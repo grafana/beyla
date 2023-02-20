@@ -1,0 +1,11 @@
+{
+  BasedOnStyle: LLVM,
+  AllowShortFunctionsOnASingleLine: InlineOnly,
+  ColumnLimit: 100,
+  IndentWidth: 4,
+  SortIncludes: false,
+  ReflowComments: false,
+  BinPackArguments: false,
+  BinPackParameters: false,
+  TabWidth: 4,
+}

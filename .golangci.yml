@@ -1,0 +1,34 @@
+linters:
+  enable:
+    - deadcode
+    - errcheck
+    - errorlint
+    - cyclop
+    - errname
+    - exhaustive
+    - exportloopref
+    - gocritic
+    - goimports
+    - gosimple
+    - govet
+    - ineffassign
+    - revive
+    - staticcheck
+    - structcheck
+    - stylecheck
+    - typecheck
+    - unused
+    - varcheck
+linters-settings:
+  stylecheck:
+    go: "1.19"
+  gocritic:
+    enabled-checks:
+      - hugeParam
+      - rangeExprCopy
+      - rangeValCopy
+      - indexAlloc
+      - deprecatedComment
+  cyclop:
+    max-complexity: 20
+

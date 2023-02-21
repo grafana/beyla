@@ -154,8 +154,6 @@ github.com/mariomac/ebpf-template v0.0.0-20230208100606-fb7531f6968b h1:fUZCsEGy
 github.com/mariomac/ebpf-template v0.0.0-20230208100606-fb7531f6968b/go.mod h1:acYwIRCpAGZm72yACBKwFdJL0HXzvOqfWxyKswB9FE4=
 github.com/mariomac/pipes v0.5.0 h1:a1hmiqxpuqDF9HK+ZV0xykh0zB1q1G7bX3IFoaKbzNY=
 github.com/mariomac/pipes v0.5.0/go.mod h1:jQjrTTJxshdixw/Gh4NbnilbL0pVyq2Ssp/v2YE3A1c=
-github.com/open-telemetry/opentelemetry-go-instrumentation v0.0.0-20230220232448-7847fbd99b0d h1:Pzl5MdeOGA3DdOPTG6TSk5liEL4345aPd11ovJNHjY8=
-github.com/open-telemetry/opentelemetry-go-instrumentation v0.0.0-20230220232448-7847fbd99b0d/go.mod h1:g/gTxZPdYpx/1LEKD4s2cu35YAg39a39Zvn1b6AwrVE=
 github.com/pkg/errors v0.8.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
 github.com/pkg/errors v0.9.1 h1:FEBLx1zS214owpjy7qsBeixbURkuhQAwrK5UwLGTwt4=
 github.com/pkg/errors v0.9.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=

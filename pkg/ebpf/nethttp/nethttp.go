@@ -18,15 +18,14 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
+	"github.com/grafana/http-autoinstrument/pkg/ebpf/bpffs"
+	"github.com/grafana/http-autoinstrument/pkg/ebpf/context"
+	"github.com/grafana/http-autoinstrument/pkg/ebpf/inject"
 	"os"
-
-	"github.com/open-telemetry/opentelemetry-go-instrumentation/pkg/instrumentors/bpffs"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
 	"github.com/cilium/ebpf/perf"
-	"github.com/open-telemetry/opentelemetry-go-instrumentation/pkg/inject"
-	"github.com/open-telemetry/opentelemetry-go-instrumentation/pkg/instrumentors/context"
 	"golang.org/x/exp/slog"
 )
 
@@ -54,28 +53,30 @@ func (h *httpServerInstrumentor) FuncNames() []string {
 }
 
 func (h *httpServerInstrumentor) Load(ctx *context.InstrumentorContext) error {
-	spec, err := ctx.Injector.Inject(loadBpf, "go", ctx.TargetDetails.GoVersion.Original(), []*inject.InjectStructField{
-		{
-			VarName:    "method_ptr_pos",
-			StructName: "net/http.Request",
-			Field:      "Method",
-		},
-		{
-			VarName:    "url_ptr_pos",
-			StructName: "net/http.Request",
-			Field:      "URL",
-		},
-		{
-			VarName:    "ctx_ptr_pos",
-			StructName: "net/http.Request",
-			Field:      "ctx",
-		},
-		{
-			VarName:    "path_ptr_pos",
-			StructName: "net/url.URL",
-			Field:      "Path",
-		},
-	}, false)
+	spec, err := ctx.Injector.Inject(
+		loadBpf, "go",
+		"1.19.5", []*inject.InjectStructField{
+			{
+				VarName:    "method_ptr_pos",
+				StructName: "net/http.Request",
+				Field:      "Method",
+			},
+			{
+				VarName:    "url_ptr_pos",
+				StructName: "net/http.Request",
+				Field:      "URL",
+			},
+			{
+				VarName:    "ctx_ptr_pos",
+				StructName: "net/http.Request",
+				Field:      "ctx",
+			},
+			{
+				VarName:    "path_ptr_pos",
+				StructName: "net/url.URL",
+				Field:      "Path",
+			},
+		}, false)
 
 	if err != nil {
 		return err

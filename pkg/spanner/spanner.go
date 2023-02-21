@@ -8,12 +8,6 @@ import (
 	"github.com/gavv/monotime"
 )
 
-// values according to net/tcp_states.h
-const (
-	tcpEstablished = 1
-	tcpClose       = 7
-)
-
 type HttpRequestSpan struct {
 	Method string
 	Path   string

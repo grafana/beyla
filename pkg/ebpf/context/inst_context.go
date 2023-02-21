@@ -16,8 +16,8 @@ package context
 
 import (
 	"github.com/cilium/ebpf/link"
-	"github.com/open-telemetry/opentelemetry-go-instrumentation/pkg/inject"
-	"github.com/open-telemetry/opentelemetry-go-instrumentation/pkg/process"
+	"github.com/grafana/http-autoinstrument/pkg/ebpf/inject"
+	"github.com/grafana/http-autoinstrument/pkg/ebpf/process"
 )
 
 type InstrumentorContext struct {

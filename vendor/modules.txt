@@ -50,15 +50,6 @@ github.com/mariomac/ebpf-template/pkg/ebpf
 ## explicit; go 1.18
 github.com/mariomac/pipes/pkg/node
 github.com/mariomac/pipes/pkg/node/internal/connect
-# github.com/open-telemetry/opentelemetry-go-instrumentation v0.0.0-20230220232448-7847fbd99b0d
-## explicit; go 1.18
-github.com/open-telemetry/opentelemetry-go-instrumentation/pkg/errors
-github.com/open-telemetry/opentelemetry-go-instrumentation/pkg/inject
-github.com/open-telemetry/opentelemetry-go-instrumentation/pkg/instrumentors/bpffs
-github.com/open-telemetry/opentelemetry-go-instrumentation/pkg/instrumentors/context
-github.com/open-telemetry/opentelemetry-go-instrumentation/pkg/instrumentors/events
-github.com/open-telemetry/opentelemetry-go-instrumentation/pkg/log
-github.com/open-telemetry/opentelemetry-go-instrumentation/pkg/process
 # github.com/prometheus/procfs v0.8.0
 ## explicit; go 1.17
 github.com/prometheus/procfs
@@ -80,7 +71,6 @@ go.opentelemetry.io/otel/propagation
 go.opentelemetry.io/otel/semconv/internal
 go.opentelemetry.io/otel/semconv/v1.12.0
 go.opentelemetry.io/otel/semconv/v1.17.0
-go.opentelemetry.io/otel/semconv/v1.7.0
 # go.opentelemetry.io/otel/exporters/otlp/internal/retry v1.13.0
 ## explicit; go 1.18
 go.opentelemetry.io/otel/exporters/otlp/internal/retry

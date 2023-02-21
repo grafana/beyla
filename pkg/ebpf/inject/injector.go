@@ -17,11 +17,11 @@ package inject
 import (
 	_ "embed"
 	"encoding/json"
+	"github.com/grafana/http-autoinstrument/pkg/ebpf/log"
+	"github.com/grafana/http-autoinstrument/pkg/ebpf/process"
 	"runtime"
 
 	"github.com/cilium/ebpf"
-	"github.com/open-telemetry/opentelemetry-go-instrumentation/pkg/log"
-	"github.com/open-telemetry/opentelemetry-go-instrumentation/pkg/process"
 )
 
 var (

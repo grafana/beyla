@@ -19,12 +19,12 @@ import (
 	"debug/gosym"
 	"errors"
 	"fmt"
+	"github.com/grafana/http-autoinstrument/pkg/ebpf/log"
 	"os"
 
 	"github.com/prometheus/procfs"
 
 	"github.com/hashicorp/go-version"
-	"github.com/open-telemetry/opentelemetry-go-instrumentation/pkg/log"
 	"golang.org/x/arch/x86/x86asm"
 )
 

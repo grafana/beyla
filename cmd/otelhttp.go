@@ -2,9 +2,10 @@ package main
 
 import (
 	"fmt"
+	"os"
+
 	"github.com/grafana/http-autoinstrument/pkg/otel"
 	tracer "github.com/mariomac/ebpf-template/pkg/ebpf"
-	"os"
 
 	"github.com/grafana/http-autoinstrument/pkg/spanner"
 	"github.com/mariomac/pipes/pkg/node"
@@ -31,7 +32,7 @@ func main() {
 	}
 	traceNode := node.AsStart(traceFunc)
 	trackerNode := node.AsMiddle(spanner.ConvertToSpan)
-	printerNode := node.AsTerminal(func(spans <-chan spanner.ConnectionSpan) {
+	printerNode := node.AsTerminal(func(spans <-chan spanner.HttpRequestSpan) {
 		for span := range spans {
 			fmt.Printf("connection %s long: %#v\n", span.End.Sub(span.Start), span)
 		}
@@ -41,7 +42,7 @@ func main() {
 		panic(err)
 	}
 	otelNode := node.AsTerminal(report)
-	traceNode.SendsTo(trackerNode)
+	//traceNode.SendsTo(trackerNode)
 	trackerNode.SendsTo(printerNode)
 	trackerNode.SendsTo(otelNode)
 	slog.Info("Starting main node")

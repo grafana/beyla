@@ -20,10 +20,10 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"github.com/grafana/http-autoinstrument/pkg/ebpf/log"
 	"strings"
 
 	"github.com/hashicorp/go-version"
-	"github.com/open-telemetry/opentelemetry-go-instrumentation/pkg/log"
 )
 
 // The build info blob left by the linker is identified by

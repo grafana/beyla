@@ -15,6 +15,8 @@
 package process
 
 import (
+	"github.com/grafana/http-autoinstrument/pkg/ebpf/errors"
+	"github.com/grafana/http-autoinstrument/pkg/ebpf/log"
 	"io"
 	"io/ioutil"
 	"os"
@@ -22,9 +24,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/open-telemetry/opentelemetry-go-instrumentation/pkg/errors"
-	"github.com/open-telemetry/opentelemetry-go-instrumentation/pkg/log"
 )
 
 type processAnalyzer struct {

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/grafana/http-autoinstrument/pkg/spanner"
 
-	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	"go.opentelemetry.io/otel/sdk/resource"
@@ -14,21 +13,21 @@ import (
 	trace2 "go.opentelemetry.io/otel/trace"
 )
 
-func Report(endpoint string) (func(<-chan spanner.ConnectionSpan), error) {
+func Report(endpoint string) (func(<-chan spanner.HttpRequestSpan), error) {
 	report := reporter{endpoint: endpoint}
 	if err := report.start(); err != nil {
 		return nil, fmt.Errorf("instantiating OTEL: %w", err)
 	}
 	// TODO: make configurable
-	return func(spans <-chan spanner.ConnectionSpan) {
+	return func(spans <-chan spanner.HttpRequestSpan) {
 		tracer := report.provider.Tracer("github.com/grafana/http-autoinstrument")
 		for span := range spans {
 			// TODO: there must be a better way to instantiate spans
 			_, sp := tracer.Start(context.TODO(), "session",
 				trace2.WithTimestamp(span.Start),
 				trace2.WithAttributes(
-					attribute.Int("src.port", span.SrcPort),
-					attribute.Int("dst.port", span.DstPort),
+				//attribute.Int("src.port", span.SrcPort),
+				//attribute.Int("dst.port", span.DstPort),
 				),
 				// TODO: trace2.WithSpanKind()
 			)

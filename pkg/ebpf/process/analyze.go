@@ -15,12 +15,15 @@
 package process
 
 import (
+	dwarf2 "debug/dwarf"
 	"debug/elf"
 	"debug/gosym"
 	"errors"
 	"fmt"
-	"github.com/grafana/http-autoinstrument/pkg/ebpf/log"
+	"golang.org/x/exp/slog"
 	"os"
+
+	"github.com/grafana/http-autoinstrument/pkg/ebpf/log"
 
 	"github.com/prometheus/procfs"
 
@@ -29,47 +32,20 @@ import (
 )
 
 type TargetDetails struct {
-	PID               int
-	Functions         []*Func
-	GoVersion         *version.Version
-	Libraries         map[string]string
-	AllocationDetails *AllocationDetails
-}
-
-type AllocationDetails struct {
-	Addr    uint64
-	EndAddr uint64
+	PID       int
+	Functions map[string]*Func // TODO: functionoffset name: offset
+	GoVersion *version.Version
+	Libraries map[string]string
 }
 
 type Func struct {
-	Name          string
-	Offset        uint64
-	ReturnOffsets []uint64
+	Name   string
+	Offset uint64
 }
 
 func (t *TargetDetails) IsRegistersABI() bool {
 	regAbiMinVersion, _ := version.NewVersion("1.17")
 	return t.GoVersion.GreaterThanOrEqual(regAbiMinVersion)
-}
-
-func (t *TargetDetails) GetFunctionOffset(name string) (uint64, error) {
-	for _, f := range t.Functions {
-		if f.Name == name {
-			return f.Offset, nil
-		}
-	}
-
-	return 0, fmt.Errorf("could not find offset for function %s", name)
-}
-
-func (t *TargetDetails) GetFunctionReturns(name string) ([]uint64, error) {
-	for _, f := range t.Functions {
-		if f.Name == name {
-			return f.ReturnOffsets, nil
-		}
-	}
-
-	return nil, fmt.Errorf("could not find returns for function %s", name)
 }
 
 func (a *processAnalyzer) findKeyvalMmap(pid int) (uintptr, uintptr) {
@@ -115,47 +91,45 @@ func (a *processAnalyzer) Analyze(pid int, relevantFuncs map[string]interface{})
 	result.GoVersion = goVersion
 	result.Libraries = modules
 
-	start, end := a.findKeyvalMmap(pid)
-	result.AllocationDetails = &AllocationDetails{
-		Addr:    uint64(start),
-		EndAddr: uint64(end),
-	}
-
-	var pclndat []byte
-	if sec := elfF.Section(".gopclntab"); sec != nil {
-		pclndat, err = sec.Data()
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	sec := elfF.Section(".gosymtab")
-	if sec == nil {
-		return nil, fmt.Errorf("%s section not found in target binary, make sure this is a Go application", ".gosymtab")
-	}
-	symTabRaw, err := sec.Data()
-	pcln := gosym.NewLineTable(pclndat, elfF.Section(".text").Addr)
-	symTab, err := gosym.NewTable(symTabRaw, pcln)
+	dwarf, err := elfF.DWARF()
 	if err != nil {
 		return nil, err
 	}
 
-	for _, f := range symTab.Funcs {
+	entryReader := dwarf.Reader()
 
-		if _, exists := relevantFuncs[f.Name]; exists {
-			start, returns, err := a.findFuncOffset(&f, elfF)
-			if err != nil {
-				return nil, err
+	for {
+		entry, err := entryReader.Next()
+		if entry == nil || err != nil {
+			slog.Info("reaching end of dwarf symbols")
+			break
+		}
+		var addr uint64
+		functionFound := false
+
+	fieldsIter:
+		for _, field := range entry.Field {
+			switch field.Attr {
+			case dwarf2.AttrName:
+				// TODO: make it working for other functions
+				if field.Val == "net/http.HandlerFunc.ServeHTTP" {
+					functionFound = true
+					continue
+				} else {
+					break fieldsIter
+				}
+			case dwarf2.AttrLowpc:
+				addr = field.Val.(uint64)
 			}
-
-			log.Logger.V(0).Info("found relevant function for instrumentation", "function", f.Name, "returns", len(returns))
-			function := &Func{
-				Name:          f.Name,
-				Offset:        start,
-				ReturnOffsets: returns,
+		}
+		if functionFound {
+			result.Functions = map[string]*Func{
+				"net/http.HandlerFunc.ServeHTTP": &Func{
+					Name:   "net/http.HandlerFunc.ServeHTTP",
+					Offset: addr,
+				},
 			}
-
-			result.Functions = append(result.Functions, function)
+			fmt.Printf("FOUND ServeHTTP at address %x\n", addr)
 		}
 	}
 

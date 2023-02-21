@@ -18,23 +18,22 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
-	"github.com/grafana/http-autoinstrument/pkg/ebpf/bpffs"
-	"github.com/grafana/http-autoinstrument/pkg/ebpf/context"
-	"github.com/grafana/http-autoinstrument/pkg/ebpf/inject"
+	"fmt"
 	"os"
 
-	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
 	"github.com/cilium/ebpf/perf"
+	"github.com/cilium/ebpf/rlimit"
+	"github.com/grafana/http-autoinstrument/pkg/ebpf/context"
 	"golang.org/x/exp/slog"
 )
 
-//go:generate bpf2go -cc $BPF_CLANG -cflags $BPF_CFLAGS -type http_request_trace bpf ../../../bpf/go_nethttp.c -- -I../../../bpf/headers
+//go:generate bpf2go -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64 -type http_request_trace bpf ../../../bpf/go_nethttp.c -- -I../../../bpf/headers
 
 type httpServerInstrumentor struct {
 	bpfObjects   *bpfObjects
 	uprobe       link.Link
-	returnProbs  []link.Link
+	uretProbe    link.Link
 	eventsReader *perf.Reader
 }
 
@@ -48,81 +47,77 @@ func (h *httpServerInstrumentor) LibraryName() string {
 	return "net/http"
 }
 
+/*
+&dwarf.Entry{Offset:0x25a449,
+
+Tag:dwarf.TagSubprogram,
+Children:true,
+
+	Field:[]dwarf.Field{
+		dwarf.Field{
+			Attr:dwarf.AttrName, Val:"net/http.(*ServeMux).ServeHTTP", Class:dwarf.ClassString
+		},
+		dwarf.Field{Attr:dwarf.AttrLowpc,  ## ESTE ES
+			Val:0x6973e0, Class:dwarf.ClassAddress
+		},
+
+dwarf.Field{Attr:dwarf.AttrHighpc, Val:0x697565, Class:dwarf.ClassAddress}, dwarf.Field{Attr:dwarf.AttrFrameBase, Val:[]uint8{0x9c}, Class:dwarf.ClassExprLoc}, dwarf.Field{Attr:dwarf.AttrDeclFile, Val:19, Class:dwarf.ClassConstant}, dwarf.Field{Attr:dwarf.AttrExternal, Val:true, Class:dwarf.ClassFlag}}}
+*/
 func (h *httpServerInstrumentor) FuncNames() []string {
-	return []string{"net/http.(*ServeMux).ServeHTTP"}
+	return []string{"net/http.HandlerFunc.ServeHTTP"}
 }
 
 func (h *httpServerInstrumentor) Load(ctx *context.InstrumentorContext) error {
-	spec, err := ctx.Injector.Inject(
-		loadBpf, "go",
-		"1.19.5", []*inject.InjectStructField{
-			{
-				VarName:    "method_ptr_pos",
-				StructName: "net/http.Request",
-				Field:      "Method",
-			},
-			{
-				VarName:    "url_ptr_pos",
-				StructName: "net/http.Request",
-				Field:      "URL",
-			},
-			{
-				VarName:    "ctx_ptr_pos",
-				StructName: "net/http.Request",
-				Field:      "ctx",
-			},
-			{
-				VarName:    "path_ptr_pos",
-				StructName: "net/url.URL",
-				Field:      "Path",
-			},
-		}, false)
-
+	if err := rlimit.RemoveMemlock(); err != nil {
+		return fmt.Errorf("removing memlock: %w", err)
+	}
+	objects := bpfObjects{}
+	spec, err := loadBpf()
 	if err != nil {
-		return err
+		return fmt.Errorf("loading BPF data: %w", err)
+	}
+	// TODO: adapt ctx.Injector.Inject and later dwarf info
+	if err := spec.RewriteConstants(map[string]interface{}{
+		"url_ptr_pos":    uint64(16),
+		"path_ptr_pos":   uint64(56),
+		"ctx_ptr_pos":    uint64(232),
+		"method_ptr_pos": uint64(0),
+	}); err != nil {
+		return fmt.Errorf("rewriting BPF constants definition: %w", err)
+	}
+	if err := spec.LoadAndAssign(&objects, nil); err != nil {
+		return fmt.Errorf("loading and assigning BPF objects: %w", err)
 	}
 
-	h.bpfObjects = &bpfObjects{}
-	err = spec.LoadAndAssign(h.bpfObjects, &ebpf.CollectionOptions{
-		Maps: ebpf.MapOptions{
-			PinPath: bpffs.BpfFsPath,
-		},
+	h.bpfObjects = &objects
+
+	serveFunc, ok := ctx.TargetDetails.Functions[h.FuncNames()[0]]
+	if !ok {
+		return fmt.Errorf("can't find function: %v", h.FuncNames()[0])
+	}
+	_ = serveFunc
+
+	// this is starting to work despite serveFunc.Offset is 0 for this actual function
+	up, err := ctx.Executable.Uprobe("net/http.HandlerFunc.ServeHTTP", h.bpfObjects.UprobeServerMuxServeHTTP, &link.UprobeOptions{
+		Address: serveFunc.Offset,
 	})
 	if err != nil {
-		return err
-	}
-
-	offset, err := ctx.TargetDetails.GetFunctionOffset(h.FuncNames()[0])
-	if err != nil {
-		return err
-	}
-
-	up, err := ctx.Executable.Uprobe("", h.bpfObjects.UprobeServerMuxServeHTTP, &link.UprobeOptions{
-		Offset: offset,
-	})
-	if err != nil {
-		return err
+		return fmt.Errorf("setting uprobe: %w", err)
 	}
 
 	h.uprobe = up
-	retOffsets, err := ctx.TargetDetails.GetFunctionReturns(h.FuncNames()[0])
-	if err != nil {
-		return err
-	}
 
-	for _, ret := range retOffsets {
-		retProbe, err := ctx.Executable.Uprobe("", h.bpfObjects.UprobeServerMuxServeHTTP_Returns, &link.UprobeOptions{
-			Offset: ret,
-		})
-		if err != nil {
-			return err
-		}
-		h.returnProbs = append(h.returnProbs, retProbe)
+	urp, err := ctx.Executable.Uretprobe("net/http.HandlerFunc.ServeHTTP", h.bpfObjects.UprobeServerMuxServeHTTP_Returns, &link.UprobeOptions{
+		Address: serveFunc.Offset,
+	})
+	if err != nil {
+		return fmt.Errorf("setting uretpobe: %w", err)
 	}
+	h.uretProbe = urp
 
 	rd, err := perf.NewReader(h.bpfObjects.Events, os.Getpagesize())
 	if err != nil {
-		return err
+		return fmt.Errorf("creating perf reader: %w", err)
 	}
 	h.eventsReader = rd
 
@@ -133,7 +128,9 @@ func (h *httpServerInstrumentor) Run(eventsChan chan<- HttpRequestTrace) {
 	logger := slog.With("name", "net/http-instrumentor")
 	var event HttpRequestTrace
 	for {
+		logger.Info("starting to read event")
 		record, err := h.eventsReader.Read()
+		logger.Info("received event")
 		if err != nil {
 			if errors.Is(err, perf.ErrClosed) {
 				return
@@ -191,9 +188,8 @@ func (h *httpServerInstrumentor) Close() {
 	if h.uprobe != nil {
 		h.uprobe.Close()
 	}
-
-	for _, r := range h.returnProbs {
-		r.Close()
+	if h.uretProbe != nil {
+		h.uretProbe.Close()
 	}
 
 	if h.bpfObjects != nil {

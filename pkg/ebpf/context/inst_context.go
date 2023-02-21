@@ -16,12 +16,10 @@ package context
 
 import (
 	"github.com/cilium/ebpf/link"
-	"github.com/grafana/http-autoinstrument/pkg/ebpf/inject"
 	"github.com/grafana/http-autoinstrument/pkg/ebpf/process"
 )
 
 type InstrumentorContext struct {
 	TargetDetails *process.TargetDetails
 	Executable    *link.Executable
-	Injector      *inject.Injector
 }

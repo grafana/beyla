@@ -2,51 +2,136 @@ package main
 
 import (
 	"fmt"
+	"io"
+	"io/ioutil"
 	"os"
+	"path"
+	"strconv"
+	"strings"
 
-	"github.com/grafana/http-autoinstrument/pkg/otel"
-	tracer "github.com/mariomac/ebpf-template/pkg/ebpf"
+	"github.com/cilium/ebpf/link"
+	"github.com/grafana/http-autoinstrument/pkg/ebpf/context"
+	"github.com/grafana/http-autoinstrument/pkg/ebpf/errors"
+	"github.com/grafana/http-autoinstrument/pkg/ebpf/nethttp"
+	"github.com/grafana/http-autoinstrument/pkg/ebpf/process"
 
+	"github.com/caarlos0/env/v6"
 	"github.com/grafana/http-autoinstrument/pkg/spanner"
 	"github.com/mariomac/pipes/pkg/node"
 	"golang.org/x/exp/slog"
 )
 
-const (
-	envEndpoint = "OTEL_TRACES_ENDPOINT"
-)
+type Config struct {
+	Endpoint string `env:"OTEL_TRACES_ENDPOINT"`
+	Exec     string `env:"EXECUTABLE_PATH"`
+}
 
 func main() {
-	tracesEndpoint, ok := os.LookupEnv(envEndpoint)
-	if !ok {
-		fmt.Fprintf(os.Stderr, "missing "+envEndpoint)
-		os.Exit(-1)
-	}
 	ho := slog.HandlerOptions{
 		Level: slog.LevelDebug,
 	}
 	slog.SetDefault(slog.New(ho.NewTextHandler(os.Stderr)))
-	traceFunc, err := tracer.Trace()
-	if err != nil {
-		panic(err)
+
+	config := Config{}
+	if err := env.Parse(&config); err != nil {
+		slog.Error("can't load configuration from environment", err)
+		os.Exit(-1)
 	}
-	traceNode := node.AsStart(traceFunc)
+
+	pid, err := findProcessID(config.Exec)
+	panicOn(err)
+
+	pa := process.NewAnalyzer()
+	// TODO: get rid of this
+	target, err := pa.Analyze(pid, map[string]interface{}{"net/http.HandlerFunc.ServeHTTP": struct{}{}})
+	panicOn(err)
+
+	// TODO: listen for new processes
+	exe, err := link.OpenExecutable(fmt.Sprintf("/proc/%d/exe", target.PID))
+	panicOn(err)
+
+	ctx := &context.InstrumentorContext{
+		Executable:    exe,
+		TargetDetails: target,
+	}
+
+	httpInstrumentor := nethttp.New()
+	panicOn(httpInstrumentor.Load(ctx))
+
+	traceNode := node.AsStart(httpInstrumentor.Run)
 	trackerNode := node.AsMiddle(spanner.ConvertToSpan)
 	printerNode := node.AsTerminal(func(spans <-chan spanner.HttpRequestSpan) {
 		for span := range spans {
 			fmt.Printf("connection %s long: %#v\n", span.End.Sub(span.Start), span)
 		}
 	})
-	report, err := otel.Report(tracesEndpoint)
+	/*report, err := otel.Report(tracesEndpoint)
 	if err != nil {
 		panic(err)
-	}
-	otelNode := node.AsTerminal(report)
-	//traceNode.SendsTo(trackerNode)
+	}*/
+	//otelNode := node.AsTerminal(report)
+	traceNode.SendsTo(trackerNode)
 	trackerNode.SendsTo(printerNode)
-	trackerNode.SendsTo(otelNode)
+	//trackerNode.SendsTo(otelNode)
 	slog.Info("Starting main node")
 	traceNode.Start()
 	wait := make(chan struct{})
 	<-wait
+}
+
+func panicOn(err error) {
+	if err != nil {
+		panic(err)
+	}
+}
+
+func findProcessID(exePath string) (int, error) {
+	// TODO: allow overriding proc for containers
+	proc, err := os.Open("/proc")
+	if err != nil {
+		return 0, err
+	}
+
+	for {
+		dirs, err := proc.Readdir(15)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return 0, err
+		}
+
+		for _, di := range dirs {
+			if !di.IsDir() {
+				continue
+			}
+
+			dname := di.Name()
+			if dname[0] < '0' || dname[0] > '9' {
+				continue
+			}
+
+			pid, err := strconv.Atoi(dname)
+			if err != nil {
+				return 0, err
+			}
+
+			exeName, err := os.Readlink(path.Join("/proc", dname, "exe"))
+			if err != nil {
+				// Read link may fail if target process runs not as root
+				cmdLine, err := ioutil.ReadFile(path.Join("/proc", dname, "cmdline"))
+				if err != nil {
+					return 0, err
+				}
+
+				if strings.Contains(string(cmdLine), exePath) {
+					return pid, nil
+				}
+			} else if exeName == exePath {
+				return pid, nil
+			}
+		}
+	}
+
+	return 0, errors.ErrProcessNotFound
 }

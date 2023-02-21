@@ -3,12 +3,12 @@ module github.com/grafana/http-autoinstrument
 go 1.19
 
 require (
+	github.com/caarlos0/env/v6 v6.10.1
 	github.com/cilium/ebpf v0.10.0
 	github.com/gavv/monotime v0.0.0-20190418164738-30dba4353424
 	github.com/go-logr/logr v1.2.3
 	github.com/go-logr/zapr v1.2.2
 	github.com/hashicorp/go-version v1.4.0
-	github.com/mariomac/ebpf-template v0.0.0-20230208100606-fb7531f6968b
 	github.com/mariomac/pipes v0.5.0
 	github.com/prometheus/procfs v0.8.0
 	go.opentelemetry.io/otel v1.13.0

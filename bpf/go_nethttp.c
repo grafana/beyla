@@ -61,6 +61,7 @@ volatile const u64 method_ptr_pos;
 SEC("uprobe/ServerMux_ServeHTTP")
 int uprobe_ServerMux_ServeHTTP(struct pt_regs *ctx)
 {
+    bpf_printk("servemux entry\n");
     u64 request_pos = 4;
     http_request_trace httpReq = {};
     httpReq.start_monotime_ns = bpf_ktime_get_ns();
@@ -100,6 +101,7 @@ int uprobe_ServerMux_ServeHTTP(struct pt_regs *ctx)
 SEC("uretprobe/ServerMux_ServeHTTP")
 int uprobe_ServerMux_ServeHTTP_Returns(struct pt_regs *ctx)
 {
+    bpf_printk("servemux enxit\n");
     u64 request_pos = 4;
     void *req_ptr = get_argument(ctx, request_pos);
     void *ctx_iface = 0;

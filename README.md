@@ -5,7 +5,8 @@ Part of the code is taken from: https://github.com/open-telemetry/opentelemetry-
 
 * bpf/**
 
-## TODO:
+Differences:
 
-### Get fields from dwarf info
-
+* No need to maintain old Go versions (e.g. stack-based parameters)
+* We assume Dwarf info is enabled
+* for return: changing end uprobes by single uretprobe

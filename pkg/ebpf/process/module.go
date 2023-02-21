@@ -20,7 +20,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"github.com/grafana/http-autoinstrument/pkg/ebpf/log"
+	"golang.org/x/exp/slog"
 	"strings"
 
 	"github.com/hashicorp/go-version"
@@ -43,8 +43,7 @@ func (a *processAnalyzer) getModuleDetails(f *elf.File) (*version.Version, map[s
 	if err != nil {
 		return nil, nil, err
 	}
-
-	log.Logger.V(1).Info("go version detected", "version", goVersion)
+	slog.Info("go version detected", "version", goVersion)
 	modsMap := parseModules(modules)
 	return v, modsMap, nil
 }

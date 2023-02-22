@@ -19,12 +19,10 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	constants "github.com/grafana/http-autoinstrument/pkg/const"
-	"os"
-
 	"github.com/cilium/ebpf/link"
-	"github.com/cilium/ebpf/perf"
+	"github.com/cilium/ebpf/ringbuf"
 	"github.com/cilium/ebpf/rlimit"
+	constants "github.com/grafana/http-autoinstrument/pkg/const"
 	"github.com/grafana/http-autoinstrument/pkg/ebpf/context"
 	"golang.org/x/exp/slog"
 )
@@ -35,7 +33,7 @@ type httpServerInstrumentor struct {
 	bpfObjects   *bpfObjects
 	uprobe       link.Link
 	uretProbes   []link.Link
-	eventsReader *perf.Reader
+	eventsReader *ringbuf.Reader
 }
 
 type HttpRequestTrace bpfHttpRequestTrace
@@ -121,7 +119,7 @@ func (h *httpServerInstrumentor) Load(ctx *context.InstrumentorContext) error {
 		h.uretProbes = append(h.uretProbes, urp)
 	}
 
-	rd, err := perf.NewReader(h.bpfObjects.Events, os.Getpagesize())
+	rd, err := ringbuf.NewReader(h.bpfObjects.Events)
 	if err != nil {
 		return fmt.Errorf("creating perf reader: %w", err)
 	}
@@ -138,15 +136,10 @@ func (h *httpServerInstrumentor) Run(eventsChan chan<- HttpRequestTrace) {
 		record, err := h.eventsReader.Read()
 		logger.Info("received event")
 		if err != nil {
-			if errors.Is(err, perf.ErrClosed) {
+			if errors.Is(err, ringbuf.ErrClosed) {
 				return
 			}
 			logger.Error("error reading from perf reader", err)
-			continue
-		}
-
-		if record.LostSamples != 0 {
-			logger.Info("perf event ring buffer full", "dropped", record.LostSamples)
 			continue
 		}
 

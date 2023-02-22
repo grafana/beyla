@@ -134,6 +134,7 @@ func (a *processAnalyzer) Analyze(pid int, relevantFuncs map[string]interface{})
 			}
 		}
 		if functionFound {
+			// seems that this is not really needed, neither fieldsIter then
 			result.AllocationDetails = &AllocationDetails{Addr: lowAddr, EndAddr: highAddr}
 			fmt.Printf("FOUND ServeHTTP at address %x\n", lowAddr)
 

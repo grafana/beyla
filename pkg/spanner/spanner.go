@@ -41,7 +41,7 @@ func (c *converter) convert(trace *nethttp.HttpRequestTrace) HttpRequestSpan {
 	endDelta := monoNow - time.Duration(trace.EndMonotimeNs)
 
 	return HttpRequestSpan{
-		Method: string(trace.Method[:]),
+		Method: string(trace.Method[:3]),
 		Path:   string(trace.Path[:]),
 		Start:  now.Add(-startDelta),
 		End:    now.Add(-endDelta),

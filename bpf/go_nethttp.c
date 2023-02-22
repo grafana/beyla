@@ -58,8 +58,9 @@ volatile const u64 method_ptr_pos;
 
 // This instrumentation attaches uprobe to the following function:
 // func (mux *ServeMux) ServeHTTP(w ResponseWriter, r *Request)
-SEC("uprobe/ServerMux_ServeHTTP")
-int uprobe_ServerMux_ServeHTTP(struct pt_regs *ctx)
+// or other functions sharing the same signature (e.g http.Handler.ServeHTTP)
+SEC("uprobe/ServeHTTP")
+int uprobe_ServeHTTP(struct pt_regs *ctx)
 {
     bpf_printk("servemux entry\n");
     u64 request_pos = 4;
@@ -98,10 +99,10 @@ int uprobe_ServerMux_ServeHTTP(struct pt_regs *ctx)
     return 0;
 }
 
-SEC("uretprobe/ServerMux_ServeHTTP")
-int uprobe_ServerMux_ServeHTTP_Returns(struct pt_regs *ctx)
+SEC("uprobe/ServeHTTP_return")
+int uprobe_ServeHttp_return(struct pt_regs *ctx)
 {
-    bpf_printk("servemux enxit\n");
+    bpf_printk("servemux EXIT\n");
     u64 request_pos = 4;
     void *req_ptr = get_argument(ctx, request_pos);
     void *ctx_iface = 0;

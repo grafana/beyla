@@ -20,6 +20,7 @@ import (
 	"debug/gosym"
 	"errors"
 	"fmt"
+	constants "github.com/grafana/http-autoinstrument/pkg/const"
 	"golang.org/x/exp/slog"
 	"os"
 
@@ -32,15 +33,22 @@ import (
 )
 
 type TargetDetails struct {
-	PID       int
-	Functions map[string]*Func // TODO: functionoffset name: offset
-	GoVersion *version.Version
-	Libraries map[string]string
+	PID               int
+	Functions         map[string]*Func // TODO: functionoffset name: offset
+	GoVersion         *version.Version
+	Libraries         map[string]string
+	AllocationDetails *AllocationDetails
+}
+
+type AllocationDetails struct {
+	Addr    uint64
+	EndAddr uint64
 }
 
 type Func struct {
-	Name   string
-	Offset uint64
+	Name          string
+	Offset        uint64
+	ReturnOffsets []uint64
 }
 
 func (t *TargetDetails) IsRegistersABI() bool {
@@ -70,7 +78,8 @@ func (a *processAnalyzer) findKeyvalMmap(pid int) (uintptr, uintptr) {
 
 func (a *processAnalyzer) Analyze(pid int, relevantFuncs map[string]interface{}) (*TargetDetails, error) {
 	result := &TargetDetails{
-		PID: pid,
+		PID:       pid,
+		Functions: map[string]*Func{},
 	}
 
 	f, err := os.Open(fmt.Sprintf("/proc/%d/exe", pid))
@@ -104,7 +113,7 @@ func (a *processAnalyzer) Analyze(pid int, relevantFuncs map[string]interface{})
 			slog.Info("reaching end of dwarf symbols")
 			break
 		}
-		var addr uint64
+		var lowAddr, highAddr uint64
 		functionFound := false
 
 	fieldsIter:
@@ -112,24 +121,58 @@ func (a *processAnalyzer) Analyze(pid int, relevantFuncs map[string]interface{})
 			switch field.Attr {
 			case dwarf2.AttrName:
 				// TODO: make it working for other functions
-				if field.Val == "net/http.HandlerFunc.ServeHTTP" {
+				if field.Val == constants.FuncName {
 					functionFound = true
 					continue
 				} else {
 					break fieldsIter
 				}
 			case dwarf2.AttrLowpc:
-				addr = field.Val.(uint64)
+				lowAddr = field.Val.(uint64)
+			case dwarf2.AttrHighpc:
+				highAddr = field.Val.(uint64)
 			}
 		}
 		if functionFound {
-			result.Functions = map[string]*Func{
-				"net/http.HandlerFunc.ServeHTTP": &Func{
-					Name:   "net/http.HandlerFunc.ServeHTTP",
-					Offset: addr,
-				},
+			result.AllocationDetails = &AllocationDetails{Addr: lowAddr, EndAddr: highAddr}
+			fmt.Printf("FOUND ServeHTTP at address %x\n", lowAddr)
+
+			var pclndat []byte
+			if sec := elfF.Section(".gopclntab"); sec != nil {
+				pclndat, err = sec.Data()
+				if err != nil {
+					return nil, err
+				}
 			}
-			fmt.Printf("FOUND ServeHTTP at address %x\n", addr)
+			sec := elfF.Section(".gosymtab")
+			if sec == nil {
+				return nil, fmt.Errorf("%s section not found in target binary, make sure this is a Go application", ".gosymtab")
+			}
+			symTabRaw, err := sec.Data()
+			pcln := gosym.NewLineTable(pclndat, elfF.Section(".text").Addr)
+			symTab, err := gosym.NewTable(symTabRaw, pcln)
+			if err != nil {
+				return nil, err
+			}
+
+			for _, f := range symTab.Funcs {
+				if _, exists := relevantFuncs[f.Name]; exists {
+					slog.Info("analysing func", "fname", f.Name)
+					start, returns, err := a.findFuncOffset(&f, elfF)
+					if err != nil {
+						return nil, err
+					}
+
+					slog.Info("found relevant function for instrumentation", "function", f.Name, "returns", len(returns))
+					function := &Func{
+						Name:          f.Name,
+						Offset:        start,
+						ReturnOffsets: returns,
+					}
+
+					result.Functions[f.Name] = function
+				}
+			}
 		}
 	}
 

@@ -9,4 +9,5 @@ Differences:
 
 * No need to maintain old Go versions (e.g. stack-based parameters)
 * We assume Dwarf info is enabled
-* for return: changing end uprobes by single uretprobe
+  * Instead of using process maps for function delimitation, we just use Dwarf
+  * 

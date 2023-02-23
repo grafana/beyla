@@ -45,6 +45,7 @@ type bpfHttpRequestTrace struct {
 	EndMonotimeNs   uint64
 	Method          [6]uint8
 	Path            [100]uint8
+	Status          uint16
 }
 
 // loadBpf returns the embedded CollectionSpec for bpf.

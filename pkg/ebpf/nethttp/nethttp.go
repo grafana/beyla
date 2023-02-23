@@ -80,6 +80,7 @@ func (h *httpServerInstrumentor) Load(ctx *context.InstrumentorContext) error {
 		"url_ptr_pos":    uint64(16),
 		"path_ptr_pos":   uint64(56),
 		"method_ptr_pos": uint64(0),
+		"status_ptr_pos": uint64(120),
 	}); err != nil {
 		return fmt.Errorf("rewriting BPF constants definition: %w", err)
 	}

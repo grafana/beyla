@@ -12,6 +12,7 @@ import (
 type HttpRequestSpan struct {
 	Method string
 	Path   string
+	Status int
 	Start  time.Time
 	End    time.Time
 }
@@ -55,5 +56,6 @@ func (c *converter) convert(trace *nethttp.HttpRequestTrace) HttpRequestSpan {
 		Path:   string(trace.Path[:pathLen]),
 		Start:  now.Add(-startDelta),
 		End:    now.Add(-endDelta),
+		Status: int(trace.Status),
 	}
 }

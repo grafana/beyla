@@ -37,7 +37,7 @@ typedef struct http_request_trace_t
     u64 end_monotime_ns;
     u8 method[METHOD_MAX_LEN];
     u8 path[PATH_MAX_LEN];
-    // TODO: http status code
+    u16 status;
     // TODO: remote address:port
     // TODO: dst address:port
 } __attribute__((packed)) http_request_trace;
@@ -62,6 +62,8 @@ struct {
 volatile const u64 url_ptr_pos;
 volatile const u64 path_ptr_pos;
 volatile const u64 method_ptr_pos;
+volatile const u64 status_ptr_pos;
+
 
 // In x86, current goroutine is pointed by r14, according to
 // https://go.googlesource.com/go/+/refs/heads/dev.regabi/src/cmd/compile/internal-abi.md#amd64-architecture
@@ -78,7 +80,6 @@ inline void debug_map_contents() {
     bpf_printk("map contents:");
     bpf_for_each_map_elem(&ongoing_http_requests, check_hash_elem, 0, 0);
 }
-
 
 // This instrumentation attaches uprobe to the following function:
 // func (mux *ServeMux) ServeHTTP(w ResponseWriter, r *Request)
@@ -153,7 +154,6 @@ int uprobe_ServeHttp_return(struct pt_regs *ctx)
         bpf_printk("can't read method string");
     };
 
-
     // get path from Request.URL
     void *url_ptr = 0;
     bpf_probe_read(&url_ptr, sizeof(url_ptr), (void *)(req_ptr + url_ptr_pos));
@@ -164,6 +164,15 @@ int uprobe_ServeHttp_return(struct pt_regs *ctx)
     u64 path_size = sizeof(trace->path);
     path_size = path_size < path_len ? path_size : path_len;
     bpf_probe_read(&trace->path, path_size, path_ptr);
+
+
+    // get return code from http.ResponseWriter (interface)
+    // assuming implementation of http.ResponseWriter is http.response
+    // TODO: this is really a nonportable assumption
+    u64 response_pos = 3;
+    void *resp_ptr = get_argument_by_reg(&(invocation->regs), response_pos);    
+
+    bpf_probe_read(&trace->status, sizeof(trace->status), (void*)(resp_ptr + status_ptr_pos));
 
     // submit the completed trace via ringbuffer
     bpf_ringbuf_submit(trace, 0);

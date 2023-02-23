@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/grafana/http-autoinstrument/pkg/otel"
 	"io"
 	"io/ioutil"
 	"os"
@@ -23,7 +24,7 @@ import (
 
 type Config struct {
 	Endpoint string `env:"OTEL_TRACES_ENDPOINT"`
-	Exec     string `env:"EXECUTABLE_PATH"`
+	Exec     string `env:"EXECUTABLE_NAME"`
 }
 
 func main() {
@@ -65,14 +66,14 @@ func main() {
 			fmt.Printf("connection %s long: %#v\n", span.End.Sub(span.Start), span)
 		}
 	})
-	/*report, err := otel.Report(tracesEndpoint)
+	report, err := otel.Report(config.Endpoint)
 	if err != nil {
 		panic(err)
-	}*/
-	//otelNode := node.AsTerminal(report)
+	}
+	otelNode := node.AsTerminal(report)
 	traceNode.SendsTo(trackerNode)
 	trackerNode.SendsTo(printerNode)
-	//trackerNode.SendsTo(otelNode)
+	trackerNode.SendsTo(otelNode)
 	slog.Info("Starting main node")
 	traceNode.Start()
 	wait := make(chan struct{})
@@ -127,7 +128,9 @@ func findProcessID(exePath string) (int, error) {
 				if strings.Contains(string(cmdLine), exePath) {
 					return pid, nil
 				}
-			} else if exeName == exePath {
+				// for simplicity, we don't check for full path
+				// TODO: support regexpes for better process selection
+			} else if strings.Contains(exeName, exePath) {
 				return pid, nil
 			}
 		}

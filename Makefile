@@ -1,5 +1,5 @@
 # Main binary configuration
-CMD ?= main
+CMD ?= otelhttp
 MAIN_GO_FILE ?= cmd/$(CMD).go
 GOOS ?= linux
 GOARCH ?= amd64
@@ -8,7 +8,7 @@ DOCKERHUB_USER ?= $(USER)
 
 # Container image creation creation
 VERSION ?= latest
-IMAGE_TAG_BASE ?= $(DOCKERHUB_USER)/ebpf-template
+IMAGE_TAG_BASE ?= $(DOCKERHUB_USER)/http-autoinstrument
 IMG ?= $(IMAGE_TAG_BASE):$(VERSION)
 
 # The generator is a local container image that provides a reproducible environment for
@@ -91,7 +91,7 @@ coverage-report-html: cov-exclude-generated
 
 .PHONY: image-build-push
 image-build-push: ## Build OCI image with the manager.
-	$(OCI_BIN) buildx build --push --platform linux/amd64,linux/arm64 -t ${IMG} .
+	$(OCI_BIN) buildx build --push --platform linux/amd64 -t ${IMG} .
 
 .PHONY: image-push
 image-push: ## Push OCI image with the manager.

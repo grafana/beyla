@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/grafana/http-autoinstrument/pkg/spanner"
+	"go.opentelemetry.io/otel/attribute"
 
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
@@ -26,8 +27,11 @@ func Report(endpoint string) (func(<-chan spanner.HttpRequestSpan), error) {
 			_, sp := tracer.Start(context.TODO(), "session",
 				trace2.WithTimestamp(span.Start),
 				trace2.WithAttributes(
-				//attribute.Int("src.port", span.SrcPort),
-				//attribute.Int("dst.port", span.DstPort),
+					// TODO: use standard names
+					attribute.Int("http.status", span.Status),
+					attribute.String("http.path", span.Path),
+					attribute.String("http.method", span.Method),
+					// TODO: add src/dst ip and dst port
 				),
 				// TODO: trace2.WithSpanKind()
 			)

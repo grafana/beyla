@@ -26,7 +26,7 @@ FROM fedora:37
 ARG ARCH="amd64"
 
 WORKDIR /
-COPY --from=builder /opt/app-root/bin/main .
+COPY --from=builder /opt/app-root/bin/otelhttp .
 USER 0:0
 
-CMD [ "/main" ]
+CMD [ "/otelhttp" ]

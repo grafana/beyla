@@ -24,6 +24,13 @@ char __license[] SEC("license") = "Dual MIT/GPL";
 
 #define MAX_REQUEST_KEY 
 
+// stored in the map
+typedef struct http_method_invocation_t {
+    u64 start_monotime_ns;
+    struct pt_regs regs; // we store registers on invocation to be able to fetch the arguments at return
+} http_method_invocation;
+
+// submitted via ringbuffer
 typedef struct http_request_trace_t
 {
     u64 start_monotime_ns;
@@ -40,8 +47,8 @@ const http_request_trace *unused __attribute__((unused));
 struct
 {
     __uint(type, BPF_MAP_TYPE_HASH);
-    __type(key, u64);  // key: pointer to the request goroutine
-    __type(value, http_request_trace);
+    __type(key, void*);  // key: pointer to the request goroutine
+    __type(value, http_method_invocation); 
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
 } ongoing_http_requests SEC(".maps");
 
@@ -63,7 +70,7 @@ inline void* get_goroutine_address(struct pt_regs *ctx) {
 }
 
 static __u64 check_hash_elem(void *map, void *key, void* val, void* ctx) {
-    bpf_printk("%lx --> %lx", key, val);
+    bpf_printk("%lx --> %lx", *((u64*)key), val);
     return 0;
 }
 
@@ -81,50 +88,17 @@ int uprobe_ServeHTTP(struct pt_regs *ctx)
 {
 
     // TODO: store registers in a map so we can fetch them in the return probe
-
-    bpf_printk("servemux entry %lx", &ongoing_http_requests);    
-    u64 request_pos = 4;
-    http_request_trace httpReq = {};
-    httpReq.start_monotime_ns = bpf_ktime_get_ns();
-
+    bpf_printk("=== uprobe/ServeHTTP === ");    
     void* goroutine_addr = get_goroutine_address(ctx);
-    bpf_printk("INPUT goroutine_addr %lx", goroutine_addr);
-    
-    // Get request struct
-    void *req_ptr = get_argument_by_reg(ctx, request_pos);    
+    bpf_printk("goroutine_addr %lx", goroutine_addr);
 
-    // Get method from request
-    void *method_ptr = 0;
-    if (bpf_probe_read(&method_ptr, sizeof(method_ptr), (void *)(req_ptr + method_ptr_pos)) != 0) {
-        bpf_printk("can't read method_ptr");
-    }
-    u64 method_len = 0;
-    if (bpf_probe_read(&method_len, sizeof(method_len), (void *)(req_ptr + (method_ptr_pos + 8))) != 0) {
-        bpf_printk("can't read method_len");
-    }
-    u64 method_size = sizeof(httpReq.method);
-
-    bpf_printk("method len %u", method_len);
-    method_size = method_size < method_len ? method_size : method_len;
-    
-    if (bpf_probe_read(httpReq.method, method_size, method_ptr)) {
-        bpf_printk("can't read method string");
+    http_method_invocation invocation = {
+        .start_monotime_ns = bpf_ktime_get_ns(),
+        .regs = *ctx,
     };
-
-
-    // get path from Request.URL
-    void *url_ptr = 0;
-    bpf_probe_read(&url_ptr, sizeof(url_ptr), (void *)(req_ptr + url_ptr_pos));
-    void *path_ptr = 0;
-    bpf_probe_read(&path_ptr, sizeof(path_ptr), (void *)(url_ptr + path_ptr_pos));
-    u64 path_len = 0;
-    bpf_probe_read(&path_len, sizeof(path_len), (void *)(url_ptr + (path_ptr_pos + 8)));
-    u64 path_size = sizeof(httpReq.path);
-    path_size = path_size < path_len ? path_size : path_len;
-    bpf_probe_read(&httpReq.path, path_size, path_ptr);
     
     // Write event
-    if (bpf_map_update_elem(&ongoing_http_requests, &goroutine_addr, &httpReq, BPF_ANY)) {
+    if (bpf_map_update_elem(&ongoing_http_requests, &goroutine_addr, &invocation, BPF_ANY)) {
         bpf_printk("can't update map element");
     }
 
@@ -136,33 +110,63 @@ int uprobe_ServeHTTP(struct pt_regs *ctx)
 SEC("uprobe/ServeHTTP_return")
 int uprobe_ServeHttp_return(struct pt_regs *ctx)
 {
-    bpf_printk("servemux EXIT %lx", &ongoing_http_requests);
-
+    bpf_printk("=== uprobe/ServeHTTP_return === ");    
     void* goroutine_addr = get_goroutine_address(ctx);
-    bpf_printk("OUTPUT goroutine_addr %lx", goroutine_addr);
-    // TODO: handle returned HTTP status code
-
+    bpf_printk("goroutine_addr %lx", goroutine_addr);
     debug_map_contents();
-    
-    // TODO: look for a way of do a lookup-and-delete in a single operation
-    http_request_trace *httpReq_ptr = bpf_map_lookup_elem(&ongoing_http_requests, &goroutine_addr);
-    long delret = bpf_map_delete_elem(&ongoing_http_requests, &goroutine_addr);
-    if (httpReq_ptr == NULL) {
-        bpf_printk("can't read http request pointer %d - %d", httpReq_ptr, delret);
+
+    http_method_invocation *invocation = bpf_map_lookup_elem(&ongoing_http_requests, &goroutine_addr);
+    bpf_map_delete_elem(&ongoing_http_requests, &goroutine_addr);
+    if (invocation == NULL) {
+        bpf_printk("can't read http invocation metadata");
         return 0;
     }
-
-    http_request_trace *httpReq = bpf_ringbuf_reserve(&events, sizeof(http_request_trace), 0);
-    bpf_map_delete_elem(&ongoing_http_requests, &goroutine_addr);
-    if (!httpReq) {
+    
+    http_request_trace *trace = bpf_ringbuf_reserve(&events, sizeof(http_request_trace), 0);
+    if (!trace) {
         bpf_printk("can't reserve space in the ringbuffer");
         return 0;
     }
-    // copies the hashmap info into the ringbuffer space
-    bpf_probe_read((void*)httpReq, sizeof(http_request_trace), httpReq_ptr);
+    trace->start_monotime_ns = invocation->start_monotime_ns;
+    trace->end_monotime_ns = bpf_ktime_get_ns();
 
-    httpReq->end_monotime_ns = bpf_ktime_get_ns();
-    bpf_ringbuf_submit(httpReq, 0);
+    // Read arguments from the original set of registers
+
+    // Get request struct
+    u64 request_pos = 4;    
+    void *req_ptr = get_argument_by_reg(&(invocation->regs), request_pos);    
+
+    // Get method from request
+    void *method_ptr = 0;
+    if (bpf_probe_read(&method_ptr, sizeof(method_ptr), (void *)(req_ptr + method_ptr_pos)) != 0) {
+        bpf_printk("can't read method_ptr");
+    }
+    u64 method_len = 0;
+    if (bpf_probe_read(&method_len, sizeof(method_len), (void *)(req_ptr + (method_ptr_pos + 8))) != 0) {
+        bpf_printk("can't read method_len");
+    }
+    u64 method_size = sizeof(&trace->method);
+
+    method_size = method_size < method_len ? method_size : method_len;
+    
+    if (bpf_probe_read(trace->method, method_size, method_ptr)) {
+        bpf_printk("can't read method string");
+    };
+
+
+    // get path from Request.URL
+    void *url_ptr = 0;
+    bpf_probe_read(&url_ptr, sizeof(url_ptr), (void *)(req_ptr + url_ptr_pos));
+    void *path_ptr = 0;
+    bpf_probe_read(&path_ptr, sizeof(path_ptr), (void *)(url_ptr + path_ptr_pos));
+    u64 path_len = 0;
+    bpf_probe_read(&path_len, sizeof(path_len), (void *)(url_ptr + (path_ptr_pos + 8)));
+    u64 path_size = sizeof(trace->path);
+    path_size = path_size < path_len ? path_size : path_len;
+    bpf_probe_read(&trace->path, path_size, path_ptr);
+
+    // submit the completed trace via ringbuffer
+    bpf_ringbuf_submit(trace, 0);
     
     return 0;
 }

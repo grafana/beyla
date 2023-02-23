@@ -79,7 +79,6 @@ func (h *httpServerInstrumentor) Load(ctx *context.InstrumentorContext) error {
 	if err := spec.RewriteConstants(map[string]interface{}{
 		"url_ptr_pos":    uint64(16),
 		"path_ptr_pos":   uint64(56),
-		"ctx_ptr_pos":    uint64(232),
 		"method_ptr_pos": uint64(0),
 	}); err != nil {
 		return fmt.Errorf("rewriting BPF constants definition: %w", err)

@@ -16,7 +16,7 @@ import (
 type bpfHttpRequestTrace struct {
 	StartMonotimeNs uint64
 	EndMonotimeNs   uint64
-	Method          [100]uint8
+	Method          [6]uint8
 	Path            [100]uint8
 }
 

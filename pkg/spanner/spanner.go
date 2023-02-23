@@ -1,6 +1,7 @@
 package spanner
 
 import (
+	"bytes"
 	"time"
 
 	"github.com/grafana/http-autoinstrument/pkg/ebpf/nethttp"
@@ -40,9 +41,18 @@ func (c *converter) convert(trace *nethttp.HttpRequestTrace) HttpRequestSpan {
 	startDelta := monoNow - time.Duration(trace.StartMonotimeNs)
 	endDelta := monoNow - time.Duration(trace.EndMonotimeNs)
 
+	// From C, assuming 0-ended strings
+	methodLen := bytes.IndexByte(trace.Method[:], 0)
+	if methodLen < 0 {
+		methodLen = len(trace.Method)
+	}
+	pathLen := bytes.IndexByte(trace.Path[:], 0)
+	if pathLen < 0 {
+		pathLen = len(trace.Path)
+	}
 	return HttpRequestSpan{
-		Method: string(trace.Method[:3]),
-		Path:   string(trace.Path[:]),
+		Method: string(trace.Method[:methodLen]),
+		Path:   string(trace.Path[:pathLen]),
 		Start:  now.Add(-startDelta),
 		End:    now.Add(-endDelta),
 	}

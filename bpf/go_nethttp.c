@@ -16,7 +16,9 @@
 
 char __license[] SEC("license") = "Dual MIT/GPL";
 
-#define MAX_SIZE 100
+#define PATH_MAX_LEN   100
+#define METHOD_MAX_LEN 6 // Longer method: DELETE
+
 // TODO: make it user-configurable
 #define MAX_CONCURRENT_REQUESTS 500
 
@@ -26,8 +28,8 @@ typedef struct http_request_trace_t
 {
     u64 start_monotime_ns;
     u64 end_monotime_ns;
-    u8 method[MAX_SIZE];
-    u8 path[MAX_SIZE];
+    u8 method[METHOD_MAX_LEN];
+    u8 path[PATH_MAX_LEN];
     // TODO: http status code
     // TODO: remote address:port
     // TODO: dst address:port
@@ -38,7 +40,7 @@ const http_request_trace *unused __attribute__((unused));
 struct
 {
     __uint(type, BPF_MAP_TYPE_HASH);
-    __type(key, void *);  // key: pointer to the request goroutine
+    __type(key, u64);  // key: pointer to the request goroutine
     __type(value, http_request_trace);
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
 } ongoing_http_requests SEC(".maps");
@@ -52,15 +54,24 @@ struct {
 // TODO: infer this from debugging info: https://github.com/grafana/http-autoinstrument/issues/1
 volatile const u64 url_ptr_pos;
 volatile const u64 path_ptr_pos;
-volatile const u64 ctx_ptr_pos;
 volatile const u64 method_ptr_pos;
 
-
-// Current goroutine is r14, according to
+// In x86, current goroutine is pointed by r14, according to
 // https://go.googlesource.com/go/+/refs/heads/dev.regabi/src/cmd/compile/internal-abi.md#amd64-architecture
 inline void* get_goroutine_address(struct pt_regs *ctx) {
     return (void*)(ctx->r14);
 }
+
+static __u64 check_hash_elem(void *map, void *key, void* val, void* ctx) {
+    bpf_printk("%lx --> %lx", key, val);
+    return 0;
+}
+
+inline void debug_map_contents() {
+    bpf_printk("map contents:");
+    bpf_for_each_map_elem(&ongoing_http_requests, check_hash_elem, 0, 0);
+}
+
 
 // This instrumentation attaches uprobe to the following function:
 // func (mux *ServeMux) ServeHTTP(w ResponseWriter, r *Request)
@@ -71,16 +82,15 @@ int uprobe_ServeHTTP(struct pt_regs *ctx)
 
     // TODO: store registers in a map so we can fetch them in the return probe
 
-    bpf_printk("servemux entry\n");    
+    bpf_printk("servemux entry %lx", &ongoing_http_requests);    
     u64 request_pos = 4;
     http_request_trace httpReq = {};
     httpReq.start_monotime_ns = bpf_ktime_get_ns();
 
-    void *goroutine_addr = get_goroutine_address(ctx);
-    bpf_printk("INPUT goroutine_addr %x", goroutine_addr);
+    void* goroutine_addr = get_goroutine_address(ctx);
+    bpf_printk("INPUT goroutine_addr %lx", goroutine_addr);
     
     // Get request struct
-    bpf_printk("rdi val %x", ctx->rdi);
     void *req_ptr = get_argument_by_reg(ctx, request_pos);    
 
     // Get method from request
@@ -93,11 +103,9 @@ int uprobe_ServeHTTP(struct pt_regs *ctx)
         bpf_printk("can't read method_len");
     }
     u64 method_size = sizeof(httpReq.method);
-    bpf_printk("method ptr %u", method_ptr);
-    bpf_printk("method size %u", method_size);
+
     bpf_printk("method len %u", method_len);
     method_size = method_size < method_len ? method_size : method_len;
-    bpf_printk("final method size %u", method_size);
     
     if (bpf_probe_read(httpReq.method, method_size, method_ptr)) {
         bpf_printk("can't read method string");
@@ -114,33 +122,33 @@ int uprobe_ServeHTTP(struct pt_regs *ctx)
     u64 path_size = sizeof(httpReq.path);
     path_size = path_size < path_len ? path_size : path_len;
     bpf_probe_read(&httpReq.path, path_size, path_ptr);
-
-    bpf_probe_read(&goroutine_addr, sizeof(goroutine_addr), (void *)(req_ptr + ctx_ptr_pos + 8));
     
-    httpReq.path[0] = 'A';
-
     // Write event
     if (bpf_map_update_elem(&ongoing_http_requests, &goroutine_addr, &httpReq, BPF_ANY)) {
         bpf_printk("can't update map element");
     }
-    bpf_printk("--------------------------");
+
+    debug_map_contents();
+
     return 0;
 }
 
-SEC("uprobe/ServeHTTP")
+SEC("uprobe/ServeHTTP_return")
 int uprobe_ServeHttp_return(struct pt_regs *ctx)
 {
-    bpf_printk("servemux EXIT\n");
-    bpf_printk("rdi val %x", ctx->rdi);
+    bpf_printk("servemux EXIT %lx", &ongoing_http_requests);
 
-    void *goroutine_addr = get_goroutine_address(ctx);
-    bpf_printk("OUTPUT goroutine_addr %x", goroutine_addr);
+    void* goroutine_addr = get_goroutine_address(ctx);
+    bpf_printk("OUTPUT goroutine_addr %lx", goroutine_addr);
     // TODO: handle returned HTTP status code
 
-    // TODO: I think we can directly delete here (check bpf_map_delete_elem documentation)
-    void *httpReq_ptr = bpf_map_lookup_elem(&ongoing_http_requests, &goroutine_addr);
-    if (httpReq_ptr <= 0) {
-        bpf_printk("can't read http request pointer %d", httpReq_ptr);
+    debug_map_contents();
+    
+    // TODO: look for a way of do a lookup-and-delete in a single operation
+    http_request_trace *httpReq_ptr = bpf_map_lookup_elem(&ongoing_http_requests, &goroutine_addr);
+    long delret = bpf_map_delete_elem(&ongoing_http_requests, &goroutine_addr);
+    if (httpReq_ptr == NULL) {
+        bpf_printk("can't read http request pointer %d - %d", httpReq_ptr, delret);
         return 0;
     }
 

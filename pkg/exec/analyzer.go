@@ -1,4 +1,4 @@
-package instr
+package exec
 
 import (
 	"debug/dwarf"
@@ -17,7 +17,7 @@ type FuncOffsets struct {
 
 // TODO: allow instrumenting multiple functions sharing the same interface
 func GoInstrumentationPoints(elfF *elf.File, funcName string) (FuncOffsets, error) {
-	log := slog.With("component", "instr.InstrumentationPoint", "funcName", funcName)
+	log := slog.With("component", "exec.InstrumentationPoint", "funcName", funcName)
 	dwarfInfo, err := elfF.DWARF()
 	if err != nil {
 		return FuncOffsets{}, fmt.Errorf("can't load DWARF information from ELF file: %w", err)

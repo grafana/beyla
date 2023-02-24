@@ -16,7 +16,6 @@ package nethttp
 
 import (
 	"bytes"
-	"debug/elf"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -24,47 +23,34 @@ import (
 	"github.com/cilium/ebpf/link"
 	"github.com/cilium/ebpf/ringbuf"
 	"github.com/cilium/ebpf/rlimit"
-	constants "github.com/grafana/http-autoinstrument/pkg/const"
-	"github.com/grafana/http-autoinstrument/pkg/instr"
+	"github.com/grafana/http-autoinstrument/pkg/exec"
 	"golang.org/x/exp/slog"
 )
 
 //go:generate bpf2go -cc $BPF_CLANG -cflags $BPF_CFLAGS -type http_request_trace bpf ../../../bpf/go_nethttp.c -- -I../../../bpf/headers
 
-type httpServerInstrumentor struct {
-	bpfObjects   *bpfObjects
-	uprobe       link.Link
-	uretProbes   []link.Link
-	eventsReader *ringbuf.Reader
+type InstrumentedServe struct {
+	bpfObjects    bpfObjects
+	uprobe        link.Link
+	uprobeReturns []link.Link
+	eventsReader  *ringbuf.Reader
 }
 
 type HttpRequestTrace bpfHttpRequestTrace
 
-func New() *httpServerInstrumentor {
-	return &httpServerInstrumentor{}
-}
-
-func (h *httpServerInstrumentor) LibraryName() string {
-	return "net/http"
-}
-
-func (h *httpServerInstrumentor) FuncNames() []string {
-	return []string{constants.FuncName}
-}
-
-func (h *httpServerInstrumentor) Load(processPath string, executable *elf.File, offsets instr.FuncOffsets) error {
+func Instrument(processPath string, offsets exec.FuncOffsets) (*InstrumentedServe, error) {
 	exe, err := link.OpenExecutable(processPath)
 	if err != nil {
-		return fmt.Errorf("opening executable file %q: %w", processPath, err)
+		return nil, fmt.Errorf("opening executable file %q: %w", processPath, err)
 	}
 
 	if err := rlimit.RemoveMemlock(); err != nil {
-		return fmt.Errorf("removing memlock: %w", err)
+		return nil, fmt.Errorf("removing memlock: %w", err)
 	}
-	objects := bpfObjects{}
+
 	spec, err := loadBpf()
 	if err != nil {
-		return fmt.Errorf("loading BPF data: %w", err)
+		return nil, fmt.Errorf("loading BPF data: %w", err)
 	}
 	// TODO: adapt ctx.Injector.Inject and later dwarf info
 	if err := spec.RewriteConstants(map[string]interface{}{
@@ -73,54 +59,52 @@ func (h *httpServerInstrumentor) Load(processPath string, executable *elf.File, 
 		"method_ptr_pos": uint64(0),
 		"status_ptr_pos": uint64(120),
 	}); err != nil {
-		return fmt.Errorf("rewriting BPF constants definition: %w", err)
-	}
-	if err := spec.LoadAndAssign(&objects, nil); err != nil {
-		return fmt.Errorf("loading and assigning BPF objects: %w", err)
+		return nil, fmt.Errorf("rewriting BPF constants definition: %w", err)
 	}
 
-	h.bpfObjects = &objects
+	h := InstrumentedServe{}
 
-	fnName := h.FuncNames()[0]
+	if err := spec.LoadAndAssign(&h.bpfObjects, nil); err != nil {
+		return nil, fmt.Errorf("loading and assigning BPF objects: %w", err)
+	}
 
 	// this is starting to work despite serveFunc.Start is 0 for this actual function
-	up, err := exe.Uprobe(fnName, h.bpfObjects.UprobeServeHTTP, &link.UprobeOptions{
+	up, err := exe.Uprobe("", h.bpfObjects.UprobeServeHTTP, &link.UprobeOptions{
 		Address: offsets.Start,
 	})
 	if err != nil {
-		return fmt.Errorf("setting uprobe: %w", err)
+		return nil, fmt.Errorf("setting uprobe: %w", err)
 	}
-
 	h.uprobe = up
 
 	// Go won't work with Uretprobes because the way it manages the stack. We need to set uprobes just before the return
 	// values: https://github.com/iovisor/bcc/issues/1320
 	for _, ret := range offsets.Returns {
-		urp, err := exe.Uprobe(fnName, h.bpfObjects.UprobeServeHttpReturn, &link.UprobeOptions{
+		urp, err := exe.Uprobe("", h.bpfObjects.UprobeServeHttpReturn, &link.UprobeOptions{
 			Address: ret,
 		})
 		if err != nil {
-			return fmt.Errorf("setting uretpobe: %w", err)
+			return nil, fmt.Errorf("setting uretpobe: %w", err)
 		}
-		h.uretProbes = append(h.uretProbes, urp)
+		h.uprobeReturns = append(h.uprobeReturns, urp)
 	}
 
 	rd, err := ringbuf.NewReader(h.bpfObjects.Events)
 	if err != nil {
-		return fmt.Errorf("creating perf reader: %w", err)
+		return nil, fmt.Errorf("creating perf reader: %w", err)
 	}
 	h.eventsReader = rd
 
-	return nil
+	return &h, nil
 }
 
-func (h *httpServerInstrumentor) Run(eventsChan chan<- HttpRequestTrace) {
+func (h *InstrumentedServe) Run(eventsChan chan<- HttpRequestTrace) {
 	logger := slog.With("name", "net/http-instrumentor")
 	var event HttpRequestTrace
 	for {
-		logger.Info("starting to read event")
+		logger.Debug("starting to read perf buffer")
 		record, err := h.eventsReader.Read()
-		logger.Info("received event")
+		logger.Debug("received event")
 		if err != nil {
 			if errors.Is(err, ringbuf.ErrClosed) {
 				return
@@ -139,7 +123,7 @@ func (h *httpServerInstrumentor) Run(eventsChan chan<- HttpRequestTrace) {
 }
 
 /*
-func (h *httpServerInstrumentor) convertEvent(e *HttpEvent) *events.Event {
+func (h *InstrumentedServe) convertEvent(e *HttpEvent) *events.Event {
 	method := unix.ByteSliceToString(e.Method[:])
 	path := unix.ByteSliceToString(e.Path[:])
 
@@ -164,7 +148,7 @@ func (h *httpServerInstrumentor) convertEvent(e *HttpEvent) *events.Event {
 }
 */
 
-func (h *httpServerInstrumentor) Close() {
+func (h *InstrumentedServe) Close() {
 	slog.With("name", "net/http-instrumentor").Info("closing net/http instrumentor")
 	if h.eventsReader != nil {
 		h.eventsReader.Close()
@@ -173,11 +157,9 @@ func (h *httpServerInstrumentor) Close() {
 	if h.uprobe != nil {
 		h.uprobe.Close()
 	}
-	for _, urp := range h.uretProbes {
+	for _, urp := range h.uprobeReturns {
 		urp.Close()
 	}
 
-	if h.bpfObjects != nil {
-		h.bpfObjects.Close()
-	}
+	h.bpfObjects.Close()
 }

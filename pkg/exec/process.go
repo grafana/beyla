@@ -1,5 +1,5 @@
-// Package instr stores the utilities to instrument the code
-package instr
+// Package exec provides the utilities to analyse the executable code
+package exec
 
 import (
 	"debug/elf"
@@ -27,7 +27,7 @@ type ProcessReader interface {
 // TODO: use regular expression
 // TODO: check that all the existing instances of the excutable are instrumented, even when it is offloaded from memory
 func FindExecELF(pathContains string) (string, *elf.File, error) {
-	var log = slog.With("component", "instr.FindExecELF", "pathContains", pathContains)
+	var log = slog.With("component", "exec.FindExecELF", "pathContains", pathContains)
 	for {
 		log.Debug("searching for process executable")
 		processes, err := process.Processes()

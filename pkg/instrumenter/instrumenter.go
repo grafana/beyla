@@ -37,18 +37,35 @@ func BuildPipeline(config Config) (Pipeline, error) {
 	// Build and connect the nodes of the processing pipeline
 	httpTracer := node.AsStart(instrumetedServe.Run)
 	converter := node.AsMiddle(spanner.ConvertToSpan)
-	// TODO: override service name
-	otelTraces, err := otel.Report(processPath, config.Endpoint)
-	if err != nil {
-		panic(err)
-	}
-	otelTracesNode := node.AsTerminal(otelTraces)
-
 	httpTracer.SendsTo(converter)
-	converter.SendsTo(otelTracesNode)
-	// Stdout output just for debugging
-	// TODO: disable by default and allow enabling it from env var
-	converter.SendsTo(printerNode())
+
+	// TODO: allow overriding service name
+	reporter := otel.NewReporter(
+		processPath, config.TracesEndpoint, config.MetricsEndpoint)
+	if err := reporter.Start(); err != nil {
+		return Pipeline{}, fmt.Errorf("starting OTEL reporter: %w", err)
+	}
+
+	outNodes := 0
+	if config.TracesEndpoint != "" {
+		outNodes++
+		converter.SendsTo(node.AsTerminal(reporter.ReportTraces))
+	}
+
+	if config.MetricsEndpoint != "" {
+		outNodes++
+		converter.SendsTo(node.AsTerminal(reporter.ReportMetrics))
+	}
+
+	if config.PrintTraces {
+		outNodes++
+		// Stdout output just for debugging
+		converter.SendsTo(printerNode())
+	}
+
+	if outNodes == 0 {
+		return Pipeline{}, fmt.Errorf("you should define at least one of OTEL_METRICS_ENDPOINT, OTEL_TRACES_ENDPOINT or PRINT_TRACES")
+	}
 
 	return Pipeline{startNode: httpTracer}, nil
 }

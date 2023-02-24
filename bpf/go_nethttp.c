@@ -1,5 +1,3 @@
-// Copyright The OpenTelemetry Authors
-//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -12,27 +10,32 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "arguments.h"
+#include "utils.h"
 
 char __license[] SEC("license") = "Dual MIT/GPL";
 
-#define PATH_MAX_LEN   100
+#define PATH_MAX_LEN 100
 #define METHOD_MAX_LEN 6 // Longer method: DELETE
 
 // TODO: make it user-configurable
 #define MAX_CONCURRENT_REQUESTS 500
 
-#define MAX_REQUEST_KEY 
-
-// stored in the map
+// Temporary information about a function invocation. It stores the invocation time of a function
+// as well as the value of registers at the invocation time. This way we can retrieve them at the
+// return uprobes so we can know the values of the function arguments (which are passed as registers
+// since Go 1.17).
+// This element is created in the function start probe and stored in the ongoing_http_requests hashmaps.
+// Then it is retrieved in the return uprobes and used to know the HTTP call duration as well as its
+// attributes (method, path, and status code).
 typedef struct http_method_invocation_t {
     u64 start_monotime_ns;
-    struct pt_regs regs; // we store registers on invocation to be able to fetch the arguments at return
+    struct pt_regs
+        regs; // we store registers on invocation to be able to fetch the arguments at return
 } http_method_invocation;
 
-// submitted via ringbuffer
-typedef struct http_request_trace_t
-{
+// Trace of an HTTP call invocation. It is instantiated by the return uprobe and forwarded to the
+// user space through the events ringbuffer.
+typedef struct http_request_trace_t {
     u64 start_monotime_ns;
     u64 end_monotime_ns;
     u8 method[METHOD_MAX_LEN];
@@ -44,11 +47,10 @@ typedef struct http_request_trace_t
 // Force emitting struct sock_info into the ELF for automatic creation of Golang struct
 const http_request_trace *unused __attribute__((unused));
 
-struct
-{
+struct {
     __uint(type, BPF_MAP_TYPE_HASH);
-    __type(key, void*);  // key: pointer to the request goroutine
-    __type(value, http_method_invocation); 
+    __type(key, void *); // key: pointer to the request goroutine
+    __type(value, http_method_invocation);
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
 } ongoing_http_requests SEC(".maps");
 
@@ -57,72 +59,50 @@ struct {
     __uint(max_entries, 1 << 24);
 } events SEC(".maps");
 
-// To be Injected in init
-// TODO: infer this from debugging info: https://github.com/grafana/http-autoinstrument/issues/1
+// To be Injected from the user space during the eBPF program load & initialization
 volatile const u64 url_ptr_pos;
 volatile const u64 path_ptr_pos;
 volatile const u64 method_ptr_pos;
 volatile const u64 status_ptr_pos;
 
-
-// In x86, current goroutine is pointed by r14, according to
-// https://go.googlesource.com/go/+/refs/heads/dev.regabi/src/cmd/compile/internal-abi.md#amd64-architecture
-inline void* get_goroutine_address(struct pt_regs *ctx) {
-    return (void*)(ctx->r14);
-}
-
-static __u64 check_hash_elem(void *map, void *key, void* val, void* ctx) {
-    bpf_printk("%lx --> %lx", *((u64*)key), val);
-    return 0;
-}
-
-inline void debug_map_contents() {
-    bpf_printk("map contents:");
-    bpf_for_each_map_elem(&ongoing_http_requests, check_hash_elem, 0, 0);
-}
-
 // This instrumentation attaches uprobe to the following function:
 // func (mux *ServeMux) ServeHTTP(w ResponseWriter, r *Request)
 // or other functions sharing the same signature (e.g http.Handler.ServeHTTP)
 SEC("uprobe/ServeHTTP")
-int uprobe_ServeHTTP(struct pt_regs *ctx)
-{
+int uprobe_ServeHTTP(struct pt_regs *ctx) {
 
     // TODO: store registers in a map so we can fetch them in the return probe
-    bpf_printk("=== uprobe/ServeHTTP === ");    
-    void* goroutine_addr = get_goroutine_address(ctx);
+    bpf_printk("=== uprobe/ServeHTTP === ");
+    void *goroutine_addr = get_goroutine_address(ctx);
     bpf_printk("goroutine_addr %lx", goroutine_addr);
 
     http_method_invocation invocation = {
         .start_monotime_ns = bpf_ktime_get_ns(),
         .regs = *ctx,
     };
-    
+
     // Write event
     if (bpf_map_update_elem(&ongoing_http_requests, &goroutine_addr, &invocation, BPF_ANY)) {
         bpf_printk("can't update map element");
     }
 
-    debug_map_contents();
-
     return 0;
 }
 
 SEC("uprobe/ServeHTTP_return")
-int uprobe_ServeHttp_return(struct pt_regs *ctx)
-{
-    bpf_printk("=== uprobe/ServeHTTP_return === ");    
-    void* goroutine_addr = get_goroutine_address(ctx);
+int uprobe_ServeHttp_return(struct pt_regs *ctx) {
+    bpf_printk("=== uprobe/ServeHTTP_return === ");
+    void *goroutine_addr = get_goroutine_address(ctx);
     bpf_printk("goroutine_addr %lx", goroutine_addr);
-    debug_map_contents();
 
-    http_method_invocation *invocation = bpf_map_lookup_elem(&ongoing_http_requests, &goroutine_addr);
+    http_method_invocation *invocation =
+        bpf_map_lookup_elem(&ongoing_http_requests, &goroutine_addr);
     bpf_map_delete_elem(&ongoing_http_requests, &goroutine_addr);
     if (invocation == NULL) {
         bpf_printk("can't read http invocation metadata");
         return 0;
     }
-    
+
     http_request_trace *trace = bpf_ringbuf_reserve(&events, sizeof(http_request_trace), 0);
     if (!trace) {
         bpf_printk("can't reserve space in the ringbuffer");
@@ -134,8 +114,8 @@ int uprobe_ServeHttp_return(struct pt_regs *ctx)
     // Read arguments from the original set of registers
 
     // Get request struct
-    u64 request_pos = 4;    
-    void *req_ptr = get_argument_by_reg(&(invocation->regs), request_pos);    
+    u64 request_pos = 4;
+    void *req_ptr = get_argument_by_reg(&(invocation->regs), request_pos);
 
     // Get method from request
     void *method_ptr = 0;
@@ -143,13 +123,14 @@ int uprobe_ServeHttp_return(struct pt_regs *ctx)
         bpf_printk("can't read method_ptr");
     }
     u64 method_len = 0;
-    if (bpf_probe_read(&method_len, sizeof(method_len), (void *)(req_ptr + (method_ptr_pos + 8))) != 0) {
+    if (bpf_probe_read(&method_len, sizeof(method_len), (void *)(req_ptr + (method_ptr_pos + 8))) !=
+        0) {
         bpf_printk("can't read method_len");
     }
     u64 method_size = sizeof(&trace->method);
 
     method_size = method_size < method_len ? method_size : method_len;
-    
+
     if (bpf_probe_read(trace->method, method_size, method_ptr)) {
         bpf_printk("can't read method string");
     };
@@ -165,18 +146,16 @@ int uprobe_ServeHttp_return(struct pt_regs *ctx)
     path_size = path_size < path_len ? path_size : path_len;
     bpf_probe_read(&trace->path, path_size, path_ptr);
 
-
     // get return code from http.ResponseWriter (interface)
     // assuming implementation of http.ResponseWriter is http.response
     // TODO: this is really a nonportable assumption
     u64 response_pos = 3;
-    void *resp_ptr = get_argument_by_reg(&(invocation->regs), response_pos);    
+    void *resp_ptr = get_argument_by_reg(&(invocation->regs), response_pos);
 
-    bpf_probe_read(&trace->status, sizeof(trace->status), (void*)(resp_ptr + status_ptr_pos));
+    bpf_probe_read(&trace->status, sizeof(trace->status), (void *)(resp_ptr + status_ptr_pos));
 
     // submit the completed trace via ringbuffer
     bpf_ringbuf_submit(trace, 0);
-    
+
     return 0;
 }
-

@@ -29,6 +29,10 @@ github.com/go-logr/stdr
 # github.com/go-logr/zapr v1.2.2
 ## explicit; go 1.16
 github.com/go-logr/zapr
+# github.com/go-ole/go-ole v1.2.6
+## explicit; go 1.12
+github.com/go-ole/go-ole
+github.com/go-ole/go-ole/oleutil
 # github.com/golang/protobuf v1.5.2
 ## explicit; go 1.9
 github.com/golang/protobuf/jsonpb
@@ -54,6 +58,22 @@ github.com/mariomac/pipes/pkg/node/internal/connect
 github.com/prometheus/procfs
 github.com/prometheus/procfs/internal/fs
 github.com/prometheus/procfs/internal/util
+# github.com/shirou/gopsutil v3.21.11+incompatible
+## explicit
+github.com/shirou/gopsutil/cpu
+github.com/shirou/gopsutil/internal/common
+github.com/shirou/gopsutil/mem
+github.com/shirou/gopsutil/net
+github.com/shirou/gopsutil/process
+# github.com/tklauser/go-sysconf v0.3.11
+## explicit; go 1.13
+github.com/tklauser/go-sysconf
+# github.com/tklauser/numcpus v0.6.0
+## explicit; go 1.13
+github.com/tklauser/numcpus
+# github.com/yusufpapurcu/wmi v1.2.2
+## explicit; go 1.16
+github.com/yusufpapurcu/wmi
 # go.opentelemetry.io/otel v1.13.0
 ## explicit; go 1.18
 go.opentelemetry.io/otel

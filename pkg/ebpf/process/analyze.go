@@ -20,20 +20,16 @@ import (
 	"debug/gosym"
 	"errors"
 	"fmt"
+
 	constants "github.com/grafana/http-autoinstrument/pkg/const"
-	"golang.org/x/exp/slog"
-	"os"
-
 	"github.com/grafana/http-autoinstrument/pkg/ebpf/log"
-
-	"github.com/prometheus/procfs"
-
 	"github.com/hashicorp/go-version"
+	"github.com/prometheus/procfs"
 	"golang.org/x/arch/x86/x86asm"
+	"golang.org/x/exp/slog"
 )
 
 type TargetDetails struct {
-	PID               int
 	Functions         map[string]*Func // TODO: functionoffset name: offset
 	GoVersion         *version.Version
 	Libraries         map[string]string
@@ -76,21 +72,9 @@ func (a *processAnalyzer) findKeyvalMmap(pid int) (uintptr, uintptr) {
 	panic(errors.New("cant find keyval map"))
 }
 
-func (a *processAnalyzer) Analyze(pid int, relevantFuncs map[string]interface{}) (*TargetDetails, error) {
+func (a *processAnalyzer) Analyze(elfF *elf.File, relevantFuncs map[string]interface{}) (*TargetDetails, error) {
 	result := &TargetDetails{
-		PID:       pid,
 		Functions: map[string]*Func{},
-	}
-
-	f, err := os.Open(fmt.Sprintf("/proc/%d/exe", pid))
-	if err != nil {
-		return nil, err
-	}
-
-	defer f.Close()
-	elfF, err := elf.NewFile(f)
-	if err != nil {
-		return nil, err
 	}
 
 	goVersion, modules, err := a.getModuleDetails(elfF)

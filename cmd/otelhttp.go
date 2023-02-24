@@ -2,17 +2,13 @@ package main
 
 import (
 	"fmt"
-	"github.com/grafana/http-autoinstrument/pkg/otel"
-	"io"
-	"io/ioutil"
 	"os"
-	"path"
-	"strconv"
-	"strings"
+
+	"github.com/grafana/http-autoinstrument/pkg/instr"
+	"github.com/grafana/http-autoinstrument/pkg/otel"
 
 	"github.com/cilium/ebpf/link"
 	"github.com/grafana/http-autoinstrument/pkg/ebpf/context"
-	"github.com/grafana/http-autoinstrument/pkg/ebpf/errors"
 	"github.com/grafana/http-autoinstrument/pkg/ebpf/nethttp"
 	"github.com/grafana/http-autoinstrument/pkg/ebpf/process"
 
@@ -39,16 +35,17 @@ func main() {
 		os.Exit(-1)
 	}
 
-	pid, err := findProcessID(config.Exec)
+	processPath, processElf, err := instr.FindProcess(config.Exec)
 	panicOn(err)
+	defer processElf.Close()
 
 	pa := process.NewAnalyzer()
 	// TODO: get rid of this
-	target, err := pa.Analyze(pid, map[string]interface{}{"net/http.HandlerFunc.ServeHTTP": struct{}{}})
+	target, err := pa.Analyze(processElf, map[string]interface{}{"net/http.HandlerFunc.ServeHTTP": struct{}{}})
 	panicOn(err)
 
 	// TODO: listen for new processes
-	exe, err := link.OpenExecutable(fmt.Sprintf("/proc/%d/exe", target.PID))
+	exe, err := link.OpenExecutable(processPath)
 	panicOn(err)
 
 	ctx := &context.InstrumentorContext{
@@ -84,57 +81,4 @@ func panicOn(err error) {
 	if err != nil {
 		panic(err)
 	}
-}
-
-func findProcessID(exePath string) (int, error) {
-	// TODO: allow overriding proc for containers
-	proc, err := os.Open("/proc")
-	if err != nil {
-		return 0, err
-	}
-
-	for {
-		dirs, err := proc.Readdir(15)
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return 0, err
-		}
-
-		for _, di := range dirs {
-			if !di.IsDir() {
-				continue
-			}
-
-			dname := di.Name()
-			if dname[0] < '0' || dname[0] > '9' {
-				continue
-			}
-
-			pid, err := strconv.Atoi(dname)
-			if err != nil {
-				return 0, err
-			}
-
-			exeName, err := os.Readlink(path.Join("/proc", dname, "exe"))
-			if err != nil {
-				// Read link may fail if target process runs not as root
-				cmdLine, err := ioutil.ReadFile(path.Join("/proc", dname, "cmdline"))
-				if err != nil {
-					return 0, err
-				}
-
-				if strings.Contains(string(cmdLine), exePath) {
-					return pid, nil
-				}
-				// for simplicity, we don't check for full path
-				// TODO: support regexpes for better process selection
-			} else if strings.Contains(exeName, exePath) {
-				return pid, nil
-			}
-		}
-	}
-
-	return 0, errors.ErrProcessNotFound
 }

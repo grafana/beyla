@@ -29,6 +29,8 @@ import (
 
 //go:generate bpf2go -cc $BPF_CLANG -cflags $BPF_CFLAGS -type http_request_trace bpf ../../../bpf/go_nethttp.c -- -I../../../bpf/headers
 
+// InstrumentedServe allows instrumenting each invocation to the Go standard net/http ServeHTTP
+// method handler.
 type InstrumentedServe struct {
 	bpfObjects    bpfObjects
 	uprobe        link.Link
@@ -36,8 +38,14 @@ type InstrumentedServe struct {
 	eventsReader  *ringbuf.Reader
 }
 
+// HttpRequestTrace contains information from an HTTP request as directly received from the
+// eBPF layer. This contains low-level C structures so for more comfortable handling from Go,
+// HttpRequestTrace instances are converted to spanner.HttpRequestSpan instances in the
+// spanner.ConvertToSpan function.
 type HttpRequestTrace bpfHttpRequestTrace
 
+// Instrument the executable passed as path and insert probes in the provided offsets, so the
+// returned InstrumentedServe instance will listen and forward traces for each HTTP invocation.
 func Instrument(processPath string, offsets exec.FuncOffsets) (*InstrumentedServe, error) {
 	exe, err := link.OpenExecutable(processPath)
 	if err != nil {
@@ -52,7 +60,8 @@ func Instrument(processPath string, offsets exec.FuncOffsets) (*InstrumentedServ
 	if err != nil {
 		return nil, fmt.Errorf("loading BPF data: %w", err)
 	}
-	// TODO: adapt ctx.Injector.Inject and later dwarf info
+
+	// TODO: fill this information from DWARF info
 	if err := spec.RewriteConstants(map[string]interface{}{
 		"url_ptr_pos":    uint64(16),
 		"path_ptr_pos":   uint64(56),
@@ -63,12 +72,11 @@ func Instrument(processPath string, offsets exec.FuncOffsets) (*InstrumentedServ
 	}
 
 	h := InstrumentedServe{}
-
+	// Load BPF programs
 	if err := spec.LoadAndAssign(&h.bpfObjects, nil); err != nil {
 		return nil, fmt.Errorf("loading and assigning BPF objects: %w", err)
 	}
-
-	// this is starting to work despite serveFunc.Start is 0 for this actual function
+	// Attach BPF programs as start and return probes
 	up, err := exe.Uprobe("", h.bpfObjects.UprobeServeHTTP, &link.UprobeOptions{
 		Address: offsets.Start,
 	})
@@ -89,6 +97,8 @@ func Instrument(processPath string, offsets exec.FuncOffsets) (*InstrumentedServ
 		h.uprobeReturns = append(h.uprobeReturns, urp)
 	}
 
+	// BPF will send each measured trace via Ring Buffer, so we listen for them from the
+	// user space.
 	rd, err := ringbuf.NewReader(h.bpfObjects.Events)
 	if err != nil {
 		return nil, fmt.Errorf("creating perf reader: %w", err)
@@ -121,32 +131,6 @@ func (h *InstrumentedServe) Run(eventsChan chan<- HttpRequestTrace) {
 		eventsChan <- event
 	}
 }
-
-/*
-func (h *InstrumentedServe) convertEvent(e *HttpEvent) *events.Event {
-	method := unix.ByteSliceToString(e.Method[:])
-	path := unix.ByteSliceToString(e.Path[:])
-
-	sc := trace.NewSpanContext(trace.SpanContextConfig{
-		TraceID:    e.SpanContext.TraceID,
-		SpanID:     e.SpanContext.SpanID,
-		TraceFlags: trace.FlagsSampled,
-	})
-
-	return &events.Event{
-		Library:     h.LibraryName(),
-		Name:        path,
-		Kind:        trace.SpanKindServer,
-		StartTime:   int64(e.StartTime),
-		EndTime:     int64(e.EndTime),
-		SpanContext: &sc,
-		Attributes: []attribute.KeyValue{
-			semconv.HTTPMethodKey.String(method),
-			semconv.HTTPTargetKey.String(path),
-		},
-	}
-}
-*/
 
 func (h *InstrumentedServe) Close() {
 	slog.With("name", "net/http-instrumentor").Info("closing net/http instrumentor")

@@ -3,6 +3,7 @@ package otel
 import (
 	"context"
 	"fmt"
+
 	"github.com/grafana/http-autoinstrument/pkg/spanner"
 	"go.opentelemetry.io/otel/attribute"
 
@@ -14,36 +15,42 @@ import (
 	trace2 "go.opentelemetry.io/otel/trace"
 )
 
-func Report(endpoint string) (func(<-chan spanner.HttpRequestSpan), error) {
-	report := reporter{endpoint: endpoint}
+func Report(svcName, endpoint string) (func(<-chan spanner.HttpRequestSpan), error) {
+	report := reporter{svcName: svcName, endpoint: endpoint}
 	if err := report.start(); err != nil {
 		return nil, fmt.Errorf("instantiating OTEL: %w", err)
 	}
 	// TODO: make configurable
 	return func(spans <-chan spanner.HttpRequestSpan) {
-		tracer := report.provider.Tracer("github.com/grafana/http-autoinstrument")
+		tracer := report.traceProvider.Tracer("github.com/grafana/http-autoinstrument")
 		for span := range spans {
-			// TODO: there must be a better way to instantiate spans
-			_, sp := tracer.Start(context.TODO(), "session",
-				trace2.WithTimestamp(span.Start),
-				trace2.WithAttributes(
-					// TODO: use standard names
-					attribute.Int("http.status", span.Status),
-					attribute.String("http.path", span.Path),
-					attribute.String("http.method", span.Method),
-					// TODO: add src/dst ip and dst port
-				),
-				// TODO: trace2.WithSpanKind()
-			)
-			sp.End(trace2.WithTimestamp(span.End))
+			reportTraceSpans(tracer, span)
+			//TODO: reportAsMetrics(span),
 		}
 	}, nil
 }
 
+func reportTraceSpans(tracer trace2.Tracer, span spanner.HttpRequestSpan) {
+	// TODO: there must be a better way to instantiate spans
+	_, sp := tracer.Start(context.TODO(), "session",
+		trace2.WithTimestamp(span.Start),
+		trace2.WithAttributes(
+			// TODO: use standard names
+			attribute.Int("http.status", span.Status),
+			attribute.String("http.path", span.Path),
+			attribute.String("http.method", span.Method),
+			// TODO: add src/dst ip and dst port
+		),
+		// TODO: trace2.WithSpanKind()
+	)
+	sp.End(trace2.WithTimestamp(span.End))
+}
+
 type reporter struct {
-	endpoint string
-	exporter *otlptrace.Exporter
-	provider *trace.TracerProvider
+	svcName       string
+	endpoint      string
+	exporter      *otlptrace.Exporter
+	traceProvider *trace.TracerProvider
 }
 
 func (r *reporter) start() error {
@@ -52,8 +59,7 @@ func (r *reporter) start() error {
 	// TODO: make configurable
 	resources := resource.NewWithAttributes(
 		semconv.SchemaURL,
-		semconv.ServiceNameKey.String("otel-ebpf-sockets"),
-		semconv.ServiceVersionKey.String("v0.0.0"),
+		semconv.ServiceNameKey.String(r.svcName),
 	)
 
 	// Instantiate the OTLP HTTP exporter
@@ -66,7 +72,7 @@ func (r *reporter) start() error {
 	if err != nil {
 		return err
 	}
-	r.provider = trace.NewTracerProvider(
+	r.traceProvider = trace.NewTracerProvider(
 		trace.WithResource(resources),
 		trace.WithSyncer(r.exporter),
 	)
@@ -74,7 +80,7 @@ func (r *reporter) start() error {
 }
 
 func (r *reporter) Close() error {
-	if err := r.provider.Shutdown(context.TODO()); err != nil {
+	if err := r.traceProvider.Shutdown(context.TODO()); err != nil {
 		return fmt.Errorf("closing traces provider: %w", err)
 	}
 	if err := r.exporter.Shutdown(context.TODO()); err != nil {

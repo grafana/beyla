@@ -15,6 +15,8 @@ type FuncOffsets struct {
 	Returns []uint64
 }
 
+// GoInstrumentationPoints loads the provided executable and looks for the addresses
+//  where the start and return probes must be inserted.
 // TODO: allow instrumenting multiple functions sharing the same interface
 func GoInstrumentationPoints(elfF *elf.File, funcName string) (FuncOffsets, error) {
 	log := slog.With("component", "exec.InstrumentationPoint", "funcName", funcName)

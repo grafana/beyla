@@ -9,6 +9,7 @@ import (
 	"github.com/gavv/monotime"
 )
 
+// HttpRequestSpan contains the information being submitted as
 type HttpRequestSpan struct {
 	Method string
 	Path   string

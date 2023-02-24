@@ -7,10 +7,7 @@ import (
 	"github.com/grafana/http-autoinstrument/pkg/instr"
 	"github.com/grafana/http-autoinstrument/pkg/otel"
 
-	"github.com/cilium/ebpf/link"
-	"github.com/grafana/http-autoinstrument/pkg/ebpf/context"
 	"github.com/grafana/http-autoinstrument/pkg/ebpf/nethttp"
-	"github.com/grafana/http-autoinstrument/pkg/ebpf/process"
 
 	"github.com/caarlos0/env/v6"
 	"github.com/grafana/http-autoinstrument/pkg/spanner"
@@ -35,26 +32,15 @@ func main() {
 		os.Exit(-1)
 	}
 
-	processPath, processElf, err := instr.FindProcess(config.Exec)
+	processPath, processElf, err := instr.FindExecELF(config.Exec)
 	panicOn(err)
 	defer processElf.Close()
 
-	pa := process.NewAnalyzer()
-	// TODO: get rid of this
-	target, err := pa.Analyze(processElf, map[string]interface{}{"net/http.HandlerFunc.ServeHTTP": struct{}{}})
+	offsets, err := instr.GoInstrumentationPoints(processElf, "net/http.HandlerFunc.ServeHTTP")
 	panicOn(err)
-
-	// TODO: listen for new processes
-	exe, err := link.OpenExecutable(processPath)
-	panicOn(err)
-
-	ctx := &context.InstrumentorContext{
-		Executable:    exe,
-		TargetDetails: target,
-	}
 
 	httpInstrumentor := nethttp.New()
-	panicOn(httpInstrumentor.Load(ctx))
+	panicOn(httpInstrumentor.Load(processPath, processElf, offsets))
 
 	traceNode := node.AsStart(httpInstrumentor.Run)
 	trackerNode := node.AsMiddle(spanner.ConvertToSpan)

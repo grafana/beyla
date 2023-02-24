@@ -20,14 +20,14 @@ type ProcessReader interface {
 	io.Closer
 }
 
-// FindProcess finds the ELF info of the first executable whose name contains the given string.
+// FindExecELF finds the ELF info of the first executable whose name contains the given string.
 // It returns a reader to the file of the process executable. The returned file
 // must be closed after its usage.
 // The operation blocks until the executable is available.
 // TODO: use regular expression
 // TODO: check that all the existing instances of the excutable are instrumented, even when it is offloaded from memory
-func FindProcess(pathContains string) (string, *elf.File, error) {
-	var log = slog.With("component", "instr.FindProcess", "pathContains", pathContains)
+func FindExecELF(pathContains string) (string, *elf.File, error) {
+	var log = slog.With("component", "instr.FindExecELF", "pathContains", pathContains)
 	for {
 		log.Debug("searching for process executable")
 		processes, err := process.Processes()

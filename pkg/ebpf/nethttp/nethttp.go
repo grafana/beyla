@@ -16,14 +16,16 @@ package nethttp
 
 import (
 	"bytes"
+	"debug/elf"
 	"encoding/binary"
 	"errors"
 	"fmt"
+
 	"github.com/cilium/ebpf/link"
 	"github.com/cilium/ebpf/ringbuf"
 	"github.com/cilium/ebpf/rlimit"
 	constants "github.com/grafana/http-autoinstrument/pkg/const"
-	"github.com/grafana/http-autoinstrument/pkg/ebpf/context"
+	"github.com/grafana/http-autoinstrument/pkg/instr"
 	"golang.org/x/exp/slog"
 )
 
@@ -46,27 +48,16 @@ func (h *httpServerInstrumentor) LibraryName() string {
 	return "net/http"
 }
 
-/*
-&dwarf.Entry{Offset:0x25a449,
-
-Tag:dwarf.TagSubprogram,
-Children:true,
-
-	Field:[]dwarf.Field{
-		dwarf.Field{
-			Attr:dwarf.AttrName, Val:"net/http.(*ServeMux).ServeHTTP", Class:dwarf.ClassString
-		},
-		dwarf.Field{Attr:dwarf.AttrLowpc,  ## ESTE ES
-			Val:0x6973e0, Class:dwarf.ClassAddress
-		},
-
-dwarf.Field{Attr:dwarf.AttrHighpc, Val:0x697565, Class:dwarf.ClassAddress}, dwarf.Field{Attr:dwarf.AttrFrameBase, Val:[]uint8{0x9c}, Class:dwarf.ClassExprLoc}, dwarf.Field{Attr:dwarf.AttrDeclFile, Val:19, Class:dwarf.ClassConstant}, dwarf.Field{Attr:dwarf.AttrExternal, Val:true, Class:dwarf.ClassFlag}}}
-*/
 func (h *httpServerInstrumentor) FuncNames() []string {
 	return []string{constants.FuncName}
 }
 
-func (h *httpServerInstrumentor) Load(ctx *context.InstrumentorContext) error {
+func (h *httpServerInstrumentor) Load(processPath string, executable *elf.File, offsets instr.FuncOffsets) error {
+	exe, err := link.OpenExecutable(processPath)
+	if err != nil {
+		return fmt.Errorf("opening executable file %q: %w", processPath, err)
+	}
+
 	if err := rlimit.RemoveMemlock(); err != nil {
 		return fmt.Errorf("removing memlock: %w", err)
 	}
@@ -92,14 +83,9 @@ func (h *httpServerInstrumentor) Load(ctx *context.InstrumentorContext) error {
 
 	fnName := h.FuncNames()[0]
 
-	serveFunc, ok := ctx.TargetDetails.Functions[fnName]
-	if !ok {
-		return fmt.Errorf("can't find function: %v", fnName)
-	}
-
-	// this is starting to work despite serveFunc.Offset is 0 for this actual function
-	up, err := ctx.Executable.Uprobe(fnName, h.bpfObjects.UprobeServeHTTP, &link.UprobeOptions{
-		Address: serveFunc.Offset,
+	// this is starting to work despite serveFunc.Start is 0 for this actual function
+	up, err := exe.Uprobe(fnName, h.bpfObjects.UprobeServeHTTP, &link.UprobeOptions{
+		Address: offsets.Start,
 	})
 	if err != nil {
 		return fmt.Errorf("setting uprobe: %w", err)
@@ -109,8 +95,8 @@ func (h *httpServerInstrumentor) Load(ctx *context.InstrumentorContext) error {
 
 	// Go won't work with Uretprobes because the way it manages the stack. We need to set uprobes just before the return
 	// values: https://github.com/iovisor/bcc/issues/1320
-	for _, ret := range serveFunc.ReturnOffsets {
-		urp, err := ctx.Executable.Uprobe(fnName, h.bpfObjects.UprobeServeHttpReturn, &link.UprobeOptions{
+	for _, ret := range offsets.Returns {
+		urp, err := exe.Uprobe(fnName, h.bpfObjects.UprobeServeHttpReturn, &link.UprobeOptions{
 			Address: ret,
 		})
 		if err != nil {

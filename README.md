@@ -19,20 +19,6 @@ Differences:
 * Using ringbuffer instead of perf_buffer
   * despite the name, ringbuffer is faster
 
-## To contribute or to not contribute
-
-Advantages of creating our own parallel project:
-- No need to deal with legacy
-- Faster release pace
-- Adapt workflow to our necessities (e.g. no odigos launcher)
-
-Advantages of contributing to otel repo:
-- More allocated resources
-- Wider user base
-- No duplicities
-- No need to solve twice the same problems
-- Maybe eventually our users end up forcing to adopt otel instrumentation
-
 ## How to setup a quick demo
 
 The simplest way is to use Kubernetes and the files in the `deployments/` folder.

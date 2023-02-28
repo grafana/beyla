@@ -1,3 +1,5 @@
+# Feel free to replace this demo app by something different,
+# but don't forget then to replace the EXECUTABLE_NAME env var in the 02-auto-instrument.yml file
 apiVersion: apps/v1
 kind: Deployment
 metadata:

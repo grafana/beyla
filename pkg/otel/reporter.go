@@ -52,6 +52,7 @@ func (r *Reporter) Start() error {
 	if r.traceEndpoint != "" {
 		// TODO: better use GRPC (secure)
 		var err error
+		// TODO: allow configuring auth headers and secure/insecure connections
 		r.traceExporter, err = otlptracehttp.New(ctx,
 			otlptracehttp.WithEndpoint(r.traceEndpoint),
 			otlptracehttp.WithInsecure(), // TODO: configurable
@@ -69,9 +70,10 @@ func (r *Reporter) Start() error {
 	// Instantiate the OTLP HTTP metric exporter
 	if r.metricEndpoint != "" {
 		var err error
+		// TODO: allow configuring auth headers and secure/insecure connections
 		r.metricExporter, err = otlpmetrichttp.New(ctx,
 			otlpmetrichttp.WithEndpoint(r.metricEndpoint),
-			otlpmetrichttp.WithInsecure(), // TODO: configurable
+			otlpmetrichttp.WithInsecure(),
 		)
 		if err != nil {
 			return fmt.Errorf("creating metric exporter: %w", err)

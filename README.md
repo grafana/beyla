@@ -33,41 +33,34 @@ Advantages of contributing to otel repo:
 - No need to solve twice the same problems
 - Maybe eventually our users end up forcing to adopt otel instrumentation
 
-## How to run
+## How to setup a quick demo
 
-### K8s
+The simplest way is to use Kubernetes and the files in the `deployments/` folder.
 
-The example here can be run in any host with administrative permissions but we provide two deployment files
-for a quick and simple example deployment:
+1. Deploy demo: you can use the blog example in the [deployments/00-demo-app.yml](./deployments/00-demo-app.yml) file.
+   As a requirement, it must be compiled with Go 1.19+ and make use of the standard library HTTP handlers.
+   ```
+   $ kubectl apply -f ./deployments/00-demo-app.yml
+   $ kubectl port-forward service/goblog 8443:8443
+   ```
 
-1. Copy the [deployments/01-example-k8s-agentconfig.yml.template](./deployments/01-example-k8s-agentconfig.yml.template)
-   file locally and edit it to provide your traces cloud name, endpoints and authentication.
+2. Provide your Grafana credentials. Use the following [K8s Secret template](deployments/01-example-k8s-agentconfig.yml.template)
+   to introduce the endpoints, usernames and API keys for Mimir and Tempo:
    ```
    $ cp deployments/01-example-k8s-agentconfig.yml.template deployments/01-example-k8s-agentconfig.yml
+   $ # EDIT the fields
+   $ vim deployments/01-example-k8s-agentconfig.yml.template
+   $ kubectl apply -f deployments/01-example-k8s-agentconfig.yml 
    ```
-2. Deploy the manifests in the [deployments/](./deployments) folders.
+2. Deploy the auto-instrumenter+agent:
    ```
-   kubectl apply -f deployments/01-example-k8s-agentconfig.yml
-   kubectl apply -f deployments/02-example-k8s.yml
+   kubectl apply -f deployments/02-auto-instrument.yml
    ```
 
-You should be able to query traces in your Grafana board.
+You should be able to query traces and metrics in your Grafana board.
 
 ![img.png](img.png)
 
-### Host Native
-
-1. Deploy the [Grafana Agent](https://grafana.com/docs/grafana-cloud/data-configuration/agent/) and setup a traces'
-   OLTP receiver using HTTP.
-2. Compile the main executable:
-   ```
-   make compile
-   ```
-3. As an administrator, run it by setting the `OTEL_TRACES_ENDPOINT` environment variable to the Agent collector.
-   ```
-   export OTEL_TRACES_ENDPOINT="localhost:4321"
-   bin/main
-   ``` 
 
 ## Development recipes
 

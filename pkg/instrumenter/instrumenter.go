@@ -18,18 +18,20 @@ type Pipeline struct {
 // pipeline and returns it as a startable item
 func BuildPipeline(config Config) (Pipeline, error) {
 	// Analyse executable ELF file and find instrumentation points
-	processPath, processElf, err := exec.FindExecELF(config.Exec)
+	execElf, err := exec.FindExecELF(config.Exec)
 	if err != nil {
 		return Pipeline{}, fmt.Errorf("looking for executable ELF: %w", err)
 	}
-	defer processElf.Close()
-	offsets, err := exec.GoInstrumentationPoints(processElf, config.FuncName)
+	defer execElf.ELF.Close()
+	offsets, err := exec.GoInstrumentationPoints(execElf.ELF, config.FuncName)
 	if err != nil {
 		return Pipeline{}, fmt.Errorf("searching for instrumentation points: %w", err)
 	}
 
 	// Load and instrument the executable file
-	instrumetedServe, err := nethttp.Instrument(processPath, offsets)
+	// Instead of the executable file in the disk, we pass the /proc/<pid>/executable
+	// to allow loading it from different container/pods in containerized environments
+	instrumetedServe, err := nethttp.Instrument(execElf.ProExeLinkPath, offsets)
 	if err != nil {
 		return Pipeline{}, fmt.Errorf("instrumenting executable: %w", err)
 	}
@@ -40,19 +42,26 @@ func BuildPipeline(config Config) (Pipeline, error) {
 	httpTracer.SendsTo(converter)
 
 	// TODO: allow overriding service name
+	tracesEndpoint, metricsEndpoint := config.OTELEndpoint, config.OTELEndpoint
+	if config.OTELTracesEndpoint != "" {
+		tracesEndpoint = config.OTELTracesEndpoint
+	}
+	if config.OTELMetricsEndpoint != "" {
+		metricsEndpoint = config.OTELMetricsEndpoint
+	}
 	reporter := otel.NewReporter(
-		processPath, config.TracesEndpoint, config.MetricsEndpoint)
+		execElf.CmdExePath, tracesEndpoint, metricsEndpoint)
 	if err := reporter.Start(); err != nil {
 		return Pipeline{}, fmt.Errorf("starting OTEL reporter: %w", err)
 	}
 
 	outNodes := 0
-	if config.TracesEndpoint != "" {
+	if tracesEndpoint != "" {
 		outNodes++
 		converter.SendsTo(node.AsTerminal(reporter.ReportTraces))
 	}
 
-	if config.MetricsEndpoint != "" {
+	if metricsEndpoint != "" {
 		outNodes++
 		converter.SendsTo(node.AsTerminal(reporter.ReportMetrics))
 	}
@@ -63,8 +72,10 @@ func BuildPipeline(config Config) (Pipeline, error) {
 		converter.SendsTo(printerNode())
 	}
 
+	// TODO: instead of checking here, do a previous configuration check we can assume this
+	// is correct
 	if outNodes == 0 {
-		return Pipeline{}, fmt.Errorf("you should define at least one of OTEL_METRICS_ENDPOINT, OTEL_TRACES_ENDPOINT or PRINT_TRACES")
+		return Pipeline{}, fmt.Errorf("you should define at least one of OTEL_EXPORTER_OTLP_ENDPOINT or PRINT_TRACES")
 	}
 
 	return Pipeline{startNode: httpTracer}, nil

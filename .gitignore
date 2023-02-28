@@ -14,4 +14,4 @@
 # Dependency directories (remove the comment below to include it)
 # vendor/
 otelhttp
-deployments/01-example-k8s-agentconfig.yml
+deployments/01-grafana-credentials.yml

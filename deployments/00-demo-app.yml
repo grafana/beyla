@@ -1,0 +1,41 @@
+# Feel free to replace this demo app by something different,
+# but don't forget then to replace the EXECUTABLE_NAME env var in the 02-auto-instrument.yml file
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: goblog
+  labels:
+    app: goblog
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: goblog
+  template:
+    metadata:
+      labels:
+        app: goblog
+    spec:
+      containers:
+        - name: goblog
+          image: mariomac/goblog:dev
+          imagePullPolicy: Always
+          command: ["/goblog"]
+          env:
+            - name: "GOBLOG_CONFIG"
+              value: "/sample/config.yml"
+          ports:
+            - containerPort: 8443
+              name: https
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: goblog
+spec:
+  selector:
+    app: goblog
+  ports:
+    - port: 8443
+      protocol: TCP
+      targetPort: https

@@ -1,0 +1,33 @@
+{
+    "files.associations": {
+        "bpf.h": "c",
+        "bpf_endian.h": "c",
+        "swab.h": "c",
+        "types.h": "c",
+        "stdbool.h": "c",
+        "bpf_tracing.h": "c",
+        "bpf_helpers.h": "c",
+        "probes.h": "c",
+        "socket.h": "c",
+        "common.h": "c",
+        "go_context.h": "c",
+        "arguments.h": "c",
+        "__hash_table": "c",
+        "__tuple": "c",
+        "array": "c",
+        "chrono": "c",
+        "compare": "c",
+        "cstddef": "c",
+        "type_traits": "c",
+        "limits": "c",
+        "ratio": "c",
+        "tuple": "c",
+        "variant": "c"
+    },
+    "C_Cpp.intelliSenseEngine": "default",
+    "C_Cpp.default.includePath": [
+        "${workspaceFolder}/**",
+        "/Users/mmacias/Desktop/linux-5.14/include",
+        "/Users/mmacias/Desktop/linux-5.14/tools/include"
+    ]
+}

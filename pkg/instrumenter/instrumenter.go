@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/grafana/http-autoinstrument/pkg/ebpf/nethttp"
-	"github.com/grafana/http-autoinstrument/pkg/exec"
+	"github.com/grafana/http-autoinstrument/pkg/goexec"
 	"github.com/grafana/http-autoinstrument/pkg/otel"
 	"github.com/grafana/http-autoinstrument/pkg/spanner"
 	"github.com/mariomac/pipes/pkg/node"
@@ -17,21 +17,14 @@ type Pipeline struct {
 // BuildPipeline instantiates the whole instrumentation --> processing --> submit
 // pipeline and returns it as a startable item
 func BuildPipeline(config Config) (Pipeline, error) {
-	// Analyse executable ELF file and find instrumentation points
-	execElf, err := exec.FindExecELF(config.Exec)
+
+	offsetsInfo, err := goexec.InspectOffsets(config.Exec, config.FuncName)
 	if err != nil {
-		return Pipeline{}, fmt.Errorf("looking for executable ELF: %w", err)
-	}
-	defer execElf.ELF.Close()
-	offsets, err := exec.GoInstrumentationPoints(execElf.ELF, config.FuncName)
-	if err != nil {
-		return Pipeline{}, fmt.Errorf("searching for instrumentation points: %w", err)
+		return Pipeline{}, fmt.Errorf("inspecting executable: %w", err)
 	}
 
 	// Load and instrument the executable file
-	// Instead of the executable file in the disk, we pass the /proc/<pid>/executable
-	// to allow loading it from different container/pods in containerized environments
-	instrumetedServe, err := nethttp.Instrument(execElf.ProExeLinkPath, offsets)
+	instrumetedServe, err := nethttp.Instrument(offsetsInfo)
 	if err != nil {
 		return Pipeline{}, fmt.Errorf("instrumenting executable: %w", err)
 	}
@@ -50,7 +43,7 @@ func BuildPipeline(config Config) (Pipeline, error) {
 		metricsEndpoint = config.OTELMetricsEndpoint
 	}
 	reporter := otel.NewReporter(
-		execElf.CmdExePath, tracesEndpoint, metricsEndpoint)
+		offsetsInfo.FileInfo.CmdExePath, tracesEndpoint, metricsEndpoint)
 	if err := reporter.Start(); err != nil {
 		return Pipeline{}, fmt.Errorf("starting OTEL reporter: %w", err)
 	}

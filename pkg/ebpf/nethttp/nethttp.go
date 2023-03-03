@@ -23,7 +23,7 @@ import (
 	"github.com/cilium/ebpf/link"
 	"github.com/cilium/ebpf/ringbuf"
 	"github.com/cilium/ebpf/rlimit"
-	"github.com/grafana/http-autoinstrument/pkg/exec"
+	"github.com/grafana/http-autoinstrument/pkg/goexec"
 	"golang.org/x/exp/slog"
 )
 
@@ -46,10 +46,13 @@ type HttpRequestTrace bpfHttpRequestTrace
 
 // Instrument the executable passed as path and insert probes in the provided offsets, so the
 // returned InstrumentedServe instance will listen and forward traces for each HTTP invocation.
-func Instrument(processPath string, offsets exec.FuncOffsets) (*InstrumentedServe, error) {
-	exe, err := link.OpenExecutable(processPath)
+func Instrument(offsets goexec.Offsets) (*InstrumentedServe, error) {
+	// Instead of the executable file in the disk, we pass the /proc/<pid>/exec
+	// to allow loading it from different container/pods in containerized environments
+	exe, err := link.OpenExecutable(offsets.FileInfo.ProExeLinkPath)
 	if err != nil {
-		return nil, fmt.Errorf("opening executable file %q: %w", processPath, err)
+		return nil, fmt.Errorf("opening executable file %q: %w",
+			offsets.FileInfo.ProExeLinkPath, err)
 	}
 
 	if err := rlimit.RemoveMemlock(); err != nil {
@@ -61,13 +64,7 @@ func Instrument(processPath string, offsets exec.FuncOffsets) (*InstrumentedServ
 		return nil, fmt.Errorf("loading BPF data: %w", err)
 	}
 
-	// TODO: fill this information from DWARF info
-	if err := spec.RewriteConstants(map[string]interface{}{
-		"url_ptr_pos":    uint64(16),
-		"path_ptr_pos":   uint64(56),
-		"method_ptr_pos": uint64(0),
-		"status_ptr_pos": uint64(120),
-	}); err != nil {
+	if err := spec.RewriteConstants(offsets.Field); err != nil {
 		return nil, fmt.Errorf("rewriting BPF constants definition: %w", err)
 	}
 
@@ -78,7 +75,7 @@ func Instrument(processPath string, offsets exec.FuncOffsets) (*InstrumentedServ
 	}
 	// Attach BPF programs as start and return probes
 	up, err := exe.Uprobe("", h.bpfObjects.UprobeServeHTTP, &link.UprobeOptions{
-		Address: offsets.Start,
+		Address: offsets.Func.Start,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("setting uprobe: %w", err)
@@ -87,7 +84,7 @@ func Instrument(processPath string, offsets exec.FuncOffsets) (*InstrumentedServ
 
 	// Go won't work with Uretprobes because the way it manages the stack. We need to set uprobes just before the return
 	// values: https://github.com/iovisor/bcc/issues/1320
-	for _, ret := range offsets.Returns {
+	for _, ret := range offsets.Func.Returns {
 		urp, err := exe.Uprobe("", h.bpfObjects.UprobeServeHttpReturn, &link.UprobeOptions{
 			Address: ret,
 		})

@@ -1,4 +1,4 @@
-package exec
+package goexec
 
 import (
 	"debug/dwarf"
@@ -9,16 +9,11 @@ import (
 	"golang.org/x/exp/slog"
 )
 
-type FuncOffsets struct {
-	Start   uint64
-	Returns []uint64
-}
-
-// GoInstrumentationPoints loads the provided executable and looks for the addresses
+// instrumentationPoints loads the provided executable and looks for the addresses
 // where the start and return probes must be inserted.
 // TODO: allow instrumenting multiple functions sharing the same interface
-func GoInstrumentationPoints(elfF *elf.File, funcName string) (FuncOffsets, error) {
-	log := slog.With("component", "exec.InstrumentationPoint", "funcName", funcName)
+func instrumentationPoints(elfF *elf.File, funcName string) (FuncOffsets, error) {
+	log := slog.With("component", "goexec.InstrumentationPoint", "funcName", funcName)
 	dwarfInfo, err := elfF.DWARF()
 	if err != nil {
 		return FuncOffsets{}, fmt.Errorf("can't load DWARF information from ELF file: %w", err)

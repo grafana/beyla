@@ -1,4 +1,4 @@
-package exec
+package goexec
 
 import (
 	"golang.org/x/arch/arm64/arm64asm"

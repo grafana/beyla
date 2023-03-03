@@ -28,7 +28,7 @@ CFLAGS := -O2 -g -Wall -Werror $(CFLAGS)
 
 # regular expressions for excluded file patterns
 # TODO: change
-EXCLUDE_COVERAGE_FILES="(/cmd/)|(bpf_bpfe)|(/examples/)|(/pkg/pbflow/)"
+EXCLUDE_COVERAGE_FILES="(bpf_bpfe)|(/pingserver/)"
 
 .PHONY: prereqs
 prereqs:

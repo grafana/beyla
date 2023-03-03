@@ -73,7 +73,7 @@ int uprobe_ServeHTTP(struct pt_regs *ctx) {
 
     // TODO: store registers in a map so we can fetch them in the return probe
     bpf_printk("=== uprobe/ServeHTTP === ");
-    void *goroutine_addr = get_goroutine_address(ctx);
+    void *goroutine_addr = GOROUTINE_PTR(ctx);
     bpf_printk("goroutine_addr %lx", goroutine_addr);
 
     http_method_invocation invocation = {
@@ -92,7 +92,7 @@ int uprobe_ServeHTTP(struct pt_regs *ctx) {
 SEC("uprobe/ServeHTTP_return")
 int uprobe_ServeHttp_return(struct pt_regs *ctx) {
     bpf_printk("=== uprobe/ServeHTTP_return === ");
-    void *goroutine_addr = get_goroutine_address(ctx);
+    void *goroutine_addr = GOROUTINE_PTR(ctx);
     bpf_printk("goroutine_addr %lx", goroutine_addr);
 
     http_method_invocation *invocation =
@@ -114,8 +114,7 @@ int uprobe_ServeHttp_return(struct pt_regs *ctx) {
     // Read arguments from the original set of registers
 
     // Get request struct
-    u64 request_pos = 4;
-    void *req_ptr = get_argument_by_reg(&(invocation->regs), request_pos);
+    void *req_ptr = GO_PARAM4(&(invocation->regs));
 
     // Get method from request
     void *method_ptr = 0;
@@ -149,8 +148,7 @@ int uprobe_ServeHttp_return(struct pt_regs *ctx) {
     // get return code from http.ResponseWriter (interface)
     // assuming implementation of http.ResponseWriter is http.response
     // TODO: this is really a nonportable assumption
-    u64 response_pos = 3;
-    void *resp_ptr = get_argument_by_reg(&(invocation->regs), response_pos);
+    void *resp_ptr = GO_PARAM3(&(invocation->regs));
 
     bpf_probe_read(&trace->status, sizeof(trace->status), (void *)(resp_ptr + status_ptr_pos));
 

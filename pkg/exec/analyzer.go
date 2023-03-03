@@ -6,7 +6,6 @@ import (
 	"debug/gosym"
 	"fmt"
 
-	"golang.org/x/arch/x86/x86asm"
 	"golang.org/x/exp/slog"
 )
 
@@ -16,7 +15,7 @@ type FuncOffsets struct {
 }
 
 // GoInstrumentationPoints loads the provided executable and looks for the addresses
-//  where the start and return probes must be inserted.
+// where the start and return probes must be inserted.
 // TODO: allow instrumenting multiple functions sharing the same interface
 func GoInstrumentationPoints(elfF *elf.File, funcName string) (FuncOffsets, error) {
 	log := slog.With("component", "exec.InstrumentationPoint", "funcName", funcName)
@@ -108,20 +107,11 @@ func findFuncOffset(f *gosym.Func, elfF *elf.File) (uint64, []uint64, error) {
 				return 0, nil, fmt.Errorf("finding function return: %w", err)
 			}
 
-			var returns []uint64
-			for i := 0; i < int(funcLen); {
-				inst, err := x86asm.Decode(data[i:], 64)
-				if err != nil {
-					return 0, nil, fmt.Errorf("finding function return: %w", err)
-				}
-
-				if inst.Op == x86asm.RET {
-					returns = append(returns, off+uint64(i))
-				}
-
-				i += inst.Len
+			returns, err := findReturnOffssets(off, data)
+			if err != nil {
+				return 0, nil, fmt.Errorf("finding function return: %w", err)
 			}
-
+			// TODO: not return on first match but append all the offsets of all the programs
 			return off, returns, nil
 		}
 

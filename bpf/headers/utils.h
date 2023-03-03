@@ -18,37 +18,42 @@
 #include "common.h"
 #include "bpf_helpers.h"
 
-void *get_argument_by_reg(struct pt_regs *ctx, int index)
-{
-    switch (index)
-    {
-    case 1:
-        return (void *)(ctx->rax);
-    case 2:
-        return (void *)(ctx->rbx);
-    case 3:
-        return (void *)(ctx->rcx);
-    case 4:
-        return (void *)(ctx->rdi);
-    case 5:
-        return (void *)(ctx->rsi);
-    case 6:
-        return (void *)(ctx->r8);
-    case 7:
-        return (void *)(ctx->r9);
-    case 8:
-        return (void *)(ctx->r10);
-    case 9:
-        return (void *)(ctx->r11);
-    default:
-        return NULL;
-    }
-}
+#if defined(__TARGET_ARCH_x86)
+
+#define GO_PARAM1(x) ((void*)(x)->rax)
+#define GO_PARAM2(x) ((void*)(x)->rbx)
+#define GO_PARAM3(x) ((void*)(x)->rcx)
+#define GO_PARAM4(x) ((void*)(x)->rdi)
+#define GO_PARAM5(x) ((void*)(x)->rsi)
+#define GO_PARAM6(x) ((void*)(x)->r8)
+#define GO_PARAM7(x) ((void*)(x)->r9)
+#define GO_PARAM8(x) ((void*)(x)->r10)
+#define GO_PARAM9(x) ((void*)(x)->r11)
 
 // In x86, current goroutine is pointed by r14, according to
 // https://go.googlesource.com/go/+/refs/heads/dev.regabi/src/cmd/compile/internal-abi.md#amd64-architecture
-inline void *get_goroutine_address(struct pt_regs *ctx) {
-    return (void *)(ctx->r14);
-}
+#define GOROUTINE_PTR(x) ((void*)(x)->r14)
+
+#elif defined(__TARGET_ARCH_arm64)
+
+/* arm64 provides struct user_pt_regs instead of struct pt_regs to userspace */
+struct pt_regs;
+#define PT_REGS_ARM64 const volatile struct user_pt_regs
+
+#define GO_PARAM1(x) ((void*)((PT_REGS_ARM64 *)(x))->regs[0])
+#define GO_PARAM2(x) ((void*)((PT_REGS_ARM64 *)(x))->regs[1])
+#define GO_PARAM3(x) ((void*)((PT_REGS_ARM64 *)(x))->regs[2])
+#define GO_PARAM4(x) ((void*)((PT_REGS_ARM64 *)(x))->regs[3])
+#define GO_PARAM5(x) ((void*)((PT_REGS_ARM64 *)(x))->regs[4])
+#define GO_PARAM6(x) ((void*)((PT_REGS_ARM64 *)(x))->regs[5])
+#define GO_PARAM7(x) ((void*)((PT_REGS_ARM64 *)(x))->regs[6])
+#define GO_PARAM8(x) ((void*)((PT_REGS_ARM64 *)(x))->regs[7])
+#define GO_PARAM9(x) ((void*)((PT_REGS_ARM64 *)(x))->regs[8])
+
+// In arm64, current goroutine is pointed by R28 according to
+// https://github.com/golang/go/blob/master/src/cmd/compile/abi-internal.md#arm64-architecture
+#define GOROUTINE_PTR(x) ((void*)((PT_REGS_ARM64 *)(x))->regs[28])
+
+#endif /*defined(__TARGET_ARCH_arm64)*/
 
 #endif /* __UTILS_H__ */

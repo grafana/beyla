@@ -9,7 +9,7 @@
                 "/Users/mmacias/Desktop/linux-5.14/include",
                 "/Users/mmacias/Desktop/linux-5.14/tools/include"
             ],
-            "defines": [],
+            "defines": ["__TARGET_ARCH_x86"],
             "macFrameworkPath": [
                 "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/System/Library/Frameworks"
             ],

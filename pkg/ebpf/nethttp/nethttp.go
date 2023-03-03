@@ -27,7 +27,7 @@ import (
 	"golang.org/x/exp/slog"
 )
 
-//go:generate bpf2go -cc $BPF_CLANG -cflags $BPF_CFLAGS -type http_request_trace bpf ../../../bpf/go_nethttp.c -- -I../../../bpf/headers
+//go:generate bpf2go -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 -type http_request_trace bpf ../../../bpf/go_nethttp.c -- -I../../../bpf/headers
 
 // InstrumentedServe allows instrumenting each invocation to the Go standard net/http ServeHTTP
 // method handler.

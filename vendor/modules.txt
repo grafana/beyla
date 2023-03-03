@@ -129,6 +129,7 @@ go.opentelemetry.io/proto/otlp/resource/v1
 go.opentelemetry.io/proto/otlp/trace/v1
 # golang.org/x/arch v0.0.0-20210923205945-b76863e36670
 ## explicit; go 1.17
+golang.org/x/arch/arm64/arm64asm
 golang.org/x/arch/x86/x86asm
 # golang.org/x/exp v0.0.0-20230213192124-5e25df0256eb
 ## explicit; go 1.18

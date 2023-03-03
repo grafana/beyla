@@ -1,9 +1,9 @@
 # Build the manager binary
 FROM golang:1.20 as builder
 
-ARG ARCH="amd64"
+ARG TARGETARCH
 
-ENV GOARCH=$ARCH
+ENV GOARCH=$TARGETARCH
 
 WORKDIR /opt/app-root
 
@@ -23,7 +23,6 @@ RUN make compile
 # Create final image from minimal + built binary
 #TODO: use minimal image
 FROM fedora:37
-ARG ARCH="amd64"
 
 WORKDIR /
 COPY --from=builder /opt/app-root/bin/otelhttp .

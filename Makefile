@@ -4,7 +4,8 @@ MAIN_GO_FILE ?= cmd/$(CMD).go
 GOOS ?= linux
 GOARCH ?= amd64
 
-DOCKERHUB_USER ?= $(USER)
+# TODO: grafana
+DOCKERHUB_USER ?= mariomac
 
 # Container image creation creation
 VERSION ?= latest
@@ -13,10 +14,8 @@ IMG ?= $(IMAGE_TAG_BASE):$(VERSION)
 
 # The generator is a local container image that provides a reproducible environment for
 # building eBPF binaries
-# TODO: consider moving it to its own shared project and
-LOCAL_GENERATOR_IMAGE ?= ebpf-generator:latest
-
-LOCAL_E2E_TEST_IMAGE ?= localhost/ebpf-agent:test
+GEN_IMAGE_TAG_BASE ?= $(DOCKERHUB_USER)/ebpf-generator
+GEN_IMG ?= $(GEN_IMAGE_TAG_BASE):$(VERSION)
 
 OCI_BIN ?= docker
 
@@ -53,14 +52,10 @@ generate: prereqs
 	@echo "### Generating BPF Go bindings"
 	go generate ./pkg/...
 
-.PHONY: docker-generator-build
-docker-generator-build:
-	@echo "### Creating the container that generates the eBPF binaries"
-	$(OCI_BIN) buildx build . -f scripts/generators.Dockerfile -t $(LOCAL_GENERATOR_IMAGE)
 
 .PHONY: docker-generate
 docker-generate:
-	$(OCI_BIN) run --rm -v $(shell pwd):/src $(LOCAL_GENERATOR_IMAGE)
+	$(OCI_BIN) run --rm -v $(shell pwd):/src $(GEN_IMG)
 
 .PHONY: build
 build: prereqs lint test compile
@@ -91,9 +86,10 @@ coverage-report-html: cov-exclude-generated
 
 .PHONY: image-build-push
 image-build-push: ## Build OCI image with the manager.
-	$(OCI_BIN) buildx build --push --platform linux/amd64 -t ${IMG} .
+	$(OCI_BIN) buildx build --push --platform linux/amd64,linux/arm64 -t ${IMG} .
 
-.PHONY: image-push
-image-push: ## Push OCI image with the manager.
-	$(OCI_BIN) push ${IMG}
+.PHONY: generator-image-build-push
+generator-image-build-push: ## Build OCI image with the manager.
+	@echo "### Creating the image that generates the eBPF binaries"
+	$(OCI_BIN) buildx build . --push -f scripts/generators.Dockerfile --platform linux/amd64,linux/arm64 -t $(GEN_IMG)
 

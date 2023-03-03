@@ -147,6 +147,6 @@ spec:
             - "/otelhttp"
           env:
             - name: EXECUTABLE_NAME
-              value: "goblog"
+              value: "/goblog"
             - name: OTEL_EXPORTER_OTLP_ENDPOINT
               value: "grafana-agent:4318"

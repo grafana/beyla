@@ -29,5 +29,6 @@
         "${workspaceFolder}/**",
         "/Users/mmacias/Desktop/linux-5.14/include",
         "/Users/mmacias/Desktop/linux-5.14/tools/include"
-    ]
+    ],
+    "git.openRepositoryInParentFolders": "always",
 }

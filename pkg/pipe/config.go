@@ -1,4 +1,4 @@
-package instrumenter
+package pipe
 
 // TODO: support all the OTEL_ stuff here: https://github.com/open-telemetry/opentelemetry-specification/blob/main/specification/protocol/exporter.md
 type Config struct {

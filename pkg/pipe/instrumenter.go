@@ -11,20 +11,19 @@ import (
 )
 
 type Graph struct {
-
-	startNode *node.Start[nethttp.HttpRequestTrace]
+	startNode *node.Start[nethttp.HTTPRequestTrace]
 }
 
 // Build instantiates the whole instrumentation --> processing --> submit
 // pipeline graph and returns it as a startable item
-func Build(config Config) (Graph, error) {
+func Build(config *Config) (Graph, error) {
 	offsetsInfo, err := goexec.InspectOffsets(config.Exec, config.FuncName)
 	if err != nil {
 		return Graph{}, fmt.Errorf("inspecting executable: %w", err)
 	}
 
 	// Load and instrument the executable file
-	instrumetedServe, err := nethttp.Instrument(offsetsInfo)
+	instrumetedServe, err := nethttp.Instrument(&offsetsInfo)
 	if err != nil {
 		return Graph{}, fmt.Errorf("instrumenting executable: %w", err)
 	}
@@ -65,6 +64,12 @@ func Build(config Config) (Graph, error) {
 		converter.SendsTo(printerNode())
 	}
 
+	if config.NoopTracer {
+		outNodes++
+		// Just count responses, minimize output
+		converter.SendsTo(noopNode())
+	}
+
 	// TODO: instead of checking here, do a previous configuration check we can assume this
 	// is correct
 	if outNodes == 0 {
@@ -79,8 +84,8 @@ func (p *Graph) Start() {
 	p.startNode.Start()
 }
 
-func printerNode() *node.Terminal[spanner.HttpRequestSpan] {
-	return node.AsTerminal(func(spans <-chan spanner.HttpRequestSpan) {
+func printerNode() *node.Terminal[spanner.HTTPRequestSpan] {
+	return node.AsTerminal(func(spans <-chan spanner.HTTPRequestSpan) {
 		for span := range spans {
 			fmt.Printf("%s (%s) %v %s %s\n",
 				span.Start.Format("2006-01-02 15:04:05.12345"),
@@ -89,5 +94,15 @@ func printerNode() *node.Terminal[spanner.HttpRequestSpan] {
 				span.Method,
 				span.Path)
 		}
+	})
+}
+
+func noopNode() *node.Terminal[spanner.HTTPRequestSpan] {
+	counter := 0
+	return node.AsTerminal(func(spans <-chan spanner.HTTPRequestSpan) {
+		for range spans {
+			counter++
+		}
+		fmt.Printf("Processed %d requests\n", counter)
 	})
 }

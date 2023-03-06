@@ -22,7 +22,7 @@ func main() {
 	}
 
 	slog.Info("creating instrumentation pipeline")
-	bp, err := pipe.Build(config)
+	bp, err := pipe.Build(&config)
 	if err != nil {
 		slog.Error("can't instantiate instrumentation pipeline", err)
 		os.Exit(-1)

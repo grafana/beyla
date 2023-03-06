@@ -2,11 +2,12 @@ package main
 
 import (
 	"fmt"
-	"golang.org/x/exp/slog"
 	"net/http"
 	"os"
 	"strconv"
 	"time"
+
+	"golang.org/x/exp/slog"
 )
 
 const (
@@ -43,7 +44,6 @@ func pingHandler(rw http.ResponseWriter, req *http.Request) {
 	}
 	slog.Info(fmt.Sprintf("%T", rw))
 	slog.Info("written response", "url", req.URL, slog.Int("bytes", b))
-	return
 }
 
 func main() {

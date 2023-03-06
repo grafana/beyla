@@ -19,7 +19,7 @@ GEN_IMG ?= $(GEN_IMAGE_TAG_BASE):$(VERSION)
 
 OCI_BIN ?= docker
 
-GOLANGCI_LINT_VERSION = v1.50.1
+GOLANGCI_LINT_VERSION = v1.51.2
 
 # BPF code generator dependencies
 CILIUM_EBPF_VERSION := v0.10.0
@@ -40,7 +40,7 @@ prereqs:
 .PHONY: lint
 lint: prereqs
 	@echo "### Linting code"
-	golangci-lint run ./... --timeout=3m
+	golangci-lint run --skip-dirs pkg ./... --timeout=3m
 
 # As generated artifacts are part of the code repo (pkg/ebpf packages), you don't have
 # to run this target for each build. Only when you change the C code inside the bpf folder.

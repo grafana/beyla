@@ -35,4 +35,3 @@ func main() {
 	wait := make(chan struct{})
 	<-wait
 }
-

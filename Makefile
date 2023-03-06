@@ -30,6 +30,8 @@ CFLAGS := -O2 -g -Wall -Werror $(CFLAGS)
 # TODO: change
 EXCLUDE_COVERAGE_FILES="(bpf_bpfe)|(/pingserver/)"
 
+.DEFAULT_GOAL := build
+
 .PHONY: prereqs
 prereqs:
 	@echo "### Check if prerequisites are met, and installing missing dependencies"

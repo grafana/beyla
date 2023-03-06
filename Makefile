@@ -91,5 +91,5 @@ image-build-push: ## Build OCI image with the manager.
 .PHONY: generator-image-build-push
 generator-image-build-push: ## Build OCI image with the manager.
 	@echo "### Creating the image that generates the eBPF binaries"
-	$(OCI_BIN) buildx build . --push -f scripts/generators.Dockerfile --platform linux/amd64,linux/arm64 -t $(GEN_IMG)
+	$(OCI_BIN) buildx build . --push -f generator.Dockerfile --platform linux/amd64,linux/arm64 -t $(GEN_IMG)
 

@@ -1,4 +1,4 @@
-package instrumenter
+package pipe
 
 import (
 	"fmt"
@@ -10,23 +10,23 @@ import (
 	"github.com/mariomac/pipes/pkg/node"
 )
 
-type Pipeline struct {
+type Graph struct {
+
 	startNode *node.Start[nethttp.HttpRequestTrace]
 }
 
-// BuildPipeline instantiates the whole instrumentation --> processing --> submit
-// pipeline and returns it as a startable item
-func BuildPipeline(config Config) (Pipeline, error) {
-
+// Build instantiates the whole instrumentation --> processing --> submit
+// pipeline graph and returns it as a startable item
+func Build(config Config) (Graph, error) {
 	offsetsInfo, err := goexec.InspectOffsets(config.Exec, config.FuncName)
 	if err != nil {
-		return Pipeline{}, fmt.Errorf("inspecting executable: %w", err)
+		return Graph{}, fmt.Errorf("inspecting executable: %w", err)
 	}
 
 	// Load and instrument the executable file
 	instrumetedServe, err := nethttp.Instrument(offsetsInfo)
 	if err != nil {
-		return Pipeline{}, fmt.Errorf("instrumenting executable: %w", err)
+		return Graph{}, fmt.Errorf("instrumenting executable: %w", err)
 	}
 
 	// Build and connect the nodes of the processing pipeline
@@ -45,7 +45,7 @@ func BuildPipeline(config Config) (Pipeline, error) {
 	reporter := otel.NewReporter(
 		offsetsInfo.FileInfo.CmdExePath, tracesEndpoint, metricsEndpoint)
 	if err := reporter.Start(); err != nil {
-		return Pipeline{}, fmt.Errorf("starting OTEL reporter: %w", err)
+		return Graph{}, fmt.Errorf("starting OTEL reporter: %w", err)
 	}
 
 	outNodes := 0
@@ -68,14 +68,14 @@ func BuildPipeline(config Config) (Pipeline, error) {
 	// TODO: instead of checking here, do a previous configuration check we can assume this
 	// is correct
 	if outNodes == 0 {
-		return Pipeline{}, fmt.Errorf("you should define at least one of OTEL_EXPORTER_OTLP_ENDPOINT or PRINT_TRACES")
+		return Graph{}, fmt.Errorf("you should define at least one of OTEL_EXPORTER_OTLP_ENDPOINT or PRINT_TRACES")
 	}
 
-	return Pipeline{startNode: httpTracer}, nil
+	return Graph{startNode: httpTracer}, nil
 }
 
 // Start the instrumentation --> processing --> submit pipeline
-func (p *Pipeline) Start() {
+func (p *Graph) Start() {
 	p.startNode.Start()
 }
 

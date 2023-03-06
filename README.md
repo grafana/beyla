@@ -45,9 +45,6 @@ The simplest way is to use Kubernetes and the files in the `deployments/` folder
 
 You should be able to query traces and metrics in your Grafana board.
 
-![img.png](img.png)
-
-
 ## Development recipes
 
 ### How to regenerate the eBPF Kernel binaries

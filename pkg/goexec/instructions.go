@@ -57,7 +57,10 @@ func instrumentationPoints(elfF *elf.File, funcName string) (FuncOffsets, error)
 			if sec == nil {
 				return FuncOffsets{}, fmt.Errorf(".gosymtab section not found in target binary, make sure this is a Go application")
 			}
-			symTabRaw, _ := sec.Data()
+			symTabRaw, err := sec.Data()
+			if err != nil {
+				return FuncOffsets{}, fmt.Errorf("getting memory section data: %w", err)
+			}
 			pcln := gosym.NewLineTable(pclndat, elfF.Section(".text").Addr)
 			symTab, err := gosym.NewTable(symTabRaw, pcln)
 			if err != nil {

@@ -30,6 +30,8 @@ CFLAGS := -O2 -g -Wall -Werror $(CFLAGS)
 # TODO: change
 EXCLUDE_COVERAGE_FILES="(bpf_bpfe)|(/pingserver/)"
 
+.DEFAULT_GOAL := build
+
 .PHONY: prereqs
 prereqs:
 	@echo "### Check if prerequisites are met, and installing missing dependencies"
@@ -40,7 +42,7 @@ prereqs:
 .PHONY: lint
 lint: prereqs
 	@echo "### Linting code"
-	golangci-lint run --skip-dirs pkg ./... --timeout=3m
+	golangci-lint run ./... --timeout=3m
 
 # As generated artifacts are part of the code repo (pkg/ebpf packages), you don't have
 # to run this target for each build. Only when you change the C code inside the bpf folder.

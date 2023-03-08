@@ -6,6 +6,7 @@ type Config struct {
 	OTELMetricsEndpoint string `env:"OTEL_EXPORTER_OTLP_METRICS_ENDPOINT"`
 	OTELTracesEndpoint  string `env:"OTEL_EXPORTER_OTLP_TRACES_ENDPOINT"`
 	PrintTraces         bool   `env:"PRINT_TRACES" envDefault:"true"` // TODO: false
+	NoopTracer          bool   `env:"NOOP_TRACES" envDefault:"false"` // TODO: false
 	Exec                string `env:"EXECUTABLE_NAME"`
 	FuncName            string `env:"INSTRUMENT_FUNC_NAME" envDefault:"net/http.HandlerFunc.ServeHTTP"`
 }

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -19,7 +20,7 @@ const (
 )
 
 func pingHandler(rw http.ResponseWriter, req *http.Request) {
-	slog.Info("connection established", "remoteAddr", req.RemoteAddr)
+	slog.Debug("connection established", "remoteAddr", req.RemoteAddr)
 	if req.URL.Path != path {
 		slog.Info("not found", "url", req.URL)
 		rw.WriteHeader(http.StatusNotFound)
@@ -42,11 +43,29 @@ func pingHandler(rw http.ResponseWriter, req *http.Request) {
 		slog.Error("writing response", err, "url", req.URL)
 		return
 	}
-	slog.Info(fmt.Sprintf("%T", rw))
-	slog.Info("written response", "url", req.URL, slog.Int("bytes", b))
+	slog.Debug(fmt.Sprintf("%T", rw))
+	slog.Debug("written response", "url", req.URL, slog.Int("bytes", b))
 }
 
 func main() {
+	// Use INFO as default log
+	lvl := slog.LevelInfo
+
+	lvlEnv, ok := os.LookupEnv("LOG_LEVEL")
+	// LOG_LEVEL is set, let's default to the desired level
+	if ok {
+		err := lvl.UnmarshalText([]byte(lvlEnv))
+		if err != nil {
+			slog.Error("unknown log level specified, choises are [DEBUG, INFO, WARN, ERROR]", errors.New(lvlEnv))
+			os.Exit(-1)
+		}
+	}
+
+	ho := slog.HandlerOptions{
+		Level: lvl,
+	}
+	slog.SetDefault(slog.New(ho.NewTextHandler(os.Stderr)))
+
 	port := defaultPort
 	if ps, ok := os.LookupEnv(envPort); ok {
 		var err error

@@ -9,8 +9,8 @@ import (
 	"github.com/gavv/monotime"
 )
 
-// HttpRequestSpan contains the information being submitted as
-type HttpRequestSpan struct {
+// HTTPRequestSpan contains the information being submitted as
+type HTTPRequestSpan struct {
 	Method string
 	Path   string
 	Status int
@@ -18,7 +18,7 @@ type HttpRequestSpan struct {
 	End    time.Time
 }
 
-func ConvertToSpan(in <-chan nethttp.HttpRequestTrace, out chan<- HttpRequestSpan) {
+func ConvertToSpan(in <-chan nethttp.HTTPRequestTrace, out chan<- HTTPRequestSpan) {
 	cnv := newConverter()
 	for trace := range in {
 		out <- cnv.convert(&trace)
@@ -37,7 +37,7 @@ type converter struct {
 	monoClock func() time.Duration
 }
 
-func (c *converter) convert(trace *nethttp.HttpRequestTrace) HttpRequestSpan {
+func (c *converter) convert(trace *nethttp.HTTPRequestTrace) HTTPRequestSpan {
 	now := time.Now()
 	monoNow := c.monoClock()
 	startDelta := monoNow - time.Duration(trace.StartMonotimeNs)
@@ -52,7 +52,7 @@ func (c *converter) convert(trace *nethttp.HttpRequestTrace) HttpRequestSpan {
 	if pathLen < 0 {
 		pathLen = len(trace.Path)
 	}
-	return HttpRequestSpan{
+	return HTTPRequestSpan{
 		Method: string(trace.Method[:methodLen]),
 		Path:   string(trace.Path[:pathLen]),
 		Start:  now.Add(-startDelta),

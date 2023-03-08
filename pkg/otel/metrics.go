@@ -7,7 +7,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 )
 
-func (r *Reporter) ReportMetrics(spans <-chan spanner.HttpRequestSpan) {
+func (r *Reporter) ReportMetrics(spans <-chan spanner.HTTPRequestSpan) {
 	for span := range spans {
 		// TODO: for more accuracy, there must be a way to set the metric time from the actual span end time
 		r.duration.Record(context.TODO(),

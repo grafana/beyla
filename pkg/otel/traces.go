@@ -9,7 +9,7 @@ import (
 	trace2 "go.opentelemetry.io/otel/trace"
 )
 
-func (r *Reporter) ReportTraces(spans <-chan spanner.HttpRequestSpan) {
+func (r *Reporter) ReportTraces(spans <-chan spanner.HTTPRequestSpan) {
 	tracer := r.traceProvider.Tracer(reporterName)
 	for span := range spans {
 		// TODO: there must be a better way to instantiate spans

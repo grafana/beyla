@@ -30,7 +30,7 @@ func instrumentationPoints(elfF *elf.File, funcName string) (FuncOffsets, error)
 
 	fieldsIter:
 		for _, field := range entry.Field {
-			switch field.Attr {
+			switch field.Attr { //nolint:exhaustive
 			case dwarf.AttrName:
 				// TODO: make it working for other functions
 				if field.Val == funcName {
@@ -58,6 +58,9 @@ func instrumentationPoints(elfF *elf.File, funcName string) (FuncOffsets, error)
 				return FuncOffsets{}, fmt.Errorf(".gosymtab section not found in target binary, make sure this is a Go application")
 			}
 			symTabRaw, err := sec.Data()
+			if err != nil {
+				return FuncOffsets{}, fmt.Errorf("getting memory section data: %w", err)
+			}
 			pcln := gosym.NewLineTable(pclndat, elfF.Section(".text").Addr)
 			symTab, err := gosym.NewTable(symTabRaw, pcln)
 			if err != nil {
@@ -85,7 +88,6 @@ func instrumentationPoints(elfF *elf.File, funcName string) (FuncOffsets, error)
 }
 
 func findFuncOffset(f *gosym.Func, elfF *elf.File) (uint64, []uint64, error) {
-	off := f.Value
 	for _, prog := range elfF.Progs {
 		if prog.Type != elf.PT_LOAD || (prog.Flags&elf.PF_X) == 0 {
 			continue
@@ -93,7 +95,7 @@ func findFuncOffset(f *gosym.Func, elfF *elf.File) (uint64, []uint64, error) {
 
 		// For more info on this calculation: stackoverflow.com/a/40249502
 		if prog.Vaddr <= f.Value && f.Value < (prog.Vaddr+prog.Memsz) {
-			off = f.Value - prog.Vaddr + prog.Off
+			off := f.Value - prog.Vaddr + prog.Off
 
 			funcLen := f.End - f.Entry
 			data := make([]byte, funcLen)

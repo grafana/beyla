@@ -52,7 +52,7 @@ func TestGoOffsetsFromDwarf(t *testing.T) {
 }
 
 func TestGoOffsetsFromDwarf_ErrorIfConstantNotFound(t *testing.T) {
-	structMembers["net/http.response"] = map[string]string {
+	structMembers["net/http.response"] = map[string]string{
 		"tralara": "tralara",
 	}
 	_, err := structMemberOffsetsFromDwarf(debugData)

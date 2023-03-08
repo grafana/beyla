@@ -38,15 +38,15 @@ type InstrumentedServe struct {
 	eventsReader  *ringbuf.Reader
 }
 
-// HttpRequestTrace contains information from an HTTP request as directly received from the
+// HTTPRequestTrace contains information from an HTTP request as directly received from the
 // eBPF layer. This contains low-level C structures so for more comfortable handling from Go,
-// HttpRequestTrace instances are converted to spanner.HttpRequestSpan instances in the
+// HTTPRequestTrace instances are converted to spanner.HTTPRequestSpan instances in the
 // spanner.ConvertToSpan function.
-type HttpRequestTrace bpfHttpRequestTrace
+type HTTPRequestTrace bpfHttpRequestTrace
 
 // Instrument the executable passed as path and insert probes in the provided offsets, so the
 // returned InstrumentedServe instance will listen and forward traces for each HTTP invocation.
-func Instrument(offsets goexec.Offsets) (*InstrumentedServe, error) {
+func Instrument(offsets *goexec.Offsets) (*InstrumentedServe, error) {
 	// Instead of the executable file in the disk, we pass the /proc/<pid>/exec
 	// to allow loading it from different container/pods in containerized environments
 	exe, err := link.OpenExecutable(offsets.FileInfo.ProExeLinkPath)
@@ -105,9 +105,9 @@ func Instrument(offsets goexec.Offsets) (*InstrumentedServe, error) {
 	return &h, nil
 }
 
-func (h *InstrumentedServe) Run(eventsChan chan<- HttpRequestTrace) {
+func (h *InstrumentedServe) Run(eventsChan chan<- HTTPRequestTrace) {
 	logger := slog.With("name", "net/http-instrumentor")
-	var event HttpRequestTrace
+	var event HTTPRequestTrace
 	for {
 		logger.Debug("starting to read perf buffer")
 		record, err := h.eventsReader.Read()

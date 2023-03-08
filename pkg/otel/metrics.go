@@ -3,6 +3,7 @@ package otel
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"golang.org/x/exp/slog"
 
@@ -21,7 +22,7 @@ type MetricsReporter struct {
 	duration instrument.Float64Histogram
 }
 
-func NewMetricsReporter(svcName, endpoint string) (*MetricsReporter, error) {
+func NewMetricsReporter(svcName, endpoint string, interval time.Duration) (*MetricsReporter, error) {
 	ctx := context.TODO()
 
 	mr := MetricsReporter{}
@@ -42,7 +43,8 @@ func NewMetricsReporter(svcName, endpoint string) (*MetricsReporter, error) {
 	}
 	mr.provider = metric.NewMeterProvider(
 		metric.WithResource(resources),
-		metric.WithReader(metric.NewPeriodicReader(mr.exporter)), // TODO: configure
+		metric.WithReader(metric.NewPeriodicReader(mr.exporter,
+			metric.WithInterval(interval))),
 	)
 	mr.duration, err = mr.provider.Meter(reporterName).
 		Float64Histogram("duration", instrument.WithUnit("ms"))

@@ -1,0 +1,67 @@
+version: '3.8'
+
+services:
+  testserver:
+    build:
+      context: ../..
+      dockerfile: test/integration/components/testserver/Dockerfile
+    image: hatest-testserver
+    ports:
+      - "8080:8080"
+    environment:
+      LOG_LEVEL: DEBUG
+    depends_on:
+      autoinstrumenter:
+        condition: service_started
+
+  autoinstrumenter:
+    build:
+      context: ../..
+      dockerfile: ./Dockerfile
+    image: hatest-autoinstrumenter
+    privileged: true # TODO: replace by individual capabilities
+    pid: "host"
+    environment:
+      PRINT_TRACES: "true"
+      EXECUTABLE_NAME: "testserver"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "otelcol:4318"
+      METRICS_INTERVAL: "10ms"
+    depends_on:
+      otelcol:
+        condition: service_started
+
+  # OpenTelemetry Collector
+  otelcol:
+    image: otel/opentelemetry-collector-contrib:0.70.0
+    container_name: otel-col
+    deploy:
+      resources:
+        limits:
+          memory: 125M
+    restart: unless-stopped
+    command: [ "--config=/etc/otelcol-config/otelcol-config.yml" ]
+    volumes:
+      - ./configs/:/etc/otelcol-config
+    ports:
+      - "4317"          # OTLP over gRPC receiver
+      - "4318:4318"     # OTLP over HTTP receiver
+      - "9464"          # Prometheus exporter
+      - "8888"          # metrics endpoint
+
+  # Prometheus
+  prometheus:
+    image: quay.io/prometheus/prometheus:v2.34.0
+    container_name: prometheus
+    command:
+      - --storage.tsdb.retention.time=1m
+      - --config.file=/etc/prometheus/prometheus-config.yml
+      - --storage.tsdb.path=/prometheus
+      - --web.enable-lifecycle
+      - --web.route-prefix=/
+    volumes:
+      - ./configs/:/etc/prometheus
+    depends_on:
+      otelcol:
+        condition: service_started
+    ports:
+      - "9090:9090"

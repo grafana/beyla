@@ -24,10 +24,10 @@ func (c *Config) Validate() error {
 	if c.FuncName == "" {
 		return ConfigError("missing INSTRUMENT_FUNC_NAME property")
 	}
-	if !c.PrintTraces && c.OTELEndpoint == "" &&
+	if !c.NoopTracer && !c.PrintTraces && c.OTELEndpoint == "" &&
 		c.OTELTracesEndpoint == "" && c.OTELMetricsEndpoint == "" {
 		return ConfigError("at least one of the following properties must be set: " +
-			"PRINT_TRACES, OTEL_EXPORTER_OTLP_ENDPOINT, " +
+			"NOOP_TRACES, PRINT_TRACES, OTEL_EXPORTER_OTLP_ENDPOINT, " +
 			"OTEL_EXPORTER_OTLP_METRICS_ENDPOINT, OTEL_EXPORTER_OTLP_TRACES_ENDPOINT")
 	}
 	return nil

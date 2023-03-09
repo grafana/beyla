@@ -1,4 +1,4 @@
-name: Pull request checks
+name: Pull request integration tests
 
 on:
   push:

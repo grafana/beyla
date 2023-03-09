@@ -1,12 +1,12 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"os"
 
-	"github.com/grafana/http-autoinstrument/pkg/pipe"
-
 	"github.com/caarlos0/env/v6"
+	"github.com/grafana/http-autoinstrument/pkg/pipe"
 	"golang.org/x/exp/slog"
 )
 
@@ -42,7 +42,7 @@ func main() {
 	}
 
 	slog.Info("Starting main node")
-	bp.Start()
+	bp.Start(context.TODO())
 
 	// TODO: add shutdown hook for graceful stop
 	wait := make(chan struct{})

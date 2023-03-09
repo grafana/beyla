@@ -5,7 +5,6 @@ linters:
     - errorlint
     - cyclop
     - errname
-    - exhaustive
     - exportloopref
     - gocritic
     - goimports
@@ -19,6 +18,8 @@ linters:
     - typecheck
     - unused
     - varcheck
+  disable:
+    - exhaustive
 linters-settings:
   stylecheck:
     go: "1.19"

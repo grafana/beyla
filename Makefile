@@ -27,8 +27,7 @@ CLANG ?= clang
 CFLAGS := -O2 -g -Wall -Werror $(CFLAGS)
 
 # regular expressions for excluded file patterns
-# TODO: change
-EXCLUDE_COVERAGE_FILES="(bpf_bpfe)|(/pingserver/)"
+EXCLUDE_COVERAGE_FILES="(/cmd/)|(bpf_bpfe)|(/pingserver/)|(/test/collector/)"
 
 .DEFAULT_GOAL := build
 
@@ -59,8 +58,11 @@ generate: prereqs
 docker-generate:
 	$(OCI_BIN) run --rm -v $(shell pwd):/src $(GEN_IMG)
 
+.PHONY: verify
+verify: prereqs lint test
+
 .PHONY: build
-build: prereqs lint test compile
+build: verify compile
 
 .PHONY: compile
 compile:

@@ -7,6 +7,9 @@ GOARCH ?= amd64
 # TODO: grafana
 DOCKERHUB_USER ?= mariomac
 
+COMPOSE_ARGS ?= -f test/integration/docker-compose.yml
+COMPOSE_LOGS ?= docker-compose.log
+
 # Container image creation creation
 VERSION ?= latest
 IMAGE_TAG_BASE ?= $(DOCKERHUB_USER)/http-autoinstrument
@@ -30,6 +33,10 @@ CFLAGS := -O2 -g -Wall -Werror $(CFLAGS)
 EXCLUDE_COVERAGE_FILES="(/cmd/)|(bpf_bpfe)|(/pingserver/)|(/test/collector/)"
 
 .DEFAULT_GOAL := build
+# Oneshell is required to auto-cleanup of integration tests
+export SHELL:=/bin/sh
+export SHELLOPTS:=$(if $(SHELLOPTS),$(SHELLOPTS):)pipefail:errexit
+.ONESHELL:
 
 .PHONY: prereqs
 prereqs:
@@ -97,3 +104,30 @@ generator-image-build-push: ## Build OCI image with the manager.
 	@echo "### Creating the image that generates the eBPF binaries"
 	$(OCI_BIN) buildx build . --push -f generator.Dockerfile --platform linux/amd64,linux/arm64 -t $(GEN_IMG)
 
+.PHONY: prepare-integration-test
+prepare-integration-test:
+	@echo "### Removing resources from previous integration tests, if any"
+	$(OCI_BIN) compose $(COMPOSE_ARGS) stop || true
+	$(OCI_BIN) compose $(COMPOSE_ARGS) rm -f || true
+	$(OCI_BIN) rmi -f $(shell $(OCI_BIN) images --format '{{.Repository}}:{{.Tag}}' | grep 'hatest-') || true
+	@echo "### Spinning up Compose cluster"
+	$(OCI_BIN) compose $(COMPOSE_ARGS)  up --detach
+
+.PHONY: cleanup-integration-test
+cleanup-integration-test:
+	@echo "### Storing integration tests Compose logs"
+	$(OCI_BIN) compose $(COMPOSE_ARGS) logs > $(COMPOSE_LOGS)
+	@echo "### Removing integration test Compose cluster"
+	$(OCI_BIN) compose $(COMPOSE_ARGS) stop
+	$(OCI_BIN) compose $(COMPOSE_ARGS) rm -f
+
+# TODO: provide coverage info for integration testing https://go.dev/blog/integration-test-coverage
+.PHONY: run-integration-test
+run-integration-test:
+	@echo "### Running integration tests"
+	go test -mod vendor -a ./test/integration/... --tags=integration
+
+.PHONY: integration-test
+integration-test: prepare-integration-test
+	$(MAKE) run-integration-test || (ret=$$?; $(MAKE) cleanup-integration-test && exit $$ret)
+	$(MAKE) cleanup-integration-test

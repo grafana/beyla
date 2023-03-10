@@ -3,9 +3,11 @@ module github.com/grafana/http-autoinstrument
 go 1.20
 
 require (
+	github.com/caarlos0/env v3.5.0+incompatible
 	github.com/caarlos0/env/v6 v6.10.1
 	github.com/cilium/ebpf v0.10.0
 	github.com/gavv/monotime v0.0.0-20190418164738-30dba4353424
+	github.com/mariomac/guara v0.0.0-20221222112709-f95b15506aee
 	github.com/mariomac/pipes v0.5.0
 	github.com/shirou/gopsutil v3.21.11+incompatible
 	github.com/stretchr/testify v1.8.2

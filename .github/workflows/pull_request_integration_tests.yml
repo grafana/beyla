@@ -1,4 +1,4 @@
-name: Pull request checks
+name: Pull request integration tests
 
 on:
   push:
@@ -19,11 +19,11 @@ jobs:
         uses: actions/setup-go@v3
         with:
           go-version: ${{ matrix.go }}
-      - name: Run verification and unit tests
-        run: make verify cov-exclude-generated
-      - name: Report coverage
-        uses: codecov/codecov-action@v3
+      - name: Run integration tests
+        run: make integration-test
+      - name: Upload integration test logs
+        uses: actions/upload-artifact@v3
+        if: always()
         with:
-          files: ./cover.out
-          flags: unittests
-          token: ${{ secrets.CODECOV_TOKEN }}
+          name: docker-compose.log
+          path: docker-compose.log

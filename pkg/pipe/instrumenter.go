@@ -112,7 +112,7 @@ func otelExporters(gb *graphBuilder) ([]*node.Terminal[spanner.HTTPRequestSpan],
 		metricsEndpoint = gb.config.OTELMetricsEndpoint
 	}
 	if metricsEndpoint != "" {
-		mr, err := otel.NewMetricsReporter(gb.svcName, metricsEndpoint)
+		mr, err := otel.NewMetricsReporter(gb.svcName, metricsEndpoint, gb.config.MetricsInterval)
 		if err != nil {
 			return nil, fmt.Errorf("starting metrics reporter: %w", err)
 		}

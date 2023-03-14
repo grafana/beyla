@@ -1,13 +1,15 @@
 package main
 
 import (
-	"fmt"
-	"net/http"
 	"os"
-	"strconv"
-	"time"
+
+	"github.com/grafana/http-autoinstrument/test/integration/components/testserver/gorilla"
+
+	"github.com/grafana/http-autoinstrument/test/integration/components/testserver/gin"
+	"github.com/grafana/http-autoinstrument/test/integration/components/testserver/std"
 
 	"github.com/caarlos0/env"
+	gin2 "github.com/gin-gonic/gin"
 	"golang.org/x/exp/slog"
 )
 
@@ -17,16 +19,14 @@ Basically it's a server that accepts any method and path with a set of query par
 that allow modifying its behavior (duration, response...)
 */
 
-const (
-	// argDelay allows delaying the response of a service call (default: no delay)
-	argDelay = "delay"
-	// argStatus allows specifying the status response of a service call (default: 200)
-	argStatus = "status"
-)
-
 type config struct {
-	Port     int    `env:"SVC_PORT" envDefault:"8080"`
-	LogLevel string `env:"LOG_LEVEL" envDefault:"INFO"`
+	// STDPort to listen connections using the standard library
+	STDPort int `env:"STD_PORT" envDefault:"8080"`
+	// GinPort to listen connections using the Gin framework
+	GinPort int `env:"GIN_PORT" envDefault:"8081"`
+	// GorillaPort to listen connections using the Gorilla Mux framework
+	GorillaPort int    `env:"GIN_PORT" envDefault:"8082"`
+	LogLevel    string `env:"LOG_LEVEL" envDefault:"INFO"`
 }
 
 func main() {
@@ -37,10 +37,24 @@ func main() {
 	}
 	setupLog(&cfg)
 
-	address := fmt.Sprintf(":%d", cfg.Port)
-	slog.Info("starting HTTP server", "address", address)
-	err := http.ListenAndServe(address, http.HandlerFunc(httpHandler))
-	slog.Error("HTTP server has unexpectedly stopped", err)
+	wait := make(chan struct{})
+	go func() {
+		std.Setup(cfg.STDPort)
+		close(wait)
+	}()
+	go func() {
+		gin2.SetMode(gin2.ReleaseMode)
+		gin.Setup(cfg.GinPort)
+		close(wait)
+	}()
+	go func() {
+		gorilla.Setup(cfg.GorillaPort)
+		close(wait)
+	}()
+
+	// wait indefinitely unless any server crashes
+	<-wait
+	slog.Warn("stopping process")
 }
 
 func setupLog(cfg *config) {
@@ -55,29 +69,4 @@ func setupLog(cfg *config) {
 	}
 	slog.SetDefault(slog.New(ho.NewTextHandler(os.Stderr)))
 	slog.Debug("logger is set", "level", lvl.String())
-}
-
-func httpHandler(rw http.ResponseWriter, req *http.Request) {
-	slog.Debug("received request", "url", req.RequestURI)
-	status := http.StatusOK
-	for k, v := range req.URL.Query() {
-		if len(v) == 0 {
-			continue
-		}
-		switch k {
-		case argStatus:
-			if s, err := strconv.Atoi(v[0]); err != nil {
-				slog.Debug("wrong status value. Ignoring", "error", err)
-			} else {
-				status = s
-			}
-		case argDelay:
-			if d, err := time.ParseDuration(v[0]); err != nil {
-				slog.Debug("wrong delay value. Ignoring", "error", err)
-			} else {
-				time.Sleep(d)
-			}
-		}
-	}
-	rw.WriteHeader(status)
 }

@@ -1,6 +1,14 @@
 # http-autoinstrument
 eBPF-based autoinstrumentation of HTTP and HTTPS services
 
+| Library                                       | Working |
+|-----------------------------------------------|---------|
+| Standard `net/http`                           | ✅       |
+| [Gorilla Mux](https://github.com/gorilla/mux) | ✅       |
+| [Gin](https://gin-gonic.com/)                 | ❌       |
+
+## Credits
+
 Part of the code is taken from: https://github.com/open-telemetry/opentelemetry-go-instrumentation
 
 * bpf/**
@@ -18,6 +26,7 @@ Differences:
   * We store the initial set of registers at the start of the function and retrieve them at the end of the function
 * Using ringbuffer instead of perf_buffer
   * despite the name, ringbuffer is faster
+* We return status code
 
 ## How to setup a quick demo
 

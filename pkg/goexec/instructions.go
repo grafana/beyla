@@ -30,7 +30,7 @@ func instrumentationPoints(elfF *elf.File, funcName string) (FuncOffsets, error)
 
 	fieldsIter:
 		for _, field := range entry.Field {
-			switch field.Attr { //nolint:exhaustive
+			switch field.Attr {
 			case dwarf.AttrName:
 				// TODO: make it working for other functions
 				if field.Val == funcName {

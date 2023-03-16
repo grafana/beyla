@@ -50,6 +50,7 @@ func pingHandler(rw http.ResponseWriter, req *http.Request) {
 func main() {
 	// Use INFO as default log
 	lvl := slog.LevelInfo
+	args := os.Args[:]
 
 	lvlEnv, ok := os.LookupEnv("LOG_LEVEL")
 	// LOG_LEVEL is set, let's default to the desired level
@@ -74,6 +75,11 @@ func main() {
 			os.Exit(-1)
 		}
 	}
-	slog.Info("listening and serving", "port", port)
-	panic(http.ListenAndServe(fmt.Sprintf(":%d", port), http.HandlerFunc(pingHandler)))
+	slog.Info("listening and serving", "port", port, "process_id", os.Getpid())
+	if len(args) > 1 && args[1] == "ssl" {
+		slog.Info("TLS enabled")
+		panic(http.ListenAndServeTLS(fmt.Sprintf(":%d", port), "server.crt", "server.key", http.HandlerFunc(pingHandler)))
+	} else {
+		panic(http.ListenAndServe(fmt.Sprintf(":%d", port), http.HandlerFunc(pingHandler)))
+	}
 }

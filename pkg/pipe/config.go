@@ -12,6 +12,7 @@ type Config struct {
 	OTELMetricsEndpoint string        `env:"OTEL_EXPORTER_OTLP_METRICS_ENDPOINT"`
 	OTELTracesEndpoint  string        `env:"OTEL_EXPORTER_OTLP_TRACES_ENDPOINT"`
 	PrintTraces         bool          `env:"PRINT_TRACES" envDefault:"true"` // TODO: false
+	ChannelBufferLen    int           `env:"CHANNEL_BUFFER_LEN" envDefault:"10"`
 }
 
 type ConfigError string

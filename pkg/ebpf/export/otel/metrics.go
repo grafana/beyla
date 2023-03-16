@@ -3,18 +3,33 @@ package otel
 import (
 	"context"
 	"fmt"
+	"os"
 	"time"
 
 	"golang.org/x/exp/slog"
 
+	"github.com/grafana/http-autoinstrument/pkg/spanner"
+	"github.com/mariomac/pipes/pkg/node"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp"
 	"go.opentelemetry.io/otel/metric/instrument"
 	"go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/resource"
 	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
-
-	"github.com/grafana/http-autoinstrument/pkg/spanner"
 )
+
+type MetricsConfig struct {
+	ServiceName     string
+	Interval        time.Duration
+	Endpoint        string
+	MetricsEndpoint string
+}
+
+// Enabled specifies that the OTEL metrics node is enabled if and only if
+// either the OTEL endpoint and OTEL metrics endpoint is defined.
+// If not enabled, this node won't be instantiated
+func (m MetricsConfig) Enabled() bool {
+	return m.Endpoint != "" || m.MetricsEndpoint != ""
+}
 
 type MetricsReporter struct {
 	exporter metric.Exporter
@@ -22,7 +37,20 @@ type MetricsReporter struct {
 	duration instrument.Float64Histogram
 }
 
-func NewMetricsReporter(svcName, endpoint string, interval time.Duration) (*MetricsReporter, error) {
+func MetricsReporterProvider(cfg MetricsConfig) node.TerminalFunc[spanner.HTTPRequestSpan] {
+	endpoint := cfg.MetricsEndpoint
+	if endpoint == "" {
+		endpoint = cfg.Endpoint
+	}
+	mr, err := newMetricsReporter(cfg.ServiceName, endpoint, cfg.Interval)
+	if err != nil {
+		slog.Error("can't instantiate OTEL metrics reporter", err)
+		os.Exit(-1)
+	}
+	return mr.reportMetrics
+}
+
+func newMetricsReporter(svcName, endpoint string, interval time.Duration) (*MetricsReporter, error) {
 	ctx := context.TODO()
 
 	mr := MetricsReporter{}
@@ -63,7 +91,7 @@ func (r *MetricsReporter) close() {
 	}
 }
 
-func (r *MetricsReporter) ReportMetrics(spans <-chan spanner.HTTPRequestSpan) {
+func (r *MetricsReporter) reportMetrics(spans <-chan spanner.HTTPRequestSpan) {
 	defer r.close()
 	for span := range spans {
 		// TODO: for more accuracy, there must be a way to set the metric time from the actual span end time

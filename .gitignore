@@ -16,3 +16,11 @@
 otelhttp
 deployments/01-grafana-credentials.yml
 test/cmd/pingserver/server
+test/cmd/rust_pingserver/target
+test/cmd/rust_pingiron/target
+test/cmd/rust_pingrouille/target
+test/cmd/rust_ironssl/target
+.vscode/settings.json
+test/cmd/python_flaskping/__pycache__/
+test/cmd/python_pingserver/__pycache__/
+.gitignore

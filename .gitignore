@@ -16,6 +16,7 @@
 otelhttp
 deployments/01-grafana-credentials.yml
 test/cmd/pingserver/server
+docker-compose.log
 test/cmd/rust_pingserver/target
 test/cmd/rust_pingiron/target
 test/cmd/rust_pingrouille/target

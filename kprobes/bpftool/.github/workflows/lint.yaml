@@ -1,0 +1,23 @@
+name: lint
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/lint.yaml'
+      - 'scripts/**'
+  push:
+    branches:
+      - master
+
+jobs:
+  shellcheck:
+    name: ShellCheck
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@ec3a7ce113134d7a93b817d10a8272cb61118579
+
+      - name: Run ShellCheck
+        uses: ludeeus/action-shellcheck@94e0aab03ca135d11a35e5bfc14e6746dc56e7e9
+        with:
+          scandir: './scripts'

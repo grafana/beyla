@@ -1,0 +1,70 @@
+name: static LLVM build
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/static-build.yaml'
+      - 'include/**'
+      - 'libbpf/**'
+      - 'src/**'
+  push:
+    branches:
+      - master
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+    runs-on: ubuntu-22.04
+    env:
+      LLVM_SRC_PATH: llvm-project/llvm
+      LLVM_BUILD_PATH: llvm-project/llvm/build
+
+    steps:
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libelf-dev ninja-build lld
+
+      - name: Checkout llvm-project
+        uses: actions/checkout@ec3a7ce113134d7a93b817d10a8272cb61118579
+        with:
+          repository: 'llvm/llvm-project'
+          ref: 'llvmorg-15.0.0'
+          path: 'llvm-project'
+
+      - name: Build LLVM libraries, llvm-config, llvm-strip
+        run: |
+          mkdir -p "${LLVM_BUILD_PATH}"
+          # Use Ninja so we can have parallel builds, but specify to use a
+          # single job for the linker (or we get OOM-ed).
+          cmake -G Ninja -S "${LLVM_SRC_PATH}" -B "${LLVM_BUILD_PATH}" \
+              -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF \
+              -DLLVM_PARALLEL_LINK_JOBS=1 -DLLVM_USE_LINKER=lld
+          ninja -C "${LLVM_BUILD_PATH}" llvm-config llvm-strip llvm-libraries
+
+      - name: Checkout bpftool
+        uses: actions/checkout@ec3a7ce113134d7a93b817d10a8272cb61118579
+        with:
+          submodules: true
+          # Create a new directory to avoid wiping out LLVM on bpftool checkout
+          path: 'bpftool'
+
+      - name: Build bpftool (static build, default LLVM disassembler)
+        working-directory: 'bpftool'
+        run: |
+          EXTRA_CFLAGS=--static \
+              LLVM_CONFIG="${GITHUB_WORKSPACE}/${LLVM_BUILD_PATH}/bin/llvm-config" \
+              LLVM_STRIP="${GITHUB_WORKSPACE}/${LLVM_BUILD_PATH}/bin/llvm-strip" \
+              make -j -C src V=1
+
+      - name: Test bpftool binary
+        working-directory: 'bpftool'
+        run: |
+          ./src/bpftool 2>&1 | grep -q Usage
+          ./src/bpftool -p version | \
+              tee /dev/stderr | \
+              jq --exit-status ".features | .llvm"
+          ldd ./src/bpftool 2>&1 | \
+              tee /dev/stderr | \
+              grep -q 'not a dynamic executable'

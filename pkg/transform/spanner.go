@@ -1,4 +1,4 @@
-package spanner
+package transform
 
 import (
 	"bytes"
@@ -13,6 +13,7 @@ import (
 type HTTPRequestSpan struct {
 	Method string
 	Path   string
+	Route  string
 	Status int
 	Start  time.Time
 	End    time.Time

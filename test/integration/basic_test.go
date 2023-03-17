@@ -86,6 +86,7 @@ func basicTest(t *testing.T, url string) {
 			`http_method="GET",` +
 			`http_status_code="404",` +
 			`service_name="/testserver",` +
+			`http_route="/basic/:rnd",` +
 			`http_target="` + path + `"}`)
 		require.NoError(t, err)
 		// check duration_count has 3 calls and all the arguments
@@ -103,6 +104,7 @@ func basicTest(t *testing.T, url string) {
 		`http_method="GET",` +
 		`http_status_code="404",` +
 		`service_name="/testserver",` +
+		`http_route="/basic/:rnd",` +
 		`http_target="` + path + `"}`)
 	require.NoError(t, err)
 	require.Len(t, results, 1)

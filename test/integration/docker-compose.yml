@@ -20,6 +20,11 @@ services:
     build:
       context: ../..
       dockerfile: ./Dockerfile
+    command:
+      - /otelhttp
+      - --config=/configs/instrumenter-config.yml
+    volumes:
+      - ./configs/:/configs
     image: hatest-autoinstrumenter
     privileged: true # TODO: replace by individual capabilities
     pid: "host"
@@ -29,6 +34,7 @@ services:
       OTEL_EXPORTER_OTLP_ENDPOINT: "otelcol:4318"
       METRICS_INTERVAL: "10ms"
       LOG_LEVEL: "DEBUG"
+      OTEL_EXPORTER_REPORT_TARGET: "true"
     depends_on:
       otelcol:
         condition: service_started

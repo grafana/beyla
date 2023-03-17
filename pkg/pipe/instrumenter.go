@@ -3,15 +3,14 @@ package pipe
 import (
 	"fmt"
 
-	"github.com/grafana/http-autoinstrument/pkg/ebpf/export/debug"
-	otel2 "github.com/grafana/http-autoinstrument/pkg/ebpf/export/otel"
-
-	"github.com/grafana/http-autoinstrument/pkg/ebpf/nethttp"
-	"github.com/grafana/http-autoinstrument/pkg/goexec"
-	"github.com/grafana/http-autoinstrument/pkg/spanner"
-
 	"github.com/mariomac/pipes/pkg/graph"
 	"github.com/mariomac/pipes/pkg/node"
+
+	"github.com/grafana/http-autoinstrument/pkg/ebpf/nethttp"
+	"github.com/grafana/http-autoinstrument/pkg/export/debug"
+	"github.com/grafana/http-autoinstrument/pkg/export/otel"
+	"github.com/grafana/http-autoinstrument/pkg/goexec"
+	"github.com/grafana/http-autoinstrument/pkg/transform"
 )
 
 // builder with injectable instantiators for unit testing
@@ -35,10 +34,11 @@ func Build(config *Config) (graph.Graph, error) {
 // and offsets inspector
 func newGraphBuilder(config *Config) *graphBuilder {
 	gb := graph.NewBuilder(node.ChannelBufferLen(config.ChannelBufferLen))
-	graph.RegisterCodec(gb, spanner.ConvertToSpan)
+	graph.RegisterCodec(gb, transform.ConvertToSpan)
 	graph.RegisterStart(gb, nethttp.EBPFTracerProvider)
-	graph.RegisterTerminal(gb, otel2.MetricsReporterProvider)
-	graph.RegisterTerminal(gb, otel2.TracesReporterProvider)
+	graph.RegisterMiddle(gb, transform.RoutesProvider)
+	graph.RegisterTerminal(gb, otel.MetricsReporterProvider)
+	graph.RegisterTerminal(gb, otel.TracesReporterProvider)
 	graph.RegisterTerminal(gb, debug.NoopNode)
 	graph.RegisterTerminal(gb, debug.PrinterNode)
 

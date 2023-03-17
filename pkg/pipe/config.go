@@ -8,9 +8,10 @@ import (
 	"github.com/caarlos0/env/v7"
 	"gopkg.in/yaml.v3"
 
-	"github.com/grafana/http-autoinstrument/pkg/ebpf/export/debug"
-	otel2 "github.com/grafana/http-autoinstrument/pkg/ebpf/export/otel"
 	"github.com/grafana/http-autoinstrument/pkg/ebpf/nethttp"
+	"github.com/grafana/http-autoinstrument/pkg/export/debug"
+	"github.com/grafana/http-autoinstrument/pkg/export/otel"
+	"github.com/grafana/http-autoinstrument/pkg/transform"
 )
 
 var defaultConfig = Config{
@@ -22,7 +23,7 @@ var defaultConfig = Config{
 			"github.com/gin-gonic/gin.(*Engine).ServeHTTP",
 		},
 	},
-	Metrics: otel2.MetricsConfig{
+	Metrics: otel.MetricsConfig{
 		Interval: 5 * time.Second,
 	},
 	Printer: true, // TODO: false
@@ -31,12 +32,14 @@ var defaultConfig = Config{
 
 // TODO: support all the OTEL_ stuff here: https://github.com/open-telemetry/opentelemetry-specification/blob/main/specification/protocol/exporter.md
 type Config struct {
-	EBPF nethttp.EBPFTracer `nodeId:"ebpf" sendsTo:"otel_metrics,otel_traces,print,noop" yaml:"ebpf"`
+	EBPF nethttp.EBPFTracer `nodeId:"ebpf" sendTo:"routes" yaml:"ebpf"`
 
-	Metrics otel2.MetricsConfig `nodeId:"otel_metrics" yaml:"otel_metrics_export"`
-	Traces  otel2.TracesConfig  `nodeId:"otel_traces" yaml:"otel_traces_export"`
-	Printer debug.PrintEnabled  `nodeId:"print" yaml:"print" env:"PRINT_TRACES"`
-	Noop    debug.NoopEnabled   `nodeId:"noop" yaml:"noop" env:"NOOP_TRACES"`
+	Routes transform.RoutesConfig `nodeId:"routes" forwardTo:"otel_metrics,otel_traces,print,noop" yaml:"routes"`
+
+	Metrics otel.MetricsConfig `nodeId:"otel_metrics" yaml:"otel_metrics_export"`
+	Traces  otel.TracesConfig  `nodeId:"otel_traces" yaml:"otel_traces_export"`
+	Printer debug.PrintEnabled `nodeId:"print" yaml:"print" env:"PRINT_TRACES"`
+	Noop    debug.NoopEnabled  `nodeId:"noop" yaml:"noop" env:"NOOP_TRACES"`
 
 	ChannelBufferLen int    `yaml:"channel_buffer_len" env:"CHANNEL_BUFFER_LEN" nodeId:"-"`
 	LogLevel         string `yaml:"log_level" env:"LOG_LEVEL" nodeId:"-"`

@@ -7,7 +7,7 @@ import (
 
 	"golang.org/x/exp/slog"
 
-	"github.com/grafana/http-autoinstrument/pkg/spanner"
+	"github.com/grafana/http-autoinstrument/pkg/transform"
 	"github.com/mariomac/pipes/pkg/node"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
@@ -37,7 +37,7 @@ type TracesReporter struct {
 	traceProvider *trace.TracerProvider
 }
 
-func TracesReporterProvider(cfg TracesConfig) node.TerminalFunc[spanner.HTTPRequestSpan] {
+func TracesReporterProvider(cfg TracesConfig) node.TerminalFunc[transform.HTTPRequestSpan] {
 	endpoint := cfg.TracesEndpoint
 	if endpoint == "" {
 		endpoint = cfg.Endpoint
@@ -90,7 +90,7 @@ func (r *TracesReporter) close() {
 	}
 }
 
-func (r *TracesReporter) reportTraces(spans <-chan spanner.HTTPRequestSpan) {
+func (r *TracesReporter) reportTraces(spans <-chan transform.HTTPRequestSpan) {
 	defer r.close()
 	tracer := r.traceProvider.Tracer(reporterName)
 	for span := range spans {

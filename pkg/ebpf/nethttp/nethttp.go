@@ -16,16 +16,32 @@ package nethttp
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"os"
 
 	"github.com/cilium/ebpf/link"
 	"github.com/cilium/ebpf/ringbuf"
 	"github.com/cilium/ebpf/rlimit"
 	"github.com/grafana/http-autoinstrument/pkg/goexec"
+	"github.com/mariomac/pipes/pkg/node"
 	"golang.org/x/exp/slog"
 )
+
+type EBPFTracer struct {
+	Offsets *goexec.Offsets
+}
+
+func EBPFTracerProvider(cfg EBPFTracer) node.StartFuncCtx[HTTPRequestTrace] {
+	is, err := Instrument(cfg.Offsets)
+	if err != nil {
+		slog.Error("can't instantiate eBPF tracer", err)
+		os.Exit(-1)
+	}
+	return is.Run
+}
 
 //go:generate bpf2go -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 -type http_request_trace bpf ../../../bpf/go_nethttp.c -- -I../../../bpf/headers
 
@@ -105,7 +121,8 @@ func Instrument(offsets *goexec.Offsets) (*InstrumentedServe, error) {
 	return &h, nil
 }
 
-func (h *InstrumentedServe) Run(eventsChan chan<- HTTPRequestTrace) {
+// TODO: make use of context to cancel process
+func (h *InstrumentedServe) Run(_ context.Context, eventsChan chan<- HTTPRequestTrace) {
 	logger := slog.With("name", "net/http-instrumentor")
 	var event HTTPRequestTrace
 	for {

@@ -6,17 +6,15 @@ import (
 	"testing"
 	"time"
 
+	"github.com/grafana/http-autoinstrument/pkg/ebpf/nethttp"
+	"github.com/grafana/http-autoinstrument/pkg/goexec"
+	"github.com/grafana/http-autoinstrument/test/collector"
+	"github.com/mariomac/pipes/pkg/graph"
+	"github.com/mariomac/pipes/pkg/node"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/pdata/pmetric"
 	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
-
-	"github.com/grafana/http-autoinstrument/test/collector"
-
-	"github.com/stretchr/testify/require"
-
-	"github.com/grafana/http-autoinstrument/pkg/ebpf/nethttp"
-	"github.com/mariomac/pipes/pkg/node"
-
-	"github.com/stretchr/testify/assert"
 )
 
 const testTimeout = 5 * time.Second
@@ -56,26 +54,24 @@ func TestBasicPipeline(t *testing.T) {
 	tc, err := collector.Start(ctx)
 	require.NoError(t, err)
 
-	gb := graphBuilder{
-		config: &Config{
-			OTELEndpoint: tc.ServerHostPort,
-		},
-		svcName: "test-service",
-		tracerNode: func(_ *graphBuilder) (*node.Start[nethttp.HTTPRequestTrace], error) {
-			return node.AsStart(func(out chan<- nethttp.HTTPRequestTrace) {
-				rt := nethttp.HTTPRequestTrace{}
-				copy(rt.Path[:], "/foo/bar")
-				copy(rt.Method[:], "GET")
-				rt.Status = 404
-				out <- rt
-			}), nil
-		},
-		exporterNodes: otelExporters,
+	gb := newGraphBuilder(&Config{OTELEndpoint: tc.ServerHostPort})
+	gb.inspector = func(_, _ string) (goexec.Offsets, error) {
+		return goexec.Offsets{FileInfo: goexec.FileInfo{CmdExePath: "test-service"}}, nil
 	}
-	graph, err := gb.buildGraph()
+	// Override eBPF tracer to send some fake data
+	graph.RegisterStart(gb.builder, func(_ nethttp.EBPFTracer) node.StartFuncCtx[nethttp.HTTPRequestTrace] {
+		return func(_ context.Context, out chan<- nethttp.HTTPRequestTrace) {
+			rt := nethttp.HTTPRequestTrace{}
+			copy(rt.Path[:], "/foo/bar")
+			copy(rt.Method[:], "GET")
+			rt.Status = 404
+			out <- rt
+		}
+	})
+	pipe, err := gb.buildGraph()
 	require.NoError(t, err)
 
-	go graph.Start(ctx)
+	go pipe.Run(ctx)
 
 	event := getEvent(t, tc)
 	assert.Equal(t, collector.MetricRecord{

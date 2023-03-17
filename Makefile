@@ -125,6 +125,7 @@ cleanup-integration-test:
 .PHONY: run-integration-test
 run-integration-test:
 	@echo "### Running integration tests"
+	go clean -testcache
 	go test -mod vendor -a ./test/integration/... --tags=integration
 
 .PHONY: integration-test

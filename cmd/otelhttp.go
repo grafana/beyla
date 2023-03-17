@@ -42,9 +42,6 @@ func main() {
 	}
 
 	slog.Info("Starting main node")
-	bp.Start(context.TODO())
-
 	// TODO: add shutdown hook for graceful stop
-	wait := make(chan struct{})
-	<-wait
+	bp.Run(context.TODO())
 }

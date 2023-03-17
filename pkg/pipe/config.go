@@ -15,7 +15,7 @@ import (
 
 var defaultConfig = Config{
 	ChannelBufferLen: 10,
-	LogLevel:         "DEBUG",
+	LogLevel:         "INFO",
 	EBPF: nethttp.EBPFTracer{
 		FuncName: "net/http.HandlerFunc.ServeHTTP",
 	},

@@ -10,8 +10,9 @@ import (
 )
 
 const (
-	nodeIdTag  = "nodeId"
-	sendsToTag = "sendsTo"
+	nodeIdTag    = "nodeId"
+	sendsToTag   = "sendsTo"
+	nodeIdIgnore = "-"
 )
 
 type codecKey struct {

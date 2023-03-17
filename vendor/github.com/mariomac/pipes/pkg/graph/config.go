@@ -107,17 +107,20 @@ func (b *Builder) applyField(fieldType reflect.StructField, fieldVal reflect.Val
 
 	if instancer, ok := fieldVal.Interface().(stage.Instancer); ok {
 		instanceID = instancer.ID()
-	} else if fieldVal.Type().ConvertibleTo(graphInstanceType) {
-		// if it does not implement the instancer interface, let's check if it can be converted
-		// to the convenience stage.Instance type
-		// TODO: if it implements it as a pointer but it is a value, try getting a pointer as we do later with Enabler
-		instanceID = fieldVal.Convert(graphInstanceType).Interface().(stage.Instance).ID()
+		//} else if fieldVal.Type().ConvertibleTo(graphInstanceType) {
+		//	// if it does not implement the instancer interface, let's check if it can be converted
+		//	// to the convenience stage.Instance type
+		//	// TODO: if it implements it as a pointer but it is a value, try getting a pointer as we do later with Enabler
+		//	instanceID = fieldVal.Convert(graphInstanceType).Interface().(stage.Instance).ID()
 	} else if instanceID, ok = fieldType.Tag.Lookup(nodeIdTag); !ok {
 		// Otherwise, let's check for the nodeId embedded tag in the struct if any
 		// But fail if it is not possible
 		return fmt.Errorf("field of type %s should provide an 'ID() InstanceID' method or be tagged"+
 			" with a `nodeId` tag in the configuration struct. Please provide a `nodeId` tag or e.g."+
 			" embed the stage.Instance field", fieldVal.Type())
+	}
+	if instanceID == nodeIdIgnore {
+		return nil
 	}
 
 	// checks if it has a sendsTo annotation and update the connections map accordingly

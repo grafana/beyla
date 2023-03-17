@@ -31,7 +31,10 @@ import (
 )
 
 type EBPFTracer struct {
-	Offsets *goexec.Offsets
+	Exec     string `yaml:"executable_name" env:"EXECUTABLE_NAME"`
+	FuncName string `yaml:"func_name" env:"INSTRUMENT_FUNC_NAME"`
+
+	Offsets *goexec.Offsets `yaml:"-"`
 }
 
 func EBPFTracerProvider(cfg EBPFTracer) node.StartFuncCtx[HTTPRequestTrace] {

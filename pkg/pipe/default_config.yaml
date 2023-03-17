@@ -1,0 +1,8 @@
+channel_buffer_len: 10
+log_level: DEBUG
+ebpf:
+  func_name: net/http.HandlerFunc.ServeHTTP
+otel_metrics_export:
+  interval: 5s
+print: true #TODO: false
+noop: false

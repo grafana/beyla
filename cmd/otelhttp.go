@@ -2,40 +2,35 @@ package main
 
 import (
 	"context"
-	"errors"
+	"flag"
+	"io"
 	"os"
 
-	"github.com/caarlos0/env/v6"
-	"github.com/grafana/http-autoinstrument/pkg/pipe"
 	"golang.org/x/exp/slog"
+
+	"github.com/grafana/http-autoinstrument/pkg/pipe"
 )
 
 func main() {
-	lvl := slog.LevelDebug
-
-	lvlEnv, ok := os.LookupEnv("LOG_LEVEL")
-	// LOG_LEVEL is set, let's default to the desired level
-	if ok {
-		err := lvl.UnmarshalText([]byte(lvlEnv))
-		if err != nil {
-			slog.Error("unknown log level specified, choises are [DEBUG, INFO, WARN, ERROR]", errors.New(lvlEnv))
-			os.Exit(-1)
-		}
-	}
-
+	lvl := slog.LevelVar{}
+	lvl.Set(slog.LevelInfo)
 	ho := slog.HandlerOptions{
-		Level: lvl,
+		Level: &lvl,
 	}
-	slog.SetDefault(slog.New(ho.NewTextHandler(os.Stderr)))
+	slog.SetDefault(slog.New(ho.NewTextHandler(os.Stdout)))
 
-	config := pipe.Config{}
-	if err := env.Parse(&config); err != nil {
-		slog.Error("can't load configuration from environment", err)
+	configPath := flag.String("config", "", "path to the configuration file")
+	flag.Parse()
+
+	config := loadConfig(configPath)
+
+	if err := lvl.UnmarshalText([]byte(config.LogLevel)); err != nil {
+		slog.Error("unknown log level specified, choices are [DEBUG, INFO, WARN, ERROR]", err)
 		os.Exit(-1)
 	}
 
 	slog.Info("creating instrumentation pipeline")
-	bp, err := pipe.Build(&config)
+	bp, err := pipe.Build(config)
 	if err != nil {
 		slog.Error("can't instantiate instrumentation pipeline", err)
 		os.Exit(-1)
@@ -44,4 +39,22 @@ func main() {
 	slog.Info("Starting main node")
 	// TODO: add shutdown hook for graceful stop
 	bp.Run(context.TODO())
+}
+
+func loadConfig(configPath *string) *pipe.Config {
+	var configReader io.ReadCloser
+	if configPath != nil && *configPath != "" {
+		var err error
+		if configReader, err = os.Open(*configPath); err != nil {
+			slog.Error("can't open "+*configPath, err)
+			os.Exit(-1)
+		}
+		defer configReader.Close()
+	}
+	config, err := pipe.LoadConfig(configReader)
+	if err != nil {
+		slog.Error("wrong configuration", err)
+		os.Exit(-1)
+	}
+	return config
 }

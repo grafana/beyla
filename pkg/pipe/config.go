@@ -1,9 +1,9 @@
 package pipe
 
 import (
-	_ "embed"
 	"fmt"
 	"io"
+	"time"
 
 	"github.com/caarlos0/env/v7"
 	"gopkg.in/yaml.v3"
@@ -13,8 +13,18 @@ import (
 	"github.com/grafana/http-autoinstrument/pkg/ebpf/nethttp"
 )
 
-//go:embed default_config.yaml
-var defaultConfig string
+var defaultConfig = Config{
+	ChannelBufferLen: 10,
+	LogLevel:         "DEBUG",
+	EBPF: nethttp.EBPFTracer{
+		FuncName: "net/http.HandlerFunc.ServeHTTP",
+	},
+	Metrics: otel2.MetricsConfig{
+		Interval: 5 * time.Second,
+	},
+	Printer: true, // TODO: false
+	Noop:    false,
+}
 
 // TODO: support all the OTEL_ stuff here: https://github.com/open-telemetry/opentelemetry-specification/blob/main/specification/protocol/exporter.md
 type Config struct {
@@ -56,11 +66,7 @@ func (c *Config) Validate() error {
 // 2 - Contents of the provided file reader (nillable)
 // 3 - Environment variables
 func LoadConfig(file io.Reader) (*Config, error) {
-	cfg := Config{}
-	if err := yaml.Unmarshal([]byte(defaultConfig), &cfg); err != nil {
-		// This must never happen so no need to return the error to the user
-		panic(err)
-	}
+	cfg := defaultConfig
 	if file != nil {
 		cfgBuf, err := io.ReadAll(file)
 		if err != nil {

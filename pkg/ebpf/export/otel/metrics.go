@@ -18,10 +18,10 @@ import (
 )
 
 type MetricsConfig struct {
-	ServiceName     string
-	Interval        time.Duration
-	Endpoint        string
-	MetricsEndpoint string
+	ServiceName     string        `yaml:"service_name" env:"SERVICE_NAME"`
+	Interval        time.Duration `yaml:"interval" env:"METRICS_INTERVAL"`
+	Endpoint        string        `yaml:"endpoint" env:"OTEL_EXPORTER_OTLP_ENDPOINT"`
+	MetricsEndpoint string        `yaml:"-" env:"OTEL_EXPORTER_OTLP_METRICS_ENDPOINT"`
 }
 
 // Enabled specifies that the OTEL metrics node is enabled if and only if

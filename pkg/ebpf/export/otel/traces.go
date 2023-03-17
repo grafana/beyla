@@ -20,9 +20,9 @@ import (
 const reporterName = "github.com/grafana/http-autoinstrument"
 
 type TracesConfig struct {
-	ServiceName    string
-	Endpoint       string
-	TracesEndpoint string
+	ServiceName    string `yaml:"service_name" env:"SERVICE_NAME"`
+	Endpoint       string `yaml:"endpoint" env:"OTEL_EXPORTER_OTLP_ENDPOINT"`
+	TracesEndpoint string `yaml:"-" env:"OTEL_EXPORTER_OTLP_TRACES_ENDPOINT"`
 }
 
 // Enabled specifies that the OTEL traces node is enabled if and only if

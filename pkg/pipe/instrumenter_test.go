@@ -2,9 +2,10 @@ package pipe
 
 import (
 	"context"
-	"fmt"
 	"testing"
 	"time"
+
+	"github.com/grafana/http-autoinstrument/pkg/ebpf/export/otel"
 
 	"github.com/grafana/http-autoinstrument/pkg/ebpf/nethttp"
 	"github.com/grafana/http-autoinstrument/pkg/goexec"
@@ -19,34 +20,6 @@ import (
 
 const testTimeout = 5 * time.Second
 
-func TestConfigValidate(t *testing.T) {
-	testCases := []Config{
-		{OTELEndpoint: "localhost:1234", Exec: "foo", FuncName: "bar"},
-		{OTELMetricsEndpoint: "localhost:1234", Exec: "foo", FuncName: "bar"},
-		{OTELTracesEndpoint: "localhost:1234", Exec: "foo", FuncName: "bar"},
-		{PrintTraces: true, Exec: "foo", FuncName: "bar"},
-	}
-	for n, tc := range testCases {
-		t.Run(fmt.Sprint("case", n), func(t *testing.T) {
-			assert.NoError(t, tc.Validate())
-		})
-	}
-}
-
-func TestConfigValidate_error(t *testing.T) {
-	testCases := []Config{
-		{OTELEndpoint: "localhost:1234", FuncName: "bar"},
-		{OTELMetricsEndpoint: "localhost:1234", Exec: "foo"},
-		{Exec: "foo", FuncName: "bar"},
-	}
-	for n, tc := range testCases {
-		t.Run(fmt.Sprint("case", n), func(t *testing.T) {
-			_, err := Build(&tc)
-			assert.Error(t, err)
-		})
-	}
-}
-
 func TestBasicPipeline(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -54,7 +27,7 @@ func TestBasicPipeline(t *testing.T) {
 	tc, err := collector.Start(ctx)
 	require.NoError(t, err)
 
-	gb := newGraphBuilder(&Config{OTELEndpoint: tc.ServerHostPort})
+	gb := newGraphBuilder(&Config{Metrics: otel.MetricsConfig{MetricsEndpoint: tc.ServerHostPort}})
 	gb.inspector = func(_, _ string) (goexec.Offsets, error) {
 		return goexec.Offsets{FileInfo: goexec.FileInfo{CmdExePath: "test-service"}}, nil
 	}

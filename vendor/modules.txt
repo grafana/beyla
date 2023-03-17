@@ -19,12 +19,9 @@ github.com/bytedance/sonic/loader
 github.com/bytedance/sonic/option
 github.com/bytedance/sonic/unquote
 github.com/bytedance/sonic/utf8
-# github.com/caarlos0/env v3.5.0+incompatible
-## explicit
-github.com/caarlos0/env
-# github.com/caarlos0/env/v6 v6.10.1
+# github.com/caarlos0/env/v7 v7.1.0
 ## explicit; go 1.17
-github.com/caarlos0/env/v6
+github.com/caarlos0/env/v7
 # github.com/cenkalti/backoff/v4 v4.2.0
 ## explicit; go 1.18
 github.com/cenkalti/backoff/v4
@@ -127,7 +124,7 @@ github.com/leodido/go-urn
 # github.com/mariomac/guara v0.0.0-20221222112709-f95b15506aee
 ## explicit; go 1.18
 github.com/mariomac/guara/pkg/test
-# github.com/mariomac/pipes v0.5.1-0.20230316154335-0f741cf1dc81
+# github.com/mariomac/pipes v0.5.1-0.20230317105426-d886f04c1777
 ## explicit; go 1.18
 github.com/mariomac/pipes/pkg/graph
 github.com/mariomac/pipes/pkg/graph/stage

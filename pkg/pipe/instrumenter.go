@@ -14,15 +14,6 @@ import (
 	"github.com/mariomac/pipes/pkg/node"
 )
 
-type GraphArch struct {
-	EBPF nethttp.EBPFTracer `nodeId:"ebpf" sendsTo:"otel_metrics,otel_traces,print,noop"`
-
-	Metrics otel2.MetricsConfig `nodeId:"otel_metrics"`
-	Traces  otel2.TracesConfig  `nodeId:"otel_traces"`
-	Printer debug.PrintEnabled  `nodeId:"print"`
-	Noop    debug.NoopEnabled   `nodeId:"noop"`
-}
-
 // builder with injectable instantiators for unit testing
 type graphBuilder struct {
 	config    *Config
@@ -64,25 +55,18 @@ func (gb *graphBuilder) buildGraph() (graph.Graph, error) {
 	//   httpTracer --> converter --+--> MetricsSender
 	//                              +--> PrinterNode
 
-	offsets, err := gb.inspector(gb.config.Exec, gb.config.FuncName)
+	offsets, err := gb.inspector(gb.config.EBPF.Exec, gb.config.EBPF.FuncName)
 	if err != nil {
 		return graph.Graph{}, fmt.Errorf("error analysing target executable: %w", err)
 	}
 
-	return gb.builder.Build(GraphArch{
-		EBPF: nethttp.EBPFTracer{Offsets: &offsets},
-		Metrics: otel2.MetricsConfig{
-			ServiceName:     offsets.FileInfo.CmdExePath,
-			Interval:        gb.config.MetricsInterval,
-			Endpoint:        gb.config.OTELEndpoint,
-			MetricsEndpoint: gb.config.OTELMetricsEndpoint,
-		},
-		Traces: otel2.TracesConfig{
-			ServiceName:    offsets.FileInfo.CmdExePath,
-			Endpoint:       gb.config.OTELEndpoint,
-			TracesEndpoint: gb.config.OTELTracesEndpoint,
-		},
-		Printer: debug.PrintEnabled(gb.config.PrintTraces),
-		Noop:    debug.NoopEnabled(gb.config.NoopTracer),
-	})
+	gb.config.EBPF.Offsets = &offsets
+	if gb.config.Metrics.ServiceName == "" {
+		gb.config.Metrics.ServiceName = offsets.FileInfo.CmdExePath
+	}
+	if gb.config.Traces.ServiceName == "" {
+		gb.config.Traces.ServiceName = offsets.FileInfo.CmdExePath
+	}
+
+	return gb.builder.Build(gb.config)
 }

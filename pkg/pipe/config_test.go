@@ -20,7 +20,8 @@ func TestConfig_Overrides(t *testing.T) {
 channel_buffer_len: 33
 ebpf:
   executable_name: tras
-  func_name: FooBar
+  functions:
+    - FooBar
 otel_metrics_export:
   endpoint: localhost:3030
 `)
@@ -43,8 +44,8 @@ otel_metrics_export:
 		Printer:          true,
 		Noop:             true,
 		EBPF: nethttp.EBPFTracer{
-			Exec:     "tras",
-			FuncName: "FooBar",
+			Exec:      "tras",
+			Functions: []string{"FooBar"},
 		},
 		Metrics: otel.MetricsConfig{
 			ServiceName: "svc-name",

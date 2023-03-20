@@ -56,7 +56,7 @@ func TestBasic(t *testing.T) {
 	for _, testCaseURL := range []string{
 		instrumentedServiceStdURL,
 		instrumentedServiceGorillaURL,
-		//instrumentedServiceGinURL, TODO
+		instrumentedServiceGinURL,
 	} {
 		t.Run(testCaseURL, func(t *testing.T) {
 			basicTest(t, testCaseURL)

@@ -28,7 +28,7 @@ func TestBasicPipeline(t *testing.T) {
 	require.NoError(t, err)
 
 	gb := newGraphBuilder(&Config{Metrics: otel.MetricsConfig{MetricsEndpoint: tc.ServerHostPort}})
-	gb.inspector = func(_, _ string) (goexec.Offsets, error) {
+	gb.inspector = func(_ string, _ []string) (goexec.Offsets, error) {
 		return goexec.Offsets{FileInfo: goexec.FileInfo{CmdExePath: "test-service"}}, nil
 	}
 	// Override eBPF tracer to send some fake data

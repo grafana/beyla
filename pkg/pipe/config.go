@@ -17,7 +17,10 @@ var defaultConfig = Config{
 	ChannelBufferLen: 10,
 	LogLevel:         "INFO",
 	EBPF: nethttp.EBPFTracer{
-		FuncName: "net/http.HandlerFunc.ServeHTTP",
+		Functions: []string{
+			"net/http.HandlerFunc.ServeHTTP",
+			"github.com/gin-gonic/gin.(*Engine).ServeHTTP",
+		},
 	},
 	Metrics: otel2.MetricsConfig{
 		Interval: 5 * time.Second,
@@ -49,7 +52,7 @@ func (c *Config) Validate() error {
 	if c.EBPF.Exec == "" {
 		return ConfigError("missing EXECUTABLE_NAME property")
 	}
-	if c.EBPF.FuncName == "" {
+	if len(c.EBPF.Functions) == 0 {
 		return ConfigError("missing INSTRUMENT_FUNC_NAME property")
 	}
 	if !c.Noop.Enabled() && !c.Printer.Enabled() &&

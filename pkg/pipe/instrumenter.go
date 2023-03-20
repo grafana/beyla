@@ -18,7 +18,7 @@ import (
 type graphBuilder struct {
 	config    *Config
 	builder   *graph.Builder
-	inspector func(execFile, funcName string) (goexec.Offsets, error)
+	inspector func(execFile string, funcNames []string) (goexec.Offsets, error)
 }
 
 // Build instantiates the whole instrumentation --> processing --> submit
@@ -55,7 +55,7 @@ func (gb *graphBuilder) buildGraph() (graph.Graph, error) {
 	//   httpTracer --> converter --+--> MetricsSender
 	//                              +--> PrinterNode
 
-	offsets, err := gb.inspector(gb.config.EBPF.Exec, gb.config.EBPF.FuncName)
+	offsets, err := gb.inspector(gb.config.EBPF.Exec, gb.config.EBPF.Functions)
 	if err != nil {
 		return graph.Graph{}, fmt.Errorf("error analysing target executable: %w", err)
 	}

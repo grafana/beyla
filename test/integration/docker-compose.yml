@@ -28,6 +28,7 @@ services:
       EXECUTABLE_NAME: "testserver"
       OTEL_EXPORTER_OTLP_ENDPOINT: "otelcol:4318"
       METRICS_INTERVAL: "10ms"
+      LOG_LEVEL: "DEBUG"
     depends_on:
       otelcol:
         condition: service_started

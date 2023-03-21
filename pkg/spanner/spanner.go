@@ -11,11 +11,12 @@ import (
 
 // HTTPRequestSpan contains the information being submitted as
 type HTTPRequestSpan struct {
-	Method string
-	Path   string
-	Status int
-	Start  time.Time
-	End    time.Time
+	Method     string
+	Path       string
+	RemoteAddr string
+	Status     int
+	Start      time.Time
+	End        time.Time
 }
 
 func ConvertToSpan(in <-chan nethttp.HTTPRequestTrace, out chan<- HTTPRequestSpan) {
@@ -52,11 +53,16 @@ func (c *converter) convert(trace *nethttp.HTTPRequestTrace) HTTPRequestSpan {
 	if pathLen < 0 {
 		pathLen = len(trace.Path)
 	}
+	remoteAddrLen := bytes.IndexByte(trace.RemoteAddr[:], 0)
+	if remoteAddrLen < 0 {
+		remoteAddrLen = len(trace.RemoteAddr)
+	}
 	return HTTPRequestSpan{
-		Method: string(trace.Method[:methodLen]),
-		Path:   string(trace.Path[:pathLen]),
-		Start:  now.Add(-startDelta),
-		End:    now.Add(-endDelta),
-		Status: int(trace.Status),
+		Method:     string(trace.Method[:methodLen]),
+		Path:       string(trace.Path[:pathLen]),
+		RemoteAddr: string(trace.RemoteAddr[:remoteAddrLen]),
+		Start:      now.Add(-startDelta),
+		End:        now.Add(-endDelta),
+		Status:     int(trace.Status),
 	}
 }

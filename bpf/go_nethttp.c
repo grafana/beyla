@@ -16,6 +16,7 @@ char __license[] SEC("license") = "Dual MIT/GPL";
 
 #define PATH_MAX_LEN 100
 #define METHOD_MAX_LEN 6 // Longer method: DELETE
+#define REMOTE_ADDR_MAX_LEN 50 // We need 48: 39(ip v6 max) + 1(: separator) + 7(port length max value 65535) + 1(null terminator) 
 
 // TODO: make it user-configurable
 #define MAX_CONCURRENT_REQUESTS 500
@@ -29,8 +30,7 @@ char __license[] SEC("license") = "Dual MIT/GPL";
 // attributes (method, path, and status code).
 typedef struct http_method_invocation_t {
     u64 start_monotime_ns;
-    struct pt_regs
-        regs; // we store registers on invocation to be able to fetch the arguments at return
+    struct pt_regs regs; // we store registers on invocation to be able to fetch the arguments at return
 } http_method_invocation;
 
 // Trace of an HTTP call invocation. It is instantiated by the return uprobe and forwarded to the
@@ -41,7 +41,7 @@ typedef struct http_request_trace_t {
     u8 method[METHOD_MAX_LEN];
     u8 path[PATH_MAX_LEN];
     u16 status;
-    // TODO: remote address:port
+    u8 remote_addr[REMOTE_ADDR_MAX_LEN];
     // TODO: dst address:port
 } __attribute__((packed)) http_request_trace;
 // Force emitting struct sock_info into the ELF for automatic creation of Golang struct
@@ -64,6 +64,7 @@ volatile const u64 url_ptr_pos;
 volatile const u64 path_ptr_pos;
 volatile const u64 method_ptr_pos;
 volatile const u64 status_ptr_pos;
+volatile const u64 remoteaddr_ptr_pos;
 
 // This instrumentation attaches uprobe to the following function:
 // func (mux *ServeMux) ServeHTTP(w ResponseWriter, r *Request)
@@ -87,6 +88,28 @@ int uprobe_ServeHTTP(struct pt_regs *ctx) {
     }
 
     return 0;
+}
+
+static __inline int read_go_str(char *name, void *base_ptr, u8 offset, void *field, u64 max_size) {
+    void *ptr = 0;
+    if (bpf_probe_read(&ptr, sizeof(ptr), (void *)(base_ptr + offset)) != 0) {
+        bpf_printk("can't read ptr for %s", name);
+        return 0;
+    }
+
+    u64 len = 0;
+    if (bpf_probe_read(&len, sizeof(len), (void *)(base_ptr + (offset + 8))) != 0) {
+        bpf_printk("can't read len for %s", name);
+        return 0;
+    }
+
+    u64 size = max_size < len ? max_size : len;
+    if (bpf_probe_read(field, size, ptr)) {
+        bpf_printk("can't read string for %s", name);
+        return 0;
+    }
+
+    return 1;
 }
 
 SEC("uprobe/ServeHTTP_return")
@@ -116,34 +139,26 @@ int uprobe_ServeHttp_return(struct pt_regs *ctx) {
     // Get request struct
     void *req_ptr = GO_PARAM4(&(invocation->regs));
 
-    // Get method from request
-    void *method_ptr = 0;
-    if (bpf_probe_read(&method_ptr, sizeof(method_ptr), (void *)(req_ptr + method_ptr_pos)) != 0) {
-        bpf_printk("can't read method_ptr");
+    // Get method from Request.Method
+    if (!read_go_str("method", req_ptr, method_ptr_pos, &trace->method, sizeof(trace->method))) {
+        bpf_ringbuf_discard(trace, 0);
+        return 0;
     }
-    u64 method_len = 0;
-    if (bpf_probe_read(&method_len, sizeof(method_len), (void *)(req_ptr + (method_ptr_pos + 8))) !=
-        0) {
-        bpf_printk("can't read method_len");
+
+    // Get the remote peer information from Request.RemoteAddr
+    if (!read_go_str("remote_addr", req_ptr, remoteaddr_ptr_pos, &trace->remote_addr, sizeof(trace->remote_addr))) {
+        bpf_ringbuf_discard(trace, 0);
+        return 0;
     }
-    u64 method_size = sizeof(&trace->method);
 
-    method_size = method_size < method_len ? method_size : method_len;
-
-    if (bpf_probe_read(trace->method, method_size, method_ptr)) {
-        bpf_printk("can't read method string");
-    };
-
-    // get path from Request.URL
+    // Get path from Request.URL
     void *url_ptr = 0;
     bpf_probe_read(&url_ptr, sizeof(url_ptr), (void *)(req_ptr + url_ptr_pos));
-    void *path_ptr = 0;
-    bpf_probe_read(&path_ptr, sizeof(path_ptr), (void *)(url_ptr + path_ptr_pos));
-    u64 path_len = 0;
-    bpf_probe_read(&path_len, sizeof(path_len), (void *)(url_ptr + (path_ptr_pos + 8)));
-    u64 path_size = sizeof(trace->path);
-    path_size = path_size < path_len ? path_size : path_len;
-    bpf_probe_read(&trace->path, path_size, path_ptr);
+
+    if (!read_go_str("path", url_ptr, path_ptr_pos, &trace->path, sizeof(trace->path))) {
+        bpf_ringbuf_discard(trace, 0);
+        return 0;
+    }
 
     // get return code from http.ResponseWriter (interface)
     // assuming implementation of http.ResponseWriter is http.response

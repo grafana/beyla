@@ -66,7 +66,7 @@ docker-generate:
 	$(OCI_BIN) run --rm -v $(shell pwd):/src $(GEN_IMG)
 
 .PHONY: verify
-verify: prereqs lint test
+verify: generate lint test
 
 .PHONY: build
 build: verify compile

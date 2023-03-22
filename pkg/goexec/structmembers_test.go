@@ -47,7 +47,7 @@ func TestGoOffsetsFromDwarf(t *testing.T) {
 		"url_ptr_pos":        uint64(16),
 		"path_ptr_pos":       uint64(56),
 		"remoteaddr_ptr_pos": uint64(176),
-		"host_ptr_pos":       uint64(176),
+		"host_ptr_pos":       uint64(128),
 		"method_ptr_pos":     uint64(0),
 		"status_ptr_pos":     uint64(120),
 	}, offsets)

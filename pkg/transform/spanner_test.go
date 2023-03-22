@@ -1,4 +1,4 @@
-package spanner
+package transform
 
 import (
 	"testing"

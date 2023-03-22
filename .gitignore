@@ -17,5 +17,5 @@ otelhttp
 deployments/01-grafana-credentials.yml
 test/cmd/pingserver/server
 docker-compose.log
-.vscode/settings.json
-.idea/.gitignore
+.vscode/
+.idea/

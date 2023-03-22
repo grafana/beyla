@@ -75,9 +75,9 @@ func TestRouteConsolidation(t *testing.T) {
 	// Override eBPF tracer to send some fake data
 	graph.RegisterStart(gb.builder, func(_ nethttp.EBPFTracer) node.StartFuncCtx[nethttp.HTTPRequestTrace] {
 		return func(_ context.Context, out chan<- nethttp.HTTPRequestTrace) {
-			out <- newRequest("GET", "/user/1234", 200)
-			out <- newRequest("GET", "/products/3210/push", 200)
-			out <- newRequest("GET", "/attach", 200) // undefined route: won't report as route
+			out <- newRequest("GET", "/user/1234", "1.1.1.1:3456", 200)
+			out <- newRequest("GET", "/products/3210/push", "1.1.1.1:3456", 200)
+			out <- newRequest("GET", "/attach", "1.1.1.1:3456", 200) // undefined route: won't report as route
 		}
 	})
 	pipe, err := gb.buildGraph()
@@ -99,6 +99,8 @@ func TestRouteConsolidation(t *testing.T) {
 			string(semconv.HTTPMethodKey):     "GET",
 			string(semconv.HTTPStatusCodeKey): "200",
 			string(semconv.HTTPRouteKey):      "/user/{id}",
+			string(semconv.NetPeerNameKey):    "1.1.1.1",
+			string(semconv.NetPeerPortKey):    "3456",
 		},
 		Type: pmetric.MetricTypeHistogram,
 	}, events["/user/{id}"])
@@ -110,6 +112,8 @@ func TestRouteConsolidation(t *testing.T) {
 			string(semconv.HTTPMethodKey):     "GET",
 			string(semconv.HTTPStatusCodeKey): "200",
 			string(semconv.HTTPRouteKey):      "/products/{id}/push",
+			string(semconv.NetPeerNameKey):    "1.1.1.1",
+			string(semconv.NetPeerPortKey):    "3456",
 		},
 		Type: pmetric.MetricTypeHistogram,
 	}, events["/products/{id}/push"])
@@ -121,15 +125,18 @@ func TestRouteConsolidation(t *testing.T) {
 			string(semconv.HTTPMethodKey):     "GET",
 			string(semconv.HTTPStatusCodeKey): "200",
 			string(semconv.HTTPRouteKey):      "*",
+			string(semconv.NetPeerNameKey):    "1.1.1.1",
+			string(semconv.NetPeerPortKey):    "3456",
 		},
 		Type: pmetric.MetricTypeHistogram,
 	}, events["*"])
 }
 
-func newRequest(method, path string, status int) nethttp.HTTPRequestTrace {
+func newRequest(method, path, peer string, status int) nethttp.HTTPRequestTrace {
 	rt := nethttp.HTTPRequestTrace{}
 	copy(rt.Path[:], path)
 	copy(rt.Method[:], method)
+	copy(rt.RemoteAddr[:], peer)
 	rt.Status = uint16(status)
 	return rt
 }

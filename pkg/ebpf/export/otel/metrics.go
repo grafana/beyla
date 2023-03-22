@@ -3,7 +3,9 @@ package otel
 import (
 	"context"
 	"fmt"
+	"net"
 	"os"
+	"strconv"
 	"time"
 
 	"golang.org/x/exp/slog"
@@ -94,12 +96,25 @@ func (r *MetricsReporter) close() {
 func (r *MetricsReporter) reportMetrics(spans <-chan spanner.HTTPRequestSpan) {
 	defer r.close()
 	for span := range spans {
+		ip, port, err := net.SplitHostPort(span.RemoteAddr)
+		peer := ""
+		peerPort := 0
+
+		if err != nil {
+			peer = span.RemoteAddr
+		} else {
+			peer = ip
+			peerPort, _ = strconv.Atoi(port)
+		}
+
 		// TODO: for more accuracy, there must be a way to set the metric time from the actual span end time
 		r.duration.Record(context.TODO(),
 			span.End.Sub(span.Start).Seconds()*1000,
 			semconv.HTTPMethod(span.Method),
 			semconv.HTTPStatusCode(span.Status),
 			semconv.HTTPTarget(span.Path),
+			semconv.NetPeerName(peer),
+			semconv.NetPeerPort(peerPort),
 		)
 	}
 }

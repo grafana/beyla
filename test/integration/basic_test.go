@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"regexp"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -101,6 +102,11 @@ func basicTest(t *testing.T, url string) {
 			addr := net.ParseIP(res.Metric["net_sock_peer_addr"])
 			assert.NotNil(t, addr)
 			assert.True(t, digits.MatchString(res.Metric["net_sock_peer_port"]))
+			addr = net.ParseIP(res.Metric["net_sock_host_addr"])
+			assert.NotNil(t, addr)
+			assert.True(t, len(res.Metric["net_host_name"]) > 0)
+			assert.True(t, digits.MatchString(res.Metric["net_host_port"]))
+			assert.True(t, strings.HasPrefix(res.Metric["net_host_port"], "80"))
 		}
 	})
 
@@ -122,4 +128,9 @@ func basicTest(t *testing.T, url string) {
 	addr := net.ParseIP(res.Metric["net_sock_peer_addr"])
 	assert.NotNil(t, addr)
 	assert.True(t, digits.MatchString(res.Metric["net_sock_peer_port"]))
+	addr = net.ParseIP(res.Metric["net_sock_host_addr"])
+	assert.NotNil(t, addr)
+	assert.True(t, len(res.Metric["net_host_name"]) > 0)
+	assert.True(t, digits.MatchString(res.Metric["net_host_port"]))
+	assert.True(t, strings.HasPrefix(res.Metric["net_host_port"], "80"))
 }

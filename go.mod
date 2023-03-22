@@ -9,7 +9,7 @@ require (
 	github.com/gin-gonic/gin v1.9.0
 	github.com/gorilla/mux v1.8.0
 	github.com/mariomac/guara v0.0.0-20221222112709-f95b15506aee
-	github.com/mariomac/pipes v0.5.1-0.20230317105426-d886f04c1777
+	github.com/mariomac/pipes v0.5.1-0.20230321095313-74438be08289
 	github.com/shirou/gopsutil v3.21.11+incompatible
 	github.com/stretchr/testify v1.8.2
 	go.opentelemetry.io/collector/pdata v0.66.0

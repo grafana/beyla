@@ -32,7 +32,7 @@ CFLAGS := -O2 -g -Wall -Werror $(CFLAGS)
 # regular expressions for excluded file patterns
 EXCLUDE_COVERAGE_FILES="(/cmd/)|(bpf_bpfe)|(/pingserver/)|(/test/collector/)"
 
-.DEFAULT_GOAL := build
+.DEFAULT_GOAL := all
 # Oneshell is required to auto-cleanup of integration tests
 export SHELL:=/bin/sh
 export SHELLOPTS:=$(if $(SHELLOPTS),$(SHELLOPTS):)pipefail:errexit
@@ -66,10 +66,13 @@ docker-generate:
 	$(OCI_BIN) run --rm -v $(shell pwd):/src $(GEN_IMG)
 
 .PHONY: verify
-verify: generate lint test
+verify: prereqs lint test
 
 .PHONY: build
 build: verify compile
+
+.PHONY: all
+all: generate build
 
 .PHONY: compile
 compile:

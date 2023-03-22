@@ -101,7 +101,9 @@ func (r *TracesReporter) reportTraces(spans <-chan spanner.HTTPRequestSpan) {
 				semconv.HTTPMethod(span.Method),
 				semconv.HTTPStatusCode(span.Status),
 				semconv.HTTPTarget(span.Path),
-				// TODO: add src/dst ip and dst port
+				semconv.NetPeerName(span.Peer),
+				semconv.NetPeerPort(span.PeerPort),
+				// TODO: add destination and port
 			),
 			// TODO: trace2.WithSpanKind()
 		)

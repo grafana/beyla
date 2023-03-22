@@ -17,13 +17,14 @@ func (p PrintEnabled) Enabled() bool {
 func PrinterNode(_ PrintEnabled) node.TerminalFunc[spanner.HTTPRequestSpan] {
 	return func(spans <-chan spanner.HTTPRequestSpan) {
 		for span := range spans {
-			fmt.Printf("%s (%s) %v %s %s [%s]\n",
+			fmt.Printf("%s (%s) %v %s %s [%s:%d]\n",
 				span.Start.Format("2006-01-02 15:04:05.12345"),
 				span.End.Sub(span.Start),
 				span.Status,
 				span.Method,
 				span.Path,
-				span.RemoteAddr,
+				span.Peer,
+				span.PeerPort,
 			)
 		}
 	}

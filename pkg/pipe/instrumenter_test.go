@@ -37,6 +37,7 @@ func TestBasicPipeline(t *testing.T) {
 			rt := nethttp.HTTPRequestTrace{}
 			copy(rt.Path[:], "/foo/bar")
 			copy(rt.Method[:], "GET")
+			copy(rt.RemoteAddr[:], "1.1.1.1:3456")
 			rt.Status = 404
 			out <- rt
 		}
@@ -54,6 +55,8 @@ func TestBasicPipeline(t *testing.T) {
 			string(semconv.HTTPMethodKey):     "GET",
 			string(semconv.HTTPStatusCodeKey): "404",
 			string(semconv.HTTPTargetKey):     "/foo/bar",
+			string(semconv.NetPeerNameKey):    "1.1.1.1",
+			string(semconv.NetPeerPortKey):    "3456",
 		},
 		Type: pmetric.MetricTypeHistogram,
 	}, event)

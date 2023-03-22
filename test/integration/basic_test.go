@@ -5,7 +5,9 @@ package integration
 import (
 	"fmt"
 	"math/rand"
+	"net"
 	"net/http"
+	"regexp"
 	"strconv"
 	"testing"
 	"time"
@@ -66,6 +68,7 @@ func TestBasic(t *testing.T) {
 
 func basicTest(t *testing.T, url string) {
 	path := "/basic/" + rndStr()
+	digits := regexp.MustCompile(`[0-9]+`)
 
 	// Call 3 times the instrumented service, forcing it to:
 	// - take at least 30ms to respond
@@ -94,6 +97,9 @@ func basicTest(t *testing.T, url string) {
 			res := results[0]
 			require.Len(t, res.Value, 2)
 			assert.Equal(t, "3", res.Value[1])
+			addr := net.ParseIP(res.Metric["net_peer_name"])
+			assert.NotNil(t, addr)
+			assert.True(t, digits.MatchString(res.Metric["net_peer_port"]))
 		}
 	})
 
@@ -111,4 +117,7 @@ func basicTest(t *testing.T, url string) {
 	sum, err := strconv.ParseFloat(fmt.Sprint(res.Value[1]), 64)
 	require.NoError(t, err)
 	assert.Greater(t, sum, 90.0)
+	addr := net.ParseIP(res.Metric["net_peer_name"])
+	assert.NotNil(t, addr)
+	assert.True(t, digits.MatchString(res.Metric["net_peer_port"]))
 }

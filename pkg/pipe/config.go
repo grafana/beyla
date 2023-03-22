@@ -34,7 +34,8 @@ var defaultConfig = Config{
 type Config struct {
 	EBPF nethttp.EBPFTracer `nodeId:"ebpf" sendTo:"routes" yaml:"ebpf"`
 
-	Routes transform.RoutesConfig `nodeId:"routes" forwardTo:"otel_metrics,otel_traces,print,noop" yaml:"routes"`
+	// Routes is an optional node. If not set, data will be directly forwarded to exporters.
+	Routes *transform.RoutesConfig `nodeId:"routes" forwardTo:"otel_metrics,otel_traces,print,noop" yaml:"routes"`
 
 	Metrics otel.MetricsConfig `nodeId:"otel_metrics" yaml:"otel_metrics_export"`
 	Traces  otel.TracesConfig  `nodeId:"otel_traces" yaml:"otel_traces_export"`
@@ -76,10 +77,10 @@ func LoadConfig(file io.Reader) (*Config, error) {
 	if file != nil {
 		cfgBuf, err := io.ReadAll(file)
 		if err != nil {
-			return nil, fmt.Errorf("reading %q: %w", file, err)
+			return nil, fmt.Errorf("reading YAML configuration: %w", err)
 		}
 		if err := yaml.Unmarshal(cfgBuf, &cfg); err != nil {
-			return nil, fmt.Errorf("parsing %q YAML: %w", file, err)
+			return nil, fmt.Errorf("parsing YAML configuration: %w", err)
 		}
 	}
 	if err := env.Parse(&cfg); err != nil {

@@ -65,7 +65,7 @@ func TestRouteConsolidation(t *testing.T) {
 
 	gb := newGraphBuilder(&Config{
 		Metrics: otel.MetricsConfig{MetricsEndpoint: tc.ServerHostPort},
-		Routes:  transform.RoutesConfig{"/user/{id}", "/products/{id}/push"},
+		Routes:  &transform.RoutesConfig{Patterns: []string{"/user/{id}", "/products/{id}/push"}},
 	})
 	gb.inspector = func(_ string, _ []string) (goexec.Offsets, error) {
 		return goexec.Offsets{FileInfo: goexec.FileInfo{CmdExePath: "test-service"}}, nil
@@ -118,10 +118,10 @@ func TestRouteConsolidation(t *testing.T) {
 		Attributes: map[string]string{
 			string(semconv.HTTPMethodKey):     "GET",
 			string(semconv.HTTPStatusCodeKey): "200",
-			// no route key expected
+			string(semconv.HTTPRouteKey):      "*",
 		},
 		Type: pmetric.MetricTypeHistogram,
-	}, events[""])
+	}, events["*"])
 }
 
 func newRequest(method, path string, status int) nethttp.HTTPRequestTrace {

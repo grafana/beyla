@@ -15,7 +15,7 @@ var structMembers = map[string]map[string]string{
 		"URL":        "url_ptr_pos",
 		"Method":     "method_ptr_pos",
 		"RemoteAddr": "remoteaddr_ptr_pos",
-		"Host":       "host_prt_pos",
+		"Host":       "host_ptr_pos",
 	},
 	"net/url.URL": {
 		"Path": "path_ptr_pos",

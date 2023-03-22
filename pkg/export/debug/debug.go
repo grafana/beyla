@@ -17,7 +17,7 @@ func (p PrintEnabled) Enabled() bool {
 func PrinterNode(_ PrintEnabled) node.TerminalFunc[transform.HTTPRequestSpan] {
 	return func(spans <-chan transform.HTTPRequestSpan) {
 		for span := range spans {
-			fmt.Printf("%s (%s) %v %s %s [%s:%d]\n",
+			fmt.Printf("%s (%s) %v %s %s [%s:%d]->[%s(%s):%d]\n",
 				span.Start.Format("2006-01-02 15:04:05.12345"),
 				span.End.Sub(span.Start),
 				span.Status,
@@ -25,6 +25,9 @@ func PrinterNode(_ PrintEnabled) node.TerminalFunc[transform.HTTPRequestSpan] {
 				span.Path,
 				span.Peer,
 				span.PeerPort,
+				span.LocalIP,
+				span.Host,
+				span.HostPort,
 			)
 		}
 	}

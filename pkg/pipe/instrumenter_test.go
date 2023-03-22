@@ -2,6 +2,7 @@ package pipe
 
 import (
 	"context"
+	"net"
 	"testing"
 	"time"
 
@@ -53,6 +54,9 @@ func TestBasicPipeline(t *testing.T) {
 			string(semconv.HTTPTargetKey):      "/foo/bar",
 			string(semconv.NetSockPeerAddrKey): "1.1.1.1",
 			string(semconv.NetSockPeerPortKey): "3456",
+			string(semconv.NetHostNameKey):     "localhost",
+			string(semconv.NetHostPortKey):     "8080",
+			string(semconv.NetSockHostAddrKey): getLocalIPv4(),
 		},
 		Type: pmetric.MetricTypeHistogram,
 	}, event)
@@ -101,6 +105,9 @@ func TestRouteConsolidation(t *testing.T) {
 			string(semconv.HTTPRouteKey):       "/user/{id}",
 			string(semconv.NetSockPeerAddrKey): "1.1.1.1",
 			string(semconv.NetSockPeerPortKey): "3456",
+			string(semconv.NetHostNameKey):     "localhost",
+			string(semconv.NetHostPortKey):     "8080",
+			string(semconv.NetSockHostAddrKey): getLocalIPv4(),
 		},
 		Type: pmetric.MetricTypeHistogram,
 	}, events["/user/{id}"])
@@ -114,6 +121,9 @@ func TestRouteConsolidation(t *testing.T) {
 			string(semconv.HTTPRouteKey):       "/products/{id}/push",
 			string(semconv.NetSockPeerAddrKey): "1.1.1.1",
 			string(semconv.NetSockPeerPortKey): "3456",
+			string(semconv.NetHostNameKey):     "localhost",
+			string(semconv.NetHostPortKey):     "8080",
+			string(semconv.NetSockHostAddrKey): getLocalIPv4(),
 		},
 		Type: pmetric.MetricTypeHistogram,
 	}, events["/products/{id}/push"])
@@ -127,6 +137,9 @@ func TestRouteConsolidation(t *testing.T) {
 			string(semconv.HTTPRouteKey):       "*",
 			string(semconv.NetSockPeerAddrKey): "1.1.1.1",
 			string(semconv.NetSockPeerPortKey): "3456",
+			string(semconv.NetHostNameKey):     "localhost",
+			string(semconv.NetHostPortKey):     "8080",
+			string(semconv.NetSockHostAddrKey): getLocalIPv4(),
 		},
 		Type: pmetric.MetricTypeHistogram,
 	}, events["*"])
@@ -137,6 +150,7 @@ func newRequest(method, path, peer string, status int) nethttp.HTTPRequestTrace 
 	copy(rt.Path[:], path)
 	copy(rt.Method[:], method)
 	copy(rt.RemoteAddr[:], peer)
+	copy(rt.Host[:], "localhost:8080")
 	rt.Status = uint16(status)
 	return rt
 }
@@ -150,4 +164,19 @@ func getEvent(t *testing.T, coll *collector.TestCollector) collector.MetricRecor
 		t.Fatal("timeout while waiting for message")
 	}
 	return collector.MetricRecord{}
+}
+
+func getLocalIPv4() string {
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		return ""
+	}
+	for _, address := range addrs {
+		if ipnet, ok := address.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
+			if ipnet.IP.To4() != nil {
+				return ipnet.IP.String()
+			}
+		}
+	}
+	return ""
 }

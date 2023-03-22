@@ -7,8 +7,9 @@ import (
 
 	"golang.org/x/exp/slog"
 
-	"github.com/grafana/http-autoinstrument/pkg/spanner"
+	"github.com/grafana/http-autoinstrument/pkg/transform"
 	"github.com/mariomac/pipes/pkg/node"
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	"go.opentelemetry.io/otel/sdk/resource"
@@ -37,7 +38,7 @@ type TracesReporter struct {
 	traceProvider *trace.TracerProvider
 }
 
-func TracesReporterProvider(cfg TracesConfig) node.TerminalFunc[spanner.HTTPRequestSpan] {
+func TracesReporterProvider(cfg TracesConfig) node.TerminalFunc[transform.HTTPRequestSpan] {
 	endpoint := cfg.TracesEndpoint
 	if endpoint == "" {
 		endpoint = cfg.Endpoint
@@ -90,21 +91,26 @@ func (r *TracesReporter) close() {
 	}
 }
 
-func (r *TracesReporter) reportTraces(spans <-chan spanner.HTTPRequestSpan) {
+func (r *TracesReporter) reportTraces(spans <-chan transform.HTTPRequestSpan) {
 	defer r.close()
 	tracer := r.traceProvider.Tracer(reporterName)
 	for span := range spans {
+		// TODO: add src/dst ip and dst port
+		attrs := []attribute.KeyValue{
+			semconv.HTTPMethod(span.Method),
+			semconv.HTTPStatusCode(span.Status),
+			semconv.HTTPTarget(span.Path),
+			semconv.NetPeerName(span.Peer),
+            semconv.NetPeerPort(span.PeerPort),
+		}
+		if span.Route != "" {
+			attrs = append(attrs, semconv.HTTPRoute(span.Route))
+		}
+
 		// TODO: there must be a better way to instantiate spans
 		_, sp := tracer.Start(context.TODO(), "session",
 			trace2.WithTimestamp(span.Start),
-			trace2.WithAttributes(
-				semconv.HTTPMethod(span.Method),
-				semconv.HTTPStatusCode(span.Status),
-				semconv.HTTPTarget(span.Path),
-				semconv.NetPeerName(span.Peer),
-				semconv.NetPeerPort(span.PeerPort),
-				// TODO: add destination and port
-			),
+			trace2.WithAttributes(attrs...),
 			// TODO: trace2.WithSpanKind()
 		)
 		sp.End(trace2.WithTimestamp(span.End))

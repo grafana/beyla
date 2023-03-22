@@ -58,8 +58,8 @@ type InstrumentedServe struct {
 
 // HTTPRequestTrace contains information from an HTTP request as directly received from the
 // eBPF layer. This contains low-level C structures so for more comfortable handling from Go,
-// HTTPRequestTrace instances are converted to spanner.HTTPRequestSpan instances in the
-// spanner.ConvertToSpan function.
+// HTTPRequestTrace instances are converted to transform.HTTPRequestSpan instances in the
+// transform.ConvertToSpan function.
 type HTTPRequestTrace bpfHttpRequestTrace
 
 // Instrument the executable passed as path and insert probes in the provided offsets, so the

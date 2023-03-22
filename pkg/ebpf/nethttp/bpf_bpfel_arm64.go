@@ -40,6 +40,7 @@ type bpfHttpRequestTrace struct {
 	Path            [100]uint8
 	Status          uint16
 	RemoteAddr      [50]uint8
+	Host            [256]uint8
 }
 
 // loadBpf returns the embedded CollectionSpec for bpf.

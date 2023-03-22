@@ -105,8 +105,8 @@ func (r *MetricsReporter) reportMetrics(spans <-chan transform.HTTPRequestSpan) 
 		attrs := []attribute.KeyValue{
 			semconv.HTTPMethod(span.Method),
 			semconv.HTTPStatusCode(span.Status),
-			semconv.NetPeerName(span.Peer),
-			semconv.NetPeerPort(span.PeerPort),
+			semconv.NetSockPeerAddr(span.Peer),
+			semconv.NetSockPeerPort(span.PeerPort),
 		}
 		if r.reportTarget {
 			attrs = append(attrs, semconv.HTTPTarget(span.Path))

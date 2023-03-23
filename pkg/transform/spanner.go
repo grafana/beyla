@@ -12,14 +12,13 @@ import (
 
 // HTTPRequestSpan contains the information being submitted as
 type HTTPRequestSpan struct {
-	Method   string
-	Path     string
-	Route    string
-	Peer     string
-	PeerPort int
-	Status   int
-	Start    time.Time
-	End      time.Time
+	Method string
+	Path   string
+	Route  string
+	Peer   string
+	Status int
+	Start  time.Time
+	End    time.Time
 }
 
 func ConvertToSpan(in <-chan nethttp.HTTPRequestTrace, out chan<- HTTPRequestSpan) {

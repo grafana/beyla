@@ -27,7 +27,7 @@ type MetricsConfig struct {
 	// default to avoid cardinality explosion in paths with IDs. In that case, it is recommended to group these
 	// requests in the Routes node
 	ReportTarget   bool `yaml:"report_target" env:"OTEL_EXPORTER_REPORT_TARGET"`
-	ReportPeerInfo bool `yaml:"peer" env:"OTEL_EXPORTER_REPORT_PEER"`
+	ReportPeerInfo bool `yaml:"report_peer" env:"OTEL_EXPORTER_REPORT_PEER"`
 }
 
 // Enabled specifies that the OTEL metrics node is enabled if and only if

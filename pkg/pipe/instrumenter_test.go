@@ -28,7 +28,7 @@ func TestBasicPipeline(t *testing.T) {
 	tc, err := collector.Start(ctx)
 	require.NoError(t, err)
 
-	gb := newGraphBuilder(&Config{Metrics: otel.MetricsConfig{MetricsEndpoint: tc.ServerHostPort, ReportTarget: true}})
+	gb := newGraphBuilder(&Config{Metrics: otel.MetricsConfig{MetricsEndpoint: tc.ServerHostPort, ReportTarget: true, ReportPeerInfo: true}})
 	gb.inspector = func(_ string, _ []string) (goexec.Offsets, error) {
 		return goexec.Offsets{FileInfo: goexec.FileInfo{CmdExePath: "test-service"}}, nil
 	}
@@ -52,7 +52,6 @@ func TestBasicPipeline(t *testing.T) {
 			string(semconv.HTTPStatusCodeKey):  "404",
 			string(semconv.HTTPTargetKey):      "/foo/bar",
 			string(semconv.NetSockPeerAddrKey): "1.1.1.1",
-			string(semconv.NetSockPeerPortKey): "3456",
 		},
 		Type: pmetric.MetricTypeHistogram,
 	}, event)
@@ -66,7 +65,7 @@ func TestRouteConsolidation(t *testing.T) {
 	require.NoError(t, err)
 
 	gb := newGraphBuilder(&Config{
-		Metrics: otel.MetricsConfig{MetricsEndpoint: tc.ServerHostPort},
+		Metrics: otel.MetricsConfig{MetricsEndpoint: tc.ServerHostPort}, // ReportPeerInfo = false, no peer info
 		Routes:  &transform.RoutesConfig{Patterns: []string{"/user/{id}", "/products/{id}/push"}},
 	})
 	gb.inspector = func(_ string, _ []string) (goexec.Offsets, error) {
@@ -96,11 +95,9 @@ func TestRouteConsolidation(t *testing.T) {
 		Name: "duration",
 		Unit: "ms",
 		Attributes: map[string]string{
-			string(semconv.HTTPMethodKey):      "GET",
-			string(semconv.HTTPStatusCodeKey):  "200",
-			string(semconv.HTTPRouteKey):       "/user/{id}",
-			string(semconv.NetSockPeerAddrKey): "1.1.1.1",
-			string(semconv.NetSockPeerPortKey): "3456",
+			string(semconv.HTTPMethodKey):     "GET",
+			string(semconv.HTTPStatusCodeKey): "200",
+			string(semconv.HTTPRouteKey):      "/user/{id}",
 		},
 		Type: pmetric.MetricTypeHistogram,
 	}, events["/user/{id}"])
@@ -109,11 +106,9 @@ func TestRouteConsolidation(t *testing.T) {
 		Name: "duration",
 		Unit: "ms",
 		Attributes: map[string]string{
-			string(semconv.HTTPMethodKey):      "GET",
-			string(semconv.HTTPStatusCodeKey):  "200",
-			string(semconv.HTTPRouteKey):       "/products/{id}/push",
-			string(semconv.NetSockPeerAddrKey): "1.1.1.1",
-			string(semconv.NetSockPeerPortKey): "3456",
+			string(semconv.HTTPMethodKey):     "GET",
+			string(semconv.HTTPStatusCodeKey): "200",
+			string(semconv.HTTPRouteKey):      "/products/{id}/push",
 		},
 		Type: pmetric.MetricTypeHistogram,
 	}, events["/products/{id}/push"])
@@ -122,11 +117,9 @@ func TestRouteConsolidation(t *testing.T) {
 		Name: "duration",
 		Unit: "ms",
 		Attributes: map[string]string{
-			string(semconv.HTTPMethodKey):      "GET",
-			string(semconv.HTTPStatusCodeKey):  "200",
-			string(semconv.HTTPRouteKey):       "*",
-			string(semconv.NetSockPeerAddrKey): "1.1.1.1",
-			string(semconv.NetSockPeerPortKey): "3456",
+			string(semconv.HTTPMethodKey):     "GET",
+			string(semconv.HTTPStatusCodeKey): "200",
+			string(semconv.HTTPRouteKey):      "*",
 		},
 		Type: pmetric.MetricTypeHistogram,
 	}, events["*"])

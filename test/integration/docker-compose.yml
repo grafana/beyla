@@ -35,6 +35,7 @@ services:
       METRICS_INTERVAL: "10ms"
       LOG_LEVEL: "DEBUG"
       OTEL_EXPORTER_REPORT_TARGET: "true"
+      OTEL_EXPORTER_REPORT_PEER: "true"
     depends_on:
       otelcol:
         condition: service_started

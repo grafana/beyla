@@ -3,7 +3,6 @@ package transform
 import (
 	"bytes"
 	"net"
-	"strconv"
 	"time"
 
 	"github.com/grafana/http-autoinstrument/pkg/ebpf/nethttp"
@@ -63,26 +62,24 @@ func (c *converter) convert(trace *nethttp.HTTPRequestTrace) HTTPRequestSpan {
 	}
 
 	peer := ""
-	peerPort := 0
 
 	if remoteAddrLen > 0 {
 		remoteAddr := string(trace.RemoteAddr[:remoteAddrLen])
-		ip, port, err := net.SplitHostPort(remoteAddr)
+		ip, _, err := net.SplitHostPort(remoteAddr)
+		// we ignore the peer port, it's not very useful for metrics and traces
 		if err != nil {
 			peer = remoteAddr
 		} else {
 			peer = ip
-			peerPort, _ = strconv.Atoi(port)
 		}
 	}
 
 	return HTTPRequestSpan{
-		Method:   string(trace.Method[:methodLen]),
-		Path:     string(trace.Path[:pathLen]),
-		Peer:     peer,
-		PeerPort: peerPort,
-		Start:    now.Add(-startDelta),
-		End:      now.Add(-endDelta),
-		Status:   int(trace.Status),
+		Method: string(trace.Method[:methodLen]),
+		Path:   string(trace.Path[:pathLen]),
+		Peer:   peer,
+		Start:  now.Add(-startDelta),
+		End:    now.Add(-endDelta),
+		Status: int(trace.Status),
 	}
 }

@@ -18,7 +18,7 @@ char __license[] SEC("license") = "Dual MIT/GPL";
 #define PATH_MAX_LEN 100
 #define METHOD_MAX_LEN 6 // Longer method: DELETE
 #define REMOTE_ADDR_MAX_LEN 50 // We need 48: 39(ip v6 max) + 1(: separator) + 7(port length max value 65535) + 1(null terminator)
-#define HOST_LEN 256 // max value of 65535 
+#define HOST_LEN 256 // can be a fully qualified DNS name
 
 // TODO: make it user-configurable
 #define MAX_CONCURRENT_REQUESTS 500

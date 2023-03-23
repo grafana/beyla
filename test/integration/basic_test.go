@@ -7,9 +7,7 @@ import (
 	"math/rand"
 	"net"
 	"net/http"
-	"regexp"
 	"strconv"
-	"strings"
 	"testing"
 	"time"
 
@@ -69,7 +67,6 @@ func TestBasic(t *testing.T) {
 
 func basicTest(t *testing.T, url string) {
 	path := "/basic/" + rndStr()
-	digits := regexp.MustCompile(`[0-9]+`)
 
 	// Call 3 times the instrumented service, forcing it to:
 	// - take at least 30ms to respond
@@ -101,12 +98,6 @@ func basicTest(t *testing.T, url string) {
 			assert.Equal(t, "3", res.Value[1])
 			addr := net.ParseIP(res.Metric["net_sock_peer_addr"])
 			assert.NotNil(t, addr)
-			assert.True(t, digits.MatchString(res.Metric["net_sock_peer_port"]))
-			addr = net.ParseIP(res.Metric["net_sock_host_addr"])
-			assert.NotNil(t, addr)
-			assert.True(t, len(res.Metric["net_host_name"]) > 0)
-			assert.True(t, digits.MatchString(res.Metric["net_host_port"]))
-			assert.True(t, strings.HasPrefix(res.Metric["net_host_port"], "80"))
 		}
 	})
 
@@ -127,10 +118,4 @@ func basicTest(t *testing.T, url string) {
 	assert.Greater(t, sum, 90.0)
 	addr := net.ParseIP(res.Metric["net_sock_peer_addr"])
 	assert.NotNil(t, addr)
-	assert.True(t, digits.MatchString(res.Metric["net_sock_peer_port"]))
-	addr = net.ParseIP(res.Metric["net_sock_host_addr"])
-	assert.NotNil(t, addr)
-	assert.True(t, len(res.Metric["net_host_name"]) > 0)
-	assert.True(t, digits.MatchString(res.Metric["net_host_port"]))
-	assert.True(t, strings.HasPrefix(res.Metric["net_host_port"], "80"))
 }

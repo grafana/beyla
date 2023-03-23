@@ -26,7 +26,8 @@ type MetricsConfig struct {
 	// ReportTarget specifies whether http.target should be submitted as a metric attribute. It is disabled by
 	// default to avoid cardinality explosion in paths with IDs. In that case, it is recommended to group these
 	// requests in the Routes node
-	ReportTarget bool `yaml:"report_target" env:"OTEL_EXPORTER_REPORT_TARGET"`
+	ReportTarget   bool `yaml:"report_target" env:"OTEL_EXPORTER_REPORT_TARGET"`
+	ReportPeerInfo bool `yaml:"report_peer" env:"OTEL_EXPORTER_REPORT_PEER"`
 }
 
 // Enabled specifies that the OTEL metrics node is enabled if and only if
@@ -38,17 +39,14 @@ func (m MetricsConfig) Enabled() bool {
 
 type MetricsReporter struct {
 	reportTarget bool
+	reportPeer   bool
 	exporter     metric.Exporter
 	provider     *metric.MeterProvider
 	duration     instrument.Float64Histogram
 }
 
 func MetricsReporterProvider(cfg MetricsConfig) node.TerminalFunc[transform.HTTPRequestSpan] {
-	endpoint := cfg.MetricsEndpoint
-	if endpoint == "" {
-		endpoint = cfg.Endpoint
-	}
-	mr, err := newMetricsReporter(cfg.ServiceName, endpoint, cfg.Interval, cfg.ReportTarget)
+	mr, err := newMetricsReporter(&cfg)
 	if err != nil {
 		slog.Error("can't instantiate OTEL metrics reporter", err)
 		os.Exit(-1)
@@ -56,17 +54,23 @@ func MetricsReporterProvider(cfg MetricsConfig) node.TerminalFunc[transform.HTTP
 	return mr.reportMetrics
 }
 
-func newMetricsReporter(svcName, endpoint string, interval time.Duration, target bool) (*MetricsReporter, error) {
+func newMetricsReporter(cfg *MetricsConfig) (*MetricsReporter, error) {
 	ctx := context.TODO()
 
+	endpoint := cfg.MetricsEndpoint
+	if endpoint == "" {
+		endpoint = cfg.Endpoint
+	}
+
 	mr := MetricsReporter{
-		reportTarget: target,
+		reportTarget: cfg.ReportTarget,
+		reportPeer:   cfg.ReportPeerInfo,
 	}
 
 	// TODO: make configurable
 	resources := resource.NewWithAttributes(
 		semconv.SchemaURL,
-		semconv.ServiceNameKey.String(svcName),
+		semconv.ServiceNameKey.String(cfg.ServiceName),
 	)
 	var err error
 	// TODO: allow configuring auth headers and secure/insecure connections
@@ -80,7 +84,7 @@ func newMetricsReporter(svcName, endpoint string, interval time.Duration, target
 	mr.provider = metric.NewMeterProvider(
 		metric.WithResource(resources),
 		metric.WithReader(metric.NewPeriodicReader(mr.exporter,
-			metric.WithInterval(interval))),
+			metric.WithInterval(cfg.Interval))),
 	)
 	mr.duration, err = mr.provider.Meter(reporterName).
 		Float64Histogram("duration", instrument.WithUnit("ms"))
@@ -105,14 +109,12 @@ func (r *MetricsReporter) reportMetrics(spans <-chan transform.HTTPRequestSpan) 
 		attrs := []attribute.KeyValue{
 			semconv.HTTPMethod(span.Method),
 			semconv.HTTPStatusCode(span.Status),
-			semconv.NetSockPeerAddr(span.Peer),
-			semconv.NetSockPeerPort(span.PeerPort),
-			semconv.NetHostName(span.Host),
-			semconv.NetHostPort(span.HostPort),
-			semconv.NetSockHostAddr(span.LocalIP),
 		}
 		if r.reportTarget {
 			attrs = append(attrs, semconv.HTTPTarget(span.Path))
+		}
+		if r.reportPeer {
+			attrs = append(attrs, semconv.NetSockPeerAddr(span.Peer))
 		}
 		if span.Route != "" {
 			attrs = append(attrs, semconv.HTTPRoute(span.Route))

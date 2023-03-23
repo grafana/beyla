@@ -17,7 +17,6 @@ type HTTPRequestSpan struct {
 	Path     string
 	Route    string
 	Peer     string
-	PeerPort int
 	Host     string
 	HostPort int
 	LocalIP  string
@@ -33,10 +32,10 @@ func getLocalIPv4() string {
 	if err != nil {
 		return ""
 	}
-	for _, address := range addrs {
-		if ipnet, ok := address.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
-			if ipnet.IP.To4() != nil {
-				return ipnet.IP.String()
+	for _, addr := range addrs {
+		if ip, ok := addr.(*net.IPNet); ok && !ip.IP.IsLoopback() {
+			if ip.IP.To4() != nil {
+				return ip.IP.String()
 			}
 		}
 	}
@@ -101,14 +100,13 @@ func (c *converter) convert(trace *nethttp.HTTPRequestTrace) HTTPRequestSpan {
 		pathLen = len(trace.Path)
 	}
 
-	peer, peerPort := extractHostPort(trace.RemoteAddr[:])
+	peer, _ := extractHostPort(trace.RemoteAddr[:])
 	host, hostPort := extractHostPort(trace.Host[:])
 
 	return HTTPRequestSpan{
 		Method:   string(trace.Method[:methodLen]),
 		Path:     string(trace.Path[:pathLen]),
 		Peer:     peer,
-		PeerPort: peerPort,
 		Host:     host,
 		HostPort: hostPort,
 		LocalIP:  localIP,

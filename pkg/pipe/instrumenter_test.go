@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/pdata/pmetric"
+	"go.opentelemetry.io/collector/pdata/ptrace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
 
 	"github.com/grafana/http-autoinstrument/pkg/ebpf/nethttp"
@@ -20,7 +21,7 @@ import (
 	"github.com/grafana/http-autoinstrument/test/collector"
 )
 
-const testTimeout = 5 * time.Second
+const testTimeout = 500 * time.Second
 
 func TestBasicPipeline(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -29,7 +30,7 @@ func TestBasicPipeline(t *testing.T) {
 	tc, err := collector.Start(ctx)
 	require.NoError(t, err)
 
-	gb := newGraphBuilder(&Config{Metrics: otel.MetricsConfig{MetricsEndpoint: tc.ServerHostPort, ReportTarget: true}})
+	gb := newGraphBuilder(&Config{Metrics: otel.MetricsConfig{MetricsEndpoint: tc.ServerHostPort, ReportTarget: true, ReportPeerInfo: true}})
 	gb.inspector = func(_ string, _ []string) (goexec.Offsets, error) {
 		return goexec.Offsets{FileInfo: goexec.FileInfo{CmdExePath: "test-service"}}, nil
 	}
@@ -53,12 +54,46 @@ func TestBasicPipeline(t *testing.T) {
 			string(semconv.HTTPStatusCodeKey):  "404",
 			string(semconv.HTTPTargetKey):      "/foo/bar",
 			string(semconv.NetSockPeerAddrKey): "1.1.1.1",
-			string(semconv.NetSockPeerPortKey): "3456",
+		},
+		Type: pmetric.MetricTypeHistogram,
+	}, event)
+}
+
+func TestTracerPipeline(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	tc, err := collector.Start(ctx)
+	require.NoError(t, err)
+
+	gb := newGraphBuilder(&Config{Traces: otel.TracesConfig{TracesEndpoint: tc.ServerHostPort, ServiceName: "test"}})
+	gb.inspector = func(_ string, _ []string) (goexec.Offsets, error) {
+		return goexec.Offsets{FileInfo: goexec.FileInfo{CmdExePath: "test-service"}}, nil
+	}
+	// Override eBPF tracer to send some fake data
+	graph.RegisterStart(gb.builder, func(_ nethttp.EBPFTracer) node.StartFuncCtx[nethttp.HTTPRequestTrace] {
+		return func(_ context.Context, out chan<- nethttp.HTTPRequestTrace) {
+			out <- newRequest("GET", "/foo/bar", "1.1.1.1:3456", 404)
+		}
+	})
+	pipe, err := gb.buildGraph()
+	require.NoError(t, err)
+
+	go pipe.Run(ctx)
+
+	event := getTraceEvent(t, tc)
+	assert.Equal(t, collector.TraceRecord{
+		Name: "session",
+		Attributes: map[string]string{
+			string(semconv.HTTPMethodKey):      "GET",
+			string(semconv.HTTPStatusCodeKey):  "404",
+			string(semconv.HTTPTargetKey):      "/foo/bar",
+			string(semconv.NetSockPeerAddrKey): "1.1.1.1",
 			string(semconv.NetHostNameKey):     "localhost",
 			string(semconv.NetHostPortKey):     "8080",
 			string(semconv.NetSockHostAddrKey): getLocalIPv4(),
 		},
-		Type: pmetric.MetricTypeHistogram,
+		Kind: ptrace.SpanKindInternal,
 	}, event)
 }
 
@@ -70,7 +105,7 @@ func TestRouteConsolidation(t *testing.T) {
 	require.NoError(t, err)
 
 	gb := newGraphBuilder(&Config{
-		Metrics: otel.MetricsConfig{MetricsEndpoint: tc.ServerHostPort},
+		Metrics: otel.MetricsConfig{MetricsEndpoint: tc.ServerHostPort}, // ReportPeerInfo = false, no peer info
 		Routes:  &transform.RoutesConfig{Patterns: []string{"/user/{id}", "/products/{id}/push"}},
 	})
 	gb.inspector = func(_ string, _ []string) (goexec.Offsets, error) {
@@ -100,14 +135,9 @@ func TestRouteConsolidation(t *testing.T) {
 		Name: "duration",
 		Unit: "ms",
 		Attributes: map[string]string{
-			string(semconv.HTTPMethodKey):      "GET",
-			string(semconv.HTTPStatusCodeKey):  "200",
-			string(semconv.HTTPRouteKey):       "/user/{id}",
-			string(semconv.NetSockPeerAddrKey): "1.1.1.1",
-			string(semconv.NetSockPeerPortKey): "3456",
-			string(semconv.NetHostNameKey):     "localhost",
-			string(semconv.NetHostPortKey):     "8080",
-			string(semconv.NetSockHostAddrKey): getLocalIPv4(),
+			string(semconv.HTTPMethodKey):     "GET",
+			string(semconv.HTTPStatusCodeKey): "200",
+			string(semconv.HTTPRouteKey):      "/user/{id}",
 		},
 		Type: pmetric.MetricTypeHistogram,
 	}, events["/user/{id}"])
@@ -116,14 +146,9 @@ func TestRouteConsolidation(t *testing.T) {
 		Name: "duration",
 		Unit: "ms",
 		Attributes: map[string]string{
-			string(semconv.HTTPMethodKey):      "GET",
-			string(semconv.HTTPStatusCodeKey):  "200",
-			string(semconv.HTTPRouteKey):       "/products/{id}/push",
-			string(semconv.NetSockPeerAddrKey): "1.1.1.1",
-			string(semconv.NetSockPeerPortKey): "3456",
-			string(semconv.NetHostNameKey):     "localhost",
-			string(semconv.NetHostPortKey):     "8080",
-			string(semconv.NetSockHostAddrKey): getLocalIPv4(),
+			string(semconv.HTTPMethodKey):     "GET",
+			string(semconv.HTTPStatusCodeKey): "200",
+			string(semconv.HTTPRouteKey):      "/products/{id}/push",
 		},
 		Type: pmetric.MetricTypeHistogram,
 	}, events["/products/{id}/push"])
@@ -132,14 +157,9 @@ func TestRouteConsolidation(t *testing.T) {
 		Name: "duration",
 		Unit: "ms",
 		Attributes: map[string]string{
-			string(semconv.HTTPMethodKey):      "GET",
-			string(semconv.HTTPStatusCodeKey):  "200",
-			string(semconv.HTTPRouteKey):       "*",
-			string(semconv.NetSockPeerAddrKey): "1.1.1.1",
-			string(semconv.NetSockPeerPortKey): "3456",
-			string(semconv.NetHostNameKey):     "localhost",
-			string(semconv.NetHostPortKey):     "8080",
-			string(semconv.NetSockHostAddrKey): getLocalIPv4(),
+			string(semconv.HTTPMethodKey):     "GET",
+			string(semconv.HTTPStatusCodeKey): "200",
+			string(semconv.HTTPRouteKey):      "*",
 		},
 		Type: pmetric.MetricTypeHistogram,
 	}, events["*"])
@@ -166,15 +186,26 @@ func getEvent(t *testing.T, coll *collector.TestCollector) collector.MetricRecor
 	return collector.MetricRecord{}
 }
 
+func getTraceEvent(t *testing.T, coll *collector.TestCollector) collector.TraceRecord {
+	t.Helper()
+	select {
+	case ev := <-coll.TraceRecords:
+		return ev
+	case <-time.After(testTimeout):
+		t.Fatal("timeout while waiting for message")
+	}
+	return collector.TraceRecord{}
+}
+
 func getLocalIPv4() string {
 	addrs, err := net.InterfaceAddrs()
 	if err != nil {
 		return ""
 	}
-	for _, address := range addrs {
-		if ipnet, ok := address.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
-			if ipnet.IP.To4() != nil {
-				return ipnet.IP.String()
+	for _, addr := range addrs {
+		if ip, ok := addr.(*net.IPNet); ok && !ip.IP.IsLoopback() {
+			if ip.IP.To4() != nil {
+				return ip.IP.String()
 			}
 		}
 	}

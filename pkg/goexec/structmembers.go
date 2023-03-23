@@ -12,8 +12,9 @@ var log = slog.With("component", "goexec.structMemberOffsetsFromDwarf")
 // TODO: make overridable by user
 var structMembers = map[string]map[string]string{
 	"net/http.Request": {
-		"URL":    "url_ptr_pos",
-		"Method": "method_ptr_pos",
+		"URL":        "url_ptr_pos",
+		"Method":     "method_ptr_pos",
+		"RemoteAddr": "remoteaddr_ptr_pos",
 	},
 	"net/url.URL": {
 		"Path": "path_ptr_pos",

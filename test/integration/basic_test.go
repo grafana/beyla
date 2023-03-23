@@ -5,6 +5,7 @@ package integration
 import (
 	"fmt"
 	"math/rand"
+	"net"
 	"net/http"
 	"strconv"
 	"testing"
@@ -95,6 +96,8 @@ func basicTest(t *testing.T, url string) {
 			res := results[0]
 			require.Len(t, res.Value, 2)
 			assert.Equal(t, "3", res.Value[1])
+			addr := net.ParseIP(res.Metric["net_sock_peer_addr"])
+			assert.NotNil(t, addr)
 		}
 	})
 
@@ -113,4 +116,6 @@ func basicTest(t *testing.T, url string) {
 	sum, err := strconv.ParseFloat(fmt.Sprint(res.Value[1]), 64)
 	require.NoError(t, err)
 	assert.Greater(t, sum, 90.0)
+	addr := net.ParseIP(res.Metric["net_sock_peer_addr"])
+	assert.NotNil(t, addr)
 }

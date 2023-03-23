@@ -2,6 +2,7 @@ package transform
 
 import (
 	"bytes"
+	"net"
 	"time"
 
 	"github.com/grafana/http-autoinstrument/pkg/ebpf/nethttp"
@@ -14,6 +15,7 @@ type HTTPRequestSpan struct {
 	Method string
 	Path   string
 	Route  string
+	Peer   string
 	Status int
 	Start  time.Time
 	End    time.Time
@@ -53,9 +55,28 @@ func (c *converter) convert(trace *nethttp.HTTPRequestTrace) HTTPRequestSpan {
 	if pathLen < 0 {
 		pathLen = len(trace.Path)
 	}
+	remoteAddrLen := bytes.IndexByte(trace.RemoteAddr[:], 0)
+	if remoteAddrLen < 0 {
+		remoteAddrLen = len(trace.RemoteAddr)
+	}
+
+	peer := ""
+
+	if remoteAddrLen > 0 {
+		remoteAddr := string(trace.RemoteAddr[:remoteAddrLen])
+		ip, _, err := net.SplitHostPort(remoteAddr)
+		// we ignore the peer port, it's not very useful for metrics and traces
+		if err != nil {
+			peer = remoteAddr
+		} else {
+			peer = ip
+		}
+	}
+
 	return HTTPRequestSpan{
 		Method: string(trace.Method[:methodLen]),
 		Path:   string(trace.Path[:pathLen]),
+		Peer:   peer,
 		Start:  now.Add(-startDelta),
 		End:    now.Add(-endDelta),
 		Status: int(trace.Status),

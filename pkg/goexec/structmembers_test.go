@@ -44,10 +44,11 @@ func TestGoOffsetsFromDwarf(t *testing.T) {
 	require.NoError(t, err)
 	// this test might fail if a future Go version updates the internal structure of the used structs.
 	assert.Equal(t, FieldOffsets{
-		"url_ptr_pos":    uint64(16),
-		"path_ptr_pos":   uint64(56),
-		"method_ptr_pos": uint64(0),
-		"status_ptr_pos": uint64(120),
+		"url_ptr_pos":        uint64(16),
+		"path_ptr_pos":       uint64(56),
+		"remoteaddr_ptr_pos": uint64(176),
+		"method_ptr_pos":     uint64(0),
+		"status_ptr_pos":     uint64(120),
 	}, offsets)
 }
 

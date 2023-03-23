@@ -100,6 +100,7 @@ func (r *TracesReporter) reportTraces(spans <-chan transform.HTTPRequestSpan) {
 			semconv.HTTPMethod(span.Method),
 			semconv.HTTPStatusCode(span.Status),
 			semconv.HTTPTarget(span.Path),
+			semconv.NetSockPeerAddr(span.Peer),
 		}
 		if span.Route != "" {
 			attrs = append(attrs, semconv.HTTPRoute(span.Route))

@@ -5,6 +5,7 @@ package integration
 import (
 	"fmt"
 	"math/rand"
+	"net"
 	"net/http"
 	"strconv"
 	"testing"
@@ -56,7 +57,7 @@ func TestBasic(t *testing.T) {
 	for _, testCaseURL := range []string{
 		instrumentedServiceStdURL,
 		instrumentedServiceGorillaURL,
-		//instrumentedServiceGinURL, TODO
+		instrumentedServiceGinURL,
 	} {
 		t.Run(testCaseURL, func(t *testing.T) {
 			basicTest(t, testCaseURL)
@@ -86,6 +87,7 @@ func basicTest(t *testing.T, url string) {
 			`http_method="GET",` +
 			`http_status_code="404",` +
 			`service_name="/testserver",` +
+			`http_route="/basic/:rnd",` +
 			`http_target="` + path + `"}`)
 		require.NoError(t, err)
 		// check duration_count has 3 calls and all the arguments
@@ -94,6 +96,8 @@ func basicTest(t *testing.T, url string) {
 			res := results[0]
 			require.Len(t, res.Value, 2)
 			assert.Equal(t, "3", res.Value[1])
+			addr := net.ParseIP(res.Metric["net_sock_peer_addr"])
+			assert.NotNil(t, addr)
 		}
 	})
 
@@ -103,6 +107,7 @@ func basicTest(t *testing.T, url string) {
 		`http_method="GET",` +
 		`http_status_code="404",` +
 		`service_name="/testserver",` +
+		`http_route="/basic/:rnd",` +
 		`http_target="` + path + `"}`)
 	require.NoError(t, err)
 	require.Len(t, results, 1)
@@ -111,4 +116,6 @@ func basicTest(t *testing.T, url string) {
 	sum, err := strconv.ParseFloat(fmt.Sprint(res.Value[1]), 64)
 	require.NoError(t, err)
 	assert.Greater(t, sum, 90.0)
+	addr := net.ParseIP(res.Metric["net_sock_peer_addr"])
+	assert.NotNil(t, addr)
 }

@@ -3,10 +3,13 @@ package otel
 import (
 	"context"
 	"fmt"
+	"os"
 
 	"golang.org/x/exp/slog"
 
-	"github.com/grafana/http-autoinstrument/pkg/spanner"
+	"github.com/grafana/http-autoinstrument/pkg/transform"
+	"github.com/mariomac/pipes/pkg/node"
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	"go.opentelemetry.io/otel/sdk/resource"
@@ -17,12 +20,38 @@ import (
 
 const reporterName = "github.com/grafana/http-autoinstrument"
 
+type TracesConfig struct {
+	ServiceName    string `yaml:"service_name" env:"SERVICE_NAME"`
+	Endpoint       string `yaml:"endpoint" env:"OTEL_EXPORTER_OTLP_ENDPOINT"`
+	TracesEndpoint string `yaml:"-" env:"OTEL_EXPORTER_OTLP_TRACES_ENDPOINT"`
+}
+
+// Enabled specifies that the OTEL traces node is enabled if and only if
+// either the OTEL endpoint and OTEL traces endpoint is defined.
+// If not enabled, this node won't be instantiated
+func (m TracesConfig) Enabled() bool {
+	return m.Endpoint != "" || m.TracesEndpoint != ""
+}
+
 type TracesReporter struct {
 	traceExporter *otlptrace.Exporter
 	traceProvider *trace.TracerProvider
 }
 
-func NewTracesReporter(svcName, endpoint string) (*TracesReporter, error) {
+func TracesReporterProvider(cfg TracesConfig) node.TerminalFunc[transform.HTTPRequestSpan] {
+	endpoint := cfg.TracesEndpoint
+	if endpoint == "" {
+		endpoint = cfg.Endpoint
+	}
+	tr, err := newTracesReporter(cfg.ServiceName, endpoint)
+	if err != nil {
+		slog.Error("can't instantiate OTEL traces reporter", err)
+		os.Exit(-1)
+	}
+	return tr.reportTraces
+}
+
+func newTracesReporter(svcName, endpoint string) (*TracesReporter, error) {
 	ctx := context.TODO()
 
 	r := TracesReporter{}
@@ -62,19 +91,25 @@ func (r *TracesReporter) close() {
 	}
 }
 
-func (r *TracesReporter) ReportTraces(spans <-chan spanner.HTTPRequestSpan) {
+func (r *TracesReporter) reportTraces(spans <-chan transform.HTTPRequestSpan) {
 	defer r.close()
 	tracer := r.traceProvider.Tracer(reporterName)
 	for span := range spans {
+		// TODO: add src/dst ip and dst port
+		attrs := []attribute.KeyValue{
+			semconv.HTTPMethod(span.Method),
+			semconv.HTTPStatusCode(span.Status),
+			semconv.HTTPTarget(span.Path),
+			semconv.NetSockPeerAddr(span.Peer),
+		}
+		if span.Route != "" {
+			attrs = append(attrs, semconv.HTTPRoute(span.Route))
+		}
+
 		// TODO: there must be a better way to instantiate spans
 		_, sp := tracer.Start(context.TODO(), "session",
 			trace2.WithTimestamp(span.Start),
-			trace2.WithAttributes(
-				semconv.HTTPMethod(span.Method),
-				semconv.HTTPStatusCode(span.Status),
-				semconv.HTTPTarget(span.Path),
-				// TODO: add src/dst ip and dst port
-			),
+			trace2.WithAttributes(attrs...),
 			// TODO: trace2.WithSpanKind()
 		)
 		sp.End(trace2.WithTimestamp(span.End))

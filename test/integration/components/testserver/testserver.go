@@ -8,7 +8,7 @@ import (
 	"github.com/grafana/http-autoinstrument/test/integration/components/testserver/gin"
 	"github.com/grafana/http-autoinstrument/test/integration/components/testserver/std"
 
-	"github.com/caarlos0/env"
+	"github.com/caarlos0/env/v7"
 	gin2 "github.com/gin-gonic/gin"
 	"golang.org/x/exp/slog"
 )

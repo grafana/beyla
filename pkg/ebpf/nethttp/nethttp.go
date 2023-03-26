@@ -16,32 +16,50 @@ package nethttp
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"os"
 
 	"github.com/cilium/ebpf/link"
 	"github.com/cilium/ebpf/ringbuf"
 	"github.com/cilium/ebpf/rlimit"
 	"github.com/grafana/http-autoinstrument/pkg/goexec"
+	"github.com/mariomac/pipes/pkg/node"
 	"golang.org/x/exp/slog"
 )
+
+type EBPFTracer struct {
+	Exec      string   `yaml:"executable_name" env:"EXECUTABLE_NAME"`
+	Functions []string `yaml:"functions" env:"INSTRUMENT_FUNCTIONS"`
+
+	Offsets *goexec.Offsets `yaml:"-"`
+}
+
+func EBPFTracerProvider(cfg EBPFTracer) node.StartFuncCtx[HTTPRequestTrace] {
+	is, err := Instrument(cfg.Offsets)
+	if err != nil {
+		slog.Error("can't instantiate eBPF tracer", err)
+		os.Exit(-1)
+	}
+	return is.Run
+}
 
 //go:generate bpf2go -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 -type http_request_trace bpf ../../../bpf/go_nethttp.c -- -I../../../bpf/headers
 
 // InstrumentedServe allows instrumenting each invocation to the Go standard net/http ServeHTTP
 // method handler.
 type InstrumentedServe struct {
-	bpfObjects    bpfObjects
-	uprobe        link.Link
-	uprobeReturns []link.Link
-	eventsReader  *ringbuf.Reader
+	bpfObjects   bpfObjects
+	uprobes      []link.Link
+	eventsReader *ringbuf.Reader
 }
 
 // HTTPRequestTrace contains information from an HTTP request as directly received from the
 // eBPF layer. This contains low-level C structures so for more comfortable handling from Go,
-// HTTPRequestTrace instances are converted to spanner.HTTPRequestSpan instances in the
-// spanner.ConvertToSpan function.
+// HTTPRequestTrace instances are converted to transform.HTTPRequestSpan instances in the
+// transform.ConvertToSpan function.
 type HTTPRequestTrace bpfHttpRequestTrace
 
 // Instrument the executable passed as path and insert probes in the provided offsets, so the
@@ -73,25 +91,11 @@ func Instrument(offsets *goexec.Offsets) (*InstrumentedServe, error) {
 	if err := spec.LoadAndAssign(&h.bpfObjects, nil); err != nil {
 		return nil, fmt.Errorf("loading and assigning BPF objects: %w", err)
 	}
-	// Attach BPF programs as start and return probes
-	up, err := exe.Uprobe("", h.bpfObjects.UprobeServeHTTP, &link.UprobeOptions{
-		Address: offsets.Func.Start,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("setting uprobe: %w", err)
-	}
-	h.uprobe = up
 
-	// Go won't work with Uretprobes because the way it manages the stack. We need to set uprobes just before the return
-	// values: https://github.com/iovisor/bcc/issues/1320
-	for _, ret := range offsets.Func.Returns {
-		urp, err := exe.Uprobe("", h.bpfObjects.UprobeServeHttpReturn, &link.UprobeOptions{
-			Address: ret,
-		})
-		if err != nil {
-			return nil, fmt.Errorf("setting uretpobe: %w", err)
+	for _, funcOffsets := range offsets.Funcs {
+		if err := h.instrumentFunction(funcOffsets, exe); err != nil {
+			return nil, fmt.Errorf("instrumenting function: %w", err)
 		}
-		h.uprobeReturns = append(h.uprobeReturns, urp)
 	}
 
 	// BPF will send each measured trace via Ring Buffer, so we listen for them from the
@@ -105,7 +109,32 @@ func Instrument(offsets *goexec.Offsets) (*InstrumentedServe, error) {
 	return &h, nil
 }
 
-func (h *InstrumentedServe) Run(eventsChan chan<- HTTPRequestTrace) {
+func (h *InstrumentedServe) instrumentFunction(offsets goexec.FuncOffsets, exe *link.Executable) error {
+	// Attach BPF programs as start and return probes
+	up, err := exe.Uprobe("", h.bpfObjects.UprobeServeHTTP, &link.UprobeOptions{
+		Address: offsets.Start,
+	})
+	if err != nil {
+		return fmt.Errorf("setting uprobe: %w", err)
+	}
+	h.uprobes = append(h.uprobes, up)
+
+	// Go won't work with Uretprobes because of the way Go manages the stack. We need to set uprobes just before the return
+	// values: https://github.com/iovisor/bcc/issues/1320
+	for _, ret := range offsets.Returns {
+		urp, err := exe.Uprobe("", h.bpfObjects.UprobeServeHttpReturn, &link.UprobeOptions{
+			Address: ret,
+		})
+		if err != nil {
+			return fmt.Errorf("setting uretpobe: %w", err)
+		}
+		h.uprobes = append(h.uprobes, urp)
+	}
+	return nil
+}
+
+// TODO: make use of context to cancel process
+func (h *InstrumentedServe) Run(_ context.Context, eventsChan chan<- HTTPRequestTrace) {
 	logger := slog.With("name", "net/http-instrumentor")
 	var event HTTPRequestTrace
 	for {
@@ -130,17 +159,19 @@ func (h *InstrumentedServe) Run(eventsChan chan<- HTTPRequestTrace) {
 }
 
 func (h *InstrumentedServe) Close() {
-	slog.With("name", "net/http-instrumentor").Info("closing net/http instrumentor")
+	log := slog.With("name", "net/http-instrumentor")
+	log.Info("closing net/http instrumentor")
 	if h.eventsReader != nil {
 		h.eventsReader.Close()
 	}
 
-	if h.uprobe != nil {
-		h.uprobe.Close()
-	}
-	for _, urp := range h.uprobeReturns {
-		urp.Close()
+	for _, urp := range h.uprobes {
+		if err := urp.Close(); err != nil {
+			log.Warn("closing uprobe", "error", err)
+		}
 	}
 
-	h.bpfObjects.Close()
+	if err := h.bpfObjects.Close(); err != nil {
+		log.Warn("closing BPF program", "error", err)
+	}
 }

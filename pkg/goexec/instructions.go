@@ -11,13 +11,31 @@ import (
 
 // instrumentationPoints loads the provided executable and looks for the addresses
 // where the start and return probes must be inserted.
-// TODO: allow instrumenting multiple functions sharing the same interface
-func instrumentationPoints(elfF *elf.File, funcName string) (FuncOffsets, error) {
-	log := slog.With("component", "goexec.InstrumentationPoint", "funcName", funcName)
+func instrumentationPoints(elfF *elf.File, funcNames []string) ([]FuncOffsets, error) {
 	dwarfInfo, err := elfF.DWARF()
 	if err != nil {
-		return FuncOffsets{}, fmt.Errorf("can't load DWARF information from ELF file: %w", err)
+		return nil, fmt.Errorf("can't load DWARF information from ELF file: %w", err)
 	}
+
+	var allOffsets []FuncOffsets
+	for _, funcName := range funcNames {
+		off, ok, err := funcOffsets(elfF, funcName, dwarfInfo)
+		if err != nil {
+			return nil, err
+		}
+		if ok {
+			allOffsets = append(allOffsets, off)
+		}
+	}
+	if len(allOffsets) == 0 {
+		return nil, fmt.Errorf("couldn't find any function: %v", funcNames)
+	}
+	return allOffsets, nil
+}
+
+func funcOffsets(elfF *elf.File, funcName string, dwarfInfo *dwarf.Data) (FuncOffsets, bool, error) {
+	log := slog.With("component", "goexec.InstrumentationPoint", "funcName", funcName)
+
 	entryReader := dwarfInfo.Reader()
 	for {
 		entry, err := entryReader.Next()
@@ -32,7 +50,6 @@ func instrumentationPoints(elfF *elf.File, funcName string) (FuncOffsets, error)
 		for _, field := range entry.Field {
 			switch field.Attr {
 			case dwarf.AttrName:
-				// TODO: make it working for other functions
 				if field.Val == funcName {
 					functionFound = true
 					continue
@@ -50,21 +67,21 @@ func instrumentationPoints(elfF *elf.File, funcName string) (FuncOffsets, error)
 			if sec := elfF.Section(".gopclntab"); sec != nil {
 				pclndat, err = sec.Data()
 				if err != nil {
-					return FuncOffsets{}, fmt.Errorf("acquiring .gopclntab section data: %w", err)
+					return FuncOffsets{}, false, fmt.Errorf("acquiring .gopclntab section data: %w", err)
 				}
 			}
 			sec := elfF.Section(".gosymtab")
 			if sec == nil {
-				return FuncOffsets{}, fmt.Errorf(".gosymtab section not found in target binary, make sure this is a Go application")
+				return FuncOffsets{}, false, fmt.Errorf(".gosymtab section not found in target binary, make sure this is a Go application")
 			}
 			symTabRaw, err := sec.Data()
 			if err != nil {
-				return FuncOffsets{}, fmt.Errorf("getting memory section data: %w", err)
+				return FuncOffsets{}, false, fmt.Errorf("getting memory section data: %w", err)
 			}
 			pcln := gosym.NewLineTable(pclndat, elfF.Section(".text").Addr)
 			symTab, err := gosym.NewTable(symTabRaw, pcln)
 			if err != nil {
-				return FuncOffsets{}, fmt.Errorf("can't decode symbols table: %w", err)
+				return FuncOffsets{}, false, fmt.Errorf("can't decode symbols table: %w", err)
 			}
 
 			for _, f := range symTab.Funcs {
@@ -72,19 +89,19 @@ func instrumentationPoints(elfF *elf.File, funcName string) (FuncOffsets, error)
 					log.Debug("found target function")
 					start, returns, err := findFuncOffset(&f, elfF)
 					if err != nil {
-						return FuncOffsets{}, err
+						return FuncOffsets{}, false, err
 					}
 					log.Debug("found relevant function for instrumentation", "function", f.Name,
 						"startOffset", start, "returnsOffsets", returns)
 					return FuncOffsets{
 						Start:   start,
 						Returns: returns,
-					}, nil
+					}, true, nil
 				}
 			}
 		}
 	}
-	return FuncOffsets{}, fmt.Errorf("couldn't find function %q", funcName)
+	return FuncOffsets{}, false, nil
 }
 
 func findFuncOffset(f *gosym.Func, elfF *elf.File) (uint64, []uint64, error) {

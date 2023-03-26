@@ -32,7 +32,7 @@ CFLAGS := -O2 -g -Wall -Werror $(CFLAGS)
 # regular expressions for excluded file patterns
 EXCLUDE_COVERAGE_FILES="(/cmd/)|(bpf_bpfe)|(/pingserver/)|(/test/collector/)"
 
-.DEFAULT_GOAL := build
+.DEFAULT_GOAL := all
 # Oneshell is required to auto-cleanup of integration tests
 export SHELL:=/bin/sh
 export SHELLOPTS:=$(if $(SHELLOPTS),$(SHELLOPTS):)pipefail:errexit
@@ -72,6 +72,9 @@ verify: prereqs lint test
 
 .PHONY: build
 build: verify compile
+
+.PHONY: all
+all: generate build
 
 .PHONY: compile
 compile:
@@ -127,6 +130,7 @@ cleanup-integration-test:
 .PHONY: run-integration-test
 run-integration-test:
 	@echo "### Running integration tests"
+	go clean -testcache
 	go test -mod vendor -a ./test/integration/... --tags=integration
 
 .PHONY: integration-test

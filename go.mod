@@ -3,14 +3,13 @@ module github.com/grafana/http-autoinstrument
 go 1.20
 
 require (
-	github.com/caarlos0/env v3.5.0+incompatible
-	github.com/caarlos0/env/v6 v6.10.1
+	github.com/caarlos0/env/v7 v7.1.0
 	github.com/cilium/ebpf v0.10.0
 	github.com/gavv/monotime v0.0.0-20190418164738-30dba4353424
 	github.com/gin-gonic/gin v1.9.0
 	github.com/gorilla/mux v1.8.0
 	github.com/mariomac/guara v0.0.0-20221222112709-f95b15506aee
-	github.com/mariomac/pipes v0.5.0
+	github.com/mariomac/pipes v0.5.1-0.20230321095313-74438be08289
 	github.com/shirou/gopsutil v3.21.11+incompatible
 	github.com/stretchr/testify v1.8.2
 	go.opentelemetry.io/collector/pdata v0.66.0
@@ -24,6 +23,7 @@ require (
 	go.opentelemetry.io/otel/trace v1.14.0
 	golang.org/x/arch v0.0.0-20210923205945-b76863e36670
 	golang.org/x/exp v0.0.0-20230213192124-5e25df0256eb
+	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
@@ -67,5 +67,4 @@ require (
 	google.golang.org/genproto v0.0.0-20230110181048-76db0878b65f // indirect
 	google.golang.org/grpc v1.53.0 // indirect
 	google.golang.org/protobuf v1.28.1 // indirect
-	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

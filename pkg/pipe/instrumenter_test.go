@@ -3,6 +3,7 @@ package pipe
 import (
 	"context"
 	"net"
+	"os"
 	"testing"
 	"time"
 
@@ -21,7 +22,7 @@ import (
 	"github.com/grafana/http-autoinstrument/test/collector"
 )
 
-const testTimeout = 500 * time.Second
+const testTimeout = 5 * time.Second
 
 func TestBasicPipeline(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -89,7 +90,7 @@ func TestTracerPipeline(t *testing.T) {
 			string(semconv.HTTPStatusCodeKey):  "404",
 			string(semconv.HTTPTargetKey):      "/foo/bar",
 			string(semconv.NetSockPeerAddrKey): "1.1.1.1",
-			string(semconv.NetHostNameKey):     "localhost",
+			string(semconv.NetHostNameKey):     getHostname(),
 			string(semconv.NetHostPortKey):     "8080",
 			string(semconv.NetSockHostAddrKey): getLocalIPv4(),
 		},
@@ -170,7 +171,7 @@ func newRequest(method, path, peer string, status int) nethttp.HTTPRequestTrace 
 	copy(rt.Path[:], path)
 	copy(rt.Method[:], method)
 	copy(rt.RemoteAddr[:], peer)
-	copy(rt.Host[:], "localhost:8080")
+	copy(rt.Host[:], getHostname()+":8080")
 	rt.Status = uint16(status)
 	return rt
 }
@@ -195,6 +196,14 @@ func getTraceEvent(t *testing.T, coll *collector.TestCollector) collector.TraceR
 		t.Fatal("timeout while waiting for message")
 	}
 	return collector.TraceRecord{}
+}
+
+func getHostname() string {
+	hostname, err := os.Hostname()
+	if err != nil {
+		return ""
+	}
+	return hostname
 }
 
 func getLocalIPv4() string {

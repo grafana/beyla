@@ -3,6 +3,7 @@ package transform
 import (
 	"bytes"
 	"net"
+	"os"
 	"strconv"
 	"time"
 
@@ -101,13 +102,16 @@ func (c *converter) convert(trace *nethttp.HTTPRequestTrace) HTTPRequestSpan {
 	}
 
 	peer, _ := extractHostPort(trace.RemoteAddr[:])
-	host, hostPort := extractHostPort(trace.Host[:])
+	_, hostPort := extractHostPort(trace.Host[:])
+
+	// We ignore the hostname from the request, and use the hostname of the machine
+	hostname, _ := os.Hostname()
 
 	return HTTPRequestSpan{
 		Method:   string(trace.Method[:methodLen]),
 		Path:     string(trace.Path[:pathLen]),
 		Peer:     peer,
-		Host:     host,
+		Host:     hostname,
 		HostPort: hostPort,
 		LocalIP:  localIP,
 		Start:    now.Add(-startDelta),

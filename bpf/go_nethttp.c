@@ -17,7 +17,8 @@ char __license[] SEC("license") = "Dual MIT/GPL";
 
 #define PATH_MAX_LEN 100
 #define METHOD_MAX_LEN 6 // Longer method: DELETE
-#define REMOTE_ADDR_MAX_LEN 50 // We need 48: 39(ip v6 max) + 1(: separator) + 7(port length max value 65535) + 1(null terminator) 
+#define REMOTE_ADDR_MAX_LEN 50 // We need 48: 39(ip v6 max) + 1(: separator) + 7(port length max value 65535) + 1(null terminator)
+#define HOST_LEN 256 // can be a fully qualified DNS name
 
 // TODO: make it user-configurable
 #define MAX_CONCURRENT_REQUESTS 500
@@ -43,7 +44,7 @@ typedef struct http_request_trace_t {
     u8 path[PATH_MAX_LEN];
     u16 status;
     u8 remote_addr[REMOTE_ADDR_MAX_LEN];
-    // TODO: dst address:port
+    u8 host[HOST_LEN];
 } __attribute__((packed)) http_request_trace;
 // Force emitting struct sock_info into the ELF for automatic creation of Golang struct
 const http_request_trace *unused __attribute__((unused));
@@ -66,6 +67,7 @@ volatile const u64 path_ptr_pos;
 volatile const u64 method_ptr_pos;
 volatile const u64 status_ptr_pos;
 volatile const u64 remoteaddr_ptr_pos;
+volatile const u64 host_ptr_pos;
 
 // This instrumentation attaches uprobe to the following function:
 // func (mux *ServeMux) ServeHTTP(w ResponseWriter, r *Request)
@@ -126,6 +128,12 @@ int uprobe_ServeHttp_return(struct pt_regs *ctx) {
 
     // Get the remote peer information from Request.RemoteAddr
     if (!read_go_str("remote_addr", req_ptr, remoteaddr_ptr_pos, &trace->remote_addr, sizeof(trace->remote_addr))) {
+        bpf_ringbuf_discard(trace, 0);
+        return 0;
+    }
+
+    // Get the host information the remote supplied
+    if (!read_go_str("host", req_ptr, host_ptr_pos, &trace->host, sizeof(trace->host))) {
         bpf_ringbuf_discard(trace, 0);
         return 0;
     }

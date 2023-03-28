@@ -3,6 +3,7 @@ package transform
 import (
 	"bytes"
 	"net"
+	"strconv"
 	"time"
 
 	"github.com/grafana/http-autoinstrument/pkg/ebpf/nethttp"
@@ -12,13 +13,15 @@ import (
 
 // HTTPRequestSpan contains the information being submitted as
 type HTTPRequestSpan struct {
-	Method string
-	Path   string
-	Route  string
-	Peer   string
-	Status int
-	Start  time.Time
-	End    time.Time
+	Method   string
+	Path     string
+	Route    string
+	Peer     string
+	Host     string
+	HostPort int
+	Status   int
+	Start    time.Time
+	End      time.Time
 }
 
 func ConvertToSpan(in <-chan nethttp.HTTPRequestTrace, out chan<- HTTPRequestSpan) {
@@ -40,6 +43,29 @@ type converter struct {
 	monoClock func() time.Duration
 }
 
+func extractHostPort(b []uint8) (string, int) {
+	addrLen := bytes.IndexByte(b, 0)
+	if addrLen < 0 {
+		addrLen = len(b)
+	}
+
+	peer := ""
+	peerPort := 0
+
+	if addrLen > 0 {
+		addr := string(b[:addrLen])
+		ip, port, err := net.SplitHostPort(addr)
+		if err != nil {
+			peer = addr
+		} else {
+			peer = ip
+			peerPort, _ = strconv.Atoi(port)
+		}
+	}
+
+	return peer, peerPort
+}
+
 func (c *converter) convert(trace *nethttp.HTTPRequestTrace) HTTPRequestSpan {
 	now := time.Now()
 	monoNow := c.monoClock()
@@ -55,30 +81,18 @@ func (c *converter) convert(trace *nethttp.HTTPRequestTrace) HTTPRequestSpan {
 	if pathLen < 0 {
 		pathLen = len(trace.Path)
 	}
-	remoteAddrLen := bytes.IndexByte(trace.RemoteAddr[:], 0)
-	if remoteAddrLen < 0 {
-		remoteAddrLen = len(trace.RemoteAddr)
-	}
 
-	peer := ""
-
-	if remoteAddrLen > 0 {
-		remoteAddr := string(trace.RemoteAddr[:remoteAddrLen])
-		ip, _, err := net.SplitHostPort(remoteAddr)
-		// we ignore the peer port, it's not very useful for metrics and traces
-		if err != nil {
-			peer = remoteAddr
-		} else {
-			peer = ip
-		}
-	}
+	peer, _ := extractHostPort(trace.RemoteAddr[:])
+	hostname, hostPort := extractHostPort(trace.Host[:])
 
 	return HTTPRequestSpan{
-		Method: string(trace.Method[:methodLen]),
-		Path:   string(trace.Path[:pathLen]),
-		Peer:   peer,
-		Start:  now.Add(-startDelta),
-		End:    now.Add(-endDelta),
-		Status: int(trace.Status),
+		Method:   string(trace.Method[:methodLen]),
+		Path:     string(trace.Path[:pathLen]),
+		Peer:     peer,
+		Host:     hostname,
+		HostPort: hostPort,
+		Start:    now.Add(-startDelta),
+		End:      now.Add(-endDelta),
+		Status:   int(trace.Status),
 	}
 }

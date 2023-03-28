@@ -11,10 +11,12 @@ import (
 
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/pmetric"
+	"go.opentelemetry.io/collector/pdata/ptrace"
 
 	"golang.org/x/exp/slog"
 
 	"go.opentelemetry.io/collector/pdata/pmetric/pmetricotlp"
+	"go.opentelemetry.io/collector/pdata/ptrace/ptraceotlp"
 )
 
 // TestCollector is a dummy OLTP test collector that allows retrieving part of the collected metrics
@@ -22,7 +24,8 @@ import (
 type TestCollector struct {
 	ServerHostPort string
 	// TODO: add also traces history
-	Records chan MetricRecord
+	Records      chan MetricRecord
+	TraceRecords chan TraceRecord
 }
 
 var log *slog.Logger
@@ -38,7 +41,8 @@ func init() {
 func Start(ctx context.Context) (*TestCollector, error) {
 
 	tc := TestCollector{
-		Records: make(chan MetricRecord, 100),
+		Records:      make(chan MetricRecord, 100),
+		TraceRecords: make(chan TraceRecord, 100),
 	}
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		body, err := io.ReadAll(request.Body)
@@ -75,8 +79,37 @@ func Start(ctx context.Context) (*TestCollector, error) {
 }
 
 func (tc *TestCollector) traceEvent(writer http.ResponseWriter, body []byte) {
-	slog.Debug("received trace")
-	// TODO: handle and store here
+	req := ptraceotlp.NewExportRequest()
+	if err := req.UnmarshalProto(body); err != nil {
+		log.Error("unmarshalling protobuf event", err)
+		writer.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	writer.WriteHeader(http.StatusOK)
+	json, _ := req.MarshalJSON()
+	slog.Debug("received metric", "json", string(json))
+
+	forEach[ptrace.ResourceSpans](req.Traces().ResourceSpans(), func(rs ptrace.ResourceSpans) {
+		forEach[ptrace.ScopeSpans](rs.ScopeSpans(), func(ss ptrace.ScopeSpans) {
+			forEach[ptrace.Span](ss.Spans(), func(s ptrace.Span) {
+				switch s.Kind() {
+				case ptrace.SpanKindInternal:
+					tr := TraceRecord{
+						Kind:       s.Kind(),
+						Name:       s.Name(),
+						Attributes: map[string]string{},
+					}
+					s.Attributes().Range(func(k string, v pcommon.Value) bool {
+						tr.Attributes[k] = v.AsString()
+						return true
+					})
+					tc.TraceRecords <- tr
+				default:
+					slog.Warn("unsupported trace kind", "kind", s.Kind().String())
+				}
+			})
+		})
+	})
 }
 
 func (tc *TestCollector) metricEvent(writer http.ResponseWriter, body []byte) {
@@ -122,6 +155,12 @@ type MetricRecord struct {
 	Name       string
 	Unit       string
 	Type       pmetric.MetricType
+}
+
+type TraceRecord struct {
+	Attributes map[string]string
+	Name       string
+	Kind       ptrace.SpanKind
 }
 
 type slice[T any] interface {

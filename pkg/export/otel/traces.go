@@ -101,6 +101,8 @@ func (r *TracesReporter) reportTraces(spans <-chan transform.HTTPRequestSpan) {
 			semconv.HTTPStatusCode(span.Status),
 			semconv.HTTPTarget(span.Path),
 			semconv.NetSockPeerAddr(span.Peer),
+			semconv.NetHostName(span.Host),
+			semconv.NetHostPort(span.HostPort),
 		}
 		if span.Route != "" {
 			attrs = append(attrs, semconv.HTTPRoute(span.Route))

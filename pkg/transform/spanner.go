@@ -3,7 +3,6 @@ package transform
 import (
 	"bytes"
 	"net"
-	"os"
 	"strconv"
 	"time"
 
@@ -20,27 +19,9 @@ type HTTPRequestSpan struct {
 	Peer     string
 	Host     string
 	HostPort int
-	LocalIP  string
 	Status   int
 	Start    time.Time
 	End      time.Time
-}
-
-var localIP = getLocalIPv4()
-
-func getLocalIPv4() string {
-	addrs, err := net.InterfaceAddrs()
-	if err != nil {
-		return ""
-	}
-	for _, addr := range addrs {
-		if ip, ok := addr.(*net.IPNet); ok && !ip.IP.IsLoopback() {
-			if ip.IP.To4() != nil {
-				return ip.IP.String()
-			}
-		}
-	}
-	return ""
 }
 
 func ConvertToSpan(in <-chan nethttp.HTTPRequestTrace, out chan<- HTTPRequestSpan) {
@@ -102,10 +83,7 @@ func (c *converter) convert(trace *nethttp.HTTPRequestTrace) HTTPRequestSpan {
 	}
 
 	peer, _ := extractHostPort(trace.RemoteAddr[:])
-	_, hostPort := extractHostPort(trace.Host[:])
-
-	// We ignore the hostname from the request, and use the hostname of the machine
-	hostname, _ := os.Hostname()
+	hostname, hostPort := extractHostPort(trace.Host[:])
 
 	return HTTPRequestSpan{
 		Method:   string(trace.Method[:methodLen]),
@@ -113,7 +91,6 @@ func (c *converter) convert(trace *nethttp.HTTPRequestTrace) HTTPRequestSpan {
 		Peer:     peer,
 		Host:     hostname,
 		HostPort: hostPort,
-		LocalIP:  localIP,
 		Start:    now.Add(-startDelta),
 		End:      now.Add(-endDelta),
 		Status:   int(trace.Status),

@@ -2,7 +2,6 @@ package pipe
 
 import (
 	"context"
-	"net"
 	"os"
 	"testing"
 	"time"
@@ -92,7 +91,6 @@ func TestTracerPipeline(t *testing.T) {
 			string(semconv.NetSockPeerAddrKey): "1.1.1.1",
 			string(semconv.NetHostNameKey):     getHostname(),
 			string(semconv.NetHostPortKey):     "8080",
-			string(semconv.NetSockHostAddrKey): getLocalIPv4(),
 		},
 		Kind: ptrace.SpanKindInternal,
 	}, event)
@@ -204,19 +202,4 @@ func getHostname() string {
 		return ""
 	}
 	return hostname
-}
-
-func getLocalIPv4() string {
-	addrs, err := net.InterfaceAddrs()
-	if err != nil {
-		return ""
-	}
-	for _, addr := range addrs {
-		if ip, ok := addr.(*net.IPNet); ok && !ip.IP.IsLoopback() {
-			if ip.IP.To4() != nil {
-				return ip.IP.String()
-			}
-		}
-	}
-	return ""
 }

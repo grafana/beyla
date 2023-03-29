@@ -3,10 +3,10 @@ package main
 import (
 	"os"
 
-	"github.com/grafana/http-autoinstrument/test/integration/components/testserver/gorilla"
+	"github.com/grafana/ebpf-autoinstrument/test/integration/components/testserver/gorilla"
 
-	"github.com/grafana/http-autoinstrument/test/integration/components/testserver/gin"
-	"github.com/grafana/http-autoinstrument/test/integration/components/testserver/std"
+	"github.com/grafana/ebpf-autoinstrument/test/integration/components/testserver/gin"
+	"github.com/grafana/ebpf-autoinstrument/test/integration/components/testserver/std"
 
 	"github.com/caarlos0/env/v7"
 	gin2 "github.com/gin-gonic/gin"

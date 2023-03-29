@@ -61,7 +61,7 @@ func structMemberOffsetsFromDwarf(data *dwarf.Data) (FieldOffsets, error) {
 		if fields, ok := structMembers[typeName]; !ok {
 			reader.SkipChildren()
 			continue
-		} else {
+		} else { //nolint:revive
 			log.Debug("inspecting fields for struct type", "type", typeName)
 			if err := readMembers(reader, fields, expectedReturns, fieldOffsets); err != nil {
 				return nil, fmt.Errorf("reading type %q members: %w", typeName, err)

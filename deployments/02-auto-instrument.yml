@@ -123,22 +123,22 @@ spec:
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
-  name: http-autoinstrumenter
+  name: ebpf-autoinstrumenter
   labels:
-    app: http-autoinstrumenter
+    app: ebpf-autoinstrumenter
 spec:
   selector:
     matchLabels:
-      app: http-autoinstrumenter
+      app: ebpf-autoinstrumenter
   template:
     metadata:
       labels:
-        app: http-autoinstrumenter
+        app: ebpf-autoinstrumenter
     spec:
       hostPID: true # require to access processes in the host
       containers:
-        - name: http-autoinstrumenter
-          image: mariomac/http-autoinstrument:latest
+        - name: ebpf-autoinstrumenter
+          image: mariomac/ebpf-autoinstrument:latest
           imagePullPolicy: Always
           securityContext:
             runAsUser: 0

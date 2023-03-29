@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/grafana/http-autoinstrument/test/integration/components/testserver/arg"
+	"github.com/grafana/ebpf-autoinstrument/test/integration/components/testserver/arg"
 	"golang.org/x/exp/slog"
 )
 

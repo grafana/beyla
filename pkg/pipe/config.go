@@ -8,10 +8,10 @@ import (
 	"github.com/caarlos0/env/v7"
 	"gopkg.in/yaml.v3"
 
-	"github.com/grafana/http-autoinstrument/pkg/ebpf/nethttp"
-	"github.com/grafana/http-autoinstrument/pkg/export/debug"
-	"github.com/grafana/http-autoinstrument/pkg/export/otel"
-	"github.com/grafana/http-autoinstrument/pkg/transform"
+	"github.com/grafana/ebpf-autoinstrument/pkg/ebpf/nethttp"
+	"github.com/grafana/ebpf-autoinstrument/pkg/export/debug"
+	"github.com/grafana/ebpf-autoinstrument/pkg/export/otel"
+	"github.com/grafana/ebpf-autoinstrument/pkg/transform"
 )
 
 var defaultConfig = Config{

@@ -14,11 +14,11 @@ import (
 	"go.opentelemetry.io/collector/pdata/ptrace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
 
-	"github.com/grafana/http-autoinstrument/pkg/ebpf/nethttp"
-	"github.com/grafana/http-autoinstrument/pkg/export/otel"
-	"github.com/grafana/http-autoinstrument/pkg/goexec"
-	"github.com/grafana/http-autoinstrument/pkg/transform"
-	"github.com/grafana/http-autoinstrument/test/collector"
+	"github.com/grafana/ebpf-autoinstrument/pkg/ebpf/nethttp"
+	"github.com/grafana/ebpf-autoinstrument/pkg/export/otel"
+	"github.com/grafana/ebpf-autoinstrument/pkg/goexec"
+	"github.com/grafana/ebpf-autoinstrument/pkg/transform"
+	"github.com/grafana/ebpf-autoinstrument/test/collector"
 )
 
 const testTimeout = 5 * time.Second

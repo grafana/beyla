@@ -12,7 +12,7 @@ COMPOSE_LOGS ?= docker-compose.log
 
 # Container image creation creation
 VERSION ?= latest
-IMAGE_TAG_BASE ?= $(DOCKERHUB_USER)/http-autoinstrument
+IMAGE_TAG_BASE ?= $(DOCKERHUB_USER)/ebpf-autoinstrument
 IMG ?= $(IMAGE_TAG_BASE):$(VERSION)
 
 # The generator is a local container image that provides a reproducible environment for

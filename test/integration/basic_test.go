@@ -13,7 +13,7 @@ import (
 
 	"golang.org/x/exp/slog"
 
-	"github.com/grafana/http-autoinstrument/test/integration/components/prom"
+	"github.com/grafana/ebpf-autoinstrument/test/integration/components/prom"
 	"github.com/mariomac/guara/pkg/test"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

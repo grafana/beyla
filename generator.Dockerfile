@@ -7,7 +7,7 @@ ARG TARGETARCH
 RUN echo "using TARGETARCH: $TARGETARCH"
 
 # Installs dependencies that are required to compile eBPF programs
-RUN dnf install -y kernel-devel make llvm clang unzip
+RUN dnf install -y git kernel-devel make llvm clang unzip
 RUN dnf clean all
 
 VOLUME ["/src"]
@@ -23,7 +23,8 @@ ENV GOROOT /go
 RUN mkdir -p /gopath
 ENV GOPATH /gopath
 
-ENV PATH $GOROOT/bin:$GOPATH/bin:$PATH
+ENV GOBIN $GOPATH/bin
+ENV PATH $GOROOT/bin:$GOBIN:$PATH
 
 WORKDIR /tmp
 # Copies some pre-required Go dependencies to avoid downloading them on each build

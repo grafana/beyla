@@ -1,37 +1,108 @@
 package goexec
 
 import (
+	"bytes"
 	"debug/dwarf"
+	"debug/elf"
+	_ "embed"
 	"fmt"
 
+	"github.com/grafana/go-offsets-tracker/pkg/offsets"
 	"golang.org/x/exp/slog"
 )
 
-var log = slog.With("component", "goexec.structMemberOffsetsFromDwarf")
+var log = slog.With("component", "goexec.structMemberOffsets")
 
-// TODO: make overridable by user
-var structMembers = map[string]map[string]string{
+//go:embed offsets.json
+var prefetchedOffsets string
+
+type structInfo struct {
+	// lib is the name of the library where the struct is defined.
+	// "go" for the standar library or e.g. "google.golang.org/grpc"
+	lib string
+	// fields of the struct as key, and the name of the constant defined in the eBPF code as value
+	fields map[string]string
+}
+
+// level-1 key = Struct type name and its containing library
+// level-2 key = name of the field
+// level-3 value = C constant name to override (e.g. path_ptr_pos)
+var structMembers = map[string]structInfo{
 	"net/http.Request": {
-		"URL":        "url_ptr_pos",
-		"Method":     "method_ptr_pos",
-		"RemoteAddr": "remoteaddr_ptr_pos",
-		"Host":       "host_ptr_pos",
+		lib: "go",
+		fields: map[string]string{
+			"URL":        "url_ptr_pos",
+			"Method":     "method_ptr_pos",
+			"RemoteAddr": "remoteaddr_ptr_pos",
+			"Host":       "host_ptr_pos",
+		},
 	},
 	"net/url.URL": {
-		"Path": "path_ptr_pos",
+		lib: "go",
+		fields: map[string]string{
+			"Path": "path_ptr_pos",
+		},
 	},
 	"net/http.response": {
-		"status": "status_ptr_pos",
+		lib: "go",
+		fields: map[string]string{
+			"status": "status_ptr_pos",
+		},
 	},
 }
 
-// level-1 key = Struct type name
-// level-2 key = name of the field
-// level-2 value = C constant name to override (e.g. path_ptr_pos)
+func structMemberOffsets(elfFile *elf.File) (FieldOffsets, error) {
+	// first, try to read offsets from DWARF debug info
+	var offs FieldOffsets
+	dwarfData, err := elfFile.DWARF()
+	if err == nil {
+		offs, err = structMemberOffsetsFromDwarf(dwarfData)
+		if err == nil {
+			return offs, nil
+		}
+	}
+	log.Debug("can't read offsets from DWARF info. Falling back to prefetched database", "error", err)
+
+	// if it is not possible, query from prefetched offsets
+	return structMemberPreFetchedOffsets(elfFile)
+}
+
+func structMemberPreFetchedOffsets(elfFile *elf.File) (FieldOffsets, error) {
+	offs, err := offsets.Read(bytes.NewBufferString(prefetchedOffsets))
+	if err != nil {
+		return nil, fmt.Errorf("reading offsets file contents: %w", err)
+	}
+	libVersions, err := findLibraryVersions(elfFile)
+	if err != nil {
+		return nil, fmt.Errorf("searching for library versions: %w", err)
+	}
+	// after putting the offsets.json in a Go structure, we search all the
+	// structMembers elements on it, to get the annotated offsets
+	fieldOffsets := FieldOffsets{}
+	for strName, strInfo := range structMembers {
+		version, ok := libVersions[strInfo.lib]
+		if !ok {
+			return nil, fmt.Errorf("can't find version for library %s", strInfo.lib)
+		}
+		for fieldName, constantName := range strInfo.fields {
+			// look the version of the required field in the offsets.json memory copy
+			offset, ok := offs.Find(strName, fieldName, version)
+			if !ok {
+				return nil, fmt.Errorf("can't find offsets for field %s/%s.%s (version %s)",
+					strInfo.lib, strName, fieldName, version)
+			}
+			fieldOffsets[constantName] = offset
+		}
+	}
+	return fieldOffsets, nil
+}
+
+// structMemberOffsetsFromDwarf reads the executable dwarf information to get
+// the offsets specified in the structMembers map
 func structMemberOffsetsFromDwarf(data *dwarf.Data) (FieldOffsets, error) {
 	expectedReturns := map[string]struct{}{}
-	for _, fields := range structMembers {
-		for _, ctName := range fields {
+	for _, str := range structMembers {
+		for _, ctName := range str.fields {
 			expectedReturns[ctName] = struct{}{}
 		}
 	}
@@ -58,12 +129,12 @@ func structMemberOffsetsFromDwarf(data *dwarf.Data) (FieldOffsets, error) {
 		}
 		attrs := getAttrs(entry)
 		typeName := attrs[dwarf.AttrName].(string)
-		if fields, ok := structMembers[typeName]; !ok {
+		if structMember, ok := structMembers[typeName]; !ok {
 			reader.SkipChildren()
 			continue
 		} else { //nolint:revive
 			log.Debug("inspecting fields for struct type", "type", typeName)
-			if err := readMembers(reader, fields, expectedReturns, fieldOffsets); err != nil {
+			if err := readMembers(reader, structMember.fields, expectedReturns, fieldOffsets); err != nil {
 				return nil, fmt.Errorf("reading type %q members: %w", typeName, err)
 			}
 		}

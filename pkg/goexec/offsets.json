@@ -1,0 +1,82 @@
+{
+  "data": {
+    "net/http.Request": {
+      "Host": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.20.2"
+        },
+        "offsets": [
+          {
+            "offset": 128,
+            "since": "1.17"
+          }
+        ]
+      },
+      "Method": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.20.2"
+        },
+        "offsets": [
+          {
+            "offset": 0,
+            "since": "1.17"
+          }
+        ]
+      },
+      "RemoteAddr": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.20.2"
+        },
+        "offsets": [
+          {
+            "offset": 176,
+            "since": "1.17"
+          }
+        ]
+      },
+      "URL": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.20.2"
+        },
+        "offsets": [
+          {
+            "offset": 16,
+            "since": "1.17"
+          }
+        ]
+      }
+    },
+    "net/http.response": {
+      "status": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.20.2"
+        },
+        "offsets": [
+          {
+            "offset": 120,
+            "since": "1.17"
+          }
+        ]
+      }
+    },
+    "net/url.URL": {
+      "Path": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.20.2"
+        },
+        "offsets": [
+          {
+            "offset": 56,
+            "since": "1.17"
+          }
+        ]
+      }
+    }
+  }
+}

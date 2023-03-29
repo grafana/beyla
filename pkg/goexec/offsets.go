@@ -33,11 +33,7 @@ func InspectOffsets(execFile string, funcNames []string) (Offsets, error) {
 	}
 
 	// check the offsets of the required fields from the method arguments
-	dwarf, err := execElf.ELF.DWARF()
-	if err != nil {
-		return Offsets{}, fmt.Errorf("searching for DWARF info in file %s: %w", execFile, err)
-	}
-	structFieldOffsets, err := structMemberOffsetsFromDwarf(dwarf)
+	structFieldOffsets, err := structMemberOffsets(execElf.ELF)
 	if err != nil {
 		return Offsets{}, fmt.Errorf("checking struct members in file %s: %w", execFile, err)
 	}

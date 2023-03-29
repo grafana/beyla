@@ -1,4 +1,4 @@
-# http-autoinstrument
+# ebpf-autoinstrument
 eBPF-based autoinstrumentation of HTTP and HTTPS services
 
 | Library                                       | Working |

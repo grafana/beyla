@@ -53,9 +53,8 @@ func funcOffsets(elfF *elf.File, funcName string, dwarfInfo *dwarf.Data) (FuncOf
 				if field.Val == funcName {
 					functionFound = true
 					continue
-				} else {
-					break fieldsIter
 				}
+				break fieldsIter
 			case dwarf.AttrLowpc:
 				lowAddr = field.Val.(uint64)
 			}

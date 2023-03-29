@@ -4,7 +4,7 @@ package debug
 import (
 	"fmt"
 
-	"github.com/grafana/http-autoinstrument/pkg/transform"
+	"github.com/grafana/ebpf-autoinstrument/pkg/transform"
 	"github.com/mariomac/pipes/pkg/node"
 )
 

@@ -7,7 +7,7 @@ import (
 
 	"golang.org/x/exp/slog"
 
-	"github.com/grafana/http-autoinstrument/pkg/transform"
+	"github.com/grafana/ebpf-autoinstrument/pkg/transform"
 	"github.com/mariomac/pipes/pkg/node"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
@@ -18,7 +18,7 @@ import (
 	trace2 "go.opentelemetry.io/otel/trace"
 )
 
-const reporterName = "github.com/grafana/http-autoinstrument"
+const reporterName = "github.com/grafana/ebpf-autoinstrument"
 
 type TracesConfig struct {
 	ServiceName    string `yaml:"service_name" env:"SERVICE_NAME"`

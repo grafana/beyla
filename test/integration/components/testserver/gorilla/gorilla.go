@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/grafana/http-autoinstrument/test/integration/components/testserver/std"
+	"github.com/grafana/ebpf-autoinstrument/test/integration/components/testserver/std"
 
 	"github.com/gorilla/mux"
 	"golang.org/x/exp/slog"

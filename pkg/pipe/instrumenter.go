@@ -6,11 +6,11 @@ import (
 	"github.com/mariomac/pipes/pkg/graph"
 	"github.com/mariomac/pipes/pkg/node"
 
-	"github.com/grafana/http-autoinstrument/pkg/ebpf/nethttp"
-	"github.com/grafana/http-autoinstrument/pkg/export/debug"
-	"github.com/grafana/http-autoinstrument/pkg/export/otel"
-	"github.com/grafana/http-autoinstrument/pkg/goexec"
-	"github.com/grafana/http-autoinstrument/pkg/transform"
+	"github.com/grafana/ebpf-autoinstrument/pkg/ebpf/nethttp"
+	"github.com/grafana/ebpf-autoinstrument/pkg/export/debug"
+	"github.com/grafana/ebpf-autoinstrument/pkg/export/otel"
+	"github.com/grafana/ebpf-autoinstrument/pkg/goexec"
+	"github.com/grafana/ebpf-autoinstrument/pkg/transform"
 )
 
 // builder with injectable instantiators for unit testing

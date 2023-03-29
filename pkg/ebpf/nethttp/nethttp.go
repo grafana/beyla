@@ -25,7 +25,7 @@ import (
 	"github.com/cilium/ebpf/link"
 	"github.com/cilium/ebpf/ringbuf"
 	"github.com/cilium/ebpf/rlimit"
-	"github.com/grafana/http-autoinstrument/pkg/goexec"
+	"github.com/grafana/ebpf-autoinstrument/pkg/goexec"
 	"github.com/mariomac/pipes/pkg/node"
 	"golang.org/x/exp/slog"
 )

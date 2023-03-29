@@ -2,7 +2,7 @@
 package transform
 
 import (
-	"github.com/grafana/http-autoinstrument/pkg/transform/route"
+	"github.com/grafana/ebpf-autoinstrument/pkg/transform/route"
 	"github.com/mariomac/pipes/pkg/node"
 	"golang.org/x/exp/slog"
 )

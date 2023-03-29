@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/grafana/http-autoinstrument/pkg/ebpf/nethttp"
+	"github.com/grafana/ebpf-autoinstrument/pkg/ebpf/nethttp"
 
 	"github.com/gavv/monotime"
 )

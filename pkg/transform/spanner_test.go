@@ -3,7 +3,7 @@ package transform
 import (
 	"testing"
 
-	"github.com/grafana/http-autoinstrument/pkg/ebpf/nethttp"
+	"github.com/grafana/ebpf-autoinstrument/pkg/ebpf/nethttp"
 	"github.com/stretchr/testify/assert"
 )
 

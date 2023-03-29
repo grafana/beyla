@@ -1,4 +1,4 @@
-module github.com/grafana/http-autoinstrument
+module github.com/grafana/ebpf-autoinstrument
 
 go 1.20
 

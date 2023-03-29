@@ -66,7 +66,7 @@ struct {
 } events SEC(".maps");
 
 // To be injected from the user space during the eBPF program load & initialization for debugging purposes
-volatile const u8 go_http_debug_level = PRINTK_LEVEL_DEBUG;
+volatile const u8 go_http_debug_level = PRINTK_LEVEL_WARN;
 
 // To be Injected from the user space during the eBPF program load & initialization
 volatile const u64 url_ptr_pos;

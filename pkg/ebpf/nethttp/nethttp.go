@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/cilium/ebpf/link"
 	"github.com/cilium/ebpf/ringbuf"
@@ -33,12 +34,13 @@ import (
 type EBPFTracer struct {
 	Exec      string   `yaml:"executable_name" env:"EXECUTABLE_NAME"`
 	Functions []string `yaml:"functions" env:"INSTRUMENT_FUNCTIONS"`
+	LogLevel  string   `yaml:"log_level" env:"LOG_LEVEL"`
 
 	Offsets *goexec.Offsets `yaml:"-"`
 }
 
 func EBPFTracerProvider(cfg EBPFTracer) node.StartFuncCtx[HTTPRequestTrace] {
-	is, err := Instrument(cfg.Offsets)
+	is, err := Instrument(cfg.Offsets, cfg.LogLevel)
 	if err != nil {
 		slog.Error("can't instantiate eBPF tracer", err)
 		os.Exit(-1)
@@ -64,7 +66,7 @@ type HTTPRequestTrace bpfHttpRequestTrace
 
 // Instrument the executable passed as path and insert probes in the provided offsets, so the
 // returned InstrumentedServe instance will listen and forward traces for each HTTP invocation.
-func Instrument(offsets *goexec.Offsets) (*InstrumentedServe, error) {
+func Instrument(offsets *goexec.Offsets, logLevel string) (*InstrumentedServe, error) {
 	// Instead of the executable file in the disk, we pass the /proc/<pid>/exec
 	// to allow loading it from different container/pods in containerized environments
 	exe, err := link.OpenExecutable(offsets.FileInfo.ProExeLinkPath)
@@ -80,6 +82,11 @@ func Instrument(offsets *goexec.Offsets) (*InstrumentedServe, error) {
 	spec, err := loadBpf()
 	if err != nil {
 		return nil, fmt.Errorf("loading BPF data: %w", err)
+	}
+
+	// Set the log level for nethttp BPF program
+	if err := spec.RewriteConstants(map[string]interface{}{"go_http_debug_level": ebpfLogLevel(logLevel)}); err != nil {
+		return nil, fmt.Errorf("rewriting BPF log level definition: %w", err)
 	}
 
 	if err := spec.RewriteConstants(offsets.Field); err != nil {
@@ -173,5 +180,21 @@ func (h *InstrumentedServe) Close() {
 
 	if err := h.bpfObjects.Close(); err != nil {
 		log.Warn("closing BPF program", "error", err)
+	}
+}
+
+// These levels must match the ones defined in bpf_dbg.h
+func ebpfLogLevel(level string) uint8 {
+	switch strings.ToLower(level) {
+	case "debug":
+		return 3
+	case "info":
+		return 2
+	case "warn":
+		return 1
+	case "error":
+		return 0
+	default:
+		return 1
 	}
 }

@@ -8,6 +8,7 @@ require (
 	github.com/gavv/monotime v0.0.0-20190418164738-30dba4353424
 	github.com/gin-gonic/gin v1.9.0
 	github.com/gorilla/mux v1.8.0
+	github.com/grafana/go-offsets-tracker v0.1.2
 	github.com/mariomac/guara v0.0.0-20221222112709-f95b15506aee
 	github.com/mariomac/pipes v0.5.1-0.20230321095313-74438be08289
 	github.com/shirou/gopsutil v3.21.11+incompatible
@@ -42,6 +43,7 @@ require (
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.7.0 // indirect
+	github.com/hashicorp/go-version v1.6.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/klauspost/cpuid/v2 v2.0.9 // indirect
 	github.com/leodido/go-urn v1.2.1 // indirect

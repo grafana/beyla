@@ -107,11 +107,19 @@ github.com/golang/protobuf/ptypes/timestamp
 # github.com/gorilla/mux v1.8.0
 ## explicit; go 1.12
 github.com/gorilla/mux
+# github.com/grafana/go-offsets-tracker v0.1.2
+## explicit; go 1.20
+github.com/grafana/go-offsets-tracker/pkg/offsets
+github.com/grafana/go-offsets-tracker/pkg/utils
+github.com/grafana/go-offsets-tracker/pkg/versions
 # github.com/grpc-ecosystem/grpc-gateway/v2 v2.7.0
 ## explicit; go 1.14
 github.com/grpc-ecosystem/grpc-gateway/v2/internal/httprule
 github.com/grpc-ecosystem/grpc-gateway/v2/runtime
 github.com/grpc-ecosystem/grpc-gateway/v2/utilities
+# github.com/hashicorp/go-version v1.6.0
+## explicit
+github.com/hashicorp/go-version
 # github.com/json-iterator/go v1.1.12
 ## explicit; go 1.12
 github.com/json-iterator/go

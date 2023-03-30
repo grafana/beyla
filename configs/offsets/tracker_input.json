@@ -1,0 +1,20 @@
+{
+  "go": {
+    "versions": ">= 1.17",
+    "inspect": "./configs/offsets/std_inspect.go",
+    "fields": {
+      "net/http.Request": [
+        "Method",
+        "URL",
+        "RemoteAddr",
+        "Host"
+      ],
+      "net/url.URL": [
+        "Path"
+      ],
+      "net/http.response": [
+        "status"
+      ]
+    }
+  }
+}

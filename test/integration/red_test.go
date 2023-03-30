@@ -11,8 +11,6 @@ import (
 	"testing"
 	"time"
 
-	"golang.org/x/exp/slog"
-
 	"github.com/grafana/ebpf-autoinstrument/test/integration/components/prom"
 	"github.com/mariomac/guara/pkg/test"
 	"github.com/stretchr/testify/assert"
@@ -32,40 +30,42 @@ func rndStr() string {
 	return strconv.Itoa(rand.Intn(10000))
 }
 
-func waitForTestService(url string) {
-	slog.Debug("waiting for instrumented service to be up and running")
-	limit := time.Now().Add(testTimeout)
-	for {
-		if resp, err := http.Get(url); err == nil && resp.StatusCode == http.StatusOK {
+// does a smoke test to verify that all the components that started
+// asynchronously are up and communicating properly
+func waitForTestComponents(t *testing.T, url string) {
+	pq := prom.Client{HostPort: prometheusHostPort}
+	test.Eventually(t, time.Minute, func(t require.TestingT) {
+		// first, verify that the test service endpoint is healthy
+		r, err := http.Get(url + "/smoke")
+		require.NoError(t, err)
+		if r == nil {
 			return
 		}
-		if time.Now().After(limit) {
-			panic("timeout while waiting for instrumented service to be up and running")
-		}
-		time.Sleep(100 * time.Millisecond)
-	}
+		require.Equal(t, http.StatusOK, r.StatusCode)
+
+		// now, verify that the metric has been reported.
+		// we don't really care that this metric could be from a previous
+		// test. Once one it is visible, it means that Otel and Prometheus are healthy
+		results, err := pq.Query(`duration_count{http_target="/smoke"}`)
+		require.NoError(t, err)
+		require.NotZero(t, len(results))
+	}, test.Interval(time.Second))
 }
 
-func TestMain(m *testing.M) {
-	waitForTestService(instrumentedServiceStdURL)
-	waitForTestService(instrumentedServiceGinURL)
-	waitForTestService(instrumentedServiceGorillaURL)
-	m.Run()
-}
-
-func TestBasic(t *testing.T) {
+func testREDMetricsHTTP(t *testing.T) {
 	for _, testCaseURL := range []string{
 		instrumentedServiceStdURL,
 		instrumentedServiceGorillaURL,
 		instrumentedServiceGinURL,
 	} {
 		t.Run(testCaseURL, func(t *testing.T) {
-			basicTest(t, testCaseURL)
+			waitForTestComponents(t, testCaseURL)
+			testREDMetricsForHTTPLibrary(t, testCaseURL)
 		})
 	}
 }
 
-func basicTest(t *testing.T, url string) {
+func testREDMetricsForHTTPLibrary(t *testing.T, url string) {
 	path := "/basic/" + rndStr()
 
 	// Call 3 times the instrumented service, forcing it to:

@@ -16,7 +16,7 @@
 
 deployments/01-grafana-credentials.yml
 test/cmd/pingserver/server
-docker-compose.log
+*.log
 .vscode/
 .idea/
 

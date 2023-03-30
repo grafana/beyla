@@ -13,6 +13,10 @@
 #include "utils.h"
 #include "go_str.h"
 
+// Tell the helpers which debug level variable to use
+#define DBG_LEVEL go_http_debug_level
+#include "bpf_dbg.h"
+
 char __license[] SEC("license") = "Dual MIT/GPL";
 
 #define PATH_MAX_LEN 100
@@ -61,6 +65,9 @@ struct {
     __uint(max_entries, 1 << 24);
 } events SEC(".maps");
 
+// To be injected from the user space during the eBPF program load & initialization for debugging purposes
+volatile const u8 go_http_debug_level = PRINTK_LEVEL_WARN;
+
 // To be Injected from the user space during the eBPF program load & initialization
 volatile const u64 url_ptr_pos;
 volatile const u64 path_ptr_pos;
@@ -76,9 +83,9 @@ SEC("uprobe/ServeHTTP")
 int uprobe_ServeHTTP(struct pt_regs *ctx) {
 
     // TODO: store registers in a map so we can fetch them in the return probe
-    bpf_printk("=== uprobe/ServeHTTP === ");
+    bpf_dbg_printk("=== uprobe/ServeHTTP === ");
     void *goroutine_addr = GOROUTINE_PTR(ctx);
-    bpf_printk("goroutine_addr %lx", goroutine_addr);
+    bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
 
     http_method_invocation invocation = {
         .start_monotime_ns = bpf_ktime_get_ns(),
@@ -87,7 +94,7 @@ int uprobe_ServeHTTP(struct pt_regs *ctx) {
 
     // Write event
     if (bpf_map_update_elem(&ongoing_http_requests, &goroutine_addr, &invocation, BPF_ANY)) {
-        bpf_printk("can't update map element");
+        bpf_warn_printk("can't update map element");
     }
 
     return 0;
@@ -95,21 +102,21 @@ int uprobe_ServeHTTP(struct pt_regs *ctx) {
 
 SEC("uprobe/ServeHTTP_return")
 int uprobe_ServeHttp_return(struct pt_regs *ctx) {
-    bpf_printk("=== uprobe/ServeHTTP_return === ");
+    bpf_dbg_printk("=== uprobe/ServeHTTP_return === ");
     void *goroutine_addr = GOROUTINE_PTR(ctx);
-    bpf_printk("goroutine_addr %lx", goroutine_addr);
+    bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
 
     http_method_invocation *invocation =
         bpf_map_lookup_elem(&ongoing_http_requests, &goroutine_addr);
     bpf_map_delete_elem(&ongoing_http_requests, &goroutine_addr);
     if (invocation == NULL) {
-        bpf_printk("can't read http invocation metadata");
+        bpf_warn_printk("can't read http invocation metadata");
         return 0;
     }
 
     http_request_trace *trace = bpf_ringbuf_reserve(&events, sizeof(http_request_trace), 0);
     if (!trace) {
-        bpf_printk("can't reserve space in the ringbuffer");
+        bpf_warn_printk("can't reserve space in the ringbuffer");
         return 0;
     }
     trace->start_monotime_ns = invocation->start_monotime_ns;
@@ -122,18 +129,21 @@ int uprobe_ServeHttp_return(struct pt_regs *ctx) {
 
     // Get method from Request.Method
     if (!read_go_str("method", req_ptr, method_ptr_pos, &trace->method, sizeof(trace->method))) {
+        bpf_warn_printk("can't read http Request.Method");
         bpf_ringbuf_discard(trace, 0);
         return 0;
     }
 
     // Get the remote peer information from Request.RemoteAddr
     if (!read_go_str("remote_addr", req_ptr, remoteaddr_ptr_pos, &trace->remote_addr, sizeof(trace->remote_addr))) {
+        bpf_warn_printk("can't read http Request.RemoteAddr");
         bpf_ringbuf_discard(trace, 0);
         return 0;
     }
 
     // Get the host information the remote supplied
     if (!read_go_str("host", req_ptr, host_ptr_pos, &trace->host, sizeof(trace->host))) {
+        bpf_warn_printk("can't read http Request.Host");
         bpf_ringbuf_discard(trace, 0);
         return 0;
     }
@@ -142,7 +152,8 @@ int uprobe_ServeHttp_return(struct pt_regs *ctx) {
     void *url_ptr = 0;
     bpf_probe_read(&url_ptr, sizeof(url_ptr), (void *)(req_ptr + url_ptr_pos));
 
-    if (!read_go_str("path", url_ptr, path_ptr_pos, &trace->path, sizeof(trace->path))) {
+    if (!url_ptr || !read_go_str("path", url_ptr, path_ptr_pos, &trace->path, sizeof(trace->path))) {
+        bpf_warn_printk("can't read http Request.URL.Path");
         bpf_ringbuf_discard(trace, 0);
         return 0;
     }

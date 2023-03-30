@@ -13,7 +13,7 @@
 
 # Dependency directories (remove the comment below to include it)
 # vendor/
-otelhttp
+
 deployments/01-grafana-credentials.yml
 test/cmd/pingserver/server
 docker-compose.log
@@ -21,3 +21,5 @@ docker-compose.log
 .idea/
 test/cmd/grpc/server/server
 test/cmd/grpc/client/client
+
+bin/

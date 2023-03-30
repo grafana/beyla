@@ -13,6 +13,7 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"flag"
 	"io"
@@ -29,11 +30,9 @@ import (
 )
 
 var (
-	tls                = flag.Bool("tls", false, "Connection uses TLS if true, else plain TCP")
-	caFile             = flag.String("ca_file", "", "The file containing the CA root cert file")
-	serverAddr         = flag.String("addr", "localhost:50051", "The server address in the format of host:port")
-	serverHostOverride = flag.String("server_host_override", "x.test.example.com", "The server name used to verify the hostname returned by the TLS handshake")
-	ping               = flag.Bool("ping", false, "Simple ping instead of full chatter")
+	ssl        = flag.Bool("tls", false, "Connection uses TLS if true, else plain TCP")
+	serverAddr = flag.String("addr", "localhost:50051", "The server address in the format of host:port")
+	ping       = flag.Bool("ping", false, "Simple ping instead of full chatter")
 )
 
 // printFeature gets the feature for the given point.
@@ -174,16 +173,11 @@ func main() {
 
 	flag.Parse()
 	var opts []grpc.DialOption
-	if *tls {
-		if *caFile == "" {
-			*caFile = "x509/ca_cert.pem"
+	if *ssl {
+		tlsConfig := &tls.Config{
+			InsecureSkipVerify: true,
 		}
-		creds, err := credentials.NewClientTLSFromFile(*caFile, *serverHostOverride)
-		if err != nil {
-			slog.Error("Failed to create TLS credentials", err)
-			os.Exit(-1)
-		}
-		opts = append(opts, grpc.WithTransportCredentials(creds))
+		opts = append(opts, grpc.WithTransportCredentials(credentials.NewTLS(tlsConfig)))
 	} else {
 		opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	}

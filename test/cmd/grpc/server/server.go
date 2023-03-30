@@ -29,7 +29,7 @@ import (
 
 	"google.golang.org/grpc/credentials"
 
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/proto"
 
 	pb "github.com/grafana/ebpf-autoinstrument/test/cmd/grpc/routeguide"
 )
@@ -51,7 +51,7 @@ type routeGuideServer struct {
 }
 
 // GetFeature returns the feature at the given point.
-func (s *routeGuideServer) GetFeature(ctx context.Context, point *pb.Point) (*pb.Feature, error) {
+func (s *routeGuideServer) GetFeature(_ context.Context, point *pb.Point) (*pb.Feature, error) {
 	slog.Info("GetFeature", "lat", point.Latitude, "long", point.Longitude)
 	for _, feature := range s.savedFeatures {
 		if proto.Equal(feature.Location, point) {
@@ -87,7 +87,7 @@ func (s *routeGuideServer) RecordRoute(stream pb.RouteGuide_RecordRouteServer) e
 	startTime := time.Now()
 	for {
 		point, err := stream.Recv()
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			endTime := time.Now()
 			return stream.SendAndClose(&pb.RouteSummary{
 				PointCount:   pointCount,
@@ -118,7 +118,7 @@ func (s *routeGuideServer) RouteChat(stream pb.RouteGuide_RouteChatServer) error
 	slog.Info("RouteChat")
 	for {
 		in, err := stream.Recv()
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			return nil
 		}
 		if err != nil {
@@ -255,7 +255,11 @@ func main() {
 	grpcServer := grpc.NewServer(opts...)
 	pb.RegisterRouteGuideServer(grpcServer, newServer())
 	slog.Info("listening and serving", "port", *port)
-	grpcServer.Serve(lis)
+	err = grpcServer.Serve(lis)
+	if err != nil {
+		slog.Error("failed to serve", err)
+		os.Exit(-1)
+	}
 }
 
 // exampleData is a copy of testdata/route_guide_db.json. It's to avoid

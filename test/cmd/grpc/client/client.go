@@ -60,7 +60,7 @@ func printFeatures(client pb.RouteGuideClient, rect *pb.Rectangle) {
 	}
 	for {
 		feature, err := stream.Recv()
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			break
 		}
 		if err != nil {
@@ -124,7 +124,7 @@ func runRouteChat(client pb.RouteGuideClient) {
 	go func() {
 		for {
 			in, err := stream.Recv()
-			if err == io.EOF {
+			if errors.Is(err, io.EOF) {
 				// read done.
 				close(waitc)
 				return
@@ -142,7 +142,11 @@ func runRouteChat(client pb.RouteGuideClient) {
 			os.Exit(-1)
 		}
 	}
-	stream.CloseSend()
+	err = stream.CloseSend()
+	if err != nil {
+		slog.Error("client.CloseSend", err)
+		os.Exit(-1)
+	}
 	<-waitc
 }
 

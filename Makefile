@@ -8,7 +8,6 @@ GOARCH ?= amd64
 DOCKERHUB_USER ?= mariomac
 
 COMPOSE_ARGS ?= -f test/integration/docker-compose.yml
-COMPOSE_LOGS ?= docker-compose.log
 
 # Container image creation creation
 VERSION ?= latest
@@ -134,16 +133,13 @@ prepare-integration-test:
 	$(OCI_BIN) compose $(COMPOSE_ARGS) stop || true
 	$(OCI_BIN) compose $(COMPOSE_ARGS) rm -f || true
 	$(OCI_BIN) rmi -f $(shell $(OCI_BIN) images --format '{{.Repository}}:{{.Tag}}' | grep 'hatest-') || true
-	@echo "### Spinning up Compose cluster"
-	$(OCI_BIN) compose $(COMPOSE_ARGS)  up --detach
 
 .PHONY: cleanup-integration-test
 cleanup-integration-test:
-	@echo "### Storing integration tests Compose logs"
-	$(OCI_BIN) compose $(COMPOSE_ARGS) logs > $(COMPOSE_LOGS)
 	@echo "### Removing integration test Compose cluster"
 	$(OCI_BIN) compose $(COMPOSE_ARGS) stop
 	$(OCI_BIN) compose $(COMPOSE_ARGS) rm -f
+	$(OCI_BIN) rmi -f $(shell $(OCI_BIN) images --format '{{.Repository}}:{{.Tag}}' | grep 'hatest-') || true
 
 # TODO: provide coverage info for integration testing https://go.dev/blog/integration-test-coverage
 .PHONY: run-integration-test

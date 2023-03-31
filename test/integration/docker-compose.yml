@@ -4,7 +4,7 @@ services:
   testserver:
     build:
       context: ../..
-      dockerfile: test/integration/components/testserver/Dockerfile
+      dockerfile: test/integration/components/testserver/Dockerfile${TESTSERVER_DOCKERFILE_SUFFIX}
     image: hatest-testserver
     ports:
       - "8080:8080"
@@ -36,9 +36,6 @@ services:
       LOG_LEVEL: "DEBUG"
       OTEL_EXPORTER_REPORT_TARGET: "true"
       OTEL_EXPORTER_REPORT_PEER: "true"
-    depends_on:
-      otelcol:
-        condition: service_started
 
   # OpenTelemetry Collector
   otelcol:
@@ -57,6 +54,11 @@ services:
       - "4318:4318"     # OTLP over HTTP receiver
       - "9464"          # Prometheus exporter
       - "8888"          # metrics endpoint
+    depends_on:
+      autoinstrumenter:
+        condition: service_started
+      prometheus:
+        condition: service_started
 
   # Prometheus
   prometheus:
@@ -70,8 +72,5 @@ services:
       - --web.route-prefix=/
     volumes:
       - ./configs/:/etc/prometheus
-    depends_on:
-      otelcol:
-        condition: service_started
     ports:
       - "9090:9090"

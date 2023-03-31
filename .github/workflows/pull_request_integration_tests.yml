@@ -25,5 +25,5 @@ jobs:
         uses: actions/upload-artifact@v3
         if: always()
         with:
-          name: docker-compose.log
-          path: docker-compose.log
+          name: Test Logs
+          path: "*.log"

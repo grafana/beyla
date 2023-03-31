@@ -19,5 +19,7 @@ test/cmd/pingserver/server
 *.log
 .vscode/
 .idea/
+test/cmd/grpc/server/server
+test/cmd/grpc/client/client
 
 bin/

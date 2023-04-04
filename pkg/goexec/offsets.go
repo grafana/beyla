@@ -5,7 +5,7 @@ import "fmt"
 
 type Offsets struct {
 	FileInfo FileInfo
-	Funcs    []FuncOffsets
+	Funcs    map[string][]FuncOffsets
 	Field    FieldOffsets
 }
 
@@ -18,7 +18,7 @@ type FieldOffsets map[string]any
 
 // InspectOffsets gets the memory addresses/offsets of the instrumenting function, as well as the required
 // parameters fields to be read from the eBPF code
-func InspectOffsets(execFile string, funcNames []string) (Offsets, error) {
+func InspectOffsets(execFile string, funcs map[string][]string) (Offsets, error) {
 	// Analyse executable ELF file and find instrumentation points
 	execElf, err := findExecELF(execFile)
 	if err != nil {
@@ -26,10 +26,15 @@ func InspectOffsets(execFile string, funcNames []string) (Offsets, error) {
 	}
 	defer execElf.ELF.Close()
 
-	// check the function instrumentation points
-	foundOffsets, err := instrumentationPoints(execElf.ELF, funcNames)
-	if err != nil {
-		return Offsets{}, fmt.Errorf("searching for instrumentation points in file %s: %w", execFile, err)
+	foundOffsets := make(map[string][]FuncOffsets)
+
+	for section, funcNames := range funcs {
+		// check the function instrumentation points
+		found, err := instrumentationPoints(execElf.ELF, funcNames)
+		if err != nil {
+			return Offsets{}, fmt.Errorf("searching for instrumentation points in file %s: %w", execFile, err)
+		}
+		foundOffsets[section] = found
 	}
 
 	// check the offsets of the required fields from the method arguments

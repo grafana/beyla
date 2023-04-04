@@ -84,8 +84,11 @@ type bpfSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpfProgramSpecs struct {
-	UprobeServeHTTP       *ebpf.ProgramSpec `ebpf:"uprobe_ServeHTTP"`
-	UprobeServeHttpReturn *ebpf.ProgramSpec `ebpf:"uprobe_ServeHttp_return"`
+	UprobeServeHTTP                *ebpf.ProgramSpec `ebpf:"uprobe_ServeHTTP"`
+	UprobeServeHttpReturn          *ebpf.ProgramSpec `ebpf:"uprobe_ServeHttp_return"`
+	UprobeServerHandleStream       *ebpf.ProgramSpec `ebpf:"uprobe_server_handleStream"`
+	UprobeServerHandleStreamReturn *ebpf.ProgramSpec `ebpf:"uprobe_server_handleStream_return"`
+	UprobeTransportWriteStatus     *ebpf.ProgramSpec `ebpf:"uprobe_transport_writeStatus"`
 }
 
 // bpfMapSpecs contains maps before they are loaded into the kernel.
@@ -130,14 +133,20 @@ func (m *bpfMaps) Close() error {
 //
 // It can be passed to loadBpfObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpfPrograms struct {
-	UprobeServeHTTP       *ebpf.Program `ebpf:"uprobe_ServeHTTP"`
-	UprobeServeHttpReturn *ebpf.Program `ebpf:"uprobe_ServeHttp_return"`
+	UprobeServeHTTP                *ebpf.Program `ebpf:"uprobe_ServeHTTP"`
+	UprobeServeHttpReturn          *ebpf.Program `ebpf:"uprobe_ServeHttp_return"`
+	UprobeServerHandleStream       *ebpf.Program `ebpf:"uprobe_server_handleStream"`
+	UprobeServerHandleStreamReturn *ebpf.Program `ebpf:"uprobe_server_handleStream_return"`
+	UprobeTransportWriteStatus     *ebpf.Program `ebpf:"uprobe_transport_writeStatus"`
 }
 
 func (p *bpfPrograms) Close() error {
 	return _BpfClose(
 		p.UprobeServeHTTP,
 		p.UprobeServeHttpReturn,
+		p.UprobeServerHandleStream,
+		p.UprobeServerHandleStreamReturn,
+		p.UprobeTransportWriteStatus,
 	)
 }
 

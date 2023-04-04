@@ -170,3 +170,21 @@ int uprobe_ServeHttp_return(struct pt_regs *ctx) {
 
     return 0;
 }
+
+SEC("uprobe/server_handleStream")
+int uprobe_server_handleStream(struct pt_regs *ctx) {
+    bpf_warn_printk("=== uprobe/server_handleStream === ");
+    return 0;
+}
+
+SEC("uprobe/server_handleStream")
+int uprobe_server_handleStream_return(struct pt_regs *ctx) {
+    bpf_warn_printk("=== uprobe/server_handleStream return === ");
+    return 0;
+}
+
+SEC("uprobe/transport_writeStatus")
+int uprobe_transport_writeStatus(struct pt_regs *ctx) {
+    bpf_warn_printk("=== uprobe/transport_writeStatus === ");
+    return 0;
+}

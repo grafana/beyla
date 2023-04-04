@@ -22,6 +22,8 @@ var defaultConfig = Config{
 			"net/http.HandlerFunc.ServeHTTP",
 			"github.com/gin-gonic/gin.(*Engine).ServeHTTP",
 		},
+		GRPCHandleStream: []string{"google.golang.org/grpc.(*Server).handleStream"},
+		GRPCWriteStatus:  []string{"google.golang.org/grpc/internal/transport.(*http2Server).WriteStatus"},
 	},
 	Metrics: otel.MetricsConfig{
 		Interval: 5 * time.Second,
@@ -57,7 +59,7 @@ func (c *Config) Validate() error {
 		return ConfigError("missing EXECUTABLE_NAME property")
 	}
 	if len(c.EBPF.Functions) == 0 {
-		return ConfigError("missing INSTRUMENT_FUNC_NAME property")
+		return ConfigError("missing INSTRUMENT_FUNCTIONS property")
 	}
 	if !c.Noop.Enabled() && !c.Printer.Enabled() &&
 		!c.Metrics.Enabled() && !c.Traces.Enabled() {

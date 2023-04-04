@@ -23,6 +23,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
 	"github.com/cilium/ebpf/ringbuf"
 	"github.com/cilium/ebpf/rlimit"
@@ -31,15 +32,21 @@ import (
 	"golang.org/x/exp/slog"
 )
 
+const SectionHTTP = "http"
+const SectionGRPCStream = "grpc_stream"
+const SectionGRPCStatus = "grpc_status"
+
 type EBPFTracer struct {
-	Exec      string   `yaml:"executable_name" env:"EXECUTABLE_NAME"`
-	Functions []string `yaml:"functions" env:"INSTRUMENT_FUNCTIONS"`
-	LogLevel  string   `yaml:"log_level" env:"LOG_LEVEL"`
+	Exec             string   `yaml:"executable_name" env:"EXECUTABLE_NAME"`
+	Functions        []string `yaml:"functions" env:"INSTRUMENT_FUNCTIONS"`
+	GRPCHandleStream []string `yaml:"grpc_handle_stream" env:"GRPC_HANDLE_STREAM"`
+	GRPCWriteStatus  []string `yaml:"grpc_write_status" env:"GRPC_WRITE_STATUS"`
+	LogLevel         string   `yaml:"log_level" env:"LOG_LEVEL"`
 
 	Offsets *goexec.Offsets `yaml:"-"`
 }
 
-func EBPFTracerProvider(cfg EBPFTracer) node.StartFuncCtx[HTTPRequestTrace] {
+func EBPFTracerProvider(cfg EBPFTracer) node.StartFuncCtx[HTTPRequestTrace] { //nolint:all
 	is, err := Instrument(cfg.Offsets, cfg.LogLevel)
 	if err != nil {
 		slog.Error("can't instantiate eBPF tracer", err)
@@ -99,9 +106,24 @@ func Instrument(offsets *goexec.Offsets, logLevel string) (*InstrumentedServe, e
 		return nil, fmt.Errorf("loading and assigning BPF objects: %w", err)
 	}
 
-	for _, funcOffsets := range offsets.Funcs {
-		if err := h.instrumentFunction(funcOffsets, exe); err != nil {
-			return nil, fmt.Errorf("instrumenting function: %w", err)
+	for section, funcOffsets := range offsets.Funcs {
+		for _, fn := range funcOffsets {
+			switch section {
+			case SectionHTTP:
+				if err := h.instrumentFunction(fn, exe, h.bpfObjects.UprobeServeHTTP, h.bpfObjects.UprobeServeHttpReturn); err != nil {
+					return nil, fmt.Errorf("instrumenting function: %w in section %s", err, section)
+				}
+			case SectionGRPCStream:
+				if err := h.instrumentFunction(fn, exe, h.bpfObjects.UprobeServerHandleStream, h.bpfObjects.UprobeServerHandleStreamReturn); err != nil {
+					return nil, fmt.Errorf("instrumenting function: %w in section %s", err, section)
+				}
+			case SectionGRPCStatus:
+				if err := h.instrumentFunction(fn, exe, h.bpfObjects.UprobeTransportWriteStatus, nil); err != nil {
+					return nil, fmt.Errorf("instrumenting function: %w in section %s", err, section)
+				}
+			default:
+				return nil, fmt.Errorf("unknown section %s", section)
+			}
 		}
 	}
 
@@ -116,9 +138,9 @@ func Instrument(offsets *goexec.Offsets, logLevel string) (*InstrumentedServe, e
 	return &h, nil
 }
 
-func (h *InstrumentedServe) instrumentFunction(offsets goexec.FuncOffsets, exe *link.Executable) error {
+func (h *InstrumentedServe) instrumentFunction(offsets goexec.FuncOffsets, exe *link.Executable, f *ebpf.Program, fret *ebpf.Program) error {
 	// Attach BPF programs as start and return probes
-	up, err := exe.Uprobe("", h.bpfObjects.UprobeServeHTTP, &link.UprobeOptions{
+	up, err := exe.Uprobe("", f, &link.UprobeOptions{
 		Address: offsets.Start,
 	})
 	if err != nil {
@@ -126,23 +148,26 @@ func (h *InstrumentedServe) instrumentFunction(offsets goexec.FuncOffsets, exe *
 	}
 	h.uprobes = append(h.uprobes, up)
 
-	// Go won't work with Uretprobes because of the way Go manages the stack. We need to set uprobes just before the return
-	// values: https://github.com/iovisor/bcc/issues/1320
-	for _, ret := range offsets.Returns {
-		urp, err := exe.Uprobe("", h.bpfObjects.UprobeServeHttpReturn, &link.UprobeOptions{
-			Address: ret,
-		})
-		if err != nil {
-			return fmt.Errorf("setting uretpobe: %w", err)
+	if fret != nil {
+		// Go won't work with Uretprobes because of the way Go manages the stack. We need to set uprobes just before the return
+		// values: https://github.com/iovisor/bcc/issues/1320
+		for _, ret := range offsets.Returns {
+			urp, err := exe.Uprobe("", fret, &link.UprobeOptions{
+				Address: ret,
+			})
+			if err != nil {
+				return fmt.Errorf("setting uretpobe: %w", err)
+			}
+			h.uprobes = append(h.uprobes, urp)
 		}
-		h.uprobes = append(h.uprobes, urp)
 	}
+
 	return nil
 }
 
 // TODO: make use of context to cancel process
 func (h *InstrumentedServe) Run(_ context.Context, eventsChan chan<- HTTPRequestTrace) {
-	logger := slog.With("name", "net/http-instrumentor")
+	logger := slog.With("name", "net/ebpf-instrumenter")
 	var event HTTPRequestTrace
 	for {
 		logger.Debug("starting to read perf buffer")
@@ -166,8 +191,8 @@ func (h *InstrumentedServe) Run(_ context.Context, eventsChan chan<- HTTPRequest
 }
 
 func (h *InstrumentedServe) Close() {
-	log := slog.With("name", "net/http-instrumentor")
-	log.Info("closing net/http instrumentor")
+	log := slog.With("name", "net/ebpf-instrumenter")
+	log.Info("closing net/http instrumenter")
 	if h.eventsReader != nil {
 		h.eventsReader.Close()
 	}

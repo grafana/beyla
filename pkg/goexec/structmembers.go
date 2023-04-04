@@ -43,10 +43,29 @@ var structMembers = map[string]structInfo{
 			"Path": "path_ptr_pos",
 		},
 	},
-	"net/http.response": {
+	"net/http.Response": {
 		lib: "go",
 		fields: map[string]string{
-			"status": "status_ptr_pos",
+			"StatusCode": "status_ptr_pos",
+		},
+	},
+	"google.golang.org/grpc/internal/transport.Stream": {
+		lib: "google.golang.org/grpc",
+		fields: map[string]string{
+			"id":     "grpc_stream_id_ptr_pos",
+			"method": "grpc_stream_method_ptr_pos",
+		},
+	},
+	"google.golang.org/grpc/internal/status.Status": {
+		lib: "google.golang.org/grpc",
+		fields: map[string]string{
+			"s": "grpc_status_s_pos",
+		},
+	},
+	"google.golang.org/genproto/googleapis/rpc/status.Status": {
+		lib: "google.golang.org/genproto",
+		fields: map[string]string{
+			"Code": "grpc_status_code_ptr_pos",
 		},
 	},
 }
@@ -61,7 +80,7 @@ func structMemberOffsets(elfFile *elf.File) (FieldOffsets, error) {
 			return offs, nil
 		}
 	}
-	log.Debug("can't read offsets from DWARF info. Falling back to prefetched database", "error", err)
+	log.Info("can't read offsets from DWARF info. Falling back to prefetched database", "error", err)
 
 	// if it is not possible, query from prefetched offsets
 	return structMemberPreFetchedOffsets(elfFile)

@@ -13,6 +13,13 @@ import (
 	"github.com/cilium/ebpf"
 )
 
+type bpfGrpcMethodInvocation struct {
+	StartMonotimeNs uint64
+	Method          [100]uint8
+	Status          uint16
+	_               [2]byte
+}
+
 type bpfHttpMethodInvocation struct {
 	StartMonotimeNs uint64
 	Regs            struct {
@@ -36,7 +43,7 @@ type bpfHttpMethodInvocation struct {
 type bpfHttpRequestTrace struct {
 	StartMonotimeNs uint64
 	EndMonotimeNs   uint64
-	Method          [6]uint8
+	Method          [100]uint8
 	Path            [100]uint8
 	Status          uint16
 	RemoteAddr      [50]uint8
@@ -96,6 +103,7 @@ type bpfProgramSpecs struct {
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpfMapSpecs struct {
 	Events              *ebpf.MapSpec `ebpf:"events"`
+	OngoingGrpcRequests *ebpf.MapSpec `ebpf:"ongoing_grpc_requests"`
 	OngoingHttpRequests *ebpf.MapSpec `ebpf:"ongoing_http_requests"`
 }
 
@@ -119,12 +127,14 @@ func (o *bpfObjects) Close() error {
 // It can be passed to loadBpfObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpfMaps struct {
 	Events              *ebpf.Map `ebpf:"events"`
+	OngoingGrpcRequests *ebpf.Map `ebpf:"ongoing_grpc_requests"`
 	OngoingHttpRequests *ebpf.Map `ebpf:"ongoing_http_requests"`
 }
 
 func (m *bpfMaps) Close() error {
 	return _BpfClose(
 		m.Events,
+		m.OngoingGrpcRequests,
 		m.OngoingHttpRequests,
 	)
 }

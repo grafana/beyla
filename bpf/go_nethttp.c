@@ -20,7 +20,7 @@
 char __license[] SEC("license") = "Dual MIT/GPL";
 
 #define PATH_MAX_LEN 100
-#define METHOD_MAX_LEN 6 // Longer method: DELETE
+#define METHOD_MAX_LEN 100 // Longest method: DELETE for HTTP, but we reuse this for GRPC
 #define REMOTE_ADDR_MAX_LEN 50 // We need 48: 39(ip v6 max) + 1(: separator) + 7(port length max value 65535) + 1(null terminator)
 #define HOST_LEN 256 // can be a fully qualified DNS name
 
@@ -38,6 +38,12 @@ typedef struct http_method_invocation_t {
     u64 start_monotime_ns;
     struct pt_regs regs; // we store registers on invocation to be able to fetch the arguments at return
 } http_method_invocation;
+
+typedef struct grpc_method_data_t {
+    u64 start_monotime_ns;
+    u8 method[METHOD_MAX_LEN];
+    u16 status;
+} grpc_method_data;
 
 // Trace of an HTTP call invocation. It is instantiated by the return uprobe and forwarded to the
 // user space through the events ringbuffer.
@@ -61,6 +67,13 @@ struct {
 } ongoing_http_requests SEC(".maps");
 
 struct {
+    __uint(type, BPF_MAP_TYPE_HASH);
+    __type(key, void *); // key: pointer to the request goroutine
+    __type(value, grpc_method_data);
+    __uint(max_entries, MAX_CONCURRENT_REQUESTS);
+} ongoing_grpc_requests SEC(".maps");
+
+struct {
     __uint(type, BPF_MAP_TYPE_RINGBUF);
     __uint(max_entries, 1 << 24);
 } events SEC(".maps");
@@ -69,12 +82,19 @@ struct {
 volatile const u8 go_http_debug_level = PRINTK_LEVEL_WARN;
 
 // To be Injected from the user space during the eBPF program load & initialization
+// HTTP
 volatile const u64 url_ptr_pos;
 volatile const u64 path_ptr_pos;
 volatile const u64 method_ptr_pos;
 volatile const u64 status_ptr_pos;
 volatile const u64 remoteaddr_ptr_pos;
 volatile const u64 host_ptr_pos;
+// GRPC
+volatile const u64 grpc_stream_id_ptr_pos;
+volatile const u64 grpc_stream_method_ptr_pos;
+volatile const u64 grpc_stream_id_ptr_pos;
+volatile const u64 grpc_status_s_pos;
+volatile const u64 grpc_status_code_ptr_pos;
 
 // This instrumentation attaches uprobe to the following function:
 // func (mux *ServeMux) ServeHTTP(w ResponseWriter, r *Request)
@@ -174,17 +194,92 @@ int uprobe_ServeHttp_return(struct pt_regs *ctx) {
 SEC("uprobe/server_handleStream")
 int uprobe_server_handleStream(struct pt_regs *ctx) {
     bpf_warn_printk("=== uprobe/server_handleStream === ");
+    void *goroutine_addr = GOROUTINE_PTR(ctx);
+    bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
+
+    void *stream_ptr = GO_PARAM4(ctx);
+    bpf_dbg_printk("stream_ptr %lx", stream_ptr);
+
+    if (stream_ptr != NULL) {
+        grpc_method_data invocation = {
+            .start_monotime_ns = bpf_ktime_get_ns(),
+        };
+
+        // Get method from transport.Stream.Method
+        if (!read_go_str("grpc method", stream_ptr, grpc_stream_method_ptr_pos, &invocation.method, sizeof(invocation.method))) {
+            bpf_warn_printk("can't read grpc transport.Stream.Method");
+            return 0;
+        }
+
+
+        // Write event
+        if (bpf_map_update_elem(&ongoing_grpc_requests, &goroutine_addr, &invocation, BPF_ANY)) {
+            bpf_warn_printk("can't update grpc map element");
+        }
+    }
+
     return 0;
 }
 
 SEC("uprobe/server_handleStream")
 int uprobe_server_handleStream_return(struct pt_regs *ctx) {
     bpf_warn_printk("=== uprobe/server_handleStream return === ");
+
+    void *goroutine_addr = GOROUTINE_PTR(ctx);
+    bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
+
+    grpc_method_data *invocation =
+        bpf_map_lookup_elem(&ongoing_grpc_requests, &goroutine_addr);
+    bpf_map_delete_elem(&ongoing_grpc_requests, &goroutine_addr);
+    if (invocation == NULL) {
+        bpf_warn_printk("can't read grpc invocation metadata");
+        return 0;
+    }
+
+    http_request_trace *trace = bpf_ringbuf_reserve(&events, sizeof(http_request_trace), 0);
+    if (!trace) {
+        bpf_warn_printk("can't reserve space in the ringbuffer");
+        return 0;
+    }
+    trace->start_monotime_ns = invocation->start_monotime_ns;
+    bpf_probe_read(&trace->method, sizeof(trace->method), (void *)(invocation->method));
+
+    trace->end_monotime_ns = bpf_ktime_get_ns();
+    // submit the completed trace via ringbuffer
+    bpf_ringbuf_submit(trace, 0);
+
     return 0;
 }
 
 SEC("uprobe/transport_writeStatus")
 int uprobe_transport_writeStatus(struct pt_regs *ctx) {
     bpf_warn_printk("=== uprobe/transport_writeStatus === ");
+
+    void *goroutine_addr = GOROUTINE_PTR(ctx);
+    bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
+
+    grpc_method_data *invocation =
+        bpf_map_lookup_elem(&ongoing_grpc_requests, &goroutine_addr);
+    if (invocation == NULL) {
+        bpf_warn_printk("can't read grpc invocation metadata in write status");
+        return 0;
+    }
+
+    void *status_ptr = GO_PARAM4(ctx);
+    bpf_dbg_printk("status_ptr %lx", status_ptr);
+
+    if (status_ptr != NULL) {
+        void *s_ptr;
+        bpf_probe_read(&s_ptr, sizeof(s_ptr), (void *)(status_ptr + grpc_status_s_pos));
+
+        bpf_dbg_printk("s_ptr %lx", s_ptr);
+
+        if (s_ptr != NULL) {
+            bpf_probe_read(&invocation->status, sizeof(invocation->status), (void *)(s_ptr + grpc_status_code_ptr_pos));
+            bpf_dbg_printk("status code %d", invocation->status);
+            bpf_map_update_elem(&ongoing_grpc_requests, &goroutine_addr, invocation, BPF_ANY);
+        }
+    }
+
     return 0;
 }

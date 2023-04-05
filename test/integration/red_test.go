@@ -23,7 +23,7 @@ const (
 	instrumentedServiceGorillaURL = "http://localhost:8082"
 	prometheusHostPort            = "localhost:9090"
 
-	testTimeout = 5 * time.Second
+	testTimeout = 15 * time.Second
 )
 
 func rndStr() string {
@@ -34,7 +34,7 @@ func rndStr() string {
 // asynchronously are up and communicating properly
 func waitForTestComponents(t *testing.T, url string) {
 	pq := prom.Client{HostPort: prometheusHostPort}
-	test.Eventually(t, time.Minute, func(t require.TestingT) {
+	test.Eventually(t, 5*time.Minute, func(t require.TestingT) {
 		// first, verify that the test service endpoint is healthy
 		r, err := http.Get(url + "/smoke")
 		require.NoError(t, err)

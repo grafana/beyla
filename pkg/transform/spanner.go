@@ -19,6 +19,7 @@ var log = slog.With("component", "goexec.spanner")
 
 // HTTPRequestSpan contains the information being submitted as
 type HTTPRequestSpan struct {
+	Type     int
 	Method   string
 	Path     string
 	Route    string
@@ -112,6 +113,7 @@ func (c *converter) convert(trace *nethttp.HTTPRequestTrace) HTTPRequestSpan {
 	}
 
 	return HTTPRequestSpan{
+		Type:     int(trace.Type),
 		Method:   string(trace.Method[:methodLen]),
 		Path:     string(trace.Path[:pathLen]),
 		Peer:     peer,

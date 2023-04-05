@@ -103,7 +103,7 @@ func (r *MetricsReporter) close() {
 	}
 }
 
-func metricAttributes(r *MetricsReporter, span transform.HTTPRequestSpan) []attribute.KeyValue {
+func metricAttributes(r *MetricsReporter, span *transform.HTTPRequestSpan) []attribute.KeyValue {
 	switch span.Type {
 	case transform.EventTypeHTTP:
 		attrs := []attribute.KeyValue{
@@ -138,7 +138,7 @@ func metricAttributes(r *MetricsReporter, span transform.HTTPRequestSpan) []attr
 func (r *MetricsReporter) reportMetrics(spans <-chan transform.HTTPRequestSpan) {
 	defer r.close()
 	for span := range spans {
-		attrs := metricAttributes(r, span)
+		attrs := metricAttributes(r, &span)
 		// TODO: for more accuracy, there must be a way to set the metric time from the actual span end time
 		r.duration.Record(context.TODO(), span.End.Sub(span.Start).Seconds()*1000, attrs...)
 	}

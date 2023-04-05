@@ -43,10 +43,10 @@ var structMembers = map[string]structInfo{
 			"Path": "path_ptr_pos",
 		},
 	},
-	"net/http.Response": {
+	"net/http.response": {
 		lib: "go",
 		fields: map[string]string{
-			"StatusCode": "status_ptr_pos",
+			"status": "status_ptr_pos",
 		},
 	},
 	"google.golang.org/grpc/internal/transport.Stream": {
@@ -115,14 +115,16 @@ func structMemberPreFetchedOffsets(elfFile *elf.File) (FieldOffsets, error) {
 	for strName, strInfo := range structMembers {
 		version, ok := libVersions[strInfo.lib]
 		if !ok {
-			return nil, fmt.Errorf("can't find version for library %s", strInfo.lib)
+			log.Warn("can't find version for library", "lib", strInfo.lib)
+			continue
 		}
 		for fieldName, constantName := range strInfo.fields {
 			// look the version of the required field in the offsets.json memory copy
 			offset, ok := offs.Find(strName, fieldName, version)
 			if !ok {
-				return nil, fmt.Errorf("can't find offsets for field %s/%s.%s (version %s)",
-					strInfo.lib, strName, fieldName, version)
+				log.Warn("can't find offsets for field",
+					"lib", strInfo.lib, "name", strName, "field", fieldName, "version", version)
+				continue
 			}
 			fieldOffsets[constantName] = offset
 		}

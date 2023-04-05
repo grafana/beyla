@@ -91,7 +91,7 @@ func (r *TracesReporter) close() {
 	}
 }
 
-func traceAttributes(r *TracesReporter, span transform.HTTPRequestSpan) []attribute.KeyValue {
+func traceAttributes(span *transform.HTTPRequestSpan) []attribute.KeyValue {
 	switch span.Type {
 	case transform.EventTypeHTTP:
 		attrs := []attribute.KeyValue{
@@ -123,7 +123,7 @@ func (r *TracesReporter) reportTraces(spans <-chan transform.HTTPRequestSpan) {
 	defer r.close()
 	tracer := r.traceProvider.Tracer(reporterName)
 	for span := range spans {
-		attrs := traceAttributes(r, span)
+		attrs := traceAttributes(&span)
 
 		// TODO: there must be a better way to instantiate spans
 		_, sp := tracer.Start(context.TODO(), "session",

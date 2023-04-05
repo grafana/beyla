@@ -1,7 +1,9 @@
 // Package goexec helps analyzing Go executables
 package goexec
 
-import "fmt"
+import (
+	"fmt"
+)
 
 type Offsets struct {
 	FileInfo FileInfo
@@ -32,7 +34,7 @@ func InspectOffsets(execFile string, funcs map[string][]string) (Offsets, error)
 		// check the function instrumentation points
 		found, err := instrumentationPoints(execElf.ELF, funcNames)
 		if err != nil {
-			return Offsets{}, fmt.Errorf("searching for instrumentation points in file %s: %w", execFile, err)
+			log.Warn("Unable to find instrumentation points in file %s: for %s - %w", execFile, section, err)
 		}
 		foundOffsets[section] = found
 	}

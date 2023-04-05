@@ -12,6 +12,7 @@
 
 #include "utils.h"
 #include "go_str.h"
+#include "go_byte_arr.h"
 
 // Tell the helpers which debug level variable to use
 #define DBG_LEVEL go_http_debug_level
@@ -19,8 +20,11 @@
 
 char __license[] SEC("license") = "Dual MIT/GPL";
 
+#define EVENT_HTTP_REQUEST 1
+#define EVENT_GRPC_REQUEST 2
+
 #define PATH_MAX_LEN 100
-#define METHOD_MAX_LEN 100 // Longest method: DELETE for HTTP, but we reuse this for GRPC
+#define METHOD_MAX_LEN 6 // Longest method: DELETE
 #define REMOTE_ADDR_MAX_LEN 50 // We need 48: 39(ip v6 max) + 1(: separator) + 7(port length max value 65535) + 1(null terminator)
 #define HOST_LEN 256 // can be a fully qualified DNS name
 
@@ -41,20 +45,24 @@ typedef struct http_method_invocation_t {
 
 typedef struct grpc_method_data_t {
     u64 start_monotime_ns;
-    u8 method[METHOD_MAX_LEN];
-    u16 status;
+    u64 status;          // we only need u16, but regs below must be 8-byte aligned
+    struct pt_regs regs; // we store registers on invocation to be able to fetch the arguments at return
 } grpc_method_data;
 
 // Trace of an HTTP call invocation. It is instantiated by the return uprobe and forwarded to the
 // user space through the events ringbuffer.
 typedef struct http_request_trace_t {
+    u8  type;
     u64 start_monotime_ns;
     u64 end_monotime_ns;
-    u8 method[METHOD_MAX_LEN];
-    u8 path[PATH_MAX_LEN];
+    u8  method[METHOD_MAX_LEN];
+    u8  path[PATH_MAX_LEN];
     u16 status;
-    u8 remote_addr[REMOTE_ADDR_MAX_LEN];
-    u8 host[HOST_LEN];
+    u8  remote_addr[REMOTE_ADDR_MAX_LEN];
+    u64 remote_addr_len;
+    u8  host[HOST_LEN];
+    u64 host_len;
+    u32 host_port;
 } __attribute__((packed)) http_request_trace;
 // Force emitting struct sock_info into the ELF for automatic creation of Golang struct
 const http_request_trace *unused __attribute__((unused));
@@ -90,11 +98,15 @@ volatile const u64 status_ptr_pos;
 volatile const u64 remoteaddr_ptr_pos;
 volatile const u64 host_ptr_pos;
 // GRPC
-volatile const u64 grpc_stream_id_ptr_pos;
+volatile const u64 grpc_stream_st_ptr_pos;
 volatile const u64 grpc_stream_method_ptr_pos;
 volatile const u64 grpc_stream_id_ptr_pos;
 volatile const u64 grpc_status_s_pos;
 volatile const u64 grpc_status_code_ptr_pos;
+volatile const u64 grpc_st_remoteaddr_ptr_pos;
+volatile const u64 grpc_st_localaddr_ptr_pos;
+volatile const u64 tcp_addr_port_ptr_pos;
+volatile const u64 tcp_addr_ip_ptr_pos;
 
 // This instrumentation attaches uprobe to the following function:
 // func (mux *ServeMux) ServeHTTP(w ResponseWriter, r *Request)
@@ -139,6 +151,7 @@ int uprobe_ServeHttp_return(struct pt_regs *ctx) {
         bpf_warn_printk("can't reserve space in the ringbuffer");
         return 0;
     }
+    trace->type = EVENT_HTTP_REQUEST;
     trace->start_monotime_ns = invocation->start_monotime_ns;
     trace->end_monotime_ns = bpf_ktime_get_ns();
 
@@ -197,25 +210,14 @@ int uprobe_server_handleStream(struct pt_regs *ctx) {
     void *goroutine_addr = GOROUTINE_PTR(ctx);
     bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
 
-    void *stream_ptr = GO_PARAM4(ctx);
-    bpf_dbg_printk("stream_ptr %lx", stream_ptr);
+    grpc_method_data invocation = {
+        .start_monotime_ns = bpf_ktime_get_ns(),
+        .regs = *ctx,
+        .status = -1
+    };
 
-    if (stream_ptr != NULL) {
-        grpc_method_data invocation = {
-            .start_monotime_ns = bpf_ktime_get_ns(),
-        };
-
-        // Get method from transport.Stream.Method
-        if (!read_go_str("grpc method", stream_ptr, grpc_stream_method_ptr_pos, &invocation.method, sizeof(invocation.method))) {
-            bpf_warn_printk("can't read grpc transport.Stream.Method");
-            return 0;
-        }
-
-
-        // Write event
-        if (bpf_map_update_elem(&ongoing_grpc_requests, &goroutine_addr, &invocation, BPF_ANY)) {
-            bpf_warn_printk("can't update grpc map element");
-        }
+    if (bpf_map_update_elem(&ongoing_grpc_requests, &goroutine_addr, &invocation, BPF_ANY)) {
+        bpf_warn_printk("can't update grpc map element");
     }
 
     return 0;
@@ -236,13 +238,63 @@ int uprobe_server_handleStream_return(struct pt_regs *ctx) {
         return 0;
     }
 
+    void *stream_ptr = GO_PARAM4(&(invocation->regs));
+    bpf_dbg_printk("stream_ptr %lx", stream_ptr);
+
     http_request_trace *trace = bpf_ringbuf_reserve(&events, sizeof(http_request_trace), 0);
     if (!trace) {
         bpf_warn_printk("can't reserve space in the ringbuffer");
         return 0;
     }
+    trace->type = EVENT_GRPC_REQUEST;
     trace->start_monotime_ns = invocation->start_monotime_ns;
-    bpf_probe_read(&trace->method, sizeof(trace->method), (void *)(invocation->method));
+
+    // Get method from transport.Stream.Method
+    if (!read_go_str("grpc method", stream_ptr, grpc_stream_method_ptr_pos, &trace->path, sizeof(trace->path))) {
+        bpf_warn_printk("can't read grpc transport.Stream.Method");
+        bpf_ringbuf_discard(trace, 0);
+        return 0;
+    }
+
+    void *st_ptr = 0;
+    // Read the embedded object ptr
+    bpf_probe_read(&st_ptr, sizeof(st_ptr), (void *)(stream_ptr + grpc_stream_st_ptr_pos + sizeof(void *)));
+
+    bpf_dbg_printk("st_ptr %lx, offset=%d, remote=%d, local=%d", st_ptr, grpc_stream_st_ptr_pos, grpc_st_remoteaddr_ptr_pos, grpc_st_localaddr_ptr_pos);
+
+    if (st_ptr) {
+        void *peer_ptr = 0; 
+        bpf_probe_read(&peer_ptr, sizeof(peer_ptr), (void *)(st_ptr + grpc_st_remoteaddr_ptr_pos + sizeof(void *)));
+
+        if (peer_ptr) {
+            bpf_dbg_printk("peer_ptr %lx", peer_ptr);
+
+            u64 remote_addr_len = 0;
+            if (!read_go_byte_arr("grpc peer ptr", peer_ptr, tcp_addr_ip_ptr_pos, &trace->remote_addr, &remote_addr_len, sizeof(trace->remote_addr))) {
+                bpf_warn_printk("can't read grpc peer ptr");
+                bpf_ringbuf_discard(trace, 0);
+                return 0;
+            }
+            trace->remote_addr_len = remote_addr_len;
+        }
+
+        void *host_ptr = 0;
+        bpf_probe_read(&host_ptr, sizeof(host_ptr), (void *)(st_ptr + grpc_st_localaddr_ptr_pos + sizeof(void *)));
+
+        if (host_ptr) {
+            u64 host_len = 0;
+
+            if (!read_go_byte_arr("grpc host ptr", host_ptr, tcp_addr_ip_ptr_pos, &trace->host, &host_len,  sizeof(trace->host))) {
+                bpf_warn_printk("can't read grpc host ptr");
+                bpf_ringbuf_discard(trace, 0);
+                return 0;
+            }
+            trace->host_len = host_len;
+
+            bpf_probe_read(&trace->host_port, sizeof(trace->host_port), (void *)(host_ptr + tcp_addr_port_ptr_pos));
+            bpf_dbg_printk("port %d", trace->host_port);
+        }
+    }
 
     trace->end_monotime_ns = bpf_ktime_get_ns();
     // submit the completed trace via ringbuffer

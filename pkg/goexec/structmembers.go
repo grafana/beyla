@@ -52,7 +52,7 @@ var structMembers = map[string]structInfo{
 	"google.golang.org/grpc/internal/transport.Stream": {
 		lib: "google.golang.org/grpc",
 		fields: map[string]string{
-			"id":     "grpc_stream_id_ptr_pos",
+			"st":     "grpc_stream_st_ptr_pos",
 			"method": "grpc_stream_method_ptr_pos",
 		},
 	},
@@ -66,6 +66,20 @@ var structMembers = map[string]structInfo{
 		lib: "google.golang.org/genproto",
 		fields: map[string]string{
 			"Code": "grpc_status_code_ptr_pos",
+		},
+	},
+	"google.golang.org/grpc/internal/transport.http2Server": {
+		lib: "google.golang.org/grpc",
+		fields: map[string]string{
+			"remoteAddr": "grpc_st_remoteaddr_ptr_pos",
+			"localAddr":  "grpc_st_localaddr_ptr_pos",
+		},
+	},
+	"net.TCPAddr": {
+		lib: "go",
+		fields: map[string]string{
+			"IP":   "tcp_addr_ip_ptr_pos",
+			"Port": "tcp_addr_port_ptr_pos",
 		},
 	},
 }

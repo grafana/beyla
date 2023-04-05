@@ -9,7 +9,13 @@ import (
 	"github.com/grafana/ebpf-autoinstrument/pkg/ebpf/nethttp"
 
 	"github.com/gavv/monotime"
+	"golang.org/x/exp/slog"
 )
+
+const EventTypeHTTP = 1
+const EventTypeGRPC = 2
+
+var log = slog.With("component", "goexec.spanner")
 
 // HTTPRequestSpan contains the information being submitted as
 type HTTPRequestSpan struct {
@@ -66,6 +72,13 @@ func extractHostPort(b []uint8) (string, int) {
 	return peer, peerPort
 }
 
+func extractIP(b []uint8, size int) string {
+	if size > len(b) {
+		size = len(b)
+	}
+	return net.IP(b[:size]).String()
+}
+
 func (c *converter) convert(trace *nethttp.HTTPRequestTrace) HTTPRequestSpan {
 	now := time.Now()
 	monoNow := c.monoClock()
@@ -82,8 +95,21 @@ func (c *converter) convert(trace *nethttp.HTTPRequestTrace) HTTPRequestSpan {
 		pathLen = len(trace.Path)
 	}
 
-	peer, _ := extractHostPort(trace.RemoteAddr[:])
-	hostname, hostPort := extractHostPort(trace.Host[:])
+	peer := ""
+	hostname := ""
+	hostPort := 0
+
+	switch trace.Type {
+	case EventTypeHTTP:
+		peer, _ = extractHostPort(trace.RemoteAddr[:])
+		hostname, hostPort = extractHostPort(trace.Host[:])
+	case EventTypeGRPC:
+		hostPort = int(trace.HostPort)
+		peer = extractIP(trace.RemoteAddr[:], int(trace.RemoteAddrLen))
+		hostname = extractIP(trace.Host[:], int(trace.HostLen))
+	default:
+		log.Warn("unknown trace type %d", trace.Type)
+	}
 
 	return HTTPRequestSpan{
 		Method:   string(trace.Method[:methodLen]),

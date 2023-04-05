@@ -13,11 +13,32 @@ import (
 	"github.com/cilium/ebpf"
 )
 
-type bpfGrpcMethodInvocation struct {
+type bpfGrpcMethodData struct {
 	StartMonotimeNs uint64
-	Method          [100]uint8
-	Status          uint16
-	_               [2]byte
+	Status          uint64
+	Regs            struct {
+		R15     uint64
+		R14     uint64
+		R13     uint64
+		R12     uint64
+		Rbp     uint64
+		Rbx     uint64
+		R11     uint64
+		R10     uint64
+		R9      uint64
+		R8      uint64
+		Rax     uint64
+		Rcx     uint64
+		Rdx     uint64
+		Rsi     uint64
+		Rdi     uint64
+		OrigRax uint64
+		Rip     uint64
+		Cs      uint64
+		Eflags  uint64
+		Rsp     uint64
+		Ss      uint64
+	}
 }
 
 type bpfHttpMethodInvocation struct {
@@ -48,13 +69,17 @@ type bpfHttpMethodInvocation struct {
 }
 
 type bpfHttpRequestTrace struct {
+	Type            uint8
 	StartMonotimeNs uint64
 	EndMonotimeNs   uint64
-	Method          [100]uint8
+	Method          [6]uint8
 	Path            [100]uint8
 	Status          uint16
 	RemoteAddr      [50]uint8
+	RemoteAddrLen   uint64
 	Host            [256]uint8
+	HostLen         uint64
+	HostPort        uint32
 }
 
 // loadBpf returns the embedded CollectionSpec for bpf.

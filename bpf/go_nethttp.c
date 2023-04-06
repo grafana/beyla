@@ -17,7 +17,7 @@
 #define DBG_LEVEL go_http_debug_level
 #include "bpf_dbg.h"
 
-char __license[] SEC("license") = "Dual MIT/GPL";
+char __license[] SEC("license") = "Apache License Version 2.0";
 
 #define PATH_MAX_LEN 100
 #define METHOD_MAX_LEN 6 // Longer method: DELETE

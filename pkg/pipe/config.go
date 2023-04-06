@@ -22,8 +22,10 @@ var defaultConfig = Config{
 			"net/http.HandlerFunc.ServeHTTP",
 			"github.com/gin-gonic/gin.(*Engine).ServeHTTP",
 		},
-		GRPCHandleStream: []string{"google.golang.org/grpc.(*Server).handleStream"},
-		GRPCWriteStatus:  []string{"google.golang.org/grpc/internal/transport.(*http2Server).WriteStatus"},
+		GRPCHandleStream:    []string{"google.golang.org/grpc.(*Server).handleStream"},
+		GRPCWriteStatus:     []string{"google.golang.org/grpc/internal/transport.(*http2Server).WriteStatus"},
+		RuntimeProcNewproc1: []string{"runtime.newproc1"},
+		RuntimeProcGoexit1:  []string{"runtime.goexit1"},
 	},
 	Metrics: otel.MetricsConfig{
 		Interval: 5 * time.Second,

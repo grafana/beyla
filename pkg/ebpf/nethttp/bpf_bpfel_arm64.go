@@ -111,6 +111,8 @@ type bpfSpecs struct {
 type bpfProgramSpecs struct {
 	UprobeServeHTTP                *ebpf.ProgramSpec `ebpf:"uprobe_ServeHTTP"`
 	UprobeServeHttpReturn          *ebpf.ProgramSpec `ebpf:"uprobe_ServeHttp_return"`
+	UprobeProcGoexit1              *ebpf.ProgramSpec `ebpf:"uprobe_proc_goexit1"`
+	UprobeProcNewproc1Ret          *ebpf.ProgramSpec `ebpf:"uprobe_proc_newproc1_ret"`
 	UprobeServerHandleStream       *ebpf.ProgramSpec `ebpf:"uprobe_server_handleStream"`
 	UprobeServerHandleStreamReturn *ebpf.ProgramSpec `ebpf:"uprobe_server_handleStream_return"`
 	UprobeTransportWriteStatus     *ebpf.ProgramSpec `ebpf:"uprobe_transport_writeStatus"`
@@ -163,6 +165,8 @@ func (m *bpfMaps) Close() error {
 type bpfPrograms struct {
 	UprobeServeHTTP                *ebpf.Program `ebpf:"uprobe_ServeHTTP"`
 	UprobeServeHttpReturn          *ebpf.Program `ebpf:"uprobe_ServeHttp_return"`
+	UprobeProcGoexit1              *ebpf.Program `ebpf:"uprobe_proc_goexit1"`
+	UprobeProcNewproc1Ret          *ebpf.Program `ebpf:"uprobe_proc_newproc1_ret"`
 	UprobeServerHandleStream       *ebpf.Program `ebpf:"uprobe_server_handleStream"`
 	UprobeServerHandleStreamReturn *ebpf.Program `ebpf:"uprobe_server_handleStream_return"`
 	UprobeTransportWriteStatus     *ebpf.Program `ebpf:"uprobe_transport_writeStatus"`
@@ -172,6 +176,8 @@ func (p *bpfPrograms) Close() error {
 	return _BpfClose(
 		p.UprobeServeHTTP,
 		p.UprobeServeHttpReturn,
+		p.UprobeProcGoexit1,
+		p.UprobeProcNewproc1Ret,
 		p.UprobeServerHandleStream,
 		p.UprobeServerHandleStreamReturn,
 		p.UprobeTransportWriteStatus,

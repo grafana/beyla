@@ -18,7 +18,7 @@
 #define DBG_LEVEL go_http_debug_level
 #include "bpf_dbg.h"
 
-char __license[] SEC("license") = "Apache License Version 2.0";
+char __license[] SEC("license") = "Dual MIT/GPL";
 
 #define EVENT_HTTP_REQUEST 1
 #define EVENT_GRPC_REQUEST 2
@@ -107,6 +107,8 @@ volatile const u64 grpc_st_remoteaddr_ptr_pos;
 volatile const u64 grpc_st_localaddr_ptr_pos;
 volatile const u64 tcp_addr_port_ptr_pos;
 volatile const u64 tcp_addr_ip_ptr_pos;
+
+/* HTTP */
 
 // This instrumentation attaches uprobe to the following function:
 // func (mux *ServeMux) ServeHTTP(w ResponseWriter, r *Request)
@@ -203,6 +205,8 @@ int uprobe_ServeHttp_return(struct pt_regs *ctx) {
 
     return 0;
 }
+
+/* GRPC */
 
 SEC("uprobe/server_handleStream")
 int uprobe_server_handleStream(struct pt_regs *ctx) {
@@ -332,6 +336,28 @@ int uprobe_transport_writeStatus(struct pt_regs *ctx) {
             bpf_map_update_elem(&ongoing_grpc_requests, &goroutine_addr, invocation, BPF_ANY);
         }
     }
+
+    return 0;
+}
+
+/* RUNTIME */
+
+SEC("uprobe/proc_newproc1")
+int uprobe_proc_newproc1_ret(struct pt_regs *ctx) {
+    bpf_warn_printk("=== uprobe/proc newproc1 returns === ");
+
+    void *goroutine_addr = (void *)GO_PARAM1(ctx);
+    bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
+
+    return 0;
+}
+
+SEC("uprobe/proc_goexit1")
+int uprobe_proc_goexit1(struct pt_regs *ctx) {
+    bpf_warn_printk("=== uprobe/proc goexit1 === ");
+
+    void *goroutine_addr = GOROUTINE_PTR(ctx);
+    bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
 
     return 0;
 }

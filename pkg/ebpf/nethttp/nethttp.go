@@ -35,13 +35,17 @@ import (
 const SectionHTTP = "http"
 const SectionGRPCStream = "grpc_stream"
 const SectionGRPCStatus = "grpc_status"
+const SectionRuntimeNewproc1 = "newproc1"
+const SectionRuntimeGoexit1 = "goexit1"
 
 type EBPFTracer struct {
-	Exec             string   `yaml:"executable_name" env:"EXECUTABLE_NAME"`
-	Functions        []string `yaml:"functions" env:"INSTRUMENT_FUNCTIONS"`
-	GRPCHandleStream []string `yaml:"grpc_handle_stream" env:"GRPC_HANDLE_STREAM"`
-	GRPCWriteStatus  []string `yaml:"grpc_write_status" env:"GRPC_WRITE_STATUS"`
-	LogLevel         string   `yaml:"log_level" env:"LOG_LEVEL"`
+	Exec                string   `yaml:"executable_name" env:"EXECUTABLE_NAME"`
+	Functions           []string `yaml:"functions" env:"INSTRUMENT_FUNCTIONS"`
+	GRPCHandleStream    []string `yaml:"grpc_handle_stream" env:"GRPC_HANDLE_STREAM"`
+	GRPCWriteStatus     []string `yaml:"grpc_write_status" env:"GRPC_WRITE_STATUS"`
+	RuntimeProcNewproc1 []string `yaml:"runtime_proc_newproc1" env:"RUNTIME_PROC_NEWPROC1"`
+	RuntimeProcGoexit1  []string `yaml:"runtime_proc_goexit1" env:"RUNTIME_PROC_GOEXIT1"`
+	LogLevel            string   `yaml:"log_level" env:"LOG_LEVEL"`
 
 	Offsets *goexec.Offsets `yaml:"-"`
 }
@@ -73,7 +77,7 @@ type HTTPRequestTrace bpfHttpRequestTrace
 
 // Instrument the executable passed as path and insert probes in the provided offsets, so the
 // returned InstrumentedServe instance will listen and forward traces for each HTTP invocation.
-func Instrument(offsets *goexec.Offsets, logLevel string) (*InstrumentedServe, error) {
+func Instrument(offsets *goexec.Offsets, logLevel string) (*InstrumentedServe, error) { //nolint:cyclop
 	// Instead of the executable file in the disk, we pass the /proc/<pid>/exec
 	// to allow loading it from different container/pods in containerized environments
 	exe, err := link.OpenExecutable(offsets.FileInfo.ProExeLinkPath)
@@ -121,6 +125,14 @@ func Instrument(offsets *goexec.Offsets, logLevel string) (*InstrumentedServe, e
 				if err := h.instrumentFunction(fn, exe, h.bpfObjects.UprobeTransportWriteStatus, nil); err != nil {
 					return nil, fmt.Errorf("instrumenting function: %w in section %s", err, section)
 				}
+			case SectionRuntimeNewproc1:
+				if err := h.instrumentFunction(fn, exe, nil, h.bpfObjects.UprobeProcNewproc1Ret); err != nil {
+					return nil, fmt.Errorf("instrumenting function: %w in section %s", err, section)
+				}
+			case SectionRuntimeGoexit1:
+				if err := h.instrumentFunction(fn, exe, h.bpfObjects.UprobeProcGoexit1, nil); err != nil {
+					return nil, fmt.Errorf("instrumenting function: %w in section %s", err, section)
+				}
 			default:
 				return nil, fmt.Errorf("unknown section %s", section)
 			}
@@ -140,13 +152,15 @@ func Instrument(offsets *goexec.Offsets, logLevel string) (*InstrumentedServe, e
 
 func (h *InstrumentedServe) instrumentFunction(offsets goexec.FuncOffsets, exe *link.Executable, f *ebpf.Program, fret *ebpf.Program) error {
 	// Attach BPF programs as start and return probes
-	up, err := exe.Uprobe("", f, &link.UprobeOptions{
-		Address: offsets.Start,
-	})
-	if err != nil {
-		return fmt.Errorf("setting uprobe: %w", err)
+	if f != nil {
+		up, err := exe.Uprobe("", f, &link.UprobeOptions{
+			Address: offsets.Start,
+		})
+		if err != nil {
+			return fmt.Errorf("setting uprobe: %w", err)
+		}
+		h.uprobes = append(h.uprobes, up)
 	}
-	h.uprobes = append(h.uprobes, up)
 
 	if fret != nil {
 		// Go won't work with Uretprobes because of the way Go manages the stack. We need to set uprobes just before the return

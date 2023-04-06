@@ -53,6 +53,7 @@ typedef struct grpc_method_data_t {
 // user space through the events ringbuffer.
 typedef struct http_request_trace_t {
     u8  type;
+    u64 go_start_monotime_ns;
     u64 start_monotime_ns;
     u64 end_monotime_ns;
     u8  method[METHOD_MAX_LEN];
@@ -80,6 +81,13 @@ struct {
     __type(value, grpc_method_data);
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
 } ongoing_grpc_requests SEC(".maps");
+
+struct {
+    __uint(type, BPF_MAP_TYPE_HASH);
+    __type(key, void *); // key: pointer to the goroutine
+    __type(value, u64);  // value: timestamp of the goroutine creation
+    __uint(max_entries, MAX_CONCURRENT_REQUESTS);
+} ongoing_goroutines SEC(".maps");
 
 struct {
     __uint(type, BPF_MAP_TYPE_RINGBUF);
@@ -157,6 +165,14 @@ int uprobe_ServeHttp_return(struct pt_regs *ctx) {
     trace->start_monotime_ns = invocation->start_monotime_ns;
     trace->end_monotime_ns = bpf_ktime_get_ns();
 
+    u64 *go_start_monotime_ns = bpf_map_lookup_elem(&ongoing_goroutines, &goroutine_addr);
+    if (go_start_monotime_ns) {
+        trace->go_start_monotime_ns = *go_start_monotime_ns;
+        bpf_map_delete_elem(&ongoing_goroutines, &goroutine_addr);
+    } else {
+        trace->go_start_monotime_ns = 0;
+    }
+
     // Read arguments from the original set of registers
 
     // Get request struct
@@ -210,7 +226,7 @@ int uprobe_ServeHttp_return(struct pt_regs *ctx) {
 
 SEC("uprobe/server_handleStream")
 int uprobe_server_handleStream(struct pt_regs *ctx) {
-    bpf_warn_printk("=== uprobe/server_handleStream === ");
+    bpf_dbg_printk("=== uprobe/server_handleStream === ");
     void *goroutine_addr = GOROUTINE_PTR(ctx);
     bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
 
@@ -229,7 +245,7 @@ int uprobe_server_handleStream(struct pt_regs *ctx) {
 
 SEC("uprobe/server_handleStream")
 int uprobe_server_handleStream_return(struct pt_regs *ctx) {
-    bpf_warn_printk("=== uprobe/server_handleStream return === ");
+    bpf_dbg_printk("=== uprobe/server_handleStream return === ");
 
     void *goroutine_addr = GOROUTINE_PTR(ctx);
     bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
@@ -243,7 +259,7 @@ int uprobe_server_handleStream_return(struct pt_regs *ctx) {
     }
 
     void *stream_ptr = GO_PARAM4(&(invocation->regs));
-    bpf_dbg_printk("stream_ptr %lx", stream_ptr);
+    bpf_dbg_printk("stream_ptr %lx, method pos %lx", stream_ptr, grpc_stream_method_ptr_pos);
 
     http_request_trace *trace = bpf_ringbuf_reserve(&events, sizeof(http_request_trace), 0);
     if (!trace) {
@@ -252,6 +268,14 @@ int uprobe_server_handleStream_return(struct pt_regs *ctx) {
     }
     trace->type = EVENT_GRPC_REQUEST;
     trace->start_monotime_ns = invocation->start_monotime_ns;
+
+    u64 *go_start_monotime_ns = bpf_map_lookup_elem(&ongoing_goroutines, &goroutine_addr);
+    if (go_start_monotime_ns) {
+        trace->go_start_monotime_ns = *go_start_monotime_ns;
+        bpf_map_delete_elem(&ongoing_goroutines, &goroutine_addr);
+    } else {
+        trace->go_start_monotime_ns = 0;
+    }
 
     // Get method from transport.Stream.Method
     if (!read_go_str("grpc method", stream_ptr, grpc_stream_method_ptr_pos, &trace->path, sizeof(trace->path))) {
@@ -309,7 +333,7 @@ int uprobe_server_handleStream_return(struct pt_regs *ctx) {
 
 SEC("uprobe/transport_writeStatus")
 int uprobe_transport_writeStatus(struct pt_regs *ctx) {
-    bpf_warn_printk("=== uprobe/transport_writeStatus === ");
+    bpf_dbg_printk("=== uprobe/transport_writeStatus === ");
 
     void *goroutine_addr = GOROUTINE_PTR(ctx);
     bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
@@ -342,22 +366,29 @@ int uprobe_transport_writeStatus(struct pt_regs *ctx) {
 
 /* RUNTIME */
 
-SEC("uprobe/proc_newproc1")
+SEC("uprobe/runtime_newproc1")
 int uprobe_proc_newproc1_ret(struct pt_regs *ctx) {
-    bpf_warn_printk("=== uprobe/proc newproc1 returns === ");
+    bpf_dbg_printk("=== uprobe/proc newproc1 returns === ");
 
     void *goroutine_addr = (void *)GO_PARAM1(ctx);
     bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
 
+    u64 timestamp = bpf_ktime_get_ns();
+    if (bpf_map_update_elem(&ongoing_goroutines, &goroutine_addr, &timestamp, BPF_ANY)) {
+        bpf_warn_printk("can't update grpc map element");
+    }
+
     return 0;
 }
 
-SEC("uprobe/proc_goexit1")
+SEC("uprobe/runtime_goexit1")
 int uprobe_proc_goexit1(struct pt_regs *ctx) {
-    bpf_warn_printk("=== uprobe/proc goexit1 === ");
+    bpf_dbg_printk("=== uprobe/proc goexit1 === ");
 
     void *goroutine_addr = GOROUTINE_PTR(ctx);
     bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
+
+    bpf_map_delete_elem(&ongoing_goroutines, &goroutine_addr);
 
     return 0;
 }

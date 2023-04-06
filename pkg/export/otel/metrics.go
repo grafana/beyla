@@ -140,6 +140,6 @@ func (r *MetricsReporter) reportMetrics(spans <-chan transform.HTTPRequestSpan) 
 	for span := range spans {
 		attrs := metricAttributes(r, &span)
 		// TODO: for more accuracy, there must be a way to set the metric time from the actual span end time
-		r.duration.Record(context.TODO(), span.End.Sub(span.Start).Seconds()*1000, attrs...)
+		r.duration.Record(context.TODO(), span.End.Sub(span.RequestStart).Seconds()*1000, attrs...)
 	}
 }

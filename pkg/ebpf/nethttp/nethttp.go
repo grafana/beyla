@@ -39,13 +39,13 @@ const SectionRuntimeNewproc1 = "newproc1"
 const SectionRuntimeGoexit1 = "goexit1"
 
 type EBPFTracer struct {
-	Exec                string   `yaml:"executable_name" env:"EXECUTABLE_NAME"`
-	Functions           []string `yaml:"functions" env:"INSTRUMENT_FUNCTIONS"`
-	GRPCHandleStream    []string `yaml:"grpc_handle_stream" env:"GRPC_HANDLE_STREAM"`
-	GRPCWriteStatus     []string `yaml:"grpc_write_status" env:"GRPC_WRITE_STATUS"`
-	RuntimeProcNewproc1 []string `yaml:"runtime_proc_newproc1" env:"RUNTIME_PROC_NEWPROC1"`
-	RuntimeProcGoexit1  []string `yaml:"runtime_proc_goexit1" env:"RUNTIME_PROC_GOEXIT1"`
-	LogLevel            string   `yaml:"log_level" env:"LOG_LEVEL"`
+	Exec             string   `yaml:"executable_name" env:"EXECUTABLE_NAME"`
+	Functions        []string `yaml:"functions" env:"INSTRUMENT_FUNCTIONS"`
+	GRPCHandleStream []string `yaml:"grpc_handle_stream" env:"GRPC_HANDLE_STREAM"`
+	GRPCWriteStatus  []string `yaml:"grpc_write_status" env:"GRPC_WRITE_STATUS"`
+	RuntimeNewproc1  []string `yaml:"runtime_newproc1" env:"RUNTIME_NEWPROC1"`
+	RuntimeGoexit1   []string `yaml:"runtime_goexit1" env:"RUNTIME_GOEXIT1"`
+	LogLevel         string   `yaml:"log_level" env:"LOG_LEVEL"`
 
 	Offsets *goexec.Offsets `yaml:"-"`
 }

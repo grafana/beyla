@@ -58,9 +58,11 @@ func (gb *graphBuilder) buildGraph() (graph.Graph, error) {
 	offsets, err := gb.inspector(
 		gb.config.EBPF.Exec,
 		map[string][]string{
-			nethttp.SectionHTTP:       gb.config.EBPF.Functions,
-			nethttp.SectionGRPCStream: gb.config.EBPF.GRPCHandleStream,
-			nethttp.SectionGRPCStatus: gb.config.EBPF.GRPCWriteStatus,
+			nethttp.SectionHTTP:            gb.config.EBPF.Functions,
+			nethttp.SectionGRPCStream:      gb.config.EBPF.GRPCHandleStream,
+			nethttp.SectionGRPCStatus:      gb.config.EBPF.GRPCWriteStatus,
+			nethttp.SectionRuntimeNewproc1: gb.config.EBPF.RuntimeNewproc1,
+			nethttp.SectionRuntimeGoexit1:  gb.config.EBPF.RuntimeGoexit1,
 		},
 	)
 	if err != nil {

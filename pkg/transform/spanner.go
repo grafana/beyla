@@ -19,16 +19,17 @@ var log = slog.With("component", "goexec.spanner")
 
 // HTTPRequestSpan contains the information being submitted as
 type HTTPRequestSpan struct {
-	Type     int
-	Method   string
-	Path     string
-	Route    string
-	Peer     string
-	Host     string
-	HostPort int
-	Status   int
-	Start    time.Time
-	End      time.Time
+	Type         int
+	Method       string
+	Path         string
+	Route        string
+	Peer         string
+	Host         string
+	HostPort     int
+	Status       int
+	RequestStart time.Time
+	Start        time.Time
+	End          time.Time
 }
 
 func ConvertToSpan(in <-chan nethttp.HTTPRequestTrace, out chan<- HTTPRequestSpan) {
@@ -85,6 +86,7 @@ func (c *converter) convert(trace *nethttp.HTTPRequestTrace) HTTPRequestSpan {
 	monoNow := c.monoClock()
 	startDelta := monoNow - time.Duration(trace.StartMonotimeNs)
 	endDelta := monoNow - time.Duration(trace.EndMonotimeNs)
+	goStartDelta := monoNow - time.Duration(trace.GoStartMonotimeNs)
 
 	// From C, assuming 0-ended strings
 	methodLen := bytes.IndexByte(trace.Method[:], 0)
@@ -113,14 +115,15 @@ func (c *converter) convert(trace *nethttp.HTTPRequestTrace) HTTPRequestSpan {
 	}
 
 	return HTTPRequestSpan{
-		Type:     int(trace.Type),
-		Method:   string(trace.Method[:methodLen]),
-		Path:     string(trace.Path[:pathLen]),
-		Peer:     peer,
-		Host:     hostname,
-		HostPort: hostPort,
-		Start:    now.Add(-startDelta),
-		End:      now.Add(-endDelta),
-		Status:   int(trace.Status),
+		Type:         int(trace.Type),
+		Method:       string(trace.Method[:methodLen]),
+		Path:         string(trace.Path[:pathLen]),
+		Peer:         peer,
+		Host:         hostname,
+		HostPort:     hostPort,
+		RequestStart: now.Add(-goStartDelta),
+		Start:        now.Add(-startDelta),
+		End:          now.Add(-endDelta),
+		Status:       int(trace.Status),
 	}
 }

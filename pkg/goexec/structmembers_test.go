@@ -106,7 +106,6 @@ func TestGoOffsetsFromDwarf_ErrorIfConstantNotFound(t *testing.T) {
 			"tralara": "tralara",
 		},
 	}
-	_, err := structMemberOffsetsFromDwarf(debugData)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "tralara")
+	_, missing := structMemberOffsetsFromDwarf(debugData)
+	assert.Contains(t, missing, "tralara")
 }

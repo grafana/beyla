@@ -34,7 +34,7 @@ func InspectOffsets(execFile string, funcs map[string][]string) (Offsets, error)
 		// check the function instrumentation points
 		found, err := instrumentationPoints(execElf.ELF, funcNames)
 		if err != nil {
-			log.Warn("Unable to find instrumentation points in file %s: for %s - %w", execFile, section, err)
+			log.Warn("Unable to find instrumentation points", "file", execFile, "section", section, "message", err)
 		}
 		foundOffsets[section] = found
 	}

@@ -69,17 +69,18 @@ type bpfHttpMethodInvocation struct {
 }
 
 type bpfHttpRequestTrace struct {
-	Type            uint8
-	StartMonotimeNs uint64
-	EndMonotimeNs   uint64
-	Method          [6]uint8
-	Path            [100]uint8
-	Status          uint16
-	RemoteAddr      [50]uint8
-	RemoteAddrLen   uint64
-	Host            [256]uint8
-	HostLen         uint64
-	HostPort        uint32
+	Type              uint8
+	GoStartMonotimeNs uint64
+	StartMonotimeNs   uint64
+	EndMonotimeNs     uint64
+	Method            [6]uint8
+	Path              [100]uint8
+	Status            uint16
+	RemoteAddr        [50]uint8
+	RemoteAddrLen     uint64
+	Host              [256]uint8
+	HostLen           uint64
+	HostPort          uint32
 }
 
 // loadBpf returns the embedded CollectionSpec for bpf.
@@ -137,6 +138,7 @@ type bpfProgramSpecs struct {
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpfMapSpecs struct {
 	Events              *ebpf.MapSpec `ebpf:"events"`
+	OngoingGoroutines   *ebpf.MapSpec `ebpf:"ongoing_goroutines"`
 	OngoingGrpcRequests *ebpf.MapSpec `ebpf:"ongoing_grpc_requests"`
 	OngoingHttpRequests *ebpf.MapSpec `ebpf:"ongoing_http_requests"`
 }
@@ -161,6 +163,7 @@ func (o *bpfObjects) Close() error {
 // It can be passed to loadBpfObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpfMaps struct {
 	Events              *ebpf.Map `ebpf:"events"`
+	OngoingGoroutines   *ebpf.Map `ebpf:"ongoing_goroutines"`
 	OngoingGrpcRequests *ebpf.Map `ebpf:"ongoing_grpc_requests"`
 	OngoingHttpRequests *ebpf.Map `ebpf:"ongoing_http_requests"`
 }
@@ -168,6 +171,7 @@ type bpfMaps struct {
 func (m *bpfMaps) Close() error {
 	return _BpfClose(
 		m.Events,
+		m.OngoingGoroutines,
 		m.OngoingGrpcRequests,
 		m.OngoingHttpRequests,
 	)

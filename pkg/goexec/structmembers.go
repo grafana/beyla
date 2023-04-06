@@ -87,20 +87,24 @@ var structMembers = map[string]structInfo{
 func structMemberOffsets(elfFile *elf.File) (FieldOffsets, error) {
 	// first, try to read offsets from DWARF debug info
 	var offs FieldOffsets
+	var expected map[string]struct{}
 	dwarfData, err := elfFile.DWARF()
 	if err == nil {
-		offs, err = structMemberOffsetsFromDwarf(dwarfData)
-		if err == nil {
+		offs, expected = structMemberOffsetsFromDwarf(dwarfData)
+
+		if len(expected) > 0 {
+			log.Warn("Fields not found in the DWARF file", "fields", expected)
+		} else {
 			return offs, nil
 		}
 	}
-	log.Info("can't read offsets from DWARF info. Falling back to prefetched database", "error", err)
+	log.Info("Can't read all offsets from DWARF info. Checking in prefetched database")
 
 	// if it is not possible, query from prefetched offsets
-	return structMemberPreFetchedOffsets(elfFile)
+	return structMemberPreFetchedOffsets(elfFile, offs)
 }
 
-func structMemberPreFetchedOffsets(elfFile *elf.File) (FieldOffsets, error) {
+func structMemberPreFetchedOffsets(elfFile *elf.File, fieldOffsets FieldOffsets) (FieldOffsets, error) {
 	offs, err := offsets.Read(bytes.NewBufferString(prefetchedOffsets))
 	if err != nil {
 		return nil, fmt.Errorf("reading offsets file contents: %w", err)
@@ -111,7 +115,6 @@ func structMemberPreFetchedOffsets(elfFile *elf.File) (FieldOffsets, error) {
 	}
 	// after putting the offsets.json in a Go structure, we search all the
 	// structMembers elements on it, to get the annotated offsets
-	fieldOffsets := FieldOffsets{}
 	for strName, strInfo := range structMembers {
 		version, ok := libVersions[strInfo.lib]
 		if !ok {
@@ -134,18 +137,12 @@ func structMemberPreFetchedOffsets(elfFile *elf.File) (FieldOffsets, error) {
 
 // structMemberOffsetsFromDwarf reads the executable dwarf information to get
 // the offsets specified in the structMembers map
-func structMemberOffsetsFromDwarf(data *dwarf.Data) (FieldOffsets, error) {
+func structMemberOffsetsFromDwarf(data *dwarf.Data) (FieldOffsets, map[string]struct{}) {
 	expectedReturns := map[string]struct{}{}
 	for _, str := range structMembers {
 		for _, ctName := range str.fields {
 			expectedReturns[ctName] = struct{}{}
 		}
-	}
-	checkAllFound := func() error {
-		if len(expectedReturns) > 0 {
-			return fmt.Errorf("not all the fields were found: %v", expectedReturns)
-		}
-		return nil
 	}
 	log.Debug("searching offests for field constants", "constants", expectedReturns)
 
@@ -154,10 +151,11 @@ func structMemberOffsetsFromDwarf(data *dwarf.Data) (FieldOffsets, error) {
 	for {
 		entry, err := reader.Next()
 		if err != nil {
-			return fieldOffsets, fmt.Errorf("can't read DWARF data: %w", err)
+			log.Warn("error reading DRWARF info", "data", err)
+			return fieldOffsets, expectedReturns
 		}
 		if entry == nil { // END of dwarf data
-			return fieldOffsets, checkAllFound()
+			return fieldOffsets, expectedReturns
 		}
 		if entry.Tag != dwarf.TagStructType {
 			continue
@@ -170,7 +168,8 @@ func structMemberOffsetsFromDwarf(data *dwarf.Data) (FieldOffsets, error) {
 		} else { //nolint:revive
 			log.Debug("inspecting fields for struct type", "type", typeName)
 			if err := readMembers(reader, structMember.fields, expectedReturns, fieldOffsets); err != nil {
-				return nil, fmt.Errorf("reading type %q members: %w", typeName, err)
+				log.Warn("error reading DRWARF info", "type", typeName, "members", err)
+				return nil, expectedReturns
 			}
 		}
 	}

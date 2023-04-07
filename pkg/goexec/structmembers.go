@@ -97,7 +97,11 @@ func structMemberOffsets(elfFile *elf.File) (FieldOffsets, error) {
 		} else {
 			return offs, nil
 		}
+	} else {
+		// initialize empty offsets
+		offs = FieldOffsets{}
 	}
+
 	log.Info("Can't read all offsets from DWARF info. Checking in prefetched database")
 
 	// if it is not possible, query from prefetched offsets

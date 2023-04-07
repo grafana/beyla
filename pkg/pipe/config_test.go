@@ -47,6 +47,8 @@ otel_metrics_export:
 			Functions:        []string{"FooBar"},
 			GRPCWriteStatus:  []string{"google.golang.org/grpc/internal/transport.(*http2Server).WriteStatus"},
 			GRPCHandleStream: []string{"google.golang.org/grpc.(*Server).handleStream"},
+			RuntimeNewproc1:  []string{"runtime.newproc1"},
+			RuntimeGoexit1:   []string{"runtime.goexit1"},
 		},
 		Metrics: otel.MetricsConfig{
 			ServiceName: "svc-name",

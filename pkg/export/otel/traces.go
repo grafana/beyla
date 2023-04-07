@@ -129,14 +129,14 @@ func (r *TracesReporter) reportTraces(spans <-chan transform.HTTPRequestSpan) {
 		ctx, sp := tracer.Start(context.TODO(), "session",
 			trace2.WithTimestamp(span.RequestStart),
 			trace2.WithAttributes(attrs...),
-			trace2.WithSpanKind(trace2.SpanKindServer),
+			trace2.WithSpanKind(trace2.SpanKindInternal),
 		)
 
 		// Create a child span showing the queue time
 		_, spQ := tracer.Start(ctx, "in queue",
 			trace2.WithTimestamp(span.RequestStart),
 			trace2.WithAttributes(attrs...),
-			trace2.WithSpanKind(trace2.SpanKindServer),
+			trace2.WithSpanKind(trace2.SpanKindInternal),
 		)
 		spQ.End(trace2.WithTimestamp(span.Start))
 
@@ -144,7 +144,7 @@ func (r *TracesReporter) reportTraces(spans <-chan transform.HTTPRequestSpan) {
 		_, spP := tracer.Start(ctx, "processing",
 			trace2.WithTimestamp(span.Start),
 			trace2.WithAttributes(attrs...),
-			trace2.WithSpanKind(trace2.SpanKindServer),
+			trace2.WithSpanKind(trace2.SpanKindInternal),
 		)
 		spP.End(trace2.WithTimestamp(span.End))
 

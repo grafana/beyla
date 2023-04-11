@@ -103,7 +103,7 @@ func Instrument(offsets *goexec.Offsets, logLevel string) (*InstrumentedServe, e
 	h := InstrumentedServe{}
 	// Load BPF programs
 	if err := spec.LoadAndAssign(&h.bpfObjects, nil); err != nil {
-		return nil, fmt.Errorf("loading and assigning BPF objects: %w", err)
+		return nil, instrumentError(err, "loading and assigning BPF objects")
 	}
 
 	for section, funcOffsets := range offsets.Funcs {
@@ -144,7 +144,7 @@ func (h *InstrumentedServe) instrumentFunction(offsets goexec.FuncOffsets, exe *
 		Address: offsets.Start,
 	})
 	if err != nil {
-		return fmt.Errorf("setting uprobe: %w", err)
+		return instrumentError(err, "setting uprobe")
 	}
 	h.uprobes = append(h.uprobes, up)
 
@@ -156,7 +156,7 @@ func (h *InstrumentedServe) instrumentFunction(offsets goexec.FuncOffsets, exe *
 				Address: ret,
 			})
 			if err != nil {
-				return fmt.Errorf("setting uretpobe: %w", err)
+				return instrumentError(err, "setting uretprobe")
 			}
 			h.uprobes = append(h.uprobes, urp)
 		}
@@ -222,4 +222,15 @@ func ebpfLogLevel(level string) uint8 {
 	default:
 		return 1
 	}
+}
+
+func instrumentError(err error, kind string) error {
+	var ve *ebpf.VerifierError
+	if !errors.As(err, &ve) {
+		return fmt.Errorf("%s: %w", kind, err)
+	}
+
+	fmt.Fprintf(os.Stderr, "Error Log:\n %v\n", strings.Join(ve.Log, "\n"))
+
+	return fmt.Errorf("%s: %w", kind, ve)
 }

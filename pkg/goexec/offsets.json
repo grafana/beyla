@@ -1,10 +1,102 @@
 {
   "data": {
+    "google.golang.org/grpc/internal/status.Status": {
+      "s": {
+        "versions": {
+          "oldest": "1.40.0",
+          "newest": "1.54.0"
+        },
+        "offsets": [
+          {
+            "offset": 0,
+            "since": "v1.40.0"
+          }
+        ]
+      }
+    },
+    "google.golang.org/grpc/internal/transport.Stream": {
+      "method": {
+        "versions": {
+          "oldest": "1.40.0",
+          "newest": "1.54.0"
+        },
+        "offsets": [
+          {
+            "offset": 80,
+            "since": "v1.40.0"
+          }
+        ]
+      },
+      "st": {
+        "versions": {
+          "oldest": "1.40.0",
+          "newest": "1.54.0"
+        },
+        "offsets": [
+          {
+            "offset": 8,
+            "since": "v1.40.0"
+          }
+        ]
+      }
+    },
+    "google.golang.org/grpc/internal/transport.http2Server": {
+      "localAddr": {
+        "versions": {
+          "oldest": "1.40.0",
+          "newest": "1.54.0"
+        },
+        "offsets": [
+          {
+            "offset": 88,
+            "since": "v1.40.0"
+          }
+        ]
+      },
+      "remoteAddr": {
+        "versions": {
+          "oldest": "1.40.0",
+          "newest": "1.54.0"
+        },
+        "offsets": [
+          {
+            "offset": 72,
+            "since": "v1.40.0"
+          }
+        ]
+      }
+    },
+    "net.TCPAddr": {
+      "IP": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.20.3"
+        },
+        "offsets": [
+          {
+            "offset": 0,
+            "since": "1.17"
+          }
+        ]
+      },
+      "Port": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.20.3"
+        },
+        "offsets": [
+          {
+            "offset": 24,
+            "since": "1.17"
+          }
+        ]
+      }
+    },
     "net/http.Request": {
       "Host": {
         "versions": {
           "oldest": "1.17.0",
-          "newest": "1.20.2"
+          "newest": "1.20.3"
         },
         "offsets": [
           {
@@ -16,7 +108,7 @@
       "Method": {
         "versions": {
           "oldest": "1.17.0",
-          "newest": "1.20.2"
+          "newest": "1.20.3"
         },
         "offsets": [
           {
@@ -28,7 +120,7 @@
       "RemoteAddr": {
         "versions": {
           "oldest": "1.17.0",
-          "newest": "1.20.2"
+          "newest": "1.20.3"
         },
         "offsets": [
           {
@@ -40,7 +132,7 @@
       "URL": {
         "versions": {
           "oldest": "1.17.0",
-          "newest": "1.20.2"
+          "newest": "1.20.3"
         },
         "offsets": [
           {
@@ -54,7 +146,7 @@
       "status": {
         "versions": {
           "oldest": "1.17.0",
-          "newest": "1.20.2"
+          "newest": "1.20.3"
         },
         "offsets": [
           {
@@ -68,7 +160,7 @@
       "Path": {
         "versions": {
           "oldest": "1.17.0",
-          "newest": "1.20.2"
+          "newest": "1.20.3"
         },
         "offsets": [
           {

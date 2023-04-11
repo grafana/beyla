@@ -18,7 +18,7 @@
 #define DBG_LEVEL go_http_debug_level
 #include "bpf_dbg.h"
 
-char __license[] SEC("license") = "Apache License Version 2.0";
+char __license[] SEC("license") = "Dual MIT/GPL";
 
 #define EVENT_HTTP_REQUEST 1
 #define EVENT_GRPC_REQUEST 2

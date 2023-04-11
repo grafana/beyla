@@ -16,6 +16,12 @@ type Compose struct {
 	Env    []string
 }
 
+func defaultEnv() []string {
+	env := os.Environ()
+	env = append(env, "EXECUTABLE_NAME=testserver")
+	return env
+}
+
 func ComposeSuite(composeFile, logFile string) (*Compose, error) {
 	logs, err := os.OpenFile(logFile, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0666)
 	if err != nil {
@@ -24,7 +30,7 @@ func ComposeSuite(composeFile, logFile string) (*Compose, error) {
 	return &Compose{
 		Path:   path.Join(composeFile),
 		Logger: logs,
-		Env:    os.Environ(),
+		Env:    defaultEnv(),
 	}, nil
 }
 

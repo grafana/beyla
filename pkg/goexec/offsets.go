@@ -20,11 +20,11 @@ type FieldOffsets map[string]any
 
 // InspectOffsets gets the memory addresses/offsets of the instrumenting function, as well as the required
 // parameters fields to be read from the eBPF code
-func InspectOffsets(execFile string, funcs map[string][]string) (Offsets, error) {
+func InspectOffsets(finder ProcessFinder, funcs map[string][]string) (Offsets, error) {
 	// Analyse executable ELF file and find instrumentation points
-	execElf, err := findExecELF(execFile)
+	execElf, err := findExecELF(finder)
 	if err != nil {
-		return Offsets{}, fmt.Errorf("looking for %s executable ELF: %w", execFile, err)
+		return Offsets{}, fmt.Errorf("looking for executable ELF: %w", err)
 	}
 	defer execElf.ELF.Close()
 
@@ -34,7 +34,7 @@ func InspectOffsets(execFile string, funcs map[string][]string) (Offsets, error)
 		// check the function instrumentation points
 		found, err := instrumentationPoints(execElf.ELF, funcNames)
 		if err != nil {
-			log.Warn("Unable to find instrumentation points", "file", execFile, "section", section, "message", err)
+			log().Warn("Unable to find instrumentation points", "section", section, "message", err)
 		}
 		foundOffsets[section] = found
 	}
@@ -42,7 +42,7 @@ func InspectOffsets(execFile string, funcs map[string][]string) (Offsets, error)
 	// check the offsets of the required fields from the method arguments
 	structFieldOffsets, err := structMemberOffsets(execElf.ELF)
 	if err != nil {
-		return Offsets{}, fmt.Errorf("checking struct members in file %s: %w", execFile, err)
+		return Offsets{}, fmt.Errorf("checking struct members in file %s: %w", execElf.ProExeLinkPath, err)
 	}
 
 	return Offsets{

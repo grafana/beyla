@@ -37,7 +37,13 @@ const SectionGRPCStream = "grpc_stream"
 const SectionGRPCStatus = "grpc_status"
 
 type EBPFTracer struct {
-	Exec             string   `yaml:"executable_name" env:"EXECUTABLE_NAME"`
+	// Exec allows selecting the instrumented executable whose complete path contains the Exec value.
+	Exec string `yaml:"executable_name" env:"EXECUTABLE_NAME"`
+	// Port allows selecting the instrumented executable that owns the Port value. If this value is set (and
+	// different to zero), the value of the Exec property won't take effect.
+	// It's important to emphasize that if your process opens multiple HTTP/GRPC ports, the auto-instrumenter
+	// will instrument all the service calls in all the ports, not only the port specified here.
+	Port             int      `yaml:"open_port" env:"OPEN_PORT"`
 	Functions        []string `yaml:"functions" env:"INSTRUMENT_FUNCTIONS"`
 	GRPCHandleStream []string `yaml:"grpc_handle_stream" env:"GRPC_HANDLE_STREAM"`
 	GRPCWriteStatus  []string `yaml:"grpc_write_status" env:"GRPC_WRITE_STATUS"`

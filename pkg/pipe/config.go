@@ -55,8 +55,8 @@ func (e ConfigError) Error() string {
 }
 
 func (c *Config) Validate() error {
-	if c.EBPF.Exec == "" {
-		return ConfigError("missing EXECUTABLE_NAME property")
+	if c.EBPF.Port == 0 && c.EBPF.Exec == "" {
+		return ConfigError("missing EXECUTABLE_NAME or OPEN_PORT property")
 	}
 	if len(c.EBPF.Functions) == 0 {
 		return ConfigError("missing INSTRUMENT_FUNCTIONS property")

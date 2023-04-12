@@ -18,6 +18,7 @@ func TestSuite(t *testing.T) {
 		require.NoError(t, compose.Close())
 	}()
 	t.Run("RED metrics", testREDMetricsHTTP)
+	t.Run("GRPC RED metrics", testREDMetricsGRPC)
 }
 
 // Same as Test suite, but the generated test image does not contain debug information
@@ -30,4 +31,5 @@ func TestSuite_NoDebugInfo(t *testing.T) {
 		require.NoError(t, compose.Close())
 	}()
 	t.Run("RED metrics", testREDMetricsHTTP)
+	// No GRPC tests for now, until we fix the offsets lookup
 }

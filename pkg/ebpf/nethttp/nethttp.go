@@ -107,7 +107,7 @@ func Instrument(offsets *goexec.Offsets, logLevel string) (*InstrumentedServe, e
 	}
 
 	// Patch the functions to be instrumented
-	if err := instrumentFunctions(&h, exe, offsets.Funcs); err != nil {
+	if err := h.instrumentFunctions(exe, offsets.Funcs); err != nil {
 		return nil, err
 	}
 
@@ -135,7 +135,7 @@ func rewriteConstants(spec *ebpf.CollectionSpec, fields map[string]interface{}, 
 	return nil
 }
 
-func instrumentFunctions(h *InstrumentedServe, exe *link.Executable, funcs map[string][]goexec.FuncOffsets) error {
+func (h *InstrumentedServe) instrumentFunctions(exe *link.Executable, funcs map[string][]goexec.FuncOffsets) error {
 	for section, funcOffsets := range funcs {
 		for _, fn := range funcOffsets {
 			switch section {

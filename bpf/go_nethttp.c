@@ -170,7 +170,7 @@ int uprobe_ServeHttp_return(struct pt_regs *ctx) {
         trace->go_start_monotime_ns = *go_start_monotime_ns;
         bpf_map_delete_elem(&ongoing_goroutines, &goroutine_addr);
     } else {
-        trace->go_start_monotime_ns = 0;
+        trace->go_start_monotime_ns = invocation->start_monotime_ns;
     }
 
     // Read arguments from the original set of registers
@@ -274,7 +274,7 @@ int uprobe_server_handleStream_return(struct pt_regs *ctx) {
         trace->go_start_monotime_ns = *go_start_monotime_ns;
         bpf_map_delete_elem(&ongoing_goroutines, &goroutine_addr);
     } else {
-        trace->go_start_monotime_ns = 0;
+        trace->go_start_monotime_ns = invocation->start_monotime_ns;
     }
 
     // Get method from transport.Stream.Method

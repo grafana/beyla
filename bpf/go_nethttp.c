@@ -288,15 +288,11 @@ int uprobe_server_handleStream_return(struct pt_regs *ctx) {
     // Read the embedded object ptr
     bpf_probe_read(&st_ptr, sizeof(st_ptr), (void *)(stream_ptr + grpc_stream_st_ptr_pos + sizeof(void *)));
 
-    bpf_dbg_printk("st_ptr %lx, offset=%d, remote=%d, local=%d", st_ptr, grpc_stream_st_ptr_pos, grpc_st_remoteaddr_ptr_pos, grpc_st_localaddr_ptr_pos);
-
     if (st_ptr) {
         void *peer_ptr = 0; 
         bpf_probe_read(&peer_ptr, sizeof(peer_ptr), (void *)(st_ptr + grpc_st_remoteaddr_ptr_pos + sizeof(void *)));
 
         if (peer_ptr) {
-            bpf_dbg_printk("peer_ptr %lx", peer_ptr);
-
             u64 remote_addr_len = 0;
             if (!read_go_byte_arr("grpc peer ptr", peer_ptr, tcp_addr_ip_ptr_pos, &trace->remote_addr, &remote_addr_len, sizeof(trace->remote_addr))) {
                 bpf_warn_printk("can't read grpc peer ptr");
@@ -320,7 +316,6 @@ int uprobe_server_handleStream_return(struct pt_regs *ctx) {
             trace->host_len = host_len;
 
             bpf_probe_read(&trace->host_port, sizeof(trace->host_port), (void *)(host_ptr + tcp_addr_port_ptr_pos));
-            bpf_dbg_printk("port %d", trace->host_port);
         }
     }
 

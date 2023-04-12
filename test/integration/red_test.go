@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"github.com/grafana/ebpf-autoinstrument/test/integration/components/prom"
+	grpcclient "github.com/grafana/ebpf-autoinstrument/test/integration/components/testserver/grpc/client"
+
 	"github.com/mariomac/guara/pkg/test"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -118,4 +120,33 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url string) {
 	assert.Greater(t, sum, 90.0)
 	addr := net.ParseIP(res.Metric["net_sock_peer_addr"])
 	assert.NotNil(t, addr)
+}
+
+func testREDMetricsGRPC(t *testing.T) {
+	// Call 3 times the instrumented service
+	for i := 0; i < 3; i++ {
+		err := grpcclient.Ping()
+		require.NoError(t, err)
+	}
+
+	// Eventually, Prometheus would make this query visible
+	pq := prom.Client{HostPort: prometheusHostPort}
+	var results []prom.Result
+	test.Eventually(t, testTimeout, func(t require.TestingT) {
+		var err error
+		results, err = pq.Query(`duration_count{` +
+			`rpc_grpc_status_code="0",` +
+			`service_name="/testserver",` +
+			`rpc_method="/routeguide.RouteGuide/GetFeature"}`)
+		require.NoError(t, err)
+		// check duration_count has 3 calls and all the arguments
+		require.Len(t, results, 1)
+		if len(results) > 0 {
+			res := results[0]
+			require.Len(t, res.Value, 2)
+			assert.Equal(t, "3", res.Value[1])
+			addr := net.ParseIP(res.Metric["net_sock_peer_addr"])
+			assert.NotNil(t, addr)
+		}
+	})
 }

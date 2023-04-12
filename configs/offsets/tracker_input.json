@@ -14,6 +14,37 @@
       ],
       "net/http.response": [
         "status"
+      ],
+      "net.TCPAddr": [
+        "IP",
+        "Port"
+      ]
+    }
+  },
+  "google.golang.org/grpc": {
+    "versions": ">= 1.40",
+    "fields": {
+      "google.golang.org/grpc/internal/transport.Stream": [
+        "method",
+        "st"
+      ],
+      "google.golang.org/grpc/internal/status.Status": [
+        "s"
+      ],
+      "google.golang.org/grpc/internal/transport.http2Server": [
+        "localAddr",
+        "remoteAddr"
+      ]
+    }
+  },
+  "google.golang.org/genproto": {
+    "branch": "main",
+    "packages": [
+      "google.golang.org/genproto/googleapis/rpc/status"
+    ],
+    "fields": {
+      "google.golang.org/genproto/googleapis/rpc/status.Status": [
+        "Code"
       ]
     }
   }

@@ -23,3 +23,4 @@ test/cmd/grpc/server/server
 test/cmd/grpc/client/client
 
 bin/
+test/integration/components/server

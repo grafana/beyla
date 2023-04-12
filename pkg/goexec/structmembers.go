@@ -6,6 +6,7 @@ import (
 	"debug/elf"
 	_ "embed"
 	"fmt"
+	"strings"
 
 	"github.com/grafana/go-offsets-tracker/pkg/offsets"
 	"golang.org/x/exp/slog"
@@ -125,6 +126,12 @@ func structMemberPreFetchedOffsets(elfFile *elf.File, fieldOffsets FieldOffsets)
 			log.Warn("can't find version for library", "lib", strInfo.lib)
 			continue
 		}
+
+		dash := strings.Index(version, "-")
+		if dash > 0 {
+			version = version[:dash]
+		}
+
 		for fieldName, constantName := range strInfo.fields {
 			// look the version of the required field in the offsets.json memory copy
 			offset, ok := offs.Find(strName, fieldName, version)

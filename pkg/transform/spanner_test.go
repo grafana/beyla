@@ -21,13 +21,14 @@ func makeHTTPRequestTrace(method, path, peerInfo string, status uint16, duration
 	copy(r[:], cstr(peerInfo)[:])
 
 	return nethttp.HTTPRequestTrace{
-		Type:            1, // transform.EventTypeHTTP
-		Method:          m,
-		Path:            p,
-		RemoteAddr:      r,
-		Status:          status,
-		StartMonotimeNs: 0,
-		EndMonotimeNs:   durationMs * 1000000,
+		Type:              1, // transform.EventTypeHTTP
+		Method:            m,
+		Path:              p,
+		RemoteAddr:        r,
+		Status:            status,
+		GoStartMonotimeNs: 0,
+		StartMonotimeNs:   durationMs * 1000000,
+		EndMonotimeNs:     durationMs * 2 * 1000000,
 	}
 }
 
@@ -38,13 +39,14 @@ func makeGRPCRequestTrace(path string, peerInfo []byte, status uint16, durationM
 	copy(r[:], peerInfo[:])
 
 	return nethttp.HTTPRequestTrace{
-		Type:            2, // transform.EventTypeGRPC
-		Path:            p,
-		RemoteAddr:      r,
-		RemoteAddrLen:   uint64(len(peerInfo)),
-		Status:          status,
-		StartMonotimeNs: 0,
-		EndMonotimeNs:   durationMs * 1000000,
+		Type:              2, // transform.EventTypeGRPC
+		Path:              p,
+		RemoteAddr:        r,
+		RemoteAddrLen:     uint64(len(peerInfo)),
+		Status:            status,
+		GoStartMonotimeNs: 0,
+		StartMonotimeNs:   durationMs * 1000000,
+		EndMonotimeNs:     durationMs * 2 * 1000000,
 	}
 }
 func assertMatches(t *testing.T, span *HTTPRequestSpan, method, path, peer string, status int, durationMs uint64) {
@@ -54,6 +56,7 @@ func assertMatches(t *testing.T, span *HTTPRequestSpan, method, path, peer strin
 	assert.Equal(t, peer, span.Peer)
 	assert.Equal(t, status, span.Status)
 	assert.Equal(t, int(durationMs*1000000), (span.End.Nanosecond() - span.Start.Nanosecond()))
+	assert.Equal(t, int(durationMs*1000000), (span.Start.Nanosecond() - span.RequestStart.Nanosecond()))
 }
 
 func TestRequestTraceParsing(t *testing.T) {

@@ -64,6 +64,7 @@ typedef struct http_request_trace_t {
     u8  host[HOST_LEN];
     u64 host_len;
     u32 host_port;
+    s64 content_length;
 } __attribute__((packed)) http_request_trace;
 // Force emitting struct sock_info into the ELF for automatic creation of Golang struct
 const http_request_trace *unused __attribute__((unused));
@@ -105,6 +106,7 @@ volatile const u64 method_ptr_pos;
 volatile const u64 status_ptr_pos;
 volatile const u64 remoteaddr_ptr_pos;
 volatile const u64 host_ptr_pos;
+volatile const u64 content_length_ptr_pos;
 // GRPC
 volatile const u64 grpc_stream_st_ptr_pos;
 volatile const u64 grpc_stream_method_ptr_pos;
@@ -208,6 +210,7 @@ int uprobe_ServeHttp_return(struct pt_regs *ctx) {
         bpf_ringbuf_discard(trace, 0);
         return 0;
     }
+    bpf_probe_read(&trace->content_length, sizeof(trace->content_length), (void *)(req_ptr + content_length_ptr_pos));
 
     // get return code from http.ResponseWriter (interface)
     // assuming implementation of http.ResponseWriter is http.response
@@ -268,6 +271,7 @@ int uprobe_server_handleStream_return(struct pt_regs *ctx) {
     }
     trace->type = EVENT_GRPC_REQUEST;
     trace->start_monotime_ns = invocation->start_monotime_ns;
+    trace->status = invocation->status;
 
     u64 *go_start_monotime_ns = bpf_map_lookup_elem(&ongoing_goroutines, &goroutine_addr);
     if (go_start_monotime_ns) {
@@ -340,7 +344,7 @@ int uprobe_transport_writeStatus(struct pt_regs *ctx) {
         return 0;
     }
 
-    void *status_ptr = GO_PARAM4(ctx);
+    void *status_ptr = GO_PARAM3(ctx);
     bpf_dbg_printk("status_ptr %lx", status_ptr);
 
     if (status_ptr != NULL) {

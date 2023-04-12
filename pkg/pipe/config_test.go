@@ -43,8 +43,10 @@ otel_metrics_export:
 		Printer:          true,
 		Noop:             true,
 		EBPF: nethttp.EBPFTracer{
-			Exec:      "tras",
-			Functions: []string{"FooBar"},
+			Exec:             "tras",
+			Functions:        []string{"FooBar"},
+			GRPCWriteStatus:  []string{"google.golang.org/grpc/internal/transport.(*http2Server).WriteStatus"},
+			GRPCHandleStream: []string{"google.golang.org/grpc.(*Server).handleStream"},
 		},
 		Metrics: otel.MetricsConfig{
 			ServiceName: "svc-name",

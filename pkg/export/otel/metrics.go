@@ -103,9 +103,9 @@ func (r *MetricsReporter) close() {
 	}
 }
 
-func (r *MetricsReporter) reportMetrics(spans <-chan transform.HTTPRequestSpan) {
-	defer r.close()
-	for span := range spans {
+func metricAttributes(r *MetricsReporter, span *transform.HTTPRequestSpan) []attribute.KeyValue {
+	switch span.Type {
+	case transform.EventTypeHTTP:
 		attrs := []attribute.KeyValue{
 			semconv.HTTPMethod(span.Method),
 			semconv.HTTPStatusCode(span.Status),
@@ -119,6 +119,26 @@ func (r *MetricsReporter) reportMetrics(spans <-chan transform.HTTPRequestSpan) 
 		if span.Route != "" {
 			attrs = append(attrs, semconv.HTTPRoute(span.Route))
 		}
+		return attrs
+	case transform.EventTypeGRPC:
+		attrs := []attribute.KeyValue{
+			semconv.RPCMethod(span.Path),
+			semconv.RPCSystemGRPC,
+			semconv.RPCGRPCStatusCodeKey.Int(span.Status),
+		}
+		if r.reportPeer {
+			attrs = append(attrs, semconv.NetSockPeerAddr(span.Peer))
+		}
+		return attrs
+	}
+
+	return []attribute.KeyValue{}
+}
+
+func (r *MetricsReporter) reportMetrics(spans <-chan transform.HTTPRequestSpan) {
+	defer r.close()
+	for span := range spans {
+		attrs := metricAttributes(r, &span)
 		// TODO: for more accuracy, there must be a way to set the metric time from the actual span end time
 		r.duration.Record(context.TODO(), span.End.Sub(span.Start).Seconds()*1000, attrs...)
 	}

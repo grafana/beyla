@@ -91,11 +91,9 @@ func (r *TracesReporter) close() {
 	}
 }
 
-func (r *TracesReporter) reportTraces(spans <-chan transform.HTTPRequestSpan) {
-	defer r.close()
-	tracer := r.traceProvider.Tracer(reporterName)
-	for span := range spans {
-		// TODO: add src/dst ip and dst port
+func traceAttributes(span *transform.HTTPRequestSpan) []attribute.KeyValue {
+	switch span.Type {
+	case transform.EventTypeHTTP:
 		attrs := []attribute.KeyValue{
 			semconv.HTTPMethod(span.Method),
 			semconv.HTTPStatusCode(span.Status),
@@ -107,6 +105,25 @@ func (r *TracesReporter) reportTraces(spans <-chan transform.HTTPRequestSpan) {
 		if span.Route != "" {
 			attrs = append(attrs, semconv.HTTPRoute(span.Route))
 		}
+		return attrs
+	case transform.EventTypeGRPC:
+		return []attribute.KeyValue{
+			semconv.RPCMethod(span.Path),
+			semconv.RPCSystemGRPC,
+			semconv.RPCGRPCStatusCodeKey.Int(span.Status),
+			semconv.NetSockPeerAddr(span.Peer),
+			semconv.NetHostName(span.Host),
+			semconv.NetHostPort(span.HostPort),
+		}
+	}
+	return []attribute.KeyValue{}
+}
+
+func (r *TracesReporter) reportTraces(spans <-chan transform.HTTPRequestSpan) {
+	defer r.close()
+	tracer := r.traceProvider.Tracer(reporterName)
+	for span := range spans {
+		attrs := traceAttributes(&span)
 
 		// TODO: there must be a better way to instantiate spans
 		_, sp := tracer.Start(context.TODO(), "session",

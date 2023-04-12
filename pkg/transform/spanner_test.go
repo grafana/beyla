@@ -21,6 +21,7 @@ func makeHTTPRequestTrace(method, path, peerInfo string, status uint16, duration
 	copy(r[:], cstr(peerInfo)[:])
 
 	return nethttp.HTTPRequestTrace{
+		Type:            1, // transform.EventTypeHTTP
 		Method:          m,
 		Path:            p,
 		RemoteAddr:      r,
@@ -30,6 +31,22 @@ func makeHTTPRequestTrace(method, path, peerInfo string, status uint16, duration
 	}
 }
 
+func makeGRPCRequestTrace(path string, peerInfo []byte, status uint16, durationMs uint64) nethttp.HTTPRequestTrace {
+	p := [100]uint8{}
+	copy(p[:], cstr(path)[:])
+	r := [50]uint8{}
+	copy(r[:], peerInfo[:])
+
+	return nethttp.HTTPRequestTrace{
+		Type:            2, // transform.EventTypeGRPC
+		Path:            p,
+		RemoteAddr:      r,
+		RemoteAddrLen:   uint64(len(peerInfo)),
+		Status:          status,
+		StartMonotimeNs: 0,
+		EndMonotimeNs:   durationMs * 1000000,
+	}
+}
 func assertMatches(t *testing.T, span *HTTPRequestSpan, method, path, peer string, status int, durationMs uint64) {
 	assert.Equal(t, method, span.Method)
 	assert.Equal(t, path, span.Path)
@@ -64,5 +81,11 @@ func TestRequestTraceParsing(t *testing.T) {
 		tr := makeHTTPRequestTrace("GET", "/posts/1/1", "1234:aaa", 500, 1)
 		s := cnv.convert(&tr)
 		assertMatches(t, &s, "GET", "/posts/1/1", "1234", 500, 1)
+	})
+
+	t.Run("Test with GRPC request", func(t *testing.T) {
+		tr := makeGRPCRequestTrace("/posts/1/1", []byte{0x7f, 0, 0, 0x1}, 2, 1)
+		s := cnv.convert(&tr)
+		assertMatches(t, &s, "", "/posts/1/1", "127.0.0.1", 2, 1)
 	})
 }

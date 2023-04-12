@@ -17,7 +17,7 @@ import (
 type graphBuilder struct {
 	config    *Config
 	builder   *graph.Builder
-	inspector func(execFile string, funcNames []string) (goexec.Offsets, error)
+	inspector func(execFile string, funcNames map[string][]string) (goexec.Offsets, error)
 }
 
 // Build instantiates the whole instrumentation --> processing --> submit
@@ -55,12 +55,19 @@ func (gb *graphBuilder) buildGraph() (graph.Graph, error) {
 	//   httpTracer --> converter --+--> MetricsSender
 	//                              +--> PrinterNode
 
-	offsets, err := gb.inspector(gb.config.EBPF.Exec, gb.config.EBPF.Functions)
+	offsets, err := gb.inspector(
+		gb.config.EBPF.Exec,
+		map[string][]string{
+			nethttp.SectionHTTP:       gb.config.EBPF.Functions,
+			nethttp.SectionGRPCStream: gb.config.EBPF.GRPCHandleStream,
+			nethttp.SectionGRPCStatus: gb.config.EBPF.GRPCWriteStatus,
+		},
+	)
 	if err != nil {
 		return graph.Graph{}, fmt.Errorf("error analysing target executable: %w", err)
 	}
-
 	gb.config.EBPF.Offsets = &offsets
+
 	if gb.config.Metrics.ServiceName == "" {
 		gb.config.Metrics.ServiceName = offsets.FileInfo.CmdExePath
 	}

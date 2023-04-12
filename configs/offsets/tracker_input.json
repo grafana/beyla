@@ -38,11 +38,14 @@
     }
   },
   "google.golang.org/genproto": {
-    "versions": ">= 0.0",
+    "branch": "main",
+    "packages": [
+      "google.golang.org/genproto/googleapis/rpc/status"
+    ],
     "fields": {
       "google.golang.org/genproto/googleapis/rpc/status.Status": [
         "Code"
       ]
     }
-  }  
+  }
 }

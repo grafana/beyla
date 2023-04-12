@@ -1,5 +1,19 @@
 {
   "data": {
+    "google.golang.org/genproto/googleapis/rpc/status.Status": {
+      "Code": {
+        "versions": {
+          "oldest": "0.0.0",
+          "newest": "0.0.0"
+        },
+        "offsets": [
+          {
+            "offset": 40,
+            "since": "0.0.0"
+          }
+        ]
+      }
+    },
     "google.golang.org/grpc/internal/status.Status": {
       "s": {
         "versions": {
@@ -9,7 +23,7 @@
         "offsets": [
           {
             "offset": 0,
-            "since": "v1.40.0"
+            "since": "1.40.0"
           }
         ]
       }
@@ -23,7 +37,7 @@
         "offsets": [
           {
             "offset": 80,
-            "since": "v1.40.0"
+            "since": "1.40.0"
           }
         ]
       },
@@ -35,7 +49,7 @@
         "offsets": [
           {
             "offset": 8,
-            "since": "v1.40.0"
+            "since": "1.40.0"
           }
         ]
       }
@@ -49,7 +63,7 @@
         "offsets": [
           {
             "offset": 88,
-            "since": "v1.40.0"
+            "since": "1.40.0"
           }
         ]
       },
@@ -61,7 +75,7 @@
         "offsets": [
           {
             "offset": 72,
-            "since": "v1.40.0"
+            "since": "1.40.0"
           }
         ]
       }
@@ -75,7 +89,7 @@
         "offsets": [
           {
             "offset": 0,
-            "since": "1.17"
+            "since": "1.17.0"
           }
         ]
       },
@@ -87,7 +101,7 @@
         "offsets": [
           {
             "offset": 24,
-            "since": "1.17"
+            "since": "1.17.0"
           }
         ]
       }
@@ -101,7 +115,7 @@
         "offsets": [
           {
             "offset": 128,
-            "since": "1.17"
+            "since": "1.17.0"
           }
         ]
       },
@@ -113,7 +127,7 @@
         "offsets": [
           {
             "offset": 0,
-            "since": "1.17"
+            "since": "1.17.0"
           }
         ]
       },
@@ -125,7 +139,7 @@
         "offsets": [
           {
             "offset": 176,
-            "since": "1.17"
+            "since": "1.17.0"
           }
         ]
       },
@@ -137,7 +151,7 @@
         "offsets": [
           {
             "offset": 16,
-            "since": "1.17"
+            "since": "1.17.0"
           }
         ]
       }
@@ -151,7 +165,7 @@
         "offsets": [
           {
             "offset": 120,
-            "since": "1.17"
+            "since": "1.17.0"
           }
         ]
       }
@@ -165,7 +179,7 @@
         "offsets": [
           {
             "offset": 56,
-            "since": "1.17"
+            "since": "1.17.0"
           }
         ]
       }

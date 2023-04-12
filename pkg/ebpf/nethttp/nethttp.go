@@ -77,7 +77,7 @@ type HTTPRequestTrace bpfHttpRequestTrace
 
 // Instrument the executable passed as path and insert probes in the provided offsets, so the
 // returned InstrumentedServe instance will listen and forward traces for each HTTP invocation.
-func Instrument(offsets *goexec.Offsets, logLevel string) (*InstrumentedServe, error) { //nolint:cyclop
+func Instrument(offsets *goexec.Offsets, logLevel string) (*InstrumentedServe, error) {
 	// Instead of the executable file in the disk, we pass the /proc/<pid>/exec
 	// to allow loading it from different container/pods in containerized environments
 	exe, err := link.OpenExecutable(offsets.FileInfo.ProExeLinkPath)
@@ -95,13 +95,9 @@ func Instrument(offsets *goexec.Offsets, logLevel string) (*InstrumentedServe, e
 		return nil, fmt.Errorf("loading BPF data: %w", err)
 	}
 
-	// Set the log level for nethttp BPF program
-	if err := spec.RewriteConstants(map[string]interface{}{"go_http_debug_level": ebpfLogLevel(logLevel)}); err != nil {
-		return nil, fmt.Errorf("rewriting BPF log level definition: %w", err)
-	}
-
-	if err := spec.RewriteConstants(offsets.Field); err != nil {
-		return nil, fmt.Errorf("rewriting BPF constants definition: %w", err)
+	// Set the field offsets and the logLevel for nethttp BPF program
+	if err := rewriteConstants(spec, offsets.Field, logLevel); err != nil {
+		return nil, err
 	}
 
 	h := InstrumentedServe{}
@@ -110,33 +106,9 @@ func Instrument(offsets *goexec.Offsets, logLevel string) (*InstrumentedServe, e
 		return nil, instrumentError(err, "loading and assigning BPF objects")
 	}
 
-	for section, funcOffsets := range offsets.Funcs {
-		for _, fn := range funcOffsets {
-			switch section {
-			case SectionHTTP:
-				if err := h.instrumentFunction(fn, exe, h.bpfObjects.UprobeServeHTTP, h.bpfObjects.UprobeServeHttpReturn); err != nil {
-					return nil, fmt.Errorf("instrumenting function: %w in section %s", err, section)
-				}
-			case SectionGRPCStream:
-				if err := h.instrumentFunction(fn, exe, h.bpfObjects.UprobeServerHandleStream, h.bpfObjects.UprobeServerHandleStreamReturn); err != nil {
-					return nil, fmt.Errorf("instrumenting function: %w in section %s", err, section)
-				}
-			case SectionGRPCStatus:
-				if err := h.instrumentFunction(fn, exe, h.bpfObjects.UprobeTransportWriteStatus, nil); err != nil {
-					return nil, fmt.Errorf("instrumenting function: %w in section %s", err, section)
-				}
-			case SectionRuntimeNewproc1:
-				if err := h.instrumentFunction(fn, exe, nil, h.bpfObjects.UprobeProcNewproc1Ret); err != nil {
-					return nil, fmt.Errorf("instrumenting function: %w in section %s", err, section)
-				}
-			case SectionRuntimeGoexit1:
-				if err := h.instrumentFunction(fn, exe, h.bpfObjects.UprobeProcGoexit1, nil); err != nil {
-					return nil, fmt.Errorf("instrumenting function: %w in section %s", err, section)
-				}
-			default:
-				return nil, fmt.Errorf("unknown section %s", section)
-			}
-		}
+	// Patch the functions to be instrumented
+	if err := instrumentFunctions(&h, exe, offsets.Funcs); err != nil {
+		return nil, err
 	}
 
 	// BPF will send each measured trace via Ring Buffer, so we listen for them from the
@@ -148,6 +120,52 @@ func Instrument(offsets *goexec.Offsets, logLevel string) (*InstrumentedServe, e
 	h.eventsReader = rd
 
 	return &h, nil
+}
+
+func rewriteConstants(spec *ebpf.CollectionSpec, fields map[string]interface{}, logLevel string) error {
+	// Set the log level for nethttp BPF program
+	if err := spec.RewriteConstants(map[string]interface{}{"go_http_debug_level": ebpfLogLevel(logLevel)}); err != nil {
+		return fmt.Errorf("rewriting BPF log level definition: %w", err)
+	}
+
+	if err := spec.RewriteConstants(fields); err != nil {
+		return fmt.Errorf("rewriting BPF constants definition: %w", err)
+	}
+
+	return nil
+}
+
+func instrumentFunctions(h *InstrumentedServe, exe *link.Executable, funcs map[string][]goexec.FuncOffsets) error {
+	for section, funcOffsets := range funcs {
+		for _, fn := range funcOffsets {
+			switch section {
+			case SectionHTTP:
+				if err := h.instrumentFunction(fn, exe, h.bpfObjects.UprobeServeHTTP, h.bpfObjects.UprobeServeHttpReturn); err != nil {
+					return fmt.Errorf("instrumenting function: %w in section %s", err, section)
+				}
+			case SectionGRPCStream:
+				if err := h.instrumentFunction(fn, exe, h.bpfObjects.UprobeServerHandleStream, h.bpfObjects.UprobeServerHandleStreamReturn); err != nil {
+					return fmt.Errorf("instrumenting function: %w in section %s", err, section)
+				}
+			case SectionGRPCStatus:
+				if err := h.instrumentFunction(fn, exe, h.bpfObjects.UprobeTransportWriteStatus, nil); err != nil {
+					return fmt.Errorf("instrumenting function: %w in section %s", err, section)
+				}
+			case SectionRuntimeNewproc1:
+				if err := h.instrumentFunction(fn, exe, nil, h.bpfObjects.UprobeProcNewproc1Ret); err != nil {
+					return fmt.Errorf("instrumenting function: %w in section %s", err, section)
+				}
+			case SectionRuntimeGoexit1:
+				if err := h.instrumentFunction(fn, exe, h.bpfObjects.UprobeProcGoexit1, nil); err != nil {
+					return fmt.Errorf("instrumenting function: %w in section %s", err, section)
+				}
+			default:
+				return fmt.Errorf("unknown section %s", section)
+			}
+		}
+	}
+
+	return nil
 }
 
 func (h *InstrumentedServe) instrumentFunction(offsets goexec.FuncOffsets, exe *link.Executable, f *ebpf.Program, fret *ebpf.Program) error {

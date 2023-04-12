@@ -38,11 +38,13 @@ func (m MetricsConfig) Enabled() bool {
 }
 
 type MetricsReporter struct {
-	reportTarget bool
-	reportPeer   bool
-	exporter     metric.Exporter
-	provider     *metric.MeterProvider
-	duration     instrument.Float64Histogram
+	reportTarget    bool
+	reportPeer      bool
+	exporter        metric.Exporter
+	provider        *metric.MeterProvider
+	httpDuration    instrument.Float64Histogram
+	grpcDuration    instrument.Float64Histogram
+	httpRequestSize instrument.Float64Histogram
 }
 
 func MetricsReporterProvider(cfg MetricsConfig) node.TerminalFunc[transform.HTTPRequestSpan] {
@@ -86,10 +88,20 @@ func newMetricsReporter(cfg *MetricsConfig) (*MetricsReporter, error) {
 		metric.WithReader(metric.NewPeriodicReader(mr.exporter,
 			metric.WithInterval(cfg.Interval))),
 	)
-	mr.duration, err = mr.provider.Meter(reporterName).
-		Float64Histogram("duration", instrument.WithUnit("ms"))
+	mr.httpDuration, err = mr.provider.Meter(reporterName).
+		Float64Histogram("http.server.duration", instrument.WithUnit("ms"))
 	if err != nil {
-		return nil, fmt.Errorf("creating duration histogram metric: %w", err)
+		return nil, fmt.Errorf("creating http duration histogram metric: %w", err)
+	}
+	mr.grpcDuration, err = mr.provider.Meter(reporterName).
+		Float64Histogram("rpc.server.duration", instrument.WithUnit("ms"))
+	if err != nil {
+		return nil, fmt.Errorf("creating grpc duration histogram metric: %w", err)
+	}
+	mr.httpRequestSize, err = mr.provider.Meter(reporterName).
+		Float64Histogram("http.server.request.size", instrument.WithUnit("By"))
+	if err != nil {
+		return nil, fmt.Errorf("creating http size histogram metric: %w", err)
 	}
 	return &mr, nil
 }
@@ -103,7 +115,7 @@ func (r *MetricsReporter) close() {
 	}
 }
 
-func metricAttributes(r *MetricsReporter, span *transform.HTTPRequestSpan) []attribute.KeyValue {
+func (r *MetricsReporter) metricAttributes(span *transform.HTTPRequestSpan) []attribute.KeyValue {
 	switch span.Type {
 	case transform.EventTypeHTTP:
 		attrs := []attribute.KeyValue{
@@ -135,11 +147,21 @@ func metricAttributes(r *MetricsReporter, span *transform.HTTPRequestSpan) []att
 	return []attribute.KeyValue{}
 }
 
+func (r *MetricsReporter) record(span *transform.HTTPRequestSpan, attrs []attribute.KeyValue) {
+	switch span.Type {
+	case transform.EventTypeHTTP:
+		// TODO: for more accuracy, there must be a way to set the metric time from the actual span end time
+		r.httpDuration.Record(context.TODO(), span.End.Sub(span.RequestStart).Seconds()*1000, attrs...)
+		r.httpRequestSize.Record(context.TODO(), float64(span.ContentLength), attrs...)
+	case transform.EventTypeGRPC:
+		r.grpcDuration.Record(context.TODO(), span.End.Sub(span.RequestStart).Seconds()*1000, attrs...)
+	}
+}
+
 func (r *MetricsReporter) reportMetrics(spans <-chan transform.HTTPRequestSpan) {
 	defer r.close()
 	for span := range spans {
-		attrs := metricAttributes(r, &span)
-		// TODO: for more accuracy, there must be a way to set the metric time from the actual span end time
-		r.duration.Record(context.TODO(), span.End.Sub(span.RequestStart).Seconds()*1000, attrs...)
+		attrs := r.metricAttributes(&span)
+		r.record(&span, attrs)
 	}
 }

@@ -47,7 +47,7 @@ func TestBasicPipeline(t *testing.T) {
 
 	event := getEvent(t, tc)
 	assert.Equal(t, collector.MetricRecord{
-		Name: "duration",
+		Name: "http.server.duration",
 		Unit: "ms",
 		Attributes: map[string]string{
 			string(semconv.HTTPMethodKey):      "GET",
@@ -124,7 +124,7 @@ func TestRouteConsolidation(t *testing.T) {
 	}
 
 	assert.Equal(t, collector.MetricRecord{
-		Name: "duration",
+		Name: "http.server.duration",
 		Unit: "ms",
 		Attributes: map[string]string{
 			string(semconv.HTTPMethodKey):     "GET",
@@ -135,7 +135,7 @@ func TestRouteConsolidation(t *testing.T) {
 	}, events["/user/{id}"])
 
 	assert.Equal(t, collector.MetricRecord{
-		Name: "duration",
+		Name: "http.server.duration",
 		Unit: "ms",
 		Attributes: map[string]string{
 			string(semconv.HTTPMethodKey):     "GET",
@@ -146,7 +146,7 @@ func TestRouteConsolidation(t *testing.T) {
 	}, events["/products/{id}/push"])
 
 	assert.Equal(t, collector.MetricRecord{
-		Name: "duration",
+		Name: "http.server.duration",
 		Unit: "ms",
 		Attributes: map[string]string{
 			string(semconv.HTTPMethodKey):     "GET",
@@ -181,7 +181,7 @@ func TestGRPCPipeline(t *testing.T) {
 
 	event := getEvent(t, tc)
 	assert.Equal(t, collector.MetricRecord{
-		Name: "duration",
+		Name: "rpc.server.duration",
 		Unit: "ms",
 		Attributes: map[string]string{
 			string(semconv.RPCSystemKey):         "grpc",
@@ -281,12 +281,13 @@ func matchTraceEvent(t *testing.T, name string, event collector.TraceRecord) {
 	assert.Equal(t, collector.TraceRecord{
 		Name: name,
 		Attributes: map[string]string{
-			string(semconv.HTTPMethodKey):      "GET",
-			string(semconv.HTTPStatusCodeKey):  "404",
-			string(semconv.HTTPTargetKey):      "/foo/bar",
-			string(semconv.NetSockPeerAddrKey): "1.1.1.1",
-			string(semconv.NetHostNameKey):     getHostname(),
-			string(semconv.NetHostPortKey):     "8080",
+			string(semconv.HTTPMethodKey):               "GET",
+			string(semconv.HTTPStatusCodeKey):           "404",
+			string(semconv.HTTPTargetKey):               "/foo/bar",
+			string(semconv.NetSockPeerAddrKey):          "1.1.1.1",
+			string(semconv.NetHostNameKey):              getHostname(),
+			string(semconv.NetHostPortKey):              "8080",
+			string(semconv.HTTPRequestContentLengthKey): "0",
 		},
 		Kind: ptrace.SpanKindInternal,
 	}, event)

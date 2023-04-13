@@ -3,6 +3,7 @@
 package integration
 
 import (
+	"bytes"
 	"fmt"
 	"math/rand"
 	"net"
@@ -70,11 +71,18 @@ func testREDMetricsHTTP(t *testing.T) {
 func testREDMetricsForHTTPLibrary(t *testing.T, url string) {
 	path := "/basic/" + rndStr()
 
+	// Random fake body to cause the request to have some size (38 bytes)
+	jsonBody := []byte(`{"productId": 123456, "quantity": 100}`)
+
 	// Call 3 times the instrumented service, forcing it to:
 	// - take at least 30ms to respond
 	// - returning a 404 code
 	for i := 0; i < 3; i++ {
-		r, err := http.Get(url + path + "?delay=30ms&status=404")
+		req, err := http.NewRequest(http.MethodGet, url+path+"?delay=30ms&status=404", bytes.NewReader(jsonBody))
+		require.NoError(t, err)
+		req.Header.Set("Content-Type", "application/json")
+
+		r, err := http.DefaultClient.Do(req)
 		require.NoError(t, err)
 		require.Equal(t, 404, r.StatusCode)
 		time.Sleep(300 * time.Millisecond)
@@ -139,6 +147,23 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url string) {
 	require.NoError(t, err)
 	assert.Greater(t, sum, 90.0)
 	addr := net.ParseIP(res.Metric["net_sock_peer_addr"])
+	assert.NotNil(t, addr)
+
+	// check request_size_sum is at least 114B (3 * 38B)
+	results, err = pq.Query(`http_server_request_size_sum{` +
+		`http_method="GET",` +
+		`http_status_code="404",` +
+		`service_name="/testserver",` +
+		`http_route="/basic/:rnd",` +
+		`http_target="` + path + `"}`)
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+	res = results[0]
+	require.Len(t, res.Value, 2)
+	sum, err = strconv.ParseFloat(fmt.Sprint(res.Value[1]), 64)
+	require.NoError(t, err)
+	assert.GreaterOrEqual(t, sum, 114.0)
+	addr = net.ParseIP(res.Metric["net_sock_peer_addr"])
 	assert.NotNil(t, addr)
 }
 

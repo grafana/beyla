@@ -125,12 +125,29 @@ func (r *TracesReporter) reportTraces(spans <-chan transform.HTTPRequestSpan) {
 	for span := range spans {
 		attrs := traceAttributes(&span)
 
-		// TODO: there must be a better way to instantiate spans
-		_, sp := tracer.Start(context.TODO(), "session",
+		// Create a parent span for the whole request session
+		ctx, sp := tracer.Start(context.TODO(), "session",
+			trace2.WithTimestamp(span.RequestStart),
+			trace2.WithAttributes(attrs...),
+			trace2.WithSpanKind(trace2.SpanKindInternal),
+		)
+
+		// Create a child span showing the queue time
+		_, spQ := tracer.Start(ctx, "in queue",
+			trace2.WithTimestamp(span.RequestStart),
+			trace2.WithAttributes(attrs...),
+			trace2.WithSpanKind(trace2.SpanKindInternal),
+		)
+		spQ.End(trace2.WithTimestamp(span.Start))
+
+		// Create a child span showing the processing time
+		_, spP := tracer.Start(ctx, "processing",
 			trace2.WithTimestamp(span.Start),
 			trace2.WithAttributes(attrs...),
-			// TODO: trace2.WithSpanKind()
+			trace2.WithSpanKind(trace2.SpanKindInternal),
 		)
+		spP.End(trace2.WithTimestamp(span.End))
+
 		sp.End(trace2.WithTimestamp(span.End))
 	}
 }

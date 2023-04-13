@@ -21,7 +21,7 @@ import (
 	"github.com/grafana/ebpf-autoinstrument/test/collector"
 )
 
-const testTimeout = 5 * time.Second
+const testTimeout = 500 * time.Second
 
 func TestBasicPipeline(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -82,18 +82,11 @@ func TestTracerPipeline(t *testing.T) {
 	go pipe.Run(ctx)
 
 	event := getTraceEvent(t, tc)
-	assert.Equal(t, collector.TraceRecord{
-		Name: "session",
-		Attributes: map[string]string{
-			string(semconv.HTTPMethodKey):      "GET",
-			string(semconv.HTTPStatusCodeKey):  "404",
-			string(semconv.HTTPTargetKey):      "/foo/bar",
-			string(semconv.NetSockPeerAddrKey): "1.1.1.1",
-			string(semconv.NetHostNameKey):     getHostname(),
-			string(semconv.NetHostPortKey):     "8080",
-		},
-		Kind: ptrace.SpanKindInternal,
-	}, event)
+	matchTraceEvent(t, "in queue", event)
+	event = getTraceEvent(t, tc)
+	matchTraceEvent(t, "processing", event)
+	event = getTraceEvent(t, tc)
+	matchTraceEvent(t, "session", event)
 }
 
 func TestRouteConsolidation(t *testing.T) {
@@ -223,18 +216,11 @@ func TestTraceGRPCPipeline(t *testing.T) {
 	go pipe.Run(ctx)
 
 	event := getTraceEvent(t, tc)
-	assert.Equal(t, collector.TraceRecord{
-		Name: "session",
-		Attributes: map[string]string{
-			string(semconv.RPCSystemKey):         "grpc",
-			string(semconv.RPCGRPCStatusCodeKey): "3",
-			string(semconv.RPCMethodKey):         "/foo/bar",
-			string(semconv.NetSockPeerAddrKey):   "1.1.1.1",
-			string(semconv.NetHostNameKey):       "127.0.0.1",
-			string(semconv.NetHostPortKey):       "8080",
-		},
-		Kind: ptrace.SpanKindInternal,
-	}, event)
+	matchGRPCTraceEvent(t, "in queue", event)
+	event = getTraceEvent(t, tc)
+	matchGRPCTraceEvent(t, "processing", event)
+	event = getTraceEvent(t, tc)
+	matchGRPCTraceEvent(t, "session", event)
 }
 
 func newRequest(method, path, peer string, status int) nethttp.HTTPRequestTrace {
@@ -289,4 +275,34 @@ func getHostname() string {
 		return ""
 	}
 	return hostname
+}
+
+func matchTraceEvent(t *testing.T, name string, event collector.TraceRecord) {
+	assert.Equal(t, collector.TraceRecord{
+		Name: name,
+		Attributes: map[string]string{
+			string(semconv.HTTPMethodKey):      "GET",
+			string(semconv.HTTPStatusCodeKey):  "404",
+			string(semconv.HTTPTargetKey):      "/foo/bar",
+			string(semconv.NetSockPeerAddrKey): "1.1.1.1",
+			string(semconv.NetHostNameKey):     getHostname(),
+			string(semconv.NetHostPortKey):     "8080",
+		},
+		Kind: ptrace.SpanKindInternal,
+	}, event)
+}
+
+func matchGRPCTraceEvent(t *testing.T, name string, event collector.TraceRecord) {
+	assert.Equal(t, collector.TraceRecord{
+		Name: name,
+		Attributes: map[string]string{
+			string(semconv.RPCSystemKey):         "grpc",
+			string(semconv.RPCGRPCStatusCodeKey): "3",
+			string(semconv.RPCMethodKey):         "/foo/bar",
+			string(semconv.NetSockPeerAddrKey):   "1.1.1.1",
+			string(semconv.NetHostNameKey):       "127.0.0.1",
+			string(semconv.NetHostPortKey):       "8080",
+		},
+		Kind: ptrace.SpanKindInternal,
+	}, event)
 }

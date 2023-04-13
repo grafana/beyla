@@ -35,12 +35,16 @@ import (
 const SectionHTTP = "http"
 const SectionGRPCStream = "grpc_stream"
 const SectionGRPCStatus = "grpc_status"
+const SectionRuntimeNewproc1 = "newproc1"
+const SectionRuntimeGoexit1 = "goexit1"
 
 type EBPFTracer struct {
 	Exec             string   `yaml:"executable_name" env:"EXECUTABLE_NAME"`
 	Functions        []string `yaml:"functions" env:"INSTRUMENT_FUNCTIONS"`
 	GRPCHandleStream []string `yaml:"grpc_handle_stream" env:"GRPC_HANDLE_STREAM"`
 	GRPCWriteStatus  []string `yaml:"grpc_write_status" env:"GRPC_WRITE_STATUS"`
+	RuntimeNewproc1  []string `yaml:"runtime_newproc1" env:"RUNTIME_NEWPROC1"`
+	RuntimeGoexit1   []string `yaml:"runtime_goexit1" env:"RUNTIME_GOEXIT1"`
 	LogLevel         string   `yaml:"log_level" env:"LOG_LEVEL"`
 
 	Offsets *goexec.Offsets `yaml:"-"`
@@ -91,13 +95,9 @@ func Instrument(offsets *goexec.Offsets, logLevel string) (*InstrumentedServe, e
 		return nil, fmt.Errorf("loading BPF data: %w", err)
 	}
 
-	// Set the log level for nethttp BPF program
-	if err := spec.RewriteConstants(map[string]interface{}{"go_http_debug_level": ebpfLogLevel(logLevel)}); err != nil {
-		return nil, fmt.Errorf("rewriting BPF log level definition: %w", err)
-	}
-
-	if err := spec.RewriteConstants(offsets.Field); err != nil {
-		return nil, fmt.Errorf("rewriting BPF constants definition: %w", err)
+	// Set the field offsets and the logLevel for nethttp BPF program
+	if err := rewriteConstants(spec, offsets.Field, logLevel); err != nil {
+		return nil, err
 	}
 
 	h := InstrumentedServe{}
@@ -106,25 +106,9 @@ func Instrument(offsets *goexec.Offsets, logLevel string) (*InstrumentedServe, e
 		return nil, instrumentError(err, "loading and assigning BPF objects")
 	}
 
-	for section, funcOffsets := range offsets.Funcs {
-		for _, fn := range funcOffsets {
-			switch section {
-			case SectionHTTP:
-				if err := h.instrumentFunction(fn, exe, h.bpfObjects.UprobeServeHTTP, h.bpfObjects.UprobeServeHttpReturn); err != nil {
-					return nil, fmt.Errorf("instrumenting function: %w in section %s", err, section)
-				}
-			case SectionGRPCStream:
-				if err := h.instrumentFunction(fn, exe, h.bpfObjects.UprobeServerHandleStream, h.bpfObjects.UprobeServerHandleStreamReturn); err != nil {
-					return nil, fmt.Errorf("instrumenting function: %w in section %s", err, section)
-				}
-			case SectionGRPCStatus:
-				if err := h.instrumentFunction(fn, exe, h.bpfObjects.UprobeTransportWriteStatus, nil); err != nil {
-					return nil, fmt.Errorf("instrumenting function: %w in section %s", err, section)
-				}
-			default:
-				return nil, fmt.Errorf("unknown section %s", section)
-			}
-		}
+	// Patch the functions to be instrumented
+	if err := h.instrumentFunctions(exe, offsets.Funcs); err != nil {
+		return nil, err
 	}
 
 	// BPF will send each measured trace via Ring Buffer, so we listen for them from the
@@ -138,15 +122,63 @@ func Instrument(offsets *goexec.Offsets, logLevel string) (*InstrumentedServe, e
 	return &h, nil
 }
 
+func rewriteConstants(spec *ebpf.CollectionSpec, fields map[string]interface{}, logLevel string) error {
+	// Set the log level for nethttp BPF program
+	if err := spec.RewriteConstants(map[string]interface{}{"go_http_debug_level": ebpfLogLevel(logLevel)}); err != nil {
+		return fmt.Errorf("rewriting BPF log level definition: %w", err)
+	}
+
+	if err := spec.RewriteConstants(fields); err != nil {
+		return fmt.Errorf("rewriting BPF constants definition: %w", err)
+	}
+
+	return nil
+}
+
+func (h *InstrumentedServe) instrumentFunctions(exe *link.Executable, funcs map[string][]goexec.FuncOffsets) error {
+	for section, funcOffsets := range funcs {
+		for _, fn := range funcOffsets {
+			switch section {
+			case SectionHTTP:
+				if err := h.instrumentFunction(fn, exe, h.bpfObjects.UprobeServeHTTP, h.bpfObjects.UprobeServeHttpReturn); err != nil {
+					return fmt.Errorf("instrumenting function: %w in section %s", err, section)
+				}
+			case SectionGRPCStream:
+				if err := h.instrumentFunction(fn, exe, h.bpfObjects.UprobeServerHandleStream, h.bpfObjects.UprobeServerHandleStreamReturn); err != nil {
+					return fmt.Errorf("instrumenting function: %w in section %s", err, section)
+				}
+			case SectionGRPCStatus:
+				if err := h.instrumentFunction(fn, exe, h.bpfObjects.UprobeTransportWriteStatus, nil); err != nil {
+					return fmt.Errorf("instrumenting function: %w in section %s", err, section)
+				}
+			case SectionRuntimeNewproc1:
+				if err := h.instrumentFunction(fn, exe, nil, h.bpfObjects.UprobeProcNewproc1Ret); err != nil {
+					return fmt.Errorf("instrumenting function: %w in section %s", err, section)
+				}
+			case SectionRuntimeGoexit1:
+				if err := h.instrumentFunction(fn, exe, h.bpfObjects.UprobeProcGoexit1, nil); err != nil {
+					return fmt.Errorf("instrumenting function: %w in section %s", err, section)
+				}
+			default:
+				return fmt.Errorf("unknown section %s", section)
+			}
+		}
+	}
+
+	return nil
+}
+
 func (h *InstrumentedServe) instrumentFunction(offsets goexec.FuncOffsets, exe *link.Executable, f *ebpf.Program, fret *ebpf.Program) error {
 	// Attach BPF programs as start and return probes
-	up, err := exe.Uprobe("", f, &link.UprobeOptions{
-		Address: offsets.Start,
-	})
-	if err != nil {
-		return instrumentError(err, "setting uprobe")
+	if f != nil {
+		up, err := exe.Uprobe("", f, &link.UprobeOptions{
+			Address: offsets.Start,
+		})
+		if err != nil {
+			return instrumentError(err, "setting uprobe")
+		}
+		h.uprobes = append(h.uprobes, up)
 	}
-	h.uprobes = append(h.uprobes, up)
 
 	if fret != nil {
 		// Go won't work with Uretprobes because of the way Go manages the stack. We need to set uprobes just before the return

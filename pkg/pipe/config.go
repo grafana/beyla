@@ -24,6 +24,8 @@ var defaultConfig = Config{
 		},
 		GRPCHandleStream: []string{"google.golang.org/grpc.(*Server).handleStream"},
 		GRPCWriteStatus:  []string{"google.golang.org/grpc/internal/transport.(*http2Server).WriteStatus"},
+		RuntimeNewproc1:  []string{"runtime.newproc1"},
+		RuntimeGoexit1:   []string{"runtime.goexit1"},
 	},
 	Metrics: otel.MetricsConfig{
 		Interval: 5 * time.Second,

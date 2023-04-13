@@ -17,7 +17,7 @@ import (
 type graphBuilder struct {
 	config    *Config
 	builder   *graph.Builder
-	inspector func(execFile string, funcNames map[string][]string) (goexec.Offsets, error)
+	inspector func(_ goexec.ProcessFinder, funcNames map[string][]string) (goexec.Offsets, error)
 }
 
 // Build instantiates the whole instrumentation --> processing --> submit
@@ -55,8 +55,14 @@ func (gb *graphBuilder) buildGraph() (graph.Graph, error) {
 	//   httpTracer --> converter --+--> MetricsSender
 	//                              +--> PrinterNode
 
+	var finder goexec.ProcessFinder
+	if gb.config.EBPF.Port != 0 {
+		finder = goexec.OwnedPort(gb.config.EBPF.Port)
+	} else {
+		finder = goexec.ProcessNamed(gb.config.EBPF.Exec)
+	}
 	offsets, err := gb.inspector(
-		gb.config.EBPF.Exec,
+		finder,
 		map[string][]string{
 			nethttp.SectionHTTP:            gb.config.EBPF.Functions,
 			nethttp.SectionGRPCStream:      gb.config.EBPF.GRPCHandleStream,

@@ -1,0 +1,56 @@
+# Feel free to replace the demo app by something different,
+# but it needs to bring the autoinstrumenter as a sidecar container
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: goblog
+  labels:
+    app: goblog
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: goblog
+  template:
+    metadata:
+      labels:
+        app: goblog
+    spec:
+      # required so the sidecar instrumenter can access the service process
+      shareProcessNamespace: true
+      containers:
+        - name: goblog
+          image: mariomac/goblog:dev
+          imagePullPolicy: Always
+          command: ["/goblog"]
+          env:
+            - name: "GOBLOG_CONFIG"
+              value: "/sample/config.yml"
+          ports:
+            - containerPort: 8443
+              name: https
+        - name: autoinstrumenter
+          image: mariomac/ebpf-autoinstrument:latest # TODO: use Grafana Hub Account
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            runAsUser: 0
+            privileged: true # TODO: change by individual capabilities
+          env:
+            - name: OPEN_PORT
+              value: "8443"
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: "grafana-agent:4318"
+            - name: LOG_LEVEL
+              value: "DEBUG"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: goblog
+spec:
+  selector:
+    app: goblog
+  ports:
+    - port: 8443
+      protocol: TCP
+      targetPort: https

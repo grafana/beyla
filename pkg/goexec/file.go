@@ -11,11 +11,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/shirou/gopsutil/process"
-	"golang.org/x/exp/slog"
-)
+	"github.com/shirou/gopsutil/net"
 
-var flog = slog.With("component", "goexec.ELF")
+	"github.com/shirou/gopsutil/process"
+)
 
 // TODO: user-configurable
 const retryTicker = 3 * time.Second
@@ -31,19 +30,19 @@ type FileInfo struct {
 	ELF            *elf.File
 }
 
-// findExecELF finds the ELF info of the first executable whose name contains the given string.
-// It returns a reader to the file of the process executable. The returned file
-// must be closed after its usage.
-// The operation blocks until the executable is available.
+// ProcessFinder allows finding a process given multiple criteria
+type ProcessFinder func() (*process.Process, bool)
+
+// ProcessNamed allows finding a Process whose name path contains the passed string
 // TODO: use regular expression
-// TODO: check that all the existing instances of the excutable are instrumented, even when it is offloaded from memory
-func findExecELF(pathContains string) (FileInfo, error) {
-	log := flog.With("pathContains", pathContains)
-	for {
-		log.Debug("searching for process executable")
+func ProcessNamed(pathContains string) ProcessFinder {
+	return func() (*process.Process, bool) {
+		log := log().With("pathContains", pathContains)
+		log.Debug("searching executable by process name")
 		processes, err := process.Processes()
 		if err != nil {
-			return FileInfo{}, fmt.Errorf("getting system processes: %w", err)
+			log.Warn("can't get system processes", "error", err)
+			return nil, false
 		}
 		for _, p := range processes {
 			exePath, err := p.Exe()
@@ -51,25 +50,72 @@ func findExecELF(pathContains string) (FileInfo, error) {
 				// expected for many processes, so we just ignore and keep going
 				continue
 			}
+
 			if strings.Contains(exePath, pathContains) {
-				// In container environments or K8s, we can't just open the executable exe path, because it might
-				// be in the volume of another pod/container. We need to access it through the /proc/<pid>/exe symbolic link
-				file := FileInfo{
-					CmdExePath: exePath,
-					// TODO: allow overriding /proc root folder
-					ProExeLinkPath: fmt.Sprintf("/proc/%d/exe", p.Pid),
-				}
-				file.ELF, err = elf.Open(file.ProExeLinkPath)
-				if err != nil {
-					return file, fmt.Errorf("can't open ELF executable file %q: %w", exePath, err)
-				}
-				return file, nil
+				return p, true
 			}
 		}
-		log.Warn("no processes found. Will retry", "retryAfter", retryTicker.String())
-		time.Sleep(retryTicker)
-		// TODO: return error after X attempts?
+		return nil, false
 	}
+}
+
+// OwnedPort allows finding a Process that owns the passed port
+func OwnedPort(port int) ProcessFinder {
+	return func() (*process.Process, bool) {
+		log := log().With("port", port)
+		log.Debug("searching executable by port number")
+		processes, err := process.Processes()
+		if err != nil {
+			log.Warn("can't get system processes", "error", err)
+			return nil, false
+		}
+		for _, p := range processes {
+			conns, err := net.ConnectionsPid("all", p.Pid)
+			if err != nil {
+				log.Warn("can't get process connections. Ignoring", "process", p.Pid, "error", err)
+				continue
+			}
+			for _, c := range conns {
+				if c.Laddr.Port == uint32(port) {
+					return p, true
+				}
+			}
+		}
+		return nil, false
+	}
+}
+
+// findExecELF operation blocks until the executable is available.
+// TODO: check that all the existing instances of the excutable are instrumented, even when it is offloaded from memory
+func findExecELF(finder ProcessFinder) (FileInfo, error) {
+	for {
+		log().Debug("searching for process executable")
+		p, ok := finder()
+		if !ok {
+			log().Debug("no processes found. Will retry", "retryAfter", retryTicker.String())
+			time.Sleep(retryTicker)
+			continue
+		}
+		exePath, err := p.Exe()
+		if err != nil {
+			// this might happen if you query from the port a service that does not have executable path.
+			// Since this value is just for attributing, we set a default placeholder
+			exePath = "unknown"
+		}
+		// In container environments or K8s, we can't just open the executable exe path, because it might
+		// be in the volume of another pod/container. We need to access it through the /proc/<pid>/exe symbolic link
+		file := FileInfo{
+			CmdExePath: exePath,
+			// TODO: allow overriding /proc root folder
+			ProExeLinkPath: fmt.Sprintf("/proc/%d/exe", p.Pid),
+		}
+		file.ELF, err = elf.Open(file.ProExeLinkPath)
+		if err != nil {
+			return file, fmt.Errorf("can't open ELF executable file %q: %w", exePath, err)
+		}
+		return file, nil
+	}
+	// TODO: return error after X attempts?
 }
 
 // findLibraryVersions looks for all the libraries and versions inside the elf file.
@@ -81,7 +127,7 @@ func findLibraryVersions(elfFile *elf.File) (map[string]string, error) {
 	}
 
 	goVersion = strings.ReplaceAll(goVersion, "go", "")
-	flog.Debug("Go version detected", "version", goVersion)
+	log().Debug("Go version detected", "version", goVersion)
 	modsMap := parseModules(modules)
 	modsMap["go"] = goVersion
 	return modsMap, nil
@@ -222,7 +268,7 @@ func parseModules(mod string) map[string]string {
 				if len(parts) > 2 {
 					v = parts[2]
 				}
-				log.Debug("library detected",
+				log().Debug("library detected",
 					"modType", modType,
 					"modPackage", modPackage,
 					"version", v)

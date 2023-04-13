@@ -12,7 +12,9 @@ import (
 	"golang.org/x/exp/slog"
 )
 
-var log = slog.With("component", "goexec.structMemberOffsets")
+func log() *slog.Logger {
+	return slog.With("component", "goexec.structMemberOffsets")
+}
 
 //go:embed offsets.json
 var prefetchedOffsets string
@@ -94,7 +96,7 @@ func structMemberOffsets(elfFile *elf.File) (FieldOffsets, error) {
 		offs, expected = structMemberOffsetsFromDwarf(dwarfData)
 
 		if len(expected) > 0 {
-			log.Warn("Fields not found in the DWARF file", "fields", expected)
+			log().Debug("Fields not found in the DWARF file", "fields", expected)
 		} else {
 			return offs, nil
 		}
@@ -103,13 +105,14 @@ func structMemberOffsets(elfFile *elf.File) (FieldOffsets, error) {
 		offs = FieldOffsets{}
 	}
 
-	log.Info("Can't read all offsets from DWARF info. Checking in prefetched database")
+	log().Debug("Can't read all offsets from DWARF info. Checking in prefetched database")
 
 	// if it is not possible, query from prefetched offsets
 	return structMemberPreFetchedOffsets(elfFile, offs)
 }
 
 func structMemberPreFetchedOffsets(elfFile *elf.File, fieldOffsets FieldOffsets) (FieldOffsets, error) {
+	log := log().With("function", "structMemberPreFetchedOffsets")
 	offs, err := offsets.Read(bytes.NewBufferString(prefetchedOffsets))
 	if err != nil {
 		return nil, fmt.Errorf("reading offsets file contents: %w", err)
@@ -149,6 +152,7 @@ func structMemberPreFetchedOffsets(elfFile *elf.File, fieldOffsets FieldOffsets)
 // structMemberOffsetsFromDwarf reads the executable dwarf information to get
 // the offsets specified in the structMembers map
 func structMemberOffsetsFromDwarf(data *dwarf.Data) (FieldOffsets, map[string]struct{}) {
+	log := log().With("function", "structMemberOffsetsFromDwarf")
 	expectedReturns := map[string]struct{}{}
 	for _, str := range structMembers {
 		for _, ctName := range str.fields {
@@ -162,7 +166,7 @@ func structMemberOffsetsFromDwarf(data *dwarf.Data) (FieldOffsets, map[string]st
 	for {
 		entry, err := reader.Next()
 		if err != nil {
-			log.Warn("error reading DRWARF info", "data", err)
+			log.Debug("error reading DRWARF info", "data", err)
 			return fieldOffsets, expectedReturns
 		}
 		if entry == nil { // END of dwarf data
@@ -179,7 +183,7 @@ func structMemberOffsetsFromDwarf(data *dwarf.Data) (FieldOffsets, map[string]st
 		} else { //nolint:revive
 			log.Debug("inspecting fields for struct type", "type", typeName)
 			if err := readMembers(reader, structMember.fields, expectedReturns, fieldOffsets); err != nil {
-				log.Warn("error reading DRWARF info", "type", typeName, "members", err)
+				log.Debug("error reading DRWARF info", "type", typeName, "members", err)
 				return nil, expectedReturns
 			}
 		}
@@ -208,7 +212,7 @@ func readMembers(
 		if constName, ok := fields[attrs[dwarf.AttrName].(string)]; ok {
 			delete(expectedReturns, constName)
 			value := attrs[dwarf.AttrDataMemberLoc]
-			log.Debug("found struct member offset",
+			log().Debug("found struct member offset",
 				"const", constName, "offset", attrs[dwarf.AttrDataMemberLoc])
 			offsets[constName] = uint64(value.(int64))
 		}

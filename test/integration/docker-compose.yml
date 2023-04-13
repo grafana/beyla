@@ -13,9 +13,6 @@ services:
       - "50051:50051"
     environment:
       LOG_LEVEL: DEBUG
-    depends_on:
-      autoinstrumenter:
-        condition: service_started
 
   autoinstrumenter:
     build:
@@ -28,10 +25,11 @@ services:
       - ./configs/:/configs
     image: hatest-autoinstrumenter
     privileged: true # TODO: replace by individual capabilities
-    pid: "host"
+    pid: "service:testserver"
     environment:
       PRINT_TRACES: "true"
-      EXECUTABLE_NAME: "testserver"
+      OPEN_PORT: "${OPEN_PORT}"
+      EXECUTABLE_NAME: "${EXECUTABLE_NAME}"
       OTEL_EXPORTER_OTLP_ENDPOINT: "otelcol:4318"
       METRICS_INTERVAL: "10ms"
       LOG_LEVEL: "DEBUG"

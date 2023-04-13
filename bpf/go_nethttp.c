@@ -206,7 +206,7 @@ int uprobe_ServeHttp_return(struct pt_regs *ctx) {
 
 SEC("uprobe/server_handleStream")
 int uprobe_server_handleStream(struct pt_regs *ctx) {
-    bpf_warn_printk("=== uprobe/server_handleStream === ");
+    bpf_dbg_printk("=== uprobe/server_handleStream === ");
     void *goroutine_addr = GOROUTINE_PTR(ctx);
     bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
 
@@ -225,7 +225,7 @@ int uprobe_server_handleStream(struct pt_regs *ctx) {
 
 SEC("uprobe/server_handleStream")
 int uprobe_server_handleStream_return(struct pt_regs *ctx) {
-    bpf_warn_printk("=== uprobe/server_handleStream return === ");
+    bpf_dbg_printk("=== uprobe/server_handleStream return === ");
 
     void *goroutine_addr = GOROUTINE_PTR(ctx);
     bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
@@ -248,6 +248,7 @@ int uprobe_server_handleStream_return(struct pt_regs *ctx) {
     }
     trace->type = EVENT_GRPC_REQUEST;
     trace->start_monotime_ns = invocation->start_monotime_ns;
+    trace->status = invocation->status;
 
     // Get method from transport.Stream.Method
     if (!read_go_str("grpc method", stream_ptr, grpc_stream_method_ptr_pos, &trace->path, sizeof(trace->path))) {
@@ -300,7 +301,7 @@ int uprobe_server_handleStream_return(struct pt_regs *ctx) {
 
 SEC("uprobe/transport_writeStatus")
 int uprobe_transport_writeStatus(struct pt_regs *ctx) {
-    bpf_warn_printk("=== uprobe/transport_writeStatus === ");
+    bpf_dbg_printk("=== uprobe/transport_writeStatus === ");
 
     void *goroutine_addr = GOROUTINE_PTR(ctx);
     bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
@@ -312,7 +313,7 @@ int uprobe_transport_writeStatus(struct pt_regs *ctx) {
         return 0;
     }
 
-    void *status_ptr = GO_PARAM4(ctx);
+    void *status_ptr = GO_PARAM3(ctx);
     bpf_dbg_printk("status_ptr %lx", status_ptr);
 
     if (status_ptr != NULL) {

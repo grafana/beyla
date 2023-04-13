@@ -268,6 +268,7 @@ int uprobe_server_handleStream_return(struct pt_regs *ctx) {
     }
     trace->type = EVENT_GRPC_REQUEST;
     trace->start_monotime_ns = invocation->start_monotime_ns;
+    trace->status = invocation->status;
 
     u64 *go_start_monotime_ns = bpf_map_lookup_elem(&ongoing_goroutines, &goroutine_addr);
     if (go_start_monotime_ns) {
@@ -340,7 +341,7 @@ int uprobe_transport_writeStatus(struct pt_regs *ctx) {
         return 0;
     }
 
-    void *status_ptr = GO_PARAM4(ctx);
+    void *status_ptr = GO_PARAM3(ctx);
     bpf_dbg_printk("status_ptr %lx", status_ptr);
 
     if (status_ptr != NULL) {

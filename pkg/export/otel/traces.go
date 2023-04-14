@@ -101,6 +101,7 @@ func traceAttributes(span *transform.HTTPRequestSpan) []attribute.KeyValue {
 			semconv.NetSockPeerAddr(span.Peer),
 			semconv.NetHostName(span.Host),
 			semconv.NetHostPort(span.HostPort),
+			semconv.HTTPRequestContentLength(int(span.ContentLength)),
 		}
 		if span.Route != "" {
 			attrs = append(attrs, semconv.HTTPRoute(span.Route))

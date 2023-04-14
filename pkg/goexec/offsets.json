@@ -107,6 +107,18 @@
       }
     },
     "net/http.Request": {
+      "ContentLength": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.20.3"
+        },
+        "offsets": [
+          {
+            "offset": 88,
+            "since": "1.17.0"
+          }
+        ]
+      },
       "Host": {
         "versions": {
           "oldest": "1.17.0",

@@ -22,6 +22,12 @@ static __inline int read_go_str(char *name, void *base_ptr, u8 offset, void *fie
         return 0;
     }
 
+    // put in a null terminator if we are not at max_size
+    if (size < max_size) {
+        char null = 0;
+        bpf_probe_read((char *)field + size, 1, &null);
+    }
+
     return 1;
 }
 

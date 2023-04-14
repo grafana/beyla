@@ -152,3 +152,9 @@ run-integration-test:
 integration-test: prepare-integration-test
 	$(MAKE) run-integration-test || (ret=$$?; $(MAKE) cleanup-integration-test && exit $$ret)
 	$(MAKE) cleanup-integration-test
+
+.PHONY: drone
+drone:
+	drone jsonnet --stream --source .drone/drone.jsonnet --target .drone/drone.yml
+	drone lint .drone/drone.yml
+	drone sign --save grafana/ebpf-autoinstrument .drone/drone.yml

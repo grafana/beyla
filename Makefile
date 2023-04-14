@@ -4,22 +4,24 @@ MAIN_GO_FILE ?= cmd/$(CMD).go
 GOOS ?= linux
 GOARCH ?= amd64
 
-# TODO: grafana
-DOCKERHUB_USER ?= mariomac
-
-COMPOSE_ARGS ?= -f test/integration/docker-compose.yml
-
+IMG_REGISTRY ?= docker.io
+# Set your registry username. CI will set 'grafana' but you mustn't use it for manual pushing.
+IMG_ORG ?=
+IMG_NAME ?= ebpf-autoinstrument
 # Container image creation creation
-VERSION ?= latest
-IMAGE_TAG_BASE ?= $(DOCKERHUB_USER)/ebpf-autoinstrument
-IMG ?= $(IMAGE_TAG_BASE):$(VERSION)
+VERSION ?= dev
+IMG = $(IMG_REGISTRY)/$(IMG_ORG)/$(IMAGE_TAG_BASE):$(VERSION)
 
 # The generator is a local container image that provides a reproducible environment for
 # building eBPF binaries
-GEN_IMAGE_TAG_BASE ?= $(DOCKERHUB_USER)/ebpf-generator
-GEN_IMG ?= $(GEN_IMAGE_TAG_BASE):$(VERSION)
+GEN_IMG_ORG ?= $(IMG_ORG)
+GEN_IMG_NAME ?= ebpf-generator
+GEN_IMG ?= $(GEN_IMG_ORG)/$(GEN_IMAGE_TAG_BASE):$(VERSION)
+
+COMPOSE_ARGS ?= -f test/integration/docker-compose.yml
 
 OCI_BIN ?= docker
+DRONE ?= drone
 
 # BPF code generator dependencies
 CLANG ?= clang
@@ -48,6 +50,19 @@ GOBIN=$(TOOLS_DIR) GOFLAGS="-mod=mod" go install $(2) ;\
 rm -rf $$TMP_DIR ;\
 }
 endef
+
+# Check that given variables are set and all have non-empty values,
+# die with an error otherwise.
+#
+# Params:
+#   1. Variable name(s) to test.
+#   2. (optional) Error message to print.
+check_defined = \
+    $(strip $(foreach 1,$1, \
+        $(call __check_defined,$1,$(strip $(value 2)))))
+__check_defined = \
+    $(if $(value $1),, \
+      $(error Undefined $1$(if $2, ($2))))
 
 # prereqs binary dependencies
 GOLANGCI_LINT = $(TOOLS_DIR)/golangci-lint
@@ -120,6 +135,7 @@ coverage-report-html: cov-exclude-generated
 
 .PHONY: image-build-push
 image-build-push: ## Build OCI image with the manager.
+	$(call check_defined, IMG_ORG, Your Docker repository user name)
 	$(OCI_BIN) buildx build --push --platform linux/amd64,linux/arm64 -t ${IMG} .
 
 .PHONY: generator-image-build-push
@@ -152,3 +168,10 @@ run-integration-test:
 integration-test: prepare-integration-test
 	$(MAKE) run-integration-test || (ret=$$?; $(MAKE) cleanup-integration-test && exit $$ret)
 	$(MAKE) cleanup-integration-test
+
+.PHONY: drone
+drone:
+	@echo "### Regenerating and signing .drone/drone.yml"
+	$(DRONE) jsonnet --stream --format --source .drone/drone.jsonnet --target .drone/drone.yml
+	$(DRONE) lint .drone/drone.yml --trusted
+	$(DRONE) sign --save grafana/ebpf-autoinstrument .drone/drone.yml || echo "You must set DRONE_SERVER and DRONE_TOKEN. These values can be found on your [drone account](http://drone.grafana.net/account) page."

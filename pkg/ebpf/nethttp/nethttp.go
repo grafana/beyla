@@ -52,12 +52,13 @@ type EBPFTracer struct {
 	RuntimeNewproc1  []string `yaml:"runtime_newproc1" env:"RUNTIME_NEWPROC1"`
 	RuntimeGoexit1   []string `yaml:"runtime_goexit1" env:"RUNTIME_GOEXIT1"`
 	LogLevel         string   `yaml:"log_level" env:"LOG_LEVEL"`
+	BpfDebug         bool     `yaml:"bfp_debug" env:"BPF_DEBUG"`
 
 	Offsets *goexec.Offsets `yaml:"-"`
 }
 
 func EBPFTracerProvider(cfg EBPFTracer) node.StartFuncCtx[HTTPRequestTrace] { //nolint:all
-	is, err := Instrument(cfg.Offsets, cfg.LogLevel)
+	is, err := Instrument(cfg.Offsets, cfg.BpfDebug)
 	if err != nil {
 		slog.Error("can't instantiate eBPF tracer", err)
 		os.Exit(-1)
@@ -66,6 +67,7 @@ func EBPFTracerProvider(cfg EBPFTracer) node.StartFuncCtx[HTTPRequestTrace] { //
 }
 
 //go:generate bpf2go -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 -type http_request_trace bpf ../../../bpf/go_nethttp.c -- -I../../../bpf/headers
+//go:generate bpf2go -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 -type http_request_trace bpf_debug ../../../bpf/go_nethttp.c -- -I../../../bpf/headers -DBPF_DEBUG
 
 // InstrumentedServe allows instrumenting each invocation to the Go standard net/http ServeHTTP
 // method handler.
@@ -83,7 +85,7 @@ type HTTPRequestTrace bpfHttpRequestTrace
 
 // Instrument the executable passed as path and insert probes in the provided offsets, so the
 // returned InstrumentedServe instance will listen and forward traces for each HTTP invocation.
-func Instrument(offsets *goexec.Offsets, logLevel string) (*InstrumentedServe, error) {
+func Instrument(offsets *goexec.Offsets, debug bool) (*InstrumentedServe, error) {
 	// Instead of the executable file in the disk, we pass the /proc/<pid>/exec
 	// to allow loading it from different container/pods in containerized environments
 	exe, err := link.OpenExecutable(offsets.FileInfo.ProExeLinkPath)
@@ -96,13 +98,18 @@ func Instrument(offsets *goexec.Offsets, logLevel string) (*InstrumentedServe, e
 		return nil, fmt.Errorf("removing memlock: %w", err)
 	}
 
-	spec, err := loadBpf()
+	loader := loadBpf
+	if debug {
+		loader = loadBpf_debug
+	}
+
+	spec, err := loader()
 	if err != nil {
 		return nil, fmt.Errorf("loading BPF data: %w", err)
 	}
 
 	// Set the field offsets and the logLevel for nethttp BPF program
-	if err := rewriteConstants(spec, offsets.Field, logLevel); err != nil {
+	if err := rewriteConstants(spec, offsets.Field); err != nil {
 		return nil, err
 	}
 
@@ -128,12 +135,7 @@ func Instrument(offsets *goexec.Offsets, logLevel string) (*InstrumentedServe, e
 	return &h, nil
 }
 
-func rewriteConstants(spec *ebpf.CollectionSpec, fields map[string]interface{}, logLevel string) error {
-	// Set the log level for nethttp BPF program
-	if err := spec.RewriteConstants(map[string]interface{}{"go_http_debug_level": ebpfLogLevel(logLevel)}); err != nil {
-		return fmt.Errorf("rewriting BPF log level definition: %w", err)
-	}
-
+func rewriteConstants(spec *ebpf.CollectionSpec, fields map[string]interface{}) error {
 	if err := spec.RewriteConstants(fields); err != nil {
 		return fmt.Errorf("rewriting BPF constants definition: %w", err)
 	}
@@ -243,22 +245,6 @@ func (h *InstrumentedServe) Close() {
 
 	if err := h.bpfObjects.Close(); err != nil {
 		log.Warn("closing BPF program", "error", err)
-	}
-}
-
-// These levels must match the ones defined in bpf_dbg.h
-func ebpfLogLevel(level string) uint8 {
-	switch strings.ToLower(level) {
-	case "debug":
-		return 3
-	case "info":
-		return 2
-	case "warn":
-		return 1
-	case "error":
-		return 0
-	default:
-		return 1
 	}
 }
 

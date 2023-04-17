@@ -1,5 +1,5 @@
 # Main binary configuration
-CMD ?= otelhttp
+CMD ?= otelauto
 MAIN_GO_FILE ?= cmd/$(CMD).go
 GOOS ?= linux
 GOARCH ?= amd64

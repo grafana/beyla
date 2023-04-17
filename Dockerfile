@@ -28,7 +28,7 @@ FROM busybox:1.35-glibc
 LABEL maintainer="Grafana Labs <hello@grafana.com>"
 
 WORKDIR /
-COPY --from=builder /opt/app-root/bin/otelhttp .
+COPY --from=builder /opt/app-root/bin/otelauto .
 USER 0:0
 
-CMD [ "/otelhttp" ]
+CMD [ "/otelauto" ]

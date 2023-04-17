@@ -34,10 +34,11 @@ var structMembers = map[string]structInfo{
 	"net/http.Request": {
 		lib: "go",
 		fields: map[string]string{
-			"URL":        "url_ptr_pos",
-			"Method":     "method_ptr_pos",
-			"RemoteAddr": "remoteaddr_ptr_pos",
-			"Host":       "host_ptr_pos",
+			"URL":           "url_ptr_pos",
+			"Method":        "method_ptr_pos",
+			"RemoteAddr":    "remoteaddr_ptr_pos",
+			"Host":          "host_ptr_pos",
+			"ContentLength": "content_length_ptr_pos",
 		},
 	},
 	"net/url.URL": {

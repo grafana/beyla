@@ -13,9 +13,6 @@
 #include "utils.h"
 #include "go_str.h"
 #include "go_byte_arr.h"
-
-// Tell the helpers which debug level variable to use
-#define DBG_LEVEL go_http_debug_level
 #include "bpf_dbg.h"
 
 char __license[] SEC("license") = "Dual MIT/GPL";
@@ -95,9 +92,6 @@ struct {
     __uint(max_entries, 1 << 24);
 } events SEC(".maps");
 
-// To be injected from the user space during the eBPF program load & initialization for debugging purposes
-volatile const u8 go_http_debug_level = PRINTK_LEVEL_WARN;
-
 // To be Injected from the user space during the eBPF program load & initialization
 // HTTP
 volatile const u64 url_ptr_pos;
@@ -138,7 +132,7 @@ int uprobe_ServeHTTP(struct pt_regs *ctx) {
 
     // Write event
     if (bpf_map_update_elem(&ongoing_http_requests, &goroutine_addr, &invocation, BPF_ANY)) {
-        bpf_warn_printk("can't update map element");
+        bpf_dbg_printk("can't update map element");
     }
 
     return 0;
@@ -154,13 +148,13 @@ int uprobe_ServeHttp_return(struct pt_regs *ctx) {
         bpf_map_lookup_elem(&ongoing_http_requests, &goroutine_addr);
     bpf_map_delete_elem(&ongoing_http_requests, &goroutine_addr);
     if (invocation == NULL) {
-        bpf_warn_printk("can't read http invocation metadata");
+        bpf_dbg_printk("can't read http invocation metadata");
         return 0;
     }
 
     http_request_trace *trace = bpf_ringbuf_reserve(&events, sizeof(http_request_trace), 0);
     if (!trace) {
-        bpf_warn_printk("can't reserve space in the ringbuffer");
+        bpf_dbg_printk("can't reserve space in the ringbuffer");
         return 0;
     }
     trace->type = EVENT_HTTP_REQUEST;
@@ -182,21 +176,21 @@ int uprobe_ServeHttp_return(struct pt_regs *ctx) {
 
     // Get method from Request.Method
     if (!read_go_str("method", req_ptr, method_ptr_pos, &trace->method, sizeof(trace->method))) {
-        bpf_warn_printk("can't read http Request.Method");
+        bpf_printk("can't read http Request.Method");
         bpf_ringbuf_discard(trace, 0);
         return 0;
     }
 
     // Get the remote peer information from Request.RemoteAddr
     if (!read_go_str("remote_addr", req_ptr, remoteaddr_ptr_pos, &trace->remote_addr, sizeof(trace->remote_addr))) {
-        bpf_warn_printk("can't read http Request.RemoteAddr");
+        bpf_printk("can't read http Request.RemoteAddr");
         bpf_ringbuf_discard(trace, 0);
         return 0;
     }
 
     // Get the host information the remote supplied
     if (!read_go_str("host", req_ptr, host_ptr_pos, &trace->host, sizeof(trace->host))) {
-        bpf_warn_printk("can't read http Request.Host");
+        bpf_printk("can't read http Request.Host");
         bpf_ringbuf_discard(trace, 0);
         return 0;
     }
@@ -206,7 +200,7 @@ int uprobe_ServeHttp_return(struct pt_regs *ctx) {
     bpf_probe_read(&url_ptr, sizeof(url_ptr), (void *)(req_ptr + url_ptr_pos));
 
     if (!url_ptr || !read_go_str("path", url_ptr, path_ptr_pos, &trace->path, sizeof(trace->path))) {
-        bpf_warn_printk("can't read http Request.URL.Path");
+        bpf_printk("can't read http Request.URL.Path");
         bpf_ringbuf_discard(trace, 0);
         return 0;
     }
@@ -240,7 +234,7 @@ int uprobe_server_handleStream(struct pt_regs *ctx) {
     };
 
     if (bpf_map_update_elem(&ongoing_grpc_requests, &goroutine_addr, &invocation, BPF_ANY)) {
-        bpf_warn_printk("can't update grpc map element");
+        bpf_dbg_printk("can't update grpc map element");
     }
 
     return 0;
@@ -257,7 +251,7 @@ int uprobe_server_handleStream_return(struct pt_regs *ctx) {
         bpf_map_lookup_elem(&ongoing_grpc_requests, &goroutine_addr);
     bpf_map_delete_elem(&ongoing_grpc_requests, &goroutine_addr);
     if (invocation == NULL) {
-        bpf_warn_printk("can't read grpc invocation metadata");
+        bpf_dbg_printk("can't read grpc invocation metadata");
         return 0;
     }
 
@@ -266,7 +260,7 @@ int uprobe_server_handleStream_return(struct pt_regs *ctx) {
 
     http_request_trace *trace = bpf_ringbuf_reserve(&events, sizeof(http_request_trace), 0);
     if (!trace) {
-        bpf_warn_printk("can't reserve space in the ringbuffer");
+        bpf_dbg_printk("can't reserve space in the ringbuffer");
         return 0;
     }
     trace->type = EVENT_GRPC_REQUEST;
@@ -283,7 +277,7 @@ int uprobe_server_handleStream_return(struct pt_regs *ctx) {
 
     // Get method from transport.Stream.Method
     if (!read_go_str("grpc method", stream_ptr, grpc_stream_method_ptr_pos, &trace->path, sizeof(trace->path))) {
-        bpf_warn_printk("can't read grpc transport.Stream.Method");
+        bpf_printk("can't read grpc transport.Stream.Method");
         bpf_ringbuf_discard(trace, 0);
         return 0;
     }
@@ -299,7 +293,7 @@ int uprobe_server_handleStream_return(struct pt_regs *ctx) {
         if (peer_ptr) {
             u64 remote_addr_len = 0;
             if (!read_go_byte_arr("grpc peer ptr", peer_ptr, tcp_addr_ip_ptr_pos, &trace->remote_addr, &remote_addr_len, sizeof(trace->remote_addr))) {
-                bpf_warn_printk("can't read grpc peer ptr");
+                bpf_printk("can't read grpc peer ptr");
                 bpf_ringbuf_discard(trace, 0);
                 return 0;
             }
@@ -313,7 +307,7 @@ int uprobe_server_handleStream_return(struct pt_regs *ctx) {
             u64 host_len = 0;
 
             if (!read_go_byte_arr("grpc host ptr", host_ptr, tcp_addr_ip_ptr_pos, &trace->host, &host_len,  sizeof(trace->host))) {
-                bpf_warn_printk("can't read grpc host ptr");
+                bpf_printk("can't read grpc host ptr");
                 bpf_ringbuf_discard(trace, 0);
                 return 0;
             }
@@ -340,7 +334,7 @@ int uprobe_transport_writeStatus(struct pt_regs *ctx) {
     grpc_method_data *invocation =
         bpf_map_lookup_elem(&ongoing_grpc_requests, &goroutine_addr);
     if (invocation == NULL) {
-        bpf_warn_printk("can't read grpc invocation metadata in write status");
+        bpf_dbg_printk("can't read grpc invocation metadata in write status");
         return 0;
     }
 
@@ -374,7 +368,7 @@ int uprobe_proc_newproc1_ret(struct pt_regs *ctx) {
 
     u64 timestamp = bpf_ktime_get_ns();
     if (bpf_map_update_elem(&ongoing_goroutines, &goroutine_addr, &timestamp, BPF_ANY)) {
-        bpf_warn_printk("can't update grpc map element");
+        bpf_dbg_printk("can't update grpc map element");
     }
 
     return 0;

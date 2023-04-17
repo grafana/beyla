@@ -1,4 +1,7 @@
-# ebpf-autoinstrument
+# eBPF autoinstrumenter
+
+[![Build Status](https://drone.grafana.net/api/badges/grafana/ebpf-autoinstrument/status.svg?ref=refs/heads/main)](https://drone.grafana.net/grafana/ebpf-autoinstrument)
+
 eBPF-based autoinstrumentation of HTTP and HTTPS services
 
 | Library                                       | Working |

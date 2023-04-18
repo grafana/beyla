@@ -48,6 +48,7 @@ type Config struct {
 
 	ChannelBufferLen int    `yaml:"channel_buffer_len" env:"CHANNEL_BUFFER_LEN" nodeId:"-"`
 	LogLevel         string `yaml:"log_level" env:"LOG_LEVEL" nodeId:"-"`
+	ProfilePort      int    `yaml:"profile_port" env:"PROFILE_PORT" nodeId:"-"`
 }
 
 type ConfigError string

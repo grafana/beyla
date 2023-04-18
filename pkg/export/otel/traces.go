@@ -74,9 +74,11 @@ func newTracesReporter(svcName, endpoint string) (*TracesReporter, error) {
 		return nil, fmt.Errorf("creating trace exporter: %w", err)
 	}
 
+	bsp := trace.NewBatchSpanProcessor(r.traceExporter, trace.WithMaxExportBatchSize(4096), trace.WithMaxQueueSize(4096))
 	r.traceProvider = trace.NewTracerProvider(
 		trace.WithResource(resources),
-		trace.WithSyncer(r.traceExporter),
+		trace.WithSpanProcessor(bsp),
+		//trace.WithSampler(trace.AlwaysSample()),
 	)
 
 	return &r, nil

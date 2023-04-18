@@ -1,6 +1,6 @@
 # Main binary configuration
 CMD ?= otelauto
-MAIN_GO_FILE ?= cmd/$(CMD).go
+MAIN_GO_FILE ?= cmd/$(CMD)/main.go
 GOOS ?= linux
 GOARCH ?= amd64
 

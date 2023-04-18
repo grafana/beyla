@@ -2,34 +2,33 @@
 
 [![Build Status](https://drone.grafana.net/api/badges/grafana/ebpf-autoinstrument/status.svg?ref=refs/heads/main)](https://drone.grafana.net/grafana/ebpf-autoinstrument)
 
-eBPF-based autoinstrumentation of HTTP and HTTPS services
+eBPF-based autoinstrumentation of HTTP/HTTPS/GRPC Go services.
+
+[Documentation](./docs)
 
 | Library                                       | Working |
-|-----------------------------------------------|---------|
-| Standard `net/http`                           | ✅       |
-| [Gorilla Mux](https://github.com/gorilla/mux) | ✅       |
-| [Gin](https://gin-gonic.com/)                 | ❌       |
+|-----------------------------------------------|--------|
+| Standard `net/http`                           | ✅      |
+| [Gorilla Mux](https://github.com/gorilla/mux) | ✅      |
+| [Gin](https://gin-gonic.com/)                 |  ✅     |
+| [gRPC-Go](https://github.com/grpc/grpc-go)    |  ✅     |
 
 ## Credits
 
 Part of the code is taken from: https://github.com/open-telemetry/opentelemetry-go-instrumentation
 
-* bpf/**
-
 Differences:
 
 * No need to maintain old Go versions (e.g. stack-based parameters)
-* We assume Dwarf info is enabled
-  * Instead of using process maps for function delimitation, we just use Dwarf
 * standard HTTP instrumentation works
   * Original didn't work in Go 1.17+ because it uses registers https://github.com/keyval-dev/opentelemetry-go-instrumentation/issues/45
   * We use a pointer to the goroutine as map key
-* They can't fetch uretprobe info
-  * Registers change during the function
-  * We store the initial set of registers at the start of the function and retrieve them at the end of the function
 * Using ringbuffer instead of perf_buffer
   * despite the name, ringbuffer is faster
 * We return status code
+* We provide goroutine wait time (since the connection is accepted until the request is processed) for more accurate
+  metrics on overload scenarios.
+* Capturing request sizes for HTTP
 
 ## How to setup a quick demo
 

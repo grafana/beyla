@@ -17,6 +17,10 @@
 #ifndef __VMLINUX_H__
 #define __VMLINUX_H__
 
+#define BPF_RB_AVAIL_DATA   0
+#define BPF_RB_NO_WAKEUP    1
+#define BPF_RB_FORCE_WAKEUP 2
+
 typedef unsigned char __u8;
 typedef short int __s16;
 typedef short unsigned int __u16;

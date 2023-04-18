@@ -21,7 +21,7 @@ spec:
       containers:
         - name: goblog
           image: mariomac/goblog:dev
-          imagePullPolicy: Always
+          imagePullPolicy: IfNotPresent
           command: ["/goblog"]
           env:
             - name: "GOBLOG_CONFIG"
@@ -30,8 +30,8 @@ spec:
             - containerPort: 8443
               name: https
         - name: autoinstrumenter
-          image: mariomac/ebpf-autoinstrument:latest # TODO: use Grafana Hub Account
-          imagePullPolicy: IfNotPresent
+          image: mariomac/ebpf-autoinstrument:dev # TODO: use Grafana Hub Account
+          imagePullPolicy: Always
           securityContext:
             runAsUser: 0
             privileged: true # TODO: change by individual capabilities
@@ -42,6 +42,8 @@ spec:
               value: "grafana-agent:4318"
             - name: LOG_LEVEL
               value: "DEBUG"
+            - name: BPF_WAKEUP_DATA_BYTES
+              value: "10000"
 ---
 apiVersion: v1
 kind: Service

@@ -54,11 +54,15 @@ type EBPFTracer struct {
 	LogLevel         string   `yaml:"log_level" env:"LOG_LEVEL"`
 	BpfDebug         bool     `yaml:"bfp_debug" env:"BPF_DEBUG"`
 
+	// WakeupDataBytes specified how many data needs to be accumulated in the ringbuffer
+	// before sending a wakeup request
+	WakeupDataBytes int `yaml:"wakeup_data_bytes" env:"BPF_WAKEUP_DATA_BYTES"`
+
 	Offsets *goexec.Offsets `yaml:"-"`
 }
 
 func EBPFTracerProvider(cfg EBPFTracer) node.StartFuncCtx[HTTPRequestTrace] { //nolint:all
-	is, err := Instrument(cfg.Offsets, cfg.BpfDebug)
+	is, err := Instrument(&cfg)
 	if err != nil {
 		slog.Error("can't instantiate eBPF tracer", err)
 		os.Exit(-1)
@@ -66,8 +70,8 @@ func EBPFTracerProvider(cfg EBPFTracer) node.StartFuncCtx[HTTPRequestTrace] { //
 	return is.Run
 }
 
-//go:generate bpf2go -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 -type http_request_trace bpf ../../../bpf/go_nethttp.c -- -I../../../bpf/headers
-//go:generate bpf2go -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 -type http_request_trace bpf_debug ../../../bpf/go_nethttp.c -- -I../../../bpf/headers -DBPF_DEBUG
+//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 -type http_request_trace bpf ../../../bpf/go_nethttp.c -- -I../../../bpf/headers
+//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 -type http_request_trace bpf_debug ../../../bpf/go_nethttp.c -- -I../../../bpf/headers -DBPF_DEBUG
 
 // InstrumentedServe allows instrumenting each invocation to the Go standard net/http ServeHTTP
 // method handler.
@@ -85,13 +89,13 @@ type HTTPRequestTrace bpfHttpRequestTrace
 
 // Instrument the executable passed as path and insert probes in the provided offsets, so the
 // returned InstrumentedServe instance will listen and forward traces for each HTTP invocation.
-func Instrument(offsets *goexec.Offsets, debug bool) (*InstrumentedServe, error) {
+func Instrument(cfg *EBPFTracer) (*InstrumentedServe, error) {
 	// Instead of the executable file in the disk, we pass the /proc/<pid>/exec
 	// to allow loading it from different container/pods in containerized environments
-	exe, err := link.OpenExecutable(offsets.FileInfo.ProExeLinkPath)
+	exe, err := link.OpenExecutable(cfg.Offsets.FileInfo.ProExeLinkPath)
 	if err != nil {
 		return nil, fmt.Errorf("opening executable file %q: %w",
-			offsets.FileInfo.ProExeLinkPath, err)
+			cfg.Offsets.FileInfo.ProExeLinkPath, err)
 	}
 
 	if err := rlimit.RemoveMemlock(); err != nil {
@@ -99,7 +103,7 @@ func Instrument(offsets *goexec.Offsets, debug bool) (*InstrumentedServe, error)
 	}
 
 	loader := loadBpf
-	if debug {
+	if cfg.BpfDebug {
 		loader = loadBpf_debug
 	}
 
@@ -108,8 +112,15 @@ func Instrument(offsets *goexec.Offsets, debug bool) (*InstrumentedServe, error)
 		return nil, fmt.Errorf("loading BPF data: %w", err)
 	}
 
-	// Set the field offsets and the logLevel for nethttp BPF program
-	if err := rewriteConstants(spec, offsets.Field); err != nil {
+	// Set the field offsets and the logLevel for nethttp BPF program,
+	// as well as some other configuration constants
+	constants := map[string]any{
+		"wakeup_data_bytes": uint32(cfg.WakeupDataBytes),
+	}
+	for k, v := range cfg.Offsets.Field {
+		constants[k] = v
+	}
+	if err := rewriteConstants(spec, cfg.Offsets.Field); err != nil {
 		return nil, err
 	}
 
@@ -120,7 +131,7 @@ func Instrument(offsets *goexec.Offsets, debug bool) (*InstrumentedServe, error)
 	}
 
 	// Patch the functions to be instrumented
-	if err := h.instrumentFunctions(exe, offsets.Funcs); err != nil {
+	if err := h.instrumentFunctions(exe, cfg.Offsets.Funcs); err != nil {
 		return nil, err
 	}
 

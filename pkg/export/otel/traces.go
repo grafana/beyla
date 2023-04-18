@@ -138,7 +138,6 @@ func (r *TracesReporter) reportTraces(spans <-chan transform.HTTPRequestSpan) {
 		// Create a child span showing the queue time
 		_, spQ := tracer.Start(ctx, "in queue",
 			trace2.WithTimestamp(span.RequestStart),
-			trace2.WithAttributes(attrs...),
 			trace2.WithSpanKind(trace2.SpanKindInternal),
 		)
 		spQ.End(trace2.WithTimestamp(span.Start))
@@ -146,7 +145,6 @@ func (r *TracesReporter) reportTraces(spans <-chan transform.HTTPRequestSpan) {
 		// Create a child span showing the processing time
 		_, spP := tracer.Start(ctx, "processing",
 			trace2.WithTimestamp(span.Start),
-			trace2.WithAttributes(attrs...),
 			trace2.WithSpanKind(trace2.SpanKindInternal),
 		)
 		spP.End(trace2.WithTimestamp(span.End))

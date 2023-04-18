@@ -19,7 +19,7 @@ services:
       context: ../..
       dockerfile: ./Dockerfile
     command:
-      - /otelhttp
+      - /otelauto
       - --config=/configs/instrumenter-config.yml
     volumes:
       - ./configs/:/configs

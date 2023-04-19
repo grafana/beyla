@@ -3,6 +3,7 @@ package otel
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"os"
 	"time"
 
@@ -59,11 +60,6 @@ func MetricsReporterProvider(cfg MetricsConfig) node.TerminalFunc[[]transform.HT
 func newMetricsReporter(cfg *MetricsConfig) (*MetricsReporter, error) {
 	ctx := context.TODO()
 
-	endpoint := cfg.MetricsEndpoint
-	if endpoint == "" {
-		endpoint = cfg.Endpoint
-	}
-
 	mr := MetricsReporter{
 		reportTarget: cfg.ReportTarget,
 		reportPeer:   cfg.ReportPeerInfo,
@@ -74,12 +70,12 @@ func newMetricsReporter(cfg *MetricsConfig) (*MetricsReporter, error) {
 		semconv.SchemaURL,
 		semconv.ServiceNameKey.String(cfg.ServiceName),
 	)
-	var err error
 	// TODO: allow configuring auth headers and secure/insecure connections
-	mr.exporter, err = otlpmetrichttp.New(ctx,
-		otlpmetrichttp.WithEndpoint(endpoint),
-		otlpmetrichttp.WithInsecure(),
-	)
+	opts, err := getEndpointOptions(cfg)
+	if err != nil {
+		return nil, err
+	}
+	mr.exporter, err = otlpmetrichttp.New(ctx, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("creating metric exporter: %w", err)
 	}
@@ -166,4 +162,27 @@ func (r *MetricsReporter) reportMetrics(input <-chan []transform.HTTPRequestSpan
 			r.record(&spans[i], attrs)
 		}
 	}
+}
+
+func getEndpointOptions(cfg *MetricsConfig) ([]otlpmetrichttp.Option, error) {
+	endpoint := cfg.MetricsEndpoint
+	if endpoint == "" {
+		endpoint = cfg.Endpoint
+	}
+
+	murl, err := url.Parse(endpoint)
+	if err != nil {
+		return nil, fmt.Errorf("parsing endpoint URL %s: %w", endpoint, err)
+	}
+
+	opts := []otlpmetrichttp.Option{
+		otlpmetrichttp.WithEndpoint(murl.Host),
+	}
+	if murl.Scheme == "http" || murl.Scheme == "unix" {
+		opts = append(opts, otlpmetrichttp.WithInsecure())
+	}
+	if len(murl.Path) > 0 && murl.Path != "/" {
+		opts = append(opts, otlpmetrichttp.WithURLPath(murl.Path + "/v1/metrics"))
+	}
+	return opts, nil
 }

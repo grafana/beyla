@@ -2,6 +2,7 @@ package pipe
 
 import (
 	"context"
+	"os"
 	"testing"
 	"time"
 
@@ -10,16 +11,17 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/pdata/pmetric"
+	"go.opentelemetry.io/collector/pdata/ptrace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
 
-	"github.com/grafana/http-autoinstrument/pkg/ebpf/nethttp"
-	"github.com/grafana/http-autoinstrument/pkg/export/otel"
-	"github.com/grafana/http-autoinstrument/pkg/goexec"
-	"github.com/grafana/http-autoinstrument/pkg/transform"
-	"github.com/grafana/http-autoinstrument/test/collector"
+	"github.com/grafana/ebpf-autoinstrument/pkg/ebpf/nethttp"
+	"github.com/grafana/ebpf-autoinstrument/pkg/export/otel"
+	"github.com/grafana/ebpf-autoinstrument/pkg/goexec"
+	"github.com/grafana/ebpf-autoinstrument/pkg/transform"
+	"github.com/grafana/ebpf-autoinstrument/test/collector"
 )
 
-const testTimeout = 5 * time.Second
+const testTimeout = 500 * time.Second
 
 func TestBasicPipeline(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -29,7 +31,7 @@ func TestBasicPipeline(t *testing.T) {
 	require.NoError(t, err)
 
 	gb := newGraphBuilder(&Config{Metrics: otel.MetricsConfig{MetricsEndpoint: tc.ServerHostPort, ReportTarget: true, ReportPeerInfo: true}})
-	gb.inspector = func(_ string, _ []string) (goexec.Offsets, error) {
+	gb.inspector = func(_ goexec.ProcessFinder, _ map[string][]string) (goexec.Offsets, error) {
 		return goexec.Offsets{FileInfo: goexec.FileInfo{CmdExePath: "test-service"}}, nil
 	}
 	// Override eBPF tracer to send some fake data
@@ -45,7 +47,7 @@ func TestBasicPipeline(t *testing.T) {
 
 	event := getEvent(t, tc)
 	assert.Equal(t, collector.MetricRecord{
-		Name: "duration",
+		Name: "http.server.duration",
 		Unit: "ms",
 		Attributes: map[string]string{
 			string(semconv.HTTPMethodKey):      "GET",
@@ -55,6 +57,36 @@ func TestBasicPipeline(t *testing.T) {
 		},
 		Type: pmetric.MetricTypeHistogram,
 	}, event)
+}
+
+func TestTracerPipeline(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	tc, err := collector.Start(ctx)
+	require.NoError(t, err)
+
+	gb := newGraphBuilder(&Config{Traces: otel.TracesConfig{TracesEndpoint: tc.ServerHostPort, ServiceName: "test"}})
+	gb.inspector = func(_ goexec.ProcessFinder, _ map[string][]string) (goexec.Offsets, error) {
+		return goexec.Offsets{FileInfo: goexec.FileInfo{CmdExePath: "test-service"}}, nil
+	}
+	// Override eBPF tracer to send some fake data
+	graph.RegisterStart(gb.builder, func(_ nethttp.EBPFTracer) node.StartFuncCtx[nethttp.HTTPRequestTrace] {
+		return func(_ context.Context, out chan<- nethttp.HTTPRequestTrace) {
+			out <- newRequest("GET", "/foo/bar", "1.1.1.1:3456", 404)
+		}
+	})
+	pipe, err := gb.buildGraph()
+	require.NoError(t, err)
+
+	go pipe.Run(ctx)
+
+	event := getTraceEvent(t, tc)
+	matchInnerTraceEvent(t, "in queue", event)
+	event = getTraceEvent(t, tc)
+	matchInnerTraceEvent(t, "processing", event)
+	event = getTraceEvent(t, tc)
+	matchTraceEvent(t, "session", event)
 }
 
 func TestRouteConsolidation(t *testing.T) {
@@ -68,7 +100,7 @@ func TestRouteConsolidation(t *testing.T) {
 		Metrics: otel.MetricsConfig{MetricsEndpoint: tc.ServerHostPort}, // ReportPeerInfo = false, no peer info
 		Routes:  &transform.RoutesConfig{Patterns: []string{"/user/{id}", "/products/{id}/push"}},
 	})
-	gb.inspector = func(_ string, _ []string) (goexec.Offsets, error) {
+	gb.inspector = func(_ goexec.ProcessFinder, _ map[string][]string) (goexec.Offsets, error) {
 		return goexec.Offsets{FileInfo: goexec.FileInfo{CmdExePath: "test-service"}}, nil
 	}
 	// Override eBPF tracer to send some fake data
@@ -92,7 +124,7 @@ func TestRouteConsolidation(t *testing.T) {
 	}
 
 	assert.Equal(t, collector.MetricRecord{
-		Name: "duration",
+		Name: "http.server.duration",
 		Unit: "ms",
 		Attributes: map[string]string{
 			string(semconv.HTTPMethodKey):     "GET",
@@ -103,7 +135,7 @@ func TestRouteConsolidation(t *testing.T) {
 	}, events["/user/{id}"])
 
 	assert.Equal(t, collector.MetricRecord{
-		Name: "duration",
+		Name: "http.server.duration",
 		Unit: "ms",
 		Attributes: map[string]string{
 			string(semconv.HTTPMethodKey):     "GET",
@@ -114,7 +146,7 @@ func TestRouteConsolidation(t *testing.T) {
 	}, events["/products/{id}/push"])
 
 	assert.Equal(t, collector.MetricRecord{
-		Name: "duration",
+		Name: "http.server.duration",
 		Unit: "ms",
 		Attributes: map[string]string{
 			string(semconv.HTTPMethodKey):     "GET",
@@ -125,12 +157,93 @@ func TestRouteConsolidation(t *testing.T) {
 	}, events["*"])
 }
 
+func TestGRPCPipeline(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	tc, err := collector.Start(ctx)
+	require.NoError(t, err)
+
+	gb := newGraphBuilder(&Config{Metrics: otel.MetricsConfig{MetricsEndpoint: tc.ServerHostPort, ReportTarget: true, ReportPeerInfo: true}})
+	gb.inspector = func(_ goexec.ProcessFinder, _ map[string][]string) (goexec.Offsets, error) {
+		return goexec.Offsets{FileInfo: goexec.FileInfo{CmdExePath: "test-service"}}, nil
+	}
+	// Override eBPF tracer to send some fake data
+	graph.RegisterStart(gb.builder, func(_ nethttp.EBPFTracer) node.StartFuncCtx[nethttp.HTTPRequestTrace] {
+		return func(_ context.Context, out chan<- nethttp.HTTPRequestTrace) {
+			out <- newGRPCRequest("/foo/bar", 3)
+		}
+	})
+	pipe, err := gb.buildGraph()
+	require.NoError(t, err)
+
+	go pipe.Run(ctx)
+
+	event := getEvent(t, tc)
+	assert.Equal(t, collector.MetricRecord{
+		Name: "rpc.server.duration",
+		Unit: "ms",
+		Attributes: map[string]string{
+			string(semconv.RPCSystemKey):         "grpc",
+			string(semconv.RPCGRPCStatusCodeKey): "3",
+			string(semconv.RPCMethodKey):         "/foo/bar",
+			string(semconv.NetSockPeerAddrKey):   "1.1.1.1",
+		},
+		Type: pmetric.MetricTypeHistogram,
+	}, event)
+}
+
+func TestTraceGRPCPipeline(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	tc, err := collector.Start(ctx)
+	require.NoError(t, err)
+
+	gb := newGraphBuilder(&Config{Traces: otel.TracesConfig{TracesEndpoint: tc.ServerHostPort, ServiceName: "test"}})
+	gb.inspector = func(_ goexec.ProcessFinder, _ map[string][]string) (goexec.Offsets, error) {
+		return goexec.Offsets{FileInfo: goexec.FileInfo{CmdExePath: "test-service"}}, nil
+	}
+	// Override eBPF tracer to send some fake data
+	graph.RegisterStart(gb.builder, func(_ nethttp.EBPFTracer) node.StartFuncCtx[nethttp.HTTPRequestTrace] {
+		return func(_ context.Context, out chan<- nethttp.HTTPRequestTrace) {
+			out <- newGRPCRequest("/foo/bar", 3)
+		}
+	})
+	pipe, err := gb.buildGraph()
+	require.NoError(t, err)
+
+	go pipe.Run(ctx)
+
+	event := getTraceEvent(t, tc)
+	matchInnerGRPCTraceEvent(t, "in queue", event)
+	event = getTraceEvent(t, tc)
+	matchInnerGRPCTraceEvent(t, "processing", event)
+	event = getTraceEvent(t, tc)
+	matchGRPCTraceEvent(t, "session", event)
+}
+
 func newRequest(method, path, peer string, status int) nethttp.HTTPRequestTrace {
 	rt := nethttp.HTTPRequestTrace{}
 	copy(rt.Path[:], path)
 	copy(rt.Method[:], method)
 	copy(rt.RemoteAddr[:], peer)
+	copy(rt.Host[:], getHostname()+":8080")
 	rt.Status = uint16(status)
+	rt.Type = transform.EventTypeHTTP
+	return rt
+}
+
+func newGRPCRequest(path string, status int) nethttp.HTTPRequestTrace {
+	rt := nethttp.HTTPRequestTrace{}
+	copy(rt.Path[:], path)
+	copy(rt.RemoteAddr[:], []byte{0x1, 0x1, 0x1, 0x1})
+	rt.RemoteAddrLen = 4
+	copy(rt.Host[:], []byte{0x7f, 0x0, 0x0, 0x1})
+	rt.HostLen = 4
+	rt.HostPort = 8080
+	rt.Status = uint16(status)
+	rt.Type = transform.EventTypeGRPC
 	return rt
 }
 
@@ -143,4 +256,70 @@ func getEvent(t *testing.T, coll *collector.TestCollector) collector.MetricRecor
 		t.Fatal("timeout while waiting for message")
 	}
 	return collector.MetricRecord{}
+}
+
+func getTraceEvent(t *testing.T, coll *collector.TestCollector) collector.TraceRecord {
+	t.Helper()
+	select {
+	case ev := <-coll.TraceRecords:
+		return ev
+	case <-time.After(testTimeout):
+		t.Fatal("timeout while waiting for message")
+	}
+	return collector.TraceRecord{}
+}
+
+func getHostname() string {
+	hostname, err := os.Hostname()
+	if err != nil {
+		return ""
+	}
+	return hostname
+}
+
+func matchTraceEvent(t *testing.T, name string, event collector.TraceRecord) {
+	assert.Equal(t, collector.TraceRecord{
+		Name: name,
+		Attributes: map[string]string{
+			string(semconv.HTTPMethodKey):               "GET",
+			string(semconv.HTTPStatusCodeKey):           "404",
+			string(semconv.HTTPTargetKey):               "/foo/bar",
+			string(semconv.NetSockPeerAddrKey):          "1.1.1.1",
+			string(semconv.NetHostNameKey):              getHostname(),
+			string(semconv.NetHostPortKey):              "8080",
+			string(semconv.HTTPRequestContentLengthKey): "0",
+		},
+		Kind: ptrace.SpanKindInternal,
+	}, event)
+}
+
+func matchInnerTraceEvent(t *testing.T, name string, event collector.TraceRecord) {
+	assert.Equal(t, collector.TraceRecord{
+		Name:       name,
+		Attributes: map[string]string{},
+		Kind:       ptrace.SpanKindInternal,
+	}, event)
+}
+
+func matchGRPCTraceEvent(t *testing.T, name string, event collector.TraceRecord) {
+	assert.Equal(t, collector.TraceRecord{
+		Name: name,
+		Attributes: map[string]string{
+			string(semconv.RPCSystemKey):         "grpc",
+			string(semconv.RPCGRPCStatusCodeKey): "3",
+			string(semconv.RPCMethodKey):         "/foo/bar",
+			string(semconv.NetSockPeerAddrKey):   "1.1.1.1",
+			string(semconv.NetHostNameKey):       "127.0.0.1",
+			string(semconv.NetHostPortKey):       "8080",
+		},
+		Kind: ptrace.SpanKindInternal,
+	}, event)
+}
+
+func matchInnerGRPCTraceEvent(t *testing.T, name string, event collector.TraceRecord) {
+	assert.Equal(t, collector.TraceRecord{
+		Name:       name,
+		Attributes: map[string]string{},
+		Kind:       ptrace.SpanKindInternal,
+	}, event)
 }

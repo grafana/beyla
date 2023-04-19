@@ -6,18 +6,18 @@ import (
 	"github.com/mariomac/pipes/pkg/graph"
 	"github.com/mariomac/pipes/pkg/node"
 
-	"github.com/grafana/http-autoinstrument/pkg/ebpf/nethttp"
-	"github.com/grafana/http-autoinstrument/pkg/export/debug"
-	"github.com/grafana/http-autoinstrument/pkg/export/otel"
-	"github.com/grafana/http-autoinstrument/pkg/goexec"
-	"github.com/grafana/http-autoinstrument/pkg/transform"
+	"github.com/grafana/ebpf-autoinstrument/pkg/ebpf/nethttp"
+	"github.com/grafana/ebpf-autoinstrument/pkg/export/debug"
+	"github.com/grafana/ebpf-autoinstrument/pkg/export/otel"
+	"github.com/grafana/ebpf-autoinstrument/pkg/goexec"
+	"github.com/grafana/ebpf-autoinstrument/pkg/transform"
 )
 
 // builder with injectable instantiators for unit testing
 type graphBuilder struct {
 	config    *Config
 	builder   *graph.Builder
-	inspector func(execFile string, funcNames []string) (goexec.Offsets, error)
+	inspector func(_ goexec.ProcessFinder, funcNames map[string][]string) (goexec.Offsets, error)
 }
 
 // Build instantiates the whole instrumentation --> processing --> submit
@@ -55,12 +55,27 @@ func (gb *graphBuilder) buildGraph() (graph.Graph, error) {
 	//   httpTracer --> converter --+--> MetricsSender
 	//                              +--> PrinterNode
 
-	offsets, err := gb.inspector(gb.config.EBPF.Exec, gb.config.EBPF.Functions)
+	var finder goexec.ProcessFinder
+	if gb.config.EBPF.Port != 0 {
+		finder = goexec.OwnedPort(gb.config.EBPF.Port)
+	} else {
+		finder = goexec.ProcessNamed(gb.config.EBPF.Exec)
+	}
+	offsets, err := gb.inspector(
+		finder,
+		map[string][]string{
+			nethttp.SectionHTTP:            gb.config.EBPF.Functions,
+			nethttp.SectionGRPCStream:      gb.config.EBPF.GRPCHandleStream,
+			nethttp.SectionGRPCStatus:      gb.config.EBPF.GRPCWriteStatus,
+			nethttp.SectionRuntimeNewproc1: gb.config.EBPF.RuntimeNewproc1,
+			nethttp.SectionRuntimeGoexit1:  gb.config.EBPF.RuntimeGoexit1,
+		},
+	)
 	if err != nil {
 		return graph.Graph{}, fmt.Errorf("error analysing target executable: %w", err)
 	}
-
 	gb.config.EBPF.Offsets = &offsets
+
 	if gb.config.Metrics.ServiceName == "" {
 		gb.config.Metrics.ServiceName = offsets.FileInfo.CmdExePath
 	}

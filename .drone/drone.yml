@@ -1,0 +1,87 @@
+---
+kind: pipeline
+name: ebpf-autoinstrument-arm64
+steps:
+- image: plugins/docker
+  name: build-ebpf-autoinstrument-image
+  settings:
+    dockerfile: Dockerfile
+    dry_run: true
+    password:
+      from_secret: docker_password
+    repo: grafana/ebpf-autoinstrument
+    username:
+      from_secret: docker_username
+  when:
+    event:
+    - pull_request
+- image: plugins/docker
+  name: publish-ebpf-autoinstrument-image
+  settings:
+    dockerfile: Dockerfile
+    dry_run: false
+    password:
+      from_secret: docker_password
+    repo: grafana/ebpf-autoinstrument
+    username:
+      from_secret: docker_username
+  when:
+    event:
+    - push
+    - tag
+trigger:
+  ref:
+  - refs/heads/main
+  - refs/tags/v*
+---
+kind: pipeline
+name: ebpf-autoinstrument-amd64
+steps:
+- image: plugins/docker
+  name: build-ebpf-autoinstrument-image
+  settings:
+    dockerfile: Dockerfile
+    dry_run: true
+    password:
+      from_secret: docker_password
+    repo: grafana/ebpf-autoinstrument
+    username:
+      from_secret: docker_username
+  when:
+    event:
+    - pull_request
+- image: plugins/docker
+  name: publish-ebpf-autoinstrument-image
+  settings:
+    dockerfile: Dockerfile
+    dry_run: false
+    password:
+      from_secret: docker_password
+    repo: grafana/ebpf-autoinstrument
+    username:
+      from_secret: docker_username
+  when:
+    event:
+    - push
+    - tag
+trigger:
+  ref:
+  - refs/heads/main
+  - refs/tags/v*
+---
+get:
+  name: username
+  path: infra/data/ci/docker_hub
+kind: secret
+name: docker_username
+---
+get:
+  name: password
+  path: infra/data/ci/docker_hub
+kind: secret
+name: docker_password
+---
+kind: signature
+hmac: 38528cd7b519148bc14114c33d40f739b41c0a01ffdc49cc1483796893dce4b5
+
+...

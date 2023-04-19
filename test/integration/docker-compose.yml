@@ -4,41 +4,37 @@ services:
   testserver:
     build:
       context: ../..
-      dockerfile: test/integration/components/testserver/Dockerfile
+      dockerfile: test/integration/components/testserver/Dockerfile${TESTSERVER_DOCKERFILE_SUFFIX}
     image: hatest-testserver
     ports:
       - "8080:8080"
       - "8081:8081"
       - "8082:8082"
+      - "50051:50051"
     environment:
       LOG_LEVEL: DEBUG
-    depends_on:
-      autoinstrumenter:
-        condition: service_started
 
   autoinstrumenter:
     build:
       context: ../..
       dockerfile: ./Dockerfile
     command:
-      - /otelhttp
+      - /otelauto
       - --config=/configs/instrumenter-config.yml
     volumes:
       - ./configs/:/configs
     image: hatest-autoinstrumenter
     privileged: true # TODO: replace by individual capabilities
-    pid: "host"
+    pid: "service:testserver"
     environment:
       PRINT_TRACES: "true"
-      EXECUTABLE_NAME: "testserver"
+      OPEN_PORT: "${OPEN_PORT}"
+      EXECUTABLE_NAME: "${EXECUTABLE_NAME}"
       OTEL_EXPORTER_OTLP_ENDPOINT: "otelcol:4318"
       METRICS_INTERVAL: "10ms"
       LOG_LEVEL: "DEBUG"
       OTEL_EXPORTER_REPORT_TARGET: "true"
       OTEL_EXPORTER_REPORT_PEER: "true"
-    depends_on:
-      otelcol:
-        condition: service_started
 
   # OpenTelemetry Collector
   otelcol:
@@ -57,6 +53,11 @@ services:
       - "4318:4318"     # OTLP over HTTP receiver
       - "9464"          # Prometheus exporter
       - "8888"          # metrics endpoint
+    depends_on:
+      autoinstrumenter:
+        condition: service_started
+      prometheus:
+        condition: service_started
 
   # Prometheus
   prometheus:
@@ -70,8 +71,5 @@ services:
       - --web.route-prefix=/
     volumes:
       - ./configs/:/etc/prometheus
-    depends_on:
-      otelcol:
-        condition: service_started
     ports:
       - "9090:9090"

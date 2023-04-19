@@ -1,4 +1,4 @@
-module github.com/grafana/http-autoinstrument
+module github.com/grafana/ebpf-autoinstrument
 
 go 1.20
 
@@ -8,6 +8,7 @@ require (
 	github.com/gavv/monotime v0.0.0-20190418164738-30dba4353424
 	github.com/gin-gonic/gin v1.9.0
 	github.com/gorilla/mux v1.8.0
+	github.com/grafana/go-offsets-tracker v0.1.2
 	github.com/mariomac/guara v0.0.0-20221222112709-f95b15506aee
 	github.com/mariomac/pipes v0.5.1-0.20230321095313-74438be08289
 	github.com/shirou/gopsutil v3.21.11+incompatible
@@ -23,6 +24,8 @@ require (
 	go.opentelemetry.io/otel/trace v1.14.0
 	golang.org/x/arch v0.0.0-20210923205945-b76863e36670
 	golang.org/x/exp v0.0.0-20230213192124-5e25df0256eb
+	google.golang.org/grpc v1.53.0
+	google.golang.org/protobuf v1.28.1
 	gopkg.in/yaml.v3 v3.0.1
 )
 
@@ -40,8 +43,9 @@ require (
 	github.com/go-playground/validator/v10 v10.11.2 // indirect
 	github.com/goccy/go-json v0.10.0 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
-	github.com/golang/protobuf v1.5.2 // indirect
+	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.7.0 // indirect
+	github.com/hashicorp/go-version v1.6.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/klauspost/cpuid/v2 v2.0.9 // indirect
 	github.com/leodido/go-urn v1.2.1 // indirect
@@ -61,10 +65,8 @@ require (
 	go.uber.org/atomic v1.7.0 // indirect
 	go.uber.org/multierr v1.8.0 // indirect
 	golang.org/x/crypto v0.5.0 // indirect
-	golang.org/x/net v0.7.0 // indirect
+	golang.org/x/net v0.8.0 // indirect
 	golang.org/x/sys v0.6.0 // indirect
-	golang.org/x/text v0.7.0 // indirect
+	golang.org/x/text v0.8.0 // indirect
 	google.golang.org/genproto v0.0.0-20230110181048-76db0878b65f // indirect
-	google.golang.org/grpc v1.53.0 // indirect
-	google.golang.org/protobuf v1.28.1 // indirect
 )

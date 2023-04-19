@@ -1,31 +1,29 @@
 # Main binary configuration
-CMD ?= otelhttp
-MAIN_GO_FILE ?= cmd/$(CMD).go
+CMD ?= otelauto
+MAIN_GO_FILE ?= cmd/$(CMD)/main.go
 GOOS ?= linux
 GOARCH ?= amd64
 
-# TODO: grafana
-DOCKERHUB_USER ?= mariomac
-
-COMPOSE_ARGS ?= -f test/integration/docker-compose.yml
-COMPOSE_LOGS ?= docker-compose.log
-
+IMG_REGISTRY ?= docker.io
+# Set your registry username. CI will set 'grafana' but you mustn't use it for manual pushing.
+IMG_ORG ?=
+IMG_NAME ?= ebpf-autoinstrument
 # Container image creation creation
-VERSION ?= latest
-IMAGE_TAG_BASE ?= $(DOCKERHUB_USER)/http-autoinstrument
-IMG ?= $(IMAGE_TAG_BASE):$(VERSION)
+VERSION ?= dev
+IMG = $(IMG_REGISTRY)/$(IMG_ORG)/$(IMAGE_TAG_BASE):$(VERSION)
 
 # The generator is a local container image that provides a reproducible environment for
 # building eBPF binaries
-GEN_IMAGE_TAG_BASE ?= $(DOCKERHUB_USER)/ebpf-generator
-GEN_IMG ?= $(GEN_IMAGE_TAG_BASE):$(VERSION)
+GEN_IMG_ORG ?= $(IMG_ORG)
+GEN_IMG_NAME ?= ebpf-generator
+GEN_IMG ?= $(GEN_IMG_ORG)/$(GEN_IMAGE_TAG_BASE):$(VERSION)
+
+COMPOSE_ARGS ?= -f test/integration/docker-compose.yml
 
 OCI_BIN ?= docker
-
-GOLANGCI_LINT_VERSION = v1.51.2
+DRONE ?= drone
 
 # BPF code generator dependencies
-CILIUM_EBPF_VERSION := v0.10.0
 CLANG ?= clang
 CFLAGS := -O2 -g -Wall -Werror $(CFLAGS)
 
@@ -33,24 +31,62 @@ CFLAGS := -O2 -g -Wall -Werror $(CFLAGS)
 EXCLUDE_COVERAGE_FILES="(/cmd/)|(bpf_bpfe)|(/pingserver/)|(/test/collector/)"
 
 .DEFAULT_GOAL := all
-# Oneshell is required to auto-cleanup of integration tests
-export SHELL:=/bin/sh
-export SHELLOPTS:=$(if $(SHELLOPTS),$(SHELLOPTS):)pipefail:errexit
-.ONESHELL:
+
+# go-install-tool will 'go install' any package $2 and install it locally to $1.
+# This will prevent that they are installed in the $USER/go/bin folder and different
+# projects ca have different versions of the tools
+PROJECT_DIR := $(shell dirname $(abspath $(firstword $(MAKEFILE_LIST))))
+
+TOOLS_DIR ?= $(PROJECT_DIR)/bin
+
+define go-install-tool
+@[ -f $(1) ] || { \
+set -e ;\
+TMP_DIR=$$(mktemp -d) ;\
+cd $$TMP_DIR ;\
+go mod init tmp ;\
+echo "Downloading $(2)" ;\
+GOBIN=$(TOOLS_DIR) GOFLAGS="-mod=mod" go install $(2) ;\
+rm -rf $$TMP_DIR ;\
+}
+endef
+
+# Check that given variables are set and all have non-empty values,
+# die with an error otherwise.
+#
+# Params:
+#   1. Variable name(s) to test.
+#   2. (optional) Error message to print.
+check_defined = \
+    $(strip $(foreach 1,$1, \
+        $(call __check_defined,$1,$(strip $(value 2)))))
+__check_defined = \
+    $(if $(value $1),, \
+      $(error Undefined $1$(if $2, ($2))))
+
+# prereqs binary dependencies
+GOLANGCI_LINT = $(TOOLS_DIR)/golangci-lint
+BPF2GO = $(TOOLS_DIR)/bpf2go
+GO_OFFSETS_TRACKER = $(TOOLS_DIR)/go-offsets-tracker
 
 .DEFAULT_GOAL := build
 
 .PHONY: prereqs
 prereqs:
 	@echo "### Check if prerequisites are met, and installing missing dependencies"
-	test -f $(shell go env GOPATH)/bin/golangci-lint || GOFLAGS="" go install github.com/golangci/golangci-lint/cmd/golangci-lint@${GOLANGCI_LINT_VERSION}
-	test -f $(shell go env GOPATH)/bin/bpf2go || go install github.com/cilium/ebpf/cmd/bpf2go@${CILIUM_EBPF_VERSION}
-#	test -f $(shell go env GOPATH)/bin/kind || go install sigs.k8s.io/kind@latest
+	$(call go-install-tool,$(GOLANGCI_LINT),github.com/golangci/golangci-lint/cmd/golangci-lint@v1.52.2)
+	$(call go-install-tool,$(BPF2GO),github.com/cilium/ebpf/cmd/bpf2go@v0.10.0)
+	$(call go-install-tool,$(GO_OFFSETS_TRACKER),github.com/grafana/go-offsets-tracker/cmd/go-offsets-tracker@v0.1.4)
 
 .PHONY: lint
 lint: prereqs
 	@echo "### Linting code"
-	golangci-lint run ./... --timeout=3m
+	$(GOLANGCI_LINT) run ./... --timeout=3m
+
+.PHONY: update-offsets
+update-offsets: prereqs
+	@echo "### Updating pkg/goexec/offsets.json"
+	$(GO_OFFSETS_TRACKER) -i configs/offsets/tracker_input.json pkg/goexec/offsets.json
 
 # As generated artifacts are part of the code repo (pkg/ebpf packages), you don't have
 # to run this target for each build. Only when you change the C code inside the bpf folder.
@@ -61,7 +97,6 @@ generate: export BPF_CFLAGS := $(CFLAGS)
 generate: prereqs
 	@echo "### Generating BPF Go bindings"
 	go generate ./pkg/...
-
 
 .PHONY: docker-generate
 docker-generate:
@@ -102,6 +137,7 @@ coverage-report-html: cov-exclude-generated
 
 .PHONY: image-build-push
 image-build-push: ## Build OCI image with the manager.
+	$(call check_defined, IMG_ORG, Your Docker repository user name)
 	$(OCI_BIN) buildx build --push --platform linux/amd64,linux/arm64 -t ${IMG} .
 
 .PHONY: generator-image-build-push
@@ -115,16 +151,13 @@ prepare-integration-test:
 	$(OCI_BIN) compose $(COMPOSE_ARGS) stop || true
 	$(OCI_BIN) compose $(COMPOSE_ARGS) rm -f || true
 	$(OCI_BIN) rmi -f $(shell $(OCI_BIN) images --format '{{.Repository}}:{{.Tag}}' | grep 'hatest-') || true
-	@echo "### Spinning up Compose cluster"
-	$(OCI_BIN) compose $(COMPOSE_ARGS)  up --detach
 
 .PHONY: cleanup-integration-test
 cleanup-integration-test:
-	@echo "### Storing integration tests Compose logs"
-	$(OCI_BIN) compose $(COMPOSE_ARGS) logs > $(COMPOSE_LOGS)
 	@echo "### Removing integration test Compose cluster"
 	$(OCI_BIN) compose $(COMPOSE_ARGS) stop
 	$(OCI_BIN) compose $(COMPOSE_ARGS) rm -f
+	$(OCI_BIN) rmi -f $(shell $(OCI_BIN) images --format '{{.Repository}}:{{.Tag}}' | grep 'hatest-') || true
 
 # TODO: provide coverage info for integration testing https://go.dev/blog/integration-test-coverage
 .PHONY: run-integration-test
@@ -137,3 +170,10 @@ run-integration-test:
 integration-test: prepare-integration-test
 	$(MAKE) run-integration-test || (ret=$$?; $(MAKE) cleanup-integration-test && exit $$ret)
 	$(MAKE) cleanup-integration-test
+
+.PHONY: drone
+drone:
+	@echo "### Regenerating and signing .drone/drone.yml"
+	drone jsonnet --stream --source .drone/drone.jsonnet --target .drone/drone.yml
+	drone lint .drone/drone.yml
+	drone sign --save grafana/ebpf-autoinstrument .drone/drone.yml || echo "You must set DRONE_SERVER and DRONE_TOKEN. These values can be found on your [drone account](http://drone.grafana.net/account) page."

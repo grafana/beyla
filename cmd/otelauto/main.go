@@ -8,7 +8,7 @@ import (
 
 	"golang.org/x/exp/slog"
 
-	"github.com/grafana/http-autoinstrument/pkg/pipe"
+	"github.com/grafana/ebpf-autoinstrument/pkg/pipe"
 )
 
 func main() {

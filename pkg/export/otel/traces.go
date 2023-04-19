@@ -7,7 +7,7 @@ import (
 
 	"golang.org/x/exp/slog"
 
-	"github.com/grafana/http-autoinstrument/pkg/transform"
+	"github.com/grafana/ebpf-autoinstrument/pkg/transform"
 	"github.com/mariomac/pipes/pkg/node"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
@@ -18,7 +18,7 @@ import (
 	trace2 "go.opentelemetry.io/otel/trace"
 )
 
-const reporterName = "github.com/grafana/http-autoinstrument"
+const reporterName = "github.com/grafana/ebpf-autoinstrument"
 
 type TracesConfig struct {
 	ServiceName    string `yaml:"service_name" env:"SERVICE_NAME"`
@@ -74,9 +74,11 @@ func newTracesReporter(svcName, endpoint string) (*TracesReporter, error) {
 		return nil, fmt.Errorf("creating trace exporter: %w", err)
 	}
 
+	bsp := trace.NewBatchSpanProcessor(r.traceExporter, trace.WithMaxExportBatchSize(4096), trace.WithMaxQueueSize(4096))
 	r.traceProvider = trace.NewTracerProvider(
 		trace.WithResource(resources),
-		trace.WithSyncer(r.traceExporter),
+		trace.WithSpanProcessor(bsp),
+		//trace.WithSampler(trace.AlwaysSample()),
 	)
 
 	return &r, nil
@@ -91,27 +93,62 @@ func (r *TracesReporter) close() {
 	}
 }
 
-func (r *TracesReporter) reportTraces(spans <-chan transform.HTTPRequestSpan) {
-	defer r.close()
-	tracer := r.traceProvider.Tracer(reporterName)
-	for span := range spans {
-		// TODO: add src/dst ip and dst port
+func traceAttributes(span *transform.HTTPRequestSpan) []attribute.KeyValue {
+	switch span.Type {
+	case transform.EventTypeHTTP:
 		attrs := []attribute.KeyValue{
 			semconv.HTTPMethod(span.Method),
 			semconv.HTTPStatusCode(span.Status),
 			semconv.HTTPTarget(span.Path),
 			semconv.NetSockPeerAddr(span.Peer),
+			semconv.NetHostName(span.Host),
+			semconv.NetHostPort(span.HostPort),
+			semconv.HTTPRequestContentLength(int(span.ContentLength)),
 		}
 		if span.Route != "" {
 			attrs = append(attrs, semconv.HTTPRoute(span.Route))
 		}
+		return attrs
+	case transform.EventTypeGRPC:
+		return []attribute.KeyValue{
+			semconv.RPCMethod(span.Path),
+			semconv.RPCSystemGRPC,
+			semconv.RPCGRPCStatusCodeKey.Int(span.Status),
+			semconv.NetSockPeerAddr(span.Peer),
+			semconv.NetHostName(span.Host),
+			semconv.NetHostPort(span.HostPort),
+		}
+	}
+	return []attribute.KeyValue{}
+}
 
-		// TODO: there must be a better way to instantiate spans
-		_, sp := tracer.Start(context.TODO(), "session",
-			trace2.WithTimestamp(span.Start),
+func (r *TracesReporter) reportTraces(spans <-chan transform.HTTPRequestSpan) {
+	defer r.close()
+	tracer := r.traceProvider.Tracer(reporterName)
+	for span := range spans {
+		attrs := traceAttributes(&span)
+
+		// Create a parent span for the whole request session
+		ctx, sp := tracer.Start(context.TODO(), "session",
+			trace2.WithTimestamp(span.RequestStart),
 			trace2.WithAttributes(attrs...),
-			// TODO: trace2.WithSpanKind()
+			trace2.WithSpanKind(trace2.SpanKindInternal),
 		)
+
+		// Create a child span showing the queue time
+		_, spQ := tracer.Start(ctx, "in queue",
+			trace2.WithTimestamp(span.RequestStart),
+			trace2.WithSpanKind(trace2.SpanKindInternal),
+		)
+		spQ.End(trace2.WithTimestamp(span.Start))
+
+		// Create a child span showing the processing time
+		_, spP := tracer.Start(ctx, "processing",
+			trace2.WithTimestamp(span.Start),
+			trace2.WithSpanKind(trace2.SpanKindInternal),
+		)
+		spP.End(trace2.WithTimestamp(span.End))
+
 		sp.End(trace2.WithTimestamp(span.End))
 	}
 }

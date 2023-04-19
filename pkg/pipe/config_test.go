@@ -10,8 +10,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/grafana/http-autoinstrument/pkg/ebpf/nethttp"
-	"github.com/grafana/http-autoinstrument/pkg/export/otel"
+	"github.com/grafana/ebpf-autoinstrument/pkg/ebpf/nethttp"
+	"github.com/grafana/ebpf-autoinstrument/pkg/export/otel"
 )
 
 func TestConfig_Overrides(t *testing.T) {
@@ -43,8 +43,12 @@ otel_metrics_export:
 		Printer:          true,
 		Noop:             true,
 		EBPF: nethttp.EBPFTracer{
-			Exec:      "tras",
-			Functions: []string{"FooBar"},
+			Exec:             "tras",
+			Functions:        []string{"FooBar"},
+			GRPCWriteStatus:  []string{"google.golang.org/grpc/internal/transport.(*http2Server).WriteStatus"},
+			GRPCHandleStream: []string{"google.golang.org/grpc.(*Server).handleStream"},
+			RuntimeNewproc1:  []string{"runtime.newproc1"},
+			RuntimeGoexit1:   []string{"runtime.goexit1"},
 		},
 		Metrics: otel.MetricsConfig{
 			ServiceName: "svc-name",

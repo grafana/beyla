@@ -8,10 +8,10 @@ import (
 	"github.com/caarlos0/env/v7"
 	"gopkg.in/yaml.v3"
 
-	"github.com/grafana/http-autoinstrument/pkg/ebpf/nethttp"
-	"github.com/grafana/http-autoinstrument/pkg/export/debug"
-	"github.com/grafana/http-autoinstrument/pkg/export/otel"
-	"github.com/grafana/http-autoinstrument/pkg/transform"
+	"github.com/grafana/ebpf-autoinstrument/pkg/ebpf/nethttp"
+	"github.com/grafana/ebpf-autoinstrument/pkg/export/debug"
+	"github.com/grafana/ebpf-autoinstrument/pkg/export/otel"
+	"github.com/grafana/ebpf-autoinstrument/pkg/transform"
 )
 
 var defaultConfig = Config{
@@ -22,6 +22,10 @@ var defaultConfig = Config{
 			"net/http.HandlerFunc.ServeHTTP",
 			"github.com/gin-gonic/gin.(*Engine).ServeHTTP",
 		},
+		GRPCHandleStream: []string{"google.golang.org/grpc.(*Server).handleStream"},
+		GRPCWriteStatus:  []string{"google.golang.org/grpc/internal/transport.(*http2Server).WriteStatus"},
+		RuntimeNewproc1:  []string{"runtime.newproc1"},
+		RuntimeGoexit1:   []string{"runtime.goexit1"},
 	},
 	Metrics: otel.MetricsConfig{
 		Interval: 5 * time.Second,
@@ -53,11 +57,11 @@ func (e ConfigError) Error() string {
 }
 
 func (c *Config) Validate() error {
-	if c.EBPF.Exec == "" {
-		return ConfigError("missing EXECUTABLE_NAME property")
+	if c.EBPF.Port == 0 && c.EBPF.Exec == "" {
+		return ConfigError("missing EXECUTABLE_NAME or OPEN_PORT property")
 	}
 	if len(c.EBPF.Functions) == 0 {
-		return ConfigError("missing INSTRUMENT_FUNC_NAME property")
+		return ConfigError("missing INSTRUMENT_FUNCTIONS property")
 	}
 	if !c.Noop.Enabled() && !c.Printer.Enabled() &&
 		!c.Metrics.Enabled() && !c.Traces.Enabled() {

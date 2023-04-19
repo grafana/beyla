@@ -13,6 +13,27 @@ import (
 	"github.com/cilium/ebpf"
 )
 
+type bpfGrpcMethodData struct {
+	StartMonotimeNs uint64
+	Status          uint64
+	Regs            struct {
+		UserRegs struct {
+			Regs   [31]uint64
+			Sp     uint64
+			Pc     uint64
+			Pstate uint64
+		}
+		OrigX0          uint64
+		Syscallno       int32
+		Unused2         uint32
+		OrigAddrLimit   uint64
+		PmrSave         uint64
+		Stackframe      [2]uint64
+		LockdepHardirqs uint64
+		ExitRcu         uint64
+	}
+}
+
 type bpfHttpMethodInvocation struct {
 	StartMonotimeNs uint64
 	Regs            struct {
@@ -34,12 +55,19 @@ type bpfHttpMethodInvocation struct {
 }
 
 type bpfHttpRequestTrace struct {
-	StartMonotimeNs uint64
-	EndMonotimeNs   uint64
-	Method          [6]uint8
-	Path            [100]uint8
-	Status          uint16
-	RemoteAddr      [50]uint8
+	Type              uint8
+	GoStartMonotimeNs uint64
+	StartMonotimeNs   uint64
+	EndMonotimeNs     uint64
+	Method            [6]uint8
+	Path              [100]uint8
+	Status            uint16
+	RemoteAddr        [50]uint8
+	RemoteAddrLen     uint64
+	Host              [256]uint8
+	HostLen           uint64
+	HostPort          uint32
+	ContentLength     int64
 }
 
 // loadBpf returns the embedded CollectionSpec for bpf.
@@ -83,8 +111,13 @@ type bpfSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpfProgramSpecs struct {
-	UprobeServeHTTP       *ebpf.ProgramSpec `ebpf:"uprobe_ServeHTTP"`
-	UprobeServeHttpReturn *ebpf.ProgramSpec `ebpf:"uprobe_ServeHttp_return"`
+	UprobeServeHTTP                *ebpf.ProgramSpec `ebpf:"uprobe_ServeHTTP"`
+	UprobeServeHttpReturn          *ebpf.ProgramSpec `ebpf:"uprobe_ServeHttp_return"`
+	UprobeProcGoexit1              *ebpf.ProgramSpec `ebpf:"uprobe_proc_goexit1"`
+	UprobeProcNewproc1Ret          *ebpf.ProgramSpec `ebpf:"uprobe_proc_newproc1_ret"`
+	UprobeServerHandleStream       *ebpf.ProgramSpec `ebpf:"uprobe_server_handleStream"`
+	UprobeServerHandleStreamReturn *ebpf.ProgramSpec `ebpf:"uprobe_server_handleStream_return"`
+	UprobeTransportWriteStatus     *ebpf.ProgramSpec `ebpf:"uprobe_transport_writeStatus"`
 }
 
 // bpfMapSpecs contains maps before they are loaded into the kernel.
@@ -92,6 +125,8 @@ type bpfProgramSpecs struct {
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpfMapSpecs struct {
 	Events              *ebpf.MapSpec `ebpf:"events"`
+	OngoingGoroutines   *ebpf.MapSpec `ebpf:"ongoing_goroutines"`
+	OngoingGrpcRequests *ebpf.MapSpec `ebpf:"ongoing_grpc_requests"`
 	OngoingHttpRequests *ebpf.MapSpec `ebpf:"ongoing_http_requests"`
 }
 
@@ -115,12 +150,16 @@ func (o *bpfObjects) Close() error {
 // It can be passed to loadBpfObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpfMaps struct {
 	Events              *ebpf.Map `ebpf:"events"`
+	OngoingGoroutines   *ebpf.Map `ebpf:"ongoing_goroutines"`
+	OngoingGrpcRequests *ebpf.Map `ebpf:"ongoing_grpc_requests"`
 	OngoingHttpRequests *ebpf.Map `ebpf:"ongoing_http_requests"`
 }
 
 func (m *bpfMaps) Close() error {
 	return _BpfClose(
 		m.Events,
+		m.OngoingGoroutines,
+		m.OngoingGrpcRequests,
 		m.OngoingHttpRequests,
 	)
 }
@@ -129,14 +168,24 @@ func (m *bpfMaps) Close() error {
 //
 // It can be passed to loadBpfObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpfPrograms struct {
-	UprobeServeHTTP       *ebpf.Program `ebpf:"uprobe_ServeHTTP"`
-	UprobeServeHttpReturn *ebpf.Program `ebpf:"uprobe_ServeHttp_return"`
+	UprobeServeHTTP                *ebpf.Program `ebpf:"uprobe_ServeHTTP"`
+	UprobeServeHttpReturn          *ebpf.Program `ebpf:"uprobe_ServeHttp_return"`
+	UprobeProcGoexit1              *ebpf.Program `ebpf:"uprobe_proc_goexit1"`
+	UprobeProcNewproc1Ret          *ebpf.Program `ebpf:"uprobe_proc_newproc1_ret"`
+	UprobeServerHandleStream       *ebpf.Program `ebpf:"uprobe_server_handleStream"`
+	UprobeServerHandleStreamReturn *ebpf.Program `ebpf:"uprobe_server_handleStream_return"`
+	UprobeTransportWriteStatus     *ebpf.Program `ebpf:"uprobe_transport_writeStatus"`
 }
 
 func (p *bpfPrograms) Close() error {
 	return _BpfClose(
 		p.UprobeServeHTTP,
 		p.UprobeServeHttpReturn,
+		p.UprobeProcGoexit1,
+		p.UprobeProcNewproc1Ret,
+		p.UprobeServerHandleStream,
+		p.UprobeServerHandleStreamReturn,
+		p.UprobeTransportWriteStatus,
 	)
 }
 

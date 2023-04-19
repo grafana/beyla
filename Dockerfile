@@ -1,6 +1,8 @@
 # Build the manager binary
 FROM golang:1.20 as builder
 
+# TODO: embed software version in executable
+
 ARG TARGETARCH
 
 ENV GOARCH=$TARGETARCH
@@ -21,11 +23,12 @@ COPY Makefile Makefile
 RUN make compile
 
 # Create final image from minimal + built binary
-#TODO: use minimal image
-FROM fedora:37
+FROM busybox:1.35-glibc
+
+LABEL maintainer="Grafana Labs <hello@grafana.com>"
 
 WORKDIR /
-COPY --from=builder /opt/app-root/bin/otelhttp .
+COPY --from=builder /opt/app-root/bin/otelauto .
 USER 0:0
 
-CMD [ "/otelhttp" ]
+CMD [ "/otelauto" ]

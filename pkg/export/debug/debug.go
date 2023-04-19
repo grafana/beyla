@@ -4,7 +4,7 @@ package debug
 import (
 	"fmt"
 
-	"github.com/grafana/http-autoinstrument/pkg/transform"
+	"github.com/grafana/ebpf-autoinstrument/pkg/transform"
 	"github.com/mariomac/pipes/pkg/node"
 )
 
@@ -17,13 +17,17 @@ func (p PrintEnabled) Enabled() bool {
 func PrinterNode(_ PrintEnabled) node.TerminalFunc[transform.HTTPRequestSpan] {
 	return func(spans <-chan transform.HTTPRequestSpan) {
 		for span := range spans {
-			fmt.Printf("%s (%s) %v %s %s [%s]\n",
+			fmt.Printf("%s (%s[%s]) %v %s %s [%s]->[%s:%d] size:%dB\n",
 				span.Start.Format("2006-01-02 15:04:05.12345"),
+				span.End.Sub(span.RequestStart),
 				span.End.Sub(span.Start),
 				span.Status,
 				span.Method,
 				span.Path,
 				span.Peer,
+				span.Host,
+				span.HostPort,
+				span.ContentLength,
 			)
 		}
 	}

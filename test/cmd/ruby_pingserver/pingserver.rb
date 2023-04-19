@@ -1,6 +1,6 @@
 require 'socket'
 
-server = TCPServer.new(8080)
+server = TCPServer.new("0.0.0.0", 8080)
 
 puts "Running ruby http server: port=8080, process_id=" + Process.pid().to_s
 

@@ -40,5 +40,5 @@ fn main() {
 
     println!("Running server: port=8080, process_id={}", process::id());
 
-    Iron::new(router).http("localhost:8080").unwrap();
+    Iron::new(router).http("0.0.0.0:8080").unwrap();
 }

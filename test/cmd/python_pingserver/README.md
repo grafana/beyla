@@ -3,7 +3,7 @@
 ### Installing pre-requisites
 
 ```bash
-pip install fastapi
+pip install fastapi uvicorn
 ```
 
 ### Running

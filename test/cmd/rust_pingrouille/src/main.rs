@@ -8,7 +8,7 @@ fn main() {
     println!("Running server: port=8080, process_id={}", process::id());
 
     // The `start_server` starts listening forever on the given address.
-    rouille::start_server("localhost:8080", move |request| {
+    rouille::start_server("0.0.0.0:8080", move |request| {
         // The closure passed to `start_server` will be called once for each client request. It
         // will be called multiple times concurrently when there are multiple clients.
 

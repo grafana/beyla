@@ -19,7 +19,7 @@ services:
       context: ../..
       dockerfile: ./Dockerfile
     command:
-      - /otelhttp
+      - /otelauto
       - --config=/configs/instrumenter-config.yml
     volumes:
       - ./configs/:/configs
@@ -32,12 +32,12 @@ services:
       PRINT_TRACES: "true"
       OPEN_PORT: "${OPEN_PORT}"
       EXECUTABLE_NAME: "${EXECUTABLE_NAME}"
-      OTEL_EXPORTER_OTLP_ENDPOINT: "otelcol:4318"
-      METRICS_INTERVAL: "10ms"
+      OTEL_EXPORTER_OTLP_METRICS_ENDPOINT: "otelcol:4318"
+      #METRICS_INTERVAL: "10ms"
       LOG_LEVEL: "DEBUG"
       OTEL_EXPORTER_REPORT_TARGET: "true"
       OTEL_EXPORTER_REPORT_PEER: "true"
-      PROFILE_PORT: "6060"
+      #PROFILE_PORT: "6060"
       #BPF_WAKEUP_DATA_BYTES: "10000"
 
   # OpenTelemetry Collector

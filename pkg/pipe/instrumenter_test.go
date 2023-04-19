@@ -82,9 +82,9 @@ func TestTracerPipeline(t *testing.T) {
 	go pipe.Run(ctx)
 
 	event := getTraceEvent(t, tc)
-	matchTraceEvent(t, "in queue", event)
+	matchInnerTraceEvent(t, "in queue", event)
 	event = getTraceEvent(t, tc)
-	matchTraceEvent(t, "processing", event)
+	matchInnerTraceEvent(t, "processing", event)
 	event = getTraceEvent(t, tc)
 	matchTraceEvent(t, "session", event)
 }
@@ -216,9 +216,9 @@ func TestTraceGRPCPipeline(t *testing.T) {
 	go pipe.Run(ctx)
 
 	event := getTraceEvent(t, tc)
-	matchGRPCTraceEvent(t, "in queue", event)
+	matchInnerGRPCTraceEvent(t, "in queue", event)
 	event = getTraceEvent(t, tc)
-	matchGRPCTraceEvent(t, "processing", event)
+	matchInnerGRPCTraceEvent(t, "processing", event)
 	event = getTraceEvent(t, tc)
 	matchGRPCTraceEvent(t, "session", event)
 }
@@ -293,6 +293,14 @@ func matchTraceEvent(t *testing.T, name string, event collector.TraceRecord) {
 	}, event)
 }
 
+func matchInnerTraceEvent(t *testing.T, name string, event collector.TraceRecord) {
+	assert.Equal(t, collector.TraceRecord{
+		Name:       name,
+		Attributes: map[string]string{},
+		Kind:       ptrace.SpanKindInternal,
+	}, event)
+}
+
 func matchGRPCTraceEvent(t *testing.T, name string, event collector.TraceRecord) {
 	assert.Equal(t, collector.TraceRecord{
 		Name: name,
@@ -305,5 +313,13 @@ func matchGRPCTraceEvent(t *testing.T, name string, event collector.TraceRecord)
 			string(semconv.NetHostPortKey):       "8080",
 		},
 		Kind: ptrace.SpanKindInternal,
+	}, event)
+}
+
+func matchInnerGRPCTraceEvent(t *testing.T, name string, event collector.TraceRecord) {
+	assert.Equal(t, collector.TraceRecord{
+		Name:       name,
+		Attributes: map[string]string{},
+		Kind:       ptrace.SpanKindInternal,
 	}, event)
 }

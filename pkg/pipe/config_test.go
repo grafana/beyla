@@ -49,6 +49,8 @@ otel_metrics_export:
 			GRPCHandleStream: []string{"google.golang.org/grpc.(*Server).handleStream"},
 			RuntimeNewproc1:  []string{"runtime.newproc1"},
 			RuntimeGoexit1:   []string{"runtime.goexit1"},
+			BatchLength:      100,
+			BatchTimeout:     time.Second,
 		},
 		Metrics: otel.MetricsConfig{
 			ServiceName: "svc-name",

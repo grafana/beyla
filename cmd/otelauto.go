@@ -11,6 +11,7 @@ import (
 	"golang.org/x/exp/slog"
 
 	"github.com/grafana/ebpf-autoinstrument/pkg/pipe"
+
 	_ "net/http/pprof"
 )
 

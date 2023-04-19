@@ -38,7 +38,7 @@ type TracesReporter struct {
 	traceProvider *trace.TracerProvider
 }
 
-func TracesReporterProvider(cfg TracesConfig) node.TerminalFunc[transform.HTTPRequestSpan] {
+func TracesReporterProvider(cfg TracesConfig) node.TerminalFunc[[]transform.HTTPRequestSpan] {
 	endpoint := cfg.TracesEndpoint
 	if endpoint == "" {
 		endpoint = cfg.Endpoint
@@ -122,33 +122,35 @@ func traceAttributes(span *transform.HTTPRequestSpan) []attribute.KeyValue {
 	return []attribute.KeyValue{}
 }
 
-func (r *TracesReporter) reportTraces(spans <-chan transform.HTTPRequestSpan) {
+func (r *TracesReporter) reportTraces(input <-chan []transform.HTTPRequestSpan) {
 	defer r.close()
 	tracer := r.traceProvider.Tracer(reporterName)
-	for span := range spans {
-		attrs := traceAttributes(&span)
+	for spans := range input {
+		for i := range spans {
+			attrs := traceAttributes(&spans[i])
 
-		// Create a parent span for the whole request session
-		ctx, sp := tracer.Start(context.TODO(), "session",
-			trace2.WithTimestamp(span.RequestStart),
-			trace2.WithAttributes(attrs...),
-			trace2.WithSpanKind(trace2.SpanKindInternal),
-		)
+			// Create a parent span for the whole request session
+			ctx, sp := tracer.Start(context.TODO(), "session",
+				trace2.WithTimestamp(spans[i].RequestStart),
+				trace2.WithAttributes(attrs...),
+				trace2.WithSpanKind(trace2.SpanKindInternal),
+			)
 
-		// Create a child span showing the queue time
-		_, spQ := tracer.Start(ctx, "in queue",
-			trace2.WithTimestamp(span.RequestStart),
-			trace2.WithSpanKind(trace2.SpanKindInternal),
-		)
-		spQ.End(trace2.WithTimestamp(span.Start))
+			// Create a child span showing the queue time
+			_, spQ := tracer.Start(ctx, "in queue",
+				trace2.WithTimestamp(spans[i].RequestStart),
+				trace2.WithSpanKind(trace2.SpanKindInternal),
+			)
+			spQ.End(trace2.WithTimestamp(spans[i].Start))
 
-		// Create a child span showing the processing time
-		_, spP := tracer.Start(ctx, "processing",
-			trace2.WithTimestamp(span.Start),
-			trace2.WithSpanKind(trace2.SpanKindInternal),
-		)
-		spP.End(trace2.WithTimestamp(span.End))
+			// Create a child span showing the processing time
+			_, spP := tracer.Start(ctx, "processing",
+				trace2.WithTimestamp(spans[i].Start),
+				trace2.WithSpanKind(trace2.SpanKindInternal),
+			)
+			spP.End(trace2.WithTimestamp(spans[i].End))
 
-		sp.End(trace2.WithTimestamp(span.End))
+			sp.End(trace2.WithTimestamp(spans[i].End))
+		}
 	}
 }

@@ -33,10 +33,14 @@ type HTTPRequestSpan struct {
 	End           time.Time
 }
 
-func ConvertToSpan(in <-chan nethttp.HTTPRequestTrace, out chan<- HTTPRequestSpan) {
+func ConvertToSpan(in <-chan []nethttp.HTTPRequestTrace, out chan<- []HTTPRequestSpan) {
 	cnv := newConverter()
-	for trace := range in {
-		out <- cnv.convert(&trace)
+	for traces := range in {
+		spans := make([]HTTPRequestSpan, 0, len(traces))
+		for i := range traces {
+			spans = append(spans, cnv.convert(&traces[i]))
+		}
+		out <- spans
 	}
 }
 

@@ -26,19 +26,16 @@ services:
     image: hatest-autoinstrumenter
     privileged: true # TODO: replace by individual capabilities
     pid: "service:testserver"
-    ports:
-      - "6060:6060"
     environment:
       PRINT_TRACES: "true"
       OPEN_PORT: "${OPEN_PORT}"
       EXECUTABLE_NAME: "${EXECUTABLE_NAME}"
-      OTEL_EXPORTER_OTLP_METRICS_ENDPOINT: "otelcol:4318"
-      #METRICS_INTERVAL: "10ms"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "otelcol:4318"
+      METRICS_INTERVAL: "10ms"
+      BPF_BATCH_TIMEOUT: "10ms"
       LOG_LEVEL: "DEBUG"
       OTEL_EXPORTER_REPORT_TARGET: "true"
       OTEL_EXPORTER_REPORT_PEER: "true"
-      #PROFILE_PORT: "6060"
-      #BPF_WAKEUP_DATA_BYTES: "10000"
 
   # OpenTelemetry Collector
   otelcol:

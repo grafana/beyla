@@ -31,7 +31,7 @@ type RoutesConfig struct {
 	Patterns []string `yaml:"patterns"`
 }
 
-func RoutesProvider(rc *RoutesConfig) node.MiddleFunc[HTTPRequestSpan, HTTPRequestSpan] {
+func RoutesProvider(rc *RoutesConfig) node.MiddleFunc[[]HTTPRequestSpan, []HTTPRequestSpan] {
 	// set default value for Unmatch action
 	var unmatchAction func(span *HTTPRequestSpan)
 	switch rc.Unmatch {
@@ -48,11 +48,13 @@ func RoutesProvider(rc *RoutesConfig) node.MiddleFunc[HTTPRequestSpan, HTTPReque
 		unmatchAction = setUnmatchToWildcard
 	}
 	matcher := route.NewMatcher(rc.Patterns)
-	return func(in <-chan HTTPRequestSpan, out chan<- HTTPRequestSpan) {
-		for s := range in {
-			s.Route = matcher.Find(s.Path)
-			unmatchAction(&s)
-			out <- s
+	return func(in <-chan []HTTPRequestSpan, out chan<- []HTTPRequestSpan) {
+		for spans := range in {
+			for i := range spans {
+				spans[i].Route = matcher.Find(spans[i].Path)
+				unmatchAction(&spans[i])
+			}
+			out <- spans
 		}
 	}
 }

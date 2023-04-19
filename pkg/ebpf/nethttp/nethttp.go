@@ -22,6 +22,9 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync"
+	"time"
+	"unsafe"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
@@ -54,14 +57,23 @@ type EBPFTracer struct {
 	LogLevel         string   `yaml:"log_level" env:"LOG_LEVEL"`
 	BpfDebug         bool     `yaml:"bfp_debug" env:"BPF_DEBUG"`
 
-	// WakeupDataBytes specified how many data needs to be accumulated in the ringbuffer
-	// before sending a wakeup request
-	WakeupDataBytes int `yaml:"wakeup_data_bytes" env:"BPF_WAKEUP_DATA_BYTES"`
+	// WakeupLen specifies how many messages need to be accumulated in the eBPF ringbuffer
+	// before sending a wakeup request.
+	// High values of WakeupLen could add a noticeable metric delay in services with low
+	// requests/second.
+	// TODO: see if there is a way to force eBPF to wakeup userspace on timeout
+	WakeupLen int `yaml:"wakeup_len" env:"BPF_WAKEUP_LEN"`
+	// BatchLength allows specifying how many traces will be batched at the initial
+	// stage before being forwarded to the next stage
+	BatchLength int `yaml:"batch_length" env:"BPF_BATCH_LENGTH"`
+	// BatchTimeout specifies the timeout to forward the data batch if it didn't
+	// reach the BatchLength size
+	BatchTimeout time.Duration `yaml:"batch_timeout" env:"BPF_BATCH_TIMEOUT"`
 
 	Offsets *goexec.Offsets `yaml:"-"`
 }
 
-func EBPFTracerProvider(cfg EBPFTracer) node.StartFuncCtx[HTTPRequestTrace] { //nolint:all
+func EBPFTracerProvider(cfg EBPFTracer) node.StartFuncCtx[[]HTTPRequestTrace] { //nolint:all
 	is, err := Instrument(&cfg)
 	if err != nil {
 		slog.Error("can't instantiate eBPF tracer", err)
@@ -76,6 +88,7 @@ func EBPFTracerProvider(cfg EBPFTracer) node.StartFuncCtx[HTTPRequestTrace] { //
 // InstrumentedServe allows instrumenting each invocation to the Go standard net/http ServeHTTP
 // method handler.
 type InstrumentedServe struct {
+	cfg          *EBPFTracer
 	bpfObjects   bpfObjects
 	uprobes      []link.Link
 	eventsReader *ringbuf.Reader
@@ -115,16 +128,17 @@ func Instrument(cfg *EBPFTracer) (*InstrumentedServe, error) {
 	// Set the field offsets and the logLevel for nethttp BPF program,
 	// as well as some other configuration constants
 	constants := map[string]any{
-		"wakeup_data_bytes": uint32(cfg.WakeupDataBytes),
+		"wakeup_data_bytes": uint32(cfg.WakeupLen) * uint32(unsafe.Sizeof(bpfHttpRequestTrace{})),
 	}
 	for k, v := range cfg.Offsets.Field {
 		constants[k] = v
 	}
-	if err := rewriteConstants(spec, cfg.Offsets.Field); err != nil {
+	slog.Debug("rewriting eBPF constants", "component", "net/ebpf-instrumenter", "constants", constants)
+	if err := rewriteConstants(spec, constants); err != nil {
 		return nil, err
 	}
 
-	h := InstrumentedServe{}
+	h := InstrumentedServe{cfg: cfg}
 	// Load BPF programs
 	if err := spec.LoadAndAssign(&h.bpfObjects, nil); err != nil {
 		return nil, instrumentError(err, "loading and assigning BPF objects")
@@ -217,9 +231,30 @@ func (h *InstrumentedServe) instrumentFunction(offsets goexec.FuncOffsets, exe *
 }
 
 // TODO: make use of context to cancel process
-func (h *InstrumentedServe) Run(_ context.Context, eventsChan chan<- HTTPRequestTrace) {
-	logger := slog.With("name", "net/ebpf-instrumenter")
-	var event HTTPRequestTrace
+func (h *InstrumentedServe) Run(_ context.Context, eventsChan chan<- []HTTPRequestTrace) {
+	logger := slog.With("component", "net/ebpf-instrumenter")
+
+	events := make([]HTTPRequestTrace, h.cfg.BatchLength)
+	ev := 0
+	ticker := time.NewTicker(h.cfg.BatchTimeout)
+	access := sync.Mutex{}
+	go func() {
+		if h.cfg.BatchTimeout == 0 {
+			return
+		}
+		// submit periodically on timeout, if the batch is not full
+		for {
+			<-ticker.C
+			access.Lock()
+			if ev > 0 {
+				logger.Debug("submitting traces on timeout", "len", ev)
+				eventsChan <- events[:ev]
+				events = make([]HTTPRequestTrace, h.cfg.BatchLength)
+				ev = 0
+			}
+			access.Unlock()
+		}
+	}()
 	for {
 		logger.Debug("starting to read perf buffer")
 		record, err := h.eventsReader.Read()
@@ -232,12 +267,22 @@ func (h *InstrumentedServe) Run(_ context.Context, eventsChan chan<- HTTPRequest
 			continue
 		}
 
-		if err := binary.Read(bytes.NewBuffer(record.RawSample), binary.LittleEndian, &event); err != nil {
+		access.Lock()
+		err = binary.Read(bytes.NewBuffer(record.RawSample), binary.LittleEndian, &events[ev])
+		if err != nil {
 			logger.Error("error parsing perf event", err)
+			access.Unlock()
 			continue
 		}
-
-		eventsChan <- event
+		ev++
+		if ev == h.cfg.BatchLength {
+			logger.Debug("submitting traces after batch is full", "len", ev)
+			eventsChan <- events
+			events = make([]HTTPRequestTrace, h.cfg.BatchLength)
+			ev = 0
+			ticker.Reset(h.cfg.BatchTimeout)
+		}
+		access.Unlock()
 	}
 }
 

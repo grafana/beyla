@@ -74,9 +74,11 @@ func newTracesReporter(svcName, endpoint string) (*TracesReporter, error) {
 		return nil, fmt.Errorf("creating trace exporter: %w", err)
 	}
 
+	bsp := trace.NewBatchSpanProcessor(r.traceExporter, trace.WithMaxExportBatchSize(4096), trace.WithMaxQueueSize(4096))
 	r.traceProvider = trace.NewTracerProvider(
 		trace.WithResource(resources),
-		trace.WithSyncer(r.traceExporter),
+		trace.WithSpanProcessor(bsp),
+		//trace.WithSampler(trace.AlwaysSample()),
 	)
 
 	return &r, nil
@@ -136,7 +138,6 @@ func (r *TracesReporter) reportTraces(spans <-chan transform.HTTPRequestSpan) {
 		// Create a child span showing the queue time
 		_, spQ := tracer.Start(ctx, "in queue",
 			trace2.WithTimestamp(span.RequestStart),
-			trace2.WithAttributes(attrs...),
 			trace2.WithSpanKind(trace2.SpanKindInternal),
 		)
 		spQ.End(trace2.WithTimestamp(span.Start))
@@ -144,7 +145,6 @@ func (r *TracesReporter) reportTraces(spans <-chan transform.HTTPRequestSpan) {
 		// Create a child span showing the processing time
 		_, spP := tracer.Start(ctx, "processing",
 			trace2.WithTimestamp(span.Start),
-			trace2.WithAttributes(attrs...),
 			trace2.WithSpanKind(trace2.SpanKindInternal),
 		)
 		spP.End(trace2.WithTimestamp(span.End))

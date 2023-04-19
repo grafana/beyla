@@ -69,8 +69,6 @@ GOLANGCI_LINT = $(TOOLS_DIR)/golangci-lint
 BPF2GO = $(TOOLS_DIR)/bpf2go
 GO_OFFSETS_TRACKER = $(TOOLS_DIR)/go-offsets-tracker
 
-.DEFAULT_GOAL := build
-
 .PHONY: prereqs
 prereqs:
 	@echo "### Check if prerequisites are met, and installing missing dependencies"

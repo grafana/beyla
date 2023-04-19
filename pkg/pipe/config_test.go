@@ -40,7 +40,7 @@ otel_metrics_export:
 	assert.Equal(t, &Config{
 		ChannelBufferLen: 33,
 		LogLevel:         "INFO",
-		Printer:          true,
+		Printer:          false,
 		Noop:             true,
 		EBPF: nethttp.EBPFTracer{
 			Exec:             "tras",

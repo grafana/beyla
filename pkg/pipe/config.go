@@ -32,7 +32,7 @@ var defaultConfig = Config{
 	Metrics: otel.MetricsConfig{
 		Interval: 5 * time.Second,
 	},
-	Printer: true, // TODO: false
+	Printer: false,
 	Noop:    false,
 }
 

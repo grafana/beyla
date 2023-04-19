@@ -32,6 +32,10 @@ var defaultConfig = Config{
 	Metrics: otel.MetricsConfig{
 		Interval: 5 * time.Second,
 	},
+	Traces: otel.TracesConfig{
+		MaxQueueSize:       4096,
+		MaxExportBatchSize: 4096,
+	},
 	Printer: false,
 	Noop:    false,
 }

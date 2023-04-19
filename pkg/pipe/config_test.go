@@ -58,9 +58,11 @@ otel_metrics_export:
 			Endpoint:    "localhost:3131",
 		},
 		Traces: otel.TracesConfig{
-			ServiceName:    "svc-name",
-			Endpoint:       "localhost:3131",
-			TracesEndpoint: "localhost:3232",
+			ServiceName:        "svc-name",
+			Endpoint:           "localhost:3131",
+			TracesEndpoint:     "localhost:3232",
+			MaxQueueSize:       4096,
+			MaxExportBatchSize: 4096,
 		},
 	}, cfg)
 }

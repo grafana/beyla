@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"time"
 
 	"golang.org/x/exp/slog"
 
@@ -21,15 +22,19 @@ import (
 const reporterName = "github.com/grafana/ebpf-autoinstrument"
 
 type TracesConfig struct {
-	ServiceName    string `yaml:"service_name" env:"SERVICE_NAME"`
-	Endpoint       string `yaml:"endpoint" env:"OTEL_EXPORTER_OTLP_ENDPOINT"`
-	TracesEndpoint string `yaml:"-" env:"OTEL_EXPORTER_OTLP_TRACES_ENDPOINT"`
+	ServiceName        string        `yaml:"service_name" env:"SERVICE_NAME"`
+	Endpoint           string        `yaml:"endpoint" env:"OTEL_EXPORTER_OTLP_ENDPOINT"`
+	TracesEndpoint     string        `yaml:"-" env:"OTEL_EXPORTER_OTLP_TRACES_ENDPOINT"`
+	MaxExportBatchSize int           `yaml:"max_export_batch_size" env:"OTLP_TRACES_MAX_EXPORT_BATCH_SIZE"`
+	MaxQueueSize       int           `yaml:"max_queue_size" env:"OTLP_TRACES_MAX_QUEUE_SIZE"`
+	BatchTimeout       time.Duration `yaml:"batch_timeout" env:"OTLP_TRACES_BATCH_TIMEOUT"`
+	ExportTimeout      time.Duration `yaml:"export_timeout" env:"OTLP_TRACES_EXPORT_TIMEOUT"`
 }
 
 // Enabled specifies that the OTEL traces node is enabled if and only if
 // either the OTEL endpoint and OTEL traces endpoint is defined.
 // If not enabled, this node won't be instantiated
-func (m TracesConfig) Enabled() bool {
+func (m TracesConfig) Enabled() bool { //nolint:gocritic
 	return m.Endpoint != "" || m.TracesEndpoint != ""
 }
 
@@ -38,12 +43,12 @@ type TracesReporter struct {
 	traceProvider *trace.TracerProvider
 }
 
-func TracesReporterProvider(cfg TracesConfig) node.TerminalFunc[[]transform.HTTPRequestSpan] {
+func TracesReporterProvider(cfg TracesConfig) node.TerminalFunc[[]transform.HTTPRequestSpan] { //nolint:gocritic
 	endpoint := cfg.TracesEndpoint
 	if endpoint == "" {
 		endpoint = cfg.Endpoint
 	}
-	tr, err := newTracesReporter(cfg.ServiceName, endpoint)
+	tr, err := newTracesReporter(&cfg, endpoint)
 	if err != nil {
 		slog.Error("can't instantiate OTEL traces reporter", err)
 		os.Exit(-1)
@@ -51,7 +56,7 @@ func TracesReporterProvider(cfg TracesConfig) node.TerminalFunc[[]transform.HTTP
 	return tr.reportTraces
 }
 
-func newTracesReporter(svcName, endpoint string) (*TracesReporter, error) {
+func newTracesReporter(cfg *TracesConfig, endpoint string) (*TracesReporter, error) {
 	ctx := context.TODO()
 
 	r := TracesReporter{}
@@ -59,7 +64,7 @@ func newTracesReporter(svcName, endpoint string) (*TracesReporter, error) {
 	// TODO: make configurable
 	resources := resource.NewWithAttributes(
 		semconv.SchemaURL,
-		semconv.ServiceNameKey.String(svcName),
+		semconv.ServiceNameKey.String(cfg.ServiceName),
 	)
 
 	// Instantiate the OTLP HTTP traceExporter
@@ -74,7 +79,21 @@ func newTracesReporter(svcName, endpoint string) (*TracesReporter, error) {
 		return nil, fmt.Errorf("creating trace exporter: %w", err)
 	}
 
-	bsp := trace.NewBatchSpanProcessor(r.traceExporter, trace.WithMaxExportBatchSize(4096), trace.WithMaxQueueSize(4096))
+	var opts []trace.BatchSpanProcessorOption
+	if cfg.MaxExportBatchSize > 0 {
+		opts = append(opts, trace.WithMaxExportBatchSize(cfg.MaxExportBatchSize))
+	}
+	if cfg.MaxQueueSize > 0 {
+		opts = append(opts, trace.WithMaxQueueSize(cfg.MaxQueueSize))
+	}
+	if cfg.BatchTimeout > 0 {
+		opts = append(opts, trace.WithBatchTimeout(cfg.BatchTimeout))
+	}
+	if cfg.ExportTimeout > 0 {
+		opts = append(opts, trace.WithExportTimeout(cfg.ExportTimeout))
+	}
+
+	bsp := trace.NewBatchSpanProcessor(r.traceExporter, opts...)
 	r.traceProvider = trace.NewTracerProvider(
 		trace.WithResource(resources),
 		trace.WithSpanProcessor(bsp),

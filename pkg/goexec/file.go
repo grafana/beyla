@@ -51,7 +51,7 @@ func ProcessNamed(pathContains string) ProcessFinder {
 				continue
 			}
 
-			if strings.Contains(exePath, pathContains) {
+			if strings.HasSuffix(exePath, pathContains) {
 				return p, true
 			}
 		}

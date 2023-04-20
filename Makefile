@@ -173,7 +173,7 @@ integration-test: prepare-integration-test
 .PHONY: drone
 drone:
 	@echo "### Regenerating and signing .drone/drone.yml"
-	drone jsonnet --stream --source .drone/drone.jsonnet --target .drone/drone.yml
+	drone jsonnet --format --stream --source .drone/drone.jsonnet --target .drone/drone.yml
 	drone lint .drone/drone.yml
 	drone sign --save grafana/ebpf-autoinstrument .drone/drone.yml || echo "You must set DRONE_SERVER and DRONE_TOKEN. These values can be found on your [drone account](http://drone.grafana.net/account) page."
 

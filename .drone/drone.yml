@@ -1,260 +1,62 @@
 ---
-{
-   "kind": "pipeline",
-   "name": "docker-arm64",
-   "platform": {
-      "arch": "arm64",
-      "os": "linux"
-   },
-   "steps": [
-      {
-         "commands": [
-            "apk add --no-cache bash git",
-            "git fetch origin --tags",
-            "echo $(./tools/image-tag)-arm64 > .tags"
-         ],
-         "image": "alpine",
-         "name": "image-tag"
-      },
-      {
-         "depends_on": [
-            "image-tag"
-         ],
-         "image": "plugins/docker",
-         "name": "pr-build-ebpf-autoinstrument-image",
-         "settings": {
-            "dockerfile": "Dockerfile",
-            "dry_run": true,
-            "password": {
-               "from_secret": "docker_password"
-            },
-            "repo": "grafana/ebpf-autoinstrument",
-            "username": {
-               "from_secret": "docker_username"
-            }
-         },
-         "when": {
-            "event": [
-               "pull_request"
-            ]
-         }
-      },
-      {
-         "depends_on": [
-            "image-tag"
-         ],
-         "image": "plugins/docker",
-         "name": "main-publish-ebpf-autoinstrument-image",
-         "settings": {
-            "dockerfile": "Dockerfile",
-            "dry_run": false,
-            "force_tag": true,
-            "password": {
-               "from_secret": "docker_password"
-            },
-            "repo": "grafana/ebpf-autoinstrument",
-            "tags": [
-               "${DRONE_COMMIT_SHA:0:8}",
-               "main"
-            ],
-            "username": {
-               "from_secret": "docker_username"
-            }
-         },
-         "when": {
-            "event": [
-               "push"
-            ]
-         }
-      },
-      {
-         "depends_on": [
-            "image-tag"
-         ],
-         "image": "plugins/docker",
-         "name": "tag-publish-ebpf-autoinstrument-image",
-         "settings": {
-            "auto_tag": true,
-            "dockerfile": "Dockerfile",
-            "dry_run": false,
-            "password": {
-               "from_secret": "docker_password"
-            },
-            "repo": "grafana/ebpf-autoinstrument",
-            "username": {
-               "from_secret": "docker_username"
-            }
-         },
-         "when": {
-            "event": [
-               "tag"
-            ]
-         }
-      }
-   ],
-   "trigger": {
-      "ref": [
-         "refs/heads/main",
-         "refs/tags/v*"
-      ]
-   }
-}
+kind: pipeline
+name: ebpf-autoinstrument
+steps:
+- image: thegeeklab/drone-docker-buildx:23
+  name: ebpf-autoinstrument-dryrun-docker-buildx
+  privileged: true
+  settings:
+    auto_tag: true
+    dockerfile: Dockerfile
+    dry_run: true
+    password:
+      from_secret: docker_password
+    platforms:
+    - linux/arm64
+    - linux/amd64
+    repo: grafana/ebpf-autoinstrument-dryrun
+    username:
+      from_secret: docker_username
+  when:
+    event:
+    - pull_request
+- image: thegeeklab/drone-docker-buildx:23
+  name: ebpf-autoinstrument-docker-buildx
+  privileged: true
+  settings:
+    auto_tag: true
+    dockerfile: Dockerfile
+    dry_run: false
+    password:
+      from_secret: docker_password
+    platforms:
+    - linux/arm64
+    - linux/amd64
+    repo: grafana/ebpf-autoinstrument
+    username:
+      from_secret: docker_username
+  when:
+    event:
+    - push
+    - tag
+trigger:
+  ref:
+  - refs/heads/main
+  - refs/tags/v*
 ---
-{
-   "kind": "pipeline",
-   "name": "docker-amd64",
-   "platform": {
-      "arch": "amd64",
-      "os": "linux"
-   },
-   "steps": [
-      {
-         "commands": [
-            "apk add --no-cache bash git",
-            "git fetch origin --tags",
-            "echo $(./tools/image-tag)-amd64 > .tags"
-         ],
-         "image": "alpine",
-         "name": "image-tag"
-      },
-      {
-         "depends_on": [
-            "image-tag"
-         ],
-         "image": "plugins/docker",
-         "name": "pr-build-ebpf-autoinstrument-image",
-         "settings": {
-            "dockerfile": "Dockerfile",
-            "dry_run": true,
-            "password": {
-               "from_secret": "docker_password"
-            },
-            "repo": "grafana/ebpf-autoinstrument",
-            "username": {
-               "from_secret": "docker_username"
-            }
-         },
-         "when": {
-            "event": [
-               "pull_request"
-            ]
-         }
-      },
-      {
-         "depends_on": [
-            "image-tag"
-         ],
-         "image": "plugins/docker",
-         "name": "main-publish-ebpf-autoinstrument-image",
-         "settings": {
-            "dockerfile": "Dockerfile",
-            "dry_run": false,
-            "force_tag": true,
-            "password": {
-               "from_secret": "docker_password"
-            },
-            "repo": "grafana/ebpf-autoinstrument",
-            "tags": [
-               "${DRONE_COMMIT_SHA:0:8}",
-               "main"
-            ],
-            "username": {
-               "from_secret": "docker_username"
-            }
-         },
-         "when": {
-            "event": [
-               "push"
-            ]
-         }
-      },
-      {
-         "depends_on": [
-            "image-tag"
-         ],
-         "image": "plugins/docker",
-         "name": "tag-publish-ebpf-autoinstrument-image",
-         "settings": {
-            "auto_tag": true,
-            "dockerfile": "Dockerfile",
-            "dry_run": false,
-            "password": {
-               "from_secret": "docker_password"
-            },
-            "repo": "grafana/ebpf-autoinstrument",
-            "username": {
-               "from_secret": "docker_username"
-            }
-         },
-         "when": {
-            "event": [
-               "tag"
-            ]
-         }
-      }
-   ],
-   "trigger": {
-      "ref": [
-         "refs/heads/main",
-         "refs/tags/v*"
-      ]
-   }
-}
+get:
+  name: username
+  path: infra/data/ci/docker_hub
+kind: secret
+name: docker_username
 ---
-{
-   "depends_on": [
-      "docker-arm64",
-      "docker-amd64"
-   ],
-   "kind": "pipeline",
-   "name": "manifest",
-   "steps": [
-      {
-         "depends_on": [
-            "clone"
-         ],
-         "image": "plugins/manifest",
-         "name": "manifest-ebpf-autoinstrument",
-         "settings": {
-            "ignore_missing": false,
-            "password": {
-               "from_secret": "docker_password"
-            },
-            "spec": ".drone/docker-manifest.tmpl",
-            "target": "ebpf-autoinstrument",
-            "username": {
-               "from_secret": "docker_username"
-            }
-         }
-      }
-   ],
-   "trigger": {
-      "ref": [
-         "refs/heads/main",
-         "refs/tags/v*"
-      ]
-   }
-}
----
-{
-   "get": {
-      "name": "username",
-      "path": "infra/data/ci/docker_hub"
-   },
-   "kind": "secret",
-   "name": "docker_username"
-}
----
-{
-   "get": {
-      "name": "password",
-      "path": "infra/data/ci/docker_hub"
-   },
-   "kind": "secret",
-   "name": "docker_password"
-}
+get:
+  name: password
+  path: infra/data/ci/docker_hub
+kind: secret
+name: docker_password
 ---
 kind: signature
-hmac: fab9702d2dfd0578c3550f2b0f7f708ec7cfb3d9367dd966cd7c9043232c9f7b
+hmac: 3ba97e977eb91bed50eba8df4f1043a7fee5b7e857fb17431368e075876f5210
 
 ...

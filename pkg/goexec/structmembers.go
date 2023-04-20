@@ -127,7 +127,7 @@ func structMemberPreFetchedOffsets(elfFile *elf.File, fieldOffsets FieldOffsets)
 	for strName, strInfo := range structMembers {
 		version, ok := libVersions[strInfo.lib]
 		if !ok {
-			log.Warn("can't find version for library", "lib", strInfo.lib)
+			log.Debug("can't find version for library", "lib", strInfo.lib)
 			continue
 		}
 
@@ -140,7 +140,7 @@ func structMemberPreFetchedOffsets(elfFile *elf.File, fieldOffsets FieldOffsets)
 			// look the version of the required field in the offsets.json memory copy
 			offset, ok := offs.Find(strName, fieldName, version)
 			if !ok {
-				log.Warn("can't find offsets for field",
+				log.Debug("can't find offsets for field",
 					"lib", strInfo.lib, "name", strName, "field", fieldName, "version", version)
 				continue
 			}

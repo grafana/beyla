@@ -149,6 +149,8 @@ func Instrument(cfg *EBPFTracer) (*InstrumentedServe, error) {
 		return nil, err
 	}
 
+	logInstrumentedFeatures(cfg.Offsets.Funcs)
+
 	// BPF will send each measured trace via Ring Buffer, so we listen for them from the
 	// user space.
 	rd, err := ringbuf.NewReader(h.bpfObjects.Events)
@@ -158,6 +160,28 @@ func Instrument(cfg *EBPFTracer) (*InstrumentedServe, error) {
 	h.eventsReader = rd
 
 	return &h, nil
+}
+
+func logInstrumentedFeatures(funcs map[string][]goexec.FuncOffsets) {
+	m := make(map[string]bool)
+	for section, offsets := range funcs {
+		if len(offsets) > 0 {
+			switch section {
+			case SectionHTTP:
+				m["'http server'"] = true
+			case SectionGRPCStream, SectionGRPCStatus:
+				m["'grpc server'"] = true
+			case SectionRuntimeNewproc1, SectionRuntimeGoexit1:
+				m["'go runtime'"] = true
+			}
+		}
+	}
+	features := []string{}
+	for f := range m {
+		features = append(features, f)
+	}
+
+	slog.Info("instrumented features [" + strings.Join(features, ",") + "]")
 }
 
 func rewriteConstants(spec *ebpf.CollectionSpec, fields map[string]interface{}) error {

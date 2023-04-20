@@ -70,8 +70,7 @@ func newMetricsReporter(cfg *MetricsConfig) (*MetricsReporter, error) {
 		semconv.SchemaURL,
 		semconv.ServiceNameKey.String(cfg.ServiceName),
 	)
-	// TODO: allow configuring auth headers and secure/insecure connections
-	opts, err := getEndpointOptions(cfg)
+	opts, err := getMetricEndpointOptions(cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -164,7 +163,7 @@ func (r *MetricsReporter) reportMetrics(input <-chan []transform.HTTPRequestSpan
 	}
 }
 
-func getEndpointOptions(cfg *MetricsConfig) ([]otlpmetrichttp.Option, error) {
+func getMetricEndpointOptions(cfg *MetricsConfig) ([]otlpmetrichttp.Option, error) {
 	endpoint := cfg.MetricsEndpoint
 	if endpoint == "" {
 		endpoint = cfg.Endpoint
@@ -182,7 +181,7 @@ func getEndpointOptions(cfg *MetricsConfig) ([]otlpmetrichttp.Option, error) {
 		opts = append(opts, otlpmetrichttp.WithInsecure())
 	}
 	if len(murl.Path) > 0 && murl.Path != "/" {
-		opts = append(opts, otlpmetrichttp.WithURLPath(murl.Path + "/v1/metrics"))
+		opts = append(opts, otlpmetrichttp.WithURLPath(murl.Path+"/v1/metrics"))
 	}
 	return opts, nil
 }

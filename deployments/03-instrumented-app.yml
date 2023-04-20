@@ -30,12 +30,14 @@ spec:
             - containerPort: 8443
               name: https
         - name: autoinstrumenter
-          image: mariomac/ebpf-autoinstrument:dev # TODO: use Grafana Hub Account
+          image: grafana/ebpf-autoinstrument:latest
           imagePullPolicy: IfNotPresent
           securityContext:
             runAsUser: 0
             privileged: true # TODO: change by individual capabilities
           env:
+            - name: PRINT_TRACES
+              value: "true"
             - name: OPEN_PORT
               value: "8443"
             - name: OTEL_EXPORTER_OTLP_ENDPOINT

@@ -11,7 +11,7 @@ DRONE_EXPECTED_CONFIG_FILE="$(mktemp)"
 
 # Check for a drift between the jsonnet and the resulting file consumed by Drone
 drone jsonnet \
-    --stream \
+    --stream --format \
     --source "${DRONE_JSONNET_FILE}" \
     --target "${DRONE_EXPECTED_CONFIG_FILE}"
 

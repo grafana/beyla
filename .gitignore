@@ -24,3 +24,10 @@ test/cmd/grpc/client/client
 
 bin/
 test/integration/components/server
+
+test/cmd/rust_pingserver/target
+test/cmd/rust_pingiron/target
+test/cmd/rust_pingrouille/target
+test/cmd/rust_ironssl/target
+test/cmd/python_flaskping/__pycache__/
+test/cmd/python_pingserver/__pycache__/

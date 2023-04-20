@@ -17,6 +17,8 @@ jobs:
       - uses: actions/checkout@v3
       - name: Check Drone.yml is up-to-date
         uses: chrislennon/action-drone@v1
+        with:
+          version: 1.7.0
       - run:  make check-drone-drift
         env:
           DRONE_SERVER: ${{ secrets.DRONE_SERVER }}

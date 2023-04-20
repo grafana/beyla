@@ -35,9 +35,9 @@ type ProcessFinder func() (*process.Process, bool)
 
 // ProcessNamed allows finding a Process whose name path contains the passed string
 // TODO: use regular expression
-func ProcessNamed(pathContains string) ProcessFinder {
+func ProcessNamed(pathSuffix string) ProcessFinder {
 	return func() (*process.Process, bool) {
-		log := log().With("pathContains", pathContains)
+		log := log().With("pathSuffix", pathSuffix)
 		log.Debug("searching executable by process name")
 		processes, err := process.Processes()
 		if err != nil {
@@ -51,7 +51,7 @@ func ProcessNamed(pathContains string) ProcessFinder {
 				continue
 			}
 
-			if strings.Contains(exePath, pathContains) {
+			if strings.HasSuffix(exePath, pathSuffix) {
 				return p, true
 			}
 		}

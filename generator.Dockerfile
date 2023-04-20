@@ -25,6 +25,7 @@ ENV GOPATH /gopath
 
 ENV GOBIN $GOPATH/bin
 ENV PATH $GOROOT/bin:$GOBIN:$PATH
+ENV TOOLS_DIR $GOBIN
 
 WORKDIR /tmp
 # Copies some pre-required Go dependencies to avoid downloading them on each build

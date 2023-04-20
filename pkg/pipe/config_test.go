@@ -40,7 +40,7 @@ otel_metrics_export:
 	assert.Equal(t, &Config{
 		ChannelBufferLen: 33,
 		LogLevel:         "INFO",
-		Printer:          true,
+		Printer:          false,
 		Noop:             true,
 		EBPF: nethttp.EBPFTracer{
 			Exec:             "tras",
@@ -49,6 +49,8 @@ otel_metrics_export:
 			GRPCHandleStream: []string{"google.golang.org/grpc.(*Server).handleStream"},
 			RuntimeNewproc1:  []string{"runtime.newproc1"},
 			RuntimeGoexit1:   []string{"runtime.goexit1"},
+			BatchLength:      100,
+			BatchTimeout:     time.Second,
 		},
 		Metrics: otel.MetricsConfig{
 			ServiceName: "svc-name",
@@ -56,9 +58,11 @@ otel_metrics_export:
 			Endpoint:    "localhost:3131",
 		},
 		Traces: otel.TracesConfig{
-			ServiceName:    "svc-name",
-			Endpoint:       "localhost:3131",
-			TracesEndpoint: "localhost:3232",
+			ServiceName:        "svc-name",
+			Endpoint:           "localhost:3131",
+			TracesEndpoint:     "localhost:3232",
+			MaxQueueSize:       4096,
+			MaxExportBatchSize: 4096,
 		},
 	}, cfg)
 }

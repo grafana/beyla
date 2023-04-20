@@ -10,13 +10,12 @@ IMG_ORG ?=
 IMG_NAME ?= ebpf-autoinstrument
 # Container image creation creation
 VERSION ?= dev
-IMG = $(IMG_REGISTRY)/$(IMG_ORG)/$(IMAGE_TAG_BASE):$(VERSION)
+IMG = $(IMG_REGISTRY)/$(IMG_ORG)/$(IMG_NAME):$(VERSION)
 
 # The generator is a local container image that provides a reproducible environment for
 # building eBPF binaries
-GEN_IMG_ORG ?= $(IMG_ORG)
 GEN_IMG_NAME ?= ebpf-generator
-GEN_IMG ?= $(GEN_IMG_ORG)/$(GEN_IMAGE_TAG_BASE):$(VERSION)
+GEN_IMG ?= $(GEN_IMG_NAME):$(VERSION)
 
 COMPOSE_ARGS ?= -f test/integration/docker-compose.yml
 
@@ -92,6 +91,7 @@ update-offsets: prereqs
 .PHONY: generate
 generate: export BPF_CLANG := $(CLANG)
 generate: export BPF_CFLAGS := $(CFLAGS)
+generate: export BPF2GO := $(BPF2GO)
 generate: prereqs
 	@echo "### Generating BPF Go bindings"
 	go generate ./pkg/...
@@ -134,14 +134,15 @@ coverage-report-html: cov-exclude-generated
 	go tool cover --html=./cover.out
 
 .PHONY: image-build-push
-image-build-push: ## Build OCI image with the manager.
+image-build-push:
+	@echo "### Building and pushing the auto-instrumenter image"
 	$(call check_defined, IMG_ORG, Your Docker repository user name)
 	$(OCI_BIN) buildx build --push --platform linux/amd64,linux/arm64 -t ${IMG} .
 
-.PHONY: generator-image-build-push
-generator-image-build-push: ## Build OCI image with the manager.
+.PHONY: generator-image-build
+generator-image-build:
 	@echo "### Creating the image that generates the eBPF binaries"
-	$(OCI_BIN) buildx build . --push -f generator.Dockerfile --platform linux/amd64,linux/arm64 -t $(GEN_IMG)
+	$(OCI_BIN) build . -f generator.Dockerfile -t $(GEN_IMG)
 
 .PHONY: prepare-integration-test
 prepare-integration-test:

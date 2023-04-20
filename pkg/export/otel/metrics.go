@@ -47,7 +47,7 @@ type MetricsReporter struct {
 	httpRequestSize instrument.Float64Histogram
 }
 
-func MetricsReporterProvider(cfg MetricsConfig) node.TerminalFunc[transform.HTTPRequestSpan] {
+func MetricsReporterProvider(cfg MetricsConfig) node.TerminalFunc[[]transform.HTTPRequestSpan] {
 	mr, err := newMetricsReporter(&cfg)
 	if err != nil {
 		slog.Error("can't instantiate OTEL metrics reporter", err)
@@ -158,10 +158,12 @@ func (r *MetricsReporter) record(span *transform.HTTPRequestSpan, attrs []attrib
 	}
 }
 
-func (r *MetricsReporter) reportMetrics(spans <-chan transform.HTTPRequestSpan) {
+func (r *MetricsReporter) reportMetrics(input <-chan []transform.HTTPRequestSpan) {
 	defer r.close()
-	for span := range spans {
-		attrs := r.metricAttributes(&span)
-		r.record(&span, attrs)
+	for spans := range input {
+		for i := range spans {
+			attrs := r.metricAttributes(&spans[i])
+			r.record(&spans[i], attrs)
+		}
 	}
 }

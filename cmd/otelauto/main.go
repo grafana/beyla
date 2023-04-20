@@ -3,12 +3,16 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"io"
+	"net/http"
 	"os"
 
 	"golang.org/x/exp/slog"
 
 	"github.com/grafana/ebpf-autoinstrument/pkg/pipe"
+
+	_ "net/http/pprof"
 )
 
 func main() {
@@ -27,6 +31,14 @@ func main() {
 	if err := lvl.UnmarshalText([]byte(config.LogLevel)); err != nil {
 		slog.Error("unknown log level specified, choices are [DEBUG, INFO, WARN, ERROR]", err)
 		os.Exit(-1)
+	}
+
+	if config.ProfilePort != 0 {
+		go func() {
+			slog.Info("starting PProf HTTP listener", "port", config.ProfilePort)
+			err := http.ListenAndServe(fmt.Sprintf(":%d", config.ProfilePort), nil)
+			slog.Error("PProf HTTP listener stopped working", err)
+		}()
 	}
 
 	slog.Info("creating instrumentation pipeline")

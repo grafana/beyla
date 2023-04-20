@@ -26,11 +26,17 @@ var defaultConfig = Config{
 		GRPCWriteStatus:  []string{"google.golang.org/grpc/internal/transport.(*http2Server).WriteStatus"},
 		RuntimeNewproc1:  []string{"runtime.newproc1"},
 		RuntimeGoexit1:   []string{"runtime.goexit1"},
+		BatchLength:      100,
+		BatchTimeout:     time.Second,
 	},
 	Metrics: otel.MetricsConfig{
 		Interval: 5 * time.Second,
 	},
-	Printer: true, // TODO: false
+	Traces: otel.TracesConfig{
+		MaxQueueSize:       4096,
+		MaxExportBatchSize: 4096,
+	},
+	Printer: false,
 	Noop:    false,
 }
 
@@ -48,6 +54,7 @@ type Config struct {
 
 	ChannelBufferLen int    `yaml:"channel_buffer_len" env:"CHANNEL_BUFFER_LEN" nodeId:"-"`
 	LogLevel         string `yaml:"log_level" env:"LOG_LEVEL" nodeId:"-"`
+	ProfilePort      int    `yaml:"profile_port" env:"PROFILE_PORT" nodeId:"-"`
 }
 
 type ConfigError string
@@ -59,6 +66,9 @@ func (e ConfigError) Error() string {
 func (c *Config) Validate() error {
 	if c.EBPF.Port == 0 && c.EBPF.Exec == "" {
 		return ConfigError("missing EXECUTABLE_NAME or OPEN_PORT property")
+	}
+	if c.EBPF.BatchLength == 0 {
+		return ConfigError("BATCH_LENGTH must be at least 1")
 	}
 	if len(c.EBPF.Functions) == 0 {
 		return ConfigError("missing INSTRUMENT_FUNCTIONS property")

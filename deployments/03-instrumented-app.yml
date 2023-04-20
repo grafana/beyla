@@ -21,7 +21,7 @@ spec:
       containers:
         - name: goblog
           image: mariomac/goblog:dev
-          imagePullPolicy: Always
+          imagePullPolicy: IfNotPresent
           command: ["/goblog"]
           env:
             - name: "GOBLOG_CONFIG"
@@ -30,7 +30,7 @@ spec:
             - containerPort: 8443
               name: https
         - name: autoinstrumenter
-          image: mariomac/ebpf-autoinstrument:latest # TODO: use Grafana Hub Account
+          image: mariomac/ebpf-autoinstrument:dev # TODO: use Grafana Hub Account
           imagePullPolicy: IfNotPresent
           securityContext:
             runAsUser: 0

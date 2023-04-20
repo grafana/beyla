@@ -93,6 +93,9 @@ struct {
 } events SEC(".maps");
 
 // To be Injected from the user space during the eBPF program load & initialization
+
+volatile const u32 wakeup_data_bytes;
+
 // HTTP
 volatile const u64 url_ptr_pos;
 volatile const u64 path_ptr_pos;
@@ -111,6 +114,21 @@ volatile const u64 grpc_st_remoteaddr_ptr_pos;
 volatile const u64 grpc_st_localaddr_ptr_pos;
 volatile const u64 tcp_addr_port_ptr_pos;
 volatile const u64 tcp_addr_ip_ptr_pos;
+
+
+// get_flags prevents waking the userspace process up on each ringbuf message.
+// If wakeup_data_bytes > 0, it will wait until wakeup_data_bytes are accumulated
+// into the buffer before waking the userspace.
+static __always_inline long get_flags()
+{
+	long sz;
+
+	if (!wakeup_data_bytes)
+		return 0;
+
+	sz = bpf_ringbuf_query(&events, BPF_RB_AVAIL_DATA);
+	return sz >= wakeup_data_bytes ? BPF_RB_FORCE_WAKEUP : BPF_RB_NO_WAKEUP;
+}
 
 /* HTTP */
 
@@ -214,7 +232,7 @@ int uprobe_ServeHttp_return(struct pt_regs *ctx) {
     bpf_probe_read(&trace->status, sizeof(trace->status), (void *)(resp_ptr + status_ptr_pos));
 
     // submit the completed trace via ringbuffer
-    bpf_ringbuf_submit(trace, 0);
+    bpf_ringbuf_submit(trace, get_flags());
 
     return 0;
 }
@@ -319,7 +337,7 @@ int uprobe_server_handleStream_return(struct pt_regs *ctx) {
 
     trace->end_monotime_ns = bpf_ktime_get_ns();
     // submit the completed trace via ringbuffer
-    bpf_ringbuf_submit(trace, 0);
+    bpf_ringbuf_submit(trace, get_flags());
 
     return 0;
 }

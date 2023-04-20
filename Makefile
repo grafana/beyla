@@ -176,3 +176,8 @@ drone:
 	drone jsonnet --stream --source .drone/drone.jsonnet --target .drone/drone.yml
 	drone lint .drone/drone.yml
 	drone sign --save grafana/ebpf-autoinstrument .drone/drone.yml || echo "You must set DRONE_SERVER and DRONE_TOKEN. These values can be found on your [drone account](http://drone.grafana.net/account) page."
+
+.PHONY: check-drone-drift
+check-drone-drift:
+	@echo "### checking that Drone.yml is up-to-date"
+	./scripts/check-drone-drift.sh

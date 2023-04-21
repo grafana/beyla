@@ -168,8 +168,10 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url string) {
 }
 
 func testREDMetricsGRPC(t *testing.T) {
-	// Call 3 times the instrumented service
-	for i := 0; i < 3; i++ {
+	// Call 300 times the instrumented service, an overkill to make sure
+	// we get some of the metrics to be visible in Prometheus. This test is
+	// currently the last one that runs.
+	for i := 0; i < 300; i++ {
 		err := grpcclient.Ping()
 		require.NoError(t, err)
 	}
@@ -184,12 +186,12 @@ func testREDMetricsGRPC(t *testing.T) {
 			`service_name="/testserver",` +
 			`rpc_method="/routeguide.RouteGuide/GetFeature"}`)
 		require.NoError(t, err)
-		// check duration_count has 3 calls and all the arguments
+		// check duration_count has at least 3 calls and all the arguments
 		require.Len(t, results, 1)
 		if len(results) > 0 {
 			res := results[0]
 			require.Len(t, res.Value, 2)
-			assert.Equal(t, "3", res.Value[1])
+			assert.LessOrEqual(t, "3", res.Value[1])
 			addr := net.ParseIP(res.Metric["net_sock_peer_addr"])
 			assert.NotNil(t, addr)
 		}

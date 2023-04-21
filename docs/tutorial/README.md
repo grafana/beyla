@@ -5,7 +5,7 @@ The eBPF autoinstrumenter allows reporting basic transaction information as well
 for Go HTTP/S and GRPC services in Linux, without requiring to modify the code
 to manually insert probes.
 
->❗ This is an **experimental** feature that is not yet supported by Grafana. ️
+>❗ This is an **experimental** feature that is not yet supported by Grafana Labs. ️
 
 Requirements:
 - Linux with Kernel 4.18 or higher

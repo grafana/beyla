@@ -22,7 +22,7 @@ import (
 // TestCollector is a dummy OLTP test collector that allows retrieving part of the collected metrics
 // Useful for unit testing
 type TestCollector struct {
-	ServerHostPort string
+	ServerEndpoint string
 	// TODO: add also traces history
 	Records      chan MetricRecord
 	TraceRecords chan TraceRecord
@@ -68,7 +68,7 @@ func Start(ctx context.Context) (*TestCollector, error) {
 		panic(err)
 	}
 
-	tc.ServerHostPort = surl.Host
+	tc.ServerEndpoint = surl.String()
 
 	go func() {
 		<-ctx.Done()

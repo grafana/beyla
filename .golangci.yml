@@ -1,6 +1,7 @@
 run:
   skip-dirs:
     - configs
+    - docs
   build-tags:
     - integration
 linters:

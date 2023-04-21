@@ -3,6 +3,7 @@ package otel
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"os"
 	"time"
 
@@ -44,11 +45,7 @@ type TracesReporter struct {
 }
 
 func TracesReporterProvider(cfg TracesConfig) node.TerminalFunc[[]transform.HTTPRequestSpan] { //nolint:gocritic
-	endpoint := cfg.TracesEndpoint
-	if endpoint == "" {
-		endpoint = cfg.Endpoint
-	}
-	tr, err := newTracesReporter(&cfg, endpoint)
+	tr, err := newTracesReporter(&cfg)
 	if err != nil {
 		slog.Error("can't instantiate OTEL traces reporter", err)
 		os.Exit(-1)
@@ -56,7 +53,7 @@ func TracesReporterProvider(cfg TracesConfig) node.TerminalFunc[[]transform.HTTP
 	return tr.reportTraces
 }
 
-func newTracesReporter(cfg *TracesConfig, endpoint string) (*TracesReporter, error) {
+func newTracesReporter(cfg *TracesConfig) (*TracesReporter, error) {
 	ctx := context.TODO()
 
 	r := TracesReporter{}
@@ -68,13 +65,11 @@ func newTracesReporter(cfg *TracesConfig, endpoint string) (*TracesReporter, err
 	)
 
 	// Instantiate the OTLP HTTP traceExporter
-	// TODO: better use GRPC (secure)
-	var err error
-	// TODO: allow configuring auth headers and secure/insecure connections
-	r.traceExporter, err = otlptracehttp.New(ctx,
-		otlptracehttp.WithEndpoint(endpoint),
-		otlptracehttp.WithInsecure(), // TODO: configurable
-	)
+	topts, err := getTracesEndpointOptions(cfg)
+	if err != nil {
+		return nil, err
+	}
+	r.traceExporter, err = otlptracehttp.New(ctx, topts...)
 	if err != nil {
 		return nil, fmt.Errorf("creating trace exporter: %w", err)
 	}
@@ -172,4 +167,27 @@ func (r *TracesReporter) reportTraces(input <-chan []transform.HTTPRequestSpan) 
 			sp.End(trace2.WithTimestamp(spans[i].End))
 		}
 	}
+}
+
+func getTracesEndpointOptions(cfg *TracesConfig) ([]otlptracehttp.Option, error) {
+	endpoint := cfg.TracesEndpoint
+	if endpoint == "" {
+		endpoint = cfg.Endpoint
+	}
+
+	murl, err := url.Parse(endpoint)
+	if err != nil {
+		return nil, fmt.Errorf("parsing endpoint URL %s: %w", endpoint, err)
+	}
+
+	opts := []otlptracehttp.Option{
+		otlptracehttp.WithEndpoint(murl.Host),
+	}
+	if murl.Scheme == "http" || murl.Scheme == "unix" {
+		opts = append(opts, otlptracehttp.WithInsecure())
+	}
+	if len(murl.Path) > 0 && murl.Path != "/" {
+		opts = append(opts, otlptracehttp.WithURLPath(murl.Path+"/v1/traces"))
+	}
+	return opts, nil
 }

@@ -30,7 +30,7 @@ func TestBasicPipeline(t *testing.T) {
 	tc, err := collector.Start(ctx)
 	require.NoError(t, err)
 
-	gb := newGraphBuilder(&Config{Metrics: otel.MetricsConfig{MetricsEndpoint: tc.ServerHostPort, ReportTarget: true, ReportPeerInfo: true}})
+	gb := newGraphBuilder(&Config{Metrics: otel.MetricsConfig{MetricsEndpoint: tc.ServerEndpoint, ReportTarget: true, ReportPeerInfo: true}})
 	gb.inspector = func(_ goexec.ProcessFinder, _ map[string][]string) (goexec.Offsets, error) {
 		return goexec.Offsets{FileInfo: goexec.FileInfo{CmdExePath: "test-service"}}, nil
 	}
@@ -66,7 +66,7 @@ func TestTracerPipeline(t *testing.T) {
 	tc, err := collector.Start(ctx)
 	require.NoError(t, err)
 
-	gb := newGraphBuilder(&Config{Traces: otel.TracesConfig{TracesEndpoint: tc.ServerHostPort, ServiceName: "test"}})
+	gb := newGraphBuilder(&Config{Traces: otel.TracesConfig{TracesEndpoint: tc.ServerEndpoint, ServiceName: "test"}})
 	gb.inspector = func(_ goexec.ProcessFinder, _ map[string][]string) (goexec.Offsets, error) {
 		return goexec.Offsets{FileInfo: goexec.FileInfo{CmdExePath: "test-service"}}, nil
 	}
@@ -97,7 +97,7 @@ func TestRouteConsolidation(t *testing.T) {
 	require.NoError(t, err)
 
 	gb := newGraphBuilder(&Config{
-		Metrics: otel.MetricsConfig{MetricsEndpoint: tc.ServerHostPort}, // ReportPeerInfo = false, no peer info
+		Metrics: otel.MetricsConfig{MetricsEndpoint: tc.ServerEndpoint}, // ReportPeerInfo = false, no peer info
 		Routes:  &transform.RoutesConfig{Patterns: []string{"/user/{id}", "/products/{id}/push"}},
 	})
 	gb.inspector = func(_ goexec.ProcessFinder, _ map[string][]string) (goexec.Offsets, error) {
@@ -164,7 +164,7 @@ func TestGRPCPipeline(t *testing.T) {
 	tc, err := collector.Start(ctx)
 	require.NoError(t, err)
 
-	gb := newGraphBuilder(&Config{Metrics: otel.MetricsConfig{MetricsEndpoint: tc.ServerHostPort, ReportTarget: true, ReportPeerInfo: true}})
+	gb := newGraphBuilder(&Config{Metrics: otel.MetricsConfig{MetricsEndpoint: tc.ServerEndpoint, ReportTarget: true, ReportPeerInfo: true}})
 	gb.inspector = func(_ goexec.ProcessFinder, _ map[string][]string) (goexec.Offsets, error) {
 		return goexec.Offsets{FileInfo: goexec.FileInfo{CmdExePath: "test-service"}}, nil
 	}
@@ -200,7 +200,7 @@ func TestTraceGRPCPipeline(t *testing.T) {
 	tc, err := collector.Start(ctx)
 	require.NoError(t, err)
 
-	gb := newGraphBuilder(&Config{Traces: otel.TracesConfig{TracesEndpoint: tc.ServerHostPort, ServiceName: "test"}})
+	gb := newGraphBuilder(&Config{Traces: otel.TracesConfig{TracesEndpoint: tc.ServerEndpoint, ServiceName: "test"}})
 	gb.inspector = func(_ goexec.ProcessFinder, _ map[string][]string) (goexec.Offsets, error) {
 		return goexec.Offsets{FileInfo: goexec.FileInfo{CmdExePath: "test-service"}}, nil
 	}

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"strings"
 	"time"
 
 	"golang.org/x/exp/slog"
@@ -147,7 +148,7 @@ func (r *TracesReporter) reportTraces(input <-chan []transform.HTTPRequestSpan) 
 			ctx, sp := tracer.Start(context.TODO(), "session",
 				trace2.WithTimestamp(spans[i].RequestStart),
 				trace2.WithAttributes(attrs...),
-				trace2.WithSpanKind(trace2.SpanKindInternal),
+				trace2.WithSpanKind(trace2.SpanKindServer),
 			)
 
 			// Create a child span showing the queue time
@@ -186,8 +187,10 @@ func getTracesEndpointOptions(cfg *TracesConfig) ([]otlptracehttp.Option, error)
 	if murl.Scheme == "http" || murl.Scheme == "unix" {
 		opts = append(opts, otlptracehttp.WithInsecure())
 	}
-	if len(murl.Path) > 0 && murl.Path != "/" {
+
+	if len(murl.Path) > 0 && murl.Path != "/" && !strings.HasSuffix(murl.Path, "/v1/traces") {
 		opts = append(opts, otlptracehttp.WithURLPath(murl.Path+"/v1/traces"))
 	}
+
 	return opts, nil
 }

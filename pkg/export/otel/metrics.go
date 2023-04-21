@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"strings"
 	"time"
 
 	"golang.org/x/exp/slog"
@@ -180,7 +181,7 @@ func getMetricEndpointOptions(cfg *MetricsConfig) ([]otlpmetrichttp.Option, erro
 	if murl.Scheme == "http" || murl.Scheme == "unix" {
 		opts = append(opts, otlpmetrichttp.WithInsecure())
 	}
-	if len(murl.Path) > 0 && murl.Path != "/" {
+	if len(murl.Path) > 0 && murl.Path != "/" && !strings.HasSuffix(murl.Path, "/v1/metrics") {
 		opts = append(opts, otlpmetrichttp.WithURLPath(murl.Path+"/v1/metrics"))
 	}
 	return opts, nil

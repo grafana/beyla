@@ -23,9 +23,13 @@ import (
 const reporterName = "github.com/grafana/ebpf-autoinstrument"
 
 type TracesConfig struct {
-	ServiceName        string        `yaml:"service_name" env:"SERVICE_NAME"`
-	Endpoint           string        `yaml:"endpoint" env:"OTEL_EXPORTER_OTLP_ENDPOINT"`
-	TracesEndpoint     string        `yaml:"-" env:"OTEL_EXPORTER_OTLP_TRACES_ENDPOINT"`
+	ServiceName    string `yaml:"service_name" env:"OTEL_SERVICE_NAME"`
+	Endpoint       string `yaml:"endpoint" env:"OTEL_EXPORTER_OTLP_ENDPOINT"`
+	TracesEndpoint string `yaml:"-" env:"OTEL_EXPORTER_OTLP_TRACES_ENDPOINT"`
+
+	// Configuration options below this line will remain undocumented at the moment,
+	// but can be useful for performance-tuning of some customers.
+
 	MaxExportBatchSize int           `yaml:"max_export_batch_size" env:"OTLP_TRACES_MAX_EXPORT_BATCH_SIZE"`
 	MaxQueueSize       int           `yaml:"max_queue_size" env:"OTLP_TRACES_MAX_QUEUE_SIZE"`
 	BatchTimeout       time.Duration `yaml:"batch_timeout" env:"OTLP_TRACES_BATCH_TIMEOUT"`

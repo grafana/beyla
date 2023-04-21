@@ -42,20 +42,13 @@ const SectionRuntimeNewproc1 = "newproc1"
 const SectionRuntimeGoexit1 = "goexit1"
 
 type EBPFTracer struct {
-	// Exec allows selecting the instrumented executable whose complete path contains the Exec value.
+	// Exec allows selecting the instrumented executable whose complete path has the Exec value as suffix.
 	Exec string `yaml:"executable_name" env:"EXECUTABLE_NAME"`
 	// Port allows selecting the instrumented executable that owns the Port value. If this value is set (and
 	// different to zero), the value of the Exec property won't take effect.
 	// It's important to emphasize that if your process opens multiple HTTP/GRPC ports, the auto-instrumenter
 	// will instrument all the service calls in all the ports, not only the port specified here.
-	Port             int      `yaml:"open_port" env:"OPEN_PORT"`
-	Functions        []string `yaml:"functions" env:"INSTRUMENT_FUNCTIONS"`
-	GRPCHandleStream []string `yaml:"grpc_handle_stream" env:"GRPC_HANDLE_STREAM"`
-	GRPCWriteStatus  []string `yaml:"grpc_write_status" env:"GRPC_WRITE_STATUS"`
-	RuntimeNewproc1  []string `yaml:"runtime_newproc1" env:"RUNTIME_NEWPROC1"`
-	RuntimeGoexit1   []string `yaml:"runtime_goexit1" env:"RUNTIME_GOEXIT1"`
-	LogLevel         string   `yaml:"log_level" env:"LOG_LEVEL"`
-	BpfDebug         bool     `yaml:"bfp_debug" env:"BPF_DEBUG"`
+	Port int `yaml:"open_port" env:"OPEN_PORT"`
 
 	// WakeupLen specifies how many messages need to be accumulated in the eBPF ringbuffer
 	// before sending a wakeup request.
@@ -63,6 +56,17 @@ type EBPFTracer struct {
 	// requests/second.
 	// TODO: see if there is a way to force eBPF to wakeup userspace on timeout
 	WakeupLen int `yaml:"wakeup_len" env:"BPF_WAKEUP_LEN"`
+
+	// The properties below this comment are undocumented, as are mainly
+	// development-oriented, but could be useful for customer support.
+
+	Functions        []string `yaml:"functions" env:"INSTRUMENT_FUNCTIONS"`
+	GRPCHandleStream []string `yaml:"grpc_handle_stream" env:"GRPC_HANDLE_STREAM"`
+	GRPCWriteStatus  []string `yaml:"grpc_write_status" env:"GRPC_WRITE_STATUS"`
+	RuntimeNewproc1  []string `yaml:"runtime_newproc1" env:"RUNTIME_NEWPROC1"`
+	RuntimeGoexit1   []string `yaml:"runtime_goexit1" env:"RUNTIME_GOEXIT1"`
+	BpfDebug         bool     `yaml:"bfp_debug" env:"BPF_DEBUG"`
+
 	// BatchLength allows specifying how many traces will be batched at the initial
 	// stage before being forwarded to the next stage
 	BatchLength int `yaml:"batch_length" env:"BPF_BATCH_LENGTH"`

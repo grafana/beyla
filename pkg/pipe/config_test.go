@@ -24,12 +24,12 @@ ebpf:
 otel_metrics_export:
   endpoint: localhost:3030
 `)
-	require.NoError(t, os.Setenv("SERVICE_NAME", "svc-name"))
+	require.NoError(t, os.Setenv("OTEL_SERVICE_NAME", "svc-name"))
 	require.NoError(t, os.Setenv("NOOP_TRACES", "true"))
 	require.NoError(t, os.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "localhost:3131"))
 	require.NoError(t, os.Setenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", "localhost:3232"))
 	defer unsetEnv(t, map[string]string{
-		"SERVICE_NAME": "", "NOOP_TRACES": "",
+		"OTEL_SERVICE_NAME": "", "NOOP_TRACES": "",
 		"OTEL_EXPORTER_OTLP_ENDPOINT": "", "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT": "",
 	})
 

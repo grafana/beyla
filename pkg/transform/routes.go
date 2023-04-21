@@ -11,8 +11,8 @@ import (
 type UnmatchType string
 
 const (
-	// UnmatchEmpty leaves the Route field as empty
-	UnmatchEmpty = UnmatchType("empty")
+	// UnmatchUnset leaves the Route field as empty
+	UnmatchUnset = UnmatchType("unset")
 	// UnmatchPath sets the Route field to the same values as the Path
 	UnmatchPath = UnmatchType("path")
 	// UnmatchWildcard sets the route field to a generic asterisk symbol
@@ -25,7 +25,7 @@ const wildCard = "*"
 
 // RoutesConfig allows grouping URLs sharing a given pattern.
 type RoutesConfig struct {
-	// Unmatch specifies what to do when a route pattern is not
+	// Unmatch specifies what to do when a route pattern is not matched
 	Unmatch UnmatchType `yaml:"unmatch"`
 	// Patterns of the paths that will match to a route
 	Patterns []string `yaml:"patterns"`
@@ -37,7 +37,7 @@ func RoutesProvider(rc *RoutesConfig) node.MiddleFunc[[]HTTPRequestSpan, []HTTPR
 	switch rc.Unmatch {
 	case UnmatchWildcard, "": // default
 		unmatchAction = setUnmatchToWildcard
-	case UnmatchEmpty:
+	case UnmatchUnset:
 		unmatchAction = leaveUnmatchEmpty
 	case UnmatchPath:
 		unmatchAction = setUnmatchToPath

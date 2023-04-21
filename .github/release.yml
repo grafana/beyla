@@ -1,0 +1,11 @@
+changelog:
+  categories:
+    - title: Breaking changes 🔨
+      labels:
+        - breaking-change
+    - title: Bug fixes 🐛
+      labels:
+        - bug
+    - title: Other changes/additions
+      labels:
+        - "*"

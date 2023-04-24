@@ -289,7 +289,7 @@ func matchTraceEvent(t *testing.T, name string, event collector.TraceRecord) {
 			string(semconv.NetHostPortKey):              "8080",
 			string(semconv.HTTPRequestContentLengthKey): "0",
 		},
-		Kind: ptrace.SpanKindInternal,
+		Kind: ptrace.SpanKindServer,
 	}, event)
 }
 
@@ -312,7 +312,7 @@ func matchGRPCTraceEvent(t *testing.T, name string, event collector.TraceRecord)
 			string(semconv.NetHostNameKey):       "127.0.0.1",
 			string(semconv.NetHostPortKey):       "8080",
 		},
-		Kind: ptrace.SpanKindInternal,
+		Kind: ptrace.SpanKindServer,
 	}, event)
 }
 

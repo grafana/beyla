@@ -93,7 +93,7 @@ func (tc *TestCollector) traceEvent(writer http.ResponseWriter, body []byte) {
 		forEach[ptrace.ScopeSpans](rs.ScopeSpans(), func(ss ptrace.ScopeSpans) {
 			forEach[ptrace.Span](ss.Spans(), func(s ptrace.Span) {
 				switch s.Kind() {
-				case ptrace.SpanKindInternal:
+				case ptrace.SpanKindServer, ptrace.SpanKindInternal:
 					tr := TraceRecord{
 						Kind:       s.Kind(),
 						Name:       s.Name(),

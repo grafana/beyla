@@ -31,11 +31,11 @@ services:
       OPEN_PORT: "${OPEN_PORT}"
       EXECUTABLE_NAME: "${EXECUTABLE_NAME}"
       OTEL_EXPORTER_OTLP_ENDPOINT: "http://otelcol:4318"
-      METRICS_INTERVAL: "10ms"
+      OTEL_METRIC_EXPORT_INTERVAL: "10ms"
       BPF_BATCH_TIMEOUT: "10ms"
       LOG_LEVEL: "DEBUG"
-      OTEL_EXPORTER_REPORT_TARGET: "true"
-      OTEL_EXPORTER_REPORT_PEER: "true"
+      METRICS_REPORT_TARGET: "true"
+      METRICS_REPORT_PEER: "true"
 
   # OpenTelemetry Collector
   otelcol:

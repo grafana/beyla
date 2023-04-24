@@ -21,15 +21,15 @@ import (
 )
 
 type MetricsConfig struct {
-	ServiceName     string        `yaml:"service_name" env:"SERVICE_NAME"`
-	Interval        time.Duration `yaml:"interval" env:"METRICS_INTERVAL"`
+	ServiceName     string        `yaml:"service_name" env:"OTEL_SERVICE_NAME"`
+	Interval        time.Duration `yaml:"interval" env:"OTEL_METRIC_EXPORT_INTERVAL"`
 	Endpoint        string        `yaml:"endpoint" env:"OTEL_EXPORTER_OTLP_ENDPOINT"`
 	MetricsEndpoint string        `yaml:"-" env:"OTEL_EXPORTER_OTLP_METRICS_ENDPOINT"`
 	// ReportTarget specifies whether http.target should be submitted as a metric attribute. It is disabled by
 	// default to avoid cardinality explosion in paths with IDs. In that case, it is recommended to group these
 	// requests in the Routes node
-	ReportTarget   bool `yaml:"report_target" env:"OTEL_EXPORTER_REPORT_TARGET"`
-	ReportPeerInfo bool `yaml:"report_peer" env:"OTEL_EXPORTER_REPORT_PEER"`
+	ReportTarget   bool `yaml:"report_target" env:"METRICS_REPORT_TARGET"`
+	ReportPeerInfo bool `yaml:"report_peer" env:"METRICS_REPORT_PEER"`
 }
 
 // Enabled specifies that the OTEL metrics node is enabled if and only if

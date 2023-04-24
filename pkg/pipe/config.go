@@ -49,12 +49,16 @@ type Config struct {
 
 	Metrics otel.MetricsConfig `nodeId:"otel_metrics" yaml:"otel_metrics_export"`
 	Traces  otel.TracesConfig  `nodeId:"otel_traces" yaml:"otel_traces_export"`
-	Printer debug.PrintEnabled `nodeId:"print" yaml:"print" env:"PRINT_TRACES"`
-	Noop    debug.NoopEnabled  `nodeId:"noop" yaml:"noop" env:"NOOP_TRACES"`
+	Printer debug.PrintEnabled `nodeId:"print" yaml:"print_traces" env:"PRINT_TRACES"`
 
-	ChannelBufferLen int    `yaml:"channel_buffer_len" env:"CHANNEL_BUFFER_LEN" nodeId:"-"`
-	LogLevel         string `yaml:"log_level" env:"LOG_LEVEL" nodeId:"-"`
-	ProfilePort      int    `yaml:"profile_port" env:"PROFILE_PORT" nodeId:"-"`
+	LogLevel string `yaml:"log_level" env:"LOG_LEVEL" nodeId:"-"`
+
+	// From this comment, the properties below will remain undocumented, as they
+	// are useful for development purposes. They might be helpful for customer support.
+
+	ChannelBufferLen int               `yaml:"channel_buffer_len" env:"CHANNEL_BUFFER_LEN" nodeId:"-"`
+	Noop             debug.NoopEnabled `nodeId:"noop" yaml:"noop" env:"NOOP_TRACES"`
+	ProfilePort      int               `yaml:"profile_port" env:"PROFILE_PORT" nodeId:"-"`
 }
 
 type ConfigError string

@@ -59,7 +59,7 @@ func TestUnmatchedPath(t *testing.T) {
 }
 
 func TestUnmatchedEmpty(t *testing.T) {
-	router := RoutesProvider(&RoutesConfig{Unmatch: UnmatchEmpty, Patterns: []string{"/user/:id"}})
+	router := RoutesProvider(&RoutesConfig{Unmatch: UnmatchUnset, Patterns: []string{"/user/:id"}})
 	in, out := make(chan []HTTPRequestSpan, 10), make(chan []HTTPRequestSpan, 10)
 	defer close(in)
 	go router(in, out)

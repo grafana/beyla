@@ -237,6 +237,26 @@ int uprobe_ServeHttp_return(struct pt_regs *ctx) {
     return 0;
 }
 
+SEC("uprobe/startBackgroundRead")
+int uprobe_startBackgroundRead(struct pt_regs *ctx) {
+    bpf_dbg_printk("=== uprobe/proc startBackgroundRead === ");
+
+    void *goroutine_addr = GOROUTINE_PTR(ctx);
+    bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
+
+    // This code is here for keepalive support on HTTP requests. Since the connection is not
+    // established everytime, we set the initial goroutine start on the new read initiation.
+    u64 *go_start_monotime_ns = bpf_map_lookup_elem(&ongoing_goroutines, &goroutine_addr);
+    if (!go_start_monotime_ns) {
+        u64 timestamp = bpf_ktime_get_ns();
+        if (bpf_map_update_elem(&ongoing_goroutines, &goroutine_addr, &timestamp, BPF_ANY)) {
+            bpf_dbg_printk("can't update active goroutine");
+        }
+    }
+
+    return 0;
+}
+
 /* GRPC */
 
 SEC("uprobe/server_handleStream")
@@ -386,7 +406,7 @@ int uprobe_proc_newproc1_ret(struct pt_regs *ctx) {
 
     u64 timestamp = bpf_ktime_get_ns();
     if (bpf_map_update_elem(&ongoing_goroutines, &goroutine_addr, &timestamp, BPF_ANY)) {
-        bpf_dbg_printk("can't update grpc map element");
+        bpf_dbg_printk("can't update active goroutine");
     }
 
     return 0;

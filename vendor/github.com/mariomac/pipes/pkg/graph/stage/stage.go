@@ -37,6 +37,10 @@ var _ Instancer = Instance("")
 // configuration struct containing it must define a `nodeId` tag with an identifier for that stage.
 type StartProvider[CFG, O any] func(CFG) node.StartFuncCtx[O]
 
+// StartMultiProvider is similar to StarProvider, but it is able to associate a variadic
+// number of functions that will behave as a single node.
+type StartMultiProvider[CFG, O any] func(CFG) []node.StartFuncCtx[O]
+
 // MiddleProvider is a function that, given a configuration argument of a unique type,
 // returns a function fulfilling the node.MiddleFunc type signature. Returned functions
 // will run inside a Graph Middle Node

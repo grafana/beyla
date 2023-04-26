@@ -10,11 +10,11 @@ import (
 	"golang.org/x/exp/slog"
 )
 
-var ilog = slog.With("component", "goexec.instructions")
-
 // instrumentationPoints loads the provided executable and looks for the addresses
 // where the start and return probes must be inserted.
-func instrumentationPoints(elfF *elf.File, funcNames []string) ([]FuncOffsets, error) {
+func instrumentationPoints(elfF *elf.File, funcNames []string) (map[string]FuncOffsets, error) {
+	ilog := slog.With("component", "goexec.instructions")
+	ilog.Debug("searching for instrumentation points", "functions", funcNames)
 	functions := map[string]struct{}{}
 	for _, fn := range funcNames {
 		functions[fn] = struct{}{}
@@ -26,7 +26,7 @@ func instrumentationPoints(elfF *elf.File, funcNames []string) ([]FuncOffsets, e
 
 	// check which functions in the symbol table correspond to any of the functions
 	// that we are looking for, and find their offsets
-	var allOffsets []FuncOffsets
+	allOffsets := map[string]FuncOffsets{}
 	for _, f := range symTab.Funcs {
 		fName := f.Name
 		// fetch short path of function for vendor scene
@@ -39,17 +39,13 @@ func instrumentationPoints(elfF *elf.File, funcNames []string) ([]FuncOffsets, e
 			if err != nil {
 				return nil, err
 			}
-			ilog.Debug("found relevant function for instrumentation", "function", f.Name)
-
 			if ok {
-				allOffsets = append(allOffsets, offs)
+				ilog.Debug("found relevant function for instrumentation", "function", fName, "offsets", offs)
+				allOffsets[fName] = offs
 			}
 		}
 	}
 
-	if len(allOffsets) == 0 {
-		return nil, fmt.Errorf("couldn't find any function: %v", funcNames)
-	}
 	return allOffsets, nil
 }
 

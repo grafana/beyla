@@ -3,7 +3,8 @@ package transform
 import (
 	"testing"
 
-	"github.com/grafana/ebpf-autoinstrument/pkg/ebpf/nethttp"
+	ebpfcommon "github.com/grafana/ebpf-autoinstrument/pkg/ebpf/common"
+
 	"github.com/stretchr/testify/assert"
 )
 
@@ -12,7 +13,7 @@ func cstr(s string) []byte {
 	return append(b, 0)
 }
 
-func makeHTTPRequestTrace(method, path, peerInfo string, status uint16, durationMs uint64) nethttp.HTTPRequestTrace {
+func makeHTTPRequestTrace(method, path, peerInfo string, status uint16, durationMs uint64) ebpfcommon.HTTPRequestTrace {
 	m := [6]uint8{}
 	copy(m[:], cstr(method)[:])
 	p := [100]uint8{}
@@ -20,7 +21,7 @@ func makeHTTPRequestTrace(method, path, peerInfo string, status uint16, duration
 	r := [50]uint8{}
 	copy(r[:], cstr(peerInfo)[:])
 
-	return nethttp.HTTPRequestTrace{
+	return ebpfcommon.HTTPRequestTrace{
 		Type:              1, // transform.EventTypeHTTP
 		Method:            m,
 		Path:              p,
@@ -32,13 +33,13 @@ func makeHTTPRequestTrace(method, path, peerInfo string, status uint16, duration
 	}
 }
 
-func makeGRPCRequestTrace(path string, peerInfo []byte, status uint16, durationMs uint64) nethttp.HTTPRequestTrace {
+func makeGRPCRequestTrace(path string, peerInfo []byte, status uint16, durationMs uint64) ebpfcommon.HTTPRequestTrace {
 	p := [100]uint8{}
 	copy(p[:], cstr(path)[:])
 	r := [50]uint8{}
 	copy(r[:], peerInfo[:])
 
-	return nethttp.HTTPRequestTrace{
+	return ebpfcommon.HTTPRequestTrace{
 		Type:              2, // transform.EventTypeGRPC
 		Path:              p,
 		RemoteAddr:        r,

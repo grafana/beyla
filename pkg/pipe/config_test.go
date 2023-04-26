@@ -7,10 +7,11 @@ import (
 	"testing"
 	"time"
 
+	ebpfcommon "github.com/grafana/ebpf-autoinstrument/pkg/ebpf/common"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/grafana/ebpf-autoinstrument/pkg/ebpf/nethttp"
 	"github.com/grafana/ebpf-autoinstrument/pkg/export/otel"
 )
 
@@ -42,16 +43,10 @@ otel_metrics_export:
 		LogLevel:         "INFO",
 		Printer:          false,
 		Noop:             true,
-		EBPF: nethttp.EBPFTracer{
-			Exec:                    "tras",
-			Functions:               []string{"FooBar"},
-			HTTPStartBackgroundRead: []string{"net/http.(*connReader).startBackgroundRead"},
-			GRPCWriteStatus:         []string{"google.golang.org/grpc/internal/transport.(*http2Server).WriteStatus"},
-			GRPCHandleStream:        []string{"google.golang.org/grpc.(*Server).handleStream"},
-			RuntimeNewproc1:         []string{"runtime.newproc1"},
-			RuntimeGoexit1:          []string{"runtime.goexit1"},
-			BatchLength:             100,
-			BatchTimeout:            time.Second,
+		EBPF: ebpfcommon.Tracer{
+			Exec:         "tras",
+			BatchLength:  100,
+			BatchTimeout: time.Second,
 		},
 		Metrics: otel.MetricsConfig{
 			ServiceName: "svc-name",

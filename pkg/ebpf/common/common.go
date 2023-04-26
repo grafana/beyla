@@ -1,0 +1,55 @@
+package ebpfcommon
+
+import (
+	"time"
+
+	"github.com/cilium/ebpf"
+	"github.com/grafana/ebpf-autoinstrument/pkg/goexec"
+)
+
+//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target bpf -type http_request_trace bpf ../../../bpf/http_trace.c -- -I../../../bpf/headers
+
+// HTTPRequestTrace contains information from an HTTP request as directly received from the
+// eBPF layer. This contains low-level C structures for accurate binary read from ring buffer.
+type HTTPRequestTrace bpfHttpRequestTrace
+
+// Tracer configuration for eBPF programs
+type Tracer struct {
+	// Exec allows selecting the instrumented executable whose complete path contains the Exec value.
+	Exec string `yaml:"executable_name" env:"EXECUTABLE_NAME"`
+	// Port allows selecting the instrumented executable that owns the Port value. If this value is set (and
+	// different to zero), the value of the Exec property won't take effect.
+	// It's important to emphasize that if your process opens multiple HTTP/GRPC ports, the auto-instrumenter
+	// will instrument all the service calls in all the ports, not only the port specified here.
+	Port     int    `yaml:"open_port" env:"OPEN_PORT"`
+	LogLevel string `yaml:"log_level" env:"LOG_LEVEL"`
+	BpfDebug bool   `yaml:"bfp_debug" env:"BPF_DEBUG"`
+
+	// WakeupLen specifies how many messages need to be accumulated in the eBPF ringbuffer
+	// before sending a wakeup request.
+	// High values of WakeupLen could add a noticeable metric delay in services with low
+	// requests/second.
+	// TODO: see if there is a way to force eBPF to wakeup userspace on timeout
+	WakeupLen int `yaml:"wakeup_len" env:"BPF_WAKEUP_LEN"`
+	// BatchLength allows specifying how many traces will be batched at the initial
+	// stage before being forwarded to the next stage
+	BatchLength int `yaml:"batch_length" env:"BPF_BATCH_LENGTH"`
+	// BatchTimeout specifies the timeout to forward the data batch if it didn't
+	// reach the BatchLength size
+	BatchTimeout time.Duration `yaml:"batch_timeout" env:"BPF_BATCH_TIMEOUT"`
+
+	// OnOffsets will be called when the offsets are discovered (if not nil).
+	// It is useful to make executable information visible to other parts of the code
+	OnOffsets func(offsets *goexec.Offsets) `yaml:"-" json:"-"`
+}
+
+type FunctionPrograms struct {
+	Start *ebpf.Program
+	End   *ebpf.Program
+}
+
+type Probe struct {
+	FunctionName string
+	Offsets      goexec.FuncOffsets
+	Programs     FunctionPrograms
+}

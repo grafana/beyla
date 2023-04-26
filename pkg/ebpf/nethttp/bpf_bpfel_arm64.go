@@ -117,6 +117,7 @@ type bpfProgramSpecs struct {
 	UprobeProcNewproc1Ret          *ebpf.ProgramSpec `ebpf:"uprobe_proc_newproc1_ret"`
 	UprobeServerHandleStream       *ebpf.ProgramSpec `ebpf:"uprobe_server_handleStream"`
 	UprobeServerHandleStreamReturn *ebpf.ProgramSpec `ebpf:"uprobe_server_handleStream_return"`
+	UprobeStartBackgroundRead      *ebpf.ProgramSpec `ebpf:"uprobe_startBackgroundRead"`
 	UprobeTransportWriteStatus     *ebpf.ProgramSpec `ebpf:"uprobe_transport_writeStatus"`
 }
 
@@ -174,6 +175,7 @@ type bpfPrograms struct {
 	UprobeProcNewproc1Ret          *ebpf.Program `ebpf:"uprobe_proc_newproc1_ret"`
 	UprobeServerHandleStream       *ebpf.Program `ebpf:"uprobe_server_handleStream"`
 	UprobeServerHandleStreamReturn *ebpf.Program `ebpf:"uprobe_server_handleStream_return"`
+	UprobeStartBackgroundRead      *ebpf.Program `ebpf:"uprobe_startBackgroundRead"`
 	UprobeTransportWriteStatus     *ebpf.Program `ebpf:"uprobe_transport_writeStatus"`
 }
 
@@ -185,6 +187,7 @@ func (p *bpfPrograms) Close() error {
 		p.UprobeProcNewproc1Ret,
 		p.UprobeServerHandleStream,
 		p.UprobeServerHandleStreamReturn,
+		p.UprobeStartBackgroundRead,
 		p.UprobeTransportWriteStatus,
 	)
 }

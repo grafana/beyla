@@ -36,6 +36,7 @@ import (
 )
 
 const SectionHTTP = "http"
+const SectionHTTPBackgroundRead = "http_background_read"
 const SectionGRPCStream = "grpc_stream"
 const SectionGRPCStatus = "grpc_status"
 const SectionRuntimeNewproc1 = "newproc1"
@@ -60,12 +61,13 @@ type EBPFTracer struct {
 	// The properties below this comment are undocumented, as are mainly
 	// development-oriented, but could be useful for customer support.
 
-	Functions        []string `yaml:"functions" env:"INSTRUMENT_FUNCTIONS"`
-	GRPCHandleStream []string `yaml:"grpc_handle_stream" env:"GRPC_HANDLE_STREAM"`
-	GRPCWriteStatus  []string `yaml:"grpc_write_status" env:"GRPC_WRITE_STATUS"`
-	RuntimeNewproc1  []string `yaml:"runtime_newproc1" env:"RUNTIME_NEWPROC1"`
-	RuntimeGoexit1   []string `yaml:"runtime_goexit1" env:"RUNTIME_GOEXIT1"`
-	BpfDebug         bool     `yaml:"bfp_debug" env:"BPF_DEBUG"`
+	Functions               []string `yaml:"functions" env:"INSTRUMENT_FUNCTIONS"`
+	HTTPStartBackgroundRead []string `yaml:"http_backround_read" env:"HTTP_BACKGROUND_READ"`
+	GRPCHandleStream        []string `yaml:"grpc_handle_stream" env:"GRPC_HANDLE_STREAM"`
+	GRPCWriteStatus         []string `yaml:"grpc_write_status" env:"GRPC_WRITE_STATUS"`
+	RuntimeNewproc1         []string `yaml:"runtime_newproc1" env:"RUNTIME_NEWPROC1"`
+	RuntimeGoexit1          []string `yaml:"runtime_goexit1" env:"RUNTIME_GOEXIT1"`
+	BpfDebug                bool     `yaml:"bfp_debug" env:"BPF_DEBUG"`
 
 	// BatchLength allows specifying how many traces will be batched at the initial
 	// stage before being forwarded to the next stage
@@ -171,7 +173,7 @@ func logInstrumentedFeatures(funcs map[string][]goexec.FuncOffsets) {
 	for section, offsets := range funcs {
 		if len(offsets) > 0 {
 			switch section {
-			case SectionHTTP:
+			case SectionHTTP, SectionHTTPBackgroundRead:
 				m["'http server'"] = true
 			case SectionGRPCStream, SectionGRPCStatus:
 				m["'grpc server'"] = true
@@ -202,6 +204,10 @@ func (h *InstrumentedServe) instrumentFunctions(exe *link.Executable, funcs map[
 			switch section {
 			case SectionHTTP:
 				if err := h.instrumentFunction(fn, exe, h.bpfObjects.UprobeServeHTTP, h.bpfObjects.UprobeServeHttpReturn); err != nil {
+					return fmt.Errorf("instrumenting function: %w in section %s", err, section)
+				}
+			case SectionHTTPBackgroundRead:
+				if err := h.instrumentFunction(fn, exe, h.bpfObjects.UprobeStartBackgroundRead, nil); err != nil {
 					return fmt.Errorf("instrumenting function: %w in section %s", err, section)
 				}
 			case SectionGRPCStream:

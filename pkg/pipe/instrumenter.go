@@ -64,11 +64,12 @@ func (gb *graphBuilder) buildGraph() (graph.Graph, error) {
 	offsets, err := gb.inspector(
 		finder,
 		map[string][]string{
-			nethttp.SectionHTTP:            gb.config.EBPF.Functions,
-			nethttp.SectionGRPCStream:      gb.config.EBPF.GRPCHandleStream,
-			nethttp.SectionGRPCStatus:      gb.config.EBPF.GRPCWriteStatus,
-			nethttp.SectionRuntimeNewproc1: gb.config.EBPF.RuntimeNewproc1,
-			nethttp.SectionRuntimeGoexit1:  gb.config.EBPF.RuntimeGoexit1,
+			nethttp.SectionHTTP:               gb.config.EBPF.Functions,
+			nethttp.SectionHTTPBackgroundRead: gb.config.EBPF.HTTPStartBackgroundRead,
+			nethttp.SectionGRPCStream:         gb.config.EBPF.GRPCHandleStream,
+			nethttp.SectionGRPCStatus:         gb.config.EBPF.GRPCWriteStatus,
+			nethttp.SectionRuntimeNewproc1:    gb.config.EBPF.RuntimeNewproc1,
+			nethttp.SectionRuntimeGoexit1:     gb.config.EBPF.RuntimeGoexit1,
 		},
 	)
 	if err != nil {

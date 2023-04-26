@@ -2,6 +2,7 @@ package pipe
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/mariomac/pipes/pkg/graph"
 	"github.com/mariomac/pipes/pkg/node"
@@ -49,6 +50,11 @@ func newGraphBuilder(config *Config) *graphBuilder {
 	}
 }
 
+func lastOfExePath(path string) string {
+	parts := strings.Split(path, "/")
+	return parts[len(parts)-1]
+}
+
 func (gb *graphBuilder) buildGraph() (graph.Graph, error) {
 	// Build and connect the nodes of the processing pipeline
 	//                              +--> TracesSender
@@ -79,10 +85,10 @@ func (gb *graphBuilder) buildGraph() (graph.Graph, error) {
 	gb.config.EBPF.Offsets = &offsets
 
 	if gb.config.Metrics.ServiceName == "" {
-		gb.config.Metrics.ServiceName = offsets.FileInfo.CmdExePath
+		gb.config.Metrics.ServiceName = lastOfExePath(offsets.FileInfo.CmdExePath)
 	}
 	if gb.config.Traces.ServiceName == "" {
-		gb.config.Traces.ServiceName = offsets.FileInfo.CmdExePath
+		gb.config.Traces.ServiceName = lastOfExePath(offsets.FileInfo.CmdExePath)
 	}
 
 	return gb.builder.Build(gb.config)

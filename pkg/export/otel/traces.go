@@ -161,10 +161,16 @@ func traceAttributes(span *transform.HTTPRequestSpan) []attribute.KeyValue {
 
 func traceName(span *transform.HTTPRequestSpan) string {
 	switch span.Type {
-	case transform.EventTypeHTTP, transform.EventTypeHTTPStart, transform.EventTypeGRPC:
-		return "session"
+	case transform.EventTypeHTTP, transform.EventTypeHTTPStart:
+		name := span.Method
+		if span.Route != "" {
+			name += " " + span.Route
+		}
+		return name
+	case transform.EventTypeGRPC:
+		return span.Path
 	case transform.EventTypeHTTPClient:
-		return "request"
+		return span.Method
 	}
 	return ""
 }
@@ -233,6 +239,7 @@ func (r *TracesReporter) reportTraces(input <-chan []transform.HTTPRequestSpan) 
 					s = makeSpan(context.TODO(), tracer, &spans[i])
 				} else {
 					s = cached
+					s.Session.SetName(traceName(&spans[i]))
 					l.Remove(spans[i].ID)
 				}
 			}

@@ -86,7 +86,7 @@ func TestTracerPipeline(t *testing.T) {
 	event = getTraceEvent(t, tc)
 	matchInnerTraceEvent(t, "processing", event)
 	event = getTraceEvent(t, tc)
-	matchTraceEvent(t, "session", event)
+	matchTraceEvent(t, "GET", event)
 }
 
 func TestRouteConsolidation(t *testing.T) {
@@ -220,7 +220,7 @@ func TestTraceGRPCPipeline(t *testing.T) {
 	event = getTraceEvent(t, tc)
 	matchInnerGRPCTraceEvent(t, "processing", event)
 	event = getTraceEvent(t, tc)
-	matchGRPCTraceEvent(t, "session", event)
+	matchGRPCTraceEvent(t, "/foo/bar", event)
 }
 
 func newRequest(method, path, peer string, status int) []nethttp.HTTPRequestTrace {

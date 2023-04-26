@@ -231,6 +231,9 @@ func newRequest(method, path, peer string, status int) []nethttp.HTTPRequestTrac
 	copy(rt.Host[:], getHostname()+":8080")
 	rt.Status = uint16(status)
 	rt.Type = transform.EventTypeHTTP
+	rt.GoStartMonotimeNs = 0
+	rt.StartMonotimeNs = 1
+	rt.EndMonotimeNs = 2
 	return []nethttp.HTTPRequestTrace{rt}
 }
 
@@ -244,6 +247,9 @@ func newGRPCRequest(path string, status int) []nethttp.HTTPRequestTrace {
 	rt.HostPort = 8080
 	rt.Status = uint16(status)
 	rt.Type = transform.EventTypeGRPC
+	rt.GoStartMonotimeNs = 0
+	rt.StartMonotimeNs = 1
+	rt.EndMonotimeNs = 2
 	return []nethttp.HTTPRequestTrace{rt}
 }
 

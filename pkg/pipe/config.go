@@ -23,6 +23,7 @@ var defaultConfig = Config{
 			"github.com/gin-gonic/gin.(*Engine).ServeHTTP",
 		},
 		HTTPStartBackgroundRead: []string{"net/http.(*connReader).startBackgroundRead"},
+		HTTPClientSend:          []string{"net/http.(*Client).send"},
 		GRPCHandleStream:        []string{"google.golang.org/grpc.(*Server).handleStream"},
 		GRPCWriteStatus:         []string{"google.golang.org/grpc/internal/transport.(*http2Server).WriteStatus"},
 		RuntimeNewproc1:         []string{"runtime.newproc1"},

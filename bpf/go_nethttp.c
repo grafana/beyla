@@ -17,8 +17,10 @@
 
 char __license[] SEC("license") = "Dual MIT/GPL";
 
-#define EVENT_HTTP_REQUEST 1
-#define EVENT_GRPC_REQUEST 2
+#define EVENT_HTTP_REQUEST       1
+#define EVENT_GRPC_REQUEST       2
+#define EVENT_HTTP_CLIENT        3
+#define EVENT_HTTP_REQUEST_START 4
 
 #define PATH_MAX_LEN 100
 #define METHOD_MAX_LEN 6 // Longest method: DELETE
@@ -50,6 +52,7 @@ typedef struct grpc_method_data_t {
 // user space through the events ringbuffer.
 typedef struct http_request_trace_t {
     u8  type;
+    u64 id;
     u64 go_start_monotime_ns;
     u64 start_monotime_ns;
     u64 end_monotime_ns;
@@ -72,6 +75,13 @@ struct {
     __type(value, http_method_invocation);
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
 } ongoing_http_requests SEC(".maps");
+
+struct {
+    __uint(type, BPF_MAP_TYPE_HASH);
+    __type(key, void *); // key: pointer to the request goroutine
+    __type(value, http_method_invocation);
+    __uint(max_entries, MAX_CONCURRENT_REQUESTS);
+} ongoing_http_client_requests SEC(".maps");
 
 struct {
     __uint(type, BPF_MAP_TYPE_HASH);
@@ -153,6 +163,26 @@ int uprobe_ServeHTTP(struct pt_regs *ctx) {
         bpf_dbg_printk("can't update map element");
     }
 
+    http_request_trace *trace = bpf_ringbuf_reserve(&events, sizeof(http_request_trace), 0);
+    if (!trace) {
+        bpf_dbg_printk("can't reserve space in the ringbuffer");
+        return 0;
+    }
+    trace->id = (u64)goroutine_addr;
+    trace->type = EVENT_HTTP_REQUEST_START;
+    trace->start_monotime_ns = invocation.start_monotime_ns;
+
+    u64 *go_start_monotime_ns = bpf_map_lookup_elem(&ongoing_goroutines, &goroutine_addr);
+    if (go_start_monotime_ns) {
+        trace->go_start_monotime_ns = *go_start_monotime_ns;
+        bpf_map_delete_elem(&ongoing_goroutines, &goroutine_addr);
+    } else {
+        trace->go_start_monotime_ns = invocation.start_monotime_ns;
+    }
+
+    // submit the completed trace via ringbuffer
+    bpf_ringbuf_submit(trace, get_flags());
+
     return 0;
 }
 
@@ -175,6 +205,7 @@ int uprobe_ServeHttp_return(struct pt_regs *ctx) {
         bpf_dbg_printk("can't reserve space in the ringbuffer");
         return 0;
     }
+    trace->id = (u64)goroutine_addr;
     trace->type = EVENT_HTTP_REQUEST;
     trace->start_monotime_ns = invocation->start_monotime_ns;
     trace->end_monotime_ns = bpf_ktime_get_ns();
@@ -257,6 +288,94 @@ int uprobe_startBackgroundRead(struct pt_regs *ctx) {
     return 0;
 }
 
+/* HTTP Client */
+
+SEC("uprobe/clientSend")
+int uprobe_clientSend(struct pt_regs *ctx) {
+    bpf_dbg_printk("=== uprobe/proc http client.send === ");
+
+    void *goroutine_addr = GOROUTINE_PTR(ctx);
+    bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
+
+    http_method_invocation invocation = {
+        .start_monotime_ns = bpf_ktime_get_ns(),
+        .regs = *ctx,
+    };
+
+    // Write event
+    if (bpf_map_update_elem(&ongoing_http_client_requests, &goroutine_addr, &invocation, BPF_ANY)) {
+        bpf_dbg_printk("can't update http client map element");
+    }
+
+    return 0;
+}
+
+SEC("uprobe/clientSend_return")
+int uprobe_clientSendReturn(struct pt_regs *ctx) {
+    bpf_dbg_printk("=== uprobe/proc http client.send return === ");
+
+    void *goroutine_addr = GOROUTINE_PTR(ctx);
+    bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
+
+    http_method_invocation *invocation =
+        bpf_map_lookup_elem(&ongoing_http_client_requests, &goroutine_addr);
+    bpf_map_delete_elem(&ongoing_http_client_requests, &goroutine_addr);
+    if (invocation == NULL) {
+        bpf_dbg_printk("can't read http invocation metadata");
+        return 0;
+    }
+
+    http_request_trace *trace = bpf_ringbuf_reserve(&events, sizeof(http_request_trace), 0);
+    if (!trace) {
+        bpf_dbg_printk("can't reserve space in the ringbuffer");
+        return 0;
+    }
+    trace->id = (u64)goroutine_addr;
+    trace->type = EVENT_HTTP_CLIENT;
+    trace->start_monotime_ns = invocation->start_monotime_ns;
+    trace->go_start_monotime_ns = invocation->start_monotime_ns;
+    trace->end_monotime_ns = bpf_ktime_get_ns();
+
+    // Read arguments from the original set of registers
+
+    // Get request/response struct
+    void *req_ptr = GO_PARAM2(&(invocation->regs));
+    void *resp_ptr = (void *)GO_PARAM1(ctx);
+
+
+    // Get method from Request.Method
+    if (!read_go_str("method", req_ptr, method_ptr_pos, &trace->method, sizeof(trace->method))) {
+        bpf_printk("can't read http Request.Method");
+        bpf_ringbuf_discard(trace, 0);
+        return 0;
+    }
+
+    // Get the host information the remote supplied
+    if (!read_go_str("host", req_ptr, host_ptr_pos, &trace->host, sizeof(trace->host))) {
+        bpf_printk("can't read http Request.Host");
+        bpf_ringbuf_discard(trace, 0);
+        return 0;
+    }
+
+    // Get path from Request.URL
+    void *url_ptr = 0;
+    bpf_probe_read(&url_ptr, sizeof(url_ptr), (void *)(req_ptr + url_ptr_pos));
+
+    if (!url_ptr || !read_go_str("path", url_ptr, path_ptr_pos, &trace->path, sizeof(trace->path))) {
+        bpf_printk("can't read http Request.URL.Path");
+        bpf_ringbuf_discard(trace, 0);
+        return 0;
+    }
+    bpf_probe_read(&trace->content_length, sizeof(trace->content_length), (void *)(req_ptr + content_length_ptr_pos));
+
+    bpf_probe_read(&trace->status, sizeof(trace->status), (void *)(resp_ptr + status_ptr_pos));
+
+    // submit the completed trace via ringbuffer
+    bpf_ringbuf_submit(trace, get_flags());
+
+    return 0;
+}
+
 /* GRPC */
 
 SEC("uprobe/server_handleStream")
@@ -301,6 +420,7 @@ int uprobe_server_handleStream_return(struct pt_regs *ctx) {
         bpf_dbg_printk("can't reserve space in the ringbuffer");
         return 0;
     }
+    trace->id = (u64)goroutine_addr;
     trace->type = EVENT_GRPC_REQUEST;
     trace->start_monotime_ns = invocation->start_monotime_ns;
     trace->status = invocation->status;

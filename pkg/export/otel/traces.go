@@ -11,6 +11,7 @@ import (
 	"golang.org/x/exp/slog"
 
 	"github.com/grafana/ebpf-autoinstrument/pkg/transform"
+	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/mariomac/pipes/pkg/node"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
@@ -20,6 +21,14 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
 	trace2 "go.opentelemetry.io/otel/trace"
 )
+
+type SessionSpan struct {
+	Session trace2.Span
+	SubSpan trace2.Span
+	RootCtx context.Context
+}
+
+var l, _ = lru.New[uint64, SessionSpan](8192)
 
 const reporterName = "github.com/grafana/ebpf-autoinstrument"
 
@@ -137,8 +146,64 @@ func traceAttributes(span *transform.HTTPRequestSpan) []attribute.KeyValue {
 			semconv.NetHostName(span.Host),
 			semconv.NetHostPort(span.HostPort),
 		}
+	case transform.EventTypeHTTPClient:
+		return []attribute.KeyValue{
+			semconv.HTTPMethod(span.Method),
+			semconv.HTTPStatusCode(span.Status),
+			semconv.HTTPURL(span.Path),
+			semconv.NetPeerName(span.Host),
+			semconv.NetPeerPort(span.HostPort),
+			semconv.HTTPRequestContentLength(int(span.ContentLength)),
+		}
 	}
 	return []attribute.KeyValue{}
+}
+
+func traceName(span *transform.HTTPRequestSpan) string {
+	switch span.Type {
+	case transform.EventTypeHTTP, transform.EventTypeHTTPStart, transform.EventTypeGRPC:
+		return "session"
+	case transform.EventTypeHTTPClient:
+		return "request"
+	}
+	return ""
+}
+
+func spanKind(span *transform.HTTPRequestSpan) trace2.SpanKind {
+	switch span.Type {
+	case transform.EventTypeHTTP, transform.EventTypeHTTPStart, transform.EventTypeGRPC:
+		return trace2.SpanKindServer
+	case transform.EventTypeHTTPClient:
+		return trace2.SpanKindClient
+	}
+	return trace2.SpanKindInternal
+}
+
+func makeSpan(parentCtx context.Context, tracer trace2.Tracer, span *transform.HTTPRequestSpan) SessionSpan {
+	var spP trace2.Span
+	// Create a parent span for the whole request session
+	ctx, sp := tracer.Start(parentCtx, traceName(span),
+		trace2.WithTimestamp(span.RequestStart),
+		trace2.WithSpanKind(spanKind(span)),
+	)
+
+	if span.RequestStart != span.Start {
+		// Create a child span showing the queue time
+		_, spQ := tracer.Start(ctx, "in queue",
+			trace2.WithTimestamp(span.RequestStart),
+			trace2.WithSpanKind(trace2.SpanKindInternal),
+		)
+		spQ.End(trace2.WithTimestamp(span.Start))
+
+		// Create a child span showing the processing time
+		// Override the active context for the span to be the processing span
+		ctx, spP = tracer.Start(ctx, "processing",
+			trace2.WithTimestamp(span.Start),
+			trace2.WithSpanKind(trace2.SpanKindInternal),
+		)
+	}
+
+	return SessionSpan{sp, spP, ctx}
 }
 
 func (r *TracesReporter) reportTraces(input <-chan []transform.HTTPRequestSpan) {
@@ -146,30 +211,37 @@ func (r *TracesReporter) reportTraces(input <-chan []transform.HTTPRequestSpan) 
 	tracer := r.traceProvider.Tracer(reporterName)
 	for spans := range input {
 		for i := range spans {
+			if spans[i].Type == transform.EventTypeHTTPStart {
+				l.Add(spans[i].ID, makeSpan(context.TODO(), tracer, &spans[i]))
+				continue
+			}
+
+			var s SessionSpan
 			attrs := traceAttributes(&spans[i])
 
-			// Create a parent span for the whole request session
-			ctx, sp := tracer.Start(context.TODO(), "session",
-				trace2.WithTimestamp(spans[i].RequestStart),
-				trace2.WithAttributes(attrs...),
-				trace2.WithSpanKind(trace2.SpanKindServer),
-			)
+			if spans[i].Type == transform.EventTypeHTTPClient {
+				ctx := context.TODO()
 
-			// Create a child span showing the queue time
-			_, spQ := tracer.Start(ctx, "in queue",
-				trace2.WithTimestamp(spans[i].RequestStart),
-				trace2.WithSpanKind(trace2.SpanKindInternal),
-			)
-			spQ.End(trace2.WithTimestamp(spans[i].Start))
+				sp, ok := l.Get(spans[i].ID)
+				if ok {
+					ctx = sp.RootCtx
+				}
+				s = makeSpan(ctx, tracer, &spans[i])
+			} else {
+				cached, ok := l.Get(spans[i].ID)
+				if !ok {
+					s = makeSpan(context.TODO(), tracer, &spans[i])
+				} else {
+					s = cached
+					l.Remove(spans[i].ID)
+				}
+			}
 
-			// Create a child span showing the processing time
-			_, spP := tracer.Start(ctx, "processing",
-				trace2.WithTimestamp(spans[i].Start),
-				trace2.WithSpanKind(trace2.SpanKindInternal),
-			)
-			spP.End(trace2.WithTimestamp(spans[i].End))
-
-			sp.End(trace2.WithTimestamp(spans[i].End))
+			s.Session.SetAttributes(attrs...)
+			if s.SubSpan != nil {
+				s.SubSpan.End(trace2.WithTimestamp(spans[i].End))
+			}
+			s.Session.End(trace2.WithTimestamp(spans[i].End))
 		}
 	}
 }

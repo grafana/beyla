@@ -14,11 +14,14 @@ import (
 
 const EventTypeHTTP = 1
 const EventTypeGRPC = 2
+const EventTypeHTTPClient = 3
+const EventTypeHTTPStart = 4
 
 var log = slog.With("component", "goexec.spanner")
 
 // HTTPRequestSpan contains the information being submitted as
 type HTTPRequestSpan struct {
+	ID            uint64
 	Type          int
 	Method        string
 	Path          string
@@ -108,18 +111,21 @@ func (c *converter) convert(trace *nethttp.HTTPRequestTrace) HTTPRequestSpan {
 	hostPort := 0
 
 	switch trace.Type {
-	case EventTypeHTTP:
+	case EventTypeHTTPClient, EventTypeHTTP:
 		peer, _ = extractHostPort(trace.RemoteAddr[:])
 		hostname, hostPort = extractHostPort(trace.Host[:])
 	case EventTypeGRPC:
 		hostPort = int(trace.HostPort)
 		peer = extractIP(trace.RemoteAddr[:], int(trace.RemoteAddrLen))
 		hostname = extractIP(trace.Host[:], int(trace.HostLen))
+	case EventTypeHTTPStart:
+		// don't do any parsing
 	default:
-		log.Warn("unknown trace type %d", trace.Type)
+		log.Warn("unknown trace", "type", trace.Type)
 	}
 
 	return HTTPRequestSpan{
+		ID:            trace.Id,
 		Type:          int(trace.Type),
 		Method:        string(trace.Method[:methodLen]),
 		Path:          string(trace.Path[:pathLen]),

@@ -66,6 +66,7 @@ func (gb *graphBuilder) buildGraph() (graph.Graph, error) {
 		map[string][]string{
 			nethttp.SectionHTTP:               gb.config.EBPF.Functions,
 			nethttp.SectionHTTPBackgroundRead: gb.config.EBPF.HTTPStartBackgroundRead,
+			nethttp.SectionHTTPClientSend:     gb.config.EBPF.HTTPClientSend,
 			nethttp.SectionGRPCStream:         gb.config.EBPF.GRPCHandleStream,
 			nethttp.SectionGRPCStatus:         gb.config.EBPF.GRPCWriteStatus,
 			nethttp.SectionRuntimeNewproc1:    gb.config.EBPF.RuntimeNewproc1,

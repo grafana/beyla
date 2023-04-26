@@ -70,6 +70,7 @@ type bpfHttpMethodInvocation struct {
 
 type bpfHttpRequestTrace struct {
 	Type              uint8
+	Id                uint64
 	GoStartMonotimeNs uint64
 	StartMonotimeNs   uint64
 	EndMonotimeNs     uint64
@@ -127,6 +128,8 @@ type bpfSpecs struct {
 type bpfProgramSpecs struct {
 	UprobeServeHTTP                *ebpf.ProgramSpec `ebpf:"uprobe_ServeHTTP"`
 	UprobeServeHttpReturn          *ebpf.ProgramSpec `ebpf:"uprobe_ServeHttp_return"`
+	UprobeClientSend               *ebpf.ProgramSpec `ebpf:"uprobe_clientSend"`
+	UprobeClientSendReturn         *ebpf.ProgramSpec `ebpf:"uprobe_clientSendReturn"`
 	UprobeProcGoexit1              *ebpf.ProgramSpec `ebpf:"uprobe_proc_goexit1"`
 	UprobeProcNewproc1Ret          *ebpf.ProgramSpec `ebpf:"uprobe_proc_newproc1_ret"`
 	UprobeServerHandleStream       *ebpf.ProgramSpec `ebpf:"uprobe_server_handleStream"`
@@ -139,10 +142,11 @@ type bpfProgramSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpfMapSpecs struct {
-	Events              *ebpf.MapSpec `ebpf:"events"`
-	OngoingGoroutines   *ebpf.MapSpec `ebpf:"ongoing_goroutines"`
-	OngoingGrpcRequests *ebpf.MapSpec `ebpf:"ongoing_grpc_requests"`
-	OngoingHttpRequests *ebpf.MapSpec `ebpf:"ongoing_http_requests"`
+	Events                    *ebpf.MapSpec `ebpf:"events"`
+	OngoingGoroutines         *ebpf.MapSpec `ebpf:"ongoing_goroutines"`
+	OngoingGrpcRequests       *ebpf.MapSpec `ebpf:"ongoing_grpc_requests"`
+	OngoingHttpClientRequests *ebpf.MapSpec `ebpf:"ongoing_http_client_requests"`
+	OngoingHttpRequests       *ebpf.MapSpec `ebpf:"ongoing_http_requests"`
 }
 
 // bpfObjects contains all objects after they have been loaded into the kernel.
@@ -164,10 +168,11 @@ func (o *bpfObjects) Close() error {
 //
 // It can be passed to loadBpfObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpfMaps struct {
-	Events              *ebpf.Map `ebpf:"events"`
-	OngoingGoroutines   *ebpf.Map `ebpf:"ongoing_goroutines"`
-	OngoingGrpcRequests *ebpf.Map `ebpf:"ongoing_grpc_requests"`
-	OngoingHttpRequests *ebpf.Map `ebpf:"ongoing_http_requests"`
+	Events                    *ebpf.Map `ebpf:"events"`
+	OngoingGoroutines         *ebpf.Map `ebpf:"ongoing_goroutines"`
+	OngoingGrpcRequests       *ebpf.Map `ebpf:"ongoing_grpc_requests"`
+	OngoingHttpClientRequests *ebpf.Map `ebpf:"ongoing_http_client_requests"`
+	OngoingHttpRequests       *ebpf.Map `ebpf:"ongoing_http_requests"`
 }
 
 func (m *bpfMaps) Close() error {
@@ -175,6 +180,7 @@ func (m *bpfMaps) Close() error {
 		m.Events,
 		m.OngoingGoroutines,
 		m.OngoingGrpcRequests,
+		m.OngoingHttpClientRequests,
 		m.OngoingHttpRequests,
 	)
 }
@@ -185,6 +191,8 @@ func (m *bpfMaps) Close() error {
 type bpfPrograms struct {
 	UprobeServeHTTP                *ebpf.Program `ebpf:"uprobe_ServeHTTP"`
 	UprobeServeHttpReturn          *ebpf.Program `ebpf:"uprobe_ServeHttp_return"`
+	UprobeClientSend               *ebpf.Program `ebpf:"uprobe_clientSend"`
+	UprobeClientSendReturn         *ebpf.Program `ebpf:"uprobe_clientSendReturn"`
 	UprobeProcGoexit1              *ebpf.Program `ebpf:"uprobe_proc_goexit1"`
 	UprobeProcNewproc1Ret          *ebpf.Program `ebpf:"uprobe_proc_newproc1_ret"`
 	UprobeServerHandleStream       *ebpf.Program `ebpf:"uprobe_server_handleStream"`
@@ -197,6 +205,8 @@ func (p *bpfPrograms) Close() error {
 	return _BpfClose(
 		p.UprobeServeHTTP,
 		p.UprobeServeHttpReturn,
+		p.UprobeClientSend,
+		p.UprobeClientSendReturn,
 		p.UprobeProcGoexit1,
 		p.UprobeProcNewproc1Ret,
 		p.UprobeServerHandleStream,

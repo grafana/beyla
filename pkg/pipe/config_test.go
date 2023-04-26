@@ -46,6 +46,7 @@ otel_metrics_export:
 			Exec:                    "tras",
 			Functions:               []string{"FooBar"},
 			HTTPStartBackgroundRead: []string{"net/http.(*connReader).startBackgroundRead"},
+			HTTPClientSend:          []string{"net/http.(*Client).send"},
 			GRPCWriteStatus:         []string{"google.golang.org/grpc/internal/transport.(*http2Server).WriteStatus"},
 			GRPCHandleStream:        []string{"google.golang.org/grpc.(*Server).handleStream"},
 			RuntimeNewproc1:         []string{"runtime.newproc1"},

@@ -51,6 +51,9 @@ type Probe struct {
 }
 
 type FunctionPrograms struct {
-	Start *ebpf.Program
-	End   *ebpf.Program
+	// Required, if true, will cancel the execution of the eBPF Tracer
+	// if the function has not been found in the executable
+	Required bool
+	Start    *ebpf.Program
+	End      *ebpf.Program
 }

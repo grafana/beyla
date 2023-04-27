@@ -74,12 +74,9 @@ func (p *Tracer) AddCloser(c ...io.Closer) {
 func (p *Tracer) Probes() map[string]ebpfcommon.FunctionPrograms {
 	return map[string]ebpfcommon.FunctionPrograms{
 		"net/http.HandlerFunc.ServeHTTP": {
-			Start: p.bpfObjects.UprobeServeHTTP,
-			End:   p.bpfObjects.UprobeServeHttpReturn,
-		},
-		"github.com/gin-gonic/gin.(*Engine).ServeHTTP": {
-			Start: p.bpfObjects.UprobeServeHTTP,
-			End:   p.bpfObjects.UprobeServeHttpReturn,
+			Required: true,
+			Start:    p.bpfObjects.UprobeServeHTTP,
+			End:      p.bpfObjects.UprobeServeHttpReturn,
 		},
 		"runtime.newproc1": {
 			End: p.bpfObjects.UprobeProcNewproc1Ret,
@@ -95,6 +92,38 @@ func (p *Tracer) Probes() map[string]ebpfcommon.FunctionPrograms {
 
 func (p *Tracer) Run(ctx context.Context, eventsChan chan<- []ebpfcommon.HTTPRequestTrace) {
 	logger := slog.With("component", "nethttp.Tracer")
+	ebpfcommon.ForwardRingbuf(
+		p.Cfg, logger, p.bpfObjects.Events,
+		append(p.closers, &p.bpfObjects)...,
+	)(ctx, eventsChan)
+}
+
+// GinTracer overrides Tracer to inspect the Gin ServeHTTP endpoint
+type GinTracer struct {
+	Tracer
+}
+
+func (p *GinTracer) Probes() map[string]ebpfcommon.FunctionPrograms {
+	return map[string]ebpfcommon.FunctionPrograms{
+		"github.com/gin-gonic/gin.(*Engine).ServeHTTP": {
+			Required: true,
+			Start:    p.bpfObjects.UprobeServeHTTP,
+			End:      p.bpfObjects.UprobeServeHttpReturn,
+		},
+		"runtime.newproc1": {
+			End: p.bpfObjects.UprobeProcNewproc1Ret,
+		},
+		"runtime.goexit1": {
+			Start: p.bpfObjects.UprobeProcGoexit1,
+		},
+		"net/http.(*connReader).startBackgroundRead": {
+			Start: p.bpfObjects.UprobeStartBackgroundRead,
+		},
+	}
+}
+
+func (p *GinTracer) Run(ctx context.Context, eventsChan chan<- []ebpfcommon.HTTPRequestTrace) {
+	logger := slog.With("component", "nethttp.GinTracer")
 	ebpfcommon.ForwardRingbuf(
 		p.Cfg, logger, p.bpfObjects.Events,
 		append(p.closers, &p.bpfObjects)...,

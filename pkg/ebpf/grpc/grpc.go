@@ -75,11 +75,13 @@ func (p *Tracer) AddCloser(c ...io.Closer) {
 func (p *Tracer) Probes() map[string]ebpfcommon.FunctionPrograms {
 	return map[string]ebpfcommon.FunctionPrograms{
 		"google.golang.org/grpc.(*Server).handleStream": {
-			Start: p.bpfObjects.UprobeServerHandleStream,
-			End:   p.bpfObjects.UprobeServerHandleStreamReturn,
+			Required: true,
+			Start:    p.bpfObjects.UprobeServerHandleStream,
+			End:      p.bpfObjects.UprobeServerHandleStreamReturn,
 		},
 		"google.golang.org/grpc/internal/transport.(*http2Server).WriteStatus": {
-			Start: p.bpfObjects.UprobeTransportWriteStatus,
+			Required: true,
+			Start:    p.bpfObjects.UprobeTransportWriteStatus,
 		},
 		"runtime.newproc1": {
 			End: p.bpfObjects.UprobeProcNewproc1Ret,

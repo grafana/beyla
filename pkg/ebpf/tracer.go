@@ -53,15 +53,23 @@ func TracerProvider(cfg ebpfcommon.TracerConfig) []node.StartFuncCtx[[]ebpfcommo
 	// Each program is an eBPF source: net/http, grpc...
 	programs := []Tracer{
 		&nethttp.Tracer{Cfg: &cfg},
+		&nethttp.GinTracer{Tracer: nethttp.Tracer{Cfg: &cfg}},
 		&grpc.Tracer{Cfg: &cfg},
 	}
 
 	// merging all the functions from all the programs, in order to do
 	// a complete inspection of the target executable
-	offsets, err := inspect(&cfg, allFunctionNames(programs))
+	allFuncs := allFunctionNames(programs)
+	offsets, err := inspect(&cfg, allFuncs)
 	if err != nil {
 		log.Error("inspecting offsets", err)
 		// TODO: rework pipes API to allow returning the errors to the pipe builder
+		return nil
+	}
+
+	programs = filterNotFoundPrograms(programs, offsets)
+	if len(programs) == 0 {
+		log.Error("the executable is not instrumentable. Exiting", fmt.Errorf("no instrumentable function found"))
 		return nil
 	}
 
@@ -123,11 +131,36 @@ func TracerProvider(cfg ebpfcommon.TracerConfig) []node.StartFuncCtx[[]ebpfcommo
 	return runFunctions
 }
 
+// filterNotFoundPrograms will filter these programs whose required functions (as
+// returned in the Offsets method) haven't been found in the offsets
+func filterNotFoundPrograms(programs []Tracer, offsets *goexec.Offsets) []Tracer {
+	var filtered []Tracer
+	funcs := offsets.Funcs
+programs:
+	for _, p := range programs {
+		for fn, fp := range p.Probes() {
+			if !fp.Required {
+				continue
+			}
+			if _, ok := funcs[fn]; !ok {
+				continue programs
+			}
+		}
+		filtered = append(filtered, p)
+	}
+	return filtered
+}
+
 func allFunctionNames(programs []Tracer) []string {
+	uniqueFunctions := map[string]struct{}{}
 	var functions []string
 	for _, p := range programs {
 		for funcName := range p.Probes() {
-			functions = append(functions, funcName)
+			// avoid duplicating function names
+			if _, ok := uniqueFunctions[funcName]; !ok {
+				uniqueFunctions[funcName] = struct{}{}
+				functions = append(functions, funcName)
+			}
 		}
 	}
 	return functions

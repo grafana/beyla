@@ -22,7 +22,7 @@ import (
 
 type MetricsConfig struct {
 	ServiceName     string        `yaml:"service_name" env:"OTEL_SERVICE_NAME"`
-	Interval        time.Duration `yaml:"interval" env:"OTEL_METRIC_EXPORT_INTERVAL"`
+	Interval        time.Duration `yaml:"interval" env:"METRICS_INTERVAL"`
 	Endpoint        string        `yaml:"endpoint" env:"OTEL_EXPORTER_OTLP_ENDPOINT"`
 	MetricsEndpoint string        `yaml:"-" env:"OTEL_EXPORTER_OTLP_METRICS_ENDPOINT"`
 	// ReportTarget specifies whether http.target should be submitted as a metric attribute. It is disabled by

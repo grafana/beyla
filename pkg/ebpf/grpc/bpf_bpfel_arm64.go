@@ -2,7 +2,7 @@
 //go:build arm64
 // +build arm64
 
-package nethttp
+package grpc
 
 import (
 	"bytes"
@@ -13,8 +13,9 @@ import (
 	"github.com/cilium/ebpf"
 )
 
-type bpfHttpMethodInvocation struct {
+type bpfGrpcMethodData struct {
 	StartMonotimeNs uint64
+	Status          uint64
 	Regs            struct {
 		UserRegs struct {
 			Regs   [31]uint64
@@ -74,11 +75,11 @@ type bpfSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpfProgramSpecs struct {
-	UprobeServeHTTP           *ebpf.ProgramSpec `ebpf:"uprobe_ServeHTTP"`
-	UprobeServeHttpReturn     *ebpf.ProgramSpec `ebpf:"uprobe_ServeHttp_return"`
-	UprobeProcGoexit1         *ebpf.ProgramSpec `ebpf:"uprobe_proc_goexit1"`
-	UprobeProcNewproc1Ret     *ebpf.ProgramSpec `ebpf:"uprobe_proc_newproc1_ret"`
-	UprobeStartBackgroundRead *ebpf.ProgramSpec `ebpf:"uprobe_startBackgroundRead"`
+	UprobeProcGoexit1              *ebpf.ProgramSpec `ebpf:"uprobe_proc_goexit1"`
+	UprobeProcNewproc1Ret          *ebpf.ProgramSpec `ebpf:"uprobe_proc_newproc1_ret"`
+	UprobeServerHandleStream       *ebpf.ProgramSpec `ebpf:"uprobe_server_handleStream"`
+	UprobeServerHandleStreamReturn *ebpf.ProgramSpec `ebpf:"uprobe_server_handleStream_return"`
+	UprobeTransportWriteStatus     *ebpf.ProgramSpec `ebpf:"uprobe_transport_writeStatus"`
 }
 
 // bpfMapSpecs contains maps before they are loaded into the kernel.
@@ -87,7 +88,7 @@ type bpfProgramSpecs struct {
 type bpfMapSpecs struct {
 	Events              *ebpf.MapSpec `ebpf:"events"`
 	OngoingGoroutines   *ebpf.MapSpec `ebpf:"ongoing_goroutines"`
-	OngoingHttpRequests *ebpf.MapSpec `ebpf:"ongoing_http_requests"`
+	OngoingGrpcRequests *ebpf.MapSpec `ebpf:"ongoing_grpc_requests"`
 }
 
 // bpfObjects contains all objects after they have been loaded into the kernel.
@@ -111,14 +112,14 @@ func (o *bpfObjects) Close() error {
 type bpfMaps struct {
 	Events              *ebpf.Map `ebpf:"events"`
 	OngoingGoroutines   *ebpf.Map `ebpf:"ongoing_goroutines"`
-	OngoingHttpRequests *ebpf.Map `ebpf:"ongoing_http_requests"`
+	OngoingGrpcRequests *ebpf.Map `ebpf:"ongoing_grpc_requests"`
 }
 
 func (m *bpfMaps) Close() error {
 	return _BpfClose(
 		m.Events,
 		m.OngoingGoroutines,
-		m.OngoingHttpRequests,
+		m.OngoingGrpcRequests,
 	)
 }
 
@@ -126,20 +127,20 @@ func (m *bpfMaps) Close() error {
 //
 // It can be passed to loadBpfObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpfPrograms struct {
-	UprobeServeHTTP           *ebpf.Program `ebpf:"uprobe_ServeHTTP"`
-	UprobeServeHttpReturn     *ebpf.Program `ebpf:"uprobe_ServeHttp_return"`
-	UprobeProcGoexit1         *ebpf.Program `ebpf:"uprobe_proc_goexit1"`
-	UprobeProcNewproc1Ret     *ebpf.Program `ebpf:"uprobe_proc_newproc1_ret"`
-	UprobeStartBackgroundRead *ebpf.Program `ebpf:"uprobe_startBackgroundRead"`
+	UprobeProcGoexit1              *ebpf.Program `ebpf:"uprobe_proc_goexit1"`
+	UprobeProcNewproc1Ret          *ebpf.Program `ebpf:"uprobe_proc_newproc1_ret"`
+	UprobeServerHandleStream       *ebpf.Program `ebpf:"uprobe_server_handleStream"`
+	UprobeServerHandleStreamReturn *ebpf.Program `ebpf:"uprobe_server_handleStream_return"`
+	UprobeTransportWriteStatus     *ebpf.Program `ebpf:"uprobe_transport_writeStatus"`
 }
 
 func (p *bpfPrograms) Close() error {
 	return _BpfClose(
-		p.UprobeServeHTTP,
-		p.UprobeServeHttpReturn,
 		p.UprobeProcGoexit1,
 		p.UprobeProcNewproc1Ret,
-		p.UprobeStartBackgroundRead,
+		p.UprobeServerHandleStream,
+		p.UprobeServerHandleStreamReturn,
+		p.UprobeTransportWriteStatus,
 	)
 }
 

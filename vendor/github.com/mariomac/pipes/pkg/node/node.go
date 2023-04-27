@@ -54,7 +54,7 @@ type Receiver[IN any] interface {
 // An Start node must have at least one output node.
 type Start[OUT any] struct {
 	outs    []Receiver[OUT]
-	fun     StartFuncCtx[OUT]
+	funs    []StartFuncCtx[OUT]
 	outType reflect.Type
 }
 
@@ -130,18 +130,23 @@ func (m *Terminal[IN]) InType() reflect.Type {
 	return m.inType
 }
 
-// AsStart wraps an StartFunc into an Start node.
-func AsStart[OUT any](fun StartFunc[OUT]) *Start[OUT] {
-	return AsStartCtx(func(_ context.Context, out chan<- OUT) {
-		fun(out)
-	})
+// AsStart wraps a group of StartFunc with the same signature into a Start node.
+// Deprecated in favor of AsStartCtx
+func AsStart[OUT any](funs ...StartFunc[OUT]) *Start[OUT] {
+	funsCtx := make([]StartFuncCtx[OUT], 0, len(funs))
+	for _, fun := range funs {
+		funsCtx = append(funsCtx, func(_ context.Context, out chan<- OUT) {
+			fun(out)
+		})
+	}
+	return AsStartCtx(funsCtx...)
 }
 
-// AsStartCtx wraps an StartFuncCtx into an Start node.
-func AsStartCtx[OUT any](fun StartFuncCtx[OUT]) *Start[OUT] {
+// AsStartCtx wraps a group of StartFuncCtx into a Start node.
+func AsStartCtx[OUT any](funs ...StartFuncCtx[OUT]) *Start[OUT] {
 	var out OUT
 	return &Start[OUT]{
-		fun:     fun,
+		funs:    funs,
 		outType: reflect.TypeOf(out),
 	}
 }
@@ -192,10 +197,13 @@ func (i *Start[OUT]) StartCtx(ctx context.Context) {
 		}
 	}
 	forker := connect.Fork(joiners...)
-	go func() {
-		i.fun(ctx, forker.Sender())
-		forker.Close()
-	}()
+	for fn := range i.funs {
+		fun := i.funs[fn]
+		go func() {
+			fun(ctx, forker.AcquireSender())
+			forker.ReleaseSender()
+		}()
+	}
 }
 
 func (i *Middle[IN, OUT]) start() {
@@ -212,8 +220,8 @@ func (i *Middle[IN, OUT]) start() {
 	}
 	forker := connect.Fork(joiners...)
 	go func() {
-		i.fun(i.inputs.Receiver(), forker.Sender())
-		forker.Close()
+		i.fun(i.inputs.Receiver(), forker.AcquireSender())
+		forker.ReleaseSender()
 	}()
 }
 

@@ -5,10 +5,11 @@ import (
 	"io"
 	"time"
 
+	ebpfcommon "github.com/grafana/ebpf-autoinstrument/pkg/ebpf/common"
+
 	"github.com/caarlos0/env/v7"
 	"gopkg.in/yaml.v3"
 
-	"github.com/grafana/ebpf-autoinstrument/pkg/ebpf/nethttp"
 	"github.com/grafana/ebpf-autoinstrument/pkg/export/debug"
 	"github.com/grafana/ebpf-autoinstrument/pkg/export/otel"
 	"github.com/grafana/ebpf-autoinstrument/pkg/transform"
@@ -17,18 +18,9 @@ import (
 var defaultConfig = Config{
 	ChannelBufferLen: 10,
 	LogLevel:         "INFO",
-	EBPF: nethttp.EBPFTracer{
-		Functions: []string{
-			"net/http.HandlerFunc.ServeHTTP",
-			"github.com/gin-gonic/gin.(*Engine).ServeHTTP",
-		},
-		HTTPStartBackgroundRead: []string{"net/http.(*connReader).startBackgroundRead"},
-		GRPCHandleStream:        []string{"google.golang.org/grpc.(*Server).handleStream"},
-		GRPCWriteStatus:         []string{"google.golang.org/grpc/internal/transport.(*http2Server).WriteStatus"},
-		RuntimeNewproc1:         []string{"runtime.newproc1"},
-		RuntimeGoexit1:          []string{"runtime.goexit1"},
-		BatchLength:             100,
-		BatchTimeout:            time.Second,
+	EBPF: ebpfcommon.TracerConfig{
+		BatchLength:  100,
+		BatchTimeout: time.Second,
 	},
 	Metrics: otel.MetricsConfig{
 		Interval: 5 * time.Second,
@@ -41,9 +33,8 @@ var defaultConfig = Config{
 	Noop:    false,
 }
 
-// TODO: support all the OTEL_ stuff here: https://github.com/open-telemetry/opentelemetry-specification/blob/main/specification/protocol/exporter.md
 type Config struct {
-	EBPF nethttp.EBPFTracer `nodeId:"ebpf" sendTo:"routes" yaml:"ebpf"`
+	EBPF ebpfcommon.TracerConfig `nodeId:"ebpf" sendTo:"routes" yaml:"ebpf"`
 
 	// Routes is an optional node. If not set, data will be directly forwarded to exporters.
 	Routes *transform.RoutesConfig `nodeId:"routes" forwardTo:"otel_metrics,otel_traces,print,noop" yaml:"routes"`
@@ -74,9 +65,6 @@ func (c *Config) Validate() error {
 	}
 	if c.EBPF.BatchLength == 0 {
 		return ConfigError("BATCH_LENGTH must be at least 1")
-	}
-	if len(c.EBPF.Functions) == 0 {
-		return ConfigError("missing INSTRUMENT_FUNCTIONS property")
 	}
 	if !c.Noop.Enabled() && !c.Printer.Enabled() &&
 		!c.Metrics.Enabled() && !c.Traces.Enabled() {

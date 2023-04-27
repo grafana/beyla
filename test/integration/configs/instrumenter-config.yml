@@ -1,4 +1,4 @@
 routes:
   patterns:
     - /basic/:rnd
-  unmatch: route
+  unmatch: path

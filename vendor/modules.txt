@@ -132,7 +132,7 @@ github.com/leodido/go-urn
 # github.com/mariomac/guara v0.0.0-20221222112709-f95b15506aee
 ## explicit; go 1.18
 github.com/mariomac/guara/pkg/test
-# github.com/mariomac/pipes v0.5.1-0.20230321095313-74438be08289
+# github.com/mariomac/pipes v0.6.0
 ## explicit; go 1.18
 github.com/mariomac/pipes/pkg/graph
 github.com/mariomac/pipes/pkg/graph/stage

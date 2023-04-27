@@ -47,6 +47,7 @@ type Releaser func()
 // one node, this will work as a single channel. When a node sends to N nodes,
 // it will spawn N channels that are cloned from the original channel in a goroutine.
 type Forker[OUT any] struct {
+	totalSenders   int32
 	sendCh         chan OUT
 	releaseChannel Releaser
 }
@@ -88,12 +89,16 @@ func Fork[T any](joiners ...*Joiner[T]) Forker[T] {
 	}
 }
 
-// Sender acquires the channel that will receive the data from the source node
-func (f *Forker[OUT]) Sender() chan OUT {
+// AcquireSender acquires the channel that will receive the data from the source node.
+// Each call to AcquireSender requires an eventual call to ReleaseSender
+func (f *Forker[OUT]) AcquireSender() chan OUT {
+	atomic.AddInt32(&f.totalSenders, 1)
 	return f.sendCh
 }
 
-// Close the input channel and, in cascade, all the forked channels
-func (f *Forker[OUT]) Close() {
-	f.releaseChannel()
+// ReleaseSender closes the input channel when the number of invocations is equal to AcquireSender invocations.
+func (f *Forker[OUT]) ReleaseSender() {
+	if atomic.AddInt32(&f.totalSenders, -1) == 0 {
+		f.releaseChannel()
+	}
 }

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package nethttp
+package grpc
 
 import (
 	"context"
@@ -26,8 +26,8 @@ import (
 	"golang.org/x/exp/slog"
 )
 
-//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf ../../../bpf/go_nethttp.c -- -I../../../bpf/headers
-//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf_debug ../../../bpf/go_nethttp.c -- -I../../../bpf/headers -DBPF_DEBUG
+//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf ../../../bpf/go_grpc.c -- -I../../../bpf/headers
+//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf_debug ../../../bpf/go_grpc.c -- -I../../../bpf/headers -DBPF_DEBUG
 
 type Tracer struct {
 	Cfg        *ebpfcommon.TracerConfig
@@ -44,19 +44,20 @@ func (p *Tracer) Load() (*ebpf.CollectionSpec, error) {
 }
 
 func (p *Tracer) Constants(offsets *goexec.Offsets) map[string]any {
-	// Set the field offsets and the logLevel for nethttp BPF program,
+	// Set the field offsets and the logLevel for grpc BPF program,
 	// as well as some other configuration constants
 	constants := map[string]any{
 		"wakeup_data_bytes": uint32(p.Cfg.WakeupLen) * uint32(unsafe.Sizeof(ebpfcommon.HTTPRequestTrace{})),
 	}
 	for _, s := range []string{
-		"url_ptr_pos",
-		"path_ptr_pos",
-		"method_ptr_pos",
-		"status_ptr_pos",
-		"remoteaddr_ptr_pos",
-		"host_ptr_pos",
-		"content_length_ptr_pos",
+		"grpc_stream_st_ptr_pos",
+		"grpc_stream_method_ptr_pos",
+		"grpc_status_s_pos",
+		"grpc_status_code_ptr_pos",
+		"grpc_st_remoteaddr_ptr_pos",
+		"grpc_st_localaddr_ptr_pos",
+		"tcp_addr_port_ptr_pos",
+		"tcp_addr_ip_ptr_pos",
 	} {
 		constants[s] = offsets.Field[s]
 	}
@@ -73,57 +74,26 @@ func (p *Tracer) AddCloser(c ...io.Closer) {
 
 func (p *Tracer) Probes() map[string]ebpfcommon.FunctionPrograms {
 	return map[string]ebpfcommon.FunctionPrograms{
-		"net/http.HandlerFunc.ServeHTTP": {
+		"google.golang.org/grpc.(*Server).handleStream": {
 			Required: true,
-			Start:    p.bpfObjects.UprobeServeHTTP,
-			End:      p.bpfObjects.UprobeServeHttpReturn,
+			Start:    p.bpfObjects.UprobeServerHandleStream,
+			End:      p.bpfObjects.UprobeServerHandleStreamReturn,
+		},
+		"google.golang.org/grpc/internal/transport.(*http2Server).WriteStatus": {
+			Required: true,
+			Start:    p.bpfObjects.UprobeTransportWriteStatus,
 		},
 		"runtime.newproc1": {
 			End: p.bpfObjects.UprobeProcNewproc1Ret,
 		},
 		"runtime.goexit1": {
 			Start: p.bpfObjects.UprobeProcGoexit1,
-		},
-		"net/http.(*connReader).startBackgroundRead": {
-			Start: p.bpfObjects.UprobeStartBackgroundRead,
 		},
 	}
 }
 
 func (p *Tracer) Run(ctx context.Context, eventsChan chan<- []ebpfcommon.HTTPRequestTrace) {
-	logger := slog.With("component", "nethttp.Tracer")
-	ebpfcommon.ForwardRingbuf(
-		p.Cfg, logger, p.bpfObjects.Events,
-		append(p.closers, &p.bpfObjects)...,
-	)(ctx, eventsChan)
-}
-
-// GinTracer overrides Tracer to inspect the Gin ServeHTTP endpoint
-type GinTracer struct {
-	Tracer
-}
-
-func (p *GinTracer) Probes() map[string]ebpfcommon.FunctionPrograms {
-	return map[string]ebpfcommon.FunctionPrograms{
-		"github.com/gin-gonic/gin.(*Engine).ServeHTTP": {
-			Required: true,
-			Start:    p.bpfObjects.UprobeServeHTTP,
-			End:      p.bpfObjects.UprobeServeHttpReturn,
-		},
-		"runtime.newproc1": {
-			End: p.bpfObjects.UprobeProcNewproc1Ret,
-		},
-		"runtime.goexit1": {
-			Start: p.bpfObjects.UprobeProcGoexit1,
-		},
-		"net/http.(*connReader).startBackgroundRead": {
-			Start: p.bpfObjects.UprobeStartBackgroundRead,
-		},
-	}
-}
-
-func (p *GinTracer) Run(ctx context.Context, eventsChan chan<- []ebpfcommon.HTTPRequestTrace) {
-	logger := slog.With("component", "nethttp.GinTracer")
+	logger := slog.With("component", "grpc.Tracer")
 	ebpfcommon.ForwardRingbuf(
 		p.Cfg, logger, p.bpfObjects.Events,
 		append(p.closers, &p.bpfObjects)...,

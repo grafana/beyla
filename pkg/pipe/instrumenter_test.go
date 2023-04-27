@@ -14,9 +14,8 @@ import (
 	"go.opentelemetry.io/collector/pdata/ptrace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
 
-	"github.com/grafana/ebpf-autoinstrument/pkg/ebpf/nethttp"
+	ebpfcommon "github.com/grafana/ebpf-autoinstrument/pkg/ebpf/common"
 	"github.com/grafana/ebpf-autoinstrument/pkg/export/otel"
-	"github.com/grafana/ebpf-autoinstrument/pkg/goexec"
 	"github.com/grafana/ebpf-autoinstrument/pkg/transform"
 	"github.com/grafana/ebpf-autoinstrument/test/collector"
 )
@@ -31,12 +30,9 @@ func TestBasicPipeline(t *testing.T) {
 	require.NoError(t, err)
 
 	gb := newGraphBuilder(&Config{Metrics: otel.MetricsConfig{MetricsEndpoint: tc.ServerEndpoint, ReportTarget: true, ReportPeerInfo: true}})
-	gb.inspector = func(_ goexec.ProcessFinder, _ map[string][]string) (goexec.Offsets, error) {
-		return goexec.Offsets{FileInfo: goexec.FileInfo{CmdExePath: "test-service"}}, nil
-	}
 	// Override eBPF tracer to send some fake data
-	graph.RegisterStart(gb.builder, func(_ nethttp.EBPFTracer) node.StartFuncCtx[[]nethttp.HTTPRequestTrace] {
-		return func(_ context.Context, out chan<- []nethttp.HTTPRequestTrace) {
+	graph.RegisterStart(gb.builder, func(_ ebpfcommon.TracerConfig) node.StartFuncCtx[[]ebpfcommon.HTTPRequestTrace] {
+		return func(_ context.Context, out chan<- []ebpfcommon.HTTPRequestTrace) {
 			out <- newRequest("GET", "/foo/bar", "1.1.1.1:3456", 404)
 		}
 	})
@@ -67,12 +63,9 @@ func TestTracerPipeline(t *testing.T) {
 	require.NoError(t, err)
 
 	gb := newGraphBuilder(&Config{Traces: otel.TracesConfig{TracesEndpoint: tc.ServerEndpoint, ServiceName: "test"}})
-	gb.inspector = func(_ goexec.ProcessFinder, _ map[string][]string) (goexec.Offsets, error) {
-		return goexec.Offsets{FileInfo: goexec.FileInfo{CmdExePath: "test-service"}}, nil
-	}
 	// Override eBPF tracer to send some fake data
-	graph.RegisterStart(gb.builder, func(_ nethttp.EBPFTracer) node.StartFuncCtx[[]nethttp.HTTPRequestTrace] {
-		return func(_ context.Context, out chan<- []nethttp.HTTPRequestTrace) {
+	graph.RegisterStart(gb.builder, func(_ ebpfcommon.TracerConfig) node.StartFuncCtx[[]ebpfcommon.HTTPRequestTrace] {
+		return func(_ context.Context, out chan<- []ebpfcommon.HTTPRequestTrace) {
 			out <- newRequest("GET", "/foo/bar", "1.1.1.1:3456", 404)
 		}
 	})
@@ -100,12 +93,9 @@ func TestRouteConsolidation(t *testing.T) {
 		Metrics: otel.MetricsConfig{MetricsEndpoint: tc.ServerEndpoint}, // ReportPeerInfo = false, no peer info
 		Routes:  &transform.RoutesConfig{Patterns: []string{"/user/{id}", "/products/{id}/push"}},
 	})
-	gb.inspector = func(_ goexec.ProcessFinder, _ map[string][]string) (goexec.Offsets, error) {
-		return goexec.Offsets{FileInfo: goexec.FileInfo{CmdExePath: "test-service"}}, nil
-	}
 	// Override eBPF tracer to send some fake data
-	graph.RegisterStart(gb.builder, func(_ nethttp.EBPFTracer) node.StartFuncCtx[[]nethttp.HTTPRequestTrace] {
-		return func(_ context.Context, out chan<- []nethttp.HTTPRequestTrace) {
+	graph.RegisterStart(gb.builder, func(_ ebpfcommon.TracerConfig) node.StartFuncCtx[[]ebpfcommon.HTTPRequestTrace] {
+		return func(_ context.Context, out chan<- []ebpfcommon.HTTPRequestTrace) {
 			out <- newRequest("GET", "/user/1234", "1.1.1.1:3456", 200)
 			out <- newRequest("GET", "/products/3210/push", "1.1.1.1:3456", 200)
 			out <- newRequest("GET", "/attach", "1.1.1.1:3456", 200) // undefined route: won't report as route
@@ -165,12 +155,9 @@ func TestGRPCPipeline(t *testing.T) {
 	require.NoError(t, err)
 
 	gb := newGraphBuilder(&Config{Metrics: otel.MetricsConfig{MetricsEndpoint: tc.ServerEndpoint, ReportTarget: true, ReportPeerInfo: true}})
-	gb.inspector = func(_ goexec.ProcessFinder, _ map[string][]string) (goexec.Offsets, error) {
-		return goexec.Offsets{FileInfo: goexec.FileInfo{CmdExePath: "test-service"}}, nil
-	}
 	// Override eBPF tracer to send some fake data
-	graph.RegisterStart(gb.builder, func(_ nethttp.EBPFTracer) node.StartFuncCtx[[]nethttp.HTTPRequestTrace] {
-		return func(_ context.Context, out chan<- []nethttp.HTTPRequestTrace) {
+	graph.RegisterStart(gb.builder, func(_ ebpfcommon.TracerConfig) node.StartFuncCtx[[]ebpfcommon.HTTPRequestTrace] {
+		return func(_ context.Context, out chan<- []ebpfcommon.HTTPRequestTrace) {
 			out <- newGRPCRequest("/foo/bar", 3)
 		}
 	})
@@ -201,12 +188,9 @@ func TestTraceGRPCPipeline(t *testing.T) {
 	require.NoError(t, err)
 
 	gb := newGraphBuilder(&Config{Traces: otel.TracesConfig{TracesEndpoint: tc.ServerEndpoint, ServiceName: "test"}})
-	gb.inspector = func(_ goexec.ProcessFinder, _ map[string][]string) (goexec.Offsets, error) {
-		return goexec.Offsets{FileInfo: goexec.FileInfo{CmdExePath: "test-service"}}, nil
-	}
 	// Override eBPF tracer to send some fake data
-	graph.RegisterStart(gb.builder, func(_ nethttp.EBPFTracer) node.StartFuncCtx[[]nethttp.HTTPRequestTrace] {
-		return func(_ context.Context, out chan<- []nethttp.HTTPRequestTrace) {
+	graph.RegisterStart(gb.builder, func(_ ebpfcommon.TracerConfig) node.StartFuncCtx[[]ebpfcommon.HTTPRequestTrace] {
+		return func(_ context.Context, out chan<- []ebpfcommon.HTTPRequestTrace) {
 			out <- newGRPCRequest("/foo/bar", 3)
 		}
 	})
@@ -223,19 +207,19 @@ func TestTraceGRPCPipeline(t *testing.T) {
 	matchGRPCTraceEvent(t, "session", event)
 }
 
-func newRequest(method, path, peer string, status int) []nethttp.HTTPRequestTrace {
-	rt := nethttp.HTTPRequestTrace{}
+func newRequest(method, path, peer string, status int) []ebpfcommon.HTTPRequestTrace {
+	rt := ebpfcommon.HTTPRequestTrace{}
 	copy(rt.Path[:], path)
 	copy(rt.Method[:], method)
 	copy(rt.RemoteAddr[:], peer)
 	copy(rt.Host[:], getHostname()+":8080")
 	rt.Status = uint16(status)
 	rt.Type = transform.EventTypeHTTP
-	return []nethttp.HTTPRequestTrace{rt}
+	return []ebpfcommon.HTTPRequestTrace{rt}
 }
 
-func newGRPCRequest(path string, status int) []nethttp.HTTPRequestTrace {
-	rt := nethttp.HTTPRequestTrace{}
+func newGRPCRequest(path string, status int) []ebpfcommon.HTTPRequestTrace {
+	rt := ebpfcommon.HTTPRequestTrace{}
 	copy(rt.Path[:], path)
 	copy(rt.RemoteAddr[:], []byte{0x1, 0x1, 0x1, 0x1})
 	rt.RemoteAddrLen = 4
@@ -244,7 +228,7 @@ func newGRPCRequest(path string, status int) []nethttp.HTTPRequestTrace {
 	rt.HostPort = 8080
 	rt.Status = uint16(status)
 	rt.Type = transform.EventTypeGRPC
-	return []nethttp.HTTPRequestTrace{rt}
+	return []ebpfcommon.HTTPRequestTrace{rt}
 }
 
 func getEvent(t *testing.T, coll *collector.TestCollector) collector.MetricRecord {

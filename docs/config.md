@@ -196,9 +196,9 @@ so the traces exporter won't be activated unless explicitly specified.
 Specifies the name of the instrumented service to be reported by the metrics exporter.
 If unset, it will be the path of the instrumented service (e.g. `/usr/local/bin/service`).
 
-| YAML       | Env var                       | Type     | Default |
-|------------|-------------------------------|----------|---------|
-| `interval` | `OTEL_METRIC_EXPORT_INTERVAL` | Duration | `5s`    |
+| YAML       | Env var            | Type     | Default |
+|------------|--------------------|----------|---------|
+| `interval` | `METRICS_INTERVAL` | Duration | `5s`    |
 
 Configures the intervening time between exports.
 

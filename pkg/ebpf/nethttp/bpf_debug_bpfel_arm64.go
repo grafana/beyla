@@ -13,27 +13,6 @@ import (
 	"github.com/cilium/ebpf"
 )
 
-type bpf_debugGrpcMethodData struct {
-	StartMonotimeNs uint64
-	Status          uint64
-	Regs            struct {
-		UserRegs struct {
-			Regs   [31]uint64
-			Sp     uint64
-			Pc     uint64
-			Pstate uint64
-		}
-		OrigX0          uint64
-		Syscallno       int32
-		Unused2         uint32
-		OrigAddrLimit   uint64
-		PmrSave         uint64
-		Stackframe      [2]uint64
-		LockdepHardirqs uint64
-		ExitRcu         uint64
-	}
-}
-
 type bpf_debugHttpMethodInvocation struct {
 	StartMonotimeNs uint64
 	Regs            struct {
@@ -52,22 +31,6 @@ type bpf_debugHttpMethodInvocation struct {
 		LockdepHardirqs uint64
 		ExitRcu         uint64
 	}
-}
-
-type bpf_debugHttpRequestTrace struct {
-	Type              uint8
-	GoStartMonotimeNs uint64
-	StartMonotimeNs   uint64
-	EndMonotimeNs     uint64
-	Method            [6]uint8
-	Path              [100]uint8
-	Status            uint16
-	RemoteAddr        [50]uint8
-	RemoteAddrLen     uint64
-	Host              [256]uint8
-	HostLen           uint64
-	HostPort          uint32
-	ContentLength     int64
 }
 
 // loadBpf_debug returns the embedded CollectionSpec for bpf_debug.
@@ -111,14 +74,11 @@ type bpf_debugSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpf_debugProgramSpecs struct {
-	UprobeServeHTTP                *ebpf.ProgramSpec `ebpf:"uprobe_ServeHTTP"`
-	UprobeServeHttpReturn          *ebpf.ProgramSpec `ebpf:"uprobe_ServeHttp_return"`
-	UprobeProcGoexit1              *ebpf.ProgramSpec `ebpf:"uprobe_proc_goexit1"`
-	UprobeProcNewproc1Ret          *ebpf.ProgramSpec `ebpf:"uprobe_proc_newproc1_ret"`
-	UprobeServerHandleStream       *ebpf.ProgramSpec `ebpf:"uprobe_server_handleStream"`
-	UprobeServerHandleStreamReturn *ebpf.ProgramSpec `ebpf:"uprobe_server_handleStream_return"`
-	UprobeStartBackgroundRead      *ebpf.ProgramSpec `ebpf:"uprobe_startBackgroundRead"`
-	UprobeTransportWriteStatus     *ebpf.ProgramSpec `ebpf:"uprobe_transport_writeStatus"`
+	UprobeServeHTTP           *ebpf.ProgramSpec `ebpf:"uprobe_ServeHTTP"`
+	UprobeServeHttpReturn     *ebpf.ProgramSpec `ebpf:"uprobe_ServeHttp_return"`
+	UprobeProcGoexit1         *ebpf.ProgramSpec `ebpf:"uprobe_proc_goexit1"`
+	UprobeProcNewproc1Ret     *ebpf.ProgramSpec `ebpf:"uprobe_proc_newproc1_ret"`
+	UprobeStartBackgroundRead *ebpf.ProgramSpec `ebpf:"uprobe_startBackgroundRead"`
 }
 
 // bpf_debugMapSpecs contains maps before they are loaded into the kernel.
@@ -127,7 +87,6 @@ type bpf_debugProgramSpecs struct {
 type bpf_debugMapSpecs struct {
 	Events              *ebpf.MapSpec `ebpf:"events"`
 	OngoingGoroutines   *ebpf.MapSpec `ebpf:"ongoing_goroutines"`
-	OngoingGrpcRequests *ebpf.MapSpec `ebpf:"ongoing_grpc_requests"`
 	OngoingHttpRequests *ebpf.MapSpec `ebpf:"ongoing_http_requests"`
 }
 
@@ -152,7 +111,6 @@ func (o *bpf_debugObjects) Close() error {
 type bpf_debugMaps struct {
 	Events              *ebpf.Map `ebpf:"events"`
 	OngoingGoroutines   *ebpf.Map `ebpf:"ongoing_goroutines"`
-	OngoingGrpcRequests *ebpf.Map `ebpf:"ongoing_grpc_requests"`
 	OngoingHttpRequests *ebpf.Map `ebpf:"ongoing_http_requests"`
 }
 
@@ -160,7 +118,6 @@ func (m *bpf_debugMaps) Close() error {
 	return _Bpf_debugClose(
 		m.Events,
 		m.OngoingGoroutines,
-		m.OngoingGrpcRequests,
 		m.OngoingHttpRequests,
 	)
 }
@@ -169,14 +126,11 @@ func (m *bpf_debugMaps) Close() error {
 //
 // It can be passed to loadBpf_debugObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpf_debugPrograms struct {
-	UprobeServeHTTP                *ebpf.Program `ebpf:"uprobe_ServeHTTP"`
-	UprobeServeHttpReturn          *ebpf.Program `ebpf:"uprobe_ServeHttp_return"`
-	UprobeProcGoexit1              *ebpf.Program `ebpf:"uprobe_proc_goexit1"`
-	UprobeProcNewproc1Ret          *ebpf.Program `ebpf:"uprobe_proc_newproc1_ret"`
-	UprobeServerHandleStream       *ebpf.Program `ebpf:"uprobe_server_handleStream"`
-	UprobeServerHandleStreamReturn *ebpf.Program `ebpf:"uprobe_server_handleStream_return"`
-	UprobeStartBackgroundRead      *ebpf.Program `ebpf:"uprobe_startBackgroundRead"`
-	UprobeTransportWriteStatus     *ebpf.Program `ebpf:"uprobe_transport_writeStatus"`
+	UprobeServeHTTP           *ebpf.Program `ebpf:"uprobe_ServeHTTP"`
+	UprobeServeHttpReturn     *ebpf.Program `ebpf:"uprobe_ServeHttp_return"`
+	UprobeProcGoexit1         *ebpf.Program `ebpf:"uprobe_proc_goexit1"`
+	UprobeProcNewproc1Ret     *ebpf.Program `ebpf:"uprobe_proc_newproc1_ret"`
+	UprobeStartBackgroundRead *ebpf.Program `ebpf:"uprobe_startBackgroundRead"`
 }
 
 func (p *bpf_debugPrograms) Close() error {
@@ -185,10 +139,7 @@ func (p *bpf_debugPrograms) Close() error {
 		p.UprobeServeHttpReturn,
 		p.UprobeProcGoexit1,
 		p.UprobeProcNewproc1Ret,
-		p.UprobeServerHandleStream,
-		p.UprobeServerHandleStreamReturn,
 		p.UprobeStartBackgroundRead,
-		p.UprobeTransportWriteStatus,
 	)
 }
 

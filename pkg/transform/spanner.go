@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/grafana/ebpf-autoinstrument/pkg/ebpf/nethttp"
+	ebpfcommon "github.com/grafana/ebpf-autoinstrument/pkg/ebpf/common"
 
 	"github.com/gavv/monotime"
 	"golang.org/x/exp/slog"
@@ -17,7 +17,8 @@ const EventTypeGRPC = 2
 
 var log = slog.With("component", "goexec.spanner")
 
-// HTTPRequestSpan contains the information being submitted as
+// HTTPRequestSpan contains the information being submitted by the following nodes in the graph.
+// It enables confortable handling of data from Go.
 type HTTPRequestSpan struct {
 	Type          int
 	Method        string
@@ -33,7 +34,7 @@ type HTTPRequestSpan struct {
 	End           time.Time
 }
 
-func ConvertToSpan(in <-chan []nethttp.HTTPRequestTrace, out chan<- []HTTPRequestSpan) {
+func ConvertToSpan(in <-chan []ebpfcommon.HTTPRequestTrace, out chan<- []HTTPRequestSpan) {
 	cnv := newConverter()
 	for traces := range in {
 		spans := make([]HTTPRequestSpan, 0, len(traces))
@@ -86,7 +87,7 @@ func extractIP(b []uint8, size int) string {
 	return net.IP(b[:size]).String()
 }
 
-func (c *converter) convert(trace *nethttp.HTTPRequestTrace) HTTPRequestSpan {
+func (c *converter) convert(trace *ebpfcommon.HTTPRequestTrace) HTTPRequestSpan {
 	now := time.Now()
 	monoNow := c.monoClock()
 	startDelta := monoNow - time.Duration(trace.StartMonotimeNs)

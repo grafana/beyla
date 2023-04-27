@@ -106,6 +106,15 @@ func RegisterStart[CFG, O any](nb *Builder, b stage.StartProvider[CFG, O]) {
 	}
 }
 
+// RegisterMultiStart is similar to RegisterStart, but registers a stage.StartMultiProvider,
+// which allows associating multiple functions with a single node
+func RegisterMultiStart[CFG, O any](nb *Builder, b stage.StartMultiProvider[CFG, O]) {
+	nb.startProviders[typeOf[CFG]()] = [2]reflect.Value{
+		reflect.ValueOf(node.AsStartCtx[O]),
+		reflect.ValueOf(b),
+	}
+}
+
 // RegisterMiddle registers a stage.MiddleProvider into the graph builder. When the Build
 // method is invoked later, any configuration field associated with the MiddleProvider will
 // result in the instantiation of a node.Middle with the provider's returned function.
@@ -177,8 +186,16 @@ func (nb *Builder) instantiate(instanceID string, arg reflect.Value) error {
 	if ib, ok := nb.startProviders[arg.Type()]; ok {
 		// providedFunc = StartProvider(arg)
 		providedFunc := ib[1].Call(rargs)
-		// startNode = AsStartCtx(providedFunc, nb.options...)
-		startNode := ib[0].Call(providedFunc)
+
+		// If the providedFunc is a slice of funcs, it means we need to call AsStartCtx as a variadic Function
+		var startNode []reflect.Value
+		if len(providedFunc) == 1 && providedFunc[0].Kind() == reflect.Slice {
+			// startNode = AsStartCtx(providedFuncs...)
+			startNode = ib[0].CallSlice(providedFunc)
+		} else {
+			// startNode = AsStartCtx(providedFunc)
+			startNode = ib[0].Call(providedFunc)
+		}
 		nb.ingests[instanceID] = startNode[0].Interface().(outTyper)
 		nb.outNodeNames[instanceID] = struct{}{}
 		return nil

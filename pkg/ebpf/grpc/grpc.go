@@ -52,7 +52,6 @@ func (p *Program) Constants(offsets *goexec.Offsets) map[string]any {
 	for _, s := range []string{
 		"grpc_stream_st_ptr_pos",
 		"grpc_stream_method_ptr_pos",
-		"grpc_stream_id_ptr_pos",
 		"grpc_status_s_pos",
 		"grpc_status_code_ptr_pos",
 		"grpc_st_remoteaddr_ptr_pos",
@@ -60,9 +59,7 @@ func (p *Program) Constants(offsets *goexec.Offsets) map[string]any {
 		"tcp_addr_port_ptr_pos",
 		"tcp_addr_ip_ptr_pos",
 	} {
-		if f, ok := offsets.Field[s]; ok {
-			constants[s] = f
-		}
+		constants[s] = offsets.Field[s]
 	}
 	return constants
 }

@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/grafana/ebpf-autoinstrument/pkg/transform"
-
 	"github.com/mariomac/pipes/pkg/node"
 )
 

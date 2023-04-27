@@ -43,13 +43,14 @@ type Tracer struct {
 	OnOffsets func(offsets *goexec.Offsets) `yaml:"-" json:"-"`
 }
 
+// Probe holds the information of the instrumentation points of a given function: its start and end offsets and
+// eBPF programs
+type Probe struct {
+	Offsets  goexec.FuncOffsets
+	Programs FunctionPrograms
+}
+
 type FunctionPrograms struct {
 	Start *ebpf.Program
 	End   *ebpf.Program
-}
-
-type Probe struct {
-	FunctionName string
-	Offsets      goexec.FuncOffsets
-	Programs     FunctionPrograms
 }

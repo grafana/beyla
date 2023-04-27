@@ -8,10 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/grafana/ebpf-autoinstrument/pkg/transform"
-
 	"golang.org/x/exp/slog"
 
+	"github.com/grafana/ebpf-autoinstrument/pkg/transform"
 	"github.com/mariomac/pipes/pkg/node"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp"

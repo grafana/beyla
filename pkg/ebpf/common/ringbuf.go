@@ -15,6 +15,9 @@ import (
 	"golang.org/x/exp/slog"
 )
 
+// ForwardRingbuf returns a function reads HTTPRequestTraces from an input ring buffer, accumulates them into an
+// internal buffer, and forwards them to an output events channel, previously converted to transform.HTTPRequestSpan
+// instances
 func ForwardRingbuf(
 	cfg *Tracer,
 	logger *slog.Logger,
@@ -32,10 +35,10 @@ func ForwardRingbuf(
 		}
 		defer func() {
 			logger.Debug("closing eBPF resources")
-			_ = eventsReader.Close()
 			for _, c := range closers {
 				_ = c.Close()
 			}
+			_ = eventsReader.Close()
 		}()
 
 		events := make([]HTTPRequestTrace, cfg.BatchLength)

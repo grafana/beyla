@@ -33,7 +33,6 @@ struct {
 
 volatile const u64 grpc_stream_st_ptr_pos;
 volatile const u64 grpc_stream_method_ptr_pos;
-volatile const u64 grpc_stream_id_ptr_pos;
 volatile const u64 grpc_status_s_pos;
 volatile const u64 grpc_status_code_ptr_pos;
 volatile const u64 grpc_st_remoteaddr_ptr_pos;

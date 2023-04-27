@@ -58,9 +58,7 @@ func (p *Program) Constants(offsets *goexec.Offsets) map[string]any {
 		"host_ptr_pos",
 		"content_length_ptr_pos",
 	} {
-		if f, ok := offsets.Field[s]; ok {
-			constants[s] = f
-		}
+		constants[s] = offsets.Field[s]
 	}
 	return constants
 }

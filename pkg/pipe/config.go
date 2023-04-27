@@ -18,7 +18,7 @@ import (
 var defaultConfig = Config{
 	ChannelBufferLen: 10,
 	LogLevel:         "INFO",
-	EBPF: ebpfcommon.Tracer{
+	EBPF: ebpfcommon.TracerConfig{
 		BatchLength:  100,
 		BatchTimeout: time.Second,
 	},
@@ -34,7 +34,7 @@ var defaultConfig = Config{
 }
 
 type Config struct {
-	EBPF ebpfcommon.Tracer `nodeId:"ebpf" sendTo:"routes" yaml:"ebpf"`
+	EBPF ebpfcommon.TracerConfig `nodeId:"ebpf" sendTo:"routes" yaml:"ebpf"`
 
 	// Routes is an optional node. If not set, data will be directly forwarded to exporters.
 	Routes *transform.RoutesConfig `nodeId:"routes" forwardTo:"otel_metrics,otel_traces,print,noop" yaml:"routes"`

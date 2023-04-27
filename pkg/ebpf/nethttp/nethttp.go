@@ -29,13 +29,13 @@ import (
 //go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf ../../../bpf/go_nethttp.c -- -I../../../bpf/headers
 //go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf_debug ../../../bpf/go_nethttp.c -- -I../../../bpf/headers -DBPF_DEBUG
 
-type Program struct {
-	Cfg        *ebpfcommon.Tracer
+type Tracer struct {
+	Cfg        *ebpfcommon.TracerConfig
 	bpfObjects bpfObjects
 	closers    []io.Closer
 }
 
-func (p *Program) Load() (*ebpf.CollectionSpec, error) {
+func (p *Tracer) Load() (*ebpf.CollectionSpec, error) {
 	loader := loadBpf
 	if p.Cfg.BpfDebug {
 		loader = loadBpf_debug
@@ -43,7 +43,7 @@ func (p *Program) Load() (*ebpf.CollectionSpec, error) {
 	return loader()
 }
 
-func (p *Program) Constants(offsets *goexec.Offsets) map[string]any {
+func (p *Tracer) Constants(offsets *goexec.Offsets) map[string]any {
 	// Set the field offsets and the logLevel for nethttp BPF program,
 	// as well as some other configuration constants
 	constants := map[string]any{
@@ -63,15 +63,15 @@ func (p *Program) Constants(offsets *goexec.Offsets) map[string]any {
 	return constants
 }
 
-func (p *Program) BpfObjects() any {
+func (p *Tracer) BpfObjects() any {
 	return &p.bpfObjects
 }
 
-func (p *Program) AddCloser(c ...io.Closer) {
+func (p *Tracer) AddCloser(c ...io.Closer) {
 	p.closers = append(p.closers, c...)
 }
 
-func (p *Program) Probes() map[string]ebpfcommon.FunctionPrograms {
+func (p *Tracer) Probes() map[string]ebpfcommon.FunctionPrograms {
 	return map[string]ebpfcommon.FunctionPrograms{
 		"net/http.HandlerFunc.ServeHTTP": {
 			Start: p.bpfObjects.UprobeServeHTTP,
@@ -93,8 +93,8 @@ func (p *Program) Probes() map[string]ebpfcommon.FunctionPrograms {
 	}
 }
 
-func (p *Program) Run(ctx context.Context, eventsChan chan<- []ebpfcommon.HTTPRequestTrace) {
-	logger := slog.With("component", "nethttp.Program")
+func (p *Tracer) Run(ctx context.Context, eventsChan chan<- []ebpfcommon.HTTPRequestTrace) {
+	logger := slog.With("component", "nethttp.Tracer")
 	ebpfcommon.ForwardRingbuf(
 		p.Cfg, logger, p.bpfObjects.Events,
 		append(p.closers, &p.bpfObjects)...,

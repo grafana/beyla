@@ -19,7 +19,7 @@ import (
 // internal buffer, and forwards them to an output events channel, previously converted to transform.HTTPRequestSpan
 // instances
 func ForwardRingbuf(
-	cfg *Tracer,
+	cfg *TracerConfig,
 	logger *slog.Logger,
 	ringbuffer *ebpf.Map,
 	closers ...io.Closer,

@@ -31,7 +31,7 @@ func TestBasicPipeline(t *testing.T) {
 
 	gb := newGraphBuilder(&Config{Metrics: otel.MetricsConfig{MetricsEndpoint: tc.ServerEndpoint, ReportTarget: true, ReportPeerInfo: true}})
 	// Override eBPF tracer to send some fake data
-	graph.RegisterStart(gb.builder, func(_ ebpfcommon.Tracer) node.StartFuncCtx[[]ebpfcommon.HTTPRequestTrace] {
+	graph.RegisterStart(gb.builder, func(_ ebpfcommon.TracerConfig) node.StartFuncCtx[[]ebpfcommon.HTTPRequestTrace] {
 		return func(_ context.Context, out chan<- []ebpfcommon.HTTPRequestTrace) {
 			out <- newRequest("GET", "/foo/bar", "1.1.1.1:3456", 404)
 		}
@@ -64,7 +64,7 @@ func TestTracerPipeline(t *testing.T) {
 
 	gb := newGraphBuilder(&Config{Traces: otel.TracesConfig{TracesEndpoint: tc.ServerEndpoint, ServiceName: "test"}})
 	// Override eBPF tracer to send some fake data
-	graph.RegisterStart(gb.builder, func(_ ebpfcommon.Tracer) node.StartFuncCtx[[]ebpfcommon.HTTPRequestTrace] {
+	graph.RegisterStart(gb.builder, func(_ ebpfcommon.TracerConfig) node.StartFuncCtx[[]ebpfcommon.HTTPRequestTrace] {
 		return func(_ context.Context, out chan<- []ebpfcommon.HTTPRequestTrace) {
 			out <- newRequest("GET", "/foo/bar", "1.1.1.1:3456", 404)
 		}
@@ -94,7 +94,7 @@ func TestRouteConsolidation(t *testing.T) {
 		Routes:  &transform.RoutesConfig{Patterns: []string{"/user/{id}", "/products/{id}/push"}},
 	})
 	// Override eBPF tracer to send some fake data
-	graph.RegisterStart(gb.builder, func(_ ebpfcommon.Tracer) node.StartFuncCtx[[]ebpfcommon.HTTPRequestTrace] {
+	graph.RegisterStart(gb.builder, func(_ ebpfcommon.TracerConfig) node.StartFuncCtx[[]ebpfcommon.HTTPRequestTrace] {
 		return func(_ context.Context, out chan<- []ebpfcommon.HTTPRequestTrace) {
 			out <- newRequest("GET", "/user/1234", "1.1.1.1:3456", 200)
 			out <- newRequest("GET", "/products/3210/push", "1.1.1.1:3456", 200)
@@ -156,7 +156,7 @@ func TestGRPCPipeline(t *testing.T) {
 
 	gb := newGraphBuilder(&Config{Metrics: otel.MetricsConfig{MetricsEndpoint: tc.ServerEndpoint, ReportTarget: true, ReportPeerInfo: true}})
 	// Override eBPF tracer to send some fake data
-	graph.RegisterStart(gb.builder, func(_ ebpfcommon.Tracer) node.StartFuncCtx[[]ebpfcommon.HTTPRequestTrace] {
+	graph.RegisterStart(gb.builder, func(_ ebpfcommon.TracerConfig) node.StartFuncCtx[[]ebpfcommon.HTTPRequestTrace] {
 		return func(_ context.Context, out chan<- []ebpfcommon.HTTPRequestTrace) {
 			out <- newGRPCRequest("/foo/bar", 3)
 		}
@@ -189,7 +189,7 @@ func TestTraceGRPCPipeline(t *testing.T) {
 
 	gb := newGraphBuilder(&Config{Traces: otel.TracesConfig{TracesEndpoint: tc.ServerEndpoint, ServiceName: "test"}})
 	// Override eBPF tracer to send some fake data
-	graph.RegisterStart(gb.builder, func(_ ebpfcommon.Tracer) node.StartFuncCtx[[]ebpfcommon.HTTPRequestTrace] {
+	graph.RegisterStart(gb.builder, func(_ ebpfcommon.TracerConfig) node.StartFuncCtx[[]ebpfcommon.HTTPRequestTrace] {
 		return func(_ context.Context, out chan<- []ebpfcommon.HTTPRequestTrace) {
 			out <- newGRPCRequest("/foo/bar", 3)
 		}

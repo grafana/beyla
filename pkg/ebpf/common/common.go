@@ -13,8 +13,8 @@ import (
 // eBPF layer. This contains low-level C structures for accurate binary read from ring buffer.
 type HTTPRequestTrace bpfHttpRequestTrace
 
-// Tracer configuration for eBPF programs
-type Tracer struct {
+// TracerConfig configuration for eBPF programs
+type TracerConfig struct {
 	// Exec allows selecting the instrumented executable whose complete path contains the Exec value.
 	Exec string `yaml:"executable_name" env:"EXECUTABLE_NAME"`
 	// Port allows selecting the instrumented executable that owns the Port value. If this value is set (and

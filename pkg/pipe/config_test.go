@@ -43,7 +43,7 @@ otel_metrics_export:
 		LogLevel:         "INFO",
 		Printer:          false,
 		Noop:             true,
-		EBPF: ebpfcommon.Tracer{
+		EBPF: ebpfcommon.TracerConfig{
 			Exec:         "tras",
 			BatchLength:  100,
 			BatchTimeout: time.Second,

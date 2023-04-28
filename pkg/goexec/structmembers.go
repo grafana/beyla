@@ -53,6 +53,12 @@ var structMembers = map[string]structInfo{
 			"status": "status_ptr_pos",
 		},
 	},
+	"net/http.Response": {
+		lib: "go",
+		fields: map[string]string{
+			"StatusCode": "status_code_ptr_pos",
+		},
+	},
 	"google.golang.org/grpc/internal/transport.Stream": {
 		lib: "google.golang.org/grpc",
 		fields: map[string]string{

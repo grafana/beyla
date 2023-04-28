@@ -131,7 +131,7 @@ int uprobe_clientSendReturn(struct pt_regs *ctx) {
 
     bpf_probe_read(&trace->status, sizeof(trace->status), (void *)(resp_ptr + status_code_ptr_pos));
 
-    bpf_printk("status %d, offset %d, resp_ptr %lx", status_code_ptr_pos, trace->status, (u64)resp_ptr);
+    bpf_printk("status %d, offset %d, resp_ptr %lx", trace->status, status_code_ptr_pos, (u64)resp_ptr);
 
     // submit the completed trace via ringbuffer
     bpf_ringbuf_submit(trace, get_flags());

@@ -16,6 +16,9 @@
       "net/http.response": [
         "status"
       ],
+      "net/http.Response": [
+        "StatusCode"
+      ],
       "net.TCPAddr": [
         "IP",
         "Port"

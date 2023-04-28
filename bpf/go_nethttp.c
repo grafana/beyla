@@ -15,58 +15,25 @@
 #include "go_byte_arr.h"
 #include "bpf_dbg.h"
 #include "go_common.h"
-
-// Temporary information about a function invocation. It stores the invocation time of a function
-// as well as the value of registers at the invocation time. This way we can retrieve them at the
-// return uprobes so we can know the values of the function arguments (which are passed as registers
-// since Go 1.17).
-// This element is created in the function start probe and stored in the ongoing_http_requests hashmaps.
-// Then it is retrieved in the return uprobes and used to know the HTTP call duration as well as its
-// attributes (method, path, and status code).
-typedef struct http_method_invocation_t {
-    u64 start_monotime_ns;
-    struct pt_regs regs; // we store registers on invocation to be able to fetch the arguments at return
-} http_method_invocation;
-
-
-struct {
-    __uint(type, BPF_MAP_TYPE_HASH);
-    __type(key, void *); // key: pointer to the request goroutine
-    __type(value, http_method_invocation);
-    __uint(max_entries, MAX_CONCURRENT_REQUESTS);
-} ongoing_http_requests SEC(".maps");
-
-
-
-// To be Injected from the user space during the eBPF program load & initialization
-
-volatile const u64 url_ptr_pos;
-volatile const u64 path_ptr_pos;
-volatile const u64 method_ptr_pos;
-volatile const u64 status_ptr_pos;
-volatile const u64 remoteaddr_ptr_pos;
-volatile const u64 host_ptr_pos;
-volatile const u64 content_length_ptr_pos;
-
+#include "go_nethttp.h"
+#include "go_nethttp_client.h"
 
 // This instrumentation attaches uprobe to the following function:
 // func (mux *ServeMux) ServeHTTP(w ResponseWriter, r *Request)
 // or other functions sharing the same signature (e.g http.Handler.ServeHTTP)
 SEC("uprobe/ServeHTTP")
 int uprobe_ServeHTTP(struct pt_regs *ctx) {
-
-    // TODO: store registers in a map so we can fetch them in the return probe
     bpf_dbg_printk("=== uprobe/ServeHTTP === ");
     void *goroutine_addr = GOROUTINE_PTR(ctx);
     bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
 
-    http_method_invocation invocation = {
+    func_invocation invocation = {
         .start_monotime_ns = bpf_ktime_get_ns(),
         .regs = *ctx,
     };
 
     // Write event
-    if (bpf_map_update_elem(&ongoing_http_requests, &goroutine_addr, &invocation, BPF_ANY)) {
+    if (bpf_map_update_elem(&ongoing_server_requests, &goroutine_addr, &invocation, BPF_ANY)) {
         bpf_dbg_printk("can't update map element");
     }
 
@@ -79,9 +46,9 @@ int uprobe_ServeHttp_return(struct pt_regs *ctx) {
     void *goroutine_addr = GOROUTINE_PTR(ctx);
     bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
 
-    http_method_invocation *invocation =
-        bpf_map_lookup_elem(&ongoing_http_requests, &goroutine_addr);
-    bpf_map_delete_elem(&ongoing_http_requests, &goroutine_addr);
+    func_invocation *invocation =
+        bpf_map_lookup_elem(&ongoing_server_requests, &goroutine_addr);
+    bpf_map_delete_elem(&ongoing_server_requests, &goroutine_addr);
     if (invocation == NULL) {
         bpf_dbg_printk("can't read http invocation metadata");
         return 0;
@@ -93,12 +60,13 @@ int uprobe_ServeHttp_return(struct pt_regs *ctx) {
         return 0;
     }
     trace->type = EVENT_HTTP_REQUEST;
+    trace->id = (u64)goroutine_addr;
     trace->start_monotime_ns = invocation->start_monotime_ns;
     trace->end_monotime_ns = bpf_ktime_get_ns();
 
-    u64 *go_start_monotime_ns = bpf_map_lookup_elem(&ongoing_goroutines, &goroutine_addr);
-    if (go_start_monotime_ns) {
-        trace->go_start_monotime_ns = *go_start_monotime_ns;
+    goroutine_metadata *g_metadata = bpf_map_lookup_elem(&ongoing_goroutines, &goroutine_addr);
+    if (g_metadata) {
+        trace->go_start_monotime_ns = g_metadata->timestamp;
         bpf_map_delete_elem(&ongoing_goroutines, &goroutine_addr);
     } else {
         trace->go_start_monotime_ns = invocation->start_monotime_ns;
@@ -163,10 +131,14 @@ int uprobe_startBackgroundRead(struct pt_regs *ctx) {
 
     // This code is here for keepalive support on HTTP requests. Since the connection is not
     // established everytime, we set the initial goroutine start on the new read initiation.
-    u64 *go_start_monotime_ns = bpf_map_lookup_elem(&ongoing_goroutines, &goroutine_addr);
-    if (!go_start_monotime_ns) {
-        u64 timestamp = bpf_ktime_get_ns();
-        if (bpf_map_update_elem(&ongoing_goroutines, &goroutine_addr, &timestamp, BPF_ANY)) {
+    goroutine_metadata *g_metadata = bpf_map_lookup_elem(&ongoing_goroutines, &goroutine_addr);
+    if (!g_metadata) {
+        goroutine_metadata metadata = {
+            .timestamp = bpf_ktime_get_ns(),
+            .parent = (u64)goroutine_addr,
+        };
+
+        if (bpf_map_update_elem(&ongoing_goroutines, &goroutine_addr, &metadata, BPF_ANY)) {
             bpf_dbg_printk("can't update active goroutine");
         }
     }

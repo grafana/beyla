@@ -10,7 +10,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "http_trace.h"
+#ifndef GO_NETHTTP_H
+#define GO_NETHTTP_H
 
-// Force emitting struct http_request_trace into the ELF for automatic creation of Golang struct
-const http_request_trace *unused __attribute__((unused));
+#include "utils.h"
+
+// To be Injected from the user space during the eBPF program load & initialization
+
+volatile const u64 url_ptr_pos;
+volatile const u64 path_ptr_pos;
+volatile const u64 method_ptr_pos;
+volatile const u64 status_ptr_pos;
+volatile const u64 status_code_ptr_pos;
+volatile const u64 remoteaddr_ptr_pos;
+volatile const u64 host_ptr_pos;
+volatile const u64 content_length_ptr_pos;
+
+#endif

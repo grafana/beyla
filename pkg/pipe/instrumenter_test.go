@@ -218,8 +218,10 @@ func TestNestedSpanMatching(t *testing.T) {
 	// Override eBPF tracer to send some fake data with nested client span
 	graph.RegisterStart(gb.builder, func(_ ebpfcommon.TracerConfig) node.StartFuncCtx[[]ebpfcommon.HTTPRequestTrace] {
 		return func(_ context.Context, out chan<- []ebpfcommon.HTTPRequestTrace) {
+			out <- newRequestWithTiming(1, transform.EventTypeHTTPClient, "GET", "/attach", "2.2.2.2:1234", 200, 5, 5, 6)
 			out <- newRequestWithTiming(1, transform.EventTypeHTTP, "GET", "/user/1234", "1.1.1.1:3456", 200, 1, 1, 4)
 			out <- newRequestWithTiming(3, transform.EventTypeHTTPClient, "GET", "/products/3210/pull", "2.2.2.2:3456", 204, 8, 8, 9)
+			out <- newRequestWithTiming(3, transform.EventTypeHTTPClient, "GET", "/products/3211/pull", "2.2.2.2:3456", 203, 8, 8, 9)
 			out <- newRequestWithTiming(2, transform.EventTypeHTTP, "GET", "/products/3210/push", "1.1.1.1:3456", 200, 1, 2, 5)
 			out <- newRequestWithTiming(3, transform.EventTypeHTTP, "GET", "/attach", "1.1.1.1:3456", 200, 7, 8, 10)
 			out <- newRequestWithTiming(1, transform.EventTypeHTTPClient, "GET", "/attach", "2.2.2.2:1234", 200, 3, 3, 4)
@@ -235,7 +237,11 @@ func TestNestedSpanMatching(t *testing.T) {
 	event := getTraceEvent(t, tc)
 	parent_1_id := event.Attributes["span_id"]
 	matchNestedEvent(t, "GET", "GET", "/user/1234", "200", ptrace.SpanKindServer, event)
-	// 2. The second event is server "/products/3210/push", since the client span has a parent which hasn't arrived yet.
+	// 2. Next we should see a child span from the request with ID=1, but the parent won't match, since we are outside the time range
+	event = getTraceEvent(t, tc)
+	matchNestedEvent(t, "GET", "GET", "/attach", "200", ptrace.SpanKindClient, event)
+	assert.Equal(t, "", event.Attributes["parent_span_id"])
+	// 3. The second event is server "/products/3210/push", since the client span has a parent which hasn't arrived yet.
 	// This event has nested server spans.
 	event = getTraceEvent(t, tc)
 	p_id_q := event.Attributes["parent_span_id"]
@@ -247,7 +253,7 @@ func TestNestedSpanMatching(t *testing.T) {
 	matchNestedEvent(t, "GET", "GET", "/products/3210/push", "200", ptrace.SpanKindServer, event)
 	assert.Equal(t, p_id_p, event.Attributes["span_id"])
 	assert.Equal(t, p_id_q, event.Attributes["span_id"])
-	// 3. Third event has client span as well, which we recorded just after we processed the first event
+	// 4. Third event has client span as well, which we recorded just after we processed the first event
 	event = getTraceEvent(t, tc)
 	matchNestedEvent(t, "in queue", "", "", "", ptrace.SpanKindInternal, event)
 	event = getTraceEvent(t, tc)
@@ -258,15 +264,19 @@ func TestNestedSpanMatching(t *testing.T) {
 	matchNestedEvent(t, "GET", "GET", "/attach", "200", ptrace.SpanKindServer, event)
 	// the processing span is a child of the session span
 	assert.Equal(t, parent_id, event.Attributes["span_id"])
-	// 4. The first client span id will be a child of the processing span, of the request with ID=3
+	// 5. The first client span id will be a child of the processing span, of the request with ID=3
 	event = getTraceEvent(t, tc)
 	matchNestedEvent(t, "GET", "GET", "/products/3210/pull", "204", ptrace.SpanKindClient, event)
 	assert.Equal(t, span_id, event.Attributes["parent_span_id"])
-	// 5. Next we should see a child span from the request with ID=1
+	// Test that we correctly keep the list of all prior client events
+	event = getTraceEvent(t, tc)
+	matchNestedEvent(t, "GET", "GET", "/products/3211/pull", "203", ptrace.SpanKindClient, event)
+	assert.Equal(t, span_id, event.Attributes["parent_span_id"])
+	// 6. Next we should see a child span from the request with ID=1
 	event = getTraceEvent(t, tc)
 	matchNestedEvent(t, "GET", "GET", "/attach", "200", ptrace.SpanKindClient, event)
 	assert.Equal(t, parent_1_id, event.Attributes["parent_span_id"])
-	// 6. Now we see a client call without a parent span ID = 0
+	// 7. Now we see a client call without a parent span ID = 0
 	event = getTraceEvent(t, tc)
 	matchNestedEvent(t, "GET", "GET", "/attach", "200", ptrace.SpanKindClient, event)
 	assert.Equal(t, "", event.Attributes["parent_span_id"])

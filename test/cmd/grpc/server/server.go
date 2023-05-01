@@ -20,6 +20,7 @@ import (
 	"io"
 	"math"
 	"net"
+	"net/http"
 	"os"
 	"sync"
 	"time"
@@ -53,6 +54,30 @@ type routeGuideServer struct {
 // GetFeature returns the feature at the given point.
 func (s *routeGuideServer) GetFeature(_ context.Context, point *pb.Point) (*pb.Feature, error) {
 	slog.Info("GetFeature", "lat", point.Latitude, "long", point.Longitude)
+	for _, feature := range s.savedFeatures {
+		if proto.Equal(feature.Location, point) {
+			return feature, nil
+		}
+	}
+	// No feature was found, return an unnamed feature
+	return &pb.Feature{Location: point}, nil
+}
+
+// GetFeature returns the feature at the given point, but it also calls the ping server
+func (s *routeGuideServer) GetFeatureWrapper(_ context.Context, point *pb.Point) (*pb.Feature, error) {
+	slog.Info("GetFeatureWrapper", "lat", point.Latitude, "long", point.Longitude)
+
+	requestURL := "http://localhost:8080/ping?delay=2ms"
+	slog.Debug("calling", "url", requestURL)
+
+	res, err := http.Get(requestURL)
+	if err != nil {
+		fmt.Printf("error making http request: %s\n", err)
+		os.Exit(1)
+	}
+
+	defer res.Body.Close()
+
 	for _, feature := range s.savedFeatures {
 		if proto.Equal(feature.Location, point) {
 			return feature, nil

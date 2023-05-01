@@ -34,3 +34,4 @@ test/cmd/rust_ironssl/target
 test/cmd/python_flaskping/__pycache__/
 test/cmd/python_pingserver/__pycache__/
 test/cmd/pingwrapper/wrapper
+test/cmd/grpc/server/grpcsrv

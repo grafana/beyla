@@ -9,6 +9,7 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/grafana/ebpf-autoinstrument/pkg/ebpf/fs"
 	"github.com/grafana/ebpf-autoinstrument/pkg/ebpf/grpc"
 
 	ebpfcommon "github.com/grafana/ebpf-autoinstrument/pkg/ebpf/common"
@@ -98,7 +99,10 @@ func TracerProvider(cfg ebpfcommon.TracerConfig) []node.StartFuncCtx[[]ebpfcommo
 			plog.Error("rewriting BPF constants definition", err)
 			return nil
 		}
-		if err := spec.LoadAndAssign(p.BpfObjects(), nil); err != nil {
+		if err := spec.LoadAndAssign(p.BpfObjects(), &ebpf.CollectionOptions{
+			Maps: ebpf.MapOptions{
+				PinPath: fs.PinnedRoot,
+			}}); err != nil {
 			plog.Error("loading and assigning BPF objects", err)
 			printVerifierErrorInfo(err)
 			return nil

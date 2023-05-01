@@ -75,6 +75,7 @@ struct {
     __type(key, void *); // key: pointer to the request goroutine
     __type(value, func_invocation);
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
+	__uint(pinning, LIBBPF_PIN_BY_NAME);
 } ongoing_server_requests SEC(".maps");
 
 

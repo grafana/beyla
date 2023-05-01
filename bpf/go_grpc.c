@@ -165,7 +165,7 @@ int uprobe_transport_writeStatus(struct pt_regs *ctx) {
             u16 status = -1;
             bpf_probe_read(&status, sizeof(status), (void *)(s_ptr + grpc_status_code_ptr_pos));
             bpf_dbg_printk("status code %d", status);
-            bpf_map_update_elem(&ongoing_server_requests, &goroutine_addr, &status, BPF_ANY);
+            bpf_map_update_elem(&ongoing_grpc_request_status, &goroutine_addr, &status, BPF_ANY);
         }
     }
 

@@ -7,9 +7,13 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/signal"
+	"path/filepath"
+	"syscall"
 
 	"golang.org/x/exp/slog"
 
+	"github.com/grafana/ebpf-autoinstrument/pkg/ebpf/fs"
 	"github.com/grafana/ebpf-autoinstrument/pkg/pipe"
 
 	_ "net/http/pprof"
@@ -33,6 +37,14 @@ func main() {
 		os.Exit(-1)
 	}
 
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-c
+		erasePinnedMaps()
+		os.Exit(1)
+	}()
+
 	if config.ProfilePort != 0 {
 		go func() {
 			slog.Info("starting PProf HTTP listener", "port", config.ProfilePort)
@@ -40,6 +52,8 @@ func main() {
 			slog.Error("PProf HTTP listener stopped working", err)
 		}()
 	}
+
+	erasePinnedMaps()
 
 	slog.Info("creating instrumentation pipeline")
 	bp, err := pipe.Build(config)
@@ -49,8 +63,17 @@ func main() {
 	}
 
 	slog.Info("Starting main node")
-	// TODO: add shutdown hook for graceful stop
 	bp.Run(context.TODO())
+}
+
+func erasePinnedMaps() {
+	for _, m := range fs.PinnedMaps {
+		slog.Debug("cleaning storage used by pinned object", "map", m)
+		err := os.Remove(filepath.Join(fs.PinnedRoot, m))
+		if err != nil {
+			slog.Error("can't remove pinned map "+m, err)
+		}
+	}
 }
 
 func loadConfig(configPath *string) *pipe.Config {

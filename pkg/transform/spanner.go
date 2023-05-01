@@ -90,11 +90,9 @@ func extractIP(b []uint8, size int) string {
 }
 
 func (c *converter) convert(trace *ebpfcommon.HTTPRequestTrace) HTTPRequestSpan {
-	now := time.Now()
-	monoNow := c.monoClock()
-	startDelta := monoNow - time.Duration(trace.StartMonotimeNs)
-	endDelta := monoNow - time.Duration(trace.EndMonotimeNs)
-	goStartDelta := monoNow - time.Duration(trace.GoStartMonotimeNs)
+	start := time.Unix(0, int64(trace.StartMonotimeNs))
+	end := time.Unix(0, int64(trace.EndMonotimeNs))
+	goStart := time.Unix(0, int64(trace.GoStartMonotimeNs))
 
 	// From C, assuming 0-ended strings
 	methodLen := bytes.IndexByte(trace.Method[:], 0)
@@ -131,9 +129,9 @@ func (c *converter) convert(trace *ebpfcommon.HTTPRequestTrace) HTTPRequestSpan 
 		Host:          hostname,
 		HostPort:      hostPort,
 		ContentLength: trace.ContentLength,
-		RequestStart:  now.Add(-goStartDelta),
-		Start:         now.Add(-startDelta),
-		End:           now.Add(-endDelta),
+		RequestStart:  goStart,
+		Start:         start,
+		End:           end,
 		Status:        int(trace.Status),
 	}
 }

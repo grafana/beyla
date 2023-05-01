@@ -33,7 +33,7 @@ func TestBasicPipeline(t *testing.T) {
 	// Override eBPF tracer to send some fake data
 	graph.RegisterStart(gb.builder, func(_ ebpfcommon.TracerConfig) node.StartFuncCtx[[]ebpfcommon.HTTPRequestTrace] {
 		return func(_ context.Context, out chan<- []ebpfcommon.HTTPRequestTrace) {
-			out <- newRequest("GET", "/foo/bar", "1.1.1.1:3456", 404)
+			out <- newRequest(1, "GET", "/foo/bar", "1.1.1.1:3456", 404)
 		}
 	})
 	pipe, err := gb.buildGraph()
@@ -66,7 +66,7 @@ func TestTracerPipeline(t *testing.T) {
 	// Override eBPF tracer to send some fake data
 	graph.RegisterStart(gb.builder, func(_ ebpfcommon.TracerConfig) node.StartFuncCtx[[]ebpfcommon.HTTPRequestTrace] {
 		return func(_ context.Context, out chan<- []ebpfcommon.HTTPRequestTrace) {
-			out <- newRequest("GET", "/foo/bar", "1.1.1.1:3456", 404)
+			out <- newRequest(1, "GET", "/foo/bar", "1.1.1.1:3456", 404)
 		}
 	})
 	pipe, err := gb.buildGraph()
@@ -79,7 +79,7 @@ func TestTracerPipeline(t *testing.T) {
 	event = getTraceEvent(t, tc)
 	matchInnerTraceEvent(t, "processing", event)
 	event = getTraceEvent(t, tc)
-	matchTraceEvent(t, "session", event)
+	matchTraceEvent(t, "GET", event)
 }
 
 func TestRouteConsolidation(t *testing.T) {
@@ -96,9 +96,9 @@ func TestRouteConsolidation(t *testing.T) {
 	// Override eBPF tracer to send some fake data
 	graph.RegisterStart(gb.builder, func(_ ebpfcommon.TracerConfig) node.StartFuncCtx[[]ebpfcommon.HTTPRequestTrace] {
 		return func(_ context.Context, out chan<- []ebpfcommon.HTTPRequestTrace) {
-			out <- newRequest("GET", "/user/1234", "1.1.1.1:3456", 200)
-			out <- newRequest("GET", "/products/3210/push", "1.1.1.1:3456", 200)
-			out <- newRequest("GET", "/attach", "1.1.1.1:3456", 200) // undefined route: won't report as route
+			out <- newRequest(1, "GET", "/user/1234", "1.1.1.1:3456", 200)
+			out <- newRequest(2, "GET", "/products/3210/push", "1.1.1.1:3456", 200)
+			out <- newRequest(3, "GET", "/attach", "1.1.1.1:3456", 200) // undefined route: won't report as route
 		}
 	})
 	pipe, err := gb.buildGraph()
@@ -158,7 +158,7 @@ func TestGRPCPipeline(t *testing.T) {
 	// Override eBPF tracer to send some fake data
 	graph.RegisterStart(gb.builder, func(_ ebpfcommon.TracerConfig) node.StartFuncCtx[[]ebpfcommon.HTTPRequestTrace] {
 		return func(_ context.Context, out chan<- []ebpfcommon.HTTPRequestTrace) {
-			out <- newGRPCRequest("/foo/bar", 3)
+			out <- newGRPCRequest(1, "/foo/bar", 3)
 		}
 	})
 	pipe, err := gb.buildGraph()
@@ -191,7 +191,7 @@ func TestTraceGRPCPipeline(t *testing.T) {
 	// Override eBPF tracer to send some fake data
 	graph.RegisterStart(gb.builder, func(_ ebpfcommon.TracerConfig) node.StartFuncCtx[[]ebpfcommon.HTTPRequestTrace] {
 		return func(_ context.Context, out chan<- []ebpfcommon.HTTPRequestTrace) {
-			out <- newGRPCRequest("/foo/bar", 3)
+			out <- newGRPCRequest(1, "foo.bar", 3)
 		}
 	})
 	pipe, err := gb.buildGraph()
@@ -204,10 +204,75 @@ func TestTraceGRPCPipeline(t *testing.T) {
 	event = getTraceEvent(t, tc)
 	matchInnerGRPCTraceEvent(t, "processing", event)
 	event = getTraceEvent(t, tc)
-	matchGRPCTraceEvent(t, "session", event)
+	matchGRPCTraceEvent(t, "foo.bar", event)
 }
 
-func newRequest(method, path, peer string, status int) []ebpfcommon.HTTPRequestTrace {
+func TestNestedSpanMatching(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	tc, err := collector.Start(ctx)
+	require.NoError(t, err)
+
+	gb := newGraphBuilder(&Config{Traces: otel.TracesConfig{TracesEndpoint: tc.ServerEndpoint, ServiceName: "test"}})
+	// Override eBPF tracer to send some fake data with nested client span
+	graph.RegisterStart(gb.builder, func(_ ebpfcommon.TracerConfig) node.StartFuncCtx[[]ebpfcommon.HTTPRequestTrace] {
+		return func(_ context.Context, out chan<- []ebpfcommon.HTTPRequestTrace) {
+			out <- newRequestWithTiming(1, transform.EventTypeHTTP, "GET", "/user/1234", "1.1.1.1:3456", 200, 1, 1, 4)
+			out <- newRequestWithTiming(3, transform.EventTypeHTTPClient, "GET", "/products/3210/pull", "2.2.2.2:3456", 204, 8, 8, 9)
+			out <- newRequestWithTiming(2, transform.EventTypeHTTP, "GET", "/products/3210/push", "1.1.1.1:3456", 200, 1, 2, 5)
+			out <- newRequestWithTiming(3, transform.EventTypeHTTP, "GET", "/attach", "1.1.1.1:3456", 200, 7, 8, 10)
+			out <- newRequestWithTiming(1, transform.EventTypeHTTPClient, "GET", "/attach", "2.2.2.2:1234", 200, 3, 3, 4)
+			out <- newRequestWithTiming(0, transform.EventTypeHTTPClient, "GET", "/attach", "2.2.2.2:1234", 200, 3, 3, 4)
+		}
+	})
+	pipe, err := gb.buildGraph()
+	require.NoError(t, err)
+
+	go pipe.Run(ctx)
+
+	// 1. The first event has no internal spans, goroutine Start and Start are the same
+	event := getTraceEvent(t, tc)
+	parent_1_id := event.Attributes["span_id"]
+	matchNestedEvent(t, "GET", "GET", "/user/1234", "200", ptrace.SpanKindServer, event)
+	// 2. The second event is server "/products/3210/push", since the client span has a parent which hasn't arrived yet.
+	// This event has nested server spans.
+	event = getTraceEvent(t, tc)
+	p_id_q := event.Attributes["parent_span_id"]
+	matchNestedEvent(t, "in queue", "", "", "", ptrace.SpanKindInternal, event)
+	event = getTraceEvent(t, tc)
+	p_id_p := event.Attributes["parent_span_id"]
+	matchNestedEvent(t, "processing", "", "", "", ptrace.SpanKindInternal, event)
+	event = getTraceEvent(t, tc)
+	matchNestedEvent(t, "GET", "GET", "/products/3210/push", "200", ptrace.SpanKindServer, event)
+	assert.Equal(t, p_id_p, event.Attributes["span_id"])
+	assert.Equal(t, p_id_q, event.Attributes["span_id"])
+	// 3. Third event has client span as well, which we recorded just after we processed the first event
+	event = getTraceEvent(t, tc)
+	matchNestedEvent(t, "in queue", "", "", "", ptrace.SpanKindInternal, event)
+	event = getTraceEvent(t, tc)
+	span_id := event.Attributes["span_id"]
+	parent_id := event.Attributes["parent_span_id"]
+	matchNestedEvent(t, "processing", "", "", "", ptrace.SpanKindInternal, event)
+	event = getTraceEvent(t, tc)
+	matchNestedEvent(t, "GET", "GET", "/attach", "200", ptrace.SpanKindServer, event)
+	// the processing span is a child of the session span
+	assert.Equal(t, parent_id, event.Attributes["span_id"])
+	// 4. The first client span id will be a child of the processing span, of the request with ID=3
+	event = getTraceEvent(t, tc)
+	matchNestedEvent(t, "GET", "GET", "/products/3210/pull", "204", ptrace.SpanKindClient, event)
+	assert.Equal(t, span_id, event.Attributes["parent_span_id"])
+	// 5. Next we should see a child span from the request with ID=1
+	event = getTraceEvent(t, tc)
+	matchNestedEvent(t, "GET", "GET", "/attach", "200", ptrace.SpanKindClient, event)
+	assert.Equal(t, parent_1_id, event.Attributes["parent_span_id"])
+	// 6. Now we see a client call without a parent span ID = 0
+	event = getTraceEvent(t, tc)
+	matchNestedEvent(t, "GET", "GET", "/attach", "200", ptrace.SpanKindClient, event)
+	assert.Equal(t, "", event.Attributes["parent_span_id"])
+}
+
+func newRequest(id uint64, method, path, peer string, status int) []ebpfcommon.HTTPRequestTrace {
 	rt := ebpfcommon.HTTPRequestTrace{}
 	copy(rt.Path[:], path)
 	copy(rt.Method[:], method)
@@ -215,10 +280,29 @@ func newRequest(method, path, peer string, status int) []ebpfcommon.HTTPRequestT
 	copy(rt.Host[:], getHostname()+":8080")
 	rt.Status = uint16(status)
 	rt.Type = transform.EventTypeHTTP
+	rt.Id = id
+	rt.GoStartMonotimeNs = 1
+	rt.StartMonotimeNs = 2
+	rt.EndMonotimeNs = 3
 	return []ebpfcommon.HTTPRequestTrace{rt}
 }
 
-func newGRPCRequest(path string, status int) []ebpfcommon.HTTPRequestTrace {
+func newRequestWithTiming(id uint64, kind uint8, method, path, peer string, status int, goStart, start, end uint64) []ebpfcommon.HTTPRequestTrace {
+	rt := ebpfcommon.HTTPRequestTrace{}
+	copy(rt.Path[:], path)
+	copy(rt.Method[:], method)
+	copy(rt.RemoteAddr[:], peer)
+	copy(rt.Host[:], getHostname()+":8080")
+	rt.Status = uint16(status)
+	rt.Type = kind
+	rt.Id = id
+	rt.GoStartMonotimeNs = goStart
+	rt.StartMonotimeNs = start
+	rt.EndMonotimeNs = end
+	return []ebpfcommon.HTTPRequestTrace{rt}
+}
+
+func newGRPCRequest(id uint64, path string, status int) []ebpfcommon.HTTPRequestTrace {
 	rt := ebpfcommon.HTTPRequestTrace{}
 	copy(rt.Path[:], path)
 	copy(rt.RemoteAddr[:], []byte{0x1, 0x1, 0x1, 0x1})
@@ -228,6 +312,10 @@ func newGRPCRequest(path string, status int) []ebpfcommon.HTTPRequestTrace {
 	rt.HostPort = 8080
 	rt.Status = uint16(status)
 	rt.Type = transform.EventTypeGRPC
+	rt.Id = id
+	rt.GoStartMonotimeNs = 1
+	rt.StartMonotimeNs = 2
+	rt.EndMonotimeNs = 3
 	return []ebpfcommon.HTTPRequestTrace{rt}
 }
 
@@ -272,6 +360,8 @@ func matchTraceEvent(t *testing.T, name string, event collector.TraceRecord) {
 			string(semconv.NetHostNameKey):              getHostname(),
 			string(semconv.NetHostPortKey):              "8080",
 			string(semconv.HTTPRequestContentLengthKey): "0",
+			"span_id":        event.Attributes["span_id"],
+			"parent_span_id": event.Attributes["parent_span_id"],
 		},
 		Kind: ptrace.SpanKindServer,
 	}, event)
@@ -279,9 +369,12 @@ func matchTraceEvent(t *testing.T, name string, event collector.TraceRecord) {
 
 func matchInnerTraceEvent(t *testing.T, name string, event collector.TraceRecord) {
 	assert.Equal(t, collector.TraceRecord{
-		Name:       name,
-		Attributes: map[string]string{},
-		Kind:       ptrace.SpanKindInternal,
+		Name: name,
+		Attributes: map[string]string{
+			"span_id":        event.Attributes["span_id"],
+			"parent_span_id": event.Attributes["parent_span_id"],
+		},
+		Kind: ptrace.SpanKindInternal,
 	}, event)
 }
 
@@ -291,10 +384,12 @@ func matchGRPCTraceEvent(t *testing.T, name string, event collector.TraceRecord)
 		Attributes: map[string]string{
 			string(semconv.RPCSystemKey):         "grpc",
 			string(semconv.RPCGRPCStatusCodeKey): "3",
-			string(semconv.RPCMethodKey):         "/foo/bar",
+			string(semconv.RPCMethodKey):         "foo.bar",
 			string(semconv.NetSockPeerAddrKey):   "1.1.1.1",
 			string(semconv.NetHostNameKey):       "127.0.0.1",
 			string(semconv.NetHostPortKey):       "8080",
+			"span_id":                            event.Attributes["span_id"],
+			"parent_span_id":                     event.Attributes["parent_span_id"],
 		},
 		Kind: ptrace.SpanKindServer,
 	}, event)
@@ -302,8 +397,23 @@ func matchGRPCTraceEvent(t *testing.T, name string, event collector.TraceRecord)
 
 func matchInnerGRPCTraceEvent(t *testing.T, name string, event collector.TraceRecord) {
 	assert.Equal(t, collector.TraceRecord{
-		Name:       name,
-		Attributes: map[string]string{},
-		Kind:       ptrace.SpanKindInternal,
+		Name: name,
+		Attributes: map[string]string{
+			"span_id":        event.Attributes["span_id"],
+			"parent_span_id": event.Attributes["parent_span_id"],
+		},
+		Kind: ptrace.SpanKindInternal,
 	}, event)
+}
+
+func matchNestedEvent(t *testing.T, name, method, target, status string, kind ptrace.SpanKind, event collector.TraceRecord) {
+	assert.Equal(t, name, event.Name)
+	assert.Equal(t, method, event.Attributes["http.method"])
+	assert.Equal(t, status, event.Attributes["http.status_code"])
+	if kind == ptrace.SpanKindClient {
+		assert.Equal(t, target, event.Attributes["http.url"])
+	} else {
+		assert.Equal(t, target, event.Attributes["http.target"])
+	}
+	assert.Equal(t, kind, event.Kind)
 }

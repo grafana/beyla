@@ -93,7 +93,7 @@ func (tc *TestCollector) traceEvent(writer http.ResponseWriter, body []byte) {
 		forEach[ptrace.ScopeSpans](rs.ScopeSpans(), func(ss ptrace.ScopeSpans) {
 			forEach[ptrace.Span](ss.Spans(), func(s ptrace.Span) {
 				switch s.Kind() {
-				case ptrace.SpanKindServer, ptrace.SpanKindInternal:
+				case ptrace.SpanKindServer, ptrace.SpanKindInternal, ptrace.SpanKindClient:
 					tr := TraceRecord{
 						Kind:       s.Kind(),
 						Name:       s.Name(),
@@ -103,6 +103,9 @@ func (tc *TestCollector) traceEvent(writer http.ResponseWriter, body []byte) {
 						tr.Attributes[k] = v.AsString()
 						return true
 					})
+					tr.Attributes["span_id"] = s.SpanID().String()
+					tr.Attributes["parent_span_id"] = s.ParentSpanID().String()
+
 					tc.TraceRecords <- tr
 				default:
 					slog.Warn("unsupported trace kind", "kind", s.Kind().String())

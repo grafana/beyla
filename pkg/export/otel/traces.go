@@ -228,7 +228,7 @@ func (r *TracesReporter) reportTraces(input <-chan []transform.HTTPRequestSpan) 
 				// we have a parent request span
 				if span.ID != 0 {
 					sp, ok := topSpans.Get(span.ID)
-					if ok && sp.ReqSpan.End.Compare(span.End) > 0 {
+					if ok && sp.ReqSpan.End.Compare(span.End) >= 0 {
 						// parent span exists, use it
 						ctx = sp.RootCtx
 					} else {
@@ -255,7 +255,11 @@ func (r *TracesReporter) reportTraces(input <-chan []transform.HTTPRequestSpan) 
 					// finish any client spans that were waiting for this parent span
 					for j := range cs {
 						cspan := &cs[j]
-						makeSpan(s.RootCtx, tracer, cspan)
+						if cspan.Start.Compare(span.RequestStart) >= 0 && cspan.End.Compare(span.End) <= 0 {
+							makeSpan(s.RootCtx, tracer, cspan)
+						} else {
+							makeSpan(context.TODO(), tracer, cspan)
+						}
 					}
 					clientSpans.Remove(span.ID)
 				}

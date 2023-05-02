@@ -29,7 +29,7 @@ func TestForwardRingbuf_CapacityFull(t *testing.T) {
 	defer restore()
 	forwardedMessages := make(chan []HTTPRequestTrace, 100)
 	go ForwardRingbuf(
-		&TracerConfig{BatchLength: 10, BatchTimeout: time.Hour},
+		&TracerConfig{BatchLength: 10},
 		slog.With("test", "TestForwardRingbuf_CapacityFull"),
 		nil, // the source ring buffer can be null
 	)(context.Background(), forwardedMessages)
@@ -98,7 +98,7 @@ func TestForwardRingbuf_Close(t *testing.T) {
 
 	closable := closableObject{}
 	go ForwardRingbuf(
-		&TracerConfig{BatchLength: 10, BatchTimeout: time.Hour},
+		&TracerConfig{BatchLength: 10},
 		slog.With("test", "TestForwardRingbuf_Close"),
 		nil, // the source ring buffer can be null
 		&closable,

@@ -38,8 +38,7 @@ func ForwardRingbuf(
 	ringbuffer *ebpf.Map,
 	closers ...io.Closer,
 ) node.StartFuncCtx[[]HTTPRequestTrace] {
-	// TODO: make use of context to cancel process
-	return func(_ context.Context, eventsChan chan<- []HTTPRequestTrace) {
+	return func(ctx context.Context, eventsChan chan<- []HTTPRequestTrace) {
 		// BPF will send each measured trace via Ring Buffer, so we listen for them from the
 		// user space.
 		eventsReader, err := readerFactory(ringbuffer)
@@ -51,25 +50,32 @@ func ForwardRingbuf(
 
 		events := make([]HTTPRequestTrace, cfg.BatchLength)
 		ev := 0
-		ticker := time.NewTicker(cfg.BatchTimeout)
+		var ticker *time.Ticker
 		access := sync.Mutex{}
+		// If the underlying context is closed, it closes the events reader
+		// so the function can exit.
 		go func() {
-			if cfg.BatchTimeout == 0 {
-				return
-			}
-			// submit periodically on timeout, if the batch is not full
-			for {
-				<-ticker.C
-				access.Lock()
-				if ev > 0 {
-					logger.Debug("submitting traces on timeout", "len", ev)
-					eventsChan <- events[:ev]
-					events = make([]HTTPRequestTrace, cfg.BatchLength)
-					ev = 0
-				}
-				access.Unlock()
-			}
+			<-ctx.Done()
+			_ = eventsReader.Close()
 		}()
+
+		// Forwards periodically on timeout, if the batch is not full
+		if cfg.BatchTimeout > 0 {
+			ticker = time.NewTicker(cfg.BatchTimeout)
+			go func() {
+				for {
+					<-ticker.C
+					access.Lock()
+					if ev > 0 {
+						logger.Debug("submitting traces on timeout", "len", ev)
+						eventsChan <- events[:ev]
+						events = make([]HTTPRequestTrace, cfg.BatchLength)
+						ev = 0
+					}
+					access.Unlock()
+				}
+			}()
+		}
 		for {
 			logger.Debug("starting to read perf buffer")
 			record, err := eventsReader.Read()
@@ -96,7 +102,9 @@ func ForwardRingbuf(
 				eventsChan <- events
 				events = make([]HTTPRequestTrace, cfg.BatchLength)
 				ev = 0
-				ticker.Reset(cfg.BatchTimeout)
+				if ticker != nil {
+					ticker.Reset(cfg.BatchTimeout)
+				}
 			}
 			access.Unlock()
 		}

@@ -237,7 +237,7 @@ int uprobe_clientSendReturn(struct pt_regs *ctx) {
         return 0;
     }
 
-    // Get the host information the remote supplied
+    // Get the host information of the remote
     if (!read_go_str("host", req_ptr, host_ptr_pos, &trace->host, sizeof(trace->host))) {
         bpf_printk("can't read http Request.Host");
         bpf_ringbuf_discard(trace, 0);

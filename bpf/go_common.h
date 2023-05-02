@@ -132,7 +132,7 @@ int uprobe_proc_newproc1_ret(struct pt_regs *ctx) {
 
     // The parent goroutine is the second argument of newproc1
     void *parent_goroutine = (void *)GO_PARAM2(&invocation->regs);
-    bpf_printk("parent goroutine_addr %lx", parent_goroutine);
+    bpf_dbg_printk("parent goroutine_addr %lx", parent_goroutine);
 
     // The result of newproc1 is the new goroutine
     void *goroutine_addr = (void *)GO_PARAM1(ctx);

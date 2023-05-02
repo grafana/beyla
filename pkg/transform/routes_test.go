@@ -4,21 +4,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/grafana/ebpf-autoinstrument/pkg/testutil"
+
 	"github.com/stretchr/testify/assert"
 )
 
 const testTimeout = 5 * time.Second
-
-func readChan(t *testing.T, ch <-chan []HTTPRequestSpan) []HTTPRequestSpan {
-	t.Helper()
-	select {
-	case <-time.After(testTimeout):
-		t.Fatal("timeout while waiting for data on channel")
-		return nil
-	case s := <-ch:
-		return s
-	}
-}
 
 func TestUnmatchedWildcard(t *testing.T) {
 	for _, tc := range []UnmatchType{"", UnmatchWildcard, "invalid_value"} {
@@ -31,12 +22,12 @@ func TestUnmatchedWildcard(t *testing.T) {
 			assert.Equal(t, []HTTPRequestSpan{{
 				Path:  "/user/1234",
 				Route: "/user/:id",
-			}}, readChan(t, out))
+			}}, testutil.ReadChannel(t, out, testTimeout))
 			in <- []HTTPRequestSpan{{Path: "/some/path"}}
 			assert.Equal(t, []HTTPRequestSpan{{
 				Path:  "/some/path",
 				Route: "*",
-			}}, readChan(t, out))
+			}}, testutil.ReadChannel(t, out, testTimeout))
 		})
 	}
 }
@@ -50,12 +41,12 @@ func TestUnmatchedPath(t *testing.T) {
 	assert.Equal(t, []HTTPRequestSpan{{
 		Path:  "/user/1234",
 		Route: "/user/:id",
-	}}, readChan(t, out))
+	}}, testutil.ReadChannel(t, out, testTimeout))
 	in <- []HTTPRequestSpan{{Path: "/some/path"}}
 	assert.Equal(t, []HTTPRequestSpan{{
 		Path:  "/some/path",
 		Route: "/some/path",
-	}}, readChan(t, out))
+	}}, testutil.ReadChannel(t, out, testTimeout))
 }
 
 func TestUnmatchedEmpty(t *testing.T) {
@@ -67,9 +58,9 @@ func TestUnmatchedEmpty(t *testing.T) {
 	assert.Equal(t, []HTTPRequestSpan{{
 		Path:  "/user/1234",
 		Route: "/user/:id",
-	}}, readChan(t, out))
+	}}, testutil.ReadChannel(t, out, testTimeout))
 	in <- []HTTPRequestSpan{{Path: "/some/path"}}
 	assert.Equal(t, []HTTPRequestSpan{{
 		Path: "/some/path",
-	}}, readChan(t, out))
+	}}, testutil.ReadChannel(t, out, testTimeout))
 }

@@ -10,10 +10,24 @@ import (
 	"time"
 
 	"github.com/cilium/ebpf"
+
 	"github.com/cilium/ebpf/ringbuf"
 	"github.com/mariomac/pipes/pkg/node"
 	"golang.org/x/exp/slog"
 )
+
+// ringBufReader interface extracts the used methods from ringbuf.Reader for proper
+// dependency injection during tests
+type ringBufReader interface {
+	io.Closer
+	Read() (ringbuf.Record, error)
+}
+
+// readerFactory instantiates a ringBufReader from a ring buffer. In unit tests, we can
+// replace this function by a mock/dummy.
+var readerFactory = func(rb *ebpf.Map) (ringBufReader, error) {
+	return ringbuf.NewReader(rb)
+}
 
 // ForwardRingbuf returns a function reads HTTPRequestTraces from an input ring buffer, accumulates them into an
 // internal buffer, and forwards them to an output events channel, previously converted to transform.HTTPRequestSpan
@@ -28,18 +42,12 @@ func ForwardRingbuf(
 	return func(_ context.Context, eventsChan chan<- []HTTPRequestTrace) {
 		// BPF will send each measured trace via Ring Buffer, so we listen for them from the
 		// user space.
-		eventsReader, err := ringbuf.NewReader(ringbuffer)
+		eventsReader, err := readerFactory(ringbuffer)
 		if err != nil {
 			logger.Error("creating perf reader. Exiting", err)
 			return
 		}
-		defer func() {
-			logger.Debug("closing eBPF resources")
-			for _, c := range closers {
-				_ = c.Close()
-			}
-			_ = eventsReader.Close()
-		}()
+		defer closeAllResources(logger, append(closers, eventsReader))
 
 		events := make([]HTTPRequestTrace, cfg.BatchLength)
 		ev := 0
@@ -92,5 +100,12 @@ func ForwardRingbuf(
 			}
 			access.Unlock()
 		}
+	}
+}
+
+func closeAllResources(logger *slog.Logger, closers []io.Closer) {
+	logger.Debug("closing eBPF resources")
+	for _, c := range closers {
+		_ = c.Close()
 	}
 }

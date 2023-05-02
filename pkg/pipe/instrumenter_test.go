@@ -218,14 +218,14 @@ func TestNestedSpanMatching(t *testing.T) {
 	// Override eBPF tracer to send some fake data with nested client span
 	graph.RegisterStart(gb.builder, func(_ ebpfcommon.TracerConfig) node.StartFuncCtx[[]ebpfcommon.HTTPRequestTrace] {
 		return func(_ context.Context, out chan<- []ebpfcommon.HTTPRequestTrace) {
-			out <- newRequestWithTiming(1, transform.EventTypeHTTPClient, "GET", "/attach", "2.2.2.2:1234", 200, 5, 5, 6)
-			out <- newRequestWithTiming(1, transform.EventTypeHTTP, "GET", "/user/1234", "1.1.1.1:3456", 200, 1, 1, 4)
-			out <- newRequestWithTiming(3, transform.EventTypeHTTPClient, "GET", "/products/3210/pull", "2.2.2.2:3456", 204, 8, 8, 9)
-			out <- newRequestWithTiming(3, transform.EventTypeHTTPClient, "GET", "/products/3211/pull", "2.2.2.2:3456", 203, 8, 8, 9)
-			out <- newRequestWithTiming(2, transform.EventTypeHTTP, "GET", "/products/3210/push", "1.1.1.1:3456", 200, 1, 2, 5)
-			out <- newRequestWithTiming(3, transform.EventTypeHTTP, "GET", "/attach", "1.1.1.1:3456", 200, 7, 8, 10)
-			out <- newRequestWithTiming(1, transform.EventTypeHTTPClient, "GET", "/attach", "2.2.2.2:1234", 200, 3, 3, 4)
-			out <- newRequestWithTiming(0, transform.EventTypeHTTPClient, "GET", "/attach", "2.2.2.2:1234", 200, 3, 3, 4)
+			out <- newRequestWithTiming(1, transform.EventTypeHTTPClient, "GET", "/attach", "2.2.2.2:1234", 200, 60000, 60000, 70000)
+			out <- newRequestWithTiming(1, transform.EventTypeHTTP, "GET", "/user/1234", "1.1.1.1:3456", 200, 10000, 10000, 50000)
+			out <- newRequestWithTiming(3, transform.EventTypeHTTPClient, "GET", "/products/3210/pull", "2.2.2.2:3456", 204, 80000, 80000, 90000)
+			out <- newRequestWithTiming(3, transform.EventTypeHTTPClient, "GET", "/products/3211/pull", "2.2.2.2:3456", 203, 80000, 80000, 90000)
+			out <- newRequestWithTiming(2, transform.EventTypeHTTP, "GET", "/products/3210/push", "1.1.1.1:3456", 200, 10000, 20000, 50000)
+			out <- newRequestWithTiming(3, transform.EventTypeHTTP, "GET", "/attach", "1.1.1.1:3456", 200, 70000, 80000, 100000)
+			out <- newRequestWithTiming(1, transform.EventTypeHTTPClient, "GET", "/attach2", "2.2.2.2:1234", 200, 30000, 30000, 40000)
+			out <- newRequestWithTiming(0, transform.EventTypeHTTPClient, "GET", "/attach1", "2.2.2.2:1234", 200, 20000, 20000, 40000)
 		}
 	})
 	pipe, err := gb.buildGraph()
@@ -274,11 +274,11 @@ func TestNestedSpanMatching(t *testing.T) {
 	assert.Equal(t, spanID, event.Attributes["parent_span_id"])
 	// 6. Next we should see a child span from the request with ID=1
 	event = getTraceEvent(t, tc)
-	matchNestedEvent(t, "GET", "GET", "/attach", "200", ptrace.SpanKindClient, event)
+	matchNestedEvent(t, "GET", "GET", "/attach2", "200", ptrace.SpanKindClient, event)
 	assert.Equal(t, parent1ID, event.Attributes["parent_span_id"])
 	// 7. Now we see a client call without a parent span ID = 0
 	event = getTraceEvent(t, tc)
-	matchNestedEvent(t, "GET", "GET", "/attach", "200", ptrace.SpanKindClient, event)
+	matchNestedEvent(t, "GET", "GET", "/attach1", "200", ptrace.SpanKindClient, event)
 	assert.Equal(t, "", event.Attributes["parent_span_id"])
 }
 

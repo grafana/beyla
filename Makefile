@@ -4,6 +4,8 @@ MAIN_GO_FILE ?= cmd/$(CMD)/main.go
 GOOS ?= linux
 GOARCH ?= amd64
 
+TEST_OUTPUT ?= ./testoutput
+
 IMG_REGISTRY ?= docker.io
 # Set your registry username. CI will set 'grafana' but you mustn't use it for manual pushing.
 IMG_ORG ?=
@@ -27,7 +29,7 @@ CLANG ?= clang
 CFLAGS := -O2 -g -Wall -Werror $(CFLAGS)
 
 # regular expressions for excluded file patterns
-EXCLUDE_COVERAGE_FILES="(/cmd/)|(bpf_)|(/pingserver/)|(/test/collector/)"
+EXCLUDE_COVERAGE_FILES="(bpf_)|(/pingserver/)|(/test/collector/)"
 
 .DEFAULT_GOAL := all
 
@@ -71,6 +73,7 @@ GO_OFFSETS_TRACKER = $(TOOLS_DIR)/go-offsets-tracker
 .PHONY: prereqs
 prereqs:
 	@echo "### Check if prerequisites are met, and installing missing dependencies"
+	mkdir -p $(TEST_OUTPUT)
 	$(call go-install-tool,$(GOLANGCI_LINT),github.com/golangci/golangci-lint/cmd/golangci-lint@v1.52.2)
 	$(call go-install-tool,$(BPF2GO),github.com/cilium/ebpf/cmd/bpf2go@v0.10.0)
 	$(call go-install-tool,$(GO_OFFSETS_TRACKER),github.com/grafana/go-offsets-tracker/cmd/go-offsets-tracker@v0.1.4)
@@ -114,24 +117,30 @@ compile:
 	@echo "### Compiling project"
 	GOOS=$(GOOS) GOARCH=$(GOARCH) go build -mod vendor -ldflags -a -o bin/$(CMD) $(MAIN_GO_FILE)
 
+# Generated binary can provide coverage stats according to https://go.dev/blog/integration-test-coverage
+.PHONY: compile-for-coverage
+compile-for-coverage:
+	@echo "### Compiling project to generate coverage profiles"
+	GOOS=$(GOOS) GOARCH=$(GOARCH) go build -mod vendor -cover -a -o bin/$(CMD) $(MAIN_GO_FILE)
+
 .PHONY: test
 test:
 	@echo "### Testing code"
-	go test -mod vendor -a ./... -coverpkg=./... -coverprofile cover.all.out
+	go test -mod vendor -a ./... -coverpkg=./... -coverprofile $(TEST_OUTPUT)/cover.all.txt
 
 .PHONY: cov-exclude-generated
 cov-exclude-generated:
-	grep -vE $(EXCLUDE_COVERAGE_FILES) cover.all.out > cover.out
+	grep -vE $(EXCLUDE_COVERAGE_FILES) $(TEST_OUTPUT)/cover.all.txt > $(TEST_OUTPUT)/cover.txt
 
 .PHONY: coverage-report
 coverage-report: cov-exclude-generated
 	@echo "### Generating coverage report"
-	go tool cover --func=./cover.out
+	go tool cover --func=$(TEST_OUTPUT)/cover.txt
 
 .PHONY: coverage-report-html
 coverage-report-html: cov-exclude-generated
 	@echo "### Generating HTML coverage report"
-	go tool cover --html=./cover.out
+	go tool cover --html=$(TEST_OUTPUT)/cover.txt
 
 .PHONY: image-build-push
 image-build-push:
@@ -158,7 +167,6 @@ cleanup-integration-test:
 	$(OCI_BIN) compose $(COMPOSE_ARGS) rm -f
 	$(OCI_BIN) rmi -f $(shell $(OCI_BIN) images --format '{{.Repository}}:{{.Tag}}' | grep 'hatest-') || true
 
-# TODO: provide coverage info for integration testing https://go.dev/blog/integration-test-coverage
 .PHONY: run-integration-test
 run-integration-test:
 	@echo "### Running integration tests"
@@ -166,9 +174,21 @@ run-integration-test:
 	go test -mod vendor -a ./test/integration/... --tags=integration
 
 .PHONY: integration-test
-integration-test: prepare-integration-test
+integration-test: prereqs prepare-integration-test
 	$(MAKE) run-integration-test || (ret=$$?; $(MAKE) cleanup-integration-test && exit $$ret)
+	$(MAKE) itest-coverage-data
 	$(MAKE) cleanup-integration-test
+
+.PHONY: itest-coverage-data
+itest-coverage-data:
+	# merge coverage data from all the integration tests
+	mkdir -p $(TEST_OUTPUT)/merge
+	go tool covdata merge -i=$(TEST_OUTPUT) -o $(TEST_OUTPUT)/merge
+	go tool covdata textfmt -i=$(TEST_OUTPUT)/merge -o $(TEST_OUTPUT)/itest-covdata.raw.txt
+	# replace the unexpected /src/cmd/otelauto/main.go file by the module path
+	sed 's/^\/src\/cmd\//github.com\/grafana\/ebpf-autoinstrument\/cmd\//' $(TEST_OUTPUT)/itest-covdata.raw.txt > $(TEST_OUTPUT)/itest-covdata.all.txt
+	# exclude generated files from coverage data
+	grep -vE $(EXCLUDE_COVERAGE_FILES) $(TEST_OUTPUT)/itest-covdata.all.txt > $(TEST_OUTPUT)/itest-covdata.txt
 
 .PHONY: drone
 drone:

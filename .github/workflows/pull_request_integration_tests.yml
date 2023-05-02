@@ -26,4 +26,10 @@ jobs:
         if: always()
         with:
           name: Test Logs
-          path: "*.log"
+          path: "testoutput/*.log"
+      - name: Report coverage
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./testoutput/itest-covdata.txt
+          flags: integration-test
+          token: ${{ secrets.CODECOV_TOKEN }}

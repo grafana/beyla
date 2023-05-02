@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/grafana/ebpf-autoinstrument/pkg/ebpf/fs"
+	"github.com/grafana/ebpf-autoinstrument/pkg/ebpf/goruntime"
 	"github.com/grafana/ebpf-autoinstrument/pkg/ebpf/grpc"
 
 	ebpfcommon "github.com/grafana/ebpf-autoinstrument/pkg/ebpf/common"
@@ -56,6 +57,7 @@ func TracerProvider(cfg ebpfcommon.TracerConfig) []node.StartFuncCtx[[]ebpfcommo
 		&nethttp.Tracer{Cfg: &cfg},
 		&nethttp.GinTracer{Tracer: nethttp.Tracer{Cfg: &cfg}},
 		&grpc.Tracer{Cfg: &cfg},
+		&goruntime.Tracer{Cfg: &cfg},
 	}
 
 	// merging all the functions from all the programs, in order to do

@@ -1,5 +1,3 @@
-// Copyright The OpenTelemetry Authors
-//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -12,22 +10,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package grpc
+package goruntime
 
 import (
 	"context"
 	"io"
-	"unsafe"
 
 	ebpfcommon "github.com/grafana/ebpf-autoinstrument/pkg/ebpf/common"
+	"golang.org/x/exp/slog"
 
 	"github.com/cilium/ebpf"
 	"github.com/grafana/ebpf-autoinstrument/pkg/goexec"
-	"golang.org/x/exp/slog"
 )
 
-//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf ../../../bpf/go_grpc.c -- -I../../../bpf/headers
-//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf_debug ../../../bpf/go_grpc.c -- -I../../../bpf/headers -DBPF_DEBUG
+//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf ../../../bpf/go_runtime.c -- -I../../../bpf/headers
+//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf_debug ../../../bpf/go_runtime.c -- -I../../../bpf/headers -DBPF_DEBUG
 
 type Tracer struct {
 	Cfg        *ebpfcommon.TracerConfig
@@ -43,25 +40,8 @@ func (p *Tracer) Load() (*ebpf.CollectionSpec, error) {
 	return loader()
 }
 
-func (p *Tracer) Constants(offsets *goexec.Offsets) map[string]any {
-	// Set the field offsets and the logLevel for grpc BPF program,
-	// as well as some other configuration constants
-	constants := map[string]any{
-		"wakeup_data_bytes": uint32(p.Cfg.WakeupLen) * uint32(unsafe.Sizeof(ebpfcommon.HTTPRequestTrace{})),
-	}
-	for _, s := range []string{
-		"grpc_stream_st_ptr_pos",
-		"grpc_stream_method_ptr_pos",
-		"grpc_status_s_pos",
-		"grpc_status_code_ptr_pos",
-		"grpc_st_remoteaddr_ptr_pos",
-		"grpc_st_localaddr_ptr_pos",
-		"tcp_addr_port_ptr_pos",
-		"tcp_addr_ip_ptr_pos",
-	} {
-		constants[s] = offsets.Field[s]
-	}
-	return constants
+func (p *Tracer) Constants(_ *goexec.Offsets) map[string]any {
+	return make(map[string]any)
 }
 
 func (p *Tracer) BpfObjects() any {
@@ -74,20 +54,18 @@ func (p *Tracer) AddCloser(c ...io.Closer) {
 
 func (p *Tracer) Probes() map[string]ebpfcommon.FunctionPrograms {
 	return map[string]ebpfcommon.FunctionPrograms{
-		"google.golang.org/grpc.(*Server).handleStream": {
-			Required: true,
-			Start:    p.bpfObjects.UprobeServerHandleStream,
-			End:      p.bpfObjects.UprobeServerHandleStreamReturn,
+		"runtime.newproc1": {
+			Start: p.bpfObjects.UprobeProcNewproc1,
+			End:   p.bpfObjects.UprobeProcNewproc1Ret,
 		},
-		"google.golang.org/grpc/internal/transport.(*http2Server).WriteStatus": {
-			Required: true,
-			Start:    p.bpfObjects.UprobeTransportWriteStatus,
+		"runtime.goexit1": {
+			Start: p.bpfObjects.UprobeProcGoexit1,
 		},
 	}
 }
 
 func (p *Tracer) Run(ctx context.Context, eventsChan chan<- []ebpfcommon.HTTPRequestTrace) {
-	logger := slog.With("component", "grpc.Tracer")
+	logger := slog.With("component", "goruntime.Tracer")
 	ebpfcommon.ForwardRingbuf(
 		p.Cfg, logger, p.bpfObjects.Events,
 		append(p.closers, &p.bpfObjects)...,

@@ -5,5 +5,5 @@ const (
 )
 
 var (
-	PinnedMaps = []string{"ongoing_server_requests"}
+	PinnedMaps = []string{"ongoing_server_requests", "ongoing_goroutines"}
 )

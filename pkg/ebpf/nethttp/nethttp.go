@@ -79,13 +79,6 @@ func (p *Tracer) Probes() map[string]ebpfcommon.FunctionPrograms {
 			Start:    p.bpfObjects.UprobeServeHTTP,
 			End:      p.bpfObjects.UprobeServeHttpReturn,
 		},
-		"runtime.newproc1": {
-			Start: p.bpfObjects.UprobeProcNewproc1,
-			End:   p.bpfObjects.UprobeProcNewproc1Ret,
-		},
-		"runtime.goexit1": {
-			Start: p.bpfObjects.UprobeProcGoexit1,
-		},
 		"net/http.(*connReader).startBackgroundRead": {
 			Start: p.bpfObjects.UprobeStartBackgroundRead,
 		},
@@ -115,13 +108,6 @@ func (p *GinTracer) Probes() map[string]ebpfcommon.FunctionPrograms {
 			Required: true,
 			Start:    p.bpfObjects.UprobeServeHTTP,
 			End:      p.bpfObjects.UprobeServeHttpReturn,
-		},
-		"runtime.newproc1": {
-			Start: p.bpfObjects.UprobeProcNewproc1,
-			End:   p.bpfObjects.UprobeProcNewproc1Ret,
-		},
-		"runtime.goexit1": {
-			Start: p.bpfObjects.UprobeProcGoexit1,
 		},
 		"net/http.(*connReader).startBackgroundRead": {
 			Start: p.bpfObjects.UprobeStartBackgroundRead,

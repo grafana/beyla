@@ -83,9 +83,6 @@ type bpfProgramSpecs struct {
 	UprobeServeHttpReturn     *ebpf.ProgramSpec `ebpf:"uprobe_ServeHttp_return"`
 	UprobeClientSend          *ebpf.ProgramSpec `ebpf:"uprobe_clientSend"`
 	UprobeClientSendReturn    *ebpf.ProgramSpec `ebpf:"uprobe_clientSendReturn"`
-	UprobeProcGoexit1         *ebpf.ProgramSpec `ebpf:"uprobe_proc_goexit1"`
-	UprobeProcNewproc1        *ebpf.ProgramSpec `ebpf:"uprobe_proc_newproc1"`
-	UprobeProcNewproc1Ret     *ebpf.ProgramSpec `ebpf:"uprobe_proc_newproc1_ret"`
 	UprobeStartBackgroundRead *ebpf.ProgramSpec `ebpf:"uprobe_startBackgroundRead"`
 }
 
@@ -144,9 +141,6 @@ type bpfPrograms struct {
 	UprobeServeHttpReturn     *ebpf.Program `ebpf:"uprobe_ServeHttp_return"`
 	UprobeClientSend          *ebpf.Program `ebpf:"uprobe_clientSend"`
 	UprobeClientSendReturn    *ebpf.Program `ebpf:"uprobe_clientSendReturn"`
-	UprobeProcGoexit1         *ebpf.Program `ebpf:"uprobe_proc_goexit1"`
-	UprobeProcNewproc1        *ebpf.Program `ebpf:"uprobe_proc_newproc1"`
-	UprobeProcNewproc1Ret     *ebpf.Program `ebpf:"uprobe_proc_newproc1_ret"`
 	UprobeStartBackgroundRead *ebpf.Program `ebpf:"uprobe_startBackgroundRead"`
 }
 
@@ -156,9 +150,6 @@ func (p *bpfPrograms) Close() error {
 		p.UprobeServeHttpReturn,
 		p.UprobeClientSend,
 		p.UprobeClientSendReturn,
-		p.UprobeProcGoexit1,
-		p.UprobeProcNewproc1,
-		p.UprobeProcNewproc1Ret,
 		p.UprobeStartBackgroundRead,
 	)
 }

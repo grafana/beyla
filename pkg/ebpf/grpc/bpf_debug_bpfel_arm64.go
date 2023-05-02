@@ -79,9 +79,6 @@ type bpf_debugSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpf_debugProgramSpecs struct {
-	UprobeProcGoexit1              *ebpf.ProgramSpec `ebpf:"uprobe_proc_goexit1"`
-	UprobeProcNewproc1             *ebpf.ProgramSpec `ebpf:"uprobe_proc_newproc1"`
-	UprobeProcNewproc1Ret          *ebpf.ProgramSpec `ebpf:"uprobe_proc_newproc1_ret"`
 	UprobeServerHandleStream       *ebpf.ProgramSpec `ebpf:"uprobe_server_handleStream"`
 	UprobeServerHandleStreamReturn *ebpf.ProgramSpec `ebpf:"uprobe_server_handleStream_return"`
 	UprobeTransportWriteStatus     *ebpf.ProgramSpec `ebpf:"uprobe_transport_writeStatus"`
@@ -138,9 +135,6 @@ func (m *bpf_debugMaps) Close() error {
 //
 // It can be passed to loadBpf_debugObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpf_debugPrograms struct {
-	UprobeProcGoexit1              *ebpf.Program `ebpf:"uprobe_proc_goexit1"`
-	UprobeProcNewproc1             *ebpf.Program `ebpf:"uprobe_proc_newproc1"`
-	UprobeProcNewproc1Ret          *ebpf.Program `ebpf:"uprobe_proc_newproc1_ret"`
 	UprobeServerHandleStream       *ebpf.Program `ebpf:"uprobe_server_handleStream"`
 	UprobeServerHandleStreamReturn *ebpf.Program `ebpf:"uprobe_server_handleStream_return"`
 	UprobeTransportWriteStatus     *ebpf.Program `ebpf:"uprobe_transport_writeStatus"`
@@ -148,9 +142,6 @@ type bpf_debugPrograms struct {
 
 func (p *bpf_debugPrograms) Close() error {
 	return _Bpf_debugClose(
-		p.UprobeProcGoexit1,
-		p.UprobeProcNewproc1,
-		p.UprobeProcNewproc1Ret,
 		p.UprobeServerHandleStream,
 		p.UprobeServerHandleStreamReturn,
 		p.UprobeTransportWriteStatus,

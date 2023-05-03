@@ -140,26 +140,9 @@ func findLibraryVersions(elfFile *elf.File) (map[string]string, error) {
 var buildInfoMagic = []byte("\xff Go buildinf:")
 
 func getGoDetails(f *elf.File) (string, string, error) {
-	// Read the first 64kB of text to find the build info blob.
-	text := dataStart(f)
-	data, err := readData(f, text, 64*1024)
-	if err != nil {
-		return "", "", err
-	}
-	const (
-		buildInfoAlign = 16
-		buildInfoSize  = 32
-	)
-	for {
-		i := bytes.Index(data, buildInfoMagic)
-		if i < 0 || len(data)-i < buildInfoSize {
-			return "", "", errors.New("not a Go executable")
-		}
-		if i%buildInfoAlign == 0 && len(data)-i >= buildInfoSize {
-			data = data[i:]
-			break
-		}
-		data = data[(i+buildInfoAlign-1)&^buildInfoAlign:]
+	data, err2 := getBuildInfoBlob(f)
+	if err2 != nil {
+		return "", "", err2
 	}
 
 	// Decode the blob.
@@ -206,6 +189,31 @@ func getGoDetails(f *elf.File) (string, string, error) {
 	}
 
 	return vers, mod, nil
+}
+
+// getBuildInfoBlob reads the first 64kB of text to find the build info blob.
+func getBuildInfoBlob(f *elf.File) ([]byte, error) {
+	text := dataStart(f)
+	data, err := readData(f, text, 64*1024)
+	if err != nil {
+		return nil, err
+	}
+	const (
+		buildInfoAlign = 16
+		buildInfoSize  = 32
+	)
+	for {
+		i := bytes.Index(data, buildInfoMagic)
+		if i < 0 || len(data)-i < buildInfoSize {
+			return nil, errors.New("not a Go executable")
+		}
+		if i%buildInfoAlign == 0 && len(data)-i >= buildInfoSize {
+			data = data[i:]
+			break
+		}
+		data = data[(i+buildInfoAlign-1)&^buildInfoAlign:]
+	}
+	return data, nil
 }
 
 func dataStart(f *elf.File) uint64 {

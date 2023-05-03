@@ -33,6 +33,6 @@ jobs:
       - name: Report coverage
         uses: codecov/codecov-action@v3
         with:
-          files: ./cover.out
+          files: ./testoutput/cover.txt
           flags: unittests
           token: ${{ secrets.CODECOV_TOKEN }}

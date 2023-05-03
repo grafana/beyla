@@ -17,20 +17,21 @@ services:
   autoinstrumenter:
     build:
       context: ../..
-      dockerfile: ./Dockerfile
+      dockerfile: ./test/integration/components/otelauto/Dockerfile
     command:
       - /otelauto
       - --config=/configs/instrumenter-config.yml
     volumes:
       - ./configs/:/configs
+      - ../../testoutput:/coverage
     image: hatest-autoinstrumenter
     privileged: true # TODO: replace by individual capabilities
     pid: "service:testserver"
     environment:
+      GOCOVERDIR: "/coverage"
       PRINT_TRACES: "true"
       OPEN_PORT: "${OPEN_PORT}"
       EXECUTABLE_NAME: "${EXECUTABLE_NAME}"
-      OTEL_EXPORTER_OTLP_ENDPOINT: "http://otelcol:4318"
       METRICS_INTERVAL: "10ms"
       BPF_BATCH_TIMEOUT: "10ms"
       LOG_LEVEL: "DEBUG"

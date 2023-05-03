@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/grafana/ebpf-autoinstrument/pkg/testutil"
+
 	"github.com/mariomac/pipes/pkg/graph"
 	"github.com/mariomac/pipes/pkg/node"
 	"github.com/stretchr/testify/assert"
@@ -41,7 +43,7 @@ func TestBasicPipeline(t *testing.T) {
 
 	go pipe.Run(ctx)
 
-	event := getEvent(t, tc)
+	event := testutil.ReadChannel(t, tc.Records, testTimeout)
 	assert.Equal(t, collector.MetricRecord{
 		Name: "http.server.duration",
 		Unit: "ms",
@@ -74,12 +76,12 @@ func TestTracerPipeline(t *testing.T) {
 
 	go pipe.Run(ctx)
 
-	event := getTraceEvent(t, tc)
+	event := testutil.ReadChannel(t, tc.TraceRecords, testTimeout)
 	matchInnerTraceEvent(t, "in queue", event)
-	event = getTraceEvent(t, tc)
+	event = testutil.ReadChannel(t, tc.TraceRecords, testTimeout)
 	matchInnerTraceEvent(t, "processing", event)
-	event = getTraceEvent(t, tc)
-	matchTraceEvent(t, "GET", event)
+	event = testutil.ReadChannel(t, tc.TraceRecords, testTimeout)
+	matchTraceEvent(t, "session", event)
 }
 
 func TestRouteConsolidation(t *testing.T) {
@@ -109,7 +111,7 @@ func TestRouteConsolidation(t *testing.T) {
 	// expect to receive 3 events without any guaranteed order
 	events := map[string]collector.MetricRecord{}
 	for i := 0; i < 3; i++ {
-		ev := getEvent(t, tc)
+		ev := testutil.ReadChannel(t, tc.Records, testTimeout)
 		events[ev.Attributes[string(semconv.HTTPRouteKey)]] = ev
 	}
 
@@ -166,7 +168,7 @@ func TestGRPCPipeline(t *testing.T) {
 
 	go pipe.Run(ctx)
 
-	event := getEvent(t, tc)
+	event := testutil.ReadChannel(t, tc.Records, testTimeout)
 	assert.Equal(t, collector.MetricRecord{
 		Name: "rpc.server.duration",
 		Unit: "ms",
@@ -199,10 +201,12 @@ func TestTraceGRPCPipeline(t *testing.T) {
 
 	go pipe.Run(ctx)
 
-	event := getTraceEvent(t, tc)
+	event := testutil.ReadChannel(t, tc.TraceRecords, testTimeout)
 	matchInnerGRPCTraceEvent(t, "in queue", event)
-	event = getTraceEvent(t, tc)
+	event = testutil.ReadChannel(t, tc.TraceRecords, testTimeout)
 	matchInnerGRPCTraceEvent(t, "processing", event)
+	event = testutil.ReadChannel(t, tc.TraceRecords, testTimeout)
+	matchGRPCTraceEvent(t, "session", event)
 	event = getTraceEvent(t, tc)
 	matchGRPCTraceEvent(t, "foo.bar", event)
 }
@@ -327,28 +331,6 @@ func newGRPCRequest(id uint64, path string, status int) []ebpfcommon.HTTPRequest
 	rt.StartMonotimeNs = 2
 	rt.EndMonotimeNs = 3
 	return []ebpfcommon.HTTPRequestTrace{rt}
-}
-
-func getEvent(t *testing.T, coll *collector.TestCollector) collector.MetricRecord {
-	t.Helper()
-	select {
-	case ev := <-coll.Records:
-		return ev
-	case <-time.After(testTimeout):
-		t.Fatal("timeout while waiting for message")
-	}
-	return collector.MetricRecord{}
-}
-
-func getTraceEvent(t *testing.T, coll *collector.TestCollector) collector.TraceRecord {
-	t.Helper()
-	select {
-	case ev := <-coll.TraceRecords:
-		return ev
-	case <-time.After(testTimeout):
-		t.Fatal("timeout while waiting for message")
-	}
-	return collector.TraceRecord{}
 }
 
 func getHostname() string {

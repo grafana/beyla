@@ -1,13 +1,13 @@
-# Build the autoinstrumenter binary
+# Development version of the otelauto Dockerfile that compiles for coverage
+# and allows retrieving coverage files.
+# The production-ready minimal image is in the project root's dockerfile.
 FROM golang:1.20 as builder
-
-# TODO: embed software version in executable
 
 ARG TARGETARCH
 
 ENV GOARCH=$TARGETARCH
 
-WORKDIR /opt/app-root
+WORKDIR /src
 
 # Copy the go manifests and source
 COPY .git/ .git/
@@ -20,15 +20,11 @@ COPY go.sum go.sum
 COPY Makefile Makefile
 
 # Build
-RUN make compile
+RUN make compile-for-coverage
 
-# Create final image from minimal + built binary
-FROM busybox:1.35-glibc
-
-LABEL maintainer="Grafana Labs <hello@grafana.com>"
+RUN mv /src/bin/otelauto /otelauto
 
 WORKDIR /
-COPY --from=builder /opt/app-root/bin/otelauto .
 USER 0:0
 
 CMD [ "/otelauto" ]

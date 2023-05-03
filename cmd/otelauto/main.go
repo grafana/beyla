@@ -38,14 +38,6 @@ func main() {
 		os.Exit(-1)
 	}
 
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
-	go func() {
-		<-c
-		erasePinnedMaps()
-		os.Exit(1)
-	}()
-
 	if config.ProfilePort != 0 {
 		go func() {
 			slog.Info("starting PProf HTTP listener", "port", config.ProfilePort)
@@ -68,7 +60,21 @@ func main() {
 	}
 
 	slog.Info("Starting main node")
-	bp.Run(context.TODO())
+
+	// Adding shutdown hook for graceful stop
+	ctx, cancel := context.WithCancel(context.Background())
+	exit := make(chan os.Signal, 1)
+	signal.Notify(exit, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		sig := <-exit
+		slog.Debug("Received termination signal", "signal", sig.String())
+		cancel()
+	}()
+
+	go bp.Run(ctx)
+
+	<-ctx.Done()
+	slog.Info("stopping auto-instrumenter")
 }
 
 func erasePinnedMaps() {

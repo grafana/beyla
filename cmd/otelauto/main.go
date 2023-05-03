@@ -7,6 +7,8 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"golang.org/x/exp/slog"
 
@@ -49,8 +51,21 @@ func main() {
 	}
 
 	slog.Info("Starting main node")
-	// TODO: add shutdown hook for graceful stop
-	bp.Run(context.TODO())
+
+	// Adding shutdown hook for graceful stop
+	ctx, cancel := context.WithCancel(context.Background())
+	exit := make(chan os.Signal, 1)
+	signal.Notify(exit, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		sig := <-exit
+		slog.Debug("Received termination signal", "signal", sig.String())
+		cancel()
+	}()
+
+	go bp.Run(ctx)
+
+	<-ctx.Done()
+	slog.Info("stopping auto-instrumenter")
 }
 
 func loadConfig(configPath *string) *pipe.Config {

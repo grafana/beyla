@@ -66,7 +66,7 @@ struct {
     __type(key, void *); // key: pointer to the goroutine
     __type(value, goroutine_metadata);  // value: timestamp of the goroutine creation
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
-	__uint(pinning, LIBBPF_PIN_BY_NAME);
+    __uint(pinning, LIBBPF_PIN_BY_NAME);
 } ongoing_goroutines SEC(".maps");
 
 
@@ -76,7 +76,7 @@ struct {
     __type(key, void *); // key: pointer to the request goroutine
     __type(value, func_invocation);
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
-	__uint(pinning, LIBBPF_PIN_BY_NAME);
+    __uint(pinning, LIBBPF_PIN_BY_NAME);
 } ongoing_server_requests SEC(".maps");
 
 

@@ -215,6 +215,51 @@ func makeSpan(parentCtx context.Context, tracer trace2.Tracer, span *transform.H
 	return SessionSpan{*span, ctx}
 }
 
+func (r *TracesReporter) reportHTTPClientTrace(span *transform.HTTPRequestSpan, tracer trace2.Tracer) {
+	ctx := context.TODO()
+
+	// we have a parent request span
+	if span.ID != 0 {
+		sp, ok := topSpans.Get(span.ID)
+		if ok && sp.ReqSpan.End.Compare(span.End) >= 0 {
+			// parent span exists, use it
+			ctx = sp.RootCtx
+		} else {
+			// stash the client span for later addition
+			cs, ok := clientSpans.Get(span.ID)
+			if !ok {
+				cs = []transform.HTTPRequestSpan{*span}
+			} else {
+				cs = append(cs, *span)
+			}
+			clientSpans.Add(span.ID, cs)
+
+			// don't add the span just yet, the parent span isn't ready
+			return
+		}
+	}
+
+	makeSpan(ctx, tracer, span)
+}
+
+func (r *TracesReporter) reportServerSpan(span *transform.HTTPRequestSpan, tracer trace2.Tracer) {
+	s := makeSpan(context.TODO(), tracer, span)
+	topSpans.Add(span.ID, s)
+	cs, ok := clientSpans.Get(span.ID)
+	if ok {
+		// finish any client spans that were waiting for this parent span
+		for j := range cs {
+			cspan := &cs[j]
+			if cspan.Start.Compare(span.RequestStart) >= 0 && cspan.End.Compare(span.End) <= 0 {
+				makeSpan(s.RootCtx, tracer, cspan)
+			} else {
+				makeSpan(context.TODO(), tracer, cspan)
+			}
+		}
+		clientSpans.Remove(span.ID)
+	}
+}
+
 func (r *TracesReporter) reportTraces(input <-chan []transform.HTTPRequestSpan) {
 	defer r.close()
 	tracer := r.traceProvider.Tracer(reporterName)
@@ -223,46 +268,9 @@ func (r *TracesReporter) reportTraces(input <-chan []transform.HTTPRequestSpan) 
 			span := &spans[i]
 
 			if span.Type == transform.EventTypeHTTPClient {
-				ctx := context.TODO()
-
-				// we have a parent request span
-				if span.ID != 0 {
-					sp, ok := topSpans.Get(span.ID)
-					if ok && sp.ReqSpan.End.Compare(span.End) >= 0 {
-						// parent span exists, use it
-						ctx = sp.RootCtx
-					} else {
-						// stash the client span for later addition
-						cs, ok := clientSpans.Get(span.ID)
-						if !ok {
-							cs = []transform.HTTPRequestSpan{*span}
-						} else {
-							cs = append(cs, *span)
-						}
-						clientSpans.Add(span.ID, cs)
-
-						// don't add the span just yet, the parent span isn't ready
-						continue
-					}
-				}
-
-				makeSpan(ctx, tracer, span)
+				r.reportHTTPClientTrace(span, tracer)
 			} else {
-				s := makeSpan(context.TODO(), tracer, span)
-				topSpans.Add(span.ID, s)
-				cs, ok := clientSpans.Get(span.ID)
-				if ok {
-					// finish any client spans that were waiting for this parent span
-					for j := range cs {
-						cspan := &cs[j]
-						if cspan.Start.Compare(span.RequestStart) >= 0 && cspan.End.Compare(span.End) <= 0 {
-							makeSpan(s.RootCtx, tracer, cspan)
-						} else {
-							makeSpan(context.TODO(), tracer, cspan)
-						}
-					}
-					clientSpans.Remove(span.ID)
-				}
+				r.reportServerSpan(span, tracer)
 			}
 		}
 	}

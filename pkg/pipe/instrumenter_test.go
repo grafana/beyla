@@ -207,7 +207,7 @@ func TestTraceGRPCPipeline(t *testing.T) {
 	matchInnerGRPCTraceEvent(t, "processing", event)
 	event = testutil.ReadChannel(t, tc.TraceRecords, testTimeout)
 	matchGRPCTraceEvent(t, "session", event)
-	event = getTraceEvent(t, tc)
+	event = testutil.ReadChannel(t, tc.TraceRecords, testTimeout)
 	matchGRPCTraceEvent(t, "foo.bar", event)
 }
 
@@ -238,50 +238,50 @@ func TestNestedSpanMatching(t *testing.T) {
 	go pipe.Run(ctx)
 
 	// 1. The first event has no internal spans, goroutine Start and Start are the same
-	event := getTraceEvent(t, tc)
+	event := testutil.ReadChannel(t, tc.TraceRecords, testTimeout)
 	parent1ID := event.Attributes["span_id"]
 	matchNestedEvent(t, "GET", "GET", "/user/1234", "200", ptrace.SpanKindServer, event)
 	// 2. Next we should see a child span from the request with ID=1, but the parent won't match, since we are outside the time range
-	event = getTraceEvent(t, tc)
+	event = testutil.ReadChannel(t, tc.TraceRecords, testTimeout)
 	matchNestedEvent(t, "GET", "GET", "/attach", "200", ptrace.SpanKindClient, event)
 	assert.Equal(t, "", event.Attributes["parent_span_id"])
 	// 3. The second event is server "/products/3210/push", since the client span has a parent which hasn't arrived yet.
 	// This event has nested server spans.
-	event = getTraceEvent(t, tc)
+	event = testutil.ReadChannel(t, tc.TraceRecords, testTimeout)
 	pIDQ := event.Attributes["parent_span_id"]
 	matchNestedEvent(t, "in queue", "", "", "", ptrace.SpanKindInternal, event)
-	event = getTraceEvent(t, tc)
+	event = testutil.ReadChannel(t, tc.TraceRecords, testTimeout)
 	pIDP := event.Attributes["parent_span_id"]
 	matchNestedEvent(t, "processing", "", "", "", ptrace.SpanKindInternal, event)
-	event = getTraceEvent(t, tc)
+	event = testutil.ReadChannel(t, tc.TraceRecords, testTimeout)
 	matchNestedEvent(t, "GET", "GET", "/products/3210/push", "200", ptrace.SpanKindServer, event)
 	assert.Equal(t, pIDP, event.Attributes["span_id"])
 	assert.Equal(t, pIDQ, event.Attributes["span_id"])
 	// 4. Third event has client span as well, which we recorded just after we processed the first event
-	event = getTraceEvent(t, tc)
+	event = testutil.ReadChannel(t, tc.TraceRecords, testTimeout)
 	matchNestedEvent(t, "in queue", "", "", "", ptrace.SpanKindInternal, event)
-	event = getTraceEvent(t, tc)
+	event = testutil.ReadChannel(t, tc.TraceRecords, testTimeout)
 	spanID := event.Attributes["span_id"]
 	parentID := event.Attributes["parent_span_id"]
 	matchNestedEvent(t, "processing", "", "", "", ptrace.SpanKindInternal, event)
-	event = getTraceEvent(t, tc)
+	event = testutil.ReadChannel(t, tc.TraceRecords, testTimeout)
 	matchNestedEvent(t, "GET", "GET", "/attach", "200", ptrace.SpanKindServer, event)
 	// the processing span is a child of the session span
 	assert.Equal(t, parentID, event.Attributes["span_id"])
 	// 5. The first client span id will be a child of the processing span, of the request with ID=3
-	event = getTraceEvent(t, tc)
+	event = testutil.ReadChannel(t, tc.TraceRecords, testTimeout)
 	matchNestedEvent(t, "GET", "GET", "/products/3210/pull", "204", ptrace.SpanKindClient, event)
 	assert.Equal(t, spanID, event.Attributes["parent_span_id"])
 	// Test that we correctly keep the list of all prior client events
-	event = getTraceEvent(t, tc)
+	event = testutil.ReadChannel(t, tc.TraceRecords, testTimeout)
 	matchNestedEvent(t, "GET", "GET", "/products/3211/pull", "203", ptrace.SpanKindClient, event)
 	assert.Equal(t, spanID, event.Attributes["parent_span_id"])
 	// 6. Next we should see a child span from the request with ID=1
-	event = getTraceEvent(t, tc)
+	event = testutil.ReadChannel(t, tc.TraceRecords, testTimeout)
 	matchNestedEvent(t, "GET", "GET", "/attach2", "200", ptrace.SpanKindClient, event)
 	assert.Equal(t, parent1ID, event.Attributes["parent_span_id"])
 	// 7. Now we see a client call without a parent span ID = 0
-	event = getTraceEvent(t, tc)
+	event = testutil.ReadChannel(t, tc.TraceRecords, testTimeout)
 	matchNestedEvent(t, "GET", "GET", "/attach1", "200", ptrace.SpanKindClient, event)
 	assert.Equal(t, "", event.Attributes["parent_span_id"])
 }

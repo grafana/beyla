@@ -2,6 +2,7 @@ package pipe
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/grafana/ebpf-autoinstrument/pkg/ebpf"
 
@@ -48,14 +49,19 @@ func newGraphBuilder(config *Config) *graphBuilder {
 	}
 }
 
+func programName(path string) string {
+	parts := strings.Split(path, "/")
+	return parts[len(parts)-1]
+}
+
 func (gb *graphBuilder) buildGraph() (graph.Graph, error) {
 
 	gb.config.EBPF.OnOffsets = func(offsets *goexec.Offsets) {
 		if gb.config.Metrics.ServiceName == "" {
-			gb.config.Metrics.ServiceName = offsets.FileInfo.CmdExePath
+			gb.config.Metrics.ServiceName = programName(offsets.FileInfo.CmdExePath)
 		}
 		if gb.config.Traces.ServiceName == "" {
-			gb.config.Traces.ServiceName = offsets.FileInfo.CmdExePath
+			gb.config.Traces.ServiceName = programName(offsets.FileInfo.CmdExePath)
 		}
 	}
 

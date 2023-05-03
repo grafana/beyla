@@ -83,12 +83,6 @@ func (p *Tracer) Probes() map[string]ebpfcommon.FunctionPrograms {
 			Required: true,
 			Start:    p.bpfObjects.UprobeTransportWriteStatus,
 		},
-		"runtime.newproc1": {
-			End: p.bpfObjects.UprobeProcNewproc1Ret,
-		},
-		"runtime.goexit1": {
-			Start: p.bpfObjects.UprobeProcGoexit1,
-		},
 	}
 }
 

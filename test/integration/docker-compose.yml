@@ -35,6 +35,7 @@ services:
       METRICS_INTERVAL: "10ms"
       BPF_BATCH_TIMEOUT: "10ms"
       LOG_LEVEL: "DEBUG"
+      BPF_DEBUG: "TRUE"
       METRICS_REPORT_TARGET: "true"
       METRICS_REPORT_PEER: "true"
 

@@ -14,6 +14,7 @@ import (
 
 const EventTypeHTTP = 1
 const EventTypeGRPC = 2
+const EventTypeHTTPClient = 3
 
 var log = slog.With("component", "goexec.spanner")
 
@@ -21,6 +22,7 @@ var log = slog.With("component", "goexec.spanner")
 // It enables confortable handling of data from Go.
 type HTTPRequestSpan struct {
 	Type          int
+	ID            uint64
 	Method        string
 	Path          string
 	Route         string
@@ -109,7 +111,7 @@ func (c *converter) convert(trace *ebpfcommon.HTTPRequestTrace) HTTPRequestSpan 
 	hostPort := 0
 
 	switch trace.Type {
-	case EventTypeHTTP:
+	case EventTypeHTTPClient, EventTypeHTTP:
 		peer, _ = extractHostPort(trace.RemoteAddr[:])
 		hostname, hostPort = extractHostPort(trace.Host[:])
 	case EventTypeGRPC:
@@ -122,6 +124,7 @@ func (c *converter) convert(trace *ebpfcommon.HTTPRequestTrace) HTTPRequestSpan 
 
 	return HTTPRequestSpan{
 		Type:          int(trace.Type),
+		ID:            trace.Id,
 		Method:        string(trace.Method[:methodLen]),
 		Path:          string(trace.Path[:pathLen]),
 		Peer:          peer,

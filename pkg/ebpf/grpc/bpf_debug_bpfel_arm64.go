@@ -13,9 +13,8 @@ import (
 	"github.com/cilium/ebpf"
 )
 
-type bpf_debugGrpcMethodData struct {
+type bpf_debugFuncInvocation struct {
 	StartMonotimeNs uint64
-	Status          uint64
 	Regs            struct {
 		UserRegs struct {
 			Regs   [31]uint64
@@ -32,6 +31,11 @@ type bpf_debugGrpcMethodData struct {
 		LockdepHardirqs uint64
 		ExitRcu         uint64
 	}
+}
+
+type bpf_debugGoroutineMetadata struct {
+	Parent    uint64
+	Timestamp uint64
 }
 
 // loadBpf_debug returns the embedded CollectionSpec for bpf_debug.
@@ -75,8 +79,6 @@ type bpf_debugSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpf_debugProgramSpecs struct {
-	UprobeProcGoexit1              *ebpf.ProgramSpec `ebpf:"uprobe_proc_goexit1"`
-	UprobeProcNewproc1Ret          *ebpf.ProgramSpec `ebpf:"uprobe_proc_newproc1_ret"`
 	UprobeServerHandleStream       *ebpf.ProgramSpec `ebpf:"uprobe_server_handleStream"`
 	UprobeServerHandleStreamReturn *ebpf.ProgramSpec `ebpf:"uprobe_server_handleStream_return"`
 	UprobeTransportWriteStatus     *ebpf.ProgramSpec `ebpf:"uprobe_transport_writeStatus"`
@@ -86,9 +88,11 @@ type bpf_debugProgramSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpf_debugMapSpecs struct {
-	Events              *ebpf.MapSpec `ebpf:"events"`
-	OngoingGoroutines   *ebpf.MapSpec `ebpf:"ongoing_goroutines"`
-	OngoingGrpcRequests *ebpf.MapSpec `ebpf:"ongoing_grpc_requests"`
+	Events                   *ebpf.MapSpec `ebpf:"events"`
+	Newproc1                 *ebpf.MapSpec `ebpf:"newproc1"`
+	OngoingGoroutines        *ebpf.MapSpec `ebpf:"ongoing_goroutines"`
+	OngoingGrpcRequestStatus *ebpf.MapSpec `ebpf:"ongoing_grpc_request_status"`
+	OngoingServerRequests    *ebpf.MapSpec `ebpf:"ongoing_server_requests"`
 }
 
 // bpf_debugObjects contains all objects after they have been loaded into the kernel.
@@ -110,16 +114,20 @@ func (o *bpf_debugObjects) Close() error {
 //
 // It can be passed to loadBpf_debugObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpf_debugMaps struct {
-	Events              *ebpf.Map `ebpf:"events"`
-	OngoingGoroutines   *ebpf.Map `ebpf:"ongoing_goroutines"`
-	OngoingGrpcRequests *ebpf.Map `ebpf:"ongoing_grpc_requests"`
+	Events                   *ebpf.Map `ebpf:"events"`
+	Newproc1                 *ebpf.Map `ebpf:"newproc1"`
+	OngoingGoroutines        *ebpf.Map `ebpf:"ongoing_goroutines"`
+	OngoingGrpcRequestStatus *ebpf.Map `ebpf:"ongoing_grpc_request_status"`
+	OngoingServerRequests    *ebpf.Map `ebpf:"ongoing_server_requests"`
 }
 
 func (m *bpf_debugMaps) Close() error {
 	return _Bpf_debugClose(
 		m.Events,
+		m.Newproc1,
 		m.OngoingGoroutines,
-		m.OngoingGrpcRequests,
+		m.OngoingGrpcRequestStatus,
+		m.OngoingServerRequests,
 	)
 }
 
@@ -127,8 +135,6 @@ func (m *bpf_debugMaps) Close() error {
 //
 // It can be passed to loadBpf_debugObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpf_debugPrograms struct {
-	UprobeProcGoexit1              *ebpf.Program `ebpf:"uprobe_proc_goexit1"`
-	UprobeProcNewproc1Ret          *ebpf.Program `ebpf:"uprobe_proc_newproc1_ret"`
 	UprobeServerHandleStream       *ebpf.Program `ebpf:"uprobe_server_handleStream"`
 	UprobeServerHandleStreamReturn *ebpf.Program `ebpf:"uprobe_server_handleStream_return"`
 	UprobeTransportWriteStatus     *ebpf.Program `ebpf:"uprobe_transport_writeStatus"`
@@ -136,8 +142,6 @@ type bpf_debugPrograms struct {
 
 func (p *bpf_debugPrograms) Close() error {
 	return _Bpf_debugClose(
-		p.UprobeProcGoexit1,
-		p.UprobeProcNewproc1Ret,
 		p.UprobeServerHandleStream,
 		p.UprobeServerHandleStreamReturn,
 		p.UprobeTransportWriteStatus,

@@ -96,7 +96,7 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url string) {
 		results, err = pq.Query(`http_server_duration_count{` +
 			`http_method="GET",` +
 			`http_status_code="404",` +
-			`service_name="/testserver",` +
+			`service_name="testserver",` +
 			`http_route="/basic/:rnd",` +
 			`http_target="` + path + `"}`)
 		require.NoError(t, err)
@@ -116,7 +116,7 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url string) {
 		results, err = pq.Query(`http_server_request_size_count{` +
 			`http_method="GET",` +
 			`http_status_code="404",` +
-			`service_name="/testserver",` +
+			`service_name="testserver",` +
 			`http_route="/basic/:rnd",` +
 			`http_target="` + path + `"}`)
 		require.NoError(t, err)
@@ -136,7 +136,7 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url string) {
 	results, err = pq.Query(`http_server_duration_sum{` +
 		`http_method="GET",` +
 		`http_status_code="404",` +
-		`service_name="/testserver",` +
+		`service_name="testserver",` +
 		`http_route="/basic/:rnd",` +
 		`http_target="` + path + `"}`)
 	require.NoError(t, err)
@@ -153,7 +153,7 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url string) {
 	results, err = pq.Query(`http_server_request_size_sum{` +
 		`http_method="GET",` +
 		`http_status_code="404",` +
-		`service_name="/testserver",` +
+		`service_name="testserver",` +
 		`http_route="/basic/:rnd",` +
 		`http_target="` + path + `"}`)
 	require.NoError(t, err)
@@ -183,7 +183,7 @@ func testREDMetricsGRPC(t *testing.T) {
 		var err error
 		results, err = pq.Query(`rpc_server_duration_count{` +
 			`rpc_grpc_status_code="0",` +
-			`service_name="/testserver",` +
+			`service_name="testserver",` +
 			`rpc_method="/routeguide.RouteGuide/GetFeature"}`)
 		require.NoError(t, err)
 		// check duration_count has at least 3 calls and all the arguments

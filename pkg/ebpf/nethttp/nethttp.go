@@ -54,6 +54,7 @@ func (p *Tracer) Constants(offsets *goexec.Offsets) map[string]any {
 		"path_ptr_pos",
 		"method_ptr_pos",
 		"status_ptr_pos",
+		"status_code_ptr_pos",
 		"remoteaddr_ptr_pos",
 		"host_ptr_pos",
 		"content_length_ptr_pos",
@@ -78,14 +79,12 @@ func (p *Tracer) Probes() map[string]ebpfcommon.FunctionPrograms {
 			Start:    p.bpfObjects.UprobeServeHTTP,
 			End:      p.bpfObjects.UprobeServeHttpReturn,
 		},
-		"runtime.newproc1": {
-			End: p.bpfObjects.UprobeProcNewproc1Ret,
-		},
-		"runtime.goexit1": {
-			Start: p.bpfObjects.UprobeProcGoexit1,
-		},
 		"net/http.(*connReader).startBackgroundRead": {
 			Start: p.bpfObjects.UprobeStartBackgroundRead,
+		},
+		"net/http.(*Client).send": {
+			Start: p.bpfObjects.UprobeClientSend,
+			End:   p.bpfObjects.UprobeClientSendReturn,
 		},
 	}
 }
@@ -110,14 +109,12 @@ func (p *GinTracer) Probes() map[string]ebpfcommon.FunctionPrograms {
 			Start:    p.bpfObjects.UprobeServeHTTP,
 			End:      p.bpfObjects.UprobeServeHttpReturn,
 		},
-		"runtime.newproc1": {
-			End: p.bpfObjects.UprobeProcNewproc1Ret,
-		},
-		"runtime.goexit1": {
-			Start: p.bpfObjects.UprobeProcGoexit1,
-		},
 		"net/http.(*connReader).startBackgroundRead": {
 			Start: p.bpfObjects.UprobeStartBackgroundRead,
+		},
+		"net/http.(*Client).send": {
+			Start: p.bpfObjects.UprobeClientSend,
+			End:   p.bpfObjects.UprobeClientSendReturn,
 		},
 	}
 }

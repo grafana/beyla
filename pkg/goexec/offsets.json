@@ -168,6 +168,20 @@
         ]
       }
     },
+    "net/http.Response": {
+      "StatusCode": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.20.3"
+        },
+        "offsets": [
+          {
+            "offset": 16,
+            "since": "1.17.0"
+          }
+        ]
+      }
+    },
     "net/http.response": {
       "status": {
         "versions": {

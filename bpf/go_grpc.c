@@ -16,18 +16,12 @@
 #include "bpf_dbg.h"
 #include "go_common.h"
 
-typedef struct grpc_method_data_t {
-    u64 start_monotime_ns;
-    u64 status;          // we only need u16, but regs below must be 8-byte aligned
-    struct pt_regs regs; // we store registers on invocation to be able to fetch the arguments at return
-} grpc_method_data;
-
 struct {
     __uint(type, BPF_MAP_TYPE_HASH);
     __type(key, void *); // key: pointer to the request goroutine
-    __type(value, grpc_method_data);
+    __type(value, u16);
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
-} ongoing_grpc_requests SEC(".maps");
+} ongoing_grpc_request_status SEC(".maps");
 
 // To be Injected from the user space during the eBPF program load & initialization
 
@@ -47,13 +41,12 @@ int uprobe_server_handleStream(struct pt_regs *ctx) {
     void *goroutine_addr = GOROUTINE_PTR(ctx);
     bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
 
-    grpc_method_data invocation = {
+    func_invocation invocation = {
         .start_monotime_ns = bpf_ktime_get_ns(),
-        .regs = *ctx,
-        .status = -1
+        .regs = *ctx
     };
 
-    if (bpf_map_update_elem(&ongoing_grpc_requests, &goroutine_addr, &invocation, BPF_ANY)) {
+    if (bpf_map_update_elem(&ongoing_server_requests, &goroutine_addr, &invocation, BPF_ANY)) {
         bpf_dbg_printk("can't update grpc map element");
     }
 
@@ -67,11 +60,18 @@ int uprobe_server_handleStream_return(struct pt_regs *ctx) {
     void *goroutine_addr = GOROUTINE_PTR(ctx);
     bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
 
-    grpc_method_data *invocation =
-        bpf_map_lookup_elem(&ongoing_grpc_requests, &goroutine_addr);
-    bpf_map_delete_elem(&ongoing_grpc_requests, &goroutine_addr);
+    func_invocation *invocation =
+        bpf_map_lookup_elem(&ongoing_server_requests, &goroutine_addr);
+    bpf_map_delete_elem(&ongoing_server_requests, &goroutine_addr);
     if (invocation == NULL) {
         bpf_dbg_printk("can't read grpc invocation metadata");
+        return 0;
+    }
+
+    u16 *status = bpf_map_lookup_elem(&ongoing_grpc_request_status, &goroutine_addr);
+    bpf_map_delete_elem(&ongoing_grpc_request_status, &goroutine_addr);
+    if (status == NULL) {
+        bpf_dbg_printk("can't read grpc invocation status");
         return 0;
     }
 
@@ -84,12 +84,13 @@ int uprobe_server_handleStream_return(struct pt_regs *ctx) {
         return 0;
     }
     trace->type = EVENT_GRPC_REQUEST;
+    trace->id = (u64)goroutine_addr;
     trace->start_monotime_ns = invocation->start_monotime_ns;
-    trace->status = invocation->status;
+    trace->status = *status;
 
-    u64 *go_start_monotime_ns = bpf_map_lookup_elem(&ongoing_goroutines, &goroutine_addr);
-    if (go_start_monotime_ns) {
-        trace->go_start_monotime_ns = *go_start_monotime_ns;
+    goroutine_metadata *g_metadata = bpf_map_lookup_elem(&ongoing_goroutines, &goroutine_addr);
+    if (g_metadata) {
+        trace->go_start_monotime_ns = g_metadata->timestamp;
         bpf_map_delete_elem(&ongoing_goroutines, &goroutine_addr);
     } else {
         trace->go_start_monotime_ns = invocation->start_monotime_ns;
@@ -151,13 +152,6 @@ int uprobe_transport_writeStatus(struct pt_regs *ctx) {
     void *goroutine_addr = GOROUTINE_PTR(ctx);
     bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
 
-    grpc_method_data *invocation =
-        bpf_map_lookup_elem(&ongoing_grpc_requests, &goroutine_addr);
-    if (invocation == NULL) {
-        bpf_dbg_printk("can't read grpc invocation metadata in write status");
-        return 0;
-    }
-
     void *status_ptr = GO_PARAM3(ctx);
     bpf_dbg_printk("status_ptr %lx", status_ptr);
 
@@ -168,9 +162,10 @@ int uprobe_transport_writeStatus(struct pt_regs *ctx) {
         bpf_dbg_printk("s_ptr %lx", s_ptr);
 
         if (s_ptr != NULL) {
-            bpf_probe_read(&invocation->status, sizeof(invocation->status), (void *)(s_ptr + grpc_status_code_ptr_pos));
-            bpf_dbg_printk("status code %d", invocation->status);
-            bpf_map_update_elem(&ongoing_grpc_requests, &goroutine_addr, invocation, BPF_ANY);
+            u16 status = -1;
+            bpf_probe_read(&status, sizeof(status), (void *)(s_ptr + grpc_status_code_ptr_pos));
+            bpf_dbg_printk("status code %d", status);
+            bpf_map_update_elem(&ongoing_grpc_request_status, &goroutine_addr, &status, BPF_ANY);
         }
     }
 

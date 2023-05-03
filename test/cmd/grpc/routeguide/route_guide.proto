@@ -20,6 +20,9 @@ service RouteGuide {
   // position.
   rpc GetFeature(Point) returns (Feature) {}
 
+  // Same as GetFeature, however it calls pingserver downstream
+  rpc GetFeatureWrapper(Point) returns (Feature) {}
+
   // A server-to-client streaming RPC.
   //
   // Obtains the Features available within the given Rectangle.  Results are

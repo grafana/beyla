@@ -13,6 +13,7 @@ import (
 
 type bpfHttpRequestTrace struct {
 	Type              uint8
+	Id                uint64
 	GoStartMonotimeNs uint64
 	StartMonotimeNs   uint64
 	EndMonotimeNs     uint64

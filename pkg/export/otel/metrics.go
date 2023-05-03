@@ -40,13 +40,15 @@ func (m MetricsConfig) Enabled() bool {
 }
 
 type MetricsReporter struct {
-	reportTarget    bool
-	reportPeer      bool
-	exporter        metric.Exporter
-	provider        *metric.MeterProvider
-	httpDuration    instrument.Float64Histogram
-	grpcDuration    instrument.Float64Histogram
-	httpRequestSize instrument.Float64Histogram
+	reportTarget          bool
+	reportPeer            bool
+	exporter              metric.Exporter
+	provider              *metric.MeterProvider
+	httpDuration          instrument.Float64Histogram
+	httpClientDuration    instrument.Float64Histogram
+	grpcDuration          instrument.Float64Histogram
+	httpRequestSize       instrument.Float64Histogram
+	httpClientRequestSize instrument.Float64Histogram
 }
 
 func MetricsReporterProvider(cfg MetricsConfig) node.TerminalFunc[[]transform.HTTPRequestSpan] {
@@ -89,6 +91,11 @@ func newMetricsReporter(cfg *MetricsConfig) (*MetricsReporter, error) {
 	if err != nil {
 		return nil, fmt.Errorf("creating http duration histogram metric: %w", err)
 	}
+	mr.httpClientDuration, err = mr.provider.Meter(reporterName).
+		Float64Histogram("http.client.duration", instrument.WithUnit("ms"))
+	if err != nil {
+		return nil, fmt.Errorf("creating http duration histogram metric: %w", err)
+	}
 	mr.grpcDuration, err = mr.provider.Meter(reporterName).
 		Float64Histogram("rpc.server.duration", instrument.WithUnit("ms"))
 	if err != nil {
@@ -96,6 +103,11 @@ func newMetricsReporter(cfg *MetricsConfig) (*MetricsReporter, error) {
 	}
 	mr.httpRequestSize, err = mr.provider.Meter(reporterName).
 		Float64Histogram("http.server.request.size", instrument.WithUnit("By"))
+	if err != nil {
+		return nil, fmt.Errorf("creating http size histogram metric: %w", err)
+	}
+	mr.httpClientRequestSize, err = mr.provider.Meter(reporterName).
+		Float64Histogram("http.client.request.size", instrument.WithUnit("By"))
 	if err != nil {
 		return nil, fmt.Errorf("creating http size histogram metric: %w", err)
 	}
@@ -138,6 +150,16 @@ func (r *MetricsReporter) metricAttributes(span *transform.HTTPRequestSpan) []at
 			attrs = append(attrs, semconv.NetSockPeerAddr(span.Peer))
 		}
 		return attrs
+	case transform.EventTypeHTTPClient:
+		attrs := []attribute.KeyValue{
+			semconv.HTTPMethod(span.Method),
+			semconv.HTTPStatusCode(span.Status),
+		}
+		if r.reportPeer {
+			attrs = append(attrs, semconv.NetSockPeerName(span.Host))
+			attrs = append(attrs, semconv.NetSockPeerPort(span.HostPort))
+		}
+		return attrs
 	}
 
 	return []attribute.KeyValue{}
@@ -151,6 +173,9 @@ func (r *MetricsReporter) record(span *transform.HTTPRequestSpan, attrs []attrib
 		r.httpRequestSize.Record(context.TODO(), float64(span.ContentLength), attrs...)
 	case transform.EventTypeGRPC:
 		r.grpcDuration.Record(context.TODO(), span.End.Sub(span.RequestStart).Seconds()*1000, attrs...)
+	case transform.EventTypeHTTPClient:
+		r.httpClientDuration.Record(context.TODO(), span.End.Sub(span.RequestStart).Seconds()*1000, attrs...)
+		r.httpClientRequestSize.Record(context.TODO(), float64(span.ContentLength), attrs...)
 	}
 }
 

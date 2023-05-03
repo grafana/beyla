@@ -8,10 +8,13 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 
 	"golang.org/x/exp/slog"
+	"golang.org/x/sys/unix"
 
+	"github.com/grafana/ebpf-autoinstrument/pkg/ebpf/fs"
 	"github.com/grafana/ebpf-autoinstrument/pkg/pipe"
 
 	_ "net/http/pprof"
@@ -43,6 +46,12 @@ func main() {
 		}()
 	}
 
+	if err := mountBpfFS(); err != nil {
+		slog.Error("error mounting bfs filesystem", err)
+		os.Exit(1)
+	}
+	erasePinnedMaps()
+
 	slog.Info("creating instrumentation pipeline")
 	bp, err := pipe.Build(config)
 	if err != nil {
@@ -68,6 +77,16 @@ func main() {
 	slog.Info("stopping auto-instrumenter")
 }
 
+func erasePinnedMaps() {
+	for _, m := range fs.PinnedMaps {
+		slog.Debug("cleaning storage used by pinned object", "map", m)
+		err := os.Remove(filepath.Join(fs.PinnedRoot, m))
+		if err != nil {
+			slog.Error("can't remove pinned map "+m, err)
+		}
+	}
+}
+
 func loadConfig(configPath *string) *pipe.Config {
 	var configReader io.ReadCloser
 	if configPath != nil && *configPath != "" {
@@ -84,4 +103,19 @@ func loadConfig(configPath *string) *pipe.Config {
 		os.Exit(-1)
 	}
 	return config
+}
+
+func mountBpfFS() error {
+	_, err := os.Stat(fs.PinnedRoot)
+	if err != nil {
+		if os.IsNotExist(err) {
+			if err := os.MkdirAll(fs.PinnedRoot, 0700); err != nil {
+				return err
+			}
+		} else {
+			return err
+		}
+	}
+
+	return unix.Mount(fs.PinnedRoot, fs.PinnedRoot, "bpf", 0, "")
 }

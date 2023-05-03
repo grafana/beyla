@@ -33,6 +33,7 @@ var (
 	ssl        = flag.Bool("tls", false, "Connection uses TLS if true, else plain TCP")
 	serverAddr = flag.String("addr", "localhost:50051", "The server address in the format of host:port")
 	ping       = flag.Bool("ping", false, "Simple ping instead of full chatter")
+	wrapper    = flag.Bool("wrapper", false, "Simple ping with wrapper call to pingserver")
 )
 
 // printFeature gets the feature for the given point.
@@ -41,6 +42,19 @@ func printFeature(client pb.RouteGuideClient, point *pb.Point) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	feature, err := client.GetFeature(ctx, point)
+	if err != nil {
+		slog.Error("client.GetFeature failed", err)
+		os.Exit(-1)
+	}
+	log.Println(feature)
+}
+
+// printFeature gets the feature for the given point.
+func printFeatureWrapper(client pb.RouteGuideClient, point *pb.Point) {
+	slog.Info("Getting feature for point", "lat", point.Latitude, "long", point.Longitude)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	feature, err := client.GetFeatureWrapper(ctx, point)
 	if err != nil {
 		slog.Error("client.GetFeature failed", err)
 		os.Exit(-1)
@@ -193,6 +207,11 @@ func main() {
 	}
 	defer conn.Close()
 	client := pb.NewRouteGuideClient(conn)
+
+	if *wrapper {
+		printFeatureWrapper(client, &pb.Point{Latitude: 409146138, Longitude: -746188906})
+		return
+	}
 
 	// Looking for a valid feature
 	printFeature(client, &pb.Point{Latitude: 409146138, Longitude: -746188906})

@@ -81,7 +81,7 @@ func TestTracerPipeline(t *testing.T) {
 	event = testutil.ReadChannel(t, tc.TraceRecords, testTimeout)
 	matchInnerTraceEvent(t, "processing", event)
 	event = testutil.ReadChannel(t, tc.TraceRecords, testTimeout)
-	matchTraceEvent(t, "session", event)
+	matchTraceEvent(t, "GET", event)
 }
 
 func TestRouteConsolidation(t *testing.T) {
@@ -205,8 +205,6 @@ func TestTraceGRPCPipeline(t *testing.T) {
 	matchInnerGRPCTraceEvent(t, "in queue", event)
 	event = testutil.ReadChannel(t, tc.TraceRecords, testTimeout)
 	matchInnerGRPCTraceEvent(t, "processing", event)
-	event = testutil.ReadChannel(t, tc.TraceRecords, testTimeout)
-	matchGRPCTraceEvent(t, "session", event)
 	event = testutil.ReadChannel(t, tc.TraceRecords, testTimeout)
 	matchGRPCTraceEvent(t, "foo.bar", event)
 }

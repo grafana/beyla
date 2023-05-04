@@ -92,6 +92,12 @@ var structMembers = map[string]structInfo{
 			"Port": "tcp_addr_port_ptr_pos",
 		},
 	},
+	"google.golang.org/grpc.ClientConn": {
+		lib: "google.golang.org/grpc",
+		fields: map[string]string{
+			"target": "grpc_client_target_ptr_pos",
+		},
+	},
 }
 
 func structMemberOffsets(elfFile *elf.File) (FieldOffsets, error) {

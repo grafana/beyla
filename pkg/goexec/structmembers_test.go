@@ -82,6 +82,7 @@ func TestGrpcOffsetsFromDwarf(t *testing.T) {
 		"grpc_status_code_ptr_pos":   uint64(40),
 		"grpc_st_remoteaddr_ptr_pos": uint64(72),
 		"grpc_st_localaddr_ptr_pos":  uint64(88),
+		"grpc_client_target_ptr_pos": uint64(24),
 	}, offsets)
 }
 

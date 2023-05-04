@@ -14,6 +14,20 @@
         ]
       }
     },
+    "google.golang.org/grpc.ClientConn": {
+      "target": {
+        "versions": {
+          "oldest": "1.40.0",
+          "newest": "1.54.0"
+        },
+        "offsets": [
+          {
+            "offset": 24,
+            "since": "1.40.0"
+          }
+        ]
+      }
+    },
     "google.golang.org/grpc/internal/status.Status": {
       "s": {
         "versions": {
@@ -84,7 +98,7 @@
       "IP": {
         "versions": {
           "oldest": "1.17.0",
-          "newest": "1.20.3"
+          "newest": "1.20.4"
         },
         "offsets": [
           {
@@ -96,7 +110,7 @@
       "Port": {
         "versions": {
           "oldest": "1.17.0",
-          "newest": "1.20.3"
+          "newest": "1.20.4"
         },
         "offsets": [
           {
@@ -110,7 +124,7 @@
       "ContentLength": {
         "versions": {
           "oldest": "1.17.0",
-          "newest": "1.20.3"
+          "newest": "1.20.4"
         },
         "offsets": [
           {
@@ -122,7 +136,7 @@
       "Host": {
         "versions": {
           "oldest": "1.17.0",
-          "newest": "1.20.3"
+          "newest": "1.20.4"
         },
         "offsets": [
           {
@@ -134,7 +148,7 @@
       "Method": {
         "versions": {
           "oldest": "1.17.0",
-          "newest": "1.20.3"
+          "newest": "1.20.4"
         },
         "offsets": [
           {
@@ -146,7 +160,7 @@
       "RemoteAddr": {
         "versions": {
           "oldest": "1.17.0",
-          "newest": "1.20.3"
+          "newest": "1.20.4"
         },
         "offsets": [
           {
@@ -158,7 +172,7 @@
       "URL": {
         "versions": {
           "oldest": "1.17.0",
-          "newest": "1.20.3"
+          "newest": "1.20.4"
         },
         "offsets": [
           {
@@ -172,7 +186,7 @@
       "StatusCode": {
         "versions": {
           "oldest": "1.17.0",
-          "newest": "1.20.3"
+          "newest": "1.20.4"
         },
         "offsets": [
           {
@@ -186,7 +200,7 @@
       "status": {
         "versions": {
           "oldest": "1.17.0",
-          "newest": "1.20.3"
+          "newest": "1.20.4"
         },
         "offsets": [
           {
@@ -200,7 +214,7 @@
       "Path": {
         "versions": {
           "oldest": "1.17.0",
-          "newest": "1.20.3"
+          "newest": "1.20.4"
         },
         "offsets": [
           {

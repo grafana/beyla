@@ -23,6 +23,13 @@ struct {
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
 } ongoing_grpc_request_status SEC(".maps");
 
+struct {
+    __uint(type, BPF_MAP_TYPE_HASH);
+    __type(key, void *); // key: pointer to the request goroutine
+    __type(value, func_invocation);
+    __uint(max_entries, MAX_CONCURRENT_REQUESTS);
+} ongoing_grpc_client_requests SEC(".maps");
+
 // To be Injected from the user space during the eBPF program load & initialization
 
 volatile const u64 grpc_stream_st_ptr_pos;
@@ -33,6 +40,7 @@ volatile const u64 grpc_st_remoteaddr_ptr_pos;
 volatile const u64 grpc_st_localaddr_ptr_pos;
 volatile const u64 tcp_addr_port_ptr_pos;
 volatile const u64 tcp_addr_ip_ptr_pos;
+volatile const u64 grpc_client_target_ptr_pos;
 
 
 SEC("uprobe/server_handleStream")
@@ -168,6 +176,87 @@ int uprobe_transport_writeStatus(struct pt_regs *ctx) {
             bpf_map_update_elem(&ongoing_grpc_request_status, &goroutine_addr, &status, BPF_ANY);
         }
     }
+
+    return 0;
+}
+
+/* GRPC client */
+
+SEC("uprobe/ClientConn_Invoke")
+int uprobe_ClientConn_Invoke(struct pt_regs *ctx) {
+    bpf_dbg_printk("=== uprobe/proc grpc ClientConn.Invoke === ");
+
+    void *goroutine_addr = GOROUTINE_PTR(ctx);
+    bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
+
+    func_invocation invocation = {
+        .start_monotime_ns = bpf_ktime_get_ns(),
+        .regs = *ctx,
+    };
+
+    // Write event
+    if (bpf_map_update_elem(&ongoing_grpc_client_requests, &goroutine_addr, &invocation, BPF_ANY)) {
+        bpf_dbg_printk("can't update grpc client map element");
+    }
+
+    return 0;
+}
+
+SEC("uprobe/ClientConn_Invoke")
+int uprobe_ClientConn_Invoke_return(struct pt_regs *ctx) {
+    bpf_dbg_printk("=== uprobe/proc grpc ClientConn.Invoke return === ");
+
+    void *goroutine_addr = GOROUTINE_PTR(ctx);
+    bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
+
+    func_invocation *invocation =
+        bpf_map_lookup_elem(&ongoing_grpc_client_requests, &goroutine_addr);
+    bpf_map_delete_elem(&ongoing_grpc_client_requests, &goroutine_addr);
+
+    if (invocation == NULL) {
+        bpf_dbg_printk("can't read grpc client invocation metadata");
+        return 0;
+    }
+
+    http_request_trace *trace = bpf_ringbuf_reserve(&events, sizeof(http_request_trace), 0);
+    if (!trace) {
+        bpf_dbg_printk("can't reserve space in the ringbuffer");
+        return 0;
+    }
+
+    trace->id = find_parent_goroutine(goroutine_addr);
+
+    trace->type = EVENT_GRPC_CLIENT;
+    trace->start_monotime_ns = invocation->start_monotime_ns;
+    trace->go_start_monotime_ns = invocation->start_monotime_ns;
+    trace->end_monotime_ns = bpf_ktime_get_ns();
+
+    // Read arguments from the original set of registers
+
+    // Get client request value pointers
+    void *cc_ptr = GO_PARAM1(&(invocation->regs));
+    void *method_ptr = GO_PARAM4(&(invocation->regs));
+    void *method_len_ptr = GO_PARAM5(&(invocation->regs));
+    void *err = (void *)GO_PARAM1(ctx);
+
+    // Get method from the incoming call arguments
+    if (!read_go_str_n("method", method_ptr, 0, method_len_ptr, 0, &trace->path, sizeof(trace->path))) {
+        bpf_printk("can't read grpc client method");
+        bpf_ringbuf_discard(trace, 0);
+        return 0;
+    }
+
+    // Get the host information of the remote
+    if (!read_go_str("host", cc_ptr, grpc_client_target_ptr_pos, &trace->host, sizeof(trace->host))) {
+        bpf_printk("can't read http Request.Host");
+        bpf_ringbuf_discard(trace, 0);
+        return 0;
+    }
+
+    // submit the completed trace via ringbuffer
+    bpf_ringbuf_submit(trace, get_flags());
+
+    trace->status = (err) ? 2 : 0; // Getting the gRPC client status is complex, if there's an error we set Code.Unknown = 2
 
     return 0;
 }

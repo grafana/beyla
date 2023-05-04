@@ -98,4 +98,29 @@ static __always_inline long get_flags()
 	return sz >= wakeup_data_bytes ? BPF_RB_FORCE_WAKEUP : BPF_RB_NO_WAKEUP;
 }
 
+static __always_inline u64 find_parent_goroutine(void *goroutine_addr) {
+    void *r_addr = goroutine_addr;
+    int attempts = 0;
+    do {
+        func_invocation *p_inv = bpf_map_lookup_elem(&ongoing_server_requests, &r_addr);
+        if (!p_inv) { // not this goroutine running the server request processing
+            // Let's find the parent scope
+            goroutine_metadata *g_metadata = bpf_map_lookup_elem(&ongoing_goroutines, &r_addr);
+            if (g_metadata) {
+                // Lookup now to see if the parent was a request
+                r_addr = (void *)g_metadata->parent;
+            } else {
+                break;
+            }
+        } else {
+            bpf_dbg_printk("Found parent %lx", r_addr);
+            return (u64)r_addr;
+        }
+
+        attempts++;
+    } while (attempts < 3); // Up to 3 levels of goroutine nesting allowed
+
+    return 0;
+}
+
 #endif // GO_COMMON_H

@@ -15,6 +15,7 @@ import (
 const EventTypeHTTP = 1
 const EventTypeGRPC = 2
 const EventTypeHTTPClient = 3
+const EventTypeGRPCClient = 4
 
 var log = slog.With("component", "goexec.spanner")
 
@@ -118,6 +119,8 @@ func (c *converter) convert(trace *ebpfcommon.HTTPRequestTrace) HTTPRequestSpan 
 		hostPort = int(trace.HostPort)
 		peer = extractIP(trace.RemoteAddr[:], int(trace.RemoteAddrLen))
 		hostname = extractIP(trace.Host[:], int(trace.HostLen))
+	case EventTypeGRPCClient:
+		hostname, hostPort = extractHostPort(trace.Host[:])
 	default:
 		log.Warn("unknown trace type %d", trace.Type)
 	}

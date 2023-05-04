@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"syscall"
 
 	"golang.org/x/exp/slog"
@@ -50,7 +49,20 @@ func main() {
 		slog.Error("error mounting bfs filesystem", err)
 		os.Exit(1)
 	}
-	erasePinnedMaps()
+
+	// Adding shutdown hook for graceful stop.
+	// We must register the hook before we launch the pipe build, otherwise we won't clean-up if the
+	// child process isn't found.
+	ctx, cancel := context.WithCancel(context.Background())
+	exit := make(chan os.Signal, 1)
+	signal.Notify(exit, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		sig := <-exit
+		slog.Debug("Received termination signal", "signal", sig.String())
+		erasePinnedMaps()
+		cancel()
+		os.Exit(1) // Must force exit, cancel will not work if we handn't found a process
+	}()
 
 	slog.Info("creating instrumentation pipeline")
 	bp, err := pipe.Build(config)
@@ -60,17 +72,6 @@ func main() {
 	}
 
 	slog.Info("Starting main node")
-
-	// Adding shutdown hook for graceful stop
-	ctx, cancel := context.WithCancel(context.Background())
-	exit := make(chan os.Signal, 1)
-	signal.Notify(exit, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
-	go func() {
-		sig := <-exit
-		slog.Debug("Received termination signal", "signal", sig.String())
-		cancel()
-	}()
-
 	go bp.Run(ctx)
 
 	<-ctx.Done()
@@ -78,12 +79,14 @@ func main() {
 }
 
 func erasePinnedMaps() {
-	for _, m := range fs.PinnedMaps {
-		slog.Debug("cleaning storage used by pinned object", "map", m)
-		err := os.Remove(filepath.Join(fs.PinnedRoot, m))
-		if err != nil {
-			slog.Error("can't remove pinned map "+m, err)
+	if err := unix.Unmount(fs.PinnedRoot, unix.MNT_FORCE); err == nil {
+		slog.Debug("unmounted bpf file system " + fs.PinnedRoot)
+		if err := os.RemoveAll(fs.PinnedRoot); err != nil {
+			slog.Error("can't remove pinned root "+fs.PinnedRoot, err)
 		}
+		slog.Debug("removed " + fs.PinnedRoot)
+	} else {
+		slog.Error("can't unmount pinned root "+fs.PinnedRoot, err)
 	}
 }
 

@@ -48,6 +48,10 @@ func ConvertToSpan(in <-chan []ebpfcommon.HTTPRequestTrace, out chan<- []HTTPReq
 	}
 }
 
+func (c *HTTPRequestSpan) Inside(parent *HTTPRequestSpan) bool {
+	return c.Start.Compare(parent.RequestStart) >= 0 && c.End.Compare(parent.End) <= 0
+}
+
 func newConverter() converter {
 	return converter{
 		monoClock: monotime.Now,

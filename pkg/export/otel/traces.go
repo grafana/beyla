@@ -223,17 +223,13 @@ func makeSpan(parentCtx context.Context, tracer trace2.Tracer, span *transform.H
 	return SessionSpan{*span, ctx}
 }
 
-func inside(child, parent *transform.HTTPRequestSpan) bool {
-	return child.Start.Compare(parent.RequestStart) >= 0 && child.End.Compare(parent.End) <= 0
-}
-
 func (r *TracesReporter) reportClientSpan(span *transform.HTTPRequestSpan, tracer trace2.Tracer) {
 	ctx := context.TODO()
 
 	// we have a parent request span
 	if span.ID != 0 {
 		sp, ok := topSpans.Get(span.ID)
-		if ok && inside(span, &sp.ReqSpan) {
+		if ok && span.Inside(&sp.ReqSpan) {
 			// parent span exists, use it
 			ctx = sp.RootCtx
 		} else {
@@ -258,12 +254,12 @@ func (r *TracesReporter) reportServerSpan(span *transform.HTTPRequestSpan, trace
 	s := makeSpan(context.TODO(), tracer, span)
 	topSpans.Add(span.ID, s)
 	cs, ok := clientSpans.Get(span.ID)
-	newer := make([]transform.HTTPRequestSpan, len(cs))
+	newer := []transform.HTTPRequestSpan{}
 	if ok {
 		// finish any client spans that were waiting for this parent span
 		for j := range cs {
 			cspan := &cs[j]
-			if inside(cspan, span) {
+			if cspan.Inside(span) {
 				makeSpan(s.RootCtx, tracer, cspan)
 			} else if cspan.Start.Compare(span.RequestStart) > 0 {
 				newer = append(newer, *cspan)

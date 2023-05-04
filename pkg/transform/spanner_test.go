@@ -50,14 +50,15 @@ func makeGRPCRequestTrace(path string, peerInfo []byte, status uint16, durationM
 		EndMonotimeNs:     durationMs * 2 * 1000000,
 	}
 }
+
 func assertMatches(t *testing.T, span *HTTPRequestSpan, method, path, peer string, status int, durationMs uint64) {
 	assert.Equal(t, method, span.Method)
 	assert.Equal(t, path, span.Path)
 	assert.Equal(t, method, span.Method)
 	assert.Equal(t, peer, span.Peer)
 	assert.Equal(t, status, span.Status)
-	assert.Equal(t, int(durationMs*1000000), (span.End.Nanosecond() - span.Start.Nanosecond()))
-	assert.Equal(t, int(durationMs*1000000), (span.Start.Nanosecond() - span.RequestStart.Nanosecond()))
+	assert.Equal(t, int64(durationMs*1000000), int64(span.End.UnixNano()-span.Start.UnixNano()))
+	assert.Equal(t, int64(durationMs*1000000), int64(span.Start.UnixNano()-span.RequestStart.UnixNano()))
 }
 
 func TestRequestTraceParsing(t *testing.T) {

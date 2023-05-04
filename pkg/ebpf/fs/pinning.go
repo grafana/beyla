@@ -7,7 +7,7 @@ import (
 )
 
 const (
-	pinnedRoot = "/sys/fs/bpf/otelauto"
+	pinnedRoot = "/var/run/otelauto"
 )
 
 var (

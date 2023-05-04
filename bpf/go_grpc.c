@@ -236,11 +236,13 @@ int uprobe_ClientConn_Invoke_return(struct pt_regs *ctx) {
     // Get client request value pointers
     void *cc_ptr = GO_PARAM1(&(invocation->regs));
     void *method_ptr = GO_PARAM4(&(invocation->regs));
-    void *method_len_ptr = GO_PARAM5(&(invocation->regs));
+    void *method_len = GO_PARAM5(&(invocation->regs));
     void *err = (void *)GO_PARAM1(ctx);
 
+    bpf_dbg_printk("method ptr = %lx, method_len = %d", method_ptr, method_len);
+
     // Get method from the incoming call arguments
-    if (!read_go_str_n("method", method_ptr, 0, method_len_ptr, 0, &trace->path, sizeof(trace->path))) {
+    if (!read_go_str_n("method", method_ptr, (u64)method_len, &trace->path, sizeof(trace->path))) {
         bpf_printk("can't read grpc client method");
         bpf_ringbuf_discard(trace, 0);
         return 0;
@@ -253,10 +255,10 @@ int uprobe_ClientConn_Invoke_return(struct pt_regs *ctx) {
         return 0;
     }
 
+    trace->status = (err) ? 2 : 0; // Getting the gRPC client status is complex, if there's an error we set Code.Unknown = 2
+
     // submit the completed trace via ringbuffer
     bpf_ringbuf_submit(trace, get_flags());
-
-    trace->status = (err) ? 2 : 0; // Getting the gRPC client status is complex, if there's an error we set Code.Unknown = 2
 
     return 0;
 }

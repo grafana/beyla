@@ -1,32 +1,45 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"strconv"
 	"time"
 
+	pb "github.com/grafana/ebpf-autoinstrument/test/cmd/grpc/routeguide"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+
 	"golang.org/x/exp/slog"
 )
 
 const (
-	path        = "/ping"
 	delayArg    = "delay"
 	envPort     = "SERVER_PORT"
 	defaultPort = 5000
 )
 
-func pingHandler(rw http.ResponseWriter, req *http.Request) {
+func serve(rw http.ResponseWriter, req *http.Request) {
 	slog.Debug("connection established", "remoteAddr", req.RemoteAddr)
-	if req.URL.Path != path {
+
+	switch req.URL.Path {
+	case "/ping":
+		pingHandler(rw, req)
+	case "/gping":
+		gpingHandler(rw, req)
+	default:
 		slog.Info("not found", "url", req.URL)
 		rw.WriteHeader(http.StatusNotFound)
 		return
 	}
+}
 
+func pingHandler(rw http.ResponseWriter, req *http.Request) {
 	var delay = 0 * time.Second
 
 	if req.URL.Query().Has(delayArg) {
@@ -64,6 +77,30 @@ func pingHandler(rw http.ResponseWriter, req *http.Request) {
 	}
 }
 
+func gpingHandler(rw http.ResponseWriter, _ *http.Request) {
+	opts := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
+	conn, err := grpc.Dial("localhost:50051", opts...)
+	if err != nil {
+		slog.Error("fail to dial", err)
+		os.Exit(-1)
+	}
+	defer conn.Close()
+	client := pb.NewRouteGuideClient(conn)
+
+	point := &pb.Point{Latitude: 409146138, Longitude: -746188906}
+
+	slog.Info("Getting feature for point", "lat", point.Latitude, "long", point.Longitude)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	feature, err := client.GetFeature(ctx, point)
+	if err != nil {
+		slog.Error("client.GetFeature failed", err)
+		os.Exit(-1)
+	}
+	log.Println(feature)
+	rw.WriteHeader(204)
+}
+
 func main() {
 	// Use INFO as default log
 	lvl := slog.LevelInfo
@@ -92,5 +129,5 @@ func main() {
 		}
 	}
 	slog.Info("listening and serving", "port", port, "process_id", os.Getpid())
-	panic(http.ListenAndServe(fmt.Sprintf(":%d", port), http.HandlerFunc(pingHandler)))
+	panic(http.ListenAndServe(fmt.Sprintf(":%d", port), http.HandlerFunc(serve)))
 }

@@ -25,7 +25,8 @@ services:
       - ./configs/:/configs
       - ../../testoutput:/coverage
     image: hatest-autoinstrumenter
-    privileged: true # TODO: replace by individual capabilities
+    cap_add:
+      - SYS_ADMIN
     pid: "service:testserver"
     environment:
       GOCOVERDIR: "/coverage"

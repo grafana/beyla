@@ -12,6 +12,7 @@ Requirements:
 - eBPF enabled in the host
 - The instrumented Go programs must have been compiled with Go 1.17 or higher
 - Administrative access to execute the instrumenter
+  - Or execute it from a user enabling the `SYS_ADMIN` capability.
 
 ## Downloading
 

@@ -154,6 +154,14 @@ func traceAttributes(span *transform.HTTPRequestSpan) []attribute.KeyValue {
 			semconv.NetPeerPort(span.HostPort),
 			semconv.HTTPRequestContentLength(int(span.ContentLength)),
 		}
+	case transform.EventTypeGRPCClient:
+		return []attribute.KeyValue{
+			semconv.RPCMethod(span.Path),
+			semconv.RPCSystemGRPC,
+			semconv.RPCGRPCStatusCodeKey.Int(span.Status),
+			semconv.NetPeerName(span.Host),
+			semconv.NetPeerPort(span.HostPort),
+		}
 	}
 	return []attribute.KeyValue{}
 }
@@ -166,7 +174,7 @@ func traceName(span *transform.HTTPRequestSpan) string {
 			name += " " + span.Route
 		}
 		return name
-	case transform.EventTypeGRPC:
+	case transform.EventTypeGRPC, transform.EventTypeGRPCClient:
 		return span.Path
 	case transform.EventTypeHTTPClient:
 		return span.Method
@@ -178,7 +186,7 @@ func spanKind(span *transform.HTTPRequestSpan) trace2.SpanKind {
 	switch span.Type {
 	case transform.EventTypeHTTP, transform.EventTypeGRPC:
 		return trace2.SpanKindServer
-	case transform.EventTypeHTTPClient:
+	case transform.EventTypeHTTPClient, transform.EventTypeGRPCClient:
 		return trace2.SpanKindClient
 	}
 	return trace2.SpanKindInternal
@@ -215,13 +223,17 @@ func makeSpan(parentCtx context.Context, tracer trace2.Tracer, span *transform.H
 	return SessionSpan{*span, ctx}
 }
 
-func (r *TracesReporter) reportHTTPClientTrace(span *transform.HTTPRequestSpan, tracer trace2.Tracer) {
+func inside(child, parent *transform.HTTPRequestSpan) bool {
+	return child.Start.Compare(parent.RequestStart) >= 0 && child.End.Compare(parent.End) <= 0
+}
+
+func (r *TracesReporter) reportClientSpan(span *transform.HTTPRequestSpan, tracer trace2.Tracer) {
 	ctx := context.TODO()
 
 	// we have a parent request span
 	if span.ID != 0 {
 		sp, ok := topSpans.Get(span.ID)
-		if ok && sp.ReqSpan.End.Compare(span.End) >= 0 {
+		if ok && inside(span, &sp.ReqSpan) {
 			// parent span exists, use it
 			ctx = sp.RootCtx
 		} else {
@@ -246,17 +258,24 @@ func (r *TracesReporter) reportServerSpan(span *transform.HTTPRequestSpan, trace
 	s := makeSpan(context.TODO(), tracer, span)
 	topSpans.Add(span.ID, s)
 	cs, ok := clientSpans.Get(span.ID)
+	newer := make([]transform.HTTPRequestSpan, len(cs))
 	if ok {
 		// finish any client spans that were waiting for this parent span
 		for j := range cs {
 			cspan := &cs[j]
-			if cspan.Start.Compare(span.RequestStart) >= 0 && cspan.End.Compare(span.End) <= 0 {
+			if inside(cspan, span) {
 				makeSpan(s.RootCtx, tracer, cspan)
+			} else if cspan.Start.Compare(span.RequestStart) > 0 {
+				newer = append(newer, *cspan)
 			} else {
 				makeSpan(context.TODO(), tracer, cspan)
 			}
 		}
-		clientSpans.Remove(span.ID)
+		if len(newer) == 0 {
+			clientSpans.Remove(span.ID)
+		} else {
+			clientSpans.Add(span.ID, newer)
+		}
 	}
 }
 
@@ -267,9 +286,10 @@ func (r *TracesReporter) reportTraces(input <-chan []transform.HTTPRequestSpan) 
 		for i := range spans {
 			span := &spans[i]
 
-			if span.Type == transform.EventTypeHTTPClient {
-				r.reportHTTPClientTrace(span, tracer)
-			} else {
+			switch span.Type {
+			case transform.EventTypeHTTPClient, transform.EventTypeGRPCClient:
+				r.reportClientSpan(span, tracer)
+			case transform.EventTypeHTTP, transform.EventTypeGRPC:
 				r.reportServerSpan(span, tracer)
 			}
 		}

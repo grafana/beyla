@@ -47,6 +47,7 @@ type MetricsReporter struct {
 	httpDuration          instrument.Float64Histogram
 	httpClientDuration    instrument.Float64Histogram
 	grpcDuration          instrument.Float64Histogram
+	grpcClientDuration    instrument.Float64Histogram
 	httpRequestSize       instrument.Float64Histogram
 	httpClientRequestSize instrument.Float64Histogram
 }
@@ -101,6 +102,11 @@ func newMetricsReporter(cfg *MetricsConfig) (*MetricsReporter, error) {
 	if err != nil {
 		return nil, fmt.Errorf("creating grpc duration histogram metric: %w", err)
 	}
+	mr.grpcClientDuration, err = mr.provider.Meter(reporterName).
+		Float64Histogram("rpc.client.duration", instrument.WithUnit("ms"))
+	if err != nil {
+		return nil, fmt.Errorf("creating grpc duration histogram metric: %w", err)
+	}
 	mr.httpRequestSize, err = mr.provider.Meter(reporterName).
 		Float64Histogram("http.server.request.size", instrument.WithUnit("By"))
 	if err != nil {
@@ -140,7 +146,7 @@ func (r *MetricsReporter) metricAttributes(span *transform.HTTPRequestSpan) []at
 			attrs = append(attrs, semconv.HTTPRoute(span.Route))
 		}
 		return attrs
-	case transform.EventTypeGRPC:
+	case transform.EventTypeGRPC, transform.EventTypeGRPCClient:
 		attrs := []attribute.KeyValue{
 			semconv.RPCMethod(span.Path),
 			semconv.RPCSystemGRPC,
@@ -173,6 +179,8 @@ func (r *MetricsReporter) record(span *transform.HTTPRequestSpan, attrs []attrib
 		r.httpRequestSize.Record(context.TODO(), float64(span.ContentLength), attrs...)
 	case transform.EventTypeGRPC:
 		r.grpcDuration.Record(context.TODO(), span.End.Sub(span.RequestStart).Seconds()*1000, attrs...)
+	case transform.EventTypeGRPCClient:
+		r.grpcClientDuration.Record(context.TODO(), span.End.Sub(span.RequestStart).Seconds()*1000, attrs...)
 	case transform.EventTypeHTTPClient:
 		r.httpClientDuration.Record(context.TODO(), span.End.Sub(span.RequestStart).Seconds()*1000, attrs...)
 		r.httpClientRequestSize.Record(context.TODO(), float64(span.ContentLength), attrs...)

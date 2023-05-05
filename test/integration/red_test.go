@@ -158,6 +158,22 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url string) {
 
 		test.Eventually(t, testTimeout, func(t require.TestingT) {
 			var err error
+			results, err = pq.Query(`http_client_request_size_count{` +
+				`http_method="GET",` +
+				`http_status_code="203",` +
+				`service_name="testserver"}`)
+			require.NoError(t, err)
+			// check duration_count has 3 calls
+			require.Len(t, results, 1)
+			if len(results) > 0 {
+				res := results[0]
+				require.Len(t, res.Value, 2)
+				assert.LessOrEqual(t, "3", res.Value[1])
+			}
+		})
+
+		test.Eventually(t, testTimeout, func(t require.TestingT) {
+			var err error
 			results, err = pq.Query(`rpc_client_duration_count{` +
 				`rpc_grpc_status_code="0",` +
 				`service_name="testserver",` +

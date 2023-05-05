@@ -19,7 +19,7 @@ func HTTPHandler(log *slog.Logger, echoPort int) http.HandlerFunc {
 		log.Debug("received request", "url", req.RequestURI)
 
 		if req.RequestURI == "/echo" {
-			echo(rw, echoPort)
+			echoAsync(rw, echoPort)
 			return
 		}
 
@@ -49,6 +49,37 @@ func HTTPHandler(log *slog.Logger, echoPort int) http.HandlerFunc {
 			}
 		}
 		rw.WriteHeader(status)
+	}
+}
+
+func echoAsync(rw http.ResponseWriter, port int) {
+	duration, err := time.ParseDuration("10s")
+
+	if err != nil {
+		slog.Error("can't parse duration", err)
+		rw.WriteHeader(500)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), duration)
+	defer cancel()
+
+	results := make(chan interface{})
+
+	go func() {
+		echo(rw, port)
+		results <- rw
+	}()
+
+	for {
+		select {
+		case <-results:
+			return
+		case <-ctx.Done():
+			slog.Warn("timeout while waiting for test to complete")
+			rw.WriteHeader(500)
+			return
+		}
 	}
 }
 

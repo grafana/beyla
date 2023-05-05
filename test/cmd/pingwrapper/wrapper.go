@@ -32,10 +32,41 @@ func serve(rw http.ResponseWriter, req *http.Request) {
 		pingHandler(rw, req)
 	case "/gping":
 		gpingHandler(rw, req)
+	case "/aping":
+		pingAsync(rw, req)
 	default:
 		slog.Info("not found", "url", req.URL)
 		rw.WriteHeader(http.StatusNotFound)
 		return
+	}
+}
+
+func pingAsync(rw http.ResponseWriter, req *http.Request) {
+	duration, err := time.ParseDuration("10s")
+
+	if err != nil {
+		slog.Error("can't parse duration", err)
+		os.Exit(-1)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), duration)
+	defer cancel()
+
+	results := make(chan interface{})
+
+	go func() {
+		pingHandler(rw, req)
+		results <- rw
+	}()
+
+	for {
+		select {
+		case <-results:
+			return
+		case <-ctx.Done():
+			slog.Warn("timeout while waiting for test to complete")
+			return
+		}
 	}
 }
 

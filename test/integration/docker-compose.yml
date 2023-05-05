@@ -27,6 +27,8 @@ services:
     image: hatest-autoinstrumenter
     cap_add:
       - SYS_ADMIN
+      - SYS_RESOURCE
+      - DAC_OVERRIDE
     pid: "service:testserver"
     environment:
       GOCOVERDIR: "/coverage"

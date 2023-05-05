@@ -49,7 +49,7 @@ func main() {
 		close(wait)
 	}()
 	go func() {
-		gorilla.Setup(cfg.GorillaPort)
+		gorilla.Setup(cfg.GorillaPort, cfg.STDPort)
 		close(wait)
 	}()
 	go func() {

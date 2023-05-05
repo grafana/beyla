@@ -228,6 +228,7 @@ func TestNestedSpanMatching(t *testing.T) {
 			out <- newRequestWithTiming(3, transform.EventTypeHTTP, "GET", "/attach", "1.1.1.1:3456", 200, 70000, 80000, 100000)
 			out <- newRequestWithTiming(1, transform.EventTypeHTTPClient, "GET", "/attach2", "2.2.2.2:1234", 200, 30000, 30000, 40000)
 			out <- newRequestWithTiming(0, transform.EventTypeHTTPClient, "GET", "/attach1", "2.2.2.2:1234", 200, 20000, 20000, 40000)
+			out <- newRequestWithTiming(1, transform.EventTypeHTTP, "GET", "/user/3456", "1.1.1.1:3456", 200, 56000, 56000, 80000)
 		}
 	})
 	pipe, err := gb.buildGraph()
@@ -239,11 +240,7 @@ func TestNestedSpanMatching(t *testing.T) {
 	event := testutil.ReadChannel(t, tc.TraceRecords, testTimeout)
 	parent1ID := event.Attributes["span_id"]
 	matchNestedEvent(t, "GET", "GET", "/user/1234", "200", ptrace.SpanKindServer, event)
-	// 2. Next we should see a child span from the request with ID=1, but the parent won't match, since we are outside the time range
-	event = testutil.ReadChannel(t, tc.TraceRecords, testTimeout)
-	matchNestedEvent(t, "GET", "GET", "/attach", "200", ptrace.SpanKindClient, event)
-	assert.Equal(t, "", event.Attributes["parent_span_id"])
-	// 3. The second event is server "/products/3210/push", since the client span has a parent which hasn't arrived yet.
+	// 2. The second event is server "/products/3210/push", since the client span has a parent which hasn't arrived yet.
 	// This event has nested server spans.
 	event = testutil.ReadChannel(t, tc.TraceRecords, testTimeout)
 	pIDQ := event.Attributes["parent_span_id"]
@@ -255,7 +252,7 @@ func TestNestedSpanMatching(t *testing.T) {
 	matchNestedEvent(t, "GET", "GET", "/products/3210/push", "200", ptrace.SpanKindServer, event)
 	assert.Equal(t, pIDP, event.Attributes["span_id"])
 	assert.Equal(t, pIDQ, event.Attributes["span_id"])
-	// 4. Third event has client span as well, which we recorded just after we processed the first event
+	// 3. Third event has client span as well, which we recorded just after we processed the first event
 	event = testutil.ReadChannel(t, tc.TraceRecords, testTimeout)
 	matchNestedEvent(t, "in queue", "", "", "", ptrace.SpanKindInternal, event)
 	event = testutil.ReadChannel(t, tc.TraceRecords, testTimeout)
@@ -266,7 +263,7 @@ func TestNestedSpanMatching(t *testing.T) {
 	matchNestedEvent(t, "GET", "GET", "/attach", "200", ptrace.SpanKindServer, event)
 	// the processing span is a child of the session span
 	assert.Equal(t, parentID, event.Attributes["span_id"])
-	// 5. The first client span id will be a child of the processing span, of the request with ID=3
+	// 4. The first client span id will be a child of the processing span, of the request with ID=3
 	event = testutil.ReadChannel(t, tc.TraceRecords, testTimeout)
 	matchNestedEvent(t, "GET", "GET", "/products/3210/pull", "204", ptrace.SpanKindClient, event)
 	assert.Equal(t, spanID, event.Attributes["parent_span_id"])
@@ -274,14 +271,21 @@ func TestNestedSpanMatching(t *testing.T) {
 	event = testutil.ReadChannel(t, tc.TraceRecords, testTimeout)
 	matchNestedEvent(t, "GET", "GET", "/products/3211/pull", "203", ptrace.SpanKindClient, event)
 	assert.Equal(t, spanID, event.Attributes["parent_span_id"])
-	// 6. Next we should see a child span from the request with ID=1
+	// 5. Next we should see a child span from the request with ID=1
 	event = testutil.ReadChannel(t, tc.TraceRecords, testTimeout)
 	matchNestedEvent(t, "GET", "GET", "/attach2", "200", ptrace.SpanKindClient, event)
 	assert.Equal(t, parent1ID, event.Attributes["parent_span_id"])
-	// 7. Now we see a client call without a parent span ID = 0
+	// 6. Now we see a client call without a parent span ID = 0
 	event = testutil.ReadChannel(t, tc.TraceRecords, testTimeout)
 	matchNestedEvent(t, "GET", "GET", "/attach1", "200", ptrace.SpanKindClient, event)
 	assert.Equal(t, "", event.Attributes["parent_span_id"])
+	// 7. Next we should see a server span with child span from the request with ID=1, this is the later server span with the same ID. We would preserve the span
+	event = testutil.ReadChannel(t, tc.TraceRecords, testTimeout)
+	parent1ID = event.Attributes["span_id"]
+	matchNestedEvent(t, "GET", "GET", "/user/3456", "200", ptrace.SpanKindServer, event)
+	event = testutil.ReadChannel(t, tc.TraceRecords, testTimeout)
+	matchNestedEvent(t, "GET", "GET", "/attach", "200", ptrace.SpanKindClient, event)
+	assert.Equal(t, parent1ID, event.Attributes["parent_span_id"])
 }
 
 func newRequest(id uint64, method, path, peer string, status int) []ebpfcommon.HTTPRequestTrace {

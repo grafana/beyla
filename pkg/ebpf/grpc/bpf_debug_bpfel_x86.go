@@ -86,6 +86,8 @@ type bpf_debugSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpf_debugProgramSpecs struct {
+	UprobeClientConnInvoke         *ebpf.ProgramSpec `ebpf:"uprobe_ClientConn_Invoke"`
+	UprobeClientConnInvokeReturn   *ebpf.ProgramSpec `ebpf:"uprobe_ClientConn_Invoke_return"`
 	UprobeServerHandleStream       *ebpf.ProgramSpec `ebpf:"uprobe_server_handleStream"`
 	UprobeServerHandleStreamReturn *ebpf.ProgramSpec `ebpf:"uprobe_server_handleStream_return"`
 	UprobeTransportWriteStatus     *ebpf.ProgramSpec `ebpf:"uprobe_transport_writeStatus"`
@@ -95,11 +97,12 @@ type bpf_debugProgramSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpf_debugMapSpecs struct {
-	Events                   *ebpf.MapSpec `ebpf:"events"`
-	Newproc1                 *ebpf.MapSpec `ebpf:"newproc1"`
-	OngoingGoroutines        *ebpf.MapSpec `ebpf:"ongoing_goroutines"`
-	OngoingGrpcRequestStatus *ebpf.MapSpec `ebpf:"ongoing_grpc_request_status"`
-	OngoingServerRequests    *ebpf.MapSpec `ebpf:"ongoing_server_requests"`
+	Events                    *ebpf.MapSpec `ebpf:"events"`
+	Newproc1                  *ebpf.MapSpec `ebpf:"newproc1"`
+	OngoingGoroutines         *ebpf.MapSpec `ebpf:"ongoing_goroutines"`
+	OngoingGrpcClientRequests *ebpf.MapSpec `ebpf:"ongoing_grpc_client_requests"`
+	OngoingGrpcRequestStatus  *ebpf.MapSpec `ebpf:"ongoing_grpc_request_status"`
+	OngoingServerRequests     *ebpf.MapSpec `ebpf:"ongoing_server_requests"`
 }
 
 // bpf_debugObjects contains all objects after they have been loaded into the kernel.
@@ -121,11 +124,12 @@ func (o *bpf_debugObjects) Close() error {
 //
 // It can be passed to loadBpf_debugObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpf_debugMaps struct {
-	Events                   *ebpf.Map `ebpf:"events"`
-	Newproc1                 *ebpf.Map `ebpf:"newproc1"`
-	OngoingGoroutines        *ebpf.Map `ebpf:"ongoing_goroutines"`
-	OngoingGrpcRequestStatus *ebpf.Map `ebpf:"ongoing_grpc_request_status"`
-	OngoingServerRequests    *ebpf.Map `ebpf:"ongoing_server_requests"`
+	Events                    *ebpf.Map `ebpf:"events"`
+	Newproc1                  *ebpf.Map `ebpf:"newproc1"`
+	OngoingGoroutines         *ebpf.Map `ebpf:"ongoing_goroutines"`
+	OngoingGrpcClientRequests *ebpf.Map `ebpf:"ongoing_grpc_client_requests"`
+	OngoingGrpcRequestStatus  *ebpf.Map `ebpf:"ongoing_grpc_request_status"`
+	OngoingServerRequests     *ebpf.Map `ebpf:"ongoing_server_requests"`
 }
 
 func (m *bpf_debugMaps) Close() error {
@@ -133,6 +137,7 @@ func (m *bpf_debugMaps) Close() error {
 		m.Events,
 		m.Newproc1,
 		m.OngoingGoroutines,
+		m.OngoingGrpcClientRequests,
 		m.OngoingGrpcRequestStatus,
 		m.OngoingServerRequests,
 	)
@@ -142,6 +147,8 @@ func (m *bpf_debugMaps) Close() error {
 //
 // It can be passed to loadBpf_debugObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpf_debugPrograms struct {
+	UprobeClientConnInvoke         *ebpf.Program `ebpf:"uprobe_ClientConn_Invoke"`
+	UprobeClientConnInvokeReturn   *ebpf.Program `ebpf:"uprobe_ClientConn_Invoke_return"`
 	UprobeServerHandleStream       *ebpf.Program `ebpf:"uprobe_server_handleStream"`
 	UprobeServerHandleStreamReturn *ebpf.Program `ebpf:"uprobe_server_handleStream_return"`
 	UprobeTransportWriteStatus     *ebpf.Program `ebpf:"uprobe_transport_writeStatus"`
@@ -149,6 +156,8 @@ type bpf_debugPrograms struct {
 
 func (p *bpf_debugPrograms) Close() error {
 	return _Bpf_debugClose(
+		p.UprobeClientConnInvoke,
+		p.UprobeClientConnInvokeReturn,
 		p.UprobeServerHandleStream,
 		p.UprobeServerHandleStreamReturn,
 		p.UprobeTransportWriteStatus,

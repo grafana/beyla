@@ -15,6 +15,7 @@ import (
 const EventTypeHTTP = 1
 const EventTypeGRPC = 2
 const EventTypeHTTPClient = 3
+const EventTypeGRPCClient = 4
 
 var log = slog.With("component", "goexec.spanner")
 
@@ -45,6 +46,10 @@ func ConvertToSpan(in <-chan []ebpfcommon.HTTPRequestTrace, out chan<- []HTTPReq
 		}
 		out <- spans
 	}
+}
+
+func (c *HTTPRequestSpan) Inside(parent *HTTPRequestSpan) bool {
+	return c.RequestStart.Compare(parent.RequestStart) >= 0 && c.End.Compare(parent.End) <= 0
 }
 
 func newConverter() converter {
@@ -90,7 +95,7 @@ func extractIP(b []uint8, size int) string {
 }
 
 func (c *converter) convert(trace *ebpfcommon.HTTPRequestTrace) HTTPRequestSpan {
-	now := time.Now()
+	now := c.clock()
 	monoNow := c.monoClock()
 	startDelta := monoNow - time.Duration(trace.StartMonotimeNs)
 	endDelta := monoNow - time.Duration(trace.EndMonotimeNs)
@@ -118,6 +123,8 @@ func (c *converter) convert(trace *ebpfcommon.HTTPRequestTrace) HTTPRequestSpan 
 		hostPort = int(trace.HostPort)
 		peer = extractIP(trace.RemoteAddr[:], int(trace.RemoteAddrLen))
 		hostname = extractIP(trace.Host[:], int(trace.HostLen))
+	case EventTypeGRPCClient:
+		hostname, hostPort = extractHostPort(trace.Host[:])
 	default:
 		log.Warn("unknown trace type %d", trace.Type)
 	}

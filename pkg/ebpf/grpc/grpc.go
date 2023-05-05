@@ -58,6 +58,7 @@ func (p *Tracer) Constants(offsets *goexec.Offsets) map[string]any {
 		"grpc_st_localaddr_ptr_pos",
 		"tcp_addr_port_ptr_pos",
 		"tcp_addr_ip_ptr_pos",
+		"grpc_client_target_ptr_pos",
 	} {
 		constants[s] = offsets.Field[s]
 	}
@@ -82,6 +83,11 @@ func (p *Tracer) Probes() map[string]ebpfcommon.FunctionPrograms {
 		"google.golang.org/grpc/internal/transport.(*http2Server).WriteStatus": {
 			Required: true,
 			Start:    p.bpfObjects.UprobeTransportWriteStatus,
+		},
+		"google.golang.org/grpc.(*ClientConn).Invoke": {
+			Required: true,
+			Start:    p.bpfObjects.UprobeClientConnInvoke,
+			End:      p.bpfObjects.UprobeClientConnInvokeReturn,
 		},
 	}
 }

@@ -10,10 +10,10 @@ import (
 	"golang.org/x/exp/slog"
 )
 
-func Setup(port int) {
+func Setup(port, stdPort int) {
 	log := slog.With("component", "gorilla.Server")
 	r := mux.NewRouter()
-	r.PathPrefix("/").HandlerFunc(std.HTTPHandler(log))
+	r.PathPrefix("/").HandlerFunc(std.HTTPHandler(log, stdPort))
 
 	address := fmt.Sprintf(":%d", port)
 	log.Info("starting HTTP server", "address", address)

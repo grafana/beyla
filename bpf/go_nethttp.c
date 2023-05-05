@@ -197,27 +197,7 @@ int uprobe_clientSendReturn(struct pt_regs *ctx) {
         return 0;
     }
 
-    trace->id = 0;
-    void *r_addr = goroutine_addr;
-    int attempts = 0;
-    do {
-        func_invocation *p_inv = bpf_map_lookup_elem(&ongoing_server_requests, &r_addr);
-        if (!p_inv) { // not this goroutine running the server request processing
-            // Let's find the parent scope
-            goroutine_metadata *g_metadata = bpf_map_lookup_elem(&ongoing_goroutines, &r_addr);
-            if (g_metadata) {
-                // Lookup now to see if the parent was a request
-                r_addr = (void *)g_metadata->parent;
-            } else {
-                break;
-            }
-        } else {
-            trace->id = (u64)r_addr;
-            break;
-        }
-
-        attempts++;
-    } while (attempts < 3); // Up to 3 levels of goroutine nesting allowed
+    trace->id = find_parent_goroutine(goroutine_addr);
 
     trace->type = EVENT_HTTP_CLIENT;
     trace->start_monotime_ns = invocation->start_monotime_ns;
@@ -257,7 +237,7 @@ int uprobe_clientSendReturn(struct pt_regs *ctx) {
 
     bpf_probe_read(&trace->status, sizeof(trace->status), (void *)(resp_ptr + status_code_ptr_pos));
 
-    bpf_printk("status %d, offset %d, resp_ptr %lx", trace->status, status_code_ptr_pos, (u64)resp_ptr);
+    bpf_dbg_printk("status %d, offset %d, resp_ptr %lx", trace->status, status_code_ptr_pos, (u64)resp_ptr);
 
     // submit the completed trace via ringbuffer
     bpf_ringbuf_submit(trace, get_flags());

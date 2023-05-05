@@ -1,18 +1,33 @@
 package std
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"strconv"
 	"time"
 
 	"github.com/grafana/ebpf-autoinstrument/test/integration/components/testserver/arg"
+	pb "github.com/grafana/ebpf-autoinstrument/test/integration/components/testserver/grpc/routeguide"
 	"golang.org/x/exp/slog"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
-func HTTPHandler(log *slog.Logger) http.HandlerFunc {
+func HTTPHandler(log *slog.Logger, echoPort int) http.HandlerFunc {
 	return func(rw http.ResponseWriter, req *http.Request) {
 		log.Debug("received request", "url", req.RequestURI)
+
+		if req.RequestURI == "/echo" {
+			echo(rw, echoPort)
+			return
+		}
+
+		if req.RequestURI == "/echoCall" {
+			echoCall(rw)
+			return
+		}
+
 		status := arg.DefaultStatus
 		for k, v := range req.URL.Query() {
 			if len(v) == 0 {
@@ -37,10 +52,51 @@ func HTTPHandler(log *slog.Logger) http.HandlerFunc {
 	}
 }
 
+func echo(rw http.ResponseWriter, port int) {
+	requestURL := "http://localhost:" + strconv.Itoa(port) + "/echoBack?delay=20ms&status=203"
+
+	slog.Debug("calling", "url", requestURL)
+
+	res, err := http.Get(requestURL)
+	if err != nil {
+		slog.Error("error making http request", err)
+		rw.WriteHeader(500)
+		return
+	}
+
+	defer res.Body.Close()
+	rw.WriteHeader(res.StatusCode)
+}
+
+func echoCall(rw http.ResponseWriter) {
+	opts := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
+	conn, err := grpc.Dial("localhost:50051", opts...)
+	if err != nil {
+		slog.Error("fail to dial", err)
+		rw.WriteHeader(500)
+		return
+	}
+	defer conn.Close()
+	client := pb.NewRouteGuideClient(conn)
+
+	point := &pb.Point{Latitude: 409146138, Longitude: -746188906}
+
+	slog.Debug("Getting feature for point", "lat", point.Latitude, "long", point.Longitude)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	_, err = client.GetFeature(ctx, point)
+	if err != nil {
+		slog.Error("client.GetFeature failed", err)
+		rw.WriteHeader(500)
+		return
+	}
+	rw.WriteHeader(204)
+}
+
 func Setup(port int) {
 	log := slog.With("component", "std.Server")
 	address := fmt.Sprintf(":%d", port)
 	log.Info("starting HTTP server", "address", address)
-	err := http.ListenAndServe(address, HTTPHandler(log))
+	err := http.ListenAndServe(address, HTTPHandler(log, port))
 	log.Error("HTTP server has unexpectedly stopped", err)
 }

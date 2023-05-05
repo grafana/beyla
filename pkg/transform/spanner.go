@@ -19,6 +19,11 @@ const EventTypeGRPCClient = 4
 
 var log = slog.With("component", "goexec.spanner")
 
+type converter struct {
+	clock     func() time.Time
+	monoClock func() time.Duration
+}
+
 var clocks = converter{monoClock: monotime.Now, clock: time.Now}
 
 // HTTPRequestSpan contains the information being submitted by the following nodes in the graph.
@@ -40,26 +45,13 @@ type HTTPRequestSpan struct {
 }
 
 func ConvertToSpan(in <-chan []ebpfcommon.HTTPRequestTrace, out chan<- []HTTPRequestSpan) {
-	cnv := newConverter()
 	for traces := range in {
 		spans := make([]HTTPRequestSpan, 0, len(traces))
 		for i := range traces {
-			spans = append(spans, cnv.convert(&traces[i]))
+			spans = append(spans, convert(&traces[i]))
 		}
 		out <- spans
 	}
-}
-
-func newConverter() converter {
-	return converter{
-		monoClock: monotime.Now,
-		clock:     time.Now,
-	}
-}
-
-type converter struct {
-	clock     func() time.Time
-	monoClock func() time.Duration
 }
 
 func extractHostPort(b []uint8) (string, int) {
@@ -106,7 +98,7 @@ func (s *HTTPRequestSpan) Timings() (time.Time, time.Time, time.Time) {
 	return now.Add(-goStartDelta), now.Add(-startDelta), now.Add(-endDelta)
 }
 
-func (c *converter) convert(trace *ebpfcommon.HTTPRequestTrace) HTTPRequestSpan {
+func convert(trace *ebpfcommon.HTTPRequestTrace) HTTPRequestSpan {
 	// From C, assuming 0-ended strings
 	methodLen := bytes.IndexByte(trace.Method[:], 0)
 	if methodLen < 0 {

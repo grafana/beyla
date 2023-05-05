@@ -193,32 +193,35 @@ func spanKind(span *transform.HTTPRequestSpan) trace2.SpanKind {
 }
 
 func makeSpan(parentCtx context.Context, tracer trace2.Tracer, span *transform.HTTPRequestSpan) SessionSpan {
-	var spP trace2.Span
+	reqStart, start, end := span.Timings()
+
 	// Create a parent span for the whole request session
 	ctx, sp := tracer.Start(parentCtx, traceName(span),
-		trace2.WithTimestamp(span.RequestStart),
+		trace2.WithTimestamp(reqStart),
 		trace2.WithSpanKind(spanKind(span)),
 		trace2.WithAttributes(traceAttributes(span)...),
 	)
 
 	if span.RequestStart != span.Start {
+		var spP trace2.Span
+
 		// Create a child span showing the queue time
 		_, spQ := tracer.Start(ctx, "in queue",
-			trace2.WithTimestamp(span.RequestStart),
+			trace2.WithTimestamp(reqStart),
 			trace2.WithSpanKind(trace2.SpanKindInternal),
 		)
-		spQ.End(trace2.WithTimestamp(span.Start))
+		spQ.End(trace2.WithTimestamp(start))
 
 		// Create a child span showing the processing time
 		// Override the active context for the span to be the processing span
 		ctx, spP = tracer.Start(ctx, "processing",
-			trace2.WithTimestamp(span.Start),
+			trace2.WithTimestamp(start),
 			trace2.WithSpanKind(trace2.SpanKindInternal),
 		)
-		spP.End(trace2.WithTimestamp(span.End))
+		spP.End(trace2.WithTimestamp(end))
 	}
 
-	sp.End(trace2.WithTimestamp(span.End))
+	sp.End(trace2.WithTimestamp(end))
 
 	return SessionSpan{*span, ctx}
 }
@@ -261,7 +264,7 @@ func (r *TracesReporter) reportServerSpan(span *transform.HTTPRequestSpan, trace
 			cspan := &cs[j]
 			if cspan.Inside(span) {
 				makeSpan(s.RootCtx, tracer, cspan)
-			} else if cspan.Start.Compare(span.RequestStart) > 0 {
+			} else if cspan.Start > span.RequestStart {
 				newer = append(newer, *cspan)
 			} else {
 				makeSpan(context.TODO(), tracer, cspan)

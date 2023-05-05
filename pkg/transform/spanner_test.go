@@ -2,7 +2,6 @@ package transform
 
 import (
 	"testing"
-	"time"
 
 	ebpfcommon "github.com/grafana/ebpf-autoinstrument/pkg/ebpf/common"
 
@@ -58,8 +57,8 @@ func assertMatches(t *testing.T, span *HTTPRequestSpan, method, path, peer strin
 	assert.Equal(t, method, span.Method)
 	assert.Equal(t, peer, span.Peer)
 	assert.Equal(t, status, span.Status)
-	assert.Equal(t, int64(durationMs*1000000), int64(span.End.UnixNano()-span.Start.UnixNano()))
-	assert.Equal(t, int64(durationMs*1000000), int64(span.Start.UnixNano()-span.RequestStart.UnixNano()))
+	assert.Equal(t, int64(durationMs*1000000), int64(span.End-span.Start))
+	assert.Equal(t, int64(durationMs*1000000), int64(span.Start-span.RequestStart))
 }
 
 func TestRequestTraceParsing(t *testing.T) {
@@ -112,11 +111,8 @@ func makeSpanWithTimings(goStart, start, end uint64, cnv converter) HTTPRequestS
 }
 
 func TestSpanNesting(t *testing.T) {
-	now := time.Now()
-	cnv := converter{
-		monoClock: func() time.Duration { return 10000000 },
-		clock:     func() time.Time { return now },
-	}
+	cnv := newConverter()
+
 	a := makeSpanWithTimings(10000, 20000, 30000, cnv)
 	b := makeSpanWithTimings(10000, 30000, 40000, cnv)
 	assert.True(t, (&a).Inside(&b))

@@ -152,7 +152,7 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url string) {
 			if len(results) > 0 {
 				res := results[0]
 				require.Len(t, res.Value, 2)
-				assert.LessOrEqual(t, "3", res.Value[1])
+				assert.Equal(t, "3", res.Value[1])
 			}
 		})
 
@@ -168,7 +168,7 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url string) {
 			if len(results) > 0 {
 				res := results[0]
 				require.Len(t, res.Value, 2)
-				assert.LessOrEqual(t, "3", res.Value[1])
+				assert.Equal(t, "3", res.Value[1])
 			}
 		})
 

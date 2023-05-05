@@ -49,7 +49,7 @@ func ConvertToSpan(in <-chan []ebpfcommon.HTTPRequestTrace, out chan<- []HTTPReq
 }
 
 func (c *HTTPRequestSpan) Inside(parent *HTTPRequestSpan) bool {
-	return c.Start.Compare(parent.RequestStart) >= 0 && c.End.Compare(parent.End) <= 0
+	return c.RequestStart.Compare(parent.RequestStart) >= 0 && c.End.Compare(parent.End) <= 0
 }
 
 func newConverter() converter {
@@ -95,7 +95,7 @@ func extractIP(b []uint8, size int) string {
 }
 
 func (c *converter) convert(trace *ebpfcommon.HTTPRequestTrace) HTTPRequestSpan {
-	now := time.Now()
+	now := c.clock()
 	monoNow := c.monoClock()
 	startDelta := monoNow - time.Duration(trace.StartMonotimeNs)
 	endDelta := monoNow - time.Duration(trace.EndMonotimeNs)

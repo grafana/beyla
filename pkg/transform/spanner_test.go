@@ -2,6 +2,7 @@ package transform
 
 import (
 	"testing"
+	"time"
 
 	ebpfcommon "github.com/grafana/ebpf-autoinstrument/pkg/ebpf/common"
 
@@ -93,4 +94,42 @@ func TestRequestTraceParsing(t *testing.T) {
 		s := cnv.convert(&tr)
 		assertMatches(t, &s, "", "/posts/1/1", "127.0.0.1", 2, 1)
 	})
+}
+
+func makeSpanWithTimings(goStart, start, end uint64, cnv converter) HTTPRequestSpan {
+	tr := ebpfcommon.HTTPRequestTrace{
+		Type:              1,
+		Path:              [100]uint8{},
+		RemoteAddr:        [50]uint8{},
+		RemoteAddrLen:     0,
+		Status:            0,
+		GoStartMonotimeNs: goStart,
+		StartMonotimeNs:   start,
+		EndMonotimeNs:     end,
+	}
+
+	return cnv.convert(&tr)
+}
+
+func TestSpanNesting(t *testing.T) {
+	now := time.Now()
+	cnv := converter{
+		monoClock: func() time.Duration { return 10000000 },
+		clock:     func() time.Time { return now },
+	}
+	a := makeSpanWithTimings(10000, 20000, 30000, cnv)
+	b := makeSpanWithTimings(10000, 30000, 40000, cnv)
+	assert.True(t, (&a).Inside(&b))
+	a = makeSpanWithTimings(10000, 20000, 30000, cnv)
+	b = makeSpanWithTimings(10000, 30000, 30000, cnv)
+	assert.True(t, (&a).Inside(&b))
+	a = makeSpanWithTimings(11000, 11000, 30000, cnv)
+	b = makeSpanWithTimings(10000, 30000, 30000, cnv)
+	assert.True(t, (&a).Inside(&b))
+	a = makeSpanWithTimings(11000, 11000, 30001, cnv)
+	b = makeSpanWithTimings(10000, 30000, 30000, cnv)
+	assert.False(t, (&a).Inside(&b))
+	a = makeSpanWithTimings(9999, 11000, 19999, cnv)
+	b = makeSpanWithTimings(10000, 30000, 30000, cnv)
+	assert.False(t, (&a).Inside(&b))
 }

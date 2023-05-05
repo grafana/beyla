@@ -68,7 +68,7 @@ spec:
         - name: grafana-agent
           image: grafana/agent:main
           command:
-            - "/usr/bin/agent"
+            - "/usr/bin/grafana-agent"
             - "run"
             - "/grafana-agent-config/agent-config.river"
           env:

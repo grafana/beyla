@@ -22,7 +22,7 @@ spec:
         - name: goblog
           image: mariomac/goblog:dev
           imagePullPolicy: IfNotPresent
-          command: ["/goblog"]
+          command: [ "/goblog" ]
           env:
             - name: "GOBLOG_CONFIG"
               value: "/sample/config.yml"
@@ -34,7 +34,9 @@ spec:
           imagePullPolicy: IfNotPresent
           securityContext:
             runAsUser: 0
-            privileged: true # TODO: change by individual capabilities
+            capabilities:
+              add:
+                - SYS_ADMIN
           env:
             - name: PRINT_TRACES
               value: "true"

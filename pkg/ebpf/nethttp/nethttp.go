@@ -109,13 +109,6 @@ func (p *GinTracer) Probes() map[string]ebpfcommon.FunctionPrograms {
 			Start:    p.bpfObjects.UprobeServeHTTP,
 			End:      p.bpfObjects.UprobeServeHttpReturn,
 		},
-		"net/http.(*connReader).startBackgroundRead": {
-			Start: p.bpfObjects.UprobeStartBackgroundRead,
-		},
-		"net/http.(*Client).send": {
-			Start: p.bpfObjects.UprobeClientSend,
-			End:   p.bpfObjects.UprobeClientSendReturn,
-		},
 	}
 }
 

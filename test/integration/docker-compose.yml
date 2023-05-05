@@ -25,10 +25,7 @@ services:
       - ./configs/:/configs
       - ../../testoutput:/coverage
     image: hatest-autoinstrumenter
-    cap_add:
-      - SYS_ADMIN
-      - SYS_RESOURCE
-      - DAC_OVERRIDE
+    privileged: true # in some environments (not GH Pull Requests) you can set it to false and then cap_add: [ SYS_ADMIN ]
     pid: "service:testserver"
     environment:
       GOCOVERDIR: "/coverage"

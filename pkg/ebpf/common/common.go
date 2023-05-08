@@ -1,6 +1,7 @@
 package ebpfcommon
 
 import (
+	"context"
 	"time"
 
 	"github.com/cilium/ebpf"
@@ -38,9 +39,21 @@ type TracerConfig struct {
 	// reach the BatchLength size
 	BatchTimeout time.Duration `yaml:"batch_timeout" env:"BPF_BATCH_TIMEOUT"`
 
+	// BpfBaseDir specifies the base directory where the BPF pinned maps will be mounted.
+	// By default, it will be /var/run/otelauto
+	BpfBaseDir string `yaml:"bpf_fs_base_dir" env:"BPF_FS_BASE_DIR"`
+
+	// Below this line, there are some configuration options that need to be setup by
+	// the invoker code.
+	// TODO: add to the Pipes library the possibility of receiving a context.Context
+	// from the node constructors, so we can pass this info without reusing the configuration.
+
 	// OnOffsets will be called when the offsets are discovered (if not nil).
 	// It is useful to make executable information visible to other parts of the code
 	OnOffsets func(offsets *goexec.Offsets) `yaml:"-" json:"-"`
+
+	// Ctx is a cancellable context that needs to be passed
+	Ctx context.Context `yaml:"-" json:"-"`
 }
 
 // Probe holds the information of the instrumentation points of a given function: its start and end offsets and

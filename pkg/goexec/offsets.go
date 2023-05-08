@@ -2,6 +2,7 @@
 package goexec
 
 import (
+	"context"
 	"fmt"
 )
 
@@ -21,9 +22,9 @@ type FieldOffsets map[string]any
 
 // InspectOffsets gets the memory addresses/offsets of the instrumenting function, as well as the required
 // parameters fields to be read from the eBPF code
-func InspectOffsets(finder ProcessFinder, funcs []string) (*Offsets, error) {
+func InspectOffsets(ctx context.Context, finder ProcessFinder, funcs []string) (*Offsets, error) {
 	// Analyse executable ELF file and find instrumentation points
-	execElf, err := findExecELF(finder)
+	execElf, err := findExecELF(ctx, finder)
 	if err != nil {
 		return nil, fmt.Errorf("looking for executable ELF: %w", err)
 	}

@@ -21,6 +21,7 @@ var defaultConfig = Config{
 	EBPF: ebpfcommon.TracerConfig{
 		BatchLength:  100,
 		BatchTimeout: time.Second,
+		BpfBaseDir:   "/var/run/otelauto",
 	},
 	Metrics: otel.MetricsConfig{
 		Interval: 5 * time.Second,

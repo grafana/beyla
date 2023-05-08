@@ -88,14 +88,24 @@ func (s *HTTPRequestSpan) Inside(parent *HTTPRequestSpan) bool {
 	return s.RequestStart >= parent.RequestStart && s.End <= parent.End
 }
 
-func (s *HTTPRequestSpan) Timings() (time.Time, time.Time, time.Time) {
+type Timings struct {
+	RequestStart time.Time
+	Start        time.Time
+	End          time.Time
+}
+
+func (s *HTTPRequestSpan) Timings() Timings {
 	now := clocks.clock()
 	monoNow := clocks.monoClock()
 	startDelta := monoNow - time.Duration(s.Start)
 	endDelta := monoNow - time.Duration(s.End)
 	goStartDelta := monoNow - time.Duration(s.RequestStart)
 
-	return now.Add(-goStartDelta), now.Add(-startDelta), now.Add(-endDelta)
+	return Timings{
+		RequestStart: now.Add(-goStartDelta),
+		Start:        now.Add(-startDelta),
+		End:          now.Add(-endDelta),
+	}
 }
 
 func convert(trace *ebpfcommon.HTTPRequestTrace) HTTPRequestSpan {

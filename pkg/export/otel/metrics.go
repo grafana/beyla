@@ -172,8 +172,8 @@ func (r *MetricsReporter) metricAttributes(span *transform.HTTPRequestSpan) []at
 }
 
 func (r *MetricsReporter) record(span *transform.HTTPRequestSpan, attrs []attribute.KeyValue) {
-	reqStart, _, end := span.Timings()
-	duration := end.Sub(reqStart).Seconds() * 1000
+	t := span.Timings()
+	duration := t.End.Sub(t.RequestStart).Seconds() * 1000
 	switch span.Type {
 	case transform.EventTypeHTTP:
 		// TODO: for more accuracy, there must be a way to set the metric time from the actual span end time

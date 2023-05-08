@@ -18,11 +18,11 @@ func PrinterNode(_ PrintEnabled) node.TerminalFunc[[]transform.HTTPRequestSpan] 
 	return func(input <-chan []transform.HTTPRequestSpan) {
 		for spans := range input {
 			for i := range spans {
-				reqStart, start, end := spans[i].Timings()
+				t := spans[i].Timings()
 				fmt.Printf("%s (%s[%s]) %v %s %s [%s]->[%s:%d] size:%dB\n",
-					start.Format("2006-01-02 15:04:05.12345"),
-					end.Sub(reqStart),
-					end.Sub(start),
+					t.Start.Format("2006-01-02 15:04:05.12345"),
+					t.End.Sub(t.RequestStart),
+					t.End.Sub(t.Start),
 					spans[i].Status,
 					spans[i].Method,
 					spans[i].Path,

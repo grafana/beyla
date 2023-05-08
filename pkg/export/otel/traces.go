@@ -193,11 +193,11 @@ func spanKind(span *transform.HTTPRequestSpan) trace2.SpanKind {
 }
 
 func makeSpan(parentCtx context.Context, tracer trace2.Tracer, span *transform.HTTPRequestSpan) SessionSpan {
-	reqStart, start, end := span.Timings()
+	t := span.Timings()
 
 	// Create a parent span for the whole request session
 	ctx, sp := tracer.Start(parentCtx, traceName(span),
-		trace2.WithTimestamp(reqStart),
+		trace2.WithTimestamp(t.RequestStart),
 		trace2.WithSpanKind(spanKind(span)),
 		trace2.WithAttributes(traceAttributes(span)...),
 	)
@@ -207,21 +207,21 @@ func makeSpan(parentCtx context.Context, tracer trace2.Tracer, span *transform.H
 
 		// Create a child span showing the queue time
 		_, spQ := tracer.Start(ctx, "in queue",
-			trace2.WithTimestamp(reqStart),
+			trace2.WithTimestamp(t.RequestStart),
 			trace2.WithSpanKind(trace2.SpanKindInternal),
 		)
-		spQ.End(trace2.WithTimestamp(start))
+		spQ.End(trace2.WithTimestamp(t.Start))
 
 		// Create a child span showing the processing time
 		// Override the active context for the span to be the processing span
 		ctx, spP = tracer.Start(ctx, "processing",
-			trace2.WithTimestamp(start),
+			trace2.WithTimestamp(t.Start),
 			trace2.WithSpanKind(trace2.SpanKindInternal),
 		)
-		spP.End(trace2.WithTimestamp(end))
+		spP.End(trace2.WithTimestamp(t.End))
 	}
 
-	sp.End(trace2.WithTimestamp(end))
+	sp.End(trace2.WithTimestamp(t.End))
 
 	return SessionSpan{*span, ctx}
 }

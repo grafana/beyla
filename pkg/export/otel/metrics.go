@@ -172,17 +172,19 @@ func (r *MetricsReporter) metricAttributes(span *transform.HTTPRequestSpan) []at
 }
 
 func (r *MetricsReporter) record(span *transform.HTTPRequestSpan, attrs []attribute.KeyValue) {
+	t := span.Timings()
+	duration := t.End.Sub(t.RequestStart).Seconds() * 1000
 	switch span.Type {
 	case transform.EventTypeHTTP:
 		// TODO: for more accuracy, there must be a way to set the metric time from the actual span end time
-		r.httpDuration.Record(context.TODO(), span.End.Sub(span.RequestStart).Seconds()*1000, attrs...)
+		r.httpDuration.Record(context.TODO(), duration, attrs...)
 		r.httpRequestSize.Record(context.TODO(), float64(span.ContentLength), attrs...)
 	case transform.EventTypeGRPC:
-		r.grpcDuration.Record(context.TODO(), span.End.Sub(span.RequestStart).Seconds()*1000, attrs...)
+		r.grpcDuration.Record(context.TODO(), duration, attrs...)
 	case transform.EventTypeGRPCClient:
-		r.grpcClientDuration.Record(context.TODO(), span.End.Sub(span.RequestStart).Seconds()*1000, attrs...)
+		r.grpcClientDuration.Record(context.TODO(), duration, attrs...)
 	case transform.EventTypeHTTPClient:
-		r.httpClientDuration.Record(context.TODO(), span.End.Sub(span.RequestStart).Seconds()*1000, attrs...)
+		r.httpClientDuration.Record(context.TODO(), duration, attrs...)
 		r.httpClientRequestSize.Record(context.TODO(), float64(span.ContentLength), attrs...)
 	}
 }

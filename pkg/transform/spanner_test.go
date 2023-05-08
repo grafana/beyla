@@ -2,7 +2,6 @@ package transform
 
 import (
 	"testing"
-	"time"
 
 	ebpfcommon "github.com/grafana/ebpf-autoinstrument/pkg/ebpf/common"
 
@@ -58,45 +57,43 @@ func assertMatches(t *testing.T, span *HTTPRequestSpan, method, path, peer strin
 	assert.Equal(t, method, span.Method)
 	assert.Equal(t, peer, span.Peer)
 	assert.Equal(t, status, span.Status)
-	assert.Equal(t, int64(durationMs*1000000), int64(span.End.UnixNano()-span.Start.UnixNano()))
-	assert.Equal(t, int64(durationMs*1000000), int64(span.Start.UnixNano()-span.RequestStart.UnixNano()))
+	assert.Equal(t, int64(durationMs*1000000), int64(span.End-span.Start))
+	assert.Equal(t, int64(durationMs*1000000), int64(span.Start-span.RequestStart))
 }
 
 func TestRequestTraceParsing(t *testing.T) {
-	cnv := newConverter()
-
 	t.Run("Test basic parsing", func(t *testing.T) {
 		tr := makeHTTPRequestTrace("POST", "/users", "127.0.0.1:1234", 200, 5)
-		s := cnv.convert(&tr)
+		s := convert(&tr)
 		assertMatches(t, &s, "POST", "/users", "127.0.0.1", 200, 5)
 	})
 
 	t.Run("Test with empty path and missing peer host", func(t *testing.T) {
 		tr := makeHTTPRequestTrace("GET", "", ":1234", 403, 6)
-		s := cnv.convert(&tr)
+		s := convert(&tr)
 		assertMatches(t, &s, "GET", "", "", 403, 6)
 	})
 
 	t.Run("Test with missing peer port", func(t *testing.T) {
 		tr := makeHTTPRequestTrace("GET", "/posts/1/1", "1234", 500, 1)
-		s := cnv.convert(&tr)
+		s := convert(&tr)
 		assertMatches(t, &s, "GET", "/posts/1/1", "1234", 500, 1)
 	})
 
 	t.Run("Test with invalid peer port", func(t *testing.T) {
 		tr := makeHTTPRequestTrace("GET", "/posts/1/1", "1234:aaa", 500, 1)
-		s := cnv.convert(&tr)
+		s := convert(&tr)
 		assertMatches(t, &s, "GET", "/posts/1/1", "1234", 500, 1)
 	})
 
 	t.Run("Test with GRPC request", func(t *testing.T) {
 		tr := makeGRPCRequestTrace("/posts/1/1", []byte{0x7f, 0, 0, 0x1}, 2, 1)
-		s := cnv.convert(&tr)
+		s := convert(&tr)
 		assertMatches(t, &s, "", "/posts/1/1", "127.0.0.1", 2, 1)
 	})
 }
 
-func makeSpanWithTimings(goStart, start, end uint64, cnv converter) HTTPRequestSpan {
+func makeSpanWithTimings(goStart, start, end uint64) HTTPRequestSpan {
 	tr := ebpfcommon.HTTPRequestTrace{
 		Type:              1,
 		Path:              [100]uint8{},
@@ -108,28 +105,23 @@ func makeSpanWithTimings(goStart, start, end uint64, cnv converter) HTTPRequestS
 		EndMonotimeNs:     end,
 	}
 
-	return cnv.convert(&tr)
+	return convert(&tr)
 }
 
 func TestSpanNesting(t *testing.T) {
-	now := time.Now()
-	cnv := converter{
-		monoClock: func() time.Duration { return 10000000 },
-		clock:     func() time.Time { return now },
-	}
-	a := makeSpanWithTimings(10000, 20000, 30000, cnv)
-	b := makeSpanWithTimings(10000, 30000, 40000, cnv)
+	a := makeSpanWithTimings(10000, 20000, 30000)
+	b := makeSpanWithTimings(10000, 30000, 40000)
 	assert.True(t, (&a).Inside(&b))
-	a = makeSpanWithTimings(10000, 20000, 30000, cnv)
-	b = makeSpanWithTimings(10000, 30000, 30000, cnv)
+	a = makeSpanWithTimings(10000, 20000, 30000)
+	b = makeSpanWithTimings(10000, 30000, 30000)
 	assert.True(t, (&a).Inside(&b))
-	a = makeSpanWithTimings(11000, 11000, 30000, cnv)
-	b = makeSpanWithTimings(10000, 30000, 30000, cnv)
+	a = makeSpanWithTimings(11000, 11000, 30000)
+	b = makeSpanWithTimings(10000, 30000, 30000)
 	assert.True(t, (&a).Inside(&b))
-	a = makeSpanWithTimings(11000, 11000, 30001, cnv)
-	b = makeSpanWithTimings(10000, 30000, 30000, cnv)
+	a = makeSpanWithTimings(11000, 11000, 30001)
+	b = makeSpanWithTimings(10000, 30000, 30000)
 	assert.False(t, (&a).Inside(&b))
-	a = makeSpanWithTimings(9999, 11000, 19999, cnv)
-	b = makeSpanWithTimings(10000, 30000, 30000, cnv)
+	a = makeSpanWithTimings(9999, 11000, 19999)
+	b = makeSpanWithTimings(10000, 30000, 30000)
 	assert.False(t, (&a).Inside(&b))
 }

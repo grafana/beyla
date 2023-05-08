@@ -19,6 +19,13 @@ const EventTypeGRPCClient = 4
 
 var log = slog.With("component", "goexec.spanner")
 
+type converter struct {
+	clock     func() time.Time
+	monoClock func() time.Duration
+}
+
+var clocks = converter{monoClock: monotime.Now, clock: time.Now}
+
 // HTTPRequestSpan contains the information being submitted by the following nodes in the graph.
 // It enables confortable handling of data from Go.
 type HTTPRequestSpan struct {
@@ -32,36 +39,19 @@ type HTTPRequestSpan struct {
 	HostPort      int
 	Status        int
 	ContentLength int64
-	RequestStart  time.Time
-	Start         time.Time
-	End           time.Time
+	RequestStart  int64
+	Start         int64
+	End           int64
 }
 
 func ConvertToSpan(in <-chan []ebpfcommon.HTTPRequestTrace, out chan<- []HTTPRequestSpan) {
-	cnv := newConverter()
 	for traces := range in {
 		spans := make([]HTTPRequestSpan, 0, len(traces))
 		for i := range traces {
-			spans = append(spans, cnv.convert(&traces[i]))
+			spans = append(spans, convert(&traces[i]))
 		}
 		out <- spans
 	}
-}
-
-func (c *HTTPRequestSpan) Inside(parent *HTTPRequestSpan) bool {
-	return c.RequestStart.Compare(parent.RequestStart) >= 0 && c.End.Compare(parent.End) <= 0
-}
-
-func newConverter() converter {
-	return converter{
-		monoClock: monotime.Now,
-		clock:     time.Now,
-	}
-}
-
-type converter struct {
-	clock     func() time.Time
-	monoClock func() time.Duration
 }
 
 func extractHostPort(b []uint8) (string, int) {
@@ -94,13 +84,31 @@ func extractIP(b []uint8, size int) string {
 	return net.IP(b[:size]).String()
 }
 
-func (c *converter) convert(trace *ebpfcommon.HTTPRequestTrace) HTTPRequestSpan {
-	now := c.clock()
-	monoNow := c.monoClock()
-	startDelta := monoNow - time.Duration(trace.StartMonotimeNs)
-	endDelta := monoNow - time.Duration(trace.EndMonotimeNs)
-	goStartDelta := monoNow - time.Duration(trace.GoStartMonotimeNs)
+func (s *HTTPRequestSpan) Inside(parent *HTTPRequestSpan) bool {
+	return s.RequestStart >= parent.RequestStart && s.End <= parent.End
+}
 
+type Timings struct {
+	RequestStart time.Time
+	Start        time.Time
+	End          time.Time
+}
+
+func (s *HTTPRequestSpan) Timings() Timings {
+	now := clocks.clock()
+	monoNow := clocks.monoClock()
+	startDelta := monoNow - time.Duration(s.Start)
+	endDelta := monoNow - time.Duration(s.End)
+	goStartDelta := monoNow - time.Duration(s.RequestStart)
+
+	return Timings{
+		RequestStart: now.Add(-goStartDelta),
+		Start:        now.Add(-startDelta),
+		End:          now.Add(-endDelta),
+	}
+}
+
+func convert(trace *ebpfcommon.HTTPRequestTrace) HTTPRequestSpan {
 	// From C, assuming 0-ended strings
 	methodLen := bytes.IndexByte(trace.Method[:], 0)
 	if methodLen < 0 {
@@ -138,9 +146,9 @@ func (c *converter) convert(trace *ebpfcommon.HTTPRequestTrace) HTTPRequestSpan 
 		Host:          hostname,
 		HostPort:      hostPort,
 		ContentLength: trace.ContentLength,
-		RequestStart:  now.Add(-goStartDelta),
-		Start:         now.Add(-startDelta),
-		End:           now.Add(-endDelta),
+		RequestStart:  int64(trace.GoStartMonotimeNs),
+		Start:         int64(trace.StartMonotimeNs),
+		End:           int64(trace.EndMonotimeNs),
 		Status:        int(trace.Status),
 	}
 }

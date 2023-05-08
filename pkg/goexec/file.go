@@ -3,6 +3,7 @@ package goexec
 
 import (
 	"bytes"
+	"context"
 	"debug/elf"
 	"encoding/binary"
 	"errors"
@@ -87,13 +88,19 @@ func OwnedPort(port int) ProcessFinder {
 
 // findExecELF operation blocks until the executable is available.
 // TODO: check that all the existing instances of the excutable are instrumented, even when it is offloaded from memory
-func findExecELF(finder ProcessFinder) (FileInfo, error) {
+func findExecELF(ctx context.Context, finder ProcessFinder) (FileInfo, error) {
 	for {
 		log().Debug("searching for process executable")
 		p, ok := finder()
 		if !ok {
-			log().Debug("no processes found. Will retry", "retryAfter", retryTicker.String())
-			time.Sleep(retryTicker)
+			select {
+			case <-ctx.Done():
+				log().Debug("context was cancelled before finding the process. Exiting")
+				return FileInfo{}, errors.New("process not found")
+			default:
+				log().Debug("no processes found. Will retry", "retryAfter", retryTicker.String())
+				time.Sleep(retryTicker)
+			}
 			continue
 		}
 		exePath, err := p.Exe()

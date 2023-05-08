@@ -6,10 +6,13 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path"
 	"reflect"
+	"strconv"
 	"strings"
 
-	"github.com/grafana/ebpf-autoinstrument/pkg/ebpf/fs"
+	"golang.org/x/sys/unix"
+
 	"github.com/grafana/ebpf-autoinstrument/pkg/ebpf/goruntime"
 	"github.com/grafana/ebpf-autoinstrument/pkg/ebpf/grpc"
 
@@ -88,13 +91,26 @@ func TracerProvider(cfg ebpfcommon.TracerConfig) []node.StartFuncCtx[[]ebpfcommo
 		return nil
 	}
 
-	var runFunctions []node.StartFuncCtx[[]ebpfcommon.HTTPRequestTrace]
+	pinPath, err := mountBpfPinPath(&cfg)
+	if err != nil {
+		log.Error("mounting BPF pinning folder", err, "baseDir", cfg.BpfBaseDir)
+		return nil
+	}
+
+	// startNodes contains the eBPF programs (HTTP, GRPC tracers...) plus a function
+	// that just waits for the passed context to finish before closing the BPF pin
+	// path
+	startNodes := []node.StartFuncCtx[[]ebpfcommon.HTTPRequestTrace]{
+		waitToCloseBbfPinPath(pinPath),
+	}
+
 	for _, p := range programs {
 		plog := log.With("program", reflect.TypeOf(p))
 		plog.Debug("loading eBPF program")
 		spec, err := p.Load()
 		if err != nil {
 			plog.Error("loading eBPF program", err)
+			unmountBpfPinPath(pinPath)
 			return nil
 		}
 		if err := spec.RewriteConstants(p.Constants(offsets)); err != nil {
@@ -103,10 +119,11 @@ func TracerProvider(cfg ebpfcommon.TracerConfig) []node.StartFuncCtx[[]ebpfcommo
 		}
 		if err := spec.LoadAndAssign(p.BpfObjects(), &ebpf.CollectionOptions{
 			Maps: ebpf.MapOptions{
-				PinPath: fs.PinnedRoot,
+				PinPath: pinPath,
 			}}); err != nil {
 			plog.Error("loading and assigning BPF objects", err)
 			printVerifierErrorInfo(err)
+			unmountBpfPinPath(pinPath)
 			return nil
 		}
 		i := instrumenter{
@@ -127,14 +144,56 @@ func TracerProvider(cfg ebpfcommon.TracerConfig) []node.StartFuncCtx[[]ebpfcommo
 			}); err != nil {
 				plog.Error("instrumenting function", err, "function", funcName)
 				printVerifierErrorInfo(err)
+				unmountBpfPinPath(pinPath)
 				return nil
 			}
 			p.AddCloser(i.uprobes...)
 		}
-		runFunctions = append(runFunctions, p.Run)
+		startNodes = append(startNodes, p.Run)
 	}
 
-	return runFunctions
+	return startNodes
+}
+
+func mountBpfPinPath(cfg *ebpfcommon.TracerConfig) (string, error) {
+	pinPath := path.Join(cfg.BpfBaseDir, strconv.Itoa(os.Getpid()))
+	log := slog.With("component", "ebpf.TracerProvider", "path", pinPath)
+	log.Debug("mounting BPF map pinning path")
+	if _, err := os.Stat(pinPath); err != nil {
+		if !os.IsNotExist(err) {
+			return "", fmt.Errorf("accessing %s stat: %w", pinPath, err)
+		}
+		log.Debug("BPF map pinning path does not exist. Creating before mounting")
+		if err := os.MkdirAll(pinPath, 0700); err != nil {
+			return "", fmt.Errorf("creating directory %s: %w", pinPath, err)
+		}
+	}
+
+	return pinPath, bpfMount(pinPath)
+}
+
+// this will be just a start node that listens for the context cancellation and then
+// unmounts the BPF pinning path
+func waitToCloseBbfPinPath(pinPath string) node.StartFuncCtx[[]ebpfcommon.HTTPRequestTrace] {
+	return func(ctx context.Context, _ chan<- []ebpfcommon.HTTPRequestTrace) {
+		<-ctx.Done()
+		unmountBpfPinPath(pinPath)
+	}
+}
+
+func unmountBpfPinPath(pinPath string) {
+	log := slog.With("component", "ebpf.TracerProvider", "path", pinPath)
+	log.Debug("context has been canceled. Unmounting BPF map pinning path")
+	if err := unix.Unmount(pinPath, unix.MNT_FORCE); err != nil {
+		log.Warn("can't unmount pinned root. Try unmounting and removing it manually", err)
+		return
+	}
+	log.Debug("unmounted bpf file system")
+	if err := os.RemoveAll(pinPath); err != nil {
+		log.Warn("can't remove pinned root. Try removing it manually", err)
+	} else {
+		log.Debug("removed pin path")
+	}
 }
 
 // filterNotFoundPrograms will filter these programs whose required functions (as
@@ -179,7 +238,7 @@ func inspect(cfg *ebpfcommon.TracerConfig, functions []string) (*goexec.Offsets,
 	} else {
 		finder = goexec.ProcessNamed(cfg.Exec)
 	}
-	offsets, err := goexec.InspectOffsets(finder, functions)
+	offsets, err := goexec.InspectOffsets(cfg.Ctx, finder, functions)
 	if err != nil {
 		return nil, fmt.Errorf("error analysing target executable: %w", err)
 	}

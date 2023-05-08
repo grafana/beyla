@@ -47,6 +47,7 @@ otel_metrics_export:
 			Exec:         "tras",
 			BatchLength:  100,
 			BatchTimeout: time.Second,
+			BpfBaseDir:   "/var/run/otelauto",
 		},
 		Metrics: otel.MetricsConfig{
 			ServiceName: "svc-name",

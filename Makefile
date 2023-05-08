@@ -156,15 +156,14 @@ generator-image-build:
 .PHONY: prepare-integration-test
 prepare-integration-test:
 	@echo "### Removing resources from previous integration tests, if any"
-	$(OCI_BIN) compose $(COMPOSE_ARGS) stop || true
-	$(OCI_BIN) compose $(COMPOSE_ARGS) rm -f || true
-	$(OCI_BIN) rmi -f $(shell $(OCI_BIN) images --format '{{.Repository}}:{{.Tag}}' | grep 'hatest-') || true
+	rm -rf $(TEST_OUTPUT)/* || true
+	$(MAKE) cleanup-integration-test
 
 .PHONY: cleanup-integration-test
 cleanup-integration-test:
 	@echo "### Removing integration test Compose cluster"
-	$(OCI_BIN) compose $(COMPOSE_ARGS) stop
-	$(OCI_BIN) compose $(COMPOSE_ARGS) rm -f
+	$(OCI_BIN) compose $(COMPOSE_ARGS) stop || true
+	$(OCI_BIN) compose $(COMPOSE_ARGS) rm -f || true
 	$(OCI_BIN) rmi -f $(shell $(OCI_BIN) images --format '{{.Repository}}:{{.Tag}}' | grep 'hatest-') || true
 
 .PHONY: run-integration-test

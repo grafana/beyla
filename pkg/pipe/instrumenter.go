@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/grafana/ebpf-autoinstrument/pkg/export/prom"
+
 	"github.com/grafana/ebpf-autoinstrument/pkg/ebpf"
 
 	"github.com/mariomac/pipes/pkg/graph"
@@ -56,7 +58,12 @@ func programName(path string) string {
 }
 
 func (gb *graphBuilder) buildGraph(ctx context.Context) (graph.Graph, error) {
-
+	// setting manually some configuration properties that are needed by their
+	// respective node providers
+	if gb.config.Prometheus != nil {
+		// Prometheus will report routes as attributes if the Routes node is configured
+		ctx = context.WithValue(ctx, prom.ReportRoutesCtxKey, gb.config.Routes != nil) //nolint:staticcheck
+	}
 	gb.config.EBPF.OnOffsets = func(offsets *goexec.Offsets) {
 		if gb.config.Metrics.ServiceName == "" {
 			gb.config.Metrics.ServiceName = programName(offsets.FileInfo.CmdExePath)

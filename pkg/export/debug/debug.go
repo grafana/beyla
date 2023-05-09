@@ -2,6 +2,7 @@
 package debug
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/grafana/ebpf-autoinstrument/pkg/transform"
@@ -14,7 +15,7 @@ func (p PrintEnabled) Enabled() bool {
 	return bool(p)
 }
 
-func PrinterNode(_ PrintEnabled) node.TerminalFunc[[]transform.HTTPRequestSpan] {
+func PrinterNode(_ context.Context, _ PrintEnabled) (node.TerminalFunc[[]transform.HTTPRequestSpan], error) {
 	return func(input <-chan []transform.HTTPRequestSpan) {
 		for spans := range input {
 			for i := range spans {
@@ -33,7 +34,7 @@ func PrinterNode(_ PrintEnabled) node.TerminalFunc[[]transform.HTTPRequestSpan] 
 				)
 			}
 		}
-	}
+	}, nil
 }
 
 type NoopEnabled bool
@@ -41,12 +42,12 @@ type NoopEnabled bool
 func (n NoopEnabled) Enabled() bool {
 	return bool(n)
 }
-func NoopNode(_ NoopEnabled) node.TerminalFunc[[]transform.HTTPRequestSpan] {
+func NoopNode(_ context.Context, _ NoopEnabled) (node.TerminalFunc[[]transform.HTTPRequestSpan], error) {
 	counter := 0
 	return func(spans <-chan []transform.HTTPRequestSpan) {
 		for range spans {
 			counter += len(spans)
 		}
 		fmt.Printf("Processed %d requests\n", counter)
-	}
+	}, nil
 }

@@ -2,6 +2,8 @@
 package transform
 
 import (
+	"context"
+
 	"github.com/grafana/ebpf-autoinstrument/pkg/transform/route"
 	"github.com/mariomac/pipes/pkg/node"
 	"golang.org/x/exp/slog"
@@ -31,7 +33,7 @@ type RoutesConfig struct {
 	Patterns []string `yaml:"patterns"`
 }
 
-func RoutesProvider(rc *RoutesConfig) node.MiddleFunc[[]HTTPRequestSpan, []HTTPRequestSpan] {
+func RoutesProvider(_ context.Context, rc *RoutesConfig) (node.MiddleFunc[[]HTTPRequestSpan, []HTTPRequestSpan], error) {
 	// set default value for Unmatch action
 	var unmatchAction func(span *HTTPRequestSpan)
 	switch rc.Unmatch {
@@ -56,7 +58,7 @@ func RoutesProvider(rc *RoutesConfig) node.MiddleFunc[[]HTTPRequestSpan, []HTTPR
 			}
 			out <- spans
 		}
-	}
+	}, nil
 }
 
 func leaveUnmatchEmpty(_ *HTTPRequestSpan) {}

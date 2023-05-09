@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net/url"
-	"os"
 	"strings"
 	"time"
 
@@ -40,6 +39,7 @@ func (m MetricsConfig) Enabled() bool {
 }
 
 type MetricsReporter struct {
+	ctx                   context.Context
 	reportTarget          bool
 	reportPeer            bool
 	exporter              metric.Exporter
@@ -52,19 +52,17 @@ type MetricsReporter struct {
 	httpClientRequestSize instrument.Float64Histogram
 }
 
-func MetricsReporterProvider(cfg MetricsConfig) node.TerminalFunc[[]transform.HTTPRequestSpan] {
-	mr, err := newMetricsReporter(&cfg)
+func MetricsReporterProvider(ctx context.Context, cfg MetricsConfig) (node.TerminalFunc[[]transform.HTTPRequestSpan], error) {
+	mr, err := newMetricsReporter(ctx, &cfg)
 	if err != nil {
-		slog.Error("can't instantiate OTEL metrics reporter", err)
-		os.Exit(-1)
+		return nil, fmt.Errorf("instantiating OTEL metrics reporter: %w", err)
 	}
-	return mr.reportMetrics
+	return mr.reportMetrics, nil
 }
 
-func newMetricsReporter(cfg *MetricsConfig) (*MetricsReporter, error) {
-	ctx := context.TODO()
-
+func newMetricsReporter(ctx context.Context, cfg *MetricsConfig) (*MetricsReporter, error) {
 	mr := MetricsReporter{
+		ctx:          ctx,
 		reportTarget: cfg.ReportTarget,
 		reportPeer:   cfg.ReportPeerInfo,
 	}
@@ -121,10 +119,10 @@ func newMetricsReporter(cfg *MetricsConfig) (*MetricsReporter, error) {
 }
 
 func (r *MetricsReporter) close() {
-	if err := r.provider.Shutdown(context.TODO()); err != nil {
+	if err := r.provider.Shutdown(r.ctx); err != nil {
 		slog.With("component", "MetricsReporter").Error("closing metrics provider", err)
 	}
-	if err := r.exporter.Shutdown(context.TODO()); err != nil {
+	if err := r.exporter.Shutdown(r.ctx); err != nil {
 		slog.With("component", "MetricsReporter").Error("closing metrics exporter", err)
 	}
 }
@@ -177,15 +175,15 @@ func (r *MetricsReporter) record(span *transform.HTTPRequestSpan, attrs []attrib
 	switch span.Type {
 	case transform.EventTypeHTTP:
 		// TODO: for more accuracy, there must be a way to set the metric time from the actual span end time
-		r.httpDuration.Record(context.TODO(), duration, attrs...)
-		r.httpRequestSize.Record(context.TODO(), float64(span.ContentLength), attrs...)
+		r.httpDuration.Record(r.ctx, duration, attrs...)
+		r.httpRequestSize.Record(r.ctx, float64(span.ContentLength), attrs...)
 	case transform.EventTypeGRPC:
-		r.grpcDuration.Record(context.TODO(), duration, attrs...)
+		r.grpcDuration.Record(r.ctx, duration, attrs...)
 	case transform.EventTypeGRPCClient:
-		r.grpcClientDuration.Record(context.TODO(), duration, attrs...)
+		r.grpcClientDuration.Record(r.ctx, duration, attrs...)
 	case transform.EventTypeHTTPClient:
-		r.httpClientDuration.Record(context.TODO(), duration, attrs...)
-		r.httpClientRequestSize.Record(context.TODO(), float64(span.ContentLength), attrs...)
+		r.httpClientDuration.Record(r.ctx, duration, attrs...)
+		r.httpClientRequestSize.Record(r.ctx, float64(span.ContentLength), attrs...)
 	}
 }
 

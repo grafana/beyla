@@ -26,7 +26,7 @@ type MiddleFunc[IN, OUT any] func(in <-chan IN, out chan<- OUT)
 
 // TerminalFunc is a function that receives a readable channel as unique argument.
 // It must process the inputs from the input channel until it's closed.
-type TerminalFunc[IN any] func(out <-chan IN)
+type TerminalFunc[IN any] func(in <-chan IN)
 
 // TODO: OutType and InType methods are candidates for deprecation
 

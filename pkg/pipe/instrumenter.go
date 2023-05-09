@@ -1,6 +1,7 @@
 package pipe
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -23,12 +24,12 @@ type graphBuilder struct {
 
 // Build instantiates the whole instrumentation --> processing --> submit
 // pipeline graph and returns it as a startable item
-func Build(config *Config) (graph.Graph, error) {
+func Build(ctx context.Context, config *Config) (graph.Graph, error) {
 	if err := config.Validate(); err != nil {
 		return graph.Graph{}, fmt.Errorf("validating configuration: %w", err)
 	}
 
-	return newGraphBuilder(config).buildGraph()
+	return newGraphBuilder(config).buildGraph(ctx)
 }
 
 // private constructor that can be instantiated from tests to override the node providers
@@ -54,7 +55,7 @@ func programName(path string) string {
 	return parts[len(parts)-1]
 }
 
-func (gb *graphBuilder) buildGraph() (graph.Graph, error) {
+func (gb *graphBuilder) buildGraph(ctx context.Context) (graph.Graph, error) {
 
 	gb.config.EBPF.OnOffsets = func(offsets *goexec.Offsets) {
 		if gb.config.Metrics.ServiceName == "" {
@@ -65,5 +66,5 @@ func (gb *graphBuilder) buildGraph() (graph.Graph, error) {
 		}
 	}
 
-	return gb.builder.Build(gb.config)
+	return gb.builder.Build(ctx, gb.config)
 }

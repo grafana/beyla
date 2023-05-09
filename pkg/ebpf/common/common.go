@@ -1,7 +1,6 @@
 package ebpfcommon
 
 import (
-	"context"
 	"time"
 
 	"github.com/cilium/ebpf"
@@ -51,9 +50,6 @@ type TracerConfig struct {
 	// OnOffsets will be called when the offsets are discovered (if not nil).
 	// It is useful to make executable information visible to other parts of the code
 	OnOffsets func(offsets *goexec.Offsets) `yaml:"-" json:"-"`
-
-	// Ctx is a cancellable context that needs to be passed
-	Ctx context.Context `yaml:"-" json:"-"`
 }
 
 // Probe holds the information of the instrumentation points of a given function: its start and end offsets and

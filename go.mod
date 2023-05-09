@@ -11,7 +11,7 @@ require (
 	github.com/grafana/go-offsets-tracker v0.1.2
 	github.com/hashicorp/golang-lru/v2 v2.0.2
 	github.com/mariomac/guara v0.0.0-20221222112709-f95b15506aee
-	github.com/mariomac/pipes v0.6.0
+	github.com/mariomac/pipes v0.7.0
 	github.com/shirou/gopsutil v3.21.11+incompatible
 	github.com/stretchr/testify v1.8.2
 	go.opentelemetry.io/collector/pdata v0.66.0
@@ -25,6 +25,7 @@ require (
 	go.opentelemetry.io/otel/trace v1.14.0
 	golang.org/x/arch v0.0.0-20210923205945-b76863e36670
 	golang.org/x/exp v0.0.0-20230213192124-5e25df0256eb
+	golang.org/x/sys v0.6.0
 	google.golang.org/grpc v1.53.0
 	google.golang.org/protobuf v1.28.1
 	gopkg.in/yaml.v3 v3.0.1
@@ -67,7 +68,6 @@ require (
 	go.uber.org/multierr v1.8.0 // indirect
 	golang.org/x/crypto v0.5.0 // indirect
 	golang.org/x/net v0.8.0 // indirect
-	golang.org/x/sys v0.6.0 // indirect
 	golang.org/x/text v0.8.0 // indirect
 	google.golang.org/genproto v0.0.0-20230110181048-76db0878b65f // indirect
 )

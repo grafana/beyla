@@ -47,7 +47,6 @@ func main() {
 	// We must register the hook before we launch the pipe build, otherwise we won't clean up if the
 	// child process isn't found.
 	ctx, cancel := context.WithCancel(context.Background())
-	config.EBPF.Ctx = ctx
 	exit := make(chan os.Signal, 1)
 	signal.Notify(exit, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
@@ -57,7 +56,7 @@ func main() {
 	}()
 
 	slog.Info("creating instrumentation pipeline")
-	bp, err := pipe.Build(config)
+	bp, err := pipe.Build(ctx, config)
 	if err != nil {
 		slog.Error("can't instantiate instrumentation pipeline", err)
 		os.Exit(-1)

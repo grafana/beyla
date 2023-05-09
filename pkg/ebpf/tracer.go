@@ -52,7 +52,7 @@ type Tracer interface {
 }
 
 // TracerProvider returns a StartFuncCtx for each discovered eBPF traceable source: GRPC, HTTP...
-func TracerProvider(cfg ebpfcommon.TracerConfig) []node.StartFuncCtx[[]ebpfcommon.HTTPRequestTrace] { //nolint:all
+func TracerProvider(ctx context.Context, cfg ebpfcommon.TracerConfig) ([]node.StartFuncCtx[[]ebpfcommon.HTTPRequestTrace], error) { //nolint:all
 	log := slog.With("component", "ebpf.TracerProvider")
 
 	// Each program is an eBPF source: net/http, grpc...
@@ -66,35 +66,29 @@ func TracerProvider(cfg ebpfcommon.TracerConfig) []node.StartFuncCtx[[]ebpfcommo
 	// merging all the functions from all the programs, in order to do
 	// a complete inspection of the target executable
 	allFuncs := allFunctionNames(programs)
-	offsets, err := inspect(&cfg, allFuncs)
+	offsets, err := inspect(ctx, &cfg, allFuncs)
 	if err != nil {
-		log.Error("inspecting offsets", err)
-		// TODO: rework pipes API to allow returning the errors to the pipe builder
-		return nil
+		return nil, fmt.Errorf("inspecting offsets: %w", err)
 	}
 
 	programs = filterNotFoundPrograms(programs, offsets)
 	if len(programs) == 0 {
-		log.Error("the executable is not instrumentable. Exiting", fmt.Errorf("no instrumentable function found"))
-		return nil
+		return nil, errors.New("no instrumentable function found")
 	}
 
 	// Instead of the executable file in the disk, we pass the /proc/<pid>/exec
 	// to allow loading it from different container/pods in containerized environments
 	exe, err := link.OpenExecutable(offsets.FileInfo.ProExeLinkPath)
 	if err != nil {
-		log.Error("opening executable file. Exiting", err, "path", offsets.FileInfo.ProExeLinkPath)
-		return nil
+		return nil, fmt.Errorf("opening %q executable file: %w", offsets.FileInfo.ProExeLinkPath, err)
 	}
 	if err := rlimit.RemoveMemlock(); err != nil {
-		log.Error("removing memory lock. Exiting", err)
-		return nil
+		return nil, fmt.Errorf("removing memory lock: %w", err)
 	}
 
 	pinPath, err := mountBpfPinPath(&cfg)
 	if err != nil {
-		log.Error("mounting BPF pinning folder", err, "baseDir", cfg.BpfBaseDir)
-		return nil
+		return nil, fmt.Errorf("mounting BPF FS in %q: %w", cfg.BpfBaseDir, err)
 	}
 
 	// startNodes contains the eBPF programs (HTTP, GRPC tracers...) plus a function
@@ -109,22 +103,19 @@ func TracerProvider(cfg ebpfcommon.TracerConfig) []node.StartFuncCtx[[]ebpfcommo
 		plog.Debug("loading eBPF program")
 		spec, err := p.Load()
 		if err != nil {
-			plog.Error("loading eBPF program", err)
 			unmountBpfPinPath(pinPath)
-			return nil
+			return nil, fmt.Errorf("loading eBPF program: %w", err)
 		}
 		if err := spec.RewriteConstants(p.Constants(offsets)); err != nil {
-			plog.Error("rewriting BPF constants definition", err)
-			return nil
+			return nil, fmt.Errorf("rewriting BPF constants definition: %w", err)
 		}
 		if err := spec.LoadAndAssign(p.BpfObjects(), &ebpf.CollectionOptions{
 			Maps: ebpf.MapOptions{
 				PinPath: pinPath,
 			}}); err != nil {
-			plog.Error("loading and assigning BPF objects", err)
 			printVerifierErrorInfo(err)
 			unmountBpfPinPath(pinPath)
-			return nil
+			return nil, fmt.Errorf("loading and assigning BPF objects: %w", err)
 		}
 		i := instrumenter{
 			exe:     exe,
@@ -142,17 +133,16 @@ func TracerProvider(cfg ebpfcommon.TracerConfig) []node.StartFuncCtx[[]ebpfcommo
 				Offsets:  offs,
 				Programs: funcPrograms,
 			}); err != nil {
-				plog.Error("instrumenting function", err, "function", funcName)
 				printVerifierErrorInfo(err)
 				unmountBpfPinPath(pinPath)
-				return nil
+				return nil, fmt.Errorf("instrumenting function %q: %w", funcName, err)
 			}
 			p.AddCloser(i.uprobes...)
 		}
 		startNodes = append(startNodes, p.Run)
 	}
 
-	return startNodes
+	return startNodes, nil
 }
 
 func mountBpfPinPath(cfg *ebpfcommon.TracerConfig) (string, error) {
@@ -231,14 +221,14 @@ func allFunctionNames(programs []Tracer) []string {
 	return functions
 }
 
-func inspect(cfg *ebpfcommon.TracerConfig, functions []string) (*goexec.Offsets, error) {
+func inspect(ctx context.Context, cfg *ebpfcommon.TracerConfig, functions []string) (*goexec.Offsets, error) {
 	var finder goexec.ProcessFinder
 	if cfg.Port != 0 {
 		finder = goexec.OwnedPort(cfg.Port)
 	} else {
 		finder = goexec.ProcessNamed(cfg.Exec)
 	}
-	offsets, err := goexec.InspectOffsets(cfg.Ctx, finder, functions)
+	offsets, err := goexec.InspectOffsets(ctx, finder, functions)
 	if err != nil {
 		return nil, fmt.Errorf("error analysing target executable: %w", err)
 	}

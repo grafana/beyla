@@ -1,8 +1,11 @@
 package transform
 
 import (
+	"context"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 
 	"github.com/grafana/ebpf-autoinstrument/pkg/testutil"
 
@@ -14,7 +17,8 @@ const testTimeout = 5 * time.Second
 func TestUnmatchedWildcard(t *testing.T) {
 	for _, tc := range []UnmatchType{"", UnmatchWildcard, "invalid_value"} {
 		t.Run(string(tc), func(t *testing.T) {
-			router := RoutesProvider(&RoutesConfig{Unmatch: tc, Patterns: []string{"/user/:id"}})
+			router, err := RoutesProvider(context.TODO(), &RoutesConfig{Unmatch: tc, Patterns: []string{"/user/:id"}})
+			require.NoError(t, err)
 			in, out := make(chan []HTTPRequestSpan, 10), make(chan []HTTPRequestSpan, 10)
 			defer close(in)
 			go router(in, out)
@@ -33,7 +37,8 @@ func TestUnmatchedWildcard(t *testing.T) {
 }
 
 func TestUnmatchedPath(t *testing.T) {
-	router := RoutesProvider(&RoutesConfig{Unmatch: UnmatchPath, Patterns: []string{"/user/:id"}})
+	router, err := RoutesProvider(context.TODO(), &RoutesConfig{Unmatch: UnmatchPath, Patterns: []string{"/user/:id"}})
+	require.NoError(t, err)
 	in, out := make(chan []HTTPRequestSpan, 10), make(chan []HTTPRequestSpan, 10)
 	defer close(in)
 	go router(in, out)
@@ -50,7 +55,8 @@ func TestUnmatchedPath(t *testing.T) {
 }
 
 func TestUnmatchedEmpty(t *testing.T) {
-	router := RoutesProvider(&RoutesConfig{Unmatch: UnmatchUnset, Patterns: []string{"/user/:id"}})
+	router, err := RoutesProvider(context.TODO(), &RoutesConfig{Unmatch: UnmatchUnset, Patterns: []string{"/user/:id"}})
+	require.NoError(t, err)
 	in, out := make(chan []HTTPRequestSpan, 10), make(chan []HTTPRequestSpan, 10)
 	defer close(in)
 	go router(in, out)

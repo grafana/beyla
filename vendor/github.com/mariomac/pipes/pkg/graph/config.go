@@ -1,6 +1,7 @@
 package graph
 
 import (
+	"context"
 	"fmt"
 	"reflect"
 	"strings"
@@ -34,15 +35,15 @@ type ConnectedConfig interface {
 }
 
 // applyConfig instantiates and configures the different pipeline stages according to the provided configuration
-func (b *Builder) applyConfig(cfg any) error {
+func (b *Builder) applyConfig(ctx context.Context, cfg any) error {
 	annotatedConnections := map[string][]string{}
 	cv := reflect.ValueOf(cfg)
 	if cv.Kind() == reflect.Pointer {
-		if err := b.applyConfigReflect(cv.Elem(), annotatedConnections); err != nil {
+		if err := b.applyConfigReflect(ctx, cv.Elem(), annotatedConnections); err != nil {
 			return err
 		}
 	} else {
-		if err := b.applyConfigReflect(cv, annotatedConnections); err != nil {
+		if err := b.applyConfigReflect(ctx, cv, annotatedConnections); err != nil {
 			return err
 		}
 	}
@@ -71,7 +72,7 @@ func (b *Builder) applyConfig(cfg any) error {
 	return nil
 }
 
-func (b *Builder) applyConfigReflect(cfgValue reflect.Value, conns map[string][]string) error {
+func (b *Builder) applyConfigReflect(ctx context.Context, cfgValue reflect.Value, conns map[string][]string) error {
 	if cfgValue.Kind() != reflect.Struct {
 		return fmt.Errorf("configuration should be a struct. Was: %s", cfgValue.Type())
 	}
@@ -83,11 +84,11 @@ func (b *Builder) applyConfigReflect(cfgValue reflect.Value, conns map[string][]
 		}
 		fieldVal := cfgValue.Field(f)
 		if fieldVal.Type().Kind() == reflect.Array || fieldVal.Type().Kind() == reflect.Slice {
-			if err := b.applyArrayOrSlice(field, fieldVal, conns); err != nil {
+			if err := b.applyArrayOrSlice(ctx, field, fieldVal, conns); err != nil {
 				return err
 			}
 		} else {
-			if err := b.applyField(field, cfgValue.Field(f), conns); err != nil {
+			if err := b.applyField(ctx, field, cfgValue.Field(f), conns); err != nil {
 				return err
 			}
 		}
@@ -95,15 +96,15 @@ func (b *Builder) applyConfigReflect(cfgValue reflect.Value, conns map[string][]
 	return nil
 }
 
-func (b *Builder) applyArrayOrSlice(field reflect.StructField, fieldVal reflect.Value, conns map[string][]string) error {
+func (b *Builder) applyArrayOrSlice(ctx context.Context, field reflect.StructField, fieldVal reflect.Value, conns map[string][]string) error {
 	// If the array type is tagged as a single node, apply it as a normal field
 	// ignoring error as it is possible that an array doesn't have any instanceID but its subnodes
 	if instanceID, _ := b.instanceID(field, fieldVal); instanceID != "" {
-		return b.applyField(field, fieldVal, conns)
+		return b.applyField(ctx, field, fieldVal, conns)
 	}
 	// otherwise, try to apply its elements one by one
 	for nf := 0; nf < fieldVal.Len(); nf++ {
-		if err := b.applyField(field, fieldVal.Index(nf), conns); err != nil {
+		if err := b.applyField(ctx, field, fieldVal.Index(nf), conns); err != nil {
 			return err
 		}
 	}
@@ -115,7 +116,7 @@ func (b *Builder) applyArrayOrSlice(field reflect.StructField, fieldVal reflect.
 // 2- The ID specified by the stage.Instance embedded type, if any
 // 3- The result of the `nodeId` embedded tag in the struct
 // otherwise it throws a runtime error
-func (b *Builder) applyField(fieldType reflect.StructField, fieldVal reflect.Value, conns map[string][]string) error {
+func (b *Builder) applyField(ctx context.Context, fieldType reflect.StructField, fieldVal reflect.Value, conns map[string][]string) error {
 	instanceID, err := b.instanceID(fieldType, fieldVal)
 	if err != nil {
 		return err
@@ -137,7 +138,7 @@ func (b *Builder) applyField(fieldType reflect.StructField, fieldVal reflect.Val
 		return nil
 	}
 
-	return b.instantiate(instanceID, fieldVal)
+	return b.instantiate(ctx, instanceID, fieldVal)
 }
 
 func (b *Builder) instanceID(fieldType reflect.StructField, fieldVal reflect.Value) (string, error) {

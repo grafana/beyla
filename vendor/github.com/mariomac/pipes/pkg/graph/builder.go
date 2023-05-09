@@ -1,6 +1,7 @@
 package graph
 
 import (
+	"context"
 	"fmt"
 	"reflect"
 	"strings"
@@ -143,9 +144,9 @@ func RegisterTerminal[CFG, I any](nb *Builder, b stage.TerminalProvider[CFG, I])
 // The nodes will be connected according to any of the following alternatives:
 //   - The ConnectedConfig "source" --> ["destination"...] map, if the passed type implements ConnectedConfig interface.
 //   - The sendTo annotations on each graph stage.
-func (b *Builder) Build(cfg any) (Graph, error) {
+func (b *Builder) Build(ctx context.Context, cfg any) (Graph, error) {
 	g := Graph{}
-	if err := b.applyConfig(cfg); err != nil {
+	if err := b.applyConfig(ctx, cfg); err != nil {
 		return g, err
 	}
 
@@ -177,34 +178,50 @@ func (b *Builder) Build(cfg any) (Graph, error) {
 	return g, nil
 }
 
-func (nb *Builder) instantiate(instanceID string, arg reflect.Value) error {
+func (nb *Builder) instantiate(ctx context.Context, instanceID string, arg reflect.Value) error {
 	// TODO: check if instanceID is duplicate
 	if instanceID == "" {
 		return fmt.Errorf("instance ID for type %s can't be empty", arg.Type())
 	}
-	rargs := []reflect.Value{arg}
+	rargs := []reflect.Value{
+		reflect.ValueOf(ctx), // arg 0: context
+		arg,                  // arg 1: configuration value
+	}
 	if ib, ok := nb.startProviders[arg.Type()]; ok {
-		// providedFunc = StartProvider(arg)
-		providedFunc := ib[1].Call(rargs)
+		// providedFunc, err = StartProvider(arg)
+		callResult := ib[1].Call(rargs)
+		providedFunc := callResult[0]
+		errVal := callResult[1]
+
+		if !errVal.IsNil() || !errVal.IsZero() {
+			return fmt.Errorf("instantiating start instance %q: %w", instanceID, errVal.Interface().(error))
+		}
 
 		// If the providedFunc is a slice of funcs, it means we need to call AsStartCtx as a variadic Function
 		var startNode []reflect.Value
-		if len(providedFunc) == 1 && providedFunc[0].Kind() == reflect.Slice {
+		if providedFunc.Kind() == reflect.Slice {
 			// startNode = AsStartCtx(providedFuncs...)
-			startNode = ib[0].CallSlice(providedFunc)
+			startNode = ib[0].CallSlice([]reflect.Value{providedFunc})
 		} else {
 			// startNode = AsStartCtx(providedFunc)
-			startNode = ib[0].Call(providedFunc)
+			startNode = ib[0].Call([]reflect.Value{providedFunc})
 		}
 		nb.ingests[instanceID] = startNode[0].Interface().(outTyper)
 		nb.outNodeNames[instanceID] = struct{}{}
 		return nil
 	}
 	if tb, ok := nb.middleProviders[arg.Type()]; ok {
-		// providedFunc = MiddleProvider(arg)
-		providedFunc := tb[1].Call(rargs)
+		// providedFunc, err = MiddleProvider(arg)
+		callResult := tb[1].Call(rargs)
+		providedFunc := callResult[0]
+		errVal := callResult[1]
+
+		if !errVal.IsNil() || !errVal.IsZero() {
+			return fmt.Errorf("instantiating middle instance %q: %w", instanceID, errVal.Interface().(error))
+		}
+
 		// middleNode = AsMiddle(providedFunc, nb.options...)
-		middleNode := tb[0].Call(append(providedFunc, nb.options...))
+		middleNode := tb[0].Call(append([]reflect.Value{providedFunc}, nb.options...))
 		nb.transforms[instanceID] = middleNode[0].Interface().(inOutTyper)
 		nb.inNodeNames[instanceID] = struct{}{}
 		nb.outNodeNames[instanceID] = struct{}{}
@@ -212,10 +229,17 @@ func (nb *Builder) instantiate(instanceID string, arg reflect.Value) error {
 	}
 
 	if eb, ok := nb.terminalProviders[arg.Type()]; ok {
-		// providedFunc = TerminalProvider(arg)
-		providedFunc := eb[1].Call(rargs)
+		// providedFunc, err = TerminalProvider(arg)
+		callResult := eb[1].Call(rargs)
+		providedFunc := callResult[0]
+		errVal := callResult[1]
+
+		if !errVal.IsNil() || !errVal.IsZero() {
+			return fmt.Errorf("instantiating terminal instance %q: %w", instanceID, errVal.Interface().(error))
+		}
+
 		// termNode = AsTerminal(providedFunc, nb.options...)
-		termNode := eb[0].Call(append(providedFunc, nb.options...))
+		termNode := eb[0].Call(append([]reflect.Value{providedFunc}, nb.options...))
 		nb.exports[instanceID] = termNode[0].Interface().(inTyper)
 		nb.inNodeNames[instanceID] = struct{}{}
 		return nil

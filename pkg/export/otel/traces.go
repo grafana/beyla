@@ -54,23 +54,22 @@ func (m TracesConfig) Enabled() bool { //nolint:gocritic
 }
 
 type TracesReporter struct {
+	ctx           context.Context
 	traceExporter *otlptrace.Exporter
 	traceProvider *trace.TracerProvider
 }
 
-func TracesReporterProvider(cfg TracesConfig) node.TerminalFunc[[]transform.HTTPRequestSpan] { //nolint:gocritic
-	tr, err := newTracesReporter(&cfg)
+func TracesReporterProvider(ctx context.Context, cfg TracesConfig) (node.TerminalFunc[[]transform.HTTPRequestSpan], error) { //nolint:gocritic
+	tr, err := newTracesReporter(ctx, &cfg)
 	if err != nil {
 		slog.Error("can't instantiate OTEL traces reporter", err)
 		os.Exit(-1)
 	}
-	return tr.reportTraces
+	return tr.reportTraces, nil
 }
 
-func newTracesReporter(cfg *TracesConfig) (*TracesReporter, error) {
-	ctx := context.TODO()
-
-	r := TracesReporter{}
+func newTracesReporter(ctx context.Context, cfg *TracesConfig) (*TracesReporter, error) {
+	r := TracesReporter{ctx: ctx}
 
 	// TODO: make configurable
 	resources := resource.NewWithAttributes(
@@ -112,10 +111,10 @@ func newTracesReporter(cfg *TracesConfig) (*TracesReporter, error) {
 }
 
 func (r *TracesReporter) close() {
-	if err := r.traceProvider.Shutdown(context.TODO()); err != nil {
+	if err := r.traceProvider.Shutdown(r.ctx); err != nil {
 		slog.With("component", "TracesReporter").Error("closing traces provider", err)
 	}
-	if err := r.traceExporter.Shutdown(context.TODO()); err != nil {
+	if err := r.traceExporter.Shutdown(r.ctx); err != nil {
 		slog.With("component", "TracesReporter").Error("closing traces exporter", err)
 	}
 }
@@ -227,7 +226,7 @@ func makeSpan(parentCtx context.Context, tracer trace2.Tracer, span *transform.H
 }
 
 func (r *TracesReporter) reportClientSpan(span *transform.HTTPRequestSpan, tracer trace2.Tracer) {
-	ctx := context.TODO()
+	ctx := r.ctx
 
 	// we have a parent request span
 	if span.ID != 0 {
@@ -254,7 +253,7 @@ func (r *TracesReporter) reportClientSpan(span *transform.HTTPRequestSpan, trace
 }
 
 func (r *TracesReporter) reportServerSpan(span *transform.HTTPRequestSpan, tracer trace2.Tracer) {
-	s := makeSpan(context.TODO(), tracer, span)
+	s := makeSpan(r.ctx, tracer, span)
 	topSpans.Add(span.ID, s)
 	cs, ok := clientSpans.Get(span.ID)
 	newer := []transform.HTTPRequestSpan{}
@@ -267,7 +266,7 @@ func (r *TracesReporter) reportServerSpan(span *transform.HTTPRequestSpan, trace
 			} else if cspan.Start > span.RequestStart {
 				newer = append(newer, *cspan)
 			} else {
-				makeSpan(context.TODO(), tracer, cspan)
+				makeSpan(r.ctx, tracer, cspan)
 			}
 		}
 		if len(newer) == 0 {

@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/grafana/ebpf-autoinstrument/pkg/export/prom"
+
 	ebpfcommon "github.com/grafana/ebpf-autoinstrument/pkg/ebpf/common"
 
 	"github.com/stretchr/testify/assert"
@@ -60,6 +62,9 @@ otel_metrics_export:
 			TracesEndpoint:     "localhost:3232",
 			MaxQueueSize:       4096,
 			MaxExportBatchSize: 4096,
+		},
+		Prometheus: prom.PrometheusConfig{
+			Path: "/metrics",
 		},
 	}, cfg)
 }

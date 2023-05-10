@@ -30,13 +30,11 @@ spec:
             - containerPort: 8443
               name: https
         - name: autoinstrumenter
-          image: grafana/ebpf-autoinstrument:latest
+          image: mariomac/ebpf-autoinstrument:dev
           imagePullPolicy: IfNotPresent
           securityContext:
             runAsUser: 0
-            capabilities:
-              add:
-                - SYS_ADMIN
+            privileged: true
           env:
             - name: PRINT_TRACES
               value: "true"

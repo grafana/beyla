@@ -8,28 +8,31 @@ import (
 	"strings"
 
 	"go.opentelemetry.io/otel/attribute"
-	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
-
-	"github.com/prometheus/client_golang/prometheus/promhttp"
-
-	"github.com/prometheus/client_golang/prometheus"
 
 	"golang.org/x/exp/slog"
 
 	"github.com/grafana/ebpf-autoinstrument/pkg/transform"
 	"github.com/mariomac/pipes/pkg/node"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
 )
 
 const (
-	// trying to not collide with any of the ports listed here
-	// https://github.com/prometheus/prometheus/wiki/Default-port-allocations
-	defaultPort = 8999
-	defaultPath = "/metrics"
-
 	ReportRoutesCtxKey = "reportRoutes"
 )
 
-// using labels with equivalent names to OTEL attributes
+// using labels and names that are equivalent names to the OTEL attributes
+// but following the different naming conventions
+const (
+	HTTPServerDuration    = "http_server_duration_seconds"
+	HTTPClientDuration    = "http_client_duration_seconds"
+	RPCServerDuration     = "rpc_server_duration_seconds"
+	RPCClientDuration     = "rpc_client_duration_seconds"
+	HTTPServerRequestSize = "http_server_request_size_bytes"
+	HTTPClientRequestSize = "http_client_request_size_bytes"
+)
+
 var (
 	httpMethodKey        = otelToProm(semconv.HTTPMethodKey)
 	httpRouteKey         = otelToProm(semconv.HTTPRouteKey)
@@ -55,6 +58,10 @@ type PrometheusConfig struct {
 	ReportPeerInfo bool   `yaml:"report_peer" env:"METRICS_REPORT_PEER"`
 }
 
+func (p PrometheusConfig) Enabled() bool {
+	return p.Port != 0
+}
+
 type metricsReporter struct {
 	cfg          *PrometheusConfig
 	registry     *prometheus.Registry
@@ -68,14 +75,8 @@ type metricsReporter struct {
 	httpClientRequestSize *prometheus.HistogramVec
 }
 
-func PullEndpointProvider(ctx context.Context, cfg *PrometheusConfig) (node.TerminalFunc[[]transform.HTTPRequestSpan], error) {
-	if cfg.Port == 0 {
-		cfg.Port = defaultPort
-	}
-	if cfg.Path == "" {
-		cfg.Path = defaultPath
-	}
-	reporter := newReporter(ctx, cfg)
+func PrometheusEndpointProvider(ctx context.Context, cfg PrometheusConfig) (node.TerminalFunc[[]transform.HTTPRequestSpan], error) {
+	reporter := newReporter(ctx, &cfg)
 	go reporter.serveHTTPMetrics()
 	return reporter.reportMetrics, nil
 }
@@ -83,6 +84,7 @@ func PullEndpointProvider(ctx context.Context, cfg *PrometheusConfig) (node.Term
 func newReporter(ctx context.Context, cfg *PrometheusConfig) *metricsReporter {
 	reportRoutes, _ := ctx.Value(ReportRoutesCtxKey).(bool)
 
+	// TODO: let users specify histogram buckets
 	mr := &metricsReporter{
 		cfg:          cfg,
 		reportRoutes: reportRoutes,
@@ -225,11 +227,19 @@ func (r *metricsReporter) record(span *transform.HTTPRequestSpan) {
 }
 
 func (r *metricsReporter) serveHTTPMetrics() {
-	log := slog.With("component", "prom.MetricsReporter")
+	log := slog.With("component", "prom.MetricsReporter", "port", r.cfg.Port)
+	log.Info("opening prometheus scrape endpoint", "path", r.cfg.Path)
 	mux := http.NewServeMux()
-	mux.Handle(r.cfg.Path, promhttp.HandlerFor(r.registry, promhttp.HandlerOpts{Registry: r.registry}))
-	log.Info("opening prometheus scrape endpoint", "port", r.cfg.Port, "path", r.cfg.Path)
-	err := http.ListenAndServe(fmt.Sprintf(":%d", r.cfg.Port), nil)
+	promHandler := promhttp.HandlerFor(r.registry, promhttp.HandlerOpts{Registry: r.registry})
+	if log.Enabled(slog.LevelDebug) {
+		mux.Handle(r.cfg.Path, http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+			slog.Debug("received request in metrics endpoint", "path", req.RequestURI, "remoteAddr", req.RemoteAddr)
+			promHandler.ServeHTTP(rw, req)
+		}))
+	} else {
+		mux.Handle(r.cfg.Path, promHandler)
+	}
+	err := http.ListenAndServe(fmt.Sprintf(":%d", r.cfg.Port), mux)
 	if err == http.ErrServerClosed {
 		log.Debug("HTTP server was closed", "err", err)
 	} else {

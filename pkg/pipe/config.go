@@ -32,6 +32,9 @@ var defaultConfig = Config{
 		MaxQueueSize:       4096,
 		MaxExportBatchSize: 4096,
 	},
+	Prometheus: prom.PrometheusConfig{
+		Path: "/metrics",
+	},
 	Printer: false,
 	Noop:    false,
 }
@@ -42,10 +45,10 @@ type Config struct {
 	// Routes is an optional node. If not set, data will be directly forwarded to exporters.
 	Routes *transform.RoutesConfig `nodeId:"routes" forwardTo:"otel_metrics,otel_traces,print,noop,prom" yaml:"routes"`
 
-	Metrics    otel.MetricsConfig     `nodeId:"otel_metrics" yaml:"otel_metrics_export"`
-	Traces     otel.TracesConfig      `nodeId:"otel_traces" yaml:"otel_traces_export"`
-	Prometheus *prom.PrometheusConfig `nodeId:"prom" yaml:"prometheus_export"`
-	Printer    debug.PrintEnabled     `nodeId:"print" yaml:"print_traces" env:"PRINT_TRACES"`
+	Metrics    otel.MetricsConfig    `nodeId:"otel_metrics" yaml:"otel_metrics_export"`
+	Traces     otel.TracesConfig     `nodeId:"otel_traces" yaml:"otel_traces_export"`
+	Prometheus prom.PrometheusConfig `nodeId:"prom" yaml:"prometheus_export"`
+	Printer    debug.PrintEnabled    `nodeId:"print" yaml:"print_traces" env:"PRINT_TRACES"`
 
 	LogLevel string `yaml:"log_level" env:"LOG_LEVEL" nodeId:"-"`
 

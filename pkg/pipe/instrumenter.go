@@ -43,6 +43,7 @@ func newGraphBuilder(config *Config) *graphBuilder {
 	graph.RegisterMiddle(gb, transform.RoutesProvider)
 	graph.RegisterTerminal(gb, otel.MetricsReporterProvider)
 	graph.RegisterTerminal(gb, otel.TracesReporterProvider)
+	graph.RegisterTerminal(gb, prom.PrometheusEndpointProvider)
 	graph.RegisterTerminal(gb, debug.NoopNode)
 	graph.RegisterTerminal(gb, debug.PrinterNode)
 
@@ -60,7 +61,7 @@ func programName(path string) string {
 func (gb *graphBuilder) buildGraph(ctx context.Context) (graph.Graph, error) {
 	// setting manually some configuration properties that are needed by their
 	// respective node providers
-	if gb.config.Prometheus != nil {
+	if gb.config.Prometheus.Enabled() {
 		// Prometheus will report routes as attributes if the Routes node is configured
 		ctx = context.WithValue(ctx, prom.ReportRoutesCtxKey, gb.config.Routes != nil) //nolint:staticcheck
 	}

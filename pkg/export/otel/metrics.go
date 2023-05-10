@@ -19,6 +19,15 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
 )
 
+const (
+	HTTPServerDuration    = "http.server.duration"
+	HTTPClientDuration    = "http.client.duration"
+	RPCServerDuration     = "rpc.server.duration"
+	RPCClientDuration     = "rpc.client.duration"
+	HTTPServerRequestSize = "http.server.request.size"
+	HTTPClientRequestSize = "http.client.request.size"
+)
+
 type MetricsConfig struct {
 	ServiceName     string        `yaml:"service_name" env:"OTEL_SERVICE_NAME"`
 	Interval        time.Duration `yaml:"interval" env:"METRICS_INTERVAL"`
@@ -85,33 +94,36 @@ func newMetricsReporter(ctx context.Context, cfg *MetricsConfig) (*MetricsReport
 		metric.WithReader(metric.NewPeriodicReader(mr.exporter,
 			metric.WithInterval(cfg.Interval))),
 	)
+	// time units for HTTP and GRPC durations are in seconds, according to the OTEL specification:
+	// https://github.com/open-telemetry/opentelemetry-specification/tree/main/specification/metrics/semantic_conventions
+	// TODO: set quantiles here and in prometheus from the previous specification
 	mr.httpDuration, err = mr.provider.Meter(reporterName).
-		Float64Histogram("http.server.duration", instrument.WithUnit("ms"))
+		Float64Histogram(HTTPServerDuration, instrument.WithUnit("s"))
 	if err != nil {
 		return nil, fmt.Errorf("creating http duration histogram metric: %w", err)
 	}
 	mr.httpClientDuration, err = mr.provider.Meter(reporterName).
-		Float64Histogram("http.client.duration", instrument.WithUnit("ms"))
+		Float64Histogram(HTTPClientDuration, instrument.WithUnit("s"))
 	if err != nil {
 		return nil, fmt.Errorf("creating http duration histogram metric: %w", err)
 	}
 	mr.grpcDuration, err = mr.provider.Meter(reporterName).
-		Float64Histogram("rpc.server.duration", instrument.WithUnit("ms"))
+		Float64Histogram(RPCServerDuration, instrument.WithUnit("s"))
 	if err != nil {
 		return nil, fmt.Errorf("creating grpc duration histogram metric: %w", err)
 	}
 	mr.grpcClientDuration, err = mr.provider.Meter(reporterName).
-		Float64Histogram("rpc.client.duration", instrument.WithUnit("ms"))
+		Float64Histogram(RPCClientDuration, instrument.WithUnit("s"))
 	if err != nil {
 		return nil, fmt.Errorf("creating grpc duration histogram metric: %w", err)
 	}
 	mr.httpRequestSize, err = mr.provider.Meter(reporterName).
-		Float64Histogram("http.server.request.size", instrument.WithUnit("By"))
+		Float64Histogram(HTTPServerRequestSize, instrument.WithUnit("By"))
 	if err != nil {
 		return nil, fmt.Errorf("creating http size histogram metric: %w", err)
 	}
 	mr.httpClientRequestSize, err = mr.provider.Meter(reporterName).
-		Float64Histogram("http.client.request.size", instrument.WithUnit("By"))
+		Float64Histogram(HTTPClientRequestSize, instrument.WithUnit("By"))
 	if err != nil {
 		return nil, fmt.Errorf("creating http size histogram metric: %w", err)
 	}
@@ -171,7 +183,7 @@ func (r *MetricsReporter) metricAttributes(span *transform.HTTPRequestSpan) []at
 
 func (r *MetricsReporter) record(span *transform.HTTPRequestSpan, attrs []attribute.KeyValue) {
 	t := span.Timings()
-	duration := t.End.Sub(t.RequestStart).Seconds() * 1000
+	duration := t.End.Sub(t.RequestStart).Seconds()
 	switch span.Type {
 	case transform.EventTypeHTTP:
 		// TODO: for more accuracy, there must be a way to set the metric time from the actual span end time

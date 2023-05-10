@@ -49,3 +49,22 @@ func TestSuite_OpenPort(t *testing.T) {
 	require.NoError(t, compose.Close())
 	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
 }
+
+// Instead of submitting metrics via OTEL, exposes them as an autoinstrumenter:8999/metrics endpoint
+// that is scraped by the Prometheus server
+func TestSuite_PrometheusScrape(t *testing.T) {
+	compose, err := docker.ComposeSuite("docker-compose.yml", path.Join(pathOutput, "test-suite-promscrape.log"))
+	compose.Env = append(compose.Env,
+		`INSTRUMENTER_CONFIG_SUFFIX=-promscrape`,
+		`PROM_CONFIG_SUFFIX=-promscrape`,
+	)
+
+	require.NoError(t, err)
+	require.NoError(t, compose.Up())
+	t.Run("RED metrics", testREDMetricsHTTP)
+	t.Run("GRPC RED metrics", testREDMetricsGRPC)
+
+	t.Run("BPF pinning folder mounted", testBPFPinningMounted)
+	require.NoError(t, compose.Close())
+	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
+}

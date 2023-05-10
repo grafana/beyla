@@ -49,7 +49,7 @@ func waitForTestComponents(t *testing.T, url string) {
 		// now, verify that the metric has been reported.
 		// we don't really care that this metric could be from a previous
 		// test. Once one it is visible, it means that Otel and Prometheus are healthy
-		results, err := pq.Query(`http_server_duration_count{http_target="/smoke"}`)
+		results, err := pq.Query(`http_server_duration_seconds_count{http_target="/smoke"}`)
 		require.NoError(t, err)
 		require.NotZero(t, len(results))
 	}, test.Interval(time.Second))
@@ -101,7 +101,7 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url string) {
 	var results []prom.Result
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
 		var err error
-		results, err = pq.Query(`http_server_duration_count{` +
+		results, err = pq.Query(`http_server_duration_seconds_count{` +
 			`http_method="GET",` +
 			`http_status_code="404",` +
 			`service_name="testserver",` +
@@ -121,7 +121,7 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url string) {
 
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
 		var err error
-		results, err = pq.Query(`http_server_request_size_count{` +
+		results, err = pq.Query(`http_server_request_size_bytes_count{` +
 			`http_method="GET",` +
 			`http_status_code="404",` +
 			`service_name="testserver",` +
@@ -142,7 +142,7 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url string) {
 	if url == instrumentedServiceGorillaURL {
 		test.Eventually(t, testTimeout, func(t require.TestingT) {
 			var err error
-			results, err = pq.Query(`http_client_duration_count{` +
+			results, err = pq.Query(`http_client_duration_seconds_count{` +
 				`http_method="GET",` +
 				`http_status_code="203",` +
 				`service_name="testserver"}`)
@@ -158,7 +158,7 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url string) {
 
 		test.Eventually(t, testTimeout, func(t require.TestingT) {
 			var err error
-			results, err = pq.Query(`http_client_request_size_count{` +
+			results, err = pq.Query(`http_client_request_size_bytes_count{` +
 				`http_method="GET",` +
 				`http_status_code="203",` +
 				`service_name="testserver"}`)
@@ -174,7 +174,7 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url string) {
 
 		test.Eventually(t, testTimeout, func(t require.TestingT) {
 			var err error
-			results, err = pq.Query(`rpc_client_duration_count{` +
+			results, err = pq.Query(`rpc_client_duration_seconds_count{` +
 				`rpc_grpc_status_code="0",` +
 				`service_name="testserver",` +
 				`rpc_method="/routeguide.RouteGuide/GetFeature"}`)
@@ -191,7 +191,7 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url string) {
 
 	// check duration_sum is at least 90ms (3 * 30ms)
 	var err error
-	results, err = pq.Query(`http_server_duration_sum{` +
+	results, err = pq.Query(`http_server_duration_seconds_sum{` +
 		`http_method="GET",` +
 		`http_status_code="404",` +
 		`service_name="testserver",` +
@@ -203,12 +203,13 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url string) {
 	require.Len(t, res.Value, 2)
 	sum, err := strconv.ParseFloat(fmt.Sprint(res.Value[1]), 64)
 	require.NoError(t, err)
-	assert.Greater(t, sum, 90.0)
+	assert.Less(t, sum, 1.0)
+	assert.Greater(t, sum, (90 * time.Millisecond).Seconds())
 	addr := net.ParseIP(res.Metric["net_sock_peer_addr"])
 	assert.NotNil(t, addr)
 
 	// check request_size_sum is at least 114B (3 * 38B)
-	results, err = pq.Query(`http_server_request_size_sum{` +
+	results, err = pq.Query(`http_server_request_size_bytes_sum{` +
 		`http_method="GET",` +
 		`http_status_code="404",` +
 		`service_name="testserver",` +
@@ -239,7 +240,7 @@ func testREDMetricsGRPC(t *testing.T) {
 	var results []prom.Result
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
 		var err error
-		results, err = pq.Query(`rpc_server_duration_count{` +
+		results, err = pq.Query(`rpc_server_duration_seconds_count{` +
 			`rpc_grpc_status_code="0",` +
 			`service_name="testserver",` +
 			`rpc_method="/routeguide.RouteGuide/GetFeature"}`)

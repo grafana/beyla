@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/grafana/ebpf-autoinstrument/pkg/export/otel"
+	"github.com/grafana/ebpf-autoinstrument/pkg/export/prom"
 )
 
 func TestConfig_Overrides(t *testing.T) {
@@ -60,6 +61,9 @@ otel_metrics_export:
 			TracesEndpoint:     "localhost:3232",
 			MaxQueueSize:       4096,
 			MaxExportBatchSize: 4096,
+		},
+		Prometheus: prom.PrometheusConfig{
+			Path: "/metrics",
 		},
 	}, cfg)
 }

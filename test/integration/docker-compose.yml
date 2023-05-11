@@ -20,7 +20,7 @@ services:
       dockerfile: ./test/integration/components/otelauto/Dockerfile
     command:
       - /otelauto
-      - --config=/configs/instrumenter-config.yml
+      - --config=/configs/instrumenter-config${INSTRUMENTER_CONFIG_SUFFIX}.yml
     volumes:
       - ./configs/:/configs
       - ../../testoutput:/coverage
@@ -39,10 +39,12 @@ services:
       BPF_DEBUG: "TRUE"
       METRICS_REPORT_TARGET: "true"
       METRICS_REPORT_PEER: "true"
+    ports:
+      - "8999:8999" # Prometheus scrape port, if enabled via config
 
   # OpenTelemetry Collector
   otelcol:
-    image: otel/opentelemetry-collector-contrib:0.70.0
+    image: otel/opentelemetry-collector-contrib:0.77.0
     container_name: otel-col
     deploy:
       resources:
@@ -69,7 +71,7 @@ services:
     container_name: prometheus
     command:
       - --storage.tsdb.retention.time=1m
-      - --config.file=/etc/prometheus/prometheus-config.yml
+      - --config.file=/etc/prometheus/prometheus-config${PROM_CONFIG_SUFFIX}.yml
       - --storage.tsdb.path=/prometheus
       - --web.enable-lifecycle
       - --web.route-prefix=/

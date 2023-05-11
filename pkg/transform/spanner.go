@@ -12,10 +12,14 @@ import (
 	"golang.org/x/exp/slog"
 )
 
-const EventTypeHTTP = 1
-const EventTypeGRPC = 2
-const EventTypeHTTPClient = 3
-const EventTypeGRPCClient = 4
+type EventType int
+
+const (
+	EventTypeHTTP EventType = iota + 1
+	EventTypeGRPC
+	EventTypeHTTPClient
+	EventTypeGRPCClient
+)
 
 var log = slog.With("component", "goexec.spanner")
 
@@ -29,7 +33,7 @@ var clocks = converter{monoClock: monotime.Now, clock: time.Now}
 // HTTPRequestSpan contains the information being submitted by the following nodes in the graph.
 // It enables confortable handling of data from Go.
 type HTTPRequestSpan struct {
-	Type          int
+	Type          EventType
 	ID            uint64
 	Method        string
 	Path          string
@@ -123,7 +127,7 @@ func convert(trace *ebpfcommon.HTTPRequestTrace) HTTPRequestSpan {
 	hostname := ""
 	hostPort := 0
 
-	switch trace.Type {
+	switch EventType(trace.Type) {
 	case EventTypeHTTPClient, EventTypeHTTP:
 		peer, _ = extractHostPort(trace.RemoteAddr[:])
 		hostname, hostPort = extractHostPort(trace.Host[:])
@@ -138,7 +142,7 @@ func convert(trace *ebpfcommon.HTTPRequestTrace) HTTPRequestSpan {
 	}
 
 	return HTTPRequestSpan{
-		Type:          int(trace.Type),
+		Type:          EventType(trace.Type),
 		ID:            trace.Id,
 		Method:        string(trace.Method[:methodLen]),
 		Path:          string(trace.Path[:pathLen]),

@@ -1,0 +1,6 @@
+routes:
+  patterns:
+    - /basic/:rnd
+  unmatch: path
+prometheus_export:
+  port: 8999

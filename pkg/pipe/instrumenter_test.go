@@ -46,7 +46,7 @@ func TestBasicPipeline(t *testing.T) {
 	event := testutil.ReadChannel(t, tc.Records, testTimeout)
 	assert.Equal(t, collector.MetricRecord{
 		Name: "http.server.duration",
-		Unit: "ms",
+		Unit: "s",
 		Attributes: map[string]string{
 			string(semconv.HTTPMethodKey):      "GET",
 			string(semconv.HTTPStatusCodeKey):  "404",
@@ -117,7 +117,7 @@ func TestRouteConsolidation(t *testing.T) {
 
 	assert.Equal(t, collector.MetricRecord{
 		Name: "http.server.duration",
-		Unit: "ms",
+		Unit: "s",
 		Attributes: map[string]string{
 			string(semconv.HTTPMethodKey):     "GET",
 			string(semconv.HTTPStatusCodeKey): "200",
@@ -128,7 +128,7 @@ func TestRouteConsolidation(t *testing.T) {
 
 	assert.Equal(t, collector.MetricRecord{
 		Name: "http.server.duration",
-		Unit: "ms",
+		Unit: "s",
 		Attributes: map[string]string{
 			string(semconv.HTTPMethodKey):     "GET",
 			string(semconv.HTTPStatusCodeKey): "200",
@@ -139,7 +139,7 @@ func TestRouteConsolidation(t *testing.T) {
 
 	assert.Equal(t, collector.MetricRecord{
 		Name: "http.server.duration",
-		Unit: "ms",
+		Unit: "s",
 		Attributes: map[string]string{
 			string(semconv.HTTPMethodKey):     "GET",
 			string(semconv.HTTPStatusCodeKey): "200",
@@ -171,7 +171,7 @@ func TestGRPCPipeline(t *testing.T) {
 	event := testutil.ReadChannel(t, tc.Records, testTimeout)
 	assert.Equal(t, collector.MetricRecord{
 		Name: "rpc.server.duration",
-		Unit: "ms",
+		Unit: "s",
 		Attributes: map[string]string{
 			string(semconv.RPCSystemKey):         "grpc",
 			string(semconv.RPCGRPCStatusCodeKey): "3",
@@ -295,7 +295,7 @@ func newRequest(id uint64, method, path, peer string, status int) []ebpfcommon.H
 	copy(rt.RemoteAddr[:], peer)
 	copy(rt.Host[:], getHostname()+":8080")
 	rt.Status = uint16(status)
-	rt.Type = transform.EventTypeHTTP
+	rt.Type = uint8(transform.EventTypeHTTP)
 	rt.Id = id
 	rt.GoStartMonotimeNs = 1
 	rt.StartMonotimeNs = 2
@@ -303,14 +303,14 @@ func newRequest(id uint64, method, path, peer string, status int) []ebpfcommon.H
 	return []ebpfcommon.HTTPRequestTrace{rt}
 }
 
-func newRequestWithTiming(id uint64, kind uint8, method, path, peer string, status int, goStart, start, end uint64) []ebpfcommon.HTTPRequestTrace {
+func newRequestWithTiming(id uint64, kind transform.EventType, method, path, peer string, status int, goStart, start, end uint64) []ebpfcommon.HTTPRequestTrace {
 	rt := ebpfcommon.HTTPRequestTrace{}
 	copy(rt.Path[:], path)
 	copy(rt.Method[:], method)
 	copy(rt.RemoteAddr[:], peer)
 	copy(rt.Host[:], getHostname()+":8080")
 	rt.Status = uint16(status)
-	rt.Type = kind
+	rt.Type = uint8(kind)
 	rt.Id = id
 	rt.GoStartMonotimeNs = goStart
 	rt.StartMonotimeNs = start
@@ -327,7 +327,7 @@ func newGRPCRequest(id uint64, path string, status int) []ebpfcommon.HTTPRequest
 	rt.HostLen = 4
 	rt.HostPort = 8080
 	rt.Status = uint16(status)
-	rt.Type = transform.EventTypeGRPC
+	rt.Type = uint8(transform.EventTypeGRPC)
 	rt.Id = id
 	rt.GoStartMonotimeNs = 1
 	rt.StartMonotimeNs = 2

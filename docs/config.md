@@ -24,10 +24,11 @@ flowchart TD
 
     ROUT --> OTELM(OTEL<br/> metrics<br/> exporter)
     ROUT --> OTELT(OTEL<br/> traces<br/> exporter)
-
+    ROUT --> PROM(Prometheus<br/>HTTP<br/>endpoint)
     style ROUT stroke-dasharray: 3 3;
     style OTELM stroke-dasharray: 3 3;
     style OTELT stroke-dasharray: 3 3;
+    style PROM stroke-dasharray: 3 3;
 ```
 
 A quick description of the components:
@@ -39,8 +40,10 @@ A quick description of the components:
   the incoming data will be directly forwarded to the next stage.
 * [OTEL metrics exporter](#otel_metrics) exports metrics data to an external
   [OpenTelemetry](https://opentelemetry.io/) metrics collector.
-* [OTEL traces exporter](#otel_metrics) exports span data to an external
+* [OTEL traces exporter](#otel_traces) exports span data to an external
   [OpenTelemetry](https://opentelemetry.io/) traces collector.
+* [Prometheus HTTP endpoint](#prom) sets an HTTP endpoint in the auto-instrumenter
+  that allows any external scraper to pull metrics in [Prometheus](https://prometheus.io/) format.
 
 Following sections explain both the global configuration properties, as well as
 the options for each component.
@@ -248,6 +251,52 @@ so the metrics exporter won't be activated unless explicitly specified.
 Specifies the name of the instrumented service to be reported by the traces exporter.
 If unset, it will be the path of the instrumented service (e.g. `/usr/local/bin/service`).
 
+## Prometheus HTTP endpoint (YAML section: `prometheus_export`)<a id="prom"></a>
+
+This component opens an HTTP endpoint in the auto-instrumenter
+that allows any external scraper to pull metrics in [Prometheus](https://prometheus.io/)
+format. It will be enabled if the `port` property is set.
+
+| YAML   | Env var           | Type | Default |
+|--------|-------------------|------|---------|
+| `port` | `PROMETHEUS_PORT` | int  | (unset) |
+
+Specifies the HTTP port to open a Prometheus scrape endpoint. If unset or 0,
+no Prometheus endpoint will be open.
+
+| YAML           | Env var                   | Type   | Default         |
+|----------------|---------------------------|--------|-----------------|
+| `service_name` | `PROMETHEUS_SERVICE_NAME` | string | executable path |
+
+Specifies the name of the instrumented service to be reported by the metrics exporter.
+If unset, it will be the path of the instrumented service (e.g. `/usr/local/bin/service`).
+
+| YAML   | Env var           | Type   | Default    |
+|--------|-------------------|--------|------------|
+| `path` | `PROMETHEUS_PATH` | string | `/metrics` |
+
+Specifies the HTTP query path to acquire the list of Prometheus metrics.
+
+| YAML            | Env var                 | Type    | Default |
+|-----------------|-------------------------|---------|---------|
+| `report_target` | `METRICS_REPORT_TARGET` | boolean | `false` |
+
+Specifies whether the exporter must submit `http_target` as a metric attribute.
+
+To be consistent with the OpenTelemetry specification, `http_target` is the full HTTP request
+path and query arguments.
+
+It is disabled by default to avoid cardinality explosion in paths with IDs. As an alternative,
+it is recommended to group these requests in the [routes node](#routes).
+
+| YAML          | Env var               | Type    | Default |
+|---------------|-----------------------|---------|---------|
+| `report_peer` | `METRICS_REPORT_PEER` | boolean | `false` |
+
+Specifies whether the exporter must submit the caller peer address as a metric attribute.
+
+It is disabled by default to avoid cardinality explosion.
+
 ## YAML file example
 
 ```yaml
@@ -257,7 +306,11 @@ ebpf:
   open_port: 443
   wakeup_len: 100
 
-otel_metrics:
+otel_traces:
   service_name: my-instrumented-service
   endpoint: https://otlp-gateway-prod-eu-west-0.grafana.net/otlp
+
+prometheus_export:
+  port: 8999
+  path: /metrics
 ```

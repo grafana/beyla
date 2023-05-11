@@ -3,7 +3,8 @@ package pipe
 import (
 	"context"
 	"fmt"
-	"strings"
+
+	"github.com/grafana/ebpf-autoinstrument/pkg/pipe/global"
 
 	"github.com/grafana/ebpf-autoinstrument/pkg/ebpf"
 
@@ -12,7 +13,7 @@ import (
 
 	"github.com/grafana/ebpf-autoinstrument/pkg/export/debug"
 	"github.com/grafana/ebpf-autoinstrument/pkg/export/otel"
-	"github.com/grafana/ebpf-autoinstrument/pkg/goexec"
+	"github.com/grafana/ebpf-autoinstrument/pkg/export/prom"
 	"github.com/grafana/ebpf-autoinstrument/pkg/transform"
 )
 
@@ -41,6 +42,7 @@ func newGraphBuilder(config *Config) *graphBuilder {
 	graph.RegisterMiddle(gb, transform.RoutesProvider)
 	graph.RegisterTerminal(gb, otel.MetricsReporterProvider)
 	graph.RegisterTerminal(gb, otel.TracesReporterProvider)
+	graph.RegisterTerminal(gb, prom.PrometheusEndpointProvider)
 	graph.RegisterTerminal(gb, debug.NoopNode)
 	graph.RegisterTerminal(gb, debug.PrinterNode)
 
@@ -50,21 +52,12 @@ func newGraphBuilder(config *Config) *graphBuilder {
 	}
 }
 
-func programName(path string) string {
-	parts := strings.Split(path, "/")
-	return parts[len(parts)-1]
-}
-
 func (gb *graphBuilder) buildGraph(ctx context.Context) (graph.Graph, error) {
-
-	gb.config.EBPF.OnOffsets = func(offsets *goexec.Offsets) {
-		if gb.config.Metrics.ServiceName == "" {
-			gb.config.Metrics.ServiceName = programName(offsets.FileInfo.CmdExePath)
-		}
-		if gb.config.Traces.ServiceName == "" {
-			gb.config.Traces.ServiceName = programName(offsets.FileInfo.CmdExePath)
-		}
-	}
+	// setting explicitly some configuration properties that are needed by their
+	// respective node providers
+	ctx = global.SetContext(ctx, &global.ContextInfo{
+		ReportRoutes: gb.config.Routes != nil,
+	})
 
 	return gb.builder.Build(ctx, gb.config)
 }

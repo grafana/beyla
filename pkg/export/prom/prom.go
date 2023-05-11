@@ -223,13 +223,13 @@ func (r *metricsReporter) labelValuesHTTP(span *transform.HTTPRequestSpan) []str
 
 // serveHTTPMetrics opens a Prometheus scraping HTTP endpoint to expose the metrics
 func (r *metricsReporter) serveHTTPMetrics() {
-	log := slog.With("component", "prom.MetricsReporter", "port", r.cfg.Port)
-	log.Info("opening prometheus scrape endpoint", "path", r.cfg.Path)
+	log := slog.With("component", "prom.MetricsReporter", "port", r.cfg.Port, "path", r.cfg.Path)
+	log.Info("opening prometheus scrape endpoint")
 	mux := http.NewServeMux()
 	promHandler := promhttp.HandlerFor(r.registry, promhttp.HandlerOpts{Registry: r.registry})
 	if log.Enabled(slog.LevelDebug) {
 		mux.Handle(r.cfg.Path, http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
-			slog.Debug("received request in metrics endpoint", "path", req.RequestURI, "remoteAddr", req.RemoteAddr)
+			log.Debug("received request in metrics endpoint", "uri", req.RequestURI, "remoteAddr", req.RemoteAddr)
 			promHandler.ServeHTTP(rw, req)
 		}))
 	} else {

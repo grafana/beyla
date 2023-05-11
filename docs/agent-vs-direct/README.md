@@ -11,13 +11,13 @@ The eBPF auto-instrumenter can work in two operation modes:
   to Grafana. In this scenario, the Agent takes care of the authentication in the Grafana endpoint.
   It also integrates better with some Grafana exclusive features, such as the span-to-metrics and
   span-to-service graph converters (**TODO**: add links).
-* **Direct mode**: the auto-instrumenter will send the metrics and traces directly to a remote endpoint
-  (currently only supporting the OpenTelemetry protocol). In this mode, the auto-instrumenter needs to be configured
-  with the authentication data.
+* **Direct mode**: the auto-instrumenter can **push** the metrics and/or traces directly to a remote endpoint
+  (using the OpenTelemetry, OTEL, protocol) or just expose a Prometheus HTTP endpoint ready to be scraped (**pull** mode).
+  In direct OTEL push mode, the auto-instrumenter needs to be configured with the authentication data.
 
 ```mermaid
 flowchart TD
-  EA1(Auto-instrumenter)  --> |OTLP metrics & traces| GA1(Grafana Agent)
+  EA1(Auto-instrumenter)  --> |Push OTLP metrics & traces| GA1(Grafana Agent)
   
   subgraph Grafana
     M(Mimir)
@@ -28,19 +28,24 @@ flowchart TD
   GA1 --> |Metrics| M
   GA1 --> |Traces| T
 
-  EA2(Auto-instrumenter) --> |OTLP metrics & traces| OTLP
+  EA2(Auto-instrumenter) --> |Push OTLP metrics & traces| OTLP
+
+  P(Prometheus) --> |Pull /metrics HTTP endpoint| EA2
 ```
 <center><i>eBPF auto-instrumenters running in Agent mode (left) and Direct mode (right)</i></center>
 
 ## Running in Direct mode
 
 You can follow our [quickstart tutorial](../tutorial/README.md) for a quick introduction
-to the eBPF auto-instrumenter running in Direct mode. You will find there how to provide
+to the eBPF auto-instrumenter running in Direct mode using OpenTelemetry. You will find there how to provide
 an OTLP endpoint and authentication credentials by means of the following environment
 variables:
 
 * `OTEL_EXPORTER_OTLP_ENDPOINT`
 * `OTEL_EXPORTER_OTLP_HEADERS`
+
+To run in direct mode using the Prometheus scrape endpoint, please refer to the
+[configuration documentation](../config.md).
 
 ## Running in Agent mode
 

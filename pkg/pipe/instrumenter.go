@@ -3,9 +3,8 @@ package pipe
 import (
 	"context"
 	"fmt"
-	"strings"
 
-	"github.com/grafana/ebpf-autoinstrument/pkg/export/prom"
+	"github.com/grafana/ebpf-autoinstrument/pkg/pipe/global"
 
 	"github.com/grafana/ebpf-autoinstrument/pkg/ebpf"
 
@@ -14,7 +13,7 @@ import (
 
 	"github.com/grafana/ebpf-autoinstrument/pkg/export/debug"
 	"github.com/grafana/ebpf-autoinstrument/pkg/export/otel"
-	"github.com/grafana/ebpf-autoinstrument/pkg/goexec"
+	"github.com/grafana/ebpf-autoinstrument/pkg/export/prom"
 	"github.com/grafana/ebpf-autoinstrument/pkg/transform"
 )
 
@@ -53,31 +52,12 @@ func newGraphBuilder(config *Config) *graphBuilder {
 	}
 }
 
-func programName(path string) string {
-	parts := strings.Split(path, "/")
-	return parts[len(parts)-1]
-}
-
 func (gb *graphBuilder) buildGraph(ctx context.Context) (graph.Graph, error) {
-	// setting manually some configuration properties that are needed by their
+	// setting explicitly some configuration properties that are needed by their
 	// respective node providers
-	if gb.config.Prometheus.Enabled() {
-		// Prometheus will report routes as attributes if the Routes node is configured
-		ctx = context.WithValue(ctx, prom.ReportRoutesCtxKey, gb.config.Routes != nil) //nolint:staticcheck
-	}
-	gb.config.EBPF.OnOffsets = func(offsets *goexec.Offsets) {
-		// TODO: investigate a cleaner way to do this. E.g. a struct ServiceInfo pointer stored in the shared context
-		serviceName := programName(offsets.FileInfo.CmdExePath)
-		if gb.config.Metrics.ServiceName == "" {
-			gb.config.Metrics.ServiceName = serviceName
-		}
-		if gb.config.Traces.ServiceName == "" {
-			gb.config.Traces.ServiceName = serviceName
-		}
-		if gb.config.Prometheus.ServiceName == "" {
-			gb.config.Prometheus.ServiceName = serviceName
-		}
-	}
+	ctx = global.SetContext(ctx, &global.ContextInfo{
+		ReportRoutes: gb.config.Routes != nil,
+	})
 
 	return gb.builder.Build(ctx, gb.config)
 }

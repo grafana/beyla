@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/grafana/ebpf-autoinstrument/pkg/pipe/global"
+
 	"golang.org/x/exp/slog"
 
 	"github.com/grafana/ebpf-autoinstrument/pkg/transform"
@@ -76,10 +78,16 @@ func newMetricsReporter(ctx context.Context, cfg *MetricsConfig) (*MetricsReport
 		reportPeer:   cfg.ReportPeerInfo,
 	}
 
+	// If service name is not explicitly set, we take the service name as set by the
+	// executable inspector
+	svcName := cfg.ServiceName
+	if svcName == "" {
+		svcName = global.Context(ctx).ServiceName
+	}
 	// TODO: make configurable
 	resources := resource.NewWithAttributes(
 		semconv.SchemaURL,
-		semconv.ServiceNameKey.String(cfg.ServiceName),
+		semconv.ServiceNameKey.String(svcName),
 	)
 	opts, err := getMetricEndpointOptions(cfg)
 	if err != nil {

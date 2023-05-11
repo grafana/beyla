@@ -39,7 +39,6 @@ services:
       BPF_DEBUG: "TRUE"
       METRICS_REPORT_TARGET: "true"
       METRICS_REPORT_PEER: "true"
-      OTEL_EXPORTER_OTLP_ENDPOINT: "http://otelcol:4318"
     ports:
       - "8999:8999" # Prometheus scrape port, if enabled via config
 

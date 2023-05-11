@@ -5,9 +5,8 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
-	"strings"
 
-	"go.opentelemetry.io/otel/attribute"
+	"github.com/grafana/ebpf-autoinstrument/pkg/pipe/global"
 
 	"golang.org/x/exp/slog"
 
@@ -15,11 +14,6 @@ import (
 	"github.com/mariomac/pipes/pkg/node"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
-)
-
-const (
-	ReportRoutesCtxKey = "reportRoutes"
 )
 
 // using labels and names that are equivalent names to the OTEL attributes
@@ -31,25 +25,19 @@ const (
 	RPCClientDuration     = "rpc_client_duration_seconds"
 	HTTPServerRequestSize = "http_server_request_size_bytes"
 	HTTPClientRequestSize = "http_client_request_size_bytes"
-)
 
-var (
-	serviceNameKey       = otelToProm(semconv.ServiceNameKey)
-	httpMethodKey        = otelToProm(semconv.HTTPMethodKey)
-	httpRouteKey         = otelToProm(semconv.HTTPRouteKey)
-	httpStatusCodeKey    = otelToProm(semconv.HTTPStatusCodeKey)
-	httpTargetKey        = otelToProm(semconv.HTTPTargetKey)
-	netSockPeerAddrKey   = otelToProm(semconv.NetSockPeerAddrKey)
-	netSockPeerNameKey   = otelToProm(semconv.NetSockPeerNameKey)
-	netSockPeerPortKey   = otelToProm(semconv.NetSockPeerPortKey)
-	rpcGRPCStatusCodeKey = otelToProm(semconv.RPCGRPCStatusCodeKey)
-	rpcMethodKey         = otelToProm(semconv.RPCMethodKey)
-	rpcSystemGRPC        = otelToProm(semconv.RPCSystemGRPC.Key)
+	serviceNameKey       = "service_name"
+	httpMethodKey        = "http_method"
+	httpRouteKey         = "http_route"
+	httpStatusCodeKey    = "http_status_code"
+	httpTargetKey        = "http_target"
+	netSockPeerAddrKey   = "net_sock_peer_addr"
+	netSockPeerNameKey   = "net_sock_peer_name"
+	netSockPeerPortKey   = "net_sock_peer_port"
+	rpcGRPCStatusCodeKey = "rpc_grpc_status_code"
+	rpcMethodKey         = "rpc_method"
+	rpcSystemGRPC        = "rpc_system"
 )
-
-func otelToProm(str attribute.Key) string {
-	return strings.ReplaceAll(string(str), ".", "_")
-}
 
 // TODO: TLS
 type PrometheusConfig struct {
@@ -84,7 +72,13 @@ func PrometheusEndpointProvider(ctx context.Context, cfg PrometheusConfig) (node
 }
 
 func newReporter(ctx context.Context, cfg *PrometheusConfig) *metricsReporter {
-	reportRoutes, _ := ctx.Value(ReportRoutesCtxKey).(bool)
+	ctxInfo := global.Context(ctx)
+	reportRoutes := ctxInfo.ReportRoutes
+	// If service name is not explicitly set, we take the service name as set by the
+	// executable inspector
+	if cfg.ServiceName == "" {
+		cfg.ServiceName = ctxInfo.ServiceName
+	}
 
 	mr := &metricsReporter{
 		cfg:          cfg,
@@ -127,8 +121,27 @@ func newReporter(ctx context.Context, cfg *PrometheusConfig) *metricsReporter {
 func (r *metricsReporter) reportMetrics(input <-chan []transform.HTTPRequestSpan) {
 	for spans := range input {
 		for i := range spans {
-			r.record(&spans[i])
+			r.observe(&spans[i])
 		}
+	}
+}
+
+func (r *metricsReporter) observe(span *transform.HTTPRequestSpan) {
+	t := span.Timings()
+	duration := t.End.Sub(t.RequestStart).Seconds()
+	switch span.Type {
+	case transform.EventTypeHTTP:
+		lv := r.labelValuesHTTP(span)
+		r.httpDuration.WithLabelValues(lv...).Observe(duration)
+		r.httpRequestSize.WithLabelValues(lv...).Observe(float64(span.ContentLength))
+	case transform.EventTypeHTTPClient:
+		lv := r.labelValuesHTTPClient(span)
+		r.httpClientDuration.WithLabelValues(lv...).Observe(duration)
+		r.httpClientRequestSize.WithLabelValues(lv...).Observe(float64(span.ContentLength))
+	case transform.EventTypeGRPC:
+		r.grpcDuration.WithLabelValues(r.labelValuesGRPC(span)...).Observe(duration)
+	case transform.EventTypeGRPCClient:
+		r.grpcClientDuration.WithLabelValues(r.labelValuesGRPC(span)...).Observe(duration)
 	}
 }
 
@@ -208,25 +221,7 @@ func (r *metricsReporter) labelValuesHTTP(span *transform.HTTPRequestSpan) []str
 	return names
 }
 
-func (r *metricsReporter) record(span *transform.HTTPRequestSpan) {
-	t := span.Timings()
-	duration := t.End.Sub(t.RequestStart).Seconds()
-	switch span.Type {
-	case transform.EventTypeHTTP:
-		lv := r.labelValuesHTTP(span)
-		r.httpDuration.WithLabelValues(lv...).Observe(duration)
-		r.httpRequestSize.WithLabelValues(lv...).Observe(float64(span.ContentLength))
-	case transform.EventTypeHTTPClient:
-		lv := r.labelValuesHTTPClient(span)
-		r.httpClientDuration.WithLabelValues(lv...).Observe(duration)
-		r.httpClientRequestSize.WithLabelValues(lv...).Observe(float64(span.ContentLength))
-	case transform.EventTypeGRPC:
-		r.grpcDuration.WithLabelValues(r.labelValuesGRPC(span)...).Observe(duration)
-	case transform.EventTypeGRPCClient:
-		r.grpcClientDuration.WithLabelValues(r.labelValuesGRPC(span)...).Observe(duration)
-	}
-}
-
+// serveHTTPMetrics opens a Prometheus scraping HTTP endpoint to expose the metrics
 func (r *metricsReporter) serveHTTPMetrics() {
 	log := slog.With("component", "prom.MetricsReporter", "port", r.cfg.Port)
 	log.Info("opening prometheus scrape endpoint", "path", r.cfg.Path)

@@ -11,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/grafana/ebpf-autoinstrument/pkg/pipe/global"
+
 	"golang.org/x/sys/unix"
 
 	"github.com/grafana/ebpf-autoinstrument/pkg/ebpf/goruntime"
@@ -232,9 +234,10 @@ func inspect(ctx context.Context, cfg *ebpfcommon.TracerConfig, functions []stri
 	if err != nil {
 		return nil, fmt.Errorf("error analysing target executable: %w", err)
 	}
-	if cfg.OnOffsets != nil {
-		cfg.OnOffsets(offsets)
-	}
+
+	parts := strings.Split(offsets.FileInfo.CmdExePath, "/")
+	global.Context(ctx).ServiceName = parts[len(parts)-1]
+
 	return offsets, nil
 }
 

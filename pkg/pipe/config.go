@@ -5,8 +5,6 @@ import (
 	"io"
 	"time"
 
-	"github.com/grafana/ebpf-autoinstrument/pkg/export/prom"
-
 	ebpfcommon "github.com/grafana/ebpf-autoinstrument/pkg/ebpf/common"
 
 	"github.com/caarlos0/env/v7"
@@ -14,6 +12,7 @@ import (
 
 	"github.com/grafana/ebpf-autoinstrument/pkg/export/debug"
 	"github.com/grafana/ebpf-autoinstrument/pkg/export/otel"
+	"github.com/grafana/ebpf-autoinstrument/pkg/export/prom"
 	"github.com/grafana/ebpf-autoinstrument/pkg/transform"
 )
 

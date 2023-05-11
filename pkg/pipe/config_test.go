@@ -7,14 +7,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/grafana/ebpf-autoinstrument/pkg/export/prom"
-
 	ebpfcommon "github.com/grafana/ebpf-autoinstrument/pkg/ebpf/common"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/grafana/ebpf-autoinstrument/pkg/export/otel"
+	"github.com/grafana/ebpf-autoinstrument/pkg/export/prom"
 )
 
 func TestConfig_Overrides(t *testing.T) {

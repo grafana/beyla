@@ -96,7 +96,7 @@ func newMetricsReporter(ctx context.Context, cfg *MetricsConfig) (*MetricsReport
 	)
 	// time units for HTTP and GRPC durations are in seconds, according to the OTEL specification:
 	// https://github.com/open-telemetry/opentelemetry-specification/tree/main/specification/metrics/semantic_conventions
-	// TODO: set quantiles here and in prometheus from the previous specification
+	// TODO: set ExplicitBucketBoundaries here and in prometheus from the previous specification
 	mr.httpDuration, err = mr.provider.Meter(reporterName).
 		Float64Histogram(HTTPServerDuration, instrument.WithUnit("s"))
 	if err != nil {

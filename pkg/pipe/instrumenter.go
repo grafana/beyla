@@ -66,11 +66,16 @@ func (gb *graphBuilder) buildGraph(ctx context.Context) (graph.Graph, error) {
 		ctx = context.WithValue(ctx, prom.ReportRoutesCtxKey, gb.config.Routes != nil) //nolint:staticcheck
 	}
 	gb.config.EBPF.OnOffsets = func(offsets *goexec.Offsets) {
+		// TODO: investigate a cleaner way to do this. E.g. a struct ServiceInfo pointer stored in the shared context
+		serviceName := programName(offsets.FileInfo.CmdExePath)
 		if gb.config.Metrics.ServiceName == "" {
-			gb.config.Metrics.ServiceName = programName(offsets.FileInfo.CmdExePath)
+			gb.config.Metrics.ServiceName = serviceName
 		}
 		if gb.config.Traces.ServiceName == "" {
-			gb.config.Traces.ServiceName = programName(offsets.FileInfo.CmdExePath)
+			gb.config.Traces.ServiceName = serviceName
+		}
+		if gb.config.Prometheus.ServiceName == "" {
+			gb.config.Prometheus.ServiceName = serviceName
 		}
 	}
 

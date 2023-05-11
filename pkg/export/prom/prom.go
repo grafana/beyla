@@ -34,6 +34,7 @@ const (
 )
 
 var (
+	serviceNameKey       = otelToProm(semconv.ServiceNameKey)
 	httpMethodKey        = otelToProm(semconv.HTTPMethodKey)
 	httpRouteKey         = otelToProm(semconv.HTTPRouteKey)
 	httpStatusCodeKey    = otelToProm(semconv.HTTPStatusCodeKey)
@@ -52,6 +53,7 @@ func otelToProm(str attribute.Key) string {
 
 // TODO: TLS
 type PrometheusConfig struct {
+	ServiceName    string `yaml:"service_name" env:"PROMETHEUS_SERVICE_NAME"`
 	Port           int    `yaml:"port" env:"PROMETHEUS_PORT"`
 	Path           string `yaml:"path" env:"PROMETHEUS_PATH"`
 	ReportTarget   bool   `yaml:"report_target" env:"METRICS_REPORT_TARGET"`
@@ -84,33 +86,32 @@ func PrometheusEndpointProvider(ctx context.Context, cfg PrometheusConfig) (node
 func newReporter(ctx context.Context, cfg *PrometheusConfig) *metricsReporter {
 	reportRoutes, _ := ctx.Value(ReportRoutesCtxKey).(bool)
 
-	// TODO: let users specify histogram buckets
 	mr := &metricsReporter{
 		cfg:          cfg,
 		reportRoutes: reportRoutes,
 		registry:     prometheus.NewRegistry(),
 		httpDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
-			Name: "http_server_duration_ms",
+			Name: HTTPServerDuration,
 			Help: "duration of HTTP service calls from the server side, in milliseconds",
 		}, labelNamesHTTP(cfg, reportRoutes)),
 		httpClientDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
-			Name: "http_client_duration_ms",
+			Name: HTTPClientDuration,
 			Help: "duration of HTTP service calls from the client side, in milliseconds",
 		}, labelNamesHTTPClient(cfg)),
 		grpcDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
-			Name: "rpc_server_duration_ms",
+			Name: RPCServerDuration,
 			Help: "duration of RCP service calls from the server side, in milliseconds",
 		}, labelNamesGRPC(cfg)),
 		grpcClientDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
-			Name: "rpc_client_duration_ms",
+			Name: RPCClientDuration,
 			Help: "duration of GRPC service calls from the client side, in milliseconds",
 		}, labelNamesGRPC(cfg)),
 		httpRequestSize: prometheus.NewHistogramVec(prometheus.HistogramOpts{
-			Name: "http_server_request_size_bytes",
+			Name: HTTPServerRequestSize,
 			Help: "size, in bytes, of the HTTP request body as received at the server side",
 		}, labelNamesHTTP(cfg, reportRoutes)),
 		httpClientRequestSize: prometheus.NewHistogramVec(prometheus.HistogramOpts{
-			Name: "http_client_request_size_bytes",
+			Name: HTTPClientRequestSize,
 			Help: "size, in bytes, of the HTTP request body as sent from the client side",
 		}, labelNamesHTTPClient(cfg)),
 	}
@@ -134,7 +135,7 @@ func (r *metricsReporter) reportMetrics(input <-chan []transform.HTTPRequestSpan
 // labelNamesGRPC must return the label names in the same order as would be returned
 // by labelValuesGRPC
 func labelNamesGRPC(cfg *PrometheusConfig) []string {
-	names := []string{rpcMethodKey, rpcSystemGRPC, rpcGRPCStatusCodeKey}
+	names := []string{serviceNameKey, rpcMethodKey, rpcSystemGRPC, rpcGRPCStatusCodeKey}
 	if cfg.ReportPeerInfo {
 		names = append(names, netSockPeerAddrKey)
 	}
@@ -144,8 +145,8 @@ func labelNamesGRPC(cfg *PrometheusConfig) []string {
 // labelValuesGRPC must return the label names in the same order as would be returned
 // by labelNamesGRPC
 func (r *metricsReporter) labelValuesGRPC(span *transform.HTTPRequestSpan) []string {
-	// rpcMethodKey, rpcSystemGRPC, rpcGRPCStatusCodeKey
-	names := []string{span.Path, "grpc", strconv.Itoa(span.Status)}
+	// serviceNameKey, rpcMethodKey, rpcSystemGRPC, rpcGRPCStatusCodeKey
+	names := []string{r.cfg.ServiceName, span.Path, "grpc", strconv.Itoa(span.Status)}
 	if r.cfg.ReportPeerInfo {
 		names = append(names, span.Peer) // netSockPeerAddrKey
 	}
@@ -155,7 +156,7 @@ func (r *metricsReporter) labelValuesGRPC(span *transform.HTTPRequestSpan) []str
 // labelNamesHTTPClient must return the label names in the same order as would be returned
 // by labelValuesHTTPClient
 func labelNamesHTTPClient(cfg *PrometheusConfig) []string {
-	names := []string{httpMethodKey, httpStatusCodeKey}
+	names := []string{serviceNameKey, httpMethodKey, httpStatusCodeKey}
 	if cfg.ReportPeerInfo {
 		names = append(names, netSockPeerNameKey, netSockPeerPortKey)
 	}
@@ -166,7 +167,7 @@ func labelNamesHTTPClient(cfg *PrometheusConfig) []string {
 // by labelNamesHTTPClient
 func (r *metricsReporter) labelValuesHTTPClient(span *transform.HTTPRequestSpan) []string {
 	// httpMethodKey, httpStatusCodeKey
-	names := []string{span.Method, strconv.Itoa(span.Status)}
+	names := []string{r.cfg.ServiceName, span.Method, strconv.Itoa(span.Status)}
 	if r.cfg.ReportPeerInfo {
 		// netSockPeerAddrKey, netSockPeerPortKey
 		names = append(names, span.Host, strconv.Itoa(span.HostPort))
@@ -177,7 +178,7 @@ func (r *metricsReporter) labelValuesHTTPClient(span *transform.HTTPRequestSpan)
 // labelNamesHTTP must return the label names in the same order as would be returned
 // by labelValuesHTTP
 func labelNamesHTTP(cfg *PrometheusConfig, reportRoutes bool) []string {
-	names := []string{httpMethodKey, httpStatusCodeKey}
+	names := []string{serviceNameKey, httpMethodKey, httpStatusCodeKey}
 	if cfg.ReportTarget {
 		names = append(names, httpTargetKey)
 	}
@@ -194,7 +195,7 @@ func labelNamesHTTP(cfg *PrometheusConfig, reportRoutes bool) []string {
 // by labelNamesHTTP
 func (r *metricsReporter) labelValuesHTTP(span *transform.HTTPRequestSpan) []string {
 	// httpMethodKey, httpStatusCodeKey
-	names := []string{span.Method, strconv.Itoa(span.Status)}
+	names := []string{r.cfg.ServiceName, span.Method, strconv.Itoa(span.Status)}
 	if r.cfg.ReportTarget {
 		names = append(names, span.Path) // httpTargetKey
 	}
@@ -209,7 +210,7 @@ func (r *metricsReporter) labelValuesHTTP(span *transform.HTTPRequestSpan) []str
 
 func (r *metricsReporter) record(span *transform.HTTPRequestSpan) {
 	t := span.Timings()
-	duration := t.End.Sub(t.RequestStart).Seconds() * 1000
+	duration := t.End.Sub(t.RequestStart).Seconds()
 	switch span.Type {
 	case transform.EventTypeHTTP:
 		lv := r.labelValuesHTTP(span)

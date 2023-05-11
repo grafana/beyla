@@ -46,7 +46,7 @@ func TestBasicPipeline(t *testing.T) {
 	event := testutil.ReadChannel(t, tc.Records, testTimeout)
 	assert.Equal(t, collector.MetricRecord{
 		Name: "http.server.duration",
-		Unit: "ms",
+		Unit: "s",
 		Attributes: map[string]string{
 			string(semconv.HTTPMethodKey):      "GET",
 			string(semconv.HTTPStatusCodeKey):  "404",
@@ -117,7 +117,7 @@ func TestRouteConsolidation(t *testing.T) {
 
 	assert.Equal(t, collector.MetricRecord{
 		Name: "http.server.duration",
-		Unit: "ms",
+		Unit: "s",
 		Attributes: map[string]string{
 			string(semconv.HTTPMethodKey):     "GET",
 			string(semconv.HTTPStatusCodeKey): "200",
@@ -128,7 +128,7 @@ func TestRouteConsolidation(t *testing.T) {
 
 	assert.Equal(t, collector.MetricRecord{
 		Name: "http.server.duration",
-		Unit: "ms",
+		Unit: "s",
 		Attributes: map[string]string{
 			string(semconv.HTTPMethodKey):     "GET",
 			string(semconv.HTTPStatusCodeKey): "200",
@@ -139,7 +139,7 @@ func TestRouteConsolidation(t *testing.T) {
 
 	assert.Equal(t, collector.MetricRecord{
 		Name: "http.server.duration",
-		Unit: "ms",
+		Unit: "s",
 		Attributes: map[string]string{
 			string(semconv.HTTPMethodKey):     "GET",
 			string(semconv.HTTPStatusCodeKey): "200",
@@ -171,7 +171,7 @@ func TestGRPCPipeline(t *testing.T) {
 	event := testutil.ReadChannel(t, tc.Records, testTimeout)
 	assert.Equal(t, collector.MetricRecord{
 		Name: "rpc.server.duration",
-		Unit: "ms",
+		Unit: "s",
 		Attributes: map[string]string{
 			string(semconv.RPCSystemKey):         "grpc",
 			string(semconv.RPCGRPCStatusCodeKey): "3",

@@ -1,27 +1,60 @@
-# Quick start tutorial
+# Zero-code application traces and metrics with eBPF
 
-The eBPF autoinstrumenter allows reporting basic transaction information as well as
-[RED metrics](https://grafana.com/files/grafanacon_eu_2018/Tom_Wilkie_GrafanaCon_EU_2018.pdf)
-for Go HTTP/S and GRPC services in Linux, without requiring to modify the code
+> ⚠️**SOME GENERAL TO-DO's before releasing the Beta**
+> * Change the current UI screenshots by the Dashboard that we are going to create an publish
+>   in Grafana Cloud.
+> * Update which languages and service types are finally supported.
+> * Probably, do not configure metrics exporter and rely on SpanMetrics service to show
+>   extra info, such as Service Maps, etc...
+> * Double-check conclusions & future work to update it according to the status of the
+>   instrumenter.
+
+Do you want to give a try to Grafana for application observability but don't have time
+to adapt your application for it?
+
+Until now, instrumenting an application to get metrics and traces required, in the best case,
+to add a language agent to your deployment/packages. In languages like Go, you had to manually
+add tracepoints into your code. In both cases, you need to redeploy the instrumented version
+of the service to your staging/production servers.
+
+To flatten the curve of adoption of Application Observability, Grafana is releasing an
+eBPF autoinstrumentation suite that is able to report basic transactions span information,
+as well as [Rate-Errors-Duration (RED) metrics](https://grafana.com/blog/2018/08/02/the-red-method-how-to-instrument-your-services/)
+for your Linux HTTP/S and gRPC services, without requiring to modify the code
 to manually insert probes.
 
->❗ This is an **experimental** feature that is not yet supported by Grafana Labs. ️
+## E-B-P...what?
 
-Requirements:
-- Linux with Kernel 4.18 or higher
-- eBPF enabled in the host
-- The instrumented Go programs must have been compiled with Go 1.17 or higher
-- Administrative access to execute the instrumenter
-  - Or execute it from a user enabling the `SYS_ADMIN` capability.
+eBPF stands for Extended Berkeley Packet Filter, and allows attaching your own programs to
+different points of the Linux Kernel. eBPF programs run in privileged mode to allow inspecting
+runtime information from different parts of your Kernel: system calls, network stack, and
+even inserting probes in your userspace programs.
+
+The eBPF programs are safe, as they are compiled for their own
+[Virtual Machine instruction set](https://docs.kernel.org/bpf/instruction-set.html)
+and then can run in a sandboxed environment that preverifies each
+loaded program for safe memory access and finite execution time. Unlike older technologies
+such as the older, native-compiled Kprobes and Uprobes, there is no chance that a poorly
+programmed probe makes your Kernel to hang.
+
+After being verified, the eBPF binaries are compiled Just-In-Time (JIT) to the host
+native architecture (x86-64, ARM64, ...) for efficient and fast execution.
+
+The eBPF code is loaded from ordinary programs running in the user space, and both
+kernel and user space programs can share information
+through a set of communication mechanisms that are provided by the eBPF specification:
+ring buffers, arrays, hash maps, etc.
+
+![](img/ebpf-arch.svg)
 
 ## Downloading
 
-> ℹ️ For help about how to download and run the autoinstrumenter as a container, you
-can check the documentation about [running the eBPF autoinstrumenter as a Docker container](../docker.md)
-or [running the eBPF autoinstrumenter in Kubernetes](../k8s.md).
+> ℹ️ For simplicity, this tutorial shows how to manually run the auto-instrumenter as a
+ordinary operating system process. For more running modes, you can check the documentation about
+[running the eBPF autoinstrumenter as a Docker container](https://github.com/grafana/ebpf-autoinstrument/blob/main/docs/docker.md)
+or [deploying the eBPF autoinstrumenter in Kubernetes](https://github.com/grafana/ebpf-autoinstrument/blob/main/docs/k8s.md).
 
-In this tutorial, we will work with plan OS executables. You can download the
-instrumenter executable directly with Go install:
+You can download the instrumenter executable directly with `go install`:
 
 ```
 go install github.com/grafana/ebpf-autoinstrument/cmd/otelauto@latest
@@ -29,7 +62,7 @@ go install github.com/grafana/ebpf-autoinstrument/cmd/otelauto@latest
 
 ## Running an instrumentable service
 
-You can instrument any Go service that uses any of the following libraries:
+At the moment, you can instrument any Go service that uses any of the following libraries:
 
 * Standard `net/http`
 * [Gorilla Mux](https://github.com/gorilla/mux)
@@ -214,3 +247,36 @@ rate(http_server_duration_sum[$__rate_interval])
 You will see a graph with the average request time (~1000ms according to the previous `curl` command):
 
 ![](./img/avg-request-time.png)
+
+## Conclusions and future work
+
+eBPF proved to be a fast, safe, and reliable way to observe some basic metrics of your
+services. The Grafana eBPF autoinstrumenter won't replace your language
+agents but will decrease the landing time of your applications in Grafana, as it does
+neither need any modification, recompilation nor repackaging. Just run it together with your
+service, and you will get the metrics.
+
+eBPF also allows you seeing some parts that manual instrumentation doesn't. For example,
+the eBPF autoinstrumenter is able to show you how much time a request is enqueued after
+the connection is established, until its code is actually executed.
+
+The eBPF autoinstrumenter has its limitations too. As it provides generic metrics and
+simple Spans information (not distributed traces, yet), language agents and manual
+instrumentation is still recommended, so you can specify the granularity of each
+part of the code to be instrumented, putting the focus on your critical operations.
+
+Another limitation to consider is that the autoinstrumenter requires to run with
+elevated privileges; not actually a `root` user but at least it has to run with the
+`CAP_SYS_ADMIN` capability. If you run it as a container (Docker, Kubernetes...), it
+has to be privileged or add the `CAP_SYS_ADMIN` capability.
+
+In the future, we plan to increase the base of supported languages. While we initially
+started on Go, we plan to increase its codebase to other major languages, and providing
+a fallback instrumenter that directly inspects the HTTP requests in the Kernel side,
+so you can get metrics even for languages that haven't been explicitly supported.
+
+Also, it is important to work on distributed tracing, then you won't get just small
+spans information, but you will be able to relate them with requests from other services
+(web, database, messaging...). It is a complex topic because it requires modifying
+each request header to insert a trace ID to allow Grafana backend relating all the
+spans into a single trace.

@@ -38,12 +38,14 @@ spec:
               add:
                 - SYS_ADMIN
           env:
+            - name: SERVICE_NAME
+              value: "goblog"
             - name: PRINT_TRACES
               value: "true"
             - name: OPEN_PORT
               value: "8443"
             - name: OTEL_EXPORTER_OTLP_ENDPOINT
-              value: "grafana-agent:4318"
+              value: "http://grafana-agent:4318"
             - name: LOG_LEVEL
               value: "DEBUG"
 ---

@@ -227,6 +227,9 @@ func getMetricEndpointOptions(cfg *MetricsConfig) ([]otlpmetrichttp.Option, erro
 	if err != nil {
 		return nil, fmt.Errorf("parsing endpoint URL %s: %w", endpoint, err)
 	}
+	if murl.Scheme == "" || murl.Host == "" {
+		return nil, fmt.Errorf("URL %q must have a scheme and a host", endpoint)
+	}
 
 	opts := []otlpmetrichttp.Option{
 		otlpmetrichttp.WithEndpoint(murl.Host),

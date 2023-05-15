@@ -312,6 +312,9 @@ func getTracesEndpointOptions(cfg *TracesConfig) ([]otlptracehttp.Option, error)
 	if err != nil {
 		return nil, fmt.Errorf("parsing endpoint URL %s: %w", endpoint, err)
 	}
+	if murl.Scheme == "" || murl.Host == "" {
+		return nil, fmt.Errorf("URL %q must have a scheme and a host", endpoint)
+	}
 
 	opts := []otlptracehttp.Option{
 		otlptracehttp.WithEndpoint(murl.Host),

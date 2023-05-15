@@ -10,8 +10,8 @@ import (
 func TestMetricsEndpoint(t *testing.T) {
 	mcfg := MetricsConfig{
 		ServiceName:     "svc-name",
-		Endpoint:        "localhost:3131",
-		MetricsEndpoint: "localhost:3232",
+		Endpoint:        "https://localhost:3131",
+		MetricsEndpoint: "https://localhost:3232",
 	}
 
 	t.Run("testing with two endpoints", func(t *testing.T) {
@@ -20,15 +20,15 @@ func TestMetricsEndpoint(t *testing.T) {
 
 	mcfg = MetricsConfig{
 		ServiceName:     "svc-name",
-		Endpoint:        "localhost:3131",
-		MetricsEndpoint: "localhost:3232",
+		Endpoint:        "https://localhost:3131",
+		MetricsEndpoint: "https://localhost:3232",
 	}
 
 	t.Run("testing with only metrics endpoint", func(t *testing.T) {
 		testMetricsEndpLen(t, 1, &mcfg)
 	})
 
-	mcfg.Endpoint = "localhost:3131"
+	mcfg.Endpoint = "https://localhost:3131"
 	mcfg.MetricsEndpoint = ""
 
 	t.Run("testing with only non-signal endpoint", func(t *testing.T) {
@@ -56,4 +56,16 @@ func testMetricsEndpLen(t *testing.T, expected int, mcfg *MetricsConfig) {
 	require.NoError(t, err)
 	// otlptracehttp.Options are notoriously hard to compare, so we just test the length
 	assert.Equal(t, expected, len(opts))
+}
+
+func TestMissingSchemeInMetricsEndpoint(t *testing.T) {
+	opts, err := getMetricEndpointOptions(&MetricsConfig{Endpoint: "http://foo:3030"})
+	require.NoError(t, err)
+	require.NotEmpty(t, opts)
+
+	_, err = getMetricEndpointOptions(&MetricsConfig{Endpoint: "foo:3030"})
+	require.Error(t, err)
+
+	_, err = getMetricEndpointOptions(&MetricsConfig{Endpoint: "foo"})
+	require.Error(t, err)
 }

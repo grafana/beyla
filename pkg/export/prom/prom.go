@@ -29,7 +29,7 @@ const (
 	serviceNameKey       = "service_name"
 	httpMethodKey        = "http_method"
 	httpRouteKey         = "http_route"
-	httpStatusCodeKey    = "http_status_code"
+	httpStatusCodeKey    = "http_response_status_code"
 	httpTargetKey        = "http_target"
 	netSockPeerAddrKey   = "net_sock_peer_addr"
 	netSockPeerNameKey   = "net_sock_peer_name"

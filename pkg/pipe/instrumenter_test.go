@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/grafana/ebpf-autoinstrument/pkg/export/otel/sc"
+
 	"github.com/grafana/ebpf-autoinstrument/pkg/testutil"
 
 	"github.com/mariomac/pipes/pkg/graph"
@@ -49,7 +51,7 @@ func TestBasicPipeline(t *testing.T) {
 		Unit: "s",
 		Attributes: map[string]string{
 			string(semconv.HTTPMethodKey):      "GET",
-			string(semconv.HTTPStatusCodeKey):  "404",
+			string(sc.HTTPResponseStatusCode):  "404",
 			string(semconv.HTTPTargetKey):      "/foo/bar",
 			string(semconv.NetSockPeerAddrKey): "1.1.1.1",
 		},
@@ -120,7 +122,7 @@ func TestRouteConsolidation(t *testing.T) {
 		Unit: "s",
 		Attributes: map[string]string{
 			string(semconv.HTTPMethodKey):     "GET",
-			string(semconv.HTTPStatusCodeKey): "200",
+			string(sc.HTTPResponseStatusCode): "200",
 			string(semconv.HTTPRouteKey):      "/user/{id}",
 		},
 		Type: pmetric.MetricTypeHistogram,
@@ -131,7 +133,7 @@ func TestRouteConsolidation(t *testing.T) {
 		Unit: "s",
 		Attributes: map[string]string{
 			string(semconv.HTTPMethodKey):     "GET",
-			string(semconv.HTTPStatusCodeKey): "200",
+			string(sc.HTTPResponseStatusCode): "200",
 			string(semconv.HTTPRouteKey):      "/products/{id}/push",
 		},
 		Type: pmetric.MetricTypeHistogram,
@@ -142,7 +144,7 @@ func TestRouteConsolidation(t *testing.T) {
 		Unit: "s",
 		Attributes: map[string]string{
 			string(semconv.HTTPMethodKey):     "GET",
-			string(semconv.HTTPStatusCodeKey): "200",
+			string(sc.HTTPResponseStatusCode): "200",
 			string(semconv.HTTPRouteKey):      "*",
 		},
 		Type: pmetric.MetricTypeHistogram,
@@ -348,7 +350,7 @@ func matchTraceEvent(t *testing.T, name string, event collector.TraceRecord) {
 		Name: name,
 		Attributes: map[string]string{
 			string(semconv.HTTPMethodKey):               "GET",
-			string(semconv.HTTPStatusCodeKey):           "404",
+			string(sc.HTTPResponseStatusCode):           "404",
 			string(semconv.HTTPTargetKey):               "/foo/bar",
 			string(semconv.NetSockPeerAddrKey):          "1.1.1.1",
 			string(semconv.NetHostNameKey):              getHostname(),
@@ -403,7 +405,7 @@ func matchInnerGRPCTraceEvent(t *testing.T, name string, event collector.TraceRe
 func matchNestedEvent(t *testing.T, name, method, target, status string, kind ptrace.SpanKind, event collector.TraceRecord) {
 	assert.Equal(t, name, event.Name)
 	assert.Equal(t, method, event.Attributes["http.method"])
-	assert.Equal(t, status, event.Attributes["http.status_code"])
+	assert.Equal(t, status, event.Attributes["http.response.status_code"])
 	if kind == ptrace.SpanKindClient {
 		assert.Equal(t, target, event.Attributes["http.url"])
 	} else {

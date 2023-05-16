@@ -103,7 +103,7 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url string) {
 		var err error
 		results, err = pq.Query(`http_server_duration_seconds_count{` +
 			`http_method="GET",` +
-			`http_status_code="404",` +
+			`http_response_status_code="404",` +
 			`service_name="testserver",` +
 			`http_route="/basic/:rnd",` +
 			`http_target="` + path + `"}`)
@@ -123,7 +123,7 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url string) {
 		var err error
 		results, err = pq.Query(`http_server_request_size_bytes_count{` +
 			`http_method="GET",` +
-			`http_status_code="404",` +
+			`http_response_status_code="404",` +
 			`service_name="testserver",` +
 			`http_route="/basic/:rnd",` +
 			`http_target="` + path + `"}`)
@@ -144,7 +144,7 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url string) {
 			var err error
 			results, err = pq.Query(`http_client_duration_seconds_count{` +
 				`http_method="GET",` +
-				`http_status_code="203",` +
+				`http_response_status_code="203",` +
 				`service_name="testserver"}`)
 			require.NoError(t, err)
 			// check duration_count has 3 calls
@@ -160,7 +160,7 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url string) {
 			var err error
 			results, err = pq.Query(`http_client_request_size_bytes_count{` +
 				`http_method="GET",` +
-				`http_status_code="203",` +
+				`http_response_status_code="203",` +
 				`service_name="testserver"}`)
 			require.NoError(t, err)
 			// check duration_count has 3 calls
@@ -193,7 +193,7 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url string) {
 	var err error
 	results, err = pq.Query(`http_server_duration_seconds_sum{` +
 		`http_method="GET",` +
-		`http_status_code="404",` +
+		`http_response_status_code="404",` +
 		`service_name="testserver",` +
 		`http_route="/basic/:rnd",` +
 		`http_target="` + path + `"}`)
@@ -211,7 +211,7 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url string) {
 	// check request_size_sum is at least 114B (3 * 38B)
 	results, err = pq.Query(`http_server_request_size_bytes_sum{` +
 		`http_method="GET",` +
-		`http_status_code="404",` +
+		`http_response_status_code="404",` +
 		`service_name="testserver",` +
 		`http_route="/basic/:rnd",` +
 		`http_target="` + path + `"}`)

@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/grafana/ebpf-autoinstrument/pkg/export/otel/sc"
+
 	"github.com/grafana/ebpf-autoinstrument/pkg/pipe/global"
 
 	"golang.org/x/exp/slog"
@@ -152,7 +154,7 @@ func (r *MetricsReporter) metricAttributes(span *transform.HTTPRequestSpan) []at
 	case transform.EventTypeHTTP:
 		attrs := []attribute.KeyValue{
 			semconv.HTTPMethod(span.Method),
-			semconv.HTTPStatusCode(span.Status),
+			sc.HTTPResponseStatusCode.Int(span.Status),
 		}
 		if r.reportTarget {
 			attrs = append(attrs, semconv.HTTPTarget(span.Path))
@@ -177,7 +179,7 @@ func (r *MetricsReporter) metricAttributes(span *transform.HTTPRequestSpan) []at
 	case transform.EventTypeHTTPClient:
 		attrs := []attribute.KeyValue{
 			semconv.HTTPMethod(span.Method),
-			semconv.HTTPStatusCode(span.Status),
+			sc.HTTPResponseStatusCode.Int(span.Status),
 		}
 		if r.reportPeer {
 			attrs = append(attrs, semconv.NetSockPeerName(span.Host))

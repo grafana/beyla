@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/grafana/ebpf-autoinstrument/pkg/export/otel/sc"
+
 	"github.com/grafana/ebpf-autoinstrument/pkg/pipe/global"
 
 	"golang.org/x/exp/slog"
@@ -132,7 +134,7 @@ func traceAttributes(span *transform.HTTPRequestSpan) []attribute.KeyValue {
 	case transform.EventTypeHTTP:
 		attrs := []attribute.KeyValue{
 			semconv.HTTPMethod(span.Method),
-			semconv.HTTPStatusCode(span.Status),
+			sc.HTTPResponseStatusCode.Int(span.Status),
 			semconv.HTTPTarget(span.Path),
 			semconv.NetSockPeerAddr(span.Peer),
 			semconv.NetHostName(span.Host),
@@ -155,7 +157,7 @@ func traceAttributes(span *transform.HTTPRequestSpan) []attribute.KeyValue {
 	case transform.EventTypeHTTPClient:
 		return []attribute.KeyValue{
 			semconv.HTTPMethod(span.Method),
-			semconv.HTTPStatusCode(span.Status),
+			sc.HTTPResponseStatusCode.Int(span.Status),
 			semconv.HTTPURL(span.Path),
 			semconv.NetPeerName(span.Host),
 			semconv.NetPeerPort(span.HostPort),

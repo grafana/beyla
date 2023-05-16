@@ -10,8 +10,8 @@ import (
 func TestTracesEndpoint(t *testing.T) {
 	tcfg := TracesConfig{
 		ServiceName:        "svc-name",
-		Endpoint:           "localhost:3131",
-		TracesEndpoint:     "localhost:3232",
+		Endpoint:           "https://localhost:3131",
+		TracesEndpoint:     "https://localhost:3232",
 		MaxQueueSize:       4096,
 		MaxExportBatchSize: 4096,
 	}
@@ -22,7 +22,7 @@ func TestTracesEndpoint(t *testing.T) {
 
 	tcfg = TracesConfig{
 		ServiceName:        "svc-name",
-		TracesEndpoint:     "localhost:3232",
+		TracesEndpoint:     "https://localhost:3232",
 		MaxQueueSize:       4096,
 		MaxExportBatchSize: 4096,
 	}
@@ -31,7 +31,7 @@ func TestTracesEndpoint(t *testing.T) {
 		testTracesEndpLen(t, 1, &tcfg)
 	})
 
-	tcfg.Endpoint = "localhost:3131"
+	tcfg.Endpoint = "https://localhost:3131"
 	tcfg.TracesEndpoint = ""
 
 	t.Run("testing with only non-signal endpoint", func(t *testing.T) {
@@ -59,4 +59,16 @@ func testTracesEndpLen(t *testing.T, expected int, tcfg *TracesConfig) {
 	require.NoError(t, err)
 	// otlptracehttp.Options are notoriously hard to compare, so we just test the length
 	assert.Equal(t, expected, len(opts))
+}
+
+func TestMissingSchemeInTracesEndpoint(t *testing.T) {
+	opts, err := getTracesEndpointOptions(&TracesConfig{Endpoint: "http://foo:3030"})
+	require.NoError(t, err)
+	require.NotEmpty(t, opts)
+
+	_, err = getTracesEndpointOptions(&TracesConfig{Endpoint: "foo:3030"})
+	require.Error(t, err)
+
+	_, err = getTracesEndpointOptions(&TracesConfig{Endpoint: "foo"})
+	require.Error(t, err)
 }

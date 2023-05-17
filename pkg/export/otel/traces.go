@@ -83,6 +83,10 @@ func newTracesReporter(ctx context.Context, cfg *TracesConfig) (*TracesReporter,
 	resources := resource.NewWithAttributes(
 		semconv.SchemaURL,
 		semconv.ServiceNameKey.String(svcName),
+		// SpanMetrics requires an extra attribute besides service name
+		// to generate the traces_target_info metric,
+		// so the service is visible in the ServicesList
+		attribute.Key("reporter").String(reporterName),
 	)
 
 	// Instantiate the OTLP HTTP traceExporter

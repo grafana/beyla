@@ -2,12 +2,12 @@
 package goexec
 
 import (
-	"context"
 	"fmt"
+
+	"github.com/grafana/ebpf-autoinstrument/pkg/exec"
 )
 
 type Offsets struct {
-	FileInfo FileInfo
 	// Funcs key: function name
 	Funcs map[string]FuncOffsets
 	Field FieldOffsets
@@ -22,14 +22,12 @@ type FieldOffsets map[string]any
 
 // InspectOffsets gets the memory addresses/offsets of the instrumenting function, as well as the required
 // parameters fields to be read from the eBPF code
-func InspectOffsets(ctx context.Context, finder ProcessFinder, funcs []string) (*Offsets, error) {
-	// Analyse executable ELF file and find instrumentation points
-	execElf, err := findExecELF(ctx, finder)
-	if err != nil {
-		return nil, fmt.Errorf("looking for executable ELF: %w", err)
+func InspectOffsets(execElf *exec.FileInfo, funcs []string) (*Offsets, error) {
+	if execElf == nil {
+		return nil, fmt.Errorf("executable not found")
 	}
-	defer execElf.ELF.Close()
 
+	// Analyse executable ELF file and find instrumentation points
 	found, err := instrumentationPoints(execElf.ELF, funcs)
 	if err != nil {
 		return nil, fmt.Errorf("finding instrumentation points: %w", err)
@@ -45,8 +43,7 @@ func InspectOffsets(ctx context.Context, finder ProcessFinder, funcs []string) (
 	}
 
 	return &Offsets{
-		FileInfo: execElf,
-		Funcs:    found,
-		Field:    structFieldOffsets,
+		Funcs: found,
+		Field: structFieldOffsets,
 	}, nil
 }

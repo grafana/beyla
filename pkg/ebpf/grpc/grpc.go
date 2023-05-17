@@ -73,7 +73,7 @@ func (p *Tracer) AddCloser(c ...io.Closer) {
 	p.closers = append(p.closers, c...)
 }
 
-func (p *Tracer) Probes() map[string]ebpfcommon.FunctionPrograms {
+func (p *Tracer) GoProbes() map[string]ebpfcommon.FunctionPrograms {
 	return map[string]ebpfcommon.FunctionPrograms{
 		"google.golang.org/grpc.(*Server).handleStream": {
 			Required: true,
@@ -90,6 +90,14 @@ func (p *Tracer) Probes() map[string]ebpfcommon.FunctionPrograms {
 			End:      p.bpfObjects.UprobeClientConnInvokeReturn,
 		},
 	}
+}
+
+func (p *Tracer) KProbes() map[string]ebpfcommon.FunctionPrograms {
+	return map[string]ebpfcommon.FunctionPrograms{}
+}
+
+func (p *Tracer) SocketFilters() []*ebpf.Program {
+	return []*ebpf.Program{}
 }
 
 func (p *Tracer) Run(ctx context.Context, eventsChan chan<- []ebpfcommon.HTTPRequestTrace) {

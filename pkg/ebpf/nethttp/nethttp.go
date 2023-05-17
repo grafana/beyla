@@ -72,7 +72,7 @@ func (p *Tracer) AddCloser(c ...io.Closer) {
 	p.closers = append(p.closers, c...)
 }
 
-func (p *Tracer) Probes() map[string]ebpfcommon.FunctionPrograms {
+func (p *Tracer) GoProbes() map[string]ebpfcommon.FunctionPrograms {
 	return map[string]ebpfcommon.FunctionPrograms{
 		"net/http.HandlerFunc.ServeHTTP": {
 			Required: true,
@@ -89,6 +89,14 @@ func (p *Tracer) Probes() map[string]ebpfcommon.FunctionPrograms {
 	}
 }
 
+func (p *Tracer) KProbes() map[string]ebpfcommon.FunctionPrograms {
+	return map[string]ebpfcommon.FunctionPrograms{}
+}
+
+func (p *Tracer) SocketFilters() []*ebpf.Program {
+	return []*ebpf.Program{}
+}
+
 func (p *Tracer) Run(ctx context.Context, eventsChan chan<- []ebpfcommon.HTTPRequestTrace) {
 	logger := slog.With("component", "nethttp.Tracer")
 	ebpfcommon.ForwardRingbuf(
@@ -102,7 +110,7 @@ type GinTracer struct {
 	Tracer
 }
 
-func (p *GinTracer) Probes() map[string]ebpfcommon.FunctionPrograms {
+func (p *GinTracer) GoProbes() map[string]ebpfcommon.FunctionPrograms {
 	return map[string]ebpfcommon.FunctionPrograms{
 		"github.com/gin-gonic/gin.(*Engine).ServeHTTP": {
 			Required: true,

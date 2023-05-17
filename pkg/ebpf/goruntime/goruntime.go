@@ -52,7 +52,7 @@ func (p *Tracer) AddCloser(c ...io.Closer) {
 	p.closers = append(p.closers, c...)
 }
 
-func (p *Tracer) Probes() map[string]ebpfcommon.FunctionPrograms {
+func (p *Tracer) GoProbes() map[string]ebpfcommon.FunctionPrograms {
 	return map[string]ebpfcommon.FunctionPrograms{
 		"runtime.newproc1": {
 			Start: p.bpfObjects.UprobeProcNewproc1,
@@ -62,6 +62,14 @@ func (p *Tracer) Probes() map[string]ebpfcommon.FunctionPrograms {
 			Start: p.bpfObjects.UprobeProcGoexit1,
 		},
 	}
+}
+
+func (p *Tracer) KProbes() map[string]ebpfcommon.FunctionPrograms {
+	return map[string]ebpfcommon.FunctionPrograms{}
+}
+
+func (p *Tracer) SocketFilters() []*ebpf.Program {
+	return []*ebpf.Program{}
 }
 
 func (p *Tracer) Run(ctx context.Context, eventsChan chan<- []ebpfcommon.HTTPRequestTrace) {

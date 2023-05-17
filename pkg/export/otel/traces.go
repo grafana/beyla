@@ -8,8 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/grafana/ebpf-autoinstrument/pkg/pipe/global"
-
 	"golang.org/x/exp/slog"
 
 	"github.com/grafana/ebpf-autoinstrument/pkg/transform"
@@ -18,7 +16,6 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
-	"go.opentelemetry.io/otel/sdk/resource"
 	"go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
 	trace2 "go.opentelemetry.io/otel/trace"
@@ -35,7 +32,9 @@ var clientSpans, _ = lru.New[uint64, []transform.HTTPRequestSpan](8192)
 const reporterName = "github.com/grafana/ebpf-autoinstrument"
 
 type TracesConfig struct {
-	ServiceName    string `yaml:"service_name" env:"OTEL_SERVICE_NAME"`
+	ServiceName      string `yaml:"service_name" env:"OTEL_SERVICE_NAME"`
+	ServiceNamespace string `yaml:"service_namespace" env:"SERVICE_NAMESPACE"`
+
 	Endpoint       string `yaml:"endpoint" env:"OTEL_EXPORTER_OTLP_ENDPOINT"`
 	TracesEndpoint string `yaml:"-" env:"OTEL_EXPORTER_OTLP_TRACES_ENDPOINT"`
 
@@ -73,21 +72,7 @@ func TracesReporterProvider(ctx context.Context, cfg TracesConfig) (node.Termina
 func newTracesReporter(ctx context.Context, cfg *TracesConfig) (*TracesReporter, error) {
 	r := TracesReporter{ctx: ctx}
 
-	// If service name is not explicitly set, we take the service name as set by the
-	// executable inspector
-	svcName := cfg.ServiceName
-	if svcName == "" {
-		svcName = global.Context(ctx).ServiceName
-	}
-	// TODO: make configurable
-	resources := resource.NewWithAttributes(
-		semconv.SchemaURL,
-		semconv.ServiceNameKey.String(svcName),
-		// SpanMetrics requires an extra attribute besides service name
-		// to generate the traces_target_info metric,
-		// so the service is visible in the ServicesList
-		attribute.Key("reporter").String(reporterName),
-	)
+	resources := otelResource(ctx, cfg.ServiceName, cfg.ServiceNamespace)
 
 	// Instantiate the OTLP HTTP traceExporter
 	topts, err := getTracesEndpointOptions(cfg)

@@ -33,6 +33,7 @@ services:
       PRINT_TRACES: "true"
       OPEN_PORT: "${OPEN_PORT}"
       EXECUTABLE_NAME: "${EXECUTABLE_NAME}"
+      SERVICE_NAMESPACE: "integration-test"
       METRICS_INTERVAL: "10ms"
       BPF_BATCH_TIMEOUT: "10ms"
       LOG_LEVEL: "DEBUG"

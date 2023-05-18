@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"syscall"
+	"unsafe"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
@@ -116,10 +117,19 @@ func attachSocketFilter(filter *ebpf.Program) (int, error) {
 	return -1, err
 }
 
+func isLittleEndian() bool {
+	var a uint16 = 1
+
+	return *(*byte)(unsafe.Pointer(&a)) == 1
+}
+
 func htons(a uint16) uint16 {
-	var arr [2]byte
-	binary.LittleEndian.PutUint16(arr[:], a)
-	return binary.BigEndian.Uint16(arr[:])
+	if isLittleEndian() {
+		var arr [2]byte
+		binary.LittleEndian.PutUint16(arr[:], a)
+		return binary.BigEndian.Uint16(arr[:])
+	}
+	return a
 }
 
 func (i *instrumenter) sockfilters(p Tracer) error {

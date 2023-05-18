@@ -20,6 +20,7 @@ import (
 	"unsafe"
 
 	ebpfcommon "github.com/grafana/ebpf-autoinstrument/pkg/ebpf/common"
+	"github.com/grafana/ebpf-autoinstrument/pkg/exec"
 
 	"github.com/cilium/ebpf"
 	"github.com/grafana/ebpf-autoinstrument/pkg/goexec"
@@ -43,7 +44,7 @@ func (p *Tracer) Load() (*ebpf.CollectionSpec, error) {
 	return loader()
 }
 
-func (p *Tracer) Constants(offsets *goexec.Offsets) map[string]any {
+func (p *Tracer) Constants(_ *exec.FileInfo, offsets *goexec.Offsets) map[string]any {
 	// Set the field offsets and the logLevel for grpc BPF program,
 	// as well as some other configuration constants
 	constants := map[string]any{

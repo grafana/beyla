@@ -17,6 +17,7 @@ import (
 
 	"github.com/grafana/ebpf-autoinstrument/pkg/ebpf/goruntime"
 	"github.com/grafana/ebpf-autoinstrument/pkg/ebpf/grpc"
+	"github.com/grafana/ebpf-autoinstrument/pkg/ebpf/httpfltr"
 
 	ebpfcommon "github.com/grafana/ebpf-autoinstrument/pkg/ebpf/common"
 
@@ -41,7 +42,7 @@ type Tracer interface {
 	Load() (*ebpf.CollectionSpec, error)
 	// Constants returns a map of constants to be overriden into the eBPF program.
 	// The key is the constant name and the value is the value to overwrite.
-	Constants(*goexec.Offsets) map[string]any
+	Constants(*exec.FileInfo, *goexec.Offsets) map[string]any
 	// BpfObjects that are created by the bpf2go compiler
 	BpfObjects() any
 	// GoProbes returns a map with the name of Go functions that need to be inspected
@@ -85,6 +86,10 @@ func TracerProvider(ctx context.Context, cfg ebpfcommon.TracerConfig) ([]node.St
 		if len(programs) == 0 {
 			return nil, errors.New("no instrumentable function found")
 		}
+	} else {
+		// We are not instrumenting a Go application, we override the programs
+		// list with the generic kernel/socket space filters
+		programs = []Tracer{&httpfltr.Tracer{Cfg: &cfg}}
 	}
 
 	// Instead of the executable file in the disk, we pass the /proc/<pid>/exec
@@ -117,7 +122,7 @@ func TracerProvider(ctx context.Context, cfg ebpfcommon.TracerConfig) ([]node.St
 			unmountBpfPinPath(pinPath)
 			return nil, fmt.Errorf("loading eBPF program: %w", err)
 		}
-		if err := spec.RewriteConstants(p.Constants(goffsets)); err != nil {
+		if err := spec.RewriteConstants(p.Constants(elfInfo, goffsets)); err != nil {
 			return nil, fmt.Errorf("rewriting BPF constants definition: %w", err)
 		}
 		if err := spec.LoadAndAssign(p.BpfObjects(), &ebpf.CollectionOptions{

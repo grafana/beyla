@@ -17,6 +17,7 @@ import (
 	"io"
 
 	ebpfcommon "github.com/grafana/ebpf-autoinstrument/pkg/ebpf/common"
+	"github.com/grafana/ebpf-autoinstrument/pkg/exec"
 	"golang.org/x/exp/slog"
 
 	"github.com/cilium/ebpf"
@@ -40,7 +41,7 @@ func (p *Tracer) Load() (*ebpf.CollectionSpec, error) {
 	return loader()
 }
 
-func (p *Tracer) Constants(_ *goexec.Offsets) map[string]any {
+func (p *Tracer) Constants(_ *exec.FileInfo, _ *goexec.Offsets) map[string]any {
 	return make(map[string]any)
 }
 

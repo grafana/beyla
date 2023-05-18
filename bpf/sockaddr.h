@@ -11,7 +11,7 @@
 typedef struct accept_args {
     u64 addr; // linux sock or socket address
     u64 accept_time;
-} accept_args_t;
+} sock_args_t;
 
 static __always_inline bool ipv4_mapped_ipv6(u64 addr_h, u64 addr_l) {
 #if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
@@ -23,29 +23,30 @@ static __always_inline bool ipv4_mapped_ipv6(u64 addr_h, u64 addr_l) {
 #endif
 }
 
-static __always_inline void parse_sock_info(accept_args_t *args, http_connection_info_t *info) {
-    struct sock* s;
-
-    struct socket *sock = (struct socket*)(args->addr);
-    BPF_CORE_READ_INTO(&s, sock, sk);
-
+static __always_inline void parse_sock_info(struct sock *s, http_connection_info_t *info) {
     short unsigned int skc_family;
     BPF_CORE_READ_INTO(&skc_family, s, __sk_common.skc_family);
     
     if (skc_family == AF_INET) {
+        // We must read only 4 bytes, our info storage for 
+        // source IP and destination IP is 8 bytes
+        u32 ip4_s_l;
+        u32 ip4_d_l;
         BPF_CORE_READ_INTO(&info->s_port, s, __sk_common.skc_num);
-        BPF_CORE_READ_INTO(&info->s_l, s, __sk_common.skc_rcv_saddr);
+        BPF_CORE_READ_INTO(&ip4_s_l, s, __sk_common.skc_rcv_saddr);        
         BPF_CORE_READ_INTO(&info->d_port, s, __sk_common.skc_dport);
         info->d_port = bpf_ntohs(info->d_port);
-        BPF_CORE_READ_INTO(&info->d_l, s, __sk_common.skc_daddr);
+        BPF_CORE_READ_INTO(&ip4_d_l, s, __sk_common.skc_daddr);
         info->flags |= F_HTTP_IP4;
+
+        info->s_l = ip4_s_l;
+        info->d_l = ip4_d_l;
 
         info->s_h = 0;
         info->d_h = 0;
     } else if (skc_family == AF_INET6) {
         u8 d_addr_v6[IP_V6_ADDR_LEN];
         u8 s_addr_v6[IP_V6_ADDR_LEN];
-
 
         BPF_CORE_READ_INTO(&info->s_port, s, __sk_common.skc_num);
         BPF_CORE_READ_INTO(&s_addr_v6, s, __sk_common.skc_v6_rcv_saddr.in6_u.u6_addr8);
@@ -79,6 +80,23 @@ static __always_inline void parse_sock_info(accept_args_t *args, http_connection
             info->flags |= F_HTTP_IP6;
         }
     }    
+}
+
+// We tag the server and client calls in flags to avoid mistaking a mutual connection between two
+// services as the same connection info. It would be almost impossible, but it might happen.
+static __always_inline void parse_accept_socket_info(sock_args_t *args, http_connection_info_t *info) {
+    struct sock *s;
+
+    struct socket *sock = (struct socket*)(args->addr);
+    BPF_CORE_READ_INTO(&s, sock, sk);
+
+    info->flags |= F_HTTP_SRV;
+    parse_sock_info(s, info);
+}
+
+static __always_inline void parse_connect_sock_info(sock_args_t *args, http_connection_info_t *info) {
+    info->flags |= F_HTTP_CLNT;
+    parse_sock_info((struct sock*)(args->addr), info);
 }
 
 #endif

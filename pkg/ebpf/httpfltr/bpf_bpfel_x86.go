@@ -13,11 +13,6 @@ import (
 	"github.com/cilium/ebpf"
 )
 
-type bpfAcceptArgsT struct {
-	Addr       uint64
-	AcceptTime uint64
-}
-
 type bpfHttpConnectionInfoT struct {
 	S_h    uint64
 	S_l    uint64
@@ -26,6 +21,11 @@ type bpfHttpConnectionInfoT struct {
 	S_port uint16
 	D_port uint16
 	Flags  uint32
+}
+
+type bpfSockArgsT struct {
+	Addr       uint64
+	AcceptTime uint64
 }
 
 // loadBpf returns the embedded CollectionSpec for bpf.
@@ -69,8 +69,10 @@ type bpfSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpfProgramSpecs struct {
+	KprobeTcpConnect    *ebpf.ProgramSpec `ebpf:"kprobe_tcp_connect"`
 	KretprobeSockAlloc  *ebpf.ProgramSpec `ebpf:"kretprobe_sock_alloc"`
 	KretprobeSysAccept4 *ebpf.ProgramSpec `ebpf:"kretprobe_sys_accept4"`
+	KretprobeSysConnect *ebpf.ProgramSpec `ebpf:"kretprobe_sys_connect"`
 }
 
 // bpfMapSpecs contains maps before they are loaded into the kernel.
@@ -78,6 +80,7 @@ type bpfProgramSpecs struct {
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpfMapSpecs struct {
 	ActiveAcceptArgs    *ebpf.MapSpec `ebpf:"active_accept_args"`
+	ActiveConnectArgs   *ebpf.MapSpec `ebpf:"active_connect_args"`
 	Events              *ebpf.MapSpec `ebpf:"events"`
 	FilteredConnections *ebpf.MapSpec `ebpf:"filtered_connections"`
 }
@@ -102,6 +105,7 @@ func (o *bpfObjects) Close() error {
 // It can be passed to loadBpfObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpfMaps struct {
 	ActiveAcceptArgs    *ebpf.Map `ebpf:"active_accept_args"`
+	ActiveConnectArgs   *ebpf.Map `ebpf:"active_connect_args"`
 	Events              *ebpf.Map `ebpf:"events"`
 	FilteredConnections *ebpf.Map `ebpf:"filtered_connections"`
 }
@@ -109,6 +113,7 @@ type bpfMaps struct {
 func (m *bpfMaps) Close() error {
 	return _BpfClose(
 		m.ActiveAcceptArgs,
+		m.ActiveConnectArgs,
 		m.Events,
 		m.FilteredConnections,
 	)
@@ -118,14 +123,18 @@ func (m *bpfMaps) Close() error {
 //
 // It can be passed to loadBpfObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpfPrograms struct {
+	KprobeTcpConnect    *ebpf.Program `ebpf:"kprobe_tcp_connect"`
 	KretprobeSockAlloc  *ebpf.Program `ebpf:"kretprobe_sock_alloc"`
 	KretprobeSysAccept4 *ebpf.Program `ebpf:"kretprobe_sys_accept4"`
+	KretprobeSysConnect *ebpf.Program `ebpf:"kretprobe_sys_connect"`
 }
 
 func (p *bpfPrograms) Close() error {
 	return _BpfClose(
+		p.KprobeTcpConnect,
 		p.KretprobeSockAlloc,
 		p.KretprobeSysAccept4,
+		p.KretprobeSysConnect,
 	)
 }
 

@@ -8,6 +8,9 @@
 #define F_HTTP_IP4 0x1
 #define F_HTTP_IP6 0x2
 
+#define F_HTTP_SRV  0x4
+#define F_HTTP_CLNT 0x8
+
 #define BUFFER_SIZE 192
 
 // Struct to keep information on the connections in flight 
@@ -51,8 +54,9 @@ struct user_pt_regs {
 
 #ifdef BPF_DEBUG
 static __always_inline void dbg_print_http_connection_info(http_connection_info_t *info) {
-    bpf_printk("[http info] s_l = %llx, s_h = %llx, d_l = %llx, d_h = %llx, s_port=%d, "
+    bpf_printk("[http %s] s_l = %llx, s_h = %llx, d_l = %llx, d_h = %llx, s_port=%d, "
                "d_port=%d, flags=%llx",
+               (info->flags & F_HTTP_SRV) ? "server" : "client",
                info->s_l,
                info->s_h,
                info->d_l,

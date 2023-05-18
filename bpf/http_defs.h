@@ -13,4 +13,7 @@
 // IANA suggests that the range should be 49152-65535, which is what Windows uses
 #define EPHEMERAL_PORT_MIN 32768
 
+// Taken from errno.h
+#define	EINPROGRESS	115	/* Operation now in progress */
+
 #endif

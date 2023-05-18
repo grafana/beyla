@@ -107,6 +107,10 @@ func TracerProvider(ctx context.Context, cfg ebpfcommon.TracerConfig) ([]node.St
 		return nil, fmt.Errorf("mounting BPF FS in %q: %w", cfg.BpfBaseDir, err)
 	}
 
+	if cfg.SystemWide {
+		log.Info("system wide instrumentation")
+	}
+
 	// startNodes contains the eBPF programs (HTTP, GRPC tracers...) plus a function
 	// that just waits for the passed context to finish before closing the BPF pin
 	// path
@@ -257,13 +261,17 @@ func inspect(ctx context.Context, cfg *ebpfcommon.TracerConfig, functions []stri
 	}
 	defer execElf.ELF.Close()
 
-	offsets, err := goexec.InspectOffsets(&execElf, functions)
-	if err != nil {
-		logger().Info("Go support not detected. Using only generic instrumentation.", "error", err)
-	}
+	var offsets *goexec.Offsets
 
-	parts := strings.Split(execElf.CmdExePath, "/")
-	global.Context(ctx).ServiceName = parts[len(parts)-1]
+	if !cfg.SystemWide {
+		offsets, err = goexec.InspectOffsets(&execElf, functions)
+		if err != nil {
+			logger().Info("Go support not detected. Using only generic instrumentation.", "error", err)
+		}
+
+		parts := strings.Split(execElf.CmdExePath, "/")
+		global.Context(ctx).ServiceName = parts[len(parts)-1]
+	}
 
 	return &execElf, offsets, nil
 }

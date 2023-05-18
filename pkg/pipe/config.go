@@ -65,13 +65,24 @@ func (e ConfigError) Error() string {
 	return string(e)
 }
 
-func (c *Config) Validate() error {
-	if c.EBPF.Port == 0 && c.EBPF.Exec == "" {
-		return ConfigError("missing EXECUTABLE_NAME or OPEN_PORT property")
+func (c *Config) validateInstrumentation() error {
+	if c.EBPF.Port == 0 && c.EBPF.Exec == "" && !c.EBPF.SystemWide {
+		return ConfigError("missing EXECUTABLE_NAME, OPEN_PORT or SYSTEM_WIDE property")
+	}
+	if (c.EBPF.Port != 0 || c.EBPF.Exec != "") && c.EBPF.SystemWide {
+		return ConfigError("use either SYSTEM_WIDE or any of EXECUTABLE_NAME and OPEN_PORT, not both")
 	}
 	if c.EBPF.BatchLength == 0 {
 		return ConfigError("BATCH_LENGTH must be at least 1")
 	}
+	return nil
+}
+
+func (c *Config) Validate() error {
+	if err := c.validateInstrumentation(); err != nil {
+		return err
+	}
+
 	if !c.Noop.Enabled() && !c.Printer.Enabled() &&
 		!c.Metrics.Enabled() && !c.Traces.Enabled() {
 		return ConfigError("at least one of the following properties must be set: " +

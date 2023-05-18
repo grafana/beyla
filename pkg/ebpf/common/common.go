@@ -22,9 +22,13 @@ type TracerConfig struct {
 	// different to zero), the value of the Exec property won't take effect.
 	// It's important to emphasize that if your process opens multiple HTTP/GRPC ports, the auto-instrumenter
 	// will instrument all the service calls in all the ports, not only the port specified here.
-	Port     int    `yaml:"open_port" env:"OPEN_PORT"`
-	LogLevel string `yaml:"log_level" env:"LOG_LEVEL"`
-	BpfDebug bool   `yaml:"bfp_debug" env:"BPF_DEBUG"`
+	Port int `yaml:"open_port" env:"OPEN_PORT"`
+	// SystemWide allows instrumentation of all HTTP (no gRPC) calls, incoming and outgoing at a system wide scale.
+	// No filtering per application will be done. Using this option may result in reduced quality of information
+	// gathered for certain languages, such as Golang.
+	SystemWide bool   `yaml:"system_wide" env:"SYSTEM_WIDE"`
+	LogLevel   string `yaml:"log_level" env:"LOG_LEVEL"`
+	BpfDebug   bool   `yaml:"bfp_debug" env:"BPF_DEBUG"`
 
 	// WakeupLen specifies how many messages need to be accumulated in the eBPF ringbuffer
 	// before sending a wakeup request.

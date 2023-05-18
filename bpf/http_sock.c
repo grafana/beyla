@@ -54,7 +54,7 @@ int BPF_KRETPROBE(kretprobe_sock_alloc, struct socket *sock) {
 // 
 // Note: A current limitation is that likely we won't capture the first accept request. The
 // process may have already reached accept, before the instrumenter has launched.
-SEC("kretprobe/__sys_accept4")
+SEC("kretprobe/sys_accept4")
 int BPF_KRETPROBE(kretprobe_sys_accept4, uint fd)
 {
     u64 id = bpf_get_current_pid_tgid();

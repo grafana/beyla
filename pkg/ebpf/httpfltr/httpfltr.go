@@ -30,6 +30,9 @@ func (p *Tracer) Load() (*ebpf.CollectionSpec, error) {
 }
 
 func (p *Tracer) Constants(finfo *exec.FileInfo, _ *goexec.Offsets) map[string]any {
+	if p.Cfg.SystemWide {
+		return nil
+	}
 	return map[string]any{"current_pid": finfo.Pid}
 }
 
@@ -42,12 +45,19 @@ func (p *Tracer) AddCloser(c ...io.Closer) {
 }
 
 func (p *Tracer) GoProbes() map[string]ebpfcommon.FunctionPrograms {
-	return map[string]ebpfcommon.FunctionPrograms{}
+	return nil
 }
 
 func (p *Tracer) KProbes() map[string]ebpfcommon.FunctionPrograms {
 	return map[string]ebpfcommon.FunctionPrograms{
-		"__sys_accept4": {
+		// Both sys accept probes use the same kretprobe.
+		// We could tap into __sys_accept4, but we might be more prone to
+		// issues with the internal kernel code changing.
+		"sys_accept": {
+			Required: true,
+			End:      p.bpfObjects.KretprobeSysAccept4,
+		},
+		"sys_accept4": {
 			Required: true,
 			End:      p.bpfObjects.KretprobeSysAccept4,
 		},
@@ -59,7 +69,8 @@ func (p *Tracer) KProbes() map[string]ebpfcommon.FunctionPrograms {
 }
 
 func (p *Tracer) SocketFilters() []*ebpf.Program {
-	return []*ebpf.Program{}
+	// No filter yet, this is will come in a follow-up change
+	return nil
 }
 
 func (p *Tracer) Run(ctx context.Context, eventsChan chan<- []ebpfcommon.HTTPRequestTrace) {

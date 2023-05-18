@@ -7,6 +7,10 @@
 
 volatile const s32 current_pid = 0;
 
+static __always_inline u32 pid_from_pid_tgid(u64 id) {
+    return (u32)(id >> 32);
+}
+
 static __always_inline u32 valid_pid(u64 id) {
     u32 pid = id >> 32;
     // If we are doing system wide instrumenting, accept all PIDs

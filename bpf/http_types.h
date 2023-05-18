@@ -24,7 +24,6 @@ typedef struct http_connection_info {
     u32 flags;
 } http_connection_info_t;
 
-
 // Here we keep the information that is sent on the ring buffer
 typedef struct http_info {
     http_connection_info_t info;
@@ -33,6 +32,7 @@ typedef struct http_info {
     u64 end_monotime_ns;
     u8  request_method;
     u16 response_status_code;
+    u32 pid; // we need this for system wide tracking so we can find the service name
     unsigned char buf[BUFFER_SIZE];
 } http_info_t;
 

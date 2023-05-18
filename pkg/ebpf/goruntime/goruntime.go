@@ -66,11 +66,11 @@ func (p *Tracer) GoProbes() map[string]ebpfcommon.FunctionPrograms {
 }
 
 func (p *Tracer) KProbes() map[string]ebpfcommon.FunctionPrograms {
-	return map[string]ebpfcommon.FunctionPrograms{}
+	return nil
 }
 
 func (p *Tracer) SocketFilters() []*ebpf.Program {
-	return []*ebpf.Program{}
+	return nil
 }
 
 func (p *Tracer) Run(ctx context.Context, eventsChan chan<- []ebpfcommon.HTTPRequestTrace) {

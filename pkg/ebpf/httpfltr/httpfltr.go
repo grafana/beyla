@@ -49,7 +49,7 @@ func (p *Tracer) GoProbes() map[string]ebpfcommon.FunctionPrograms {
 }
 
 func (p *Tracer) KProbes() map[string]ebpfcommon.FunctionPrograms {
-	return map[string]ebpfcommon.FunctionPrograms{
+	kprobes := map[string]ebpfcommon.FunctionPrograms{
 		// Both sys accept probes use the same kretprobe.
 		// We could tap into __sys_accept4, but we might be more prone to
 		// issues with the internal kernel code changing.
@@ -75,6 +75,21 @@ func (p *Tracer) KProbes() map[string]ebpfcommon.FunctionPrograms {
 			Start:    p.bpfObjects.KprobeTcpConnect,
 		},
 	}
+
+	// Track system exit so we can find program names of dead programs
+	// when we process the events
+	if p.Cfg.SystemWide {
+		kprobes["sys_exit"] = ebpfcommon.FunctionPrograms{
+			Required: true,
+			Start:    p.bpfObjects.KprobeSysExit,
+		}
+		kprobes["sys_exit_group"] = ebpfcommon.FunctionPrograms{
+			Required: true,
+			Start:    p.bpfObjects.KprobeSysExit,
+		}
+	}
+
+	return kprobes
 }
 
 func (p *Tracer) SocketFilters() []*ebpf.Program {

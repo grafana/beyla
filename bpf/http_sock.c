@@ -9,6 +9,7 @@
 
 char __license[] SEC("license") = "Dual MIT/GPL";
 
+// Temporary tracking of accept arguments
 struct {
     __uint(type, BPF_MAP_TYPE_HASH);
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
@@ -16,6 +17,7 @@ struct {
     __type(value, sock_args_t);
 } active_accept_args SEC(".maps");
 
+// Temporary tracking of connect arguments
 struct {
     __uint(type, BPF_MAP_TYPE_HASH);
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
@@ -23,12 +25,24 @@ struct {
     __type(value, sock_args_t);
 } active_connect_args SEC(".maps");
 
+// Keeps track of active accept or connect connection infos
+// From this table we extract the PID of the process and filter
+// HTTP calls we are not interested in
 struct {
-    __uint(type, BPF_MAP_TYPE_HASH);
+    __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __type(key, http_connection_info_t);
     __type(value, u64); // PID_TID group
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
 } filtered_connections SEC(".maps");
+
+// Helps us track process names of processes that exited.
+// Only used with system wide instrumentation
+struct {
+    __uint(type, BPF_MAP_TYPE_LRU_HASH);
+    __uint(max_entries, MAX_CONCURRENT_REQUESTS);
+    __type(key, u32);
+    __type(value, char[16]);
+} dead_pids SEC(".maps");
 
 // Used by accept to grab the sock details
 SEC("kretprobe/sock_alloc")
@@ -132,10 +146,10 @@ int BPF_KRETPROBE(kretprobe_sys_connect, int fd)
         return 0;
     }
 
-    bpf_dbg_printk("=== connect ret id=%d ===", id);
+    bpf_dbg_printk("=== connect ret id=%d, pid=%d ===", id, pid_from_pid_tgid(id));
 
-    // The file descriptor is the value returned from the accept4 syscall.
-    // If we got a negative file descriptor we don't have a connection
+    // The file descriptor is the value returned from the connect syscall.
+    // If we got a negative file descriptor we don't have a connection, unless we are in progress
     if (fd < 0 && (fd != -EINPROGRESS)) {
         goto cleanup;
     }
@@ -156,5 +170,25 @@ int BPF_KRETPROBE(kretprobe_sys_connect, int fd)
 
 cleanup:
     bpf_map_delete_elem(&active_connect_args, &id);
+    return 0;
+}
+
+SEC("kprobe/sys_exit")
+int BPF_KPROBE(kprobe_sys_exit, int status) {
+    u64 id = bpf_get_current_pid_tgid();
+
+    if (!valid_pid(id)) {
+        return 0;
+    }
+
+    u32 pid = pid_from_pid_tgid(id);
+
+    char comm[16];
+    bpf_get_current_comm(&comm, sizeof(comm));
+
+    bpf_dbg_printk("=== sys exit id=%d [%s]===", id, comm);
+
+    bpf_map_update_elem(&dead_pids, &pid, &comm, BPF_ANY); // On purpose BPF_ANY, we want to overwrite stale
+
     return 0;
 }

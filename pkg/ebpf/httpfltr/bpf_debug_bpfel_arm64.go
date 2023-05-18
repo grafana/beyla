@@ -69,6 +69,7 @@ type bpf_debugSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpf_debugProgramSpecs struct {
+	KprobeSysExit       *ebpf.ProgramSpec `ebpf:"kprobe_sys_exit"`
 	KprobeTcpConnect    *ebpf.ProgramSpec `ebpf:"kprobe_tcp_connect"`
 	KretprobeSockAlloc  *ebpf.ProgramSpec `ebpf:"kretprobe_sock_alloc"`
 	KretprobeSysAccept4 *ebpf.ProgramSpec `ebpf:"kretprobe_sys_accept4"`
@@ -81,6 +82,7 @@ type bpf_debugProgramSpecs struct {
 type bpf_debugMapSpecs struct {
 	ActiveAcceptArgs    *ebpf.MapSpec `ebpf:"active_accept_args"`
 	ActiveConnectArgs   *ebpf.MapSpec `ebpf:"active_connect_args"`
+	DeadPids            *ebpf.MapSpec `ebpf:"dead_pids"`
 	Events              *ebpf.MapSpec `ebpf:"events"`
 	FilteredConnections *ebpf.MapSpec `ebpf:"filtered_connections"`
 }
@@ -106,6 +108,7 @@ func (o *bpf_debugObjects) Close() error {
 type bpf_debugMaps struct {
 	ActiveAcceptArgs    *ebpf.Map `ebpf:"active_accept_args"`
 	ActiveConnectArgs   *ebpf.Map `ebpf:"active_connect_args"`
+	DeadPids            *ebpf.Map `ebpf:"dead_pids"`
 	Events              *ebpf.Map `ebpf:"events"`
 	FilteredConnections *ebpf.Map `ebpf:"filtered_connections"`
 }
@@ -114,6 +117,7 @@ func (m *bpf_debugMaps) Close() error {
 	return _Bpf_debugClose(
 		m.ActiveAcceptArgs,
 		m.ActiveConnectArgs,
+		m.DeadPids,
 		m.Events,
 		m.FilteredConnections,
 	)
@@ -123,6 +127,7 @@ func (m *bpf_debugMaps) Close() error {
 //
 // It can be passed to loadBpf_debugObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpf_debugPrograms struct {
+	KprobeSysExit       *ebpf.Program `ebpf:"kprobe_sys_exit"`
 	KprobeTcpConnect    *ebpf.Program `ebpf:"kprobe_tcp_connect"`
 	KretprobeSockAlloc  *ebpf.Program `ebpf:"kretprobe_sock_alloc"`
 	KretprobeSysAccept4 *ebpf.Program `ebpf:"kretprobe_sys_accept4"`
@@ -131,6 +136,7 @@ type bpf_debugPrograms struct {
 
 func (p *bpf_debugPrograms) Close() error {
 	return _Bpf_debugClose(
+		p.KprobeSysExit,
 		p.KprobeTcpConnect,
 		p.KretprobeSockAlloc,
 		p.KretprobeSysAccept4,

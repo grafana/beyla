@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"golang.org/x/exp/slog"
 
@@ -60,6 +61,11 @@ func main() {
 	bp.Run(ctx)
 
 	slog.Info("exiting auto-instrumenter")
+
+	if gc := os.Getenv("GOCOVERDIR"); gc != "" {
+		slog.Info("Waiting 1s to collect coverage data...")
+		time.Sleep(time.Second)
+	}
 }
 
 func loadConfig(configPath *string) *pipe.Config {

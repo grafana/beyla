@@ -26,7 +26,7 @@ type config struct {
 	// GinPort to listen connections using the Gin framework
 	GinPort int `env:"GIN_PORT" envDefault:"8081"`
 	// GorillaPort to listen connections using the Gorilla Mux framework
-	GorillaPort int    `env:"GIN_PORT" envDefault:"8082"`
+	GorillaPort int    `env:"GORILLA_PORT" envDefault:"8082"`
 	LogLevel    string `env:"LOG_LEVEL" envDefault:"INFO"`
 }
 

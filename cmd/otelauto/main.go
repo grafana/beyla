@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"golang.org/x/exp/slog"
 
@@ -46,14 +47,7 @@ func main() {
 	// Adding shutdown hook for graceful stop.
 	// We must register the hook before we launch the pipe build, otherwise we won't clean up if the
 	// child process isn't found.
-	ctx, cancel := context.WithCancel(context.Background())
-	exit := make(chan os.Signal, 1)
-	signal.Notify(exit, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
-	go func() {
-		sig := <-exit
-		slog.Debug("Received termination signal", "signal", sig.String())
-		cancel()
-	}()
+	ctx, _ := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 
 	slog.Info("creating instrumentation pipeline")
 	bp, err := pipe.Build(ctx, config)
@@ -67,6 +61,11 @@ func main() {
 	bp.Run(ctx)
 
 	slog.Info("exiting auto-instrumenter")
+
+	if gc := os.Getenv("GOCOVERDIR"); gc != "" {
+		slog.Info("Waiting 1s to collect coverage data...")
+		time.Sleep(time.Second)
+	}
 }
 
 func loadConfig(configPath *string) *pipe.Config {

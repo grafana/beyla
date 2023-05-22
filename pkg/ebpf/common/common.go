@@ -1,6 +1,7 @@
 package ebpfcommon
 
 import (
+	"io"
 	"time"
 
 	"github.com/cilium/ebpf"
@@ -56,4 +57,9 @@ type FunctionPrograms struct {
 	Required bool
 	Start    *ebpf.Program
 	End      *ebpf.Program
+}
+
+type Filter struct {
+	io.Closer
+	Fd int
 }

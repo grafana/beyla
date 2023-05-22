@@ -25,6 +25,7 @@ import (
 	"github.com/cilium/ebpf/link"
 
 	"github.com/cilium/ebpf"
+	"github.com/grafana/ebpf-autoinstrument/pkg/exec"
 	"github.com/grafana/ebpf-autoinstrument/pkg/goexec"
 
 	"github.com/grafana/ebpf-autoinstrument/pkg/ebpf/nethttp"
@@ -41,10 +42,16 @@ type Tracer interface {
 	Constants(*goexec.Offsets) map[string]any
 	// BpfObjects that are created by the bpf2go compiler
 	BpfObjects() any
-	// Probes returns a map with the name of the functions that need to be inspected
+	// GoProbes returns a map with the name of Go functions that need to be inspected
 	// in the executable, as well as the eBPF programs that optionally need to be
-	// inserted as the function start and end probes
-	Probes() map[string]ebpfcommon.FunctionPrograms
+	// inserted as the Go function start and end probes
+	GoProbes() map[string]ebpfcommon.FunctionPrograms
+	// KProbes returns a map with the name of the kernel probes that need to be
+	// tapped into. Start matches kprobe, End matches kretprobe
+	KProbes() map[string]ebpfcommon.FunctionPrograms
+	// Socket filters returns a list of programs that need to be loaded as a
+	// generic eBPF socket filter
+	SocketFilters() []*ebpf.Program
 	// Run will do the action of listening for eBPF traces and forward them
 	// periodically to the output channel.
 	Run(context.Context, chan<- []ebpfcommon.HTTPRequestTrace)
@@ -55,7 +62,7 @@ type Tracer interface {
 
 // TracerProvider returns a StartFuncCtx for each discovered eBPF traceable source: GRPC, HTTP...
 func TracerProvider(ctx context.Context, cfg ebpfcommon.TracerConfig) ([]node.StartFuncCtx[[]ebpfcommon.HTTPRequestTrace], error) { //nolint:all
-	log := slog.With("component", "ebpf.TracerProvider")
+	var log = logger()
 
 	// Each program is an eBPF source: net/http, grpc...
 	programs := []Tracer{
@@ -68,21 +75,23 @@ func TracerProvider(ctx context.Context, cfg ebpfcommon.TracerConfig) ([]node.St
 	// merging all the functions from all the programs, in order to do
 	// a complete inspection of the target executable
 	allFuncs := allFunctionNames(programs)
-	offsets, err := inspect(ctx, &cfg, allFuncs)
+	elfInfo, goffsets, err := inspect(ctx, &cfg, allFuncs)
 	if err != nil {
 		return nil, fmt.Errorf("inspecting offsets: %w", err)
 	}
 
-	programs = filterNotFoundPrograms(programs, offsets)
-	if len(programs) == 0 {
-		return nil, errors.New("no instrumentable function found")
+	if goffsets != nil {
+		programs = filterNotFoundPrograms(programs, goffsets)
+		if len(programs) == 0 {
+			return nil, errors.New("no instrumentable function found")
+		}
 	}
 
 	// Instead of the executable file in the disk, we pass the /proc/<pid>/exec
 	// to allow loading it from different container/pods in containerized environments
-	exe, err := link.OpenExecutable(offsets.FileInfo.ProExeLinkPath)
+	exe, err := link.OpenExecutable(elfInfo.ProExeLinkPath)
 	if err != nil {
-		return nil, fmt.Errorf("opening %q executable file: %w", offsets.FileInfo.ProExeLinkPath, err)
+		return nil, fmt.Errorf("opening %q executable file: %w", elfInfo.ProExeLinkPath, err)
 	}
 	if err := rlimit.RemoveMemlock(); err != nil {
 		return nil, fmt.Errorf("removing memory lock: %w", err)
@@ -108,7 +117,7 @@ func TracerProvider(ctx context.Context, cfg ebpfcommon.TracerConfig) ([]node.St
 			unmountBpfPinPath(pinPath)
 			return nil, fmt.Errorf("loading eBPF program: %w", err)
 		}
-		if err := spec.RewriteConstants(p.Constants(offsets)); err != nil {
+		if err := spec.RewriteConstants(p.Constants(goffsets)); err != nil {
 			return nil, fmt.Errorf("rewriting BPF constants definition: %w", err)
 		}
 		if err := spec.LoadAndAssign(p.BpfObjects(), &ebpf.CollectionOptions{
@@ -121,26 +130,30 @@ func TracerProvider(ctx context.Context, cfg ebpfcommon.TracerConfig) ([]node.St
 		}
 		i := instrumenter{
 			exe:     exe,
-			offsets: offsets,
+			offsets: goffsets,
 		}
-		// TODO: not running program if it does not find the required probes
-		for funcName, funcPrograms := range p.Probes() {
-			offs, ok := offsets.Funcs[funcName]
-			if !ok {
-				// the program function is not in the detected offsets. Ignoring
-				continue
-			}
-			slog.Debug("going to instrument function", "function", funcName, "offsets", offs, "programs", funcPrograms)
-			if err := i.instrument(ebpfcommon.Probe{
-				Offsets:  offs,
-				Programs: funcPrograms,
-			}); err != nil {
-				printVerifierErrorInfo(err)
-				unmountBpfPinPath(pinPath)
-				return nil, fmt.Errorf("instrumenting function %q: %w", funcName, err)
-			}
-			p.AddCloser(i.uprobes...)
+
+		//Go style Uprobes
+		if err := i.goprobes(p); err != nil {
+			printVerifierErrorInfo(err)
+			unmountBpfPinPath(pinPath)
+			return nil, err
 		}
+
+		//Kprobes to be used for native instrumentation points
+		if err := i.kprobes(p); err != nil {
+			printVerifierErrorInfo(err)
+			unmountBpfPinPath(pinPath)
+			return nil, err
+		}
+
+		//Sock filters support
+		if err := i.sockfilters(p); err != nil {
+			printVerifierErrorInfo(err)
+			unmountBpfPinPath(pinPath)
+			return nil, err
+		}
+
 		startNodes = append(startNodes, p.Run)
 	}
 
@@ -163,6 +176,8 @@ func mountBpfPinPath(cfg *ebpfcommon.TracerConfig) (string, error) {
 
 	return pinPath, bpfMount(pinPath)
 }
+
+func logger() *slog.Logger { return slog.With("component", "ebpf.TracerProvider") }
 
 // this will be just a start node that listens for the context cancellation and then
 // unmounts the BPF pinning path
@@ -195,7 +210,7 @@ func filterNotFoundPrograms(programs []Tracer, offsets *goexec.Offsets) []Tracer
 	funcs := offsets.Funcs
 programs:
 	for _, p := range programs {
-		for fn, fp := range p.Probes() {
+		for fn, fp := range p.GoProbes() {
 			if !fp.Required {
 				continue
 			}
@@ -212,7 +227,7 @@ func allFunctionNames(programs []Tracer) []string {
 	uniqueFunctions := map[string]struct{}{}
 	var functions []string
 	for _, p := range programs {
-		for funcName := range p.Probes() {
+		for funcName := range p.GoProbes() {
 			// avoid duplicating function names
 			if _, ok := uniqueFunctions[funcName]; !ok {
 				uniqueFunctions[funcName] = struct{}{}
@@ -223,57 +238,29 @@ func allFunctionNames(programs []Tracer) []string {
 	return functions
 }
 
-func inspect(ctx context.Context, cfg *ebpfcommon.TracerConfig, functions []string) (*goexec.Offsets, error) {
-	var finder goexec.ProcessFinder
+func inspect(ctx context.Context, cfg *ebpfcommon.TracerConfig, functions []string) (*exec.FileInfo, *goexec.Offsets, error) {
+	var finder exec.ProcessFinder
+
 	if cfg.Port != 0 {
-		finder = goexec.OwnedPort(cfg.Port)
+		finder = exec.OwnedPort(cfg.Port)
 	} else {
-		finder = goexec.ProcessNamed(cfg.Exec)
+		finder = exec.ProcessNamed(cfg.Exec)
 	}
-	offsets, err := goexec.InspectOffsets(ctx, finder, functions)
+	execElf, err := exec.FindExecELF(ctx, finder)
 	if err != nil {
-		return nil, fmt.Errorf("error analysing target executable: %w", err)
+		return nil, nil, fmt.Errorf("looking for executable ELF: %w", err)
+	}
+	defer execElf.ELF.Close()
+
+	offsets, err := goexec.InspectOffsets(&execElf, functions)
+	if err != nil {
+		logger().Info("Go support not detected. Using only generic instrumentation.", "error", err)
 	}
 
-	parts := strings.Split(offsets.FileInfo.CmdExePath, "/")
+	parts := strings.Split(execElf.CmdExePath, "/")
 	global.Context(ctx).ServiceName = parts[len(parts)-1]
 
-	return offsets, nil
-}
-
-type instrumenter struct {
-	offsets *goexec.Offsets
-	exe     *link.Executable
-	uprobes []io.Closer
-}
-
-func (i *instrumenter) instrument(probe ebpfcommon.Probe) error {
-	// Attach BPF programs as start and return probes
-	if probe.Programs.Start != nil {
-		up, err := i.exe.Uprobe("", probe.Programs.Start, &link.UprobeOptions{
-			Address: probe.Offsets.Start,
-		})
-		if err != nil {
-			return fmt.Errorf("setting uprobe: %w", err)
-		}
-		i.uprobes = append(i.uprobes, up)
-	}
-
-	if probe.Programs.End != nil {
-		// Go won't work with Uretprobes because of the way Go manages the stack. We need to set uprobes just before the return
-		// values: https://github.com/iovisor/bcc/issues/1320
-		for _, ret := range probe.Offsets.Returns {
-			urp, err := i.exe.Uprobe("", probe.Programs.End, &link.UprobeOptions{
-				Address: ret,
-			})
-			if err != nil {
-				return fmt.Errorf("setting uretprobe: %w", err)
-			}
-			i.uprobes = append(i.uprobes, urp)
-		}
-	}
-
-	return nil
+	return &execElf, offsets, nil
 }
 
 func printVerifierErrorInfo(err error) {

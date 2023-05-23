@@ -27,6 +27,7 @@ const (
 	HTTPClientRequestSize = "http_client_request_size_bytes"
 
 	serviceNameKey       = "service_name"
+	serviceNamespaceKey  = "service_namespace"
 	httpMethodKey        = "http_method"
 	httpRouteKey         = "http_route"
 	httpStatusCodeKey    = "http_status_code"
@@ -41,7 +42,9 @@ const (
 
 // TODO: TLS
 type PrometheusConfig struct {
-	ServiceName    string `yaml:"service_name" env:"PROMETHEUS_SERVICE_NAME"`
+	ServiceName      string `yaml:"service_name" env:"PROMETHEUS_SERVICE_NAME"`
+	ServiceNamespace string `yaml:"service_namespace" env:"SERVICE_NAMESPACE"`
+
 	Port           int    `yaml:"port" env:"PROMETHEUS_PORT"`
 	Path           string `yaml:"path" env:"PROMETHEUS_PATH"`
 	ReportTarget   bool   `yaml:"report_target" env:"METRICS_REPORT_TARGET"`
@@ -149,6 +152,9 @@ func (r *metricsReporter) observe(span *transform.HTTPRequestSpan) {
 // by labelValuesGRPC
 func labelNamesGRPC(cfg *PrometheusConfig) []string {
 	names := []string{serviceNameKey, rpcMethodKey, rpcSystemGRPC, rpcGRPCStatusCodeKey}
+	if cfg.ServiceNamespace != "" {
+		names = append(names, serviceNamespaceKey)
+	}
 	if cfg.ReportPeerInfo {
 		names = append(names, netSockPeerAddrKey)
 	}
@@ -160,6 +166,9 @@ func labelNamesGRPC(cfg *PrometheusConfig) []string {
 func (r *metricsReporter) labelValuesGRPC(span *transform.HTTPRequestSpan) []string {
 	// serviceNameKey, rpcMethodKey, rpcSystemGRPC, rpcGRPCStatusCodeKey
 	names := []string{r.cfg.ServiceName, span.Path, "grpc", strconv.Itoa(span.Status)}
+	if r.cfg.ServiceNamespace != "" {
+		names = append(names, r.cfg.ServiceNamespace)
+	}
 	if r.cfg.ReportPeerInfo {
 		names = append(names, span.Peer) // netSockPeerAddrKey
 	}
@@ -170,6 +179,9 @@ func (r *metricsReporter) labelValuesGRPC(span *transform.HTTPRequestSpan) []str
 // by labelValuesHTTPClient
 func labelNamesHTTPClient(cfg *PrometheusConfig) []string {
 	names := []string{serviceNameKey, httpMethodKey, httpStatusCodeKey}
+	if cfg.ServiceNamespace != "" {
+		names = append(names, serviceNamespaceKey)
+	}
 	if cfg.ReportPeerInfo {
 		names = append(names, netSockPeerNameKey, netSockPeerPortKey)
 	}
@@ -181,6 +193,9 @@ func labelNamesHTTPClient(cfg *PrometheusConfig) []string {
 func (r *metricsReporter) labelValuesHTTPClient(span *transform.HTTPRequestSpan) []string {
 	// httpMethodKey, httpStatusCodeKey
 	names := []string{r.cfg.ServiceName, span.Method, strconv.Itoa(span.Status)}
+	if r.cfg.ServiceNamespace != "" {
+		names = append(names, r.cfg.ServiceNamespace)
+	}
 	if r.cfg.ReportPeerInfo {
 		// netSockPeerAddrKey, netSockPeerPortKey
 		names = append(names, span.Host, strconv.Itoa(span.HostPort))
@@ -192,6 +207,9 @@ func (r *metricsReporter) labelValuesHTTPClient(span *transform.HTTPRequestSpan)
 // by labelValuesHTTP
 func labelNamesHTTP(cfg *PrometheusConfig, reportRoutes bool) []string {
 	names := []string{serviceNameKey, httpMethodKey, httpStatusCodeKey}
+	if cfg.ServiceNamespace != "" {
+		names = append(names, serviceNamespaceKey)
+	}
 	if cfg.ReportTarget {
 		names = append(names, httpTargetKey)
 	}
@@ -209,6 +227,9 @@ func labelNamesHTTP(cfg *PrometheusConfig, reportRoutes bool) []string {
 func (r *metricsReporter) labelValuesHTTP(span *transform.HTTPRequestSpan) []string {
 	// httpMethodKey, httpStatusCodeKey
 	names := []string{r.cfg.ServiceName, span.Method, strconv.Itoa(span.Status)}
+	if r.cfg.ServiceNamespace != "" {
+		names = append(names, r.cfg.ServiceNamespace)
+	}
 	if r.cfg.ReportTarget {
 		names = append(names, span.Path) // httpTargetKey
 	}

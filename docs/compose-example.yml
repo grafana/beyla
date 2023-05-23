@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  # Service to instrument. Change it by any
+  # other container at your convenience
+  goblog:
+    image: mariomac/goblog:dev
+    ports:
+      # Exposes port 18843, forwarding it to container port 8443
+      - "18443:8443"
+
+  autoinstrumenter:
+    image: grafana/ebpf-autoinstrument:latest
+    pid: "service:goblog"
+    cap_add:
+      - SYS_ADMIN
+    # if the above section fails, just remove it
+    # and uncomment the line below
+    # privileged: true
+    environment:
+      PRINT_TRACES: true
+      OPEN_PORT: 8443

@@ -23,6 +23,12 @@ type bpfHttpConnectionInfoT struct {
 	Flags  uint32
 }
 
+type bpfHttpConnectionMetadataT struct {
+	Id    uint64
+	Flags uint8
+	_     [7]byte
+}
+
 type bpfSockArgsT struct {
 	Addr       uint64
 	AcceptTime uint64
@@ -74,6 +80,7 @@ type bpfProgramSpecs struct {
 	KretprobeSockAlloc  *ebpf.ProgramSpec `ebpf:"kretprobe_sock_alloc"`
 	KretprobeSysAccept4 *ebpf.ProgramSpec `ebpf:"kretprobe_sys_accept4"`
 	KretprobeSysConnect *ebpf.ProgramSpec `ebpf:"kretprobe_sys_connect"`
+	SocketHttpFilter    *ebpf.ProgramSpec `ebpf:"socket__http_filter"`
 }
 
 // bpfMapSpecs contains maps before they are loaded into the kernel.
@@ -85,6 +92,7 @@ type bpfMapSpecs struct {
 	DeadPids            *ebpf.MapSpec `ebpf:"dead_pids"`
 	Events              *ebpf.MapSpec `ebpf:"events"`
 	FilteredConnections *ebpf.MapSpec `ebpf:"filtered_connections"`
+	HttpTcpSeq          *ebpf.MapSpec `ebpf:"http_tcp_seq"`
 }
 
 // bpfObjects contains all objects after they have been loaded into the kernel.
@@ -111,6 +119,7 @@ type bpfMaps struct {
 	DeadPids            *ebpf.Map `ebpf:"dead_pids"`
 	Events              *ebpf.Map `ebpf:"events"`
 	FilteredConnections *ebpf.Map `ebpf:"filtered_connections"`
+	HttpTcpSeq          *ebpf.Map `ebpf:"http_tcp_seq"`
 }
 
 func (m *bpfMaps) Close() error {
@@ -120,6 +129,7 @@ func (m *bpfMaps) Close() error {
 		m.DeadPids,
 		m.Events,
 		m.FilteredConnections,
+		m.HttpTcpSeq,
 	)
 }
 
@@ -132,6 +142,7 @@ type bpfPrograms struct {
 	KretprobeSockAlloc  *ebpf.Program `ebpf:"kretprobe_sock_alloc"`
 	KretprobeSysAccept4 *ebpf.Program `ebpf:"kretprobe_sys_accept4"`
 	KretprobeSysConnect *ebpf.Program `ebpf:"kretprobe_sys_connect"`
+	SocketHttpFilter    *ebpf.Program `ebpf:"socket__http_filter"`
 }
 
 func (p *bpfPrograms) Close() error {
@@ -141,6 +152,7 @@ func (p *bpfPrograms) Close() error {
 		p.KretprobeSockAlloc,
 		p.KretprobeSysAccept4,
 		p.KretprobeSysConnect,
+		p.SocketHttpFilter,
 	)
 }
 

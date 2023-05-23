@@ -16,4 +16,23 @@
 // Taken from errno.h
 #define	EINPROGRESS	115	/* Operation now in progress */
 
+// Taken from uapi/linux/if_ether.h
+#define ETH_HLEN	14          /* Total octets in header.       */
+#define ETH_P_IP	0x0800      /* Internet Protocol packet      */
+#define ETH_P_IPV6	0x86DD		/* IPv6 over bluebook            */
+
+
+// Taken from uapi/linux/in.h
+#define IPPROTO_TCP 6           /* Transmission Control Protocol */
+
+// Taken from linux/include/net/tcp.h
+#define TCPHDR_FIN 0x01
+#define TCPHDR_SYN 0x02
+#define TCPHDR_RST 0x04
+#define TCPHDR_PSH 0x08
+#define TCPHDR_ACK 0x10
+#define TCPHDR_URG 0x20
+#define TCPHDR_ECE 0x40
+#define TCPHDR_CWR 0x80
+
 #endif

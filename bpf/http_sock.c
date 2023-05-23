@@ -5,6 +5,7 @@
 #include "bpf_dbg.h"
 #include "pid.h"
 #include "sockaddr.h"
+#include "tcp_info.h"
 #include "ringbuf.h"
 
 char __license[] SEC("license") = "Dual MIT/GPL";
@@ -31,7 +32,7 @@ struct {
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __type(key, http_connection_info_t);
-    __type(value, u64); // PID_TID group
+    __type(value, http_connection_metadata_t); // PID_TID group and connection type
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
 } filtered_connections SEC(".maps");
 
@@ -43,6 +44,15 @@ struct {
     __type(key, u32);
     __type(value, char[16]);
 } dead_pids SEC(".maps");
+
+// Keeps track of the tcp sequences we've seen for a connection
+// With multiple network interfaces the same sequence can be seen again
+struct {
+    __uint(type, BPF_MAP_TYPE_HASH);
+    __type(key, http_connection_info_t);
+    __type(value, u32); // the TCP sequence
+    __uint(max_entries, MAX_CONCURRENT_REQUESTS);
+} http_tcp_seq SEC(".maps");
 
 // Used by accept to grab the sock details
 SEC("kretprobe/sock_alloc")
@@ -105,7 +115,11 @@ int BPF_KRETPROBE(kretprobe_sys_accept4, uint fd)
     sort_connection_info(&info);
     dbg_print_http_connection_info(&info);
 
-    bpf_map_update_elem(&filtered_connections, &info, &id, BPF_ANY); // On purpose BPF_ANY, we want to overwrite stale
+    http_connection_metadata_t meta = {};
+    meta.id = id;
+    meta.flags |= META_HTTP_SRV;
+
+    bpf_map_update_elem(&filtered_connections, &info, &meta, BPF_ANY); // On purpose BPF_ANY, we want to overwrite stale
 
 cleanup:
     bpf_map_delete_elem(&active_accept_args, &id);
@@ -166,7 +180,11 @@ int BPF_KRETPROBE(kretprobe_sys_connect, int fd)
     sort_connection_info(&info);
     dbg_print_http_connection_info(&info);
 
-    bpf_map_update_elem(&filtered_connections, &info, &id, BPF_ANY); // On purpose BPF_ANY, we want to overwrite stale
+    http_connection_metadata_t meta = {};
+    meta.id = id;
+    meta.flags |= META_HTTP_SRV;
+
+    bpf_map_update_elem(&filtered_connections, &info, &meta, BPF_ANY); // On purpose BPF_ANY, we want to overwrite stale
 
 cleanup:
     bpf_map_delete_elem(&active_connect_args, &id);
@@ -189,6 +207,58 @@ int BPF_KPROBE(kprobe_sys_exit, int status) {
     bpf_dbg_printk("=== sys exit id=%d [%s]===", id, comm);
 
     bpf_map_update_elem(&dead_pids, &pid, &comm, BPF_ANY); // On purpose BPF_ANY, we want to overwrite stale
+
+    return 0;
+}
+
+static __always_inline bool tcp_dup(http_connection_info_t *http, protocol_info_t *tcp) {
+    u32 *prev_seq = bpf_map_lookup_elem(&http_tcp_seq, http);
+
+    if (prev_seq && (*prev_seq == tcp->seq)) {
+        return true;
+    }
+
+    bpf_map_update_elem(&http_tcp_seq, http, &tcp->seq, BPF_ANY);
+    return false;
+}
+
+SEC("socket/http_filter")
+int socket__http_filter(struct __sk_buff *skb) {
+    protocol_info_t tcp = {};
+    http_connection_info_t http = {};
+
+    if (!read_sk_buff(skb, &tcp, &http)) {
+        return 0;
+    }
+
+    // if we are filtering by application, ignore the packets not for this connection
+    http_connection_metadata_t *meta = bpf_map_lookup_elem(&filtered_connections, &http);
+    if (!meta) {
+        return 0;
+    }
+
+    // ignore ACK packets
+    if (tcp_ack(&tcp)) {
+        return 0;
+    }
+
+    // ignore empty packets, unless it's TCP FIN or TCP RST
+    if (!tcp_close(&tcp) && tcp_empty(&tcp, skb)) {
+        return 0;
+    }
+
+    // ignore duplicate sequences
+    if (tcp_dup(&http, &tcp)) {
+        return 0;
+    }
+
+    // we don't support HTTPs yet, quick check for client HTTP calls being SSL, so we don't bother parsing
+    if (http.s_port == 443 || http.d_port == 443) {
+        return 0;
+    }
+
+    bpf_dbg_printk("=== http_filter ===");
+    dbg_print_http_connection_info(&http);
 
     return 0;
 }

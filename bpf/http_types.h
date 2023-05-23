@@ -8,8 +8,8 @@
 #define F_HTTP_IP4 0x1
 #define F_HTTP_IP6 0x2
 
-#define F_HTTP_SRV  0x4
-#define F_HTTP_CLNT 0x8
+#define META_HTTP_SRV  0x1
+#define META_HTTP_CLNT 0x2
 
 #define BUFFER_SIZE 192
 
@@ -39,6 +39,19 @@ typedef struct http_info {
     unsigned char buf[BUFFER_SIZE];
 } http_info_t;
 
+// Here we keep information on the packets passing through the socket filter
+typedef struct protocol_info {
+    u32 hdr_len;
+    u32 seq;
+    u8  flags;
+} protocol_info_t;
+
+// Here we keep information on the ongoing filtered connections, PID/TID and connection type
+typedef struct http_connection_metadata {
+    u64 id;
+    u8  flags;
+} http_connection_metadata_t;
+
 // Force emitting struct http_request_trace into the ELF for automatic creation of Golang struct
 const http_info_t *unused __attribute__((unused));
 
@@ -54,9 +67,8 @@ struct user_pt_regs {
 
 #ifdef BPF_DEBUG
 static __always_inline void dbg_print_http_connection_info(http_connection_info_t *info) {
-    bpf_printk("[http %s] s_l = %llx, s_h = %llx, d_l = %llx, d_h = %llx, s_port=%d, "
+    bpf_printk("[http] s_l = %llx, s_h = %llx, d_l = %llx, d_h = %llx, s_port=%d, "
                "d_port=%d, flags=%llx",
-               (info->flags & F_HTTP_SRV) ? "server" : "client",
                info->s_l,
                info->s_h,
                info->d_l,

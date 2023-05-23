@@ -39,8 +39,8 @@ static __always_inline void parse_sock_info(struct sock *s, http_connection_info
         BPF_CORE_READ_INTO(&ip4_d_l, s, __sk_common.skc_daddr);
         info->flags |= F_HTTP_IP4;
 
-        info->s_l = ip4_s_l;
-        info->d_l = ip4_d_l;
+        info->s_l = __bpf_htonl(ip4_s_l);
+        info->d_l = __bpf_htonl(ip4_d_l);
 
         info->s_h = 0;
         info->d_h = 0;
@@ -74,6 +74,11 @@ static __always_inline void parse_sock_info(struct sock *s, http_connection_info
             info->s_l = (u32)(info->s_l >> 32);
         }
 
+        info->s_l = __bpf_htonl(info->s_l);
+        info->d_l = __bpf_htonl(info->d_l);
+        info->s_h = __bpf_htonl(info->s_h);
+        info->d_h = __bpf_htonl(info->d_h);
+
         if (source_ip4 && target_ip4) {
             info->flags |= F_HTTP_IP4;
         } else {
@@ -90,12 +95,10 @@ static __always_inline void parse_accept_socket_info(sock_args_t *args, http_con
     struct socket *sock = (struct socket*)(args->addr);
     BPF_CORE_READ_INTO(&s, sock, sk);
 
-    info->flags |= F_HTTP_SRV;
     parse_sock_info(s, info);
 }
 
 static __always_inline void parse_connect_sock_info(sock_args_t *args, http_connection_info_t *info) {
-    info->flags |= F_HTTP_CLNT;
     parse_sock_info((struct sock*)(args->addr), info);
 }
 

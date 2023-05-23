@@ -7,8 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/grafana/ebpf-autoinstrument/pkg/pipe/global"
-
 	"golang.org/x/exp/slog"
 
 	"github.com/grafana/ebpf-autoinstrument/pkg/transform"
@@ -17,7 +15,6 @@ import (
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp"
 	"go.opentelemetry.io/otel/metric/instrument"
 	"go.opentelemetry.io/otel/sdk/metric"
-	"go.opentelemetry.io/otel/sdk/resource"
 	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
 )
 
@@ -31,7 +28,9 @@ const (
 )
 
 type MetricsConfig struct {
-	ServiceName     string        `yaml:"service_name" env:"OTEL_SERVICE_NAME"`
+	ServiceName      string `yaml:"service_name" env:"OTEL_SERVICE_NAME"`
+	ServiceNamespace string `yaml:"service_namespace" env:"SERVICE_NAMESPACE"`
+
 	Interval        time.Duration `yaml:"interval" env:"METRICS_INTERVAL"`
 	Endpoint        string        `yaml:"endpoint" env:"OTEL_EXPORTER_OTLP_ENDPOINT"`
 	MetricsEndpoint string        `yaml:"-" env:"OTEL_EXPORTER_OTLP_METRICS_ENDPOINT"`
@@ -78,17 +77,8 @@ func newMetricsReporter(ctx context.Context, cfg *MetricsConfig) (*MetricsReport
 		reportPeer:   cfg.ReportPeerInfo,
 	}
 
-	// If service name is not explicitly set, we take the service name as set by the
-	// executable inspector
-	svcName := cfg.ServiceName
-	if svcName == "" {
-		svcName = global.Context(ctx).ServiceName
-	}
-	// TODO: make configurable
-	resources := resource.NewWithAttributes(
-		semconv.SchemaURL,
-		semconv.ServiceNameKey.String(svcName),
-	)
+	resources := otelResource(ctx, cfg.ServiceName, cfg.ServiceNamespace)
+
 	opts, err := getMetricEndpointOptions(cfg)
 	if err != nil {
 		return nil, err

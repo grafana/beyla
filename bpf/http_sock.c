@@ -253,7 +253,7 @@ int socket__http_filter(struct __sk_buff *skb) {
     }
 
     // we don't support HTTPs yet, quick check for client HTTP calls being SSL, so we don't bother parsing
-    if (http.s_port == 443 || http.d_port == 443) {
+    if (http.s_port == DEFAULT_HTTPS_PORT || http.d_port == DEFAULT_HTTPS_PORT) {
         return 0;
     }
 

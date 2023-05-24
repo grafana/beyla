@@ -35,4 +35,6 @@
 #define TCPHDR_ECE 0x40
 #define TCPHDR_CWR 0x80
 
+#define DEFAULT_HTTPS_PORT 443
+
 #endif

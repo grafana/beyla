@@ -13,23 +13,15 @@ typedef struct accept_args {
     u64 accept_time;
 } sock_args_t;
 
-static __always_inline bool ipv4_mapped_ipv6(u64 addr_h, u64 addr_l) {
-#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
-    return (addr_h == 0 && ((u32)addr_l == 0xFFFF0000));
-#elif __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
-    return (addr_h == 0 && ((u32)(addr_l >> 32) == 0x0000FFFF));
-#else
-    return false
-#endif
-}
+static const u8 ip4ip6_prefix[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff};
 
-static __always_inline void parse_sock_info(struct sock *s, http_connection_info_t *info) {
+static __always_inline bool parse_sock_info(struct sock *s, http_connection_info_t *info) {
     short unsigned int skc_family;
     BPF_CORE_READ_INTO(&skc_family, s, __sk_common.skc_family);
     
+    // We always store the IP addresses in IPV6 format, simplifies the code and 
+    // it matches natively what our Golang userspace processing will require.
     if (skc_family == AF_INET) {
-        // We must read only 4 bytes, our info storage for 
-        // source IP and destination IP is 8 bytes
         u32 ip4_s_l;
         u32 ip4_d_l;
         BPF_CORE_READ_INTO(&info->s_port, s, __sk_common.skc_num);
@@ -37,66 +29,41 @@ static __always_inline void parse_sock_info(struct sock *s, http_connection_info
         BPF_CORE_READ_INTO(&info->d_port, s, __sk_common.skc_dport);
         info->d_port = bpf_ntohs(info->d_port);
         BPF_CORE_READ_INTO(&ip4_d_l, s, __sk_common.skc_daddr);
-        info->flags |= F_HTTP_IP4;
+        
+        __builtin_memcpy(info->s_addr, ip4ip6_prefix, sizeof(ip4ip6_prefix));
+        __builtin_memcpy(info->d_addr, ip4ip6_prefix, sizeof(ip4ip6_prefix));
+        __builtin_memcpy(info->s_addr + sizeof(ip4ip6_prefix), &ip4_s_l, sizeof(ip4_s_l));
+        __builtin_memcpy(info->d_addr + sizeof(ip4ip6_prefix), &ip4_d_l, sizeof(ip4_d_l));
 
-        info->s_l = ip4_s_l;
-        info->d_l = ip4_d_l;
-
-        info->s_h = 0;
-        info->d_h = 0;
+        return true;
     } else if (skc_family == AF_INET6) {
-        u8 d_addr_v6[IP_V6_ADDR_LEN];
-        u8 s_addr_v6[IP_V6_ADDR_LEN];
-
         BPF_CORE_READ_INTO(&info->s_port, s, __sk_common.skc_num);
-        BPF_CORE_READ_INTO(&s_addr_v6, s, __sk_common.skc_v6_rcv_saddr.in6_u.u6_addr8);
+        BPF_CORE_READ_INTO(&info->s_addr, s, __sk_common.skc_v6_rcv_saddr.in6_u.u6_addr8);
         BPF_CORE_READ_INTO(&info->d_port, s, __sk_common.skc_dport);
         info->d_port = bpf_ntohs(info->d_port);
-        BPF_CORE_READ_INTO(&d_addr_v6, s, __sk_common.skc_v6_daddr.in6_u.u6_addr8);
+        BPF_CORE_READ_INTO(&info->d_addr, s, __sk_common.skc_v6_daddr.in6_u.u6_addr8);
 
-        info->d_h = *((u64 *)&d_addr_v6[0]);
-        info->d_l = *((u64 *)&d_addr_v6[8]);
+        return true;
+    }  
 
-        info->s_h = *((u64 *)&s_addr_v6[0]);
-        info->s_l = *((u64 *)&s_addr_v6[8]);
-
-        bool source_ip4, target_ip4;
-
-        // We need to normalize as IP4 if we have an IP4 address mapped as IPV6,
-        // otherwise when we need to compare the TCP http connection info it may not match
-        if ((source_ip4 = ipv4_mapped_ipv6(info->d_h, info->d_l))) {
-            info->d_h = 0;
-            info->d_l = (u32)(info->d_l >> 32);
-        }
-
-        if ((target_ip4 = ipv4_mapped_ipv6(info->s_h, info->s_l))) {
-            info->s_h = 0;
-            info->s_l = (u32)(info->s_l >> 32);
-        }
-
-        if (source_ip4 && target_ip4) {
-            info->flags |= F_HTTP_IP4;
-        } else {
-            info->flags |= F_HTTP_IP6;
-        }
-    }    
+    return false;  
 }
 
 // We tag the server and client calls in flags to avoid mistaking a mutual connection between two
 // services as the same connection info. It would be almost impossible, but it might happen.
-static __always_inline void parse_accept_socket_info(sock_args_t *args, http_connection_info_t *info) {
+static __always_inline bool parse_accept_socket_info(sock_args_t *args, http_connection_info_t *info) {
     struct sock *s;
 
     struct socket *sock = (struct socket*)(args->addr);
     BPF_CORE_READ_INTO(&s, sock, sk);
 
     info->flags |= F_HTTP_SRV;
-    parse_sock_info(s, info);
+    return parse_sock_info(s, info);
 }
 
-static __always_inline void parse_connect_sock_info(sock_args_t *args, http_connection_info_t *info) {
+static __always_inline bool parse_connect_sock_info(sock_args_t *args, http_connection_info_t *info) {
     info->flags |= F_HTTP_CLNT;
-    parse_sock_info((struct sock*)(args->addr), info);
+    return parse_sock_info((struct sock*)(args->addr), info);
 }
 
 #endif

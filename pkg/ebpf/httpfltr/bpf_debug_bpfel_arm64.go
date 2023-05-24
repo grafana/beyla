@@ -14,10 +14,8 @@ import (
 )
 
 type bpf_debugHttpConnectionInfoT struct {
-	S_h    uint64
-	S_l    uint64
-	D_h    uint64
-	D_l    uint64
+	S_addr [16]uint8
+	D_addr [16]uint8
 	S_port uint16
 	D_port uint16
 	Flags  uint32

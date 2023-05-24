@@ -101,11 +101,12 @@ int BPF_KRETPROBE(kretprobe_sys_accept4, uint fd)
 
     http_connection_info_t info = {};
 
-    parse_accept_socket_info(args, &info);
-    sort_connection_info(&info);
-    dbg_print_http_connection_info(&info);
+    if (parse_accept_socket_info(args, &info)) {
+        sort_connection_info(&info);
+        dbg_print_http_connection_info(&info);
 
-    bpf_map_update_elem(&filtered_connections, &info, &id, BPF_ANY); // On purpose BPF_ANY, we want to overwrite stale
+        bpf_map_update_elem(&filtered_connections, &info, &id, BPF_ANY); // On purpose BPF_ANY, we want to overwrite stale
+    }
 
 cleanup:
     bpf_map_delete_elem(&active_accept_args, &id);
@@ -162,11 +163,12 @@ int BPF_KRETPROBE(kretprobe_sys_connect, int fd)
 
     http_connection_info_t info = {};
 
-    parse_connect_sock_info(args, &info);
-    sort_connection_info(&info);
-    dbg_print_http_connection_info(&info);
+    if (parse_connect_sock_info(args, &info)) {
+        sort_connection_info(&info);
+        dbg_print_http_connection_info(&info);
 
-    bpf_map_update_elem(&filtered_connections, &info, &id, BPF_ANY); // On purpose BPF_ANY, we want to overwrite stale
+        bpf_map_update_elem(&filtered_connections, &info, &id, BPF_ANY); // On purpose BPF_ANY, we want to overwrite stale
+    }
 
 cleanup:
     bpf_map_delete_elem(&active_connect_args, &id);

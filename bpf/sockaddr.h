@@ -22,7 +22,7 @@ static __always_inline bool parse_sock_info(struct sock *s, http_connection_info
     if (skc_family == AF_INET) {
         u32 ip4_s_l;
         u32 ip4_d_l;
-        BPF_CORE_READ_INTO(&info->s_port, s, __sk_common.skc_num);
+        BPF_CORE_READ_INTO(&info->s_port, s, __sk_common.skc_num); // weirdly not in network byte order
         BPF_CORE_READ_INTO(&ip4_s_l, s, __sk_common.skc_rcv_saddr);        
         BPF_CORE_READ_INTO(&info->d_port, s, __sk_common.skc_dport);
         info->d_port = bpf_ntohs(info->d_port);
@@ -35,7 +35,7 @@ static __always_inline bool parse_sock_info(struct sock *s, http_connection_info
 
         return true;
     } else if (skc_family == AF_INET6) {
-        BPF_CORE_READ_INTO(&info->s_port, s, __sk_common.skc_num);
+        BPF_CORE_READ_INTO(&info->s_port, s, __sk_common.skc_num); // weirdly not in network byte order
         BPF_CORE_READ_INTO(&info->s_addr, s, __sk_common.skc_v6_rcv_saddr.in6_u.u6_addr8);
         BPF_CORE_READ_INTO(&info->d_port, s, __sk_common.skc_dport);
         info->d_port = bpf_ntohs(info->d_port);

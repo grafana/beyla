@@ -5,7 +5,9 @@
 #include "bpf_helpers.h"
 #include "http_defs.h"
 
-#define BUFFER_SIZE 192
+#define PEEK_BUF_SIZE 8 // HTTP response is more than HTTP request, 'DELETE /' is largest.
+#define FULL_BUF_SIZE 160 // should be enough for most URLs, we may need to extend it if not. Must be multiple of 16 for the copy to work.
+#define BUF_COPY_BLOCK_SIZE 16
 
 // Struct to keep information on the connections in flight 
 // s = source, d = destination
@@ -24,10 +26,8 @@ typedef struct http_info {
     u64 req_start_monotime_ns;
     u64 start_monotime_ns;
     u64 end_monotime_ns;
-    u8  request_method;
-    u16 response_status_code;
     u32 pid; // we need this for system wide tracking so we can find the service name
-    unsigned char buf[BUFFER_SIZE];
+    unsigned char buf[FULL_BUF_SIZE];
 } http_info_t;
 
 // Here we keep information on the packets passing through the socket filter

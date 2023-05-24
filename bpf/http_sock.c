@@ -7,6 +7,7 @@
 #include "sockaddr.h"
 #include "tcp_info.h"
 #include "ringbuf.h"
+#include "http_sock.h"
 
 char __license[] SEC("license") = "Dual MIT/GPL";
 
@@ -231,12 +232,6 @@ int socket__http_filter(struct __sk_buff *skb) {
         return 0;
     }
 
-    // if we are filtering by application, ignore the packets not for this connection
-    http_connection_metadata_t *meta = bpf_map_lookup_elem(&filtered_connections, &http);
-    if (!meta) {
-        return 0;
-    }
-
     // ignore ACK packets
     if (tcp_ack(&tcp)) {
         return 0;
@@ -257,8 +252,34 @@ int socket__http_filter(struct __sk_buff *skb) {
         return 0;
     }
 
+    sort_connection_info(&http);
+    // if we are filtering by application, ignore the packets not for this connection
+    http_connection_metadata_t *meta = bpf_map_lookup_elem(&filtered_connections, &http);
+    if (!meta) {
+        return 0;
+    }
+
     bpf_dbg_printk("=== http_filter ===");
     dbg_print_http_connection_info(&http);
+
+    // we don't want to read the whole buffer for every packed that passes our checks, we read only a bit and check if it's trully HTTP request/response.
+    char buf[PEEK_BUF_SIZE] = {0};
+    bpf_skb_load_bytes(skb, tcp.hdr_len, (void *)buf, sizeof(buf));
+    // technically the read should be reversed, but eBPF verifier complains on read with variable length
+    u32 len = skb->len - tcp.hdr_len;
+    if (len > PEEK_BUF_SIZE) {
+        len = PEEK_BUF_SIZE;
+    }
+
+    bool is_request = false;
+    if (tcp_close(&tcp) || is_http(buf, len, &is_request)) {
+        http_info_t info = {0};
+        u32 full_len = skb->len - tcp.hdr_len;
+        if (full_len > FULL_BUF_SIZE) {
+            full_len = FULL_BUF_SIZE;
+        }
+        read_skb_bytes(skb, tcp.hdr_len, info.buf, full_len);
+    }
 
     return 0;
 }

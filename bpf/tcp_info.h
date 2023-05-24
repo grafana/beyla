@@ -63,7 +63,6 @@ static __always_inline bool read_sk_buff(struct __sk_buff *skb, protocol_info_t 
     case ETH_P_IPV6:
         bpf_skb_load_bytes(skb, ETH_HLEN + offsetof(struct ipv6hdr, nexthdr), &proto, sizeof(proto));
 
-
         bpf_skb_load_bytes(skb, ETH_HLEN + offsetof(struct ipv6hdr, saddr), &http->s_addr, sizeof(http->s_addr));
         bpf_skb_load_bytes(skb, ETH_HLEN + offsetof(struct ipv6hdr, daddr), &http->d_addr, sizeof(http->d_addr));
 
@@ -102,8 +101,6 @@ static __always_inline bool read_sk_buff(struct __sk_buff *skb, protocol_info_t 
     if ((skb->len - tcp->hdr_len) < 0) { // less than 0 is a packet we can't parse
         return false;
     }
-
-    sort_connection_info(http);
 
     return true;
 }

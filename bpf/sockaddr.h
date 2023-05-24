@@ -13,8 +13,6 @@ typedef struct accept_args {
     u64 accept_time;
 } sock_args_t;
 
-static const u8 ip4ip6_prefix[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff};
-
 static __always_inline bool parse_sock_info(struct sock *s, http_connection_info_t *info) {
     short unsigned int skc_family;
     BPF_CORE_READ_INTO(&skc_family, s, __sk_common.skc_family);

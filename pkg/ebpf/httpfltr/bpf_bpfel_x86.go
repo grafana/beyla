@@ -18,7 +18,6 @@ type bpfHttpConnectionInfoT struct {
 	D_addr [16]uint8
 	S_port uint16
 	D_port uint16
-	Flags  uint32
 }
 
 type bpfHttpConnectionMetadataT struct {

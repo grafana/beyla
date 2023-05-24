@@ -20,24 +20,6 @@ struct __tcphdr {
     __be16 urg_ptr;
 };
 
-static __always_inline void skb_read_ipv6(struct __sk_buff *skb, u32 offset, u64 *h, u64 *l) {
-    u32 tmp;
-
-    bpf_skb_load_bytes(skb, offset, &tmp, sizeof(tmp));
-    *h |= (u64)tmp << 32;
-    bpf_skb_load_bytes(skb, offset + 4, &tmp, sizeof(tmp));
-    *h |= (u64)tmp;
-
-    *h = __bpf_be64_to_cpu(*h); // technically same as __bpf_htonl, but for 64 bits
-
-    bpf_skb_load_bytes(skb, offset + 8, &tmp, sizeof(tmp));
-    *l |= (u64)tmp << 32;
-    bpf_skb_load_bytes(skb, offset + 12, &tmp, sizeof(tmp));
-    *l |= (u64)tmp;
-
-    *l = __bpf_be64_to_cpu(*l); // technically same as __bpf_htonl, but for 64 bits
-}
-
 static __always_inline bool read_sk_buff(struct __sk_buff *skb, protocol_info_t *tcp, http_connection_info_t *http) {
     // we read the protocol just like here linux/samples/bpf/parse_ldabs.c
     u16 h_proto;
@@ -67,24 +49,25 @@ static __always_inline bool read_sk_buff(struct __sk_buff *skb, protocol_info_t 
 
         u32 saddr;
         bpf_skb_load_bytes(skb, ETH_HLEN + offsetof(struct iphdr, saddr), &saddr, sizeof(saddr));
-        http->s_l = __bpf_htonl(saddr);
-
         u32 daddr;
         bpf_skb_load_bytes(skb, ETH_HLEN + offsetof(struct iphdr, daddr), &daddr, sizeof(daddr));
-        http->d_l = __bpf_htonl(daddr);
+
+        __builtin_memcpy(http->s_addr, ip4ip6_prefix, sizeof(ip4ip6_prefix));
+        __builtin_memcpy(http->d_addr, ip4ip6_prefix, sizeof(ip4ip6_prefix));
+        __builtin_memcpy(http->s_addr + sizeof(ip4ip6_prefix), &saddr, sizeof(saddr));
+        __builtin_memcpy(http->d_addr + sizeof(ip4ip6_prefix), &daddr, sizeof(daddr));
 
         tcp->hdr_len = ETH_HLEN + hdr_len;
-        http->flags |= F_HTTP_IP4;
         break;
     }
     case ETH_P_IPV6:
         bpf_skb_load_bytes(skb, ETH_HLEN + offsetof(struct ipv6hdr, nexthdr), &proto, sizeof(proto));
 
-        skb_read_ipv6(skb, ETH_HLEN + offsetof(struct ipv6hdr, saddr), &http->s_h, &http->s_l);
-        skb_read_ipv6(skb, ETH_HLEN + offsetof(struct ipv6hdr, daddr), &http->d_h, &http->d_l);
+
+        bpf_skb_load_bytes(skb, ETH_HLEN + offsetof(struct ipv6hdr, saddr), &http->s_addr, sizeof(http->s_addr));
+        bpf_skb_load_bytes(skb, ETH_HLEN + offsetof(struct ipv6hdr, daddr), &http->d_addr, sizeof(http->d_addr));
 
         tcp->hdr_len = ETH_HLEN + sizeof(struct ipv6hdr);
-        http->flags |= F_HTTP_IP6;
         break;
     default:
         return false;

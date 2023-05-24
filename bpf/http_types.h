@@ -46,6 +46,8 @@ typedef struct http_connection_metadata {
 // Force emitting struct http_request_trace into the ELF for automatic creation of Golang struct
 const http_info_t *unused __attribute__((unused));
 
+const u8 ip4ip6_prefix[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff};
+
 #if defined(__TARGET_ARCH_arm64)
 // Copied from Linux include/uapi/asm/ptrace.h to make ARM64 happy
 struct user_pt_regs {
@@ -58,8 +60,7 @@ struct user_pt_regs {
 
 #ifdef BPF_DEBUG
 static __always_inline void dbg_print_http_connection_info(http_connection_info_t *info) {
-    bpf_printk("[http] s_l = %llx, s_h = %llx, d_l = %llx, d_h = %llx, s_port=%d, "
-               "d_port=%d, flags=%llx",
+    bpf_printk("[http] s_l = %llx, s_h = %llx, d_l = %llx, d_h = %llx, s_port=%d, d_port=%d",
                *(u64 *)(&info->s_addr),
                *(u64 *)(&info->s_addr[8]),
                *(u64 *)(&info->d_addr),

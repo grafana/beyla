@@ -5,12 +5,6 @@
 #include "bpf_helpers.h"
 #include "http_defs.h"
 
-#define F_HTTP_IP4 0x1
-#define F_HTTP_IP6 0x2
-
-#define META_HTTP_SRV  0x1
-#define META_HTTP_CLNT 0x2
-
 #define BUFFER_SIZE 192
 
 // Struct to keep information on the connections in flight 
@@ -18,13 +12,10 @@
 // h = high word, l = low word
 // used as hashmap key, must be 4 byte aligned?
 typedef struct http_connection_info {
-    u64 s_h;
-    u64 s_l;
-    u64 d_h;
-    u64 d_l;
+    u8 s_addr[IP_V6_ADDR_LEN];
+    u8 d_addr[IP_V6_ADDR_LEN];
     u16 s_port;
     u16 d_port;
-    u32 flags;
 } http_connection_info_t;
 
 // Here we keep the information that is sent on the ring buffer
@@ -69,13 +60,12 @@ struct user_pt_regs {
 static __always_inline void dbg_print_http_connection_info(http_connection_info_t *info) {
     bpf_printk("[http] s_l = %llx, s_h = %llx, d_l = %llx, d_h = %llx, s_port=%d, "
                "d_port=%d, flags=%llx",
-               info->s_l,
-               info->s_h,
-               info->d_l,
-               info->d_h,
+               *(u64 *)(&info->s_addr),
+               *(u64 *)(&info->s_addr[8]),
+               *(u64 *)(&info->d_addr),
+               *(u64 *)(&info->d_addr[8]),
                info->s_port,
-               info->d_port,
-               info->flags);
+               info->d_port);
 }
 #else
 static __always_inline void dbg_print_http_connection_info(http_connection_info_t *info) {
@@ -106,8 +96,10 @@ static __always_inline void sort_connection_info(http_connection_info_t *info) {
         // Only sort if they are explicitly reversed, otherwise always sort source to be the larger
         // of the two ports
         __SWAP(u16, info->s_port, info->d_port);
-        __SWAP(u64, info->s_l, info->d_l);
-        __SWAP(u64, info->s_h, info->d_h);
+        u8 tmp_addr[IP_V6_ADDR_LEN];
+        __builtin_memcpy(tmp_addr, info->s_addr, sizeof(tmp_addr));
+        __builtin_memcpy(info->s_addr, info->d_addr, sizeof(info->s_addr));
+        __builtin_memcpy(info->d_addr, tmp_addr, sizeof(info->d_addr));
     }
 }
 

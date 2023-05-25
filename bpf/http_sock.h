@@ -123,7 +123,7 @@ static __always_inline void process_http_request(http_info_t *info, unsigned cha
 
 static __always_inline void process_http_response(http_info_t *info, unsigned char *buf, http_connection_metadata_t *meta) {
     info->pid = pid_from_pid_tgid(meta->id);
-    info->flags = meta->flags;
+    info->type = meta->type;
     info->status = 0;
     info->status += (buf[RESPONSE_STATUS_POS]     - '0') * 100;
     info->status += (buf[RESPONSE_STATUS_POS + 1] - '0') * 10;

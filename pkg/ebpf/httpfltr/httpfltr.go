@@ -120,10 +120,7 @@ func toRequestTrace(record *ringbuf.Record) (ebpfcommon.HTTPRequestTrace, error)
 		return result, err
 	}
 
-	result.Type = 1 // EventTypeHTTP
-	if event.Flags == 2 {
-		result.Type = 3 // EventTypeHTTPClient
-	}
+	result.Type = event.Type
 	result.StartMonotimeNs = event.StartMonotimeNs
 	result.GoStartMonotimeNs = event.StartMonotimeNs
 	result.EndMonotimeNs = event.EndMonotimeNs

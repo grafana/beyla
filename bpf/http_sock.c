@@ -99,7 +99,7 @@ int BPF_KRETPROBE(kretprobe_sys_accept4, uint fd)
 
         http_connection_metadata_t meta = {};
         meta.id = id;
-        meta.flags |= META_HTTP_SRV;
+        meta.type = EVENT_HTTP_REQUEST;
         bpf_map_update_elem(&filtered_connections, &info, &meta, BPF_ANY); // On purpose BPF_ANY, we want to overwrite stale
     }
 
@@ -164,7 +164,7 @@ int BPF_KRETPROBE(kretprobe_sys_connect, int fd)
 
         http_connection_metadata_t meta = {};
         meta.id = id;
-        meta.flags |= META_HTTP_CLNT;
+        meta.type = EVENT_HTTP_CLIENT;
         bpf_map_update_elem(&filtered_connections, &info, &meta, BPF_ANY); // On purpose BPF_ANY, we want to overwrite stale
     }
 

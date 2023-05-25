@@ -21,9 +21,9 @@ type bpf_debugConnectionInfoT struct {
 }
 
 type bpf_debugHttpConnectionMetadataT struct {
-	Id    uint64
-	Flags uint8
-	_     [7]byte
+	Id   uint64
+	Type uint8
+	_    [7]byte
 }
 
 type bpf_debugHttpInfoT struct {
@@ -34,7 +34,7 @@ type bpf_debugHttpInfoT struct {
 	Buf             [160]uint8
 	Pid             uint32
 	Status          uint16
-	Flags           uint8
+	Type            uint8
 	_               [1]byte
 }
 

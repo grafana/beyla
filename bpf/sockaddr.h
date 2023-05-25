@@ -13,7 +13,7 @@ typedef struct accept_args {
     u64 accept_time;
 } sock_args_t;
 
-static __always_inline bool parse_sock_info(struct sock *s, http_connection_info_t *info) {
+static __always_inline bool parse_sock_info(struct sock *s, connection_info_t *info) {
     short unsigned int skc_family;
     BPF_CORE_READ_INTO(&skc_family, s, __sk_common.skc_family);
     
@@ -49,7 +49,7 @@ static __always_inline bool parse_sock_info(struct sock *s, http_connection_info
 
 // We tag the server and client calls in flags to avoid mistaking a mutual connection between two
 // services as the same connection info. It would be almost impossible, but it might happen.
-static __always_inline bool parse_accept_socket_info(sock_args_t *args, http_connection_info_t *info) {
+static __always_inline bool parse_accept_socket_info(sock_args_t *args, connection_info_t *info) {
     struct sock *s;
 
     struct socket *sock = (struct socket*)(args->addr);
@@ -58,7 +58,7 @@ static __always_inline bool parse_accept_socket_info(sock_args_t *args, http_con
     return parse_sock_info(s, info);
 }
 
-static __always_inline bool parse_connect_sock_info(sock_args_t *args, http_connection_info_t *info) {
+static __always_inline bool parse_connect_sock_info(sock_args_t *args, connection_info_t *info) {
     return parse_sock_info((struct sock*)(args->addr), info);
 }
 

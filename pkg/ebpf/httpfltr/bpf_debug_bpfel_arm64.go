@@ -13,7 +13,7 @@ import (
 	"github.com/cilium/ebpf"
 )
 
-type bpf_debugHttpConnectionInfoT struct {
+type bpf_debugConnectionInfoT struct {
 	S_addr [16]uint8
 	D_addr [16]uint8
 	S_port uint16
@@ -27,7 +27,7 @@ type bpf_debugHttpConnectionMetadataT struct {
 }
 
 type bpf_debugHttpInfoT struct {
-	ConnInfo        bpf_debugHttpConnectionInfoT
+	ConnInfo        bpf_debugConnectionInfoT
 	_               [4]byte
 	StartMonotimeNs uint64
 	EndMonotimeNs   uint64

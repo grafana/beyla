@@ -91,7 +91,7 @@ int BPF_KRETPROBE(kretprobe_sys_accept4, uint fd)
         goto cleanup;
     }
 
-    http_connection_info_t info = {};
+    connection_info_t info = {};
 
     if (parse_accept_socket_info(args, &info)) {
         sort_connection_info(&info);
@@ -156,7 +156,7 @@ int BPF_KRETPROBE(kretprobe_sys_connect, int fd)
         goto cleanup;
     }
 
-    http_connection_info_t info = {};
+    connection_info_t info = {};
 
     if (parse_connect_sock_info(args, &info)) {
         sort_connection_info(&info);
@@ -196,9 +196,9 @@ int BPF_KPROBE(kprobe_sys_exit, int status) {
 SEC("socket/http_filter")
 int socket__http_filter(struct __sk_buff *skb) {
     protocol_info_t tcp = {};
-    http_connection_info_t http = {};
+    connection_info_t conn = {};
 
-    if (!read_sk_buff(skb, &tcp, &http)) {
+    if (!read_sk_buff(skb, &tcp, &conn)) {
         return 0;
     }
 
@@ -213,15 +213,15 @@ int socket__http_filter(struct __sk_buff *skb) {
     }
 
     // sorting must happen here, before we check or set dups
-    sort_connection_info(&http);
+    sort_connection_info(&conn);
 
     // ignore duplicate sequences
-    if (tcp_dup(&http, &tcp)) {
+    if (tcp_dup(&conn, &tcp)) {
         return 0;
     }
 
     // we don't support HTTPs yet, quick check for client HTTP calls being SSL, so we don't bother parsing
-    if (http.s_port == DEFAULT_HTTPS_PORT || http.d_port == DEFAULT_HTTPS_PORT) {
+    if (conn.s_port == DEFAULT_HTTPS_PORT || conn.d_port == DEFAULT_HTTPS_PORT) {
         return 0;
     }
 
@@ -235,12 +235,12 @@ int socket__http_filter(struct __sk_buff *skb) {
     }
 
     bpf_dbg_printk("=== http_filter len=%d %s ===", len, buf);
-    dbg_print_http_connection_info(&http);
+    dbg_print_http_connection_info(&conn);
 
     u8 packet_type = 0;
     if (is_http(buf, len, &packet_type) || tcp_close(&tcp)) { // we must check tcp_close second, a packet can be a close and a response
         http_info_t info = {0};
-        info.conn_info = http;
+        info.conn_info = conn;
 
         http_connection_metadata_t *meta = NULL;
         if (packet_type) {
@@ -251,7 +251,7 @@ int socket__http_filter(struct __sk_buff *skb) {
             read_skb_bytes(skb, tcp.hdr_len, info.buf, full_len);
             if (packet_type == PACKET_TYPE_RESPONSE) {
                 // if we are filtering by application, ignore the packets not for this connection
-                meta = bpf_map_lookup_elem(&filtered_connections, &http);
+                meta = bpf_map_lookup_elem(&filtered_connections, &conn);
                 if (!meta) {
                     return 0;
                 }

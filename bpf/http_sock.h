@@ -18,7 +18,7 @@
 // With multiple network interfaces the same sequence can be seen again
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, http_connection_info_t);
+    __type(key, connection_info_t);
     __type(value, u32); // the TCP sequence
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
 } http_tcp_seq SEC(".maps");
@@ -28,7 +28,7 @@ struct {
 // HTTP calls we are not interested in
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, http_connection_info_t);
+    __type(key, connection_info_t);
     __type(value, http_connection_metadata_t); // PID_TID group and connection type
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
 } filtered_connections SEC(".maps");
@@ -36,12 +36,12 @@ struct {
 // Keeps track of the ongoing http connections we match for request/response
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, http_connection_info_t);
+    __type(key, connection_info_t);
     __type(value, http_info_t);
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
 } ongoing_http SEC(".maps");
 
-static __always_inline bool tcp_dup(http_connection_info_t *http, protocol_info_t *tcp) {
+static __always_inline bool tcp_dup(connection_info_t *http, protocol_info_t *tcp) {
     u32 *prev_seq = bpf_map_lookup_elem(&http_tcp_seq, http);
 
     if (prev_seq && (*prev_seq == tcp->seq)) {

@@ -20,7 +20,7 @@ struct __tcphdr {
     __be16 urg_ptr;
 };
 
-static __always_inline bool read_sk_buff(struct __sk_buff *skb, protocol_info_t *tcp, http_connection_info_t *http) {
+static __always_inline bool read_sk_buff(struct __sk_buff *skb, protocol_info_t *tcp, connection_info_t *conn) {
     // we read the protocol just like here linux/samples/bpf/parse_ldabs.c
     u16 h_proto;
     bpf_skb_load_bytes(skb, offsetof(struct ethhdr, h_proto), &h_proto, sizeof(h_proto));
@@ -52,10 +52,10 @@ static __always_inline bool read_sk_buff(struct __sk_buff *skb, protocol_info_t 
         u32 daddr;
         bpf_skb_load_bytes(skb, ETH_HLEN + offsetof(struct iphdr, daddr), &daddr, sizeof(daddr));
 
-        __builtin_memcpy(http->s_addr, ip4ip6_prefix, sizeof(ip4ip6_prefix));
-        __builtin_memcpy(http->d_addr, ip4ip6_prefix, sizeof(ip4ip6_prefix));
-        __builtin_memcpy(http->s_addr + sizeof(ip4ip6_prefix), &saddr, sizeof(saddr));
-        __builtin_memcpy(http->d_addr + sizeof(ip4ip6_prefix), &daddr, sizeof(daddr));
+        __builtin_memcpy(conn->s_addr, ip4ip6_prefix, sizeof(ip4ip6_prefix));
+        __builtin_memcpy(conn->d_addr, ip4ip6_prefix, sizeof(ip4ip6_prefix));
+        __builtin_memcpy(conn->s_addr + sizeof(ip4ip6_prefix), &saddr, sizeof(saddr));
+        __builtin_memcpy(conn->d_addr + sizeof(ip4ip6_prefix), &daddr, sizeof(daddr));
 
         tcp->hdr_len = ETH_HLEN + hdr_len;
         break;
@@ -63,8 +63,8 @@ static __always_inline bool read_sk_buff(struct __sk_buff *skb, protocol_info_t 
     case ETH_P_IPV6:
         bpf_skb_load_bytes(skb, ETH_HLEN + offsetof(struct ipv6hdr, nexthdr), &proto, sizeof(proto));
 
-        bpf_skb_load_bytes(skb, ETH_HLEN + offsetof(struct ipv6hdr, saddr), &http->s_addr, sizeof(http->s_addr));
-        bpf_skb_load_bytes(skb, ETH_HLEN + offsetof(struct ipv6hdr, daddr), &http->d_addr, sizeof(http->d_addr));
+        bpf_skb_load_bytes(skb, ETH_HLEN + offsetof(struct ipv6hdr, saddr), &conn->s_addr, sizeof(conn->s_addr));
+        bpf_skb_load_bytes(skb, ETH_HLEN + offsetof(struct ipv6hdr, daddr), &conn->d_addr, sizeof(conn->d_addr));
 
         tcp->hdr_len = ETH_HLEN + sizeof(struct ipv6hdr);
         break;
@@ -78,10 +78,10 @@ static __always_inline bool read_sk_buff(struct __sk_buff *skb, protocol_info_t 
 
     u16 port;
     bpf_skb_load_bytes(skb, tcp->hdr_len + offsetof(struct __tcphdr, source), &port, sizeof(port));
-    http->s_port = __bpf_htons(port);
+    conn->s_port = __bpf_htons(port);
 
     bpf_skb_load_bytes(skb, tcp->hdr_len + offsetof(struct __tcphdr, dest), &port, sizeof(port));
-    http->d_port = __bpf_htons(port);
+    conn->d_port = __bpf_htons(port);
 
     u16 seq;
     bpf_skb_load_bytes(skb, tcp->hdr_len + offsetof(struct __tcphdr, seq), &seq, sizeof(seq));

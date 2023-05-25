@@ -17,11 +17,11 @@ typedef struct http_connection_info {
     u8 d_addr[IP_V6_ADDR_LEN];
     u16 s_port;
     u16 d_port;
-} http_connection_info_t;
+} connection_info_t;
 
 // Here we keep the information that is sent on the ring buffer
 typedef struct http_info {
-    http_connection_info_t conn_info;
+    connection_info_t conn_info;
     u64 start_monotime_ns;
     u64 end_monotime_ns;
     unsigned char buf[FULL_BUF_SIZE] __attribute__ ((aligned (8))); // ringbuffer memcpy complains unless this is 8 byte aligned
@@ -59,7 +59,7 @@ struct user_pt_regs {
 #endif
 
 #ifdef BPF_DEBUG
-static __always_inline void dbg_print_http_connection_info(http_connection_info_t *info) {
+static __always_inline void dbg_print_http_connection_info(connection_info_t *info) {
     bpf_printk("[http] s_h = %llx, s_l = %llx, d_h = %llx, d_l = %llx, s_port=%d, d_port=%d",
                *(u64 *)(&info->s_addr),
                *(u64 *)(&info->s_addr[8]),
@@ -69,7 +69,7 @@ static __always_inline void dbg_print_http_connection_info(http_connection_info_
                info->d_port);
 }
 #else
-static __always_inline void dbg_print_http_connection_info(http_connection_info_t *info) {
+static __always_inline void dbg_print_http_connection_info(connection_info_t *info) {
 }
 #endif
 
@@ -87,7 +87,7 @@ static __always_inline bool likely_ephemeral_port(u16 port) {
 // Since we track both send and receive connections, we need to sort the source and destination
 // pairs in a standardized way, we choose the server way of sorting, such that the ephemeral port
 // on the client is first.
-static __always_inline void sort_connection_info(http_connection_info_t *info) {
+static __always_inline void sort_connection_info(connection_info_t *info) {
     if (likely_ephemeral_port(info->s_port) && !likely_ephemeral_port(info->d_port)) {
         return;
     }

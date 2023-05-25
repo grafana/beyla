@@ -221,13 +221,6 @@ int socket__http_filter(struct __sk_buff *skb) {
         return 0;
     }
 
-    //u64 daddr = *(u64 *)(&conn.d_addr[8]);
-
-    //if (daddr != 0xe432a8c0ffff0000) {
-    //    return 0;
-    //}
-    
-
     // we don't support HTTPs yet, quick check for client HTTP calls being SSL, so we don't bother parsing
     if (conn.s_port == DEFAULT_HTTPS_PORT || conn.d_port == DEFAULT_HTTPS_PORT) {
         return 0;

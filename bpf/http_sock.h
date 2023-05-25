@@ -58,29 +58,18 @@ static __always_inline bool is_http(char *p, u32 len, u8 *packet_type) {
     }
 	//HTTP
 	if ((p[0] == 'H') && (p[1] == 'T') && (p[2] == 'T') && (p[3] == 'P')) {
-        *packet_type = PACKET_TYPE_RESPONSE;
-	}
-	//GET
-	if ((p[0] == 'G') && (p[1] == 'E') && (p[2] == 'T') && (p[3] == ' ') && (p[4] == '/')) {
+       *packet_type = PACKET_TYPE_RESPONSE;
+	} else if (
+        ((p[0] == 'G') && (p[1] == 'E') && (p[2] == 'T') && (p[3] == ' ') && (p[4] == '/')) ||                                                      // GET
+        ((p[0] == 'P') && (p[1] == 'O') && (p[2] == 'S') && (p[3] == 'T') && (p[4] == ' ') && (p[5] == '/')) ||                                     // POST
+        ((p[0] == 'P') && (p[1] == 'U') && (p[2] == 'T') && (p[3] == ' ') && (p[4] == '/')) ||                                                      // PUT
+        ((p[0] == 'P') && (p[1] == 'A') && (p[2] == 'T') && (p[3] == 'C') && (p[4] == 'H') && (p[5] == ' ') && (p[6] == '/')) ||                    // PATCH
+        ((p[0] == 'D') && (p[1] == 'E') && (p[2] == 'L') && (p[3] == 'E') && (p[4] == 'T') && (p[5] == 'E') && (p[6] == ' ') && (p[7] == '/')) ||   // DELETE
+        ((p[0] == 'H') && (p[1] == 'E') && (p[2] == 'A') && (p[3] == 'D') && (p[4] == ' ') && (p[5] == '/'))                                        // HEAD
+    ) {
 		*packet_type = PACKET_TYPE_REQUEST;
 	}
-	//POST
-	if ((p[0] == 'P') && (p[1] == 'O') && (p[2] == 'S') && (p[3] == 'T') && (p[4] == ' ') && (p[5] == '/')) {
-		*packet_type = PACKET_TYPE_REQUEST;
-	}
-	//PUT
-	if ((p[0] == 'P') && (p[1] == 'U') && (p[2] == 'T') && (p[3] == ' ') && (p[4] == '/')) {
-		*packet_type = PACKET_TYPE_REQUEST;
-	}
-	//DELETE
-	if ((p[0] == 'D') && (p[1] == 'E') && (p[2] == 'L') && (p[3] == 'E') && (p[4] == 'T') && (p[5] == 'E') && (p[6] == ' ') && (p[7] == '/')) {
-		*packet_type = PACKET_TYPE_REQUEST;
-	}
-	//HEAD
-	if ((p[0] == 'H') && (p[1] == 'E') && (p[2] == 'A') && (p[3] == 'D') && (p[4] == ' ') && (p[5] == '/')) {
-		*packet_type = PACKET_TYPE_REQUEST;
-	}
-    // OPTIONS ? we don't care IMO
+    // OPTIONS? do we care?
 
     return true;
 }
@@ -134,6 +123,7 @@ static __always_inline void process_http_request(http_info_t *info, unsigned cha
 
 static __always_inline void process_http_response(http_info_t *info, unsigned char *buf, http_connection_metadata_t *meta) {
     info->pid = pid_from_pid_tgid(meta->id);
+    info->flags = meta->flags;
     info->status = 0;
     info->status += (buf[RESPONSE_STATUS_POS]     - '0') * 100;
     info->status += (buf[RESPONSE_STATUS_POS + 1] - '0') * 10;
@@ -169,7 +159,6 @@ static __always_inline void process_http(http_info_t *in, protocol_info_t *tcp, 
 
         bpf_map_delete_elem(&ongoing_http, &info->conn_info);
         bpf_map_delete_elem(&filtered_connections, &info->conn_info);
-        bpf_map_delete_elem(&http_tcp_seq, &info->conn_info);
     }
 }
 

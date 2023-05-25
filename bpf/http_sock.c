@@ -241,13 +241,13 @@ int socket__http_filter(struct __sk_buff *skb) {
     if (is_http(buf, len, &packet_type) || tcp_close(&tcp)) { // we must check tcp_close second, a packet can be a close and a response
         http_info_t info = {0};
         info.conn_info = http;
-        u32 full_len = skb->len - tcp.hdr_len;
-        if (full_len > FULL_BUF_SIZE) {
-            full_len = FULL_BUF_SIZE;
-        }
 
         http_connection_metadata_t *meta = NULL;
         if (packet_type) {
+            u32 full_len = skb->len - tcp.hdr_len;
+            if (full_len > FULL_BUF_SIZE) {
+                full_len = FULL_BUF_SIZE;
+            }
             read_skb_bytes(skb, tcp.hdr_len, info.buf, full_len);
             if (packet_type == PACKET_TYPE_RESPONSE) {
                 // if we are filtering by application, ignore the packets not for this connection

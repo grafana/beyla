@@ -26,6 +26,18 @@ type bpfHttpConnectionMetadataT struct {
 	_     [7]byte
 }
 
+type bpfHttpInfoT struct {
+	ConnInfo        bpfHttpConnectionInfoT
+	_               [4]byte
+	StartMonotimeNs uint64
+	EndMonotimeNs   uint64
+	Buf             [160]uint8
+	Pid             uint32
+	Status          uint16
+	Flags           uint8
+	_               [1]byte
+}
+
 type bpfSockArgsT struct {
 	Addr       uint64
 	AcceptTime uint64
@@ -90,6 +102,7 @@ type bpfMapSpecs struct {
 	Events              *ebpf.MapSpec `ebpf:"events"`
 	FilteredConnections *ebpf.MapSpec `ebpf:"filtered_connections"`
 	HttpTcpSeq          *ebpf.MapSpec `ebpf:"http_tcp_seq"`
+	OngoingHttp         *ebpf.MapSpec `ebpf:"ongoing_http"`
 }
 
 // bpfObjects contains all objects after they have been loaded into the kernel.
@@ -117,6 +130,7 @@ type bpfMaps struct {
 	Events              *ebpf.Map `ebpf:"events"`
 	FilteredConnections *ebpf.Map `ebpf:"filtered_connections"`
 	HttpTcpSeq          *ebpf.Map `ebpf:"http_tcp_seq"`
+	OngoingHttp         *ebpf.Map `ebpf:"ongoing_http"`
 }
 
 func (m *bpfMaps) Close() error {
@@ -127,6 +141,7 @@ func (m *bpfMaps) Close() error {
 		m.Events,
 		m.FilteredConnections,
 		m.HttpTcpSeq,
+		m.OngoingHttp,
 	)
 }
 

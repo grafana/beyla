@@ -32,6 +32,7 @@ func TestForwardRingbuf_CapacityFull(t *testing.T) {
 		&TracerConfig{BatchLength: 10},
 		slog.With("test", "TestForwardRingbuf_CapacityFull"),
 		nil, // the source ring buffer can be null
+		nil,
 	)(context.Background(), forwardedMessages)
 
 	// WHEN it starts receiving trace events
@@ -72,6 +73,7 @@ func TestForwardRingbuf_Deadline(t *testing.T) {
 		&TracerConfig{BatchLength: 10, BatchTimeout: 20 * time.Millisecond},
 		slog.With("test", "TestForwardRingbuf_Deadline"),
 		nil, // the source ring buffer can be null
+		nil,
 	)(context.Background(), forwardedMessages)
 
 	// WHEN it receives, after a timeout, less events than its internal buffer
@@ -101,6 +103,7 @@ func TestForwardRingbuf_Close(t *testing.T) {
 		&TracerConfig{BatchLength: 10},
 		slog.With("test", "TestForwardRingbuf_Close"),
 		nil, // the source ring buffer can be null
+		nil,
 		&closable,
 	)(context.Background(), make(chan []HTTPRequestTrace, 100))
 

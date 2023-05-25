@@ -96,11 +96,11 @@ static __always_inline void read_skb_bytes(const void *skb, u32 offset, unsigned
         return;
     }
 
-    int tmp = (remainder < (BUF_COPY_BLOCK_SIZE - 1)) ? remainder : (BUF_COPY_BLOCK_SIZE - 1);
-    int tmp1 = (len < (b * BUF_COPY_BLOCK_SIZE)) ? 0 : len - (b * BUF_COPY_BLOCK_SIZE);
+    int remaining_to_copy = (remainder < (BUF_COPY_BLOCK_SIZE - 1)) ? remainder : (BUF_COPY_BLOCK_SIZE - 1);
+    int space_in_buffer = (len < (b * BUF_COPY_BLOCK_SIZE)) ? 0 : len - (b * BUF_COPY_BLOCK_SIZE);
 
-    if (tmp <= tmp1) {
-        bpf_skb_load_bytes(skb, offset, (void *)(&buf[b * BUF_COPY_BLOCK_SIZE]), tmp);
+    if (remaining_to_copy <= space_in_buffer) {
+        bpf_skb_load_bytes(skb, offset, (void *)(&buf[b * BUF_COPY_BLOCK_SIZE]), remaining_to_copy);
     }
 }
 
@@ -159,6 +159,7 @@ static __always_inline void process_http(http_info_t *in, protocol_info_t *tcp, 
 
         bpf_map_delete_elem(&ongoing_http, &info->conn_info);
         bpf_map_delete_elem(&filtered_connections, &info->conn_info);
+        // we don't explicitly clean-up the http_tcp_seq, we need to still monitor for dups
     }
 }
 

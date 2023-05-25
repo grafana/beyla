@@ -30,14 +30,15 @@ var readerFactory = func(rb *ebpf.Map) (ringBufReader, error) {
 }
 
 type ringBufForwarder struct {
-	cfg        *TracerConfig
-	logger     *slog.Logger
-	ringbuffer *ebpf.Map
-	closers    []io.Closer
-	events     []HTTPRequestTrace
-	evLen      int
-	access     sync.Mutex
-	ticker     *time.Ticker
+	cfg         *TracerConfig
+	logger      *slog.Logger
+	ringbuffer  *ebpf.Map
+	closers     []io.Closer
+	events      []HTTPRequestTrace
+	evLen       int
+	access      sync.Mutex
+	ticker      *time.Ticker
+	transformer func(*ringbuf.Record) (HTTPRequestTrace, error)
 }
 
 // ForwardRingbuf returns a function reads HTTPRequestTraces from an input ring buffer, accumulates them into an
@@ -47,10 +48,11 @@ func ForwardRingbuf(
 	cfg *TracerConfig,
 	logger *slog.Logger,
 	ringbuffer *ebpf.Map,
+	recordTransformer func(*ringbuf.Record) (HTTPRequestTrace, error),
 	closers ...io.Closer,
 ) node.StartFuncCtx[[]HTTPRequestTrace] {
 	rbf := ringBufForwarder{
-		cfg: cfg, logger: logger, ringbuffer: ringbuffer, closers: closers,
+		cfg: cfg, logger: logger, ringbuffer: ringbuffer, closers: closers, transformer: recordTransformer,
 	}
 	return rbf.readAndForward
 }
@@ -99,7 +101,11 @@ func (rbf *ringBufForwarder) readAndForward(ctx context.Context, eventsChan chan
 		}
 
 		rbf.access.Lock()
-		err = binary.Read(bytes.NewBuffer(record.RawSample), binary.LittleEndian, &rbf.events[rbf.evLen])
+		if rbf.transformer != nil {
+			rbf.events[rbf.evLen], err = rbf.transformer(&record)
+		} else {
+			err = binary.Read(bytes.NewBuffer(record.RawSample), binary.LittleEndian, &rbf.events[rbf.evLen])
+		}
 		if err != nil {
 			rbf.logger.Error("error parsing perf event", err)
 			rbf.access.Unlock()

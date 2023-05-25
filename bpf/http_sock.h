@@ -130,29 +130,10 @@ static __always_inline void process_http_response(http_info_t *info, unsigned ch
     info->status += (buf[RESPONSE_STATUS_POS + 2] - '0');
 }
 
-static __always_inline bool has_stale_info(http_info_t *info, u8 packet_type) {
-    return (packet_type == PACKET_TYPE_REQUEST) && (info->start_monotime_ns != 0);
-}
-
 static __always_inline void process_http(http_info_t *in, protocol_info_t *tcp, u8 packet_type, unsigned char *buf, http_connection_metadata_t *meta) {
     http_info_t *info = get_or_set_http_info(in, packet_type);
     if (!info) {
         return;
-    }
-
-    // we've seen double request or response, can happen on client requests
-    if (has_stale_info(info, packet_type)) {
-        http_info_t *trace = bpf_ringbuf_reserve(&events, sizeof(http_info_t), 0);
-
-        if (trace) {
-            bpf_dbg_printk("Sending trace %lx, stale state", info);
-
-            bpf_memcpy(trace, info, sizeof(http_info_t));
-            bpf_ringbuf_submit(trace, get_flags());
-        }
-
-        // Overwrite info with our incoming packet
-        bpf_memcpy(info, in, sizeof(http_info_t));
     }
 
     if (packet_type == PACKET_TYPE_REQUEST) {
@@ -176,7 +157,7 @@ static __always_inline void process_http(http_info_t *in, protocol_info_t *tcp, 
             }
 
             bpf_map_delete_elem(&ongoing_http, &info->conn_info);
-            bpf_map_delete_elem(&filtered_connections, &info->conn_info);
+            // bpf_map_delete_elem(&filtered_connections, &info->conn_info); // don't clean this up, doesn't work with keepalive
             // we don't explicitly clean-up the http_tcp_seq, we need to still monitor for dups
         }        
     }

@@ -27,16 +27,6 @@ struct {
     __type(value, sock_args_t);
 } active_connect_args SEC(".maps");
 
-// Keeps track of active accept or connect connection infos
-// From this table we extract the PID of the process and filter
-// HTTP calls we are not interested in
-struct {
-    __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, http_connection_info_t);
-    __type(value, http_connection_metadata_t); // PID_TID group and connection type
-    __uint(max_entries, MAX_CONCURRENT_REQUESTS);
-} filtered_connections SEC(".maps");
-
 // Helps us track process names of processes that exited.
 // Only used with system wide instrumentation
 struct {
@@ -45,15 +35,6 @@ struct {
     __type(key, u32);
     __type(value, char[16]);
 } dead_pids SEC(".maps");
-
-// Keeps track of the tcp sequences we've seen for a connection
-// With multiple network interfaces the same sequence can be seen again
-struct {
-    __uint(type, BPF_MAP_TYPE_HASH);
-    __type(key, http_connection_info_t);
-    __type(value, u32); // the TCP sequence
-    __uint(max_entries, MAX_CONCURRENT_REQUESTS);
-} http_tcp_seq SEC(".maps");
 
 // Used by accept to grab the sock details
 SEC("kretprobe/sock_alloc")
@@ -212,17 +193,6 @@ int BPF_KPROBE(kprobe_sys_exit, int status) {
     return 0;
 }
 
-static __always_inline bool tcp_dup(http_connection_info_t *http, protocol_info_t *tcp) {
-    u32 *prev_seq = bpf_map_lookup_elem(&http_tcp_seq, http);
-
-    if (prev_seq && (*prev_seq == tcp->seq)) {
-        return true;
-    }
-
-    bpf_map_update_elem(&http_tcp_seq, http, &tcp->seq, BPF_ANY);
-    return false;
-}
-
 SEC("socket/http_filter")
 int socket__http_filter(struct __sk_buff *skb) {
     protocol_info_t tcp = {};
@@ -242,6 +212,9 @@ int socket__http_filter(struct __sk_buff *skb) {
         return 0;
     }
 
+    // sorting must happen here, before we check or set dups
+    sort_connection_info(&http);
+
     // ignore duplicate sequences
     if (tcp_dup(&http, &tcp)) {
         return 0;
@@ -252,33 +225,39 @@ int socket__http_filter(struct __sk_buff *skb) {
         return 0;
     }
 
-    sort_connection_info(&http);
-    // if we are filtering by application, ignore the packets not for this connection
-    http_connection_metadata_t *meta = bpf_map_lookup_elem(&filtered_connections, &http);
-    if (!meta) {
-        return 0;
-    }
-
-    bpf_dbg_printk("=== http_filter ===");
-    dbg_print_http_connection_info(&http);
-
     // we don't want to read the whole buffer for every packed that passes our checks, we read only a bit and check if it's trully HTTP request/response.
-    char buf[PEEK_BUF_SIZE] = {0};
+    char buf[MIN_HTTP_SIZE] = {0};
     bpf_skb_load_bytes(skb, tcp.hdr_len, (void *)buf, sizeof(buf));
     // technically the read should be reversed, but eBPF verifier complains on read with variable length
     u32 len = skb->len - tcp.hdr_len;
-    if (len > PEEK_BUF_SIZE) {
-        len = PEEK_BUF_SIZE;
+    if (len > MIN_HTTP_SIZE) {
+        len = MIN_HTTP_SIZE;
     }
 
-    bool is_request = false;
-    if (tcp_close(&tcp) || is_http(buf, len, &is_request)) {
+    bpf_dbg_printk("=== http_filter len=%d %s ===", len, buf);
+    dbg_print_http_connection_info(&http);
+
+    u8 packet_type = 0;
+    if (is_http(buf, len, &packet_type) || tcp_close(&tcp)) { // we must check tcp_close second, a packet can be a close and a response
         http_info_t info = {0};
+        info.conn_info = http;
         u32 full_len = skb->len - tcp.hdr_len;
         if (full_len > FULL_BUF_SIZE) {
             full_len = FULL_BUF_SIZE;
         }
-        read_skb_bytes(skb, tcp.hdr_len, info.buf, full_len);
+
+        http_connection_metadata_t *meta = NULL;
+        if (packet_type) {
+            read_skb_bytes(skb, tcp.hdr_len, info.buf, full_len);
+            if (packet_type == PACKET_TYPE_RESPONSE) {
+                // if we are filtering by application, ignore the packets not for this connection
+                meta = bpf_map_lookup_elem(&filtered_connections, &http);
+                if (!meta) {
+                    return 0;
+                }
+            }
+        }
+        process_http(&info, &tcp, packet_type, info.buf, meta);
     }
 
     return 0;

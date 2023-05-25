@@ -90,6 +90,7 @@ static __always_inline bool read_sk_buff(struct __sk_buff *skb, protocol_info_t 
     u8 doff;
     bpf_skb_load_bytes(skb, tcp->hdr_len + offsetof(struct __tcphdr, ack_seq) + 4, &doff, sizeof(doff)); // read the first byte past __tcphdr->ack_seq, we can't do offsetof bit fields
     doff &= 0xf0; // clean-up res1
+    doff >>= 4; // move the upper 4 bits to low
     doff *= 4; // convert to bytes length
 
     tcp->hdr_len += doff;

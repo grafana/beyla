@@ -5,7 +5,6 @@
 #include "bpf_helpers.h"
 #include "http_defs.h"
 
-#define PEEK_BUF_SIZE 8 // HTTP response is more than HTTP request, 'DELETE /' is largest.
 #define FULL_BUF_SIZE 160 // should be enough for most URLs, we may need to extend it if not. Must be multiple of 16 for the copy to work.
 #define BUF_COPY_BLOCK_SIZE 16
 
@@ -22,12 +21,12 @@ typedef struct http_connection_info {
 
 // Here we keep the information that is sent on the ring buffer
 typedef struct http_info {
-    http_connection_info_t info;
-    u64 req_start_monotime_ns;
+    http_connection_info_t conn_info;
     u64 start_monotime_ns;
     u64 end_monotime_ns;
+    unsigned char buf[FULL_BUF_SIZE] __attribute__ ((aligned (8))); // ringbuffer memcpy complains unless this is 8 byte aligned
     u32 pid; // we need this for system wide tracking so we can find the service name
-    unsigned char buf[FULL_BUF_SIZE];
+    u16 status;
 } http_info_t;
 
 // Here we keep information on the packets passing through the socket filter
@@ -60,7 +59,7 @@ struct user_pt_regs {
 
 #ifdef BPF_DEBUG
 static __always_inline void dbg_print_http_connection_info(http_connection_info_t *info) {
-    bpf_printk("[http] s_l = %llx, s_h = %llx, d_l = %llx, d_h = %llx, s_port=%d, d_port=%d",
+    bpf_printk("[http] s_h = %llx, s_l = %llx, d_h = %llx, d_l = %llx, s_port=%d, d_port=%d",
                *(u64 *)(&info->s_addr),
                *(u64 *)(&info->s_addr[8]),
                *(u64 *)(&info->d_addr),

@@ -45,7 +45,7 @@ int BPF_KRETPROBE(kretprobe_sock_alloc, struct socket *sock) {
         return 0;
     }
 
-    bpf_dbg_printk("=== sock alloc %llx ===", id);
+    //bpf_dbg_printk("=== sock alloc %llx ===", id);
 
     u64 addr = (u64)sock;
 
@@ -77,7 +77,7 @@ int BPF_KRETPROBE(kretprobe_sys_accept4, uint fd)
         return 0;
     }
 
-    bpf_dbg_printk("=== accept 4 ret id=%d ===", id);
+    //bpf_dbg_printk("=== accept 4 ret id=%d ===", id);
 
     // The file descriptor is the value returned from the accept4 syscall.
     // If we got a negative file descriptor we don't have a connection
@@ -87,7 +87,7 @@ int BPF_KRETPROBE(kretprobe_sys_accept4, uint fd)
 
     sock_args_t *args = bpf_map_lookup_elem(&active_accept_args, &id);
     if (!args) {
-        bpf_dbg_printk("No sock info %d", id);
+        //bpf_dbg_printk("No sock info %d", id);
         goto cleanup;
     }
 
@@ -117,7 +117,7 @@ int BPF_KPROBE(kprobe_tcp_connect, struct sock *sk) {
         return 0;
     }
 
-    bpf_dbg_printk("=== tcp connect %llx ===", id);
+    //bpf_dbg_printk("=== tcp connect %llx ===", id);
 
     u64 addr = (u64)sk;
 
@@ -142,7 +142,7 @@ int BPF_KRETPROBE(kretprobe_sys_connect, int fd)
         return 0;
     }
 
-    bpf_dbg_printk("=== connect ret id=%d, pid=%d ===", id, pid_from_pid_tgid(id));
+    //bpf_dbg_printk("=== connect ret id=%d, pid=%d ===", id, pid_from_pid_tgid(id));
 
     // The file descriptor is the value returned from the connect syscall.
     // If we got a negative file descriptor we don't have a connection, unless we are in progress
@@ -152,13 +152,14 @@ int BPF_KRETPROBE(kretprobe_sys_connect, int fd)
 
     sock_args_t *args = bpf_map_lookup_elem(&active_connect_args, &id);
     if (!args) {
-        bpf_dbg_printk("No sock info %d", id);
+        //bpf_dbg_printk("No sock info %d", id);
         goto cleanup;
     }
 
     connection_info_t info = {};
 
     if (parse_connect_sock_info(args, &info)) {
+        bpf_dbg_printk("=== connect ret id=%d, pid=%d ===", id, pid_from_pid_tgid(id));
         sort_connection_info(&info);
         dbg_print_http_connection_info(&info);
 
@@ -186,7 +187,7 @@ int BPF_KPROBE(kprobe_sys_exit, int status) {
     char comm[16];
     bpf_get_current_comm(&comm, sizeof(comm));
 
-    bpf_dbg_printk("=== sys exit id=%d [%s]===", id, comm);
+    //bpf_dbg_printk("=== sys exit id=%d [%s]===", id, comm);
 
     bpf_map_update_elem(&dead_pids, &pid, &comm, BPF_ANY); // On purpose BPF_ANY, we want to overwrite stale
 
@@ -220,6 +221,13 @@ int socket__http_filter(struct __sk_buff *skb) {
         return 0;
     }
 
+    //u64 daddr = *(u64 *)(&conn.d_addr[8]);
+
+    //if (daddr != 0xe432a8c0ffff0000) {
+    //    return 0;
+    //}
+    
+
     // we don't support HTTPs yet, quick check for client HTTP calls being SSL, so we don't bother parsing
     if (conn.s_port == DEFAULT_HTTPS_PORT || conn.d_port == DEFAULT_HTTPS_PORT) {
         return 0;
@@ -252,6 +260,7 @@ int socket__http_filter(struct __sk_buff *skb) {
             if (packet_type == PACKET_TYPE_RESPONSE) {
                 // if we are filtering by application, ignore the packets not for this connection
                 meta = bpf_map_lookup_elem(&filtered_connections, &conn);
+                bpf_dbg_printk("Response meta=%lx", meta);
                 if (!meta) {
                     return 0;
                 }

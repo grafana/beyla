@@ -107,6 +107,22 @@ specify only one of the ports and the Autoinstrumenter **will instrument all the
 HTTP and GRPC requests in all the ports**. At the moment, there is no way to
 restrict the instrumentation only to the methods exposed through a single port.
 
+| YAML          | Env var       | Type    | Default |
+|---------------|---------------|---------|---------|
+| `system_wide` | `SYSTEM_WIDE` | boolean |  false  |
+
+
+Causes instrumentation of all processes on the system. This includes all
+existing processes, and all newly launched processes after the instrumentation
+has been enabled.
+
+This property is mutually exclusive with the `executable_name` and `open_port` properties.
+
+At present time only HTTP (non SSL) requests are tracked and there's no support for gRPC yet.
+When you are instrumenting Go applications, you should explicitly use `executable_name` or 
+`open_port` instead of `system_wide` instrumentation. The Go specific instrumentation is of higher
+fidelity and it incurs lesser overall overhead.
+
 | YAML         | Env var          | Type   | Default |
 |--------------|------------------|--------|---------|
 | `wakeup_len` | `BPF_WAKEUP_LEN` | string | (unset) |

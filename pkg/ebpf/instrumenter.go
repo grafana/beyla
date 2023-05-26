@@ -1,18 +1,13 @@
 package ebpf
 
 import (
-	"encoding/binary"
 	"fmt"
 	"io"
-	"syscall"
-	"unsafe"
 
-	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
 	ebpfcommon "github.com/grafana/ebpf-autoinstrument/pkg/ebpf/common"
 	"github.com/grafana/ebpf-autoinstrument/pkg/goexec"
 	"golang.org/x/exp/slog"
-	"golang.org/x/sys/unix"
 )
 
 type instrumenter struct {
@@ -102,34 +97,6 @@ func (i *instrumenter) kprobe(funcName string, programs ebpfcommon.FunctionProgr
 	}
 
 	return nil
-}
-
-func attachSocketFilter(filter *ebpf.Program) (int, error) {
-	fd, err := unix.Socket(unix.AF_PACKET, unix.SOCK_RAW, int(htons(unix.ETH_P_ALL)))
-	if err == nil {
-		ssoErr := syscall.SetsockoptInt(int(fd), unix.SOL_SOCKET, unix.SO_ATTACH_BPF, filter.FD())
-		if ssoErr != nil {
-			return -1, ssoErr
-		}
-		return int(fd), nil
-	}
-
-	return -1, err
-}
-
-func isLittleEndian() bool {
-	var a uint16 = 1
-
-	return *(*byte)(unsafe.Pointer(&a)) == 1
-}
-
-func htons(a uint16) uint16 {
-	if isLittleEndian() {
-		var arr [2]byte
-		binary.LittleEndian.PutUint16(arr[:], a)
-		return binary.BigEndian.Uint16(arr[:])
-	}
-	return a
 }
 
 func (i *instrumenter) sockfilters(p Tracer) error {

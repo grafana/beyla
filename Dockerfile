@@ -23,7 +23,7 @@ COPY Makefile Makefile
 RUN make compile
 
 # Create final image from minimal + built binary
-FROM busybox:1.35-glibc
+FROM busybox:1.36.1-glibc
 
 LABEL maintainer="Grafana Labs <hello@grafana.com>"
 

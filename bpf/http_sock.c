@@ -5,7 +5,9 @@
 #include "bpf_dbg.h"
 #include "pid.h"
 #include "sockaddr.h"
+#include "tcp_info.h"
 #include "ringbuf.h"
+#include "http_sock.h"
 
 char __license[] SEC("license") = "Dual MIT/GPL";
 
@@ -24,16 +26,6 @@ struct {
     __type(key, u64);
     __type(value, sock_args_t);
 } active_connect_args SEC(".maps");
-
-// Keeps track of active accept or connect connection infos
-// From this table we extract the PID of the process and filter
-// HTTP calls we are not interested in
-struct {
-    __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, http_connection_info_t);
-    __type(value, u64); // PID_TID group
-    __uint(max_entries, MAX_CONCURRENT_REQUESTS);
-} filtered_connections SEC(".maps");
 
 // Helps us track process names of processes that exited.
 // Only used with system wide instrumentation
@@ -85,7 +77,7 @@ int BPF_KRETPROBE(kretprobe_sys_accept4, uint fd)
         return 0;
     }
 
-    bpf_dbg_printk("=== accept 4 ret id=%d ===", id);
+    //bpf_dbg_printk("=== accept 4 ret id=%d ===", id);
 
     // The file descriptor is the value returned from the accept4 syscall.
     // If we got a negative file descriptor we don't have a connection
@@ -95,17 +87,20 @@ int BPF_KRETPROBE(kretprobe_sys_accept4, uint fd)
 
     sock_args_t *args = bpf_map_lookup_elem(&active_accept_args, &id);
     if (!args) {
-        bpf_dbg_printk("No sock info %d", id);
+        //bpf_dbg_printk("No sock info %d", id);
         goto cleanup;
     }
 
-    http_connection_info_t info = {};
+    connection_info_t info = {};
 
     if (parse_accept_socket_info(args, &info)) {
         sort_connection_info(&info);
         dbg_print_http_connection_info(&info);
 
-        bpf_map_update_elem(&filtered_connections, &info, &id, BPF_ANY); // On purpose BPF_ANY, we want to overwrite stale
+        http_connection_metadata_t meta = {};
+        meta.id = id;
+        meta.type = EVENT_HTTP_REQUEST;
+        bpf_map_update_elem(&filtered_connections, &info, &meta, BPF_ANY); // On purpose BPF_ANY, we want to overwrite stale
     }
 
 cleanup:
@@ -161,13 +156,17 @@ int BPF_KRETPROBE(kretprobe_sys_connect, int fd)
         goto cleanup;
     }
 
-    http_connection_info_t info = {};
+    connection_info_t info = {};
 
     if (parse_connect_sock_info(args, &info)) {
+        bpf_dbg_printk("=== connect ret id=%d, pid=%d ===", id, pid_from_pid_tgid(id));
         sort_connection_info(&info);
         dbg_print_http_connection_info(&info);
 
-        bpf_map_update_elem(&filtered_connections, &info, &id, BPF_ANY); // On purpose BPF_ANY, we want to overwrite stale
+        http_connection_metadata_t meta = {};
+        meta.id = id;
+        meta.type = EVENT_HTTP_CLIENT;
+        bpf_map_update_elem(&filtered_connections, &info, &meta, BPF_ANY); // On purpose BPF_ANY, we want to overwrite stale
     }
 
 cleanup:
@@ -191,6 +190,77 @@ int BPF_KPROBE(kprobe_sys_exit, int status) {
     bpf_dbg_printk("=== sys exit id=%d [%s]===", id, comm);
 
     bpf_map_update_elem(&dead_pids, &pid, &comm, BPF_ANY); // On purpose BPF_ANY, we want to overwrite stale
+
+    return 0;
+}
+
+SEC("socket/http_filter")
+int socket__http_filter(struct __sk_buff *skb) {
+    protocol_info_t tcp = {};
+    connection_info_t conn = {};
+
+    if (!read_sk_buff(skb, &tcp, &conn)) {
+        return 0;
+    }
+
+    // ignore ACK packets
+    if (tcp_ack(&tcp)) {
+        return 0;
+    }
+
+    // ignore empty packets, unless it's TCP FIN or TCP RST
+    if (!tcp_close(&tcp) && tcp_empty(&tcp, skb)) {
+        return 0;
+    }
+
+    // sorting must happen here, before we check or set dups
+    sort_connection_info(&conn);
+
+    // ignore duplicate sequences
+    if (tcp_dup(&conn, &tcp)) {
+        return 0;
+    }
+
+    // we don't support HTTPs yet, quick check for client HTTP calls being SSL, so we don't bother parsing
+    if (conn.s_port == DEFAULT_HTTPS_PORT || conn.d_port == DEFAULT_HTTPS_PORT) {
+        return 0;
+    }
+
+    // we don't want to read the whole buffer for every packed that passes our checks, we read only a bit and check if it's trully HTTP request/response.
+    char buf[MIN_HTTP_SIZE] = {0};
+    bpf_skb_load_bytes(skb, tcp.hdr_len, (void *)buf, sizeof(buf));
+    // technically the read should be reversed, but eBPF verifier complains on read with variable length
+    u32 len = skb->len - tcp.hdr_len;
+    if (len > MIN_HTTP_SIZE) {
+        len = MIN_HTTP_SIZE;
+    }
+
+    bpf_dbg_printk("=== http_filter len=%d %s ===", len, buf);
+    dbg_print_http_connection_info(&conn);
+
+    u8 packet_type = 0;
+    if (is_http(buf, len, &packet_type) || tcp_close(&tcp)) { // we must check tcp_close second, a packet can be a close and a response
+        http_info_t info = {0};
+        info.conn_info = conn;
+
+        http_connection_metadata_t *meta = NULL;
+        if (packet_type) {
+            u32 full_len = skb->len - tcp.hdr_len;
+            if (full_len > FULL_BUF_SIZE) {
+                full_len = FULL_BUF_SIZE;
+            }
+            read_skb_bytes(skb, tcp.hdr_len, info.buf, full_len);
+            if (packet_type == PACKET_TYPE_RESPONSE) {
+                // if we are filtering by application, ignore the packets not for this connection
+                meta = bpf_map_lookup_elem(&filtered_connections, &conn);
+                bpf_dbg_printk("Response meta=%lx", meta);
+                if (!meta) {
+                    return 0;
+                }
+            }
+        }
+        process_http(&info, &tcp, packet_type, info.buf, meta);
+    }
 
     return 0;
 }

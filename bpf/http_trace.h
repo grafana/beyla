@@ -15,12 +15,6 @@
 
 #include "utils.h"
 
-#define EVENT_HTTP_REQUEST 1
-#define EVENT_GRPC_REQUEST 2
-#define EVENT_HTTP_CLIENT  3
-#define EVENT_GRPC_CLIENT  4
-
-
 #define PATH_MAX_LEN 100
 #define METHOD_MAX_LEN 6 // Longest method: DELETE
 #define REMOTE_ADDR_MAX_LEN 50 // We need 48: 39(ip v6 max) + 1(: separator) + 7(port length max value 65535) + 1(null terminator)

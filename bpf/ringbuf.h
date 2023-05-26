@@ -3,6 +3,11 @@
 
 #include "utils.h"
 
+#define EVENT_HTTP_REQUEST 1
+#define EVENT_GRPC_REQUEST 2
+#define EVENT_HTTP_CLIENT  3
+#define EVENT_GRPC_CLIENT  4
+
 // setting here the following map definitions without pinning them to a global namespace
 // would lead that services running both HTTP and GRPC server would duplicate 
 // the events ringbuffer and goroutines map.

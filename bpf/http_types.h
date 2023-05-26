@@ -5,10 +5,8 @@
 #include "bpf_helpers.h"
 #include "http_defs.h"
 
-#define F_HTTP_SRV  0x4
-#define F_HTTP_CLNT 0x8
-
-#define BUFFER_SIZE 192
+#define FULL_BUF_SIZE 160 // should be enough for most URLs, we may need to extend it if not. Must be multiple of 16 for the copy to work.
+#define BUF_COPY_BLOCK_SIZE 16
 
 // Struct to keep information on the connections in flight 
 // s = source, d = destination
@@ -19,23 +17,36 @@ typedef struct http_connection_info {
     u8 d_addr[IP_V6_ADDR_LEN];
     u16 s_port;
     u16 d_port;
-    u32 flags;
-} http_connection_info_t;
+} connection_info_t;
 
 // Here we keep the information that is sent on the ring buffer
 typedef struct http_info {
-    http_connection_info_t info;
-    u64 req_start_monotime_ns;
+    connection_info_t conn_info;
     u64 start_monotime_ns;
     u64 end_monotime_ns;
-    u8  request_method;
-    u16 response_status_code;
+    unsigned char buf[FULL_BUF_SIZE] __attribute__ ((aligned (8))); // ringbuffer memcpy complains unless this is 8 byte aligned
     u32 pid; // we need this for system wide tracking so we can find the service name
-    unsigned char buf[BUFFER_SIZE];
+    u16 status;
+    u8 type;
 } http_info_t;
+
+// Here we keep information on the packets passing through the socket filter
+typedef struct protocol_info {
+    u32 hdr_len;
+    u32 seq;
+    u8  flags;
+} protocol_info_t;
+
+// Here we keep information on the ongoing filtered connections, PID/TID and connection type
+typedef struct http_connection_metadata {
+    u64 id;
+    u8  type;
+} http_connection_metadata_t;
 
 // Force emitting struct http_request_trace into the ELF for automatic creation of Golang struct
 const http_info_t *unused __attribute__((unused));
+
+const u8 ip4ip6_prefix[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff};
 
 #if defined(__TARGET_ARCH_arm64)
 // Copied from Linux include/uapi/asm/ptrace.h to make ARM64 happy
@@ -48,20 +59,17 @@ struct user_pt_regs {
 #endif
 
 #ifdef BPF_DEBUG
-static __always_inline void dbg_print_http_connection_info(http_connection_info_t *info) {
-    bpf_printk("[http %s] s_l = %llx, s_h = %llx, d_l = %llx, d_h = %llx, s_port=%d, "
-               "d_port=%d, flags=%llx",
-               (info->flags & F_HTTP_SRV) ? "server" : "client",
+static __always_inline void dbg_print_http_connection_info(connection_info_t *info) {
+    bpf_printk("[http] s_h = %llx, s_l = %llx, d_h = %llx, d_l = %llx, s_port=%d, d_port=%d",
                *(u64 *)(&info->s_addr),
                *(u64 *)(&info->s_addr[8]),
                *(u64 *)(&info->d_addr),
                *(u64 *)(&info->d_addr[8]),
                info->s_port,
-               info->d_port,
-               info->flags);
+               info->d_port);
 }
 #else
-static __always_inline void dbg_print_http_connection_info(http_connection_info_t *info) {
+static __always_inline void dbg_print_http_connection_info(connection_info_t *info) {
 }
 #endif
 
@@ -79,7 +87,7 @@ static __always_inline bool likely_ephemeral_port(u16 port) {
 // Since we track both send and receive connections, we need to sort the source and destination
 // pairs in a standardized way, we choose the server way of sorting, such that the ephemeral port
 // on the client is first.
-static __always_inline void sort_connection_info(http_connection_info_t *info) {
+static __always_inline void sort_connection_info(connection_info_t *info) {
     if (likely_ephemeral_port(info->s_port) && !likely_ephemeral_port(info->d_port)) {
         return;
     }

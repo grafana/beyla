@@ -1,14 +1,20 @@
 package httpfltr
 
 import (
+	"bytes"
 	"context"
+	"encoding/binary"
 	"io"
+	"net"
+	"strconv"
+	"strings"
 
 	ebpfcommon "github.com/grafana/ebpf-autoinstrument/pkg/ebpf/common"
 	"github.com/grafana/ebpf-autoinstrument/pkg/exec"
 	"golang.org/x/exp/slog"
 
 	"github.com/cilium/ebpf"
+	"github.com/cilium/ebpf/ringbuf"
 	"github.com/grafana/ebpf-autoinstrument/pkg/goexec"
 )
 
@@ -93,14 +99,75 @@ func (p *Tracer) KProbes() map[string]ebpfcommon.FunctionPrograms {
 }
 
 func (p *Tracer) SocketFilters() []*ebpf.Program {
-	// No filter yet, this is will come in a follow-up change
-	return nil
+	return []*ebpf.Program{p.bpfObjects.SocketHttpFilter}
 }
 
 func (p *Tracer) Run(ctx context.Context, eventsChan chan<- []ebpfcommon.HTTPRequestTrace) {
 	logger := slog.With("component", "httpfltr.Tracer")
 	ebpfcommon.ForwardRingbuf(
-		p.Cfg, logger, p.bpfObjects.Events,
+		p.Cfg, logger, p.bpfObjects.Events, toRequestTrace,
 		append(p.closers, &p.bpfObjects)...,
 	)(ctx, eventsChan)
+}
+
+func toRequestTrace(record *ringbuf.Record) (ebpfcommon.HTTPRequestTrace, error) {
+	var event bpfHttpInfoT
+	result := ebpfcommon.HTTPRequestTrace{}
+
+	err := binary.Read(bytes.NewBuffer(record.RawSample), binary.LittleEndian, &event)
+	if err != nil {
+		slog.Error("Error reading generic HTTP event", err)
+		return result, err
+	}
+
+	result.Type = event.Type
+	result.StartMonotimeNs = event.StartMonotimeNs
+	result.GoStartMonotimeNs = event.StartMonotimeNs
+	result.EndMonotimeNs = event.EndMonotimeNs
+	result.Status = event.Status
+
+	source, target := event.getHostInfo()
+	copy(result.Host[:], ([]byte(target)))
+	copy(result.RemoteAddr[:], ([]byte(source)))
+	copy(result.Method[:], ([]byte(event.getMethod())))
+	copy(result.Path[:], ([]byte(event.getURL())))
+
+	return result, nil
+}
+
+func (event *bpfHttpInfoT) getURL() string {
+	buf := string(event.Buf[:])
+	space := strings.Index(buf, " ")
+	if space < 0 {
+		return ""
+	}
+	nextSpace := strings.Index(buf[space+1:], " ")
+	if nextSpace < 0 {
+		return ""
+	}
+
+	return buf[space+1 : nextSpace+space+1]
+}
+
+func (event *bpfHttpInfoT) getMethod() string {
+	buf := string(event.Buf[:])
+	space := strings.Index(buf, " ")
+	if space < 0 {
+		return ""
+	}
+
+	return buf[:space]
+}
+
+func formatHost(ip net.IP, port uint16) string {
+	return ip.String() + ":" + strconv.FormatUint(uint64(port), 10) + "\x00"
+}
+
+func (event *bpfHttpInfoT) getHostInfo() (source, target string) {
+	src := make(net.IP, net.IPv6len)
+	dst := make(net.IP, net.IPv6len)
+	copy(src, event.ConnInfo.S_addr[:])
+	copy(dst, event.ConnInfo.D_addr[:])
+
+	return formatHost(src, event.ConnInfo.S_port), formatHost(dst, event.ConnInfo.D_port)
 }

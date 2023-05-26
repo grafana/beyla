@@ -2,12 +2,10 @@ package ebpfcommon
 
 import (
 	"io"
-	"syscall"
 	"time"
 
 	"github.com/cilium/ebpf"
 	"github.com/grafana/ebpf-autoinstrument/pkg/goexec"
-	"golang.org/x/sys/unix"
 )
 
 //go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target bpf -type http_request_trace bpf ../../../bpf/http_trace.c -- -I../../../bpf/headers
@@ -68,8 +66,4 @@ type FunctionPrograms struct {
 type Filter struct {
 	io.Closer
 	Fd int
-}
-
-func (f *Filter) Close() error {
-	return syscall.SetsockoptInt(f.Fd, unix.SOL_SOCKET, unix.SO_DETACH_BPF, 0)
 }

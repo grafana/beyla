@@ -6,10 +6,10 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/grafana/ebpf-autoinstrument/pkg/pipe/global"
-
 	"golang.org/x/exp/slog"
 
+	"github.com/grafana/ebpf-autoinstrument/pkg/export/otel"
+	"github.com/grafana/ebpf-autoinstrument/pkg/pipe/global"
 	"github.com/grafana/ebpf-autoinstrument/pkg/transform"
 	"github.com/mariomac/pipes/pkg/node"
 	"github.com/prometheus/client_golang/prometheus"
@@ -88,20 +88,24 @@ func newReporter(ctx context.Context, cfg *PrometheusConfig) *metricsReporter {
 		reportRoutes: reportRoutes,
 		registry:     prometheus.NewRegistry(),
 		httpDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
-			Name: HTTPServerDuration,
-			Help: "duration of HTTP service calls from the server side, in milliseconds",
+			Name:    HTTPServerDuration,
+			Help:    "duration of HTTP service calls from the server side, in milliseconds",
+			Buckets: otel.DurationHistogramBoundaries,
 		}, labelNamesHTTP(cfg, reportRoutes)),
 		httpClientDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
-			Name: HTTPClientDuration,
-			Help: "duration of HTTP service calls from the client side, in milliseconds",
+			Name:    HTTPClientDuration,
+			Help:    "duration of HTTP service calls from the client side, in milliseconds",
+			Buckets: otel.DurationHistogramBoundaries,
 		}, labelNamesHTTPClient(cfg)),
 		grpcDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
-			Name: RPCServerDuration,
-			Help: "duration of RCP service calls from the server side, in milliseconds",
+			Name:    RPCServerDuration,
+			Help:    "duration of RCP service calls from the server side, in milliseconds",
+			Buckets: otel.DurationHistogramBoundaries,
 		}, labelNamesGRPC(cfg)),
 		grpcClientDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
-			Name: RPCClientDuration,
-			Help: "duration of GRPC service calls from the client side, in milliseconds",
+			Name:    RPCClientDuration,
+			Help:    "duration of GRPC service calls from the client side, in milliseconds",
+			Buckets: otel.DurationHistogramBoundaries,
 		}, labelNamesGRPC(cfg)),
 		httpRequestSize: prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Name: HTTPServerRequestSize,

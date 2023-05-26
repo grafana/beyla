@@ -7,6 +7,10 @@ import (
 	"strings"
 	"time"
 
+	"go.opentelemetry.io/otel/sdk/instrumentation"
+
+	"go.opentelemetry.io/otel/sdk/metric/aggregation"
+
 	"golang.org/x/exp/slog"
 
 	"github.com/grafana/ebpf-autoinstrument/pkg/transform"
@@ -26,6 +30,11 @@ const (
 	HTTPServerRequestSize = "http.server.request.size"
 	HTTPClientRequestSize = "http.client.request.size"
 )
+
+// DurationHistogramBoundaries is specified in the OTEL specification
+// https://github.com/open-telemetry/opentelemetry-specification/blob/main/specification/metrics/semantic_conventions/http-metrics.md
+// TODO: allow user overriding them
+var DurationHistogramBoundaries = []float64{0, 0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.25, 0.5, 0.75, 1, 2.5, 5, 7.5, 10}
 
 type MetricsConfig struct {
 	ServiceName      string `yaml:"service_name" env:"OTEL_SERVICE_NAME"`
@@ -87,41 +96,42 @@ func newMetricsReporter(ctx context.Context, cfg *MetricsConfig) (*MetricsReport
 	if err != nil {
 		return nil, fmt.Errorf("creating metric exporter: %w", err)
 	}
+	// changes
 	mr.provider = metric.NewMeterProvider(
 		metric.WithResource(resources),
 		metric.WithReader(metric.NewPeriodicReader(mr.exporter,
 			metric.WithInterval(cfg.Interval))),
+		metric.WithView(otelHistogramBuckets(HTTPServerDuration)),
+		metric.WithView(otelHistogramBuckets(HTTPClientDuration)),
+		metric.WithView(otelHistogramBuckets(RPCServerDuration)),
+		metric.WithView(otelHistogramBuckets(RPCClientDuration)),
+		// TODO: add specific buckets also for request sizes
 	)
 	// time units for HTTP and GRPC durations are in seconds, according to the OTEL specification:
 	// https://github.com/open-telemetry/opentelemetry-specification/tree/main/specification/metrics/semantic_conventions
 	// TODO: set ExplicitBucketBoundaries here and in prometheus from the previous specification
-	mr.httpDuration, err = mr.provider.Meter(reporterName).
-		Float64Histogram(HTTPServerDuration, instrument.WithUnit("s"))
+	meter := mr.provider.Meter(reporterName)
+	mr.httpDuration, err = meter.Float64Histogram(HTTPServerDuration, instrument.WithUnit("s"))
 	if err != nil {
 		return nil, fmt.Errorf("creating http duration histogram metric: %w", err)
 	}
-	mr.httpClientDuration, err = mr.provider.Meter(reporterName).
-		Float64Histogram(HTTPClientDuration, instrument.WithUnit("s"))
+	mr.httpClientDuration, err = meter.Float64Histogram(HTTPClientDuration, instrument.WithUnit("s"))
 	if err != nil {
 		return nil, fmt.Errorf("creating http duration histogram metric: %w", err)
 	}
-	mr.grpcDuration, err = mr.provider.Meter(reporterName).
-		Float64Histogram(RPCServerDuration, instrument.WithUnit("s"))
+	mr.grpcDuration, err = meter.Float64Histogram(RPCServerDuration, instrument.WithUnit("s"))
 	if err != nil {
 		return nil, fmt.Errorf("creating grpc duration histogram metric: %w", err)
 	}
-	mr.grpcClientDuration, err = mr.provider.Meter(reporterName).
-		Float64Histogram(RPCClientDuration, instrument.WithUnit("s"))
+	mr.grpcClientDuration, err = meter.Float64Histogram(RPCClientDuration, instrument.WithUnit("s"))
 	if err != nil {
 		return nil, fmt.Errorf("creating grpc duration histogram metric: %w", err)
 	}
-	mr.httpRequestSize, err = mr.provider.Meter(reporterName).
-		Float64Histogram(HTTPServerRequestSize, instrument.WithUnit("By"))
+	mr.httpRequestSize, err = meter.Float64Histogram(HTTPServerRequestSize, instrument.WithUnit("By"))
 	if err != nil {
 		return nil, fmt.Errorf("creating http size histogram metric: %w", err)
 	}
-	mr.httpClientRequestSize, err = mr.provider.Meter(reporterName).
-		Float64Histogram(HTTPClientRequestSize, instrument.WithUnit("By"))
+	mr.httpClientRequestSize, err = meter.Float64Histogram(HTTPClientRequestSize, instrument.WithUnit("By"))
 	if err != nil {
 		return nil, fmt.Errorf("creating http size histogram metric: %w", err)
 	}
@@ -135,6 +145,20 @@ func (r *MetricsReporter) close() {
 	if err := r.exporter.Shutdown(r.ctx); err != nil {
 		slog.With("component", "MetricsReporter").Error("closing metrics exporter", err)
 	}
+}
+
+func otelHistogramBuckets(metricName string) metric.View {
+	return metric.NewView(
+		metric.Instrument{
+			Name:  metricName,
+			Scope: instrumentation.Scope{Name: reporterName},
+		},
+		metric.Stream{
+			Name: metricName,
+			Aggregation: aggregation.ExplicitBucketHistogram{
+				Boundaries: DurationHistogramBoundaries,
+			},
+		})
 }
 
 func (r *MetricsReporter) metricAttributes(span *transform.HTTPRequestSpan) []attribute.KeyValue {

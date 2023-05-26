@@ -45,7 +45,7 @@ int BPF_KRETPROBE(kretprobe_sock_alloc, struct socket *sock) {
         return 0;
     }
 
-    //bpf_dbg_printk("=== sock alloc %llx ===", id);
+    bpf_dbg_printk("=== sock alloc %llx ===", id);
 
     u64 addr = (u64)sock;
 
@@ -117,7 +117,7 @@ int BPF_KPROBE(kprobe_tcp_connect, struct sock *sk) {
         return 0;
     }
 
-    //bpf_dbg_printk("=== tcp connect %llx ===", id);
+    bpf_dbg_printk("=== tcp connect %llx ===", id);
 
     u64 addr = (u64)sk;
 
@@ -142,7 +142,7 @@ int BPF_KRETPROBE(kretprobe_sys_connect, int fd)
         return 0;
     }
 
-    //bpf_dbg_printk("=== connect ret id=%d, pid=%d ===", id, pid_from_pid_tgid(id));
+    bpf_dbg_printk("=== connect ret id=%d, pid=%d ===", id, pid_from_pid_tgid(id));
 
     // The file descriptor is the value returned from the connect syscall.
     // If we got a negative file descriptor we don't have a connection, unless we are in progress
@@ -152,7 +152,7 @@ int BPF_KRETPROBE(kretprobe_sys_connect, int fd)
 
     sock_args_t *args = bpf_map_lookup_elem(&active_connect_args, &id);
     if (!args) {
-        //bpf_dbg_printk("No sock info %d", id);
+        bpf_dbg_printk("No sock info %d", id);
         goto cleanup;
     }
 
@@ -187,7 +187,7 @@ int BPF_KPROBE(kprobe_sys_exit, int status) {
     char comm[16];
     bpf_get_current_comm(&comm, sizeof(comm));
 
-    //bpf_dbg_printk("=== sys exit id=%d [%s]===", id, comm);
+    bpf_dbg_printk("=== sys exit id=%d [%s]===", id, comm);
 
     bpf_map_update_elem(&dead_pids, &pid, &comm, BPF_ANY); // On purpose BPF_ANY, we want to overwrite stale
 

@@ -3,9 +3,6 @@
 
 #define MAX_CONCURRENT_REQUESTS 10000
 
-#define META_HTTP_SRV  1
-#define META_HTTP_CLNT 2
-
 // Taken from linux/socket.h
 #define AF_INET		2	/* Internet IP Protocol 	*/
 #define AF_INET6	10	/* IP version 6			    */

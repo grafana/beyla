@@ -134,12 +134,12 @@ func htons(a uint16) uint16 {
 
 func (i *instrumenter) sockfilters(p Tracer) error {
 	for _, filter := range p.SocketFilters() {
-		_, err := attachSocketFilter(filter)
+		fd, err := attachSocketFilter(filter)
 		if err != nil {
 			return fmt.Errorf("attaching socket filter: %w", err)
 		}
 
-		//p.AddCloser(&ebpfcommon.Filter{Fd: fd})
+		p.AddCloser(&ebpfcommon.Filter{Fd: fd})
 	}
 
 	return nil

@@ -56,10 +56,10 @@ static __always_inline bool is_http(char *p, u32 len, u8 *packet_type) {
     if (len < MIN_HTTP_SIZE) {
         return false;
     }
-	//HTTP
-	if ((p[0] == 'H') && (p[1] == 'T') && (p[2] == 'T') && (p[3] == 'P')) {
+    //HTTP
+    if ((p[0] == 'H') && (p[1] == 'T') && (p[2] == 'T') && (p[3] == 'P')) {
        *packet_type = PACKET_TYPE_RESPONSE;
-	} else if (
+    } else if (
         ((p[0] == 'G') && (p[1] == 'E') && (p[2] == 'T') && (p[3] == ' ') && (p[4] == '/')) ||                                                      // GET
         ((p[0] == 'P') && (p[1] == 'O') && (p[2] == 'S') && (p[3] == 'T') && (p[4] == ' ') && (p[5] == '/')) ||                                     // POST
         ((p[0] == 'P') && (p[1] == 'U') && (p[2] == 'T') && (p[3] == ' ') && (p[4] == '/')) ||                                                      // PUT
@@ -67,8 +67,8 @@ static __always_inline bool is_http(char *p, u32 len, u8 *packet_type) {
         ((p[0] == 'D') && (p[1] == 'E') && (p[2] == 'L') && (p[3] == 'E') && (p[4] == 'T') && (p[5] == 'E') && (p[6] == ' ') && (p[7] == '/')) ||   // DELETE
         ((p[0] == 'H') && (p[1] == 'E') && (p[2] == 'A') && (p[3] == 'D') && (p[4] == ' ') && (p[5] == '/'))                                        // HEAD
     ) {
-		*packet_type = PACKET_TYPE_REQUEST;
-	}
+        *packet_type = PACKET_TYPE_REQUEST;
+    }
     // OPTIONS? do we care?
 
     return true;

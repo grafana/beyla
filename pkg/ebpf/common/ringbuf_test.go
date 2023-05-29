@@ -27,12 +27,12 @@ func TestForwardRingbuf_CapacityFull(t *testing.T) {
 	// GIVEN a ring buffer forwarder
 	ringBuf, restore := replaceTestRingBuf()
 	defer restore()
-	forwardedMessages := make(chan []HTTPRequestTrace, 100)
+	forwardedMessages := make(chan []interface{}, 100)
 	go ForwardRingbuf(
 		&TracerConfig{BatchLength: 10},
 		slog.With("test", "TestForwardRingbuf_CapacityFull"),
 		nil, // the source ring buffer can be null
-		nil,
+		toRequestTrace,
 	)(context.Background(), forwardedMessages)
 
 	// WHEN it starts receiving trace events
@@ -68,12 +68,12 @@ func TestForwardRingbuf_Deadline(t *testing.T) {
 	ringBuf, restore := replaceTestRingBuf()
 	defer restore()
 
-	forwardedMessages := make(chan []HTTPRequestTrace, 100)
+	forwardedMessages := make(chan []interface{}, 100)
 	go ForwardRingbuf(
 		&TracerConfig{BatchLength: 10, BatchTimeout: 20 * time.Millisecond},
 		slog.With("test", "TestForwardRingbuf_Deadline"),
 		nil, // the source ring buffer can be null
-		nil,
+		toRequestTrace,
 	)(context.Background(), forwardedMessages)
 
 	// WHEN it receives, after a timeout, less events than its internal buffer
@@ -103,9 +103,9 @@ func TestForwardRingbuf_Close(t *testing.T) {
 		&TracerConfig{BatchLength: 10},
 		slog.With("test", "TestForwardRingbuf_Close"),
 		nil, // the source ring buffer can be null
-		nil,
+		toRequestTrace,
 		&closable,
-	)(context.Background(), make(chan []HTTPRequestTrace, 100))
+	)(context.Background(), make(chan []interface{}, 100))
 
 	assert.False(t, ringBuf.explicitClose)
 	assert.False(t, closable.closed)
@@ -165,4 +165,16 @@ type closableObject struct {
 func (c *closableObject) Close() error {
 	c.closed = true
 	return nil
+}
+
+func toRequestTrace(record *ringbuf.Record) (interface{}, error) {
+	var event HTTPRequestTrace
+
+	err := binary.Read(bytes.NewBuffer(record.RawSample), binary.LittleEndian, &event)
+	if err != nil {
+		slog.Error("Error reading generic HTTP event", err)
+		return nil, err
+	}
+
+	return event, nil
 }

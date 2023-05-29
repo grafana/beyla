@@ -162,9 +162,10 @@ func otelHistogramBuckets(metricName string) metric.View {
 }
 
 func (r *MetricsReporter) metricAttributes(span *transform.HTTPRequestSpan) []attribute.KeyValue {
+	attrs := []attribute.KeyValue{}
 	switch span.Type {
 	case transform.EventTypeHTTP:
-		attrs := []attribute.KeyValue{
+		attrs = []attribute.KeyValue{
 			semconv.HTTPMethod(span.Method),
 			semconv.HTTPStatusCode(span.Status),
 		}
@@ -177,9 +178,8 @@ func (r *MetricsReporter) metricAttributes(span *transform.HTTPRequestSpan) []at
 		if span.Route != "" {
 			attrs = append(attrs, semconv.HTTPRoute(span.Route))
 		}
-		return attrs
 	case transform.EventTypeGRPC, transform.EventTypeGRPCClient:
-		attrs := []attribute.KeyValue{
+		attrs = []attribute.KeyValue{
 			semconv.RPCMethod(span.Path),
 			semconv.RPCSystemGRPC,
 			semconv.RPCGRPCStatusCodeKey.Int(span.Status),
@@ -187,9 +187,8 @@ func (r *MetricsReporter) metricAttributes(span *transform.HTTPRequestSpan) []at
 		if r.reportPeer {
 			attrs = append(attrs, semconv.NetSockPeerAddr(span.Peer))
 		}
-		return attrs
 	case transform.EventTypeHTTPClient:
-		attrs := []attribute.KeyValue{
+		attrs = []attribute.KeyValue{
 			semconv.HTTPMethod(span.Method),
 			semconv.HTTPStatusCode(span.Status),
 		}
@@ -197,10 +196,13 @@ func (r *MetricsReporter) metricAttributes(span *transform.HTTPRequestSpan) []at
 			attrs = append(attrs, semconv.NetSockPeerName(span.Host))
 			attrs = append(attrs, semconv.NetSockPeerPort(span.HostPort))
 		}
-		return attrs
 	}
 
-	return []attribute.KeyValue{}
+	if span.ServiceName != "" { // we don't have service name set, system wide instrumentation
+		attrs = append(attrs, semconv.ServiceName(span.ServiceName))
+	}
+
+	return attrs
 }
 
 func (r *MetricsReporter) record(span *transform.HTTPRequestSpan, attrs []attribute.KeyValue) {

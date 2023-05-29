@@ -1,9 +1,7 @@
 package ebpfcommon
 
 import (
-	"bytes"
 	"context"
-	"encoding/binary"
 	"errors"
 	"io"
 	"sync"
@@ -30,15 +28,15 @@ var readerFactory = func(rb *ebpf.Map) (ringBufReader, error) {
 }
 
 type ringBufForwarder struct {
-	cfg         *TracerConfig
-	logger      *slog.Logger
-	ringbuffer  *ebpf.Map
-	closers     []io.Closer
-	events      []HTTPRequestTrace
-	evLen       int
-	access      sync.Mutex
-	ticker      *time.Ticker
-	transformer func(*ringbuf.Record) (HTTPRequestTrace, error)
+	cfg        *TracerConfig
+	logger     *slog.Logger
+	ringbuffer *ebpf.Map
+	closers    []io.Closer
+	events     []interface{}
+	evLen      int
+	access     sync.Mutex
+	ticker     *time.Ticker
+	reader     func(*ringbuf.Record) (interface{}, error)
 }
 
 // ForwardRingbuf returns a function reads HTTPRequestTraces from an input ring buffer, accumulates them into an
@@ -48,16 +46,16 @@ func ForwardRingbuf(
 	cfg *TracerConfig,
 	logger *slog.Logger,
 	ringbuffer *ebpf.Map,
-	recordTransformer func(*ringbuf.Record) (HTTPRequestTrace, error),
+	reader func(*ringbuf.Record) (interface{}, error),
 	closers ...io.Closer,
-) node.StartFuncCtx[[]HTTPRequestTrace] {
+) node.StartFuncCtx[[]interface{}] {
 	rbf := ringBufForwarder{
-		cfg: cfg, logger: logger, ringbuffer: ringbuffer, closers: closers, transformer: recordTransformer,
+		cfg: cfg, logger: logger, ringbuffer: ringbuffer, closers: closers, reader: reader,
 	}
 	return rbf.readAndForward
 }
 
-func (rbf *ringBufForwarder) readAndForward(ctx context.Context, eventsChan chan<- []HTTPRequestTrace) {
+func (rbf *ringBufForwarder) readAndForward(ctx context.Context, eventsChan chan<- []interface{}) {
 	// BPF will send each measured trace via Ring Buffer, so we listen for them from the
 	// user space.
 	eventsReader, err := readerFactory(rbf.ringbuffer)
@@ -68,7 +66,7 @@ func (rbf *ringBufForwarder) readAndForward(ctx context.Context, eventsChan chan
 	rbf.closers = append(rbf.closers, eventsReader)
 	defer rbf.closeAllResources()
 
-	rbf.events = make([]HTTPRequestTrace, rbf.cfg.BatchLength)
+	rbf.events = make([]interface{}, rbf.cfg.BatchLength)
 	rbf.evLen = 0
 
 	// If the underlying context is closed, it closes the events reader
@@ -101,11 +99,7 @@ func (rbf *ringBufForwarder) readAndForward(ctx context.Context, eventsChan chan
 		}
 
 		rbf.access.Lock()
-		if rbf.transformer != nil {
-			rbf.events[rbf.evLen], err = rbf.transformer(&record)
-		} else {
-			err = binary.Read(bytes.NewBuffer(record.RawSample), binary.LittleEndian, &rbf.events[rbf.evLen])
-		}
+		rbf.events[rbf.evLen], err = rbf.reader(&record)
 		if err != nil {
 			rbf.logger.Error("error parsing perf event", err)
 			rbf.access.Unlock()
@@ -123,13 +117,13 @@ func (rbf *ringBufForwarder) readAndForward(ctx context.Context, eventsChan chan
 	}
 }
 
-func (rbf *ringBufForwarder) flushEvents(eventsChan chan<- []HTTPRequestTrace) {
+func (rbf *ringBufForwarder) flushEvents(eventsChan chan<- []interface{}) {
 	eventsChan <- rbf.events[:rbf.evLen]
-	rbf.events = make([]HTTPRequestTrace, rbf.cfg.BatchLength)
+	rbf.events = make([]interface{}, rbf.cfg.BatchLength)
 	rbf.evLen = 0
 }
 
-func (rbf *ringBufForwarder) bgFlushOnTimeout(eventsChan chan<- []HTTPRequestTrace) {
+func (rbf *ringBufForwarder) bgFlushOnTimeout(eventsChan chan<- []interface{}) {
 	for {
 		<-rbf.ticker.C
 		rbf.access.Lock()

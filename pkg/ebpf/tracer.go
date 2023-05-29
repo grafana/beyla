@@ -55,14 +55,14 @@ type Tracer interface {
 	SocketFilters() []*ebpf.Program
 	// Run will do the action of listening for eBPF traces and forward them
 	// periodically to the output channel.
-	Run(context.Context, chan<- []ebpfcommon.HTTPRequestTrace)
+	Run(context.Context, chan<- []interface{})
 	// AddCloser adds io.Closer instances that need to be invoked when the
 	// Run function ends.
 	AddCloser(c ...io.Closer)
 }
 
 // TracerProvider returns a StartFuncCtx for each discovered eBPF traceable source: GRPC, HTTP...
-func TracerProvider(ctx context.Context, cfg ebpfcommon.TracerConfig) ([]node.StartFuncCtx[[]ebpfcommon.HTTPRequestTrace], error) { //nolint:all
+func TracerProvider(ctx context.Context, cfg ebpfcommon.TracerConfig) ([]node.StartFuncCtx[[]interface{}], error) { //nolint:all
 	var log = logger()
 
 	// Each program is an eBPF source: net/http, grpc...
@@ -114,7 +114,7 @@ func TracerProvider(ctx context.Context, cfg ebpfcommon.TracerConfig) ([]node.St
 	// startNodes contains the eBPF programs (HTTP, GRPC tracers...) plus a function
 	// that just waits for the passed context to finish before closing the BPF pin
 	// path
-	startNodes := []node.StartFuncCtx[[]ebpfcommon.HTTPRequestTrace]{
+	startNodes := []node.StartFuncCtx[[]interface{}]{
 		waitToCloseBbfPinPath(pinPath),
 	}
 
@@ -190,8 +190,8 @@ func logger() *slog.Logger { return slog.With("component", "ebpf.TracerProvider"
 
 // this will be just a start node that listens for the context cancellation and then
 // unmounts the BPF pinning path
-func waitToCloseBbfPinPath(pinPath string) node.StartFuncCtx[[]ebpfcommon.HTTPRequestTrace] {
-	return func(ctx context.Context, _ chan<- []ebpfcommon.HTTPRequestTrace) {
+func waitToCloseBbfPinPath(pinPath string) node.StartFuncCtx[[]interface{}] {
+	return func(ctx context.Context, _ chan<- []interface{}) {
 		<-ctx.Done()
 		unmountBpfPinPath(pinPath)
 	}

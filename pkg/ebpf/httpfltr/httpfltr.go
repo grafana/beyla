@@ -6,11 +6,14 @@ import (
 	"encoding/binary"
 	"io"
 	"net"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
 	ebpfcommon "github.com/grafana/ebpf-autoinstrument/pkg/ebpf/common"
 	"github.com/grafana/ebpf-autoinstrument/pkg/exec"
+	lru "github.com/hashicorp/golang-lru/v2"
 	"golang.org/x/exp/slog"
 
 	"github.com/cilium/ebpf"
@@ -20,6 +23,17 @@ import (
 
 //go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf ../../../bpf/http_sock.c -- -I../../../bpf/headers
 //go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf_debug ../../../bpf/http_sock.c -- -I../../../bpf/headers -DBPF_DEBUG
+
+var activePids, _ = lru.New[uint32, string](64)
+
+type HTTPInfo struct {
+	bpfHttpInfoT
+	Method string
+	URL    string
+	Comm   string
+	Host   string
+	Peer   string
+}
 
 type Tracer struct {
 	Cfg        *ebpfcommon.TracerConfig
@@ -102,35 +116,38 @@ func (p *Tracer) SocketFilters() []*ebpf.Program {
 	return []*ebpf.Program{p.bpfObjects.SocketHttpFilter}
 }
 
-func (p *Tracer) Run(ctx context.Context, eventsChan chan<- []ebpfcommon.HTTPRequestTrace) {
+func (p *Tracer) Run(ctx context.Context, eventsChan chan<- []interface{}) {
 	logger := slog.With("component", "httpfltr.Tracer")
 	ebpfcommon.ForwardRingbuf(
-		p.Cfg, logger, p.bpfObjects.Events, toRequestTrace,
+		p.Cfg, logger, p.bpfObjects.Events, p.toRequestTrace,
 		append(p.closers, &p.bpfObjects)...,
 	)(ctx, eventsChan)
 }
 
-func toRequestTrace(record *ringbuf.Record) (ebpfcommon.HTTPRequestTrace, error) {
+func (p *Tracer) toRequestTrace(record *ringbuf.Record) (interface{}, error) {
 	var event bpfHttpInfoT
-	result := ebpfcommon.HTTPRequestTrace{}
 
 	err := binary.Read(bytes.NewBuffer(record.RawSample), binary.LittleEndian, &event)
 	if err != nil {
 		slog.Error("Error reading generic HTTP event", err)
-		return result, err
+		return nil, err
 	}
+
+	result := HTTPInfo{bpfHttpInfoT: event}
 
 	result.Type = event.Type
 	result.StartMonotimeNs = event.StartMonotimeNs
-	result.GoStartMonotimeNs = event.StartMonotimeNs
 	result.EndMonotimeNs = event.EndMonotimeNs
 	result.Status = event.Status
 
 	source, target := event.getHostInfo()
-	copy(result.Host[:], ([]byte(target)))
-	copy(result.RemoteAddr[:], ([]byte(source)))
-	copy(result.Method[:], ([]byte(event.getMethod())))
-	copy(result.Path[:], ([]byte(event.getURL())))
+	result.Host = target
+	result.Peer = source
+	result.URL = event.getURL()
+	result.Method = event.getMethod()
+	if p.Cfg.SystemWide {
+		result.Comm = p.serviceName(event.Pid)
+	}
 
 	return result, nil
 }
@@ -159,15 +176,51 @@ func (event *bpfHttpInfoT) getMethod() string {
 	return buf[:space]
 }
 
-func formatHost(ip net.IP, port uint16) string {
-	return ip.String() + ":" + strconv.FormatUint(uint64(port), 10) + "\x00"
-}
-
 func (event *bpfHttpInfoT) getHostInfo() (source, target string) {
 	src := make(net.IP, net.IPv6len)
 	dst := make(net.IP, net.IPv6len)
 	copy(src, event.ConnInfo.S_addr[:])
 	copy(dst, event.ConnInfo.D_addr[:])
 
-	return formatHost(src, event.ConnInfo.S_port), formatHost(dst, event.ConnInfo.D_port)
+	return src.String(), dst.String()
+}
+
+func (p *Tracer) commNameOfDeadPid(pid uint32) string {
+	var name [16]uint8
+	err := p.bpfObjects.DeadPids.Lookup(pid, &name)
+	if err != nil {
+		return ""
+	}
+	addrLen := bytes.IndexByte(name[:], 0)
+	if addrLen < 0 {
+		addrLen = len(name)
+	}
+
+	return string(name[:addrLen])
+}
+
+func (p *Tracer) commName(pid uint32) string {
+	procPath := filepath.Join("/proc", strconv.FormatUint(uint64(pid), 10), "comm")
+	_, err := os.Stat(procPath)
+	if os.IsNotExist(err) {
+		return p.commNameOfDeadPid(pid)
+	}
+
+	name, err := os.ReadFile(procPath)
+	if err != nil {
+		p.commNameOfDeadPid(pid)
+	}
+
+	return strings.TrimSpace(string(name))
+}
+
+func (p *Tracer) serviceName(pid uint32) string {
+	cached, ok := activePids.Get(pid)
+	if ok {
+		return cached
+	}
+
+	name := p.commName(pid)
+	activePids.Add(pid, name)
+	return name
 }

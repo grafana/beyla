@@ -64,31 +64,31 @@ func assertMatches(t *testing.T, span *HTTPRequestSpan, method, path, peer strin
 func TestRequestTraceParsing(t *testing.T) {
 	t.Run("Test basic parsing", func(t *testing.T) {
 		tr := makeHTTPRequestTrace("POST", "/users", "127.0.0.1:1234", 200, 5)
-		s := convert(&tr)
+		s := convertFromHTTPTrace(&tr)
 		assertMatches(t, &s, "POST", "/users", "127.0.0.1", 200, 5)
 	})
 
 	t.Run("Test with empty path and missing peer host", func(t *testing.T) {
 		tr := makeHTTPRequestTrace("GET", "", ":1234", 403, 6)
-		s := convert(&tr)
+		s := convertFromHTTPTrace(&tr)
 		assertMatches(t, &s, "GET", "", "", 403, 6)
 	})
 
 	t.Run("Test with missing peer port", func(t *testing.T) {
 		tr := makeHTTPRequestTrace("GET", "/posts/1/1", "1234", 500, 1)
-		s := convert(&tr)
+		s := convertFromHTTPTrace(&tr)
 		assertMatches(t, &s, "GET", "/posts/1/1", "1234", 500, 1)
 	})
 
 	t.Run("Test with invalid peer port", func(t *testing.T) {
 		tr := makeHTTPRequestTrace("GET", "/posts/1/1", "1234:aaa", 500, 1)
-		s := convert(&tr)
+		s := convertFromHTTPTrace(&tr)
 		assertMatches(t, &s, "GET", "/posts/1/1", "1234", 500, 1)
 	})
 
 	t.Run("Test with GRPC request", func(t *testing.T) {
 		tr := makeGRPCRequestTrace("/posts/1/1", []byte{0x7f, 0, 0, 0x1}, 2, 1)
-		s := convert(&tr)
+		s := convertFromHTTPTrace(&tr)
 		assertMatches(t, &s, "", "/posts/1/1", "127.0.0.1", 2, 1)
 	})
 }
@@ -105,7 +105,7 @@ func makeSpanWithTimings(goStart, start, end uint64) HTTPRequestSpan {
 		EndMonotimeNs:     end,
 	}
 
-	return convert(&tr)
+	return convertFromHTTPTrace(&tr)
 }
 
 func TestSpanNesting(t *testing.T) {

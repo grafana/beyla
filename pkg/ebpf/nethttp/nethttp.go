@@ -15,7 +15,9 @@
 package nethttp
 
 import (
+	"bytes"
 	"context"
+	"encoding/binary"
 	"io"
 	"unsafe"
 
@@ -23,6 +25,7 @@ import (
 	"github.com/grafana/ebpf-autoinstrument/pkg/exec"
 
 	"github.com/cilium/ebpf"
+	"github.com/cilium/ebpf/ringbuf"
 	"github.com/grafana/ebpf-autoinstrument/pkg/goexec"
 	"golang.org/x/exp/slog"
 )
@@ -98,10 +101,10 @@ func (p *Tracer) SocketFilters() []*ebpf.Program {
 	return nil
 }
 
-func (p *Tracer) Run(ctx context.Context, eventsChan chan<- []ebpfcommon.HTTPRequestTrace) {
+func (p *Tracer) Run(ctx context.Context, eventsChan chan<- []interface{}) {
 	logger := slog.With("component", "nethttp.Tracer")
 	ebpfcommon.ForwardRingbuf(
-		p.Cfg, logger, p.bpfObjects.Events, nil,
+		p.Cfg, logger, p.bpfObjects.Events, p.toRequestTrace,
 		append(p.closers, &p.bpfObjects)...,
 	)(ctx, eventsChan)
 }
@@ -121,10 +124,22 @@ func (p *GinTracer) GoProbes() map[string]ebpfcommon.FunctionPrograms {
 	}
 }
 
-func (p *GinTracer) Run(ctx context.Context, eventsChan chan<- []ebpfcommon.HTTPRequestTrace) {
+func (p *GinTracer) Run(ctx context.Context, eventsChan chan<- []interface{}) {
 	logger := slog.With("component", "nethttp.GinTracer")
 	ebpfcommon.ForwardRingbuf(
-		p.Cfg, logger, p.bpfObjects.Events, nil,
+		p.Cfg, logger, p.bpfObjects.Events, p.toRequestTrace,
 		append(p.closers, &p.bpfObjects)...,
 	)(ctx, eventsChan)
+}
+
+func (p *Tracer) toRequestTrace(record *ringbuf.Record) (interface{}, error) {
+	var event ebpfcommon.HTTPRequestTrace
+
+	err := binary.Read(bytes.NewBuffer(record.RawSample), binary.LittleEndian, &event)
+	if err != nil {
+		slog.Error("Error reading generic HTTP event", err)
+		return nil, err
+	}
+
+	return event, nil
 }

@@ -162,7 +162,8 @@ func otelHistogramBuckets(metricName string) metric.View {
 }
 
 func (r *MetricsReporter) metricAttributes(span *transform.HTTPRequestSpan) []attribute.KeyValue {
-	attrs := []attribute.KeyValue{}
+	var attrs []attribute.KeyValue
+
 	switch span.Type {
 	case transform.EventTypeHTTP:
 		attrs = []attribute.KeyValue{

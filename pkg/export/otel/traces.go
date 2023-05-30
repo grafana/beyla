@@ -118,7 +118,8 @@ func (r *TracesReporter) close() {
 }
 
 func (r *TracesReporter) traceAttributes(span *transform.HTTPRequestSpan) []attribute.KeyValue {
-	attrs := []attribute.KeyValue{}
+	var attrs []attribute.KeyValue
+
 	switch span.Type {
 	case transform.EventTypeHTTP:
 		attrs = []attribute.KeyValue{

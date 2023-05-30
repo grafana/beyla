@@ -17,6 +17,7 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
 
 	ebpfcommon "github.com/grafana/ebpf-autoinstrument/pkg/ebpf/common"
+	"github.com/grafana/ebpf-autoinstrument/pkg/ebpf/httpfltr"
 	"github.com/grafana/ebpf-autoinstrument/pkg/export/otel"
 	"github.com/grafana/ebpf-autoinstrument/pkg/transform"
 	"github.com/grafana/ebpf-autoinstrument/test/collector"
@@ -36,6 +37,7 @@ func TestBasicPipeline(t *testing.T) {
 	graph.RegisterStart(gb.builder, func(_ context.Context, _ ebpfcommon.TracerConfig) (node.StartFuncCtx[[]any], error) {
 		return func(_ context.Context, out chan<- []any) {
 			out <- newRequest(1, "GET", "/foo/bar", "1.1.1.1:3456", 404)
+			out <- newHttpInfo("PATCH", "/aaa/bbb", "1.1.1.1", 204)
 		}, nil
 	})
 	pipe, err := gb.buildGraph(ctx)
@@ -55,6 +57,20 @@ func TestBasicPipeline(t *testing.T) {
 		},
 		Type: pmetric.MetricTypeHistogram,
 	}, event)
+
+	event = testutil.ReadChannel(t, tc.Records, testTimeout)
+	assert.Equal(t, collector.MetricRecord{
+		Name: "http.server.duration",
+		Unit: "s",
+		Attributes: map[string]string{
+			string(semconv.HTTPMethodKey):      "PATCH",
+			string(semconv.HTTPStatusCodeKey):  "204",
+			string(semconv.HTTPTargetKey):      "/aaa/bbb",
+			string(semconv.NetSockPeerAddrKey): "1.1.1.1",
+			string(semconv.ServiceNameKey):     "comm",
+		},
+		Type: pmetric.MetricTypeHistogram,
+	}, event)
 }
 
 func TestTracerPipeline(t *testing.T) {
@@ -69,6 +85,7 @@ func TestTracerPipeline(t *testing.T) {
 	graph.RegisterStart(gb.builder, func(_ context.Context, _ ebpfcommon.TracerConfig) (node.StartFuncCtx[[]any], error) {
 		return func(_ context.Context, out chan<- []any) {
 			out <- newRequest(1, "GET", "/foo/bar", "1.1.1.1:3456", 404)
+			out <- newHttpInfo("PATCH", "/aaa/bbb", "1.1.1.1", 204)
 		}, nil
 	})
 	pipe, err := gb.buildGraph(ctx)
@@ -82,6 +99,8 @@ func TestTracerPipeline(t *testing.T) {
 	matchInnerTraceEvent(t, "processing", event)
 	event = testutil.ReadChannel(t, tc.TraceRecords, testTimeout)
 	matchTraceEvent(t, "GET", event)
+	event = testutil.ReadChannel(t, tc.TraceRecords, testTimeout)
+	matchInfoEvent(t, "PATCH", event)
 }
 
 func TestRouteConsolidation(t *testing.T) {
@@ -410,4 +429,40 @@ func matchNestedEvent(t *testing.T, name, method, target, status string, kind pt
 		assert.Equal(t, target, event.Attributes["http.target"])
 	}
 	assert.Equal(t, kind, event.Kind)
+}
+
+func newHttpInfo(method, path, peer string, status int) []any {
+	var i httpfltr.HTTPInfo
+	i.Type = 1
+	i.Method = method
+	i.Peer = peer
+	i.URL = path
+	i.Host = getHostname()
+	i.ConnInfo.D_port = uint16(8080)
+	i.ConnInfo.S_port = uint16(12345)
+	i.Status = uint16(status)
+	i.StartMonotimeNs = 2
+	i.EndMonotimeNs = 3
+	i.Comm = "comm"
+
+	return []any{i}
+}
+
+func matchInfoEvent(t *testing.T, name string, event collector.TraceRecord) {
+	assert.Equal(t, collector.TraceRecord{
+		Name: name,
+		Attributes: map[string]string{
+			string(semconv.HTTPMethodKey):               "PATCH",
+			string(semconv.HTTPStatusCodeKey):           "204",
+			string(semconv.HTTPTargetKey):               "/aaa/bbb",
+			string(semconv.NetSockPeerAddrKey):          "1.1.1.1",
+			string(semconv.NetHostNameKey):              getHostname(),
+			string(semconv.NetHostPortKey):              "8080",
+			string(semconv.HTTPRequestContentLengthKey): "0",
+			"span_id":                      event.Attributes["span_id"],
+			"parent_span_id":               "",
+			string(semconv.ServiceNameKey): "comm",
+		},
+		Kind: ptrace.SpanKindServer,
+	}, event)
 }

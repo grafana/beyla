@@ -33,8 +33,8 @@ func TestBasicPipeline(t *testing.T) {
 
 	gb := newGraphBuilder(&Config{Metrics: otel.MetricsConfig{MetricsEndpoint: tc.ServerEndpoint, ReportTarget: true, ReportPeerInfo: true}})
 	// Override eBPF tracer to send some fake data
-	graph.RegisterStart(gb.builder, func(_ context.Context, _ ebpfcommon.TracerConfig) (node.StartFuncCtx[[]interface{}], error) {
-		return func(_ context.Context, out chan<- []interface{}) {
+	graph.RegisterStart(gb.builder, func(_ context.Context, _ ebpfcommon.TracerConfig) (node.StartFuncCtx[[]any], error) {
+		return func(_ context.Context, out chan<- []any) {
 			out <- newRequest(1, "GET", "/foo/bar", "1.1.1.1:3456", 404)
 		}, nil
 	})
@@ -66,8 +66,8 @@ func TestTracerPipeline(t *testing.T) {
 
 	gb := newGraphBuilder(&Config{Traces: otel.TracesConfig{TracesEndpoint: tc.ServerEndpoint, ServiceName: "test"}})
 	// Override eBPF tracer to send some fake data
-	graph.RegisterStart(gb.builder, func(_ context.Context, _ ebpfcommon.TracerConfig) (node.StartFuncCtx[[]interface{}], error) {
-		return func(_ context.Context, out chan<- []interface{}) {
+	graph.RegisterStart(gb.builder, func(_ context.Context, _ ebpfcommon.TracerConfig) (node.StartFuncCtx[[]any], error) {
+		return func(_ context.Context, out chan<- []any) {
 			out <- newRequest(1, "GET", "/foo/bar", "1.1.1.1:3456", 404)
 		}, nil
 	})
@@ -96,8 +96,8 @@ func TestRouteConsolidation(t *testing.T) {
 		Routes:  &transform.RoutesConfig{Patterns: []string{"/user/{id}", "/products/{id}/push"}},
 	})
 	// Override eBPF tracer to send some fake data
-	graph.RegisterStart(gb.builder, func(_ context.Context, _ ebpfcommon.TracerConfig) (node.StartFuncCtx[[]interface{}], error) {
-		return func(_ context.Context, out chan<- []interface{}) {
+	graph.RegisterStart(gb.builder, func(_ context.Context, _ ebpfcommon.TracerConfig) (node.StartFuncCtx[[]any], error) {
+		return func(_ context.Context, out chan<- []any) {
 			out <- newRequest(1, "GET", "/user/1234", "1.1.1.1:3456", 200)
 			out <- newRequest(2, "GET", "/products/3210/push", "1.1.1.1:3456", 200)
 			out <- newRequest(3, "GET", "/attach", "1.1.1.1:3456", 200) // undefined route: won't report as route
@@ -158,8 +158,8 @@ func TestGRPCPipeline(t *testing.T) {
 
 	gb := newGraphBuilder(&Config{Metrics: otel.MetricsConfig{MetricsEndpoint: tc.ServerEndpoint, ReportTarget: true, ReportPeerInfo: true}})
 	// Override eBPF tracer to send some fake data
-	graph.RegisterStart(gb.builder, func(_ context.Context, _ ebpfcommon.TracerConfig) (node.StartFuncCtx[[]interface{}], error) {
-		return func(_ context.Context, out chan<- []interface{}) {
+	graph.RegisterStart(gb.builder, func(_ context.Context, _ ebpfcommon.TracerConfig) (node.StartFuncCtx[[]any], error) {
+		return func(_ context.Context, out chan<- []any) {
 			out <- newGRPCRequest(1, "/foo/bar", 3)
 		}, nil
 	})
@@ -191,8 +191,8 @@ func TestTraceGRPCPipeline(t *testing.T) {
 
 	gb := newGraphBuilder(&Config{Traces: otel.TracesConfig{TracesEndpoint: tc.ServerEndpoint, ServiceName: "test"}})
 	// Override eBPF tracer to send some fake data
-	graph.RegisterStart(gb.builder, func(_ context.Context, _ ebpfcommon.TracerConfig) (node.StartFuncCtx[[]interface{}], error) {
-		return func(_ context.Context, out chan<- []interface{}) {
+	graph.RegisterStart(gb.builder, func(_ context.Context, _ ebpfcommon.TracerConfig) (node.StartFuncCtx[[]any], error) {
+		return func(_ context.Context, out chan<- []any) {
 			out <- newGRPCRequest(1, "foo.bar", 3)
 		}, nil
 	})
@@ -218,8 +218,8 @@ func TestNestedSpanMatching(t *testing.T) {
 
 	gb := newGraphBuilder(&Config{Traces: otel.TracesConfig{TracesEndpoint: tc.ServerEndpoint, ServiceName: "test"}})
 	// Override eBPF tracer to send some fake data with nested client span
-	graph.RegisterStart(gb.builder, func(_ context.Context, _ ebpfcommon.TracerConfig) (node.StartFuncCtx[[]interface{}], error) {
-		return func(_ context.Context, out chan<- []interface{}) {
+	graph.RegisterStart(gb.builder, func(_ context.Context, _ ebpfcommon.TracerConfig) (node.StartFuncCtx[[]any], error) {
+		return func(_ context.Context, out chan<- []any) {
 			out <- newRequestWithTiming(1, transform.EventTypeHTTPClient, "GET", "/attach", "2.2.2.2:1234", 200, 60000, 60000, 70000)
 			out <- newRequestWithTiming(1, transform.EventTypeHTTP, "GET", "/user/1234", "1.1.1.1:3456", 200, 10000, 10000, 50000)
 			out <- newRequestWithTiming(3, transform.EventTypeHTTPClient, "GET", "/products/3210/pull", "2.2.2.2:3456", 204, 80000, 80000, 90000)
@@ -288,7 +288,7 @@ func TestNestedSpanMatching(t *testing.T) {
 	assert.Equal(t, parent1ID, event.Attributes["parent_span_id"])
 }
 
-func newRequest(id uint64, method, path, peer string, status int) []interface{} {
+func newRequest(id uint64, method, path, peer string, status int) []any {
 	rt := ebpfcommon.HTTPRequestTrace{}
 	copy(rt.Path[:], path)
 	copy(rt.Method[:], method)
@@ -300,10 +300,10 @@ func newRequest(id uint64, method, path, peer string, status int) []interface{} 
 	rt.GoStartMonotimeNs = 1
 	rt.StartMonotimeNs = 2
 	rt.EndMonotimeNs = 3
-	return []interface{}{rt}
+	return []any{rt}
 }
 
-func newRequestWithTiming(id uint64, kind transform.EventType, method, path, peer string, status int, goStart, start, end uint64) []interface{} {
+func newRequestWithTiming(id uint64, kind transform.EventType, method, path, peer string, status int, goStart, start, end uint64) []any {
 	rt := ebpfcommon.HTTPRequestTrace{}
 	copy(rt.Path[:], path)
 	copy(rt.Method[:], method)
@@ -315,10 +315,10 @@ func newRequestWithTiming(id uint64, kind transform.EventType, method, path, pee
 	rt.GoStartMonotimeNs = goStart
 	rt.StartMonotimeNs = start
 	rt.EndMonotimeNs = end
-	return []interface{}{rt}
+	return []any{rt}
 }
 
-func newGRPCRequest(id uint64, path string, status int) []interface{} {
+func newGRPCRequest(id uint64, path string, status int) []any {
 	rt := ebpfcommon.HTTPRequestTrace{}
 	copy(rt.Path[:], path)
 	copy(rt.RemoteAddr[:], []byte{0x1, 0x1, 0x1, 0x1})
@@ -332,7 +332,7 @@ func newGRPCRequest(id uint64, path string, status int) []interface{} {
 	rt.GoStartMonotimeNs = 1
 	rt.StartMonotimeNs = 2
 	rt.EndMonotimeNs = 3
-	return []interface{}{rt}
+	return []any{rt}
 }
 
 func getHostname() string {

@@ -116,7 +116,7 @@ func (p *Tracer) SocketFilters() []*ebpf.Program {
 	return []*ebpf.Program{p.bpfObjects.SocketHttpFilter}
 }
 
-func (p *Tracer) Run(ctx context.Context, eventsChan chan<- []interface{}) {
+func (p *Tracer) Run(ctx context.Context, eventsChan chan<- []any) {
 	logger := slog.With("component", "httpfltr.Tracer")
 	ebpfcommon.ForwardRingbuf(
 		p.Cfg, logger, p.bpfObjects.Events, p.toRequestTrace,
@@ -124,16 +124,16 @@ func (p *Tracer) Run(ctx context.Context, eventsChan chan<- []interface{}) {
 	)(ctx, eventsChan)
 }
 
-func (p *Tracer) toRequestTrace(record *ringbuf.Record) (interface{}, error) {
+func (p *Tracer) toRequestTrace(record *ringbuf.Record) (any, error) {
 	var event bpfHttpInfoT
+	var result HTTPInfo
 
 	err := binary.Read(bytes.NewBuffer(record.RawSample), binary.LittleEndian, &event)
 	if err != nil {
-		slog.Error("Error reading generic HTTP event", err)
-		return nil, err
+		return result, err
 	}
 
-	result := HTTPInfo{bpfHttpInfoT: event}
+	result = HTTPInfo{bpfHttpInfoT: event}
 
 	result.Type = event.Type
 	result.StartMonotimeNs = event.StartMonotimeNs

@@ -1,10 +1,13 @@
 package ebpfcommon
 
 import (
+	"bytes"
+	"encoding/binary"
 	"io"
 	"time"
 
 	"github.com/cilium/ebpf"
+	"github.com/cilium/ebpf/ringbuf"
 	"github.com/grafana/ebpf-autoinstrument/pkg/goexec"
 )
 
@@ -66,4 +69,15 @@ type FunctionPrograms struct {
 type Filter struct {
 	io.Closer
 	Fd int
+}
+
+func Read[T any](record *ringbuf.Record) (any, error) {
+	var event T
+
+	err := binary.Read(bytes.NewBuffer(record.RawSample), binary.LittleEndian, &event)
+	if err != nil {
+		return event, err
+	}
+
+	return event, nil
 }

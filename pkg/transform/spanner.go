@@ -50,7 +50,7 @@ type HTTPRequestSpan struct {
 	ServiceName   string
 }
 
-func ConvertToSpan(in <-chan []interface{}, out chan<- []HTTPRequestSpan) {
+func ConvertToSpan(in <-chan []any, out chan<- []HTTPRequestSpan) {
 	for traces := range in {
 		spans := make([]HTTPRequestSpan, 0, len(traces))
 		for i := range traces {

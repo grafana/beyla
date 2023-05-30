@@ -15,9 +15,7 @@
 package grpc
 
 import (
-	"bytes"
 	"context"
-	"encoding/binary"
 	"io"
 	"unsafe"
 
@@ -25,7 +23,6 @@ import (
 	"github.com/grafana/ebpf-autoinstrument/pkg/exec"
 
 	"github.com/cilium/ebpf"
-	"github.com/cilium/ebpf/ringbuf"
 	"github.com/grafana/ebpf-autoinstrument/pkg/goexec"
 	"golang.org/x/exp/slog"
 )
@@ -104,22 +101,10 @@ func (p *Tracer) SocketFilters() []*ebpf.Program {
 	return nil
 }
 
-func (p *Tracer) Run(ctx context.Context, eventsChan chan<- []interface{}) {
+func (p *Tracer) Run(ctx context.Context, eventsChan chan<- []any) {
 	logger := slog.With("component", "grpc.Tracer")
 	ebpfcommon.ForwardRingbuf(
-		p.Cfg, logger, p.bpfObjects.Events, p.toRequestTrace,
+		p.Cfg, logger, p.bpfObjects.Events, ebpfcommon.Read[any],
 		append(p.closers, &p.bpfObjects)...,
 	)(ctx, eventsChan)
-}
-
-func (p *Tracer) toRequestTrace(record *ringbuf.Record) (interface{}, error) {
-	var event ebpfcommon.HTTPRequestTrace
-
-	err := binary.Read(bytes.NewBuffer(record.RawSample), binary.LittleEndian, &event)
-	if err != nil {
-		slog.Error("Error reading generic HTTP event", err)
-		return nil, err
-	}
-
-	return event, nil
 }

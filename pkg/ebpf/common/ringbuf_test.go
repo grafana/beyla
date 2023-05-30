@@ -27,7 +27,7 @@ func TestForwardRingbuf_CapacityFull(t *testing.T) {
 	// GIVEN a ring buffer forwarder
 	ringBuf, restore := replaceTestRingBuf()
 	defer restore()
-	forwardedMessages := make(chan []interface{}, 100)
+	forwardedMessages := make(chan []any, 100)
 	go ForwardRingbuf(
 		&TracerConfig{BatchLength: 10},
 		slog.With("test", "TestForwardRingbuf_CapacityFull"),
@@ -68,7 +68,7 @@ func TestForwardRingbuf_Deadline(t *testing.T) {
 	ringBuf, restore := replaceTestRingBuf()
 	defer restore()
 
-	forwardedMessages := make(chan []interface{}, 100)
+	forwardedMessages := make(chan []any, 100)
 	go ForwardRingbuf(
 		&TracerConfig{BatchLength: 10, BatchTimeout: 20 * time.Millisecond},
 		slog.With("test", "TestForwardRingbuf_Deadline"),
@@ -105,7 +105,7 @@ func TestForwardRingbuf_Close(t *testing.T) {
 		nil, // the source ring buffer can be null
 		toRequestTrace,
 		&closable,
-	)(context.Background(), make(chan []interface{}, 100))
+	)(context.Background(), make(chan []any, 100))
 
 	assert.False(t, ringBuf.explicitClose)
 	assert.False(t, closable.closed)
@@ -167,7 +167,7 @@ func (c *closableObject) Close() error {
 	return nil
 }
 
-func toRequestTrace(record *ringbuf.Record) (interface{}, error) {
+func toRequestTrace(record *ringbuf.Record) (any, error) {
 	var event HTTPRequestTrace
 
 	err := binary.Read(bytes.NewBuffer(record.RawSample), binary.LittleEndian, &event)

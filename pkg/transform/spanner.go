@@ -7,6 +7,7 @@ import (
 	"time"
 
 	ebpfcommon "github.com/grafana/ebpf-autoinstrument/pkg/ebpf/common"
+	httpfltr "github.com/grafana/ebpf-autoinstrument/pkg/ebpf/httpfltr"
 
 	"github.com/gavv/monotime"
 	"golang.org/x/exp/slog"
@@ -46,13 +47,23 @@ type HTTPRequestSpan struct {
 	RequestStart  int64
 	Start         int64
 	End           int64
+	ServiceName   string
 }
 
-func ConvertToSpan(in <-chan []ebpfcommon.HTTPRequestTrace, out chan<- []HTTPRequestSpan) {
+func ConvertToSpan(in <-chan []any, out chan<- []HTTPRequestSpan) {
 	for traces := range in {
 		spans := make([]HTTPRequestSpan, 0, len(traces))
 		for i := range traces {
-			spans = append(spans, convert(&traces[i]))
+			v := traces[i]
+
+			switch t := v.(type) {
+			case ebpfcommon.HTTPRequestTrace:
+				httpTrace := t
+				spans = append(spans, convertFromHTTPTrace(&httpTrace))
+			case httpfltr.HTTPInfo:
+				info := t
+				spans = append(spans, convertFromHTTPInfo(&info))
+			}
 		}
 		out <- spans
 	}
@@ -112,7 +123,7 @@ func (s *HTTPRequestSpan) Timings() Timings {
 	}
 }
 
-func convert(trace *ebpfcommon.HTTPRequestTrace) HTTPRequestSpan {
+func convertFromHTTPTrace(trace *ebpfcommon.HTTPRequestTrace) HTTPRequestSpan {
 	// From C, assuming 0-ended strings
 	methodLen := bytes.IndexByte(trace.Method[:], 0)
 	if methodLen < 0 {
@@ -154,5 +165,23 @@ func convert(trace *ebpfcommon.HTTPRequestTrace) HTTPRequestSpan {
 		Start:         int64(trace.StartMonotimeNs),
 		End:           int64(trace.EndMonotimeNs),
 		Status:        int(trace.Status),
+	}
+}
+
+func convertFromHTTPInfo(info *httpfltr.HTTPInfo) HTTPRequestSpan {
+	return HTTPRequestSpan{
+		Type:          EventType(info.Type),
+		ID:            0,
+		Method:        info.Method,
+		Path:          info.URL,
+		Peer:          info.Peer,
+		Host:          info.Host,
+		HostPort:      int(info.ConnInfo.D_port),
+		ContentLength: 0,
+		RequestStart:  int64(info.StartMonotimeNs),
+		Start:         int64(info.StartMonotimeNs),
+		End:           int64(info.EndMonotimeNs),
+		Status:        int(info.Status),
+		ServiceName:   info.Comm,
 	}
 }

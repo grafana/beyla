@@ -28,6 +28,7 @@ type SessionSpan struct {
 
 var topSpans, _ = lru.New[uint64, SessionSpan](8192)
 var clientSpans, _ = lru.New[uint64, []transform.HTTPRequestSpan](8192)
+var namedTracers, _ = lru.New[string, *trace.TracerProvider](512)
 
 const reporterName = "github.com/grafana/ebpf-autoinstrument"
 
@@ -58,6 +59,7 @@ type TracesReporter struct {
 	ctx           context.Context
 	traceExporter *otlptrace.Exporter
 	traceProvider *trace.TracerProvider
+	bsp           trace.SpanProcessor
 }
 
 func TracesReporterProvider(ctx context.Context, cfg TracesConfig) (node.TerminalFunc[[]transform.HTTPRequestSpan], error) { //nolint:gocritic
@@ -71,8 +73,6 @@ func TracesReporterProvider(ctx context.Context, cfg TracesConfig) (node.Termina
 
 func newTracesReporter(ctx context.Context, cfg *TracesConfig) (*TracesReporter, error) {
 	r := TracesReporter{ctx: ctx}
-
-	resources := otelResource(ctx, cfg.ServiceName, cfg.ServiceNamespace)
 
 	// Instantiate the OTLP HTTP traceExporter
 	topts, err := getTracesEndpointOptions(cfg)
@@ -98,10 +98,11 @@ func newTracesReporter(ctx context.Context, cfg *TracesConfig) (*TracesReporter,
 		opts = append(opts, trace.WithExportTimeout(cfg.ExportTimeout))
 	}
 
-	bsp := trace.NewBatchSpanProcessor(r.traceExporter, opts...)
+	resource := otelResource(ctx, cfg.ServiceName, cfg.ServiceNamespace)
+	r.bsp = trace.NewBatchSpanProcessor(r.traceExporter, opts...)
 	r.traceProvider = trace.NewTracerProvider(
-		trace.WithResource(resources),
-		trace.WithSpanProcessor(bsp),
+		trace.WithResource(resource),
+		trace.WithSpanProcessor(r.bsp),
 	)
 
 	return &r, nil
@@ -116,10 +117,12 @@ func (r *TracesReporter) close() {
 	}
 }
 
-func traceAttributes(span *transform.HTTPRequestSpan) []attribute.KeyValue {
+func (r *TracesReporter) traceAttributes(span *transform.HTTPRequestSpan) []attribute.KeyValue {
+	var attrs []attribute.KeyValue
+
 	switch span.Type {
 	case transform.EventTypeHTTP:
-		attrs := []attribute.KeyValue{
+		attrs = []attribute.KeyValue{
 			semconv.HTTPMethod(span.Method),
 			semconv.HTTPStatusCode(span.Status),
 			semconv.HTTPTarget(span.Path),
@@ -131,9 +134,8 @@ func traceAttributes(span *transform.HTTPRequestSpan) []attribute.KeyValue {
 		if span.Route != "" {
 			attrs = append(attrs, semconv.HTTPRoute(span.Route))
 		}
-		return attrs
 	case transform.EventTypeGRPC:
-		return []attribute.KeyValue{
+		attrs = []attribute.KeyValue{
 			semconv.RPCMethod(span.Path),
 			semconv.RPCSystemGRPC,
 			semconv.RPCGRPCStatusCodeKey.Int(span.Status),
@@ -142,7 +144,7 @@ func traceAttributes(span *transform.HTTPRequestSpan) []attribute.KeyValue {
 			semconv.NetHostPort(span.HostPort),
 		}
 	case transform.EventTypeHTTPClient:
-		return []attribute.KeyValue{
+		attrs = []attribute.KeyValue{
 			semconv.HTTPMethod(span.Method),
 			semconv.HTTPStatusCode(span.Status),
 			semconv.HTTPURL(span.Path),
@@ -151,7 +153,7 @@ func traceAttributes(span *transform.HTTPRequestSpan) []attribute.KeyValue {
 			semconv.HTTPRequestContentLength(int(span.ContentLength)),
 		}
 	case transform.EventTypeGRPCClient:
-		return []attribute.KeyValue{
+		attrs = []attribute.KeyValue{
 			semconv.RPCMethod(span.Path),
 			semconv.RPCSystemGRPC,
 			semconv.RPCGRPCStatusCodeKey.Int(span.Status),
@@ -159,7 +161,12 @@ func traceAttributes(span *transform.HTTPRequestSpan) []attribute.KeyValue {
 			semconv.NetPeerPort(span.HostPort),
 		}
 	}
-	return []attribute.KeyValue{}
+
+	if span.ServiceName != "" { // we don't have service name set, system wide instrumentation
+		attrs = append(attrs, semconv.ServiceName(span.ServiceName))
+	}
+
+	return attrs
 }
 
 func traceName(span *transform.HTTPRequestSpan) string {
@@ -188,14 +195,14 @@ func spanKind(span *transform.HTTPRequestSpan) trace2.SpanKind {
 	return trace2.SpanKindInternal
 }
 
-func makeSpan(parentCtx context.Context, tracer trace2.Tracer, span *transform.HTTPRequestSpan) SessionSpan {
+func (r *TracesReporter) makeSpan(parentCtx context.Context, tracer trace2.Tracer, span *transform.HTTPRequestSpan) SessionSpan {
 	t := span.Timings()
 
 	// Create a parent span for the whole request session
 	ctx, sp := tracer.Start(parentCtx, traceName(span),
 		trace2.WithTimestamp(t.RequestStart),
 		trace2.WithSpanKind(spanKind(span)),
-		trace2.WithAttributes(traceAttributes(span)...),
+		trace2.WithAttributes(r.traceAttributes(span)...),
 	)
 
 	if span.RequestStart != span.Start {
@@ -246,49 +253,72 @@ func (r *TracesReporter) reportClientSpan(span *transform.HTTPRequestSpan, trace
 		}
 	}
 
-	makeSpan(ctx, tracer, span)
+	r.makeSpan(ctx, tracer, span)
 }
 
 func (r *TracesReporter) reportServerSpan(span *transform.HTTPRequestSpan, tracer trace2.Tracer) {
-	s := makeSpan(r.ctx, tracer, span)
-	topSpans.Add(span.ID, s)
-	cs, ok := clientSpans.Get(span.ID)
-	newer := []transform.HTTPRequestSpan{}
-	if ok {
-		// finish any client spans that were waiting for this parent span
-		for j := range cs {
-			cspan := &cs[j]
-			if cspan.Inside(span) {
-				makeSpan(s.RootCtx, tracer, cspan)
-			} else if cspan.Start > span.RequestStart {
-				newer = append(newer, *cspan)
-			} else {
-				makeSpan(r.ctx, tracer, cspan)
+
+	s := r.makeSpan(r.ctx, tracer, span)
+	if span.ID != 0 {
+		topSpans.Add(span.ID, s)
+		cs, ok := clientSpans.Get(span.ID)
+		newer := []transform.HTTPRequestSpan{}
+		if ok {
+			// finish any client spans that were waiting for this parent span
+			for j := range cs {
+				cspan := &cs[j]
+				if cspan.Inside(span) {
+					r.makeSpan(s.RootCtx, tracer, cspan)
+				} else if cspan.Start > span.RequestStart {
+					newer = append(newer, *cspan)
+				} else {
+					r.makeSpan(r.ctx, tracer, cspan)
+				}
 			}
-		}
-		if len(newer) == 0 {
-			clientSpans.Remove(span.ID)
-		} else {
-			clientSpans.Add(span.ID, newer)
+			if len(newer) == 0 {
+				clientSpans.Remove(span.ID)
+			} else {
+				clientSpans.Add(span.ID, newer)
+			}
 		}
 	}
 }
 
 func (r *TracesReporter) reportTraces(input <-chan []transform.HTTPRequestSpan) {
 	defer r.close()
-	tracer := r.traceProvider.Tracer(reporterName)
+	defaultTracer := r.traceProvider.Tracer(reporterName)
 	for spans := range input {
 		for i := range spans {
+			spanTracer := defaultTracer
 			span := &spans[i]
+
+			if span.ServiceName != "" {
+				spanTracer = r.namedTracer(span.ServiceName)
+			}
 
 			switch span.Type {
 			case transform.EventTypeHTTPClient, transform.EventTypeGRPCClient:
-				r.reportClientSpan(span, tracer)
+				r.reportClientSpan(span, spanTracer)
 			case transform.EventTypeHTTP, transform.EventTypeGRPC:
-				r.reportServerSpan(span, tracer)
+				r.reportServerSpan(span, spanTracer)
 			}
 		}
 	}
+}
+
+func (r *TracesReporter) namedTracer(comm string) trace2.Tracer {
+	traceProvider, ok := namedTracers.Get(comm)
+
+	if !ok {
+		resource := otelResource(r.ctx, comm, "")
+		traceProvider = trace.NewTracerProvider(
+			trace.WithResource(resource),
+			trace.WithSpanProcessor(r.bsp),
+		)
+		namedTracers.Add(comm, traceProvider)
+	}
+
+	return traceProvider.Tracer(reporterName)
 }
 
 func getTracesEndpointOptions(cfg *TracesConfig) ([]otlptracehttp.Option, error) {

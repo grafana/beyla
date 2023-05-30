@@ -149,6 +149,18 @@ func TestHTTPInfoParsing(t *testing.T) {
 		s := convertFromHTTPInfo(&tr)
 		assertMatchesInfo(t, &s, "POST", "/users", "127.0.0.1", "127.0.0.2", "curl", 8080, 200, 5)
 	})
+
+	t.Run("Test empty URL", func(t *testing.T) {
+		tr := makeHTTPInfo("POST", "", "127.0.0.1", "127.0.0.2", "curl", 12345, 8080, 200, 5)
+		s := convertFromHTTPInfo(&tr)
+		assertMatchesInfo(t, &s, "POST", "", "127.0.0.1", "127.0.0.2", "curl", 8080, 200, 5)
+	})
+
+	t.Run("Test parsing with URL parameters", func(t *testing.T) {
+		tr := makeHTTPInfo("POST", "/users?query=1234", "127.0.0.1", "127.0.0.2", "curl", 12345, 8080, 200, 5)
+		s := convertFromHTTPInfo(&tr)
+		assertMatchesInfo(t, &s, "POST", "/users", "127.0.0.1", "127.0.0.2", "curl", 8080, 200, 5)
+	})
 }
 
 func assertMatchesInfo(t *testing.T, span *HTTPRequestSpan, method, path, peer, host, comm string, hostPort int, status int, durationMs uint64) {

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"net"
 	"strconv"
+	"strings"
 	"time"
 
 	ebpfcommon "github.com/grafana/ebpf-autoinstrument/pkg/ebpf/common"
@@ -173,7 +174,7 @@ func convertFromHTTPInfo(info *httpfltr.HTTPInfo) HTTPRequestSpan {
 		Type:          EventType(info.Type),
 		ID:            0,
 		Method:        info.Method,
-		Path:          info.URL,
+		Path:          strings.Split(info.URL, "?")[0],
 		Peer:          info.Peer,
 		Host:          info.Host,
 		HostPort:      int(info.ConnInfo.D_port),

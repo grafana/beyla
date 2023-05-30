@@ -135,16 +135,11 @@ func (p *Tracer) toRequestTrace(record *ringbuf.Record) (any, error) {
 
 	result = HTTPInfo{bpfHttpInfoT: event}
 
-	result.Type = event.Type
-	result.StartMonotimeNs = event.StartMonotimeNs
-	result.EndMonotimeNs = event.EndMonotimeNs
-	result.Status = event.Status
-
-	source, target := event.getHostInfo()
+	source, target := event.hostInfo()
 	result.Host = target
 	result.Peer = source
-	result.URL = event.getURL()
-	result.Method = event.getMethod()
+	result.URL = event.url()
+	result.Method = event.method()
 	if p.Cfg.SystemWide {
 		result.Comm = p.serviceName(event.Pid)
 	}
@@ -152,7 +147,7 @@ func (p *Tracer) toRequestTrace(record *ringbuf.Record) (any, error) {
 	return result, nil
 }
 
-func (event *bpfHttpInfoT) getURL() string {
+func (event *bpfHttpInfoT) url() string {
 	buf := string(event.Buf[:])
 	space := strings.Index(buf, " ")
 	if space < 0 {
@@ -166,7 +161,7 @@ func (event *bpfHttpInfoT) getURL() string {
 	return buf[space+1 : nextSpace+space+1]
 }
 
-func (event *bpfHttpInfoT) getMethod() string {
+func (event *bpfHttpInfoT) method() string {
 	buf := string(event.Buf[:])
 	space := strings.Index(buf, " ")
 	if space < 0 {
@@ -176,7 +171,7 @@ func (event *bpfHttpInfoT) getMethod() string {
 	return buf[:space]
 }
 
-func (event *bpfHttpInfoT) getHostInfo() (source, target string) {
+func (event *bpfHttpInfoT) hostInfo() (source, target string) {
 	src := make(net.IP, net.IPv6len)
 	dst := make(net.IP, net.IPv6len)
 	copy(src, event.ConnInfo.S_addr[:])
@@ -185,18 +180,23 @@ func (event *bpfHttpInfoT) getHostInfo() (source, target string) {
 	return src.String(), dst.String()
 }
 
+func cstr(chars []uint8) string {
+	addrLen := bytes.IndexByte(chars[:], 0)
+	if addrLen < 0 {
+		addrLen = len(chars)
+	}
+
+	return string(chars[:addrLen])
+}
+
 func (p *Tracer) commNameOfDeadPid(pid uint32) string {
 	var name [16]uint8
 	err := p.bpfObjects.DeadPids.Lookup(pid, &name)
 	if err != nil {
 		return ""
 	}
-	addrLen := bytes.IndexByte(name[:], 0)
-	if addrLen < 0 {
-		addrLen = len(name)
-	}
 
-	return string(name[:addrLen])
+	return string(cstr(name[:]))
 }
 
 func (p *Tracer) commName(pid uint32) string {

@@ -68,3 +68,41 @@ func TestSuite_PrometheusScrape(t *testing.T) {
 	require.NoError(t, compose.Close())
 	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
 }
+
+func TestSuite_Java(t *testing.T) {
+	compose, err := docker.ComposeSuite("docker-compose-java.yml", path.Join(pathOutput, "test-suite-java.log"))
+	require.NoError(t, err)
+	require.NoError(t, compose.Up())
+	t.Run("Java RED metrics", testREDMetricsJavaHTTP)
+	t.Run("BPF pinning folder mounted", testBPFPinningMounted)
+	require.NoError(t, compose.Close())
+	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
+}
+
+// same as Test suite for java, but using the system_wide instrumentation
+// TODO: Fix the service name, mimir seems to work with what we have, but not Prometheus
+func TestSuite_Java_SystemWide(t *testing.T) {
+	compose, err := docker.ComposeSuite("docker-compose-java.yml", path.Join(pathOutput, "test-suite-java-system-wide.log"))
+	compose.Env = append(compose.Env, `SYSTEM_WIDE=TRUE`, `JAVA_EXECUTABLE_NAME=`)
+	require.NoError(t, err)
+	require.NoError(t, compose.Up())
+	t.Run("Java RED metrics", testREDMetricsJavaHTTPSystemWide)
+	t.Run("BPF pinning folder mounted", testBPFPinningMounted)
+	require.NoError(t, compose.Close())
+	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
+}
+
+// Same as Java Test suite, but searching the executable by port instead of executable name. We also run the jar version of Java instead of native image
+func TestSuite_Java_OpenPort(t *testing.T) {
+	compose, err := docker.ComposeSuite("docker-compose-java.yml", path.Join(pathOutput, "test-suite-java-openport.log"))
+	compose.Env = append(compose.Env, `JAVA_OPEN_PORT=8085`, `JAVA_EXECUTABLE_NAME=""`)
+	compose.Env = append(compose.Env, `TEST_DOCKERFILE_SUFFIX=_jar`)
+	compose.Env = append(compose.Env, `OTEL_SERVICE_NAME=greeting`)
+	require.NoError(t, err)
+	require.NoError(t, compose.Up())
+	t.Run("Java RED metrics", testREDMetricsJavaHTTP)
+
+	t.Run("BPF pinning folder mounted", testBPFPinningMounted)
+	require.NoError(t, compose.Close())
+	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
+}

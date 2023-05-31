@@ -37,7 +37,6 @@ func TestBasicPipeline(t *testing.T) {
 	graph.RegisterStart(gb.builder, func(_ context.Context, _ ebpfcommon.TracerConfig) (node.StartFuncCtx[[]any], error) {
 		return func(_ context.Context, out chan<- []any) {
 			out <- newRequest(1, "GET", "/foo/bar", "1.1.1.1:3456", 404)
-			out <- newHttpInfo("PATCH", "/aaa/bbb", "1.1.1.1", 204)
 		}, nil
 	})
 	pipe, err := gb.buildGraph(ctx)
@@ -58,19 +57,6 @@ func TestBasicPipeline(t *testing.T) {
 		Type: pmetric.MetricTypeHistogram,
 	}, event)
 
-	event = testutil.ReadChannel(t, tc.Records, testTimeout)
-	assert.Equal(t, collector.MetricRecord{
-		Name: "http.server.duration",
-		Unit: "s",
-		Attributes: map[string]string{
-			string(semconv.HTTPMethodKey):      "PATCH",
-			string(semconv.HTTPStatusCodeKey):  "204",
-			string(semconv.HTTPTargetKey):      "/aaa/bbb",
-			string(semconv.NetSockPeerAddrKey): "1.1.1.1",
-			string(semconv.ServiceNameKey):     "comm",
-		},
-		Type: pmetric.MetricTypeHistogram,
-	}, event)
 }
 
 func TestTracerPipeline(t *testing.T) {
@@ -85,7 +71,6 @@ func TestTracerPipeline(t *testing.T) {
 	graph.RegisterStart(gb.builder, func(_ context.Context, _ ebpfcommon.TracerConfig) (node.StartFuncCtx[[]any], error) {
 		return func(_ context.Context, out chan<- []any) {
 			out <- newRequest(1, "GET", "/foo/bar", "1.1.1.1:3456", 404)
-			out <- newHttpInfo("PATCH", "/aaa/bbb", "1.1.1.1", 204)
 		}, nil
 	})
 	pipe, err := gb.buildGraph(ctx)
@@ -99,8 +84,6 @@ func TestTracerPipeline(t *testing.T) {
 	matchInnerTraceEvent(t, "processing", event)
 	event = testutil.ReadChannel(t, tc.TraceRecords, testTimeout)
 	matchTraceEvent(t, "GET", event)
-	event = testutil.ReadChannel(t, tc.TraceRecords, testTimeout)
-	matchInfoEvent(t, "PATCH", event)
 }
 
 func TestRouteConsolidation(t *testing.T) {
@@ -431,7 +414,7 @@ func matchNestedEvent(t *testing.T, name, method, target, status string, kind pt
 	assert.Equal(t, kind, event.Kind)
 }
 
-func newHttpInfo(method, path, peer string, status int) []any {
+func newHTTPInfo(method, path, peer string, status int) []any {
 	var i httpfltr.HTTPInfo
 	i.Type = 1
 	i.Method = method
@@ -465,4 +448,61 @@ func matchInfoEvent(t *testing.T, name string, event collector.TraceRecord) {
 		},
 		Kind: ptrace.SpanKindServer,
 	}, event)
+}
+
+func TestBasicPipelineInfo(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	tc, err := collector.Start(ctx)
+	require.NoError(t, err)
+
+	gb := newGraphBuilder(&Config{Metrics: otel.MetricsConfig{MetricsEndpoint: tc.ServerEndpoint, ReportTarget: true, ReportPeerInfo: true}})
+	// Override eBPF tracer to send some fake data
+	graph.RegisterStart(gb.builder, func(_ context.Context, _ ebpfcommon.TracerConfig) (node.StartFuncCtx[[]any], error) {
+		return func(_ context.Context, out chan<- []any) {
+			out <- newHTTPInfo("PATCH", "/aaa/bbb", "1.1.1.1", 204)
+		}, nil
+	})
+	pipe, err := gb.buildGraph(ctx)
+	require.NoError(t, err)
+
+	go pipe.Run(ctx)
+
+	event := testutil.ReadChannel(t, tc.Records, testTimeout)
+	assert.Equal(t, collector.MetricRecord{
+		Name: "http.server.duration",
+		Unit: "s",
+		Attributes: map[string]string{
+			string(semconv.HTTPMethodKey):      "PATCH",
+			string(semconv.HTTPStatusCodeKey):  "204",
+			string(semconv.HTTPTargetKey):      "/aaa/bbb",
+			string(semconv.NetSockPeerAddrKey): "1.1.1.1",
+			string(semconv.ServiceNameKey):     "comm",
+		},
+		Type: pmetric.MetricTypeHistogram,
+	}, event)
+}
+
+func TestTracerPipelineInfo(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	tc, err := collector.Start(ctx)
+	require.NoError(t, err)
+
+	gb := newGraphBuilder(&Config{Traces: otel.TracesConfig{TracesEndpoint: tc.ServerEndpoint, ServiceName: "test"}})
+	// Override eBPF tracer to send some fake data
+	graph.RegisterStart(gb.builder, func(_ context.Context, _ ebpfcommon.TracerConfig) (node.StartFuncCtx[[]any], error) {
+		return func(_ context.Context, out chan<- []any) {
+			out <- newHTTPInfo("PATCH", "/aaa/bbb", "1.1.1.1", 204)
+		}, nil
+	})
+	pipe, err := gb.buildGraph(ctx)
+	require.NoError(t, err)
+
+	go pipe.Run(ctx)
+
+	event := testutil.ReadChannel(t, tc.TraceRecords, testTimeout)
+	matchInfoEvent(t, "PATCH", event)
 }

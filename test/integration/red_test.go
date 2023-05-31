@@ -1,6 +1,5 @@
 //go:build integration
 
-// nolint
 package integration
 
 import (

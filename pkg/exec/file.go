@@ -32,7 +32,7 @@ type FileInfo struct {
 }
 
 // ProcessFinder allows finding a process given multiple criteria
-type ProcessFinder func() (*process.Process, bool)
+type ProcessFinder func() ([]*process.Process, bool)
 
 func log() *slog.Logger {
 	return slog.With("component", "exec")
@@ -41,7 +41,7 @@ func log() *slog.Logger {
 // ProcessNamed allows finding a Process whose name path contains the passed string
 // TODO: use regular expression
 func ProcessNamed(pathSuffix string) ProcessFinder {
-	return func() (*process.Process, bool) {
+	return func() ([]*process.Process, bool) {
 		log := log().With("pathSuffix", pathSuffix)
 		log.Debug("searching executable by process name")
 		processes, err := process.Processes()
@@ -57,7 +57,7 @@ func ProcessNamed(pathSuffix string) ProcessFinder {
 			}
 
 			if strings.HasSuffix(exePath, pathSuffix) {
-				return p, true
+				return []*process.Process{p}, true
 			}
 		}
 		return nil, false
@@ -66,7 +66,8 @@ func ProcessNamed(pathSuffix string) ProcessFinder {
 
 // OwnedPort allows finding a Process that owns the passed port
 func OwnedPort(port int) ProcessFinder {
-	return func() (*process.Process, bool) {
+	return func() ([]*process.Process, bool) {
+		var found []*process.Process
 		log := log().With("port", port)
 		log.Debug("searching executable by port number")
 		processes, err := process.Processes()
@@ -82,50 +83,57 @@ func OwnedPort(port int) ProcessFinder {
 			}
 			for _, c := range conns {
 				if c.Laddr.Port == uint32(port) {
-					return p, true
+					comm, _ := p.Cmdline()
+					log.Info("found process", "pid", p.Pid, "comm", comm)
+					found = append(found, p)
 				}
 			}
 		}
-		return nil, false
+		return found, len(found) != 0
 	}
 }
 
 // findExecELF operation blocks until the executable is available.
 // TODO: check that all the existing instances of the excutable are instrumented, even when it is offloaded from memory
-func FindExecELF(ctx context.Context, finder ProcessFinder) (FileInfo, error) {
+func FindExecELF(ctx context.Context, finder ProcessFinder) ([]FileInfo, error) {
+	var fileInfos []FileInfo
 	for {
 		log().Debug("searching for process executable")
-		p, ok := finder()
+		processes, ok := finder()
 		if !ok {
 			select {
 			case <-ctx.Done():
 				log().Debug("context was cancelled before finding the process. Exiting")
-				return FileInfo{}, errors.New("process not found")
+				return []FileInfo{}, errors.New("process not found")
 			default:
 				log().Debug("no processes found. Will retry", "retryAfter", retryTicker.String())
 				time.Sleep(retryTicker)
 			}
 			continue
 		}
-		exePath, err := p.Exe()
-		if err != nil {
-			// this might happen if you query from the port a service that does not have executable path.
-			// Since this value is just for attributing, we set a default placeholder
-			exePath = "unknown"
+		for _, p := range processes {
+			exePath, err := p.Exe()
+			if err != nil {
+				// this might happen if you query from the port a service that does not have executable path.
+				// Since this value is just for attributing, we set a default placeholder
+				exePath = "unknown"
+			}
+			// In container environments or K8s, we can't just open the executable exe path, because it might
+			// be in the volume of another pod/container. We need to access it through the /proc/<pid>/exe symbolic link
+			file := FileInfo{
+				CmdExePath: exePath,
+				// TODO: allow overriding /proc root folder
+				ProExeLinkPath: fmt.Sprintf("/proc/%d/exe", p.Pid),
+				Pid:            p.Pid,
+			}
+			file.ELF, err = elf.Open(file.ProExeLinkPath)
+			if err != nil {
+				return fileInfos, fmt.Errorf("can't open ELF executable file %q: %w", exePath, err)
+			}
+			fileInfos = append(fileInfos, file)
 		}
-		// In container environments or K8s, we can't just open the executable exe path, because it might
-		// be in the volume of another pod/container. We need to access it through the /proc/<pid>/exe symbolic link
-		file := FileInfo{
-			CmdExePath: exePath,
-			// TODO: allow overriding /proc root folder
-			ProExeLinkPath: fmt.Sprintf("/proc/%d/exe", p.Pid),
-			Pid:            p.Pid,
-		}
-		file.ELF, err = elf.Open(file.ProExeLinkPath)
-		if err != nil {
-			return file, fmt.Errorf("can't open ELF executable file %q: %w", exePath, err)
-		}
-		return file, nil
+
+		return fileInfos, nil
 	}
 	// TODO: return error after X attempts?
 }

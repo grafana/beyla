@@ -1,0 +1,79 @@
+version: '3.8'
+
+services:
+  javatestserver:
+    image: grcevski/tests:greeting${JAVA_TEST_MODE}
+    ports:
+      - "8085:8085"
+    environment:
+      LOG_LEVEL: DEBUG
+
+  javaautoinstrumenter:
+    build:
+      context: ../..
+      dockerfile: ./test/integration/components/otelauto/Dockerfile
+    command:
+      - /otelauto
+      - --config=/configs/instrumenter-config-java.yml
+    volumes:
+      - ./configs/:/configs
+      - ../../testoutput:/coverage
+      - ../../testoutput/run:/var/run/otelauto
+    image: hatest-javaautoinstrumenter
+    privileged: true # in some environments (not GH Pull Requests) you can set it to false and then cap_add: [ SYS_ADMIN ]
+    network_mode: "host"
+    pid: "host"
+    environment:
+      GOCOVERDIR: "/coverage"
+      PRINT_TRACES: "true"
+      OPEN_PORT: "${JAVA_OPEN_PORT}"
+      EXECUTABLE_NAME: "${JAVA_EXECUTABLE_NAME}"
+      SYSTEM_WIDE: "${SYSTEM_WIDE}"
+      OTEL_SERVICE_NAME: "${OTEL_SERVICE_NAME}"
+      SERVICE_NAMESPACE: "integration-test"
+      METRICS_INTERVAL: "10ms"
+      BPF_BATCH_TIMEOUT: "10ms"
+      LOG_LEVEL: "DEBUG"
+      BPF_DEBUG: "TRUE"
+      METRICS_REPORT_TARGET: "true"
+      METRICS_REPORT_PEER: "true"
+    ports:
+      - "8999:8999" # Prometheus scrape port, if enabled via config
+
+  # OpenTelemetry Collector
+  otelcol:
+    image: otel/opentelemetry-collector-contrib:0.77.0
+    container_name: otel-col
+    deploy:
+      resources:
+        limits:
+          memory: 125M
+    restart: unless-stopped
+    command: [ "--config=/etc/otelcol-config/otelcol-config.yml" ]
+    volumes:
+      - ./configs/:/etc/otelcol-config
+    ports:
+      - "4317"          # OTLP over gRPC receiver
+      - "4318:4318"     # OTLP over HTTP receiver
+      - "9464"          # Prometheus exporter
+      - "8888"          # metrics endpoint
+    depends_on:
+      javaautoinstrumenter:
+        condition: service_started
+      prometheus:
+        condition: service_started
+
+  # Prometheus
+  prometheus:
+    image: quay.io/prometheus/prometheus:v2.34.0
+    container_name: prometheus
+    command:
+      - --storage.tsdb.retention.time=30m
+      - --config.file=/etc/prometheus/prometheus-config.yml
+      - --storage.tsdb.path=/prometheus
+      - --web.enable-lifecycle
+      - --web.route-prefix=/
+    volumes:
+      - ./configs/:/etc/prometheus
+    ports:
+      - "9090:9090"

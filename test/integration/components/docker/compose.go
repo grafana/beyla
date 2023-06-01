@@ -19,6 +19,7 @@ type Compose struct {
 func defaultEnv() []string {
 	env := os.Environ()
 	env = append(env, "EXECUTABLE_NAME=testserver")
+	env = append(env, "JAVA_EXECUTABLE_NAME=greeting")
 	return env
 }
 

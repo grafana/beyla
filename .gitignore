@@ -37,3 +37,4 @@ test/cmd/python_pingserver/__pycache__/
 test/cmd/pingwrapper/wrapper
 test/cmd/grpc/server/grpcsrv
 test/cmd/greeting-service/target
+test/integration/components/javatestserver/target/

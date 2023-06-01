@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"net"
 	"strconv"
+	"strings"
 	"time"
 
 	ebpfcommon "github.com/grafana/ebpf-autoinstrument/pkg/ebpf/common"
@@ -168,12 +169,20 @@ func convertFromHTTPTrace(trace *ebpfcommon.HTTPRequestTrace) HTTPRequestSpan {
 	}
 }
 
+func removeQuery(url string) string {
+	idx := strings.IndexByte(url, '?')
+	if idx > 0 {
+		return url[:idx]
+	}
+	return url
+}
+
 func convertFromHTTPInfo(info *httpfltr.HTTPInfo) HTTPRequestSpan {
 	return HTTPRequestSpan{
 		Type:          EventType(info.Type),
 		ID:            0,
 		Method:        info.Method,
-		Path:          info.URL,
+		Path:          removeQuery(info.URL),
 		Peer:          info.Peer,
 		Host:          info.Host,
 		HostPort:      int(info.ConnInfo.D_port),

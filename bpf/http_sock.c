@@ -95,7 +95,7 @@ int BPF_KRETPROBE(kretprobe_sys_accept4, uint fd)
 
     if (parse_accept_socket_info(args, &info)) {
         sort_connection_info(&info);
-        dbg_print_http_connection_info(&info);
+        //dbg_print_http_connection_info(&info);
 
         http_connection_metadata_t meta = {};
         meta.id = id;
@@ -161,7 +161,7 @@ int BPF_KRETPROBE(kretprobe_sys_connect, int fd)
     if (parse_connect_sock_info(args, &info)) {
         bpf_dbg_printk("=== connect ret id=%d, pid=%d ===", id, pid_from_pid_tgid(id));
         sort_connection_info(&info);
-        dbg_print_http_connection_info(&info);
+        //dbg_print_http_connection_info(&info);
 
         http_connection_metadata_t meta = {};
         meta.id = id;
@@ -235,9 +235,6 @@ int socket__http_filter(struct __sk_buff *skb) {
         len = MIN_HTTP_SIZE;
     }
 
-    bpf_dbg_printk("=== http_filter len=%d %s ===", len, buf);
-    dbg_print_http_connection_info(&conn);
-
     u8 packet_type = 0;
     if (is_http(buf, len, &packet_type) || tcp_close(&tcp)) { // we must check tcp_close second, a packet can be a close and a response
         http_info_t info = {0};
@@ -253,12 +250,15 @@ int socket__http_filter(struct __sk_buff *skb) {
             if (packet_type == PACKET_TYPE_RESPONSE) {
                 // if we are filtering by application, ignore the packets not for this connection
                 meta = bpf_map_lookup_elem(&filtered_connections, &conn);
-                bpf_dbg_printk("Response meta=%lx", meta);
+                //bpf_dbg_printk("Response meta=%lx", meta);
                 if (!meta) {
                     return 0;
                 }
             }
         }
+        bpf_dbg_printk("=== http_filter len=%d %s ===", len, buf);
+        //dbg_print_http_connection_info(&conn);
+
         process_http(&info, &tcp, packet_type, info.buf, meta);
     }
 

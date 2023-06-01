@@ -2,10 +2,7 @@ version: '3.8'
 
 services:
   javatestserver:
-    build:
-      context: ../..
-      dockerfile: test/integration/components/javatestserver/Dockerfile${TEST_DOCKERFILE_SUFFIX}
-    image: hatest-javatestserver
+    image: grcevski/tests:greeting${JAVA_TEST_MODE}
     ports:
       - "8085:8085"
     environment:

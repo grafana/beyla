@@ -299,6 +299,8 @@ func inspectByPort(ctx context.Context, cfg *ebpfcommon.TracerConfig, functions 
 
 	// look for suitable Go application first
 	for _, execElf := range elfs {
+		logger().Info("inspecting", "pid", execElf.Pid, "comm", execElf.CmdExePath)
+
 		offsets, err := goexec.InspectOffsets(&execElf, functions)
 
 		if err != nil {
@@ -320,8 +322,6 @@ func inspectByPort(ctx context.Context, cfg *ebpfcommon.TracerConfig, functions 
 		goProxies = append(goProxies, execElf)
 	}
 
-	logger().Info("Go HTTP/gRPC support not detected. Using only generic instrumentation.")
-
 	var execElf exec.FileInfo
 
 	if len(goProxies) != 0 {
@@ -332,6 +332,7 @@ func inspectByPort(ctx context.Context, cfg *ebpfcommon.TracerConfig, functions 
 		return nil, nil, fmt.Errorf("looking for executable ELF, no suitable processes found")
 	}
 
+	logger().Info("Go HTTP/gRPC support not detected. Using only generic instrumentation.")
 	logger().Info("instrumented", "comm", execElf.CmdExePath)
 
 	setGlobalServiceName(ctx, &execElf)

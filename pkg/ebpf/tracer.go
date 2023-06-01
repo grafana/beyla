@@ -325,9 +325,9 @@ func inspectByPort(ctx context.Context, cfg *ebpfcommon.TracerConfig, functions 
 	var execElf exec.FileInfo
 
 	if len(goProxies) != 0 {
-		execElf = goProxies[0]
+		execElf = goProxies[len(goProxies)-1]
 	} else if len(fallBackInfos) != 0 {
-		execElf = fallBackInfos[0]
+		execElf = fallBackInfos[len(fallBackInfos)-1]
 	} else {
 		return nil, nil, fmt.Errorf("looking for executable ELF, no suitable processes found")
 	}

@@ -83,6 +83,7 @@ func OwnedPort(port int, ignorePids map[int32]bool) ProcessFinder {
 			if ignorePids[p.Pid] {
 				comm, _ := p.Cmdline()
 				log.Info("Ignoring invalid process", "process", p.Pid, "comm", comm)
+				continue
 			}
 			for _, c := range conns {
 				if c.Laddr.Port == uint32(port) {

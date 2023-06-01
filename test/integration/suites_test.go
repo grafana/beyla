@@ -71,7 +71,7 @@ func TestSuite_PrometheusScrape(t *testing.T) {
 
 func TestSuite_Java(t *testing.T) {
 	compose, err := docker.ComposeSuite("docker-compose-java.yml", path.Join(pathOutput, "test-suite-java.log"))
-	compose.Env = append(compose.Env, `JAVA_TEST_MODE=-native`)
+	compose.Env = append(compose.Env, `JAVA_TEST_MODE=-native`, `OTEL_SERVICE_NAME=greeting`)
 	require.NoError(t, err)
 	require.NoError(t, compose.Up())
 	t.Run("Java RED metrics", testREDMetricsJavaHTTP)

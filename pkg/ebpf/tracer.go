@@ -247,14 +247,18 @@ func allFunctionNames(programs []Tracer) []string {
 	return functions
 }
 
-func inspect(ctx context.Context, cfg *ebpfcommon.TracerConfig, functions []string) (*exec.FileInfo, *goexec.Offsets, error) {
-	var finder exec.ProcessFinder
+func setGlobalServiceName(ctx context.Context, execElf exec.FileInfo) {
+	parts := strings.Split(execElf.CmdExePath, "/")
+	global.Context(ctx).ServiceName = parts[len(parts)-1]
+}
 
+func inspect(ctx context.Context, cfg *ebpfcommon.TracerConfig, functions []string) (*exec.FileInfo, *goexec.Offsets, error) {
+	// Finding the process by port is more complex, it needs to skip proxies written in Go
 	if cfg.Port != 0 {
-		finder = exec.OwnedPort(cfg.Port)
-	} else {
-		finder = exec.ProcessNamed(cfg.Exec)
+		return inspectPort(ctx, cfg, functions)
 	}
+
+	finder := exec.ProcessNamed(cfg.Exec)
 	execElf, err := exec.FindExecELF(ctx, finder)
 	if err != nil {
 		return nil, nil, fmt.Errorf("looking for executable ELF: %w", err)
@@ -269,11 +273,46 @@ func inspect(ctx context.Context, cfg *ebpfcommon.TracerConfig, functions []stri
 			logger().Info("Go support not detected. Using only generic instrumentation.", "error", err)
 		}
 
-		parts := strings.Split(execElf.CmdExePath, "/")
-		global.Context(ctx).ServiceName = parts[len(parts)-1]
+		setGlobalServiceName(ctx, execElf)
 	}
 
 	return &execElf, offsets, nil
+}
+
+// Note: there may be a more efficient way to write this, by potentially passing a validator function to OwnedPort, but
+// the code might be a lot harder to follow.
+func inspectPort(ctx context.Context, cfg *ebpfcommon.TracerConfig, functions []string) (*exec.FileInfo, *goexec.Offsets, error) {
+	invalidPids := make(map[int32]bool)
+	for {
+		finder := exec.OwnedPort(cfg.Port, invalidPids)
+
+		execElf, err := exec.FindExecELF(ctx, finder)
+		if err != nil {
+			return nil, nil, fmt.Errorf("looking for executable ELF: %w", err)
+		}
+		defer execElf.ELF.Close()
+
+		setGlobalServiceName(ctx, execElf)
+
+		offsets, err := goexec.InspectOffsets(&execElf, functions)
+
+		// we didn't find any Go offsets
+		// TODO: add an option to keep looking for Go applications if we have a proxy in another language in front of Go
+		if err != nil {
+			logger().Info("Go support not detected. Using only generic instrumentation.", "error", err)
+			return &execElf, offsets, nil
+		}
+
+		// we found go offsets, let's see if this application is not a proxy
+		for f := range offsets.Funcs {
+			// if we find anything of interest other than the Go runtime, we consider this valid application
+			if !strings.HasPrefix(f, "runtime.") {
+				return &execElf, offsets, nil
+			}
+		}
+
+		invalidPids[execElf.Pid] = true
+	}
 }
 
 func printVerifierErrorInfo(err error) {

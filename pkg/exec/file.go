@@ -65,7 +65,7 @@ func ProcessNamed(pathSuffix string) ProcessFinder {
 }
 
 // OwnedPort allows finding a Process that owns the passed port
-func OwnedPort(port int) ProcessFinder {
+func OwnedPort(port int, ignorePids map[int32]bool) ProcessFinder {
 	return func() (*process.Process, bool) {
 		log := log().With("port", port)
 		log.Debug("searching executable by port number")
@@ -79,6 +79,10 @@ func OwnedPort(port int) ProcessFinder {
 			if err != nil {
 				log.Warn("can't get process connections. Ignoring", "process", p.Pid, "error", err)
 				continue
+			}
+			if ignorePids[p.Pid] {
+				comm, _ := p.Cmdline()
+				log.Info("Ignoring invalid process", "process", p.Pid, "comm", comm)
 			}
 			for _, c := range conns {
 				if c.Laddr.Port == uint32(port) {

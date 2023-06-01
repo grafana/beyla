@@ -169,12 +169,20 @@ func convertFromHTTPTrace(trace *ebpfcommon.HTTPRequestTrace) HTTPRequestSpan {
 	}
 }
 
+func removeQuery(url string) string {
+	idx := strings.IndexByte(url, '?')
+	if idx > 0 {
+		return url[:idx]
+	}
+	return url
+}
+
 func convertFromHTTPInfo(info *httpfltr.HTTPInfo) HTTPRequestSpan {
 	return HTTPRequestSpan{
 		Type:          EventType(info.Type),
 		ID:            0,
 		Method:        info.Method,
-		Path:          strings.Split(info.URL, "?")[0],
+		Path:          removeQuery(info.URL),
 		Peer:          info.Peer,
 		Host:          info.Host,
 		HostPort:      int(info.ConnInfo.D_port),

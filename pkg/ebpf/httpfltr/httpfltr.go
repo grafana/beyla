@@ -26,8 +26,11 @@ import (
 
 var activePids, _ = lru.New[uint32, string](64)
 
+type BPFHTTPInfo bpfHttpInfoT
+type BPFConnInfo bpfConnectionInfoT
+
 type HTTPInfo struct {
-	bpfHttpInfoT
+	BPFHTTPInfo
 	Method string
 	URL    string
 	Comm   string
@@ -125,7 +128,7 @@ func (p *Tracer) Run(ctx context.Context, eventsChan chan<- []any) {
 }
 
 func (p *Tracer) toRequestTrace(record *ringbuf.Record) (any, error) {
-	var event bpfHttpInfoT
+	var event BPFHTTPInfo
 	var result HTTPInfo
 
 	err := binary.Read(bytes.NewBuffer(record.RawSample), binary.LittleEndian, &event)
@@ -133,7 +136,7 @@ func (p *Tracer) toRequestTrace(record *ringbuf.Record) (any, error) {
 		return result, err
 	}
 
-	result = HTTPInfo{bpfHttpInfoT: event}
+	result = HTTPInfo{BPFHTTPInfo: event}
 
 	source, target := event.hostInfo()
 	result.Host = target
@@ -147,7 +150,7 @@ func (p *Tracer) toRequestTrace(record *ringbuf.Record) (any, error) {
 	return result, nil
 }
 
-func (event *bpfHttpInfoT) url() string {
+func (event *BPFHTTPInfo) url() string {
 	buf := string(event.Buf[:])
 	space := strings.Index(buf, " ")
 	if space < 0 {
@@ -161,7 +164,7 @@ func (event *bpfHttpInfoT) url() string {
 	return buf[space+1 : nextSpace+space+1]
 }
 
-func (event *bpfHttpInfoT) method() string {
+func (event *BPFHTTPInfo) method() string {
 	buf := string(event.Buf[:])
 	space := strings.Index(buf, " ")
 	if space < 0 {
@@ -171,7 +174,7 @@ func (event *bpfHttpInfoT) method() string {
 	return buf[:space]
 }
 
-func (event *bpfHttpInfoT) hostInfo() (source, target string) {
+func (event *BPFHTTPInfo) hostInfo() (source, target string) {
 	src := make(net.IP, net.IPv6len)
 	dst := make(net.IP, net.IPv6len)
 	copy(src, event.ConnInfo.S_addr[:])

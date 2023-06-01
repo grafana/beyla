@@ -127,18 +127,23 @@ func TestSpanNesting(t *testing.T) {
 }
 
 func makeHTTPInfo(method, path, peer, host, comm string, peerPort, hostPort uint32, status uint16, durationMs uint64) httpfltr.HTTPInfo {
-	var i httpfltr.HTTPInfo
-	i.Type = 1
-	i.Method = method
-	i.Peer = peer
-	i.URL = path
-	i.Host = host
+	bpfInfo := httpfltr.BPFHTTPInfo{
+		Type:            1,
+		Status:          status,
+		StartMonotimeNs: durationMs * 1000000,
+		EndMonotimeNs:   durationMs * 2 * 1000000,
+	}
+	i := httpfltr.HTTPInfo{
+		BPFHTTPInfo: bpfInfo,
+		Method:      method,
+		Peer:        peer,
+		URL:         path,
+		Host:        host,
+		Comm:        comm,
+	}
+
 	i.ConnInfo.D_port = uint16(hostPort)
 	i.ConnInfo.S_port = uint16(peerPort)
-	i.Status = status
-	i.StartMonotimeNs = durationMs * 1000000
-	i.EndMonotimeNs = durationMs * 2 * 1000000
-	i.Comm = comm
 
 	return i
 }

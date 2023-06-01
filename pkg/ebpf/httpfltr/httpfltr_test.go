@@ -13,26 +13,26 @@ import (
 const bufSize = 160
 
 func TestURL(t *testing.T) {
-	event := bpfHttpInfoT{
+	event := BPFHTTPInfo{
 		Buf: [bufSize]byte{'G', 'E', 'T', ' ', '/', 'p', 'a', 't', 'h', '?', 'q', 'u', 'e', 'r', 'y', '=', '1', '2', '3', '4', ' ', 'H', 'T', 'T', 'P', '/', '1', '.', '1'},
 	}
 	assert.Equal(t, "/path?query=1234", event.url())
-	event = bpfHttpInfoT{}
+	event = BPFHTTPInfo{}
 	assert.Equal(t, "", event.url())
 }
 
 func TestMethod(t *testing.T) {
-	event := bpfHttpInfoT{
+	event := BPFHTTPInfo{
 		Buf: [bufSize]byte{'G', 'E', 'T', ' ', '/', 'p', 'a', 't', 'h', ' ', 'H', 'T', 'T', 'P', '/', '1', '.', '1'},
 	}
 
 	assert.Equal(t, "GET", event.method())
-	event = bpfHttpInfoT{}
+	event = BPFHTTPInfo{}
 	assert.Equal(t, "", event.method())
 }
 
 func TestHostInfo(t *testing.T) {
-	event := bpfHttpInfoT{
+	event := BPFHTTPInfo{
 		ConnInfo: bpfConnectionInfoT{
 			S_addr: [16]byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff, 192, 168, 0, 1},
 			D_addr: [16]byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff, 8, 8, 8, 8},
@@ -44,7 +44,7 @@ func TestHostInfo(t *testing.T) {
 	assert.Equal(t, "192.168.0.1", source)
 	assert.Equal(t, "8.8.8.8", target)
 
-	event = bpfHttpInfoT{
+	event = BPFHTTPInfo{
 		ConnInfo: bpfConnectionInfoT{
 			S_addr: [16]byte{1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff, 192, 168, 0, 1},
 			D_addr: [16]byte{1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff, 8, 8, 8, 8},
@@ -56,7 +56,7 @@ func TestHostInfo(t *testing.T) {
 	assert.Equal(t, "100::ffff:c0a8:1", source)
 	assert.Equal(t, "100::ffff:808:808", target)
 
-	event = bpfHttpInfoT{
+	event = BPFHTTPInfo{
 		ConnInfo: bpfConnectionInfoT{},
 	}
 
@@ -84,7 +84,7 @@ func TestCstr(t *testing.T) {
 }
 
 func TestToRequestTrace(t *testing.T) {
-	var record bpfHttpInfoT
+	var record BPFHTTPInfo
 	record.Type = 1
 	record.StartMonotimeNs = 123456
 	record.EndMonotimeNs = 789012
@@ -102,11 +102,11 @@ func TestToRequestTrace(t *testing.T) {
 	assert.NoError(t, err)
 
 	expected := HTTPInfo{
-		bpfHttpInfoT: record,
-		Host:         "8.8.8.8",
-		Peer:         "192.168.0.1",
-		URL:          "/hello",
-		Method:       "GET",
+		BPFHTTPInfo: record,
+		Host:        "8.8.8.8",
+		Peer:        "192.168.0.1",
+		URL:         "/hello",
+		Method:      "GET",
 	}
 	assert.Equal(t, expected, result)
 }

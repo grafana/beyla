@@ -303,6 +303,7 @@ func inspectByPort(ctx context.Context, cfg *ebpfcommon.TracerConfig, functions 
 
 		if err != nil {
 			fallBackInfos = append(fallBackInfos, execElf)
+			logger().Info("adding fall-back generic executable", "pid", execElf.Pid, "comm", execElf.CmdExePath)
 			continue
 		}
 
@@ -313,21 +314,25 @@ func inspectByPort(ctx context.Context, cfg *ebpfcommon.TracerConfig, functions 
 				setGlobalServiceName(ctx, &execElf)
 				return &execElf, offsets, nil
 			}
-			goProxies = append(goProxies, execElf)
 		}
+
+		logger().Info("ignoring Go proxy for now", "pid", execElf.Pid, "comm", execElf.CmdExePath)
+		goProxies = append(goProxies, execElf)
 	}
 
 	logger().Info("Go HTTP/gRPC support not detected. Using only generic instrumentation.")
 
 	var execElf exec.FileInfo
 
-	if len(fallBackInfos) != 0 {
-		execElf = fallBackInfos[0]
-	} else if len(goProxies) != 0 {
+	if len(goProxies) != 0 {
 		execElf = goProxies[0]
+	} else if len(fallBackInfos) != 0 {
+		execElf = fallBackInfos[0]
 	} else {
 		return nil, nil, fmt.Errorf("looking for executable ELF, no suitable processes found")
 	}
+
+	logger().Info("instrumented", "comm", execElf.CmdExePath)
 
 	setGlobalServiceName(ctx, &execElf)
 	return &execElf, nil, nil

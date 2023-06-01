@@ -83,6 +83,8 @@ func OwnedPort(port int) ProcessFinder {
 			}
 			for _, c := range conns {
 				if c.Laddr.Port == uint32(port) {
+					comm, _ := p.Cmdline()
+					log.Info("found process", "pid", p.Pid, "comm", comm)
 					found = append(found, p)
 				}
 			}

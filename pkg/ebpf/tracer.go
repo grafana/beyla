@@ -247,72 +247,90 @@ func allFunctionNames(programs []Tracer) []string {
 	return functions
 }
 
-func setGlobalServiceName(ctx context.Context, execElf exec.FileInfo) {
+func setGlobalServiceName(ctx context.Context, execElf *exec.FileInfo) {
 	parts := strings.Split(execElf.CmdExePath, "/")
 	global.Context(ctx).ServiceName = parts[len(parts)-1]
 }
 
 func inspect(ctx context.Context, cfg *ebpfcommon.TracerConfig, functions []string) (*exec.FileInfo, *goexec.Offsets, error) {
-	// Finding the process by port is more complex, it needs to skip proxies written in Go
+	// Finding the process by port is more complex, it needs to skip proxies
 	if cfg.Port != 0 {
-		return inspectPort(ctx, cfg, functions)
+		return inspectByPort(ctx, cfg, functions)
 	}
 
 	finder := exec.ProcessNamed(cfg.Exec)
-	execElf, err := exec.FindExecELF(ctx, finder)
-	if err != nil {
+	elfs, err := exec.FindExecELF(ctx, finder)
+	for _, exec := range elfs {
+		defer exec.ELF.Close()
+	}
+	if err != nil || len(elfs) == 0 {
 		return nil, nil, fmt.Errorf("looking for executable ELF: %w", err)
 	}
-	defer execElf.ELF.Close()
 
+	// when we look by executable name we pick the first one, we look at all processes only when we pick by port to avoid proxies
+	execElf := elfs[0]
 	var offsets *goexec.Offsets
 
 	if !cfg.SystemWide {
 		offsets, err = goexec.InspectOffsets(&execElf, functions)
 		if err != nil {
-			logger().Info("Go support not detected. Using only generic instrumentation.", "error", err)
+			logger().Info("Go HTTP/gRPC support not detected. Using only generic instrumentation.", "error", err)
 		}
 
-		setGlobalServiceName(ctx, execElf)
+		setGlobalServiceName(ctx, &execElf)
 	}
 
 	return &execElf, offsets, nil
 }
 
-// Note: there may be a more efficient way to write this, by potentially passing a validator function to OwnedPort, but
-// the code might be a lot harder to follow.
-func inspectPort(ctx context.Context, cfg *ebpfcommon.TracerConfig, functions []string) (*exec.FileInfo, *goexec.Offsets, error) {
-	invalidPids := make(map[int32]bool)
-	for {
-		finder := exec.OwnedPort(cfg.Port, invalidPids)
+func inspectByPort(ctx context.Context, cfg *ebpfcommon.TracerConfig, functions []string) (*exec.FileInfo, *goexec.Offsets, error) {
+	finder := exec.OwnedPort(cfg.Port)
 
-		execElf, err := exec.FindExecELF(ctx, finder)
-		if err != nil {
-			return nil, nil, fmt.Errorf("looking for executable ELF: %w", err)
-		}
-		defer execElf.ELF.Close()
+	elfs, err := exec.FindExecELF(ctx, finder)
+	for _, exec := range elfs {
+		defer exec.ELF.Close()
+	}
+	if err != nil {
+		return nil, nil, fmt.Errorf("looking for executable ELF: %w", err)
+	}
 
-		setGlobalServiceName(ctx, execElf)
+	var fallBackInfos []exec.FileInfo
+	var goProxies []exec.FileInfo
 
+	// look for suitable Go application first
+	for _, execElf := range elfs {
 		offsets, err := goexec.InspectOffsets(&execElf, functions)
 
-		// we didn't find any Go offsets
-		// TODO: add an option to keep looking for Go applications if we have a proxy in another language in front of Go
 		if err != nil {
-			logger().Info("Go support not detected. Using only generic instrumentation.", "error", err)
-			return &execElf, offsets, nil
+			fallBackInfos = append(fallBackInfos, execElf)
+			continue
 		}
 
 		// we found go offsets, let's see if this application is not a proxy
 		for f := range offsets.Funcs {
-			// if we find anything of interest other than the Go runtime, we consider this valid application
+			// if we find anything of interest other than the Go runtime, we consider this a valid application
 			if !strings.HasPrefix(f, "runtime.") {
+				setGlobalServiceName(ctx, &execElf)
 				return &execElf, offsets, nil
 			}
+			goProxies = append(goProxies, execElf)
 		}
-
-		invalidPids[execElf.Pid] = true
 	}
+
+	logger().Info("Go HTTP/gRPC support not detected. Using only generic instrumentation.")
+
+	var execElf exec.FileInfo
+
+	if len(fallBackInfos) != 0 {
+		execElf = fallBackInfos[0]
+	} else if len(goProxies) != 0 {
+		execElf = goProxies[0]
+	} else {
+		return nil, nil, fmt.Errorf("looking for executable ELF, no suitable processes found")
+	}
+
+	setGlobalServiceName(ctx, &execElf)
+	return &execElf, nil, nil
 }
 
 func printVerifierErrorInfo(err error) {

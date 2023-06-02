@@ -105,3 +105,15 @@ func TestSuite_Java_OpenPort(t *testing.T) {
 	require.NoError(t, compose.Close())
 	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
 }
+
+// Test that we can also instrument when running with host network mode
+func TestSuite_Java_Host_Network(t *testing.T) {
+	compose, err := docker.ComposeSuite("docker-compose-java-host.yml", path.Join(pathOutput, "test-suite-java-host-network.log"))
+	compose.Env = append(compose.Env, `JAVA_TEST_MODE=-native`)
+	require.NoError(t, err)
+	require.NoError(t, compose.Up())
+	t.Run("Java RED metrics", testREDMetricsJavaHTTP)
+	t.Run("BPF pinning folder mounted", testBPFPinningMounted)
+	require.NoError(t, compose.Close())
+	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
+}

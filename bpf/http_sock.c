@@ -256,7 +256,7 @@ int socket__http_filter(struct __sk_buff *skb) {
                 }
             }
         }
-        bpf_dbg_printk("=== http_filter len=%d %s ===", len, buf);
+        bpf_dbg_printk("=== http_filter len=%d pid=%d %s ===", len, (meta != NULL) ? pid_from_pid_tgid(meta->id) : -1, buf);
         //dbg_print_http_connection_info(&conn);
 
         process_http(&info, &tcp, packet_type, info.buf, meta);

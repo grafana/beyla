@@ -327,7 +327,7 @@ func testREDMetricsForJavaHTTPLibrary(t *testing.T, url string, comm string, sys
 
 func testREDMetricsJavaHTTP(t *testing.T) {
 	for _, testCaseURL := range []string{
-		"http://localhost:8085",
+		"http://localhost:8084",
 	} {
 		t.Run(testCaseURL, func(t *testing.T) {
 			waitForJavaTestComponents(t, testCaseURL)
@@ -338,7 +338,7 @@ func testREDMetricsJavaHTTP(t *testing.T) {
 
 func testREDMetricsJavaHTTPSystemWide(t *testing.T) {
 	for _, testCaseURL := range []string{
-		"http://localhost:8085",
+		"http://localhost:8084",
 	} {
 		t.Run(testCaseURL, func(t *testing.T) {
 			waitForJavaTestComponents(t, testCaseURL)

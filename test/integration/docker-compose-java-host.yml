@@ -4,7 +4,7 @@ services:
   javatestserver:
     image: grcevski/tests:greeting${JAVA_TEST_MODE}
     ports:
-      - "8084:8085"
+      - "8086:8085"
     environment:
       LOG_LEVEL: DEBUG
 

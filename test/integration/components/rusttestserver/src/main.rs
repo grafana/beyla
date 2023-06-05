@@ -13,7 +13,6 @@ async fn index(item: web::Json<MyObj>) -> HttpResponse {
     HttpResponse::Ok().json(item.0) // <- send response
 }
 
-
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     env_logger::init_from_env(env_logger::Env::new().default_filter_or("info"));

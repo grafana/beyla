@@ -14,14 +14,14 @@ services:
       dockerfile: ./test/integration/components/otelauto/Dockerfile
     command:
       - /otelauto
-      - --config=/configs/instrumenter-config-java.yml
+      - --config=/configs/instrumenter-config-java-host.yml
     volumes:
       - ./configs/:/configs
       - ../../testoutput:/coverage
       - ../../testoutput/run:/var/run/otelauto
     image: hatest-javaautoinstrumenter
     privileged: true # in some environments (not GH Pull Requests) you can set it to false and then cap_add: [ SYS_ADMIN ]
-    network_mode: "service:javatestserver"
+    network_mode: "host"
     pid: "host"
     environment:
       GOCOVERDIR: "/coverage"
@@ -37,9 +37,8 @@ services:
       BPF_DEBUG: "TRUE"
       METRICS_REPORT_TARGET: "true"
       METRICS_REPORT_PEER: "true"
-    depends_on:
-      javatestserver:
-        condition: service_started
+    ports:
+      - "8999:8999" # Prometheus scrape port, if enabled via config
 
   # OpenTelemetry Collector
   otelcol:

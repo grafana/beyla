@@ -333,7 +333,7 @@ func inspectByPort(ctx context.Context, cfg *ebpfcommon.TracerConfig, functions 
 	}
 
 	logger().Info("Go HTTP/gRPC support not detected. Using only generic instrumentation.")
-	logger().Info("instrumented", "comm", execElf.CmdExePath)
+	logger().Info("instrumented", "comm", execElf.CmdExePath, "pid", execElf.Pid)
 
 	setGlobalServiceName(ctx, &execElf)
 	return &execElf, nil, nil

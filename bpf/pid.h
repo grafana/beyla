@@ -6,12 +6,12 @@
 #include "bpf_core_read.h"
 
 volatile const s32 current_pid = 0;
+volatile const s32 current_pid_ns_id = 0;
 
 // Good resource on this: https://mozillazg.com/2022/05/ebpf-libbpfgo-get-process-info-en.html
-// Using bpf_get_ns_current_pid_tgid seems way too restrictive
-static __always_inline void ns_pid_ppid(int *pid, int *ppid) {
+// Using bpf_get_ns_current_pid_tgid is too restrictive for us
+static __always_inline void ns_pid_ppid(struct task_struct *task, int *pid, int *ppid, u32 *pid_ns_id) {
     struct upid upid;    
-    struct task_struct *task = (struct task_struct *)bpf_get_current_task();
 
     unsigned int level = BPF_CORE_READ(task, nsproxy, pid_ns_for_children, level);
     struct pid *ns_pid = (struct pid *)BPF_CORE_READ(task, group_leader, thread_pid);
@@ -23,6 +23,9 @@ static __always_inline void ns_pid_ppid(int *pid, int *ppid) {
     struct pid *ns_ppid = (struct pid *)BPF_CORE_READ(task, real_parent, group_leader, thread_pid);
     bpf_probe_read_kernel(&upid, sizeof(upid), &ns_ppid->numbers[p_level]);
     *ppid = upid.nr;
+
+    struct ns_common ns = BPF_CORE_READ(task, nsproxy, pid_ns_for_children, ns);
+    *pid_ns_id = ns.inum;
 }
 
 static __always_inline u32 pid_from_pid_tgid(u64 id) {
@@ -42,20 +45,22 @@ static __always_inline u32 valid_pid(u64 id) {
         struct task_struct *task = (struct task_struct *)bpf_get_current_task();
         if (task) {
             host_ppid = BPF_CORE_READ(task, real_parent, tgid);
-        }
 
-        if (host_ppid != current_pid) {
-            // let's see if we are in a container pid space
-            int ns_pid = 0;
-            int ns_ppid = 0;
+            if (host_ppid != current_pid && current_pid_ns_id) {
+                // let's see if we are in a container pid space
+                int ns_pid = 0;
+                int ns_ppid = 0;
+                u32 pid_ns_id = 0;
 
-            ns_pid_ppid(&ns_pid, &ns_ppid);
+                ns_pid_ppid(task, &ns_pid, &ns_ppid, &pid_ns_id);
 
-            if (current_pid == ns_pid || current_pid == ns_ppid) {
-                return ns_pid;
+                if ((current_pid == ns_pid || current_pid == ns_ppid) && (current_pid_ns_id == pid_ns_id)) {
+                    //bpf_printk("ns_pid=%d ns_ppid=%d pid_ns_id=%u current_pid_ns_id=%u", ns_pid, ns_ppid, pid_ns_id, current_pid_ns_id);
+                    return ns_pid;
+                }
+
+                return 0;
             }
-
-            return 0;
         }
     }
 

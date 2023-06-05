@@ -24,7 +24,7 @@ async fn main() -> std::io::Result<()> {
         App::new()
             // enable logger
             .wrap(middleware::Logger::default())
-            .app_data(web::JsonConfig::default().limit(16384)) // <- limit size of the payload (global configuration)
+            .app_data(web::JsonConfig::default().limit(800000)) // <- limit size of the payload (global configuration)
             .service(web::resource("/greeting").route(web::post().to(index)))
             .service(web::resource("/").route(web::post().to(index)))
     })

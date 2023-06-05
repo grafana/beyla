@@ -186,7 +186,7 @@ func convertFromHTTPInfo(info *httpfltr.HTTPInfo) HTTPRequestSpan {
 		Peer:          info.Peer,
 		Host:          info.Host,
 		HostPort:      int(info.ConnInfo.D_port),
-		ContentLength: 0,
+		ContentLength: int64(info.Len),
 		RequestStart:  int64(info.StartMonotimeNs),
 		Start:         int64(info.StartMonotimeNs),
 		End:           int64(info.EndMonotimeNs),

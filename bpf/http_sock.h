@@ -116,9 +116,15 @@ static __always_inline bool still_responding(http_info_t *info) {
     return info->status != 0;
 }
 
+static __always_inline bool still_reading(http_info_t *info) {
+    return info->status == 0 && info->start_monotime_ns != 0;
+}
+
 static __always_inline void process_http_request(http_info_t *info, unsigned char *buf) {
     bpf_memcpy(info->buf, buf, FULL_BUF_SIZE);
     info->start_monotime_ns = bpf_ktime_get_ns();
+    info->status = 0;
+    info->len = 0;
 }
 
 static __always_inline void process_http_response(http_info_t *info, unsigned char *buf, http_connection_metadata_t *meta) {
@@ -130,7 +136,7 @@ static __always_inline void process_http_response(http_info_t *info, unsigned ch
     info->status += (buf[RESPONSE_STATUS_POS + 2] - '0');
 }
 
-static __always_inline void process_http(http_info_t *in, protocol_info_t *tcp, u8 packet_type, unsigned char *buf, http_connection_metadata_t *meta) {
+static __always_inline void process_http(http_info_t *in, protocol_info_t *tcp, u8 packet_type, u32 packet_len, unsigned char *buf, http_connection_metadata_t *meta) {
     http_info_t *info = get_or_set_http_info(in, packet_type);
     if (!info) {
         return;
@@ -140,6 +146,10 @@ static __always_inline void process_http(http_info_t *in, protocol_info_t *tcp, 
         process_http_request(info, buf);
     } else if (packet_type == PACKET_TYPE_RESPONSE) {
         process_http_response(info, buf, meta);
+    }
+
+    if (still_reading(info)) {
+        info->len += packet_len;
     }
 
     if (still_responding(info)) {

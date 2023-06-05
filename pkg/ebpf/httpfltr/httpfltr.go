@@ -4,12 +4,14 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"fmt"
 	"io"
 	"net"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 
 	ebpfcommon "github.com/grafana/ebpf-autoinstrument/pkg/ebpf/common"
 	"github.com/grafana/ebpf-autoinstrument/pkg/exec"
@@ -44,6 +46,10 @@ type Tracer struct {
 	closers    []io.Closer
 }
 
+func logger() *slog.Logger {
+	return slog.With("component", "httpfltr.Tracer")
+}
+
 func (p *Tracer) Load() (*ebpf.CollectionSpec, error) {
 	loader := loadBpf
 	if p.Cfg.BpfDebug {
@@ -56,7 +62,17 @@ func (p *Tracer) Constants(finfo *exec.FileInfo, _ *goexec.Offsets) map[string]a
 	if p.Cfg.SystemWide {
 		return nil
 	}
-	return map[string]any{"current_pid": finfo.Pid}
+
+	m := map[string]any{"current_pid": finfo.Pid}
+
+	npid, err := findNamespace(finfo.Pid)
+	if err != nil {
+		logger().Warn("error while looking up namespace pid, namespace pid matching will not work", err)
+	}
+
+	m["current_pid_ns_id"] = npid
+
+	return m
 }
 
 func (p *Tracer) BpfObjects() any {
@@ -120,9 +136,8 @@ func (p *Tracer) SocketFilters() []*ebpf.Program {
 }
 
 func (p *Tracer) Run(ctx context.Context, eventsChan chan<- []any) {
-	logger := slog.With("component", "httpfltr.Tracer")
 	ebpfcommon.ForwardRingbuf(
-		p.Cfg, logger, p.bpfObjects.Events, p.toRequestTrace,
+		p.Cfg, logger(), p.bpfObjects.Events, p.toRequestTrace,
 		append(p.closers, &p.bpfObjects)...,
 	)(ctx, eventsChan)
 }
@@ -226,4 +241,43 @@ func (p *Tracer) serviceName(pid uint32) string {
 	name := p.commName(pid)
 	activePids.Add(pid, name)
 	return name
+}
+
+func findNamespace(pid int32) (uint32, error) {
+	pidPath := fmt.Sprintf("/proc/%d/ns/pid", pid)
+	f, err := os.Open(pidPath)
+
+	if err != nil {
+		return 0, fmt.Errorf("failed to open(/proc/%d/ns/pid): %w", pid, err)
+	}
+
+	defer f.Close()
+
+	// read the value of the symbolic link
+	buf := make([]byte, syscall.PathMax)
+	n, err := syscall.Readlink(pidPath, buf)
+	if err != nil {
+		return 0, fmt.Errorf("failed to read symlink(/proc/%d/ns/pid): %w", pid, err)
+	}
+
+	logger := slog.With("component", "httpfltr.Tracer")
+
+	nsPid := string(buf[:n])
+	// extract u32 from the format pid:[nnnnn]
+	start := strings.LastIndex(nsPid, "[")
+	end := strings.LastIndex(nsPid, "]")
+
+	logger.Info("Found namespace", "nsPid", nsPid)
+
+	if start >= 0 && end >= 0 && end > start {
+		npid, err := strconv.ParseUint(string(buf[start+1:end]), 10, 32)
+
+		if err != nil {
+			return 0, fmt.Errorf("failed to parse ns pid %w", err)
+		}
+
+		return uint32(npid), nil
+	}
+
+	return 0, fmt.Errorf("couldn't find ns pid in the symlink [%s]", nsPid)
 }

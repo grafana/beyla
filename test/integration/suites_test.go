@@ -80,6 +80,18 @@ func TestSuite_Java(t *testing.T) {
 	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
 }
 
+// Same as TestSuite_Java but we run in the process namespace and it uses process namespace filtering
+func TestSuite_Java_PID(t *testing.T) {
+	compose, err := docker.ComposeSuite("docker-compose-java-pid.yml", path.Join(pathOutput, "test-suite-java-pid.log"))
+	compose.Env = append(compose.Env, `JAVA_OPEN_PORT=8085`, `JAVA_EXECUTABLE_NAME=""`, `JAVA_TEST_MODE=-jar`, `OTEL_SERVICE_NAME=greeting`)
+	require.NoError(t, err)
+	require.NoError(t, compose.Up())
+	t.Run("Java RED metrics", testREDMetricsJavaHTTP)
+	t.Run("BPF pinning folder mounted", testBPFPinningMounted)
+	require.NoError(t, compose.Close())
+	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
+}
+
 // same as Test suite for java, but using the system_wide instrumentation
 // TODO: Fix the service name, mimir seems to work with what we have, but not Prometheus
 func TestSuite_Java_SystemWide(t *testing.T) {

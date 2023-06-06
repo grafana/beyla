@@ -55,7 +55,6 @@ static __always_inline u32 valid_pid(u64 id) {
                 ns_pid_ppid(task, &ns_pid, &ns_ppid, &pid_ns_id);
 
                 if ((current_pid == ns_pid || current_pid == ns_ppid) && (current_pid_ns_id == pid_ns_id)) {
-                    //bpf_printk("ns_pid=%d ns_ppid=%d pid_ns_id=%u current_pid_ns_id=%u", ns_pid, ns_ppid, pid_ns_id, current_pid_ns_id);
                     return ns_pid;
                 }
 

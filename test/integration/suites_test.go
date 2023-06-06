@@ -129,3 +129,14 @@ func TestSuite_Java_Host_Network(t *testing.T) {
 	require.NoError(t, compose.Close())
 	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
 }
+
+func TestSuite_Rust(t *testing.T) {
+	compose, err := docker.ComposeSuite("docker-compose-rust.yml", path.Join(pathOutput, "test-suite-rust.log"))
+	compose.Env = append(compose.Env, `OPEN_PORT=8090`, `EXECUTABLE_NAME=`)
+	require.NoError(t, err)
+	require.NoError(t, compose.Up())
+	t.Run("Rust RED metrics", testREDMetricsRustHTTP)
+	t.Run("BPF pinning folder mounted", testBPFPinningMounted)
+	require.NoError(t, compose.Close())
+	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
+}

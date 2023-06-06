@@ -14,7 +14,7 @@ RUN cargo build --release
 # The App Image
 FROM ubuntu:latest
 
-EXPOSE 8085
+EXPOSE 8090
 
 # Copy the native executable into the containers
 COPY --from=rustbuilder /build/test/integration/components/rusttestserver/target/release/greetings ./greetings

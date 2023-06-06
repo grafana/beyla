@@ -4,11 +4,15 @@ services:
   rusttestserver:
     image: grcevski/tests:greeting-rust
     ports:
-      - "8087:8085"
+      - "8091:8090"
     environment:
       LOG_LEVEL: DEBUG
+    depends_on:
+      otelcol:
+        condition: service_started
 
-  rustautoinstrumenter:
+
+  autoinstrumenter:
     build:
       context: ../..
       dockerfile: ./test/integration/components/otelauto/Dockerfile
@@ -19,10 +23,10 @@ services:
       - ./configs/:/configs
       - ../../testoutput:/coverage
       - ../../testoutput/run:/var/run/otelauto
-    image: hatest-rustautoinstrumenter
+    image: hatest-autoinstrumenter
     privileged: true # in some environments (not GH Pull Requests) you can set it to false and then cap_add: [ SYS_ADMIN ]
     network_mode: "service:rusttestserver"
-    pid: "service:rusttestserver"
+    pid: "host"
     environment:
       GOCOVERDIR: "/coverage"
       PRINT_TRACES: "true"
@@ -57,8 +61,6 @@ services:
       - "9464"          # Prometheus exporter
       - "8888"          # metrics endpoint
     depends_on:
-      rustautoinstrumenter:
-        condition: service_started
       prometheus:
         condition: service_started
 

@@ -2,6 +2,7 @@ package otel
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"net/url"
 	"strings"
@@ -43,6 +44,10 @@ type MetricsConfig struct {
 	Interval        time.Duration `yaml:"interval" env:"METRICS_INTERVAL"`
 	Endpoint        string        `yaml:"endpoint" env:"OTEL_EXPORTER_OTLP_ENDPOINT"`
 	MetricsEndpoint string        `yaml:"-" env:"OTEL_EXPORTER_OTLP_METRICS_ENDPOINT"`
+
+	// InsecureSkipVerify is not standard, so we don't follow the same naming convention
+	InsecureSkipVerify bool `yaml:"insecure_skip_verify" env:"OTEL_INSECURE_SKIP_VERIFY"`
+
 	// ReportTarget specifies whether http.target should be submitted as a metric attribute. It is disabled by
 	// default to avoid cardinality explosion in paths with IDs. In that case, it is recommended to group these
 	// requests in the Routes node
@@ -234,6 +239,9 @@ func (r *MetricsReporter) reportMetrics(input <-chan []transform.HTTPRequestSpan
 	}
 }
 
+// Linter disabled by reason: cyclomatic complexity reaches 11 but the function is almost flat.
+//
+//nolint:cyclop
 func getMetricEndpointOptions(cfg *MetricsConfig) ([]otlpmetrichttp.Option, error) {
 	endpoint := cfg.MetricsEndpoint
 	if endpoint == "" {
@@ -256,6 +264,9 @@ func getMetricEndpointOptions(cfg *MetricsConfig) ([]otlpmetrichttp.Option, erro
 	}
 	if len(murl.Path) > 0 && murl.Path != "/" && !strings.HasSuffix(murl.Path, "/v1/metrics") {
 		opts = append(opts, otlpmetrichttp.WithURLPath(murl.Path+"/v1/metrics"))
+	}
+	if cfg.InsecureSkipVerify {
+		opts = append(opts, otlpmetrichttp.WithTLSClientConfig(&tls.Config{InsecureSkipVerify: true}))
 	}
 	return opts, nil
 }

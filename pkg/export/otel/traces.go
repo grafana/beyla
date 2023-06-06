@@ -2,6 +2,7 @@ package otel
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"net/url"
 	"os"
@@ -38,6 +39,9 @@ type TracesConfig struct {
 
 	Endpoint       string `yaml:"endpoint" env:"OTEL_EXPORTER_OTLP_ENDPOINT"`
 	TracesEndpoint string `yaml:"-" env:"OTEL_EXPORTER_OTLP_TRACES_ENDPOINT"`
+
+	// InsecureSkipVerify is not standard, so we don't follow the same naming convention
+	InsecureSkipVerify bool `yaml:"insecure_skip_verify" env:"OTEL_INSECURE_SKIP_VERIFY"`
 
 	// Configuration options below this line will remain undocumented at the moment,
 	// but can be useful for performance-tuning of some customers.
@@ -321,6 +325,9 @@ func (r *TracesReporter) namedTracer(comm string) trace2.Tracer {
 	return traceProvider.Tracer(reporterName)
 }
 
+// Linter disabled by reason: cyclomatic complexity reaches 11 but the function is almost flat.
+//
+//nolint:cyclop
 func getTracesEndpointOptions(cfg *TracesConfig) ([]otlptracehttp.Option, error) {
 	endpoint := cfg.TracesEndpoint
 	if endpoint == "" {
@@ -344,6 +351,10 @@ func getTracesEndpointOptions(cfg *TracesConfig) ([]otlptracehttp.Option, error)
 
 	if len(murl.Path) > 0 && murl.Path != "/" && !strings.HasSuffix(murl.Path, "/v1/traces") {
 		opts = append(opts, otlptracehttp.WithURLPath(murl.Path+"/v1/traces"))
+	}
+
+	if cfg.InsecureSkipVerify {
+		opts = append(opts, otlptracehttp.WithTLSClientConfig(&tls.Config{InsecureSkipVerify: true}))
 	}
 
 	return opts, nil

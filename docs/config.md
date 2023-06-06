@@ -208,6 +208,15 @@ Using the `OTEL_EXPORTER_OTLP_ENDPOINT` env var sets a common endpoint for both 
 or the `endpoint` YAML property will set the endpoint only for the metrics exporter node,
 so the traces exporter won't be activated unless explicitly specified.
 
+| YAML                   | Env var                     | Type | Default |
+|------------------------|-----------------------------|------|---------|
+| `insecure_skip_verify` | `OTEL_INSECURE_SKIP_VERIFY` | bool | `false` |
+
+Controls whether the OTEL client verifies the server's certificate chain and host name.
+If set to `true`, the OTEL client accepts any certificate presented by the server
+and any host name in that certificate. In this mode, TLS is susceptible to machine-in-the-middle
+attacks. This option should be used only for testing and development purposes.
+
 | YAML           | Env var             | Type   | Default         |
 |----------------|---------------------|--------|-----------------|
 | `service_name` | `OTEL_SERVICE_NAME` | string | executable path |
@@ -259,6 +268,15 @@ Using the `OTEL_EXPORTER_OTLP_ENDPOINT` env var sets a common endpoint for both 
 [metrics](#otel_metrics) and traces exporters. Using the `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` env var
 or the `endpoint` YAML property will set the endpoint only for the metrics exporter node,
 so the metrics exporter won't be activated unless explicitly specified.
+
+| YAML                   | Env var                     | Type | Default |
+|------------------------|-----------------------------|------|---------|
+| `insecure_skip_verify` | `OTEL_INSECURE_SKIP_VERIFY` | bool | `false` |
+
+Controls whether the OTEL client verifies the server's certificate chain and host name.
+If set to `true`, the OTEL client accepts any certificate presented by the server
+and any host name in that certificate. In this mode, TLS is susceptible to machine-in-the-middle
+attacks. This option should be used only for testing and development purposes.
 
 | YAML           | Env var             | Type   | Default         |
 |----------------|---------------------|--------|-----------------|

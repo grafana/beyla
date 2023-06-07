@@ -4,14 +4,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
-	"fmt"
 	"io"
 	"net"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
-	"syscall"
 
 	ebpfcommon "github.com/grafana/ebpf-autoinstrument/pkg/ebpf/common"
 	"github.com/grafana/ebpf-autoinstrument/pkg/exec"
@@ -218,7 +216,7 @@ func (p *Tracer) commNameOfDeadPid(pid uint32) string {
 		return ""
 	}
 
-	return string(cstr(name[:]))
+	return cstr(name[:])
 }
 
 func (p *Tracer) commName(pid uint32) string {
@@ -245,43 +243,4 @@ func (p *Tracer) serviceName(pid uint32) string {
 	name := p.commName(pid)
 	activePids.Add(pid, name)
 	return name
-}
-
-func findNamespace(pid int32) (uint32, error) {
-	pidPath := fmt.Sprintf("/proc/%d/ns/pid", pid)
-	f, err := os.Open(pidPath)
-
-	if err != nil {
-		return 0, fmt.Errorf("failed to open(/proc/%d/ns/pid): %w", pid, err)
-	}
-
-	defer f.Close()
-
-	// read the value of the symbolic link
-	buf := make([]byte, syscall.PathMax)
-	n, err := syscall.Readlink(pidPath, buf)
-	if err != nil {
-		return 0, fmt.Errorf("failed to read symlink(/proc/%d/ns/pid): %w", pid, err)
-	}
-
-	logger := slog.With("component", "httpfltr.Tracer")
-
-	nsPid := string(buf[:n])
-	// extract u32 from the format pid:[nnnnn]
-	start := strings.LastIndex(nsPid, "[")
-	end := strings.LastIndex(nsPid, "]")
-
-	logger.Info("Found namespace", "nsPid", nsPid)
-
-	if start >= 0 && end >= 0 && end > start {
-		npid, err := strconv.ParseUint(string(buf[start+1:end]), 10, 32)
-
-		if err != nil {
-			return 0, fmt.Errorf("failed to parse ns pid %w", err)
-		}
-
-		return uint32(npid), nil
-	}
-
-	return 0, fmt.Errorf("couldn't find ns pid in the symlink [%s]", nsPid)
 }

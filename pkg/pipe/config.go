@@ -84,10 +84,11 @@ func (c *Config) Validate() error {
 	}
 
 	if !c.Noop.Enabled() && !c.Printer.Enabled() &&
-		!c.Metrics.Enabled() && !c.Traces.Enabled() {
+		!c.Metrics.Enabled() && !c.Traces.Enabled() &&
+		!c.Prometheus.Enabled() {
 		return ConfigError("at least one of the following properties must be set: " +
 			"NOOP_TRACES, PRINT_TRACES, OTEL_EXPORTER_OTLP_ENDPOINT, " +
-			"OTEL_EXPORTER_OTLP_METRICS_ENDPOINT, OTEL_EXPORTER_OTLP_TRACES_ENDPOINT")
+			"OTEL_EXPORTER_OTLP_METRICS_ENDPOINT, OTEL_EXPORTER_OTLP_TRACES_ENDPOINT, PROMETHEUS_PORT")
 	}
 	return nil
 }

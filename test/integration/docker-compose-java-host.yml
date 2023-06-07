@@ -1,14 +1,14 @@
 version: '3.8'
 
 services:
-  javatestserver:
+  testserver:
     image: grcevski/tests:greeting${JAVA_TEST_MODE}
     ports:
       - "8086:8085"
     environment:
       LOG_LEVEL: DEBUG
 
-  javaautoinstrumenter:
+  autoinstrumenter:
     build:
       context: ../..
       dockerfile: ./test/integration/components/otelauto/Dockerfile
@@ -58,7 +58,7 @@ services:
       - "9464"          # Prometheus exporter
       - "8888"          # metrics endpoint
     depends_on:
-      javaautoinstrumenter:
+      autoinstrumenter:
         condition: service_started
       prometheus:
         condition: service_started

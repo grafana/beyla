@@ -33,9 +33,10 @@ type bpfHttpInfoT struct {
 	EndMonotimeNs   uint64
 	Buf             [160]uint8
 	Pid             uint32
+	Len             uint32
 	Status          uint16
 	Type            uint8
-	_               [1]byte
+	_               [5]byte
 }
 
 type bpfSockArgsT struct {

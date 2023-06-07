@@ -346,3 +346,61 @@ func testREDMetricsJavaHTTPSystemWide(t *testing.T) {
 		})
 	}
 }
+
+func doHTTPPost(t *testing.T, path string, status int) {
+	// Random fake body to cause the request to have some size (38 bytes)
+	jsonBody := []byte(`{"name": "Someone", "number": 123}`)
+
+	req, err := http.NewRequest(http.MethodPost, path, bytes.NewReader(jsonBody))
+	require.NoError(t, err)
+	req.Header.Set("Content-Type", "application/json")
+
+	r, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	require.Equal(t, status, r.StatusCode)
+	time.Sleep(300 * time.Millisecond)
+}
+
+func testREDMetricsForRustHTTPLibrary(t *testing.T, url string, comm string) {
+	path := "/greeting"
+
+	// Call 3 times the instrumented service, forcing it to:
+	// - take at least 30ms to respond
+	// - returning a 204 code
+	for i := 0; i < 4; i++ {
+		doHTTPPost(t, url+path, 200)
+	}
+
+	// Eventually, Prometheus would make this query visible
+	pq := prom.Client{HostPort: prometheusHostPort}
+	var results []prom.Result
+	test.Eventually(t, testTimeout, func(t require.TestingT) {
+		var err error
+		results, err = pq.Query(`http_server_duration_seconds_count{` +
+			`http_method="POST",` +
+			`http_status_code="200",` +
+			`service_namespace="integration-test",` +
+			`service_name="` + comm + `",` +
+			`http_target="` + path + `"}`)
+		require.NoError(t, err)
+		require.Len(t, results, 1)
+		if len(results) > 0 {
+			res := results[0]
+			require.Len(t, res.Value, 2)
+			assert.LessOrEqual(t, "3", res.Value[1])
+			addr := net.ParseIP(res.Metric["net_sock_peer_addr"])
+			assert.NotNil(t, addr)
+		}
+	})
+}
+
+func testREDMetricsRustHTTP(t *testing.T) {
+	for _, testCaseURL := range []string{
+		"http://localhost:8091",
+	} {
+		t.Run(testCaseURL, func(t *testing.T) {
+			waitForTestComponents(t, testCaseURL)
+			testREDMetricsForRustHTTPLibrary(t, testCaseURL, "greetings")
+		})
+	}
+}

@@ -14,8 +14,12 @@ RUN cargo build --release
 # The App Image
 FROM ubuntu:latest
 
+#RUN apt update
+#RUN apt install strace -y
+
 EXPOSE 8090
 
 # Copy the native executable into the containers
 COPY --from=rustbuilder /build/test/integration/components/rusttestserver/target/release/greetings ./greetings
 ENTRYPOINT ["/greetings"]
+#CMD [ "strace", "-f", "/greetings" ]

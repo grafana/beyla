@@ -102,6 +102,10 @@ func (p *Tracer) KProbes() map[string]ebpfcommon.FunctionPrograms {
 			Required: true,
 			End:      p.bpfObjects.KretprobeSockAlloc,
 		},
+		"tcp_rcv_established": {
+			Required: true,
+			Start:    p.bpfObjects.KprobeTcpRcvEstablished,
+		},
 		// Tracking of HTTP client calls, by tapping into connect
 		"sys_connect": {
 			Required: true,

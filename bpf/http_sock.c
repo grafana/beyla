@@ -294,3 +294,21 @@ int socket__http_filter(struct __sk_buff *skb) {
 
     return 0;
 }
+
+SEC("uprobe/libssl.so:SSL_read")
+int BPF_UPROBE(uprobe_ssl_read, void *ssl, const void *buf, int num) {
+    u64 id = bpf_get_current_pid_tgid();
+
+    bpf_printk("=== SSL_read id=%d ===", id);
+
+    return 0;
+}
+
+SEC("uprobe/libssl.so:SSL_read_ex")
+int BPF_UPROBE(uprobe_ssl_read_ex, void *ssl, const void *buf, int num, size_t *readbytes) {
+    u64 id = bpf_get_current_pid_tgid();
+
+    bpf_printk("=== SSL_read_ex id=%d ===", id);
+
+    return 0;
+}

@@ -133,6 +133,33 @@ func (p *Tracer) KProbes() map[string]ebpfcommon.FunctionPrograms {
 	return kprobes
 }
 
+func (p *Tracer) UProbes() map[string]map[string]ebpfcommon.FunctionPrograms {
+	path, err := findLibssl()
+
+	if err != nil {
+		logger().Warn("can't find SSL library path", err)
+		return nil
+	}
+
+	if path != "" {
+		logger().Info("SSL library path", "path", path)
+		return map[string]map[string]ebpfcommon.FunctionPrograms{
+			path: {
+				"SSL_read": {
+					Required: true,
+					Start:    p.bpfObjects.UprobeSslRead,
+				},
+				"SSL_read_ex": {
+					Required: true,
+					Start:    p.bpfObjects.UprobeSslReadEx,
+				},
+			},
+		}
+	}
+
+	return nil
+}
+
 func (p *Tracer) SocketFilters() []*ebpf.Program {
 	return []*ebpf.Program{p.bpfObjects.SocketHttpFilter}
 }

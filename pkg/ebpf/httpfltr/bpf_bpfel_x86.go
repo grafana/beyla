@@ -92,6 +92,8 @@ type bpfProgramSpecs struct {
 	KretprobeSysAccept4     *ebpf.ProgramSpec `ebpf:"kretprobe_sys_accept4"`
 	KretprobeSysConnect     *ebpf.ProgramSpec `ebpf:"kretprobe_sys_connect"`
 	SocketHttpFilter        *ebpf.ProgramSpec `ebpf:"socket__http_filter"`
+	UprobeSslRead           *ebpf.ProgramSpec `ebpf:"uprobe_ssl_read"`
+	UprobeSslReadEx         *ebpf.ProgramSpec `ebpf:"uprobe_ssl_read_ex"`
 }
 
 // bpfMapSpecs contains maps before they are loaded into the kernel.
@@ -158,6 +160,8 @@ type bpfPrograms struct {
 	KretprobeSysAccept4     *ebpf.Program `ebpf:"kretprobe_sys_accept4"`
 	KretprobeSysConnect     *ebpf.Program `ebpf:"kretprobe_sys_connect"`
 	SocketHttpFilter        *ebpf.Program `ebpf:"socket__http_filter"`
+	UprobeSslRead           *ebpf.Program `ebpf:"uprobe_ssl_read"`
+	UprobeSslReadEx         *ebpf.Program `ebpf:"uprobe_ssl_read_ex"`
 }
 
 func (p *bpfPrograms) Close() error {
@@ -169,6 +173,8 @@ func (p *bpfPrograms) Close() error {
 		p.KretprobeSysAccept4,
 		p.KretprobeSysConnect,
 		p.SocketHttpFilter,
+		p.UprobeSslRead,
+		p.UprobeSslReadEx,
 	)
 }
 

@@ -99,6 +99,47 @@ func (i *instrumenter) kprobe(funcName string, programs ebpfcommon.FunctionProgr
 	return nil
 }
 
+func (i *instrumenter) uprobes(p Tracer) error {
+	for umodule, ufuncs := range p.UProbes() {
+		ex, err := link.OpenExecutable(umodule)
+		if err != nil {
+			slog.Error("opening executable: %s", err)
+			return err
+		}
+
+		for ufunc, uprobes := range ufuncs {
+			slog.Debug("going to add uprobe to", "module", umodule, "function", ufunc, "probes", uprobes)
+
+			if err := i.uprobe(ex, ufunc, uprobes); err != nil {
+				return fmt.Errorf("instrumenting function %s %q: %w", umodule, ufunc, err)
+			}
+			p.AddCloser(i.closables...)
+		}
+	}
+
+	return nil
+}
+
+func (i *instrumenter) uprobe(module *link.Executable, funcName string, programs ebpfcommon.FunctionPrograms) error {
+	if programs.Start != nil {
+		up, err := module.Uprobe(funcName, programs.Start, nil)
+		if err != nil {
+			return fmt.Errorf("setting uprobe: %w", err)
+		}
+		i.closables = append(i.closables, up)
+	}
+
+	if programs.End != nil {
+		up, err := module.Uretprobe(funcName, programs.End, nil)
+		if err != nil {
+			return fmt.Errorf("setting kretprobe: %w", err)
+		}
+		i.closables = append(i.closables, up)
+	}
+
+	return nil
+}
+
 func (i *instrumenter) sockfilters(p Tracer) error {
 	for _, filter := range p.SocketFilters() {
 		fd, err := attachSocketFilter(filter)

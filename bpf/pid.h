@@ -35,7 +35,7 @@ static __always_inline u32 pid_from_pid_tgid(u64 id) {
 static __always_inline u32 valid_pid(u64 id) {
     u32 pid = id >> 32;
     // If we are doing system wide instrumenting, accept all PIDs
-    if (!current_pid) {
+    if (!current_pid || !current_pid_ns_id) {
         return pid;
     }
 
@@ -46,7 +46,7 @@ static __always_inline u32 valid_pid(u64 id) {
         if (task) {
             host_ppid = BPF_CORE_READ(task, real_parent, tgid);
 
-            if (host_ppid != current_pid && current_pid_ns_id) {
+            if (host_ppid != current_pid) {
                 // let's see if we are in a container pid space
                 int ns_pid = 0;
                 int ns_ppid = 0;

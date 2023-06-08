@@ -1,5 +1,4 @@
 use actix_web::{middleware, web, App, HttpResponse, HttpServer};
-use actix_web::http::header::ContentType;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -15,7 +14,7 @@ async fn greeting(item: web::Json<MyObj>) -> HttpResponse {
 }
 
 async fn smoke() -> HttpResponse {
-    HttpResponse::Ok().content_type(ContentType::plaintext()).body("hello")
+    HttpResponse::Ok().into()
 }
 
 #[actix_web::main]

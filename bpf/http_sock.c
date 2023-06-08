@@ -62,6 +62,36 @@ int BPF_KRETPROBE(kretprobe_sock_alloc, struct socket *sock) {
     return 0;
 }
 
+// We tap into accept and connect to figure out if a request is inbound or
+// outbound. However, in some cases servers can optimise the accept path if
+// the same request is sent over and over. For that reason, in case we miss the
+// initial accept, we establish an active filtered connection here. By default
+// sets the type to be server HTTP, in client mode we'll overwrite the 
+// data in the map, since those cannot be optimised.
+SEC("kprobe/tcp_rcv_established")
+int BPF_KPROBE(kprobe_tcp_rcv_established, struct sock *sk, struct sk_buff *skb) {
+    u64 id = bpf_get_current_pid_tgid();
+
+    if (!valid_pid(id)) {
+        return 0;
+    }
+
+    connection_info_t info = {};
+
+    if (parse_sock_info(sk, &info)) {
+        sort_connection_info(&info);
+        //dbg_print_http_connection_info(&info);
+
+        http_connection_metadata_t meta = {};
+        meta.id = id;
+        meta.type = EVENT_HTTP_REQUEST;
+        bpf_map_update_elem(&filtered_connections, &info, &meta, BPF_NOEXIST); // On purpose BPF_NOEXIST, we don't want to overwrite data by accept or connect
+    }
+
+
+    return 0;
+}
+
 // We tap into both sys_accept and sys_accept4.
 // We don't care about the accept entry arguments, since we get only peer information
 // we don't have the full picture for the socket.

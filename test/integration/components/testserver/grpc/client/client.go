@@ -35,7 +35,7 @@ var (
 
 // printFeature gets the feature for the given point.
 func printFeature(client pb.RouteGuideClient, point *pb.Point) {
-	slog.Info("Getting feature for point", "lat", point.Latitude, "long", point.Longitude)
+	slog.Debug("Getting feature for point", "lat", point.Latitude, "long", point.Longitude)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	feature, err := client.GetFeature(ctx, point)
@@ -43,7 +43,9 @@ func printFeature(client pb.RouteGuideClient, point *pb.Point) {
 		logs.Error("client.GetFeature failed", err)
 		os.Exit(-1)
 	}
-	log.Println(feature)
+	if slog.Default().Enabled(slog.LevelDebug) {
+		log.Println(feature)
+	}
 }
 
 func Ping() error {

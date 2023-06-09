@@ -6,12 +6,22 @@ eBPF-based autoinstrumentation of HTTP/HTTPS/GRPC Go services.
 
 [Documentation](./docs)
 
-| Library                                       | Working |
-|-----------------------------------------------|--------|
-| Standard `net/http`                           | ✅      |
-| [Gorilla Mux](https://github.com/gorilla/mux) | ✅      |
-| [Gin](https://gin-gonic.com/)                 |  ✅     |
-| [gRPC-Go](https://github.com/grpc/grpc-go)    |  ✅     |
+Requirements:
+- Linux with Kernel 4.18 or higher
+- eBPF enabled in the host
+- The instrumented Go programs must have been compiled with Go 1.17 or higher
+- Administrative access to execute the instrumenter
+    - Or execute it from a user enabling the `SYS_ADMIN` capability.
+- If you want to instrument HTTP calls at kernel-level (for other languages than Go),
+  your Kernel needs to enable BTF ([compiled with `CONFIG_DEBUG_INFO_BTF`](https://www.baeldung.com/linux/kernel-config))
+
+| Library                                       | Working     |
+|-----------------------------------------------|-------------|
+| Kernel-level HTTP calls                       | ⚠️ (no TLS) |
+| Standard `net/http`                           | ✅           |
+| [Gorilla Mux](https://github.com/gorilla/mux) | ✅           |
+| [Gin](https://gin-gonic.com/)                 | ✅           |
+| [gRPC-Go](https://github.com/grpc/grpc-go)    | ✅           |
 
 ## Credits
 

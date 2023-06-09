@@ -44,9 +44,10 @@ type bpfSockArgsT struct {
 	AcceptTime uint64
 }
 
-type bpfSslReadArgsT struct {
-	Ssl uint64
-	Buf uint64
+type bpfSslArgsT struct {
+	Ssl    uint64
+	Buf    uint64
+	LenPtr uint64
 }
 
 // loadBpf returns the embedded CollectionSpec for bpf.
@@ -101,8 +102,13 @@ type bpfProgramSpecs struct {
 	UprobeSslDoHandshake    *ebpf.ProgramSpec `ebpf:"uprobe_ssl_do_handshake"`
 	UprobeSslRead           *ebpf.ProgramSpec `ebpf:"uprobe_ssl_read"`
 	UprobeSslReadEx         *ebpf.ProgramSpec `ebpf:"uprobe_ssl_read_ex"`
+	UprobeSslWrite          *ebpf.ProgramSpec `ebpf:"uprobe_ssl_write"`
+	UprobeSslWriteEx        *ebpf.ProgramSpec `ebpf:"uprobe_ssl_write_ex"`
 	UretprobeSslDoHandshake *ebpf.ProgramSpec `ebpf:"uretprobe_ssl_do_handshake"`
 	UretprobeSslRead        *ebpf.ProgramSpec `ebpf:"uretprobe_ssl_read"`
+	UretprobeSslReadEx      *ebpf.ProgramSpec `ebpf:"uretprobe_ssl_read_ex"`
+	UretprobeSslWrite       *ebpf.ProgramSpec `ebpf:"uretprobe_ssl_write"`
+	UretprobeSslWriteEx     *ebpf.ProgramSpec `ebpf:"uretprobe_ssl_write_ex"`
 }
 
 // bpfMapSpecs contains maps before they are loaded into the kernel.
@@ -113,6 +119,7 @@ type bpfMapSpecs struct {
 	ActiveConnectArgs   *ebpf.MapSpec `ebpf:"active_connect_args"`
 	ActiveSslHandshakes *ebpf.MapSpec `ebpf:"active_ssl_handshakes"`
 	ActiveSslReadArgs   *ebpf.MapSpec `ebpf:"active_ssl_read_args"`
+	ActiveSslWriteArgs  *ebpf.MapSpec `ebpf:"active_ssl_write_args"`
 	DeadPids            *ebpf.MapSpec `ebpf:"dead_pids"`
 	Events              *ebpf.MapSpec `ebpf:"events"`
 	FilteredConnections *ebpf.MapSpec `ebpf:"filtered_connections"`
@@ -144,6 +151,7 @@ type bpfMaps struct {
 	ActiveConnectArgs   *ebpf.Map `ebpf:"active_connect_args"`
 	ActiveSslHandshakes *ebpf.Map `ebpf:"active_ssl_handshakes"`
 	ActiveSslReadArgs   *ebpf.Map `ebpf:"active_ssl_read_args"`
+	ActiveSslWriteArgs  *ebpf.Map `ebpf:"active_ssl_write_args"`
 	DeadPids            *ebpf.Map `ebpf:"dead_pids"`
 	Events              *ebpf.Map `ebpf:"events"`
 	FilteredConnections *ebpf.Map `ebpf:"filtered_connections"`
@@ -158,6 +166,7 @@ func (m *bpfMaps) Close() error {
 		m.ActiveConnectArgs,
 		m.ActiveSslHandshakes,
 		m.ActiveSslReadArgs,
+		m.ActiveSslWriteArgs,
 		m.DeadPids,
 		m.Events,
 		m.FilteredConnections,
@@ -182,8 +191,13 @@ type bpfPrograms struct {
 	UprobeSslDoHandshake    *ebpf.Program `ebpf:"uprobe_ssl_do_handshake"`
 	UprobeSslRead           *ebpf.Program `ebpf:"uprobe_ssl_read"`
 	UprobeSslReadEx         *ebpf.Program `ebpf:"uprobe_ssl_read_ex"`
+	UprobeSslWrite          *ebpf.Program `ebpf:"uprobe_ssl_write"`
+	UprobeSslWriteEx        *ebpf.Program `ebpf:"uprobe_ssl_write_ex"`
 	UretprobeSslDoHandshake *ebpf.Program `ebpf:"uretprobe_ssl_do_handshake"`
 	UretprobeSslRead        *ebpf.Program `ebpf:"uretprobe_ssl_read"`
+	UretprobeSslReadEx      *ebpf.Program `ebpf:"uretprobe_ssl_read_ex"`
+	UretprobeSslWrite       *ebpf.Program `ebpf:"uretprobe_ssl_write"`
+	UretprobeSslWriteEx     *ebpf.Program `ebpf:"uretprobe_ssl_write_ex"`
 }
 
 func (p *bpfPrograms) Close() error {
@@ -199,8 +213,13 @@ func (p *bpfPrograms) Close() error {
 		p.UprobeSslDoHandshake,
 		p.UprobeSslRead,
 		p.UprobeSslReadEx,
+		p.UprobeSslWrite,
+		p.UprobeSslWriteEx,
 		p.UretprobeSslDoHandshake,
 		p.UretprobeSslRead,
+		p.UretprobeSslReadEx,
+		p.UretprobeSslWrite,
+		p.UretprobeSslWriteEx,
 	)
 }
 

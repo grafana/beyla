@@ -347,9 +347,10 @@ int BPF_UPROBE(uprobe_ssl_read, void *ssl, const void *buf, int num) {
 
     bpf_printk("=== uprobe SSL_read id=%d ssl=%llx ===", id, ssl);
 
-    ssl_read_args_t args = {};
+    ssl_args_t args = {};
     args.buf = (u64)buf;
     args.ssl = (u64)ssl;
+    args.len_ptr = 0;
 
     bpf_map_update_elem(&active_ssl_read_args, &id, &args, BPF_ANY);
 
@@ -362,31 +363,10 @@ int BPF_URETPROBE(uretprobe_ssl_read, int ret) {
 
     bpf_printk("=== uretprobe SSL_read id=%d ===", id);
 
-    ssl_read_args_t *args = bpf_map_lookup_elem(&active_ssl_read_args, &id);
+    ssl_args_t *args = bpf_map_lookup_elem(&active_ssl_read_args, &id);
     bpf_map_delete_elem(&active_ssl_read_args, &id);
 
-    if (args && ret > 0) {
-        void *ssl = ((void *)args->ssl);
-        bpf_printk("=== uretprobe SSL_read id=%d ssl=%llx ===", id, ssl);
-        connection_info_t *conn = bpf_map_lookup_elem(&ssl_to_conn, &ssl);
-        if (conn) {
-            void *read_buf = (void *)args->buf;
-            char buf[FULL_BUF_SIZE] = {0};
-            
-            u32 len = ret & 0x0ffff;
-
-            if (len > FULL_BUF_SIZE) {
-                len = FULL_BUF_SIZE;
-            }
-
-            bpf_probe_read(&buf, len * sizeof(char), read_buf);
-            bpf_printk("read from SSL %s", buf);
-            https_buffer_event(buf, len, conn);
-        } else {
-            bpf_printk("No connection info");
-        }
-    }
-
+    handle_ssl_buf(id, args, ret);
     return 0;
 }
 
@@ -396,5 +376,97 @@ int BPF_UPROBE(uprobe_ssl_read_ex, void *ssl, const void *buf, int num, size_t *
 
     bpf_printk("=== SSL_read_ex id=%d ===", id);
 
+    ssl_args_t args = {};
+    args.buf = (u64)buf;
+    args.ssl = (u64)ssl;
+    args.len_ptr = (u64)readbytes;
+
+    bpf_map_update_elem(&active_ssl_read_args, &id, &args, BPF_ANY);
+
+    return 0;
+}
+
+SEC("uretprobe/libssl.so:SSL_read_ex")
+int BPF_URETPROBE(uretprobe_ssl_read_ex, int ret) {
+    u64 id = bpf_get_current_pid_tgid();
+
+    bpf_printk("=== uretprobe SSL_read_ex id=%d ===", id);
+
+    ssl_args_t *args = bpf_map_lookup_elem(&active_ssl_read_args, &id);
+    bpf_map_delete_elem(&active_ssl_read_args, &id);
+
+    if (ret != 1 || !args || !args->len_ptr) {
+        return 0;
+    }
+
+    size_t read_len = 0;
+    bpf_probe_read(&read_len, sizeof(read_len), (void *)args->len_ptr);
+
+    handle_ssl_buf(id, args, read_len);
+    return 0;
+}
+
+SEC("uprobe/libssl.so:SSL_write")
+int BPF_UPROBE(uprobe_ssl_write, void *ssl, const void *buf, int num) {
+    u64 id = bpf_get_current_pid_tgid();
+
+    bpf_printk("=== uprobe SSL_write id=%d ssl=%llx ===", id, ssl);
+
+    ssl_args_t args = {};
+    args.buf = (u64)buf;
+    args.ssl = (u64)ssl;
+    args.len_ptr = 0;
+
+    bpf_map_update_elem(&active_ssl_write_args, &id, &args, BPF_ANY);
+
+    return 0;
+}
+
+SEC("uretprobe/libssl.so:SSL_write")
+int BPF_URETPROBE(uretprobe_ssl_write, int ret) {
+    u64 id = bpf_get_current_pid_tgid();
+
+    bpf_printk("=== uretprobe SSL_write id=%d ===", id);
+
+    ssl_args_t *args = bpf_map_lookup_elem(&active_ssl_write_args, &id);
+    bpf_map_delete_elem(&active_ssl_write_args, &id);
+
+    handle_ssl_buf(id, args, ret);
+    return 0;
+}
+
+SEC("uprobe/libssl.so:SSL_write_ex")
+int BPF_UPROBE(uprobe_ssl_write_ex, void *ssl, const void *buf, int num, size_t *written) {
+    u64 id = bpf_get_current_pid_tgid();
+
+    bpf_printk("=== SSL_write_ex id=%d ===", id);
+
+    ssl_args_t args = {};
+    args.buf = (u64)buf;
+    args.ssl = (u64)ssl;
+    args.len_ptr = (u64)written;
+
+    bpf_map_update_elem(&active_ssl_write_args, &id, &args, BPF_ANY);
+
+    return 0;
+}
+
+SEC("uretprobe/libssl.so:SSL_write_ex")
+int BPF_URETPROBE(uretprobe_ssl_write_ex, int ret) {
+    u64 id = bpf_get_current_pid_tgid();
+
+    bpf_printk("=== uretprobe SSL_write_ex id=%d ===", id);
+
+    ssl_args_t *args = bpf_map_lookup_elem(&active_ssl_write_args, &id);
+    bpf_map_delete_elem(&active_ssl_write_args, &id);
+
+    if (ret != 1 || !args || !args->len_ptr) {
+        return 0;
+    }
+
+    size_t wrote_len = 0;
+    bpf_probe_read(&wrote_len, sizeof(wrote_len), (void *)args->len_ptr);
+
+    handle_ssl_buf(id, args, wrote_len);
     return 0;
 }

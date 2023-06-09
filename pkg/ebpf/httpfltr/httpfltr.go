@@ -154,9 +154,20 @@ func (p *Tracer) UProbes() map[string]map[string]ebpfcommon.FunctionPrograms {
 					Start:    p.bpfObjects.UprobeSslRead,
 					End:      p.bpfObjects.UretprobeSslRead,
 				},
+				"SSL_write": {
+					Required: true,
+					Start:    p.bpfObjects.UprobeSslWrite,
+					End:      p.bpfObjects.UretprobeSslWrite,
+				},
 				"SSL_read_ex": {
 					Required: true,
 					Start:    p.bpfObjects.UprobeSslReadEx,
+					End:      p.bpfObjects.UretprobeSslReadEx,
+				},
+				"SSL_write_ex": {
+					Required: true,
+					Start:    p.bpfObjects.UprobeSslWriteEx,
+					End:      p.bpfObjects.UretprobeSslWriteEx,
 				},
 				"SSL_do_handshake": {
 					Required: true,

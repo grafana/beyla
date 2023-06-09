@@ -24,18 +24,25 @@ struct {
 } ssl_to_conn SEC(".maps");
 
 // Temporary tracking of ssl_read arguments
-typedef struct ssl_read_args {
+typedef struct ssl_args {
     u64 ssl; // SSL struct pointer
     u64 buf; // pointer to the buffer we read into
-} ssl_read_args_t;
+    u64 len_ptr; // size_t pointer of the read/written bytes, used only by SSL_read_ex and SSL_write_ex
+} ssl_args_t;
 
 struct {
     __uint(type, BPF_MAP_TYPE_HASH);
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
     __type(key, u64);
-    __type(value, ssl_read_args_t);
+    __type(value, ssl_args_t);
 } active_ssl_read_args SEC(".maps");
 
+struct {
+    __uint(type, BPF_MAP_TYPE_HASH);
+    __uint(max_entries, MAX_CONCURRENT_REQUESTS);
+    __type(key, u64);
+    __type(value, ssl_args_t);
+} active_ssl_write_args SEC(".maps");
 
 static __always_inline void https_buffer_event(void *buf, int len, connection_info_t *conn) {
     u8 packet_type = 0;
@@ -63,6 +70,30 @@ static __always_inline void https_buffer_event(void *buf, int len, connection_in
         }
 
         // we let the regular socket filter do the rest
+    }
+}
+
+static __always_inline void handle_ssl_buf(u64 id, ssl_args_t *args, int bytes_len) {
+    if (args && bytes_len > 0) {
+        void *ssl = ((void *)args->ssl);
+        bpf_printk("SSL_buf id=%d ssl=%llx", id, ssl);
+        connection_info_t *conn = bpf_map_lookup_elem(&ssl_to_conn, &ssl);
+        if (conn) {
+            void *read_buf = (void *)args->buf;
+            char buf[FULL_BUF_SIZE] = {0};
+            
+            u32 len = bytes_len & 0x0fffffff; // keep the verifier happy
+
+            if (len > FULL_BUF_SIZE) {
+                len = FULL_BUF_SIZE;
+            }
+
+            bpf_probe_read(&buf, len * sizeof(char), read_buf);
+            bpf_printk("buffer from SSL %s", buf);
+            https_buffer_event(buf, len, conn);
+        } else {
+            bpf_printk("No connection info");
+        }
     }
 }
 

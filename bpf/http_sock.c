@@ -8,6 +8,7 @@
 #include "tcp_info.h"
 #include "ringbuf.h"
 #include "http_sock.h"
+#include "http_ssl.h"
 
 char __license[] SEC("license") = "Dual MIT/GPL";
 
@@ -295,11 +296,96 @@ int socket__http_filter(struct __sk_buff *skb) {
     return 0;
 }
 
+SEC("uprobe/libssl.so:SSL_do_handshake")
+int BPF_UPROBE(uprobe_ssl_do_handshake, void *s) {
+    u64 id = bpf_get_current_pid_tgid();
+    bpf_printk("=== uprobe SSL_do_handshake=%d ssl=%llx===", id, s);
+
+    bpf_map_update_elem(&active_ssl_handshakes, &id, &s, BPF_ANY);
+
+    return 0;
+}
+
+SEC("kprobe/tcp_sendmsg")
+int BPF_KPROBE(kprobe_tcp_sendmsg, struct sock *sk, struct msghdr *msg, size_t size) {
+    u64 id = bpf_get_current_pid_tgid();
+
+    void **s = bpf_map_lookup_elem(&active_ssl_handshakes, &id);
+    if (!s) {
+        return 0;
+    }
+
+    void *ssl = *s;
+
+    bpf_printk("=== kprobe tcp_sendmsg=%d sock=%llx ssl=%llx ===", id, sk, ssl);
+
+    connection_info_t info = {};
+
+    if (parse_sock_info(sk, &info)) {
+        sort_connection_info(&info);
+        dbg_print_http_connection_info(&info);
+
+        bpf_map_update_elem(&ssl_to_conn, &ssl, &info, BPF_ANY);
+    }
+
+    return 0;
+}
+
+SEC("uretprobe/libssl.so:SSL_do_handshake")
+int BPF_URETPROBE(uretprobe_ssl_do_handshake, int ret) {
+    u64 id = bpf_get_current_pid_tgid();
+    bpf_printk("=== uretprobe SSL_do_handshake=%d", id);
+
+    bpf_map_delete_elem(&active_ssl_handshakes, &id);
+
+    return 0;
+}
+
 SEC("uprobe/libssl.so:SSL_read")
 int BPF_UPROBE(uprobe_ssl_read, void *ssl, const void *buf, int num) {
     u64 id = bpf_get_current_pid_tgid();
 
-    bpf_printk("=== SSL_read id=%d ===", id);
+    bpf_printk("=== uprobe SSL_read id=%d ssl=%llx ===", id, ssl);
+
+    ssl_read_args_t args = {};
+    args.buf = (u64)buf;
+    args.ssl = (u64)ssl;
+
+    bpf_map_update_elem(&active_ssl_read_args, &id, &args, BPF_ANY);
+
+    return 0;
+}
+
+SEC("uretprobe/libssl.so:SSL_read")
+int BPF_URETPROBE(uretprobe_ssl_read, int ret) {
+    u64 id = bpf_get_current_pid_tgid();
+
+    bpf_printk("=== uretprobe SSL_read id=%d ===", id);
+
+    ssl_read_args_t *args = bpf_map_lookup_elem(&active_ssl_read_args, &id);
+    bpf_map_delete_elem(&active_ssl_read_args, &id);
+
+    if (args && ret > 0) {
+        void *ssl = ((void *)args->ssl);
+        bpf_printk("=== uretprobe SSL_read id=%d ssl=%llx ===", id, ssl);
+        connection_info_t *conn = bpf_map_lookup_elem(&ssl_to_conn, &ssl);
+        if (conn) {
+            void *read_buf = (void *)args->buf;
+            char buf[FULL_BUF_SIZE] = {0};
+            
+            u32 len = ret & 0x0ffff;
+
+            if (len > FULL_BUF_SIZE) {
+                len = FULL_BUF_SIZE;
+            }
+
+            bpf_probe_read(&buf, len * sizeof(char), read_buf);
+            bpf_printk("read from SSL %s", buf);
+            https_buffer_event(buf, len, conn);
+        } else {
+            bpf_printk("No connection info");
+        }
+    }
 
     return 0;
 }

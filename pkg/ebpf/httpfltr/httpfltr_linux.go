@@ -50,7 +50,7 @@ func findNamespace(pid int32) (uint32, error) {
 	return 0, fmt.Errorf("couldn't find ns pid in the symlink [%s]", nsPid)
 }
 
-func findLibssl() (string, error) {
+func findSharedLib(lib string) (string, error) {
 	o, err := exec.Command("ldconfig", "-p").Output()
 
 	if err != nil {
@@ -59,9 +59,9 @@ func findLibssl() (string, error) {
 
 	out := string(o)
 
-	sslPos := strings.Index(out, "libssl.so ")
+	sslPos := strings.Index(out, lib+" ")
 	if sslPos < 0 {
-		return "", fmt.Errorf("can't find libssl.so in the shared libraries")
+		return "", fmt.Errorf("can't find %s in the shared libraries", lib)
 	}
 
 	pToPos := strings.Index(out[sslPos+1:], "=> ")

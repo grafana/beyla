@@ -5,6 +5,6 @@ func findNamespace(_ int32) (uint32, error) {
 	return 1, nil
 }
 
-func findLibssl() (string, error) {
+func findSharedLib(lib string) (string, error) {
 	return "", nil
 }

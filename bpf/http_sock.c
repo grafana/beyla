@@ -252,11 +252,6 @@ int socket__http_filter(struct __sk_buff *skb) {
         return 0;
     }
 
-    // we don't support HTTPs yet, quick check for client HTTP calls being SSL, so we don't bother parsing
-    if (conn.s_port == DEFAULT_HTTPS_PORT || conn.d_port == DEFAULT_HTTPS_PORT) {
-        return 0;
-    }
-
     // we don't want to read the whole buffer for every packed that passes our checks, we read only a bit and check if it's trully HTTP request/response.
     char buf[MIN_HTTP_SIZE] = {0};
     bpf_skb_load_bytes(skb, tcp.hdr_len, (void *)buf, sizeof(buf));
@@ -296,6 +291,11 @@ int socket__http_filter(struct __sk_buff *skb) {
     return 0;
 }
 
+// We start by looking whrn the SSL handshake is established. In between
+// the start and the end of the SSL handshake, we'll see at least one tcp_sendmsg
+// between the parties. Sandwitching this tcp_sendmsg allows us to grab the sock *
+// and match it with our SSL *. The sock * will give us the connection info that is
+// used by the generic HTTP filter.
 SEC("uprobe/libssl.so:SSL_do_handshake")
 int BPF_UPROBE(uprobe_ssl_do_handshake, void *s) {
     u64 id = bpf_get_current_pid_tgid();
@@ -304,13 +304,14 @@ int BPF_UPROBE(uprobe_ssl_do_handshake, void *s) {
         return 0;
     }
 
-    bpf_printk("=== uprobe SSL_do_handshake=%d ssl=%llx===", id, s);
+    bpf_dbg_printk("=== uprobe SSL_do_handshake=%d ssl=%llx===", id, s);
 
     bpf_map_update_elem(&active_ssl_handshakes, &id, &s, BPF_ANY);
 
     return 0;
 }
 
+// Checks if it's sandwitched between active SSL handshake uprobe/uretprobe
 SEC("kprobe/tcp_sendmsg")
 int BPF_KPROBE(kprobe_tcp_sendmsg, struct sock *sk, struct msghdr *msg, size_t size) {
     u64 id = bpf_get_current_pid_tgid();
@@ -326,13 +327,13 @@ int BPF_KPROBE(kprobe_tcp_sendmsg, struct sock *sk, struct msghdr *msg, size_t s
 
     void *ssl = *s;
 
-    bpf_printk("=== kprobe tcp_sendmsg=%d sock=%llx ssl=%llx ===", id, sk, ssl);
+    bpf_dbg_printk("=== kprobe tcp_sendmsg=%d sock=%llx ssl=%llx ===", id, sk, ssl);
 
     connection_info_t info = {};
 
     if (parse_sock_info(sk, &info)) {
         sort_connection_info(&info);
-        dbg_print_http_connection_info(&info);
+        //dbg_print_http_connection_info(&info); // commented out since GitHub CI doesn't like this call
 
         bpf_map_update_elem(&ssl_to_conn, &ssl, &info, BPF_ANY);
     }
@@ -347,13 +348,16 @@ int BPF_URETPROBE(uretprobe_ssl_do_handshake, int ret) {
         return 0;
     }
 
-    bpf_printk("=== uretprobe SSL_do_handshake=%d", id);
+    bpf_dbg_printk("=== uretprobe SSL_do_handshake=%d", id);
 
     bpf_map_delete_elem(&active_ssl_handshakes, &id);
 
     return 0;
 }
 
+// SSL read and read_ex are more less the same, but some frameworks use one or the other.
+// SSL_read_ex sets an argument pointer with the number of bytes read, while SSL_read returns
+// the number of bytes read.
 SEC("uprobe/libssl.so:SSL_read")
 int BPF_UPROBE(uprobe_ssl_read, void *ssl, const void *buf, int num) {
     u64 id = bpf_get_current_pid_tgid();
@@ -362,7 +366,7 @@ int BPF_UPROBE(uprobe_ssl_read, void *ssl, const void *buf, int num) {
         return 0;
     }
 
-    bpf_printk("=== uprobe SSL_read id=%d ssl=%llx ===", id, ssl);
+    bpf_dbg_printk("=== uprobe SSL_read id=%d ssl=%llx ===", id, ssl);
 
     ssl_args_t args = {};
     args.buf = (u64)buf;
@@ -382,7 +386,7 @@ int BPF_URETPROBE(uretprobe_ssl_read, int ret) {
         return 0;
     }
 
-    bpf_printk("=== uretprobe SSL_read id=%d ===", id);
+    bpf_dbg_printk("=== uretprobe SSL_read id=%d ===", id);
 
     ssl_args_t *args = bpf_map_lookup_elem(&active_ssl_read_args, &id);
     bpf_map_delete_elem(&active_ssl_read_args, &id);
@@ -399,7 +403,7 @@ int BPF_UPROBE(uprobe_ssl_read_ex, void *ssl, const void *buf, int num, size_t *
         return 0;
     }
 
-    bpf_printk("=== SSL_read_ex id=%d ===", id);
+    bpf_dbg_printk("=== SSL_read_ex id=%d ===", id);
 
     ssl_args_t args = {};
     args.buf = (u64)buf;
@@ -419,7 +423,7 @@ int BPF_URETPROBE(uretprobe_ssl_read_ex, int ret) {
         return 0;
     }
 
-    bpf_printk("=== uretprobe SSL_read_ex id=%d ===", id);
+    bpf_dbg_printk("=== uretprobe SSL_read_ex id=%d ===", id);
 
     ssl_args_t *args = bpf_map_lookup_elem(&active_ssl_read_args, &id);
     bpf_map_delete_elem(&active_ssl_read_args, &id);
@@ -435,6 +439,9 @@ int BPF_URETPROBE(uretprobe_ssl_read_ex, int ret) {
     return 0;
 }
 
+// SSL write and write_ex are more less the same, but some frameworks use one or the other.
+// SSL_write_ex sets an argument pointer with the number of bytes written, while SSL_write returns
+// the number of bytes written.
 SEC("uprobe/libssl.so:SSL_write")
 int BPF_UPROBE(uprobe_ssl_write, void *ssl, const void *buf, int num) {
     u64 id = bpf_get_current_pid_tgid();
@@ -443,7 +450,7 @@ int BPF_UPROBE(uprobe_ssl_write, void *ssl, const void *buf, int num) {
         return 0;
     }
 
-    bpf_printk("=== uprobe SSL_write id=%d ssl=%llx ===", id, ssl);
+    bpf_dbg_printk("=== uprobe SSL_write id=%d ssl=%llx ===", id, ssl);
 
     ssl_args_t args = {};
     args.buf = (u64)buf;
@@ -463,7 +470,7 @@ int BPF_URETPROBE(uretprobe_ssl_write, int ret) {
         return 0;
     }
 
-    bpf_printk("=== uretprobe SSL_write id=%d ===", id);
+    bpf_dbg_printk("=== uretprobe SSL_write id=%d ===", id);
 
     ssl_args_t *args = bpf_map_lookup_elem(&active_ssl_write_args, &id);
     bpf_map_delete_elem(&active_ssl_write_args, &id);
@@ -480,7 +487,7 @@ int BPF_UPROBE(uprobe_ssl_write_ex, void *ssl, const void *buf, int num, size_t 
         return 0;
     }
 
-    bpf_printk("=== SSL_write_ex id=%d ===", id);
+    bpf_dbg_printk("=== SSL_write_ex id=%d ===", id);
 
     ssl_args_t args = {};
     args.buf = (u64)buf;
@@ -500,7 +507,7 @@ int BPF_URETPROBE(uretprobe_ssl_write_ex, int ret) {
         return 0;
     }
 
-    bpf_printk("=== uretprobe SSL_write_ex id=%d ===", id);
+    bpf_dbg_printk("=== uretprobe SSL_write_ex id=%d ===", id);
 
     ssl_args_t *args = bpf_map_lookup_elem(&active_ssl_write_args, &id);
     bpf_map_delete_elem(&active_ssl_write_args, &id);

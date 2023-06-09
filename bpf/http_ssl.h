@@ -9,6 +9,8 @@
 
 #define MAX_CONCURRENT_SSL_REQUESTS 10000
 
+// We use this map to track ssl hanshake enter/exit, it should be only
+// temporary
 struct {
     __uint(type, BPF_MAP_TYPE_HASH);
     __type(key, u64);   // the pid_tid 
@@ -16,6 +18,9 @@ struct {
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
 } active_ssl_handshakes SEC(".maps");
 
+// LRU map, we don't clean-it up at the moment, which holds onto the mapping
+// of the SSL pointer and the current connection. It's setup by the tcp_sendmsg uprobe
+// when it's sandwitched between ssl_handshake entry/exit.
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __type(key, u64);   // the SSL struct pointer
@@ -23,13 +28,16 @@ struct {
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
 } ssl_to_conn SEC(".maps");
 
-// Temporary tracking of ssl_read arguments
+// Temporary tracking of ssl_read/ssl_read_ex and ssl_write/ssl_write_ex arguments
 typedef struct ssl_args {
     u64 ssl; // SSL struct pointer
     u64 buf; // pointer to the buffer we read into
     u64 len_ptr; // size_t pointer of the read/written bytes, used only by SSL_read_ex and SSL_write_ex
 } ssl_args_t;
 
+// TODO: we should be able to make this into a single map. It's not a big deal because they are really only
+// tracking the parameters of SSL_read and SSL_write, so their memory consumption is minimal. If we can be
+// 100% certain that SSL_read will never do an SSL_write, then these can be a single map. 
 struct {
     __uint(type, BPF_MAP_TYPE_HASH);
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
@@ -55,8 +63,8 @@ static __always_inline void https_buffer_event(void *buf, int len, connection_in
             .type = EVENT_HTTP_REQUEST
         };
 
-        bpf_printk("=== https_filter len=%d pid=%d %s ===", len, pid_from_pid_tgid(meta.id), buf);
-        dbg_print_http_connection_info(conn);
+        bpf_dbg_printk("=== https_filter len=%d pid=%d %s ===", len, pid_from_pid_tgid(meta.id), buf);
+        //dbg_print_http_connection_info(conn); // commented out since GitHub CI doesn't like this call
 
         http_info_t *info = get_or_set_http_info(&in, packet_type);
         if (!info) {
@@ -89,10 +97,10 @@ static __always_inline void handle_ssl_buf(u64 id, ssl_args_t *args, int bytes_l
             }
 
             bpf_probe_read(&buf, len * sizeof(char), read_buf);
-            bpf_printk("buffer from SSL %s", buf);
+            bpf_dbg_printk("buffer from SSL %s", buf);
             https_buffer_event(buf, len, conn);
         } else {
-            bpf_printk("No connection info");
+            bpf_dbg_printk("No connection info! This is a bug.");
         }
     }
 }

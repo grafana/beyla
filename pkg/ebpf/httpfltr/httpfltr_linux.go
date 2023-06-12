@@ -1,12 +1,21 @@
 package httpfltr
 
+/*
+   #cgo CFLAGS: -D_GNU_SOURCE
+   #cgo LDFLAGS: -ldl
+
+   #include <stdlib.h>
+   #include <dlfcn.h>
+*/
+import "C"
+
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"strconv"
 	"strings"
 	"syscall"
+	"unsafe"
 
 	"golang.org/x/exp/slog"
 )
@@ -51,30 +60,26 @@ func findNamespace(pid int32) (uint32, error) {
 }
 
 func findSharedLib(lib string) (string, error) {
-	o, err := exec.Command("ldconfig", "-p").Output()
+	libname := C.CString(lib)
+	defer C.free(unsafe.Pointer(libname))
 
-	if err != nil {
-		return "", err
+	handle := C.dlopen(libname, C.RTLD_NOW)
+	if handle == nil {
+		return "", fmt.Errorf("failed to load library: %s", C.GoString(C.dlerror()))
+	}
+	defer C.dlclose(handle)
+
+	sslRead := C.CString("SSL_read")
+	defer C.free(unsafe.Pointer(sslRead))
+	addr := C.dlsym(handle, sslRead)
+	if addr == nil {
+		return "", fmt.Errorf("failed to find SSL_read: %s", C.GoString(C.dlerror()))
 	}
 
-	out := string(o)
-
-	sslPos := strings.Index(out, lib+" ")
-	if sslPos < 0 {
-		return "", fmt.Errorf("can't find %s in the shared libraries", lib)
+	var info C.Dl_info
+	if C.dladdr(addr, &info) == 0 {
+		return "", fmt.Errorf("failed to get symbol information: %s", C.GoString(C.dlerror()))
 	}
 
-	pToPos := strings.Index(out[sslPos+1:], "=> ")
-	if pToPos < 0 {
-		return "", fmt.Errorf("wrong output from ldconfig")
-	}
-	pToPos += sslPos + 4
-
-	end := strings.Index(out[pToPos:], "\n")
-
-	if end < 0 {
-		return "", fmt.Errorf("wrong output from ldconfig, can't find newline")
-	}
-
-	return string(out[pToPos : pToPos+end]), err
+	return C.GoString(info.dli_fname), nil
 }

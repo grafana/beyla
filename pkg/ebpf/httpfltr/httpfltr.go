@@ -141,7 +141,7 @@ func (p *Tracer) UProbes() map[string]map[string]ebpfcommon.FunctionPrograms {
 	libssl, err := findSharedLib("libssl.so")
 
 	if err != nil {
-		logger().Warn("can't find libssl library path", err)
+		logger().Warn("can't find libssl library path", "error", err)
 		return nil
 	}
 

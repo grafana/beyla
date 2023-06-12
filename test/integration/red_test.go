@@ -4,6 +4,7 @@ package integration
 
 import (
 	"bytes"
+	"crypto/tls"
 	"fmt"
 	"math/rand"
 	"net"
@@ -29,6 +30,11 @@ const (
 	testTimeout = 5 * time.Second
 )
 
+var tr = &http.Transport{
+	TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+}
+var httpClient = &http.Client{Transport: tr}
+
 func rndStr() string {
 	return strconv.Itoa(rand.Intn(10000))
 }
@@ -39,7 +45,9 @@ func waitForTestComponents(t *testing.T, url string) {
 	pq := prom.Client{HostPort: prometheusHostPort}
 	test.Eventually(t, time.Minute, func(t require.TestingT) {
 		// first, verify that the test service endpoint is healthy
-		r, err := http.Get(url + "/smoke")
+		req, err := http.NewRequest("GET", url+"/smoke", nil)
+		require.NoError(t, err)
+		r, err := httpClient.Do(req)
 		require.NoError(t, err)
 		if r == nil {
 			return
@@ -355,7 +363,7 @@ func doHTTPPost(t *testing.T, path string, status int) {
 	require.NoError(t, err)
 	req.Header.Set("Content-Type", "application/json")
 
-	r, err := http.DefaultClient.Do(req)
+	r, err := httpClient.Do(req)
 	require.NoError(t, err)
 	require.Equal(t, status, r.StatusCode)
 	time.Sleep(300 * time.Millisecond)

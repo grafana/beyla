@@ -102,6 +102,7 @@ type bpf_debugProgramSpecs struct {
 	UprobeSslDoHandshake    *ebpf.ProgramSpec `ebpf:"uprobe_ssl_do_handshake"`
 	UprobeSslRead           *ebpf.ProgramSpec `ebpf:"uprobe_ssl_read"`
 	UprobeSslReadEx         *ebpf.ProgramSpec `ebpf:"uprobe_ssl_read_ex"`
+	UprobeSslShutdown       *ebpf.ProgramSpec `ebpf:"uprobe_ssl_shutdown"`
 	UprobeSslWrite          *ebpf.ProgramSpec `ebpf:"uprobe_ssl_write"`
 	UprobeSslWriteEx        *ebpf.ProgramSpec `ebpf:"uprobe_ssl_write_ex"`
 	UretprobeSslDoHandshake *ebpf.ProgramSpec `ebpf:"uretprobe_ssl_do_handshake"`
@@ -191,6 +192,7 @@ type bpf_debugPrograms struct {
 	UprobeSslDoHandshake    *ebpf.Program `ebpf:"uprobe_ssl_do_handshake"`
 	UprobeSslRead           *ebpf.Program `ebpf:"uprobe_ssl_read"`
 	UprobeSslReadEx         *ebpf.Program `ebpf:"uprobe_ssl_read_ex"`
+	UprobeSslShutdown       *ebpf.Program `ebpf:"uprobe_ssl_shutdown"`
 	UprobeSslWrite          *ebpf.Program `ebpf:"uprobe_ssl_write"`
 	UprobeSslWriteEx        *ebpf.Program `ebpf:"uprobe_ssl_write_ex"`
 	UretprobeSslDoHandshake *ebpf.Program `ebpf:"uretprobe_ssl_do_handshake"`
@@ -213,6 +215,7 @@ func (p *bpf_debugPrograms) Close() error {
 		p.UprobeSslDoHandshake,
 		p.UprobeSslRead,
 		p.UprobeSslReadEx,
+		p.UprobeSslShutdown,
 		p.UprobeSslWrite,
 		p.UprobeSslWriteEx,
 		p.UretprobeSslDoHandshake,

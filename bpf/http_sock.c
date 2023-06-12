@@ -522,3 +522,18 @@ int BPF_URETPROBE(uretprobe_ssl_write_ex, int ret) {
     handle_ssl_buf(id, args, wrote_len);
     return 0;
 }
+
+SEC("uprobe/libssl.so:SSL_shutdown")
+int BPF_UPROBE(uprobe_ssl_shutdown, void *s) {
+    u64 id = bpf_get_current_pid_tgid();
+
+    if (!valid_pid(id)) {
+        return 0;
+    }
+
+    bpf_dbg_printk("=== SSL_shutdown id=%d ssl=%llx ===", id, s);
+
+    bpf_map_delete_elem(&ssl_to_conn, &s);
+
+    return 0;
+}

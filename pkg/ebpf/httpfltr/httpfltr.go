@@ -174,6 +174,10 @@ func (p *Tracer) UProbes() map[string]map[string]ebpfcommon.FunctionPrograms {
 					Start:    p.bpfObjects.UprobeSslDoHandshake,
 					End:      p.bpfObjects.UretprobeSslDoHandshake,
 				},
+				"SSL_shutdown": {
+					Required: true,
+					Start:    p.bpfObjects.UprobeSslShutdown,
+				},
 			},
 		}
 	}

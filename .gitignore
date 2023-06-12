@@ -39,3 +39,4 @@ test/cmd/grpc/server/grpcsrv
 test/cmd/greeting-service/target
 test/integration/components/javatestserver/target/
 test/integration/components/rusttestserver/target/
+test/integration/components/rustssltestserver/target/

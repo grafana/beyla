@@ -1,4 +1,4 @@
-server.port=8443
+server.port=8081
 
 # Logging
 logging.file.name=/tmp/greeting-service.log
@@ -14,10 +14,3 @@ server.tomcat.accesslog.suffix=.log
 server.tomcat.accesslog.prefix=access_log
 server.tomcat.accesslog.directory=/tmp
 server.tomcat.accesslog.pattern=common
-
-# SSL
-server.ssl.key-store=classpath:springboot.p12
-server.ssl.key-store-password=password
-server.ssl.key-store-type=pkcs12
-server.ssl.key-alias=springboot
-server.ssl.key-password=password

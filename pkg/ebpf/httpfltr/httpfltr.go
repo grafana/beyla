@@ -115,6 +115,10 @@ func (p *Tracer) KProbes() map[string]ebpfcommon.FunctionPrograms {
 			Required: true,
 			Start:    p.bpfObjects.KprobeTcpConnect,
 		},
+		"tcp_sendmsg": {
+			Required: true,
+			Start:    p.bpfObjects.KprobeTcpSendmsg,
+		},
 	}
 
 	// Track system exit so we can find program names of dead programs
@@ -131,6 +135,50 @@ func (p *Tracer) KProbes() map[string]ebpfcommon.FunctionPrograms {
 	}
 
 	return kprobes
+}
+
+func (p *Tracer) UProbes() map[string]map[string]ebpfcommon.FunctionPrograms {
+	libssl, err := findSharedLib("libssl.so")
+
+	if err != nil {
+		logger().Warn("can't find libssl library path", err)
+		return nil
+	}
+
+	if libssl != "" {
+		logger().Info("SSL library paths", "libssl", libssl)
+		return map[string]map[string]ebpfcommon.FunctionPrograms{
+			libssl: {
+				"SSL_read": {
+					Required: true,
+					Start:    p.bpfObjects.UprobeSslRead,
+					End:      p.bpfObjects.UretprobeSslRead,
+				},
+				"SSL_write": {
+					Required: true,
+					Start:    p.bpfObjects.UprobeSslWrite,
+					End:      p.bpfObjects.UretprobeSslWrite,
+				},
+				"SSL_read_ex": {
+					Required: true,
+					Start:    p.bpfObjects.UprobeSslReadEx,
+					End:      p.bpfObjects.UretprobeSslReadEx,
+				},
+				"SSL_write_ex": {
+					Required: true,
+					Start:    p.bpfObjects.UprobeSslWriteEx,
+					End:      p.bpfObjects.UretprobeSslWriteEx,
+				},
+				"SSL_do_handshake": {
+					Required: true,
+					Start:    p.bpfObjects.UprobeSslDoHandshake,
+					End:      p.bpfObjects.UretprobeSslDoHandshake,
+				},
+			},
+		}
+	}
+
+	return nil
 }
 
 func (p *Tracer) SocketFilters() []*ebpf.Program {

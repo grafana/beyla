@@ -50,6 +50,9 @@ type Tracer interface {
 	// KProbes returns a map with the name of the kernel probes that need to be
 	// tapped into. Start matches kprobe, End matches kretprobe
 	KProbes() map[string]ebpfcommon.FunctionPrograms
+	// KProbes returns a map with the module name mapping to the uprobes that need to be
+	// tapped into. Start matches uprobe, End matches uretprobe
+	UProbes() map[string]map[string]ebpfcommon.FunctionPrograms
 	// Socket filters returns a list of programs that need to be loaded as a
 	// generic eBPF socket filter
 	SocketFilters() []*ebpf.Program
@@ -151,6 +154,13 @@ func TracerProvider(ctx context.Context, cfg ebpfcommon.TracerConfig) ([]node.St
 
 		//Kprobes to be used for native instrumentation points
 		if err := i.kprobes(p); err != nil {
+			printVerifierErrorInfo(err)
+			unmountBpfPinPath(pinPath)
+			return nil, err
+		}
+
+		//Uprobes to be used for native module instrumentation points
+		if err := i.uprobes(p); err != nil {
 			printVerifierErrorInfo(err)
 			unmountBpfPinPath(pinPath)
 			return nil, err

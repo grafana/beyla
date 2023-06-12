@@ -3,6 +3,7 @@ package httpfltr
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"strconv"
 	"strings"
 	"syscall"
@@ -47,4 +48,33 @@ func findNamespace(pid int32) (uint32, error) {
 	}
 
 	return 0, fmt.Errorf("couldn't find ns pid in the symlink [%s]", nsPid)
+}
+
+func findSharedLib(lib string) (string, error) {
+	o, err := exec.Command("ldconfig", "-p").Output()
+
+	if err != nil {
+		return "", err
+	}
+
+	out := string(o)
+
+	sslPos := strings.Index(out, lib+" ")
+	if sslPos < 0 {
+		return "", fmt.Errorf("can't find %s in the shared libraries", lib)
+	}
+
+	pToPos := strings.Index(out[sslPos+1:], "=> ")
+	if pToPos < 0 {
+		return "", fmt.Errorf("wrong output from ldconfig")
+	}
+	pToPos += sslPos + 4
+
+	end := strings.Index(out[pToPos:], "\n")
+
+	if end < 0 {
+		return "", fmt.Errorf("wrong output from ldconfig, can't find newline")
+	}
+
+	return string(out[pToPos : pToPos+end]), err
 }

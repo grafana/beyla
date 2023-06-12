@@ -136,6 +136,22 @@ static __always_inline void process_http_response(http_info_t *info, unsigned ch
     info->status += (buf[RESPONSE_STATUS_POS + 2] - '0');
 }
 
+static __always_inline void finish_http(http_info_t *info) {
+    if (info->start_monotime_ns != 0 && info->status != 0 && info->pid != 0) {
+        http_info_t *trace = bpf_ringbuf_reserve(&events, sizeof(http_info_t), 0);
+        if (trace) {
+            bpf_dbg_printk("Sending trace %lx, closing connection", info);
+
+            bpf_memcpy(trace, info, sizeof(http_info_t));
+            bpf_ringbuf_submit(trace, get_flags());
+        }
+
+        bpf_map_delete_elem(&ongoing_http, &info->conn_info);
+        // bpf_map_delete_elem(&filtered_connections, &info->conn_info); // don't clean this up, doesn't work with keepalive
+        // we don't explicitly clean-up the http_tcp_seq, we need to still monitor for dups
+    }        
+}
+
 static __always_inline void process_http(http_info_t *in, protocol_info_t *tcp, u8 packet_type, u32 packet_len, unsigned char *buf, http_connection_metadata_t *meta) {
     http_info_t *info = get_or_set_http_info(in, packet_type);
     if (!info) {
@@ -157,19 +173,7 @@ static __always_inline void process_http(http_info_t *in, protocol_info_t *tcp, 
     }
 
     if (tcp_close(tcp)) {
-        if (info->start_monotime_ns != 0 && info->status != 0 && info->pid != 0) {
-            http_info_t *trace = bpf_ringbuf_reserve(&events, sizeof(http_info_t), 0);
-            if (trace) {
-                bpf_dbg_printk("Sending trace %lx, closing connection", info);
-
-                bpf_memcpy(trace, info, sizeof(http_info_t));
-                bpf_ringbuf_submit(trace, get_flags());
-            }
-
-            bpf_map_delete_elem(&ongoing_http, &info->conn_info);
-            // bpf_map_delete_elem(&filtered_connections, &info->conn_info); // don't clean this up, doesn't work with keepalive
-            // we don't explicitly clean-up the http_tcp_seq, we need to still monitor for dups
-        }        
+        finish_http(info);
     }
 
 }

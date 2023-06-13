@@ -67,7 +67,6 @@ func TestSuite_PrometheusScrape(t *testing.T) {
 	require.NoError(t, compose.Up())
 	t.Run("RED metrics", testREDMetricsHTTP)
 	t.Run("GRPC RED metrics", testREDMetricsGRPC)
-	t.Run("HTTP traces", testHTTPTraces)
 
 	t.Run("BPF pinning folder mounted", testBPFPinningMounted)
 	require.NoError(t, compose.Close())

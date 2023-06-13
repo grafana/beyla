@@ -1,4 +1,6 @@
-// Package jaeger provides some convenience data structures for integration testing
+// Package jaeger provides some convenience data structures for integration testing.
+// Disable some linting, as this is just a test class where readability is preferred to performance
+// nolint:gocritic
 package jaeger
 
 type TracesQuery struct {

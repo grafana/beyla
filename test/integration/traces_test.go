@@ -1,3 +1,5 @@
+//go:build integration
+
 package integration
 
 import (
@@ -81,7 +83,7 @@ func testHTTPTraces(t *testing.T) {
 	assert.Equal(t, parent.TraceID, p.TraceID)
 	assert.Equal(t, parent.SpanID, p.SpanID)
 	// check reasonable start and end times
-	assert.GreaterOrEqual(t, processing.StartTime, queue.StartTime + queue.Duration)
+	assert.GreaterOrEqual(t, processing.StartTime, queue.StartTime+queue.Duration)
 	assert.LessOrEqual(t, processing.StartTime+processing.Duration, parent.StartTime+parent.Duration)
 	// check span attributes
 	assert.Truef(t, queue.AllMatches(
@@ -99,7 +101,5 @@ func testHTTPTraces(t *testing.T) {
 		{Key: "telemetry.sdk.language", Type: "string", Value: "go"},
 		{Key: "service.namespace", Type: "string", Value: "integration-test"},
 	}), "not all tags matched in %+v", process.Tags)
-
-
 
 }

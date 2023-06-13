@@ -16,16 +16,16 @@ type Span struct {
 	SpanID        string      `json:"spanID"`
 	OperationName string      `json:"operationName"`
 	References    []Reference `json:"references"`
-	StartTime     uint64      `json:"startTime"`
-	Duration      uint64      `json:"duration"`
+	StartTime     int64       `json:"startTime"`
+	Duration      int64       `json:"duration"`
 	Tags          []Tag       `json:"tags"`
+	ProcessID     string      `json:"processID"`
 }
 
 type Tag struct {
-	Key       string      `json:"key"`
-	Type      string      `json:"type"`
-	Value     interface{} `json:"value"`
-	ProcessID string      `json:"processID"`
+	Key   string      `json:"key"`
+	Type  string      `json:"type"`
+	Value interface{} `json:"value"`
 }
 
 type Reference struct {
@@ -43,7 +43,7 @@ func (tq *TracesQuery) FindBySpan(tags ...Tag) []Trace {
 	var matches []Trace
 	for _, trace := range tq.Data {
 		for _, span := range trace.Spans {
-			if allMatches(span.Tags, tags) {
+			if span.AllMatches(tags...) {
 				matches = append(matches, trace)
 				break
 			}
@@ -93,7 +93,11 @@ func (t *Trace) ChildrenOf(parentID string) []Span {
 	return matches
 }
 
-func allMatches(dst, src []Tag) bool {
+func (s *Span) AllMatches(tags ...Tag) bool {
+	return AllMatches(s.Tags, tags)
+}
+
+func AllMatches(dst, src []Tag) bool {
 	dstTags := map[Tag]struct{}{}
 	for _, d := range dst {
 		dstTags[d] = struct{}{}

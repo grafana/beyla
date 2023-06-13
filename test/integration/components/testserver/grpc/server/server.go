@@ -54,7 +54,7 @@ type routeGuideServer struct {
 
 // GetFeature returns the feature at the given point.
 func (s *routeGuideServer) GetFeature(_ context.Context, point *pb.Point) (*pb.Feature, error) {
-	log.Info("GetFeature", "lat", point.Latitude, "long", point.Longitude)
+	log.Debug("GetFeature", "lat", point.Latitude, "long", point.Longitude)
 	for _, feature := range s.savedFeatures {
 		if proto.Equal(feature.Location, point) {
 			return feature, nil

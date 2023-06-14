@@ -112,7 +112,14 @@ func (i *instrumenter) uprobes(pid int32, p Tracer) error {
 	}
 
 	for lib, pMap := range p.UProbes() {
+		logger().Info("finding library", "lib", lib)
 		libMap := exec.LibPath(lib, maps)
+
+		if libMap == nil {
+			continue
+		}
+
+		logger().Info("instrumenting library", "lib", lib, "path", libMap.Pathname)
 
 		// we do this to make sure instrumenting something like libssl.so works with Docker
 		libExe, err := link.OpenExecutable(fmt.Sprintf("/proc/%d/map_files/%x-%x", pid, libMap.StartAddr, libMap.EndAddr))

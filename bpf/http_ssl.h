@@ -28,6 +28,16 @@ struct {
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
 } ssl_to_conn SEC(".maps");
 
+// LRU map, we don't clean-it up at the moment, which holds onto the mapping
+// of the pid-tid and the current connection. It's setup by the by tcp_rcv_established
+// in case we miss SSL_do_handshake
+struct {
+    __uint(type, BPF_MAP_TYPE_LRU_HASH);
+    __type(key, u64);   // the pid-tid pair
+    __type(value, connection_info_t); // the pointer to the file descriptor matching ssl
+    __uint(max_entries, MAX_CONCURRENT_REQUESTS);
+} pid_tid_to_conn SEC(".maps");
+
 // Temporary tracking of ssl_read/ssl_read_ex and ssl_write/ssl_write_ex arguments
 typedef struct ssl_args {
     u64 ssl; // SSL struct pointer
@@ -75,6 +85,13 @@ static __always_inline void https_buffer_event(void *buf, int len, connection_in
             process_http_request(info, buf);
         } else if (packet_type == PACKET_TYPE_RESPONSE) {
             process_http_response(info, buf, &meta);
+
+            // We sometimes don't see the TCP close in the filter, I wish we didn't have to 
+            // do this here, but let the filter handle it.
+            if (still_responding(info)) {
+                info->end_monotime_ns = bpf_ktime_get_ns();
+            }
+            finish_http(info);
         }
 
         // we let the regular socket filter do the rest
@@ -86,6 +103,22 @@ static __always_inline void handle_ssl_buf(u64 id, ssl_args_t *args, int bytes_l
         void *ssl = ((void *)args->ssl);
         bpf_printk("SSL_buf id=%d ssl=%llx", id, ssl);
         connection_info_t *conn = bpf_map_lookup_elem(&ssl_to_conn, &ssl);
+
+        if (!conn) {
+            conn = bpf_map_lookup_elem(&pid_tid_to_conn, &id);
+
+            // If we found a connection setup by tcp_rcv_established, which means
+            // we missed a SSL_do_handshake, update our ssl to connection map to be
+            // used by the rest of the SSL lifecycle. We shouldn't rely on the SSL_write
+            // being on the same thread as the SSL_read. 
+            if (conn) {
+                bpf_map_delete_elem(&pid_tid_to_conn, &id);
+                connection_info_t c;
+                bpf_probe_read(&c, sizeof(connection_info_t), conn);
+                bpf_map_update_elem(&ssl_to_conn, &ssl, &c, BPF_ANY);
+            }
+        }
+
         if (conn) {
             void *read_buf = (void *)args->buf;
             char buf[FULL_BUF_SIZE] = {0};

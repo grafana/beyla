@@ -412,3 +412,14 @@ func testREDMetricsRustHTTP(t *testing.T) {
 		})
 	}
 }
+
+func testREDMetricsRustHTTPS(t *testing.T) {
+	for _, testCaseURL := range []string{
+		"https://localhost:8491",
+	} {
+		t.Run(testCaseURL, func(t *testing.T) {
+			waitForTestComponents(t, testCaseURL)
+			testREDMetricsForRustHTTPLibrary(t, testCaseURL, "greetings")
+		})
+	}
+}

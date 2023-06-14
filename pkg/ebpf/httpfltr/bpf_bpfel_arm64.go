@@ -126,6 +126,7 @@ type bpfMapSpecs struct {
 	FilteredConnections *ebpf.MapSpec `ebpf:"filtered_connections"`
 	HttpTcpSeq          *ebpf.MapSpec `ebpf:"http_tcp_seq"`
 	OngoingHttp         *ebpf.MapSpec `ebpf:"ongoing_http"`
+	PidTidToConn        *ebpf.MapSpec `ebpf:"pid_tid_to_conn"`
 	SslToConn           *ebpf.MapSpec `ebpf:"ssl_to_conn"`
 }
 
@@ -158,6 +159,7 @@ type bpfMaps struct {
 	FilteredConnections *ebpf.Map `ebpf:"filtered_connections"`
 	HttpTcpSeq          *ebpf.Map `ebpf:"http_tcp_seq"`
 	OngoingHttp         *ebpf.Map `ebpf:"ongoing_http"`
+	PidTidToConn        *ebpf.Map `ebpf:"pid_tid_to_conn"`
 	SslToConn           *ebpf.Map `ebpf:"ssl_to_conn"`
 }
 
@@ -173,6 +175,7 @@ func (m *bpfMaps) Close() error {
 		m.FilteredConnections,
 		m.HttpTcpSeq,
 		m.OngoingHttp,
+		m.PidTidToConn,
 		m.SslToConn,
 	)
 }

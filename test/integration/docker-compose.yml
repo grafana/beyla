@@ -43,7 +43,7 @@ services:
     ports:
       - "8999:8999" # Prometheus scrape port, if enabled via config
 
-  # OpenTelemetry Collector
+  # OpenTelemetry Collector for Metrics. For Traces, we use directly Jaeger
   otelcol:
     image: otel/opentelemetry-collector-contrib:0.77.0
     container_name: otel-col
@@ -57,7 +57,7 @@ services:
       - ./configs/:/etc/otelcol-config
     ports:
       - "4317"          # OTLP over gRPC receiver
-      - "4318:4318"     # OTLP over HTTP receiver
+      - "4318"          # OTLP over HTTP receiver
       - "9464"          # Prometheus exporter
       - "8888"          # metrics endpoint
     depends_on:
@@ -80,3 +80,15 @@ services:
       - ./configs/:/etc/prometheus
     ports:
       - "9090:9090"
+
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    ports:
+      - "16686:16686" # Query frontend
+      - "4318"        # OTEL traces collector
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+      - LOG_LEVEL=debug
+
+# curl http://localhost:16686/api/services
+# curl http://localhost:16686/api/traces?service=testserver

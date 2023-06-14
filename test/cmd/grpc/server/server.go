@@ -53,7 +53,7 @@ type routeGuideServer struct {
 
 // GetFeature returns the feature at the given point.
 func (s *routeGuideServer) GetFeature(_ context.Context, point *pb.Point) (*pb.Feature, error) {
-	slog.Info("GetFeature", "lat", point.Latitude, "long", point.Longitude)
+	slog.Debug("GetFeature", "lat", point.Latitude, "long", point.Longitude)
 	for _, feature := range s.savedFeatures {
 		if proto.Equal(feature.Location, point) {
 			return feature, nil
@@ -63,9 +63,9 @@ func (s *routeGuideServer) GetFeature(_ context.Context, point *pb.Point) (*pb.F
 	return &pb.Feature{Location: point}, nil
 }
 
-// GetFeature returns the feature at the given point, but it also calls the ping server
+// GetFeatureWrapper returns the feature at the given point, but it also calls the ping server
 func (s *routeGuideServer) GetFeatureWrapper(_ context.Context, point *pb.Point) (*pb.Feature, error) {
-	slog.Info("GetFeatureWrapper", "lat", point.Latitude, "long", point.Longitude)
+	slog.Debug("GetFeatureWrapper", "lat", point.Latitude, "long", point.Longitude)
 
 	requestURL := "http://localhost:8080/ping?delay=2ms"
 	slog.Debug("calling", "url", requestURL)

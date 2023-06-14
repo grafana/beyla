@@ -26,6 +26,7 @@ const (
 	instrumentedServiceGinURL     = "http://localhost:8081"
 	instrumentedServiceGorillaURL = "http://localhost:8082"
 	prometheusHostPort            = "localhost:9090"
+	jaegerQueryURL                = "http://localhost:16686/api/traces"
 
 	testTimeout = 5 * time.Second
 )

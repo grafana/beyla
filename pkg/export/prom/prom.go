@@ -2,18 +2,15 @@ package prom
 
 import (
 	"context"
-	"fmt"
-	"net/http"
 	"strconv"
 
-	"golang.org/x/exp/slog"
+	"github.com/grafana/ebpf-autoinstrument/pkg/connector"
 
 	"github.com/grafana/ebpf-autoinstrument/pkg/export/otel"
 	"github.com/grafana/ebpf-autoinstrument/pkg/pipe/global"
 	"github.com/grafana/ebpf-autoinstrument/pkg/transform"
 	"github.com/mariomac/pipes/pkg/node"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 // using labels and names that are equivalent names to the OTEL attributes
@@ -66,11 +63,13 @@ type metricsReporter struct {
 	grpcClientDuration    *prometheus.HistogramVec
 	httpRequestSize       *prometheus.HistogramVec
 	httpClientRequestSize *prometheus.HistogramVec
+
+	promConnect *connector.PrometheusManager
 }
 
 func PrometheusEndpointProvider(ctx context.Context, cfg PrometheusConfig) (node.TerminalFunc[[]transform.HTTPRequestSpan], error) {
 	reporter := newReporter(ctx, &cfg)
-	go reporter.serveHTTPMetrics()
+	go reporter.promConnect.StartHTTP(ctx)
 	return reporter.reportMetrics, nil
 }
 
@@ -82,10 +81,10 @@ func newReporter(ctx context.Context, cfg *PrometheusConfig) *metricsReporter {
 	if cfg.ServiceName == "" {
 		cfg.ServiceName = ctxInfo.ServiceName
 	}
-
 	mr := &metricsReporter{
 		cfg:          cfg,
 		reportRoutes: reportRoutes,
+		promConnect:  &ctxInfo.Prometheus,
 		registry:     prometheus.NewRegistry(),
 		httpDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Name:    HTTPServerDuration,
@@ -116,12 +115,13 @@ func newReporter(ctx context.Context, cfg *PrometheusConfig) *metricsReporter {
 			Help: "size, in bytes, of the HTTP request body as sent from the client side",
 		}, labelNamesHTTPClient(cfg)),
 	}
-	mr.registry.MustRegister(mr.httpClientRequestSize)
-	mr.registry.MustRegister(mr.httpClientDuration)
-	mr.registry.MustRegister(mr.grpcClientDuration)
-	mr.registry.MustRegister(mr.httpRequestSize)
-	mr.registry.MustRegister(mr.httpDuration)
-	mr.registry.MustRegister(mr.grpcDuration)
+	mr.promConnect.Register(cfg.Port, cfg.Path,
+		mr.httpClientRequestSize,
+		mr.httpClientDuration,
+		mr.grpcClientDuration,
+		mr.httpRequestSize,
+		mr.httpDuration,
+		mr.grpcDuration)
 	return mr
 }
 
@@ -244,26 +244,4 @@ func (r *metricsReporter) labelValuesHTTP(span *transform.HTTPRequestSpan) []str
 		names = append(names, span.Route) // httpRouteKey
 	}
 	return names
-}
-
-// serveHTTPMetrics opens a Prometheus scraping HTTP endpoint to expose the metrics
-func (r *metricsReporter) serveHTTPMetrics() {
-	log := slog.With("component", "prom.MetricsReporter", "port", r.cfg.Port, "path", r.cfg.Path)
-	log.Info("opening prometheus scrape endpoint")
-	mux := http.NewServeMux()
-	promHandler := promhttp.HandlerFor(r.registry, promhttp.HandlerOpts{Registry: r.registry})
-	if log.Enabled(slog.LevelDebug) {
-		mux.Handle(r.cfg.Path, http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
-			log.Debug("received request in metrics endpoint", "uri", req.RequestURI, "remoteAddr", req.RemoteAddr)
-			promHandler.ServeHTTP(rw, req)
-		}))
-	} else {
-		mux.Handle(r.cfg.Path, promHandler)
-	}
-	err := http.ListenAndServe(fmt.Sprintf(":%d", r.cfg.Port), mux)
-	if err == http.ErrServerClosed {
-		log.Debug("HTTP server was closed", "err", err)
-	} else {
-		log.Error("HTTP service ended unexpectedly", err)
-	}
 }

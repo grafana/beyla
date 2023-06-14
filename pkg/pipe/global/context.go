@@ -1,6 +1,12 @@
 package global
 
-import "context"
+import (
+	"context"
+
+	"github.com/grafana/ebpf-autoinstrument/pkg/connector"
+
+	"github.com/grafana/ebpf-autoinstrument/pkg/imetrics"
+)
 
 type contextInfoKey struct{}
 
@@ -14,6 +20,10 @@ type ContextInfo struct {
 	ReportRoutes bool
 	// ServiceName is the value of the service.name metrics & span attribute
 	ServiceName string
+	// Metrics internal to the pipe components
+	Metrics imetrics.Reporter
+	// Prometheus connection manager to manage metrics exposition from diverse nodes
+	Prometheus connector.PrometheusManager
 }
 
 // SetContext creates a new context from the argument, storing the passed

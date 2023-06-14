@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/grafana/ebpf-autoinstrument/pkg/imetrics"
+
 	"github.com/grafana/ebpf-autoinstrument/pkg/pipe/global"
 
 	"github.com/grafana/ebpf-autoinstrument/pkg/ebpf"
@@ -57,6 +59,7 @@ func (gb *graphBuilder) buildGraph(ctx context.Context) (graph.Graph, error) {
 	// respective node providers
 	ctx = global.SetContext(ctx, &global.ContextInfo{
 		ReportRoutes: gb.config.Routes != nil,
+		Metrics:      &imetrics.NoopReporter{},
 	})
 
 	return gb.builder.Build(ctx, gb.config)

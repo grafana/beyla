@@ -68,7 +68,10 @@ func testHTTPTraces(t *testing.T) {
 	assert.Equal(t, parent.SpanID, p.SpanID)
 	// check reasonable start and end times
 	assert.GreaterOrEqual(t, queue.StartTime, parent.StartTime)
-	assert.LessOrEqual(t, queue.StartTime+queue.Duration, parent.StartTime+parent.Duration)
+	assert.LessOrEqual(t,
+		queue.StartTime+queue.Duration,
+		parent.StartTime+parent.Duration+1) // adding 1 to tolerate inaccuracies from rounding from ns to ms
+	// check span attributes
 	// check span attributes
 	assert.Truef(t, queue.AllMatches(
 		jaeger.Tag{Key: "otel.library.name", Type: "string", Value: "github.com/grafana/ebpf-autoinstrument"},
@@ -88,8 +91,7 @@ func testHTTPTraces(t *testing.T) {
 	assert.GreaterOrEqual(t, processing.StartTime, queue.StartTime+queue.Duration)
 	assert.LessOrEqual(t,
 		processing.StartTime+processing.Duration,
-		parent.StartTime+parent.Duration+1) // adding 1 to tolerate inaccuracies from rounding from ns to ms
-	// check span attributes
+		parent.StartTime+parent.Duration+1)
 	assert.Truef(t, queue.AllMatches(
 		jaeger.Tag{Key: "otel.library.name", Type: "string", Value: "github.com/grafana/ebpf-autoinstrument"},
 		jaeger.Tag{Key: "span.kind", Type: "string", Value: "internal"},
@@ -177,7 +179,7 @@ func testGRPCTraces(t *testing.T) {
 	assert.Equal(t, parent.SpanID, p.SpanID)
 	// check reasonable start and end times
 	assert.GreaterOrEqual(t, processing.StartTime, queue.StartTime+queue.Duration)
-	assert.LessOrEqual(t, processing.StartTime+processing.Duration, parent.StartTime+parent.Duration)
+	assert.LessOrEqual(t, processing.StartTime+processing.Duration, parent.StartTime+parent.Duration+1)
 	// check span attributes
 	assert.Truef(t, queue.AllMatches(
 		jaeger.Tag{Key: "otel.library.name", Type: "string", Value: "github.com/grafana/ebpf-autoinstrument"},

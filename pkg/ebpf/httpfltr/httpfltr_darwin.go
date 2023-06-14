@@ -4,7 +4,3 @@ func findNamespace(_ int32) (uint32, error) {
 	// convenience method to allow unit tests compiling in Darwin
 	return 1, nil
 }
-
-func findSharedLib(lib string) (string, error) {
-	return "", nil
-}

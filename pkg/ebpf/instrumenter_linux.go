@@ -6,6 +6,8 @@ import (
 	"unsafe"
 
 	"github.com/cilium/ebpf"
+	"github.com/grafana/ebpf-autoinstrument/pkg/exec"
+	"github.com/prometheus/procfs"
 	"golang.org/x/sys/unix"
 )
 
@@ -35,4 +37,8 @@ func htons(a uint16) uint16 {
 		return binary.BigEndian.Uint16(arr[:])
 	}
 	return a
+}
+
+func processMaps(pid int32) ([]*procfs.ProcMap, error) {
+	return exec.FindLibMaps(pid)
 }

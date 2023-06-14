@@ -17,6 +17,7 @@ func TestSuite(t *testing.T) {
 	require.NoError(t, compose.Up())
 	t.Run("RED metrics", testREDMetricsHTTP)
 	t.Run("GRPC RED metrics", testREDMetricsGRPC)
+	t.Run("HTTP traces", testHTTPTraces)
 
 	t.Run("BPF pinning folder mounted", testBPFPinningMounted)
 	require.NoError(t, compose.Close())
@@ -31,6 +32,8 @@ func TestSuite_NoDebugInfo(t *testing.T) {
 	require.NoError(t, compose.Up())
 	t.Run("RED metrics", testREDMetricsHTTP)
 	t.Run("GRPC RED metrics", testREDMetricsGRPC)
+	t.Run("HTTP traces", testHTTPTraces)
+
 	t.Run("BPF pinning folder mounted", testBPFPinningMounted)
 	require.NoError(t, compose.Close())
 	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
@@ -44,6 +47,7 @@ func TestSuite_OpenPort(t *testing.T) {
 	require.NoError(t, compose.Up())
 	t.Run("RED metrics", testREDMetricsHTTP)
 	t.Run("GRPC RED metrics", testREDMetricsGRPC)
+	t.Run("HTTP traces", testHTTPTraces)
 
 	t.Run("BPF pinning folder mounted", testBPFPinningMounted)
 	require.NoError(t, compose.Close())

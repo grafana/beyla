@@ -102,6 +102,7 @@ type bpfProgramSpecs struct {
 	UprobeSslDoHandshake    *ebpf.ProgramSpec `ebpf:"uprobe_ssl_do_handshake"`
 	UprobeSslRead           *ebpf.ProgramSpec `ebpf:"uprobe_ssl_read"`
 	UprobeSslReadEx         *ebpf.ProgramSpec `ebpf:"uprobe_ssl_read_ex"`
+	UprobeSslShutdown       *ebpf.ProgramSpec `ebpf:"uprobe_ssl_shutdown"`
 	UprobeSslWrite          *ebpf.ProgramSpec `ebpf:"uprobe_ssl_write"`
 	UprobeSslWriteEx        *ebpf.ProgramSpec `ebpf:"uprobe_ssl_write_ex"`
 	UretprobeSslDoHandshake *ebpf.ProgramSpec `ebpf:"uretprobe_ssl_do_handshake"`
@@ -125,6 +126,7 @@ type bpfMapSpecs struct {
 	FilteredConnections *ebpf.MapSpec `ebpf:"filtered_connections"`
 	HttpTcpSeq          *ebpf.MapSpec `ebpf:"http_tcp_seq"`
 	OngoingHttp         *ebpf.MapSpec `ebpf:"ongoing_http"`
+	PidTidToConn        *ebpf.MapSpec `ebpf:"pid_tid_to_conn"`
 	SslToConn           *ebpf.MapSpec `ebpf:"ssl_to_conn"`
 }
 
@@ -157,6 +159,7 @@ type bpfMaps struct {
 	FilteredConnections *ebpf.Map `ebpf:"filtered_connections"`
 	HttpTcpSeq          *ebpf.Map `ebpf:"http_tcp_seq"`
 	OngoingHttp         *ebpf.Map `ebpf:"ongoing_http"`
+	PidTidToConn        *ebpf.Map `ebpf:"pid_tid_to_conn"`
 	SslToConn           *ebpf.Map `ebpf:"ssl_to_conn"`
 }
 
@@ -172,6 +175,7 @@ func (m *bpfMaps) Close() error {
 		m.FilteredConnections,
 		m.HttpTcpSeq,
 		m.OngoingHttp,
+		m.PidTidToConn,
 		m.SslToConn,
 	)
 }
@@ -191,6 +195,7 @@ type bpfPrograms struct {
 	UprobeSslDoHandshake    *ebpf.Program `ebpf:"uprobe_ssl_do_handshake"`
 	UprobeSslRead           *ebpf.Program `ebpf:"uprobe_ssl_read"`
 	UprobeSslReadEx         *ebpf.Program `ebpf:"uprobe_ssl_read_ex"`
+	UprobeSslShutdown       *ebpf.Program `ebpf:"uprobe_ssl_shutdown"`
 	UprobeSslWrite          *ebpf.Program `ebpf:"uprobe_ssl_write"`
 	UprobeSslWriteEx        *ebpf.Program `ebpf:"uprobe_ssl_write_ex"`
 	UretprobeSslDoHandshake *ebpf.Program `ebpf:"uretprobe_ssl_do_handshake"`
@@ -213,6 +218,7 @@ func (p *bpfPrograms) Close() error {
 		p.UprobeSslDoHandshake,
 		p.UprobeSslRead,
 		p.UprobeSslReadEx,
+		p.UprobeSslShutdown,
 		p.UprobeSslWrite,
 		p.UprobeSslWriteEx,
 		p.UretprobeSslDoHandshake,

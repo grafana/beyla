@@ -78,7 +78,7 @@ func TracerProvider(ctx context.Context, cfg ebpfcommon.TracerConfig) ([]node.St
 
 	// merging all the functions from all the programs, in order to do
 	// a complete inspection of the target executable
-	allFuncs := allFunctionNames(programs)
+	allFuncs := allGoFunctionNames(programs)
 	elfInfo, goffsets, err := inspect(ctx, &cfg, allFuncs)
 	if err != nil {
 		return nil, fmt.Errorf("inspecting offsets: %w", err)
@@ -160,7 +160,7 @@ func TracerProvider(ctx context.Context, cfg ebpfcommon.TracerConfig) ([]node.St
 		}
 
 		//Uprobes to be used for native module instrumentation points
-		if err := i.uprobes(p); err != nil {
+		if err := i.uprobes(elfInfo.Pid, p); err != nil {
 			printVerifierErrorInfo(err)
 			unmountBpfPinPath(pinPath)
 			return nil, err
@@ -242,7 +242,7 @@ programs:
 	return filtered
 }
 
-func allFunctionNames(programs []Tracer) []string {
+func allGoFunctionNames(programs []Tracer) []string {
 	uniqueFunctions := map[string]struct{}{}
 	var functions []string
 	for _, p := range programs {

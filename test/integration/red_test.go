@@ -28,7 +28,7 @@ const (
 	prometheusHostPort            = "localhost:9090"
 	jaegerQueryURL                = "http://localhost:16686/api/traces"
 
-	testTimeout = 5 * time.Second
+	testTimeout = 10 * time.Second
 )
 
 var tr = &http.Transport{

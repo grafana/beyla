@@ -3,7 +3,7 @@
 
 syntax = "proto3";
 
-option go_package = "google.golang.org/grpc/examples/route_guide/routeguide";
+option go_package = "./routeguide";
 option java_multiple_files = true;
 option java_package = "io.grpc.examples.routeguide";
 option java_outer_classname = "RouteGuideProto";
@@ -39,6 +39,9 @@ service RouteGuide {
   // Accepts a stream of RouteNotes sent while a route is being traversed,
   // while receiving other RouteNotes (e.g. from other users).
   rpc RouteChat(stream RouteNote) returns (stream RouteNote) {}
+
+  // Just a dummy method for debug
+  rpc Debug(DebugReq) returns (Empty) {}
 }
 
 // Points are represented as latitude-longitude pairs in the E7 representation
@@ -98,3 +101,12 @@ message RouteSummary {
   // The duration of the traversal in seconds.
   int32 elapsed_time = 4;
 }
+
+message DebugReq {
+  // forces the server to respond in at least this time
+  int32 response_time_ms = 1;
+  // forces the server to return error
+  bool fail = 2;
+}
+
+message Empty {}

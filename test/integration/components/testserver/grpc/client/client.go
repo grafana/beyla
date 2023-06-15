@@ -15,6 +15,7 @@ import (
 	"context"
 	"crypto/tls"
 	"flag"
+	"io"
 	"log"
 	"os"
 	"time"
@@ -48,7 +49,7 @@ func printFeature(client pb.RouteGuideClient, point *pb.Point) {
 	}
 }
 
-func Ping() error {
+func newClient() (pb.RouteGuideClient, io.Closer, error) {
 	// Use INFO as default log
 	flag.Parse()
 	var opts []grpc.DialOption
@@ -64,12 +65,31 @@ func Ping() error {
 	conn, err := grpc.Dial(*serverAddr, opts...)
 	if err != nil {
 		logs.Error("fail to dial", err)
+		return nil, conn, err
+	}
+	return pb.NewRouteGuideClient(conn), conn, nil
+}
+
+func Ping() error {
+	client, closer, err := newClient()
+	defer closer.Close()
+	if err != nil {
 		return err
 	}
-	defer conn.Close()
-	client := pb.NewRouteGuideClient(conn)
-
 	// Looking for a valid feature
 	printFeature(client, &pb.Point{Latitude: 409146138, Longitude: -746188906})
 	return nil
+}
+
+func Debug(processTime time.Duration, forceFail bool) error {
+	client, closer, err := newClient()
+	defer closer.Close()
+	if err != nil {
+		return err
+	}
+	_, err = client.Debug(context.TODO(), &pb.DebugReq{
+		ResponseTimeMs: int32(processTime.Milliseconds()),
+		Fail:           forceFail,
+	})
+	return err
 }

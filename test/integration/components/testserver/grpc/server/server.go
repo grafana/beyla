@@ -145,6 +145,14 @@ func (s *routeGuideServer) RouteChat(stream pb.RouteGuide_RouteChatServer) error
 	}
 }
 
+func (s *routeGuideServer) Debug(_ context.Context, dr *pb.DebugReq) (*pb.Empty, error) {
+	time.Sleep(time.Duration(dr.GetResponseTimeMs()) * time.Millisecond)
+	if dr.GetFail() {
+		return &pb.Empty{}, errors.New("you asked for an error")
+	}
+	return &pb.Empty{}, nil
+}
+
 // loadFeatures loads features from a JSON file.
 func (s *routeGuideServer) loadFeatures(filePath string) {
 	var data []byte

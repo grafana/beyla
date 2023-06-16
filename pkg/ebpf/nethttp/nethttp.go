@@ -19,13 +19,13 @@ import (
 	"io"
 	"unsafe"
 
+	"github.com/cilium/ebpf"
+	"golang.org/x/exp/slog"
+
 	ebpfcommon "github.com/grafana/ebpf-autoinstrument/pkg/ebpf/common"
 	"github.com/grafana/ebpf-autoinstrument/pkg/exec"
-	"github.com/grafana/ebpf-autoinstrument/pkg/imetrics"
-
-	"github.com/cilium/ebpf"
 	"github.com/grafana/ebpf-autoinstrument/pkg/goexec"
-	"golang.org/x/exp/slog"
+	"github.com/grafana/ebpf-autoinstrument/pkg/imetrics"
 )
 
 //go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf ../../../bpf/go_nethttp.c -- -I../../../bpf/headers

@@ -54,7 +54,6 @@ func (p PrometheusConfig) Enabled() bool {
 
 type metricsReporter struct {
 	cfg          *PrometheusConfig
-	registry     *prometheus.Registry
 	reportRoutes bool
 
 	httpDuration          *prometheus.HistogramVec
@@ -85,7 +84,6 @@ func newReporter(ctx context.Context, cfg *PrometheusConfig) *metricsReporter {
 		cfg:          cfg,
 		reportRoutes: reportRoutes,
 		promConnect:  &ctxInfo.Prometheus,
-		registry:     prometheus.NewRegistry(),
 		httpDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Name:    HTTPServerDuration,
 			Help:    "duration of HTTP service calls from the server side, in milliseconds",

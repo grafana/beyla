@@ -4,18 +4,15 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/grafana/ebpf-autoinstrument/pkg/imetrics"
-
-	"github.com/grafana/ebpf-autoinstrument/pkg/pipe/global"
-
-	"github.com/grafana/ebpf-autoinstrument/pkg/ebpf"
-
 	"github.com/mariomac/pipes/pkg/graph"
 	"github.com/mariomac/pipes/pkg/node"
 
+	"github.com/grafana/ebpf-autoinstrument/pkg/ebpf"
 	"github.com/grafana/ebpf-autoinstrument/pkg/export/debug"
 	"github.com/grafana/ebpf-autoinstrument/pkg/export/otel"
 	"github.com/grafana/ebpf-autoinstrument/pkg/export/prom"
+	"github.com/grafana/ebpf-autoinstrument/pkg/imetrics"
+	"github.com/grafana/ebpf-autoinstrument/pkg/pipe/global"
 	"github.com/grafana/ebpf-autoinstrument/pkg/transform"
 )
 
@@ -57,10 +54,29 @@ func newGraphBuilder(config *Config) *graphBuilder {
 func (gb *graphBuilder) buildGraph(ctx context.Context) (graph.Graph, error) {
 	// setting explicitly some configuration properties that are needed by their
 	// respective node providers
-	ctx = global.SetContext(ctx, &global.ContextInfo{
+	ctxInfo := &global.ContextInfo{
 		ReportRoutes: gb.config.Routes != nil,
-		Metrics:      &imetrics.NoopReporter{},
-	})
-
+	}
+	setMetricsReporter(ctxInfo, &gb.config.InternalMetrics)
+	ctx = global.SetContext(ctx, ctxInfo)
 	return gb.builder.Build(ctx, gb.config)
+}
+
+type Instrumenter struct {
+	internalMetrics imetrics.Reporter
+	graph           *graph.Graph
+}
+
+func (i *Instrumenter) Start(ctx context.Context) {
+	go i.internalMetrics.Start(ctx)
+	i.graph.Run(ctx)
+}
+
+// SetReporter populates the global context info with an internal metrics reporter according to the passed config.
+func setMetricsReporter(ctx *global.ContextInfo, cfg *imetrics.Config) {
+	if cfg.Prometheus.Port != 0 {
+		ctx.Metrics = imetrics.NewPrometheusReporter(&cfg.Prometheus, &ctx.Prometheus)
+	} else {
+		ctx.Metrics = &imetrics.NoopReporter{}
+	}
 }

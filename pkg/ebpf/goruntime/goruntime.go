@@ -17,9 +17,9 @@ import (
 	"io"
 
 	"github.com/cilium/ebpf"
-	ebpfcommon "github.com/grafana/ebpf-autoinstrument/pkg/ebpf/common"
 	"golang.org/x/exp/slog"
 
+	ebpfcommon "github.com/grafana/ebpf-autoinstrument/pkg/ebpf/common"
 	"github.com/grafana/ebpf-autoinstrument/pkg/exec"
 	"github.com/grafana/ebpf-autoinstrument/pkg/goexec"
 	"github.com/grafana/ebpf-autoinstrument/pkg/imetrics"

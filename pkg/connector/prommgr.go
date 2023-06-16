@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"sync/atomic"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -18,8 +19,9 @@ func log() *slog.Logger {
 }
 
 // PrometheusManager allows exporting metrics from different sources (instrumented metrics, internal metrics...)
-// sharing the same port and path, or using different ones, depending on the configuration provided by the user.
+// sharing the same port and path, or using different ones, depending on the configuration provided by the registrars.
 type PrometheusManager struct {
+	started atomic.Bool
 	// key 1: port. Key 2: path
 	registries map[int]map[string]*prometheus.Registry
 }
@@ -43,9 +45,12 @@ func (pm *PrometheusManager) Register(port int, path string, collectors ...prome
 	reg.MustRegister(collectors...)
 }
 
-// StartHTTP serves metrics in background. Its invocation won't take effect if it has been invoked previously,
+// StartHTTP serves metrics in background. Its invocation won't have effect if it has been invoked previously,
 // so invoke it only after you are sure that all the collectors have been registered via the Register method.
 func (pm *PrometheusManager) StartHTTP(ctx context.Context) {
+	if pm.started.Swap(true) {
+		return
+	}
 	log := log()
 	// Creating a serve mux for each port
 	for port, paths := range pm.registries {

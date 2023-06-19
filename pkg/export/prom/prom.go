@@ -64,11 +64,12 @@ type metricsReporter struct {
 	httpClientRequestSize *prometheus.HistogramVec
 
 	promConnect *connector.PrometheusManager
+
+	bgCtx context.Context
 }
 
 func PrometheusEndpointProvider(ctx context.Context, cfg PrometheusConfig) (node.TerminalFunc[[]transform.HTTPRequestSpan], error) {
 	reporter := newReporter(ctx, &cfg)
-	go reporter.promConnect.StartHTTP(ctx)
 	return reporter.reportMetrics, nil
 }
 
@@ -81,6 +82,7 @@ func newReporter(ctx context.Context, cfg *PrometheusConfig) *metricsReporter {
 		cfg.ServiceName = ctxInfo.ServiceName
 	}
 	mr := &metricsReporter{
+		bgCtx:        ctx,
 		cfg:          cfg,
 		reportRoutes: reportRoutes,
 		promConnect:  &ctxInfo.Prometheus,
@@ -124,6 +126,7 @@ func newReporter(ctx context.Context, cfg *PrometheusConfig) *metricsReporter {
 }
 
 func (r *metricsReporter) reportMetrics(input <-chan []transform.HTTPRequestSpan) {
+	go r.promConnect.StartHTTP(r.bgCtx)
 	for spans := range input {
 		for i := range spans {
 			r.observe(&spans[i])

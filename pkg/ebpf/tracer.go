@@ -94,7 +94,7 @@ func TracerProvider(ctx context.Context, cfg ebpfcommon.TracerConfig) ([]node.St
 	} else {
 		// We are not instrumenting a Go application, we override the programs
 		// list with the generic kernel/socket space filters
-		programs = []Tracer{&httpfltr.Tracer{Cfg: &cfg}}
+		programs = []Tracer{&httpfltr.Tracer{Cfg: &cfg, Metrics: metrics}}
 	}
 
 	// Instead of the executable file in the disk, we pass the /proc/<pid>/exec

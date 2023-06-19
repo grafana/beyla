@@ -29,6 +29,8 @@ type PrometheusManager struct {
 // Register a set of prometheus metrics to be accessible through an HTTP port/path.
 // This method is not thread-safe
 func (pm *PrometheusManager) Register(port int, path string, collectors ...prometheus.Collector) {
+	log().Debug("registering Prometheus metrics collectors",
+		"len", len(collectors), "port", port, "path", path)
 	if pm.registries == nil {
 		pm.registries = map[int]map[string]*prometheus.Registry{}
 	}

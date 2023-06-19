@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"golang.org/x/exp/slog"
+
 	"github.com/mariomac/pipes/pkg/graph"
 	"github.com/mariomac/pipes/pkg/node"
 
@@ -16,6 +18,10 @@ import (
 	"github.com/grafana/ebpf-autoinstrument/pkg/transform"
 )
 
+func log() *slog.Logger {
+	return slog.With("component", "pipe.Build")
+}
+
 // builder with injectable instantiators for unit testing
 type graphBuilder struct {
 	config  *Config
@@ -24,9 +30,9 @@ type graphBuilder struct {
 
 // Build instantiates the whole instrumentation --> processing --> submit
 // pipeline graph and returns it as a startable item
-func Build(ctx context.Context, config *Config) (graph.Graph, error) {
+func Build(ctx context.Context, config *Config) (*Instrumenter, error) {
 	if err := config.Validate(); err != nil {
-		return graph.Graph{}, fmt.Errorf("validating configuration: %w", err)
+		return nil, fmt.Errorf("validating configuration: %w", err)
 	}
 
 	return newGraphBuilder(config).buildGraph(ctx)
@@ -51,7 +57,7 @@ func newGraphBuilder(config *Config) *graphBuilder {
 	}
 }
 
-func (gb *graphBuilder) buildGraph(ctx context.Context) (graph.Graph, error) {
+func (gb *graphBuilder) buildGraph(ctx context.Context) (*Instrumenter, error) {
 	// setting explicitly some configuration properties that are needed by their
 	// respective node providers
 	ctxInfo := &global.ContextInfo{
@@ -59,7 +65,14 @@ func (gb *graphBuilder) buildGraph(ctx context.Context) (graph.Graph, error) {
 	}
 	setMetricsReporter(ctxInfo, &gb.config.InternalMetrics)
 	ctx = global.SetContext(ctx, ctxInfo)
-	return gb.builder.Build(ctx, gb.config)
+	grp, err := gb.builder.Build(ctx, gb.config)
+	if err != nil {
+		return nil, err
+	}
+	return &Instrumenter{
+		internalMetrics: ctxInfo.Metrics,
+		graph:           &grp,
+	}, nil
 }
 
 type Instrumenter struct {
@@ -67,7 +80,7 @@ type Instrumenter struct {
 	graph           *graph.Graph
 }
 
-func (i *Instrumenter) Start(ctx context.Context) {
+func (i *Instrumenter) Run(ctx context.Context) {
 	go i.internalMetrics.Start(ctx)
 	i.graph.Run(ctx)
 }
@@ -75,8 +88,10 @@ func (i *Instrumenter) Start(ctx context.Context) {
 // SetReporter populates the global context info with an internal metrics reporter according to the passed config.
 func setMetricsReporter(ctx *global.ContextInfo, cfg *imetrics.Config) {
 	if cfg.Prometheus.Port != 0 {
+		log().Debug("reporting internal metrics as Prometheus")
 		ctx.Metrics = imetrics.NewPrometheusReporter(&cfg.Prometheus, &ctx.Prometheus)
 	} else {
+		log().Debug("not reporting internal metrics")
 		ctx.Metrics = &imetrics.NoopReporter{}
 	}
 }

@@ -1,7 +1,14 @@
 package ebpf
 
-func bpfMount(_ string) error {
-	// dummy function to compilation errors in Darwin, due to the
-	// different signatures of unix.Mount functions
-	return nil
+import (
+	"context"
+
+	ebpfcommon "github.com/grafana/ebpf-autoinstrument/pkg/ebpf/common"
+	"github.com/mariomac/pipes/pkg/node"
+)
+
+// dummy functions and types to avoid compilation errors in Darwin. The tracer component is only usable in Linux.
+
+func TracerProvider(ctx context.Context, cfg ebpfcommon.TracerConfig) ([]node.StartFuncCtx[[]any], error) { //nolint:all
+	return nil, nil
 }

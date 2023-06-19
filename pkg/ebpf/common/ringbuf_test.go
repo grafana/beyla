@@ -7,18 +7,15 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cilium/ebpf"
+	"github.com/cilium/ebpf/ringbuf"
 	"github.com/mariomac/guara/pkg/test"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/grafana/ebpf-autoinstrument/pkg/testutil"
-
 	"golang.org/x/exp/slog"
 
-	"github.com/cilium/ebpf"
-
-	"github.com/cilium/ebpf/ringbuf"
+	"github.com/grafana/ebpf-autoinstrument/pkg/imetrics"
+	"github.com/grafana/ebpf-autoinstrument/pkg/testutil"
 )
 
 const testTimeout = 5 * time.Second
@@ -27,12 +24,14 @@ func TestForwardRingbuf_CapacityFull(t *testing.T) {
 	// GIVEN a ring buffer forwarder
 	ringBuf, restore := replaceTestRingBuf()
 	defer restore()
+	metrics := &metricsReporter{}
 	forwardedMessages := make(chan []any, 100)
 	go ForwardRingbuf(
 		&TracerConfig{BatchLength: 10},
 		slog.With("test", "TestForwardRingbuf_CapacityFull"),
 		nil, // the source ring buffer can be null
 		toRequestTrace,
+		metrics,
 	)(context.Background(), forwardedMessages)
 
 	// WHEN it starts receiving trace events
@@ -53,6 +52,9 @@ func TestForwardRingbuf_CapacityFull(t *testing.T) {
 	for i := range batch {
 		assert.Equal(t, HTTPRequestTrace{Type: 1, Method: get, ContentLength: int64(10 + i)}, batch[i])
 	}
+	// AND metrics are properly updated
+	assert.Equal(t, 2, metrics.flushes)
+	assert.Equal(t, 20, metrics.flushedLen)
 
 	// AND does not forward any extra message if no more elements are in the ring buffer
 	select {
@@ -68,12 +70,14 @@ func TestForwardRingbuf_Deadline(t *testing.T) {
 	ringBuf, restore := replaceTestRingBuf()
 	defer restore()
 
+	metrics := &metricsReporter{}
 	forwardedMessages := make(chan []any, 100)
 	go ForwardRingbuf(
 		&TracerConfig{BatchLength: 10, BatchTimeout: 20 * time.Millisecond},
 		slog.With("test", "TestForwardRingbuf_Deadline"),
 		nil, // the source ring buffer can be null
 		toRequestTrace,
+		metrics,
 	)(context.Background(), forwardedMessages)
 
 	// WHEN it receives, after a timeout, less events than its internal buffer
@@ -91,6 +95,10 @@ func TestForwardRingbuf_Deadline(t *testing.T) {
 	for i := range batch {
 		assert.Equal(t, HTTPRequestTrace{Type: 1, Method: get, ContentLength: int64(i)}, batch[i])
 	}
+
+	// AND metrics are properly updated
+	assert.Equal(t, 1, metrics.flushes)
+	assert.Equal(t, 7, metrics.flushedLen)
 }
 
 func TestForwardRingbuf_Close(t *testing.T) {
@@ -98,12 +106,14 @@ func TestForwardRingbuf_Close(t *testing.T) {
 	ringBuf, restore := replaceTestRingBuf()
 	defer restore()
 
+	metrics := &metricsReporter{}
 	closable := closableObject{}
 	go ForwardRingbuf(
 		&TracerConfig{BatchLength: 10},
 		slog.With("test", "TestForwardRingbuf_Close"),
 		nil, // the source ring buffer can be null
 		toRequestTrace,
+		metrics,
 		&closable,
 	)(context.Background(), make(chan []any, 100))
 
@@ -118,6 +128,10 @@ func TestForwardRingbuf_Close(t *testing.T) {
 		assert.True(t, ringBuf.explicitClose)
 	})
 	assert.True(t, closable.closed)
+
+	// AND metrics haven't been updated
+	assert.Equal(t, 0, metrics.flushes)
+	assert.Equal(t, 0, metrics.flushedLen)
 }
 
 // replaces the original ring buffer factory by a fake ring buffer creator and returns it,
@@ -177,4 +191,15 @@ func toRequestTrace(record *ringbuf.Record) (any, error) {
 	}
 
 	return event, nil
+}
+
+type metricsReporter struct {
+	imetrics.NoopReporter
+	flushes    int
+	flushedLen int
+}
+
+func (m *metricsReporter) TracerFlush(len int) {
+	m.flushes++
+	m.flushedLen += len
 }

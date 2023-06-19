@@ -68,12 +68,14 @@ type Tracer interface {
 func TracerProvider(ctx context.Context, cfg ebpfcommon.TracerConfig) ([]node.StartFuncCtx[[]any], error) { //nolint:all
 	var log = logger()
 
+	metrics := global.Context(ctx).Metrics
+
 	// Each program is an eBPF source: net/http, grpc...
 	programs := []Tracer{
-		&nethttp.Tracer{Cfg: &cfg},
-		&nethttp.GinTracer{Tracer: nethttp.Tracer{Cfg: &cfg}},
-		&grpc.Tracer{Cfg: &cfg},
-		&goruntime.Tracer{Cfg: &cfg},
+		&nethttp.Tracer{Cfg: &cfg, Metrics: metrics},
+		&nethttp.GinTracer{Tracer: nethttp.Tracer{Cfg: &cfg, Metrics: metrics}},
+		&grpc.Tracer{Cfg: &cfg, Metrics: metrics},
+		&goruntime.Tracer{Cfg: &cfg, Metrics: metrics},
 	}
 
 	// merging all the functions from all the programs, in order to do
@@ -92,7 +94,7 @@ func TracerProvider(ctx context.Context, cfg ebpfcommon.TracerConfig) ([]node.St
 	} else {
 		// We are not instrumenting a Go application, we override the programs
 		// list with the generic kernel/socket space filters
-		programs = []Tracer{&httpfltr.Tracer{Cfg: &cfg}}
+		programs = []Tracer{&httpfltr.Tracer{Cfg: &cfg, Metrics: metrics}}
 	}
 
 	// Instead of the executable file in the disk, we pass the /proc/<pid>/exec

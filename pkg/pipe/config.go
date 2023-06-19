@@ -5,14 +5,14 @@ import (
 	"io"
 	"time"
 
-	ebpfcommon "github.com/grafana/ebpf-autoinstrument/pkg/ebpf/common"
-
 	"github.com/caarlos0/env/v7"
 	"gopkg.in/yaml.v3"
 
+	ebpfcommon "github.com/grafana/ebpf-autoinstrument/pkg/ebpf/common"
 	"github.com/grafana/ebpf-autoinstrument/pkg/export/debug"
 	"github.com/grafana/ebpf-autoinstrument/pkg/export/otel"
 	"github.com/grafana/ebpf-autoinstrument/pkg/export/prom"
+	"github.com/grafana/ebpf-autoinstrument/pkg/imetrics"
 	"github.com/grafana/ebpf-autoinstrument/pkg/transform"
 )
 
@@ -36,6 +36,12 @@ var defaultConfig = Config{
 	},
 	Printer: false,
 	Noop:    false,
+	InternalMetrics: imetrics.Config{
+		Prometheus: imetrics.PrometheusConfig{
+			Port: 0, // disabled by default
+			Path: "/internal/metrics",
+		},
+	},
 }
 
 type Config struct {
@@ -57,6 +63,7 @@ type Config struct {
 	ChannelBufferLen int               `yaml:"channel_buffer_len" env:"CHANNEL_BUFFER_LEN" nodeId:"-"`
 	Noop             debug.NoopEnabled `nodeId:"noop" yaml:"noop" env:"NOOP_TRACES"`
 	ProfilePort      int               `yaml:"profile_port" env:"PROFILE_PORT" nodeId:"-"`
+	InternalMetrics  imetrics.Config   `yaml:"internal_metrics" nodeId:"-"`
 }
 
 type ConfigError string

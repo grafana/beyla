@@ -11,14 +11,15 @@ import (
 	"strconv"
 	"strings"
 
-	ebpfcommon "github.com/grafana/ebpf-autoinstrument/pkg/ebpf/common"
-	"github.com/grafana/ebpf-autoinstrument/pkg/exec"
+	"github.com/cilium/ebpf"
+	"github.com/cilium/ebpf/ringbuf"
 	lru "github.com/hashicorp/golang-lru/v2"
 	"golang.org/x/exp/slog"
 
-	"github.com/cilium/ebpf"
-	"github.com/cilium/ebpf/ringbuf"
+	ebpfcommon "github.com/grafana/ebpf-autoinstrument/pkg/ebpf/common"
+	"github.com/grafana/ebpf-autoinstrument/pkg/exec"
 	"github.com/grafana/ebpf-autoinstrument/pkg/goexec"
+	"github.com/grafana/ebpf-autoinstrument/pkg/imetrics"
 )
 
 //go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf ../../../bpf/http_sock.c -- -I../../../bpf/headers
@@ -40,6 +41,7 @@ type HTTPInfo struct {
 
 type Tracer struct {
 	Cfg        *ebpfcommon.TracerConfig
+	Metrics    imetrics.Reporter
 	bpfObjects bpfObjects
 	closers    []io.Closer
 }
@@ -180,6 +182,7 @@ func (p *Tracer) SocketFilters() []*ebpf.Program {
 func (p *Tracer) Run(ctx context.Context, eventsChan chan<- []any) {
 	ebpfcommon.ForwardRingbuf(
 		p.Cfg, logger(), p.bpfObjects.Events, p.toRequestTrace,
+		p.Metrics,
 		append(p.closers, &p.bpfObjects)...,
 	)(ctx, eventsChan)
 }

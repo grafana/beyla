@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/cilium/ebpf"
-
 	"github.com/cilium/ebpf/ringbuf"
+	"github.com/grafana/ebpf-autoinstrument/pkg/imetrics"
 	"github.com/mariomac/pipes/pkg/node"
 	"golang.org/x/exp/slog"
 )
@@ -37,6 +37,7 @@ type ringBufForwarder[T any] struct {
 	access     sync.Mutex
 	ticker     *time.Ticker
 	reader     func(*ringbuf.Record) (T, error)
+	metrics    imetrics.Reporter
 }
 
 // ForwardRingbuf returns a function reads HTTPRequestTraces from an input ring buffer, accumulates them into an
@@ -47,10 +48,11 @@ func ForwardRingbuf[T any](
 	logger *slog.Logger,
 	ringbuffer *ebpf.Map,
 	reader func(*ringbuf.Record) (T, error),
+	metrics imetrics.Reporter,
 	closers ...io.Closer,
 ) node.StartFuncCtx[[]T] {
 	rbf := ringBufForwarder[T]{
-		cfg: cfg, logger: logger, ringbuffer: ringbuffer, closers: closers, reader: reader,
+		cfg: cfg, logger: logger, ringbuffer: ringbuffer, closers: closers, reader: reader, metrics: metrics,
 	}
 	return rbf.readAndForward
 }
@@ -118,6 +120,7 @@ func (rbf *ringBufForwarder[T]) readAndForward(ctx context.Context, eventsChan c
 }
 
 func (rbf *ringBufForwarder[T]) flushEvents(eventsChan chan<- []T) {
+	rbf.metrics.TracerFlush(rbf.evLen)
 	eventsChan <- rbf.events[:rbf.evLen]
 	rbf.events = make([]T, rbf.cfg.BatchLength)
 	rbf.evLen = 0

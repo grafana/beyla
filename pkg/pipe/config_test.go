@@ -7,13 +7,13 @@ import (
 	"testing"
 	"time"
 
-	ebpfcommon "github.com/grafana/ebpf-autoinstrument/pkg/ebpf/common"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	ebpfcommon "github.com/grafana/ebpf-autoinstrument/pkg/ebpf/common"
 	"github.com/grafana/ebpf-autoinstrument/pkg/export/otel"
 	"github.com/grafana/ebpf-autoinstrument/pkg/export/prom"
+	"github.com/grafana/ebpf-autoinstrument/pkg/imetrics"
 )
 
 func TestConfig_Overrides(t *testing.T) {
@@ -30,6 +30,7 @@ otel_metrics_export:
 	require.NoError(t, os.Setenv("NOOP_TRACES", "true"))
 	require.NoError(t, os.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "localhost:3131"))
 	require.NoError(t, os.Setenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", "localhost:3232"))
+	require.NoError(t, os.Setenv("INTERNAL_METRICS_PROMETHEUS_PORT", "3210"))
 	defer unsetEnv(t, map[string]string{
 		"OTEL_SERVICE_NAME": "", "NOOP_TRACES": "",
 		"OTEL_EXPORTER_OTLP_ENDPOINT": "", "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT": "",
@@ -64,6 +65,12 @@ otel_metrics_export:
 		},
 		Prometheus: prom.PrometheusConfig{
 			Path: "/metrics",
+		},
+		InternalMetrics: imetrics.Config{
+			Prometheus: imetrics.PrometheusConfig{
+				Port: 3210,
+				Path: "/internal/metrics",
+			},
 		},
 	}, cfg)
 }

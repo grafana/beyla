@@ -19,19 +19,22 @@ import (
 	"io"
 	"unsafe"
 
+	"github.com/cilium/ebpf"
+	"golang.org/x/exp/slog"
+
 	ebpfcommon "github.com/grafana/ebpf-autoinstrument/pkg/ebpf/common"
 	"github.com/grafana/ebpf-autoinstrument/pkg/exec"
-
-	"github.com/cilium/ebpf"
 	"github.com/grafana/ebpf-autoinstrument/pkg/goexec"
-	"golang.org/x/exp/slog"
+	"github.com/grafana/ebpf-autoinstrument/pkg/imetrics"
 )
 
 //go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf ../../../bpf/go_grpc.c -- -I../../../bpf/headers
 //go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf_debug ../../../bpf/go_grpc.c -- -I../../../bpf/headers -DBPF_DEBUG
 
 type Tracer struct {
-	Cfg        *ebpfcommon.TracerConfig
+	Cfg     *ebpfcommon.TracerConfig
+	Metrics imetrics.Reporter
+
 	bpfObjects bpfObjects
 	closers    []io.Closer
 }
@@ -109,6 +112,7 @@ func (p *Tracer) Run(ctx context.Context, eventsChan chan<- []any) {
 	logger := slog.With("component", "grpc.Tracer")
 	ebpfcommon.ForwardRingbuf(
 		p.Cfg, logger, p.bpfObjects.Events, ebpfcommon.Read[ebpfcommon.HTTPRequestTrace],
+		p.Metrics,
 		append(p.closers, &p.bpfObjects)...,
 	)(ctx, eventsChan)
 }

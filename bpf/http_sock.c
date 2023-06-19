@@ -87,6 +87,7 @@ int BPF_KPROBE(kprobe_tcp_rcv_established, struct sock *sk, struct sk_buff *skb)
         meta.id = id;
         meta.type = EVENT_HTTP_REQUEST;
         bpf_map_update_elem(&filtered_connections, &info, &meta, BPF_NOEXIST); // On purpose BPF_NOEXIST, we don't want to overwrite data by accept or connect
+        bpf_map_update_elem(&pid_tid_to_conn, &id, &info, BPF_ANY); // to support SSL on missing handshake
     }
 
 
@@ -344,6 +345,7 @@ int BPF_KPROBE(kprobe_tcp_sendmsg, struct sock *sk, struct msghdr *msg, size_t s
 SEC("uretprobe/libssl.so:SSL_do_handshake")
 int BPF_URETPROBE(uretprobe_ssl_do_handshake, int ret) {
     u64 id = bpf_get_current_pid_tgid();
+    
     if (!valid_pid(id)) {
         return 0;
     }
@@ -520,5 +522,21 @@ int BPF_URETPROBE(uretprobe_ssl_write_ex, int ret) {
     bpf_probe_read(&wrote_len, sizeof(wrote_len), (void *)args->len_ptr);
 
     handle_ssl_buf(id, args, wrote_len);
+    return 0;
+}
+
+SEC("uprobe/libssl.so:SSL_shutdown")
+int BPF_UPROBE(uprobe_ssl_shutdown, void *s) {
+    u64 id = bpf_get_current_pid_tgid();
+
+    if (!valid_pid(id)) {
+        return 0;
+    }
+
+    bpf_dbg_printk("=== SSL_shutdown id=%d ssl=%llx ===", id, s);
+
+    bpf_map_delete_elem(&ssl_to_conn, &s);
+    bpf_map_delete_elem(&pid_tid_to_conn, &id);
+
     return 0;
 }

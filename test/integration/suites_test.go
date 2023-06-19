@@ -151,3 +151,14 @@ func TestSuite_Rust(t *testing.T) {
 	require.NoError(t, compose.Close())
 	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
 }
+
+func TestSuite_RustSSL(t *testing.T) {
+	compose, err := docker.ComposeSuite("docker-compose-rust-tls.yml", path.Join(pathOutput, "test-suite-rust-tls.log"))
+	compose.Env = append(compose.Env, `OPEN_PORT=8490`, `EXECUTABLE_NAME=`)
+	require.NoError(t, err)
+	require.NoError(t, compose.Up())
+	t.Run("Rust RED metrics", testREDMetricsRustHTTPS)
+	t.Run("BPF pinning folder mounted", testBPFPinningMounted)
+	require.NoError(t, compose.Close())
+	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
+}

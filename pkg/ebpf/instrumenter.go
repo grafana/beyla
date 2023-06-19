@@ -6,6 +6,7 @@ import (
 
 	"github.com/cilium/ebpf/link"
 	ebpfcommon "github.com/grafana/ebpf-autoinstrument/pkg/ebpf/common"
+	"github.com/grafana/ebpf-autoinstrument/pkg/exec"
 	"github.com/grafana/ebpf-autoinstrument/pkg/goexec"
 	"golang.org/x/exp/slog"
 )
@@ -99,19 +100,42 @@ func (i *instrumenter) kprobe(funcName string, programs ebpfcommon.FunctionProgr
 	return nil
 }
 
-func (i *instrumenter) uprobes(p Tracer) error {
-	for umodule, ufuncs := range p.UProbes() {
-		ex, err := link.OpenExecutable(umodule)
+func (i *instrumenter) uprobes(pid int32, p Tracer) error {
+	maps, err := processMaps(pid)
+	if err != nil {
+		return err
+	}
+
+	if len(maps) == 0 {
+		logger().Info("didn't find any process maps, not instrumenting shared libraries", "pid", pid)
+		return nil
+	}
+
+	for lib, pMap := range p.UProbes() {
+		logger().Info("finding library", "lib", lib)
+		libMap := exec.LibPath(lib, maps)
+
+		if libMap == nil {
+			continue
+		}
+
+		logger().Info("instrumenting library", "lib", lib, "path", libMap.Pathname)
+
+		// we do this to make sure instrumenting something like libssl.so works with Docker
+		libExe, err := link.OpenExecutable(fmt.Sprintf("/proc/%d/map_files/%x-%x", pid, libMap.StartAddr, libMap.EndAddr))
+
 		if err != nil {
-			slog.Error("opening executable: %s", err)
 			return err
 		}
 
-		for ufunc, uprobes := range ufuncs {
-			slog.Debug("going to add uprobe to", "module", umodule, "function", ufunc, "probes", uprobes)
+		for funcName, funcPrograms := range pMap {
+			slog.Debug("going to instrument function", "function", funcName, "programs", funcPrograms)
+			if err := i.uprobe(funcName, libExe, funcPrograms); err != nil {
+				if funcPrograms.Required {
+					return fmt.Errorf("instrumenting function %q: %w", funcName, err)
+				}
 
-			if err := i.uprobe(ex, ufunc, uprobes); err != nil {
-				return fmt.Errorf("instrumenting function %s %q: %w", umodule, ufunc, err)
+				slog.Info("error instrumenting uprobe", "function", funcName, "error", err)
 			}
 			p.AddCloser(i.closables...)
 		}
@@ -120,19 +144,19 @@ func (i *instrumenter) uprobes(p Tracer) error {
 	return nil
 }
 
-func (i *instrumenter) uprobe(module *link.Executable, funcName string, programs ebpfcommon.FunctionPrograms) error {
-	if programs.Start != nil {
-		up, err := module.Uprobe(funcName, programs.Start, nil)
+func (i *instrumenter) uprobe(funcName string, exe *link.Executable, probe ebpfcommon.FunctionPrograms) error {
+	if probe.Start != nil {
+		up, err := exe.Uprobe(funcName, probe.Start, nil)
 		if err != nil {
 			return fmt.Errorf("setting uprobe: %w", err)
 		}
 		i.closables = append(i.closables, up)
 	}
 
-	if programs.End != nil {
-		up, err := module.Uretprobe(funcName, programs.End, nil)
+	if probe.End != nil {
+		up, err := exe.Uretprobe(funcName, probe.End, nil)
 		if err != nil {
-			return fmt.Errorf("setting kretprobe: %w", err)
+			return fmt.Errorf("setting uretprobe: %w", err)
 		}
 		i.closables = append(i.closables, up)
 	}

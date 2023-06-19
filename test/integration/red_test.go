@@ -259,7 +259,7 @@ func testREDMetricsGRPC(t *testing.T) {
 		results, err = pq.Query(`rpc_server_duration_seconds_count{` +
 			`rpc_grpc_status_code="0",` +
 			`service_namespace="integration-test",` +
-			`net_sock_peer_addr="127.0.0.1",` +
+			`net_sock_peer_addr!="127.0.0.1",` + // discard the metrics from testREDMetricsForHTTPLibrary/GorillaURL
 			`service_name="testserver",` +
 			`rpc_method="/routeguide.RouteGuide/GetFeature"}`)
 		require.NoError(t, err)

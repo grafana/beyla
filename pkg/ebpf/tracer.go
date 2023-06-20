@@ -1,3 +1,5 @@
+//go:build linux
+
 package ebpf
 
 import (
@@ -356,4 +358,8 @@ func printVerifierErrorInfo(err error) {
 	if errors.As(err, &ve) {
 		_, _ = fmt.Fprintf(os.Stderr, "Error Log:\n %v\n", strings.Join(ve.Log, "\n"))
 	}
+}
+
+func bpfMount(pinPath string) error {
+	return unix.Mount(pinPath, pinPath, "bpf", 0, "")
 }

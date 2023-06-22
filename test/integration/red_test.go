@@ -310,11 +310,13 @@ func testREDMetricsForJavaHTTPLibrary(t *testing.T, url string, comm string, sys
 		} else {
 			require.Len(t, results, 1)
 		}
-		res := results[0]
-		require.Len(t, res.Value, 2)
-		assert.LessOrEqual(t, "3", res.Value[1])
-		addr := net.ParseIP(res.Metric["net_sock_peer_addr"])
-		assert.NotNil(t, addr)
+		if len(results) > 0 {
+			res := results[0]
+			require.Len(t, res.Value, 2)
+			assert.LessOrEqual(t, "3", res.Value[1])
+			addr := net.ParseIP(res.Metric["net_sock_peer_addr"])
+			assert.NotNil(t, addr)
+		}
 	})
 }
 

@@ -18,7 +18,7 @@ import (
 	"github.com/grafana/ebpf-autoinstrument/pkg/transform"
 )
 
-const timeout = 5000 * time.Second
+const timeout = 5 * time.Second
 
 func TestMetricsEndpoint(t *testing.T) {
 	mcfg := MetricsConfig{
@@ -83,12 +83,13 @@ func TestMissingSchemeInMetricsEndpoint(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestInternalInstrumentation(t *testing.T) {
+func TestMetrics_InternalInstrumentation(t *testing.T) {
 	// fake OTEL collector server
 	coll := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, _ *http.Request) {
 		rw.WriteHeader(http.StatusOK)
 	}))
 	defer coll.Close()
+
 	// create a simple dummy graph to send data to the Metrics reporter, which will send
 	// metrics to the fake collector
 	sendData := make(chan struct{})
@@ -105,6 +106,7 @@ func TestInternalInstrumentation(t *testing.T) {
 	}), MetricsConfig{Endpoint: coll.URL, Interval: 10 * time.Millisecond})
 	require.NoError(t, err)
 	inputNode.SendsTo(node.AsTerminal(exporter))
+
 	go inputNode.Start()
 
 	sendData <- struct{}{}

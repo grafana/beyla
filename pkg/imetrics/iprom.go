@@ -20,10 +20,12 @@ type PrometheusConfig struct {
 
 // PrometheusReporter is an internal metrics Reporter that exports to Prometheus
 type PrometheusReporter struct {
-	connector             *connector.PrometheusManager
-	tracerFlushes         prometheus.Histogram
-	otelMetricExports     prometheus.Counter
-	otelMetricsExportErrs *prometheus.CounterVec
+	connector            *connector.PrometheusManager
+	tracerFlushes        prometheus.Histogram
+	otelMetricExports    prometheus.Counter
+	otelMetricExportErrs *prometheus.CounterVec
+	otelTraceExports     prometheus.Counter
+	otelTraceExportErrs  *prometheus.CounterVec
 }
 
 func NewPrometheusReporter(cfg *PrometheusConfig, manager *connector.PrometheusManager) *PrometheusReporter {
@@ -38,9 +40,17 @@ func NewPrometheusReporter(cfg *PrometheusConfig, manager *connector.PrometheusM
 			Name: "otel_metric_exports",
 			Help: "length of the metric batches submitted to the remote OTEL collector",
 		}),
-		otelMetricsExportErrs: prometheus.NewCounterVec(prometheus.CounterOpts{
+		otelMetricExportErrs: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "otel_metric_export_errors",
 			Help: "error count on each failed OTEL metric export",
+		}, []string{"error"}),
+		otelTraceExports: prometheus.NewCounter(prometheus.CounterOpts{
+			Name: "otel_trace_exports",
+			Help: "length of the trace batches submitted to the remote OTEL collector",
+		}),
+		otelTraceExportErrs: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "otel_trace_export_errors",
+			Help: "error count on each failed OTEL trace export",
 		}, []string{"error"}),
 	}
 	manager.Register(cfg.Port, cfg.Path, pr.tracerFlushes)
@@ -61,5 +71,13 @@ func (p *PrometheusReporter) OTELMetricExport(len int) {
 }
 
 func (p *PrometheusReporter) OTELMetricExportError(err error) {
-	p.otelMetricsExportErrs.WithLabelValues(err.Error()).Inc()
+	p.otelMetricExportErrs.WithLabelValues(err.Error()).Inc()
+}
+
+func (p *PrometheusReporter) OTELTraceExport(len int) {
+	p.otelTraceExports.Add(float64(len))
+}
+
+func (p *PrometheusReporter) OTELTraceExportError(err error) {
+	p.otelTraceExportErrs.WithLabelValues(err.Error()).Inc()
 }

@@ -21,6 +21,11 @@ type Reporter interface {
 	OTELMetricExport(len int)
 	// OTELMetricExportError is invoked every time the OpenTelemetry Metrics export fails with an error
 	OTELMetricExportError(err error)
+	// OTELTraceExport is invoked every time the OpenTelemetry Traces exporter successfully exports traces to
+	// a remote collector. It accounts the length, in traces, for each invocation.
+	OTELTraceExport(i int)
+	// OTELTraceExportError is invoked every time the OpenTelemetry Traces export fails with an error
+	OTELTraceExportError(err error)
 }
 
 // NoopReporter is a metrics Reporter that just does nothing
@@ -30,3 +35,5 @@ func (n NoopReporter) Start(_ context.Context)       {}
 func (n NoopReporter) TracerFlush(_ int)             {}
 func (n NoopReporter) OTELMetricExport(_ int)        {}
 func (n NoopReporter) OTELMetricExportError(_ error) {}
+func (n NoopReporter) OTELTraceExport(_ int)         {}
+func (n NoopReporter) OTELTraceExportError(_ error)  {}

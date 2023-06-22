@@ -155,7 +155,7 @@ func (r *MetricsReporter) close() {
 	}
 }
 
-// instrumentMetricsExporter checks if the context is configured to report internal metrics and,
+// instrumentMetricsExporter checks whether the context is configured to report internal metrics and,
 // in this case, wraps the passed metrics exporter inside an instrumented exporter
 func instrumentMetricsExporter(ctx context.Context, in metric.Exporter) metric.Exporter {
 	internalMetrics := global.Context(ctx).Metrics

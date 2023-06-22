@@ -9,17 +9,18 @@ import (
 	"strings"
 	"time"
 
-	"golang.org/x/exp/slog"
-
-	"github.com/grafana/ebpf-autoinstrument/pkg/transform"
 	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/mariomac/pipes/pkg/node"
 	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	"go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
 	trace2 "go.opentelemetry.io/otel/trace"
+	"golang.org/x/exp/slog"
+
+	"github.com/grafana/ebpf-autoinstrument/pkg/imetrics"
+	"github.com/grafana/ebpf-autoinstrument/pkg/pipe/global"
+	"github.com/grafana/ebpf-autoinstrument/pkg/transform"
 )
 
 type SessionSpan struct {
@@ -61,7 +62,7 @@ func (m TracesConfig) Enabled() bool { //nolint:gocritic
 
 type TracesReporter struct {
 	ctx           context.Context
-	traceExporter *otlptrace.Exporter
+	traceExporter trace.SpanExporter
 	traceProvider *trace.TracerProvider
 	bsp           trace.SpanProcessor
 }
@@ -83,10 +84,11 @@ func newTracesReporter(ctx context.Context, cfg *TracesConfig) (*TracesReporter,
 	if err != nil {
 		return nil, err
 	}
-	r.traceExporter, err = otlptracehttp.New(ctx, topts...)
+	texp, err := otlptracehttp.New(ctx, topts...)
 	if err != nil {
 		return nil, fmt.Errorf("creating trace exporter: %w", err)
 	}
+	r.traceExporter = instrumentTraceExporter(ctx, texp)
 
 	var opts []trace.BatchSpanProcessorOption
 	if cfg.MaxExportBatchSize > 0 {
@@ -110,6 +112,21 @@ func newTracesReporter(ctx context.Context, cfg *TracesConfig) (*TracesReporter,
 	)
 
 	return &r, nil
+}
+
+// instrumentTraceExporter checks whether the context is configured to report internal metrics and,
+// in this case, wraps the passed traces exporter inside an instrumented exporter
+func instrumentTraceExporter(ctx context.Context, in trace.SpanExporter) trace.SpanExporter {
+	internalMetrics := global.Context(ctx).Metrics
+	// avoid wrapping the instrumented exporter if we don't have
+	// internal instrumentation (NoopReporter)
+	if _, ok := internalMetrics.(imetrics.NoopReporter); ok || internalMetrics == nil {
+		return in
+	}
+	return &instrumentedTracesExporter{
+		SpanExporter: in,
+		internal:     internalMetrics,
+	}
 }
 
 func (r *TracesReporter) close() {

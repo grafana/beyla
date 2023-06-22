@@ -11,10 +11,11 @@ require (
 	github.com/gorilla/mux v1.8.0
 	github.com/grafana/go-offsets-tracker v0.1.2
 	github.com/hashicorp/golang-lru/v2 v2.0.2
-	github.com/mariomac/guara v0.0.0-20221222112709-f95b15506aee
+	github.com/mariomac/guara v0.0.0-20230621100729-42bd7716e524
 	github.com/mariomac/pipes v0.7.0
 	github.com/prometheus/client_golang v1.15.1
 	github.com/prometheus/common v0.42.0
+	github.com/prometheus/procfs v0.9.0
 	github.com/shirou/gopsutil v3.21.11+incompatible
 	github.com/stretchr/testify v1.8.2
 	go.opentelemetry.io/collector/pdata v0.66.0
@@ -62,7 +63,6 @@ require (
 	github.com/pelletier/go-toml/v2 v2.0.6 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/prometheus/client_model v0.3.0 // indirect
-	github.com/prometheus/procfs v0.9.0 // indirect
 	github.com/tklauser/go-sysconf v0.3.11 // indirect
 	github.com/tklauser/numcpus v0.6.0 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect

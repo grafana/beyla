@@ -20,18 +20,28 @@ type PrometheusConfig struct {
 
 // PrometheusReporter is an internal metrics Reporter that exports to Prometheus
 type PrometheusReporter struct {
-	connector     *connector.PrometheusManager
-	tracerFlushes *prometheus.HistogramVec
+	connector             *connector.PrometheusManager
+	tracerFlushes         prometheus.Histogram
+	otelMetricExports     prometheus.Counter
+	otelMetricsExportErrs *prometheus.CounterVec
 }
 
 func NewPrometheusReporter(cfg *PrometheusConfig, manager *connector.PrometheusManager) *PrometheusReporter {
 	pr := &PrometheusReporter{
 		connector: manager,
-		tracerFlushes: prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		tracerFlushes: prometheus.NewHistogram(prometheus.HistogramOpts{
 			Name:    "ebpf_tracer_flushes",
 			Help:    "length of the groups of traces flushed from the eBPF tracer to the next pipeline stage",
 			Buckets: pipelineBufferLengths,
-		}, nil),
+		}),
+		otelMetricExports: prometheus.NewCounter(prometheus.CounterOpts{
+			Name: "otel_metric_exports",
+			Help: "length of the metric batches submitted to the remote OTEL collector",
+		}),
+		otelMetricsExportErrs: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "otel_metric_export_errors",
+			Help: "error count on each failed OTEL metric export",
+		}, []string{"error"}),
 	}
 	manager.Register(cfg.Port, cfg.Path, pr.tracerFlushes)
 
@@ -42,8 +52,14 @@ func (p *PrometheusReporter) Start(ctx context.Context) {
 	p.connector.StartHTTP(ctx)
 }
 
-var emptyLabels = prometheus.Labels{}
-
 func (p *PrometheusReporter) TracerFlush(len int) {
-	p.tracerFlushes.With(emptyLabels).Observe(float64(len))
+	p.tracerFlushes.Observe(float64(len))
+}
+
+func (p *PrometheusReporter) OTELMetricExport(len int) {
+	p.otelMetricExports.Add(float64(len))
+}
+
+func (p *PrometheusReporter) OTELMetricExportError(err error) {
+	p.otelMetricsExportErrs.WithLabelValues(err.Error()).Inc()
 }

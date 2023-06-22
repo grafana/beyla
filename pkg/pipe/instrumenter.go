@@ -92,6 +92,6 @@ func setMetricsReporter(ctx *global.ContextInfo, cfg *imetrics.Config) {
 		ctx.Metrics = imetrics.NewPrometheusReporter(&cfg.Prometheus, &ctx.Prometheus)
 	} else {
 		log().Debug("not reporting internal metrics")
-		ctx.Metrics = &imetrics.NoopReporter{}
+		ctx.Metrics = imetrics.NoopReporter{}
 	}
 }

@@ -8,6 +8,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/grafana/ebpf-autoinstrument/pkg/pipe/global"
+
+	"github.com/grafana/ebpf-autoinstrument/pkg/imetrics"
+
 	"go.opentelemetry.io/otel/sdk/instrumentation"
 
 	"go.opentelemetry.io/otel/sdk/metric/aggregation"
@@ -97,10 +101,12 @@ func newMetricsReporter(ctx context.Context, cfg *MetricsConfig) (*MetricsReport
 	if err != nil {
 		return nil, err
 	}
-	mr.exporter, err = otlpmetrichttp.New(ctx, opts...)
+	mexp, err := otlpmetrichttp.New(ctx, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("creating metric exporter: %w", err)
 	}
+	mr.exporter = instrumentMetricsExporter(ctx, mexp)
+
 	// changes
 	mr.provider = metric.NewMeterProvider(
 		metric.WithResource(resources),
@@ -147,8 +153,20 @@ func (r *MetricsReporter) close() {
 	if err := r.provider.Shutdown(r.ctx); err != nil {
 		slog.With("component", "MetricsReporter").Error("closing metrics provider", err)
 	}
-	if err := r.exporter.Shutdown(r.ctx); err != nil {
-		slog.With("component", "MetricsReporter").Error("closing metrics exporter", err)
+}
+
+// instrumentMetricsExporter checks if the context is configured to report internal metrics and,
+// in this case, wraps the passed metrics exporter inside an instrumented exporter
+func instrumentMetricsExporter(ctx context.Context, in metric.Exporter) metric.Exporter {
+	internalMetrics := global.Context(ctx).Metrics
+	// avoid wrapping the instrumented exporter if we don't have
+	// internal instrumentation (NoopReporter)
+	if _, ok := internalMetrics.(imetrics.NoopReporter); ok || internalMetrics == nil {
+		return in
+	}
+	return &instrumentedMetricsExporter{
+		Exporter: in,
+		internal: internalMetrics,
 	}
 }
 

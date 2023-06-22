@@ -101,7 +101,7 @@ func (c *Config) Validate() error {
 }
 
 // LoadConfig overrides configuration in the following order (from less to most priority)
-// 1 - Default configuration (default_config.yml)
+// 1 - Default configuration (defaultConfig variable)
 // 2 - Contents of the provided file reader (nillable)
 // 3 - Environment variables
 func LoadConfig(file io.Reader) (*Config, error) {

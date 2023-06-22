@@ -50,9 +50,6 @@ func waitForTestComponents(t *testing.T, url string) {
 		require.NoError(t, err)
 		r, err := httpClient.Do(req)
 		require.NoError(t, err)
-		if r == nil {
-			return
-		}
 		require.Equal(t, http.StatusOK, r.StatusCode)
 
 		// now, verify that the metric has been reported.
@@ -120,13 +117,11 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url string) {
 		require.NoError(t, err)
 		// check duration_count has 3 calls and all the arguments
 		require.Len(t, results, 1)
-		if len(results) > 0 {
-			res := results[0]
-			require.Len(t, res.Value, 2)
-			assert.Equal(t, "3", res.Value[1])
-			addr := net.ParseIP(res.Metric["net_sock_peer_addr"])
-			assert.NotNil(t, addr)
-		}
+		res := results[0]
+		require.Len(t, res.Value, 2)
+		assert.Equal(t, "3", res.Value[1])
+		addr := net.ParseIP(res.Metric["net_sock_peer_addr"])
+		assert.NotNil(t, addr)
 	})
 
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
@@ -141,13 +136,11 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url string) {
 		require.NoError(t, err)
 		// check duration_count has 3 calls and all the arguments
 		require.Len(t, results, 1)
-		if len(results) > 0 {
-			res := results[0]
-			require.Len(t, res.Value, 2)
-			assert.Equal(t, "3", res.Value[1])
-			addr := net.ParseIP(res.Metric["net_sock_peer_addr"])
-			assert.NotNil(t, addr)
-		}
+		res := results[0]
+		require.Len(t, res.Value, 2)
+		assert.Equal(t, "3", res.Value[1])
+		addr := net.ParseIP(res.Metric["net_sock_peer_addr"])
+		assert.NotNil(t, addr)
 	})
 
 	if url == instrumentedServiceGorillaURL {
@@ -161,11 +154,9 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url string) {
 			require.NoError(t, err)
 			// check duration_count has 3 calls
 			require.Len(t, results, 1)
-			if len(results) > 0 {
-				res := results[0]
-				require.Len(t, res.Value, 2)
-				assert.Equal(t, "3", res.Value[1])
-			}
+			res := results[0]
+			require.Len(t, res.Value, 2)
+			assert.Equal(t, "3", res.Value[1])
 		})
 
 		test.Eventually(t, testTimeout, func(t require.TestingT) {
@@ -178,11 +169,9 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url string) {
 			require.NoError(t, err)
 			// check duration_count has 3 calls
 			require.Len(t, results, 1)
-			if len(results) > 0 {
-				res := results[0]
-				require.Len(t, res.Value, 2)
-				assert.Equal(t, "3", res.Value[1])
-			}
+			res := results[0]
+			require.Len(t, res.Value, 2)
+			assert.Equal(t, "3", res.Value[1])
 		})
 
 		test.Eventually(t, testTimeout, func(t require.TestingT) {
@@ -195,11 +184,9 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url string) {
 			require.NoError(t, err)
 			// check duration_count has at least 3 calls
 			require.Len(t, results, 1)
-			if len(results) > 0 {
-				res := results[0]
-				require.Len(t, res.Value, 2)
-				assert.LessOrEqual(t, "3", res.Value[1])
-			}
+			res := results[0]
+			require.Len(t, res.Value, 2)
+			assert.LessOrEqual(t, "3", res.Value[1])
 		})
 	}
 
@@ -265,13 +252,11 @@ func testREDMetricsGRPC(t *testing.T) {
 		require.NoError(t, err)
 		// check duration_count has at least 3 calls and all the arguments
 		require.Len(t, results, 1)
-		if len(results) > 0 {
-			res := results[0]
-			require.Len(t, res.Value, 2)
-			assert.LessOrEqual(t, "3", res.Value[1])
-			addr := net.ParseIP(res.Metric["net_sock_peer_addr"])
-			assert.NotNil(t, addr)
-		}
+		res := results[0]
+		require.Len(t, res.Value, 2)
+		assert.LessOrEqual(t, "3", res.Value[1])
+		addr := net.ParseIP(res.Metric["net_sock_peer_addr"])
+		assert.NotNil(t, addr)
 	})
 }
 
@@ -325,13 +310,11 @@ func testREDMetricsForJavaHTTPLibrary(t *testing.T, url string, comm string, sys
 		} else {
 			require.Len(t, results, 1)
 		}
-		if len(results) > 0 {
-			res := results[0]
-			require.Len(t, res.Value, 2)
-			assert.LessOrEqual(t, "3", res.Value[1])
-			addr := net.ParseIP(res.Metric["net_sock_peer_addr"])
-			assert.NotNil(t, addr)
-		}
+		res := results[0]
+		require.Len(t, res.Value, 2)
+		assert.LessOrEqual(t, "3", res.Value[1])
+		addr := net.ParseIP(res.Metric["net_sock_peer_addr"])
+		assert.NotNil(t, addr)
 	})
 }
 
@@ -394,13 +377,11 @@ func testREDMetricsForRustHTTPLibrary(t *testing.T, url string, comm string) {
 			`http_target="` + path + `"}`)
 		require.NoError(t, err)
 		require.Len(t, results, 1)
-		if len(results) > 0 {
-			res := results[0]
-			require.Len(t, res.Value, 2)
-			assert.LessOrEqual(t, "3", res.Value[1])
-			addr := net.ParseIP(res.Metric["net_sock_peer_addr"])
-			assert.NotNil(t, addr)
-		}
+		res := results[0]
+		require.Len(t, res.Value, 2)
+		assert.LessOrEqual(t, "3", res.Value[1])
+		addr := net.ParseIP(res.Metric["net_sock_peer_addr"])
+		assert.NotNil(t, addr)
 	})
 }
 

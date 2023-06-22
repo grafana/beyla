@@ -85,7 +85,7 @@ func doHTTPGet(t *testing.T, path string, status int) {
 	require.NoError(t, err)
 	req.Header.Set("Content-Type", "application/json")
 
-	r, err := http.DefaultClient.Do(req)
+	r, err := httpClient.Do(req)
 	require.NoError(t, err)
 	require.Equal(t, status, r.StatusCode)
 	time.Sleep(300 * time.Millisecond)

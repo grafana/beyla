@@ -86,8 +86,8 @@ func wrapInstrumentedHandler(metrics internalIntrumenter, port int, path string,
 	}
 	portStr := strconv.Itoa(port)
 	return func(rw http.ResponseWriter, req *http.Request) {
-		metrics.PrometheusRequest(portStr, path)
 		promHandler.ServeHTTP(rw, req)
+		metrics.PrometheusRequest(portStr, path)
 	}
 }
 

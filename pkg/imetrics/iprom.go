@@ -56,9 +56,15 @@ func NewPrometheusReporter(cfg *PrometheusConfig, manager *connector.PrometheusM
 		prometheusRequests: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "prometheus_http_requests",
 			Help: "error count on each failed OTEL trace export",
-		}, []string{"host_port", "path"}),
+		}, []string{"port", "path"}),
 	}
-	manager.Register(cfg.Port, cfg.Path, pr.tracerFlushes)
+	manager.Register(cfg.Port, cfg.Path,
+		pr.tracerFlushes,
+		pr.otelMetricExports,
+		pr.otelMetricExportErrs,
+		pr.otelTraceExports,
+		pr.otelTraceExportErrs,
+		pr.prometheusRequests)
 
 	return pr
 }

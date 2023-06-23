@@ -4,9 +4,10 @@ package transform
 import (
 	"context"
 
-	"github.com/grafana/ebpf-autoinstrument/pkg/transform/route"
 	"github.com/mariomac/pipes/pkg/node"
 	"golang.org/x/exp/slog"
+
+	"github.com/grafana/ebpf-autoinstrument/pkg/transform/route"
 )
 
 // UnmatchType defines which actions to do when a route pattern is not recognized

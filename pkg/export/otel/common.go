@@ -3,10 +3,11 @@ package otel
 import (
 	"context"
 
-	"github.com/grafana/ebpf-autoinstrument/pkg/pipe/global"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/sdk/resource"
 	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
+
+	"github.com/grafana/ebpf-autoinstrument/pkg/pipe/global"
 )
 
 // TODO: when we join both traces' and metrics ServiceName and ServiceNamespace into a common configuration section

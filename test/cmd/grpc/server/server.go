@@ -27,9 +27,7 @@ import (
 
 	"golang.org/x/exp/slog"
 	"google.golang.org/grpc"
-
 	"google.golang.org/grpc/credentials"
-
 	"google.golang.org/protobuf/proto"
 
 	pb "github.com/grafana/ebpf-autoinstrument/test/cmd/grpc/routeguide"

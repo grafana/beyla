@@ -3,15 +3,14 @@ package main
 import (
 	"os"
 
-	"github.com/grafana/ebpf-autoinstrument/test/integration/components/testserver/gorilla"
-
-	"github.com/grafana/ebpf-autoinstrument/test/integration/components/testserver/gin"
-	grpctest "github.com/grafana/ebpf-autoinstrument/test/integration/components/testserver/grpc/server"
-	"github.com/grafana/ebpf-autoinstrument/test/integration/components/testserver/std"
-
 	"github.com/caarlos0/env/v7"
 	gin2 "github.com/gin-gonic/gin"
 	"golang.org/x/exp/slog"
+
+	"github.com/grafana/ebpf-autoinstrument/test/integration/components/testserver/gin"
+	"github.com/grafana/ebpf-autoinstrument/test/integration/components/testserver/gorilla"
+	grpctest "github.com/grafana/ebpf-autoinstrument/test/integration/components/testserver/grpc/server"
+	"github.com/grafana/ebpf-autoinstrument/test/integration/components/testserver/std"
 )
 
 /*

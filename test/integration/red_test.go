@@ -13,12 +13,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/grafana/ebpf-autoinstrument/test/integration/components/prom"
-	grpcclient "github.com/grafana/ebpf-autoinstrument/test/integration/components/testserver/grpc/client"
-
 	"github.com/mariomac/guara/pkg/test"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/grafana/ebpf-autoinstrument/test/integration/components/prom"
+	grpcclient "github.com/grafana/ebpf-autoinstrument/test/integration/components/testserver/grpc/client"
 )
 
 const (

@@ -7,11 +7,11 @@ import (
 	"strings"
 	"time"
 
-	ebpfcommon "github.com/grafana/ebpf-autoinstrument/pkg/ebpf/common"
-	httpfltr "github.com/grafana/ebpf-autoinstrument/pkg/ebpf/httpfltr"
-
 	"github.com/gavv/monotime"
 	"golang.org/x/exp/slog"
+
+	ebpfcommon "github.com/grafana/ebpf-autoinstrument/pkg/ebpf/common"
+	httpfltr "github.com/grafana/ebpf-autoinstrument/pkg/ebpf/httpfltr"
 )
 
 type EventType int

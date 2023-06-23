@@ -4,13 +4,13 @@ import (
 	"context"
 	"strconv"
 
-	"github.com/grafana/ebpf-autoinstrument/pkg/connector"
+	"github.com/mariomac/pipes/pkg/node"
+	"github.com/prometheus/client_golang/prometheus"
 
+	"github.com/grafana/ebpf-autoinstrument/pkg/connector"
 	"github.com/grafana/ebpf-autoinstrument/pkg/export/otel"
 	"github.com/grafana/ebpf-autoinstrument/pkg/pipe/global"
 	"github.com/grafana/ebpf-autoinstrument/pkg/transform"
-	"github.com/mariomac/pipes/pkg/node"
-	"github.com/prometheus/client_golang/prometheus"
 )
 
 // using labels and names that are equivalent names to the OTEL attributes

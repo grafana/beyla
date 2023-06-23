@@ -6,8 +6,9 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/grafana/ebpf-autoinstrument/test/integration/components/testserver/arg"
 	"golang.org/x/exp/slog"
+
+	"github.com/grafana/ebpf-autoinstrument/test/integration/components/testserver/arg"
 )
 
 func Setup(port int) {

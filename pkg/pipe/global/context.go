@@ -3,9 +3,8 @@ package global
 import (
 	"context"
 
-	"github.com/grafana/ebpf-autoinstrument/pkg/imetrics"
-
 	"github.com/grafana/ebpf-autoinstrument/pkg/connector"
+	"github.com/grafana/ebpf-autoinstrument/pkg/imetrics"
 )
 
 type contextInfoKey struct{}

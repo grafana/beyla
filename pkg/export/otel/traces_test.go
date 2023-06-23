@@ -142,6 +142,11 @@ func TestTraces_InternalInstrumentation(t *testing.T) {
 	// collector starts failing, so errors should be received
 	coll.CloseClientConnections()
 	coll.Close()
+	// Wait for the HTTP server to be stopped
+	test.Eventually(t, timeout, func(t require.TestingT) {
+		_, err := coll.Client().Get(coll.URL + "/foo")
+		require.Error(t, err)
+	})
 
 	var previousErrors map[string]int
 	var previousErrCount int

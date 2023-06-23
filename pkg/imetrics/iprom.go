@@ -26,6 +26,7 @@ type PrometheusReporter struct {
 	otelMetricExportErrs *prometheus.CounterVec
 	otelTraceExports     prometheus.Counter
 	otelTraceExportErrs  *prometheus.CounterVec
+	prometheusRequests   *prometheus.CounterVec
 }
 
 func NewPrometheusReporter(cfg *PrometheusConfig, manager *connector.PrometheusManager) *PrometheusReporter {
@@ -52,6 +53,10 @@ func NewPrometheusReporter(cfg *PrometheusConfig, manager *connector.PrometheusM
 			Name: "otel_trace_export_errors",
 			Help: "error count on each failed OTEL trace export",
 		}, []string{"error"}),
+		prometheusRequests: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "prometheus_http_requests",
+			Help: "error count on each failed OTEL trace export",
+		}, []string{"host_port", "path"}),
 	}
 	manager.Register(cfg.Port, cfg.Path, pr.tracerFlushes)
 
@@ -80,4 +85,8 @@ func (p *PrometheusReporter) OTELTraceExport(len int) {
 
 func (p *PrometheusReporter) OTELTraceExportError(err error) {
 	p.otelTraceExportErrs.WithLabelValues(err.Error()).Inc()
+}
+
+func (p *PrometheusReporter) PrometheusRequest(port, path string) {
+	p.prometheusRequests.WithLabelValues(port, path).Inc()
 }

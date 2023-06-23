@@ -150,8 +150,8 @@ func TestTraces_InternalInstrumentation(t *testing.T) {
 
 	var previousErrors map[string]int
 	var previousErrCount int
-	sendData <- struct{}{}
 	test.Eventually(t, timeout, func(t require.TestingT) {
+		sendData <- struct{}{}
 		previousCount, previousCalls = internalTraces.count, internalTraces.calls
 		// calls should start returning errors
 		previousErrors = maps.Clone(internalTraces.errors)
@@ -162,8 +162,8 @@ func TestTraces_InternalInstrumentation(t *testing.T) {
 	})
 
 	// after a while, metrics count should not increase but errors do
-	sendData <- struct{}{}
 	test.Eventually(t, timeout, func(t require.TestingT) {
+		sendData <- struct{}{}
 		assert.Equal(t, previousCount, internalTraces.count)
 		assert.Equal(t, previousCalls, internalTraces.calls)
 		// calls should start returning errors

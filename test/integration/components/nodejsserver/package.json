@@ -1,0 +1,14 @@
+{
+    "name": "nodejsserver",
+    "version": "1.0.0",
+    "description": "NodeJS Express API test server",
+    "main": "app.js",
+    "scripts": {
+        "start": "node app.js"
+    },
+    "author": "Grafana Labs",
+    "license": "APL",
+    "dependencies": {
+        "express": "^4.18.2"
+    }
+}

@@ -89,6 +89,12 @@ func TestMetrics_InternalInstrumentation(t *testing.T) {
 		rw.WriteHeader(http.StatusOK)
 	}))
 	defer coll.Close()
+	// Wait for the HTTP server to be alive
+	test.Eventually(t, timeout, func(t require.TestingT) {
+		resp, err := coll.Client().Get(coll.URL + "/foo")
+		require.NoError(t, err)
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+	})
 
 	// create a simple dummy graph to send data to the Metrics reporter, which will send
 	// metrics to the fake collector
@@ -135,6 +141,11 @@ func TestMetrics_InternalInstrumentation(t *testing.T) {
 	// collector starts failing, so errors should be received
 	coll.CloseClientConnections()
 	coll.Close()
+	// Wait for the HTTP server to be stopped
+	test.Eventually(t, timeout, func(t require.TestingT) {
+		_, err := coll.Client().Get(coll.URL + "/foo")
+		require.Error(t, err)
+	})
 
 	var previousErrors map[string]int
 	var previousErrCount int

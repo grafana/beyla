@@ -89,6 +89,8 @@ func setMetricsReporter(ctx *global.ContextInfo, cfg *imetrics.Config) {
 	if cfg.Prometheus.Port != 0 {
 		log().Debug("reporting internal metrics as Prometheus")
 		ctx.Metrics = imetrics.NewPrometheusReporter(&cfg.Prometheus, &ctx.Prometheus)
+		// wiring up prometheus connection manager, as it internally uses a metrics reporter for its internal instrumentation
+		ctx.Prometheus.InstrumentWith(ctx.Metrics)
 	} else {
 		log().Debug("not reporting internal metrics")
 		ctx.Metrics = imetrics.NoopReporter{}

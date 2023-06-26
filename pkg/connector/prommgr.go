@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
 	"sync/atomic"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -24,6 +25,16 @@ type PrometheusManager struct {
 	started atomic.Bool
 	// key 1: port. Key 2: path
 	registries map[int]map[string]*prometheus.Registry
+
+	metrics internalIntrumenter
+}
+
+type internalIntrumenter interface {
+	PrometheusRequest(port, path string)
+}
+
+func (pm *PrometheusManager) InstrumentWith(ii internalIntrumenter) {
+	pm.metrics = ii
 }
 
 // Register a set of prometheus metrics to be accessible through an HTTP port/path.
@@ -60,17 +71,31 @@ func (pm *PrometheusManager) StartHTTP(ctx context.Context) {
 		for path, registry := range paths {
 			log.With("port", port, "path", path).Info("opening prometheus scrape endpoint")
 			promHandler := promhttp.HandlerFor(registry, promhttp.HandlerOpts{Registry: registry})
-			if log.Enabled(slog.LevelDebug) {
-				mux.Handle(path, wrapDebugHandler(log, promHandler))
-			} else {
-				mux.Handle(path, promHandler)
-			}
+			promHandler = wrapDebugHandler(log, promHandler)
+			promHandler = wrapInstrumentedHandler(pm.metrics, port, path, promHandler)
+			mux.Handle(path, promHandler)
 		}
 		pm.listenAndServe(ctx, port, mux)
 	}
 }
 
+func wrapInstrumentedHandler(metrics internalIntrumenter, port int, path string, promHandler http.Handler) http.HandlerFunc {
+	// we don't wrap anything if the reporter is nil
+	if metrics == nil {
+		return promHandler.ServeHTTP
+	}
+	portStr := strconv.Itoa(port)
+	return func(rw http.ResponseWriter, req *http.Request) {
+		promHandler.ServeHTTP(rw, req)
+		metrics.PrometheusRequest(portStr, path)
+	}
+}
+
 func wrapDebugHandler(log *slog.Logger, promHandler http.Handler) http.HandlerFunc {
+	// we don't wrap anything for if the log level is not debug or lower
+	if !log.Enabled(slog.LevelDebug) {
+		return promHandler.ServeHTTP
+	}
 	return func(rw http.ResponseWriter, req *http.Request) {
 		log.Debug("received metrics request", "uri", req.RequestURI, "remoteAddr", req.RemoteAddr)
 		promHandler.ServeHTTP(rw, req)

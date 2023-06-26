@@ -90,6 +90,12 @@ func TestTraces_InternalInstrumentation(t *testing.T) {
 		rw.WriteHeader(http.StatusOK)
 	}))
 	defer coll.Close()
+	// Wait for the HTTP server to be alive
+	test.Eventually(t, timeout, func(t require.TestingT) {
+		resp, err := coll.Client().Get(coll.URL + "/foo")
+		require.NoError(t, err)
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+	})
 
 	// create a simple dummy graph to send data to the Metrics reporter, which will send
 	// metrics to the fake collector
@@ -136,11 +142,16 @@ func TestTraces_InternalInstrumentation(t *testing.T) {
 	// collector starts failing, so errors should be received
 	coll.CloseClientConnections()
 	coll.Close()
+	// Wait for the HTTP server to be stopped
+	test.Eventually(t, timeout, func(t require.TestingT) {
+		_, err := coll.Client().Get(coll.URL + "/foo")
+		require.Error(t, err)
+	})
 
 	var previousErrors map[string]int
 	var previousErrCount int
-	sendData <- struct{}{}
 	test.Eventually(t, timeout, func(t require.TestingT) {
+		sendData <- struct{}{}
 		previousCount, previousCalls = internalTraces.count, internalTraces.calls
 		// calls should start returning errors
 		previousErrors = maps.Clone(internalTraces.errors)
@@ -151,8 +162,8 @@ func TestTraces_InternalInstrumentation(t *testing.T) {
 	})
 
 	// after a while, metrics count should not increase but errors do
-	sendData <- struct{}{}
 	test.Eventually(t, timeout, func(t require.TestingT) {
+		sendData <- struct{}{}
 		assert.Equal(t, previousCount, internalTraces.count)
 		assert.Equal(t, previousCalls, internalTraces.calls)
 		// calls should start returning errors

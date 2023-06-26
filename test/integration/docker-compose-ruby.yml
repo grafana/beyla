@@ -4,10 +4,10 @@ services:
   testserver:
     build:
       context: ../..
-      dockerfile: test/integration/components/nodejsserver/Dockerfile_tls
+      dockerfile: test/integration/components/rubytestserver/testapi/Dockerfile${TESTSERVER_DOCKERFILE_SUFFIX}
     image: hatest-testserver
     ports:
-      - "3034:3033"
+      - "3041:3040"
     depends_on:
       otelcol:
         condition: service_started
@@ -18,7 +18,7 @@ services:
       dockerfile: ./test/integration/components/otelauto/Dockerfile
     command:
       - /otelauto
-      - --config=/configs/instrumenter-config-java.yml
+      - --config=/configs/instrumenter-config-ruby.yml
     volumes:
       - ./configs/:/configs
       - ../../testoutput:/coverage

@@ -71,6 +71,11 @@ BPF2GO = $(TOOLS_DIR)/bpf2go
 GO_OFFSETS_TRACKER = $(TOOLS_DIR)/go-offsets-tracker
 GOIMPORTS_REVISER = $(TOOLS_DIR)/goimports-reviser
 
+define check_format
+	$(shell $(foreach FILE, $(shell find . -name "*.go" -not -path "./vendor/*"), \
+		$(GOIMPORTS_REVISER) -local github.com/grafana -list-diff -output stdout -file-path $(FILE);))
+endef
+
 .PHONY: prereqs
 prereqs:
 	@echo "### Check if prerequisites are met, and installing missing dependencies"
@@ -89,15 +94,11 @@ fmt: prereqs
 .PHONY: checkfmt
 checkfmt:
 	@echo '### check correct formatting and imports'
-define check_format
-	$(shell $(foreach FILE, $(shell find . -name "*.go" -not -path "./vendor/*"), \
-		$(GOIMPORTS_REVISER) -local github.com/grafana -list-diff -output stdout -file-path $(FILE);))
-endef
-ifneq ($(strip $(check_format)),)
-	@echo "$(check_format)"
-	@echo "Above files are not properly formatted. Run 'make fmt' to fix them";
-	@exit 1;
-endif
+	@if [ "$(strip $(check_format))" != "" ]; then \
+		echo "$(check_format)"; \
+		echo "Above files are not properly formatted. Run 'make fmt' to fix them"; \
+		exit 1; \
+	fi
 
 .PHONY: lint
 lint: prereqs checkfmt
@@ -191,7 +192,7 @@ cleanup-integration-test:
 run-integration-test:
 	@echo "### Running integration tests"
 	go clean -testcache
-	go test -mod vendor -a ./test/integration/... --tags=integration
+	go test -timeout 20m -mod vendor -a ./test/integration/... --tags=integration
 
 .PHONY: integration-test
 integration-test: prereqs prepare-integration-test

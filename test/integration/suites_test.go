@@ -143,7 +143,7 @@ func TestSuite_Java_Host_Network(t *testing.T) {
 
 func TestSuite_Rust(t *testing.T) {
 	compose, err := docker.ComposeSuite("docker-compose-rust.yml", path.Join(pathOutput, "test-suite-rust.log"))
-	compose.Env = append(compose.Env, `OPEN_PORT=8090`, `EXECUTABLE_NAME=`)
+	compose.Env = append(compose.Env, `OPEN_PORT=8090`, `EXECUTABLE_NAME=`, `TEST_SERVICE_PORTS=8091:8090`)
 	require.NoError(t, err)
 	require.NoError(t, compose.Up())
 	t.Run("Rust RED metrics", testREDMetricsRustHTTP)
@@ -153,8 +153,8 @@ func TestSuite_Rust(t *testing.T) {
 }
 
 func TestSuite_RustSSL(t *testing.T) {
-	compose, err := docker.ComposeSuite("docker-compose-rust-tls.yml", path.Join(pathOutput, "test-suite-rust-tls.log"))
-	compose.Env = append(compose.Env, `OPEN_PORT=8490`, `EXECUTABLE_NAME=`)
+	compose, err := docker.ComposeSuite("docker-compose-rust.yml", path.Join(pathOutput, "test-suite-rust-tls.log"))
+	compose.Env = append(compose.Env, `OPEN_PORT=8490`, `EXECUTABLE_NAME=`, `TEST_SERVICE_PORTS=8491:8490`, `TESTSERVER_IMAGE_SUFFIX=-ssl`)
 	require.NoError(t, err)
 	require.NoError(t, compose.Up())
 	t.Run("Rust RED metrics", testREDMetricsRustHTTPS)
@@ -165,7 +165,7 @@ func TestSuite_RustSSL(t *testing.T) {
 
 func TestSuite_NodeJS(t *testing.T) {
 	compose, err := docker.ComposeSuite("docker-compose-nodejs.yml", path.Join(pathOutput, "test-suite-nodejs.log"))
-	compose.Env = append(compose.Env, `OPEN_PORT=3030`, `EXECUTABLE_NAME=`)
+	compose.Env = append(compose.Env, `OPEN_PORT=3030`, `EXECUTABLE_NAME=`, `TEST_SERVICE_PORTS=3031:3030`)
 	require.NoError(t, err)
 	require.NoError(t, compose.Up())
 	t.Run("NodeJS RED metrics", testREDMetricsNodeJSHTTP)
@@ -175,11 +175,33 @@ func TestSuite_NodeJS(t *testing.T) {
 }
 
 func TestSuite_NodeJSTLS(t *testing.T) {
-	compose, err := docker.ComposeSuite("docker-compose-nodejs-tls.yml", path.Join(pathOutput, "test-suite-nodejs-tls.log"))
-	compose.Env = append(compose.Env, `OPEN_PORT=3033`, `EXECUTABLE_NAME=`)
+	compose, err := docker.ComposeSuite("docker-compose-nodejs.yml", path.Join(pathOutput, "test-suite-nodejs-tls.log"))
+	compose.Env = append(compose.Env, `OPEN_PORT=3033`, `EXECUTABLE_NAME=`, `TESTSERVER_DOCKERFILE_SUFFIX=_tls`, `TEST_SERVICE_PORTS=3034:3033`)
 	require.NoError(t, err)
 	require.NoError(t, compose.Up())
-	t.Run("NodeJS RED metrics", testREDMetricsNodeJSHTTPS)
+	t.Run("NodeJS SSL RED metrics", testREDMetricsNodeJSHTTPS)
+	t.Run("BPF pinning folder mounted", testBPFPinningMounted)
+	require.NoError(t, compose.Close())
+	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
+}
+
+func TestSuite_Rails(t *testing.T) {
+	compose, err := docker.ComposeSuite("docker-compose-ruby.yml", path.Join(pathOutput, "test-suite-ruby.log"))
+	compose.Env = append(compose.Env, `OPEN_PORT=3040`, `EXECUTABLE_NAME=`)
+	require.NoError(t, err)
+	require.NoError(t, compose.Up())
+	t.Run("Rails RED metrics", testREDMetricsRailsHTTP)
+	t.Run("BPF pinning folder mounted", testBPFPinningMounted)
+	require.NoError(t, compose.Close())
+	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
+}
+
+func TestSuite_RailsTLS(t *testing.T) {
+	compose, err := docker.ComposeSuite("docker-compose-ruby.yml", path.Join(pathOutput, "test-suite-ruby-tls.log"))
+	compose.Env = append(compose.Env, `OPEN_PORT=3040`, `EXECUTABLE_NAME=`, `TESTSERVER_DOCKERFILE_SUFFIX=_tls`)
+	require.NoError(t, err)
+	require.NoError(t, compose.Up())
+	t.Run("Rails SSL RED metrics", testREDMetricsRailsHTTPS)
 	t.Run("BPF pinning folder mounted", testBPFPinningMounted)
 	require.NoError(t, compose.Close())
 	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)

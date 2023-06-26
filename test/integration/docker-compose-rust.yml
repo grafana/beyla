@@ -2,9 +2,9 @@ version: '3.8'
 
 services:
   testserver:
-    image: grcevski/tests:greeting-rust
+    image: grcevski/tests:greeting-rust${TESTSERVER_IMAGE_SUFFIX}
     ports:
-      - "8091:8090"
+      - "${TEST_SERVICE_PORTS}"
     environment:
       LOG_LEVEL: DEBUG
     depends_on:

@@ -4,10 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	"golang.org/x/exp/slog"
-
 	"github.com/mariomac/pipes/pkg/graph"
 	"github.com/mariomac/pipes/pkg/node"
+	"golang.org/x/exp/slog"
 
 	"github.com/grafana/ebpf-autoinstrument/pkg/ebpf"
 	"github.com/grafana/ebpf-autoinstrument/pkg/export/debug"

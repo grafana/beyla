@@ -7,15 +7,15 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mariomac/guara/pkg/test"
+	"github.com/mariomac/pipes/pkg/node"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"golang.org/x/exp/maps"
+
 	"github.com/grafana/ebpf-autoinstrument/pkg/imetrics"
 	"github.com/grafana/ebpf-autoinstrument/pkg/pipe/global"
 	"github.com/grafana/ebpf-autoinstrument/pkg/transform"
-	"github.com/mariomac/guara/pkg/test"
-	"github.com/mariomac/pipes/pkg/node"
-	"golang.org/x/exp/maps"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func TestTracesEndpoint(t *testing.T) {

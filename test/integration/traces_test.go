@@ -7,14 +7,13 @@ import (
 	"testing"
 	"time"
 
-	grpcclient "github.com/grafana/ebpf-autoinstrument/test/integration/components/testserver/grpc/client"
-
-	"github.com/stretchr/testify/assert"
-
 	"github.com/goccy/go-json"
-	"github.com/grafana/ebpf-autoinstrument/test/integration/components/jaeger"
 	"github.com/mariomac/guara/pkg/test"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/grafana/ebpf-autoinstrument/test/integration/components/jaeger"
+	grpcclient "github.com/grafana/ebpf-autoinstrument/test/integration/components/testserver/grpc/client"
 )
 
 func testHTTPTraces(t *testing.T) {

@@ -11,9 +11,8 @@ import (
 	"time"
 
 	"github.com/shirou/gopsutil/net"
-	"golang.org/x/exp/slog"
-
 	"github.com/shirou/gopsutil/process"
+	"golang.org/x/exp/slog"
 )
 
 // TODO: user-configurable

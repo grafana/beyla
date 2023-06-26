@@ -9,9 +9,10 @@ import (
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/ringbuf"
-	"github.com/grafana/ebpf-autoinstrument/pkg/imetrics"
 	"github.com/mariomac/pipes/pkg/node"
 	"golang.org/x/exp/slog"
+
+	"github.com/grafana/ebpf-autoinstrument/pkg/imetrics"
 )
 
 // ringBufReader interface extracts the used methods from ringbuf.Reader for proper

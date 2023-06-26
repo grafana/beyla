@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/grafana/ebpf-autoinstrument/test/integration/components/testserver/std"
-
 	"github.com/gorilla/mux"
 	"golang.org/x/exp/slog"
+
+	"github.com/grafana/ebpf-autoinstrument/test/integration/components/testserver/std"
 )
 
 func Setup(port, stdPort int) {

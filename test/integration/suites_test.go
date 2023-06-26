@@ -162,3 +162,25 @@ func TestSuite_RustSSL(t *testing.T) {
 	require.NoError(t, compose.Close())
 	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
 }
+
+func TestSuite_NodeJS(t *testing.T) {
+	compose, err := docker.ComposeSuite("docker-compose-nodejs.yml", path.Join(pathOutput, "test-suite-nodejs.log"))
+	compose.Env = append(compose.Env, `OPEN_PORT=3030`, `EXECUTABLE_NAME=`)
+	require.NoError(t, err)
+	require.NoError(t, compose.Up())
+	t.Run("NodeJS RED metrics", testREDMetricsNodeJSHTTP)
+	t.Run("BPF pinning folder mounted", testBPFPinningMounted)
+	require.NoError(t, compose.Close())
+	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
+}
+
+func TestSuite_NodeJSTLS(t *testing.T) {
+	compose, err := docker.ComposeSuite("docker-compose-nodejs-tls.yml", path.Join(pathOutput, "test-suite-nodejs-tls.log"))
+	compose.Env = append(compose.Env, `OPEN_PORT=3033`, `EXECUTABLE_NAME=`)
+	require.NoError(t, err)
+	require.NoError(t, compose.Up())
+	t.Run("NodeJS RED metrics", testREDMetricsNodeJSHTTPS)
+	t.Run("BPF pinning folder mounted", testBPFPinningMounted)
+	require.NoError(t, compose.Close())
+	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
+}

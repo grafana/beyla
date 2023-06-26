@@ -5,11 +5,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/grafana/ebpf-autoinstrument/pkg/testutil"
-
-	"github.com/stretchr/testify/assert"
 )
 
 const testTimeout = 5 * time.Second

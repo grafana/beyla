@@ -8,6 +8,7 @@ import (
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/ringbuf"
+
 	"github.com/grafana/ebpf-autoinstrument/pkg/goexec"
 )
 

@@ -8,23 +8,19 @@ import (
 	"strings"
 	"time"
 
-	"github.com/grafana/ebpf-autoinstrument/pkg/pipe/global"
-
-	"github.com/grafana/ebpf-autoinstrument/pkg/imetrics"
-
-	"go.opentelemetry.io/otel/sdk/instrumentation"
-
-	"go.opentelemetry.io/otel/sdk/metric/aggregation"
-
-	"golang.org/x/exp/slog"
-
-	"github.com/grafana/ebpf-autoinstrument/pkg/transform"
 	"github.com/mariomac/pipes/pkg/node"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp"
 	"go.opentelemetry.io/otel/metric/instrument"
+	"go.opentelemetry.io/otel/sdk/instrumentation"
 	"go.opentelemetry.io/otel/sdk/metric"
+	"go.opentelemetry.io/otel/sdk/metric/aggregation"
 	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
+	"golang.org/x/exp/slog"
+
+	"github.com/grafana/ebpf-autoinstrument/pkg/imetrics"
+	"github.com/grafana/ebpf-autoinstrument/pkg/pipe/global"
+	"github.com/grafana/ebpf-autoinstrument/pkg/transform"
 )
 
 const (

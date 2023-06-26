@@ -40,3 +40,4 @@ test/cmd/greeting-service/target
 test/integration/components/javatestserver/target/
 test/integration/components/rusttestserver/target/
 test/integration/components/rustssltestserver/target/
+test/integration/components/nodejsserver/node_modules/

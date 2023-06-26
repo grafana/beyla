@@ -7,11 +7,12 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/grafana/ebpf-autoinstrument/test/integration/components/testserver/arg"
-	pb "github.com/grafana/ebpf-autoinstrument/test/integration/components/testserver/grpc/routeguide"
 	"golang.org/x/exp/slog"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+
+	"github.com/grafana/ebpf-autoinstrument/test/integration/components/testserver/arg"
+	pb "github.com/grafana/ebpf-autoinstrument/test/integration/components/testserver/grpc/routeguide"
 )
 
 func HTTPHandler(log *slog.Logger, echoPort int) http.HandlerFunc {

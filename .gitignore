@@ -66,6 +66,3 @@ test/integration/components/rubytestserver/testapi/storage/*
 test/integration/components/rubytestserver/testapi/tmp/storage/*
 !test/integration/components/rubytestserver/testapi/tmp/storage/
 !test/integration/components/rubytestserver/testapi/tmp/storage/.keep
-
-# Ignore master key for decrypting credentials and more.
-test/integration/components/rubytestserver/testapi/config/master.key

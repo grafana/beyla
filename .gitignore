@@ -41,3 +41,31 @@ test/integration/components/javatestserver/target/
 test/integration/components/rusttestserver/target/
 test/integration/components/rustssltestserver/target/
 test/integration/components/nodejsserver/node_modules/
+# Ruby on Rails test
+# Ignore bundler config.
+test/integration/components/rubytestserver/testapi/.bundle
+
+# Ignore the default SQLite database.
+test/integration/components/rubytestserver/testapi/db/*.sqlite3
+test/integration/components/rubytestserver/testapi/db/*.sqlite3-*
+
+# Ignore all logfiles and tempfiles.
+test/integration/components/rubytestserver/testapi/log/*
+test/integration/components/rubytestserver/testapi/tmp/*
+!test/integration/components/rubytestserver/testapi/log/.keep
+!test/integration/components/rubytestserver/testapi/tmp/.keep
+
+# Ignore pidfiles, but keep the directory.
+test/integration/components/rubytestserver/testapi/tmp/pids/*
+!test/integration/components/rubytestserver/testapi/tmp/pids/
+!test/integration/components/rubytestserver/testapi/tmp/pids/.keep
+
+# Ignore uploaded files in development.
+test/integration/components/rubytestserver/testapi/storage/*
+!test/integration/components/rubytestserver/testapi/storage/.keep
+test/integration/components/rubytestserver/testapi/tmp/storage/*
+!test/integration/components/rubytestserver/testapi/tmp/storage/
+!test/integration/components/rubytestserver/testapi/tmp/storage/.keep
+
+# Ignore master key for decrypting credentials and more.
+test/integration/components/rubytestserver/testapi/config/master.key

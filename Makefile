@@ -69,6 +69,7 @@ __check_defined = \
 GOLANGCI_LINT = $(TOOLS_DIR)/golangci-lint
 BPF2GO = $(TOOLS_DIR)/bpf2go
 GO_OFFSETS_TRACKER = $(TOOLS_DIR)/go-offsets-tracker
+GOIMPORTS_REVISER = $(TOOLS_DIR)/goimports-reviser
 
 .PHONY: prereqs
 prereqs:
@@ -77,9 +78,29 @@ prereqs:
 	$(call go-install-tool,$(GOLANGCI_LINT),github.com/golangci/golangci-lint/cmd/golangci-lint@v1.52.2)
 	$(call go-install-tool,$(BPF2GO),github.com/cilium/ebpf/cmd/bpf2go@v0.10.0)
 	$(call go-install-tool,$(GO_OFFSETS_TRACKER),github.com/grafana/go-offsets-tracker/cmd/go-offsets-tracker@v0.1.4)
+	$(call go-install-tool,$(GOIMPORTS_REVISER),github.com/incu6us/goimports-reviser/v2@v2.5.3)
+
+.PHONY: fmt
+fmt: prereqs
+	@echo "### Formatting code and fixing imports"
+	@$(foreach FILE, $(shell find . -name "*.go" -not -path "./vendor/*"), \
+		$(GOIMPORTS_REVISER) -local github.com/grafana -file-path $(FILE);)
+
+.PHONY: checkfmt
+checkfmt:
+	@echo '### check correct formatting and imports'
+define check_format
+	$(shell $(foreach FILE, $(shell find . -name "*.go" -not -path "./vendor/*"), \
+		$(GOIMPORTS_REVISER) -local github.com/grafana -list-diff -output stdout -file-path $(FILE);))
+endef
+ifneq ($(strip $(check_format)),)
+	@echo "$(check_format)"
+	@echo "Above files are not properly formatted. Run 'make fmt' to fix them";
+	@exit 1;
+endif
 
 .PHONY: lint
-lint: prereqs
+lint: prereqs checkfmt
 	@echo "### Linting code"
 	$(GOLANGCI_LINT) run ./... --timeout=3m
 

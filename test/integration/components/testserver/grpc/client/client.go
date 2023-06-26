@@ -20,11 +20,12 @@ import (
 	"os"
 	"time"
 
-	pb "github.com/grafana/ebpf-autoinstrument/test/integration/components/testserver/grpc/routeguide"
 	"golang.org/x/exp/slog"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
+
+	pb "github.com/grafana/ebpf-autoinstrument/test/integration/components/testserver/grpc/routeguide"
 )
 
 var logs = slog.With("component", "grpc.Client")

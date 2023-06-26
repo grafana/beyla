@@ -139,7 +139,7 @@ github.com/klauspost/cpuid/v2
 # github.com/leodido/go-urn v1.2.1
 ## explicit; go 1.13
 github.com/leodido/go-urn
-# github.com/mariomac/guara v0.0.0-20221222112709-f95b15506aee
+# github.com/mariomac/guara v0.0.0-20230621100729-42bd7716e524
 ## explicit; go 1.18
 github.com/mariomac/guara/pkg/test
 # github.com/mariomac/pipes v0.7.0
@@ -328,6 +328,7 @@ golang.org/x/crypto/sha3
 # golang.org/x/exp v0.0.0-20230213192124-5e25df0256eb
 ## explicit; go 1.18
 golang.org/x/exp/constraints
+golang.org/x/exp/maps
 golang.org/x/exp/slices
 golang.org/x/exp/slog
 golang.org/x/exp/slog/internal/buffer

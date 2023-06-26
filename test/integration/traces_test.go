@@ -7,14 +7,13 @@ import (
 	"testing"
 	"time"
 
-	grpcclient "github.com/grafana/ebpf-autoinstrument/test/integration/components/testserver/grpc/client"
-
-	"github.com/stretchr/testify/assert"
-
 	"github.com/goccy/go-json"
-	"github.com/grafana/ebpf-autoinstrument/test/integration/components/jaeger"
 	"github.com/mariomac/guara/pkg/test"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/grafana/ebpf-autoinstrument/test/integration/components/jaeger"
+	grpcclient "github.com/grafana/ebpf-autoinstrument/test/integration/components/testserver/grpc/client"
 )
 
 func testHTTPTraces(t *testing.T) {
@@ -31,11 +30,8 @@ func testHTTPTraces(t *testing.T) {
 		var tq jaeger.TracesQuery
 		require.NoError(t, json.NewDecoder(resp.Body).Decode(&tq))
 		traces := tq.FindBySpan(jaeger.Tag{Key: "http.target", Type: "string", Value: "/create-trace"})
-		if len(traces) == 1 {
-			trace = traces[0]
-		} else {
-			require.Failf(t, "error getting traces", "expected one trace, got: %+v", traces)
-		}
+		require.Len(t, traces, 1)
+		trace = traces[0]
 	}, test.Interval(100*time.Millisecond))
 
 	// Check the information of the parent span
@@ -116,18 +112,12 @@ func testGRPCTraces(t *testing.T) {
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
 		resp, err := http.Get(jaegerQueryURL + "?service=testserver&operation=%2Frouteguide.RouteGuide%2FDebug")
 		require.NoError(t, err)
-		if resp == nil {
-			return
-		}
 		require.Equal(t, http.StatusOK, resp.StatusCode)
 		var tq jaeger.TracesQuery
 		require.NoError(t, json.NewDecoder(resp.Body).Decode(&tq))
 		traces := tq.FindBySpan(jaeger.Tag{Key: "rpc.method", Type: "string", Value: "/routeguide.RouteGuide/Debug"})
-		if len(traces) == 1 {
-			trace = traces[0]
-		} else {
-			require.Failf(t, "error getting traces", "expected one trace, got %d: %+v", len(traces), traces)
-		}
+		require.Len(t, traces, 1)
+		trace = traces[0]
 	}, test.Interval(100*time.Millisecond))
 
 	// Check the information of the parent span

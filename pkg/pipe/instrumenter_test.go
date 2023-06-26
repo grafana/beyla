@@ -6,8 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/grafana/ebpf-autoinstrument/pkg/testutil"
-
 	"github.com/mariomac/pipes/pkg/graph"
 	"github.com/mariomac/pipes/pkg/node"
 	"github.com/stretchr/testify/assert"
@@ -19,6 +17,7 @@ import (
 	ebpfcommon "github.com/grafana/ebpf-autoinstrument/pkg/ebpf/common"
 	"github.com/grafana/ebpf-autoinstrument/pkg/ebpf/httpfltr"
 	"github.com/grafana/ebpf-autoinstrument/pkg/export/otel"
+	"github.com/grafana/ebpf-autoinstrument/pkg/testutil"
 	"github.com/grafana/ebpf-autoinstrument/pkg/transform"
 	"github.com/grafana/ebpf-autoinstrument/test/collector"
 )

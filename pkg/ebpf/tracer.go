@@ -13,27 +13,21 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/grafana/ebpf-autoinstrument/pkg/pipe/global"
-
+	"github.com/cilium/ebpf"
+	"github.com/cilium/ebpf/link"
+	"github.com/cilium/ebpf/rlimit"
+	"github.com/mariomac/pipes/pkg/node"
+	"golang.org/x/exp/slog"
 	"golang.org/x/sys/unix"
 
+	ebpfcommon "github.com/grafana/ebpf-autoinstrument/pkg/ebpf/common"
 	"github.com/grafana/ebpf-autoinstrument/pkg/ebpf/goruntime"
 	"github.com/grafana/ebpf-autoinstrument/pkg/ebpf/grpc"
 	"github.com/grafana/ebpf-autoinstrument/pkg/ebpf/httpfltr"
-
-	ebpfcommon "github.com/grafana/ebpf-autoinstrument/pkg/ebpf/common"
-
-	"github.com/cilium/ebpf/rlimit"
-
-	"github.com/cilium/ebpf/link"
-
-	"github.com/cilium/ebpf"
+	"github.com/grafana/ebpf-autoinstrument/pkg/ebpf/nethttp"
 	"github.com/grafana/ebpf-autoinstrument/pkg/exec"
 	"github.com/grafana/ebpf-autoinstrument/pkg/goexec"
-
-	"github.com/grafana/ebpf-autoinstrument/pkg/ebpf/nethttp"
-	"github.com/mariomac/pipes/pkg/node"
-	"golang.org/x/exp/slog"
+	"github.com/grafana/ebpf-autoinstrument/pkg/pipe/global"
 )
 
 // Tracer is an individual eBPF program (e.g. the net/http or the grpc tracers)

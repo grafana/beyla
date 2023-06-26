@@ -3,10 +3,10 @@ package transform
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	ebpfcommon "github.com/grafana/ebpf-autoinstrument/pkg/ebpf/common"
 	"github.com/grafana/ebpf-autoinstrument/pkg/ebpf/httpfltr"
-
-	"github.com/stretchr/testify/assert"
 )
 
 func cstr(s string) []byte {

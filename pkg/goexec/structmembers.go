@@ -8,8 +8,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/grafana/go-offsets-tracker/pkg/offsets"
 	"golang.org/x/exp/slog"
+
+	"github.com/grafana/go-offsets-tracker/pkg/offsets"
 )
 
 func log() *slog.Logger {

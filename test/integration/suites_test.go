@@ -198,7 +198,7 @@ func TestSuite_Rails(t *testing.T) {
 
 func TestSuite_RailsTLS(t *testing.T) {
 	compose, err := docker.ComposeSuite("docker-compose-ruby.yml", path.Join(pathOutput, "test-suite-ruby-tls.log"))
-	compose.Env = append(compose.Env, `OPEN_PORT=3043`, `EXECUTABLE_NAME=`, `TESTSERVER_DOCKERFILE_SUFFIX=_tls`, `TEST_SERVICE_PORTS=3044:3043`)
+	compose.Env = append(compose.Env, `OPEN_PORT=3043`, `EXECUTABLE_NAME=`, `TESTSERVER_IMAGE_SUFFIX=-tls`, `TEST_SERVICE_PORTS=3044:3043`)
 	require.NoError(t, err)
 	require.NoError(t, compose.Up())
 	t.Run("Rails SSL RED metrics", testREDMetricsRailsHTTPS)

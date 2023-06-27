@@ -2,10 +2,7 @@ version: '3.8'
 
 services:
   testserver:
-    build:
-      context: ../..
-      dockerfile: test/integration/components/rubytestserver/testapi/Dockerfile${TESTSERVER_DOCKERFILE_SUFFIX}
-    image: hatest-testserver
+    image: grcevski/tests:rails-test${TESTSERVER_IMAGE_SUFFIX}
     ports:
       - "${TEST_SERVICE_PORTS}"
     depends_on:

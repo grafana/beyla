@@ -2,12 +2,9 @@ version: '3.8'
 
 services:
   testserver:
-    build:
-      context: ../..
-      dockerfile: test/integration/components/nodejsserver/Dockerfile_tls
-    image: hatest-testserver
+    image: grcevski/tests:rails-test${TESTSERVER_IMAGE_SUFFIX}
     ports:
-      - "3034:3033"
+      - "${TEST_SERVICE_PORTS}"
     depends_on:
       otelcol:
         condition: service_started
@@ -18,7 +15,7 @@ services:
       dockerfile: ./test/integration/components/otelauto/Dockerfile
     command:
       - /otelauto
-      - --config=/configs/instrumenter-config-java.yml
+      - --config=/configs/instrumenter-config-ruby.yml
     volumes:
       - ./configs/:/configs
       - ../../testoutput:/coverage

@@ -7,7 +7,7 @@ services:
       dockerfile: test/integration/components/nodejsserver/Dockerfile${TESTSERVER_DOCKERFILE_SUFFIX}
     image: hatest-testserver
     ports:
-      - "3031:3030"
+      - "${TEST_SERVICE_PORTS}"
     depends_on:
       otelcol:
         condition: service_started

@@ -29,7 +29,7 @@ struct {
 } ssl_to_conn SEC(".maps");
 
 // LRU map, we don't clean-it up at the moment, which holds onto the mapping
-// of the pid-tid and the current connection. It's setup by the by tcp_rcv_established
+// of the pid-tid and the current connection. It's setup by tcp_rcv_established
 // in case we miss SSL_do_handshake
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
@@ -37,6 +37,16 @@ struct {
     __type(value, connection_info_t); // the pointer to the file descriptor matching ssl
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
 } pid_tid_to_conn SEC(".maps");
+
+// LRU map which holds onto the mapping of an ssl pointer to pid-tid,
+// we clean-it up when we lookup by ssl. It's setup by SSL_read for cases where frameworks 
+// process SSL requests on separate thread pools, e.g. Ruby on Rails
+struct {
+    __uint(type, BPF_MAP_TYPE_LRU_HASH);
+    __type(key, u64);   // the ssl pointer
+    __type(value, u64); // the pid tid of the thread in ssl read
+    __uint(max_entries, MAX_CONCURRENT_REQUESTS);
+} ssl_to_pid_tid SEC(".maps");
 
 // Temporary tracking of ssl_read/ssl_read_ex and ssl_write/ssl_write_ex arguments
 typedef struct ssl_args {
@@ -101,11 +111,31 @@ static __always_inline void https_buffer_event(void *buf, int len, connection_in
 static __always_inline void handle_ssl_buf(u64 id, ssl_args_t *args, int bytes_len) {
     if (args && bytes_len > 0) {
         void *ssl = ((void *)args->ssl);
+        u64 ssl_ptr = (u64)ssl;
         bpf_printk("SSL_buf id=%d ssl=%llx", id, ssl);
         connection_info_t *conn = bpf_map_lookup_elem(&ssl_to_conn, &ssl);
 
         if (!conn) {
             conn = bpf_map_lookup_elem(&pid_tid_to_conn, &id);
+
+            if (!conn) {
+                // We try even harder, we might have an SSL pointer mapped on another
+                // thread, since tcp_rcv_established was handled on another thread pool.
+                // First we look up a pid_tid by the ssl pointer, which might've been established
+                // by a prior SSL_read on another thread, then we look up in the same map.
+                // Clean-up here we are done trying if we don't succeed
+                void *pid_tid_ptr = bpf_map_lookup_elem(&ssl_to_pid_tid, &ssl_ptr);
+
+                if (pid_tid_ptr) {
+                    u64 pid_tid;
+                    bpf_probe_read(&pid_tid, sizeof(pid_tid), pid_tid_ptr);
+
+                    conn = bpf_map_lookup_elem(&pid_tid_to_conn, &pid_tid);
+                    bpf_dbg_printk("Separate pool lookup ssl=%llx, pid=%d, conn=%llx", ssl_ptr, pid_tid, conn);
+                } else {
+                    bpf_dbg_printk("Other thread lookup failed for ssl=%llx", ssl_ptr);
+                }
+            }
 
             // If we found a connection setup by tcp_rcv_established, which means
             // we missed a SSL_do_handshake, update our ssl to connection map to be
@@ -118,6 +148,8 @@ static __always_inline void handle_ssl_buf(u64 id, ssl_args_t *args, int bytes_l
                 bpf_map_update_elem(&ssl_to_conn, &ssl, &c, BPF_ANY);
             }
         }
+
+        bpf_map_delete_elem(&ssl_to_pid_tid, &ssl_ptr);
 
         if (conn) {
             void *read_buf = (void *)args->buf;

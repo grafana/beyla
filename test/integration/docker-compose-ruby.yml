@@ -7,7 +7,7 @@ services:
       dockerfile: test/integration/components/rubytestserver/testapi/Dockerfile${TESTSERVER_DOCKERFILE_SUFFIX}
     image: hatest-testserver
     ports:
-      - "3041:3040"
+      - "${TEST_SERVICE_PORTS}"
     depends_on:
       otelcol:
         condition: service_started

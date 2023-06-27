@@ -94,7 +94,7 @@ func testREDMetricsRailsHTTP(t *testing.T) {
 
 func testREDMetricsRailsHTTPS(t *testing.T) {
 	for _, testCaseURL := range []string{
-		"https://localhost:3041",
+		"https://localhost:3044",
 	} {
 		t.Run(testCaseURL, func(t *testing.T) {
 			waitForRubyTestComponents(t, testCaseURL)

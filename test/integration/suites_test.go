@@ -187,7 +187,7 @@ func TestSuite_NodeJSTLS(t *testing.T) {
 
 func TestSuite_Rails(t *testing.T) {
 	compose, err := docker.ComposeSuite("docker-compose-ruby.yml", path.Join(pathOutput, "test-suite-ruby.log"))
-	compose.Env = append(compose.Env, `OPEN_PORT=3040`, `EXECUTABLE_NAME=`)
+	compose.Env = append(compose.Env, `OPEN_PORT=3040`, `EXECUTABLE_NAME=`, `TEST_SERVICE_PORTS=3041:3040`)
 	require.NoError(t, err)
 	require.NoError(t, compose.Up())
 	t.Run("Rails RED metrics", testREDMetricsRailsHTTP)
@@ -198,7 +198,7 @@ func TestSuite_Rails(t *testing.T) {
 
 func TestSuite_RailsTLS(t *testing.T) {
 	compose, err := docker.ComposeSuite("docker-compose-ruby.yml", path.Join(pathOutput, "test-suite-ruby-tls.log"))
-	compose.Env = append(compose.Env, `OPEN_PORT=3040`, `EXECUTABLE_NAME=`, `TESTSERVER_DOCKERFILE_SUFFIX=_tls`)
+	compose.Env = append(compose.Env, `OPEN_PORT=3043`, `EXECUTABLE_NAME=`, `TESTSERVER_DOCKERFILE_SUFFIX=_tls`, `TEST_SERVICE_PORTS=3044:3043`)
 	require.NoError(t, err)
 	require.NoError(t, compose.Up())
 	t.Run("Rails SSL RED metrics", testREDMetricsRailsHTTPS)

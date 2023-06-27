@@ -13,7 +13,7 @@ RUN gem install rails
 RUN gem install bundler rails
 RUN bundle install
 
-EXPOSE 3040
+EXPOSE 3043
 
 # Run the node app
-CMD [ "rails", "server", "-b", "ssl://0.0.0.0:3040?key=config/key.pem&cert=config/cert.pem" ]
+CMD [ "rails", "server", "-b", "ssl://0.0.0.0:3043?key=config/key.pem&cert=config/cert.pem" ]

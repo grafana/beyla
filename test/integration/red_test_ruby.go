@@ -6,7 +6,6 @@ import (
 	"net"
 	"strconv"
 	"testing"
-	"time"
 
 	"github.com/mariomac/guara/pkg/test"
 	"github.com/stretchr/testify/assert"
@@ -51,12 +50,11 @@ func testREDMetricsForRubyHTTPLibrary(t *testing.T, url string, comm string) {
 		}
 	})
 
-	// Call 10 times the instrumented service, forcing it to:
-	// - SSL is very slow, it messes with our request timings, needs lots of calls
+	// Call 4 times the instrumented service, forcing it to:
+	// - process multiple calls in a row with, one more than we might need
 	// - returning a 200 code
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 4; i++ {
 		doHTTPGet(t, url+path+"/1", 200)
-		time.Sleep(2 * time.Millisecond)
 	}
 
 	// Eventually, Prometheus would make this query visible

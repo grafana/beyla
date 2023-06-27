@@ -128,6 +128,7 @@ type bpfMapSpecs struct {
 	OngoingHttp         *ebpf.MapSpec `ebpf:"ongoing_http"`
 	PidTidToConn        *ebpf.MapSpec `ebpf:"pid_tid_to_conn"`
 	SslToConn           *ebpf.MapSpec `ebpf:"ssl_to_conn"`
+	SslToPidTid         *ebpf.MapSpec `ebpf:"ssl_to_pid_tid"`
 }
 
 // bpfObjects contains all objects after they have been loaded into the kernel.
@@ -161,6 +162,7 @@ type bpfMaps struct {
 	OngoingHttp         *ebpf.Map `ebpf:"ongoing_http"`
 	PidTidToConn        *ebpf.Map `ebpf:"pid_tid_to_conn"`
 	SslToConn           *ebpf.Map `ebpf:"ssl_to_conn"`
+	SslToPidTid         *ebpf.Map `ebpf:"ssl_to_pid_tid"`
 }
 
 func (m *bpfMaps) Close() error {
@@ -177,6 +179,7 @@ func (m *bpfMaps) Close() error {
 		m.OngoingHttp,
 		m.PidTidToConn,
 		m.SslToConn,
+		m.SslToPidTid,
 	)
 }
 

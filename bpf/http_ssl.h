@@ -111,6 +111,7 @@ static __always_inline void https_buffer_event(void *buf, int len, connection_in
 static __always_inline void handle_ssl_buf(u64 id, ssl_args_t *args, int bytes_len) {
     if (args && bytes_len > 0) {
         void *ssl = ((void *)args->ssl);
+        u64 ssl_ptr = (u64)ssl;
         bpf_printk("SSL_buf id=%d ssl=%llx", id, ssl);
         connection_info_t *conn = bpf_map_lookup_elem(&ssl_to_conn, &ssl);
 
@@ -118,15 +119,12 @@ static __always_inline void handle_ssl_buf(u64 id, ssl_args_t *args, int bytes_l
             conn = bpf_map_lookup_elem(&pid_tid_to_conn, &id);
 
             if (!conn) {
-                u64 ssl_ptr = (u64)ssl;
-
                 // We try even harder, we might have an SSL pointer mapped on another
                 // thread, since tcp_rcv_established was handled on another thread pool.
                 // First we look up a pid_tid by the ssl pointer, which might've been established
                 // by a prior SSL_read on another thread, then we look up in the same map.
                 // Clean-up here we are done trying if we don't succeed
                 void *pid_tid_ptr = bpf_map_lookup_elem(&ssl_to_pid_tid, &ssl_ptr);
-                bpf_map_delete_elem(&ssl_to_pid_tid, &ssl_ptr);
 
                 if (pid_tid_ptr) {
                     u64 pid_tid;
@@ -150,6 +148,8 @@ static __always_inline void handle_ssl_buf(u64 id, ssl_args_t *args, int bytes_l
                 bpf_map_update_elem(&ssl_to_conn, &ssl, &c, BPF_ANY);
             }
         }
+
+        bpf_map_delete_elem(&ssl_to_pid_tid, &ssl_ptr);
 
         if (conn) {
             void *read_buf = (void *)args->buf;

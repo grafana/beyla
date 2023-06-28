@@ -15,10 +15,11 @@
       }
     ]
   },
+  "description": "HTTP and gRPC RED metrics visualization for the Grafana eBPF autoinstrument",
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": 30,
+  "id": 35,
   "links": [],
   "liveNow": false,
   "panels": [
@@ -121,7 +122,7 @@
           }
         ]
       },
-      "pluginVersion": "10.0.0-cloud.3.b04cc88b",
+      "pluginVersion": "10.1.0-57417pre",
       "targets": [
         {
           "datasource": {
@@ -130,11 +131,11 @@
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "sort_desc(topk by(http_route, job) (5,  max by (http_route, job) (histogram_quantile(0.95,  (sum by(http_route, job, le) (rate(http_server_duration_bucket[$__rate_interval])))))))",
+          "expr": "sort_desc(topk by(http_route, service_name) (5,  max by (http_route, service_name) (histogram_quantile(0.95,  (sum by(http_route, service_name, le) (rate(http_server_duration_seconds_bucket[$__rate_interval])))))))",
           "format": "table",
           "hide": false,
           "instant": true,
-          "legendFormat": "{{job}} - {{http_route}}",
+          "legendFormat": "{{service_name}} - {{http_route}}",
           "range": false,
           "refId": "A"
         }
@@ -167,7 +168,7 @@
               "Time": 1,
               "Value": 3,
               "http_route": 2,
-              "job": 0
+              "service_name": 0
             },
             "renameByName": {}
           }
@@ -274,7 +275,7 @@
           }
         ]
       },
-      "pluginVersion": "10.0.0-cloud.3.b04cc88b",
+      "pluginVersion": "10.1.0-57417pre",
       "targets": [
         {
           "datasource": {
@@ -283,11 +284,11 @@
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "sort_desc(topk by(rpc_method, job) (5,  max by (rpc_method, job) (histogram_quantile(0.95,  (sum by(rpc_method, job, le) (rate(rpc_server_duration_bucket[$__rate_interval])))))))",
+          "expr": "sort_desc(topk by(rpc_method, service_name) (5,  max by (rpc_method, service_name) (histogram_quantile(0.95,  (sum by(rpc_method, service_name, le) (rate(rpc_server_duration_seconds_bucket[$__rate_interval])))))))",
           "format": "table",
           "hide": false,
           "instant": true,
-          "legendFormat": "{{job}} - {{http_route}}",
+          "legendFormat": "{{service_name}} - {{http_route}}",
           "range": false,
           "refId": "A"
         }
@@ -353,6 +354,7 @@
               "tooltip": false,
               "viz": false
             },
+            "insertNulls": false,
             "lineInterpolation": "linear",
             "lineWidth": 3,
             "pointSize": 5,
@@ -413,7 +415,7 @@
             "uid": "${Metrics}"
           },
           "editorMode": "builder",
-          "expr": "histogram_quantile(0.99, sum by(job, le) (rate(http_server_duration_bucket{job=\"$Service\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.99, sum by(service_name, le) (rate(http_server_duration_seconds_bucket{service_name=\"$Service\"}[$__rate_interval])))",
           "legendFormat": "HTTP p99",
           "range": true,
           "refId": "A"
@@ -424,7 +426,7 @@
             "uid": "${Metrics}"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.95, sum(rate(http_server_duration_bucket{job=\"$Service\"}[$__rate_interval])) by (job, le))",
+          "expr": "histogram_quantile(0.95, sum(rate(http_server_duration_seconds_bucket{service_name=\"$Service\"}[$__rate_interval])) by (service_name, le))",
           "hide": false,
           "legendFormat": "HTTP p95",
           "range": true,
@@ -436,7 +438,7 @@
             "uid": "${Metrics}"
           },
           "editorMode": "code",
-          "expr": "sum(rate(http_server_duration_sum{job=\"$Service\"} [$__rate_interval])) / sum(rate(http_server_duration_count{job=\"$Service\"} [$__rate_interval]))",
+          "expr": "sum(rate(http_server_duration_seconds_sum{service_name=\"$Service\"} [$__rate_interval])) / sum(rate(http_server_duration_seconds_count{service_name=\"$Service\"} [$__rate_interval]))",
           "hide": false,
           "legendFormat": "HTTP Avg",
           "range": true,
@@ -448,7 +450,7 @@
             "uid": "${Metrics}"
           },
           "editorMode": "builder",
-          "expr": "histogram_quantile(0.99, sum by(job, le) (rate(rpc_server_duration_bucket{job=\"$Service\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.99, sum by(service_name, le) (rate(rpc_server_duration_seconds_bucket{service_name=\"$Service\"}[$__rate_interval])))",
           "hide": false,
           "legendFormat": "RPC p99",
           "range": true,
@@ -460,7 +462,7 @@
             "uid": "${Metrics}"
           },
           "editorMode": "builder",
-          "expr": "histogram_quantile(0.95, sum by(job, le) (rate(rpc_server_duration_bucket{job=\"$Service\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.95, sum by(service_name, le) (rate(rpc_server_duration_seconds_bucket{service_name=\"$Service\"}[$__rate_interval])))",
           "hide": false,
           "legendFormat": "RPC p95",
           "range": true,
@@ -472,7 +474,7 @@
             "uid": "${Metrics}"
           },
           "editorMode": "code",
-          "expr": "sum(rate(rpc_server_duration_sum{job=\"$Service\"} [$__rate_interval])) / sum(rate(rpc_server_duration_count{job=\"$Service\"} [$__rate_interval]))",
+          "expr": "sum(rate(rpc_server_duration_seconds_sum{service_name=\"$Service\"} [$__rate_interval])) / sum(rate(rpc_server_duration_seconds_count{service_name=\"$Service\"} [$__rate_interval]))",
           "hide": false,
           "legendFormat": "RPC Avg",
           "range": true,
@@ -506,6 +508,7 @@
               "tooltip": false,
               "viz": false
             },
+            "insertNulls": false,
             "lineInterpolation": "linear",
             "lineWidth": 1,
             "pointSize": 5,
@@ -566,7 +569,7 @@
             "uid": "${Metrics}"
           },
           "editorMode": "code",
-          "expr": "sum(rate(http_server_duration_count{job=\"$Service\"} [$__rate_interval])) by (http_status_code)",
+          "expr": "sum(rate(http_server_duration_seconds_count{service_name=\"$Service\"} [$__rate_interval])) by (http_status_code)",
           "hide": false,
           "legendFormat": "HTTP server - {{http_status_code}}",
           "range": true,
@@ -578,7 +581,7 @@
             "uid": "${Metrics}"
           },
           "editorMode": "code",
-          "expr": "sum(rate(rpc_server_duration_count{job=\"$Service\"} [$__rate_interval])) by (job, rpc_grpc_status_code)",
+          "expr": "sum(rate(rpc_server_duration_seconds_count{service_name=\"$Service\"} [$__rate_interval])) by (service_name, rpc_grpc_status_code)",
           "hide": false,
           "legendFormat": "RPC server (status {{rpc_grpc_status_code}})",
           "range": true,
@@ -603,6 +606,7 @@
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
+            "axisSoftMax": 1,
             "barAlignment": 0,
             "drawStyle": "line",
             "fillOpacity": 0,
@@ -612,6 +616,7 @@
               "tooltip": false,
               "viz": false
             },
+            "insertNulls": false,
             "lineInterpolation": "linear",
             "lineWidth": 1,
             "pointSize": 5,
@@ -664,7 +669,7 @@
                 "value": {
                   "legend": false,
                   "tooltip": false,
-                  "viz": false
+                  "viz": true
                 }
               }
             ]
@@ -697,7 +702,7 @@
             "uid": "${Metrics}"
           },
           "editorMode": "code",
-          "expr": "sum by (http_status_code) (rate(http_server_duration_count{job=\"$Service\",http_status_code=~\"(4|5).*\"}[$__rate_interval])) / ignoring(http_status_code) group_left sum(rate(http_server_duration_count{job=\"$Service\"}[$__rate_interval]))",
+          "expr": "sum by (http_status_code) (rate(http_server_duration_seconds_count{service_name=\"$Service\",http_status_code=~\"(4|5).*\"}[$__rate_interval])) / ignoring(http_status_code) group_left sum(rate(http_server_duration_seconds_count{service_name=\"$Service\"}[$__rate_interval]))",
           "hide": false,
           "legendFormat": "HTTP server - {{http_status_code}}",
           "range": true,
@@ -709,7 +714,7 @@
             "uid": "${Metrics}"
           },
           "editorMode": "code",
-          "expr": "sum by (rpc_grpc_status_code) (rate(rpc_server_duration_count{job=\"$Service\",rpc_grpc_status_code!=\"0\"}[$__rate_interval])) / ignoring(rpc_grpc_status_code) group_left sum(rate(rpc_server_duration_count{job=\"$Service\"}[$__rate_interval]))",
+          "expr": "sum by (rpc_grpc_status_code) (rate(rpc_server_duration_seconds_count{service_name=\"$Service\",rpc_grpc_status_code!=\"0\"}[$__rate_interval])) / ignoring(rpc_grpc_status_code) group_left sum(rate(rpc_server_duration_seconds_count{service_name=\"$Service\"}[$__rate_interval]))",
           "hide": false,
           "legendFormat": "RPC server (status {{rpc_grpc_status_code}})",
           "range": true,
@@ -725,7 +730,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 50
+        "y": 14
       },
       "id": 5,
       "panels": [],
@@ -758,6 +763,7 @@
               "tooltip": false,
               "viz": false
             },
+            "insertNulls": false,
             "lineInterpolation": "linear",
             "lineWidth": 3,
             "pointSize": 5,
@@ -796,7 +802,7 @@
         "h": 8,
         "w": 8,
         "x": 0,
-        "y": 51
+        "y": 15
       },
       "id": 6,
       "options": {
@@ -818,7 +824,7 @@
             "uid": "${Metrics}"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by(job, le) (rate(http_client_duration_bucket{job=\"$Service\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.99, sum by(service_name, le) (rate(http_client_duration_seconds_bucket{service_name=\"$Service\"}[$__rate_interval])))",
           "legendFormat": "HTTP p99",
           "range": true,
           "refId": "A"
@@ -829,7 +835,7 @@
             "uid": "${Metrics}"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.95, sum(rate(http_client_duration_bucket{job=\"$Service\"}[$__rate_interval])) by (job, le)) ",
+          "expr": "histogram_quantile(0.95, sum(rate(http_client_duration_seconds_bucket{service_name=\"$Service\"}[$__rate_interval])) by (service_name, le)) ",
           "hide": false,
           "legendFormat": "HTTP p95",
           "range": true,
@@ -841,7 +847,7 @@
             "uid": "${Metrics}"
           },
           "editorMode": "code",
-          "expr": "sum(rate(http_client_duration_sum{job=\"$Service\"} [$__rate_interval])) / sum(rate(http_client_duration_count{job=\"$Service\"} [$__rate_interval]))",
+          "expr": "sum(rate(http_client_duration_seconds_sum{service_name=\"$Service\"} [$__rate_interval])) / sum(rate(http_client_duration_seconds_count{service_name=\"$Service\"} [$__rate_interval]))",
           "hide": false,
           "legendFormat": "HTTP Avg",
           "range": true,
@@ -853,7 +859,7 @@
             "uid": "${Metrics}"
           },
           "editorMode": "code",
-          "expr": "sum(rate(rpc_client_duration_sum{job=\"$Service\"} [$__rate_interval])) / sum(rate(rpc_client_duration_count{job=\"$Service\"} [$__rate_interval]))",
+          "expr": "sum(rate(rpc_client_duration_seconds_sum{service_name=\"$Service\"} [$__rate_interval])) / sum(rate(rpc_client_duration_seconds_count{service_name=\"$Service\"} [$__rate_interval]))",
           "hide": false,
           "legendFormat": "RPC Avg",
           "range": true,
@@ -865,7 +871,7 @@
             "uid": "${Metrics}"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by(job, le) (rate(rpc_client_duration_bucket{job=\"$Service\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.99, sum by(service_name, le) (rate(rpc_client_duration_seconds_bucket{service_name=\"$Service\"}[$__rate_interval])))",
           "hide": false,
           "legendFormat": "RPC p99",
           "range": true,
@@ -877,7 +883,7 @@
             "uid": "${Metrics}"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.95, sum(rate(rpc_client_duration_bucket{job=\"$Service\"}[$__rate_interval])) by (job, le)) ",
+          "expr": "histogram_quantile(0.95, sum(rate(rpc_client_duration_seconds_bucket{service_name=\"$Service\"}[$__rate_interval])) by (service_name, le)) ",
           "hide": false,
           "legendFormat": "RPC p95",
           "range": true,
@@ -911,6 +917,7 @@
               "tooltip": false,
               "viz": false
             },
+            "insertNulls": false,
             "lineInterpolation": "linear",
             "lineWidth": 1,
             "pointSize": 5,
@@ -949,7 +956,7 @@
         "h": 8,
         "w": 8,
         "x": 8,
-        "y": 51
+        "y": 15
       },
       "id": 8,
       "options": {
@@ -971,7 +978,7 @@
             "uid": "${Metrics}"
           },
           "editorMode": "code",
-          "expr": "sum(rate(http_client_duration_count{job=\"$Service\"} [$__rate_interval])) by (job, http_status_code)",
+          "expr": "sum(rate(http_client_duration_seconds_count{service_name=\"$Service\"} [$__rate_interval])) by (service_name, http_status_code)",
           "legendFormat": "HTTP client - {{http_status_code}}",
           "range": true,
           "refId": "A"
@@ -982,7 +989,7 @@
             "uid": "${Metrics}"
           },
           "editorMode": "code",
-          "expr": "sum(rate(rpc_client_duration_count{job=\"$Service\"} [$__rate_interval])) by (job, rpc_grpc_status_code)",
+          "expr": "sum(rate(rpc_client_duration_seconds_count{service_name=\"$Service\"} [$__rate_interval])) by (service_name, rpc_grpc_status_code)",
           "hide": false,
           "legendFormat": "RPC client (status {{rpc_grpc_status_code}})",
           "range": true,
@@ -1007,6 +1014,7 @@
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
+            "axisSoftMax": 1,
             "barAlignment": 0,
             "drawStyle": "line",
             "fillOpacity": 0,
@@ -1016,6 +1024,7 @@
               "tooltip": false,
               "viz": false
             },
+            "insertNulls": false,
             "lineInterpolation": "linear",
             "lineWidth": 1,
             "pointSize": 5,
@@ -1079,7 +1088,7 @@
         "h": 8,
         "w": 8,
         "x": 16,
-        "y": 51
+        "y": 15
       },
       "id": 73,
       "options": {
@@ -1101,7 +1110,7 @@
             "uid": "${Metrics}"
           },
           "editorMode": "code",
-          "expr": "sum by (http_status_code) (rate(http_client_duration_count{job=\"$Service\",http_status_code=~\"5.*\"}[$__rate_interval])) / ignoring(http_status_code) group_left sum(rate(http_client_duration_count{job=\"$Service\"}[$__rate_interval]))",
+          "expr": "sum by (http_status_code) (rate(http_client_duration_seconds_count{service_name=\"$Service\",http_status_code=~\"5.*\"}[$__rate_interval])) / ignoring(http_status_code) group_left sum(rate(http_client_duration_seconds_count{service_name=\"$Service\"}[$__rate_interval]))",
           "hide": false,
           "legendFormat": "HTTP client - {{http_status_code}}",
           "range": true,
@@ -1113,7 +1122,7 @@
             "uid": "${Metrics}"
           },
           "editorMode": "code",
-          "expr": "sum by (rpc_grpc_status_code) (rate(rpc_client_duration_count{job=\"$Service\",rpc_grpc_status_code!=\"0\"}[$__rate_interval])) / ignoring(rpc_grpc_status_code) group_left sum(rate(rpc_client_duration_count{job=\"$Service\"}[$__rate_interval]))",
+          "expr": "sum by (rpc_grpc_status_code) (rate(rpc_client_duration_seconds_count{service_name=\"$Service\",rpc_grpc_status_code!=\"0\"}[$__rate_interval])) / ignoring(rpc_grpc_status_code) group_left sum(rate(rpc_client_duration_seconds_count{service_name=\"$Service\"}[$__rate_interval]))",
           "hide": false,
           "legendFormat": "RPC client (status {{rpc_grpc_status_code}})",
           "range": true,
@@ -1124,18 +1133,18 @@
       "type": "timeseries"
     }
   ],
-  "refresh": "",
+  "refresh": "auto",
   "schemaVersion": 38,
   "style": "dark",
-  "tags": [],
+  "tags": [
+    "ebpf",
+    "red",
+    "http",
+    "grpc"
+  ],
   "templating": {
     "list": [
       {
-        "current": {
-          "selected": false,
-          "text": "grafanacloud-mariomacias-prom",
-          "value": "grafanacloud-mariomacias-prom"
-        },
         "description": "Source of the metrics (e.g. Prometheus source)",
         "hide": 0,
         "includeAll": false,
@@ -1151,7 +1160,7 @@
       },
       {
         "current": {
-          "selected": false,
+          "selected": true,
           "text": [
             "All"
           ],
@@ -1163,7 +1172,7 @@
           "type": "prometheus",
           "uid": "grafanacloud-prom"
         },
-        "definition": "label_values(job)",
+        "definition": "label_values(service_name)",
         "hide": 0,
         "includeAll": true,
         "label": "Service",
@@ -1171,7 +1180,7 @@
         "name": "Service",
         "options": [],
         "query": {
-          "query": "label_values(job)",
+          "query": "label_values(service_name)",
           "refId": "PrometheusVariableQueryEditor-VariableQuery"
         },
         "refresh": 1,
@@ -1190,6 +1199,6 @@
   "timezone": "",
   "title": "eBPF RED Metrics",
   "uid": "e0701985-a623-4e62-9fae-f5094244d065",
-  "version": 54,
+  "version": 1,
   "weekStart": ""
 }

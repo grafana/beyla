@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 	"time"
 
@@ -116,26 +117,27 @@ func TestMetrics_InternalInstrumentation(t *testing.T) {
 	go inputNode.Start()
 
 	sendData <- struct{}{}
-	var previousCount, previousCalls int
+	var previousSum, previousCount int
 	test.Eventually(t, timeout, func(t require.TestingT) {
 		// we can't guarantee the number of calls at test time, but they must be at least 1
-		previousCount, previousCalls = internalMetrics.count, internalMetrics.calls
+		previousSum, previousCount = internalMetrics.SumCount()
+		assert.LessOrEqual(t, 1, previousSum)
 		assert.LessOrEqual(t, 1, previousCount)
-		assert.LessOrEqual(t, 1, previousCalls)
 		// the count of metrics should be larger than the number of calls (1 call : n metrics)
-		assert.Less(t, previousCalls, previousCount)
+		assert.Less(t, previousCount, previousSum)
 		// no call should return error
-		assert.Empty(t, internalMetrics.errors)
+		assert.Empty(t, internalMetrics.Errors())
 	})
 
 	sendData <- struct{}{}
 	// after some time, the number of calls should be higher than before
 	test.Eventually(t, timeout, func(t require.TestingT) {
-		assert.LessOrEqual(t, previousCount, internalMetrics.count)
-		assert.LessOrEqual(t, previousCalls, internalMetrics.calls)
-		assert.Less(t, internalMetrics.calls, internalMetrics.count)
+		sum, cnt := internalMetrics.SumCount()
+		assert.LessOrEqual(t, previousSum, sum)
+		assert.LessOrEqual(t, previousCount, cnt)
+		assert.Less(t, cnt, sum)
 		// no call should return error
-		assert.Empty(t, internalMetrics.errors)
+		assert.Empty(t, internalMetrics.Errors())
 	})
 
 	// collector starts failing, so errors should be received
@@ -151,9 +153,9 @@ func TestMetrics_InternalInstrumentation(t *testing.T) {
 	var previousErrCount int
 	sendData <- struct{}{}
 	test.Eventually(t, timeout, func(t require.TestingT) {
-		previousCount, previousCalls = internalMetrics.count, internalMetrics.calls
+		previousSum, previousCount = internalMetrics.SumCount()
 		// calls should start returning errors
-		previousErrors = maps.Clone(internalMetrics.errors)
+		previousErrors = maps.Clone(internalMetrics.Errors())
 		assert.Len(t, previousErrors, 1)
 		for _, v := range previousErrors {
 			previousErrCount = v
@@ -163,11 +165,12 @@ func TestMetrics_InternalInstrumentation(t *testing.T) {
 	// after a while, metrics count should not increase but errors do
 	sendData <- struct{}{}
 	test.Eventually(t, timeout, func(t require.TestingT) {
-		assert.Equal(t, previousCount, internalMetrics.count)
-		assert.Equal(t, previousCalls, internalMetrics.calls)
+		sum, cnt := internalMetrics.SumCount()
+		assert.Equal(t, previousSum, sum)
+		assert.Equal(t, previousCount, cnt)
 		// calls should start returning errors
 		assert.Len(t, previousErrors, 1)
-		for _, v := range internalMetrics.errors {
+		for _, v := range internalMetrics.Errors() {
 			assert.Less(t, previousErrCount, v)
 		}
 	})
@@ -175,19 +178,36 @@ func TestMetrics_InternalInstrumentation(t *testing.T) {
 
 type fakeInternalMetrics struct {
 	imetrics.NoopReporter
-	calls  int
-	count  int
-	errors map[string]int
+	m    sync.RWMutex
+	sum  int
+	cnt  int
+	errs map[string]int
 }
 
 func (f *fakeInternalMetrics) OTELMetricExport(len int) {
-	f.calls++
-	f.count += len
+	f.m.Lock()
+	defer f.m.Unlock()
+	f.cnt++
+	f.sum += len
 }
 
 func (f *fakeInternalMetrics) OTELMetricExportError(err error) {
-	if f.errors == nil {
-		f.errors = map[string]int{}
+	f.m.Lock()
+	defer f.m.Unlock()
+	if f.errs == nil {
+		f.errs = map[string]int{}
 	}
-	f.errors[err.Error()]++
+	f.errs[err.Error()]++
+}
+
+func (f *fakeInternalMetrics) Errors() map[string]int {
+	f.m.RLock()
+	defer f.m.RUnlock()
+	return maps.Clone(f.errs)
+}
+
+func (f *fakeInternalMetrics) SumCount() (sum, count int) {
+	f.m.RLock()
+	defer f.m.RUnlock()
+	return f.sum, f.cnt
 }

@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -117,7 +119,7 @@ func TestForwardRingbuf_Close(t *testing.T) {
 		&closable,
 	)(context.Background(), make(chan []any, 100))
 
-	assert.False(t, ringBuf.explicitClose)
+	assert.False(t, ringBuf.explicitClose.Load())
 	assert.False(t, closable.closed)
 
 	// WHEN the ring buffer is closed
@@ -125,7 +127,7 @@ func TestForwardRingbuf_Close(t *testing.T) {
 
 	// THEN the ring buffer and the passed io.Closer elements have been explicitly closed
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
-		assert.True(t, ringBuf.explicitClose)
+		assert.True(t, ringBuf.explicitClose.Load())
 	})
 	assert.True(t, closable.closed)
 
@@ -138,11 +140,17 @@ func TestForwardRingbuf_Close(t *testing.T) {
 // along with a function to invoke deferred to restore the real ring buffer factory
 func replaceTestRingBuf() (ringBuf *fakeRingBufReader, restorer func()) {
 	rb := fakeRingBufReader{events: make(chan HTTPRequestTrace, 100), closeCh: make(chan struct{})}
+	// required to silence some data race warnings in tests
+	mt := sync.Mutex{}
+	mt.Lock()
+	defer mt.Unlock()
 	oldReaderFactory := readerFactory
 	readerFactory = func(_ *ebpf.Map) (ringBufReader, error) {
 		return &rb, nil
 	}
 	return &rb, func() {
+		mt.Lock()
+		defer mt.Unlock()
 		readerFactory = oldReaderFactory
 	}
 }
@@ -150,11 +158,11 @@ func replaceTestRingBuf() (ringBuf *fakeRingBufReader, restorer func()) {
 type fakeRingBufReader struct {
 	events        chan HTTPRequestTrace
 	closeCh       chan struct{}
-	explicitClose bool
+	explicitClose atomic.Bool
 }
 
 func (f *fakeRingBufReader) Close() error {
-	f.explicitClose = true
+	f.explicitClose.Store(true)
 	close(f.events)
 	return nil
 }

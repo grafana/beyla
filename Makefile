@@ -148,7 +148,7 @@ compile-for-coverage:
 .PHONY: test
 test:
 	@echo "### Testing code"
-	go test -mod vendor -a ./... -coverpkg=./... -coverprofile $(TEST_OUTPUT)/cover.all.txt
+	go test -race -mod vendor -a ./... -coverpkg=./... -coverprofile $(TEST_OUTPUT)/cover.all.txt
 
 .PHONY: cov-exclude-generated
 cov-exclude-generated:

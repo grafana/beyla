@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 	"time"
 
@@ -117,26 +118,27 @@ func TestTraces_InternalInstrumentation(t *testing.T) {
 	go inputNode.Start()
 
 	sendData <- struct{}{}
-	var previousCount, previousCalls int
+	var previousSum, previouscount int
 	test.Eventually(t, timeout, func(t require.TestingT) {
 		// we can't guarantee the number of calls at test time, but they must be at least 1
-		previousCount, previousCalls = internalTraces.count, internalTraces.calls
-		assert.LessOrEqual(t, 1, previousCount)
-		assert.LessOrEqual(t, 1, previousCalls)
-		// the count of metrics should be larger or equal than the number of calls (1 call : n metrics)
-		assert.LessOrEqual(t, previousCalls, previousCount)
+		previousSum, previouscount = internalTraces.SumCount()
+		assert.LessOrEqual(t, 1, previousSum)
+		assert.LessOrEqual(t, 1, previouscount)
+		// the sum of metrics should be larger or equal than the number of calls (1 call : n metrics)
+		assert.LessOrEqual(t, previouscount, previousSum)
 		// no call should return error
-		assert.Empty(t, internalTraces.errors)
+		assert.Empty(t, internalTraces.Errors())
 	})
 
 	sendData <- struct{}{}
 	// after some time, the number of calls should be higher than before
 	test.Eventually(t, timeout, func(t require.TestingT) {
-		assert.LessOrEqual(t, previousCount, internalTraces.count)
-		assert.LessOrEqual(t, previousCalls, internalTraces.calls)
-		assert.LessOrEqual(t, internalTraces.calls, internalTraces.count)
+		sum, count := internalTraces.SumCount()
+		assert.LessOrEqual(t, previousSum, sum)
+		assert.LessOrEqual(t, previouscount, count)
+		assert.LessOrEqual(t, count, sum)
 		// no call should return error
-		assert.Empty(t, internalTraces.errors)
+		assert.Empty(t, internalTraces.Errors())
 	})
 
 	// collector starts failing, so errors should be received
@@ -150,25 +152,26 @@ func TestTraces_InternalInstrumentation(t *testing.T) {
 
 	var previousErrors map[string]int
 	var previousErrCount int
+	sendData <- struct{}{}
 	test.Eventually(t, timeout, func(t require.TestingT) {
-		sendData <- struct{}{}
-		previousCount, previousCalls = internalTraces.count, internalTraces.calls
+		previousSum, previouscount = internalTraces.SumCount()
 		// calls should start returning errors
-		previousErrors = maps.Clone(internalTraces.errors)
+		previousErrors = internalTraces.Errors()
 		assert.Len(t, previousErrors, 1)
 		for _, v := range previousErrors {
 			previousErrCount = v
 		}
 	})
 
-	// after a while, metrics count should not increase but errors do
+	// after a while, metrics sum should not increase but errors do
+	sendData <- struct{}{}
 	test.Eventually(t, timeout, func(t require.TestingT) {
-		sendData <- struct{}{}
-		assert.Equal(t, previousCount, internalTraces.count)
-		assert.Equal(t, previousCalls, internalTraces.calls)
+		sum, count := internalTraces.SumCount()
+		assert.Equal(t, previousSum, sum)
+		assert.Equal(t, previouscount, count)
 		// calls should start returning errors
 		assert.Len(t, previousErrors, 1)
-		for _, v := range internalTraces.errors {
+		for _, v := range internalTraces.Errors() {
 			assert.Less(t, previousErrCount, v)
 		}
 	})
@@ -176,19 +179,36 @@ func TestTraces_InternalInstrumentation(t *testing.T) {
 
 type fakeInternalTraces struct {
 	imetrics.NoopReporter
-	calls  int
-	count  int
-	errors map[string]int
+	m     sync.RWMutex
+	count int
+	sum   int
+	errs  map[string]int
 }
 
 func (f *fakeInternalTraces) OTELTraceExport(len int) {
-	f.calls++
-	f.count += len
+	f.m.Lock()
+	defer f.m.Unlock()
+	f.count++
+	f.sum += len
 }
 
 func (f *fakeInternalTraces) OTELTraceExportError(err error) {
-	if f.errors == nil {
-		f.errors = map[string]int{}
+	f.m.Lock()
+	defer f.m.Unlock()
+	if f.errs == nil {
+		f.errs = map[string]int{}
 	}
-	f.errors[err.Error()]++
+	f.errs[err.Error()]++
+}
+
+func (f *fakeInternalTraces) Errors() map[string]int {
+	f.m.RLock()
+	defer f.m.RUnlock()
+	return maps.Clone(f.errs)
+}
+
+func (f *fakeInternalTraces) SumCount() (sum, count int) {
+	f.m.RLock()
+	defer f.m.RUnlock()
+	return f.sum, f.count
 }

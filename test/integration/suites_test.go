@@ -206,3 +206,14 @@ func TestSuite_RailsTLS(t *testing.T) {
 	require.NoError(t, compose.Close())
 	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
 }
+
+func TestSuite_DotNet(t *testing.T) {
+	compose, err := docker.ComposeSuite("docker-compose-dotnet.yml", path.Join(pathOutput, "test-suite-dotnet.log"))
+	compose.Env = append(compose.Env, `OPEN_PORT=5266`, `EXECUTABLE_NAME=`, `TEST_SERVICE_PORTS=5267:5266`)
+	require.NoError(t, err)
+	require.NoError(t, compose.Up())
+	t.Run("DotNet RED metrics", testREDMetricsDotNetHTTP)
+	t.Run("BPF pinning folder mounted", testBPFPinningMounted)
+	require.NoError(t, compose.Close())
+	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
+}

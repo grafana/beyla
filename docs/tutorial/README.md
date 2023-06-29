@@ -25,14 +25,14 @@ to manually insert probes.
 eBPF stands for Extended Berkeley Packet Filter, and allows attaching your own programs to
 different points of the Linux Kernel. eBPF programs run in privileged mode to allow inspecting
 runtime information from different parts of your Kernel: system calls, network stack, and
-even inserting probes in your userspace programs.
+even inserting probes in your user space programs.
 
 The eBPF programs are safe, as they are compiled for their own
 [Virtual Machine instruction set](https://docs.kernel.org/bpf/instruction-set.html)
 and then can run in a sandboxed environment that preverifies each
 loaded program for safe memory access and finite execution time. Unlike older technologies
 such as the older, native-compiled Kprobes and Uprobes, there is no chance that a poorly
-programmed probe makes your Kernel to hang.
+programmed probe makes your Kernel hang.
 
 After being verified, the eBPF binaries are compiled Just-In-Time (JIT) to the host
 native architecture (x86-64, ARM64, ...) for efficient and fast execution.
@@ -47,7 +47,7 @@ ring buffers, arrays, hash maps, etc.
 ## Running an instrumentable service
 
 For testing the eBPF autoinstrument capabilities, you first need a service to instrument.
-For this quick start tutorial, we recommend instrumenting any Go service that uses any of
+For this quick start tutorial, we recommend instrumenting any HTTP, HTTPS or gRPC Go service that uses any of
 the following libraries:
 
 * Standard `net/http`
@@ -56,7 +56,7 @@ the following libraries:
 * [gRPC-Go](https://github.com/grpc/grpc-go)
 
 Additionally, you can also instrument HTTP and HTTPs services written in other languages:
-NodeJS, Python, Rust, Ruby, Java (partially...).
+NodeJS, Python, Rust, Ruby, Java (only HTTP), etc.
 
 If at this moment you don't have a concrete executable to instrument, you can create a simple
 service just for testing. Create a `server.go` plain text file and open it in your editor
@@ -114,7 +114,7 @@ $ go run server.go
 
 ## Downloading the Autoinstrument
 
-> ℹ️ For simplicity, this tutorial shows how to manually run the Autoinstrument as a
+> ℹ️ For simplicity, this tutorial shows how to manually run the Autoinstrument as an
 ordinary operating system process. For more running modes, you can check the documentation about
 [running the eBPF Autoinstrument as a Docker container](https://github.com/grafana/ebpf-autoinstrument/blob/main/docs/docker.md)
 or [deploying the eBPF Autoinstrument in Kubernetes](https://github.com/grafana/ebpf-autoinstrument/blob/main/docs/k8s.md).
@@ -141,8 +141,8 @@ To know how to configure other exporters (for example, [OpenTelemetry](https://o
 traces and metrics), as well as extra configuration options, please check the
 [configuration section in the documentation](../config.md).
 
-After the service from the previous section is running, we can instrumenting it
-by executing execute the `otelauto` command that we previously downloaded with
+After the service from the previous section is running, we can instrument it
+by executing the `otelauto` command that we previously downloaded with
 `go install`, as seen in the [Downloading](#downloading) section.
 
 We will configure the eBPF autoinstrument to instrument the executable that owns
@@ -287,7 +287,7 @@ ts=2023-06-29T08:02:58.761546307Z level=info trace_id=359c08a12e833f29bf21457d95
 
 To verify that metrics are properly received by Grafana, you can go to the left panel,
 choose the Explore tab and for your Prometheus data source, write `http_` in the
-Metrics Browser input. You should see the new metric names in the autocompletion popup.
+Metrics Browser input. You should see the new metric names in the autocomplete popup.
 
 ![](./img/dropdown-metrics.png)
 
@@ -307,7 +307,7 @@ In the "Import via grafana.com" textbox, you can just copy the Grafana ID from t
 dashboard: `19077`.
 
 Rename it at your convenience, select the folder and, most important, select the
-the data source in the `prometheus-data-source` popup at the bottom.
+data source in the `prometheus-data-source` popup at the bottom.
 
 And _voilà!_ you can see some of your RED metrics:
 
@@ -344,7 +344,7 @@ agents but will decrease the landing time of your applications in Grafana, as it
 neither need any modification, recompilation nor repackaging. Just run it together with your
 service, and you will get the metrics.
 
-eBPF also allows you seeing some parts that manual instrumentation doesn't. For example,
+eBPF also allows you to see some parts that manual instrumentation doesn't. For example,
 the eBPF Autoinstrument is able to show you how much time a request is enqueued after
 the connection is established, until its code is actually executed (requires [exporting
 OpenTelemetry traces](../config.md#otel-traces-exporter-yaml-section-oteltracesa-idoteltracesa),
@@ -363,9 +363,9 @@ has to be privileged or add the `CAP_SYS_ADMIN` capability.
 In the future, we plan to add metrics about other well-established protocols, like
 database or message queuing connections.
 
-Also, it is important to work on distributed tracing, then you won't get just small
-spans information, but you will be able to relate them with requests from other services
-(web, database, messaging...). It is a complex due to the implications of being able
+Also, it is important to work on distributed tracing, then you won't get just isolated
+spans, but you will be able to relate them with requests from other services
+(web, database, messaging...). It is complex due to the implications of being able
 to redo client-side headers and put them in the same context as server-side requests,
 but we plan to do progressive advances, small steps towards distributed tracing.
 

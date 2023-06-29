@@ -47,30 +47,23 @@ ring buffers, arrays, hash maps, etc.
 
 ![](img/ebpf-arch.svg)
 
-## Downloading
-
-> ℹ️ For simplicity, this tutorial shows how to manually run the auto-instrumenter as a
-ordinary operating system process. For more running modes, you can check the documentation about
-[running the eBPF autoinstrumenter as a Docker container](https://github.com/grafana/ebpf-autoinstrument/blob/main/docs/docker.md)
-or [deploying the eBPF autoinstrumenter in Kubernetes](https://github.com/grafana/ebpf-autoinstrument/blob/main/docs/k8s.md).
-
-You can download the instrumenter executable directly with `go install`:
-
-```
-go install github.com/grafana/ebpf-autoinstrument/cmd/otelauto@latest
-```
-
 ## Running an instrumentable service
 
-At the moment, you can instrument any Go service that uses any of the following libraries:
+For testing the eBPF autoinstrument capabilities, you first need a service to instrument.
+For this quick start tutorial, we recommend instrumenting any Go service that uses any of
+the following libraries:
 
 * Standard `net/http`
 * [Gorilla Mux](https://github.com/gorilla/mux)
 * [Gin](https://gin-gonic.com/)
 * [gRPC-Go](https://github.com/grpc/grpc-go)
 
-If you don't have now any concrete executable to instrument, you can create a simple
-service just for testing:
+Additionally, you can also instrument HTTP and HTTPs services written in other languages:
+NodeJS, Python, Rust, Ruby, Java (partially...).
+
+If at this moment you don't have a concrete executable to instrument, you can create a simple
+service just for testing. Create a `server.go` plain text file and open it in your editor
+to paste the following code:
 
 ```go
 package main
@@ -122,33 +115,47 @@ You can [download the server.go file from this tutorial](server.go) and run it b
 $ go run server.go
 ```
 
+## Downloading the Autoinstrument
+
+> ℹ️ For simplicity, this tutorial shows how to manually run the Autoinstrument as a
+ordinary operating system process. For more running modes, you can check the documentation about
+[running the eBPF Autoinstrument as a Docker container](https://github.com/grafana/ebpf-autoinstrument/blob/main/docs/docker.md)
+or [deploying the eBPF Autoinstrument in Kubernetes](https://github.com/grafana/ebpf-autoinstrument/blob/main/docs/k8s.md).
+
+You can download the Autoinstrument executable directly with `go install`:
+
+```
+go install github.com/grafana/ebpf-autoinstrument/cmd/otelauto@latest
+```
+
 ## Instrumenting a running service
 
-The eBPF autoinstrumenter requires at least two configuration options to run:
+The eBPF Autoinstrument requires at least two configuration options to run:
 
 * A selector of the executable to instrument. You can select it by executable name
   (`EXECUTABLE_NAME` environment variable) or by any port it has open
   (`OPEN_PORT` environment variable).
-* A metrics export endpoint. It can be an OpenTelemetry endpoint
-  (`OTEL_EXPORTER_OTLP_ENDPOINT` environment variable), but for the moment we
-  will just print the traces via standard output (setting the `PRINT_TRACES=true`
-  environment variable).
+* A metrics exporter. For this tutorial, autoinstrumented metrics will be exported
+  by a [Prometheus](https://prometheus.io/) scrape endpoint (`PROMETHEUS_PORT`
+  environment variable), and some traces will be sent to the standard output
+  (setting the `PRINT_TRACES=true` environment variable).
 
-Please check the [configuration section in the documentation](../config.md) to
-see more configuration options.
+To know how to configure other exporters (for example, [OpenTelemetry](https://opentelemetry.io/)
+traces and metrics), as well as extra configuration options, please check the
+[configuration section in the documentation](../config.md).
 
-So after the service from the previous section is running, we can execute the
-`otelauto` that we previously downloaded with `go install`, as seen in the
-[Downloading](#downloading) section.
+After the service from the previous section is running, we can instrumenting it
+by executing execute the `otelauto` command that we previously downloaded with
+`go install`, as seen in the [Downloading](#downloading) section.
 
-We will configure it to instrument the executable that owns the port 8080, and
-to just printing the traces via standard output (not reporting to any OpenTelemetry
-endpoint).
+We will configure the eBPF autoinstrument to instrument the executable that owns
+the port 8080, printing the traces via standard output and exposing RED metrics
+in the `localhost:8999/metrics` HTTP endpoint.
 
-Remember that you need administrator access to run the instrumenter:
+Remember that you need administrator access to run the instrumenting process:
 
 ```
-$ PRINT_TRACES=true OPEN_PORT=8080 sudo -E otelauto
+$ PROMETHEUS_PORT=8999 PRINT_TRACES=true OPEN_PORT=8080 sudo -E otelauto
 ```
 
 You can now test the instrumented service from another terminal:
@@ -180,61 +187,120 @@ take 200ms to respond:
 $ curl -X POST -d "abcdef" "http://localhost:8080/post?delay=200ms"
 ```
 
-And the autoinstrumenter standard output will show:
+And the Autoinstrument standard output will show:
 
 ```
 2023-04-19 15:17:54 (210.91ms[203.28ms]) 200 POST /post [::1]->[localhost:8080] size:6B
 ```
 
+Optionally, in background, you can even generate some artificial load in another terminal:
+
+```
+$ while true; do curl "http://localhost:8080/service?delay=1s"; done
+```
+
+After playing for a while with the server running at the port 8080, you can query the
+Prometheus metrics that are exposed in the port `8999`:
+
+```
+$ curl http://localhost:8999/metrics
+# HELP http_server_duration_seconds duration of HTTP service calls from the server side, in milliseconds
+# TYPE http_server_duration_seconds histogram
+http_server_duration_seconds_bucket{http_method="GET",http_status_code="200",service_name="testserver",le="0.005"} 1
+http_server_duration_seconds_bucket{http_method="GET",http_status_code="200",service_name="testserver",le="0.005"} 1
+http_server_duration_seconds_bucket{http_method="GET",http_status_code="200",service_name="testserver",le="0.01"} 1
+
+(... cutting for the sake of brevity ...)
+```
+
+Please check the [List of exported metrics](../metrics.md) document for an exhaustive list
+of the metrics that can be exposed by the eBPF Autoinstrument.
+
 ## Sending data to Grafana Cloud
 
-Once we have verified that our application is correctly instrumented, we can modify the
-configuration of the Autoinstrumenter to send the data directly to Grafana Cloud.
+Once we have verified that our application is correctly instrumented, we can add a Prometheus
+collector to read the autoinstrumented metrics and forwards them to Grafana Cloud.
 You can get a [Free Account in the Grafana site](https://grafana.com/pricing/).  
 
-> ⚠️ For simplicity, we will be [sending OpenTelemetry data directly to Grafana Cloud](https://grafana.com/docs/grafana-cloud/data-configuration/otlp/send-data-otlp/).
-However, this is a preview feature that is not available in all the regions. Another option
-is to [configure the Grafana Agent to process OpenTelemetry data and forward it to Grafana](https://grafana.com/docs/agent/latest/).
+There are two alternatives for reading the metrics and forwarding them to Grafana Cloud:
+* [Install Prometheus in your host and configure the scrape and remote write to read-and-forward the metrics
+  ](https://grafana.com/docs/grafana-cloud/quickstart/noagent_linuxnode/#install-prometheus-on-the-node)
+* Use the [Grafana Agent](https://grafana.com/docs/agent/latest/), as this tutorial shows.
 
-In your Grafana Cloud Portal, click on the "Details" button in the "Grafana" box. Then
-get your Grafana Cloud Instance ID number and region, e.g.:
+### Downloading and configuring the Grafana Agent Flow
+
+> ⚠️ This section explains briefly how to download and configure the Grafana Agent Flow for
+manual playground.
+For a complete description of the Grafana Agent Flow setup and configuration process
+and recommended modes,
+you can refer to the [Install Grafana Agent Flow](https://grafana.com/docs/agent/latest/flow/setup/install/)
+documentation .
+
+1. Go to the Latest [Grafana Agent Releases page](https://github.com/grafana/agent/releases/).
+2. For the last version, pick up your preferred package and required architecture.
+   * For example, downloading zipped 0.34.3 version for Intel/AMD 64-bit architecture:
+     ```
+     $ wget https://github.com/grafana/agent/releases/download/v0.34.3/grafana-agent-linux-amd64.zip
+     $ unzip grafana-agent-linux-amd64.zip
+     ```
+3. Create a plain text file, for example named `ebpf-tutorial.river`, and copy there the
+   following text, that will tell the Agent to scrape the prometheus metrics from the
+   eBPF Autoinstrument and forward them to [Grafana Mimir](https://grafana.com/oss/mimir/).
+   ```
+   prometheus.scrape "default" {
+       targets = [{"__address__" = "localhost:8999"}]
+       forward_to = [prometheus.remote_write.mimir.receiver]
+   }      
+   prometheus.remote_write "mimir" {
+       endpoint {
+           url = env("MIMIR_ENDPOINT")
+           basic_auth {
+               username = env("MIMIR_USER")
+               password = env("GRAFANA_API_KEY")
+           }
+       }
+   }
+   ```
+   Observe that it is configured to scrape the metrics in the `localhost:8999` address,
+   same as the value of the `PROMETHEUS_PORT` variable from the previous section. Also,
+   the connection details to Grafana Mimir (endpoint and authentication), is going to
+   be provided via environment variables.
+
+### Running the Grafana Agent Flow with your Grafana Credentials.
+
+In your Grafana Cloud Portal, click on the "Details" button in the "Prometheus" box. Then
+get your Grafana Prometheus (Mimir) Remote Write endpoint, your username, and generate and
+copy a Grafana API Key with metrics push privileges:
 
 ![](./img/grafana-instance-id.png)
 
-Also make sure you create an API Key in the "Security → API Keys" section of your Grafana
-Cloud portal.
-
-Now you can configure the Autoinstrumenter via the following environment variables.
+Now you run the Agent via using the above information to feed the
+`MIMIR_ENDPOINT`, `MIMIR_USER` and `GRAFANA_API_KEY` environment variables:
 
 ```
-export GRAFANA_INSTANCE_ID="123123"
-export GRAFANA_API_KEY="abcabcabcabcabcabcab....bcabcabc="
-export GRAFANA_REGION="prod-eu-west-0"
+$ export MIMIR_ENDPOINT="https://prometheus-prod-01-eu-west-0.grafana.net/api/prom/push"
+$ export MIMIR_USER="123456"
+$ export GRAFANA_API_KEY="your api key here"
+$ AGENT_MODE=flow ./grafana-agent-linux-amd64 run ebpf-tutorial.river
 
-export OTEL_EXPORTER_OTLP_ENDPOINT="https://otlp-gateway-${GRAFANA_REGION}.grafana.net/otlp"
-export OTEL_EXPORTER_OTLP_PROTOCOL="http/protobuf"
-export OTEL_EXPORTER_OTLP_HEADERS="Authorization=Basic $(echo -n $GRAFANA_INSTANCE_ID:$GRAFANA_API_KEY | base64 -w 0)"
+ts=2023-06-29T08:02:58.761420514Z level=info msg="now listening for http traffic" addr=127.0.0.1:12345
+ts=2023-06-29T08:02:58.761546307Z level=info trace_id=359c08a12e833f29bf21457d95c09a08 msg="starting complete graph evaluation"
+(more logs....)
 ```
 
-Change the `GRAFANA_INSTANCE_ID` and `GRAFANA_API_KEY` values by your own Grafana Cloud account
-values. Change also the `GRAFANA_REGION` value by the Region that is listed in your own Grafana account.
+To verify that metrics are properly received by Grafana, you can go to the left panel,
+choose the Explore tab and for your Prometheus data source, write `http_` in the
+Metrics Browser input. You should see the new metric names in the autocompletion popup.
 
-Then run again the otel auto-instrumenter making sure that the environment is passed to the command
-(flag `-E` in the `sudo` command):
+## Add the eBPF RED Metrics Dashboard
 
-```
-$ OPEN_PORT=8080 sudo -E otelauto
-```
-
-You can generate some artificial load in another terminal:
-
-```
-while true; do curl -X POST -d "abcdef" "http://localhost:8080/post?delay=1s"; done
-```
+From now, you could start composing your PromQL queries for better visualization of
+your autoinstrumented RED metrics; to save your time, we already provide a
+public dashboard with some basic information.
 
 Now go to your Grafana main GUI and, in the left panel, click the "Explore" section.
 Choosing the Prometheus dropdown, you will see some metrics that are reported by the
-Autoinstrumenter:
+Autoinstrument:
 
 ![](./img/dropdown-metrics.png)
 
@@ -251,28 +317,28 @@ You will see a graph with the average request time (~1000ms according to the pre
 ## Conclusions and future work
 
 eBPF proved to be a fast, safe, and reliable way to observe some basic metrics of your
-services. The Grafana eBPF autoinstrumenter won't replace your language
+services. The Grafana eBPF Autoinstrument won't replace your language
 agents but will decrease the landing time of your applications in Grafana, as it does
 neither need any modification, recompilation nor repackaging. Just run it together with your
 service, and you will get the metrics.
 
 eBPF also allows you seeing some parts that manual instrumentation doesn't. For example,
-the eBPF autoinstrumenter is able to show you how much time a request is enqueued after
+the eBPF Autoinstrument is able to show you how much time a request is enqueued after
 the connection is established, until its code is actually executed.
 
-The eBPF autoinstrumenter has its limitations too. As it provides generic metrics and
+The eBPF Autoinstrument has its limitations too. As it provides generic metrics and
 simple Spans information (not distributed traces, yet), language agents and manual
 instrumentation is still recommended, so you can specify the granularity of each
 part of the code to be instrumented, putting the focus on your critical operations.
 
-Another limitation to consider is that the autoinstrumenter requires to run with
+Another limitation to consider is that the Autoinstrument requires to run with
 elevated privileges; not actually a `root` user but at least it has to run with the
 `CAP_SYS_ADMIN` capability. If you run it as a container (Docker, Kubernetes...), it
 has to be privileged or add the `CAP_SYS_ADMIN` capability.
 
 In the future, we plan to increase the base of supported languages. While we initially
 started on Go, we plan to increase its codebase to other major languages, and providing
-a fallback instrumenter that directly inspects the HTTP requests in the Kernel side,
+a fallback instrumentation that directly inspects the HTTP requests in the Kernel side,
 so you can get metrics even for languages that haven't been explicitly supported.
 
 Also, it is important to work on distributed tracing, then you won't get just small

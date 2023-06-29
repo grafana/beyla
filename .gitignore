@@ -66,3 +66,4 @@ test/integration/components/rubytestserver/testapi/storage/*
 test/integration/components/rubytestserver/testapi/tmp/storage/*
 !test/integration/components/rubytestserver/testapi/tmp/storage/
 !test/integration/components/rubytestserver/testapi/tmp/storage/.keep
+test/integration/components/dotnetserver/obj/Debug

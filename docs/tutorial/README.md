@@ -1,11 +1,8 @@
 # Zero-code application traces and metrics with eBPF
 
 > ⚠️**SOME GENERAL TO-DO's before releasing the Beta**
-> * Change the current UI screenshots by the Dashboard that we are going to create an publish
->   in Grafana Cloud.
+> * Change Dashboard URL and ID when we change the dashboard owner to Grafana
 > * Update which languages and service types are finally supported.
-> * Probably, do not configure metrics exporter and rely on SpanMetrics service to show
->   extra info, such as Service Maps, etc...
 > * Double-check conclusions & future work to update it according to the status of the
 >   instrumenter.
 
@@ -292,27 +289,52 @@ To verify that metrics are properly received by Grafana, you can go to the left 
 choose the Explore tab and for your Prometheus data source, write `http_` in the
 Metrics Browser input. You should see the new metric names in the autocompletion popup.
 
+![](./img/dropdown-metrics.png)
+
 ## Add the eBPF RED Metrics Dashboard
 
 From now, you could start composing your PromQL queries for better visualization of
 your autoinstrumented RED metrics; to save your time, we already provide a
-public dashboard with some basic information.
+[public dashboard with some basic information](https://grafana.com/grafana/dashboards/19077-ebpf-red-metrics/).
 
-Now go to your Grafana main GUI and, in the left panel, click the "Explore" section.
-Choosing the Prometheus dropdown, you will see some metrics that are reported by the
-Autoinstrument:
+To import it into your Grafana instance, choose "Dashboards" in the Grafana left panel,
+then in the Dashboards page, click on the "New" dropdown and select "Import":
 
-![](./img/dropdown-metrics.png)
+![](./img/import-dashboard.png)
 
-So if you, for example, introduce the following PromQL query:
+In the "Import via grafana.com" textbox, you can just copy the Grafana ID from the
+[eBPF Red Metrics](https://grafana.com/grafana/dashboards/19077-ebpf-red-metrics/)
+dashboard: `19077`.
 
-```
-rate(http_server_duration_sum[$__rate_interval])
-```
+Rename it at your convenience, select the folder and, most important, select the
+the data source in the `prometheus-data-source` popup at the bottom.
 
-You will see a graph with the average request time (~1000ms according to the previous `curl` command):
+And _voilà!_ you can see some of your RED metrics:
 
-![](./img/avg-request-time.png)
+![](./img/dashboard-screenshot.png)
+
+The dashboard contains the following parts:
+
+* A list with the top slowest HTTP routes for all the instrumented services. Since you only
+  have a single service, only an entry appears. If you configure the autoinstrumentation to
+  [report the HTTP routes](../config.md#routes-decorator-yaml-section-routesa-idroutesa),
+  many entries could appear there, one for each HTTP path in the server.
+* A list with the top slowest GRPC methods. Since the test service in this tutorial only
+  serves HTTP, this table is empty.
+* For each instrumented server, a list of RED metrics for the inbound (server) traffic. This includes:
+  * Duration: average and top percentiles for both HTTP and gRPC traffic.
+  * Request rate: number of requests per second, faceted by its HTTP or gRPC return code.
+  * Error rate as a percentage of 5xx HTTP responses or non-zero gRPC responses over the total
+    of requests. They are faceted by return code.
+* For each instrumented server, a list of RED metrics for the outbound (client) traffic. In
+  the above screenshot they are empty because the test service does perform HTTP or gRPC
+  calls to other services.
+  * The Duration, Request Rate and Errors charts are analogues to the inbound traffic charts,
+    with the only difference that 4xx return codes are also considered errors in the
+    client side.
+
+In the top of the chart, you can use the "Service" dropdown to filter the services you
+want to visualize.
 
 ## Conclusions and future work
 
@@ -324,7 +346,9 @@ service, and you will get the metrics.
 
 eBPF also allows you seeing some parts that manual instrumentation doesn't. For example,
 the eBPF Autoinstrument is able to show you how much time a request is enqueued after
-the connection is established, until its code is actually executed.
+the connection is established, until its code is actually executed (requires [exporting
+OpenTelemetry traces](../config.md#otel-traces-exporter-yaml-section-oteltracesa-idoteltracesa),
+but this function is not explained in this tutorial).
 
 The eBPF Autoinstrument has its limitations too. As it provides generic metrics and
 simple Spans information (not distributed traces, yet), language agents and manual
@@ -336,13 +360,15 @@ elevated privileges; not actually a `root` user but at least it has to run with 
 `CAP_SYS_ADMIN` capability. If you run it as a container (Docker, Kubernetes...), it
 has to be privileged or add the `CAP_SYS_ADMIN` capability.
 
-In the future, we plan to increase the base of supported languages. While we initially
-started on Go, we plan to increase its codebase to other major languages, and providing
-a fallback instrumentation that directly inspects the HTTP requests in the Kernel side,
-so you can get metrics even for languages that haven't been explicitly supported.
+In the future, we plan to add metrics about other well-established protocols, like
+database or message queuing connections.
 
 Also, it is important to work on distributed tracing, then you won't get just small
 spans information, but you will be able to relate them with requests from other services
-(web, database, messaging...). It is a complex topic because it requires modifying
-each request header to insert a trace ID to allow Grafana backend relating all the
-spans into a single trace.
+(web, database, messaging...). It is a complex due to the implications of being able
+to redo client-side headers and put them in the same context as server-side requests,
+but we plan to do progressive advances, small steps towards distributed tracing.
+
+Another future task is to reduce the surface of the code that requires administrative
+privileges, executing a small eBPF loader with `root` or `CAP_SYS_ADMIN` privileges
+and running the rest of data processing/exposition with normal user privileges.

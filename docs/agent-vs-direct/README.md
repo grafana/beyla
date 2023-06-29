@@ -136,9 +136,13 @@ otelcol.exporter.prometheus "default" {
 }
     
 prometheus.remote_write "mimir" {
-    endpoint {
-        url = "https://" + env("MIMIR_USER") + ":" + env("GRAFANA_API_KEY") + "@" + env("MIMIR_ENDPOINT") + "/api/prom/push"
+  endpoint {
+    url = "https://" + env("MIMIR_ENDPOINT") + "/api/prom/push"
+    basic_auth {
+      username = env("MIMIR_USER")
+      password = env("GRAFANA_API_KEY")
     }
+  }
 }
 ```
 

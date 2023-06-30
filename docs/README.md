@@ -2,10 +2,13 @@
 
 * [Quick start tutorial](tutorial/README.md)
 
-* Documentation
-  * [List of exported metrics](metrics.adoc)
-  * [Agent mode vs Direct mode](agent-vs-direct/README.md)
+* User documentation
   * [Running as a standalone process](./standalone.md)
+  * [Agent mode vs Direct mode](agent-vs-direct/README.md)
   * [Running as a Docker container](./docker.md)
-  * [Deploying in Kubernetes as a sidecar container](./k8s.md)
+  * [Deploying in Kubernetes](./k8s.md)
   * [Configuration](./config.md)
+  * [List of exported metrics](metrics.adoc)
+
+* Developer documentation
+  * [Profiling guide](./profiling.md)

@@ -44,6 +44,8 @@ A quick description of the components:
   [OpenTelemetry](https://opentelemetry.io/) traces collector.
 * [Prometheus HTTP endpoint](#prom) sets an HTTP endpoint in the auto-instrumenter
   that allows any external scraper to pull metrics in [Prometheus](https://prometheus.io/) format.
+* [Internal metrics reporter](#internal-metrics) optionally reports, [Prometheus](https://prometheus.io/)
+  scrape endpoint, some metrics about the internal behavior of the autoinstrument.
 
 Following sections explain both the global configuration properties, as well as
 the options for each component.
@@ -330,6 +332,33 @@ it is recommended to group these requests in the [routes node](#routes).
 Specifies whether the exporter must submit the caller peer address as a metric attribute.
 
 It is disabled by default to avoid cardinality explosion.
+
+## Internal metrics reporter (YAML section: `internal_metrics`)<a id="internal-metrics"></a>
+
+This compoment will account some internal metrics about the behavior
+of the autoinstrument, and expose them as a [Prometheus](https://prometheus.io/)
+scraper. It will be enabled if the `port` property is set.
+
+| YAML   | Env var                    | Type | Default |
+|--------|----------------------------|------|---------|
+| `port` | `INTERNAL_METRICS_PROMETHEUS_PORT` | int  | (unset) |
+
+Specifies the HTTP port to open a Prometheus scrape endpoint. If unset or 0,
+no Prometheus endpoint will be open and no metrics will be accounted.
+
+Its value can be the same as [`prometheus_export.port`](#prom) (both metric families
+will share the same HTTP server, though they can be accessed in different paths),
+or a different value (two different HTTP servers for the different metric families).
+
+| YAML   | Env var           | Type   | Default             |
+|--------|-------------------|--------|---------------------|
+| `path` | `INTERNAL_METRICS_PROMETHEUS_PATH` | string | `/internal/metrics` |
+
+Specifies the HTTP query path to acquire the list of Prometheus metrics.
+If [`prometheus_export.port`](#prom) and `internal_metrics.port` have the
+same values, this `internal_metrics.path` value can be
+different than `prometheus_export.path`, to keep both metric families separated,
+or the same (both metric families will be listed in the same scrape endpoint).
 
 ## YAML file example
 

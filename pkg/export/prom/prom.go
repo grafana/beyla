@@ -88,22 +88,22 @@ func newReporter(ctx context.Context, cfg *PrometheusConfig) *metricsReporter {
 		promConnect:  &ctxInfo.Prometheus,
 		httpDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Name:    HTTPServerDuration,
-			Help:    "duration of HTTP service calls from the server side, in milliseconds",
+			Help:    "duration of HTTP service calls from the server side, in seconds",
 			Buckets: otel.DurationHistogramBoundaries,
 		}, labelNamesHTTP(cfg, reportRoutes)),
 		httpClientDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Name:    HTTPClientDuration,
-			Help:    "duration of HTTP service calls from the client side, in milliseconds",
+			Help:    "duration of HTTP service calls from the client side, in seconds",
 			Buckets: otel.DurationHistogramBoundaries,
 		}, labelNamesHTTPClient(cfg)),
 		grpcDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Name:    RPCServerDuration,
-			Help:    "duration of RCP service calls from the server side, in milliseconds",
+			Help:    "duration of RCP service calls from the server side, in seconds",
 			Buckets: otel.DurationHistogramBoundaries,
 		}, labelNamesGRPC(cfg)),
 		grpcClientDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Name:    RPCClientDuration,
-			Help:    "duration of GRPC service calls from the client side, in milliseconds",
+			Help:    "duration of GRPC service calls from the client side, in seconds",
 			Buckets: otel.DurationHistogramBoundaries,
 		}, labelNamesGRPC(cfg)),
 		httpRequestSize: prometheus.NewHistogramVec(prometheus.HistogramOpts{

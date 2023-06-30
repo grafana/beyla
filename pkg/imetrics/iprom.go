@@ -55,7 +55,7 @@ func NewPrometheusReporter(cfg *PrometheusConfig, manager *connector.PrometheusM
 		}, []string{"error"}),
 		prometheusRequests: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "prometheus_http_requests",
-			Help: "error count on each failed OTEL trace export",
+			Help: "requests towards the Prometheus Scrape endpoint",
 		}, []string{"port", "path"}),
 	}
 	manager.Register(cfg.Port, cfg.Path,

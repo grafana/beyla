@@ -210,7 +210,7 @@ http_server_duration_seconds_bucket{http_method="GET",http_status_code="200",ser
 (... cutting for the sake of brevity ...)
 ```
 
-Please check the [List of exported metrics](../metrics.md) document for an exhaustive list
+Please check the [List of exported metrics](../metrics.adoc) document for an exhaustive list
 of the metrics that can be exposed by the eBPF Autoinstrument.
 
 ## Sending data to Grafana Cloud

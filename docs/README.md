@@ -1,6 +1,7 @@
 # Documentation
 
 * [Quick start tutorial](tutorial/README.md)
+* [eBPF Autoinstrument value propositions](features.md)
 
 * User documentation
   * [Running as a standalone process](./standalone.md)

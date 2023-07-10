@@ -1,3 +1,7 @@
+---
+title: Profiling guide
+---
+
 # Profiling guide
 
 1. Run the autoinstrumenter with the `PROFILE_PORT` variable set to e.g. 6060. ```

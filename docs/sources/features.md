@@ -1,3 +1,7 @@
+---
+title: eBPF Autoinstrument value propositions
+---
+
 # eBPF Autoinstrument value propositions
 
 ## Track total request time

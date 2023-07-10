@@ -1,1 +1,8 @@
 *       @grcevski @mariomac
+
+# `make docs` procedure is owned by @jdbaldry of @grafana/docs-squad.
+/.github/workflows/update-make-docs.yml @jdbaldry
+/docs/Makefile @jdbaldry
+/docs/docs.mk @jdbaldry
+/docs/make-docs @jdbaldry
+/docs/variables.mk @jdbaldry

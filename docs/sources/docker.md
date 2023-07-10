@@ -1,4 +1,7 @@
-# Running as a Docker container
+---
+title: Run as a Docker container
+---
+# Run as a Docker container
 
 You can run the eBPF autoinstrumenter as a standalone Docker container that
 instruments a process located in another container.
@@ -65,12 +68,12 @@ time=2023-05-22T14:03:42.526Z level=INFO msg="Starting main node"
 
 Once we verify that the auto-instrumenter is properly tracing the target HTTP services,
 you can configure it to send information to an OpenTelemetry or Prometheus endpoint.
-You can check the [Quick tutorial](./tutorial/README.md) and the [Configuration](./config.md)
+You can check the [Quick tutorial]({{< relref "./tutorial" >}}) and the [Configuration]({{< relref "./config" >}})
 sections of this documentation site.
 
 ## Docker Compose example
 
-The following [Docker compose example file](./compose-example.yml) provides an
+The following Docker compose example file provides an
 alternative that is analogue to the example in the previous section.
 
 ```yaml

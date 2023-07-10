@@ -1,15 +1,19 @@
-# Documentation
+---
+title: eBPF autoinstrumenter
+---
 
-* [Quick start tutorial](tutorial/README.md)
-* [eBPF Autoinstrument value propositions](features.md)
+# eBPF autoinstrumenter
+
+* [Quick start tutorial]({{< relref "./tutorial" >}})
+* [eBPF Autoinstrument value propositions]({{< relref "./features" >}})
 
 * User documentation
-  * [Running as a standalone process](./standalone.md)
-  * [Agent mode vs Direct mode](agent-vs-direct/README.md)
-  * [Running as a Docker container](./docker.md)
-  * [Deploying in Kubernetes](./k8s.md)
-  * [Configuration](./config.md)
-  * [List of exported metrics](metrics.adoc)
+  * [Running as a standalone process]({{< relref "./standalone" >}})
+  * [Agent mode vs Direct mode]({{< relref "./agent-vs-direct" >}})
+  * [Running as a Docker container]({{< relref "./docker" >}})
+  * [Deploying in Kubernetes]({{< relref "./k8s" >}})
+  * [Configuration]({{< relref "./config" >}})
+  * [List of exported metrics]({{< relref "./metrics" >}})
 
 * Developer documentation
-  * [Profiling guide](./profiling.md)
+  * [Profiling guide]({{< relref "./profiling" >}})

@@ -1,3 +1,7 @@
+---
+title: Configuration
+---
+
 # Configuration
 
 The Autoinstrumenter can be configured via environment variables or via
@@ -33,18 +37,18 @@ flowchart TD
 
 A quick description of the components:
 
-* [EBPF tracer](#ebpf) instruments the HTTP and GRPC services of an external Go process,
+* [EBPF tracer](#ebpf-tracer) instruments the HTTP and GRPC services of an external Go process,
   creates service traces and forwards them to the next stage of the pipeline.
-* [Routes decorator](#routes) will match HTTP paths (e.g. `/user/1234/info`)
+* [Routes decorator](#routes-decorator) will match HTTP paths (e.g. `/user/1234/info`)
   into user-provided HTTP routes (e.g. `/user/{id}/info`). If no routes are defined,
   the incoming data will be directly forwarded to the next stage.
-* [OTEL metrics exporter](#otel_metrics) exports metrics data to an external
+* [OTEL metrics exporter](#otel-metrics-exporter) exports metrics data to an external
   [OpenTelemetry](https://opentelemetry.io/) metrics collector.
-* [OTEL traces exporter](#otel_traces) exports span data to an external
+* [OTEL traces exporter](#otel-traces-exporter) exports span data to an external
   [OpenTelemetry](https://opentelemetry.io/) traces collector.
-* [Prometheus HTTP endpoint](#prom) sets an HTTP endpoint in the auto-instrumenter
+* [Prometheus HTTP endpoint](#prometheus-http-endpoint) sets an HTTP endpoint in the auto-instrumenter
   that allows any external scraper to pull metrics in [Prometheus](https://prometheus.io/) format.
-* [Internal metrics reporter](#internal-metrics) optionally reports, [Prometheus](https://prometheus.io/)
+* [Internal metrics reporter](#internal-metrics-reporter) optionally reports, [Prometheus](https://prometheus.io/)
   scrape endpoint, some metrics about the internal behavior of the autoinstrument.
 
 Following sections explain both the global configuration properties, as well as
@@ -70,7 +74,9 @@ Valid values, from more to less verbose, are: `DEBUG`, `INFO`, `WARN` and `ERROR
 
 If `true`, prints any instrumented trace via standard output.
 
-## EBPF tracer (YAML section: `ebpf`)<a id="ebpf"></a>
+## EBPF tracer
+
+YAML section `ebpf`.
 
 
 | YAML              | Env var           | Type   | Default |
@@ -138,7 +144,9 @@ footprint of the Autoinstrumenter.
 In low-load services (in terms of requests/second), high values of `wakeup_len` could
 add a noticeable delay in the time the metrics are submitted.
 
-## Routes decorator (YAML section: `routes`)<a id="routes"></a>
+## Routes decorator
+
+YAML section `routes.
 
 This section can be only configured via YAML. If no `routes` section is provided in
 the YAML file, the routes pipeline stage is not created and data will be bypassed
@@ -191,7 +199,9 @@ Its possible values are:
   * 🚨 Caution: this option could lead to cardinality explosion at the ingester side.
 * `wildcard` will set the `http.route` field property to a generic askterisk `*` value.
 
-## OTEL metrics exporter (YAML section: `otel_metrics`)<a id="otel_metrics"></a>
+## OTEL metrics exporter
+
+YAML section `otel_metrics`.
 
 This component exports OpenTelemetry metrics to a given endpoint. It will be enabled if
 its `endpoint` attribute is set (either via YAML or environment variables).
@@ -206,7 +216,7 @@ the environment variables from the [standard OTEL exporter configuration](https:
 Specifies the OpentTelemetry endpoint where metrics will be sent.
 
 Using the `OTEL_EXPORTER_OTLP_ENDPOINT` env var sets a common endpoint for both the metrics and
-[traces](#otel_traces) exporters. Using the `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT` env var
+[traces](#otel-traces-exporter) exporters. Using the `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT` env var
 or the `endpoint` YAML property will set the endpoint only for the metrics exporter node,
 so the traces exporter won't be activated unless explicitly specified.
 
@@ -242,7 +252,7 @@ According to the standard OpenTelemetry specification, `http.target` is the full
 path and query arguments.
 
 It is disabled by default to avoid cardinality explosion in paths with IDs. As an alternative,
-it is recommended to group these requests in the [routes node](#routes).
+it is recommended to group these requests in the [routes node](#routes-decorator).
 
 | YAML          | Env var               | Type    | Default |
 |---------------|-----------------------|---------|---------|
@@ -252,7 +262,9 @@ Specifies whether the exporter must submit the caller peer address as a metric a
 
 It is disabled by default to avoid cardinality explosion.
 
-## OTEL traces exporter (YAML section: `otel_traces`)<a id="otel_traces"></a>
+## OTEL traces exporter
+
+YAML section `otel_traces`.
 
 This component exports OpenTelemetry traces to a given endpoint. It will be enabled if
 its `endpoint` attribute is set (either via YAML or environment variables).
@@ -267,7 +279,7 @@ the environment variables from the [standard OTEL exporter configuration](https:
 Specifies the OpentTelemetry endpoint where the traces will be sent.
 
 Using the `OTEL_EXPORTER_OTLP_ENDPOINT` env var sets a common endpoint for both the
-[metrics](#otel_metrics) and traces exporters. Using the `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` env var
+[metrics](#otel-metrics-exporter) and traces exporters. Using the `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` env var
 or the `endpoint` YAML property will set the endpoint only for the metrics exporter node,
 so the metrics exporter won't be activated unless explicitly specified.
 
@@ -287,7 +299,9 @@ attacks. This option should be used only for testing and development purposes.
 Specifies the name of the instrumented service to be reported by the traces exporter.
 If unset, it will be the path of the instrumented service (e.g. `/usr/local/bin/service`).
 
-## Prometheus HTTP endpoint (YAML section: `prometheus_export`)<a id="prom"></a>
+## Prometheus HTTP endpoint
+
+YAML section `prometheus_export`.
 
 This component opens an HTTP endpoint in the auto-instrumenter
 that allows any external scraper to pull metrics in [Prometheus](https://prometheus.io/)
@@ -323,7 +337,7 @@ To be consistent with the OpenTelemetry specification, `http_target` is the full
 path and query arguments.
 
 It is disabled by default to avoid cardinality explosion in paths with IDs. As an alternative,
-it is recommended to group these requests in the [routes node](#routes).
+it is recommended to group these requests in the [routes node](#routes-decorator).
 
 | YAML          | Env var               | Type    | Default |
 |---------------|-----------------------|---------|---------|
@@ -333,7 +347,9 @@ Specifies whether the exporter must submit the caller peer address as a metric a
 
 It is disabled by default to avoid cardinality explosion.
 
-## Internal metrics reporter (YAML section: `internal_metrics`)<a id="internal-metrics"></a>
+## Internal metrics reporter
+
+YAML section `internal_metrics`.
 
 This compoment will account some internal metrics about the behavior
 of the autoinstrument, and expose them as a [Prometheus](https://prometheus.io/)
@@ -346,7 +362,7 @@ scraper. It will be enabled if the `port` property is set.
 Specifies the HTTP port to open a Prometheus scrape endpoint. If unset or 0,
 no Prometheus endpoint will be open and no metrics will be accounted.
 
-Its value can be the same as [`prometheus_export.port`](#prom) (both metric families
+Its value can be the same as [`prometheus_export.port`](#prometheus-http-endpoint) (both metric families
 will share the same HTTP server, though they can be accessed in different paths),
 or a different value (two different HTTP servers for the different metric families).
 
@@ -355,7 +371,7 @@ or a different value (two different HTTP servers for the different metric famili
 | `path` | `INTERNAL_METRICS_PROMETHEUS_PATH` | string | `/internal/metrics` |
 
 Specifies the HTTP query path to acquire the list of Prometheus metrics.
-If [`prometheus_export.port`](#prom) and `internal_metrics.port` have the
+If [`prometheus_export.port`](#prometheus-http-endpoint) and `internal_metrics.port` have the
 same values, this `internal_metrics.path` value can be
 different than `prometheus_export.path`, to keep both metric families separated,
 or the same (both metric families will be listed in the same scrape endpoint).

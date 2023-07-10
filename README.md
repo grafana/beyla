@@ -6,7 +6,7 @@ eBPF-based autoinstrumentation of HTTP/HTTPS/GRPC Go services, as well as HTTP/H
 written in other languages (intercepting Kernel-level socket operations as well as
 OpenSSL invocations).
 
-[Documentation](./docs).
+[Documentation](https://grafana.com/docs/TODO).
 
 Requirements:
 - Linux with Kernel 4.18 or higher

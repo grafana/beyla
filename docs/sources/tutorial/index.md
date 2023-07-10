@@ -1,5 +1,6 @@
 ---
 title: Zero-code application traces and metrics with eBPF
+description: This tutorial explains how to get started with application RED metrics collection by using Grafana's eBPF auto-instrumentation tool.
 ---
 
 # Zero-code application traces and metrics with eBPF

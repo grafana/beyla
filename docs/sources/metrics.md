@@ -1,6 +1,8 @@
 ---
 title: List of exported metrics
+description: Learn about which HTTP/gRPC metrics can be exported by Grafana's application auto-instrumentation tool. 
 ---
+
 # List of exported metrics
 
 ## Application instrumentation metrics

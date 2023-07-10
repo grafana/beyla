@@ -1,5 +1,6 @@
 ---
 title: eBPF autoinstrumenter
+description: Learn about Grafana's eBPF based application auto-instrumentation tool.
 ---
 
 # eBPF autoinstrumenter

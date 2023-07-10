@@ -1,6 +1,8 @@
 ---
 title: Agent mode vs. direct mode
+description: Learn about the different ways you can export metrics with Grafana's eBPF application auto-instrumentation tool.
 ---
+
 # Agent mode vs. direct mode
 
 > ⚠️ this is a live document. Some parts might change in the future as long as we provide new ways

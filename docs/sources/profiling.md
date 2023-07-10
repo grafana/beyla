@@ -1,5 +1,6 @@
 ---
 title: Profiling guide
+description: Learn how to profile Grafana's eBPF auto-instrumentation tool for performance analysis.
 ---
 
 # Profiling guide

@@ -1,5 +1,6 @@
 ---
 title: Deploy in Kubernetes
+description: Learn how to deploy Grafana's eBPF auto-instrumentation tool in Kubernetes.
 ---
 
 # Deploy in Kubernetes

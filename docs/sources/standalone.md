@@ -1,5 +1,6 @@
 ---
 title: Run as a standalone process
+description: Learn how to run Grafana's eBPF auto-instrumentation tool as a standalone Linux process.
 ---
 
 # Run as a standalone process

@@ -1,5 +1,6 @@
 ---
 title: eBPF Autoinstrument value propositions
+description: Learn about Grafana's eBPF auto-instrumentation tool unique value propositions.
 ---
 
 # eBPF Autoinstrument value propositions

@@ -1,5 +1,6 @@
 ---
 title: Configuration
+description: Learn how to configure Grafana's eBPF based auto-instrumentation tool and the available configuration options.
 ---
 
 # Configuration

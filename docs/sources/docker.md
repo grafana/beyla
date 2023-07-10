@@ -1,6 +1,8 @@
 ---
 title: Run as a Docker container
+description: Learn how to run Grafana's eBPF auto-instrumentation tool as a standalone Docker container, which instruments another container.
 ---
+
 # Run as a Docker container
 
 You can run the eBPF autoinstrumenter as a standalone Docker container that

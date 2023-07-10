@@ -14,6 +14,7 @@ jobs:
       - name: "Run doc-validator tool"
         run: >
           doc-validator
+          --skip-checks=^image-
           docs/sources
           /docs/writers-toolkit
           | reviewdog

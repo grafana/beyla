@@ -1,3 +1,8 @@
+---
+title: Profiling guide
+description: Learn how to profile Grafana's eBPF auto-instrumentation tool for performance analysis.
+---
+
 # Profiling guide
 
 1. Run the autoinstrumenter with the `PROFILE_PORT` variable set to e.g. 6060. ```

@@ -1,4 +1,9 @@
-# Deploying in Kubernetes
+---
+title: Deploy in Kubernetes
+description: Learn how to deploy Grafana's eBPF auto-instrumentation tool in Kubernetes.
+---
+
+# Deploy in Kubernetes
 
 In Kubernetes, you can Deploy the eBPF Autoinstrument in two ways:
 
@@ -76,7 +81,7 @@ spec:
 ```
 
 For more information about the different configuration options, please check the
-[Configuration](config.md) document.
+[Configuration]({{< relref "./config" >}}) document.
 
 Deploying as a sidecar is the chosen option by the work-in-progress
 [eBPF Autoinstrument Operator](https://github.com/grafana/ebpf-autoinstrument-operator).

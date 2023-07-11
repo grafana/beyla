@@ -1,3 +1,8 @@
+---
+title: Zero-code application traces and metrics with eBPF
+description: This tutorial explains how to get started with application RED metrics collection by using Grafana's eBPF auto-instrumentation tool.
+---
+
 # Zero-code application traces and metrics with eBPF
 
 > ⚠️**SOME GENERAL TO-DO's before releasing the Beta**
@@ -16,7 +21,7 @@ of the service to your staging/production servers.
 
 To flatten the curve of adoption of Application Observability, Grafana is releasing an
 eBPF autoinstrumentation suite that is able to report basic transactions span information,
-as well as [Rate-Errors-Duration (RED) metrics](https://grafana.com/blog/2018/08/02/the-red-method-how-to-instrument-your-services/)
+as well as [Rate-Errors-Duration (RED) metrics](/blog/2018/08/02/the-red-method-how-to-instrument-your-services/)
 for your Linux HTTP/S and gRPC services, without requiring to modify the code
 to manually insert probes.
 
@@ -106,7 +111,7 @@ overriding the behavior by means of two query arguments:
   `curl "http://localhost:8080/bar?delay=3s"` will require 3 seconds to send
   the response.
 
-You can [download the server.go file from this tutorial](server.go) and run it by:
+You can [download the server.go file from this tutorial](./server.go) and run it by:
 
 ```
 $ go run server.go
@@ -139,11 +144,11 @@ The eBPF Autoinstrument requires at least two configuration options to run:
 
 To know how to configure other exporters (for example, [OpenTelemetry](https://opentelemetry.io/)
 traces and metrics), as well as extra configuration options, please check the
-[configuration section in the documentation](../config.md).
+[configuration section in the documentation]({{< relref "../config" >}}).
 
 After the service from the previous section is running, we can instrument it
 by executing the `otelauto` command that we previously downloaded with
-`go install`, as seen in the [Downloading](#downloading) section.
+`go install`, as seen in the [Downloading](#downloading-the-autoinstrument) section.
 
 We will configure the eBPF autoinstrument to instrument the executable that owns
 the port 8080, printing the traces via standard output and exposing RED metrics
@@ -158,7 +163,7 @@ $ PROMETHEUS_PORT=8999 PRINT_TRACES=true OPEN_PORT=8080 sudo -E otelauto
 You can now test the instrumented service from another terminal:
 
 ```
-$ curl "http://localhost:8080/hello"        
+$ curl "http://localhost:8080/hello"
 $ curl "http://localhost:8080/bye"
 ```
 
@@ -210,19 +215,19 @@ http_server_duration_seconds_bucket{http_method="GET",http_status_code="200",ser
 (... cutting for the sake of brevity ...)
 ```
 
-Please check the [List of exported metrics](../metrics.adoc) document for an exhaustive list
+Please check the [List of exported metrics]({{< relref "../metrics" >}}) document for an exhaustive list
 of the metrics that can be exposed by the eBPF Autoinstrument.
 
 ## Sending data to Grafana Cloud
 
 Once we have verified that our application is correctly instrumented, we can add a Prometheus
 collector to read the autoinstrumented metrics and forwards them to Grafana Cloud.
-You can get a [Free Account in the Grafana site](https://grafana.com/pricing/).  
+You can get a [Free Account in the Grafana site](/pricing/).
 
 There are two alternatives for reading the metrics and forwarding them to Grafana Cloud:
 * [Install Prometheus in your host and configure the scrape and remote write to read-and-forward the metrics
-  ](https://grafana.com/docs/grafana-cloud/quickstart/noagent_linuxnode/#install-prometheus-on-the-node)
-* Use the [Grafana Agent](https://grafana.com/docs/agent/latest/), as this tutorial shows.
+  ](/docs/grafana-cloud/quickstart/noagent_linuxnode/#install-prometheus-on-the-node)
+* Use the [Grafana Agent](/docs/agent/latest/), as this tutorial shows.
 
 ### Downloading and configuring the Grafana Agent Flow
 
@@ -230,7 +235,7 @@ There are two alternatives for reading the metrics and forwarding them to Grafan
 manual playground.
 For a complete description of the Grafana Agent Flow setup and configuration process
 and recommended modes,
-you can refer to the [Install Grafana Agent Flow](https://grafana.com/docs/agent/latest/flow/setup/install/)
+you can refer to the [Install Grafana Agent Flow](/docs/agent/latest/flow/setup/install/)
 documentation .
 
 1. Go to the Latest [Grafana Agent Releases page](https://github.com/grafana/agent/releases/).
@@ -242,12 +247,12 @@ documentation .
      ```
 3. Create a plain text file, for example named `ebpf-tutorial.river`, and copy there the
    following text, that will tell the Agent to scrape the prometheus metrics from the
-   eBPF Autoinstrument and forward them to [Grafana Mimir](https://grafana.com/oss/mimir/).
+   eBPF Autoinstrument and forward them to [Grafana Mimir](/oss/mimir/).
    ```
    prometheus.scrape "default" {
        targets = [{"__address__" = "localhost:8999"}]
        forward_to = [prometheus.remote_write.mimir.receiver]
-   }      
+   }
    prometheus.remote_write "mimir" {
        endpoint {
            url = env("MIMIR_ENDPOINT")
@@ -295,7 +300,7 @@ Metrics Browser input. You should see the new metric names in the autocomplete p
 
 From now, you could start composing your PromQL queries for better visualization of
 your autoinstrumented RED metrics; to save your time, we already provide a
-[public dashboard with some basic information](https://grafana.com/grafana/dashboards/19077-ebpf-red-metrics/).
+[public dashboard with some basic information](/grafana/dashboards/19077-ebpf-red-metrics/).
 
 To import it into your Grafana instance, choose "Dashboards" in the Grafana left panel,
 then in the Dashboards page, click on the "New" dropdown and select "Import":
@@ -303,7 +308,7 @@ then in the Dashboards page, click on the "New" dropdown and select "Import":
 ![](./img/import-dashboard.png)
 
 In the "Import via grafana.com" textbox, you can just copy the Grafana ID from the
-[eBPF Red Metrics](https://grafana.com/grafana/dashboards/19077-ebpf-red-metrics/)
+[eBPF Red Metrics](/grafana/dashboards/19077-ebpf-red-metrics/)
 dashboard: `19077`.
 
 Rename it at your convenience, select the folder and, most important, select the
@@ -317,7 +322,7 @@ The dashboard contains the following parts:
 
 * A list with the top slowest HTTP routes for all the instrumented services. Since you only
   have a single service, only an entry appears. If you configure the autoinstrumentation to
-  [report the HTTP routes](../config.md#routes-decorator-yaml-section-routesa-idroutesa),
+  [report the HTTP routes]({{< relref "../config#routes-decorator" >}}),
   many entries could appear there, one for each HTTP path in the server.
 * A list with the top slowest GRPC methods. Since the test service in this tutorial only
   serves HTTP, this table is empty.
@@ -347,7 +352,7 @@ service, and you will get the metrics.
 eBPF also allows you to see some parts that manual instrumentation doesn't. For example,
 the eBPF Autoinstrument is able to show you how much time a request is enqueued after
 the connection is established, until its code is actually executed (requires [exporting
-OpenTelemetry traces](../config.md#otel-traces-exporter-yaml-section-oteltracesa-idoteltracesa),
+OpenTelemetry traces]({{< relref "../config#otel-traces-exporter" >}}),
 but this function is not explained in this tutorial).
 
 The eBPF Autoinstrument has its limitations too. As it provides generic metrics and

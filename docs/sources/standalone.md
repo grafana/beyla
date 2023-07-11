@@ -1,10 +1,15 @@
-# Running as a standalone process
+---
+title: Run as a standalone process
+description: Learn how to run Grafana's eBPF auto-instrumentation tool as a standalone Linux process.
+---
+
+# Run as a standalone process
 
 The eBPF Autoinstrument can run as a standalone Operating System process with
 elevated privileges, which can inspect other running processes.
 
 For a quick introduction about how to run it and visualize the instrument
-data, you can also follow our [step-by-step tutorial](./tutorial/README.md).
+data, you can also follow our [step-by-step tutorial]({{< relref "./tutorial" >}}).
 
 ## Download the eBPF autoinstrument
 
@@ -26,7 +31,7 @@ variables, the value in the environment variable takes precedence over the
 configuration file.
 
 For a complete description of the configuration values, you can check the
-[list of configuration options](config.md).
+[list of configuration options]({{< relref "./config" >}}).
 
 ## Running
 

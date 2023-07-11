@@ -1,5 +1,9 @@
-Agent mode vs Direct mode
-=========================
+---
+title: Agent mode vs. direct mode
+description: Learn about the different ways you can export metrics with Grafana's eBPF application auto-instrumentation tool.
+---
+
+# Agent mode vs. direct mode
 
 > ⚠️ this is a live document. Some parts might change in the future as long as we provide new ways
 of packaging and installing the Auto-instrumenter.
@@ -18,7 +22,7 @@ The eBPF auto-instrumenter can work in two operation modes:
 ```mermaid
 flowchart TD
   EA1(Auto-instrumenter)  --> |Push OTLP metrics & traces| GA1(Grafana Agent)
-  
+
   subgraph Grafana
     M(Mimir)
     T(Tempo)
@@ -36,7 +40,7 @@ flowchart TD
 
 ## Running in Direct mode
 
-You can follow our [quickstart tutorial](../tutorial/README.md) for a quick introduction
+You can follow our [quickstart tutorial]({{< relref "../tutorial" >}}) for a quick introduction
 to the eBPF auto-instrumenter running in Direct mode using OpenTelemetry. You will find there how to provide
 an OTLP endpoint and authentication credentials by means of the following environment
 variables:
@@ -45,17 +49,17 @@ variables:
 * `OTEL_EXPORTER_OTLP_HEADERS`
 
 To run in direct mode using the Prometheus scrape endpoint, please refer to the
-[configuration documentation](../config.md).
+[configuration documentation]({{< relref "../config" >}}).
 
 ## Running in Agent mode
 
 > ℹ️ This tutorial assumes that both the Agent and the Auto-instrumenter are installed
-as normal OS executable files. For examples about downloading and running the 
+as normal OS executable files. For examples about downloading and running the
 autoinstrumenter as a container, you can check the documentation about
-[running the eBPF autoinstrumenter as a Docker container](../docker.md)
-or [running the eBPF autoinstrumenter in Kubernetes](../k8s.md).
+[running the eBPF autoinstrumenter as a Docker container]({{< relref "../docker" >}})
+or [running the eBPF autoinstrumenter in Kubernetes]({{< relref "../k8s" >}}).
 
-First, you need to locally install and configure the [Grafana Agent in **Flow** mode, according to the latest documentation](https://grafana.com/docs/agent/latest/flow/).
+First, you need to locally install and configure the [Grafana Agent in **Flow** mode, according to the latest documentation](/docs/agent/latest/flow/).
 It's important to run it in Flow mode as it will facilitate the ingest of OpenTelemetry
 metrics and traces from the auto-instrumenter, as well as their processing and forwarding
 to the different Grafana endpoints.
@@ -63,7 +67,7 @@ to the different Grafana endpoints.
 ### Configuring the Agent pipeline
 
 First, you need to specify the following nodes by using the
-[River configuration language](https://grafana.com/docs/agent/latest/flow/config-language/):
+[River configuration language](/docs/agent/latest/flow/config-language/):
 
 ```mermaid
 flowchart TD
@@ -92,7 +96,7 @@ end
 
 You can download the [example of the whole River configuration file](./agent-config.river), which will be explained in the rest of this section.
 
-The Agent needs to expose an **OpenTelemetry receiver** endpoint so the 
+The Agent needs to expose an **OpenTelemetry receiver** endpoint so the
 Auto-instrumenter can forward there both metrics and traces. The Agent
 configuration file will need to include this entry:
 
@@ -125,16 +129,16 @@ You can export either metrics, traces, or both. If you only want to export a sin
 type of data, you can just avoid the `metrics` or `traces` lines in the previous
 node definitions, and ignore some of the following exporters.
 
-The metrics are **exported in Prometheus** format to [Grafana Mimir](https://grafana.com/oss/mimir/).
-The configuration entry will need to specify an endpoint with basic 
-authentication. In the provided example, the endpoint and credentials are 
+The metrics are **exported in Prometheus** format to [Grafana Mimir](/oss/mimir/).
+The configuration entry will need to specify an endpoint with basic
+authentication. In the provided example, the endpoint and credentials are
 provided via environment variables, to avoid leaking them into a plain text file:
 
 ```hcl
 otelcol.exporter.prometheus "default" {
     forward_to = [prometheus.remote_write.mimir.receiver]
 }
-    
+
 prometheus.remote_write "mimir" {
   endpoint {
     url = "https://" + env("MIMIR_ENDPOINT") + "/api/prom/push"
@@ -154,8 +158,8 @@ export MIMIR_ENDPOINT=prometheus-prod-01-eu-west-0.grafana.net
 export GRAFANA_API_KEY=VHJhbGFyw60gcXVlIHRlIHbD....=
 ```
 
-And finally, to **export the traces** format, you need to setup a 
-[Grafana Tempo](https://grafana.com/oss/tempo/) exporter
+And finally, to **export the traces** format, you need to setup a
+[Grafana Tempo](/oss/tempo/) exporter
 and endpoint, also configured via environment variables:
 
 ```hcl
@@ -191,7 +195,7 @@ authentication in the Agent OTLP receiver.
 
 You can configure the Auto-instrumenter both via environment variables or via
 a configuration YAML file, which is what we will use in this example.
-Please refer to the complete [Configuration documentation](../config.md) for
+Please refer to the complete [Configuration documentation]({{< relref "../config" >}}) for
 more detailed description of each configuration option.
 
 You can download the whole [example configuration file](./instrumenter-config.yml),
@@ -224,7 +228,7 @@ allow exporting both metrics and traces, or only one of them to export either
 metrics or traces.
 
 To run the Auto-instrumenter (previously installed via `go install github.com/grafana/ebpf-autoinstrument/cmd/otelauto@latest`), you need to specify the path to the
-configuration YAML file (for example, `instrumenter-config.yaml`):
+configuration YAML "for example, `instrumenter-config.yml`):
 
 ```
 otelauto -config instrumenter-config.yml

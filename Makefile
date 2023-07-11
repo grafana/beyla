@@ -19,6 +19,9 @@ IMG = $(IMG_REGISTRY)/$(IMG_ORG)/$(IMG_NAME):$(VERSION)
 GEN_IMG_NAME ?= ebpf-generator
 GEN_IMG ?= $(GEN_IMG_NAME):$(VERSION)
 
+# Used to compile Mermaid diagrams as images until this PR is not merged: https://github.com/grafana/website/pull/9196
+MERMAID_IMG ?= minlag/mermaid-cli:10.2.4
+
 COMPOSE_ARGS ?= -f test/integration/docker-compose.yml
 
 OCI_BIN ?= docker
@@ -228,3 +231,8 @@ check-drone-drift:
 update-licenses: prereqs
 	@echo "### Updating third_party_licenses.csv"
 	$(GO_LICENSES) report --include_tests ./... > third_party_licenses.csv
+
+.PHONY: mermaid
+mermaid:
+	@echo "### Updating Mermaid diagrams"
+	$(OCI_BIN) run --entrypoint /bin/sh -it --rm -v ./docs:/docs $(MERMAID_IMG) -c 'find /docs -name *.mmd | sed s/".mmd"// | xargs -I{} /home/mermaidcli/node_modules/.bin/mmdc -i {}.mmd -o {}.png -p /puppeteer-config.json'

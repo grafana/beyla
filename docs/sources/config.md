@@ -23,18 +23,7 @@ YAML configuration, each component has its own first-level section.
 The architecture below shows the different components of the Autoinstrumenter.
 Dashed boxes can be enabled and disabled according to the configuration.
 
-```mermaid
-flowchart TD
-    EBPF(EBPF tracer) --> ROUT(Routes<br/>decorator)
-
-    ROUT --> OTELM(OTEL<br/> metrics<br/> exporter)
-    ROUT --> OTELT(OTEL<br/> traces<br/> exporter)
-    ROUT --> PROM(Prometheus<br/>HTTP<br/>endpoint)
-    style ROUT stroke-dasharray: 3 3;
-    style OTELM stroke-dasharray: 3 3;
-    style OTELT stroke-dasharray: 3 3;
-    style PROM stroke-dasharray: 3 3;
-```
+![](img/architecture.png)
 
 A quick description of the components:
 

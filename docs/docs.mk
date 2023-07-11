@@ -115,3 +115,7 @@ update: ## Fetch the latest version of this Makefile and the `make-docs` script 
 	curl -s -LO https://raw.githubusercontent.com/grafana/writers-toolkit/main/docs/docs.mk
 	curl -s -LO https://raw.githubusercontent.com/grafana/writers-toolkit/main/docs/make-docs
 	chmod +x make-docs
+
+.PHONY: mermaid
+mermaid:
+	$(PODMAN) run --entrypoint /bin/sh -it --rm -v .:/docs $(MERMAID_IMAGE) -c 'find /docs -name *.mmd | sed s/".mmd"// | xargs -I{} /home/mermaidcli/node_modules/.bin/mmdc -i {}.mmd -o {}.png -p /puppeteer-config.json'

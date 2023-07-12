@@ -1,0 +1,33 @@
+name: Release binaries
+on:
+  release:
+    types:
+      - created
+
+jobs:
+  release-binaries:
+    name: Release compiled binaries for Linux/${{matrix.arch}}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch: ['amd64','arm64']
+        go: [ '1.20' ]
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: ${{ matrix.go }}
+      - name: Build Go release for linux/${{ matrix.arch }}
+        run: make build
+        env:
+          GOOS: linux
+          GOARCH: ${{ matrix.arch }}
+      - name: Upload release asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: ./bin/otelauto
+          asset_name: otelauto-linux-${{ matrix.arch }}

@@ -4,7 +4,7 @@ services:
   testserver:
     build:
       context: ../..
-      dockerfile: test/integration/components/dotnetserver/Dockerfile
+      dockerfile: test/integration/components/dotnetserver/Dockerfile${TESTSERVER_DOCKERFILE_SUFFIX}
     image: hatest-testserver
     ports:
       - "${TEST_SERVICE_PORTS}"

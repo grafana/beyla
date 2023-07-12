@@ -1,0 +1,23 @@
+name: Update offsets
+on:
+  schedule:
+    - cron: '1 1 * * *'
+  workflow_dispatch:
+jobs:
+  UpdateOffsets:
+    runs-on: ubuntu-latest
+    steps:
+    - name: "Checkout repo"
+      uses: actions/checkout@v3
+    - name: "Update offsets"
+      run: make update-offsets
+    - name: "Create/update PR"
+      uses: peter-evans/create-pull-request@v5
+      with:
+        commit-message: Automatic update of offsets.json
+        title: Automatic update of offsets.json
+        body: The offsets have been updated by go-offsets-tracker
+        base: main
+        branch: offset-content-auto-update
+        labels: automated-pr
+        delete-branch: true

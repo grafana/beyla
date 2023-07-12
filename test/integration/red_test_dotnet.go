@@ -16,3 +16,14 @@ func testREDMetricsDotNetHTTP(t *testing.T) {
 		})
 	}
 }
+
+func testREDMetricsDotNetHTTPS(t *testing.T) {
+	for _, testCaseURL := range []string{
+		"https://localhost:7034",
+	} {
+		t.Run(testCaseURL, func(t *testing.T) {
+			waitForTestComponents(t, testCaseURL)
+			testREDMetricsForNodeHTTPLibrary(t, testCaseURL, "dotnetserver") // reusing what we do for NodeJS
+		})
+	}
+}

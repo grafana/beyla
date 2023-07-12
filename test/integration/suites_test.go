@@ -217,3 +217,14 @@ func TestSuite_DotNet(t *testing.T) {
 	require.NoError(t, compose.Close())
 	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
 }
+
+func TestSuite_DotNetTLS(t *testing.T) {
+	compose, err := docker.ComposeSuite("docker-compose-dotnet.yml", path.Join(pathOutput, "test-suite-dotnet-tls.log"))
+	compose.Env = append(compose.Env, `OPEN_PORT=7033`, `EXECUTABLE_NAME=`, `TEST_SERVICE_PORTS=7034:7033`, `TESTSERVER_DOCKERFILE_SUFFIX=_tls`)
+	require.NoError(t, err)
+	require.NoError(t, compose.Up())
+	t.Run("DotNet SSL RED metrics", testREDMetricsDotNetHTTPS)
+	t.Run("BPF pinning folder mounted", testBPFPinningMounted)
+	require.NoError(t, compose.Close())
+	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
+}

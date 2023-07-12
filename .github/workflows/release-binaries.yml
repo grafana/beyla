@@ -34,4 +34,4 @@ jobs:
           gitHubToken: ${{ github.token }}
           # TODO: change name when we get a definitive name
           files: |
-            otelauto-linux-${{ matrix.arch }}-${{ github.event.release.tag_name }}.tar.gz
+            ./bin/otelauto-linux-${{ matrix.arch }}-${{ github.event.release.tag_name }}.tar.gz

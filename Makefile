@@ -232,4 +232,4 @@ update-licenses: prereqs
 .PHONY: artifact
 artifact: compile
 	@echo "### Packing generated artifact"
-	tar -C ./bin -cvzf bin/otelauto.tar.gz otelauto
+	tar -C ./bin -cvzf bin/otelauto-$(GOOS)-$(GOARCH)-$(VERSION).tar.gz otelauto

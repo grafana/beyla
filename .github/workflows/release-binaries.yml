@@ -2,7 +2,7 @@ name: Release binaries
 on:
   release:
     types:
-      - created
+      - published
 
 jobs:
   release-binaries:
@@ -30,4 +30,4 @@ jobs:
         with:
           upload_url: ${{ github.event.release.upload_url }}
           asset_path: ./bin/otelauto
-          asset_name: otelauto-linux-${{ matrix.arch }}
+          asset_name: otelauto-linux-${{ matrix.arch }}-${{ github.event.release.tag_name }}

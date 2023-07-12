@@ -24,14 +24,11 @@ jobs:
           GOOS: linux
           GOARCH: ${{ matrix.arch }}
       - name: Upload release asset
-        uses: echapmanFromBunnings/upload-release-assets@1.3
+        uses: actions/upload-release-asset@v1
         env:
-          GOOS: linux
-          GOARCH: ${{ matrix.arch }}
-          VERSION: ${{ github.event.release.tag_name }}
+          GITHUB_TOKEN: ${{ github.token }}
         with:
-          releaseTag: ${{ github.event.release.tag_name }}
-          gitHubToken: ${{ github.token }}
-          # TODO: change name when we get a definitive name
-          files: |
-            ./bin/otelauto-linux-${{ matrix.arch }}-${{ github.event.release.tag_name }}.tar.gz
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: ./bin/otelauto.tar.gz
+          asset_name: otelauto-linux-${{ matrix.arch }}-${{ github.event.release.tag_name }}.tar.gz
+          asset_content_type: application/gzip

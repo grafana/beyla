@@ -228,3 +228,8 @@ check-drone-drift:
 update-licenses: prereqs
 	@echo "### Updating third_party_licenses.csv"
 	$(GO_LICENSES) report --include_tests ./... > third_party_licenses.csv
+
+.PHONY: artifact
+artifact: compile
+	@echo "### Packing generated artifact"
+	tar -C ./bin -cvzf bin/otelauto.tar.gz otelauto

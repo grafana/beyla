@@ -19,7 +19,7 @@ jobs:
         with:
           go-version: ${{ matrix.go }}
       - name: Build Go release for linux/${{ matrix.arch }}
-        run: make build
+        run: make compile
         env:
           GOOS: linux
           GOARCH: ${{ matrix.arch }}

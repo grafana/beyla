@@ -19,23 +19,8 @@ The eBPF auto-instrumenter can work in two operation modes:
   (using the OpenTelemetry, OTEL, protocol) or just expose a Prometheus HTTP endpoint ready to be scraped (**pull** mode).
   In direct OTEL push mode, the auto-instrumenter needs to be configured with the authentication data.
 
-```mermaid
-flowchart TD
-  EA1(Auto-instrumenter)  --> |Push OTLP metrics & traces| GA1(Grafana Agent)
+![](img/agent-vs-direct.png)
 
-  subgraph Grafana
-    M(Mimir)
-    T(Tempo)
-    OTLP(OpenTelemetry<br/>endpoint)
-  end
-
-  GA1 --> |Metrics| M
-  GA1 --> |Traces| T
-
-  EA2(Auto-instrumenter) --> |Push OTLP metrics & traces| OTLP
-
-  P(Prometheus) --> |Pull /metrics HTTP endpoint| EA2
-```
 <center><i>eBPF auto-instrumenters running in Agent mode (left) and Direct mode (right)</i></center>
 
 ## Running in Direct mode
@@ -69,30 +54,7 @@ to the different Grafana endpoints.
 First, you need to specify the following nodes by using the
 [River configuration language](/docs/agent/latest/flow/config-language/):
 
-```mermaid
-flowchart TD
-
-EA1(Auto-instrumenter) --> OTLP
-
-OTLP(OpenTelemetry receiver) --> |Metrics & traces| BATCH(Batch processor)
-BATCH --> |Metrics| PE(Prometheus exporter)
-BATCH --> |Traces| OE(OpenTelemetry Exporter)
-
-PE --> M
-OE --> T
-
-subgraph Agent
-  OTLP
-  BATCH
-  PE
-  OE
-end
-
-subgraph Grafana
-  M(Mimir)
-  T(Tempo)
-end
-```
+![](img/nodes.png)
 
 You can download the [example of the whole River configuration file](./agent-config.river), which will be explained in the rest of this section.
 

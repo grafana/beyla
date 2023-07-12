@@ -11,24 +11,7 @@ When performing a remote service request, the response time that is
 perceived by the client is different from the response time that is measured
 at the server-side. Often, these values might be really distant.
 
-```mermaid
-gantt
-    title Life cycle of an web service request
-    axisFormat %L ms # removing axis
-    section Client-side
-        ...code                     :a1, 2014-01-01 00:00, 20ms
-        svc request                 :a2, after a1, 1ms
-        svc response                :a3, after n2, 1ms
-    section Network
-        send                        :n1, after a2, 10ms
-        rcv                         :n2, after s2, 10ms
-    section Server-side (kernel)
-        connect/read                :s1, after n1, 10ms
-        write/close                 :s2, after u2, 10ms
-    section Server-side (user)
-        Runtime enqueuing           :u1, after s1, 50ms
-        Service handler execution   :u2, after u1, 50ms
-```
+![](img/req-life-cycle.png)
 
 The above image shows an example; from the start of the service request until the end
 of the service response, the client-perceived response time is near to 140 ms.
@@ -53,15 +36,7 @@ traces, nearer to the user-perceived response time.
 
 Concretely, the eBPF autoinstrument reports traces that are divided in different spans:
 
-```mermaid
-gantt
-    title Structure of a server-side trace from the eBPF autoinstrument
-    axisFormat %L ms # removing axis
-    section Server trace
-        trace name (e.g. /users/add)    :a1, 2014-01-01 00:00, 100ms
-        in queue                        :a2, 2014-01-01 00:00, 50ms
-        processing                      :a3, after a2, 50ms
-```
+![](img/server-side-trace.png)
 
 The above image shows the typical structure of a trace as reported by the eBPF autoinstrument:
 

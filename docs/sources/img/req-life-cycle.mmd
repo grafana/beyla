@@ -1,0 +1,16 @@
+gantt
+    title Life cycle of a web service request
+    axisFormat %L ms # removing axis
+    section Client-side
+        ...code                     :a1, 2014-01-01 00:00, 20ms
+        svc request                 :a2, after a1, 1ms
+        svc response                :a3, after n2, 1ms
+    section Network
+        send                        :n1, after a2, 10ms
+        rcv                         :n2, after s2, 10ms
+    section Server-side (kernel)
+        connect/read                :s1, after n1, 10ms
+        write/close                 :s2, after u2, 10ms
+    section Server-side (user)
+        Runtime enqueuing           :u1, after s1, 50ms
+        Service handler execution   :u2, after u1, 50ms

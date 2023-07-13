@@ -66,21 +66,21 @@ func TestTracesEndpoint(t *testing.T) {
 }
 
 func testTracesEndpLen(t *testing.T, expected int, tcfg *TracesConfig) {
-	opts, err := getTracesEndpointOptions(tcfg)
+	opts, err := getHTTPTracesEndpointOptions(tcfg)
 	require.NoError(t, err)
 	// otlptracehttp.Options are notoriously hard to compare, so we just test the length
 	assert.Equal(t, expected, len(opts))
 }
 
 func TestMissingSchemeInTracesEndpoint(t *testing.T) {
-	opts, err := getTracesEndpointOptions(&TracesConfig{Endpoint: "http://foo:3030"})
+	opts, err := getHTTPTracesEndpointOptions(&TracesConfig{Endpoint: "http://foo:3030"})
 	require.NoError(t, err)
 	require.NotEmpty(t, opts)
 
-	_, err = getTracesEndpointOptions(&TracesConfig{Endpoint: "foo:3030"})
+	_, err = getHTTPTracesEndpointOptions(&TracesConfig{Endpoint: "foo:3030"})
 	require.Error(t, err)
 
-	_, err = getTracesEndpointOptions(&TracesConfig{Endpoint: "foo"})
+	_, err = getHTTPTracesEndpointOptions(&TracesConfig{Endpoint: "foo"})
 	require.Error(t, err)
 }
 

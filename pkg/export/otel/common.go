@@ -10,6 +10,17 @@ import (
 	"github.com/grafana/ebpf-autoinstrument/pkg/pipe/global"
 )
 
+// Protocol values for the OTEL_EXPORTER_OTLP_PROTOCOL, OTEL_EXPORTER_OTLP_TRACES_PROTOCOL and
+// OTEL_EXPORTER_OTLP_METRICS_PROTOCOL standard configuration values
+// More info: https://opentelemetry.io/docs/concepts/sdk-configuration/otlp-exporter-configuration/
+type Protocol string
+
+const (
+	ProtocolGRPC         Protocol = "grpc"
+	ProtocolHTTPProtobuf Protocol = "http/protobuf"
+	ProtocolHTTPJSON     Protocol = "http/json"
+)
+
 // TODO: when we join both traces' and metrics ServiceName and ServiceNamespace into a common configuration section
 // provide a unique Resource for both metrics and traces reporter
 func otelResource(ctx context.Context, cfgSvcName, cfgSvcNamespace string) *resource.Resource {

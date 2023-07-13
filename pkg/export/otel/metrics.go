@@ -11,7 +11,7 @@ import (
 	"github.com/mariomac/pipes/pkg/node"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp"
-	"go.opentelemetry.io/otel/metric/instrument"
+	instrument "go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/sdk/instrumentation"
 	"go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/metric/aggregation"
@@ -180,7 +180,7 @@ func otelHistogramBuckets(metricName string) metric.View {
 		})
 }
 
-func (r *MetricsReporter) metricAttributes(span *transform.HTTPRequestSpan) []attribute.KeyValue {
+func (r *MetricsReporter) metricAttributes(span *transform.HTTPRequestSpan) attribute.Set {
 	var attrs []attribute.KeyValue
 
 	switch span.Type {
@@ -222,24 +222,25 @@ func (r *MetricsReporter) metricAttributes(span *transform.HTTPRequestSpan) []at
 		attrs = append(attrs, semconv.ServiceName(span.ServiceName))
 	}
 
-	return attrs
+	return attribute.NewSet(attrs...)
 }
 
-func (r *MetricsReporter) record(span *transform.HTTPRequestSpan, attrs []attribute.KeyValue) {
+func (r *MetricsReporter) record(span *transform.HTTPRequestSpan, attrs attribute.Set) {
 	t := span.Timings()
 	duration := t.End.Sub(t.RequestStart).Seconds()
+	attrOpt := instrument.WithAttributeSet(attrs)
 	switch span.Type {
 	case transform.EventTypeHTTP:
 		// TODO: for more accuracy, there must be a way to set the metric time from the actual span end time
-		r.httpDuration.Record(r.ctx, duration, attrs...)
-		r.httpRequestSize.Record(r.ctx, float64(span.ContentLength), attrs...)
+		r.httpDuration.Record(r.ctx, duration, attrOpt)
+		r.httpRequestSize.Record(r.ctx, float64(span.ContentLength), attrOpt)
 	case transform.EventTypeGRPC:
-		r.grpcDuration.Record(r.ctx, duration, attrs...)
+		r.grpcDuration.Record(r.ctx, duration, attrOpt)
 	case transform.EventTypeGRPCClient:
-		r.grpcClientDuration.Record(r.ctx, duration, attrs...)
+		r.grpcClientDuration.Record(r.ctx, duration, attrOpt)
 	case transform.EventTypeHTTPClient:
-		r.httpClientDuration.Record(r.ctx, duration, attrs...)
-		r.httpClientRequestSize.Record(r.ctx, float64(span.ContentLength), attrs...)
+		r.httpClientDuration.Record(r.ctx, duration, attrOpt)
+		r.httpClientRequestSize.Record(r.ctx, float64(span.ContentLength), attrOpt)
 	}
 }
 

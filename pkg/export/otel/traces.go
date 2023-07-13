@@ -12,11 +12,14 @@ import (
 	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/mariomac/pipes/pkg/node"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	"go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
 	trace2 "go.opentelemetry.io/otel/trace"
 	"golang.org/x/exp/slog"
+	"google.golang.org/grpc/credentials"
 
 	"github.com/grafana/ebpf-autoinstrument/pkg/imetrics"
 	"github.com/grafana/ebpf-autoinstrument/pkg/pipe/global"
@@ -41,6 +44,10 @@ type TracesConfig struct {
 	Endpoint       string `yaml:"endpoint" env:"OTEL_EXPORTER_OTLP_ENDPOINT"`
 	TracesEndpoint string `yaml:"-" env:"OTEL_EXPORTER_OTLP_TRACES_ENDPOINT"`
 
+	// TODO: Protocol will remain undocumented until we support it also in the metrics exporter.
+	Protocol       Protocol `yaml:"protocol" env:"OTEL_EXPORTER_OTLP_PROTOCOL"`
+	TracesProtocol Protocol `yaml:"-" env:"OTEL_EXPORTER_OTLP_TRACES_PROTOCOL"`
+
 	// InsecureSkipVerify is not standard, so we don't follow the same naming convention
 	InsecureSkipVerify bool `yaml:"insecure_skip_verify" env:"OTEL_INSECURE_SKIP_VERIFY"`
 
@@ -58,6 +65,13 @@ type TracesConfig struct {
 // If not enabled, this node won't be instantiated
 func (m TracesConfig) Enabled() bool { //nolint:gocritic
 	return m.Endpoint != "" || m.TracesEndpoint != ""
+}
+
+func (m *TracesConfig) GetProtocol() Protocol {
+	if m.TracesProtocol != "" {
+		return m.TracesProtocol
+	}
+	return m.Protocol
 }
 
 type TracesReporter struct {
@@ -79,16 +93,24 @@ func TracesReporterProvider(ctx context.Context, cfg TracesConfig) (node.Termina
 func newTracesReporter(ctx context.Context, cfg *TracesConfig) (*TracesReporter, error) {
 	r := TracesReporter{ctx: ctx}
 
-	// Instantiate the OTLP HTTP traceExporter
-	topts, err := getTracesEndpointOptions(cfg)
-	if err != nil {
-		return nil, err
+	// Instantiate the OTLP HTTP or GRPC traceExporter
+	var err error
+	var exporter trace.SpanExporter
+	switch proto := cfg.GetProtocol(); proto {
+	case ProtocolHTTPJSON, ProtocolHTTPProtobuf, "": // zero value defaults to HTTP for backwards-compatibility
+		if exporter, err = httpTracer(ctx, cfg); err != nil {
+			return nil, fmt.Errorf("can't instantiate OTEL HTTP traces exporter: %w", err)
+		}
+	case ProtocolGRPC:
+		if exporter, err = grpcTracer(ctx, cfg); err != nil {
+			return nil, fmt.Errorf("can't instantiate OTEL GRPC traces exporter: %w", err)
+		}
+	default:
+		return nil, fmt.Errorf("invalid protocol value: %q. Accepted values are: %s, %s, %s",
+			proto, ProtocolGRPC, ProtocolHTTPJSON, ProtocolHTTPProtobuf)
 	}
-	texp, err := otlptracehttp.New(ctx, topts...)
-	if err != nil {
-		return nil, fmt.Errorf("creating trace exporter: %w", err)
-	}
-	r.traceExporter = instrumentTraceExporter(ctx, texp)
+
+	r.traceExporter = instrumentTraceExporter(ctx, exporter)
 
 	var opts []trace.BatchSpanProcessorOption
 	if cfg.MaxExportBatchSize > 0 {
@@ -112,6 +134,30 @@ func newTracesReporter(ctx context.Context, cfg *TracesConfig) (*TracesReporter,
 	)
 
 	return &r, nil
+}
+
+func httpTracer(ctx context.Context, cfg *TracesConfig) (*otlptrace.Exporter, error) {
+	topts, err := getHTTPTracesEndpointOptions(cfg)
+	if err != nil {
+		return nil, err
+	}
+	texp, err := otlptracehttp.New(ctx, topts...)
+	if err != nil {
+		return nil, fmt.Errorf("creating HTTP trace exporter: %w", err)
+	}
+	return texp, nil
+}
+
+func grpcTracer(ctx context.Context, cfg *TracesConfig) (*otlptrace.Exporter, error) {
+	topts, err := getGRPCTracesEndpointOptions(cfg)
+	if err != nil {
+		return nil, err
+	}
+	texp, err := otlptracegrpc.New(ctx, topts...)
+	if err != nil {
+		return nil, fmt.Errorf("creating HTTP trace exporter: %w", err)
+	}
+	return texp, nil
 }
 
 // instrumentTraceExporter checks whether the context is configured to report internal metrics and,
@@ -342,10 +388,7 @@ func (r *TracesReporter) namedTracer(comm string) trace2.Tracer {
 	return traceProvider.Tracer(reporterName)
 }
 
-// Linter disabled by reason: cyclomatic complexity reaches 11 but the function is almost flat.
-//
-//nolint:cyclop
-func getTracesEndpointOptions(cfg *TracesConfig) ([]otlptracehttp.Option, error) {
+func parseEndpoint(cfg *TracesConfig) (*url.URL, error) {
 	endpoint := cfg.TracesEndpoint
 	if endpoint == "" {
 		endpoint = cfg.Endpoint
@@ -358,6 +401,16 @@ func getTracesEndpointOptions(cfg *TracesConfig) ([]otlptracehttp.Option, error)
 	if murl.Scheme == "" || murl.Host == "" {
 		return nil, fmt.Errorf("URL %q must have a scheme and a host", endpoint)
 	}
+	return murl, nil
+}
+
+func getHTTPTracesEndpointOptions(cfg *TracesConfig) ([]otlptracehttp.Option, error) {
+	murl, err := parseEndpoint(cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	setProtocol(cfg)
 
 	opts := []otlptracehttp.Option{
 		otlptracehttp.WithEndpoint(murl.Host),
@@ -375,4 +428,47 @@ func getTracesEndpointOptions(cfg *TracesConfig) ([]otlptracehttp.Option, error)
 	}
 
 	return opts, nil
+}
+
+func getGRPCTracesEndpointOptions(cfg *TracesConfig) ([]otlptracegrpc.Option, error) {
+	murl, err := parseEndpoint(cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	setProtocol(cfg)
+
+	opts := []otlptracegrpc.Option{
+		otlptracegrpc.WithEndpoint(murl.Host),
+	}
+	if murl.Scheme == "http" || murl.Scheme == "unix" {
+		opts = append(opts, otlptracegrpc.WithInsecure())
+	}
+
+	if cfg.InsecureSkipVerify {
+		opts = append(opts, otlptracegrpc.WithTLSCredentials(credentials.NewTLS(&tls.Config{InsecureSkipVerify: true})))
+	}
+
+	return opts, nil
+}
+
+// HACK: at the time of writing this, the otelptracehttp API does not support explicitly
+// setting the protocol. They should be properly set via environment variables, but
+// if the user supplied the value via configuration file (and not via env vars), we override the environment.
+// To be as least intrusive as possible, we will change the variables if strictly needed
+// TODO: remove this once otelptracehttp.WithProtocol is supported
+func setProtocol(cfg *TracesConfig) {
+	if _, ok := os.LookupEnv("OTEL_EXPORTER_OTLP_TRACES_PROTOCOL"); ok {
+		return
+	}
+	if _, ok := os.LookupEnv("OTEL_EXPORTER_OTLP_PROTOCOL"); ok {
+		return
+	}
+	if cfg.TracesProtocol != "" {
+		os.Setenv("OTEL_EXPORTER_OTLP_TRACES_PROTOCOL", string(cfg.TracesProtocol))
+		return
+	}
+	if cfg.Protocol != "" {
+		os.Setenv("OTEL_EXPORTER_OTLP_PROTOCOL", string(cfg.TracesProtocol))
+	}
 }

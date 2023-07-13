@@ -302,6 +302,8 @@ func inspectByPort(ctx context.Context, cfg *ebpfcommon.TracerConfig, functions 
 		return nil, nil, fmt.Errorf("looking for executable ELF: %w", err)
 	}
 
+	pidMap := make(map[int32]exec.FileInfo)
+
 	var fallBackInfos []exec.FileInfo
 	var goProxies []exec.FileInfo
 
@@ -313,6 +315,7 @@ func inspectByPort(ctx context.Context, cfg *ebpfcommon.TracerConfig, functions 
 
 		if err != nil {
 			fallBackInfos = append(fallBackInfos, execElf)
+			pidMap[execElf.Pid] = execElf
 			logger().Info("adding fall-back generic executable", "pid", execElf.Pid, "comm", execElf.CmdExePath)
 			continue
 		}
@@ -328,6 +331,7 @@ func inspectByPort(ctx context.Context, cfg *ebpfcommon.TracerConfig, functions 
 
 		logger().Info("ignoring Go proxy for now", "pid", execElf.Pid, "comm", execElf.CmdExePath)
 		goProxies = append(goProxies, execElf)
+		pidMap[execElf.Pid] = execElf
 	}
 
 	var execElf exec.FileInfo
@@ -338,6 +342,13 @@ func inspectByPort(ctx context.Context, cfg *ebpfcommon.TracerConfig, functions 
 		execElf = fallBackInfos[len(fallBackInfos)-1]
 	} else {
 		return nil, nil, fmt.Errorf("looking for executable ELF, no suitable processes found")
+	}
+
+	// check if the executable is a subprocess of another we have found, f so use the parent
+	parentElf, ok := pidMap[execElf.Ppid]
+
+	if ok {
+		execElf = parentElf
 	}
 
 	logger().Info("Go HTTP/gRPC support not detected. Using only generic instrumentation.")

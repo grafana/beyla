@@ -28,6 +28,7 @@ type FileInfo struct {
 	ProExeLinkPath string
 	ELF            *elf.File
 	Pid            int32
+	Ppid           int32
 }
 
 // ProcessFinder allows finding a process given multiple criteria
@@ -117,6 +118,9 @@ func FindExecELF(ctx context.Context, finder ProcessFinder) ([]FileInfo, error) 
 				// Since this value is just for attributing, we set a default placeholder
 				exePath = "unknown"
 			}
+
+			ppid, _ := p.Ppid()
+
 			// In container environments or K8s, we can't just open the executable exe path, because it might
 			// be in the volume of another pod/container. We need to access it through the /proc/<pid>/exe symbolic link
 			file := FileInfo{
@@ -124,6 +128,7 @@ func FindExecELF(ctx context.Context, finder ProcessFinder) ([]FileInfo, error) 
 				// TODO: allow overriding /proc root folder
 				ProExeLinkPath: fmt.Sprintf("/proc/%d/exe", p.Pid),
 				Pid:            p.Pid,
+				Ppid:           ppid,
 			}
 			file.ELF, err = elf.Open(file.ProExeLinkPath)
 			if err != nil {

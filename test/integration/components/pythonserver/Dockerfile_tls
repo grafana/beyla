@@ -1,0 +1,14 @@
+# Dockerfile that will build a container that runs python flask with gunicorn on port 8080
+FROM python:3.11.4
+EXPOSE 8080
+RUN pip install flask gunicorn
+
+# Set the working directory to /build
+WORKDIR /build
+
+# Copy the source code into the image for building
+COPY test/ test/
+
+WORKDIR /build/test/integration/components/pythonserver
+
+CMD ["gunicorn", "--keyfile", "server.key", "--certfile", "server.crt", "-w", "4", "-b", "0.0.0.0:8080", "main:app"]

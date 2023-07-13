@@ -302,7 +302,7 @@ func inspectByPort(ctx context.Context, cfg *ebpfcommon.TracerConfig, functions 
 		return nil, nil, fmt.Errorf("looking for executable ELF: %w", err)
 	}
 
-	pidMap := make(map[int32]exec.FileInfo)
+	pidMap := map[int32]exec.FileInfo{}
 
 	var fallBackInfos []exec.FileInfo
 	var goProxies []exec.FileInfo

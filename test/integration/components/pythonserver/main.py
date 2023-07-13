@@ -1,9 +1,13 @@
-from flask import Flask
+from flask import Flask, Response
 import os
 
 app = Flask(__name__)
 
-@app.route("/ping")
+@app.route("/smoke")
+def smoke():
+    return Response(status=200)
+
+@app.route("/greeting")
 def ping():
     return "PONG!"
 

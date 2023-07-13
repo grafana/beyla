@@ -228,3 +228,25 @@ func TestSuite_DotNetTLS(t *testing.T) {
 	require.NoError(t, compose.Close())
 	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
 }
+
+func TestSuite_Python(t *testing.T) {
+	compose, err := docker.ComposeSuite("docker-compose-python.yml", path.Join(pathOutput, "test-suite-python.log"))
+	compose.Env = append(compose.Env, `OPEN_PORT=8080`, `EXECUTABLE_NAME=`, `TEST_SERVICE_PORTS=8081:8080`)
+	require.NoError(t, err)
+	require.NoError(t, compose.Up())
+	t.Run("Python RED metrics", testREDMetricsPythonHTTP)
+	t.Run("BPF pinning folder mounted", testBPFPinningMounted)
+	require.NoError(t, compose.Close())
+	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
+}
+
+func TestSuite_PythonTLS(t *testing.T) {
+	compose, err := docker.ComposeSuite("docker-compose-python.yml", path.Join(pathOutput, "test-suite-python-tls.log"))
+	compose.Env = append(compose.Env, `OPEN_PORT=8080`, `EXECUTABLE_NAME=`, `TEST_SERVICE_PORTS=8081:8080`, `TESTSERVER_DOCKERFILE_SUFFIX=_tls`)
+	require.NoError(t, err)
+	require.NoError(t, compose.Up())
+	t.Run("Python SSL RED metrics", testREDMetricsPythonHTTPS)
+	t.Run("BPF pinning folder mounted", testBPFPinningMounted)
+	require.NoError(t, compose.Close())
+	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
+}

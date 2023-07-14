@@ -25,6 +25,7 @@ var defaultConfig = Config{
 		BpfBaseDir:   "/var/run/otelauto",
 	},
 	Metrics: otel.MetricsConfig{
+		Protocol: otel.ProtocolHTTPProtobuf,
 		Interval: 5 * time.Second,
 	},
 	Traces: otel.TracesConfig{

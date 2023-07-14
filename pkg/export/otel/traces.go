@@ -26,7 +26,7 @@ import (
 	"github.com/grafana/ebpf-autoinstrument/pkg/transform"
 )
 
-func log() *slog.Logger {
+func tlog() *slog.Logger {
 	return slog.With("component", "otel.TracesReporter")
 }
 
@@ -48,7 +48,6 @@ type TracesConfig struct {
 	Endpoint       string `yaml:"endpoint" env:"OTEL_EXPORTER_OTLP_ENDPOINT"`
 	TracesEndpoint string `yaml:"-" env:"OTEL_EXPORTER_OTLP_TRACES_ENDPOINT"`
 
-	// TODO: Protocol will remain undocumented until we support it also in the metrics exporter.
 	Protocol       Protocol `yaml:"protocol" env:"OTEL_EXPORTER_OTLP_PROTOCOL"`
 	TracesProtocol Protocol `yaml:"-" env:"OTEL_EXPORTER_OTLP_TRACES_PROTOCOL"`
 
@@ -95,7 +94,7 @@ func TracesReporterProvider(ctx context.Context, cfg TracesConfig) (node.Termina
 }
 
 func newTracesReporter(ctx context.Context, cfg *TracesConfig) (*TracesReporter, error) {
-	log := log()
+	log := tlog()
 	r := TracesReporter{ctx: ctx}
 
 	// Instantiate the OTLP HTTP or GRPC traceExporter
@@ -162,7 +161,7 @@ func grpcTracer(ctx context.Context, cfg *TracesConfig) (*otlptrace.Exporter, er
 	}
 	texp, err := otlptracegrpc.New(ctx, topts...)
 	if err != nil {
-		return nil, fmt.Errorf("creating HTTP trace exporter: %w", err)
+		return nil, fmt.Errorf("creating GRPC trace exporter: %w", err)
 	}
 	return texp, nil
 }
@@ -395,7 +394,7 @@ func (r *TracesReporter) namedTracer(comm string) trace2.Tracer {
 	return traceProvider.Tracer(reporterName)
 }
 
-func parseEndpoint(cfg *TracesConfig) (*url.URL, error) {
+func parseTracesEndpoint(cfg *TracesConfig) (*url.URL, error) {
 	endpoint := cfg.TracesEndpoint
 	if endpoint == "" {
 		endpoint = cfg.Endpoint
@@ -412,16 +411,16 @@ func parseEndpoint(cfg *TracesConfig) (*url.URL, error) {
 }
 
 func getHTTPTracesEndpointOptions(cfg *TracesConfig) ([]otlptracehttp.Option, error) {
-	log := log().With("transport", "http")
+	log := tlog().With("transport", "http")
 
-	murl, err := parseEndpoint(cfg)
+	murl, err := parseTracesEndpoint(cfg)
 	if err != nil {
 		return nil, err
 	}
 
 	log.Debug("Configuring exporter", "protocol",
 		cfg.Protocol, "tracesProtocol", cfg.TracesProtocol, "endpoint", murl.Host)
-	setProtocol(cfg)
+	setTracesProtocol(cfg)
 	opts := []otlptracehttp.Option{
 		otlptracehttp.WithEndpoint(murl.Host),
 	}
@@ -445,15 +444,14 @@ func getHTTPTracesEndpointOptions(cfg *TracesConfig) ([]otlptracehttp.Option, er
 }
 
 func getGRPCTracesEndpointOptions(cfg *TracesConfig) ([]otlptracegrpc.Option, error) {
-	log := log().With("transport", "grpc")
-	murl, err := parseEndpoint(cfg)
+	log := tlog().With("transport", "grpc")
+	murl, err := parseTracesEndpoint(cfg)
 	if err != nil {
 		return nil, err
 	}
 
 	log.Debug("Configuring exporter", "protocol",
 		cfg.Protocol, "tracesProtocol", cfg.TracesProtocol, "endpoint", murl.Host)
-	setProtocol(cfg)
 	opts := []otlptracegrpc.Option{
 		otlptracegrpc.WithEndpoint(murl.Host),
 	}
@@ -475,7 +473,7 @@ func getGRPCTracesEndpointOptions(cfg *TracesConfig) ([]otlptracegrpc.Option, er
 // if the user supplied the value via configuration file (and not via env vars), we override the environment.
 // To be as least intrusive as possible, we will change the variables if strictly needed
 // TODO: remove this once otelptracehttp.WithProtocol is supported
-func setProtocol(cfg *TracesConfig) {
+func setTracesProtocol(cfg *TracesConfig) {
 	if _, ok := os.LookupEnv(envTracesProtocol); ok {
 		return
 	}

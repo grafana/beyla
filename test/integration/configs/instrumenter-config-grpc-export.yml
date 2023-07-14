@@ -3,8 +3,8 @@ routes:
     - /basic/:rnd
   unmatch: path
 otel_metrics_export:
-  # TODO: change by 4317
-  endpoint: http://otelcol:4318
+  endpoint: http://otelcol:4317
+  protocol: grpc
 otel_traces_export:
   endpoint: http://jaeger:4317
   protocol: grpc

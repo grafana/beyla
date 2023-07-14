@@ -5,11 +5,13 @@ import (
 	"crypto/tls"
 	"fmt"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 
 	"github.com/mariomac/pipes/pkg/node"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp"
 	instrument "go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/sdk/instrumentation"
@@ -17,11 +19,16 @@ import (
 	"go.opentelemetry.io/otel/sdk/metric/aggregation"
 	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
 	"golang.org/x/exp/slog"
+	"google.golang.org/grpc/credentials"
 
 	"github.com/grafana/ebpf-autoinstrument/pkg/imetrics"
 	"github.com/grafana/ebpf-autoinstrument/pkg/pipe/global"
 	"github.com/grafana/ebpf-autoinstrument/pkg/transform"
 )
+
+func mlog() *slog.Logger {
+	return slog.With("component", "otel.MetricsReporter")
+}
 
 const (
 	HTTPServerDuration    = "http.server.duration"
@@ -45,6 +52,9 @@ type MetricsConfig struct {
 	Endpoint        string        `yaml:"endpoint" env:"OTEL_EXPORTER_OTLP_ENDPOINT"`
 	MetricsEndpoint string        `yaml:"-" env:"OTEL_EXPORTER_OTLP_METRICS_ENDPOINT"`
 
+	Protocol        Protocol `yaml:"protocol" env:"OTEL_EXPORTER_OTLP_PROTOCOL"`
+	MetricsProtocol Protocol `yaml:"-" env:"OTEL_EXPORTER_OTLP_METRICS_PROTOCOL"`
+
 	// InsecureSkipVerify is not standard, so we don't follow the same naming convention
 	InsecureSkipVerify bool `yaml:"insecure_skip_verify" env:"OTEL_INSECURE_SKIP_VERIFY"`
 
@@ -55,9 +65,19 @@ type MetricsConfig struct {
 	ReportPeerInfo bool `yaml:"report_peer" env:"METRICS_REPORT_PEER"`
 }
 
+func (m *MetricsConfig) GetProtocol() Protocol {
+	if m.MetricsProtocol != "" {
+		return m.MetricsProtocol
+	}
+	return m.Protocol
+}
+
 // Enabled specifies that the OTEL metrics node is enabled if and only if
 // either the OTEL endpoint and OTEL metrics endpoint is defined.
 // If not enabled, this node won't be instantiated
+// Reason to disable linting: it requires to be a value despite it is considered a "heavy struct".
+// This method is invoked only once during startup time so it doesn't have a noticeable performance impact.
+// nolint:gocritic
 func (m MetricsConfig) Enabled() bool {
 	return m.Endpoint != "" || m.MetricsEndpoint != ""
 }
@@ -76,6 +96,9 @@ type MetricsReporter struct {
 	httpClientRequestSize instrument.Float64Histogram
 }
 
+// Reason to disable linting: it requires to be a value despite it is considered a "heavy struct".
+// This method is invoked only once during startup time so it doesn't have a noticeable performance impact.
+// nolint:gocritic
 func MetricsReporterProvider(ctx context.Context, cfg MetricsConfig) (node.TerminalFunc[[]transform.HTTPRequestSpan], error) {
 	mr, err := newMetricsReporter(ctx, &cfg)
 	if err != nil {
@@ -85,24 +108,21 @@ func MetricsReporterProvider(ctx context.Context, cfg MetricsConfig) (node.Termi
 }
 
 func newMetricsReporter(ctx context.Context, cfg *MetricsConfig) (*MetricsReporter, error) {
+	log := mlog()
 	mr := MetricsReporter{
 		ctx:          ctx,
 		reportTarget: cfg.ReportTarget,
 		reportPeer:   cfg.ReportPeerInfo,
 	}
 
-	resources := otelResource(ctx, cfg.ServiceName, cfg.ServiceNamespace)
-
-	opts, err := getMetricEndpointOptions(cfg)
+	// Instantiate the OTLP HTTP or GRPC metrics exporter
+	exporter, err := instantiateMetricsExporter(ctx, cfg, log)
 	if err != nil {
 		return nil, err
 	}
-	mexp, err := otlpmetrichttp.New(ctx, opts...)
-	if err != nil {
-		return nil, fmt.Errorf("creating metric exporter: %w", err)
-	}
-	mr.exporter = instrumentMetricsExporter(ctx, mexp)
+	mr.exporter = instrumentMetricsExporter(ctx, exporter)
 
+	resources := otelResource(ctx, cfg.ServiceName, cfg.ServiceNamespace)
 	// changes
 	mr.provider = metric.NewMeterProvider(
 		metric.WithResource(resources),
@@ -143,6 +163,51 @@ func newMetricsReporter(ctx context.Context, cfg *MetricsConfig) (*MetricsReport
 		return nil, fmt.Errorf("creating http size histogram metric: %w", err)
 	}
 	return &mr, nil
+}
+
+func instantiateMetricsExporter(ctx context.Context, cfg *MetricsConfig, log *slog.Logger) (metric.Exporter, error) {
+	var err error
+	var exporter metric.Exporter
+	switch proto := cfg.GetProtocol(); proto {
+	case ProtocolHTTPJSON, ProtocolHTTPProtobuf, "": // zero value defaults to HTTP for backwards-compatibility
+		log.Debug("instantiating HTTP MetricsReporter", "protocol", proto)
+		if exporter, err = httpMetricsExporter(ctx, cfg); err != nil {
+			return nil, fmt.Errorf("can't instantiate OTEL HTTP metrics exporter: %w", err)
+		}
+	case ProtocolGRPC:
+		log.Debug("instantiating GRPC MetricsReporter", "protocol", proto)
+		if exporter, err = grpcMetricsExporter(ctx, cfg); err != nil {
+			return nil, fmt.Errorf("can't instantiate OTEL GRPC metrics exporter: %w", err)
+		}
+	default:
+		return nil, fmt.Errorf("invalid protocol value: %q. Accepted values are: %s, %s, %s",
+			proto, ProtocolGRPC, ProtocolHTTPJSON, ProtocolHTTPProtobuf)
+	}
+	return exporter, nil
+}
+
+func httpMetricsExporter(ctx context.Context, cfg *MetricsConfig) (metric.Exporter, error) {
+	opts, err := getHTTPMetricEndpointOptions(cfg)
+	if err != nil {
+		return nil, err
+	}
+	mexp, err := otlpmetrichttp.New(ctx, opts...)
+	if err != nil {
+		return nil, fmt.Errorf("creating HTTP metric exporter: %w", err)
+	}
+	return mexp, nil
+}
+
+func grpcMetricsExporter(ctx context.Context, cfg *MetricsConfig) (metric.Exporter, error) {
+	opts, err := getGRPCMetricEndpointOptions(cfg)
+	if err != nil {
+		return nil, err
+	}
+	mexp, err := otlpmetricgrpc.New(ctx, opts...)
+	if err != nil {
+		return nil, fmt.Errorf("creating GRPC metric exporter: %w", err)
+	}
+	return mexp, nil
 }
 
 func (r *MetricsReporter) close() {
@@ -254,10 +319,60 @@ func (r *MetricsReporter) reportMetrics(input <-chan []transform.HTTPRequestSpan
 	}
 }
 
-// Linter disabled by reason: cyclomatic complexity reaches 11 but the function is almost flat.
-//
-//nolint:cyclop
-func getMetricEndpointOptions(cfg *MetricsConfig) ([]otlpmetrichttp.Option, error) {
+func getHTTPMetricEndpointOptions(cfg *MetricsConfig) ([]otlpmetrichttp.Option, error) {
+	log := mlog().With("transport", "http")
+	murl, err := parseMetricsEndpoint(cfg)
+	if err != nil {
+		return nil, err
+	}
+	log.Debug("Configuring exporter",
+		"protocol", cfg.Protocol, "metricsProtocol", cfg.MetricsProtocol, "endpoint", murl.Host)
+
+	setMetricsProtocol(cfg)
+	opts := []otlpmetrichttp.Option{
+		otlpmetrichttp.WithEndpoint(murl.Host),
+	}
+	if murl.Scheme == "http" || murl.Scheme == "unix" {
+		log.Debug("Specifying insecure connection", "scheme", murl.Scheme)
+		opts = append(opts, otlpmetrichttp.WithInsecure())
+	}
+	if len(murl.Path) > 0 && murl.Path != "/" && !strings.HasSuffix(murl.Path, "/v1/metrics") {
+		urlPath := murl.Path + "/v1/metrics"
+		log.Debug("Specifying path", "path", urlPath)
+		opts = append(opts, otlpmetrichttp.WithURLPath(urlPath))
+	}
+	if cfg.InsecureSkipVerify {
+		log.Debug("Setting InsecureSkipVerify")
+		opts = append(opts, otlpmetrichttp.WithTLSClientConfig(&tls.Config{InsecureSkipVerify: true}))
+	}
+	return opts, nil
+}
+
+func getGRPCMetricEndpointOptions(cfg *MetricsConfig) ([]otlpmetricgrpc.Option, error) {
+	log := mlog().With("transport", "grpc")
+	murl, err := parseMetricsEndpoint(cfg)
+	if err != nil {
+		return nil, err
+	}
+	log.Debug("Configuring exporter",
+		"protocol", cfg.Protocol, "metricsProtocol", cfg.MetricsProtocol, "endpoint", murl.Host)
+
+	setMetricsProtocol(cfg)
+	opts := []otlpmetricgrpc.Option{
+		otlpmetricgrpc.WithEndpoint(murl.Host),
+	}
+	if murl.Scheme == "http" || murl.Scheme == "unix" {
+		log.Debug("Specifying insecure connection", "scheme", murl.Scheme)
+		opts = append(opts, otlpmetricgrpc.WithInsecure())
+	}
+	if cfg.InsecureSkipVerify {
+		log.Debug("Setting InsecureSkipVerify")
+		opts = append(opts, otlpmetricgrpc.WithTLSCredentials(credentials.NewTLS(&tls.Config{InsecureSkipVerify: true})))
+	}
+	return opts, nil
+}
+
+func parseMetricsEndpoint(cfg *MetricsConfig) (*url.URL, error) {
 	endpoint := cfg.MetricsEndpoint
 	if endpoint == "" {
 		endpoint = cfg.Endpoint
@@ -270,18 +385,26 @@ func getMetricEndpointOptions(cfg *MetricsConfig) ([]otlpmetrichttp.Option, erro
 	if murl.Scheme == "" || murl.Host == "" {
 		return nil, fmt.Errorf("URL %q must have a scheme and a host", endpoint)
 	}
+	return murl, nil
+}
 
-	opts := []otlpmetrichttp.Option{
-		otlpmetrichttp.WithEndpoint(murl.Host),
+// HACK: at the time of writing this, the otelpmetrichttp API does not support explicitly
+// setting the protocol. They should be properly set via environment variables, but
+// if the user supplied the value via configuration file (and not via env vars), we override the environment.
+// To be as least intrusive as possible, we will change the variables if strictly needed
+// TODO: remove this once otelpmetrichttp.WithProtocol is supported
+func setMetricsProtocol(cfg *MetricsConfig) {
+	if _, ok := os.LookupEnv(envMetricsProtocol); ok {
+		return
 	}
-	if murl.Scheme == "http" || murl.Scheme == "unix" {
-		opts = append(opts, otlpmetrichttp.WithInsecure())
+	if _, ok := os.LookupEnv(envProtocol); ok {
+		return
 	}
-	if len(murl.Path) > 0 && murl.Path != "/" && !strings.HasSuffix(murl.Path, "/v1/metrics") {
-		opts = append(opts, otlpmetrichttp.WithURLPath(murl.Path+"/v1/metrics"))
+	if cfg.MetricsProtocol != "" {
+		os.Setenv(envMetricsProtocol, string(cfg.MetricsProtocol))
+		return
 	}
-	if cfg.InsecureSkipVerify {
-		opts = append(opts, otlpmetrichttp.WithTLSClientConfig(&tls.Config{InsecureSkipVerify: true}))
+	if cfg.Protocol != "" {
+		os.Setenv(envProtocol, string(cfg.Protocol))
 	}
-	return opts, nil
 }

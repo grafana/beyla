@@ -282,6 +282,9 @@ go.opentelemetry.io/otel/exporters/otlp/otlpmetric
 go.opentelemetry.io/otel/exporters/otlp/otlpmetric/internal
 go.opentelemetry.io/otel/exporters/otlp/otlpmetric/internal/oconf
 go.opentelemetry.io/otel/exporters/otlp/otlpmetric/internal/transform
+# go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc v0.39.0
+## explicit; go 1.19
+go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc
 # go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp v0.39.0
 ## explicit; go 1.19
 go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp

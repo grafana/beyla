@@ -203,12 +203,26 @@ the environment variables from the [standard OTEL exporter configuration](https:
 |------------|----------------------------------------------------------------------------|------|---------|
 | `endpoint` | `OTEL_EXPORTER_OTLP_ENDPOINT` or<br/>`OTEL_EXPORTER_OTLP_METRICS_ENDPOINT` | URL  | (unset) |
 
-Specifies the OpentTelemetry endpoint where metrics will be sent.
+Specifies the OpenTelemetry endpoint where metrics will be sent.
 
 Using the `OTEL_EXPORTER_OTLP_ENDPOINT` env var sets a common endpoint for both the metrics and
 [traces](#otel-traces-exporter) exporters. Using the `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT` env var
 or the `endpoint` YAML property will set the endpoint only for the metrics exporter node,
 so the traces exporter won't be activated unless explicitly specified.
+
+| YAML       | Env var                                                                    | Type   | Default        |
+|------------|----------------------------------------------------------------------------|--------|----------------|
+| `protocol` | `OTEL_EXPORTER_OTLP_PROTOCOL` or<br/>`OTEL_EXPORTER_OTLP_METRICS_PROTOCOL` | string | `http/protobuf |
+
+Specifies the transport/encoding protocol of the OpenTelemetry endpoint.
+
+The accepted values, as defined by the [OTLP Exporter Confguration document]( 
+https://opentelemetry.io/docs/concepts/sdk-configuration/otlp-exporter-configuration/#otel_exporter_otlp_protocol
+) are `http/json`, `http/protobuf` and `grpc`.
+
+Using the `OTEL_EXPORTER_OTLP_PROTOCOL` env var sets a common protocol for both the metrics and
+[traces](#otel-traces-exporter) exporters. Using the `OTEL_EXPORTER_OTLP_METRICS_PROTOCOL` env var
+or the `protocol` YAML property will set the protocol only for the metrics exporter node.
 
 | YAML                   | Env var                     | Type | Default |
 |------------------------|-----------------------------|------|---------|
@@ -272,6 +286,21 @@ Using the `OTEL_EXPORTER_OTLP_ENDPOINT` env var sets a common endpoint for both 
 [metrics](#otel-metrics-exporter) and traces exporters. Using the `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` env var
 or the `endpoint` YAML property will set the endpoint only for the metrics exporter node,
 so the metrics exporter won't be activated unless explicitly specified.
+
+| YAML       | Env var                                                                   | Type   | Default        |
+|------------|---------------------------------------------------------------------------|--------|----------------|
+| `protocol` | `OTEL_EXPORTER_OTLP_PROTOCOL` or<br/>`OTEL_EXPORTER_OTLP_TRACES_PROTOCOL` | string | `http/protobuf |
+
+Specifies the transport/encoding protocol of the OpenTelemetry endpoint.
+
+The accepted values, as defined by the [OTLP Exporter Confguration document](
+https://opentelemetry.io/docs/concepts/sdk-configuration/otlp-exporter-configuration/#otel_exporter_otlp_protocol
+) are `http/json`, `http/protobuf` and `grpc`.
+
+Using the `OTEL_EXPORTER_OTLP_PROTOCOL` env var sets a common protocol for both the metrics and
+[traces](#otel-traces-exporter) exporters. Using the `OTEL_EXPORTER_OTLP_TRACES_PROTOCOL` env var
+or the `protocol` YAML property will set the protocol only for the traces exporter node.
+
 
 | YAML                   | Env var                     | Type | Default |
 |------------------------|-----------------------------|------|---------|

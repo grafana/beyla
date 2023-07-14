@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -28,7 +29,7 @@ func TestTracesEndpoint(t *testing.T) {
 	}
 
 	t.Run("testing with two endpoints", func(t *testing.T) {
-		testTracesEndpLen(t, 1, &tcfg)
+		testHTTPTracesEndpLen(t, 1, &tcfg)
 	})
 
 	tcfg = TracesConfig{
@@ -39,49 +40,140 @@ func TestTracesEndpoint(t *testing.T) {
 	}
 
 	t.Run("testing with only trace endpoint", func(t *testing.T) {
-		testTracesEndpLen(t, 1, &tcfg)
+		testHTTPTracesEndpLen(t, 1, &tcfg)
 	})
 
 	tcfg.Endpoint = "https://localhost:3131"
 	tcfg.TracesEndpoint = ""
 
 	t.Run("testing with only non-signal endpoint", func(t *testing.T) {
-		testTracesEndpLen(t, 1, &tcfg)
+		testHTTPTracesEndpLen(t, 1, &tcfg)
 	})
 
 	tcfg.Endpoint = "http://localhost:3131"
 	t.Run("testing with insecure endpoint", func(t *testing.T) {
-		testTracesEndpLen(t, 2, &tcfg)
+		testHTTPTracesEndpLen(t, 2, &tcfg)
 	})
 
 	tcfg.Endpoint = "http://localhost:3131/path_to_endpoint"
 	t.Run("testing with insecure endpoint and path", func(t *testing.T) {
-		testTracesEndpLen(t, 3, &tcfg)
+		testHTTPTracesEndpLen(t, 3, &tcfg)
 	})
 
 	tcfg.Endpoint = "http://localhost:3131/v1/traces"
 	t.Run("testing with insecure endpoint and containing v1/traces", func(t *testing.T) {
-		testTracesEndpLen(t, 2, &tcfg)
+		testHTTPTracesEndpLen(t, 2, &tcfg)
 	})
 }
 
-func testTracesEndpLen(t *testing.T, expected int, tcfg *TracesConfig) {
-	opts, err := getTracesEndpointOptions(tcfg)
+func testHTTPTracesEndpLen(t *testing.T, expected int, tcfg *TracesConfig) {
+	opts, err := getHTTPTracesEndpointOptions(tcfg)
 	require.NoError(t, err)
 	// otlptracehttp.Options are notoriously hard to compare, so we just test the length
 	assert.Equal(t, expected, len(opts))
 }
 
-func TestMissingSchemeInTracesEndpoint(t *testing.T) {
-	opts, err := getTracesEndpointOptions(&TracesConfig{Endpoint: "http://foo:3030"})
+func TestMissingSchemeInHTTPTracesEndpoint(t *testing.T) {
+	opts, err := getHTTPTracesEndpointOptions(&TracesConfig{Endpoint: "http://foo:3030"})
 	require.NoError(t, err)
 	require.NotEmpty(t, opts)
 
-	_, err = getTracesEndpointOptions(&TracesConfig{Endpoint: "foo:3030"})
+	_, err = getHTTPTracesEndpointOptions(&TracesConfig{Endpoint: "foo:3030"})
 	require.Error(t, err)
 
-	_, err = getTracesEndpointOptions(&TracesConfig{Endpoint: "foo"})
+	_, err = getHTTPTracesEndpointOptions(&TracesConfig{Endpoint: "foo"})
 	require.Error(t, err)
+}
+
+func TestGRPCTracesEndpointOptions(t *testing.T) {
+	t.Run("do not accept URLs without a scheme", func(t *testing.T) {
+		_, err := getGRPCTracesEndpointOptions(&TracesConfig{Endpoint: "foo:3939"})
+		assert.Error(t, err)
+	})
+	t.Run("handles insecure skip verification", func(t *testing.T) {
+		opts, err := getGRPCTracesEndpointOptions(&TracesConfig{
+			Endpoint:           "http://foo:3939",
+			InsecureSkipVerify: true,
+		})
+		assert.NoError(t, err)
+		assert.Len(t, opts, 3) // host, insecure, insecure skip
+	})
+}
+
+func TestTracesSetupHTTP_Protocol(t *testing.T) {
+	testTracesSetupEnv(t, getHTTPTracesEndpointOptions)
+}
+
+func TestTracesSetupGRPC_Protocol(t *testing.T) {
+	testTracesSetupEnv(t, getGRPCTracesEndpointOptions)
+}
+
+// this test should be removed after we can remove the setProtocol function
+func testTracesSetupEnv[T any](
+	t *testing.T,
+	setupEndpointOptions func(config *TracesConfig) ([]T, error),
+) {
+	testCases := []struct {
+		ProtoVal              Protocol
+		TraceProtoVal         Protocol
+		ExpectedProtoEnv      string
+		ExpectedTraceProtoEnv string
+	}{
+		{ProtoVal: "", TraceProtoVal: "", ExpectedProtoEnv: "", ExpectedTraceProtoEnv: ""},
+		{ProtoVal: "", TraceProtoVal: "foo", ExpectedProtoEnv: "", ExpectedTraceProtoEnv: "foo"},
+		{ProtoVal: "bar", TraceProtoVal: "", ExpectedProtoEnv: "bar", ExpectedTraceProtoEnv: ""},
+		{ProtoVal: "bar", TraceProtoVal: "foo", ExpectedProtoEnv: "", ExpectedTraceProtoEnv: "foo"},
+	}
+	for _, tc := range testCases {
+		t.Run(string(tc.ProtoVal)+"/"+string(tc.TraceProtoVal), func(t *testing.T) {
+			defer restoreEnvAfterExecution()()
+			_, err := setupEndpointOptions(&TracesConfig{
+				Endpoint: "http://host:3333",
+				Protocol: tc.ProtoVal, TracesProtocol: tc.TraceProtoVal,
+			})
+			require.NoError(t, err)
+			assert.Equal(t, tc.ExpectedProtoEnv, os.Getenv(envProtocol))
+			assert.Equal(t, tc.ExpectedTraceProtoEnv, os.Getenv(envTracesProtocol))
+		})
+	}
+}
+
+func TestTracesSetupGRPC_DoNotOverrideEnv(t *testing.T) {
+	testTracesSetupEnvDoNotOverrideEnv(t, getHTTPTracesEndpointOptions)
+}
+
+func TestTracesSetupHTTP_DoNotOverrideEnv(t *testing.T) {
+	testTracesSetupEnvDoNotOverrideEnv(t, getGRPCTracesEndpointOptions)
+}
+
+// tets that setProtocol does not override any preexisting environment
+// this test should be removed after we can remove the setProtocol function
+func testTracesSetupEnvDoNotOverrideEnv[T any](
+	t *testing.T,
+	setupEndpointOptions func(config *TracesConfig) ([]T, error),
+) {
+	t.Run("setting both variables", func(t *testing.T) {
+		defer restoreEnvAfterExecution()()
+		require.NoError(t, os.Setenv(envProtocol, "foo-proto"))
+		require.NoError(t, os.Setenv(envTracesProtocol, "bar-proto"))
+		_, err := setupEndpointOptions(&TracesConfig{
+			Endpoint: "http://host:3333", Protocol: "foo", TracesProtocol: "bar",
+		})
+		require.NoError(t, err)
+		assert.Equal(t, "foo-proto", os.Getenv(envProtocol))
+		assert.Equal(t, "bar-proto", os.Getenv(envTracesProtocol))
+	})
+	t.Run("setting only proto env var", func(t *testing.T) {
+		defer restoreEnvAfterExecution()()
+		require.NoError(t, os.Setenv(envProtocol, "foo-proto"))
+		_, err := setupEndpointOptions(&TracesConfig{
+			Endpoint: "http://host:3333", Protocol: "foo",
+		})
+		require.NoError(t, err)
+		_, ok := os.LookupEnv(envTracesProtocol)
+		assert.False(t, ok)
+		assert.Equal(t, "foo-proto", os.Getenv(envProtocol))
+	})
 }
 
 func TestTraces_InternalInstrumentation(t *testing.T) {
@@ -190,4 +282,29 @@ func (f *fakeInternalTraces) Errors() int {
 
 func (f *fakeInternalTraces) SumCount() (sum, count int) {
 	return int(f.sum.Load()), int(f.cnt.Load())
+}
+
+// stores the values of some modified env vars to avoid
+// interferences between cases. Must be invoked as:
+// defer restoreEnvAfterExecution()()
+func restoreEnvAfterExecution() func() {
+	vals := []*struct {
+		name   string
+		val    string
+		exists bool
+	}{
+		{name: envTracesProtocol}, {name: envMetricsProtocol}, {name: envProtocol},
+	}
+	for _, v := range vals {
+		v.val, v.exists = os.LookupEnv(v.name)
+	}
+	return func() {
+		for _, v := range vals {
+			if v.exists {
+				os.Setenv(v.name, v.val)
+			} else {
+				os.Unsetenv(v.name)
+			}
+		}
+	}
 }

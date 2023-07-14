@@ -16,7 +16,7 @@ type instrumentedMetricsExporter struct {
 	internal imetrics.Reporter
 }
 
-func (ie *instrumentedMetricsExporter) Export(ctx context.Context, md metricdata.ResourceMetrics) error {
+func (ie *instrumentedMetricsExporter) Export(ctx context.Context, md *metricdata.ResourceMetrics) error {
 	if err := ie.Exporter.Export(ctx, md); err != nil {
 		ie.internal.OTELMetricExportError(err)
 		return err

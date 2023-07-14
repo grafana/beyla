@@ -16,9 +16,15 @@ import (
 type Protocol string
 
 const (
-	ProtocolGRPC         Protocol = "grpc"
-	ProtocolHTTPProtobuf Protocol = "http/protobuf"
-	ProtocolHTTPJSON     Protocol = "http/json"
+	protocolGRPC         Protocol = "grpc"
+	protocolHTTPProtobuf Protocol = "http/protobuf"
+	protocolHTTPJSON     Protocol = "http/json"
+)
+
+const (
+	envTracesProtocol  = "OTEL_EXPORTER_OTLP_TRACES_PROTOCOL"
+	envMetricsProtocol = "OTEL_EXPORTER_OTLP_METRICS_PROTOCOL"
+	envProtocol        = "OTEL_EXPORTER_OTLP_PROTOCOL"
 )
 
 // TODO: when we join both traces' and metrics ServiceName and ServiceNamespace into a common configuration section

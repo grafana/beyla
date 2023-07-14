@@ -97,17 +97,17 @@ func newTracesReporter(ctx context.Context, cfg *TracesConfig) (*TracesReporter,
 	var err error
 	var exporter trace.SpanExporter
 	switch proto := cfg.GetProtocol(); proto {
-	case ProtocolHTTPJSON, ProtocolHTTPProtobuf, "": // zero value defaults to HTTP for backwards-compatibility
+	case protocolHTTPJSON, protocolHTTPProtobuf, "": // zero value defaults to HTTP for backwards-compatibility
 		if exporter, err = httpTracer(ctx, cfg); err != nil {
 			return nil, fmt.Errorf("can't instantiate OTEL HTTP traces exporter: %w", err)
 		}
-	case ProtocolGRPC:
+	case protocolGRPC:
 		if exporter, err = grpcTracer(ctx, cfg); err != nil {
 			return nil, fmt.Errorf("can't instantiate OTEL GRPC traces exporter: %w", err)
 		}
 	default:
 		return nil, fmt.Errorf("invalid protocol value: %q. Accepted values are: %s, %s, %s",
-			proto, ProtocolGRPC, ProtocolHTTPJSON, ProtocolHTTPProtobuf)
+			proto, protocolGRPC, protocolHTTPJSON, protocolHTTPProtobuf)
 	}
 
 	r.traceExporter = instrumentTraceExporter(ctx, exporter)
@@ -458,17 +458,17 @@ func getGRPCTracesEndpointOptions(cfg *TracesConfig) ([]otlptracegrpc.Option, er
 // To be as least intrusive as possible, we will change the variables if strictly needed
 // TODO: remove this once otelptracehttp.WithProtocol is supported
 func setProtocol(cfg *TracesConfig) {
-	if _, ok := os.LookupEnv("OTEL_EXPORTER_OTLP_TRACES_PROTOCOL"); ok {
+	if _, ok := os.LookupEnv(envTracesProtocol); ok {
 		return
 	}
-	if _, ok := os.LookupEnv("OTEL_EXPORTER_OTLP_PROTOCOL"); ok {
+	if _, ok := os.LookupEnv(envProtocol); ok {
 		return
 	}
 	if cfg.TracesProtocol != "" {
-		os.Setenv("OTEL_EXPORTER_OTLP_TRACES_PROTOCOL", string(cfg.TracesProtocol))
+		os.Setenv(envTracesProtocol, string(cfg.TracesProtocol))
 		return
 	}
 	if cfg.Protocol != "" {
-		os.Setenv("OTEL_EXPORTER_OTLP_PROTOCOL", string(cfg.TracesProtocol))
+		os.Setenv(envProtocol, string(cfg.Protocol))
 	}
 }

@@ -55,6 +55,7 @@ otel_metrics_export:
 			ServiceName: "svc-name",
 			Interval:    5 * time.Second,
 			Endpoint:    "localhost:3131",
+			Protocol:    otel.ProtocolHTTPProtobuf,
 		},
 		Traces: otel.TracesConfig{
 			Protocol:           otel.ProtocolHTTPProtobuf,

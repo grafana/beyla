@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -65,21 +66,21 @@ func TestMetricsEndpoint(t *testing.T) {
 }
 
 func testMetricsEndpLen(t *testing.T, expected int, mcfg *MetricsConfig) {
-	opts, err := getMetricEndpointOptions(mcfg)
+	opts, err := getHTTPMetricEndpointOptions(mcfg)
 	require.NoError(t, err)
-	// otlptracehttp.Options are notoriously hard to compare, so we just test the length
+	// otlpmetrichttp.Options are notoriously hard to compare, so we just test the length
 	assert.Equal(t, expected, len(opts))
 }
 
 func TestMissingSchemeInMetricsEndpoint(t *testing.T) {
-	opts, err := getMetricEndpointOptions(&MetricsConfig{Endpoint: "http://foo:3030"})
+	opts, err := getHTTPMetricEndpointOptions(&MetricsConfig{Endpoint: "http://foo:3030"})
 	require.NoError(t, err)
 	require.NotEmpty(t, opts)
 
-	_, err = getMetricEndpointOptions(&MetricsConfig{Endpoint: "foo:3030"})
+	_, err = getHTTPMetricEndpointOptions(&MetricsConfig{Endpoint: "foo:3030"})
 	require.Error(t, err)
 
-	_, err = getMetricEndpointOptions(&MetricsConfig{Endpoint: "foo"})
+	_, err = getHTTPMetricEndpointOptions(&MetricsConfig{Endpoint: "foo"})
 	require.Error(t, err)
 }
 
@@ -173,6 +174,72 @@ type fakeInternalMetrics struct {
 	sum  atomic.Int32
 	cnt  atomic.Int32
 	errs atomic.Int32
+}
+
+func TestGRPCMetricsEndpointOptions(t *testing.T) {
+	t.Run("do not accept URLs without a scheme", func(t *testing.T) {
+		_, err := getGRPCMetricEndpointOptions(&MetricsConfig{Endpoint: "foo:3939"})
+		assert.Error(t, err)
+	})
+	t.Run("handles insecure skip verification", func(t *testing.T) {
+		opts, err := getGRPCMetricEndpointOptions(&MetricsConfig{
+			Endpoint:           "http://foo:3939",
+			InsecureSkipVerify: true,
+		})
+		assert.NoError(t, err)
+		assert.Len(t, opts, 3) // host, insecure, insecure skip
+	})
+}
+
+func TestMetricsSetupHTTP_Protocol(t *testing.T) {
+	testCases := []struct {
+		ProtoVal               Protocol
+		MetricProtoVal         Protocol
+		ExpectedProtoEnv       string
+		ExpectedMetricProtoEnv string
+	}{
+		{ProtoVal: "", MetricProtoVal: "", ExpectedProtoEnv: "", ExpectedMetricProtoEnv: ""},
+		{ProtoVal: "", MetricProtoVal: "foo", ExpectedProtoEnv: "", ExpectedMetricProtoEnv: "foo"},
+		{ProtoVal: "bar", MetricProtoVal: "", ExpectedProtoEnv: "bar", ExpectedMetricProtoEnv: ""},
+		{ProtoVal: "bar", MetricProtoVal: "foo", ExpectedProtoEnv: "", ExpectedMetricProtoEnv: "foo"},
+	}
+	for _, tc := range testCases {
+		t.Run(string(tc.ProtoVal)+"/"+string(tc.MetricProtoVal), func(t *testing.T) {
+			defer restoreEnvAfterExecution()()
+			_, err := getHTTPMetricEndpointOptions(&MetricsConfig{
+				Endpoint: "http://host:3333",
+				Protocol: tc.ProtoVal, MetricsProtocol: tc.MetricProtoVal,
+			})
+			require.NoError(t, err)
+			assert.Equal(t, tc.ExpectedProtoEnv, os.Getenv(envProtocol))
+			assert.Equal(t, tc.ExpectedMetricProtoEnv, os.Getenv(envMetricsProtocol))
+		})
+	}
+}
+
+func TestMetricSetupHTTP_DoNotOverrideEnv(t *testing.T) {
+	t.Run("setting both variables", func(t *testing.T) {
+		defer restoreEnvAfterExecution()()
+		require.NoError(t, os.Setenv(envProtocol, "foo-proto"))
+		require.NoError(t, os.Setenv(envMetricsProtocol, "bar-proto"))
+		_, err := getHTTPMetricEndpointOptions(&MetricsConfig{
+			Endpoint: "http://host:3333", Protocol: "foo", MetricsProtocol: "bar",
+		})
+		require.NoError(t, err)
+		assert.Equal(t, "foo-proto", os.Getenv(envProtocol))
+		assert.Equal(t, "bar-proto", os.Getenv(envMetricsProtocol))
+	})
+	t.Run("setting only proto env var", func(t *testing.T) {
+		defer restoreEnvAfterExecution()()
+		require.NoError(t, os.Setenv(envProtocol, "foo-proto"))
+		_, err := getHTTPMetricEndpointOptions(&MetricsConfig{
+			Endpoint: "http://host:3333", Protocol: "foo",
+		})
+		require.NoError(t, err)
+		_, ok := os.LookupEnv(envMetricsProtocol)
+		assert.False(t, ok)
+		assert.Equal(t, "foo-proto", os.Getenv(envProtocol))
+	})
 }
 
 func (f *fakeInternalMetrics) OTELMetricExport(len int) {

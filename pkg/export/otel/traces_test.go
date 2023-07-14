@@ -101,18 +101,6 @@ func TestGRPCTracesEndpointOptions(t *testing.T) {
 }
 
 func TestTracesSetupHTTP_Protocol(t *testing.T) {
-	testTracesSetupEnv(t, getHTTPTracesEndpointOptions)
-}
-
-func TestTracesSetupGRPC_Protocol(t *testing.T) {
-	testTracesSetupEnv(t, getGRPCTracesEndpointOptions)
-}
-
-// this test should be removed after we can remove the setProtocol function
-func testTracesSetupEnv[T any](
-	t *testing.T,
-	setupEndpointOptions func(config *TracesConfig) ([]T, error),
-) {
 	testCases := []struct {
 		ProtoVal              Protocol
 		TraceProtoVal         Protocol
@@ -127,7 +115,7 @@ func testTracesSetupEnv[T any](
 	for _, tc := range testCases {
 		t.Run(string(tc.ProtoVal)+"/"+string(tc.TraceProtoVal), func(t *testing.T) {
 			defer restoreEnvAfterExecution()()
-			_, err := setupEndpointOptions(&TracesConfig{
+			_, err := getHTTPTracesEndpointOptions(&TracesConfig{
 				Endpoint: "http://host:3333",
 				Protocol: tc.ProtoVal, TracesProtocol: tc.TraceProtoVal,
 			})
@@ -138,25 +126,12 @@ func testTracesSetupEnv[T any](
 	}
 }
 
-func TestTracesSetupGRPC_DoNotOverrideEnv(t *testing.T) {
-	testTracesSetupEnvDoNotOverrideEnv(t, getHTTPTracesEndpointOptions)
-}
-
 func TestTracesSetupHTTP_DoNotOverrideEnv(t *testing.T) {
-	testTracesSetupEnvDoNotOverrideEnv(t, getGRPCTracesEndpointOptions)
-}
-
-// tets that setProtocol does not override any preexisting environment
-// this test should be removed after we can remove the setProtocol function
-func testTracesSetupEnvDoNotOverrideEnv[T any](
-	t *testing.T,
-	setupEndpointOptions func(config *TracesConfig) ([]T, error),
-) {
 	t.Run("setting both variables", func(t *testing.T) {
 		defer restoreEnvAfterExecution()()
 		require.NoError(t, os.Setenv(envProtocol, "foo-proto"))
 		require.NoError(t, os.Setenv(envTracesProtocol, "bar-proto"))
-		_, err := setupEndpointOptions(&TracesConfig{
+		_, err := getHTTPTracesEndpointOptions(&TracesConfig{
 			Endpoint: "http://host:3333", Protocol: "foo", TracesProtocol: "bar",
 		})
 		require.NoError(t, err)
@@ -166,7 +141,7 @@ func testTracesSetupEnvDoNotOverrideEnv[T any](
 	t.Run("setting only proto env var", func(t *testing.T) {
 		defer restoreEnvAfterExecution()()
 		require.NoError(t, os.Setenv(envProtocol, "foo-proto"))
-		_, err := setupEndpointOptions(&TracesConfig{
+		_, err := getHTTPTracesEndpointOptions(&TracesConfig{
 			Endpoint: "http://host:3333", Protocol: "foo",
 		})
 		require.NoError(t, err)

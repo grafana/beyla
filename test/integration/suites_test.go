@@ -43,6 +43,21 @@ func TestSuite_NoDebugInfo(t *testing.T) {
 	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
 }
 
+func TestSuite_GRPCExport(t *testing.T) {
+	compose, err := docker.ComposeSuite("docker-compose.yml", path.Join(pathOutput, "test-suite-grpc-export.log"))
+	compose.Env = append(compose.Env, "INSTRUMENTER_CONFIG_SUFFIX=-grpc-export")
+	require.NoError(t, err)
+	require.NoError(t, compose.Up())
+	t.Run("RED metrics", testREDMetricsHTTP)
+	t.Run("trace HTTP service and export as GRPC traces", testHTTPTraces)
+	t.Run("trace GRPC service and export as GRPC traces", testGRPCTraces)
+	t.Run("GRPC RED metrics", testREDMetricsGRPC)
+
+	t.Run("BPF pinning folder mounted", testBPFPinningMounted)
+	require.NoError(t, compose.Close())
+	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
+}
+
 // Same as Test suite, but searching the executable by port instead of executable name
 func TestSuite_OpenPort(t *testing.T) {
 	compose, err := docker.ComposeSuite("docker-compose.yml", path.Join(pathOutput, "test-suite-openport.log"))

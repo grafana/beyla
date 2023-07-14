@@ -57,6 +57,7 @@ otel_metrics_export:
 			Endpoint:    "localhost:3131",
 		},
 		Traces: otel.TracesConfig{
+			Protocol:           otel.ProtocolHTTPProtobuf,
 			ServiceName:        "svc-name",
 			Endpoint:           "localhost:3131",
 			TracesEndpoint:     "localhost:3232",

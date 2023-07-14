@@ -26,6 +26,10 @@ import (
 	"github.com/grafana/ebpf-autoinstrument/pkg/transform"
 )
 
+func log() *slog.Logger {
+	return slog.With("component", "otel.TracesReporter")
+}
+
 type SessionSpan struct {
 	ReqSpan transform.HTTPRequestSpan
 	RootCtx context.Context
@@ -91,23 +95,26 @@ func TracesReporterProvider(ctx context.Context, cfg TracesConfig) (node.Termina
 }
 
 func newTracesReporter(ctx context.Context, cfg *TracesConfig) (*TracesReporter, error) {
+	log := log()
 	r := TracesReporter{ctx: ctx}
 
 	// Instantiate the OTLP HTTP or GRPC traceExporter
 	var err error
 	var exporter trace.SpanExporter
 	switch proto := cfg.GetProtocol(); proto {
-	case protocolHTTPJSON, protocolHTTPProtobuf, "": // zero value defaults to HTTP for backwards-compatibility
+	case ProtocolHTTPJSON, ProtocolHTTPProtobuf, "": // zero value defaults to HTTP for backwards-compatibility
+		log.Debug("instantiating HTTP TracesReporter", "protocol", proto)
 		if exporter, err = httpTracer(ctx, cfg); err != nil {
 			return nil, fmt.Errorf("can't instantiate OTEL HTTP traces exporter: %w", err)
 		}
-	case protocolGRPC:
+	case ProtocolGRPC:
+		log.Debug("instantiating GRPC TracesReporter", "protocol", proto)
 		if exporter, err = grpcTracer(ctx, cfg); err != nil {
 			return nil, fmt.Errorf("can't instantiate OTEL GRPC traces exporter: %w", err)
 		}
 	default:
 		return nil, fmt.Errorf("invalid protocol value: %q. Accepted values are: %s, %s, %s",
-			proto, protocolGRPC, protocolHTTPJSON, protocolHTTPProtobuf)
+			proto, ProtocolGRPC, ProtocolHTTPJSON, ProtocolHTTPProtobuf)
 	}
 
 	r.traceExporter = instrumentTraceExporter(ctx, exporter)
@@ -405,25 +412,32 @@ func parseEndpoint(cfg *TracesConfig) (*url.URL, error) {
 }
 
 func getHTTPTracesEndpointOptions(cfg *TracesConfig) ([]otlptracehttp.Option, error) {
+	log := log().With("transport", "http")
+
 	murl, err := parseEndpoint(cfg)
 	if err != nil {
 		return nil, err
 	}
 
+	log.Debug("Configuring exporter", "protocol",
+		cfg.Protocol, "tracesProtocol", cfg.TracesProtocol, "endpoint", murl.Host)
 	setProtocol(cfg)
-
 	opts := []otlptracehttp.Option{
 		otlptracehttp.WithEndpoint(murl.Host),
 	}
 	if murl.Scheme == "http" || murl.Scheme == "unix" {
+		log.Debug("Specifying insecure connection", "scheme", murl.Scheme)
 		opts = append(opts, otlptracehttp.WithInsecure())
 	}
 
 	if len(murl.Path) > 0 && murl.Path != "/" && !strings.HasSuffix(murl.Path, "/v1/traces") {
-		opts = append(opts, otlptracehttp.WithURLPath(murl.Path+"/v1/traces"))
+		urlPath := murl.Path + "/v1/traces"
+		log.Debug("Specifying path", "path", urlPath)
+		opts = append(opts, otlptracehttp.WithURLPath(urlPath))
 	}
 
 	if cfg.InsecureSkipVerify {
+		log.Debug("Setting InsecureSkipVerify")
 		opts = append(opts, otlptracehttp.WithTLSClientConfig(&tls.Config{InsecureSkipVerify: true}))
 	}
 
@@ -431,21 +445,25 @@ func getHTTPTracesEndpointOptions(cfg *TracesConfig) ([]otlptracehttp.Option, er
 }
 
 func getGRPCTracesEndpointOptions(cfg *TracesConfig) ([]otlptracegrpc.Option, error) {
+	log := log().With("transport", "grpc")
 	murl, err := parseEndpoint(cfg)
 	if err != nil {
 		return nil, err
 	}
 
+	log.Debug("Configuring exporter", "protocol",
+		cfg.Protocol, "tracesProtocol", cfg.TracesProtocol, "endpoint", murl.Host)
 	setProtocol(cfg)
-
 	opts := []otlptracegrpc.Option{
 		otlptracegrpc.WithEndpoint(murl.Host),
 	}
 	if murl.Scheme == "http" || murl.Scheme == "unix" {
+		log.Debug("Specifying insecure connection", "scheme", murl.Scheme)
 		opts = append(opts, otlptracegrpc.WithInsecure())
 	}
 
 	if cfg.InsecureSkipVerify {
+		log.Debug("Setting InsecureSkipVerify")
 		opts = append(opts, otlptracegrpc.WithTLSCredentials(credentials.NewTLS(&tls.Config{InsecureSkipVerify: true})))
 	}
 

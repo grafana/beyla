@@ -28,6 +28,7 @@ var defaultConfig = Config{
 		Interval: 5 * time.Second,
 	},
 	Traces: otel.TracesConfig{
+		Protocol:           otel.ProtocolHTTPProtobuf,
 		MaxQueueSize:       4096,
 		MaxExportBatchSize: 4096,
 	},

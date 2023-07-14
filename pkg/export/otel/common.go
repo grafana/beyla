@@ -16,9 +16,9 @@ import (
 type Protocol string
 
 const (
-	protocolGRPC         Protocol = "grpc"
-	protocolHTTPProtobuf Protocol = "http/protobuf"
-	protocolHTTPJSON     Protocol = "http/json"
+	ProtocolGRPC         Protocol = "grpc"
+	ProtocolHTTPProtobuf Protocol = "http/protobuf"
+	ProtocolHTTPJSON     Protocol = "http/json"
 )
 
 const (

@@ -86,7 +86,8 @@ services:
     image: jaegertracing/all-in-one:latest
     ports:
       - "16686:16686" # Query frontend
-      - "4318"        # OTEL traces collector
+      - "4317"        # OTEL GRPC traces collector
+      - "4318"        # OTEL HTTP traces collector
     environment:
       - COLLECTOR_OTLP_ENABLED=true
       - LOG_LEVEL=debug

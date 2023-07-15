@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 	"time"
 
@@ -52,7 +53,11 @@ func ProcessNamed(pathSuffix string) ProcessFinder {
 		for _, p := range processes {
 			exePath, err := p.Exe()
 			if err != nil {
-				// expected for many processes, so we just ignore and keep going
+				// expected for some processes, but it could also be due to insufficient permissions.
+				// we check for insufficient permissions, log a warning, and continue
+				if err := tryAccessPid(p.Pid); err != nil {
+					log.Warn("can't get process information, possibly because of insufficient permissions", "process", p.Pid, "error", err)
+				}
 				continue
 			}
 
@@ -81,6 +86,18 @@ func OwnedPort(port int) ProcessFinder {
 				log.Warn("can't get process connections. Ignoring", "process", p.Pid, "error", err)
 				continue
 			}
+
+			if len(conns) == 0 {
+				// there will be processes with no open file descriptors, but unfortunately the library we use to
+				// get the connections for a given 'pid' swallows any permission errors. We ensure we didn't fail to
+				// find the open file descriptors because of access permissions. If we did, we log a warning to let
+				// the user know they may have configuration issues.
+				if err := tryAccessPid(p.Pid); err != nil {
+					log.Warn("can't get process information, possibly because of insufficient permissions", "process", p.Pid, "error", err)
+					continue
+				}
+			}
+
 			for _, c := range conns {
 				if c.Laddr.Port == uint32(port) {
 					comm, _ := p.Cmdline()
@@ -89,8 +106,15 @@ func OwnedPort(port int) ProcessFinder {
 				}
 			}
 		}
+
 		return found, len(found) != 0
 	}
+}
+
+func tryAccessPid(pid int32) error {
+	dir := fmt.Sprintf("/proc/%d/fd", pid)
+	_, err := os.Open(dir)
+	return err
 }
 
 // findExecELF operation blocks until the executable is available.

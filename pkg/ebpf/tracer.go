@@ -79,6 +79,7 @@ func TracerProvider(ctx context.Context, cfg ebpfcommon.TracerConfig) ([]node.St
 	allFuncs := allGoFunctionNames(programs)
 	elfInfo, goffsets, err := inspect(ctx, &cfg, allFuncs)
 	if err != nil {
+		log.Error("Error inspecting", err)
 		return nil, fmt.Errorf("inspecting offsets: %w", err)
 	}
 

@@ -38,13 +38,13 @@ local secret(name, vault_path, vault_key) = {
 local docker_username_secret = secret('docker_username', 'infra/data/ci/docker_hub', 'username');
 local docker_password_secret = secret('docker_password', 'infra/data/ci/docker_hub', 'password');
 
-local buildx(app) = {
+local buildx(app, auto_tag, tags) = {
   name: '%s-docker-buildx' % app,
   image: 'thegeeklab/drone-docker-buildx:24',
   privileged: true,
   settings: {
-    auto_tag: true,
-    tags: 'main',
+    auto_tag: auto_tag,
+    tags: tags,
     repo: 'grafana/%s' % app,
     dockerfile: 'Dockerfile',
     platforms: ['linux/%s' % arch for arch in archs],
@@ -56,15 +56,19 @@ local buildx(app) = {
 
 local autoinstrument() = pipeline('ebpf-autoinstrument') {
   steps+: [
-    buildx('ebpf-autoinstrument-dryrun') {
-      when: onPRs,
+    buildx('ebpf-autoinstrument-dryrun', false, 'test') {
+      when: onPRs, # TODO: if container creation fails, make the PR fail
       settings+: {
         dry_run: true,
       },
     },
   ] + [
-    buildx('ebpf-autoinstrument') {
-      when: onTagOrMain,
+    buildx('ebpf-autoinstrument', true, 'latest') {
+      when: onTag,
+    },
+  ] + [
+    buildx('ebpf-autoinstrument-main', false, 'main') {
+      when: onMain,
     },
   ],
 };

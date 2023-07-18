@@ -40,10 +40,11 @@ local docker_password_secret = secret('docker_password', 'infra/data/ci/docker_h
 
 local buildx(app) = {
   name: '%s-docker-buildx' % app,
-  image: 'thegeeklab/drone-docker-buildx:23',
+  image: 'thegeeklab/drone-docker-buildx:24',
   privileged: true,
   settings: {
     auto_tag: true,
+    tags: 'main',
     repo: 'grafana/%s' % app,
     dockerfile: 'Dockerfile',
     platforms: ['linux/%s' % arch for arch in archs],

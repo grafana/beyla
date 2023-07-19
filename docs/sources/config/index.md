@@ -266,6 +266,55 @@ Specifies whether the exporter must submit the caller peer address as a metric a
 
 It is disabled by default to avoid cardinality explosion.
 
+| YAML      | Env var | Type   |
+|-----------|---------|--------|
+| `buckets` | (n/a)   | Object |
+
+The `buckets` object allows overriding the bucket boundaries of diverse histograms. See
+[Overriding histogram buckets](#overriding-histogram-buckets) section for more details.
+
+### Overriding histogram buckets
+
+For both OpenTelemetry and Prometheus metrics exporters, you can override the histogram bucket
+boundaries via configuration file (`buckets` YAML section of your metrics exporter configuration).
+
+| YAML                 | Type        |
+|----------------------|-------------|
+| `duration_histogram` | `[]float64` |
+
+Sets the bucket boundaries for the metrics related to the request duration. This is:
+
+* `http.server.duration` (OTEL) / `http_server_duration_seconds` (Prometheus)
+* `http.client.duration` (OTEL) / `http_client_duration_seconds` (Prometheus)
+* `rpc.server.duration` (OTEL) / `rpc_server_duration_seconds` (Prometheus)
+* `rpc.client.duration` (OTEL) / `rpc_client_duration_seconds` (Prometheus)
+
+If the value is unset, the default bucket boundaries follow the
+[recommendation from the OpenTelemetry semantic conventions](
+https://github.com/open-telemetry/opentelemetry-specification/blob/main/specification/metrics/semantic_conventions/http-metrics.md)
+
+```
+0, 0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.25, 0.5, 0.75, 1, 2.5, 5, 7.5, 10`
+```
+
+| YAML                     | Type        |
+|--------------------------|-------------|
+| `request_size_histogram` | `[]float64` |
+
+Sets the bucket boundaries for the metrics related to request sizes. This is:
+
+* `http.server.request.size` (OTEL) / `http_server_request_size_bytes` (Prometheus)
+* `http.client.request.size` (OTEL) / `http_client_request_size_bytes` (Prometheus)
+
+If the value is unset, the default bucket boundaries are:
+
+```
+0, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192
+```
+
+Default values are UNSTABLE and could change if Prometheus or OpenTelemetry semantic
+conventions recommend another set of bucket boundaries.
+
 ## OTEL traces exporter
 
 YAML section `otel_traces`.
@@ -365,6 +414,13 @@ it is recommended to group these requests in the [routes node](#routes-decorator
 Specifies whether the exporter must submit the caller peer address as a metric attribute.
 
 It is disabled by default to avoid cardinality explosion.
+
+| YAML      | Env var | Type   |
+|-----------|---------|--------|
+| `buckets` | (n/a)   | Object |
+
+The `buckets` object allows overriding the bucket boundaries of diverse histograms. See
+[Overriding histogram buckets](#overriding-histogram-buckets) section for more details.
 
 ## Internal metrics reporter
 

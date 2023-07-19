@@ -27,6 +27,7 @@ var defaultConfig = Config{
 	Metrics: otel.MetricsConfig{
 		Protocol: otel.ProtocolHTTPProtobuf,
 		Interval: 5 * time.Second,
+		Buckets:  otel.DefaultBuckets,
 	},
 	Traces: otel.TracesConfig{
 		Protocol:           otel.ProtocolHTTPProtobuf,
@@ -34,7 +35,8 @@ var defaultConfig = Config{
 		MaxExportBatchSize: 4096,
 	},
 	Prometheus: prom.PrometheusConfig{
-		Path: "/metrics",
+		Path:    "/metrics",
+		Buckets: otel.DefaultBuckets,
 	},
 	Printer: false,
 	Noop:    false,

@@ -38,8 +38,8 @@ local secret(name, vault_path, vault_key) = {
 local docker_username_secret = secret('docker_username', 'infra/data/ci/docker_hub', 'username');
 local docker_password_secret = secret('docker_password', 'infra/data/ci/docker_hub', 'password');
 
-local buildx(app, auto_tag, tags) = {
-  name: '%s-docker-buildx' % app,
+local buildx(stepName, app, auto_tag, tags) = {
+  name: 'ebpf-autoinstrument-%s-docker-buildx' % stepName,
   image: 'thegeeklab/drone-docker-buildx:24',
   privileged: true,
   settings: {
@@ -56,18 +56,18 @@ local buildx(app, auto_tag, tags) = {
 
 local autoinstrument() = pipeline('ebpf-autoinstrument') {
   steps+: [
-    buildx('ebpf-autoinstrument-dryrun', false, 'test') {
-      when: onPRs, # TODO: if container creation fails, make the PR fail
+    buildx('dryrun', 'ebpf-autoinstrument-dryrun', false, 'test') {
+      when: onPRs,  // TODO: if container creation fails, make the PR fail
       settings+: {
         dry_run: true,
       },
     },
   ] + [
-    buildx('ebpf-autoinstrument', true, 'latest') {
+    buildx('tagged', 'ebpf-autoinstrument', true, 'latest') {
       when: onTag,
     },
   ] + [
-    buildx('ebpf-autoinstrument-main', false, 'main') {
+    buildx('main', 'ebpf-autoinstrument', false, 'main') {
       when: onMain,
     },
   ],

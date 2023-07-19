@@ -34,6 +34,8 @@ spec:
           imagePullPolicy: IfNotPresent
           securityContext:
             runAsUser: 0
+            # uncomment the following line if the logs still show permission errors:
+            # privileged: true
             capabilities:
               add:
                 - SYS_ADMIN

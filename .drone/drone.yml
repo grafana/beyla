@@ -22,7 +22,7 @@ steps:
     event:
     - pull_request
 - image: thegeeklab/drone-docker-buildx:24
-  name: ebpf-autoinstrument-docker-buildx
+  name: ebpf-autoinstrument-tagged-docker-buildx
   privileged: true
   settings:
     auto_tag: true
@@ -52,7 +52,7 @@ steps:
     platforms:
     - linux/arm64
     - linux/amd64
-    repo: grafana/ebpf-autoinstrument-main
+    repo: grafana/ebpf-autoinstrument
     tags: main
     username:
       from_secret: docker_username
@@ -77,6 +77,6 @@ kind: secret
 name: docker_password
 ---
 kind: signature
-hmac: 07573dab95399efe97ef0366ad71379d9aa922c35b0811bdba1824c71b13d4e0
+hmac: c8e7bb5d13a900799135d67a42a57f199678aa6593a1a4371a449313f5e298b7
 
 ...

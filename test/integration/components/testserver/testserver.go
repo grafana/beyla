@@ -9,6 +9,7 @@ import (
 
 	"github.com/grafana/ebpf-autoinstrument/test/integration/components/testserver/gin"
 	"github.com/grafana/ebpf-autoinstrument/test/integration/components/testserver/gorilla"
+	"github.com/grafana/ebpf-autoinstrument/test/integration/components/testserver/gorillamid"
 	grpctest "github.com/grafana/ebpf-autoinstrument/test/integration/components/testserver/grpc/server"
 	"github.com/grafana/ebpf-autoinstrument/test/integration/components/testserver/std"
 )
@@ -25,8 +26,10 @@ type config struct {
 	// GinPort to listen connections using the Gin framework
 	GinPort int `env:"GIN_PORT" envDefault:"8081"`
 	// GorillaPort to listen connections using the Gorilla Mux framework
-	GorillaPort int    `env:"GORILLA_PORT" envDefault:"8082"`
-	LogLevel    string `env:"LOG_LEVEL" envDefault:"INFO"`
+	GorillaPort int `env:"GORILLA_PORT" envDefault:"8082"`
+	// GorillaPort to listen connections using the Gorilla Mux framework, but using a middleware that has custom ResposeWriter
+	GorillaMidPort int    `env:"GORILLA_MID_PORT" envDefault:"8083"`
+	LogLevel       string `env:"LOG_LEVEL" envDefault:"INFO"`
 }
 
 func main() {
@@ -49,6 +52,10 @@ func main() {
 	}()
 	go func() {
 		gorilla.Setup(cfg.GorillaPort, cfg.STDPort)
+		close(wait)
+	}()
+	go func() {
+		gorillamid.Setup(cfg.GorillaMidPort, cfg.STDPort)
 		close(wait)
 	}()
 	go func() {

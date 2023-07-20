@@ -61,6 +61,7 @@ func (p *Tracer) Constants(_ *exec.FileInfo, offsets *goexec.Offsets) map[string
 		"remoteaddr_ptr_pos",
 		"host_ptr_pos",
 		"content_length_ptr_pos",
+		"resp_req_pos",
 	} {
 		constants[s] = offsets.Field[s]
 	}
@@ -80,10 +81,12 @@ func (p *Tracer) GoProbes() map[string]ebpfcommon.FunctionPrograms {
 		"net/http.HandlerFunc.ServeHTTP": {
 			Required: true,
 			Start:    p.bpfObjects.UprobeServeHTTP,
-			End:      p.bpfObjects.UprobeServeHttpReturn,
 		},
 		"net/http.(*connReader).startBackgroundRead": {
 			Start: p.bpfObjects.UprobeStartBackgroundRead,
+		},
+		"net/http.(*response).WriteHeader": {
+			Start: p.bpfObjects.UprobeWriteHeader,
 		},
 		"net/http.(*Client).send": {
 			Start: p.bpfObjects.UprobeClientSend,
@@ -123,7 +126,9 @@ func (p *GinTracer) GoProbes() map[string]ebpfcommon.FunctionPrograms {
 		"github.com/gin-gonic/gin.(*Engine).ServeHTTP": {
 			Required: true,
 			Start:    p.bpfObjects.UprobeServeHTTP,
-			End:      p.bpfObjects.UprobeServeHttpReturn,
+		},
+		"net/http.(*response).WriteHeader": {
+			Start: p.bpfObjects.UprobeWriteHeader,
 		},
 	}
 }

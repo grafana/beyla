@@ -48,9 +48,33 @@ int uprobe_ServeHTTP(struct pt_regs *ctx) {
     return 0;
 }
 
-SEC("uprobe/ServeHTTP_return")
-int uprobe_ServeHttp_return(struct pt_regs *ctx) {
-    bpf_dbg_printk("=== uprobe/ServeHTTP_return === ");
+SEC("uprobe/startBackgroundRead")
+int uprobe_startBackgroundRead(struct pt_regs *ctx) {
+    bpf_dbg_printk("=== uprobe/proc startBackgroundRead === ");
+
+    void *goroutine_addr = GOROUTINE_PTR(ctx);
+    bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
+
+    // This code is here for keepalive support on HTTP requests. Since the connection is not
+    // established everytime, we set the initial goroutine start on the new read initiation.
+    goroutine_metadata *g_metadata = bpf_map_lookup_elem(&ongoing_goroutines, &goroutine_addr);
+    if (!g_metadata) {
+        goroutine_metadata metadata = {
+            .timestamp = bpf_ktime_get_ns(),
+            .parent = (u64)goroutine_addr,
+        };
+
+        if (bpf_map_update_elem(&ongoing_goroutines, &goroutine_addr, &metadata, BPF_ANY)) {
+            bpf_dbg_printk("can't update active goroutine");
+        }
+    }
+
+    return 0;
+}
+
+SEC("uprobe/WriteHeader")
+int uprobe_WriteHeader(struct pt_regs *ctx) {
+    bpf_dbg_printk("=== uprobe/WriteHeader === ");
     void *goroutine_addr = GOROUTINE_PTR(ctx);
     bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
 
@@ -80,10 +104,18 @@ int uprobe_ServeHttp_return(struct pt_regs *ctx) {
         trace->go_start_monotime_ns = invocation->start_monotime_ns;
     }
 
-    // Read arguments from the original set of registers
+    // Read the response argument
+    void *resp_ptr = GO_PARAM1(ctx);
 
     // Get request struct
-    void *req_ptr = GO_PARAM4(&(invocation->regs));
+    void *req_ptr = 0;
+    bpf_probe_read(&req_ptr, sizeof(req_ptr), (void *)(resp_ptr + resp_req_pos));
+
+    if (!req_ptr) {
+        bpf_printk("can't find req inside the response value");
+        bpf_ringbuf_discard(trace, 0);
+        return 0;
+    }
 
     // Get method from Request.Method
     if (!read_go_str("method", req_ptr, method_ptr_pos, &trace->method, sizeof(trace->method))) {
@@ -117,39 +149,10 @@ int uprobe_ServeHttp_return(struct pt_regs *ctx) {
     }
     bpf_probe_read(&trace->content_length, sizeof(trace->content_length), (void *)(req_ptr + content_length_ptr_pos));
 
-    // get return code from http.ResponseWriter (interface)
-    // assuming implementation of http.ResponseWriter is http.response
-    // TODO: this is really a nonportable assumption
-    void *resp_ptr = GO_PARAM3(&(invocation->regs));
-
-    bpf_probe_read(&trace->status, sizeof(trace->status), (void *)(resp_ptr + status_ptr_pos));
+    trace->status = (u16)(((u64)GO_PARAM2(ctx)) & 0x0ffff);
 
     // submit the completed trace via ringbuffer
     bpf_ringbuf_submit(trace, get_flags());
-
-    return 0;
-}
-
-SEC("uprobe/startBackgroundRead")
-int uprobe_startBackgroundRead(struct pt_regs *ctx) {
-    bpf_dbg_printk("=== uprobe/proc startBackgroundRead === ");
-
-    void *goroutine_addr = GOROUTINE_PTR(ctx);
-    bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
-
-    // This code is here for keepalive support on HTTP requests. Since the connection is not
-    // established everytime, we set the initial goroutine start on the new read initiation.
-    goroutine_metadata *g_metadata = bpf_map_lookup_elem(&ongoing_goroutines, &goroutine_addr);
-    if (!g_metadata) {
-        goroutine_metadata metadata = {
-            .timestamp = bpf_ktime_get_ns(),
-            .parent = (u64)goroutine_addr,
-        };
-
-        if (bpf_map_update_elem(&ongoing_goroutines, &goroutine_addr, &metadata, BPF_ANY)) {
-            bpf_dbg_printk("can't update active goroutine");
-        }
-    }
 
     return 0;
 }

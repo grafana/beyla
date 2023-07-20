@@ -80,7 +80,7 @@ type bpf_debugSpecs struct {
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpf_debugProgramSpecs struct {
 	UprobeServeHTTP           *ebpf.ProgramSpec `ebpf:"uprobe_ServeHTTP"`
-	UprobeServeHttpReturn     *ebpf.ProgramSpec `ebpf:"uprobe_ServeHttp_return"`
+	UprobeWriteHeader         *ebpf.ProgramSpec `ebpf:"uprobe_WriteHeader"`
 	UprobeClientSend          *ebpf.ProgramSpec `ebpf:"uprobe_clientSend"`
 	UprobeClientSendReturn    *ebpf.ProgramSpec `ebpf:"uprobe_clientSendReturn"`
 	UprobeStartBackgroundRead *ebpf.ProgramSpec `ebpf:"uprobe_startBackgroundRead"`
@@ -138,7 +138,7 @@ func (m *bpf_debugMaps) Close() error {
 // It can be passed to loadBpf_debugObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpf_debugPrograms struct {
 	UprobeServeHTTP           *ebpf.Program `ebpf:"uprobe_ServeHTTP"`
-	UprobeServeHttpReturn     *ebpf.Program `ebpf:"uprobe_ServeHttp_return"`
+	UprobeWriteHeader         *ebpf.Program `ebpf:"uprobe_WriteHeader"`
 	UprobeClientSend          *ebpf.Program `ebpf:"uprobe_clientSend"`
 	UprobeClientSendReturn    *ebpf.Program `ebpf:"uprobe_clientSendReturn"`
 	UprobeStartBackgroundRead *ebpf.Program `ebpf:"uprobe_startBackgroundRead"`
@@ -147,7 +147,7 @@ type bpf_debugPrograms struct {
 func (p *bpf_debugPrograms) Close() error {
 	return _Bpf_debugClose(
 		p.UprobeServeHTTP,
-		p.UprobeServeHttpReturn,
+		p.UprobeWriteHeader,
 		p.UprobeClientSend,
 		p.UprobeClientSendReturn,
 		p.UprobeStartBackgroundRead,

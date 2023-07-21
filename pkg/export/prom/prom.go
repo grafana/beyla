@@ -46,8 +46,11 @@ type PrometheusConfig struct {
 	Path           string `yaml:"path" env:"PROMETHEUS_PATH"`
 	ReportTarget   bool   `yaml:"report_target" env:"METRICS_REPORT_TARGET"`
 	ReportPeerInfo bool   `yaml:"report_peer" env:"METRICS_REPORT_PEER"`
+
+	Buckets otel.Buckets `yaml:"buckets"`
 }
 
+// nolint:gocritic
 func (p PrometheusConfig) Enabled() bool {
 	return p.Port != 0
 }
@@ -68,6 +71,7 @@ type metricsReporter struct {
 	bgCtx context.Context
 }
 
+// nolint:gocritic
 func PrometheusEndpointProvider(ctx context.Context, cfg PrometheusConfig) (node.TerminalFunc[[]transform.HTTPRequestSpan], error) {
 	reporter := newReporter(ctx, &cfg)
 	return reporter.reportMetrics, nil
@@ -89,30 +93,32 @@ func newReporter(ctx context.Context, cfg *PrometheusConfig) *metricsReporter {
 		httpDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Name:    HTTPServerDuration,
 			Help:    "duration of HTTP service calls from the server side, in seconds",
-			Buckets: otel.DurationHistogramBoundaries,
+			Buckets: cfg.Buckets.DurationHistogram,
 		}, labelNamesHTTP(cfg, reportRoutes)),
 		httpClientDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Name:    HTTPClientDuration,
 			Help:    "duration of HTTP service calls from the client side, in seconds",
-			Buckets: otel.DurationHistogramBoundaries,
+			Buckets: cfg.Buckets.DurationHistogram,
 		}, labelNamesHTTPClient(cfg)),
 		grpcDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Name:    RPCServerDuration,
 			Help:    "duration of RCP service calls from the server side, in seconds",
-			Buckets: otel.DurationHistogramBoundaries,
+			Buckets: cfg.Buckets.DurationHistogram,
 		}, labelNamesGRPC(cfg)),
 		grpcClientDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Name:    RPCClientDuration,
 			Help:    "duration of GRPC service calls from the client side, in seconds",
-			Buckets: otel.DurationHistogramBoundaries,
+			Buckets: cfg.Buckets.DurationHistogram,
 		}, labelNamesGRPC(cfg)),
 		httpRequestSize: prometheus.NewHistogramVec(prometheus.HistogramOpts{
-			Name: HTTPServerRequestSize,
-			Help: "size, in bytes, of the HTTP request body as received at the server side",
+			Name:    HTTPServerRequestSize,
+			Help:    "size, in bytes, of the HTTP request body as received at the server side",
+			Buckets: cfg.Buckets.RequestSizeHistogram,
 		}, labelNamesHTTP(cfg, reportRoutes)),
 		httpClientRequestSize: prometheus.NewHistogramVec(prometheus.HistogramOpts{
-			Name: HTTPClientRequestSize,
-			Help: "size, in bytes, of the HTTP request body as sent from the client side",
+			Name:    HTTPClientRequestSize,
+			Help:    "size, in bytes, of the HTTP request body as sent from the client side",
+			Buckets: cfg.Buckets.RequestSizeHistogram,
 		}, labelNamesHTTPClient(cfg)),
 	}
 	mr.promConnect.Register(cfg.Port, cfg.Path,

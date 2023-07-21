@@ -39,11 +39,6 @@ const (
 	HTTPClientRequestSize = "http.client.request.size"
 )
 
-// DurationHistogramBoundaries is specified in the OTEL specification
-// https://github.com/open-telemetry/opentelemetry-specification/blob/main/specification/metrics/semantic_conventions/http-metrics.md
-// TODO: allow user overriding them
-var DurationHistogramBoundaries = []float64{0, 0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.25, 0.5, 0.75, 1, 2.5, 5, 7.5, 10}
-
 type MetricsConfig struct {
 	ServiceName      string `yaml:"service_name" env:"OTEL_SERVICE_NAME"`
 	ServiceNamespace string `yaml:"service_namespace" env:"SERVICE_NAMESPACE"`
@@ -63,6 +58,8 @@ type MetricsConfig struct {
 	// requests in the Routes node
 	ReportTarget   bool `yaml:"report_target" env:"METRICS_REPORT_TARGET"`
 	ReportPeerInfo bool `yaml:"report_peer" env:"METRICS_REPORT_PEER"`
+
+	Buckets Buckets `yaml:"buckets"`
 }
 
 func (m *MetricsConfig) GetProtocol() Protocol {
@@ -128,11 +125,12 @@ func newMetricsReporter(ctx context.Context, cfg *MetricsConfig) (*MetricsReport
 		metric.WithResource(resources),
 		metric.WithReader(metric.NewPeriodicReader(mr.exporter,
 			metric.WithInterval(cfg.Interval))),
-		metric.WithView(otelHistogramBuckets(HTTPServerDuration)),
-		metric.WithView(otelHistogramBuckets(HTTPClientDuration)),
-		metric.WithView(otelHistogramBuckets(RPCServerDuration)),
-		metric.WithView(otelHistogramBuckets(RPCClientDuration)),
-		// TODO: add specific buckets also for request sizes
+		metric.WithView(otelHistogramBuckets(HTTPServerDuration, cfg.Buckets.DurationHistogram)),
+		metric.WithView(otelHistogramBuckets(HTTPClientDuration, cfg.Buckets.DurationHistogram)),
+		metric.WithView(otelHistogramBuckets(RPCServerDuration, cfg.Buckets.DurationHistogram)),
+		metric.WithView(otelHistogramBuckets(RPCClientDuration, cfg.Buckets.DurationHistogram)),
+		metric.WithView(otelHistogramBuckets(HTTPServerRequestSize, cfg.Buckets.RequestSizeHistogram)),
+		metric.WithView(otelHistogramBuckets(HTTPClientRequestSize, cfg.Buckets.RequestSizeHistogram)),
 	)
 	// time units for HTTP and GRPC durations are in seconds, according to the OTEL specification:
 	// https://github.com/open-telemetry/opentelemetry-specification/tree/main/specification/metrics/semantic_conventions
@@ -231,7 +229,7 @@ func instrumentMetricsExporter(ctx context.Context, in metric.Exporter) metric.E
 	}
 }
 
-func otelHistogramBuckets(metricName string) metric.View {
+func otelHistogramBuckets(metricName string, buckets []float64) metric.View {
 	return metric.NewView(
 		metric.Instrument{
 			Name:  metricName,
@@ -240,7 +238,7 @@ func otelHistogramBuckets(metricName string) metric.View {
 		metric.Stream{
 			Name: metricName,
 			Aggregation: aggregation.ExplicitBucketHistogram{
-				Boundaries: DurationHistogramBoundaries,
+				Boundaries: buckets,
 			},
 		})
 }

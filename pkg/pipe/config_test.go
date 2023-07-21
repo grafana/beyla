@@ -25,6 +25,11 @@ ebpf:
     - FooBar
 otel_metrics_export:
   endpoint: localhost:3030
+  buckets:
+    duration_histogram: [0, 1, 2]
+prometheus_export:
+  buckets:
+    request_size_histogram: [0, 10, 20, 22]
 `)
 	require.NoError(t, os.Setenv("OTEL_SERVICE_NAME", "svc-name"))
 	require.NoError(t, os.Setenv("NOOP_TRACES", "true"))
@@ -56,6 +61,10 @@ otel_metrics_export:
 			Interval:    5 * time.Second,
 			Endpoint:    "localhost:3131",
 			Protocol:    otel.ProtocolHTTPProtobuf,
+			Buckets: otel.Buckets{
+				DurationHistogram:    []float64{0, 1, 2},
+				RequestSizeHistogram: otel.DefaultBuckets.RequestSizeHistogram,
+			},
 		},
 		Traces: otel.TracesConfig{
 			Protocol:           otel.ProtocolHTTPProtobuf,
@@ -67,7 +76,10 @@ otel_metrics_export:
 		},
 		Prometheus: prom.PrometheusConfig{
 			Path: "/metrics",
-		},
+			Buckets: otel.Buckets{
+				DurationHistogram:    otel.DefaultBuckets.DurationHistogram,
+				RequestSizeHistogram: []float64{0, 10, 20, 22},
+			}},
 		InternalMetrics: imetrics.Config{
 			Prometheus: imetrics.PrometheusConfig{
 				Port: 3210,

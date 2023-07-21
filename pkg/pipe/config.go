@@ -22,7 +22,7 @@ var defaultConfig = Config{
 	EBPF: ebpfcommon.TracerConfig{
 		BatchLength:  100,
 		BatchTimeout: time.Second,
-		BpfBaseDir:   "/var/run/otelauto",
+		BpfBaseDir:   "/var/run/beyla",
 	},
 	Metrics: otel.MetricsConfig{
 		Protocol: otel.ProtocolHTTPProtobuf,

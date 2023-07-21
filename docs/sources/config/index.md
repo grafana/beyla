@@ -11,7 +11,7 @@ argument. Environment variables have priority over the properties in the
 configuration file. E.g.:
 
 ```
-$ OPEN_PORT=8080 otelauto -config /path/to/config.yaml
+$ OPEN_PORT=8080 beyla -config /path/to/config.yaml
 ```
 
 At the end of this document, there is an [example of YAML configuration file](#yaml-file-example).

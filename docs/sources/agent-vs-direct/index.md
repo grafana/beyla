@@ -189,9 +189,9 @@ You can specify both `otel_metrics_export` and `otel_traces_export` properties t
 allow exporting both metrics and traces, or only one of them to export either
 metrics or traces.
 
-To run the Auto-instrumenter (previously installed via `go install github.com/grafana/ebpf-autoinstrument/cmd/otelauto@latest`), you need to specify the path to the
+To run the Auto-instrumenter (previously installed via `go install github.com/grafana/ebpf-autoinstrument/cmd/beyla@latest`), you need to specify the path to the
 configuration YAML "for example, `instrumenter-config.yml`):
 
 ```
-otelauto -config instrumenter-config.yml
+beyla -config instrumenter-config.yml
 ```

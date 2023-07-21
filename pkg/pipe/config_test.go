@@ -54,7 +54,7 @@ prometheus_export:
 			Exec:         "tras",
 			BatchLength:  100,
 			BatchTimeout: time.Second,
-			BpfBaseDir:   "/var/run/otelauto",
+			BpfBaseDir:   "/var/run/beyla",
 		},
 		Metrics: otel.MetricsConfig{
 			ServiceName: "svc-name",

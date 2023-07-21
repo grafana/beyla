@@ -48,7 +48,7 @@ type TracerConfig struct {
 	BatchTimeout time.Duration `yaml:"batch_timeout" env:"BPF_BATCH_TIMEOUT"`
 
 	// BpfBaseDir specifies the base directory where the BPF pinned maps will be mounted.
-	// By default, it will be /var/run/otelauto
+	// By default, it will be /var/run/beyla
 	BpfBaseDir string `yaml:"bpf_fs_base_dir" env:"BPF_FS_BASE_DIR"`
 }
 

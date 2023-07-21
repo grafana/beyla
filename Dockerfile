@@ -28,7 +28,7 @@ FROM ubuntu:latest
 LABEL maintainer="Grafana Labs <hello@grafana.com>"
 
 WORKDIR /
-COPY --from=builder /opt/app-root/bin/otelauto .
+COPY --from=builder /opt/app-root/bin/beyla .
 USER 0:0
 
-CMD [ "/otelauto" ]
+CMD [ "/beyla" ]

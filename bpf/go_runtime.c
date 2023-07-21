@@ -75,6 +75,9 @@ int uprobe_proc_goexit1(struct pt_regs *ctx) {
     bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
 
     bpf_map_delete_elem(&ongoing_goroutines, &goroutine_addr);
+    // We also clean-up ongoing_server_requests so that we can handle hijacked requests, where the ServeHTTP
+    // finishes, but we never call WriteHeader to clean-up the ongoing requests
+    bpf_map_delete_elem(&ongoing_server_requests, &goroutine_addr);
 
     return 0;
 }

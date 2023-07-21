@@ -17,6 +17,8 @@ func testREDMetricsDotNetHTTP(t *testing.T) {
 	}
 }
 
+/*
+// Disabled because of: https://github.com/grafana/ebpf-autoinstrument/issues/208
 func testREDMetricsDotNetHTTPS(t *testing.T) {
 	for _, testCaseURL := range []string{
 		"https://localhost:7034",
@@ -27,3 +29,4 @@ func testREDMetricsDotNetHTTPS(t *testing.T) {
 		})
 	}
 }
+*/

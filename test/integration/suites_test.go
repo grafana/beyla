@@ -233,6 +233,9 @@ func TestSuite_DotNet(t *testing.T) {
 	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
 }
 
+/*
+// Disabled for now as we randomly fail to register 3 events, but only get 2
+// Issue: https://github.com/grafana/ebpf-autoinstrument/issues/208
 func TestSuite_DotNetTLS(t *testing.T) {
 	compose, err := docker.ComposeSuite("docker-compose-dotnet.yml", path.Join(pathOutput, "test-suite-dotnet-tls.log"))
 	compose.Env = append(compose.Env, `OPEN_PORT=7033`, `EXECUTABLE_NAME=`, `TEST_SERVICE_PORTS=7034:7033`, `TESTSERVER_DOCKERFILE_SUFFIX=_tls`)
@@ -243,6 +246,7 @@ func TestSuite_DotNetTLS(t *testing.T) {
 	require.NoError(t, compose.Close())
 	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
 }
+*/
 
 func TestSuite_Python(t *testing.T) {
 	compose, err := docker.ComposeSuite("docker-compose-python.yml", path.Join(pathOutput, "test-suite-python.log"))

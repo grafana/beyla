@@ -197,6 +197,18 @@
       }
     },
     "net/http.response": {
+      "req": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.20.6"
+        },
+        "offsets": [
+          {
+            "offset": 8,
+            "since": "1.17.0"
+          }
+        ]
+      },
       "status": {
         "versions": {
           "oldest": "1.17.0",

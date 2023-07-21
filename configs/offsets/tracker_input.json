@@ -14,7 +14,8 @@
         "Path"
       ],
       "net/http.response": [
-        "status"
+        "status",
+        "req"
       ],
       "net/http.Response": [
         "StatusCode"

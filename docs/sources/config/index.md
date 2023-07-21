@@ -276,7 +276,7 @@ The `buckets` object allows overriding the bucket boundaries of diverse histogra
 ### Overriding histogram buckets
 
 For both OpenTelemetry and Prometheus metrics exporters, you can override the histogram bucket
-boundaries via configuration file (`buckets` YAML section of your metrics exporter configuration).
+boundaries via configuration file (see `buckets` YAML section of your metrics exporter configuration).
 
 | YAML                 | Type        |
 |----------------------|-------------|
@@ -294,7 +294,7 @@ If the value is unset, the default bucket boundaries follow the
 https://github.com/open-telemetry/opentelemetry-specification/blob/main/specification/metrics/semantic_conventions/http-metrics.md)
 
 ```
-0, 0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.25, 0.5, 0.75, 1, 2.5, 5, 7.5, 10`
+0, 0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.25, 0.5, 0.75, 1, 2.5, 5, 7.5, 10
 ```
 
 | YAML                     | Type        |

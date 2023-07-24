@@ -7,12 +7,16 @@ spec:
     app: otelcol
   ports:
     - port: 4317
+      name: otlp-grpc
       targetPort: otlp-grpc
     - port: 4318
+      name: otlp-http
       targetPort: otlp-http
     - port: 9464
+      name: prometheus
       targetPort: prometheus
     - port: 8888
+      name: metrics
       targetPort: metrics
 ---
 apiVersion: v1
@@ -29,7 +33,7 @@ spec:
   containers:
     - name: otelcol
       image: otel/opentelemetry-collector-contrib:0.77.0
-      command: [ "--config=/etc/otelcol-config/otelcol-config.yml" ]
+      args: [ "--config=/etc/otelcol-config/otelcol-config.yml" ]
       volumeMounts:
         - mountPath: /etc/otelcol-config
           name: configs

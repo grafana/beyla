@@ -7,14 +7,19 @@ spec:
     app: testserver
   ports:
     - port: 8080
+      name: http0
       targetPort: http0
     - port: 8081
+      name: http1
       targetPort: http1
     - port: 8082
+      name: http2
       targetPort: http2
     - port: 8083
+      name: http
       targetPort: http3
     - port: 50051
+      name: grpc
       targetPort: grpc
 ---
 apiVersion: v1

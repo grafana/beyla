@@ -7,5 +7,5 @@ nodes:
       - containerPort: 30100
         hostPort: 30100
     extraMounts:
-      - hostPath: ./configs
+      - hostPath: ../../../configs
         containerPath: /configs

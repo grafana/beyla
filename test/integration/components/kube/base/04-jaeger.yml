@@ -7,10 +7,13 @@ spec:
     app: jaeger
   ports:
     - port: 4317
+      name: otlp-grpc
       targetPort: otlp-grpc
     - port: 4318
+      name: otlp-http
       targetPort: otlp-http
     - port: 16686
+      name: query-frontend
       targetPort: query-frontend
 ---
 apiVersion: v1

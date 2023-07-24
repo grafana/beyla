@@ -127,7 +127,7 @@ or [deploying the eBPF Autoinstrument in Kubernetes](https://github.com/grafana/
 You can download the Autoinstrument executable directly with `go install`:
 
 ```
-go install github.com/grafana/ebpf-autoinstrument/cmd/otelauto@latest
+go install github.com/grafana/ebpf-autoinstrument/cmd/beyla@latest
 ```
 
 ## Instrumenting a running service
@@ -147,7 +147,7 @@ traces and metrics), as well as extra configuration options, please check the
 [configuration section in the documentation]({{< relref "../config" >}}).
 
 After the service from the previous section is running, we can instrument it
-by executing the `otelauto` command that we previously downloaded with
+by executing the `beyla` command that we previously downloaded with
 `go install`, as seen in the [Downloading](#downloading-the-autoinstrument) section.
 
 We will configure the eBPF autoinstrument to instrument the executable that owns
@@ -157,7 +157,7 @@ in the `localhost:8999/metrics` HTTP endpoint.
 Remember that you need administrator access to run the instrumenting process:
 
 ```
-$ PROMETHEUS_PORT=8999 PRINT_TRACES=true OPEN_PORT=8080 sudo -E otelauto
+$ PROMETHEUS_PORT=8999 PRINT_TRACES=true OPEN_PORT=8080 sudo -E beyla
 ```
 
 You can now test the instrumented service from another terminal:
@@ -167,7 +167,7 @@ $ curl "http://localhost:8080/hello"
 $ curl "http://localhost:8080/bye"
 ```
 
-After some logs, the `otelauto` standard output should show the traces information
+After some logs, the `beyla` standard output should show the traces information
 of the above requests:
 
 ```

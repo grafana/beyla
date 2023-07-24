@@ -1,5 +1,5 @@
 # Main binary configuration
-CMD ?= otelauto
+CMD ?= beyla
 MAIN_GO_FILE ?= cmd/$(CMD)/main.go
 GOOS ?= linux
 GOARCH ?= amd64
@@ -207,7 +207,7 @@ itest-coverage-data:
 	mkdir -p $(TEST_OUTPUT)/merge
 	go tool covdata merge -i=$(TEST_OUTPUT) -o $(TEST_OUTPUT)/merge
 	go tool covdata textfmt -i=$(TEST_OUTPUT)/merge -o $(TEST_OUTPUT)/itest-covdata.raw.txt
-	# replace the unexpected /src/cmd/otelauto/main.go file by the module path
+	# replace the unexpected /src/cmd/beyla/main.go file by the module path
 	sed 's/^\/src\/cmd\//github.com\/grafana\/ebpf-autoinstrument\/cmd\//' $(TEST_OUTPUT)/itest-covdata.raw.txt > $(TEST_OUTPUT)/itest-covdata.all.txt
 	# exclude generated files from coverage data
 	grep -vE $(EXCLUDE_COVERAGE_FILES) $(TEST_OUTPUT)/itest-covdata.all.txt > $(TEST_OUTPUT)/itest-covdata.txt
@@ -232,4 +232,4 @@ update-licenses: prereqs
 .PHONY: artifact
 artifact: compile
 	@echo "### Packing generated artifact"
-	tar -C ./bin -cvzf bin/otelauto.tar.gz otelauto
+	tar -C ./bin -cvzf bin/beyla.tar.gz beyla

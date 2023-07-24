@@ -16,7 +16,7 @@ data, you can also follow our [step-by-step tutorial]({{< relref "./tutorial" >}
 You can download the Autoinstrument executable directly with `go install`:
 
 ```
-go install github.com/grafana/ebpf-autoinstrument/cmd/otelauto@latest
+go install github.com/grafana/ebpf-autoinstrument/cmd/beyla@latest
 ```
 
 ## Configuring
@@ -52,7 +52,7 @@ Prometheus endpoint listening in the port 8999. The configuration is passed
 exclusively as environment variables:
 
 ```
-$ PROMETHEUS_PORT=8999 OPEN_PORT=443 sudo -E otelauto
+$ PROMETHEUS_PORT=8999 OPEN_PORT=443 sudo -E beyla
 ```
 
 The equivalent execution, but configured via YAML file:
@@ -64,11 +64,11 @@ ebpf:
 prometheus_export:
   port: 8999
 EOF
-$ sudo otelauto -config config.yml
+$ sudo beyla -config config.yml
 ```
 
 The previous YAML configuration can be overriden via environment variables:
 
 ```
-$ PROMETHEUS_PORT=8888 sudo -E otelauto -config config.yml
+$ PROMETHEUS_PORT=8888 sudo -E beyla -config config.yml
 ```

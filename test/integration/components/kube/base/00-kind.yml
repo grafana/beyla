@@ -1,0 +1,11 @@
+apiVersion: kind.x-k8s.io/v1alpha4
+kind: Cluster
+nodes:
+  - role: control-plane
+    extraPortMappings:
+      # hostPorts need to be in range 30000-32767
+      - containerPort: 30100
+        hostPort: 30100
+    extraMounts:
+      - hostPath: ./configs
+        containerPath: /configs

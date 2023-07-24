@@ -45,7 +45,7 @@ func printFeature(client pb.RouteGuideClient, point *pb.Point) {
 		logs.Error("client.GetFeature failed", err)
 		os.Exit(-1)
 	}
-	if slog.Default().Enabled(slog.LevelDebug) {
+	if slog.Default().Enabled(context.TODO(), slog.LevelDebug) {
 		log.Println(feature)
 	}
 }

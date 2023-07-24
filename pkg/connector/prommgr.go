@@ -93,7 +93,7 @@ func wrapInstrumentedHandler(metrics internalIntrumenter, port int, path string,
 
 func wrapDebugHandler(log *slog.Logger, promHandler http.Handler) http.HandlerFunc {
 	// we don't wrap anything for if the log level is not debug or lower
-	if !log.Enabled(slog.LevelDebug) {
+	if !log.Enabled(context.TODO(), slog.LevelDebug) {
 		return promHandler.ServeHTTP
 	}
 	return func(rw http.ResponseWriter, req *http.Request) {

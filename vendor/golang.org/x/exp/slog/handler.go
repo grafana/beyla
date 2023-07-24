@@ -36,6 +36,14 @@ type Handler interface {
 
 	// Handle handles the Record.
 	// It will only be called if Enabled returns true.
+	//
+	// The first argument is the context of the Logger that created the Record,
+	// which may be nil.
+	// It is present solely to provide Handlers access to the context's values.
+	// Canceling the context should not affect record processing.
+	// (Among other things, log messages may be necessary to debug a
+	// cancellation-related problem.)
+	//
 	// Handle methods that produce output should observe the following rules:
 	//   - If r.Time is the zero time, ignore the time.
 	//   - If an Attr's key is the empty string and the value is not a group,
@@ -43,7 +51,7 @@ type Handler interface {
 	//   - If a group's key is empty, inline the group's Attrs.
 	//   - If a group has no Attrs (even if it has a non-empty key),
 	//     ignore it.
-	Handle(r Record) error
+	Handle(context.Context, Record) error
 
 	// WithAttrs returns a new Handler whose attributes consist of
 	// both the receiver's attributes and the arguments.
@@ -92,7 +100,7 @@ func (*defaultHandler) Enabled(_ context.Context, l Level) bool {
 // Collect the level, attributes and message in a string and
 // write it with the default log.Logger.
 // Let the log.Logger handle time and file/line.
-func (h *defaultHandler) Handle(r Record) error {
+func (h *defaultHandler) Handle(ctx context.Context, r Record) error {
 	buf := buffer.New()
 	buf.WriteString(r.Level.String())
 	buf.WriteByte(' ')

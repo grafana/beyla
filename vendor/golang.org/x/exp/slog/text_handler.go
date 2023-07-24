@@ -86,7 +86,7 @@ func (h *TextHandler) WithGroup(name string) Handler {
 //
 // Each call to Handle results in a single serialized call to
 // io.Writer.Write.
-func (h *TextHandler) Handle(r Record) error {
+func (h *TextHandler) Handle(_ context.Context, r Record) error {
 	return h.commonHandler.handle(r)
 }
 
@@ -127,7 +127,7 @@ func byteSlice(a any) ([]byte, bool) {
 	}
 	// Like Printf's %s, we allow both the slice type and the byte element type to be named.
 	t := reflect.TypeOf(a)
-	if t.Kind() == reflect.Slice && t.Elem().Kind() == reflect.Uint8 {
+	if t != nil && t.Kind() == reflect.Slice && t.Elem().Kind() == reflect.Uint8 {
 		return reflect.ValueOf(a).Bytes(), true
 	}
 	return nil, false

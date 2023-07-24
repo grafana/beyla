@@ -128,7 +128,7 @@ func gpingHandler(rw http.ResponseWriter, _ *http.Request) {
 		slog.Error("client.GetFeature failed", err)
 		os.Exit(-1)
 	}
-	if slog.Default().Enabled(slog.LevelDebug) {
+	if slog.Default().Enabled(context.TODO(), slog.LevelDebug) {
 		log.Println(feature)
 	}
 	rw.WriteHeader(204)

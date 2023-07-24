@@ -22,7 +22,7 @@ A log record consists of a time, a level, a message, and a set of key-value
 pairs, where the keys are strings and the values may be of any type.
 As an example,
 
-    slog.Info("hello", "count", 3)
+	slog.Info("hello", "count", 3)
 
 creates a record containing the time of the call,
 a level of Info, the message "hello", and a single
@@ -38,31 +38,31 @@ default logger.
 The default handler formats the log record's message, time, level, and attributes
 as a string and passes it to the [log] package.
 
-    2022/11/08 15:28:26 INFO hello count=3
+	2022/11/08 15:28:26 INFO hello count=3
 
 For more control over the output format, create a logger with a different handler.
 This statement uses [New] to create a new logger with a TextHandler
 that writes structured records in text form to standard error:
 
-    logger := slog.New(slog.NewTextHandler(os.Stderr))
+	logger := slog.New(slog.NewTextHandler(os.Stderr))
 
 [TextHandler] output is a sequence of key=value pairs, easily and unambiguously
 parsed by machine. This statement:
 
-    logger.Info("hello", "count", 3)
+	logger.Info("hello", "count", 3)
 
 produces this output:
 
-    time=2022-11-08T15:28:26.000-05:00 level=INFO msg=hello count=3
+	time=2022-11-08T15:28:26.000-05:00 level=INFO msg=hello count=3
 
 The package also provides [JSONHandler], whose output is line-delimited JSON:
 
-    logger := slog.New(slog.NewJSONHandler(os.Stdout))
-    logger.Info("hello", "count", 3)
+	logger := slog.New(slog.NewJSONHandler(os.Stdout))
+	logger.Info("hello", "count", 3)
 
 produces this output:
 
-    {"time":"2022-11-08T15:28:26.000000000-05:00","level":"INFO","msg":"hello","count":3}
+	{"time":"2022-11-08T15:28:26.000000000-05:00","level":"INFO","msg":"hello","count":3}
 
 Both [TextHandler] and [JSONHandler] can be configured with a [HandlerOptions].
 There are options for setting the minimum level (see Levels, below),
@@ -71,24 +71,23 @@ modifying attributes before they are logged.
 
 Setting a logger as the default with
 
-    slog.SetDefault(logger)
+	slog.SetDefault(logger)
 
 will cause the top-level functions like [Info] to use it.
 [SetDefault] also updates the default logger used by the [log] package,
 so that existing applications that use [log.Printf] and related functions
 will send log records to the logger's handler without needing to be rewritten.
 
-
 # Attrs and Values
 
 An [Attr] is a key-value pair. The Logger output methods accept Attrs as well as
 alternating keys and values. The statement
 
-    slog.Info("hello", slog.Int("count", 3))
+	slog.Info("hello", slog.Int("count", 3))
 
 behaves the same as
 
-    slog.Info("hello", "count", 3)
+	slog.Info("hello", "count", 3)
 
 There are convenience constructors for [Attr] such as [Int], [String], and [Bool]
 for common types, as well as the function [Any] for constructing Attrs of any
@@ -105,11 +104,11 @@ keys and values; this allows it, too, to avoid allocation.
 
 The call
 
-    logger.LogAttrs(slog.LevelInfo, "hello", slog.Int("count", 3))
+	logger.LogAttrs(nil, slog.LevelInfo, "hello", slog.Int("count", 3))
 
 is the most efficient way to achieve the same output as
 
-    slog.Info("hello", "count", 3)
+	slog.Info("hello", "count", 3)
 
 Some attributes are common to many log calls.
 For example, you may wish to include the URL or trace identifier of a server request
@@ -117,12 +116,11 @@ with all log events arising from the request.
 Rather than repeat the attribute with every log call, you can use [Logger.With]
 to construct a new Logger containing the attributes:
 
-    logger2 := logger.With("url", r.URL)
+	logger2 := logger.With("url", r.URL)
 
 The arguments to With are the same key-value pairs used in [Logger.Info].
 The result is a new Logger with the same handler as the original, but additional
 attributes that will appear in the output of every call.
-
 
 # Levels
 
@@ -147,17 +145,16 @@ goroutines.
 To vary the level dynamically for an entire program, first initialize
 a global LevelVar:
 
-    var programLevel = new(slog.LevelVar) // Info by default
+	var programLevel = new(slog.LevelVar) // Info by default
 
 Then use the LevelVar to construct a handler, and make it the default:
 
-    h := slog.HandlerOptions{Level: programLevel}.NewJSONHandler(os.Stderr)
-    slog.SetDefault(slog.New(h))
+	h := slog.HandlerOptions{Level: programLevel}.NewJSONHandler(os.Stderr)
+	slog.SetDefault(slog.New(h))
 
 Now the program can change its logging level with a single statement:
 
-    programLevel.Set(slog.LevelDebug)
-
+	programLevel.Set(slog.LevelDebug)
 
 # Groups
 
@@ -169,17 +166,17 @@ How this qualification is displayed depends on the handler.
 
 Use [Group] to create a Group Attr from a name and a list of Attrs:
 
-    slog.Group("request",
-        slog.String("method", r.Method),
-        slog.Any("url", r.URL))
+	slog.Group("request",
+	    slog.String("method", r.Method),
+	    slog.Any("url", r.URL))
 
 TextHandler would display this group as
 
-    request.method=GET request.url=http://example.com
+	request.method=GET request.url=http://example.com
 
 JSONHandler would display it as
 
-    "request":{"method":"GET","url":"http://example.com"}
+	"request":{"method":"GET","url":"http://example.com"}
 
 Use [Logger.WithGroup] to qualify all of a Logger's output
 with a group name. Calling WithGroup on a Logger results in a
@@ -191,33 +188,31 @@ where subsystems might use the same keys.
 Pass each subsystem a different Logger with its own group name so that
 potential duplicates are qualified:
 
-    logger := slog.Default().With("id", systemID)
-    parserLogger := logger.WithGroup("parser")
-    parseInput(input, parserLogger)
+	logger := slog.Default().With("id", systemID)
+	parserLogger := logger.WithGroup("parser")
+	parseInput(input, parserLogger)
 
 When parseInput logs with parserLogger, its keys will be qualified with "parser",
 so even if it uses the common key "id", the log line will have distinct keys.
 
 # Contexts
 
-This package works with [context.Context] in two ways.
+Some handlers may wish to include information from the [context.Context] that is
+available at the call site. One example of such information
+is the identifier for the current span when tracing is is enabled.
 
-Storing a Logger in a Context is a convenient way to pass it around,
-since many functions already take a Context as an argument.
-Create a Context that contains a Logger with [NewContext],
-and retrieve the Logger with [FromContext].
+The [Logger.Log] and [Logger.LogAttrs] methods take a context as a first
+argument, as do their corresponding top-level functions.
 
-Sometimes a Context holds information that a Handler would like to use.
-For example, tracing systems usually store span identifiers in Contexts.
-To provide a Context to a Handler, associate it with a Logger using [Logger.WithContext]:
+Although the convenience methods on Logger (Info and so on) and the
+corresponding top-level functions do not take a context, the alternatives ending
+in "Ctx" do. For example,
 
-    logger.WithContext(ctx).Info("hello")
+	slog.InfoCtx(ctx, "message")
 
-That sets [Record.Context] to ctx so the Handler can access it.
-
+It is recommended to pass a context to an output method if one is available.
 
 # Advanced topics
-
 
 ## Customizing a type's logging behavior
 
@@ -231,39 +226,27 @@ A LogValue method may return a Value that itself implements [LogValuer]. The [Va
 method handles these cases carefully, avoiding infinite loops and unbounded recursion.
 Handler authors and others may wish to use Value.Resolve instead of calling LogValue directly.
 
-
 ## Wrapping output methods
 
-The logger functions use reflection over the call stack to find the
-file name and line number of the logging call within the application.
-To distinguish logger functions from application functions, the logger
-ignores the topmost few functions on the call stack.
-The number of frames to ignore is called the "depth."
+The logger functions use reflection over the call stack to find the file name
+and line number of the logging call within the application. This can produce
+incorrect source information for functions that wrap slog. For instance, if you
+define this function in file mylog.go:
 
-If your own packages define logging functions that wrap those provided by slog,
-you will want to adjust the depth so that source line
-information points to your wrapper, not the underlying slog function. For instance, if you define
-this function in file mylog.go:
-
-    func Infof(format string, args ...any) {
-        slog.Default().Info(fmt.Sprintf(format, args...))
-    }
+	func Infof(format string, args ...any) {
+	    slog.Default().Info(fmt.Sprintf(format, args...))
+	}
 
 and you call it like this in main.go:
 
-    Infof(slog.Default(), "hello, %s", "world")
+	Infof(slog.Default(), "hello, %s", "world")
 
-then slog will use source file mylog.go, not main.go.
+then slog will report the source file as mylog.go, not main.go.
 
-The [LogDepth] and [LogAttrDepth] functions are designed for this case.
-Their first argument is the number of calls between your wrapper
-function and the LogDepth or LogAttrDepth call.
-The proper definition of Infof is
-
-    func Infof(format string, args ...any) {
-        slog.Default().LogDepth(1, slog.LevelInfo, fmt.Sprintf(format, args...))
-    }
-
+A correct implementation of Infof will obtain the source location
+(pc) and pass it to NewRecord.
+The Infof function in the package-level example called "wrapping"
+demonstrates how to do this.
 
 ## Working with Records
 
@@ -271,13 +254,13 @@ Sometimes a Handler will need to modify a Record
 before passing it on to another Handler or backend.
 A Record contains a mixture of simple public fields (e.g. Time, Level, Message)
 and hidden fields that refer to state (such as attributes) indirectly. This
-means that modifying a simple copy of a Record (e.g. by calling [Record.AddAttrs] to add attributes)
+means that modifying a simple copy of a Record (e.g. by calling
+[Record.Add] or [Record.AddAttrs] to add attributes)
 may have unexpected effects on the original.
 Before modifying a Record, use [Clone] to
 create a copy that shares no state with the original,
 or create a new Record with [NewRecord]
 and build up its Attrs by traversing the old ones with [Record.Attrs].
-
 
 ## Performance considerations
 
@@ -293,12 +276,12 @@ The arguments to a log call are always evaluated, even if the log event is disca
 If possible, defer computation so that it happens only if the value is actually logged.
 For example, consider the call
 
-    slog.Info("starting request", "url", r.URL.String())  // may compute String unnecessarily
+	slog.Info("starting request", "url", r.URL.String())  // may compute String unnecessarily
 
 The URL.String method will be called even if the logger discards Info-level events.
 Instead, pass the URL directly:
 
-    slog.Info("starting request", "url", &r.URL) // calls URL.String only if needed
+	slog.Info("starting request", "url", &r.URL) // calls URL.String only if needed
 
 The built-in [TextHandler] will call its String method, but only
 if the log event is enabled.
@@ -311,20 +294,20 @@ wrap the value in a fmt.Stringer implementation that hides its Marshal methods.
 You can also use the [LogValuer] interface to avoid unnecessary work in disabled log
 calls. Say you need to log some expensive value:
 
-    slog.Debug("frobbing", "value", computeExpensiveValue(arg))
+	slog.Debug("frobbing", "value", computeExpensiveValue(arg))
 
 Even if this line is disabled, computeExpensiveValue will be called.
 To avoid that, define a type implementing LogValuer:
 
-    type expensive struct { arg int }
+	type expensive struct { arg int }
 
-    func (e expensive) LogValue() slog.Value {
-        return slog.AnyValue(computeExpensiveValue(e.arg))
-    }
+	func (e expensive) LogValue() slog.Value {
+	    return slog.AnyValue(computeExpensiveValue(e.arg))
+	}
 
 Then use a value of that type in log calls:
 
-    slog.Debug("frobbing", "value", expensive{arg})
+	slog.Debug("frobbing", "value", expensive{arg})
 
 Now computeExpensiveValue will only be called when the line is enabled.
 

@@ -85,7 +85,7 @@ func (h *JSONHandler) WithGroup(name string) Handler {
 //   - HTML characters are not escaped.
 //
 // Each call to Handle results in a single serialized call to io.Writer.Write.
-func (h *JSONHandler) Handle(r Record) error {
+func (h *JSONHandler) Handle(_ context.Context, r Record) error {
 	return h.commonHandler.handle(r)
 }
 

@@ -7,6 +7,7 @@
 package slog
 
 import (
+	"context"
 	"runtime"
 	"time"
 )
@@ -17,26 +18,26 @@ import (
 // LogDepth is like [Logger.Log], but accepts a call depth to adjust the
 // file and line number in the log record. 1 refers to the caller
 // of LogDepth; 2 refers to the caller's caller; and so on.
-func (l *Logger) LogDepth(calldepth int, level Level, msg string, args ...any) {
-	if !l.Enabled(level) {
+func (l *Logger) logDepth(ctx context.Context, calldepth int, level Level, msg string, args ...any) {
+	if !l.Enabled(ctx, level) {
 		return
 	}
 	var pcs [1]uintptr
 	runtime.Callers(calldepth+2, pcs[:])
-	l.logPC(nil, pcs[0], level, msg, args...)
+	l.logPC(ctx, nil, pcs[0], level, msg, args...)
 }
 
 // LogAttrsDepth is like [Logger.LogAttrs], but accepts a call depth argument
 // which it interprets like [Logger.LogDepth].
-func (l *Logger) LogAttrsDepth(calldepth int, level Level, msg string, attrs ...Attr) {
-	if !l.Enabled(level) {
+func (l *Logger) logAttrsDepth(ctx context.Context, calldepth int, level Level, msg string, attrs ...Attr) {
+	if !l.Enabled(ctx, level) {
 		return
 	}
 	var pcs [1]uintptr
 	runtime.Callers(calldepth+2, pcs[:])
-	r := NewRecord(time.Now(), level, msg, pcs[0], l.ctx)
+	r := NewRecord(time.Now(), level, msg, pcs[0])
 	r.AddAttrs(attrs...)
-	_ = l.Handler().Handle(r)
+	_ = l.Handler().Handle(ctx, r)
 }
 
 // logDepthErr is a trivial wrapper around logDepth, just to make the call
@@ -45,13 +46,13 @@ func (l *Logger) LogAttrsDepth(calldepth int, level Level, msg string, attrs ...
 // TODO: When slog moves to the standard library, replace the fixed call depth
 // with logic based on the Record's pc, and remove this function. See the
 // comment on TestConnections/wrap_default_handler.
-func (l *Logger) logDepthErr(err error, calldepth int, level Level, msg string, args ...any) {
-	if !l.Enabled(level) {
+func (l *Logger) logDepthErr(ctx context.Context, err error, calldepth int, level Level, msg string, args ...any) {
+	if !l.Enabled(ctx, level) {
 		return
 	}
 	var pcs [1]uintptr
 	runtime.Callers(calldepth+2, pcs[:])
-	l.logPC(err, pcs[0], level, msg, args...)
+	l.logPC(ctx, err, pcs[0], level, msg, args...)
 }
 
 // callerPC returns the program counter at the given stack depth.

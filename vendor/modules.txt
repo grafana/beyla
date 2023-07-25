@@ -36,14 +36,16 @@ github.com/cespare/xxhash/v2
 # github.com/chenzhuoyu/base64x v0.0.0-20221115062448-fe3a3abad311
 ## explicit; go 1.15
 github.com/chenzhuoyu/base64x
-# github.com/cilium/ebpf v0.10.0
-## explicit; go 1.18
+# github.com/cilium/ebpf v0.11.0
+## explicit; go 1.19
 github.com/cilium/ebpf
 github.com/cilium/ebpf/asm
 github.com/cilium/ebpf/btf
 github.com/cilium/ebpf/internal
 github.com/cilium/ebpf/internal/epoll
+github.com/cilium/ebpf/internal/kconfig
 github.com/cilium/ebpf/internal/sys
+github.com/cilium/ebpf/internal/tracefs
 github.com/cilium/ebpf/internal/unix
 github.com/cilium/ebpf/link
 github.com/cilium/ebpf/ringbuf
@@ -412,9 +414,10 @@ golang.org/x/arch/x86/x86asm
 # golang.org/x/crypto v0.9.0
 ## explicit; go 1.17
 golang.org/x/crypto/sha3
-# golang.org/x/exp v0.0.0-20230213192124-5e25df0256eb
+# golang.org/x/exp v0.0.0-20230224173230-c95f2b4c22f2
 ## explicit; go 1.18
 golang.org/x/exp/constraints
+golang.org/x/exp/maps
 golang.org/x/exp/slices
 golang.org/x/exp/slog
 golang.org/x/exp/slog/internal/buffer

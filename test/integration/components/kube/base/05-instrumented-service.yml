@@ -30,9 +30,14 @@ metadata:
     app: testserver
 spec:
   shareProcessNamespace: true
+  volumes:
+    - name: configs
+      persistentVolumeClaim:
+        claimName: configs
   containers:
     - name: testserver
-      image: testserver:latest
+      image: testserver:dev
+      imagePullPolicy: Never # loaded into Kind from localhost
       ports:
         - containerPort: 8080
           name: http0
@@ -47,19 +52,23 @@ spec:
       env:
         - name: LOG_LEVEL
           value: "DEBUG"
-    - name: autoinstrumenter
-      image: autoinstrument:latest
+    - name: autoinstrument
+      image: autoinstrument:dev
+      imagePullPolicy: Never # loaded into Kind from localhost
       securityContext:
         privileged: true
+      command: ["/beyla", "--config=/configs/instrumenter-config.yml"]
+      volumeMounts:
+        - mountPath: /configs
+          name: configs
       env:
-        - name: GOCOVERDIR
-          value: "/coverage"
+        # k8s tests still don't support coverage
+#        - name: GOCOVERDIR
+#          value: "/coverage"
         - name: PRINT_TRACES
           value: "true"
         - name: OPEN_PORT
-          value: "${OPEN_PORT}"
-        - name: EXECUTABLE_NAME
-          value: "${EXECUTABLE_NAME}"
+          value: "8080"
         - name: SERVICE_NAMESPACE
           value: "integration-test"
         - name: METRICS_INTERVAL

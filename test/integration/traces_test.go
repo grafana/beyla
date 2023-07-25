@@ -41,7 +41,7 @@ func testHTTPTraces(t *testing.T) {
 	require.NotEmpty(t, parent.TraceID)
 	require.NotEmpty(t, parent.SpanID)
 	// check duration is at least 10ms
-	assert.Less(t, 10*time.Millisecond, parent.Duration)
+	assert.Less(t, (10 * time.Millisecond).Microseconds(), parent.Duration)
 	// check span attributes
 	assert.Truef(t, parent.AllMatches(
 		jaeger.Tag{Key: "otel.library.name", Type: "string", Value: "github.com/grafana/ebpf-autoinstrument"},
@@ -127,7 +127,7 @@ func testGRPCTraces(t *testing.T) {
 	require.NotEmpty(t, parent.TraceID)
 	require.NotEmpty(t, parent.SpanID)
 	// check duration is at least 10ms (10,000 microseconds)
-	assert.Less(t, int64(10_000), parent.Duration)
+	assert.Less(t, (10 * time.Millisecond).Microseconds(), parent.Duration)
 	// check span attributes
 	assert.Truef(t, parent.AllMatches(
 		jaeger.Tag{Key: "otel.library.name", Type: "string", Value: "github.com/grafana/ebpf-autoinstrument"},

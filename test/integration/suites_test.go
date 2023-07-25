@@ -269,3 +269,20 @@ func TestSuite_PythonTLS(t *testing.T) {
 	require.NoError(t, compose.Close())
 	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
 }
+
+func TestSuite_DisableKeepAlives(t *testing.T) {
+	compose, err := docker.ComposeSuite("docker-compose.yml", path.Join(pathOutput, "test-suite-disablekeepalives.log"))
+	require.NoError(t, err)
+	require.NoError(t, compose.Up())
+
+	// Run tests with keepalives disabled:
+	setHTTPClientDisableKeepAlives(true)
+	t.Run("HTTP DisableKeepAlives traces", testHTTPTraces)
+	t.Run("Internal Prometheus DisableKeepAlives metrics", testInternalPrometheusExport)
+	// Reset to defaults for any tests run afterward
+	setHTTPClientDisableKeepAlives(false)
+
+	t.Run("BPF pinning folder mounted", testBPFPinningMounted)
+	require.NoError(t, compose.Close())
+	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
+}

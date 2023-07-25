@@ -20,6 +20,10 @@ var tr = &http.Transport{
 }
 var testHTTPClient = &http.Client{Transport: tr}
 
+func setHTTPClientDisableKeepAlives(disableKeepAlives bool) {
+	testHTTPClient.Transport.(*http.Transport).DisableKeepAlives = disableKeepAlives
+}
+
 func doHTTPPost(t *testing.T, path string, status int, jsonBody []byte) {
 	req, err := http.NewRequest(http.MethodPost, path, bytes.NewReader(jsonBody))
 	require.NoError(t, err)

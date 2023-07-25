@@ -35,6 +35,7 @@ spec:
           name: configs
       ports:
         - containerPort: 9090
+          # exposing as hostport for simple query from tests
           hostPort: 9090
           protocol: TCP
           name: http

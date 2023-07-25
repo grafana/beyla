@@ -3,12 +3,14 @@ kind: Cluster
 nodes:
   - role: control-plane
     extraMounts:
+      # configuration files that need to be mounted in the host
       - hostPath: ./configs
         containerPath: /configs
-      - hostPath: ../testoutput
+      # testoutput folder to store coverage data
+      - hostPath: ../../testoutput
         containerPath: /testoutput
     extraPortMappings:
-      # to avoid having to do port-forwarding from the go client,
+      # to avoid having to do port-forwarding from the Go client (a bit cumbersome process),
       # we just make visible some container ports through host ports
       # hostPorts need to be in range 30000-32767
       # containerPort must be the "hostPort" value that needs to be

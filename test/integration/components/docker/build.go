@@ -7,11 +7,13 @@ import (
 	"golang.org/x/exp/slog"
 )
 
+// ImageBuild information for testing docker images: its name/tag and where the dockerfile is located
 type ImageBuild struct {
 	Tag        string
 	Dockerfile string
 }
 
+// Build a set of Dockerfile images
 func Build(logger io.WriteCloser, rootPath string, imgs ...ImageBuild) error {
 	log := slog.With("component", "docker.Build", "rootPath", rootPath)
 	for _, img := range imgs {

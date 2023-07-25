@@ -42,6 +42,7 @@ spec:
       image: testserver:dev
       imagePullPolicy: Never # loaded into Kind from localhost
       ports:
+        # exposing hostports to enable operation from tests
         - containerPort: 8080
           hostPort: 8080
           name: http0
@@ -72,9 +73,8 @@ spec:
         - mountPath: /testoutput
           name: testoutput
       env:
-        # k8s tests still don't support coverage
         - name: GOCOVERDIR
-          value: "/coverage"
+          value: "/testoutput"
         - name: PRINT_TRACES
           value: "true"
         - name: OPEN_PORT

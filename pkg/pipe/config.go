@@ -3,6 +3,7 @@ package pipe
 import (
 	"fmt"
 	"io"
+	"os"
 	"time"
 
 	"github.com/caarlos0/env/v7"
@@ -99,7 +100,7 @@ func (c *Config) Validate() error {
 		!c.Prometheus.Enabled() {
 		return ConfigError("at least one of the following properties must be set: " +
 			"NOOP_TRACES, PRINT_TRACES, OTEL_EXPORTER_OTLP_ENDPOINT, " +
-			"OTEL_EXPORTER_OTLP_METRICS_ENDPOINT, OTEL_EXPORTER_OTLP_TRACES_ENDPOINT, PROMETHEUS_PORT")
+			"OTEL_EXPORTER_OTLP_METRICS_ENDPOINT, OTEL_EXPORTER_OTLP_TRACES_ENDPOINT, BEYLA_PROMETHEUS_PORT")
 	}
 	return nil
 }

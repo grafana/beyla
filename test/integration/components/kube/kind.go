@@ -34,7 +34,7 @@ import (
 )
 
 const (
-	kindImage = "kindest/node:v1.27.0"
+	kindImage = "kindest/node:v1.27.3"
 )
 
 func log() *slog.Logger {

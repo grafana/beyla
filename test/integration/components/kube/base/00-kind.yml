@@ -2,10 +2,28 @@ apiVersion: kind.x-k8s.io/v1alpha4
 kind: Cluster
 nodes:
   - role: control-plane
-    extraPortMappings:
-      # hostPorts need to be in range 30000-32767
-      - containerPort: 30100
-        hostPort: 30100
     extraMounts:
-      - hostPath: ../../../configs
+      - hostPath: ./configs
         containerPath: /configs
+    extraPortMappings:
+      # to avoid having to do port-forwarding from the go client,
+      # we just make visible some container ports through host ports
+      # hostPorts need to be in range 30000-32767
+      # containerPort must be the "hostPort" value that needs to be
+      # exposed on each Pod container
+      - containerPort: 8080
+        hostPort: 38080
+      - containerPort: 8081
+        hostPort: 38081
+      - containerPort: 8082
+        hostPort: 38082
+      - containerPort: 8083
+        hostPort: 38083
+      - containerPort: 8999
+        hostPort: 38999
+      - containerPort: 9090
+        hostPort: 39090
+      - containerPort: 16686
+        hostPort: 36686
+      - containerPort: 50051
+        hostPort: 30051

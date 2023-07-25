@@ -52,7 +52,7 @@ Prometheus endpoint listening in the port 8999. The configuration is passed
 exclusively as environment variables:
 
 ```
-$ PROMETHEUS_PORT=8999 OPEN_PORT=443 sudo -E beyla
+$ BEYLA_PROMETHEUS_PORT=8999 OPEN_PORT=443 sudo -E beyla
 ```
 
 The equivalent execution, but configured via YAML file:
@@ -70,5 +70,5 @@ $ sudo beyla -config config.yml
 The previous YAML configuration can be overriden via environment variables:
 
 ```
-$ PROMETHEUS_PORT=8888 sudo -E beyla -config config.yml
+$ BEYLA_PROMETHEUS_PORT=8888 sudo -E beyla -config config.yml
 ```

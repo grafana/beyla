@@ -138,7 +138,7 @@ The eBPF Autoinstrument requires at least two configuration options to run:
   (`EXECUTABLE_NAME` environment variable) or by any port it has open
   (`OPEN_PORT` environment variable).
 * A metrics exporter. For this tutorial, autoinstrumented metrics will be exported
-  by a [Prometheus](https://prometheus.io/) scrape endpoint (`PROMETHEUS_PORT`
+  by a [Prometheus](https://prometheus.io/) scrape endpoint (`BEYLA_PROMETHEUS_PORT`
   environment variable), and some traces will be sent to the standard output
   (setting the `PRINT_TRACES=true` environment variable).
 
@@ -157,7 +157,7 @@ in the `localhost:8999/metrics` HTTP endpoint.
 Remember that you need administrator access to run the instrumenting process:
 
 ```
-$ PROMETHEUS_PORT=8999 PRINT_TRACES=true OPEN_PORT=8080 sudo -E beyla
+$ BEYLA_PROMETHEUS_PORT=8999 PRINT_TRACES=true OPEN_PORT=8080 sudo -E beyla
 ```
 
 You can now test the instrumented service from another terminal:
@@ -264,7 +264,7 @@ documentation .
    }
    ```
    Observe that it is configured to scrape the metrics in the `localhost:8999` address,
-   same as the value of the `PROMETHEUS_PORT` variable from the previous section. Also,
+   same as the value of the `BEYLA_PROMETHEUS_PORT` variable from the previous section. Also,
    the connection details to Grafana Mimir (endpoint and authentication), is going to
    be provided via environment variables.
 

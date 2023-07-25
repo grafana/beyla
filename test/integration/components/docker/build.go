@@ -19,10 +19,6 @@ func Build(logger io.WriteCloser, rootPath string, imgs ...ImageBuild) error {
 		ilog := log.With("dockerfile", img.Dockerfile, "tag", img.Tag)
 		ilog.Info("building Dockerfile")
 
-		pwd := exec.Command("pwd")
-		pwd.Stdout = os.Stdout
-		pwd.Run()
-
 		cmd := exec.Command("docker", "build", "-t", img.Tag, "-f", img.Dockerfile, rootPath)
 		if logger != nil {
 			cmd.Stdout = logger

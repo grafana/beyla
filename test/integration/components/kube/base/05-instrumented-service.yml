@@ -40,20 +40,25 @@ spec:
       imagePullPolicy: Never # loaded into Kind from localhost
       ports:
         - containerPort: 8080
+          hostPort: 8080
           name: http0
         - containerPort: 8081
+          hostPort: 8081
           name: http1
         - containerPort: 8082
+          hostPort: 8082
           name: http2
         - containerPort: 8083
+          hostPort: 8083
           name: http3
         - containerPort: 50051
+          hostPort: 50051
           name: grpc
       env:
         - name: LOG_LEVEL
           value: "DEBUG"
-    - name: autoinstrument
-      image: autoinstrument:dev
+    - name: beyla
+      image: beyla:dev
       imagePullPolicy: Never # loaded into Kind from localhost
       securityContext:
         privileged: true

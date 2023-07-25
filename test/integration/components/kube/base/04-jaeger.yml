@@ -32,4 +32,5 @@ spec:
         - containerPort: 4318
           name: otlp-http
         - containerPort: 16686
+          hostPort: 16686
           name: query-frontend

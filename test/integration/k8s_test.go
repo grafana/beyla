@@ -30,21 +30,20 @@ func TestMain(m *testing.M) {
 
 	cluster = kube.NewKind("test-kind-cluster",
 		kube.ExportLogs(pathKindLogs),
-		kube.KindConfig("components/kube/base/00-kind.yml"),
-		kube.ContextDir("../.."),
+		kube.KindConfig("manifests/k8s/00-kind.yml"),
 		kube.LocalImage("testserver:dev"),
 		kube.LocalImage("beyla:dev"),
-		kube.Deploy("components/kube/base/01-volumes.yml"),
-		kube.Deploy("components/kube/base/02-prometheus.yml"),
-		kube.Deploy("components/kube/base/03-otelcol.yml"),
-		kube.Deploy("components/kube/base/04-jaeger.yml"),
-		kube.Deploy("components/kube/base/05-instrumented-service.yml"),
+		kube.Deploy("manifests/k8s/01-volumes.yml"),
+		kube.Deploy("manifests/k8s/02-prometheus.yml"),
+		kube.Deploy("manifests/k8s/03-otelcol.yml"),
+		kube.Deploy("manifests/k8s/04-jaeger.yml"),
+		kube.Deploy("manifests/k8s/05-instrumented-service.yml"),
 	)
 
 	cluster.Run(m)
 }
 
-func TestAllComponentsWork(t *testing.T) {
+func TestSmoke(t *testing.T) {
 	// smoke test that just waits until all the components are up and
 	// applications traces are reported are traced
 	const (

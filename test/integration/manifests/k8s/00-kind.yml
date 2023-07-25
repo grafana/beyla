@@ -5,6 +5,8 @@ nodes:
     extraMounts:
       - hostPath: ./configs
         containerPath: /configs
+      - hostPath: ../testoutput
+        containerPath: /testoutput
     extraPortMappings:
       # to avoid having to do port-forwarding from the go client,
       # we just make visible some container ports through host ports

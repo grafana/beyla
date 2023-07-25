@@ -1,0 +1,52 @@
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: configs
+spec:
+  storageClassName: standard
+  accessModes:
+    - ReadOnlyMany
+  capacity:
+    storage: 10Mi
+  hostPath:
+    # Value set in 00-kind.yml
+    path: /configs
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: configs
+spec:
+  volumeName: configs
+  accessModes:
+    - ReadOnlyMany
+  resources:
+    requests:
+      storage: 10Mi
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: testoutput
+spec:
+  storageClassName: standard
+  accessModes:
+    - ReadWriteOnce
+  capacity:
+    storage: 10Mi
+  hostPath:
+    # Value set in 00-kind.yml
+    path: /testoutput
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: testoutput
+spec:
+  volumeName: testoutput
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Mi

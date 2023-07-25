@@ -3,7 +3,6 @@ package pipe
 import (
 	"fmt"
 	"io"
-	"os"
 	"time"
 
 	"github.com/caarlos0/env/v7"

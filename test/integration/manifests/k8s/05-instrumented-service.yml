@@ -34,6 +34,9 @@ spec:
     - name: configs
       persistentVolumeClaim:
         claimName: configs
+    - name: testoutput
+      persistentVolumeClaim:
+        claimName: testoutput
   containers:
     - name: testserver
       image: testserver:dev
@@ -66,10 +69,12 @@ spec:
       volumeMounts:
         - mountPath: /configs
           name: configs
+        - mountPath: /testoutput
+          name: testoutput
       env:
         # k8s tests still don't support coverage
-#        - name: GOCOVERDIR
-#          value: "/coverage"
+        - name: GOCOVERDIR
+          value: "/coverage"
         - name: PRINT_TRACES
           value: "true"
         - name: OPEN_PORT

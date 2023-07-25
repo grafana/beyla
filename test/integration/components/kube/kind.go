@@ -1,8 +1,4 @@
-// Package kube cointains the base setup for the test environment. This is:
-//   - Deployment manifests for a base cluster: Loki, permissions, flowlogs-processor and the
-//     local version of the agent. As well as the cluster configuration for ports exposure.
-//   - Utility classes to programmatically manage the Kind cluster and some of its components
-//     (e.g. Loki)
+// Package kube contains some tools to setup and use a Kind cluster
 package kube
 
 import (
@@ -12,8 +8,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path"
-	rt2 "runtime"
 	"testing"
 	"time"
 
@@ -41,11 +35,10 @@ func log() *slog.Logger {
 	return slog.With("component", "kube.Kind")
 }
 
-// Kind cluster deployed by each TestMain function, prepared for a given test scenario.
+// Kind cluster deployed by each TestMain function, prepared to run a given test scenario.
 type Kind struct {
 	kindConfigPath  string
 	clusterName     string
-	contextDir      string
 	testEnv         env.Environment
 	timeout         time.Duration
 	deployManifests []string
@@ -64,12 +57,14 @@ func Deploy(manifest string) Option {
 	}
 }
 
+// KindConfig can be passed to NewKind to override the default Kind cluster configuration.
 func KindConfig(filePath string) Option {
 	return func(k *Kind) {
 		k.kindConfigPath = filePath
 	}
 }
 
+// ExportLogs can be passed to NewKind to specify the folder where the kubernetes logs will be exported after the tests.
 func ExportLogs(folder string) Option {
 	return func(k *Kind) {
 		k.logsDir = folder
@@ -83,22 +78,14 @@ func Timeout(t time.Duration) Option {
 	}
 }
 
+// LocalImage is passed to NewKind to allow loading a local Docker image into the cluster
 func LocalImage(nameTag string) Option {
 	return func(k *Kind) {
 		k.localImages = append(k.localImages, nameTag)
 	}
 }
 
-func ContextDir(path string) Option {
-	return func(k *Kind) {
-		k.contextDir = path
-	}
-}
-
-// NewKind creates a kind cluster given a name and set of Option instances. The base dir
-// must point to the folder where the logs are going to be stored and, in case your docker
-// backend doesn't provide access to the local images, where the ebpf-agent.tar container image
-// is located. Usually it will be the project root.
+// NewKind creates a kind cluster given a name and set of Option instances.
 func NewKind(kindClusterName string, options ...Option) *Kind {
 	k := &Kind{
 		testEnv:     env.New(),
@@ -116,9 +103,8 @@ func (k *Kind) Run(m *testing.M) {
 	var funcs []env.Func
 	if k.kindConfigPath != "" {
 		funcs = append(funcs,
-			envfuncs.CreateKindClusterWithConfig(k.clusterName,
-				kindImage,
-				path.Join(packageDir(), "base", "00-kind.yml")))
+			// TODO: allow overriding kindImage
+			envfuncs.CreateKindClusterWithConfig(k.clusterName, kindImage, k.kindConfigPath))
 	} else {
 		funcs = append(funcs,
 			envfuncs.CreateKindCluster(k.clusterName))
@@ -155,6 +141,7 @@ func (k *Kind) exportLogs() env.Func {
 	}
 }
 
+// TestEnv returns the env.Environment object, useful for unit tests that need to interact with the Kubernetes API.
 func (k *Kind) TestEnv() env.Environment {
 	return k.testEnv
 }
@@ -202,42 +189,49 @@ func deployManifestFile(
 			return nil
 		}
 
-		obj, gvk, err := yaml.NewDecodingSerializer(unstructured.UnstructuredJSONScheme).Decode(rawObj.Raw, nil, nil)
-		if err != nil {
-			return fmt.Errorf("creating yaml decoding serializer: %w", err)
-		}
-		unstructuredMap, err := runtime.DefaultUnstructuredConverter.ToUnstructured(obj)
-		if err != nil {
-			return fmt.Errorf("deserializing object in manifest: %w", err)
-		}
-
-		unstructuredObj := &unstructured.Unstructured{Object: unstructuredMap}
-
-		gr, err := restmapper.GetAPIGroupResources(kclient.Discovery())
-		if err != nil {
-			return fmt.Errorf("can't get API group resources: %w", err)
-		}
-
-		mapper := restmapper.NewDiscoveryRESTMapper(gr)
-		mapping, err := mapper.RESTMapping(gvk.GroupKind(), gvk.Version)
-		if err != nil {
-			return fmt.Errorf("creating REST Mapping: %w", err)
-		}
-
-		var dri dynamic.ResourceInterface
-		if mapping.Scope.Name() == meta.RESTScopeNameNamespace {
-			if unstructuredObj.GetNamespace() == "" {
-				unstructuredObj.SetNamespace("default") // TODO: allow overriding default namespace
-			}
-			dri = dd.Resource(mapping.Resource).Namespace(unstructuredObj.GetNamespace())
-		} else {
-			dri = dd.Resource(mapping.Resource)
-		}
-
-		if _, err := dri.Create(context.Background(), unstructuredObj, metav1.CreateOptions{}); err != nil {
-			return fmt.Errorf("deploying manifest: %w", err)
+		if err := decodeAndCreate(rawObj, kclient, dd); err != nil {
+			return err
 		}
 	}
+}
+
+func decodeAndCreate(rawObj runtime.RawExtension, kclient *kubernetes.Clientset, dd *dynamic.DynamicClient) error {
+	obj, gvk, err := yaml.NewDecodingSerializer(unstructured.UnstructuredJSONScheme).Decode(rawObj.Raw, nil, nil)
+	if err != nil {
+		return fmt.Errorf("creating yaml decoding serializer: %w", err)
+	}
+	unstructuredMap, err := runtime.DefaultUnstructuredConverter.ToUnstructured(obj)
+	if err != nil {
+		return fmt.Errorf("deserializing object in manifest: %w", err)
+	}
+
+	unstructuredObj := &unstructured.Unstructured{Object: unstructuredMap}
+
+	gr, err := restmapper.GetAPIGroupResources(kclient.Discovery())
+	if err != nil {
+		return fmt.Errorf("can't get API group resources: %w", err)
+	}
+
+	mapper := restmapper.NewDiscoveryRESTMapper(gr)
+	mapping, err := mapper.RESTMapping(gvk.GroupKind(), gvk.Version)
+	if err != nil {
+		return fmt.Errorf("creating REST Mapping: %w", err)
+	}
+
+	var dri dynamic.ResourceInterface
+	if mapping.Scope.Name() == meta.RESTScopeNameNamespace {
+		if unstructuredObj.GetNamespace() == "" {
+			unstructuredObj.SetNamespace("default") // TODO: allow overriding default namespace
+		}
+		dri = dd.Resource(mapping.Resource).Namespace(unstructuredObj.GetNamespace())
+	} else {
+		dri = dd.Resource(mapping.Resource)
+	}
+
+	if _, err := dri.Create(context.Background(), unstructuredObj, metav1.CreateOptions{}); err != nil {
+		return fmt.Errorf("deploying manifest: %w", err)
+	}
+	return nil
 }
 
 // loadLocalImage loads the agent docker image into the test cluster. It tries both available
@@ -252,14 +246,4 @@ func (k *Kind) loadLocalImage(tag string) env.Func {
 		}
 		return ctx, fmt.Errorf("couldn't load image from local registry: %w", err)
 	}
-}
-
-// helper to get the base directory of this package, allowing to load the test deployment
-// files whatever the working directory is
-func packageDir() string {
-	_, file, _, ok := rt2.Caller(1)
-	if !ok {
-		panic("can't find package directory for (project_dir)/test/cluster")
-	}
-	return path.Dir(file)
 }

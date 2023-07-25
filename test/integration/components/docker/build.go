@@ -2,7 +2,6 @@ package docker
 
 import (
 	"io"
-	"os"
 	"os/exec"
 
 	"golang.org/x/exp/slog"

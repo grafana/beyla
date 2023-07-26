@@ -22,7 +22,7 @@ type ContextInfo struct {
 	// Metrics  that are internal to the pipe components
 	Metrics imetrics.Reporter
 	// Prometheus connection manager to coordinate metrics exposition from diverse nodes
-	Prometheus connector.PrometheusManager
+	Prometheus *connector.PrometheusManager
 }
 
 // SetContext creates a new context from the argument, storing the passed

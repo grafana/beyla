@@ -19,7 +19,7 @@ import (
 
 var cluster *kube.Kind
 
-func TestMain(m *testing.M) {
+func ssTestMain(m *testing.M) {
 	if err := docker.Build(os.Stdout, "../..",
 		docker.ImageBuild{Tag: "testserver:dev", Dockerfile: "components/testserver/Dockerfile"},
 		docker.ImageBuild{Tag: "beyla:dev", Dockerfile: "components/beyla/Dockerfile"},

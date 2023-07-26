@@ -89,7 +89,7 @@ func newReporter(ctx context.Context, cfg *PrometheusConfig) *metricsReporter {
 		bgCtx:        ctx,
 		cfg:          cfg,
 		reportRoutes: reportRoutes,
-		promConnect:  &ctxInfo.Prometheus,
+		promConnect:  ctxInfo.Prometheus,
 		httpDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Name:    HTTPServerDuration,
 			Help:    "duration of HTTP service calls from the server side, in seconds",

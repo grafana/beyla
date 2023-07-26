@@ -8,6 +8,7 @@ import (
 	"github.com/caarlos0/env/v7"
 	"gopkg.in/yaml.v3"
 
+	"github.com/grafana/ebpf-autoinstrument/pkg/ebpf"
 	ebpfcommon "github.com/grafana/ebpf-autoinstrument/pkg/ebpf/common"
 	"github.com/grafana/ebpf-autoinstrument/pkg/export/debug"
 	"github.com/grafana/ebpf-autoinstrument/pkg/export/otel"
@@ -48,26 +49,52 @@ var defaultConfig = Config{
 	},
 }
 
-type Config struct {
-	EBPF ebpfcommon.TracerConfig `nodeId:"ebpf" sendTo:"routes" yaml:"ebpf"`
+type Graph struct {
+	// TODO: use interface
+	TracerReader *ebpf.ProcessTracer `nodeId:"tracer" sendTo:"routes"`
 
 	// Routes is an optional node. If not set, data will be directly forwarded to exporters.
-	Routes *transform.RoutesConfig `nodeId:"routes" forwardTo:"otel_metrics,otel_traces,print,noop,prom" yaml:"routes"`
+	Routes *transform.RoutesConfig `nodeId:"routes" forwardTo:"otel_metrics,otel_traces,print,noop,prom"`
 
-	Metrics    otel.MetricsConfig    `nodeId:"otel_metrics" yaml:"otel_metrics_export"`
-	Traces     otel.TracesConfig     `nodeId:"otel_traces" yaml:"otel_traces_export"`
-	Prometheus prom.PrometheusConfig `nodeId:"prom" yaml:"prometheus_export"`
-	Printer    debug.PrintEnabled    `nodeId:"print" yaml:"print_traces" env:"PRINT_TRACES"`
+	Metrics    otel.MetricsConfig    `nodeId:"otel_metrics"`
+	Traces     otel.TracesConfig     `nodeId:"otel_traces"`
+	Prometheus prom.PrometheusConfig `nodeId:"prom"`
+	Printer    debug.PrintEnabled    `nodeId:"print"`
+	Noop       debug.NoopEnabled     `nodeId:"noop"`
+}
 
-	LogLevel string `yaml:"log_level" env:"LOG_LEVEL" nodeId:"-"`
+func GraphFromConfig(cfg *Config, tracer *ebpf.ProcessTracer) *Graph {
+	return &Graph{
+		TracerReader: tracer,
+		Routes:       cfg.Routes,
+		Metrics:      cfg.Metrics,
+		Traces:       cfg.Traces,
+		Prometheus:   cfg.Prometheus,
+		Printer:      cfg.Printer,
+		Noop:         cfg.Noop,
+	}
+}
+
+type Config struct {
+	EBPF ebpfcommon.TracerConfig `yaml:"ebpf"`
+
+	// Routes is an optional node. If not set, data will be directly forwarded to exporters.
+	Routes *transform.RoutesConfig `yaml:"routes"`
+
+	Metrics    otel.MetricsConfig    `yaml:"otel_metrics_export"`
+	Traces     otel.TracesConfig     `yaml:"otel_traces_export"`
+	Prometheus prom.PrometheusConfig `yaml:"prometheus_export"`
+	Printer    debug.PrintEnabled    `yaml:"print_traces" env:"PRINT_TRACES"`
+
+	LogLevel string `yaml:"log_level" env:"LOG_LEVEL"`
 
 	// From this comment, the properties below will remain undocumented, as they
 	// are useful for development purposes. They might be helpful for customer support.
 
-	ChannelBufferLen int               `yaml:"channel_buffer_len" env:"CHANNEL_BUFFER_LEN" nodeId:"-"`
+	ChannelBufferLen int               `yaml:"channel_buffer_len" env:"CHANNEL_BUFFER_LEN"`
 	Noop             debug.NoopEnabled `nodeId:"noop" yaml:"noop" env:"NOOP_TRACES"`
-	ProfilePort      int               `yaml:"profile_port" env:"PROFILE_PORT" nodeId:"-"`
-	InternalMetrics  imetrics.Config   `yaml:"internal_metrics" nodeId:"-"`
+	ProfilePort      int               `yaml:"profile_port" env:"PROFILE_PORT"`
+	InternalMetrics  imetrics.Config   `yaml:"internal_metrics"`
 }
 
 type ConfigError string

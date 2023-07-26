@@ -14,7 +14,11 @@ import (
 
 	"golang.org/x/exp/slog"
 
+	"github.com/grafana/ebpf-autoinstrument/pkg/connector"
+	"github.com/grafana/ebpf-autoinstrument/pkg/ebpf"
+	"github.com/grafana/ebpf-autoinstrument/pkg/imetrics"
 	"github.com/grafana/ebpf-autoinstrument/pkg/pipe"
+	"github.com/grafana/ebpf-autoinstrument/pkg/pipe/global"
 )
 
 func main() {
@@ -48,8 +52,17 @@ func main() {
 	// child process isn't found.
 	ctx, _ := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 
+	ctxInfo := BuildContextInfo(config)
+	ctx = global.SetContext(ctx, ctxInfo)
+
 	slog.Info("creating instrumentation pipeline")
-	bp, err := pipe.Build(ctx, config)
+	tracer, err := ebpf.FindAndInstrument(ctx, &config.EBPF, ctxInfo.Metrics)
+	if err != nil {
+		slog.Error("can't find an instrument executable", err)
+		os.Exit(-1)
+	}
+
+	bp, err := pipe.Build(ctx, config, tracer, ctxInfo)
 	if err != nil {
 		slog.Error("can't instantiate instrumentation pipeline", err)
 		os.Exit(-1)
@@ -83,4 +96,23 @@ func loadConfig(configPath *string) *pipe.Config {
 		os.Exit(-1)
 	}
 	return config
+}
+
+func BuildContextInfo(config *pipe.Config) *global.ContextInfo {
+	promMgr := &connector.PrometheusManager{}
+	ctxInfo := &global.ContextInfo{
+		ReportRoutes: config.Routes != nil,
+		Prometheus:   promMgr,
+	}
+	if config.InternalMetrics.Prometheus.Port != 0 {
+		slog.Debug("reporting internal metrics as Prometheus")
+		ctxInfo.Metrics = imetrics.NewPrometheusReporter(&config.InternalMetrics.Prometheus, promMgr)
+		// Prometheus manager also has its own internal metrics, so we need to pass the imetrics reporter
+		// TODO: remove this dependency cycle and let prommgr to create and return the PrometheusReporter
+		promMgr.InstrumentWith(ctxInfo.Metrics)
+	} else {
+		slog.Debug("not reporting internal metrics")
+		ctxInfo.Metrics = imetrics.NoopReporter{}
+	}
+	return ctxInfo
 }

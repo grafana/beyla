@@ -27,6 +27,7 @@ import (
 	"github.com/grafana/ebpf-autoinstrument/pkg/ebpf/nethttp"
 	"github.com/grafana/ebpf-autoinstrument/pkg/exec"
 	"github.com/grafana/ebpf-autoinstrument/pkg/goexec"
+	"github.com/grafana/ebpf-autoinstrument/pkg/imetrics"
 	"github.com/grafana/ebpf-autoinstrument/pkg/pipe/global"
 )
 
@@ -69,12 +70,12 @@ type ProcessTracer struct {
 }
 
 // TracerProvider returns a StartFuncCtx for each discovered eBPF traceable source: GRPC, HTTP...
-func TracerProvider(ctx context.Context, cfg ebpfcommon.TracerConfig) ([]node.StartFuncCtx[[]any], error) { //nolint:all
+func TracerProvider(_ context.Context, pt *ProcessTracer) ([]node.StartFuncCtx[[]any], error) {
 
-	pt, err := FindAndInstrument(ctx, cfg)
-	if err != nil {
-		return nil, err
-	}
+	//pt, err := FindAndInstrument(ctx, cfg)
+	//if err != nil {
+	//	return nil, err
+	//}
 
 	readers, err := pt.TraceReaders()
 	if err != nil {
@@ -84,23 +85,21 @@ func TracerProvider(ctx context.Context, cfg ebpfcommon.TracerConfig) ([]node.St
 	return readers, nil
 }
 
-func FindAndInstrument(ctx context.Context, cfg ebpfcommon.TracerConfig) (*ProcessTracer, error) {
+func FindAndInstrument(ctx context.Context, cfg *ebpfcommon.TracerConfig, metrics imetrics.Reporter) (*ProcessTracer, error) {
 	var log = logger()
-
-	metrics := global.Context(ctx).Metrics
 
 	// Each program is an eBPF source: net/http, grpc...
 	programs := []Tracer{
-		&nethttp.Tracer{Cfg: &cfg, Metrics: metrics},
-		&nethttp.GinTracer{Tracer: nethttp.Tracer{Cfg: &cfg, Metrics: metrics}},
-		&grpc.Tracer{Cfg: &cfg, Metrics: metrics},
-		&goruntime.Tracer{Cfg: &cfg, Metrics: metrics},
+		&nethttp.Tracer{Cfg: cfg, Metrics: metrics},
+		&nethttp.GinTracer{Tracer: nethttp.Tracer{Cfg: cfg, Metrics: metrics}},
+		&grpc.Tracer{Cfg: cfg, Metrics: metrics},
+		&goruntime.Tracer{Cfg: cfg, Metrics: metrics},
 	}
 
 	// merging all the functions from all the programs, in order to do
 	// a complete inspection of the target executable
 	allFuncs := allGoFunctionNames(programs)
-	elfInfo, goffsets, err := inspect(ctx, &cfg, allFuncs)
+	elfInfo, goffsets, err := inspect(ctx, cfg, allFuncs)
 	if err != nil {
 		return nil, fmt.Errorf("inspecting offsets: %w", err)
 	}
@@ -113,7 +112,7 @@ func FindAndInstrument(ctx context.Context, cfg ebpfcommon.TracerConfig) (*Proce
 	} else {
 		// We are not instrumenting a Go application, we override the programs
 		// list with the generic kernel/socket space filters
-		programs = []Tracer{&httpfltr.Tracer{Cfg: &cfg, Metrics: metrics}}
+		programs = []Tracer{&httpfltr.Tracer{Cfg: cfg, Metrics: metrics}}
 	}
 
 	// Instead of the executable file in the disk, we pass the /proc/<pid>/exec
@@ -126,7 +125,7 @@ func FindAndInstrument(ctx context.Context, cfg ebpfcommon.TracerConfig) (*Proce
 		return nil, fmt.Errorf("removing memory lock: %w", err)
 	}
 
-	pinPath, err := mountBpfPinPath(&cfg)
+	pinPath, err := mountBpfPinPath(cfg)
 	if err != nil {
 		return nil, fmt.Errorf("mounting BPF FS in %q: %w", cfg.BpfBaseDir, err)
 	}

@@ -42,9 +42,6 @@ var namedTracers, _ = lru.New[string, *trace.TracerProvider](512)
 const reporterName = "github.com/grafana/ebpf-autoinstrument"
 
 type TracesConfig struct {
-	ServiceName      string `yaml:"service_name" env:"OTEL_SERVICE_NAME"`
-	ServiceNamespace string `yaml:"service_namespace" env:"SERVICE_NAMESPACE"`
-
 	Endpoint       string `yaml:"endpoint" env:"OTEL_EXPORTER_OTLP_ENDPOINT"`
 	TracesEndpoint string `yaml:"-" env:"OTEL_EXPORTER_OTLP_TRACES_ENDPOINT"`
 
@@ -84,8 +81,8 @@ type TracesReporter struct {
 	bsp           trace.SpanProcessor
 }
 
-func TracesReporterProvider(ctx context.Context, cfg TracesConfig) (node.TerminalFunc[[]transform.HTTPRequestSpan], error) { //nolint:gocritic
-	tr, err := newTracesReporter(ctx, &cfg)
+func ReportTraces(ctx context.Context, cfg *TracesConfig, ctxInfo *global.ContextInfo) (node.TerminalFunc[[]transform.HTTPRequestSpan], error) {
+	tr, err := newTracesReporter(ctx, cfg, ctxInfo)
 	if err != nil {
 		slog.Error("can't instantiate OTEL traces reporter", err)
 		os.Exit(-1)
@@ -93,7 +90,7 @@ func TracesReporterProvider(ctx context.Context, cfg TracesConfig) (node.Termina
 	return tr.reportTraces, nil
 }
 
-func newTracesReporter(ctx context.Context, cfg *TracesConfig) (*TracesReporter, error) {
+func newTracesReporter(ctx context.Context, cfg *TracesConfig, ctxInfo *global.ContextInfo) (*TracesReporter, error) {
 	log := tlog()
 	r := TracesReporter{ctx: ctx}
 
@@ -116,7 +113,7 @@ func newTracesReporter(ctx context.Context, cfg *TracesConfig) (*TracesReporter,
 			proto, ProtocolGRPC, ProtocolHTTPJSON, ProtocolHTTPProtobuf)
 	}
 
-	r.traceExporter = instrumentTraceExporter(ctx, exporter)
+	r.traceExporter = instrumentTraceExporter(ctx, exporter, ctxInfo.Metrics)
 
 	var opts []trace.BatchSpanProcessorOption
 	if cfg.MaxExportBatchSize > 0 {
@@ -132,7 +129,7 @@ func newTracesReporter(ctx context.Context, cfg *TracesConfig) (*TracesReporter,
 		opts = append(opts, trace.WithExportTimeout(cfg.ExportTimeout))
 	}
 
-	resource := otelResource(ctx, cfg.ServiceName, cfg.ServiceNamespace)
+	resource := otelResource(ctxInfo.ServiceName, ctxInfo.ServiceNamespace)
 	r.bsp = trace.NewBatchSpanProcessor(r.traceExporter, opts...)
 	r.traceProvider = trace.NewTracerProvider(
 		trace.WithResource(resource),
@@ -168,8 +165,7 @@ func grpcTracer(ctx context.Context, cfg *TracesConfig) (*otlptrace.Exporter, er
 
 // instrumentTraceExporter checks whether the context is configured to report internal metrics and,
 // in this case, wraps the passed traces exporter inside an instrumented exporter
-func instrumentTraceExporter(ctx context.Context, in trace.SpanExporter) trace.SpanExporter {
-	internalMetrics := global.Context(ctx).Metrics
+func instrumentTraceExporter(ctx context.Context, in trace.SpanExporter, internalMetrics imetrics.Reporter) trace.SpanExporter {
 	// avoid wrapping the instrumented exporter if we don't have
 	// internal instrumentation (NoopReporter)
 	if _, ok := internalMetrics.(imetrics.NoopReporter); ok || internalMetrics == nil {
@@ -383,7 +379,7 @@ func (r *TracesReporter) namedTracer(comm string) trace2.Tracer {
 	traceProvider, ok := namedTracers.Get(comm)
 
 	if !ok {
-		resource := otelResource(r.ctx, comm, "")
+		resource := otelResource(comm, "")
 		traceProvider = trace.NewTracerProvider(
 			trace.WithResource(resource),
 			trace.WithSpanProcessor(r.bsp),

@@ -23,7 +23,6 @@ const timeout = 5 * time.Second
 
 func TestMetricsEndpoint(t *testing.T) {
 	mcfg := MetricsConfig{
-		ServiceName:     "svc-name",
 		Endpoint:        "https://localhost:3131",
 		MetricsEndpoint: "https://localhost:3232",
 	}
@@ -33,7 +32,6 @@ func TestMetricsEndpoint(t *testing.T) {
 	})
 
 	mcfg = MetricsConfig{
-		ServiceName:     "svc-name",
 		Endpoint:        "https://localhost:3131",
 		MetricsEndpoint: "https://localhost:3232",
 	}
@@ -107,10 +105,12 @@ func TestMetrics_InternalInstrumentation(t *testing.T) {
 		}
 	})
 	internalMetrics := &fakeInternalMetrics{}
-	exporter, err := MetricsReporterProvider(global.SetContext(context.Background(), &global.ContextInfo{
-		ServiceName: "foo",
-		Metrics:     internalMetrics,
-	}), MetricsConfig{Endpoint: coll.URL, Interval: 10 * time.Millisecond})
+	exporter, err := ReportMetrics(context.Background(),
+		&MetricsConfig{Endpoint: coll.URL, Interval: 10 * time.Millisecond},
+		&global.ContextInfo{
+			ServiceName: "foo",
+			Metrics:     internalMetrics,
+		})
 	require.NoError(t, err)
 	inputNode.SendsTo(node.AsTerminal(exporter))
 

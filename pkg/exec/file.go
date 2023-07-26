@@ -32,6 +32,11 @@ type FileInfo struct {
 	Ppid           int32
 }
 
+func (fi *FileInfo) ExecutableName() string {
+	parts := strings.Split(fi.CmdExePath, "/")
+	return parts[len(parts)-1]
+}
+
 // ProcessFinder allows finding a process given multiple criteria
 type ProcessFinder func() ([]*process.Process, bool)
 

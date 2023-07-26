@@ -31,33 +31,34 @@ type graphBuilder struct {
 
 // Build instantiates the whole instrumentation --> processing --> submit
 // pipeline graph and returns it as a startable item
-func Build(ctx context.Context, config *Config, tracer *ebpf.ProcessTracer, ctxInfo *global.ContextInfo) (*Instrumenter, error) {
+func Build(ctx context.Context, config *Config, ctxInfo *global.ContextInfo, tracer *ebpf.ProcessTracer) (*Instrumenter, error) {
 	if err := config.Validate(); err != nil {
 		return nil, fmt.Errorf("validating configuration: %w", err)
 	}
 
-	return newGraphBuilder(config, tracer, ctxInfo).buildGraph(ctx)
+	return newGraphBuilder(config, ctxInfo, tracer).buildGraph(ctx)
 }
 
 // private constructor that can be instantiated from tests to override the node providers
 // and offsets inspector
-func newGraphBuilder(config *Config, tracer *ebpf.ProcessTracer, ctxInfo *global.ContextInfo) *graphBuilder {
-	gb := graph.NewBuilder(node.ChannelBufferLen(config.ChannelBufferLen))
-	graph.RegisterCodec(gb, transform.ConvertToSpan)
-	graph.RegisterMultiStart(gb, ebpf.TracerProvider)
-	graph.RegisterMiddle(gb, transform.RoutesProvider)
-	graph.RegisterTerminal(gb, otel.MetricsReporterProvider)
-	graph.RegisterTerminal(gb, otel.TracesReporterProvider)
-	graph.RegisterTerminal(gb, prom.PrometheusEndpointProvider)
-	graph.RegisterTerminal(gb, debug.NoopNode)
-	graph.RegisterTerminal(gb, debug.PrinterNode)
-
-	return &graphBuilder{
-		builder: gb,
+func newGraphBuilder(config *Config, ctxInfo *global.ContextInfo, tracer *ebpf.ProcessTracer) *graphBuilder {
+	gnb := graph.NewBuilder(node.ChannelBufferLen(config.ChannelBufferLen))
+	gb := &graphBuilder{
+		builder: gnb,
 		config:  config,
 		tracer:  tracer,
 		ctxInfo: ctxInfo,
 	}
+	graph.RegisterCodec(gnb, transform.ConvertToSpan)
+	graph.RegisterMultiStart(gnb, ebpf.TracerProvider)
+	graph.RegisterMiddle(gnb, transform.RoutesProvider)
+	graph.RegisterTerminal(gnb, gb.metricsReporterProvider)
+	graph.RegisterTerminal(gnb, gb.tracesReporterProvicer)
+	graph.RegisterTerminal(gnb, gb.prometheusProvider)
+	graph.RegisterTerminal(gnb, debug.NoopNode)
+	graph.RegisterTerminal(gnb, debug.PrinterNode)
+
+	return gb
 }
 
 func (gb *graphBuilder) buildGraph(ctx context.Context) (*Instrumenter, error) {
@@ -83,4 +84,18 @@ type Instrumenter struct {
 func (i *Instrumenter) Run(ctx context.Context) {
 	go i.internalMetrics.Start(ctx)
 	i.graph.Run(ctx)
+}
+
+// behind this line, adaptors to instantiate the different pipeline nodes according to the expected signature format
+
+func (gb *graphBuilder) tracesReporterProvicer(ctx context.Context, config otel.TracesConfig) (node.TerminalFunc[[]transform.HTTPRequestSpan], error) {
+	return otel.ReportTraces(ctx, &config, gb.ctxInfo)
+}
+
+func (gb *graphBuilder) metricsReporterProvider(ctx context.Context, config otel.MetricsConfig) (node.TerminalFunc[[]transform.HTTPRequestSpan], error) {
+	return otel.ReportMetrics(ctx, &config, gb.ctxInfo)
+}
+
+func (gb *graphBuilder) prometheusProvider(ctx context.Context, config prom.PrometheusConfig) (node.TerminalFunc[[]transform.HTTPRequestSpan], error) {
+	return prom.PrometheusEndpoint(ctx, &config, gb.ctxInfo)
 }

@@ -53,7 +53,6 @@ func main() {
 	ctx, _ := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 
 	ctxInfo := BuildContextInfo(config)
-	ctx = global.SetContext(ctx, ctxInfo)
 
 	slog.Info("creating instrumentation pipeline")
 	tracer, err := ebpf.FindAndInstrument(ctx, &config.EBPF, ctxInfo.Metrics)
@@ -61,8 +60,11 @@ func main() {
 		slog.Error("can't find an instrument executable", err)
 		os.Exit(-1)
 	}
+	if ctxInfo.ServiceName == "" {
+		ctxInfo.ServiceName = tracer.ELFInfo.ExecutableName()
+	}
 
-	bp, err := pipe.Build(ctx, config, tracer, ctxInfo)
+	bp, err := pipe.Build(ctx, config, ctxInfo, tracer)
 	if err != nil {
 		slog.Error("can't instantiate instrumentation pipeline", err)
 		os.Exit(-1)
@@ -101,8 +103,10 @@ func loadConfig(configPath *string) *pipe.Config {
 func BuildContextInfo(config *pipe.Config) *global.ContextInfo {
 	promMgr := &connector.PrometheusManager{}
 	ctxInfo := &global.ContextInfo{
-		ReportRoutes: config.Routes != nil,
-		Prometheus:   promMgr,
+		ReportRoutes:     config.Routes != nil,
+		Prometheus:       promMgr,
+		ServiceName:      config.ServiceName,
+		ServiceNamespace: config.ServiceNamespace,
 	}
 	if config.InternalMetrics.Prometheus.Port != 0 {
 		slog.Debug("reporting internal metrics as Prometheus")

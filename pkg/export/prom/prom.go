@@ -71,14 +71,12 @@ type metricsReporter struct {
 	bgCtx context.Context
 }
 
-// nolint:gocritic
-func PrometheusEndpointProvider(ctx context.Context, cfg PrometheusConfig) (node.TerminalFunc[[]transform.HTTPRequestSpan], error) {
-	reporter := newReporter(ctx, &cfg)
+func PrometheusEndpoint(ctx context.Context, cfg *PrometheusConfig, ctxInfo *global.ContextInfo) (node.TerminalFunc[[]transform.HTTPRequestSpan], error) {
+	reporter := newReporter(ctx, cfg, ctxInfo)
 	return reporter.reportMetrics, nil
 }
 
-func newReporter(ctx context.Context, cfg *PrometheusConfig) *metricsReporter {
-	ctxInfo := global.Context(ctx)
+func newReporter(ctx context.Context, cfg *PrometheusConfig, ctxInfo *global.ContextInfo) *metricsReporter {
 	reportRoutes := ctxInfo.ReportRoutes
 	// If service name is not explicitly set, we take the service name as set by the
 	// executable inspector

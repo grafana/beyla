@@ -46,6 +46,7 @@ prometheus_export:
 	assert.NoError(t, cfg.Validate())
 
 	assert.Equal(t, &Config{
+		ServiceName: "svc-name",
 		ChannelBufferLen: 33,
 		LogLevel:         "INFO",
 		Printer:          false,
@@ -57,7 +58,6 @@ prometheus_export:
 			BpfBaseDir:   "/var/run/beyla",
 		},
 		Metrics: otel.MetricsConfig{
-			ServiceName: "svc-name",
 			Interval:    5 * time.Second,
 			Endpoint:    "localhost:3131",
 			Protocol:    otel.ProtocolHTTPProtobuf,
@@ -68,7 +68,6 @@ prometheus_export:
 		},
 		Traces: otel.TracesConfig{
 			Protocol:           otel.ProtocolHTTPProtobuf,
-			ServiceName:        "svc-name",
 			Endpoint:           "localhost:3131",
 			TracesEndpoint:     "localhost:3232",
 			MaxQueueSize:       4096,

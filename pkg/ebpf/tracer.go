@@ -28,7 +28,6 @@ import (
 	"github.com/grafana/ebpf-autoinstrument/pkg/exec"
 	"github.com/grafana/ebpf-autoinstrument/pkg/goexec"
 	"github.com/grafana/ebpf-autoinstrument/pkg/imetrics"
-	"github.com/grafana/ebpf-autoinstrument/pkg/pipe/global"
 )
 
 // Tracer is an individual eBPF program (e.g. the net/http or the grpc tracers)
@@ -63,7 +62,7 @@ type Tracer interface {
 
 type ProcessTracer struct {
 	programs []Tracer
-	elfInfo  *exec.FileInfo
+	ELFInfo  *exec.FileInfo
 	goffsets *goexec.Offsets
 	exe      *link.Executable
 	pinPath  string
@@ -135,7 +134,7 @@ func FindAndInstrument(ctx context.Context, cfg *ebpfcommon.TracerConfig, metric
 	}
 	return &ProcessTracer{
 		programs: programs,
-		elfInfo:  elfInfo,
+		ELFInfo:  elfInfo,
 		goffsets: goffsets,
 		exe:      exe,
 		pinPath:  pinPath,
@@ -160,7 +159,7 @@ func (pt *ProcessTracer) TraceReaders() ([]node.StartFuncCtx[[]any], error) {
 			unmountBpfPinPath(pt.pinPath)
 			return nil, fmt.Errorf("loading eBPF program: %w", err)
 		}
-		if err := spec.RewriteConstants(p.Constants(pt.elfInfo, pt.goffsets)); err != nil {
+		if err := spec.RewriteConstants(p.Constants(pt.ELFInfo, pt.goffsets)); err != nil {
 			return nil, fmt.Errorf("rewriting BPF constants definition: %w", err)
 		}
 		if err := spec.LoadAndAssign(p.BpfObjects(), &ebpf.CollectionOptions{
@@ -191,7 +190,7 @@ func (pt *ProcessTracer) TraceReaders() ([]node.StartFuncCtx[[]any], error) {
 		}
 
 		//Uprobes to be used for native module instrumentation points
-		if err := i.uprobes(pt.elfInfo.Pid, p); err != nil {
+		if err := i.uprobes(pt.ELFInfo.Pid, p); err != nil {
 			printVerifierErrorInfo(err)
 			unmountBpfPinPath(pt.pinPath)
 			return nil, err
@@ -288,11 +287,6 @@ func allGoFunctionNames(programs []Tracer) []string {
 	return functions
 }
 
-func setGlobalServiceName(ctx context.Context, execElf *exec.FileInfo) {
-	parts := strings.Split(execElf.CmdExePath, "/")
-	global.Context(ctx).ServiceName = parts[len(parts)-1]
-}
-
 func inspect(ctx context.Context, cfg *ebpfcommon.TracerConfig, functions []string) (*exec.FileInfo, *goexec.Offsets, error) {
 	// Finding the process by port is more complex, it needs to skip proxies
 	if cfg.Port != 0 {
@@ -317,8 +311,6 @@ func inspect(ctx context.Context, cfg *ebpfcommon.TracerConfig, functions []stri
 		if err != nil {
 			logger().Info("Go HTTP/gRPC support not detected. Using only generic instrumentation.", "error", err)
 		}
-
-		setGlobalServiceName(ctx, &execElf)
 	}
 
 	return &execElf, offsets, nil
@@ -357,7 +349,6 @@ func inspectByPort(ctx context.Context, cfg *ebpfcommon.TracerConfig, functions 
 		for f := range offsets.Funcs {
 			// if we find anything of interest other than the Go runtime, we consider this a valid application
 			if !strings.HasPrefix(f, "runtime.") {
-				setGlobalServiceName(ctx, &execElf)
 				return &execElf, offsets, nil
 			}
 		}
@@ -387,7 +378,6 @@ func inspectByPort(ctx context.Context, cfg *ebpfcommon.TracerConfig, functions 
 	logger().Info("Go HTTP/gRPC support not detected. Using only generic instrumentation.")
 	logger().Info("instrumented", "comm", execElf.CmdExePath, "pid", execElf.Pid)
 
-	setGlobalServiceName(ctx, &execElf)
 	return &execElf, nil, nil
 }
 

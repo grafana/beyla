@@ -40,9 +40,6 @@ const (
 )
 
 type MetricsConfig struct {
-	ServiceName      string `yaml:"service_name" env:"OTEL_SERVICE_NAME"`
-	ServiceNamespace string `yaml:"service_namespace" env:"SERVICE_NAMESPACE"`
-
 	Interval        time.Duration `yaml:"interval" env:"METRICS_INTERVAL"`
 	Endpoint        string        `yaml:"endpoint" env:"OTEL_EXPORTER_OTLP_ENDPOINT"`
 	MetricsEndpoint string        `yaml:"-" env:"OTEL_EXPORTER_OTLP_METRICS_ENDPOINT"`
@@ -93,18 +90,18 @@ type MetricsReporter struct {
 	httpClientRequestSize instrument.Float64Histogram
 }
 
-// Reason to disable linting: it requires to be a value despite it is considered a "heavy struct".
-// This method is invoked only once during startup time so it doesn't have a noticeable performance impact.
-// nolint:gocritic
-func MetricsReporterProvider(ctx context.Context, cfg MetricsConfig) (node.TerminalFunc[[]transform.HTTPRequestSpan], error) {
-	mr, err := newMetricsReporter(ctx, &cfg)
+func ReportMetrics(
+	ctx context.Context, cfg *MetricsConfig, ctxInfo *global.ContextInfo,
+) (node.TerminalFunc[[]transform.HTTPRequestSpan], error) {
+
+	mr, err := newMetricsReporter(ctx, cfg, ctxInfo)
 	if err != nil {
 		return nil, fmt.Errorf("instantiating OTEL metrics reporter: %w", err)
 	}
 	return mr.reportMetrics, nil
 }
 
-func newMetricsReporter(ctx context.Context, cfg *MetricsConfig) (*MetricsReporter, error) {
+func newMetricsReporter(ctx context.Context, cfg *MetricsConfig, ctxInfo *global.ContextInfo) (*MetricsReporter, error) {
 	log := mlog()
 	mr := MetricsReporter{
 		ctx:          ctx,
@@ -117,9 +114,9 @@ func newMetricsReporter(ctx context.Context, cfg *MetricsConfig) (*MetricsReport
 	if err != nil {
 		return nil, err
 	}
-	mr.exporter = instrumentMetricsExporter(ctx, exporter)
+	mr.exporter = instrumentMetricsExporter(ctxInfo.Metrics, exporter)
 
-	resources := otelResource(ctx, cfg.ServiceName, cfg.ServiceNamespace)
+	resources := otelResource(ctxInfo.ServiceName, ctxInfo.ServiceNamespace)
 	// changes
 	mr.provider = metric.NewMeterProvider(
 		metric.WithResource(resources),
@@ -216,8 +213,7 @@ func (r *MetricsReporter) close() {
 
 // instrumentMetricsExporter checks whether the context is configured to report internal metrics and,
 // in this case, wraps the passed metrics exporter inside an instrumented exporter
-func instrumentMetricsExporter(ctx context.Context, in metric.Exporter) metric.Exporter {
-	internalMetrics := global.Context(ctx).Metrics
+func instrumentMetricsExporter(internalMetrics imetrics.Reporter, in metric.Exporter) metric.Exporter {
 	// avoid wrapping the instrumented exporter if we don't have
 	// internal instrumentation (NoopReporter)
 	if _, ok := internalMetrics.(imetrics.NoopReporter); ok || internalMetrics == nil {

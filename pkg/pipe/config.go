@@ -88,6 +88,9 @@ type Config struct {
 
 	LogLevel string `yaml:"log_level" env:"LOG_LEVEL"`
 
+	ServiceName      string `yaml:"service_name" env:"OTEL_SERVICE_NAME"`
+	ServiceNamespace string `yaml:"service_namespace" env:"SERVICE_NAMESPACE"`
+
 	// From this comment, the properties below will remain undocumented, as they
 	// are useful for development purposes. They might be helpful for customer support.
 

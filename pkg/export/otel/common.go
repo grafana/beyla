@@ -1,13 +1,9 @@
 package otel
 
 import (
-	"context"
-
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/sdk/resource"
 	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
-
-	"github.com/grafana/ebpf-autoinstrument/pkg/pipe/global"
 )
 
 // Protocol values for the OTEL_EXPORTER_OTLP_PROTOCOL, OTEL_EXPORTER_OTLP_TRACES_PROTOCOL and
@@ -44,14 +40,7 @@ var DefaultBuckets = Buckets{
 
 // TODO: when we join both traces' and metrics ServiceName and ServiceNamespace into a common configuration section
 // provide a unique Resource for both metrics and traces reporter
-func otelResource(ctx context.Context, cfgSvcName, cfgSvcNamespace string) *resource.Resource {
-	// If service name is not explicitly set, we take the service name as set by the
-	// executable inspector
-	svcName := cfgSvcName
-	if svcName == "" {
-		svcName = global.Context(ctx).ServiceName
-	}
-
+func otelResource(svcName, cfgSvcNamespace string) *resource.Resource {
 	attrs := []attribute.KeyValue{
 		semconv.ServiceName(svcName),
 		// SpanMetrics requires an extra attribute besides service name

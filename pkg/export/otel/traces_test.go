@@ -21,7 +21,6 @@ import (
 
 func TestTracesEndpoint(t *testing.T) {
 	tcfg := TracesConfig{
-		ServiceName:        "svc-name",
 		Endpoint:           "https://localhost:3131",
 		TracesEndpoint:     "https://localhost:3232",
 		MaxQueueSize:       4096,
@@ -33,7 +32,6 @@ func TestTracesEndpoint(t *testing.T) {
 	})
 
 	tcfg = TracesConfig{
-		ServiceName:        "svc-name",
 		TracesEndpoint:     "https://localhost:3232",
 		MaxQueueSize:       4096,
 		MaxExportBatchSize: 4096,
@@ -174,10 +172,12 @@ func TestTraces_InternalInstrumentation(t *testing.T) {
 		}
 	})
 	internalTraces := &fakeInternalTraces{}
-	exporter, err := TracesReporterProvider(global.SetContext(context.Background(), &global.ContextInfo{
-		ServiceName: "foo",
-		Metrics:     internalTraces,
-	}), TracesConfig{Endpoint: coll.URL, BatchTimeout: 10 * time.Millisecond, ExportTimeout: 5 * time.Second})
+	exporter, err := ReportTraces(context.Background(),
+		&TracesConfig{Endpoint: coll.URL, BatchTimeout: 10 * time.Millisecond, ExportTimeout: 5 * time.Second},
+		&global.ContextInfo{
+			ServiceName: "foo",
+			Metrics:     internalTraces,
+		})
 	require.NoError(t, err)
 	inputNode.SendsTo(node.AsTerminal(exporter))
 

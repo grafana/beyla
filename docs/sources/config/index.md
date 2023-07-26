@@ -375,9 +375,9 @@ This component opens an HTTP endpoint in the auto-instrumenter
 that allows any external scraper to pull metrics in [Prometheus](https://prometheus.io/)
 format. It will be enabled if the `port` property is set.
 
-| YAML   | Env var           | Type | Default |
-|--------|-------------------|------|---------|
-| `port` | `PROMETHEUS_PORT` | int  | (unset) |
+| YAML   | Env var                 | Type | Default |
+|--------|-------------------------|------|---------|
+| `port` | `BEYLA_PROMETHEUS_PORT` | int  | (unset) |
 
 Specifies the HTTP port to open a Prometheus scrape endpoint. If unset or 0,
 no Prometheus endpoint will be open.

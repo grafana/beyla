@@ -42,7 +42,7 @@ type PrometheusConfig struct {
 	ServiceName      string `yaml:"service_name" env:"PROMETHEUS_SERVICE_NAME"`
 	ServiceNamespace string `yaml:"service_namespace" env:"SERVICE_NAMESPACE"`
 
-	Port           int    `yaml:"port" env:"PROMETHEUS_PORT"`
+	Port           int    `yaml:"port" env:"BEYLA_PROMETHEUS_PORT"`
 	Path           string `yaml:"path" env:"PROMETHEUS_PATH"`
 	ReportTarget   bool   `yaml:"report_target" env:"METRICS_REPORT_TARGET"`
 	ReportPeerInfo bool   `yaml:"report_peer" env:"METRICS_REPORT_PEER"`

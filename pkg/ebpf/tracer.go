@@ -60,8 +60,31 @@ type Tracer interface {
 	AddCloser(c ...io.Closer)
 }
 
+type ProcessTracer struct {
+	programs []Tracer
+	elfInfo  *exec.FileInfo
+	goffsets *goexec.Offsets
+	exe      *link.Executable
+	pinPath  string
+}
+
 // TracerProvider returns a StartFuncCtx for each discovered eBPF traceable source: GRPC, HTTP...
 func TracerProvider(ctx context.Context, cfg ebpfcommon.TracerConfig) ([]node.StartFuncCtx[[]any], error) { //nolint:all
+
+	pt, err := FindAndInstrument(ctx, cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	readers, err := pt.TraceReaders()
+	if err != nil {
+		return nil, err
+	}
+
+	return readers, nil
+}
+
+func FindAndInstrument(ctx context.Context, cfg ebpfcommon.TracerConfig) (*ProcessTracer, error) {
 	var log = logger()
 
 	metrics := global.Context(ctx).Metrics
@@ -79,7 +102,6 @@ func TracerProvider(ctx context.Context, cfg ebpfcommon.TracerConfig) ([]node.St
 	allFuncs := allGoFunctionNames(programs)
 	elfInfo, goffsets, err := inspect(ctx, &cfg, allFuncs)
 	if err != nil {
-		log.Error("Error inspecting", err)
 		return nil, fmt.Errorf("inspecting offsets: %w", err)
 	}
 
@@ -112,63 +134,74 @@ func TracerProvider(ctx context.Context, cfg ebpfcommon.TracerConfig) ([]node.St
 	if cfg.SystemWide {
 		log.Info("system wide instrumentation")
 	}
+	return &ProcessTracer{
+		programs: programs,
+		elfInfo:  elfInfo,
+		goffsets: goffsets,
+		exe:      exe,
+		pinPath:  pinPath,
+	}, nil
+}
+
+func (pt *ProcessTracer) TraceReaders() ([]node.StartFuncCtx[[]any], error) {
+	var log = logger()
 
 	// startNodes contains the eBPF programs (HTTP, GRPC tracers...) plus a function
 	// that just waits for the passed context to finish before closing the BPF pin
 	// path
 	startNodes := []node.StartFuncCtx[[]any]{
-		waitToCloseBbfPinPath(pinPath),
+		waitToCloseBbfPinPath(pt.pinPath),
 	}
 
-	for _, p := range programs {
+	for _, p := range pt.programs {
 		plog := log.With("program", reflect.TypeOf(p))
 		plog.Debug("loading eBPF program")
 		spec, err := p.Load()
 		if err != nil {
-			unmountBpfPinPath(pinPath)
+			unmountBpfPinPath(pt.pinPath)
 			return nil, fmt.Errorf("loading eBPF program: %w", err)
 		}
-		if err := spec.RewriteConstants(p.Constants(elfInfo, goffsets)); err != nil {
+		if err := spec.RewriteConstants(p.Constants(pt.elfInfo, pt.goffsets)); err != nil {
 			return nil, fmt.Errorf("rewriting BPF constants definition: %w", err)
 		}
 		if err := spec.LoadAndAssign(p.BpfObjects(), &ebpf.CollectionOptions{
 			Maps: ebpf.MapOptions{
-				PinPath: pinPath,
+				PinPath: pt.pinPath,
 			}}); err != nil {
 			printVerifierErrorInfo(err)
-			unmountBpfPinPath(pinPath)
+			unmountBpfPinPath(pt.pinPath)
 			return nil, fmt.Errorf("loading and assigning BPF objects: %w", err)
 		}
 		i := instrumenter{
-			exe:     exe,
-			offsets: goffsets,
+			exe:     pt.exe,
+			offsets: pt.goffsets,
 		}
 
 		//Go style Uprobes
 		if err := i.goprobes(p); err != nil {
 			printVerifierErrorInfo(err)
-			unmountBpfPinPath(pinPath)
+			unmountBpfPinPath(pt.pinPath)
 			return nil, err
 		}
 
 		//Kprobes to be used for native instrumentation points
 		if err := i.kprobes(p); err != nil {
 			printVerifierErrorInfo(err)
-			unmountBpfPinPath(pinPath)
+			unmountBpfPinPath(pt.pinPath)
 			return nil, err
 		}
 
 		//Uprobes to be used for native module instrumentation points
-		if err := i.uprobes(elfInfo.Pid, p); err != nil {
+		if err := i.uprobes(pt.elfInfo.Pid, p); err != nil {
 			printVerifierErrorInfo(err)
-			unmountBpfPinPath(pinPath)
+			unmountBpfPinPath(pt.pinPath)
 			return nil, err
 		}
 
 		//Sock filters support
 		if err := i.sockfilters(p); err != nil {
 			printVerifierErrorInfo(err)
-			unmountBpfPinPath(pinPath)
+			unmountBpfPinPath(pt.pinPath)
 			return nil, err
 		}
 

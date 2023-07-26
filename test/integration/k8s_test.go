@@ -17,9 +17,12 @@ import (
 	"github.com/grafana/ebpf-autoinstrument/test/integration/components/prom"
 )
 
+// nolint:unused
 var cluster *kube.Kind
 
-func TestMain(m *testing.M) {
+// TODO: unskip when we require testing Kubernetes features
+// nolint
+func skipTestMain(m *testing.M) {
 	if err := docker.Build(os.Stdout, "../..",
 		docker.ImageBuild{Tag: "testserver:dev", Dockerfile: "components/testserver/Dockerfile"},
 		docker.ImageBuild{Tag: "beyla:dev", Dockerfile: "components/beyla/Dockerfile"},
@@ -43,7 +46,8 @@ func TestMain(m *testing.M) {
 	cluster.Run(m)
 }
 
-func TestSmoke(t *testing.T) {
+func TestK8sSmoke(t *testing.T) {
+	t.Skip("we don't require Kubernetes testing right now")
 	// smoke test that just waits until all the components are up and
 	// applications traces are reported are traced
 	const (

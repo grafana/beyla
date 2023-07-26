@@ -6,5 +6,5 @@ var (
 	pathRoot     = path.Join("..", "..")
 	pathOutput   = path.Join(pathRoot, "testoutput")
 	pathVarRun   = path.Join(pathOutput, "run")
-	pathKindLogs = path.Join(pathOutput, "kind")
+	pathKindLogs = path.Join(pathOutput, "kind") //nolint:unused
 )

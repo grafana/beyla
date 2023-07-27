@@ -151,6 +151,17 @@ static __always_inline void handle_ssl_buf(u64 id, ssl_args_t *args, int bytes_l
 
         bpf_map_delete_elem(&ssl_to_pid_tid, &ssl_ptr);
 
+
+        if (!conn) {
+            connection_info_t c = {};
+            bpf_dbg_printk("setting fake connection info ssl=%llx", ssl);
+            bpf_memcpy(&c.s_addr, &ssl, sizeof(void *));
+            c.d_port = c.s_port = 0;
+
+            bpf_map_update_elem(&ssl_to_conn, &ssl, &c, BPF_ANY);
+            conn = bpf_map_lookup_elem(&ssl_to_conn, &ssl);
+        }
+
         if (conn) {
             void *read_buf = (void *)args->buf;
             char buf[FULL_BUF_SIZE] = {0};

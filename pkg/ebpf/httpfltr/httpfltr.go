@@ -219,9 +219,20 @@ func (p *Tracer) toRequestTrace(record *ringbuf.Record) (any, error) {
 
 	result = HTTPInfo{BPFHTTPInfo: event}
 
-	source, target := event.hostInfo()
-	result.Host = target
-	result.Peer = source
+	// When we can't find the connection info, we signal that through making the
+	// source and destination ports equal to max short. E.g. async SSL
+	if event.ConnInfo.S_port != 0 || event.ConnInfo.D_port != 0 {
+		source, target := event.hostInfo()
+		result.Host = target
+		result.Peer = source
+	} else {
+		host, port := event.hostFromBuf()
+
+		if port >= 0 {
+			result.Host = host
+			result.ConnInfo.D_port = uint16(port)
+		}
+	}
 	result.URL = event.url()
 	result.Method = event.method()
 	if p.Cfg.SystemWide {
@@ -253,6 +264,29 @@ func (event *BPFHTTPInfo) method() string {
 	}
 
 	return buf[:space]
+}
+
+func (event *BPFHTTPInfo) hostFromBuf() (string, int) {
+	buf := string(event.Buf[:])
+	idx := strings.Index(buf, "Host: ")
+
+	if idx < 0 {
+		return "", -1
+	}
+
+	buf = buf[idx+6:]
+
+	rIdx := strings.Index(buf, "\r")
+
+	host, portStr, err := net.SplitHostPort(buf[:rIdx])
+
+	if err != nil {
+		return "", -1
+	}
+
+	port, _ := strconv.Atoi(portStr)
+
+	return host, port
 }
 
 func (event *BPFHTTPInfo) hostInfo() (source, target string) {

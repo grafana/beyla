@@ -4,6 +4,12 @@ package integration
 
 import (
 	"testing"
+
+	"github.com/mariomac/guara/pkg/test"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/grafana/ebpf-autoinstrument/test/integration/components/prom"
 )
 
 func testREDMetricsDotNetHTTP(t *testing.T) {

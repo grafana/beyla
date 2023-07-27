@@ -49,6 +49,19 @@ the options for each component.
 The properties in this section are first-level YAML properties, as they apply to the
 whole Autoinstrumenter configuration:
 
+| YAML           | Env var             | Type   | Default         |
+|----------------|---------------------|--------|-----------------|
+| `service_name` | `OTEL_SERVICE_NAME` | string | executable name |
+
+Specifies the name of the instrumented service to be reported by the metrics exporter.
+If unset, it will be the name of the executable running the service.
+
+| YAML                | Env var             | Type   | Default |
+|---------------------|---------------------|--------|---------|
+| `service_namespace` | `SERVICE_NAMESPACE` | string | (unset) |
+
+Optionally allows assigning a namespace for the service.
+
 | YAML        | Env var     | Type   | Default |
 |-------------|-------------|--------|---------|
 | `log_level` | `LOG_LEVEL` | string | `INFO`  |
@@ -233,13 +246,6 @@ If set to `true`, the OTEL client accepts any certificate presented by the serve
 and any host name in that certificate. In this mode, TLS is susceptible to machine-in-the-middle
 attacks. This option should be used only for testing and development purposes.
 
-| YAML           | Env var             | Type   | Default         |
-|----------------|---------------------|--------|-----------------|
-| `service_name` | `OTEL_SERVICE_NAME` | string | executable path |
-
-Specifies the name of the instrumented service to be reported by the metrics exporter.
-If unset, it will be the path of the instrumented service (e.g. `/usr/local/bin/service`).
-
 | YAML       | Env var            | Type     | Default |
 |------------|--------------------|----------|---------|
 | `interval` | `METRICS_INTERVAL` | Duration | `5s`    |
@@ -360,13 +366,6 @@ If set to `true`, the OTEL client accepts any certificate presented by the serve
 and any host name in that certificate. In this mode, TLS is susceptible to machine-in-the-middle
 attacks. This option should be used only for testing and development purposes.
 
-| YAML           | Env var             | Type   | Default         |
-|----------------|---------------------|--------|-----------------|
-| `service_name` | `OTEL_SERVICE_NAME` | string | executable path |
-
-Specifies the name of the instrumented service to be reported by the traces exporter.
-If unset, it will be the path of the instrumented service (e.g. `/usr/local/bin/service`).
-
 ## Prometheus HTTP endpoint
 
 YAML section `prometheus_export`.
@@ -455,13 +454,13 @@ or the same (both metric families will be listed in the same scrape endpoint).
 
 ```yaml
 log_level: DEBUG
+service_name: my-instrumented-service
 
 ebpf:
   open_port: 443
   wakeup_len: 100
 
 otel_traces:
-  service_name: my-instrumented-service
   endpoint: https://otlp-gateway-prod-eu-west-0.grafana.net/otlp
 
 prometheus_export:

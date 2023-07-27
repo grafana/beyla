@@ -70,18 +70,7 @@ type ProcessTracer struct {
 
 // TracerProvider returns a StartFuncCtx for each discovered eBPF traceable source: GRPC, HTTP...
 func TracerProvider(_ context.Context, pt *ProcessTracer) ([]node.StartFuncCtx[[]any], error) {
-
-	//pt, err := FindAndInstrument(ctx, cfg)
-	//if err != nil {
-	//	return nil, err
-	//}
-
-	readers, err := pt.TraceReaders()
-	if err != nil {
-		return nil, err
-	}
-
-	return readers, nil
+	return pt.TraceReaders()
 }
 
 func FindAndInstrument(ctx context.Context, cfg *ebpfcommon.TracerConfig, metrics imetrics.Reporter) (*ProcessTracer, error) {

@@ -14,11 +14,8 @@ import (
 
 	"golang.org/x/exp/slog"
 
-	"github.com/grafana/ebpf-autoinstrument/pkg/connector"
-	"github.com/grafana/ebpf-autoinstrument/pkg/ebpf"
-	"github.com/grafana/ebpf-autoinstrument/pkg/imetrics"
+	"github.com/grafana/ebpf-autoinstrument/pkg/beyla"
 	"github.com/grafana/ebpf-autoinstrument/pkg/pipe"
-	"github.com/grafana/ebpf-autoinstrument/pkg/pipe/global"
 )
 
 func main() {
@@ -52,29 +49,19 @@ func main() {
 	// child process isn't found.
 	ctx, _ := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 
-	ctxInfo := BuildContextInfo(config)
-
-	slog.Info("creating instrumentation pipeline")
-	tracer, err := ebpf.FindAndInstrument(ctx, &config.EBPF, ctxInfo.Metrics)
-	if err != nil {
-		slog.Error("can't find an instrument executable", err)
+	// TODO: when we split Beyla in two executables, this function can be split
+	// in two parts:
+	// 1st executable - Invoke FindTarget, which also mounts the BPF maps
+	// 2nd executable - Invoke ReadAndForward, receiving the BPF map mountpoint as argument
+	instr := beyla.New(config)
+	if err := instr.FindTarget(ctx); err != nil {
+		slog.Error("Beyla couldn't find target service", err)
 		os.Exit(-1)
 	}
-	if ctxInfo.ServiceName == "" {
-		ctxInfo.ServiceName = tracer.ELFInfo.ExecutableName()
-	}
-
-	bp, err := pipe.Build(ctx, config, ctxInfo, tracer)
-	if err != nil {
-		slog.Error("can't instantiate instrumentation pipeline", err)
+	if err := instr.ReadAndForward(ctx); err != nil {
+		slog.Error("Beyla couldn't start read and forwarding", err)
 		os.Exit(-1)
 	}
-
-	slog.Info("Starting main node")
-
-	bp.Run(ctx)
-
-	slog.Info("exiting auto-instrumenter")
 
 	if gc := os.Getenv("GOCOVERDIR"); gc != "" {
 		slog.Info("Waiting 1s to collect coverage data...")
@@ -98,25 +85,4 @@ func loadConfig(configPath *string) *pipe.Config {
 		os.Exit(-1)
 	}
 	return config
-}
-
-func BuildContextInfo(config *pipe.Config) *global.ContextInfo {
-	promMgr := &connector.PrometheusManager{}
-	ctxInfo := &global.ContextInfo{
-		ReportRoutes:     config.Routes != nil,
-		Prometheus:       promMgr,
-		ServiceName:      config.ServiceName,
-		ServiceNamespace: config.ServiceNamespace,
-	}
-	if config.InternalMetrics.Prometheus.Port != 0 {
-		slog.Debug("reporting internal metrics as Prometheus")
-		ctxInfo.Metrics = imetrics.NewPrometheusReporter(&config.InternalMetrics.Prometheus, promMgr)
-		// Prometheus manager also has its own internal metrics, so we need to pass the imetrics reporter
-		// TODO: remove this dependency cycle and let prommgr to create and return the PrometheusReporter
-		promMgr.InstrumentWith(ctxInfo.Metrics)
-	} else {
-		slog.Debug("not reporting internal metrics")
-		ctxInfo.Metrics = imetrics.NoopReporter{}
-	}
-	return ctxInfo
 }

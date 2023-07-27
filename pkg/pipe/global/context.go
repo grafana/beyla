@@ -6,10 +6,7 @@ import (
 )
 
 // ContextInfo stores some context information that must be shared across some nodes of the
-// processing graph, but it is not known during the instantiation time, so we
-// set a pointer to this in the global context, then we write/read its properties
-// from the different nodes
-// TODO: generify and make this part of the github.com/mariomac/pipes library
+// processing graph.
 type ContextInfo struct {
 	// ReportRoutes sets whether the metrics should set the http.route attribute
 	ReportRoutes bool

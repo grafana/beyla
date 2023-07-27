@@ -28,8 +28,8 @@ import (
 	"github.com/grafana/ebpf-autoinstrument/pkg/internal/imetrics"
 )
 
-//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf ../../../bpf/go_grpc.c -- -I../../../bpf/headers
-//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf_debug ../../../bpf/go_grpc.c -- -I../../../bpf/headers -DBPF_DEBUG
+//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf ../../../../bpf/go_grpc.c -- -I../../../../bpf/headers
+//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf_debug ../../../../bpf/go_grpc.c -- -I../../../../bpf/headers -DBPF_DEBUG
 
 type Tracer struct {
 	Cfg     *ebpfcommon.TracerConfig

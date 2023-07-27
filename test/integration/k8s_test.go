@@ -1,10 +1,11 @@
-//go:build integration
+//go:build ignore_by_now_replace_later_by_integration
 
 package integration
 
 import (
 	"net/http"
 	"os"
+	"path"
 	"testing"
 	"time"
 
@@ -17,9 +18,13 @@ import (
 	"github.com/grafana/ebpf-autoinstrument/test/integration/components/prom"
 )
 
+const (
+	pathKindLogs = path.Join(pathOutput, "kind")
+)
+
 var cluster *kube.Kind
 
-func ssTestMain(m *testing.M) {
+func TestMain(m *testing.M) {
 	if err := docker.Build(os.Stdout, "../..",
 		docker.ImageBuild{Tag: "testserver:dev", Dockerfile: "components/testserver/Dockerfile"},
 		docker.ImageBuild{Tag: "beyla:dev", Dockerfile: "components/beyla/Dockerfile"},

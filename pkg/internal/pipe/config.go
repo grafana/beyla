@@ -8,7 +8,6 @@ import (
 	"github.com/caarlos0/env/v7"
 	"gopkg.in/yaml.v3"
 
-	"github.com/grafana/ebpf-autoinstrument/pkg/internal/ebpf"
 	ebpfcommon "github.com/grafana/ebpf-autoinstrument/pkg/internal/ebpf/common"
 	"github.com/grafana/ebpf-autoinstrument/pkg/internal/export/debug"
 	"github.com/grafana/ebpf-autoinstrument/pkg/internal/export/otel"
@@ -49,32 +48,6 @@ var defaultConfig = Config{
 	},
 }
 
-type Graph struct {
-	// TODO: use interface
-	TracerReader *ebpf.ProcessTracer `nodeId:"tracer" sendTo:"routes"`
-
-	// Routes is an optional node. If not set, data will be directly forwarded to exporters.
-	Routes *transform.RoutesConfig `nodeId:"routes" forwardTo:"otel_metrics,otel_traces,print,noop,prom"`
-
-	Metrics    otel.MetricsConfig    `nodeId:"otel_metrics"`
-	Traces     otel.TracesConfig     `nodeId:"otel_traces"`
-	Prometheus prom.PrometheusConfig `nodeId:"prom"`
-	Printer    debug.PrintEnabled    `nodeId:"print"`
-	Noop       debug.NoopEnabled     `nodeId:"noop"`
-}
-
-func GraphFromConfig(cfg *Config, tracer *ebpf.ProcessTracer) *Graph {
-	return &Graph{
-		TracerReader: tracer,
-		Routes:       cfg.Routes,
-		Metrics:      cfg.Metrics,
-		Traces:       cfg.Traces,
-		Prometheus:   cfg.Prometheus,
-		Printer:      cfg.Printer,
-		Noop:         cfg.Noop,
-	}
-}
-
 type Config struct {
 	EBPF ebpfcommon.TracerConfig `yaml:"ebpf"`
 
@@ -95,7 +68,7 @@ type Config struct {
 	// are useful for development purposes. They might be helpful for customer support.
 
 	ChannelBufferLen int               `yaml:"channel_buffer_len" env:"CHANNEL_BUFFER_LEN"`
-	Noop             debug.NoopEnabled `nodeId:"noop" yaml:"noop" env:"NOOP_TRACES"`
+	Noop             debug.NoopEnabled `yaml:"noop" env:"NOOP_TRACES"`
 	ProfilePort      int               `yaml:"profile_port" env:"PROFILE_PORT"`
 	InternalMetrics  imetrics.Config   `yaml:"internal_metrics"`
 }

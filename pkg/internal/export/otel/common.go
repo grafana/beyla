@@ -38,8 +38,6 @@ var DefaultBuckets = Buckets{
 	RequestSizeHistogram: []float64{0, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192},
 }
 
-// TODO: when we join both traces' and metrics ServiceName and ServiceNamespace into a common configuration section
-// provide a unique Resource for both metrics and traces reporter
 func otelResource(svcName, cfgSvcNamespace string) *resource.Resource {
 	attrs := []attribute.KeyValue{
 		semconv.ServiceName(svcName),

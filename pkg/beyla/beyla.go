@@ -1,3 +1,5 @@
+// Package beyla provides public access to Beyla as a library. All the other subcomponents
+// of Beyla are hidden.
 package beyla
 
 import (

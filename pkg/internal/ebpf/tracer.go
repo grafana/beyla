@@ -60,6 +60,9 @@ type Tracer interface {
 	AddCloser(c ...io.Closer)
 }
 
+// ProcessTracer instruments an executable with eBPF and provides the eBPF readers
+// that will forward the traces to later stages in the pipeline
+// TODO: split in two, the instrumenter and the reader
 type ProcessTracer struct {
 	programs []Tracer
 	ELFInfo  *exec.FileInfo
@@ -130,6 +133,7 @@ func FindAndInstrument(ctx context.Context, cfg *ebpfcommon.TracerConfig, metric
 	}, nil
 }
 
+// TraceReaders returns one StartFuncCtx for each discovered eBPF traceable source: GRPC, HTTP...
 func (pt *ProcessTracer) TraceReaders() ([]node.StartFuncCtx[[]any], error) {
 	var log = logger()
 

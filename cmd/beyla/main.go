@@ -15,7 +15,6 @@ import (
 	"golang.org/x/exp/slog"
 
 	"github.com/grafana/ebpf-autoinstrument/pkg/beyla"
-	"github.com/grafana/ebpf-autoinstrument/pkg/pipe"
 )
 
 func main() {
@@ -49,7 +48,7 @@ func main() {
 	// child process isn't found.
 	ctx, _ := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 
-	// TODO: when we split Beyla in two executables, this function can be split
+	// TODO: when we split Beyla in two executables, this code can be split:
 	// in two parts:
 	// 1st executable - Invoke FindTarget, which also mounts the BPF maps
 	// 2nd executable - Invoke ReadAndForward, receiving the BPF map mountpoint as argument
@@ -69,7 +68,7 @@ func main() {
 	}
 }
 
-func loadConfig(configPath *string) *pipe.Config {
+func loadConfig(configPath *string) *beyla.Config {
 	var configReader io.ReadCloser
 	if configPath != nil && *configPath != "" {
 		var err error
@@ -79,7 +78,7 @@ func loadConfig(configPath *string) *pipe.Config {
 		}
 		defer configReader.Close()
 	}
-	config, err := pipe.LoadConfig(configReader)
+	config, err := beyla.LoadConfig(configReader)
 	if err != nil {
 		slog.Error("wrong configuration", err)
 		os.Exit(-1)

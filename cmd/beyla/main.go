@@ -14,7 +14,7 @@ import (
 
 	"golang.org/x/exp/slog"
 
-	"github.com/grafana/ebpf-autoinstrument/pkg/pipe"
+	"github.com/grafana/ebpf-autoinstrument/pkg/beyla"
 )
 
 func main() {
@@ -48,18 +48,19 @@ func main() {
 	// child process isn't found.
 	ctx, _ := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 
-	slog.Info("creating instrumentation pipeline")
-	bp, err := pipe.Build(ctx, config)
-	if err != nil {
-		slog.Error("can't instantiate instrumentation pipeline", err)
+	// TODO: when we split Beyla in two executables, this code can be split:
+	// in two parts:
+	// 1st executable - Invoke FindTarget, which also mounts the BPF maps
+	// 2nd executable - Invoke ReadAndForward, receiving the BPF map mountpoint as argument
+	instr := beyla.New(config)
+	if err := instr.FindTarget(ctx); err != nil {
+		slog.Error("Beyla couldn't find target service", err)
 		os.Exit(-1)
 	}
-
-	slog.Info("Starting main node")
-
-	bp.Run(ctx)
-
-	slog.Info("exiting auto-instrumenter")
+	if err := instr.ReadAndForward(ctx); err != nil {
+		slog.Error("Beyla couldn't start read and forwarding", err)
+		os.Exit(-1)
+	}
 
 	if gc := os.Getenv("GOCOVERDIR"); gc != "" {
 		slog.Info("Waiting 1s to collect coverage data...")
@@ -67,7 +68,7 @@ func main() {
 	}
 }
 
-func loadConfig(configPath *string) *pipe.Config {
+func loadConfig(configPath *string) *beyla.Config {
 	var configReader io.ReadCloser
 	if configPath != nil && *configPath != "" {
 		var err error
@@ -77,7 +78,7 @@ func loadConfig(configPath *string) *pipe.Config {
 		}
 		defer configReader.Close()
 	}
-	config, err := pipe.LoadConfig(configReader)
+	config, err := beyla.LoadConfig(configReader)
 	if err != nil {
 		slog.Error("wrong configuration", err)
 		os.Exit(-1)

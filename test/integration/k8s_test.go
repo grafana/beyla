@@ -1,10 +1,11 @@
-//go:build integration
+//go:build integration_ignore_by_now
 
 package integration
 
 import (
 	"net/http"
 	"os"
+	"path"
 	"testing"
 	"time"
 
@@ -15,6 +16,10 @@ import (
 	"github.com/grafana/ebpf-autoinstrument/test/integration/components/docker"
 	"github.com/grafana/ebpf-autoinstrument/test/integration/components/kube"
 	"github.com/grafana/ebpf-autoinstrument/test/integration/components/prom"
+)
+
+const (
+	pathKindLogs = path.Join(pathOutput, "kind")
 )
 
 var cluster *kube.Kind

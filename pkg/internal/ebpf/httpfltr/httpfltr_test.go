@@ -90,6 +90,7 @@ func TestToRequestTrace(t *testing.T) {
 	record.StartMonotimeNs = 123456
 	record.EndMonotimeNs = 789012
 	record.Status = 200
+	record.ConnInfo.D_port = 1
 	record.ConnInfo.S_addr = [16]byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff, 192, 168, 0, 1}
 	record.ConnInfo.D_addr = [16]byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff, 8, 8, 8, 8}
 	copy(record.Buf[:], []byte("GET /hello HTTP/1.1\r\nHost: example.com\r\n\r\n"))
@@ -106,6 +107,36 @@ func TestToRequestTrace(t *testing.T) {
 		BPFHTTPInfo: record,
 		Host:        "8.8.8.8",
 		Peer:        "192.168.0.1",
+		URL:         "/hello",
+		Method:      "GET",
+	}
+	assert.Equal(t, expected, result)
+}
+
+func TestToRequestTraceNoConnection(t *testing.T) {
+	var record BPFHTTPInfo
+	record.Type = 1
+	record.StartMonotimeNs = 123456
+	record.EndMonotimeNs = 789012
+	record.Status = 200
+	record.ConnInfo.S_addr = [16]byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff, 192, 168, 0, 1}
+	record.ConnInfo.D_addr = [16]byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff, 8, 8, 8, 8}
+	copy(record.Buf[:], []byte("GET /hello HTTP/1.1\r\nHost: localhost:7033\r\n\r\nUser-Agent: curl/7.81.0\r\nAccept: */*\r\n"))
+
+	buf := new(bytes.Buffer)
+	err := binary.Write(buf, binary.LittleEndian, &record)
+	assert.NoError(t, err)
+
+	tracer := Tracer{Cfg: &ebpfcommon.TracerConfig{}}
+	result, err := tracer.toRequestTrace(&ringbuf.Record{RawSample: buf.Bytes()})
+	assert.NoError(t, err)
+
+	// change the expected port just before testing
+	record.ConnInfo.D_port = 7033
+	expected := HTTPInfo{
+		BPFHTTPInfo: record,
+		Host:        "localhost",
+		Peer:        "",
 		URL:         "/hello",
 		Method:      "GET",
 	}

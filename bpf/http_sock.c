@@ -90,7 +90,6 @@ int BPF_KPROBE(kprobe_tcp_rcv_established, struct sock *sk, struct sk_buff *skb)
         bpf_map_update_elem(&pid_tid_to_conn, &id, &info, BPF_ANY); // to support SSL on missing handshake
     }
 
-
     return 0;
 }
 
@@ -123,6 +122,8 @@ int BPF_KRETPROBE(kretprobe_sys_accept4, uint fd)
         goto cleanup;
     }
 
+    bpf_dbg_printk("=== accept 4 ret id=%d, sock=%llx, fd=%d ===", id, args->addr, fd);
+
     connection_info_t info = {};
 
     if (parse_accept_socket_info(args, &info)) {
@@ -133,6 +134,7 @@ int BPF_KRETPROBE(kretprobe_sys_accept4, uint fd)
         meta.id = id;
         meta.type = EVENT_HTTP_REQUEST;
         bpf_map_update_elem(&filtered_connections, &info, &meta, BPF_ANY); // On purpose BPF_ANY, we want to overwrite stale
+        bpf_map_update_elem(&pid_tid_to_conn, &id, &info, BPF_ANY); // to support SSL on missing handshake
     }
 
 cleanup:

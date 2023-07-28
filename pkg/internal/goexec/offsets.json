@@ -1,0 +1,240 @@
+{
+  "data": {
+    "google.golang.org/genproto/googleapis/rpc/status.Status": {
+      "Code": {
+        "versions": {
+          "oldest": "0.0.0",
+          "newest": "0.0.0"
+        },
+        "offsets": [
+          {
+            "offset": 40,
+            "since": "0.0.0"
+          }
+        ]
+      }
+    },
+    "google.golang.org/grpc.ClientConn": {
+      "target": {
+        "versions": {
+          "oldest": "1.40.0",
+          "newest": "1.57.0"
+        },
+        "offsets": [
+          {
+            "offset": 24,
+            "since": "1.40.0"
+          }
+        ]
+      }
+    },
+    "google.golang.org/grpc/internal/status.Status": {
+      "s": {
+        "versions": {
+          "oldest": "1.40.0",
+          "newest": "1.57.0"
+        },
+        "offsets": [
+          {
+            "offset": 0,
+            "since": "1.40.0"
+          }
+        ]
+      }
+    },
+    "google.golang.org/grpc/internal/transport.Stream": {
+      "method": {
+        "versions": {
+          "oldest": "1.40.0",
+          "newest": "1.57.0"
+        },
+        "offsets": [
+          {
+            "offset": 80,
+            "since": "1.40.0"
+          }
+        ]
+      },
+      "st": {
+        "versions": {
+          "oldest": "1.40.0",
+          "newest": "1.57.0"
+        },
+        "offsets": [
+          {
+            "offset": 8,
+            "since": "1.40.0"
+          }
+        ]
+      }
+    },
+    "google.golang.org/grpc/internal/transport.http2Server": {
+      "localAddr": {
+        "versions": {
+          "oldest": "1.40.0",
+          "newest": "1.57.0"
+        },
+        "offsets": [
+          {
+            "offset": 88,
+            "since": "1.40.0"
+          }
+        ]
+      },
+      "remoteAddr": {
+        "versions": {
+          "oldest": "1.40.0",
+          "newest": "1.57.0"
+        },
+        "offsets": [
+          {
+            "offset": 72,
+            "since": "1.40.0"
+          }
+        ]
+      }
+    },
+    "net.TCPAddr": {
+      "IP": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.20.6"
+        },
+        "offsets": [
+          {
+            "offset": 0,
+            "since": "1.17.0"
+          }
+        ]
+      },
+      "Port": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.20.6"
+        },
+        "offsets": [
+          {
+            "offset": 24,
+            "since": "1.17.0"
+          }
+        ]
+      }
+    },
+    "net/http.Request": {
+      "ContentLength": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.20.6"
+        },
+        "offsets": [
+          {
+            "offset": 88,
+            "since": "1.17.0"
+          }
+        ]
+      },
+      "Host": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.20.6"
+        },
+        "offsets": [
+          {
+            "offset": 128,
+            "since": "1.17.0"
+          }
+        ]
+      },
+      "Method": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.20.6"
+        },
+        "offsets": [
+          {
+            "offset": 0,
+            "since": "1.17.0"
+          }
+        ]
+      },
+      "RemoteAddr": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.20.6"
+        },
+        "offsets": [
+          {
+            "offset": 176,
+            "since": "1.17.0"
+          }
+        ]
+      },
+      "URL": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.20.6"
+        },
+        "offsets": [
+          {
+            "offset": 16,
+            "since": "1.17.0"
+          }
+        ]
+      }
+    },
+    "net/http.Response": {
+      "StatusCode": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.20.6"
+        },
+        "offsets": [
+          {
+            "offset": 16,
+            "since": "1.17.0"
+          }
+        ]
+      }
+    },
+    "net/http.response": {
+      "req": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.20.6"
+        },
+        "offsets": [
+          {
+            "offset": 8,
+            "since": "1.17.0"
+          }
+        ]
+      },
+      "status": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.20.6"
+        },
+        "offsets": [
+          {
+            "offset": 120,
+            "since": "1.17.0"
+          }
+        ]
+      }
+    },
+    "net/url.URL": {
+      "Path": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.20.6"
+        },
+        "offsets": [
+          {
+            "offset": 56,
+            "since": "1.17.0"
+          }
+        ]
+      }
+    }
+  }
+}

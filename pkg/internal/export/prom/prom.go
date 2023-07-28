@@ -174,7 +174,13 @@ func labelNamesGRPC(cfg *PrometheusConfig) []string {
 // by labelNamesGRPC
 func (r *metricsReporter) labelValuesGRPC(span *transform.HTTPRequestSpan) []string {
 	// serviceNameKey, rpcMethodKey, rpcSystemGRPC, rpcGRPCStatusCodeKey
-	names := []string{r.cfg.ServiceName, span.Path, "grpc", strconv.Itoa(span.Status)}
+	// In some situations e.g. system-wide instrumentation, the global service name
+	// is empty and we need to take the name from the trace
+	var svcName = r.cfg.ServiceName
+	if svcName == "" {
+		svcName = span.ServiceName
+	}
+	names := []string{svcName, span.Path, "grpc", strconv.Itoa(span.Status)}
 	if r.cfg.ServiceNamespace != "" {
 		names = append(names, r.cfg.ServiceNamespace)
 	}

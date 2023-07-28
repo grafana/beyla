@@ -121,9 +121,6 @@ func TestSuite_Java_PID(t *testing.T) {
 // same as Test suite for java, but using the system_wide instrumentation
 // TODO: Fix the service name, mimir seems to work with what we have, but not Prometheus
 func TestSuite_Java_SystemWide(t *testing.T) {
-
-	t.Skip("this test fails in main tag. Skipping temporarily until we fix it ASAP")
-
 	compose, err := docker.ComposeSuite("docker-compose-java.yml", path.Join(pathOutput, "test-suite-java-system-wide.log"))
 	compose.Env = append(compose.Env, `SYSTEM_WIDE=TRUE`, `JAVA_EXECUTABLE_NAME=`, `JAVA_TEST_MODE=-native`)
 	require.NoError(t, err)

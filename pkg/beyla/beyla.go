@@ -64,7 +64,10 @@ func (i *Instrumenter) FindTarget(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("can't find an instrument executable: %w", err)
 	}
-	if i.ctxInfo.ServiceName == "" {
+	// If system-wide tracing is set, we don't use the initially-found
+	// executable name as service name, as it might be anything.
+	// We'll use the service name as traced from eBPF
+	if i.ctxInfo.ServiceName == "" && !i.config.EBPF.SystemWide {
 		i.ctxInfo.ServiceName = i.tracer.ELFInfo.ExecutableName()
 	}
 	return nil

@@ -59,7 +59,7 @@ You should be able to query traces and metrics in your Grafana board.
 
 ### How to regenerate the eBPF Kernel binaries
 
-The eBPF program is embedded into the `pkg/ebpf/bpf_*` generated files.
+The eBPF program is embedded into the `pkg/internal/ebpf/bpf_*` generated files.
 This step is generally not needed unless you change the C code in the `bpf` folder.
 
 If you have Docker installed, you just need to run:

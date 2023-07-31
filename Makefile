@@ -108,8 +108,8 @@ lint: prereqs checkfmt
 
 .PHONY: update-offsets
 update-offsets: prereqs
-	@echo "### Updating pkg/goexec/offsets.json"
-	$(GO_OFFSETS_TRACKER) -i configs/offsets/tracker_input.json pkg/goexec/offsets.json
+	@echo "### Updating pkg/internal/goexec/offsets.json"
+	$(GO_OFFSETS_TRACKER) -i configs/offsets/tracker_input.json pkg/internal/goexec/offsets.json
 
 # As generated artifacts are part of the code repo (pkg/ebpf packages), you don't have
 # to run this target for each build. Only when you change the C code inside the bpf folder.

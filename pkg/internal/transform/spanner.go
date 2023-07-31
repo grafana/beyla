@@ -49,6 +49,8 @@ type HTTPRequestSpan struct {
 	Start         int64
 	End           int64
 	ServiceName   string
+	// Metadata can be composed from multiple maps to allow data sharing
+	Metadata      []map[string]string
 }
 
 func ConvertToSpan(in <-chan []any, out chan<- []HTTPRequestSpan) {

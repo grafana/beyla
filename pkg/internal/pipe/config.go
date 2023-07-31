@@ -46,18 +46,22 @@ var defaultConfig = Config{
 			Path: "/internal/metrics",
 		},
 	},
+	Kubernetes: transform.KubernetesDecorator{
+		Enable:               transform.KubeAutodetect,
+		InformersSyncTimeout: 30 * time.Second,
+	},
 }
 
 type Config struct {
 	EBPF ebpfcommon.TracerConfig `yaml:"ebpf"`
 
 	// Routes is an optional node. If not set, data will be directly forwarded to exporters.
-	Routes *transform.RoutesConfig `yaml:"routes"`
-
-	Metrics    otel.MetricsConfig    `yaml:"otel_metrics_export"`
-	Traces     otel.TracesConfig     `yaml:"otel_traces_export"`
-	Prometheus prom.PrometheusConfig `yaml:"prometheus_export"`
-	Printer    debug.PrintEnabled    `yaml:"print_traces" env:"PRINT_TRACES"`
+	Routes     *transform.RoutesConfig       `yaml:"routes"`
+	Kubernetes transform.KubernetesDecorator `yaml:"kubernetes"`
+	Metrics    otel.MetricsConfig            `yaml:"otel_metrics_export"`
+	Traces     otel.TracesConfig             `yaml:"otel_traces_export"`
+	Prometheus prom.PrometheusConfig         `yaml:"prometheus_export"`
+	Printer    debug.PrintEnabled            `yaml:"print_traces" env:"PRINT_TRACES"`
 
 	LogLevel string `yaml:"log_level" env:"LOG_LEVEL"`
 

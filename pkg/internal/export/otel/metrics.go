@@ -281,6 +281,12 @@ func (r *MetricsReporter) metricAttributes(span *transform.HTTPRequestSpan) attr
 		attrs = append(attrs, semconv.ServiceName(span.ServiceName))
 	}
 
+	for _, meta := range span.Metadata {
+		for k, v := range meta {
+			attrs = append(attrs, attribute.String(k, v))
+		}
+	}
+
 	return attribute.NewSet(attrs...)
 }
 

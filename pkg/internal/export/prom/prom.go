@@ -92,7 +92,7 @@ func newReporter(ctx context.Context, cfg *PrometheusConfig, ctxInfo *global.Con
 			Name:    HTTPServerDuration,
 			Help:    "duration of HTTP service calls from the server side, in seconds",
 			Buckets: cfg.Buckets.DurationHistogram,
-		}, labelNamesHTTP(cfg, reportRoutes)),
+		}, nil),
 		httpClientDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Name:    HTTPClientDuration,
 			Help:    "duration of HTTP service calls from the client side, in seconds",
@@ -112,7 +112,7 @@ func newReporter(ctx context.Context, cfg *PrometheusConfig, ctxInfo *global.Con
 			Name:    HTTPServerRequestSize,
 			Help:    "size, in bytes, of the HTTP request body as received at the server side",
 			Buckets: cfg.Buckets.RequestSizeHistogram,
-		}, labelNamesHTTP(cfg, reportRoutes)),
+		}, nil),
 		httpClientRequestSize: prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Name:    HTTPClientRequestSize,
 			Help:    "size, in bytes, of the HTTP request body as sent from the client side",
@@ -143,9 +143,10 @@ func (r *metricsReporter) observe(span *transform.HTTPRequestSpan) {
 	duration := t.End.Sub(t.RequestStart).Seconds()
 	switch span.Type {
 	case transform.EventTypeHTTP:
-		lv := r.labelValuesHTTP(span)
-		r.httpDuration.WithLabelValues(lv...).Observe(duration)
-		r.httpRequestSize.WithLabelValues(lv...).Observe(float64(span.ContentLength))
+		lv := r.labelsHTTP(span)
+		addMetadata(lv, span)
+		r.httpDuration.With(lv).Observe(duration)
+		r.httpRequestSize.With(lv).Observe(float64(span.ContentLength))
 	case transform.EventTypeHTTPClient:
 		lv := r.labelValuesHTTPClient(span)
 		r.httpClientDuration.WithLabelValues(lv...).Observe(duration)
@@ -218,41 +219,35 @@ func (r *metricsReporter) labelValuesHTTPClient(span *transform.HTTPRequestSpan)
 	return names
 }
 
-// labelNamesHTTP must return the label names in the same order as would be returned
-// by labelValuesHTTP
-func labelNamesHTTP(cfg *PrometheusConfig, reportRoutes bool) []string {
-	names := []string{serviceNameKey, httpMethodKey, httpStatusCodeKey}
-	if cfg.ServiceNamespace != "" {
-		names = append(names, serviceNamespaceKey)
-	}
-	if cfg.ReportTarget {
-		names = append(names, httpTargetKey)
-	}
-	if cfg.ReportPeerInfo {
-		names = append(names, netSockPeerAddrKey)
-	}
-	if reportRoutes {
-		names = append(names, httpRouteKey)
-	}
-	return names
-}
-
 // labelValuesGRPC must return the label names in the same order as would be returned
 // by labelNamesHTTP
-func (r *metricsReporter) labelValuesHTTP(span *transform.HTTPRequestSpan) []string {
-	// httpMethodKey, httpStatusCodeKey
-	names := []string{r.cfg.ServiceName, span.Method, strconv.Itoa(span.Status)}
+func (r *metricsReporter) labelsHTTP(span *transform.HTTPRequestSpan) prometheus.Labels {
+	lbls := prometheus.Labels{
+		serviceNameKey:    r.cfg.ServiceName,
+		httpMethodKey:     span.Method,
+		httpStatusCodeKey: strconv.Itoa(span.Status),
+	}
+
 	if r.cfg.ServiceNamespace != "" {
-		names = append(names, r.cfg.ServiceNamespace)
+		lbls[serviceNamespaceKey] = r.cfg.ServiceNamespace
 	}
 	if r.cfg.ReportTarget {
-		names = append(names, span.Path) // httpTargetKey
+		lbls[httpTargetKey] = span.Path
 	}
 	if r.cfg.ReportPeerInfo {
-		names = append(names, span.Peer) // netSockPeerAddrKey
+		lbls[netSockPeerAddrKey] = span.Peer
 	}
 	if r.reportRoutes {
-		names = append(names, span.Route) // httpRouteKey
+		lbls[httpRouteKey] = span.Route
 	}
-	return names
+	return lbls
+}
+
+func addMetadata(lbls prometheus.Labels, span *transform.HTTPRequestSpan) {
+	for _, md := range span.Metadata {
+		for k, v := range md {
+			// TODO: snake_case
+			lbls[k] = v
+		}
+	}
 }

@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: internal-pinger
+spec:
+  containers:
+    - name: fedora
+      image: fedora:38
+      command:
+        - sh
+        - -c
+        - "echo 'start pinging from client pod...'; while true; do curl -v http://testserver:8080/iping ; sleep 1; done"

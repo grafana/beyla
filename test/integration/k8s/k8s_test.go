@@ -4,7 +4,6 @@ package k8s
 
 import (
 	"crypto/tls"
-	"fmt"
 	"net/http"
 	"os"
 	"path"
@@ -18,6 +17,10 @@ import (
 	"github.com/grafana/ebpf-autoinstrument/test/integration/components/docker"
 	"github.com/grafana/ebpf-autoinstrument/test/integration/components/kube"
 	"github.com/grafana/ebpf-autoinstrument/test/integration/components/prom"
+)
+
+const (
+	prometheusHostPort = "localhost:39090"
 )
 
 var (
@@ -50,18 +53,19 @@ func TestMain(m *testing.M) {
 		kube.Deploy("manifests/03-otelcol.yml"),
 		kube.Deploy("manifests/04-jaeger.yml"),
 		kube.Deploy("manifests/05-instrumented-service.yml"),
+		kube.Deploy("manifests/06-internal-pinger.yml"),
 	)
 
 	cluster.Run(m)
 }
 
-func TestSmoke(t *testing.T) {
+// Run it alphabetically first
+func TestAASmoke(t *testing.T) {
 	// smoke test that just waits until all the components are up and
 	// applications traces are reported are traced
 	const (
-		prometheusHostPort = "localhost:39090"
-		subpath            = "/smoke"
-		url                = "http://localhost:38080"
+		subpath = "/smoke"
+		url     = "http://localhost:38080"
 	)
 	pq := prom.Client{HostPort: prometheusHostPort}
 	test.Eventually(t, 2*time.Minute, func(t require.TestingT) {
@@ -78,7 +82,29 @@ func TestSmoke(t *testing.T) {
 		results, err := pq.Query(`http_server_duration_seconds_count{http_target="` + subpath + `"}`)
 		require.NoError(t, err)
 		require.NotZero(t, len(results))
-		fmt.Printf("%#v\n", results)
 	}, test.Interval(time.Second))
+}
 
+func TestDecoration(t *testing.T) {
+	// Testing the decoration of the HTTP calls from the internal-pinger pod
+	pq := prom.Client{HostPort: prometheusHostPort}
+	for _, metric := range []string{
+		"http_server_duration_seconds_count",
+		"http_server_duration_seconds_sum",
+		"http_server_duration_seconds_bucket",
+		"http_server_request_size_bytes_count",
+		"http_server_request_size_bytes_sum",
+		"http_server_request_size_bytes_bucket",
+	} {
+		t.Run(metric, func(t *testing.T) {
+			var results []prom.Result
+			test.Eventually(t, 30*time.Second, func(t require.TestingT) {
+				var err error
+				results, err = pq.Query(metric + `{http_target="/iping",k8s_src_name="internal-pinger"}`)
+				require.NoError(t, err)
+				require.NotZero(t, len(results))
+			})
+
+		})
+	}
 }

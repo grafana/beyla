@@ -19,8 +19,6 @@
 
 package kube
 
-
-
 import (
 	"testing"
 
@@ -29,16 +27,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/cache"
 )
-
-type KubeDataMock struct {
-	mock.Mock
-	kubeDataInterface
-}
-
-func (o *KubeDataMock) InitFromConfig(kubeConfigPath string) error {
-	args := o.Called(kubeConfigPath)
-	return args.Error(0)
-}
 
 type IndexerMock struct {
 	mock.Mock
@@ -76,8 +64,6 @@ func TestGetInfoPods(t *testing.T) {
 			Name:      "podName",
 			Namespace: "podNamespace",
 		},
-		HostIP: "10.0.0.1",
-		Owner:  Owner{Name: "podName", Type: "Pod"},
 	}}, nil)
 	pim := InformerMock{}
 	pim.On("GetIndexer").Return(&pidx)
@@ -103,8 +89,5 @@ func TestGetInfoPods(t *testing.T) {
 			Name:      "podName",
 			Namespace: "podNamespace",
 		},
-		HostName: "nodeName",
-		HostIP:   "10.0.0.1",
-		Owner:    Owner{Name: "podName", Type: "Pod"},
 	})
 }

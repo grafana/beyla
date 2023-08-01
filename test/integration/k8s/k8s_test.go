@@ -113,10 +113,7 @@ func TestServerDecoration(t *testing.T) {
 				assert.Equal(t, "testserver", r.Metric["k8s_dst_name"])
 				assert.Equal(t, "default", r.Metric["k8s_src_namespace"])
 				assert.Equal(t, "default", r.Metric["k8s_dst_namespace"])
-				assert.Equal(t, "Pod", r.Metric["k8s_src_type"])
 				assert.Equal(t, "Pod", r.Metric["k8s_dst_type"])
-				assert.Equal(t, "test-kind-cluster-control-plane", r.Metric["k8s_src_node_name"])
-				assert.Equal(t, "test-kind-cluster-control-plane", r.Metric["k8s_dst_node_name"])
 			}
 		})
 	}
@@ -137,7 +134,7 @@ func TestClientDecoration(t *testing.T) {
 			var results []prom.Result
 			test.Eventually(t, 30*time.Second, func(t require.TestingT) {
 				var err error
-				results, err = pq.Query(metric + `{http_target="/iping",k8s_src_name="internal-pinger"}`)
+				results, err = pq.Query(metric + `{k8s_src_name="internal-pinger"}`)
 				require.NoError(t, err)
 				require.NotZero(t, len(results))
 				fmt.Printf("%#v\n", results)
@@ -148,10 +145,7 @@ func TestClientDecoration(t *testing.T) {
 				assert.Equal(t, "testserver", r.Metric["k8s_dst_name"])
 				assert.Equal(t, "default", r.Metric["k8s_src_namespace"])
 				assert.Equal(t, "default", r.Metric["k8s_dst_namespace"])
-				assert.Equal(t, "Pod", r.Metric["k8s_src_type"])
 				assert.Equal(t, "Service", r.Metric["k8s_dst_type"])
-				assert.Equal(t, "test-kind-cluster-control-plane", r.Metric["k8s_src_node_name"])
-				assert.Equal(t, "test-kind-cluster-control-plane", r.Metric["k8s_dst_node_name"])
 			}
 		})
 	}

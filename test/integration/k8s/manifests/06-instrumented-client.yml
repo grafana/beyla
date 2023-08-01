@@ -14,7 +14,7 @@ data:
       // TODO: remove server after this bug is fixed https://github.com/grafana/ebpf-autoinstrument/issues/221    
       go http.ListenAndServe(":8787", nil)
       for {
-        r, err := http.Get("http://10.244.0.7:8080/iping")
+        r, err := http.Get("http://testserver:8080/iping")
         if err != nil {
           fmt.Println("error!", err)
         }

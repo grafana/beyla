@@ -21,11 +21,6 @@ const (
 	KubeAutodetect = KubeEnableFlag("autodetect")
 )
 
-const (
-	k8sSrcPrefix = "k8s.src."
-	k8sDstPrefix = "k8s.dst."
-)
-
 func klog() *slog.Logger {
 	return slog.With("component", "transform.KubernetesDecorator")
 }
@@ -64,6 +59,8 @@ func KubeDecoratorProvider(_ context.Context, cfg KubernetesDecorator) (node.Mid
 		return nil, fmt.Errorf("instantiating kubernetes metadata decorator: %w", err)
 	}
 	return func(in <-chan []HTTPRequestSpan, out chan<- []HTTPRequestSpan) {
+		decorator.refreshOwnPodMetadata()
+
 		klog().Debug("starting kubernetes decoration loop")
 		for spans := range in {
 			// in-place decoration and forwarding
@@ -96,43 +93,49 @@ type KubeInfo struct {
 }
 
 func (md *metadataDecorator) do(span *HTTPRequestSpan) {
-	if peerInfo, ok := md.kube.GetInfo(span.Peer); ok {
-		md.refreshOwnPodMetadata()
-		switch span.Type {
-		case EventTypeGRPC, EventTypeHTTP:
-			span.Metadata = append(span.Metadata, asMap(k8sSrcPrefix, peerInfo), md.ownMetadataAsDst)
-		case EventTypeGRPCClient, EventTypeHTTPClient:
-			span.Metadata = append(span.Metadata, asMap(k8sDstPrefix, peerInfo), md.ownMetadataAsSrc)
+	switch span.Type {
+	case EventTypeGRPC, EventTypeHTTP:
+		if peerInfo, ok := md.kube.GetInfo(span.Peer); ok {
+			span.Metadata = append(span.Metadata, asSrcMap(peerInfo), md.ownMetadataAsDst)
+		} else {
+			span.Metadata = append(span.Metadata, md.ownMetadataAsDst)
 		}
-		fmt.Println("instrumented metadata", span.Metadata)
-	} else {
-		fmt.Println("couldn't find info for", span.Peer)
+	case EventTypeGRPCClient, EventTypeHTTPClient:
+		ay ke mirar el span jost este a ver si podemos hacerlo mas estable
+		if peerInfo, ok := md.kube.GetServiceInfo(span.Host); ok {
+			span.Metadata = append(span.Metadata, asDstMap(peerInfo), md.ownMetadataAsSrc)
+		} else {
+			span.Metadata = append(span.Metadata, md.ownMetadataAsSrc)
+		}
 	}
 }
 
 // TODO: allow users to filter which attributes they want, instead of adding all of them
 // TODO: cache
-// TODO: local IP metadata
-func asMap(keyPrefix string, info *kube.Info) map[string]string {
-	meta := map[string]string{
-		keyPrefix + "namespace": info.Namespace,
-		keyPrefix + "name":      info.Name,
-		keyPrefix + "type":      info.Type,
+func asDstMap(info *kube.Info) map[string]string {
+	return map[string]string{
+		"k8s.dst.namespace": info.Namespace,
+		"k8s.dst.name":      info.Name,
+		"k8s.dst.type":      info.Type,
 	}
-	// TODO: allow user defining labels to add as metadata
-	if info.HostName != "" {
-		meta[keyPrefix+"node.name"] = info.HostName
+}
+
+func asSrcMap(info *kube.Info) map[string]string {
+	return map[string]string{
+		"k8s.src.namespace": info.Namespace,
+		"k8s.src.name":      info.Name,
 	}
-	return meta
 }
 
 func (md *metadataDecorator) refreshOwnPodMetadata() {
-	if md.ownMetadataAsDst != nil {
-		return
-	}
-	if info, ok := md.kube.GetInfo(getLocalIP()); ok {
-		md.ownMetadataAsSrc = asMap(k8sSrcPrefix, info)
-		md.ownMetadataAsDst = asMap(k8sDstPrefix, info)
+	for md.ownMetadataAsDst == nil {
+		if info, ok := md.kube.GetInfo(getLocalIP()); ok {
+			md.ownMetadataAsSrc = asSrcMap(info)
+			md.ownMetadataAsDst = asDstMap(info)
+			return
+		}
+		klog().Info("local pod metadata not yet found. Waiting 5s and trying again before starting the kubernetes decorator")
+		time.Sleep(5 * time.Second)
 	}
 }
 

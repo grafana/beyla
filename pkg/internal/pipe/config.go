@@ -47,7 +47,7 @@ var defaultConfig = Config{
 		},
 	},
 	Kubernetes: transform.KubernetesDecorator{
-		Enable:               transform.KubeAutodetect,
+		Enable:               transform.KubeDisabled,
 		InformersSyncTimeout: 30 * time.Second,
 	},
 }

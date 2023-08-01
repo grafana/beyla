@@ -94,8 +94,8 @@ func TestGetInfoPods(t *testing.T) {
 
 	kubeData.pods = &pim
 	kubeData.nodes = &him
-	info, err := kubeData.GetInfo("1.2.3.4")
-	require.NoError(t, err)
+	info, ok := kubeData.GetInfo("1.2.3.4")
+	require.True(t, ok)
 
 	require.Equal(t, *info, Info{
 		Type: "Pod",

@@ -4,6 +4,7 @@ package k8s
 
 import (
 	"crypto/tls"
+	"fmt"
 	"net/http"
 	"os"
 	"path"
@@ -11,6 +12,7 @@ import (
 	"time"
 
 	"github.com/mariomac/guara/pkg/test"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/exp/slog"
 
@@ -53,7 +55,7 @@ func TestMain(m *testing.M) {
 		kube.Deploy("manifests/03-otelcol.yml"),
 		kube.Deploy("manifests/04-jaeger.yml"),
 		kube.Deploy("manifests/05-instrumented-service.yml"),
-		kube.Deploy("manifests/06-internal-pinger.yml"),
+		kube.Deploy("manifests/06-instrumented-client.yml"),
 	)
 
 	cluster.Run(m)
@@ -85,8 +87,8 @@ func TestAASmoke(t *testing.T) {
 	}, test.Interval(time.Second))
 }
 
-func TestDecoration(t *testing.T) {
-	// Testing the decoration of the HTTP calls from the internal-pinger pod
+func TestServerDecoration(t *testing.T) {
+	// Testing the decoration of the server-side HTTP calls from the internal-pinger pod
 	pq := prom.Client{HostPort: prometheusHostPort}
 	for _, metric := range []string{
 		"http_server_duration_seconds_count",
@@ -103,8 +105,54 @@ func TestDecoration(t *testing.T) {
 				results, err = pq.Query(metric + `{http_target="/iping",k8s_src_name="internal-pinger"}`)
 				require.NoError(t, err)
 				require.NotZero(t, len(results))
+				fmt.Printf("%#v\n", results)
 			})
 
+			for _, r := range results {
+				assert.Equal(t, "internal-pinger", r.Metric["k8s_src_name"])
+				assert.Equal(t, "testserver", r.Metric["k8s_dst_name"])
+				assert.Equal(t, "default", r.Metric["k8s_src_namespace"])
+				assert.Equal(t, "default", r.Metric["k8s_dst_namespace"])
+				assert.Equal(t, "Pod", r.Metric["k8s_src_type"])
+				assert.Equal(t, "Pod", r.Metric["k8s_dst_type"])
+				assert.Equal(t, "test-kind-cluster-control-plane", r.Metric["k8s_src_node_name"])
+				assert.Equal(t, "test-kind-cluster-control-plane", r.Metric["k8s_dst_node_name"])
+			}
+		})
+	}
+}
+
+func TestClientDecoration(t *testing.T) {
+	// Testing the decoration of the client-side HTTP calls from the internal-pinger pod
+	pq := prom.Client{HostPort: prometheusHostPort}
+	for _, metric := range []string{
+		"http_client_duration_seconds_count",
+		"http_client_duration_seconds_sum",
+		"http_client_duration_seconds_bucket",
+		"http_client_request_size_bytes_count",
+		"http_client_request_size_bytes_sum",
+		"http_client_request_size_bytes_bucket",
+	} {
+		t.Run(metric, func(t *testing.T) {
+			var results []prom.Result
+			test.Eventually(t, 30*time.Second, func(t require.TestingT) {
+				var err error
+				results, err = pq.Query(metric + `{http_target="/iping",k8s_src_name="internal-pinger"}`)
+				require.NoError(t, err)
+				require.NotZero(t, len(results))
+				fmt.Printf("%#v\n", results)
+			})
+
+			for _, r := range results {
+				assert.Equal(t, "internal-pinger", r.Metric["k8s_src_name"])
+				assert.Equal(t, "testserver", r.Metric["k8s_dst_name"])
+				assert.Equal(t, "default", r.Metric["k8s_src_namespace"])
+				assert.Equal(t, "default", r.Metric["k8s_dst_namespace"])
+				assert.Equal(t, "Pod", r.Metric["k8s_src_type"])
+				assert.Equal(t, "Service", r.Metric["k8s_dst_type"])
+				assert.Equal(t, "test-kind-cluster-control-plane", r.Metric["k8s_src_node_name"])
+				assert.Equal(t, "test-kind-cluster-control-plane", r.Metric["k8s_dst_node_name"])
+			}
 		})
 	}
 }

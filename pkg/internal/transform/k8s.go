@@ -115,18 +115,13 @@ func (md *metadataDecorator) do(span *HTTPRequestSpan) {
 // TODO: local IP metadata
 func asMap(keyPrefix string, info *kube.Info) map[string]string {
 	meta := map[string]string{
-		keyPrefix + "namespace":  info.Namespace,
-		keyPrefix + "name":       info.Name,
-		keyPrefix + "type":       info.Type,
-		keyPrefix + "owner.name": info.Owner.Name,
-		keyPrefix + "owner.type": info.Owner.Type,
+		keyPrefix + "namespace": info.Namespace,
+		keyPrefix + "name":      info.Name,
+		keyPrefix + "type":      info.Type,
 	}
 	// TODO: allow user defining labels to add as metadata
-	if info.HostIP != "" {
-		meta[keyPrefix+"node.ip"] = info.HostIP
-		if info.HostName != "" {
-			meta[keyPrefix+"node.name"] = info.HostName
-		}
+	if info.HostName != "" {
+		meta[keyPrefix+"node.name"] = info.HostName
 	}
 	return meta
 }

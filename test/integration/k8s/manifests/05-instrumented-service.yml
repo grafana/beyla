@@ -128,4 +128,5 @@ spec:
           value: "true"
         - name: INTERNAL_METRICS_PROMETHEUS_PORT
           value: "8999"
-
+        - name: KUBE_METADATA_ENABLE
+          value: "autodetect"

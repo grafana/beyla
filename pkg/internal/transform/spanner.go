@@ -151,6 +151,7 @@ func convertFromHTTPTrace(trace *ebpfcommon.HTTPRequestTrace) HTTPRequestSpan {
 		hostname = extractIP(trace.Host[:], int(trace.HostLen))
 	case EventTypeGRPCClient:
 		hostname, hostPort = extractHostPort(trace.Host[:])
+		peer = hostname
 	default:
 		log.Warn("unknown trace type %d", trace.Type)
 	}

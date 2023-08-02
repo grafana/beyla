@@ -4,7 +4,6 @@ package k8s
 
 import (
 	"crypto/tls"
-	"fmt"
 	"net/http"
 	"os"
 	"path"
@@ -61,10 +60,9 @@ func TestMain(m *testing.M) {
 	cluster.Run(m)
 }
 
-// Run it alphabetically first
+// Run it alphabetically first to wait until all the components are up and
+// traces/metrics are flowing normally
 func TestAASmoke(t *testing.T) {
-	// smoke test that just waits until all the components are up and
-	// applications traces are reported are traced
 	const (
 		subpath = "/smoke"
 		url     = "http://localhost:38080"
@@ -87,65 +85,62 @@ func TestAASmoke(t *testing.T) {
 	}, test.Interval(time.Second))
 }
 
-func TestServerDecoration(t *testing.T) {
-	// Testing the decoration of the server-side HTTP calls from the internal-pinger pod
-	pq := prom.Client{HostPort: prometheusHostPort}
-	for _, metric := range []string{
+var (
+	serverMetrics = []string{
 		"http_server_duration_seconds_count",
 		"http_server_duration_seconds_sum",
 		"http_server_duration_seconds_bucket",
 		"http_server_request_size_bytes_count",
 		"http_server_request_size_bytes_sum",
 		"http_server_request_size_bytes_bucket",
-	} {
-		t.Run(metric, func(t *testing.T) {
-			var results []prom.Result
-			test.Eventually(t, 30*time.Second, func(t require.TestingT) {
-				var err error
-				results, err = pq.Query(metric + `{http_target="/iping",k8s_src_name="internal-pinger"}`)
-				require.NoError(t, err)
-				require.NotZero(t, len(results))
-				fmt.Printf("%#v\n", results)
-			})
-
-			for _, r := range results {
-				assert.Equal(t, "internal-pinger", r.Metric["k8s_src_name"])
-				assert.Equal(t, "testserver", r.Metric["k8s_dst_name"])
-				assert.Equal(t, "default", r.Metric["k8s_src_namespace"])
-				assert.Equal(t, "default", r.Metric["k8s_dst_namespace"])
-				assert.Equal(t, "Pod", r.Metric["k8s_dst_type"])
-			}
-		})
 	}
-}
-
-func TestClientDecoration(t *testing.T) {
-	// Testing the decoration of the client-side HTTP calls from the internal-pinger pod
-	pq := prom.Client{HostPort: prometheusHostPort}
-	for _, metric := range []string{
+	clientMetrics = []string{
 		"http_client_duration_seconds_count",
 		"http_client_duration_seconds_sum",
 		"http_client_duration_seconds_bucket",
 		"http_client_request_size_bytes_count",
 		"http_client_request_size_bytes_sum",
 		"http_client_request_size_bytes_bucket",
-	} {
+	}
+)
+
+func TestServerDecoration_Pod2Pod(t *testing.T) {
+	testDecoration(t, serverMetrics, `{http_target="/iping",k8s_src_name="internal-pinger"}`, map[string]string{
+		"k8s_src_name":      "internal-pinger",
+		"k8s_dst_name":      "testserver",
+		"k8s_src_namespace": "default",
+		"k8s_dst_namespace": "default",
+		"k8s_dst_type":      "Pod",
+	})
+}
+
+func TestClientDecoration_Pod2Service(t *testing.T) {
+	testDecoration(t, clientMetrics, `{k8s_src_name="internal-pinger"}`, map[string]string{
+		"k8s_src_name":      "internal-pinger",
+		"k8s_dst_name":      "testserver",
+		"k8s_src_namespace": "default",
+		"k8s_dst_namespace": "default",
+		"k8s_dst_type":      "Service",
+	})
+}
+
+func testDecoration(t *testing.T, metricsSet []string, queryArgs string, expectedLabels map[string]string) {
+	// Testing the decoration of the server-side HTTP calls from the internal-pinger pod
+	pq := prom.Client{HostPort: prometheusHostPort}
+	for _, metric := range metricsSet {
 		t.Run(metric, func(t *testing.T) {
 			var results []prom.Result
 			test.Eventually(t, 30*time.Second, func(t require.TestingT) {
 				var err error
-				results, err = pq.Query(metric + `{k8s_src_name="internal-pinger"}`)
+				results, err = pq.Query(metric + queryArgs)
 				require.NoError(t, err)
 				require.NotZero(t, len(results))
-				fmt.Printf("%#v\n", results)
 			})
 
 			for _, r := range results {
-				assert.Equal(t, "internal-pinger", r.Metric["k8s_src_name"])
-				assert.Equal(t, "testserver", r.Metric["k8s_dst_name"])
-				assert.Equal(t, "default", r.Metric["k8s_src_namespace"])
-				assert.Equal(t, "default", r.Metric["k8s_dst_namespace"])
-				assert.Equal(t, "Service", r.Metric["k8s_dst_type"])
+				for ek, ev := range expectedLabels {
+					assert.Equalf(t, ev, r.Metric[ek], "expected %q:%q entry in map %v", ek, ev, r.Metric)
+				}
 			}
 		})
 	}

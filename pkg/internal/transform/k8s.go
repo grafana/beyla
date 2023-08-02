@@ -89,10 +89,13 @@ func newMetadataDecorator(cfg *KubernetesDecorator) (*metadataDecorator, error) 
 	return dec, nil
 }
 
-type KubeInfo struct {
-}
-
 func (md *metadataDecorator) do(span *HTTPRequestSpan) {
+	// We decorate each trace by looking up into the local kubernetes cache for the
+	// Peer address, when we are instrumenting server-side traces, or the
+	// Host name, when we are instrumenting client-side traces.
+	// This assumption is a bit fragile and might break if the spanner.go
+	// changes the way it works.
+	// Extensive integration test cases are provided as a safeguard.
 	switch span.Type {
 	case EventTypeGRPC, EventTypeHTTP:
 		if peerInfo, ok := md.kube.GetInfo(span.Peer); ok {
@@ -101,7 +104,6 @@ func (md *metadataDecorator) do(span *HTTPRequestSpan) {
 			span.Metadata = append(span.Metadata, md.ownMetadataAsDst)
 		}
 	case EventTypeGRPCClient, EventTypeHTTPClient:
-		ay ke mirar el span jost este a ver si podemos hacerlo mas estable
 		if peerInfo, ok := md.kube.GetServiceInfo(span.Host); ok {
 			span.Metadata = append(span.Metadata, asDstMap(peerInfo), md.ownMetadataAsSrc)
 		} else {

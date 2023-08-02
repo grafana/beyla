@@ -83,14 +83,15 @@ func TestMain(m *testing.M) {
 	cluster.Run(m)
 }
 
-// Run it alphabetically first to wait until all the components are up and
+// Run it alphabetically first (AA-prefix), with a longer timeout, to wait until all the components are up and
 // traces/metrics are flowing normally
-func TestAASmoke(t *testing.T) {
+func TestAADecoration_ExternalToPod(t *testing.T) {
 	const (
 		subpath = "/smoke"
 		url     = "http://localhost:38080"
 	)
 	pq := prom.Client{HostPort: prometheusHostPort}
+	var results []prom.Result
 	test.Eventually(t, 2*time.Minute, func(t require.TestingT) {
 		// first, verify that the test service endpoint is healthy
 		r, err := http.Get(url + subpath)
@@ -100,10 +101,18 @@ func TestAASmoke(t *testing.T) {
 		// now, verify that the metric has been reported.
 		// we don't really care that this metric could be from a previous
 		// test. Once one it is visible, it means that Otel and Prometheus are healthy
-		results, err := pq.Query(`http_server_duration_seconds_count{http_target="` + subpath + `"}`)
+		results, err = pq.Query(`http_server_duration_seconds_count{http_target="` + subpath + `",k8s_dst_name="testserver"}`)
 		require.NoError(t, err)
 		require.NotZero(t, len(results))
 	}, test.Interval(time.Second))
+
+	for _, r := range results {
+		assert.Equal(t, "default", r.Metric["k8s_dst_namespace"])
+		assert.Equal(t, "Pod", r.Metric["k8s_dst_type"])
+
+		assert.NotContains(t, r.Metric, "k8s_src_name")
+		assert.NotContains(t, r.Metric, "k8s_src_namespace")
+	}
 }
 
 func TestDecoration_Pod2Service(t *testing.T) {

@@ -148,16 +148,16 @@ func (k *Kind) TestEnv() env.Environment {
 
 func deploy(manifest string) env.Func {
 	return func(ctx context.Context, cfg *envconf.Config) (context.Context, error) {
-		if err := DeployManifestFile(manifest, cfg); err != nil {
+		if err := deployManifestFile(manifest, cfg); err != nil {
 			return ctx, fmt.Errorf("deploying manifest file: %w", err)
 		}
 		return ctx, nil
 	}
 }
 
-// DeployManifestFile deploys a yaml manifest file
+// deployManifestFile deploys a yaml manifest file
 // credits to https://gist.github.com/pytimer/0ad436972a073bb37b8b6b8b474520fc
-func DeployManifestFile(
+func deployManifestFile(
 	manifestFile string,
 	cfg *envconf.Config,
 ) error {
@@ -169,10 +169,32 @@ func DeployManifestFile(
 		return fmt.Errorf("reading manifest file %q: %w", manifestFile, err)
 	}
 
-	return DeployManifest(cfg, string(b))
+	return deployManifest(cfg, string(b))
 }
 
-func DeployManifest(cfg *envconf.Config, manifest string) error {
+func deployManifest(cfg *envconf.Config, manifest string) error {
+	return applyManifest(cfg, manifest, func(dri dynamic.ResourceInterface, obj *unstructured.Unstructured) error {
+		if _, err := dri.Create(context.Background(), obj, metav1.CreateOptions{}); err != nil {
+			return fmt.Errorf("deploying manifest: %w", err)
+		}
+		return nil
+	})
+}
+
+func deleteManifest(cfg *envconf.Config, manifest string) error {
+	return applyManifest(cfg, manifest, func(dri dynamic.ResourceInterface, obj *unstructured.Unstructured) error {
+		if err := dri.Delete(context.Background(), obj.GetName(), metav1.DeleteOptions{}); err != nil {
+			return fmt.Errorf("deploying manifest: %w", err)
+		}
+		return nil
+	})
+}
+
+func applyManifest(
+	cfg *envconf.Config,
+	manifest string,
+	process func(dri dynamic.ResourceInterface, obj *unstructured.Unstructured) error,
+) error {
 	decoder := yamlutil.NewYAMLOrJSONDecoder(strings.NewReader(manifest), 100)
 	var rawObj runtime.RawExtension
 	for {
@@ -183,13 +205,17 @@ func DeployManifest(cfg *envconf.Config, manifest string) error {
 			return nil
 		}
 
-		if err := decodeAndCreate(cfg, rawObj); err != nil {
-			return fmt.Errorf("decoding and creating manifest: %w", err)
+		if err := decodeAndApply(cfg, rawObj, process); err != nil {
+			return fmt.Errorf("decoding and applying manifest: %w", err)
 		}
 	}
 }
 
-func decodeAndCreate(cfg *envconf.Config, rawObj runtime.RawExtension) error {
+func decodeAndApply(
+	cfg *envconf.Config,
+	rawObj runtime.RawExtension,
+	process func(dri dynamic.ResourceInterface, obj *unstructured.Unstructured) error,
+) error {
 	kclient, err := kubernetes.NewForConfig(cfg.Client().RESTConfig())
 	if err != nil {
 		return fmt.Errorf("creating kubernetes client: %w", err)
@@ -230,10 +256,8 @@ func decodeAndCreate(cfg *envconf.Config, rawObj runtime.RawExtension) error {
 	} else {
 		dri = dd.Resource(mapping.Resource)
 	}
-	if _, err := dri.Create(context.Background(), unstructuredObj, metav1.CreateOptions{}); err != nil {
-		return fmt.Errorf("deploying manifest: %w", err)
-	}
-	return nil
+
+	return process(dri, unstructuredObj)
 }
 
 // loadLocalImage loads the agent docker image into the test cluster. It tries both available

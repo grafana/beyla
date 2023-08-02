@@ -3,13 +3,11 @@
 package k8s
 
 import (
-	"bytes"
 	"context"
 	"net/http"
 	"os"
 	"path"
 	"testing"
-	"text/template"
 	"time"
 
 	"github.com/mariomac/guara/pkg/test"
@@ -71,6 +69,11 @@ var (
 
 var cluster *kube.Kind
 
+type Pinger struct {
+	PodName   string
+	TargetURL string
+}
+
 func TestMain(m *testing.M) {
 	if err := docker.Build(os.Stdout, "../../..",
 		docker.ImageBuild{Tag: "testserver:dev", Dockerfile: "../components/testserver/Dockerfile"},
@@ -130,14 +133,16 @@ func TestAA_HTTPDecoration_ExternalToPod(t *testing.T) {
 }
 
 func TestHTTPDecoration_Pod2Service(t *testing.T) {
-	pinger := Pinger{
-		ManifestTemplate: pingerManifest,
-		PodName:          "internal-pinger",
-		TargetURL:        "http://testserver:8080/iping",
+	pinger := kube.Template[Pinger]{
+		TemplateFile: pingerManifest,
+		Data: Pinger{
+			PodName:   "internal-pinger",
+			TargetURL: "http://testserver:8080/iping",
+		},
 	}
 	feat := features.New("Decoration of Pod-to-Service communications").
-		Setup(pinger.deploy).
-		Teardown(pinger.undeploy).
+		Setup(pinger.Deploy()).
+		Teardown(pinger.Delete()).
 		Assess("all the server metrics are properly decorated",
 			testDecoration(httpServerMetrics, `{http_target="/iping",k8s_src_name="internal-pinger"}`, map[string]string{
 				"k8s_src_name":      "internal-pinger",
@@ -162,18 +167,20 @@ func TestHTTPDecoration_Pod2Service(t *testing.T) {
 }
 
 func TestHTTPClientDecoration_Pod2Pod(t *testing.T) {
-	pinger := Pinger{
-		ManifestTemplate: pingerManifest,
-		PodName:          "ping-to-pod",
+	pinger := kube.Template[Pinger]{
+		TemplateFile: pingerManifest,
+		Data: Pinger{
+			PodName: "ping-to-pod",
+		},
 	}
 	feat := features.New("Client-side decoration of Pod-to-Pod direct communications").
 		Setup(func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
 			testserver := getPodIP(ctx, t, cfg, "testserver", "default")
 			// Setting the testserver Pod IP in the target URL of the pinger pod, to avoid going through a service
-			pinger.TargetURL = "http://" + testserver.Status.PodIP + ":8080/iping"
-			return pinger.deploy(ctx, t, cfg)
+			pinger.Data.TargetURL = "http://" + testserver.Status.PodIP + ":8080/iping"
+			return pinger.Deploy()(ctx, t, cfg)
 		}).
-		Teardown(pinger.undeploy).
+		Teardown(pinger.Delete()).
 		Assess("all the client metrics are properly decorated",
 			testDecoration(httpClientMetrics, `{k8s_src_name="ping-to-pod"}`, map[string]string{
 				"k8s_src_name":      "ping-to-pod",
@@ -188,14 +195,16 @@ func TestHTTPClientDecoration_Pod2Pod(t *testing.T) {
 }
 
 func TestHTTPDecoration_Pod2External(t *testing.T) {
-	pinger := Pinger{
-		ManifestTemplate: pingerManifest,
-		PodName:          "ping-to-grafana",
-		TargetURL:        "https://grafana.com/",
+	pinger := kube.Template[Pinger]{
+		TemplateFile: pingerManifest,
+		Data: Pinger{
+			PodName:   "ping-to-grafana",
+			TargetURL: "https://grafana.com/",
+		},
 	}
 	feat := features.New("Client-side decoration of Pod-to-External communications").
-		Setup(pinger.deploy).
-		Teardown(pinger.undeploy).
+		Setup(pinger.Deploy()).
+		Teardown(pinger.Delete()).
 		Assess("all the client metrics are properly decorated",
 			testDecoration(httpClientMetrics, `{k8s_src_name="ping-to-grafana"}`, map[string]string{
 				"k8s_src_name":      "ping-to-grafana",
@@ -207,14 +216,16 @@ func TestHTTPDecoration_Pod2External(t *testing.T) {
 }
 
 func TestGRPCDecoration_Pod2Service(t *testing.T) {
-	pinger := Pinger{
-		ManifestTemplate: grpcPingerManifest,
-		PodName:          "internal-grpc-pinger",
-		TargetURL:        "testserver:50051",
+	pinger := kube.Template[Pinger]{
+		TemplateFile: grpcPingerManifest,
+		Data: Pinger{
+			PodName:   "internal-grpc-pinger",
+			TargetURL: "testserver:50051",
+		},
 	}
 	feat := features.New("Decoration of Pod-to-Service communications").
-		Setup(pinger.deploy).
-		Teardown(pinger.undeploy).
+		Setup(pinger.Deploy()).
+		Teardown(pinger.Delete()).
 		Assess("all the server metrics are properly decorated",
 			testDecoration(grpcServerMetrics, `{k8s_src_name="internal-grpc-pinger"}`, map[string]string{
 				"k8s_src_name":      "internal-grpc-pinger",
@@ -239,18 +250,20 @@ func TestGRPCDecoration_Pod2Service(t *testing.T) {
 }
 
 func TestGRPCDecoration_Pod2Pod(t *testing.T) {
-	pinger := Pinger{
-		ManifestTemplate: grpcPingerManifest,
-		PodName:          "internal-grpc-pinger-2pod",
+	pinger := kube.Template[Pinger]{
+		TemplateFile: grpcPingerManifest,
+		Data: Pinger{
+			PodName: "internal-grpc-pinger-2pod",
+		},
 	}
 	feat := features.New("Decoration of Pod-to-Service communications").
 		Setup(func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
 			testserver := getPodIP(ctx, t, cfg, "testserver", "default")
 			// Setting the testserver Pod IP in the target URL of the pinger pod, to avoid going through a service
-			pinger.TargetURL = testserver.Status.PodIP + ":50051"
-			return pinger.deploy(ctx, t, cfg)
+			pinger.Data.TargetURL = testserver.Status.PodIP + ":50051"
+			return pinger.Deploy()(ctx, t, cfg)
 		}).
-		Teardown(pinger.undeploy).
+		Teardown(pinger.Delete()).
 		Assess("all the server metrics are properly decorated",
 			testDecoration(grpcServerMetrics, `{k8s_src_name="internal-grpc-pinger-2pod"}`, map[string]string{
 				"k8s_src_name":      "internal-grpc-pinger-2pod",
@@ -273,7 +286,6 @@ func TestGRPCDecoration_Pod2Pod(t *testing.T) {
 
 	cluster.TestEnv().Test(t, feat)
 }
-
 
 func testDecoration(
 	metricsSet []string, queryArgs string, expectedLabels map[string]string, expectedMissingLabels ...string,
@@ -303,37 +315,6 @@ func testDecoration(
 		}
 		return ctx
 	}
-}
-
-type Pinger struct {
-	ManifestTemplate string
-	PodName          string
-	TargetURL        string
-
-	compiledManifest string
-}
-
-func (ping *Pinger) deploy(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
-	tmpl, err := template.ParseFiles(ping.ManifestTemplate)
-	require.NoError(t, err)
-	compiled := &bytes.Buffer{}
-	require.NoError(t, tmpl.Execute(compiled, ping))
-	ping.compiledManifest = compiled.String()
-
-	require.NoError(t, kube.DeployManifest(cfg, ping.compiledManifest))
-	return ctx
-}
-
-func (ping *Pinger) undeploy(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
-	kclient, err := kubernetes.NewForConfig(cfg.Client().RESTConfig())
-	require.NoError(t, err)
-
-	delSelector := metav1.ListOptions{LabelSelector: "component=pinger"}
-
-	require.NoError(t, kclient.CoreV1().Pods("default").DeleteCollection(ctx, metav1.DeleteOptions{}, delSelector))
-	require.NoError(t, kclient.CoreV1().ConfigMaps("default").DeleteCollection(ctx, metav1.DeleteOptions{}, delSelector))
-
-	return ctx
 }
 
 func getPodIP(ctx context.Context, t *testing.T, cfg *envconf.Config, podName, podNS string) *v1.Pod {

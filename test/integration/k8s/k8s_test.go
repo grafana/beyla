@@ -16,6 +16,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/exp/slog"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/e2e-framework/pkg/envconf"
@@ -31,7 +32,8 @@ const (
 
 	prometheusHostPort = "localhost:39090"
 
-	pingerManifest = "manifests/06-instrumented-client.template.yml"
+	pingerManifest     = "manifests/06-instrumented-client.template.yml"
+	grpcPingerManifest = "manifests/06-instrumented-grpc-client.template.yml"
 )
 
 var (
@@ -39,7 +41,7 @@ var (
 	pathOutput   = path.Join(pathRoot, "testoutput")
 	pathKindLogs = path.Join(pathOutput, "kind")
 
-	serverMetrics = []string{
+	httpServerMetrics = []string{
 		"http_server_duration_seconds_count",
 		"http_server_duration_seconds_sum",
 		"http_server_duration_seconds_bucket",
@@ -47,13 +49,23 @@ var (
 		"http_server_request_size_bytes_sum",
 		"http_server_request_size_bytes_bucket",
 	}
-	clientMetrics = []string{
+	httpClientMetrics = []string{
 		"http_client_duration_seconds_count",
 		"http_client_duration_seconds_sum",
 		"http_client_duration_seconds_bucket",
 		"http_client_request_size_bytes_count",
 		"http_client_request_size_bytes_sum",
 		"http_client_request_size_bytes_bucket",
+	}
+	grpcServerMetrics = []string{
+		"rpc_server_duration_seconds_count",
+		"rpc_server_duration_seconds_sum",
+		"rpc_server_duration_seconds_bucket",
+	}
+	grpcClientMetrics = []string{
+		"rpc_client_duration_seconds_count",
+		"rpc_client_duration_seconds_sum",
+		"rpc_client_duration_seconds_bucket",
 	}
 )
 
@@ -63,6 +75,7 @@ func TestMain(m *testing.M) {
 	if err := docker.Build(os.Stdout, "../../..",
 		docker.ImageBuild{Tag: "testserver:dev", Dockerfile: "../components/testserver/Dockerfile"},
 		docker.ImageBuild{Tag: "beyla:dev", Dockerfile: "../components/beyla/Dockerfile"},
+		docker.ImageBuild{Tag: "grpcpinger:dev", Dockerfile: "../components/grpcpinger/Dockerfile"},
 	); err != nil {
 		slog.Error("can't build docker images", err)
 		os.Exit(-1)
@@ -73,6 +86,7 @@ func TestMain(m *testing.M) {
 		kube.KindConfig("manifests/00-kind.yml"),
 		kube.LocalImage("testserver:dev"),
 		kube.LocalImage("beyla:dev"),
+		kube.LocalImage("grpcpinger:dev"),
 		kube.Deploy("manifests/01-volumes.yml"),
 		kube.Deploy("manifests/02-prometheus.yml"),
 		kube.Deploy("manifests/03-otelcol.yml"),
@@ -85,7 +99,7 @@ func TestMain(m *testing.M) {
 
 // Run it alphabetically first (AA-prefix), with a longer timeout, to wait until all the components are up and
 // traces/metrics are flowing normally
-func TestAADecoration_ExternalToPod(t *testing.T) {
+func TestAA_HTTPDecoration_ExternalToPod(t *testing.T) {
 	const (
 		subpath = "/smoke"
 		url     = "http://localhost:38080"
@@ -115,7 +129,7 @@ func TestAADecoration_ExternalToPod(t *testing.T) {
 	}
 }
 
-func TestDecoration_Pod2Service(t *testing.T) {
+func TestHTTPDecoration_Pod2Service(t *testing.T) {
 	pinger := Pinger{
 		ManifestTemplate: pingerManifest,
 		PodName:          "internal-pinger",
@@ -125,7 +139,7 @@ func TestDecoration_Pod2Service(t *testing.T) {
 		Setup(pinger.deploy).
 		Teardown(pinger.undeploy).
 		Assess("all the server metrics are properly decorated",
-			testDecoration(serverMetrics, `{http_target="/iping",k8s_src_name="internal-pinger"}`, map[string]string{
+			testDecoration(httpServerMetrics, `{http_target="/iping",k8s_src_name="internal-pinger"}`, map[string]string{
 				"k8s_src_name":      "internal-pinger",
 				"k8s_dst_name":      "testserver",
 				"k8s_src_namespace": "default",
@@ -135,7 +149,7 @@ func TestDecoration_Pod2Service(t *testing.T) {
 				"k8s_dst_type": "Pod",
 			})).
 		Assess("all the client metrics are properly decorated",
-			testDecoration(clientMetrics, `{k8s_src_name="internal-pinger"}`, map[string]string{
+			testDecoration(httpClientMetrics, `{k8s_src_name="internal-pinger"}`, map[string]string{
 				"k8s_src_name":      "internal-pinger",
 				"k8s_dst_name":      "testserver",
 				"k8s_src_namespace": "default",
@@ -147,26 +161,21 @@ func TestDecoration_Pod2Service(t *testing.T) {
 	cluster.TestEnv().Test(t, feat)
 }
 
-func TestClientDecoration_Pod2Pod(t *testing.T) {
+func TestHTTPClientDecoration_Pod2Pod(t *testing.T) {
 	pinger := Pinger{
 		ManifestTemplate: pingerManifest,
 		PodName:          "ping-to-pod",
 	}
 	feat := features.New("Client-side decoration of Pod-to-Pod direct communications").
 		Setup(func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
-			kclient, err := kubernetes.NewForConfig(cfg.Client().RESTConfig())
-			require.NoError(t, err)
-			// First, get the testserver IP address
-			testserver, err := kclient.CoreV1().Pods("default").Get(ctx, "testserver", metav1.GetOptions{})
-			require.NoError(t, err)
-			// Then we use it in the target URL of the pinger pod, to avoid going through a service
+			testserver := getPodIP(ctx, t, cfg, "testserver", "default")
+			// Setting the testserver Pod IP in the target URL of the pinger pod, to avoid going through a service
 			pinger.TargetURL = "http://" + testserver.Status.PodIP + ":8080/iping"
-
 			return pinger.deploy(ctx, t, cfg)
 		}).
 		Teardown(pinger.undeploy).
 		Assess("all the client metrics are properly decorated",
-			testDecoration(clientMetrics, `{k8s_src_name="ping-to-pod"}`, map[string]string{
+			testDecoration(httpClientMetrics, `{k8s_src_name="ping-to-pod"}`, map[string]string{
 				"k8s_src_name":      "ping-to-pod",
 				"k8s_dst_name":      "testserver",
 				"k8s_src_namespace": "default",
@@ -178,7 +187,7 @@ func TestClientDecoration_Pod2Pod(t *testing.T) {
 	cluster.TestEnv().Test(t, feat)
 }
 
-func TestDecoration_Pod2External(t *testing.T) {
+func TestHTTPDecoration_Pod2External(t *testing.T) {
 	pinger := Pinger{
 		ManifestTemplate: pingerManifest,
 		PodName:          "ping-to-grafana",
@@ -188,7 +197,7 @@ func TestDecoration_Pod2External(t *testing.T) {
 		Setup(pinger.deploy).
 		Teardown(pinger.undeploy).
 		Assess("all the client metrics are properly decorated",
-			testDecoration(clientMetrics, `{k8s_src_name="ping-to-grafana"}`, map[string]string{
+			testDecoration(httpClientMetrics, `{k8s_src_name="ping-to-grafana"}`, map[string]string{
 				"k8s_src_name":      "ping-to-grafana",
 				"k8s_src_namespace": "default",
 			},
@@ -196,6 +205,75 @@ func TestDecoration_Pod2External(t *testing.T) {
 		).Feature()
 	cluster.TestEnv().Test(t, feat)
 }
+
+func TestGRPCDecoration_Pod2Service(t *testing.T) {
+	pinger := Pinger{
+		ManifestTemplate: grpcPingerManifest,
+		PodName:          "internal-grpc-pinger",
+		TargetURL:        "testserver:50051",
+	}
+	feat := features.New("Decoration of Pod-to-Service communications").
+		Setup(pinger.deploy).
+		Teardown(pinger.undeploy).
+		Assess("all the server metrics are properly decorated",
+			testDecoration(grpcServerMetrics, `{k8s_src_name="internal-grpc-pinger"}`, map[string]string{
+				"k8s_src_name":      "internal-grpc-pinger",
+				"k8s_dst_name":      "testserver",
+				"k8s_src_namespace": "default",
+				"k8s_dst_namespace": "default",
+				// data captured at the server side will be always "Pod" as destination type, as the
+				// server Pod doesn't see the service URL but itself as a Pod
+				"k8s_dst_type": "Pod",
+			})).
+		Assess("all the client metrics are properly decorated",
+			testDecoration(grpcClientMetrics, `{k8s_src_name="internal-grpc-pinger"}`, map[string]string{
+				"k8s_src_name":      "internal-grpc-pinger",
+				"k8s_dst_name":      "testserver",
+				"k8s_src_namespace": "default",
+				"k8s_dst_namespace": "default",
+				"k8s_dst_type":      "Service",
+			}),
+		).Feature()
+
+	cluster.TestEnv().Test(t, feat)
+}
+
+func TestGRPCDecoration_Pod2Pod(t *testing.T) {
+	pinger := Pinger{
+		ManifestTemplate: grpcPingerManifest,
+		PodName:          "internal-grpc-pinger-2pod",
+	}
+	feat := features.New("Decoration of Pod-to-Service communications").
+		Setup(func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
+			testserver := getPodIP(ctx, t, cfg, "testserver", "default")
+			// Setting the testserver Pod IP in the target URL of the pinger pod, to avoid going through a service
+			pinger.TargetURL = testserver.Status.PodIP + ":50051"
+			return pinger.deploy(ctx, t, cfg)
+		}).
+		Teardown(pinger.undeploy).
+		Assess("all the server metrics are properly decorated",
+			testDecoration(grpcServerMetrics, `{k8s_src_name="internal-grpc-pinger-2pod"}`, map[string]string{
+				"k8s_src_name":      "internal-grpc-pinger-2pod",
+				"k8s_dst_name":      "testserver",
+				"k8s_src_namespace": "default",
+				"k8s_dst_namespace": "default",
+				// data captured at the server side will be always "Pod" as destination type, as the
+				// server Pod doesn't see the service URL but itself as a Pod
+				"k8s_dst_type": "Pod",
+			})).
+		Assess("all the client metrics are properly decorated",
+			testDecoration(grpcClientMetrics, `{k8s_src_name="internal-grpc-pinger-2pod"}`, map[string]string{
+				"k8s_src_name":      "internal-grpc-pinger-2pod",
+				"k8s_dst_name":      "testserver",
+				"k8s_src_namespace": "default",
+				"k8s_dst_namespace": "default",
+				"k8s_dst_type":      "Pod",
+			}),
+		).Feature()
+
+	cluster.TestEnv().Test(t, feat)
+}
+
 
 func testDecoration(
 	metricsSet []string, queryArgs string, expectedLabels map[string]string, expectedMissingLabels ...string,
@@ -251,8 +329,17 @@ func (ping *Pinger) undeploy(ctx context.Context, t *testing.T, cfg *envconf.Con
 	require.NoError(t, err)
 
 	delSelector := metav1.ListOptions{LabelSelector: "component=pinger"}
+
 	require.NoError(t, kclient.CoreV1().Pods("default").DeleteCollection(ctx, metav1.DeleteOptions{}, delSelector))
 	require.NoError(t, kclient.CoreV1().ConfigMaps("default").DeleteCollection(ctx, metav1.DeleteOptions{}, delSelector))
 
 	return ctx
+}
+
+func getPodIP(ctx context.Context, t *testing.T, cfg *envconf.Config, podName, podNS string) *v1.Pod {
+	kclient, err := kubernetes.NewForConfig(cfg.Client().RESTConfig())
+	require.NoError(t, err)
+	testserver, err := kclient.CoreV1().Pods(podNS).Get(ctx, podName, metav1.GetOptions{})
+	require.NoError(t, err)
+	return testserver
 }

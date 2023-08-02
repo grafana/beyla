@@ -5,7 +5,7 @@
  *
  */
 
-// Package main implements a simple gRPC client that demonstrates how to use gRPC-Go libraries
+// Package grpcclient implements a simple gRPC client that demonstrates how to use gRPC-Go libraries
 // to perform unary, client streaming, server streaming and full duplex RPCs.
 //
 // It interacts with the route guide service whose definition can be found in routeguide/route_guide.proto.
@@ -14,7 +14,6 @@ package grpcclient
 import (
 	"context"
 	"crypto/tls"
-	"flag"
 	"io"
 	"log"
 	"os"
@@ -30,10 +29,26 @@ import (
 
 var logs = slog.With("component", "grpc.Client")
 
-var (
-	ssl        = flag.Bool("tls", false, "Connection uses TLS if true, else plain TCP")
-	serverAddr = flag.String("addr", "localhost:50051", "The server address in the format of host:port")
-)
+type pingOpts struct {
+	ssl        bool
+	serverAddr string
+}
+
+var defaultPingOpts = pingOpts{serverAddr: "localhost:50051"}
+
+type PingOption func(*pingOpts)
+
+func WithServerAddr(addr string) PingOption {
+	return func(opts *pingOpts) {
+		opts.serverAddr = addr
+	}
+}
+
+func WithSSL() PingOption {
+	return func(opts *pingOpts) {
+		opts.ssl = true
+	}
+}
 
 // printFeature gets the feature for the given point.
 func printFeature(client pb.RouteGuideClient, point *pb.Point) {
@@ -50,11 +65,10 @@ func printFeature(client pb.RouteGuideClient, point *pb.Point) {
 	}
 }
 
-func newClient() (pb.RouteGuideClient, io.Closer, error) {
+func newClient(po *pingOpts) (pb.RouteGuideClient, io.Closer, error) {
 	// Use INFO as default log
-	flag.Parse()
 	var opts []grpc.DialOption
-	if *ssl {
+	if po.ssl {
 		tlsConfig := &tls.Config{
 			InsecureSkipVerify: true,
 		}
@@ -63,7 +77,7 @@ func newClient() (pb.RouteGuideClient, io.Closer, error) {
 		opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	}
 
-	conn, err := grpc.Dial(*serverAddr, opts...)
+	conn, err := grpc.Dial(po.serverAddr, opts...)
 	if err != nil {
 		logs.Error("fail to dial", err)
 		return nil, conn, err
@@ -71,8 +85,8 @@ func newClient() (pb.RouteGuideClient, io.Closer, error) {
 	return pb.NewRouteGuideClient(conn), conn, nil
 }
 
-func Ping() error {
-	client, closer, err := newClient()
+func Ping(opts ...PingOption) error {
+	client, closer, err := newClient(pingConfig(opts))
 	defer closer.Close()
 	if err != nil {
 		return err
@@ -82,8 +96,8 @@ func Ping() error {
 	return nil
 }
 
-func Debug(processTime time.Duration, forceFail bool) error {
-	client, closer, err := newClient()
+func Debug(processTime time.Duration, forceFail bool, opts ...PingOption) error {
+	client, closer, err := newClient(pingConfig(opts))
 	defer closer.Close()
 	if err != nil {
 		return err
@@ -93,4 +107,12 @@ func Debug(processTime time.Duration, forceFail bool) error {
 		Fail:           forceFail,
 	})
 	return err
+}
+
+func pingConfig(opts []PingOption) *pingOpts {
+	po := defaultPingOpts
+	for _, opt := range opts {
+		opt(&po)
+	}
+	return &po
 }

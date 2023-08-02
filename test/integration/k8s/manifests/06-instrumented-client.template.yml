@@ -1,3 +1,5 @@
+# this file is actually a Go template that needs to be processed before deploying
+# Mandatory variables are PodName and TargetURL
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -14,7 +16,7 @@ data:
       // TODO: remove server after this bug is fixed https://github.com/grafana/ebpf-autoinstrument/issues/221    
       go http.ListenAndServe(":8787", nil)
       for {
-        r, err := http.Get("http://testserver:8080/iping")
+        r, err := http.Get("{{.TargetURL}}")
         if err != nil {
           fmt.Println("error!", err)
         }
@@ -28,7 +30,7 @@ data:
 apiVersion: v1
 kind: Pod
 metadata:
-  name: internal-pinger
+  name: "{{.PodName}}"
 spec:
   shareProcessNamespace: true
   serviceAccountName: beyla

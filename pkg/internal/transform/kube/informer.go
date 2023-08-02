@@ -3,7 +3,6 @@ package kube
 import (
 	"errors"
 	"fmt"
-	"net"
 	"os"
 	"path"
 	"time"
@@ -39,9 +38,8 @@ type kubeDataInterface interface {
 
 type Metadata struct {
 	kubeDataInterface
-	// pods, nodes and services cache the different object types as *Info pointers
+	// pods and services cache the different object types as *Info pointers
 	pods     cache.SharedIndexInformer
-	nodes    cache.SharedIndexInformer
 	services cache.SharedIndexInformer
 
 	stopChan chan struct{}
@@ -88,9 +86,6 @@ func (k *Metadata) GetInfo(ip string) (*Info, bool) {
 	if info, ok := infoForIP(k.pods.GetIndexer(), ip); ok {
 		return info, true
 	}
-	if info, ok := infoForIP(k.nodes.GetIndexer(), ip); ok {
-		return info, true
-	}
 	if info, ok := infoForIP(k.services.GetIndexer(), ip); ok {
 		return info, true
 	}
@@ -120,51 +115,6 @@ func infoForIP(idx cache.Indexer, ip string) (*Info, bool) {
 		return nil, false
 	}
 	return objs[0].(*Info), true
-}
-
-func (k *Metadata) getHostName(hostIP string) string {
-	if hostIP != "" {
-		if info, ok := infoForIP(k.nodes.GetIndexer(), hostIP); ok {
-			return info.Name
-		}
-	}
-	return ""
-}
-
-func (k *Metadata) initNodeInformer(informerFactory informers.SharedInformerFactory) error {
-	nodes := informerFactory.Core().V1().Nodes().Informer()
-	// Transform any *v1.Node instance into a *Info instance to save space
-	// in the informer's cache
-	if err := nodes.SetTransform(func(i interface{}) (interface{}, error) {
-		node, ok := i.(*v1.Node)
-		if !ok {
-			return nil, fmt.Errorf("was expecting a Node. Got: %T", i)
-		}
-		ips := make([]string, 0, len(node.Status.Addresses))
-		for _, address := range node.Status.Addresses {
-			ip := net.ParseIP(address.Address)
-			if ip != nil {
-				ips = append(ips, ip.String())
-			}
-		}
-
-		return &Info{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      node.Name,
-				Namespace: node.Namespace,
-				Labels:    node.Labels,
-			},
-			ips:  ips,
-			Type: typeNode,
-		}, nil
-	}); err != nil {
-		return fmt.Errorf("can't set nodes transform: %w", err)
-	}
-	if err := nodes.AddIndexers(ipIndexers); err != nil {
-		return fmt.Errorf("can't add %s indexer to Nodes informer: %w", IndexIP, err)
-	}
-	k.nodes = nodes
-	return nil
 }
 
 func (k *Metadata) initPodInformer(informerFactory informers.SharedInformerFactory) error {
@@ -287,11 +237,7 @@ func LoadConfig(kubeConfigPath string) (*rest.Config, error) {
 
 func (k *Metadata) initInformers(client kubernetes.Interface, timeout time.Duration) error {
 	informerFactory := informers.NewSharedInformerFactory(client, syncTime)
-	err := k.initNodeInformer(informerFactory)
-	if err != nil {
-		return err
-	}
-	err = k.initPodInformer(informerFactory)
+	err := k.initPodInformer(informerFactory)
 	if err != nil {
 		return err
 	}

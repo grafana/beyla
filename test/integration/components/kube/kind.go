@@ -2,12 +2,12 @@
 package kube
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -152,34 +152,42 @@ func deploy(manifest string) env.Func {
 		if err != nil {
 			return ctx, fmt.Errorf("creating kubernetes client: %w", err)
 		}
-		if err := deployManifestFile(manifest, cfg, kclient); err != nil {
+		if err := DeployManifestFile(manifest, cfg, kclient); err != nil {
 			return ctx, fmt.Errorf("deploying manifest file: %w", err)
 		}
 		return ctx, nil
 	}
 }
 
-// deploys a yaml manifest file
+// DeployManifestFile deploys a yaml manifest file
 // credits to https://gist.github.com/pytimer/0ad436972a073bb37b8b6b8b474520fc
-func deployManifestFile(
-	manifest string,
+func DeployManifestFile(
+	manifestFile string,
 	cfg *envconf.Config,
 	kclient *kubernetes.Clientset,
 ) error {
 	log := log()
-	log.With("file", manifest).Info("deploying manifest file")
+	log.With("file", manifestFile).Info("deploying manifest file")
 
-	b, err := os.ReadFile(manifest)
+	b, err := os.ReadFile(manifestFile)
 	if err != nil {
-		return fmt.Errorf("reading manifest file %q: %w", manifest, err)
+		return fmt.Errorf("reading manifest file %q: %w", manifestFile, err)
 	}
 
+	return DeployManifest(string(b), cfg, kclient)
+}
+
+func DeployManifest(
+	manifest string,
+	cfg *envconf.Config,
+	kclient *kubernetes.Clientset,
+) error {
 	dd, err := dynamic.NewForConfig(cfg.Client().RESTConfig())
 	if err != nil {
 		return fmt.Errorf("creating kubernetes dynamic client: %w", err)
 	}
 
-	decoder := yamlutil.NewYAMLOrJSONDecoder(bytes.NewReader(b), 100)
+	decoder := yamlutil.NewYAMLOrJSONDecoder(strings.NewReader(manifest), 100)
 	for {
 		var rawObj runtime.RawExtension
 		if err = decoder.Decode(&rawObj); err != nil {

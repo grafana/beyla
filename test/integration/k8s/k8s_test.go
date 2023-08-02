@@ -143,7 +143,7 @@ func TestClientDecoration_Pod2Pod(t *testing.T) {
 		ManifestTemplate: pingerManifest,
 		PodName:          "ping-to-pod",
 	}
-	feat := features.New("Decoration of Pod-to-Pod direct communications").
+	feat := features.New("Client-side decoration of Pod-to-Pod direct communications").
 		Setup(func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
 			kclient, err := kubernetes.NewForConfig(cfg.Client().RESTConfig())
 			require.NoError(t, err)
@@ -157,7 +157,7 @@ func TestClientDecoration_Pod2Pod(t *testing.T) {
 		}).
 		Teardown(pinger.undeploy).
 		Assess("all the client metrics are properly decorated",
-			testDecoration(clientMetrics, `{k8s_src_name="ping-to-pod",k8s_dst_name="testserver"}`, map[string]string{
+			testDecoration(clientMetrics, `{k8s_src_name="ping-to-pod"}`, map[string]string{
 				"k8s_src_name":      "ping-to-pod",
 				"k8s_dst_name":      "testserver",
 				"k8s_src_namespace": "default",
@@ -169,7 +169,28 @@ func TestClientDecoration_Pod2Pod(t *testing.T) {
 	cluster.TestEnv().Test(t, feat)
 }
 
-func testDecoration(metricsSet []string, queryArgs string, expectedLabels map[string]string) features.Func {
+func TestDecoration_Pod2External(t *testing.T) {
+	pinger := Pinger{
+		ManifestTemplate: pingerManifest,
+		PodName:          "ping-to-grafana",
+		TargetURL:        "https://grafana.com/",
+	}
+	feat := features.New("Client-side decoration of Pod-to-External communications").
+		Setup(pinger.deploy).
+		Teardown(pinger.undeploy).
+		Assess("all the client metrics are properly decorated",
+			testDecoration(clientMetrics, `{k8s_src_name="ping-to-grafana"}`, map[string]string{
+				"k8s_src_name":      "ping-to-grafana",
+				"k8s_src_namespace": "default",
+			},
+				"k8s_dst_name", "k8s_dst_namespace", "k8s_dst_type"), // expected missing labels
+		).Feature()
+	cluster.TestEnv().Test(t, feat)
+}
+
+func testDecoration(
+	metricsSet []string, queryArgs string, expectedLabels map[string]string, expectedMissingLabels ...string,
+) features.Func {
 	return func(ctx context.Context, t *testing.T, config *envconf.Config) context.Context {
 		// Testing the decoration of the server-side HTTP calls from the internal-pinger pod
 		pq := prom.Client{HostPort: prometheusHostPort}
@@ -186,6 +207,9 @@ func testDecoration(metricsSet []string, queryArgs string, expectedLabels map[st
 				for _, r := range results {
 					for ek, ev := range expectedLabels {
 						assert.Equalf(t, ev, r.Metric[ek], "expected %q:%q entry in map %v", ek, ev, r.Metric)
+					}
+					for _, ek := range expectedMissingLabels {
+						assert.NotContainsf(t, r.Metric, ek, "not expected %q entry in map %v", ek, r.Metric)
 					}
 				}
 			})

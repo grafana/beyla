@@ -96,6 +96,7 @@ func (md *metadataDecorator) do(span *HTTPRequestSpan) {
 	// This assumption is a bit fragile and might break if the spanner.go
 	// changes the way it works.
 	// Extensive integration test cases are provided as a safeguard.
+	fmt.Println("type", span.Type, "peer", span.Peer, "host", span.Host)
 	switch span.Type {
 	case EventTypeGRPC, EventTypeHTTP:
 		if peerInfo, ok := md.kube.GetInfo(span.Peer); ok {
@@ -104,7 +105,7 @@ func (md *metadataDecorator) do(span *HTTPRequestSpan) {
 			span.Metadata = append(span.Metadata, md.ownMetadataAsDst)
 		}
 	case EventTypeGRPCClient, EventTypeHTTPClient:
-		if peerInfo, ok := md.kube.GetServiceInfo(span.Host); ok {
+		if peerInfo, ok := md.kube.GetInfo(span.Host); ok {
 			span.Metadata = append(span.Metadata, asDstMap(peerInfo), md.ownMetadataAsSrc)
 		} else {
 			span.Metadata = append(span.Metadata, md.ownMetadataAsSrc)

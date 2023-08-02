@@ -20,8 +20,7 @@ import (
 const (
 	kubeConfigEnvVariable = "KUBECONFIG"
 	syncTime              = 10 * time.Minute
-	IndexIP               = "byIP"
-	IndexSVCName          = "bySVCName"
+	IndexIPOrName         = "idx"
 	typeNode              = "Node"
 	typePod               = "Pod"
 	typeService           = "Service"
@@ -59,54 +58,40 @@ type Info struct {
 	ips  []string
 }
 
-var ipIndexers = cache.Indexers{
-	IndexIP: func(obj interface{}) ([]string, error) {
-		return obj.(*Info).ips, nil
+var indexers = cache.Indexers{
+	IndexIPOrName: func(obj interface{}) ([]string, error) {
+		oi := obj.(*Info)
+		switch oi.Type {
+		case typeService:
+			// Known issues: two services with the same name would overwrite metadata unless they are accessed with the
+			// namespace in the URL
+			return append(
+				oi.ips,
+				// TODO: support subdomains and custom cluster domains: https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/
+				oi.Name,
+				oi.Name+"."+oi.Namespace,
+				oi.Name+"."+oi.Namespace+".svc.cluster.local",
+				oi.Name+"."+oi.Namespace+".cluster.local",
+			), nil
+		default:
+			return oi.ips, nil
+		}
 	},
 }
 
-// Known issues: two services with the same name could get mixed metadata unless they are accessed with the
-// namespace in the URL
-var serviceIndexers = cache.Indexers{
-	IndexSVCName: func(obj interface{}) ([]string, error) {
-		svc := obj.(*Info)
-		return append(
-			svc.ips,
-			// TODO: support subdomains and custom cluster domains: https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/
-			svc.Name,
-			svc.Name+"."+svc.Namespace,
-			svc.Name+"."+svc.Namespace+".svc.cluster.local",
-			svc.Name+"."+svc.Namespace+".cluster.local",
-		), nil
-	},
-}
-
-// GetInfo fetches metadata from Pod, Node or Service given its IP
-func (k *Metadata) GetInfo(ip string) (*Info, bool) {
-	if info, ok := infoForIP(k.pods.GetIndexer(), ip); ok {
+// GetInfo fetches metadata from Pod, Service given its IP or Service Name
+func (k *Metadata) GetInfo(ipOrName string) (*Info, bool) {
+	if info, ok := infoForIP(k.pods.GetIndexer(), ipOrName); ok {
 		return info, true
 	}
-	if info, ok := infoForIP(k.services.GetIndexer(), ip); ok {
+	if info, ok := infoForIP(k.services.GetIndexer(), ipOrName); ok {
 		return info, true
 	}
 	return nil, false
 }
 
-// GetServiceInfo fetches Service metadata given a service name, IP, or Fully Qualified Domain Name
-func (k *Metadata) GetServiceInfo(service string) (*Info, bool) {
-	objs, err := k.services.GetIndexer().ByIndex(IndexSVCName, service)
-	if err != nil {
-		klog().Debug("error accessing Service index by Qualified Name. Ignoring", "error", err, "service", service)
-		return nil, false
-	}
-	if len(objs) == 0 {
-		return nil, false
-	}
-	return objs[0].(*Info), true
-}
-
 func infoForIP(idx cache.Indexer, ip string) (*Info, bool) {
-	objs, err := idx.ByIndex(IndexIP, ip)
+	objs, err := idx.ByIndex(IndexIPOrName, ip)
 	if err != nil {
 		klog().Debug("error accessing index by IP. Ignoring", "error", err, "ip", ip)
 		return nil, false
@@ -146,8 +131,8 @@ func (k *Metadata) initPodInformer(informerFactory informers.SharedInformerFacto
 	}); err != nil {
 		return fmt.Errorf("can't set pods transform: %w", err)
 	}
-	if err := pods.AddIndexers(ipIndexers); err != nil {
-		return fmt.Errorf("can't add %s indexer to Pods informer: %w", IndexIP, err)
+	if err := pods.AddIndexers(indexers); err != nil {
+		return fmt.Errorf("can't add %s indexer to Pods informer: %w", IndexIPOrName, err)
 	}
 
 	k.pods = pods
@@ -178,8 +163,8 @@ func (k *Metadata) initServiceInformer(informerFactory informers.SharedInformerF
 	}); err != nil {
 		return fmt.Errorf("can't set services transform: %w", err)
 	}
-	if err := services.AddIndexers(serviceIndexers); err != nil {
-		return fmt.Errorf("can't add %s indexer to Services informer: %w", IndexIP, err)
+	if err := services.AddIndexers(indexers); err != nil {
+		return fmt.Errorf("can't add %s indexer to Services informer: %w", IndexIPOrName, err)
 	}
 
 	k.services = services

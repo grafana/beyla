@@ -148,11 +148,7 @@ func (k *Kind) TestEnv() env.Environment {
 
 func deploy(manifest string) env.Func {
 	return func(ctx context.Context, cfg *envconf.Config) (context.Context, error) {
-		kclient, err := kubernetes.NewForConfig(cfg.Client().RESTConfig())
-		if err != nil {
-			return ctx, fmt.Errorf("creating kubernetes client: %w", err)
-		}
-		if err := DeployManifestFile(manifest, cfg, kclient); err != nil {
+		if err := DeployManifestFile(manifest, cfg); err != nil {
 			return ctx, fmt.Errorf("deploying manifest file: %w", err)
 		}
 		return ctx, nil
@@ -164,7 +160,6 @@ func deploy(manifest string) env.Func {
 func DeployManifestFile(
 	manifestFile string,
 	cfg *envconf.Config,
-	kclient *kubernetes.Clientset,
 ) error {
 	log := log()
 	log.With("file", manifestFile).Info("deploying manifest file")
@@ -174,36 +169,36 @@ func DeployManifestFile(
 		return fmt.Errorf("reading manifest file %q: %w", manifestFile, err)
 	}
 
-	return DeployManifest(string(b), cfg, kclient)
+	return DeployManifest(cfg, string(b))
 }
 
-func DeployManifest(
-	manifest string,
-	cfg *envconf.Config,
-	kclient *kubernetes.Clientset,
-) error {
-	dd, err := dynamic.NewForConfig(cfg.Client().RESTConfig())
-	if err != nil {
-		return fmt.Errorf("creating kubernetes dynamic client: %w", err)
-	}
-
+func DeployManifest(cfg *envconf.Config, manifest string) error {
 	decoder := yamlutil.NewYAMLOrJSONDecoder(strings.NewReader(manifest), 100)
+	var rawObj runtime.RawExtension
 	for {
-		var rawObj runtime.RawExtension
-		if err = decoder.Decode(&rawObj); err != nil {
+		if err := decoder.Decode(&rawObj); err != nil {
 			if !errors.Is(err, io.EOF) {
 				return fmt.Errorf("decoding manifest raw object: %w", err)
 			}
 			return nil
 		}
 
-		if err := decodeAndCreate(rawObj, kclient, dd); err != nil {
-			return err
+		if err := decodeAndCreate(cfg, rawObj); err != nil {
+			return fmt.Errorf("decoding and creating manifest: %w", err)
 		}
 	}
 }
 
-func decodeAndCreate(rawObj runtime.RawExtension, kclient *kubernetes.Clientset, dd *dynamic.DynamicClient) error {
+func decodeAndCreate(cfg *envconf.Config, rawObj runtime.RawExtension) error {
+	kclient, err := kubernetes.NewForConfig(cfg.Client().RESTConfig())
+	if err != nil {
+		return fmt.Errorf("creating kubernetes client: %w", err)
+	}
+	dd, err := dynamic.NewForConfig(cfg.Client().RESTConfig())
+	if err != nil {
+		return fmt.Errorf("creating kubernetes dynamic client: %w", err)
+	}
+
 	obj, gvk, err := yaml.NewDecodingSerializer(unstructured.UnstructuredJSONScheme).Decode(rawObj.Raw, nil, nil)
 	if err != nil {
 		return fmt.Errorf("creating yaml decoding serializer: %w", err)
@@ -235,7 +230,6 @@ func decodeAndCreate(rawObj runtime.RawExtension, kclient *kubernetes.Clientset,
 	} else {
 		dri = dd.Resource(mapping.Resource)
 	}
-
 	if _, err := dri.Create(context.Background(), unstructuredObj, metav1.CreateOptions{}); err != nil {
 		return fmt.Errorf("deploying manifest: %w", err)
 	}

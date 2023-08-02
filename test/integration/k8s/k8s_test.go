@@ -5,7 +5,6 @@ package k8s
 import (
 	"bytes"
 	"context"
-	"crypto/tls"
 	"net/http"
 	"os"
 	"path"
@@ -17,6 +16,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/exp/slog"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/e2e-framework/pkg/envconf"
 	"sigs.k8s.io/e2e-framework/pkg/features"
@@ -27,9 +27,11 @@ import (
 )
 
 const (
+	testTimeout = 30 * time.Second
+
 	prometheusHostPort = "localhost:39090"
 
-	httpTargetURLEnvName = "HTTP_TARGET_URL"
+	pingerManifest = "manifests/06-instrumented-client.template.yml"
 )
 
 var (
@@ -37,8 +39,22 @@ var (
 	pathOutput   = path.Join(pathRoot, "testoutput")
 	pathKindLogs = path.Join(pathOutput, "kind")
 
-	tr             = &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}
-	testHTTPClient = &http.Client{Transport: tr}
+	serverMetrics = []string{
+		"http_server_duration_seconds_count",
+		"http_server_duration_seconds_sum",
+		"http_server_duration_seconds_bucket",
+		"http_server_request_size_bytes_count",
+		"http_server_request_size_bytes_sum",
+		"http_server_request_size_bytes_bucket",
+	}
+	clientMetrics = []string{
+		"http_client_duration_seconds_count",
+		"http_client_duration_seconds_sum",
+		"http_client_duration_seconds_bucket",
+		"http_client_request_size_bytes_count",
+		"http_client_request_size_bytes_sum",
+		"http_client_request_size_bytes_bucket",
+	}
 )
 
 var cluster *kube.Kind
@@ -77,9 +93,7 @@ func TestAASmoke(t *testing.T) {
 	pq := prom.Client{HostPort: prometheusHostPort}
 	test.Eventually(t, 2*time.Minute, func(t require.TestingT) {
 		// first, verify that the test service endpoint is healthy
-		req, err := http.NewRequest("GET", url+subpath, nil)
-		require.NoError(t, err)
-		r, err := testHTTPClient.Do(req)
+		r, err := http.Get(url + subpath)
 		require.NoError(t, err)
 		require.Equal(t, http.StatusOK, r.StatusCode)
 
@@ -92,52 +106,26 @@ func TestAASmoke(t *testing.T) {
 	}, test.Interval(time.Second))
 }
 
-var (
-	serverMetrics = []string{
-		"http_server_duration_seconds_count",
-		"http_server_duration_seconds_sum",
-		"http_server_duration_seconds_bucket",
-		"http_server_request_size_bytes_count",
-		"http_server_request_size_bytes_sum",
-		"http_server_request_size_bytes_bucket",
-	}
-	clientMetrics = []string{
-		"http_client_duration_seconds_count",
-		"http_client_duration_seconds_sum",
-		"http_client_duration_seconds_bucket",
-		"http_client_request_size_bytes_count",
-		"http_client_request_size_bytes_sum",
-		"http_client_request_size_bytes_bucket",
-	}
-)
-
-func TestServerDecoration_Pod2Pod(t *testing.T) {
+func TestDecoration_Pod2Service(t *testing.T) {
 	pinger := Pinger{
-		ManifestTemplate: "manifests/06-instrumented-client.template.yml",
+		ManifestTemplate: pingerManifest,
 		PodName:          "internal-pinger",
 		TargetURL:        "http://testserver:8080/iping",
 	}
-	feat := features.New("Server decoration of Pod-to-Pod direct communications").
+	feat := features.New("Decoration of Pod-to-Service communications").
 		Setup(pinger.deploy).
 		Teardown(pinger.undeploy).
-		Assess("all the metrics are properly decorated",
+		Assess("all the server metrics are properly decorated",
 			testDecoration(serverMetrics, `{http_target="/iping",k8s_src_name="internal-pinger"}`, map[string]string{
 				"k8s_src_name":      "internal-pinger",
 				"k8s_dst_name":      "testserver",
 				"k8s_src_namespace": "default",
 				"k8s_dst_namespace": "default",
-				"k8s_dst_type":      "Pod",
-			}),
-		).Feature()
-
-	cluster.TestEnv().Test(t, feat)
-}
-
-func TestClientDecoration_Pod2Service(t *testing.T) {
-	feat := features.New("Server decoration of Pod-to-Pod direct communications").
-		//Setup(pinger.deploy).
-		//Teardown(pinger.undeploy).
-		Assess("all the metrics are properly decorated",
+				// data captured at the server side will be always "Pod" as destination type, as the
+				// server Pod doesn't see the service URL but itself as a Pod
+				"k8s_dst_type": "Pod",
+			})).
+		Assess("all the client metrics are properly decorated",
 			testDecoration(clientMetrics, `{k8s_src_name="internal-pinger"}`, map[string]string{
 				"k8s_src_name":      "internal-pinger",
 				"k8s_dst_name":      "testserver",
@@ -150,42 +138,37 @@ func TestClientDecoration_Pod2Service(t *testing.T) {
 	cluster.TestEnv().Test(t, feat)
 }
 
-/*
-	func TestClientDecoration_Pod2Pod(t *testing.T) {
-		var oldPingerURL string
-
-		feat := features.New("Client decoration of Pod-to-Pod direct communications").
-			Setup(func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
-				// change the target URL of the internal pinger to point to the pod IP instead of the service behind it
-				kclient, err := kubernetes.NewForConfig(cfg.Client().RESTConfig())
-				require.NoError(t, err)
-				// Get the testserver IP address
-				p, err := kclient.CoreV1().Pods("default").Get(ctx, "testserver", metav1.GetOptions{})
-				require.NotZero(t, err)
-				podIp := p.Status.PodIP
-				// Replace the Pinger target URL by the pod IP instead of the hostname
-				cm, err := kclient.CoreV1().ConfigMaps("default").Get(ctx, "pinger-env", metav1.GetOptions{})
-				require.NotZero(t, err)
-				oldPingerURL = cm.Data[httpTargetURLEnvName]
-				require.NotEmpty(t, oldPingerURL)
-				cm.Data[httpTargetURLEnvName] = podIp
-				_, err = kclient.CoreV1().ConfigMaps("default").Update(ctx, cm, metav1.UpdateOptions{})
-				require.NoError(t, err)
-				// Restart pinger so changes take effect
-				p, err = kclient.CoreV1().Pods("default").Get(ctx, "internal-pinger", metav1.GetOptions{})
-				require.NoError(t, err)
-				p.Labels["restart"] = strconv.Itoa(rand.Int())
-				return ctx
-			}).Teardown(func(ctx context.Context, t *testing.T, config *envconf.Config) context.Context {
-			// Restore old Pinger URL
-			return ctx
-		}).Feature()
-
-		cluster.TestEnv().Test(t, feat)
-
-		testDecoration()
+func TestClientDecoration_Pod2Pod(t *testing.T) {
+	pinger := Pinger{
+		ManifestTemplate: pingerManifest,
+		PodName:          "ping-to-pod",
 	}
-*/
+	feat := features.New("Decoration of Pod-to-Pod direct communications").
+		Setup(func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
+			kclient, err := kubernetes.NewForConfig(cfg.Client().RESTConfig())
+			require.NoError(t, err)
+			// First, get the testserver IP address
+			testserver, err := kclient.CoreV1().Pods("default").Get(ctx, "testserver", metav1.GetOptions{})
+			require.NoError(t, err)
+			// Then we use it in the target URL of the pinger pod, to avoid going through a service
+			pinger.TargetURL = "http://" + testserver.Status.PodIP + ":8080/iping"
+
+			return pinger.deploy(ctx, t, cfg)
+		}).
+		Teardown(pinger.undeploy).
+		Assess("all the client metrics are properly decorated",
+			testDecoration(clientMetrics, `{k8s_src_name="ping-to-pod",k8s_dst_name="testserver"}`, map[string]string{
+				"k8s_src_name":      "ping-to-pod",
+				"k8s_dst_name":      "testserver",
+				"k8s_src_namespace": "default",
+				"k8s_dst_namespace": "default",
+				"k8s_dst_type":      "Pod",
+			}),
+		).Feature()
+
+	cluster.TestEnv().Test(t, feat)
+}
+
 func testDecoration(metricsSet []string, queryArgs string, expectedLabels map[string]string) features.Func {
 	return func(ctx context.Context, t *testing.T, config *envconf.Config) context.Context {
 		// Testing the decoration of the server-side HTTP calls from the internal-pinger pod
@@ -193,7 +176,7 @@ func testDecoration(metricsSet []string, queryArgs string, expectedLabels map[st
 		for _, metric := range metricsSet {
 			t.Run(metric, func(t *testing.T) {
 				var results []prom.Result
-				test.Eventually(t, 30*time.Second, func(t require.TestingT) {
+				test.Eventually(t, testTimeout, func(t require.TestingT) {
 					var err error
 					results, err = pq.Query(metric + queryArgs)
 					require.NoError(t, err)
@@ -226,14 +209,17 @@ func (ping *Pinger) deploy(ctx context.Context, t *testing.T, cfg *envconf.Confi
 	require.NoError(t, tmpl.Execute(compiled, ping))
 	ping.compiledManifest = compiled.String()
 
-	kclient, err := kubernetes.NewForConfig(cfg.Client().RESTConfig())
-	require.NoError(t, err)
-	require.NoError(t, kube.DeployManifest(ping.compiledManifest, cfg, kclient))
-
+	require.NoError(t, kube.DeployManifest(cfg, ping.compiledManifest))
 	return ctx
 }
 
-func (ping *Pinger) undeploy(ctx context.Context, t *testing.T, config *envconf.Config) context.Context {
+func (ping *Pinger) undeploy(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
+	kclient, err := kubernetes.NewForConfig(cfg.Client().RESTConfig())
+	require.NoError(t, err)
+
+	delSelector := metav1.ListOptions{LabelSelector: "component=pinger"}
+	require.NoError(t, kclient.CoreV1().Pods("default").DeleteCollection(ctx, metav1.DeleteOptions{}, delSelector))
+	require.NoError(t, kclient.CoreV1().ConfigMaps("default").DeleteCollection(ctx, metav1.DeleteOptions{}, delSelector))
 
 	return ctx
 }

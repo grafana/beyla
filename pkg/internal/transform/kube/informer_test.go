@@ -1,25 +1,7 @@
-/*
- * Copyright (C) 2023 Grafana Labs
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * Part of this his code is a revision of the code found in:
- * https://github.com/netobserv/flowlogs-pipeline/ (Apache 2.0 license)
- */
-
 package kube
 
 import (
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/mock"
@@ -54,11 +36,12 @@ func (informerMock *InformerMock) GetIndexer() cache.Indexer {
 	return args.Get(0).(cache.Indexer)
 }
 
-func TestGetInfoPods(t *testing.T) {
+func TestGetInfoByIP(t *testing.T) {
 	kubeData := Metadata{}
 	// pods informer
 	pidx := IndexerMock{}
-	pidx.On("ByIndex", IndexIP, "1.2.3.4").Return([]interface{}{&Info{
+	pidx.On("ByIndex", IndexIPOrName, "10.0.0.1").Return([]interface{}{}, os.ErrNotExist)
+	pidx.On("ByIndex", IndexIPOrName, "1.2.3.4").Return([]interface{}{&Info{
 		Type: "Pod",
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "podName",
@@ -67,19 +50,20 @@ func TestGetInfoPods(t *testing.T) {
 	}}, nil)
 	pim := InformerMock{}
 	pim.On("GetIndexer").Return(&pidx)
-	// nodes informer
+	// Services informer
 	hidx := IndexerMock{}
-	hidx.On("ByIndex", IndexIP, "10.0.0.1").Return([]interface{}{&Info{
-		Type: "Node",
+	hidx.On("ByIndex", IndexIPOrName, "10.0.0.1").Return([]interface{}{&Info{
+		Type: "Service",
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "nodeName",
+			Name: "serviceName",
 		},
 	}}, nil)
-	him := InformerMock{}
-	him.On("GetIndexer").Return(&hidx)
+	sim := InformerMock{}
+	sim.On("GetIndexer").Return(&hidx)
 
 	kubeData.pods = &pim
-	kubeData.nodes = &him
+	kubeData.services = &sim
+
 	info, ok := kubeData.GetInfo("1.2.3.4")
 	require.True(t, ok)
 
@@ -88,6 +72,16 @@ func TestGetInfoPods(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "podName",
 			Namespace: "podNamespace",
+		},
+	})
+
+	info, ok = kubeData.GetInfo("10.0.0.1")
+	require.True(t, ok)
+
+	require.Equal(t, *info, Info{
+		Type: "Service",
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "serviceName",
 		},
 	})
 }

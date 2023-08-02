@@ -21,7 +21,6 @@ const (
 	kubeConfigEnvVariable = "KUBECONFIG"
 	syncTime              = 10 * time.Minute
 	IndexIPOrName         = "idx"
-	typeNode              = "Node"
 	typePod               = "Pod"
 	typeService           = "Service"
 )

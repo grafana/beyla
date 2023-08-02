@@ -38,4 +38,4 @@ curl "http://localhost:6060/debug/pprof/allocs" -o allocs
 curl "http://localhost:6060/debug/pprof/goroutine" -o goroutine
 ```
 
-3. Use `go tool pprof` to dig into the profiles (`go tool trace` for the `trace` profile)
+3. Use `go tool pprof` to dig into the profiles (`go tool trace` for `trace` profiles)

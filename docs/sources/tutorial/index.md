@@ -155,7 +155,7 @@ traces and metrics), as well as additional configuration options, please check t
 
 After the service from the previous section is up and running, we can instrument it
 by executing the `beyla` command which we previously downloaded with
-`go install`, as seen in the [Downloading](#downloading-the-autoinstrument) section.
+`go install`, as seen in the [Downloading](#downloading-the-auto-instrumentation-tool) section.
 
 We will configure the eBPF auto-instrumentation tool to instrument the executable that 
 listens on port 8080, printing the traces on the standard output and exposing RED metrics

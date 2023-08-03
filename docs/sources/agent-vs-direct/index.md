@@ -11,8 +11,8 @@ The eBPF auto-instrumentation tool can export data in two modes:
   [Grafana Agent](https://github.com/grafana/agent), which will process and send them
   to Mimir and Tempo. In this scenario, the Agent takes care of the authentication required by the Grafana Mimir/Tempo endpoints.
   This mode also integrates better with some Grafana exclusive features, 
-  such as the [span-to-metrics](https://grafana.com/docs/tempo/latest/metrics-generator/span_metrics/) and
-  [span-to-service graph](https://grafana.com/docs/tempo/latest/metrics-generator/service_graphs/) converters.
+  such as the [span-to-metrics](/docs/tempo/latest/metrics-generator/span_metrics/) and
+  [span-to-service graph](/docs/tempo/latest/metrics-generator/service_graphs/) converters.
 * **Direct mode**: the auto-instrumentation tool can **push** metrics and/or traces directly to a remote endpoint
   (using the OpenTelemetry/OTEL protocols) or expose a Prometheus HTTP endpoint ready to be scraped (i.e. **pull** mode).
   In the direct OTEL push mode, the auto-instrumentation tool needs to be configured with the authentication credentials.

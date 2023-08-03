@@ -3,7 +3,7 @@ title: Beyla
 description: Learn about Grafana's Beyla, the eBPF based application auto-instrumentation tool.
 ---
 
-# Beyla - eBPF based application auto-instrumentation
+# Beyla - eBPF based application auto-instrumentation tool
 
 * [Quick start tutorial]({{< relref "./tutorial" >}})
 * [Beyla's value propositions]({{< relref "./features" >}})

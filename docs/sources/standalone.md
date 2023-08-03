@@ -48,7 +48,7 @@ least it needs to be granted the `CAP_SYS_ADMIN` capability.
 
 ## Examples
 
-Let's instrument the process that owns the port 443, and expose the aetrics as a
+Let's instrument the process that owns the port 443, and expose the metrics as a
 Prometheus endpoint listening in the port 8999. In this example, the configuration is passed
 exclusively through environment variables:
 

@@ -1,16 +1,16 @@
 ---
-title: Deploy Beyla in Kubernetes
+title: Deploy in Kubernetes
 description: Learn how to deploy Grafana's eBPF auto-instrumentation tool in Kubernetes.
 ---
 
-# Deploy Beyla in Kubernetes
+# Deploy in Kubernetes
 
-In Kubernetes, you can deploy Beyla - the eBPF auto-instrument tool in two ways:
+In Kubernetes, you can deploy the eBPF auto-instrumentation tool in two ways:
 
 * As a Sidecar Container (recommended)
 * As a DaemonSet
 
-## Deploying Beyla as a sidecar container
+## Deploying as a sidecar container
 
 This is the recommended way of deploying the eBPF auto-instrumentation tool for the following reason:
 
@@ -51,7 +51,7 @@ spec:
       labels:
         app: goblog
     spec:
-      # Required so the sidecar instrumenter can access the service process
+      # Required so the sidecar instrument tool can access the service process
       shareProcessNamespace: true
       containers:
         # Container for the instrumented service
@@ -91,7 +91,7 @@ Deploying as a sidecar container is deployment mode in the work-in-progress
 Alternatively, you can deploy the auto-instrumentation tool as a DaemonSet. Using the
 previous example (the `goblog` pod), we cannot select the process to instrument by using
 its open port, because the port is internal to the Pod. At the same time multiple instances of the
-service would have diffrent open ports. In this case, we will need to instrument by
+service would have different open ports. In this case, we will need to instrument by
 using the application service executable name (see later example).
 
 For security reasons, you should not deploy as DaemonSet unless you can be sure

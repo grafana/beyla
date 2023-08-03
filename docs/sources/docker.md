@@ -9,7 +9,7 @@ You can run Beyla - the eBPF auto-instrumentation tool as a standalone Docker co
 which instruments a process running in another container.
 
 [Docker Hub](https://hub.docker.com/r/grafana/ebpf-autoinstrument) provides
-an updated image of the eBPF autoinstrumenter, with the following image name:
+an updated image of the eBPF auto-instrumentation tool, with the following image name:
 
 ```
 grafana/ebpf-autoinstrument:latest
@@ -35,8 +35,8 @@ docker run -p 18443:8443 --name goblog mariomac/goblog:dev
 The above command line will run a simple HTTPS application. The process opens the container's
 internal port `8443`, which is then exposed at the host level as the port `18443`.
 
-Next, let's check that Beya is able to auto-instrument the above
-container. Initially, we will configure Beya to simply print (on stdout) each collected trace event,
+Next, let's check that Beyla is able to auto-instrument the above
+container. Initially, we will configure Beyla to simply print (on stdout) each collected trace event,
 by setting the environment variable `PRINT_TRACES=true`. We will also instruct the tool to
 inspect the executable that is listening on port `8443`, by setting the environment variable
 `OPEN_PORT=8443`. Please note that we are using the application container's internal port `8443`, and
@@ -70,7 +70,7 @@ time=2023-05-22T14:03:42.526Z level=INFO msg="Starting main node"
 2023-05-22 14:13:47.52221347 (115µs[75.625µs]) 200 GET /static/style.css [172.17.0.1]->[localhost:18443] size:0B
 ```
 
-Now that we have verified that the auto-instrumenter tool is properly tracing the target HTTP service,
+Now that we have verified that the auto-instrumentation tool is properly tracing the target HTTP service,
 you can configure it to send metrics and traces to an OpenTelemetry endpoint, or have metrics scraped by Prometheus.
 For information on how to export traces and metrics, you can check the [Quick tutorial]({{< relref "./tutorial" >}}) 
 and the [Configuration]({{< relref "./config" >}}) sections of this documentation site.

@@ -5,7 +5,7 @@ description: Learn how to configure Grafana's eBPF based auto-instrumentation to
 
 # Configuration
 
-The eBPF-autoinstrumentation tool can be configured via environment variables or via
+The eBPF auto-instrumentation tool can be configured via environment variables or via
 a YAML configuration file that is passed with the `-config` command-line
 argument. Environment variables have priority over the properties in the
 configuration file. For example, in the following command line the OPEN_PORT option 
@@ -17,11 +17,11 @@ $ OPEN_PORT=8080 beyla -config /path/to/config.yaml
 
 At the end of this document, there is an [example of YAML configuration file](#yaml-file-example).
 
-Currently, the eBPF-autoinstrumentation tool consist of a pipeline of components which
+Currently, the eBPF auto-instrumentation tool consist of a pipeline of components which
 generate, transform, and export traces from HTTP and GRPC services. In the
 YAML configuration, each component has its own first-level section.
 
-The architecture below shows the different components of the eBPF-autoinstrumentation tool.
+The architecture below shows the different components of the eBPF auto-instrumentation tool.
 Dashed boxes can be enabled and disabled according to the configuration.
 
 ![](img/architecture.png)
@@ -48,7 +48,7 @@ the options for each component.
 ## Global configuration properties
 
 The properties in this section are first-level YAML properties, as they apply to the
-whole eBPF-autoinstrumentation tool configuration:
+whole eBPF auto-instrumentation tool configuration:
 
 | YAML           | Env var             | Type   | Default         |
 |----------------|---------------------|--------|-----------------|
@@ -102,7 +102,7 @@ have the following paths:
 /opt/app/server
 ```
 
-Then the eBPF-autoinstrumentation tool will match indistinctly one of the above processes. To avoid this
+Then the eBPF auto-instrumentation tool will match indistinctly one of the above processes. To avoid this
 issue, you should be as concrete as possible about the value of. For example, `EXECUTABLE_NAME=/opt/app/server` 
 or just `EXECUTABLE_NAME=/server`.
 
@@ -141,7 +141,7 @@ fidelity and it incurs lesser overall overhead.
 | `wakeup_len` | `BPF_WAKEUP_LEN` | string | (unset) |
 
 Specifies how many messages need to be accumulated in the eBPF ringbuffer
-before sending a wakeup request to the user space code.
+before sending a wake-up request to the user space code.
 
 In high-load services (in terms of requests/second), tuning this option to higher values
 can help with reducing the CPU overhead of the eBPF auto-instrumentation tool.
@@ -203,7 +203,7 @@ Possible values for the `unmatch` property are:
 * `unset` will leave the `http.route` property as unset.
 * `path` will copy the `http.route` field property to the path value.
   * 🚨 Caution: this option could lead to cardinality explosion at the ingester side.
-* `wildcard` will set the `http.route` field property to a generic askterisk `*` value.
+* `wildcard` will set the `http.route` field property to a generic asterisk `*` value.
 
 ## OTEL metrics exporter
 
@@ -232,7 +232,7 @@ such that the traces exporter won't be activated unless explicitly specified.
 
 Specifies the transport/encoding protocol of the OpenTelemetry endpoint.
 
-The accepted values, as defined by the [OTLP Exporter Confguration document]( 
+The accepted values, as defined by the [OTLP Exporter Configuration document]( 
 https://opentelemetry.io/docs/concepts/sdk-configuration/otlp-exporter-configuration/#otel_exporter_otlp_protocol
 ) are `http/json`, `http/protobuf` and `grpc`.
 
@@ -338,7 +338,7 @@ the environment variables from the [standard OTEL exporter configuration](https:
 |------------|---------------------------------------------------------------------------|------|---------|
 | `endpoint` | `OTEL_EXPORTER_OTLP_ENDPOINT` or<br/>`OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` | URL  | (unset) |
 
-Specifies the OpentTelemetry endpoint where the traces will be sent.
+Specifies the OpenTelemetry endpoint where the traces will be sent.
 
 The `OTEL_EXPORTER_OTLP_ENDPOINT` environment variable sets a common endpoint for both the
 [metrics](#otel-metrics-exporter) and the traces exporters. The `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` environment variable
@@ -351,7 +351,7 @@ so the metrics exporter won't be activated unless explicitly specified.
 
 Specifies the transport/encoding protocol of the OpenTelemetry traces endpoint.
 
-The accepted values, as defined by the [OTLP Exporter Confguration document](
+The accepted values, as defined by the [OTLP Exporter Configuration document](
 https://opentelemetry.io/docs/concepts/sdk-configuration/otlp-exporter-configuration/#otel_exporter_otlp_protocol
 ) are `http/json`, `http/protobuf` and `grpc`.
 
@@ -428,7 +428,7 @@ The `buckets` object allows overriding the bucket boundaries of diverse histogra
 
 YAML section `internal_metrics`.
 
-This compoment will report certain internal metrics about the behavior
+This component will report certain internal metrics about the behavior
 of the auto-instrumentation tool, and expose them as a [Prometheus](https://prometheus.io/)
 scraper. It will be enabled if the `port` property is set.
 

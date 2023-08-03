@@ -1,9 +1,9 @@
 ---
-title: eBPF Autoinstrument value propositions
+title: eBPF auto-instrumentation tool value propositions
 description: Learn about Grafana's eBPF auto-instrumentation tool unique value propositions.
 ---
 
-# eBPF Autoinstrument value propositions
+# eBPF auto-instrumentation tool value propositions
 
 ## Track total request time
 
@@ -31,7 +31,7 @@ inaccurate metrics about their services behavior.
 
 eBPF allows us to overcome the limitations of manual instrumentation tools. The eBPF auto-instrumentation
 tool inserts tracepoints at the kernel connect/receive/write/close functions (also at the
-Go runtime in the case of Go applications). This low leve instrumentation provides more accurate metrics and
+Go runtime in the case of Go applications). This low level instrumentation provides more accurate metrics and
 traces, much closer to the user-perceived response time.
 
 Concretely, the eBPF auto-instrumentation tool reports traces that are divided in different spans:

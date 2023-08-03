@@ -5,9 +5,6 @@ description: Learn about the different ways you can export metrics with Grafana'
 
 # Agent mode vs. direct mode
 
-> ⚠️ this is a live document. Some parts might change in the future as long as we provide new ways
-of packaging and installing the Auto-instrumenter.
-
 The eBPF auto-instrumentation tool can work in two modes:
 
 * **Agent mode** (recommended mode): the auto-instrumentation tool will send the metrics and traces to the
@@ -26,7 +23,7 @@ The eBPF auto-instrumentation tool can work in two modes:
 
 ## Running in Direct mode
 
-You can follow our [quickstart tutorial]({{< relref "../tutorial" >}}) for a quick introduction
+You can follow our [quick start tutorial]({{< relref "../tutorial" >}}) for a quick introduction
 to auto-instrumentation in Direct mode, by using OpenTelemetry. The OTLP endpoint authentication credentials are provided
 by using the following environment variables:
 
@@ -164,7 +161,7 @@ more detailed description of each configuration option.
 You can download the whole [example configuration file](./instrumenter-config.yml),
 which we will explain in the rest of this section.
 
-First, you will need to specify the executbale to instrument. If, for example,
+First, you will need to specify the executable to instrument. If, for example,
 the service executable is a process that opens the port `443`, you can use the `open_port`
 property in the `ebpf` section of the YAML document:
 
@@ -191,8 +188,8 @@ allow exporting both metrics and traces, or only one of them to export either
 metrics or traces.
 
 To run the auto-instrumentation tool (previously installed via `go install github.com/grafana/ebpf-autoinstrument/cmd/beyla@latest`), 
-you will need to specify the path to the configuration YAML file. For example `instrumenter-config.yml`:
+you will need to specify the path to the configuration YAML file. For example `instrument-config.yml`:
 
 ```
-beyla -config instrumenter-config.yml
+beyla -config instrument-config.yml
 ```

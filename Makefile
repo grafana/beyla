@@ -104,7 +104,7 @@ checkfmt:
 .PHONY: lint
 lint: prereqs checkfmt
 	@echo "### Linting code"
-	$(GOLANGCI_LINT) run ./... --timeout=3m
+	$(GOLANGCI_LINT) run ./... --timeout=6m
 
 .PHONY: update-offsets
 update-offsets: prereqs

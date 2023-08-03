@@ -3,6 +3,7 @@ package prom
 import (
 	"context"
 	"strconv"
+	"strings"
 
 	"github.com/mariomac/pipes/pkg/node"
 	"github.com/prometheus/client_golang/prometheus"
@@ -92,7 +93,7 @@ func newReporter(ctx context.Context, cfg *PrometheusConfig, ctxInfo *global.Con
 			Name:    HTTPServerDuration,
 			Help:    "duration of HTTP service calls from the server side, in seconds",
 			Buckets: cfg.Buckets.DurationHistogram,
-		}, nil),
+		}, labelNamesHTTP(cfg, reportRoutes)),
 		httpClientDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Name:    HTTPClientDuration,
 			Help:    "duration of HTTP service calls from the client side, in seconds",
@@ -112,7 +113,7 @@ func newReporter(ctx context.Context, cfg *PrometheusConfig, ctxInfo *global.Con
 			Name:    HTTPServerRequestSize,
 			Help:    "size, in bytes, of the HTTP request body as received at the server side",
 			Buckets: cfg.Buckets.RequestSizeHistogram,
-		}, nil),
+		}, labelNamesHTTP(cfg, reportRoutes)),
 		httpClientRequestSize: prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Name:    HTTPClientRequestSize,
 			Help:    "size, in bytes, of the HTTP request body as sent from the client side",
@@ -143,23 +144,20 @@ func (r *metricsReporter) observe(span *transform.HTTPRequestSpan) {
 	duration := t.End.Sub(t.RequestStart).Seconds()
 	switch span.Type {
 	case transform.EventTypeHTTP:
-		lv := r.labelsHTTP(span)
-		addMetadata(lv, span)
+		lv := r.labelsHTTPServer(span)
 		r.httpDuration.With(lv).Observe(duration)
 		r.httpRequestSize.With(lv).Observe(float64(span.ContentLength))
 	case transform.EventTypeHTTPClient:
-		lv := r.labelValuesHTTPClient(span)
-		r.httpClientDuration.WithLabelValues(lv...).Observe(duration)
-		r.httpClientRequestSize.WithLabelValues(lv...).Observe(float64(span.ContentLength))
+		lv := r.labelsHTTPClient(span)
+		r.httpClientDuration.With(lv).Observe(duration)
+		r.httpClientRequestSize.With(lv).Observe(float64(span.ContentLength))
 	case transform.EventTypeGRPC:
-		r.grpcDuration.WithLabelValues(r.labelValuesGRPC(span)...).Observe(duration)
+		r.grpcDuration.With(r.labelsGRPC(span)).Observe(duration)
 	case transform.EventTypeGRPCClient:
-		r.grpcClientDuration.WithLabelValues(r.labelValuesGRPC(span)...).Observe(duration)
+		r.grpcClientDuration.With(r.labelsGRPC(span)).Observe(duration)
 	}
 }
 
-// labelNamesGRPC must return the label names in the same order as would be returned
-// by labelValuesGRPC
 func labelNamesGRPC(cfg *PrometheusConfig) []string {
 	names := []string{serviceNameKey, rpcMethodKey, rpcSystemGRPC, rpcGRPCStatusCodeKey}
 	if cfg.ServiceNamespace != "" {
@@ -168,31 +166,32 @@ func labelNamesGRPC(cfg *PrometheusConfig) []string {
 	if cfg.ReportPeerInfo {
 		names = append(names, netSockPeerAddrKey)
 	}
-	return names
+	return appendK8sMetrics(names)
 }
 
-// labelValuesGRPC must return the label names in the same order as would be returned
-// by labelNamesGRPC
-func (r *metricsReporter) labelValuesGRPC(span *transform.HTTPRequestSpan) []string {
-	// serviceNameKey, rpcMethodKey, rpcSystemGRPC, rpcGRPCStatusCodeKey
+func (r *metricsReporter) labelsGRPC(span *transform.HTTPRequestSpan) prometheus.Labels {
 	// In some situations e.g. system-wide instrumentation, the global service name
 	// is empty and we need to take the name from the trace
 	var svcName = r.cfg.ServiceName
 	if svcName == "" {
 		svcName = span.ServiceName
 	}
-	names := []string{svcName, span.Path, "grpc", strconv.Itoa(span.Status)}
+	lbls := prometheus.Labels{
+		serviceNameKey:       svcName,
+		rpcMethodKey:         span.Path,
+		rpcSystemGRPC:        "grpc",
+		rpcGRPCStatusCodeKey: strconv.Itoa(span.Status),
+	}
 	if r.cfg.ServiceNamespace != "" {
-		names = append(names, r.cfg.ServiceNamespace)
+		lbls[serviceNamespaceKey] = r.cfg.ServiceNamespace
 	}
 	if r.cfg.ReportPeerInfo {
-		names = append(names, span.Peer) // netSockPeerAddrKey
+		lbls[netSockPeerAddrKey] = span.Peer
 	}
-	return names
+	addMetadata(lbls, span)
+	return lbls
 }
 
-// labelNamesHTTPClient must return the label names in the same order as would be returned
-// by labelValuesHTTPClient
 func labelNamesHTTPClient(cfg *PrometheusConfig) []string {
 	names := []string{serviceNameKey, httpMethodKey, httpStatusCodeKey}
 	if cfg.ServiceNamespace != "" {
@@ -201,27 +200,50 @@ func labelNamesHTTPClient(cfg *PrometheusConfig) []string {
 	if cfg.ReportPeerInfo {
 		names = append(names, netSockPeerNameKey, netSockPeerPortKey)
 	}
-	return names
+	return appendK8sMetrics(names)
 }
 
-// labelValuesHTTPClient must return the label names in the same order as would be returned
-// by labelNamesHTTPClient
-func (r *metricsReporter) labelValuesHTTPClient(span *transform.HTTPRequestSpan) []string {
-	// httpMethodKey, httpStatusCodeKey
-	names := []string{r.cfg.ServiceName, span.Method, strconv.Itoa(span.Status)}
+func (r *metricsReporter) labelsHTTPClient(span *transform.HTTPRequestSpan) prometheus.Labels {
+	lbls := prometheus.Labels{
+		serviceNameKey:    r.cfg.ServiceName,
+		httpMethodKey:     span.Method,
+		httpStatusCodeKey: strconv.Itoa(span.Status),
+	}
+
 	if r.cfg.ServiceNamespace != "" {
-		names = append(names, r.cfg.ServiceNamespace)
+		lbls[serviceNamespaceKey] = r.cfg.ServiceNamespace
 	}
 	if r.cfg.ReportPeerInfo {
 		// netSockPeerAddrKey, netSockPeerPortKey
-		names = append(names, span.Host, strconv.Itoa(span.HostPort))
+		lbls[netSockPeerNameKey] = span.Host
+		lbls[netSockPeerPortKey] = strconv.Itoa(span.HostPort)
 	}
-	return names
+	addMetadata(lbls, span)
+	return lbls
 }
 
-// labelValuesGRPC must return the label names in the same order as would be returned
-// by labelNamesHTTP
-func (r *metricsReporter) labelsHTTP(span *transform.HTTPRequestSpan) prometheus.Labels {
+func labelNamesHTTP(cfg *PrometheusConfig, reportRoutes bool) []string {
+	names := []string{serviceNameKey, httpMethodKey, httpStatusCodeKey}
+	if cfg.ServiceNamespace != "" {
+		names = append(names, serviceNamespaceKey)
+	}
+	if cfg.ReportTarget {
+		names = append(names, httpTargetKey)
+	}
+	if cfg.ReportPeerInfo {
+		names = append(names, netSockPeerAddrKey)
+	}
+	if reportRoutes {
+		names = append(names, httpRouteKey)
+	}
+	return appendK8sMetrics(names)
+}
+
+func appendK8sMetrics(names []string) []string {
+	return append(names, "k8s_src_name", "k8s_dst_name", "k8s_src_namespace", "k8s_dst_namespace", "k8s_dst_type")
+}
+
+func (r *metricsReporter) labelsHTTPServer(span *transform.HTTPRequestSpan) prometheus.Labels {
 	lbls := prometheus.Labels{
 		serviceNameKey:    r.cfg.ServiceName,
 		httpMethodKey:     span.Method,
@@ -240,14 +262,15 @@ func (r *metricsReporter) labelsHTTP(span *transform.HTTPRequestSpan) prometheus
 	if r.reportRoutes {
 		lbls[httpRouteKey] = span.Route
 	}
+	addMetadata(lbls, span)
 	return lbls
 }
 
 func addMetadata(lbls prometheus.Labels, span *transform.HTTPRequestSpan) {
 	for _, md := range span.Metadata {
 		for k, v := range md {
-			// TODO: snake_case
-			lbls[k] = v
+			// TODO: see if we can optimize this
+			lbls[strings.ReplaceAll(k, ".", "_")] = v
 		}
 	}
 }

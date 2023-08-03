@@ -29,8 +29,9 @@ var (
 )
 
 type Pinger struct {
-	PodName   string
-	TargetURL string
+	PodName      string
+	TargetURL    string
+	ConfigSuffix string
 }
 
 var cluster *kube.Kind

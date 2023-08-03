@@ -37,13 +37,13 @@ func (d KubernetesDecorator) Enabled() bool {
 	switch strings.ToLower(string(d.Enable)) {
 	case string(KubeEnabled):
 		return true
-	case string(KubeDisabled):
+	case string(KubeDisabled), "": // empty value is disabled
 		return false
 	case string(KubeAutodetect):
 		// We autodetect that we are in a kubernetes if we can properly load a K8s configuration file
 		_, err := kube.LoadConfig(d.KubeconfigPath)
 		if err != nil {
-			klog().Debug("kubeconfig can't be detected. Assuming we are not in kubernetes", "error", err)
+			klog().Debug("kubeconfig can't be detected. Assuming we are not in Kubernetes", "error", err)
 			return false
 		}
 		return true
@@ -77,8 +77,8 @@ type metadataDecorator struct {
 	kube kube.Metadata
 	cfg  *KubernetesDecorator
 
-	ownMetadataAsSrc map[string]string
-	ownMetadataAsDst map[string]string
+	ownMetadataAsSrc []MetadataTag
+	ownMetadataAsDst []MetadataTag
 }
 
 func newMetadataDecorator(cfg *KubernetesDecorator) (*metadataDecorator, error) {
@@ -100,41 +100,39 @@ func (md *metadataDecorator) do(span *HTTPRequestSpan) {
 	switch span.Type {
 	case EventTypeGRPC, EventTypeHTTP:
 		if peerInfo, ok := md.kube.GetInfo(span.Peer); ok {
-			span.Metadata = append(span.Metadata, asSrcMap(peerInfo), md.ownMetadataAsDst)
-		} else {
-			span.Metadata = append(span.Metadata, md.ownMetadataAsDst)
+			span.Metadata = appendSRCMetadata(span.Metadata, peerInfo)
 		}
+		span.Metadata = append(span.Metadata, md.ownMetadataAsDst...)
 	case EventTypeGRPCClient, EventTypeHTTPClient:
 		if peerInfo, ok := md.kube.GetInfo(span.Host); ok {
-			span.Metadata = append(span.Metadata, asDstMap(peerInfo), md.ownMetadataAsSrc)
-		} else {
-			span.Metadata = append(span.Metadata, md.ownMetadataAsSrc)
+			span.Metadata = appendDSTMetadata(span.Metadata, peerInfo)
 		}
+		span.Metadata = append(span.Metadata, md.ownMetadataAsSrc...)
 	}
 }
 
 // TODO: allow users to filter which attributes they want, instead of adding all of them
 // TODO: cache
-func asDstMap(info *kube.Info) map[string]string {
-	return map[string]string{
-		"k8s.dst.namespace": info.Namespace,
-		"k8s.dst.name":      info.Name,
-		"k8s.dst.type":      info.Type,
-	}
+func appendDSTMetadata(dst []MetadataTag, info *kube.Info) []MetadataTag {
+	return append(dst,
+		MetadataTag{Key: "k8s.dst.namespace", Val: info.Namespace},
+		MetadataTag{Key: "k8s.dst.name", Val: info.Name},
+		MetadataTag{Key: "k8s.dst.type", Val: info.Type},
+	)
 }
 
-func asSrcMap(info *kube.Info) map[string]string {
-	return map[string]string{
-		"k8s.src.namespace": info.Namespace,
-		"k8s.src.name":      info.Name,
-	}
+func appendSRCMetadata(dst []MetadataTag, info *kube.Info) []MetadataTag {
+	return append(dst,
+		MetadataTag{Key: "k8s.src.namespace", Val: info.Namespace},
+		MetadataTag{Key: "k8s.src.name", Val: info.Name},
+	)
 }
 
 func (md *metadataDecorator) refreshOwnPodMetadata() {
 	for md.ownMetadataAsDst == nil {
 		if info, ok := md.kube.GetInfo(getLocalIP()); ok {
-			md.ownMetadataAsSrc = asSrcMap(info)
-			md.ownMetadataAsDst = asDstMap(info)
+			md.ownMetadataAsSrc = appendSRCMetadata(md.ownMetadataAsSrc, info)
+			md.ownMetadataAsDst = appendDSTMetadata(md.ownMetadataAsDst, info)
 			return
 		}
 		klog().Info("local pod metadata not yet found. Waiting 5s and trying again before starting the kubernetes decorator")

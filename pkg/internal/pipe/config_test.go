@@ -14,6 +14,7 @@ import (
 	"github.com/grafana/ebpf-autoinstrument/pkg/internal/export/otel"
 	"github.com/grafana/ebpf-autoinstrument/pkg/internal/export/prom"
 	"github.com/grafana/ebpf-autoinstrument/pkg/internal/imetrics"
+	"github.com/grafana/ebpf-autoinstrument/pkg/internal/transform"
 )
 
 func TestConfig_Overrides(t *testing.T) {
@@ -84,6 +85,10 @@ prometheus_export:
 				Port: 3210,
 				Path: "/internal/metrics",
 			},
+		},
+		Kubernetes: transform.KubernetesDecorator{
+			Enable:               transform.KubeDisabled,
+			InformersSyncTimeout: 30 * time.Second,
 		},
 	}, cfg)
 }

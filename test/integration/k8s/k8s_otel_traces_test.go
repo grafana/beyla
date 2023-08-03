@@ -1,3 +1,5 @@
+//go:build integration
+
 package k8s
 
 import (

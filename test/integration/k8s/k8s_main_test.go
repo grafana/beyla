@@ -1,3 +1,5 @@
+//go:build integration
+
 package k8s
 
 import (
@@ -28,6 +30,8 @@ var (
 	pathKindLogs = path.Join(pathOutput, "kind")
 )
 
+// Ping stores the configuration data of a local pod that will be used to
+// send recurring requests to the test server
 type Pinger struct {
 	PodName      string
 	TargetURL    string

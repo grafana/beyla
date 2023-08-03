@@ -282,9 +282,7 @@ func (r *MetricsReporter) metricAttributes(span *transform.HTTPRequestSpan) attr
 	}
 
 	for _, meta := range span.Metadata {
-		for k, v := range meta {
-			attrs = append(attrs, attribute.String(k, v))
-		}
+		attrs = append(attrs, attribute.String(meta.Key, meta.Val))
 	}
 
 	return attribute.NewSet(attrs...)

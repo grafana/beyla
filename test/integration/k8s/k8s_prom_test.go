@@ -1,3 +1,5 @@
+//go:build integration
+
 package k8s
 
 import (
@@ -11,6 +13,7 @@ import (
 )
 
 func TestPrometheusDecoration(t *testing.T) {
+	t.Skip("Prometheus K8s metadata decoration is WIP")
 	pinger := kube.Template[Pinger]{
 		TemplateFile: pingerManifest,
 		Data: Pinger{
@@ -24,7 +27,6 @@ func TestPrometheusDecoration(t *testing.T) {
 		Teardown(pinger.Delete()).
 		Assess("all the traces are properly decorated",
 			func(ctx context.Context, t *testing.T, config *envconf.Config) context.Context {
-				panic("catapun!")
 
 				return ctx
 			},

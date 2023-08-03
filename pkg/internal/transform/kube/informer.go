@@ -29,20 +29,13 @@ func klog() *slog.Logger {
 	return slog.With("component", "kube.Metadata")
 }
 
-type kubeDataInterface interface {
-	GetInfo(string) (*Info, error)
-	InitFromConfig(string) error
-}
-
+// Metadata stores an in-memory copy of the different Kubernetes objects whose metadata is relevant to us.
 type Metadata struct {
-	kubeDataInterface
 	// pods and services cache the different object types as *Info pointers
 	pods     cache.SharedIndexInformer
 	services cache.SharedIndexInformer
 
 	stopChan chan struct{}
-
-	localIP string
 }
 
 // Info contains precollected metadata for Pods, Nodes and Services.

@@ -25,20 +25,20 @@ dispatch).
 Under low-load conditions, most of the execution time will be spent in the service handler,
 but in high-load scenarios, many requests might spend a non-negligible time
 in an internal queue, waiting to be dispatched. In the above timeline, instrumenting only the
-server handler would report metrics measuring that a web request has required 50ms to execute
+server handler would report metrics measuring that a web request has required 50ms to execute,
 while in reality it has spent 120ms at the server side. The service owner would get really
 inaccurate metrics about their services behavior.
 
-eBPF allows overcoming the limitations of manual instrumentation tools. The eBPF auto-instrument
-will insert tracepoints at the kernel connect/receive/write/close functions (also at the
-Go runtime in the case of Go applications). This will provide more accurate metrics and
-traces, nearer to the user-perceived response time.
+eBPF allows us to overcome the limitations of manual instrumentation tools. The eBPF auto-instrumentation
+tool inserts tracepoints at the kernel connect/receive/write/close functions (also at the
+Go runtime in the case of Go applications). This low leve instrumentation provides more accurate metrics and
+traces, much closer to the user-perceived response time.
 
-Concretely, the eBPF autoinstrument reports traces that are divided in different spans:
+Concretely, the eBPF auto-instrumentation tool reports traces that are divided in different spans:
 
 ![](img/server-side-trace.png)
 
-The above image shows the typical structure of a trace as reported by the eBPF autoinstrument:
+The above image shows the typical structure of a trace as reported by the eBPF auto-instrumentation tool:
 
 * An overall span measuring the total time spent by the request at the server side.
 * A child span measuring the time spent by the request in the queue, waiting to be dispatched.

@@ -7,7 +7,7 @@ description: Learn about the different ways you can export metrics with Grafana'
 
 The eBPF auto-instrumentation tool can work in two modes:
 
-* **Agent mode** (recommended mode): the auto-instrumentation tool will send the metrics and traces to the
+* **Agent mode** (recommended mode): the auto-instrumentation tool will send the metrics and the traces to the
   [Grafana Agent](https://github.com/grafana/agent), which will process and send them
   to Mimir and Tempo. In this scenario, the Agent takes care of the authentication required by the Grafana Mimir/Tempo endpoints.
   This mode also integrates better with some Grafana exclusive features, 
@@ -73,7 +73,7 @@ otelcol.receiver.otlp "default" {
 
 This enables reception of OpenTelemetry events via GRPC and HTTP, which will be
 forwarded to the next stage in the pipeline, the **Batch processor**, which
-will accumulate the messages and forward them to the exporters:
+will then accumulate the messages and forward them to the exporters:
 
 ```hcl
 otelcol.processor.batch "default" {

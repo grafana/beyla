@@ -5,7 +5,7 @@ description: Learn how to deploy Grafana's eBPF auto-instrumentation tool in Kub
 
 # Deploy in Kubernetes
 
-In Kubernetes, you can deploy the eBPF auto-instrumentation tool in two ways:
+You can deploy the eBPF auto-instrumentation tool in Kubernetes in two separate ways:
 
 * As a Sidecar Container (recommended)
 * As a DaemonSet
@@ -14,19 +14,19 @@ In Kubernetes, you can deploy the eBPF auto-instrumentation tool in two ways:
 
 This is the recommended way of deploying the eBPF auto-instrumentation tool for the following reason:
 
-* You can configure the auto-instrumentation per instance, instead of having a single
-  Beyla monitoring all of the service instances on the host.
+* You can configure the auto-instrumentation per instance, instead of having
+  Beyla monitor all of the service instances on the host.
 * You will save on compute and memory resources. If the auto-instrumented service is present only in a subset
   of the containers running on the host, you won't need to deploy the auto-instrument tool for all containers.
 
 Deploying the eBPF auto-instrumentation tool as a sidecar container has the following configuration
 requirements:
 
-* Sharing of the process namespace between all containers in the Pod (`shareNamespace: true`
+* The process namespace must be shared between all containers in the Pod (`shareNamespace: true`
   pod variable)
-* Internally run as privileged user of the auto-instrument container 
+* The auto-instrument tool must internally run as privileged user in the container
   (`securityContext.runAsUser: 0` property in the container configuration).
-* Run the auto-instrument container as privileged (`securityContext.privileged: true` property of the
+* The auto-instrument container must run in privileged mode (`securityContext.privileged: true` property of the
   container configuration) or at least with `SYS_ADMIN` capability (`securityContext.capabilities.add: ["SYS_ADMIN"])
 
 The following example instruments the `goblog` pod by attaching the eBPF auto-instrumentation tool
@@ -83,8 +83,8 @@ spec:
 For more information about the different configuration options, please check the
 [Configuration]({{< relref "./config" >}}) section of this documentation site.
 
-Deploying as a sidecar container is deployment mode in the work-in-progress
-[eBPF auto-instrument Operator](https://github.com/grafana/ebpf-autoinstrument-operator).
+Deploying as a sidecar container, is the default deployment mode for the
+[eBPF auto-instrument Kubernetes Operator](https://github.com/grafana/ebpf-autoinstrument-operator).
 
 ## Deploying as a Daemonset
 

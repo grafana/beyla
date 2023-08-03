@@ -72,7 +72,7 @@ time=2023-05-22T14:03:42.526Z level=INFO msg="Starting main node"
 
 Now that we have verified that the auto-instrumentation tool is properly tracing the target HTTP service,
 you can configure it to send metrics and traces to an OpenTelemetry endpoint, or have metrics scraped by Prometheus.
-For information on how to export traces and metrics, you can check the [Quick tutorial]({{< relref "./tutorial" >}}) 
+For information on how to export traces and metrics, you can check the [quick start tutorial]({{< relref "./tutorial" >}}) 
 and the [Configuration]({{< relref "./config" >}}) sections of this documentation site.
 
 ## Docker Compose example

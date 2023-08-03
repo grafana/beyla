@@ -49,28 +49,28 @@ least it needs to be granted the `CAP_SYS_ADMIN` capability.
 ## Examples
 
 Let's instrument the process that owns the port 443, and expose the metrics as a
-Prometheus endpoint listening in the port 8999. In this example, the configuration is passed
+Prometheus endpoint listening on the port 8999. In this example, the configuration is passed
 exclusively through environment variables:
 
 ```sh
-$ BEYLA_PROMETHEUS_PORT=8999 OPEN_PORT=443 sudo -E beyla
+BEYLA_PROMETHEUS_PORT=8999 OPEN_PORT=443 sudo -E beyla
 ```
 
-The equivalent execution, but configured via a YAML file:
+The equivalent execution, but configured via a YAML file would look like:
 
 ```yaml
-$ cat > config.yml <<EOF
+cat > config.yml <<EOF
 ebpf:
   open_port: 443
 prometheus_export:
   port: 8999
 EOF
-$ sudo beyla -config config.yml
+sudo beyla -config config.yml
 ```
 
 In the following example, we are overriding the previous YAML configuration option
 for the Prometheus port, via an environment variable:
 
 ```
-$ BEYLA_PROMETHEUS_PORT=8888 sudo -E beyla -config config.yml
+BEYLA_PROMETHEUS_PORT=8888 sudo -E beyla -config config.yml
 ```

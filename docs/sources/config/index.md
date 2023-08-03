@@ -8,7 +8,7 @@ description: Learn how to configure Grafana's eBPF based auto-instrumentation to
 The eBPF auto-instrumentation tool can be configured via environment variables or via
 a YAML configuration file that is passed with the `-config` command-line
 argument. Environment variables have priority over the properties in the
-configuration file. For example, in the following command line the OPEN_PORT option 
+configuration file. For example, in the following command line, the OPEN_PORT option,
 is used to override any open_port settings inside the config.yaml file:
 
 ```
@@ -22,7 +22,7 @@ generate, transform, and export traces from HTTP and GRPC services. In the
 YAML configuration, each component has its own first-level section.
 
 The architecture below shows the different components of the eBPF auto-instrumentation tool.
-Dashed boxes can be enabled and disabled according to the configuration.
+The dashed boxes in the diagram below can be enabled and disabled according to the configuration.
 
 ![](img/architecture.png)
 
@@ -37,7 +37,7 @@ A quick description of the components:
   [OpenTelemetry](https://opentelemetry.io/) metrics collector.
 * [OTEL traces exporter](#otel-traces-exporter) exports span data to an external
   [OpenTelemetry](https://opentelemetry.io/) traces collector.
-* [Prometheus HTTP endpoint](#prometheus-http-endpoint) sets an HTTP endpoint in the auto-instrumentation tool
+* [Prometheus HTTP endpoint](#prometheus-http-endpoint) enables an HTTP endpoint
   that allows any external scraper to pull metrics in [Prometheus](https://prometheus.io/) format.
 * [Internal metrics reporter](#internal-metrics-reporter) optionally reports metrics about the internal behavior of 
   the auto-instrumentation tool in [Prometheus](https://prometheus.io/) format.
@@ -67,7 +67,7 @@ Optionally, allows assigning a namespace for the service.
 |-------------|-------------|--------|---------|
 | `log_level` | `LOG_LEVEL` | string | `INFO`  |
 
-Sets the level of the process standard output logger.
+Sets the verbosity level of the process standard output logger.
 Valid log level values are: `DEBUG`, `INFO`, `WARN` and `ERROR`. 
 `DEBUG` being the most verbose and `ERROR` the least verbose.
 
@@ -87,14 +87,15 @@ YAML section `ebpf`.
 |-------------------|-------------------|--------|---------|
 | `executable_name` | `EXECUTABLE_NAME` | string | (unset) |
 
-Selects the process to instrument by the executable name path. It will match
+Selects the process to instrument by the executable name path. The tool will match
 this value as a suffix on the full executable command line, including the directory
 where the executable resides on the file system.
 
 This property will be ignored if the `open_port` property is set.
 
-You need to be careful when instrumenting to be specific enough to choose a non-ambiguous name. 
-If, for example, you set `EXECUTABLE_NAME=server`, and you have running two processes whose executables
+When instrumenting by using the executable name, choose a non-ambiguous name, a name that 
+will match a single executable on the target system.
+For example, if you set `EXECUTABLE_NAME=server`, and you have running two processes whose executables
 have the following paths:
 
 ```sh
@@ -102,8 +103,8 @@ have the following paths:
 /opt/app/server
 ```
 
-Then the eBPF auto-instrumentation tool will match indistinctly one of the above processes. To avoid this
-issue, you should be as concrete as possible about the value of. For example, `EXECUTABLE_NAME=/opt/app/server` 
+then, the eBPF auto-instrumentation tool will match indistinctly one of the above processes. To avoid this
+issue, you should be as concrete as possible about the value of the setting. For example, `EXECUTABLE_NAME=/opt/app/server` 
 or just `EXECUTABLE_NAME=/server`.
 
 
@@ -131,7 +132,7 @@ has been enabled.
 
 This property is mutually exclusive with the `executable_name` and `open_port` properties.
 
-At present time only HTTP (non SSL) requests are tracked and there's no support for gRPC yet.
+At present time only HTTP (non SSL) requests are tracked system wide, and there's no support for gRPC yet.
 When you are instrumenting Go applications, you should explicitly use `executable_name` or 
 `open_port` instead of `system_wide` instrumentation. The Go specific instrumentation is of higher
 fidelity and it incurs lesser overall overhead.
@@ -154,7 +155,7 @@ add a noticeable delay in the time the metrics are submitted and become external
 YAML section `routes`.
 
 This section can be only configured via the YAML file. If no `routes` section is provided in
-the YAML file, the routes pipeline stage is not created and data will be filtered
+the YAML file, the routes pipeline stage will not be created and data will not be filtered
 for the exporters.
 
 | YAML       | Env var | Type            | Default |
@@ -162,7 +163,7 @@ for the exporters.
 | `patterns` | --      | list of strings | (unset) |
 
 Will match the provided URL path patterns and set the `http.route` trace/metric
-property accordingly with the matching path pattern. You should use the `routes` property 
+property accordingly. You should use the `routes` property 
 whenever possible to reduce the cardinality of generated metrics.
 
 Each route pattern is a URL path with specific tags which allow for grouping path
@@ -246,7 +247,7 @@ or the `protocol` YAML property, will set the protocol only for the metrics expo
 
 Controls whether the OTEL client verifies the server's certificate chain and host name.
 If set to `true`, the OTEL client accepts any certificate presented by the server
-and any host name in that certificate. In this mode, TLS is susceptible to machine-in-the-middle
+and any host name in that certificate. In this mode, TLS is susceptible to a man-in-the-middle
 attacks. This option should be used only for testing and development purposes.
 
 | YAML       | Env var            | Type     | Default |
@@ -321,7 +322,7 @@ If the value is unset, the default bucket boundaries are:
 0, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192
 ```
 
-Default values are UNSTABLE and could change if Prometheus or OpenTelemetry semantic
+The default values are UNSTABLE and could change if Prometheus or OpenTelemetry semantic
 conventions recommend a different set of bucket boundaries.
 
 ## OTEL traces exporter
@@ -366,7 +367,7 @@ or the `protocol` YAML property, will set the protocol only for the traces expor
 
 Controls whether the OTEL client verifies the server's certificate chain and host name.
 If set to `true`, the OTEL client accepts any certificate presented by the server
-and any host name in that certificate. In this mode, TLS is susceptible to machine-in-the-middle
+and any host name in that certificate. In this mode, TLS is susceptible to a man-in-the-middle
 attacks. This option should be used only for testing and development purposes.
 
 ## Prometheus HTTP endpoint
@@ -395,7 +396,7 @@ If unset, it will be the path of the instrumented service (e.g. `/usr/local/bin/
 |--------|-------------------|--------|------------|
 | `path` | `PROMETHEUS_PATH` | string | `/metrics` |
 
-Specifies the HTTP query path to acquire the list of Prometheus metrics.
+Specifies the HTTP query path to fetch the list of Prometheus metrics.
 
 | YAML            | Env var                 | Type    | Default |
 |-----------------|-------------------------|---------|---------|
@@ -447,7 +448,7 @@ or a different value (two different HTTP servers for the different metric famili
 |--------|-------------------|--------|---------------------|
 | `path` | `INTERNAL_METRICS_PROMETHEUS_PATH` | string | `/internal/metrics` |
 
-Specifies the HTTP query path to acquire the list of Prometheus metrics.
+Specifies the HTTP query path to fetch the list of Prometheus metrics.
 If [`prometheus_export.port`](#prometheus-http-endpoint) and `internal_metrics.port` have the
 same values, this `internal_metrics.path` value can be
 different than `prometheus_export.path`, to keep both metric families separated,

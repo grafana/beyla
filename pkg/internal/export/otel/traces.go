@@ -235,6 +235,14 @@ func (r *TracesReporter) traceAttributes(span *transform.HTTPRequestSpan) []attr
 		attrs = append(attrs, semconv.ServiceName(span.ServiceName))
 	}
 
+	// append extra metadata
+	// TODO: to minimize memory generation cache attribute.KeyValue arrays and share them with the metrics reporter
+	for _, meta := range span.Metadata {
+		for k, v := range meta {
+			attrs = append(attrs, attribute.String(k, v))
+		}
+	}
+
 	return attrs
 }
 

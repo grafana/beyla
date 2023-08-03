@@ -50,6 +50,7 @@ type HTTPRequestSpan struct {
 	End           int64
 	ServiceName   string
 	// Metadata can be composed from multiple maps to allow data sharing
+	// TODO: probably it's just faster an array of struct{string; string}, as we don't need lookup
 	Metadata      []map[string]string
 }
 

@@ -5,40 +5,23 @@ package k8s
 import (
 	"context"
 	"net/http"
-	"os"
-	"path"
 	"testing"
 	"time"
 
 	"github.com/mariomac/guara/pkg/test"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/exp/slog"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/e2e-framework/pkg/envconf"
 	"sigs.k8s.io/e2e-framework/pkg/features"
 
-	"github.com/grafana/ebpf-autoinstrument/test/integration/components/docker"
 	"github.com/grafana/ebpf-autoinstrument/test/integration/components/kube"
 	"github.com/grafana/ebpf-autoinstrument/test/integration/components/prom"
 )
 
-const (
-	testTimeout = 30 * time.Second
-
-	prometheusHostPort = "localhost:39090"
-
-	pingerManifest     = "manifests/06-instrumented-client.template.yml"
-	grpcPingerManifest = "manifests/06-instrumented-grpc-client.template.yml"
-)
-
 var (
-	pathRoot     = path.Join("..", "..", "..")
-	pathOutput   = path.Join(pathRoot, "testoutput")
-	pathKindLogs = path.Join(pathOutput, "kind")
-
 	httpServerMetrics = []string{
 		"http_server_duration_seconds_count",
 		"http_server_duration_seconds_sum",
@@ -67,42 +50,9 @@ var (
 	}
 )
 
-var cluster *kube.Kind
-
-type Pinger struct {
-	PodName   string
-	TargetURL string
-}
-
-func TestMain(m *testing.M) {
-	if err := docker.Build(os.Stdout, "../../..",
-		docker.ImageBuild{Tag: "testserver:dev", Dockerfile: "../components/testserver/Dockerfile"},
-		docker.ImageBuild{Tag: "beyla:dev", Dockerfile: "../components/beyla/Dockerfile"},
-		docker.ImageBuild{Tag: "grpcpinger:dev", Dockerfile: "../components/grpcpinger/Dockerfile"},
-	); err != nil {
-		slog.Error("can't build docker images", err)
-		os.Exit(-1)
-	}
-
-	cluster = kube.NewKind("test-kind-cluster",
-		kube.ExportLogs(pathKindLogs),
-		kube.KindConfig("manifests/00-kind.yml"),
-		kube.LocalImage("testserver:dev"),
-		kube.LocalImage("beyla:dev"),
-		kube.LocalImage("grpcpinger:dev"),
-		kube.Deploy("manifests/01-volumes.yml"),
-		kube.Deploy("manifests/02-prometheus.yml"),
-		kube.Deploy("manifests/03-otelcol.yml"),
-		kube.Deploy("manifests/04-jaeger.yml"),
-		kube.Deploy("manifests/05-instrumented-service.yml"),
-	)
-
-	cluster.Run(m)
-}
-
 // Run it alphabetically first (AA-prefix), with a longer timeout, to wait until all the components are up and
 // traces/metrics are flowing normally
-func TestAA_HTTPDecoration_ExternalToPod(t *testing.T) {
+func TestAA_HTTPMetricsDecoration_ExternalToPod(t *testing.T) {
 	const (
 		subpath = "/smoke"
 		url     = "http://localhost:38080"
@@ -144,7 +94,7 @@ func TestHTTPDecoration_Pod2Service(t *testing.T) {
 		Setup(pinger.Deploy()).
 		Teardown(pinger.Delete()).
 		Assess("all the server metrics are properly decorated",
-			testDecoration(httpServerMetrics, `{http_target="/iping",k8s_src_name="internal-pinger"}`, map[string]string{
+			testMetricsDecoration(httpServerMetrics, `{http_target="/iping",k8s_src_name="internal-pinger"}`, map[string]string{
 				"k8s_src_name":      "internal-pinger",
 				"k8s_dst_name":      "testserver",
 				"k8s_src_namespace": "default",
@@ -154,7 +104,7 @@ func TestHTTPDecoration_Pod2Service(t *testing.T) {
 				"k8s_dst_type": "Pod",
 			})).
 		Assess("all the client metrics are properly decorated",
-			testDecoration(httpClientMetrics, `{k8s_src_name="internal-pinger"}`, map[string]string{
+			testMetricsDecoration(httpClientMetrics, `{k8s_src_name="internal-pinger"}`, map[string]string{
 				"k8s_src_name":      "internal-pinger",
 				"k8s_dst_name":      "testserver",
 				"k8s_src_namespace": "default",
@@ -166,7 +116,7 @@ func TestHTTPDecoration_Pod2Service(t *testing.T) {
 	cluster.TestEnv().Test(t, feat)
 }
 
-func TestHTTPClientDecoration_Pod2Pod(t *testing.T) {
+func TestHTTPClientMetricsDecoration_Pod2Pod(t *testing.T) {
 	pinger := kube.Template[Pinger]{
 		TemplateFile: pingerManifest,
 		Data: Pinger{
@@ -182,7 +132,7 @@ func TestHTTPClientDecoration_Pod2Pod(t *testing.T) {
 		}).
 		Teardown(pinger.Delete()).
 		Assess("all the client metrics are properly decorated",
-			testDecoration(httpClientMetrics, `{k8s_src_name="ping-to-pod"}`, map[string]string{
+			testMetricsDecoration(httpClientMetrics, `{k8s_src_name="ping-to-pod"}`, map[string]string{
 				"k8s_src_name":      "ping-to-pod",
 				"k8s_dst_name":      "testserver",
 				"k8s_src_namespace": "default",
@@ -194,7 +144,7 @@ func TestHTTPClientDecoration_Pod2Pod(t *testing.T) {
 	cluster.TestEnv().Test(t, feat)
 }
 
-func TestHTTPDecoration_Pod2External(t *testing.T) {
+func TestHTTPMetricsDecoration_Pod2External(t *testing.T) {
 	pinger := kube.Template[Pinger]{
 		TemplateFile: pingerManifest,
 		Data: Pinger{
@@ -206,7 +156,7 @@ func TestHTTPDecoration_Pod2External(t *testing.T) {
 		Setup(pinger.Deploy()).
 		Teardown(pinger.Delete()).
 		Assess("all the client metrics are properly decorated",
-			testDecoration(httpClientMetrics, `{k8s_src_name="ping-to-grafana"}`, map[string]string{
+			testMetricsDecoration(httpClientMetrics, `{k8s_src_name="ping-to-grafana"}`, map[string]string{
 				"k8s_src_name":      "ping-to-grafana",
 				"k8s_src_namespace": "default",
 			},
@@ -215,7 +165,7 @@ func TestHTTPDecoration_Pod2External(t *testing.T) {
 	cluster.TestEnv().Test(t, feat)
 }
 
-func TestGRPCDecoration_Pod2Service(t *testing.T) {
+func TestGRPCMetricsDecoration_Pod2Service(t *testing.T) {
 	pinger := kube.Template[Pinger]{
 		TemplateFile: grpcPingerManifest,
 		Data: Pinger{
@@ -227,7 +177,7 @@ func TestGRPCDecoration_Pod2Service(t *testing.T) {
 		Setup(pinger.Deploy()).
 		Teardown(pinger.Delete()).
 		Assess("all the server metrics are properly decorated",
-			testDecoration(grpcServerMetrics, `{k8s_src_name="internal-grpc-pinger"}`, map[string]string{
+			testMetricsDecoration(grpcServerMetrics, `{k8s_src_name="internal-grpc-pinger"}`, map[string]string{
 				"k8s_src_name":      "internal-grpc-pinger",
 				"k8s_dst_name":      "testserver",
 				"k8s_src_namespace": "default",
@@ -237,7 +187,7 @@ func TestGRPCDecoration_Pod2Service(t *testing.T) {
 				"k8s_dst_type": "Pod",
 			})).
 		Assess("all the client metrics are properly decorated",
-			testDecoration(grpcClientMetrics, `{k8s_src_name="internal-grpc-pinger"}`, map[string]string{
+			testMetricsDecoration(grpcClientMetrics, `{k8s_src_name="internal-grpc-pinger"}`, map[string]string{
 				"k8s_src_name":      "internal-grpc-pinger",
 				"k8s_dst_name":      "testserver",
 				"k8s_src_namespace": "default",
@@ -249,7 +199,7 @@ func TestGRPCDecoration_Pod2Service(t *testing.T) {
 	cluster.TestEnv().Test(t, feat)
 }
 
-func TestGRPCDecoration_Pod2Pod(t *testing.T) {
+func TestGRPCMetricsDecoration_Pod2Pod(t *testing.T) {
 	pinger := kube.Template[Pinger]{
 		TemplateFile: grpcPingerManifest,
 		Data: Pinger{
@@ -265,7 +215,7 @@ func TestGRPCDecoration_Pod2Pod(t *testing.T) {
 		}).
 		Teardown(pinger.Delete()).
 		Assess("all the server metrics are properly decorated",
-			testDecoration(grpcServerMetrics, `{k8s_src_name="internal-grpc-pinger-2pod"}`, map[string]string{
+			testMetricsDecoration(grpcServerMetrics, `{k8s_src_name="internal-grpc-pinger-2pod"}`, map[string]string{
 				"k8s_src_name":      "internal-grpc-pinger-2pod",
 				"k8s_dst_name":      "testserver",
 				"k8s_src_namespace": "default",
@@ -275,7 +225,7 @@ func TestGRPCDecoration_Pod2Pod(t *testing.T) {
 				"k8s_dst_type": "Pod",
 			})).
 		Assess("all the client metrics are properly decorated",
-			testDecoration(grpcClientMetrics, `{k8s_src_name="internal-grpc-pinger-2pod"}`, map[string]string{
+			testMetricsDecoration(grpcClientMetrics, `{k8s_src_name="internal-grpc-pinger-2pod"}`, map[string]string{
 				"k8s_src_name":      "internal-grpc-pinger-2pod",
 				"k8s_dst_name":      "testserver",
 				"k8s_src_namespace": "default",
@@ -287,7 +237,7 @@ func TestGRPCDecoration_Pod2Pod(t *testing.T) {
 	cluster.TestEnv().Test(t, feat)
 }
 
-func testDecoration(
+func testMetricsDecoration(
 	metricsSet []string, queryArgs string, expectedLabels map[string]string, expectedMissingLabels ...string,
 ) features.Func {
 	return func(ctx context.Context, t *testing.T, config *envconf.Config) context.Context {

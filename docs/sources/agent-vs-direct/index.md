@@ -5,7 +5,7 @@ description: Learn about the different ways you can export metrics with Grafana'
 
 # Agent mode vs. direct mode
 
-The eBPF auto-instrumentation tool can work in two modes:
+The eBPF auto-instrumentation tool can export data in two modes:
 
 * **Agent mode** (recommended mode): the auto-instrumentation tool will send the metrics and the traces to the
   [Grafana Agent](https://github.com/grafana/agent), which will process and send them

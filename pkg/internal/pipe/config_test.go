@@ -31,6 +31,8 @@ otel_metrics_export:
 prometheus_export:
   buckets:
     request_size_histogram: [0, 10, 20, 22]
+kubernetes:
+  enable: true
 `)
 	require.NoError(t, os.Setenv("OTEL_SERVICE_NAME", "svc-name"))
 	require.NoError(t, os.Setenv("NOOP_TRACES", "true"))
@@ -87,7 +89,7 @@ prometheus_export:
 			},
 		},
 		Kubernetes: transform.KubernetesDecorator{
-			Enable:               transform.EnabledDefault,
+			Enable:               transform.EnabledTrue,
 			InformersSyncTimeout: 30 * time.Second,
 		},
 	}, cfg)

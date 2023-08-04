@@ -28,7 +28,7 @@ Requirements:
 
 ## How to setup a quick demo
 
-We recommend you to follow our [quickstart tutorial](docs/tutorial/README.md).
+We recommend you to follow our [quickstart tutorial](docs/sources/tutorial/index.md).
 
 Optionally you can just trigger the Kubernetes descriptors in the `deployments/` folder.
 

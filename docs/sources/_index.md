@@ -1,12 +1,14 @@
 ---
-title: eBPF autoinstrumenter
-description: Learn about Grafana's eBPF based application auto-instrumentation tool.
+title: Beyla
+description: Learn about Grafana's Beyla, the eBPF based application auto-instrumentation tool.
 ---
 
-# eBPF autoinstrumenter
+# Beyla 
+
+### eBPF based application auto-instrumentation tool
 
 * [Quick start tutorial]({{< relref "./tutorial" >}})
-* [eBPF Autoinstrument value propositions]({{< relref "./features" >}})
+* [Beyla's value propositions]({{< relref "./features" >}})
 
 * User documentation
   * [Running as a standalone process]({{< relref "./standalone" >}})

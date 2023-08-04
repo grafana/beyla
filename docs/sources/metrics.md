@@ -7,13 +7,12 @@ description: Learn about which HTTP/gRPC metrics can be exported by Grafana's ap
 
 ## Application instrumentation metrics
 
-Following table describes, alphabetically listed, the exported metrics,
-both in OpenTelemetry and Prometheus format.
+The following table describes the exported metrics in both OpenTelemetry and Prometheus format.
 
 | Name (OTEL) | Name (Prometheus) | Type | Unit | Description |
 |-|-|-|-|-|
 | `http.client.duration` | `http_client_duration_seconds` | Histogram | seconds | Duration of HTTP service calls from the client side |
-| `http.client.request.size` | `http_client_request_size_bytes` | Histogram | bytes | Size of the HTTP request body as sent from the client side |
+| `http.client.request.size` | `http_client_request_size_bytes` | Histogram | bytes | Size of the HTTP request body as sent by the client |
 | `http.server.duration` | `http_server_duration_seconds` | Histogram | seconds | Duration of HTTP service calls from the server side |
 | `http.server.request.size` | `http_server_request_size_bytes` | Histogram | bytes | Size of the HTTP request body as received at the server side |
 | `rpc.client.duration` | `rpc_client_duration_seconds` | Histogram | seconds | Duration of GRPC service calls from the client side |
@@ -21,7 +20,7 @@ both in OpenTelemetry and Prometheus format.
 
 ## Internal metrics
 
-Additionally, the eBPF Autoinstrument can be [configured to report internal metrics]({{< relref "./config#internal-metrics-reporter" >}}) in Prometheus Format.
+Additionally, the eBPF auto-instrument tool can be [configured to report internal metrics]({{< relref "./config#internal-metrics-reporter" >}}) in Prometheus Format.
 
 | Name | Type | Description |
 |-|-|-|

@@ -87,7 +87,7 @@ prometheus_export:
 			},
 		},
 		Kubernetes: transform.KubernetesDecorator{
-			Enable:               transform.KubeDisabled,
+			Enable:               transform.EnabledDefault,
 			InformersSyncTimeout: 30 * time.Second,
 		},
 	}, cfg)

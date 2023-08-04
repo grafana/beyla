@@ -16,9 +16,10 @@ import (
 type KubeEnableFlag string
 
 const (
-	KubeEnabled    = KubeEnableFlag("true")
-	KubeDisabled   = KubeEnableFlag("false")
-	KubeAutodetect = KubeEnableFlag("autodetect")
+	EnabledTrue       = KubeEnableFlag("true")
+	EnabledFalse      = KubeEnableFlag("false")
+	EnabledAutodetect = KubeEnableFlag("autodetect")
+	EnabledDefault    = EnabledFalse
 )
 
 func klog() *slog.Logger {
@@ -35,11 +36,11 @@ type KubernetesDecorator struct {
 
 func (d KubernetesDecorator) Enabled() bool {
 	switch strings.ToLower(string(d.Enable)) {
-	case string(KubeEnabled):
+	case string(EnabledTrue):
 		return true
-	case string(KubeDisabled), "": // empty value is disabled
+	case string(EnabledFalse), "": // empty value is disabled
 		return false
-	case string(KubeAutodetect):
+	case string(EnabledAutodetect):
 		// We autodetect that we are in a kubernetes if we can properly load a K8s configuration file
 		_, err := kube.LoadConfig(d.KubeconfigPath)
 		if err != nil {

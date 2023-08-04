@@ -71,6 +71,8 @@ BPF2GO = $(TOOLS_DIR)/bpf2go
 GO_OFFSETS_TRACKER = $(TOOLS_DIR)/go-offsets-tracker
 GOIMPORTS_REVISER = $(TOOLS_DIR)/goimports-reviser
 GO_LICENSES = $(TOOLS_DIR)/go-licenses
+KIND = $(TOOLS_DIR)/kind
+
 define check_format
 	$(shell $(foreach FILE, $(shell find . -name "*.go" -not -path "./vendor/*"), \
 		$(GOIMPORTS_REVISER) -local github.com/grafana -list-diff -output stdout -file-path $(FILE);))
@@ -85,6 +87,7 @@ prereqs:
 	$(call go-install-tool,$(GO_OFFSETS_TRACKER),github.com/grafana/go-offsets-tracker/cmd/go-offsets-tracker@v0.1.4)
 	$(call go-install-tool,$(GOIMPORTS_REVISER),github.com/incu6us/goimports-reviser/v2@v2.5.3)
 	$(call go-install-tool,$(GO_LICENSES),github.com/google/go-licenses@v1.6.0)
+	$(call go-install-tool,$(KIND),sigs.k8s.io/kind@v0.20.0)
 
 .PHONY: fmt
 fmt: prereqs
@@ -184,7 +187,8 @@ prepare-integration-test:
 
 .PHONY: cleanup-integration-test
 cleanup-integration-test:
-	@echo "### Removing integration test Compose cluster"
+	@echo "### Removing integration test clusters"
+	$(KIND) delete cluster -n test-kind-cluster || true
 	$(OCI_BIN) compose $(COMPOSE_ARGS) stop || true
 	$(OCI_BIN) compose $(COMPOSE_ARGS) rm -f || true
 	$(OCI_BIN) rmi -f $(shell $(OCI_BIN) images --format '{{.Repository}}:{{.Tag}}' | grep 'hatest-') || true

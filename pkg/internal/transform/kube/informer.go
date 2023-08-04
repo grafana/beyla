@@ -114,8 +114,6 @@ func (k *Metadata) initPodInformer(informerFactory informers.SharedInformerFacto
 			ObjectMeta: metav1.ObjectMeta{
 				Name:            pod.Name,
 				Namespace:       pod.Namespace,
-				Labels:          pod.Labels,
-				OwnerReferences: pod.OwnerReferences,
 			},
 			Type: typePod,
 			ips:  ips,
@@ -147,7 +145,6 @@ func (k *Metadata) initServiceInformer(informerFactory informers.SharedInformerF
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      svc.Name,
 				Namespace: svc.Namespace,
-				Labels:    svc.Labels,
 			},
 			Type: typeService,
 			ips:  svc.Spec.ClusterIPs,

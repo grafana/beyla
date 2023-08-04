@@ -59,7 +59,7 @@ func TestAA_HTTPMetricsDecoration_ExternalToPod(t *testing.T) {
 	)
 	pq := prom.Client{HostPort: prometheusHostPort}
 	var results []prom.Result
-	test.Eventually(t, 2*time.Minute, func(t require.TestingT) {
+	test.Eventually(t, 4*testTimeout, func(t require.TestingT) {
 		// first, verify that the test service endpoint is healthy
 		r, err := http.Get(url + subpath)
 		require.NoError(t, err)

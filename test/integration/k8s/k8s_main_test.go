@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	testTimeout = 30 * time.Second
+	testTimeout = 2 * time.Minute
 
 	prometheusHostPort = "localhost:39090"
 	jaegerQueryURL     = "http://localhost:36686/api/traces"

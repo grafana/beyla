@@ -22,8 +22,11 @@ type nodesMap struct {
 	// TODO: use interface
 	TracerReader *ebpf.ProcessTracer `nodeId:"tracer" sendTo:"routes"`
 
-	// Routes is an optional node. If not set, data will be directly forwarded to exporters.
-	Routes *transform.RoutesConfig `nodeId:"routes" forwardTo:"otel_metrics,otel_traces,print,noop,prom"`
+	// Routes is an optional node. If not set, data will be bypassed to the next stage in the pipeline.
+	Routes *transform.RoutesConfig `nodeId:"routes" forwardTo:"kube"`
+
+	// Kubernetes is an optional node. If not set, data will be bypassed to the exporters.
+	Kubernetes transform.KubernetesDecorator `nodeId:"kube" forwardTo:"otel_metrics,otel_traces,print,noop,prom"`
 
 	Metrics    otel.MetricsConfig    `nodeId:"otel_metrics"`
 	Traces     otel.TracesConfig     `nodeId:"otel_traces"`
@@ -36,6 +39,7 @@ func configToNodesMap(cfg *Config, tracer *ebpf.ProcessTracer) *nodesMap {
 	return &nodesMap{
 		TracerReader: tracer,
 		Routes:       cfg.Routes,
+		Kubernetes:   cfg.Kubernetes,
 		Metrics:      cfg.Metrics,
 		Traces:       cfg.Traces,
 		Prometheus:   cfg.Prometheus,
@@ -80,6 +84,7 @@ func newGraphBuilder(config *Config, ctxInfo *global.ContextInfo, tracer *ebpf.P
 	graph.RegisterCodec(gnb, transform.ConvertToSpan)
 	graph.RegisterMultiStart(gnb, ebpf.TracerProvider)
 	graph.RegisterMiddle(gnb, transform.RoutesProvider)
+	graph.RegisterMiddle(gnb, transform.KubeDecoratorProvider)
 	graph.RegisterTerminal(gnb, gb.metricsReporterProvider)
 	graph.RegisterTerminal(gnb, gb.tracesReporterProvicer)
 	graph.RegisterTerminal(gnb, gb.prometheusProvider)

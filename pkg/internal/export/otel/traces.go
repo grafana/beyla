@@ -235,6 +235,11 @@ func (r *TracesReporter) traceAttributes(span *transform.HTTPRequestSpan) []attr
 		attrs = append(attrs, semconv.ServiceName(span.ServiceName))
 	}
 
+	// append extra metadata
+	for _, meta := range span.Metadata {
+		attrs = append(attrs, attribute.String(meta.Key, meta.Val))
+	}
+
 	return attrs
 }
 

@@ -2,12 +2,12 @@
 package kube
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -148,54 +148,83 @@ func (k *Kind) TestEnv() env.Environment {
 
 func deploy(manifest string) env.Func {
 	return func(ctx context.Context, cfg *envconf.Config) (context.Context, error) {
-		kclient, err := kubernetes.NewForConfig(cfg.Client().RESTConfig())
-		if err != nil {
-			return ctx, fmt.Errorf("creating kubernetes client: %w", err)
-		}
-		if err := deployManifestFile(manifest, cfg, kclient); err != nil {
+		if err := deployManifestFile(manifest, cfg); err != nil {
 			return ctx, fmt.Errorf("deploying manifest file: %w", err)
 		}
 		return ctx, nil
 	}
 }
 
-// deploys a yaml manifest file
+// deployManifestFile deploys a yaml manifest file
 // credits to https://gist.github.com/pytimer/0ad436972a073bb37b8b6b8b474520fc
 func deployManifestFile(
-	manifest string,
+	manifestFile string,
 	cfg *envconf.Config,
-	kclient *kubernetes.Clientset,
 ) error {
 	log := log()
-	log.With("file", manifest).Info("deploying manifest file")
+	log.With("file", manifestFile).Info("deploying manifest file")
 
-	b, err := os.ReadFile(manifest)
+	b, err := os.ReadFile(manifestFile)
 	if err != nil {
-		return fmt.Errorf("reading manifest file %q: %w", manifest, err)
+		return fmt.Errorf("reading manifest file %q: %w", manifestFile, err)
 	}
 
-	dd, err := dynamic.NewForConfig(cfg.Client().RESTConfig())
-	if err != nil {
-		return fmt.Errorf("creating kubernetes dynamic client: %w", err)
-	}
+	return deployManifest(cfg, string(b))
+}
 
-	decoder := yamlutil.NewYAMLOrJSONDecoder(bytes.NewReader(b), 100)
+func deployManifest(cfg *envconf.Config, manifest string) error {
+	return applyManifest(cfg, manifest, func(dri dynamic.ResourceInterface, obj *unstructured.Unstructured) error {
+		if _, err := dri.Create(context.Background(), obj, metav1.CreateOptions{}); err != nil {
+			return fmt.Errorf("deploying manifest: %w", err)
+		}
+		return nil
+	})
+}
+
+func deleteManifest(cfg *envconf.Config, manifest string) error {
+	return applyManifest(cfg, manifest, func(dri dynamic.ResourceInterface, obj *unstructured.Unstructured) error {
+		if err := dri.Delete(context.Background(), obj.GetName(), metav1.DeleteOptions{}); err != nil {
+			return fmt.Errorf("deploying manifest: %w", err)
+		}
+		return nil
+	})
+}
+
+func applyManifest(
+	cfg *envconf.Config,
+	manifest string,
+	process func(dri dynamic.ResourceInterface, obj *unstructured.Unstructured) error,
+) error {
+	decoder := yamlutil.NewYAMLOrJSONDecoder(strings.NewReader(manifest), 100)
+	var rawObj runtime.RawExtension
 	for {
-		var rawObj runtime.RawExtension
-		if err = decoder.Decode(&rawObj); err != nil {
+		if err := decoder.Decode(&rawObj); err != nil {
 			if !errors.Is(err, io.EOF) {
 				return fmt.Errorf("decoding manifest raw object: %w", err)
 			}
 			return nil
 		}
 
-		if err := decodeAndCreate(rawObj, kclient, dd); err != nil {
-			return err
+		if err := decodeAndApply(cfg, rawObj, process); err != nil {
+			return fmt.Errorf("decoding and applying manifest: %w", err)
 		}
 	}
 }
 
-func decodeAndCreate(rawObj runtime.RawExtension, kclient *kubernetes.Clientset, dd *dynamic.DynamicClient) error {
+func decodeAndApply(
+	cfg *envconf.Config,
+	rawObj runtime.RawExtension,
+	process func(dri dynamic.ResourceInterface, obj *unstructured.Unstructured) error,
+) error {
+	kclient, err := kubernetes.NewForConfig(cfg.Client().RESTConfig())
+	if err != nil {
+		return fmt.Errorf("creating kubernetes client: %w", err)
+	}
+	dd, err := dynamic.NewForConfig(cfg.Client().RESTConfig())
+	if err != nil {
+		return fmt.Errorf("creating kubernetes dynamic client: %w", err)
+	}
+
 	obj, gvk, err := yaml.NewDecodingSerializer(unstructured.UnstructuredJSONScheme).Decode(rawObj.Raw, nil, nil)
 	if err != nil {
 		return fmt.Errorf("creating yaml decoding serializer: %w", err)
@@ -228,10 +257,7 @@ func decodeAndCreate(rawObj runtime.RawExtension, kclient *kubernetes.Clientset,
 		dri = dd.Resource(mapping.Resource)
 	}
 
-	if _, err := dri.Create(context.Background(), unstructuredObj, metav1.CreateOptions{}); err != nil {
-		return fmt.Errorf("deploying manifest: %w", err)
-	}
-	return nil
+	return process(dri, unstructuredObj)
 }
 
 // loadLocalImage loads the agent docker image into the test cluster. It tries both available

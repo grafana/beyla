@@ -14,6 +14,7 @@ import (
 	"github.com/grafana/ebpf-autoinstrument/pkg/internal/export/otel"
 	"github.com/grafana/ebpf-autoinstrument/pkg/internal/export/prom"
 	"github.com/grafana/ebpf-autoinstrument/pkg/internal/imetrics"
+	"github.com/grafana/ebpf-autoinstrument/pkg/internal/transform"
 )
 
 func TestConfig_Overrides(t *testing.T) {
@@ -30,6 +31,8 @@ otel_metrics_export:
 prometheus_export:
   buckets:
     request_size_histogram: [0, 10, 20, 22]
+kubernetes:
+  enable: true
 `)
 	require.NoError(t, os.Setenv("OTEL_SERVICE_NAME", "svc-name"))
 	require.NoError(t, os.Setenv("NOOP_TRACES", "true"))
@@ -84,6 +87,10 @@ prometheus_export:
 				Port: 3210,
 				Path: "/internal/metrics",
 			},
+		},
+		Kubernetes: transform.KubernetesDecorator{
+			Enable:               transform.EnabledTrue,
+			InformersSyncTimeout: 30 * time.Second,
 		},
 	}, cfg)
 }

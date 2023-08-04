@@ -1,0 +1,95 @@
+# this file is actually a Go template that needs to be processed before deploying
+# Mandatory variables are PodName and TargetURL
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: maincode
+  labels:
+    component: pinger
+data:
+  main.go: |
+    package main
+    import (
+      "fmt"
+      "net/http"
+      "time"
+    )
+    func main() {
+      // TODO: remove server after this bug is fixed https://github.com/grafana/ebpf-autoinstrument/issues/221    
+      go http.ListenAndServe(":8787", nil)
+      for {
+        r, err := http.Get("{{.TargetURL}}")
+        if err != nil {
+          fmt.Println("error!", err)
+        }
+        if r != nil {
+          fmt.Println("response:", r.Status)
+        }
+        time.Sleep(time.Second)
+      }
+    }
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: "{{.PodName}}"
+  labels:
+    component: pinger
+spec:
+  shareProcessNamespace: true
+  serviceAccountName: beyla
+  volumes:
+    - name: configs
+      persistentVolumeClaim:
+        claimName: configs
+    - name: testoutput
+      persistentVolumeClaim:
+        claimName: testoutput
+    - name: maincode
+      configMap:
+        name: maincode
+  containers:
+    - name: pinger
+      image: golang:1.20
+      command:
+        - sh
+        - -c
+        - 'go build -o pinger-cmd /code/main.go && ./pinger-cmd '
+      volumeMounts:
+        - mountPath: /code
+          name: maincode
+    - name: beyla
+      image: beyla:dev
+      imagePullPolicy: Never # loaded into Kind from localhost
+      securityContext:
+        privileged: true
+      command: [ "/beyla", "--config=/configs/instrumenter-config{{.ConfigSuffix}}.yml" ]
+      ports:
+        - containerPort: 8999
+          hostPort: 8999
+      volumeMounts:
+        - mountPath: /configs
+          name: configs
+        - mountPath: /testoutput
+          name: testoutput
+      env:
+        - name: GOCOVERDIR
+          value: "/testoutput"
+        - name: PRINT_TRACES
+          value: "true"
+        - name: EXECUTABLE_NAME
+          value: "pinger-cmd"
+        - name: METRICS_INTERVAL
+          value: "10ms"
+        - name: BPF_BATCH_TIMEOUT
+          value: "10ms"
+        - name: LOG_LEVEL
+          value: "DEBUG"
+        - name: BPF_DEBUG
+          value: "TRUE"
+        - name: METRICS_REPORT_TARGET
+          value: "true"
+        - name: METRICS_REPORT_PEER
+          value: "true"
+        - name: KUBE_METADATA_ENABLE
+          value: "true"

@@ -49,6 +49,12 @@ type HTTPRequestSpan struct {
 	Start         int64
 	End           int64
 	ServiceName   string
+	Metadata      []MetadataTag
+}
+
+type MetadataTag struct {
+	Key string
+	Val string
 }
 
 func ConvertToSpan(in <-chan []any, out chan<- []HTTPRequestSpan) {

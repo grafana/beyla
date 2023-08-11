@@ -5,9 +5,6 @@ description: This tutorial explains how to get started with application RED metr
 
 # Zero-code application traces and metrics with eBPF
 
-> ⚠️**SOME GENERAL TO-DO's before releasing the Beta**
-> * Change Dashboard URL and ID when we change the dashboard owner to Grafana
-
 Do you want to give Grafana a try for application observability, but you don't have the time
 to adapt your application for it?
 

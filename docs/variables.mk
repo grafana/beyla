@@ -1,5 +1,5 @@
 # List of projects to provide to the make-docs script.
-PROJECTS := ebpf-autoinstrument
+PROJECTS := beyla
 
 # Used to compile Mermaid diagrams as images until this PR is not merged: https://github.com/grafana/website/pull/9196
 export MERMAID_IMAGE := minlag/mermaid-cli:10.2.4

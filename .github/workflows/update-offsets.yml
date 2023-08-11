@@ -9,6 +9,11 @@ jobs:
     steps:
     - name: "Checkout repo"
       uses: actions/checkout@v3
+    - name: "Update Go"
+      uses: actions/setup-go@v4
+      with:
+        go-version: '>=1.21'
+        check-latest: true
     - name: "Update offsets"
       run: make update-offsets
     - name: "Create/update PR"

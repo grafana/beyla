@@ -3,7 +3,6 @@
 package integration
 
 import (
-	"strconv"
 	"testing"
 
 	"github.com/mariomac/guara/pkg/test"
@@ -25,12 +24,8 @@ func testREDMetricsForClientHTTPLibrary(t *testing.T) {
 			`service_namespace="integration-test",` +
 			`service_name="pingclient"}`)
 		require.NoError(t, err)
-		// check duration_count has 3 calls and all the arguments
-		require.Len(t, results, 1)
-		res := results[0]
-		val, err := strconv.Atoi(res.Value[1].(string))
-		require.NoError(t, err)
-		require.Len(t, res.Value, 2)
+		enoughPromResults(t, results)
+		val := totalPromCount(t, results)
 		assert.LessOrEqual(t, 1, val)
 	})
 
@@ -42,12 +37,8 @@ func testREDMetricsForClientHTTPLibrary(t *testing.T) {
 			`service_namespace="integration-test",` +
 			`service_name="pingclient"}`)
 		require.NoError(t, err)
-		// check duration_count has 3 calls and all the arguments
-		require.Len(t, results, 1)
-		res := results[0]
-		val, err := strconv.Atoi(res.Value[1].(string))
-		require.NoError(t, err)
-		require.Len(t, res.Value, 2)
+		enoughPromResults(t, results)
+		val := totalPromCount(t, results)
 		assert.LessOrEqual(t, 1, val)
 	})
 }

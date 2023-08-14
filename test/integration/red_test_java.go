@@ -19,7 +19,7 @@ func waitForJavaTestComponents(t *testing.T, url string) {
 	waitForTestComponentsSub(t, url, "/greeting")
 }
 
-func testREDMetricsForJavaHTTPLibrary(t *testing.T, url string, comm string, systemWide bool) {
+func testREDMetricsForJavaHTTPLibrary(t *testing.T, url string, comm string) {
 	path := "/greeting"
 
 	// Call 3 times the instrumented service, forcing it to:
@@ -42,15 +42,12 @@ func testREDMetricsForJavaHTTPLibrary(t *testing.T, url string, comm string, sys
 			`http_target="` + path + `"}`)
 		require.NoError(t, err)
 		// check duration_count has 3 calls and all the arguments
-		if systemWide {
-			assert.LessOrEqual(t, 1, len(results))
-		} else {
-			require.Len(t, results, 1)
-		}
+		enoughPromResults(t, results)
 		if len(results) > 0 {
+			val := totalPromCount(t, results)
+			assert.LessOrEqual(t, 3, val)
+
 			res := results[0]
-			require.Len(t, res.Value, 2)
-			assert.LessOrEqual(t, "3", res.Value[1])
 			addr := net.ParseIP(res.Metric["net_sock_peer_addr"])
 			assert.NotNil(t, addr)
 		}
@@ -63,7 +60,7 @@ func testREDMetricsJavaHTTP(t *testing.T) {
 	} {
 		t.Run(testCaseURL, func(t *testing.T) {
 			waitForJavaTestComponents(t, testCaseURL)
-			testREDMetricsForJavaHTTPLibrary(t, testCaseURL, "greeting", false)
+			testREDMetricsForJavaHTTPLibrary(t, testCaseURL, "greeting")
 		})
 	}
 }
@@ -74,7 +71,7 @@ func testREDMetricsJavaHTTPSystemWide(t *testing.T) {
 	} {
 		t.Run(testCaseURL, func(t *testing.T) {
 			waitForJavaTestComponents(t, testCaseURL)
-			testREDMetricsForJavaHTTPLibrary(t, testCaseURL, "", true)
+			testREDMetricsForJavaHTTPLibrary(t, testCaseURL, "")
 		})
 	}
 }

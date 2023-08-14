@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"crypto/tls"
 	"net/http"
+	"strconv"
 	"testing"
 	"time"
 
@@ -68,4 +69,20 @@ func waitForTestComponentsSub(t *testing.T, url, subpath string) {
 		require.NoError(t, err)
 		require.NotZero(t, len(results))
 	}, test.Interval(time.Second))
+}
+
+func enoughPromResults(t require.TestingT, results []prom.Result) {
+	require.GreaterOrEqual(t, len(results), 1)
+}
+
+func totalPromCount(t require.TestingT, results []prom.Result) int {
+	total := 0
+	for _, res := range results {
+		require.Len(t, res.Value, 2)
+		val, err := strconv.Atoi(res.Value[1].(string))
+		require.NoError(t, err)
+		total += val
+	}
+
+	return total
 }

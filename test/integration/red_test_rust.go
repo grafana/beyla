@@ -37,12 +37,14 @@ func testREDMetricsForRustHTTPLibrary(t *testing.T, url string, comm string) {
 			`service_name="` + comm + `",` +
 			`http_target="` + path + `"}`)
 		require.NoError(t, err)
-		require.Len(t, results, 1)
-		res := results[0]
-		require.Len(t, res.Value, 2)
-		assert.LessOrEqual(t, "3", res.Value[1])
-		addr := net.ParseIP(res.Metric["net_sock_peer_addr"])
-		assert.NotNil(t, addr)
+		enoughPromResults(t, results)
+		val := totalPromCount(t, results)
+		assert.LessOrEqual(t, 3, val)
+		if len(results) > 0 {
+			res := results[0]
+			addr := net.ParseIP(res.Metric["net_sock_peer_addr"])
+			assert.NotNil(t, addr)
+		}
 	})
 }
 

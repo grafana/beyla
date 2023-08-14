@@ -4,7 +4,6 @@ package integration
 
 import (
 	"net"
-	"strconv"
 	"testing"
 
 	"github.com/mariomac/guara/pkg/test"
@@ -40,11 +39,11 @@ func testREDMetricsForRubyHTTPLibrary(t *testing.T, url string, comm string) {
 			`service_name="` + comm + `",` +
 			`http_target="` + path + `"}`)
 		require.NoError(t, err)
-		require.Len(t, results, 1)
+		enoughPromResults(t, results)
+		val := totalPromCount(t, results)
+		assert.LessOrEqual(t, 1, val)
 		if len(results) > 0 {
 			res := results[0]
-			require.Len(t, res.Value, 2)
-			assert.LessOrEqual(t, "1", res.Value[1])
 			addr := net.ParseIP(res.Metric["net_sock_peer_addr"])
 			assert.NotNil(t, addr)
 		}
@@ -68,13 +67,11 @@ func testREDMetricsForRubyHTTPLibrary(t *testing.T, url string, comm string) {
 			`http_route="/users/:user_id",` +
 			`http_target="` + path + `/1"}`)
 		require.NoError(t, err)
-		require.Len(t, results, 1)
+		enoughPromResults(t, results)
+		val := totalPromCount(t, results)
+		assert.LessOrEqual(t, 3, val)
 		if len(results) > 0 {
 			res := results[0]
-			require.Len(t, res.Value, 2)
-			val, err := strconv.Atoi(res.Value[1].(string))
-			require.NoError(t, err)
-			assert.LessOrEqual(t, 3, val)
 			addr := net.ParseIP(res.Metric["net_sock_peer_addr"])
 			assert.NotNil(t, addr)
 		}

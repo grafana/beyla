@@ -98,7 +98,7 @@
       "IP": {
         "versions": {
           "oldest": "1.17.0",
-          "newest": "1.20.7"
+          "newest": "1.21.0"
         },
         "offsets": [
           {
@@ -110,7 +110,7 @@
       "Port": {
         "versions": {
           "oldest": "1.17.0",
-          "newest": "1.20.7"
+          "newest": "1.21.0"
         },
         "offsets": [
           {
@@ -124,7 +124,7 @@
       "ContentLength": {
         "versions": {
           "oldest": "1.17.0",
-          "newest": "1.20.7"
+          "newest": "1.21.0"
         },
         "offsets": [
           {
@@ -136,7 +136,7 @@
       "Host": {
         "versions": {
           "oldest": "1.17.0",
-          "newest": "1.20.7"
+          "newest": "1.21.0"
         },
         "offsets": [
           {
@@ -148,7 +148,7 @@
       "Method": {
         "versions": {
           "oldest": "1.17.0",
-          "newest": "1.20.7"
+          "newest": "1.21.0"
         },
         "offsets": [
           {
@@ -160,7 +160,7 @@
       "RemoteAddr": {
         "versions": {
           "oldest": "1.17.0",
-          "newest": "1.20.7"
+          "newest": "1.21.0"
         },
         "offsets": [
           {
@@ -172,7 +172,7 @@
       "URL": {
         "versions": {
           "oldest": "1.17.0",
-          "newest": "1.20.7"
+          "newest": "1.21.0"
         },
         "offsets": [
           {
@@ -186,7 +186,7 @@
       "StatusCode": {
         "versions": {
           "oldest": "1.17.0",
-          "newest": "1.20.7"
+          "newest": "1.21.0"
         },
         "offsets": [
           {
@@ -200,7 +200,7 @@
       "req": {
         "versions": {
           "oldest": "1.17.0",
-          "newest": "1.20.7"
+          "newest": "1.21.0"
         },
         "offsets": [
           {
@@ -212,7 +212,7 @@
       "status": {
         "versions": {
           "oldest": "1.17.0",
-          "newest": "1.20.7"
+          "newest": "1.21.0"
         },
         "offsets": [
           {
@@ -226,7 +226,7 @@
       "Path": {
         "versions": {
           "oldest": "1.17.0",
-          "newest": "1.20.7"
+          "newest": "1.21.0"
         },
         "offsets": [
           {

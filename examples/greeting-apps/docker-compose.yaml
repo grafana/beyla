@@ -1,0 +1,176 @@
+version: '3.8'
+
+services:
+  nginx:
+    image: nginx:latest
+    container_name: demo-nginx
+    ports:
+      - 3333:3330
+    volumes:
+      - ./configs/:/etc/nginx
+    depends_on:
+      gotestserver:
+        condition: service_started
+      javatestserver:
+        condition: service_started
+      rusttestserver:
+        condition: service_started
+
+  # Beyla for NGINX
+  nginxbeyla:
+    image: grafana/ebpf-autoinstrument:latest
+    command:
+      - /otelauto
+      - --config=/configs/beyla-config.yml
+    volumes:
+      - ./configs/:/configs
+    container_name: demo-nginxbeyla
+    privileged: true 
+    network_mode: "service:nginx"
+    pid: "service:nginx"
+    environment:
+      PRINT_TRACES: "true"
+      OPEN_PORT: "3330"
+      SERVICE_NAMESPACE: "demo"
+      OTEL_SERVICE_NAME: "demo-nginx"
+      LOG_LEVEL: "DEBUG"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://agent:4018"
+    depends_on:
+      nginx:
+        condition: service_started
+
+  # Go test server
+  # Test server source can be found at test/integration/components/testserver
+  gotestserver:
+    image: ghcr.io/grafana/beyla-demo/greeting-go/0.0.1
+    container_name: demo-gotestserver
+    #ports:
+    #  - "8084:8080"
+
+  # Beyla for Java Spring Boot 3.0 GraalVM Native Image
+  gobeyla:
+    image: grafana/ebpf-autoinstrument:latest
+    command:
+      - /otelauto
+      - --config=/configs/beyla-config.yml
+    volumes:
+      - ./configs/:/configs
+    container_name: demo-gobeyla
+    privileged: true 
+    network_mode: "service:gotestserver"
+    pid: "service:gotestserver"
+    environment:
+      PRINT_TRACES: "true"
+      OPEN_PORT: "8080"
+      SERVICE_NAMESPACE: "demo"
+      OTEL_SERVICE_NAME: "demo-go-service"
+      LOG_LEVEL: "DEBUG"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://agent:4018"
+    depends_on:
+      gotestserver:
+        condition: service_started
+
+  # Java Spring Boot 3.0 GraalVM Native Image test server
+  # Test server source can be found at test/integration/components/javatestserver
+  javatestserver:
+    image: ghcr.io/grafana/beyla-demo/greeting-graalvm-native/0.0.1
+    container_name: demo-javatestserver
+    #ports:
+    #  - "8085:8085"
+
+  # Beyla for Java Spring Boot 3.0 GraalVM Native Image
+  javabeyla:
+    image: grafana/ebpf-autoinstrument:latest
+    command:
+      - /otelauto
+      - --config=/configs/beyla-config.yml
+    volumes:
+      - ./configs/:/configs
+    container_name: demo-javabeyla
+    privileged: true 
+    network_mode: "service:javatestserver"
+    pid: "service:javatestserver"
+    environment:
+      PRINT_TRACES: "true"
+      OPEN_PORT: "8085"
+      SERVICE_NAMESPACE: "demo"
+      OTEL_SERVICE_NAME: "demo-graalvm-native-service"
+      LOG_LEVEL: "DEBUG"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://agent:4018"
+    depends_on:
+      javatestserver:
+        condition: service_started
+
+  # Rust Actix test server
+  # Test server source can be found at test/integration/components/rusttestserver
+  rusttestserver:
+    image: ghcr.io/grafana/beyla-demo/greeting-actix-rust/0.0.1
+    container_name: demo-rusttestserver
+    #ports:
+    #  - "8086:8090"
+
+  # Beyla for Rust Actix
+  rustbeyla:
+    image: grafana/ebpf-autoinstrument:latest
+    command:
+      - /otelauto
+      - --config=/configs/beyla-config.yml
+    volumes:
+      - ./configs/:/configs
+    container_name: demo-rustbeyla
+    privileged: true 
+    network_mode: "service:rusttestserver"
+    pid: "service:rusttestserver"
+    environment:
+      PRINT_TRACES: "true"
+      OPEN_PORT: "8090"
+      SERVICE_NAMESPACE: "demo"
+      OTEL_SERVICE_NAME: "demo-rust-service"
+      LOG_LEVEL: "DEBUG"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://agent:4018"
+    depends_on:
+      rusttestserver:
+        condition: service_started
+
+  # Grafana Agent
+  agent:
+    image: grafana/agent
+    container_name: demo-agent
+    command:
+      - run
+      - /etc/agent/agent-config.river
+    volumes:
+      - ./configs/:/etc/agent
+    environment:
+      AGENT_MODE: "flow"
+    ports:
+      - "4017:4017"
+      - "4018:4018"
+
+  # Tempo
+  tempo:
+    image: grafana/tempo
+    container_name: demo-tempo
+    command:
+      - -config.file 
+      - /etc/tempo/tempo-config.yaml
+    volumes:
+      - ./configs/:/etc/tempo
+    ports:
+      - "3200:3200"
+      - "4317:4317"
+      - "4318:4318"
+
+  # Mimir -config.file=config-mimir.yaml -server.grpc-listen-port=9096
+  mimir:
+    image: grafana/mimir
+    container_name: demo-mimir
+    command:
+      - -config.file=/etc/mimir/mimir-config.yaml
+      - -server.grpc-listen-port=9096
+    volumes:
+      - ./configs/:/etc/mimir
+    ports:
+      - "9009:9009"
+      - "9096:9096"
+

@@ -51,9 +51,10 @@ type TracesConfig struct {
 	// InsecureSkipVerify is not standard, so we don't follow the same naming convention
 	InsecureSkipVerify bool `yaml:"insecure_skip_verify" env:"OTEL_INSECURE_SKIP_VERIFY"`
 
+	SamplingRatio float64 `yaml:"sampling_ratio" env:"OTEL_TRACE_SAMPLING_RATIO"`
+
 	// Configuration options below this line will remain undocumented at the moment,
 	// but can be useful for performance-tuning of some customers.
-
 	MaxExportBatchSize int           `yaml:"max_export_batch_size" env:"OTLP_TRACES_MAX_EXPORT_BATCH_SIZE"`
 	MaxQueueSize       int           `yaml:"max_queue_size" env:"OTLP_TRACES_MAX_QUEUE_SIZE"`
 	BatchTimeout       time.Duration `yaml:"batch_timeout" env:"OTLP_TRACES_BATCH_TIMEOUT"`
@@ -134,6 +135,7 @@ func newTracesReporter(ctx context.Context, cfg *TracesConfig, ctxInfo *global.C
 	r.traceProvider = trace.NewTracerProvider(
 		trace.WithResource(resource),
 		trace.WithSpanProcessor(r.bsp),
+		trace.WithSampler(trace.ParentBased(trace.TraceIDRatioBased(cfg.SamplingRatio))),
 	)
 
 	return &r, nil

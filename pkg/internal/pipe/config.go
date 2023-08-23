@@ -33,6 +33,7 @@ var defaultConfig = Config{
 		Protocol:           otel.ProtocolHTTPProtobuf,
 		MaxQueueSize:       4096,
 		MaxExportBatchSize: 4096,
+		SamplingRatio:      1.0,
 	},
 	Prometheus: prom.PrometheusConfig{
 		Path:    "/metrics",

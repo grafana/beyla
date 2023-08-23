@@ -25,6 +25,7 @@ func TestTracesEndpoint(t *testing.T) {
 		TracesEndpoint:     "https://localhost:3232",
 		MaxQueueSize:       4096,
 		MaxExportBatchSize: 4096,
+		SamplingRatio:      1.0,
 	}
 
 	t.Run("testing with two endpoints", func(t *testing.T) {
@@ -35,6 +36,7 @@ func TestTracesEndpoint(t *testing.T) {
 		TracesEndpoint:     "https://localhost:3232",
 		MaxQueueSize:       4096,
 		MaxExportBatchSize: 4096,
+		SamplingRatio:      1.0,
 	}
 
 	t.Run("testing with only trace endpoint", func(t *testing.T) {
@@ -72,26 +74,27 @@ func testHTTPTracesEndpLen(t *testing.T, expected int, tcfg *TracesConfig) {
 }
 
 func TestMissingSchemeInHTTPTracesEndpoint(t *testing.T) {
-	opts, err := getHTTPTracesEndpointOptions(&TracesConfig{Endpoint: "http://foo:3030"})
+	opts, err := getHTTPTracesEndpointOptions(&TracesConfig{Endpoint: "http://foo:3030", SamplingRatio: 1.0})
 	require.NoError(t, err)
 	require.NotEmpty(t, opts)
 
-	_, err = getHTTPTracesEndpointOptions(&TracesConfig{Endpoint: "foo:3030"})
+	_, err = getHTTPTracesEndpointOptions(&TracesConfig{Endpoint: "foo:3030", SamplingRatio: 1.0})
 	require.Error(t, err)
 
-	_, err = getHTTPTracesEndpointOptions(&TracesConfig{Endpoint: "foo"})
+	_, err = getHTTPTracesEndpointOptions(&TracesConfig{Endpoint: "foo", SamplingRatio: 1.0})
 	require.Error(t, err)
 }
 
 func TestGRPCTracesEndpointOptions(t *testing.T) {
 	t.Run("do not accept URLs without a scheme", func(t *testing.T) {
-		_, err := getGRPCTracesEndpointOptions(&TracesConfig{Endpoint: "foo:3939"})
+		_, err := getGRPCTracesEndpointOptions(&TracesConfig{Endpoint: "foo:3939", SamplingRatio: 1.0})
 		assert.Error(t, err)
 	})
 	t.Run("handles insecure skip verification", func(t *testing.T) {
 		opts, err := getGRPCTracesEndpointOptions(&TracesConfig{
 			Endpoint:           "http://foo:3939",
 			InsecureSkipVerify: true,
+			SamplingRatio:      1.0,
 		})
 		assert.NoError(t, err)
 		assert.Len(t, opts, 3) // host, insecure, insecure skip
@@ -114,8 +117,10 @@ func TestTracesSetupHTTP_Protocol(t *testing.T) {
 		t.Run(string(tc.ProtoVal)+"/"+string(tc.TraceProtoVal), func(t *testing.T) {
 			defer restoreEnvAfterExecution()()
 			_, err := getHTTPTracesEndpointOptions(&TracesConfig{
-				Endpoint: "http://host:3333",
-				Protocol: tc.ProtoVal, TracesProtocol: tc.TraceProtoVal,
+				Endpoint:       "http://host:3333",
+				Protocol:       tc.ProtoVal,
+				TracesProtocol: tc.TraceProtoVal,
+				SamplingRatio:  1.0,
 			})
 			require.NoError(t, err)
 			assert.Equal(t, tc.ExpectedProtoEnv, os.Getenv(envProtocol))
@@ -130,7 +135,10 @@ func TestTracesSetupHTTP_DoNotOverrideEnv(t *testing.T) {
 		require.NoError(t, os.Setenv(envProtocol, "foo-proto"))
 		require.NoError(t, os.Setenv(envTracesProtocol, "bar-proto"))
 		_, err := getHTTPTracesEndpointOptions(&TracesConfig{
-			Endpoint: "http://host:3333", Protocol: "foo", TracesProtocol: "bar",
+			Endpoint:       "http://host:3333",
+			Protocol:       "foo",
+			TracesProtocol: "bar",
+			SamplingRatio:  1.0,
 		})
 		require.NoError(t, err)
 		assert.Equal(t, "foo-proto", os.Getenv(envProtocol))
@@ -140,7 +148,9 @@ func TestTracesSetupHTTP_DoNotOverrideEnv(t *testing.T) {
 		defer restoreEnvAfterExecution()()
 		require.NoError(t, os.Setenv(envProtocol, "foo-proto"))
 		_, err := getHTTPTracesEndpointOptions(&TracesConfig{
-			Endpoint: "http://host:3333", Protocol: "foo",
+			Endpoint:      "http://host:3333",
+			Protocol:      "foo",
+			SamplingRatio: 1.0,
 		})
 		require.NoError(t, err)
 		_, ok := os.LookupEnv(envTracesProtocol)
@@ -173,7 +183,12 @@ func TestTraces_InternalInstrumentation(t *testing.T) {
 	})
 	internalTraces := &fakeInternalTraces{}
 	exporter, err := ReportTraces(context.Background(),
-		&TracesConfig{Endpoint: coll.URL, BatchTimeout: 10 * time.Millisecond, ExportTimeout: 5 * time.Second},
+		&TracesConfig{
+			Endpoint:      coll.URL,
+			BatchTimeout:  10 * time.Millisecond,
+			ExportTimeout: 5 * time.Second,
+			SamplingRatio: 1.0,
+		},
 		&global.ContextInfo{
 			ServiceName: "foo",
 			Metrics:     internalTraces,
@@ -232,6 +247,60 @@ func TestTraces_InternalInstrumentation(t *testing.T) {
 		assert.Equal(t, previousSum, sum)
 		assert.Equal(t, previousCount, count)
 		assert.Less(t, previousErrCount, internalTraces.Errors())
+	})
+}
+
+func TestTraces_InternalInstrumentationSampling(t *testing.T) {
+	// fake OTEL collector server
+	coll := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, _ *http.Request) {
+		rw.WriteHeader(http.StatusOK)
+	}))
+	defer coll.Close()
+	// Wait for the HTTP server to be alive
+	test.Eventually(t, timeout, func(t require.TestingT) {
+		resp, err := coll.Client().Get(coll.URL + "/foo")
+		require.NoError(t, err)
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+	})
+
+	// create a simple dummy graph to send data to the Metrics reporter, which will send
+	// metrics to the fake collector
+	sendData := make(chan struct{})
+	inputNode := node.AsStart(func(out chan<- []transform.HTTPRequestSpan) {
+		// on every send data signal, the traces generator sends a dummy trace
+		for range sendData {
+			out <- []transform.HTTPRequestSpan{{Type: transform.EventTypeHTTP}}
+		}
+	})
+	internalTraces := &fakeInternalTraces{}
+	exporter, err := ReportTraces(context.Background(),
+		&TracesConfig{
+			Endpoint:      coll.URL,
+			BatchTimeout:  10 * time.Millisecond,
+			ExportTimeout: 5 * time.Second,
+			SamplingRatio: 0.0, // sampling 0 means we won't generate any samples
+		},
+		&global.ContextInfo{
+			ServiceName: "foo",
+			Metrics:     internalTraces,
+		})
+	require.NoError(t, err)
+	inputNode.SendsTo(node.AsTerminal(exporter))
+
+	go inputNode.Start()
+
+	// Let's make 10 traces, none should be seen
+	for i := 0; i < 10; i++ {
+		sendData <- struct{}{}
+	}
+	var previousSum, previousCount int
+	test.Eventually(t, timeout, func(t require.TestingT) {
+		// we shouldn't see any data
+		previousSum, previousCount = internalTraces.SumCount()
+		assert.Equal(t, 0, previousSum)
+		assert.Equal(t, 0, previousCount)
+		// no call should return error
+		assert.Empty(t, internalTraces.Errors())
 	})
 }
 

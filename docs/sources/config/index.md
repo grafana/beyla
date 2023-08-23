@@ -370,6 +370,15 @@ If set to `true`, the OTEL client accepts any certificate presented by the serve
 and any host name in that certificate. In this mode, TLS is susceptible to a man-in-the-middle
 attacks. This option should be used only for testing and development purposes.
 
+| YAML                   | Env var                     | Type | Default |
+|------------------------|-----------------------------|------|---------|
+| `sampling_ratio` | `OTEL_TRACE_SAMPLING_RATIO` | float | `1.0` |
+
+Specifies the ratio of generated traces that will be sampled for sending to an OTEL collector.
+By default, all traces are sampled, meaning that all traces will be sent downstream. In production, you
+may want to lower this number to reduce the amount of generated trace data. If you are using the
+Grafana Agent as your OTEL collector, you can configure the sampling policy at that level instead.
+
 ## Prometheus HTTP endpoint
 
 YAML section `prometheus_export`.

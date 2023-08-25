@@ -12,21 +12,35 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Portions flagged with GRAFANA are changes by Raintank, Inc., dba Grafana Labs.
+#define GRAFANA 1
+
+#ifdef GRAFANA
+#include "utils.h"
+#include "stdbool.h"
+#include "bpf_dbg.h"
+#else
 #include "arguments.h"
 #include "span_context.h"
 #include "go_context.h"
+#endif
 #include "go_types.h"
+#ifndef GRAFANA
 #include "uprobe.h"
 
 char __license[] SEC("license") = "Dual MIT/GPL";
 
 #define PATH_MAX_LEN 100
+#endif
 #define MAX_BUCKETS 8
+#ifndef GRAFANA
 #define METHOD_MAX_LEN 7
 #define MAX_CONCURRENT 50
+#endif
 #define W3C_KEY_LENGTH 11
 #define W3C_VAL_LENGTH 55
 
+#ifndef GRAFANA
 struct http_request_t
 {
     BASE_SPAN_PROPERTIES
@@ -41,6 +55,7 @@ struct
     __type(value, struct http_request_t);
     __uint(max_entries, MAX_CONCURRENT);
 } http_events SEC(".maps");
+#endif
 
 struct
 {
@@ -50,6 +65,7 @@ struct
     __uint(max_entries, 1);
 } golang_mapbucket_storage_map SEC(".maps");
 
+#ifndef GRAFANA
 struct
 {
     __uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
@@ -69,8 +85,28 @@ volatile const u64 url_ptr_pos;
 volatile const u64 path_ptr_pos;
 volatile const u64 ctx_ptr_pos;
 volatile const u64 headers_ptr_pos;
+#endif
 
+#ifdef GRAFANA
+static __always_inline _Bool bpf_memcmp(char *s1, char *s2, s32 size)
+{
+    for (int i = 0; i < size; i++)
+    {
+        if (s1[i] != s2[i])
+        {
+            return false;
+        }
+    }
+
+    return true;
+}
+#endif
+
+#ifdef GRAFANA
+static __always_inline void *extract_context_from_req_headers(void *headers_ptr_ptr)
+#else
 static __always_inline struct span_context *extract_context_from_req_headers(void *headers_ptr_ptr)
+#endif
 {
     void *headers_ptr;
     long res;
@@ -153,6 +189,9 @@ static __always_inline struct span_context *extract_context_from_req_headers(voi
             {
                 return NULL;
             }
+#ifdef GRAFANA
+            bpf_printk("Found headers: %s", traceparent_header_value);
+#else
             struct span_context *parent_span_context = bpf_map_lookup_elem(&parent_span_context_storage_map, &map_id);
             if (!parent_span_context)
             {
@@ -160,11 +199,13 @@ static __always_inline struct span_context *extract_context_from_req_headers(voi
             }
             w3c_string_to_span_context(traceparent_header_value, parent_span_context);
             return parent_span_context;
+#endif
         }
     }
     return NULL;
 }
 
+#ifndef GRAFANA
 // This instrumentation attaches uprobe to the following function:
 // func (mux *ServeMux) ServeHTTP(w ResponseWriter, r *Request)
 SEC("uprobe/ServerMux_ServeHTTP")
@@ -223,3 +264,4 @@ int uprobe_ServerMux_ServeHTTP(struct pt_regs *ctx)
 }
 
 UPROBE_RETURN(ServerMux_ServeHTTP, struct http_request_t, 4, ctx_ptr_pos, http_events, events)
+#endif // GRAFANA

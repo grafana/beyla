@@ -12,10 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Portions flagged with GRAFANA are changes by Raintank, Inc., dba Grafana Labs.
+#define GRAFANA 1
+
 #ifndef _GO_TYPES_H
 #define _GO_TYPES_H
 
+#ifndef GRAFANA
 #include "alloc.h"
+#endif
 #include "bpf_helpers.h"
 
 #define MAX_REALLOCATION 400
@@ -54,6 +59,7 @@ struct map_bucket {
     void *overflow;
 };
 
+#ifndef GRAFANA
 static __always_inline struct go_string write_user_go_string(char *str, u32 len)
 {
     // Copy chars to userspace
@@ -125,5 +131,6 @@ static __always_inline void append_item_to_slice(struct go_slice *slice, void *n
     slice->len++;
     long success = bpf_probe_write_user(slice_user_ptr->len, &slice->len, sizeof(slice->len));
 }
+#endif //GRAFANA
 
 #endif

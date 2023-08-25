@@ -62,6 +62,7 @@ func (p *Tracer) Constants(_ *exec.FileInfo, offsets *goexec.Offsets) map[string
 		"host_ptr_pos",
 		"content_length_ptr_pos",
 		"resp_req_pos",
+		"req_header_ptr_pos",
 	} {
 		constants[s] = offsets.Field[s]
 	}

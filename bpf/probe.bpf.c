@@ -12,50 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Portions flagged with GRAFANA are changes by Raintank, Inc., dba Grafana Labs.
-#define GRAFANA 1
-
-#ifdef GRAFANA
 #include "utils.h"
 #include "stdbool.h"
 #include "bpf_dbg.h"
-#else
-#include "arguments.h"
-#include "span_context.h"
-#include "go_context.h"
-#endif
 #include "go_types.h"
-#ifndef GRAFANA
-#include "uprobe.h"
-
-char __license[] SEC("license") = "Dual MIT/GPL";
-
-#define PATH_MAX_LEN 100
-#endif
 #define MAX_BUCKETS 8
-#ifndef GRAFANA
-#define METHOD_MAX_LEN 7
-#define MAX_CONCURRENT 50
-#endif
 #define W3C_KEY_LENGTH 11
 #define W3C_VAL_LENGTH 55
-
-#ifndef GRAFANA
-struct http_request_t
-{
-    BASE_SPAN_PROPERTIES
-    char method[METHOD_MAX_LEN];
-    char path[PATH_MAX_LEN];
-};
-
-struct
-{
-    __uint(type, BPF_MAP_TYPE_HASH);
-    __type(key, void *);
-    __type(value, struct http_request_t);
-    __uint(max_entries, MAX_CONCURRENT);
-} http_events SEC(".maps");
-#endif
 
 struct
 {
@@ -65,29 +28,6 @@ struct
     __uint(max_entries, 1);
 } golang_mapbucket_storage_map SEC(".maps");
 
-#ifndef GRAFANA
-struct
-{
-    __uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
-    __uint(key_size, sizeof(u32));
-    __uint(value_size, sizeof(struct span_context));
-    __uint(max_entries, 1);
-} parent_span_context_storage_map SEC(".maps");
-
-struct
-{
-    __uint(type, BPF_MAP_TYPE_PERF_EVENT_ARRAY);
-} events SEC(".maps");
-
-// Injected in init
-volatile const u64 method_ptr_pos;
-volatile const u64 url_ptr_pos;
-volatile const u64 path_ptr_pos;
-volatile const u64 ctx_ptr_pos;
-volatile const u64 headers_ptr_pos;
-#endif
-
-#ifdef GRAFANA
 static __always_inline _Bool bpf_memcmp(char *s1, char *s2, s32 size)
 {
     for (int i = 0; i < size; i++)
@@ -100,13 +40,8 @@ static __always_inline _Bool bpf_memcmp(char *s1, char *s2, s32 size)
 
     return true;
 }
-#endif
 
-#ifdef GRAFANA
 static __always_inline void *extract_context_from_req_headers(void *headers_ptr_ptr)
-#else
-static __always_inline struct span_context *extract_context_from_req_headers(void *headers_ptr_ptr)
-#endif
 {
     void *headers_ptr;
     long res;
@@ -183,85 +118,8 @@ static __always_inline struct span_context *extract_context_from_req_headers(voi
             {
                 continue;
             }
-#ifdef GRAFANA
             return traceparent_header_value_go_str.str;
-#else
-            char traceparent_header_value[W3C_VAL_LENGTH];
-            res = bpf_probe_read(&traceparent_header_value, sizeof(traceparent_header_value), traceparent_header_value_go_str.str);
-            if (res < 0)
-            {
-                return NULL;
-            }
-            struct span_context *parent_span_context = bpf_map_lookup_elem(&parent_span_context_storage_map, &map_id);
-            if (!parent_span_context)
-            {
-                return NULL;
-            }
-            w3c_string_to_span_context(traceparent_header_value, parent_span_context);
-            return parent_span_context;
-#endif
         }
     }
     return NULL;
 }
-
-#ifndef GRAFANA
-// This instrumentation attaches uprobe to the following function:
-// func (mux *ServeMux) ServeHTTP(w ResponseWriter, r *Request)
-SEC("uprobe/ServerMux_ServeHTTP")
-int uprobe_ServerMux_ServeHTTP(struct pt_regs *ctx)
-{
-    u64 request_pos = 4;
-    struct http_request_t httpReq = {};
-    httpReq.start_time = bpf_ktime_get_ns();
-
-    // Get request struct
-    void *req_ptr = get_argument(ctx, request_pos);
-
-    // Get method from request
-    void *method_ptr = 0;
-    bpf_probe_read(&method_ptr, sizeof(method_ptr), (void *)(req_ptr + method_ptr_pos));
-    u64 method_len = 0;
-    bpf_probe_read(&method_len, sizeof(method_len), (void *)(req_ptr + (method_ptr_pos + 8)));
-    u64 method_size = sizeof(httpReq.method);
-    method_size = method_size < method_len ? method_size : method_len;
-    bpf_probe_read(&httpReq.method, method_size, method_ptr);
-
-    // get path from Request.URL
-    void *url_ptr = 0;
-    bpf_probe_read(&url_ptr, sizeof(url_ptr), (void *)(req_ptr + url_ptr_pos));
-    void *path_ptr = 0;
-    bpf_probe_read(&path_ptr, sizeof(path_ptr), (void *)(url_ptr + path_ptr_pos));
-    u64 path_len = 0;
-    bpf_probe_read(&path_len, sizeof(path_len), (void *)(url_ptr + (path_ptr_pos + 8)));
-    u64 path_size = sizeof(httpReq.path);
-    path_size = path_size < path_len ? path_size : path_len;
-    bpf_probe_read(&httpReq.path, path_size, path_ptr);
-
-    // Propagate context
-    struct span_context *parent_ctx = extract_context_from_req_headers(req_ptr + headers_ptr_pos);
-    if (parent_ctx != NULL)
-    {
-        httpReq.psc = *parent_ctx;
-        copy_byte_arrays(httpReq.psc.TraceID, httpReq.sc.TraceID, TRACE_ID_SIZE);
-        generate_random_bytes(httpReq.sc.SpanID, SPAN_ID_SIZE);
-    }
-    else
-    {
-        httpReq.sc = generate_span_context();
-    }
-
-    // Get key
-    void *req_ctx_ptr = 0;
-    bpf_probe_read(&req_ctx_ptr, sizeof(req_ctx_ptr), (void *)(req_ptr + ctx_ptr_pos));
-    void *key = get_consistent_key(ctx, (void *)(req_ptr + ctx_ptr_pos));
-
-    // Write event
-    httpReq.sc = generate_span_context();
-    bpf_map_update_elem(&http_events, &key, &httpReq, 0);
-    start_tracking_span(req_ctx_ptr, &httpReq.sc);
-    return 0;
-}
-
-UPROBE_RETURN(ServerMux_ServeHTTP, struct http_request_t, 4, ctx_ptr_pos, http_events, events)
-#endif // GRAFANA

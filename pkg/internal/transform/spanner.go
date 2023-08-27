@@ -33,7 +33,7 @@ type converter struct {
 var clocks = converter{monoClock: monotime.Now, clock: time.Now}
 
 // HTTPRequestSpan contains the information being submitted by the following nodes in the graph.
-// It enables confortable handling of data from Go.
+// It enables comfortable handling of data from Go.
 type HTTPRequestSpan struct {
 	Type          EventType
 	ID            uint64
@@ -50,6 +50,7 @@ type HTTPRequestSpan struct {
 	End           int64
 	ServiceName   string
 	Metadata      []MetadataTag
+	TraceID       string
 }
 
 type MetadataTag struct {
@@ -106,6 +107,16 @@ func extractIP(b []uint8, size int) string {
 	return net.IP(b[:size]).String()
 }
 
+func extractTraceID(traceparent [55]byte) string {
+	// If traceparent was not set in eBPF, entire field should be all zeroes.
+	if traceparent[0] == 0 {
+		return ""
+	}
+	// See https://www.w3.org/TR/trace-context/#traceparent-header-field-values for format.
+	// Traceparent starts with version, e.g. "00-". TraceID is the following 32 hex digits
+	return string(traceparent[3:35])
+}
+
 func (s *HTTPRequestSpan) Inside(parent *HTTPRequestSpan) bool {
 	return s.RequestStart >= parent.RequestStart && s.End <= parent.End
 }
@@ -144,11 +155,13 @@ func convertFromHTTPTrace(trace *ebpfcommon.HTTPRequestTrace) HTTPRequestSpan {
 	peer := ""
 	hostname := ""
 	hostPort := 0
+	traceID := ""
 
 	switch EventType(trace.Type) {
 	case EventTypeHTTPClient, EventTypeHTTP:
 		peer, _ = extractHostPort(trace.RemoteAddr[:])
 		hostname, hostPort = extractHostPort(trace.Host[:])
+		traceID = extractTraceID(trace.Traceparent)
 	case EventTypeGRPC:
 		hostPort = int(trace.HostPort)
 		peer = extractIP(trace.RemoteAddr[:], int(trace.RemoteAddrLen))
@@ -172,6 +185,7 @@ func convertFromHTTPTrace(trace *ebpfcommon.HTTPRequestTrace) HTTPRequestSpan {
 		Start:         int64(trace.StartMonotimeNs),
 		End:           int64(trace.EndMonotimeNs),
 		Status:        int(trace.Status),
+		TraceID:       traceID,
 	}
 }
 

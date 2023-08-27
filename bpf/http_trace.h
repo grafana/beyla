@@ -19,6 +19,7 @@
 #define METHOD_MAX_LEN 6 // Longest method: DELETE
 #define REMOTE_ADDR_MAX_LEN 50 // We need 48: 39(ip v6 max) + 1(: separator) + 7(port length max value 65535) + 1(null terminator)
 #define HOST_LEN 256 // can be a fully qualified DNS name
+#define TRACEPARENT_LEN 55
 
 // Trace of an HTTP call invocation. It is instantiated by the return uprobe and forwarded to the
 // user space through the events ringbuffer.
@@ -37,6 +38,7 @@ typedef struct http_request_trace_t {
     u64 host_len;
     u32 host_port;
     s64 content_length;
+    u8  traceparent[TRACEPARENT_LEN];
 } __attribute__((packed)) http_request_trace;
 
 #endif

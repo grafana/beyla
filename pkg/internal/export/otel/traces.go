@@ -274,6 +274,17 @@ func spanKind(span *transform.HTTPRequestSpan) trace2.SpanKind {
 func (r *TracesReporter) makeSpan(parentCtx context.Context, tracer trace2.Tracer, span *transform.HTTPRequestSpan) SessionSpan {
 	t := span.Timings()
 
+	if span.TraceID != "" {
+		tid, err := trace2.TraceIDFromHex(span.TraceID)
+		if err != nil {
+			slog.Debug("Invalid TraceID", "error:", err, "traceId:", span.TraceID)
+		} else {
+			spanCtx := trace2.SpanContextFromContext(parentCtx)
+			spanCtx = spanCtx.WithTraceID(tid)
+			parentCtx = trace2.ContextWithSpanContext(parentCtx, spanCtx)
+		}
+	}
+
 	// Create a parent span for the whole request session
 	ctx, sp := tracer.Start(parentCtx, traceName(span),
 		trace2.WithTimestamp(t.RequestStart),

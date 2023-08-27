@@ -150,8 +150,15 @@ int uprobe_WriteHeader(struct pt_regs *ctx) {
     }
     bpf_probe_read(&trace->content_length, sizeof(trace->content_length), (void *)(req_ptr + content_length_ptr_pos));
 
-
-    extract_context_from_req_headers((void*)(req_ptr + req_header_ptr_pos));
+    void *traceparent_ptr = extract_context_from_req_headers((void*)(req_ptr + req_header_ptr_pos));
+    if (traceparent_ptr != NULL) {
+        long res = bpf_probe_read(trace->traceparent, sizeof(trace->traceparent), traceparent_ptr);
+        if (res < 0) {
+            bpf_printk("can't copy traceparent header");
+            bpf_ringbuf_discard(trace, 0);
+            return 0;
+        }
+    }
 
     trace->status = (u16)(((u64)GO_PARAM2(ctx)) & 0x0ffff);
 

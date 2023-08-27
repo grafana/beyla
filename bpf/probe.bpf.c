@@ -183,15 +183,15 @@ static __always_inline struct span_context *extract_context_from_req_headers(voi
             {
                 continue;
             }
+#ifdef GRAFANA
+            return traceparent_header_value_go_str.str;
+#else
             char traceparent_header_value[W3C_VAL_LENGTH];
             res = bpf_probe_read(&traceparent_header_value, sizeof(traceparent_header_value), traceparent_header_value_go_str.str);
             if (res < 0)
             {
                 return NULL;
             }
-#ifdef GRAFANA
-            bpf_printk("Found headers: %s", traceparent_header_value);
-#else
             struct span_context *parent_span_context = bpf_map_lookup_elem(&parent_span_context_storage_map, &map_id);
             if (!parent_span_context)
             {

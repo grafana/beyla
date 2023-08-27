@@ -133,6 +133,18 @@
           }
         ]
       },
+      "Header": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.21.0"
+        },
+        "offsets": [
+          {
+            "offset": 56,
+            "since": "1.17.0"
+          }
+        ]
+      },
       "Host": {
         "versions": {
           "oldest": "1.17.0",

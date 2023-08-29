@@ -1,29 +1,31 @@
 ---
-title: Agent mode vs. direct mode
+title: Beyla export modes
+menuTitle: Export modes
 description: Learn about the different ways you can export metrics with Grafana's eBPF application auto-instrumentation tool.
+weight: 2
 ---
 
-# Agent mode vs. direct mode
+# Beyla export modes
 
 The eBPF auto-instrumentation tool can export data in two modes:
 
 * **Agent mode** (recommended mode): the auto-instrumentation tool will send the metrics and the traces to the
   [Grafana Agent](https://github.com/grafana/agent), which will process and send them
   to Mimir and Tempo. In this scenario, the Agent takes care of the authentication required by the Grafana Mimir/Tempo endpoints.
-  This mode also integrates better with some Grafana exclusive features, 
+  This mode also integrates better with some Grafana exclusive features,
   such as the [span-to-metrics](/docs/tempo/latest/metrics-generator/span_metrics/) and
   [span-to-service graph](/docs/tempo/latest/metrics-generator/service_graphs/) converters.
 * **Direct mode**: the auto-instrumentation tool can **push** metrics and/or traces directly to a remote endpoint
   (using the OpenTelemetry/OTEL protocols) or expose a Prometheus HTTP endpoint ready to be scraped (i.e. **pull** mode).
   In the direct OTEL push mode, the auto-instrumentation tool needs to be configured with the authentication credentials.
 
-![](img/agent-vs-direct.png)
+![](https://grafana.com/media/docs/grafana-cloud/beyla/agent-vs-direct.png)
 
 <center><i>eBPF auto-instrumentation tool running in Agent mode (left) vs. Direct mode (right)</i></center>
 
 ## Running in Direct mode
 
-You can follow our [quick start tutorial]({{< relref "../tutorial" >}}) for a quick introduction
+You can follow our [quick start tutorial]({{< relref "../tutorial/index.md" >}}) for a quick introduction
 to auto-instrumentation in Direct mode, by using OpenTelemetry. The OTLP endpoint authentication credentials are provided
 by using the following environment variables:
 
@@ -31,15 +33,15 @@ by using the following environment variables:
 * `OTEL_EXPORTER_OTLP_HEADERS`
 
 To run in Direct mode by using the Prometheus scrape endpoint, please refer to the
-[configuration documentation]({{< relref "../config" >}}).
+[configuration documentation]({{< relref "./options.md" >}}).
 
 ## Running in Agent mode
 
 > ℹ️ This tutorial assumes that both the Agent and the auto-instrumentation tool are installed
 as local Linux OS executables. For further examples on downloading and running the
 auto-instrumentation tool as an OCI container, you can check the documentation sections on
-[running the eBPF auto-instrumentation tool as a Docker container]({{< relref "../docker" >}})
-or [running the eBPF auto-instrumentation tool in Kubernetes]({{< relref "../k8s" >}}).
+[running the eBPF auto-instrumentation tool as a Docker container]({{< relref "../setup/docker.md" >}})
+or [running the eBPF auto-instrumentation tool in Kubernetes]({{< relref "../kubernetes.md" >}}).
 
 First, you will need to locally install and configure the [Grafana Agent in **Flow** mode, according to the latest documentation](/docs/agent/latest/flow/).
 Running the Agent in Flow mode will facilitate the ingest of OpenTelemetry
@@ -51,9 +53,9 @@ to the different Grafana product endpoints (Mimir and/or Tempo).
 Next, you'll need to specify the following nodes by using the
 [River configuration language](/docs/agent/latest/flow/config-language/):
 
-![](img/nodes.png)
+![](https://grafana.com/media/docs/grafana-cloud/beyla/nodes.png)
 
-You can download the [example of the whole River configuration file](./agent-config.river), which will be explained in the rest of this section.
+You can download the [example of the whole River configuration file](/docs/grafana-cloud/monitor-applications/beyla/configure/resources/agent-config.river), which will be explained in the rest of this section.
 
 The Agent needs to expose an **OpenTelemetry receiver** endpoint, such that the
 auto-instrumentation tool can forward both metrics and traces. The Agent
@@ -109,7 +111,7 @@ prometheus.remote_write "mimir" {
 }
 ```
 
-Assuming you have a configuration file as above, you will need to run the Agent with the environment variables set. 
+Assuming you have a configuration file as above, you will need to run the Agent with the environment variables set.
 For example:
 
 ```sh
@@ -129,7 +131,7 @@ otelcol.exporter.otlp "tempo" {
         auth     = otelcol.auth.basic.creds.handler
     }
 }
-    
+
 otelcol.auth.basic "creds" {
     username = env("TEMPO_USER")
     password = env("GRAFANA_API_KEY")
@@ -155,10 +157,10 @@ authentication in the Agent OTLP receiver.
 
 You can configure the auto-instrumentation tool both via environment variables or via
 a configuration YAML file, which is what we will use in this example.
-Please refer to the complete [Configuration documentation]({{< relref "../config" >}}) for
+Please refer to the complete [Configuration documentation]({{< relref "./options.md" >}}) for
 more detailed description of each configuration option.
 
-You can download the whole [example configuration file](./instrumenter-config.yml),
+You can download the whole [example configuration file](/docs/grafana-cloud/monitor-applications/beyla/configure/resources/instrumenter-config.yml),
 which we will explain in the rest of this section.
 
 First, you will need to specify the executable to instrument. If, for example,
@@ -170,7 +172,7 @@ ebpf:
   open_port: 443
 ```
 
-The auto-instrumentation tool will automatically search and instrument the process 
+The auto-instrumentation tool will automatically search and instrument the process
 listening on port 443.
 
 Next, you will need to specify where the traces and the metrics will be submitted. If
@@ -187,7 +189,7 @@ You can specify both `otel_metrics_export` and `otel_traces_export` properties t
 allow exporting both metrics and traces, or only one of them to export either
 metrics or traces.
 
-To run the auto-instrumentation tool (previously installed via `go install github.com/grafana/ebpf-autoinstrument/cmd/beyla@latest`), 
+To run the auto-instrumentation tool (previously installed via `go install github.com/grafana/ebpf-autoinstrument/cmd/beyla@latest`),
 you will need to specify the path to the configuration YAML file. For example `instrument-config.yml`:
 
 ```

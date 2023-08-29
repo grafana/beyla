@@ -300,6 +300,8 @@ func inspect(ctx context.Context, cfg *ebpfcommon.TracerConfig, functions []stri
 	var offsets *goexec.Offsets
 
 	if !cfg.SystemWide {
+		logger().Info("inspecting", "pid", execElf.Pid, "comm", execElf.CmdExePath)
+
 		offsets, err = goexec.InspectOffsets(&execElf, functions)
 		if err != nil {
 			logger().Info("Go HTTP/gRPC support not detected. Using only generic instrumentation.", "error", err)

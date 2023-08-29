@@ -1,9 +1,11 @@
 ---
-title: Configuration
+title: Configure Beyla
+menuTitle: Options
 description: Learn how to configure Grafana's eBPF based auto-instrumentation tool and the available configuration options.
+weight: 1
 ---
 
-# Configuration
+# Configure Beyla
 
 The eBPF auto-instrumentation tool can be configured via environment variables or via
 a YAML configuration file that is passed with the `-config` command-line
@@ -24,7 +26,7 @@ YAML configuration, each component has its own first-level section.
 The architecture below shows the different components of the eBPF auto-instrumentation tool.
 The dashed boxes in the diagram below can be enabled and disabled according to the configuration.
 
-![](img/architecture.png)
+![Grafana Beyla architecture](https://grafana.com/media/docs/grafana-cloud/beyla/architecture.png)
 
 A quick description of the components:
 
@@ -39,7 +41,7 @@ A quick description of the components:
   [OpenTelemetry](https://opentelemetry.io/) traces collector.
 * [Prometheus HTTP endpoint](#prometheus-http-endpoint) enables an HTTP endpoint
   that allows any external scraper to pull metrics in [Prometheus](https://prometheus.io/) format.
-* [Internal metrics reporter](#internal-metrics-reporter) optionally reports metrics about the internal behavior of 
+* [Internal metrics reporter](#internal-metrics-reporter) optionally reports metrics about the internal behavior of
   the auto-instrumentation tool in [Prometheus](https://prometheus.io/) format.
 
 The following sections explain the global configuration properties, as well as
@@ -51,28 +53,28 @@ The properties in this section are first-level YAML properties, as they apply to
 whole eBPF auto-instrumentation tool configuration:
 
 | YAML           | Env var             | Type   | Default         |
-|----------------|---------------------|--------|-----------------|
+| -------------- | ------------------- | ------ | --------------- |
 | `service_name` | `OTEL_SERVICE_NAME` | string | executable name |
 
 Specifies the name of the instrumented service to be reported by the metrics exporter.
 If unset, it will be the name of the executable of the service.
 
 | YAML                | Env var             | Type   | Default |
-|---------------------|---------------------|--------|---------|
+| ------------------- | ------------------- | ------ | ------- |
 | `service_namespace` | `SERVICE_NAMESPACE` | string | (unset) |
 
 Optionally, allows assigning a namespace for the service.
 
 | YAML        | Env var     | Type   | Default |
-|-------------|-------------|--------|---------|
+| ----------- | ----------- | ------ | ------- |
 | `log_level` | `LOG_LEVEL` | string | `INFO`  |
 
 Sets the verbosity level of the process standard output logger.
-Valid log level values are: `DEBUG`, `INFO`, `WARN` and `ERROR`. 
+Valid log level values are: `DEBUG`, `INFO`, `WARN` and `ERROR`.
 `DEBUG` being the most verbose and `ERROR` the least verbose.
 
 | YAML           | Env var        | Type    | Default |
-|----------------|----------------|---------|---------|
+| -------------- | -------------- | ------- | ------- |
 | `print_traces` | `PRINT_TRACES` | boolean | `false` |
 <a id="printer"></a>
 
@@ -84,7 +86,7 @@ YAML section `ebpf`.
 
 
 | YAML              | Env var           | Type   | Default |
-|-------------------|-------------------|--------|---------|
+| ----------------- | ----------------- | ------ | ------- |
 | `executable_name` | `EXECUTABLE_NAME` | string | (unset) |
 
 Selects the process to instrument by the executable name path. The tool will match
@@ -93,7 +95,7 @@ where the executable resides on the file system.
 
 This property will be ignored if the `open_port` property is set.
 
-When instrumenting by using the executable name, choose a non-ambiguous name, a name that 
+When instrumenting by using the executable name, choose a non-ambiguous name, a name that
 will match a single executable on the target system.
 For example, if you set `EXECUTABLE_NAME=server`, and you have running two processes whose executables
 have the following paths:
@@ -104,12 +106,12 @@ have the following paths:
 ```
 
 then, the eBPF auto-instrumentation tool will match indistinctly one of the above processes. To avoid this
-issue, you should be as concrete as possible about the value of the setting. For example, `EXECUTABLE_NAME=/opt/app/server` 
+issue, you should be as concrete as possible about the value of the setting. For example, `EXECUTABLE_NAME=/opt/app/server`
 or just `EXECUTABLE_NAME=/server`.
 
 
 | YAML        | Env var     | Type   | Default |
-|-------------|-------------|--------|---------|
+| ----------- | ----------- | ------ | ------- |
 | `open_port` | `OPEN_PORT` | string | (unset) |
 
 Selects the process to instrument by the port it has open (listens to).
@@ -122,8 +124,8 @@ HTTP/S and GRPC requests on all application ports**. At the moment, there is no 
 restrict the instrumentation only to the methods exposed through a specific port.
 
 | YAML          | Env var       | Type    | Default |
-|---------------|---------------|---------|---------|
-| `system_wide` | `SYSTEM_WIDE` | boolean |  false  |
+| ------------- | ------------- | ------- | ------- |
+| `system_wide` | `SYSTEM_WIDE` | boolean | false   |
 
 
 Causes instrumentation of all processes on the system. This includes all
@@ -133,12 +135,12 @@ has been enabled.
 This property is mutually exclusive with the `executable_name` and `open_port` properties.
 
 At present time only HTTP (non SSL) requests are tracked system wide, and there's no support for gRPC yet.
-When you are instrumenting Go applications, you should explicitly use `executable_name` or 
+When you are instrumenting Go applications, you should explicitly use `executable_name` or
 `open_port` instead of `system_wide` instrumentation. The Go specific instrumentation is of higher
 fidelity and it incurs lesser overall overhead.
 
 | YAML         | Env var          | Type   | Default |
-|--------------|------------------|--------|---------|
+| ------------ | ---------------- | ------ | ------- |
 | `wakeup_len` | `BPF_WAKEUP_LEN` | string | (unset) |
 
 Specifies how many messages need to be accumulated in the eBPF ringbuffer
@@ -159,11 +161,11 @@ the YAML file, the routes pipeline stage will not be created and data will not b
 for the exporters.
 
 | YAML       | Env var | Type            | Default |
-|------------|---------|-----------------|---------|
+| ---------- | ------- | --------------- | ------- |
 | `patterns` | --      | list of strings | (unset) |
 
 Will match the provided URL path patterns and set the `http.route` trace/metric
-property accordingly. You should use the `routes` property 
+property accordingly. You should use the `routes` property
 whenever possible to reduce the cardinality of generated metrics.
 
 Each route pattern is a URL path with specific tags which allow for grouping path
@@ -194,7 +196,7 @@ property:
 ```
 
 | YAML      | Env var | Type   | Default    |
-|-----------|---------|--------|------------|
+| --------- | ------- | ------ | ---------- |
 | `unmatch` | --      | string | `wildcard` |
 
 Specifies what to do when a trace HTTP path does not match any of the `patterns` entries.
@@ -217,23 +219,23 @@ In addition to the properties exposed in this section, this component implicitly
 the environment variables from the [standard OTEL exporter configuration](https://opentelemetry.io/docs/concepts/sdk-configuration/otlp-exporter-configuration/).
 
 | YAML       | Env var                                                                    | Type | Default |
-|------------|----------------------------------------------------------------------------|------|---------|
+| ---------- | -------------------------------------------------------------------------- | ---- | ------- |
 | `endpoint` | `OTEL_EXPORTER_OTLP_ENDPOINT` or<br/>`OTEL_EXPORTER_OTLP_METRICS_ENDPOINT` | URL  | (unset) |
 
 Specifies the OpenTelemetry endpoint where metrics will be sent.
 
-The `OTEL_EXPORTER_OTLP_ENDPOINT` environment variable sets a common endpoint for both the metrics and the 
+The `OTEL_EXPORTER_OTLP_ENDPOINT` environment variable sets a common endpoint for both the metrics and the
 [traces](#otel-traces-exporter) exporters. The `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT` environment variable,
 or the `endpoint` YAML, property will set the endpoint only for the metrics exporter node,
 such that the traces exporter won't be activated unless explicitly specified.
 
 | YAML       | Env var                                                                    | Type   | Default        |
-|------------|----------------------------------------------------------------------------|--------|----------------|
+| ---------- | -------------------------------------------------------------------------- | ------ | -------------- |
 | `protocol` | `OTEL_EXPORTER_OTLP_PROTOCOL` or<br/>`OTEL_EXPORTER_OTLP_METRICS_PROTOCOL` | string | `http/protobuf |
 
 Specifies the transport/encoding protocol of the OpenTelemetry endpoint.
 
-The accepted values, as defined by the [OTLP Exporter Configuration document]( 
+The accepted values, as defined by the [OTLP Exporter Configuration document](
 https://opentelemetry.io/docs/concepts/sdk-configuration/otlp-exporter-configuration/#otel_exporter_otlp_protocol
 ) are `http/json`, `http/protobuf` and `grpc`.
 
@@ -242,7 +244,7 @@ The `OTEL_EXPORTER_OTLP_PROTOCOL` environment variable sets a common protocol fo
 or the `protocol` YAML property, will set the protocol only for the metrics exporter node.
 
 | YAML                   | Env var                     | Type | Default |
-|------------------------|-----------------------------|------|---------|
+| ---------------------- | --------------------------- | ---- | ------- |
 | `insecure_skip_verify` | `OTEL_INSECURE_SKIP_VERIFY` | bool | `false` |
 
 Controls whether the OTEL client verifies the server's certificate chain and host name.
@@ -251,13 +253,13 @@ and any host name in that certificate. In this mode, TLS is susceptible to a man
 attacks. This option should be used only for testing and development purposes.
 
 | YAML       | Env var            | Type     | Default |
-|------------|--------------------|----------|---------|
+| ---------- | ------------------ | -------- | ------- |
 | `interval` | `METRICS_INTERVAL` | Duration | `5s`    |
 
 Configures the intervening time between exports.
 
 | YAML            | Env var                 | Type    | Default |
-|-----------------|-------------------------|---------|---------|
+| --------------- | ----------------------- | ------- | ------- |
 | `report_target` | `METRICS_REPORT_TARGET` | boolean | `false` |
 
 Specifies whether the exporter must submit `http.target` as a metric attribute.
@@ -269,7 +271,7 @@ It is disabled by default to avoid cardinality explosion in paths with IDs. As a
 it is recommended to group these requests in the [routes node](#routes-decorator).
 
 | YAML          | Env var               | Type    | Default |
-|---------------|-----------------------|---------|---------|
+| ------------- | --------------------- | ------- | ------- |
 | `report_peer` | `METRICS_REPORT_PEER` | boolean | `false` |
 
 Specifies whether the exporter must submit the caller peer address as a metric attribute.
@@ -277,7 +279,7 @@ Specifies whether the exporter must submit the caller peer address as a metric a
 It is disabled by default to avoid cardinality explosion.
 
 | YAML      | Env var | Type   |
-|-----------|---------|--------|
+| --------- | ------- | ------ |
 | `buckets` | (n/a)   | Object |
 
 The `buckets` object allows overriding the bucket boundaries of diverse histograms. See
@@ -289,7 +291,7 @@ For both OpenTelemetry and Prometheus metrics exporters, you can override the hi
 boundaries via a configuration file (see `buckets` YAML section of your metrics exporter configuration).
 
 | YAML                 | Type        |
-|----------------------|-------------|
+| -------------------- | ----------- |
 | `duration_histogram` | `[]float64` |
 
 Sets the bucket boundaries for the metrics related to the request duration. Specifically:
@@ -308,7 +310,7 @@ https://github.com/open-telemetry/opentelemetry-specification/blob/main/specific
 ```
 
 | YAML                     | Type        |
-|--------------------------|-------------|
+| ------------------------ | ----------- |
 | `request_size_histogram` | `[]float64` |
 
 Sets the bucket boundaries for the metrics related to request sizes. This is:
@@ -336,7 +338,7 @@ In addition to the properties exposed in this section, this component implicitly
 the environment variables from the [standard OTEL exporter configuration](https://opentelemetry.io/docs/concepts/sdk-configuration/otlp-exporter-configuration/).
 
 | YAML       | Env var                                                                   | Type | Default |
-|------------|---------------------------------------------------------------------------|------|---------|
+| ---------- | ------------------------------------------------------------------------- | ---- | ------- |
 | `endpoint` | `OTEL_EXPORTER_OTLP_ENDPOINT` or<br/>`OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` | URL  | (unset) |
 
 Specifies the OpenTelemetry endpoint where the traces will be sent.
@@ -347,7 +349,7 @@ or the `endpoint` YAML property, will set the endpoint only for the traces expor
 so the metrics exporter won't be activated unless explicitly specified.
 
 | YAML       | Env var                                                                   | Type   | Default        |
-|------------|---------------------------------------------------------------------------|--------|----------------|
+| ---------- | ------------------------------------------------------------------------- | ------ | -------------- |
 | `protocol` | `OTEL_EXPORTER_OTLP_PROTOCOL` or<br/>`OTEL_EXPORTER_OTLP_TRACES_PROTOCOL` | string | `http/protobuf |
 
 Specifies the transport/encoding protocol of the OpenTelemetry traces endpoint.
@@ -362,7 +364,7 @@ or the `protocol` YAML property, will set the protocol only for the traces expor
 
 
 | YAML                   | Env var                     | Type | Default |
-|------------------------|-----------------------------|------|---------|
+| ---------------------- | --------------------------- | ---- | ------- |
 | `insecure_skip_verify` | `OTEL_INSECURE_SKIP_VERIFY` | bool | `false` |
 
 Controls whether the OTEL client verifies the server's certificate chain and host name.
@@ -370,9 +372,9 @@ If set to `true`, the OTEL client accepts any certificate presented by the serve
 and any host name in that certificate. In this mode, TLS is susceptible to a man-in-the-middle
 attacks. This option should be used only for testing and development purposes.
 
-| YAML                   | Env var                     | Type | Default |
-|------------------------|-----------------------------|------|---------|
-| `sampling_ratio` | `OTEL_TRACE_SAMPLING_RATIO` | float | `1.0` |
+| YAML             | Env var                     | Type  | Default |
+| ---------------- | --------------------------- | ----- | ------- |
+| `sampling_ratio` | `OTEL_TRACE_SAMPLING_RATIO` | float | `1.0`   |
 
 Specifies the ratio of generated traces that will be sampled for sending to an OTEL collector.
 By default, all traces are sampled, meaning that all traces will be sent downstream. In production, you
@@ -388,27 +390,27 @@ that allows any external scraper to pull metrics in [Prometheus](https://prometh
 format. It will be enabled if the `port` property is set.
 
 | YAML   | Env var                 | Type | Default |
-|--------|-------------------------|------|---------|
+| ------ | ----------------------- | ---- | ------- |
 | `port` | `BEYLA_PROMETHEUS_PORT` | int  | (unset) |
 
 Specifies the HTTP port for the Prometheus scrape endpoint. If unset or 0,
 no Prometheus endpoint will be open.
 
 | YAML           | Env var                   | Type   | Default         |
-|----------------|---------------------------|--------|-----------------|
+| -------------- | ------------------------- | ------ | --------------- |
 | `service_name` | `PROMETHEUS_SERVICE_NAME` | string | executable path |
 
 Specifies the name of the instrumented service to be reported by the metrics exporter.
 If unset, it will be the path of the instrumented service (e.g. `/usr/local/bin/service`).
 
 | YAML   | Env var           | Type   | Default    |
-|--------|-------------------|--------|------------|
+| ------ | ----------------- | ------ | ---------- |
 | `path` | `PROMETHEUS_PATH` | string | `/metrics` |
 
 Specifies the HTTP query path to fetch the list of Prometheus metrics.
 
 | YAML            | Env var                 | Type    | Default |
-|-----------------|-------------------------|---------|---------|
+| --------------- | ----------------------- | ------- | ------- |
 | `report_target` | `METRICS_REPORT_TARGET` | boolean | `false` |
 
 Specifies whether the exporter must submit `http_target` as a metric attribute.
@@ -420,7 +422,7 @@ It is disabled by default to avoid cardinality explosion in paths with IDs. As a
 it is recommended to group these requests in the [routes node](#routes-decorator).
 
 | YAML          | Env var               | Type    | Default |
-|---------------|-----------------------|---------|---------|
+| ------------- | --------------------- | ------- | ------- |
 | `report_peer` | `METRICS_REPORT_PEER` | boolean | `false` |
 
 Specifies whether the exporter must submit the caller peer address as a metric attribute.
@@ -428,7 +430,7 @@ Specifies whether the exporter must submit the caller peer address as a metric a
 It is disabled by default to avoid cardinality explosion.
 
 | YAML      | Env var | Type   |
-|-----------|---------|--------|
+| --------- | ------- | ------ |
 | `buckets` | (n/a)   | Object |
 
 The `buckets` object allows overriding the bucket boundaries of diverse histograms. See
@@ -442,8 +444,8 @@ This component will report certain internal metrics about the behavior
 of the auto-instrumentation tool, and expose them as a [Prometheus](https://prometheus.io/)
 scraper. It will be enabled if the `port` property is set.
 
-| YAML   | Env var                    | Type | Default |
-|--------|----------------------------|------|---------|
+| YAML   | Env var                            | Type | Default |
+| ------ | ---------------------------------- | ---- | ------- |
 | `port` | `INTERNAL_METRICS_PROMETHEUS_PORT` | int  | (unset) |
 
 Specifies the HTTP port for the Prometheus scrape endpoint. If unset or 0,
@@ -453,8 +455,8 @@ Its value can be the same as [`prometheus_export.port`](#prometheus-http-endpoin
 will share the same HTTP server, though they can be accessed in different paths),
 or a different value (two different HTTP servers for the different metric families).
 
-| YAML   | Env var           | Type   | Default             |
-|--------|-------------------|--------|---------------------|
+| YAML   | Env var                            | Type   | Default             |
+| ------ | ---------------------------------- | ------ | ------------------- |
 | `path` | `INTERNAL_METRICS_PROMETHEUS_PATH` | string | `/internal/metrics` |
 
 Specifies the HTTP query path to fetch the list of Prometheus metrics.

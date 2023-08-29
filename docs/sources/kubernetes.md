@@ -1,9 +1,11 @@
 ---
-title: Deploy in Kubernetes
+title: Deploy Beyla in Kubernetes
+menuTitle: Deploy in Kubernetes
 description: Learn how to deploy Grafana's eBPF auto-instrumentation tool in Kubernetes.
+weight: 5
 ---
 
-# Deploy in Kubernetes
+# Deploy Beyla in Kubernetes
 
 You can deploy the eBPF auto-instrumentation tool in Kubernetes in two separate ways:
 
@@ -32,7 +34,7 @@ requirements:
 The following example instruments the `goblog` pod by attaching the eBPF auto-instrumentation tool
 as a container (image available at `grafana/ebpf-autoinstrument:latest`). The
 auto-instrumentation tool is configured to forward metrics and traces to a Grafana Agent,
-which is accessible behind the `grafana-agent` service in the same namespace: 
+which is accessible behind the `grafana-agent` service in the same namespace:
 
 ```yaml
 apiVersion: apps/v1
@@ -81,7 +83,7 @@ spec:
 ```
 
 For more information about the different configuration options, please check the
-[Configuration]({{< relref "./config" >}}) section of this documentation site.
+[Configuration]({{< relref "./configure/options.md" >}}) section of this documentation site.
 
 Deploying as a sidecar container, is the default deployment mode for the
 [eBPF auto-instrument Kubernetes Operator](https://github.com/grafana/ebpf-autoinstrument-operator).

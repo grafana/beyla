@@ -1,11 +1,13 @@
 ---
 title: Run as a Docker container
+menuTitle: Docker
 description: Learn how to run Grafana's eBPF auto-instrumentation tool as a standalone Docker container, which instruments another container.
+weight: 2
 ---
 
 # Run as a Docker container
 
-You can run Beyla - the eBPF auto-instrumentation tool as a standalone Docker container, 
+You can run Beyla - the eBPF auto-instrumentation tool as a standalone Docker container,
 which instruments a process running in another container.
 
 [Docker Hub](https://hub.docker.com/r/grafana/ebpf-autoinstrument) provides
@@ -25,7 +27,7 @@ The auto-instrument container must be configured with the following properties:
 
 Let's start with an instrumentation example by using the Docker CLI.
 
-First, you'll need a container running an HTTP/S or GRPC service. 
+First, you'll need a container running an HTTP/S or GRPC service.
 If you don't have one handy, you can use this [simple blog engine service written in Go](http://macias.info):
 
 ```sh
@@ -56,8 +58,8 @@ docker run --rm \
   grafana/ebpf-autoinstrument:latest
 ```
 
-Once Beyla's (the auto-instrument tool) container is running, you can open `https://localhost:8443` in your browser, 
-click around a bit, and verify that the auto-instrument tool prints some traced requests on stdout. For example, 
+Once Beyla's (the auto-instrument tool) container is running, you can open `https://localhost:8443` in your browser,
+click around a bit, and verify that the auto-instrument tool prints some traced requests on stdout. For example,
 the standard output (stdout) might look like this:
 
 ```sh
@@ -72,8 +74,8 @@ time=2023-05-22T14:03:42.526Z level=INFO msg="Starting main node"
 
 Now that we have verified that the auto-instrumentation tool is properly tracing the target HTTP service,
 you can configure it to send metrics and traces to an OpenTelemetry endpoint, or have metrics scraped by Prometheus.
-For information on how to export traces and metrics, you can check the [quick start tutorial]({{< relref "./tutorial" >}}) 
-and the [Configuration]({{< relref "./config" >}}) sections of this documentation site.
+For information on how to export traces and metrics, you can check the [quick start tutorial]({{< relref "../tutorial/index.md" >}})
+and the [Configuration]({{< relref "../configure/options.md" >}}) sections of this documentation site.
 
 ## Docker Compose example
 

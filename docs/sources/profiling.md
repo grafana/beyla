@@ -1,9 +1,11 @@
 ---
-title: Profiling guide
+title: Beyla profiling
+menuTitle: Profiling
 description: Learn how to profile Grafana's eBPF auto-instrumentation tool for performance analysis.
+weight: 5
 ---
 
-# Profiling guide
+# Beyla profiling
 
 1. Run the auto-instrumentation tool with the `PROFILE_PORT` variable set, e.g. 6060.
 

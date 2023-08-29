@@ -74,6 +74,7 @@ static __always_inline bool is_http(char *p, u32 len, u8 *packet_type) {
     return true;
 }
 
+// Copying 16 bytes at a time from the skb buffer is the only way to keep the verifier happy.
 static __always_inline void read_skb_bytes(const void *skb, u32 offset, unsigned char *buf, const u32 len) {
     u32 max = offset + len;
     int b = 0;
@@ -104,9 +105,30 @@ static __always_inline void read_skb_bytes(const void *skb, u32 offset, unsigned
     }
 }
 
+static __always_inline void finish_http(http_info_t *info) {
+    if (info->start_monotime_ns != 0 && info->status != 0 && info->pid != 0) {
+        http_info_t *trace = bpf_ringbuf_reserve(&events, sizeof(http_info_t), 0);
+        if (trace) {
+            bpf_dbg_printk("Sending trace %lx", info);
+
+            bpf_memcpy(trace, info, sizeof(http_info_t));
+            bpf_ringbuf_submit(trace, get_flags());
+        }
+
+        bpf_map_delete_elem(&ongoing_http, &info->conn_info);
+        // bpf_map_delete_elem(&filtered_connections, &info->conn_info); // don't clean this up, doesn't work with keepalive
+        // we don't explicitly clean-up the http_tcp_seq, we need to still monitor for dups
+    }        
+}
+
 static __always_inline http_info_t *get_or_set_http_info(http_info_t *info, u8 packet_type) {
     if (packet_type == PACKET_TYPE_REQUEST) {
-        bpf_map_update_elem(&ongoing_http, &info->conn_info, info, BPF_NOEXIST); // noexist is critical here for correct keepalive functionality
+        http_info_t *old_info = bpf_map_lookup_elem(&ongoing_http, &info->conn_info);
+        if (old_info) {
+            finish_http(old_info);
+        }
+
+        bpf_map_update_elem(&ongoing_http, &info->conn_info, info, BPF_ANY); 
     }
 
     return bpf_map_lookup_elem(&ongoing_http, &info->conn_info);
@@ -121,7 +143,6 @@ static __always_inline bool still_reading(http_info_t *info) {
 }
 
 static __always_inline void process_http_request(http_info_t *info, unsigned char *buf) {
-    bpf_memcpy(info->buf, buf, FULL_BUF_SIZE);
     info->start_monotime_ns = bpf_ktime_get_ns();
     info->status = 0;
     info->len = 0;
@@ -134,22 +155,6 @@ static __always_inline void process_http_response(http_info_t *info, unsigned ch
     info->status += (buf[RESPONSE_STATUS_POS]     - '0') * 100;
     info->status += (buf[RESPONSE_STATUS_POS + 1] - '0') * 10;
     info->status += (buf[RESPONSE_STATUS_POS + 2] - '0');
-}
-
-static __always_inline void finish_http(http_info_t *info) {
-    if (info->start_monotime_ns != 0 && info->status != 0 && info->pid != 0) {
-        http_info_t *trace = bpf_ringbuf_reserve(&events, sizeof(http_info_t), 0);
-        if (trace) {
-            bpf_dbg_printk("Sending trace %lx, closing connection", info);
-
-            bpf_memcpy(trace, info, sizeof(http_info_t));
-            bpf_ringbuf_submit(trace, get_flags());
-        }
-
-        bpf_map_delete_elem(&ongoing_http, &info->conn_info);
-        // bpf_map_delete_elem(&filtered_connections, &info->conn_info); // don't clean this up, doesn't work with keepalive
-        // we don't explicitly clean-up the http_tcp_seq, we need to still monitor for dups
-    }        
 }
 
 static __always_inline void process_http(http_info_t *in, protocol_info_t *tcp, u8 packet_type, u32 packet_len, unsigned char *buf, http_connection_metadata_t *meta) {

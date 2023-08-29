@@ -8,6 +8,8 @@ import (
 // ContextInfo stores some context information that must be shared across some nodes of the
 // processing graph.
 type ContextInfo struct {
+	// ChannelBufferLen specifies, for each channel that is created in the pipeline, its buffer length
+	ChannelBufferLen int
 	// ReportRoutes sets whether the metrics should set the http.route attribute
 	ReportRoutes bool
 	// ServiceName is the value of the service_name config attribute, or the discovered value

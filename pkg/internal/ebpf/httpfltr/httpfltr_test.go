@@ -8,7 +8,7 @@ import (
 	"github.com/cilium/ebpf/ringbuf"
 	"github.com/stretchr/testify/assert"
 
-	ebpfcommon "github.com/grafana/ebpf-autoinstrument/pkg/internal/ebpf/common"
+	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
 )
 
 const bufSize = 160

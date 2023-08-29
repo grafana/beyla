@@ -13,7 +13,7 @@ import (
 	"github.com/mariomac/guara/pkg/test"
 	"github.com/stretchr/testify/require"
 
-	"github.com/grafana/ebpf-autoinstrument/test/integration/components/prom"
+	"github.com/grafana/beyla/test/integration/components/prom"
 )
 
 var tr = &http.Transport{

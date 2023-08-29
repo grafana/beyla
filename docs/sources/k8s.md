@@ -30,7 +30,7 @@ requirements:
   container configuration) or at least with `SYS_ADMIN` capability (`securityContext.capabilities.add: ["SYS_ADMIN"])
 
 The following example instruments the `goblog` pod by attaching the eBPF auto-instrumentation tool
-as a container (image available at `grafana/ebpf-autoinstrument:latest`). The
+as a container (image available at `grafana/beyla:latest`). The
 auto-instrumentation tool is configured to forward metrics and traces to a Grafana Agent,
 which is accessible behind the `grafana-agent` service in the same namespace: 
 
@@ -67,7 +67,7 @@ spec:
               name: https
         # Sidecar container with Beyla - the eBPF auto-instrumentation tool
         - name: autoinstrument
-          image: grafana/ebpf-autoinstrument:latest
+          image: grafana/beyla:latest
           securityContext: # Privileges are required to install the eBPF probes
             runAsUser: 0
             capabilities:
@@ -84,7 +84,7 @@ For more information about the different configuration options, please check the
 [Configuration]({{< relref "./config" >}}) section of this documentation site.
 
 Deploying as a sidecar container, is the default deployment mode for the
-[eBPF auto-instrument Kubernetes Operator](https://github.com/grafana/ebpf-autoinstrument-operator).
+[eBPF auto-instrument Kubernetes Operator](https://github.com/grafana/beyla-operator).
 
 ## Deploying as a Daemonset
 
@@ -108,22 +108,22 @@ option enabled, so that it can access all of the processes running on the same h
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
-  name: ebpf-autoinstrument
+  name: beyla
   labels:
-    app: ebpf-autoinstrument
+    app: beyla
 spec:
   selector:
     matchLabels:
-      app: ebpf-autoinstrument
+      app: beyla
   template:
     metadata:
       labels:
-        app: ebpf-autoinstrument
+        app: beyla
     spec:
       hostPID: true # Require to access the processes on the host
       containers:
         - name: autoinstrument
-          image: grafana/ebpf-autoinstrument:latest
+          image: grafana/beyla:latest
           securityContext:
             runAsUser: 0
             privileged: true # Alternative to the capabilities.add SYS_ADMIN setting

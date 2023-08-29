@@ -7,13 +7,13 @@ import (
 	"github.com/mariomac/pipes/pkg/graph"
 	"github.com/mariomac/pipes/pkg/node"
 
-	"github.com/grafana/ebpf-autoinstrument/pkg/internal/ebpf"
-	"github.com/grafana/ebpf-autoinstrument/pkg/internal/export/debug"
-	"github.com/grafana/ebpf-autoinstrument/pkg/internal/export/otel"
-	"github.com/grafana/ebpf-autoinstrument/pkg/internal/export/prom"
-	"github.com/grafana/ebpf-autoinstrument/pkg/internal/imetrics"
-	"github.com/grafana/ebpf-autoinstrument/pkg/internal/pipe/global"
-	"github.com/grafana/ebpf-autoinstrument/pkg/internal/transform"
+	"github.com/grafana/beyla/pkg/internal/ebpf"
+	"github.com/grafana/beyla/pkg/internal/export/debug"
+	"github.com/grafana/beyla/pkg/internal/export/otel"
+	"github.com/grafana/beyla/pkg/internal/export/prom"
+	"github.com/grafana/beyla/pkg/internal/imetrics"
+	"github.com/grafana/beyla/pkg/internal/pipe/global"
+	"github.com/grafana/beyla/pkg/internal/transform"
 )
 
 // nodesMap provides the architecture of the whole processing pipeline:

@@ -14,7 +14,7 @@ import (
 
 	"golang.org/x/exp/slog"
 
-	"github.com/grafana/ebpf-autoinstrument/pkg/beyla"
+	"github.com/grafana/beyla/pkg/beyla"
 )
 
 func main() {

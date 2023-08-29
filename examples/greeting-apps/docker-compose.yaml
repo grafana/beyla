@@ -18,7 +18,7 @@ services:
 
   # Beyla for NGINX
   nginxbeyla:
-    image: grafana/ebpf-autoinstrument:latest
+    image: grafana/beyla:latest
     command:
       - /otelauto
       - --config=/configs/beyla-config.yml
@@ -49,7 +49,7 @@ services:
 
   # Beyla for Java Spring Boot 3.0 GraalVM Native Image
   gobeyla:
-    image: grafana/ebpf-autoinstrument:latest
+    image: grafana/beyla:latest
     command:
       - /otelauto
       - --config=/configs/beyla-config.yml
@@ -80,7 +80,7 @@ services:
 
   # Beyla for Java Spring Boot 3.0 GraalVM Native Image
   javabeyla:
-    image: grafana/ebpf-autoinstrument:latest
+    image: grafana/beyla:latest
     command:
       - /otelauto
       - --config=/configs/beyla-config.yml
@@ -111,7 +111,7 @@ services:
 
   # Beyla for Rust Actix
   rustbeyla:
-    image: grafana/ebpf-autoinstrument:latest
+    image: grafana/beyla:latest
     command:
       - /otelauto
       - --config=/configs/beyla-config.yml

@@ -1,8 +1,8 @@
 package global
 
 import (
-	"github.com/grafana/ebpf-autoinstrument/pkg/internal/connector"
-	"github.com/grafana/ebpf-autoinstrument/pkg/internal/imetrics"
+	"github.com/grafana/beyla/pkg/internal/connector"
+	"github.com/grafana/beyla/pkg/internal/imetrics"
 )
 
 // ContextInfo stores some context information that must be shared across some nodes of the

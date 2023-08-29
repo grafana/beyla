@@ -1,4 +1,4 @@
-module github.com/grafana/ebpf-autoinstrument
+module github.com/grafana/beyla
 
 go 1.20
 

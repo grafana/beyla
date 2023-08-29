@@ -12,8 +12,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/grafana/ebpf-autoinstrument/test/integration/components/jaeger"
-	grpcclient "github.com/grafana/ebpf-autoinstrument/test/integration/components/testserver/grpc/client"
+	"github.com/grafana/beyla/test/integration/components/jaeger"
+	grpcclient "github.com/grafana/beyla/test/integration/components/testserver/grpc/client"
 )
 
 func testHTTPTraces(t *testing.T) {
@@ -44,7 +44,7 @@ func testHTTPTraces(t *testing.T) {
 	assert.Less(t, (10 * time.Millisecond).Microseconds(), parent.Duration)
 	// check span attributes
 	assert.Truef(t, parent.AllMatches(
-		jaeger.Tag{Key: "otel.library.name", Type: "string", Value: "github.com/grafana/ebpf-autoinstrument"},
+		jaeger.Tag{Key: "otel.library.name", Type: "string", Value: "github.com/grafana/beyla"},
 		jaeger.Tag{Key: "http.method", Type: "string", Value: "GET"},
 		jaeger.Tag{Key: "http.status_code", Type: "int64", Value: float64(200)},
 		jaeger.Tag{Key: "http.target", Type: "string", Value: "/create-trace"},
@@ -70,7 +70,7 @@ func testHTTPTraces(t *testing.T) {
 	// check span attributes
 	// check span attributes
 	assert.Truef(t, queue.AllMatches(
-		jaeger.Tag{Key: "otel.library.name", Type: "string", Value: "github.com/grafana/ebpf-autoinstrument"},
+		jaeger.Tag{Key: "otel.library.name", Type: "string", Value: "github.com/grafana/beyla"},
 		jaeger.Tag{Key: "span.kind", Type: "string", Value: "internal"},
 	), "not all tags matched in %+v", queue.Tags)
 
@@ -89,7 +89,7 @@ func testHTTPTraces(t *testing.T) {
 		processing.StartTime+processing.Duration,
 		parent.StartTime+parent.Duration+1)
 	assert.Truef(t, queue.AllMatches(
-		jaeger.Tag{Key: "otel.library.name", Type: "string", Value: "github.com/grafana/ebpf-autoinstrument"},
+		jaeger.Tag{Key: "otel.library.name", Type: "string", Value: "github.com/grafana/beyla"},
 		jaeger.Tag{Key: "span.kind", Type: "string", Value: "internal"},
 	), "not all tags matched in %+v", queue.Tags)
 
@@ -130,7 +130,7 @@ func testGRPCTraces(t *testing.T) {
 	assert.Less(t, (10 * time.Millisecond).Microseconds(), parent.Duration)
 	// check span attributes
 	assert.Truef(t, parent.AllMatches(
-		jaeger.Tag{Key: "otel.library.name", Type: "string", Value: "github.com/grafana/ebpf-autoinstrument"},
+		jaeger.Tag{Key: "otel.library.name", Type: "string", Value: "github.com/grafana/beyla"},
 		jaeger.Tag{Key: "net.host.port", Type: "int64", Value: float64(50051)},
 		jaeger.Tag{Key: "rpc.grpc.status_code", Type: "int64", Value: float64(2)},
 		jaeger.Tag{Key: "rpc.method", Type: "string", Value: "/routeguide.RouteGuide/Debug"},
@@ -154,7 +154,7 @@ func testGRPCTraces(t *testing.T) {
 		parent.StartTime+parent.Duration+1) // adding 1 to tolerate inaccuracies from rounding from ns to ms
 	// check span attributes
 	assert.Truef(t, queue.AllMatches(
-		jaeger.Tag{Key: "otel.library.name", Type: "string", Value: "github.com/grafana/ebpf-autoinstrument"},
+		jaeger.Tag{Key: "otel.library.name", Type: "string", Value: "github.com/grafana/beyla"},
 		jaeger.Tag{Key: "span.kind", Type: "string", Value: "internal"},
 	), "not all tags matched in %+v", queue.Tags)
 
@@ -172,7 +172,7 @@ func testGRPCTraces(t *testing.T) {
 	assert.LessOrEqual(t, processing.StartTime+processing.Duration, parent.StartTime+parent.Duration+1)
 	// check span attributes
 	assert.Truef(t, queue.AllMatches(
-		jaeger.Tag{Key: "otel.library.name", Type: "string", Value: "github.com/grafana/ebpf-autoinstrument"},
+		jaeger.Tag{Key: "otel.library.name", Type: "string", Value: "github.com/grafana/beyla"},
 		jaeger.Tag{Key: "span.kind", Type: "string", Value: "internal"},
 	), "not all tags matched in %+v", queue.Tags)
 

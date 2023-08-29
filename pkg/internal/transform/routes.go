@@ -7,7 +7,7 @@ import (
 	"github.com/mariomac/pipes/pkg/node"
 	"golang.org/x/exp/slog"
 
-	"github.com/grafana/ebpf-autoinstrument/pkg/internal/transform/route"
+	"github.com/grafana/beyla/pkg/internal/transform/route"
 )
 
 // UnmatchType defines which actions to do when a route pattern is not recognized

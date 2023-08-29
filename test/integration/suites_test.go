@@ -8,7 +8,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/grafana/ebpf-autoinstrument/test/integration/components/docker"
+	"github.com/grafana/beyla/test/integration/components/docker"
 )
 
 func TestSuite(t *testing.T) {
@@ -245,7 +245,7 @@ func TestSuite_DotNet(t *testing.T) {
 }
 
 // Disabled for now as we randomly fail to register 3 events, but only get 2
-// Issue: https://github.com/grafana/ebpf-autoinstrument/issues/208
+// Issue: https://github.com/grafana/beyla/issues/208
 func TestSuite_DotNetTLS(t *testing.T) {
 	compose, err := docker.ComposeSuite("docker-compose-dotnet.yml", path.Join(pathOutput, "test-suite-dotnet-tls.log"))
 	compose.Env = append(compose.Env, `OPEN_PORT=7033`, `EXECUTABLE_NAME=`, `TEST_SERVICE_PORTS=7034:7033`, `TESTSERVER_DOCKERFILE_SUFFIX=_tls`)

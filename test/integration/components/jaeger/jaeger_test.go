@@ -47,16 +47,16 @@ func Fixture() *TracesQuery {
 	err := json.Unmarshal([]byte(`{"data":[{"traceID":"eae56fbbec9505c102e8aabfc6b5c481","spans":[{"traceID":"eae56fbbec9505c102e8aabfc`+
 		`6b5c481","spanID":"89cbc1f60aab3b04","operationName":"in queue","references":[{"refType":"CHILD_OF","traceID":"ea`+
 		`e56fbbec9505c102e8aabfc6b5c481","spanID":"1eef766536d58ec8"}],"startTime":1686641491452470,"duration":2845,"tags"`+
-		`:[{"key":"otel.library.name","type":"string","value":"github.com/grafana/ebpf-autoinstrument"},{"key":"span.kind"`+
+		`:[{"key":"otel.library.name","type":"string","value":"github.com/grafana/beyla"},{"key":"span.kind"`+
 		`,"type":"string","value":"internal"},{"key":"internal.span.format","type":"string","value":"proto"}],"logs":[],"p`+
 		`rocessID":"p1","warnings":null},{"traceID":"eae56fbbec9505c102e8aabfc6b5c481","spanID":"783b655f78525376","operat`+
 		`ionName":"processing","references":[{"refType":"CHILD_OF","traceID":"eae56fbbec9505c102e8aabfc6b5c481","spanID":"`+
 		`1eef766536d58ec8"}],"startTime":1686641491455316,"duration":476,"tags":[{"key":"otel.library.name","type":"string`+
-		`","value":"github.com/grafana/ebpf-autoinstrument"},{"key":"span.kind","type":"string","value":"internal"},{"key"`+
+		`","value":"github.com/grafana/beyla"},{"key":"span.kind","type":"string","value":"internal"},{"key"`+
 		`:"internal.span.format","type":"string","value":"proto"}],"logs":[],"processID":"p1","warnings":null},{"traceID":`+
 		`"eae56fbbec9505c102e8aabfc6b5c481","spanID":"1eef766536d58ec8","operationName":"GET /holanen","references":[],"st`+
 		`artTime":1686641491452470,"duration":3322,"tags":[{"key":"otel.library.name","type":"string","value":"github.com/`+
-		`grafana/ebpf-autoinstrument"},{"key":"http.method","type":"string","value":"GET"},{"key":"http.status_code","type`+
+		`grafana/beyla"},{"key":"http.method","type":"string","value":"GET"},{"key":"http.status_code","type`+
 		`":"int64","value":200},{"key":"http.target","type":"string","value":"/holanen"},{"key":"net.sock.peer.addr","type`+
 		`":"string","value":"172.18.0.1"},{"key":"net.host.name","type":"string","value":"localhost"},{"key":"net.host.por`+
 		`t","type":"int64","value":8080},{"key":"http.request_content_length","type":"int64","value":0},{"key":"http.route`+
@@ -66,7 +66,7 @@ func Fixture() *TracesQuery {
 		`try.sdk.language","type":"string","value":"go"}]}},"warnings":null},{"traceID":"af9ccbccbddc06accc7047dfb0d69ea0"`+
 		`,"spans":[{"traceID":"af9ccbccbddc06accc7047dfb0d69ea0","spanID":"0c904394258e390c","operationName":"GET /holanen`+
 		`a","references":[],"startTime":1686641494868532,"duration":1108,"tags":[{"key":"otel.library.name","type":"string`+
-		`","value":"github.com/grafana/ebpf-autoinstrument"},{"key":"http.method","type":"string","value":"GET"},{"key":"h`+
+		`","value":"github.com/grafana/beyla"},{"key":"http.method","type":"string","value":"GET"},{"key":"h`+
 		`ttp.status_code","type":"int64","value":200},{"key":"http.target","type":"string","value":"/holanena"},{"key":"ne`+
 		`t.sock.peer.addr","type":"string","value":"172.18.0.1"},{"key":"net.host.name","type":"string","value":"localhost`+
 		`"},{"key":"net.host.port","type":"int64","value":8080},{"key":"http.request_content_length","type":"int64","value`+
@@ -79,7 +79,7 @@ func Fixture() *TracesQuery {
 		`ing","value":"proto"}],"logs":[],"processID":"p1","warnings":null},{"traceID":"af9ccbccbddc06accc7047dfb0d69ea0",`+
 		`"spanID":"29b1da78526e9c57","operationName":"in queue","references":[{"refType":"CHILD_OF","traceID":"af9ccbccbdd`+
 		`c06accc7047dfb0d69ea0","spanID":"0c904394258e390c"}],"startTime":1686641494868532,"duration":998,"tags":[{"key":"`+
-		`otel.library.name","type":"string","value":"github.com/grafana/ebpf-autoinstrument"},{"key":"span.kind","type":"s`+
+		`otel.library.name","type":"string","value":"github.com/grafana/beyla"},{"key":"span.kind","type":"s`+
 		`tring","value":"internal"},{"key":"internal.span.format","type":"string","value":"proto"}],"logs":[],"processID":`+
 		`"p1","warnings":null}],"processes":{"p1":{"serviceName":"testserver","tags":[{"key":"service.namespace","type":"s`+
 		`tring","value":"integration-test"},{"key":"telemetry.sdk.language","type":"string","value":"go"}]}},"warnings":nu`+

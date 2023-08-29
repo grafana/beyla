@@ -1,4 +1,4 @@
-// Package imetrics supports recording and submission of internal metrics from the autoinstrument
+// Package imetrics supports recording and submission of internal metrics from Beyla
 package imetrics
 
 import (

@@ -7,10 +7,10 @@ import (
 	"github.com/mariomac/pipes/pkg/node"
 	"github.com/prometheus/client_golang/prometheus"
 
-	"github.com/grafana/ebpf-autoinstrument/pkg/internal/connector"
-	"github.com/grafana/ebpf-autoinstrument/pkg/internal/export/otel"
-	"github.com/grafana/ebpf-autoinstrument/pkg/internal/pipe/global"
-	"github.com/grafana/ebpf-autoinstrument/pkg/internal/transform"
+	"github.com/grafana/beyla/pkg/internal/connector"
+	"github.com/grafana/beyla/pkg/internal/export/otel"
+	"github.com/grafana/beyla/pkg/internal/pipe/global"
+	"github.com/grafana/beyla/pkg/internal/transform"
 )
 
 // using labels and names that are equivalent names to the OTEL attributes

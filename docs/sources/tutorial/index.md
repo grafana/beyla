@@ -125,13 +125,13 @@ go run server.go
 
 > ℹ️ For simplicity, this tutorial shows how to manually run the auto-instrumentation tool as an
 ordinary operating system process. For more running modes, you can check the documentation about
-[running the eBPF auto-instrumentation tool as a Docker container](https://github.com/grafana/ebpf-autoinstrument/blob/main/docs/docker.md)
-or [deploying the eBPF auto-instrumentation tool in Kubernetes](https://github.com/grafana/ebpf-autoinstrument/blob/main/docs/k8s.md).
+[running the eBPF auto-instrumentation tool as a Docker container](https://github.com/grafana/beyla/blob/main/docs/docker.md)
+or [deploying the eBPF auto-instrumentation tool in Kubernetes](https://github.com/grafana/beyla/blob/main/docs/k8s.md).
 
 You can download the auto-instrumentation executable directly with `go install`:
 
 ```sh
-go install github.com/grafana/ebpf-autoinstrument/cmd/beyla@latest
+go install github.com/grafana/beyla/cmd/beyla@latest
 ```
 
 ## Instrumenting a running service

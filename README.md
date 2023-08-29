@@ -1,6 +1,6 @@
-# eBPF autoinstrumenter
+# Grafana Beyla
 
-[![Build Status](https://drone.grafana.net/api/badges/grafana/ebpf-autoinstrument/status.svg?ref=refs/heads/main)](https://drone.grafana.net/grafana/ebpf-autoinstrument)
+[![Build Status](https://drone.grafana.net/api/badges/grafana/beyla/status.svg?ref=refs/heads/main)](https://drone.grafana.net/grafana/beyla)
 
 eBPF-based autoinstrumentation of HTTP/HTTPS/GRPC Go services, as well as HTTP/HTTPS services
 written in other languages (intercepting Kernel-level socket operations as well as

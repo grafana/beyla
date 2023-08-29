@@ -24,7 +24,7 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 
-	pb "github.com/grafana/ebpf-autoinstrument/test/integration/components/testserver/grpc/routeguide"
+	pb "github.com/grafana/beyla/test/integration/components/testserver/grpc/routeguide"
 )
 
 var logs = slog.With("component", "grpc.Client")

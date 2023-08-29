@@ -14,15 +14,15 @@ import (
 	"go.opentelemetry.io/collector/pdata/ptrace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
 
-	"github.com/grafana/ebpf-autoinstrument/pkg/internal/ebpf"
-	ebpfcommon "github.com/grafana/ebpf-autoinstrument/pkg/internal/ebpf/common"
-	"github.com/grafana/ebpf-autoinstrument/pkg/internal/ebpf/httpfltr"
-	"github.com/grafana/ebpf-autoinstrument/pkg/internal/export/otel"
-	"github.com/grafana/ebpf-autoinstrument/pkg/internal/imetrics"
-	"github.com/grafana/ebpf-autoinstrument/pkg/internal/pipe/global"
-	"github.com/grafana/ebpf-autoinstrument/pkg/internal/testutil"
-	"github.com/grafana/ebpf-autoinstrument/pkg/internal/transform"
-	"github.com/grafana/ebpf-autoinstrument/test/collector"
+	"github.com/grafana/beyla/pkg/internal/ebpf"
+	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
+	"github.com/grafana/beyla/pkg/internal/ebpf/httpfltr"
+	"github.com/grafana/beyla/pkg/internal/export/otel"
+	"github.com/grafana/beyla/pkg/internal/imetrics"
+	"github.com/grafana/beyla/pkg/internal/pipe/global"
+	"github.com/grafana/beyla/pkg/internal/testutil"
+	"github.com/grafana/beyla/pkg/internal/transform"
+	"github.com/grafana/beyla/test/collector"
 )
 
 const testTimeout = 5 * time.Second

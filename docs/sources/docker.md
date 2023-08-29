@@ -8,11 +8,11 @@ description: Learn how to run Grafana's eBPF auto-instrumentation tool as a stan
 You can run Beyla - the eBPF auto-instrumentation tool as a standalone Docker container, 
 which instruments a process running in another container.
 
-[Docker Hub](https://hub.docker.com/r/grafana/ebpf-autoinstrument) provides
+[Docker Hub](https://hub.docker.com/r/grafana/beyla) provides
 an updated image of the eBPF auto-instrumentation tool, with the following image name:
 
 ```
-grafana/ebpf-autoinstrument:latest
+grafana/beyla:latest
 ```
 
 The auto-instrument container must be configured with the following properties:
@@ -53,7 +53,7 @@ docker run --rm \
   -e PRINT_TRACES=true \
   --pid="container:goblog" \
   --privileged \
-  grafana/ebpf-autoinstrument:latest
+  grafana/beyla:latest
 ```
 
 Once Beyla's (the auto-instrument tool) container is running, you can open `https://localhost:8443` in your browser, 
@@ -93,7 +93,7 @@ services:
       - "18443:8443"
 
   autoinstrumenter:
-    image: grafana/ebpf-autoinstrument:latest
+    image: grafana/beyla:latest
     pid: "service:goblog"
     cap_add:
       - SYS_ADMIN

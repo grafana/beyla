@@ -30,7 +30,7 @@ spec:
             - containerPort: 8443
               name: https
         - name: autoinstrumenter
-          image: grafana/ebpf-autoinstrument:latest
+          image: grafana/beyla:latest
           imagePullPolicy: IfNotPresent
           securityContext:
             runAsUser: 0

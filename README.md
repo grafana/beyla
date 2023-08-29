@@ -1,4 +1,4 @@
-# Grafana Beyla
+# Beyla
 
 [![Build Status](https://drone.grafana.net/api/badges/grafana/beyla/status.svg?ref=refs/heads/main)](https://drone.grafana.net/grafana/beyla)
 

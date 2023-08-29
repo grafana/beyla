@@ -4,7 +4,9 @@ package integration
 
 import (
 	"bytes"
+	"crypto/rand"
 	"crypto/tls"
+	"encoding/hex"
 	"net/http"
 	"strconv"
 	"testing"
@@ -48,6 +50,33 @@ func doHTTPGet(t *testing.T, path string, status int) {
 	require.NoError(t, err)
 	require.Equal(t, status, r.StatusCode)
 	time.Sleep(300 * time.Millisecond)
+}
+
+func doHTTPGetWithTraceparent(t *testing.T, path string, status int, traceparent string) {
+	// Random fake body to cause the request to have some size (38 bytes)
+	jsonBody := []byte(`{"productId": 123456, "quantity": 100}`)
+
+	req, err := http.NewRequest(http.MethodGet, path, bytes.NewReader(jsonBody))
+	require.NoError(t, err)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Traceparent", traceparent)
+
+	r, err := testHTTPClient.Do(req)
+	require.NoError(t, err)
+	require.Equal(t, status, r.StatusCode)
+	time.Sleep(300 * time.Millisecond)
+}
+
+func createTraceID() string {
+	bytes := make([]byte, 16)
+	if _, err := rand.Read(bytes); err != nil {
+		return "0123456789abcdef0123456789abcdef"
+	}
+	return hex.EncodeToString(bytes)
+}
+
+func createTraceparent(TraceID string) string {
+	return "00-" + TraceID + "-1122334455667788-01"
 }
 
 // does a smoke test to verify that all the components that started

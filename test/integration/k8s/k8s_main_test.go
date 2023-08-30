@@ -10,8 +10,8 @@ import (
 
 	"golang.org/x/exp/slog"
 
-	"github.com/grafana/ebpf-autoinstrument/test/integration/components/docker"
-	"github.com/grafana/ebpf-autoinstrument/test/integration/components/kube"
+	"github.com/grafana/beyla/test/integration/components/docker"
+	"github.com/grafana/beyla/test/integration/components/kube"
 )
 
 const (

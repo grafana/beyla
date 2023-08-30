@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
 jobs:
   sync:
-    if: github.repository == 'grafana/ebpf-autoinstrument'
+    if: github.repository == 'grafana/beyla'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3

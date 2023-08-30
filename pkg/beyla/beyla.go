@@ -9,11 +9,11 @@ import (
 
 	"golang.org/x/exp/slog"
 
-	"github.com/grafana/ebpf-autoinstrument/pkg/internal/connector"
-	"github.com/grafana/ebpf-autoinstrument/pkg/internal/ebpf"
-	"github.com/grafana/ebpf-autoinstrument/pkg/internal/imetrics"
-	"github.com/grafana/ebpf-autoinstrument/pkg/internal/pipe"
-	"github.com/grafana/ebpf-autoinstrument/pkg/internal/pipe/global"
+	"github.com/grafana/beyla/pkg/internal/connector"
+	"github.com/grafana/beyla/pkg/internal/ebpf"
+	"github.com/grafana/beyla/pkg/internal/imetrics"
+	"github.com/grafana/beyla/pkg/internal/pipe"
+	"github.com/grafana/beyla/pkg/internal/pipe/global"
 )
 
 // Config as provided by the user to configure and run Beyla

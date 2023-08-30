@@ -10,7 +10,7 @@ import (
 	"github.com/mariomac/pipes/pkg/node"
 	"golang.org/x/exp/slog"
 
-	"github.com/grafana/ebpf-autoinstrument/pkg/internal/transform/kube"
+	"github.com/grafana/beyla/pkg/internal/transform/kube"
 )
 
 type KubeEnableFlag string

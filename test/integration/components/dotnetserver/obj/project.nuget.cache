@@ -2,7 +2,7 @@
   "version": 2,
   "dgSpecHash": "Wmo0FNrpwM2+JUMmmIq129ItivQQqQXKH8nfbhq1Wu2Er8Wr0kOgg7fBDLRdGDJylL14bLT9IBdKkplity6+UA==",
   "success": true,
-  "projectFilePath": "/home/nino/work/ebpf-autoinstrument/test/integration/components/dotnetserver/dotnetserver.csproj",
+  "projectFilePath": "/home/nino/work/beyla/test/integration/components/dotnetserver/dotnetserver.csproj",
   "expectedPackageFiles": [],
   "logs": []
 }

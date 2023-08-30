@@ -5,9 +5,9 @@ import (
 
 	"github.com/mariomac/pipes/pkg/node"
 
-	ebpfcommon "github.com/grafana/ebpf-autoinstrument/pkg/internal/ebpf/common"
-	"github.com/grafana/ebpf-autoinstrument/pkg/internal/exec"
-	"github.com/grafana/ebpf-autoinstrument/pkg/internal/imetrics"
+	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
+	"github.com/grafana/beyla/pkg/internal/exec"
+	"github.com/grafana/beyla/pkg/internal/imetrics"
 )
 
 // dummy functions and types to avoid compilation errors in Darwin. The tracer component is only usable in Linux.

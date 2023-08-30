@@ -10,8 +10,8 @@ import (
 	"github.com/gavv/monotime"
 	"golang.org/x/exp/slog"
 
-	ebpfcommon "github.com/grafana/ebpf-autoinstrument/pkg/internal/ebpf/common"
-	httpfltr "github.com/grafana/ebpf-autoinstrument/pkg/internal/ebpf/httpfltr"
+	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
+	httpfltr "github.com/grafana/beyla/pkg/internal/ebpf/httpfltr"
 )
 
 type EventType int

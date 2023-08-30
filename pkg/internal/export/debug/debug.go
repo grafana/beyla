@@ -7,7 +7,7 @@ import (
 
 	"github.com/mariomac/pipes/pkg/node"
 
-	"github.com/grafana/ebpf-autoinstrument/pkg/internal/transform"
+	"github.com/grafana/beyla/pkg/internal/transform"
 )
 
 type PrintEnabled bool

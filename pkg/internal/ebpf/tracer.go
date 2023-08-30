@@ -20,14 +20,14 @@ import (
 	"golang.org/x/exp/slog"
 	"golang.org/x/sys/unix"
 
-	ebpfcommon "github.com/grafana/ebpf-autoinstrument/pkg/internal/ebpf/common"
-	"github.com/grafana/ebpf-autoinstrument/pkg/internal/ebpf/goruntime"
-	"github.com/grafana/ebpf-autoinstrument/pkg/internal/ebpf/grpc"
-	"github.com/grafana/ebpf-autoinstrument/pkg/internal/ebpf/httpfltr"
-	"github.com/grafana/ebpf-autoinstrument/pkg/internal/ebpf/nethttp"
-	"github.com/grafana/ebpf-autoinstrument/pkg/internal/exec"
-	"github.com/grafana/ebpf-autoinstrument/pkg/internal/goexec"
-	"github.com/grafana/ebpf-autoinstrument/pkg/internal/imetrics"
+	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
+	"github.com/grafana/beyla/pkg/internal/ebpf/goruntime"
+	"github.com/grafana/beyla/pkg/internal/ebpf/grpc"
+	"github.com/grafana/beyla/pkg/internal/ebpf/httpfltr"
+	"github.com/grafana/beyla/pkg/internal/ebpf/nethttp"
+	"github.com/grafana/beyla/pkg/internal/exec"
+	"github.com/grafana/beyla/pkg/internal/goexec"
+	"github.com/grafana/beyla/pkg/internal/imetrics"
 )
 
 // Tracer is an individual eBPF program (e.g. the net/http or the grpc tracers)

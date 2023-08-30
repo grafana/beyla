@@ -4,7 +4,7 @@ package goexec
 import (
 	"fmt"
 
-	"github.com/grafana/ebpf-autoinstrument/pkg/internal/exec"
+	"github.com/grafana/beyla/pkg/internal/exec"
 )
 
 type Offsets struct {

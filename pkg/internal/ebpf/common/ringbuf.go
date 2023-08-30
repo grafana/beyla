@@ -12,7 +12,7 @@ import (
 	"github.com/mariomac/pipes/pkg/node"
 	"golang.org/x/exp/slog"
 
-	"github.com/grafana/ebpf-autoinstrument/pkg/internal/imetrics"
+	"github.com/grafana/beyla/pkg/internal/imetrics"
 )
 
 // ringBufReader interface extracts the used methods from ringbuf.Reader for proper

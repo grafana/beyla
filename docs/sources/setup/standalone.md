@@ -19,7 +19,7 @@ You can download the auto-instrumentation executable directly with the `go insta
 command line:
 
 ```sh
-go install github.com/grafana/ebpf-autoinstrument/cmd/beyla@latest
+go install github.com/grafana/beyla/cmd/beyla@latest
 ```
 
 ## Specifying configuration options

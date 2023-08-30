@@ -13,11 +13,11 @@
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "/home/nino/work/ebpf-autoinstrument/test/integration/components/dotnetserver/dotnetserver.csproj",
+      "projectUniqueName": "/home/nino/work/beyla/test/integration/components/dotnetserver/dotnetserver.csproj",
       "projectName": "dotnetserver",
-      "projectPath": "/home/nino/work/ebpf-autoinstrument/test/integration/components/dotnetserver/dotnetserver.csproj",
+      "projectPath": "/home/nino/work/beyla/test/integration/components/dotnetserver/dotnetserver.csproj",
       "packagesPath": "/home/nino/.nuget/packages/",
-      "outputPath": "/home/nino/work/ebpf-autoinstrument/test/integration/components/dotnetserver/obj/",
+      "outputPath": "/home/nino/work/beyla/test/integration/components/dotnetserver/obj/",
       "projectStyle": "PackageReference",
       "configFilePaths": [
         "/home/nino/.nuget/NuGet/NuGet.Config"

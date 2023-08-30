@@ -9,7 +9,7 @@ TEST_OUTPUT ?= ./testoutput
 IMG_REGISTRY ?= docker.io
 # Set your registry username. CI will set 'grafana' but you mustn't use it for manual pushing.
 IMG_ORG ?=
-IMG_NAME ?= ebpf-autoinstrument
+IMG_NAME ?= beyla
 # Container image creation creation
 VERSION ?= dev
 IMG = $(IMG_REGISTRY)/$(IMG_ORG)/$(IMG_NAME):$(VERSION)
@@ -212,7 +212,7 @@ itest-coverage-data:
 	go tool covdata merge -i=$(TEST_OUTPUT) -o $(TEST_OUTPUT)/merge
 	go tool covdata textfmt -i=$(TEST_OUTPUT)/merge -o $(TEST_OUTPUT)/itest-covdata.raw.txt
 	# replace the unexpected /src/cmd/beyla/main.go file by the module path
-	sed 's/^\/src\/cmd\//github.com\/grafana\/ebpf-autoinstrument\/cmd\//' $(TEST_OUTPUT)/itest-covdata.raw.txt > $(TEST_OUTPUT)/itest-covdata.all.txt
+	sed 's/^\/src\/cmd\//github.com\/grafana\/beyla\/cmd\//' $(TEST_OUTPUT)/itest-covdata.raw.txt > $(TEST_OUTPUT)/itest-covdata.all.txt
 	# exclude generated files from coverage data
 	grep -vE $(EXCLUDE_COVERAGE_FILES) $(TEST_OUTPUT)/itest-covdata.all.txt > $(TEST_OUTPUT)/itest-covdata.txt
 
@@ -221,7 +221,7 @@ drone:
 	@echo "### Regenerating and signing .drone/drone.yml"
 	drone jsonnet --format --stream --source .drone/drone.jsonnet --target .drone/drone.yml
 	drone lint .drone/drone.yml
-	drone sign --save grafana/ebpf-autoinstrument .drone/drone.yml || echo "You must set DRONE_SERVER and DRONE_TOKEN. These values can be found on your [drone account](http://drone.grafana.net/account) page."
+	drone sign --save grafana/beyla .drone/drone.yml || echo "You must set DRONE_SERVER and DRONE_TOKEN. These values can be found on your [drone account](http://drone.grafana.net/account) page."
 
 .PHONY: check-drone-drift
 check-drone-drift:

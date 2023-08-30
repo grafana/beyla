@@ -15,6 +15,10 @@ keywords:
 
 # Grafana Beyla
 
+{{% admonition type="caution" %}}
+Beyla is currently in [public preview](/docs/release-life-cycle/). Grafana Labs offers limited support, and breaking changes might occur prior to the feature being made generally available.
+{{% /admonition %}}
+
 Grafana Beyla is an eBPF based application auto-instrumentation tool to track total request time.
 
 When performing a remote service request, the perceived client response time is different from the measured response time at the server.

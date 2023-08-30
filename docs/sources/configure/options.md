@@ -1,11 +1,11 @@
 ---
-title: Configure Beyla
+title: Beyla configuration options
 menuTitle: Options
 description: Learn how to configure Grafana's eBPF based auto-instrumentation tool and the available configuration options.
 weight: 1
 ---
 
-# Configure Beyla
+# Beyla configuration options
 
 The eBPF auto-instrumentation tool can be configured via environment variables or via
 a YAML configuration file that is passed with the `-config` command-line

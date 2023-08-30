@@ -1,61 +1,51 @@
 ---
-title: Run as a standalone process
+title: Run Beyla as a standalone process
 menuTitle: Standalone
 description: Learn how to run Grafana's eBPF auto-instrumentation tool as a standalone Linux process.
 weight: 1
 ---
 
-# Run as a standalone process
+# Run Beyla as a standalone process
 
-The eBPF auto-instrumentation tool can run as a standalone Linux OS process with
-elevated privileges, which can inspect other running processes.
+Beyla can run as a standalone Linux OS process with elevated privileges that can inspect other running processes.
 
-For a quick introduction about how to collect and visualize the instrumented
-data, you can follow our [step-by-step tutorial]({{< relref "../tutorial/index.md" >}}).
+For a complete introduction tutorial on how to collect and visualize the instrumented data, follow the [quick start tutorial]({{< relref "../tutorial/index.md" >}}).
 
-## Download and install Beyla - the eBPF auto-instrumentation tool
+## Download and install
 
-You can directly download the latest version that matches your processor architecture
-from the [Beyla releases page](https://github.com/grafana/beyla/releases).
+You can download the Beyla executable from the [Beyla releases page](https://github.com/grafana/beyla/releases).
 
-As an alternative, if your system has the Go SDK installed, you can download the
-Beyla executable directly with the `go install` command:
+Alternatively, download the Beyla executable directly with the `go install` command:
 
 ```sh
 go install github.com/grafana/beyla/cmd/beyla@latest
 ```
 
-## Specifying configuration options
+## Configure
 
-The eBPF auto-instrumentation tool can be configured via:
+Beyla can be configured via:
 
-- Environment variables.
-- A YAML configuration file path, passed in with the `-config` CLI argument.
+- environment variables
+- a YAML configuration file, supplied with the `-config` CLI argument
 
 If the same configuration property is defined in both the YAML file and the environment
 variables, the value specified in the environment variables takes precedence over the
 configuration file.
 
-For a complete list and description of all of the configuration options, you can check the
-[list of configuration options]({{< relref "../configure/options" >}}) documentation section.
+For a complete list of configuration options, see the [Beyla configuration options]({{< relref "../configure/_index.md" >}}) documentation.
 
-## Running the auto-instrumentation tool
+## Run
 
-The eBPF auto-instrumentation tool requires at least two configuration options to run:
+Beyla requires at least two configuration options to run:
 
-- The executable to instrument. You can select which executable to instrument by its
-  command line name or by any port it has open.
-- A metrics exporter. You can configure an OpenTelemetry metrics and/or traces exporter, but
-  you can also configure a Prometheus HTTP endpoint to expose the metrics.
+- the executable to instrument, specified with the command line name or port
+- a metrics exporter, either OpenTelemetry or Prometheus
 
-The eBPF auto-instrumentation tool requires `sudo`/administrative processes privileges, or at
-least it needs to be granted the `CAP_SYS_ADMIN` capability.
+Beyla requires administrative (sudo) privileges, or at least it needs to be granted the `CAP_SYS_ADMIN` capability.
 
 ## Examples
 
-Let's instrument the process that owns the port 443, and expose the metrics as a
-Prometheus endpoint listening on the port 8999. In this example, the configuration is passed
-exclusively through environment variables:
+Let's instrument the process that owns the port 443, and expose the metrics as a Prometheus endpoint listening on the port 8999. In this example, the configuration is passed exclusively through environment variables:
 
 ```sh
 BEYLA_PROMETHEUS_PORT=8999 OPEN_PORT=443 sudo -E beyla
@@ -73,8 +63,7 @@ EOF
 sudo beyla -config config.yml
 ```
 
-In the following example, we are overriding the previous YAML configuration option
-for the Prometheus port, via an environment variable:
+In the following example, the previous YAML configuration option for the Prometheus port is overridden by an environment variable:
 
 ```
 BEYLA_PROMETHEUS_PORT=8888 sudo -E beyla -config config.yml

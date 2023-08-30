@@ -1,16 +1,18 @@
 ---
-title: Zero-code application traces and metrics with eBPF
+title: Beyla quick start tutorial
+menuTitle: Quick start tutorial
 description: This tutorial explains how to get started with application RED metrics collection by using Grafana's eBPF auto-instrumentation tool.
+weight: 3
 ---
 
-# Zero-code application traces and metrics with eBPF
+# Beyla quick start tutorial
 
 Do you want to give Grafana a try for application observability, but you don't have the time
 to adapt your application for it?
 
 Until now, instrumenting an application to get metrics and traces, required, in the best case,
-adding a programming language specific agent to your deployment/packages. In languages like Go, 
-you had to manually add tracepoints into your code. In all cases, you need to redeploy the 
+adding a programming language specific agent to your deployment/packages. In languages like Go,
+you had to manually add tracepoints into your code. In all cases, you need to redeploy the
 instrumented version of the service to your staging/production servers.
 
 To flatten the curve of adoption of Application Observability, Grafana is releasing an
@@ -26,20 +28,20 @@ runtime information of different parts of the Linux Kernel: system calls, networ
 inserting probes in your user space programs.
 
 The eBPF programs are safe, they are compiled for their own
-[Virtual Machine instruction set](https://docs.kernel.org/bpf/instruction-set.html) and they run in a 
-sandboxed environment which verifies each loaded eBPF program for memory access safety and finite execution time. 
+[Virtual Machine instruction set](https://docs.kernel.org/bpf/instruction-set.html) and they run in a
+sandboxed environment which verifies each loaded eBPF program for memory access safety and finite execution time.
 Unlike older technologies, such as the natively-compiled Kprobes and Uprobes, there is no chance that a poorly
 programmed probe will cause the Linux Kernel to hang.
 
 After being verified, the eBPF binaries are compiled with a Just-In-Time (JIT) compiler
-for the native host architecture (x86-64, ARM64, ...). This allows for efficient and fast 
+for the native host architecture (x86-64, ARM64, ...). This allows for efficient and fast
 execution.
 
-The eBPF code is loaded from ordinary programs running in user space. The kernel and the user 
-space programs can share information through a set of well defined communication mechanisms, which are 
+The eBPF code is loaded from ordinary programs running in user space. The kernel and the user
+space programs can share information through a set of well defined communication mechanisms, which are
 provided by the eBPF specification. For example: ring buffers, arrays, hash maps, etc.
 
-![](img/ebpf-arch.svg)
+![](https://grafana.com/media/docs/grafana-cloud/beyla/tutorial/ebpf-arch.svg)
 
 ## Running an instrumented service
 
@@ -113,7 +115,7 @@ query parameters:
 * `delay` will artificially increase the service response time. For example
   `curl "http://localhost:8080/bar?delay=3s"` will take at least 3 seconds to complete.
 
-You can also [download the server.go file from this tutorial](./server.go).
+You can also [download the server.go file from this tutorial](/docs/grafana-cloud/monitor-applications/beyla/tutorial/resources/server.go).
 
 We can now run the test HTTP service with the following command line:
 
@@ -148,13 +150,13 @@ The eBPF auto-instrumentation tool requires at least two configuration options t
 
 For details on how to configure other exporters (for example, [OpenTelemetry](https://opentelemetry.io/)
 traces and metrics), as well as additional configuration options, please check the
-[configuration section in the documentation]({{< relref "../config" >}}).
+[configuration section in the documentation]({{< relref "../configure/options.md" >}}).
 
 After the service from the previous section is up and running, we can instrument it
 by executing the `beyla` command which we previously downloaded with
 `go install`, as seen in the [Downloading](#downloading-the-auto-instrumentation-tool) section.
 
-We will configure the eBPF auto-instrumentation tool to instrument the executable that 
+We will configure the eBPF auto-instrumentation tool to instrument the executable that
 listens on port 8080, printing the traces on the standard output and exposing RED metrics
 on the `localhost:8999/metrics` HTTP endpoint.
 
@@ -182,10 +184,10 @@ related to the above `curl` requests:
 The output format is:
 
 ```
-Request_time (response_duration) status_code http_method path source->destination request_size 
+Request_time (response_duration) status_code http_method path source->destination request_size
 ```
 
-You can play with the `curl` command, by making different type of requests, in order to see how 
+You can play with the `curl` command, by making different type of requests, in order to see how
 it affects the trace output. For example, the following request would send a 6-bytes POST request
 and the service will take 200ms to respond:
 
@@ -219,7 +221,7 @@ http_server_duration_seconds_bucket{http_method="GET",http_status_code="200",ser
 (... output snipped for sake of brevity ...)
 ```
 
-Please check the [List of exported metrics]({{< relref "../metrics" >}}) document for an exhaustive list
+Please check the [List of exported metrics]({{< relref "../metrics.md" >}}) document for an exhaustive list
 of the metrics that can be exposed by the eBPF auto-instrumentation tool.
 
 ## Sending data to Grafana Cloud
@@ -276,10 +278,10 @@ documentation.
 ### Running the Grafana Agent Flow with your Grafana Credentials
 
 In your Grafana Cloud Portal, click on the "Details" button in the "Prometheus" box. Next,
-copy your Grafana Prometheus (Mimir) Remote Write endpoint, your username, and generate/copy 
+copy your Grafana Prometheus (Mimir) Remote Write endpoint, your username, and generate/copy
 a Grafana API Key with metrics push privileges:
 
-![](./img/grafana-instance-id.png)
+![](https://grafana.com/media/docs/grafana-cloud/beyla/tutorial/grafana-instance-id.png)
 
 Now you can run the Agent by using the above information to set the
 `MIMIR_ENDPOINT`, `MIMIR_USER` and `GRAFANA_API_KEY` environment variables. For example:
@@ -299,7 +301,7 @@ To verify that metrics are properly received by Grafana, you can go to the left 
 choose the Explore tab and your Prometheus data source. Next, write `http_` in the
 Metrics Browser input field and you should see the available metric names in the auto-complete drop-down.
 
-![](./img/dropdown-metrics.png)
+![](https://grafana.com/media/docs/grafana-cloud/beyla/tutorial/dropdown-metrics.png)
 
 ## Add the eBPF RED Metrics Dashboard
 
@@ -310,7 +312,7 @@ your auto-instrumented RED metrics; to save you time, we provide a sample
 To import the sample dashboard into your Grafana instance, choose "Dashboards" in the Grafana left panel.
 Next, in the Dashboards page, click on the "New" drop-down menu and select "Import":
 
-![](./img/import-dashboard.png)
+![](https://grafana.com/media/docs/grafana-cloud/beyla/tutorial/import-dashboard.png)
 
 In the "Import via grafana.com" textbox, copy the Grafana ID from the
 [eBPF Red Metrics](/grafana/dashboards/19077-ebpf-red-metrics/)
@@ -321,13 +323,13 @@ data source in the `prometheus-data-source` drop-down at the bottom.
 
 And _voilà!_ you can see some of your test RED metrics:
 
-![](./img/dashboard-screenshot.png)
+![](https://grafana.com/media/docs/grafana-cloud/beyla/tutorial/dashboard-screenshot.png)
 
 The dashboard contains the following components:
 
 * A list with the slowest HTTP routes for all instrumented services. Since you only
   have a single service, only one entry appears. If you configure the auto-instrumentation to
-  [report the HTTP routes]({{< relref "../config#routes-decorator" >}}),
+  [report the HTTP routes]({{< relref "../configure/options.md#routes-decorator" >}}),
   many entries could appear there, one for each HTTP path seen by the server.
 * A list with the slowest GRPC methods. Since the test service in this tutorial only
   serves HTTP, this table is empty.
@@ -351,13 +353,13 @@ want to visualize.
 eBPF proved to be a low-overhead, safe, and reliable way to observe some basic metrics for
 HTTP/gRPC services. The Grafana eBPF auto-instrumentation tool is not a replacement for language
 specific agents, however it significantly decreases the landing time of your application insights in Grafana.
-The auto-instrumentation tool does not require any code changes, recompilation nor repackaging, simply run 
+The auto-instrumentation tool does not require any code changes, recompilation nor repackaging, simply run
 it together with your service, and your application metrics will start to flow.
 
 eBPF also allows you to get deeper insights which manual instrumentation doesn't. For example,
 the eBPF auto-instrumentation tool is able to show you how much time a request is enqueued, after
 the connection is established, and before its code is actually executed (requires [exporting
-OpenTelemetry traces]({{< relref "../config#otel-traces-exporter" >}}),
+OpenTelemetry traces]({{< relref "../configure/options.md#otel-traces-exporter" >}}),
 but this functionality is not explained in this tutorial).
 
 The eBPF auto-instrumentation tool has its limitations too. It only provides generic metrics and
@@ -365,7 +367,7 @@ single spans trace information (no distributed traces, yet). Language agents and
 instrumentation is still recommended, so that you can specify the granularity of each
 part of the code to be instrumented, putting the focus on your critical operations.
 
-Another limitation to consider is that the eBPF auto-instrumentation tool requires 
+Another limitation to consider is that the eBPF auto-instrumentation tool requires
 elevated privileges; not actually a `root` user, but at least it has to run with the
 `CAP_SYS_ADMIN` capability. If you run the tool as a container (Docker, Kubernetes...), it
 has to be privileged, or configured with the `CAP_SYS_ADMIN` capability.
@@ -374,8 +376,8 @@ In the future, we plan to add metrics about other well-established protocols, li
 database or message queuing connections.
 
 Distributed tracing is also on our road-map. With distributed tracing we will be able to correlate
-requests from multiple services (web, database, messaging...). One complexity of 
-distributed tracing is the injection of client-side headers and matching them to the context of 
+requests from multiple services (web, database, messaging...). One complexity of
+distributed tracing is the injection of client-side headers and matching them to the context of
 the server-side requests. We are making progressive advances towards this goal with each
 new pull request.
 

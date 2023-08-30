@@ -1,6 +1,8 @@
 ---
 title: Run as a standalone process
+menuTitle: Standalone
 description: Learn how to run Grafana's eBPF auto-instrumentation tool as a standalone Linux process.
+weight: 1
 ---
 
 # Run as a standalone process
@@ -9,7 +11,7 @@ The eBPF auto-instrumentation tool can run as a standalone Linux OS process with
 elevated privileges, which can inspect other running processes.
 
 For a quick introduction about how to collect and visualize the instrumented
-data, you can follow our [step-by-step tutorial]({{< relref "./tutorial" >}}).
+data, you can follow our [step-by-step tutorial]({{< relref "../tutorial/index.md" >}}).
 
 ## Download and install Beyla - the eBPF auto-instrumentation tool
 
@@ -29,10 +31,10 @@ The eBPF auto-instrumentation tool can be configured via:
 
 If the same configuration property is defined in both the YAML file and the environment
 variables, the value specified in the environment variables takes precedence over the
-configuration file. 
+configuration file.
 
 For a complete list and description of all of the configuration options, you can check the
-[list of configuration options]({{< relref "./config" >}}) documentation section.
+[list of configuration options]({{< relref "../configure/options" >}}) documentation section.
 
 ## Running the auto-instrumentation tool
 

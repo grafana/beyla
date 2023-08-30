@@ -9,13 +9,13 @@ weight: 2
 
 The eBPF auto-instrumentation tool can export data in two modes:
 
-* **Agent mode** (recommended mode): the auto-instrumentation tool will send the metrics and the traces to the
+- **Agent mode** (recommended mode): the auto-instrumentation tool will send the metrics and the traces to the
   [Grafana Agent](https://github.com/grafana/agent), which will process and send them
   to Mimir and Tempo. In this scenario, the Agent takes care of the authentication required by the Grafana Mimir/Tempo endpoints.
   This mode also integrates better with some Grafana exclusive features,
   such as the [span-to-metrics](/docs/tempo/latest/metrics-generator/span_metrics/) and
   [span-to-service graph](/docs/tempo/latest/metrics-generator/service_graphs/) converters.
-* **Direct mode**: the auto-instrumentation tool can **push** metrics and/or traces directly to a remote endpoint
+- **Direct mode**: the auto-instrumentation tool can **push** metrics and/or traces directly to a remote endpoint
   (using the OpenTelemetry/OTEL protocols) or expose a Prometheus HTTP endpoint ready to be scraped (i.e. **pull** mode).
   In the direct OTEL push mode, the auto-instrumentation tool needs to be configured with the authentication credentials.
 
@@ -29,8 +29,8 @@ You can follow our [quick start tutorial]({{< relref "../tutorial/index.md" >}})
 to auto-instrumentation in Direct mode, by using OpenTelemetry. The OTLP endpoint authentication credentials are provided
 by using the following environment variables:
 
-* `OTEL_EXPORTER_OTLP_ENDPOINT`
-* `OTEL_EXPORTER_OTLP_HEADERS`
+- `OTEL_EXPORTER_OTLP_ENDPOINT`
+- `OTEL_EXPORTER_OTLP_HEADERS`
 
 To run in Direct mode by using the Prometheus scrape endpoint, please refer to the
 [configuration documentation]({{< relref "./options.md" >}}).
@@ -38,10 +38,10 @@ To run in Direct mode by using the Prometheus scrape endpoint, please refer to t
 ## Running in Agent mode
 
 > ℹ️ This tutorial assumes that both the Agent and the auto-instrumentation tool are installed
-as local Linux OS executables. For further examples on downloading and running the
-auto-instrumentation tool as an OCI container, you can check the documentation sections on
-[running the eBPF auto-instrumentation tool as a Docker container]({{< relref "../setup/docker.md" >}})
-or [running the eBPF auto-instrumentation tool in Kubernetes]({{< relref "../kubernetes.md" >}}).
+> as local Linux OS executables. For further examples on downloading and running the
+> auto-instrumentation tool as an OCI container, you can check the documentation sections on
+> [running the eBPF auto-instrumentation tool as a Docker container]({{< relref "../setup/docker.md" >}})
+> or [running the eBPF auto-instrumentation tool in Kubernetes]({{< relref "../kubernetes.md" >}}).
 
 First, you will need to locally install and configure the [Grafana Agent in **Flow** mode, according to the latest documentation](/docs/agent/latest/flow/).
 Running the Agent in Flow mode will facilitate the ingest of OpenTelemetry

@@ -29,8 +29,8 @@ go install github.com/grafana/beyla/cmd/beyla@latest
 
 The eBPF auto-instrumentation tool can be configured via:
 
-* Environment variables.
-* A YAML configuration file path, passed in with the `-config` CLI argument.
+- Environment variables.
+- A YAML configuration file path, passed in with the `-config` CLI argument.
 
 If the same configuration property is defined in both the YAML file and the environment
 variables, the value specified in the environment variables takes precedence over the
@@ -43,9 +43,9 @@ For a complete list and description of all of the configuration options, you can
 
 The eBPF auto-instrumentation tool requires at least two configuration options to run:
 
-* The executable to instrument. You can select which executable to instrument by its
+- The executable to instrument. You can select which executable to instrument by its
   command line name or by any port it has open.
-* A metrics exporter. You can configure an OpenTelemetry metrics and/or traces exporter, but
+- A metrics exporter. You can configure an OpenTelemetry metrics and/or traces exporter, but
   you can also configure a Prometheus HTTP endpoint to expose the metrics.
 
 The eBPF auto-instrumentation tool requires `sudo`/administrative processes privileges, or at

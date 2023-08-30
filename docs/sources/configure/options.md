@@ -30,18 +30,18 @@ The dashed boxes in the diagram below can be enabled and disabled according to t
 
 A quick description of the components:
 
-* [EBPF tracer](#ebpf-tracer) instruments the HTTP and GRPC services of an external process,
+- [EBPF tracer](#ebpf-tracer) instruments the HTTP and GRPC services of an external process,
   creates service traces and forwards them to the next stage of the pipeline.
-* [Routes decorator](#routes-decorator) will match HTTP paths (e.g. `/user/1234/info`)
+- [Routes decorator](#routes-decorator) will match HTTP paths (e.g. `/user/1234/info`)
   into user-provided HTTP routes (e.g. `/user/{id}/info`). If no routes are defined,
   the incoming data will be directly forwarded to the next stage.
-* [OTEL metrics exporter](#otel-metrics-exporter) exports metrics data to an external
+- [OTEL metrics exporter](#otel-metrics-exporter) exports metrics data to an external
   [OpenTelemetry](https://opentelemetry.io/) metrics collector.
-* [OTEL traces exporter](#otel-traces-exporter) exports span data to an external
+- [OTEL traces exporter](#otel-traces-exporter) exports span data to an external
   [OpenTelemetry](https://opentelemetry.io/) traces collector.
-* [Prometheus HTTP endpoint](#prometheus-http-endpoint) enables an HTTP endpoint
+- [Prometheus HTTP endpoint](#prometheus-http-endpoint) enables an HTTP endpoint
   that allows any external scraper to pull metrics in [Prometheus](https://prometheus.io/) format.
-* [Internal metrics reporter](#internal-metrics-reporter) optionally reports metrics about the internal behavior of
+- [Internal metrics reporter](#internal-metrics-reporter) optionally reports metrics about the internal behavior of
   the auto-instrumentation tool in [Prometheus](https://prometheus.io/) format.
 
 The following sections explain the global configuration properties, as well as
@@ -76,6 +76,7 @@ Valid log level values are: `DEBUG`, `INFO`, `WARN` and `ERROR`.
 | YAML           | Env var        | Type    | Default |
 | -------------- | -------------- | ------- | ------- |
 | `print_traces` | `PRINT_TRACES` | boolean | `false` |
+
 <a id="printer"></a>
 
 If `true`, prints any instrumented trace on the standard output (stdout).
@@ -83,7 +84,6 @@ If `true`, prints any instrumented trace on the standard output (stdout).
 ## EBPF tracer
 
 YAML section `ebpf`.
-
 
 | YAML              | Env var           | Type   | Default |
 | ----------------- | ----------------- | ------ | ------- |
@@ -109,7 +109,6 @@ then, the eBPF auto-instrumentation tool will match indistinctly one of the abov
 issue, you should be as concrete as possible about the value of the setting. For example, `EXECUTABLE_NAME=/opt/app/server`
 or just `EXECUTABLE_NAME=/server`.
 
-
 | YAML        | Env var     | Type   | Default |
 | ----------- | ----------- | ------ | ------- |
 | `open_port` | `OPEN_PORT` | string | (unset) |
@@ -126,7 +125,6 @@ restrict the instrumentation only to the methods exposed through a specific port
 | YAML          | Env var       | Type    | Default |
 | ------------- | ------------- | ------- | ------- |
 | `system_wide` | `SYSTEM_WIDE` | boolean | false   |
-
 
 Causes instrumentation of all processes on the system. This includes all
 existing processes, and all newly launched processes after the instrumentation
@@ -203,10 +201,10 @@ Specifies what to do when a trace HTTP path does not match any of the `patterns`
 
 Possible values for the `unmatch` property are:
 
-* `unset` will leave the `http.route` property as unset.
-* `path` will copy the `http.route` field property to the path value.
-  * 🚨 Caution: this option could lead to cardinality explosion at the ingester side.
-* `wildcard` will set the `http.route` field property to a generic asterisk `*` value.
+- `unset` will leave the `http.route` property as unset.
+- `path` will copy the `http.route` field property to the path value.
+  - 🚨 Caution: this option could lead to cardinality explosion at the ingester side.
+- `wildcard` will set the `http.route` field property to a generic asterisk `*` value.
 
 ## OTEL metrics exporter
 
@@ -235,9 +233,7 @@ such that the traces exporter won't be activated unless explicitly specified.
 
 Specifies the transport/encoding protocol of the OpenTelemetry endpoint.
 
-The accepted values, as defined by the [OTLP Exporter Configuration document](
-https://opentelemetry.io/docs/concepts/sdk-configuration/otlp-exporter-configuration/#otel_exporter_otlp_protocol
-) are `http/json`, `http/protobuf` and `grpc`.
+The accepted values, as defined by the [OTLP Exporter Configuration document](https://opentelemetry.io/docs/concepts/sdk-configuration/otlp-exporter-configuration/#otel_exporter_otlp_protocol) are `http/json`, `http/protobuf` and `grpc`.
 
 The `OTEL_EXPORTER_OTLP_PROTOCOL` environment variable sets a common protocol for both the metrics and
 [traces](#otel-traces-exporter) exporters. The `OTEL_EXPORTER_OTLP_METRICS_PROTOCOL` environment variable,
@@ -296,14 +292,13 @@ boundaries via a configuration file (see `buckets` YAML section of your metrics 
 
 Sets the bucket boundaries for the metrics related to the request duration. Specifically:
 
-* `http.server.duration` (OTEL) / `http_server_duration_seconds` (Prometheus)
-* `http.client.duration` (OTEL) / `http_client_duration_seconds` (Prometheus)
-* `rpc.server.duration` (OTEL) / `rpc_server_duration_seconds` (Prometheus)
-* `rpc.client.duration` (OTEL) / `rpc_client_duration_seconds` (Prometheus)
+- `http.server.duration` (OTEL) / `http_server_duration_seconds` (Prometheus)
+- `http.client.duration` (OTEL) / `http_client_duration_seconds` (Prometheus)
+- `rpc.server.duration` (OTEL) / `rpc_server_duration_seconds` (Prometheus)
+- `rpc.client.duration` (OTEL) / `rpc_client_duration_seconds` (Prometheus)
 
 If the value is unset, the default bucket boundaries follow the
-[recommendation from the OpenTelemetry semantic conventions](
-https://github.com/open-telemetry/opentelemetry-specification/blob/main/specification/metrics/semantic_conventions/http-metrics.md)
+[recommendation from the OpenTelemetry semantic conventions](https://github.com/open-telemetry/opentelemetry-specification/blob/main/specification/metrics/semantic_conventions/http-metrics.md)
 
 ```
 0, 0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.25, 0.5, 0.75, 1, 2.5, 5, 7.5, 10
@@ -315,8 +310,8 @@ https://github.com/open-telemetry/opentelemetry-specification/blob/main/specific
 
 Sets the bucket boundaries for the metrics related to request sizes. This is:
 
-* `http.server.request.size` (OTEL) / `http_server_request_size_bytes` (Prometheus)
-* `http.client.request.size` (OTEL) / `http_client_request_size_bytes` (Prometheus)
+- `http.server.request.size` (OTEL) / `http_server_request_size_bytes` (Prometheus)
+- `http.client.request.size` (OTEL) / `http_client_request_size_bytes` (Prometheus)
 
 If the value is unset, the default bucket boundaries are:
 
@@ -354,14 +349,11 @@ so the metrics exporter won't be activated unless explicitly specified.
 
 Specifies the transport/encoding protocol of the OpenTelemetry traces endpoint.
 
-The accepted values, as defined by the [OTLP Exporter Configuration document](
-https://opentelemetry.io/docs/concepts/sdk-configuration/otlp-exporter-configuration/#otel_exporter_otlp_protocol
-) are `http/json`, `http/protobuf` and `grpc`.
+The accepted values, as defined by the [OTLP Exporter Configuration document](https://opentelemetry.io/docs/concepts/sdk-configuration/otlp-exporter-configuration/#otel_exporter_otlp_protocol) are `http/json`, `http/protobuf` and `grpc`.
 
 The `OTEL_EXPORTER_OTLP_PROTOCOL` environment variable sets a common protocol for both the metrics and
 the [traces](#otel-traces-exporter) exporters. The `OTEL_EXPORTER_OTLP_TRACES_PROTOCOL` environment variable,
 or the `protocol` YAML property, will set the protocol only for the traces exporter node.
-
 
 | YAML                   | Env var                     | Type | Default |
 | ---------------------- | --------------------------- | ---- | ------- |

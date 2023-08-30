@@ -9,26 +9,26 @@ weight: 5
 
 You can deploy the eBPF auto-instrumentation tool in Kubernetes in two separate ways:
 
-* As a Sidecar Container (recommended)
-* As a DaemonSet
+- As a Sidecar Container (recommended)
+- As a DaemonSet
 
 ## Deploying as a sidecar container
 
 This is the recommended way of deploying the eBPF auto-instrumentation tool for the following reason:
 
-* You can configure the auto-instrumentation per instance, instead of having
+- You can configure the auto-instrumentation per instance, instead of having
   Beyla monitor all of the service instances on the host.
-* You will save on compute and memory resources. If the auto-instrumented service is present only in a subset
+- You will save on compute and memory resources. If the auto-instrumented service is present only in a subset
   of the containers running on the host, you won't need to deploy the auto-instrument tool for all containers.
 
 Deploying the eBPF auto-instrumentation tool as a sidecar container has the following configuration
 requirements:
 
-* The process namespace must be shared between all containers in the Pod (`shareNamespace: true`
+- The process namespace must be shared between all containers in the Pod (`shareNamespace: true`
   pod variable)
-* The auto-instrument tool must internally run as privileged user in the container
+- The auto-instrument tool must internally run as privileged user in the container
   (`securityContext.runAsUser: 0` property in the container configuration).
-* The auto-instrument container must run in privileged mode (`securityContext.privileged: true` property of the
+- The auto-instrument container must run in privileged mode (`securityContext.privileged: true` property of the
   container configuration) or at least with `SYS_ADMIN` capability (`securityContext.capabilities.add: ["SYS_ADMIN"])
 
 The following example instruments the `goblog` pod by attaching the eBPF auto-instrumentation tool
@@ -60,7 +60,7 @@ spec:
         - name: goblog
           image: mariomac/goblog:dev
           imagePullPolicy: IfNotPresent
-          command: [ "/goblog" ]
+          command: ["/goblog"]
           env:
             - name: "GOBLOG_CONFIG"
               value: "/sample/config.yml"
@@ -130,7 +130,7 @@ spec:
             runAsUser: 0
             privileged: true # Alternative to the capabilities.add SYS_ADMIN setting
           env:
-            - name: EXECUTABLE_NAME  # Select the executable by its name instead of OPEN_PORT
+            - name: EXECUTABLE_NAME # Select the executable by its name instead of OPEN_PORT
               value: "goblog"
             - name: OTEL_EXPORTER_OTLP_ENDPOINT
               value: "grafana-agent:4318"

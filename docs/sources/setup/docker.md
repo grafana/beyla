@@ -19,9 +19,9 @@ grafana/beyla:latest
 
 The auto-instrument container must be configured with the following properties:
 
-* It must be run either as a **privileged** container, or as a container with the
+- It must be run either as a **privileged** container, or as a container with the
   `SYS_ADMIN` capability.
-* It must share the PID space with the container that is being instrumented.
+- It must share the PID space with the container that is being instrumented.
 
 ## Docker command line interface (CLI) example
 
@@ -46,8 +46,8 @@ not the port visible at the host level.
 
 To run properly, the auto-instrument container needs some special settings. Namely:
 
-* We'll run in `--privileged` mode (or alternatively, we can grant it the `SYS_ADMIN` capability).
-* We'll let it access the `goblog` container PID namespace, by using the command line option `--pid="container:goblog"`.
+- We'll run in `--privileged` mode (or alternatively, we can grant it the `SYS_ADMIN` capability).
+- We'll let it access the `goblog` container PID namespace, by using the command line option `--pid="container:goblog"`.
 
 ```sh
 docker run --rm \
@@ -83,7 +83,7 @@ The following Docker compose example file does the same as the Docker CLI sectio
 but through a single compose file.
 
 ```yaml
-version: '3.8'
+version: "3.8"
 
 services:
   # Service to instrument. Change it to any

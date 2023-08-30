@@ -49,20 +49,20 @@ To test the eBPF auto-instrumentation tool capabilities, you first need a servic
 For this quick start tutorial, we recommend instrumenting any HTTP, HTTPS or gRPC Go service that uses any of
 the following libraries:
 
-* Standard `net/http`
-* [Gorilla Mux](https://github.com/gorilla/mux)
-* [Gin](https://gin-gonic.com/)
-* [gRPC-Go](https://github.com/grpc/grpc-go)
+- Standard `net/http`
+- [Gorilla Mux](https://github.com/gorilla/mux)
+- [Gin](https://gin-gonic.com/)
+- [gRPC-Go](https://github.com/grpc/grpc-go)
 
 Additionally, you can also instrument HTTP and HTTPs services written in other languages. The following
 list shows some of the other supported languages and technologies:
 
-* Node.js (HTTP 1.1 and HTTPs with OpenSSL)
-* Python (HTTP 1.1 and HTTPs with OpenSSL)
-* Rust (HTTP 1.1 and HTTPs with OpenSSL)
-* Ruby (HTTP 1.1 and HTTPs with OpenSSL)
-* .NET Core 6+ (HTTP 1.1 and HTTPs with OpenSSL)
-* Java (HTTP 1.1)
+- Node.js (HTTP 1.1 and HTTPs with OpenSSL)
+- Python (HTTP 1.1 and HTTPs with OpenSSL)
+- Rust (HTTP 1.1 and HTTPs with OpenSSL)
+- Ruby (HTTP 1.1 and HTTPs with OpenSSL)
+- .NET Core 6+ (HTTP 1.1 and HTTPs with OpenSSL)
+- Java (HTTP 1.1)
 
 The HTTP 1.1 and OpenSSL support is generic, so services written in different programming languages
 than those listed above might work, but haven't been tested.
@@ -109,10 +109,10 @@ The above code implements an HTTP service which will accept any request on the p
 The service has two knobs for overriding the HTTP handler behavior, through two separate
 query parameters:
 
-* `status` will override the returned HTTP status code (which defaults to 200).
+- `status` will override the returned HTTP status code (which defaults to 200).
   For example `curl -v "http://localhost:8080/foo?status=404"` will return a 404
   status code.
-* `delay` will artificially increase the service response time. For example
+- `delay` will artificially increase the service response time. For example
   `curl "http://localhost:8080/bar?delay=3s"` will take at least 3 seconds to complete.
 
 You can also [download the server.go file from this tutorial](/docs/grafana-cloud/monitor-applications/beyla/tutorial/resources/server.go).
@@ -126,9 +126,9 @@ go run server.go
 ## Downloading the auto-instrumentation tool
 
 > ℹ️ For simplicity, this tutorial shows how to manually run the auto-instrumentation tool as an
-ordinary operating system process. For more running modes, you can check the documentation about
-[running the eBPF auto-instrumentation tool as a Docker container](https://github.com/grafana/beyla/blob/main/docs/docker.md)
-or [deploying the eBPF auto-instrumentation tool in Kubernetes](https://github.com/grafana/beyla/blob/main/docs/k8s.md).
+> ordinary operating system process. For more running modes, you can check the documentation about
+> [running the eBPF auto-instrumentation tool as a Docker container](https://github.com/grafana/beyla/blob/main/docs/docker.md)
+> or [deploying the eBPF auto-instrumentation tool in Kubernetes](https://github.com/grafana/beyla/blob/main/docs/k8s.md).
 
 You can download Beyla executable directly from the [Beyla releases page](https://github.com/grafana/beyla/releases).
 
@@ -143,10 +143,10 @@ go install github.com/grafana/beyla/cmd/beyla@latest
 
 The eBPF auto-instrumentation tool requires at least two configuration options to run:
 
-* An executable to instrument. You can select the executable to instrument by the executable name
+- An executable to instrument. You can select the executable to instrument by the executable name
   (`EXECUTABLE_NAME` environment variable) or by any port it has open
   (`OPEN_PORT` environment variable).
-* A metrics exporter. For this tutorial, the metrics will be exported
+- A metrics exporter. For this tutorial, the metrics will be exported
   by a [Prometheus](https://prometheus.io/) scrape endpoint (`BEYLA_PROMETHEUS_PORT`
   environment variable), and traces will be printed on the standard output
   (setting the `PRINT_TRACES=true` environment variable).
@@ -234,20 +234,21 @@ collector to read the generated metrics and forward them to Grafana Cloud.
 You can get a [Free Grafana Cloud Account at Grafana's website](/pricing/).
 
 There are two ways to forward your metrics to Grafana Cloud:
-* [Install Prometheus on your host, configure the scrape and remote write to read-and-forward the metrics
+
+- [Install Prometheus on your host, configure the scrape and remote write to read-and-forward the metrics
   ](/docs/grafana-cloud/quickstart/noagent_linuxnode/#install-prometheus-on-the-node)
-* Use the [Grafana Agent](/docs/agent/latest/), as shown by this tutorial.
+- Use the [Grafana Agent](/docs/agent/latest/), as shown by this tutorial.
 
 ### Downloading and configuring the Grafana Agent Flow
 
 > ⚠️ This section explains how to download and configure the Grafana Agent Flow manually.
-For a complete description of the Grafana Agent Flow setup, its configuration process,
-and the recommended modes, please refer to the [Install Grafana Agent Flow](/docs/agent/latest/flow/setup/install/)
-documentation.
+> For a complete description of the Grafana Agent Flow setup, its configuration process,
+> and the recommended modes, please refer to the [Install Grafana Agent Flow](/docs/agent/latest/flow/setup/install/)
+> documentation.
 
 1. Go to the [Grafana Agent Releases page](https://github.com/grafana/agent/releases/).
 2. Choose the latest version for your system architecture.
-   * For example, we are downloading zipped 0.34.3 version for Linux Intel/AMD 64-bit architecture:
+   - For example, we are downloading zipped 0.34.3 version for Linux Intel/AMD 64-bit architecture:
      ```
      $ wget https://github.com/grafana/agent/releases/download/v0.34.3/grafana-agent-linux-amd64.zip
      $ unzip grafana-agent-linux-amd64.zip
@@ -270,6 +271,7 @@ documentation.
        }
    }
    ```
+
    The above configuration file instructs the Agent to scrape Prometheus metrics, from the
    eBPF auto-instrumentation tool and forward them to [Grafana Mimir](/oss/mimir/).
 
@@ -330,21 +332,21 @@ And _voilà!_ you can see some of your test RED metrics:
 
 The dashboard contains the following components:
 
-* A list with the slowest HTTP routes for all instrumented services. Since you only
+- A list with the slowest HTTP routes for all instrumented services. Since you only
   have a single service, only one entry appears. If you configure the auto-instrumentation to
   [report the HTTP routes]({{< relref "../configure/options.md#routes-decorator" >}}),
   many entries could appear there, one for each HTTP path seen by the server.
-* A list with the slowest GRPC methods. Since the test service in this tutorial only
+- A list with the slowest GRPC methods. Since the test service in this tutorial only
   serves HTTP, this table is empty.
-* For each instrumented service, a list of RED metrics for the inbound (server) traffic. This includes:
-  * Duration: average and top percentiles for both HTTP and gRPC traffic.
-  * Request rate: number of requests per second, faceted by its HTTP or gRPC return code.
-  * Error rate as a percentage of 5xx HTTP responses or non-zero gRPC responses over the total
+- For each instrumented service, a list of RED metrics for the inbound (server) traffic. This includes:
+  - Duration: average and top percentiles for both HTTP and gRPC traffic.
+  - Request rate: number of requests per second, faceted by its HTTP or gRPC return code.
+  - Error rate as a percentage of 5xx HTTP responses or non-zero gRPC responses over the total
     of the requests. They are faceted by return code.
-* For each instrumented service, a list of RED metrics for the outbound (client) traffic. In
+- For each instrumented service, a list of RED metrics for the outbound (client) traffic. In
   the above screenshot they are empty because the test service does not perform HTTP or gRPC
   calls to other services.
-  * The Duration, Request Rate and Errors charts are analogues to the inbound traffic charts,
+  - The Duration, Request Rate and Errors charts are analogues to the inbound traffic charts,
     with the only difference that 4xx return codes are also considered errors on the
     client side.
 

@@ -1,45 +1,36 @@
 ---
-title: Run as a Docker container
+title: Run Beyla as a Docker container
 menuTitle: Docker
-description: Learn how to run Grafana's eBPF auto-instrumentation tool as a standalone Docker container, which instruments another container.
+description: Learn how to run Grafana's eBPF auto-instrumentation tool as a standalone Docker container that instruments another container.
 weight: 2
 ---
 
-# Run as a Docker container
+# Run Beyla as a Docker container
 
-You can run Beyla - the eBPF auto-instrumentation tool as a standalone Docker container,
-which instruments a process running in another container.
+Beyla can run a standalone Docker container that can instrument a process running in another container.
 
-[Docker Hub](https://hub.docker.com/r/grafana/beyla) provides
-an updated image of the eBPF auto-instrumentation tool, with the following image name:
+Find the latest image of Beyla on [Docker Hub](https://hub.docker.com/r/grafana/beyla) with the following name:
 
 ```
 grafana/beyla:latest
 ```
 
-The auto-instrument container must be configured with the following properties:
+The Beyla container must be configured in following way:
 
-- It must be run either as a **privileged** container, or as a container with the
-  `SYS_ADMIN` capability.
-- It must share the PID space with the container that is being instrumented.
+- run as a **privileged** container, or as a container with the `SYS_ADMIN` capability
+- share the PID space with the container that is being instrumented
 
-## Docker command line interface (CLI) example
+## Docker CLI example
 
-Let's start with an instrumentation example by using the Docker CLI.
-
-First, you'll need a container running an HTTP/S or GRPC service.
-If you don't have one handy, you can use this [simple blog engine service written in Go](http://macias.info):
+For this example you need a container running an HTTP/S or GRPC service. If you don't have one, you can use this [simple blog engine service written in Go](http://macias.info):
 
 ```sh
 docker run -p 18443:8443 --name goblog mariomac/goblog:dev
 ```
 
-The above command line will run a simple HTTPS application. The process opens the container's
-internal port `8443`, which is then exposed at the host level as the port `18443`.
+The above command runs a simple HTTPS application. The process opens the container's internal port `8443`, which is then exposed at the host level as the port `18443`.
 
-Next, let's check that Beyla is able to auto-instrument the above
-container. Initially, we will configure Beyla to simply print (on stdout) each collected trace event,
-by setting the environment variable `PRINT_TRACES=true`. We will also instruct the tool to
+Now check if Beyla is able to auto-instrument the container. Initially, configure Beyla to print (on stdout) each collected trace event, by setting the environment variable `PRINT_TRACES=true`. We will also instruct the tool to
 inspect the executable that is listening on port `8443`, by setting the environment variable
 `OPEN_PORT=8443`. Please note that we are using the application container's internal port `8443`, and
 not the port visible at the host level.

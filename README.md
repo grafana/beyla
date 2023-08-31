@@ -11,10 +11,10 @@ OpenSSL invocations).
 To try out Beyla, you need to run a network service for Beyla to instrument.
 Beyla supports a wide range of programming languages (Go, Java, .NET, NodeJS, Python, Ruby, Rust, etc.),
 so if you already have an example service you can use it.
-If you don't have an example, you can download and run the service from the `examples/` directory:
+If you don't have an example, you can download and run `example-http-service.go` from the `examples/` directory:
 
 ```
-curl -OL https://github.com/grafana/beyla/blob/main/examples/example-http-service/example-http-service.go
+curl -OL https://raw.githubusercontent.com/grafana/beyla/main/examples/example-http-service/example-http-service.go
 go run ./example-http-service.go
 ```
 

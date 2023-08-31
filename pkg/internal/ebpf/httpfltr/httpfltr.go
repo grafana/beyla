@@ -20,6 +20,7 @@ import (
 	"github.com/grafana/beyla/pkg/internal/exec"
 	"github.com/grafana/beyla/pkg/internal/goexec"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
+	"github.com/grafana/beyla/pkg/internal/request"
 )
 
 //go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf ../../../../bpf/http_sock.c -- -I../../../../bpf/headers
@@ -200,21 +201,22 @@ func (p *Tracer) SocketFilters() []*ebpf.Program {
 	return []*ebpf.Program{p.bpfObjects.SocketHttpFilter}
 }
 
-func (p *Tracer) Run(ctx context.Context, eventsChan chan<- []any) {
-	ebpfcommon.ForwardRingbuf(
-		p.Cfg, logger(), p.bpfObjects.Events, p.toRequestTrace,
+func (p *Tracer) Run(ctx context.Context, eventsChan chan<- []request.Span) {
+	ebpfcommon.ForwardRingbuf[HTTPInfo](
+		p.Cfg, logger(), p.bpfObjects.Events,
+		p.readHTTPInfoIntoSpan,
 		p.Metrics,
 		append(p.closers, &p.bpfObjects)...,
 	)(ctx, eventsChan)
 }
 
-func (p *Tracer) toRequestTrace(record *ringbuf.Record) (any, error) {
+func (p *Tracer) readHTTPInfoIntoSpan(record *ringbuf.Record) (request.Span, error) {
 	var event BPFHTTPInfo
 	var result HTTPInfo
 
 	err := binary.Read(bytes.NewBuffer(record.RawSample), binary.LittleEndian, &event)
 	if err != nil {
-		return result, err
+		return request.Span{}, err
 	}
 
 	result = HTTPInfo{BPFHTTPInfo: event}
@@ -239,7 +241,7 @@ func (p *Tracer) toRequestTrace(record *ringbuf.Record) (any, error) {
 		result.Comm = p.serviceName(event.Pid)
 	}
 
-	return result, nil
+	return httpInfoToSpan(&result), nil
 }
 
 func (event *BPFHTTPInfo) url() string {

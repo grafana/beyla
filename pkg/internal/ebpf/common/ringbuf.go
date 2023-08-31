@@ -13,6 +13,7 @@ import (
 	"golang.org/x/exp/slog"
 
 	"github.com/grafana/beyla/pkg/internal/imetrics"
+	"github.com/grafana/beyla/pkg/internal/request"
 )
 
 // ringBufReader interface extracts the used methods from ringbuf.Reader for proper
@@ -33,32 +34,34 @@ type ringBufForwarder[T any] struct {
 	logger     *slog.Logger
 	ringbuffer *ebpf.Map
 	closers    []io.Closer
-	events     []T
-	evLen      int
+	spans      []request.Span
+	spansLen   int
 	access     sync.Mutex
 	ticker     *time.Ticker
-	reader     func(*ringbuf.Record) (T, error)
+	reader     func(*ringbuf.Record) (request.Span, error)
 	metrics    imetrics.Reporter
 }
 
 // ForwardRingbuf returns a function reads HTTPRequestTraces from an input ring buffer, accumulates them into an
 // internal buffer, and forwards them to an output events channel, previously converted to request.Span
-// instances
+// instances.
+// Despite it returns a StartFuncCtx, this is not used inside the Pipes' library but it's invoked
+// directly in the code as a simple function.
 func ForwardRingbuf[T any](
 	cfg *TracerConfig,
 	logger *slog.Logger,
 	ringbuffer *ebpf.Map,
-	reader func(*ringbuf.Record) (T, error),
+	reader func(*ringbuf.Record) (request.Span, error),
 	metrics imetrics.Reporter,
 	closers ...io.Closer,
-) node.StartFuncCtx[[]T] {
+) node.StartFuncCtx[[]request.Span] {
 	rbf := ringBufForwarder[T]{
 		cfg: cfg, logger: logger, ringbuffer: ringbuffer, closers: closers, reader: reader, metrics: metrics,
 	}
 	return rbf.readAndForward
 }
 
-func (rbf *ringBufForwarder[T]) readAndForward(ctx context.Context, eventsChan chan<- []T) {
+func (rbf *ringBufForwarder[T]) readAndForward(ctx context.Context, spansChan chan<- []request.Span) {
 	// BPF will send each measured trace via Ring Buffer, so we listen for them from the
 	// user space.
 	eventsReader, err := readerFactory(rbf.ringbuffer)
@@ -69,8 +72,8 @@ func (rbf *ringBufForwarder[T]) readAndForward(ctx context.Context, eventsChan c
 	rbf.closers = append(rbf.closers, eventsReader)
 	defer rbf.closeAllResources()
 
-	rbf.events = make([]T, rbf.cfg.BatchLength)
-	rbf.evLen = 0
+	rbf.spans = make([]request.Span, rbf.cfg.BatchLength)
+	rbf.spansLen = 0
 
 	// If the underlying context is closed, it closes the events reader
 	// so the function can exit.
@@ -79,7 +82,7 @@ func (rbf *ringBufForwarder[T]) readAndForward(ctx context.Context, eventsChan c
 	// Forwards periodically on timeout, if the batch is not full
 	if rbf.cfg.BatchTimeout > 0 {
 		rbf.ticker = time.NewTicker(rbf.cfg.BatchTimeout)
-		go rbf.bgFlushOnTimeout(eventsChan)
+		go rbf.bgFlushOnTimeout(spansChan)
 	}
 
 	// Main loop:
@@ -102,16 +105,16 @@ func (rbf *ringBufForwarder[T]) readAndForward(ctx context.Context, eventsChan c
 		}
 
 		rbf.access.Lock()
-		rbf.events[rbf.evLen], err = rbf.reader(&record)
+		rbf.spans[rbf.spansLen], err = rbf.reader(&record)
 		if err != nil {
 			rbf.logger.Error("error parsing perf event", err)
 			rbf.access.Unlock()
 			continue
 		}
-		rbf.evLen++
-		if rbf.evLen == rbf.cfg.BatchLength {
-			rbf.logger.Debug("submitting traces after batch is full", "len", rbf.evLen)
-			rbf.flushEvents(eventsChan)
+		rbf.spansLen++
+		if rbf.spansLen == rbf.cfg.BatchLength {
+			rbf.logger.Debug("submitting traces after batch is full", "len", rbf.spansLen)
+			rbf.flushEvents(spansChan)
 			if rbf.ticker != nil {
 				rbf.ticker.Reset(rbf.cfg.BatchTimeout)
 			}
@@ -120,20 +123,20 @@ func (rbf *ringBufForwarder[T]) readAndForward(ctx context.Context, eventsChan c
 	}
 }
 
-func (rbf *ringBufForwarder[T]) flushEvents(eventsChan chan<- []T) {
-	rbf.metrics.TracerFlush(rbf.evLen)
-	eventsChan <- rbf.events[:rbf.evLen]
-	rbf.events = make([]T, rbf.cfg.BatchLength)
-	rbf.evLen = 0
+func (rbf *ringBufForwarder[T]) flushEvents(spansChan chan<- []request.Span) {
+	rbf.metrics.TracerFlush(rbf.spansLen)
+	spansChan <- rbf.spans[:rbf.spansLen]
+	rbf.spans = make([]request.Span, rbf.cfg.BatchLength)
+	rbf.spansLen = 0
 }
 
-func (rbf *ringBufForwarder[T]) bgFlushOnTimeout(eventsChan chan<- []T) {
+func (rbf *ringBufForwarder[T]) bgFlushOnTimeout(spansChan chan<- []request.Span) {
 	for {
 		<-rbf.ticker.C
 		rbf.access.Lock()
-		if rbf.evLen > 0 {
-			rbf.logger.Debug("submitting traces on timeout", "len", rbf.evLen)
-			rbf.flushEvents(eventsChan)
+		if rbf.spansLen > 0 {
+			rbf.logger.Debug("submitting traces on timeout", "len", rbf.spansLen)
+			rbf.flushEvents(spansChan)
 		}
 		rbf.access.Unlock()
 	}

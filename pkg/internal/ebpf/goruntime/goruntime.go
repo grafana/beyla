@@ -23,6 +23,7 @@ import (
 	"github.com/grafana/beyla/pkg/internal/exec"
 	"github.com/grafana/beyla/pkg/internal/goexec"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
+	"github.com/grafana/beyla/pkg/internal/request"
 )
 
 //go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf ../../../../bpf/go_runtime.c -- -I../../../../bpf/headers
@@ -79,10 +80,11 @@ func (p *Tracer) SocketFilters() []*ebpf.Program {
 	return nil
 }
 
-func (p *Tracer) Run(ctx context.Context, eventsChan chan<- []any) {
+func (p *Tracer) Run(ctx context.Context, eventsChan chan<- []request.Span) {
 	logger := slog.With("component", "goruntime.Tracer")
-	ebpfcommon.ForwardRingbuf(
-		p.Cfg, logger, p.bpfObjects.Events, ebpfcommon.Read[ebpfcommon.HTTPRequestTrace],
+	ebpfcommon.ForwardRingbuf[ebpfcommon.HTTPRequestTrace](
+		p.Cfg, logger, p.bpfObjects.Events,
+		ebpfcommon.ReadHTTPRequestTraceAsSpan,
 		p.Metrics,
 		append(p.closers, &p.bpfObjects)...,
 	)(ctx, eventsChan)

@@ -19,6 +19,7 @@ import (
 	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
 	"github.com/grafana/beyla/pkg/internal/exec"
 	"github.com/grafana/beyla/pkg/internal/goexec"
+	"github.com/grafana/beyla/pkg/internal/request"
 )
 
 // Tracer is an individual eBPF program (e.g. the net/http or the grpc tracers)
@@ -45,7 +46,7 @@ type Tracer interface {
 	SocketFilters() []*ebpf.Program
 	// Run will do the action of listening for eBPF traces and forward them
 	// periodically to the output channel.
-	Run(context.Context, chan<- []any)
+	Run(context.Context, chan<- []request.Span)
 	// AddCloser adds io.Closer instances that need to be invoked when the
 	// Run function ends.
 	AddCloser(c ...io.Closer)
@@ -62,7 +63,7 @@ type ProcessTracer struct {
 	pinPath  string
 }
 
-func (pt *ProcessTracer) Run(ctx context.Context, out chan<- []any) {
+func (pt *ProcessTracer) Run(ctx context.Context, out chan<- []request.Span) {
 	var log = logger()
 
 	// Searches for traceable functions
@@ -78,11 +79,11 @@ func (pt *ProcessTracer) Run(ctx context.Context, out chan<- []any) {
 }
 
 // tracerFunctions returns a tracing function for each discovered eBPF traceable source: GRPC, HTTP...
-func (pt *ProcessTracer) tracerFunctions() ([]func(context.Context, chan<- []any), error) {
+func (pt *ProcessTracer) tracerFunctions() ([]func(context.Context, chan<- []request.Span), error) {
 	var log = logger()
 
 	// tracerFuncs contains the eBPF programs (HTTP, GRPC tracers...)
-	var tracerFuncs []func(context.Context, chan<- []any)
+	var tracerFuncs []func(context.Context, chan<- []request.Span)
 
 	for _, p := range pt.programs {
 		plog := log.With("program", reflect.TypeOf(p))

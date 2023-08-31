@@ -56,12 +56,12 @@ type graphFunctions struct {
 	// tracesCh is shared across all the eBPF tracing programs, which send there
 	// any discovered trace, and the input node of the graph, which reads and
 	// forwards them to the next stages.
-	tracesCh <-chan []any
+	tracesCh <-chan []request.Span
 }
 
 // Build instantiates the whole instrumentation --> processing --> submit
 // pipeline graph and returns it as a startable item
-func Build(ctx context.Context, config *Config, ctxInfo *global.ContextInfo, tracesCh <-chan []any) (*Instrumenter, error) {
+func Build(ctx context.Context, config *Config, ctxInfo *global.ContextInfo, tracesCh <-chan []request.Span) (*Instrumenter, error) {
 	if err := config.Validate(); err != nil {
 		return nil, fmt.Errorf("validating configuration: %w", err)
 	}
@@ -71,7 +71,7 @@ func Build(ctx context.Context, config *Config, ctxInfo *global.ContextInfo, tra
 
 // private constructor that can be instantiated from tests to override the node providers
 // and offsets inspector
-func newGraphBuilder(config *Config, ctxInfo *global.ContextInfo, tracesCh <-chan []any) *graphFunctions {
+func newGraphBuilder(config *Config, ctxInfo *global.ContextInfo, tracesCh <-chan []request.Span) *graphFunctions {
 	// This is how the github.com/mariomac/pipes library, works:
 	// First, we create a graph builder
 	gnb := graph.NewBuilder(node.ChannelBufferLen(config.ChannelBufferLen))

@@ -3,6 +3,7 @@ package pipe
 import (
 	"context"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -14,8 +15,6 @@ import (
 	"go.opentelemetry.io/collector/pdata/ptrace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
 
-	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
-	"github.com/grafana/beyla/pkg/internal/ebpf/httpfltr"
 	"github.com/grafana/beyla/pkg/internal/export/otel"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
@@ -43,10 +42,10 @@ func TestBasicPipeline(t *testing.T) {
 
 	gb := newGraphBuilder(&Config{
 		Metrics: otel.MetricsConfig{MetricsEndpoint: tc.ServerEndpoint, ReportTarget: true, ReportPeerInfo: true},
-	}, gctx(), make(<-chan []any))
+	}, gctx(), make(<-chan []request.Span))
 	// Override eBPF tracer to send some fake data
-	graph.RegisterStart(gb.builder, func(_ context.Context, _ traces.Reader) (node.StartFuncCtx[[]any], error) {
-		return func(_ context.Context, out chan<- []any) {
+	graph.RegisterStart(gb.builder, func(_ context.Context, _ traces.Reader) (node.StartFuncCtx[[]request.Span], error) {
+		return func(_ context.Context, out chan<- []request.Span) {
 			out <- newRequest(1, "GET", "/foo/bar", "1.1.1.1:3456", 404)
 		}, nil
 	})
@@ -79,10 +78,10 @@ func TestTracerPipeline(t *testing.T) {
 
 	gb := newGraphBuilder(&Config{
 		Traces: otel.TracesConfig{TracesEndpoint: tc.ServerEndpoint, SamplingRatio: 1.0},
-	}, gctx(), make(<-chan []any))
+	}, gctx(), make(<-chan []request.Span))
 	// Override eBPF tracer to send some fake data
-	graph.RegisterStart(gb.builder, func(_ context.Context, _ traces.Reader) (node.StartFuncCtx[[]any], error) {
-		return func(_ context.Context, out chan<- []any) {
+	graph.RegisterStart(gb.builder, func(_ context.Context, _ traces.Reader) (node.StartFuncCtx[[]request.Span], error) {
+		return func(_ context.Context, out chan<- []request.Span) {
 			out <- newRequest(1, "GET", "/foo/bar", "1.1.1.1:3456", 404)
 		}, nil
 	})
@@ -109,10 +108,10 @@ func TestRouteConsolidation(t *testing.T) {
 	gb := newGraphBuilder(&Config{
 		Metrics: otel.MetricsConfig{MetricsEndpoint: tc.ServerEndpoint}, // ReportPeerInfo = false, no peer info
 		Routes:  &transform.RoutesConfig{Patterns: []string{"/user/{id}", "/products/{id}/push"}},
-	}, gctx(), make(<-chan []any))
+	}, gctx(), make(<-chan []request.Span))
 	// Override eBPF tracer to send some fake data
-	graph.RegisterStart(gb.builder, func(_ context.Context, _ traces.Reader) (node.StartFuncCtx[[]any], error) {
-		return func(_ context.Context, out chan<- []any) {
+	graph.RegisterStart(gb.builder, func(_ context.Context, _ traces.Reader) (node.StartFuncCtx[[]request.Span], error) {
+		return func(_ context.Context, out chan<- []request.Span) {
 			out <- newRequest(1, "GET", "/user/1234", "1.1.1.1:3456", 200)
 			out <- newRequest(2, "GET", "/products/3210/push", "1.1.1.1:3456", 200)
 			out <- newRequest(3, "GET", "/attach", "1.1.1.1:3456", 200) // undefined route: won't report as route
@@ -173,10 +172,10 @@ func TestGRPCPipeline(t *testing.T) {
 
 	gb := newGraphBuilder(&Config{
 		Metrics: otel.MetricsConfig{MetricsEndpoint: tc.ServerEndpoint, ReportTarget: true, ReportPeerInfo: true},
-	}, gctx(), make(<-chan []any))
+	}, gctx(), make(<-chan []request.Span))
 	// Override eBPF tracer to send some fake data
-	graph.RegisterStart(gb.builder, func(_ context.Context, _ traces.Reader) (node.StartFuncCtx[[]any], error) {
-		return func(_ context.Context, out chan<- []any) {
+	graph.RegisterStart(gb.builder, func(_ context.Context, _ traces.Reader) (node.StartFuncCtx[[]request.Span], error) {
+		return func(_ context.Context, out chan<- []request.Span) {
 			out <- newGRPCRequest(1, "/foo/bar", 3)
 		}, nil
 	})
@@ -208,10 +207,10 @@ func TestTraceGRPCPipeline(t *testing.T) {
 
 	gb := newGraphBuilder(&Config{
 		Traces: otel.TracesConfig{TracesEndpoint: tc.ServerEndpoint, SamplingRatio: 1.0},
-	}, gctx(), make(<-chan []any))
+	}, gctx(), make(<-chan []request.Span))
 	// Override eBPF tracer to send some fake data
-	graph.RegisterStart(gb.builder, func(_ context.Context, _ traces.Reader) (node.StartFuncCtx[[]any], error) {
-		return func(_ context.Context, out chan<- []any) {
+	graph.RegisterStart(gb.builder, func(_ context.Context, _ traces.Reader) (node.StartFuncCtx[[]request.Span], error) {
+		return func(_ context.Context, out chan<- []request.Span) {
 			out <- newGRPCRequest(1, "foo.bar", 3)
 		}, nil
 	})
@@ -237,10 +236,10 @@ func TestNestedSpanMatching(t *testing.T) {
 
 	gb := newGraphBuilder(&Config{
 		Traces: otel.TracesConfig{TracesEndpoint: tc.ServerEndpoint, SamplingRatio: 1.0},
-	}, gctx(), make(<-chan []any))
+	}, gctx(), make(<-chan []request.Span))
 	// Override eBPF tracer to send some fake data with nested client span
-	graph.RegisterStart(gb.builder, func(_ context.Context, _ traces.Reader) (node.StartFuncCtx[[]any], error) {
-		return func(_ context.Context, out chan<- []any) {
+	graph.RegisterStart(gb.builder, func(_ context.Context, _ traces.Reader) (node.StartFuncCtx[[]request.Span], error) {
+		return func(_ context.Context, out chan<- []request.Span) {
 			out <- newRequestWithTiming(1, request.EventTypeHTTPClient, "GET", "/attach", "2.2.2.2:1234", 200, 60000, 60000, 70000)
 			out <- newRequestWithTiming(1, request.EventTypeHTTP, "GET", "/user/1234", "1.1.1.1:3456", 200, 10000, 10000, 50000)
 			out <- newRequestWithTiming(3, request.EventTypeHTTPClient, "GET", "/products/3210/pull", "2.2.2.2:3456", 204, 80000, 80000, 90000)
@@ -309,51 +308,51 @@ func TestNestedSpanMatching(t *testing.T) {
 	assert.Equal(t, parent1ID, event.Attributes["parent_span_id"])
 }
 
-func newRequest(id uint64, method, path, peer string, status int) []any {
-	rt := ebpfcommon.HTTPRequestTrace{}
-	copy(rt.Path[:], path)
-	copy(rt.Method[:], method)
-	copy(rt.RemoteAddr[:], peer)
-	copy(rt.Host[:], getHostname()+":8080")
-	rt.Status = uint16(status)
-	rt.Type = uint8(request.EventTypeHTTP)
-	rt.Id = id
-	rt.GoStartMonotimeNs = 1
-	rt.StartMonotimeNs = 2
-	rt.EndMonotimeNs = 3
-	return []any{rt}
+func newRequest(id uint64, method, path, peer string, status int) []request.Span {
+	return []request.Span{{
+		Path:         path,
+		Method:       method,
+		Peer:         strings.Split(peer, ":")[0],
+		Host:         getHostname(),
+		HostPort:     8080,
+		Status:       status,
+		Type:         request.EventTypeHTTP,
+		ID:           id,
+		Start:        2,
+		RequestStart: 1,
+		End:          3,
+	}}
 }
 
-func newRequestWithTiming(id uint64, kind request.EventType, method, path, peer string, status int, goStart, start, end uint64) []any {
-	rt := ebpfcommon.HTTPRequestTrace{}
-	copy(rt.Path[:], path)
-	copy(rt.Method[:], method)
-	copy(rt.RemoteAddr[:], peer)
-	copy(rt.Host[:], getHostname()+":8080")
-	rt.Status = uint16(status)
-	rt.Type = uint8(kind)
-	rt.Id = id
-	rt.GoStartMonotimeNs = goStart
-	rt.StartMonotimeNs = start
-	rt.EndMonotimeNs = end
-	return []any{rt}
+func newRequestWithTiming(id uint64, kind request.EventType, method, path, peer string, status int, goStart, start, end uint64) []request.Span {
+	return []request.Span{{
+		Path:         path,
+		Method:       method,
+		Peer:         strings.Split(peer, ":")[0],
+		Host:         getHostname(),
+		HostPort:     8080,
+		Type:         kind,
+		Status:       status,
+		ID:           id,
+		RequestStart: int64(goStart),
+		Start:        int64(start),
+		End:          int64(end),
+	}}
 }
 
-func newGRPCRequest(id uint64, path string, status int) []any {
-	rt := ebpfcommon.HTTPRequestTrace{}
-	copy(rt.Path[:], path)
-	copy(rt.RemoteAddr[:], []byte{0x1, 0x1, 0x1, 0x1})
-	rt.RemoteAddrLen = 4
-	copy(rt.Host[:], []byte{0x7f, 0x0, 0x0, 0x1})
-	rt.HostLen = 4
-	rt.HostPort = 8080
-	rt.Status = uint16(status)
-	rt.Type = uint8(request.EventTypeGRPC)
-	rt.Id = id
-	rt.GoStartMonotimeNs = 1
-	rt.StartMonotimeNs = 2
-	rt.EndMonotimeNs = 3
-	return []any{rt}
+func newGRPCRequest(id uint64, path string, status int) []request.Span {
+	return []request.Span{{
+		Path:         path,
+		Peer:         "1.1.1.1",
+		Host:         "127.0.0.1",
+		HostPort:     8080,
+		Status:       status,
+		Type:         request.EventTypeGRPC,
+		ID:           id,
+		Start:        2,
+		RequestStart: 1,
+		End:          3,
+	}}
 }
 
 func getHostname() string {
@@ -433,21 +432,20 @@ func matchNestedEvent(t *testing.T, name, method, target, status string, kind pt
 	assert.Equal(t, kind, event.Kind)
 }
 
-func newHTTPInfo(method, path, peer string, status int) []any {
-	var i httpfltr.HTTPInfo
-	i.Type = 1
-	i.Method = method
-	i.Peer = peer
-	i.URL = path
-	i.Host = getHostname()
-	i.ConnInfo.D_port = uint16(8080)
-	i.ConnInfo.S_port = uint16(12345)
-	i.Status = uint16(status)
-	i.StartMonotimeNs = 2
-	i.EndMonotimeNs = 3
-	i.Comm = "comm"
-
-	return []any{i}
+func newHTTPInfo(method, path, peer string, status int) []request.Span {
+	return []request.Span{{
+		Type:         1,
+		Method:       method,
+		Peer:         peer,
+		Path:         path,
+		Host:         getHostname(),
+		HostPort:     8080,
+		Status:       status,
+		Start:        2,
+		RequestStart: 2,
+		End:          3,
+		ServiceName:  "comm",
+	}}
 }
 
 func matchInfoEvent(t *testing.T, name string, event collector.TraceRecord) {
@@ -478,10 +476,10 @@ func TestBasicPipelineInfo(t *testing.T) {
 
 	gb := newGraphBuilder(&Config{
 		Metrics: otel.MetricsConfig{MetricsEndpoint: tc.ServerEndpoint, ReportTarget: true, ReportPeerInfo: true},
-	}, gctx(), make(<-chan []any))
+	}, gctx(), make(<-chan []request.Span))
 	// Override eBPF tracer to send some fake data
-	graph.RegisterStart(gb.builder, func(_ context.Context, _ traces.Reader) (node.StartFuncCtx[[]any], error) {
-		return func(_ context.Context, out chan<- []any) {
+	graph.RegisterStart(gb.builder, func(_ context.Context, _ traces.Reader) (node.StartFuncCtx[[]request.Span], error) {
+		return func(_ context.Context, out chan<- []request.Span) {
 			out <- newHTTPInfo("PATCH", "/aaa/bbb", "1.1.1.1", 204)
 		}, nil
 	})
@@ -514,10 +512,10 @@ func TestTracerPipelineInfo(t *testing.T) {
 
 	gb := newGraphBuilder(&Config{
 		Traces: otel.TracesConfig{TracesEndpoint: tc.ServerEndpoint, SamplingRatio: 1.0},
-	}, gctx(), make(<-chan []any))
+	}, gctx(), make(<-chan []request.Span))
 	// Override eBPF tracer to send some fake data
-	graph.RegisterStart(gb.builder, func(_ context.Context, _ traces.Reader) (node.StartFuncCtx[[]any], error) {
-		return func(_ context.Context, out chan<- []any) {
+	graph.RegisterStart(gb.builder, func(_ context.Context, _ traces.Reader) (node.StartFuncCtx[[]request.Span], error) {
+		return func(_ context.Context, out chan<- []request.Span) {
 			out <- newHTTPInfo("PATCH", "/aaa/bbb", "1.1.1.1", 204)
 		}, nil
 	})

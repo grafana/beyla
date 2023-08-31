@@ -17,6 +17,7 @@ import (
 	"golang.org/x/exp/slog"
 
 	"github.com/grafana/beyla/pkg/internal/imetrics"
+	"github.com/grafana/beyla/pkg/internal/request"
 	"github.com/grafana/beyla/pkg/internal/testutil"
 )
 
@@ -27,12 +28,12 @@ func TestForwardRingbuf_CapacityFull(t *testing.T) {
 	ringBuf, restore := replaceTestRingBuf()
 	defer restore()
 	metrics := &metricsReporter{}
-	forwardedMessages := make(chan []any, 100)
-	go ForwardRingbuf(
+	forwardedMessages := make(chan []request.Span, 100)
+	go ForwardRingbuf[HTTPRequestTrace](
 		&TracerConfig{BatchLength: 10},
 		slog.With("test", "TestForwardRingbuf_CapacityFull"),
 		nil, // the source ring buffer can be null
-		toRequestTrace,
+		ReadHTTPRequestTraceAsSpan,
 		metrics,
 	)(context.Background(), forwardedMessages)
 
@@ -46,13 +47,13 @@ func TestForwardRingbuf_CapacityFull(t *testing.T) {
 	batch := testutil.ReadChannel(t, forwardedMessages, testTimeout)
 	require.Len(t, batch, 10)
 	for i := range batch {
-		assert.Equal(t, HTTPRequestTrace{Type: 1, Method: get, ContentLength: int64(i)}, batch[i])
+		assert.Equal(t, request.Span{Type: 1, Method: "GET", ContentLength: int64(i)}, batch[i])
 	}
 
 	batch = testutil.ReadChannel(t, forwardedMessages, testTimeout)
 	require.Len(t, batch, 10)
 	for i := range batch {
-		assert.Equal(t, HTTPRequestTrace{Type: 1, Method: get, ContentLength: int64(10 + i)}, batch[i])
+		assert.Equal(t, request.Span{Type: 1, Method: "GET", ContentLength: int64(10 + i)}, batch[i])
 	}
 	// AND metrics are properly updated
 	assert.Equal(t, 2, metrics.flushes)
@@ -73,12 +74,12 @@ func TestForwardRingbuf_Deadline(t *testing.T) {
 	defer restore()
 
 	metrics := &metricsReporter{}
-	forwardedMessages := make(chan []any, 100)
-	go ForwardRingbuf(
+	forwardedMessages := make(chan []request.Span, 100)
+	go ForwardRingbuf[HTTPRequestTrace](
 		&TracerConfig{BatchLength: 10, BatchTimeout: 20 * time.Millisecond},
 		slog.With("test", "TestForwardRingbuf_Deadline"),
 		nil, // the source ring buffer can be null
-		toRequestTrace,
+		ReadHTTPRequestTraceAsSpan,
 		metrics,
 	)(context.Background(), forwardedMessages)
 
@@ -95,7 +96,7 @@ func TestForwardRingbuf_Deadline(t *testing.T) {
 	}
 	require.Len(t, batch, 7)
 	for i := range batch {
-		assert.Equal(t, HTTPRequestTrace{Type: 1, Method: get, ContentLength: int64(i)}, batch[i])
+		assert.Equal(t, request.Span{Type: 1, Method: "GET", ContentLength: int64(i)}, batch[i])
 	}
 
 	// AND metrics are properly updated
@@ -110,14 +111,14 @@ func TestForwardRingbuf_Close(t *testing.T) {
 
 	metrics := &metricsReporter{}
 	closable := closableObject{}
-	go ForwardRingbuf(
+	go ForwardRingbuf[HTTPRequestTrace](
 		&TracerConfig{BatchLength: 10},
 		slog.With("test", "TestForwardRingbuf_Close"),
 		nil, // the source ring buffer can be null
-		toRequestTrace,
+		ReadHTTPRequestTraceAsSpan,
 		metrics,
 		&closable,
-	)(context.Background(), make(chan []any, 100))
+	)(context.Background(), make(chan []request.Span, 100))
 
 	assert.False(t, ringBuf.explicitClose.Load())
 	assert.False(t, closable.closed)
@@ -187,18 +188,6 @@ type closableObject struct {
 func (c *closableObject) Close() error {
 	c.closed = true
 	return nil
-}
-
-func toRequestTrace(record *ringbuf.Record) (any, error) {
-	var event HTTPRequestTrace
-
-	err := binary.Read(bytes.NewBuffer(record.RawSample), binary.LittleEndian, &event)
-	if err != nil {
-		slog.Error("Error reading generic HTTP event", err)
-		return nil, err
-	}
-
-	return event, nil
 }
 
 type metricsReporter struct {

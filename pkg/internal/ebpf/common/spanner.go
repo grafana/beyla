@@ -1,51 +1,18 @@
-package transform
+package ebpfcommon
 
 import (
 	"bytes"
 	"net"
 	"strconv"
-	"strings"
 
 	"golang.org/x/exp/slog"
 
-	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
-	httpfltr "github.com/grafana/beyla/pkg/internal/ebpf/httpfltr"
 	"github.com/grafana/beyla/pkg/internal/request"
 )
 
 var log = slog.With("component", "goexec.spanner")
 
-func extractHostPort(b []uint8) (string, int) {
-	addrLen := bytes.IndexByte(b, 0)
-	if addrLen < 0 {
-		addrLen = len(b)
-	}
-
-	peer := ""
-	peerPort := 0
-
-	if addrLen > 0 {
-		addr := string(b[:addrLen])
-		ip, port, err := net.SplitHostPort(addr)
-		if err != nil {
-			peer = addr
-		} else {
-			peer = ip
-			peerPort, _ = strconv.Atoi(port)
-		}
-	}
-
-	return peer, peerPort
-}
-
-func extractIP(b []uint8, size int) string {
-	if size > len(b) {
-		size = len(b)
-	}
-	return net.IP(b[:size]).String()
-}
-
-func HTTPRequestTraceToSpan(trace *ebpfcommon.HTTPRequestTrace) request.Span {
+func HTTPRequestTraceToSpan(trace *HTTPRequestTrace) request.Span {
 	// From C, assuming 0-ended strings
 	methodLen := bytes.IndexByte(trace.Method[:], 0)
 	if methodLen < 0 {
@@ -90,28 +57,32 @@ func HTTPRequestTraceToSpan(trace *ebpfcommon.HTTPRequestTrace) request.Span {
 	}
 }
 
-func removeQuery(url string) string {
-	idx := strings.IndexByte(url, '?')
-	if idx > 0 {
-		return url[:idx]
+func extractHostPort(b []uint8) (string, int) {
+	addrLen := bytes.IndexByte(b, 0)
+	if addrLen < 0 {
+		addrLen = len(b)
 	}
-	return url
+
+	peer := ""
+	peerPort := 0
+
+	if addrLen > 0 {
+		addr := string(b[:addrLen])
+		ip, port, err := net.SplitHostPort(addr)
+		if err != nil {
+			peer = addr
+		} else {
+			peer = ip
+			peerPort, _ = strconv.Atoi(port)
+		}
+	}
+
+	return peer, peerPort
 }
 
-func HTTPInfoToSpan(info *httpfltr.HTTPInfo) request.Span {
-	return request.Span{
-		Type:          request.EventType(info.Type),
-		ID:            0,
-		Method:        info.Method,
-		Path:          removeQuery(info.URL),
-		Peer:          info.Peer,
-		Host:          info.Host,
-		HostPort:      int(info.ConnInfo.D_port),
-		ContentLength: int64(info.Len),
-		RequestStart:  int64(info.StartMonotimeNs),
-		Start:         int64(info.StartMonotimeNs),
-		End:           int64(info.EndMonotimeNs),
-		Status:        int(info.Status),
-		ServiceName:   info.Comm,
+func extractIP(b []uint8, size int) string {
+	if size > len(b) {
+		size = len(b)
 	}
+	return net.IP(b[:size]).String()
 }

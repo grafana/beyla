@@ -10,6 +10,7 @@ import (
 	"github.com/cilium/ebpf/ringbuf"
 
 	"github.com/grafana/beyla/pkg/internal/goexec"
+	"github.com/grafana/beyla/pkg/internal/request"
 )
 
 //go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target bpf -type http_request_trace bpf ../../../../bpf/http_trace.c -- -I../../../../bpf/headers
@@ -72,13 +73,13 @@ type Filter struct {
 	Fd int
 }
 
-func Read[T any](record *ringbuf.Record) (any, error) {
-	var event T
+func ReadHTTPRequestTraceAsSpan(record *ringbuf.Record) (request.Span, error) {
+	var event HTTPRequestTrace
 
 	err := binary.Read(bytes.NewBuffer(record.RawSample), binary.LittleEndian, &event)
 	if err != nil {
-		return event, err
+		return request.Span{}, err
 	}
 
-	return event, nil
+	return HTTPRequestTraceToSpan(&event), nil
 }

@@ -14,6 +14,7 @@ import (
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/pipe"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
+	"github.com/grafana/beyla/pkg/internal/request"
 )
 
 // Config as provided by the user to configure and run Beyla
@@ -33,7 +34,7 @@ type Instrumenter struct {
 	// the ProcessTracer.
 	// TODO: When we split beyla into two executables, probably the BPF map
 	// should be the traces' communication mechanism instead of a native channel
-	tracesInput chan []any
+	tracesInput chan []request.Span
 
 	// TODO: temporary hack. REMOVE
 	// This will force that the pipeline is not created until we have a service name.
@@ -48,7 +49,7 @@ func New(config *Config) *Instrumenter {
 	return &Instrumenter{
 		config:                     (*pipe.Config)(config),
 		ctxInfo:                    buildContextInfo((*pipe.Config)(config)),
-		tracesInput:                make(chan []any, config.ChannelBufferLen),
+		tracesInput:                make(chan []request.Span, config.ChannelBufferLen),
 		TempHackWaitForServiceName: make(chan struct{}),
 	}
 }

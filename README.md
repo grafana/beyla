@@ -15,7 +15,7 @@ If you don't have an example, you can download and run the service from the `exa
 
 ```
 curl -OL https://github.com/grafana/beyla/blob/main/examples/example-http-service/example-http-service.go
-go run ./example-service.go
+go run ./example-http-service.go
 ```
 
 Next, generate some traffic. The following command will trigger a GET request to http://localhost:8080 every two seconds.
@@ -29,10 +29,10 @@ Now that we have an example running, we are ready to download and run Beyla.
 First, download and unpack the latest release from the [Github releases page](https://github.com/grafana/beyla/releases).
 The release should contain the `./beyla` executable.
 
-Beyla supports multiple exposition format (Prometheus, OpenTelemetry metrics, Single Span traces),
-and multiple ways to find the service to be instrumented (by network port, executable name, process ID).
+Beyla supports multiple ways to find the service to be instrumented (by network port, executable name, process ID),
+and multiple exposition formats (Prometheus, OpenTelemetry metrics, Single Span traces).
 
-For getting started, we'll tell Beyla to instrument the service running on port 8080 (our example service) and expose metrics in Prometheus on port 9400.
+For getting started, we'll tell Beyla to instrument the service running on port 8080 (our example service) and expose metrics in Prometheus format on port 9400.
 
 ```
 export BEYLA_PROMETHEUS_PORT=9400

@@ -42,7 +42,7 @@ type ringBufForwarder[T any] struct {
 }
 
 // ForwardRingbuf returns a function reads HTTPRequestTraces from an input ring buffer, accumulates them into an
-// internal buffer, and forwards them to an output events channel, previously converted to transform.HTTPRequestSpan
+// internal buffer, and forwards them to an output events channel, previously converted to request.Span
 // instances
 func ForwardRingbuf[T any](
 	cfg *TracerConfig,

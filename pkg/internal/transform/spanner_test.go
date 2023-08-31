@@ -7,6 +7,7 @@ import (
 
 	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
 	"github.com/grafana/beyla/pkg/internal/ebpf/httpfltr"
+	"github.com/grafana/beyla/pkg/internal/request"
 )
 
 func cstr(s string) []byte {
@@ -52,7 +53,7 @@ func makeGRPCRequestTrace(path string, peerInfo []byte, status uint16, durationM
 	}
 }
 
-func assertMatches(t *testing.T, span *HTTPRequestSpan, method, path, peer string, status int, durationMs uint64) {
+func assertMatches(t *testing.T, span *request.Span, method, path, peer string, status int, durationMs uint64) {
 	assert.Equal(t, method, span.Method)
 	assert.Equal(t, path, span.Path)
 	assert.Equal(t, peer, span.Peer)
@@ -64,36 +65,36 @@ func assertMatches(t *testing.T, span *HTTPRequestSpan, method, path, peer strin
 func TestRequestTraceParsing(t *testing.T) {
 	t.Run("Test basic parsing", func(t *testing.T) {
 		tr := makeHTTPRequestTrace("POST", "/users", "127.0.0.1:1234", 200, 5)
-		s := convertFromHTTPTrace(&tr)
+		s := HTTPRequestTraceToSpan(&tr)
 		assertMatches(t, &s, "POST", "/users", "127.0.0.1", 200, 5)
 	})
 
 	t.Run("Test with empty path and missing peer host", func(t *testing.T) {
 		tr := makeHTTPRequestTrace("GET", "", ":1234", 403, 6)
-		s := convertFromHTTPTrace(&tr)
+		s := HTTPRequestTraceToSpan(&tr)
 		assertMatches(t, &s, "GET", "", "", 403, 6)
 	})
 
 	t.Run("Test with missing peer port", func(t *testing.T) {
 		tr := makeHTTPRequestTrace("GET", "/posts/1/1", "1234", 500, 1)
-		s := convertFromHTTPTrace(&tr)
+		s := HTTPRequestTraceToSpan(&tr)
 		assertMatches(t, &s, "GET", "/posts/1/1", "1234", 500, 1)
 	})
 
 	t.Run("Test with invalid peer port", func(t *testing.T) {
 		tr := makeHTTPRequestTrace("GET", "/posts/1/1", "1234:aaa", 500, 1)
-		s := convertFromHTTPTrace(&tr)
+		s := HTTPRequestTraceToSpan(&tr)
 		assertMatches(t, &s, "GET", "/posts/1/1", "1234", 500, 1)
 	})
 
 	t.Run("Test with GRPC request", func(t *testing.T) {
 		tr := makeGRPCRequestTrace("/posts/1/1", []byte{0x7f, 0, 0, 0x1}, 2, 1)
-		s := convertFromHTTPTrace(&tr)
+		s := HTTPRequestTraceToSpan(&tr)
 		assertMatches(t, &s, "", "/posts/1/1", "127.0.0.1", 2, 1)
 	})
 }
 
-func makeSpanWithTimings(goStart, start, end uint64) HTTPRequestSpan {
+func makeSpanWithTimings(goStart, start, end uint64) request.Span {
 	tr := ebpfcommon.HTTPRequestTrace{
 		Type:              1,
 		Path:              [100]uint8{},
@@ -105,7 +106,7 @@ func makeSpanWithTimings(goStart, start, end uint64) HTTPRequestSpan {
 		EndMonotimeNs:     end,
 	}
 
-	return convertFromHTTPTrace(&tr)
+	return HTTPRequestTraceToSpan(&tr)
 }
 
 func TestSpanNesting(t *testing.T) {
@@ -151,24 +152,24 @@ func makeHTTPInfo(method, path, peer, host, comm string, peerPort, hostPort uint
 func TestHTTPInfoParsing(t *testing.T) {
 	t.Run("Test basic parsing", func(t *testing.T) {
 		tr := makeHTTPInfo("POST", "/users", "127.0.0.1", "127.0.0.2", "curl", 12345, 8080, 200, 5)
-		s := convertFromHTTPInfo(&tr)
+		s := HTTPInfoToSpan(&tr)
 		assertMatchesInfo(t, &s, "POST", "/users", "127.0.0.1", "127.0.0.2", "curl", 8080, 200, 5)
 	})
 
 	t.Run("Test empty URL", func(t *testing.T) {
 		tr := makeHTTPInfo("POST", "", "127.0.0.1", "127.0.0.2", "curl", 12345, 8080, 200, 5)
-		s := convertFromHTTPInfo(&tr)
+		s := HTTPInfoToSpan(&tr)
 		assertMatchesInfo(t, &s, "POST", "", "127.0.0.1", "127.0.0.2", "curl", 8080, 200, 5)
 	})
 
 	t.Run("Test parsing with URL parameters", func(t *testing.T) {
 		tr := makeHTTPInfo("POST", "/users?query=1234", "127.0.0.1", "127.0.0.2", "curl", 12345, 8080, 200, 5)
-		s := convertFromHTTPInfo(&tr)
+		s := HTTPInfoToSpan(&tr)
 		assertMatchesInfo(t, &s, "POST", "/users", "127.0.0.1", "127.0.0.2", "curl", 8080, 200, 5)
 	})
 }
 
-func assertMatchesInfo(t *testing.T, span *HTTPRequestSpan, method, path, peer, host, comm string, hostPort int, status int, durationMs uint64) {
+func assertMatchesInfo(t *testing.T, span *request.Span, method, path, peer, host, comm string, hostPort int, status int, durationMs uint64) {
 	assert.Equal(t, method, span.Method)
 	assert.Equal(t, path, span.Path)
 	assert.Equal(t, host, span.Host)

@@ -7,6 +7,7 @@ import (
 	"github.com/mariomac/pipes/pkg/node"
 	"golang.org/x/exp/slog"
 
+	"github.com/grafana/beyla/pkg/internal/request"
 	"github.com/grafana/beyla/pkg/internal/transform/route"
 )
 
@@ -34,9 +35,9 @@ type RoutesConfig struct {
 	Patterns []string `yaml:"patterns"`
 }
 
-func RoutesProvider(_ context.Context, rc *RoutesConfig) (node.MiddleFunc[[]HTTPRequestSpan, []HTTPRequestSpan], error) {
+func RoutesProvider(_ context.Context, rc *RoutesConfig) (node.MiddleFunc[[]request.Span, []request.Span], error) {
 	// set default value for Unmatch action
-	var unmatchAction func(span *HTTPRequestSpan)
+	var unmatchAction func(span *request.Span)
 	switch rc.Unmatch {
 	case UnmatchWildcard, "": // default
 		unmatchAction = setUnmatchToWildcard
@@ -51,7 +52,7 @@ func RoutesProvider(_ context.Context, rc *RoutesConfig) (node.MiddleFunc[[]HTTP
 		unmatchAction = setUnmatchToWildcard
 	}
 	matcher := route.NewMatcher(rc.Patterns)
-	return func(in <-chan []HTTPRequestSpan, out chan<- []HTTPRequestSpan) {
+	return func(in <-chan []request.Span, out chan<- []request.Span) {
 		for spans := range in {
 			for i := range spans {
 				spans[i].Route = matcher.Find(spans[i].Path)
@@ -62,15 +63,15 @@ func RoutesProvider(_ context.Context, rc *RoutesConfig) (node.MiddleFunc[[]HTTP
 	}, nil
 }
 
-func leaveUnmatchEmpty(_ *HTTPRequestSpan) {}
+func leaveUnmatchEmpty(_ *request.Span) {}
 
-func setUnmatchToWildcard(str *HTTPRequestSpan) {
+func setUnmatchToWildcard(str *request.Span) {
 	if str.Route == "" {
 		str.Route = wildCard
 	}
 }
 
-func setUnmatchToPath(str *HTTPRequestSpan) {
+func setUnmatchToPath(str *request.Span) {
 	if str.Route == "" {
 		str.Route = str.Path
 	}

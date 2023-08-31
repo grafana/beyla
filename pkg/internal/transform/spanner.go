@@ -5,76 +5,15 @@ import (
 	"net"
 	"strconv"
 	"strings"
-	"time"
 
-	"github.com/gavv/monotime"
 	"golang.org/x/exp/slog"
 
 	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
 	httpfltr "github.com/grafana/beyla/pkg/internal/ebpf/httpfltr"
-)
-
-type EventType int
-
-const (
-	EventTypeHTTP EventType = iota + 1
-	EventTypeGRPC
-	EventTypeHTTPClient
-	EventTypeGRPCClient
+	"github.com/grafana/beyla/pkg/internal/request"
 )
 
 var log = slog.With("component", "goexec.spanner")
-
-type converter struct {
-	clock     func() time.Time
-	monoClock func() time.Duration
-}
-
-var clocks = converter{monoClock: monotime.Now, clock: time.Now}
-
-// HTTPRequestSpan contains the information being submitted by the following nodes in the graph.
-// It enables confortable handling of data from Go.
-type HTTPRequestSpan struct {
-	Type          EventType
-	ID            uint64
-	Method        string
-	Path          string
-	Route         string
-	Peer          string
-	Host          string
-	HostPort      int
-	Status        int
-	ContentLength int64
-	RequestStart  int64
-	Start         int64
-	End           int64
-	ServiceName   string
-	Metadata      []MetadataTag
-}
-
-type MetadataTag struct {
-	Key string
-	Val string
-}
-
-func ConvertToSpan(in <-chan []any, out chan<- []HTTPRequestSpan) {
-	for traces := range in {
-		spans := make([]HTTPRequestSpan, 0, len(traces))
-		for i := range traces {
-			v := traces[i]
-
-			switch t := v.(type) {
-			case ebpfcommon.HTTPRequestTrace:
-				httpTrace := t
-				spans = append(spans, convertFromHTTPTrace(&httpTrace))
-			case httpfltr.HTTPInfo:
-				info := t
-				spans = append(spans, convertFromHTTPInfo(&info))
-			}
-		}
-		out <- spans
-	}
-}
 
 func extractHostPort(b []uint8) (string, int) {
 	addrLen := bytes.IndexByte(b, 0)
@@ -106,31 +45,7 @@ func extractIP(b []uint8, size int) string {
 	return net.IP(b[:size]).String()
 }
 
-func (s *HTTPRequestSpan) Inside(parent *HTTPRequestSpan) bool {
-	return s.RequestStart >= parent.RequestStart && s.End <= parent.End
-}
-
-type Timings struct {
-	RequestStart time.Time
-	Start        time.Time
-	End          time.Time
-}
-
-func (s *HTTPRequestSpan) Timings() Timings {
-	now := clocks.clock()
-	monoNow := clocks.monoClock()
-	startDelta := monoNow - time.Duration(s.Start)
-	endDelta := monoNow - time.Duration(s.End)
-	goStartDelta := monoNow - time.Duration(s.RequestStart)
-
-	return Timings{
-		RequestStart: now.Add(-goStartDelta),
-		Start:        now.Add(-startDelta),
-		End:          now.Add(-endDelta),
-	}
-}
-
-func convertFromHTTPTrace(trace *ebpfcommon.HTTPRequestTrace) HTTPRequestSpan {
+func HTTPRequestTraceToSpan(trace *ebpfcommon.HTTPRequestTrace) request.Span {
 	// From C, assuming 0-ended strings
 	methodLen := bytes.IndexByte(trace.Method[:], 0)
 	if methodLen < 0 {
@@ -145,22 +60,22 @@ func convertFromHTTPTrace(trace *ebpfcommon.HTTPRequestTrace) HTTPRequestSpan {
 	hostname := ""
 	hostPort := 0
 
-	switch EventType(trace.Type) {
-	case EventTypeHTTPClient, EventTypeHTTP:
+	switch request.EventType(trace.Type) {
+	case request.EventTypeHTTPClient, request.EventTypeHTTP:
 		peer, _ = extractHostPort(trace.RemoteAddr[:])
 		hostname, hostPort = extractHostPort(trace.Host[:])
-	case EventTypeGRPC:
+	case request.EventTypeGRPC:
 		hostPort = int(trace.HostPort)
 		peer = extractIP(trace.RemoteAddr[:], int(trace.RemoteAddrLen))
 		hostname = extractIP(trace.Host[:], int(trace.HostLen))
-	case EventTypeGRPCClient:
+	case request.EventTypeGRPCClient:
 		hostname, hostPort = extractHostPort(trace.Host[:])
 	default:
 		log.Warn("unknown trace type %d", trace.Type)
 	}
 
-	return HTTPRequestSpan{
-		Type:          EventType(trace.Type),
+	return request.Span{
+		Type:          request.EventType(trace.Type),
 		ID:            trace.Id,
 		Method:        string(trace.Method[:methodLen]),
 		Path:          string(trace.Path[:pathLen]),
@@ -183,9 +98,9 @@ func removeQuery(url string) string {
 	return url
 }
 
-func convertFromHTTPInfo(info *httpfltr.HTTPInfo) HTTPRequestSpan {
-	return HTTPRequestSpan{
-		Type:          EventType(info.Type),
+func HTTPInfoToSpan(info *httpfltr.HTTPInfo) request.Span {
+	return request.Span{
+		Type:          request.EventType(info.Type),
 		ID:            0,
 		Method:        info.Method,
 		Path:          removeQuery(info.URL),

@@ -19,6 +19,7 @@ import (
 	"github.com/grafana/beyla/pkg/internal/export/otel"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
+	"github.com/grafana/beyla/pkg/internal/request"
 	"github.com/grafana/beyla/pkg/internal/testutil"
 	"github.com/grafana/beyla/pkg/internal/traces"
 	"github.com/grafana/beyla/pkg/internal/transform"
@@ -240,15 +241,15 @@ func TestNestedSpanMatching(t *testing.T) {
 	// Override eBPF tracer to send some fake data with nested client span
 	graph.RegisterStart(gb.builder, func(_ context.Context, _ traces.Reader) (node.StartFuncCtx[[]any], error) {
 		return func(_ context.Context, out chan<- []any) {
-			out <- newRequestWithTiming(1, transform.EventTypeHTTPClient, "GET", "/attach", "2.2.2.2:1234", 200, 60000, 60000, 70000)
-			out <- newRequestWithTiming(1, transform.EventTypeHTTP, "GET", "/user/1234", "1.1.1.1:3456", 200, 10000, 10000, 50000)
-			out <- newRequestWithTiming(3, transform.EventTypeHTTPClient, "GET", "/products/3210/pull", "2.2.2.2:3456", 204, 80000, 80000, 90000)
-			out <- newRequestWithTiming(3, transform.EventTypeHTTPClient, "GET", "/products/3211/pull", "2.2.2.2:3456", 203, 80000, 80000, 90000)
-			out <- newRequestWithTiming(2, transform.EventTypeHTTP, "GET", "/products/3210/push", "1.1.1.1:3456", 200, 10000, 20000, 50000)
-			out <- newRequestWithTiming(3, transform.EventTypeHTTP, "GET", "/attach", "1.1.1.1:3456", 200, 70000, 80000, 100000)
-			out <- newRequestWithTiming(1, transform.EventTypeHTTPClient, "GET", "/attach2", "2.2.2.2:1234", 200, 30000, 30000, 40000)
-			out <- newRequestWithTiming(0, transform.EventTypeHTTPClient, "GET", "/attach1", "2.2.2.2:1234", 200, 20000, 20000, 40000)
-			out <- newRequestWithTiming(1, transform.EventTypeHTTP, "GET", "/user/3456", "1.1.1.1:3456", 200, 56000, 56000, 80000)
+			out <- newRequestWithTiming(1, request.EventTypeHTTPClient, "GET", "/attach", "2.2.2.2:1234", 200, 60000, 60000, 70000)
+			out <- newRequestWithTiming(1, request.EventTypeHTTP, "GET", "/user/1234", "1.1.1.1:3456", 200, 10000, 10000, 50000)
+			out <- newRequestWithTiming(3, request.EventTypeHTTPClient, "GET", "/products/3210/pull", "2.2.2.2:3456", 204, 80000, 80000, 90000)
+			out <- newRequestWithTiming(3, request.EventTypeHTTPClient, "GET", "/products/3211/pull", "2.2.2.2:3456", 203, 80000, 80000, 90000)
+			out <- newRequestWithTiming(2, request.EventTypeHTTP, "GET", "/products/3210/push", "1.1.1.1:3456", 200, 10000, 20000, 50000)
+			out <- newRequestWithTiming(3, request.EventTypeHTTP, "GET", "/attach", "1.1.1.1:3456", 200, 70000, 80000, 100000)
+			out <- newRequestWithTiming(1, request.EventTypeHTTPClient, "GET", "/attach2", "2.2.2.2:1234", 200, 30000, 30000, 40000)
+			out <- newRequestWithTiming(0, request.EventTypeHTTPClient, "GET", "/attach1", "2.2.2.2:1234", 200, 20000, 20000, 40000)
+			out <- newRequestWithTiming(1, request.EventTypeHTTP, "GET", "/user/3456", "1.1.1.1:3456", 200, 56000, 56000, 80000)
 		}, nil
 	})
 	pipe, err := gb.buildGraph(ctx)
@@ -315,7 +316,7 @@ func newRequest(id uint64, method, path, peer string, status int) []any {
 	copy(rt.RemoteAddr[:], peer)
 	copy(rt.Host[:], getHostname()+":8080")
 	rt.Status = uint16(status)
-	rt.Type = uint8(transform.EventTypeHTTP)
+	rt.Type = uint8(request.EventTypeHTTP)
 	rt.Id = id
 	rt.GoStartMonotimeNs = 1
 	rt.StartMonotimeNs = 2
@@ -323,7 +324,7 @@ func newRequest(id uint64, method, path, peer string, status int) []any {
 	return []any{rt}
 }
 
-func newRequestWithTiming(id uint64, kind transform.EventType, method, path, peer string, status int, goStart, start, end uint64) []any {
+func newRequestWithTiming(id uint64, kind request.EventType, method, path, peer string, status int, goStart, start, end uint64) []any {
 	rt := ebpfcommon.HTTPRequestTrace{}
 	copy(rt.Path[:], path)
 	copy(rt.Method[:], method)
@@ -347,7 +348,7 @@ func newGRPCRequest(id uint64, path string, status int) []any {
 	rt.HostLen = 4
 	rt.HostPort = 8080
 	rt.Status = uint16(status)
-	rt.Type = uint8(transform.EventTypeGRPC)
+	rt.Type = uint8(request.EventTypeGRPC)
 	rt.Id = id
 	rt.GoStartMonotimeNs = 1
 	rt.StartMonotimeNs = 2

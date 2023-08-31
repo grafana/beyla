@@ -23,7 +23,7 @@ import (
 
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
-	"github.com/grafana/beyla/pkg/internal/transform"
+	"github.com/grafana/beyla/pkg/internal/request"
 )
 
 func tlog() *slog.Logger {
@@ -31,12 +31,12 @@ func tlog() *slog.Logger {
 }
 
 type SessionSpan struct {
-	ReqSpan transform.HTTPRequestSpan
+	ReqSpan request.Span
 	RootCtx context.Context
 }
 
 var topSpans, _ = lru.New[uint64, SessionSpan](8192)
-var clientSpans, _ = lru.New[uint64, []transform.HTTPRequestSpan](8192)
+var clientSpans, _ = lru.New[uint64, []request.Span](8192)
 var namedTracers, _ = lru.New[string, *trace.TracerProvider](512)
 
 const reporterName = "github.com/grafana/beyla"
@@ -82,7 +82,7 @@ type TracesReporter struct {
 	bsp           trace.SpanProcessor
 }
 
-func ReportTraces(ctx context.Context, cfg *TracesConfig, ctxInfo *global.ContextInfo) (node.TerminalFunc[[]transform.HTTPRequestSpan], error) {
+func ReportTraces(ctx context.Context, cfg *TracesConfig, ctxInfo *global.ContextInfo) (node.TerminalFunc[[]request.Span], error) {
 	tr, err := newTracesReporter(ctx, cfg, ctxInfo)
 	if err != nil {
 		slog.Error("can't instantiate OTEL traces reporter", err)
@@ -188,11 +188,11 @@ func (r *TracesReporter) close() {
 	}
 }
 
-func (r *TracesReporter) traceAttributes(span *transform.HTTPRequestSpan) []attribute.KeyValue {
+func (r *TracesReporter) traceAttributes(span *request.Span) []attribute.KeyValue {
 	var attrs []attribute.KeyValue
 
 	switch span.Type {
-	case transform.EventTypeHTTP:
+	case request.EventTypeHTTP:
 		attrs = []attribute.KeyValue{
 			semconv.HTTPMethod(span.Method),
 			semconv.HTTPStatusCode(span.Status),
@@ -205,7 +205,7 @@ func (r *TracesReporter) traceAttributes(span *transform.HTTPRequestSpan) []attr
 		if span.Route != "" {
 			attrs = append(attrs, semconv.HTTPRoute(span.Route))
 		}
-	case transform.EventTypeGRPC:
+	case request.EventTypeGRPC:
 		attrs = []attribute.KeyValue{
 			semconv.RPCMethod(span.Path),
 			semconv.RPCSystemGRPC,
@@ -214,7 +214,7 @@ func (r *TracesReporter) traceAttributes(span *transform.HTTPRequestSpan) []attr
 			semconv.NetHostName(span.Host),
 			semconv.NetHostPort(span.HostPort),
 		}
-	case transform.EventTypeHTTPClient:
+	case request.EventTypeHTTPClient:
 		attrs = []attribute.KeyValue{
 			semconv.HTTPMethod(span.Method),
 			semconv.HTTPStatusCode(span.Status),
@@ -223,7 +223,7 @@ func (r *TracesReporter) traceAttributes(span *transform.HTTPRequestSpan) []attr
 			semconv.NetPeerPort(span.HostPort),
 			semconv.HTTPRequestContentLength(int(span.ContentLength)),
 		}
-	case transform.EventTypeGRPCClient:
+	case request.EventTypeGRPCClient:
 		attrs = []attribute.KeyValue{
 			semconv.RPCMethod(span.Path),
 			semconv.RPCSystemGRPC,
@@ -245,33 +245,33 @@ func (r *TracesReporter) traceAttributes(span *transform.HTTPRequestSpan) []attr
 	return attrs
 }
 
-func traceName(span *transform.HTTPRequestSpan) string {
+func traceName(span *request.Span) string {
 	switch span.Type {
-	case transform.EventTypeHTTP:
+	case request.EventTypeHTTP:
 		name := span.Method
 		if span.Route != "" {
 			name += " " + span.Route
 		}
 		return name
-	case transform.EventTypeGRPC, transform.EventTypeGRPCClient:
+	case request.EventTypeGRPC, request.EventTypeGRPCClient:
 		return span.Path
-	case transform.EventTypeHTTPClient:
+	case request.EventTypeHTTPClient:
 		return span.Method
 	}
 	return ""
 }
 
-func spanKind(span *transform.HTTPRequestSpan) trace2.SpanKind {
+func spanKind(span *request.Span) trace2.SpanKind {
 	switch span.Type {
-	case transform.EventTypeHTTP, transform.EventTypeGRPC:
+	case request.EventTypeHTTP, request.EventTypeGRPC:
 		return trace2.SpanKindServer
-	case transform.EventTypeHTTPClient, transform.EventTypeGRPCClient:
+	case request.EventTypeHTTPClient, request.EventTypeGRPCClient:
 		return trace2.SpanKindClient
 	}
 	return trace2.SpanKindInternal
 }
 
-func (r *TracesReporter) makeSpan(parentCtx context.Context, tracer trace2.Tracer, span *transform.HTTPRequestSpan) SessionSpan {
+func (r *TracesReporter) makeSpan(parentCtx context.Context, tracer trace2.Tracer, span *request.Span) SessionSpan {
 	t := span.Timings()
 
 	// Create a parent span for the whole request session
@@ -305,7 +305,7 @@ func (r *TracesReporter) makeSpan(parentCtx context.Context, tracer trace2.Trace
 	return SessionSpan{*span, ctx}
 }
 
-func (r *TracesReporter) reportClientSpan(span *transform.HTTPRequestSpan, tracer trace2.Tracer) {
+func (r *TracesReporter) reportClientSpan(span *request.Span, tracer trace2.Tracer) {
 	ctx := r.ctx
 
 	// we have a parent request span
@@ -318,7 +318,7 @@ func (r *TracesReporter) reportClientSpan(span *transform.HTTPRequestSpan, trace
 			// stash the client span for later addition
 			cs, ok := clientSpans.Get(span.ID)
 			if !ok {
-				cs = []transform.HTTPRequestSpan{*span}
+				cs = []request.Span{*span}
 			} else {
 				cs = append(cs, *span)
 			}
@@ -332,13 +332,13 @@ func (r *TracesReporter) reportClientSpan(span *transform.HTTPRequestSpan, trace
 	r.makeSpan(ctx, tracer, span)
 }
 
-func (r *TracesReporter) reportServerSpan(span *transform.HTTPRequestSpan, tracer trace2.Tracer) {
+func (r *TracesReporter) reportServerSpan(span *request.Span, tracer trace2.Tracer) {
 
 	s := r.makeSpan(r.ctx, tracer, span)
 	if span.ID != 0 {
 		topSpans.Add(span.ID, s)
 		cs, ok := clientSpans.Get(span.ID)
-		newer := []transform.HTTPRequestSpan{}
+		newer := []request.Span{}
 		if ok {
 			// finish any client spans that were waiting for this parent span
 			for j := range cs {
@@ -360,7 +360,7 @@ func (r *TracesReporter) reportServerSpan(span *transform.HTTPRequestSpan, trace
 	}
 }
 
-func (r *TracesReporter) reportTraces(input <-chan []transform.HTTPRequestSpan) {
+func (r *TracesReporter) reportTraces(input <-chan []request.Span) {
 	defer r.close()
 	defaultTracer := r.traceProvider.Tracer(reporterName)
 	for spans := range input {
@@ -373,9 +373,9 @@ func (r *TracesReporter) reportTraces(input <-chan []transform.HTTPRequestSpan) 
 			}
 
 			switch span.Type {
-			case transform.EventTypeHTTPClient, transform.EventTypeGRPCClient:
+			case request.EventTypeHTTPClient, request.EventTypeGRPCClient:
 				r.reportClientSpan(span, spanTracer)
-			case transform.EventTypeHTTP, transform.EventTypeGRPC:
+			case request.EventTypeHTTP, request.EventTypeGRPC:
 				r.reportServerSpan(span, spanTracer)
 			}
 		}

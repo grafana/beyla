@@ -12,6 +12,7 @@ import (
 	"github.com/grafana/beyla/pkg/internal/export/prom"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
+	"github.com/grafana/beyla/pkg/internal/request"
 	"github.com/grafana/beyla/pkg/internal/traces"
 	"github.com/grafana/beyla/pkg/internal/transform"
 )
@@ -83,7 +84,6 @@ func newGraphBuilder(config *Config, ctxInfo *global.ContextInfo, tracesCh <-cha
 	// Second, we register providers for each node. Each provider is a function that receives the
 	// type of each of the "nodesMap" struct fields, and returns the function that represents
 	// each node. Each function will have input and/or output channels.
-	graph.RegisterCodec(gnb, transform.ConvertToSpan)
 	graph.RegisterStart(gnb, traces.ReaderProvider)
 	graph.RegisterMiddle(gnb, transform.RoutesProvider)
 	graph.RegisterMiddle(gnb, transform.KubeDecoratorProvider)
@@ -131,16 +131,16 @@ func (i *Instrumenter) Run(ctx context.Context) {
 // argument in the functions below need to be a value.
 
 //nolint:gocritic
-func (gb *graphFunctions) tracesReporterProvicer(ctx context.Context, config otel.TracesConfig) (node.TerminalFunc[[]transform.HTTPRequestSpan], error) {
+func (gb *graphFunctions) tracesReporterProvicer(ctx context.Context, config otel.TracesConfig) (node.TerminalFunc[[]request.Span], error) {
 	return otel.ReportTraces(ctx, &config, gb.ctxInfo)
 }
 
 //nolint:gocritic
-func (gb *graphFunctions) metricsReporterProvider(ctx context.Context, config otel.MetricsConfig) (node.TerminalFunc[[]transform.HTTPRequestSpan], error) {
+func (gb *graphFunctions) metricsReporterProvider(ctx context.Context, config otel.MetricsConfig) (node.TerminalFunc[[]request.Span], error) {
 	return otel.ReportMetrics(ctx, &config, gb.ctxInfo)
 }
 
 //nolint:gocritic
-func (gb *graphFunctions) prometheusProvider(ctx context.Context, config prom.PrometheusConfig) (node.TerminalFunc[[]transform.HTTPRequestSpan], error) {
+func (gb *graphFunctions) prometheusProvider(ctx context.Context, config prom.PrometheusConfig) (node.TerminalFunc[[]request.Span], error) {
 	return prom.PrometheusEndpoint(ctx, &config, gb.ctxInfo)
 }

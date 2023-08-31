@@ -15,10 +15,50 @@
 #include "utils.h"
 #include "stdbool.h"
 #include "bpf_dbg.h"
-#include "go_types.h"
+#include "bpf_helpers.h"
+
 #define MAX_BUCKETS 8
 #define W3C_KEY_LENGTH 11
 #define W3C_VAL_LENGTH 55
+
+#define MAX_REALLOCATION 400
+#define MAX_DATA_SIZE 400
+
+#define OFFSET_OF_GO_RUNTIME_HMAP_FIELD_B 9
+#define OFFSET_OF_GO_RUNTIME_HMAP_FIELD_BUCKETS 16
+
+struct go_string
+{
+    char *str;
+    s64 len;
+};
+
+struct go_slice
+{
+    void *array;
+    s64 len;
+    s64 cap;
+};
+
+struct go_slice_user_ptr
+{
+    void *array;
+    void *len;
+    void *cap;
+};
+
+struct go_iface
+{
+    void *tab;
+    void *data;
+};
+
+struct map_bucket {
+    char tophash[8];
+    struct go_string keys[8];
+    struct go_slice values[8];
+    void *overflow;
+};
 
 struct
 {
@@ -41,7 +81,7 @@ static __always_inline _Bool bpf_memcmp(char *s1, char *s2, s32 size)
     return true;
 }
 
-static __always_inline void *extract_context_from_req_headers(void *headers_ptr_ptr)
+static __always_inline void *extract_traceparent_from_req_headers(void *headers_ptr_ptr)
 {
     void *headers_ptr;
     long res;
@@ -61,14 +101,14 @@ static __always_inline void *extract_context_from_req_headers(void *headers_ptr_
         return NULL;
     }
     unsigned char log_2_bucket_count;
-    res = bpf_probe_read(&log_2_bucket_count, sizeof(log_2_bucket_count), headers_ptr + 9);
+    res = bpf_probe_read(&log_2_bucket_count, sizeof(log_2_bucket_count), headers_ptr + OFFSET_OF_GO_RUNTIME_HMAP_FIELD_B);
     if (res < 0)
     {
         return NULL;
     }
     u64 bucket_count = 1 << log_2_bucket_count;
     void *header_buckets;
-    res = bpf_probe_read(&header_buckets, sizeof(header_buckets), headers_ptr + 16);
+    res = bpf_probe_read(&header_buckets, sizeof(header_buckets), headers_ptr + OFFSET_OF_GO_RUNTIME_HMAP_FIELD_BUCKETS);
     if (res < 0)
     {
         return NULL;

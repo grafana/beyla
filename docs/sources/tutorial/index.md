@@ -130,7 +130,10 @@ ordinary operating system process. For more running modes, you can check the doc
 [running the eBPF auto-instrumentation tool as a Docker container](https://github.com/grafana/beyla/blob/main/docs/docker.md)
 or [deploying the eBPF auto-instrumentation tool in Kubernetes](https://github.com/grafana/beyla/blob/main/docs/k8s.md).
 
-You can download the auto-instrumentation executable directly with `go install`:
+You can download Beyla executable directly from the [Beyla releases page](https://github.com/grafana/beyla/releases).
+
+As an alternative, if your system has the Go SDK installed, you can download the
+Beyla executable directly with the `go install` command line:
 
 ```sh
 go install github.com/grafana/beyla/cmd/beyla@latest

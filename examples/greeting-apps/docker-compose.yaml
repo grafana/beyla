@@ -20,7 +20,7 @@ services:
   nginxbeyla:
     image: grafana/beyla:latest
     command:
-      - /otelauto
+      - /beyla
       - --config=/configs/beyla-config.yml
     volumes:
       - ./configs/:/configs
@@ -51,7 +51,7 @@ services:
   gobeyla:
     image: grafana/beyla:latest
     command:
-      - /otelauto
+      - /beyla
       - --config=/configs/beyla-config.yml
     volumes:
       - ./configs/:/configs
@@ -82,7 +82,7 @@ services:
   javabeyla:
     image: grafana/beyla:latest
     command:
-      - /otelauto
+      - /beyla
       - --config=/configs/beyla-config.yml
     volumes:
       - ./configs/:/configs
@@ -113,7 +113,7 @@ services:
   rustbeyla:
     image: grafana/beyla:latest
     command:
-      - /otelauto
+      - /beyla
       - --config=/configs/beyla-config.yml
     volumes:
       - ./configs/:/configs

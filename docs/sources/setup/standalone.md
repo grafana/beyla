@@ -15,8 +15,11 @@ data, you can follow our [step-by-step tutorial]({{< relref "../tutorial/index.m
 
 ## Download and install Beyla - the eBPF auto-instrumentation tool
 
-You can download the auto-instrumentation executable directly with the `go install`
-command line:
+You can directly download the latest version that matches your processor architecture
+from the [Beyla releases page](https://github.com/grafana/beyla/releases).
+
+As an alternative, if your system has the Go SDK installed, you can download the
+Beyla executable directly with the `go install` command line:
 
 ```sh
 go install github.com/grafana/beyla/cmd/beyla@latest

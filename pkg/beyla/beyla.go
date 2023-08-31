@@ -34,14 +34,22 @@ type Instrumenter struct {
 	// TODO: When we split beyla into two executables, probably the BPF map
 	// should be the traces' communication mechanism instead of a native channel
 	tracesInput chan []any
+
+	// TODO: temporary hack. REMOVE
+	// This will force that the pipeline is not created until we have a service name.
+	// In the following PR this will be removed, as we will include the service name
+	// in the Span information, and create dynamically OTEL resources for each new
+	// service (as we already do for system wide configuration): remove ASAP
+	TempHackWaitForServiceName chan struct{}
 }
 
 // New Instrumenter, given a Config
 func New(config *Config) *Instrumenter {
 	return &Instrumenter{
-		config:      (*pipe.Config)(config),
-		ctxInfo:     buildContextInfo((*pipe.Config)(config)),
-		tracesInput: make(chan []any, config.ChannelBufferLen),
+		config:                     (*pipe.Config)(config),
+		ctxInfo:                    buildContextInfo((*pipe.Config)(config)),
+		tracesInput:                make(chan []any, config.ChannelBufferLen),
+		TempHackWaitForServiceName: make(chan struct{}),
 	}
 }
 
@@ -81,6 +89,12 @@ func (i *Instrumenter) FindAndInstrument(ctx context.Context) error {
 				finder.Close()
 				return
 			case pt := <-foundProcesses:
+				select {
+				case <-i.TempHackWaitForServiceName:
+					// already closed. Not closing again!
+				default:
+					close(i.TempHackWaitForServiceName)
+				}
 				go pt.Run(ctx, i.tracesInput)
 			}
 		}
@@ -93,6 +107,7 @@ func (i *Instrumenter) FindAndInstrument(ctx context.Context) error {
 func (i *Instrumenter) ReadAndForward(ctx context.Context) error {
 	log := log()
 	log.Debug("creating instrumentation pipeline")
+	<-i.TempHackWaitForServiceName
 
 	// TODO: when we split the executable, tracer should be reconstructed somehow
 	// from this instance

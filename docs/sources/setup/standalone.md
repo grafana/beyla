@@ -19,7 +19,7 @@ You can directly download the latest version that matches your processor archite
 from the [Beyla releases page](https://github.com/grafana/beyla/releases).
 
 As an alternative, if your system has the Go SDK installed, you can download the
-Beyla executable directly with the `go install` command line:
+Beyla executable directly with the `go install` command:
 
 ```sh
 go install github.com/grafana/beyla/cmd/beyla@latest

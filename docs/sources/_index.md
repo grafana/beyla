@@ -1,7 +1,7 @@
 ---
 title: Grafana Beyla
 menuTitle: Beyla
-description: Learn about Grafana Beyla an eBPF based application auto-instrumentation tool.
+description: Learn how to use Grafana Beyla, an eBPF based application auto-instrumentation tool.
 weight: 1
 cascade:
   labels:

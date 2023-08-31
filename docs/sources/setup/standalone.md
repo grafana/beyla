@@ -1,8 +1,11 @@
 ---
 title: Run Beyla as a standalone process
 menuTitle: Standalone
-description: Learn how to run Grafana's eBPF auto-instrumentation tool as a standalone Linux process.
+description: Learn how to setup and run Beyla as a standalone Linux process.
 weight: 1
+keywords:
+  - Beyla
+  - eBPF
 ---
 
 # Run Beyla as a standalone process
@@ -15,7 +18,7 @@ For a complete introduction tutorial on how to collect and visualize the instrum
 
 You can download the Beyla executable from the [Beyla releases page](https://github.com/grafana/beyla/releases).
 
-Alternatively, download the Beyla executable directly with the `go install` command:
+Alternatively, download the Beyla executable with the `go install` command:
 
 ```sh
 go install github.com/grafana/beyla/cmd/beyla@latest

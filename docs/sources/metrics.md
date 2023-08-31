@@ -1,8 +1,12 @@
 ---
 title: Beyla exported metrics
 menuTitle: Exported metrics
-description: Learn about which HTTP/gRPC metrics can be exported by Grafana's application auto-instrumentation tool.
+description: Learn about the HTTP/gRPC metrics Beyla can export.
 weight: 4
+keywords:
+  - Beyla
+  - eBPF
+  - metrics
 ---
 
 # Beyla exported metrics
@@ -22,7 +26,7 @@ The following table describes the exported metrics in both OpenTelemetry and Pro
 
 ## Internal metrics
 
-Additionally, the eBPF auto-instrument tool can be [configured to report internal metrics]({{< relref "./configure/options.md#internal-metrics-reporter" >}}) in Prometheus Format.
+Additionally, Beyla can be [configured to report internal metrics]({{< relref "./configure/options.md#internal-metrics-reporter" >}}) in Prometheus Format.
 
 | Name                        | Type       | Description                                                                              |
 | --------------------------- | ---------- | ---------------------------------------------------------------------------------------- |

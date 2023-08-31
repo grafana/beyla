@@ -1,8 +1,12 @@
 ---
 title: Beyla profiling
 menuTitle: Profiling
-description: Learn how to profile Grafana's eBPF auto-instrumentation tool for performance analysis.
+description: Learn how to profile Beyla performance analysis.
 weight: 5
+keywords:
+  - Beyla
+  - eBPF
+  - profiling
 ---
 
 # Beyla profiling

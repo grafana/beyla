@@ -1,13 +1,16 @@
 ---
 title: Beyla configuration options
 menuTitle: Options
-description: Learn how to configure Grafana's eBPF based auto-instrumentation tool and the available configuration options.
+description: Learn about the configuration options available for Beyla.
 weight: 1
+keywords:
+  - Beyla
+  - eBPF
 ---
 
 # Beyla configuration options
 
-The eBPF auto-instrumentation tool can be configured via environment variables or via
+Beyla can be configured via environment variables or via
 a YAML configuration file that is passed with the `-config` command-line
 argument. Environment variables have priority over the properties in the
 configuration file. For example, in the following command line, the OPEN_PORT option,
@@ -19,11 +22,11 @@ $ OPEN_PORT=8080 beyla -config /path/to/config.yaml
 
 At the end of this document, there is an [example of YAML configuration file](#yaml-file-example).
 
-Currently, the eBPF auto-instrumentation tool consist of a pipeline of components which
+Currently, Beyal consist of a pipeline of components which
 generate, transform, and export traces from HTTP and GRPC services. In the
 YAML configuration, each component has its own first-level section.
 
-The architecture below shows the different components of the eBPF auto-instrumentation tool.
+The architecture below shows the different components of Beyla.
 The dashed boxes in the diagram below can be enabled and disabled according to the configuration.
 
 ![Grafana Beyla architecture](https://grafana.com/media/docs/grafana-cloud/beyla/architecture.png)
@@ -50,7 +53,7 @@ the options for each component.
 ## Global configuration properties
 
 The properties in this section are first-level YAML properties, as they apply to the
-whole eBPF auto-instrumentation tool configuration:
+whole Beyla configuration:
 
 | YAML           | Env var             | Type   | Default         |
 | -------------- | ------------------- | ------ | --------------- |
@@ -105,7 +108,7 @@ have the following paths:
 /opt/app/server
 ```
 
-then, the eBPF auto-instrumentation tool will match indistinctly one of the above processes. To avoid this
+Beyla will match indistinctly one of the above processes. To avoid this
 issue, you should be as concrete as possible about the value of the setting. For example, `EXECUTABLE_NAME=/opt/app/server`
 or just `EXECUTABLE_NAME=/server`.
 
@@ -118,7 +121,7 @@ Selects the process to instrument by the port it has open (listens to).
 This property takes precedence over the `executable_name` property.
 
 If an executable opens multiple ports, only one of the ports needs to be specified
-for the eBPF auto-instrumentation tool **to instrument all the
+for Beyla **to instrument all the
 HTTP/S and GRPC requests on all application ports**. At the moment, there is no way to
 restrict the instrumentation only to the methods exposed through a specific port.
 
@@ -145,7 +148,7 @@ Specifies how many messages need to be accumulated in the eBPF ringbuffer
 before sending a wake-up request to the user space code.
 
 In high-load services (in terms of requests/second), tuning this option to higher values
-can help with reducing the CPU overhead of the eBPF auto-instrumentation tool.
+can help with reducing the CPU overhead of Beyla.
 
 In low-load services (in terms of requests/second), high values of `wakeup_len` could
 add a noticeable delay in the time the metrics are submitted and become externally visible.

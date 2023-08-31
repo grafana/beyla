@@ -1,13 +1,16 @@
 ---
 title: Beyla export modes
 menuTitle: Export modes
-description: Learn about the different ways you can export metrics with Grafana's eBPF application auto-instrumentation tool.
+description: Learn about the different export modes for Beyla.
 weight: 2
+keywords:
+  - Beyla
+  - eBPF
 ---
 
 # Beyla export modes
 
-The eBPF auto-instrumentation tool can export data in two modes:
+Beyla can export data in two modes:
 
 - **Agent mode** (recommended mode): the auto-instrumentation tool will send the metrics and the traces to the
   [Grafana Agent](https://github.com/grafana/agent), which will process and send them
@@ -21,7 +24,7 @@ The eBPF auto-instrumentation tool can export data in two modes:
 
 ![](https://grafana.com/media/docs/grafana-cloud/beyla/agent-vs-direct.png)
 
-<center><i>eBPF auto-instrumentation tool running in Agent mode (left) vs. Direct mode (right)</i></center>
+<center><i>Beyal running in Agent mode (left) vs. Direct mode (right)</i></center>
 
 ## Running in Direct mode
 
@@ -40,8 +43,8 @@ To run in Direct mode by using the Prometheus scrape endpoint, please refer to t
 > ℹ️ This tutorial assumes that both the Agent and the auto-instrumentation tool are installed
 > as local Linux OS executables. For further examples on downloading and running the
 > auto-instrumentation tool as an OCI container, you can check the documentation sections on
-> [running the eBPF auto-instrumentation tool as a Docker container]({{< relref "../setup/docker.md" >}})
-> or [running the eBPF auto-instrumentation tool in Kubernetes]({{< relref "../kubernetes.md" >}}).
+> [running the Beyla as a Docker container]({{< relref "../setup/docker.md" >}})
+> or [running Beyla in Kubernetes]({{< relref "../kubernetes.md" >}}).
 
 First, you will need to locally install and configure the [Grafana Agent in **Flow** mode, according to the latest documentation](/docs/agent/latest/flow/).
 Running the Agent in Flow mode will facilitate the ingest of OpenTelemetry

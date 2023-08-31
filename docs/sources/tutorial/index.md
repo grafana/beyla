@@ -1,61 +1,42 @@
 ---
 title: Beyla quick start tutorial
 menuTitle: Quick start tutorial
-description: This tutorial explains how to get started with application RED metrics collection by using Grafana's eBPF auto-instrumentation tool.
+description: Learn how to instrument an application export data with Prometheus to Grafana Cloud.
 weight: 3
+keywords:
+  - Beyla
+  - eBPF
+  - Prometheus
+  - Grafana Cloud
+  - tutorial
 ---
 
 # Beyla quick start tutorial
 
-Do you want to give Grafana a try for application observability, but you don't have the time
-to adapt your application for it?
+To reduce the time it takes to instrument an application and improve the adoption of Application Observability, Grafana built Belya, an eBPF auto-instrumentation tool, that is able to report basic transactions span information, as well as [RED metrics](/blog/2018/08/02/the-red-method-how-to-instrument-your-services/) for Linux HTTP/S and gRPC services, without any application code or configuration changes.
 
-Until now, instrumenting an application to get metrics and traces, required, in the best case,
-adding a programming language specific agent to your deployment/packages. In languages like Go,
-you had to manually add tracepoints into your code. In all cases, you need to redeploy the
-instrumented version of the service to your staging/production servers.
+## eBPF overview
 
-To flatten the curve of adoption of Application Observability, Grafana is releasing an
-eBPF auto-instrumentation tool that is able to report basic transactions span information,
-as well as [Rate-Errors-Duration (RED) metrics](/blog/2018/08/02/the-red-method-how-to-instrument-your-services/)
-for your Linux HTTP/S and gRPC services, without any the application code or configuration changes.
+eBPF stands for Extended Berkeley Packet Filter, and allows attaching applications to different points of the Linux Kernel. eBPF applications run in privileged mode and allow the runtime information of the Linux Kernel to be inspected: system calls, network stack, as well as inserting probes in user space applications.
 
-## E-B-P...what?
+The eBPF applications are safe, they are compiled for their own [Virtual Machine instruction set](https://docs.kernel.org/bpf/instruction-set.html) and run in a sandboxed environment that verifies each loaded eBPF program for memory access safety and finite execution time. Unlike older technologies, such as the natively-compiled Kprobes and Uprobes, there is no chance that a poorly programmed probe will cause the Linux Kernel to hang.
 
-eBPF stands for Extended Berkeley Packet Filter, and allows attaching your own programs to
-different points of the Linux Kernel. eBPF programs run in privileged mode and allow for inspecting
-runtime information of different parts of the Linux Kernel: system calls, network stack, as well as
-inserting probes in your user space programs.
+After being the eBPF binaries have been verified they are compiled with a Just-In-Time (JIT) compiler for the native host architecture (x86-64, ARM64, etc). This allows for efficient and fast execution.
 
-The eBPF programs are safe, they are compiled for their own
-[Virtual Machine instruction set](https://docs.kernel.org/bpf/instruction-set.html) and they run in a
-sandboxed environment which verifies each loaded eBPF program for memory access safety and finite execution time.
-Unlike older technologies, such as the natively-compiled Kprobes and Uprobes, there is no chance that a poorly
-programmed probe will cause the Linux Kernel to hang.
-
-After being verified, the eBPF binaries are compiled with a Just-In-Time (JIT) compiler
-for the native host architecture (x86-64, ARM64, ...). This allows for efficient and fast
-execution.
-
-The eBPF code is loaded from ordinary programs running in user space. The kernel and the user
-space programs can share information through a set of well defined communication mechanisms, which are
-provided by the eBPF specification. For example: ring buffers, arrays, hash maps, etc.
+The eBPF code is loaded from ordinary applications running in user space. The kernel and the user space applications can share information through a set of well defined communication mechanisms, which are provided by the eBPF specification. For example: ring buffers, arrays, hash maps, etc.
 
 ![](https://grafana.com/media/docs/grafana-cloud/beyla/tutorial/ebpf-arch.svg)
 
 ## Running an instrumented service
 
-To test the eBPF auto-instrumentation tool capabilities, you first need a service to instrument.
-For this quick start tutorial, we recommend instrumenting any HTTP, HTTPS or gRPC Go service that uses any of
-the following libraries:
+For this quick start tutorial, instrument any HTTP, HTTPS or gRPC Go service that uses any of the following libraries:
 
 - Standard `net/http`
 - [Gorilla Mux](https://github.com/gorilla/mux)
 - [Gin](https://gin-gonic.com/)
 - [gRPC-Go](https://github.com/grpc/grpc-go)
 
-Additionally, you can also instrument HTTP and HTTPs services written in other languages. The following
-list shows some of the other supported languages and technologies:
+HTTP and HTTPs services written in other languages can also be instrumented:
 
 - Node.js (HTTP 1.1 and HTTPs with OpenSSL)
 - Python (HTTP 1.1 and HTTPs with OpenSSL)
@@ -64,12 +45,9 @@ list shows some of the other supported languages and technologies:
 - .NET Core 6+ (HTTP 1.1 and HTTPs with OpenSSL)
 - Java (HTTP 1.1)
 
-The HTTP 1.1 and OpenSSL support is generic, so services written in different programming languages
-than those listed above might work, but haven't been tested.
+The HTTP 1.1 and OpenSSL support is generic, services written in different programming languages than those listed above might work, but haven't been tested.
 
-If at this moment you don't have a concrete service to instrument, you can create a simple
-Go service for testing purposes. Create a `server.go` plain text file in a code editor
-of your choice, and paste the following code:
+If you don't have a service to instrument, create a `server.go` file with the following code:
 
 ```go
 package main
@@ -105,79 +83,42 @@ func main() {
 }
 ```
 
-The above code implements an HTTP service which will accept any request on the port 8080.
-The service has two knobs for overriding the HTTP handler behavior, through two separate
-query parameters:
+The code implements an HTTP service that accepts request on port 8080. The HTTP handler behavior can be specified with the following query parameters:
 
-- `status` will override the returned HTTP status code (which defaults to 200).
-  For example `curl -v "http://localhost:8080/foo?status=404"` will return a 404
-  status code.
-- `delay` will artificially increase the service response time. For example
-  `curl "http://localhost:8080/bar?delay=3s"` will take at least 3 seconds to complete.
+- `status` will override the returned HTTP status code (which defaults to 200). For example `curl -v "http://localhost:8080/foo?status=404"` will return a 404 status code.
+- `delay` will artificially increase the service response time. For example `curl "http://localhost:8080/bar?delay=3s"` will take at least 3 seconds to complete.
 
-You can also [download the server.go file from this tutorial](/docs/grafana-cloud/monitor-applications/beyla/tutorial/resources/server.go).
+Download the [server.go](/docs/grafana-cloud/monitor-applications/beyla/tutorial/resources/server.go) file from this tutorial.
 
-We can now run the test HTTP service with the following command line:
+Run the test HTTP service with the following command:
 
 ```sh
 go run server.go
 ```
 
-## Downloading the auto-instrumentation tool
+## Instrument a service
 
-> ℹ️ For simplicity, this tutorial shows how to manually run the auto-instrumentation tool as an
-> ordinary operating system process. For more running modes, you can check the documentation about
-> [running the eBPF auto-instrumentation tool as a Docker container](https://github.com/grafana/beyla/blob/main/docs/docker.md)
-> or [deploying the eBPF auto-instrumentation tool in Kubernetes](https://github.com/grafana/beyla/blob/main/docs/k8s.md).
+Setup Beyla as a standalone linux process by following the [standalone setup]({{< relref "../setup/standalone.md" >}}) documentation.
 
-You can download Beyla executable directly from the [Beyla releases page](https://github.com/grafana/beyla/releases).
+Metrics will be exported from a [Prometheus](https://prometheus.io/) scrape endpoint by setting the `BEYLA_PROMETHEUS_PORT` environment variable. Traces will be printed to stdout by setting the `PRINT_TRACES=true` environment variable.
 
-As an alternative, if your system has the Go SDK installed, you can download the
-Beyla executable directly with the `go install` command:
+For information on how to configure other exporters like [OpenTelemetry](https://opentelemetry.io/), see the
+[configuration options]({{< relref "../configure/options.md" >}}) documentation.
 
-```sh
-go install github.com/grafana/beyla/cmd/beyla@latest
-```
-
-## Instrumenting a running service
-
-The eBPF auto-instrumentation tool requires at least two configuration options to run:
-
-- An executable to instrument. You can select the executable to instrument by the executable name
-  (`EXECUTABLE_NAME` environment variable) or by any port it has open
-  (`OPEN_PORT` environment variable).
-- A metrics exporter. For this tutorial, the metrics will be exported
-  by a [Prometheus](https://prometheus.io/) scrape endpoint (`BEYLA_PROMETHEUS_PORT`
-  environment variable), and traces will be printed on the standard output
-  (setting the `PRINT_TRACES=true` environment variable).
-
-For details on how to configure other exporters (for example, [OpenTelemetry](https://opentelemetry.io/)
-traces and metrics), as well as additional configuration options, please check the
-[configuration section in the documentation]({{< relref "../configure/options.md" >}}).
-
-After the service from the previous section is up and running, we can instrument it
-by executing the `beyla` command which we previously downloaded with
-`go install`, as seen in the [Downloading](#downloading-the-auto-instrumentation-tool) section.
-
-We will configure the eBPF auto-instrumentation tool to instrument the executable that
-listens on port 8080, printing the traces on the standard output and exposing RED metrics
-on the `localhost:8999/metrics` HTTP endpoint.
-
-Please note that you need administrator privileges (e.g. sudo) to run the auto-instrumentation tool:
+Set environment variables and run Beyla:
 
 ```sh
 BEYLA_PROMETHEUS_PORT=8999 PRINT_TRACES=true OPEN_PORT=8080 sudo -E beyla
 ```
 
-Open a new terminal and send a few HTTP GET calls to the test service. For example:
+Open a new terminal and send a few HTTP GET calls to the test service:
 
 ```sh
 curl "http://localhost:8080/hello"
 curl "http://localhost:8080/bye"
 ```
 
-Shortly, the `beyla` terminal should show some trace information on the standard output,
-related to the above `curl` requests:
+Beyla will log trace information to the first terminal:
 
 ```sh
 2023-04-19 13:49:04 (15.22ms[689.9µs]) 200 GET /hello [::1]->[localhost:8080] size:0B
@@ -190,31 +131,33 @@ The output format is:
 Request_time (response_duration) status_code http_method path source->destination request_size
 ```
 
-You can play with the `curl` command, by making different type of requests, in order to see how
-it affects the trace output. For example, the following request would send a 6-bytes POST request
-and the service will take 200ms to respond:
+Experiment with the `curl` command and make additional requests to see how it affects the trace output. For example, the following request would send a 6-bytes POST request and the service will take 200ms to respond:
 
 ```sh
 curl -X POST -d "abcdef" "http://localhost:8080/post?delay=200ms"
 ```
 
-And the `beyla` terminal should show the following on the standard output:
+Beyla will log the following trace information:
 
 ```sh
 2023-04-19 15:17:54 (210.91ms[203.28ms]) 200 POST /post [::1]->[localhost:8080] size:6B
 ```
 
-Optionally, in the background, you can generate some artificial load in another terminal:
+Optionally, open another terminal and run the following command to generate some artificial load:
 
 ```sh
 while true; do curl "http://localhost:8080/service?delay=1s"; done
 ```
 
-After playing for a while with the server running on port 8080, you can query the
-Prometheus metrics that are exposed on port `8999`:
+Next, query the Prometheus metrics exposed on port `8999`:
 
 ```sh
 curl http://localhost:8999/metrics
+```
+
+Which will output a result similar to:
+
+```sh
 # HELP http_server_duration_seconds duration of HTTP service calls from the server side, in milliseconds
 # TYPE http_server_duration_seconds histogram
 http_server_duration_seconds_bucket{http_method="GET",http_status_code="200",service_name="testserver",le="0.005"} 1
@@ -224,10 +167,9 @@ http_server_duration_seconds_bucket{http_method="GET",http_status_code="200",ser
 (... output snipped for sake of brevity ...)
 ```
 
-Please check the [List of exported metrics]({{< relref "../metrics.md" >}}) document for an exhaustive list
-of the metrics that can be exposed by the eBPF auto-instrumentation tool.
+For information on the metrics Beyla exports, see the [exported metrics]({{< relref "../metrics.md" >}}) documentation.
 
-## Sending data to Grafana Cloud
+## Send data to Grafana Cloud
 
 Once we have verified that our application is correctly instrumented, we can add a Prometheus
 collector to read the generated metrics and forward them to Grafana Cloud.
@@ -272,13 +214,12 @@ There are two ways to forward your metrics to Grafana Cloud:
    }
    ```
 
-   The above configuration file instructs the Agent to scrape Prometheus metrics, from the
-   eBPF auto-instrumentation tool and forward them to [Grafana Mimir](/oss/mimir/).
+The configuration file instructs the Agent to scrape Prometheus metrics, from Beyla and forward them to [Grafana Mimir](/oss/mimir/).
 
-   Note that we configured the Agent to scrape the metrics from the `localhost:8999` address,
-   same as the value of the `BEYLA_PROMETHEUS_PORT` variable from the previous section.
-   At the same time, the connection details and the authentication credentials for Grafana Mimir are
-   to be provided via environment variables.
+Note that we configured the Agent to scrape the metrics from the `localhost:8999` address,
+same as the value of the `BEYLA_PROMETHEUS_PORT` variable from the previous section.
+At the same time, the connection details and the authentication credentials for Grafana Mimir are
+to be provided via environment variables.
 
 ### Running the Grafana Agent Flow with your Grafana Credentials
 
@@ -356,23 +297,23 @@ want to visualize.
 ## Conclusions and future work
 
 eBPF proved to be a low-overhead, safe, and reliable way to observe some basic metrics for
-HTTP/gRPC services. The Grafana eBPF auto-instrumentation tool is not a replacement for language
+HTTP/gRPC services. Beyla is not a replacement for language
 specific agents, however it significantly decreases the landing time of your application insights in Grafana.
 The auto-instrumentation tool does not require any code changes, recompilation nor repackaging, simply run
 it together with your service, and your application metrics will start to flow.
 
 eBPF also allows you to get deeper insights which manual instrumentation doesn't. For example,
-the eBPF auto-instrumentation tool is able to show you how much time a request is enqueued, after
+Beyla is able to show you how much time a request is enqueued, after
 the connection is established, and before its code is actually executed (requires [exporting
 OpenTelemetry traces]({{< relref "../configure/options.md#otel-traces-exporter" >}}),
 but this functionality is not explained in this tutorial).
 
-The eBPF auto-instrumentation tool has its limitations too. It only provides generic metrics and
+Beyla has its limitations too. It only provides generic metrics and
 single spans trace information (no distributed traces, yet). Language agents and manual
 instrumentation is still recommended, so that you can specify the granularity of each
 part of the code to be instrumented, putting the focus on your critical operations.
 
-Another limitation to consider is that the eBPF auto-instrumentation tool requires
+Another limitation to consider is that Beyla requires
 elevated privileges; not actually a `root` user, but at least it has to run with the
 `CAP_SYS_ADMIN` capability. If you run the tool as a container (Docker, Kubernetes...), it
 has to be privileged, or configured with the `CAP_SYS_ADMIN` capability.

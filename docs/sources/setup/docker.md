@@ -1,8 +1,12 @@
 ---
 title: Run Beyla as a Docker container
 menuTitle: Docker
-description: Learn how to run Grafana's eBPF auto-instrumentation tool as a standalone Docker container that instruments another container.
+description: Learn how to setup and run Beyla as a standalone Docker container that instruments another container.
 weight: 2
+keywords:
+  - Beyla
+  - eBPF
+  - Docker
 ---
 
 # Run Beyla as a Docker container
@@ -30,15 +34,17 @@ docker run -p 18443:8443 --name goblog mariomac/goblog:dev
 
 The above command runs a simple HTTPS application. The process opens the container's internal port `8443`, which is then exposed at the host level as the port `18443`.
 
-Now check if Beyla is able to auto-instrument the container. Initially, configure Beyla to print (on stdout) each collected trace event, by setting the environment variable `PRINT_TRACES=true`. We will also instruct the tool to
-inspect the executable that is listening on port `8443`, by setting the environment variable
-`OPEN_PORT=8443`. Please note that we are using the application container's internal port `8443`, and
-not the port visible at the host level.
+Set environment variables to configure Beyla to print to stdout and listen to a port (container) to inspect the executable:
 
-To run properly, the auto-instrument container needs some special settings. Namely:
+```sh
+export PRINT_TRACES=true
+export OPEN_PORT=8443
+```
 
-- We'll run in `--privileged` mode (or alternatively, we can grant it the `SYS_ADMIN` capability).
-- We'll let it access the `goblog` container PID namespace, by using the command line option `--pid="container:goblog"`.
+Beyla needs to be run with the following settings:
+
+- in `--privileged` mode, or with `SYS_ADMIN` capability
+- a container PID namespace, with the option `--pid="container:goblog"`.
 
 ```sh
 docker run --rm \
@@ -49,9 +55,7 @@ docker run --rm \
   grafana/beyla:latest
 ```
 
-Once Beyla's (the auto-instrument tool) container is running, you can open `https://localhost:8443` in your browser,
-click around a bit, and verify that the auto-instrument tool prints some traced requests on stdout. For example,
-the standard output (stdout) might look like this:
+Once Beyla is running, open `https://localhost:8443` in your browser, use the app to generate test data, and verify that Beyla prints trace requests to stdout similar to:
 
 ```sh
 time=2023-05-22T14:03:42.402Z level=INFO msg="creating instrumentation pipeline"
@@ -63,15 +67,13 @@ time=2023-05-22T14:03:42.526Z level=INFO msg="Starting main node"
 2023-05-22 14:13:47.52221347 (115µs[75.625µs]) 200 GET /static/style.css [172.17.0.1]->[localhost:18443] size:0B
 ```
 
-Now that we have verified that the auto-instrumentation tool is properly tracing the target HTTP service,
-you can configure it to send metrics and traces to an OpenTelemetry endpoint, or have metrics scraped by Prometheus.
-For information on how to export traces and metrics, you can check the [quick start tutorial]({{< relref "../tutorial/index.md" >}})
-and the [Configuration]({{< relref "../configure/options.md" >}}) sections of this documentation site.
+Now that Beyla is tracing the the target HTTP service, configure it to send metrics and traces to an OpenTelemetry endpoint, or have metrics scraped by Prometheus.
+
+For information on how to export traces and metrics, see the [quick start tutorial]({{< relref "../tutorial/index.md" >}}) and the [configuration options]({{< relref "../configure/options.md" >}}) documentation.
 
 ## Docker Compose example
 
-The following Docker compose example file does the same as the Docker CLI section above,
-but through a single compose file.
+The following Docker compose file replicates the same functionality of the Docker CLI example:
 
 ```yaml
 version: "3.8"
@@ -98,18 +100,8 @@ services:
       OPEN_PORT: 8443
 ```
 
-You can run the above Docker compose file via the following command line:
+Run the Docker compose file with the following command and use the app to generate traces:
 
 ```sh
 docker compose -f compose-example.yml up
-```
-
-If you navigate a bit through `https://localhost:8443`, wou will see the logs of
-both the instrumented service and the auto-instrument tool:
-
-```sh
-docs-goblog-1            | time="2023-05-22T14:42:50Z" level=debug msg="new request" component=assets/handler.go method=GET remoteAddr="172.18.0.1:35488" url=/entry/201710281345_instructions.md
-docs-goblog-1            | time="2023-05-22T14:42:50Z" level=debug msg="new request" component=assets/handler.go method=GET remoteAddr="172.18.0.1:35488" url=/static/style.css
-docs-autoinstrumenter-1  | 2023-05-22 14:42:50.52224250 (7.617792ms[867.667µs]) 200 GET /entry/201710281345_instructions.md [172.18.0.1]->[localhost:18443] size:0B
-docs-autoinstrumenter-1  | 2023-05-22 14:42:50.52224250 (613.791µs[547.041µs]) 200 GET /static/style.css [172.18.0.1]->[localhost:18443] size:0B
 ```

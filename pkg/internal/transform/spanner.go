@@ -108,12 +108,14 @@ func extractIP(b []uint8, size int) string {
 }
 
 func extractTraceID(traceparent [55]byte) string {
-	// If traceparent was not set in eBPF, entire field should be all zeroes.
+	// If traceparent was not set in eBPF, entire field should be zeroed bytes.
 	if traceparent[0] == 0 {
 		return ""
 	}
+
+	// It is assumed that eBPF code has already verified the length is exactly 55
 	// See https://www.w3.org/TR/trace-context/#traceparent-header-field-values for format.
-	// Traceparent starts with version, e.g. "00-". TraceID is the following 32 hex digits
+	// 2 hex version + dash + 32 hex traceID + dash + 16 hex parent + dash + 2 hex flags
 	return string(traceparent[3:35])
 }
 

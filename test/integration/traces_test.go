@@ -23,7 +23,6 @@ func testHTTPTracesNoTraceID(t *testing.T) {
 func testHTTPTraces(t *testing.T) {
 	testHTTPTracesCommon(t, true)
 }
-
 func testHTTPTracesCommon(t *testing.T, doTraceID bool) {
 	var traceID string
 	slug := "create-trace"
@@ -124,6 +123,45 @@ func testHTTPTracesCommon(t *testing.T, doTraceID bool) {
 		{Key: "telemetry.sdk.language", Type: "string", Value: "go"},
 		{Key: "service.namespace", Type: "string", Value: "integration-test"},
 	}), "not all tags matched in %+v", process.Tags)
+}
+
+func testHTTPTracesBadTraceID(t *testing.T) {
+	slugToParent := map[string]string{
+		// Valid traceparent example:
+		//		valid: "00-5fe865607da112abd799ea8108c38bcb-4c59e9a913c480a3-01"
+		// Examples of INVALID traceIDs in traceparent:  Note: eBPF rejects when len != 55
+		"invalid-trace-id1": "00-Zfe865607da112abd799ea8108c38bcb-4c59e9a913c480a3-01",
+		"invalid-trace-id2": "00-5fe865607da112abd799ea8108c38bcL-4c59e9a913c480a3-01",
+		"invalid-trace-id3": "00-5fe865607Ra112abd799ea8108c38bcb-4c59e9a913c480a3-01",
+		"invalid-trace-id4": "00-0x5fe865607da112abd799ea8108c3cb-4c59e9a913c480a3-01",
+		"invalid-trace-id5": "00-5FE865607DA112ABD799EA8108C38BCB-4c59e9a913c480a3-01",
+	}
+	for slug, traceparent := range slugToParent {
+		t.Log("Testing bad traceid. traceparent:", traceparent, "slug:", slug)
+		doHTTPGetWithTraceparent(t, instrumentedServiceStdURL+"/"+slug+"?delay=10ms", 200, traceparent)
+
+		var trace jaeger.Trace
+		test.Eventually(t, testTimeout, func(t require.TestingT) {
+			resp, err := http.Get(jaegerQueryURL + "?service=testserver&operation=GET%20%2F" + slug)
+			require.NoError(t, err)
+			if resp == nil {
+				return
+			}
+			require.Equal(t, http.StatusOK, resp.StatusCode)
+			var tq jaeger.TracesQuery
+			require.NoError(t, json.NewDecoder(resp.Body).Decode(&tq))
+			traces := tq.FindBySpan(jaeger.Tag{Key: "http.target", Type: "string", Value: "/" + slug})
+			require.Len(t, traces, 1)
+			trace = traces[0]
+		}, test.Interval(100*time.Millisecond))
+
+		// Check the information of the parent span
+		res := trace.FindByOperationName("GET /" + slug)
+		require.Len(t, res, 1)
+		parent := res[0]
+		require.NotEmpty(t, parent.TraceID)
+		require.NotEqual(t, traceparent[3:35], parent.TraceID)
+	}
 }
 
 func testGRPCTraces(t *testing.T) {

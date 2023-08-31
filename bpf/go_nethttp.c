@@ -16,7 +16,7 @@
 #include "bpf_dbg.h"
 #include "go_common.h"
 #include "go_nethttp.h"
-#include "probe.bpf.c"
+#include "go_traceparent.h"
 
 struct {
     __uint(type, BPF_MAP_TYPE_HASH);
@@ -150,7 +150,7 @@ int uprobe_WriteHeader(struct pt_regs *ctx) {
     }
     bpf_probe_read(&trace->content_length, sizeof(trace->content_length), (void *)(req_ptr + content_length_ptr_pos));
 
-    void *traceparent_ptr = extract_context_from_req_headers((void*)(req_ptr + req_header_ptr_pos));
+    void *traceparent_ptr = extract_traceparent_from_req_headers((void*)(req_ptr + req_header_ptr_pos));
     if (traceparent_ptr != NULL) {
         long res = bpf_probe_read(trace->traceparent, sizeof(trace->traceparent), traceparent_ptr);
         if (res < 0) {

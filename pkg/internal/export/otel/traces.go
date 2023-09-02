@@ -3,6 +3,7 @@ package otel
 import (
 	"context"
 	"crypto/tls"
+	"encoding/hex"
 	"fmt"
 	"net/url"
 	"os"
@@ -271,19 +272,52 @@ func spanKind(span *request.Span) trace2.SpanKind {
 	return trace2.SpanKindInternal
 }
 
+func handleTraceparentField(parentCtx context.Context, traceparent string) context.Context {
+	// If traceparent was not set in eBPF, entire field should be zeroed bytes.
+	if len(traceparent) < 55 || traceparent[0] == 0 {
+		return parentCtx
+	}
+
+	// See https://www.w3.org/TR/trace-context/#traceparent-header-field-values for format.
+	// 2 hex version + dash + 32 hex traceID + dash + 16 hex parent + dash + 2 hex flags
+	traceID := string(traceparent[3:35])
+
+	if traceID != "" {
+		tid, err := trace2.TraceIDFromHex(traceID)
+		if err != nil {
+			slog.Debug("Invalid TraceID", "error:", err, "traceId:", traceID)
+		} else {
+			spanCtx := trace2.SpanContextFromContext(parentCtx).WithTraceID(tid)
+			parentCtx = trace2.ContextWithSpanContext(parentCtx, spanCtx)
+
+			// Otel loads parent-id into SpanID
+			parentID := string(traceparent[36:52])
+			spanID, err := trace2.SpanIDFromHex(parentID)
+			if err != nil {
+				slog.Debug("Invalid ParentID", "error:", err, "parentId:", parentID)
+			} else {
+				spanCtx := trace2.SpanContextFromContext(parentCtx).WithSpanID(spanID)
+				parentCtx = trace2.ContextWithSpanContext(parentCtx, spanCtx)
+			}
+
+			// Propagate the trace flags
+			traceFlags := string(traceparent[53:55])
+			flags, err := hex.DecodeString(traceFlags)
+			if err != nil {
+				slog.Debug("Invalid trace flags", "error:", err, "traceFlags:", traceFlags)
+			} else {
+				spanCtx = trace2.SpanContextFromContext(parentCtx).WithTraceFlags(trace2.TraceFlags(flags[0]))
+				parentCtx = trace2.ContextWithSpanContext(parentCtx, spanCtx)
+			}
+		}
+	}
+	return parentCtx
+}
+
 func (r *TracesReporter) makeSpan(parentCtx context.Context, tracer trace2.Tracer, span *request.Span) SessionSpan {
 	t := span.Timings()
 
-	if span.TraceID != "" {
-		tid, err := trace2.TraceIDFromHex(span.TraceID)
-		if err != nil {
-			slog.Debug("Invalid TraceID", "error:", err, "traceId:", span.TraceID)
-		} else {
-			spanCtx := trace2.SpanContextFromContext(parentCtx)
-			spanCtx = spanCtx.WithTraceID(tid)
-			parentCtx = trace2.ContextWithSpanContext(parentCtx, spanCtx)
-		}
-	}
+	parentCtx = handleTraceparentField(parentCtx, span.Traceparent)
 
 	// Create a parent span for the whole request session
 	ctx, sp := tracer.Start(parentCtx, traceName(span),

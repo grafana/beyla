@@ -4,6 +4,7 @@ package integration
 
 import (
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -23,14 +24,18 @@ func testHTTPTracesNoTraceID(t *testing.T) {
 func testHTTPTraces(t *testing.T) {
 	testHTTPTracesCommon(t, true)
 }
+
 func testHTTPTracesCommon(t *testing.T, doTraceID bool) {
 	var traceID string
+	var parentID string
+
 	slug := "create-trace"
 	if doTraceID {
 		slug = "create-trace-with-id"
 		// Add and check for specific trace ID
 		traceID = createTraceID()
-		traceparent := createTraceparent(traceID)
+		parentID = createParentID()
+		traceparent := createTraceparent(traceID, parentID)
 		doHTTPGetWithTraceparent(t, instrumentedServiceStdURL+"/"+slug+"?delay=10ms", 200, traceparent)
 	} else {
 		doHTTPGet(t, instrumentedServiceStdURL+"/"+slug+"?delay=10ms", 200)
@@ -58,6 +63,9 @@ func testHTTPTracesCommon(t *testing.T, doTraceID bool) {
 	require.NotEmpty(t, parent.TraceID)
 	if doTraceID {
 		require.Equal(t, traceID, parent.TraceID)
+		// Validate that "parent" is a CHILD_OF the traceparent's "parent-id"
+		childOfPID := trace.ChildrenOf(parentID)
+		require.Len(t, childOfPID, 1)
 	}
 	require.NotEmpty(t, parent.SpanID)
 	// check duration is at least 10ms
@@ -125,7 +133,7 @@ func testHTTPTracesCommon(t *testing.T, doTraceID bool) {
 	}), "not all tags matched in %+v", process.Tags)
 }
 
-func testHTTPTracesBadTraceID(t *testing.T) {
+func testHTTPTracesBadTraceparent(t *testing.T) {
 	slugToParent := map[string]string{
 		// Valid traceparent example:
 		//		valid: "00-5fe865607da112abd799ea8108c38bcb-4c59e9a913c480a3-01"
@@ -135,6 +143,12 @@ func testHTTPTracesBadTraceID(t *testing.T) {
 		"invalid-trace-id3": "00-5fe865607Ra112abd799ea8108c38bcb-4c59e9a913c480a3-01",
 		"invalid-trace-id4": "00-0x5fe865607da112abd799ea8108c3cb-4c59e9a913c480a3-01",
 		"invalid-trace-id5": "00-5FE865607DA112ABD799EA8108C38BCB-4c59e9a913c480a3-01",
+		// For parent test, traceID portion must be different each time
+		"invalid-parent-id1": "00-11111111111111111111111111111111-Zc59e9a913c480a3-01",
+		"invalid-parent-id2": "00-22222222222222222222222222222222-4C59E9A913C480A3-01",
+		"invalid-parent-id3": "00-33333333333333333333333333333333-4c59e9aW13c480a3-01",
+		"invalid-parent-id4": "00-44444444444444444444444444444444-4c59e9a9-3c480a3-01",
+		"invalid-parent-id5": "00-55555555555555555555555555555555-0x59e9a913c480a3-01",
 	}
 	for slug, traceparent := range slugToParent {
 		t.Log("Testing bad traceid. traceparent:", traceparent, "slug:", slug)
@@ -160,7 +174,12 @@ func testHTTPTracesBadTraceID(t *testing.T) {
 		require.Len(t, res, 1)
 		parent := res[0]
 		require.NotEmpty(t, parent.TraceID)
-		require.NotEqual(t, traceparent[3:35], parent.TraceID)
+		if strings.Contains(slug, "trace-id") {
+			require.NotEqual(t, traceparent[3:35], parent.TraceID)
+		} else if strings.Contains(slug, "parent-id") {
+			children := trace.ChildrenOf(traceparent[36:52])
+			require.Equal(t, len(children), 0)
+		}
 	}
 }
 

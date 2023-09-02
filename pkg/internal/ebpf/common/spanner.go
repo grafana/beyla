@@ -26,13 +26,13 @@ func HTTPRequestTraceToSpan(trace *HTTPRequestTrace) request.Span {
 	peer := ""
 	hostname := ""
 	hostPort := 0
-	traceID := ""
+	traceparent := ""
 
 	switch request.EventType(trace.Type) {
 	case request.EventTypeHTTPClient, request.EventTypeHTTP:
 		peer, _ = extractHostPort(trace.RemoteAddr[:])
 		hostname, hostPort = extractHostPort(trace.Host[:])
-		traceID = extractTraceID(trace.Traceparent)
+		traceparent = extractTraceparent(trace.Traceparent)
 	case request.EventTypeGRPC:
 		hostPort = int(trace.HostPort)
 		peer = extractIP(trace.RemoteAddr[:], int(trace.RemoteAddrLen))
@@ -56,7 +56,7 @@ func HTTPRequestTraceToSpan(trace *HTTPRequestTrace) request.Span {
 		Start:         int64(trace.StartMonotimeNs),
 		End:           int64(trace.EndMonotimeNs),
 		Status:        int(trace.Status),
-		TraceID:       traceID,
+		Traceparent:   traceparent,
 	}
 }
 
@@ -90,14 +90,10 @@ func extractIP(b []uint8, size int) string {
 	return net.IP(b[:size]).String()
 }
 
-func extractTraceID(traceparent [55]byte) string {
-	// If traceparent was not set in eBPF, entire field should be zeroed bytes.
+func extractTraceparent(traceparent [55]byte) string {
+	// If traceparent was not set, array should be all zeroes.
 	if traceparent[0] == 0 {
 		return ""
 	}
-
-	// It is assumed that eBPF code has already verified the length is exactly 55
-	// See https://www.w3.org/TR/trace-context/#traceparent-header-field-values for format.
-	// 2 hex version + dash + 32 hex traceID + dash + 16 hex parent + dash + 2 hex flags
-	return string(traceparent[3:35])
+	return string(traceparent[:])
 }

@@ -75,8 +75,16 @@ func createTraceID() string {
 	return hex.EncodeToString(bytes)
 }
 
-func createTraceparent(TraceID string) string {
-	return "00-" + TraceID + "-1122334455667788-01"
+func createParentID() string {
+	bytes := make([]byte, 8)
+	if _, err := rand.Read(bytes); err != nil {
+		return "0123456789abcdef"
+	}
+	return hex.EncodeToString(bytes)
+}
+
+func createTraceparent(traceID string, parentID string) string {
+	return "00-" + traceID + "-" + parentID + "-01"
 }
 
 // does a smoke test to verify that all the components that started

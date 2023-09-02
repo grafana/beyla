@@ -13,6 +13,7 @@ import (
 	"github.com/mariomac/pipes/pkg/node"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	trace2 "go.opentelemetry.io/otel/trace"
 
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
@@ -348,6 +349,72 @@ func restoreEnvAfterExecution() func() {
 				os.Setenv(v.name, v.val)
 			} else {
 				os.Unsetenv(v.name)
+			}
+		}
+	}
+}
+
+func TestTraces_Traceparent(t *testing.T) {
+	type traceparentTest struct {
+		badTid bool
+		badPid bool
+		tp     [55]byte
+	}
+
+	// Traceparents are byte arrays here, like what is provided by eBPF.
+	testTraceparents := []traceparentTest{
+		{badTid: false, badPid: false, tp: [55]byte([]byte("00-fe211fdbe7577019574171229dc11c68-0795b6fd135d1cad-01"))},
+		{badTid: false, badPid: false, tp: [55]byte([]byte("00-fe211fdbe7577019574171229dc11c68-0795b6fd135d1cad-00"))},
+		{badTid: false, badPid: false, tp: [55]byte([]byte("00-4fa876be53b9e76974dc030d4cf346ea-2620fa5719017438-01"))},
+		{badTid: false, badPid: false, tp: [55]byte([]byte("00-4fa876be53b9e76974dc030d4cf346ea-2620fa5719017438-00"))},
+		{badTid: false, badPid: false, tp: [55]byte([]byte("00-55b136efe14761a763df0779a2e4c057-0fb91de9e2199abe-01"))},
+		{badTid: false, badPid: false, tp: [55]byte([]byte("00-55b136efe14761a763df0779a2e4c057-0fb91de9e2199abe-00"))},
+		{badTid: false, badPid: false, tp: [55]byte([]byte("00-55b136efe14761a763df0779a2e4c057-0fb91de9e2199abe-0x"))},
+		{badTid: false, badPid: false, tp: [55]byte([]byte("00-55b136efe14761a763df0779a2e4c057-0fb91de9e2199abe-gg"))},
+		{badTid: true, badPid: true, tp: [55]byte{'\r', '\n'}},
+		{badTid: true, badPid: true, tp: [55]byte{0}},
+		{badTid: true, badPid: true, tp: [55]byte{'0'}},
+		{badTid: true, badPid: true, tp: [55]byte{'0', '0', '-'}},
+		{badTid: true, badPid: false, tp: [55]byte([]byte("00-Zfe865607da112abd799ea8108c38bcb-4c59e9a913c480a3-01"))},
+		{badTid: true, badPid: false, tp: [55]byte([]byte("00-5fe865607da112abd799ea8108c38bcL-4c59e9a913c480a3-01"))},
+		{badTid: true, badPid: false, tp: [55]byte([]byte("00-5fe865607Ra112abd799ea8108c38bcb-4c59e9a913c480a3-01"))},
+		{badTid: true, badPid: false, tp: [55]byte([]byte("00-0x5fe865607da112abd799ea8108c3cb-4c59e9a913c480a3-01"))},
+		{badTid: true, badPid: false, tp: [55]byte([]byte("00-5FE865607DA112ABD799EA8108C38BCB-4c59e9a913c480a3-01"))},
+		{badTid: false, badPid: true, tp: [55]byte([]byte("00-11111111111111111111111111111111-Zc59e9a913c480a3-01"))},
+		{badTid: false, badPid: true, tp: [55]byte([]byte("00-22222222222222222222222222222222-4C59E9A913C480A3-01"))},
+		{badTid: false, badPid: true, tp: [55]byte([]byte("00-33333333333333333333333333333333-4c59e9aW13c480a3-01"))},
+		{badTid: false, badPid: true, tp: [55]byte([]byte("00-44444444444444444444444444444444-4c59e9a9-3c480a3-01"))},
+		{badTid: false, badPid: true, tp: [55]byte([]byte("00-55555555555555555555555555555555-0x59e9a913c480a3-01"))},
+		{badTid: true, badPid: true, tp: [55]byte([]byte("00-16fddc390bba20bG11ae0ea4e1073735-130c93e94b0x9436-01"))},
+		{badTid: true, badPid: false, tp: [55]byte(append([]byte("00-Z8ded37f8a156b0d8b78a861bf0a3b52-0f9b26893b"), []byte{0, 0, 0, 0, 0, 0, 0, 0, 0}...))},
+	}
+	for _, tpTest := range testTraceparents {
+		parentCtx := context.Background()
+		originalTraceID := "12345678901234567890123456789012"
+		originalParentID := "1122334455667788"
+
+		// Create context with original values to compare afterwards
+		traceID, err := trace2.TraceIDFromHex(originalTraceID)
+		assert.Nil(t, err)
+		parentSpanID, err := trace2.SpanIDFromHex(originalParentID)
+		assert.Nil(t, err)
+		spanCtx := trace2.SpanContextFromContext(parentCtx).WithTraceID(traceID).WithSpanID(parentSpanID)
+		parentCtx = trace2.ContextWithSpanContext(parentCtx, spanCtx)
+
+		t.Log("Testing traceparent:", tpTest.tp)
+		parentCtx = handleTraceparentField(parentCtx, string(tpTest.tp[:]))
+
+		if tpTest.badTid {
+			assert.Equal(t, traceID, trace2.SpanContextFromContext(parentCtx).TraceID())
+		} else {
+			assert.NotEqual(t, traceID, trace2.SpanContextFromContext(parentCtx).TraceID())
+		}
+		if tpTest.badPid {
+			assert.Equal(t, parentSpanID, trace2.SpanContextFromContext(parentCtx).SpanID())
+		} else {
+			if !tpTest.badTid {
+				// We only set parent-ID when trace ID is not invalid
+				assert.NotEqual(t, parentSpanID, trace2.SpanContextFromContext(parentCtx).SpanID())
 			}
 		}
 	}

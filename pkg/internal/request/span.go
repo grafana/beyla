@@ -40,7 +40,7 @@ type Span struct {
 	End           int64
 	ServiceName   string
 	Metadata      []MetadataTag
-	TraceID       string
+	Traceparent   string
 }
 
 type MetadataTag struct {

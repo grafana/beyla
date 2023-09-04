@@ -6,9 +6,46 @@ eBPF-based autoinstrumentation of HTTP/HTTPS/GRPC Go services, as well as HTTP/H
 written in other languages (intercepting Kernel-level socket operations as well as
 OpenSSL invocations).
 
-[Documentation](https://grafana.com/docs/TODO).
+## Getting Started
 
-Requirements:
+To try out Beyla, you need to run a network service for Beyla to instrument.
+Beyla supports a wide range of programming languages (Go, Java, .NET, NodeJS, Python, Ruby, Rust, etc.),
+so if you already have an example service you can use it.
+If you don't have an example, you can download and run `example-http-service.go` from the `examples/` directory:
+
+```
+curl -OL https://raw.githubusercontent.com/grafana/beyla/main/examples/example-http-service/example-http-service.go
+go run ./example-http-service.go
+```
+
+Next, generate some traffic. The following command will trigger a GET request to http://localhost:8080 every two seconds.
+
+```
+watch curl -s http://localhost:8080
+```
+
+Now that we have an example running, we are ready to download and run Beyla.
+
+First, download and unpack the latest release from the [Github releases page](https://github.com/grafana/beyla/releases).
+The release should contain the `./beyla` executable.
+
+Beyla supports multiple ways to find the service to be instrumented (by network port, executable name, process ID),
+and multiple exposition formats (Prometheus, OpenTelemetry metrics, Single Span traces).
+
+For getting started, we'll tell Beyla to instrument the service running on port 8080 (our example service) and expose metrics in Prometheus format on port 9400.
+
+```
+export BEYLA_PROMETHEUS_PORT=9400
+export OPEN_PORT=8080
+sudo -E ./beyla
+```
+
+Now, you should see metrics on [http://localhost:9400/metrics](http://localhost:9400/metrics).
+
+See [Documentation](https://grafana.com/docs/TODO) and the [quickstart tutorial](docs/sources/tutorial/index.md) for more info.
+
+## Requirements
+
 - Linux with Kernel 4.18 or higher
 - eBPF enabled in the host
 - For instrumenting Go programs, they must have been compiled with Go 1.17 or higher
@@ -26,11 +63,9 @@ Requirements:
 | [Gin](https://gin-gonic.com/)                 | ✅       |
 | [gRPC-Go](https://github.com/grpc/grpc-go)    | ✅       |
 
-## How to setup a quick demo
+## Kubernetes
 
-We recommend you to follow our [quickstart tutorial](docs/sources/tutorial/index.md).
-
-Optionally you can just trigger the Kubernetes descriptors in the `deployments/` folder.
+You can just trigger the Kubernetes descriptors in the `deployments/` folder.
 
 1. Provide your Grafana credentials. Use the following [K8s Secret template](deployments/01-grafana-credentials.template.yml)
    to introduce the endpoints, usernames and API keys for Mimir and Tempo:

@@ -23,7 +23,7 @@ type converter struct {
 var clocks = converter{monoClock: monotime.Now, clock: time.Now}
 
 // Span contains the information being submitted by the following nodes in the graph.
-// It enables confortable handling of data from Go.
+// It enables comfortable handling of data from Go.
 type Span struct {
 	Type          EventType
 	ID            uint64
@@ -40,6 +40,7 @@ type Span struct {
 	End           int64
 	ServiceName   string
 	Metadata      []MetadataTag
+	TraceID       string
 }
 
 type MetadataTag struct {

@@ -52,7 +52,7 @@ static __always_inline bool tcp_dup(connection_info_t *http, protocol_info_t *tc
     return false;
 }
 
-static __always_inline bool is_http(char *p, u32 len, u8 *packet_type) {
+static __always_inline bool is_http(unsigned char *p, u32 len, u8 *packet_type) {
     if (len < MIN_HTTP_SIZE) {
         return false;
     }
@@ -65,11 +65,11 @@ static __always_inline bool is_http(char *p, u32 len, u8 *packet_type) {
         ((p[0] == 'P') && (p[1] == 'U') && (p[2] == 'T') && (p[3] == ' ') && (p[4] == '/')) ||                                                      // PUT
         ((p[0] == 'P') && (p[1] == 'A') && (p[2] == 'T') && (p[3] == 'C') && (p[4] == 'H') && (p[5] == ' ') && (p[6] == '/')) ||                    // PATCH
         ((p[0] == 'D') && (p[1] == 'E') && (p[2] == 'L') && (p[3] == 'E') && (p[4] == 'T') && (p[5] == 'E') && (p[6] == ' ') && (p[7] == '/')) ||   // DELETE
-        ((p[0] == 'H') && (p[1] == 'E') && (p[2] == 'A') && (p[3] == 'D') && (p[4] == ' ') && (p[5] == '/'))                                        // HEAD
+        ((p[0] == 'H') && (p[1] == 'E') && (p[2] == 'A') && (p[3] == 'D') && (p[4] == ' ') && (p[5] == '/')) ||                                     // HEAD
+        ((p[0] == 'O') && (p[1] == 'P') && (p[2] == 'T') && (p[3] == 'I') && (p[4] == 'O') && (p[5] == 'N') && (p[6] == 'S') && (p[7] == ' ') && (p[8] == '/'))   // OPTIONS
     ) {
         *packet_type = PACKET_TYPE_REQUEST;
     }
-    // OPTIONS? do we care?
 
     return true;
 }

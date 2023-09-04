@@ -7,7 +7,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/grafana/ebpf-autoinstrument/pkg/internal/testutil"
+	"github.com/grafana/beyla/pkg/internal/testutil"
 )
 
 // TestProcessNotFound tests that InspectOffsets process exits on context cancellation

@@ -5,7 +5,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 
-	"github.com/grafana/ebpf-autoinstrument/pkg/internal/connector"
+	"github.com/grafana/beyla/pkg/internal/connector"
 )
 
 // pipelineBufferLengths buckets for histogram metrics about the number of traces submitted from one stage to another

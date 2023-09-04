@@ -12,16 +12,33 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/grafana/ebpf-autoinstrument/test/integration/components/jaeger"
-	grpcclient "github.com/grafana/ebpf-autoinstrument/test/integration/components/testserver/grpc/client"
+	"github.com/grafana/beyla/test/integration/components/jaeger"
+	grpcclient "github.com/grafana/beyla/test/integration/components/testserver/grpc/client"
 )
 
+func testHTTPTracesNoTraceID(t *testing.T) {
+	testHTTPTracesCommon(t, false)
+}
+
 func testHTTPTraces(t *testing.T) {
-	doHTTPGet(t, instrumentedServiceStdURL+"/create-trace?delay=10ms", 200)
+	testHTTPTracesCommon(t, true)
+}
+func testHTTPTracesCommon(t *testing.T, doTraceID bool) {
+	var traceID string
+	slug := "create-trace"
+	if doTraceID {
+		slug = "create-trace-with-id"
+		// Add and check for specific trace ID
+		traceID = createTraceID()
+		traceparent := createTraceparent(traceID)
+		doHTTPGetWithTraceparent(t, instrumentedServiceStdURL+"/"+slug+"?delay=10ms", 200, traceparent)
+	} else {
+		doHTTPGet(t, instrumentedServiceStdURL+"/"+slug+"?delay=10ms", 200)
+	}
 
 	var trace jaeger.Trace
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
-		resp, err := http.Get(jaegerQueryURL + "?service=testserver&operation=GET%20%2Fcreate-trace")
+		resp, err := http.Get(jaegerQueryURL + "?service=testserver&operation=GET%20%2F" + slug)
 		require.NoError(t, err)
 		if resp == nil {
 			return
@@ -29,27 +46,30 @@ func testHTTPTraces(t *testing.T) {
 		require.Equal(t, http.StatusOK, resp.StatusCode)
 		var tq jaeger.TracesQuery
 		require.NoError(t, json.NewDecoder(resp.Body).Decode(&tq))
-		traces := tq.FindBySpan(jaeger.Tag{Key: "http.target", Type: "string", Value: "/create-trace"})
+		traces := tq.FindBySpan(jaeger.Tag{Key: "http.target", Type: "string", Value: "/" + slug})
 		require.Len(t, traces, 1)
 		trace = traces[0]
 	}, test.Interval(100*time.Millisecond))
 
 	// Check the information of the parent span
-	res := trace.FindByOperationName("GET /create-trace")
+	res := trace.FindByOperationName("GET /" + slug)
 	require.Len(t, res, 1)
 	parent := res[0]
 	require.NotEmpty(t, parent.TraceID)
+	if doTraceID {
+		require.Equal(t, traceID, parent.TraceID)
+	}
 	require.NotEmpty(t, parent.SpanID)
 	// check duration is at least 10ms
 	assert.Less(t, (10 * time.Millisecond).Microseconds(), parent.Duration)
 	// check span attributes
 	assert.Truef(t, parent.AllMatches(
-		jaeger.Tag{Key: "otel.library.name", Type: "string", Value: "github.com/grafana/ebpf-autoinstrument"},
+		jaeger.Tag{Key: "otel.library.name", Type: "string", Value: "github.com/grafana/beyla"},
 		jaeger.Tag{Key: "http.method", Type: "string", Value: "GET"},
 		jaeger.Tag{Key: "http.status_code", Type: "int64", Value: float64(200)},
-		jaeger.Tag{Key: "http.target", Type: "string", Value: "/create-trace"},
+		jaeger.Tag{Key: "http.target", Type: "string", Value: "/" + slug},
 		jaeger.Tag{Key: "net.host.port", Type: "int64", Value: float64(8080)},
-		jaeger.Tag{Key: "http.route", Type: "string", Value: "/create-trace"},
+		jaeger.Tag{Key: "http.route", Type: "string", Value: "/" + slug},
 		jaeger.Tag{Key: "span.kind", Type: "string", Value: "server"},
 	), "not all tags matched in %+v", parent.Tags)
 
@@ -70,7 +90,7 @@ func testHTTPTraces(t *testing.T) {
 	// check span attributes
 	// check span attributes
 	assert.Truef(t, queue.AllMatches(
-		jaeger.Tag{Key: "otel.library.name", Type: "string", Value: "github.com/grafana/ebpf-autoinstrument"},
+		jaeger.Tag{Key: "otel.library.name", Type: "string", Value: "github.com/grafana/beyla"},
 		jaeger.Tag{Key: "span.kind", Type: "string", Value: "internal"},
 	), "not all tags matched in %+v", queue.Tags)
 
@@ -89,7 +109,7 @@ func testHTTPTraces(t *testing.T) {
 		processing.StartTime+processing.Duration,
 		parent.StartTime+parent.Duration+1)
 	assert.Truef(t, queue.AllMatches(
-		jaeger.Tag{Key: "otel.library.name", Type: "string", Value: "github.com/grafana/ebpf-autoinstrument"},
+		jaeger.Tag{Key: "otel.library.name", Type: "string", Value: "github.com/grafana/beyla"},
 		jaeger.Tag{Key: "span.kind", Type: "string", Value: "internal"},
 	), "not all tags matched in %+v", queue.Tags)
 
@@ -103,6 +123,45 @@ func testHTTPTraces(t *testing.T) {
 		{Key: "telemetry.sdk.language", Type: "string", Value: "go"},
 		{Key: "service.namespace", Type: "string", Value: "integration-test"},
 	}), "not all tags matched in %+v", process.Tags)
+}
+
+func testHTTPTracesBadTraceID(t *testing.T) {
+	slugToParent := map[string]string{
+		// Valid traceparent example:
+		//		valid: "00-5fe865607da112abd799ea8108c38bcb-4c59e9a913c480a3-01"
+		// Examples of INVALID traceIDs in traceparent:  Note: eBPF rejects when len != 55
+		"invalid-trace-id1": "00-Zfe865607da112abd799ea8108c38bcb-4c59e9a913c480a3-01",
+		"invalid-trace-id2": "00-5fe865607da112abd799ea8108c38bcL-4c59e9a913c480a3-01",
+		"invalid-trace-id3": "00-5fe865607Ra112abd799ea8108c38bcb-4c59e9a913c480a3-01",
+		"invalid-trace-id4": "00-0x5fe865607da112abd799ea8108c3cb-4c59e9a913c480a3-01",
+		"invalid-trace-id5": "00-5FE865607DA112ABD799EA8108C38BCB-4c59e9a913c480a3-01",
+	}
+	for slug, traceparent := range slugToParent {
+		t.Log("Testing bad traceid. traceparent:", traceparent, "slug:", slug)
+		doHTTPGetWithTraceparent(t, instrumentedServiceStdURL+"/"+slug+"?delay=10ms", 200, traceparent)
+
+		var trace jaeger.Trace
+		test.Eventually(t, testTimeout, func(t require.TestingT) {
+			resp, err := http.Get(jaegerQueryURL + "?service=testserver&operation=GET%20%2F" + slug)
+			require.NoError(t, err)
+			if resp == nil {
+				return
+			}
+			require.Equal(t, http.StatusOK, resp.StatusCode)
+			var tq jaeger.TracesQuery
+			require.NoError(t, json.NewDecoder(resp.Body).Decode(&tq))
+			traces := tq.FindBySpan(jaeger.Tag{Key: "http.target", Type: "string", Value: "/" + slug})
+			require.Len(t, traces, 1)
+			trace = traces[0]
+		}, test.Interval(100*time.Millisecond))
+
+		// Check the information of the parent span
+		res := trace.FindByOperationName("GET /" + slug)
+		require.Len(t, res, 1)
+		parent := res[0]
+		require.NotEmpty(t, parent.TraceID)
+		require.NotEqual(t, traceparent[3:35], parent.TraceID)
+	}
 }
 
 func testGRPCTraces(t *testing.T) {
@@ -130,7 +189,7 @@ func testGRPCTraces(t *testing.T) {
 	assert.Less(t, (10 * time.Millisecond).Microseconds(), parent.Duration)
 	// check span attributes
 	assert.Truef(t, parent.AllMatches(
-		jaeger.Tag{Key: "otel.library.name", Type: "string", Value: "github.com/grafana/ebpf-autoinstrument"},
+		jaeger.Tag{Key: "otel.library.name", Type: "string", Value: "github.com/grafana/beyla"},
 		jaeger.Tag{Key: "net.host.port", Type: "int64", Value: float64(50051)},
 		jaeger.Tag{Key: "rpc.grpc.status_code", Type: "int64", Value: float64(2)},
 		jaeger.Tag{Key: "rpc.method", Type: "string", Value: "/routeguide.RouteGuide/Debug"},
@@ -154,7 +213,7 @@ func testGRPCTraces(t *testing.T) {
 		parent.StartTime+parent.Duration+1) // adding 1 to tolerate inaccuracies from rounding from ns to ms
 	// check span attributes
 	assert.Truef(t, queue.AllMatches(
-		jaeger.Tag{Key: "otel.library.name", Type: "string", Value: "github.com/grafana/ebpf-autoinstrument"},
+		jaeger.Tag{Key: "otel.library.name", Type: "string", Value: "github.com/grafana/beyla"},
 		jaeger.Tag{Key: "span.kind", Type: "string", Value: "internal"},
 	), "not all tags matched in %+v", queue.Tags)
 
@@ -172,7 +231,7 @@ func testGRPCTraces(t *testing.T) {
 	assert.LessOrEqual(t, processing.StartTime+processing.Duration, parent.StartTime+parent.Duration+1)
 	// check span attributes
 	assert.Truef(t, queue.AllMatches(
-		jaeger.Tag{Key: "otel.library.name", Type: "string", Value: "github.com/grafana/ebpf-autoinstrument"},
+		jaeger.Tag{Key: "otel.library.name", Type: "string", Value: "github.com/grafana/beyla"},
 		jaeger.Tag{Key: "span.kind", Type: "string", Value: "internal"},
 	), "not all tags matched in %+v", queue.Tags)
 

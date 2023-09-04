@@ -14,7 +14,7 @@ import (
 
 	"golang.org/x/exp/slog"
 
-	"github.com/grafana/ebpf-autoinstrument/pkg/beyla"
+	"github.com/grafana/beyla/pkg/beyla"
 )
 
 func main() {
@@ -53,8 +53,8 @@ func main() {
 	// 1st executable - Invoke FindTarget, which also mounts the BPF maps
 	// 2nd executable - Invoke ReadAndForward, receiving the BPF map mountpoint as argument
 	instr := beyla.New(config)
-	if err := instr.FindTarget(ctx); err != nil {
-		slog.Error("Beyla couldn't find target service", err)
+	if err := instr.FindAndInstrument(ctx); err != nil {
+		slog.Error("Beyla couldn't find target process", err)
 		os.Exit(-1)
 	}
 	if err := instr.ReadAndForward(ctx); err != nil {

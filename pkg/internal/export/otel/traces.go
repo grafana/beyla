@@ -21,9 +21,9 @@ import (
 	"golang.org/x/exp/slog"
 	"google.golang.org/grpc/credentials"
 
-	"github.com/grafana/ebpf-autoinstrument/pkg/internal/imetrics"
-	"github.com/grafana/ebpf-autoinstrument/pkg/internal/pipe/global"
-	"github.com/grafana/ebpf-autoinstrument/pkg/internal/transform"
+	"github.com/grafana/beyla/pkg/internal/imetrics"
+	"github.com/grafana/beyla/pkg/internal/pipe/global"
+	"github.com/grafana/beyla/pkg/internal/transform"
 )
 
 func tlog() *slog.Logger {
@@ -39,7 +39,7 @@ var topSpans, _ = lru.New[uint64, SessionSpan](8192)
 var clientSpans, _ = lru.New[uint64, []transform.HTTPRequestSpan](8192)
 var namedTracers, _ = lru.New[string, *trace.TracerProvider](512)
 
-const reporterName = "github.com/grafana/ebpf-autoinstrument"
+const reporterName = "github.com/grafana/beyla"
 
 type TracesConfig struct {
 	Endpoint       string `yaml:"endpoint" env:"OTEL_EXPORTER_OTLP_ENDPOINT"`
@@ -273,6 +273,17 @@ func spanKind(span *transform.HTTPRequestSpan) trace2.SpanKind {
 
 func (r *TracesReporter) makeSpan(parentCtx context.Context, tracer trace2.Tracer, span *transform.HTTPRequestSpan) SessionSpan {
 	t := span.Timings()
+
+	if span.TraceID != "" {
+		tid, err := trace2.TraceIDFromHex(span.TraceID)
+		if err != nil {
+			slog.Debug("Invalid TraceID", "error:", err, "traceId:", span.TraceID)
+		} else {
+			spanCtx := trace2.SpanContextFromContext(parentCtx)
+			spanCtx = spanCtx.WithTraceID(tid)
+			parentCtx = trace2.ContextWithSpanContext(parentCtx, spanCtx)
+		}
+	}
 
 	// Create a parent span for the whole request session
 	ctx, sp := tracer.Start(parentCtx, traceName(span),

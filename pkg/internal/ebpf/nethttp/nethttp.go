@@ -22,10 +22,10 @@ import (
 	"github.com/cilium/ebpf"
 	"golang.org/x/exp/slog"
 
-	ebpfcommon "github.com/grafana/ebpf-autoinstrument/pkg/internal/ebpf/common"
-	"github.com/grafana/ebpf-autoinstrument/pkg/internal/exec"
-	"github.com/grafana/ebpf-autoinstrument/pkg/internal/goexec"
-	"github.com/grafana/ebpf-autoinstrument/pkg/internal/imetrics"
+	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
+	"github.com/grafana/beyla/pkg/internal/exec"
+	"github.com/grafana/beyla/pkg/internal/goexec"
+	"github.com/grafana/beyla/pkg/internal/imetrics"
 )
 
 //go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf ../../../../bpf/go_nethttp.c -- -I../../../../bpf/headers
@@ -62,6 +62,7 @@ func (p *Tracer) Constants(_ *exec.FileInfo, offsets *goexec.Offsets) map[string
 		"host_ptr_pos",
 		"content_length_ptr_pos",
 		"resp_req_pos",
+		"req_header_ptr_pos",
 	} {
 		constants[s] = offsets.Field[s]
 	}

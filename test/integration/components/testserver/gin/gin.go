@@ -8,7 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"golang.org/x/exp/slog"
 
-	"github.com/grafana/ebpf-autoinstrument/test/integration/components/testserver/arg"
+	"github.com/grafana/beyla/test/integration/components/testserver/arg"
 )
 
 func Setup(port int) {

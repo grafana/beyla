@@ -8,26 +8,17 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path"
 	"reflect"
-	"strconv"
 	"strings"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
-	"github.com/cilium/ebpf/rlimit"
-	"github.com/mariomac/pipes/pkg/node"
 	"golang.org/x/exp/slog"
 	"golang.org/x/sys/unix"
 
-	ebpfcommon "github.com/grafana/ebpf-autoinstrument/pkg/internal/ebpf/common"
-	"github.com/grafana/ebpf-autoinstrument/pkg/internal/ebpf/goruntime"
-	"github.com/grafana/ebpf-autoinstrument/pkg/internal/ebpf/grpc"
-	"github.com/grafana/ebpf-autoinstrument/pkg/internal/ebpf/httpfltr"
-	"github.com/grafana/ebpf-autoinstrument/pkg/internal/ebpf/nethttp"
-	"github.com/grafana/ebpf-autoinstrument/pkg/internal/exec"
-	"github.com/grafana/ebpf-autoinstrument/pkg/internal/goexec"
-	"github.com/grafana/ebpf-autoinstrument/pkg/internal/imetrics"
+	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
+	"github.com/grafana/beyla/pkg/internal/exec"
+	"github.com/grafana/beyla/pkg/internal/goexec"
 )
 
 // Tracer is an individual eBPF program (e.g. the net/http or the grpc tracers)
@@ -71,85 +62,33 @@ type ProcessTracer struct {
 	pinPath  string
 }
 
-// TracerProvider returns a StartFuncCtx for each discovered eBPF traceable source: GRPC, HTTP...
-func TracerProvider(_ context.Context, pt *ProcessTracer) ([]node.StartFuncCtx[[]any], error) {
-	return pt.TraceReaders()
-}
-
-func FindAndInstrument(ctx context.Context, cfg *ebpfcommon.TracerConfig, metrics imetrics.Reporter) (*ProcessTracer, error) {
+func (pt *ProcessTracer) Run(ctx context.Context, out chan<- []any) {
 	var log = logger()
 
-	// Each program is an eBPF source: net/http, grpc...
-	programs := []Tracer{
-		&nethttp.Tracer{Cfg: cfg, Metrics: metrics},
-		&nethttp.GinTracer{Tracer: nethttp.Tracer{Cfg: cfg, Metrics: metrics}},
-		&grpc.Tracer{Cfg: cfg, Metrics: metrics},
-		&goruntime.Tracer{Cfg: cfg, Metrics: metrics},
-	}
-
-	// merging all the functions from all the programs, in order to do
-	// a complete inspection of the target executable
-	allFuncs := allGoFunctionNames(programs)
-	elfInfo, goffsets, err := inspect(ctx, cfg, allFuncs)
+	// Searches for traceable functions
+	funcs, err := pt.tracerFunctions()
 	if err != nil {
-		return nil, fmt.Errorf("inspecting offsets: %w", err)
+		log.Error("couldn't trace process", err, "path", pt.ELFInfo.CmdExePath, "pid", pt.ELFInfo.Pid)
+		return
 	}
-
-	if goffsets != nil {
-		programs = filterNotFoundPrograms(programs, goffsets)
-		if len(programs) == 0 {
-			return nil, errors.New("no instrumentable function found")
-		}
-	} else {
-		// We are not instrumenting a Go application, we override the programs
-		// list with the generic kernel/socket space filters
-		programs = []Tracer{&httpfltr.Tracer{Cfg: cfg, Metrics: metrics}}
+	// run each tracer program
+	for _, fn := range funcs {
+		go fn(ctx, out)
 	}
-
-	// Instead of the executable file in the disk, we pass the /proc/<pid>/exec
-	// to allow loading it from different container/pods in containerized environments
-	exe, err := link.OpenExecutable(elfInfo.ProExeLinkPath)
-	if err != nil {
-		return nil, fmt.Errorf("opening %q executable file: %w", elfInfo.ProExeLinkPath, err)
-	}
-	if err := rlimit.RemoveMemlock(); err != nil {
-		return nil, fmt.Errorf("removing memory lock: %w", err)
-	}
-
-	pinPath, err := mountBpfPinPath(cfg)
-	if err != nil {
-		return nil, fmt.Errorf("mounting BPF FS in %q: %w", cfg.BpfBaseDir, err)
-	}
-
-	if cfg.SystemWide {
-		log.Info("system wide instrumentation")
-	}
-	return &ProcessTracer{
-		programs: programs,
-		ELFInfo:  elfInfo,
-		goffsets: goffsets,
-		exe:      exe,
-		pinPath:  pinPath,
-	}, nil
 }
 
-// TraceReaders returns one StartFuncCtx for each discovered eBPF traceable source: GRPC, HTTP...
-func (pt *ProcessTracer) TraceReaders() ([]node.StartFuncCtx[[]any], error) {
+// tracerFunctions returns a tracing function for each discovered eBPF traceable source: GRPC, HTTP...
+func (pt *ProcessTracer) tracerFunctions() ([]func(context.Context, chan<- []any), error) {
 	var log = logger()
 
-	// startNodes contains the eBPF programs (HTTP, GRPC tracers...) plus a function
-	// that just waits for the passed context to finish before closing the BPF pin
-	// path
-	startNodes := []node.StartFuncCtx[[]any]{
-		waitToCloseBbfPinPath(pt.pinPath),
-	}
+	// tracerFuncs contains the eBPF programs (HTTP, GRPC tracers...)
+	var tracerFuncs []func(context.Context, chan<- []any)
 
 	for _, p := range pt.programs {
 		plog := log.With("program", reflect.TypeOf(p))
 		plog.Debug("loading eBPF program")
 		spec, err := p.Load()
 		if err != nil {
-			unmountBpfPinPath(pt.pinPath)
 			return nil, fmt.Errorf("loading eBPF program: %w", err)
 		}
 		if err := spec.RewriteConstants(p.Constants(pt.ELFInfo, pt.goffsets)); err != nil {
@@ -160,7 +99,6 @@ func (pt *ProcessTracer) TraceReaders() ([]node.StartFuncCtx[[]any], error) {
 				PinPath: pt.pinPath,
 			}}); err != nil {
 			printVerifierErrorInfo(err)
-			unmountBpfPinPath(pt.pinPath)
 			return nil, fmt.Errorf("loading and assigning BPF objects: %w", err)
 		}
 		i := instrumenter{
@@ -171,79 +109,34 @@ func (pt *ProcessTracer) TraceReaders() ([]node.StartFuncCtx[[]any], error) {
 		//Go style Uprobes
 		if err := i.goprobes(p); err != nil {
 			printVerifierErrorInfo(err)
-			unmountBpfPinPath(pt.pinPath)
 			return nil, err
 		}
 
 		//Kprobes to be used for native instrumentation points
 		if err := i.kprobes(p); err != nil {
 			printVerifierErrorInfo(err)
-			unmountBpfPinPath(pt.pinPath)
 			return nil, err
 		}
 
 		//Uprobes to be used for native module instrumentation points
 		if err := i.uprobes(pt.ELFInfo.Pid, p); err != nil {
 			printVerifierErrorInfo(err)
-			unmountBpfPinPath(pt.pinPath)
 			return nil, err
 		}
 
 		//Sock filters support
 		if err := i.sockfilters(p); err != nil {
 			printVerifierErrorInfo(err)
-			unmountBpfPinPath(pt.pinPath)
 			return nil, err
 		}
 
-		startNodes = append(startNodes, p.Run)
+		tracerFuncs = append(tracerFuncs, p.Run)
 	}
 
-	return startNodes, nil
-}
-
-func mountBpfPinPath(cfg *ebpfcommon.TracerConfig) (string, error) {
-	pinPath := path.Join(cfg.BpfBaseDir, strconv.Itoa(os.Getpid()))
-	log := slog.With("component", "ebpf.TracerProvider", "path", pinPath)
-	log.Debug("mounting BPF map pinning path")
-	if _, err := os.Stat(pinPath); err != nil {
-		if !os.IsNotExist(err) {
-			return "", fmt.Errorf("accessing %s stat: %w", pinPath, err)
-		}
-		log.Debug("BPF map pinning path does not exist. Creating before mounting")
-		if err := os.MkdirAll(pinPath, 0700); err != nil {
-			return "", fmt.Errorf("creating directory %s: %w", pinPath, err)
-		}
-	}
-
-	return pinPath, bpfMount(pinPath)
+	return tracerFuncs, nil
 }
 
 func logger() *slog.Logger { return slog.With("component", "ebpf.TracerProvider") }
-
-// this will be just a start node that listens for the context cancellation and then
-// unmounts the BPF pinning path
-func waitToCloseBbfPinPath(pinPath string) node.StartFuncCtx[[]any] {
-	return func(ctx context.Context, _ chan<- []any) {
-		<-ctx.Done()
-		unmountBpfPinPath(pinPath)
-	}
-}
-
-func unmountBpfPinPath(pinPath string) {
-	log := slog.With("component", "ebpf.TracerProvider", "path", pinPath)
-	log.Debug("context has been canceled. Unmounting BPF map pinning path")
-	if err := unix.Unmount(pinPath, unix.MNT_FORCE); err != nil {
-		log.Warn("can't unmount pinned root. Try unmounting and removing it manually", err)
-		return
-	}
-	log.Debug("unmounted bpf file system")
-	if err := os.RemoveAll(pinPath); err != nil {
-		log.Warn("can't remove pinned root. Try removing it manually", err)
-	} else {
-		log.Debug("removed pin path")
-	}
-}
 
 // filterNotFoundPrograms will filter these programs whose required functions (as
 // returned in the Offsets method) haven't been found in the offsets
@@ -300,6 +193,8 @@ func inspect(ctx context.Context, cfg *ebpfcommon.TracerConfig, functions []stri
 	var offsets *goexec.Offsets
 
 	if !cfg.SystemWide {
+		logger().Info("inspecting", "pid", execElf.Pid, "comm", execElf.CmdExePath)
+
 		offsets, err = goexec.InspectOffsets(&execElf, functions)
 		if err != nil {
 			logger().Info("Go HTTP/gRPC support not detected. Using only generic instrumentation.", "error", err)

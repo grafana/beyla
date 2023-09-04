@@ -15,7 +15,7 @@ data:
       "time"
     )
     func main() {
-      // TODO: remove server after this bug is fixed https://github.com/grafana/ebpf-autoinstrument/issues/221    
+      // TODO: remove server after this bug is fixed https://github.com/grafana/beyla/issues/221    
       go http.ListenAndServe(":8787", nil)
       for {
         r, err := http.Get("{{.TargetURL}}")

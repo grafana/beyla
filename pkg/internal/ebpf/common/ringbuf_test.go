@@ -16,8 +16,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/exp/slog"
 
-	"github.com/grafana/ebpf-autoinstrument/pkg/internal/imetrics"
-	"github.com/grafana/ebpf-autoinstrument/pkg/internal/testutil"
+	"github.com/grafana/beyla/pkg/internal/imetrics"
+	"github.com/grafana/beyla/pkg/internal/testutil"
 )
 
 const testTimeout = 5 * time.Second

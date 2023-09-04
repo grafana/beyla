@@ -1,9 +1,9 @@
 ---
 kind: pipeline
-name: ebpf-autoinstrument
+name: beyla
 steps:
 - image: thegeeklab/drone-docker-buildx:24
-  name: ebpf-autoinstrument-dryrun-docker-buildx
+  name: beyla-dryrun-docker-buildx
   privileged: true
   settings:
     auto_tag: false
@@ -14,7 +14,7 @@ steps:
     platforms:
     - linux/arm64
     - linux/amd64
-    repo: grafana/ebpf-autoinstrument-dryrun
+    repo: grafana/beyla-dryrun
     tags: test
     username:
       from_secret: docker_username
@@ -22,7 +22,7 @@ steps:
     event:
     - pull_request
 - image: thegeeklab/drone-docker-buildx:24
-  name: ebpf-autoinstrument-tagged-docker-buildx
+  name: beyla-tagged-docker-buildx
   privileged: true
   settings:
     auto_tag: true
@@ -33,7 +33,7 @@ steps:
     platforms:
     - linux/arm64
     - linux/amd64
-    repo: grafana/ebpf-autoinstrument
+    repo: grafana/beyla
     tags: latest
     username:
       from_secret: docker_username
@@ -41,7 +41,7 @@ steps:
     event:
     - tag
 - image: thegeeklab/drone-docker-buildx:24
-  name: ebpf-autoinstrument-main-docker-buildx
+  name: beyla-main-docker-buildx
   privileged: true
   settings:
     auto_tag: false
@@ -52,7 +52,7 @@ steps:
     platforms:
     - linux/arm64
     - linux/amd64
-    repo: grafana/ebpf-autoinstrument
+    repo: grafana/beyla
     tags: main
     username:
       from_secret: docker_username
@@ -77,6 +77,6 @@ kind: secret
 name: docker_password
 ---
 kind: signature
-hmac: c8e7bb5d13a900799135d67a42a57f199678aa6593a1a4371a449313f5e298b7
+hmac: 596f1c15aa7a0918c5983b390801fe734d0655097fc009cbe1083c836e533833
 
 ...

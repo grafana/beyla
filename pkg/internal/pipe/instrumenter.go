@@ -7,20 +7,19 @@ import (
 	"github.com/mariomac/pipes/pkg/graph"
 	"github.com/mariomac/pipes/pkg/node"
 
-	"github.com/grafana/ebpf-autoinstrument/pkg/internal/ebpf"
-	"github.com/grafana/ebpf-autoinstrument/pkg/internal/export/debug"
-	"github.com/grafana/ebpf-autoinstrument/pkg/internal/export/otel"
-	"github.com/grafana/ebpf-autoinstrument/pkg/internal/export/prom"
-	"github.com/grafana/ebpf-autoinstrument/pkg/internal/imetrics"
-	"github.com/grafana/ebpf-autoinstrument/pkg/internal/pipe/global"
-	"github.com/grafana/ebpf-autoinstrument/pkg/internal/transform"
+	"github.com/grafana/beyla/pkg/internal/export/debug"
+	"github.com/grafana/beyla/pkg/internal/export/otel"
+	"github.com/grafana/beyla/pkg/internal/export/prom"
+	"github.com/grafana/beyla/pkg/internal/imetrics"
+	"github.com/grafana/beyla/pkg/internal/pipe/global"
+	"github.com/grafana/beyla/pkg/internal/traces"
+	"github.com/grafana/beyla/pkg/internal/transform"
 )
 
 // nodesMap provides the architecture of the whole processing pipeline:
 // each node and which nodes are they connected to
 type nodesMap struct {
-	// TODO: use interface
-	TracerReader *ebpf.ProcessTracer `nodeId:"tracer" sendTo:"routes"`
+	TracesReader traces.Reader `nodeId:"tracer" sendTo:"routes"`
 
 	// Routes is an optional node. If not set, data will be bypassed to the next stage in the pipeline.
 	Routes *transform.RoutesConfig `nodeId:"routes" forwardTo:"kube"`
@@ -35,16 +34,15 @@ type nodesMap struct {
 	Noop       debug.NoopEnabled     `nodeId:"noop"`
 }
 
-func configToNodesMap(cfg *Config, tracer *ebpf.ProcessTracer) *nodesMap {
+func configToNodesMap(cfg *Config) *nodesMap {
 	return &nodesMap{
-		TracerReader: tracer,
-		Routes:       cfg.Routes,
-		Kubernetes:   cfg.Kubernetes,
-		Metrics:      cfg.Metrics,
-		Traces:       cfg.Traces,
-		Prometheus:   cfg.Prometheus,
-		Printer:      cfg.Printer,
-		Noop:         cfg.Noop,
+		Routes:     cfg.Routes,
+		Kubernetes: cfg.Kubernetes,
+		Metrics:    cfg.Metrics,
+		Traces:     cfg.Traces,
+		Prometheus: cfg.Prometheus,
+		Printer:    cfg.Printer,
+		Noop:       cfg.Noop,
 	}
 }
 
@@ -52,37 +50,41 @@ func configToNodesMap(cfg *Config, tracer *ebpf.ProcessTracer) *nodesMap {
 type graphFunctions struct {
 	config  *Config
 	builder *graph.Builder
-	tracer  *ebpf.ProcessTracer
 	ctxInfo *global.ContextInfo
+
+	// tracesCh is shared across all the eBPF tracing programs, which send there
+	// any discovered trace, and the input node of the graph, which reads and
+	// forwards them to the next stages.
+	tracesCh <-chan []any
 }
 
 // Build instantiates the whole instrumentation --> processing --> submit
 // pipeline graph and returns it as a startable item
-func Build(ctx context.Context, config *Config, ctxInfo *global.ContextInfo, tracer *ebpf.ProcessTracer) (*Instrumenter, error) {
+func Build(ctx context.Context, config *Config, ctxInfo *global.ContextInfo, tracesCh <-chan []any) (*Instrumenter, error) {
 	if err := config.Validate(); err != nil {
 		return nil, fmt.Errorf("validating configuration: %w", err)
 	}
 
-	return newGraphBuilder(config, ctxInfo, tracer).buildGraph(ctx)
+	return newGraphBuilder(config, ctxInfo, tracesCh).buildGraph(ctx)
 }
 
 // private constructor that can be instantiated from tests to override the node providers
 // and offsets inspector
-func newGraphBuilder(config *Config, ctxInfo *global.ContextInfo, tracer *ebpf.ProcessTracer) *graphFunctions {
+func newGraphBuilder(config *Config, ctxInfo *global.ContextInfo, tracesCh <-chan []any) *graphFunctions {
 	// This is how the github.com/mariomac/pipes library, works:
 	// First, we create a graph builder
 	gnb := graph.NewBuilder(node.ChannelBufferLen(config.ChannelBufferLen))
 	gb := &graphFunctions{
-		builder: gnb,
-		config:  config,
-		tracer:  tracer,
-		ctxInfo: ctxInfo,
+		builder:  gnb,
+		config:   config,
+		ctxInfo:  ctxInfo,
+		tracesCh: tracesCh,
 	}
 	// Second, we register providers for each node. Each provider is a function that receives the
 	// type of each of the "nodesMap" struct fields, and returns the function that represents
 	// each node. Each function will have input and/or output channels.
 	graph.RegisterCodec(gnb, transform.ConvertToSpan)
-	graph.RegisterMultiStart(gnb, ebpf.TracerProvider)
+	graph.RegisterStart(gnb, traces.ReaderProvider)
 	graph.RegisterMiddle(gnb, transform.RoutesProvider)
 	graph.RegisterMiddle(gnb, transform.KubeDecoratorProvider)
 	graph.RegisterTerminal(gnb, gb.metricsReporterProvider)
@@ -102,7 +104,8 @@ func (gb *graphFunctions) buildGraph(ctx context.Context) (*Instrumenter, error)
 	// setting explicitly some configuration properties that are needed by their
 	// respective node providers
 
-	definedNodesMap := configToNodesMap(gb.config, gb.tracer)
+	definedNodesMap := configToNodesMap(gb.config)
+	definedNodesMap.TracesReader.TracesInput = gb.tracesCh
 	grp, err := gb.builder.Build(ctx, definedNodesMap)
 	if err != nil {
 		return nil, err

@@ -9,11 +9,11 @@ import (
 
 	"golang.org/x/exp/slog"
 
-	"github.com/grafana/ebpf-autoinstrument/pkg/internal/connector"
-	"github.com/grafana/ebpf-autoinstrument/pkg/internal/ebpf"
-	"github.com/grafana/ebpf-autoinstrument/pkg/internal/imetrics"
-	"github.com/grafana/ebpf-autoinstrument/pkg/internal/pipe"
-	"github.com/grafana/ebpf-autoinstrument/pkg/internal/pipe/global"
+	"github.com/grafana/beyla/pkg/internal/connector"
+	"github.com/grafana/beyla/pkg/internal/ebpf"
+	"github.com/grafana/beyla/pkg/internal/imetrics"
+	"github.com/grafana/beyla/pkg/internal/pipe"
+	"github.com/grafana/beyla/pkg/internal/pipe/global"
 )
 
 // Config as provided by the user to configure and run Beyla
@@ -28,16 +28,28 @@ func log() *slog.Logger {
 type Instrumenter struct {
 	config  *pipe.Config
 	ctxInfo *global.ContextInfo
-	// TODO: before splitting the executable, tracer interface passed here should have
-	// restricted functionality: just read and forward data from already mounted BPF maps
-	tracer *ebpf.ProcessTracer
+
+	// tracesInput is used to communicate the found traces between the ProcessFinder and
+	// the ProcessTracer.
+	// TODO: When we split beyla into two executables, probably the BPF map
+	// should be the traces' communication mechanism instead of a native channel
+	tracesInput chan []any
+
+	// TODO: temporary hack. REMOVE
+	// This will force that the pipeline is not created until we have a service name.
+	// In the following PR this will be removed, as we will include the service name
+	// in the Span information, and create dynamically OTEL resources for each new
+	// service (as we already do for system wide configuration): remove ASAP
+	TempHackWaitForServiceName chan struct{}
 }
 
 // New Instrumenter, given a Config
 func New(config *Config) *Instrumenter {
 	return &Instrumenter{
-		config:  (*pipe.Config)(config),
-		ctxInfo: buildContextInfo((*pipe.Config)(config)),
+		config:                     (*pipe.Config)(config),
+		ctxInfo:                    buildContextInfo((*pipe.Config)(config)),
+		tracesInput:                make(chan []any, config.ChannelBufferLen),
+		TempHackWaitForServiceName: make(chan struct{}),
 	}
 }
 
@@ -55,21 +67,38 @@ func LoadConfig(reader io.Reader) (*Config, error) {
 	return (*Config)(cfg), nil
 }
 
-// FindTarget finds the target executable or service and instruments it. In addition
-// it mounts the required BPF maps to be used by ReadAndForward
-func (i *Instrumenter) FindTarget(ctx context.Context) error {
-	log().Info("creating instrumentation pipeline")
-	var err error
-	i.tracer, err = ebpf.FindAndInstrument(ctx, &i.config.EBPF, i.ctxInfo.Metrics)
+// FindAndInstrument searches in background for any new executable matching the
+// selection criteria.
+func (i *Instrumenter) FindAndInstrument(ctx context.Context) error {
+	finder := &ebpf.ProcessFinder{
+		Cfg:     &i.config.EBPF,
+		CtxInfo: i.ctxInfo,
+		Metrics: i.ctxInfo.Metrics,
+	}
+	foundProcesses, err := finder.Start(ctx)
 	if err != nil {
-		return fmt.Errorf("can't find an instrument executable: %w", err)
+		return fmt.Errorf("couldn't start Process Finder: %w", err)
 	}
-	// If system-wide tracing is set, we don't use the initially-found
-	// executable name as service name, as it might be anything.
-	// We'll use the service name as traced from eBPF
-	if i.ctxInfo.ServiceName == "" && !i.config.EBPF.SystemWide {
-		i.ctxInfo.ServiceName = i.tracer.ELFInfo.ExecutableName()
-	}
+	// In background, listen indefinitely for each new process and run its
+	// associated ebpf.ProcessTracer once it is found.
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				log().Debug("stopped searching for new processes to instrument")
+				finder.Close()
+				return
+			case pt := <-foundProcesses:
+				select {
+				case <-i.TempHackWaitForServiceName:
+					// already closed. Not closing again!
+				default:
+					close(i.TempHackWaitForServiceName)
+				}
+				go pt.Run(ctx, i.tracesInput)
+			}
+		}
+	}()
 	return nil
 }
 
@@ -77,9 +106,12 @@ func (i *Instrumenter) FindTarget(ctx context.Context) error {
 // processes and forwards them
 func (i *Instrumenter) ReadAndForward(ctx context.Context) error {
 	log := log()
+	log.Debug("creating instrumentation pipeline")
+	<-i.TempHackWaitForServiceName
+
 	// TODO: when we split the executable, tracer should be reconstructed somehow
 	// from this instance
-	bp, err := pipe.Build(ctx, i.config, i.ctxInfo, i.tracer)
+	bp, err := pipe.Build(ctx, i.config, i.ctxInfo, i.tracesInput)
 	if err != nil {
 		return fmt.Errorf("can't instantiate instrumentation pipeline: %w", err)
 	}
@@ -102,6 +134,7 @@ func buildContextInfo(config *pipe.Config) *global.ContextInfo {
 		Prometheus:       promMgr,
 		ServiceName:      config.ServiceName,
 		ServiceNamespace: config.ServiceNamespace,
+		ChannelBufferLen: config.ChannelBufferLen,
 	}
 	if config.InternalMetrics.Prometheus.Port != 0 {
 		slog.Debug("reporting internal metrics as Prometheus")

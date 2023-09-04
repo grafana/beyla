@@ -19,10 +19,10 @@ import (
 	"github.com/cilium/ebpf"
 	"golang.org/x/exp/slog"
 
-	ebpfcommon "github.com/grafana/ebpf-autoinstrument/pkg/internal/ebpf/common"
-	"github.com/grafana/ebpf-autoinstrument/pkg/internal/exec"
-	"github.com/grafana/ebpf-autoinstrument/pkg/internal/goexec"
-	"github.com/grafana/ebpf-autoinstrument/pkg/internal/imetrics"
+	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
+	"github.com/grafana/beyla/pkg/internal/exec"
+	"github.com/grafana/beyla/pkg/internal/goexec"
+	"github.com/grafana/beyla/pkg/internal/imetrics"
 )
 
 //go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf ../../../../bpf/go_runtime.c -- -I../../../../bpf/headers

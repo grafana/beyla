@@ -5,7 +5,7 @@ import (
 	"os"
 	"time"
 
-	grpcclient "github.com/grafana/ebpf-autoinstrument/test/integration/components/testserver/grpc/client"
+	grpcclient "github.com/grafana/beyla/test/integration/components/testserver/grpc/client"
 )
 
 func main() {

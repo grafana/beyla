@@ -39,7 +39,7 @@ local docker_username_secret = secret('docker_username', 'infra/data/ci/docker_h
 local docker_password_secret = secret('docker_password', 'infra/data/ci/docker_hub', 'password');
 
 local buildx(stepName, app, auto_tag, tags) = {
-  name: 'ebpf-autoinstrument-%s-docker-buildx' % stepName,
+  name: 'beyla-%s-docker-buildx' % stepName,
   image: 'thegeeklab/drone-docker-buildx:24',
   privileged: true,
   settings: {
@@ -54,20 +54,20 @@ local buildx(stepName, app, auto_tag, tags) = {
   },
 };
 
-local autoinstrument() = pipeline('ebpf-autoinstrument') {
+local beyla() = pipeline('beyla') {
   steps+: [
-    buildx('dryrun', 'ebpf-autoinstrument-dryrun', false, 'test') {
+    buildx('dryrun', 'beyla-dryrun', false, 'test') {
       when: onPRs,  // TODO: if container creation fails, make the PR fail
       settings+: {
         dry_run: true,
       },
     },
   ] + [
-    buildx('tagged', 'ebpf-autoinstrument', true, 'latest') {
+    buildx('tagged', 'beyla', true, 'latest') {
       when: onTag,
     },
   ] + [
-    buildx('main', 'ebpf-autoinstrument', false, 'main') {
+    buildx('main', 'beyla', false, 'main') {
       when: onMain,
     },
   ],
@@ -75,7 +75,7 @@ local autoinstrument() = pipeline('ebpf-autoinstrument') {
 
 // TODO: don't create images if unit tests nor integration tests pass
 [
-  autoinstrument(),
+  beyla(),
 ] + [
   docker_username_secret,
   docker_password_secret,

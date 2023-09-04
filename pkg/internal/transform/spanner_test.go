@@ -5,8 +5,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	ebpfcommon "github.com/grafana/ebpf-autoinstrument/pkg/internal/ebpf/common"
-	"github.com/grafana/ebpf-autoinstrument/pkg/internal/ebpf/httpfltr"
+	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
+	"github.com/grafana/beyla/pkg/internal/ebpf/httpfltr"
 )
 
 func cstr(s string) []byte {

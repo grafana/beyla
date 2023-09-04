@@ -40,6 +40,7 @@ var structMembers = map[string]structInfo{
 			"RemoteAddr":    "remoteaddr_ptr_pos",
 			"Host":          "host_ptr_pos",
 			"ContentLength": "content_length_ptr_pos",
+			"Header":        "req_header_ptr_pos",
 		},
 	},
 	"net/url.URL": {

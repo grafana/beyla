@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/grafana/ebpf-autoinstrument/test/integration/components/prom"
+	"github.com/grafana/beyla/test/integration/components/prom"
 )
 
 func testREDMetricsForClientHTTPLibrary(t *testing.T) {

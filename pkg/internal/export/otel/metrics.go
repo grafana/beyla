@@ -21,9 +21,9 @@ import (
 	"golang.org/x/exp/slog"
 	"google.golang.org/grpc/credentials"
 
-	"github.com/grafana/ebpf-autoinstrument/pkg/internal/imetrics"
-	"github.com/grafana/ebpf-autoinstrument/pkg/internal/pipe/global"
-	"github.com/grafana/ebpf-autoinstrument/pkg/internal/transform"
+	"github.com/grafana/beyla/pkg/internal/imetrics"
+	"github.com/grafana/beyla/pkg/internal/pipe/global"
+	"github.com/grafana/beyla/pkg/internal/transform"
 )
 
 func mlog() *slog.Logger {

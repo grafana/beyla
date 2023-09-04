@@ -62,6 +62,7 @@ func ForwardRingbuf[T any](
 }
 
 func (rbf *ringBufForwarder[T]) readAndForward(ctx context.Context, spansChan chan<- []request.Span) {
+	rbf.logger.Debug("start reading and forwarding")
 	// BPF will send each measured trace via Ring Buffer, so we listen for them from the
 	// user space.
 	eventsReader, err := readerFactory(rbf.ringbuffer)
@@ -144,6 +145,7 @@ func (rbf *ringBufForwarder[T]) bgFlushOnTimeout(spansChan chan<- []request.Span
 
 func (rbf *ringBufForwarder[T]) bgListenContextCancelation(ctx context.Context, eventsReader ringBufReader) {
 	<-ctx.Done()
+	rbf.logger.Debug("context is cancelled. Closing events reader")
 	_ = eventsReader.Close()
 }
 

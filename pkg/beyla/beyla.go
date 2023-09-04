@@ -86,8 +86,11 @@ func (i *Instrumenter) FindAndInstrument(ctx context.Context) error {
 		for {
 			select {
 			case <-ctx.Done():
-				log().Debug("stopped searching for new processes to instrument")
-				finder.Close()
+				lg := log()
+				lg.Debug("stopped searching for new processes to instrument")
+				if err := finder.Close(); err != nil {
+					lg.Warn("error closing process finder instance", "error", err)
+				}
 				return
 			case pt := <-foundProcesses:
 				select {

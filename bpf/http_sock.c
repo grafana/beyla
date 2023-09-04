@@ -257,6 +257,8 @@ int socket__http_filter(struct __sk_buff *skb) {
 
     // we don't want to read the whole buffer for every packed that passes our checks, we read only a bit and check if it's trully HTTP request/response.
     unsigned char buf[MIN_HTTP_SIZE] = {0};
+    // note: we load everything here in a pedestrian way using chunks of 16 bytes with bpf_skb_load_bytes, because skb->data and skb->data_end are not
+    // available with socket filters. Question answerered here https://github.com/iovisor/bcc/issues/3807#issuecomment-1011837033
     bpf_skb_load_bytes(skb, tcp.hdr_len, (void *)buf, sizeof(buf));
     // technically the read should be reversed, but eBPF verifier complains on read with variable length
     u32 len = skb->len - tcp.hdr_len;

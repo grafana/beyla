@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
+	"github.com/grafana/beyla/pkg/internal/request"
 )
 
 const bufSize = 160
@@ -93,22 +94,27 @@ func TestToRequestTrace(t *testing.T) {
 	record.ConnInfo.D_port = 1
 	record.ConnInfo.S_addr = [16]byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff, 192, 168, 0, 1}
 	record.ConnInfo.D_addr = [16]byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff, 8, 8, 8, 8}
-	copy(record.Buf[:], []byte("GET /hello HTTP/1.1\r\nHost: example.com\r\n\r\n"))
+	copy(record.Buf[:], "GET /hello HTTP/1.1\r\nHost: example.com\r\n\r\n")
 
 	buf := new(bytes.Buffer)
 	err := binary.Write(buf, binary.LittleEndian, &record)
 	assert.NoError(t, err)
 
 	tracer := Tracer{Cfg: &ebpfcommon.TracerConfig{}}
-	result, err := tracer.toRequestTrace(&ringbuf.Record{RawSample: buf.Bytes()})
+	result, err := tracer.readHTTPInfoIntoSpan(&ringbuf.Record{RawSample: buf.Bytes()})
 	assert.NoError(t, err)
 
-	expected := HTTPInfo{
-		BPFHTTPInfo: record,
-		Host:        "8.8.8.8",
-		Peer:        "192.168.0.1",
-		URL:         "/hello",
-		Method:      "GET",
+	expected := request.Span{
+		Host:         "8.8.8.8",
+		Peer:         "192.168.0.1",
+		Path:         "/hello",
+		Method:       "GET",
+		Status:       200,
+		Type:         request.EventTypeHTTP,
+		RequestStart: 123456,
+		Start:        123456,
+		End:          789012,
+		HostPort:     1,
 	}
 	assert.Equal(t, expected, result)
 }
@@ -121,24 +127,28 @@ func TestToRequestTraceNoConnection(t *testing.T) {
 	record.Status = 200
 	record.ConnInfo.S_addr = [16]byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff, 192, 168, 0, 1}
 	record.ConnInfo.D_addr = [16]byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff, 8, 8, 8, 8}
-	copy(record.Buf[:], []byte("GET /hello HTTP/1.1\r\nHost: localhost:7033\r\n\r\nUser-Agent: curl/7.81.0\r\nAccept: */*\r\n"))
+	copy(record.Buf[:], "GET /hello HTTP/1.1\r\nHost: localhost:7033\r\n\r\nUser-Agent: curl/7.81.0\r\nAccept: */*\r\n")
 
 	buf := new(bytes.Buffer)
 	err := binary.Write(buf, binary.LittleEndian, &record)
 	assert.NoError(t, err)
 
 	tracer := Tracer{Cfg: &ebpfcommon.TracerConfig{}}
-	result, err := tracer.toRequestTrace(&ringbuf.Record{RawSample: buf.Bytes()})
+	result, err := tracer.readHTTPInfoIntoSpan(&ringbuf.Record{RawSample: buf.Bytes()})
 	assert.NoError(t, err)
 
 	// change the expected port just before testing
-	record.ConnInfo.D_port = 7033
-	expected := HTTPInfo{
-		BPFHTTPInfo: record,
-		Host:        "localhost",
-		Peer:        "",
-		URL:         "/hello",
-		Method:      "GET",
+	expected := request.Span{
+		Host:         "localhost",
+		Peer:         "",
+		Path:         "/hello",
+		Method:       "GET",
+		Type:         request.EventTypeHTTP,
+		Start:        123456,
+		RequestStart: 123456,
+		End:          789012,
+		Status:       200,
+		HostPort:     7033,
 	}
 	assert.Equal(t, expected, result)
 }

@@ -16,7 +16,7 @@ import (
 
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
-	"github.com/grafana/beyla/pkg/internal/transform"
+	"github.com/grafana/beyla/pkg/internal/request"
 )
 
 const timeout = 5 * time.Second
@@ -98,10 +98,10 @@ func TestMetrics_InternalInstrumentation(t *testing.T) {
 	// create a simple dummy graph to send data to the Metrics reporter, which will send
 	// metrics to the fake collector
 	sendData := make(chan struct{})
-	inputNode := node.AsStart(func(out chan<- []transform.HTTPRequestSpan) {
+	inputNode := node.AsStart(func(out chan<- []request.Span) {
 		// on every send data signal, the traces generator sends a dummy trace
 		for range sendData {
-			out <- []transform.HTTPRequestSpan{{Type: transform.EventTypeHTTP}}
+			out <- []request.Span{{Type: request.EventTypeHTTP}}
 		}
 	})
 	internalMetrics := &fakeInternalMetrics{}

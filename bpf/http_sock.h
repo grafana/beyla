@@ -125,10 +125,10 @@ static __always_inline http_info_t *get_or_set_http_info(http_info_t *info, u8 p
     if (packet_type == PACKET_TYPE_REQUEST) {
         http_info_t *old_info = bpf_map_lookup_elem(&ongoing_http, &info->conn_info);
         if (old_info) {
-            finish_http(old_info);
+            finish_http(old_info); // this will delete ongoing_http for this connection info if there's full stale request
         }
 
-        bpf_map_update_elem(&ongoing_http, &info->conn_info, info, BPF_ANY); 
+        bpf_map_update_elem(&ongoing_http, &info->conn_info, info, BPF_ANY);
     }
 
     return bpf_map_lookup_elem(&ongoing_http, &info->conn_info);
@@ -142,7 +142,7 @@ static __always_inline bool still_reading(http_info_t *info) {
     return info->status == 0 && info->start_monotime_ns != 0;
 }
 
-static __always_inline void process_http_request(http_info_t *info, unsigned char *buf) {
+static __always_inline void process_http_request(http_info_t *info) {
     info->start_monotime_ns = bpf_ktime_get_ns();
     info->status = 0;
     info->len = 0;
@@ -164,7 +164,7 @@ static __always_inline void process_http(http_info_t *in, protocol_info_t *tcp, 
     }
 
     if (packet_type == PACKET_TYPE_REQUEST) {
-        process_http_request(info, buf);
+        process_http_request(info);
     } else if (packet_type == PACKET_TYPE_RESPONSE) {
         process_http_response(info, buf, meta);
     }

@@ -92,7 +92,8 @@ static __always_inline void https_buffer_event(void *buf, int len, connection_in
         }
 
         if (packet_type == PACKET_TYPE_REQUEST) {
-            process_http_request(info, buf);
+            process_http_request(info);
+            bpf_memcpy(info->buf, buf, len);
         } else if (packet_type == PACKET_TYPE_RESPONSE) {
             process_http_response(info, buf, &meta);
 

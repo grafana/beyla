@@ -10,7 +10,7 @@ keywords:
 
 # Setup Beyla
 
-There are two options to setup and run Beyla:
+There are two options to set up and run Beyla:
 
 1. [As a standalone Linux process]({{< relref "./standalone.md" >}}).
 2. [With Docker to instrument a process running in a container]({{< relref "./docker.md" >}}).

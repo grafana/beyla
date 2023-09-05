@@ -135,10 +135,10 @@ has been enabled.
 
 This property is mutually exclusive with the `executable_name` and `open_port` properties.
 
-At present time only HTTP (non SSL) requests are tracked system wide, and there's no support for gRPC yet.
+At present time only HTTP (non SSL) requests are tracked system-wide, and there's no support for gRPC yet.
 When you are instrumenting Go applications, you should explicitly use `executable_name` or
 `open_port` instead of `system_wide` instrumentation. The Go specific instrumentation is of higher
-fidelity and it incurs lesser overall overhead.
+fidelity and incurs lesser overall overhead.
 
 | YAML         | Env var          | Type   | Default |
 | ------------ | ---------------- | ------ | ------- |
@@ -158,7 +158,7 @@ add a noticeable delay in the time the metrics are submitted and become external
 YAML section `routes`.
 
 This section can be only configured via the YAML file. If no `routes` section is provided in
-the YAML file, the routes pipeline stage will not be created and data will not be filtered
+the YAML file, the routes' pipeline stage will not be created and data will not be filtered
 for the exporters.
 
 | YAML       | Env var | Type            | Default |
@@ -228,7 +228,7 @@ Specifies the OpenTelemetry endpoint where metrics will be sent.
 The `OTEL_EXPORTER_OTLP_ENDPOINT` environment variable sets a common endpoint for both the metrics and the
 [traces](#otel-traces-exporter) exporters. The `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT` environment variable,
 or the `endpoint` YAML, property will set the endpoint only for the metrics exporter node,
-such that the traces exporter won't be activated unless explicitly specified.
+such that the traces' exporter won't be activated unless explicitly specified.
 
 | YAML       | Env var                                                                    | Type   | Default        |
 | ---------- | -------------------------------------------------------------------------- | ------ | -------------- |
@@ -267,7 +267,7 @@ According to the standard OpenTelemetry specification, `http.target` is the full
 path and query arguments.
 
 It is disabled by default to avoid cardinality explosion in paths with IDs. As an alternative,
-it is recommended to group these requests in the [routes node](#routes-decorator).
+it is recommended to group these requests in the [routes' node](#routes-decorator).
 
 | YAML          | Env var               | Type    | Default |
 | ------------- | --------------------- | ------- | ------- |
@@ -343,7 +343,7 @@ Specifies the OpenTelemetry endpoint where the traces will be sent.
 
 The `OTEL_EXPORTER_OTLP_ENDPOINT` environment variable sets a common endpoint for both the
 [metrics](#otel-metrics-exporter) and the traces exporters. The `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` environment variable
-or the `endpoint` YAML property, will set the endpoint only for the traces exporter node,
+or the `endpoint` YAML property, will set the endpoint only for the traces' exporter node,
 so the metrics exporter won't be activated unless explicitly specified.
 
 | YAML       | Env var                                                                   | Type   | Default        |
@@ -356,7 +356,7 @@ The accepted values, as defined by the [OTLP Exporter Configuration document](ht
 
 The `OTEL_EXPORTER_OTLP_PROTOCOL` environment variable sets a common protocol for both the metrics and
 the [traces](#otel-traces-exporter) exporters. The `OTEL_EXPORTER_OTLP_TRACES_PROTOCOL` environment variable,
-or the `protocol` YAML property, will set the protocol only for the traces exporter node.
+or the `protocol` YAML property, will set the protocol only for the traces' exporter node.
 
 | YAML                   | Env var                     | Type | Default |
 | ---------------------- | --------------------------- | ---- | ------- |
@@ -414,7 +414,7 @@ To be consistent with the OpenTelemetry specification, `http_target` is the full
 path and query arguments.
 
 It is disabled by default to avoid cardinality explosion in paths with IDs. As an alternative,
-it is recommended to group these requests in the [routes node](#routes-decorator).
+it is recommended to group these requests in the [routes' node](#routes-decorator).
 
 | YAML          | Env var               | Type    | Default |
 | ------------- | --------------------- | ------- | ------- |
@@ -457,7 +457,7 @@ or a different value (two different HTTP servers for the different metric famili
 Specifies the HTTP query path to fetch the list of Prometheus metrics.
 If [`prometheus_export.port`](#prometheus-http-endpoint) and `internal_metrics.port` have the
 same values, this `internal_metrics.path` value can be
-different than `prometheus_export.path`, to keep both metric families separated,
+different from `prometheus_export.path`, to keep both metric families separated,
 or the same (both metric families will be listed in the same scrape endpoint).
 
 ## YAML file example

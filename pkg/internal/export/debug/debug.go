@@ -7,7 +7,7 @@ import (
 
 	"github.com/mariomac/pipes/pkg/node"
 
-	"github.com/grafana/beyla/pkg/internal/transform"
+	"github.com/grafana/beyla/pkg/internal/request"
 )
 
 type PrintEnabled bool
@@ -16,8 +16,8 @@ func (p PrintEnabled) Enabled() bool {
 	return bool(p)
 }
 
-func PrinterNode(_ context.Context, _ PrintEnabled) (node.TerminalFunc[[]transform.HTTPRequestSpan], error) {
-	return func(input <-chan []transform.HTTPRequestSpan) {
+func PrinterNode(_ context.Context, _ PrintEnabled) (node.TerminalFunc[[]request.Span], error) {
+	return func(input <-chan []request.Span) {
 		for spans := range input {
 			for i := range spans {
 				t := spans[i].Timings()
@@ -45,9 +45,9 @@ type NoopEnabled bool
 func (n NoopEnabled) Enabled() bool {
 	return bool(n)
 }
-func NoopNode(_ context.Context, _ NoopEnabled) (node.TerminalFunc[[]transform.HTTPRequestSpan], error) {
+func NoopNode(_ context.Context, _ NoopEnabled) (node.TerminalFunc[[]request.Span], error) {
 	counter := 0
-	return func(spans <-chan []transform.HTTPRequestSpan) {
+	return func(spans <-chan []request.Span) {
 		for range spans {
 			counter += len(spans)
 		}

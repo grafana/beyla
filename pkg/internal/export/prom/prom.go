@@ -10,7 +10,7 @@ import (
 	"github.com/grafana/beyla/pkg/internal/connector"
 	"github.com/grafana/beyla/pkg/internal/export/otel"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
-	"github.com/grafana/beyla/pkg/internal/transform"
+	"github.com/grafana/beyla/pkg/internal/request"
 )
 
 // using labels and names that are equivalent names to the OTEL attributes
@@ -71,7 +71,7 @@ type metricsReporter struct {
 	bgCtx context.Context
 }
 
-func PrometheusEndpoint(ctx context.Context, cfg *PrometheusConfig, ctxInfo *global.ContextInfo) (node.TerminalFunc[[]transform.HTTPRequestSpan], error) {
+func PrometheusEndpoint(ctx context.Context, cfg *PrometheusConfig, ctxInfo *global.ContextInfo) (node.TerminalFunc[[]request.Span], error) {
 	reporter := newReporter(ctx, cfg, ctxInfo)
 	return reporter.reportMetrics, nil
 }
@@ -129,7 +129,7 @@ func newReporter(ctx context.Context, cfg *PrometheusConfig, ctxInfo *global.Con
 	return mr
 }
 
-func (r *metricsReporter) reportMetrics(input <-chan []transform.HTTPRequestSpan) {
+func (r *metricsReporter) reportMetrics(input <-chan []request.Span) {
 	go r.promConnect.StartHTTP(r.bgCtx)
 	for spans := range input {
 		for i := range spans {
@@ -138,21 +138,21 @@ func (r *metricsReporter) reportMetrics(input <-chan []transform.HTTPRequestSpan
 	}
 }
 
-func (r *metricsReporter) observe(span *transform.HTTPRequestSpan) {
+func (r *metricsReporter) observe(span *request.Span) {
 	t := span.Timings()
 	duration := t.End.Sub(t.RequestStart).Seconds()
 	switch span.Type {
-	case transform.EventTypeHTTP:
+	case request.EventTypeHTTP:
 		lv := r.labelValuesHTTP(span)
 		r.httpDuration.WithLabelValues(lv...).Observe(duration)
 		r.httpRequestSize.WithLabelValues(lv...).Observe(float64(span.ContentLength))
-	case transform.EventTypeHTTPClient:
+	case request.EventTypeHTTPClient:
 		lv := r.labelValuesHTTPClient(span)
 		r.httpClientDuration.WithLabelValues(lv...).Observe(duration)
 		r.httpClientRequestSize.WithLabelValues(lv...).Observe(float64(span.ContentLength))
-	case transform.EventTypeGRPC:
+	case request.EventTypeGRPC:
 		r.grpcDuration.WithLabelValues(r.labelValuesGRPC(span)...).Observe(duration)
-	case transform.EventTypeGRPCClient:
+	case request.EventTypeGRPCClient:
 		r.grpcClientDuration.WithLabelValues(r.labelValuesGRPC(span)...).Observe(duration)
 	}
 }
@@ -172,7 +172,7 @@ func labelNamesGRPC(cfg *PrometheusConfig) []string {
 
 // labelValuesGRPC must return the label names in the same order as would be returned
 // by labelNamesGRPC
-func (r *metricsReporter) labelValuesGRPC(span *transform.HTTPRequestSpan) []string {
+func (r *metricsReporter) labelValuesGRPC(span *request.Span) []string {
 	// serviceNameKey, rpcMethodKey, rpcSystemGRPC, rpcGRPCStatusCodeKey
 	// In some situations e.g. system-wide instrumentation, the global service name
 	// is empty and we need to take the name from the trace
@@ -205,7 +205,7 @@ func labelNamesHTTPClient(cfg *PrometheusConfig) []string {
 
 // labelValuesHTTPClient must return the label names in the same order as would be returned
 // by labelNamesHTTPClient
-func (r *metricsReporter) labelValuesHTTPClient(span *transform.HTTPRequestSpan) []string {
+func (r *metricsReporter) labelValuesHTTPClient(span *request.Span) []string {
 	// httpMethodKey, httpStatusCodeKey
 	names := []string{r.cfg.ServiceName, span.Method, strconv.Itoa(span.Status)}
 	if r.cfg.ServiceNamespace != "" {
@@ -239,7 +239,7 @@ func labelNamesHTTP(cfg *PrometheusConfig, reportRoutes bool) []string {
 
 // labelValuesGRPC must return the label names in the same order as would be returned
 // by labelNamesHTTP
-func (r *metricsReporter) labelValuesHTTP(span *transform.HTTPRequestSpan) []string {
+func (r *metricsReporter) labelValuesHTTP(span *request.Span) []string {
 	// httpMethodKey, httpStatusCodeKey
 	names := []string{r.cfg.ServiceName, span.Method, strconv.Itoa(span.Status)}
 	if r.cfg.ServiceNamespace != "" {

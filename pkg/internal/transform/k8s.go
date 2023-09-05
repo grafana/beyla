@@ -10,6 +10,7 @@ import (
 	"github.com/mariomac/pipes/pkg/node"
 	"golang.org/x/exp/slog"
 
+	"github.com/grafana/beyla/pkg/internal/request"
 	"github.com/grafana/beyla/pkg/internal/transform/kube"
 )
 
@@ -54,12 +55,12 @@ func (d KubernetesDecorator) Enabled() bool {
 	}
 }
 
-func KubeDecoratorProvider(_ context.Context, cfg KubernetesDecorator) (node.MiddleFunc[[]HTTPRequestSpan, []HTTPRequestSpan], error) {
+func KubeDecoratorProvider(_ context.Context, cfg KubernetesDecorator) (node.MiddleFunc[[]request.Span, []request.Span], error) {
 	decorator, err := newMetadataDecorator(&cfg)
 	if err != nil {
 		return nil, fmt.Errorf("instantiating kubernetes metadata decorator: %w", err)
 	}
-	return func(in <-chan []HTTPRequestSpan, out chan<- []HTTPRequestSpan) {
+	return func(in <-chan []request.Span, out chan<- []request.Span) {
 		decorator.refreshOwnPodMetadata()
 
 		klog().Debug("starting kubernetes decoration loop")
@@ -78,8 +79,8 @@ type metadataDecorator struct {
 	kube kube.Metadata
 	cfg  *KubernetesDecorator
 
-	ownMetadataAsSrc []MetadataTag
-	ownMetadataAsDst []MetadataTag
+	ownMetadataAsSrc []request.MetadataTag
+	ownMetadataAsDst []request.MetadataTag
 }
 
 func newMetadataDecorator(cfg *KubernetesDecorator) (*metadataDecorator, error) {
@@ -90,7 +91,7 @@ func newMetadataDecorator(cfg *KubernetesDecorator) (*metadataDecorator, error) 
 	return dec, nil
 }
 
-func (md *metadataDecorator) do(span *HTTPRequestSpan) {
+func (md *metadataDecorator) do(span *request.Span) {
 	// We decorate each trace by looking up into the local kubernetes cache for the
 	// Peer address, when we are instrumenting server-side traces, or the
 	// Host name, when we are instrumenting client-side traces.
@@ -98,12 +99,12 @@ func (md *metadataDecorator) do(span *HTTPRequestSpan) {
 	// changes the way it works.
 	// Extensive integration test cases are provided as a safeguard.
 	switch span.Type {
-	case EventTypeGRPC, EventTypeHTTP:
+	case request.EventTypeGRPC, request.EventTypeHTTP:
 		if peerInfo, ok := md.kube.GetInfo(span.Peer); ok {
 			span.Metadata = appendSRCMetadata(span.Metadata, peerInfo)
 		}
 		span.Metadata = append(span.Metadata, md.ownMetadataAsDst...)
-	case EventTypeGRPCClient, EventTypeHTTPClient:
+	case request.EventTypeGRPCClient, request.EventTypeHTTPClient:
 		if peerInfo, ok := md.kube.GetInfo(span.Host); ok {
 			span.Metadata = appendDSTMetadata(span.Metadata, peerInfo)
 		}
@@ -113,18 +114,18 @@ func (md *metadataDecorator) do(span *HTTPRequestSpan) {
 
 // TODO: allow users to filter which attributes they want, instead of adding all of them
 // TODO: cache
-func appendDSTMetadata(dst []MetadataTag, info *kube.Info) []MetadataTag {
+func appendDSTMetadata(dst []request.MetadataTag, info *kube.Info) []request.MetadataTag {
 	return append(dst,
-		MetadataTag{Key: "k8s.dst.namespace", Val: info.Namespace},
-		MetadataTag{Key: "k8s.dst.name", Val: info.Name},
-		MetadataTag{Key: "k8s.dst.type", Val: info.Type},
+		request.MetadataTag{Key: "k8s.dst.namespace", Val: info.Namespace},
+		request.MetadataTag{Key: "k8s.dst.name", Val: info.Name},
+		request.MetadataTag{Key: "k8s.dst.type", Val: info.Type},
 	)
 }
 
-func appendSRCMetadata(dst []MetadataTag, info *kube.Info) []MetadataTag {
+func appendSRCMetadata(dst []request.MetadataTag, info *kube.Info) []request.MetadataTag {
 	return append(dst,
-		MetadataTag{Key: "k8s.src.namespace", Val: info.Namespace},
-		MetadataTag{Key: "k8s.src.name", Val: info.Name},
+		request.MetadataTag{Key: "k8s.src.namespace", Val: info.Namespace},
+		request.MetadataTag{Key: "k8s.src.name", Val: info.Name},
 	)
 }
 

@@ -23,7 +23,7 @@ import (
 
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
-	"github.com/grafana/beyla/pkg/internal/transform"
+	"github.com/grafana/beyla/pkg/internal/request"
 )
 
 func mlog() *slog.Logger {
@@ -92,7 +92,7 @@ type MetricsReporter struct {
 
 func ReportMetrics(
 	ctx context.Context, cfg *MetricsConfig, ctxInfo *global.ContextInfo,
-) (node.TerminalFunc[[]transform.HTTPRequestSpan], error) {
+) (node.TerminalFunc[[]request.Span], error) {
 
 	mr, err := newMetricsReporter(ctx, cfg, ctxInfo)
 	if err != nil {
@@ -239,11 +239,11 @@ func otelHistogramBuckets(metricName string, buckets []float64) metric.View {
 		})
 }
 
-func (r *MetricsReporter) metricAttributes(span *transform.HTTPRequestSpan) attribute.Set {
+func (r *MetricsReporter) metricAttributes(span *request.Span) attribute.Set {
 	var attrs []attribute.KeyValue
 
 	switch span.Type {
-	case transform.EventTypeHTTP:
+	case request.EventTypeHTTP:
 		attrs = []attribute.KeyValue{
 			semconv.HTTPMethod(span.Method),
 			semconv.HTTPStatusCode(span.Status),
@@ -257,7 +257,7 @@ func (r *MetricsReporter) metricAttributes(span *transform.HTTPRequestSpan) attr
 		if span.Route != "" {
 			attrs = append(attrs, semconv.HTTPRoute(span.Route))
 		}
-	case transform.EventTypeGRPC, transform.EventTypeGRPCClient:
+	case request.EventTypeGRPC, request.EventTypeGRPCClient:
 		attrs = []attribute.KeyValue{
 			semconv.RPCMethod(span.Path),
 			semconv.RPCSystemGRPC,
@@ -266,7 +266,7 @@ func (r *MetricsReporter) metricAttributes(span *transform.HTTPRequestSpan) attr
 		if r.reportPeer {
 			attrs = append(attrs, semconv.NetSockPeerAddr(span.Peer))
 		}
-	case transform.EventTypeHTTPClient:
+	case request.EventTypeHTTPClient:
 		attrs = []attribute.KeyValue{
 			semconv.HTTPMethod(span.Method),
 			semconv.HTTPStatusCode(span.Status),
@@ -288,26 +288,26 @@ func (r *MetricsReporter) metricAttributes(span *transform.HTTPRequestSpan) attr
 	return attribute.NewSet(attrs...)
 }
 
-func (r *MetricsReporter) record(span *transform.HTTPRequestSpan, attrs attribute.Set) {
+func (r *MetricsReporter) record(span *request.Span, attrs attribute.Set) {
 	t := span.Timings()
 	duration := t.End.Sub(t.RequestStart).Seconds()
 	attrOpt := instrument.WithAttributeSet(attrs)
 	switch span.Type {
-	case transform.EventTypeHTTP:
+	case request.EventTypeHTTP:
 		// TODO: for more accuracy, there must be a way to set the metric time from the actual span end time
 		r.httpDuration.Record(r.ctx, duration, attrOpt)
 		r.httpRequestSize.Record(r.ctx, float64(span.ContentLength), attrOpt)
-	case transform.EventTypeGRPC:
+	case request.EventTypeGRPC:
 		r.grpcDuration.Record(r.ctx, duration, attrOpt)
-	case transform.EventTypeGRPCClient:
+	case request.EventTypeGRPCClient:
 		r.grpcClientDuration.Record(r.ctx, duration, attrOpt)
-	case transform.EventTypeHTTPClient:
+	case request.EventTypeHTTPClient:
 		r.httpClientDuration.Record(r.ctx, duration, attrOpt)
 		r.httpClientRequestSize.Record(r.ctx, float64(span.ContentLength), attrOpt)
 	}
 }
 
-func (r *MetricsReporter) reportMetrics(input <-chan []transform.HTTPRequestSpan) {
+func (r *MetricsReporter) reportMetrics(input <-chan []request.Span) {
 	defer r.close()
 	for spans := range input {
 		for i := range spans {

@@ -13,10 +13,6 @@ local onMain = {
   event: ['push'],
 };
 
-local onTagOrMain = {
-  event: ['push', 'tag'],
-};
-
 local pipeline(name) = {
   kind: 'pipeline',
   name: name,
@@ -63,7 +59,14 @@ local beyla() = pipeline('beyla') {
       },
     },
   ] + [
-    buildx('tagged', 'beyla', true, 'latest') {
+    // on each new version, it tags version `a.b.c` and `a.b`
+    buildx('tagged', 'beyla', true, '') {
+      when: onTag,
+    },
+  ] + [
+    // on each new version, it tags version `latest`,
+    // equivalent to the versions from the previous section
+    buildx('latest', 'beyla', false, 'latest') {
       when: onTag,
     },
   ] + [

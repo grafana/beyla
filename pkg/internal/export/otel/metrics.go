@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/hashicorp/golang-lru/v2/simplelru"
 	"github.com/mariomac/pipes/pkg/node"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
@@ -57,6 +58,8 @@ type MetricsConfig struct {
 	ReportPeerInfo bool `yaml:"report_peer" env:"METRICS_REPORT_PEER"`
 
 	Buckets Buckets `yaml:"buckets"`
+
+	ReportersCacheLen int `yaml:"reporters_cache_len" env:"METRICS_REPORT_CACHE_LEN"`
 }
 
 func (m *MetricsConfig) GetProtocol() Protocol {
@@ -77,10 +80,14 @@ func (m MetricsConfig) Enabled() bool {
 }
 
 type MetricsReporter struct {
+	ctx      context.Context
+	cfg      *MetricsConfig
+	exporter metric.Exporter
+	metrics  *simplelru.LRU[ServiceID, *Metrics]
+}
+
+type Metrics struct {
 	ctx                   context.Context
-	reportTarget          bool
-	reportPeer            bool
-	exporter              metric.Exporter
 	provider              *metric.MeterProvider
 	httpDuration          instrument.Float64Histogram
 	httpClientDuration    instrument.Float64Histogram
@@ -103,10 +110,25 @@ func ReportMetrics(
 
 func newMetricsReporter(ctx context.Context, cfg *MetricsConfig, ctxInfo *global.ContextInfo) (*MetricsReporter, error) {
 	log := mlog()
+	cacheLen := cfg.ReportersCacheLen
+	if cacheLen == 0 {
+		cacheLen = defaultCacheLen
+	}
+	metricsCache, _ := simplelru.NewLRU[ServiceID, *Metrics](
+		cacheLen,
+		func(k ServiceID, v *Metrics) {
+			llog := log.With("serviceName", k.Name, "serviceNamespace", k.Namespace)
+			llog.Debug("evicting metrics reporter from cache")
+			go func() {
+				if err := v.provider.Shutdown(ctx); err != nil {
+					log.Warn("error shutting down metrics provider", "error", err)
+				}
+			}()
+		})
 	mr := MetricsReporter{
-		ctx:          ctx,
-		reportTarget: cfg.ReportTarget,
-		reportPeer:   cfg.ReportPeerInfo,
+		ctx:     ctx,
+		cfg:     cfg,
+		metrics: metricsCache,
 	}
 
 	// Instantiate the OTLP HTTP or GRPC metrics exporter
@@ -116,48 +138,70 @@ func newMetricsReporter(ctx context.Context, cfg *MetricsConfig, ctxInfo *global
 	}
 	mr.exporter = instrumentMetricsExporter(ctxInfo.Metrics, exporter)
 
-	resources := otelResource(ctxInfo.ServiceName, ctxInfo.ServiceNamespace)
-	// changes
-	mr.provider = metric.NewMeterProvider(
-		metric.WithResource(resources),
-		metric.WithReader(metric.NewPeriodicReader(mr.exporter,
-			metric.WithInterval(cfg.Interval))),
-		metric.WithView(otelHistogramBuckets(HTTPServerDuration, cfg.Buckets.DurationHistogram)),
-		metric.WithView(otelHistogramBuckets(HTTPClientDuration, cfg.Buckets.DurationHistogram)),
-		metric.WithView(otelHistogramBuckets(RPCServerDuration, cfg.Buckets.DurationHistogram)),
-		metric.WithView(otelHistogramBuckets(RPCClientDuration, cfg.Buckets.DurationHistogram)),
-		metric.WithView(otelHistogramBuckets(HTTPServerRequestSize, cfg.Buckets.RequestSizeHistogram)),
-		metric.WithView(otelHistogramBuckets(HTTPClientRequestSize, cfg.Buckets.RequestSizeHistogram)),
-	)
+	return &mr, nil
+}
+
+func (mr *MetricsReporter) GetResource(id ServiceID) (*Metrics, error) {
+	if m, ok := mr.metrics.Get(id); ok {
+		return m, nil
+	}
+	m, err := mr.CreateResource(id)
+	if err != nil {
+		return nil, fmt.Errorf("creating %s/%s metrics resource: %w",
+			id.Namespace, id.Name, err)
+	}
+	mlog().Debug("creating new Metrics reporter",
+		"serviceName", id.Name, "serviceNamespace", id.Namespace)
+	mr.metrics.Add(id, m)
+	return m, nil
+}
+
+func (mr *MetricsReporter) CreateResource(id ServiceID) (*Metrics, error) {
+	resources := otelResource(id)
+	m := Metrics{
+		ctx: mr.ctx,
+		provider: metric.NewMeterProvider(
+			metric.WithResource(resources),
+			metric.WithReader(metric.NewPeriodicReader(mr.exporter,
+				metric.WithInterval(mr.cfg.Interval))),
+			metric.WithView(otelHistogramBuckets(HTTPServerDuration, mr.cfg.Buckets.DurationHistogram)),
+			metric.WithView(otelHistogramBuckets(HTTPClientDuration, mr.cfg.Buckets.DurationHistogram)),
+			metric.WithView(otelHistogramBuckets(RPCServerDuration, mr.cfg.Buckets.DurationHistogram)),
+			metric.WithView(otelHistogramBuckets(RPCClientDuration, mr.cfg.Buckets.DurationHistogram)),
+			metric.WithView(otelHistogramBuckets(HTTPServerRequestSize, mr.cfg.Buckets.RequestSizeHistogram)),
+			metric.WithView(otelHistogramBuckets(HTTPClientRequestSize, mr.cfg.Buckets.RequestSizeHistogram)),
+		),
+	}
 	// time units for HTTP and GRPC durations are in seconds, according to the OTEL specification:
 	// https://github.com/open-telemetry/opentelemetry-specification/tree/main/specification/metrics/semantic_conventions
 	// TODO: set ExplicitBucketBoundaries here and in prometheus from the previous specification
-	meter := mr.provider.Meter(reporterName)
-	mr.httpDuration, err = meter.Float64Histogram(HTTPServerDuration, instrument.WithUnit("s"))
+	var err error
+	meter := m.provider.Meter(reporterName)
+	m.httpDuration, err = meter.Float64Histogram(HTTPServerDuration, instrument.WithUnit("s"))
 	if err != nil {
 		return nil, fmt.Errorf("creating http duration histogram metric: %w", err)
 	}
-	mr.httpClientDuration, err = meter.Float64Histogram(HTTPClientDuration, instrument.WithUnit("s"))
+	m.httpClientDuration, err = meter.Float64Histogram(HTTPClientDuration, instrument.WithUnit("s"))
 	if err != nil {
 		return nil, fmt.Errorf("creating http duration histogram metric: %w", err)
 	}
-	mr.grpcDuration, err = meter.Float64Histogram(RPCServerDuration, instrument.WithUnit("s"))
+	m.grpcDuration, err = meter.Float64Histogram(RPCServerDuration, instrument.WithUnit("s"))
 	if err != nil {
 		return nil, fmt.Errorf("creating grpc duration histogram metric: %w", err)
 	}
-	mr.grpcClientDuration, err = meter.Float64Histogram(RPCClientDuration, instrument.WithUnit("s"))
+	m.grpcClientDuration, err = meter.Float64Histogram(RPCClientDuration, instrument.WithUnit("s"))
 	if err != nil {
 		return nil, fmt.Errorf("creating grpc duration histogram metric: %w", err)
 	}
-	mr.httpRequestSize, err = meter.Float64Histogram(HTTPServerRequestSize, instrument.WithUnit("By"))
+	m.httpRequestSize, err = meter.Float64Histogram(HTTPServerRequestSize, instrument.WithUnit("By"))
 	if err != nil {
 		return nil, fmt.Errorf("creating http size histogram metric: %w", err)
 	}
-	mr.httpClientRequestSize, err = meter.Float64Histogram(HTTPClientRequestSize, instrument.WithUnit("By"))
+	m.httpClientRequestSize, err = meter.Float64Histogram(HTTPClientRequestSize, instrument.WithUnit("By"))
 	if err != nil {
 		return nil, fmt.Errorf("creating http size histogram metric: %w", err)
 	}
-	return &mr, nil
+	return &m, nil
 }
 
 func instantiateMetricsExporter(ctx context.Context, cfg *MetricsConfig, log *slog.Logger) (metric.Exporter, error) {
@@ -205,9 +249,16 @@ func grpcMetricsExporter(ctx context.Context, cfg *MetricsConfig) (metric.Export
 	return mexp, nil
 }
 
-func (r *MetricsReporter) close() {
-	if err := r.provider.Shutdown(r.ctx); err != nil {
-		slog.With("component", "MetricsReporter").Error("closing metrics provider", err)
+func (mr *MetricsReporter) close(ctx context.Context) {
+	log := mlog()
+	log.Debug("closing all the metrics reporters")
+	for _, key := range mr.metrics.Keys() {
+		v, _ := mr.metrics.Get(key)
+		plog := log.With("serviceName", key.Name, "serviceNamespace", key.Namespace)
+		plog.Debug("shutting down metrics provider")
+		if err := v.provider.Shutdown(ctx); err != nil {
+			plog.Warn("error shutting down metrics provider", "error", err)
+		}
 	}
 }
 
@@ -248,10 +299,10 @@ func (r *MetricsReporter) metricAttributes(span *request.Span) attribute.Set {
 			semconv.HTTPMethod(span.Method),
 			semconv.HTTPStatusCode(span.Status),
 		}
-		if r.reportTarget {
+		if r.cfg.ReportTarget {
 			attrs = append(attrs, semconv.HTTPTarget(span.Path))
 		}
-		if r.reportPeer {
+		if r.cfg.ReportPeerInfo {
 			attrs = append(attrs, semconv.NetSockPeerAddr(span.Peer))
 		}
 		if span.Route != "" {
@@ -263,7 +314,7 @@ func (r *MetricsReporter) metricAttributes(span *request.Span) attribute.Set {
 			semconv.RPCSystemGRPC,
 			semconv.RPCGRPCStatusCodeKey.Int(span.Status),
 		}
-		if r.reportPeer {
+		if r.cfg.ReportPeerInfo {
 			attrs = append(attrs, semconv.NetSockPeerAddr(span.Peer))
 		}
 	case request.EventTypeHTTPClient:
@@ -271,7 +322,7 @@ func (r *MetricsReporter) metricAttributes(span *request.Span) attribute.Set {
 			semconv.HTTPMethod(span.Method),
 			semconv.HTTPStatusCode(span.Status),
 		}
-		if r.reportPeer {
+		if r.cfg.ReportPeerInfo {
 			attrs = append(attrs, semconv.NetSockPeerName(span.Host))
 			attrs = append(attrs, semconv.NetSockPeerPort(span.HostPort))
 		}
@@ -288,7 +339,7 @@ func (r *MetricsReporter) metricAttributes(span *request.Span) attribute.Set {
 	return attribute.NewSet(attrs...)
 }
 
-func (r *MetricsReporter) record(span *request.Span, attrs attribute.Set) {
+func (r *Metrics) record(span *request.Span, attrs attribute.Set) {
 	t := span.Timings()
 	duration := t.End.Sub(t.RequestStart).Seconds()
 	attrOpt := instrument.WithAttributeSet(attrs)
@@ -308,13 +359,14 @@ func (r *MetricsReporter) record(span *request.Span, attrs attribute.Set) {
 }
 
 func (r *MetricsReporter) reportMetrics(input <-chan []request.Span) {
-	defer r.close()
 	for spans := range input {
 		for i := range spans {
+			m, err := r.GetResource()
 			attrs := r.metricAttributes(&spans[i])
 			r.record(&spans[i], attrs)
 		}
 	}
+	r.close(r.ctx)
 }
 
 func getHTTPMetricEndpointOptions(cfg *MetricsConfig) ([]otlpmetrichttp.Option, error) {

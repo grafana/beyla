@@ -23,6 +23,10 @@ const (
 	envProtocol        = "OTEL_EXPORTER_OTLP_PROTOCOL"
 )
 
+const (
+	defaultCacheLen = 16
+)
+
 // Buckets defines the histograms bucket boundaries, and allows users to
 // redefine them
 type Buckets struct {
@@ -38,9 +42,14 @@ var DefaultBuckets = Buckets{
 	RequestSizeHistogram: []float64{0, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192},
 }
 
-func otelResource(svcName, cfgSvcNamespace string) *resource.Resource {
+type ServiceID struct {
+	Name      string
+	Namespace string
+}
+
+func otelResource(id ServiceID) *resource.Resource {
 	attrs := []attribute.KeyValue{
-		semconv.ServiceName(svcName),
+		semconv.ServiceName(id.Name),
 		// SpanMetrics requires an extra attribute besides service name
 		// to generate the traces_target_info metric,
 		// so the service is visible in the ServicesList
@@ -49,8 +58,8 @@ func otelResource(svcName, cfgSvcNamespace string) *resource.Resource {
 		semconv.TelemetrySDKLanguageGo,
 	}
 
-	if cfgSvcNamespace != "" {
-		attrs = append(attrs, semconv.ServiceNamespace(cfgSvcNamespace))
+	if id.Namespace != "" {
+		attrs = append(attrs, semconv.ServiceNamespace(id.Namespace))
 	}
 
 	return resource.NewWithAttributes(semconv.SchemaURL, attrs...)

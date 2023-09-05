@@ -47,7 +47,7 @@ To run in Direct mode by using the Prometheus scrape endpoint, please refer to t
 > or [running Beyla in Kubernetes]({{< relref "../kubernetes.md" >}}).
 
 First, you will need to locally install and configure the [Grafana Agent in **Flow** mode, according to the latest documentation](/docs/agent/latest/flow/).
-Running the Agent in Flow mode will facilitate the ingest of OpenTelemetry
+Running the Agent in Flow mode will facilitate the ingestion of OpenTelemetry
 metrics and traces from the auto-instrumentation tool, as well as process and forward
 to the different Grafana product endpoints (Mimir and/or Tempo).
 
@@ -123,7 +123,7 @@ export MIMIR_ENDPOINT=prometheus-prod-01-eu-west-0.grafana.net
 export GRAFANA_API_KEY=VHJhbGFyw60gcXVlIHRlIHbD....=
 ```
 
-Finally, to **export the traces**, you will need to setup a
+Finally, to **export the traces**, you will need to set up a
 [Grafana Tempo](/oss/tempo/) exporter
 and an endpoint, also configured via environment variables:
 
@@ -142,7 +142,7 @@ otelcol.auth.basic "creds" {
 ```
 
 Please note that the `TEMPO_ENDPOINT` and `TEMPO_USER` values are different
-than `MIMIR_ENDPOINT` and `MIMIR_USER`.
+from `MIMIR_ENDPOINT` and `MIMIR_USER`.
 
 To run the agent with the previous configuration (for example, written in a file
 named `agent-config.river`), you need to run the following command:

@@ -36,13 +36,13 @@ For this quick start tutorial, instrument any HTTP, HTTPS or gRPC Go service tha
 - [Gin](https://gin-gonic.com/)
 - [gRPC-Go](https://github.com/grpc/grpc-go)
 
-HTTP and HTTPs services written in other languages can also be instrumented:
+HTTP and HTTPS services written in other languages can also be instrumented:
 
-- Node.js (HTTP 1.1 and HTTPs with OpenSSL)
-- Python (HTTP 1.1 and HTTPs with OpenSSL)
-- Rust (HTTP 1.1 and HTTPs with OpenSSL)
-- Ruby (HTTP 1.1 and HTTPs with OpenSSL)
-- .NET Core 6+ (HTTP 1.1 and HTTPs with OpenSSL)
+- Node.js (HTTP 1.1 and HTTPS with OpenSSL)
+- Python (HTTP 1.1 and HTTPS with OpenSSL)
+- Rust (HTTP 1.1 and HTTPS with OpenSSL)
+- Ruby (HTTP 1.1 and HTTPS with OpenSSL)
+- .NET Core 6+ (HTTP 1.1 and HTTPS with OpenSSL)
 - Java (HTTP 1.1)
 
 The HTTP 1.1 and OpenSSL support is generic, services written in different programming languages than those listed above might work, but haven't been tested.

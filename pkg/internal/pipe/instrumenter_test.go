@@ -474,15 +474,15 @@ func TestBasicPipelineInfo(t *testing.T) {
 	tc, err := collector.Start(ctx)
 	require.NoError(t, err)
 
+	tracesInput := make(chan []request.Span, 10)
 	gb := newGraphBuilder(&Config{
-		Metrics: otel.MetricsConfig{MetricsEndpoint: tc.ServerEndpoint, ReportTarget: true, ReportPeerInfo: true},
-	}, gctx(), make(<-chan []request.Span))
-	// Override eBPF tracer to send some fake data
-	graph.RegisterStart(gb.builder, func(_ context.Context, _ traces.Reader) (node.StartFuncCtx[[]request.Span], error) {
-		return func(_ context.Context, out chan<- []request.Span) {
-			out <- newHTTPInfo("PATCH", "/aaa/bbb", "1.1.1.1", 204)
-		}, nil
-	})
+		Metrics: otel.MetricsConfig{
+			MetricsEndpoint: tc.ServerEndpoint, ReportTarget: true, ReportPeerInfo: true,
+			Interval: 10 * time.Millisecond,
+		},
+	}, gctx(), tracesInput)
+	// send some fake data through the traces' input
+	tracesInput <- newHTTPInfo("PATCH", "/aaa/bbb", "1.1.1.1", 204)
 	pipe, err := gb.buildGraph(ctx)
 	require.NoError(t, err)
 

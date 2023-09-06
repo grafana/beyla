@@ -83,7 +83,10 @@ type MetricsReporter struct {
 	ctx      context.Context
 	cfg      *MetricsConfig
 	exporter metric.Exporter
-	metrics  *simplelru.LRU[ServiceID, *Metrics]
+	//metrics key: service name
+	// TODO: at some point we might want to set a namespace per service
+	namespace string
+	metrics   *simplelru.LRU[string, *Metrics]
 }
 
 type Metrics struct {
@@ -114,10 +117,10 @@ func newMetricsReporter(ctx context.Context, cfg *MetricsConfig, ctxInfo *global
 	if cacheLen == 0 {
 		cacheLen = defaultCacheLen
 	}
-	metricsCache, _ := simplelru.NewLRU[ServiceID, *Metrics](
+	metricsCache, _ := simplelru.NewLRU[string, *Metrics](
 		cacheLen,
-		func(k ServiceID, v *Metrics) {
-			llog := log.With("serviceName", k.Name, "serviceNamespace", k.Namespace)
+		func(k string, v *Metrics) {
+			llog := log.With("serviceName", k)
 			llog.Debug("evicting metrics reporter from cache")
 			go func() {
 				if err := v.provider.Shutdown(ctx); err != nil {
@@ -141,23 +144,21 @@ func newMetricsReporter(ctx context.Context, cfg *MetricsConfig, ctxInfo *global
 	return &mr, nil
 }
 
-func (mr *MetricsReporter) GetResource(id ServiceID) (*Metrics, error) {
-	if m, ok := mr.metrics.Get(id); ok {
+func (mr *MetricsReporter) GetResource(svcName string) (*Metrics, error) {
+	if m, ok := mr.metrics.Get(svcName); ok {
 		return m, nil
 	}
-	m, err := mr.CreateResource(id)
+	m, err := mr.CreateResource(svcName)
 	if err != nil {
-		return nil, fmt.Errorf("creating %s/%s metrics resource: %w",
-			id.Namespace, id.Name, err)
+		return nil, fmt.Errorf("creating metrics resource for service %q: %w", svcName, err)
 	}
-	mlog().Debug("creating new Metrics reporter",
-		"serviceName", id.Name, "serviceNamespace", id.Namespace)
-	mr.metrics.Add(id, m)
+	mlog().Debug("creating new Metrics reporter", "serviceName", svcName)
+	mr.metrics.Add(svcName, m)
 	return m, nil
 }
 
-func (mr *MetricsReporter) CreateResource(id ServiceID) (*Metrics, error) {
-	resources := otelResource(id)
+func (mr *MetricsReporter) CreateResource(svcName string) (*Metrics, error) {
+	resources := otelResource(svcName, mr.namespace)
 	m := Metrics{
 		ctx: mr.ctx,
 		provider: metric.NewMeterProvider(
@@ -254,7 +255,7 @@ func (mr *MetricsReporter) close(ctx context.Context) {
 	log.Debug("closing all the metrics reporters")
 	for _, key := range mr.metrics.Keys() {
 		v, _ := mr.metrics.Get(key)
-		plog := log.With("serviceName", key.Name, "serviceNamespace", key.Namespace)
+		plog := log.With("serviceName", key)
 		plog.Debug("shutting down metrics provider")
 		if err := v.provider.Shutdown(ctx); err != nil {
 			plog.Warn("error shutting down metrics provider", "error", err)
@@ -290,7 +291,7 @@ func otelHistogramBuckets(metricName string, buckets []float64) metric.View {
 		})
 }
 
-func (r *MetricsReporter) metricAttributes(span *request.Span) attribute.Set {
+func (mr *MetricsReporter) metricAttributes(span *request.Span) attribute.Set {
 	var attrs []attribute.KeyValue
 
 	switch span.Type {
@@ -299,10 +300,10 @@ func (r *MetricsReporter) metricAttributes(span *request.Span) attribute.Set {
 			semconv.HTTPMethod(span.Method),
 			semconv.HTTPStatusCode(span.Status),
 		}
-		if r.cfg.ReportTarget {
+		if mr.cfg.ReportTarget {
 			attrs = append(attrs, semconv.HTTPTarget(span.Path))
 		}
-		if r.cfg.ReportPeerInfo {
+		if mr.cfg.ReportPeerInfo {
 			attrs = append(attrs, semconv.NetSockPeerAddr(span.Peer))
 		}
 		if span.Route != "" {
@@ -314,7 +315,7 @@ func (r *MetricsReporter) metricAttributes(span *request.Span) attribute.Set {
 			semconv.RPCSystemGRPC,
 			semconv.RPCGRPCStatusCodeKey.Int(span.Status),
 		}
-		if r.cfg.ReportPeerInfo {
+		if mr.cfg.ReportPeerInfo {
 			attrs = append(attrs, semconv.NetSockPeerAddr(span.Peer))
 		}
 	case request.EventTypeHTTPClient:
@@ -322,7 +323,7 @@ func (r *MetricsReporter) metricAttributes(span *request.Span) attribute.Set {
 			semconv.HTTPMethod(span.Method),
 			semconv.HTTPStatusCode(span.Status),
 		}
-		if r.cfg.ReportPeerInfo {
+		if mr.cfg.ReportPeerInfo {
 			attrs = append(attrs, semconv.NetSockPeerName(span.Host))
 			attrs = append(attrs, semconv.NetSockPeerPort(span.HostPort))
 		}
@@ -358,15 +359,37 @@ func (r *Metrics) record(span *request.Span, attrs attribute.Set) {
 	}
 }
 
-func (r *MetricsReporter) reportMetrics(input <-chan []request.Span) {
+func (mr *MetricsReporter) reportMetrics(input <-chan []request.Span) {
+	lastSvc := ""
+	reporter, err := mr.GetResource("")
+	if err != nil {
+		mlog().Error("unexpected error creating empty OTEL resource", err)
+	}
 	for spans := range input {
+		fmt.Println("recibiendo espanacos", spans)
 		for i := range spans {
-			m, err := r.GetResource()
-			attrs := r.metricAttributes(&spans[i])
-			r.record(&spans[i], attrs)
+			s := &spans[i]
+			// small optimization: do not query the resources' cache if the
+			// previously processed span belongs to the same service name
+			// as the current.
+			// This will save querying OTEL resource reporters when there is
+			// only a single instrumented process.
+			// In multi-process tracing, this is likely to happen as most
+			// tracers group traces belonging to the same service in the same slice.
+			if s.ServiceName != lastSvc {
+				lm, err := mr.GetResource(s.ServiceName)
+				if err != nil {
+					mlog().Error("unexpected error creating OTEL resource. Ignoring metric",
+						err, "serviceName", s.ServiceName)
+					continue
+				}
+				lastSvc = s.ServiceName
+				reporter = lm
+			}
+			reporter.record(s, mr.metricAttributes(s))
 		}
 	}
-	r.close(r.ctx)
+	mr.close(mr.ctx)
 }
 
 func getHTTPMetricEndpointOptions(cfg *MetricsConfig) ([]otlpmetrichttp.Option, error) {

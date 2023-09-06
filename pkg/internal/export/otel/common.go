@@ -42,14 +42,9 @@ var DefaultBuckets = Buckets{
 	RequestSizeHistogram: []float64{0, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192},
 }
 
-type ServiceID struct {
-	Name      string
-	Namespace string
-}
-
-func otelResource(id ServiceID) *resource.Resource {
+func otelResource(svcName, cfgSvcNamespace string) *resource.Resource {
 	attrs := []attribute.KeyValue{
-		semconv.ServiceName(id.Name),
+		semconv.ServiceName(svcName),
 		// SpanMetrics requires an extra attribute besides service name
 		// to generate the traces_target_info metric,
 		// so the service is visible in the ServicesList
@@ -58,8 +53,8 @@ func otelResource(id ServiceID) *resource.Resource {
 		semconv.TelemetrySDKLanguageGo,
 	}
 
-	if id.Namespace != "" {
-		attrs = append(attrs, semconv.ServiceNamespace(id.Namespace))
+	if cfgSvcNamespace != "" {
+		attrs = append(attrs, semconv.ServiceNamespace(cfgSvcNamespace))
 	}
 
 	return resource.NewWithAttributes(semconv.SchemaURL, attrs...)

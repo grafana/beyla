@@ -256,7 +256,9 @@ int socket__http_filter(struct __sk_buff *skb) {
     }
 
     // we don't want to read the whole buffer for every packed that passes our checks, we read only a bit and check if it's trully HTTP request/response.
-    char buf[MIN_HTTP_SIZE] = {0};
+    unsigned char buf[MIN_HTTP_SIZE] = {0};
+    // note: we load everything here in a pedestrian way using chunks of 16 bytes with bpf_skb_load_bytes, because skb->data and skb->data_end are not
+    // available with socket filters. Question answerered here https://github.com/iovisor/bcc/issues/3807#issuecomment-1011837033
     bpf_skb_load_bytes(skb, tcp.hdr_len, (void *)buf, sizeof(buf));
     // technically the read should be reversed, but eBPF verifier complains on read with variable length
     u32 len = skb->len - tcp.hdr_len;
@@ -268,14 +270,10 @@ int socket__http_filter(struct __sk_buff *skb) {
     if (is_http(buf, len, &packet_type) || tcp_close(&tcp)) { // we must check tcp_close second, a packet can be a close and a response
         http_info_t info = {0};
         info.conn_info = conn;
+        unsigned char *processing_buf = buf;
 
         http_connection_metadata_t *meta = NULL;
         if (packet_type) {
-            u32 full_len = skb->len - tcp.hdr_len;
-            if (full_len > FULL_BUF_SIZE) {
-                full_len = FULL_BUF_SIZE;
-            }
-            read_skb_bytes(skb, tcp.hdr_len, info.buf, full_len);
             if (packet_type == PACKET_TYPE_RESPONSE) {
                 // if we are filtering by application, ignore the packets not for this connection
                 meta = bpf_map_lookup_elem(&filtered_connections, &conn);
@@ -283,12 +281,19 @@ int socket__http_filter(struct __sk_buff *skb) {
                 if (!meta) {
                     return 0;
                 }
+            } else { // it must be a request, let's read more bytes
+                u32 full_len = skb->len - tcp.hdr_len;
+                if (full_len > FULL_BUF_SIZE) {
+                    full_len = FULL_BUF_SIZE;
+                }
+                read_skb_bytes(skb, tcp.hdr_len, info.buf, full_len);
+                processing_buf = info.buf;
             }
         }
         bpf_dbg_printk("=== http_filter len=%d pid=%d %s ===", (skb->len - tcp.hdr_len), (meta != NULL) ? pid_from_pid_tgid(meta->id) : -1, buf);
         //dbg_print_http_connection_info(&conn);
 
-        process_http(&info, &tcp, packet_type, (skb->len - tcp.hdr_len), info.buf, meta);
+        process_http(&info, &tcp, packet_type, (skb->len - tcp.hdr_len), processing_buf, meta);
     }
 
     return 0;

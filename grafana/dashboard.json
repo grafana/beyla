@@ -15,11 +15,11 @@
       }
     ]
   },
-  "description": "HTTP and gRPC RED metrics visualization for the Grafana eBPF autoinstrument",
+  "description": "HTTP and gRPC RED metrics visualization for Grafana Beyla",
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": 35,
+  "id": 38,
   "links": [],
   "liveNow": false,
   "panels": [
@@ -345,6 +345,7 @@
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
+            "axisShow": false,
             "barAlignment": 0,
             "drawStyle": "line",
             "fillOpacity": 63,
@@ -499,6 +500,7 @@
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
+            "axisShow": false,
             "barAlignment": 0,
             "drawStyle": "line",
             "fillOpacity": 0,
@@ -606,6 +608,7 @@
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
+            "axisShow": false,
             "axisSoftMax": 1,
             "barAlignment": 0,
             "drawStyle": "line",
@@ -754,6 +757,7 @@
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
+            "axisShow": false,
             "barAlignment": 0,
             "drawStyle": "line",
             "fillOpacity": 63,
@@ -908,6 +912,7 @@
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
+            "axisShow": false,
             "barAlignment": 0,
             "drawStyle": "line",
             "fillOpacity": 0,
@@ -1014,6 +1019,7 @@
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
+            "axisShow": false,
             "axisSoftMax": 1,
             "barAlignment": 0,
             "drawStyle": "line",
@@ -1135,12 +1141,13 @@
   ],
   "refresh": "auto",
   "schemaVersion": 38,
-  "style": "dark",
   "tags": [
     "ebpf",
     "red",
     "http",
-    "grpc"
+    "grpc",
+    "https",
+    "beyla"
   ],
   "templating": {
     "list": [
@@ -1197,7 +1204,7 @@
   },
   "timepicker": {},
   "timezone": "",
-  "title": "eBPF RED Metrics",
+  "title": "Grafana Beyla RED Metrics",
   "uid": "e0701985-a623-4e62-9fae-f5094244d065",
   "version": 1,
   "weekStart": ""

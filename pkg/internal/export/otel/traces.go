@@ -36,9 +36,9 @@ type SessionSpan struct {
 	RootCtx context.Context
 }
 
+// TODO: global variables, move as fields of TracesReporter
 var topSpans, _ = lru.New[uint64, SessionSpan](8192)
 var clientSpans, _ = lru.New[uint64, []request.Span](8192)
-var namedTracers, _ = lru.New[string, *trace.TracerProvider](512)
 
 const reporterName = "github.com/grafana/beyla"
 
@@ -60,6 +60,8 @@ type TracesConfig struct {
 	MaxQueueSize       int           `yaml:"max_queue_size" env:"OTLP_TRACES_MAX_QUEUE_SIZE"`
 	BatchTimeout       time.Duration `yaml:"batch_timeout" env:"OTLP_TRACES_BATCH_TIMEOUT"`
 	ExportTimeout      time.Duration `yaml:"export_timeout" env:"OTLP_TRACES_EXPORT_TIMEOUT"`
+
+	ReportersCacheLen int `yaml:"reporters_cache_len" env:"METRICS_REPORT_CACHE_LEN"`
 }
 
 // Enabled specifies that the OTEL traces node is enabled if and only if
@@ -78,9 +80,17 @@ func (m *TracesConfig) GetProtocol() Protocol {
 
 type TracesReporter struct {
 	ctx           context.Context
+	cfg           *TracesConfig
 	traceExporter trace.SpanExporter
-	traceProvider *trace.TracerProvider
 	bsp           trace.SpanProcessor
+	// TODO: at some point we might want to set a namespace per service
+	namespace string
+	reporters ReporterPool[*Tracers]
+}
+
+type Tracers struct {
+	provider *trace.TracerProvider
+	tracer   trace2.Tracer
 }
 
 func ReportTraces(ctx context.Context, cfg *TracesConfig, ctxInfo *global.ContextInfo) (node.TerminalFunc[[]request.Span], error) {
@@ -94,8 +104,21 @@ func ReportTraces(ctx context.Context, cfg *TracesConfig, ctxInfo *global.Contex
 
 func newTracesReporter(ctx context.Context, cfg *TracesConfig, ctxInfo *global.ContextInfo) (*TracesReporter, error) {
 	log := tlog()
-	r := TracesReporter{ctx: ctx}
-
+	cacheLen := cfg.ReportersCacheLen
+	if cacheLen == 0 {
+		cacheLen = defaultCacheLen
+	}
+	r := TracesReporter{ctx: ctx, cfg: cfg, namespace: ctxInfo.ServiceNamespace}
+	r.reporters = NewReporterPool[*Tracers](cacheLen,
+		func(k string, v *Tracers) {
+			llog := log.With("serviceName", k)
+			llog.Debug("evicting metrics reporter from cache")
+			go func() {
+				if err := v.provider.Shutdown(ctx); err != nil {
+					log.Warn("error shutting down metrics provider", "error", err)
+				}
+			}()
+		}, r.newTracers)
 	// Instantiate the OTLP HTTP or GRPC traceExporter
 	var err error
 	var exporter trace.SpanExporter
@@ -131,13 +154,7 @@ func newTracesReporter(ctx context.Context, cfg *TracesConfig, ctxInfo *global.C
 		opts = append(opts, trace.WithExportTimeout(cfg.ExportTimeout))
 	}
 
-	resource := otelResource(ctxInfo.ServiceName, ctxInfo.ServiceNamespace)
 	r.bsp = trace.NewBatchSpanProcessor(r.traceExporter, opts...)
-	r.traceProvider = trace.NewTracerProvider(
-		trace.WithResource(resource),
-		trace.WithSpanProcessor(r.bsp),
-		trace.WithSampler(trace.ParentBased(trace.TraceIDRatioBased(cfg.SamplingRatio))),
-	)
 
 	return &r, nil
 }
@@ -181,11 +198,18 @@ func instrumentTraceExporter(in trace.SpanExporter, internalMetrics imetrics.Rep
 }
 
 func (r *TracesReporter) close() {
-	if err := r.traceProvider.Shutdown(r.ctx); err != nil {
-		slog.With("component", "TracesReporter").Error("closing traces provider", err)
+	log := tlog()
+	log.Debug("closing all the traces reporters")
+	for _, key := range r.reporters.pool.Keys() {
+		v, _ := r.reporters.pool.Get(key)
+		plog := log.With("serviceName", key)
+		plog.Debug("shutting down traces provider")
+		if err := v.provider.Shutdown(r.ctx); err != nil {
+			log.Error("closing traces provider", err)
+		}
 	}
 	if err := r.traceExporter.Shutdown(r.ctx); err != nil {
-		slog.With("component", "TracesReporter").Error("closing traces exporter", err)
+		log.Error("closing traces exporter", err)
 	}
 }
 
@@ -406,40 +430,49 @@ func (r *TracesReporter) reportServerSpan(span *request.Span, tracer trace2.Trac
 }
 
 func (r *TracesReporter) reportTraces(input <-chan []request.Span) {
-	defer r.close()
-	defaultTracer := r.traceProvider.Tracer(reporterName)
+	lastSvc := ""
+	tr, err := r.reporters.For("")
+	if err != nil {
+		tlog().Error("unexpected error creating empty OTEL reporter", err)
+	}
+	reporter := tr.tracer
 	for spans := range input {
 		for i := range spans {
-			spanTracer := defaultTracer
 			span := &spans[i]
 
-			if span.ServiceName != "" {
-				spanTracer = r.namedTracer(span.ServiceName)
+			// small optimization: read explanation in MetricsReporter.reportMetrics
+			if span.ServiceName != lastSvc {
+				lm, err := r.reporters.For(span.ServiceName)
+				if err != nil {
+					mlog().Error("unexpected error creating OTEL resource. Ignoring trace",
+						err, "serviceName", span.ServiceName)
+					continue
+				}
+				lastSvc = span.ServiceName
+				reporter = lm.tracer
 			}
 
 			switch span.Type {
 			case request.EventTypeHTTPClient, request.EventTypeGRPCClient:
-				r.reportClientSpan(span, spanTracer)
+				r.reportClientSpan(span, reporter)
 			case request.EventTypeHTTP, request.EventTypeGRPC:
-				r.reportServerSpan(span, spanTracer)
+				r.reportServerSpan(span, reporter)
 			}
 		}
 	}
+	r.close()
 }
 
-func (r *TracesReporter) namedTracer(comm string) trace2.Tracer {
-	traceProvider, ok := namedTracers.Get(comm)
-
-	if !ok {
-		resource := otelResource(comm, "")
-		traceProvider = trace.NewTracerProvider(
-			trace.WithResource(resource),
+func (r *TracesReporter) newTracers(svcName string) (*Tracers, error) {
+	tracers := Tracers{
+		provider: trace.NewTracerProvider(
+			trace.WithResource(otelResource(svcName, r.namespace)),
 			trace.WithSpanProcessor(r.bsp),
-		)
-		namedTracers.Add(comm, traceProvider)
+			trace.WithSampler(trace.ParentBased(trace.TraceIDRatioBased(r.cfg.SamplingRatio))),
+		),
 	}
-
-	return traceProvider.Tracer(reporterName)
+	tracers.tracer = tracers.provider.Tracer(reporterName)
+	return &tracers, nil
 }
 
 func parseTracesEndpoint(cfg *TracesConfig) (*url.URL, error) {

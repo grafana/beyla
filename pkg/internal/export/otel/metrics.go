@@ -9,7 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hashicorp/golang-lru/v2/simplelru"
 	"github.com/mariomac/pipes/pkg/node"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
@@ -83,10 +82,9 @@ type MetricsReporter struct {
 	ctx      context.Context
 	cfg      *MetricsConfig
 	exporter metric.Exporter
-	//metrics key: service name
 	// TODO: at some point we might want to set a namespace per service
 	namespace string
-	metrics   *simplelru.LRU[string, *Metrics]
+	reporters ReporterPool[*Metrics]
 }
 
 type Metrics struct {
@@ -117,8 +115,11 @@ func newMetricsReporter(ctx context.Context, cfg *MetricsConfig, ctxInfo *global
 	if cacheLen == 0 {
 		cacheLen = defaultCacheLen
 	}
-	metricsCache, _ := simplelru.NewLRU[string, *Metrics](
-		cacheLen,
+	mr := MetricsReporter{
+		ctx: ctx,
+		cfg: cfg,
+	}
+	mr.reporters = NewReporterPool[*Metrics](cacheLen,
 		func(k string, v *Metrics) {
 			llog := log.With("serviceName", k)
 			llog.Debug("evicting metrics reporter from cache")
@@ -127,13 +128,7 @@ func newMetricsReporter(ctx context.Context, cfg *MetricsConfig, ctxInfo *global
 					log.Warn("error shutting down metrics provider", "error", err)
 				}
 			}()
-		})
-	mr := MetricsReporter{
-		ctx:     ctx,
-		cfg:     cfg,
-		metrics: metricsCache,
-	}
-
+		}, mr.newMetricSet)
 	// Instantiate the OTLP HTTP or GRPC metrics exporter
 	exporter, err := instantiateMetricsExporter(ctx, cfg, log)
 	if err != nil {
@@ -144,20 +139,7 @@ func newMetricsReporter(ctx context.Context, cfg *MetricsConfig, ctxInfo *global
 	return &mr, nil
 }
 
-func (mr *MetricsReporter) GetResource(svcName string) (*Metrics, error) {
-	if m, ok := mr.metrics.Get(svcName); ok {
-		return m, nil
-	}
-	m, err := mr.CreateResource(svcName)
-	if err != nil {
-		return nil, fmt.Errorf("creating metrics resource for service %q: %w", svcName, err)
-	}
-	mlog().Debug("creating new Metrics reporter", "serviceName", svcName)
-	mr.metrics.Add(svcName, m)
-	return m, nil
-}
-
-func (mr *MetricsReporter) CreateResource(svcName string) (*Metrics, error) {
+func (mr *MetricsReporter) newMetricSet(svcName string) (*Metrics, error) {
 	resources := otelResource(svcName, mr.namespace)
 	m := Metrics{
 		ctx: mr.ctx,
@@ -253,13 +235,16 @@ func grpcMetricsExporter(ctx context.Context, cfg *MetricsConfig) (metric.Export
 func (mr *MetricsReporter) close(ctx context.Context) {
 	log := mlog()
 	log.Debug("closing all the metrics reporters")
-	for _, key := range mr.metrics.Keys() {
-		v, _ := mr.metrics.Get(key)
+	for _, key := range mr.reporters.pool.Keys() {
+		v, _ := mr.reporters.pool.Get(key)
 		plog := log.With("serviceName", key)
 		plog.Debug("shutting down metrics provider")
 		if err := v.provider.Shutdown(ctx); err != nil {
 			plog.Warn("error shutting down metrics provider", "error", err)
 		}
+	}
+	if err := mr.exporter.Shutdown(mr.ctx); err != nil {
+		log.Error("closing metrics exporter", err)
 	}
 }
 
@@ -361,12 +346,11 @@ func (r *Metrics) record(span *request.Span, attrs attribute.Set) {
 
 func (mr *MetricsReporter) reportMetrics(input <-chan []request.Span) {
 	lastSvc := ""
-	reporter, err := mr.GetResource("")
+	reporter, err := mr.reporters.For("")
 	if err != nil {
-		mlog().Error("unexpected error creating empty OTEL resource", err)
+		mlog().Error("unexpected error creating empty OTEL reporter", err)
 	}
 	for spans := range input {
-		fmt.Println("recibiendo espanacos", spans)
 		for i := range spans {
 			s := &spans[i]
 			// small optimization: do not query the resources' cache if the
@@ -377,7 +361,7 @@ func (mr *MetricsReporter) reportMetrics(input <-chan []request.Span) {
 			// In multi-process tracing, this is likely to happen as most
 			// tracers group traces belonging to the same service in the same slice.
 			if s.ServiceName != lastSvc {
-				lm, err := mr.GetResource(s.ServiceName)
+				lm, err := mr.reporters.For(s.ServiceName)
 				if err != nil {
 					mlog().Error("unexpected error creating OTEL resource. Ignoring metric",
 						err, "serviceName", s.ServiceName)

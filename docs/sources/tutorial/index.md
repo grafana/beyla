@@ -270,7 +270,7 @@ data source in the `prometheus-data-source` drop-down at the bottom.
 
 And _voilà!_ you can see some of your test RED metrics:
 
-![](https://grafana.com/media/docs/grafana-cloud/beyla/tutorial/dashboard-screenshot.png)
+![](https://grafana.com/media/docs/grafana-cloud/beyla/tutorial/beyla-dashboard-screenshot.png)
 
 The dashboard contains the following components:
 

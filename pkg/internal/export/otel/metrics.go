@@ -233,17 +233,8 @@ func grpcMetricsExporter(ctx context.Context, cfg *MetricsConfig) (metric.Export
 	return mexp, nil
 }
 
-func (mr *MetricsReporter) close(ctx context.Context) {
+func (mr *MetricsReporter) close() {
 	log := mlog()
-	log.Debug("closing all the metrics reporters")
-	for _, key := range mr.reporters.pool.Keys() {
-		v, _ := mr.reporters.pool.Get(key)
-		plog := log.With("serviceName", key)
-		plog.Debug("shutting down metrics provider")
-		if err := v.provider.Shutdown(ctx); err != nil {
-			plog.Warn("error shutting down metrics provider", "error", err)
-		}
-	}
 	if err := mr.exporter.Shutdown(mr.ctx); err != nil {
 		log.Error("closing metrics exporter", err)
 	}
@@ -347,10 +338,7 @@ func (r *Metrics) record(span *request.Span, attrs attribute.Set) {
 
 func (mr *MetricsReporter) reportMetrics(input <-chan []request.Span) {
 	lastSvc := ""
-	reporter, err := mr.reporters.For("")
-	if err != nil {
-		mlog().Error("unexpected error creating empty OTEL reporter", err)
-	}
+	var reporter *Metrics
 	for spans := range input {
 		for i := range spans {
 			s := &spans[i]
@@ -361,7 +349,7 @@ func (mr *MetricsReporter) reportMetrics(input <-chan []request.Span) {
 			// only a single instrumented process.
 			// In multi-process tracing, this is likely to happen as most
 			// tracers group traces belonging to the same service in the same slice.
-			if s.ServiceName != lastSvc {
+			if s.ServiceName != lastSvc || reporter == nil {
 				lm, err := mr.reporters.For(s.ServiceName)
 				if err != nil {
 					mlog().Error("unexpected error creating OTEL resource. Ignoring metric",
@@ -374,7 +362,7 @@ func (mr *MetricsReporter) reportMetrics(input <-chan []request.Span) {
 			reporter.record(s, mr.metricAttributes(s))
 		}
 	}
-	mr.close(mr.ctx)
+	mr.close()
 }
 
 func getHTTPMetricEndpointOptions(cfg *MetricsConfig) ([]otlpmetrichttp.Option, error) {

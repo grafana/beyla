@@ -63,6 +63,7 @@ func otelResource(svcName, cfgSvcNamespace string) *resource.Resource {
 	return resource.NewWithAttributes(semconv.SchemaURL, attrs...)
 }
 
+// TODO: evict reporters after a time without being accessed
 type ReporterPool[T any] struct {
 	pool *simplelru.LRU[string, T]
 

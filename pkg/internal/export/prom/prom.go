@@ -68,8 +68,7 @@ type metricsReporter struct {
 	bgCtx context.Context
 
 	// TODO: at some point we might want to override either a name and a namespace per service
-	overrideSvcName string
-	namespace       string
+	namespace string
 }
 
 func PrometheusEndpoint(ctx context.Context, cfg *PrometheusConfig, ctxInfo *global.ContextInfo) (node.TerminalFunc[[]request.Span], error) {
@@ -82,12 +81,11 @@ func newReporter(ctx context.Context, cfg *PrometheusConfig, ctxInfo *global.Con
 	// If service name is not explicitly set, we take the service name as set by the
 	// executable inspector
 	mr := &metricsReporter{
-		bgCtx:           ctx,
-		cfg:             cfg,
-		overrideSvcName: ctxInfo.ServiceName,
-		namespace:       ctxInfo.ServiceNamespace,
-		reportRoutes:    reportRoutes,
-		promConnect:     ctxInfo.Prometheus,
+		bgCtx:        ctx,
+		cfg:          cfg,
+		namespace:    ctxInfo.ServiceNamespace,
+		reportRoutes: reportRoutes,
+		promConnect:  ctxInfo.Prometheus,
 		httpDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Name:    HTTPServerDuration,
 			Help:    "duration of HTTP service calls from the server side, in seconds",
@@ -173,14 +171,8 @@ func labelNamesGRPC(cfg *PrometheusConfig, ctxInfo *global.ContextInfo) []string
 // labelValuesGRPC must return the label names in the same order as would be returned
 // by labelNamesGRPC
 func (r *metricsReporter) labelValuesGRPC(span *request.Span) []string {
-	// Unless the service name is overridden by the user configuration,
-	// we use the name from the span
-	var svcName = r.overrideSvcName
-	if svcName == "" {
-		svcName = span.ServiceName
-	}
 	// serviceNameKey, rpcMethodKey, rpcSystemGRPC, rpcGRPCStatusCodeKey
-	names := []string{svcName, span.Path, "grpc", strconv.Itoa(span.Status)}
+	names := []string{span.ServiceName, span.Path, "grpc", strconv.Itoa(span.Status)}
 	if r.namespace != "" {
 		names = append(names, r.namespace)
 	}
@@ -206,14 +198,8 @@ func labelNamesHTTPClient(cfg *PrometheusConfig, ctxInfo *global.ContextInfo) []
 // labelValuesHTTPClient must return the label names in the same order as would be returned
 // by labelNamesHTTPClient
 func (r *metricsReporter) labelValuesHTTPClient(span *request.Span) []string {
-	// Unless the service name is overridden by the user configuration,
-	// we use the name from the span
-	var svcName = r.overrideSvcName
-	if svcName == "" {
-		svcName = span.ServiceName
-	}
 	// httpMethodKey, httpStatusCodeKey
-	names := []string{svcName, span.Method, strconv.Itoa(span.Status)}
+	names := []string{span.ServiceName, span.Method, strconv.Itoa(span.Status)}
 	if r.namespace != "" {
 		names = append(names, r.namespace)
 	}
@@ -246,14 +232,8 @@ func labelNamesHTTP(cfg *PrometheusConfig, ctxInfo *global.ContextInfo, reportRo
 // labelValuesGRPC must return the label names in the same order as would be returned
 // by labelNamesHTTP
 func (r *metricsReporter) labelValuesHTTP(span *request.Span) []string {
-	// Unless the service name is overridden by the user configuration,
-	// we use the name from the span
-	var svcName = r.overrideSvcName
-	if svcName == "" {
-		svcName = span.ServiceName
-	}
 	// httpMethodKey, httpStatusCodeKey
-	names := []string{svcName, span.Method, strconv.Itoa(span.Status)}
+	names := []string{span.ServiceName, span.Method, strconv.Itoa(span.Status)}
 	if r.namespace != "" {
 		names = append(names, r.namespace)
 	}

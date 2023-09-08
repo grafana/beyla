@@ -431,17 +431,13 @@ func (r *TracesReporter) reportServerSpan(span *request.Span, tracer trace2.Trac
 
 func (r *TracesReporter) reportTraces(input <-chan []request.Span) {
 	lastSvc := ""
-	tr, err := r.reporters.For("")
-	if err != nil {
-		tlog().Error("unexpected error creating empty OTEL reporter", err)
-	}
-	reporter := tr.tracer
+	var reporter trace2.Tracer
 	for spans := range input {
 		for i := range spans {
 			span := &spans[i]
 
 			// small optimization: read explanation in MetricsReporter.reportMetrics
-			if span.ServiceName != lastSvc {
+			if span.ServiceName != lastSvc || reporter == nil {
 				lm, err := r.reporters.For(span.ServiceName)
 				if err != nil {
 					mlog().Error("unexpected error creating OTEL resource. Ignoring trace",

@@ -10,9 +10,9 @@ keywords:
   - service time
 ---
 
-# Request time instead of service time, for your server-side application code
+# Measuring total request times, instead of service times
 
-Grafana Beyla is an eBPF based application auto-instrumentation tool that is able to track the total request time.
+Grafana Beyla is an eBPF based application auto-instrumentation tool that is able to track the total request time, for your server side application code.
 
 When performing a remote service request, the perceived client response time is different from the measured response time at the server.
 

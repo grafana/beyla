@@ -72,6 +72,7 @@ GO_OFFSETS_TRACKER = $(TOOLS_DIR)/go-offsets-tracker
 GOIMPORTS_REVISER = $(TOOLS_DIR)/goimports-reviser
 GO_LICENSES = $(TOOLS_DIR)/go-licenses
 KIND = $(TOOLS_DIR)/kind
+DASHBOARD_LINTER = $(TOOLS_DIR)/dashboard-linter
 
 define check_format
 	$(shell $(foreach FILE, $(shell find . -name "*.go" -not -path "./vendor/*"), \
@@ -88,6 +89,7 @@ prereqs:
 	$(call go-install-tool,$(GOIMPORTS_REVISER),github.com/incu6us/goimports-reviser/v2@v2.5.3)
 	$(call go-install-tool,$(GO_LICENSES),github.com/google/go-licenses@v1.6.0)
 	$(call go-install-tool,$(KIND),sigs.k8s.io/kind@v0.20.0)
+	$(call go-install-tool,$(DASHBOARD_LINTER),github.com/grafana/dashboard-linter@latest)
 
 .PHONY: fmt
 fmt: prereqs
@@ -103,6 +105,10 @@ checkfmt:
 		echo "Above files are not properly formatted. Run 'make fmt' to fix them"; \
 		exit 1; \
 	fi
+
+.PHONY: lint-dashboard
+lint-dashboard: prereqs
+	$(DASHBOARD_LINTER) lint grafana/dashboard.json
 
 .PHONY: lint
 lint: prereqs checkfmt

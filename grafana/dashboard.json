@@ -15,18 +15,18 @@
       }
     ]
   },
-  "description": "HTTP and gRPC RED metrics visualization for the Grafana eBPF autoinstrument",
+  "description": "HTTP and gRPC RED metrics visualization for Grafana Beyla",
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": 35,
+  "id": 38,
   "links": [],
   "liveNow": false,
   "panels": [
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "grafanacloud-prom"
+        "uid": "${datasource}"
       },
       "fieldConfig": {
         "defaults": {
@@ -127,7 +127,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "grafanacloud-prom"
+            "uid": "${datasource}"
           },
           "editorMode": "code",
           "exemplar": false,
@@ -179,7 +179,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "grafanacloud-prom"
+        "uid": "${datasource}"
       },
       "fieldConfig": {
         "defaults": {
@@ -280,7 +280,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "grafanacloud-prom"
+            "uid": "${datasource}"
           },
           "editorMode": "code",
           "exemplar": false,
@@ -333,7 +333,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "${Metrics}"
+        "uid": "${datasource}"
       },
       "fieldConfig": {
         "defaults": {
@@ -345,6 +345,7 @@
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
+            "axisShow": false,
             "barAlignment": 0,
             "drawStyle": "line",
             "fillOpacity": 63,
@@ -412,7 +413,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${Metrics}"
+            "uid": "${datasource}"
           },
           "editorMode": "builder",
           "expr": "histogram_quantile(0.99, sum by(service_name, le) (rate(http_server_duration_seconds_bucket{service_name=\"$Service\"}[$__rate_interval])))",
@@ -423,7 +424,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${Metrics}"
+            "uid": "${datasource}"
           },
           "editorMode": "code",
           "expr": "histogram_quantile(0.95, sum(rate(http_server_duration_seconds_bucket{service_name=\"$Service\"}[$__rate_interval])) by (service_name, le))",
@@ -435,7 +436,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${Metrics}"
+            "uid": "${datasource}"
           },
           "editorMode": "code",
           "expr": "sum(rate(http_server_duration_seconds_sum{service_name=\"$Service\"} [$__rate_interval])) / sum(rate(http_server_duration_seconds_count{service_name=\"$Service\"} [$__rate_interval]))",
@@ -447,7 +448,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${Metrics}"
+            "uid": "${datasource}"
           },
           "editorMode": "builder",
           "expr": "histogram_quantile(0.99, sum by(service_name, le) (rate(rpc_server_duration_seconds_bucket{service_name=\"$Service\"}[$__rate_interval])))",
@@ -459,7 +460,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${Metrics}"
+            "uid": "${datasource}"
           },
           "editorMode": "builder",
           "expr": "histogram_quantile(0.95, sum by(service_name, le) (rate(rpc_server_duration_seconds_bucket{service_name=\"$Service\"}[$__rate_interval])))",
@@ -471,7 +472,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${Metrics}"
+            "uid": "${datasource}"
           },
           "editorMode": "code",
           "expr": "sum(rate(rpc_server_duration_seconds_sum{service_name=\"$Service\"} [$__rate_interval])) / sum(rate(rpc_server_duration_seconds_count{service_name=\"$Service\"} [$__rate_interval]))",
@@ -487,7 +488,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "${Metrics}"
+        "uid": "${datasource}"
       },
       "fieldConfig": {
         "defaults": {
@@ -499,6 +500,7 @@
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
+            "axisShow": false,
             "barAlignment": 0,
             "drawStyle": "line",
             "fillOpacity": 0,
@@ -566,7 +568,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${Metrics}"
+            "uid": "${datasource}"
           },
           "editorMode": "code",
           "expr": "sum(rate(http_server_duration_seconds_count{service_name=\"$Service\"} [$__rate_interval])) by (http_status_code)",
@@ -578,7 +580,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${Metrics}"
+            "uid": "${datasource}"
           },
           "editorMode": "code",
           "expr": "sum(rate(rpc_server_duration_seconds_count{service_name=\"$Service\"} [$__rate_interval])) by (service_name, rpc_grpc_status_code)",
@@ -594,7 +596,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "${Metrics}"
+        "uid": "${datasource}"
       },
       "fieldConfig": {
         "defaults": {
@@ -606,6 +608,7 @@
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
+            "axisShow": false,
             "axisSoftMax": 1,
             "barAlignment": 0,
             "drawStyle": "line",
@@ -699,7 +702,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${Metrics}"
+            "uid": "${datasource}"
           },
           "editorMode": "code",
           "expr": "sum by (http_status_code) (rate(http_server_duration_seconds_count{service_name=\"$Service\",http_status_code=~\"(4|5).*\"}[$__rate_interval])) / ignoring(http_status_code) group_left sum(rate(http_server_duration_seconds_count{service_name=\"$Service\"}[$__rate_interval]))",
@@ -711,7 +714,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${Metrics}"
+            "uid": "${datasource}"
           },
           "editorMode": "code",
           "expr": "sum by (rpc_grpc_status_code) (rate(rpc_server_duration_seconds_count{service_name=\"$Service\",rpc_grpc_status_code!=\"0\"}[$__rate_interval])) / ignoring(rpc_grpc_status_code) group_left sum(rate(rpc_server_duration_seconds_count{service_name=\"$Service\"}[$__rate_interval]))",
@@ -742,7 +745,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "${Metrics}"
+        "uid": "${datasource}"
       },
       "fieldConfig": {
         "defaults": {
@@ -754,6 +757,7 @@
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
+            "axisShow": false,
             "barAlignment": 0,
             "drawStyle": "line",
             "fillOpacity": 63,
@@ -821,7 +825,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${Metrics}"
+            "uid": "${datasource}"
           },
           "editorMode": "code",
           "expr": "histogram_quantile(0.99, sum by(service_name, le) (rate(http_client_duration_seconds_bucket{service_name=\"$Service\"}[$__rate_interval])))",
@@ -832,7 +836,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${Metrics}"
+            "uid": "${datasource}"
           },
           "editorMode": "code",
           "expr": "histogram_quantile(0.95, sum(rate(http_client_duration_seconds_bucket{service_name=\"$Service\"}[$__rate_interval])) by (service_name, le)) ",
@@ -844,7 +848,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${Metrics}"
+            "uid": "${datasource}"
           },
           "editorMode": "code",
           "expr": "sum(rate(http_client_duration_seconds_sum{service_name=\"$Service\"} [$__rate_interval])) / sum(rate(http_client_duration_seconds_count{service_name=\"$Service\"} [$__rate_interval]))",
@@ -856,7 +860,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${Metrics}"
+            "uid": "${datasource}"
           },
           "editorMode": "code",
           "expr": "sum(rate(rpc_client_duration_seconds_sum{service_name=\"$Service\"} [$__rate_interval])) / sum(rate(rpc_client_duration_seconds_count{service_name=\"$Service\"} [$__rate_interval]))",
@@ -868,7 +872,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${Metrics}"
+            "uid": "${datasource}"
           },
           "editorMode": "code",
           "expr": "histogram_quantile(0.99, sum by(service_name, le) (rate(rpc_client_duration_seconds_bucket{service_name=\"$Service\"}[$__rate_interval])))",
@@ -880,7 +884,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${Metrics}"
+            "uid": "${datasource}"
           },
           "editorMode": "code",
           "expr": "histogram_quantile(0.95, sum(rate(rpc_client_duration_seconds_bucket{service_name=\"$Service\"}[$__rate_interval])) by (service_name, le)) ",
@@ -896,7 +900,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "${Metrics}"
+        "uid": "${datasource}"
       },
       "fieldConfig": {
         "defaults": {
@@ -908,6 +912,7 @@
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
+            "axisShow": false,
             "barAlignment": 0,
             "drawStyle": "line",
             "fillOpacity": 0,
@@ -975,7 +980,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${Metrics}"
+            "uid": "${datasource}"
           },
           "editorMode": "code",
           "expr": "sum(rate(http_client_duration_seconds_count{service_name=\"$Service\"} [$__rate_interval])) by (service_name, http_status_code)",
@@ -986,7 +991,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${Metrics}"
+            "uid": "${datasource}"
           },
           "editorMode": "code",
           "expr": "sum(rate(rpc_client_duration_seconds_count{service_name=\"$Service\"} [$__rate_interval])) by (service_name, rpc_grpc_status_code)",
@@ -1002,7 +1007,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "${Metrics}"
+        "uid": "${datasource}"
       },
       "fieldConfig": {
         "defaults": {
@@ -1014,6 +1019,7 @@
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
+            "axisShow": false,
             "axisSoftMax": 1,
             "barAlignment": 0,
             "drawStyle": "line",
@@ -1107,7 +1113,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${Metrics}"
+            "uid": "${datasource}"
           },
           "editorMode": "code",
           "expr": "sum by (http_status_code) (rate(http_client_duration_seconds_count{service_name=\"$Service\",http_status_code=~\"5.*\"}[$__rate_interval])) / ignoring(http_status_code) group_left sum(rate(http_client_duration_seconds_count{service_name=\"$Service\"}[$__rate_interval]))",
@@ -1119,7 +1125,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${Metrics}"
+            "uid": "${datasource}"
           },
           "editorMode": "code",
           "expr": "sum by (rpc_grpc_status_code) (rate(rpc_client_duration_seconds_count{service_name=\"$Service\",rpc_grpc_status_code!=\"0\"}[$__rate_interval])) / ignoring(rpc_grpc_status_code) group_left sum(rate(rpc_client_duration_seconds_count{service_name=\"$Service\"}[$__rate_interval]))",
@@ -1135,12 +1141,13 @@
   ],
   "refresh": "auto",
   "schemaVersion": 38,
-  "style": "dark",
   "tags": [
     "ebpf",
     "red",
     "http",
-    "grpc"
+    "grpc",
+    "https",
+    "beyla"
   ],
   "templating": {
     "list": [
@@ -1149,7 +1156,8 @@
         "hide": 0,
         "includeAll": false,
         "multi": false,
-        "name": "Metrics",
+        "label": "Data Source",
+        "name": "datasource",
         "options": [],
         "query": "prometheus",
         "queryValue": "",
@@ -1170,7 +1178,7 @@
         },
         "datasource": {
           "type": "prometheus",
-          "uid": "grafanacloud-prom"
+          "uid": "${datasource}"
         },
         "definition": "label_values(service_name)",
         "hide": 0,
@@ -1183,7 +1191,7 @@
           "query": "label_values(service_name)",
           "refId": "PrometheusVariableQueryEditor-VariableQuery"
         },
-        "refresh": 1,
+        "refresh": 2,
         "regex": "",
         "skipUrlSync": false,
         "sort": 5,
@@ -1197,7 +1205,7 @@
   },
   "timepicker": {},
   "timezone": "",
-  "title": "eBPF RED Metrics",
+  "title": "Beyla RED Metrics",
   "uid": "e0701985-a623-4e62-9fae-f5094244d065",
   "version": 1,
   "weekStart": ""

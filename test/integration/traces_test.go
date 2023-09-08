@@ -149,13 +149,23 @@ func testHTTPTracesBadTraceparent(t *testing.T) {
 		"invalid-parent-id3": "00-33333333333333333333333333333333-4c59e9aW13c480a3-01",
 		"invalid-parent-id4": "00-44444444444444444444444444444444-4c59e9a9-3c480a3-01",
 		"invalid-parent-id5": "00-55555555555555555555555555555555-0x59e9a913c480a3-01",
+		"invalid-flags-1":    "00-176716bec4d4c0e85df0d39dd70a2b62-c7fe2560276e9ba0-0x",
+		"invalid-flags-2":    "00-b97fd2bfb304550fd85c33fdfc821f29-dfca787aa452fcdb-No",
+		"not-sampled-flag-1": "00-48ebacb3fe3ebaa5df61f611dda9a094-c1c831f7da1a9309-00",
+		"not-sampled-flag-2": "00-d9e4d0f83479f891815e33af16175af8-eaff68618edf4279-f0",
+		"not-sampled-flag-3": "00-be8faab0d17fe5424d142a3b356a5d35-d52a68b9f0cf468e-12",
 	}
 	for slug, traceparent := range slugToParent {
 		t.Log("Testing bad traceid. traceparent:", traceparent, "slug:", slug)
 		doHTTPGetWithTraceparent(t, instrumentedServiceStdURL+"/"+slug+"?delay=10ms", 200, traceparent)
 
 		var trace jaeger.Trace
+		negativeTest := strings.Contains(slug, "flag")
 		test.Eventually(t, testTimeout, func(t require.TestingT) {
+			if negativeTest {
+				// Give time when we're ensuring that a trace is NOT generated
+				time.Sleep(testTimeout / 2)
+			}
 			resp, err := http.Get(jaegerQueryURL + "?service=testserver&operation=GET%20%2F" + slug)
 			require.NoError(t, err)
 			if resp == nil {
@@ -165,10 +175,17 @@ func testHTTPTracesBadTraceparent(t *testing.T) {
 			var tq jaeger.TracesQuery
 			require.NoError(t, json.NewDecoder(resp.Body).Decode(&tq))
 			traces := tq.FindBySpan(jaeger.Tag{Key: "http.target", Type: "string", Value: "/" + slug})
-			require.Len(t, traces, 1)
-			trace = traces[0]
+			if negativeTest {
+				require.Len(t, traces, 0)
+			} else {
+				require.Len(t, traces, 1)
+				trace = traces[0]
+			}
 		}, test.Interval(100*time.Millisecond))
 
+		if negativeTest {
+			continue
+		}
 		// Check the information of the parent span
 		res := trace.FindByOperationName("GET /" + slug)
 		require.Len(t, res, 1)

@@ -77,5 +77,12 @@ services:
     ports:
       - "9090:9090"
 
-# curl http://localhost:16686/api/services
-# curl http://localhost:16686/api/traces?service=testserver
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    ports:
+      - "16686:16686" # Query frontend
+      - "4317"        # OTEL GRPC traces collector
+      - "4318"        # OTEL HTTP traces collector
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+      - LOG_LEVEL=debug

@@ -150,6 +150,7 @@ int uprobe_WriteHeader(struct pt_regs *ctx) {
     }
     bpf_probe_read(&trace->content_length, sizeof(trace->content_length), (void *)(req_ptr + content_length_ptr_pos));
 
+    // Get traceparent from the Request.Header
     void *traceparent_ptr = extract_traceparent_from_req_headers((void*)(req_ptr + req_header_ptr_pos));
     if (traceparent_ptr != NULL) {
         long res = bpf_probe_read(trace->traceparent, sizeof(trace->traceparent), traceparent_ptr);
@@ -247,6 +248,18 @@ int uprobe_clientSendReturn(struct pt_regs *ctx) {
         bpf_ringbuf_discard(trace, 0);
         return 0;
     }
+
+    // Get traceparent from the Request.Header
+    void *traceparent_ptr = extract_traceparent_from_req_headers((void*)(req_ptr + req_header_ptr_pos));
+    if (traceparent_ptr != NULL) {
+        long res = bpf_probe_read(trace->traceparent, sizeof(trace->traceparent), traceparent_ptr);
+        if (res < 0) {
+            bpf_printk("can't copy traceparent header");
+            bpf_ringbuf_discard(trace, 0);
+            return 0;
+        }
+    }
+
     bpf_probe_read(&trace->content_length, sizeof(trace->content_length), (void *)(req_ptr + content_length_ptr_pos));
 
     bpf_probe_read(&trace->status, sizeof(trace->status), (void *)(resp_ptr + status_code_ptr_pos));

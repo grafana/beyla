@@ -78,6 +78,8 @@ func (m *TracesConfig) GetProtocol() Protocol {
 	return m.Protocol
 }
 
+// TracesReporter implement the graph node that receives request.Span
+// instances and forwards them as OTEL traces.
 type TracesReporter struct {
 	ctx           context.Context
 	cfg           *TracesConfig
@@ -88,6 +90,8 @@ type TracesReporter struct {
 	reporters ReporterPool[*Tracers]
 }
 
+// Tracers handles the OTEL traces providers and exporters.
+// There is a Tracers instance for each instrumented service/process.
 type Tracers struct {
 	provider *trace.TracerProvider
 	tracer   trace2.Tracer

@@ -63,6 +63,7 @@ func otelResource(svcName, cfgSvcNamespace string) *resource.Resource {
 	return resource.NewWithAttributes(semconv.SchemaURL, attrs...)
 }
 
+// ReporterPool keeps an LRU cache of different OTEL reporters given a service name.
 // TODO: evict reporters after a time without being accessed
 type ReporterPool[T any] struct {
 	pool *simplelru.LRU[string, T]
@@ -70,6 +71,10 @@ type ReporterPool[T any] struct {
 	itemConstructor func(string) (T, error)
 }
 
+// NewReporterPool creates a ReporterPool instance given a cache length,
+// an eviction callback to be invoked each time an element is removed
+// from the cache, and a constructor function that will specify how to
+// instantiate the generic OTEL metrics/traces reporter.
 func NewReporterPool[T any](
 	cacheLen int,
 	callback simplelru.EvictCallback[string, T],

@@ -78,6 +78,8 @@ func (m MetricsConfig) Enabled() bool {
 	return m.Endpoint != "" || m.MetricsEndpoint != ""
 }
 
+// MetricsReporter implements the graph node that receives request.Span
+// instances and forwards them as OTEL metrics.
 type MetricsReporter struct {
 	ctx      context.Context
 	cfg      *MetricsConfig
@@ -87,6 +89,8 @@ type MetricsReporter struct {
 	reporters ReporterPool[*Metrics]
 }
 
+// Metrics is a set of metrics associated to a given OTEL MeterProvider.
+// There is a Metrics instance for each service/process instrumented by Beyla.
 type Metrics struct {
 	ctx                   context.Context
 	provider              *metric.MeterProvider
@@ -234,9 +238,8 @@ func grpcMetricsExporter(ctx context.Context, cfg *MetricsConfig) (metric.Export
 }
 
 func (mr *MetricsReporter) close() {
-	log := mlog()
 	if err := mr.exporter.Shutdown(mr.ctx); err != nil {
-		log.Error("closing metrics exporter", err)
+		slog.With("component", "MetricsReporter").Error("closing metrics provider", err)
 	}
 }
 
@@ -342,7 +345,7 @@ func (mr *MetricsReporter) reportMetrics(input <-chan []request.Span) {
 	for spans := range input {
 		for i := range spans {
 			s := &spans[i]
-			// small optimization: do not query the resources' cache if the
+			// optimization: do not query the resources' cache if the
 			// previously processed span belongs to the same service name
 			// as the current.
 			// This will save querying OTEL resource reporters when there is

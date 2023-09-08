@@ -46,7 +46,8 @@ type Tracer interface {
 	SocketFilters() []*ebpf.Program
 	// Run will do the action of listening for eBPF traces and forward them
 	// periodically to the output channel.
-	// It optionally receives the service name as a second attribute, but some
+	// It optionally receives the service name as a second attribute, to
+	// populate each forwarded span with its value. But some
 	// tracers might ignore it (e.g. system-wide HTTP filter will directly set the
 	// executable name of each request).
 	Run(context.Context, chan<- []request.Span, string)
@@ -78,6 +79,8 @@ func (pt *ProcessTracer) Run(ctx context.Context, out chan<- []request.Span) {
 		return
 	}
 
+	// If the user does not override the service name via configuration
+	// the service name is the name of the executable
 	svcName := pt.overrideServiceName
 	if svcName == "" {
 		svcName = pt.ELFInfo.ExecutableName()

@@ -30,6 +30,7 @@ func ReaderProvider(_ context.Context, r Reader) (node.StartFuncCtx[[]request.Sp
 					out <- trace
 				} else {
 					rlog().Debug("input channel closed. Exiting traces input loop")
+					return
 				}
 			case <-cancelChan:
 				rlog().Debug("context canceled. Exiting traces input loop")

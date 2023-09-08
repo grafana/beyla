@@ -67,7 +67,7 @@ type Config struct {
 	LogLevel string `yaml:"log_level" env:"LOG_LEVEL"`
 
 	// ServiceName is taken from either SERVICE_NAME env var or OTEL_SERVICE_NAME (for OTEL spec compatibility)
-	// Using env and envDefault is a trick to get the value either from one or another
+	// Using env and envDefault is a trick to get the value either from one of either variables
 	ServiceName      string `yaml:"service_name" env:"OTEL_SERVICE_NAME,expand" envDefault:"${SERVICE_NAME}"`
 	ServiceNamespace string `yaml:"service_namespace" env:"SERVICE_NAMESPACE"`
 

@@ -108,9 +108,10 @@ func (p *Tracer) SocketFilters() []*ebpf.Program {
 	return nil
 }
 
-func (p *Tracer) Run(ctx context.Context, eventsChan chan<- []request.Span) {
+func (p *Tracer) Run(ctx context.Context, eventsChan chan<- []request.Span, svcName string) {
 	logger := slog.With("component", "nethttp.Tracer")
 	ebpfcommon.ForwardRingbuf[ebpfcommon.HTTPRequestTrace](
+		svcName,
 		p.Cfg, logger, p.bpfObjects.Events,
 		ebpfcommon.ReadHTTPRequestTraceAsSpan,
 		p.Metrics,
@@ -135,9 +136,10 @@ func (p *GinTracer) GoProbes() map[string]ebpfcommon.FunctionPrograms {
 	}
 }
 
-func (p *GinTracer) Run(ctx context.Context, eventsChan chan<- []request.Span) {
+func (p *GinTracer) Run(ctx context.Context, eventsChan chan<- []request.Span, svcName string) {
 	logger := slog.With("component", "nethttp.GinTracer")
 	ebpfcommon.ForwardRingbuf[ebpfcommon.HTTPRequestTrace](
+		svcName,
 		p.Cfg, logger, p.bpfObjects.Events,
 		ebpfcommon.ReadHTTPRequestTraceAsSpan,
 		p.Metrics,

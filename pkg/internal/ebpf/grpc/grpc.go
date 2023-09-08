@@ -109,9 +109,10 @@ func (p *Tracer) SocketFilters() []*ebpf.Program {
 	return nil
 }
 
-func (p *Tracer) Run(ctx context.Context, eventsChan chan<- []request.Span) {
+func (p *Tracer) Run(ctx context.Context, eventsChan chan<- []request.Span, svcName string) {
 	logger := slog.With("component", "grpc.Tracer")
 	ebpfcommon.ForwardRingbuf[ebpfcommon.HTTPRequestTrace](
+		svcName,
 		p.Cfg, logger, p.bpfObjects.Events,
 		ebpfcommon.ReadHTTPRequestTraceAsSpan,
 		p.Metrics,

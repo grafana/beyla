@@ -116,8 +116,9 @@ func newMetricsReporter(ctx context.Context, cfg *MetricsConfig, ctxInfo *global
 		cacheLen = defaultCacheLen
 	}
 	mr := MetricsReporter{
-		ctx: ctx,
-		cfg: cfg,
+		ctx:       ctx,
+		cfg:       cfg,
+		namespace: ctxInfo.ServiceNamespace,
 	}
 	mr.reporters = NewReporterPool[*Metrics](cacheLen,
 		func(k string, v *Metrics) {

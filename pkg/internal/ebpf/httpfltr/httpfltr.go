@@ -201,8 +201,9 @@ func (p *Tracer) SocketFilters() []*ebpf.Program {
 	return []*ebpf.Program{p.bpfObjects.SocketHttpFilter}
 }
 
-func (p *Tracer) Run(ctx context.Context, eventsChan chan<- []request.Span) {
+func (p *Tracer) Run(ctx context.Context, eventsChan chan<- []request.Span, _ string) {
 	ebpfcommon.ForwardRingbuf[HTTPInfo](
+		"",
 		p.Cfg, logger(), p.bpfObjects.Events,
 		p.readHTTPInfoIntoSpan,
 		p.Metrics,

@@ -30,6 +30,7 @@ func TestForwardRingbuf_CapacityFull(t *testing.T) {
 	metrics := &metricsReporter{}
 	forwardedMessages := make(chan []request.Span, 100)
 	go ForwardRingbuf[HTTPRequestTrace](
+		"myService",
 		&TracerConfig{BatchLength: 10},
 		slog.With("test", "TestForwardRingbuf_CapacityFull"),
 		nil, // the source ring buffer can be null
@@ -47,13 +48,13 @@ func TestForwardRingbuf_CapacityFull(t *testing.T) {
 	batch := testutil.ReadChannel(t, forwardedMessages, testTimeout)
 	require.Len(t, batch, 10)
 	for i := range batch {
-		assert.Equal(t, request.Span{Type: 1, Method: "GET", ContentLength: int64(i)}, batch[i])
+		assert.Equal(t, request.Span{Type: 1, Method: "GET", ContentLength: int64(i), ServiceName: "myService"}, batch[i])
 	}
 
 	batch = testutil.ReadChannel(t, forwardedMessages, testTimeout)
 	require.Len(t, batch, 10)
 	for i := range batch {
-		assert.Equal(t, request.Span{Type: 1, Method: "GET", ContentLength: int64(10 + i)}, batch[i])
+		assert.Equal(t, request.Span{Type: 1, Method: "GET", ContentLength: int64(10 + i), ServiceName: "myService"}, batch[i])
 	}
 	// AND metrics are properly updated
 	assert.Equal(t, 2, metrics.flushes)
@@ -76,6 +77,7 @@ func TestForwardRingbuf_Deadline(t *testing.T) {
 	metrics := &metricsReporter{}
 	forwardedMessages := make(chan []request.Span, 100)
 	go ForwardRingbuf[HTTPRequestTrace](
+		"myService",
 		&TracerConfig{BatchLength: 10, BatchTimeout: 20 * time.Millisecond},
 		slog.With("test", "TestForwardRingbuf_Deadline"),
 		nil, // the source ring buffer can be null
@@ -96,7 +98,7 @@ func TestForwardRingbuf_Deadline(t *testing.T) {
 	}
 	require.Len(t, batch, 7)
 	for i := range batch {
-		assert.Equal(t, request.Span{Type: 1, Method: "GET", ContentLength: int64(i)}, batch[i])
+		assert.Equal(t, request.Span{Type: 1, Method: "GET", ContentLength: int64(i), ServiceName: "myService"}, batch[i])
 	}
 
 	// AND metrics are properly updated
@@ -112,6 +114,7 @@ func TestForwardRingbuf_Close(t *testing.T) {
 	metrics := &metricsReporter{}
 	closable := closableObject{}
 	go ForwardRingbuf[HTTPRequestTrace](
+		"myService",
 		&TracerConfig{BatchLength: 10},
 		slog.With("test", "TestForwardRingbuf_Close"),
 		nil, // the source ring buffer can be null

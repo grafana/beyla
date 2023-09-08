@@ -30,6 +30,7 @@ var readerFactory = func(rb *ebpf.Map) (ringBufReader, error) {
 }
 
 type ringBufForwarder[T any] struct {
+	svcName    string
 	cfg        *TracerConfig
 	logger     *slog.Logger
 	ringbuffer *ebpf.Map
@@ -48,6 +49,7 @@ type ringBufForwarder[T any] struct {
 // Despite it returns a StartFuncCtx, this is not used inside the Pipes' library but it's invoked
 // directly in the code as a simple function.
 func ForwardRingbuf[T any](
+	svcName string,
 	cfg *TracerConfig,
 	logger *slog.Logger,
 	ringbuffer *ebpf.Map,
@@ -56,7 +58,8 @@ func ForwardRingbuf[T any](
 	closers ...io.Closer,
 ) node.StartFuncCtx[[]request.Span] {
 	rbf := ringBufForwarder[T]{
-		cfg: cfg, logger: logger, ringbuffer: ringbuffer, closers: closers, reader: reader, metrics: metrics,
+		svcName: svcName, cfg: cfg, logger: logger, ringbuffer: ringbuffer,
+		closers: closers, reader: reader, metrics: metrics,
 	}
 	return rbf.readAndForward
 }
@@ -104,13 +107,17 @@ func (rbf *ringBufForwarder[T]) readAndForward(ctx context.Context, spansChan ch
 			rbf.logger.Error("error reading from perf reader", err)
 			continue
 		}
-
 		rbf.access.Lock()
 		rbf.spans[rbf.spansLen], err = rbf.reader(&record)
 		if err != nil {
 			rbf.logger.Error("error parsing perf event", err)
 			rbf.access.Unlock()
 			continue
+		}
+		// we need to decorate each span with the tracer's service name
+		// if this information is not forwarded from eBPF
+		if rbf.svcName != "" {
+			rbf.spans[rbf.spansLen].ServiceName = rbf.svcName
 		}
 		rbf.spansLen++
 		if rbf.spansLen == rbf.cfg.BatchLength {

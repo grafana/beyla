@@ -46,7 +46,10 @@ type Tracer interface {
 	SocketFilters() []*ebpf.Program
 	// Run will do the action of listening for eBPF traces and forward them
 	// periodically to the output channel.
-	Run(context.Context, chan<- []request.Span)
+	// It optionally receives the service name as a second attribute, but some
+	// tracers might ignore it (e.g. system-wide HTTP filter will directly set the
+	// executable name of each request).
+	Run(context.Context, chan<- []request.Span, string)
 	// AddCloser adds io.Closer instances that need to be invoked when the
 	// Run function ends.
 	AddCloser(c ...io.Closer)
@@ -61,29 +64,36 @@ type ProcessTracer struct {
 	goffsets *goexec.Offsets
 	exe      *link.Executable
 	pinPath  string
+
+	overrideServiceName string
 }
 
 func (pt *ProcessTracer) Run(ctx context.Context, out chan<- []request.Span) {
 	var log = logger()
 
 	// Searches for traceable functions
-	funcs, err := pt.tracerFunctions()
+	trcrs, err := pt.tracers()
 	if err != nil {
 		log.Error("couldn't trace process", err, "path", pt.ELFInfo.CmdExePath, "pid", pt.ELFInfo.Pid)
 		return
 	}
+
+	svcName := pt.overrideServiceName
+	if svcName == "" {
+		svcName = pt.ELFInfo.ExecutableName()
+	}
 	// run each tracer program
-	for _, fn := range funcs {
-		go fn(ctx, out)
+	for _, t := range trcrs {
+		go t.Run(ctx, out, svcName)
 	}
 }
 
-// tracerFunctions returns a tracing function for each discovered eBPF traceable source: GRPC, HTTP...
-func (pt *ProcessTracer) tracerFunctions() ([]func(context.Context, chan<- []request.Span), error) {
+// tracers returns Tracer implementer for each discovered eBPF traceable source: GRPC, HTTP...
+func (pt *ProcessTracer) tracers() ([]Tracer, error) {
 	var log = logger()
 
 	// tracerFuncs contains the eBPF programs (HTTP, GRPC tracers...)
-	var tracerFuncs []func(context.Context, chan<- []request.Span)
+	var tracers []Tracer
 
 	for _, p := range pt.programs {
 		plog := log.With("program", reflect.TypeOf(p))
@@ -131,10 +141,10 @@ func (pt *ProcessTracer) tracerFunctions() ([]func(context.Context, chan<- []req
 			return nil, err
 		}
 
-		tracerFuncs = append(tracerFuncs, p.Run)
+		tracers = append(tracers, p)
 	}
 
-	return tracerFuncs, nil
+	return tracers, nil
 }
 
 func logger() *slog.Logger { return slog.With("component", "ebpf.TracerProvider") }

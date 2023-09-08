@@ -80,6 +80,7 @@ func newReporter(ctx context.Context, cfg *PrometheusConfig, ctxInfo *global.Con
 	reportRoutes := ctxInfo.ReportRoutes
 	// If service name is not explicitly set, we take the service name as set by the
 	// executable inspector
+	// TODO: remove this property and use directly data from span
 	if cfg.ServiceName == "" {
 		cfg.ServiceName = ctxInfo.ServiceName
 	}

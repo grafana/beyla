@@ -3,7 +3,7 @@ package main
 import (
 	"os"
 
-	"github.com/caarlos0/env/v7"
+	"github.com/caarlos0/env/v9"
 	gin2 "github.com/gin-gonic/gin"
 	"golang.org/x/exp/slog"
 

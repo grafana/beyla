@@ -96,6 +96,15 @@ kubernetes:
 	}, cfg)
 }
 
+func TestConfig_ServiceName(t *testing.T) {
+	// ServiceName property can be handled via two different env vars SERVICE_NAME and OTEL_SERVICE_NAME (for
+	// compatibility with OpenTelemetry)
+	require.NoError(t, os.Setenv("SERVICE_NAME", "some-svc-name"))
+	cfg, err := LoadConfig(bytes.NewReader(nil))
+	require.NoError(t, err)
+	assert.Equal(t, "some-svc-name", cfg.ServiceName)
+}
+
 func TestConfigValidate(t *testing.T) {
 	testCases := []map[string]string{
 		{"OTEL_EXPORTER_OTLP_ENDPOINT": "localhost:1234", "EXECUTABLE_NAME": "foo", "INSTRUMENT_FUNC_NAME": "bar"},

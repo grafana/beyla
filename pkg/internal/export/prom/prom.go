@@ -39,9 +39,6 @@ const (
 
 // TODO: TLS
 type PrometheusConfig struct {
-	ServiceName      string `yaml:"service_name" env:"PROMETHEUS_SERVICE_NAME"`
-	ServiceNamespace string `yaml:"service_namespace" env:"SERVICE_NAMESPACE"`
-
 	Port           int    `yaml:"port" env:"BEYLA_PROMETHEUS_PORT"`
 	Path           string `yaml:"path" env:"PROMETHEUS_PATH"`
 	ReportTarget   bool   `yaml:"report_target" env:"METRICS_REPORT_TARGET"`
@@ -70,8 +67,9 @@ type metricsReporter struct {
 
 	bgCtx context.Context
 
-	// TODO: at some point we might want to set a namespace per service
-	namespace string
+	// TODO: at some point we might want to override either a name and a namespace per service
+	overrideSvcName string
+	namespace       string
 }
 
 func PrometheusEndpoint(ctx context.Context, cfg *PrometheusConfig, ctxInfo *global.ContextInfo) (node.TerminalFunc[[]request.Span], error) {
@@ -84,41 +82,42 @@ func newReporter(ctx context.Context, cfg *PrometheusConfig, ctxInfo *global.Con
 	// If service name is not explicitly set, we take the service name as set by the
 	// executable inspector
 	mr := &metricsReporter{
-		bgCtx:        ctx,
-		cfg:          cfg,
-		namespace:    ctxInfo.ServiceNamespace,
-		reportRoutes: reportRoutes,
-		promConnect:  ctxInfo.Prometheus,
+		bgCtx:           ctx,
+		cfg:             cfg,
+		overrideSvcName: ctxInfo.ServiceName,
+		namespace:       ctxInfo.ServiceNamespace,
+		reportRoutes:    reportRoutes,
+		promConnect:     ctxInfo.Prometheus,
 		httpDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Name:    HTTPServerDuration,
 			Help:    "duration of HTTP service calls from the server side, in seconds",
 			Buckets: cfg.Buckets.DurationHistogram,
-		}, labelNamesHTTP(cfg, reportRoutes)),
+		}, labelNamesHTTP(cfg, ctxInfo, reportRoutes)),
 		httpClientDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Name:    HTTPClientDuration,
 			Help:    "duration of HTTP service calls from the client side, in seconds",
 			Buckets: cfg.Buckets.DurationHistogram,
-		}, labelNamesHTTPClient(cfg)),
+		}, labelNamesHTTPClient(cfg, ctxInfo)),
 		grpcDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Name:    RPCServerDuration,
 			Help:    "duration of RCP service calls from the server side, in seconds",
 			Buckets: cfg.Buckets.DurationHistogram,
-		}, labelNamesGRPC(cfg)),
+		}, labelNamesGRPC(cfg, ctxInfo)),
 		grpcClientDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Name:    RPCClientDuration,
 			Help:    "duration of GRPC service calls from the client side, in seconds",
 			Buckets: cfg.Buckets.DurationHistogram,
-		}, labelNamesGRPC(cfg)),
+		}, labelNamesGRPC(cfg, ctxInfo)),
 		httpRequestSize: prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Name:    HTTPServerRequestSize,
 			Help:    "size, in bytes, of the HTTP request body as received at the server side",
 			Buckets: cfg.Buckets.RequestSizeHistogram,
-		}, labelNamesHTTP(cfg, reportRoutes)),
+		}, labelNamesHTTP(cfg, ctxInfo, reportRoutes)),
 		httpClientRequestSize: prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Name:    HTTPClientRequestSize,
 			Help:    "size, in bytes, of the HTTP request body as sent from the client side",
 			Buckets: cfg.Buckets.RequestSizeHistogram,
-		}, labelNamesHTTPClient(cfg)),
+		}, labelNamesHTTPClient(cfg, ctxInfo)),
 	}
 	mr.promConnect.Register(cfg.Port, cfg.Path,
 		mr.httpClientRequestSize,
@@ -160,9 +159,9 @@ func (r *metricsReporter) observe(span *request.Span) {
 
 // labelNamesGRPC must return the label names in the same order as would be returned
 // by labelValuesGRPC
-func labelNamesGRPC(cfg *PrometheusConfig) []string {
+func labelNamesGRPC(cfg *PrometheusConfig, ctxInfo *global.ContextInfo) []string {
 	names := []string{serviceNameKey, rpcMethodKey, rpcSystemGRPC, rpcGRPCStatusCodeKey}
-	if cfg.ServiceNamespace != "" {
+	if ctxInfo.ServiceNamespace != "" {
 		names = append(names, serviceNamespaceKey)
 	}
 	if cfg.ReportPeerInfo {
@@ -176,14 +175,14 @@ func labelNamesGRPC(cfg *PrometheusConfig) []string {
 func (r *metricsReporter) labelValuesGRPC(span *request.Span) []string {
 	// Unless the service name is overridden by the user configuration,
 	// we use the name from the span
-	var svcName = r.cfg.ServiceName
+	var svcName = r.overrideSvcName
 	if svcName == "" {
 		svcName = span.ServiceName
 	}
 	// serviceNameKey, rpcMethodKey, rpcSystemGRPC, rpcGRPCStatusCodeKey
 	names := []string{svcName, span.Path, "grpc", strconv.Itoa(span.Status)}
-	if r.cfg.ServiceNamespace != "" {
-		names = append(names, r.cfg.ServiceNamespace)
+	if r.namespace != "" {
+		names = append(names, r.namespace)
 	}
 	if r.cfg.ReportPeerInfo {
 		names = append(names, span.Peer) // netSockPeerAddrKey
@@ -193,9 +192,9 @@ func (r *metricsReporter) labelValuesGRPC(span *request.Span) []string {
 
 // labelNamesHTTPClient must return the label names in the same order as would be returned
 // by labelValuesHTTPClient
-func labelNamesHTTPClient(cfg *PrometheusConfig) []string {
+func labelNamesHTTPClient(cfg *PrometheusConfig, ctxInfo *global.ContextInfo) []string {
 	names := []string{serviceNameKey, httpMethodKey, httpStatusCodeKey}
-	if cfg.ServiceNamespace != "" {
+	if ctxInfo.ServiceNamespace != "" {
 		names = append(names, serviceNamespaceKey)
 	}
 	if cfg.ReportPeerInfo {
@@ -209,14 +208,14 @@ func labelNamesHTTPClient(cfg *PrometheusConfig) []string {
 func (r *metricsReporter) labelValuesHTTPClient(span *request.Span) []string {
 	// Unless the service name is overridden by the user configuration,
 	// we use the name from the span
-	var svcName = r.cfg.ServiceName
+	var svcName = r.overrideSvcName
 	if svcName == "" {
 		svcName = span.ServiceName
 	}
 	// httpMethodKey, httpStatusCodeKey
 	names := []string{svcName, span.Method, strconv.Itoa(span.Status)}
-	if r.cfg.ServiceNamespace != "" {
-		names = append(names, r.cfg.ServiceNamespace)
+	if r.namespace != "" {
+		names = append(names, r.namespace)
 	}
 	if r.cfg.ReportPeerInfo {
 		// netSockPeerAddrKey, netSockPeerPortKey
@@ -227,9 +226,9 @@ func (r *metricsReporter) labelValuesHTTPClient(span *request.Span) []string {
 
 // labelNamesHTTP must return the label names in the same order as would be returned
 // by labelValuesHTTP
-func labelNamesHTTP(cfg *PrometheusConfig, reportRoutes bool) []string {
+func labelNamesHTTP(cfg *PrometheusConfig, ctxInfo *global.ContextInfo, reportRoutes bool) []string {
 	names := []string{serviceNameKey, httpMethodKey, httpStatusCodeKey}
-	if cfg.ServiceNamespace != "" {
+	if ctxInfo.ServiceNamespace != "" {
 		names = append(names, serviceNamespaceKey)
 	}
 	if cfg.ReportTarget {
@@ -249,14 +248,14 @@ func labelNamesHTTP(cfg *PrometheusConfig, reportRoutes bool) []string {
 func (r *metricsReporter) labelValuesHTTP(span *request.Span) []string {
 	// Unless the service name is overridden by the user configuration,
 	// we use the name from the span
-	var svcName = r.cfg.ServiceName
+	var svcName = r.overrideSvcName
 	if svcName == "" {
 		svcName = span.ServiceName
 	}
 	// httpMethodKey, httpStatusCodeKey
 	names := []string{svcName, span.Method, strconv.Itoa(span.Status)}
-	if r.cfg.ServiceNamespace != "" {
-		names = append(names, r.cfg.ServiceNamespace)
+	if r.namespace != "" {
+		names = append(names, r.namespace)
 	}
 	if r.cfg.ReportTarget {
 		names = append(names, span.Path) // httpTargetKey

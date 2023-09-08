@@ -148,11 +148,10 @@ func (pf *ProcessFinder) findAndInstrument(ctx context.Context, metrics imetrics
 		log.Info("system wide instrumentation")
 	}
 	return &ProcessTracer{
-		programs:            programs,
-		ELFInfo:             elfInfo,
-		goffsets:            goffsets,
-		exe:                 exe,
-		pinPath:             pf.pinPath,
-		overrideServiceName: pf.CtxInfo.ServiceName,
+		programs: programs,
+		ELFInfo:  elfInfo,
+		goffsets: goffsets,
+		exe:      exe,
+		pinPath:  pf.pinPath,
 	}, nil
 }

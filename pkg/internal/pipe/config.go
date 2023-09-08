@@ -5,7 +5,7 @@ import (
 	"io"
 	"time"
 
-	"github.com/caarlos0/env/v7"
+	"github.com/caarlos0/env/v9"
 	"gopkg.in/yaml.v3"
 
 	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
@@ -66,7 +66,9 @@ type Config struct {
 
 	LogLevel string `yaml:"log_level" env:"LOG_LEVEL"`
 
-	ServiceName      string `yaml:"service_name" env:"OTEL_SERVICE_NAME"`
+	// ServiceName is taken from either SERVICE_NAME env var or OTEL_SERVICE_NAME (for OTEL spec compatibility)
+	// Using env and envDefault is a trick to get the value either from one or another
+	ServiceName      string `yaml:"service_name" env:"OTEL_SERVICE_NAME,expand" envDefault:"${SERVICE_NAME}"`
 	ServiceNamespace string `yaml:"service_namespace" env:"SERVICE_NAMESPACE"`
 
 	// From this comment, the properties below will remain undocumented, as they

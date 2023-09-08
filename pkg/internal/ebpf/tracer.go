@@ -64,8 +64,6 @@ type ProcessTracer struct {
 	goffsets *goexec.Offsets
 	exe      *link.Executable
 	pinPath  string
-
-	overrideServiceName string
 }
 
 func (pt *ProcessTracer) Run(ctx context.Context, out chan<- []request.Span) {
@@ -78,10 +76,7 @@ func (pt *ProcessTracer) Run(ctx context.Context, out chan<- []request.Span) {
 		return
 	}
 
-	svcName := pt.overrideServiceName
-	if svcName == "" {
-		svcName = pt.ELFInfo.ExecutableName()
-	}
+	svcName := pt.ELFInfo.ExecutableName()
 	// run each tracer program
 	for _, t := range trcrs {
 		go t.Run(ctx, out, svcName)

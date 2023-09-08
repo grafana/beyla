@@ -3,12 +3,17 @@
 package integration
 
 import (
+	"encoding/json"
+	"net/http"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/mariomac/guara/pkg/test"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/grafana/beyla/test/integration/components/jaeger"
 	"github.com/grafana/beyla/test/integration/components/prom"
 )
 
@@ -41,4 +46,43 @@ func testREDMetricsForClientHTTPLibrary(t *testing.T) {
 		val := totalPromCount(t, results)
 		assert.LessOrEqual(t, 1, val)
 	})
+
+	var trace jaeger.Trace
+	test.Eventually(t, testTimeout, func(t require.TestingT) {
+		resp, err := http.Get(jaegerQueryURL + "?service=pingclient&operation=GET")
+		require.NoError(t, err)
+		if resp == nil {
+			return
+		}
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+		var tq jaeger.TracesQuery
+		require.NoError(t, json.NewDecoder(resp.Body).Decode(&tq))
+		traces := tq.FindBySpan(jaeger.Tag{Key: "net.peer.name", Type: "string", Value: "grafana.com"})
+		require.GreaterOrEqual(t, len(traces), 1)
+		trace = traces[0]
+	}, test.Interval(100*time.Millisecond))
+
+	spans := trace.FindByOperationName("GET")
+	require.Len(t, spans, 1)
+	span := spans[0]
+
+	/*
+	 The code in pingclient.go generates spans like these:
+	 00-000000000000038b0000000000000000-000000000000038b-01
+
+	 The traceID and spanID increase by one in tandem and it loops forever.
+	 We check that the traceID has that 16 character 0 suffix and then we
+	 use the first 16 characters for looking up by Parent span.
+	*/
+	require.True(t, span.TraceID != "")
+	require.True(t, strings.HasSuffix(span.TraceID, "0000000000000000"))
+
+	// The first 16 characters of traceID must match the spanID if pingclient
+	// generated the spans
+	parent := span.TraceID[:16]
+	childOfPID := trace.ChildrenOf(parent)
+	require.Len(t, childOfPID, 1)
+	childSpan := childOfPID[0]
+	require.Equal(t, childSpan.TraceID, span.TraceID)
+	require.Equal(t, childSpan.SpanID, span.SpanID)
 }

@@ -9,6 +9,7 @@ keywords:
   - Prometheus
   - Grafana Cloud
   - tutorial
+  - RED metrics
 ---
 
 # Beyla quick start tutorial
@@ -249,11 +250,11 @@ Metrics Browser input field and you should see the available metric names in the
 
 ![](https://grafana.com/media/docs/grafana-cloud/beyla/tutorial/dropdown-metrics.png)
 
-## Add the eBPF RED Metrics Dashboard
+## Add the Beyla RED Metrics Dashboard
 
 You could start composing your PromQL queries for better visualization of
 your auto-instrumented RED metrics; to save you time, we provide a sample
-[public dashboard with some basic information](/grafana/dashboards/19077-ebpf-red-metrics/).
+[public dashboard with some basic information](/grafana/dashboards/19077-grafana-beyla-red-metrics/).
 
 To import the sample dashboard into your Grafana instance, choose "Dashboards" in the Grafana left panel.
 Next, in the Dashboards page, click on the "New" drop-down menu and select "Import":
@@ -261,7 +262,7 @@ Next, in the Dashboards page, click on the "New" drop-down menu and select "Impo
 ![](https://grafana.com/media/docs/grafana-cloud/beyla/tutorial/import-dashboard.png)
 
 In the "Import via grafana.com" textbox, copy the Grafana ID from the
-[eBPF Red Metrics](/grafana/dashboards/19077-ebpf-red-metrics/)
+[Beyla RED Metrics](/grafana/dashboards/19077-grafana-beyla-red-metrics/)
 dashboard: `19077`.
 
 Rename the dashboard to match your service, select the folder and, most importantly, select the
@@ -269,12 +270,12 @@ data source in the `prometheus-data-source` drop-down at the bottom.
 
 And _voilà!_ you can see some of your test RED metrics:
 
-![](https://grafana.com/media/docs/grafana-cloud/beyla/tutorial/dashboard-screenshot.png)
+![](https://grafana.com/media/docs/grafana-cloud/beyla/tutorial/beyla-dashboard-screenshot.png)
 
 The dashboard contains the following components:
 
 - A list with the slowest HTTP routes for all instrumented services. Since you only
-  have a single service, only one entry appears. If you configure the auto-instrumentation to
+  have a single service, only one entry appears. If you configure Beyla to
   [report the HTTP routes]({{< relref "../configure/options.md#routes-decorator" >}}),
   many entries could appear there, one for each HTTP path seen by the server.
 - A list with the slowest GRPC methods. Since the test service in this tutorial only
@@ -299,7 +300,7 @@ want to visualize.
 eBPF proved to be a low-overhead, safe, and reliable way to observe some basic metrics for
 HTTP/gRPC services. Beyla is not a replacement for language
 specific agents, however it significantly decreases the landing time of your application insights in Grafana.
-The auto-instrumentation tool does not require any code changes, recompilation nor repackaging, simply run
+Beyla does not require any code changes, recompilation nor repackaging, simply run
 it together with your service, and your application metrics will start to flow.
 
 eBPF also allows you to get deeper insights which manual instrumentation doesn't. For example,

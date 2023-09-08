@@ -300,3 +300,25 @@ func TestSuite_DisableKeepAlives(t *testing.T) {
 	require.NoError(t, compose.Close())
 	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
 }
+
+func TestSuite_OverrideServiceName(t *testing.T) {
+	compose, err := docker.ComposeSuite("docker-compose.yml", path.Join(pathOutput, "test-suite-override-svcname.log"))
+	compose.Env = append(compose.Env, "INSTRUMENTER_CONFIG_SUFFIX=-override-svcname")
+
+	require.NoError(t, err)
+	require.NoError(t, compose.Up())
+
+	// Just few simple test cases to verify that the tracers properly override the service name
+	// according to the configuration
+	t.Run("RED metrics", func(t *testing.T) {
+		waitForTestComponents(t, instrumentedServiceStdURL)
+		testREDMetricsForHTTPLibrary(t, instrumentedServiceStdURL, "overridden-svc-name")
+	})
+	t.Run("GRPC traces", func(t *testing.T) {
+		testGRPCTracesForServiceName(t, "overridden-svc-name")
+	})
+
+	t.Run("BPF pinning folder mounted", testBPFPinningMounted)
+	require.NoError(t, compose.Close())
+	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
+}

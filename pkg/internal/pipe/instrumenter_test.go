@@ -84,7 +84,7 @@ func TestTracerPipeline(t *testing.T) {
 
 	gb := newGraphBuilder(&Config{
 		Traces: otel.TracesConfig{
-			BatchTimeout: 10 * time.Millisecond,
+			BatchTimeout:   10 * time.Millisecond,
 			TracesEndpoint: tc.ServerEndpoint, SamplingRatio: 1.0,
 		},
 	}, gctx(), make(<-chan []request.Span))

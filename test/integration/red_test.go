@@ -46,12 +46,12 @@ func testREDMetricsHTTP(t *testing.T) {
 	} {
 		t.Run(testCaseURL, func(t *testing.T) {
 			waitForTestComponents(t, testCaseURL)
-			testREDMetricsForHTTPLibrary(t, testCaseURL)
+			testREDMetricsForHTTPLibrary(t, testCaseURL, "testserver")
 		})
 	}
 }
 
-func testREDMetricsForHTTPLibrary(t *testing.T, url string) {
+func testREDMetricsForHTTPLibrary(t *testing.T, url, svcName string) {
 	path := "/basic/" + rndStr()
 
 	// Call 3 times the instrumented service, forcing it to:
@@ -74,7 +74,7 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url string) {
 			`http_method="GET",` +
 			`http_status_code="404",` +
 			`service_namespace="integration-test",` +
-			`service_name="testserver",` +
+			`service_name="` + svcName + `",` +
 			`http_route="/basic/:rnd",` +
 			`http_target="` + path + `"}`)
 		require.NoError(t, err)
@@ -95,7 +95,7 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url string) {
 			`http_method="GET",` +
 			`http_status_code="404",` +
 			`service_namespace="integration-test",` +
-			`service_name="testserver",` +
+			`service_name="` + svcName + `",` +
 			`http_route="/basic/:rnd",` +
 			`http_target="` + path + `"}`)
 		require.NoError(t, err)
@@ -117,7 +117,7 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url string) {
 				`http_method="GET",` +
 				`http_status_code="203",` +
 				`service_namespace="integration-test",` +
-				`service_name="testserver"}`)
+				`service_name="` + svcName + `"}`)
 			require.NoError(t, err)
 			// check duration_count has 3 calls
 			enoughPromResults(t, results)
@@ -131,7 +131,7 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url string) {
 				`http_method="GET",` +
 				`http_status_code="203",` +
 				`service_namespace="integration-test",` +
-				`service_name="testserver"}`)
+				`service_name="` + svcName + `"}`)
 			require.NoError(t, err)
 			// check duration_count has 3 calls
 			enoughPromResults(t, results)
@@ -143,7 +143,7 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url string) {
 			var err error
 			results, err = pq.Query(`rpc_client_duration_seconds_count{` +
 				`rpc_grpc_status_code="0",` +
-				`service_name="testserver",` +
+				`service_name="` + svcName + `",` +
 				`service_namespace="integration-test",` +
 				`rpc_method="/routeguide.RouteGuide/GetFeature"}`)
 			require.NoError(t, err)
@@ -159,7 +159,7 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url string) {
 	results, err = pq.Query(`http_server_duration_seconds_sum{` +
 		`http_method="GET",` +
 		`http_status_code="404",` +
-		`service_name="testserver",` +
+		`service_name="` + svcName + `",` +
 		`service_namespace="integration-test",` +
 		`http_route="/basic/:rnd",` +
 		`http_target="` + path + `"}`)
@@ -178,7 +178,7 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url string) {
 	results, err = pq.Query(`http_server_request_size_bytes_sum{` +
 		`http_method="GET",` +
 		`http_status_code="404",` +
-		`service_name="testserver",` +
+		`service_name="` + svcName + `",` +
 		`service_namespace="integration-test",` +
 		`http_route="/basic/:rnd",` +
 		`http_target="` + path + `"}`)

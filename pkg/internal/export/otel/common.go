@@ -26,10 +26,6 @@ const (
 	envProtocol        = "OTEL_EXPORTER_OTLP_PROTOCOL"
 )
 
-const (
-	defaultCacheLen = 16
-)
-
 // Buckets defines the histograms bucket boundaries, and allows users to
 // redefine them
 type Buckets struct {
@@ -95,7 +91,6 @@ func (rp *ReporterPool[T]) For(svcName string) (T, error) {
 		var t T
 		return t, fmt.Errorf("creating resource for service %q: %w", svcName, err)
 	}
-	mlog().Debug("creating new Metrics reporter", "serviceName", svcName)
 	rp.pool.Add(svcName, m)
 	return m, nil
 }

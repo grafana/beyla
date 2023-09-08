@@ -61,9 +61,10 @@ kubernetes:
 			BpfBaseDir:   "/var/run/beyla",
 		},
 		Metrics: otel.MetricsConfig{
-			Interval: 5 * time.Second,
-			Endpoint: "localhost:3131",
-			Protocol: otel.ProtocolHTTPProtobuf,
+			Interval:          5 * time.Second,
+			Endpoint:          "localhost:3131",
+			Protocol:          otel.ProtocolHTTPProtobuf,
+			ReportersCacheLen: 16,
 			Buckets: otel.Buckets{
 				DurationHistogram:    []float64{0, 1, 2},
 				RequestSizeHistogram: otel.DefaultBuckets.RequestSizeHistogram,
@@ -76,6 +77,7 @@ kubernetes:
 			MaxQueueSize:       4096,
 			MaxExportBatchSize: 4096,
 			SamplingRatio:      1.0,
+			ReportersCacheLen:  16,
 		},
 		Prometheus: prom.PrometheusConfig{
 			Path: "/metrics",

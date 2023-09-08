@@ -115,16 +115,12 @@ func ReportMetrics(
 
 func newMetricsReporter(ctx context.Context, cfg *MetricsConfig, ctxInfo *global.ContextInfo) (*MetricsReporter, error) {
 	log := mlog()
-	cacheLen := cfg.ReportersCacheLen
-	if cacheLen == 0 {
-		cacheLen = defaultCacheLen
-	}
 	mr := MetricsReporter{
 		ctx:       ctx,
 		cfg:       cfg,
 		namespace: ctxInfo.ServiceNamespace,
 	}
-	mr.reporters = NewReporterPool[*Metrics](cacheLen,
+	mr.reporters = NewReporterPool[*Metrics](cfg.ReportersCacheLen,
 		func(k string, v *Metrics) {
 			llog := log.With("serviceName", k)
 			llog.Debug("evicting metrics reporter from cache")
@@ -145,6 +141,7 @@ func newMetricsReporter(ctx context.Context, cfg *MetricsConfig, ctxInfo *global
 }
 
 func (mr *MetricsReporter) newMetricSet(svcName string) (*Metrics, error) {
+	mlog().Debug("creating new Metrics reporter", "serviceName", svcName)
 	resources := otelResource(svcName, mr.namespace)
 	m := Metrics{
 		ctx: mr.ctx,

@@ -108,12 +108,8 @@ func ReportTraces(ctx context.Context, cfg *TracesConfig, ctxInfo *global.Contex
 
 func newTracesReporter(ctx context.Context, cfg *TracesConfig, ctxInfo *global.ContextInfo) (*TracesReporter, error) {
 	log := tlog()
-	cacheLen := cfg.ReportersCacheLen
-	if cacheLen == 0 {
-		cacheLen = defaultCacheLen
-	}
 	r := TracesReporter{ctx: ctx, cfg: cfg, namespace: ctxInfo.ServiceNamespace}
-	r.reporters = NewReporterPool[*Tracers](cacheLen,
+	r.reporters = NewReporterPool[*Tracers](cfg.ReportersCacheLen,
 		func(k string, v *Tracers) {
 			llog := log.With("serviceName", k)
 			llog.Debug("evicting metrics reporter from cache")
@@ -464,6 +460,7 @@ func (r *TracesReporter) reportTraces(input <-chan []request.Span) {
 }
 
 func (r *TracesReporter) newTracers(svcName string) (*Tracers, error) {
+	tlog().Debug("creating new Tracers reporter", "serviceName", svcName)
 	tracers := Tracers{
 		provider: trace.NewTracerProvider(
 			trace.WithResource(otelResource(svcName, r.namespace)),

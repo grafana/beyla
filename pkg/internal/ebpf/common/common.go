@@ -51,6 +51,9 @@ type TracerConfig struct {
 	// BpfBaseDir specifies the base directory where the BPF pinned maps will be mounted.
 	// By default, it will be /var/run/beyla
 	BpfBaseDir string `yaml:"bpf_fs_base_dir" env:"BPF_FS_BASE_DIR"`
+
+	// This can be enabled to use generic HTTP tracers only, no Go-specifics will be used:
+	SkipGoSpecificTracers bool `yaml:"skip_go_specific_tracers" env:"SKIP_GO_SPECIFIC_TRACERS"`
 }
 
 // Probe holds the information of the instrumentation points of a given function: its start and end offsets and

@@ -127,7 +127,10 @@ func (pf *ProcessFinder) findAndInstrument(ctx context.Context, metrics imetrics
 
 	// merging all the functions from all the programs, in order to do
 	// a complete inspection of the target executable
-	allFuncs := allGoFunctionNames(programs)
+	var allFuncs []string
+	if !pf.Cfg.SkipGoSpecificTracers {
+		allFuncs = allGoFunctionNames(programs)
+	}
 	elfInfo, goffsets, err := inspect(ctx, pf.Cfg, allFuncs)
 	if err != nil {
 		return nil, fmt.Errorf("inspecting offsets: %w", err)

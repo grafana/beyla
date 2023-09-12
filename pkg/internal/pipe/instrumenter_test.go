@@ -265,7 +265,7 @@ func TestTraceGRPCPipeline(t *testing.T) {
 	matchGRPCTraceEvent(t, "svc", "foo.bar", event)
 }
 
-func kTestNestedSpanMatching(t *testing.T) {
+func TestNestedSpanMatching(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 

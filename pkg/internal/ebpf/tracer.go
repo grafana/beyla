@@ -66,6 +66,7 @@ type ProcessTracer struct {
 	exe      *link.Executable
 	pinPath  string
 
+	systemWide          bool
 	overrideServiceName string
 }
 
@@ -79,10 +80,12 @@ func (pt *ProcessTracer) Run(ctx context.Context, out chan<- []request.Span) {
 		return
 	}
 
-	// If the user does not override the service name via configuration
-	// the service name is the name of the executable
 	svcName := pt.overrideServiceName
-	if svcName == "" {
+	// If the user does not override the service name via configuration
+	// the service name is the name of the found executable
+	// Unless the case of system-wide tracing, where the name of the
+	// executable will be dynamically set for each traced http request call.
+	if svcName == "" && !pt.systemWide {
 		svcName = pt.ELFInfo.ExecutableName()
 	}
 	// run each tracer program

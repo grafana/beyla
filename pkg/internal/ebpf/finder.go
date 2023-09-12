@@ -153,6 +153,7 @@ func (pf *ProcessFinder) findAndInstrument(ctx context.Context, metrics imetrics
 		goffsets:            goffsets,
 		exe:                 exe,
 		pinPath:             pf.pinPath,
+		systemWide:          pf.Cfg.SystemWide,
 		overrideServiceName: pf.CtxInfo.ServiceName,
 	}, nil
 }

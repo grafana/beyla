@@ -11,8 +11,6 @@ keywords:
 
 # Beyla exported metrics
 
-## Application instrumentation metrics
-
 The following table describes the exported metrics in both OpenTelemetry and Prometheus format.
 
 | Name (OTEL)                | Name (Prometheus)                | Type      | Unit    | Description                                                  |
@@ -26,7 +24,7 @@ The following table describes the exported metrics in both OpenTelemetry and Pro
 
 ## Internal metrics
 
-Additionally, Beyla can be [configured to report internal metrics]({{< relref "./configure/options.md#internal-metrics-reporter" >}}) in Prometheus Format.
+Beyla can be [configured to report internal metrics]({{< relref "./configure/options.md#internal-metrics-reporter" >}}) in Prometheus Format.
 
 | Name                        | Type       | Description                                                                              |
 | --------------------------- | ---------- | ---------------------------------------------------------------------------------------- |

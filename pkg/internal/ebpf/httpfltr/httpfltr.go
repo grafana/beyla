@@ -201,9 +201,9 @@ func (p *Tracer) SocketFilters() []*ebpf.Program {
 	return []*ebpf.Program{p.bpfObjects.SocketHttpFilter}
 }
 
-func (p *Tracer) Run(ctx context.Context, eventsChan chan<- []request.Span, _ string) {
+func (p *Tracer) Run(ctx context.Context, eventsChan chan<- []request.Span, svcName string) {
 	ebpfcommon.ForwardRingbuf[HTTPInfo](
-		"", //the service name is provided from eBPF
+		svcName,
 		p.Cfg, logger(), p.bpfObjects.Events,
 		p.readHTTPInfoIntoSpan,
 		p.Metrics,

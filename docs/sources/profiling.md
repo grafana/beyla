@@ -11,37 +11,38 @@ keywords:
 
 # Beyla profiling
 
-1. Run the auto-instrumentation tool with the `PROFILE_PORT` variable set, e.g. 6060.
+To profile a Beyla instrumented application do the following:
 
+1. Run the auto-instrumentation tool with the `PROFILE_PORT` variable set, e.g. 6060.
 2. Download the required profiles:
 
-   ```
+   ```sh
    curl -o <profile> http://localhost:6060/debug/pprof/<profile>
    ```
 
    Where `<profile>` can be:
 
-- `allocs`: A sampling of all past memory allocations
-- `block`: Stack traces that led to blocking on synchronization primitives
-- `cmdline`: The command line invocation of the current program
-- `goroutine`: Stack traces of all current goroutines
-- `heap`: A sampling of memory allocations of live objects.
-  - You can specify the `gc` GET parameter to run GC before taking the heap sample.
-- `mutex`: Stack traces of holders of contended mutexes
-- `profile`: CPU profile.
-  - You can specify the `duration` in the seconds GET parameter.
-- `threadcreate`: Stack traces that led to the creation of new OS threads
-- `trace`: A trace of execution of the current program.
-  - You can specify the `duration` in the seconds GET parameter.
+   - `allocs`: a sample of all past memory allocations
+   - `block`: stack traces that led to blocking on synchronization primitives
+   - `cmdline`: the command to run the program to profile
+   - `goroutine`: stack traces of all current goroutines
+   - `heap`: a sample of memory allocations of live objects
+     - provide an optional `gc` query parameter to run the GC before sampling the heap
+   - `mutex`: stack traces of holders of contended mutexes
+   - `profile`: CPU profile
+     - provide an optional `duration` query parameter in seconds
+   - `threadcreate`: stack traces that led to the creation of new OS threads
+   - `trace`: a trace of execution of the current program
+     - provide an optional `duration` query parameter in seconds
 
-Example:
+   Example:
 
-```
-curl "http://localhost:6060/debug/pprof/trace?seconds=20" -o trace20s
-curl "http://localhost:6060/debug/pprof/profile?duration=20" -o profile20s
-curl "http://localhost:6060/debug/pprof/heap?gc" -o heap
-curl "http://localhost:6060/debug/pprof/allocs" -o allocs
-curl "http://localhost:6060/debug/pprof/goroutine" -o goroutine
-```
+   ```sh
+   curl "http://localhost:6060/debug/pprof/trace?seconds=20" -o trace20s
+   curl "http://localhost:6060/debug/pprof/profile?duration=20" -o profile20s
+   curl "http://localhost:6060/debug/pprof/heap?gc" -o heap
+   curl "http://localhost:6060/debug/pprof/allocs" -o allocs
+   curl "http://localhost:6060/debug/pprof/goroutine" -o goroutine
+   ```
 
 3. Use `go tool pprof` to dig into the profiles (`go tool trace` for `trace` profiles)

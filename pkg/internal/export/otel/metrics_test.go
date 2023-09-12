@@ -106,7 +106,7 @@ func TestMetrics_InternalInstrumentation(t *testing.T) {
 	})
 	internalMetrics := &fakeInternalMetrics{}
 	exporter, err := ReportMetrics(context.Background(),
-		&MetricsConfig{Endpoint: coll.URL, Interval: 10 * time.Millisecond},
+		&MetricsConfig{Endpoint: coll.URL, Interval: 10 * time.Millisecond, ReportersCacheLen: 16},
 		&global.ContextInfo{
 			ServiceName: "foo",
 			Metrics:     internalMetrics,

@@ -24,9 +24,9 @@ github.com/bytedance/sonic/loader
 github.com/bytedance/sonic/option
 github.com/bytedance/sonic/unquote
 github.com/bytedance/sonic/utf8
-# github.com/caarlos0/env/v7 v7.1.0
+# github.com/caarlos0/env/v9 v9.0.0
 ## explicit; go 1.17
-github.com/caarlos0/env/v7
+github.com/caarlos0/env/v9
 # github.com/cenkalti/backoff/v4 v4.2.1
 ## explicit; go 1.18
 github.com/cenkalti/backoff/v4

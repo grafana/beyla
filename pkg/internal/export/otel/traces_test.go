@@ -185,10 +185,11 @@ func TestTraces_InternalInstrumentation(t *testing.T) {
 	internalTraces := &fakeInternalTraces{}
 	exporter, err := ReportTraces(context.Background(),
 		&TracesConfig{
-			Endpoint:      coll.URL,
-			BatchTimeout:  10 * time.Millisecond,
-			ExportTimeout: 5 * time.Second,
-			SamplingRatio: 1.0,
+			Endpoint:          coll.URL,
+			BatchTimeout:      10 * time.Millisecond,
+			ExportTimeout:     5 * time.Second,
+			SamplingRatio:     1.0,
+			ReportersCacheLen: 16,
 		},
 		&global.ContextInfo{
 			ServiceName: "foo",
@@ -276,10 +277,11 @@ func TestTraces_InternalInstrumentationSampling(t *testing.T) {
 	internalTraces := &fakeInternalTraces{}
 	exporter, err := ReportTraces(context.Background(),
 		&TracesConfig{
-			Endpoint:      coll.URL,
-			BatchTimeout:  10 * time.Millisecond,
-			ExportTimeout: 5 * time.Second,
-			SamplingRatio: 0.0, // sampling 0 means we won't generate any samples
+			Endpoint:          coll.URL,
+			BatchTimeout:      10 * time.Millisecond,
+			ExportTimeout:     5 * time.Second,
+			SamplingRatio:     0.0, // sampling 0 means we won't generate any samples
+			ReportersCacheLen: 16,
 		},
 		&global.ContextInfo{
 			ServiceName: "foo",

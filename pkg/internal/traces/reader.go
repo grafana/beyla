@@ -25,8 +25,13 @@ func ReaderProvider(_ context.Context, r Reader) (node.StartFuncCtx[[]request.Sp
 		cancelChan := ctx.Done()
 		for {
 			select {
-			case trace := <-r.TracesInput:
-				out <- trace
+			case trace, ok := <-r.TracesInput:
+				if ok {
+					out <- trace
+				} else {
+					rlog().Debug("input channel closed. Exiting traces input loop")
+					return
+				}
 			case <-cancelChan:
 				rlog().Debug("context canceled. Exiting traces input loop")
 				return

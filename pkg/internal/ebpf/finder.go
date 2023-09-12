@@ -65,13 +65,6 @@ func (pf *ProcessFinder) Start(ctx context.Context) (<-chan *ProcessTracer, erro
 			log.Error("finding instrumentable process", err)
 			return
 		}
-		// TODO: move this to each tracer so each process would have its own service name
-		// If system-wide tracing is set, we don't use the initially-found
-		// executable name as service name, as it might be anything.
-		// We'll use the service name as traced from eBPF
-		if pf.CtxInfo.ServiceName == "" && !pf.Cfg.SystemWide {
-			pf.CtxInfo.ServiceName = pt.ELFInfo.ExecutableName()
-		}
 		pf.discoveredTracers <- pt
 	}()
 	return pf.discoveredTracers, nil
@@ -158,10 +151,12 @@ func (pf *ProcessFinder) findAndInstrument(ctx context.Context, metrics imetrics
 		log.Info("system wide instrumentation")
 	}
 	return &ProcessTracer{
-		programs: programs,
-		ELFInfo:  elfInfo,
-		goffsets: goffsets,
-		exe:      exe,
-		pinPath:  pf.pinPath,
+		programs:            programs,
+		ELFInfo:             elfInfo,
+		goffsets:            goffsets,
+		exe:                 exe,
+		pinPath:             pf.pinPath,
+		systemWide:          pf.Cfg.SystemWide,
+		overrideServiceName: pf.CtxInfo.ServiceName,
 	}, nil
 }

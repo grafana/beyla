@@ -41,12 +41,19 @@ func TestBasicPipeline(t *testing.T) {
 	require.NoError(t, err)
 
 	gb := newGraphBuilder(&Config{
-		Metrics: otel.MetricsConfig{MetricsEndpoint: tc.ServerEndpoint, ReportTarget: true, ReportPeerInfo: true},
+		Metrics: otel.MetricsConfig{
+			MetricsEndpoint: tc.ServerEndpoint, ReportTarget: true,
+			ReportPeerInfo: true, Interval: 10 * time.Millisecond,
+			ReportersCacheLen: 16,
+		},
 	}, gctx(), make(<-chan []request.Span))
 	// Override eBPF tracer to send some fake data
 	graph.RegisterStart(gb.builder, func(_ context.Context, _ traces.Reader) (node.StartFuncCtx[[]request.Span], error) {
 		return func(_ context.Context, out chan<- []request.Span) {
-			out <- newRequest(1, "GET", "/foo/bar", "1.1.1.1:3456", 404)
+			out <- newRequest("foo-svc", 1, "GET", "/foo/bar", "1.1.1.1:3456", 404)
+			// closing prematurely the input node would finish the whole graph processing
+			// and OTEL exporters could be closed, so we wait.
+			time.Sleep(testTimeout)
 		}, nil
 	})
 	pipe, err := gb.buildGraph(ctx)
@@ -63,6 +70,7 @@ func TestBasicPipeline(t *testing.T) {
 			string(semconv.HTTPStatusCodeKey):  "404",
 			string(semconv.HTTPTargetKey):      "/foo/bar",
 			string(semconv.NetSockPeerAddrKey): "1.1.1.1",
+			string(semconv.ServiceNameKey):     "foo-svc",
 		},
 		Type: pmetric.MetricTypeHistogram,
 	}, event)
@@ -77,12 +85,19 @@ func TestTracerPipeline(t *testing.T) {
 	require.NoError(t, err)
 
 	gb := newGraphBuilder(&Config{
-		Traces: otel.TracesConfig{TracesEndpoint: tc.ServerEndpoint, SamplingRatio: 1.0},
+		Traces: otel.TracesConfig{
+			BatchTimeout:   10 * time.Millisecond,
+			TracesEndpoint: tc.ServerEndpoint, SamplingRatio: 1.0,
+			ReportersCacheLen: 16,
+		},
 	}, gctx(), make(<-chan []request.Span))
 	// Override eBPF tracer to send some fake data
 	graph.RegisterStart(gb.builder, func(_ context.Context, _ traces.Reader) (node.StartFuncCtx[[]request.Span], error) {
 		return func(_ context.Context, out chan<- []request.Span) {
-			out <- newRequest(1, "GET", "/foo/bar", "1.1.1.1:3456", 404)
+			out <- newRequest("bar-svc", 1, "GET", "/foo/bar", "1.1.1.1:3456", 404)
+			// closing prematurely the input node would finish the whole graph processing
+			// and OTEL exporters could be closed, so we wait.
+			time.Sleep(testTimeout)
 		}, nil
 	})
 	pipe, err := gb.buildGraph(ctx)
@@ -95,7 +110,7 @@ func TestTracerPipeline(t *testing.T) {
 	event = testutil.ReadChannel(t, tc.TraceRecords, testTimeout)
 	matchInnerTraceEvent(t, "processing", event)
 	event = testutil.ReadChannel(t, tc.TraceRecords, testTimeout)
-	matchTraceEvent(t, "GET", event)
+	matchTraceEvent(t, "bar-svc", "GET", event)
 }
 
 func TestRouteConsolidation(t *testing.T) {
@@ -106,15 +121,22 @@ func TestRouteConsolidation(t *testing.T) {
 	require.NoError(t, err)
 
 	gb := newGraphBuilder(&Config{
-		Metrics: otel.MetricsConfig{MetricsEndpoint: tc.ServerEndpoint}, // ReportPeerInfo = false, no peer info
-		Routes:  &transform.RoutesConfig{Patterns: []string{"/user/{id}", "/products/{id}/push"}},
+		Metrics: otel.MetricsConfig{
+			ReportPeerInfo:  false, // no peer info
+			MetricsEndpoint: tc.ServerEndpoint, Interval: 10 * time.Millisecond,
+			ReportersCacheLen: 16,
+		},
+		Routes: &transform.RoutesConfig{Patterns: []string{"/user/{id}", "/products/{id}/push"}},
 	}, gctx(), make(<-chan []request.Span))
 	// Override eBPF tracer to send some fake data
 	graph.RegisterStart(gb.builder, func(_ context.Context, _ traces.Reader) (node.StartFuncCtx[[]request.Span], error) {
 		return func(_ context.Context, out chan<- []request.Span) {
-			out <- newRequest(1, "GET", "/user/1234", "1.1.1.1:3456", 200)
-			out <- newRequest(2, "GET", "/products/3210/push", "1.1.1.1:3456", 200)
-			out <- newRequest(3, "GET", "/attach", "1.1.1.1:3456", 200) // undefined route: won't report as route
+			out <- newRequest("svc-1", 1, "GET", "/user/1234", "1.1.1.1:3456", 200)
+			out <- newRequest("svc-1", 2, "GET", "/products/3210/push", "1.1.1.1:3456", 200)
+			out <- newRequest("svc-1", 3, "GET", "/attach", "1.1.1.1:3456", 200) // undefined route: won't report as route
+			// closing prematurely the input node would finish the whole graph processing
+			// and OTEL exporters could be closed, so we wait.
+			time.Sleep(testTimeout)
 		}, nil
 	})
 	pipe, err := gb.buildGraph(ctx)
@@ -133,6 +155,7 @@ func TestRouteConsolidation(t *testing.T) {
 		Name: "http.server.duration",
 		Unit: "s",
 		Attributes: map[string]string{
+			string(semconv.ServiceNameKey):    "svc-1",
 			string(semconv.HTTPMethodKey):     "GET",
 			string(semconv.HTTPStatusCodeKey): "200",
 			string(semconv.HTTPRouteKey):      "/user/{id}",
@@ -144,6 +167,7 @@ func TestRouteConsolidation(t *testing.T) {
 		Name: "http.server.duration",
 		Unit: "s",
 		Attributes: map[string]string{
+			string(semconv.ServiceNameKey):    "svc-1",
 			string(semconv.HTTPMethodKey):     "GET",
 			string(semconv.HTTPStatusCodeKey): "200",
 			string(semconv.HTTPRouteKey):      "/products/{id}/push",
@@ -155,6 +179,7 @@ func TestRouteConsolidation(t *testing.T) {
 		Name: "http.server.duration",
 		Unit: "s",
 		Attributes: map[string]string{
+			string(semconv.ServiceNameKey):    "svc-1",
 			string(semconv.HTTPMethodKey):     "GET",
 			string(semconv.HTTPStatusCodeKey): "200",
 			string(semconv.HTTPRouteKey):      "*",
@@ -171,12 +196,18 @@ func TestGRPCPipeline(t *testing.T) {
 	require.NoError(t, err)
 
 	gb := newGraphBuilder(&Config{
-		Metrics: otel.MetricsConfig{MetricsEndpoint: tc.ServerEndpoint, ReportTarget: true, ReportPeerInfo: true},
+		Metrics: otel.MetricsConfig{
+			MetricsEndpoint: tc.ServerEndpoint, ReportTarget: true, ReportPeerInfo: true, Interval: time.Millisecond,
+			ReportersCacheLen: 16,
+		},
 	}, gctx(), make(<-chan []request.Span))
 	// Override eBPF tracer to send some fake data
 	graph.RegisterStart(gb.builder, func(_ context.Context, _ traces.Reader) (node.StartFuncCtx[[]request.Span], error) {
 		return func(_ context.Context, out chan<- []request.Span) {
-			out <- newGRPCRequest(1, "/foo/bar", 3)
+			out <- newGRPCRequest("grpc-svc", 1, "/foo/bar", 3)
+			// closing prematurely the input node would finish the whole graph processing
+			// and OTEL exporters could be closed, so we wait.
+			time.Sleep(testTimeout)
 		}, nil
 	})
 	pipe, err := gb.buildGraph(ctx)
@@ -189,6 +220,7 @@ func TestGRPCPipeline(t *testing.T) {
 		Name: "rpc.server.duration",
 		Unit: "s",
 		Attributes: map[string]string{
+			string(semconv.ServiceNameKey):       "grpc-svc",
 			string(semconv.RPCSystemKey):         "grpc",
 			string(semconv.RPCGRPCStatusCodeKey): "3",
 			string(semconv.RPCMethodKey):         "/foo/bar",
@@ -206,12 +238,18 @@ func TestTraceGRPCPipeline(t *testing.T) {
 	require.NoError(t, err)
 
 	gb := newGraphBuilder(&Config{
-		Traces: otel.TracesConfig{TracesEndpoint: tc.ServerEndpoint, SamplingRatio: 1.0},
+		Traces: otel.TracesConfig{
+			TracesEndpoint: tc.ServerEndpoint, SamplingRatio: 1.0,
+			BatchTimeout: time.Millisecond, ReportersCacheLen: 16,
+		},
 	}, gctx(), make(<-chan []request.Span))
 	// Override eBPF tracer to send some fake data
 	graph.RegisterStart(gb.builder, func(_ context.Context, _ traces.Reader) (node.StartFuncCtx[[]request.Span], error) {
 		return func(_ context.Context, out chan<- []request.Span) {
-			out <- newGRPCRequest(1, "foo.bar", 3)
+			out <- newGRPCRequest("svc", 1, "foo.bar", 3)
+			// closing prematurely the input node would finish the whole graph processing
+			// and OTEL exporters could be closed, so we wait.
+			time.Sleep(testTimeout)
 		}, nil
 	})
 	pipe, err := gb.buildGraph(ctx)
@@ -224,7 +262,7 @@ func TestTraceGRPCPipeline(t *testing.T) {
 	event = testutil.ReadChannel(t, tc.TraceRecords, testTimeout)
 	matchInnerGRPCTraceEvent(t, "processing", event)
 	event = testutil.ReadChannel(t, tc.TraceRecords, testTimeout)
-	matchGRPCTraceEvent(t, "foo.bar", event)
+	matchGRPCTraceEvent(t, "svc", "foo.bar", event)
 }
 
 func TestNestedSpanMatching(t *testing.T) {
@@ -235,20 +273,20 @@ func TestNestedSpanMatching(t *testing.T) {
 	require.NoError(t, err)
 
 	gb := newGraphBuilder(&Config{
-		Traces: otel.TracesConfig{TracesEndpoint: tc.ServerEndpoint, SamplingRatio: 1.0},
+		Traces: otel.TracesConfig{TracesEndpoint: tc.ServerEndpoint, SamplingRatio: 1.0, ReportersCacheLen: 16},
 	}, gctx(), make(<-chan []request.Span))
 	// Override eBPF tracer to send some fake data with nested client span
 	graph.RegisterStart(gb.builder, func(_ context.Context, _ traces.Reader) (node.StartFuncCtx[[]request.Span], error) {
 		return func(_ context.Context, out chan<- []request.Span) {
-			out <- newRequestWithTiming(1, request.EventTypeHTTPClient, "GET", "/attach", "2.2.2.2:1234", 200, 60000, 60000, 70000)
-			out <- newRequestWithTiming(1, request.EventTypeHTTP, "GET", "/user/1234", "1.1.1.1:3456", 200, 10000, 10000, 50000)
-			out <- newRequestWithTiming(3, request.EventTypeHTTPClient, "GET", "/products/3210/pull", "2.2.2.2:3456", 204, 80000, 80000, 90000)
-			out <- newRequestWithTiming(3, request.EventTypeHTTPClient, "GET", "/products/3211/pull", "2.2.2.2:3456", 203, 80000, 80000, 90000)
-			out <- newRequestWithTiming(2, request.EventTypeHTTP, "GET", "/products/3210/push", "1.1.1.1:3456", 200, 10000, 20000, 50000)
-			out <- newRequestWithTiming(3, request.EventTypeHTTP, "GET", "/attach", "1.1.1.1:3456", 200, 70000, 80000, 100000)
-			out <- newRequestWithTiming(1, request.EventTypeHTTPClient, "GET", "/attach2", "2.2.2.2:1234", 200, 30000, 30000, 40000)
-			out <- newRequestWithTiming(0, request.EventTypeHTTPClient, "GET", "/attach1", "2.2.2.2:1234", 200, 20000, 20000, 40000)
-			out <- newRequestWithTiming(1, request.EventTypeHTTP, "GET", "/user/3456", "1.1.1.1:3456", 200, 56000, 56000, 80000)
+			out <- newRequestWithTiming("svc1", 1, request.EventTypeHTTPClient, "GET", "/attach", "2.2.2.2:1234", 200, 60000, 60000, 70000)
+			out <- newRequestWithTiming("svc1", 1, request.EventTypeHTTP, "GET", "/user/1234", "1.1.1.1:3456", 200, 10000, 10000, 50000)
+			out <- newRequestWithTiming("svc1", 3, request.EventTypeHTTPClient, "GET", "/products/3210/pull", "2.2.2.2:3456", 204, 80000, 80000, 90000)
+			out <- newRequestWithTiming("svc1", 3, request.EventTypeHTTPClient, "GET", "/products/3211/pull", "2.2.2.2:3456", 203, 80000, 80000, 90000)
+			out <- newRequestWithTiming("svc1", 2, request.EventTypeHTTP, "GET", "/products/3210/push", "1.1.1.1:3456", 200, 10000, 20000, 50000)
+			out <- newRequestWithTiming("svc1", 3, request.EventTypeHTTP, "GET", "/attach", "1.1.1.1:3456", 200, 70000, 80000, 100000)
+			out <- newRequestWithTiming("svc1", 1, request.EventTypeHTTPClient, "GET", "/attach2", "2.2.2.2:1234", 200, 30000, 30000, 40000)
+			out <- newRequestWithTiming("svc1", 0, request.EventTypeHTTPClient, "GET", "/attach1", "2.2.2.2:1234", 200, 20000, 20000, 40000)
+			out <- newRequestWithTiming("svc1", 1, request.EventTypeHTTP, "GET", "/user/3456", "1.1.1.1:3456", 200, 56000, 56000, 80000)
 		}, nil
 	})
 	pipe, err := gb.buildGraph(ctx)
@@ -308,7 +346,7 @@ func TestNestedSpanMatching(t *testing.T) {
 	assert.Equal(t, parent1ID, event.Attributes["parent_span_id"])
 }
 
-func newRequest(id uint64, method, path, peer string, status int) []request.Span {
+func newRequest(serviceName string, id uint64, method, path, peer string, status int) []request.Span {
 	return []request.Span{{
 		Path:         path,
 		Method:       method,
@@ -321,10 +359,11 @@ func newRequest(id uint64, method, path, peer string, status int) []request.Span
 		Start:        2,
 		RequestStart: 1,
 		End:          3,
+		ServiceName:  serviceName,
 	}}
 }
 
-func newRequestWithTiming(id uint64, kind request.EventType, method, path, peer string, status int, goStart, start, end uint64) []request.Span {
+func newRequestWithTiming(svcName string, id uint64, kind request.EventType, method, path, peer string, status int, goStart, start, end uint64) []request.Span {
 	return []request.Span{{
 		Path:         path,
 		Method:       method,
@@ -337,10 +376,11 @@ func newRequestWithTiming(id uint64, kind request.EventType, method, path, peer 
 		RequestStart: int64(goStart),
 		Start:        int64(start),
 		End:          int64(end),
+		ServiceName:  svcName,
 	}}
 }
 
-func newGRPCRequest(id uint64, path string, status int) []request.Span {
+func newGRPCRequest(svcName string, id uint64, path string, status int) []request.Span {
 	return []request.Span{{
 		Path:         path,
 		Peer:         "1.1.1.1",
@@ -352,6 +392,7 @@ func newGRPCRequest(id uint64, path string, status int) []request.Span {
 		Start:        2,
 		RequestStart: 1,
 		End:          3,
+		ServiceName:  svcName,
 	}}
 }
 
@@ -363,10 +404,11 @@ func getHostname() string {
 	return hostname
 }
 
-func matchTraceEvent(t *testing.T, name string, event collector.TraceRecord) {
+func matchTraceEvent(t require.TestingT, svcName, name string, event collector.TraceRecord) {
 	assert.Equal(t, collector.TraceRecord{
 		Name: name,
 		Attributes: map[string]string{
+			string(semconv.ServiceNameKey):              svcName,
 			string(semconv.HTTPMethodKey):               "GET",
 			string(semconv.HTTPStatusCodeKey):           "404",
 			string(semconv.HTTPTargetKey):               "/foo/bar",
@@ -381,7 +423,7 @@ func matchTraceEvent(t *testing.T, name string, event collector.TraceRecord) {
 	}, event)
 }
 
-func matchInnerTraceEvent(t *testing.T, name string, event collector.TraceRecord) {
+func matchInnerTraceEvent(t require.TestingT, name string, event collector.TraceRecord) {
 	assert.Equal(t, collector.TraceRecord{
 		Name: name,
 		Attributes: map[string]string{
@@ -392,10 +434,11 @@ func matchInnerTraceEvent(t *testing.T, name string, event collector.TraceRecord
 	}, event)
 }
 
-func matchGRPCTraceEvent(t *testing.T, name string, event collector.TraceRecord) {
+func matchGRPCTraceEvent(t *testing.T, svcName, name string, event collector.TraceRecord) {
 	assert.Equal(t, collector.TraceRecord{
 		Name: name,
 		Attributes: map[string]string{
+			string(semconv.ServiceNameKey):       svcName,
 			string(semconv.RPCSystemKey):         "grpc",
 			string(semconv.RPCGRPCStatusCodeKey): "3",
 			string(semconv.RPCMethodKey):         "foo.bar",
@@ -474,15 +517,15 @@ func TestBasicPipelineInfo(t *testing.T) {
 	tc, err := collector.Start(ctx)
 	require.NoError(t, err)
 
+	tracesInput := make(chan []request.Span, 10)
 	gb := newGraphBuilder(&Config{
-		Metrics: otel.MetricsConfig{MetricsEndpoint: tc.ServerEndpoint, ReportTarget: true, ReportPeerInfo: true},
-	}, gctx(), make(<-chan []request.Span))
-	// Override eBPF tracer to send some fake data
-	graph.RegisterStart(gb.builder, func(_ context.Context, _ traces.Reader) (node.StartFuncCtx[[]request.Span], error) {
-		return func(_ context.Context, out chan<- []request.Span) {
-			out <- newHTTPInfo("PATCH", "/aaa/bbb", "1.1.1.1", 204)
-		}, nil
-	})
+		Metrics: otel.MetricsConfig{
+			MetricsEndpoint: tc.ServerEndpoint, ReportTarget: true, ReportPeerInfo: true,
+			Interval: 10 * time.Millisecond, ReportersCacheLen: 16,
+		},
+	}, gctx(), tracesInput)
+	// send some fake data through the traces' input
+	tracesInput <- newHTTPInfo("PATCH", "/aaa/bbb", "1.1.1.1", 204)
 	pipe, err := gb.buildGraph(ctx)
 	require.NoError(t, err)
 
@@ -511,7 +554,7 @@ func TestTracerPipelineInfo(t *testing.T) {
 	require.NoError(t, err)
 
 	gb := newGraphBuilder(&Config{
-		Traces: otel.TracesConfig{TracesEndpoint: tc.ServerEndpoint, SamplingRatio: 1.0},
+		Traces: otel.TracesConfig{TracesEndpoint: tc.ServerEndpoint, SamplingRatio: 1.0, ReportersCacheLen: 16},
 	}, gctx(), make(<-chan []request.Span))
 	// Override eBPF tracer to send some fake data
 	graph.RegisterStart(gb.builder, func(_ context.Context, _ traces.Reader) (node.StartFuncCtx[[]request.Span], error) {

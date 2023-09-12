@@ -201,11 +201,15 @@ func testHTTPTracesBadTraceparent(t *testing.T) {
 }
 
 func testGRPCTraces(t *testing.T) {
+	testGRPCTracesForServiceName(t, "testserver")
+}
+
+func testGRPCTracesForServiceName(t *testing.T, svcName string) {
 	require.Error(t, grpcclient.Debug(10*time.Millisecond, true))
 
 	var trace jaeger.Trace
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
-		resp, err := http.Get(jaegerQueryURL + "?service=testserver&operation=%2Frouteguide.RouteGuide%2FDebug")
+		resp, err := http.Get(jaegerQueryURL + "?service=" + svcName + "&operation=%2Frouteguide.RouteGuide%2FDebug")
 		require.NoError(t, err)
 		require.Equal(t, http.StatusOK, resp.StatusCode)
 		var tq jaeger.TracesQuery
@@ -231,6 +235,7 @@ func testGRPCTraces(t *testing.T) {
 		jaeger.Tag{Key: "rpc.method", Type: "string", Value: "/routeguide.RouteGuide/Debug"},
 		jaeger.Tag{Key: "rpc.system", Type: "string", Value: "grpc"},
 		jaeger.Tag{Key: "span.kind", Type: "string", Value: "server"},
+		jaeger.Tag{Key: "service.name", Type: "string", Value: svcName},
 	), "not all tags matched in %+v", parent.Tags)
 
 	// Check the information of the "in queue" span
@@ -276,7 +281,7 @@ func testGRPCTraces(t *testing.T) {
 	assert.Equal(t, parent.ProcessID, queue.ProcessID)
 	assert.Equal(t, parent.ProcessID, processing.ProcessID)
 	process := trace.Processes[parent.ProcessID]
-	assert.Equal(t, "testserver", process.ServiceName)
+	assert.Equal(t, svcName, process.ServiceName)
 	assert.Truef(t, jaeger.AllMatches(process.Tags, []jaeger.Tag{
 		{Key: "telemetry.sdk.language", Type: "string", Value: "go"},
 		{Key: "service.namespace", Type: "string", Value: "integration-test"},

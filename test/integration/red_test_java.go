@@ -71,7 +71,7 @@ func testREDMetricsJavaHTTPSystemWide(t *testing.T) {
 	} {
 		t.Run(testCaseURL, func(t *testing.T) {
 			waitForJavaTestComponents(t, testCaseURL)
-			testREDMetricsForJavaHTTPLibrary(t, testCaseURL, "")
+			testREDMetricsForJavaHTTPLibrary(t, testCaseURL, "greeting")
 		})
 	}
 }

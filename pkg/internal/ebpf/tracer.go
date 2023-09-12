@@ -210,11 +210,14 @@ func inspect(ctx context.Context, cfg *ebpfcommon.TracerConfig, functions []stri
 	var offsets *goexec.Offsets
 
 	if !cfg.SystemWide {
-		logger().Info("inspecting", "pid", execElf.Pid, "comm", execElf.CmdExePath)
-
-		offsets, err = goexec.InspectOffsets(&execElf, functions)
-		if err != nil {
-			logger().Info("Go HTTP/gRPC support not detected. Using only generic instrumentation.", "error", err)
+		if cfg.SkipGoSpecificTracers {
+			logger().Info("Skipping inspection for Go functions. Using only generic instrumentation.", "pid", execElf.Pid, "comm", execElf.CmdExePath)
+		} else {
+			logger().Info("inspecting", "pid", execElf.Pid, "comm", execElf.CmdExePath)
+			offsets, err = goexec.InspectOffsets(&execElf, functions)
+			if err != nil {
+				logger().Info("Go HTTP/gRPC support not detected. Using only generic instrumentation.", "error", err)
+			}
 		}
 	}
 
@@ -239,11 +242,17 @@ func inspectByPort(ctx context.Context, cfg *ebpfcommon.TracerConfig, functions 
 
 	// look for suitable Go application first
 	for _, execElf := range elfs {
-		logger().Info("inspecting", "pid", execElf.Pid, "comm", execElf.CmdExePath)
+		var offsets *goexec.Offsets
+		var err error
 
-		offsets, err := goexec.InspectOffsets(&execElf, functions)
+		if cfg.SkipGoSpecificTracers {
+			logger().Info("skipping inspection for Go functions", "pid", execElf.Pid, "comm", execElf.CmdExePath)
+		} else {
+			logger().Info("inspecting", "pid", execElf.Pid, "comm", execElf.CmdExePath)
+			offsets, err = goexec.InspectOffsets(&execElf, functions)
+		}
 
-		if err != nil {
+		if cfg.SkipGoSpecificTracers || err != nil {
 			fallBackInfos = append(fallBackInfos, execElf)
 			pidMap[execElf.Pid] = execElf
 			logger().Info("adding fall-back generic executable", "pid", execElf.Pid, "comm", execElf.CmdExePath)

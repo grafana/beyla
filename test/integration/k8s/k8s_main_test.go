@@ -12,6 +12,7 @@ import (
 
 	"github.com/grafana/beyla/test/integration/components/docker"
 	"github.com/grafana/beyla/test/integration/components/kube"
+	"github.com/grafana/beyla/test/tools"
 )
 
 const (
@@ -25,9 +26,10 @@ const (
 )
 
 var (
-	pathRoot     = path.Join("..", "..", "..")
-	pathOutput   = path.Join(pathRoot, "testoutput")
-	pathKindLogs = path.Join(pathOutput, "kind")
+	pathRoot       = tools.ProjectDir()
+	pathOutput     = path.Join(pathRoot, "testoutput")
+	pathKindLogs   = path.Join(pathOutput, "kind")
+	componentsPath = path.Join(pathRoot, "test", "integration", "components")
 )
 
 // Ping stores the configuration data of a local pod that will be used to
@@ -43,10 +45,10 @@ var cluster *kube.Kind
 // TestMain is run once before all the tests in the package. If you need to mount a different cluster for
 // a different test suite, you should add a new TestMain in a new package together with the new test suite
 func TestMain(m *testing.M) {
-	if err := docker.Build(os.Stdout, "../../..",
-		docker.ImageBuild{Tag: "testserver:dev", Dockerfile: "../components/testserver/Dockerfile"},
-		docker.ImageBuild{Tag: "beyla:dev", Dockerfile: "../components/beyla/Dockerfile"},
-		docker.ImageBuild{Tag: "grpcpinger:dev", Dockerfile: "../components/grpcpinger/Dockerfile"},
+	if err := docker.Build(os.Stdout, pathRoot,
+		docker.ImageBuild{Tag: "testserver:dev", Dockerfile: componentsPath + "/testserver/Dockerfile"},
+		docker.ImageBuild{Tag: "beyla:dev", Dockerfile: componentsPath + "/beyla/Dockerfile"},
+		docker.ImageBuild{Tag: "grpcpinger:dev", Dockerfile: componentsPath + "/grpcpinger/Dockerfile"},
 	); err != nil {
 		slog.Error("can't build docker images", err)
 		os.Exit(-1)

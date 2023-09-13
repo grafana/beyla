@@ -12,6 +12,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/grafana/beyla/test/tools"
 )
 
 var debugData *dwarf.Data
@@ -41,13 +43,14 @@ func compileELF(source string, extraArgs ...string) *elf.File {
 
 func TestMain(m *testing.M) {
 	var err error
+	baseDir := tools.ProjectDir()
 	// Compiling the same executable twice, with and without debug data so we can inspect it later in the tests
-	debugData, err = compileELF("../../../test/cmd/pingserver/server.go").DWARF()
+	debugData, err = compileELF(baseDir + "/test/cmd/pingserver/server.go").DWARF()
 	if err != nil {
 		panic(err)
 	}
-	grpcElf, _ = compileELF("../../../test/cmd/grpc/server/server.go").DWARF()
-	smallELF = compileELF("../../../test/cmd/pingserver/server.go", "-ldflags", "-s -w")
+	grpcElf, _ = compileELF(baseDir + "/test/cmd/grpc/server/server.go").DWARF()
+	smallELF = compileELF(baseDir+"/test/cmd/pingserver/server.go", "-ldflags", "-s -w")
 	m.Run()
 }
 

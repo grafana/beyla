@@ -1,6 +1,6 @@
 //go:build integration
 
-package k8s
+package otel
 
 import (
 	"context"
@@ -17,14 +17,15 @@ import (
 
 	"github.com/grafana/beyla/test/integration/components/jaeger"
 	"github.com/grafana/beyla/test/integration/components/kube"
+	k8s "github.com/grafana/beyla/test/integration/k8s/common"
 )
 
 // We only check that traces are decorated in an overall Pod2Service scenario, as the whole metadata
 // composition process is shared too with the rest of metrics decoration
 func TestTracesDecoration(t *testing.T) {
-	pinger := kube.Template[Pinger]{
+	pinger := kube.Template[k8s.Pinger]{
 		TemplateFile: pingerManifest,
-		Data: Pinger{
+		Data: k8s.Pinger{
 			PodName:   "internal-pinger",
 			TargetURL: "http://testserver:8080/traced-ping",
 		},

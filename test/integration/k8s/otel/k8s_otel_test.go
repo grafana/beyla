@@ -1,6 +1,6 @@
 //go:build integration
 
-package k8s
+package otel
 
 import (
 	"context"
@@ -19,6 +19,7 @@ import (
 
 	"github.com/grafana/beyla/test/integration/components/kube"
 	"github.com/grafana/beyla/test/integration/components/prom"
+	k8s "github.com/grafana/beyla/test/integration/k8s/common"
 )
 
 var (
@@ -83,9 +84,9 @@ func TestAA_HTTPMetricsDecoration_ExternalToPod(t *testing.T) {
 }
 
 func TestHTTPDecoration_Pod2Service(t *testing.T) {
-	pinger := kube.Template[Pinger]{
+	pinger := kube.Template[k8s.Pinger]{
 		TemplateFile: pingerManifest,
-		Data: Pinger{
+		Data: k8s.Pinger{
 			PodName:   "internal-pinger",
 			TargetURL: "http://testserver:8080/iping",
 		},
@@ -117,9 +118,9 @@ func TestHTTPDecoration_Pod2Service(t *testing.T) {
 }
 
 func TestHTTPClientMetricsDecoration_Pod2Pod(t *testing.T) {
-	pinger := kube.Template[Pinger]{
+	pinger := kube.Template[k8s.Pinger]{
 		TemplateFile: pingerManifest,
-		Data: Pinger{
+		Data: k8s.Pinger{
 			PodName: "ping-to-pod",
 		},
 	}
@@ -145,9 +146,9 @@ func TestHTTPClientMetricsDecoration_Pod2Pod(t *testing.T) {
 }
 
 func TestHTTPMetricsDecoration_Pod2External(t *testing.T) {
-	pinger := kube.Template[Pinger]{
+	pinger := kube.Template[k8s.Pinger]{
 		TemplateFile: pingerManifest,
-		Data: Pinger{
+		Data: k8s.Pinger{
 			PodName:   "ping-to-grafana",
 			TargetURL: "https://grafana.com/",
 		},
@@ -166,9 +167,9 @@ func TestHTTPMetricsDecoration_Pod2External(t *testing.T) {
 }
 
 func TestGRPCMetricsDecoration_Pod2Service(t *testing.T) {
-	pinger := kube.Template[Pinger]{
+	pinger := kube.Template[k8s.Pinger]{
 		TemplateFile: grpcPingerManifest,
-		Data: Pinger{
+		Data: k8s.Pinger{
 			PodName:   "internal-grpc-pinger",
 			TargetURL: "testserver:50051",
 		},
@@ -200,9 +201,9 @@ func TestGRPCMetricsDecoration_Pod2Service(t *testing.T) {
 }
 
 func TestGRPCMetricsDecoration_Pod2Pod(t *testing.T) {
-	pinger := kube.Template[Pinger]{
+	pinger := kube.Template[k8s.Pinger]{
 		TemplateFile: grpcPingerManifest,
-		Data: Pinger{
+		Data: k8s.Pinger{
 			PodName: "internal-grpc-pinger-2pod",
 		},
 	}

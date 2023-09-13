@@ -1,6 +1,6 @@
 //go:build integration
 
-package k8s
+package otel
 
 import (
 	"os"

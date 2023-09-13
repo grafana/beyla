@@ -1,10 +1,9 @@
 //go:build integration
 
-package otel
+package prom
 
 import (
 	"os"
-	"path"
 	"testing"
 	"time"
 
@@ -12,7 +11,7 @@ import (
 
 	"github.com/grafana/beyla/test/integration/components/docker"
 	"github.com/grafana/beyla/test/integration/components/kube"
-	"github.com/grafana/beyla/test/tools"
+	k8s "github.com/grafana/beyla/test/integration/k8s/common"
 )
 
 const (
@@ -25,37 +24,22 @@ const (
 	grpcPingerManifest = "manifests/06-instrumented-grpc-client.template.yml"
 )
 
-var (
-	pathRoot       = tools.ProjectDir()
-	pathOutput     = path.Join(pathRoot, "testoutput")
-	pathKindLogs   = path.Join(pathOutput, "kind")
-	componentsPath = path.Join(pathRoot, "test", "integration", "components")
-)
-
-// Ping stores the configuration data of a local pod that will be used to
-// send recurring requests to the test server
-type Pinger struct {
-	PodName      string
-	TargetURL    string
-	ConfigSuffix string
-}
-
 var cluster *kube.Kind
 
 // TestMain is run once before all the tests in the package. If you need to mount a different cluster for
 // a different test suite, you should add a new TestMain in a new package together with the new test suite
 func TestMain(m *testing.M) {
-	if err := docker.Build(os.Stdout, pathRoot,
-		docker.ImageBuild{Tag: "testserver:dev", Dockerfile: componentsPath + "/testserver/Dockerfile"},
-		docker.ImageBuild{Tag: "beyla:dev", Dockerfile: componentsPath + "/beyla/Dockerfile"},
-		docker.ImageBuild{Tag: "grpcpinger:dev", Dockerfile: componentsPath + "/grpcpinger/Dockerfile"},
+	if err := docker.Build(os.Stdout, k8s.PathRoot,
+		docker.ImageBuild{Tag: "testserver:dev", Dockerfile: k8s.DockerfileTestServer},
+		docker.ImageBuild{Tag: "beyla:dev", Dockerfile: k8s.DockerfileBeyla},
+		docker.ImageBuild{Tag: "grpcpinger:dev", Dockerfile: k8s.DockerfilePinger},
 	); err != nil {
 		slog.Error("can't build docker images", err)
 		os.Exit(-1)
 	}
 
 	cluster = kube.NewKind("test-kind-cluster",
-		kube.ExportLogs(pathKindLogs),
+		kube.ExportLogs(k8s.PathKindLogs),
 		kube.KindConfig("manifests/00-kind.yml"),
 		kube.LocalImage("testserver:dev"),
 		kube.LocalImage("beyla:dev"),

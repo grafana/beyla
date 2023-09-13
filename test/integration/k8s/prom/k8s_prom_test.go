@@ -10,14 +10,14 @@ import (
 	"sigs.k8s.io/e2e-framework/pkg/features"
 
 	"github.com/grafana/beyla/test/integration/components/kube"
-	"github.com/grafana/beyla/test/integration/k8s/otel"
+	k8s "github.com/grafana/beyla/test/integration/k8s/common"
 )
 
 func TestPrometheusDecoration(t *testing.T) {
 	t.Skip("Prometheus K8s metadata decoration is WIP")
-	pinger := kube.Template[otel.Pinger]{
-		TemplateFile: otel.pingerManifest,
-		Data: otel.Pinger{
+	pinger := kube.Template[k8s.Pinger]{
+		TemplateFile: k8s.PingerManifest,
+		Data: k8s.Pinger{
 			PodName:      "prom-pinger",
 			TargetURL:    "http://testserver:8080/prom-ping",
 			ConfigSuffix: "-promscrape",
@@ -32,5 +32,5 @@ func TestPrometheusDecoration(t *testing.T) {
 				return ctx
 			},
 		).Feature()
-	otel.cluster.TestEnv().Test(t, feat)
+	cluster.TestEnv().Test(t, feat)
 }

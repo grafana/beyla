@@ -4,10 +4,10 @@ nodes:
   - role: control-plane
     extraMounts:
       # configuration files that need to be mounted in the host
-      - hostPath: ../configs
+      - hostPath: ../../configs
         containerPath: /configs
       # testoutput folder to store coverage data
-      - hostPath: ../../../testoutput
+      - hostPath: ../../../../testoutput
         containerPath: /testoutput
     extraPortMappings:
       # to avoid having to do port-forwarding from the Go client (a bit cumbersome process),

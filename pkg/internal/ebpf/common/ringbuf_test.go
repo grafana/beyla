@@ -39,7 +39,7 @@ func TestForwardRingbuf_CapacityFull(t *testing.T) {
 	)(context.Background(), forwardedMessages)
 
 	// WHEN it starts receiving trace events
-	var get = [6]byte{'G', 'E', 'T', 0, 0, 0}
+	var get = [7]byte{'G', 'E', 'T', 0, 0, 0, 0}
 	for i := 0; i < 20; i++ {
 		ringBuf.events <- HTTPRequestTrace{Type: 1, Method: get, ContentLength: int64(i)}
 	}
@@ -86,7 +86,7 @@ func TestForwardRingbuf_Deadline(t *testing.T) {
 	)(context.Background(), forwardedMessages)
 
 	// WHEN it receives, after a timeout, less events than its internal buffer
-	var get = [6]byte{'G', 'E', 'T', 0, 0, 0}
+	var get = [7]byte{'G', 'E', 'T', 0, 0, 0, 0}
 	for i := 0; i < 7; i++ {
 		ringBuf.events <- HTTPRequestTrace{Type: 1, Method: get, ContentLength: int64(i)}
 	}

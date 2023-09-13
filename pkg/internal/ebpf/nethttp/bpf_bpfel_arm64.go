@@ -81,8 +81,8 @@ type bpfSpecs struct {
 type bpfProgramSpecs struct {
 	UprobeServeHTTP           *ebpf.ProgramSpec `ebpf:"uprobe_ServeHTTP"`
 	UprobeWriteHeader         *ebpf.ProgramSpec `ebpf:"uprobe_WriteHeader"`
-	UprobeClientSend          *ebpf.ProgramSpec `ebpf:"uprobe_clientSend"`
-	UprobeClientSendReturn    *ebpf.ProgramSpec `ebpf:"uprobe_clientSendReturn"`
+	UprobeRoundTrip           *ebpf.ProgramSpec `ebpf:"uprobe_roundTrip"`
+	UprobeRoundTripReturn     *ebpf.ProgramSpec `ebpf:"uprobe_roundTripReturn"`
 	UprobeStartBackgroundRead *ebpf.ProgramSpec `ebpf:"uprobe_startBackgroundRead"`
 }
 
@@ -142,8 +142,8 @@ func (m *bpfMaps) Close() error {
 type bpfPrograms struct {
 	UprobeServeHTTP           *ebpf.Program `ebpf:"uprobe_ServeHTTP"`
 	UprobeWriteHeader         *ebpf.Program `ebpf:"uprobe_WriteHeader"`
-	UprobeClientSend          *ebpf.Program `ebpf:"uprobe_clientSend"`
-	UprobeClientSendReturn    *ebpf.Program `ebpf:"uprobe_clientSendReturn"`
+	UprobeRoundTrip           *ebpf.Program `ebpf:"uprobe_roundTrip"`
+	UprobeRoundTripReturn     *ebpf.Program `ebpf:"uprobe_roundTripReturn"`
 	UprobeStartBackgroundRead *ebpf.Program `ebpf:"uprobe_startBackgroundRead"`
 }
 
@@ -151,8 +151,8 @@ func (p *bpfPrograms) Close() error {
 	return _BpfClose(
 		p.UprobeServeHTTP,
 		p.UprobeWriteHeader,
-		p.UprobeClientSend,
-		p.UprobeClientSendReturn,
+		p.UprobeRoundTrip,
+		p.UprobeRoundTripReturn,
 		p.UprobeStartBackgroundRead,
 	)
 }

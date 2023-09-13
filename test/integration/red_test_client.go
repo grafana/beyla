@@ -4,6 +4,7 @@ package integration
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 	"testing"
@@ -17,15 +18,15 @@ import (
 	"github.com/grafana/beyla/test/integration/components/prom"
 )
 
-func testREDMetricsForClientHTTPLibrary(t *testing.T) {
+func testClientWithMethodAndStatusCode(t *testing.T, method string, statusCode int, traceIDLookup string) {
 	// Eventually, Prometheus would make this query visible
 	pq := prom.Client{HostPort: prometheusHostPort}
 	var results []prom.Result
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
 		var err error
 		results, err = pq.Query(`http_client_duration_seconds_count{` +
-			`http_method="GET",` +
-			`http_status_code="200",` +
+			fmt.Sprintf(`http_method="%s",`, method) +
+			fmt.Sprintf(`http_status_code="%d",`, statusCode) +
 			`service_namespace="integration-test",` +
 			`service_name="pingclient"}`)
 		require.NoError(t, err)
@@ -37,8 +38,8 @@ func testREDMetricsForClientHTTPLibrary(t *testing.T) {
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
 		var err error
 		results, err = pq.Query(`http_client_request_size_bytes_count{` +
-			`http_method="GET",` +
-			`http_status_code="200",` +
+			fmt.Sprintf(`http_method="%s",`, method) +
+			fmt.Sprintf(`http_status_code="%d",`, statusCode) +
 			`service_namespace="integration-test",` +
 			`service_name="pingclient"}`)
 		require.NoError(t, err)
@@ -49,7 +50,7 @@ func testREDMetricsForClientHTTPLibrary(t *testing.T) {
 
 	var trace jaeger.Trace
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
-		resp, err := http.Get(jaegerQueryURL + "?service=pingclient&operation=GET")
+		resp, err := http.Get(jaegerQueryURL + fmt.Sprintf("?service=pingclient&operation=%s", method))
 		require.NoError(t, err)
 		if resp == nil {
 			return
@@ -62,7 +63,7 @@ func testREDMetricsForClientHTTPLibrary(t *testing.T) {
 		trace = traces[0]
 	}, test.Interval(100*time.Millisecond))
 
-	spans := trace.FindByOperationName("GET")
+	spans := trace.FindByOperationName(method)
 	require.Len(t, spans, 1)
 	span := spans[0]
 
@@ -75,7 +76,7 @@ func testREDMetricsForClientHTTPLibrary(t *testing.T) {
 	 use the first 16 characters for looking up by Parent span.
 	*/
 	require.True(t, span.TraceID != "")
-	require.True(t, strings.HasSuffix(span.TraceID, "0000000000000000"))
+	require.True(t, strings.HasSuffix(span.TraceID, traceIDLookup))
 
 	// The first 16 characters of traceID must match the spanID if pingclient
 	// generated the spans
@@ -85,4 +86,9 @@ func testREDMetricsForClientHTTPLibrary(t *testing.T) {
 	childSpan := childOfPID[0]
 	require.Equal(t, childSpan.TraceID, span.TraceID)
 	require.Equal(t, childSpan.SpanID, span.SpanID)
+}
+
+func testREDMetricsForClientHTTPLibrary(t *testing.T) {
+	testClientWithMethodAndStatusCode(t, "GET", 200, "0000000000000000")
+	testClientWithMethodAndStatusCode(t, "OPTIONS", 204, "0000000000000001")
 }

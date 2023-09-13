@@ -17,7 +17,7 @@ type bpfHttpRequestTrace struct {
 	GoStartMonotimeNs uint64
 	StartMonotimeNs   uint64
 	EndMonotimeNs     uint64
-	Method            [6]uint8
+	Method            [7]uint8
 	Path              [100]uint8
 	Status            uint16
 	RemoteAddr        [50]uint8

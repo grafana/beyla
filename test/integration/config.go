@@ -1,9 +1,13 @@
 package integration
 
-import "path"
+import (
+	"path"
+
+	"github.com/grafana/beyla/test/tools"
+)
 
 var (
-	pathRoot   = path.Join("..", "..")
+	pathRoot   = tools.ProjectDir()
 	pathOutput = path.Join(pathRoot, "testoutput")
 	pathVarRun = path.Join(pathOutput, "run")
 )

@@ -1,4 +1,4 @@
-<img src="docs/sources/assets/logo.png" style="vertical-align:middle" height=226 alt="Grafana Beyla logo">
+<img src="docs/sources/assets/logo.png" height=226 alt="Grafana Beyla logo">
 
 # Grafana Beyla
 

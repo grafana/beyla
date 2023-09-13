@@ -1,11 +1,13 @@
-<p><img src="docs/sources/assets/logo.png" style="vertical-align:middle" height=226 alt="Grafana Beyla logo"><span style="font-size: 7em;vertical-align:middle">Grafana&nbsp;Beyla</span></p>
+<img src="docs/sources/assets/logo.png" style="vertical-align:middle" height=226 alt="Grafana Beyla logo">
+<font size="7">Grafana&nbsp;Beyla</font>
 
+
+eBPF-based auto-instrumentation of HTTP/HTTPS/GRPC Go services, as well as HTTP/HTTPS services
+written in other languages (intercepting Kernel-level socket operations as well as
+OpenSSL invocations).
 
 [![Build Status](https://drone.grafana.net/api/badges/grafana/beyla/status.svg?ref=refs/heads/main)](https://drone.grafana.net/grafana/beyla)
 
-eBPF-based autoinstrumentation of HTTP/HTTPS/GRPC Go services, as well as HTTP/HTTPS services
-written in other languages (intercepting Kernel-level socket operations as well as
-OpenSSL invocations).
 
 ## Getting Started
 

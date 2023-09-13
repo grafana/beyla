@@ -14,30 +14,77 @@ var tr = &http.Transport{
 }
 var testHTTPClient = &http.Client{Transport: tr}
 
+func regularGetRequest(url string, counter int) {
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		fmt.Println("error creating request:", err)
+		return
+	}
+	var traceID [16]byte
+	var spanID [8]byte
+	binary.BigEndian.PutUint64(traceID[:8], uint64(counter))
+	binary.BigEndian.PutUint64(spanID[:], uint64(counter))
+
+	// Generate a traceparent that we easily recognize
+	tp := fmt.Sprintf("00-%s-%s-01", hex.EncodeToString(traceID[:]), hex.EncodeToString(spanID[:]))
+	req.Header.Set("traceparent", tp)
+
+	r, err := testHTTPClient.Do(req)
+	if err != nil {
+		fmt.Println("error!", err)
+	}
+	if r != nil {
+		fmt.Println("response:", r.Status)
+	}
+}
+
+type MyRoundTripper struct{}
+
+func (rt *MyRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	req.Header.Add("X-My-Header", "my-value")
+
+	// send the request using the custom transport
+	res, err := tr.RoundTrip(req)
+	if err != nil {
+		return nil, err
+	}
+
+	// process the response as needed
+	return res, nil
+}
+
+func rtRequest(url string, counter int) {
+	req, err := http.NewRequest("OPTIONS", url, nil)
+	if err != nil {
+		fmt.Println("error creating request:", err)
+		return
+	}
+	var traceID [16]byte
+	var spanID [8]byte
+	binary.BigEndian.PutUint64(traceID[:8], uint64(counter))
+	binary.BigEndian.PutUint64(traceID[8:], uint64(1))
+	binary.BigEndian.PutUint64(spanID[:], uint64(counter))
+
+	// Generate a traceparent that we easily recognize
+	tp := fmt.Sprintf("00-%s-%s-01", hex.EncodeToString(traceID[:]), hex.EncodeToString(spanID[:]))
+	req.Header.Set("traceparent", tp)
+
+	mt := &MyRoundTripper{}
+
+	r, err := mt.RoundTrip(req)
+	if err != nil {
+		fmt.Println("error!", err)
+	}
+	if r != nil {
+		fmt.Println("response:", r.Status)
+	}
+}
+
 func main() {
 	counter := 1
 	for {
-		req, err := http.NewRequest("GET", "https://grafana.com", nil)
-		if err != nil {
-			fmt.Println("error creating request:", err)
-			return
-		}
-		var traceID [16]byte
-		var spanID [8]byte
-		binary.BigEndian.PutUint64(traceID[:8], uint64(counter))
-		binary.BigEndian.PutUint64(spanID[:], uint64(counter))
-
-		// Generate a traceparent that we easily recognize
-		tp := fmt.Sprintf("00-%s-%s-01", hex.EncodeToString(traceID[:]), hex.EncodeToString(spanID[:]))
-		req.Header.Set("traceparent", tp)
-
-		r, err := testHTTPClient.Do(req)
-		if err != nil {
-			fmt.Println("error!", err)
-		}
-		if r != nil {
-			fmt.Println("response:", r.Status)
-		}
+		regularGetRequest("https://grafana.com", counter)
+		rtRequest("https://grafana.com", counter)
 		time.Sleep(time.Second)
 		counter++
 	}

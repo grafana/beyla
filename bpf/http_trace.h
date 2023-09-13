@@ -16,7 +16,7 @@
 #include "utils.h"
 
 #define PATH_MAX_LEN 100
-#define METHOD_MAX_LEN 6 // Longest method: DELETE
+#define METHOD_MAX_LEN 7 // Longest method: OPTIONS
 #define REMOTE_ADDR_MAX_LEN 50 // We need 48: 39(ip v6 max) + 1(: separator) + 7(port length max value 65535) + 1(null terminator)
 #define HOST_LEN 256 // can be a fully qualified DNS name
 #define TRACEPARENT_LEN 55

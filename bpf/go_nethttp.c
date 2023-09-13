@@ -171,9 +171,9 @@ int uprobe_WriteHeader(struct pt_regs *ctx) {
 
 /* HTTP Client. We expect to see HTTP client in both HTTP server and gRPC server calls.*/
 
-SEC("uprobe/clientSend")
-int uprobe_clientSend(struct pt_regs *ctx) {
-    bpf_dbg_printk("=== uprobe/proc http client.send === ");
+SEC("uprobe/roundTrip")
+int uprobe_roundTrip(struct pt_regs *ctx) {
+    bpf_dbg_printk("=== uprobe/proc http roundTrip === ");
 
     void *goroutine_addr = GOROUTINE_PTR(ctx);
     bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
@@ -191,9 +191,9 @@ int uprobe_clientSend(struct pt_regs *ctx) {
     return 0;
 }
 
-SEC("uprobe/clientSend_return")
-int uprobe_clientSendReturn(struct pt_regs *ctx) {
-    bpf_dbg_printk("=== uprobe/proc http client.send return === ");
+SEC("uprobe/roundTrip_return")
+int uprobe_roundTripReturn(struct pt_regs *ctx) {
+    bpf_dbg_printk("=== uprobe/proc http roundTrip return === ");
 
     void *goroutine_addr = GOROUTINE_PTR(ctx);
     bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);

@@ -14,7 +14,7 @@ func cstr(s string) []byte {
 }
 
 func makeHTTPRequestTrace(method, path, peerInfo string, status uint16, durationMs uint64) HTTPRequestTrace {
-	m := [6]uint8{}
+	m := [7]uint8{}
 	copy(m[:], cstr(method)[:])
 	p := [100]uint8{}
 	copy(p[:], cstr(path)[:])

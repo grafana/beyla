@@ -9,7 +9,7 @@
 
 #define MAX_CONCURRENT_SSL_REQUESTS 10000
 
-// We use this map to track ssl hanshake enter/exit, it should be only
+// We use this map to track ssl handshake enter/exit, it should be only
 // temporary
 struct {
     __uint(type, BPF_MAP_TYPE_HASH);

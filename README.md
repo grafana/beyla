@@ -1,6 +1,6 @@
 <img src="docs/sources/assets/logo.png" style="vertical-align:middle" height=226 alt="Grafana Beyla logo">
-<font size="7">Grafana&nbsp;Beyla</font>
 
+# Grafana Beyla
 
 eBPF-based auto-instrumentation of HTTP/HTTPS/GRPC Go services, as well as HTTP/HTTPS services
 written in other languages (intercepting Kernel-level socket operations as well as

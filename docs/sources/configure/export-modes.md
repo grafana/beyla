@@ -44,7 +44,7 @@ To run in Direct mode by using the Prometheus scrape endpoint, please refer to t
 > as local Linux OS executables. For further examples on downloading and running the
 > auto-instrumentation tool as an OCI container, you can check the documentation sections on
 > [running the Beyla as a Docker container]({{< relref "../setup/docker.md" >}})
-> or [running Beyla in Kubernetes]({{< relref "../kubernetes.md" >}}).
+> or [running Beyla in Kubernetes]({{< relref "../setup/kubernetes.md" >}}).
 
 First, you will need to locally install and configure the [Grafana Agent in **Flow** mode, according to the latest documentation](/docs/agent/latest/flow/).
 Running the Agent in Flow mode will facilitate the ingestion of OpenTelemetry

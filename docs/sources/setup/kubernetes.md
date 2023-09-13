@@ -2,7 +2,7 @@
 title: Deploy Beyla in Kubernetes
 menuTitle: Deploy in Kubernetes
 description: Learn how to deploy Beyla in Kubernetes.
-weight: 5
+weight: 3
 keywords:
   - Beyla
   - eBPF
@@ -15,6 +15,9 @@ You can deploy Beyla in Kubernetes in two separate ways:
 
 - As a Sidecar Container (recommended)
 - As a DaemonSet
+
+In the future, we will release a [Beyla operator](https://github.com/grafana/beyla-operator)
+but at the moment it is work in progress and its API is not stable enough. 
 
 ## Deploying as a sidecar container
 
@@ -87,7 +90,7 @@ spec:
 ```
 
 For more information about the different configuration options, please check the
-[Configuration]({{< relref "./configure/options.md" >}}) section of this documentation site.
+[Configuration]({{< relref "../configure/options.md" >}}) section of this documentation site.
 
 Deploying as a sidecar container, is the default deployment mode for the
 [eBPF auto-instrument Kubernetes Operator](https://github.com/grafana/beyla-operator).

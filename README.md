@@ -75,7 +75,7 @@ You can just trigger the Kubernetes descriptors in the `deployments/` folder.
    $ vim 01-grafana-credentials.yml
    $ kubectl apply -f 01-grafana-credentials.yml 
    ```
-2. Deploy the Grafana Aent:
+2. Deploy the Grafana Agent:
    ```
    kubectl apply -f deployments/02-grafana-agent.yml
    ```

@@ -90,7 +90,7 @@ spec:
 ```
 
 For more information about the different configuration options, please check the
-[Configuration]({{< relref "./configure/options.md" >}}) section of this documentation site.
+[Configuration]({{< relref "../configure/options.md" >}}) section of this documentation site.
 
 Deploying as a sidecar container, is the default deployment mode for the
 [eBPF auto-instrument Kubernetes Operator](https://github.com/grafana/beyla-operator).

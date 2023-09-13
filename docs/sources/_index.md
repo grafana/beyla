@@ -19,6 +19,8 @@ keywords:
 Beyla is currently in [public preview](/docs/release-life-cycle/). Grafana Labs offers limited support, and breaking changes might occur prior to the feature being made generally available.
 {{% /admonition %}}
 
+![Grafana Logo](https://grafana.com/media/docs/grafana-cloud/beyla/beyla-logo.png)
+
 ## eBPF application auto-instrumentation
 
 Instrumenting an application to obtain metrics and traces typically requires adding a language agent to the application deployment/packages. In some compiled languages like Go or Rust, tracepoints have to be manually added to the code. In both cases, the instrumented version of the application must be redeployed to the staging/production servers.

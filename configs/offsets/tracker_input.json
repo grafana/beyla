@@ -24,6 +24,9 @@
       "net.TCPAddr": [
         "IP",
         "Port"
+      ],
+      "context.valueCtx": [
+        "val"
       ]
     }
   },
@@ -32,7 +35,8 @@
     "fields": {
       "google.golang.org/grpc/internal/transport.Stream": [
         "method",
-        "st"
+        "st",
+        "ctx"
       ],
       "google.golang.org/grpc/internal/status.Status": [
         "s"

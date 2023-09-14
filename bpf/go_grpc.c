@@ -15,6 +15,7 @@
 #include "go_byte_arr.h"
 #include "bpf_dbg.h"
 #include "go_common.h"
+#include "go_traceparent.h"
 
 struct {
     __uint(type, BPF_MAP_TYPE_HASH);
@@ -41,6 +42,8 @@ volatile const u64 grpc_st_localaddr_ptr_pos;
 volatile const u64 tcp_addr_port_ptr_pos;
 volatile const u64 tcp_addr_ip_ptr_pos;
 volatile const u64 grpc_client_target_ptr_pos;
+volatile const u64 grpc_stream_ctx_ptr_pos;
+volatile const u64 value_context_val_ptr_pos;
 
 
 SEC("uprobe/server_handleStream")
@@ -143,6 +146,18 @@ int uprobe_server_handleStream_return(struct pt_regs *ctx) {
             trace->host_len = host_len;
 
             bpf_probe_read(&trace->host_port, sizeof(trace->host_port), (void *)(host_ptr + tcp_addr_port_ptr_pos));
+        }
+    }
+
+    void *ctx_ptr = 0;
+    // Read the embedded context object ptr
+    bpf_probe_read(&ctx_ptr, sizeof(ctx_ptr), (void *)(stream_ptr + grpc_stream_ctx_ptr_pos + sizeof(void *)));
+
+    if (ctx_ptr) {
+        void *tp_ptr = extract_traceparent_from_req_headers((void *)(ctx_ptr + value_context_val_ptr_pos + sizeof(void *)));
+        if (tp_ptr) {
+            bpf_probe_read(trace->traceparent, sizeof(trace->traceparent), tp_ptr);
+            bpf_dbg_printk("traceparent %s", trace->traceparent);
         }
     }
 
@@ -253,6 +268,19 @@ int uprobe_ClientConn_Invoke_return(struct pt_regs *ctx) {
         bpf_printk("can't read http Request.Host");
         bpf_ringbuf_discard(trace, 0);
         return 0;
+    }
+
+    void *ctx_ptr = GO_PARAM3(&(invocation->regs));
+    void *val_ptr = 0;
+    // Read the embedded val object ptr from ctx
+    bpf_probe_read(&val_ptr, sizeof(val_ptr), (void *)(ctx_ptr + value_context_val_ptr_pos + sizeof(void *)));
+
+    if (val_ptr) {
+        void *tp_ptr = extract_traceparent_from_req_headers((void *)(val_ptr)); // embedded metadata.rawMD is at 0 offset 
+        if (tp_ptr) {
+            bpf_probe_read(trace->traceparent, sizeof(trace->traceparent), tp_ptr);
+            bpf_dbg_printk("traceparent %s", trace->traceparent);
+        }
     }
 
     trace->status = (err) ? 2 : 0; // Getting the gRPC client status is complex, if there's an error we set Code.Unknown = 2

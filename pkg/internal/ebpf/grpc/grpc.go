@@ -64,6 +64,8 @@ func (p *Tracer) Constants(_ *exec.FileInfo, offsets *goexec.Offsets) map[string
 		"tcp_addr_port_ptr_pos",
 		"tcp_addr_ip_ptr_pos",
 		"grpc_client_target_ptr_pos",
+		"grpc_stream_ctx_ptr_pos",
+		"value_context_val_ptr_pos",
 	} {
 		constants[s] = offsets.Field[s]
 	}

@@ -14,8 +14,11 @@ package main
 import (
 	"context"
 	"crypto/tls"
+	"encoding/binary"
+	"encoding/hex"
 	"errors"
 	"flag"
+	"fmt"
 	"io"
 	"log"
 	"math/rand"
@@ -26,6 +29,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/metadata"
 
 	pb "github.com/grafana/beyla/test/cmd/grpc/routeguide"
 )
@@ -38,10 +42,23 @@ var (
 )
 
 // printFeature gets the feature for the given point.
-func printFeature(client pb.RouteGuideClient, point *pb.Point) {
+func printFeature(client pb.RouteGuideClient, point *pb.Point, counter int) {
 	slog.Debug("Getting feature for point", "lat", point.Latitude, "long", point.Longitude)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
+
+	var traceID [16]byte
+	var spanID [8]byte
+	binary.BigEndian.PutUint64(traceID[:8], uint64(counter))
+	binary.BigEndian.PutUint64(spanID[:], uint64(counter))
+
+	// Generate a traceparent that we easily recognize
+	tp := fmt.Sprintf("00-%s-%s-01", hex.EncodeToString(traceID[:]), hex.EncodeToString(spanID[:]))
+
+	// Anything linked to this variable will transmit request headers.
+	md := metadata.New(map[string]string{"traceparent": tp})
+	ctx = metadata.NewOutgoingContext(ctx, md)
+
 	feature, err := client.GetFeature(ctx, point)
 	if err != nil {
 		slog.Error("client.GetFeature failed", err)
@@ -218,12 +235,15 @@ func main() {
 		return
 	}
 
+	counter := 1
+
 	// Looking for a valid feature
-	printFeature(client, &pb.Point{Latitude: 409146138, Longitude: -746188906})
+	printFeature(client, &pb.Point{Latitude: 409146138, Longitude: -746188906}, counter)
 
 	if !*ping {
+		counter++
 		// Feature missing.
-		printFeature(client, &pb.Point{Latitude: 0, Longitude: 0})
+		printFeature(client, &pb.Point{Latitude: 0, Longitude: 0}, counter)
 
 		// Looking for features between 40, -75 and 42, -73.
 		printFeatures(client, &pb.Rectangle{
@@ -236,5 +256,11 @@ func main() {
 
 		// RouteChat
 		runRouteChat(client)
+	} else {
+		for {
+			time.Sleep(5 * time.Second)
+			counter++
+			printFeature(client, &pb.Point{Latitude: 409146138, Longitude: -746188906}, counter)
+		}
 	}
 }

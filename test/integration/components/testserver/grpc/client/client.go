@@ -14,20 +14,26 @@ package grpcclient
 import (
 	"context"
 	"crypto/tls"
+	"encoding/binary"
+	"encoding/hex"
+	"fmt"
 	"io"
 	"log"
 	"os"
+	"sync/atomic"
 	"time"
 
 	"golang.org/x/exp/slog"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/metadata"
 
 	pb "github.com/grafana/beyla/test/integration/components/testserver/grpc/routeguide"
 )
 
 var logs = slog.With("component", "grpc.Client")
+var counter int64
 
 type pingOpts struct {
 	ssl        bool
@@ -55,6 +61,20 @@ func printFeature(client pb.RouteGuideClient, point *pb.Point) {
 	slog.Debug("Getting feature for point", "lat", point.Latitude, "long", point.Longitude)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
+
+	cnt := atomic.AddInt64(&counter, 1)
+
+	var traceID [16]byte
+	var spanID [8]byte
+	binary.BigEndian.PutUint64(traceID[:8], uint64(cnt))
+	binary.BigEndian.PutUint64(spanID[:], uint64(cnt))
+	// Generate a traceparent that we easily recognize
+	tp := fmt.Sprintf("00-%s-%s-01", hex.EncodeToString(traceID[:]), hex.EncodeToString(spanID[:]))
+
+	// Anything linked to this variable will transmit request headers.
+	md := metadata.New(map[string]string{"traceparent": tp})
+	ctx = metadata.NewOutgoingContext(ctx, md)
+
 	feature, err := client.GetFeature(ctx, point)
 	if err != nil {
 		logs.Error("client.GetFeature failed", err)

@@ -36,17 +36,17 @@ func TestMain(m *testing.M) {
 		os.Exit(-1)
 	}
 
-	cluster = kube.NewKind("test-kind-cluster-prom",
+	cluster = kube.NewKind("test-kind-cluster",
 		kube.ExportLogs(k8s.PathKindLogs),
 		kube.KindConfig(k8s.PathManifests+"/00-kind.yml"),
 		kube.LocalImage("testserver:dev"),
 		kube.LocalImage("beyla:dev"),
 		kube.LocalImage("grpcpinger:dev"),
 		kube.Deploy(k8s.PathManifests+"/01-volumes.yml"),
-		kube.Deploy(k8s.PathManifests+"/02-prometheus.yml"),
+		kube.Deploy(k8s.PathManifests+"/02-prometheus-otelscrape.yml"),
 		kube.Deploy(k8s.PathManifests+"/03-otelcol.yml"),
 		kube.Deploy(k8s.PathManifests+"/04-jaeger.yml"),
-		kube.Deploy(k8s.PathManifests+"/05-instrumented-service.yml"),
+		kube.Deploy(k8s.PathManifests+"/05-instrumented-service-otel.yml"),
 	)
 
 	cluster.Run(m)

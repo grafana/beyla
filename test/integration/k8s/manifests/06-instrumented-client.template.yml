@@ -38,8 +38,7 @@ spec:
   selector:
     component: pinger
   ports:
-    - port: 8998
-      targetPort: 8998
+    - port: 8999
       name: prometheus
 ---
 apiVersion: v1

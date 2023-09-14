@@ -21,6 +21,6 @@ var (
 // Pinger stores the configuration data of a local pod that will be used to
 // send recurring requests to the test server
 type Pinger struct {
-	PodName      string
-	TargetURL    string
+	PodName   string
+	TargetURL string
 }

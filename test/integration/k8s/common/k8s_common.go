@@ -23,5 +23,4 @@ var (
 type Pinger struct {
 	PodName      string
 	TargetURL    string
-	ConfigSuffix string
 }

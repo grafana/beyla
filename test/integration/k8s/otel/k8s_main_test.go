@@ -18,9 +18,8 @@ import (
 const (
 	testTimeout = 2 * time.Minute
 
-	jaegerQueryURL     = "http://localhost:36686/api/traces"
+	jaegerQueryURL = "http://localhost:36686/api/traces"
 )
-
 
 var cluster *kube.Kind
 
@@ -36,7 +35,7 @@ func TestMain(m *testing.M) {
 		os.Exit(-1)
 	}
 
-	cluster = kube.NewKind("test-kind-cluster",
+	cluster = kube.NewKind("test-kind-cluster-otel",
 		kube.ExportLogs(k8s.PathKindLogs),
 		kube.KindConfig(k8s.PathManifests+"/00-kind.yml"),
 		kube.LocalImage("testserver:dev"),

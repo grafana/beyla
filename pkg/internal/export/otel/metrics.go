@@ -310,8 +310,8 @@ func (mr *MetricsReporter) metricAttributes(span *request.Span) attribute.Set {
 		attrs = append(attrs, semconv.ServiceName(span.ServiceName))
 	}
 
-	for _, meta := range span.Metadata {
-		attrs = append(attrs, attribute.String(meta.Key, meta.Val))
+	for key, val := range span.Metadata {
+		attrs = append(attrs, attribute.String(key, val))
 	}
 
 	return attribute.NewSet(attrs...)

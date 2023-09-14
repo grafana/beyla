@@ -39,13 +39,8 @@ type Span struct {
 	Start         int64
 	End           int64
 	ServiceName   string
-	Metadata      []MetadataTag
+	Metadata      map[string]string
 	Traceparent   string
-}
-
-type MetadataTag struct {
-	Key string
-	Val string
 }
 
 func (s *Span) Inside(parent *Span) bool {

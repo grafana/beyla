@@ -26,7 +26,7 @@ spec:
       image: quay.io/prometheus/prometheus:v2.46.0
       args:
         - --storage.tsdb.retention.time=1m
-        - --config.file=/etc/prometheus/prometheus-config-promscrape.yml
+        - --config.file=/etc/prometheus/prometheus-config-promscrape-k8s-test.yml
         - --storage.tsdb.path=/prometheus
         - --web.enable-lifecycle
         - --web.route-prefix=/

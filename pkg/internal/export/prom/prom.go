@@ -11,6 +11,7 @@ import (
 	"github.com/grafana/beyla/pkg/internal/export/otel"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/pkg/internal/request"
+	"github.com/grafana/beyla/pkg/internal/transform"
 )
 
 // using labels and names that are equivalent names to the OTEL attributes
@@ -35,6 +36,12 @@ const (
 	rpcGRPCStatusCodeKey = "rpc_grpc_status_code"
 	rpcMethodKey         = "rpc_method"
 	rpcSystemGRPC        = "rpc_system"
+
+	k8sSrcNameKey      = "k8s_src_name"
+	k8sSrcNamespaceKey = "k8s_src_namespace"
+	k8sDstNameKey      = "k8s_dst_name"
+	k8sDstNamespaceKey = "k8s_dst_namespace"
+	k8sDstTypeKey      = "k8s_dst_type"
 )
 
 // TODO: TLS
@@ -53,8 +60,7 @@ func (p PrometheusConfig) Enabled() bool {
 }
 
 type metricsReporter struct {
-	cfg          *PrometheusConfig
-	reportRoutes bool
+	cfg *PrometheusConfig
 
 	httpDuration          *prometheus.HistogramVec
 	httpClientDuration    *prometheus.HistogramVec
@@ -65,10 +71,8 @@ type metricsReporter struct {
 
 	promConnect *connector.PrometheusManager
 
-	bgCtx context.Context
-
-	// TODO: at some point we might want to override either a name and a namespace per service
-	namespace string
+	bgCtx   context.Context
+	ctxInfo *global.ContextInfo
 }
 
 func PrometheusEndpoint(ctx context.Context, cfg *PrometheusConfig, ctxInfo *global.ContextInfo) (node.TerminalFunc[[]request.Span], error) {
@@ -77,20 +81,18 @@ func PrometheusEndpoint(ctx context.Context, cfg *PrometheusConfig, ctxInfo *glo
 }
 
 func newReporter(ctx context.Context, cfg *PrometheusConfig, ctxInfo *global.ContextInfo) *metricsReporter {
-	reportRoutes := ctxInfo.ReportRoutes
 	// If service name is not explicitly set, we take the service name as set by the
 	// executable inspector
 	mr := &metricsReporter{
-		bgCtx:        ctx,
-		cfg:          cfg,
-		namespace:    ctxInfo.ServiceNamespace,
-		reportRoutes: reportRoutes,
-		promConnect:  ctxInfo.Prometheus,
+		bgCtx:       ctx,
+		ctxInfo:     ctxInfo,
+		cfg:         cfg,
+		promConnect: ctxInfo.Prometheus,
 		httpDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Name:    HTTPServerDuration,
 			Help:    "duration of HTTP service calls from the server side, in seconds",
 			Buckets: cfg.Buckets.DurationHistogram,
-		}, labelNamesHTTP(cfg, ctxInfo, reportRoutes)),
+		}, labelNamesHTTP(cfg, ctxInfo)),
 		httpClientDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Name:    HTTPClientDuration,
 			Help:    "duration of HTTP service calls from the client side, in seconds",
@@ -110,7 +112,7 @@ func newReporter(ctx context.Context, cfg *PrometheusConfig, ctxInfo *global.Con
 			Name:    HTTPServerRequestSize,
 			Help:    "size, in bytes, of the HTTP request body as received at the server side",
 			Buckets: cfg.Buckets.RequestSizeHistogram,
-		}, labelNamesHTTP(cfg, ctxInfo, reportRoutes)),
+		}, labelNamesHTTP(cfg, ctxInfo)),
 		httpClientRequestSize: prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Name:    HTTPClientRequestSize,
 			Help:    "size, in bytes, of the HTTP request body as sent from the client side",
@@ -165,6 +167,9 @@ func labelNamesGRPC(cfg *PrometheusConfig, ctxInfo *global.ContextInfo) []string
 	if cfg.ReportPeerInfo {
 		names = append(names, netSockPeerAddrKey)
 	}
+	if ctxInfo.K8sDecoration {
+		names = appendK8sLabelNames(names)
+	}
 	return names
 }
 
@@ -172,14 +177,17 @@ func labelNamesGRPC(cfg *PrometheusConfig, ctxInfo *global.ContextInfo) []string
 // by labelNamesGRPC
 func (r *metricsReporter) labelValuesGRPC(span *request.Span) []string {
 	// serviceNameKey, rpcMethodKey, rpcSystemGRPC, rpcGRPCStatusCodeKey
-	names := []string{span.ServiceName, span.Path, "grpc", strconv.Itoa(span.Status)}
-	if r.namespace != "" {
-		names = append(names, r.namespace)
+	values := []string{span.ServiceName, span.Path, "grpc", strconv.Itoa(span.Status)}
+	if r.ctxInfo.ServiceNamespace != "" {
+		values = append(values, r.ctxInfo.ServiceNamespace)
 	}
 	if r.cfg.ReportPeerInfo {
-		names = append(names, span.Peer) // netSockPeerAddrKey
+		values = append(values, span.Peer) // netSockPeerAddrKey
 	}
-	return names
+	if r.ctxInfo.K8sDecoration {
+		values = appendK8sLabelValues(values, span)
+	}
+	return values
 }
 
 // labelNamesHTTPClient must return the label names in the same order as would be returned
@@ -192,6 +200,9 @@ func labelNamesHTTPClient(cfg *PrometheusConfig, ctxInfo *global.ContextInfo) []
 	if cfg.ReportPeerInfo {
 		names = append(names, netSockPeerNameKey, netSockPeerPortKey)
 	}
+	if ctxInfo.K8sDecoration {
+		names = appendK8sLabelNames(names)
+	}
 	return names
 }
 
@@ -199,20 +210,23 @@ func labelNamesHTTPClient(cfg *PrometheusConfig, ctxInfo *global.ContextInfo) []
 // by labelNamesHTTPClient
 func (r *metricsReporter) labelValuesHTTPClient(span *request.Span) []string {
 	// httpMethodKey, httpStatusCodeKey
-	names := []string{span.ServiceName, span.Method, strconv.Itoa(span.Status)}
-	if r.namespace != "" {
-		names = append(names, r.namespace)
+	values := []string{span.ServiceName, span.Method, strconv.Itoa(span.Status)}
+	if r.ctxInfo.ServiceNamespace != "" {
+		values = append(values, r.ctxInfo.ServiceNamespace)
 	}
 	if r.cfg.ReportPeerInfo {
 		// netSockPeerAddrKey, netSockPeerPortKey
-		names = append(names, span.Host, strconv.Itoa(span.HostPort))
+		values = append(values, span.Host, strconv.Itoa(span.HostPort))
 	}
-	return names
+	if r.ctxInfo.K8sDecoration {
+		values = appendK8sLabelValues(values, span)
+	}
+	return values
 }
 
 // labelNamesHTTP must return the label names in the same order as would be returned
 // by labelValuesHTTP
-func labelNamesHTTP(cfg *PrometheusConfig, ctxInfo *global.ContextInfo, reportRoutes bool) []string {
+func labelNamesHTTP(cfg *PrometheusConfig, ctxInfo *global.ContextInfo) []string {
 	names := []string{serviceNameKey, httpMethodKey, httpStatusCodeKey}
 	if ctxInfo.ServiceNamespace != "" {
 		names = append(names, serviceNamespaceKey)
@@ -223,8 +237,11 @@ func labelNamesHTTP(cfg *PrometheusConfig, ctxInfo *global.ContextInfo, reportRo
 	if cfg.ReportPeerInfo {
 		names = append(names, netSockPeerAddrKey)
 	}
-	if reportRoutes {
+	if ctxInfo.ReportRoutes {
 		names = append(names, httpRouteKey)
+	}
+	if ctxInfo.K8sDecoration {
+		names = appendK8sLabelNames(names)
 	}
 	return names
 }
@@ -233,18 +250,38 @@ func labelNamesHTTP(cfg *PrometheusConfig, ctxInfo *global.ContextInfo, reportRo
 // by labelNamesHTTP
 func (r *metricsReporter) labelValuesHTTP(span *request.Span) []string {
 	// httpMethodKey, httpStatusCodeKey
-	names := []string{span.ServiceName, span.Method, strconv.Itoa(span.Status)}
-	if r.namespace != "" {
-		names = append(names, r.namespace)
+	values := []string{span.ServiceName, span.Method, strconv.Itoa(span.Status)}
+	if r.ctxInfo.ServiceNamespace != "" {
+		values = append(values, r.ctxInfo.ServiceNamespace)
 	}
 	if r.cfg.ReportTarget {
-		names = append(names, span.Path) // httpTargetKey
+		values = append(values, span.Path) // httpTargetKey
 	}
 	if r.cfg.ReportPeerInfo {
-		names = append(names, span.Peer) // netSockPeerAddrKey
+		values = append(values, span.Peer) // netSockPeerAddrKey
 	}
-	if r.reportRoutes {
-		names = append(names, span.Route) // httpRouteKey
+	if r.ctxInfo.ReportRoutes {
+		values = append(values, span.Route) // httpRouteKey
 	}
+	if r.ctxInfo.K8sDecoration {
+		values = appendK8sLabelValues(values, span)
+	}
+	return values
+}
+
+func appendK8sLabelNames(names []string) []string {
+	names = append(names, k8sSrcNameKey, k8sSrcNamespaceKey, k8sDstNameKey, k8sDstNamespaceKey, k8sDstTypeKey)
 	return names
+}
+
+func appendK8sLabelValues(values []string, span *request.Span) []string {
+	// k8sSrcNameKey, k8sSrcNamespaceKey, k8sDstNameKey, k8sDstNamespaceKey, k8sDstTypeKey
+	values = append(values,
+		span.Metadata[transform.SrcNameKey],
+		span.Metadata[transform.SrcNamespaceKey],
+		span.Metadata[transform.DstNameKey],
+		span.Metadata[transform.DstNamespaceKey],
+		span.Metadata[transform.DstTypeKey],
+	)
+	return values
 }

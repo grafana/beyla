@@ -5,7 +5,6 @@ package prom
 import (
 	"os"
 	"testing"
-	"time"
 
 	"golang.org/x/exp/slog"
 
@@ -13,10 +12,6 @@ import (
 	"github.com/grafana/beyla/test/integration/components/kube"
 	k8s "github.com/grafana/beyla/test/integration/k8s/common"
 	"github.com/grafana/beyla/test/tools"
-)
-
-const (
-	testTimeout = 2 * time.Minute
 )
 
 var cluster *kube.Kind
@@ -33,7 +28,7 @@ func TestMain(m *testing.M) {
 		os.Exit(-1)
 	}
 
-	cluster = kube.NewKind("test-kind-cluster",
+	cluster = kube.NewKind("test-kind-cluster-prom",
 		kube.ExportLogs(k8s.PathKindLogs),
 		kube.KindConfig(k8s.PathManifests+"/00-kind.yml"),
 		kube.LocalImage("testserver:dev"),

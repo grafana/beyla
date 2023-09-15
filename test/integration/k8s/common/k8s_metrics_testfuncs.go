@@ -21,6 +21,13 @@ import (
 	"github.com/grafana/beyla/test/integration/components/prom"
 )
 
+// This file contains some functions and features that are accessed/used
+// from diverse integration tests
+const (
+	testTimeout        = 2 * time.Minute
+	prometheusHostPort = "localhost:39090"
+)
+
 var (
 	httpServerMetrics = []string{
 		"http_server_duration_seconds_count",
@@ -50,9 +57,7 @@ var (
 	}
 )
 
-// Run it alphabetically first (AA-prefix), with a longer timeout, to wait until all the components are up and
-// traces/metrics are flowing normally
-func TestAA_HTTPMetricsDecoration_ExternalToPod(t *testing.T) {
+func DoTestHTTPMetricsDecorationExternalToPod(t *testing.T) {
 	const (
 		subpath = "/smoke"
 		url     = "http://localhost:38080"
@@ -82,15 +87,15 @@ func TestAA_HTTPMetricsDecoration_ExternalToPod(t *testing.T) {
 	}
 }
 
-func TestHTTPDecoration_Pod2Service(t *testing.T) {
+func FeatureHTTPDecorationPod2Service() features.Feature {
 	pinger := kube.Template[Pinger]{
-		TemplateFile: pingerManifest,
+		TemplateFile: PingerManifest,
 		Data: Pinger{
 			PodName:   "internal-pinger",
 			TargetURL: "http://testserver:8080/iping",
 		},
 	}
-	feat := features.New("Decoration of Pod-to-Service communications").
+	return features.New("Decoration of Pod-to-Service communications").
 		Setup(pinger.Deploy()).
 		Teardown(pinger.Delete()).
 		Assess("all the server metrics are properly decorated",
@@ -112,18 +117,16 @@ func TestHTTPDecoration_Pod2Service(t *testing.T) {
 				"k8s_dst_type":      "Service",
 			}),
 		).Feature()
-
-	cluster.TestEnv().Test(t, feat)
 }
 
-func TestHTTPClientMetricsDecoration_Pod2Pod(t *testing.T) {
+func FeatureHTTPClientMetricsDecorationPod2Pod() features.Feature {
 	pinger := kube.Template[Pinger]{
-		TemplateFile: pingerManifest,
+		TemplateFile: PingerManifest,
 		Data: Pinger{
 			PodName: "ping-to-pod",
 		},
 	}
-	feat := features.New("Client-side decoration of Pod-to-Pod direct communications").
+	return features.New("Client-side decoration of Pod-to-Pod direct communications").
 		Setup(func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
 			testserver := getPodIP(ctx, t, cfg, "testserver", "default")
 			// Setting the testserver Pod IP in the target URL of the pinger pod, to avoid going through a service
@@ -140,19 +143,17 @@ func TestHTTPClientMetricsDecoration_Pod2Pod(t *testing.T) {
 				"k8s_dst_type":      "Pod",
 			}),
 		).Feature()
-
-	cluster.TestEnv().Test(t, feat)
 }
 
-func TestHTTPMetricsDecoration_Pod2External(t *testing.T) {
+func FeatureHTTPMetricsDecorationPod2External() features.Feature {
 	pinger := kube.Template[Pinger]{
-		TemplateFile: pingerManifest,
+		TemplateFile: PingerManifest,
 		Data: Pinger{
 			PodName:   "ping-to-grafana",
 			TargetURL: "https://grafana.com/",
 		},
 	}
-	feat := features.New("Client-side decoration of Pod-to-External communications").
+	return features.New("Client-side decoration of Pod-to-External communications").
 		Setup(pinger.Deploy()).
 		Teardown(pinger.Delete()).
 		Assess("all the client metrics are properly decorated",
@@ -162,18 +163,17 @@ func TestHTTPMetricsDecoration_Pod2External(t *testing.T) {
 			},
 				"k8s_dst_name", "k8s_dst_namespace", "k8s_dst_type"), // expected missing labels
 		).Feature()
-	cluster.TestEnv().Test(t, feat)
 }
 
-func TestGRPCMetricsDecoration_Pod2Service(t *testing.T) {
+func FeatureGRPCMetricsDecorationPod2Service() features.Feature {
 	pinger := kube.Template[Pinger]{
-		TemplateFile: grpcPingerManifest,
+		TemplateFile: GrpcPingerManifest,
 		Data: Pinger{
 			PodName:   "internal-grpc-pinger",
 			TargetURL: "testserver:50051",
 		},
 	}
-	feat := features.New("Decoration of Pod-to-Service communications").
+	return features.New("Decoration of Pod-to-Service communications").
 		Setup(pinger.Deploy()).
 		Teardown(pinger.Delete()).
 		Assess("all the server metrics are properly decorated",
@@ -195,18 +195,16 @@ func TestGRPCMetricsDecoration_Pod2Service(t *testing.T) {
 				"k8s_dst_type":      "Service",
 			}),
 		).Feature()
-
-	cluster.TestEnv().Test(t, feat)
 }
 
-func TestGRPCMetricsDecoration_Pod2Pod(t *testing.T) {
+func FeatureGRPCMetricsDecorationPod2Pod() features.Feature {
 	pinger := kube.Template[Pinger]{
-		TemplateFile: grpcPingerManifest,
+		TemplateFile: GrpcPingerManifest,
 		Data: Pinger{
 			PodName: "internal-grpc-pinger-2pod",
 		},
 	}
-	feat := features.New("Decoration of Pod-to-Service communications").
+	return features.New("Decoration of Pod-to-Service communications").
 		Setup(func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
 			testserver := getPodIP(ctx, t, cfg, "testserver", "default")
 			// Setting the testserver Pod IP in the target URL of the pinger pod, to avoid going through a service
@@ -233,8 +231,6 @@ func TestGRPCMetricsDecoration_Pod2Pod(t *testing.T) {
 				"k8s_dst_type":      "Pod",
 			}),
 		).Feature()
-
-	cluster.TestEnv().Test(t, feat)
 }
 
 func testMetricsDecoration(

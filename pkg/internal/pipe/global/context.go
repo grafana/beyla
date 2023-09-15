@@ -16,6 +16,8 @@ type ContextInfo struct {
 	ServiceName string
 	// ServiceNamespace is the value of the service_namespace config attribute
 	ServiceNamespace string
+	// K8sDecoration specifies whether kubernetes decoration is enabled
+	K8sDecoration bool
 	// Metrics  that are internal to the pipe components
 	Metrics imetrics.Reporter
 	// Prometheus connection manager to coordinate metrics exposition from diverse nodes

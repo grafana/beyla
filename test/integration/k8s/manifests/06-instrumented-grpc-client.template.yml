@@ -1,3 +1,16 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  # this is the service name as expected by configs/prometheus-config-promscrape.yml
+  name: beyla-pinger
+spec:
+  selector:
+    component: pinger
+  ports:
+    - port: 8999
+      name: prometheus
+---
 # this file is actually a Go template that needs to be processed before deploying
 # Mandatory variables are PodName and TargetURL
 apiVersion: v1
@@ -36,7 +49,11 @@ spec:
           name: configs
         - mountPath: /testoutput
           name: testoutput
+      ports:
+        - containerPort: 8999
       env:
+        - name: BEYLA_PROMETHEUS_PORT
+          value: "8999"
         - name: GOCOVERDIR
           value: "/testoutput"
         - name: PRINT_TRACES

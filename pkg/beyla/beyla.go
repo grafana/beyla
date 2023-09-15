@@ -139,6 +139,7 @@ func buildContextInfo(config *pipe.Config) *global.ContextInfo {
 		ServiceName:      config.ServiceName,
 		ServiceNamespace: config.ServiceNamespace,
 		ChannelBufferLen: config.ChannelBufferLen,
+		K8sDecoration:    config.Kubernetes.Enabled(),
 	}
 	if config.InternalMetrics.Prometheus.Port != 0 {
 		slog.Debug("reporting internal metrics as Prometheus")

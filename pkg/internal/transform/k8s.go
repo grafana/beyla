@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/mariomac/pipes/pkg/node"
+	"golang.org/x/exp/maps"
 	"golang.org/x/exp/slog"
 
 	"github.com/grafana/beyla/pkg/internal/request"
@@ -21,6 +22,12 @@ const (
 	EnabledFalse      = KubeEnableFlag("false")
 	EnabledAutodetect = KubeEnableFlag("autodetect")
 	EnabledDefault    = EnabledFalse
+
+	SrcNameKey      = "k8s.src.name"
+	SrcNamespaceKey = "k8s.src.namespace"
+	DstNameKey      = "k8s.dst.name"
+	DstNamespaceKey = "k8s.dst.namespace"
+	DstTypeKey      = "k8s.dst.type"
 )
 
 func klog() *slog.Logger {
@@ -79,8 +86,8 @@ type metadataDecorator struct {
 	kube kube.Metadata
 	cfg  *KubernetesDecorator
 
-	ownMetadataAsSrc []request.MetadataTag
-	ownMetadataAsDst []request.MetadataTag
+	ownMetadataAsSrc map[string]string
+	ownMetadataAsDst map[string]string
 }
 
 func newMetadataDecorator(cfg *KubernetesDecorator) (*metadataDecorator, error) {
@@ -92,6 +99,9 @@ func newMetadataDecorator(cfg *KubernetesDecorator) (*metadataDecorator, error) 
 }
 
 func (md *metadataDecorator) do(span *request.Span) {
+	if span.Metadata == nil {
+		span.Metadata = make(map[string]string, 5)
+	}
 	// We decorate each trace by looking up into the local kubernetes cache for the
 	// Peer address, when we are instrumenting server-side traces, or the
 	// Host name, when we are instrumenting client-side traces.
@@ -101,39 +111,38 @@ func (md *metadataDecorator) do(span *request.Span) {
 	switch span.Type {
 	case request.EventTypeGRPC, request.EventTypeHTTP:
 		if peerInfo, ok := md.kube.GetInfo(span.Peer); ok {
-			span.Metadata = appendSRCMetadata(span.Metadata, peerInfo)
+			appendSRCMetadata(span.Metadata, peerInfo)
 		}
-		span.Metadata = append(span.Metadata, md.ownMetadataAsDst...)
+		maps.Copy(span.Metadata, md.ownMetadataAsDst)
 	case request.EventTypeGRPCClient, request.EventTypeHTTPClient:
 		if peerInfo, ok := md.kube.GetInfo(span.Host); ok {
-			span.Metadata = appendDSTMetadata(span.Metadata, peerInfo)
+			appendDSTMetadata(span.Metadata, peerInfo)
 		}
-		span.Metadata = append(span.Metadata, md.ownMetadataAsSrc...)
+		maps.Copy(span.Metadata, md.ownMetadataAsSrc)
 	}
 }
 
 // TODO: allow users to filter which attributes they want, instead of adding all of them
 // TODO: cache
-func appendDSTMetadata(dst []request.MetadataTag, info *kube.Info) []request.MetadataTag {
-	return append(dst,
-		request.MetadataTag{Key: "k8s.dst.namespace", Val: info.Namespace},
-		request.MetadataTag{Key: "k8s.dst.name", Val: info.Name},
-		request.MetadataTag{Key: "k8s.dst.type", Val: info.Type},
-	)
+func appendDSTMetadata(to map[string]string, info *kube.Info) {
+	to[DstNameKey] = info.Name
+	to[DstNamespaceKey] = info.Namespace
+	to[DstTypeKey] = info.Type
 }
 
-func appendSRCMetadata(dst []request.MetadataTag, info *kube.Info) []request.MetadataTag {
-	return append(dst,
-		request.MetadataTag{Key: "k8s.src.namespace", Val: info.Namespace},
-		request.MetadataTag{Key: "k8s.src.name", Val: info.Name},
-	)
+func appendSRCMetadata(to map[string]string, info *kube.Info) {
+	to[SrcNameKey] = info.Name
+	to[SrcNamespaceKey] = info.Namespace
 }
 
 func (md *metadataDecorator) refreshOwnPodMetadata() {
-	for md.ownMetadataAsDst == nil {
+	for {
 		if info, ok := md.kube.GetInfo(getLocalIP()); ok {
-			md.ownMetadataAsSrc = appendSRCMetadata(md.ownMetadataAsSrc, info)
-			md.ownMetadataAsDst = appendDSTMetadata(md.ownMetadataAsDst, info)
+			klog().Debug("found local pod metadata", "metadata", info)
+			md.ownMetadataAsSrc = make(map[string]string, 2)
+			md.ownMetadataAsDst = make(map[string]string, 2)
+			appendSRCMetadata(md.ownMetadataAsSrc, info)
+			appendDSTMetadata(md.ownMetadataAsDst, info)
 			return
 		}
 		klog().Info("local pod metadata not yet found. Waiting 5s and trying again before starting the kubernetes decorator")

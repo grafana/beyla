@@ -18,7 +18,7 @@
       "target": {
         "versions": {
           "oldest": "1.40.0",
-          "newest": "1.58.0"
+          "newest": "1.58.1"
         },
         "offsets": [
           {
@@ -32,7 +32,7 @@
       "s": {
         "versions": {
           "oldest": "1.40.0",
-          "newest": "1.58.0"
+          "newest": "1.58.1"
         },
         "offsets": [
           {
@@ -46,7 +46,7 @@
       "method": {
         "versions": {
           "oldest": "1.40.0",
-          "newest": "1.58.0"
+          "newest": "1.58.1"
         },
         "offsets": [
           {
@@ -58,7 +58,7 @@
       "st": {
         "versions": {
           "oldest": "1.40.0",
-          "newest": "1.58.0"
+          "newest": "1.58.1"
         },
         "offsets": [
           {
@@ -72,7 +72,7 @@
       "localAddr": {
         "versions": {
           "oldest": "1.40.0",
-          "newest": "1.58.0"
+          "newest": "1.58.1"
         },
         "offsets": [
           {
@@ -84,7 +84,7 @@
       "remoteAddr": {
         "versions": {
           "oldest": "1.40.0",
-          "newest": "1.58.0"
+          "newest": "1.58.1"
         },
         "offsets": [
           {

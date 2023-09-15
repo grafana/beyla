@@ -205,7 +205,6 @@ func testGRPCTraces(t *testing.T) {
 }
 
 func testGRPCTracesForServiceName(t *testing.T, svcName string) {
-	require.NoError(t, grpcclient.Ping())                         // this call adds traceparent manually to the headers, simulates existing traceparent
 	require.Error(t, grpcclient.Debug(10*time.Millisecond, true)) // this call doesn't add anything, the Go SDK will generate traceID and contextID
 
 	var trace jaeger.Trace
@@ -288,6 +287,19 @@ func testGRPCTracesForServiceName(t *testing.T, svcName string) {
 		{Key: "telemetry.sdk.language", Type: "string", Value: "go"},
 		{Key: "service.namespace", Type: "string", Value: "integration-test"},
 	}), "not all tags matched in %+v", process.Tags)
+
+	require.NoError(t, grpcclient.Ping()) // this call adds traceparent manually to the headers, simulates existing traceparent
+
+	test.Eventually(t, testTimeout, func(t require.TestingT) {
+		resp, err := http.Get(jaegerQueryURL + "?service=" + svcName + "&operation=%2Frouteguide.RouteGuide%2FGetFeature")
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+		var tq jaeger.TracesQuery
+		require.NoError(t, json.NewDecoder(resp.Body).Decode(&tq))
+		traces := tq.FindBySpan(jaeger.Tag{Key: "rpc.method", Type: "string", Value: "/routeguide.RouteGuide/GetFeature"})
+		require.Len(t, traces, 1)
+		trace = traces[0]
+	}, test.Interval(100*time.Millisecond))
 
 	// Check the information of the parent span
 	res = trace.FindByOperationName("/routeguide.RouteGuide/GetFeature")

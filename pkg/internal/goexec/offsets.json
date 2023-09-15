@@ -1,5 +1,19 @@
 {
   "data": {
+    "context.valueCtx": {
+      "val": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.21.1"
+        },
+        "offsets": [
+          {
+            "offset": 32,
+            "since": "1.17.0"
+          }
+        ]
+      }
+    },
     "google.golang.org/genproto/googleapis/rpc/status.Status": {
       "Code": {
         "versions": {
@@ -18,7 +32,7 @@
       "target": {
         "versions": {
           "oldest": "1.40.0",
-          "newest": "1.58.0"
+          "newest": "1.58.1"
         },
         "offsets": [
           {
@@ -32,7 +46,7 @@
       "s": {
         "versions": {
           "oldest": "1.40.0",
-          "newest": "1.58.0"
+          "newest": "1.58.1"
         },
         "offsets": [
           {
@@ -43,10 +57,22 @@
       }
     },
     "google.golang.org/grpc/internal/transport.Stream": {
+      "ctx": {
+        "versions": {
+          "oldest": "1.40.0",
+          "newest": "1.58.1"
+        },
+        "offsets": [
+          {
+            "offset": 32,
+            "since": "1.40.0"
+          }
+        ]
+      },
       "method": {
         "versions": {
           "oldest": "1.40.0",
-          "newest": "1.58.0"
+          "newest": "1.58.1"
         },
         "offsets": [
           {
@@ -58,7 +84,7 @@
       "st": {
         "versions": {
           "oldest": "1.40.0",
-          "newest": "1.58.0"
+          "newest": "1.58.1"
         },
         "offsets": [
           {
@@ -72,7 +98,7 @@
       "localAddr": {
         "versions": {
           "oldest": "1.40.0",
-          "newest": "1.58.0"
+          "newest": "1.58.1"
         },
         "offsets": [
           {
@@ -84,7 +110,7 @@
       "remoteAddr": {
         "versions": {
           "oldest": "1.40.0",
-          "newest": "1.58.0"
+          "newest": "1.58.1"
         },
         "offsets": [
           {

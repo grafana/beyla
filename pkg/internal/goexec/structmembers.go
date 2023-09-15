@@ -67,6 +67,7 @@ var structMembers = map[string]structInfo{
 		fields: map[string]string{
 			"st":     "grpc_stream_st_ptr_pos",
 			"method": "grpc_stream_method_ptr_pos",
+			"ctx":    "grpc_stream_ctx_ptr_pos",
 		},
 	},
 	"google.golang.org/grpc/internal/status.Status": {
@@ -99,6 +100,12 @@ var structMembers = map[string]structInfo{
 		lib: "google.golang.org/grpc",
 		fields: map[string]string{
 			"target": "grpc_client_target_ptr_pos",
+		},
+	},
+	"context.valueCtx": {
+		lib: "go",
+		fields: map[string]string{
+			"val": "value_context_val_ptr_pos",
 		},
 	},
 }

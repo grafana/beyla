@@ -26,13 +26,12 @@ func HTTPRequestTraceToSpan(trace *HTTPRequestTrace) request.Span {
 	peer := ""
 	hostname := ""
 	hostPort := 0
-	traceparent := ""
+	traceparent := extractTraceparent(trace.Traceparent)
 
 	switch request.EventType(trace.Type) {
 	case request.EventTypeHTTPClient, request.EventTypeHTTP:
 		peer, _ = extractHostPort(trace.RemoteAddr[:])
 		hostname, hostPort = extractHostPort(trace.Host[:])
-		traceparent = extractTraceparent(trace.Traceparent)
 	case request.EventTypeGRPC:
 		hostPort = int(trace.HostPort)
 		peer = extractIP(trace.RemoteAddr[:], int(trace.RemoteAddrLen))

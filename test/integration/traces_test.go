@@ -205,7 +205,7 @@ func testGRPCTraces(t *testing.T) {
 }
 
 func testGRPCTracesForServiceName(t *testing.T, svcName string) {
-	require.Error(t, grpcclient.Debug(10*time.Millisecond, true))
+	require.Error(t, grpcclient.Debug(10*time.Millisecond, true)) // this call doesn't add anything, the Go SDK will generate traceID and contextID
 
 	var trace jaeger.Trace
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
@@ -266,6 +266,7 @@ func testGRPCTracesForServiceName(t *testing.T, svcName string) {
 	p, ok = trace.ParentOf(&queue)
 	require.True(t, ok)
 	assert.Equal(t, parent.TraceID, p.TraceID)
+	require.False(t, strings.HasSuffix(parent.TraceID, "0000000000000000")) // the Debug call doesn't add any traceparent to the request header, the traceID is auto-generated won't look like this
 	assert.Equal(t, parent.SpanID, p.SpanID)
 	// check reasonable start and end times
 	assert.GreaterOrEqual(t, processing.StartTime, queue.StartTime+queue.Duration)
@@ -286,4 +287,45 @@ func testGRPCTracesForServiceName(t *testing.T, svcName string) {
 		{Key: "telemetry.sdk.language", Type: "string", Value: "go"},
 		{Key: "service.namespace", Type: "string", Value: "integration-test"},
 	}), "not all tags matched in %+v", process.Tags)
+
+	require.NoError(t, grpcclient.List()) // this call adds traceparent manually to the headers, simulates existing traceparent
+
+	test.Eventually(t, testTimeout, func(t require.TestingT) {
+		resp, err := http.Get(jaegerQueryURL + "?service=" + svcName + "&operation=%2Frouteguide.RouteGuide%2FListFeatures")
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+		var tq jaeger.TracesQuery
+		require.NoError(t, json.NewDecoder(resp.Body).Decode(&tq))
+		traces := tq.FindBySpan(jaeger.Tag{Key: "rpc.method", Type: "string", Value: "/routeguide.RouteGuide/ListFeatures"})
+		require.Len(t, traces, 1)
+		trace = traces[0]
+	}, test.Interval(100*time.Millisecond))
+
+	// Check the information of the parent span
+	res = trace.FindByOperationName("/routeguide.RouteGuide/ListFeatures")
+	require.Len(t, res, 1)
+	parent = res[0]
+	require.NotEmpty(t, parent.TraceID)
+	require.NotEmpty(t, parent.SpanID)
+
+	/*
+	 The code for grpc Ping() generates spans like these:
+	 00-000000000000038b0000000000000000-000000000000038b-01
+
+	 The traceID and spanID increase by one in tandem and it loops forever.
+	 We check that the traceID has that 16 character 0 suffix and then we
+	 use the first 16 characters for looking up by Parent span.
+
+	 Finding a traceID like the custom pattern means that our traceparent
+	 extraction in eBPF works.
+	*/
+	require.NotEmpty(t, parent.TraceID)
+	require.True(t, strings.HasSuffix(parent.TraceID, "0000000000000000"))
+
+	pparent := parent.TraceID[:16]
+	childOfPID := trace.ChildrenOf(pparent)
+	require.Len(t, childOfPID, 1)
+	childSpan := childOfPID[0]
+	require.Equal(t, childSpan.TraceID, parent.TraceID)
+	require.Equal(t, childSpan.SpanID, parent.SpanID)
 }

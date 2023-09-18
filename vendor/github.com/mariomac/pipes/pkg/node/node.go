@@ -1,10 +1,11 @@
 // Package node provides functionalities to create nodes and interconnect them.
 // A Node is a function container that can be connected via channels to other nodes.
 // A node can send data to multiple nodes, and receive data from multiple nodes.
+//
+//nolint:unused
 package node
 
 import (
-	"context"
 	"reflect"
 
 	"github.com/mariomac/pipes/pkg/node/internal/connect"
@@ -13,11 +14,6 @@ import (
 // StartFunc is a function that receives a writable channel as unique argument, and sends
 // value to that channel during an indefinite amount of time.
 type StartFunc[OUT any] func(out chan<- OUT)
-
-// StartFuncCtx is a StartFunc that also receives a context as a first argument. If the passed
-// context is cancelled via the ctx.Done() function, the implementer function should end,
-// so the cancel will be propagated to the later nodes.
-type StartFuncCtx[OUT any] func(ctx context.Context, out chan<- OUT)
 
 // MiddleFunc is a function that receives a readable channel as first argument,
 // and a writable channel as second argument.
@@ -33,7 +29,7 @@ type TerminalFunc[IN any] func(in <-chan IN)
 // Sender is any node that can send data to another node: node.Start and node.Middle
 type Sender[OUT any] interface {
 	// SendsTo connect a sender with a group of receivers
-	SendsTo(...Receiver[OUT])
+	SendTo(...Receiver[OUT])
 	// OutType returns the inner type of the Sender's output channel
 	OutType() reflect.Type
 }
@@ -54,11 +50,11 @@ type Receiver[IN any] interface {
 // An Start node must have at least one output node.
 type Start[OUT any] struct {
 	outs    []Receiver[OUT]
-	funs    []StartFuncCtx[OUT]
+	funs    []StartFunc[OUT]
 	outType reflect.Type
 }
 
-func (s *Start[OUT]) SendsTo(outputs ...Receiver[OUT]) {
+func (s *Start[OUT]) SendTo(outputs ...Receiver[OUT]) {
 	//assertChannelsCompatibility(s.fun.ArgChannelType(0), outputs)
 	s.outs = append(s.outs, outputs...)
 }
@@ -88,7 +84,7 @@ func (i *Middle[IN, OUT]) isStarted() bool {
 	return i.started
 }
 
-func (s *Middle[IN, OUT]) SendsTo(outputs ...Receiver[OUT]) {
+func (s *Middle[IN, OUT]) SendTo(outputs ...Receiver[OUT]) {
 	s.outs = append(s.outs, outputs...)
 }
 
@@ -131,19 +127,7 @@ func (m *Terminal[IN]) InType() reflect.Type {
 }
 
 // AsStart wraps a group of StartFunc with the same signature into a Start node.
-// Deprecated in favor of AsStartCtx
 func AsStart[OUT any](funs ...StartFunc[OUT]) *Start[OUT] {
-	funsCtx := make([]StartFuncCtx[OUT], 0, len(funs))
-	for _, fun := range funs {
-		funsCtx = append(funsCtx, func(_ context.Context, out chan<- OUT) {
-			fun(out)
-		})
-	}
-	return AsStartCtx(funsCtx...)
-}
-
-// AsStartCtx wraps a group of StartFuncCtx into a Start node.
-func AsStartCtx[OUT any](funs ...StartFuncCtx[OUT]) *Start[OUT] {
 	var out OUT
 	return &Start[OUT]{
 		funs:    funs,
@@ -176,16 +160,9 @@ func AsTerminal[IN any](fun TerminalFunc[IN], opts ...Option) *Terminal[IN] {
 	}
 }
 
-// Start the function wrapped in the Start node. Either this method or StartCtx should be invoked
+// Start starts the function wrapped in the Start node. This method should be invoked
 // for all the start nodes of the same graph, so the graph can properly start and finish.
 func (i *Start[OUT]) Start() {
-	i.StartCtx(context.TODO())
-}
-
-// StartCtx starts the function wrapped in the Start node, allow passing a context that can be
-// used by the wrapped function. Either this method or Start should be invoked
-// for all the start nodes of the same graph, so the graph can properly start and finish.
-func (i *Start[OUT]) StartCtx(ctx context.Context) {
 	if len(i.outs) == 0 {
 		panic("Start node should have outputs")
 	}
@@ -200,7 +177,7 @@ func (i *Start[OUT]) StartCtx(ctx context.Context) {
 	for fn := range i.funs {
 		fun := i.funs[fn]
 		go func() {
-			fun(ctx, forker.AcquireSender())
+			fun(forker.AcquireSender())
 			forker.ReleaseSender()
 		}()
 	}

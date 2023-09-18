@@ -112,7 +112,7 @@ func TestMetrics_InternalInstrumentation(t *testing.T) {
 			Metrics:     internalMetrics,
 		})
 	require.NoError(t, err)
-	inputNode.SendsTo(node.AsTerminal(exporter))
+	inputNode.SendTo(node.AsTerminal(exporter))
 
 	go inputNode.Start()
 

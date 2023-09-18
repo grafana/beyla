@@ -20,19 +20,19 @@ import (
 // nodesMap provides the architecture of the whole processing pipeline:
 // each node and which nodes are they connected to
 type nodesMap struct {
-	TracesReader traces.Reader `nodeId:"tracer" sendTo:"routes"`
+	TracesReader traces.Reader `sendTo:"Routes"`
 
 	// Routes is an optional node. If not set, data will be bypassed to the next stage in the pipeline.
-	Routes *transform.RoutesConfig `nodeId:"routes" forwardTo:"kube"`
+	Routes *transform.RoutesConfig `forwardTo:"Kubernetes"`
 
 	// Kubernetes is an optional node. If not set, data will be bypassed to the exporters.
-	Kubernetes transform.KubernetesDecorator `nodeId:"kube" forwardTo:"otel_metrics,otel_traces,print,noop,prom"`
+	Kubernetes transform.KubernetesDecorator `forwardTo:"Metrics,Traces,Prometheus,Printer,Noop"`
 
-	Metrics    otel.MetricsConfig    `nodeId:"otel_metrics"`
-	Traces     otel.TracesConfig     `nodeId:"otel_traces"`
-	Prometheus prom.PrometheusConfig `nodeId:"prom"`
-	Printer    debug.PrintEnabled    `nodeId:"print"`
-	Noop       debug.NoopEnabled     `nodeId:"noop"`
+	Metrics    otel.MetricsConfig
+	Traces     otel.TracesConfig
+	Prometheus prom.PrometheusConfig
+	Printer    debug.PrintEnabled
+	Noop       debug.NoopEnabled
 }
 
 func configToNodesMap(cfg *Config) *nodesMap {
@@ -49,6 +49,8 @@ func configToNodesMap(cfg *Config) *nodesMap {
 
 // builder with injectable instantiators for unit testing
 type graphFunctions struct {
+	ctx context.Context
+
 	config  *Config
 	builder *graph.Builder
 	ctxInfo *global.ContextInfo
@@ -66,16 +68,19 @@ func Build(ctx context.Context, config *Config, ctxInfo *global.ContextInfo, tra
 		return nil, fmt.Errorf("validating configuration: %w", err)
 	}
 
-	return newGraphBuilder(config, ctxInfo, tracesCh).buildGraph(ctx)
+	return newGraphBuilder(ctx, config, ctxInfo, tracesCh).buildGraph()
 }
 
 // private constructor that can be instantiated from tests to override the node providers
 // and offsets inspector
-func newGraphBuilder(config *Config, ctxInfo *global.ContextInfo, tracesCh <-chan []request.Span) *graphFunctions {
+func newGraphBuilder(ctx context.Context, config *Config, ctxInfo *global.ContextInfo, tracesCh <-chan []request.Span) *graphFunctions {
 	// This is how the github.com/mariomac/pipes library, works:
+	// https://github.com/mariomac/pipes/tree/main/docs/tutorial/b-highlevel/01-basic-nodes
+
 	// First, we create a graph builder
 	gnb := graph.NewBuilder(node.ChannelBufferLen(config.ChannelBufferLen))
 	gb := &graphFunctions{
+		ctx:      ctx,
 		builder:  gnb,
 		config:   config,
 		ctxInfo:  ctxInfo,
@@ -84,7 +89,7 @@ func newGraphBuilder(config *Config, ctxInfo *global.ContextInfo, tracesCh <-cha
 	// Second, we register providers for each node. Each provider is a function that receives the
 	// type of each of the "nodesMap" struct fields, and returns the function that represents
 	// each node. Each function will have input and/or output channels.
-	graph.RegisterStart(gnb, traces.ReaderProvider)
+	graph.RegisterStart(gnb, gb.tracesListenerProvider)
 	graph.RegisterMiddle(gnb, transform.RoutesProvider)
 	graph.RegisterMiddle(gnb, transform.KubeDecoratorProvider)
 	graph.RegisterTerminal(gnb, gb.metricsReporterProvider)
@@ -95,18 +100,18 @@ func newGraphBuilder(config *Config, ctxInfo *global.ContextInfo, tracesCh <-cha
 
 	// The returned builder later invokes its "Build" function that, given
 	// the contents of the nodesMap struct, will automagically instantiate
-	// and interconnect each node according to the "nodeId" and "sendsTo"
+	// and interconnect each node according to the "nodeId" and "sendTo"
 	// annotations in the nodesMap struct definition
 	return gb
 }
 
-func (gb *graphFunctions) buildGraph(ctx context.Context) (*Instrumenter, error) {
+func (gb *graphFunctions) buildGraph() (*Instrumenter, error) {
 	// setting explicitly some configuration properties that are needed by their
 	// respective node providers
 
 	definedNodesMap := configToNodesMap(gb.config)
 	definedNodesMap.TracesReader.TracesInput = gb.tracesCh
-	grp, err := gb.builder.Build(ctx, definedNodesMap)
+	grp, err := gb.builder.Build(definedNodesMap)
 	if err != nil {
 		return nil, err
 	}
@@ -123,24 +128,28 @@ type Instrumenter struct {
 
 func (i *Instrumenter) Run(ctx context.Context) {
 	go i.internalMetrics.Start(ctx)
-	i.graph.Run(ctx)
+	i.graph.Run()
 }
 
 // behind this line, adaptors to instantiate the different pipeline nodes according to the expected signature format
 // Gocritic is disabled because we need to violate the "hugeParam" check, as the second
 // argument in the functions below need to be a value.
 
-//nolint:gocritic
-func (gb *graphFunctions) tracesReporterProvicer(ctx context.Context, config otel.TracesConfig) (node.TerminalFunc[[]request.Span], error) {
-	return otel.ReportTraces(ctx, &config, gb.ctxInfo)
+func (gb *graphFunctions) tracesListenerProvider(config traces.Reader) (node.StartFunc[[]request.Span], error) {
+	return traces.ReadFromChannel(gb.ctx, config)
 }
 
 //nolint:gocritic
-func (gb *graphFunctions) metricsReporterProvider(ctx context.Context, config otel.MetricsConfig) (node.TerminalFunc[[]request.Span], error) {
-	return otel.ReportMetrics(ctx, &config, gb.ctxInfo)
+func (gb *graphFunctions) tracesReporterProvicer(config otel.TracesConfig) (node.TerminalFunc[[]request.Span], error) {
+	return otel.ReportTraces(gb.ctx, &config, gb.ctxInfo)
 }
 
 //nolint:gocritic
-func (gb *graphFunctions) prometheusProvider(ctx context.Context, config prom.PrometheusConfig) (node.TerminalFunc[[]request.Span], error) {
-	return prom.PrometheusEndpoint(ctx, &config, gb.ctxInfo)
+func (gb *graphFunctions) metricsReporterProvider(config otel.MetricsConfig) (node.TerminalFunc[[]request.Span], error) {
+	return otel.ReportMetrics(gb.ctx, &config, gb.ctxInfo)
+}
+
+//nolint:gocritic
+func (gb *graphFunctions) prometheusProvider(config prom.PrometheusConfig) (node.TerminalFunc[[]request.Span], error) {
+	return prom.PrometheusEndpoint(gb.ctx, &config, gb.ctxInfo)
 }

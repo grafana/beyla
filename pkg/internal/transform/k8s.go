@@ -1,7 +1,6 @@
 package transform
 
 import (
-	"context"
 	"fmt"
 	"net"
 	"strings"
@@ -62,7 +61,7 @@ func (d KubernetesDecorator) Enabled() bool {
 	}
 }
 
-func KubeDecoratorProvider(_ context.Context, cfg KubernetesDecorator) (node.MiddleFunc[[]request.Span, []request.Span], error) {
+func KubeDecoratorProvider(cfg KubernetesDecorator) (node.MiddleFunc[[]request.Span, []request.Span], error) {
 	decorator, err := newMetadataDecorator(&cfg)
 	if err != nil {
 		return nil, fmt.Errorf("instantiating kubernetes metadata decorator: %w", err)

@@ -1,9 +1,7 @@
 package graph
 
-import "context"
-
 type startNode interface {
-	StartCtx(ctx context.Context)
+	Start()
 }
 
 type terminalNode interface {
@@ -19,10 +17,10 @@ type Graph struct {
 }
 
 // Run all the stages of the graph and wait until all the nodes stopped processing.
-func (g *Graph) Run(ctx context.Context) {
+func (g *Graph) Run() {
 	// start all stages
 	for _, s := range g.start {
-		s.StartCtx(ctx)
+		s.Start()
 	}
 	// wait for all stages to finish
 	for _, t := range g.terms {

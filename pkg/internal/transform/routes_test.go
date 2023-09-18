@@ -1,7 +1,6 @@
 package transform
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -17,7 +16,7 @@ const testTimeout = 5 * time.Second
 func TestUnmatchedWildcard(t *testing.T) {
 	for _, tc := range []UnmatchType{"", UnmatchWildcard, "invalid_value"} {
 		t.Run(string(tc), func(t *testing.T) {
-			router, err := RoutesProvider(context.TODO(), &RoutesConfig{Unmatch: tc, Patterns: []string{"/user/:id"}})
+			router, err := RoutesProvider(&RoutesConfig{Unmatch: tc, Patterns: []string{"/user/:id"}})
 			require.NoError(t, err)
 			in, out := make(chan []request.Span, 10), make(chan []request.Span, 10)
 			defer close(in)
@@ -37,7 +36,7 @@ func TestUnmatchedWildcard(t *testing.T) {
 }
 
 func TestUnmatchedPath(t *testing.T) {
-	router, err := RoutesProvider(context.TODO(), &RoutesConfig{Unmatch: UnmatchPath, Patterns: []string{"/user/:id"}})
+	router, err := RoutesProvider(&RoutesConfig{Unmatch: UnmatchPath, Patterns: []string{"/user/:id"}})
 	require.NoError(t, err)
 	in, out := make(chan []request.Span, 10), make(chan []request.Span, 10)
 	defer close(in)
@@ -55,7 +54,7 @@ func TestUnmatchedPath(t *testing.T) {
 }
 
 func TestUnmatchedEmpty(t *testing.T) {
-	router, err := RoutesProvider(context.TODO(), &RoutesConfig{Unmatch: UnmatchUnset, Patterns: []string{"/user/:id"}})
+	router, err := RoutesProvider(&RoutesConfig{Unmatch: UnmatchUnset, Patterns: []string{"/user/:id"}})
 	require.NoError(t, err)
 	in, out := make(chan []request.Span, 10), make(chan []request.Span, 10)
 	defer close(in)

@@ -196,7 +196,7 @@ func TestTraces_InternalInstrumentation(t *testing.T) {
 			Metrics:     internalTraces,
 		})
 	require.NoError(t, err)
-	inputNode.SendsTo(node.AsTerminal(exporter))
+	inputNode.SendTo(node.AsTerminal(exporter))
 
 	go inputNode.Start()
 
@@ -288,7 +288,7 @@ func TestTraces_InternalInstrumentationSampling(t *testing.T) {
 			Metrics:     internalTraces,
 		})
 	require.NoError(t, err)
-	inputNode.SendsTo(node.AsTerminal(exporter))
+	inputNode.SendTo(node.AsTerminal(exporter))
 
 	go inputNode.Start()
 

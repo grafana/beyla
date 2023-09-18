@@ -2,8 +2,6 @@
 package transform
 
 import (
-	"context"
-
 	"github.com/mariomac/pipes/pkg/node"
 	"golang.org/x/exp/slog"
 
@@ -35,7 +33,7 @@ type RoutesConfig struct {
 	Patterns []string `yaml:"patterns"`
 }
 
-func RoutesProvider(_ context.Context, rc *RoutesConfig) (node.MiddleFunc[[]request.Span, []request.Span], error) {
+func RoutesProvider(rc *RoutesConfig) (node.MiddleFunc[[]request.Span, []request.Span], error) {
 	// set default value for Unmatch action
 	var unmatchAction func(span *request.Span)
 	switch rc.Unmatch {

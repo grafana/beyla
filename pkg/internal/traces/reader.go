@@ -20,8 +20,8 @@ type Reader struct {
 	TracesInput <-chan []request.Span
 }
 
-func ReaderProvider(_ context.Context, r Reader) (node.StartFuncCtx[[]request.Span], error) {
-	return func(ctx context.Context, out chan<- []request.Span) {
+func ReadFromChannel(ctx context.Context, r Reader) (node.StartFunc[[]request.Span], error) {
+	return func(out chan<- []request.Span) {
 		cancelChan := ctx.Done()
 		for {
 			select {

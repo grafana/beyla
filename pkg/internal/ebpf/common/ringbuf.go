@@ -9,7 +9,6 @@ import (
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/ringbuf"
-	"github.com/mariomac/pipes/pkg/node"
 	"golang.org/x/exp/slog"
 
 	"github.com/grafana/beyla/pkg/internal/imetrics"
@@ -46,8 +45,6 @@ type ringBufForwarder[T any] struct {
 // ForwardRingbuf returns a function reads HTTPRequestTraces from an input ring buffer, accumulates them into an
 // internal buffer, and forwards them to an output events channel, previously converted to request.Span
 // instances.
-// Despite it returns a StartFuncCtx, this is not used inside the Pipes' library but it's invoked
-// directly in the code as a simple function.
 func ForwardRingbuf[T any](
 	svcName string,
 	cfg *TracerConfig,
@@ -56,7 +53,7 @@ func ForwardRingbuf[T any](
 	reader func(*ringbuf.Record) (request.Span, error),
 	metrics imetrics.Reporter,
 	closers ...io.Closer,
-) node.StartFuncCtx[[]request.Span] {
+) func(context.Context, chan<- []request.Span) {
 	rbf := ringBufForwarder[T]{
 		svcName: svcName, cfg: cfg, logger: logger, ringbuffer: ringbuffer,
 		closers: closers, reader: reader, metrics: metrics,

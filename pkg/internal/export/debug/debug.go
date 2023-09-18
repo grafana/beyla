@@ -2,7 +2,6 @@
 package debug
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/mariomac/pipes/pkg/node"
@@ -16,7 +15,7 @@ func (p PrintEnabled) Enabled() bool {
 	return bool(p)
 }
 
-func PrinterNode(_ context.Context, _ PrintEnabled) (node.TerminalFunc[[]request.Span], error) {
+func PrinterNode(_ PrintEnabled) (node.TerminalFunc[[]request.Span], error) {
 	return func(input <-chan []request.Span) {
 		for spans := range input {
 			for i := range spans {
@@ -45,7 +44,7 @@ type NoopEnabled bool
 func (n NoopEnabled) Enabled() bool {
 	return bool(n)
 }
-func NoopNode(_ context.Context, _ NoopEnabled) (node.TerminalFunc[[]request.Span], error) {
+func NoopNode(_ NoopEnabled) (node.TerminalFunc[[]request.Span], error) {
 	counter := 0
 	return func(spans <-chan []request.Span) {
 		for range spans {

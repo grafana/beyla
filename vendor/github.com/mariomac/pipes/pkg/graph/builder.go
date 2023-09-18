@@ -1,7 +1,6 @@
 package graph
 
 import (
-	"context"
 	"fmt"
 	"reflect"
 	"strings"
@@ -39,7 +38,7 @@ type inOutTyper interface {
 // its stages given a name and a type, as well as connect them. If two connected stages have
 // incompatible types, it will insert a codec in between to translate between the stage types
 type Builder struct {
-	startProviders    map[reflect.Type][2]reflect.Value //0: reflect.ValueOf(node.AsStartCtx[I, O]), 1: reflect.ValueOf(startfunc)
+	startProviders    map[reflect.Type][2]reflect.Value //0: reflect.ValueOf(node.AsStart[I, O]), 1: reflect.ValueOf(startfunc)
 	middleProviders   map[reflect.Type][2]reflect.Value
 	terminalProviders map[reflect.Type][2]reflect.Value
 	// keys: instance IDs
@@ -102,7 +101,7 @@ func RegisterCodec[I, O any](nb *Builder, middleFunc node.MiddleFunc[I, O]) {
 // configuration struct containing it must define a `nodeId` tag with an identifier for that stage.
 func RegisterStart[CFG, O any](nb *Builder, b stage.StartProvider[CFG, O]) {
 	nb.startProviders[typeOf[CFG]()] = [2]reflect.Value{
-		reflect.ValueOf(node.AsStartCtx[O]),
+		reflect.ValueOf(node.AsStart[O]),
 		reflect.ValueOf(b),
 	}
 }
@@ -111,7 +110,7 @@ func RegisterStart[CFG, O any](nb *Builder, b stage.StartProvider[CFG, O]) {
 // which allows associating multiple functions with a single node
 func RegisterMultiStart[CFG, O any](nb *Builder, b stage.StartMultiProvider[CFG, O]) {
 	nb.startProviders[typeOf[CFG]()] = [2]reflect.Value{
-		reflect.ValueOf(node.AsStartCtx[O]),
+		reflect.ValueOf(node.AsStart[O]),
 		reflect.ValueOf(b),
 	}
 }
@@ -144,9 +143,9 @@ func RegisterTerminal[CFG, I any](nb *Builder, b stage.TerminalProvider[CFG, I])
 // The nodes will be connected according to any of the following alternatives:
 //   - The ConnectedConfig "source" --> ["destination"...] map, if the passed type implements ConnectedConfig interface.
 //   - The sendTo annotations on each graph stage.
-func (b *Builder) Build(ctx context.Context, cfg any) (Graph, error) {
+func (b *Builder) Build(cfg any) (Graph, error) {
 	g := Graph{}
-	if err := b.applyConfig(ctx, cfg); err != nil {
+	if err := b.applyConfig(cfg); err != nil {
 		return g, err
 	}
 
@@ -178,14 +177,13 @@ func (b *Builder) Build(ctx context.Context, cfg any) (Graph, error) {
 	return g, nil
 }
 
-func (nb *Builder) instantiate(ctx context.Context, instanceID string, arg reflect.Value) error {
+func (nb *Builder) instantiate(instanceID string, arg reflect.Value) error {
 	// TODO: check if instanceID is duplicate
 	if instanceID == "" {
 		return fmt.Errorf("instance ID for type %s can't be empty", arg.Type())
 	}
 	rargs := []reflect.Value{
-		reflect.ValueOf(ctx), // arg 0: context
-		arg,                  // arg 1: configuration value
+		arg, // arg 0: configuration value
 	}
 	if ib, ok := nb.startProviders[arg.Type()]; ok {
 		// providedFunc, err = StartProvider(arg)
@@ -244,7 +242,7 @@ func (nb *Builder) instantiate(ctx context.Context, instanceID string, arg refle
 		nb.inNodeNames[instanceID] = struct{}{}
 		return nil
 	}
-	return fmt.Errorf("unknown node name %q for type %q", instanceID, arg.Type())
+	return fmt.Errorf("for node ID: %q. Provider not registered for type %q", instanceID, arg.Type())
 }
 
 func (b *Builder) connect(src, dst string) error {
@@ -291,9 +289,9 @@ func (b *Builder) connect(src, dst string) error {
 			return fmt.Errorf("invalid destination node: %q", dst)
 		}
 	}
-	srcSendsToMethod := reflect.ValueOf(srcNode).MethodByName("SendsTo")
+	srcSendsToMethod := reflect.ValueOf(srcNode).MethodByName("SendTo")
 	if srcSendsToMethod.IsZero() {
-		panic(fmt.Sprintf("BUG: for stage %q, source of type %T does not have SendsTo method", src, srcNode))
+		panic(fmt.Sprintf("BUG: for stage %q, source of type %T does not have SendTo method", src, srcNode))
 	}
 	// check if they have compatible types
 	if srcNode.OutType() == dstNode.InType() {
@@ -307,9 +305,9 @@ func (b *Builder) connect(src, dst string) error {
 			" any %s -> %s codec", src, dst, srcNode.OutType(), dstNode.InType())
 	}
 	srcSendsToMethod.Call([]reflect.Value{codec})
-	codecSendsToMethod := codec.MethodByName("SendsTo")
+	codecSendsToMethod := codec.MethodByName("SendTo")
 	if codecSendsToMethod.IsZero() {
-		panic(fmt.Sprintf("BUG: for stage %q, codec of type %T does not have SendsTo method", src, srcNode))
+		panic(fmt.Sprintf("BUG: for stage %q, codec of type %T does not have SendTo method", src, srcNode))
 	}
 	codecSendsToMethod.Call([]reflect.Value{reflect.ValueOf(dstNode)})
 	return nil

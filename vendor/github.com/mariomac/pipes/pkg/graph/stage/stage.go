@@ -1,8 +1,6 @@
 package stage
 
 import (
-	"context"
-
 	"github.com/mariomac/pipes/pkg/node"
 )
 
@@ -33,28 +31,29 @@ var _ Instancer = (*Instance)(nil)
 var _ Instancer = Instance("")
 
 // StartProvider is a function that, given a configuration argument of a unique type,
-// returns a function fulfilling the node.StartFuncCtx type signature. Returned functions
+// returns a function fulfilling the node.StartFunc type signature. Returned function
 // will run inside a Graph Start Node
+// If it returns an error, the graph building process will be interrupted.
 // The configuration type must either implement the stage.Instancer interface or the
 // configuration struct containing it must define a `nodeId` tag with an identifier for that stage.
-// The context that is passed to the Provider doesn't have to be the same context that is
-// later passed to the node.StartFuncCtx instance.
-type StartProvider[CFG, O any] func(context.Context, CFG) (node.StartFuncCtx[O], error)
+type StartProvider[CFG, O any] func(CFG) (node.StartFunc[O], error)
 
 // StartMultiProvider is similar to StarProvider, but it is able to associate a variadic
 // number of functions that will behave as a single node.
-type StartMultiProvider[CFG, O any] func(context.Context, CFG) ([]node.StartFuncCtx[O], error)
+type StartMultiProvider[CFG, O any] func(CFG) ([]node.StartFunc[O], error)
 
 // MiddleProvider is a function that, given a configuration argument of a unique type,
 // returns a function fulfilling the node.MiddleFunc type signature. Returned functions
-// will run inside a Graph Middle Node
+// will run inside a Graph Middle Node.
+// If it returns an error, the graph building process will be interrupted.
 // The configuration type must either implement the stage.Instancer interface or the
 // configuration struct containing it must define a `nodeId` tag with an identifier for that stage.
-type MiddleProvider[CFG, I, O any] func(context.Context, CFG) (node.MiddleFunc[I, O], error)
+type MiddleProvider[CFG, I, O any] func(CFG) (node.MiddleFunc[I, O], error)
 
 // TerminalProvider is a function that, given a configuration argument of a unique type,
 // returns a function fulfilling the node.TerminalFunc type signature. Returned functions
-// will run inside a Graph Terminal Node
+// will run inside a Graph Terminal Node.
+// If it returns an error, the graph building process will be interrupted.
 // The configuration type must either implement the stage.Instancer interface or the
 // configuration struct containing it must define a `nodeId` tag with an identifier for that stage.
-type TerminalProvider[CFG, I any] func(context.Context, CFG) (node.TerminalFunc[I], error)
+type TerminalProvider[CFG, I any] func(CFG) (node.TerminalFunc[I], error)

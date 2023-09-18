@@ -45,8 +45,6 @@ type ringBufForwarder[T any] struct {
 // ForwardRingbuf returns a function reads HTTPRequestTraces from an input ring buffer, accumulates them into an
 // internal buffer, and forwards them to an output events channel, previously converted to request.Span
 // instances.
-// Despite it returns a StartFunc, this is not used inside the Pipes' library but it's invoked
-// directly in the code as a simple function.
 func ForwardRingbuf[T any](
 	svcName string,
 	cfg *TracerConfig,

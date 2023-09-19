@@ -1,0 +1,3 @@
+docker run -p 5432:5432 --name beyla-postgres-test -e POSTGRES_PASSWORD=mysecretpassword -d postgres
+#psql -h localhost -U postgres
+

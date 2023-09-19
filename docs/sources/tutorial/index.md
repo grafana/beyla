@@ -99,7 +99,7 @@ go run server.go
 
 ## Instrument a service
 
-Setup Beyla as a standalone linux process by following the [standalone setup]({{< relref "../setup/standalone.md" >}}) documentation.
+Set up Beyla as a standalone linux process by following the [standalone setup]({{< relref "../setup/standalone.md" >}}) documentation.
 
 Metrics will be exported from a [Prometheus](https://prometheus.io/) scrape endpoint by setting the `BEYLA_PROMETHEUS_PORT` environment variable. Traces will be printed to stdout by setting the `PRINT_TRACES=true` environment variable.
 

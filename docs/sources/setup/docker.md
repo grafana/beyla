@@ -1,7 +1,7 @@
 ---
 title: Run Beyla as a Docker container
 menuTitle: Docker
-description: Learn how to setup and run Beyla as a standalone Docker container that instruments another container.
+description: Learn how to set up and run Beyla as a standalone Docker container that instruments another container.
 weight: 2
 keywords:
   - Beyla

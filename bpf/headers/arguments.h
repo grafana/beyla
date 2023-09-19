@@ -21,7 +21,7 @@
 #include <stdbool.h>
 
 // Injected in init
-volatile const bool is_registers_abi;
+volatile const bool is_registers_abi /* TODO: set this up based on instrumented application's go version >= 1.17 */ = 1;
 
 void *get_argument_by_reg(struct pt_regs *ctx, int index)
 {

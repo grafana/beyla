@@ -41,28 +41,6 @@ char __license[] SEC("license") = "Dual MIT/GPL";
     struct span_context sc;  \
     struct span_context psc; 
 
-// Common flow for uprobe return:
-// 1. Find consistend key for the current uprobe context
-// 2. Use the key to lookup for the uprobe context in the uprobe_context_map
-// 3. Update the end time of the found span
-// 4. Submit the constructed event to the agent code using perf buffer events_map
-// 5. Delete the span from the uprobe_context_map
-// 6. Delete the span from the global active spans map
-#define UPROBE_RETURN(name, event_type, ctx_struct_pos, ctx_struct_offset, uprobe_context_map, events_map) \
-SEC("uprobe/##name##")                                                                                     \
-int uprobe_##name##_Returns(struct pt_regs *ctx) {                                                         \
-    void *req_ptr = get_argument(ctx, ctx_struct_pos);                                                     \
-    void *key = get_consistent_key(ctx, (void *)(req_ptr + ctx_struct_offset));                            \
-    void *req_ptr_map = bpf_map_lookup_elem(&uprobe_context_map, &key);                                    \
-    event_type tmpReq = {};                                                                                \
-    bpf_probe_read(&tmpReq, sizeof(tmpReq), req_ptr_map);                                                  \
-    tmpReq.end_time = bpf_ktime_get_ns();                                                                  \
-    bpf_perf_event_output(ctx, &events_map, BPF_F_CURRENT_CPU, &tmpReq, sizeof(tmpReq));                   \
-    bpf_map_delete_elem(&uprobe_context_map, &key);                                                        \
-    stop_tracking_span(&tmpReq.sc);                                                                        \
-    return 0;                                                                                              \
-}
-
 struct sql_request_t {
     BASE_SPAN_PROPERTIES
     char query[MAX_QUERY_SIZE];
@@ -94,12 +72,16 @@ int uprobe_queryDC(struct pt_regs *ctx) {
     struct sql_request_t sql_request = {0};
     sql_request.start_time = bpf_ktime_get_ns();
 
-    if (should_include_db_statement) {
+
+    if (1 /*  TODO: HOOK UP TO CONFIG */ || should_include_db_statement) {
         // Read Query string
         void *query_str_ptr = get_argument(ctx, query_str_ptr_pos);
         u64 query_str_len = (u64)get_argument(ctx, query_str_len_pos);
         u64 query_size = MAX_QUERY_SIZE < query_str_len ? MAX_QUERY_SIZE : query_str_len;
         bpf_probe_read(sql_request.query, query_size, query_str_ptr);
+        bpf_dbg_printk("queryDC probe, size: %d, query: %100s", query_size, sql_request.query); // TODO: REMOVE ME
+    } else {
+        bpf_dbg_printk("queryDC probe, not including db statement"); // TODO: REMOVE ME
     }
 
     // Get parent if exists
@@ -112,8 +94,10 @@ int uprobe_queryDC(struct pt_regs *ctx) {
         bpf_probe_read(&sql_request.psc, sizeof(sql_request.psc), span_ctx);
         copy_byte_arrays(sql_request.psc.TraceID, sql_request.sc.TraceID, TRACE_ID_SIZE);
         generate_random_bytes(sql_request.sc.SpanID, SPAN_ID_SIZE);
+        bpf_dbg_printk("Setting span context"); // TODO: REMOVE ME
     } else {
         sql_request.sc = generate_span_context();
+        bpf_dbg_printk("Generated span context"); // TODO: REMOVE ME
     }
 
     // Get key
@@ -123,6 +107,32 @@ int uprobe_queryDC(struct pt_regs *ctx) {
     start_tracking_span(context_ptr_val, &sql_request.sc);
     return 0;
 }
+
+// Common flow for uprobe return:
+// 1. Find consistend key for the current uprobe context
+// 2. Use the key to lookup for the uprobe context in the uprobe_context_map
+// 3. Update the end time of the found span
+// 4. Submit the constructed event to the agent code using perf buffer events_map
+// 5. Delete the span from the uprobe_context_map
+// 6. Delete the span from the global active spans map
+#define UPROBE_RETURN(name, event_type, ctx_struct_pos, ctx_struct_offset, uprobe_context_map, events_map) \
+SEC("uprobe/##name##")                                                                                     \
+int uprobe_##name##_Returns(struct pt_regs *ctx) {                                                         \
+    void *req_ptr = get_argument(ctx, ctx_struct_pos);                                                     \
+    void *key = get_consistent_key(ctx, (void *)(req_ptr + ctx_struct_offset));                            \
+    bpf_printk("uret key=%px", key); /* TODO: REMOVE ME */  \
+    void *req_ptr_map = bpf_map_lookup_elem(&uprobe_context_map, &key);                                    \
+    bpf_printk("uret req_ptr_map=%px", req_ptr_map); /* TODO: REMOVE ME */ \
+    event_type tmpReq = {};                                                                                \
+    bpf_probe_read(&tmpReq, sizeof(tmpReq), req_ptr_map);                                                  \
+    bpf_printk("uret req_ptr_map=%s", ((struct sql_request_t)tmpReq).query); /* TODO: REMOVE ME */ \
+    tmpReq.end_time = bpf_ktime_get_ns();                                                                  \
+    bpf_perf_event_output(ctx, &events_map, BPF_F_CURRENT_CPU, &tmpReq, sizeof(tmpReq));                   \
+    bpf_map_delete_elem(&uprobe_context_map, &key);                                                        \
+    stop_tracking_span(&tmpReq.sc);                                                                        \
+    return 0;                                                                                              \
+}
+
 
 // This instrumentation attaches uprobe to the following function:
 // func (db *DB) queryDC(ctx, txctx context.Context, dc *driverConn, releaseConn func(error), query string, args []any)

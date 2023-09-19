@@ -1,14 +1,14 @@
 ---
-title: Setup Beyla
+title: Set up Beyla
 menuTitle: Setup
-description: Learn how to setup and run Beyla.
+description: Learn how to set up and run Beyla.
 weight: 1
 keywords:
   - Beyla
   - eBPF
 ---
 
-# Setup Beyla
+# Set up Beyla
 
 There are different options to set up and run Beyla:
 

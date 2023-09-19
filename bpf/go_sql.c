@@ -12,37 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "headers/bpf_tracing.h"
 #include "common.h"
 #include "bpf_helpers.h"
+#include "bpf_builtins.h"
+#include "go_common.h"
 #include "bpf_dbg.h"
-#include "utils.h"
 #include <stdbool.h>
 
-#include "arguments.h"
-#include "span_context.h"
-#include "go_context.h"
-//#include "go_types.h"
-//#include "uprobe.h"
-
-char __license[] SEC("license") = "Dual MIT/GPL";
-
 #define MAX_QUERY_SIZE 100
-#define MAX_CONCURRENT 50
-
-#define TRACE_ID_SIZE 16
-#define TRACE_ID_STRING_SIZE 32
-#define SPAN_ID_SIZE 8
-#define SPAN_ID_STRING_SIZE 16
-
-#define BASE_SPAN_PROPERTIES \
-    u64 start_time;          \
-    u64 end_time;            \
-    struct span_context sc;  \
-    struct span_context psc; 
 
 struct sql_request_t {
-    BASE_SPAN_PROPERTIES
+    u64 start_time;
     char query[MAX_QUERY_SIZE];
 };
 
@@ -50,12 +30,8 @@ struct {
 	__uint(type, BPF_MAP_TYPE_HASH);
 	__type(key, void*);
 	__type(value, struct sql_request_t);
-	__uint(max_entries, MAX_CONCURRENT);
+	__uint(max_entries, MAX_CONCURRENT_REQUESTS);
 } sql_events SEC(".maps");
-
-struct {
-	__uint(type, BPF_MAP_TYPE_PERF_EVENT_ARRAY);
-} events SEC(".maps");
 
 // Injected in init
 volatile const bool should_include_db_statement;
@@ -64,19 +40,17 @@ volatile const bool should_include_db_statement;
 // func (db *DB) queryDC(ctx, txctx context.Context, dc *driverConn, releaseConn func(error), query string, args []any)
 SEC("uprobe/queryDC")
 int uprobe_queryDC(struct pt_regs *ctx) {
-    // argument positions
-    u64 context_ptr_pos = 3;
-    u64 query_str_ptr_pos = 8;
-    u64 query_str_len_pos = 9;
+    bpf_dbg_printk("=== uprobe/queryDC === ");
+    void *goroutine_addr = GOROUTINE_PTR(ctx);
+    bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
 
     struct sql_request_t sql_request = {0};
     sql_request.start_time = bpf_ktime_get_ns();
 
-
     if (1 /*  TODO: HOOK UP TO CONFIG */ || should_include_db_statement) {
         // Read Query string
-        void *query_str_ptr = get_argument(ctx, query_str_ptr_pos);
-        u64 query_str_len = (u64)get_argument(ctx, query_str_len_pos);
+        void *query_str_ptr = GO_PARAM8(ctx);
+        u64 query_str_len = (u64)GO_PARAM9(ctx);
         u64 query_size = MAX_QUERY_SIZE < query_str_len ? MAX_QUERY_SIZE : query_str_len;
         bpf_probe_read(sql_request.query, query_size, query_str_ptr);
         bpf_dbg_printk("queryDC probe, size: %d, query: %100s", query_size, sql_request.query); // TODO: REMOVE ME
@@ -84,56 +58,33 @@ int uprobe_queryDC(struct pt_regs *ctx) {
         bpf_dbg_printk("queryDC probe, not including db statement"); // TODO: REMOVE ME
     }
 
-    // Get parent if exists
-    void *context_ptr = get_argument(ctx, context_ptr_pos);
-    void *context_ptr_val = 0;
-    bpf_probe_read(&context_ptr_val, sizeof(context_ptr_val), context_ptr);
-    struct span_context *span_ctx = get_parent_span_context(context_ptr_val);
-    if (span_ctx != NULL) {
-        // Set the parent context
-        bpf_probe_read(&sql_request.psc, sizeof(sql_request.psc), span_ctx);
-        copy_byte_arrays(sql_request.psc.TraceID, sql_request.sc.TraceID, TRACE_ID_SIZE);
-        generate_random_bytes(sql_request.sc.SpanID, SPAN_ID_SIZE);
-        bpf_dbg_printk("Setting span context"); // TODO: REMOVE ME
-    } else {
-        sql_request.sc = generate_span_context();
-        bpf_dbg_printk("Generated span context"); // TODO: REMOVE ME
-    }
-
-    // Get key
-    void *key = get_consistent_key(ctx, context_ptr);
-
-    bpf_map_update_elem(&sql_events, &key, &sql_request, 0);
-    start_tracking_span(context_ptr_val, &sql_request.sc);
+    bpf_map_update_elem(&sql_events, &goroutine_addr, &sql_request, BPF_ANY);
     return 0;
 }
 
-// Common flow for uprobe return:
-// 1. Find consistend key for the current uprobe context
-// 2. Use the key to lookup for the uprobe context in the uprobe_context_map
-// 3. Update the end time of the found span
-// 4. Submit the constructed event to the agent code using perf buffer events_map
-// 5. Delete the span from the uprobe_context_map
-// 6. Delete the span from the global active spans map
-#define UPROBE_RETURN(name, event_type, ctx_struct_pos, ctx_struct_offset, uprobe_context_map, events_map) \
-SEC("uprobe/##name##")                                                                                     \
-int uprobe_##name##_Returns(struct pt_regs *ctx) {                                                         \
-    void *req_ptr = get_argument(ctx, ctx_struct_pos);                                                     \
-    void *key = get_consistent_key(ctx, (void *)(req_ptr + ctx_struct_offset));                            \
-    bpf_printk("uret key=%px", key); /* TODO: REMOVE ME */  \
-    void *req_ptr_map = bpf_map_lookup_elem(&uprobe_context_map, &key);                                    \
-    bpf_printk("uret req_ptr_map=%px", req_ptr_map); /* TODO: REMOVE ME */ \
-    event_type tmpReq = {};                                                                                \
-    bpf_probe_read(&tmpReq, sizeof(tmpReq), req_ptr_map);                                                  \
-    bpf_printk("uret req_ptr_map=%s", ((struct sql_request_t)tmpReq).query); /* TODO: REMOVE ME */ \
-    tmpReq.end_time = bpf_ktime_get_ns();                                                                  \
-    bpf_perf_event_output(ctx, &events_map, BPF_F_CURRENT_CPU, &tmpReq, sizeof(tmpReq));                   \
-    bpf_map_delete_elem(&uprobe_context_map, &key);                                                        \
-    stop_tracking_span(&tmpReq.sc);                                                                        \
-    return 0;                                                                                              \
+SEC("uprobe/queryDC")
+int uprobe_queryDC_Returns(struct pt_regs *ctx) {
+    bpf_dbg_printk("=== uprobe/queryDC_Returns === ");
+    void *goroutine_addr = GOROUTINE_PTR(ctx);
+    bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
+    struct sql_request_t *request = bpf_map_lookup_elem(&sql_events, &goroutine_addr);
+    if (request == NULL) {
+        bpf_dbg_printk("Request not found for this goroutine");
+        return 0;
+    }
+
+    http_request_trace *trace = bpf_ringbuf_reserve(&events, sizeof(http_request_trace), 0);
+    if (trace) {
+        trace->type = EVENT_SQL_CLIENT;
+        trace->id = (u64)goroutine_addr;
+        trace->start_monotime_ns = request->start_time;
+        trace->end_monotime_ns = bpf_ktime_get_ns();
+        bpf_memcpy(trace->path, request->query, MAX_QUERY_SIZE);
+        // submit the completed trace via ringbuffer
+        bpf_ringbuf_submit(trace, get_flags());
+    } else {
+        bpf_dbg_printk("can't reserve space in the ringbuffer");
+    }
+    bpf_map_delete_elem(&sql_events, &goroutine_addr);
+    return 0;
 }
-
-
-// This instrumentation attaches uprobe to the following function:
-// func (db *DB) queryDC(ctx, txctx context.Context, dc *driverConn, releaseConn func(error), query string, args []any)
-UPROBE_RETURN(queryDC, struct sql_request_t, 3, 0, sql_events, events)

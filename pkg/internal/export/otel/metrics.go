@@ -16,7 +16,6 @@ import (
 	instrument "go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/sdk/instrumentation"
 	"go.opentelemetry.io/otel/sdk/metric"
-	"go.opentelemetry.io/otel/sdk/metric/aggregation"
 	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
 	"golang.org/x/exp/slog"
 	"google.golang.org/grpc/credentials"
@@ -262,7 +261,7 @@ func otelHistogramBuckets(metricName string, buckets []float64) metric.View {
 		},
 		metric.Stream{
 			Name: metricName,
-			Aggregation: aggregation.ExplicitBucketHistogram{
+			Aggregation: metric.AggregationExplicitBucketHistogram{
 				Boundaries: buckets,
 			},
 		})

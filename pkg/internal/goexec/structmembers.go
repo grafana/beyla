@@ -149,8 +149,10 @@ func structMemberPreFetchedOffsets(elfFile *elf.File, fieldOffsets FieldOffsets)
 	for strName, strInfo := range structMembers {
 		version, ok := libVersions[strInfo.lib]
 		if !ok {
-			log.Debug("can't find version for library", "lib", strInfo.lib)
-			continue
+			log.Debug("can't find version for library. Assuming 0.0.0", "lib", strInfo.lib)
+			// unversioned libraries are accounted as "0.0.0" in offsets.json file
+			// https://github.com/grafana/go-offsets-tracker/blob/main/pkg/writer/writer.go#L108-L110
+			version = "0.0.0"
 		}
 
 		dash := strings.Index(version, "-")

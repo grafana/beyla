@@ -40,7 +40,7 @@ const (
 type MetricsConfig struct {
 	Interval time.Duration `yaml:"interval" env:"METRICS_INTERVAL"`
 
-	CommonEndpoint  string `yaml:"" env:"OTEL_EXPORTER_OTLP_ENDPOINT"`
+	CommonEndpoint  string `yaml:"-" env:"OTEL_EXPORTER_OTLP_ENDPOINT"`
 	MetricsEndpoint string `yaml:"endpoint" env:"OTEL_EXPORTER_OTLP_METRICS_ENDPOINT"`
 
 	Protocol        Protocol `yaml:"protocol" env:"OTEL_EXPORTER_OTLP_PROTOCOL"`

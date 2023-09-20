@@ -62,7 +62,8 @@ kubernetes:
 		},
 		Metrics: otel.MetricsConfig{
 			Interval:          5 * time.Second,
-			Endpoint:          "localhost:3131",
+			CommonEndpoint:    "localhost:3131",
+			MetricsEndpoint:   "localhost:3030",
 			Protocol:          otel.ProtocolHTTPProtobuf,
 			ReportersCacheLen: 16,
 			Buckets: otel.Buckets{

@@ -1,12 +1,16 @@
 package otel
 
 import (
+	"crypto/tls"
 	"fmt"
 
 	"github.com/hashicorp/golang-lru/v2/simplelru"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
+	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp"
 	"go.opentelemetry.io/otel/sdk/resource"
 	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
+	"google.golang.org/grpc/credentials"
 )
 
 // Protocol values for the OTEL_EXPORTER_OTLP_PROTOCOL, OTEL_EXPORTER_OTLP_TRACES_PROTOCOL and
@@ -93,4 +97,41 @@ func (rp *ReporterPool[T]) For(svcName string) (T, error) {
 	}
 	rp.pool.Add(svcName, m)
 	return m, nil
+}
+
+// Intermediate representation of option functions suitable for testing
+type otlpOptions struct {
+	Endpoint      string
+	Insecure      bool
+	URLPath       string
+	SkipTLSVerify bool
+}
+
+func (o *otlpOptions) AsMetricHTTP() []otlpmetrichttp.Option {
+	opts := []otlpmetrichttp.Option{
+		otlpmetrichttp.WithEndpoint(o.Endpoint),
+	}
+	if o.Insecure {
+		opts = append(opts, otlpmetrichttp.WithInsecure())
+	}
+	if o.URLPath != "" {
+		opts = append(opts, otlpmetrichttp.WithURLPath(o.URLPath))
+	}
+	if o.SkipTLSVerify {
+		opts = append(opts, otlpmetrichttp.WithTLSClientConfig(&tls.Config{InsecureSkipVerify: true}))
+	}
+	return opts
+}
+
+func (o *otlpOptions) AsMetricGRPC() []otlpmetricgrpc.Option {
+	opts := []otlpmetricgrpc.Option{
+		otlpmetricgrpc.WithEndpoint(o.Endpoint),
+	}
+	if o.Insecure {
+		opts = append(opts, otlpmetricgrpc.WithInsecure())
+	}
+	if o.SkipTLSVerify {
+		opts = append(opts, otlpmetricgrpc.WithTLSCredentials(credentials.NewTLS(&tls.Config{InsecureSkipVerify: true})))
+	}
+	return opts
 }

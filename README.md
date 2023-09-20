@@ -29,7 +29,7 @@ watch curl -s http://localhost:8080
 
 Now that we have an example running, we are ready to download and run Beyla.
 
-First, download and unpack the latest release from the [Github releases page](https://github.com/grafana/beyla/releases).
+First, download and unpack the latest release from the [GitHub releases page](https://github.com/grafana/beyla/releases).
 The release should contain the `./beyla` executable.
 
 Beyla supports multiple ways to find the service to be instrumented (by network port, executable name, process ID),

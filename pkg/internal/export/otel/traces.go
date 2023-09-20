@@ -2,7 +2,6 @@ package otel
 
 import (
 	"context"
-	"crypto/tls"
 	"encoding/hex"
 	"fmt"
 	"net/url"
@@ -20,7 +19,6 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
 	trace2 "go.opentelemetry.io/otel/trace"
 	"golang.org/x/exp/slog"
-	"google.golang.org/grpc/credentials"
 
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
@@ -43,8 +41,8 @@ var clientSpans, _ = lru.New[uint64, []request.Span](8192)
 const reporterName = "github.com/grafana/beyla"
 
 type TracesConfig struct {
-	Endpoint       string `yaml:"endpoint" env:"OTEL_EXPORTER_OTLP_ENDPOINT"`
-	TracesEndpoint string `yaml:"-" env:"OTEL_EXPORTER_OTLP_TRACES_ENDPOINT"`
+	CommonEndpoint string `yaml:"-" env:"OTEL_EXPORTER_OTLP_ENDPOINT"`
+	TracesEndpoint string `yaml:"endpoint" env:"OTEL_EXPORTER_OTLP_TRACES_ENDPOINT"`
 
 	Protocol       Protocol `yaml:"protocol" env:"OTEL_EXPORTER_OTLP_PROTOCOL"`
 	TracesProtocol Protocol `yaml:"-" env:"OTEL_EXPORTER_OTLP_TRACES_PROTOCOL"`
@@ -68,7 +66,7 @@ type TracesConfig struct {
 // either the OTEL endpoint and OTEL traces endpoint is defined.
 // If not enabled, this node won't be instantiated
 func (m TracesConfig) Enabled() bool { //nolint:gocritic
-	return m.Endpoint != "" || m.TracesEndpoint != ""
+	return m.CommonEndpoint != "" || m.TracesEndpoint != ""
 }
 
 func (m *TracesConfig) GetProtocol() Protocol {
@@ -164,7 +162,7 @@ func httpTracer(ctx context.Context, cfg *TracesConfig) (*otlptrace.Exporter, er
 	if err != nil {
 		return nil, err
 	}
-	texp, err := otlptracehttp.New(ctx, topts...)
+	texp, err := otlptracehttp.New(ctx, topts.AsTraceHTTP()...)
 	if err != nil {
 		return nil, fmt.Errorf("creating HTTP trace exporter: %w", err)
 	}
@@ -176,7 +174,7 @@ func grpcTracer(ctx context.Context, cfg *TracesConfig) (*otlptrace.Exporter, er
 	if err != nil {
 		return nil, err
 	}
-	texp, err := otlptracegrpc.New(ctx, topts...)
+	texp, err := otlptracegrpc.New(ctx, topts.AsTraceGRPC()...)
 	if err != nil {
 		return nil, fmt.Errorf("creating GRPC trace exporter: %w", err)
 	}
@@ -472,75 +470,80 @@ func (r *TracesReporter) newTracers(svcName string) (*Tracers, error) {
 	return &tracers, nil
 }
 
-func parseTracesEndpoint(cfg *TracesConfig) (*url.URL, error) {
+func parseTracesEndpoint(cfg *TracesConfig) (*url.URL, bool, error) {
+	isCommon := false
 	endpoint := cfg.TracesEndpoint
 	if endpoint == "" {
-		endpoint = cfg.Endpoint
+		isCommon = true
+		endpoint = cfg.CommonEndpoint
 	}
 
 	murl, err := url.Parse(endpoint)
 	if err != nil {
-		return nil, fmt.Errorf("parsing endpoint URL %s: %w", endpoint, err)
+		return nil, isCommon, fmt.Errorf("parsing endpoint URL %s: %w", endpoint, err)
 	}
 	if murl.Scheme == "" || murl.Host == "" {
-		return nil, fmt.Errorf("URL %q must have a scheme and a host", endpoint)
+		return nil, isCommon, fmt.Errorf("URL %q must have a scheme and a host", endpoint)
 	}
-	return murl, nil
+	return murl, isCommon, nil
 }
 
-func getHTTPTracesEndpointOptions(cfg *TracesConfig) ([]otlptracehttp.Option, error) {
+func getHTTPTracesEndpointOptions(cfg *TracesConfig) (otlpOptions, error) {
+	opts := otlpOptions{}
 	log := tlog().With("transport", "http")
 
-	murl, err := parseTracesEndpoint(cfg)
+	murl, isCommon, err := parseTracesEndpoint(cfg)
 	if err != nil {
-		return nil, err
+		return opts, err
 	}
 
 	log.Debug("Configuring exporter", "protocol",
 		cfg.Protocol, "tracesProtocol", cfg.TracesProtocol, "endpoint", murl.Host)
 	setTracesProtocol(cfg)
-	opts := []otlptracehttp.Option{
-		otlptracehttp.WithEndpoint(murl.Host),
-	}
+	opts.Endpoint = murl.Host
 	if murl.Scheme == "http" || murl.Scheme == "unix" {
 		log.Debug("Specifying insecure connection", "scheme", murl.Scheme)
-		opts = append(opts, otlptracehttp.WithInsecure())
+		opts.Insecure = true
 	}
-
-	if len(murl.Path) > 0 && murl.Path != "/" && !strings.HasSuffix(murl.Path, "/v1/traces") {
-		urlPath := murl.Path + "/v1/traces"
-		log.Debug("Specifying path", "path", urlPath)
-		opts = append(opts, otlptracehttp.WithURLPath(urlPath))
+	// If the value is set from the OTEL_EXPORTER_OTLP_ENDPOINT common property, we need to add /v1/metrics to the path
+	// otherwise, we leave the path that is explicitly set by the user
+	opts.URLPath = murl.Path
+	if isCommon {
+		if strings.HasSuffix(opts.URLPath, "/") {
+			opts.URLPath += "v1/traces"
+		} else {
+			opts.URLPath += "/v1/traces"
+		}
+		log.Debug("Specifying path", "path", opts.URLPath)
 	}
 
 	if cfg.InsecureSkipVerify {
 		log.Debug("Setting InsecureSkipVerify")
-		opts = append(opts, otlptracehttp.WithTLSClientConfig(&tls.Config{InsecureSkipVerify: true}))
+		opts.SkipTLSVerify = true
 	}
 
 	return opts, nil
 }
 
-func getGRPCTracesEndpointOptions(cfg *TracesConfig) ([]otlptracegrpc.Option, error) {
+func getGRPCTracesEndpointOptions(cfg *TracesConfig) (otlpOptions, error) {
+	opts := otlpOptions{}
 	log := tlog().With("transport", "grpc")
-	murl, err := parseTracesEndpoint(cfg)
+	murl, _, err := parseTracesEndpoint(cfg)
 	if err != nil {
-		return nil, err
+		return opts, err
 	}
 
 	log.Debug("Configuring exporter", "protocol",
 		cfg.Protocol, "tracesProtocol", cfg.TracesProtocol, "endpoint", murl.Host)
-	opts := []otlptracegrpc.Option{
-		otlptracegrpc.WithEndpoint(murl.Host),
-	}
+	opts.Endpoint = murl.Host
 	if murl.Scheme == "http" || murl.Scheme == "unix" {
 		log.Debug("Specifying insecure connection", "scheme", murl.Scheme)
-		opts = append(opts, otlptracegrpc.WithInsecure())
+		opts.Insecure = true
 	}
 
 	if cfg.InsecureSkipVerify {
 		log.Debug("Setting InsecureSkipVerify")
-		opts = append(opts, otlptracegrpc.WithTLSCredentials(credentials.NewTLS(&tls.Config{InsecureSkipVerify: true})))
+		opts.SkipTLSVerify = true
 	}
 
 	return opts, nil

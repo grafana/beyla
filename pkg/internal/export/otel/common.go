@@ -8,6 +8,8 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	"go.opentelemetry.io/otel/sdk/resource"
 	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
 	"google.golang.org/grpc/credentials"
@@ -132,6 +134,35 @@ func (o *otlpOptions) AsMetricGRPC() []otlpmetricgrpc.Option {
 	}
 	if o.SkipTLSVerify {
 		opts = append(opts, otlpmetricgrpc.WithTLSCredentials(credentials.NewTLS(&tls.Config{InsecureSkipVerify: true})))
+	}
+	return opts
+}
+
+func (o *otlpOptions) AsTraceHTTP() []otlptracehttp.Option {
+	opts := []otlptracehttp.Option{
+		otlptracehttp.WithEndpoint(o.Endpoint),
+	}
+	if o.Insecure {
+		opts = append(opts, otlptracehttp.WithInsecure())
+	}
+	if o.URLPath != "" {
+		opts = append(opts, otlptracehttp.WithURLPath(o.URLPath))
+	}
+	if o.SkipTLSVerify {
+		opts = append(opts, otlptracehttp.WithTLSClientConfig(&tls.Config{InsecureSkipVerify: true}))
+	}
+	return opts
+}
+
+func (o *otlpOptions) AsTraceGRPC() []otlptracegrpc.Option {
+	opts := []otlptracegrpc.Option{
+		otlptracegrpc.WithEndpoint(o.Endpoint),
+	}
+	if o.Insecure {
+		opts = append(opts, otlptracegrpc.WithInsecure())
+	}
+	if o.SkipTLSVerify {
+		opts = append(opts, otlptracegrpc.WithTLSCredentials(credentials.NewTLS(&tls.Config{InsecureSkipVerify: true})))
 	}
 	return opts
 }

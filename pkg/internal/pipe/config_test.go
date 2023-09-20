@@ -73,7 +73,7 @@ kubernetes:
 		},
 		Traces: otel.TracesConfig{
 			Protocol:           otel.ProtocolHTTPProtobuf,
-			Endpoint:           "localhost:3131",
+			CommonEndpoint:     "localhost:3131",
 			TracesEndpoint:     "localhost:3232",
 			MaxQueueSize:       4096,
 			MaxExportBatchSize: 4096,

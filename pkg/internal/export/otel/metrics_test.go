@@ -28,7 +28,7 @@ func TestHTTPMetricsEndpointOPtions(t *testing.T) {
 	}
 
 	t.Run("testing with two endpoints", func(t *testing.T) {
-		testMetricsHTTPOptions(t, otlpOptions{Endpoint: "localhost:3232", URLPath: "/v1/metrics"}, mcfg)
+		testMetricsHTTPOptions(t, otlpOptions{Endpoint: "localhost:3232", URLPath: "/v1/metrics"}, &mcfg)
 	})
 
 	mcfg = MetricsConfig{
@@ -36,7 +36,7 @@ func TestHTTPMetricsEndpointOPtions(t *testing.T) {
 	}
 
 	t.Run("testing with only common endpoint", func(t *testing.T) {
-		testMetricsHTTPOptions(t, otlpOptions{Endpoint: "localhost:3131", URLPath: "/otlp/v1/metrics"}, mcfg)
+		testMetricsHTTPOptions(t, otlpOptions{Endpoint: "localhost:3131", URLPath: "/otlp/v1/metrics"}, &mcfg)
 	})
 
 	mcfg = MetricsConfig{
@@ -44,7 +44,7 @@ func TestHTTPMetricsEndpointOPtions(t *testing.T) {
 		MetricsEndpoint: "http://localhost:3232",
 	}
 	t.Run("testing with insecure endpoint", func(t *testing.T) {
-		testMetricsHTTPOptions(t, otlpOptions{Endpoint: "localhost:3232", Insecure: true}, mcfg)
+		testMetricsHTTPOptions(t, otlpOptions{Endpoint: "localhost:3232", Insecure: true}, &mcfg)
 	})
 
 	mcfg = MetricsConfig{
@@ -53,12 +53,12 @@ func TestHTTPMetricsEndpointOPtions(t *testing.T) {
 	}
 
 	t.Run("testing with skip TLS verification", func(t *testing.T) {
-		testMetricsHTTPOptions(t, otlpOptions{Endpoint: "localhost:3232", URLPath: "/v1/metrics", SkipTLSVerify: true}, mcfg)
+		testMetricsHTTPOptions(t, otlpOptions{Endpoint: "localhost:3232", URLPath: "/v1/metrics", SkipTLSVerify: true}, &mcfg)
 	})
 }
 
-func testMetricsHTTPOptions(t *testing.T, expected otlpOptions, mcfg MetricsConfig) {
-	opts, err := getHTTPMetricEndpointOptions(&mcfg)
+func testMetricsHTTPOptions(t *testing.T, expected otlpOptions, mcfg *MetricsConfig) {
+	opts, err := getHTTPMetricEndpointOptions(mcfg)
 	require.NoError(t, err)
 	assert.Equal(t, expected, opts)
 }
@@ -181,7 +181,7 @@ func TestGRPCMetricsEndpointOptions(t *testing.T) {
 	}
 
 	t.Run("testing with two endpoints", func(t *testing.T) {
-		testMetricsGRPCOptions(t, otlpOptions{Endpoint: "localhost:3232"}, mcfg)
+		testMetricsGRPCOptions(t, otlpOptions{Endpoint: "localhost:3232"}, &mcfg)
 	})
 
 	mcfg = MetricsConfig{
@@ -189,7 +189,7 @@ func TestGRPCMetricsEndpointOptions(t *testing.T) {
 	}
 
 	t.Run("testing with only common endpoint", func(t *testing.T) {
-		testMetricsGRPCOptions(t, otlpOptions{Endpoint: "localhost:3131"}, mcfg)
+		testMetricsGRPCOptions(t, otlpOptions{Endpoint: "localhost:3131"}, &mcfg)
 	})
 
 	mcfg = MetricsConfig{
@@ -197,7 +197,7 @@ func TestGRPCMetricsEndpointOptions(t *testing.T) {
 		MetricsEndpoint: "http://localhost:3232",
 	}
 	t.Run("testing with insecure endpoint", func(t *testing.T) {
-		testMetricsGRPCOptions(t, otlpOptions{Endpoint: "localhost:3232", Insecure: true}, mcfg)
+		testMetricsGRPCOptions(t, otlpOptions{Endpoint: "localhost:3232", Insecure: true}, &mcfg)
 	})
 
 	mcfg = MetricsConfig{
@@ -206,12 +206,12 @@ func TestGRPCMetricsEndpointOptions(t *testing.T) {
 	}
 
 	t.Run("testing with skip TLS verification", func(t *testing.T) {
-		testMetricsGRPCOptions(t, otlpOptions{Endpoint: "localhost:3232", SkipTLSVerify: true}, mcfg)
+		testMetricsGRPCOptions(t, otlpOptions{Endpoint: "localhost:3232", SkipTLSVerify: true}, &mcfg)
 	})
 }
 
-func testMetricsGRPCOptions(t *testing.T, expected otlpOptions, mcfg MetricsConfig) {
-	opts, err := getGRPCMetricEndpointOptions(&mcfg)
+func testMetricsGRPCOptions(t *testing.T, expected otlpOptions, mcfg *MetricsConfig) {
+	opts, err := getGRPCMetricEndpointOptions(mcfg)
 	require.NoError(t, err)
 	assert.Equal(t, expected, opts)
 }

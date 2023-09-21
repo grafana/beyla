@@ -19,11 +19,12 @@ func TestSuite(t *testing.T) {
 	t.Run("HTTP traces", testHTTPTraces)
 	t.Run("HTTP traces (no traceID)", testHTTPTracesNoTraceID)
 	t.Run("HTTP traces (bad traceparent)", testHTTPTracesBadTraceparent)
+	t.Run("HTTP traces (kprobes)", testHTTPTracesKProbes)
 	t.Run("GRPC traces", testGRPCTraces)
 	t.Run("GRPC RED metrics", testREDMetricsGRPC)
 	t.Run("Internal Prometheus metrics", testInternalPrometheusExport)
 
-	t.Run("BPF pinning folder mounted", testBPFPinningMounted)
+	t.Run("BPF pinning folder mounted", func(t *testing.T) { testBPFPinningMountedWithCount(t, 2) })
 	require.NoError(t, compose.Close())
 	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
 }

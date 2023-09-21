@@ -57,7 +57,6 @@ func (pf *ProcessFinder) Start(ctx context.Context) (<-chan *ProcessTracer, erro
 		// TODO, for multi-process inspection
 		// 1. Keep searching processes matching a given search criteria
 		// 2. Instrument these that haven't been instrumented already
-		// 3. Do not report service name as part of a shared configuration but as part of the trace
 
 		log.Debug("Finding process in background...")
 		pt, err := pf.findAndInstrument(ctx, pf.Metrics)

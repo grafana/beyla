@@ -2,7 +2,6 @@ package otel
 
 import (
 	"context"
-	"crypto/tls"
 	"fmt"
 	"net/url"
 	"os"
@@ -18,7 +17,6 @@ import (
 	"go.opentelemetry.io/otel/sdk/metric"
 	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
 	"golang.org/x/exp/slog"
-	"google.golang.org/grpc/credentials"
 
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
@@ -39,9 +37,10 @@ const (
 )
 
 type MetricsConfig struct {
-	Interval        time.Duration `yaml:"interval" env:"METRICS_INTERVAL"`
-	Endpoint        string        `yaml:"endpoint" env:"OTEL_EXPORTER_OTLP_ENDPOINT"`
-	MetricsEndpoint string        `yaml:"-" env:"OTEL_EXPORTER_OTLP_METRICS_ENDPOINT"`
+	Interval time.Duration `yaml:"interval" env:"METRICS_INTERVAL"`
+
+	CommonEndpoint  string `yaml:"-" env:"OTEL_EXPORTER_OTLP_ENDPOINT"`
+	MetricsEndpoint string `yaml:"endpoint" env:"OTEL_EXPORTER_OTLP_METRICS_ENDPOINT"`
 
 	Protocol        Protocol `yaml:"protocol" env:"OTEL_EXPORTER_OTLP_PROTOCOL"`
 	MetricsProtocol Protocol `yaml:"-" env:"OTEL_EXPORTER_OTLP_METRICS_PROTOCOL"`
@@ -74,7 +73,7 @@ func (m *MetricsConfig) GetProtocol() Protocol {
 // This method is invoked only once during startup time so it doesn't have a noticeable performance impact.
 // nolint:gocritic
 func (m MetricsConfig) Enabled() bool {
-	return m.Endpoint != "" || m.MetricsEndpoint != ""
+	return m.CommonEndpoint != "" || m.MetricsEndpoint != ""
 }
 
 // MetricsReporter implements the graph node that receives request.Span
@@ -214,7 +213,7 @@ func httpMetricsExporter(ctx context.Context, cfg *MetricsConfig) (metric.Export
 	if err != nil {
 		return nil, err
 	}
-	mexp, err := otlpmetrichttp.New(ctx, opts...)
+	mexp, err := otlpmetrichttp.New(ctx, opts.AsMetricHTTP()...)
 	if err != nil {
 		return nil, fmt.Errorf("creating HTTP metric exporter: %w", err)
 	}
@@ -226,7 +225,7 @@ func grpcMetricsExporter(ctx context.Context, cfg *MetricsConfig) (metric.Export
 	if err != nil {
 		return nil, err
 	}
-	mexp, err := otlpmetricgrpc.New(ctx, opts...)
+	mexp, err := otlpmetricgrpc.New(ctx, opts.AsMetricGRPC()...)
 	if err != nil {
 		return nil, fmt.Errorf("creating GRPC metric exporter: %w", err)
 	}
@@ -364,73 +363,80 @@ func (mr *MetricsReporter) reportMetrics(input <-chan []request.Span) {
 	mr.close()
 }
 
-func getHTTPMetricEndpointOptions(cfg *MetricsConfig) ([]otlpmetrichttp.Option, error) {
+func getHTTPMetricEndpointOptions(cfg *MetricsConfig) (otlpOptions, error) {
+	opts := otlpOptions{}
 	log := mlog().With("transport", "http")
-	murl, err := parseMetricsEndpoint(cfg)
+	murl, isCommon, err := parseMetricsEndpoint(cfg)
 	if err != nil {
-		return nil, err
+		return opts, err
 	}
 	log.Debug("Configuring exporter",
 		"protocol", cfg.Protocol, "metricsProtocol", cfg.MetricsProtocol, "endpoint", murl.Host)
 
 	setMetricsProtocol(cfg)
-	opts := []otlpmetrichttp.Option{
-		otlpmetrichttp.WithEndpoint(murl.Host),
-	}
+	opts.Endpoint = murl.Host
 	if murl.Scheme == "http" || murl.Scheme == "unix" {
 		log.Debug("Specifying insecure connection", "scheme", murl.Scheme)
-		opts = append(opts, otlpmetrichttp.WithInsecure())
+		opts.Insecure = true
 	}
-	if len(murl.Path) > 0 && murl.Path != "/" && !strings.HasSuffix(murl.Path, "/v1/metrics") {
-		urlPath := murl.Path + "/v1/metrics"
-		log.Debug("Specifying path", "path", urlPath)
-		opts = append(opts, otlpmetrichttp.WithURLPath(urlPath))
+	// If the value is set from the OTEL_EXPORTER_OTLP_ENDPOINT common property, we need to add /v1/metrics to the path
+	// otherwise, we leave the path that is explicitly set by the user
+	opts.URLPath = murl.Path
+	if isCommon {
+		if strings.HasSuffix(opts.URLPath, "/") {
+			opts.URLPath += "v1/metrics"
+		} else {
+			opts.URLPath += "/v1/metrics"
+		}
 	}
+	log.Debug("Specifying path", "path", opts.URLPath)
+
 	if cfg.InsecureSkipVerify {
 		log.Debug("Setting InsecureSkipVerify")
-		opts = append(opts, otlpmetrichttp.WithTLSClientConfig(&tls.Config{InsecureSkipVerify: true}))
+		opts.SkipTLSVerify = cfg.InsecureSkipVerify
 	}
 	return opts, nil
 }
 
-func getGRPCMetricEndpointOptions(cfg *MetricsConfig) ([]otlpmetricgrpc.Option, error) {
+func getGRPCMetricEndpointOptions(cfg *MetricsConfig) (otlpOptions, error) {
+	opts := otlpOptions{}
 	log := mlog().With("transport", "grpc")
-	murl, err := parseMetricsEndpoint(cfg)
+	murl, _, err := parseMetricsEndpoint(cfg)
 	if err != nil {
-		return nil, err
+		return opts, err
 	}
 	log.Debug("Configuring exporter",
 		"protocol", cfg.Protocol, "metricsProtocol", cfg.MetricsProtocol, "endpoint", murl.Host)
 
 	setMetricsProtocol(cfg)
-	opts := []otlpmetricgrpc.Option{
-		otlpmetricgrpc.WithEndpoint(murl.Host),
-	}
+	opts.Endpoint = murl.Host
 	if murl.Scheme == "http" || murl.Scheme == "unix" {
 		log.Debug("Specifying insecure connection", "scheme", murl.Scheme)
-		opts = append(opts, otlpmetricgrpc.WithInsecure())
+		opts.Insecure = true
 	}
 	if cfg.InsecureSkipVerify {
 		log.Debug("Setting InsecureSkipVerify")
-		opts = append(opts, otlpmetricgrpc.WithTLSCredentials(credentials.NewTLS(&tls.Config{InsecureSkipVerify: true})))
+		opts.SkipTLSVerify = true
 	}
 	return opts, nil
 }
 
-func parseMetricsEndpoint(cfg *MetricsConfig) (*url.URL, error) {
+func parseMetricsEndpoint(cfg *MetricsConfig) (*url.URL, bool, error) {
+	isCommon := false
 	endpoint := cfg.MetricsEndpoint
 	if endpoint == "" {
-		endpoint = cfg.Endpoint
+		isCommon = true
+		endpoint = cfg.CommonEndpoint
 	}
 
 	murl, err := url.Parse(endpoint)
 	if err != nil {
-		return nil, fmt.Errorf("parsing endpoint URL %s: %w", endpoint, err)
+		return nil, isCommon, fmt.Errorf("parsing endpoint URL %s: %w", endpoint, err)
 	}
 	if murl.Scheme == "" || murl.Host == "" {
-		return nil, fmt.Errorf("URL %q must have a scheme and a host", endpoint)
+		return nil, isCommon, fmt.Errorf("URL %q must have a scheme and a host", endpoint)
 	}
-	return murl, nil
+	return murl, isCommon, nil
 }
 
 // HACK: at the time of writing this, the otelpmetrichttp API does not support explicitly

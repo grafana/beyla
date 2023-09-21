@@ -20,86 +20,104 @@ import (
 	"github.com/grafana/beyla/pkg/internal/request"
 )
 
-func TestTracesEndpoint(t *testing.T) {
+func TestHTTPTracesEndpoint(t *testing.T) {
 	tcfg := TracesConfig{
-		Endpoint:           "https://localhost:3131",
-		TracesEndpoint:     "https://localhost:3232",
-		MaxQueueSize:       4096,
-		MaxExportBatchSize: 4096,
-		SamplingRatio:      1.0,
+		CommonEndpoint: "https://localhost:3131",
+		TracesEndpoint: "https://localhost:3232/v1/traces",
 	}
 
 	t.Run("testing with two endpoints", func(t *testing.T) {
-		testHTTPTracesEndpLen(t, 1, &tcfg)
+		testHTTPTracesOptions(t, otlpOptions{Endpoint: "localhost:3232", URLPath: "/v1/traces"}, &tcfg)
 	})
 
 	tcfg = TracesConfig{
-		TracesEndpoint:     "https://localhost:3232",
-		MaxQueueSize:       4096,
-		MaxExportBatchSize: 4096,
-		SamplingRatio:      1.0,
+		CommonEndpoint: "https://localhost:3131/otlp",
 	}
 
-	t.Run("testing with only trace endpoint", func(t *testing.T) {
-		testHTTPTracesEndpLen(t, 1, &tcfg)
+	t.Run("testing with only common endpoint", func(t *testing.T) {
+		testHTTPTracesOptions(t, otlpOptions{Endpoint: "localhost:3131", URLPath: "/otlp/v1/traces"}, &tcfg)
 	})
 
-	tcfg.Endpoint = "https://localhost:3131"
-	tcfg.TracesEndpoint = ""
-
-	t.Run("testing with only non-signal endpoint", func(t *testing.T) {
-		testHTTPTracesEndpLen(t, 1, &tcfg)
-	})
-
-	tcfg.Endpoint = "http://localhost:3131"
+	tcfg = TracesConfig{
+		CommonEndpoint: "https://localhost:3131",
+		TracesEndpoint: "http://localhost:3232",
+	}
 	t.Run("testing with insecure endpoint", func(t *testing.T) {
-		testHTTPTracesEndpLen(t, 2, &tcfg)
+		testHTTPTracesOptions(t, otlpOptions{Endpoint: "localhost:3232", Insecure: true}, &tcfg)
 	})
 
-	tcfg.Endpoint = "http://localhost:3131/path_to_endpoint"
-	t.Run("testing with insecure endpoint and path", func(t *testing.T) {
-		testHTTPTracesEndpLen(t, 3, &tcfg)
-	})
+	tcfg = TracesConfig{
+		CommonEndpoint:     "https://localhost:3232",
+		InsecureSkipVerify: true,
+	}
 
-	tcfg.Endpoint = "http://localhost:3131/v1/traces"
-	t.Run("testing with insecure endpoint and containing v1/traces", func(t *testing.T) {
-		testHTTPTracesEndpLen(t, 2, &tcfg)
+	t.Run("testing with skip TLS verification", func(t *testing.T) {
+		testHTTPTracesOptions(t, otlpOptions{Endpoint: "localhost:3232", URLPath: "/v1/traces", SkipTLSVerify: true}, &tcfg)
 	})
 }
 
-func testHTTPTracesEndpLen(t *testing.T, expected int, tcfg *TracesConfig) {
+func testHTTPTracesOptions(t *testing.T, expected otlpOptions, tcfg *TracesConfig) {
 	opts, err := getHTTPTracesEndpointOptions(tcfg)
 	require.NoError(t, err)
-	// otlptracehttp.Options are notoriously hard to compare, so we just test the length
-	assert.Equal(t, expected, len(opts))
+	assert.Equal(t, expected, opts)
 }
 
 func TestMissingSchemeInHTTPTracesEndpoint(t *testing.T) {
-	opts, err := getHTTPTracesEndpointOptions(&TracesConfig{Endpoint: "http://foo:3030", SamplingRatio: 1.0})
+	opts, err := getHTTPTracesEndpointOptions(&TracesConfig{CommonEndpoint: "http://foo:3030", SamplingRatio: 1.0})
 	require.NoError(t, err)
 	require.NotEmpty(t, opts)
 
-	_, err = getHTTPTracesEndpointOptions(&TracesConfig{Endpoint: "foo:3030", SamplingRatio: 1.0})
+	_, err = getHTTPTracesEndpointOptions(&TracesConfig{CommonEndpoint: "foo:3030", SamplingRatio: 1.0})
 	require.Error(t, err)
 
-	_, err = getHTTPTracesEndpointOptions(&TracesConfig{Endpoint: "foo", SamplingRatio: 1.0})
+	_, err = getHTTPTracesEndpointOptions(&TracesConfig{CommonEndpoint: "foo", SamplingRatio: 1.0})
 	require.Error(t, err)
 }
 
 func TestGRPCTracesEndpointOptions(t *testing.T) {
 	t.Run("do not accept URLs without a scheme", func(t *testing.T) {
-		_, err := getGRPCTracesEndpointOptions(&TracesConfig{Endpoint: "foo:3939", SamplingRatio: 1.0})
+		_, err := getGRPCTracesEndpointOptions(&TracesConfig{CommonEndpoint: "foo:3939", SamplingRatio: 1.0})
 		assert.Error(t, err)
 	})
-	t.Run("handles insecure skip verification", func(t *testing.T) {
-		opts, err := getGRPCTracesEndpointOptions(&TracesConfig{
-			Endpoint:           "http://foo:3939",
-			InsecureSkipVerify: true,
-			SamplingRatio:      1.0,
-		})
-		assert.NoError(t, err)
-		assert.Len(t, opts, 3) // host, insecure, insecure skip
+	tcfg := TracesConfig{
+		CommonEndpoint: "https://localhost:3131",
+		TracesEndpoint: "https://localhost:3232",
+	}
+
+	t.Run("testing with two endpoints", func(t *testing.T) {
+		testTracesGRPOptions(t, otlpOptions{Endpoint: "localhost:3232"}, &tcfg)
 	})
+
+	tcfg = TracesConfig{
+		CommonEndpoint: "https://localhost:3131",
+	}
+
+	t.Run("testing with only common endpoint", func(t *testing.T) {
+		testTracesGRPOptions(t, otlpOptions{Endpoint: "localhost:3131"}, &tcfg)
+	})
+
+	tcfg = TracesConfig{
+		CommonEndpoint: "https://localhost:3131",
+		TracesEndpoint: "http://localhost:3232",
+	}
+	t.Run("testing with insecure endpoint", func(t *testing.T) {
+		testTracesGRPOptions(t, otlpOptions{Endpoint: "localhost:3232", Insecure: true}, &tcfg)
+	})
+
+	tcfg = TracesConfig{
+		CommonEndpoint:     "https://localhost:3232",
+		InsecureSkipVerify: true,
+	}
+
+	t.Run("testing with skip TLS verification", func(t *testing.T) {
+		testTracesGRPOptions(t, otlpOptions{Endpoint: "localhost:3232", SkipTLSVerify: true}, &tcfg)
+	})
+}
+
+func testTracesGRPOptions(t *testing.T, expected otlpOptions, tcfg *TracesConfig) {
+	opts, err := getGRPCTracesEndpointOptions(tcfg)
+	require.NoError(t, err)
+	assert.Equal(t, expected, opts)
 }
 
 func TestTracesSetupHTTP_Protocol(t *testing.T) {
@@ -118,7 +136,7 @@ func TestTracesSetupHTTP_Protocol(t *testing.T) {
 		t.Run(string(tc.ProtoVal)+"/"+string(tc.TraceProtoVal), func(t *testing.T) {
 			defer restoreEnvAfterExecution()()
 			_, err := getHTTPTracesEndpointOptions(&TracesConfig{
-				Endpoint:       "http://host:3333",
+				CommonEndpoint: "http://host:3333",
 				Protocol:       tc.ProtoVal,
 				TracesProtocol: tc.TraceProtoVal,
 				SamplingRatio:  1.0,
@@ -136,7 +154,7 @@ func TestTracesSetupHTTP_DoNotOverrideEnv(t *testing.T) {
 		require.NoError(t, os.Setenv(envProtocol, "foo-proto"))
 		require.NoError(t, os.Setenv(envTracesProtocol, "bar-proto"))
 		_, err := getHTTPTracesEndpointOptions(&TracesConfig{
-			Endpoint:       "http://host:3333",
+			CommonEndpoint: "http://host:3333",
 			Protocol:       "foo",
 			TracesProtocol: "bar",
 			SamplingRatio:  1.0,
@@ -149,9 +167,9 @@ func TestTracesSetupHTTP_DoNotOverrideEnv(t *testing.T) {
 		defer restoreEnvAfterExecution()()
 		require.NoError(t, os.Setenv(envProtocol, "foo-proto"))
 		_, err := getHTTPTracesEndpointOptions(&TracesConfig{
-			Endpoint:      "http://host:3333",
-			Protocol:      "foo",
-			SamplingRatio: 1.0,
+			CommonEndpoint: "http://host:3333",
+			Protocol:       "foo",
+			SamplingRatio:  1.0,
 		})
 		require.NoError(t, err)
 		_, ok := os.LookupEnv(envTracesProtocol)
@@ -185,7 +203,7 @@ func TestTraces_InternalInstrumentation(t *testing.T) {
 	internalTraces := &fakeInternalTraces{}
 	exporter, err := ReportTraces(context.Background(),
 		&TracesConfig{
-			Endpoint:          coll.URL,
+			CommonEndpoint:    coll.URL,
 			BatchTimeout:      10 * time.Millisecond,
 			ExportTimeout:     5 * time.Second,
 			SamplingRatio:     1.0,
@@ -277,7 +295,7 @@ func TestTraces_InternalInstrumentationSampling(t *testing.T) {
 	internalTraces := &fakeInternalTraces{}
 	exporter, err := ReportTraces(context.Background(),
 		&TracesConfig{
-			Endpoint:          coll.URL,
+			CommonEndpoint:    coll.URL,
 			BatchTimeout:      10 * time.Millisecond,
 			ExportTimeout:     5 * time.Second,
 			SamplingRatio:     0.0, // sampling 0 means we won't generate any samples

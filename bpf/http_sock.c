@@ -607,8 +607,8 @@ int BPF_KRETPROBE(kretprobe_tcp_recvmsg, int copied_len) {
         sort_connection_info(&info);
         dbg_print_http_connection_info(&info);
 
-        void *meta = bpf_map_lookup_elem(&filtered_connections, &info);
-        if (meta) {
+        http_connection_metadata_t *meta = bpf_map_lookup_elem(&filtered_connections, &info);
+        if (meta && meta->type != EVENT_HTTP_CLIENT) {
             http_buf_t *trace = bpf_ringbuf_reserve(&events, sizeof(http_buf_t), 0);
             if (trace) {
                 trace->conn_info = info;

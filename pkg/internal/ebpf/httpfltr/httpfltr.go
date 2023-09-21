@@ -321,6 +321,8 @@ func (p *Tracer) readHTTPInfoIntoSpan(record *ringbuf.Record) (request.Span, boo
 	if ok {
 		p.log().Debug("Found traceparent for request", "Traceparent", tp)
 		result.Traceparent = tp
+		// Clean up the LRU map once we know we have what we need
+		recvBufs.Remove(event.ConnInfo)
 	}
 
 	return httpInfoToSpan(&result), false, nil

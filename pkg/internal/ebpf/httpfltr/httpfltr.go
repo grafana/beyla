@@ -57,8 +57,17 @@ func (p *Tracer) Load() (*ebpf.CollectionSpec, error) {
 	if p.Cfg.BpfDebug {
 		loader = loadBpf_debug
 	}
-	p.logger = slog.With("component", "httpfltr.Tracer")
+
 	return loader()
+}
+
+func (p *Tracer) log() *slog.Logger {
+	if p.logger != nil {
+		return p.logger
+	}
+
+	p.logger = slog.With("component", "httpfltr.Tracer")
+	return p.logger
 }
 
 func (p *Tracer) Constants(finfo *exec.FileInfo, _ *goexec.Offsets) map[string]any {
@@ -70,7 +79,7 @@ func (p *Tracer) Constants(finfo *exec.FileInfo, _ *goexec.Offsets) map[string]a
 
 	npid, err := findNamespace(finfo.Pid)
 	if err != nil {
-		p.logger.Warn("error while looking up namespace pid, namespace pid matching will not work", err)
+		p.log().Warn("error while looking up namespace pid, namespace pid matching will not work", err)
 	}
 
 	m["current_pid_ns_id"] = npid
@@ -212,15 +221,14 @@ func (p *Tracer) SocketFilters() []*ebpf.Program {
 func (p *Tracer) Run(ctx context.Context, eventsChan chan<- []request.Span, svcName string) {
 	ebpfcommon.ForwardRingbuf[HTTPInfo](
 		svcName,
-		p.Cfg, p.logger, p.bpfObjects.Events,
+		p.Cfg, p.log(), p.bpfObjects.Events,
 		p.readHTTPInfoIntoSpan,
 		p.Metrics,
 		append(p.closers, &p.bpfObjects)...,
 	)(ctx, eventsChan)
 }
 
-func (p *Tracer) processHTTPBuf(event *bpfHttpBufT) {
-	b := event.Buf[:]
+func (p *Tracer) extractTraceParent(b []uint8) string {
 	sLen := bytes.IndexByte(b, 0)
 	if sLen < 0 {
 		sLen = len(b)
@@ -231,7 +239,7 @@ func (p *Tracer) processHTTPBuf(event *bpfHttpBufT) {
 	hdrEnd := strings.Index(s, "\r\n\r\n")
 
 	if hdrEnd < 0 {
-		return
+		return ""
 	}
 
 	s = s[:hdrEnd]
@@ -246,7 +254,17 @@ func (p *Tracer) processHTTPBuf(event *bpfHttpBufT) {
 			end += keyIdx
 		}
 		tp := s[keyIdx+len(tpLookup) : end]
-		p.logger.Debug("Found traceparent", "value", tp)
+		return tp
+	}
+
+	return ""
+}
+
+func (p *Tracer) processHTTPBuf(event *bpfHttpBufT) {
+	b := event.Buf[:]
+	tp := p.extractTraceParent(b)
+	if tp != "" {
+		p.log().Debug("Found traceparent in buffer", "Traceparent", tp)
 		recvBufs.Add(event.ConnInfo, tp)
 	}
 }
@@ -301,7 +319,7 @@ func (p *Tracer) readHTTPInfoIntoSpan(record *ringbuf.Record) (request.Span, boo
 	tp, ok := recvBufs.Get(event.ConnInfo)
 
 	if ok {
-		p.logger.Debug("Found traceparent for request", "value", tp)
+		p.log().Debug("Found traceparent for request", "Traceparent", tp)
 		result.Traceparent = tp
 	}
 

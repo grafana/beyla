@@ -101,7 +101,7 @@ func TestToRequestTrace(t *testing.T) {
 	assert.NoError(t, err)
 
 	tracer := Tracer{Cfg: &ebpfcommon.TracerConfig{}}
-	result, err := tracer.readHTTPInfoIntoSpan(&ringbuf.Record{RawSample: buf.Bytes()})
+	result, _, err := tracer.readHTTPInfoIntoSpan(&ringbuf.Record{RawSample: buf.Bytes()})
 	assert.NoError(t, err)
 
 	expected := request.Span{
@@ -134,7 +134,7 @@ func TestToRequestTraceNoConnection(t *testing.T) {
 	assert.NoError(t, err)
 
 	tracer := Tracer{Cfg: &ebpfcommon.TracerConfig{}}
-	result, err := tracer.readHTTPInfoIntoSpan(&ringbuf.Record{RawSample: buf.Bytes()})
+	result, _, err := tracer.readHTTPInfoIntoSpan(&ringbuf.Record{RawSample: buf.Bytes()})
 	assert.NoError(t, err)
 
 	// change the expected port just before testing

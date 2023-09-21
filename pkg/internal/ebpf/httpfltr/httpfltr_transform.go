@@ -21,6 +21,7 @@ func httpInfoToSpan(info *HTTPInfo) request.Span {
 		End:           int64(info.EndMonotimeNs),
 		Status:        int(info.Status),
 		ServiceName:   info.Comm,
+		Traceparent:   info.Traceparent,
 	}
 }
 

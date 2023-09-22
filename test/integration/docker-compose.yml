@@ -48,7 +48,7 @@ services:
   node-testserver:
     build:
       context: ../..
-      dockerfile: test/integration/components/nodejsserver/Dockerfile${TESTSERVER_DOCKERFILE_SUFFIX}
+      dockerfile: test/integration/components/nodejsserver/Dockerfile
     image: hatest-node-testserver
     ports:
       - 3031:3030

@@ -626,7 +626,7 @@ int BPF_KRETPROBE(kretprobe_tcp_recvmsg, int copied_len) {
                 bpf_dbg_printk("msg type %x, iter type %d", m_flags, i_type);
 
                 struct iovec *iovec;
-                bpf_probe_read_kernel(&iovec, sizeof(struct iovec), &(msg->msg_iter.iov));
+                bpf_probe_read_kernel(&iovec, sizeof(struct iovec *), &(msg->msg_iter.iov));
                 int buf_len = copied_len & (TRACE_BUF_SIZE - 1);
 
                 if (i_type == 0) { // IOVEC

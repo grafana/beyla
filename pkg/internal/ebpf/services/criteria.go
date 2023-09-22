@@ -21,8 +21,7 @@ type DefinitionCriteria []Attributes
 type Attributes struct {
 	// Name will define a name for the matching service. If unset, it will take the name of the executable process
 	Name string `yaml:"name"`
-	// Namespace will define a namespace for the matching service. If unset, it will take the global namespace,
-	// if already defined, or empty.
+	// Namespace will define a namespace for the matching service. If unset, it will be left empty.
 	Namespace string `yaml:"namespace"`
 	// OpenPorts allows defining a group of ports that this service could open. It accepts a comma-separated
 	// list of port numbers (e.g. 80) and port ranges (e.g. 8080-8089)

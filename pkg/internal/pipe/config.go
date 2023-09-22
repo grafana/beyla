@@ -9,6 +9,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
+	"github.com/grafana/beyla/pkg/internal/ebpf/services"
 	"github.com/grafana/beyla/pkg/internal/export/debug"
 	"github.com/grafana/beyla/pkg/internal/export/otel"
 	"github.com/grafana/beyla/pkg/internal/export/prom"
@@ -56,6 +57,36 @@ var defaultConfig = Config{
 }
 
 type Config struct {
+	// SystemWide allows instrumentation of all HTTP (no gRPC) calls, incoming and outgoing at a system wide scale.
+	// No filtering per application will be done. Using this option may result in reduced quality of information
+	// gathered for certain languages, such as Golang.
+	// Setting this property will make Beyla to ignore the Exec, Port, ServiceName, ServiceNamespace and Services
+	// properties.
+	SystemWide bool   `yaml:"system_wide" env:"SYSTEM_WIDE"`
+
+	// Exec allows selecting the instrumented executable whose complete path contains matches the Exec regular expression
+	// If the Port property is also defined, Beyla will search for executables that must match both properties.
+	Exec string `env:"EXECUTABLE_NAME"`
+
+	// Port allows selecting the instrumented executable that owns the Port value. If this value is set (and
+	// different to zero), the value of the Exec property won't take effect.
+	// It's important to emphasize that if your process opens multiple HTTP/GRPC ports, the auto-instrumenter
+	// will instrument all the service calls in all the ports, not only the port specified here.
+	// If the Exec property is also defined, Beyla will search for executables that need to match both properties.
+	Port int `env:"OPEN_PORT"`
+
+	// ServiceName is taken from either SERVICE_NAME env var or OTEL_SERVICE_NAME (for OTEL spec compatibility)
+	// Using env and envDefault is a trick to get the value either from one of either variables
+	ServiceName      string `env:"OTEL_SERVICE_NAME,expand" envDefault:"${SERVICE_NAME}"`
+	ServiceNamespace string `env:"SERVICE_NAMESPACE"`
+
+	// The above properties are aimed at simplifying the instrumentation of a single service via environment variables.
+	// To instrument multiple services, you need to use the Services property below via YAML configuration.
+
+	// Services selection. If the user defined the EXECUTABLE_NAME or OPEN_PORT variables, they will be automatically
+	// added to the services definition criteria, with the lowest preference.
+	Services services.DefinitionCriteria `yaml:"services"`
+
 	EBPF ebpfcommon.TracerConfig `yaml:"ebpf"`
 
 	// Routes is an optional node. If not set, data will be directly forwarded to exporters.
@@ -68,10 +99,7 @@ type Config struct {
 
 	LogLevel string `yaml:"log_level" env:"LOG_LEVEL"`
 
-	// ServiceName is taken from either SERVICE_NAME env var or OTEL_SERVICE_NAME (for OTEL spec compatibility)
-	// Using env and envDefault is a trick to get the value either from one of either variables
-	ServiceName      string `yaml:"service_name" env:"OTEL_SERVICE_NAME,expand" envDefault:"${SERVICE_NAME}"`
-	ServiceNamespace string `yaml:"service_namespace" env:"SERVICE_NAMESPACE"`
+
 
 	// From this comment, the properties below will remain undocumented, as they
 	// are useful for development purposes. They might be helpful for customer support.

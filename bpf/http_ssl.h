@@ -85,7 +85,12 @@ static __always_inline void send_trace_buff(void *orig_buf, int orig_len, connec
             trace->buf[buf_len] = '\0';
         }
 
-        bpf_dbg_printk("Sending buffer %s, copied_size %d", trace->buf, orig_len);
+        /*bpf_dbg_printk("Sending buffer %c%c%c%c%c%c%c%c%c%c, copied_size %d", 
+            trace->buf[0], trace->buf[1], trace->buf[2], 
+            trace->buf[3], trace->buf[4], trace->buf[5],
+            trace->buf[6], trace->buf[7], trace->buf[8],
+            trace->buf[9], orig_len);
+        */
 
         bpf_ringbuf_submit(trace, get_flags());
     }
@@ -96,26 +101,33 @@ static __always_inline void https_buffer_event(void *buf, int len, connection_in
     if (is_http(buf, len, &packet_type)) {
         http_info_t in = {0};
         in.conn_info = *conn;
-
-        http_connection_metadata_t meta = {
-            .id = bpf_get_current_pid_tgid(),
-            .type = EVENT_HTTP_REQUEST
-        };
-
-        bpf_dbg_printk("=== https_filter len=%d pid=%d %s ===", len, pid_from_pid_tgid(meta.id), buf);
-        //dbg_print_http_connection_info(conn); // commented out since GitHub CI doesn't like this call
+        in.ssl = 1;
 
         http_info_t *info = get_or_set_http_info(&in, packet_type);
         if (!info) {
             return;
         }
 
-        if (packet_type == PACKET_TYPE_REQUEST) {
+        bpf_dbg_printk("=== https_filter len=%d pid=%d still_reading=%d ===", len, pid_from_pid_tgid(bpf_get_current_pid_tgid()), still_reading(info));
+        //dbg_print_http_connection_info(conn); // commented out since GitHub CI doesn't like this call
+
+        if (packet_type == PACKET_TYPE_REQUEST && (info->status == 0)) {
             send_trace_buff(orig_buf, orig_len, conn);
             process_http_request(info);
+            info->len = len;
             bpf_memcpy(info->buf, buf, FULL_BUF_SIZE);
         } else if (packet_type == PACKET_TYPE_RESPONSE) {
-            process_http_response(info, buf, &meta);
+            http_connection_metadata_t *meta = bpf_map_lookup_elem(&filtered_connections, conn);
+            http_connection_metadata_t dummy_meta = {
+                .id = bpf_get_current_pid_tgid(),
+                .type = EVENT_HTTP_REQUEST
+            };
+
+            if (!meta) {
+                meta = &dummy_meta;
+            }
+
+            process_http_response(info, buf, meta);
 
             // We sometimes don't see the TCP close in the filter, I wish we didn't have to 
             // do this here, but let the filter handle it.

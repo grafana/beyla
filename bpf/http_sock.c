@@ -214,6 +214,7 @@ int BPF_KRETPROBE(kretprobe_sys_connect, int fd)
         meta.id = id;
         meta.type = EVENT_HTTP_CLIENT;
         bpf_map_update_elem(&filtered_connections, &info, &meta, BPF_ANY); // On purpose BPF_ANY, we want to overwrite stale
+        bpf_map_update_elem(&pid_tid_to_conn, &id, &info, BPF_ANY); // to support SSL 
     }
 
 cleanup:
@@ -637,7 +638,7 @@ int BPF_KRETPROBE(kretprobe_tcp_recvmsg, int copied_len) {
 
         // we only care about connections setup by the socket filter as HTTP
         http_info_t *http_info = bpf_map_lookup_elem(&ongoing_http, &info);
-        if (http_info && http_info->type != EVENT_HTTP_CLIENT) {
+        if (http_info && http_info->type != EVENT_HTTP_CLIENT && !http_info->ssl) {
             http_buf_t *trace = bpf_ringbuf_reserve(&events, sizeof(http_buf_t), 0);
             if (trace) {
                 trace->conn_info = info;

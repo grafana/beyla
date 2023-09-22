@@ -179,7 +179,7 @@ static __always_inline void process_http_response(http_info_t *info, unsigned ch
 
 static __always_inline void process_http(http_info_t *in, protocol_info_t *tcp, u8 packet_type, u32 packet_len, unsigned char *buf, http_connection_metadata_t *meta) {
     http_info_t *info = get_or_set_http_info(in, packet_type);
-    if (!info) {
+    if (!info || info->ssl) {
         return;
     }
 

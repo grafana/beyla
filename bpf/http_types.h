@@ -33,6 +33,7 @@ typedef struct http_info {
     u32 len;
     u16 status;    
     u8  type;
+    u8  ssl;
 } http_info_t;
 
 // Here we keep information on the packets passing through the socket filter

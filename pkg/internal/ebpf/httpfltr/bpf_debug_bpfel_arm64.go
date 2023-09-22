@@ -44,7 +44,8 @@ type bpf_debugHttpInfoT struct {
 	Len             uint32
 	Status          uint16
 	Type            uint8
-	_               [5]byte
+	Ssl             uint8
+	_               [4]byte
 }
 
 type bpf_debugRecvArgsT struct {

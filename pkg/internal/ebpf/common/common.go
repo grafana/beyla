@@ -76,13 +76,13 @@ type Filter struct {
 	Fd int
 }
 
-func ReadHTTPRequestTraceAsSpan(record *ringbuf.Record) (request.Span, error) {
+func ReadHTTPRequestTraceAsSpan(record *ringbuf.Record) (request.Span, bool, error) {
 	var event HTTPRequestTrace
 
 	err := binary.Read(bytes.NewBuffer(record.RawSample), binary.LittleEndian, &event)
 	if err != nil {
-		return request.Span{}, err
+		return request.Span{}, true, err
 	}
 
-	return HTTPRequestTraceToSpan(&event), nil
+	return HTTPRequestTraceToSpan(&event), false, nil
 }

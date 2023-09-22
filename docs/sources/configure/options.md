@@ -237,6 +237,11 @@ The `OTEL_EXPORTER_OTLP_ENDPOINT` environment variable sets a common endpoint fo
 or the `endpoint` YAML, property will set the endpoint only for the metrics exporter node,
 such that the traces' exporter won't be activated unless explicitly specified.
 
+According to the OpenTelemetry standard, if you set the endpoint via the `OTEL_EXPORTER_OTLP_ENDPOINT` environment variable,
+the OpenTelemetry exporter will automatically add the `/v1/metrics` path to the URL. If you want to avoid this
+addition, you can use either the `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT` environment variable or the `environment` YAML
+property to use exactly the provided URL without any addition.
+
 | YAML       | Env var                                                                    | Type   | Default        |
 | ---------- | -------------------------------------------------------------------------- | ------ | -------------- |
 | `protocol` | `OTEL_EXPORTER_OTLP_PROTOCOL` or<br/>`OTEL_EXPORTER_OTLP_METRICS_PROTOCOL` | string | `http/protobuf |
@@ -352,6 +357,11 @@ The `OTEL_EXPORTER_OTLP_ENDPOINT` environment variable sets a common endpoint fo
 [metrics](#otel-metrics-exporter) and the traces exporters. The `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` environment variable
 or the `endpoint` YAML property, will set the endpoint only for the traces' exporter node,
 so the metrics exporter won't be activated unless explicitly specified.
+
+According to the OpenTelemetry standard, if you set the endpoint via the `OTEL_EXPORTER_OTLP_ENDPOINT` environment variable,
+the OpenTelemetry exporter will automatically add the `/v1/traces` path to the URL. If you want to avoid this
+addition, you can use either the `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` environment variable or the `environment` YAML
+property to use exactly the provided URL without any addition.
 
 | YAML       | Env var                                                                   | Type   | Default        |
 | ---------- | ------------------------------------------------------------------------- | ------ | -------------- |

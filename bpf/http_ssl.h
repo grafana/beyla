@@ -72,7 +72,26 @@ struct {
     __type(value, ssl_args_t);
 } active_ssl_write_args SEC(".maps");
 
-static __always_inline void https_buffer_event(void *buf, int len, connection_info_t *conn) {
+static __always_inline void send_trace_buff(void *orig_buf, int orig_len, connection_info_t *info) {
+    http_buf_t *trace = bpf_ringbuf_reserve(&events, sizeof(http_buf_t), 0);
+    if (trace) {
+        trace->conn_info = *info;
+        trace->flags |= CONN_INFO_FLAG_TRACE;
+
+        int buf_len = orig_len & (TRACE_BUF_SIZE - 1);
+        bpf_probe_read(&trace->buf, buf_len, orig_buf);
+        
+        if (buf_len < TRACE_BUF_SIZE) {
+            trace->buf[buf_len] = '\0';
+        }
+
+        bpf_dbg_printk("Sending buffer %s, copied_size %d", trace->buf, orig_len);
+
+        bpf_ringbuf_submit(trace, get_flags());
+    }
+}
+
+static __always_inline void https_buffer_event(void *buf, int len, connection_info_t *conn, void *orig_buf, int orig_len) {
     u8 packet_type = 0;
     if (is_http(buf, len, &packet_type)) {
         http_info_t in = {0};
@@ -92,6 +111,7 @@ static __always_inline void https_buffer_event(void *buf, int len, connection_in
         }
 
         if (packet_type == PACKET_TYPE_REQUEST) {
+            send_trace_buff(orig_buf, orig_len, conn);
             process_http_request(info);
             bpf_memcpy(info->buf, buf, FULL_BUF_SIZE);
         } else if (packet_type == PACKET_TYPE_RESPONSE) {
@@ -175,7 +195,7 @@ static __always_inline void handle_ssl_buf(u64 id, ssl_args_t *args, int bytes_l
 
             bpf_probe_read(&buf, len * sizeof(char), read_buf);
             bpf_dbg_printk("buffer from SSL %s", buf);
-            https_buffer_event(buf, len, conn);
+            https_buffer_event(buf, len, conn, read_buf, bytes_len);
         } else {
             bpf_dbg_printk("No connection info! This is a bug.");
         }

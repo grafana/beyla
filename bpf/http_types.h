@@ -116,4 +116,8 @@ static __always_inline void sort_connection_info(connection_info_t *info) {
     }
 }
 
+static __always_inline bool client_call(connection_info_t *info) {
+    return likely_ephemeral_port(info->s_port) && !likely_ephemeral_port(info->d_port);
+}
+
 #endif

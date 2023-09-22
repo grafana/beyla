@@ -332,7 +332,6 @@ int BPF_UPROBE(uprobe_ssl_do_handshake, void *s) {
     return 0;
 }
 
-// Checks if it's sandwitched between active SSL handshake uprobe/uretprobe
 SEC("kprobe/tcp_sendmsg")
 int BPF_KPROBE(kprobe_tcp_sendmsg, struct sock *sk, struct msghdr *msg, size_t size) {
     u64 id = bpf_get_current_pid_tgid();
@@ -341,20 +340,43 @@ int BPF_KPROBE(kprobe_tcp_sendmsg, struct sock *sk, struct msghdr *msg, size_t s
         return 0;
     }
 
-    bpf_dbg_printk("=== kprobe tcp_sendmsg=%d sock=%llx ===", id, sk);
+    bpf_dbg_printk("=== kprobe tcp_sendmsg=%d sock=%llx size %d===", id, sk, size);
 
     connection_info_t info = {};
 
     if (parse_sock_info(sk, &info)) {
-        sort_connection_info(&info);
+        bool client_req = client_call(&info);
         //dbg_print_http_connection_info(&info); // commented out since GitHub CI doesn't like this call
+        sort_connection_info(&info);
 
-        http_info_t *http_info = bpf_map_lookup_elem(&ongoing_http, &info);
-        if (http_info && http_info->type == EVENT_HTTP_CLIENT) {
-            bpf_dbg_printk("Found client call!");
+        if (client_req) {
+            unsigned char small_buf[16];            
+            read_msghdr_buf(&small_buf, 16, msg);
+
+            u8 packet_type = 0;
+            if (is_http(small_buf, 16, &packet_type)) {
+                if (packet_type == PACKET_TYPE_REQUEST) {
+                    http_buf_t *trace = bpf_ringbuf_reserve(&events, sizeof(http_buf_t), 0);
+                    if (trace) {
+                        trace->conn_info = info;
+                        trace->flags |= CONN_INFO_FLAG_TRACE;
+
+                        s64 buf_len = (s64)size & (TRACE_BUF_SIZE - 1);
+                        read_msghdr_buf(&trace->buf, buf_len, msg);
+
+                        if (buf_len < TRACE_BUF_SIZE) {
+                            trace->buf[buf_len] = '\0';
+                        }
+
+                        bpf_dbg_printk("Sending client buffer %s, copied_size %d", trace->buf, size);
+
+                        bpf_ringbuf_submit(trace, get_flags());
+                    }
+                }
+            }
         }
 
-
+        // Checks if it's sandwitched between active SSL handshake uprobe/uretprobe
         void **s = bpf_map_lookup_elem(&active_ssl_handshakes, &id);
         if (!s) {
             return 0;
@@ -623,26 +645,9 @@ int BPF_KRETPROBE(kretprobe_tcp_recvmsg, int copied_len) {
 
                 struct msghdr *msg = (struct msghdr *)args->msghdr_ptr;
 
-                unsigned int m_flags;
-                u8 i_type;
-
-                bpf_probe_read_kernel(&m_flags, sizeof(unsigned int), &(msg->msg_flags));
-                bpf_probe_read_kernel(&i_type, sizeof(u8), &(msg->msg_iter.iter_type));
-
-                bpf_dbg_printk("msg type %x, iter type %d", m_flags, i_type);
-
-                struct iovec *iovec;
-                bpf_probe_read_kernel(&iovec, sizeof(struct iovec), &(msg->msg_iter.iov));
                 int buf_len = copied_len & (TRACE_BUF_SIZE - 1);
+                read_msghdr_buf(&trace->buf, buf_len, msg);
 
-                if (i_type == 0) { // IOVEC
-                    struct iovec vec;
-                    bpf_probe_read(&vec, sizeof(vec), iovec);
-                    bpf_probe_read(&trace->buf, buf_len, (void *)vec.iov_base);
-                } else { // we assume UBUF
-                    bpf_probe_read(&trace->buf, buf_len, (void *)iovec);
-                }
-                
                 if (buf_len < TRACE_BUF_SIZE) {
                     trace->buf[buf_len] = '\0';
                 }

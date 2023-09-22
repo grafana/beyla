@@ -74,6 +74,26 @@ static __always_inline bool is_http(unsigned char *p, u32 len, u8 *packet_type) 
     return true;
 }
 
+static __always_inline void read_msghdr_buf(void *target, int buf_len, struct msghdr *msg) {
+    unsigned int m_flags;
+    u8 i_type;
+
+    bpf_probe_read_kernel(&m_flags, sizeof(unsigned int), &(msg->msg_flags));
+    bpf_probe_read_kernel(&i_type, sizeof(u8), &(msg->msg_iter.iter_type));
+
+    bpf_dbg_printk("msg type %x, iter type %d", m_flags, i_type);
+
+    struct iovec *iovec;
+    bpf_probe_read_kernel(&iovec, sizeof(struct iovec *), &(msg->msg_iter.iov));        
+    if (i_type == 0) { // IOVEC
+        struct iovec vec;
+        bpf_probe_read(&vec, sizeof(vec), iovec);
+        bpf_probe_read(target, buf_len, (void *)vec.iov_base);
+    } else { // we assume UBUF
+        bpf_probe_read(target, buf_len, (void *)iovec);
+    }    
+}
+
 // Copying 16 bytes at a time from the skb buffer is the only way to keep the verifier happy.
 static __always_inline void read_skb_bytes(const void *skb, u32 offset, unsigned char *buf, const u32 len) {
     u32 max = offset + len;

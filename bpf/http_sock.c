@@ -341,14 +341,7 @@ int BPF_KPROBE(kprobe_tcp_sendmsg, struct sock *sk, struct msghdr *msg, size_t s
         return 0;
     }
 
-    void **s = bpf_map_lookup_elem(&active_ssl_handshakes, &id);
-    if (!s) {
-        return 0;
-    }
-
-    void *ssl = *s;
-
-    bpf_dbg_printk("=== kprobe tcp_sendmsg=%d sock=%llx ssl=%llx ===", id, sk, ssl);
+    bpf_dbg_printk("=== kprobe tcp_sendmsg=%d sock=%llx ===", id, sk);
 
     connection_info_t info = {};
 
@@ -356,6 +349,19 @@ int BPF_KPROBE(kprobe_tcp_sendmsg, struct sock *sk, struct msghdr *msg, size_t s
         sort_connection_info(&info);
         //dbg_print_http_connection_info(&info); // commented out since GitHub CI doesn't like this call
 
+        http_info_t *http_info = bpf_map_lookup_elem(&ongoing_http, &info);
+        if (http_info && http_info->type == EVENT_HTTP_CLIENT) {
+            bpf_dbg_printk("Found client call!");
+        }
+
+
+        void **s = bpf_map_lookup_elem(&active_ssl_handshakes, &id);
+        if (!s) {
+            return 0;
+        }
+
+        void *ssl = *s;
+        bpf_dbg_printk("=== kprobe SSL tcp_sendmsg=%d sock=%llx ssl=%llx ===", id, sk, ssl);
         bpf_map_update_elem(&ssl_to_conn, &ssl, &info, BPF_ANY);
     }
 

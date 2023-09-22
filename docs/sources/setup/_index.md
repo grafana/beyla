@@ -8,6 +8,8 @@ keywords:
   - eBPF
 ---
 
+![Grafana Beyla Logo](https://grafana.com/media/docs/grafana-cloud/beyla/beyla-logo-2.png)
+
 # Set up Beyla
 
 There are different options to set up and run Beyla:

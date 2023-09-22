@@ -323,3 +323,29 @@ func TestSuite_OverrideServiceName(t *testing.T) {
 	require.NoError(t, compose.Close())
 	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
 }
+
+func TestSuiteNodeClient(t *testing.T) {
+	compose, err := docker.ComposeSuite("docker-compose-nodeclient.yml", path.Join(pathOutput, "test-suite-nodeclient.log"))
+	compose.Env = append(compose.Env, `EXECUTABLE_NAME=node`)
+	require.NoError(t, err)
+	require.NoError(t, compose.Up())
+	t.Run("Node Client RED metrics", func(t *testing.T) {
+		testNodeClientWithMethodAndStatusCode(t, "GET", 301, 80, "0000000000000000")
+	})
+	t.Run("BPF pinning folder mounted", testBPFPinningMounted)
+	require.NoError(t, compose.Close())
+	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
+}
+
+func TestSuiteNodeClientTLS(t *testing.T) {
+	compose, err := docker.ComposeSuite("docker-compose-nodeclient.yml", path.Join(pathOutput, "test-suite-nodeclient-tls.log"))
+	compose.Env = append(compose.Env, `EXECUTABLE_NAME=node`, `TESTS_DOCKERFILE_SUFFIX=_tls`)
+	require.NoError(t, err)
+	require.NoError(t, compose.Up())
+	t.Run("Node Client RED metrics", func(t *testing.T) {
+		testNodeClientWithMethodAndStatusCode(t, "GET", 200, 443, "0000000000000001")
+	})
+	t.Run("BPF pinning folder mounted", testBPFPinningMounted)
+	require.NoError(t, compose.Close())
+	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
+}

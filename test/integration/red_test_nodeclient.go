@@ -50,7 +50,7 @@ func testNodeClientWithMethodAndStatusCode(t *testing.T, method string, statusCo
 
 	var trace jaeger.Trace
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
-		resp, err := http.Get(jaegerQueryURL + fmt.Sprintf("?service=node"))
+		resp, err := http.Get(jaegerQueryURL + "?service=node")
 		require.NoError(t, err)
 		if resp == nil {
 			return

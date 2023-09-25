@@ -135,6 +135,7 @@ static __always_inline void finish_http(http_info_t *info) {
             bpf_ringbuf_submit(trace, get_flags());
         }
 
+        bpf_map_delete_elem(&http_tcp_seq, &info->conn_info);
         bpf_map_delete_elem(&ongoing_http, &info->conn_info);
         // bpf_map_delete_elem(&filtered_connections, &info->conn_info); // don't clean this up, doesn't work with keepalive
         // we don't explicitly clean-up the http_tcp_seq, we need to still monitor for dups

@@ -141,7 +141,7 @@ int BPF_KRETPROBE(kretprobe_sys_accept4, uint fd)
 
     if (parse_accept_socket_info(args, &info)) {
         sort_connection_info(&info);
-        dbg_print_http_connection_info(&info);
+        //dbg_print_http_connection_info(&info);
 
         http_connection_metadata_t meta = {};
         meta.id = id;
@@ -634,7 +634,7 @@ int BPF_KRETPROBE(kretprobe_tcp_recvmsg, int copied_len) {
 
     if (parse_sock_info((struct sock *)args->sock_ptr, &info)) {
         sort_connection_info(&info);
-        dbg_print_http_connection_info(&info);
+        //dbg_print_http_connection_info(&info);
 
         // we only care about connections setup by the socket filter as HTTP
         http_info_t *http_info = bpf_map_lookup_elem(&ongoing_http, &info);

@@ -21,17 +21,17 @@ type HTTPRequestTrace bpfHttpRequestTrace
 
 // TracerConfig configuration for eBPF programs
 type TracerConfig struct {
-	// Exec allows selecting the instrumented executable whose complete path contains the Exec value.
-	// Deprecated: this value is kept here for backwards compatibility. Use the `executable_name` property in the
-	// root YAML document.
-	Exec string `yaml:"executable_name"`
-	// Port allows selecting the instrumented executable that owns the Port value. If this value is set (and
-	// different to zero), the value of the Exec property won't take effect.
-	// It's important to emphasize that if your process opens multiple HTTP/GRPC ports, the auto-instrumenter
-	// will instrument all the service calls in all the ports, not only the port specified here.
-	// Deprecated: this value is kept here for backwards compatibility. Use the `open_port` property in the
-	// root YAML document.
-	Port int `yaml:"open_port"`
+	//// Exec allows selecting the instrumented executable whose complete path contains the Exec value.
+	//// Deprecated: this value is kept here for backwards compatibility. Use the `executable_name` property in the
+	//// root YAML document.
+	//Exec string `yaml:"executable_name"`
+	//// Port allows selecting the instrumented executable that owns the Port value. If this value is set (and
+	//// different to zero), the value of the Exec property won't take effect.
+	//// It's important to emphasize that if your process opens multiple HTTP/GRPC ports, the auto-instrumenter
+	//// will instrument all the service calls in all the ports, not only the port specified here.
+	//// Deprecated: this value is kept here for backwards compatibility. Use the `open_port` property in the
+	//// root YAML document.
+	//Port int `yaml:"open_port"`
 
 	// SystemWide allows instrumentation of all HTTP (no gRPC) calls, incoming and outgoing at a system wide scale.
 	// No filtering per application will be done. Using this option may result in reduced quality of information

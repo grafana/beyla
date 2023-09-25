@@ -15,6 +15,7 @@ import (
 	"golang.org/x/exp/slog"
 	"golang.org/x/sys/unix"
 
+	"github.com/grafana/beyla/pkg/beyla"
 	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
 	"github.com/grafana/beyla/pkg/internal/ebpf/goruntime"
 	"github.com/grafana/beyla/pkg/internal/ebpf/grpc"
@@ -31,7 +32,7 @@ func pflog() *slog.Logger {
 // ProcessFinder continuously listens in background for a process matching the
 // search criteria as specified to the user.
 type ProcessFinder struct {
-	Cfg     *ebpfcommon.TracerConfig
+	Cfg     *beyla.Config
 	Metrics imetrics.Reporter
 	CtxInfo *global.ContextInfo
 
@@ -49,9 +50,9 @@ func (pf *ProcessFinder) Start(ctx context.Context) (<-chan *ProcessTracer, erro
 		return nil, fmt.Errorf("removing memory lock: %w", err)
 	}
 	var err error
-	pf.pinPath, err = mountBpfPinPath(pf.Cfg)
+	pf.pinPath, err = mountBpfPinPath(&pf.Cfg.EBPF)
 	if err != nil {
-		return nil, fmt.Errorf("mounting BPF FS in %q: %w", pf.Cfg.BpfBaseDir, err)
+		return nil, fmt.Errorf("mounting BPF FS in %q: %w", pf.Cfg.EBPF.BpfBaseDir, err)
 	}
 	go func() {
 		// TODO, for multi-process inspection
@@ -111,16 +112,16 @@ func (pf *ProcessFinder) findAndInstrument(ctx context.Context, metrics imetrics
 
 	// Each program is an eBPF source: net/http, grpc...
 	programs := []Tracer{
-		&nethttp.Tracer{Cfg: pf.Cfg, Metrics: metrics},
-		&nethttp.GinTracer{Tracer: nethttp.Tracer{Cfg: pf.Cfg, Metrics: metrics}},
-		&grpc.Tracer{Cfg: pf.Cfg, Metrics: metrics},
-		&goruntime.Tracer{Cfg: pf.Cfg, Metrics: metrics},
+		&nethttp.Tracer{Cfg: &pf.Cfg.EBPF, Metrics: metrics},
+		&nethttp.GinTracer{Tracer: nethttp.Tracer{Cfg: &pf.Cfg.EBPF, Metrics: metrics}},
+		&grpc.Tracer{Cfg: &pf.Cfg.EBPF, Metrics: metrics},
+		&goruntime.Tracer{Cfg: &pf.Cfg.EBPF, Metrics: metrics},
 	}
 
 	// merging all the functions from all the programs, in order to do
 	// a complete inspection of the target executable
 	var allFuncs []string
-	if !pf.Cfg.SkipGoSpecificTracers {
+	if !pf.Cfg.EBPF.SkipGoSpecificTracers {
 		allFuncs = allGoFunctionNames(programs)
 	}
 	elfInfo, goffsets, err := inspect(ctx, pf.Cfg, allFuncs)

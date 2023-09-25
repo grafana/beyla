@@ -14,6 +14,15 @@ import (
 // earliest defined service will take precedence.
 type DefinitionCriteria []Attributes
 
+func (dc DefinitionCriteria) Validate() error {
+	// an empty definition criteria is valid
+	for i := range dc {
+		if len(dc[i].OpenPorts.ranges) == 0 || dc[i].Path.re == nil {
+			return fmt.Errorf("attribute [%d] should define at least the open_ports or exe_path_regexp property", i)
+		}
+	}
+}
+
 // Attributes that specify a given instrumented service.
 // Each instance has to define either the OpenPorts or Path property, or both. These are used to match
 // a given executable. If both OpenPorts and Path are defined, the inspected executable must fulfill both

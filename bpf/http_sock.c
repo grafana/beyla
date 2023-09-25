@@ -617,10 +617,25 @@ int BPF_KRETPROBE(kretprobe_tcp_recvmsg, int copied_len) {
 
                 struct msghdr *msg = (struct msghdr *)args->msghdr_ptr;
 
+                unsigned int m_flags;
+                u8 i_type;
+
+                bpf_probe_read_kernel(&m_flags, sizeof(unsigned int), &(msg->msg_flags));
+                bpf_probe_read_kernel(&i_type, sizeof(u8), &(msg->msg_iter.iter_type));
+
+                bpf_dbg_printk("msg type %x, iter type %d", m_flags, i_type);
+
                 struct iovec *iovec;
-                bpf_probe_read_kernel(&iovec, sizeof(struct iovec), &(msg->msg_iter.iov));
+                bpf_probe_read_kernel(&iovec, sizeof(struct iovec *), &(msg->msg_iter.iov));
                 int buf_len = copied_len & (TRACE_BUF_SIZE - 1);
-                bpf_probe_read(&trace->buf, buf_len, iovec);
+
+                if (i_type == 0) { // IOVEC
+                    struct iovec vec;
+                    bpf_probe_read(&vec, sizeof(vec), iovec);
+                    bpf_probe_read(&trace->buf, buf_len, (void *)vec.iov_base);
+                } else { // we assume UBUF
+                    bpf_probe_read(&trace->buf, buf_len, (void *)iovec);
+                }
                 
                 if (buf_len < TRACE_BUF_SIZE) {
                     trace->buf[buf_len] = '\0';

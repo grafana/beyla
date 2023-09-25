@@ -7,6 +7,9 @@ services:
       - "8086:8085"
     environment:
       LOG_LEVEL: DEBUG
+    depends_on:
+      otelcol:
+        condition: service_started
 
   autoinstrumenter:
     build:
@@ -59,8 +62,6 @@ services:
       - "9464"          # Prometheus exporter
       - "8888"          # metrics endpoint
     depends_on:
-      autoinstrumenter:
-        condition: service_started
       prometheus:
         condition: service_started
 

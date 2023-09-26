@@ -4,6 +4,7 @@ package collector
 import (
 	"context"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -14,7 +15,6 @@ import (
 	"go.opentelemetry.io/collector/pdata/pmetric/pmetricotlp"
 	"go.opentelemetry.io/collector/pdata/ptrace"
 	"go.opentelemetry.io/collector/pdata/ptrace/ptraceotlp"
-	"golang.org/x/exp/slog"
 )
 
 // TestCollector is a dummy OLTP test collector that allows retrieving part of the collected metrics
@@ -29,10 +29,9 @@ type TestCollector struct {
 var log *slog.Logger
 
 func init() {
-	ho := slog.HandlerOptions{
+	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
 		Level: slog.LevelDebug,
-	}
-	slog.SetDefault(slog.New(ho.NewTextHandler(os.Stderr)))
+	})))
 	log = slog.With("component", "collector.TestCollector")
 }
 

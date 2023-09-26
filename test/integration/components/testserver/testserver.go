@@ -1,11 +1,11 @@
 package main
 
 import (
+	"log/slog"
 	"os"
 
 	"github.com/caarlos0/env/v9"
 	gin2 "github.com/gin-gonic/gin"
-	"golang.org/x/exp/slog"
 
 	"github.com/grafana/beyla/test/integration/components/testserver/gin"
 	"github.com/grafana/beyla/test/integration/components/testserver/gorilla"
@@ -78,9 +78,8 @@ func setupLog(cfg *config) {
 		slog.Error("unknown log level specified, choises are [DEBUG, INFO, WARN, ERROR]", err)
 		os.Exit(-1)
 	}
-	ho := slog.HandlerOptions{
+	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
 		Level: lvl,
-	}
-	slog.SetDefault(slog.New(ho.NewTextHandler(os.Stderr)))
+	})))
 	slog.Debug("logger is set", "level", lvl.String())
 }

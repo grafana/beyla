@@ -2,12 +2,11 @@ package httpfltr
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"strconv"
 	"strings"
 	"syscall"
-
-	"golang.org/x/exp/slog"
 )
 
 func findNamespace(pid int32) (uint32, error) {

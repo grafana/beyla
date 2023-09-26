@@ -17,10 +17,10 @@ package nethttp
 import (
 	"context"
 	"io"
+	"log/slog"
 	"unsafe"
 
 	"github.com/cilium/ebpf"
-	"golang.org/x/exp/slog"
 
 	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
 	"github.com/grafana/beyla/pkg/internal/exec"

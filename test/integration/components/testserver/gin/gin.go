@@ -2,11 +2,11 @@ package gin
 
 import (
 	"fmt"
+	"log/slog"
 	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"golang.org/x/exp/slog"
 
 	"github.com/grafana/beyla/test/integration/components/testserver/arg"
 )

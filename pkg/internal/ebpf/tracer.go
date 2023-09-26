@@ -225,6 +225,17 @@ func inspect(ctx context.Context, cfg *pipe.Config, functions []string) (*exec.F
 	return &execElf, offsets, nil
 }
 
+func isGoProxy(offsets *goexec.Offsets) bool {
+	for f := range offsets.Funcs {
+		// if we find anything of interest other than the Go runtime, we consider this a valid application
+		if !strings.HasPrefix(f, "runtime.") {
+			return false
+		}
+	}
+
+	return true
+}
+
 func inspectByPort(ctx context.Context, cfg *pipe.Config, functions []string) (*exec.FileInfo, *goexec.Offsets, error) {
 	log := logger()
 	finder := exec.OwnedPort(cfg.Port)
@@ -263,11 +274,8 @@ func inspectByPort(ctx context.Context, cfg *pipe.Config, functions []string) (*
 		}
 
 		// we found go offsets, let's see if this application is not a proxy
-		for f := range offsets.Funcs {
-			// if we find anything of interest other than the Go runtime, we consider this a valid application
-			if !strings.HasPrefix(f, "runtime.") {
-				return &execElf, offsets, nil
-			}
+		if !isGoProxy(offsets) {
+			return &execElf, offsets, nil
 		}
 
 		log.Info("ignoring Go proxy for now", "pid", execElf.Pid, "comm", execElf.CmdExePath)

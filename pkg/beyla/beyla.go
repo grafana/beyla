@@ -71,7 +71,7 @@ func LoadConfig(reader io.Reader) (*Config, error) {
 // selection criteria.
 func (i *Instrumenter) FindAndInstrument(ctx context.Context) error {
 	finder := &ebpf.ProcessFinder{
-		Cfg:     &i.config.EBPF,
+		Cfg:     i.config,
 		CtxInfo: i.ctxInfo,
 		Metrics: i.ctxInfo.Metrics,
 	}

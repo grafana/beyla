@@ -77,6 +77,8 @@ type Config struct {
 	// No filtering per application will be done. Using this option may result in reduced quality of information
 	// gathered for certain languages, such as Golang.
 	SystemWide bool `yaml:"system_wide" env:"SYSTEM_WIDE"`
+	// This can be enabled to use generic HTTP tracers only, no Go-specifics will be used:
+	SkipGoSpecificTracers bool `yaml:"skip_go_specific_tracers" env:"SKIP_GO_SPECIFIC_TRACERS"`
 
 	LogLevel string `yaml:"log_level" env:"LOG_LEVEL"`
 

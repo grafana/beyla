@@ -136,6 +136,13 @@ Valid log level values are: `DEBUG`, `INFO`, `WARN` and `ERROR`.
 
 If `true`, prints any instrumented trace on the standard output (stdout).
 
+| YAML                       | Env var                    | Type    | Default |
+| -------------------------- | -------------------------- | ------- | ------- |
+| `skip_go_specific_tracers` | `SKIP_GO_SPECIFIC_TRACERS` | boolean | false   |
+
+Disables the detection of Go specifics when ebpf tracer inspects executables to be instrumented.
+The tracer will fallback to using generic instrumentation, which will generally be less efficient.
+
 ## EBPF tracer
 
 YAML section `ebpf`.
@@ -153,12 +160,6 @@ can help with reducing the CPU overhead of Beyla.
 In low-load services (in terms of requests/second), high values of `wakeup_len` could
 add a noticeable delay in the time the metrics are submitted and become externally visible.
 
-| YAML                       | Env var                    | Type    | Default |
-| -------------------------- | -------------------------- | ------- | ------- |
-| `skip_go_specific_tracers` | `SKIP_GO_SPECIFIC_TRACERS` | boolean | false   |
-
-Disables the detection of Go specifics when ebpf tracer inspects executables to be instrumented.
-The tracer will fallback to using generic instrumentation, which will generally be less efficient.
 
 ## Routes decorator
 

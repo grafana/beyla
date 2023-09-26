@@ -19,6 +19,7 @@ import (
 	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
 	"github.com/grafana/beyla/pkg/internal/exec"
 	"github.com/grafana/beyla/pkg/internal/goexec"
+	"github.com/grafana/beyla/pkg/internal/pipe"
 	"github.com/grafana/beyla/pkg/internal/request"
 )
 
@@ -190,7 +191,7 @@ func allGoFunctionNames(programs []Tracer) []string {
 	return functions
 }
 
-func inspect(ctx context.Context, cfg *ebpfcommon.TracerConfig, functions []string) (*exec.FileInfo, *goexec.Offsets, error) {
+func inspect(ctx context.Context, cfg *pipe.Config, functions []string) (*exec.FileInfo, *goexec.Offsets, error) {
 	// Finding the process by port is more complex, it needs to skip proxies
 	if cfg.Port != 0 {
 		return inspectByPort(ctx, cfg, functions)
@@ -224,7 +225,7 @@ func inspect(ctx context.Context, cfg *ebpfcommon.TracerConfig, functions []stri
 	return &execElf, offsets, nil
 }
 
-func inspectByPort(ctx context.Context, cfg *ebpfcommon.TracerConfig, functions []string) (*exec.FileInfo, *goexec.Offsets, error) {
+func inspectByPort(ctx context.Context, cfg *pipe.Config, functions []string) (*exec.FileInfo, *goexec.Offsets, error) {
 	finder := exec.OwnedPort(cfg.Port)
 
 	elfs, err := exec.FindExecELF(ctx, finder)

@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
@@ -12,18 +13,15 @@ import (
 	"syscall"
 	"time"
 
-	"golang.org/x/exp/slog"
-
 	"github.com/grafana/beyla/pkg/beyla"
 )
 
 func main() {
 	lvl := slog.LevelVar{}
 	lvl.Set(slog.LevelInfo)
-	ho := slog.HandlerOptions{
+	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
 		Level: &lvl,
-	}
-	slog.SetDefault(slog.New(ho.NewTextHandler(os.Stdout)))
+	})))
 
 	configPath := flag.String("config", "", "path to the configuration file")
 	flag.Parse()

@@ -6,13 +6,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"sync/atomic"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"golang.org/x/exp/slog"
 )
 
 func log() *slog.Logger {
@@ -117,7 +117,7 @@ func (pm *PrometheusManager) listenAndServe(ctx context.Context, port int, handl
 	go func() {
 		<-ctx.Done()
 		if err := server.Close(); err != nil {
-			log.Warn("error closing HTTP server: %s", err.Error())
+			log.Warn("error closing HTTP server", "err", err.Error())
 		}
 	}()
 }

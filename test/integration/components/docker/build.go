@@ -2,9 +2,8 @@ package docker
 
 import (
 	"io"
+	"log/slog"
 	"os/exec"
-
-	"golang.org/x/exp/slog"
 )
 
 // ImageBuild information for testing docker images: its name/tag and where the dockerfile is located

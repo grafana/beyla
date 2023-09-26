@@ -5,9 +5,8 @@ import (
 	"debug/gosym"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
-
-	"golang.org/x/exp/slog"
 )
 
 // instrumentationPoints loads the provided executable and looks for the addresses

@@ -2,10 +2,9 @@ package ebpfcommon
 
 import (
 	"bytes"
+	"log/slog"
 	"net"
 	"strconv"
-
-	"golang.org/x/exp/slog"
 
 	"github.com/grafana/beyla/pkg/internal/request"
 )
@@ -39,7 +38,7 @@ func HTTPRequestTraceToSpan(trace *HTTPRequestTrace) request.Span {
 	case request.EventTypeGRPCClient:
 		hostname, hostPort = extractHostPort(trace.Host[:])
 	default:
-		log.Warn("unknown trace type %d", trace.Type)
+		log.Warn("unknown trace type", "type", trace.Type)
 	}
 
 	return request.Span{

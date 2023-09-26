@@ -6,8 +6,7 @@ import (
 	"context"
 	"fmt"
 	"io"
-
-	"golang.org/x/exp/slog"
+	"log/slog"
 
 	"github.com/grafana/beyla/pkg/internal/connector"
 	"github.com/grafana/beyla/pkg/internal/ebpf"

@@ -6,13 +6,13 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"log/slog"
 	"syscall"
 	"unsafe"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
 	"github.com/prometheus/procfs"
-	"golang.org/x/exp/slog"
 	"golang.org/x/sys/unix"
 
 	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"

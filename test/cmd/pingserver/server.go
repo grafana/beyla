@@ -3,12 +3,11 @@ package main
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"strconv"
 	"time"
-
-	"golang.org/x/exp/slog"
 )
 
 const (
@@ -62,10 +61,9 @@ func main() {
 		}
 	}
 
-	ho := slog.HandlerOptions{
+	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
 		Level: lvl,
-	}
-	slog.SetDefault(slog.New(ho.NewTextHandler(os.Stderr)))
+	})))
 
 	port := defaultPort
 	if ps, ok := os.LookupEnv(envPort); ok {

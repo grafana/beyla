@@ -76,17 +76,17 @@ DASHBOARD_LINTER = $(TOOLS_DIR)/dashboard-linter
 
 define check_format
 	$(shell $(foreach FILE, $(shell find . -name "*.go" -not -path "./vendor/*"), \
-		$(GOIMPORTS_REVISER) -local github.com/grafana -list-diff -output stdout -file-path $(FILE);))
+		$(GOIMPORTS_REVISER) -company-prefixes github.com/grafana -list-diff -output stdout $(FILE);))
 endef
 
 .PHONY: prereqs
 prereqs:
 	@echo "### Check if prerequisites are met, and installing missing dependencies"
 	mkdir -p $(TEST_OUTPUT)
-	$(call go-install-tool,$(GOLANGCI_LINT),github.com/golangci/golangci-lint/cmd/golangci-lint@v1.52.2)
+	$(call go-install-tool,$(GOLANGCI_LINT),github.com/golangci/golangci-lint/cmd/golangci-lint@v1.54.2)
 	$(call go-install-tool,$(BPF2GO),github.com/cilium/ebpf/cmd/bpf2go@v0.10.0)
 	$(call go-install-tool,$(GO_OFFSETS_TRACKER),github.com/grafana/go-offsets-tracker/cmd/go-offsets-tracker@v0.1.4)
-	$(call go-install-tool,$(GOIMPORTS_REVISER),github.com/incu6us/goimports-reviser/v2@v2.5.3)
+	$(call go-install-tool,$(GOIMPORTS_REVISER),github.com/incu6us/goimports-reviser/v3@v3.4.5)
 	$(call go-install-tool,$(GO_LICENSES),github.com/google/go-licenses@v1.6.0)
 	$(call go-install-tool,$(KIND),sigs.k8s.io/kind@v0.20.0)
 	$(call go-install-tool,$(DASHBOARD_LINTER),github.com/grafana/dashboard-linter@latest)
@@ -95,7 +95,7 @@ prereqs:
 fmt: prereqs
 	@echo "### Formatting code and fixing imports"
 	@$(foreach FILE, $(shell find . -name "*.go" -not -path "./vendor/*"), \
-		$(GOIMPORTS_REVISER) -local github.com/grafana -file-path $(FILE);)
+		$(GOIMPORTS_REVISER) -company-prefixes github.com/grafana $(FILE);)
 
 .PHONY: checkfmt
 checkfmt:

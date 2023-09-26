@@ -2,13 +2,13 @@ package transform
 
 import (
 	"fmt"
+	"log/slog"
 	"net"
 	"strings"
 	"time"
 
 	"github.com/mariomac/pipes/pkg/node"
 	"golang.org/x/exp/maps"
-	"golang.org/x/exp/slog"
 
 	"github.com/grafana/beyla/pkg/internal/request"
 	"github.com/grafana/beyla/pkg/internal/transform/kube"
@@ -56,7 +56,7 @@ func (d KubernetesDecorator) Enabled() bool {
 		}
 		return true
 	default:
-		klog().Warn("invalid value for Enable value: %s. Ignoring stage", d.Enable)
+		klog().Warn("invalid value for Enable value. Ignoring stage", "value", d.Enable)
 		return false
 	}
 }

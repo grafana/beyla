@@ -167,6 +167,7 @@ func structMemberPreFetchedOffsets(elfFile *elf.File, fieldOffsets FieldOffsets)
 					"lib", strInfo.lib, "name", strName, "field", fieldName, "version", version)
 				continue
 			}
+			log.Debug("found offset", "constantName", constantName, "offset", offset)
 			fieldOffsets[constantName] = offset
 		}
 	}
@@ -200,16 +201,20 @@ func structMemberOffsetsFromDwarf(data *dwarf.Data) (FieldOffsets, map[string]st
 			continue
 		}
 		attrs := getAttrs(entry)
-		typeName := attrs[dwarf.AttrName].(string)
-		if structMember, ok := structMembers[typeName]; !ok {
+		typeName, ok := attrs[dwarf.AttrName]
+		if !ok {
 			reader.SkipChildren()
 			continue
-		} else { //nolint:revive
-			log.Debug("inspecting fields for struct type", "type", typeName)
-			if err := readMembers(reader, structMember.fields, expectedReturns, fieldOffsets); err != nil {
-				log.Debug("error reading DRWARF info", "type", typeName, "members", err)
-				return nil, expectedReturns
-			}
+		}
+		structMember, ok := structMembers[typeName.(string)]
+		if !ok {
+			reader.SkipChildren()
+			continue
+		}
+		log.Debug("inspecting fields for struct type", "type", typeName)
+		if err := readMembers(reader, structMember.fields, expectedReturns, fieldOffsets); err != nil {
+			log.Debug("error reading DRWARF info", "type", typeName, "members", err)
+			return nil, expectedReturns
 		}
 	}
 }

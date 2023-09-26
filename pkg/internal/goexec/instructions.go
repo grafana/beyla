@@ -3,7 +3,6 @@ package goexec
 import (
 	"debug/elf"
 	"debug/gosym"
-	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -87,18 +86,12 @@ func findGoSymbolTable(elfF *elf.File) (*gosym.Table, error) {
 			return nil, fmt.Errorf("acquiring .gopclntab data: %w", err)
 		}
 	}
-	sec := elfF.Section(".gosymtab")
-	if sec == nil {
-		return nil, errors.New(".gosymtab section not found in target binary, make sure this is a Go application")
-	}
-	symTabRaw, err := sec.Data()
-	if err != nil {
-		return nil, fmt.Errorf("acquiring .gosymtab data: %w", err)
-	}
 	pcln := gosym.NewLineTable(pclndat, elfF.Section(".text").Addr)
-	symTab, err := gosym.NewTable(symTabRaw, pcln)
+	// First argument accepts the .gosymtab ELF section.
+	// Since Go 1.3, .gosymtab is empty so we just pass an nil slice
+	symTab, err := gosym.NewTable(nil, pcln)
 	if err != nil {
-		return nil, fmt.Errorf("decoding .gosymtab: %w", err)
+		return nil, fmt.Errorf("creating go symbol table: %w", err)
 	}
 	return symTab, nil
 }

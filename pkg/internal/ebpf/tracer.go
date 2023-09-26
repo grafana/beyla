@@ -226,6 +226,7 @@ func inspect(ctx context.Context, cfg *pipe.Config, functions []string) (*exec.F
 }
 
 func inspectByPort(ctx context.Context, cfg *pipe.Config, functions []string) (*exec.FileInfo, *goexec.Offsets, error) {
+	log := logger()
 	finder := exec.OwnedPort(cfg.Port)
 
 	elfs, err := exec.FindExecELF(ctx, finder)
@@ -244,19 +245,20 @@ func inspectByPort(ctx context.Context, cfg *pipe.Config, functions []string) (*
 	// look for suitable Go application first
 	for _, execElf := range elfs {
 		var offsets *goexec.Offsets
-		var err error
 
 		if cfg.SkipGoSpecificTracers {
-			logger().Info("skipping inspection for Go functions", "pid", execElf.Pid, "comm", execElf.CmdExePath)
+			log.Info("skipping inspection for Go functions", "pid", execElf.Pid, "comm", execElf.CmdExePath)
 		} else {
-			logger().Info("inspecting", "pid", execElf.Pid, "comm", execElf.CmdExePath)
-			offsets, err = goexec.InspectOffsets(&execElf, functions)
+			log.Info("inspecting", "pid", execElf.Pid, "comm", execElf.CmdExePath)
+			if offsets, err = goexec.InspectOffsets(&execElf, functions); err != nil {
+				log.Debug("couldn't find go specific tracers", "error", err)
+			}
 		}
 
-		if cfg.SkipGoSpecificTracers || err != nil {
+		if cfg.SkipGoSpecificTracers || offsets == nil {
 			fallBackInfos = append(fallBackInfos, execElf)
 			pidMap[execElf.Pid] = execElf
-			logger().Info("adding fall-back generic executable", "pid", execElf.Pid, "comm", execElf.CmdExePath)
+			log.Info("adding fall-back generic executable", "pid", execElf.Pid, "comm", execElf.CmdExePath)
 			continue
 		}
 
@@ -268,7 +270,7 @@ func inspectByPort(ctx context.Context, cfg *pipe.Config, functions []string) (*
 			}
 		}
 
-		logger().Info("ignoring Go proxy for now", "pid", execElf.Pid, "comm", execElf.CmdExePath)
+		log.Info("ignoring Go proxy for now", "pid", execElf.Pid, "comm", execElf.CmdExePath)
 		goProxies = append(goProxies, execElf)
 		pidMap[execElf.Pid] = execElf
 	}

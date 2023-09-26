@@ -57,6 +57,23 @@ func TestSuite_NoDebugInfo(t *testing.T) {
 	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
 }
 
+// Same as Test suite, but the generated test image does not contain debug information
+func TestSuite_StaticCompilation(t *testing.T) {
+	compose, err := docker.ComposeSuite("docker-compose.yml", path.Join(pathOutput, "test-suite-static.log"))
+	compose.Env = append(compose.Env, `TESTSERVER_DOCKERFILE_SUFFIX=_static`)
+	require.NoError(t, err)
+	require.NoError(t, compose.Up())
+	t.Run("RED metrics", testREDMetricsHTTP)
+	t.Run("HTTP traces", testHTTPTraces)
+	t.Run("GRPC traces", testGRPCTraces)
+	t.Run("GRPC RED metrics", testREDMetricsGRPC)
+	t.Run("Internal Prometheus metrics", testInternalPrometheusExport)
+
+	t.Run("BPF pinning folder mounted", func(t *testing.T) { testBPFPinningMountedWithCount(t, 2) })
+	require.NoError(t, compose.Close())
+	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
+}
+
 func TestSuite_GRPCExport(t *testing.T) {
 	compose, err := docker.ComposeSuite("docker-compose.yml", path.Join(pathOutput, "test-suite-grpc-export.log"))
 	compose.Env = append(compose.Env, "INSTRUMENTER_CONFIG_SUFFIX=-grpc-export")

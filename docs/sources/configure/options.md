@@ -55,39 +55,6 @@ the options for each component.
 The properties in this section are first-level YAML properties, as they apply to the
 whole Beyla configuration:
 
-| YAML           | Env var                               | Type   | Default         |
-| -------------- |---------------------------------------| ------ | --------------- |
-| `service_name` | `SERVICE_NAME` or `OTEL_SERVICE_NAME` | string | executable name |
-
-Specifies the name of the instrumented service to be reported by the metrics exporter.
-If unset, it will be the name of the executable of the service.
-
-| YAML                | Env var             | Type   | Default |
-| ------------------- | ------------------- | ------ | ------- |
-| `service_namespace` | `SERVICE_NAMESPACE` | string | (unset) |
-
-Optionally, allows assigning a namespace for the service.
-
-| YAML        | Env var     | Type   | Default |
-| ----------- | ----------- | ------ | ------- |
-| `log_level` | `LOG_LEVEL` | string | `INFO`  |
-
-Sets the verbosity level of the process standard output logger.
-Valid log level values are: `DEBUG`, `INFO`, `WARN` and `ERROR`.
-`DEBUG` being the most verbose and `ERROR` the least verbose.
-
-| YAML           | Env var        | Type    | Default |
-| -------------- | -------------- | ------- | ------- |
-| `print_traces` | `PRINT_TRACES` | boolean | `false` |
-
-<a id="printer"></a>
-
-If `true`, prints any instrumented trace on the standard output (stdout).
-
-## EBPF tracer
-
-YAML section `ebpf`.
-
 | YAML              | Env var           | Type   | Default |
 | ----------------- | ----------------- | ------ | ------- |
 | `executable_name` | `EXECUTABLE_NAME` | string | (unset) |
@@ -139,6 +106,39 @@ At present time only HTTP (non SSL) requests are tracked system-wide, and there'
 When you are instrumenting Go applications, you should explicitly use `executable_name` or
 `open_port` instead of `system_wide` instrumentation. The Go specific instrumentation is of higher
 fidelity and incurs lesser overall overhead.
+
+| YAML           | Env var                               | Type   | Default         |
+| -------------- |---------------------------------------| ------ | --------------- |
+| `service_name` | `SERVICE_NAME` or `OTEL_SERVICE_NAME` | string | executable name |
+
+Overrides the name of the instrumented service to be reported by the metrics exporter.
+If unset, it will be the name of the executable of the service.
+
+| YAML                | Env var             | Type   | Default |
+| ------------------- | ------------------- | ------ | ------- |
+| `service_namespace` | `SERVICE_NAMESPACE` | string | (unset) |
+
+Optionally, allows assigning a namespace for the service.
+
+| YAML        | Env var     | Type   | Default |
+| ----------- | ----------- | ------ | ------- |
+| `log_level` | `LOG_LEVEL` | string | `INFO`  |
+
+Sets the verbosity level of the process standard output logger.
+Valid log level values are: `DEBUG`, `INFO`, `WARN` and `ERROR`.
+`DEBUG` being the most verbose and `ERROR` the least verbose.
+
+| YAML           | Env var        | Type    | Default |
+| -------------- | -------------- | ------- | ------- |
+| `print_traces` | `PRINT_TRACES` | boolean | `false` |
+
+<a id="printer"></a>
+
+If `true`, prints any instrumented trace on the standard output (stdout).
+
+## EBPF tracer
+
+YAML section `ebpf`.
 
 | YAML         | Env var          | Type   | Default |
 | ------------ | ---------------- | ------ | ------- |
@@ -473,11 +473,11 @@ or the same (both metric families will be listed in the same scrape endpoint).
 ## YAML file example
 
 ```yaml
-log_level: DEBUG
+open_port: 443
 service_name: my-instrumented-service
+log_level: DEBUG
 
 ebpf:
-  open_port: 443
   wakeup_len: 100
 
 otel_traces:

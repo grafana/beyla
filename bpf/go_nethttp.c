@@ -83,8 +83,16 @@ int uprobe_WriteHeader(struct pt_regs *ctx) {
         bpf_map_lookup_elem(&ongoing_server_requests, &goroutine_addr);
     bpf_map_delete_elem(&ongoing_server_requests, &goroutine_addr);
     if (invocation == NULL) {
-        bpf_dbg_printk("can't read http invocation metadata");
-        return 0;
+        void *parent_go = (void *)find_parent_goroutine(goroutine_addr);
+        if (parent_go) {
+            bpf_dbg_printk("found parent goroutine for header [%llx]", parent_go);
+            invocation = bpf_map_lookup_elem(&ongoing_server_requests, &parent_go);
+            bpf_map_delete_elem(&ongoing_server_requests, &goroutine_addr);
+        }
+        if (!invocation) {
+            bpf_dbg_printk("can't read http invocation metadata");
+            return 0;
+        }
     }
 
     http_request_trace *trace = bpf_ringbuf_reserve(&events, sizeof(http_request_trace), 0);
@@ -148,6 +156,8 @@ int uprobe_WriteHeader(struct pt_regs *ctx) {
         bpf_ringbuf_discard(trace, 0);
         return 0;
     }
+
+    bpf_printk("url %s", trace->path);
     bpf_probe_read(&trace->content_length, sizeof(trace->content_length), (void *)(req_ptr + content_length_ptr_pos));
 
     // Get traceparent from the Request.Header
@@ -163,6 +173,7 @@ int uprobe_WriteHeader(struct pt_regs *ctx) {
 
     trace->status = (u16)(((u64)GO_PARAM2(ctx)) & 0x0ffff);
 
+    bpf_printk("sending...", trace->path);
     // submit the completed trace via ringbuffer
     bpf_ringbuf_submit(trace, get_flags());
 

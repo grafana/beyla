@@ -25,13 +25,15 @@ var defaultConfig = Config{
 		BpfBaseDir:   "/var/run/beyla",
 	},
 	Metrics: otel.MetricsConfig{
-		Protocol:          otel.ProtocolHTTPProtobuf,
+		Protocol:          otel.ProtocolUnset,
+		MetricsProtocol:   otel.ProtocolUnset,
 		Interval:          5 * time.Second,
 		Buckets:           otel.DefaultBuckets,
 		ReportersCacheLen: 16,
 	},
 	Traces: otel.TracesConfig{
-		Protocol:           otel.ProtocolHTTPProtobuf,
+		Protocol:           otel.ProtocolUnset,
+		TracesProtocol:     otel.ProtocolUnset,
 		MaxQueueSize:       4096,
 		MaxExportBatchSize: 4096,
 		SamplingRatio:      1.0,

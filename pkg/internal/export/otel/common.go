@@ -21,6 +21,7 @@ import (
 type Protocol string
 
 const (
+	ProtocolUnset        Protocol = ""
 	ProtocolGRPC         Protocol = "grpc"
 	ProtocolHTTPProtobuf Protocol = "http/protobuf"
 	ProtocolHTTPJSON     Protocol = "http/json"

@@ -64,7 +64,7 @@ kubernetes:
 			Interval:          5 * time.Second,
 			CommonEndpoint:    "localhost:3131",
 			MetricsEndpoint:   "localhost:3030",
-			Protocol:          otel.ProtocolHTTPProtobuf,
+			Protocol:          otel.ProtocolUnset,
 			ReportersCacheLen: 16,
 			Buckets: otel.Buckets{
 				DurationHistogram:    []float64{0, 1, 2},
@@ -72,7 +72,7 @@ kubernetes:
 			},
 		},
 		Traces: otel.TracesConfig{
-			Protocol:           otel.ProtocolHTTPProtobuf,
+			Protocol:           otel.ProtocolUnset,
 			CommonEndpoint:     "localhost:3131",
 			TracesEndpoint:     "localhost:3232",
 			MaxQueueSize:       4096,

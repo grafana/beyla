@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/binary"
 	"io"
+	"log/slog"
 	"net"
 	"os"
 	"path/filepath"
@@ -14,12 +15,12 @@ import (
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/ringbuf"
 	lru "github.com/hashicorp/golang-lru/v2"
-	"golang.org/x/exp/slog"
 
 	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
 	"github.com/grafana/beyla/pkg/internal/exec"
 	"github.com/grafana/beyla/pkg/internal/goexec"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
+	"github.com/grafana/beyla/pkg/internal/pipe"
 	"github.com/grafana/beyla/pkg/internal/request"
 )
 
@@ -45,7 +46,7 @@ type HTTPInfo struct {
 }
 
 type Tracer struct {
-	Cfg        *ebpfcommon.TracerConfig
+	Cfg        *pipe.Config
 	Metrics    imetrics.Reporter
 	bpfObjects bpfObjects
 	closers    []io.Closer
@@ -54,7 +55,7 @@ type Tracer struct {
 
 func (p *Tracer) Load() (*ebpf.CollectionSpec, error) {
 	loader := loadBpf
-	if p.Cfg.BpfDebug {
+	if p.Cfg.EBPF.BpfDebug {
 		loader = loadBpf_debug
 	}
 
@@ -221,7 +222,7 @@ func (p *Tracer) SocketFilters() []*ebpf.Program {
 func (p *Tracer) Run(ctx context.Context, eventsChan chan<- []request.Span, svcName string) {
 	ebpfcommon.ForwardRingbuf[HTTPInfo](
 		svcName,
-		p.Cfg, p.log(), p.bpfObjects.Events,
+		&p.Cfg.EBPF, p.log(), p.bpfObjects.Events,
 		p.readHTTPInfoIntoSpan,
 		p.Metrics,
 		append(p.closers, &p.bpfObjects)...,

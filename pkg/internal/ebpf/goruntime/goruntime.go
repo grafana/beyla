@@ -15,9 +15,9 @@ package goruntime
 import (
 	"context"
 	"io"
+	"log/slog"
 
 	"github.com/cilium/ebpf"
-	"golang.org/x/exp/slog"
 
 	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
 	"github.com/grafana/beyla/pkg/internal/exec"

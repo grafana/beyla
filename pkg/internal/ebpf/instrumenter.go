@@ -6,13 +6,13 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"log/slog"
 	"syscall"
 	"unsafe"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
 	"github.com/prometheus/procfs"
-	"golang.org/x/exp/slog"
 	"golang.org/x/sys/unix"
 
 	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
@@ -35,11 +35,21 @@ func (i *instrumenter) goprobes(p Tracer) error {
 			continue
 		}
 		slog.Debug("going to instrument function", "function", funcName, "offsets", offs, "programs", funcPrograms)
-		if err := i.goprobe(ebpfcommon.Probe{
-			Offsets:  offs,
-			Programs: funcPrograms,
-		}); err != nil {
-			return fmt.Errorf("instrumenting function %q: %w", funcName, err)
+		if offs.Start == goexec.NoOffsetsAvailable {
+			if err := i.uprobe(funcName, i.exe, funcPrograms); err != nil {
+				if funcPrograms.Required {
+					return fmt.Errorf("instrumenting function %q: %w", funcName, err)
+				}
+
+				slog.Info("error instrumenting uprobe", "function", funcName, "error", err)
+			}
+		} else {
+			if err := i.goprobe(ebpfcommon.Probe{
+				Offsets:  offs,
+				Programs: funcPrograms,
+			}); err != nil {
+				return fmt.Errorf("instrumenting function %q: %w", funcName, err)
+			}
 		}
 		p.AddCloser(i.closables...)
 	}

@@ -4,12 +4,12 @@ import (
 	"context"
 	"errors"
 	"io"
+	"log/slog"
 	"sync"
 	"time"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/ringbuf"
-	"golang.org/x/exp/slog"
 
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/request"

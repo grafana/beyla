@@ -18,6 +18,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"log/slog"
 	"math"
 	"net"
 	"net/http"
@@ -25,7 +26,6 @@ import (
 	"sync"
 	"time"
 
-	"golang.org/x/exp/slog"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
@@ -258,10 +258,9 @@ func main() {
 		}
 	}
 
-	ho := slog.HandlerOptions{
+	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
 		Level: lvl,
-	}
-	slog.SetDefault(slog.New(ho.NewTextHandler(os.Stderr)))
+	})))
 
 	flag.Parse()
 	lis, err := net.Listen("tcp", fmt.Sprintf("localhost:%d", *port))

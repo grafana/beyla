@@ -19,9 +19,9 @@ import (
 
 func TestConfig_Overrides(t *testing.T) {
 	userConfig := bytes.NewBufferString(`
+executable_name: tras
 channel_buffer_len: 33
 ebpf:
-  executable_name: tras
   functions:
     - FooBar
 otel_metrics_export:
@@ -49,13 +49,13 @@ kubernetes:
 	assert.NoError(t, cfg.Validate())
 
 	assert.Equal(t, &Config{
+		Exec:             "tras",
 		ServiceName:      "svc-name",
 		ChannelBufferLen: 33,
 		LogLevel:         "INFO",
 		Printer:          false,
 		Noop:             true,
 		EBPF: ebpfcommon.TracerConfig{
-			Exec:         "tras",
 			BatchLength:  100,
 			BatchTimeout: time.Second,
 			BpfBaseDir:   "/var/run/beyla",

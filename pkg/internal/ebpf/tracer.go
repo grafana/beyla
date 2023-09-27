@@ -7,18 +7,19 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"reflect"
 	"strings"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
-	"golang.org/x/exp/slog"
 	"golang.org/x/sys/unix"
 
 	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
 	"github.com/grafana/beyla/pkg/internal/exec"
 	"github.com/grafana/beyla/pkg/internal/goexec"
+	"github.com/grafana/beyla/pkg/internal/pipe"
 	"github.com/grafana/beyla/pkg/internal/request"
 )
 
@@ -190,7 +191,7 @@ func allGoFunctionNames(programs []Tracer) []string {
 	return functions
 }
 
-func inspect(ctx context.Context, cfg *ebpfcommon.TracerConfig, functions []string) (*exec.FileInfo, *goexec.Offsets, error) {
+func inspect(ctx context.Context, cfg *pipe.Config, functions []string) (*exec.FileInfo, *goexec.Offsets, error) {
 	// Finding the process by port is more complex, it needs to skip proxies
 	if cfg.Port != 0 {
 		return inspectByPort(ctx, cfg, functions)
@@ -224,7 +225,18 @@ func inspect(ctx context.Context, cfg *ebpfcommon.TracerConfig, functions []stri
 	return &execElf, offsets, nil
 }
 
-func inspectByPort(ctx context.Context, cfg *ebpfcommon.TracerConfig, functions []string) (*exec.FileInfo, *goexec.Offsets, error) {
+func isGoProxy(offsets *goexec.Offsets) bool {
+	for f := range offsets.Funcs {
+		// if we find anything of interest other than the Go runtime, we consider this a valid application
+		if !strings.HasPrefix(f, "runtime.") {
+			return false
+		}
+	}
+
+	return true
+}
+
+func inspectByPort(ctx context.Context, cfg *pipe.Config, functions []string) (*exec.FileInfo, *goexec.Offsets, error) {
 	log := logger()
 	finder := exec.OwnedPort(cfg.Port)
 
@@ -262,11 +274,8 @@ func inspectByPort(ctx context.Context, cfg *ebpfcommon.TracerConfig, functions 
 		}
 
 		// we found go offsets, let's see if this application is not a proxy
-		for f := range offsets.Funcs {
-			// if we find anything of interest other than the Go runtime, we consider this a valid application
-			if !strings.HasPrefix(f, "runtime.") {
-				return &execElf, offsets, nil
-			}
+		if !isGoProxy(offsets) {
+			return &execElf, offsets, nil
 		}
 
 		log.Info("ignoring Go proxy for now", "pid", execElf.Pid, "comm", execElf.CmdExePath)

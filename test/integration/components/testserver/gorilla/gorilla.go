@@ -2,10 +2,10 @@ package gorilla
 
 import (
 	"fmt"
+	"log/slog"
 	"net/http"
 
 	"github.com/gorilla/mux"
-	"golang.org/x/exp/slog"
 
 	"github.com/grafana/beyla/test/integration/components/testserver/std"
 )

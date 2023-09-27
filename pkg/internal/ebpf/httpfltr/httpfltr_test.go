@@ -8,7 +8,7 @@ import (
 	"github.com/cilium/ebpf/ringbuf"
 	"github.com/stretchr/testify/assert"
 
-	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
+	"github.com/grafana/beyla/pkg/internal/pipe"
 	"github.com/grafana/beyla/pkg/internal/request"
 )
 
@@ -100,7 +100,7 @@ func TestToRequestTrace(t *testing.T) {
 	err := binary.Write(buf, binary.LittleEndian, &record)
 	assert.NoError(t, err)
 
-	tracer := Tracer{Cfg: &ebpfcommon.TracerConfig{}}
+	tracer := Tracer{Cfg: &pipe.Config{}}
 	result, _, err := tracer.readHTTPInfoIntoSpan(&ringbuf.Record{RawSample: buf.Bytes()})
 	assert.NoError(t, err)
 
@@ -133,7 +133,7 @@ func TestToRequestTraceNoConnection(t *testing.T) {
 	err := binary.Write(buf, binary.LittleEndian, &record)
 	assert.NoError(t, err)
 
-	tracer := Tracer{Cfg: &ebpfcommon.TracerConfig{}}
+	tracer := Tracer{Cfg: &pipe.Config{}}
 	result, _, err := tracer.readHTTPInfoIntoSpan(&ringbuf.Record{RawSample: buf.Bytes()})
 	assert.NoError(t, err)
 
@@ -154,7 +154,7 @@ func TestToRequestTraceNoConnection(t *testing.T) {
 }
 
 func TestExtractTraceParent(t *testing.T) {
-	tracer := Tracer{Cfg: &ebpfcommon.TracerConfig{}}
+	tracer := Tracer{Cfg: &pipe.Config{}}
 
 	// normal formulated request
 	assert.Equal(t, "ABBA", tracer.extractTraceParent([]byte(

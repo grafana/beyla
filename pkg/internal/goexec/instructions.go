@@ -4,10 +4,11 @@ import (
 	"debug/elf"
 	"debug/gosym"
 	"fmt"
+	"log/slog"
 	"strings"
-
-	"golang.org/x/exp/slog"
 )
+
+const NoOffsetsAvailable = 0xffffffffffffff
 
 // instrumentationPoints loads the provided executable and looks for the addresses
 // where the start and return probes must be inserted.
@@ -23,6 +24,8 @@ func instrumentationPoints(elfF *elf.File, funcNames []string) (map[string]FuncO
 		return nil, err
 	}
 
+	gosyms := elfF.Section(".gosymtab")
+
 	// check which functions in the symbol table correspond to any of the functions
 	// that we are looking for, and find their offsets
 	allOffsets := map[string]FuncOffsets{}
@@ -34,6 +37,14 @@ func instrumentationPoints(elfF *elf.File, funcNames []string) (map[string]FuncO
 		}
 
 		if _, ok := functions[fName]; ok {
+			// when we don't have a Go symbol table, the executable is statically linked, we don't look for offsets => using regular uprobes
+			// it's important that we don't attempt to look for offsets when we don't have .gosymtab, otherwise we might find one that's bogus,
+			// since the findFuncOffset code does a simple range check, e.g. goexit1 might accidentally match ServeHTTP.
+			if gosyms == nil {
+				allOffsets[fName] = FuncOffsets{Start: NoOffsetsAvailable, Returns: nil}
+				continue
+			}
+
 			offs, ok, err := findFuncOffset(&f, elfF)
 			if err != nil {
 				return nil, err

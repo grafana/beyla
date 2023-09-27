@@ -6,9 +6,8 @@ import (
 	"debug/elf"
 	_ "embed"
 	"fmt"
+	"log/slog"
 	"strings"
-
-	"golang.org/x/exp/slog"
 
 	"github.com/grafana/go-offsets-tracker/pkg/offsets"
 )

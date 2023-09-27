@@ -6,12 +6,12 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"strconv"
 	"time"
 
-	"golang.org/x/exp/slog"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
@@ -148,10 +148,9 @@ func main() {
 		}
 	}
 
-	ho := slog.HandlerOptions{
+	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
 		Level: lvl,
-	}
-	slog.SetDefault(slog.New(ho.NewTextHandler(os.Stderr)))
+	})))
 
 	port := defaultPort
 	if ps, ok := os.LookupEnv(envPort); ok {

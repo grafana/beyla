@@ -33,6 +33,7 @@ typedef struct http_info {
     u32 len;
     u16 status;    
     u8  type;
+    u8  ssl;
 } http_info_t;
 
 // Here we keep information on the packets passing through the socket filter
@@ -114,6 +115,10 @@ static __always_inline void sort_connection_info(connection_info_t *info) {
         __builtin_memcpy(info->s_addr, info->d_addr, sizeof(info->s_addr));
         __builtin_memcpy(info->d_addr, tmp_addr, sizeof(info->d_addr));
     }
+}
+
+static __always_inline bool client_call(connection_info_t *info) {
+    return likely_ephemeral_port(info->s_port) && !likely_ephemeral_port(info->d_port);
 }
 
 #endif

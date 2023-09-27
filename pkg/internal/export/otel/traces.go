@@ -73,7 +73,26 @@ func (m *TracesConfig) GetProtocol() Protocol {
 	if m.TracesProtocol != "" {
 		return m.TracesProtocol
 	}
-	return m.Protocol
+	if m.Protocol != "" {
+		return m.Protocol
+	}
+	return m.GuessProtocol()
+}
+
+func (m *TracesConfig) GuessProtocol() Protocol {
+	// If no explicit protocol is set, we guess it it from the metrics enpdoint port
+	// (assuming it uses a standard port or a development-like form like 14317, 24317, 14318...)
+	ep, _, err := parseTracesEndpoint(m)
+	if err == nil {
+		if strings.HasSuffix(ep.Port(), UsualPortGRPC) {
+			return ProtocolGRPC
+		} else if strings.HasSuffix(ep.Port(), UsualPortHTTP) {
+			return ProtocolHTTPProtobuf
+		}
+	}
+	// Otherwise we return default protocol according to the latest specification:
+	// https://github.com/open-telemetry/opentelemetry-specification/blob/main/specification/protocol/exporter.md?plain=1#L53
+	return ProtocolHTTPProtobuf
 }
 
 // TracesReporter implement the graph node that receives request.Span
@@ -567,5 +586,8 @@ func setTracesProtocol(cfg *TracesConfig) {
 	}
 	if cfg.Protocol != "" {
 		os.Setenv(envProtocol, string(cfg.Protocol))
+		return
 	}
+	// unset. Guessing it
+	os.Setenv(envTracesProtocol, string(cfg.GuessProtocol()))
 }

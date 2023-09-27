@@ -22,6 +22,7 @@ import (
 const timeout = 5 * time.Second
 
 func TestHTTPMetricsEndpointOPtions(t *testing.T) {
+	defer restoreEnvAfterExecution()()
 	mcfg := MetricsConfig{
 		CommonEndpoint:  "https://localhost:3131",
 		MetricsEndpoint: "https://localhost:3232/v1/metrics",
@@ -58,12 +59,14 @@ func TestHTTPMetricsEndpointOPtions(t *testing.T) {
 }
 
 func testMetricsHTTPOptions(t *testing.T, expected otlpOptions, mcfg *MetricsConfig) {
+	defer restoreEnvAfterExecution()()
 	opts, err := getHTTPMetricEndpointOptions(mcfg)
 	require.NoError(t, err)
 	assert.Equal(t, expected, opts)
 }
 
 func TestMissingSchemeInMetricsEndpoint(t *testing.T) {
+	defer restoreEnvAfterExecution()()
 	opts, err := getHTTPMetricEndpointOptions(&MetricsConfig{CommonEndpoint: "http://foo:3030"})
 	require.NoError(t, err)
 	require.NotEmpty(t, opts)
@@ -76,6 +79,7 @@ func TestMissingSchemeInMetricsEndpoint(t *testing.T) {
 }
 
 func TestMetrics_InternalInstrumentation(t *testing.T) {
+	defer restoreEnvAfterExecution()()
 	// fake OTEL collector server
 	coll := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, _ *http.Request) {
 		rw.WriteHeader(http.StatusOK)
@@ -170,6 +174,7 @@ type fakeInternalMetrics struct {
 }
 
 func TestGRPCMetricsEndpointOptions(t *testing.T) {
+	defer restoreEnvAfterExecution()()
 	t.Run("do not accept URLs without a scheme", func(t *testing.T) {
 		_, err := getGRPCMetricEndpointOptions(&MetricsConfig{CommonEndpoint: "foo:3939"})
 		assert.Error(t, err)
@@ -211,6 +216,7 @@ func TestGRPCMetricsEndpointOptions(t *testing.T) {
 }
 
 func testMetricsGRPCOptions(t *testing.T, expected otlpOptions, mcfg *MetricsConfig) {
+	defer restoreEnvAfterExecution()()
 	opts, err := getGRPCMetricEndpointOptions(mcfg)
 	require.NoError(t, err)
 	assert.Equal(t, expected, opts)
@@ -218,22 +224,41 @@ func testMetricsGRPCOptions(t *testing.T, expected otlpOptions, mcfg *MetricsCon
 
 func TestMetricsSetupHTTP_Protocol(t *testing.T) {
 	testCases := []struct {
+		Endpoint               string
 		ProtoVal               Protocol
 		MetricProtoVal         Protocol
 		ExpectedProtoEnv       string
 		ExpectedMetricProtoEnv string
 	}{
-		{ProtoVal: "", MetricProtoVal: "", ExpectedProtoEnv: "", ExpectedMetricProtoEnv: ""},
+		{ProtoVal: "", MetricProtoVal: "", ExpectedProtoEnv: "", ExpectedMetricProtoEnv: "http/protobuf"},
 		{ProtoVal: "", MetricProtoVal: "foo", ExpectedProtoEnv: "", ExpectedMetricProtoEnv: "foo"},
 		{ProtoVal: "bar", MetricProtoVal: "", ExpectedProtoEnv: "bar", ExpectedMetricProtoEnv: ""},
 		{ProtoVal: "bar", MetricProtoVal: "foo", ExpectedProtoEnv: "", ExpectedMetricProtoEnv: "foo"},
+		{Endpoint: "http://foo:4317", ProtoVal: "", MetricProtoVal: "", ExpectedProtoEnv: "", ExpectedMetricProtoEnv: "grpc"},
+		{Endpoint: "http://foo:4317", ProtoVal: "", MetricProtoVal: "foo", ExpectedProtoEnv: "", ExpectedMetricProtoEnv: "foo"},
+		{Endpoint: "http://foo:4317", ProtoVal: "bar", MetricProtoVal: "", ExpectedProtoEnv: "bar", ExpectedMetricProtoEnv: ""},
+		{Endpoint: "http://foo:4317", ProtoVal: "bar", MetricProtoVal: "foo", ExpectedProtoEnv: "", ExpectedMetricProtoEnv: "foo"},
+		{Endpoint: "http://foo:14317", ProtoVal: "", MetricProtoVal: "", ExpectedProtoEnv: "", ExpectedMetricProtoEnv: "grpc"},
+		{Endpoint: "http://foo:14317", ProtoVal: "", MetricProtoVal: "foo", ExpectedProtoEnv: "", ExpectedMetricProtoEnv: "foo"},
+		{Endpoint: "http://foo:14317", ProtoVal: "bar", MetricProtoVal: "", ExpectedProtoEnv: "bar", ExpectedMetricProtoEnv: ""},
+		{Endpoint: "http://foo:14317", ProtoVal: "bar", MetricProtoVal: "foo", ExpectedProtoEnv: "", ExpectedMetricProtoEnv: "foo"},
+		{Endpoint: "http://foo:4318", ProtoVal: "", MetricProtoVal: "", ExpectedProtoEnv: "", ExpectedMetricProtoEnv: "http/protobuf"},
+		{Endpoint: "http://foo:4318", ProtoVal: "", MetricProtoVal: "foo", ExpectedProtoEnv: "", ExpectedMetricProtoEnv: "foo"},
+		{Endpoint: "http://foo:4318", ProtoVal: "bar", MetricProtoVal: "", ExpectedProtoEnv: "bar", ExpectedMetricProtoEnv: ""},
+		{Endpoint: "http://foo:4318", ProtoVal: "bar", MetricProtoVal: "foo", ExpectedProtoEnv: "", ExpectedMetricProtoEnv: "foo"},
+		{Endpoint: "http://foo:24318", ProtoVal: "", MetricProtoVal: "", ExpectedProtoEnv: "", ExpectedMetricProtoEnv: "http/protobuf"},
+		{Endpoint: "http://foo:24318", ProtoVal: "", MetricProtoVal: "foo", ExpectedProtoEnv: "", ExpectedMetricProtoEnv: "foo"},
+		{Endpoint: "http://foo:24318", ProtoVal: "bar", MetricProtoVal: "", ExpectedProtoEnv: "bar", ExpectedMetricProtoEnv: ""},
+		{Endpoint: "http://foo:24318", ProtoVal: "bar", MetricProtoVal: "foo", ExpectedProtoEnv: "", ExpectedMetricProtoEnv: "foo"},
 	}
 	for _, tc := range testCases {
-		t.Run(string(tc.ProtoVal)+"/"+string(tc.MetricProtoVal), func(t *testing.T) {
+		t.Run(tc.Endpoint+"/"+string(tc.ProtoVal)+"/"+string(tc.MetricProtoVal), func(t *testing.T) {
 			defer restoreEnvAfterExecution()()
 			_, err := getHTTPMetricEndpointOptions(&MetricsConfig{
-				CommonEndpoint: "http://host:3333",
-				Protocol:       tc.ProtoVal, MetricsProtocol: tc.MetricProtoVal,
+				CommonEndpoint:  "http://host:3333",
+				MetricsEndpoint: tc.Endpoint,
+				Protocol:        tc.ProtoVal,
+				MetricsProtocol: tc.MetricProtoVal,
 			})
 			require.NoError(t, err)
 			assert.Equal(t, tc.ExpectedProtoEnv, os.Getenv(envProtocol))

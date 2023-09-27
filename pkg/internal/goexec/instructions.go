@@ -8,6 +8,8 @@ import (
 	"strings"
 )
 
+const NoOffsetsAvailable = 0xffffffffffffff
+
 // instrumentationPoints loads the provided executable and looks for the addresses
 // where the start and return probes must be inserted.
 func instrumentationPoints(elfF *elf.File, funcNames []string) (map[string]FuncOffsets, error) {
@@ -39,7 +41,7 @@ func instrumentationPoints(elfF *elf.File, funcNames []string) (map[string]FuncO
 			// it's important that we don't attempt to look for offsets when we don't have .gosymtab, otherwise we might find one that's bogus,
 			// since the findFuncOffset code does a simple range check, e.g. goexit1 might accidentally match ServeHTTP.
 			if gosyms == nil {
-				allOffsets[fName] = FuncOffsets{Start: 0xffffffffffffff, Returns: nil}
+				allOffsets[fName] = FuncOffsets{Start: NoOffsetsAvailable, Returns: nil}
 				continue
 			}
 

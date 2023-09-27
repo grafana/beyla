@@ -35,7 +35,7 @@ func (i *instrumenter) goprobes(p Tracer) error {
 			continue
 		}
 		slog.Debug("going to instrument function", "function", funcName, "offsets", offs, "programs", funcPrograms)
-		if offs.Start == 0xffffffffffffff {
+		if offs.Start == goexec.NoOffsetsAvailable {
 			if err := i.uprobe(funcName, i.exe, funcPrograms); err != nil {
 				if funcPrograms.Required {
 					return fmt.Errorf("instrumenting function %q: %w", funcName, err)

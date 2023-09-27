@@ -20,7 +20,7 @@ RUN go build -tags -a -ldflags '-linkmode external -extldflags "-static"' -o tes
 
 # Create final image from minimal + built binary
 #TODO: use minimal image
-FROM ubuntu:latest
+FROM debian:12
 
 WORKDIR /
 COPY --from=builder /src/testserver .

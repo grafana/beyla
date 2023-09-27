@@ -32,24 +32,15 @@ func (i *instrumenter) goprobes(p Tracer) error {
 		offs, ok := i.offsets.Funcs[funcName]
 		if !ok {
 			// the program function is not in the detected offsets. Ignoring
+			slog.Debug("Ignoring function", "function", funcName)
 			continue
 		}
 		slog.Debug("going to instrument function", "function", funcName, "offsets", offs, "programs", funcPrograms)
-		if offs.Start == goexec.NoOffsetsAvailable {
-			if err := i.uprobe(funcName, i.exe, funcPrograms); err != nil {
-				if funcPrograms.Required {
-					return fmt.Errorf("instrumenting function %q: %w", funcName, err)
-				}
-
-				slog.Info("error instrumenting uprobe", "function", funcName, "error", err)
-			}
-		} else {
-			if err := i.goprobe(ebpfcommon.Probe{
-				Offsets:  offs,
-				Programs: funcPrograms,
-			}); err != nil {
-				return fmt.Errorf("instrumenting function %q: %w", funcName, err)
-			}
+		if err := i.goprobe(ebpfcommon.Probe{
+			Offsets:  offs,
+			Programs: funcPrograms,
+		}); err != nil {
+			return fmt.Errorf("instrumenting function %q: %w", funcName, err)
 		}
 		p.AddCloser(i.closables...)
 	}

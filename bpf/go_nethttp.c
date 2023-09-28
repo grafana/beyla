@@ -157,7 +157,6 @@ int uprobe_WriteHeader(struct pt_regs *ctx) {
         return 0;
     }
 
-    bpf_printk("url %s", trace->path);
     bpf_probe_read(&trace->content_length, sizeof(trace->content_length), (void *)(req_ptr + content_length_ptr_pos));
 
     // Get traceparent from the Request.Header
@@ -173,7 +172,6 @@ int uprobe_WriteHeader(struct pt_regs *ctx) {
 
     trace->status = (u16)(((u64)GO_PARAM2(ctx)) & 0x0ffff);
 
-    bpf_printk("sending...", trace->path);
     // submit the completed trace via ringbuffer
     bpf_ringbuf_submit(trace, get_flags());
 

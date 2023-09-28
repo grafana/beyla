@@ -114,7 +114,7 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url, svcName string) {
 		// Make sure we see /echo
 		test.Eventually(t, testTimeout, func(t require.TestingT) {
 			var err error
-			results, err = pq.Query(`http_client_duration_seconds_count{` +
+			results, err = pq.Query(`http_server_duration_seconds_count{` +
 				`http_method="GET",` +
 				`http_status_code="203",` +
 				`service_namespace="integration-test",` +
@@ -129,7 +129,7 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url, svcName string) {
 
 		test.Eventually(t, testTimeout, func(t require.TestingT) {
 			var err error
-			results, err = pq.Query(`http_client_request_size_bytes_count{` +
+			results, err = pq.Query(`http_server_request_size_bytes_count{` +
 				`http_method="GET",` +
 				`http_status_code="203",` +
 				`service_namespace="integration-test",` +
@@ -142,7 +142,38 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url, svcName string) {
 			assert.LessOrEqual(t, 3, val)
 		})
 
-		// make sure we see /echoCall
+		// Make sure we see /echoCall server
+		test.Eventually(t, testTimeout, func(t require.TestingT) {
+			var err error
+			results, err = pq.Query(`http_server_duration_seconds_count{` +
+				`http_method="GET",` +
+				`http_status_code="203",` +
+				`service_namespace="integration-test",` +
+				`http_route="/echoCall",` +
+				`service_name="` + svcName + `"}`)
+			require.NoError(t, err)
+			// check duration_count has 3 calls
+			enoughPromResults(t, results)
+			val := totalPromCount(t, results)
+			assert.LessOrEqual(t, 3, val)
+		})
+
+		test.Eventually(t, testTimeout, func(t require.TestingT) {
+			var err error
+			results, err = pq.Query(`http_server_request_size_bytes_count{` +
+				`http_method="GET",` +
+				`http_status_code="203",` +
+				`service_namespace="integration-test",` +
+				`http_route="/echoCall",` +
+				`service_name="` + svcName + `"}`)
+			require.NoError(t, err)
+			// check duration_count has 3 calls
+			enoughPromResults(t, results)
+			val := totalPromCount(t, results)
+			assert.LessOrEqual(t, 3, val)
+		})
+
+		// make sure we see /echoCall client
 		test.Eventually(t, testTimeout, func(t require.TestingT) {
 			var err error
 			results, err = pq.Query(`http_client_duration_seconds_count{` +

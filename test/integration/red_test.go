@@ -142,14 +142,14 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url, svcName string) {
 			assert.LessOrEqual(t, 3, val)
 		})
 
-		// Make sure we see /echoCall server
+		// Make sure we see /echoBack server
 		test.Eventually(t, testTimeout, func(t require.TestingT) {
 			var err error
 			results, err = pq.Query(`http_server_duration_seconds_count{` +
 				`http_method="GET",` +
 				`http_status_code="203",` +
 				`service_namespace="integration-test",` +
-				`http_route="/echoCall",` +
+				`http_route="/echoBack",` +
 				`service_name="` + svcName + `"}`)
 			require.NoError(t, err)
 			// check duration_count has 3 calls
@@ -164,7 +164,7 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url, svcName string) {
 				`http_method="GET",` +
 				`http_status_code="203",` +
 				`service_namespace="integration-test",` +
-				`http_route="/echoCall",` +
+				`http_route="/echoBack",` +
 				`service_name="` + svcName + `"}`)
 			require.NoError(t, err)
 			// check duration_count has 3 calls
@@ -173,14 +173,13 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url, svcName string) {
 			assert.LessOrEqual(t, 3, val)
 		})
 
-		// make sure we see /echoCall client
+		// make sure we see /echo client
 		test.Eventually(t, testTimeout, func(t require.TestingT) {
 			var err error
 			results, err = pq.Query(`http_client_duration_seconds_count{` +
 				`http_method="GET",` +
 				`http_status_code="203",` +
 				`service_namespace="integration-test",` +
-				`http_route="/echoCall",` +
 				`service_name="` + svcName + `"}`)
 			require.NoError(t, err)
 			// check duration_count has 3 calls
@@ -195,7 +194,6 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url, svcName string) {
 				`http_method="GET",` +
 				`http_status_code="203",` +
 				`service_namespace="integration-test",` +
-				`http_route="/echoCall",` +
 				`service_name="` + svcName + `"}`)
 			require.NoError(t, err)
 			// check duration_count has 3 calls

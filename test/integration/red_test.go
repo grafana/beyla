@@ -111,12 +111,14 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url, svcName string) {
 	})
 
 	if url == instrumentedServiceGorillaURL {
+		// Make sure we see /echo
 		test.Eventually(t, testTimeout, func(t require.TestingT) {
 			var err error
 			results, err = pq.Query(`http_client_duration_seconds_count{` +
 				`http_method="GET",` +
 				`http_status_code="203",` +
 				`service_namespace="integration-test",` +
+				`http_route="/echo",` +
 				`service_name="` + svcName + `"}`)
 			require.NoError(t, err)
 			// check duration_count has 3 calls
@@ -131,6 +133,38 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url, svcName string) {
 				`http_method="GET",` +
 				`http_status_code="203",` +
 				`service_namespace="integration-test",` +
+				`http_route="/echo",` +
+				`service_name="` + svcName + `"}`)
+			require.NoError(t, err)
+			// check duration_count has 3 calls
+			enoughPromResults(t, results)
+			val := totalPromCount(t, results)
+			assert.LessOrEqual(t, 3, val)
+		})
+
+		// make sure we see /echoCall
+		test.Eventually(t, testTimeout, func(t require.TestingT) {
+			var err error
+			results, err = pq.Query(`http_client_duration_seconds_count{` +
+				`http_method="GET",` +
+				`http_status_code="203",` +
+				`service_namespace="integration-test",` +
+				`http_route="/echoCall",` +
+				`service_name="` + svcName + `"}`)
+			require.NoError(t, err)
+			// check duration_count has 3 calls
+			enoughPromResults(t, results)
+			val := totalPromCount(t, results)
+			assert.LessOrEqual(t, 3, val)
+		})
+
+		test.Eventually(t, testTimeout, func(t require.TestingT) {
+			var err error
+			results, err = pq.Query(`http_client_request_size_bytes_count{` +
+				`http_method="GET",` +
+				`http_status_code="203",` +
+				`service_namespace="integration-test",` +
+				`http_route="/echoCall",` +
 				`service_name="` + svcName + `"}`)
 			require.NoError(t, err)
 			// check duration_count has 3 calls

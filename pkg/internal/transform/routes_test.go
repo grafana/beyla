@@ -29,7 +29,7 @@ func TestUnmatchedWildcard(t *testing.T) {
 			in <- []request.Span{{Path: "/some/path"}}
 			assert.Equal(t, []request.Span{{
 				Path:  "/some/path",
-				Route: "*",
+				Route: "/**",
 			}}, testutil.ReadChannel(t, out, testTimeout))
 		})
 	}

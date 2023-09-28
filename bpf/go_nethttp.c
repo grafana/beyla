@@ -87,7 +87,7 @@ int uprobe_WriteHeader(struct pt_regs *ctx) {
         if (parent_go) {
             bpf_dbg_printk("found parent goroutine for header [%llx]", parent_go);
             invocation = bpf_map_lookup_elem(&ongoing_server_requests, &parent_go);
-            bpf_map_delete_elem(&ongoing_server_requests, &goroutine_addr);
+            bpf_map_delete_elem(&ongoing_server_requests, &parent_go);
         }
         if (!invocation) {
             bpf_dbg_printk("can't read http invocation metadata");

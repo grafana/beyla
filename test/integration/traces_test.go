@@ -19,14 +19,14 @@ import (
 )
 
 func testHTTPTracesNoTraceID(t *testing.T) {
-	testHTTPTracesCommon(t, false, 200, 0)
+	testHTTPTracesCommon(t, false, 200)
 }
 
 func testHTTPTraces(t *testing.T) {
-	testHTTPTracesCommon(t, true, 500, 1)
+	testHTTPTracesCommon(t, true, 500)
 }
 
-func testHTTPTracesCommon(t *testing.T, doTraceID bool, httpCode, statusCode int) {
+func testHTTPTracesCommon(t *testing.T, doTraceID bool, httpCode int) {
 	var traceID string
 	var parentID string
 

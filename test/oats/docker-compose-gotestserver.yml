@@ -1,0 +1,15 @@
+version: '3.9'
+
+services:
+  # Go based test server
+  testserver:
+    image: grcevski/tests:gotestserver
+    container_name: hatest-testserver
+    ports:
+      - "8080:8080"
+      - "8081:8081"
+      - "8082:8082"
+      - "8083:8083"
+      - "50051:50051"
+    environment:
+      LOG_LEVEL: DEBUG

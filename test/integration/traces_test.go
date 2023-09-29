@@ -3,6 +3,7 @@
 package integration
 
 import (
+	"fmt"
 	"net/http"
 	"strings"
 	"testing"
@@ -18,14 +19,14 @@ import (
 )
 
 func testHTTPTracesNoTraceID(t *testing.T) {
-	testHTTPTracesCommon(t, false)
+	testHTTPTracesCommon(t, false, 200, 0)
 }
 
 func testHTTPTraces(t *testing.T) {
-	testHTTPTracesCommon(t, true)
+	testHTTPTracesCommon(t, true, 500, 1)
 }
 
-func testHTTPTracesCommon(t *testing.T, doTraceID bool) {
+func testHTTPTracesCommon(t *testing.T, doTraceID bool, httpCode, statusCode int) {
 	var traceID string
 	var parentID string
 
@@ -36,9 +37,9 @@ func testHTTPTracesCommon(t *testing.T, doTraceID bool) {
 		traceID = createTraceID()
 		parentID = createParentID()
 		traceparent := createTraceparent(traceID, parentID)
-		doHTTPGetWithTraceparent(t, instrumentedServiceStdURL+"/"+slug+"?delay=10ms", 200, traceparent)
+		doHTTPGetWithTraceparent(t, fmt.Sprintf("%s/%s?delay=10ms&status=%d", instrumentedServiceStdURL, slug, httpCode), httpCode, traceparent)
 	} else {
-		doHTTPGet(t, instrumentedServiceStdURL+"/"+slug+"?delay=10ms", 200)
+		doHTTPGet(t, fmt.Sprintf("%s/%s?delay=10ms&status=%d", instrumentedServiceStdURL, slug, httpCode), httpCode)
 	}
 
 	var trace jaeger.Trace
@@ -74,12 +75,18 @@ func testHTTPTracesCommon(t *testing.T, doTraceID bool) {
 	assert.Truef(t, parent.AllMatches(
 		jaeger.Tag{Key: "otel.library.name", Type: "string", Value: "github.com/grafana/beyla"},
 		jaeger.Tag{Key: "http.method", Type: "string", Value: "GET"},
-		jaeger.Tag{Key: "http.status_code", Type: "int64", Value: float64(200)},
+		jaeger.Tag{Key: "http.status_code", Type: "int64", Value: float64(httpCode)},
 		jaeger.Tag{Key: "http.target", Type: "string", Value: "/" + slug},
 		jaeger.Tag{Key: "net.host.port", Type: "int64", Value: float64(8080)},
 		jaeger.Tag{Key: "http.route", Type: "string", Value: "/" + slug},
 		jaeger.Tag{Key: "span.kind", Type: "string", Value: "server"},
 	), "not all tags matched in %+v", parent.Tags)
+
+	if httpCode >= 500 {
+		assert.Truef(t, parent.AllMatches(
+			jaeger.Tag{Key: "otel.status_code", Type: "string", Value: "ERROR"},
+		), "not all tags matched in %+v", parent.Tags)
+	}
 
 	// Check the information of the "in queue" span
 	res = trace.FindByOperationName("in queue")

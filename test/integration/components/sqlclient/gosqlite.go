@@ -5,21 +5,19 @@ import (
 	"fmt"
 	"time"
 
-	_ "github.com/lib/pq"
-)
-
-const (
-	host     = "localhost"
-	port     = 5432
-	user     = "postgres"
-	password = "mysecretpassword"
-	dbname   = "postgres"
+	_ "modernc.org/sqlite"
 )
 
 func main() {
-	psqlconn := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable", host, port, user, password, dbname)
+	db, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		panic(err)
+	}
+	// See "Important settings" section.
+	db.SetConnMaxLifetime(time.Minute * 3)
+	db.SetMaxOpenConns(10)
+	db.SetMaxIdleConns(10)
 
-	db, err := sql.Open("postgres", psqlconn)
 	CheckError(err)
 	defer db.Close()
 
@@ -36,7 +34,7 @@ func main() {
 	CheckError(e)
 
 	// Do queries for >5 seconds (it may take Beyla that long to find this process)
-	for i := 1; i < 6; i++ {
+	for i := 1; i < 10; i++ {
 		rows, e := db.Query("SELECT * FROM students")
 		CheckError(e)
 		defer rows.Close()

@@ -182,10 +182,10 @@ func TestRouteConsolidation(t *testing.T) {
 			string(semconv.ServiceNameKey):    "svc-1",
 			string(semconv.HTTPMethodKey):     "GET",
 			string(semconv.HTTPStatusCodeKey): "200",
-			string(semconv.HTTPRouteKey):      "*",
+			string(semconv.HTTPRouteKey):      "/**",
 		},
 		Type: pmetric.MetricTypeHistogram,
-	}, events["*"])
+	}, events["/**"])
 }
 
 func TestGRPCPipeline(t *testing.T) {

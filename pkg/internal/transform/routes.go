@@ -24,7 +24,7 @@ const (
 	UnmatchDefault = UnmatchWildcard
 )
 
-const wildCard = "*"
+const wildCard = "/**"
 
 // RoutesConfig allows grouping URLs sharing a given pattern.
 type RoutesConfig struct {

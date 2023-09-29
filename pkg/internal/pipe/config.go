@@ -55,6 +55,7 @@ var defaultConfig = Config{
 		Enable:               transform.EnabledDefault,
 		InformersSyncTimeout: 30 * time.Second,
 	},
+	Routes: &transform.RoutesConfig{},
 }
 
 type Config struct {

@@ -13,6 +13,9 @@ import (
 	"github.com/mariomac/pipes/pkg/node"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
 	trace2 "go.opentelemetry.io/otel/trace"
 
 	"github.com/grafana/beyla/pkg/internal/imetrics"
@@ -464,4 +467,112 @@ func TestTraces_Traceparent(t *testing.T) {
 			}
 		}
 	}
+}
+
+func TestTraces_HTTPStatus(t *testing.T) {
+	type testPair struct {
+		httpCode   int
+		statusCode codes.Code
+	}
+
+	t.Run("HTTP server testing", func(t *testing.T) {
+		for _, p := range []testPair{
+			{100, codes.Unset},
+			{103, codes.Unset},
+			{199, codes.Unset},
+			{200, codes.Unset},
+			{204, codes.Unset},
+			{299, codes.Unset},
+			{300, codes.Unset},
+			{399, codes.Unset},
+			{400, codes.Unset},
+			{404, codes.Unset},
+			{405, codes.Unset},
+			{499, codes.Unset},
+			{500, codes.Error},
+			{5999, codes.Error},
+		} {
+			assert.Equal(t, p.statusCode, httpSpanStatusCode(&request.Span{Status: p.httpCode, Type: request.EventTypeHTTP}))
+			assert.Equal(t, p.statusCode, spanStatusCode(&request.Span{Status: p.httpCode, Type: request.EventTypeHTTP}))
+		}
+	})
+
+	t.Run("HTTP client testing", func(t *testing.T) {
+		for _, p := range []testPair{
+			{100, codes.Unset},
+			{103, codes.Unset},
+			{199, codes.Unset},
+			{200, codes.Unset},
+			{204, codes.Unset},
+			{299, codes.Unset},
+			{300, codes.Unset},
+			{399, codes.Unset},
+			{400, codes.Error},
+			{404, codes.Error},
+			{405, codes.Error},
+			{499, codes.Error},
+			{500, codes.Error},
+			{5999, codes.Error},
+		} {
+			assert.Equal(t, p.statusCode, httpSpanStatusCode(&request.Span{Status: p.httpCode, Type: request.EventTypeHTTPClient}))
+			assert.Equal(t, p.statusCode, spanStatusCode(&request.Span{Status: p.httpCode, Type: request.EventTypeHTTPClient}))
+		}
+	})
+}
+
+func TestTraces_GRPCStatus(t *testing.T) {
+	type testPair struct {
+		grpcCode   attribute.KeyValue
+		statusCode codes.Code
+	}
+
+	t.Run("gRPC server testing", func(t *testing.T) {
+		for _, p := range []testPair{
+			{semconv.RPCGRPCStatusCodeOk, codes.Unset},
+			{semconv.RPCGRPCStatusCodeCancelled, codes.Unset},
+			{semconv.RPCGRPCStatusCodeUnknown, codes.Error},
+			{semconv.RPCGRPCStatusCodeInvalidArgument, codes.Unset},
+			{semconv.RPCGRPCStatusCodeDeadlineExceeded, codes.Error},
+			{semconv.RPCGRPCStatusCodeNotFound, codes.Unset},
+			{semconv.RPCGRPCStatusCodeAlreadyExists, codes.Unset},
+			{semconv.RPCGRPCStatusCodePermissionDenied, codes.Unset},
+			{semconv.RPCGRPCStatusCodeResourceExhausted, codes.Unset},
+			{semconv.RPCGRPCStatusCodeFailedPrecondition, codes.Unset},
+			{semconv.RPCGRPCStatusCodeAborted, codes.Unset},
+			{semconv.RPCGRPCStatusCodeOutOfRange, codes.Unset},
+			{semconv.RPCGRPCStatusCodeUnimplemented, codes.Error},
+			{semconv.RPCGRPCStatusCodeInternal, codes.Error},
+			{semconv.RPCGRPCStatusCodeUnavailable, codes.Error},
+			{semconv.RPCGRPCStatusCodeDataLoss, codes.Error},
+			{semconv.RPCGRPCStatusCodeUnauthenticated, codes.Unset},
+		} {
+			assert.Equal(t, p.statusCode, grpcSpanStatusCode(&request.Span{Status: int(p.grpcCode.Value.AsInt64()), Type: request.EventTypeGRPC}))
+			assert.Equal(t, p.statusCode, spanStatusCode(&request.Span{Status: int(p.grpcCode.Value.AsInt64()), Type: request.EventTypeGRPC}))
+		}
+	})
+
+	t.Run("gRPC client testing", func(t *testing.T) {
+		for _, p := range []testPair{
+			{semconv.RPCGRPCStatusCodeOk, codes.Unset},
+			{semconv.RPCGRPCStatusCodeCancelled, codes.Error},
+			{semconv.RPCGRPCStatusCodeUnknown, codes.Error},
+			{semconv.RPCGRPCStatusCodeInvalidArgument, codes.Error},
+			{semconv.RPCGRPCStatusCodeDeadlineExceeded, codes.Error},
+			{semconv.RPCGRPCStatusCodeNotFound, codes.Error},
+			{semconv.RPCGRPCStatusCodeAlreadyExists, codes.Error},
+			{semconv.RPCGRPCStatusCodePermissionDenied, codes.Error},
+			{semconv.RPCGRPCStatusCodeResourceExhausted, codes.Error},
+			{semconv.RPCGRPCStatusCodeFailedPrecondition, codes.Error},
+			{semconv.RPCGRPCStatusCodeAborted, codes.Error},
+			{semconv.RPCGRPCStatusCodeOutOfRange, codes.Error},
+			{semconv.RPCGRPCStatusCodeUnimplemented, codes.Error},
+			{semconv.RPCGRPCStatusCodeInternal, codes.Error},
+			{semconv.RPCGRPCStatusCodeUnavailable, codes.Error},
+			{semconv.RPCGRPCStatusCodeDataLoss, codes.Error},
+			{semconv.RPCGRPCStatusCodeUnauthenticated, codes.Error},
+		} {
+			assert.Equal(t, p.statusCode, grpcSpanStatusCode(&request.Span{Status: int(p.grpcCode.Value.AsInt64()), Type: request.EventTypeGRPCClient}))
+			assert.Equal(t, p.statusCode, spanStatusCode(&request.Span{Status: int(p.grpcCode.Value.AsInt64()), Type: request.EventTypeGRPCClient}))
+		}
+	})
 }

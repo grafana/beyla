@@ -13,6 +13,7 @@ import (
 	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/mariomac/pipes/pkg/node"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
@@ -230,6 +231,54 @@ func (r *TracesReporter) close() {
 	}
 }
 
+// https://opentelemetry.io/docs/specs/otel/trace/semantic_conventions/http/#status
+func httpSpanStatusCode(span *request.Span) codes.Code {
+	if span.Status < 400 {
+		return codes.Unset
+	}
+
+	if span.Status < 500 {
+		if span.Type == request.EventTypeHTTPClient {
+			return codes.Error
+		}
+		return codes.Unset
+	}
+
+	return codes.Error
+}
+
+// https://opentelemetry.io/docs/specs/otel/trace/semantic_conventions/rpc/#grpc-status
+func grpcSpanStatusCode(span *request.Span) codes.Code {
+	if span.Type == request.EventTypeGRPCClient {
+		if span.Status == int(semconv.RPCGRPCStatusCodeOk.Value.AsInt64()) {
+			return codes.Unset
+		}
+		return codes.Error
+	}
+
+	switch int64(span.Status) {
+	case semconv.RPCGRPCStatusCodeUnknown.Value.AsInt64(),
+		semconv.RPCGRPCStatusCodeDeadlineExceeded.Value.AsInt64(),
+		semconv.RPCGRPCStatusCodeUnimplemented.Value.AsInt64(),
+		semconv.RPCGRPCStatusCodeInternal.Value.AsInt64(),
+		semconv.RPCGRPCStatusCodeUnavailable.Value.AsInt64(),
+		semconv.RPCGRPCStatusCodeDataLoss.Value.AsInt64():
+		return codes.Error
+	}
+
+	return codes.Unset
+}
+
+func spanStatusCode(span *request.Span) codes.Code {
+	switch span.Type {
+	case request.EventTypeHTTP, request.EventTypeHTTPClient:
+		return httpSpanStatusCode(span)
+	case request.EventTypeGRPC, request.EventTypeGRPCClient:
+		return grpcSpanStatusCode(span)
+	}
+	return codes.Unset
+}
+
 func (r *TracesReporter) traceAttributes(span *request.Span) []attribute.KeyValue {
 	var attrs []attribute.KeyValue
 
@@ -366,6 +415,8 @@ func (r *TracesReporter) makeSpan(parentCtx context.Context, tracer trace2.Trace
 		trace2.WithSpanKind(spanKind(span)),
 		trace2.WithAttributes(r.traceAttributes(span)...),
 	)
+
+	sp.SetStatus(spanStatusCode(span), "")
 
 	if span.RequestStart != span.Start {
 		var spP trace2.Span

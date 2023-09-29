@@ -96,6 +96,7 @@ kubernetes:
 			Enable:               transform.EnabledTrue,
 			InformersSyncTimeout: 30 * time.Second,
 		},
+		Routes: &transform.RoutesConfig{},
 	}, cfg)
 }
 

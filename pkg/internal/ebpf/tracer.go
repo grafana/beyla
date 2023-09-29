@@ -209,15 +209,15 @@ func inspect(ctx context.Context, cfg *pipe.Config, functions []string) (*exec.F
 	// when we look by executable name we pick the first one, we look at all processes only when we pick by port to avoid proxies
 	execElf := elfs[0]
 	var offsets *goexec.Offsets
-
+	log := logger()
 	if !cfg.SystemWide {
 		if cfg.SkipGoSpecificTracers {
-			logger().Info("Skipping inspection for Go functions. Using only generic instrumentation.", "pid", execElf.Pid, "comm", execElf.CmdExePath)
+			log.Debug("Skipping inspection for Go functions. Using only generic instrumentation.", "pid", execElf.Pid, "comm", execElf.CmdExePath)
 		} else {
-			logger().Info("inspecting", "pid", execElf.Pid, "comm", execElf.CmdExePath)
+			log.Debug("inspecting", "pid", execElf.Pid, "comm", execElf.CmdExePath)
 			offsets, err = goexec.InspectOffsets(&execElf, functions)
 			if err != nil {
-				logger().Info("Go HTTP/gRPC support not detected. Using only generic instrumentation.", "error", err)
+				log.Debug("Go HTTP/gRPC support not detected. Using only generic instrumentation.", "error", err)
 			}
 		}
 	}
@@ -258,9 +258,9 @@ func inspectByPort(ctx context.Context, cfg *pipe.Config, functions []string) (*
 		var offsets *goexec.Offsets
 
 		if cfg.SkipGoSpecificTracers {
-			log.Info("skipping inspection for Go functions", "pid", execElf.Pid, "comm", execElf.CmdExePath)
+			log.Debug("skipping inspection for Go functions", "pid", execElf.Pid, "comm", execElf.CmdExePath)
 		} else {
-			log.Info("inspecting", "pid", execElf.Pid, "comm", execElf.CmdExePath)
+			log.Debug("inspecting", "pid", execElf.Pid, "comm", execElf.CmdExePath)
 			if offsets, err = goexec.InspectOffsets(&execElf, functions); err != nil {
 				log.Debug("couldn't find go specific tracers", "error", err)
 			}
@@ -269,7 +269,7 @@ func inspectByPort(ctx context.Context, cfg *pipe.Config, functions []string) (*
 		if cfg.SkipGoSpecificTracers || offsets == nil {
 			fallBackInfos = append(fallBackInfos, execElf)
 			pidMap[execElf.Pid] = execElf
-			log.Info("adding fall-back generic executable", "pid", execElf.Pid, "comm", execElf.CmdExePath)
+			log.Debug("adding fall-back generic executable", "pid", execElf.Pid, "comm", execElf.CmdExePath)
 			continue
 		}
 
@@ -278,7 +278,7 @@ func inspectByPort(ctx context.Context, cfg *pipe.Config, functions []string) (*
 			return &execElf, offsets, nil
 		}
 
-		log.Info("ignoring Go proxy for now", "pid", execElf.Pid, "comm", execElf.CmdExePath)
+		log.Debug("ignoring Go proxy for now", "pid", execElf.Pid, "comm", execElf.CmdExePath)
 		goProxies = append(goProxies, execElf)
 		pidMap[execElf.Pid] = execElf
 	}

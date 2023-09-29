@@ -1,0 +1,29 @@
+# Build the testserver binary
+# Docker command must be invoked from the projec root directory
+FROM golang:1.21 as builder
+
+ARG TARGETARCH
+
+ENV GOARCH=$TARGETARCH
+ENV CGO_ENABLED=1
+
+WORKDIR /src
+
+# Copy the go manifests and source
+COPY vendor/ vendor/
+COPY test/ test/
+COPY go.mod go.mod
+COPY go.sum go.sum
+
+# Build/link statically with CGO, external static linking
+RUN go build -tags -a -ldflags '-linkmode external -extldflags "-static"' -o testserver ./test/integration/components/testserver/testserver.go
+
+# Create final image from minimal + built binary
+#TODO: use minimal image
+FROM debian:12
+
+WORKDIR /
+COPY --from=builder /src/testserver .
+USER 0:0
+
+CMD [ "/testserver" ]

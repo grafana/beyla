@@ -16,7 +16,7 @@ keywords:
 
 # Beyla quick start tutorial
 
-To reduce the time it takes to instrument an application and improve the adoption of Application Observability, Grafana built Belya, an eBPF auto-instrumentation tool, that is able to report basic transactions span information, as well as [RED metrics](/blog/2018/08/02/the-red-method-how-to-instrument-your-services/) for Linux HTTP/S and gRPC services, without any application code or configuration changes.
+To reduce the time it takes to instrument an application and improve the adoption of Application Observability, Grafana built Beyla, an eBPF auto-instrumentation tool, that is able to report basic transactions span information, as well as [RED metrics](/blog/2018/08/02/the-red-method-how-to-instrument-your-services/) for Linux HTTP/S and gRPC services, without any application code or configuration changes.
 
 ## eBPF overview
 

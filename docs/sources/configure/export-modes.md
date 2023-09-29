@@ -24,7 +24,7 @@ Beyla can export data in two modes:
 
 ![](https://grafana.com/media/docs/grafana-cloud/beyla/agent-vs-direct.png)
 
-<center><i>Beyal running in Agent mode (left) vs. Direct mode (right)</i></center>
+<center><i>Beyla running in Agent mode (left) vs. Direct mode (right)</i></center>
 
 ## Running in Direct mode
 

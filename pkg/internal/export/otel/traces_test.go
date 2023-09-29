@@ -21,6 +21,7 @@ import (
 )
 
 func TestHTTPTracesEndpoint(t *testing.T) {
+	defer restoreEnvAfterExecution()()
 	tcfg := TracesConfig{
 		CommonEndpoint: "https://localhost:3131",
 		TracesEndpoint: "https://localhost:3232/v1/traces",
@@ -57,12 +58,14 @@ func TestHTTPTracesEndpoint(t *testing.T) {
 }
 
 func testHTTPTracesOptions(t *testing.T, expected otlpOptions, tcfg *TracesConfig) {
+	defer restoreEnvAfterExecution()()
 	opts, err := getHTTPTracesEndpointOptions(tcfg)
 	require.NoError(t, err)
 	assert.Equal(t, expected, opts)
 }
 
 func TestMissingSchemeInHTTPTracesEndpoint(t *testing.T) {
+	defer restoreEnvAfterExecution()()
 	opts, err := getHTTPTracesEndpointOptions(&TracesConfig{CommonEndpoint: "http://foo:3030", SamplingRatio: 1.0})
 	require.NoError(t, err)
 	require.NotEmpty(t, opts)
@@ -75,6 +78,7 @@ func TestMissingSchemeInHTTPTracesEndpoint(t *testing.T) {
 }
 
 func TestGRPCTracesEndpointOptions(t *testing.T) {
+	defer restoreEnvAfterExecution()()
 	t.Run("do not accept URLs without a scheme", func(t *testing.T) {
 		_, err := getGRPCTracesEndpointOptions(&TracesConfig{CommonEndpoint: "foo:3939", SamplingRatio: 1.0})
 		assert.Error(t, err)
@@ -115,6 +119,7 @@ func TestGRPCTracesEndpointOptions(t *testing.T) {
 }
 
 func testTracesGRPOptions(t *testing.T, expected otlpOptions, tcfg *TracesConfig) {
+	defer restoreEnvAfterExecution()()
 	opts, err := getGRPCTracesEndpointOptions(tcfg)
 	require.NoError(t, err)
 	assert.Equal(t, expected, opts)
@@ -122,21 +127,39 @@ func testTracesGRPOptions(t *testing.T, expected otlpOptions, tcfg *TracesConfig
 
 func TestTracesSetupHTTP_Protocol(t *testing.T) {
 	testCases := []struct {
+		Endpoint              string
 		ProtoVal              Protocol
 		TraceProtoVal         Protocol
 		ExpectedProtoEnv      string
 		ExpectedTraceProtoEnv string
 	}{
-		{ProtoVal: "", TraceProtoVal: "", ExpectedProtoEnv: "", ExpectedTraceProtoEnv: ""},
+		{ProtoVal: "", TraceProtoVal: "", ExpectedProtoEnv: "", ExpectedTraceProtoEnv: "http/protobuf"},
 		{ProtoVal: "", TraceProtoVal: "foo", ExpectedProtoEnv: "", ExpectedTraceProtoEnv: "foo"},
 		{ProtoVal: "bar", TraceProtoVal: "", ExpectedProtoEnv: "bar", ExpectedTraceProtoEnv: ""},
 		{ProtoVal: "bar", TraceProtoVal: "foo", ExpectedProtoEnv: "", ExpectedTraceProtoEnv: "foo"},
+		{Endpoint: "http://foo:4317", ProtoVal: "", TraceProtoVal: "", ExpectedProtoEnv: "", ExpectedTraceProtoEnv: "grpc"},
+		{Endpoint: "http://foo:4317", ProtoVal: "", TraceProtoVal: "foo", ExpectedProtoEnv: "", ExpectedTraceProtoEnv: "foo"},
+		{Endpoint: "http://foo:4317", ProtoVal: "bar", TraceProtoVal: "", ExpectedProtoEnv: "bar", ExpectedTraceProtoEnv: ""},
+		{Endpoint: "http://foo:4317", ProtoVal: "bar", TraceProtoVal: "foo", ExpectedProtoEnv: "", ExpectedTraceProtoEnv: "foo"},
+		{Endpoint: "http://foo:14317", ProtoVal: "", TraceProtoVal: "", ExpectedProtoEnv: "", ExpectedTraceProtoEnv: "grpc"},
+		{Endpoint: "http://foo:14317", ProtoVal: "", TraceProtoVal: "foo", ExpectedProtoEnv: "", ExpectedTraceProtoEnv: "foo"},
+		{Endpoint: "http://foo:14317", ProtoVal: "bar", TraceProtoVal: "", ExpectedProtoEnv: "bar", ExpectedTraceProtoEnv: ""},
+		{Endpoint: "http://foo:14317", ProtoVal: "bar", TraceProtoVal: "foo", ExpectedProtoEnv: "", ExpectedTraceProtoEnv: "foo"},
+		{Endpoint: "http://foo:4318", ProtoVal: "", TraceProtoVal: "", ExpectedProtoEnv: "", ExpectedTraceProtoEnv: "http/protobuf"},
+		{Endpoint: "http://foo:4318", ProtoVal: "", TraceProtoVal: "foo", ExpectedProtoEnv: "", ExpectedTraceProtoEnv: "foo"},
+		{Endpoint: "http://foo:4318", ProtoVal: "bar", TraceProtoVal: "", ExpectedProtoEnv: "bar", ExpectedTraceProtoEnv: ""},
+		{Endpoint: "http://foo:4318", ProtoVal: "bar", TraceProtoVal: "foo", ExpectedProtoEnv: "", ExpectedTraceProtoEnv: "foo"},
+		{Endpoint: "http://foo:24318", ProtoVal: "", TraceProtoVal: "", ExpectedProtoEnv: "", ExpectedTraceProtoEnv: "http/protobuf"},
+		{Endpoint: "http://foo:24318", ProtoVal: "", TraceProtoVal: "foo", ExpectedProtoEnv: "", ExpectedTraceProtoEnv: "foo"},
+		{Endpoint: "http://foo:24318", ProtoVal: "bar", TraceProtoVal: "", ExpectedProtoEnv: "bar", ExpectedTraceProtoEnv: ""},
+		{Endpoint: "http://foo:24318", ProtoVal: "bar", TraceProtoVal: "foo", ExpectedProtoEnv: "", ExpectedTraceProtoEnv: "foo"},
 	}
 	for _, tc := range testCases {
-		t.Run(string(tc.ProtoVal)+"/"+string(tc.TraceProtoVal), func(t *testing.T) {
+		t.Run(tc.Endpoint+"/"+string(tc.ProtoVal)+"/"+string(tc.TraceProtoVal), func(t *testing.T) {
 			defer restoreEnvAfterExecution()()
 			_, err := getHTTPTracesEndpointOptions(&TracesConfig{
 				CommonEndpoint: "http://host:3333",
+				TracesEndpoint: tc.Endpoint,
 				Protocol:       tc.ProtoVal,
 				TracesProtocol: tc.TraceProtoVal,
 				SamplingRatio:  1.0,
@@ -149,6 +172,7 @@ func TestTracesSetupHTTP_Protocol(t *testing.T) {
 }
 
 func TestTracesSetupHTTP_DoNotOverrideEnv(t *testing.T) {
+	defer restoreEnvAfterExecution()()
 	t.Run("setting both variables", func(t *testing.T) {
 		defer restoreEnvAfterExecution()()
 		require.NoError(t, os.Setenv(envProtocol, "foo-proto"))
@@ -179,6 +203,7 @@ func TestTracesSetupHTTP_DoNotOverrideEnv(t *testing.T) {
 }
 
 func TestTraces_InternalInstrumentation(t *testing.T) {
+	defer restoreEnvAfterExecution()()
 	// fake OTEL collector server
 	coll := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, _ *http.Request) {
 		rw.WriteHeader(http.StatusOK)
@@ -271,6 +296,7 @@ func TestTraces_InternalInstrumentation(t *testing.T) {
 }
 
 func TestTraces_InternalInstrumentationSampling(t *testing.T) {
+	defer restoreEnvAfterExecution()()
 	// fake OTEL collector server
 	coll := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, _ *http.Request) {
 		rw.WriteHeader(http.StatusOK)

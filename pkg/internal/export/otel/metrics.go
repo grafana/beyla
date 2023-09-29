@@ -34,6 +34,9 @@ const (
 	RPCClientDuration     = "rpc.client.duration"
 	HTTPServerRequestSize = "http.server.request.size"
 	HTTPClientRequestSize = "http.client.request.size"
+
+	UsualPortGRPC = "4317"
+	UsualPortHTTP = "4318"
 )
 
 type MetricsConfig struct {
@@ -63,7 +66,26 @@ func (m *MetricsConfig) GetProtocol() Protocol {
 	if m.MetricsProtocol != "" {
 		return m.MetricsProtocol
 	}
-	return m.Protocol
+	if m.Protocol != "" {
+		return m.Protocol
+	}
+	return m.GuessProtocol()
+}
+
+func (m *MetricsConfig) GuessProtocol() Protocol {
+	// If no explicit protocol is set, we guess it it from the metrics enpdoint port
+	// (assuming it uses a standard port or a development-like form like 14317, 24317, 14318...)
+	ep, _, err := parseMetricsEndpoint(m)
+	if err == nil {
+		if strings.HasSuffix(ep.Port(), UsualPortGRPC) {
+			return ProtocolGRPC
+		} else if strings.HasSuffix(ep.Port(), UsualPortHTTP) {
+			return ProtocolHTTPProtobuf
+		}
+	}
+	// Otherwise we return default protocol according to the latest specification:
+	// https://github.com/open-telemetry/opentelemetry-specification/blob/main/specification/protocol/exporter.md?plain=1#L53
+	return ProtocolHTTPProtobuf
 }
 
 // Enabled specifies that the OTEL metrics node is enabled if and only if
@@ -457,5 +479,8 @@ func setMetricsProtocol(cfg *MetricsConfig) {
 	}
 	if cfg.Protocol != "" {
 		os.Setenv(envProtocol, string(cfg.Protocol))
+		return
 	}
+	// unset. Guessing it
+	os.Setenv(envMetricsProtocol, string(cfg.GuessProtocol()))
 }

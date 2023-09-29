@@ -22,7 +22,7 @@ $ OPEN_PORT=8080 beyla -config /path/to/config.yaml
 
 At the end of this document, there is an [example of YAML configuration file](#yaml-file-example).
 
-Currently, Beyal consist of a pipeline of components which
+Currently, Beyla consist of a pipeline of components which
 generate, transform, and export traces from HTTP and GRPC services. In the
 YAML configuration, each component has its own first-level section.
 
@@ -243,9 +243,9 @@ the OpenTelemetry exporter will automatically add the `/v1/metrics` path to the 
 addition, you can use either the `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT` environment variable or the `environment` YAML
 property to use exactly the provided URL without any addition.
 
-| YAML       | Env var                                                                    | Type   | Default        |
-| ---------- | -------------------------------------------------------------------------- | ------ | -------------- |
-| `protocol` | `OTEL_EXPORTER_OTLP_PROTOCOL` or<br/>`OTEL_EXPORTER_OTLP_METRICS_PROTOCOL` | string | `http/protobuf |
+| YAML       | Env var                                                                    | Type   | Default   |
+| ---------- | -------------------------------------------------------------------------- | ------ |-----------|
+| `protocol` | `OTEL_EXPORTER_OTLP_PROTOCOL` or<br/>`OTEL_EXPORTER_OTLP_METRICS_PROTOCOL` | string | (guessed) |
 
 Specifies the transport/encoding protocol of the OpenTelemetry endpoint.
 
@@ -254,6 +254,13 @@ The accepted values, as defined by the [OTLP Exporter Configuration document](ht
 The `OTEL_EXPORTER_OTLP_PROTOCOL` environment variable sets a common protocol for both the metrics and
 [traces](#otel-traces-exporter) exporters. The `OTEL_EXPORTER_OTLP_METRICS_PROTOCOL` environment variable,
 or the `protocol` YAML property, will set the protocol only for the metrics exporter node.
+
+If this property is not provided, Beyla will guess it according to the following rules:
+
+* Beyla will guess `grpc` if the port ends in `4317` (`4317`, `14317`, `24317`, ...),
+  as `4317` is the usual Port number for the OTEL GRPC collector.
+* Beyla will guess `http/protobuf` if the port ends in `4318` (`4318`, `14318`, `24318`, ...),
+  as `4318` is the usual Port number for the OTEL HTTP collector.
 
 | YAML                   | Env var                     | Type | Default |
 | ---------------------- | --------------------------- | ---- | ------- |
@@ -364,9 +371,9 @@ the OpenTelemetry exporter will automatically add the `/v1/traces` path to the U
 addition, you can use either the `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` environment variable or the `environment` YAML
 property to use exactly the provided URL without any addition.
 
-| YAML       | Env var                                                                   | Type   | Default        |
-| ---------- | ------------------------------------------------------------------------- | ------ | -------------- |
-| `protocol` | `OTEL_EXPORTER_OTLP_PROTOCOL` or<br/>`OTEL_EXPORTER_OTLP_TRACES_PROTOCOL` | string | `http/protobuf |
+| YAML       | Env var                                                                   | Type   | Default   |
+| ---------- | ------------------------------------------------------------------------- | ------ |-----------|
+| `protocol` | `OTEL_EXPORTER_OTLP_PROTOCOL` or<br/>`OTEL_EXPORTER_OTLP_TRACES_PROTOCOL` | string | (guessed) |
 
 Specifies the transport/encoding protocol of the OpenTelemetry traces endpoint.
 
@@ -375,6 +382,13 @@ The accepted values, as defined by the [OTLP Exporter Configuration document](ht
 The `OTEL_EXPORTER_OTLP_PROTOCOL` environment variable sets a common protocol for both the metrics and
 the [traces](#otel-traces-exporter) exporters. The `OTEL_EXPORTER_OTLP_TRACES_PROTOCOL` environment variable,
 or the `protocol` YAML property, will set the protocol only for the traces' exporter node.
+
+If this property is not provided, Beyla will guess it according to the following rules:
+
+* Beyla will guess `grpc` if the port ends in `4317` (`4317`, `14317`, `24317`, ...),
+  as `4317` is the usual Port number for the OTEL GRPC collector.
+* Beyla will guess `http/protobuf` if the port ends in `4318` (`4318`, `14318`, `24318`, ...),
+  as `4318` is the usual Port number for the OTEL HTTP collector.
 
 | YAML                   | Env var                     | Type | Default |
 | ---------------------- | --------------------------- | ---- | ------- |

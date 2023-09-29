@@ -261,7 +261,7 @@ func grpcSpanStatusCode(span *request.Span) codes.Code {
 		semconv.RPCGRPCStatusCodeDeadlineExceeded.Value.AsInt64(),
 		semconv.RPCGRPCStatusCodeUnimplemented.Value.AsInt64(),
 		semconv.RPCGRPCStatusCodeInternal.Value.AsInt64(),
-		semconv.RPCGRPCStatusCodeUnimplemented.Value.AsInt64(),
+		semconv.RPCGRPCStatusCodeUnavailable.Value.AsInt64(),
 		semconv.RPCGRPCStatusCodeDataLoss.Value.AsInt64():
 		return codes.Error
 	}

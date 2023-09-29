@@ -166,8 +166,8 @@ add a noticeable delay in the time the metrics are submitted and become external
 YAML section `routes`.
 
 This section can be only configured via the YAML file. If no `routes` section is provided in
-the YAML file, the routes' pipeline stage will not be created and data will not be filtered
-for the exporters.
+the YAML file, a default routes' pipeline stage will be created and filtered with the `wildcard`
+routes decorator.
 
 | YAML       | Env var | Type            | Default |
 | ---------- | ------- | --------------- | ------- |
@@ -215,7 +215,7 @@ Possible values for the `unmatch` property are:
 - `unset` will leave the `http.route` property as unset.
 - `path` will copy the `http.route` field property to the path value.
   - 🚨 Caution: this option could lead to cardinality explosion at the ingester side.
-- `wildcard` will set the `http.route` field property to a generic asterisk `*` value.
+- `wildcard` will set the `http.route` field property to a generic asterisk based `/**` value.
 
 ## OTEL metrics exporter
 

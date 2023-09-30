@@ -20,8 +20,10 @@ const (
 	UnmatchPath = UnmatchType("path")
 	// UnmatchWildcard sets the route field to a generic asterisk symbol
 	UnmatchWildcard = UnmatchType("wildcard")
+	// UnmatchAuto detects the route field using a heuristic
+	UnmatchAuto = UnmatchType("auto")
 
-	UnmatchDefault = UnmatchWildcard
+	UnmatchDefault = UnmatchAuto
 )
 
 const wildCard = "/**"
@@ -38,12 +40,18 @@ func RoutesProvider(rc *RoutesConfig) (node.MiddleFunc[[]request.Span, []request
 	// set default value for Unmatch action
 	var unmatchAction func(span *request.Span)
 	switch rc.Unmatch {
-	case UnmatchWildcard, "": // default
+	case UnmatchWildcard:
 		unmatchAction = setUnmatchToWildcard
 	case UnmatchUnset:
 		unmatchAction = leaveUnmatchEmpty
 	case UnmatchPath:
 		unmatchAction = setUnmatchToPath
+	case UnmatchAuto, "": // default
+		err := route.InitAutoClassifier()
+		if err != nil {
+			return nil, err
+		}
+		unmatchAction = classifyFromPath
 	default:
 		slog.With("component", "RoutesProvider").
 			Warn("invalid 'unmatch' value in configuration, defaulting to '"+string(UnmatchDefault)+"'",
@@ -73,5 +81,11 @@ func setUnmatchToWildcard(str *request.Span) {
 func setUnmatchToPath(str *request.Span) {
 	if str.Route == "" {
 		str.Route = str.Path
+	}
+}
+
+func classifyFromPath(s *request.Span) {
+	if s.Route == "" && (s.Type == request.EventTypeHTTP || s.Type == request.EventTypeHTTPClient) {
+		s.Route = route.ClusterPath(s.Path)
 	}
 }

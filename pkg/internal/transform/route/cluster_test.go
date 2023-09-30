@@ -20,6 +20,8 @@ func TestURLClustering(t *testing.T) {
 	assert.Equal(t, "/products/*/org/*", ClusterPath("/products/1/org/3"))
 	assert.Equal(t, "/products//org/*", ClusterPath("/products//org/3"))
 	assert.Equal(t, "/attach", ClusterPath("/attach"))
+	assert.Equal(t, "/usuarios/*/*/*/trabajo/*", ClusterPath("/usuarios/fdklsd/j4elk/23993/trabajo/2"))
+	assert.Equal(t, "/Benutzer/*/*/*/Arbeit/*", ClusterPath("/Benutzer/fdklsd/j4elk/23993/Arbeit/2"))
 	assert.Equal(t, "/products/", ClusterPath("/products/"))
 	assert.Equal(t, "/user-space/", ClusterPath("/user-space/"))
 	assert.Equal(t, "/user_space/", ClusterPath("/user_space/"))

@@ -207,22 +207,9 @@ func isGoProxy(offsets *goexec.Offsets) bool {
 func inspect(ctx context.Context, cfg *pipe.Config, functions []string) (*exec.FileInfo, *goexec.Offsets, error) {
 	log := logger()
 
-	// Merge the old, individual single-service selector,
-	// with the new, map-based multi-services selector.
-	finderCriteria := cfg.Services
-	if cfg.Exec.IsSet() || cfg.Port.Len() > 0 {
-		finderCriteria = slices.Clone(cfg.Services)
-		finderCriteria = append(finderCriteria, services.Attributes{
-			Name:      cfg.ServiceName,
-			Namespace: cfg.ServiceNamespace,
-			Path:      cfg.Exec,
-			OpenPorts: cfg.Port,
-		})
-	}
-
-	elfs, err := exec.FindExecELFs(ctx, finderCriteria)
-	for _, exec := range elfs {
-		defer exec.ELF.Close()
+	elfs, err := exec.FindExecELFs(ctx, findingCriteria(cfg))
+	for _, e := range elfs {
+		defer e.ELF.Close()
 	}
 	if err != nil {
 		return nil, nil, fmt.Errorf("looking for executable ELF: %w", err)
@@ -284,6 +271,22 @@ func inspect(ctx context.Context, cfg *pipe.Config, functions []string) (*exec.F
 	logger().Info("instrumented", "comm", execElf.CmdExePath, "pid", execElf.Pid)
 
 	return &execElf, nil, nil
+}
+
+func findingCriteria(cfg *pipe.Config) services.DefinitionCriteria {
+	finderCriteria := cfg.Services
+	// Merge the old, individual single-service selector,
+	// with the new, map-based multi-services selector.
+	if cfg.Exec.IsSet() || cfg.Port.Len() > 0 {
+		finderCriteria = slices.Clone(cfg.Services)
+		finderCriteria = append(finderCriteria, services.Attributes{
+			Name:      cfg.ServiceName,
+			Namespace: cfg.ServiceNamespace,
+			Path:      cfg.Exec,
+			OpenPorts: cfg.Port,
+		})
+	}
+	return finderCriteria
 }
 
 func printVerifierErrorInfo(err error) {

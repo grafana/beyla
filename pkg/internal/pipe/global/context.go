@@ -12,10 +12,6 @@ type ContextInfo struct {
 	ChannelBufferLen int
 	// ReportRoutes sets whether the metrics should set the http.route attribute
 	ReportRoutes bool
-	// ServiceName is the value of the service_name config attribute, or the discovered value
-	ServiceName string
-	// ServiceNamespace is the value of the service_namespace config attribute
-	ServiceNamespace string
 	// K8sDecoration specifies whether kubernetes decoration is enabled
 	K8sDecoration bool
 	// Metrics  that are internal to the pipe components

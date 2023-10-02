@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"os"
 	"reflect"
+	"slices"
 	"strings"
 
 	"github.com/cilium/ebpf"
@@ -17,10 +18,12 @@ import (
 	"golang.org/x/sys/unix"
 
 	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
+	"github.com/grafana/beyla/pkg/internal/ebpf/services"
 	"github.com/grafana/beyla/pkg/internal/exec"
 	"github.com/grafana/beyla/pkg/internal/goexec"
 	"github.com/grafana/beyla/pkg/internal/pipe"
 	"github.com/grafana/beyla/pkg/internal/request"
+	"github.com/grafana/beyla/pkg/internal/svc"
 )
 
 // Tracer is an individual eBPF program (e.g. the net/http or the grpc tracers)
@@ -39,19 +42,19 @@ type Tracer interface {
 	// KProbes returns a map with the name of the kernel probes that need to be
 	// tapped into. Start matches kprobe, End matches kretprobe
 	KProbes() map[string]ebpfcommon.FunctionPrograms
-	// KProbes returns a map with the module name mapping to the uprobes that need to be
+	// UProbes returns a map with the module name mapping to the uprobes that need to be
 	// tapped into. Start matches uprobe, End matches uretprobe
 	UProbes() map[string]map[string]ebpfcommon.FunctionPrograms
-	// Socket filters returns a list of programs that need to be loaded as a
+	// SocketFilters  returns a list of programs that need to be loaded as a
 	// generic eBPF socket filter
 	SocketFilters() []*ebpf.Program
 	// Run will do the action of listening for eBPF traces and forward them
 	// periodically to the output channel.
-	// It optionally receives the service name as a second attribute, to
+	// It optionally receives the service svc.ID, to
 	// populate each forwarded span with its value. But some
 	// tracers might ignore it (e.g. system-wide HTTP filter will directly set the
 	// executable name of each request).
-	Run(context.Context, chan<- []request.Span, string)
+	Run(context.Context, chan<- []request.Span, svc.ID)
 	// AddCloser adds io.Closer instances that need to be invoked when the
 	// Run function ends.
 	AddCloser(c ...io.Closer)
@@ -67,8 +70,7 @@ type ProcessTracer struct {
 	exe      *link.Executable
 	pinPath  string
 
-	systemWide          bool
-	overrideServiceName string
+	systemWide bool
 }
 
 func (pt *ProcessTracer) Run(ctx context.Context, out chan<- []request.Span) {
@@ -81,17 +83,17 @@ func (pt *ProcessTracer) Run(ctx context.Context, out chan<- []request.Span) {
 		return
 	}
 
-	svcName := pt.overrideServiceName
+	service := pt.ELFInfo.Service
 	// If the user does not override the service name via configuration
 	// the service name is the name of the found executable
 	// Unless the case of system-wide tracing, where the name of the
 	// executable will be dynamically set for each traced http request call.
-	if svcName == "" && !pt.systemWide {
-		svcName = pt.ELFInfo.ExecutableName()
+	if service.Name == "" && !pt.systemWide {
+		service.Name = pt.ELFInfo.ExecutableName()
 	}
 	// run each tracer program
 	for _, t := range trcrs {
-		go t.Run(ctx, out, svcName)
+		go t.Run(ctx, out, service)
 	}
 }
 
@@ -191,40 +193,6 @@ func allGoFunctionNames(programs []Tracer) []string {
 	return functions
 }
 
-func inspect(ctx context.Context, cfg *pipe.Config, functions []string) (*exec.FileInfo, *goexec.Offsets, error) {
-	// Finding the process by port is more complex, it needs to skip proxies
-	if cfg.Port != 0 {
-		return inspectByPort(ctx, cfg, functions)
-	}
-
-	finder := exec.ProcessNamed(cfg.Exec)
-	elfs, err := exec.FindExecELF(ctx, finder)
-	for _, exec := range elfs {
-		defer exec.ELF.Close()
-	}
-	if err != nil || len(elfs) == 0 {
-		return nil, nil, fmt.Errorf("looking for executable ELF: %w", err)
-	}
-
-	// when we look by executable name we pick the first one, we look at all processes only when we pick by port to avoid proxies
-	execElf := elfs[0]
-	var offsets *goexec.Offsets
-	log := logger()
-	if !cfg.SystemWide {
-		if cfg.SkipGoSpecificTracers {
-			log.Debug("Skipping inspection for Go functions. Using only generic instrumentation.", "pid", execElf.Pid, "comm", execElf.CmdExePath)
-		} else {
-			log.Debug("inspecting", "pid", execElf.Pid, "comm", execElf.CmdExePath)
-			offsets, err = goexec.InspectOffsets(&execElf, functions)
-			if err != nil {
-				log.Debug("Go HTTP/gRPC support not detected. Using only generic instrumentation.", "error", err)
-			}
-		}
-	}
-
-	return &execElf, offsets, nil
-}
-
 func isGoProxy(offsets *goexec.Offsets) bool {
 	for f := range offsets.Funcs {
 		// if we find anything of interest other than the Go runtime, we consider this a valid application
@@ -236,11 +204,23 @@ func isGoProxy(offsets *goexec.Offsets) bool {
 	return true
 }
 
-func inspectByPort(ctx context.Context, cfg *pipe.Config, functions []string) (*exec.FileInfo, *goexec.Offsets, error) {
+func inspect(ctx context.Context, cfg *pipe.Config, functions []string) (*exec.FileInfo, *goexec.Offsets, error) {
 	log := logger()
-	finder := exec.OwnedPort(cfg.Port)
 
-	elfs, err := exec.FindExecELF(ctx, finder)
+	// Merge the old, individual single-service selector,
+	// with the new, map-based multi-services selector.
+	finderCriteria := cfg.Services
+	if cfg.Exec.IsSet() || cfg.Port.Len() > 0 {
+		finderCriteria = slices.Clone(cfg.Services)
+		finderCriteria = append(finderCriteria, services.Attributes{
+			Name:      cfg.ServiceName,
+			Namespace: cfg.ServiceNamespace,
+			Path:      cfg.Exec,
+			OpenPorts: cfg.Port,
+		})
+	}
+
+	elfs, err := exec.FindExecELFs(ctx, finderCriteria)
 	for _, exec := range elfs {
 		defer exec.ELF.Close()
 	}

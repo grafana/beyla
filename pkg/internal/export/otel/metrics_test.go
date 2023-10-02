@@ -105,8 +105,7 @@ func TestMetrics_InternalInstrumentation(t *testing.T) {
 	exporter, err := ReportMetrics(context.Background(),
 		&MetricsConfig{CommonEndpoint: coll.URL, Interval: 10 * time.Millisecond, ReportersCacheLen: 16},
 		&global.ContextInfo{
-			ServiceName: "foo",
-			Metrics:     internalMetrics,
+			Metrics: internalMetrics,
 		})
 	require.NoError(t, err)
 	inputNode.SendTo(node.AsTerminal(exporter))

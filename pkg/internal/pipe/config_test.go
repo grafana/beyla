@@ -19,7 +19,6 @@ import (
 
 func TestConfig_Overrides(t *testing.T) {
 	userConfig := bytes.NewBufferString(`
-executable_name: tras
 channel_buffer_len: 33
 ebpf:
   functions:
@@ -34,13 +33,15 @@ prometheus_export:
 kubernetes:
   enable: true
 `)
+	require.NoError(t, os.Setenv("EXECUTABLE_NAME", "tras"))
+	require.NoError(t, os.Setenv("OPEN_PORT", "8080-8089"))
 	require.NoError(t, os.Setenv("OTEL_SERVICE_NAME", "svc-name"))
 	require.NoError(t, os.Setenv("NOOP_TRACES", "true"))
 	require.NoError(t, os.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "localhost:3131"))
 	require.NoError(t, os.Setenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", "localhost:3232"))
 	require.NoError(t, os.Setenv("INTERNAL_METRICS_PROMETHEUS_PORT", "3210"))
 	defer unsetEnv(t, map[string]string{
-		"OTEL_SERVICE_NAME": "", "NOOP_TRACES": "",
+		"OPEN_PORT": "", "EXECUTABLE_NAME": "", "OTEL_SERVICE_NAME": "", "NOOP_TRACES": "",
 		"OTEL_EXPORTER_OTLP_ENDPOINT": "", "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT": "",
 	})
 
@@ -48,8 +49,18 @@ kubernetes:
 	require.NoError(t, err)
 	assert.NoError(t, cfg.Validate())
 
+	// first test executable, as we can't test equality on it
+	assert.True(t, cfg.Exec.MatchString("atrassss"))
+	assert.False(t, cfg.Exec.MatchString("foobar"))
+
+	// test also openports by the same reason
+	assert.True(t, cfg.Port.Matches(8088))
+	assert.False(t, cfg.Port.Matches(8078))
+	assert.False(t, cfg.Port.Matches(8098))
+
 	assert.Equal(t, &Config{
-		Exec:             "tras",
+		Exec:             cfg.Exec,
+		Port:             cfg.Port,
 		ServiceName:      "svc-name",
 		ChannelBufferLen: 33,
 		LogLevel:         "INFO",

@@ -13,6 +13,8 @@ import (
 	"go.opentelemetry.io/otel/sdk/resource"
 	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
 	"google.golang.org/grpc/credentials"
+
+	"github.com/grafana/beyla/pkg/internal/svc"
 )
 
 // Protocol values for the OTEL_EXPORTER_OTLP_PROTOCOL, OTEL_EXPORTER_OTLP_TRACES_PROTOCOL and
@@ -48,9 +50,9 @@ var DefaultBuckets = Buckets{
 	RequestSizeHistogram: []float64{0, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192},
 }
 
-func otelResource(svcName, cfgSvcNamespace string) *resource.Resource {
+func otelResource(service svc.ID) *resource.Resource {
 	attrs := []attribute.KeyValue{
-		semconv.ServiceName(svcName),
+		semconv.ServiceName(service.Name),
 		// SpanMetrics requires an extra attribute besides service name
 		// to generate the traces_target_info metric,
 		// so the service is visible in the ServicesList
@@ -59,8 +61,8 @@ func otelResource(svcName, cfgSvcNamespace string) *resource.Resource {
 		semconv.TelemetrySDKLanguageGo,
 	}
 
-	if cfgSvcNamespace != "" {
-		attrs = append(attrs, semconv.ServiceNamespace(cfgSvcNamespace))
+	if service.Namespace != "" {
+		attrs = append(attrs, semconv.ServiceNamespace(service.Namespace))
 	}
 
 	return resource.NewWithAttributes(semconv.SchemaURL, attrs...)
@@ -69,9 +71,9 @@ func otelResource(svcName, cfgSvcNamespace string) *resource.Resource {
 // ReporterPool keeps an LRU cache of different OTEL reporters given a service name.
 // TODO: evict reporters after a time without being accessed
 type ReporterPool[T any] struct {
-	pool *simplelru.LRU[string, T]
+	pool *simplelru.LRU[svc.ID, T]
 
-	itemConstructor func(string) (T, error)
+	itemConstructor func(svc.ID) (T, error)
 }
 
 // NewReporterPool creates a ReporterPool instance given a cache length,
@@ -80,25 +82,25 @@ type ReporterPool[T any] struct {
 // instantiate the generic OTEL metrics/traces reporter.
 func NewReporterPool[T any](
 	cacheLen int,
-	callback simplelru.EvictCallback[string, T],
-	itemConstructor func(string) (T, error),
+	callback simplelru.EvictCallback[svc.ID, T],
+	itemConstructor func(id svc.ID) (T, error),
 ) ReporterPool[T] {
-	pool, _ := simplelru.NewLRU[string, T](cacheLen, callback)
+	pool, _ := simplelru.NewLRU[svc.ID, T](cacheLen, callback)
 	return ReporterPool[T]{pool: pool, itemConstructor: itemConstructor}
 }
 
 // For retrieves the associated item for the given service name, or
 // creates a new one if it does not exist
-func (rp *ReporterPool[T]) For(svcName string) (T, error) {
-	if m, ok := rp.pool.Get(svcName); ok {
+func (rp *ReporterPool[T]) For(service svc.ID) (T, error) {
+	if m, ok := rp.pool.Get(service); ok {
 		return m, nil
 	}
-	m, err := rp.itemConstructor(svcName)
+	m, err := rp.itemConstructor(service)
 	if err != nil {
 		var t T
-		return t, fmt.Errorf("creating resource for service %q: %w", svcName, err)
+		return t, fmt.Errorf("creating resource for service %q: %w", service, err)
 	}
-	rp.pool.Add(svcName, m)
+	rp.pool.Add(service, m)
 	return m, nil
 }
 

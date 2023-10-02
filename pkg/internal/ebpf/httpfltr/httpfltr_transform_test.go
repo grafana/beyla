@@ -57,7 +57,7 @@ func assertMatchesInfo(t *testing.T, span *request.Span, method, path, peer, hos
 	assert.Equal(t, hostPort, span.HostPort)
 	assert.Equal(t, peer, span.Peer)
 	assert.Equal(t, status, span.Status)
-	assert.Equal(t, comm, span.ServiceName)
+	assert.Equal(t, comm, span.ServiceID.Name)
 	assert.Equal(t, int64(durationMs*1000000), int64(span.End-span.Start))
 	assert.Equal(t, int64(durationMs*1000000), int64(span.End-span.RequestStart))
 }

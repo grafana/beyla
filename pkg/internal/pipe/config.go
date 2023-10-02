@@ -71,12 +71,13 @@ type Config struct {
 	Printer    debug.PrintEnabled            `yaml:"print_traces" env:"PRINT_TRACES"`
 
 	// Exec allows selecting the instrumented executable whose complete path contains the Exec value.
-	Exec string `yaml:"executable_name" env:"EXECUTABLE_NAME"`
+	Exec services.PathRegexp `yaml:"executable_name" env:"EXECUTABLE_NAME"`
 	// Port allows selecting the instrumented executable that owns the Port value. If this value is set (and
 	// different to zero), the value of the Exec property won't take effect.
 	// It's important to emphasize that if your process opens multiple HTTP/GRPC ports, the auto-instrumenter
 	// will instrument all the service calls in all the ports, not only the port specified here.
-	Port int `yaml:"open_port" env:"OPEN_PORT"`
+	Port services.PortEnum `yaml:"open_port" env:"OPEN_PORT"`
+
 	// SystemWide allows instrumentation of all HTTP (no gRPC) calls, incoming and outgoing at a system wide scale.
 	// No filtering per application will be done. Using this option may result in reduced quality of information
 	// gathered for certain languages, such as Golang.
@@ -111,11 +112,14 @@ func (e ConfigError) Error() string {
 }
 
 func (c *Config) validateInstrumentation() error {
-	if c.Port == 0 && c.Exec == "" && !c.SystemWide {
+	if err := c.Services.Validate(); err != nil {
+		return ConfigError(fmt.Sprintf("error in services YAML property: %s", err.Error()))
+	}
+	if c.Port.Len() == 0 && !c.Exec.IsSet() && len(c.Services) == 0 && !c.SystemWide {
 		return ConfigError("missing EXECUTABLE_NAME, OPEN_PORT or SYSTEM_WIDE property")
 	}
-	if (c.Port != 0 || c.Exec != "") && c.SystemWide {
-		return ConfigError("use either SYSTEM_WIDE or any of EXECUTABLE_NAME and OPEN_PORT, not both")
+	if (c.Port.Len() > 0 || c.Exec.IsSet() || len(c.Services) > 0) && c.SystemWide {
+		return ConfigError("you can't use SYSTEM_WIDE if any of EXECUTABLE_NAME, OPEN_PORT or services (YAML) is set")
 	}
 	if c.EBPF.BatchLength == 0 {
 		return ConfigError("BATCH_LENGTH must be at least 1")

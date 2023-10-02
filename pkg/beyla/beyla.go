@@ -135,8 +135,6 @@ func buildContextInfo(config *pipe.Config) *global.ContextInfo {
 	ctxInfo := &global.ContextInfo{
 		ReportRoutes:     config.Routes != nil,
 		Prometheus:       promMgr,
-		ServiceName:      config.ServiceName,
-		ServiceNamespace: config.ServiceNamespace,
 		ChannelBufferLen: config.ChannelBufferLen,
 		K8sDecoration:    config.Kubernetes.Enabled(),
 	}

@@ -21,6 +21,7 @@ func (dc DefinitionCriteria) Validate() error {
 			return fmt.Errorf("attribute [%d] should define at least the open_ports or exe_path_regexp property", i)
 		}
 	}
+	return nil
 }
 
 // Attributes that specify a given instrumented service.
@@ -39,6 +40,10 @@ type Attributes struct {
 	Path PathRegexp `yaml:"exe_path_regexp"`
 }
 
+// PortEnum defines an enumeration of ports. It allows defining a set of single ports as well a set of
+// port ranges. When unmarshalled from text, it accepts a comma-separated
+// list of port numbers (e.g. 80) and port ranges (e.g. 8080-8089). For example, this would be a valid
+// port range: 80,443,8000-8999
 type PortEnum struct {
 	ranges []portRange
 }
@@ -64,10 +69,15 @@ func (p *PortEnum) UnmarshalYAML(value *yaml.Node) error {
 	if value.Kind != yaml.ScalarNode {
 		return fmt.Errorf("PortEnum: unexpected YAML node kind %d", value.Kind)
 	}
-	if !validPortEnum.MatchString(value.Value) {
-		return fmt.Errorf("invalid port range %q. Must be a comma-separated list of numeric ports or port ranges (e.g. 8000-8999)", value.Value)
+	return p.UnmarshalText([]byte(value.Value))
+}
+
+func (p *PortEnum) UnmarshalText(text []byte) error {
+	val := string(text)
+	if !validPortEnum.MatchString(val) {
+		return fmt.Errorf("invalid port range %q. Must be a comma-separated list of numeric ports or port ranges (e.g. 8000-8999)", val)
 	}
-	for _, entry := range strings.Split(value.Value, ",") {
+	for _, entry := range strings.Split(val, ",") {
 		e := portRange{}
 		ports := strings.Split(entry, "-")
 		// don't need to check integer parsing, as we already did it via regular expression
@@ -90,8 +100,13 @@ func (p *PortEnum) Matches(port int) bool {
 	return false
 }
 
+// PathRegexp stores a regular expression representing an executable file path.
 type PathRegexp struct {
 	re *regexp.Regexp
+}
+
+func (p *PathRegexp) IsSet() bool {
+	return p.re != nil
 }
 
 func (p *PathRegexp) UnmarshalYAML(value *yaml.Node) error {
@@ -106,6 +121,19 @@ func (p *PathRegexp) UnmarshalYAML(value *yaml.Node) error {
 	return nil
 }
 
+func (p *PathRegexp) UnmarshalText(text []byte) error {
+	re, err := regexp.Compile(string(text))
+	if err != nil {
+		return fmt.Errorf("invalid regular expression %q: %w", string(text), err)
+	}
+	p.re = re
+	return nil
+}
+
 func (p *PathRegexp) MatchString(input string) bool {
+	// no regexp means "empty regexp", so anything will match it
+	if p.re == nil {
+		return true
+	}
 	return p.re.MatchString(input)
 }

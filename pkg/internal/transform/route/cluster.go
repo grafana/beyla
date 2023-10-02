@@ -4,16 +4,18 @@ import (
 	"embed"
 	"encoding/json"
 	"fmt"
-	"strings"
 
 	"github.com/AlessandroPomponio/go-gibberish/gibberish"
 	"github.com/AlessandroPomponio/go-gibberish/structs"
+	lru "github.com/hashicorp/golang-lru/v2"
 )
 
 var classifier *structs.GibberishData
 
 const maxSegments = 10
 const maxPartSize = 25
+
+var words, _ = lru.New[string, bool](8192)
 
 //go:embed classifier.json
 var dataFile embed.FS
@@ -48,21 +50,24 @@ func ClusterPath(path string) string {
 		return path
 	}
 
-	pArr := []byte(path)
-	var sb strings.Builder
+	p := []byte(path)
+	sPos := 0
+	sFwd := 0
 
-	tmp := make([]byte, maxPartSize)
-	tmpPos := 0
 	skip := false
 	nSegments := 0
-	for _, c := range pArr {
+	for _, c := range p {
 		if c == '/' {
 			nSegments++
 			if skip {
-				sb.WriteByte('*')
-			} else {
-				if tmpPos > 0 {
-					segmentOrAsterisk(tmp[:tmpPos], &sb)
+				p[sPos] = '*'
+				sPos++
+			} else if sFwd > sPos {
+				if !okWord(string(p[sPos:sFwd])) {
+					p[sPos] = '*'
+					sPos++
+				} else {
+					sPos = sFwd
 				}
 			}
 
@@ -70,39 +75,45 @@ func ClusterPath(path string) string {
 				break
 			}
 
-			sb.WriteByte('/')
+			p[sPos] = '/'
+			sPos++
+			sFwd = sPos
 			skip = false
-			tmpPos = 0
 		} else if !skip {
-			tmp[tmpPos] = c
-			tmpPos++
-			if tmpPos >= maxPartSize {
-				skip = true
-			}
+			p[sFwd] = c
+			sFwd++
 			if !isAlpha(c) {
 				skip = true
 			}
-
 		}
 	}
 
 	if skip {
-		sb.WriteByte('*')
-	} else {
-		segmentOrAsterisk(tmp[:tmpPos], &sb)
-	}
-
-	return sb.String()
-}
-
-func segmentOrAsterisk(tmp []byte, sb *strings.Builder) {
-	if len(tmp) > 0 {
-		if !gibberish.IsGibberish(string(tmp), classifier) {
-			sb.Write(tmp)
+		p[sPos] = '*'
+		sPos++
+	} else if sFwd > sPos {
+		if !okWord(string(p[sPos:sFwd])) {
+			p[sPos] = '*'
+			sPos++
 		} else {
-			sb.WriteByte('*')
+			sPos = sFwd
 		}
 	}
+
+	return string(p[:sPos])
+}
+
+func okWord(w string) bool {
+	_, ok := words.Get(w)
+	if ok {
+		return ok
+	}
+	if gibberish.IsGibberish(w, classifier) {
+		return false
+	}
+
+	words.Add(w, true)
+	return true
 }
 
 func isAlpha(c byte) bool {

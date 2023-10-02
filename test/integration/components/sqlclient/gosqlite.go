@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"fmt"
+	"net/http"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -33,8 +34,7 @@ func main() {
 	_, e = db.Exec(insertStudent, "Alice", 2)
 	CheckError(e)
 
-	// Do queries for >5 seconds (it may take Beyla that long to find this process)
-	for i := 1; i < 10; i++ {
+	http.HandleFunc("/sqltest", func(w http.ResponseWriter, r *http.Request) {
 		rows, e := db.Query("SELECT * FROM students")
 		CheckError(e)
 		defer rows.Close()
@@ -46,7 +46,9 @@ func main() {
 			fmt.Println("name: ", name, " id: ", id)
 		}
 		time.Sleep(1 * time.Second)
-	}
+	})
+	err = http.ListenAndServe(":8080", nil)
+	CheckError(err)
 }
 
 func CheckError(err error) {

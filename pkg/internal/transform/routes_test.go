@@ -104,3 +104,35 @@ func TestUnmatchedAuto(t *testing.T) {
 		})
 	}
 }
+
+func BenchmarkRoutesProvider_Wildcard(b *testing.B) {
+	benchProvider(b, UnmatchWildcard)
+}
+
+func BenchmarkRoutesProvider_Heuristic(b *testing.B) {
+	benchProvider(b, UnmatchAuto)
+}
+
+func benchProvider(b *testing.B, unmatch UnmatchType) {
+	router, err := RoutesProvider(&RoutesConfig{Unmatch: unmatch, Patterns: []string{
+		"/users/{id}",
+		"/users/{id}/product/{pid}",
+	}})
+	if err != nil {
+		b.Fatal(err)
+	}
+	inCh, outCh := make(chan []request.Span, 10), make(chan []request.Span, 10)
+	// 40% of unmatched routes
+	benchmarkInput := []request.Span{
+		{Type: request.EventTypeHTTP, Path: "/users/123"},
+		{Type: request.EventTypeHTTP, Path: "/users/123/product/456"},
+		{Type: request.EventTypeHTTP, Path: "/users"},
+		{Type: request.EventTypeHTTP, Path: "/products/34322"},
+		{Type: request.EventTypeHTTP, Path: "/users/123/delete"},
+	}
+	go router(inCh, outCh)
+	for i := 0; i < b.N; i++ {
+		inCh <- benchmarkInput
+		<-outCh
+	}
+}

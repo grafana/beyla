@@ -13,7 +13,6 @@ import (
 var classifier *structs.GibberishData
 
 const maxSegments = 10
-const maxPartSize = 25
 
 var words, _ = lru.New[string, bool](8192)
 
@@ -45,6 +44,7 @@ func InitAutoClassifier() error {
 	return nil
 }
 
+//nolint:cyclop
 func ClusterPath(path string) string {
 	if path == "" {
 		return path

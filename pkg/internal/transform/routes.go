@@ -20,10 +20,10 @@ const (
 	UnmatchPath = UnmatchType("path")
 	// UnmatchWildcard sets the route field to a generic asterisk symbol
 	UnmatchWildcard = UnmatchType("wildcard")
-	// UnmatchAuto detects the route field using a heuristic
-	UnmatchAuto = UnmatchType("auto")
+	// UnmatchHeuristic detects the route field using a heuristic
+	UnmatchHeuristic = UnmatchType("auto")
 
-	UnmatchDefault = UnmatchAuto
+	UnmatchDefault = UnmatchHeuristic
 )
 
 const wildCard = "/**"
@@ -46,7 +46,7 @@ func RoutesProvider(rc *RoutesConfig) (node.MiddleFunc[[]request.Span, []request
 		unmatchAction = leaveUnmatchEmpty
 	case UnmatchPath:
 		unmatchAction = setUnmatchToPath
-	case UnmatchAuto, "": // default
+	case UnmatchHeuristic, "": // default
 		err := route.InitAutoClassifier()
 		if err != nil {
 			return nil, err

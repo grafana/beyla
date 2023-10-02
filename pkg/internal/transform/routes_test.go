@@ -71,7 +71,7 @@ func TestUnmatchedEmpty(t *testing.T) {
 }
 
 func TestUnmatchedAuto(t *testing.T) {
-	for _, tc := range []UnmatchType{"", UnmatchAuto} {
+	for _, tc := range []UnmatchType{"", UnmatchHeuristic} {
 		t.Run(string(tc), func(t *testing.T) {
 			router, err := RoutesProvider(&RoutesConfig{Unmatch: tc, Patterns: []string{"/user/:id"}})
 			require.NoError(t, err)
@@ -110,7 +110,7 @@ func BenchmarkRoutesProvider_Wildcard(b *testing.B) {
 }
 
 func BenchmarkRoutesProvider_Heuristic(b *testing.B) {
-	benchProvider(b, UnmatchAuto)
+	benchProvider(b, UnmatchHeuristic)
 }
 
 func benchProvider(b *testing.B, unmatch UnmatchType) {

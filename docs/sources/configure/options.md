@@ -59,11 +59,11 @@ whole Beyla configuration:
 | ----------------- | ----------------- | ------ | ------- |
 | `executable_name` | `EXECUTABLE_NAME` | string | (unset) |
 
-Selects the process to instrument by the executable name path. The tool will match
-this value as a suffix on the full executable command line, including the directory
+Selects the process to instrument by the executable name path. This property accepts
+a regular expression to be matched againts the full executable command line, including the directory
 where the executable resides on the file system.
 
-This property will be ignored if the `open_port` property is set.
+If the `open_port` property is set, the executable to be selected needs to match both properties.
 
 When instrumenting by using the executable name, choose a non-ambiguous name, a name that
 will match a single executable on the target system.
@@ -83,9 +83,18 @@ or just `EXECUTABLE_NAME=/server`.
 | ----------- | ----------- | ------ | ------- |
 | `open_port` | `OPEN_PORT` | string | (unset) |
 
-Selects the process to instrument by the port it has open (listens to).
+Selects the process to instrument by the port it has open (listens to). This property
+accepts a comma-separated list of ports (for example, `80`), and port ranges (for example, `8000-8999`).
+If the executable matching only one of the ports in the list, it is considered to match
+the selection criteria.
 
-This property takes precedence over the `executable_name` property.
+For example, specifying the following property:
+```
+open_port: 80,443,8000-8999
+```
+Would make Beyla to select any executable that opens port 80, 443, or any of the ports between 8000 and 8999 included. 
+
+If the `executable_name` property is set, the executable to be selected needs to match both properties.
 
 If an executable opens multiple ports, only one of the ports needs to be specified
 for Beyla **to instrument all the

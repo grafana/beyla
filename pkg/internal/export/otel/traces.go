@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"log/slog"
 	"net/url"
 	"os"
 	"strings"
@@ -12,13 +13,13 @@ import (
 	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/mariomac/pipes/pkg/node"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	"go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
 	trace2 "go.opentelemetry.io/otel/trace"
-	"golang.org/x/exp/slog"
 
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
@@ -73,7 +74,26 @@ func (m *TracesConfig) GetProtocol() Protocol {
 	if m.TracesProtocol != "" {
 		return m.TracesProtocol
 	}
-	return m.Protocol
+	if m.Protocol != "" {
+		return m.Protocol
+	}
+	return m.GuessProtocol()
+}
+
+func (m *TracesConfig) GuessProtocol() Protocol {
+	// If no explicit protocol is set, we guess it it from the metrics enpdoint port
+	// (assuming it uses a standard port or a development-like form like 14317, 24317, 14318...)
+	ep, _, err := parseTracesEndpoint(m)
+	if err == nil {
+		if strings.HasSuffix(ep.Port(), UsualPortGRPC) {
+			return ProtocolGRPC
+		} else if strings.HasSuffix(ep.Port(), UsualPortHTTP) {
+			return ProtocolHTTPProtobuf
+		}
+	}
+	// Otherwise we return default protocol according to the latest specification:
+	// https://github.com/open-telemetry/opentelemetry-specification/blob/main/specification/protocol/exporter.md?plain=1#L53
+	return ProtocolHTTPProtobuf
 }
 
 // TracesReporter implement the graph node that receives request.Span
@@ -209,6 +229,54 @@ func (r *TracesReporter) close() {
 	if err := r.traceExporter.Shutdown(r.ctx); err != nil {
 		log.Error("closing traces exporter", err)
 	}
+}
+
+// https://opentelemetry.io/docs/specs/otel/trace/semantic_conventions/http/#status
+func httpSpanStatusCode(span *request.Span) codes.Code {
+	if span.Status < 400 {
+		return codes.Unset
+	}
+
+	if span.Status < 500 {
+		if span.Type == request.EventTypeHTTPClient {
+			return codes.Error
+		}
+		return codes.Unset
+	}
+
+	return codes.Error
+}
+
+// https://opentelemetry.io/docs/specs/otel/trace/semantic_conventions/rpc/#grpc-status
+func grpcSpanStatusCode(span *request.Span) codes.Code {
+	if span.Type == request.EventTypeGRPCClient {
+		if span.Status == int(semconv.RPCGRPCStatusCodeOk.Value.AsInt64()) {
+			return codes.Unset
+		}
+		return codes.Error
+	}
+
+	switch int64(span.Status) {
+	case semconv.RPCGRPCStatusCodeUnknown.Value.AsInt64(),
+		semconv.RPCGRPCStatusCodeDeadlineExceeded.Value.AsInt64(),
+		semconv.RPCGRPCStatusCodeUnimplemented.Value.AsInt64(),
+		semconv.RPCGRPCStatusCodeInternal.Value.AsInt64(),
+		semconv.RPCGRPCStatusCodeUnavailable.Value.AsInt64(),
+		semconv.RPCGRPCStatusCodeDataLoss.Value.AsInt64():
+		return codes.Error
+	}
+
+	return codes.Unset
+}
+
+func spanStatusCode(span *request.Span) codes.Code {
+	switch span.Type {
+	case request.EventTypeHTTP, request.EventTypeHTTPClient:
+		return httpSpanStatusCode(span)
+	case request.EventTypeGRPC, request.EventTypeGRPCClient:
+		return grpcSpanStatusCode(span)
+	}
+	return codes.Unset
 }
 
 func (r *TracesReporter) traceAttributes(span *request.Span) []attribute.KeyValue {
@@ -347,6 +415,8 @@ func (r *TracesReporter) makeSpan(parentCtx context.Context, tracer trace2.Trace
 		trace2.WithSpanKind(spanKind(span)),
 		trace2.WithAttributes(r.traceAttributes(span)...),
 	)
+
+	sp.SetStatus(spanStatusCode(span), "")
 
 	if span.RequestStart != span.Start {
 		var spP trace2.Span
@@ -567,5 +637,8 @@ func setTracesProtocol(cfg *TracesConfig) {
 	}
 	if cfg.Protocol != "" {
 		os.Setenv(envProtocol, string(cfg.Protocol))
+		return
 	}
+	// unset. Guessing it
+	os.Setenv(envTracesProtocol, string(cfg.GuessProtocol()))
 }

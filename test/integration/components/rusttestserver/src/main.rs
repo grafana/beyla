@@ -23,6 +23,10 @@ async fn smoke() -> HttpResponse {
     HttpResponse::Ok().into()
 }
 
+async fn trace() -> HttpResponse {
+    HttpResponse::Ok().into()
+}
+
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     env_logger::init_from_env(env_logger::Env::new().default_filter_or("info"));
@@ -36,6 +40,7 @@ async fn main() -> std::io::Result<()> {
             .app_data(web::JsonConfig::default().limit(800000)) // <- limit size of the payload (global configuration)
             .service(web::resource("/greeting").route(web::post().to(greeting)))
             .service(web::resource("/smoke").route(web::get().to(smoke)))
+            .service(web::resource("/trace").route(web::get().to(trace)))
     })
     .bind(("0.0.0.0", 8090))?
     .run()

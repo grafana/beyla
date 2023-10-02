@@ -3,10 +3,9 @@
 package prom
 
 import (
+	"log/slog"
 	"os"
 	"testing"
-
-	"golang.org/x/exp/slog"
 
 	"github.com/grafana/beyla/test/integration/components/docker"
 	"github.com/grafana/beyla/test/integration/components/kube"

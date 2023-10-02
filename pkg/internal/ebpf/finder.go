@@ -6,22 +6,22 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"path"
 	"strconv"
 
 	"github.com/cilium/ebpf/link"
 	"github.com/cilium/ebpf/rlimit"
-	"golang.org/x/exp/slog"
 	"golang.org/x/sys/unix"
 
-	"github.com/grafana/beyla/pkg/beyla"
 	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
 	"github.com/grafana/beyla/pkg/internal/ebpf/goruntime"
 	"github.com/grafana/beyla/pkg/internal/ebpf/grpc"
 	"github.com/grafana/beyla/pkg/internal/ebpf/httpfltr"
 	"github.com/grafana/beyla/pkg/internal/ebpf/nethttp"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
+	"github.com/grafana/beyla/pkg/internal/pipe"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 )
 
@@ -32,7 +32,7 @@ func pflog() *slog.Logger {
 // ProcessFinder continuously listens in background for a process matching the
 // search criteria as specified to the user.
 type ProcessFinder struct {
-	Cfg     *beyla.Config
+	Cfg     *pipe.Config
 	Metrics imetrics.Reporter
 	CtxInfo *global.ContextInfo
 
@@ -121,7 +121,7 @@ func (pf *ProcessFinder) findAndInstrument(ctx context.Context, metrics imetrics
 	// merging all the functions from all the programs, in order to do
 	// a complete inspection of the target executable
 	var allFuncs []string
-	if !pf.Cfg.EBPF.SkipGoSpecificTracers {
+	if !pf.Cfg.SkipGoSpecificTracers {
 		allFuncs = allGoFunctionNames(programs)
 	}
 	elfInfo, goffsets, err := inspect(ctx, pf.Cfg, allFuncs)

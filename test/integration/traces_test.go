@@ -3,6 +3,7 @@
 package integration
 
 import (
+	"fmt"
 	"net/http"
 	"strings"
 	"testing"
@@ -18,14 +19,14 @@ import (
 )
 
 func testHTTPTracesNoTraceID(t *testing.T) {
-	testHTTPTracesCommon(t, false)
+	testHTTPTracesCommon(t, false, 200)
 }
 
 func testHTTPTraces(t *testing.T) {
-	testHTTPTracesCommon(t, true)
+	testHTTPTracesCommon(t, true, 500)
 }
 
-func testHTTPTracesCommon(t *testing.T, doTraceID bool) {
+func testHTTPTracesCommon(t *testing.T, doTraceID bool, httpCode int) {
 	var traceID string
 	var parentID string
 
@@ -36,9 +37,9 @@ func testHTTPTracesCommon(t *testing.T, doTraceID bool) {
 		traceID = createTraceID()
 		parentID = createParentID()
 		traceparent := createTraceparent(traceID, parentID)
-		doHTTPGetWithTraceparent(t, instrumentedServiceStdURL+"/"+slug+"?delay=10ms", 200, traceparent)
+		doHTTPGetWithTraceparent(t, fmt.Sprintf("%s/%s?delay=10ms&status=%d", instrumentedServiceStdURL, slug, httpCode), httpCode, traceparent)
 	} else {
-		doHTTPGet(t, instrumentedServiceStdURL+"/"+slug+"?delay=10ms", 200)
+		doHTTPGet(t, fmt.Sprintf("%s/%s?delay=10ms&status=%d", instrumentedServiceStdURL, slug, httpCode), httpCode)
 	}
 
 	var trace jaeger.Trace
@@ -74,12 +75,18 @@ func testHTTPTracesCommon(t *testing.T, doTraceID bool) {
 	assert.Truef(t, parent.AllMatches(
 		jaeger.Tag{Key: "otel.library.name", Type: "string", Value: "github.com/grafana/beyla"},
 		jaeger.Tag{Key: "http.method", Type: "string", Value: "GET"},
-		jaeger.Tag{Key: "http.status_code", Type: "int64", Value: float64(200)},
+		jaeger.Tag{Key: "http.status_code", Type: "int64", Value: float64(httpCode)},
 		jaeger.Tag{Key: "http.target", Type: "string", Value: "/" + slug},
 		jaeger.Tag{Key: "net.host.port", Type: "int64", Value: float64(8080)},
 		jaeger.Tag{Key: "http.route", Type: "string", Value: "/" + slug},
 		jaeger.Tag{Key: "span.kind", Type: "string", Value: "server"},
 	), "not all tags matched in %+v", parent.Tags)
+
+	if httpCode >= 500 {
+		assert.Truef(t, parent.AllMatches(
+			jaeger.Tag{Key: "otel.status_code", Type: "string", Value: "ERROR"},
+		), "not all tags matched in %+v", parent.Tags)
+	}
 
 	// Check the information of the "in queue" span
 	res = trace.FindByOperationName("in queue")
@@ -328,4 +335,60 @@ func testGRPCTracesForServiceName(t *testing.T, svcName string) {
 	childSpan := childOfPID[0]
 	require.Equal(t, childSpan.TraceID, parent.TraceID)
 	require.Equal(t, childSpan.SpanID, parent.SpanID)
+}
+
+func testHTTPTracesKProbes(t *testing.T) {
+	var traceID string
+	var parentID string
+
+	// Add and check for specific trace ID
+	traceID = createTraceID()
+	parentID = createParentID()
+	traceparent := createTraceparent(traceID, parentID)
+	doHTTPGetWithTraceparent(t, "http://localhost:3031/greeting", 200, traceparent)
+
+	var trace jaeger.Trace
+	test.Eventually(t, testTimeout, func(t require.TestingT) {
+		resp, err := http.Get(jaegerQueryURL + "?service=node&operation=GET%20%2Fgreeting")
+		require.NoError(t, err)
+		if resp == nil {
+			return
+		}
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+		var tq jaeger.TracesQuery
+		require.NoError(t, json.NewDecoder(resp.Body).Decode(&tq))
+		traces := tq.FindBySpan(jaeger.Tag{Key: "http.target", Type: "string", Value: "/greeting"})
+		require.Len(t, traces, 1)
+		trace = traces[0]
+	}, test.Interval(100*time.Millisecond))
+
+	// Check the information of the parent span
+	res := trace.FindByOperationName("GET /greeting")
+	require.Len(t, res, 1)
+	parent := res[0]
+	require.NotEmpty(t, parent.TraceID)
+	require.Equal(t, traceID, parent.TraceID)
+	// Validate that "parent" is a CHILD_OF the traceparent's "parent-id"
+	childOfPID := trace.ChildrenOf(parentID)
+	require.Len(t, childOfPID, 1)
+	require.NotEmpty(t, parent.SpanID)
+	// check duration is at least 2us
+	assert.Less(t, (2 * time.Microsecond).Microseconds(), parent.Duration)
+	// check span attributes
+	assert.Truef(t, parent.AllMatches(
+		jaeger.Tag{Key: "otel.library.name", Type: "string", Value: "github.com/grafana/beyla"},
+		jaeger.Tag{Key: "http.method", Type: "string", Value: "GET"},
+		jaeger.Tag{Key: "http.status_code", Type: "int64", Value: float64(200)},
+		jaeger.Tag{Key: "http.target", Type: "string", Value: "/greeting"},
+		jaeger.Tag{Key: "net.host.port", Type: "int64", Value: float64(3030)},
+		jaeger.Tag{Key: "http.route", Type: "string", Value: "/greeting"},
+		jaeger.Tag{Key: "span.kind", Type: "string", Value: "server"},
+	), "not all tags matched in %+v", parent.Tags)
+
+	process := trace.Processes[parent.ProcessID]
+	assert.Equal(t, "node", process.ServiceName)
+	assert.Truef(t, jaeger.AllMatches(process.Tags, []jaeger.Tag{
+		{Key: "telemetry.sdk.language", Type: "string", Value: "go"},
+		{Key: "service.namespace", Type: "string", Value: "integration-test"},
+	}), "not all tags matched in %+v", process.Tags)
 }

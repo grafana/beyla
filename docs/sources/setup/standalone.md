@@ -58,8 +58,7 @@ The equivalent execution, but configured via a YAML file would look like:
 
 ```yaml
 cat > config.yml <<EOF
-ebpf:
-  open_port: 443
+open_port: 443
 prometheus_export:
   port: 8999
 EOF

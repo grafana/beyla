@@ -1,5 +1,5 @@
 # Build the autoinstrumenter binary
-FROM golang:1.20 as builder
+FROM golang:1.21 as builder
 
 # TODO: embed software version in executable
 

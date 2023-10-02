@@ -21,11 +21,11 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"log/slog"
 	"math/rand"
 	"os"
 	"time"
 
-	"golang.org/x/exp/slog"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
@@ -206,10 +206,9 @@ func main() {
 		}
 	}
 
-	ho := slog.HandlerOptions{
+	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
 		Level: lvl,
-	}
-	slog.SetDefault(slog.New(ho.NewTextHandler(os.Stderr)))
+	})))
 
 	flag.Parse()
 	var opts []grpc.DialOption

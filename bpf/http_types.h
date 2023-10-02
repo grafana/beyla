@@ -7,20 +7,24 @@
 
 #define FULL_BUF_SIZE 160 // should be enough for most URLs, we may need to extend it if not. Must be multiple of 16 for the copy to work.
 #define BUF_COPY_BLOCK_SIZE 16
+#define TRACE_BUF_SIZE 1024 // must be power of 2, we do an & to limit the buffer size
+
+#define CONN_INFO_FLAG_TRACE 0x1
 
 // Struct to keep information on the connections in flight 
 // s = source, d = destination
 // h = high word, l = low word
 // used as hashmap key, must be 4 byte aligned?
 typedef struct http_connection_info {
-    u8 s_addr[IP_V6_ADDR_LEN];
-    u8 d_addr[IP_V6_ADDR_LEN];
+    u8  s_addr[IP_V6_ADDR_LEN];
+    u8  d_addr[IP_V6_ADDR_LEN];
     u16 s_port;
     u16 d_port;
 } connection_info_t;
 
 // Here we keep the information that is sent on the ring buffer
 typedef struct http_info {
+    u64 flags; // Must be fist we use it to tell what kind of packet we have on the ring buffer
     connection_info_t conn_info;
     u64 start_monotime_ns;
     u64 end_monotime_ns;
@@ -28,7 +32,8 @@ typedef struct http_info {
     u32 pid; // we need this for system wide tracking so we can find the service name
     u32 len;
     u16 status;    
-    u8 type;
+    u8  type;
+    u8  ssl;
 } http_info_t;
 
 // Here we keep information on the packets passing through the socket filter
@@ -44,8 +49,15 @@ typedef struct http_connection_metadata {
     u8  type;
 } http_connection_metadata_t;
 
+typedef struct http_buf {
+    u64 flags; // Must be fist we use it to tell what kind of packet we have on the ring buffer
+    connection_info_t conn_info;
+    u8  buf[TRACE_BUF_SIZE];
+} http_buf_t;
+
 // Force emitting struct http_request_trace into the ELF for automatic creation of Golang struct
 const http_info_t *unused __attribute__((unused));
+const http_buf_t *unused_1 __attribute__((unused));
 
 const u8 ip4ip6_prefix[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff};
 
@@ -103,6 +115,10 @@ static __always_inline void sort_connection_info(connection_info_t *info) {
         __builtin_memcpy(info->s_addr, info->d_addr, sizeof(info->s_addr));
         __builtin_memcpy(info->d_addr, tmp_addr, sizeof(info->d_addr));
     }
+}
+
+static __always_inline bool client_call(connection_info_t *info) {
+    return likely_ephemeral_port(info->s_port) && !likely_ephemeral_port(info->d_port);
 }
 
 #endif

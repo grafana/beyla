@@ -5,10 +5,15 @@ import (
 	"debug/gosym"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
-
-	"golang.org/x/exp/slog"
 )
+
+type sym struct {
+	off  uint64
+	len  uint64
+	prog *elf.Prog
+}
 
 // instrumentationPoints loads the provided executable and looks for the addresses
 // where the start and return probes must be inserted.
@@ -24,6 +29,19 @@ func instrumentationPoints(elfF *elf.File, funcNames []string) (map[string]FuncO
 		return nil, err
 	}
 
+	gosyms := elfF.Section(".gosymtab")
+
+	var allSyms map[string]sym
+
+	// no go symbols in the executable, maybe it's statically linked
+	// find regular elf symbols
+	if gosyms == nil {
+		allSyms, err = findExeSymbols(elfF)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	// check which functions in the symbol table correspond to any of the functions
 	// that we are looking for, and find their offsets
 	allOffsets := map[string]FuncOffsets{}
@@ -35,6 +53,14 @@ func instrumentationPoints(elfF *elf.File, funcNames []string) (map[string]FuncO
 		}
 
 		if _, ok := functions[fName]; ok {
+			// when we don't have a Go symbol table, the executable is statically linked, we don't look for offsets
+			// using the gosym tab, we lookup offsets just like a regular elf file.
+			// we still need to find the return statements, since go linkage is non-standard we can't use uretprobe
+			if gosyms == nil {
+				handleStaticSymbol(fName, allOffsets, allSyms, ilog)
+				continue
+			}
+
 			offs, ok, err := findFuncOffset(&f, elfF)
 			if err != nil {
 				return nil, err
@@ -47,6 +73,28 @@ func instrumentationPoints(elfF *elf.File, funcNames []string) (map[string]FuncO
 	}
 
 	return allOffsets, nil
+}
+
+func handleStaticSymbol(fName string, allOffsets map[string]FuncOffsets, allSyms map[string]sym, ilog *slog.Logger) {
+	s, ok := allSyms[fName]
+
+	if ok && s.prog != nil {
+		data := make([]byte, s.len)
+		_, err := s.prog.ReadAt(data, int64(s.off-s.prog.Off))
+		if err != nil {
+			ilog.Error("error reading instructions for symbol", "symbol", fName, "error", err)
+			return
+		}
+
+		returns, err := findReturnOffssets(s.off, data)
+		if err != nil {
+			ilog.Error("error finding returns for symbol", "symbol", fName, "offset", s.off-s.prog.Off, "size", s.len, "error", err)
+			return
+		}
+		allOffsets[fName] = FuncOffsets{Start: s.off, Returns: returns}
+	} else {
+		ilog.Debug("can't find in elf symbol table", "symbol", fName, "ok", ok, "prog", s.prog)
+	}
 }
 
 // findFuncOffset gets the start address and end addresses of the function whose symbol is passed
@@ -73,7 +121,6 @@ func findFuncOffset(f *gosym.Func, elfF *elf.File) (FuncOffsets, bool, error) {
 			}
 			return FuncOffsets{Start: off, Returns: returns}, true, nil
 		}
-
 	}
 
 	return FuncOffsets{}, false, nil
@@ -88,18 +135,54 @@ func findGoSymbolTable(elfF *elf.File) (*gosym.Table, error) {
 			return nil, fmt.Errorf("acquiring .gopclntab data: %w", err)
 		}
 	}
-	sec := elfF.Section(".gosymtab")
-	if sec == nil {
-		return nil, errors.New(".gosymtab section not found in target binary, make sure this is a Go application")
-	}
-	symTabRaw, err := sec.Data()
-	if err != nil {
-		return nil, fmt.Errorf("acquiring .gosymtab data: %w", err)
-	}
 	pcln := gosym.NewLineTable(pclndat, elfF.Section(".text").Addr)
-	symTab, err := gosym.NewTable(symTabRaw, pcln)
+	// First argument accepts the .gosymtab ELF section.
+	// Since Go 1.3, .gosymtab is empty so we just pass an nil slice
+	symTab, err := gosym.NewTable(nil, pcln)
 	if err != nil {
-		return nil, fmt.Errorf("decoding .gosymtab: %w", err)
+		return nil, fmt.Errorf("creating go symbol table: %w", err)
 	}
 	return symTab, nil
+}
+
+func findExeSymbols(f *elf.File) (map[string]sym, error) {
+	addresses := map[string]sym{}
+	syms, err := f.Symbols()
+	if err != nil && !errors.Is(err, elf.ErrNoSymbols) {
+		return nil, err
+	}
+
+	dynsyms, err := f.DynamicSymbols()
+	if err != nil && !errors.Is(err, elf.ErrNoSymbols) {
+		return nil, err
+	}
+
+	syms = append(syms, dynsyms...)
+
+	for _, s := range syms {
+		if elf.ST_TYPE(s.Info) != elf.STT_FUNC {
+			// Symbol not associated with a function or other executable code.
+			continue
+		}
+
+		address := s.Value
+		var p *elf.Prog
+
+		// Loop over ELF segments.
+		for _, prog := range f.Progs {
+			// Skip uninteresting segments.
+			if prog.Type != elf.PT_LOAD || (prog.Flags&elf.PF_X) == 0 {
+				continue
+			}
+
+			if prog.Vaddr <= s.Value && s.Value < (prog.Vaddr+prog.Memsz) {
+				address = s.Value - prog.Vaddr + prog.Off
+				p = prog
+				break
+			}
+		}
+		addresses[s.Name] = sym{off: address, len: s.Size, prog: p}
+	}
+
+	return addresses, nil
 }

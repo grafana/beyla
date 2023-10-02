@@ -7,13 +7,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"strings"
 	"time"
 
 	"github.com/shirou/gopsutil/net"
 	"github.com/shirou/gopsutil/process"
-	"golang.org/x/exp/slog"
 )
 
 // TODO: user-configurable

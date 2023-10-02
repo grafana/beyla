@@ -5,10 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
-
-	"golang.org/x/exp/slog"
 )
 
 var log = slog.With("component", "prom.Client")

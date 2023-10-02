@@ -7,18 +7,19 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"reflect"
 	"strings"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
-	"golang.org/x/exp/slog"
 	"golang.org/x/sys/unix"
 
 	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
 	"github.com/grafana/beyla/pkg/internal/exec"
 	"github.com/grafana/beyla/pkg/internal/goexec"
+	"github.com/grafana/beyla/pkg/internal/pipe"
 	"github.com/grafana/beyla/pkg/internal/request"
 )
 
@@ -190,7 +191,7 @@ func allGoFunctionNames(programs []Tracer) []string {
 	return functions
 }
 
-func inspect(ctx context.Context, cfg *ebpfcommon.TracerConfig, functions []string) (*exec.FileInfo, *goexec.Offsets, error) {
+func inspect(ctx context.Context, cfg *pipe.Config, functions []string) (*exec.FileInfo, *goexec.Offsets, error) {
 	// Finding the process by port is more complex, it needs to skip proxies
 	if cfg.Port != 0 {
 		return inspectByPort(ctx, cfg, functions)
@@ -208,15 +209,15 @@ func inspect(ctx context.Context, cfg *ebpfcommon.TracerConfig, functions []stri
 	// when we look by executable name we pick the first one, we look at all processes only when we pick by port to avoid proxies
 	execElf := elfs[0]
 	var offsets *goexec.Offsets
-
+	log := logger()
 	if !cfg.SystemWide {
 		if cfg.SkipGoSpecificTracers {
-			logger().Info("Skipping inspection for Go functions. Using only generic instrumentation.", "pid", execElf.Pid, "comm", execElf.CmdExePath)
+			log.Debug("Skipping inspection for Go functions. Using only generic instrumentation.", "pid", execElf.Pid, "comm", execElf.CmdExePath)
 		} else {
-			logger().Info("inspecting", "pid", execElf.Pid, "comm", execElf.CmdExePath)
+			log.Debug("inspecting", "pid", execElf.Pid, "comm", execElf.CmdExePath)
 			offsets, err = goexec.InspectOffsets(&execElf, functions)
 			if err != nil {
-				logger().Info("Go HTTP/gRPC support not detected. Using only generic instrumentation.", "error", err)
+				log.Debug("Go HTTP/gRPC support not detected. Using only generic instrumentation.", "error", err)
 			}
 		}
 	}
@@ -224,7 +225,19 @@ func inspect(ctx context.Context, cfg *ebpfcommon.TracerConfig, functions []stri
 	return &execElf, offsets, nil
 }
 
-func inspectByPort(ctx context.Context, cfg *ebpfcommon.TracerConfig, functions []string) (*exec.FileInfo, *goexec.Offsets, error) {
+func isGoProxy(offsets *goexec.Offsets) bool {
+	for f := range offsets.Funcs {
+		// if we find anything of interest other than the Go runtime, we consider this a valid application
+		if !strings.HasPrefix(f, "runtime.") {
+			return false
+		}
+	}
+
+	return true
+}
+
+func inspectByPort(ctx context.Context, cfg *pipe.Config, functions []string) (*exec.FileInfo, *goexec.Offsets, error) {
+	log := logger()
 	finder := exec.OwnedPort(cfg.Port)
 
 	elfs, err := exec.FindExecELF(ctx, finder)
@@ -243,31 +256,29 @@ func inspectByPort(ctx context.Context, cfg *ebpfcommon.TracerConfig, functions 
 	// look for suitable Go application first
 	for _, execElf := range elfs {
 		var offsets *goexec.Offsets
-		var err error
 
 		if cfg.SkipGoSpecificTracers {
-			logger().Info("skipping inspection for Go functions", "pid", execElf.Pid, "comm", execElf.CmdExePath)
+			log.Debug("skipping inspection for Go functions", "pid", execElf.Pid, "comm", execElf.CmdExePath)
 		} else {
-			logger().Info("inspecting", "pid", execElf.Pid, "comm", execElf.CmdExePath)
-			offsets, err = goexec.InspectOffsets(&execElf, functions)
+			log.Debug("inspecting", "pid", execElf.Pid, "comm", execElf.CmdExePath)
+			if offsets, err = goexec.InspectOffsets(&execElf, functions); err != nil {
+				log.Debug("couldn't find go specific tracers", "error", err)
+			}
 		}
 
-		if cfg.SkipGoSpecificTracers || err != nil {
+		if cfg.SkipGoSpecificTracers || offsets == nil {
 			fallBackInfos = append(fallBackInfos, execElf)
 			pidMap[execElf.Pid] = execElf
-			logger().Info("adding fall-back generic executable", "pid", execElf.Pid, "comm", execElf.CmdExePath)
+			log.Debug("adding fall-back generic executable", "pid", execElf.Pid, "comm", execElf.CmdExePath)
 			continue
 		}
 
 		// we found go offsets, let's see if this application is not a proxy
-		for f := range offsets.Funcs {
-			// if we find anything of interest other than the Go runtime, we consider this a valid application
-			if !strings.HasPrefix(f, "runtime.") {
-				return &execElf, offsets, nil
-			}
+		if !isGoProxy(offsets) {
+			return &execElf, offsets, nil
 		}
 
-		logger().Info("ignoring Go proxy for now", "pid", execElf.Pid, "comm", execElf.CmdExePath)
+		log.Debug("ignoring Go proxy for now", "pid", execElf.Pid, "comm", execElf.CmdExePath)
 		goProxies = append(goProxies, execElf)
 		pidMap[execElf.Pid] = execElf
 	}

@@ -5,6 +5,7 @@ FROM golang:1.21 as builder
 ARG TARGETARCH
 
 ENV GOARCH=$TARGETARCH
+ENV CGO_ENABLED=1
 
 WORKDIR /src
 
@@ -14,12 +15,12 @@ COPY test/ test/
 COPY go.mod go.mod
 COPY go.sum go.sum
 
-# Build
-RUN go build -o testserver ./test/integration/components/testserver/testserver.go
+# Build/link statically with CGO, external static linking
+RUN go build -tags -a -ldflags '-linkmode external -extldflags "-static"' -o testserver ./test/integration/components/testserver/testserver.go
 
 # Create final image from minimal + built binary
 #TODO: use minimal image
-FROM ubuntu:latest
+FROM debian:12
 
 WORKDIR /
 COPY --from=builder /src/testserver .

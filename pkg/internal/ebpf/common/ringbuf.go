@@ -4,12 +4,12 @@ import (
 	"context"
 	"errors"
 	"io"
+	"log/slog"
 	"sync"
 	"time"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/ringbuf"
-	"golang.org/x/exp/slog"
 
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/request"
@@ -38,7 +38,7 @@ type ringBufForwarder[T any] struct {
 	spansLen   int
 	access     sync.Mutex
 	ticker     *time.Ticker
-	reader     func(*ringbuf.Record) (request.Span, error)
+	reader     func(*ringbuf.Record) (request.Span, bool, error)
 	metrics    imetrics.Reporter
 }
 
@@ -50,7 +50,7 @@ func ForwardRingbuf[T any](
 	cfg *TracerConfig,
 	logger *slog.Logger,
 	ringbuffer *ebpf.Map,
-	reader func(*ringbuf.Record) (request.Span, error),
+	reader func(*ringbuf.Record) (request.Span, bool, error),
 	metrics imetrics.Reporter,
 	closers ...io.Closer,
 ) func(context.Context, chan<- []request.Span) {
@@ -105,12 +105,17 @@ func (rbf *ringBufForwarder[T]) readAndForward(ctx context.Context, spansChan ch
 			continue
 		}
 		rbf.access.Lock()
-		rbf.spans[rbf.spansLen], err = rbf.reader(&record)
+		s, ignore, err := rbf.reader(&record)
 		if err != nil {
 			rbf.logger.Error("error parsing perf event", err)
 			rbf.access.Unlock()
 			continue
 		}
+		if ignore {
+			rbf.access.Unlock()
+			continue
+		}
+		rbf.spans[rbf.spansLen] = s
 		// we need to decorate each span with the tracer's service name
 		// if this information is not forwarded from eBPF
 		if rbf.svcName != "" {

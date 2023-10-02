@@ -24,7 +24,7 @@ Beyla can export data in two modes:
 
 ![](https://grafana.com/media/docs/grafana-cloud/beyla/agent-vs-direct.png)
 
-<center><i>Beyal running in Agent mode (left) vs. Direct mode (right)</i></center>
+<center><i>Beyla running in Agent mode (left) vs. Direct mode (right)</i></center>
 
 ## Running in Direct mode
 
@@ -168,11 +168,10 @@ which we will explain in the rest of this section.
 
 First, you will need to specify the executable to instrument. If, for example,
 the service executable is a process that opens the port `443`, you can use the `open_port`
-property in the `ebpf` section of the YAML document:
+property of the YAML document:
 
 ```yaml
-ebpf:
-  open_port: 443
+open_port: 443
 ```
 
 The auto-instrumentation tool will automatically search and instrument the process

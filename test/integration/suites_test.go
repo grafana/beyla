@@ -19,11 +19,12 @@ func TestSuite(t *testing.T) {
 	t.Run("HTTP traces", testHTTPTraces)
 	t.Run("HTTP traces (no traceID)", testHTTPTracesNoTraceID)
 	t.Run("HTTP traces (bad traceparent)", testHTTPTracesBadTraceparent)
+	t.Run("HTTP traces (kprobes)", testHTTPTracesKProbes)
 	t.Run("GRPC traces", testGRPCTraces)
 	t.Run("GRPC RED metrics", testREDMetricsGRPC)
 	t.Run("Internal Prometheus metrics", testInternalPrometheusExport)
 
-	t.Run("BPF pinning folder mounted", testBPFPinningMounted)
+	t.Run("BPF pinning folder mounted", func(t *testing.T) { testBPFPinningMountedWithCount(t, 2) })
 	require.NoError(t, compose.Close())
 	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
 }
@@ -51,7 +52,24 @@ func TestSuite_NoDebugInfo(t *testing.T) {
 	t.Run("GRPC RED metrics", testREDMetricsGRPC)
 	t.Run("Internal Prometheus metrics", testInternalPrometheusExport)
 
-	t.Run("BPF pinning folder mounted", testBPFPinningMounted)
+	t.Run("BPF pinning folder mounted", func(t *testing.T) { testBPFPinningMountedWithCount(t, 2) })
+	require.NoError(t, compose.Close())
+	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
+}
+
+// Same as Test suite, but the generated test image does not contain debug information
+func TestSuite_StaticCompilation(t *testing.T) {
+	compose, err := docker.ComposeSuite("docker-compose.yml", path.Join(pathOutput, "test-suite-static.log"))
+	compose.Env = append(compose.Env, `TESTSERVER_DOCKERFILE_SUFFIX=_static`)
+	require.NoError(t, err)
+	require.NoError(t, compose.Up())
+	t.Run("RED metrics", testREDMetricsHTTP)
+	t.Run("HTTP traces", testHTTPTraces)
+	t.Run("GRPC traces", testGRPCTraces)
+	t.Run("GRPC RED metrics", testREDMetricsGRPC)
+	t.Run("Internal Prometheus metrics", testInternalPrometheusExport)
+
+	t.Run("BPF pinning folder mounted", func(t *testing.T) { testBPFPinningMountedWithCount(t, 2) })
 	require.NoError(t, compose.Close())
 	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
 }
@@ -66,7 +84,7 @@ func TestSuite_GRPCExport(t *testing.T) {
 	t.Run("trace GRPC service and export as GRPC traces", testGRPCTraces)
 	t.Run("GRPC RED metrics", testREDMetricsGRPC)
 
-	t.Run("BPF pinning folder mounted", testBPFPinningMounted)
+	t.Run("BPF pinning folder mounted", func(t *testing.T) { testBPFPinningMountedWithCount(t, 2) })
 	require.NoError(t, compose.Close())
 	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
 }
@@ -83,7 +101,7 @@ func TestSuite_OpenPort(t *testing.T) {
 	t.Run("GRPC RED metrics", testREDMetricsGRPC)
 	t.Run("Internal Prometheus metrics", testInternalPrometheusExport)
 
-	t.Run("BPF pinning folder mounted", testBPFPinningMounted)
+	t.Run("BPF pinning folder mounted", func(t *testing.T) { testBPFPinningMountedWithCount(t, 2) })
 	require.NoError(t, compose.Close())
 	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
 }
@@ -103,7 +121,7 @@ func TestSuite_PrometheusScrape(t *testing.T) {
 	t.Run("GRPC RED metrics", testREDMetricsGRPC)
 	t.Run("Internal Prometheus metrics", testInternalPrometheusExport)
 
-	t.Run("BPF pinning folder mounted", testBPFPinningMounted)
+	t.Run("BPF pinning folder mounted", func(t *testing.T) { testBPFPinningMountedWithCount(t, 2) })
 	require.NoError(t, compose.Close())
 	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
 }
@@ -296,7 +314,7 @@ func TestSuite_DisableKeepAlives(t *testing.T) {
 	// Reset to defaults for any tests run afterward
 	setHTTPClientDisableKeepAlives(false)
 
-	t.Run("BPF pinning folder mounted", testBPFPinningMounted)
+	t.Run("BPF pinning folder mounted", func(t *testing.T) { testBPFPinningMountedWithCount(t, 2) })
 	require.NoError(t, compose.Close())
 	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
 }
@@ -318,6 +336,32 @@ func TestSuite_OverrideServiceName(t *testing.T) {
 		testGRPCTracesForServiceName(t, "overridden-svc-name")
 	})
 
+	t.Run("BPF pinning folder mounted", func(t *testing.T) { testBPFPinningMountedWithCount(t, 2) })
+	require.NoError(t, compose.Close())
+	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
+}
+
+func TestSuiteNodeClient(t *testing.T) {
+	compose, err := docker.ComposeSuite("docker-compose-nodeclient.yml", path.Join(pathOutput, "test-suite-nodeclient.log"))
+	compose.Env = append(compose.Env, `EXECUTABLE_NAME=node`)
+	require.NoError(t, err)
+	require.NoError(t, compose.Up())
+	t.Run("Node Client RED metrics", func(t *testing.T) {
+		testNodeClientWithMethodAndStatusCode(t, "GET", 301, 80, "0000000000000000")
+	})
+	t.Run("BPF pinning folder mounted", testBPFPinningMounted)
+	require.NoError(t, compose.Close())
+	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
+}
+
+func TestSuiteNodeClientTLS(t *testing.T) {
+	compose, err := docker.ComposeSuite("docker-compose-nodeclient.yml", path.Join(pathOutput, "test-suite-nodeclient-tls.log"))
+	compose.Env = append(compose.Env, `EXECUTABLE_NAME=node`, `TESTS_DOCKERFILE_SUFFIX=_tls`)
+	require.NoError(t, err)
+	require.NoError(t, compose.Up())
+	t.Run("Node Client RED metrics", func(t *testing.T) {
+		testNodeClientWithMethodAndStatusCode(t, "GET", 200, 443, "0000000000000001")
+	})
 	t.Run("BPF pinning folder mounted", testBPFPinningMounted)
 	require.NoError(t, compose.Close())
 	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)

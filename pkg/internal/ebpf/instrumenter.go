@@ -6,13 +6,13 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"log/slog"
 	"syscall"
 	"unsafe"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
 	"github.com/prometheus/procfs"
-	"golang.org/x/exp/slog"
 	"golang.org/x/sys/unix"
 
 	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
@@ -26,15 +26,21 @@ type instrumenter struct {
 	closables []io.Closer
 }
 
+func ilog() *slog.Logger {
+	return slog.With("component", "ebpf.Instrumenter")
+}
+
 func (i *instrumenter) goprobes(p Tracer) error {
+	log := ilog().With("probes", "goprobes")
 	// TODO: not running program if it does not find the required probes
 	for funcName, funcPrograms := range p.GoProbes() {
 		offs, ok := i.offsets.Funcs[funcName]
 		if !ok {
 			// the program function is not in the detected offsets. Ignoring
+			log.Debug("ignoring function", "function", funcName)
 			continue
 		}
-		slog.Debug("going to instrument function", "function", funcName, "offsets", offs, "programs", funcPrograms)
+		log.Debug("going to instrument function", "function", funcName, "offsets", offs, "programs", funcPrograms)
 		if err := i.goprobe(ebpfcommon.Probe{
 			Offsets:  offs,
 			Programs: funcPrograms,
@@ -77,8 +83,9 @@ func (i *instrumenter) goprobe(probe ebpfcommon.Probe) error {
 }
 
 func (i *instrumenter) kprobes(p Tracer) error {
+	log := ilog().With("probes", "kprobes")
 	for kfunc, kprobes := range p.KProbes() {
-		slog.Debug("going to add kprobe to function", "function", kfunc, "probes", kprobes)
+		log.Debug("going to add kprobe to function", "function", kfunc, "probes", kprobes)
 
 		if err := i.kprobe(kfunc, kprobes); err != nil {
 			return fmt.Errorf("instrumenting function %q: %w", kfunc, err)
@@ -114,24 +121,24 @@ func (i *instrumenter) uprobes(pid int32, p Tracer) error {
 	if err != nil {
 		return err
 	}
-
+	log := ilog().With("probes", "uprobes")
 	if len(maps) == 0 {
-		logger().Info("didn't find any process maps, not instrumenting shared libraries", "pid", pid)
+		log.Info("didn't find any process maps, not instrumenting shared libraries", "pid", pid)
 		return nil
 	}
 
 	for lib, pMap := range p.UProbes() {
-		logger().Info("finding library", "lib", lib)
+		log.Info("finding library", "lib", lib)
 		libMap := exec.LibPath(lib, maps)
 		instrPath := fmt.Sprintf("/proc/%d/exe", pid)
 
 		if libMap != nil {
-			logger().Info("instrumenting library", "lib", lib, "path", libMap.Pathname)
+			log.Info("instrumenting library", "lib", lib, "path", libMap.Pathname)
 			// we do this to make sure instrumenting something like libssl.so works with Docker
 			instrPath = fmt.Sprintf("/proc/%d/map_files/%x-%x", pid, libMap.StartAddr, libMap.EndAddr)
 		} else {
 			// E.g. NodeJS uses OpenSSL but they ship it as statically linked in the node binary
-			logger().Info(fmt.Sprintf("%s not linked, attempting to instrument executable", lib), "path", instrPath)
+			log.Info(fmt.Sprintf("%s not linked, attempting to instrument executable", lib), "path", instrPath)
 		}
 
 		libExe, err := link.OpenExecutable(instrPath)
@@ -141,13 +148,13 @@ func (i *instrumenter) uprobes(pid int32, p Tracer) error {
 		}
 
 		for funcName, funcPrograms := range pMap {
-			slog.Debug("going to instrument function", "function", funcName, "programs", funcPrograms)
+			log.Debug("going to instrument function", "function", funcName, "programs", funcPrograms)
 			if err := i.uprobe(funcName, libExe, funcPrograms); err != nil {
 				if funcPrograms.Required {
 					return fmt.Errorf("instrumenting function %q: %w", funcName, err)
 				}
 
-				slog.Info("error instrumenting uprobe", "function", funcName, "error", err)
+				log.Info("error instrumenting uprobe", "function", funcName, "error", err)
 			}
 			p.AddCloser(i.closables...)
 		}

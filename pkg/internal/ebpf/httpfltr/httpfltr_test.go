@@ -8,7 +8,7 @@ import (
 	"github.com/cilium/ebpf/ringbuf"
 	"github.com/stretchr/testify/assert"
 
-	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
+	"github.com/grafana/beyla/pkg/internal/pipe"
 	"github.com/grafana/beyla/pkg/internal/request"
 )
 
@@ -100,8 +100,8 @@ func TestToRequestTrace(t *testing.T) {
 	err := binary.Write(buf, binary.LittleEndian, &record)
 	assert.NoError(t, err)
 
-	tracer := Tracer{Cfg: &ebpfcommon.TracerConfig{}}
-	result, err := tracer.readHTTPInfoIntoSpan(&ringbuf.Record{RawSample: buf.Bytes()})
+	tracer := Tracer{Cfg: &pipe.Config{}}
+	result, _, err := tracer.readHTTPInfoIntoSpan(&ringbuf.Record{RawSample: buf.Bytes()})
 	assert.NoError(t, err)
 
 	expected := request.Span{
@@ -133,8 +133,8 @@ func TestToRequestTraceNoConnection(t *testing.T) {
 	err := binary.Write(buf, binary.LittleEndian, &record)
 	assert.NoError(t, err)
 
-	tracer := Tracer{Cfg: &ebpfcommon.TracerConfig{}}
-	result, err := tracer.readHTTPInfoIntoSpan(&ringbuf.Record{RawSample: buf.Bytes()})
+	tracer := Tracer{Cfg: &pipe.Config{}}
+	result, _, err := tracer.readHTTPInfoIntoSpan(&ringbuf.Record{RawSample: buf.Bytes()})
 	assert.NoError(t, err)
 
 	// change the expected port just before testing
@@ -151,4 +151,93 @@ func TestToRequestTraceNoConnection(t *testing.T) {
 		HostPort:     7033,
 	}
 	assert.Equal(t, expected, result)
+}
+
+func TestExtractTraceParent(t *testing.T) {
+	tracer := Tracer{Cfg: &pipe.Config{}}
+
+	// normal formulated request
+	assert.Equal(t, "ABBA", tracer.extractTraceParent([]byte(
+		"POST /smoke HTTP/1.1\r\n"+
+			"Host: localhost:3030\r\n"+
+			"User-Agent: curl/7.81.0\r\n"+
+			"Accept: */*\r\n"+
+			"Content-Type:application/json\r\n"+
+			"TraceParent: ABBA\r\n"+
+			"Content-Length: 33\r\n"+
+			"\r\n"+
+			"{\"name\": \"Joe\", \"number\": 123}")))
+
+	// normal formulated request, weird casing
+	assert.Equal(t, "AbbA", tracer.extractTraceParent([]byte(
+		"POST /smoke HTTP/1.1\r\n"+
+			"Host: localhost:3030\r\n"+
+			"User-Agent: curl/7.81.0\r\n"+
+			"Accept: */*\r\n"+
+			"Content-Type:application/json\r\n"+
+			"TrAcEpArEnT: AbbA\r\n"+
+			"Content-Length: 33\r\n"+
+			"\r\n"+
+			"{\"name\": \"Joe\", \"number\": 123}")))
+
+	// we only look up to the end of the headers section
+	assert.Equal(t, "", tracer.extractTraceParent([]byte(
+		"POST /smoke HTTP/1.1\r\n"+
+			"Host: localhost:3030\r\n"+
+			"User-Agent: curl/7.81.0\r\n"+
+			"Accept: */*\r\n"+
+			"Content-Type:application/json\r\n"+
+			"Content-Length: 33\r\n"+
+			"\r\n"+
+			"{\"name\": \"Joe\", \"number\": 123, \"Traceparent\": \"ABBA\"}")))
+
+	// we must find the end of headers in the buffer, if it's not there we do nothing
+	assert.Equal(t, "", tracer.extractTraceParent([]byte(
+		"POST /smoke HTTP/1.1\r\n"+
+			"Host: localhost:3030\r\n"+
+			"User-Agent: curl/7.81.0\r\n"+
+			"Accept: */*\r\n"+
+			"Content-Type:application/json\r\n"+
+			"Content-Length: 33\r\n"+
+			"{\"name\": \"Joe\", \"number\": 123, \"Traceparent\": \"ABBA\"\r\n}")))
+
+	// we find the traceparent in body-less requests
+	assert.Equal(t, "ABBA", tracer.extractTraceParent([]byte(
+		"POST /smoke HTTP/1.1\r\n"+
+			"Host: localhost:3030\r\n"+
+			"User-Agent: curl/7.81.0\r\n"+
+			"Accept: */*\r\n"+
+			"Content-Type:application/json\r\n"+
+			"TraceParent: ABBA\r\n"+
+			"Content-Length: 33\r\n\r\n")))
+
+	// empty buffer
+	assert.Equal(t, "", tracer.extractTraceParent([]byte("")))
+
+	// we find the traceparent but it's empty
+	assert.Equal(t, "", tracer.extractTraceParent([]byte(
+		"POST /smoke HTTP/1.1\r\n"+
+			"Host: localhost:3030\r\n"+
+			"User-Agent: curl/7.81.0\r\n"+
+			"Accept: */*\r\n"+
+			"Content-Type:application/json\r\n"+
+			"TraceParent: \r\n"+
+			"Content-Length: 33\r\n\r\n")))
+
+	// Cut off
+	assert.Equal(t, "", tracer.extractTraceParent([]byte(
+		"POST /smoke HTTP/1.1\r\n"+
+			"Host: localhost:3030\r\n"+
+			"User-Agent: curl/7.81.0\r\n"+
+			"Accept: */*\r\n"+
+			"Content-Type:application/json\r\n"+
+			"TraceParent: ")))
+	// Differently Cut off
+	assert.Equal(t, "", tracer.extractTraceParent([]byte(
+		"POST /smoke HTTP/1.1\r\n"+
+			"Host: localhost:3030\r\n"+
+			"User-Agent: curl/7.81.0\r\n"+
+			"Accept: */*\r\n"+
+			"Content-Type:application/json\r\n"+
+			"TraceParent: \r\n\r\n")))
 }

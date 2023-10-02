@@ -28,6 +28,19 @@ struct {
     __type(value, sock_args_t);
 } active_connect_args SEC(".maps");
 
+// Temporary tracking of tcp_recvmsg arguments
+typedef struct recv_args {
+    u64 sock_ptr; // linux sock or socket address
+    u64 msghdr_ptr;
+} recv_args_t;
+
+struct {
+    __uint(type, BPF_MAP_TYPE_HASH);
+    __uint(max_entries, MAX_CONCURRENT_REQUESTS);
+    __type(key, u64);
+    __type(value, recv_args_t);
+} active_recv_args SEC(".maps");
+
 // Helps us track process names of processes that exited.
 // Only used with system wide instrumentation
 struct {
@@ -201,6 +214,7 @@ int BPF_KRETPROBE(kretprobe_sys_connect, int fd)
         meta.id = id;
         meta.type = EVENT_HTTP_CLIENT;
         bpf_map_update_elem(&filtered_connections, &info, &meta, BPF_ANY); // On purpose BPF_ANY, we want to overwrite stale
+        bpf_map_update_elem(&pid_tid_to_conn, &id, &info, BPF_ANY); // to support SSL 
     }
 
 cleanup:
@@ -299,7 +313,7 @@ int socket__http_filter(struct __sk_buff *skb) {
     return 0;
 }
 
-// We start by looking whrn the SSL handshake is established. In between
+// We start by looking when the SSL handshake is established. In between
 // the start and the end of the SSL handshake, we'll see at least one tcp_sendmsg
 // between the parties. Sandwitching this tcp_sendmsg allows us to grab the sock *
 // and match it with our SSL *. The sock * will give us the connection info that is
@@ -319,7 +333,6 @@ int BPF_UPROBE(uprobe_ssl_do_handshake, void *s) {
     return 0;
 }
 
-// Checks if it's sandwitched between active SSL handshake uprobe/uretprobe
 SEC("kprobe/tcp_sendmsg")
 int BPF_KPROBE(kprobe_tcp_sendmsg, struct sock *sk, struct msghdr *msg, size_t size) {
     u64 id = bpf_get_current_pid_tgid();
@@ -328,21 +341,50 @@ int BPF_KPROBE(kprobe_tcp_sendmsg, struct sock *sk, struct msghdr *msg, size_t s
         return 0;
     }
 
-    void **s = bpf_map_lookup_elem(&active_ssl_handshakes, &id);
-    if (!s) {
-        return 0;
-    }
-
-    void *ssl = *s;
-
-    bpf_dbg_printk("=== kprobe tcp_sendmsg=%d sock=%llx ssl=%llx ===", id, sk, ssl);
+    bpf_dbg_printk("=== kprobe tcp_sendmsg=%d sock=%llx size %d===", id, sk, size);
 
     connection_info_t info = {};
 
     if (parse_sock_info(sk, &info)) {
-        sort_connection_info(&info);
+        bool client_req = client_call(&info);
         //dbg_print_http_connection_info(&info); // commented out since GitHub CI doesn't like this call
+        sort_connection_info(&info);
 
+        if (client_req) {
+            unsigned char small_buf[16];            
+            read_msghdr_buf(&small_buf, 16, msg);
+
+            u8 packet_type = 0;
+            if (is_http(small_buf, 16, &packet_type)) {
+                if (packet_type == PACKET_TYPE_REQUEST) {
+                    http_buf_t *trace = bpf_ringbuf_reserve(&events, sizeof(http_buf_t), 0);
+                    if (trace) {
+                        trace->conn_info = info;
+                        trace->flags |= CONN_INFO_FLAG_TRACE;
+
+                        s64 buf_len = (s64)size & (TRACE_BUF_SIZE - 1);
+                        read_msghdr_buf(&trace->buf, buf_len, msg);
+
+                        if (buf_len < TRACE_BUF_SIZE) {
+                            trace->buf[buf_len] = '\0';
+                        }
+
+                        bpf_dbg_printk("Sending client buffer %s, copied_size %d", trace->buf, size);
+
+                        bpf_ringbuf_submit(trace, get_flags());
+                    }
+                }
+            }
+        }
+
+        // Checks if it's sandwitched between active SSL handshake uprobe/uretprobe
+        void **s = bpf_map_lookup_elem(&active_ssl_handshakes, &id);
+        if (!s) {
+            return 0;
+        }
+
+        void *ssl = *s;
+        bpf_dbg_printk("=== kprobe SSL tcp_sendmsg=%d sock=%llx ssl=%llx ===", id, sk, ssl);
         bpf_map_update_elem(&ssl_to_conn, &ssl, &info, BPF_ANY);
     }
 
@@ -546,6 +588,77 @@ int BPF_UPROBE(uprobe_ssl_shutdown, void *s) {
 
     bpf_map_delete_elem(&ssl_to_conn, &s);
     bpf_map_delete_elem(&pid_tid_to_conn, &id);
+
+    return 0;
+}
+
+//int tcp_recvmsg(struct sock *sk, struct msghdr *msg, size_t len, int flags, int *addr_len)
+SEC("kprobe/tcp_recvmsg")
+int BPF_KPROBE(kprobe_tcp_recvmsg, struct sock *sk, struct msghdr *msg, size_t len, int flags, int *addr_len) {
+    u64 id = bpf_get_current_pid_tgid();
+
+    if (!valid_pid(id)) {
+        return 0;
+    }
+
+    bpf_printk("=== tcp_recvmsg id=%d sock=%llx ===", id, sk);
+
+    recv_args_t args = {
+        .sock_ptr = (u64)sk,
+        .msghdr_ptr = (u64)msg
+    };
+
+    bpf_map_update_elem(&active_recv_args, &id, &args, BPF_ANY);
+
+    return 0;
+}
+
+SEC("kretprobe/tcp_recvmsg")
+int BPF_KRETPROBE(kretprobe_tcp_recvmsg, int copied_len) {
+    u64 id = bpf_get_current_pid_tgid();
+
+    if (!valid_pid(id)) {
+        return 0;
+    }
+
+    recv_args_t *args = bpf_map_lookup_elem(&active_recv_args, &id);
+    bpf_map_delete_elem(&active_recv_args, &id);
+
+    if (!args || (copied_len <= 0)) {
+        return 0;
+    }
+
+    bpf_printk("=== tcp_recvmsg ret id=%d sock=%llx ===", id, args->sock_ptr);
+
+    connection_info_t info = {};
+
+    if (parse_sock_info((struct sock *)args->sock_ptr, &info)) {
+        sort_connection_info(&info);
+        //dbg_print_http_connection_info(&info);
+
+        // we only care about connections setup by the socket filter as HTTP
+        http_info_t *http_info = bpf_map_lookup_elem(&ongoing_http, &info);
+        if (http_info && http_info->type != EVENT_HTTP_CLIENT && !http_info->ssl) {
+            http_buf_t *trace = bpf_ringbuf_reserve(&events, sizeof(http_buf_t), 0);
+            if (trace) {
+                trace->conn_info = info;
+                trace->flags |= CONN_INFO_FLAG_TRACE;
+
+                struct msghdr *msg = (struct msghdr *)args->msghdr_ptr;
+
+                int buf_len = copied_len & (TRACE_BUF_SIZE - 1);
+                read_msghdr_buf(&trace->buf, buf_len, msg);
+
+                if (buf_len < TRACE_BUF_SIZE) {
+                    trace->buf[buf_len] = '\0';
+                }
+
+                bpf_dbg_printk("Sending buffer %s, copied_size %d", trace->buf, copied_len);
+
+                bpf_ringbuf_submit(trace, get_flags());
+            }
+        }
+    }
 
     return 0;
 }

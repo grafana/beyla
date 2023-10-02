@@ -22,7 +22,7 @@ $ OPEN_PORT=8080 beyla -config /path/to/config.yaml
 
 At the end of this document, there is an [example of YAML configuration file](#yaml-file-example).
 
-Currently, Beyal consist of a pipeline of components which
+Currently, Beyla consist of a pipeline of components which
 generate, transform, and export traces from HTTP and GRPC services. In the
 YAML configuration, each component has its own first-level section.
 
@@ -54,39 +54,6 @@ the options for each component.
 
 The properties in this section are first-level YAML properties, as they apply to the
 whole Beyla configuration:
-
-| YAML           | Env var                               | Type   | Default         |
-| -------------- |---------------------------------------| ------ | --------------- |
-| `service_name` | `SERVICE_NAME` or `OTEL_SERVICE_NAME` | string | executable name |
-
-Specifies the name of the instrumented service to be reported by the metrics exporter.
-If unset, it will be the name of the executable of the service.
-
-| YAML                | Env var             | Type   | Default |
-| ------------------- | ------------------- | ------ | ------- |
-| `service_namespace` | `SERVICE_NAMESPACE` | string | (unset) |
-
-Optionally, allows assigning a namespace for the service.
-
-| YAML        | Env var     | Type   | Default |
-| ----------- | ----------- | ------ | ------- |
-| `log_level` | `LOG_LEVEL` | string | `INFO`  |
-
-Sets the verbosity level of the process standard output logger.
-Valid log level values are: `DEBUG`, `INFO`, `WARN` and `ERROR`.
-`DEBUG` being the most verbose and `ERROR` the least verbose.
-
-| YAML           | Env var        | Type    | Default |
-| -------------- | -------------- | ------- | ------- |
-| `print_traces` | `PRINT_TRACES` | boolean | `false` |
-
-<a id="printer"></a>
-
-If `true`, prints any instrumented trace on the standard output (stdout).
-
-## EBPF tracer
-
-YAML section `ebpf`.
 
 | YAML              | Env var           | Type   | Default |
 | ----------------- | ----------------- | ------ | ------- |
@@ -140,6 +107,46 @@ When you are instrumenting Go applications, you should explicitly use `executabl
 `open_port` instead of `system_wide` instrumentation. The Go specific instrumentation is of higher
 fidelity and incurs lesser overall overhead.
 
+| YAML           | Env var                               | Type   | Default         |
+| -------------- |---------------------------------------| ------ | --------------- |
+| `service_name` | `SERVICE_NAME` or `OTEL_SERVICE_NAME` | string | executable name |
+
+Overrides the name of the instrumented service to be reported by the metrics exporter.
+If unset, it will be the name of the executable of the service.
+
+| YAML                | Env var             | Type   | Default |
+| ------------------- | ------------------- | ------ | ------- |
+| `service_namespace` | `SERVICE_NAMESPACE` | string | (unset) |
+
+Optionally, allows assigning a namespace for the service.
+
+| YAML        | Env var     | Type   | Default |
+| ----------- | ----------- | ------ | ------- |
+| `log_level` | `LOG_LEVEL` | string | `INFO`  |
+
+Sets the verbosity level of the process standard output logger.
+Valid log level values are: `DEBUG`, `INFO`, `WARN` and `ERROR`.
+`DEBUG` being the most verbose and `ERROR` the least verbose.
+
+| YAML           | Env var        | Type    | Default |
+| -------------- | -------------- | ------- | ------- |
+| `print_traces` | `PRINT_TRACES` | boolean | `false` |
+
+<a id="printer"></a>
+
+If `true`, prints any instrumented trace on the standard output (stdout).
+
+| YAML                       | Env var                    | Type    | Default |
+| -------------------------- | -------------------------- | ------- | ------- |
+| `skip_go_specific_tracers` | `SKIP_GO_SPECIFIC_TRACERS` | boolean | false   |
+
+Disables the detection of Go specifics when ebpf tracer inspects executables to be instrumented.
+The tracer will fallback to using generic instrumentation, which will generally be less efficient.
+
+## EBPF tracer
+
+YAML section `ebpf`.
+
 | YAML         | Env var          | Type   | Default |
 | ------------ | ---------------- | ------ | ------- |
 | `wakeup_len` | `BPF_WAKEUP_LEN` | string | (unset) |
@@ -153,20 +160,14 @@ can help with reducing the CPU overhead of Beyla.
 In low-load services (in terms of requests/second), high values of `wakeup_len` could
 add a noticeable delay in the time the metrics are submitted and become externally visible.
 
-| YAML                       | Env var                    | Type    | Default |
-| -------------------------- | -------------------------- | ------- | ------- |
-| `skip_go_specific_tracers` | `SKIP_GO_SPECIFIC_TRACERS` | boolean | false   |
-
-Disables the detection of Go specifics when ebpf tracer inspects executables to be instrumented.
-The tracer will fallback to using generic instrumentation, which will generally be less efficient.
 
 ## Routes decorator
 
 YAML section `routes`.
 
 This section can be only configured via the YAML file. If no `routes` section is provided in
-the YAML file, the routes' pipeline stage will not be created and data will not be filtered
-for the exporters.
+the YAML file, a default routes' pipeline stage will be created and filtered with the `wildcard`
+routes decorator.
 
 | YAML       | Env var | Type            | Default |
 | ---------- | ------- | --------------- | ------- |
@@ -214,7 +215,7 @@ Possible values for the `unmatch` property are:
 - `unset` will leave the `http.route` property as unset.
 - `path` will copy the `http.route` field property to the path value.
   - 🚨 Caution: this option could lead to cardinality explosion at the ingester side.
-- `wildcard` will set the `http.route` field property to a generic asterisk `*` value.
+- `wildcard` will set the `http.route` field property to a generic asterisk based `/**` value.
 
 ## OTEL metrics exporter
 
@@ -242,9 +243,9 @@ the OpenTelemetry exporter will automatically add the `/v1/metrics` path to the 
 addition, you can use either the `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT` environment variable or the `environment` YAML
 property to use exactly the provided URL without any addition.
 
-| YAML       | Env var                                                                    | Type   | Default        |
-| ---------- | -------------------------------------------------------------------------- | ------ | -------------- |
-| `protocol` | `OTEL_EXPORTER_OTLP_PROTOCOL` or<br/>`OTEL_EXPORTER_OTLP_METRICS_PROTOCOL` | string | `http/protobuf |
+| YAML       | Env var                                                                    | Type   | Default   |
+| ---------- | -------------------------------------------------------------------------- | ------ |-----------|
+| `protocol` | `OTEL_EXPORTER_OTLP_PROTOCOL` or<br/>`OTEL_EXPORTER_OTLP_METRICS_PROTOCOL` | string | (guessed) |
 
 Specifies the transport/encoding protocol of the OpenTelemetry endpoint.
 
@@ -253,6 +254,13 @@ The accepted values, as defined by the [OTLP Exporter Configuration document](ht
 The `OTEL_EXPORTER_OTLP_PROTOCOL` environment variable sets a common protocol for both the metrics and
 [traces](#otel-traces-exporter) exporters. The `OTEL_EXPORTER_OTLP_METRICS_PROTOCOL` environment variable,
 or the `protocol` YAML property, will set the protocol only for the metrics exporter node.
+
+If this property is not provided, Beyla will guess it according to the following rules:
+
+* Beyla will guess `grpc` if the port ends in `4317` (`4317`, `14317`, `24317`, ...),
+  as `4317` is the usual Port number for the OTEL GRPC collector.
+* Beyla will guess `http/protobuf` if the port ends in `4318` (`4318`, `14318`, `24318`, ...),
+  as `4318` is the usual Port number for the OTEL HTTP collector.
 
 | YAML                   | Env var                     | Type | Default |
 | ---------------------- | --------------------------- | ---- | ------- |
@@ -363,9 +371,9 @@ the OpenTelemetry exporter will automatically add the `/v1/traces` path to the U
 addition, you can use either the `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` environment variable or the `environment` YAML
 property to use exactly the provided URL without any addition.
 
-| YAML       | Env var                                                                   | Type   | Default        |
-| ---------- | ------------------------------------------------------------------------- | ------ | -------------- |
-| `protocol` | `OTEL_EXPORTER_OTLP_PROTOCOL` or<br/>`OTEL_EXPORTER_OTLP_TRACES_PROTOCOL` | string | `http/protobuf |
+| YAML       | Env var                                                                   | Type   | Default   |
+| ---------- | ------------------------------------------------------------------------- | ------ |-----------|
+| `protocol` | `OTEL_EXPORTER_OTLP_PROTOCOL` or<br/>`OTEL_EXPORTER_OTLP_TRACES_PROTOCOL` | string | (guessed) |
 
 Specifies the transport/encoding protocol of the OpenTelemetry traces endpoint.
 
@@ -374,6 +382,13 @@ The accepted values, as defined by the [OTLP Exporter Configuration document](ht
 The `OTEL_EXPORTER_OTLP_PROTOCOL` environment variable sets a common protocol for both the metrics and
 the [traces](#otel-traces-exporter) exporters. The `OTEL_EXPORTER_OTLP_TRACES_PROTOCOL` environment variable,
 or the `protocol` YAML property, will set the protocol only for the traces' exporter node.
+
+If this property is not provided, Beyla will guess it according to the following rules:
+
+* Beyla will guess `grpc` if the port ends in `4317` (`4317`, `14317`, `24317`, ...),
+  as `4317` is the usual Port number for the OTEL GRPC collector.
+* Beyla will guess `http/protobuf` if the port ends in `4318` (`4318`, `14318`, `24318`, ...),
+  as `4318` is the usual Port number for the OTEL HTTP collector.
 
 | YAML                   | Env var                     | Type | Default |
 | ---------------------- | --------------------------- | ---- | ------- |
@@ -473,11 +488,11 @@ or the same (both metric families will be listed in the same scrape endpoint).
 ## YAML file example
 
 ```yaml
-log_level: DEBUG
+open_port: 443
 service_name: my-instrumented-service
+log_level: DEBUG
 
 ebpf:
-  open_port: 443
   wakeup_len: 100
 
 otel_traces:

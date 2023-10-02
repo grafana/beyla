@@ -3,14 +3,14 @@ package ebpf
 import (
 	"context"
 
-	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
+	"github.com/grafana/beyla/pkg/internal/pipe"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 )
 
 // dummy functions and types to avoid compilation errors in Darwin. The finder component is only usable in Linux.
 type ProcessFinder struct {
-	Cfg     *ebpfcommon.TracerConfig
+	Cfg     *pipe.Config
 	Metrics imetrics.Reporter
 	CtxInfo *global.ContextInfo
 }

@@ -2,9 +2,9 @@ package traces
 
 import (
 	"context"
+	"log/slog"
 
 	"github.com/mariomac/pipes/pkg/node"
-	"golang.org/x/exp/slog"
 
 	"github.com/grafana/beyla/pkg/internal/request"
 )

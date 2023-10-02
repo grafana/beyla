@@ -19,7 +19,7 @@ linters:
     - ineffassign
     - revive
     - staticcheck
-    - structcheck
+#    - structcheck Disable until they properly support generics
     - stylecheck
     - typecheck
     - unused
@@ -28,7 +28,7 @@ linters:
     - exhaustive
 linters-settings:
   stylecheck:
-    go: "1.19"
+    go: "1.21"
   gocritic:
     enabled-checks:
       - hugeParam

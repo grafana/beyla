@@ -12,9 +12,11 @@ keywords:
   - RED metrics
 ---
 
+![Grafana Beyla Logo](https://grafana.com/media/docs/grafana-cloud/beyla/beyla-logo-2.png)
+
 # Beyla quick start tutorial
 
-To reduce the time it takes to instrument an application and improve the adoption of Application Observability, Grafana built Belya, an eBPF auto-instrumentation tool, that is able to report basic transactions span information, as well as [RED metrics](/blog/2018/08/02/the-red-method-how-to-instrument-your-services/) for Linux HTTP/S and gRPC services, without any application code or configuration changes.
+To reduce the time it takes to instrument an application and improve the adoption of Application Observability, Grafana built Beyla, an eBPF auto-instrumentation tool, that is able to report basic transactions span information, as well as [RED metrics](/blog/2018/08/02/the-red-method-how-to-instrument-your-services/) for Linux HTTP/S and gRPC services, without any application code or configuration changes.
 
 ## eBPF overview
 
@@ -254,7 +256,7 @@ Metrics Browser input field and you should see the available metric names in the
 
 You could start composing your PromQL queries for better visualization of
 your auto-instrumented RED metrics; to save you time, we provide a sample
-[public dashboard with some basic information](/grafana/dashboards/19077-grafana-beyla-red-metrics/).
+[public dashboard with some basic information](/grafana/dashboards/19077-beyla-red-metrics/).
 
 To import the sample dashboard into your Grafana instance, choose "Dashboards" in the Grafana left panel.
 Next, in the Dashboards page, click on the "New" drop-down menu and select "Import":
@@ -262,7 +264,7 @@ Next, in the Dashboards page, click on the "New" drop-down menu and select "Impo
 ![](https://grafana.com/media/docs/grafana-cloud/beyla/tutorial/import-dashboard.png)
 
 In the "Import via grafana.com" textbox, copy the Grafana ID from the
-[Beyla RED Metrics](/grafana/dashboards/19077-grafana-beyla-red-metrics/)
+[Beyla RED Metrics](/grafana/dashboards/19077-beyla-red-metrics/)
 dashboard: `19077`.
 
 Rename the dashboard to match your service, select the folder and, most importantly, select the

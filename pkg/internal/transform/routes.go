@@ -2,8 +2,9 @@
 package transform
 
 import (
+	"log/slog"
+
 	"github.com/mariomac/pipes/pkg/node"
-	"golang.org/x/exp/slog"
 
 	"github.com/grafana/beyla/pkg/internal/request"
 	"github.com/grafana/beyla/pkg/internal/transform/route"
@@ -23,7 +24,7 @@ const (
 	UnmatchDefault = UnmatchWildcard
 )
 
-const wildCard = "*"
+const wildCard = "/**"
 
 // RoutesConfig allows grouping URLs sharing a given pattern.
 type RoutesConfig struct {

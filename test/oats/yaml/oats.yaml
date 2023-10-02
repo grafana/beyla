@@ -3,10 +3,10 @@ docker-compose:
   files:
     - ../docker-compose-beyla-gotestserver.yml
 input:
-  - path: /smoke
+  - path: /sqltest
 interval: 500ms
 expected:
   traces:
     - traceql: '{ .http.method = "GET" }'
       spans:
-        - name: 'GET /smoke'
+        - name: 'GET /sqltest'

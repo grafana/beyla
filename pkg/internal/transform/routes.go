@@ -21,7 +21,7 @@ const (
 	// UnmatchWildcard sets the route field to a generic asterisk symbol
 	UnmatchWildcard = UnmatchType("wildcard")
 	// UnmatchHeuristic detects the route field using a heuristic
-	UnmatchHeuristic = UnmatchType("auto")
+	UnmatchHeuristic = UnmatchType("heuristic")
 
 	UnmatchDefault = UnmatchWildcard
 )

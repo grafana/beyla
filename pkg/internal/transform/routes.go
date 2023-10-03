@@ -23,7 +23,7 @@ const (
 	// UnmatchHeuristic detects the route field using a heuristic
 	UnmatchHeuristic = UnmatchType("auto")
 
-	UnmatchDefault = UnmatchHeuristic
+	UnmatchDefault = UnmatchWildcard
 )
 
 const wildCard = "/**"
@@ -40,13 +40,13 @@ func RoutesProvider(rc *RoutesConfig) (node.MiddleFunc[[]request.Span, []request
 	// set default value for Unmatch action
 	var unmatchAction func(span *request.Span)
 	switch rc.Unmatch {
-	case UnmatchWildcard:
+	case UnmatchWildcard, "":
 		unmatchAction = setUnmatchToWildcard
 	case UnmatchUnset:
 		unmatchAction = leaveUnmatchEmpty
 	case UnmatchPath:
 		unmatchAction = setUnmatchToPath
-	case UnmatchHeuristic, "": // default
+	case UnmatchHeuristic: // default
 		err := route.InitAutoClassifier()
 		if err != nil {
 			return nil, err

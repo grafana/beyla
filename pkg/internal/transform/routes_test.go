@@ -14,7 +14,7 @@ import (
 const testTimeout = 5 * time.Second
 
 func TestUnmatchedWildcard(t *testing.T) {
-	for _, tc := range []UnmatchType{ /*"",*/ UnmatchWildcard, "invalid_value"} {
+	for _, tc := range []UnmatchType{"", UnmatchWildcard, "invalid_value"} {
 		t.Run(string(tc), func(t *testing.T) {
 			router, err := RoutesProvider(&RoutesConfig{Unmatch: tc, Patterns: []string{"/user/:id"}})
 			require.NoError(t, err)
@@ -71,7 +71,7 @@ func TestUnmatchedEmpty(t *testing.T) {
 }
 
 func TestUnmatchedAuto(t *testing.T) {
-	for _, tc := range []UnmatchType{"", UnmatchHeuristic} {
+	for _, tc := range []UnmatchType{UnmatchHeuristic} {
 		t.Run(string(tc), func(t *testing.T) {
 			router, err := RoutesProvider(&RoutesConfig{Unmatch: tc, Patterns: []string{"/user/:id"}})
 			require.NoError(t, err)

@@ -24,9 +24,12 @@ services:
 
 	require.Len(t, yf.Services, 1)
 
+	assert.True(t, yf.Services[0].Path.IsSet())
 	assert.True(t, yf.Services[0].Path.MatchString("abc"))
 	assert.False(t, yf.Services[0].Path.MatchString("cabc"))
 	assert.False(t, yf.Services[0].Path.MatchString("abca"))
+
+	assert.Zero(t, yf.Services[0].OpenPorts.Len())
 }
 
 func TestYAMLParse_PathRegexp_Errors(t *testing.T) {
@@ -47,6 +50,7 @@ func TestYAMLParse_PortEnum(t *testing.T) {
 		err := yaml.Unmarshal([]byte(fmt.Sprintf("services:\n  - open_ports: %s\n", enum)), &yf)
 		require.NoError(t, err)
 		require.Len(t, yf.Services, 1)
+		assert.False(t, yf.Services[0].Path.IsSet())
 		return yf.Services[0].OpenPorts
 	}
 	t.Run("single port number", func(t *testing.T) {

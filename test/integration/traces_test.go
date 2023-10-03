@@ -345,11 +345,11 @@ func testHTTPTracesKProbes(t *testing.T) {
 	traceID = createTraceID()
 	parentID = createParentID()
 	traceparent := createTraceparent(traceID, parentID)
-	doHTTPGetWithTraceparent(t, "http://localhost:3031/greeting", 200, traceparent)
+	doHTTPGetWithTraceparent(t, "http://localhost:3031/bye", 200, traceparent)
 
 	var trace jaeger.Trace
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
-		resp, err := http.Get(jaegerQueryURL + "?service=node&operation=GET%20%2Fgreeting")
+		resp, err := http.Get(jaegerQueryURL + "?service=node&operation=GET%20%2Fbye")
 		require.NoError(t, err)
 		if resp == nil {
 			return
@@ -357,13 +357,13 @@ func testHTTPTracesKProbes(t *testing.T) {
 		require.Equal(t, http.StatusOK, resp.StatusCode)
 		var tq jaeger.TracesQuery
 		require.NoError(t, json.NewDecoder(resp.Body).Decode(&tq))
-		traces := tq.FindBySpan(jaeger.Tag{Key: "http.target", Type: "string", Value: "/greeting"})
+		traces := tq.FindBySpan(jaeger.Tag{Key: "http.target", Type: "string", Value: "/bye"})
 		require.Len(t, traces, 1)
 		trace = traces[0]
 	}, test.Interval(100*time.Millisecond))
 
 	// Check the information of the parent span
-	res := trace.FindByOperationName("GET /greeting")
+	res := trace.FindByOperationName("GET /bye")
 	require.Len(t, res, 1)
 	parent := res[0]
 	require.NotEmpty(t, parent.TraceID)
@@ -379,9 +379,9 @@ func testHTTPTracesKProbes(t *testing.T) {
 		jaeger.Tag{Key: "otel.library.name", Type: "string", Value: "github.com/grafana/beyla"},
 		jaeger.Tag{Key: "http.method", Type: "string", Value: "GET"},
 		jaeger.Tag{Key: "http.status_code", Type: "int64", Value: float64(200)},
-		jaeger.Tag{Key: "http.target", Type: "string", Value: "/greeting"},
+		jaeger.Tag{Key: "http.target", Type: "string", Value: "/bye"},
 		jaeger.Tag{Key: "net.host.port", Type: "int64", Value: float64(3030)},
-		jaeger.Tag{Key: "http.route", Type: "string", Value: "/greeting"},
+		jaeger.Tag{Key: "http.route", Type: "string", Value: "/bye"},
 		jaeger.Tag{Key: "span.kind", Type: "string", Value: "server"},
 	), "not all tags matched in %+v", parent.Tags)
 

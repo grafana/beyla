@@ -113,6 +113,10 @@ func (p *PathRegexp) UnmarshalYAML(value *yaml.Node) error {
 	if value.Kind != yaml.ScalarNode {
 		return fmt.Errorf("PathRegexp: unexpected YAML node kind %d", value.Kind)
 	}
+	if len(value.Value) == 0 {
+		p.re = nil
+		return nil
+	}
 	re, err := regexp.Compile(value.Value)
 	if err != nil {
 		return fmt.Errorf("invalid regular expression in node %s: %w", value.Tag, err)
@@ -122,6 +126,10 @@ func (p *PathRegexp) UnmarshalYAML(value *yaml.Node) error {
 }
 
 func (p *PathRegexp) UnmarshalText(text []byte) error {
+	if len(text) == 0 {
+		p.re = nil
+		return nil
+	}
 	re, err := regexp.Compile(string(text))
 	if err != nil {
 		return fmt.Errorf("invalid regular expression %q: %w", string(text), err)

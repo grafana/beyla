@@ -74,41 +74,54 @@ func findProcesses(criteria services.DefinitionCriteria) ([]ProcessMatch, error)
 }
 
 func matchProcess(log *slog.Logger, p *process.Process, a *services.Attributes) bool {
-	if a.Path.IsSet() {
-		exePath, err := p.Exe()
-		if err != nil {
-			// expected for some processes, but it could also be due to insufficient permissions.
-			// we check for insufficient permissions, log a warning, and continue
-			if err := tryAccessPid(p.Pid); err != nil {
-				log.Warn("can't get process information, possibly because of insufficient permissions", "process", p.Pid, "error", err)
-			}
-			return false
-		}
-		if !a.Path.MatchString(exePath) {
+	if !a.Path.IsSet() && a.OpenPorts.Len() == 0 {
+		return false
+	}
+	if a.Path.IsSet() && !matchByExecutable(log, p, a) {
+		return false
+	}
+	if a.OpenPorts.Len() > 0 {
+		return matchByPort(log, p, a)
+	}
+	return true
+}
+
+func matchByPort(log *slog.Logger, p *process.Process, a *services.Attributes) bool {
+	conns, err := net.ConnectionsPid("all", p.Pid)
+	if err != nil {
+		log.Warn("can't get process connections. Ignoring", "process", p.Pid, "error", err)
+		return false
+	}
+	if len(conns) == 0 {
+		// there will be processes with no open file descriptors, but unfortunately the library we use to
+		// get the connections for a given 'pid' swallows any permission errors. We ensure we didn't fail to
+		// find the open file descriptors because of access permissions. If we did, we log a warning to let
+		// the user know they may have configuration issues.
+		if err := tryAccessPid(p.Pid); err != nil {
+			log.Warn("can't get process information, possibly because of insufficient permissions", "process", p.Pid, "error", err)
 			return false
 		}
 	}
-	if a.OpenPorts.Len() == 0 {
-		conns, err := net.ConnectionsPid("all", p.Pid)
-		if err != nil {
-			log.Warn("can't get process connections. Ignoring", "process", p.Pid, "error", err)
-			return false
+	for _, c := range conns {
+		if a.OpenPorts.Matches(int(c.Laddr.Port)) {
+			return true
 		}
-		if len(conns) == 0 {
-			// there will be processes with no open file descriptors, but unfortunately the library we use to
-			// get the connections for a given 'pid' swallows any permission errors. We ensure we didn't fail to
-			// find the open file descriptors because of access permissions. If we did, we log a warning to let
-			// the user know they may have configuration issues.
-			if err := tryAccessPid(p.Pid); err != nil {
-				log.Warn("can't get process information, possibly because of insufficient permissions", "process", p.Pid, "error", err)
-				return false
-			}
+	}
+	return false
+}
+
+func matchByExecutable(log *slog.Logger, p *process.Process, a *services.Attributes) bool {
+	exePath, err := p.Exe()
+	if err != nil {
+		// expected for some processes, but it could also be due to insufficient permissions.
+		// we check for insufficient permissions, log a warning, and continue
+		if err := tryAccessPid(p.Pid); err != nil {
+			log.Warn("can't get process information, possibly because of insufficient permissions", "process", p.Pid, "error", err)
 		}
-		for _, c := range conns {
-			if a.OpenPorts.Matches(int(c.Laddr.Port)) {
-				return true
-			}
-		}
+		return false
+	}
+	if !a.Path.MatchString(exePath) {
+		return false
 	}
 	return true
 }

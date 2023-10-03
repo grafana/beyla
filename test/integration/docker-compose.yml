@@ -45,44 +45,6 @@ services:
     ports:
       - "8999:8999" # Prometheus scrape port, if enabled via config
 
-  node-testserver:
-    build:
-      context: ../..
-      dockerfile: test/integration/components/nodejsserver/Dockerfile
-    image: hatest-node-testserver
-    ports:
-      - 3031:3030
-
-  node-autoinstrumenter:
-    build:
-      context: ../..
-      dockerfile: ./test/integration/components/beyla/Dockerfile
-    command:
-      - /beyla
-      - --config=/configs/instrumenter-config.yml
-    volumes:
-      - ./configs/:/configs
-      - ../../testoutput:/coverage
-      - ../../testoutput/run:/var/run/beyla
-    image: hatest-node-autoinstrumenter
-    privileged: true # in some environments (not GH Pull Requests) you can set it to false and then cap_add: [ SYS_ADMIN ]
-    network_mode: "service:node-testserver"
-    pid: "service:node-testserver"
-    environment:
-      GOCOVERDIR: "/coverage"
-      PRINT_TRACES: "true"
-      OPEN_PORT: 3030
-      SERVICE_NAMESPACE: "integration-test"
-      METRICS_INTERVAL: "10ms"
-      BPF_BATCH_TIMEOUT: "10ms"
-      LOG_LEVEL: "DEBUG"
-      BPF_DEBUG: "TRUE"
-      METRICS_REPORT_TARGET: "true"
-      METRICS_REPORT_PEER: "true"
-    depends_on:
-      node-testserver:
-        condition: service_started
-
   # OpenTelemetry Collector for Metrics. For Traces, we use directly Jaeger
   otelcol:
     image: otel/opentelemetry-collector-contrib:0.77.0
@@ -102,8 +64,6 @@ services:
       - "8888"          # metrics endpoint
     depends_on:
       autoinstrumenter:
-        condition: service_started
-      node-autoinstrumenter:
         condition: service_started
       prometheus:
         condition: service_started

@@ -42,6 +42,17 @@ func RoutesProvider(rc *RoutesConfig) (node.MiddleFunc[[]request.Span, []request
 	switch rc.Unmatch {
 	case UnmatchWildcard, "":
 		unmatchAction = setUnmatchToWildcard
+
+		if len(rc.Patterns) == 0 {
+			slog.With("component", "RoutesProvider").
+				Warn("No route match patterns configured. " +
+					"Without route definitions Beyla will not be able to generate a low cardinality " +
+					"route for trace span names. For optimal experience, please define your application " +
+					"HTTP route patterns or enable the route 'heuristic' mode. " +
+					"For more information please see the documentation at: " +
+					"https://grafana.com/docs/grafana-cloud/monitor-applications/beyla/configure/options/#routes-decorator. " +
+					"If your application is only using gRPC you can ignore this warning.")
+		}
 	case UnmatchUnset:
 		unmatchAction = leaveUnmatchEmpty
 	case UnmatchPath:

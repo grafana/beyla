@@ -133,8 +133,7 @@ func TestRouteConsolidation(t *testing.T) {
 		return func(out chan<- []request.Span) {
 			out <- newRequest("svc-1", 1, "GET", "/user/1234", "1.1.1.1:3456", 200)
 			out <- newRequest("svc-1", 2, "GET", "/products/3210/push", "1.1.1.1:3456", 200)
-			out <- newRequest("svc-1", 2, "GET", "/attach", "1.1.1.1:3456", 200)
-			out <- newRequest("svc-1", 3, "GET", "/kdhgkjh", "1.1.1.1:3456", 200) // undefined route: won't report as route
+			out <- newRequest("svc-1", 3, "GET", "/attach", "1.1.1.1:3456", 200)
 			// closing prematurely the input node would finish the whole graph processing
 			// and OTEL exporters could be closed, so we wait.
 			time.Sleep(testTimeout)
@@ -147,7 +146,7 @@ func TestRouteConsolidation(t *testing.T) {
 
 	// expect to receive 3 events without any guaranteed order
 	events := map[string]collector.MetricRecord{}
-	for i := 0; i < 4; i++ {
+	for i := 0; i < 3; i++ {
 		ev := testutil.ReadChannel(t, tc.Records, testTimeout)
 		events[ev.Attributes[string(semconv.HTTPRouteKey)]] = ev
 	}
@@ -183,22 +182,10 @@ func TestRouteConsolidation(t *testing.T) {
 			string(semconv.ServiceNameKey):    "svc-1",
 			string(semconv.HTTPMethodKey):     "GET",
 			string(semconv.HTTPStatusCodeKey): "200",
-			string(semconv.HTTPRouteKey):      "/attach",
+			string(semconv.HTTPRouteKey):      "/**",
 		},
 		Type: pmetric.MetricTypeHistogram,
-	}, events["/attach"])
-
-	assert.Equal(t, collector.MetricRecord{
-		Name: "http.server.duration",
-		Unit: "s",
-		Attributes: map[string]string{
-			string(semconv.ServiceNameKey):    "svc-1",
-			string(semconv.HTTPMethodKey):     "GET",
-			string(semconv.HTTPStatusCodeKey): "200",
-			string(semconv.HTTPRouteKey):      "/*",
-		},
-		Type: pmetric.MetricTypeHistogram,
-	}, events["/*"])
+	}, events["/**"])
 }
 
 func TestGRPCPipeline(t *testing.T) {

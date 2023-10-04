@@ -133,7 +133,7 @@ func TestRouteConsolidation(t *testing.T) {
 		return func(out chan<- []request.Span) {
 			out <- newRequest("svc-1", 1, "GET", "/user/1234", "1.1.1.1:3456", 200)
 			out <- newRequest("svc-1", 2, "GET", "/products/3210/push", "1.1.1.1:3456", 200)
-			out <- newRequest("svc-1", 3, "GET", "/attach", "1.1.1.1:3456", 200) // undefined route: won't report as route
+			out <- newRequest("svc-1", 3, "GET", "/attach", "1.1.1.1:3456", 200)
 			// closing prematurely the input node would finish the whole graph processing
 			// and OTEL exporters could be closed, so we wait.
 			time.Sleep(testTimeout)

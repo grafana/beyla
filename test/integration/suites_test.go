@@ -366,3 +366,14 @@ func TestSuiteNodeClientTLS(t *testing.T) {
 	require.NoError(t, compose.Close())
 	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
 }
+
+func TestSuiteNoRoutes(t *testing.T) {
+	compose, err := docker.ComposeSuite("docker-compose.yml", path.Join(pathOutput, "test-suite.log"))
+	compose.Env = append(compose.Env, "INSTRUMENTER_CONFIG_SUFFIX=-no-route")
+	require.NoError(t, err)
+	require.NoError(t, compose.Up())
+	t.Run("RED metrics", testREDMetricsHTTPNoRoute)
+	t.Run("BPF pinning folder mounted", func(t *testing.T) { testBPFPinningMountedWithCount(t, 2) })
+	require.NoError(t, compose.Close())
+	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
+}

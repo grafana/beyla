@@ -1,3 +1,10 @@
+# github.com/AlessandroPomponio/go-gibberish v0.0.0-20191004143433-a2d4156f0396
+## explicit; go 1.13
+github.com/AlessandroPomponio/go-gibberish/analysis
+github.com/AlessandroPomponio/go-gibberish/consts
+github.com/AlessandroPomponio/go-gibberish/gibberish
+github.com/AlessandroPomponio/go-gibberish/persistence
+github.com/AlessandroPomponio/go-gibberish/structs
 # github.com/beorn7/perks v1.0.1
 ## explicit; go 1.11
 github.com/beorn7/perks/quantile

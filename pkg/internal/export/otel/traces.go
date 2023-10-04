@@ -24,6 +24,7 @@ import (
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/pkg/internal/request"
+	"github.com/grafana/beyla/pkg/internal/svc"
 )
 
 func tlog() *slog.Logger {
@@ -103,9 +104,7 @@ type TracesReporter struct {
 	cfg           *TracesConfig
 	traceExporter trace.SpanExporter
 	bsp           trace.SpanProcessor
-	// TODO: at some point we might want to set a namespace per service
-	namespace string
-	reporters ReporterPool[*Tracers]
+	reporters     ReporterPool[*Tracers]
 }
 
 // Tracers handles the OTEL traces providers and exporters.
@@ -126,10 +125,10 @@ func ReportTraces(ctx context.Context, cfg *TracesConfig, ctxInfo *global.Contex
 
 func newTracesReporter(ctx context.Context, cfg *TracesConfig, ctxInfo *global.ContextInfo) (*TracesReporter, error) {
 	log := tlog()
-	r := TracesReporter{ctx: ctx, cfg: cfg, namespace: ctxInfo.ServiceNamespace}
+	r := TracesReporter{ctx: ctx, cfg: cfg}
 	r.reporters = NewReporterPool[*Tracers](cfg.ReportersCacheLen,
-		func(k string, v *Tracers) {
-			llog := log.With("serviceName", k)
+		func(k svc.ID, v *Tracers) {
+			llog := log.With("service", k)
 			llog.Debug("evicting metrics reporter from cache")
 			go func() {
 				if err := v.provider.Shutdown(ctx); err != nil {
@@ -324,8 +323,8 @@ func (r *TracesReporter) traceAttributes(span *request.Span) []attribute.KeyValu
 		}
 	}
 
-	if span.ServiceName != "" { // we don't have service name set, system wide instrumentation
-		attrs = append(attrs, semconv.ServiceName(span.ServiceName))
+	if span.ServiceID.Name != "" { // we don't have service name set, system wide instrumentation
+		attrs = append(attrs, semconv.ServiceName(span.ServiceID.Name))
 	}
 
 	// append extra metadata
@@ -498,21 +497,21 @@ func (r *TracesReporter) reportServerSpan(span *request.Span, tracer trace2.Trac
 }
 
 func (r *TracesReporter) reportTraces(input <-chan []request.Span) {
-	lastSvc := ""
+	var lastSvc svc.ID
 	var reporter trace2.Tracer
 	for spans := range input {
 		for i := range spans {
 			span := &spans[i]
 
 			// small optimization: read explanation in MetricsReporter.reportMetrics
-			if span.ServiceName != lastSvc || reporter == nil {
-				lm, err := r.reporters.For(span.ServiceName)
+			if span.ServiceID != lastSvc || reporter == nil {
+				lm, err := r.reporters.For(span.ServiceID)
 				if err != nil {
 					mlog().Error("unexpected error creating OTEL resource. Ignoring trace",
-						err, "serviceName", span.ServiceName)
+						err, "service", span.ServiceID)
 					continue
 				}
-				lastSvc = span.ServiceName
+				lastSvc = span.ServiceID
 				reporter = lm.tracer
 			}
 
@@ -527,11 +526,11 @@ func (r *TracesReporter) reportTraces(input <-chan []request.Span) {
 	r.close()
 }
 
-func (r *TracesReporter) newTracers(svcName string) (*Tracers, error) {
-	tlog().Debug("creating new Tracers reporter", "serviceName", svcName)
+func (r *TracesReporter) newTracers(service svc.ID) (*Tracers, error) {
+	tlog().Debug("creating new Tracers reporter", "service", service)
 	tracers := Tracers{
 		provider: trace.NewTracerProvider(
-			trace.WithResource(otelResource(svcName, r.namespace)),
+			trace.WithResource(otelResource(service)),
 			trace.WithSpanProcessor(r.bsp),
 			trace.WithSampler(trace.ParentBased(trace.TraceIDRatioBased(r.cfg.SamplingRatio))),
 		),

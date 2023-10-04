@@ -21,6 +21,7 @@ import (
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/pkg/internal/request"
+	"github.com/grafana/beyla/pkg/internal/svc"
 )
 
 func mlog() *slog.Logger {
@@ -101,11 +102,9 @@ func (m MetricsConfig) Enabled() bool {
 // MetricsReporter implements the graph node that receives request.Span
 // instances and forwards them as OTEL metrics.
 type MetricsReporter struct {
-	ctx      context.Context
-	cfg      *MetricsConfig
-	exporter metric.Exporter
-	// TODO: at some point we might want to set a namespace per service
-	namespace string
+	ctx       context.Context
+	cfg       *MetricsConfig
+	exporter  metric.Exporter
 	reporters ReporterPool[*Metrics]
 }
 
@@ -136,13 +135,12 @@ func ReportMetrics(
 func newMetricsReporter(ctx context.Context, cfg *MetricsConfig, ctxInfo *global.ContextInfo) (*MetricsReporter, error) {
 	log := mlog()
 	mr := MetricsReporter{
-		ctx:       ctx,
-		cfg:       cfg,
-		namespace: ctxInfo.ServiceNamespace,
+		ctx: ctx,
+		cfg: cfg,
 	}
 	mr.reporters = NewReporterPool[*Metrics](cfg.ReportersCacheLen,
-		func(k string, v *Metrics) {
-			llog := log.With("serviceName", k)
+		func(id svc.ID, v *Metrics) {
+			llog := log.With("service", id)
 			llog.Debug("evicting metrics reporter from cache")
 			go func() {
 				if err := v.provider.Shutdown(ctx); err != nil {
@@ -160,9 +158,9 @@ func newMetricsReporter(ctx context.Context, cfg *MetricsConfig, ctxInfo *global
 	return &mr, nil
 }
 
-func (mr *MetricsReporter) newMetricSet(svcName string) (*Metrics, error) {
-	mlog().Debug("creating new Metrics reporter", "serviceName", svcName)
-	resources := otelResource(svcName, mr.namespace)
+func (mr *MetricsReporter) newMetricSet(service svc.ID) (*Metrics, error) {
+	mlog().Debug("creating new Metrics reporter", "service", service)
+	resources := otelResource(service)
 	m := Metrics{
 		ctx: mr.ctx,
 		provider: metric.NewMeterProvider(
@@ -326,8 +324,8 @@ func (mr *MetricsReporter) metricAttributes(span *request.Span) attribute.Set {
 		}
 	}
 
-	if span.ServiceName != "" { // we don't have service name set, system wide instrumentation
-		attrs = append(attrs, semconv.ServiceName(span.ServiceName))
+	if span.ServiceID.Name != "" { // we don't have service name set, system wide instrumentation
+		attrs = append(attrs, semconv.ServiceName(span.ServiceID.Name))
 	}
 
 	for key, val := range span.Metadata {
@@ -357,7 +355,7 @@ func (r *Metrics) record(span *request.Span, attrs attribute.Set) {
 }
 
 func (mr *MetricsReporter) reportMetrics(input <-chan []request.Span) {
-	lastSvc := ""
+	var lastSvc svc.ID
 	var reporter *Metrics
 	for spans := range input {
 		for i := range spans {
@@ -369,14 +367,14 @@ func (mr *MetricsReporter) reportMetrics(input <-chan []request.Span) {
 			// only a single instrumented process.
 			// In multi-process tracing, this is likely to happen as most
 			// tracers group traces belonging to the same service in the same slice.
-			if s.ServiceName != lastSvc || reporter == nil {
-				lm, err := mr.reporters.For(s.ServiceName)
+			if s.ServiceID != lastSvc || reporter == nil {
+				lm, err := mr.reporters.For(s.ServiceID)
 				if err != nil {
 					mlog().Error("unexpected error creating OTEL resource. Ignoring metric",
-						err, "serviceName", s.ServiceName)
+						err, "service", s.ServiceID)
 					continue
 				}
-				lastSvc = s.ServiceName
+				lastSvc = s.ServiceID
 				reporter = lm
 			}
 			reporter.record(s, mr.metricAttributes(s))

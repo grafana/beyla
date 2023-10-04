@@ -6,6 +6,10 @@ app.get("/greeting", (req, res, next) => {
     res.json("Hello!");
 });
 
+app.get("/bye", (req, res, next) => {
+    res.json("Goodbye!");
+});
+
 app.get("/smoke", (req, res, next) => {
     res.sendStatus(200)
 });

@@ -18,7 +18,7 @@ services:
       dockerfile: ./test/integration/components/beyla/Dockerfile
     command:
       - /beyla
-      - --config=/configs/instrumenter-config-java.yml
+      - --config=/configs/instrumenter-config-node.yml
     volumes:
       - ./configs/:/configs
       - ../../testoutput:/coverage
@@ -78,3 +78,13 @@ services:
       - ./configs/:/etc/prometheus
     ports:
       - "9090:9090"
+
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    ports:
+      - "16686:16686" # Query frontend
+      - "4317"        # OTEL GRPC traces collector
+      - "4318"        # OTEL HTTP traces collector
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+      - LOG_LEVEL=debug

@@ -58,7 +58,6 @@ func (pf *ProcessFinder) Start(ctx context.Context) (<-chan *ProcessTracer, erro
 		// TODO, for multi-process inspection
 		// 1. Keep searching processes matching a given search criteria
 		// 2. Instrument these that haven't been instrumented already
-		// 3. Do not report service name as part of a shared configuration but as part of the trace
 
 		log.Debug("Finding process in background...")
 		pt, err := pf.findAndInstrument(ctx, pf.Metrics)
@@ -152,12 +151,11 @@ func (pf *ProcessFinder) findAndInstrument(ctx context.Context, metrics imetrics
 		log.Info("system wide instrumentation")
 	}
 	return &ProcessTracer{
-		programs:            programs,
-		ELFInfo:             elfInfo,
-		goffsets:            goffsets,
-		exe:                 exe,
-		pinPath:             pf.pinPath,
-		systemWide:          pf.Cfg.SystemWide,
-		overrideServiceName: pf.CtxInfo.ServiceName,
+		programs:   programs,
+		ELFInfo:    elfInfo,
+		goffsets:   goffsets,
+		exe:        exe,
+		pinPath:    pf.pinPath,
+		systemWide: pf.Cfg.SystemWide,
 	}, nil
 }

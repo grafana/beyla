@@ -22,6 +22,7 @@ import (
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/pipe"
 	"github.com/grafana/beyla/pkg/internal/request"
+	"github.com/grafana/beyla/pkg/internal/svc"
 )
 
 //go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -type http_buf_t -target amd64,arm64 bpf ../../../../bpf/http_sock.c -- -I../../../../bpf/headers
@@ -219,9 +220,9 @@ func (p *Tracer) SocketFilters() []*ebpf.Program {
 	return []*ebpf.Program{p.bpfObjects.SocketHttpFilter}
 }
 
-func (p *Tracer) Run(ctx context.Context, eventsChan chan<- []request.Span, svcName string) {
+func (p *Tracer) Run(ctx context.Context, eventsChan chan<- []request.Span, service svc.ID) {
 	ebpfcommon.ForwardRingbuf[HTTPInfo](
-		svcName,
+		service,
 		&p.Cfg.EBPF, p.log(), p.bpfObjects.Events,
 		p.readHTTPInfoIntoSpan,
 		p.Metrics,

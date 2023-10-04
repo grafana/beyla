@@ -82,7 +82,7 @@ endef
 .PHONY: prereqs
 prereqs:
 	@echo "### Check if prerequisites are met, and installing missing dependencies"
-	mkdir -p $(TEST_OUTPUT)
+	mkdir -p $(TEST_OUTPUT)/run
 	$(call go-install-tool,$(GOLANGCI_LINT),github.com/golangci/golangci-lint/cmd/golangci-lint@v1.54.2)
 	$(call go-install-tool,$(BPF2GO),github.com/cilium/ebpf/cmd/bpf2go@v0.10.0)
 	$(call go-install-tool,$(GO_OFFSETS_TRACKER),github.com/grafana/go-offsets-tracker/cmd/go-offsets-tracker@v0.1.4)
@@ -243,3 +243,8 @@ update-licenses: prereqs
 artifact: compile
 	@echo "### Packing generated artifact"
 	tar -C ./bin -cvzf bin/beyla.tar.gz beyla
+
+.PHONE: clean-testoutput
+clean-testoutput:
+	@echo "### Cleaning ${TEST_OUTPUT} folder"
+	rm -rf ${TEST_OUTPUT}/*

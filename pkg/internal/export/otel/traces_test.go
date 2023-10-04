@@ -238,8 +238,7 @@ func TestTraces_InternalInstrumentation(t *testing.T) {
 			ReportersCacheLen: 16,
 		},
 		&global.ContextInfo{
-			ServiceName: "foo",
-			Metrics:     internalTraces,
+			Metrics: internalTraces,
 		})
 	require.NoError(t, err)
 	inputNode.SendTo(node.AsTerminal(exporter))
@@ -331,8 +330,7 @@ func TestTraces_InternalInstrumentationSampling(t *testing.T) {
 			ReportersCacheLen: 16,
 		},
 		&global.ContextInfo{
-			ServiceName: "foo",
-			Metrics:     internalTraces,
+			Metrics: internalTraces,
 		})
 	require.NoError(t, err)
 	inputNode.SendTo(node.AsTerminal(exporter))

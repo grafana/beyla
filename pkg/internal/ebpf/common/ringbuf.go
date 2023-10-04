@@ -13,6 +13,7 @@ import (
 
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/request"
+	"github.com/grafana/beyla/pkg/internal/svc"
 )
 
 // ringBufReader interface extracts the used methods from ringbuf.Reader for proper
@@ -29,7 +30,8 @@ var readerFactory = func(rb *ebpf.Map) (ringBufReader, error) {
 }
 
 type ringBufForwarder[T any] struct {
-	svcName    string
+	service svc.ID
+
 	cfg        *TracerConfig
 	logger     *slog.Logger
 	ringbuffer *ebpf.Map
@@ -46,7 +48,7 @@ type ringBufForwarder[T any] struct {
 // internal buffer, and forwards them to an output events channel, previously converted to request.Span
 // instances.
 func ForwardRingbuf[T any](
-	svcName string,
+	service svc.ID,
 	cfg *TracerConfig,
 	logger *slog.Logger,
 	ringbuffer *ebpf.Map,
@@ -55,7 +57,7 @@ func ForwardRingbuf[T any](
 	closers ...io.Closer,
 ) func(context.Context, chan<- []request.Span) {
 	rbf := ringBufForwarder[T]{
-		svcName: svcName, cfg: cfg, logger: logger, ringbuffer: ringbuffer,
+		service: service, cfg: cfg, logger: logger, ringbuffer: ringbuffer,
 		closers: closers, reader: reader, metrics: metrics,
 	}
 	return rbf.readAndForward
@@ -115,12 +117,10 @@ func (rbf *ringBufForwarder[T]) readAndForward(ctx context.Context, spansChan ch
 			rbf.access.Unlock()
 			continue
 		}
+		s.ServiceID = rbf.service
 		rbf.spans[rbf.spansLen] = s
 		// we need to decorate each span with the tracer's service name
 		// if this information is not forwarded from eBPF
-		if rbf.svcName != "" {
-			rbf.spans[rbf.spansLen].ServiceName = rbf.svcName
-		}
 		rbf.spansLen++
 		if rbf.spansLen == rbf.cfg.BatchLength {
 			rbf.logger.Debug("submitting traces after batch is full", "len", rbf.spansLen)

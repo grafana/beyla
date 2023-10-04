@@ -4,6 +4,8 @@ import (
 	"time"
 
 	"github.com/gavv/monotime"
+
+	"github.com/grafana/beyla/pkg/internal/svc"
 )
 
 type EventType int
@@ -38,7 +40,7 @@ type Span struct {
 	RequestStart  int64
 	Start         int64
 	End           int64
-	ServiceName   string
+	ServiceID     svc.ID
 	Metadata      map[string]string
 	Traceparent   string
 }

@@ -117,12 +117,10 @@ func (rbf *ringBufForwarder[T]) readAndForward(ctx context.Context, spansChan ch
 			rbf.access.Unlock()
 			continue
 		}
+		s.ServiceID = rbf.service
 		rbf.spans[rbf.spansLen] = s
 		// we need to decorate each span with the tracer's service name
 		// if this information is not forwarded from eBPF
-		if rbf.service.Name != "" {
-			rbf.spans[rbf.spansLen].ServiceID = rbf.service
-		}
 		rbf.spansLen++
 		if rbf.spansLen == rbf.cfg.BatchLength {
 			rbf.logger.Debug("submitting traces after batch is full", "len", rbf.spansLen)

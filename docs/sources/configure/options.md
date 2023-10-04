@@ -60,7 +60,7 @@ whole Beyla configuration:
 | `executable_name` | `EXECUTABLE_NAME` | string | (unset) |
 
 Selects the process to instrument by the executable name path. This property accepts
-a regular expression to be matched againts the full executable command line, including the directory
+a regular expression to be matched against the full executable command line, including the directory
 where the executable resides on the file system.
 
 If the `open_port` property is set, the executable to be selected needs to match both properties.

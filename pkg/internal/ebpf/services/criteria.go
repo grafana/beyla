@@ -105,6 +105,10 @@ type PathRegexp struct {
 	re *regexp.Regexp
 }
 
+func NewPathRegexp(re *regexp.Regexp) PathRegexp {
+	return PathRegexp{re: re}
+}
+
 func (p *PathRegexp) IsSet() bool {
 	return p.re != nil
 }

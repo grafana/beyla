@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"os"
 	"reflect"
+	"regexp"
 	"slices"
 	"strings"
 
@@ -224,12 +225,14 @@ func inspect(ctx context.Context, cfg *pipe.Config, functions []string) (*exec.F
 	for _, execElf := range elfs {
 		var offsets *goexec.Offsets
 
-		if cfg.SkipGoSpecificTracers {
-			log.Debug("skipping inspection for Go functions", "pid", execElf.Pid, "comm", execElf.CmdExePath)
-		} else {
-			log.Debug("inspecting", "pid", execElf.Pid, "comm", execElf.CmdExePath)
-			if offsets, err = goexec.InspectOffsets(&execElf, functions); err != nil {
-				log.Debug("couldn't find go specific tracers", "error", err)
+		if !cfg.SystemWide {
+			if cfg.SkipGoSpecificTracers {
+				log.Debug("skipping inspection for Go functions", "pid", execElf.Pid, "comm", execElf.CmdExePath)
+			} else {
+				log.Debug("inspecting", "pid", execElf.Pid, "comm", execElf.CmdExePath)
+				if offsets, err = goexec.InspectOffsets(&execElf, functions); err != nil {
+					log.Debug("couldn't find go specific tracers", "error", err)
+				}
 			}
 		}
 
@@ -274,6 +277,15 @@ func inspect(ctx context.Context, cfg *pipe.Config, functions []string) (*exec.F
 }
 
 func findingCriteria(cfg *pipe.Config) services.DefinitionCriteria {
+	if cfg.SystemWide {
+		// will return all the executables in the system
+		return services.DefinitionCriteria{
+			services.Attributes{
+				Namespace: cfg.ServiceNamespace,
+				Path:      services.NewPathRegexp(regexp.MustCompile(".")),
+			},
+		}
+	}
 	finderCriteria := cfg.Services
 	// Merge the old, individual single-service selector,
 	// with the new, map-based multi-services selector.

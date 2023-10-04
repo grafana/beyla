@@ -33,6 +33,7 @@ const (
 	HTTPClientDuration    = "http.client.duration"
 	RPCServerDuration     = "rpc.server.duration"
 	RPCClientDuration     = "rpc.client.duration"
+	SQLClientDuration     = "sql.client.duration"
 	HTTPServerRequestSize = "http.server.request.size"
 	HTTPClientRequestSize = "http.client.request.size"
 
@@ -119,6 +120,7 @@ type Metrics struct {
 	grpcClientDuration    instrument.Float64Histogram
 	httpRequestSize       instrument.Float64Histogram
 	httpClientRequestSize instrument.Float64Histogram
+	sqlClientDuration     instrument.Float64Histogram
 }
 
 func ReportMetrics(
@@ -195,6 +197,10 @@ func (mr *MetricsReporter) newMetricSet(service svc.ID) (*Metrics, error) {
 	m.grpcClientDuration, err = meter.Float64Histogram(RPCClientDuration, instrument.WithUnit("s"))
 	if err != nil {
 		return nil, fmt.Errorf("creating grpc duration histogram metric: %w", err)
+	}
+	m.sqlClientDuration, err = meter.Float64Histogram(SQLClientDuration, instrument.WithUnit("s"))
+	if err != nil {
+		return nil, fmt.Errorf("creating sql client duration histogram metric: %w", err)
 	}
 	m.httpRequestSize, err = meter.Float64Histogram(HTTPServerRequestSize, instrument.WithUnit("By"))
 	if err != nil {
@@ -322,6 +328,10 @@ func (mr *MetricsReporter) metricAttributes(span *request.Span) attribute.Set {
 			attrs = append(attrs, semconv.NetSockPeerName(span.Host))
 			attrs = append(attrs, semconv.NetSockPeerPort(span.HostPort))
 		}
+	case request.EventTypeSQLClient:
+		attrs = []attribute.KeyValue{
+			semconv.DBStatement(span.Path),
+		}
 	}
 
 	if span.ServiceID.Name != "" { // we don't have service name set, system wide instrumentation
@@ -351,6 +361,8 @@ func (r *Metrics) record(span *request.Span, attrs attribute.Set) {
 	case request.EventTypeHTTPClient:
 		r.httpClientDuration.Record(r.ctx, duration, attrOpt)
 		r.httpClientRequestSize.Record(r.ctx, float64(span.ContentLength), attrOpt)
+	case request.EventTypeSQLClient:
+		r.sqlClientDuration.Record(r.ctx, duration, attrOpt)
 	}
 }
 

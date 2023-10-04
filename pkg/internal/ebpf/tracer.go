@@ -223,20 +223,8 @@ func inspect(ctx context.Context, cfg *pipe.Config, functions []string) (*exec.F
 
 	// look for suitable Go application first
 	for _, execElf := range elfs {
-		var offsets *goexec.Offsets
-
-		if !cfg.SystemWide {
-			if cfg.SkipGoSpecificTracers {
-				log.Debug("skipping inspection for Go functions", "pid", execElf.Pid, "comm", execElf.CmdExePath)
-			} else {
-				log.Debug("inspecting", "pid", execElf.Pid, "comm", execElf.CmdExePath)
-				if offsets, err = goexec.InspectOffsets(&execElf, functions); err != nil {
-					log.Debug("couldn't find go specific tracers", "error", err)
-				}
-			}
-		}
-
-		if cfg.SkipGoSpecificTracers || offsets == nil {
+		offsets, ok := inspectOffsets(cfg, &execElf, functions)
+		if !ok {
 			fallBackInfos = append(fallBackInfos, execElf)
 			pidMap[execElf.Pid] = execElf
 			log.Debug("adding fall-back generic executable", "pid", execElf.Pid, "comm", execElf.CmdExePath)
@@ -274,6 +262,23 @@ func inspect(ctx context.Context, cfg *pipe.Config, functions []string) (*exec.F
 	logger().Info("instrumented", "comm", execElf.CmdExePath, "pid", execElf.Pid)
 
 	return &execElf, nil, nil
+}
+
+func inspectOffsets(cfg *pipe.Config, execElf *exec.FileInfo, functions []string) (*goexec.Offsets, bool) {
+	if !cfg.SystemWide {
+		log := logger()
+		if cfg.SkipGoSpecificTracers {
+			log.Debug("skipping inspection for Go functions", "pid", execElf.Pid, "comm", execElf.CmdExePath)
+		} else {
+			log.Debug("inspecting", "pid", execElf.Pid, "comm", execElf.CmdExePath)
+			if offsets, err := goexec.InspectOffsets(execElf, functions); err != nil {
+				log.Debug("couldn't find go specific tracers", "error", err)
+			} else {
+				return offsets, true
+			}
+		}
+	}
+	return nil, false
 }
 
 func findingCriteria(cfg *pipe.Config) services.DefinitionCriteria {

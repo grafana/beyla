@@ -45,7 +45,6 @@ func main() {
 			CheckError(e)
 			fmt.Println("name: ", name, " id: ", id)
 		}
-		time.Sleep(1 * time.Second)
 	})
 	err = http.ListenAndServe(":8080", nil)
 	CheckError(err)

@@ -1,0 +1,9 @@
+version: "3.9"
+services:
+  testserver:
+    build:
+      context: ../../integration/components/sqlclient
+      dockerfile: Dockerfile
+    image: hatest-gosqlclient
+    ports:
+      - "8080:8080"

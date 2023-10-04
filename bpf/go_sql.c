@@ -67,6 +67,7 @@ int uprobe_queryDC_Returns(struct pt_regs *ctx) {
     bpf_dbg_printk("=== uprobe/queryDC_Returns === ");
     void *goroutine_addr = GOROUTINE_PTR(ctx);
     bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
+
     struct sql_request_t *request = bpf_map_lookup_elem(&sql_events, &goroutine_addr);
     if (request == NULL) {
         bpf_dbg_printk("Request not found for this goroutine");

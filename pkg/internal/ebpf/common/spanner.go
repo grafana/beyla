@@ -37,6 +37,8 @@ func HTTPRequestTraceToSpan(trace *HTTPRequestTrace) request.Span {
 		hostname = extractIP(trace.Host[:], int(trace.HostLen))
 	case request.EventTypeGRPCClient:
 		hostname, hostPort = extractHostPort(trace.Host[:])
+	case request.EventTypeSQLClient:
+		trace.GoStartMonotimeNs = trace.StartMonotimeNs
 	default:
 		log.Warn("unknown trace type", "type", trace.Type)
 	}

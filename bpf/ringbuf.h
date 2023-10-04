@@ -3,6 +3,8 @@
 
 #include "utils.h"
 
+// These need to line up with some Go identifiers:
+// EventTypeHTTP, EventTypeGRPC, EventTypeHTTPClient, EventTypeGRPCClient, EventTypeSQLClient
 #define EVENT_HTTP_REQUEST 1
 #define EVENT_GRPC_REQUEST 2
 #define EVENT_HTTP_CLIENT  3

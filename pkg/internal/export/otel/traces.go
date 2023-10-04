@@ -278,6 +278,27 @@ func spanStatusCode(span *request.Span) codes.Code {
 	return codes.Unset
 }
 
+func getSQLOperationAndTable(queryString string) (string, string) {
+	fields := strings.Fields(queryString)
+	if len(fields) == 0 {
+		return "", ""
+	}
+	operation := strings.ToUpper(fields[0])
+	table := ""
+	for i, f := range fields {
+		word := strings.ToUpper(f)
+		switch word {
+		case "FROM", "INTO", "ON":
+			next := i + 1
+			if next < len(fields) {
+				table = fields[next]
+			}
+			return operation, table
+		}
+	}
+	return operation, table
+}
+
 func (r *TracesReporter) traceAttributes(span *request.Span) []attribute.KeyValue {
 	var attrs []attribute.KeyValue
 
@@ -321,6 +342,13 @@ func (r *TracesReporter) traceAttributes(span *request.Span) []attribute.KeyValu
 			semconv.NetPeerName(span.Host),
 			semconv.NetPeerPort(span.HostPort),
 		}
+	case request.EventTypeSQLClient:
+		operation, table := getSQLOperationAndTable(span.Path)
+		attrs = []attribute.KeyValue{
+			semconv.DBStatement(operation + " " + table),
+			semconv.DBSQLTable(table),
+			semconv.DBOperation(operation),
+		}
 	}
 
 	if span.ServiceID.Name != "" { // we don't have service name set, system wide instrumentation
@@ -347,6 +375,9 @@ func traceName(span *request.Span) string {
 		return span.Path
 	case request.EventTypeHTTPClient:
 		return span.Method
+	case request.EventTypeSQLClient:
+		operation, table := getSQLOperationAndTable(span.Path)
+		return operation + " ." + table
 	}
 	return ""
 }
@@ -355,7 +386,7 @@ func spanKind(span *request.Span) trace2.SpanKind {
 	switch span.Type {
 	case request.EventTypeHTTP, request.EventTypeGRPC:
 		return trace2.SpanKindServer
-	case request.EventTypeHTTPClient, request.EventTypeGRPCClient:
+	case request.EventTypeHTTPClient, request.EventTypeGRPCClient, request.EventTypeSQLClient:
 		return trace2.SpanKindClient
 	}
 	return trace2.SpanKindInternal
@@ -516,7 +547,7 @@ func (r *TracesReporter) reportTraces(input <-chan []request.Span) {
 			}
 
 			switch span.Type {
-			case request.EventTypeHTTPClient, request.EventTypeGRPCClient:
+			case request.EventTypeHTTPClient, request.EventTypeGRPCClient, request.EventTypeSQLClient:
 				r.reportClientSpan(span, reporter)
 			case request.EventTypeHTTP, request.EventTypeGRPC:
 				r.reportServerSpan(span, reporter)

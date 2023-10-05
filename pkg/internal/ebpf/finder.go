@@ -10,7 +10,6 @@ import (
 	"path"
 
 	"github.com/cilium/ebpf/link"
-	"github.com/cilium/ebpf/rlimit"
 
 	"github.com/grafana/beyla/pkg/internal/ebpf/goruntime"
 	"github.com/grafana/beyla/pkg/internal/ebpf/grpc"
@@ -42,9 +41,6 @@ func (pf *ProcessFinder) Start(ctx context.Context) (<-chan *ProcessTracer, erro
 	log.Debug("Starting Process Finder")
 	pf.discoveredTracers = make(chan *ProcessTracer, pf.CtxInfo.ChannelBufferLen)
 
-	if err := rlimit.RemoveMemlock(); err != nil {
-		return nil, fmt.Errorf("removing memory lock: %w", err)
-	}
 	go func() {
 		// TODO, for multi-process inspection
 		// 1. Keep searching processes matching a given search criteria

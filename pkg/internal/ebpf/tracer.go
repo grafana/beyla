@@ -14,6 +14,7 @@ import (
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
+	"github.com/cilium/ebpf/rlimit"
 	"golang.org/x/sys/unix"
 
 	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
@@ -106,6 +107,9 @@ func (pt *ProcessTracer) Run(ctx context.Context, out chan<- []request.Span) {
 
 func (pt *ProcessTracer) init() error {
 	pt.log = ptlog().With("path", pt.ELFInfo.CmdExePath, "pid", pt.ELFInfo.Pid)
+	if err := rlimit.RemoveMemlock(); err != nil {
+		return fmt.Errorf("removing memory lock: %w", err)
+	}
 	if err := pt.mountBpfPinPath(); err != nil {
 		return fmt.Errorf("can't mount BPF filesystem: %w", err)
 	}

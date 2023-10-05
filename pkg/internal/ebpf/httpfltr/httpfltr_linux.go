@@ -33,7 +33,7 @@ func findNamespace(pid int32) (uint32, error) {
 	start := strings.LastIndex(nsPid, "[")
 	end := strings.LastIndex(nsPid, "]")
 
-	logger.Info("Found namespace", "nsPid", nsPid)
+	logger.Debug("Found namespace", "nsPid", nsPid)
 
 	if start >= 0 && end >= 0 && end > start {
 		npid, err := strconv.ParseUint(string(buf[start+1:end]), 10, 32)

@@ -124,7 +124,7 @@ func (pf *ProcessFinder) getTracer(ie Instrumentable) (*ProcessTracer, bool) {
 	if ie.Offsets != nil {
 		programs = filterNotFoundPrograms(programs, ie.Offsets)
 		if len(programs) == 0 {
-			pflog().Debug("no instrumentable function found. Ignoring", "pid", ie.FileInfo.Pid, "cmd", ie.FileInfo.CmdExePath)
+			pflog().Warn("no instrumentable functions found. Ignoring", "pid", ie.FileInfo.Pid, "cmd", ie.FileInfo.CmdExePath)
 			return nil, false
 		}
 	} else {

@@ -34,6 +34,7 @@ func NewInspector(cfg *pipe.Config, functions []string) *Inspector {
 }
 
 func (ei *Inspector) Inspect(ctx context.Context) ([]Instrumentable, error) {
+	log := inspectLog()
 	elfs, err := exec.FindExecELFs(ctx, findingCriteria(ei.cfg))
 	defer func() {
 		for _, e := range elfs {
@@ -55,11 +56,11 @@ func (ei *Inspector) Inspect(ctx context.Context) ([]Instrumentable, error) {
 		// if we find multiple processes with the same parent, avoid
 		// adding multiple times the parent
 		if _, ok := instrumentedPids[inst.FileInfo.Pid]; !ok {
+			log.Info("instrumenting process", "cmd", inst.FileInfo.CmdExePath, "pid", inst.FileInfo.Pid)
 			out = append(out, inst)
 			instrumentedPids[inst.FileInfo.Pid] = struct{}{}
 		}
 	}
-	inspectLog().Debug("found instrumentable processes", "len", len(out))
 	return out, nil
 }
 
@@ -81,16 +82,14 @@ func (ei *Inspector) asInstrumentable(execElf *exec.FileInfo) Instrumentable {
 
 	// select the parent (or grandparent) of the executable, if any
 	parent, ok := ei.pidMap[execElf.Ppid]
-	for ok {
-		execElf = parent
+	for ok && execElf.Ppid != execElf.Pid {
 		log.Debug("replacing executable by its parent", "ppid", execElf.Ppid)
+		execElf = parent
 		parent, ok = ei.pidMap[parent.Ppid]
 	}
 
-	log.Info("Go HTTP/gRPC support not detected. Using only generic instrumentation.")
 	log.Info("instrumented", "comm", execElf.CmdExePath, "pid", execElf.Pid)
-
-	// Return the instrumentable without offsets, at is is identified as a generic
+	// Return the instrumentable without offsets, at it is identified as a generic
 	// (or non-instrumentable Go proxy) executable
 	return Instrumentable{FileInfo: execElf}
 }

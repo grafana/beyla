@@ -153,8 +153,7 @@ func (i *instrumenter) uprobes(pid int32, p Tracer) error {
 				if funcPrograms.Required {
 					return fmt.Errorf("instrumenting function %q: %w", funcName, err)
 				}
-
-				log.Info("error instrumenting uprobe", "function", funcName, "error", err)
+				log.Debug("can't instrument uprobe", "function", funcName, "error", err)
 			}
 			p.AddCloser(i.closables...)
 		}

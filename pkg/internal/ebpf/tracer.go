@@ -75,7 +75,8 @@ type ProcessTracer struct {
 
 func (pt *ProcessTracer) Run(ctx context.Context, out chan<- []request.Span) {
 	if err := pt.init(); err != nil {
-		pt.log.Error("cant start process tracer. Stopping", "error", err)
+		pt.log.Error("cant start process tracer. Stopping it", "error", err)
+		return
 	}
 	pt.log.Debug("starting process tracer")
 	// Searches for traceable functions
@@ -116,7 +117,7 @@ func (pt *ProcessTracer) close() {
 }
 
 func (pt *ProcessTracer) mountBpfPinPath() error {
-	pt.log.Debug("mounting BPF map pinning path")
+	pt.log.Debug("mounting BPF map pinning", "path", pt.pinPath)
 	if _, err := os.Stat(pt.pinPath); err != nil {
 		if !os.IsNotExist(err) {
 			return fmt.Errorf("accessing %s stat: %w", pt.pinPath, err)
@@ -152,7 +153,7 @@ func (pt *ProcessTracer) tracers() ([]Tracer, error) {
 
 	for _, p := range pt.programs {
 		plog := log.With("program", reflect.TypeOf(p))
-		plog.Debug("loading eBPF program")
+		plog.Debug("loading eBPF program", "pinPath", pt.pinPath, "pid", pt.ELFInfo.Pid, "cmd", pt.ELFInfo.CmdExePath)
 		spec, err := p.Load()
 		if err != nil {
 			return nil, fmt.Errorf("loading eBPF program: %w", err)

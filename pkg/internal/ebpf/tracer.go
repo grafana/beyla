@@ -10,8 +10,6 @@ import (
 	"log/slog"
 	"os"
 	"reflect"
-	"regexp"
-	"slices"
 	"strings"
 
 	"github.com/cilium/ebpf"
@@ -19,10 +17,8 @@ import (
 	"golang.org/x/sys/unix"
 
 	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
-	"github.com/grafana/beyla/pkg/internal/ebpf/services"
 	"github.com/grafana/beyla/pkg/internal/exec"
 	"github.com/grafana/beyla/pkg/internal/goexec"
-	"github.com/grafana/beyla/pkg/internal/pipe"
 	"github.com/grafana/beyla/pkg/internal/request"
 	"github.com/grafana/beyla/pkg/internal/svc"
 )
@@ -224,142 +220,6 @@ programs:
 		filtered = append(filtered, p)
 	}
 	return filtered
-}
-
-func isGoProxy(offsets *goexec.Offsets) bool {
-	for f := range offsets.Funcs {
-		// if we find anything of interest other than the Go runtime, we consider this a valid application
-		if !strings.HasPrefix(f, "runtime.") {
-			return false
-		}
-	}
-
-	return true
-}
-
-type instrumentableExec struct {
-	fileInfo *exec.FileInfo
-	offsets  *goexec.Offsets
-}
-
-type executablesInspector struct {
-	cfg           *pipe.Config
-	functions     []string
-	pidMap        map[int32]*exec.FileInfo
-	fallBackInfos []*exec.FileInfo
-	goProxies     []*exec.FileInfo
-}
-
-func inspect(ctx context.Context, cfg *pipe.Config, functions []string) ([]instrumentableExec, error) {
-	ei := executablesInspector{
-		cfg:       cfg,
-		functions: functions,
-		pidMap:    map[int32]*exec.FileInfo{},
-	}
-	return ei.doInspection(ctx)
-}
-
-func (ei *executablesInspector) doInspection(ctx context.Context) ([]instrumentableExec, error) {
-	elfs, err := exec.FindExecELFs(ctx, findingCriteria(ei.cfg))
-	defer func() {
-		for _, e := range elfs {
-			e.ELF.Close()
-		}
-	}()
-	if err != nil {
-		return nil, fmt.Errorf("looking for executable ELFs: %w", err)
-	}
-	var out []instrumentableExec
-	for i := range elfs {
-		if inst, ok := ei.asInstrumentable(&elfs[i]); ok {
-			out = append(out, inst)
-		}
-	}
-	ptlog().Debug("found instrumentable processes", "len", len(out))
-	return out, nil
-}
-
-func (ei *executablesInspector) asInstrumentable(execElf *exec.FileInfo) (instrumentableExec, bool) {
-	log := ptlog().With("pid", execElf.Pid, "comm", execElf.CmdExePath)
-	log.Debug("getting instrumentable information")
-	// look for suitable Go application first
-	offsets, ok := inspectOffsets(ei.cfg, execElf, ei.functions)
-	if !ok {
-		ei.fallBackInfos = append(ei.fallBackInfos, execElf)
-		ei.pidMap[execElf.Pid] = execElf
-		log.Debug("adding fall-back generic executable")
-		return instrumentableExec{}, false
-	}
-
-	// we found go offsets, let's see if this application is not a proxy
-	if !isGoProxy(offsets) {
-		return instrumentableExec{fileInfo: execElf, offsets: offsets}, true
-	}
-
-	log.Debug("ignoring Go proxy for now")
-	ei.goProxies = append(ei.goProxies, execElf)
-	ei.pidMap[execElf.Pid] = execElf
-
-	if len(ei.goProxies) != 0 {
-		execElf = ei.goProxies[len(ei.goProxies)-1]
-	} else if len(ei.fallBackInfos) != 0 {
-		execElf = ei.fallBackInfos[len(ei.fallBackInfos)-1]
-	} else {
-		log.Warn("looking for executable ELF, no suitable processes found. Ignoring")
-		return instrumentableExec{}, false
-	}
-
-	// check if the executable is a subprocess of another we have found, f so use the parent
-	if parentElf, ok := ei.pidMap[execElf.Ppid]; ok {
-		execElf = parentElf
-	}
-
-	log.Info("Go HTTP/gRPC support not detected. Using only generic instrumentation.")
-	log.Info("instrumented", "comm", execElf.CmdExePath, "pid", execElf.Pid)
-
-	return instrumentableExec{fileInfo: execElf, offsets: offsets}, true
-}
-
-func inspectOffsets(cfg *pipe.Config, execElf *exec.FileInfo, functions []string) (*goexec.Offsets, bool) {
-	if !cfg.SystemWide {
-		log := ptlog()
-		if cfg.SkipGoSpecificTracers {
-			log.Debug("skipping inspection for Go functions", "pid", execElf.Pid, "comm", execElf.CmdExePath)
-		} else {
-			log.Debug("inspecting", "pid", execElf.Pid, "comm", execElf.CmdExePath)
-			if offsets, err := goexec.InspectOffsets(execElf, functions); err != nil {
-				log.Debug("couldn't find go specific tracers", "error", err)
-			} else {
-				return offsets, true
-			}
-		}
-	}
-	return nil, false
-}
-
-func findingCriteria(cfg *pipe.Config) services.DefinitionCriteria {
-	if cfg.SystemWide {
-		// will return all the executables in the system
-		return services.DefinitionCriteria{
-			services.Attributes{
-				Namespace: cfg.ServiceNamespace,
-				Path:      services.NewPathRegexp(regexp.MustCompile(".")),
-			},
-		}
-	}
-	finderCriteria := cfg.Services
-	// Merge the old, individual single-service selector,
-	// with the new, map-based multi-services selector.
-	if cfg.Exec.IsSet() || cfg.Port.Len() > 0 {
-		finderCriteria = slices.Clone(cfg.Services)
-		finderCriteria = append(finderCriteria, services.Attributes{
-			Name:      cfg.ServiceName,
-			Namespace: cfg.ServiceNamespace,
-			Path:      cfg.Exec,
-			OpenPorts: cfg.Port,
-		})
-	}
-	return finderCriteria
 }
 
 func printVerifierErrorInfo(err error) {

@@ -102,7 +102,7 @@ func (pf *ProcessFinder) findAndInstrument(ctx context.Context) ([]*ProcessTrace
 	if !pf.Cfg.SkipGoSpecificTracers {
 		allFuncs = pf.allGoFunctionNames()
 	}
-	instrumentables, err := inspect(ctx, pf.Cfg, allFuncs)
+	instrumentables, err := NewInspector(pf.Cfg, allFuncs).Inspect(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("inspecting offsets: %w", err)
 	}
@@ -119,12 +119,12 @@ func (pf *ProcessFinder) findAndInstrument(ctx context.Context) ([]*ProcessTrace
 	return tracers, nil
 }
 
-func (pf *ProcessFinder) getTracer(ie instrumentableExec) (*ProcessTracer, bool) {
+func (pf *ProcessFinder) getTracer(ie Instrumentable) (*ProcessTracer, bool) {
 	programs := pf.newGoProgramsGroup()
-	if ie.offsets != nil {
-		programs = filterNotFoundPrograms(programs, ie.offsets)
+	if ie.Offsets != nil {
+		programs = filterNotFoundPrograms(programs, ie.Offsets)
 		if len(programs) == 0 {
-			pflog().Debug("no instrumentable function found. Ignoring", "pid", ie.fileInfo.Pid, "cmd", ie.fileInfo.CmdExePath)
+			pflog().Debug("no instrumentable function found. Ignoring", "pid", ie.FileInfo.Pid, "cmd", ie.FileInfo.CmdExePath)
 			return nil, false
 		}
 	} else {
@@ -135,19 +135,19 @@ func (pf *ProcessFinder) getTracer(ie instrumentableExec) (*ProcessTracer, bool)
 
 	// Instead of the executable file in the disk, we pass the /proc/<pid>/exec
 	// to allow loading it from different container/pods in containerized environments
-	exe, err := link.OpenExecutable(ie.fileInfo.ProExeLinkPath)
+	exe, err := link.OpenExecutable(ie.FileInfo.ProExeLinkPath)
 	if err != nil {
 		pflog().Warn("can't open executable. Ignoring",
-			"error", err, "pid", ie.fileInfo.Pid, "cmd", ie.fileInfo.CmdExePath)
+			"error", err, "pid", ie.FileInfo.Pid, "cmd", ie.FileInfo.CmdExePath)
 		return nil, false
 	}
 
 	return &ProcessTracer{
 		programs:   programs,
-		ELFInfo:    ie.fileInfo,
-		goffsets:   ie.offsets,
+		ELFInfo:    ie.FileInfo,
+		goffsets:   ie.Offsets,
 		exe:        exe,
-		pinPath:    path.Join(pf.Cfg.EBPF.BpfBaseDir, fmt.Sprintf("%d-%d", os.Getpid(), ie.fileInfo.Pid)),
+		pinPath:    path.Join(pf.Cfg.EBPF.BpfBaseDir, fmt.Sprintf("%d-%d", os.Getpid(), ie.FileInfo.Pid)),
 		systemWide: pf.Cfg.SystemWide,
 	}, true
 }

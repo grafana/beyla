@@ -5,7 +5,7 @@ services:
     build:
       context: ../..
       dockerfile: test/integration/components/nodejsserver/Dockerfile${TESTSERVER_DOCKERFILE_SUFFIX}
-    image: hatest-testserver
+    image: hatest-testserver-node
     ports:
       - "${TEST_SERVICE_PORTS}"
     depends_on:

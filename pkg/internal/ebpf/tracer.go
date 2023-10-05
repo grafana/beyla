@@ -216,16 +216,15 @@ func inspect(ctx context.Context, cfg *pipe.Config, functions []string) (*exec.F
 		return nil, nil, fmt.Errorf("looking for executable ELF: %w", err)
 	}
 
-	pidMap := map[int32]exec.FileInfo{}
-
-	var fallBackInfos []exec.FileInfo
-	var goProxies []exec.FileInfo
+	pidMap := map[int32]*exec.FileInfo{}
+	var goProxy, fallBack *exec.FileInfo
 
 	// look for suitable Go application first
-	for _, execElf := range elfs {
-		offsets, ok := inspectOffsets(cfg, &execElf, functions)
+	for i := range elfs {
+		execElf := &elfs[i]
+		offsets, ok := inspectOffsets(cfg, execElf, functions)
 		if !ok {
-			fallBackInfos = append(fallBackInfos, execElf)
+			fallBack = execElf
 			pidMap[execElf.Pid] = execElf
 			log.Debug("adding fall-back generic executable", "pid", execElf.Pid, "comm", execElf.CmdExePath)
 			continue
@@ -233,20 +232,19 @@ func inspect(ctx context.Context, cfg *pipe.Config, functions []string) (*exec.F
 
 		// we found go offsets, let's see if this application is not a proxy
 		if !isGoProxy(offsets) {
-			return &execElf, offsets, nil
+			return execElf, offsets, nil
 		}
 
 		log.Debug("ignoring Go proxy for now", "pid", execElf.Pid, "comm", execElf.CmdExePath)
-		goProxies = append(goProxies, execElf)
+		goProxy = execElf
 		pidMap[execElf.Pid] = execElf
 	}
 
-	var execElf exec.FileInfo
-
-	if len(goProxies) != 0 {
-		execElf = goProxies[len(goProxies)-1]
-	} else if len(fallBackInfos) != 0 {
-		execElf = fallBackInfos[len(fallBackInfos)-1]
+	var execElf *exec.FileInfo
+	if goProxy != nil {
+		execElf = goProxy
+	} else if fallBack != nil {
+		execElf = fallBack
 	} else {
 		return nil, nil, fmt.Errorf("looking for executable ELF, no suitable processes found")
 	}
@@ -261,7 +259,7 @@ func inspect(ctx context.Context, cfg *pipe.Config, functions []string) (*exec.F
 	logger().Info("Go HTTP/gRPC support not detected. Using only generic instrumentation.")
 	logger().Info("instrumented", "comm", execElf.CmdExePath, "pid", execElf.Pid)
 
-	return &execElf, nil, nil
+	return execElf, nil, nil
 }
 
 func inspectOffsets(cfg *pipe.Config, execElf *exec.FileInfo, functions []string) (*goexec.Offsets, bool) {

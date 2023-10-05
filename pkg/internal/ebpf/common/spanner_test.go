@@ -124,3 +124,31 @@ func TestSpanNesting(t *testing.T) {
 	b = makeSpanWithTimings(10000, 30000, 30000)
 	assert.False(t, (&a).Inside(&b))
 }
+
+func TestTraces_SQLOperationTable(t *testing.T) {
+	type sqlQueryTest struct {
+		queryString       string
+		expectedOperation string
+		expectedTable     string
+	}
+	for _, sqt := range []sqlQueryTest{
+		{"", "", ""},
+		{" ", "", ""},
+		{" FiRsTwOrDtOuPpeR", "FIRSTWORDTOUPPER", ""},
+		{"SELECT * FROM TableNameCasePreserved", "SELECT", "TableNameCasePreserved"},
+		{"FROM", "FROM", ""},
+		{"FROM tablename", "FROM", "tablename"},
+		{"FROM tablename extraword", "FROM", "tablename"},
+		{"SELECT * FROM students", "SELECT", "students"},
+		{"SELECT ", "SELECT", ""},
+		{"SELECT * ", "SELECT", ""},
+		{"INSERT INTO students (name, id) VALUES (\"Bob\", 1)", "INSERT", "students"},
+		{"CREATE INDEX index_name ON table_name (column_name)", "CREATE", "table_name"},
+		{"CREATE INDEX index_name ON", "CREATE", ""},
+		{"CREATE INDEX index_name ON ", "CREATE", ""},
+	} {
+		operation, table := getSQLOperationAndTable(sqt.queryString)
+		assert.Equal(t, sqt.expectedOperation, operation)
+		assert.Equal(t, sqt.expectedTable, table)
+	}
+}

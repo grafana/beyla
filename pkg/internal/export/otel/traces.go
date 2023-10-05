@@ -278,27 +278,6 @@ func spanStatusCode(span *request.Span) codes.Code {
 	return codes.Unset
 }
 
-func getSQLOperationAndTable(queryString string) (string, string) {
-	fields := strings.Fields(queryString)
-	if len(fields) == 0 {
-		return "", ""
-	}
-	operation := strings.ToUpper(fields[0])
-	table := ""
-	for i, f := range fields {
-		word := strings.ToUpper(f)
-		switch word {
-		case "FROM", "INTO", "ON":
-			next := i + 1
-			if next < len(fields) {
-				table = fields[next]
-			}
-			return operation, table
-		}
-	}
-	return operation, table
-}
-
 func (r *TracesReporter) traceAttributes(span *request.Span) []attribute.KeyValue {
 	var attrs []attribute.KeyValue
 
@@ -343,7 +322,8 @@ func (r *TracesReporter) traceAttributes(span *request.Span) []attribute.KeyValu
 			semconv.NetPeerPort(span.HostPort),
 		}
 	case request.EventTypeSQLClient:
-		operation, table := getSQLOperationAndTable(span.Path)
+		operation := span.Method
+		table := span.Path
 		attrs = []attribute.KeyValue{
 			semconv.DBStatement(operation + " " + table),
 			semconv.DBSQLTable(table),
@@ -376,7 +356,9 @@ func traceName(span *request.Span) string {
 	case request.EventTypeHTTPClient:
 		return span.Method
 	case request.EventTypeSQLClient:
-		operation, table := getSQLOperationAndTable(span.Path)
+		// We don't have db.name, but follow "<db.operation> <db.name>.<db.sql.table_name>"
+		operation := span.Method
+		table := span.Path
 		return operation + " ." + table
 	}
 	return ""

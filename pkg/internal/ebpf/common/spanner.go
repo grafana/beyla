@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net"
 	"strconv"
+	"strings"
 
 	"github.com/grafana/beyla/pkg/internal/request"
 )
@@ -17,10 +18,12 @@ func HTTPRequestTraceToSpan(trace *HTTPRequestTrace) request.Span {
 	if methodLen < 0 {
 		methodLen = len(trace.Method)
 	}
+	method := string(trace.Method[:methodLen])
 	pathLen := bytes.IndexByte(trace.Path[:], 0)
 	if pathLen < 0 {
 		pathLen = len(trace.Path)
 	}
+	path := string(trace.Path[:pathLen])
 
 	peer := ""
 	hostname := ""
@@ -39,6 +42,7 @@ func HTTPRequestTraceToSpan(trace *HTTPRequestTrace) request.Span {
 		hostname, hostPort = extractHostPort(trace.Host[:])
 	case request.EventTypeSQLClient:
 		trace.GoStartMonotimeNs = trace.StartMonotimeNs
+		method, path = getSQLOperationAndTable(path)
 	default:
 		log.Warn("unknown trace type", "type", trace.Type)
 	}
@@ -46,8 +50,8 @@ func HTTPRequestTraceToSpan(trace *HTTPRequestTrace) request.Span {
 	return request.Span{
 		Type:          request.EventType(trace.Type),
 		ID:            trace.Id,
-		Method:        string(trace.Method[:methodLen]),
-		Path:          string(trace.Path[:pathLen]),
+		Method:        method,
+		Path:          path,
 		Peer:          peer,
 		Host:          hostname,
 		HostPort:      hostPort,
@@ -96,4 +100,25 @@ func extractTraceparent(traceparent [55]byte) string {
 		return ""
 	}
 	return string(traceparent[:])
+}
+
+func getSQLOperationAndTable(queryString string) (string, string) {
+	fields := strings.Fields(queryString)
+	if len(fields) == 0 {
+		return "", ""
+	}
+	operation := strings.ToUpper(fields[0])
+	table := ""
+	for i, f := range fields {
+		word := strings.ToUpper(f)
+		switch word {
+		case "FROM", "INTO", "ON":
+			next := i + 1
+			if next < len(fields) {
+				table = fields[next]
+			}
+			return operation, table
+		}
+	}
+	return operation, table
 }

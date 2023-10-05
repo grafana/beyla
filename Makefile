@@ -222,6 +222,14 @@ itest-coverage-data:
 	# exclude generated files from coverage data
 	grep -vE $(EXCLUDE_COVERAGE_FILES) $(TEST_OUTPUT)/itest-covdata.all.txt > $(TEST_OUTPUT)/itest-covdata.txt
 
+.PHONY: oats-test
+oats-test:
+	cd test/oats && TESTCASE_BASE_PATH=./yaml ginkgo -v -r
+
+.PHONY: oats-test-debug
+oats-test-debug:
+	cd test/oats && TESTCASE_BASE_PATH=./yaml TESTCASE_MANUAL_DEBUG=true TESTCASE_TIMEOUT=1h ginkgo -v -r
+
 .PHONY: drone
 drone:
 	@echo "### Regenerating and signing .drone/drone.yml"

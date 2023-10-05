@@ -118,9 +118,9 @@ type Metrics struct {
 	httpClientDuration    instrument.Float64Histogram
 	grpcDuration          instrument.Float64Histogram
 	grpcClientDuration    instrument.Float64Histogram
+	sqlClientDuration     instrument.Float64Histogram
 	httpRequestSize       instrument.Float64Histogram
 	httpClientRequestSize instrument.Float64Histogram
-	sqlClientDuration     instrument.Float64Histogram
 }
 
 func ReportMetrics(
@@ -173,6 +173,7 @@ func (mr *MetricsReporter) newMetricSet(service svc.ID) (*Metrics, error) {
 			metric.WithView(otelHistogramBuckets(HTTPClientDuration, mr.cfg.Buckets.DurationHistogram)),
 			metric.WithView(otelHistogramBuckets(RPCServerDuration, mr.cfg.Buckets.DurationHistogram)),
 			metric.WithView(otelHistogramBuckets(RPCClientDuration, mr.cfg.Buckets.DurationHistogram)),
+			metric.WithView(otelHistogramBuckets(SQLClientDuration, mr.cfg.Buckets.DurationHistogram)),
 			metric.WithView(otelHistogramBuckets(HTTPServerRequestSize, mr.cfg.Buckets.RequestSizeHistogram)),
 			metric.WithView(otelHistogramBuckets(HTTPClientRequestSize, mr.cfg.Buckets.RequestSizeHistogram)),
 		),

@@ -37,6 +37,8 @@ const (
 	rpcGRPCStatusCodeKey = "rpc_grpc_status_code"
 	rpcMethodKey         = "rpc_method"
 	rpcSystemGRPC        = "rpc_system"
+	DBOperationKey       = "db_operation"
+	DBSQLTableTable      = "db_sql_table"
 
 	k8sSrcNameKey      = "k8s_src_name"
 	k8sSrcNamespaceKey = "k8s_src_namespace"
@@ -67,9 +69,9 @@ type metricsReporter struct {
 	httpClientDuration    *prometheus.HistogramVec
 	grpcDuration          *prometheus.HistogramVec
 	grpcClientDuration    *prometheus.HistogramVec
+	sqlClientDuration     *prometheus.HistogramVec
 	httpRequestSize       *prometheus.HistogramVec
 	httpClientRequestSize *prometheus.HistogramVec
-	sqlClientDuration     *prometheus.HistogramVec
 
 	promConnect *connector.PrometheusManager
 
@@ -111,8 +113,9 @@ func newReporter(ctx context.Context, cfg *PrometheusConfig, ctxInfo *global.Con
 			Buckets: cfg.Buckets.DurationHistogram,
 		}, labelNamesGRPC(cfg, ctxInfo)),
 		sqlClientDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
-			Name: SQLClientDuration,
-			Help: "duration of SQL client operations, in seconds",
+			Name:    SQLClientDuration,
+			Help:    "duration of SQL client operations, in seconds",
+			Buckets: cfg.Buckets.DurationHistogram,
 		}, labelNamesSQL(ctxInfo)),
 		httpRequestSize: prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Name:    HTTPServerRequestSize,
@@ -129,6 +132,7 @@ func newReporter(ctx context.Context, cfg *PrometheusConfig, ctxInfo *global.Con
 		mr.httpClientRequestSize,
 		mr.httpClientDuration,
 		mr.grpcClientDuration,
+		mr.sqlClientDuration,
 		mr.httpRequestSize,
 		mr.httpDuration,
 		mr.grpcDuration)
@@ -168,7 +172,7 @@ func (r *metricsReporter) observe(span *request.Span) {
 // labelNamesSQL must return the label names in the same order as would be returned
 // by labelValuesSQL
 func labelNamesSQL(ctxInfo *global.ContextInfo) []string {
-	names := []string{serviceNameKey}
+	names := []string{serviceNameKey, DBOperationKey, DBSQLTableTable}
 	if ctxInfo.ServiceNamespace != "" {
 		names = append(names, serviceNamespaceKey)
 	}
@@ -181,7 +185,7 @@ func labelNamesSQL(ctxInfo *global.ContextInfo) []string {
 // labelValuesSQL must return the label names in the same order as would be returned
 // by labelNamesSQL
 func (r *metricsReporter) labelValuesSQL(span *request.Span) []string {
-	values := []string{span.ServiceName}
+	values := []string{span.ServiceName, span.Method, span.Path}
 	if r.ctxInfo.ServiceNamespace != "" {
 		values = append(values, r.ctxInfo.ServiceNamespace)
 	}

@@ -11,15 +11,16 @@ services:
     environment:
       LOG_LEVEL: DEBUG
 
-  testserver-2:
+  testserver-python:
     build:
       context: ../..
-      dockerfile: test/integration/components/testserver/Dockerfile_rename1
-    image: hatest-testserver-rename1
+      dockerfile: test/integration/components/pythonserver/Dockerfile
+    image: hatest-testserver-python
     ports:
-      - "18080:8080"
-    environment:
-      LOG_LEVEL: DEBUG
+      - "8081:8080"
+    depends_on:
+      otelcol:
+        condition: service_started
 
   autoinstrumenter:
     build:

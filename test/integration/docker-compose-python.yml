@@ -5,7 +5,7 @@ services:
     build:
       context: ../..
       dockerfile: test/integration/components/pythonserver/Dockerfile${TESTSERVER_DOCKERFILE_SUFFIX}
-    image: hatest-testserver
+    image: hatest-testserver-python
     ports:
       - "${TEST_SERVICE_PORTS}"
     depends_on:

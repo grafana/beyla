@@ -77,17 +77,14 @@ func (i *Instrumenter) FindAndInstrument(ctx context.Context) error {
 		for {
 			select {
 			case <-ctx.Done():
-				lg := log()
-				lg.Debug("stopped searching for new processes to instrument")
-				if err := finder.Close(); err != nil {
-					lg.Warn("error closing process finder instance", "error", err)
-				}
+				log().Debug("stopped searching for new processes to instrument")
 				return
 			case pt := <-foundProcesses:
 				go pt.Run(ctx, i.tracesInput)
 			}
 		}
 	}()
+	// TODO: wait until all the resources have been freed/unmounted
 	return nil
 }
 

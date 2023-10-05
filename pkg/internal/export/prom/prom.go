@@ -173,9 +173,6 @@ func (r *metricsReporter) observe(span *request.Span) {
 // by labelValuesSQL
 func labelNamesSQL(ctxInfo *global.ContextInfo) []string {
 	names := []string{serviceNameKey, DBOperationKey, DBSQLTableTable}
-	if ctxInfo.ServiceNamespace != "" {
-		names = append(names, serviceNamespaceKey)
-	}
 	if ctxInfo.K8sDecoration {
 		names = appendK8sLabelNames(names)
 	}
@@ -185,10 +182,7 @@ func labelNamesSQL(ctxInfo *global.ContextInfo) []string {
 // labelValuesSQL must return the label names in the same order as would be returned
 // by labelNamesSQL
 func (r *metricsReporter) labelValuesSQL(span *request.Span) []string {
-	values := []string{span.ServiceName, span.Method, span.Path}
-	if r.ctxInfo.ServiceNamespace != "" {
-		values = append(values, r.ctxInfo.ServiceNamespace)
-	}
+	values := []string{span.ServiceID.Name, span.ServiceID.Namespace, span.Method, span.Path}
 	if r.ctxInfo.K8sDecoration {
 		values = appendK8sLabelValues(values, span)
 	}

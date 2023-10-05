@@ -1,8 +1,7 @@
 docker-compose:
   generator: generic
   files:
-    - ../docker-compose-beyla-build.yml
-    - ../docker-compose-gotestserver.yml
+    - ../docker-compose-beyla-gotestserver.yml
 input:
   - path: /smoke
 interval: 500ms

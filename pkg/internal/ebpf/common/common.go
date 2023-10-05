@@ -39,6 +39,11 @@ type TracerConfig struct {
 	// BpfBaseDir specifies the base directory where the BPF pinned maps will be mounted.
 	// By default, it will be /var/run/beyla
 	BpfBaseDir string `yaml:"bpf_fs_base_dir" env:"BPF_FS_BASE_DIR"`
+
+	// BpfIncludeDBStatement controls if BPF will copying and instrumented database
+	// query statements, from which db.operation and db.sql.operation will be extracted.
+	// Default is enabled
+	BpfIncludeDBStatement bool `yaml:"bpf_include_db_statement" env:"BPF_INCLUDE_DB_STATEMENT"`
 }
 
 // Probe holds the information of the instrumentation points of a given function: its start and end offsets and

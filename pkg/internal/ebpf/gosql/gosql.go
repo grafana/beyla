@@ -34,7 +34,9 @@ func (p *Tracer) Load() (*ebpf.CollectionSpec, error) {
 }
 
 func (p *Tracer) Constants(_ *exec.FileInfo, _ *goexec.Offsets) map[string]any {
-	return make(map[string]any)
+	return map[string]any{
+		"should_include_db_statement": bool(p.Cfg.BpfIncludeDBStatement),
+	}
 }
 
 func (p *Tracer) BpfObjects() any {

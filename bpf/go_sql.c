@@ -47,15 +47,12 @@ int uprobe_queryDC(struct pt_regs *ctx) {
     struct sql_request_t sql_request = {0};
     sql_request.start_time = bpf_ktime_get_ns();
 
-    if (1 /*  TODO: HOOK UP TO CONFIG */ || should_include_db_statement) {
+    if (should_include_db_statement) {
         // Read Query string
         void *query_str_ptr = GO_PARAM8(ctx);
         u64 query_str_len = (u64)GO_PARAM9(ctx);
         u64 query_size = MAX_QUERY_SIZE < query_str_len ? MAX_QUERY_SIZE : query_str_len;
         bpf_probe_read(sql_request.query, query_size, query_str_ptr);
-        bpf_dbg_printk("queryDC probe, size: %d, query: %100s", query_size, sql_request.query); // TODO: REMOVE ME
-    } else {
-        bpf_dbg_printk("queryDC probe, not including db statement"); // TODO: REMOVE ME
     }
 
     bpf_map_update_elem(&sql_events, &goroutine_addr, &sql_request, BPF_ANY);

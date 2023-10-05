@@ -323,11 +323,15 @@ func (r *TracesReporter) traceAttributes(span *request.Span) []attribute.KeyValu
 		}
 	case request.EventTypeSQLClient:
 		operation := span.Method
-		table := span.Path
-		attrs = []attribute.KeyValue{
-			semconv.DBStatement(operation + " " + table),
-			semconv.DBSQLTable(table),
-			semconv.DBOperation(operation),
+		if operation != "" {
+			attrs = []attribute.KeyValue{
+				semconv.DBOperation(operation),
+			}
+			table := span.Path
+			if table != "" {
+				attrs = append(attrs, semconv.DBSQLTable(table))
+				attrs = append(attrs, semconv.DBStatement(operation+" "+table))
+			}
 		}
 	}
 
@@ -357,9 +361,16 @@ func traceName(span *request.Span) string {
 		return span.Method
 	case request.EventTypeSQLClient:
 		// We don't have db.name, but follow "<db.operation> <db.name>.<db.sql.table_name>"
+		// or just "<db.operation>" if table is not known, otherwise just a fixed string.
 		operation := span.Method
+		if operation == "" {
+			return "SQL"
+		}
 		table := span.Path
-		return operation + " ." + table
+		if table != "" {
+			operation += " ." + table
+		}
+		return operation
 	}
 	return ""
 }

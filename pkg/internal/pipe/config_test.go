@@ -67,9 +67,10 @@ kubernetes:
 		Printer:          false,
 		Noop:             true,
 		EBPF: ebpfcommon.TracerConfig{
-			BatchLength:  100,
-			BatchTimeout: time.Second,
-			BpfBaseDir:   "/var/run/beyla",
+			BatchLength:           100,
+			BatchTimeout:          time.Second,
+			BpfBaseDir:            "/var/run/beyla",
+			BpfIncludeDBStatement: true,
 		},
 		Metrics: otel.MetricsConfig{
 			Interval:          5 * time.Second,

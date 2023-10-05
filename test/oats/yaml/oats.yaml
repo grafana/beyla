@@ -7,6 +7,9 @@ input:
 interval: 500ms
 expected:
   traces:
-    - traceql: '{ .http.method = "GET" }'
+    - traceql: '{ .db.operation = "SELECT" }'
       spans:
-        - name: 'GET /sqltest'
+        - name: 'SELECT .students'
+  metrics:
+    - promql: 'sql_client_duration_count'
+      value: "> 0"

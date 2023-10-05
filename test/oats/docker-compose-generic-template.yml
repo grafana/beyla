@@ -4,8 +4,6 @@ services:
     image: grafana/grafana:10.0.5
     volumes:
       - "{{ .ConfigDir }}/grafana-datasources.yaml:/etc/grafana/provisioning/datasources/grafana-datasources.yaml"
-      - "{{ .ConfigDir }}/grafana-dashboards.yaml:/etc/grafana/provisioning/dashboards/grafana-dashboards.yaml"
-      - "{{ .Dashboard }}:/etc/grafana/grafana-test-dashboard.json"
     ports:
       - "{{ .GrafanaHTTPPort }}:3000"
   prometheus:
@@ -25,11 +23,10 @@ services:
       - --config.file=/config.yaml
     ports:
       - "{{ .TempoHTTPPort }}:3200"
-
-  loki:
-    image: grafana/loki:2.9.0
-    ports:
-      - "{{ .LokiHTTPPort }}:3100"
+#  loki:
+#    image: grafana/loki:2.9.0
+#    ports:
+#      - "{{ .LokiHTTPPort }}:3100"
   collector:
     image: otel/opentelemetry-collector-contrib:0.85.0
     volumes:

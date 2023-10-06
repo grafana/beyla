@@ -13,6 +13,9 @@ import (
 	"github.com/grafana/beyla/pkg/internal/svc"
 )
 
+// ExecTyper classifies the discovered executables according to the
+// executable type (Go, generic...), and filters these executables
+// that are not instrumentable.
 type ExecTyper struct {
 	Cfg     *pipe.Config
 	Metrics imetrics.Reporter
@@ -51,7 +54,8 @@ func ExecTyperProvider(ecfg ExecTyper) (node.MiddleFunc[[]Event[ProcessMatch], [
 		currentPids:      map[int32]*exec.FileInfo{},
 		instrumentedPids: map[int32]struct{}{},
 	}
-	if !ecfg.Cfg.SkipGoSpecificTracers {
+	// TODO: do it per executable
+	if !ecfg.Cfg.Discovery.SkipGoSpecificTracers {
 		t.loadAllGoFunctionNames()
 	}
 	return func(in <-chan []Event[ProcessMatch], out chan<- []Event[Instrumentable]) {
@@ -70,6 +74,9 @@ type typer struct {
 	allGoFunctions   []string
 }
 
+// FilterClassify returns the Instrumentable types for each received ProcessMatch,
+// and filters out the processes that can't be instrumented (e.g. because of the lack
+// of instrumentation points)
 func (t *typer) FilterClassify(evs []Event[ProcessMatch]) []Event[Instrumentable] {
 	var out []Event[Instrumentable]
 
@@ -110,6 +117,8 @@ func (t *typer) FilterClassify(evs []Event[ProcessMatch]) []Event[Instrumentable
 	return out
 }
 
+// asInstrumentable classifies the type of executable (Go, generic...) and,
+// in case of belonging to a forked process, returns its parent.
 func (t *typer) asInstrumentable(execElf *exec.FileInfo) Instrumentable {
 	log := t.log.With("pid", execElf.Pid, "comm", execElf.CmdExePath)
 	log.Debug("getting instrumentable information")
@@ -141,8 +150,8 @@ func (t *typer) asInstrumentable(execElf *exec.FileInfo) Instrumentable {
 }
 
 func (t *typer) inspectOffsets(execElf *exec.FileInfo) (*goexec.Offsets, bool) {
-	if !t.cfg.SystemWide {
-		if t.cfg.SkipGoSpecificTracers {
+	if !t.cfg.Discovery.SystemWide {
+		if t.cfg.Discovery.SkipGoSpecificTracers {
 			t.log.Debug("skipping inspection for Go functions", "pid", execElf.Pid, "comm", execElf.CmdExePath)
 		} else {
 			t.log.Debug("inspecting", "pid", execElf.Pid, "comm", execElf.CmdExePath)
@@ -170,7 +179,7 @@ func isGoProxy(offsets *goexec.Offsets) bool {
 func (t *typer) loadAllGoFunctionNames() {
 	uniqueFunctions := map[string]struct{}{}
 	t.allGoFunctions = nil
-	for _, p := range newGoProgramsGroup(t.cfg, t.metrics) {
+	for _, p := range newGoTracersGroup(t.cfg, t.metrics) {
 		for funcName := range p.GoProbes() {
 			// avoid duplicating function names
 			if _, ok := uniqueFunctions[funcName]; !ok {

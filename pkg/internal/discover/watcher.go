@@ -13,20 +13,22 @@ const (
 	defaultPollInterval = 5 * time.Second
 )
 
+// Watcher polls every PollInterval for new processes and forwards either new processes
+// or deleted processes
 type Watcher struct {
 	Ctx          context.Context
 	PollInterval time.Duration
 }
 
-type WatchEvenType int
+type WatchEventType int
 
 const (
-	EventCreated = WatchEvenType(iota)
+	EventCreated = WatchEventType(iota)
 	EventDeleted
 )
 
 type Event[T any] struct {
-	Type WatchEvenType
+	Type WatchEventType
 	Obj  T
 }
 
@@ -74,6 +76,8 @@ func (pa *pollAccounter) Run(out chan<- []Event[*process.Process]) {
 	}
 }
 
+// snapshot compares the current processes with the status of the previous poll
+// and forwards a list of process creation/deletion events
 func (pa *pollAccounter) snapshot(procs []*process.Process) []Event[*process.Process] {
 	var events []Event[*process.Process]
 	currentPids := make(map[int32]*process.Process, len(procs))

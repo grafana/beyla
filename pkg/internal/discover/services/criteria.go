@@ -5,9 +5,29 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
+
+// DiscoveryConfig for the discover.ProcessFinder pipeline
+type DiscoveryConfig struct {
+	// Services selection. If the user defined the EXECUTABLE_NAME or OPEN_PORT variables, they will be automatically
+	// added to the services definition criteria, with the lowest preference.
+	Services DefinitionCriteria `yaml:"services"`
+
+	// PollInterval specifies, for the poll service watcher, the interval time between
+	// process inspections
+	PollInterval time.Duration `yaml:"poll_interval" env:"DISCOVERY_POLL_INTERVAL"`
+
+	// SystemWide allows instrumentation of all HTTP (no gRPC) calls, incoming and outgoing at a system wide scale.
+	// No filtering per application will be done. Using this option may result in reduced quality of information
+	// gathered for certain languages, such as Golang.
+	SystemWide bool `yaml:"system_wide" env:"SYSTEM_WIDE"`
+
+	// This can be enabled to use generic HTTP tracers only, no Go-specifics will be used:
+	SkipGoSpecificTracers bool `yaml:"skip_go_specific_tracers" env:"SKIP_GO_SPECIFIC_TRACERS"`
+}
 
 // DefinitionCriteria allows defining a group of services to be instrumented according to a set
 // of attributes. If a given executable/service matches multiple of the attributes, the

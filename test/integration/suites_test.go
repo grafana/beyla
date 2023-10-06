@@ -392,7 +392,8 @@ func TestSuite_MultiExec(t *testing.T) {
 		waitForTestComponents(t, "http://localhost:8900")
 		testREDMetricsForHTTPLibrary(t, "http://localhost:8900", "rename1", "initial-set")
 	})
-	t.Run("BPF pinning folder mounted", func(t *testing.T) { testBPFPinningMountedWithCount(t, 2) })
+	t.Run("BPF pinning folders mounted", func(t *testing.T) { testBPFPinningMountedWithCount(t, 2) })
+
 	require.NoError(t, compose.Close())
 	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
 }

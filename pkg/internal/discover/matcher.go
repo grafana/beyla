@@ -11,10 +11,11 @@ import (
 	"github.com/shirou/gopsutil/net"
 	"github.com/shirou/gopsutil/process"
 
-	"github.com/grafana/beyla/pkg/internal/ebpf/services"
+	"github.com/grafana/beyla/pkg/internal/discover/services"
 	"github.com/grafana/beyla/pkg/internal/pipe"
 )
 
+// CriteriaMatcher filters these processes that matches the discovery criteria.
 type CriteriaMatcher struct {
 	Cfg *pipe.Config
 }
@@ -127,7 +128,7 @@ func tryAccessPid(pid int32) error {
 }
 
 func findingCriteria(cfg *pipe.Config) services.DefinitionCriteria {
-	if cfg.SystemWide {
+	if cfg.Discovery.SystemWide {
 		// will return all the executables in the system
 		return services.DefinitionCriteria{
 			services.Attributes{
@@ -136,11 +137,11 @@ func findingCriteria(cfg *pipe.Config) services.DefinitionCriteria {
 			},
 		}
 	}
-	finderCriteria := cfg.Services
+	finderCriteria := cfg.Discovery.Services
 	// Merge the old, individual single-service selector,
 	// with the new, map-based multi-services selector.
 	if cfg.Exec.IsSet() || cfg.Port.Len() > 0 {
-		finderCriteria = slices.Clone(cfg.Services)
+		finderCriteria = slices.Clone(cfg.Discovery.Services)
 		finderCriteria = append(finderCriteria, services.Attributes{
 			Name:      cfg.ServiceName,
 			Namespace: cfg.ServiceNamespace,

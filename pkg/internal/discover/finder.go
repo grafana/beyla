@@ -15,6 +15,7 @@ import (
 	"github.com/grafana/beyla/pkg/internal/pipe"
 )
 
+// ProcessFinder pipeline architecture. It uses the Pipes library to instantiate and connect all eht nodes.
 type ProcessFinder struct {
 	Watcher         `sendTo:"CriteriaMatcher"`
 	CriteriaMatcher `sendTo:"ExecTyper"`
@@ -24,7 +25,7 @@ type ProcessFinder struct {
 
 func NewProcessFinder(ctx context.Context, cfg *pipe.Config, metrics imetrics.Reporter) *ProcessFinder {
 	return &ProcessFinder{
-		Watcher:         Watcher{Ctx: ctx, PollInterval: defaultPollInterval}, // TODO: configurable
+		Watcher:         Watcher{Ctx: ctx, PollInterval: cfg.Discovery.PollInterval},
 		CriteriaMatcher: CriteriaMatcher{Cfg: cfg},
 		ExecTyper:       ExecTyper{Cfg: cfg, Metrics: metrics},
 		TraceAttacher: TraceAttacher{
@@ -36,6 +37,8 @@ func NewProcessFinder(ctx context.Context, cfg *pipe.Config, metrics imetrics.Re
 	}
 }
 
+// Start the ProcessFinder pipeline in background. It returns a channel where each new discovered
+// ebpf.ProcessTracer will be notified.
 func (pf *ProcessFinder) Start() (<-chan *ebpf.ProcessTracer, error) {
 	gb := graph.NewBuilder()
 	graph.RegisterStart(gb, WatcherProvider)
@@ -50,7 +53,10 @@ func (pf *ProcessFinder) Start() (<-chan *ebpf.ProcessTracer, error) {
 	return pf.DiscoveredTracers, nil
 }
 
-func newGoProgramsGroup(cfg *pipe.Config, metrics imetrics.Reporter) []ebpf.Tracer {
+// auxiliary functions to instantiate the go and non-go tracers on diverse steps of the
+// discovery pipeline
+
+func newGoTracersGroup(cfg *pipe.Config, metrics imetrics.Reporter) []ebpf.Tracer {
 	// Each program is an eBPF source: net/http, grpc...
 	return []ebpf.Tracer{
 		&nethttp.Tracer{Cfg: &cfg.EBPF, Metrics: metrics},
@@ -60,6 +66,6 @@ func newGoProgramsGroup(cfg *pipe.Config, metrics imetrics.Reporter) []ebpf.Trac
 	}
 }
 
-func newNonGoProgramsGroup(cfg *pipe.Config, metrics imetrics.Reporter) []ebpf.Tracer {
+func newNonGoTracersGroup(cfg *pipe.Config, metrics imetrics.Reporter) []ebpf.Tracer {
 	return []ebpf.Tracer{&httpfltr.Tracer{Cfg: cfg, Metrics: metrics}}
 }

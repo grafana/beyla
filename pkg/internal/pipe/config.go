@@ -8,8 +8,8 @@ import (
 	"github.com/caarlos0/env/v9"
 	"gopkg.in/yaml.v3"
 
+	"github.com/grafana/beyla/pkg/internal/discover/services"
 	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
-	"github.com/grafana/beyla/pkg/internal/ebpf/services"
 	"github.com/grafana/beyla/pkg/internal/export/debug"
 	"github.com/grafana/beyla/pkg/internal/export/otel"
 	"github.com/grafana/beyla/pkg/internal/export/prom"
@@ -78,21 +78,13 @@ type Config struct {
 	// will instrument all the service calls in all the ports, not only the port specified here.
 	Port services.PortEnum `yaml:"open_port" env:"OPEN_PORT"`
 
-	// SystemWide allows instrumentation of all HTTP (no gRPC) calls, incoming and outgoing at a system wide scale.
-	// No filtering per application will be done. Using this option may result in reduced quality of information
-	// gathered for certain languages, such as Golang.
-	SystemWide bool `yaml:"system_wide" env:"SYSTEM_WIDE"`
-	// This can be enabled to use generic HTTP tracers only, no Go-specifics will be used:
-	SkipGoSpecificTracers bool `yaml:"skip_go_specific_tracers" env:"SKIP_GO_SPECIFIC_TRACERS"`
-
 	// ServiceName is taken from either SERVICE_NAME env var or OTEL_SERVICE_NAME (for OTEL spec compatibility)
 	// Using env and envDefault is a trick to get the value either from one of either variables
 	ServiceName      string `yaml:"service_name" env:"OTEL_SERVICE_NAME,expand" envDefault:"${SERVICE_NAME}"`
 	ServiceNamespace string `yaml:"service_namespace" env:"SERVICE_NAMESPACE"`
 
-	// Services selection. If the user defined the EXECUTABLE_NAME or OPEN_PORT variables, they will be automatically
-	// added to the services definition criteria, with the lowest preference.
-	Services services.DefinitionCriteria `yaml:"services"`
+	// Discovery configuration
+	Discovery services.DiscoveryConfig `yaml:"discovery"`
 
 	LogLevel string `yaml:"log_level" env:"LOG_LEVEL"`
 
@@ -112,13 +104,13 @@ func (e ConfigError) Error() string {
 }
 
 func (c *Config) validateInstrumentation() error {
-	if err := c.Services.Validate(); err != nil {
+	if err := c.Discovery.Services.Validate(); err != nil {
 		return ConfigError(fmt.Sprintf("error in services YAML property: %s", err.Error()))
 	}
-	if c.Port.Len() == 0 && !c.Exec.IsSet() && len(c.Services) == 0 && !c.SystemWide {
+	if c.Port.Len() == 0 && !c.Exec.IsSet() && len(c.Discovery.Services) == 0 && !c.Discovery.SystemWide {
 		return ConfigError("missing EXECUTABLE_NAME, OPEN_PORT or SYSTEM_WIDE property")
 	}
-	if (c.Port.Len() > 0 || c.Exec.IsSet() || len(c.Services) > 0) && c.SystemWide {
+	if (c.Port.Len() > 0 || c.Exec.IsSet() || len(c.Discovery.Services) > 0) && c.Discovery.SystemWide {
 		return ConfigError("you can't use SYSTEM_WIDE if any of EXECUTABLE_NAME, OPEN_PORT or services (YAML) is set")
 	}
 	if c.EBPF.BatchLength == 0 {

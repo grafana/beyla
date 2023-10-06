@@ -21,6 +21,18 @@ services:
     environment:
       LOG_LEVEL: DEBUG
 
+  testserver2:
+    profiles:
+      - startlater
+    build:
+      context: ../..
+      dockerfile: test/integration/components/testserver/Dockerfile_rename2
+    image: hatest-testserver2
+    ports:
+      - "8901:8901"
+    environment:
+      LOG_LEVEL: DEBUG
+
   autoinstrumenter:
     build:
       context: ../..

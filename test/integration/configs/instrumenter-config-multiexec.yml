@@ -4,9 +4,12 @@ routes:
   unmatch: path
 otel_metrics_export:
   endpoint: http://otelcol:4318
-services:
-  - namespace: initial-set
-    exe_path_regexp: ((testserver)|(rename1))
-  - namespace: second-set
-    name: another-service
-    open_ports: 8901
+discovery:
+  services:
+    - namespace: just-will-be-ignored
+      name: another-service
+      exe_path_regexp: asdflkjasdf
+    - namespace: initial-set
+      exe_path_regexp: ((testserver)|(rename1))
+
+

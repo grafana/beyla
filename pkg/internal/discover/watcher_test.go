@@ -38,7 +38,7 @@ func TestWatcher_Poll(t *testing.T) {
 			}
 		},
 	}
-	accounterOutput := make(chan []Event, 1)
+	accounterOutput := make(chan []Event[*process.Process], 1)
 	accounterExited := make(chan struct{})
 	go func() {
 		acc.Run(accounterOutput)
@@ -48,24 +48,24 @@ func TestWatcher_Poll(t *testing.T) {
 	// WHEN it polls the process for the first time
 	// THEN it returns the creation of all the events
 	out := testutil.ReadChannel(t, accounterOutput, testTimeout)
-	assert.Equal(t, []Event{
-		{Type: EventCreated, Process: p1},
-		{Type: EventCreated, Process: p2},
-		{Type: EventCreated, Process: p3},
+	assert.Equal(t, []Event[*process.Process]{
+		{Type: EventCreated, Obj: p1},
+		{Type: EventCreated, Obj: p2},
+		{Type: EventCreated, Obj: p3},
 	}, out)
 
 	// WHEN it polls the process for the successive times
 	// THEN it returns the creation the new processes
 	// AND the deletion of the old processes
 	out = testutil.ReadChannel(t, accounterOutput, testTimeout)
-	assert.Equal(t, []Event{
-		{Type: EventCreated, Process: p4},
-		{Type: EventDeleted, Process: p2},
+	assert.Equal(t, []Event[*process.Process]{
+		{Type: EventCreated, Obj: p4},
+		{Type: EventDeleted, Obj: p2},
 	}, out)
 	out = testutil.ReadChannel(t, accounterOutput, testTimeout)
-	assert.Equal(t, []Event{
-		{Type: EventCreated, Process: p2},
-		{Type: EventDeleted, Process: p1},
+	assert.Equal(t, []Event[*process.Process]{
+		{Type: EventCreated, Obj: p2},
+		{Type: EventDeleted, Obj: p1},
 	}, out)
 
 	// WHEN no changes in the process, it doesn't send anything

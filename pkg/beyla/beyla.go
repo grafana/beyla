@@ -9,7 +9,7 @@ import (
 	"log/slog"
 
 	"github.com/grafana/beyla/pkg/internal/connector"
-	"github.com/grafana/beyla/pkg/internal/ebpf"
+	"github.com/grafana/beyla/pkg/internal/discover"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/pipe"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
@@ -62,12 +62,8 @@ func LoadConfig(reader io.Reader) (*Config, error) {
 // FindAndInstrument searches in background for any new executable matching the
 // selection criteria.
 func (i *Instrumenter) FindAndInstrument(ctx context.Context) error {
-	finder := &ebpf.ProcessFinder{
-		Cfg:     i.config,
-		CtxInfo: i.ctxInfo,
-		Metrics: i.ctxInfo.Metrics,
-	}
-	foundProcesses, err := finder.Start(ctx)
+	finder := discover.NewProcessFinder(ctx, i.config, i.ctxInfo.Metrics)
+	foundProcesses, err := finder.Start()
 	if err != nil {
 		return fmt.Errorf("couldn't start Process Finder: %w", err)
 	}

@@ -1,21 +1,12 @@
-//go:build linux
-
 package ebpf
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"io"
 	"log/slog"
-	"os"
-	"reflect"
-	"strings"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
-	"github.com/cilium/ebpf/rlimit"
-	"golang.org/x/sys/unix"
 
 	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
 	"github.com/grafana/beyla/pkg/internal/exec"
@@ -23,8 +14,6 @@ import (
 	"github.com/grafana/beyla/pkg/internal/request"
 	"github.com/grafana/beyla/pkg/internal/svc"
 )
-
-func ptlog() *slog.Logger { return slog.With("component", "ebpf.ProcessTracer") }
 
 // Tracer is an individual eBPF program (e.g. the net/http or the grpc tracers)
 type Tracer interface {
@@ -36,7 +25,7 @@ type Tracer interface {
 	// BpfObjects that are created by the bpf2go compiler
 	BpfObjects() any
 	// GoProbes returns a map with the name of Go functions that need to be inspected
-	// in the executable, as well as the eBPF programs that optionally need to be
+	// in the executable, as well as the eBPF Programs that optionally need to be
 	// inserted as the Go function start and end probes
 	GoProbes() map[string]ebpfcommon.FunctionPrograms
 	// KProbes returns a map with the name of the kernel probes that need to be
@@ -45,7 +34,7 @@ type Tracer interface {
 	// UProbes returns a map with the module name mapping to the uprobes that need to be
 	// tapped into. Start matches uprobe, End matches uretprobe
 	UProbes() map[string]map[string]ebpfcommon.FunctionPrograms
-	// SocketFilters  returns a list of programs that need to be loaded as a
+	// SocketFilters  returns a list of Programs that need to be loaded as a
 	// generic eBPF socket filter
 	SocketFilters() []*ebpf.Program
 	// Run will do the action of listening for eBPF traces and forward them
@@ -62,178 +51,13 @@ type Tracer interface {
 
 // ProcessTracer instruments an executable with eBPF and provides the eBPF readers
 // that will forward the traces to later stages in the pipeline
-// TODO: split in two, the instrumenter and the reader
 type ProcessTracer struct {
-	log      *slog.Logger
-	programs []Tracer
+	log      *slog.Logger //nolint:unused
+	Programs []Tracer
 	ELFInfo  *exec.FileInfo
-	goffsets *goexec.Offsets
-	exe      *link.Executable
-	pinPath  string
+	Goffsets *goexec.Offsets
+	Exe      *link.Executable
+	PinPath  string
 
-	systemWide bool
-}
-
-func (pt *ProcessTracer) Run(ctx context.Context, out chan<- []request.Span) {
-	if err := pt.init(); err != nil {
-		pt.log.Error("cant start process tracer. Stopping it", "error", err)
-		return
-	}
-	pt.log.Debug("starting process tracer")
-	// Searches for traceable functions
-	trcrs, err := pt.tracers()
-	if err != nil {
-		pt.log.Error("couldn't trace process. Stopping process tracer", "error", err)
-		return
-	}
-
-	service := pt.ELFInfo.Service
-	// If the user does not override the service name via configuration
-	// the service name is the name of the found executable
-	// Unless the case of system-wide tracing, where the name of the
-	// executable will be dynamically set for each traced http request call.
-	if service.Name == "" && !pt.systemWide {
-		service.Name = pt.ELFInfo.ExecutableName()
-	}
-	// run each tracer program
-	for _, t := range trcrs {
-		go t.Run(ctx, out, service)
-	}
-	go func() {
-		<-ctx.Done()
-		pt.close()
-	}()
-}
-
-func (pt *ProcessTracer) init() error {
-	pt.log = ptlog().With("path", pt.ELFInfo.CmdExePath, "pid", pt.ELFInfo.Pid)
-	if err := rlimit.RemoveMemlock(); err != nil {
-		return fmt.Errorf("removing memory lock: %w", err)
-	}
-	if err := pt.mountBpfPinPath(); err != nil {
-		return fmt.Errorf("can't mount BPF filesystem: %w", err)
-	}
-	return nil
-}
-
-func (pt *ProcessTracer) close() {
-	pt.unmountBpfPinPath()
-}
-
-func (pt *ProcessTracer) mountBpfPinPath() error {
-	pt.log.Debug("mounting BPF map pinning", "path", pt.pinPath)
-	if _, err := os.Stat(pt.pinPath); err != nil {
-		if !os.IsNotExist(err) {
-			return fmt.Errorf("accessing %s stat: %w", pt.pinPath, err)
-		}
-		pt.log.Debug("BPF map pinning path does not exist. Creating before mounting")
-		if err := os.MkdirAll(pt.pinPath, 0700); err != nil {
-			return fmt.Errorf("creating directory %s: %w", pt.pinPath, err)
-		}
-	}
-
-	return bpfMount(pt.pinPath)
-}
-
-func (pt *ProcessTracer) unmountBpfPinPath() {
-	if err := unix.Unmount(pt.pinPath, unix.MNT_FORCE); err != nil {
-		pt.log.Warn("can't unmount pinned root. Try unmounting and removing it manually", err)
-		return
-	}
-	pt.log.Debug("unmounted bpf file system")
-	if err := os.RemoveAll(pt.pinPath); err != nil {
-		pt.log.Warn("can't remove pinned root. Try removing it manually", err)
-	} else {
-		pt.log.Debug("removed pin path")
-	}
-}
-
-// tracers returns Tracer implementer for each discovered eBPF traceable source: GRPC, HTTP...
-func (pt *ProcessTracer) tracers() ([]Tracer, error) {
-	var log = ptlog()
-
-	// tracerFuncs contains the eBPF programs (HTTP, GRPC tracers...)
-	var tracers []Tracer
-
-	for _, p := range pt.programs {
-		plog := log.With("program", reflect.TypeOf(p))
-		plog.Debug("loading eBPF program", "pinPath", pt.pinPath, "pid", pt.ELFInfo.Pid, "cmd", pt.ELFInfo.CmdExePath)
-		spec, err := p.Load()
-		if err != nil {
-			return nil, fmt.Errorf("loading eBPF program: %w", err)
-		}
-		if err := spec.RewriteConstants(p.Constants(pt.ELFInfo, pt.goffsets)); err != nil {
-			return nil, fmt.Errorf("rewriting BPF constants definition: %w", err)
-		}
-		if err := spec.LoadAndAssign(p.BpfObjects(), &ebpf.CollectionOptions{
-			Maps: ebpf.MapOptions{
-				PinPath: pt.pinPath,
-			}}); err != nil {
-			printVerifierErrorInfo(err)
-			return nil, fmt.Errorf("loading and assigning BPF objects: %w", err)
-		}
-		i := instrumenter{
-			exe:     pt.exe,
-			offsets: pt.goffsets,
-		}
-
-		//Go style Uprobes
-		if err := i.goprobes(p); err != nil {
-			printVerifierErrorInfo(err)
-			return nil, err
-		}
-
-		//Kprobes to be used for native instrumentation points
-		if err := i.kprobes(p); err != nil {
-			printVerifierErrorInfo(err)
-			return nil, err
-		}
-
-		//Uprobes to be used for native module instrumentation points
-		if err := i.uprobes(pt.ELFInfo.Pid, p); err != nil {
-			printVerifierErrorInfo(err)
-			return nil, err
-		}
-
-		//Sock filters support
-		if err := i.sockfilters(p); err != nil {
-			printVerifierErrorInfo(err)
-			return nil, err
-		}
-
-		tracers = append(tracers, p)
-	}
-
-	return tracers, nil
-}
-
-// filterNotFoundPrograms will filter these programs whose required functions (as
-// returned in the Offsets method) haven't been found in the offsets
-func filterNotFoundPrograms(programs []Tracer, offsets *goexec.Offsets) []Tracer {
-	var filtered []Tracer
-	funcs := offsets.Funcs
-programs:
-	for _, p := range programs {
-		for fn, fp := range p.GoProbes() {
-			if !fp.Required {
-				continue
-			}
-			if _, ok := funcs[fn]; !ok {
-				continue programs
-			}
-		}
-		filtered = append(filtered, p)
-	}
-	return filtered
-}
-
-func printVerifierErrorInfo(err error) {
-	var ve *ebpf.VerifierError
-	if errors.As(err, &ve) {
-		_, _ = fmt.Fprintf(os.Stderr, "Error Log:\n %v\n", strings.Join(ve.Log, "\n"))
-	}
-}
-
-func bpfMount(pinPath string) error {
-	return unix.Mount(pinPath, pinPath, "bpf", 0, "")
+	SystemWide bool
 }

@@ -12,23 +12,19 @@ import (
 	"github.com/shirou/gopsutil/process"
 
 	"github.com/grafana/beyla/pkg/internal/ebpf/services"
+	"github.com/grafana/beyla/pkg/internal/pipe"
 )
 
 type CriteriaMatcher struct {
-	SystemWide       bool
-	ServiceName      string
-	ServiceNamespace string
-	Exec             services.PathRegexp
-	Port             services.PortEnum
-	Criteria         services.DefinitionCriteria
+	Cfg *pipe.Config
 }
 
-func MatcherProvider(cfg CriteriaMatcher) node.MiddleFunc[[]Event[*process.Process], []Event[ProcessMatch]] {
+func CriteriaMatcherProvider(cm CriteriaMatcher) (node.MiddleFunc[[]Event[*process.Process], []Event[ProcessMatch]], error) {
 	m := &matcher{
 		log:      slog.With("component", "discover.CriteriaMatcher"),
-		criteria: findingCriteria(&cfg),
+		criteria: findingCriteria(cm.Cfg),
 	}
-	return m.run
+	return m.run, nil
 }
 
 type matcher struct {
@@ -61,7 +57,7 @@ func (m *matcher) filter(events []Event[*process.Process]) []Event[ProcessMatch]
 				m.log.Debug("found process", "pid", ev.Obj.Pid, "comm", comm)
 				matches = append(matches, Event[ProcessMatch]{
 					Type: EventCreated,
-					Obj: ProcessMatch{Criteria: &m.criteria[i], Process: ev.Obj},
+					Obj:  ProcessMatch{Criteria: &m.criteria[i], Process: ev.Obj},
 				})
 				break
 			}
@@ -130,7 +126,7 @@ func tryAccessPid(pid int32) error {
 	return err
 }
 
-func findingCriteria(cfg *CriteriaMatcher) services.DefinitionCriteria {
+func findingCriteria(cfg *pipe.Config) services.DefinitionCriteria {
 	if cfg.SystemWide {
 		// will return all the executables in the system
 		return services.DefinitionCriteria{
@@ -140,11 +136,11 @@ func findingCriteria(cfg *CriteriaMatcher) services.DefinitionCriteria {
 			},
 		}
 	}
-	finderCriteria := cfg.Criteria
+	finderCriteria := cfg.Services
 	// Merge the old, individual single-service selector,
 	// with the new, map-based multi-services selector.
 	if cfg.Exec.IsSet() || cfg.Port.Len() > 0 {
-		finderCriteria = slices.Clone(cfg.Criteria)
+		finderCriteria = slices.Clone(cfg.Services)
 		finderCriteria = append(finderCriteria, services.Attributes{
 			Name:      cfg.ServiceName,
 			Namespace: cfg.ServiceNamespace,

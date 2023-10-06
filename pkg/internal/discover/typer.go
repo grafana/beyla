@@ -1,13 +1,12 @@
 package discover
 
 import (
-	"debug/elf"
-	"fmt"
 	"log/slog"
 	"strings"
 
 	"github.com/mariomac/pipes/pkg/node"
 
+	"github.com/grafana/beyla/pkg/internal/exec"
 	"github.com/grafana/beyla/pkg/internal/goexec"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/pipe"
@@ -40,23 +39,8 @@ func (it InstrumentableType) String() string {
 type Instrumentable struct {
 	Type InstrumentableType
 
-	FileInfo *FileInfo
+	FileInfo *exec.FileInfo
 	Offsets  *goexec.Offsets
-}
-
-type FileInfo struct {
-	Service svc.ID
-
-	CmdExePath     string
-	ProExeLinkPath string
-	ELF            *elf.File
-	Pid            int32
-	Ppid           int32
-}
-
-func (fi *FileInfo) ExecutableName() string {
-	parts := strings.Split(fi.CmdExePath, "/")
-	return parts[len(parts)-1]
 }
 
 func ExecTyperProvider(ecfg ExecTyper) (node.MiddleFunc[[]Event[ProcessMatch], []Event[Instrumentable]], error) {
@@ -64,7 +48,7 @@ func ExecTyperProvider(ecfg ExecTyper) (node.MiddleFunc[[]Event[ProcessMatch], [
 		cfg:              ecfg.Cfg,
 		metrics:          ecfg.Metrics,
 		log:              slog.With("component", "discover.ExecTyper"),
-		currentPids:      map[int32]*FileInfo{},
+		currentPids:      map[int32]*exec.FileInfo{},
 		instrumentedPids: map[int32]struct{}{},
 	}
 	if !ecfg.Cfg.SkipGoSpecificTracers {
@@ -81,7 +65,7 @@ type typer struct {
 	cfg              *pipe.Config
 	metrics          imetrics.Reporter
 	log              *slog.Logger
-	currentPids      map[int32]*FileInfo
+	currentPids      map[int32]*exec.FileInfo
 	instrumentedPids map[int32]struct{}
 	allGoFunctions   []string
 }
@@ -89,14 +73,15 @@ type typer struct {
 func (t *typer) FilterClassify(evs []Event[ProcessMatch]) []Event[Instrumentable] {
 	var out []Event[Instrumentable]
 
-	elfs := make([]*FileInfo, len(evs))
+	elfs := make([]*exec.FileInfo, len(evs))
 	// Update first the PID map so we use only the parent processes
 	// in case of multiple matches
 	for i := range evs {
 		ev := &evs[i]
 		switch evs[i].Type {
 		case EventCreated:
-			if elfFile, err := findExecELF(&ev.Obj); err != nil {
+			svcID := svc.ID{Name: ev.Obj.Criteria.Name, Namespace: ev.Obj.Criteria.Namespace}
+			if elfFile, err := exec.FindExecELF(ev.Obj.Process, svcID); err != nil {
 				t.log.Warn("error finding process ELF. Ignoring", "error", err)
 			} else {
 				t.currentPids[ev.Obj.Process.Pid] = elfFile
@@ -107,7 +92,7 @@ func (t *typer) FilterClassify(evs []Event[ProcessMatch]) []Event[Instrumentable
 			delete(t.instrumentedPids, ev.Obj.Process.Pid)
 			out = append(out, Event[Instrumentable]{
 				Type: EventDeleted,
-				Obj:  Instrumentable{FileInfo: &FileInfo{Pid: ev.Obj.Process.Pid}},
+				Obj:  Instrumentable{FileInfo: &exec.FileInfo{Pid: ev.Obj.Process.Pid}},
 			})
 		}
 	}
@@ -125,36 +110,7 @@ func (t *typer) FilterClassify(evs []Event[ProcessMatch]) []Event[Instrumentable
 	return out
 }
 
-func findExecELF(pm *ProcessMatch) (*FileInfo, error) {
-	exePath, err := pm.Process.Exe()
-	if err != nil {
-		// this might happen if you query from the port a service that does not have executable path.
-		// Since this value is just for attributing, we set a default placeholder
-		exePath = "unknown"
-	}
-
-	ppid, _ := pm.Process.Ppid()
-
-	// In container environments or K8s, we can't just open the executable exe path, because it might
-	// be in the volume of another pod/container. We need to access it through the /proc/<pid>/exe symbolic link
-	file := FileInfo{
-		Service: svc.ID{
-			Name:      pm.Criteria.Name,
-			Namespace: pm.Criteria.Namespace,
-		},
-		CmdExePath: exePath,
-		// TODO: allow overriding /proc root folder
-		ProExeLinkPath: fmt.Sprintf("/proc/%d/exe", pm.Process.Pid),
-		Pid:            pm.Process.Pid,
-		Ppid:           ppid,
-	}
-	if file.ELF, err = elf.Open(file.ProExeLinkPath); err != nil {
-		return nil, fmt.Errorf("can't open ELF file in %s: %w", file.ProExeLinkPath, err)
-	}
-	return &file, nil
-}
-
-func (t *typer) asInstrumentable(execElf *FileInfo) Instrumentable {
+func (t *typer) asInstrumentable(execElf *exec.FileInfo) Instrumentable {
 	log := t.log.With("pid", execElf.Pid, "comm", execElf.CmdExePath)
 	log.Debug("getting instrumentable information")
 	// look for suitable Go application first
@@ -184,7 +140,7 @@ func (t *typer) asInstrumentable(execElf *FileInfo) Instrumentable {
 	return Instrumentable{Type: InstrumentableGeneric, FileInfo: execElf}
 }
 
-func (t *typer) inspectOffsets(execElf *FileInfo, functions []string) (*goexec.Offsets, bool) {
+func (t *typer) inspectOffsets(execElf *exec.FileInfo, functions []string) (*goexec.Offsets, bool) {
 	if !t.cfg.SystemWide {
 		if t.cfg.SkipGoSpecificTracers {
 			t.log.Debug("skipping inspection for Go functions", "pid", execElf.Pid, "comm", execElf.CmdExePath)

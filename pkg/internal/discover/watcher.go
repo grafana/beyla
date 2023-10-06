@@ -5,7 +5,6 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/mariomac/pipes/pkg/graph/stage"
 	"github.com/mariomac/pipes/pkg/node"
 	"github.com/shirou/gopsutil/process"
 )
@@ -15,6 +14,7 @@ const (
 )
 
 type Watcher struct {
+	Ctx          context.Context
 	PollInterval time.Duration
 }
 
@@ -30,19 +30,17 @@ type Event[T any] struct {
 	Obj  T
 }
 
-func WatcherProvider(ctx context.Context) stage.StartProvider[Watcher, []Event[*process.Process]] {
-	return func(w Watcher) (node.StartFunc[[]Event[*process.Process]], error) {
-		acc := pollAccounter{
-			ctx:           ctx,
-			interval:      w.PollInterval,
-			pids:          map[int32]*process.Process{},
-			listProcesses: process.Processes,
-		}
-		if acc.interval == 0 {
-			acc.interval = defaultPollInterval
-		}
-		return acc.Run, nil
+func WatcherProvider(w Watcher) (node.StartFunc[[]Event[*process.Process]], error) {
+	acc := pollAccounter{
+		ctx:           w.Ctx,
+		interval:      w.PollInterval,
+		pids:          map[int32]*process.Process{},
+		listProcesses: process.Processes,
 	}
+	if acc.interval == 0 {
+		acc.interval = defaultPollInterval
+	}
+	return acc.Run, nil
 }
 
 // TODO: replace a poller by a listener, or allow users trying between both

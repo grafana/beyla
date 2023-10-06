@@ -17,7 +17,7 @@ type DefinitionCriteria []Attributes
 func (dc DefinitionCriteria) Validate() error {
 	// an empty definition criteria is valid
 	for i := range dc {
-		if len(dc[i].OpenPorts.ranges) == 0 || dc[i].Path.re == nil {
+		if len(dc[i].OpenPorts.ranges) == 0 && dc[i].Path.re == nil {
 			return fmt.Errorf("attribute [%d] should define at least the open_ports or exe_path_regexp property", i)
 		}
 	}

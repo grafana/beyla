@@ -25,4 +25,6 @@ WORKDIR /
 COPY --from=builder /src/testserver /rename2
 USER 0:0
 
+ENV STD_PORT=8901
+
 CMD [ "/rename2" ]

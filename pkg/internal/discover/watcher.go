@@ -60,7 +60,7 @@ func (pa *pollAccounter) Run(out chan<- []Event[*process.Process]) {
 			log.Warn("can't get system processes", "error", err)
 		} else {
 			if events := pa.snapshot(procs); len(events) > 0 {
-				log.Debug("sending events", "len", len(events))
+				log.Debug("new process watching events", "len", len(events))
 				out <- events
 			}
 		}
@@ -69,7 +69,7 @@ func (pa *pollAccounter) Run(out chan<- []Event[*process.Process]) {
 			log.Debug("context canceled. Exiting")
 			return
 		case <-time.After(pa.interval):
-			log.Debug("poll event starting again")
+			// poll event starting again
 		}
 	}
 }

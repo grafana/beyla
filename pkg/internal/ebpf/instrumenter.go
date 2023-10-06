@@ -130,7 +130,7 @@ func (i *instrumenter) uprobes(pid int32, p Tracer) error {
 	for lib, pMap := range p.UProbes() {
 		log.Info("finding library", "lib", lib)
 		libMap := exec.LibPath(lib, maps)
-		instrPath := fmt.Sprintf("/proc/%d/Exe", pid)
+		instrPath := fmt.Sprintf("/proc/%d/exe", pid)
 
 		if libMap != nil {
 			log.Info("instrumenting library", "lib", lib, "path", libMap.Pathname)

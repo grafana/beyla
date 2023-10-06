@@ -52,11 +52,11 @@ func main() {
 	// 2nd executable - Invoke ReadAndForward, receiving the BPF map mountpoint as argument
 	instr := beyla.New(config)
 	if err := instr.FindAndInstrument(ctx); err != nil {
-		slog.Error("Beyla couldn't find target process", err)
+		slog.Error("Beyla couldn't find target process", "error", err)
 		os.Exit(-1)
 	}
 	if err := instr.ReadAndForward(ctx); err != nil {
-		slog.Error("Beyla couldn't start read and forwarding", err)
+		slog.Error("Beyla couldn't start read and forwarding", "error", err)
 		os.Exit(-1)
 	}
 

@@ -73,7 +73,7 @@ type typer struct {
 func (t *typer) FilterClassify(evs []Event[ProcessMatch]) []Event[Instrumentable] {
 	var out []Event[Instrumentable]
 
-	elfs := make([]*exec.FileInfo, len(evs))
+	elfs := make([]*exec.FileInfo, 0, len(evs))
 	// Update first the PID map so we use only the parent processes
 	// in case of multiple matches
 	for i := range evs {
@@ -114,7 +114,7 @@ func (t *typer) asInstrumentable(execElf *exec.FileInfo) Instrumentable {
 	log := t.log.With("pid", execElf.Pid, "comm", execElf.CmdExePath)
 	log.Debug("getting instrumentable information")
 	// look for suitable Go application first
-	offsets, ok := t.inspectOffsets(execElf, t.allGoFunctions)
+	offsets, ok := t.inspectOffsets(execElf)
 	if ok {
 		// we found go offsets, let's see if this application is not a proxy
 		if !isGoProxy(offsets) {
@@ -140,13 +140,13 @@ func (t *typer) asInstrumentable(execElf *exec.FileInfo) Instrumentable {
 	return Instrumentable{Type: InstrumentableGeneric, FileInfo: execElf}
 }
 
-func (t *typer) inspectOffsets(execElf *exec.FileInfo, functions []string) (*goexec.Offsets, bool) {
+func (t *typer) inspectOffsets(execElf *exec.FileInfo) (*goexec.Offsets, bool) {
 	if !t.cfg.SystemWide {
 		if t.cfg.SkipGoSpecificTracers {
 			t.log.Debug("skipping inspection for Go functions", "pid", execElf.Pid, "comm", execElf.CmdExePath)
 		} else {
 			t.log.Debug("inspecting", "pid", execElf.Pid, "comm", execElf.CmdExePath)
-			if offsets, err := goexec.InspectOffsets(execElf, functions); err != nil {
+			if offsets, err := goexec.InspectOffsets(execElf, t.allGoFunctions); err != nil {
 				t.log.Debug("couldn't find go specific tracers", "error", err)
 			} else {
 				return offsets, true
@@ -167,17 +167,16 @@ func isGoProxy(offsets *goexec.Offsets) bool {
 	return true
 }
 
-func (t *typer) loadAllGoFunctionNames() []string {
+func (t *typer) loadAllGoFunctionNames() {
 	uniqueFunctions := map[string]struct{}{}
-	var functions []string
+	t.allGoFunctions = nil
 	for _, p := range newGoProgramsGroup(t.cfg, t.metrics) {
 		for funcName := range p.GoProbes() {
 			// avoid duplicating function names
 			if _, ok := uniqueFunctions[funcName]; !ok {
 				uniqueFunctions[funcName] = struct{}{}
-				functions = append(functions, funcName)
+				t.allGoFunctions = append(t.allGoFunctions, funcName)
 			}
 		}
 	}
-	return functions
 }

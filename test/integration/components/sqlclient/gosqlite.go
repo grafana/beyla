@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"fmt"
 	"net/http"
-	"time"
 
 	_ "modernc.org/sqlite"
 )
@@ -14,8 +13,8 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	// See "Important settings" section.
-	db.SetConnMaxLifetime(time.Minute * 3)
+
+	db.SetConnMaxLifetime(0)
 	db.SetMaxOpenConns(10)
 	db.SetMaxIdleConns(10)
 
@@ -35,15 +34,24 @@ func main() {
 	CheckError(e)
 
 	http.HandleFunc("/sqltest", func(w http.ResponseWriter, r *http.Request) {
-		rows, e := db.Query("SELECT * FROM students")
-		CheckError(e)
-		defer rows.Close()
-		for rows.Next() {
-			var name string
-			var id int
-			e = rows.Scan(&name, &id)
-			CheckError(e)
-			fmt.Println("name: ", name, " id: ", id)
+		urlQuery := r.URL.Query()
+		var rows *sql.Rows
+		if len(urlQuery["query"]) > 0 {
+			queryString := urlQuery["query"][0]
+			fmt.Println("query arg in url query is:", queryString)
+			rows, e = db.Query(queryString)
+		} else {
+			rows, e = db.Query("SELECT * FROM students")
+		}
+		if e == nil {
+			defer rows.Close()
+			for rows.Next() {
+				var name string
+				var id int
+				e = rows.Scan(&name, &id)
+				CheckError(e)
+				fmt.Println("name: ", name, " id: ", id)
+			}
 		}
 	})
 	err = http.ListenAndServe(":8080", nil)

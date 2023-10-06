@@ -15,7 +15,7 @@ import (
 	"github.com/grafana/beyla/pkg/internal/pipe"
 )
 
-// CriteriaMatcher filters these processes that matches the discovery criteria.
+// CriteriaMatcher filters the processes that match the discovery criteria.
 type CriteriaMatcher struct {
 	Cfg *pipe.Config
 }

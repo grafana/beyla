@@ -25,7 +25,7 @@ type Tracer interface {
 	// BpfObjects that are created by the bpf2go compiler
 	BpfObjects() any
 	// GoProbes returns a map with the name of Go functions that need to be inspected
-	// in the executable, as well as the eBPF Programs that optionally need to be
+	// in the executable, as well as the eBPF programs that optionally need to be
 	// inserted as the Go function start and end probes
 	GoProbes() map[string]ebpfcommon.FunctionPrograms
 	// KProbes returns a map with the name of the kernel probes that need to be
@@ -34,7 +34,7 @@ type Tracer interface {
 	// UProbes returns a map with the module name mapping to the uprobes that need to be
 	// tapped into. Start matches uprobe, End matches uretprobe
 	UProbes() map[string]map[string]ebpfcommon.FunctionPrograms
-	// SocketFilters  returns a list of Programs that need to be loaded as a
+	// SocketFilters  returns a list of programs that need to be loaded as a
 	// generic eBPF socket filter
 	SocketFilters() []*ebpf.Program
 	// Run will do the action of listening for eBPF traces and forward them

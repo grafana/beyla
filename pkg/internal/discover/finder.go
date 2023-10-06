@@ -15,7 +15,7 @@ import (
 	"github.com/grafana/beyla/pkg/internal/pipe"
 )
 
-// ProcessFinder pipeline architecture. It uses the Pipes library to instantiate and connect all eht nodes.
+// ProcessFinder pipeline architecture. It uses the Pipes library to instantiate and connect all the nodes.
 type ProcessFinder struct {
 	Watcher         `sendTo:"CriteriaMatcher"`
 	CriteriaMatcher `sendTo:"ExecTyper"`

@@ -40,7 +40,7 @@ func (i *instrumenter) goprobes(p Tracer) error {
 			log.Debug("ignoring function", "function", funcName)
 			continue
 		}
-		log.Debug("going to instrument function", "function", funcName, "offsets", offs, "Programs", funcPrograms)
+		log.Debug("going to instrument function", "function", funcName, "offsets", offs, "programs", funcPrograms)
 		if err := i.goprobe(ebpfcommon.Probe{
 			Offsets:  offs,
 			Programs: funcPrograms,
@@ -54,7 +54,7 @@ func (i *instrumenter) goprobes(p Tracer) error {
 }
 
 func (i *instrumenter) goprobe(probe ebpfcommon.Probe) error {
-	// Attach BPF Programs as start and return probes
+	// Attach BPF programs as start and return probes
 	if probe.Programs.Start != nil {
 		up, err := i.exe.Uprobe("", probe.Programs.Start, &link.UprobeOptions{
 			Address: probe.Offsets.Start,
@@ -148,7 +148,7 @@ func (i *instrumenter) uprobes(pid int32, p Tracer) error {
 		}
 
 		for funcName, funcPrograms := range pMap {
-			log.Debug("going to instrument function", "function", funcName, "Programs", funcPrograms)
+			log.Debug("going to instrument function", "function", funcName, "programs", funcPrograms)
 			if err := i.uprobe(funcName, libExe, funcPrograms); err != nil {
 				if funcPrograms.Required {
 					return fmt.Errorf("instrumenting function %q: %w", funcName, err)

@@ -59,38 +59,6 @@ func (pf *ProcessFinder) Start(ctx context.Context) (<-chan *ProcessTracer, erro
 	return pf.discoveredTracers, nil
 }
 
-func (pf *ProcessFinder) newGoProgramsGroup() []Tracer {
-	// Each program is an eBPF source: net/http, grpc...
-	return []Tracer{
-		&nethttp.Tracer{Cfg: &pf.Cfg.EBPF, Metrics: pf.Metrics},
-		&nethttp.GinTracer{Tracer: nethttp.Tracer{Cfg: &pf.Cfg.EBPF, Metrics: pf.Metrics}},
-		&grpc.Tracer{Cfg: &pf.Cfg.EBPF, Metrics: pf.Metrics},
-		&goruntime.Tracer{Cfg: &pf.Cfg.EBPF, Metrics: pf.Metrics},
-	}
-}
-
-func (pf *ProcessFinder) newNonGoProgramsGroup() []Tracer {
-	return []Tracer{&httpfltr.Tracer{Cfg: pf.Cfg, Metrics: pf.Metrics}}
-}
-
-func (pf *ProcessFinder) allGoFunctionNames() []string {
-	if len(pf.goFunctionNames) > 0 {
-		return pf.goFunctionNames
-	}
-	uniqueFunctions := map[string]struct{}{}
-	var functions []string
-	for _, p := range pf.newGoProgramsGroup() {
-		for funcName := range p.GoProbes() {
-			// avoid duplicating function names
-			if _, ok := uniqueFunctions[funcName]; !ok {
-				uniqueFunctions[funcName] = struct{}{}
-				functions = append(functions, funcName)
-			}
-		}
-	}
-	return functions
-}
-
 func (pf *ProcessFinder) findAndInstrument(ctx context.Context) ([]*ProcessTracer, error) {
 	// merging all the functions from all the programs, in order to do
 	// a complete inspection of the target executable

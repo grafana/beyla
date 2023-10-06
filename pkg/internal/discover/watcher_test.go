@@ -1,4 +1,4 @@
-package process
+package discover
 
 import (
 	"context"
@@ -38,7 +38,7 @@ func TestWatcher_Poll(t *testing.T) {
 			}
 		},
 	}
-	accounterOutput := make(chan []WatchEvent, 1)
+	accounterOutput := make(chan []Event, 1)
 	accounterExited := make(chan struct{})
 	go func() {
 		acc.Run(accounterOutput)
@@ -48,7 +48,7 @@ func TestWatcher_Poll(t *testing.T) {
 	// WHEN it polls the process for the first time
 	// THEN it returns the creation of all the events
 	out := testutil.ReadChannel(t, accounterOutput, testTimeout)
-	assert.Equal(t, []WatchEvent{
+	assert.Equal(t, []Event{
 		{Type: EventCreated, Process: p1},
 		{Type: EventCreated, Process: p2},
 		{Type: EventCreated, Process: p3},
@@ -58,12 +58,12 @@ func TestWatcher_Poll(t *testing.T) {
 	// THEN it returns the creation the new processes
 	// AND the deletion of the old processes
 	out = testutil.ReadChannel(t, accounterOutput, testTimeout)
-	assert.Equal(t, []WatchEvent{
+	assert.Equal(t, []Event{
 		{Type: EventCreated, Process: p4},
 		{Type: EventDeleted, Process: p2},
 	}, out)
 	out = testutil.ReadChannel(t, accounterOutput, testTimeout)
-	assert.Equal(t, []WatchEvent{
+	assert.Equal(t, []Event{
 		{Type: EventCreated, Process: p2},
 		{Type: EventDeleted, Process: p1},
 	}, out)

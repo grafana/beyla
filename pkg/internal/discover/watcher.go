@@ -1,4 +1,4 @@
-package process
+package discover
 
 import (
 	"context"
@@ -25,13 +25,13 @@ const (
 	EventDeleted
 )
 
-type WatchEvent struct {
-	Type    WatchEvenType
-	Process *process.Process
+type Event[T any] struct {
+	Type WatchEvenType
+	Obj  T
 }
 
-func WatcherProvider(ctx context.Context) stage.StartProvider[Watcher, []WatchEvent] {
-	return func(w Watcher) (node.StartFunc[[]WatchEvent], error) {
+func WatcherProvider(ctx context.Context) stage.StartProvider[Watcher, []Event[*process.Process]] {
+	return func(w Watcher) (node.StartFunc[[]Event[*process.Process]], error) {
 		acc := pollAccounter{
 			ctx:           ctx,
 			interval:      w.PollInterval,
@@ -54,8 +54,8 @@ type pollAccounter struct {
 	listProcesses func() ([]*process.Process, error)
 }
 
-func (pa *pollAccounter) Run(out chan<- []WatchEvent) {
-	log := slog.With("component", "process.Watcher", "interval", pa.interval)
+func (pa *pollAccounter) Run(out chan<- []Event[*process.Process]) {
+	log := slog.With("component", "discover.Watcher", "interval", pa.interval)
 	for {
 		procs, err := pa.listProcesses()
 		if err != nil {
@@ -76,20 +76,20 @@ func (pa *pollAccounter) Run(out chan<- []WatchEvent) {
 	}
 }
 
-func (pa *pollAccounter) snapshot(procs []*process.Process) []WatchEvent {
-	var events []WatchEvent
+func (pa *pollAccounter) snapshot(procs []*process.Process) []Event[*process.Process] {
+	var events []Event[*process.Process]
 	currentPids := make(map[int32]*process.Process, len(procs))
 	// notify processes that are new
 	for _, p := range procs {
 		currentPids[p.Pid] = p
 		if _, ok := pa.pids[p.Pid]; !ok {
-			events = append(events, WatchEvent{Type: EventCreated, Process: p})
+			events = append(events, Event[*process.Process]{Type: EventCreated, Obj: p})
 		}
 	}
 	// notify processes that are removed
 	for pid, p := range pa.pids {
 		if _, ok := currentPids[pid]; !ok {
-			events = append(events, WatchEvent{Type: EventDeleted, Process: p})
+			events = append(events, Event[*process.Process]{Type: EventDeleted, Obj: p})
 		}
 	}
 	pa.pids = currentPids

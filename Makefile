@@ -73,6 +73,7 @@ GOIMPORTS_REVISER = $(TOOLS_DIR)/goimports-reviser
 GO_LICENSES = $(TOOLS_DIR)/go-licenses
 KIND = $(TOOLS_DIR)/kind
 DASHBOARD_LINTER = $(TOOLS_DIR)/dashboard-linter
+GINKGO = $(TOOLS_DIR)/ginkgo
 
 define check_format
 	$(shell $(foreach FILE, $(shell find . -name "*.go" -not -path "./vendor/*"), \
@@ -222,13 +223,20 @@ itest-coverage-data:
 	# exclude generated files from coverage data
 	grep -vE $(EXCLUDE_COVERAGE_FILES) $(TEST_OUTPUT)/itest-covdata.all.txt > $(TEST_OUTPUT)/itest-covdata.txt
 
+bin/ginkgo:
+	$(call go-install-tool,$(GINKGO),github.com/onsi/ginkgo/v2/ginkgo@latest)
+
+.PHONY: oats-prereq
+oats-prereq: bin/ginkgo
+	cd test/oats && go mod vendor
+
 .PHONY: oats-test
-oats-test:
-	cd test/oats && TESTCASE_BASE_PATH=./yaml ginkgo -v -r
+oats-test: oats-prereq
+	cd test/oats && TESTCASE_BASE_PATH=./yaml $(GINKGO) -v -r
 
 .PHONY: oats-test-debug
-oats-test-debug:
-	cd test/oats && TESTCASE_BASE_PATH=./yaml TESTCASE_MANUAL_DEBUG=true TESTCASE_TIMEOUT=1h ginkgo -v -r
+oats-test-debug: oats-prereq
+	cd test/oats && TESTCASE_BASE_PATH=./yaml TESTCASE_MANUAL_DEBUG=true TESTCASE_TIMEOUT=1h $(GINKGO) -v -r
 
 .PHONY: drone
 drone:

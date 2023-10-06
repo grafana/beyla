@@ -4,7 +4,7 @@
       "val": {
         "versions": {
           "oldest": "1.17.0",
-          "newest": "1.21.1"
+          "newest": "1.21.2"
         },
         "offsets": [
           {
@@ -124,7 +124,7 @@
       "IP": {
         "versions": {
           "oldest": "1.17.0",
-          "newest": "1.21.1"
+          "newest": "1.21.2"
         },
         "offsets": [
           {
@@ -136,7 +136,7 @@
       "Port": {
         "versions": {
           "oldest": "1.17.0",
-          "newest": "1.21.1"
+          "newest": "1.21.2"
         },
         "offsets": [
           {
@@ -150,7 +150,7 @@
       "ContentLength": {
         "versions": {
           "oldest": "1.17.0",
-          "newest": "1.21.1"
+          "newest": "1.21.2"
         },
         "offsets": [
           {
@@ -162,7 +162,7 @@
       "Header": {
         "versions": {
           "oldest": "1.17.0",
-          "newest": "1.21.1"
+          "newest": "1.21.2"
         },
         "offsets": [
           {
@@ -174,7 +174,7 @@
       "Host": {
         "versions": {
           "oldest": "1.17.0",
-          "newest": "1.21.1"
+          "newest": "1.21.2"
         },
         "offsets": [
           {
@@ -186,7 +186,7 @@
       "Method": {
         "versions": {
           "oldest": "1.17.0",
-          "newest": "1.21.1"
+          "newest": "1.21.2"
         },
         "offsets": [
           {
@@ -198,7 +198,7 @@
       "RemoteAddr": {
         "versions": {
           "oldest": "1.17.0",
-          "newest": "1.21.1"
+          "newest": "1.21.2"
         },
         "offsets": [
           {
@@ -210,7 +210,7 @@
       "URL": {
         "versions": {
           "oldest": "1.17.0",
-          "newest": "1.21.1"
+          "newest": "1.21.2"
         },
         "offsets": [
           {
@@ -224,7 +224,7 @@
       "StatusCode": {
         "versions": {
           "oldest": "1.17.0",
-          "newest": "1.21.1"
+          "newest": "1.21.2"
         },
         "offsets": [
           {
@@ -238,7 +238,7 @@
       "req": {
         "versions": {
           "oldest": "1.17.0",
-          "newest": "1.21.1"
+          "newest": "1.21.2"
         },
         "offsets": [
           {
@@ -250,7 +250,7 @@
       "status": {
         "versions": {
           "oldest": "1.17.0",
-          "newest": "1.21.1"
+          "newest": "1.21.2"
         },
         "offsets": [
           {
@@ -264,7 +264,7 @@
       "Path": {
         "versions": {
           "oldest": "1.17.0",
-          "newest": "1.21.1"
+          "newest": "1.21.2"
         },
         "offsets": [
           {

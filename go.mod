@@ -3,6 +3,7 @@ module github.com/grafana/beyla
 go 1.21
 
 require (
+	github.com/AlessandroPomponio/go-gibberish v0.0.0-20191004143433-a2d4156f0396
 	github.com/caarlos0/env/v9 v9.0.0
 	github.com/cilium/ebpf v0.11.0
 	github.com/gavv/monotime v0.0.0-20190418164738-30dba4353424
@@ -44,7 +45,6 @@ require (
 )
 
 require (
-	github.com/AlessandroPomponio/go-gibberish v0.0.0-20191004143433-a2d4156f0396 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/bytedance/sonic v1.9.1 // indirect
 	github.com/cenkalti/backoff/v4 v4.2.1 // indirect

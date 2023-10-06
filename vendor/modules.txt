@@ -3,7 +3,6 @@
 github.com/AlessandroPomponio/go-gibberish/analysis
 github.com/AlessandroPomponio/go-gibberish/consts
 github.com/AlessandroPomponio/go-gibberish/gibberish
-github.com/AlessandroPomponio/go-gibberish/persistence
 github.com/AlessandroPomponio/go-gibberish/structs
 # github.com/beorn7/perks v1.0.1
 ## explicit; go 1.11

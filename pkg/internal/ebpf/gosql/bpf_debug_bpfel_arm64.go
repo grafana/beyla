@@ -13,37 +13,6 @@ import (
 	"github.com/cilium/ebpf"
 )
 
-type bpf_debugFuncInvocation struct {
-	StartMonotimeNs uint64
-	Regs            struct {
-		UserRegs struct {
-			Regs   [31]uint64
-			Sp     uint64
-			Pc     uint64
-			Pstate uint64
-		}
-		OrigX0          uint64
-		Syscallno       int32
-		Unused2         uint32
-		OrigAddrLimit   uint64
-		PmrSave         uint64
-		Stackframe      [2]uint64
-		LockdepHardirqs uint64
-		ExitRcu         uint64
-	}
-}
-
-type bpf_debugGoroutineMetadata struct {
-	Parent    uint64
-	Timestamp uint64
-}
-
-type bpf_debugSqlRequestT struct {
-	StartTime uint64
-	Query     [100]int8
-	_         [4]byte
-}
-
 // loadBpf_debug returns the embedded CollectionSpec for bpf_debug.
 func loadBpf_debug() (*ebpf.CollectionSpec, error) {
 	reader := bytes.NewReader(_Bpf_debugBytes)

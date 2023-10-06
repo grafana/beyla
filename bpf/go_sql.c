@@ -21,9 +21,16 @@
 
 #define MAX_QUERY_SIZE 100
 
+#define BUFFER_QUERY_ARG 0
+
 struct sql_request_t {
     u64 start_time;
+#if BUFFER_QUERY_ARG
     char query[MAX_QUERY_SIZE];
+#else
+    char *query_ptr;
+    u8    query_len;
+#endif
 };
 
 struct {
@@ -51,8 +58,13 @@ int uprobe_queryDC(struct pt_regs *ctx) {
         // Read Query string
         void *query_str_ptr = GO_PARAM8(ctx);
         u64 query_str_len = (u64)GO_PARAM9(ctx);
+#if BUFFER_QUERY_ARG
         u64 query_size = MAX_QUERY_SIZE < query_str_len ? MAX_QUERY_SIZE : query_str_len;
         bpf_probe_read(sql_request.query, query_size, query_str_ptr);
+#else
+        sql_request.query_ptr = query_str_ptr;
+        sql_request.query_len = (u8)query_str_len;
+#endif
     }
 
     bpf_map_update_elem(&sql_events, &goroutine_addr, &sql_request, BPF_ANY);
@@ -77,7 +89,11 @@ int uprobe_queryDC_Returns(struct pt_regs *ctx) {
         trace->id = (u64)goroutine_addr;
         trace->start_monotime_ns = request->start_time;
         trace->end_monotime_ns = bpf_ktime_get_ns();
+#if BUFFER_QUERY_ARG
         bpf_memcpy(trace->path, request->query, MAX_QUERY_SIZE);
+#else
+        bpf_probe_read(trace->path, (u64)request->query_len, request->query_ptr);
+#endif
         // submit the completed trace via ringbuffer
         bpf_ringbuf_submit(trace, get_flags());
     } else {

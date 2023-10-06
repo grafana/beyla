@@ -15,8 +15,8 @@ import (
 	"github.com/grafana/beyla/pkg/internal/svc"
 )
 
-//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf ../../../../bpf/go_sql.c -- -I../../../../bpf/headers
-//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf_debug ../../../../bpf/go_sql.c -- -I../../../../bpf/headers -DBPF_DEBUG
+//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -no-global-types -target amd64,arm64 bpf ../../../../bpf/go_sql.c -- -I../../../../bpf/headers
+//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -no-global-types -target amd64,arm64 bpf_debug ../../../../bpf/go_sql.c -- -I../../../../bpf/headers -DBPF_DEBUG
 
 type Tracer struct {
 	Cfg        *ebpfcommon.TracerConfig

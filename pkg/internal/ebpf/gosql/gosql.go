@@ -34,9 +34,7 @@ func (p *Tracer) Load() (*ebpf.CollectionSpec, error) {
 }
 
 func (p *Tracer) Constants(_ *exec.FileInfo, _ *goexec.Offsets) map[string]any {
-	return map[string]any{
-		"should_include_db_statement": bool(p.Cfg.BpfIncludeDBStatement),
-	}
+	return make(map[string]any)
 }
 
 func (p *Tracer) BpfObjects() any {
@@ -51,7 +49,7 @@ func (p *Tracer) GoProbes() map[string]ebpfcommon.FunctionPrograms {
 	return map[string]ebpfcommon.FunctionPrograms{
 		"database/sql.(*DB).queryDC": {
 			Start: p.bpfObjects.UprobeQueryDC,
-			End:   p.bpfObjects.UprobeQueryDC_Returns,
+			End:   p.bpfObjects.UprobeQueryDCReturn,
 		},
 	}
 }

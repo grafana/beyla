@@ -54,8 +54,8 @@ type bpfSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpfProgramSpecs struct {
-	UprobeQueryDC         *ebpf.ProgramSpec `ebpf:"uprobe_queryDC"`
-	UprobeQueryDC_Returns *ebpf.ProgramSpec `ebpf:"uprobe_queryDC_Returns"`
+	UprobeQueryDC       *ebpf.ProgramSpec `ebpf:"uprobe_queryDC"`
+	UprobeQueryDCReturn *ebpf.ProgramSpec `ebpf:"uprobe_queryDCReturn"`
 }
 
 // bpfMapSpecs contains maps before they are loaded into the kernel.
@@ -66,7 +66,7 @@ type bpfMapSpecs struct {
 	Newproc1              *ebpf.MapSpec `ebpf:"newproc1"`
 	OngoingGoroutines     *ebpf.MapSpec `ebpf:"ongoing_goroutines"`
 	OngoingServerRequests *ebpf.MapSpec `ebpf:"ongoing_server_requests"`
-	SqlEvents             *ebpf.MapSpec `ebpf:"sql_events"`
+	OngoingSqlQueries     *ebpf.MapSpec `ebpf:"ongoing_sql_queries"`
 }
 
 // bpfObjects contains all objects after they have been loaded into the kernel.
@@ -92,7 +92,7 @@ type bpfMaps struct {
 	Newproc1              *ebpf.Map `ebpf:"newproc1"`
 	OngoingGoroutines     *ebpf.Map `ebpf:"ongoing_goroutines"`
 	OngoingServerRequests *ebpf.Map `ebpf:"ongoing_server_requests"`
-	SqlEvents             *ebpf.Map `ebpf:"sql_events"`
+	OngoingSqlQueries     *ebpf.Map `ebpf:"ongoing_sql_queries"`
 }
 
 func (m *bpfMaps) Close() error {
@@ -101,7 +101,7 @@ func (m *bpfMaps) Close() error {
 		m.Newproc1,
 		m.OngoingGoroutines,
 		m.OngoingServerRequests,
-		m.SqlEvents,
+		m.OngoingSqlQueries,
 	)
 }
 
@@ -109,14 +109,14 @@ func (m *bpfMaps) Close() error {
 //
 // It can be passed to loadBpfObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpfPrograms struct {
-	UprobeQueryDC         *ebpf.Program `ebpf:"uprobe_queryDC"`
-	UprobeQueryDC_Returns *ebpf.Program `ebpf:"uprobe_queryDC_Returns"`
+	UprobeQueryDC       *ebpf.Program `ebpf:"uprobe_queryDC"`
+	UprobeQueryDCReturn *ebpf.Program `ebpf:"uprobe_queryDCReturn"`
 }
 
 func (p *bpfPrograms) Close() error {
 	return _BpfClose(
 		p.UprobeQueryDC,
-		p.UprobeQueryDC_Returns,
+		p.UprobeQueryDCReturn,
 	)
 }
 

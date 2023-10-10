@@ -1,5 +1,3 @@
-// Copyright The OpenTelemetry Authors
-//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -19,86 +17,61 @@
 #include "bpf_dbg.h"
 #include <stdbool.h>
 
-#define MAX_QUERY_SIZE 100
-
-#define BUFFER_QUERY_ARG 0
-
-struct sql_request_t {
-    u64 start_time;
-#if BUFFER_QUERY_ARG
-    char query[MAX_QUERY_SIZE];
-#else
-    char *query_ptr;
-    u8    query_len;
-#endif
-};
-
 struct {
-	__uint(type, BPF_MAP_TYPE_HASH);
-	__type(key, void*);
-	__type(value, struct sql_request_t);
-	__uint(max_entries, MAX_CONCURRENT_REQUESTS);
-} sql_events SEC(".maps");
+    __uint(type, BPF_MAP_TYPE_HASH);
+    __type(key, void *); // key: pointer to the request goroutine
+    __type(value, func_invocation);
+    __uint(max_entries, MAX_CONCURRENT_REQUESTS);
+} ongoing_sql_queries SEC(".maps");
 
-// Injected in init
-volatile const bool should_include_db_statement;
-
-// This instrumentation attaches uprobe to the following function:
-// func (db *DB) queryDC(ctx, txctx context.Context, dc *driverConn, releaseConn func(error), query string, args []any)
 SEC("uprobe/queryDC")
 int uprobe_queryDC(struct pt_regs *ctx) {
     bpf_dbg_printk("=== uprobe/queryDC === ");
     void *goroutine_addr = GOROUTINE_PTR(ctx);
     bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
 
-    struct sql_request_t sql_request = {0};
-    sql_request.start_time = bpf_ktime_get_ns();
+    func_invocation invocation = {
+        .start_monotime_ns = bpf_ktime_get_ns(),
+        .regs = *ctx,
+    };
 
-    if (should_include_db_statement) {
-        // Read Query string
-        void *query_str_ptr = GO_PARAM8(ctx);
-        u64 query_str_len = (u64)GO_PARAM9(ctx);
-#if BUFFER_QUERY_ARG
-        u64 query_size = MAX_QUERY_SIZE < query_str_len ? MAX_QUERY_SIZE : query_str_len;
-        bpf_probe_read(sql_request.query, query_size, query_str_ptr);
-#else
-        sql_request.query_ptr = query_str_ptr;
-        sql_request.query_len = (u8)query_str_len;
-#endif
+    // Write event
+    if (bpf_map_update_elem(&ongoing_sql_queries, &goroutine_addr, &invocation, BPF_ANY)) {
+        bpf_dbg_printk("can't update map element");
     }
 
-    bpf_map_update_elem(&sql_events, &goroutine_addr, &sql_request, BPF_ANY);
     return 0;
 }
 
 SEC("uprobe/queryDC")
-int uprobe_queryDC_Returns(struct pt_regs *ctx) {
-    bpf_dbg_printk("=== uprobe/queryDC_Returns === ");
+int uprobe_queryDCReturn(struct pt_regs *ctx) {
+
+    bpf_dbg_printk("=== uprobe/queryDCReturn === ");
     void *goroutine_addr = GOROUTINE_PTR(ctx);
     bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
 
-    struct sql_request_t *request = bpf_map_lookup_elem(&sql_events, &goroutine_addr);
-    if (request == NULL) {
+    func_invocation *invocation = bpf_map_lookup_elem(&ongoing_sql_queries, &goroutine_addr);
+    if (invocation == NULL) {
         bpf_dbg_printk("Request not found for this goroutine");
         return 0;
     }
+    bpf_map_delete_elem(&ongoing_sql_queries, &goroutine_addr);
 
     http_request_trace *trace = bpf_ringbuf_reserve(&events, sizeof(http_request_trace), 0);
     if (trace) {
         trace->type = EVENT_SQL_CLIENT;
         trace->id = (u64)goroutine_addr;
-        trace->start_monotime_ns = request->start_time;
+        trace->start_monotime_ns = invocation->start_monotime_ns;
         trace->end_monotime_ns = bpf_ktime_get_ns();
-#if BUFFER_QUERY_ARG
-        bpf_memcpy(trace->path, request->query, MAX_QUERY_SIZE);
-#else
-        bpf_probe_read(trace->path, (u64)request->query_len, request->query_ptr);
-#endif
+        u64 query_len = (u64)GO_PARAM9(&(invocation->regs));
+        if (query_len > sizeof(trace->path)) {
+            query_len = sizeof(trace->path);
+        }
+        bpf_probe_read(trace->path, query_len, (void*)GO_PARAM8(&(invocation->regs)));
         // submit the completed trace via ringbuffer
         bpf_ringbuf_submit(trace, get_flags());
     } else {
         bpf_dbg_printk("can't reserve space in the ringbuffer");
     }
-    bpf_map_delete_elem(&sql_events, &goroutine_addr);
     return 0;
 }

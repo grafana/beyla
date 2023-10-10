@@ -169,12 +169,6 @@ can help with reducing the CPU overhead of Beyla.
 In low-load services (in terms of requests/second), high values of `wakeup_len` could
 add a noticeable delay in the time the metrics are submitted and become externally visible.
 
-| YAML                       | Env var                    | Type | Default |
-| -------------------------- | -------------------------- | ---- | ------- |
-| `bpf_include_db_statement` | `BPF_INCLUDE_DB_STATEMENT` | bool | true    |
-
-This controls if BPF will copy the instrumented database query statements,
-from which db.operation and db.sql.operation will be extracted.
 
 ## Routes decorator
 

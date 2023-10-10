@@ -5,7 +5,6 @@ import (
 	"log/slog"
 	"net"
 	"strconv"
-	"strings"
 
 	"github.com/grafana/beyla/pkg/internal/request"
 	"github.com/grafana/beyla/pkg/internal/sqlprune"
@@ -101,46 +100,4 @@ func extractTraceparent(traceparent [55]byte) string {
 		return ""
 	}
 	return string(traceparent[:])
-}
-
-func getSQLOperationAndTable(queryString string) (string, string) {
-	fields := strings.Fields(queryString)
-	if len(fields) == 0 {
-		return "", ""
-	}
-	operation := strings.ToUpper(fields[0])
-	if len(fields) < 2 {
-		return operation, ""
-	}
-	table := ""
-	if operation == "UPDATE" {
-		return operation, fields[1]
-	}
-	if len(fields) < 3 {
-		return operation, ""
-	}
-	switch operation {
-	case "ALTER", "CREATE", "DROP", "TRUNCATE":
-		if strings.ToUpper(fields[1]) == "TABLE" {
-			// TODO: Handle "If exists" -- cyclomatic complexity is too great here to pass linter
-			//if len(fields) < 5 {
-			return operation, fields[2]
-			//} else if strings.ToUpper(fields[2]) == "IF" &&
-			//	strings.ToUpper(fields[3]) == "EXISTS" {
-			//	return operation, fields[4]
-			//}
-		}
-	}
-	for i, f := range fields {
-		word := strings.ToUpper(f)
-		switch word {
-		case "FROM", "INTO", "ON":
-			next := i + 1
-			if next < len(fields) {
-				table = fields[next]
-			}
-			return operation, table
-		}
-	}
-	return operation, table
 }

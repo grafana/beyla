@@ -203,7 +203,6 @@ int uprobe_roundTrip(struct pt_regs *ctx) {
 SEC("uprobe/roundTrip_return")
 int uprobe_roundTripReturn(struct pt_regs *ctx) {
     bpf_dbg_printk("=== uprobe/proc http roundTrip return === ");
-
     void *goroutine_addr = GOROUTINE_PTR(ctx);
     bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
 

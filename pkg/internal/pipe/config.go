@@ -21,10 +21,9 @@ var defaultConfig = Config{
 	ChannelBufferLen: 10,
 	LogLevel:         "INFO",
 	EBPF: ebpfcommon.TracerConfig{
-		BatchLength:           100,
-		BatchTimeout:          time.Second,
-		BpfBaseDir:            "/var/run/beyla",
-		BpfIncludeDBStatement: true,
+		BatchLength:  100,
+		BatchTimeout: time.Second,
+		BpfBaseDir:   "/var/run/beyla",
 	},
 	Metrics: otel.MetricsConfig{
 		Protocol:          otel.ProtocolUnset,

@@ -124,36 +124,3 @@ func TestSpanNesting(t *testing.T) {
 	b = makeSpanWithTimings(10000, 30000, 30000)
 	assert.False(t, (&a).Inside(&b))
 }
-
-func TestTraces_SQLOperationTable(t *testing.T) {
-	type sqlQueryTest struct {
-		queryString       string
-		expectedOperation string
-		expectedTable     string
-	}
-	for _, sqt := range []sqlQueryTest{
-		{"", "", ""},
-		{" ", "", ""},
-		{" FiRsTwOrDtOuPpeR", "FIRSTWORDTOUPPER", ""},
-		{"SELECT * FROM TableNameCasePreserved", "SELECT", "TableNameCasePreserved"},
-		{"FROM", "FROM", ""},
-		{"DELETE FROM tablename WHERE column = 'value'", "DELETE", "tablename"},
-		{"FROM tablename2 extraword", "FROM", "tablename2"},
-		{"SELECT * FROM students", "SELECT", "students"},
-		{"SELECT ", "SELECT", ""},
-		{"SELECT * ", "SELECT", ""},
-		{"INSERT INTO students (name, id) VALUES (\"Bob\", 1)", "INSERT", "students"},
-		{"CREATE INDEX index_name ON table_name (column_name)", "CREATE", "table_name"},
-		{"CREATE INDEX index_name ON", "CREATE", ""},
-		{"CREATE INDEX index_name ON ", "CREATE", ""},
-		{"Alter Table students Add age varchar(100)'", "ALTER", "students"},
-		{"Create Table faculty SET name = 'Robert' WHERE id = '1'", "CREATE", "faculty"},
-		{"Drop Table summerschool", "DROP", "summerschool"},
-		{"TRUNCATE table faculty", "TRUNCATE", "faculty"},
-		{"UPDATE students SET name = 'Bobbie' WHERE id = '1'", "UPDATE", "students"},
-	} {
-		operation, table := getSQLOperationAndTable(sqt.queryString)
-		assert.Equal(t, sqt.expectedOperation, operation)
-		assert.Equal(t, sqt.expectedTable, table)
-	}
-}

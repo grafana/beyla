@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/grafana/beyla/pkg/internal/request"
+	"github.com/grafana/beyla/pkg/internal/sqlprune"
 )
 
 var log = slog.With("component", "goexec.spanner")
@@ -42,7 +43,7 @@ func HTTPRequestTraceToSpan(trace *HTTPRequestTrace) request.Span {
 		hostname, hostPort = extractHostPort(trace.Host[:])
 	case request.EventTypeSQLClient:
 		trace.GoStartMonotimeNs = trace.StartMonotimeNs
-		method, path = getSQLOperationAndTable(path)
+		method, path = sqlprune.SQLParseOperationAndTable(path)
 	default:
 		log.Warn("unknown trace type", "type", trace.Type)
 	}

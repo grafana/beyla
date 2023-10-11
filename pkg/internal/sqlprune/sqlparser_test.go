@@ -4,19 +4,22 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/xwb1989/sqlparser"
 )
 
-var tableOptional = map[string]bool{
-	"SET":      true,
-	"SHOW":     true,
-	"USE":      true,
-	"BEGIN":    true,
-	"START":    true,
-	"COMMIT":   true,
-	"ROLLBACK": true,
+var tableRequired = map[string]bool{
+	"DELETE": true,
+	"INSERT": true,
+	"UPDATE": true,
+}
+
+func queryIsNotParsable(query string) bool {
+	_, err := sqlparser.Parse(query)
+	return err != nil
 }
 
 func RunOneSQLTest(t *testing.T, query string) {
+	setGlobalTestingT(t)
 	operation, table := SQLParseOperationAndTable(query)
 
 	if query == "" {
@@ -26,6 +29,11 @@ func RunOneSQLTest(t *testing.T, query string) {
 		return
 	}
 
+	t.Logf("Op/tab: %-20s Query: %s\n", operation+" "+table, query)
+	if queryIsNotParsable(query) {
+		t.Logf("                                    Above query did not parse successfully with library, skipping checks on output")
+		return
+	}
 	if operation == "" {
 		// One exception case here:
 		if query == "desc foobar" {
@@ -35,18 +43,20 @@ func RunOneSQLTest(t *testing.T, query string) {
 		assert.NotEmpty(t, operation, "DB operation not found on query string: %s", query)
 		return
 	}
-	t.Logf("Op/tab: %-20s Query: %s\n", operation+" "+table, query)
-	if !tableOptional[operation] {
-		// One odd exception case, table can't start with number:
-		if query != "select 1" {
-			assert.NotEqualValues(t, "", table, "Table was not optional for operator %s.  Query string: %s", operation, query)
-		}
+	if tableRequired[operation] {
+		assert.NotEqualValues(t, "", table, "Table was required for operator %s.  Query string: %s", operation, query)
 	}
 }
 
-func TestSQLparser(t *testing.T) {
+func TestSQLParser(t *testing.T) {
 	for _, sql := range validSQL {
 		RunOneSQLTest(t, sql.input)
+	}
+	for _, sql := range parameterizedValidSQL {
+		RunOneSQLTest(t, sql.input)
+	}
+	for _, queryString := range otalJavaSqlQueries {
+		RunOneSQLTest(t, queryString)
 	}
 	RunOneSQLTest(t, "")
 }

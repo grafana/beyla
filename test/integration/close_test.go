@@ -49,3 +49,14 @@ func PrintDockerStorage(t *testing.T) {
 		t.Logf("Docker system df output:\n%s", string(out))
 	}
 }
+
+func DockerSystemPrune(t *testing.T) {
+	PrintStorage(t)
+	PrintDockerStorage(t)
+	out, err := exec.Command("docker", "system", "prune", "-f").CombinedOutput()
+	if err == nil {
+		t.Logf("Docker system prune -f\n%s", string(out))
+	}
+	PrintStorage(t)
+	PrintDockerStorage(t)
+}

@@ -34,14 +34,31 @@ var tokenIsDBOperation = map[int]bool{
 
 func SQLParseOperationAndTable(query string) (string, string) {
 	var operation, table string
+	var lastType int
 	tokens := sqlparser.NewTokenizer(strings.NewReader(query))
 	for tokenType, data := tokens.Scan(); tokenType != 0; tokenType, data = tokens.Scan() {
+		// Uncomment to run "go test -v" and print out token types and data:
+		//debugSQLParseOperationAndTable(tokenType, data)
+		if tokenType == sqlparser.LEX_ERROR {
+			return operation, table
+		}
 		if operation == "" && tokenIsDBOperation[tokenType] {
 			operation = strings.ToUpper(string(data[:]))
 		}
-		if table == "" && tokenType == sqlparser.ID {
-			table = string(data[:])
-			break
+
+		if tokenType == sqlparser.ID || tokenType == sqlparser.VALUE_ARG {
+			switch lastType {
+			case sqlparser.TABLE, sqlparser.FROM, sqlparser.INTO, sqlparser.UPDATE:
+				if tokenType == sqlparser.VALUE_ARG {
+					table = "?"
+				} else {
+					table = string(data[:])
+				}
+				return operation, table
+			}
+		}
+		if tokenType != sqlparser.COMMENT {
+			lastType = tokenType
 		}
 	}
 	return operation, table

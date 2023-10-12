@@ -171,7 +171,7 @@ func testHTTPTracesBadTraceparent(t *testing.T) {
 		test.Eventually(t, testTimeout, func(t require.TestingT) {
 			if negativeTest {
 				// Give time when we're ensuring that a trace is NOT generated
-				time.Sleep(testTimeout / 2)
+				time.Sleep(min(10, testTimeout/2) * time.Second)
 			}
 			resp, err := http.Get(jaegerQueryURL + "?service=testserver&operation=GET%20%2F" + slug)
 			require.NoError(t, err)

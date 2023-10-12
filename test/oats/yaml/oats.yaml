@@ -1,0 +1,12 @@
+docker-compose:
+  generator: generic
+  files:
+    - ../docker-compose-beyla-gotestserver.yml
+input:
+  - path: /smoke
+interval: 500ms
+expected:
+  traces:
+    - traceql: '{ .http.method = "GET" }'
+      spans:
+        - name: 'GET /smoke'

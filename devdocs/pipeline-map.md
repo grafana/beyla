@@ -22,11 +22,13 @@ flowchart TD
         EBPF2 -.-> |"[]request.Span"| TR
         EBPF3 -.-> TR
         TR(traces.Reader) --> ROUT(Routes<br/>decorator)
-    
-        ROUT --> OTELM(OTEL<br/> metrics<br/> exporter)
-        ROUT --> OTELT(OTEL<br/> traces<br/> exporter)
-        ROUT --> PROM(Prometheus<br/>HTTP<br/>endpoint)
+        ROUT --> KD(Kubernetes<br/>decorator)
+
+        KD --> OTELM(OTEL<br/> metrics<br/> exporter)
+        KD --> OTELT(OTEL<br/> traces<br/> exporter)
+        KD --> PROM(Prometheus<br/>HTTP<br/>endpoint)
         style ROUT stroke-dasharray: 3 3;
+        style KD stroke-dasharray: 3 3;
         style OTELM stroke-dasharray: 3 3;
         style OTELT stroke-dasharray: 3 3;
         style PROM stroke-dasharray: 3 3;

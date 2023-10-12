@@ -73,6 +73,7 @@ GOIMPORTS_REVISER = $(TOOLS_DIR)/goimports-reviser
 GO_LICENSES = $(TOOLS_DIR)/go-licenses
 KIND = $(TOOLS_DIR)/kind
 DASHBOARD_LINTER = $(TOOLS_DIR)/dashboard-linter
+GINKGO = $(TOOLS_DIR)/ginkgo
 
 define check_format
 	$(shell $(foreach FILE, $(shell find . -name "*.go" -not -path "./vendor/*"), \
@@ -223,6 +224,21 @@ itest-coverage-data:
 	sed 's/^\/src\/cmd\//github.com\/grafana\/beyla\/cmd\//' $(TEST_OUTPUT)/itest-covdata.raw.txt > $(TEST_OUTPUT)/itest-covdata.all.txt
 	# exclude generated files from coverage data
 	grep -vE $(EXCLUDE_COVERAGE_FILES) $(TEST_OUTPUT)/itest-covdata.all.txt > $(TEST_OUTPUT)/itest-covdata.txt
+
+bin/ginkgo:
+	$(call go-install-tool,$(GINKGO),github.com/onsi/ginkgo/v2/ginkgo@latest)
+
+.PHONY: oats-prereq
+oats-prereq: bin/ginkgo
+	cd test/oats && go mod vendor
+
+.PHONY: oats-test
+oats-test: oats-prereq
+	cd test/oats && TESTCASE_BASE_PATH=./yaml $(GINKGO) -v -r
+
+.PHONY: oats-test-debug
+oats-test-debug: oats-prereq
+	cd test/oats && TESTCASE_BASE_PATH=./yaml TESTCASE_MANUAL_DEBUG=true TESTCASE_TIMEOUT=1h $(GINKGO) -v -r
 
 .PHONY: drone
 drone:

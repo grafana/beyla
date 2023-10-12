@@ -19,6 +19,10 @@ jobs:
         uses: actions/setup-go@v3
         with:
           go-version: ${{ matrix.go }}
+      - name: Clean up disk space
+        run: |
+          docker system prune -af
+          docker volume prune -f
       - name: Run integration tests
         run: make integration-test
         timeout-minutes: 60

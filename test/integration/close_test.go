@@ -48,6 +48,10 @@ func PrintDockerStorage(t *testing.T) {
 	if err == nil {
 		t.Logf("Docker system df output:\n%s", string(out))
 	}
+	out, err = exec.Command("docker", "images").CombinedOutput()
+	if err == nil {
+		t.Logf("Docker images:\n%s", string(out))
+	}
 }
 
 func DockerSystemPrune(t *testing.T) {

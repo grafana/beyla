@@ -4,7 +4,7 @@
  */
 package sqlprune
 
-var otalJavaSqlQueries = []string{
+var otelJavaSQLQueries = []string{
 	"SELECT * FROM TABLE WHERE FIELD=1234", "SELECT * FROM TABLE WHERE FIELD=?",
 	"SELECT * FROM TABLE WHERE FIELD = 1234", "SELECT * FROM TABLE WHERE FIELD = ?",
 

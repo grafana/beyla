@@ -19,6 +19,9 @@ func debugSQLParseOperationAndTable(tokenType int, data []byte) {
 	globalTestingT.Logf("Type %s=%s\n", typeName, string(data[:]))
 }
 
+// This is to be used for debugging unit tests, normally unused.
+var _ = debugSQLParseOperationAndTable
+
 var xwbTokenTypeToName = map[int]string{
 	57346: "LEX_ERROR",
 	57347: "UNION",

@@ -29,13 +29,11 @@ func testBPFPinningUnmounted(t *testing.T) {
 	require.NoError(t, err)
 	require.Empty(t, entries)
 
-	// Convenient hook for monitoring storage space:
-	PrintStorage(t)
-	PrintDockerStorage(t)
+	// Convenient hook for monitoring/managing image storage space:
+	DeleteDockerImage(t, "hatest-*autoinstrumenter")
 }
 
-func PrintStorage(t *testing.T) {
-	// Convenient hook for monitoring storage space:
+func PrintFreeStorage(t *testing.T) {
 	var stat unix.Statfs_t
 	wd, err := os.Getwd()
 	if err == nil && unix.Statfs(wd, &stat) == nil {
@@ -44,23 +42,25 @@ func PrintStorage(t *testing.T) {
 }
 
 func PrintDockerStorage(t *testing.T) {
+	PrintFreeStorage(t)
 	out, err := exec.Command("docker", "system", "df").CombinedOutput()
+	require.NoError(t, err)
 	if err == nil {
 		t.Logf("Docker system df output:\n%s", string(out))
 	}
 	out, err = exec.Command("docker", "images").CombinedOutput()
+	require.NoError(t, err)
 	if err == nil {
 		t.Logf("Docker images:\n%s", string(out))
 	}
 }
 
-func DockerSystemPrune(t *testing.T) {
-	PrintStorage(t)
+func DeleteDockerImage(t *testing.T, imageName string) {
 	PrintDockerStorage(t)
-	out, err := exec.Command("docker", "system", "prune", "-f").CombinedOutput()
+	cmd := exec.Command("/bin/bash", "-c", "docker rmi -f $(docker images -q \""+imageName+"\")")
+	out, err := cmd.Output()
+	require.NoError(t, err)
 	if err == nil {
-		t.Logf("Docker system prune -f\n%s", string(out))
+		t.Logf("Docker remove images:\n %s", string(out))
 	}
-	PrintStorage(t)
-	PrintDockerStorage(t)
 }

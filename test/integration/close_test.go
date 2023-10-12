@@ -29,8 +29,8 @@ func testBPFPinningUnmounted(t *testing.T) {
 	require.NoError(t, err)
 	require.Empty(t, entries)
 
-	// Convenient hook for monitoring/managing image storage space:
-	DeleteDockerImage(t, "hatest-*autoinstrumenter")
+	// Convenient hook for monitoring image storage space:
+	PrintDockerStorage(t)
 }
 
 func PrintFreeStorage(t *testing.T) {
@@ -52,15 +52,5 @@ func PrintDockerStorage(t *testing.T) {
 	require.NoError(t, err)
 	if err == nil {
 		t.Logf("Docker images:\n%s", string(out))
-	}
-}
-
-func DeleteDockerImage(t *testing.T, imageName string) {
-	PrintDockerStorage(t)
-	cmd := exec.Command("/bin/bash", "-c", "docker rmi -f $(docker images -q \""+imageName+"\")")
-	out, err := cmd.Output()
-	require.NoError(t, err)
-	if err == nil {
-		t.Logf("Docker remove images:\n %s", string(out))
 	}
 }

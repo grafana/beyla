@@ -29,8 +29,9 @@ func testBPFPinningUnmounted(t *testing.T) {
 	require.NoError(t, err)
 	require.Empty(t, entries)
 
-	// Convenient hook for monitoring image storage space:
+	// Convenient hook for monitoring/managing image storage space:
 	PrintDockerStorage(t)
+	DockerPrune(t)
 }
 
 func PrintFreeStorage(t *testing.T) {
@@ -52,5 +53,18 @@ func PrintDockerStorage(t *testing.T) {
 	require.NoError(t, err)
 	if err == nil {
 		t.Logf("Docker images:\n%s", string(out))
+	}
+}
+
+func DockerPrune(t *testing.T) {
+	out, err := exec.Command("docker", "system", "prune", "-f").CombinedOutput()
+	require.NoError(t, err)
+	if err == nil {
+		t.Logf("Docker system prune -f:\n %s", string(out))
+	}
+	out, err = exec.Command("docker", "volume", "prune", "-f").CombinedOutput()
+	require.NoError(t, err)
+	if err == nil {
+		t.Logf("Docker volume prune -f:\n %s", string(out))
 	}
 }

@@ -331,7 +331,7 @@ func (mr *MetricsReporter) metricAttributes(span *request.Span) attribute.Set {
 		}
 	case request.EventTypeSQLClient:
 		attrs = []attribute.KeyValue{
-			semconv.DBStatement(span.Path),
+			semconv.DBOperation(span.Method),
 		}
 	}
 

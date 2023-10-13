@@ -330,7 +330,6 @@ func (r *TracesReporter) traceAttributes(span *request.Span) []attribute.KeyValu
 			table := span.Path
 			if table != "" {
 				attrs = append(attrs, semconv.DBSQLTable(table))
-				attrs = append(attrs, semconv.DBStatement(operation+" "+table))
 			}
 		}
 	}

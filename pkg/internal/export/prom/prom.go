@@ -38,7 +38,6 @@ const (
 	rpcMethodKey         = "rpc_method"
 	rpcSystemGRPC        = "rpc_system"
 	DBOperationKey       = "db_operation"
-	DBSQLTableTable      = "db_sql_table"
 
 	k8sSrcNameKey      = "k8s_src_name"
 	k8sSrcNamespaceKey = "k8s_src_namespace"
@@ -172,7 +171,7 @@ func (r *metricsReporter) observe(span *request.Span) {
 // labelNamesSQL must return the label names in the same order as would be returned
 // by labelValuesSQL
 func labelNamesSQL(ctxInfo *global.ContextInfo) []string {
-	names := []string{serviceNameKey, serviceNamespaceKey, DBOperationKey, DBSQLTableTable}
+	names := []string{serviceNameKey, serviceNamespaceKey, DBOperationKey}
 	if ctxInfo.K8sDecoration {
 		names = appendK8sLabelNames(names)
 	}
@@ -182,7 +181,7 @@ func labelNamesSQL(ctxInfo *global.ContextInfo) []string {
 // labelValuesSQL must return the label names in the same order as would be returned
 // by labelNamesSQL
 func (r *metricsReporter) labelValuesSQL(span *request.Span) []string {
-	values := []string{span.ServiceID.Name, span.ServiceID.Namespace, span.Method, span.Path}
+	values := []string{span.ServiceID.Name, span.ServiceID.Namespace, span.Method}
 	if r.ctxInfo.K8sDecoration {
 		values = appendK8sLabelValues(values, span)
 	}

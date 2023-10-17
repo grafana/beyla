@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/mariomac/guara/pkg/test"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"sigs.k8s.io/e2e-framework/pkg/envconf"
 	"sigs.k8s.io/e2e-framework/pkg/features"
@@ -49,9 +48,10 @@ func TestTracesDecoration(t *testing.T) {
 					require.NotEmpty(t, traces)
 					trace = traces[0]
 					require.NotEmpty(t, trace.Spans)
-					require.Truef(t, trace.Spans[0].AllMatches(jaeger.Tag{
+					sd := trace.Spans[0].Diff(jaeger.Tag{
 						Key: "k8s.src.name", Type: "string", Value: "internal-pinger",
-					}), "spans do not have kubernetes metadata: %v", trace.Spans[0].Tags)
+					})
+					require.Empty(t, sd, sd.String())
 				}, test.Interval(100*time.Millisecond))
 
 				// Check that the parent Span has the required metadata
@@ -59,13 +59,14 @@ func TestTracesDecoration(t *testing.T) {
 				if p, ok := trace.ParentOf(&span); ok {
 					span = p
 				}
-				assert.Truef(t, span.AllMatches(
+				sd := span.Diff(
 					jaeger.Tag{Key: "k8s.src.name", Type: "string", Value: "internal-pinger"},
 					jaeger.Tag{Key: "k8s.dst.name", Type: "string", Value: "testserver"},
 					jaeger.Tag{Key: "k8s.src.namespace", Type: "string", Value: "default"},
 					jaeger.Tag{Key: "k8s.src.namespace", Type: "string", Value: "default"},
 					jaeger.Tag{Key: "k8s.dst.type", Type: "string", Value: "Pod"},
-				), "trace %q does not have expected metadata: %v", span.SpanID, span.Tags)
+				)
+				require.Empty(t, sd, sd.String())
 				return ctx
 			},
 		).Feature()

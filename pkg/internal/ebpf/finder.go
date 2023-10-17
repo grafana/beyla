@@ -17,6 +17,7 @@ import (
 
 	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
 	"github.com/grafana/beyla/pkg/internal/ebpf/goruntime"
+	"github.com/grafana/beyla/pkg/internal/ebpf/gosql"
 	"github.com/grafana/beyla/pkg/internal/ebpf/grpc"
 	"github.com/grafana/beyla/pkg/internal/ebpf/httpfltr"
 	"github.com/grafana/beyla/pkg/internal/ebpf/nethttp"
@@ -116,6 +117,7 @@ func (pf *ProcessFinder) findAndInstrument(ctx context.Context, metrics imetrics
 		&nethttp.GinTracer{Tracer: nethttp.Tracer{Cfg: &pf.Cfg.EBPF, Metrics: metrics}},
 		&grpc.Tracer{Cfg: &pf.Cfg.EBPF, Metrics: metrics},
 		&goruntime.Tracer{Cfg: &pf.Cfg.EBPF, Metrics: metrics},
+		&gosql.Tracer{Cfg: &pf.Cfg.EBPF, Metrics: metrics},
 	}
 
 	// merging all the functions from all the programs, in order to do

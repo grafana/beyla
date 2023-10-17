@@ -3,6 +3,11 @@
 // nolint:gocritic
 package jaeger
 
+import (
+	"fmt"
+	"strings"
+)
+
 type TracesQuery struct {
 	Data []Trace `json:"data"`
 }
@@ -45,7 +50,7 @@ func (tq *TracesQuery) FindBySpan(tags ...Tag) []Trace {
 	var matches []Trace
 	for _, trace := range tq.Data {
 		for _, span := range trace.Spans {
-			if span.AllMatches(tags...) {
+			if len(span.Diff(tags...)) == 0 {
 				matches = append(matches, trace)
 				break
 			}
@@ -95,20 +100,54 @@ func (t *Trace) ChildrenOf(parentID string) []Span {
 	return matches
 }
 
-func (s *Span) AllMatches(tags ...Tag) bool {
-	return AllMatches(s.Tags, tags)
+func (s *Span) Diff(expected ...Tag) DiffResult {
+	return Diff(expected, s.Tags)
 }
 
-func AllMatches(dst, src []Tag) bool {
-	dstTags := map[Tag]struct{}{}
-	for _, d := range dst {
-		dstTags[d] = struct{}{}
-	}
+type DiffResult []TagDiff
 
-	for _, s := range src {
-		if _, ok := dstTags[s]; !ok {
-			return false
+func (mr DiffResult) String() string {
+	sb := strings.Builder{}
+	if len(mr) > 0 {
+		sb.WriteString("The following tags did not match:\n")
+	}
+	for _, td := range mr {
+		if td.ErrType == ErrTypeMissing {
+			sb.WriteString(fmt.Sprintf("\tmissing tag: %+v\n", td.Expected))
+		} else {
+			sb.WriteString(fmt.Sprintf("\ttag values do not match:\n\t\twant: %+v\n\t\tgot:  %+v\n", td.Expected, td.Actual))
 		}
 	}
-	return true
+	return sb.String()
+}
+
+type ErrType int
+
+const (
+	ErrTypeMissing = ErrType(iota)
+	ErrTypeNotEqual
+)
+
+type TagDiff struct {
+	ErrType  ErrType
+	Expected Tag
+	Actual   Tag
+}
+
+func Diff(expected, actual []Tag) DiffResult {
+	dr := DiffResult{}
+	actualTags := map[string]Tag{}
+	for _, d := range actual {
+		actualTags[d.Key] = d
+	}
+	for _, exp := range expected {
+		if act, ok := actualTags[exp.Key]; ok {
+			if act.Type != exp.Type || act.Value != exp.Value {
+				dr = append(dr, TagDiff{ErrType: ErrTypeNotEqual, Expected: exp, Actual: act})
+			}
+		} else {
+			dr = append(dr, TagDiff{ErrType: ErrTypeMissing, Expected: exp})
+		}
+	}
+	return dr
 }

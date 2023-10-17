@@ -8,6 +8,7 @@ import (
 
 	"github.com/grafana/beyla/pkg/internal/ebpf"
 	"github.com/grafana/beyla/pkg/internal/ebpf/goruntime"
+	"github.com/grafana/beyla/pkg/internal/ebpf/gosql"
 	"github.com/grafana/beyla/pkg/internal/ebpf/grpc"
 	"github.com/grafana/beyla/pkg/internal/ebpf/httpfltr"
 	"github.com/grafana/beyla/pkg/internal/ebpf/nethttp"
@@ -63,6 +64,7 @@ func newGoTracersGroup(cfg *pipe.Config, metrics imetrics.Reporter) []ebpf.Trace
 		&nethttp.GinTracer{Tracer: nethttp.Tracer{Cfg: &cfg.EBPF, Metrics: metrics}},
 		&grpc.Tracer{Cfg: &cfg.EBPF, Metrics: metrics},
 		&goruntime.Tracer{Cfg: &cfg.EBPF, Metrics: metrics},
+		&gosql.Tracer{Cfg: &cfg.EBPF, Metrics: metrics},
 	}
 }
 

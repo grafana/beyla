@@ -85,7 +85,7 @@ func testREDMetricsForRustHTTPLibrary(t *testing.T, url string, comm string, por
 	// check duration is at least 2us
 	assert.Less(t, (2 * time.Microsecond).Microseconds(), parent.Duration)
 	// check span attributes
-	assert.Truef(t, parent.AllMatches(
+	sd := parent.Diff(
 		jaeger.Tag{Key: "otel.library.name", Type: "string", Value: "github.com/grafana/beyla"},
 		jaeger.Tag{Key: "http.method", Type: "string", Value: "GET"},
 		jaeger.Tag{Key: "http.status_code", Type: "int64", Value: float64(200)},
@@ -93,14 +93,16 @@ func testREDMetricsForRustHTTPLibrary(t *testing.T, url string, comm string, por
 		jaeger.Tag{Key: "net.host.port", Type: "int64", Value: float64(port)},
 		jaeger.Tag{Key: "http.route", Type: "string", Value: "/trace"},
 		jaeger.Tag{Key: "span.kind", Type: "string", Value: "server"},
-	), "not all tags matched in %+v", parent.Tags)
+	)
+	assert.Empty(t, sd, sd.String())
 
 	process := trace.Processes[parent.ProcessID]
 	assert.Equal(t, comm, process.ServiceName)
-	assert.Truef(t, jaeger.AllMatches(process.Tags, []jaeger.Tag{
+	sd = jaeger.Diff([]jaeger.Tag{
 		{Key: "telemetry.sdk.language", Type: "string", Value: "go"},
 		{Key: "service.namespace", Type: "string", Value: "integration-test"},
-	}), "not all tags matched in %+v", process.Tags)
+	}, process.Tags)
+	assert.Empty(t, sd, sd.String())
 
 }
 

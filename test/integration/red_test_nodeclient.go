@@ -67,14 +67,15 @@ func testNodeClientWithMethodAndStatusCode(t *testing.T, method string, statusCo
 	require.Len(t, spans, 1)
 	span := spans[0]
 
-	assert.Truef(t, span.AllMatches(
+	sd := span.Diff(
 		jaeger.Tag{Key: "otel.library.name", Type: "string", Value: "github.com/grafana/beyla"},
 		jaeger.Tag{Key: "http.method", Type: "string", Value: "GET"},
 		jaeger.Tag{Key: "http.status_code", Type: "int64", Value: float64(statusCode)},
 		jaeger.Tag{Key: "http.url", Type: "string", Value: "/"},
 		jaeger.Tag{Key: "net.peer.port", Type: "int64", Value: float64(port)},
 		jaeger.Tag{Key: "span.kind", Type: "string", Value: "client"},
-	), "not all tags matched in %+v", span.Tags)
+	)
+	assert.Empty(t, sd, sd.String())
 
 	/*
 	 The code in client.js generates spans like these:

@@ -72,7 +72,7 @@ func testHTTPTracesCommon(t *testing.T, doTraceID bool, httpCode int) {
 	// check duration is at least 10ms
 	assert.Less(t, (10 * time.Millisecond).Microseconds(), parent.Duration)
 	// check span attributes
-	assert.Truef(t, parent.AllMatches(
+	sd := parent.Diff(
 		jaeger.Tag{Key: "otel.library.name", Type: "string", Value: "github.com/grafana/beyla"},
 		jaeger.Tag{Key: "http.method", Type: "string", Value: "GET"},
 		jaeger.Tag{Key: "http.status_code", Type: "int64", Value: float64(httpCode)},
@@ -80,12 +80,14 @@ func testHTTPTracesCommon(t *testing.T, doTraceID bool, httpCode int) {
 		jaeger.Tag{Key: "net.host.port", Type: "int64", Value: float64(8080)},
 		jaeger.Tag{Key: "http.route", Type: "string", Value: "/" + slug},
 		jaeger.Tag{Key: "span.kind", Type: "string", Value: "server"},
-	), "not all tags matched in %+v", parent.Tags)
+	)
+	assert.Empty(t, sd, sd.String())
 
 	if httpCode >= 500 {
-		assert.Truef(t, parent.AllMatches(
+		sd := parent.Diff(
 			jaeger.Tag{Key: "otel.status_code", Type: "string", Value: "ERROR"},
-		), "not all tags matched in %+v", parent.Tags)
+		)
+		assert.Empty(t, sd, sd.String())
 	}
 
 	// Check the information of the "in queue" span
@@ -104,10 +106,11 @@ func testHTTPTracesCommon(t *testing.T, doTraceID bool, httpCode int) {
 		parent.StartTime+parent.Duration+1) // adding 1 to tolerate inaccuracies from rounding from ns to ms
 	// check span attributes
 	// check span attributes
-	assert.Truef(t, queue.AllMatches(
+	sd = queue.Diff(
 		jaeger.Tag{Key: "otel.library.name", Type: "string", Value: "github.com/grafana/beyla"},
 		jaeger.Tag{Key: "span.kind", Type: "string", Value: "internal"},
-	), "not all tags matched in %+v", queue.Tags)
+	)
+	assert.Empty(t, sd, sd.String())
 
 	// Check the information of the "processing" span
 	res = trace.FindByOperationName("processing")
@@ -123,10 +126,11 @@ func testHTTPTracesCommon(t *testing.T, doTraceID bool, httpCode int) {
 	assert.LessOrEqual(t,
 		processing.StartTime+processing.Duration,
 		parent.StartTime+parent.Duration+1)
-	assert.Truef(t, queue.AllMatches(
+	sd = queue.Diff(
 		jaeger.Tag{Key: "otel.library.name", Type: "string", Value: "github.com/grafana/beyla"},
 		jaeger.Tag{Key: "span.kind", Type: "string", Value: "internal"},
-	), "not all tags matched in %+v", queue.Tags)
+	)
+	assert.Empty(t, sd, sd.String())
 
 	// check process ID
 	require.Contains(t, trace.Processes, parent.ProcessID)
@@ -134,10 +138,11 @@ func testHTTPTracesCommon(t *testing.T, doTraceID bool, httpCode int) {
 	assert.Equal(t, parent.ProcessID, processing.ProcessID)
 	process := trace.Processes[parent.ProcessID]
 	assert.Equal(t, "testserver", process.ServiceName)
-	assert.Truef(t, jaeger.AllMatches(process.Tags, []jaeger.Tag{
+	jaeger.Diff([]jaeger.Tag{
 		{Key: "telemetry.sdk.language", Type: "string", Value: "go"},
 		{Key: "service.namespace", Type: "string", Value: "integration-test"},
-	}), "not all tags matched in %+v", process.Tags)
+	}, process.Tags)
+	assert.Empty(t, sd, sd.String())
 }
 
 func testHTTPTracesBadTraceparent(t *testing.T) {
@@ -235,7 +240,7 @@ func testGRPCTracesForServiceName(t *testing.T, svcName string) {
 	// check duration is at least 10ms (10,000 microseconds)
 	assert.Less(t, (10 * time.Millisecond).Microseconds(), parent.Duration)
 	// check span attributes
-	assert.Truef(t, parent.AllMatches(
+	sd := parent.Diff(
 		jaeger.Tag{Key: "otel.library.name", Type: "string", Value: "github.com/grafana/beyla"},
 		jaeger.Tag{Key: "net.host.port", Type: "int64", Value: float64(50051)},
 		jaeger.Tag{Key: "rpc.grpc.status_code", Type: "int64", Value: float64(2)},
@@ -243,7 +248,8 @@ func testGRPCTracesForServiceName(t *testing.T, svcName string) {
 		jaeger.Tag{Key: "rpc.system", Type: "string", Value: "grpc"},
 		jaeger.Tag{Key: "span.kind", Type: "string", Value: "server"},
 		jaeger.Tag{Key: "service.name", Type: "string", Value: svcName},
-	), "not all tags matched in %+v", parent.Tags)
+	)
+	assert.Empty(t, sd, sd.String())
 
 	// Check the information of the "in queue" span
 	res = trace.FindByOperationName("in queue")
@@ -260,10 +266,11 @@ func testGRPCTracesForServiceName(t *testing.T, svcName string) {
 		queue.StartTime+queue.Duration,
 		parent.StartTime+parent.Duration+1) // adding 1 to tolerate inaccuracies from rounding from ns to ms
 	// check span attributes
-	assert.Truef(t, queue.AllMatches(
+	sd = queue.Diff(
 		jaeger.Tag{Key: "otel.library.name", Type: "string", Value: "github.com/grafana/beyla"},
 		jaeger.Tag{Key: "span.kind", Type: "string", Value: "internal"},
-	), "not all tags matched in %+v", queue.Tags)
+	)
+	assert.Empty(t, sd, sd.String())
 
 	// Check the information of the "processing" span
 	res = trace.FindByOperationName("processing")
@@ -279,10 +286,11 @@ func testGRPCTracesForServiceName(t *testing.T, svcName string) {
 	assert.GreaterOrEqual(t, processing.StartTime, queue.StartTime+queue.Duration)
 	assert.LessOrEqual(t, processing.StartTime+processing.Duration, parent.StartTime+parent.Duration+1)
 	// check span attributes
-	assert.Truef(t, queue.AllMatches(
+	sd = queue.Diff(
 		jaeger.Tag{Key: "otel.library.name", Type: "string", Value: "github.com/grafana/beyla"},
 		jaeger.Tag{Key: "span.kind", Type: "string", Value: "internal"},
-	), "not all tags matched in %+v", queue.Tags)
+	)
+	assert.Empty(t, sd, sd.String())
 
 	// check process ID
 	require.Contains(t, trace.Processes, parent.ProcessID)
@@ -290,10 +298,11 @@ func testGRPCTracesForServiceName(t *testing.T, svcName string) {
 	assert.Equal(t, parent.ProcessID, processing.ProcessID)
 	process := trace.Processes[parent.ProcessID]
 	assert.Equal(t, svcName, process.ServiceName)
-	assert.Truef(t, jaeger.AllMatches(process.Tags, []jaeger.Tag{
+	jaeger.Diff([]jaeger.Tag{
 		{Key: "telemetry.sdk.language", Type: "string", Value: "go"},
 		{Key: "service.namespace", Type: "string", Value: "integration-test"},
-	}), "not all tags matched in %+v", process.Tags)
+	}, process.Tags)
+	assert.Empty(t, sd, sd.String())
 
 	require.NoError(t, grpcclient.List()) // this call adds traceparent manually to the headers, simulates existing traceparent
 
@@ -375,7 +384,7 @@ func testHTTPTracesKProbes(t *testing.T) {
 	// check duration is at least 2us
 	assert.Less(t, (2 * time.Microsecond).Microseconds(), parent.Duration)
 	// check span attributes
-	assert.Truef(t, parent.AllMatches(
+	sd := parent.Diff(
 		jaeger.Tag{Key: "otel.library.name", Type: "string", Value: "github.com/grafana/beyla"},
 		jaeger.Tag{Key: "http.method", Type: "string", Value: "GET"},
 		jaeger.Tag{Key: "http.status_code", Type: "int64", Value: float64(200)},
@@ -383,12 +392,14 @@ func testHTTPTracesKProbes(t *testing.T) {
 		jaeger.Tag{Key: "net.host.port", Type: "int64", Value: float64(3030)},
 		jaeger.Tag{Key: "http.route", Type: "string", Value: "/bye"},
 		jaeger.Tag{Key: "span.kind", Type: "string", Value: "server"},
-	), "not all tags matched in %+v", parent.Tags)
+	)
+	assert.Empty(t, sd, sd.String())
 
 	process := trace.Processes[parent.ProcessID]
 	assert.Equal(t, "node", process.ServiceName)
-	assert.Truef(t, jaeger.AllMatches(process.Tags, []jaeger.Tag{
+	jaeger.Diff([]jaeger.Tag{
 		{Key: "telemetry.sdk.language", Type: "string", Value: "go"},
 		{Key: "service.namespace", Type: "string", Value: "integration-test"},
-	}), "not all tags matched in %+v", process.Tags)
+	}, process.Tags)
+	assert.Empty(t, sd, sd.String())
 }

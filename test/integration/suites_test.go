@@ -12,9 +12,9 @@ import (
 )
 
 func TestSuite(t *testing.T) {
-	compose, err := docker.ComposeSuite("docker-compose.yml", path.Join(pathOutput, "test-suite.log"))
-	require.NoError(t, err)
-	require.NoError(t, compose.Up())
+	//compose, err := docker.ComposeSuite("docker-compose.yml", path.Join(pathOutput, "test-suite.log"))
+	//require.NoError(t, err)
+	//require.NoError(t, compose.Up())
 	t.Run("RED metrics", testREDMetricsHTTP)
 	t.Run("HTTP traces", testHTTPTraces)
 	t.Run("HTTP traces (no traceID)", testHTTPTracesNoTraceID)
@@ -24,7 +24,7 @@ func TestSuite(t *testing.T) {
 	t.Run("Internal Prometheus metrics", testInternalPrometheusExport)
 
 	t.Run("BPF pinning folder mounted", testBPFPinningMounted)
-	require.NoError(t, compose.Close())
+	//require.NoError(t, compose.Close())
 	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
 }
 

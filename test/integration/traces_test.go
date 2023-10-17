@@ -73,7 +73,6 @@ func testHTTPTracesCommon(t *testing.T, doTraceID bool, httpCode int) {
 	assert.Less(t, (10 * time.Millisecond).Microseconds(), parent.Duration)
 	// check span attributes
 	sd := parent.Diff(
-		jaeger.Tag{Key: "otel.library.name", Type: "string", Value: "github.com/grafana/beyla"},
 		jaeger.Tag{Key: "http.method", Type: "string", Value: "GET"},
 		jaeger.Tag{Key: "http.status_code", Type: "int64", Value: float64(httpCode)},
 		jaeger.Tag{Key: "http.target", Type: "string", Value: "/" + slug},
@@ -107,7 +106,6 @@ func testHTTPTracesCommon(t *testing.T, doTraceID bool, httpCode int) {
 	// check span attributes
 	// check span attributes
 	sd = queue.Diff(
-		jaeger.Tag{Key: "otel.library.name", Type: "string", Value: "github.com/grafana/beyla"},
 		jaeger.Tag{Key: "span.kind", Type: "string", Value: "internal"},
 	)
 	assert.Empty(t, sd, sd.String())
@@ -127,7 +125,6 @@ func testHTTPTracesCommon(t *testing.T, doTraceID bool, httpCode int) {
 		processing.StartTime+processing.Duration,
 		parent.StartTime+parent.Duration+1)
 	sd = queue.Diff(
-		jaeger.Tag{Key: "otel.library.name", Type: "string", Value: "github.com/grafana/beyla"},
 		jaeger.Tag{Key: "span.kind", Type: "string", Value: "internal"},
 	)
 	assert.Empty(t, sd, sd.String())
@@ -139,6 +136,7 @@ func testHTTPTracesCommon(t *testing.T, doTraceID bool, httpCode int) {
 	process := trace.Processes[parent.ProcessID]
 	assert.Equal(t, "testserver", process.ServiceName)
 	jaeger.Diff([]jaeger.Tag{
+		{Key: "otel.library.name", Type: "string", Value: "github.com/grafana/beyla"},
 		{Key: "telemetry.sdk.language", Type: "string", Value: "go"},
 		{Key: "service.namespace", Type: "string", Value: "integration-test"},
 	}, process.Tags)
@@ -241,7 +239,6 @@ func testGRPCTracesForServiceName(t *testing.T, svcName string) {
 	assert.Less(t, (10 * time.Millisecond).Microseconds(), parent.Duration)
 	// check span attributes
 	sd := parent.Diff(
-		jaeger.Tag{Key: "otel.library.name", Type: "string", Value: "github.com/grafana/beyla"},
 		jaeger.Tag{Key: "net.host.port", Type: "int64", Value: float64(50051)},
 		jaeger.Tag{Key: "rpc.grpc.status_code", Type: "int64", Value: float64(2)},
 		jaeger.Tag{Key: "rpc.method", Type: "string", Value: "/routeguide.RouteGuide/Debug"},
@@ -267,7 +264,6 @@ func testGRPCTracesForServiceName(t *testing.T, svcName string) {
 		parent.StartTime+parent.Duration+1) // adding 1 to tolerate inaccuracies from rounding from ns to ms
 	// check span attributes
 	sd = queue.Diff(
-		jaeger.Tag{Key: "otel.library.name", Type: "string", Value: "github.com/grafana/beyla"},
 		jaeger.Tag{Key: "span.kind", Type: "string", Value: "internal"},
 	)
 	assert.Empty(t, sd, sd.String())
@@ -287,7 +283,6 @@ func testGRPCTracesForServiceName(t *testing.T, svcName string) {
 	assert.LessOrEqual(t, processing.StartTime+processing.Duration, parent.StartTime+parent.Duration+1)
 	// check span attributes
 	sd = queue.Diff(
-		jaeger.Tag{Key: "otel.library.name", Type: "string", Value: "github.com/grafana/beyla"},
 		jaeger.Tag{Key: "span.kind", Type: "string", Value: "internal"},
 	)
 	assert.Empty(t, sd, sd.String())
@@ -299,6 +294,7 @@ func testGRPCTracesForServiceName(t *testing.T, svcName string) {
 	process := trace.Processes[parent.ProcessID]
 	assert.Equal(t, svcName, process.ServiceName)
 	jaeger.Diff([]jaeger.Tag{
+		{Key: "otel.library.name", Type: "string", Value: "github.com/grafana/beyla"},
 		{Key: "telemetry.sdk.language", Type: "string", Value: "go"},
 		{Key: "service.namespace", Type: "string", Value: "integration-test"},
 	}, process.Tags)
@@ -385,7 +381,6 @@ func testHTTPTracesKProbes(t *testing.T) {
 	assert.Less(t, (2 * time.Microsecond).Microseconds(), parent.Duration)
 	// check span attributes
 	sd := parent.Diff(
-		jaeger.Tag{Key: "otel.library.name", Type: "string", Value: "github.com/grafana/beyla"},
 		jaeger.Tag{Key: "http.method", Type: "string", Value: "GET"},
 		jaeger.Tag{Key: "http.status_code", Type: "int64", Value: float64(200)},
 		jaeger.Tag{Key: "http.target", Type: "string", Value: "/bye"},
@@ -398,6 +393,7 @@ func testHTTPTracesKProbes(t *testing.T) {
 	process := trace.Processes[parent.ProcessID]
 	assert.Equal(t, "node", process.ServiceName)
 	jaeger.Diff([]jaeger.Tag{
+		{Key: "otel.library.name", Type: "string", Value: "github.com/grafana/beyla"},
 		{Key: "telemetry.sdk.language", Type: "string", Value: "go"},
 		{Key: "service.namespace", Type: "string", Value: "integration-test"},
 	}, process.Tags)

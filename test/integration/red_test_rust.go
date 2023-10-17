@@ -86,7 +86,6 @@ func testREDMetricsForRustHTTPLibrary(t *testing.T, url string, comm string, por
 	assert.Less(t, (2 * time.Microsecond).Microseconds(), parent.Duration)
 	// check span attributes
 	sd := parent.Diff(
-		jaeger.Tag{Key: "otel.library.name", Type: "string", Value: "github.com/grafana/beyla"},
 		jaeger.Tag{Key: "http.method", Type: "string", Value: "GET"},
 		jaeger.Tag{Key: "http.status_code", Type: "int64", Value: float64(200)},
 		jaeger.Tag{Key: "http.target", Type: "string", Value: "/trace"},
@@ -99,6 +98,7 @@ func testREDMetricsForRustHTTPLibrary(t *testing.T, url string, comm string, por
 	process := trace.Processes[parent.ProcessID]
 	assert.Equal(t, comm, process.ServiceName)
 	sd = jaeger.Diff([]jaeger.Tag{
+		{Key: "otel.library.name", Type: "string", Value: "github.com/grafana/beyla"},
 		{Key: "telemetry.sdk.language", Type: "string", Value: "go"},
 		{Key: "service.namespace", Type: "string", Value: "integration-test"},
 	}, process.Tags)

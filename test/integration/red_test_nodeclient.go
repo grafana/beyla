@@ -68,7 +68,6 @@ func testNodeClientWithMethodAndStatusCode(t *testing.T, method string, statusCo
 	span := spans[0]
 
 	sd := span.Diff(
-		jaeger.Tag{Key: "otel.library.name", Type: "string", Value: "github.com/grafana/beyla"},
 		jaeger.Tag{Key: "http.method", Type: "string", Value: "GET"},
 		jaeger.Tag{Key: "http.status_code", Type: "int64", Value: float64(statusCode)},
 		jaeger.Tag{Key: "http.url", Type: "string", Value: "/"},

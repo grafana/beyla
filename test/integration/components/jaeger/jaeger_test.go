@@ -89,3 +89,42 @@ func Fixture() *TracesQuery {
 	}
 	return &t
 }
+
+func TestDiff(t *testing.T) {
+	expected := []Tag{
+		{Key: "foo", Type: "string", Value: 123},
+		{Key: "match", Type: "int", Value: 321},
+		{Key: "baz", Type: "float", Value: 111},
+		{Key: "nf", Type: "float", Value: 321},
+	}
+	actual := []Tag{
+		{Key: "baz", Type: "float", Value: 111},
+		{Key: "match", Type: "string", Value: 321},
+		{Key: "foo", Type: "string", Value: 321},
+	}
+	dr := Diff(expected, actual)
+	t.Log(dr.String())
+	assert.Equal(t, dr, DiffResult{
+		{ErrType: ErrTypeNotEqual, Expected: expected[0], Actual: actual[2]},
+		{ErrType: ErrTypeNotEqual, Expected: expected[1], Actual: actual[1]},
+		{ErrType: ErrTypeMissing, Expected: expected[3]},
+	})
+}
+
+func TestDiff_Matching(t *testing.T) {
+	expected := []Tag{
+		{Key: "foo", Type: "string", Value: 123},
+		{Key: "match", Type: "int", Value: 321},
+		{Key: "baz", Type: "float", Value: 111},
+		{Key: "nf", Type: "float", Value: 321},
+	}
+	actual := []Tag{
+		expected[1], expected[3], expected[0], expected[2],
+		// any tag in the actual set is ignored if not specified in the "expected" set
+		{Key: "triliri", Type: "float", Value: 111},
+		{Key: "tralara", Type: "string", Value: 321},
+	}
+	dr := Diff(expected, actual)
+	t.Log(dr.String())
+	assert.Emptyf(t, dr, "expected empty but got: %s", dr.String())
+}

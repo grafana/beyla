@@ -63,7 +63,7 @@ func LoadConfig(reader io.Reader) (*Config, error) {
 // selection criteria.
 func (i *Instrumenter) FindAndInstrument(ctx context.Context) error {
 	finder := discover.NewProcessFinder(ctx, i.config, i.ctxInfo.Metrics)
-	foundProcesses, err := finder.Start()
+	foundProcesses, err := finder.Start(i.config)
 	if err != nil {
 		return fmt.Errorf("couldn't start Process Finder: %w", err)
 	}
@@ -111,10 +111,9 @@ func (i *Instrumenter) ReadAndForward(ctx context.Context) error {
 func buildContextInfo(config *pipe.Config) *global.ContextInfo {
 	promMgr := &connector.PrometheusManager{}
 	ctxInfo := &global.ContextInfo{
-		ReportRoutes:     config.Routes != nil,
-		Prometheus:       promMgr,
-		ChannelBufferLen: config.ChannelBufferLen,
-		K8sDecoration:    config.Kubernetes.Enabled(),
+		ReportRoutes:  config.Routes != nil,
+		Prometheus:    promMgr,
+		K8sDecoration: config.Kubernetes.Enabled(),
 	}
 	if config.InternalMetrics.Prometheus.Port != 0 {
 		slog.Debug("reporting internal metrics as Prometheus")

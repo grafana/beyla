@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/mariomac/pipes/pkg/graph"
+	"github.com/mariomac/pipes/pkg/node"
 
 	"github.com/grafana/beyla/pkg/internal/ebpf"
 	"github.com/grafana/beyla/pkg/internal/ebpf/goruntime"
@@ -40,8 +41,8 @@ func NewProcessFinder(ctx context.Context, cfg *pipe.Config, metrics imetrics.Re
 
 // Start the ProcessFinder pipeline in background. It returns a channel where each new discovered
 // ebpf.ProcessTracer will be notified.
-func (pf *ProcessFinder) Start() (<-chan *ebpf.ProcessTracer, error) {
-	gb := graph.NewBuilder()
+func (pf *ProcessFinder) Start(cfg *pipe.Config) (<-chan *ebpf.ProcessTracer, error) {
+	gb := graph.NewBuilder(node.ChannelBufferLen(cfg.ChannelBufferLen))
 	graph.RegisterStart(gb, WatcherProvider)
 	graph.RegisterMiddle(gb, CriteriaMatcherProvider)
 	graph.RegisterMiddle(gb, ExecTyperProvider)

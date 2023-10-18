@@ -321,6 +321,17 @@ func (r *TracesReporter) traceAttributes(span *request.Span) []attribute.KeyValu
 			semconv.NetPeerName(span.Host),
 			semconv.NetPeerPort(span.HostPort),
 		}
+	case request.EventTypeSQLClient:
+		operation := span.Method
+		if operation != "" {
+			attrs = []attribute.KeyValue{
+				semconv.DBOperation(operation),
+			}
+			table := span.Path
+			if table != "" {
+				attrs = append(attrs, semconv.DBSQLTable(table))
+			}
+		}
 	}
 
 	if span.ServiceID.Name != "" { // we don't have service name set, system wide instrumentation
@@ -347,6 +358,18 @@ func traceName(span *request.Span) string {
 		return span.Path
 	case request.EventTypeHTTPClient:
 		return span.Method
+	case request.EventTypeSQLClient:
+		// We don't have db.name, but follow "<db.operation> <db.name>.<db.sql.table_name>"
+		// or just "<db.operation>" if table is not known, otherwise just a fixed string.
+		operation := span.Method
+		if operation == "" {
+			return "SQL"
+		}
+		table := span.Path
+		if table != "" {
+			operation += " ." + table
+		}
+		return operation
 	}
 	return ""
 }
@@ -355,7 +378,7 @@ func spanKind(span *request.Span) trace2.SpanKind {
 	switch span.Type {
 	case request.EventTypeHTTP, request.EventTypeGRPC:
 		return trace2.SpanKindServer
-	case request.EventTypeHTTPClient, request.EventTypeGRPCClient:
+	case request.EventTypeHTTPClient, request.EventTypeGRPCClient, request.EventTypeSQLClient:
 		return trace2.SpanKindClient
 	}
 	return trace2.SpanKindInternal
@@ -516,7 +539,7 @@ func (r *TracesReporter) reportTraces(input <-chan []request.Span) {
 			}
 
 			switch span.Type {
-			case request.EventTypeHTTPClient, request.EventTypeGRPCClient:
+			case request.EventTypeHTTPClient, request.EventTypeGRPCClient, request.EventTypeSQLClient:
 				r.reportClientSpan(span, reporter)
 			case request.EventTypeHTTP, request.EventTypeGRPC:
 				r.reportServerSpan(span, reporter)

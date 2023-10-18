@@ -317,6 +317,13 @@ github.com/vladimirvivien/gexe/fs
 github.com/vladimirvivien/gexe/http
 github.com/vladimirvivien/gexe/prog
 github.com/vladimirvivien/gexe/vars
+# github.com/xwb1989/sqlparser v0.0.0-20180606152119-120387863bf2
+## explicit
+github.com/xwb1989/sqlparser
+github.com/xwb1989/sqlparser/dependency/bytes2
+github.com/xwb1989/sqlparser/dependency/hack
+github.com/xwb1989/sqlparser/dependency/querypb
+github.com/xwb1989/sqlparser/dependency/sqltypes
 # github.com/yusufpapurcu/wmi v1.2.2
 ## explicit; go 1.16
 github.com/yusufpapurcu/wmi

@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	"github.com/grafana/beyla/pkg/internal/request"
+	"github.com/grafana/beyla/pkg/internal/sqlprune"
 )
 
 var log = slog.With("component", "goexec.spanner")
@@ -17,10 +18,12 @@ func HTTPRequestTraceToSpan(trace *HTTPRequestTrace) request.Span {
 	if methodLen < 0 {
 		methodLen = len(trace.Method)
 	}
+	method := string(trace.Method[:methodLen])
 	pathLen := bytes.IndexByte(trace.Path[:], 0)
 	if pathLen < 0 {
 		pathLen = len(trace.Path)
 	}
+	path := string(trace.Path[:pathLen])
 
 	peer := ""
 	hostname := ""
@@ -37,6 +40,9 @@ func HTTPRequestTraceToSpan(trace *HTTPRequestTrace) request.Span {
 		hostname = extractIP(trace.Host[:], int(trace.HostLen))
 	case request.EventTypeGRPCClient:
 		hostname, hostPort = extractHostPort(trace.Host[:])
+	case request.EventTypeSQLClient:
+		trace.GoStartMonotimeNs = trace.StartMonotimeNs
+		method, path = sqlprune.SQLParseOperationAndTable(path)
 	default:
 		log.Warn("unknown trace type", "type", trace.Type)
 	}
@@ -44,8 +50,8 @@ func HTTPRequestTraceToSpan(trace *HTTPRequestTrace) request.Span {
 	return request.Span{
 		Type:          request.EventType(trace.Type),
 		ID:            trace.Id,
-		Method:        string(trace.Method[:methodLen]),
-		Path:          string(trace.Path[:pathLen]),
+		Method:        method,
+		Path:          path,
 		Peer:          peer,
 		Host:          hostname,
 		HostPort:      hostPort,

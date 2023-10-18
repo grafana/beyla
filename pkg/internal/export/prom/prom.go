@@ -21,6 +21,7 @@ const (
 	HTTPClientDuration    = "http_client_duration_seconds"
 	RPCServerDuration     = "rpc_server_duration_seconds"
 	RPCClientDuration     = "rpc_client_duration_seconds"
+	SQLClientDuration     = "sql_client_duration_seconds"
 	HTTPServerRequestSize = "http_server_request_size_bytes"
 	HTTPClientRequestSize = "http_client_request_size_bytes"
 
@@ -36,6 +37,7 @@ const (
 	rpcGRPCStatusCodeKey = "rpc_grpc_status_code"
 	rpcMethodKey         = "rpc_method"
 	rpcSystemGRPC        = "rpc_system"
+	DBOperationKey       = "db_operation"
 
 	k8sSrcNameKey      = "k8s_src_name"
 	k8sSrcNamespaceKey = "k8s_src_namespace"
@@ -66,6 +68,7 @@ type metricsReporter struct {
 	httpClientDuration    *prometheus.HistogramVec
 	grpcDuration          *prometheus.HistogramVec
 	grpcClientDuration    *prometheus.HistogramVec
+	sqlClientDuration     *prometheus.HistogramVec
 	httpRequestSize       *prometheus.HistogramVec
 	httpClientRequestSize *prometheus.HistogramVec
 
@@ -108,6 +111,11 @@ func newReporter(ctx context.Context, cfg *PrometheusConfig, ctxInfo *global.Con
 			Help:    "duration of GRPC service calls from the client side, in seconds",
 			Buckets: cfg.Buckets.DurationHistogram,
 		}, labelNamesGRPC(cfg, ctxInfo)),
+		sqlClientDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
+			Name:    SQLClientDuration,
+			Help:    "duration of SQL client operations, in seconds",
+			Buckets: cfg.Buckets.DurationHistogram,
+		}, labelNamesSQL(ctxInfo)),
 		httpRequestSize: prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Name:    HTTPServerRequestSize,
 			Help:    "size, in bytes, of the HTTP request body as received at the server side",
@@ -123,6 +131,7 @@ func newReporter(ctx context.Context, cfg *PrometheusConfig, ctxInfo *global.Con
 		mr.httpClientRequestSize,
 		mr.httpClientDuration,
 		mr.grpcClientDuration,
+		mr.sqlClientDuration,
 		mr.httpRequestSize,
 		mr.httpDuration,
 		mr.grpcDuration)
@@ -154,7 +163,29 @@ func (r *metricsReporter) observe(span *request.Span) {
 		r.grpcDuration.WithLabelValues(r.labelValuesGRPC(span)...).Observe(duration)
 	case request.EventTypeGRPCClient:
 		r.grpcClientDuration.WithLabelValues(r.labelValuesGRPC(span)...).Observe(duration)
+	case request.EventTypeSQLClient:
+		r.sqlClientDuration.WithLabelValues(r.labelValuesSQL(span)...).Observe(duration)
 	}
+}
+
+// labelNamesSQL must return the label names in the same order as would be returned
+// by labelValuesSQL
+func labelNamesSQL(ctxInfo *global.ContextInfo) []string {
+	names := []string{serviceNameKey, serviceNamespaceKey, DBOperationKey}
+	if ctxInfo.K8sDecoration {
+		names = appendK8sLabelNames(names)
+	}
+	return names
+}
+
+// labelValuesSQL must return the label names in the same order as would be returned
+// by labelNamesSQL
+func (r *metricsReporter) labelValuesSQL(span *request.Span) []string {
+	values := []string{span.ServiceID.Name, span.ServiceID.Namespace, span.Method}
+	if r.ctxInfo.K8sDecoration {
+		values = appendK8sLabelValues(values, span)
+	}
+	return values
 }
 
 // labelNamesGRPC must return the label names in the same order as would be returned

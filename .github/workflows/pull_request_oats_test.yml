@@ -23,3 +23,9 @@ jobs:
         run: make compile
       - name: Run oats tests
         run: make oats-test
+      - name: Upload oats test logs
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: Oats test logs
+          path: test/oats/build/output.log

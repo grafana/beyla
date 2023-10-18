@@ -3,4 +3,5 @@ routes:
     - /create-trace
     - /smoke
     - /greeting
+    - /sqltest
   unmatch: path

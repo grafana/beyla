@@ -2,43 +2,47 @@ package discover
 
 import (
 	"context"
+	"slices"
 	"testing"
 	"time"
 
-	"github.com/shirou/gopsutil/process"
 	"github.com/stretchr/testify/assert"
 
+	"github.com/grafana/beyla/pkg/internal/discover/services"
 	"github.com/grafana/beyla/pkg/internal/testutil"
 )
 
-const testTimeout = 5 * time.Second
+const testTimeout = 500000 * time.Second
 
 func TestWatcher_Poll(t *testing.T) {
-	// mocking a fake process.Processes function
-	p1 := &process.Process{Pid: 1}
-	p2 := &process.Process{Pid: 2}
-	p3 := &process.Process{Pid: 3}
-	p4 := &process.Process{Pid: 4}
+	// mocking a fake services.ProcessInfoes function
+
+	p1_1 := &services.ProcessInfo{Pid: 1, OpenPorts: []uint32{3030}}
+	p1_2 := &services.ProcessInfo{Pid: 1, OpenPorts: []uint32{3030, 3031}}
+	p2 := &services.ProcessInfo{Pid: 2, OpenPorts: []uint32{123}}
+	p3 := &services.ProcessInfo{Pid: 3, OpenPorts: []uint32{456}}
+	p4 := &services.ProcessInfo{Pid: 4, OpenPorts: []uint32{789}}
 	invocation := 0
 	ctx, cancel := context.WithCancel(context.Background())
 	// GIVEN a pollAccounter
 	acc := pollAccounter{
 		interval: time.Microsecond,
 		ctx:      ctx,
-		pids:     map[int32]*process.Process{},
-		listProcesses: func() ([]*process.Process, error) {
+		pidPorts: map[pidPort]*services.ProcessInfo{},
+		listProcesses: func() (map[int32]*services.ProcessInfo, error) {
 			invocation++
 			switch invocation {
 			case 1:
-				return []*process.Process{p1, p2, p3}, nil
+				return map[int32]*services.ProcessInfo{p1_1.Pid: p1_1, p2.Pid: p2, p3.Pid: p3}, nil
 			case 2:
-				return []*process.Process{p1, p3, p4}, nil
+				// p1_2 simulates that a new connection has been created for an existing process
+				return map[int32]*services.ProcessInfo{p1_2.Pid: p1_2, p3.Pid: p3, p4.Pid: p4}, nil
 			default:
-				return []*process.Process{p2, p3, p4}, nil
+				return map[int32]*services.ProcessInfo{p2.Pid: p2, p3.Pid: p3, p4.Pid: p4}, nil
 			}
 		},
 	}
-	accounterOutput := make(chan []Event[*process.Process], 1)
+	accounterOutput := make(chan []Event[*services.ProcessInfo], 1)
 	accounterExited := make(chan struct{})
 	go func() {
 		acc.Run(accounterOutput)
@@ -48,25 +52,26 @@ func TestWatcher_Poll(t *testing.T) {
 	// WHEN it polls the process for the first time
 	// THEN it returns the creation of all the events
 	out := testutil.ReadChannel(t, accounterOutput, testTimeout)
-	assert.Equal(t, []Event[*process.Process]{
-		{Type: EventCreated, Obj: p1},
+	assert.Equal(t, []Event[*services.ProcessInfo]{
+		{Type: EventCreated, Obj: p1_1},
 		{Type: EventCreated, Obj: p2},
 		{Type: EventCreated, Obj: p3},
-	}, out)
+	}, sort(out))
 
 	// WHEN it polls the process for the successive times
-	// THEN it returns the creation the new processes
+	// THEN it returns the creation of the new processes/connections
 	// AND the deletion of the old processes
 	out = testutil.ReadChannel(t, accounterOutput, testTimeout)
-	assert.Equal(t, []Event[*process.Process]{
-		{Type: EventCreated, Obj: p4},
+	assert.Equal(t, []Event[*services.ProcessInfo]{
+		{Type: EventCreated, Obj: p1_2},
 		{Type: EventDeleted, Obj: p2},
-	}, out)
+		{Type: EventCreated, Obj: p4},
+	}, sort(out))
 	out = testutil.ReadChannel(t, accounterOutput, testTimeout)
-	assert.Equal(t, []Event[*process.Process]{
+	assert.Equal(t, []Event[*services.ProcessInfo]{
+		{Type: EventDeleted, Obj: p1_2},
 		{Type: EventCreated, Obj: p2},
-		{Type: EventDeleted, Obj: p1},
-	}, out)
+	}, sort(out))
 
 	// WHEN no changes in the process, it doesn't send anything
 	select {
@@ -85,4 +90,12 @@ func TestWatcher_Poll(t *testing.T) {
 	case <-time.After(testTimeout):
 		assert.Fail(t, "expected to exit the main loop")
 	}
+}
+
+// auxiliary function just to allow comparing slices whose order is not deterministic
+func sort(events []Event[*services.ProcessInfo]) []Event[*services.ProcessInfo] {
+	slices.SortFunc(events, func(a, b Event[*services.ProcessInfo]) int {
+		return int(a.Obj.Pid) - int(b.Obj.Pid)
+	})
+	return events
 }

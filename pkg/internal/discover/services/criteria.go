@@ -10,6 +10,14 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// ProcessInfo stores some relevant information about a running process
+type ProcessInfo struct {
+	Pid       int32
+	PPid      int32
+	ExePath   string
+	OpenPorts []uint32
+}
+
 // DiscoveryConfig for the discover.ProcessFinder pipeline
 type DiscoveryConfig struct {
 	// Services selection. If the user defined the EXECUTABLE_NAME or OPEN_PORT variables, they will be automatically

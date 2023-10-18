@@ -2,11 +2,16 @@ package discover
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
+	"os"
 	"time"
 
 	"github.com/mariomac/pipes/pkg/node"
+	"github.com/shirou/gopsutil/net"
 	"github.com/shirou/gopsutil/process"
+
+	"github.com/grafana/beyla/pkg/internal/discover/services"
 )
 
 const (
@@ -32,12 +37,17 @@ type Event[T any] struct {
 	Obj  T
 }
 
-func WatcherProvider(w Watcher) (node.StartFunc[[]Event[*process.Process]], error) {
+func wplog() *slog.Logger {
+	return slog.With("component", "discover.Watcher")
+}
+
+func WatcherProvider(w Watcher) (node.StartFunc[[]Event[*services.ProcessInfo]], error) {
 	acc := pollAccounter{
 		ctx:           w.Ctx,
 		interval:      w.PollInterval,
-		pids:          map[int32]*process.Process{},
-		listProcesses: process.Processes,
+		pids:          map[int32]*services.ProcessInfo{},
+		pidPorts:      map[pidPort]*services.ProcessInfo{},
+		listProcesses: connectedProcesses,
 	}
 	if acc.interval == 0 {
 		acc.interval = defaultPollInterval
@@ -45,16 +55,26 @@ func WatcherProvider(w Watcher) (node.StartFunc[[]Event[*process.Process]], erro
 	return acc.Run, nil
 }
 
-// TODO: replace a poller by a listener, or allow users trying between both
+// pidPort associates a PID with its open port
+type pidPort struct {
+	Pid  int32
+	Port uint32
+}
+
+// TODO: combine the poller with an eBPF listener (poll at start and e.g. every 30 seconds, and keep listening eBPF in background)
 type pollAccounter struct {
 	ctx      context.Context
 	interval time.Duration
-	pids     map[int32]*process.Process
+	// last polled processes accessible by its pid
+	pids map[int32]*services.ProcessInfo
+	// last polled processes accesible by a combination of pid/connection port
+	// same process might appear several times
+	pidPorts map[pidPort]*services.ProcessInfo
 	// injectable function
-	listProcesses func() ([]*process.Process, error)
+	listProcesses func() (map[int32]*services.ProcessInfo, error)
 }
 
-func (pa *pollAccounter) Run(out chan<- []Event[*process.Process]) {
+func (pa *pollAccounter) Run(out chan<- []Event[*services.ProcessInfo]) {
 	log := slog.With("component", "discover.Watcher", "interval", pa.interval)
 	for {
 		procs, err := pa.listProcesses()
@@ -78,22 +98,84 @@ func (pa *pollAccounter) Run(out chan<- []Event[*process.Process]) {
 
 // snapshot compares the current processes with the status of the previous poll
 // and forwards a list of process creation/deletion events
-func (pa *pollAccounter) snapshot(procs []*process.Process) []Event[*process.Process] {
-	var events []Event[*process.Process]
-	currentPids := make(map[int32]*process.Process, len(procs))
-	// notify processes that are new
-	for _, p := range procs {
-		currentPids[p.Pid] = p
-		if _, ok := pa.pids[p.Pid]; !ok {
-			events = append(events, Event[*process.Process]{Type: EventCreated, Obj: p})
+func (pa *pollAccounter) snapshot(fetchedProcs map[int32]*services.ProcessInfo) []Event[*services.ProcessInfo] {
+	var events []Event[*services.ProcessInfo]
+	currentPidPorts := make(map[pidPort]*services.ProcessInfo, len(fetchedProcs))
+	createdProcs := map[int32]struct{}{}
+	// notify processes that are new, or already existed but have a new connection
+	for pid, proc := range fetchedProcs {
+		for _, port := range proc.OpenPorts {
+			pp := pidPort{Pid: pid, Port: port}
+			currentPidPorts[pp] = proc
+			if _, ok := pa.pidPorts[pp]; !ok {
+				if _, ok := createdProcs[pp.Pid]; !ok {
+					// avoid notifying multiple times the same process if it has multiple connections
+					createdProcs[pp.Pid] = struct{}{}
+					events = append(events, Event[*services.ProcessInfo]{Type: EventCreated, Obj: proc})
+				}
+			}
 		}
 	}
 	// notify processes that are removed
-	for pid, p := range pa.pids {
-		if _, ok := currentPids[pid]; !ok {
-			events = append(events, Event[*process.Process]{Type: EventDeleted, Obj: p})
+	for pp, proc := range pa.pids {
+		if _, ok := fetchedProcs[pp]; !ok {
+			events = append(events, Event[*services.ProcessInfo]{Type: EventDeleted, Obj: proc})
 		}
 	}
-	pa.pids = currentPids
+	pa.pids = fetchedProcs
+	pa.pidPorts = currentPidPorts
 	return events
+}
+
+func connectedProcesses() (map[int32]*services.ProcessInfo, error) {
+	conns, err := net.Connections("inet")
+	if err != nil {
+		return nil, fmt.Errorf("can't get network connections: %w", err)
+	}
+	processes := map[int32]*services.ProcessInfo{}
+	for i := range conns {
+		conn := &conns[i]
+		if conn.Pid == 0 {
+			continue
+		}
+		proc, ok := processes[conn.Pid]
+		if !ok {
+			if proc, err = processFromConnection(conn); err != nil {
+				wplog().Warn("can't read process information", "pid", conn.Pid, "err", err)
+				continue
+			}
+			processes[conn.Pid] = proc
+		}
+		proc.OpenPorts = append(proc.OpenPorts, conn.Laddr.Port)
+	}
+	return processes, nil
+}
+
+func processFromConnection(conn *net.ConnectionStat) (*services.ProcessInfo, error) {
+	proc, err := process.NewProcess(conn.Pid)
+	if err != nil {
+		return nil, err
+	}
+	ppid, _ := proc.Ppid()
+	exePath, err := proc.Exe()
+	if err != nil {
+		if err := tryAccessPid(proc.Pid); err != nil {
+			return nil, fmt.Errorf("can't read /proc/<pid>/fd information: %w", err)
+		}
+		// this might happen if you query from the port a service that does not have executable path.
+		// Since this value is just for attributing, we set a default placeholder
+		exePath = "unknown"
+	}
+	return &services.ProcessInfo{
+		Pid:     conn.Pid,
+		PPid:    ppid,
+		ExePath: exePath,
+	}, nil
+}
+
+func tryAccessPid(pid int32) error {
+	// TODO: allow overriding proc root
+	dir := fmt.Sprintf("/proc/%d/fd", pid)
+	_, err := os.Open(dir)
+	return err
 }

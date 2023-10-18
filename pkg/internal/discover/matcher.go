@@ -40,8 +40,12 @@ type ProcessMatch struct {
 }
 
 func (m *matcher) run(in <-chan []Event[*process.Process], out chan<- []Event[ProcessMatch]) {
+	m.log.Debug("starting criteria matcher node")
 	for i := range in {
-		out <- m.filter(i)
+		m.log.Debug("filtering processes", "len", i)
+		o := m.filter(i)
+		m.log.Debug("processes matching selection criteria", "len", len(o))
+		out <- o
 	}
 }
 

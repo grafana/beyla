@@ -8,6 +8,8 @@ keywords:
   - eBPF
 ---
 
+![Grafana Beyla Logo](https://grafana.com/media/docs/grafana-cloud/beyla/beyla-logo-2.png)
+
 # Run Beyla as a standalone process
 
 Beyla can run as a standalone Linux OS process with elevated privileges that can inspect other running processes.

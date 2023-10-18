@@ -74,24 +74,35 @@ static __always_inline bool is_http(unsigned char *p, u32 len, u8 *packet_type) 
     return true;
 }
 
-static __always_inline void read_msghdr_buf(void *target, int buf_len, struct msghdr *msg) {
+static __always_inline void *read_msghdr_buf(struct msghdr *msg) {
     unsigned int m_flags;
-    u8 i_type;
+    struct iov_iter msg_iter;
 
     bpf_probe_read_kernel(&m_flags, sizeof(unsigned int), &(msg->msg_flags));
-    bpf_probe_read_kernel(&i_type, sizeof(u8), &(msg->msg_iter.iter_type));
+    bpf_probe_read_kernel(&msg_iter, sizeof(struct iov_iter), &(msg->msg_iter));
 
-    bpf_dbg_printk("msg type %x, iter type %d", m_flags, i_type);
+    u8 msg_iter_type;
+    bpf_probe_read(&msg_iter_type, sizeof(u8), &(msg_iter));
 
-    struct iovec *iovec;
-    bpf_probe_read_kernel(&iovec, sizeof(struct iovec *), &(msg->msg_iter.iov));        
-    if (i_type == 0) { // IOVEC
-        struct iovec vec;
-        bpf_probe_read(&vec, sizeof(vec), iovec);
-        bpf_probe_read(target, buf_len, (void *)vec.iov_base);
-    } else { // we assume UBUF
-        bpf_probe_read(target, buf_len, (void *)iovec);
-    }    
+    bpf_dbg_printk("msg type %x, iter type %d", m_flags, msg_iter_type);
+
+    struct iovec *iov;
+    bpf_probe_read(&iov, sizeof(struct iovec *), &(msg_iter.iov));
+    
+    if (!iov) {
+        return NULL;
+    }
+
+    if (msg_iter_type == 6) {// Direct char buffer
+        return iov;
+    }
+
+    struct iovec vec;
+    bpf_probe_read(&vec, sizeof(struct iovec), iov);
+
+    bpf_dbg_printk("iov %llx base %llx", iov, vec.iov_base);
+
+    return vec.iov_base;    
 }
 
 // Copying 16 bytes at a time from the skb buffer is the only way to keep the verifier happy.
@@ -138,7 +149,6 @@ static __always_inline void finish_http(http_info_t *info) {
         bpf_map_delete_elem(&http_tcp_seq, &info->conn_info);
         bpf_map_delete_elem(&ongoing_http, &info->conn_info);
         // bpf_map_delete_elem(&filtered_connections, &info->conn_info); // don't clean this up, doesn't work with keepalive
-        // we don't explicitly clean-up the http_tcp_seq, we need to still monitor for dups
     }        
 }
 

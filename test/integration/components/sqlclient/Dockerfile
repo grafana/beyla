@@ -18,8 +18,7 @@ RUN go mod download
 RUN go build gosqlite.go
 
 # Create final image from minimal + built binary
-#TODO: use minimal image
-FROM ubuntu:latest
+FROM debian:bookworm-slim
 
 WORKDIR /
 COPY --from=builder /src/gosqlite .

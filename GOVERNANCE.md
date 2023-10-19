@@ -49,7 +49,6 @@ In case a member leaves, the [offboarding](#offboarding) procedure is applied.
 The current team members are:
 
 - Mario Macías - [@mariomac](https://github.com/mariomac) ([Grafana Labs](https://grafana.com/))
-- Matt Frick - [@MattFrick](https://github.com/MattFrick) ([Grafana Labs](https://grafana.com/))
 - Nikola Grcevski - [@grcevski](https://github.com/grcevski) ([Grafana Labs](https://grafana.com/))
 
 ### Maintainers

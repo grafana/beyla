@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   testserver:
-    image: ghcr.io/grafana/beyla/test/greeting-rust${TESTSERVER_IMAGE_SUFFIX}/0.0.2
+    image: ghcr.io/grafana/beyla-test/greeting-rust-${TESTSERVER_IMAGE_SUFFIX}/0.0.1
     ports:
       - "${TEST_SERVICE_PORTS}"
     environment:

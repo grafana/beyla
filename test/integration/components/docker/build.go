@@ -25,7 +25,7 @@ func Build(logger io.WriteCloser, rootPath string, imgs ...ImageBuild) error {
 			cmd.Stderr = logger
 		}
 		if err := cmd.Run(); err != nil {
-			ilog.Error("building dockerfile. Check build logs for details", err)
+			ilog.Error("building dockerfile. Check build logs for details", "error", err)
 			return err
 		}
 	}

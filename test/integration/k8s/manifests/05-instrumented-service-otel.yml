@@ -112,6 +112,8 @@ spec:
           value: "true"
         - name: OPEN_PORT
           value: "8080"
+        - name: DISCOVERY_POLL_INTERVAL
+          value: "500ms"
         - name: SERVICE_NAMESPACE
           value: "integration-test"
         - name: METRICS_INTERVAL

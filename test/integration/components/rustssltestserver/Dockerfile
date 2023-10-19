@@ -1,4 +1,4 @@
-FROM ubuntu:latest AS rustbuilder
+FROM debian:bookworm AS rustbuilder
 
 RUN apt update
 RUN apt install -y build-essential curl pkg-config libssl-dev
@@ -10,24 +10,23 @@ ENV PATH="/root/.cargo/bin:${PATH}"
 WORKDIR /build
 
 # Copy the source code into the image for building
-COPY test/ test/
-
-WORKDIR /build/test/integration/components/rustssltestserver
+COPY test/integration/components/rustssltestserver .
 
 # Build
 RUN cargo build --release
 
 # The App Image
-FROM ubuntu:latest
+FROM debian:bookworm-slim
 
-#RUN apt update
+RUN apt update
+RUN apt install libssl3 -y
 #RUN apt install strace -y
 
 EXPOSE 8090
 
 # Copy the native executable into the containers
-COPY --from=rustbuilder /build/test/integration/components/rustssltestserver/target/release/greetings ./greetings
-COPY --from=rustbuilder /build/test/integration/components/rustssltestserver/key.pem ./key.pem
-COPY --from=rustbuilder /build/test/integration/components/rustssltestserver/cert.pem ./cert.pem
+COPY --from=rustbuilder /build/target/release/greetings ./greetings
+COPY --from=rustbuilder /build/key.pem ./key.pem
+COPY --from=rustbuilder /build/cert.pem ./cert.pem
 ENTRYPOINT ["/greetings"]
 #CMD [ "strace", "-f", "/greetings" ]

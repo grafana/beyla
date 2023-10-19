@@ -1,19 +1,23 @@
-FROM ruby:3.0.2
+FROM ruby:3.0.2 as builder
 
 # Set the working directory to /build
 WORKDIR /build
 
 # Copy the source code into the image for building
-COPY test/ test/
+COPY test/integration/components/rubytestserver/testapi .
 
-WORKDIR /build/test/integration/components/rubytestserver/testapi
-
-# Install NodeJS express
+# Install Rails
 RUN gem install rails
 RUN gem install bundler rails
 RUN bundle install
 
 EXPOSE 3043
+
+FROM ruby:3.0.2-slim
+
+WORKDIR /
+COPY --from=builder /build .
+COPY --from=builder /usr/local/bundle /usr/local/bundle
 
 # Run the node app
 CMD [ "rails", "server", "-b", "ssl://0.0.0.0:3043?key=config/key.pem&cert=config/cert.pem" ]

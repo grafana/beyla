@@ -18,8 +18,7 @@ COPY go.sum go.sum
 RUN go build -o grpcpinger ./test/integration/components/grpcpinger/grpcpinger.go
 
 # Create final image from minimal + built binary
-#TODO: use minimal image
-FROM ubuntu:latest
+FROM debian:bookworm-slim
 
 WORKDIR /
 COPY --from=builder /src/grpcpinger .

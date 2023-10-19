@@ -13,6 +13,8 @@ import (
 	"syscall"
 	"time"
 
+	otelsdk "go.opentelemetry.io/otel/sdk"
+
 	"github.com/grafana/beyla/pkg/beyla"
 )
 
@@ -25,7 +27,7 @@ func main() {
 		Level: &lvl,
 	})))
 
-	slog.Info("Grafana Beyla", "Version", Version)
+	slog.Info("Grafana Beyla", "Version", Version, "OpenTelemetry SDK Version", otelsdk.Version())
 
 	configPath := flag.String("config", "", "path to the configuration file")
 	flag.Parse()

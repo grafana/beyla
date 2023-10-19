@@ -18,8 +18,8 @@ const (
 	defaultPollInterval = 5 * time.Second
 )
 
-// Watcher polls every PollInterval for new processes and forwards either new processes
-// or deleted processes
+// Watcher polls every PollInterval for new processes and forwards either new or deleted processes
+// as well as process that setup a new connection
 type Watcher struct {
 	Ctx          context.Context
 	PollInterval time.Duration
@@ -101,17 +101,20 @@ func (pa *pollAccounter) Run(out chan<- []Event[*services.ProcessInfo]) {
 func (pa *pollAccounter) snapshot(fetchedProcs map[int32]*services.ProcessInfo) []Event[*services.ProcessInfo] {
 	var events []Event[*services.ProcessInfo]
 	currentPidPorts := make(map[pidPort]*services.ProcessInfo, len(fetchedProcs))
-	createdProcs := map[int32]struct{}{}
+	reportedProcs := map[int32]struct{}{}
 	// notify processes that are new, or already existed but have a new connection
-	for pid, proc := range fetchedProcs {
-		for _, port := range proc.OpenPorts {
-			pp := pidPort{Pid: pid, Port: port}
-			currentPidPorts[pp] = proc
-			if _, ok := pa.pidPorts[pp]; !ok {
-				if _, ok := createdProcs[pp.Pid]; !ok {
-					// avoid notifying multiple times the same process if it has multiple connections
-					createdProcs[pp.Pid] = struct{}{}
-					events = append(events, Event[*services.ProcessInfo]{Type: EventCreated, Obj: proc})
+	for _, proc := range fetchedProcs {
+		// if the process does not have open ports, we might still notify it
+		// for example, if it's a client with ephemeral connections, which might be later matched by executable name
+		if len(proc.OpenPorts) == 0 {
+			if ev, ok := pa.checkProcessNotification(proc, reportedProcs); ok {
+				events = append(events, ev)
+			}
+		} else {
+			for _, port := range proc.OpenPorts {
+				if ev, ok := pa.checkProcessConnectionNotification(proc, port, currentPidPorts, reportedProcs); ok {
+					events = append(events, ev)
+					continue
 				}
 			}
 		}
@@ -125,6 +128,46 @@ func (pa *pollAccounter) snapshot(fetchedProcs map[int32]*services.ProcessInfo) 
 	pa.pids = fetchedProcs
 	pa.pidPorts = currentPidPorts
 	return events
+}
+
+func (pa *pollAccounter) checkProcessConnectionNotification(
+	proc *services.ProcessInfo,
+	port uint32,
+	currentPidPorts map[pidPort]*services.ProcessInfo,
+	reportedProcs map[int32]struct{},
+) (Event[*services.ProcessInfo], bool) {
+	pp := pidPort{Pid: proc.Pid, Port: port}
+	currentPidPorts[pp] = proc
+	// the connection existed before iff we already had registered this pid/port pair
+	_, existingConnection := pa.pidPorts[pp]
+	// the proc existed before iff we already had registered this pid
+	_, existingProcess := pa.pids[proc.Pid]
+	// we notify the creation either if the connection and the process is new...
+	if !existingConnection || !existingProcess {
+		// ...also if we haven't already reported the process in the last "snapshot" invocation
+		if _, ok := reportedProcs[pp.Pid]; !ok {
+			// avoid notifying multiple times the same process if it has multiple connections
+			reportedProcs[pp.Pid] = struct{}{}
+			return Event[*services.ProcessInfo]{Type: EventCreated, Obj: proc}, true
+		}
+	}
+	return Event[*services.ProcessInfo]{}, false
+}
+
+func (pa *pollAccounter) checkProcessNotification(
+	proc *services.ProcessInfo,
+	reportedProcs map[int32]struct{},
+) (Event[*services.ProcessInfo], bool) {
+	// the proc existed before iff we already had registered this pid from a previous snapshot
+	if _, existingProcess := pa.pids[proc.Pid]; !existingProcess {
+		// ...also if we haven't already reported the process in the last "snapshot" invocation
+		if _, ok := reportedProcs[proc.Pid]; !ok {
+			// avoid notifying multiple times the same process if it has multiple connections
+			reportedProcs[proc.Pid] = struct{}{}
+			return Event[*services.ProcessInfo]{Type: EventCreated, Obj: proc}, true
+		}
+	}
+	return Event[*services.ProcessInfo]{}, false
 }
 
 func connectedProcesses() (map[int32]*services.ProcessInfo, error) {

@@ -368,7 +368,7 @@ func TestSuiteNodeClientTLS(t *testing.T) {
 }
 
 func TestSuiteNoRoutes(t *testing.T) {
-	compose, err := docker.ComposeSuite("docker-compose.yml", path.Join(pathOutput, "test-suite.log"))
+	compose, err := docker.ComposeSuite("docker-compose.yml", path.Join(pathOutput, "test-suite-no-routes.log"))
 	compose.Env = append(compose.Env, "INSTRUMENTER_CONFIG_SUFFIX=-no-route")
 	require.NoError(t, err)
 	require.NoError(t, compose.Up())

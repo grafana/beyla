@@ -15,13 +15,13 @@ import (
 const testTimeout = 5 * time.Second
 
 func TestWatcher_Poll(t *testing.T) {
-	// mocking a fake services.ProcessInfoes function
-
+	// mocking a fake listProcesses method
 	p1_1 := &services.ProcessInfo{Pid: 1, OpenPorts: []uint32{3030}}
 	p1_2 := &services.ProcessInfo{Pid: 1, OpenPorts: []uint32{3030, 3031}}
 	p2 := &services.ProcessInfo{Pid: 2, OpenPorts: []uint32{123}}
 	p3 := &services.ProcessInfo{Pid: 3, OpenPorts: []uint32{456}}
 	p4 := &services.ProcessInfo{Pid: 4, OpenPorts: []uint32{789}}
+	p5 := &services.ProcessInfo{Pid: 10}
 	invocation := 0
 	ctx, cancel := context.WithCancel(context.Background())
 	// GIVEN a pollAccounter
@@ -37,8 +37,11 @@ func TestWatcher_Poll(t *testing.T) {
 			case 2:
 				// p1_2 simulates that a new connection has been created for an existing process
 				return map[int32]*services.ProcessInfo{p1_2.Pid: p1_2, p3.Pid: p3, p4.Pid: p4}, nil
-			default:
+			case 3:
 				return map[int32]*services.ProcessInfo{p2.Pid: p2, p3.Pid: p3, p4.Pid: p4}, nil
+			default:
+				// new processes with no connections (p5) should be also reported
+				return map[int32]*services.ProcessInfo{p5.Pid: p5, p2.Pid: p2, p3.Pid: p3, p4.Pid: p4}, nil
 			}
 		},
 	}
@@ -71,6 +74,14 @@ func TestWatcher_Poll(t *testing.T) {
 	assert.Equal(t, []Event[*services.ProcessInfo]{
 		{Type: EventDeleted, Obj: p1_2},
 		{Type: EventCreated, Obj: p2},
+	}, sort(out))
+
+	// WHEN a new process with no connections is created
+	// THEN it should be also reported
+	// (use case: we want to later match by executable path a client process with short-lived connections)
+	out = testutil.ReadChannel(t, accounterOutput, testTimeout)
+	assert.Equal(t, []Event[*services.ProcessInfo]{
+		{Type: EventCreated, Obj: p5},
 	}, sort(out))
 
 	// WHEN no changes in the process, it doesn't send anything

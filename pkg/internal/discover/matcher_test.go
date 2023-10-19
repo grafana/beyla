@@ -40,10 +40,11 @@ func TestCriteriaMatcher(t *testing.T) {
 		{Type: EventCreated, Obj: &services.ProcessInfo{ExePath: "server", OpenPorts: []uint32{8433}}},          // filter
 		{Type: EventCreated, Obj: &services.ProcessInfo{ExePath: "/bin/something", OpenPorts: []uint32{8083}}},  //pass
 		{Type: EventCreated, Obj: &services.ProcessInfo{ExePath: "server", OpenPorts: []uint32{443}}},           // pass
+		{Type: EventCreated, Obj: &services.ProcessInfo{ExePath: "/bin/clientweird99"}},                         // pass
 	}
 
 	matches := testutil.ReadChannel(t, filteredProcesses, testTimeout)
-	require.Len(t, matches, 3)
+	require.Len(t, matches, 4)
 	m := matches[0]
 	assert.Equal(t, EventCreated, m.Type)
 	assert.Equal(t, "exec-only", m.Obj.Criteria.Name)
@@ -59,4 +60,9 @@ func TestCriteriaMatcher(t *testing.T) {
 	assert.Equal(t, "both", m.Obj.Criteria.Name)
 	assert.Equal(t, "", m.Obj.Criteria.Namespace)
 	assert.Equal(t, services.ProcessInfo{ExePath: "server", OpenPorts: []uint32{443}}, *m.Obj.Process)
+	m = matches[3]
+	assert.Equal(t, EventCreated, m.Type)
+	assert.Equal(t, "exec-only", m.Obj.Criteria.Name)
+	assert.Equal(t, "", m.Obj.Criteria.Namespace)
+	assert.Equal(t, services.ProcessInfo{ExePath: "/bin/clientweird99"}, *m.Obj.Process)
 }

@@ -210,7 +210,7 @@ func TestSuite_RustSSL(t *testing.T) {
 
 func TestSuite_NodeJS(t *testing.T) {
 	compose, err := docker.ComposeSuite("docker-compose-nodejs.yml", path.Join(pathOutput, "test-suite-nodejs.log"))
-	compose.Env = append(compose.Env, `OPEN_PORT=3030`, `EXECUTABLE_NAME=`, `NODE_APP=app_tls`)
+	compose.Env = append(compose.Env, `OPEN_PORT=3030`, `EXECUTABLE_NAME=`, `NODE_APP=app`)
 	require.NoError(t, err)
 	require.NoError(t, compose.Up())
 	t.Run("NodeJS RED metrics", testREDMetricsNodeJSHTTP)

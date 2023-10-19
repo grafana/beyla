@@ -1,28 +1,16 @@
-//go:build linux
-
 package ebpf
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"io"
 	"log/slog"
-	"os"
-	"reflect"
-	"regexp"
-	"slices"
-	"strings"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
-	"golang.org/x/sys/unix"
 
 	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
-	"github.com/grafana/beyla/pkg/internal/ebpf/services"
 	"github.com/grafana/beyla/pkg/internal/exec"
 	"github.com/grafana/beyla/pkg/internal/goexec"
-	"github.com/grafana/beyla/pkg/internal/pipe"
 	"github.com/grafana/beyla/pkg/internal/request"
 	"github.com/grafana/beyla/pkg/internal/svc"
 )
@@ -63,256 +51,13 @@ type Tracer interface {
 
 // ProcessTracer instruments an executable with eBPF and provides the eBPF readers
 // that will forward the traces to later stages in the pipeline
-// TODO: split in two, the instrumenter and the reader
 type ProcessTracer struct {
-	programs []Tracer
+	log      *slog.Logger //nolint:unused
+	Programs []Tracer
 	ELFInfo  *exec.FileInfo
-	goffsets *goexec.Offsets
-	exe      *link.Executable
-	pinPath  string
+	Goffsets *goexec.Offsets
+	Exe      *link.Executable
+	PinPath  string
 
-	systemWide bool
-}
-
-func (pt *ProcessTracer) Run(ctx context.Context, out chan<- []request.Span) {
-	var log = logger()
-
-	// Searches for traceable functions
-	trcrs, err := pt.tracers()
-	if err != nil {
-		log.Error("couldn't trace process", err, "path", pt.ELFInfo.CmdExePath, "pid", pt.ELFInfo.Pid)
-		return
-	}
-
-	service := pt.ELFInfo.Service
-	// If the user does not override the service name via configuration
-	// the service name is the name of the found executable
-	// Unless the case of system-wide tracing, where the name of the
-	// executable will be dynamically set for each traced http request call.
-	if service.Name == "" && !pt.systemWide {
-		service.Name = pt.ELFInfo.ExecutableName()
-	}
-	// run each tracer program
-	for _, t := range trcrs {
-		go t.Run(ctx, out, service)
-	}
-}
-
-// tracers returns Tracer implementer for each discovered eBPF traceable source: GRPC, HTTP...
-func (pt *ProcessTracer) tracers() ([]Tracer, error) {
-	var log = logger()
-
-	// tracerFuncs contains the eBPF programs (HTTP, GRPC tracers...)
-	var tracers []Tracer
-
-	for _, p := range pt.programs {
-		plog := log.With("program", reflect.TypeOf(p))
-		plog.Debug("loading eBPF program")
-		spec, err := p.Load()
-		if err != nil {
-			return nil, fmt.Errorf("loading eBPF program: %w", err)
-		}
-		if err := spec.RewriteConstants(p.Constants(pt.ELFInfo, pt.goffsets)); err != nil {
-			return nil, fmt.Errorf("rewriting BPF constants definition: %w", err)
-		}
-		if err := spec.LoadAndAssign(p.BpfObjects(), &ebpf.CollectionOptions{
-			Maps: ebpf.MapOptions{
-				PinPath: pt.pinPath,
-			}}); err != nil {
-			printVerifierErrorInfo(err)
-			return nil, fmt.Errorf("loading and assigning BPF objects: %w", err)
-		}
-		i := instrumenter{
-			exe:     pt.exe,
-			offsets: pt.goffsets,
-		}
-
-		//Go style Uprobes
-		if err := i.goprobes(p); err != nil {
-			printVerifierErrorInfo(err)
-			return nil, err
-		}
-
-		//Kprobes to be used for native instrumentation points
-		if err := i.kprobes(p); err != nil {
-			printVerifierErrorInfo(err)
-			return nil, err
-		}
-
-		//Uprobes to be used for native module instrumentation points
-		if err := i.uprobes(pt.ELFInfo.Pid, p); err != nil {
-			printVerifierErrorInfo(err)
-			return nil, err
-		}
-
-		//Sock filters support
-		if err := i.sockfilters(p); err != nil {
-			printVerifierErrorInfo(err)
-			return nil, err
-		}
-
-		tracers = append(tracers, p)
-	}
-
-	return tracers, nil
-}
-
-func logger() *slog.Logger { return slog.With("component", "ebpf.TracerProvider") }
-
-// filterNotFoundPrograms will filter these programs whose required functions (as
-// returned in the Offsets method) haven't been found in the offsets
-func filterNotFoundPrograms(programs []Tracer, offsets *goexec.Offsets) []Tracer {
-	var filtered []Tracer
-	funcs := offsets.Funcs
-programs:
-	for _, p := range programs {
-		for fn, fp := range p.GoProbes() {
-			if !fp.Required {
-				continue
-			}
-			if _, ok := funcs[fn]; !ok {
-				continue programs
-			}
-		}
-		filtered = append(filtered, p)
-	}
-	return filtered
-}
-
-func allGoFunctionNames(programs []Tracer) []string {
-	uniqueFunctions := map[string]struct{}{}
-	var functions []string
-	for _, p := range programs {
-		for funcName := range p.GoProbes() {
-			// avoid duplicating function names
-			if _, ok := uniqueFunctions[funcName]; !ok {
-				uniqueFunctions[funcName] = struct{}{}
-				functions = append(functions, funcName)
-			}
-		}
-	}
-	return functions
-}
-
-func isGoProxy(offsets *goexec.Offsets) bool {
-	for f := range offsets.Funcs {
-		// if we find anything of interest other than the Go runtime, we consider this a valid application
-		if !strings.HasPrefix(f, "runtime.") {
-			return false
-		}
-	}
-
-	return true
-}
-
-func inspect(ctx context.Context, cfg *pipe.Config, functions []string) (*exec.FileInfo, *goexec.Offsets, error) {
-	log := logger()
-
-	elfs, err := exec.FindExecELFs(ctx, findingCriteria(cfg))
-	for _, e := range elfs {
-		defer e.ELF.Close()
-	}
-	if err != nil {
-		return nil, nil, fmt.Errorf("looking for executable ELF: %w", err)
-	}
-
-	pidMap := map[int32]exec.FileInfo{}
-
-	var fallBackInfos []exec.FileInfo
-	var goProxies []exec.FileInfo
-
-	// look for suitable Go application first
-	for _, execElf := range elfs {
-		offsets, ok := inspectOffsets(cfg, &execElf, functions)
-		if !ok {
-			fallBackInfos = append(fallBackInfos, execElf)
-			pidMap[execElf.Pid] = execElf
-			log.Debug("adding fall-back generic executable", "pid", execElf.Pid, "comm", execElf.CmdExePath)
-			continue
-		}
-
-		// we found go offsets, let's see if this application is not a proxy
-		if !isGoProxy(offsets) {
-			return &execElf, offsets, nil
-		}
-
-		log.Debug("ignoring Go proxy for now", "pid", execElf.Pid, "comm", execElf.CmdExePath)
-		goProxies = append(goProxies, execElf)
-		pidMap[execElf.Pid] = execElf
-	}
-
-	var execElf exec.FileInfo
-
-	if len(goProxies) != 0 {
-		execElf = goProxies[len(goProxies)-1]
-	} else if len(fallBackInfos) != 0 {
-		execElf = fallBackInfos[len(fallBackInfos)-1]
-	} else {
-		return nil, nil, fmt.Errorf("looking for executable ELF, no suitable processes found")
-	}
-
-	// check if the executable is a subprocess of another we have found, f so use the parent
-	parentElf, ok := pidMap[execElf.Ppid]
-
-	if ok {
-		execElf = parentElf
-	}
-
-	logger().Info("Go HTTP/gRPC support not detected. Using only generic instrumentation.")
-	logger().Info("instrumented", "comm", execElf.CmdExePath, "pid", execElf.Pid)
-
-	return &execElf, nil, nil
-}
-
-func inspectOffsets(cfg *pipe.Config, execElf *exec.FileInfo, functions []string) (*goexec.Offsets, bool) {
-	if !cfg.SystemWide {
-		log := logger()
-		if cfg.SkipGoSpecificTracers {
-			log.Debug("skipping inspection for Go functions", "pid", execElf.Pid, "comm", execElf.CmdExePath)
-		} else {
-			log.Debug("inspecting", "pid", execElf.Pid, "comm", execElf.CmdExePath)
-			if offsets, err := goexec.InspectOffsets(execElf, functions); err != nil {
-				log.Debug("couldn't find go specific tracers", "error", err)
-			} else {
-				return offsets, true
-			}
-		}
-	}
-	return nil, false
-}
-
-func findingCriteria(cfg *pipe.Config) services.DefinitionCriteria {
-	if cfg.SystemWide {
-		// will return all the executables in the system
-		return services.DefinitionCriteria{
-			services.Attributes{
-				Namespace: cfg.ServiceNamespace,
-				Path:      services.NewPathRegexp(regexp.MustCompile(".")),
-			},
-		}
-	}
-	finderCriteria := cfg.Services
-	// Merge the old, individual single-service selector,
-	// with the new, map-based multi-services selector.
-	if cfg.Exec.IsSet() || cfg.Port.Len() > 0 {
-		finderCriteria = slices.Clone(cfg.Services)
-		finderCriteria = append(finderCriteria, services.Attributes{
-			Name:      cfg.ServiceName,
-			Namespace: cfg.ServiceNamespace,
-			Path:      cfg.Exec,
-			OpenPorts: cfg.Port,
-		})
-	}
-	return finderCriteria
-}
-
-func printVerifierErrorInfo(err error) {
-	var ve *ebpf.VerifierError
-	if errors.As(err, &ve) {
-		_, _ = fmt.Fprintf(os.Stderr, "Error Log:\n %v\n", strings.Join(ve.Log, "\n"))
-	}
-}
-
-func bpfMount(pinPath string) error {
-	return unix.Mount(pinPath, pinPath, "bpf", 0, "")
+	SystemWide bool
 }

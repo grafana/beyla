@@ -73,7 +73,7 @@ func (p *Tracer) log() *slog.Logger {
 }
 
 func (p *Tracer) Constants(finfo *exec.FileInfo, _ *goexec.Offsets) map[string]any {
-	if p.Cfg.SystemWide {
+	if p.Cfg.Discovery.SystemWide {
 		return nil
 	}
 
@@ -145,7 +145,7 @@ func (p *Tracer) KProbes() map[string]ebpfcommon.FunctionPrograms {
 
 	// Track system exit so we can find program names of dead programs
 	// when we process the events
-	if p.Cfg.SystemWide {
+	if p.Cfg.Discovery.SystemWide {
 		kprobes["sys_exit"] = ebpfcommon.FunctionPrograms{
 			Required: true,
 			Start:    p.bpfObjects.KprobeSysExit,
@@ -314,7 +314,7 @@ func (p *Tracer) readHTTPInfoIntoSpan(record *ringbuf.Record) (request.Span, boo
 	}
 	result.URL = event.url()
 	result.Method = event.method()
-	if p.Cfg.SystemWide {
+	if p.Cfg.Discovery.SystemWide {
 		result.Comm = p.serviceName(event.Pid)
 	}
 

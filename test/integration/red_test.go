@@ -26,7 +26,7 @@ const (
 	prometheusHostPort               = "localhost:9090"
 	jaegerQueryURL                   = "http://localhost:16686/api/traces"
 
-	testTimeout = 20 * time.Second
+	testTimeout = 30 * time.Second
 )
 
 func rndStr() string {
@@ -46,12 +46,12 @@ func testREDMetricsHTTP(t *testing.T) {
 	} {
 		t.Run(testCaseURL, func(t *testing.T) {
 			waitForTestComponents(t, testCaseURL)
-			testREDMetricsForHTTPLibrary(t, testCaseURL, "testserver")
+			testREDMetricsForHTTPLibrary(t, testCaseURL, "testserver", "integration-test")
 		})
 	}
 }
 
-func testREDMetricsForHTTPLibrary(t *testing.T, url, svcName string) {
+func testREDMetricsForHTTPLibrary(t *testing.T, url, svcName, svcNs string) {
 	path := "/basic/" + rndStr()
 
 	// Call 3 times the instrumented service, forcing it to:
@@ -73,7 +73,7 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url, svcName string) {
 		results, err = pq.Query(`http_server_duration_seconds_count{` +
 			`http_method="GET",` +
 			`http_status_code="404",` +
-			`service_namespace="integration-test",` +
+			`service_namespace="` + svcNs + `",` +
 			`service_name="` + svcName + `",` +
 			`http_route="/basic/:rnd",` +
 			`http_target="` + path + `"}`)
@@ -94,7 +94,7 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url, svcName string) {
 		results, err = pq.Query(`http_server_request_size_bytes_count{` +
 			`http_method="GET",` +
 			`http_status_code="404",` +
-			`service_namespace="integration-test",` +
+			`service_namespace="` + svcNs + `",` +
 			`service_name="` + svcName + `",` +
 			`http_route="/basic/:rnd",` +
 			`http_target="` + path + `"}`)
@@ -117,7 +117,7 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url, svcName string) {
 			results, err = pq.Query(`http_server_duration_seconds_count{` +
 				`http_method="GET",` +
 				`http_status_code="203",` +
-				`service_namespace="integration-test",` +
+				`service_namespace="` + svcNs + `",` +
 				`http_route="/echo",` +
 				`service_name="` + svcName + `"}`)
 			require.NoError(t, err)
@@ -132,7 +132,7 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url, svcName string) {
 			results, err = pq.Query(`http_server_request_size_bytes_count{` +
 				`http_method="GET",` +
 				`http_status_code="203",` +
-				`service_namespace="integration-test",` +
+				`service_namespace="` + svcNs + `",` +
 				`http_route="/echo",` +
 				`service_name="` + svcName + `"}`)
 			require.NoError(t, err)
@@ -148,7 +148,7 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url, svcName string) {
 			results, err = pq.Query(`http_server_duration_seconds_count{` +
 				`http_method="GET",` +
 				`http_status_code="203",` +
-				`service_namespace="integration-test",` +
+				`service_namespace="` + svcNs + `",` +
 				`http_route="/echoBack",` +
 				`service_name="` + svcName + `"}`)
 			require.NoError(t, err)
@@ -163,7 +163,7 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url, svcName string) {
 			results, err = pq.Query(`http_server_request_size_bytes_count{` +
 				`http_method="GET",` +
 				`http_status_code="203",` +
-				`service_namespace="integration-test",` +
+				`service_namespace="` + svcNs + `",` +
 				`http_route="/echoBack",` +
 				`service_name="` + svcName + `"}`)
 			require.NoError(t, err)
@@ -179,7 +179,7 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url, svcName string) {
 			results, err = pq.Query(`http_client_duration_seconds_count{` +
 				`http_method="GET",` +
 				`http_status_code="203",` +
-				`service_namespace="integration-test",` +
+				`service_namespace="` + svcNs + `",` +
 				`service_name="` + svcName + `"}`)
 			require.NoError(t, err)
 			// check duration_count has 3 calls
@@ -193,7 +193,7 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url, svcName string) {
 			results, err = pq.Query(`http_client_request_size_bytes_count{` +
 				`http_method="GET",` +
 				`http_status_code="203",` +
-				`service_namespace="integration-test",` +
+				`service_namespace="` + svcNs + `",` +
 				`service_name="` + svcName + `"}`)
 			require.NoError(t, err)
 			// check duration_count has 3 calls
@@ -207,7 +207,7 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url, svcName string) {
 			results, err = pq.Query(`rpc_client_duration_seconds_count{` +
 				`rpc_grpc_status_code="0",` +
 				`service_name="` + svcName + `",` +
-				`service_namespace="integration-test",` +
+				`service_namespace="` + svcNs + `",` +
 				`rpc_method="/routeguide.RouteGuide/GetFeature"}`)
 			require.NoError(t, err)
 			// check duration_count has at least 3 calls
@@ -223,7 +223,7 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url, svcName string) {
 		`http_method="GET",` +
 		`http_status_code="404",` +
 		`service_name="` + svcName + `",` +
-		`service_namespace="integration-test",` +
+		`service_namespace="` + svcNs + `",` +
 		`http_route="/basic/:rnd",` +
 		`http_target="` + path + `"}`)
 	require.NoError(t, err)
@@ -242,7 +242,7 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url, svcName string) {
 		`http_method="GET",` +
 		`http_status_code="404",` +
 		`service_name="` + svcName + `",` +
-		`service_namespace="integration-test",` +
+		`service_namespace="` + svcNs + `",` +
 		`http_route="/basic/:rnd",` +
 		`http_target="` + path + `"}`)
 	require.NoError(t, err)

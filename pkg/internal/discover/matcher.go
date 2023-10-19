@@ -18,8 +18,9 @@ type CriteriaMatcher struct {
 
 func CriteriaMatcherProvider(cm CriteriaMatcher) (node.MiddleFunc[[]Event[*services.ProcessInfo], []Event[ProcessMatch]], error) {
 	m := &matcher{
-		log:      slog.With("component", "discover.CriteriaMatcher"),
-		criteria: findingCriteria(cm.Cfg),
+		log:            slog.With("component", "discover.CriteriaMatcher"),
+		criteria:       findingCriteria(cm.Cfg),
+		processHistory: map[int32]struct{}{},
 	}
 	return m.run, nil
 }
@@ -27,6 +28,11 @@ func CriteriaMatcherProvider(cm CriteriaMatcher) (node.MiddleFunc[[]Event[*servi
 type matcher struct {
 	log      *slog.Logger
 	criteria services.DefinitionCriteria
+	// processHistory keeps track of the processes that have been already matched and submitted for
+	// instrumentation.
+	// This avoids keep inspecting again and again client processes each time they open a new connection port
+	// TODO: move to a deduper node when we handle the process elimination
+	processHistory map[int32]struct{}
 }
 
 // ProcessMatch matches a found process with the first selection criteria it fulfilled.
@@ -49,7 +55,11 @@ func (m *matcher) filter(events []Event[*services.ProcessInfo]) []Event[ProcessM
 	var matches []Event[ProcessMatch]
 	for _, ev := range events {
 		if ev.Type == EventDeleted {
-			// TODO: handle process deletion
+			delete(m.processHistory, ev.Obj.Pid)
+			continue
+		}
+		if _, ok := m.processHistory[ev.Obj.Pid]; ok {
+			// this was already matched and submitted for inspection. Ignoring!
 			continue
 		}
 		for i := range m.criteria {
@@ -60,6 +70,7 @@ func (m *matcher) filter(events []Event[*services.ProcessInfo]) []Event[ProcessM
 					Type: EventCreated,
 					Obj:  ProcessMatch{Criteria: &m.criteria[i], Process: ev.Obj},
 				})
+				m.processHistory[ev.Obj.Pid] = struct{}{}
 				break
 			}
 		}

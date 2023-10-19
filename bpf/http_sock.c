@@ -261,12 +261,14 @@ int socket__http_filter(struct __sk_buff *skb) {
         return 0;
     }
 
+    bool client = client_call(&conn);
     // sorting must happen here, before we check or set dups
     sort_connection_info(&conn);
 
     // ignore duplicate sequences
-    if (tcp_dup(&conn, &tcp)) {
-        return 0;
+    // This doesn't seem to work on kernels 5.10
+    if (client && tcp_dup(&conn, &tcp)) {
+       return 0;
     }
 
     // we don't want to read the whole buffer for every packed that passes our checks, we read only a bit and check if it's trully HTTP request/response.
@@ -304,8 +306,10 @@ int socket__http_filter(struct __sk_buff *skb) {
                 processing_buf = info.buf;
             }
         }
-        bpf_dbg_printk("=== http_filter len=%d pid=%d %s ===", (skb->len - tcp.hdr_len), (meta != NULL) ? pid_from_pid_tgid(meta->id) : -1, buf);
-        //dbg_print_http_connection_info(&conn);
+        if (packet_type) {
+            bpf_dbg_printk("=== http_filter len=%d pid=%d %s ===", (skb->len - tcp.hdr_len), (meta != NULL) ? pid_from_pid_tgid(meta->id) : -1, buf);
+            //dbg_print_http_connection_info(&conn);
+        }
 
         process_http(&info, &tcp, packet_type, (skb->len - tcp.hdr_len), processing_buf, meta);
     }
@@ -351,29 +355,35 @@ int BPF_KPROBE(kprobe_tcp_sendmsg, struct sock *sk, struct msghdr *msg, size_t s
         sort_connection_info(&info);
 
         if (client_req) {
-            unsigned char small_buf[16];            
-            read_msghdr_buf(&small_buf, 16, msg);
+            void *u_buf = read_msghdr_buf(msg);
 
-            u8 packet_type = 0;
-            if (is_http(small_buf, 16, &packet_type)) {
-                if (packet_type == PACKET_TYPE_REQUEST) {
-                    http_buf_t *trace = bpf_ringbuf_reserve(&events, sizeof(http_buf_t), 0);
-                    if (trace) {
-                        trace->conn_info = info;
-                        trace->flags |= CONN_INFO_FLAG_TRACE;
+            if (u_buf) {
+                unsigned char small_buf[16];            
+                bpf_probe_read(small_buf, 16, u_buf);
 
-                        s64 buf_len = (s64)size & (TRACE_BUF_SIZE - 1);
-                        read_msghdr_buf(&trace->buf, buf_len, msg);
+                u8 packet_type = 0;
+                if (is_http(small_buf, 16, &packet_type)) {
+                    if (packet_type == PACKET_TYPE_REQUEST) {
+                        http_buf_t *trace = bpf_ringbuf_reserve(&events, sizeof(http_buf_t), 0);
+                        if (trace) {
+                            trace->conn_info = info;
+                            trace->flags |= CONN_INFO_FLAG_TRACE;
 
-                        if (buf_len < TRACE_BUF_SIZE) {
-                            trace->buf[buf_len] = '\0';
+                            s64 buf_len = (s64)size & (TRACE_BUF_SIZE - 1);
+                            bpf_probe_read(trace->buf, buf_len, u_buf);
+
+                            if (buf_len < TRACE_BUF_SIZE) {
+                                trace->buf[buf_len] = '\0';
+                            }
+
+                            bpf_dbg_printk("Sending client buffer %s, copied_size %d", trace->buf, size);
+
+                            bpf_ringbuf_submit(trace, get_flags());
                         }
-
-                        bpf_dbg_printk("Sending client buffer %s, copied_size %d", trace->buf, size);
-
-                        bpf_ringbuf_submit(trace, get_flags());
                     }
                 }
+            } else {
+                bpf_dbg_printk("couldn't find msghdr u_buf");
             }
         }
 
@@ -628,7 +638,7 @@ int BPF_KRETPROBE(kretprobe_tcp_recvmsg, int copied_len) {
         return 0;
     }
 
-    bpf_printk("=== tcp_recvmsg ret id=%d sock=%llx ===", id, args->sock_ptr);
+    bpf_dbg_printk("=== tcp_recvmsg ret id=%d sock=%llx ===", id, args->sock_ptr);
 
     connection_info_t info = {};
 
@@ -639,23 +649,28 @@ int BPF_KRETPROBE(kretprobe_tcp_recvmsg, int copied_len) {
         // we only care about connections setup by the socket filter as HTTP
         http_info_t *http_info = bpf_map_lookup_elem(&ongoing_http, &info);
         if (http_info && http_info->type != EVENT_HTTP_CLIENT && !http_info->ssl) {
-            http_buf_t *trace = bpf_ringbuf_reserve(&events, sizeof(http_buf_t), 0);
-            if (trace) {
-                trace->conn_info = info;
-                trace->flags |= CONN_INFO_FLAG_TRACE;
+            struct msghdr *msg = (struct msghdr *)args->msghdr_ptr;
+            void *u_buf = read_msghdr_buf(msg);
+            
+            if (u_buf) {
+                http_buf_t *trace = bpf_ringbuf_reserve(&events, sizeof(http_buf_t), 0);
+                if (trace) {
+                    trace->conn_info = info;
+                    trace->flags |= CONN_INFO_FLAG_TRACE;
 
-                struct msghdr *msg = (struct msghdr *)args->msghdr_ptr;
+                    int buf_len = copied_len & (TRACE_BUF_SIZE - 1);
+                    bpf_probe_read(trace->buf, buf_len, u_buf);
 
-                int buf_len = copied_len & (TRACE_BUF_SIZE - 1);
-                read_msghdr_buf(&trace->buf, buf_len, msg);
+                    if (buf_len < TRACE_BUF_SIZE) {
+                        trace->buf[buf_len] = '\0';
+                    }
 
-                if (buf_len < TRACE_BUF_SIZE) {
-                    trace->buf[buf_len] = '\0';
+                    bpf_dbg_printk("Sending buffer %s, copied_size %d", trace->buf, copied_len);
+
+                    bpf_ringbuf_submit(trace, get_flags());
                 }
-
-                bpf_dbg_printk("Sending buffer %s, copied_size %d", trace->buf, copied_len);
-
-                bpf_ringbuf_submit(trace, get_flags());
+            } else {
+                bpf_dbg_printk("Couldn't read msghdr buffer");
             }
         }
     }

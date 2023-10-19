@@ -128,17 +128,17 @@ func (i *instrumenter) uprobes(pid int32, p Tracer) error {
 	}
 
 	for lib, pMap := range p.UProbes() {
-		log.Info("finding library", "lib", lib)
+		log.Debug("finding library", "lib", lib)
 		libMap := exec.LibPath(lib, maps)
 		instrPath := fmt.Sprintf("/proc/%d/exe", pid)
 
 		if libMap != nil {
-			log.Info("instrumenting library", "lib", lib, "path", libMap.Pathname)
+			log.Debug("instrumenting library", "lib", lib, "path", libMap.Pathname)
 			// we do this to make sure instrumenting something like libssl.so works with Docker
 			instrPath = fmt.Sprintf("/proc/%d/map_files/%x-%x", pid, libMap.StartAddr, libMap.EndAddr)
 		} else {
 			// E.g. NodeJS uses OpenSSL but they ship it as statically linked in the node binary
-			log.Info(fmt.Sprintf("%s not linked, attempting to instrument executable", lib), "path", instrPath)
+			log.Debug(fmt.Sprintf("%s not linked, attempting to instrument executable", lib), "path", instrPath)
 		}
 
 		libExe, err := link.OpenExecutable(instrPath)
@@ -153,7 +153,9 @@ func (i *instrumenter) uprobes(pid int32, p Tracer) error {
 				if funcPrograms.Required {
 					return fmt.Errorf("instrumenting function %q: %w", funcName, err)
 				}
-				log.Debug("can't instrument uprobe", "function", funcName, "error", err)
+
+				// error will be common here since this could be no openssl loaded
+				log.Debug("error instrumenting uprobe", "function", funcName, "error", err)
 			}
 			p.AddCloser(i.closables...)
 		}

@@ -306,8 +306,10 @@ int socket__http_filter(struct __sk_buff *skb) {
                 processing_buf = info.buf;
             }
         }
-        bpf_dbg_printk("=== http_filter len=%d pid=%d %s ===", (skb->len - tcp.hdr_len), (meta != NULL) ? pid_from_pid_tgid(meta->id) : -1, buf);
-        //dbg_print_http_connection_info(&conn);
+        if (packet_type) {
+            bpf_dbg_printk("=== http_filter len=%d pid=%d %s ===", (skb->len - tcp.hdr_len), (meta != NULL) ? pid_from_pid_tgid(meta->id) : -1, buf);
+            //dbg_print_http_connection_info(&conn);
+        }
 
         process_http(&info, &tcp, packet_type, (skb->len - tcp.hdr_len), processing_buf, meta);
     }

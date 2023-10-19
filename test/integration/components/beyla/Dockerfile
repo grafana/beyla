@@ -22,9 +22,11 @@ COPY Makefile Makefile
 # Build
 RUN make compile-for-coverage
 
-RUN mv /src/bin/beyla /beyla
+# Create final image from minimal + built binary
+FROM debian:bookworm-slim
 
 WORKDIR /
+COPY --from=builder /src/bin/beyla .
 USER 0:0
 
 CMD [ "/beyla" ]

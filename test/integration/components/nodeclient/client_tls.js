@@ -28,7 +28,7 @@ function smoke() {
 function smokeLoop() {
     setInterval(() => {
         smoke();
-    }, 10000);
+    }, 1000);
 }
 
 //smoke();

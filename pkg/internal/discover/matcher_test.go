@@ -35,12 +35,12 @@ func TestCriteriaMatcher(t *testing.T) {
 
 	// it will filter unmatching processes and return a ProcessMatch for these that match
 	discoveredProcesses <- []Event[*services.ProcessInfo]{
-		{Type: EventCreated, Obj: &services.ProcessInfo{ExePath: "/bin/weird33", OpenPorts: []uint32{1, 2, 3}}}, // pass
-		{Type: EventDeleted, Obj: &services.ProcessInfo{ExePath: "/bin/weird33", OpenPorts: []uint32{4}}},       // filter
-		{Type: EventCreated, Obj: &services.ProcessInfo{ExePath: "server", OpenPorts: []uint32{8433}}},          // filter
-		{Type: EventCreated, Obj: &services.ProcessInfo{ExePath: "/bin/something", OpenPorts: []uint32{8083}}},  //pass
-		{Type: EventCreated, Obj: &services.ProcessInfo{ExePath: "server", OpenPorts: []uint32{443}}},           // pass
-		{Type: EventCreated, Obj: &services.ProcessInfo{ExePath: "/bin/clientweird99"}},                         // pass
+		{Type: EventCreated, Obj: &services.ProcessInfo{Pid: 1, ExePath: "/bin/weird33", OpenPorts: []uint32{1, 2, 3}}}, // pass
+		{Type: EventDeleted, Obj: &services.ProcessInfo{Pid: 2, ExePath: "/bin/weird33", OpenPorts: []uint32{4}}},       // filter
+		{Type: EventCreated, Obj: &services.ProcessInfo{Pid: 3, ExePath: "server", OpenPorts: []uint32{8433}}},          // filter
+		{Type: EventCreated, Obj: &services.ProcessInfo{Pid: 4, ExePath: "/bin/something", OpenPorts: []uint32{8083}}},  //pass
+		{Type: EventCreated, Obj: &services.ProcessInfo{Pid: 5, ExePath: "server", OpenPorts: []uint32{443}}},           // pass
+		{Type: EventCreated, Obj: &services.ProcessInfo{Pid: 6, ExePath: "/bin/clientweird99"}},                         // pass
 	}
 
 	matches := testutil.ReadChannel(t, filteredProcesses, testTimeout)
@@ -49,20 +49,20 @@ func TestCriteriaMatcher(t *testing.T) {
 	assert.Equal(t, EventCreated, m.Type)
 	assert.Equal(t, "exec-only", m.Obj.Criteria.Name)
 	assert.Equal(t, "", m.Obj.Criteria.Namespace)
-	assert.Equal(t, services.ProcessInfo{ExePath: "/bin/weird33", OpenPorts: []uint32{1, 2, 3}}, *m.Obj.Process)
+	assert.Equal(t, services.ProcessInfo{Pid: 1, ExePath: "/bin/weird33", OpenPorts: []uint32{1, 2, 3}}, *m.Obj.Process)
 	m = matches[1]
 	assert.Equal(t, EventCreated, m.Type)
 	assert.Equal(t, "port-only", m.Obj.Criteria.Name)
 	assert.Equal(t, "foo", m.Obj.Criteria.Namespace)
-	assert.Equal(t, services.ProcessInfo{ExePath: "/bin/something", OpenPorts: []uint32{8083}}, *m.Obj.Process)
+	assert.Equal(t, services.ProcessInfo{Pid: 4, ExePath: "/bin/something", OpenPorts: []uint32{8083}}, *m.Obj.Process)
 	m = matches[2]
 	assert.Equal(t, EventCreated, m.Type)
 	assert.Equal(t, "both", m.Obj.Criteria.Name)
 	assert.Equal(t, "", m.Obj.Criteria.Namespace)
-	assert.Equal(t, services.ProcessInfo{ExePath: "server", OpenPorts: []uint32{443}}, *m.Obj.Process)
+	assert.Equal(t, services.ProcessInfo{Pid: 5, ExePath: "server", OpenPorts: []uint32{443}}, *m.Obj.Process)
 	m = matches[3]
 	assert.Equal(t, EventCreated, m.Type)
 	assert.Equal(t, "exec-only", m.Obj.Criteria.Name)
 	assert.Equal(t, "", m.Obj.Criteria.Namespace)
-	assert.Equal(t, services.ProcessInfo{ExePath: "/bin/clientweird99"}, *m.Obj.Process)
+	assert.Equal(t, services.ProcessInfo{Pid: 6, ExePath: "/bin/clientweird99"}, *m.Obj.Process)
 }

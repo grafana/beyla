@@ -196,10 +196,8 @@ prepare-integration-test:
 cleanup-integration-test:
 	@echo "### Removing integration test clusters"
 	$(KIND) delete cluster -n test-kind-cluster || true
-	@echo "### Removing docker containers and images"
 	$(OCI_BIN) compose $(COMPOSE_ARGS) stop || true
 	$(OCI_BIN) compose $(COMPOSE_ARGS) rm -f || true
-	$(OCI_BIN) rm -f $(shell $(OCI_BIN) ps --format '{{.Names}}' | grep 'integration-') || true
 	$(OCI_BIN) rmi -f $(shell $(OCI_BIN) images --format '{{.Repository}}:{{.Tag}}' | grep 'hatest-') || true
 
 .PHONY: run-integration-test

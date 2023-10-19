@@ -27,6 +27,7 @@ services:
       GOCOVERDIR: "/coverage"
       PRINT_TRACES: "true"
       OPEN_PORT: "${OPEN_PORT}"
+      DISCOVERY_POLL_INTERVAL: 500ms
       EXECUTABLE_NAME: "${EXECUTABLE_NAME}"
       SERVICE_NAMESPACE: "integration-test"
       METRICS_INTERVAL: "10ms"

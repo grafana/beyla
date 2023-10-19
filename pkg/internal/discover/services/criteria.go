@@ -5,9 +5,37 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
+
+// ProcessInfo stores some relevant information about a running process
+type ProcessInfo struct {
+	Pid       int32
+	PPid      int32
+	ExePath   string
+	OpenPorts []uint32
+}
+
+// DiscoveryConfig for the discover.ProcessFinder pipeline
+type DiscoveryConfig struct {
+	// Services selection. If the user defined the EXECUTABLE_NAME or OPEN_PORT variables, they will be automatically
+	// added to the services definition criteria, with the lowest preference.
+	Services DefinitionCriteria `yaml:"services"`
+
+	// PollInterval specifies, for the poll service watcher, the interval time between
+	// process inspections
+	PollInterval time.Duration `yaml:"poll_interval" env:"DISCOVERY_POLL_INTERVAL"`
+
+	// SystemWide allows instrumentation of all HTTP (no gRPC) calls, incoming and outgoing at a system wide scale.
+	// No filtering per application will be done. Using this option may result in reduced quality of information
+	// gathered for certain languages, such as Golang.
+	SystemWide bool `yaml:"system_wide" env:"SYSTEM_WIDE"`
+
+	// This can be enabled to use generic HTTP tracers only, no Go-specifics will be used:
+	SkipGoSpecificTracers bool `yaml:"skip_go_specific_tracers" env:"SKIP_GO_SPECIFIC_TRACERS"`
+}
 
 // DefinitionCriteria allows defining a group of services to be instrumented according to a set
 // of attributes. If a given executable/service matches multiple of the attributes, the
@@ -17,7 +45,7 @@ type DefinitionCriteria []Attributes
 func (dc DefinitionCriteria) Validate() error {
 	// an empty definition criteria is valid
 	for i := range dc {
-		if len(dc[i].OpenPorts.ranges) == 0 || dc[i].Path.re == nil {
+		if len(dc[i].OpenPorts.ranges) == 0 && dc[i].Path.re == nil {
 			return fmt.Errorf("attribute [%d] should define at least the open_ports or exe_path_regexp property", i)
 		}
 	}

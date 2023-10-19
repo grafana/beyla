@@ -56,6 +56,8 @@ spec:
           value: "8999"
         - name: GOCOVERDIR
           value: "/testoutput"
+        - name: DISCOVERY_POLL_INTERVAL
+          value: "500ms"
         - name: PRINT_TRACES
           value: "true"
         - name: EXECUTABLE_NAME

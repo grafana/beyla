@@ -330,7 +330,7 @@ func TestSuite_OverrideServiceName(t *testing.T) {
 	// according to the configuration
 	t.Run("RED metrics", func(t *testing.T) {
 		waitForTestComponents(t, instrumentedServiceStdURL)
-		testREDMetricsForHTTPLibrary(t, instrumentedServiceStdURL, "overridden-svc-name")
+		testREDMetricsForHTTPLibrary(t, instrumentedServiceStdURL, "overridden-svc-name", "integration-test")
 	})
 	t.Run("GRPC traces", func(t *testing.T) {
 		testGRPCTracesForServiceName(t, "overridden-svc-name")
@@ -368,12 +368,32 @@ func TestSuiteNodeClientTLS(t *testing.T) {
 }
 
 func TestSuiteNoRoutes(t *testing.T) {
-	compose, err := docker.ComposeSuite("docker-compose.yml", path.Join(pathOutput, "test-suite.log"))
+	compose, err := docker.ComposeSuite("docker-compose.yml", path.Join(pathOutput, "test-suite-no-routes.log"))
 	compose.Env = append(compose.Env, "INSTRUMENTER_CONFIG_SUFFIX=-no-route")
 	require.NoError(t, err)
 	require.NoError(t, compose.Up())
 	t.Run("RED metrics", testREDMetricsHTTPNoRoute)
 	t.Run("BPF pinning folder mounted", testBPFPinningMounted)
+	require.NoError(t, compose.Close())
+	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
+}
+
+func TestSuite_MultiExec(t *testing.T) {
+	compose, err := docker.ComposeSuite("docker-compose-multiexec.yml", path.Join(pathOutput, "test-suite-multiexec.log"))
+	// we are going to setup discovery directly in the configuration file
+	compose.Env = append(compose.Env, `EXECUTABLE_NAME=`, `OPEN_PORT=`)
+	require.NoError(t, err)
+	require.NoError(t, compose.Up())
+	t.Run("Go RED metrics: usual service", func(t *testing.T) {
+		waitForTestComponents(t, instrumentedServiceStdURL)
+		testREDMetricsForHTTPLibrary(t, instrumentedServiceStdURL, "testserver", "initial-set")
+	})
+	t.Run("Go RED metrics: service 1", func(t *testing.T) {
+		waitForTestComponents(t, "http://localhost:8900")
+		testREDMetricsForHTTPLibrary(t, "http://localhost:8900", "rename1", "initial-set")
+	})
+	t.Run("BPF pinning folders mounted", func(t *testing.T) { testBPFPinningMountedWithCount(t, 2) })
+
 	require.NoError(t, compose.Close())
 	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
 }

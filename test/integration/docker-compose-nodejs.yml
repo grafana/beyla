@@ -4,10 +4,14 @@ services:
   testserver:
     build:
       context: ../..
-      dockerfile: test/integration/components/nodejsserver/Dockerfile${TESTSERVER_DOCKERFILE_SUFFIX}
+      dockerfile: test/integration/components/nodejsserver/Dockerfile
     image: hatest-testserver-node
+    command:
+      - node
+      - ${NODE_APP}.js
     ports:
-      - "${TEST_SERVICE_PORTS}"
+      - 3031:3030
+      - 3034:3033
     depends_on:
       otelcol:
         condition: service_started

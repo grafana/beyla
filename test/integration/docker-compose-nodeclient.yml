@@ -4,8 +4,11 @@ services:
   nodeclient:
     build:
       context: ../..
-      dockerfile: test/integration/components/nodeclient/Dockerfile${TESTS_DOCKERFILE_SUFFIX}
+      dockerfile: test/integration/components/nodeclient/Dockerfile
     image: hatest-nodeclient
+    command:
+      - node
+      - ${NODE_APP}.js
     environment:
       LOG_LEVEL: DEBUG
     depends_on:

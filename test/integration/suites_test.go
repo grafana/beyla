@@ -210,7 +210,7 @@ func TestSuite_RustSSL(t *testing.T) {
 
 func TestSuite_NodeJS(t *testing.T) {
 	compose, err := docker.ComposeSuite("docker-compose-nodejs.yml", path.Join(pathOutput, "test-suite-nodejs.log"))
-	compose.Env = append(compose.Env, `OPEN_PORT=3030`, `EXECUTABLE_NAME=`, `TEST_SERVICE_PORTS=3031:3030`)
+	compose.Env = append(compose.Env, `OPEN_PORT=3030`, `EXECUTABLE_NAME=`, `NODE_APP=app_tls`)
 	require.NoError(t, err)
 	require.NoError(t, compose.Up())
 	t.Run("NodeJS RED metrics", testREDMetricsNodeJSHTTP)
@@ -222,7 +222,7 @@ func TestSuite_NodeJS(t *testing.T) {
 
 func TestSuite_NodeJSTLS(t *testing.T) {
 	compose, err := docker.ComposeSuite("docker-compose-nodejs.yml", path.Join(pathOutput, "test-suite-nodejs-tls.log"))
-	compose.Env = append(compose.Env, `OPEN_PORT=3033`, `EXECUTABLE_NAME=`, `TESTSERVER_DOCKERFILE_SUFFIX=_tls`, `TEST_SERVICE_PORTS=3034:3033`)
+	compose.Env = append(compose.Env, `OPEN_PORT=3033`, `EXECUTABLE_NAME=`, `NODE_APP=app_tls`)
 	require.NoError(t, err)
 	require.NoError(t, compose.Up())
 	t.Run("NodeJS SSL RED metrics", testREDMetricsNodeJSHTTPS)
@@ -343,7 +343,7 @@ func TestSuite_OverrideServiceName(t *testing.T) {
 
 func TestSuiteNodeClient(t *testing.T) {
 	compose, err := docker.ComposeSuite("docker-compose-nodeclient.yml", path.Join(pathOutput, "test-suite-nodeclient.log"))
-	compose.Env = append(compose.Env, `EXECUTABLE_NAME=node`)
+	compose.Env = append(compose.Env, `EXECUTABLE_NAME=node`, `NODE_APP=client`)
 	require.NoError(t, err)
 	require.NoError(t, compose.Up())
 	t.Run("Node Client RED metrics", func(t *testing.T) {
@@ -356,7 +356,7 @@ func TestSuiteNodeClient(t *testing.T) {
 
 func TestSuiteNodeClientTLS(t *testing.T) {
 	compose, err := docker.ComposeSuite("docker-compose-nodeclient.yml", path.Join(pathOutput, "test-suite-nodeclient-tls.log"))
-	compose.Env = append(compose.Env, `EXECUTABLE_NAME=node`, `TESTS_DOCKERFILE_SUFFIX=_tls`)
+	compose.Env = append(compose.Env, `EXECUTABLE_NAME=node`, `NODE_APP=client_tls`)
 	require.NoError(t, err)
 	require.NoError(t, compose.Up())
 	t.Run("Node Client RED metrics", func(t *testing.T) {

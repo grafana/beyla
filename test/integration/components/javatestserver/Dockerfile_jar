@@ -1,16 +1,11 @@
-FROM ghcr.io/graalvm/native-image:ol8-java17-22 AS javabuilder
+FROM eclipse-temurin:17 AS javabuilder
 
 # Install tar and gzip to extract the Maven binaries
-RUN microdnf update \
- && microdnf install --nodocs \
-    tar \
-    gzip \
- && microdnf clean all \
- && rm -rf /var/cache/yum
+RUN apt install -y tar gzip
 
 # Install Maven
 ARG USER_HOME_DIR="/cache"
-ARG MAVEN_DOWNLOAD_URL=https://dlcdn.apache.org/maven/maven-3/3.9.2/binaries/apache-maven-3.9.2-bin.tar.gz
+ARG MAVEN_DOWNLOAD_URL=https://dlcdn.apache.org/maven/maven-3/3.9.4/binaries/apache-maven-3.9.4-bin.tar.gz
 
 RUN mkdir -p /usr/share/maven /usr/share/maven/ref \
   && curl -L -o /tmp/apache-maven.tar.gz ${MAVEN_DOWNLOAD_URL} \
@@ -18,7 +13,6 @@ RUN mkdir -p /usr/share/maven /usr/share/maven/ref \
   && rm -f /tmp/apache-maven.tar.gz \
   && ln -s /usr/share/maven/bin/mvn /usr/bin/mvn
 
-ENV JAVA_HOME /usr/lib64/graalvm/graalvm22-ce-java17
 ENV MAVEN_HOME /usr/share/maven
 ENV MAVEN_CONFIG "$USER_HOME_DIR/.m2"
 
@@ -26,9 +20,8 @@ ENV MAVEN_CONFIG "$USER_HOME_DIR/.m2"
 WORKDIR /build
 
 # Copy the source code into the image for building
-COPY test/ test/
-
-WORKDIR /build/test/integration/components/javatestserver
+COPY test/integration/components/javatestserver/src src/
+COPY test/integration/components/javatestserver/pom.xml pom.xml
 
 RUN java -version
 RUN mvn -version
@@ -37,10 +30,10 @@ RUN mvn -version
 RUN mvn clean package
 
 # The App Image
-FROM openjdk:21-slim-bullseye
+FROM eclipse-temurin:17-jre
 
 EXPOSE 8085
 
 # Copy the native executable into the containers
-COPY --from=javabuilder /build/test/integration/components/javatestserver/target/greeting-service-1.0.0-SNAPSHOT.jar .
+COPY --from=javabuilder /build/target/greeting-service-1.0.0-SNAPSHOT.jar .
 CMD [ "java", "-jar", "/greeting-service-1.0.0-SNAPSHOT.jar" ]

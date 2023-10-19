@@ -16,12 +16,16 @@ import (
 	"github.com/grafana/beyla/pkg/beyla"
 )
 
+var Version = "main"
+
 func main() {
 	lvl := slog.LevelVar{}
 	lvl.Set(slog.LevelInfo)
 	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
 		Level: &lvl,
 	})))
+
+	slog.Info("Grafana Beyla", "Version", Version)
 
 	configPath := flag.String("config", "", "path to the configuration file")
 	flag.Parse()

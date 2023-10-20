@@ -57,28 +57,6 @@ func testHTTPTracesCommon(t *testing.T, doTraceID bool, httpCode int) {
 		trace = traces[0]
 	}, test.Interval(100*time.Millisecond))
 
-	require.NotNil(t, trace)
-
-	var proc jaeger.Process
-
-	for _, p := range trace.Processes {
-		proc = p
-		break
-	}
-
-	require.Equal(t, "testserver", proc.ServiceName)
-
-	var sdk jaeger.Tag
-
-	for _, t := range proc.Tags {
-		if t.Key == "telemetry.sdk.language" {
-			sdk = t
-		}
-	}
-
-	require.NotNil(t, sdk)
-	require.Equal(t, "go", sdk.Value)
-
 	// Check the information of the parent span
 	res := trace.FindByOperationName("GET /" + slug)
 	require.Len(t, res, 1)
@@ -161,6 +139,7 @@ func testHTTPTracesCommon(t *testing.T, doTraceID bool, httpCode int) {
 		{Key: "otel.library.name", Type: "string", Value: "github.com/grafana/beyla"},
 		{Key: "telemetry.sdk.language", Type: "string", Value: "go"},
 		{Key: "service.namespace", Type: "string", Value: "integration-test"},
+		{Key: "service.name", Type: "string", Value: "testserver"},
 	}, process.Tags)
 	assert.Empty(t, sd, sd.String())
 }
@@ -266,7 +245,6 @@ func testGRPCTracesForServiceName(t *testing.T, svcName string) {
 		jaeger.Tag{Key: "rpc.method", Type: "string", Value: "/routeguide.RouteGuide/Debug"},
 		jaeger.Tag{Key: "rpc.system", Type: "string", Value: "grpc"},
 		jaeger.Tag{Key: "span.kind", Type: "string", Value: "server"},
-		jaeger.Tag{Key: "service.name", Type: "string", Value: svcName},
 	)
 	assert.Empty(t, sd, sd.String())
 
@@ -318,6 +296,7 @@ func testGRPCTracesForServiceName(t *testing.T, svcName string) {
 	jaeger.Diff([]jaeger.Tag{
 		{Key: "otel.library.name", Type: "string", Value: "github.com/grafana/beyla"},
 		{Key: "telemetry.sdk.language", Type: "string", Value: "go"},
+		{Key: "service.name", Type: "string", Value: svcName},
 		{Key: "service.namespace", Type: "string", Value: "integration-test"},
 	}, process.Tags)
 	assert.Empty(t, sd, sd.String())
@@ -389,28 +368,6 @@ func testHTTPTracesKProbes(t *testing.T) {
 		trace = traces[0]
 	}, test.Interval(100*time.Millisecond))
 
-	require.NotNil(t, trace)
-
-	var proc jaeger.Process
-
-	for _, p := range trace.Processes {
-		proc = p
-		break
-	}
-
-	require.Equal(t, "node", proc.ServiceName)
-
-	var sdk jaeger.Tag
-
-	for _, t := range proc.Tags {
-		if t.Key == "telemetry.sdk.language" {
-			sdk = t
-		}
-	}
-
-	require.NotNil(t, sdk)
-	require.Equal(t, "nodejs", sdk.Value)
-
 	// Check the information of the parent span
 	res := trace.FindByOperationName("GET /bye")
 	require.Len(t, res, 1)
@@ -438,8 +395,9 @@ func testHTTPTracesKProbes(t *testing.T) {
 	assert.Equal(t, "node", process.ServiceName)
 	jaeger.Diff([]jaeger.Tag{
 		{Key: "otel.library.name", Type: "string", Value: "github.com/grafana/beyla"},
-		{Key: "telemetry.sdk.language", Type: "string", Value: "go"},
+		{Key: "telemetry.sdk.language", Type: "string", Value: "nodejs"},
 		{Key: "service.namespace", Type: "string", Value: "integration-test"},
+		{Key: "service.name", Type: "string", Value: "node"},
 	}, process.Tags)
 	assert.Empty(t, sd, sd.String())
 }

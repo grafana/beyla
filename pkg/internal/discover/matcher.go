@@ -1,11 +1,15 @@
 package discover
 
 import (
+	"errors"
+	"fmt"
 	"log/slog"
+	"os"
 	"regexp"
 	"slices"
 
 	"github.com/mariomac/pipes/pkg/node"
+	"github.com/shirou/gopsutil/process"
 
 	"github.com/grafana/beyla/pkg/internal/discover/services"
 	"github.com/grafana/beyla/pkg/internal/pipe"
@@ -16,11 +20,11 @@ type CriteriaMatcher struct {
 	Cfg *pipe.Config
 }
 
-func CriteriaMatcherProvider(cm CriteriaMatcher) (node.MiddleFunc[[]Event[*services.ProcessInfo], []Event[ProcessMatch]], error) {
+func CriteriaMatcherProvider(cm CriteriaMatcher) (node.MiddleFunc[[]Event[processPorts], []Event[ProcessMatch]], error) {
 	m := &matcher{
 		log:            slog.With("component", "discover.CriteriaMatcher"),
 		criteria:       findingCriteria(cm.Cfg),
-		processHistory: map[int32]struct{}{},
+		processHistory: map[PID]struct{}{},
 	}
 	return m.run, nil
 }
@@ -32,7 +36,7 @@ type matcher struct {
 	// instrumentation.
 	// This avoids keep inspecting again and again client processes each time they open a new connection port
 	// TODO: move to a deduper node when we handle the process elimination
-	processHistory map[int32]struct{}
+	processHistory map[PID]struct{}
 }
 
 // ProcessMatch matches a found process with the first selection criteria it fulfilled.
@@ -41,7 +45,7 @@ type ProcessMatch struct {
 	Process  *services.ProcessInfo
 }
 
-func (m *matcher) run(in <-chan []Event[*services.ProcessInfo], out chan<- []Event[ProcessMatch]) {
+func (m *matcher) run(in <-chan []Event[processPorts], out chan<- []Event[ProcessMatch]) {
 	m.log.Debug("starting criteria matcher node")
 	for i := range in {
 		m.log.Debug("filtering processes", "len", len(i))
@@ -51,26 +55,31 @@ func (m *matcher) run(in <-chan []Event[*services.ProcessInfo], out chan<- []Eve
 	}
 }
 
-func (m *matcher) filter(events []Event[*services.ProcessInfo]) []Event[ProcessMatch] {
+func (m *matcher) filter(events []Event[processPorts]) []Event[ProcessMatch] {
 	var matches []Event[ProcessMatch]
 	for _, ev := range events {
 		if ev.Type == EventDeleted {
-			delete(m.processHistory, ev.Obj.Pid)
+			delete(m.processHistory, ev.Obj.pid)
 			continue
 		}
-		if _, ok := m.processHistory[ev.Obj.Pid]; ok {
+		if _, ok := m.processHistory[ev.Obj.pid]; ok {
 			// this was already matched and submitted for inspection. Ignoring!
 			continue
 		}
+		proc, err := processInfo(ev.Obj)
+		if err != nil {
+			m.log.Debug("can't get information for process", "pid", ev.Obj.pid, "error", err)
+			continue
+		}
 		for i := range m.criteria {
-			if m.matchProcess(ev.Obj, &m.criteria[i]) {
-				comm := ev.Obj.ExePath
-				m.log.Debug("found process", "pid", ev.Obj.Pid, "comm", comm)
+			if m.matchProcess(proc, &m.criteria[i]) {
+				comm := proc.ExePath
+				m.log.Debug("found process", "pid", proc.Pid, "comm", comm)
 				matches = append(matches, Event[ProcessMatch]{
 					Type: EventCreated,
-					Obj:  ProcessMatch{Criteria: &m.criteria[i], Process: ev.Obj},
+					Obj:  ProcessMatch{Criteria: &m.criteria[i], Process: proc},
 				})
-				m.processHistory[ev.Obj.Pid] = struct{}{}
+				m.processHistory[ev.Obj.pid] = struct{}{}
 				break
 			}
 		}
@@ -127,4 +136,29 @@ func findingCriteria(cfg *pipe.Config) services.DefinitionCriteria {
 		})
 	}
 	return finderCriteria
+}
+
+// replaceable function to allow unit tests with faked processes
+var processInfo = func(pp processPorts) (*services.ProcessInfo, error) {
+	proc, err := process.NewProcess(int32(pp.pid))
+	if err != nil {
+		return nil, fmt.Errorf("can't read process: %w", err)
+	}
+	ppid, _ := proc.Ppid()
+	exePath, err := proc.Exe()
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			// this might happen if you query from the port a service that does not have executable path.
+			// Since this value is just for attributing, we set a default placeholder
+			exePath = "unknown"
+		} else {
+			return nil, fmt.Errorf("can't read /proc/<pid>/fd information: %w", err)
+		}
+	}
+	return &services.ProcessInfo{
+		Pid:       proc.Pid,
+		PPid:      ppid,
+		ExePath:   exePath,
+		OpenPorts: pp.openPorts,
+	}, nil
 }

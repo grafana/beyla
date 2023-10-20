@@ -57,6 +57,28 @@ func testHTTPTracesCommon(t *testing.T, doTraceID bool, httpCode int) {
 		trace = traces[0]
 	}, test.Interval(100*time.Millisecond))
 
+	require.NotNil(t, trace)
+
+	var proc jaeger.Process
+
+	for _, p := range trace.Processes {
+		proc = p
+		break
+	}
+
+	require.Equal(t, "testserver", proc.ServiceName)
+
+	var sdk jaeger.Tag
+
+	for _, t := range proc.Tags {
+		if t.Key == "telemetry.sdk.language" {
+			sdk = t
+		}
+	}
+
+	require.NotNil(t, sdk)
+	require.Equal(t, "go", sdk.Value)
+
 	// Check the information of the parent span
 	res := trace.FindByOperationName("GET /" + slug)
 	require.Len(t, res, 1)
@@ -366,6 +388,28 @@ func testHTTPTracesKProbes(t *testing.T) {
 		require.Len(t, traces, 1)
 		trace = traces[0]
 	}, test.Interval(100*time.Millisecond))
+
+	require.NotNil(t, trace)
+
+	var proc jaeger.Process
+
+	for _, p := range trace.Processes {
+		proc = p
+		break
+	}
+
+	require.Equal(t, "node", proc.ServiceName)
+
+	var sdk jaeger.Tag
+
+	for _, t := range proc.Tags {
+		if t.Key == "telemetry.sdk.language" {
+			sdk = t
+		}
+	}
+
+	require.NotNil(t, sdk)
+	require.Equal(t, "nodejs", sdk.Value)
 
 	// Check the information of the parent span
 	res := trace.FindByOperationName("GET /bye")

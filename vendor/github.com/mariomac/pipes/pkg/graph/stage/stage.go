@@ -57,3 +57,19 @@ type MiddleProvider[CFG, I, O any] func(CFG) (node.MiddleFunc[I, O], error)
 // The configuration type must either implement the stage.Instancer interface or the
 // configuration struct containing it must define a `nodeId` tag with an identifier for that stage.
 type TerminalProvider[CFG, I any] func(CFG) (node.TerminalFunc[I], error)
+
+// StartDemuxProvider is a function that, given a configuration argument of a unique type,
+// returns a function fulfilling the node.StartFuncDemux type signature. Returned function
+// will run inside a Graph Start Node
+// If it returns an error, the graph building process will be interrupted.
+// The configuration type must either implement the stage.Instancer interface or the
+// configuration struct containing it must define a `nodeId` tag with an identifier for that stage.
+type StartDemuxProvider[CFG any] func(CFG) (node.StartDemuxFunc, error)
+
+// MiddleDemuxProvider is a function that, given a configuration argument of a unique type,
+// returns a function fulfilling the node.MiddleDemuxFunc type signature. Returned functions
+// will run inside a Graph Middle Node.
+// If it returns an error, the graph building process will be interrupted.
+// The configuration type must either implement the stage.Instancer interface or the
+// configuration struct containing it must define a `nodeId` tag with an identifier for that stage.
+type MiddleDemuxProvider[CFG, I any] func(CFG) (node.MiddleDemuxFunc[I], error)

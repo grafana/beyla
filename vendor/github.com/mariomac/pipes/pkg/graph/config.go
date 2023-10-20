@@ -3,7 +3,6 @@ package graph
 import (
 	"fmt"
 	"reflect"
-	"strings"
 
 	"github.com/mariomac/pipes/pkg/graph/stage"
 )
@@ -34,7 +33,7 @@ type ConnectedConfig interface {
 
 // applyConfig instantiates and configures the different pipeline stages according to the provided configuration
 func (b *Builder) applyConfig(cfg any) error {
-	annotatedConnections := map[string][]string{}
+	annotatedConnections := map[string][]dstConnector{}
 	cv := reflect.ValueOf(cfg)
 	if cv.Kind() == reflect.Pointer {
 		if err := b.applyConfigReflect(cv.Elem(), annotatedConnections); err != nil {
@@ -62,7 +61,8 @@ func (b *Builder) applyConfig(cfg any) error {
 	}
 	for src, dsts := range ccfg.Connections() {
 		for _, dst := range dsts {
-			if err := b.connect(src, dst); err != nil {
+			dstC := connectorFrom(dst)
+			if err := b.connect(src, dstC); err != nil {
 				return err
 			}
 		}
@@ -70,7 +70,7 @@ func (b *Builder) applyConfig(cfg any) error {
 	return nil
 }
 
-func (b *Builder) applyConfigReflect(cfgValue reflect.Value, conns map[string][]string) error {
+func (b *Builder) applyConfigReflect(cfgValue reflect.Value, conns map[string][]dstConnector) error {
 	if cfgValue.Kind() != reflect.Struct {
 		return fmt.Errorf("configuration should be a struct. Was: %s", cfgValue.Type())
 	}
@@ -92,7 +92,7 @@ func (b *Builder) applyConfigReflect(cfgValue reflect.Value, conns map[string][]
 // 2- The ID specified by the stage.Instance embedded type, if any
 // 3- The result of the `nodeId` embedded tag in the struct
 // otherwise it throws a runtime error
-func (b *Builder) applyField(fieldType reflect.StructField, fieldVal reflect.Value, conns map[string][]string) error {
+func (b *Builder) applyField(fieldType reflect.StructField, fieldVal reflect.Value, conns map[string][]dstConnector) error {
 	instanceID, err := b.instanceID(fieldType, fieldVal)
 	if err != nil {
 		return err
@@ -102,8 +102,8 @@ func (b *Builder) applyField(fieldType reflect.StructField, fieldVal reflect.Val
 	}
 
 	// checks if it has a sendTo annotation and update the connections map accordingly
-	if dstNode, ok := fieldType.Tag.Lookup(sendsToTag); ok {
-		conns[instanceID] = strings.Split(dstNode, ",")
+	if sendsTo, ok := fieldType.Tag.Lookup(sendsToTag); ok {
+		conns[instanceID] = allConnectorsFrom(sendsTo)
 	} else {
 		b.checkForwarding(fieldType, conns, instanceID)
 	}
@@ -142,9 +142,9 @@ func (b *Builder) instanceID(fieldType reflect.StructField, fieldVal reflect.Val
 }
 
 // updates the connections and forwarding connections in case the field is marked as forwardTo
-func (b *Builder) checkForwarding(fieldType reflect.StructField, conns map[string][]string, instanceID string) {
-	if dstNode, ok := fieldType.Tag.Lookup(fwdToTag); ok {
-		dsts := strings.Split(dstNode, ",")
+func (b *Builder) checkForwarding(fieldType reflect.StructField, conns map[string][]dstConnector, instanceID string) {
+	if fwdToContent, ok := fieldType.Tag.Lookup(fwdToTag); ok {
+		dsts := allConnectorsFrom(fwdToContent)
 		conns[instanceID] = dsts
 		b.forwarderNodes[instanceID] = dsts
 	}

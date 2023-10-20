@@ -8,7 +8,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/grafana/beyla/pkg/internal/discover/services"
 	"github.com/grafana/beyla/pkg/internal/testutil"
 )
 
@@ -16,36 +15,36 @@ const testTimeout = 5 * time.Second
 
 func TestWatcher_Poll(t *testing.T) {
 	// mocking a fake listProcesses method
-	p1_1 := &services.ProcessInfo{Pid: 1, OpenPorts: []uint32{3030}}
-	p1_2 := &services.ProcessInfo{Pid: 1, OpenPorts: []uint32{3030, 3031}}
-	p2 := &services.ProcessInfo{Pid: 2, OpenPorts: []uint32{123}}
-	p3 := &services.ProcessInfo{Pid: 3, OpenPorts: []uint32{456}}
-	p4 := &services.ProcessInfo{Pid: 4, OpenPorts: []uint32{789}}
-	p5 := &services.ProcessInfo{Pid: 10}
+	p1_1 := processPorts{pid: 1, openPorts: []uint32{3030}}
+	p1_2 := processPorts{pid: 1, openPorts: []uint32{3030, 3031}}
+	p2 := processPorts{pid: 2, openPorts: []uint32{123}}
+	p3 := processPorts{pid: 3, openPorts: []uint32{456}}
+	p4 := processPorts{pid: 4, openPorts: []uint32{789}}
+	p5 := processPorts{pid: 10}
 	invocation := 0
 	ctx, cancel := context.WithCancel(context.Background())
 	// GIVEN a pollAccounter
 	acc := pollAccounter{
 		interval: time.Microsecond,
 		ctx:      ctx,
-		pidPorts: map[pidPort]*services.ProcessInfo{},
-		listProcesses: func() (map[int32]*services.ProcessInfo, error) {
+		pidPorts: map[pidPort]processPorts{},
+		listProcesses: func() (map[PID]processPorts, error) {
 			invocation++
 			switch invocation {
 			case 1:
-				return map[int32]*services.ProcessInfo{p1_1.Pid: p1_1, p2.Pid: p2, p3.Pid: p3}, nil
+				return map[PID]processPorts{p1_1.pid: p1_1, p2.pid: p2, p3.pid: p3}, nil
 			case 2:
 				// p1_2 simulates that a new connection has been created for an existing process
-				return map[int32]*services.ProcessInfo{p1_2.Pid: p1_2, p3.Pid: p3, p4.Pid: p4}, nil
+				return map[PID]processPorts{p1_2.pid: p1_2, p3.pid: p3, p4.pid: p4}, nil
 			case 3:
-				return map[int32]*services.ProcessInfo{p2.Pid: p2, p3.Pid: p3, p4.Pid: p4}, nil
+				return map[PID]processPorts{p2.pid: p2, p3.pid: p3, p4.pid: p4}, nil
 			default:
 				// new processes with no connections (p5) should be also reported
-				return map[int32]*services.ProcessInfo{p5.Pid: p5, p2.Pid: p2, p3.Pid: p3, p4.Pid: p4}, nil
+				return map[PID]processPorts{p5.pid: p5, p2.pid: p2, p3.pid: p3, p4.pid: p4}, nil
 			}
 		},
 	}
-	accounterOutput := make(chan []Event[*services.ProcessInfo], 1)
+	accounterOutput := make(chan []Event[processPorts], 1)
 	accounterExited := make(chan struct{})
 	go func() {
 		acc.Run(accounterOutput)
@@ -55,7 +54,7 @@ func TestWatcher_Poll(t *testing.T) {
 	// WHEN it polls the process for the first time
 	// THEN it returns the creation of all the events
 	out := testutil.ReadChannel(t, accounterOutput, testTimeout)
-	assert.Equal(t, []Event[*services.ProcessInfo]{
+	assert.Equal(t, []Event[processPorts]{
 		{Type: EventCreated, Obj: p1_1},
 		{Type: EventCreated, Obj: p2},
 		{Type: EventCreated, Obj: p3},
@@ -65,13 +64,13 @@ func TestWatcher_Poll(t *testing.T) {
 	// THEN it returns the creation of the new processes/connections
 	// AND the deletion of the old processes
 	out = testutil.ReadChannel(t, accounterOutput, testTimeout)
-	assert.Equal(t, []Event[*services.ProcessInfo]{
+	assert.Equal(t, []Event[processPorts]{
 		{Type: EventCreated, Obj: p1_2},
 		{Type: EventDeleted, Obj: p2},
 		{Type: EventCreated, Obj: p4},
 	}, sort(out))
 	out = testutil.ReadChannel(t, accounterOutput, testTimeout)
-	assert.Equal(t, []Event[*services.ProcessInfo]{
+	assert.Equal(t, []Event[processPorts]{
 		{Type: EventDeleted, Obj: p1_2},
 		{Type: EventCreated, Obj: p2},
 	}, sort(out))
@@ -80,7 +79,7 @@ func TestWatcher_Poll(t *testing.T) {
 	// THEN it should be also reported
 	// (use case: we want to later match by executable path a client process with short-lived connections)
 	out = testutil.ReadChannel(t, accounterOutput, testTimeout)
-	assert.Equal(t, []Event[*services.ProcessInfo]{
+	assert.Equal(t, []Event[processPorts]{
 		{Type: EventCreated, Obj: p5},
 	}, sort(out))
 
@@ -104,9 +103,9 @@ func TestWatcher_Poll(t *testing.T) {
 }
 
 // auxiliary function just to allow comparing slices whose order is not deterministic
-func sort(events []Event[*services.ProcessInfo]) []Event[*services.ProcessInfo] {
-	slices.SortFunc(events, func(a, b Event[*services.ProcessInfo]) int {
-		return int(a.Obj.Pid) - int(b.Obj.Pid)
+func sort(events []Event[processPorts]) []Event[processPorts] {
+	slices.SortFunc(events, func(a, b Event[processPorts]) int {
+		return int(a.Obj.pid) - int(b.Obj.pid)
 	})
 	return events
 }

@@ -4,15 +4,13 @@ FROM rust:latest AS rustbuilder
 WORKDIR /build
 
 # Copy the source code into the image for building
-COPY test/ test/
-
-WORKDIR /build/test/integration/components/rusttestserver
+COPY test/integration/components/rusttestserver .
 
 # Build
 RUN cargo build --release
 
 # The App Image
-FROM ubuntu:latest
+FROM debian:bookworm-slim
 
 #RUN apt update
 #RUN apt install strace -y
@@ -20,6 +18,6 @@ FROM ubuntu:latest
 EXPOSE 8090
 
 # Copy the native executable into the containers
-COPY --from=rustbuilder /build/test/integration/components/rusttestserver/target/release/greetings ./greetings
+COPY --from=rustbuilder /build/target/release/greetings ./greetings
 ENTRYPOINT ["/greetings"]
 #CMD [ "strace", "-f", "/greetings" ]

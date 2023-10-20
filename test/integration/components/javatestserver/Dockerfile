@@ -26,9 +26,8 @@ ENV MAVEN_CONFIG "$USER_HOME_DIR/.m2"
 WORKDIR /build
 
 # Copy the source code into the image for building
-COPY test/ test/
-
-WORKDIR /build/test/integration/components/javatestserver
+COPY test/integration/components/javatestserver/src src/
+COPY test/integration/components/javatestserver/pom.xml pom.xml
 
 RUN java -version
 RUN mvn -version
@@ -37,10 +36,10 @@ RUN mvn -version
 RUN mvn -Pnative native:compile
 
 # The App Image
-FROM ubuntu:latest
+FROM debian:bookworm-slim
 
 EXPOSE 8085
 
 # Copy the native executable into the containers
-COPY --from=javabuilder /build/test/integration/components/javatestserver/target/greeting-service ./greeting
+COPY --from=javabuilder /build/target/greeting-service ./greeting
 ENTRYPOINT ["/greeting"]

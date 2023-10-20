@@ -4,10 +4,11 @@ services:
   testserver:
     build:
       context: ../..
-      dockerfile: test/integration/components/dotnetserver/Dockerfile${TESTSERVER_DOCKERFILE_SUFFIX}
+      dockerfile: test/integration/components/dotnetserver/Dockerfile
     image: hatest-testserver
     ports:
-      - "${TEST_SERVICE_PORTS}"
+      - 5267:5266
+      - 7034:7033
     depends_on:
       otelcol:
         condition: service_started

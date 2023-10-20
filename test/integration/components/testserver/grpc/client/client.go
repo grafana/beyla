@@ -126,7 +126,7 @@ func pingConfig(opts []PingOption) *pingOpts {
 
 // printFeatures lists all the features within the given bounding Rectangle.
 func printFeatures(client pb.RouteGuideClient, rect *pb.Rectangle) {
-	slog.Info("Looking for features within", "rect", rect)
+	slog.Debug("Looking for features within", "rect", rect)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -157,7 +157,7 @@ func printFeatures(client pb.RouteGuideClient, rect *pb.Rectangle) {
 			slog.Error("client.ListFeatures failed", err)
 			os.Exit(-1)
 		}
-		slog.Info("Feature: ", "name", feature.GetName(),
+		slog.Debug("Feature: ", "name", feature.GetName(),
 			"lat", feature.GetLocation().GetLatitude(), "long", feature.GetLocation().GetLongitude())
 	}
 }

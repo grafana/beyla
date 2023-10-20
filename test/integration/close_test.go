@@ -30,8 +30,9 @@ func testBPFPinningUnmounted(t *testing.T) {
 	require.Empty(t, entries)
 
 	// Convenient hook for monitoring/managing image storage space:
-	PrintDockerStorage(t)
-	DockerPrune(t)
+	//PrintDockerStorage(t)
+	//DockerPrune(t)
+	PrintFreeStorage(t)
 }
 
 func PrintFreeStorage(t *testing.T) {

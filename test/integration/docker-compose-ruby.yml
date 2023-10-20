@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   testserver:
-    image: grcevski/tests:rails-test${TESTSERVER_IMAGE_SUFFIX}
+    image: ghcr.io/grafana/beyla-test/greeting-rails${TESTSERVER_IMAGE_SUFFIX}/0.0.1
     ports:
       - "${TEST_SERVICE_PORTS}"
     depends_on:

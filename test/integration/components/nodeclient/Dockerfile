@@ -1,12 +1,10 @@
-FROM node:latest
+FROM node:20-slim
 
 # Set the working directory to /build
-WORKDIR /build
+WORKDIR /
 
 # Copy the source code into the image for building
-COPY test/ test/
-
-WORKDIR /build/test/integration/components/nodeclient
+COPY test/integration/components/nodeclient/client* . 
 
 # Run the node app
 CMD [ "node", "client.js" ]

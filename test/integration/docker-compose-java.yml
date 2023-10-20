@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   testserver:
-    image: grcevski/tests:greeting${JAVA_TEST_MODE}
+    image: ghcr.io/grafana/beyla-test/greeting-java${JAVA_TEST_MODE}/0.0.1
     ports:
       - "8086:8085"
     environment:

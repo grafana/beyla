@@ -4,6 +4,8 @@ MAIN_GO_FILE ?= cmd/$(CMD)/main.go
 GOOS ?= linux
 GOARCH ?= amd64
 
+RELEASE_VERSION := $(shell git describe --tags --always)
+
 TEST_OUTPUT ?= ./testoutput
 
 IMG_REGISTRY ?= docker.io
@@ -148,7 +150,7 @@ all: generate build
 .PHONY: compile
 compile:
 	@echo "### Compiling project"
-	GOOS=$(GOOS) GOARCH=$(GOARCH) go build -mod vendor -ldflags -a -o bin/$(CMD) $(MAIN_GO_FILE)
+	GOOS=$(GOOS) GOARCH=$(GOARCH) go build -mod vendor -ldflags="-X 'main.Version=$(RELEASE_VERSION)'" -a -o bin/$(CMD) $(MAIN_GO_FILE)
 
 # Generated binary can provide coverage stats according to https://go.dev/blog/integration-test-coverage
 .PHONY: compile-for-coverage

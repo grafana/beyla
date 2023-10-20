@@ -28,7 +28,7 @@ import (
 //go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -type http_buf_t -target amd64,arm64 bpf ../../../../bpf/http_sock.c -- -I../../../../bpf/headers
 //go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -type http_buf_t -target amd64,arm64 bpf_debug ../../../../bpf/http_sock.c -- -I../../../../bpf/headers -DBPF_DEBUG
 
-var activePids, _ = lru.New[uint32, string](64)
+var activePids, _ = lru.New[uint32, svc.ID](256)
 var recvBufs, _ = lru.New[bpfConnectionInfoT, string](8192)
 
 const tpLookup = "traceparent: "
@@ -40,10 +40,10 @@ type HTTPInfo struct {
 	BPFHTTPInfo
 	Method      string
 	URL         string
-	Comm        string
 	Host        string
 	Peer        string
 	Traceparent string
+	Service     svc.ID
 }
 
 type Tracer struct {
@@ -52,6 +52,7 @@ type Tracer struct {
 	bpfObjects bpfObjects
 	closers    []io.Closer
 	logger     *slog.Logger
+	Service    *svc.ID
 }
 
 func (p *Tracer) Load() (*ebpf.CollectionSpec, error) {
@@ -221,6 +222,7 @@ func (p *Tracer) SocketFilters() []*ebpf.Program {
 }
 
 func (p *Tracer) Run(ctx context.Context, eventsChan chan<- []request.Span, service svc.ID) {
+	p.Service = &service
 	ebpfcommon.ForwardRingbuf[HTTPInfo](
 		service,
 		&p.Cfg.EBPF, p.log(), p.bpfObjects.Events,
@@ -314,8 +316,11 @@ func (p *Tracer) readHTTPInfoIntoSpan(record *ringbuf.Record) (request.Span, boo
 	}
 	result.URL = event.url()
 	result.Method = event.method()
-	if p.Cfg.Discovery.SystemWide {
-		result.Comm = p.serviceName(event.Pid)
+
+	if p.Service == nil {
+		result.Service = p.serviceInfo(event.Pid)
+	} else {
+		result.Service = *p.Service
 	}
 
 	tp, ok := recvBufs.Get(event.ConnInfo)
@@ -397,6 +402,9 @@ func cstr(chars []uint8) string {
 
 func (p *Tracer) commNameOfDeadPid(pid uint32) string {
 	var name [16]uint8
+	if p.bpfObjects.DeadPids == nil {
+		return ""
+	}
 	err := p.bpfObjects.DeadPids.Lookup(pid, &name)
 	if err != nil {
 		return ""
@@ -420,13 +428,17 @@ func (p *Tracer) commName(pid uint32) string {
 	return strings.TrimSpace(string(name))
 }
 
-func (p *Tracer) serviceName(pid uint32) string {
+func (p *Tracer) serviceInfo(pid uint32) svc.ID {
 	cached, ok := activePids.Get(pid)
 	if ok {
 		return cached
 	}
 
 	name := p.commName(pid)
-	activePids.Add(pid, name)
-	return name
+	tech := exec.FindProcLanguage(int32(pid), nil)
+	result := svc.ID{Name: name, Technology: tech}
+
+	activePids.Add(pid, result)
+
+	return result
 }

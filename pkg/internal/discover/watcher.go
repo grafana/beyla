@@ -190,7 +190,7 @@ func fetchProcesses(processes map[int32]*services.ProcessInfo) error {
 	}
 	for _, proc := range procs {
 		if pi, err := processInfo(proc); err != nil {
-			wplog().Warn("can't get process information", "pid", proc.Pid, "error", err)
+			wplog().Debug("can't get process information", "pid", proc.Pid, "error", err)
 		} else {
 			conns, _ := proc.Connections()
 			for _, conn := range conns {

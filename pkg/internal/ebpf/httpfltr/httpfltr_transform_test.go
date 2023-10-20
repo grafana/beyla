@@ -6,6 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/grafana/beyla/pkg/internal/request"
+	"github.com/grafana/beyla/pkg/internal/svc"
 )
 
 func TestHTTPInfoParsing(t *testing.T) {
@@ -41,7 +42,7 @@ func makeHTTPInfo(method, path, peer, host, comm string, peerPort, hostPort uint
 		Peer:        peer,
 		URL:         path,
 		Host:        host,
-		Comm:        comm,
+		Service:     svc.ID{Name: comm, Technology: "c++"},
 	}
 
 	i.ConnInfo.D_port = uint16(hostPort)
@@ -58,6 +59,7 @@ func assertMatchesInfo(t *testing.T, span *request.Span, method, path, peer, hos
 	assert.Equal(t, peer, span.Peer)
 	assert.Equal(t, status, span.Status)
 	assert.Equal(t, comm, span.ServiceID.Name)
+	assert.Equal(t, "c++", span.ServiceID.Technology)
 	assert.Equal(t, int64(durationMs*1000000), int64(span.End-span.Start))
 	assert.Equal(t, int64(durationMs*1000000), int64(span.End-span.RequestStart))
 }

@@ -111,7 +111,7 @@ func TestTracerPipeline(t *testing.T) {
 	event = testutil.ReadChannel(t, tc.TraceRecords, testTimeout)
 	matchInnerTraceEvent(t, "processing", event)
 	event = testutil.ReadChannel(t, tc.TraceRecords, testTimeout)
-	matchTraceEvent(t, "bar-svc", "GET", event)
+	matchTraceEvent(t, "GET", event)
 }
 
 func TestRouteConsolidation(t *testing.T) {
@@ -263,7 +263,7 @@ func TestTraceGRPCPipeline(t *testing.T) {
 	event = testutil.ReadChannel(t, tc.TraceRecords, testTimeout)
 	matchInnerGRPCTraceEvent(t, "processing", event)
 	event = testutil.ReadChannel(t, tc.TraceRecords, testTimeout)
-	matchGRPCTraceEvent(t, "svc", "foo.bar", event)
+	matchGRPCTraceEvent(t, "foo.bar", event)
 }
 
 func TestNestedSpanMatching(t *testing.T) {
@@ -405,11 +405,10 @@ func getHostname() string {
 	return hostname
 }
 
-func matchTraceEvent(t require.TestingT, svcName, name string, event collector.TraceRecord) {
+func matchTraceEvent(t require.TestingT, name string, event collector.TraceRecord) {
 	assert.Equal(t, collector.TraceRecord{
 		Name: name,
 		Attributes: map[string]string{
-			string(semconv.ServiceNameKey):              svcName,
 			string(semconv.HTTPMethodKey):               "GET",
 			string(semconv.HTTPStatusCodeKey):           "404",
 			string(semconv.HTTPTargetKey):               "/foo/bar",
@@ -435,11 +434,10 @@ func matchInnerTraceEvent(t require.TestingT, name string, event collector.Trace
 	}, event)
 }
 
-func matchGRPCTraceEvent(t *testing.T, svcName, name string, event collector.TraceRecord) {
+func matchGRPCTraceEvent(t *testing.T, name string, event collector.TraceRecord) {
 	assert.Equal(t, collector.TraceRecord{
 		Name: name,
 		Attributes: map[string]string{
-			string(semconv.ServiceNameKey):       svcName,
 			string(semconv.RPCSystemKey):         "grpc",
 			string(semconv.RPCGRPCStatusCodeKey): "3",
 			string(semconv.RPCMethodKey):         "foo.bar",
@@ -503,9 +501,8 @@ func matchInfoEvent(t *testing.T, name string, event collector.TraceRecord) {
 			string(semconv.NetHostNameKey):              getHostname(),
 			string(semconv.NetHostPortKey):              "8080",
 			string(semconv.HTTPRequestContentLengthKey): "0",
-			"span_id":                      event.Attributes["span_id"],
-			"parent_span_id":               "",
-			string(semconv.ServiceNameKey): "comm",
+			"span_id":        event.Attributes["span_id"],
+			"parent_span_id": "",
 		},
 		Kind: ptrace.SpanKindServer,
 	}, event)

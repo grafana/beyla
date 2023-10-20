@@ -2,12 +2,10 @@ package exec
 
 import (
 	"debug/elf"
-
-	"github.com/grafana/beyla/pkg/internal/svc"
 )
 
-func FindProcLanguage(pid int32) string {
-	return svc.Unknown
+func FindProcLanguage(pid int32, elfF *elf.File) string {
+	return ""
 }
 
 func FindExeSymbols(f *elf.File) (map[string]Sym, error) {

@@ -13,7 +13,7 @@ require (
 	github.com/grafana/go-offsets-tracker v0.1.2
 	github.com/hashicorp/golang-lru/v2 v2.0.2
 	github.com/mariomac/guara v0.0.0-20230621100729-42bd7716e524
-	github.com/mariomac/pipes v0.8.0
+	github.com/mariomac/pipes v0.9.0
 	github.com/prometheus/client_golang v1.15.1
 	github.com/prometheus/client_model v0.3.0
 	github.com/prometheus/common v0.42.0

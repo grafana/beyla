@@ -435,8 +435,8 @@ func (p *Tracer) serviceInfo(pid uint32) svc.ID {
 	}
 
 	name := p.commName(pid)
-	tech := exec.FindProcLanguage(int32(pid), nil)
-	result := svc.ID{Name: name, Technology: tech}
+	lang := exec.FindProcLanguage(int32(pid), nil)
+	result := svc.ID{Name: name, SDKLanguage: lang}
 
 	activePids.Add(pid, result)
 

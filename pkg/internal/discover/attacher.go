@@ -72,8 +72,8 @@ func (ta *TraceAttacher) getTracer(ie Instrumentable) (*ebpf.ProcessTracer, bool
 		return nil, false
 	}
 
-	technology := exec.FindProcLanguage(ie.FileInfo.Pid, ie.FileInfo.ELF)
-	ie.FileInfo.Service = svc.ID{Name: ie.FileInfo.Service.Name, Namespace: ie.FileInfo.Service.Namespace, Technology: technology}
+	sdkLang := exec.FindProcLanguage(ie.FileInfo.Pid, ie.FileInfo.ELF)
+	ie.FileInfo.Service = svc.ID{Name: ie.FileInfo.Service.Name, Namespace: ie.FileInfo.Service.Namespace, SDKLanguage: sdkLang}
 
 	// Instead of the executable file in the disk, we pass the /proc/<pid>/exec
 	// to allow loading it from different container/pods in containerized environments

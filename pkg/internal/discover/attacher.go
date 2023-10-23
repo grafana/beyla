@@ -14,6 +14,7 @@ import (
 	"github.com/grafana/beyla/pkg/internal/goexec"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/pipe"
+	"github.com/grafana/beyla/pkg/internal/svc"
 )
 
 // TraceAttacher creates the available trace.Tracer implementations (Go HTTP tracer, GRPC tracer, Generic tracer...)
@@ -54,11 +55,11 @@ func (ta *TraceAttacher) getTracer(ie Instrumentable) (*ebpf.ProcessTracer, bool
 	// gets the
 	var programs []ebpf.Tracer
 	switch ie.Type {
-	case InstrumentableGolang:
+	case svc.InstrumentableGolang:
 		// gets all the possible supported tracers for a go program, and filters out
 		// those whose symbols are not present in the ELF functions list
 		programs = filterNotFoundPrograms(newGoTracersGroup(ta.Cfg, ta.Metrics), ie.Offsets)
-	case InstrumentableGeneric:
+	case svc.InstrumentableJava, svc.InstrumentableNodejs, svc.InstrumentableRuby, svc.InstrumentablePython, svc.InstrumentableDotnet, svc.InstrumentableGeneric, svc.InstrumentableRust:
 		// We are not instrumenting a Go application, we override the programs
 		// list with the generic kernel/socket space filters
 		programs = newNonGoTracersGroup(ta.Cfg, ta.Metrics)
@@ -69,6 +70,8 @@ func (ta *TraceAttacher) getTracer(ie Instrumentable) (*ebpf.ProcessTracer, bool
 		ta.log.Warn("no instrumentable functions found. Ignoring", "pid", ie.FileInfo.Pid, "cmd", ie.FileInfo.CmdExePath)
 		return nil, false
 	}
+
+	ie.FileInfo.Service = svc.ID{Name: ie.FileInfo.Service.Name, Namespace: ie.FileInfo.Service.Namespace, SDKLanguage: ie.Type}
 
 	// Instead of the executable file in the disk, we pass the /proc/<pid>/exec
 	// to allow loading it from different container/pods in containerized environments

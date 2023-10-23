@@ -99,7 +99,7 @@ func testREDMetricsForRustHTTPLibrary(t *testing.T, url string, comm string, por
 	assert.Equal(t, comm, process.ServiceName)
 	sd = jaeger.Diff([]jaeger.Tag{
 		{Key: "otel.library.name", Type: "string", Value: "github.com/grafana/beyla"},
-		{Key: "telemetry.sdk.language", Type: "string", Value: "go"},
+		{Key: "telemetry.sdk.language", Type: "string", Value: "rust"},
 		{Key: "service.namespace", Type: "string", Value: "integration-test"},
 	}, process.Tags)
 	assert.Empty(t, sd, sd.String())

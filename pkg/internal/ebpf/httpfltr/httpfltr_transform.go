@@ -4,7 +4,6 @@ import (
 	"strings"
 
 	"github.com/grafana/beyla/pkg/internal/request"
-	"github.com/grafana/beyla/pkg/internal/svc"
 )
 
 func httpInfoToSpan(info *HTTPInfo) request.Span {
@@ -21,7 +20,7 @@ func httpInfoToSpan(info *HTTPInfo) request.Span {
 		Start:         int64(info.StartMonotimeNs),
 		End:           int64(info.EndMonotimeNs),
 		Status:        int(info.Status),
-		ServiceID:     svc.ID{Name: info.Comm},
+		ServiceID:     info.Service,
 		Traceparent:   info.Traceparent,
 	}
 }

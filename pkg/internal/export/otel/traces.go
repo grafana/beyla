@@ -334,10 +334,6 @@ func (r *TracesReporter) traceAttributes(span *request.Span) []attribute.KeyValu
 		}
 	}
 
-	if span.ServiceID.Name != "" { // we don't have service name set, system wide instrumentation
-		attrs = append(attrs, semconv.ServiceName(span.ServiceID.Name))
-	}
-
 	// append extra metadata
 	for key, val := range span.Metadata {
 		attrs = append(attrs, attribute.String(key, val))

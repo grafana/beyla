@@ -244,7 +244,6 @@ func testGRPCTracesForServiceName(t *testing.T, svcName string) {
 		jaeger.Tag{Key: "rpc.method", Type: "string", Value: "/routeguide.RouteGuide/Debug"},
 		jaeger.Tag{Key: "rpc.system", Type: "string", Value: "grpc"},
 		jaeger.Tag{Key: "span.kind", Type: "string", Value: "server"},
-		jaeger.Tag{Key: "service.name", Type: "string", Value: svcName},
 	)
 	assert.Empty(t, sd, sd.String())
 
@@ -394,7 +393,7 @@ func testHTTPTracesKProbes(t *testing.T) {
 	assert.Equal(t, "node", process.ServiceName)
 	jaeger.Diff([]jaeger.Tag{
 		{Key: "otel.library.name", Type: "string", Value: "github.com/grafana/beyla"},
-		{Key: "telemetry.sdk.language", Type: "string", Value: "go"},
+		{Key: "telemetry.sdk.language", Type: "string", Value: "nodejs"},
 		{Key: "service.namespace", Type: "string", Value: "integration-test"},
 	}, process.Tags)
 	assert.Empty(t, sd, sd.String())

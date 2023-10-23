@@ -3,17 +3,12 @@ package goexec
 import (
 	"debug/elf"
 	"debug/gosym"
-	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
-)
 
-type sym struct {
-	off  uint64
-	len  uint64
-	prog *elf.Prog
-}
+	"github.com/grafana/beyla/pkg/internal/exec"
+)
 
 // instrumentationPoints loads the provided executable and looks for the addresses
 // where the start and return probes must be inserted.
@@ -31,12 +26,12 @@ func instrumentationPoints(elfF *elf.File, funcNames []string) (map[string]FuncO
 
 	gosyms := elfF.Section(".gosymtab")
 
-	var allSyms map[string]sym
+	var allSyms map[string]exec.Sym
 
 	// no go symbols in the executable, maybe it's statically linked
 	// find regular elf symbols
 	if gosyms == nil {
-		allSyms, err = findExeSymbols(elfF)
+		allSyms, err = exec.FindExeSymbols(elfF)
 		if err != nil {
 			return nil, err
 		}
@@ -75,25 +70,25 @@ func instrumentationPoints(elfF *elf.File, funcNames []string) (map[string]FuncO
 	return allOffsets, nil
 }
 
-func handleStaticSymbol(fName string, allOffsets map[string]FuncOffsets, allSyms map[string]sym, ilog *slog.Logger) {
+func handleStaticSymbol(fName string, allOffsets map[string]FuncOffsets, allSyms map[string]exec.Sym, ilog *slog.Logger) {
 	s, ok := allSyms[fName]
 
-	if ok && s.prog != nil {
-		data := make([]byte, s.len)
-		_, err := s.prog.ReadAt(data, int64(s.off-s.prog.Off))
+	if ok && s.Prog != nil {
+		data := make([]byte, s.Len)
+		_, err := s.Prog.ReadAt(data, int64(s.Off-s.Prog.Off))
 		if err != nil {
 			ilog.Error("error reading instructions for symbol", "symbol", fName, "error", err)
 			return
 		}
 
-		returns, err := findReturnOffssets(s.off, data)
+		returns, err := findReturnOffssets(s.Off, data)
 		if err != nil {
-			ilog.Error("error finding returns for symbol", "symbol", fName, "offset", s.off-s.prog.Off, "size", s.len, "error", err)
+			ilog.Error("error finding returns for symbol", "symbol", fName, "offset", s.Off-s.Prog.Off, "size", s.Len, "error", err)
 			return
 		}
-		allOffsets[fName] = FuncOffsets{Start: s.off, Returns: returns}
+		allOffsets[fName] = FuncOffsets{Start: s.Off, Returns: returns}
 	} else {
-		ilog.Debug("can't find in elf symbol table", "symbol", fName, "ok", ok, "prog", s.prog)
+		ilog.Debug("can't find in elf symbol table", "symbol", fName, "ok", ok, "prog", s.Prog)
 	}
 }
 
@@ -143,46 +138,4 @@ func findGoSymbolTable(elfF *elf.File) (*gosym.Table, error) {
 		return nil, fmt.Errorf("creating go symbol table: %w", err)
 	}
 	return symTab, nil
-}
-
-func findExeSymbols(f *elf.File) (map[string]sym, error) {
-	addresses := map[string]sym{}
-	syms, err := f.Symbols()
-	if err != nil && !errors.Is(err, elf.ErrNoSymbols) {
-		return nil, err
-	}
-
-	dynsyms, err := f.DynamicSymbols()
-	if err != nil && !errors.Is(err, elf.ErrNoSymbols) {
-		return nil, err
-	}
-
-	syms = append(syms, dynsyms...)
-
-	for _, s := range syms {
-		if elf.ST_TYPE(s.Info) != elf.STT_FUNC {
-			// Symbol not associated with a function or other executable code.
-			continue
-		}
-
-		address := s.Value
-		var p *elf.Prog
-
-		// Loop over ELF segments.
-		for _, prog := range f.Progs {
-			// Skip uninteresting segments.
-			if prog.Type != elf.PT_LOAD || (prog.Flags&elf.PF_X) == 0 {
-				continue
-			}
-
-			if prog.Vaddr <= s.Value && s.Value < (prog.Vaddr+prog.Memsz) {
-				address = s.Value - prog.Vaddr + prog.Off
-				p = prog
-				break
-			}
-		}
-		addresses[s.Name] = sym{off: address, len: s.Size, prog: p}
-	}
-
-	return addresses, nil
 }

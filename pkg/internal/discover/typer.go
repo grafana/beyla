@@ -109,7 +109,10 @@ func (t *typer) FilterClassify(evs []Event[ProcessMatch]) []Event[Instrumentable
 		// if we found a process and returned its parent, it might be already
 		// instrumented. We skip it in that case
 		if _, ok := t.instrumentedPids[inst.FileInfo.Pid]; !ok {
-			t.log.Info("instrumenting process", "cmd", inst.FileInfo.CmdExePath, "pid", inst.FileInfo.Pid)
+			t.log.Debug(
+				"found an instrumentable process",
+				"type", inst.Type.String(),
+				"exec", inst.FileInfo.CmdExePath, "pid", inst.FileInfo.Pid)
 			out = append(out, Event[Instrumentable]{Type: EventCreated, Obj: inst})
 			t.instrumentedPids[inst.FileInfo.Pid] = struct{}{}
 		}

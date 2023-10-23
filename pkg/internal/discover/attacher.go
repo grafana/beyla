@@ -3,6 +3,7 @@ package discover
 import (
 	"context"
 	"fmt"
+	"hash/fnv"
 	"log/slog"
 	"os"
 	"path"
@@ -20,21 +21,25 @@ import (
 // for each received Instrumentable process and forwards an ebpf.ProcessTracer instance ready to run and start
 // instrumenting the executable
 type TraceAttacher struct {
+	log               *slog.Logger
 	Cfg               *pipe.Config
 	Ctx               context.Context
 	DiscoveredTracers chan *ebpf.ProcessTracer
 	Metrics           imetrics.Reporter
 
-	log *slog.Logger
+	// keeps a copy of all the tracers for a given executable path
+	existingTracers map[string]*ebpf.ProcessTracer
 }
 
 func TraceAttacherProvider(ta TraceAttacher) (node.TerminalFunc[[]Event[Instrumentable]], error) {
 	ta.log = slog.With("component", "discover.TraceAttacher")
+	ta.existingTracers = map[string]*ebpf.ProcessTracer{}
+
 	return func(in <-chan []Event[Instrumentable]) {
 	mainLoop:
 		for instrumentables := range in {
 			for _, instr := range instrumentables {
-				if pt, ok := ta.getTracer(instr.Obj); ok {
+				if pt, ok := ta.getTracer(&instr.Obj); ok {
 					// we can create multiple tracers for the same executable (ran from different processes)
 					// even if we just need to instrument the executable once. TODO: deduplicate
 					ta.DiscoveredTracers <- pt
@@ -50,8 +55,17 @@ func TraceAttacherProvider(ta TraceAttacher) (node.TerminalFunc[[]Event[Instrume
 	}, nil
 }
 
-func (ta *TraceAttacher) getTracer(ie Instrumentable) (*ebpf.ProcessTracer, bool) {
-	// gets the
+func (ta *TraceAttacher) getTracer(ie *Instrumentable) (*ebpf.ProcessTracer, bool) {
+	if tracer, ok := ta.existingTracers[ie.FileInfo.CmdExePath]; ok {
+		ta.log.Info("new process for already instrumented executable",
+			"pid", ie.FileInfo.Pid,
+			"exec", ie.FileInfo.CmdExePath)
+		_ = tracer
+		return nil, false
+	}
+	ta.log.Info("instrumenting process", "cmd", ie.FileInfo.CmdExePath, "pid", ie.FileInfo.Pid)
+
+	// builds a tracer for that executable
 	var programs []ebpf.Tracer
 	switch ie.Type {
 	case InstrumentableGolang:
@@ -79,14 +93,33 @@ func (ta *TraceAttacher) getTracer(ie Instrumentable) (*ebpf.ProcessTracer, bool
 		return nil, false
 	}
 
-	return &ebpf.ProcessTracer{
+	tracer := &ebpf.ProcessTracer{
 		Programs:   programs,
 		ELFInfo:    ie.FileInfo,
 		Goffsets:   ie.Offsets,
 		Exe:        exe,
-		PinPath:    path.Join(ta.Cfg.EBPF.BpfBaseDir, fmt.Sprintf("%d-%d", os.Getpid(), ie.FileInfo.Pid)),
+		PinPath:    ta.buildPinPath(ie),
 		SystemWide: ta.Cfg.Discovery.SystemWide,
-	}, true
+	}
+	ta.existingTracers[ie.FileInfo.CmdExePath] = tracer
+	return tracer, true
+}
+
+// pinpath must be unique for a given executable group
+// it will be:
+//   - current beyla PID
+//   - PID of the first process that matched that executable
+//     (don't mind if that process stops and other processes of the same executable keep using this pinPath)
+//   - Hash of the executable path
+//
+// This way we prevent improbable (almost impossible) collisions of the exec hash
+// or that the first process stopped and a different process with the same PID
+// started, with a different executable
+func (ta *TraceAttacher) buildPinPath(ie *Instrumentable) string {
+	execHash := fnv.New32()
+	_, _ = execHash.Write([]byte(ie.FileInfo.CmdExePath))
+	return path.Join(ta.Cfg.EBPF.BpfBaseDir,
+		fmt.Sprintf("%d-%d-%x", os.Getpid(), ie.FileInfo.Pid, execHash.Sum32()))
 }
 
 // filterNotFoundPrograms will filter these programs whose required functions (as

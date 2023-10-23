@@ -41,7 +41,12 @@ func TestMultiProcess(t *testing.T) {
 		checkReportedOnlyOnce(t, "http://localhost:18080", "dupe_testserver")
 	})
 
-	t.Run("BPF pinning folders mounted", func(t *testing.T) { testBPFPinningMountedWithCount(t, 5) })
+	t.Run("BPF pinning folders mounted", func(t *testing.T) {
+		// 1 pinned map for testserver and testserver-unused containers
+		// 1 pinned map for testserver1 container
+		// 1 pinned map for all the processes in testserver-duplicate container
+		testBPFPinningMountedWithCount(t, 3)
+	})
 
 	require.NoError(t, compose.Close())
 	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
@@ -49,10 +54,10 @@ func TestMultiProcess(t *testing.T) {
 
 // Addresses bug https://github.com/grafana/beyla/issues/370 for Go executables
 // Prevents that two instances of the same process report traces or metrics by duplicate
-func checkReportedOnlyOnce(t *testing.T, baseURl, serviceName string) {
+func checkReportedOnlyOnce(t *testing.T, baseURL, serviceName string) {
 	const path = "/check-only-once"
 	for i := 0; i < 3; i++ {
-		resp, err := http.Get(baseURl + path)
+		resp, err := http.Get(baseURL + path)
 		require.NoError(t, err)
 		require.Equal(t, http.StatusOK, resp.StatusCode)
 	}

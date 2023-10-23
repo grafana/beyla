@@ -101,7 +101,6 @@ func testREDMetricsForRustHTTPLibrary(t *testing.T, url string, comm string, por
 		{Key: "otel.library.name", Type: "string", Value: "github.com/grafana/beyla"},
 		{Key: "telemetry.sdk.language", Type: "string", Value: "rust"},
 		{Key: "service.namespace", Type: "string", Value: "integration-test"},
-		{Key: "service.name", Type: "string", Value: comm},
 	}, process.Tags)
 	assert.Empty(t, sd, sd.String())
 

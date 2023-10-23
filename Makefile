@@ -152,6 +152,9 @@ compile:
 	@echo "### Compiling project"
 	GOOS=$(GOOS) GOARCH=$(GOARCH) go build -mod vendor -ldflags="-X 'main.Version=$(RELEASE_VERSION)'" -a -o bin/$(CMD) $(MAIN_GO_FILE)
 
+.PHONY: dev
+dev: prereqs generate compile-for-coverage
+
 # Generated binary can provide coverage stats according to https://go.dev/blog/integration-test-coverage
 .PHONY: compile-for-coverage
 compile-for-coverage:

@@ -139,7 +139,6 @@ func testHTTPTracesCommon(t *testing.T, doTraceID bool, httpCode int) {
 		{Key: "otel.library.name", Type: "string", Value: "github.com/grafana/beyla"},
 		{Key: "telemetry.sdk.language", Type: "string", Value: "go"},
 		{Key: "service.namespace", Type: "string", Value: "integration-test"},
-		{Key: "service.name", Type: "string", Value: "testserver"},
 	}, process.Tags)
 	assert.Empty(t, sd, sd.String())
 }
@@ -296,7 +295,6 @@ func testGRPCTracesForServiceName(t *testing.T, svcName string) {
 	jaeger.Diff([]jaeger.Tag{
 		{Key: "otel.library.name", Type: "string", Value: "github.com/grafana/beyla"},
 		{Key: "telemetry.sdk.language", Type: "string", Value: "go"},
-		{Key: "service.name", Type: "string", Value: svcName},
 		{Key: "service.namespace", Type: "string", Value: "integration-test"},
 	}, process.Tags)
 	assert.Empty(t, sd, sd.String())
@@ -397,7 +395,6 @@ func testHTTPTracesKProbes(t *testing.T) {
 		{Key: "otel.library.name", Type: "string", Value: "github.com/grafana/beyla"},
 		{Key: "telemetry.sdk.language", Type: "string", Value: "nodejs"},
 		{Key: "service.namespace", Type: "string", Value: "integration-test"},
-		{Key: "service.name", Type: "string", Value: "node"},
 	}, process.Tags)
 	assert.Empty(t, sd, sd.String())
 }

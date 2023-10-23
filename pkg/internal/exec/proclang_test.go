@@ -3,8 +3,9 @@ package exec
 import (
 	"testing"
 
-	"github.com/grafana/beyla/pkg/internal/svc"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/grafana/beyla/pkg/internal/svc"
 )
 
 func TestModuleDetection(t *testing.T) {

@@ -51,11 +51,7 @@ var DefaultBuckets = Buckets{
 }
 
 func otelResource(service svc.ID) *resource.Resource {
-	telemetrySDK := semconv.TelemetrySDKLanguageGo
-
-	if service.SDKLanguage != "" {
-		telemetrySDK = semconv.TelemetrySDKLanguageKey.String(service.SDKLanguage)
-	}
+	telemetrySDK := semconv.TelemetrySDKLanguageKey.String(service.SDKLanguage.String())
 
 	attrs := []attribute.KeyValue{
 		semconv.ServiceName(service.Name),

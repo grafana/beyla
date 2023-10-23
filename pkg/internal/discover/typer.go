@@ -21,26 +21,8 @@ type ExecTyper struct {
 	Metrics imetrics.Reporter
 }
 
-type InstrumentableType int
-
-const (
-	InstrumentableGolang = InstrumentableType(iota)
-	InstrumentableGeneric
-)
-
-func (it InstrumentableType) String() string {
-	switch it {
-	case InstrumentableGolang:
-		return "Golang"
-	case InstrumentableGeneric:
-		return "Generic"
-	default:
-		return "unknown(bug!)"
-	}
-}
-
 type Instrumentable struct {
-	Type InstrumentableType
+	Type svc.InstrumentableType
 
 	FileInfo *exec.FileInfo
 	Offsets  *goexec.Offsets
@@ -128,7 +110,7 @@ func (t *typer) asInstrumentable(execElf *exec.FileInfo) Instrumentable {
 		// we found go offsets, let's see if this application is not a proxy
 		if !isGoProxy(offsets) {
 			log.Debug("identified as a Go service or client")
-			return Instrumentable{Type: InstrumentableGolang, FileInfo: execElf, Offsets: offsets}
+			return Instrumentable{Type: svc.InstrumentableGolang, FileInfo: execElf, Offsets: offsets}
 		}
 		log.Debug("identified as a Go proxy")
 	} else {
@@ -143,10 +125,12 @@ func (t *typer) asInstrumentable(execElf *exec.FileInfo) Instrumentable {
 		parent, ok = t.currentPids[parent.Ppid]
 	}
 
-	log.Debug("instrumented", "comm", execElf.CmdExePath, "pid", execElf.Pid)
+	detectedType := exec.FindProcLanguage(execElf.Pid, execElf.ELF)
+
+	log.Debug("instrumented", "comm", execElf.CmdExePath, "pid", execElf.Pid, "language", detectedType.String())
 	// Return the instrumentable without offsets, at it is identified as a generic
 	// (or non-instrumentable Go proxy) executable
-	return Instrumentable{Type: InstrumentableGeneric, FileInfo: execElf}
+	return Instrumentable{Type: detectedType, FileInfo: execElf}
 }
 
 func (t *typer) inspectOffsets(execElf *exec.FileInfo) (*goexec.Offsets, bool) {

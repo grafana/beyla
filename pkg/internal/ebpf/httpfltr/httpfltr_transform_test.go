@@ -42,7 +42,7 @@ func makeHTTPInfo(method, path, peer, host, comm string, peerPort, hostPort uint
 		Peer:        peer,
 		URL:         path,
 		Host:        host,
-		Service:     svc.ID{Name: comm, SDKLanguage: "c++"},
+		Service:     svc.ID{Name: comm, SDKLanguage: svc.InstrumentableRuby},
 	}
 
 	i.ConnInfo.D_port = uint16(hostPort)
@@ -59,7 +59,7 @@ func assertMatchesInfo(t *testing.T, span *request.Span, method, path, peer, hos
 	assert.Equal(t, peer, span.Peer)
 	assert.Equal(t, status, span.Status)
 	assert.Equal(t, comm, span.ServiceID.Name)
-	assert.Equal(t, "c++", span.ServiceID.SDKLanguage)
+	assert.Equal(t, svc.InstrumentableRuby, span.ServiceID.SDKLanguage)
 	assert.Equal(t, int64(durationMs*1000000), int64(span.End-span.Start))
 	assert.Equal(t, int64(durationMs*1000000), int64(span.End-span.RequestStart))
 }

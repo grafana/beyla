@@ -2,9 +2,11 @@ package exec
 
 import (
 	"debug/elf"
+
+	"github.com/grafana/beyla/pkg/internal/svc"
 )
 
-func FindProcLanguage(pid int32, elfF *elf.File) string {
+func FindProcLanguage(pid int32, elfF *elf.File) svc.InstrumentableType {
 	return ""
 }
 

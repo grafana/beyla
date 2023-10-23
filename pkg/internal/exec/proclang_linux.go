@@ -4,29 +4,21 @@ import (
 	"debug/elf"
 	"errors"
 	"fmt"
-	"strings"
 
-	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
+	"github.com/grafana/beyla/pkg/internal/svc"
 )
 
-func FindProcLanguage(pid int32, elfF *elf.File) string {
+func FindProcLanguage(pid int32, elfF *elf.File) svc.InstrumentableType {
 	maps, err := FindLibMaps(pid)
 
 	if err != nil {
-		return ""
+		return svc.InstrumentableGeneric
 	}
 
 	for _, m := range maps {
-		if strings.Contains(m.Pathname, "libcoreclr.so") {
-			return semconv.TelemetrySDKLanguageDotnet.Value.AsString()
-		} else if strings.Contains(m.Pathname, "libjvm.so") {
-			return semconv.TelemetrySDKLanguageJava.Value.AsString()
-		} else if strings.HasSuffix(m.Pathname, "/node") {
-			return semconv.TelemetrySDKLanguageNodejs.Value.AsString()
-		} else if strings.HasSuffix(m.Pathname, "/ruby") {
-			return semconv.TelemetrySDKLanguageRuby.Value.AsString()
-		} else if strings.Contains(m.Pathname, "/python") {
-			return semconv.TelemetrySDKLanguagePython.Value.AsString()
+		t := instrumentableFromModuleMap(m.Pathname)
+		if t != svc.InstrumentableGeneric {
+			return t
 		}
 	}
 
@@ -35,31 +27,30 @@ func FindProcLanguage(pid int32, elfF *elf.File) string {
 		elfF, err = elf.Open(pidPath)
 
 		if err != nil || elfF == nil {
-			return ""
+			return svc.InstrumentableGeneric
 		}
 	}
 
 	return findLanguageFromElf(elfF)
 }
 
-func findLanguageFromElf(elfF *elf.File) string {
+func findLanguageFromElf(elfF *elf.File) svc.InstrumentableType {
 	gosyms := elfF.Section(".gosymtab")
 
 	if gosyms != nil {
-		return semconv.TelemetrySDKLanguageGo.Value.AsString()
+		return svc.InstrumentableGolang
 	}
 
 	if allSyms, err := FindExeSymbols(elfF); err == nil {
 		for name := range allSyms {
-			if strings.Contains(name, "rust_panic") {
-				return "rust"
-			} else if strings.HasPrefix(name, "JVM_") || strings.HasPrefix(name, "graal_") {
-				return semconv.TelemetrySDKLanguageJava.Value.AsString()
+			t := instrumentableFromSymbolName(name)
+			if t != svc.InstrumentableGeneric {
+				return t
 			}
 		}
 	}
 
-	return ""
+	return svc.InstrumentableGeneric
 }
 
 func FindExeSymbols(f *elf.File) (map[string]Sym, error) {

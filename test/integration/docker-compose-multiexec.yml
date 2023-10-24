@@ -10,6 +10,14 @@ services:
       - "8080:8080"
     environment:
       LOG_LEVEL: DEBUG
+  # another instance of the above image. Used to test the deduplication
+  # of metrics when they come from the same executable file
+  testserver-unused:
+    image: hatest-testserver
+    ports:
+      - "38080:8080"
+    environment:
+      LOG_LEVEL: DEBUG
 
   testserver1:
     build:
@@ -18,6 +26,20 @@ services:
     image: hatest-testserver1
     ports:
       - "8900:8900"
+    environment:
+      LOG_LEVEL: DEBUG
+      
+  # image that runs two instances of the 'testserver' executable
+  # Used to test the deduplication
+  # of metrics when they come from the same executable file
+  testserver-duplicate:
+    build:
+      context: ../..
+      dockerfile: test/integration/components/testserver/Dockerfile_duplicate
+    image: hatest-testserver-duplicate
+    ports:
+      - "18080:18080"
+      - "18090:18090"
     environment:
       LOG_LEVEL: DEBUG
 

@@ -3,11 +3,9 @@
 package integration
 
 import (
-	"encoding/json"
 	"fmt"
 	"math/rand"
 	"net"
-	"net/http"
 	"strconv"
 	"testing"
 	"time"
@@ -16,7 +14,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/grafana/beyla/test/integration/components/jaeger"
 	"github.com/grafana/beyla/test/integration/components/prom"
 	grpcclient "github.com/grafana/beyla/test/integration/components/testserver/grpc/client"
 )
@@ -263,18 +260,6 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url, svcName, svcNs string) {
 	results, err = pq.Query(`http_server_duration_seconds_count{http_route="/metrics"}`)
 	require.NoError(t, err)
 	enoughPromResults(t, results)
-
-	// Check that /metrics is missing from Jaeger at the same time
-	resp, err := http.Get(jaegerQueryURL + "?service=testserver&operation=GET%20%2Fmetrics")
-	require.NoError(t, err)
-	if resp == nil {
-		return
-	}
-	require.Equal(t, http.StatusOK, resp.StatusCode)
-	var tq jaeger.TracesQuery
-	require.NoError(t, json.NewDecoder(resp.Body).Decode(&tq))
-	traces := tq.FindBySpan(jaeger.Tag{Key: "http.target", Type: "string", Value: "/metrics"})
-	require.Len(t, traces, 0)
 }
 
 func testREDMetricsGRPC(t *testing.T) {

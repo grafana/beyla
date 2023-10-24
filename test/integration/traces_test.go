@@ -30,6 +30,9 @@ func testHTTPTracesCommon(t *testing.T, doTraceID bool, httpCode int) {
 	var traceID string
 	var parentID string
 
+	doHTTPGet(t, instrumentedServiceStdURL+"/metrics", 200)
+	doHTTPGet(t, instrumentedServiceStdURL+"/metrics", 200)
+
 	slug := "create-trace"
 	if doTraceID {
 		slug = "create-trace-with-id"
@@ -141,6 +144,18 @@ func testHTTPTracesCommon(t *testing.T, doTraceID bool, httpCode int) {
 		{Key: "service.namespace", Type: "string", Value: "integration-test"},
 	}, process.Tags)
 	assert.Empty(t, sd, sd.String())
+
+	// Check that /metrics is missing from Jaeger at the same time
+	resp, err := http.Get(jaegerQueryURL + "?service=testserver&operation=GET%20%2Fmetrics")
+	require.NoError(t, err)
+	if resp == nil {
+		return
+	}
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	var tq jaeger.TracesQuery
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&tq))
+	traces := tq.FindBySpan(jaeger.Tag{Key: "http.target", Type: "string", Value: "/metrics"})
+	require.Len(t, traces, 0)
 }
 
 func testHTTPTracesBadTraceparent(t *testing.T) {

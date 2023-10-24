@@ -296,6 +296,7 @@ func testREDMetricsForHTTPLibraryNoRoute(t *testing.T, url, svcName string) {
 	// - take at least 30ms to respond
 	// - returning a 404 code
 	for i := 0; i < 3; i++ {
+		doHTTPGet(t, url+"/metrics", 200)
 		doHTTPGet(t, url+path+"?delay=30ms&status=404", 404)
 		doHTTPGet(t, url+"/echo", 203)
 		doHTTPGet(t, url+"/echoCall", 204)
@@ -488,6 +489,11 @@ func testREDMetricsForHTTPLibraryNoRoute(t *testing.T, url, svcName string) {
 	assert.GreaterOrEqual(t, sum, 114.0)
 	addr = net.ParseIP(res.Metric["net_sock_peer_addr"])
 	assert.NotNil(t, addr)
+
+	// Check that we never recorded any /metrics calls
+	results, err = pq.Query(`http_server_duration_seconds_count{http_route="/metrics"}`)
+	require.NoError(t, err)
+	require.Equal(t, len(results), 0)
 }
 
 func testREDMetricsHTTPNoRoute(t *testing.T) {

@@ -16,6 +16,7 @@ import (
 	"github.com/cilium/ebpf/ringbuf"
 	lru "github.com/hashicorp/golang-lru/v2"
 
+	ebpf2 "github.com/grafana/beyla/pkg/internal/ebpf"
 	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
 	"github.com/grafana/beyla/pkg/internal/exec"
 	"github.com/grafana/beyla/pkg/internal/goexec"
@@ -46,35 +47,56 @@ type HTTPInfo struct {
 	Service     svc.ID
 }
 
+type pidsFilter interface {
+	ebpf2.PIDsAccounter
+	Filter(inputSpans []request.Span) []request.Span
+}
+
 type Tracer struct {
-	Cfg        *pipe.Config
-	Metrics    imetrics.Reporter
+	pidsFilter pidsFilter
+	cfg        *pipe.Config
+	metrics    imetrics.Reporter
 	bpfObjects bpfObjects
 	closers    []io.Closer
-	logger     *slog.Logger
+	log        *slog.Logger
 	Service    *svc.ID
+}
+
+func New(cfg *pipe.Config, metrics imetrics.Reporter) *Tracer {
+	log := slog.With("component", "httpfltr.Tracer")
+	var filter pidsFilter
+	if cfg.Discovery.SystemWide {
+		filter = &ebpfcommon.IdentityPidsFilter{}
+	} else {
+		filter = ebpfcommon.NewPIDsFilter(log)
+	}
+	return &Tracer{
+		log:        log,
+		cfg:        cfg,
+		metrics:    metrics,
+		pidsFilter: filter,
+	}
+}
+
+func (p *Tracer) AddPID(pid uint32) {
+	p.pidsFilter.AddPID(pid)
+}
+
+func (p *Tracer) RemovePID(pid uint32) {
+	p.pidsFilter.RemovePID(pid)
 }
 
 func (p *Tracer) Load() (*ebpf.CollectionSpec, error) {
 	loader := loadBpf
-	if p.Cfg.EBPF.BpfDebug {
+	if p.cfg.EBPF.BpfDebug {
 		loader = loadBpf_debug
 	}
 
 	return loader()
 }
 
-func (p *Tracer) log() *slog.Logger {
-	if p.logger != nil {
-		return p.logger
-	}
-
-	p.logger = slog.With("component", "httpfltr.Tracer")
-	return p.logger
-}
-
 func (p *Tracer) Constants(finfo *exec.FileInfo, _ *goexec.Offsets) map[string]any {
-	if p.Cfg.Discovery.SystemWide {
+	if p.cfg.Discovery.SystemWide {
 		return nil
 	}
 
@@ -82,7 +104,7 @@ func (p *Tracer) Constants(finfo *exec.FileInfo, _ *goexec.Offsets) map[string]a
 
 	npid, err := findNamespace(finfo.Pid)
 	if err != nil {
-		p.log().Warn("error while looking up namespace pid, namespace pid matching will not work", err)
+		p.log.Warn("error while looking up namespace pid, namespace pid matching will not work", err)
 	}
 
 	m["current_pid_ns_id"] = npid
@@ -146,7 +168,7 @@ func (p *Tracer) KProbes() map[string]ebpfcommon.FunctionPrograms {
 
 	// Track system exit so we can find program names of dead programs
 	// when we process the events
-	if p.Cfg.Discovery.SystemWide {
+	if p.cfg.Discovery.SystemWide {
 		kprobes["sys_exit"] = ebpfcommon.FunctionPrograms{
 			Required: true,
 			Start:    p.bpfObjects.KprobeSysExit,
@@ -225,9 +247,10 @@ func (p *Tracer) Run(ctx context.Context, eventsChan chan<- []request.Span, serv
 	p.Service = &service
 	ebpfcommon.ForwardRingbuf[HTTPInfo](
 		service,
-		&p.Cfg.EBPF, p.log(), p.bpfObjects.Events,
+		&p.cfg.EBPF, p.log, p.bpfObjects.Events,
 		p.readHTTPInfoIntoSpan,
-		p.Metrics,
+		p.pidsFilter.Filter,
+		p.metrics,
 		append(p.closers, &p.bpfObjects)...,
 	)(ctx, eventsChan)
 }
@@ -268,7 +291,7 @@ func (p *Tracer) processHTTPBuf(event *bpfHttpBufT) {
 	b := event.Buf[:]
 	tp := p.extractTraceParent(b)
 	if tp != "" {
-		p.log().Debug("Found traceparent in buffer", "Traceparent", tp)
+		p.log.Debug("Found traceparent in buffer", "Traceparent", tp)
 		recvBufs.Add(event.ConnInfo, tp)
 	}
 }
@@ -326,7 +349,7 @@ func (p *Tracer) readHTTPInfoIntoSpan(record *ringbuf.Record) (request.Span, boo
 	tp, ok := recvBufs.Get(event.ConnInfo)
 
 	if ok {
-		p.log().Debug("Found traceparent for request", "Traceparent", tp)
+		p.log.Debug("Found traceparent for request", "Traceparent", tp)
 		result.Traceparent = tp
 		// Clean up the LRU map once we know we have what we need
 		recvBufs.Remove(event.ConnInfo)

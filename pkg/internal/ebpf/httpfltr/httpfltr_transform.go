@@ -8,6 +8,7 @@ import (
 
 func httpInfoToSpan(info *HTTPInfo) request.Span {
 	return request.Span{
+		PID:           info.Pid,
 		Type:          request.EventType(info.Type),
 		ID:            0,
 		Method:        info.Method,

@@ -12,6 +12,7 @@ discovery:
     - namespace: initial-set
       name: some-server
       open_ports: 18080
+      exe_path_regexp: dupe # choose only the dupe.* process that uses port 18080
     - namespace: initial-set
       exe_path_regexp: ((testserver)|(rename1))
 

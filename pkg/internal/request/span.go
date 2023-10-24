@@ -30,6 +30,7 @@ var clocks = converter{monoClock: monotime.Now, clock: time.Now}
 // Span contains the information being submitted by the following nodes in the graph.
 // It enables comfortable handling of data from Go.
 type Span struct {
+	PID           uint32
 	Type          EventType
 	ID            uint64
 	Method        string

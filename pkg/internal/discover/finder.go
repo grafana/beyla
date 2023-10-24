@@ -61,14 +61,14 @@ func (pf *ProcessFinder) Start(cfg *pipe.Config) (<-chan *ebpf.ProcessTracer, er
 func newGoTracersGroup(cfg *pipe.Config, metrics imetrics.Reporter) []ebpf.Tracer {
 	// Each program is an eBPF source: net/http, grpc...
 	return []ebpf.Tracer{
-		&nethttp.Tracer{Cfg: &cfg.EBPF, Metrics: metrics},
-		&nethttp.GinTracer{Tracer: nethttp.Tracer{Cfg: &cfg.EBPF, Metrics: metrics}},
-		&grpc.Tracer{Cfg: &cfg.EBPF, Metrics: metrics},
-		&goruntime.Tracer{Cfg: &cfg.EBPF, Metrics: metrics},
-		&gosql.Tracer{Cfg: &cfg.EBPF, Metrics: metrics},
+		nethttp.New(&cfg.EBPF, metrics),
+		&nethttp.GinTracer{Tracer: *nethttp.New(&cfg.EBPF, metrics)},
+		grpc.New(&cfg.EBPF, metrics),
+		goruntime.New(&cfg.EBPF, metrics),
+		gosql.New(&cfg.EBPF, metrics),
 	}
 }
 
 func newNonGoTracersGroup(cfg *pipe.Config, metrics imetrics.Reporter) []ebpf.Tracer {
-	return []ebpf.Tracer{&httpfltr.Tracer{Cfg: cfg, Metrics: metrics}}
+	return []ebpf.Tracer{httpfltr.New(cfg, metrics)}
 }

@@ -24,6 +24,7 @@
 // Trace of an HTTP call invocation. It is instantiated by the return uprobe and forwarded to the
 // user space through the events ringbuffer.
 typedef struct http_request_trace_t {
+    u32 pid;
     u8  type;
     u64 id;
     u64 go_start_monotime_ns;

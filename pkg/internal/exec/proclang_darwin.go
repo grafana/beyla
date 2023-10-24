@@ -6,10 +6,10 @@ import (
 	"github.com/grafana/beyla/pkg/internal/svc"
 )
 
-func FindProcLanguage(pid int32, elfF *elf.File) svc.InstrumentableType {
-	return ""
+func FindProcLanguage(_ int32, _ *elf.File) svc.InstrumentableType {
+	return svc.InstrumentableGeneric
 }
 
-func FindExeSymbols(f *elf.File) (map[string]Sym, error) {
-	return nil
+func FindExeSymbols(_ *elf.File) (map[string]Sym, error) {
+	return nil, nil
 }

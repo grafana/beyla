@@ -1,5 +1,5 @@
 routes:
-  ignore:
+  ignored:
     - /metrics
   unmatched: heuristic
 otel_metrics_export:

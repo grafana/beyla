@@ -55,6 +55,7 @@ func testHTTPTracesCommon(t *testing.T, doTraceID bool, httpCode int) {
 		traces := tq.FindBySpan(jaeger.Tag{Key: "http.target", Type: "string", Value: "/" + slug})
 		require.Len(t, traces, 1)
 		trace = traces[0]
+		require.Len(t, trace.Spans, 3) // parent - in queue - processing
 	}, test.Interval(100*time.Millisecond))
 
 	// Check the information of the parent span
@@ -237,6 +238,7 @@ func testGRPCTracesForServiceName(t *testing.T, svcName string) {
 		traces := tq.FindBySpan(jaeger.Tag{Key: "rpc.method", Type: "string", Value: "/routeguide.RouteGuide/Debug"})
 		require.Len(t, traces, 1)
 		trace = traces[0]
+		require.Len(t, trace.Spans, 3) // parent - in queue - processing
 	}, test.Interval(100*time.Millisecond))
 
 	// Check the information of the parent span

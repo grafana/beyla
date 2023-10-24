@@ -35,7 +35,6 @@ func doHTTPPost(t *testing.T, path string, status int, jsonBody []byte) {
 	r, err := testHTTPClient.Do(req)
 	require.NoError(t, err)
 	require.Equal(t, status, r.StatusCode)
-	time.Sleep(300 * time.Millisecond)
 }
 
 func doHTTPGet(t *testing.T, path string, status int) {
@@ -49,7 +48,6 @@ func doHTTPGet(t *testing.T, path string, status int) {
 	r, err := testHTTPClient.Do(req)
 	require.NoError(t, err)
 	require.Equal(t, status, r.StatusCode)
-	time.Sleep(300 * time.Millisecond)
 }
 
 func doHTTPGetWithTraceparent(t *testing.T, path string, status int, traceparent string) {
@@ -64,7 +62,6 @@ func doHTTPGetWithTraceparent(t *testing.T, path string, status int, traceparent
 	r, err := testHTTPClient.Do(req)
 	require.NoError(t, err)
 	require.Equal(t, status, r.StatusCode)
-	time.Sleep(300 * time.Millisecond)
 }
 
 func createTraceID() string {

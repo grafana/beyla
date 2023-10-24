@@ -47,8 +47,8 @@ type RoutesConfig struct {
 	Unmatch UnmatchType `yaml:"unmatched"`
 	// Patterns of the paths that will match to a route
 	Patterns       []string   `yaml:"patterns"`
-	IgnorePatterns []string   `yaml:"ignored"`
-	IgnoredEvents  IgnoreMode `yaml:"ignored_events"`
+	IgnorePatterns []string   `yaml:"ignored_patterns"`
+	IgnoredEvents  IgnoreMode `yaml:"ignore_mode"`
 }
 
 func RoutesProvider(rc *RoutesConfig) (node.MiddleFunc[[]request.Span, []request.Span], error) {

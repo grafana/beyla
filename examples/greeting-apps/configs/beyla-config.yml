@@ -3,4 +3,4 @@ routes:
     - /smoke
     - /greeting
     - /ping
-  unmatch: path
+  unmatched: path

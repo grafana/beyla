@@ -225,6 +225,10 @@ func TestTraces_InternalInstrumentation(t *testing.T) {
 	inputNode := node.AsStart(func(out chan<- []request.Span) {
 		// on every send data signal, the traces generator sends a dummy trace
 		for range sendData {
+			// the first three spans will be ignored, we'll only get one below
+			out <- []request.Span{{Type: request.EventTypeHTTPClient, IgnoreSpan: request.IgnoreTraces}}
+			out <- []request.Span{{Type: request.EventTypeGRPC, IgnoreSpan: request.IgnoreTraces}}
+			out <- []request.Span{{Type: request.EventTypeGRPCClient, IgnoreSpan: request.IgnoreMetrics}}
 			out <- []request.Span{{Type: request.EventTypeHTTP}}
 		}
 	})
@@ -257,6 +261,8 @@ func TestTraces_InternalInstrumentation(t *testing.T) {
 		// no call should return error
 		assert.Empty(t, internalTraces.Errors())
 	})
+
+	assert.LessOrEqual(t, previousSum, 3) // 2 no restrictions + 1 with ignore metrics
 
 	sendData <- struct{}{}
 	// after some time, the number of calls should be higher than before

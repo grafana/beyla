@@ -128,6 +128,14 @@ func TestIgnoreRoutes(t *testing.T) {
 	}}, testutil.ReadChannel(t, out, testTimeout))
 }
 
+func TestIgnoreMode(t *testing.T) {
+	s := request.Span{Path: "/user/1234"}
+	setSpanIgnoreMode(IgnoreTraces, &s)
+	assert.Equal(t, request.IgnoreTraces, s.IgnoreSpan)
+	setSpanIgnoreMode(IgnoreMetrics, &s)
+	assert.Equal(t, request.IgnoreMetrics, s.IgnoreSpan)
+}
+
 func BenchmarkRoutesProvider_Wildcard(b *testing.B) {
 	benchProvider(b, UnmatchWildcard)
 }

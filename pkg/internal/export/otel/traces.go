@@ -522,6 +522,11 @@ func (r *TracesReporter) reportTraces(input <-chan []request.Span) {
 		for i := range spans {
 			span := &spans[i]
 
+			// If we are ignoring this span because of route patterns, don't do anything
+			if span.IgnoreSpan == request.IgnoreTraces {
+				continue
+			}
+
 			// small optimization: read explanation in MetricsReporter.reportMetrics
 			if span.ServiceID != lastSvc || reporter == nil {
 				lm, err := r.reporters.For(span.ServiceID)

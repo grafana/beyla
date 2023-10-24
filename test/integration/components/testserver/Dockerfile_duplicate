@@ -22,7 +22,7 @@ FROM debian:bookworm-slim
 
 WORKDIR /
 COPY --from=builder /src/test/integration/components/testserver/duplicate_testserver.sh .
-COPY --from=builder /src/testserver dupe_testserver
+COPY --from=builder /src/testserver duped_service
 USER 0:0
 
 CMD [ "sh", "/duplicate_testserver.sh" ]

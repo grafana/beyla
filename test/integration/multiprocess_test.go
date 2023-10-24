@@ -36,15 +36,34 @@ func TestMultiProcess(t *testing.T) {
 		// it doesn't instrument too the process from the other container
 		checkReportedOnlyOnce(t, "http://localhost:8900", "rename1")
 	})
+
+	// do some requests to the server at port 18090, which must not be instrumented
+	// as the instrumenter-config-multiexec.yml file only selects the process with port 18080.
+	// Doing it a bit earlier to give time to generate the traces (in case the test failed)
+	// while doing another test in between for the same container
+	test.Eventually(t, testTimeout, func(t require.TestingT) {
+		resp, err := http.Get("http://localhost:18090/dont-instrument")
+		require.NoError(t, err)
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+	})
+
 	t.Run("Processes in the same host are instrumented once and only once", func(t *testing.T) {
 		waitForTestComponents(t, "http://localhost:18080")
-		checkReportedOnlyOnce(t, "http://localhost:18080", "dupe_testserver")
+		checkReportedOnlyOnce(t, "http://localhost:18080", "some-server")
+	})
+
+	t.Run("Non-selected processes must not be instrumented"+
+		" even if they share the executable of another instrumented process", func(t *testing.T) {
+		pq := prom.Client{HostPort: prometheusHostPort}
+		results, err := pq.Query(`http_server_duration_seconds_count{http_target="/dont-instrument"}`)
+		require.NoError(t, err)
+		assert.Empty(t, results)
 	})
 
 	t.Run("BPF pinning folders mounted", func(t *testing.T) {
 		// 1 pinned map for testserver and testserver-unused containers
 		// 1 pinned map for testserver1 container
-		// 1 pinned map for all the processes in testserver-duplicate container
+		// 1 pinned map for testserver-duplicate container
 		testBPFPinningMountedWithCount(t, 3)
 	})
 

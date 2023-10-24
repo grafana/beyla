@@ -104,7 +104,7 @@ func waitForTestComponentsSub(t *testing.T, url, subpath string) {
 		// test. Once one it is visible, it means that Otel and Prometheus are healthy
 		results, err := pq.Query(`http_server_duration_seconds_count{http_target="` + subpath + `"}`)
 		require.NoError(t, err)
-		require.NotZero(t, len(results))
+		require.NotEmpty(t, results)
 	}, test.Interval(time.Second))
 }
 

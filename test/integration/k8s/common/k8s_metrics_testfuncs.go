@@ -75,7 +75,7 @@ func DoTestHTTPMetricsDecorationExternalToPod(t *testing.T) {
 		// test. Once one it is visible, it means that Otel and Prometheus are healthy
 		results, err = pq.Query(`http_server_duration_seconds_count{http_target="` + subpath + `",k8s_dst_name="testserver"}`)
 		require.NoError(t, err)
-		require.NotZero(t, len(results))
+		require.NotEmpty(t, results)
 	}, test.Interval(time.Second))
 
 	for _, r := range results {
@@ -246,7 +246,7 @@ func testMetricsDecoration(
 					var err error
 					results, err = pq.Query(metric + queryArgs)
 					require.NoError(t, err)
-					require.NotZero(t, len(results))
+					require.NotEmpty(t, results)
 				})
 
 				for _, r := range results {

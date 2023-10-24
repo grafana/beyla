@@ -76,9 +76,9 @@ func RoutesProvider(rc *RoutesConfig) (node.MiddleFunc[[]request.Span, []request
 					if discarder.Find(s.Path) != "" {
 						if ignoreMode == IgnoreAll {
 							continue
-						} else {
-							setSpanIgnoreMode(ignoreMode, s)
 						}
+						// we can't discard it here, ignoring is selective (metrics | traces)
+						setSpanIgnoreMode(ignoreMode, s)
 					}
 				}
 				if routesEnabled {

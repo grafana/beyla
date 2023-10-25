@@ -25,7 +25,7 @@ type bpfFuncInvocation struct {
 		OrigX0          uint64
 		Syscallno       int32
 		Unused2         uint32
-		OrigAddrLimit   uint64
+		SdeiTtbr1       uint64
 		PmrSave         uint64
 		Stackframe      [2]uint64
 		LockdepHardirqs uint64

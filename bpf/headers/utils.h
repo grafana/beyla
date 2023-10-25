@@ -15,16 +15,17 @@
 #ifndef __UTILS_H__
 #define __UTILS_H__
 
-#include "common.h"
+#include "vmlinux.h"
+#include "bpf_tracing.h"
 #include "bpf_helpers.h"
 
 #if defined(__TARGET_ARCH_x86)
 
-#define GO_PARAM1(x) ((void*)(x)->rax)
-#define GO_PARAM2(x) ((void*)(x)->rbx)
-#define GO_PARAM3(x) ((void*)(x)->rcx)
-#define GO_PARAM4(x) ((void*)(x)->rdi)
-#define GO_PARAM5(x) ((void*)(x)->rsi)
+#define GO_PARAM1(x) ((void*)(x)->ax)
+#define GO_PARAM2(x) ((void*)(x)->bx)
+#define GO_PARAM3(x) ((void*)(x)->cx)
+#define GO_PARAM4(x) ((void*)(x)->di)
+#define GO_PARAM5(x) ((void*)(x)->si)
 #define GO_PARAM6(x) ((void*)(x)->r8)
 #define GO_PARAM7(x) ((void*)(x)->r9)
 #define GO_PARAM8(x) ((void*)(x)->r10)
@@ -35,10 +36,6 @@
 #define GOROUTINE_PTR(x) ((void*)(x)->r14)
 
 #elif defined(__TARGET_ARCH_arm64)
-
-/* arm64 provides struct user_pt_regs instead of struct pt_regs to userspace */
-struct pt_regs;
-#define PT_REGS_ARM64 const volatile struct user_pt_regs
 
 #define GO_PARAM1(x) ((void*)((PT_REGS_ARM64 *)(x))->regs[0])
 #define GO_PARAM2(x) ((void*)((PT_REGS_ARM64 *)(x))->regs[1])

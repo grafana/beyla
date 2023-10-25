@@ -2,7 +2,6 @@
 #define TCP_INFO_HELPERS_H
 
 #include "vmlinux.h"
-#include "common.h"
 #include "bpf_helpers.h"
 #include "bpf_core_read.h"
 #include "http_types.h"

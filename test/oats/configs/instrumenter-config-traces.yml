@@ -4,4 +4,4 @@ routes:
     - /smoke
     - /greeting
     - /sqltest
-  unmatch: path
+  unmatched: path

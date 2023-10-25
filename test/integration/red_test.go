@@ -58,6 +58,7 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url, svcName, svcNs string) {
 	// - take at least 30ms to respond
 	// - returning a 404 code
 	for i := 0; i < 3; i++ {
+		doHTTPGet(t, url+"/metrics", 200)
 		doHTTPGet(t, url+path+"?delay=30ms&status=404", 404)
 		if url == instrumentedServiceGorillaURL {
 			doHTTPGet(t, url+"/echo", 203)
@@ -254,6 +255,11 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url, svcName, svcNs string) {
 	assert.GreaterOrEqual(t, sum, 114.0)
 	addr = net.ParseIP(res.Metric["net_sock_peer_addr"])
 	assert.NotNil(t, addr)
+
+	// Check that we never recorded metrics for /metrics, in the basic test only traces are ignored
+	results, err = pq.Query(`http_server_duration_seconds_count{http_route="/metrics"}`)
+	require.NoError(t, err)
+	enoughPromResults(t, results)
 }
 
 func testREDMetricsGRPC(t *testing.T) {
@@ -296,6 +302,7 @@ func testREDMetricsForHTTPLibraryNoRoute(t *testing.T, url, svcName string) {
 	// - take at least 30ms to respond
 	// - returning a 404 code
 	for i := 0; i < 3; i++ {
+		doHTTPGet(t, url+"/metrics", 200)
 		doHTTPGet(t, url+path+"?delay=30ms&status=404", 404)
 		doHTTPGet(t, url+"/echo", 203)
 		doHTTPGet(t, url+"/echoCall", 204)
@@ -488,6 +495,11 @@ func testREDMetricsForHTTPLibraryNoRoute(t *testing.T, url, svcName string) {
 	assert.GreaterOrEqual(t, sum, 114.0)
 	addr = net.ParseIP(res.Metric["net_sock_peer_addr"])
 	assert.NotNil(t, addr)
+
+	// Check that we never recorded any /metrics calls
+	results, err = pq.Query(`http_server_duration_seconds_count{http_route="/metrics"}`)
+	require.NoError(t, err)
+	require.Equal(t, len(results), 0)
 }
 
 func testREDMetricsHTTPNoRoute(t *testing.T) {

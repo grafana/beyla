@@ -1,7 +1,7 @@
 #ifndef HTTP_SOCK_HELPERS
 #define HTTP_SOCK_HELPERS
 
-#include "common.h"
+#include "vmlinux.h"
 #include "bpf_helpers.h"
 #include "bpf_builtins.h"
 #include "http_types.h"

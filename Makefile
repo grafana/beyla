@@ -267,7 +267,8 @@ artifact: compile
 	@echo "### Packing generated artifact"
 	cp LICENSE ./bin
 	cp NOTICE ./bin
-	tar -C ./bin -cvzf bin/beyla.tar.gz beyla LICENSE NOTICE
+	cp third_party_licenses.csv ./bin
+	tar -C ./bin -cvzf bin/beyla.tar.gz beyla LICENSE NOTICE third_party_licenses.csv
 
 .PHONE: clean-testoutput
 clean-testoutput:

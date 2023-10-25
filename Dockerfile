@@ -20,6 +20,7 @@ COPY go.sum go.sum
 COPY Makefile Makefile
 COPY LICENSE LICENSE
 COPY NOTICE NOTICE
+COPY third_party_licenses.csv third_party_licenses.csv
 
 # Build
 RUN make compile
@@ -33,6 +34,7 @@ WORKDIR /
 COPY --from=builder /opt/app-root/bin/beyla .
 COPY --from=builder /opt/app-root/LICENSE .
 COPY --from=builder /opt/app-root/NOTICE .
+COPY --from=builder /opt/app-root/third_party_licenses.csv .
 USER 0:0
 
 CMD [ "/beyla" ]

@@ -114,6 +114,38 @@ func TestTracerPipeline(t *testing.T) {
 	matchTraceEvent(t, "GET", event)
 }
 
+func TestTracerPipelineBadTimestamps(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	tc, err := collector.Start(ctx)
+	require.NoError(t, err)
+
+	gb := newGraphBuilder(ctx, &Config{
+		Traces: otel.TracesConfig{
+			BatchTimeout:   10 * time.Millisecond,
+			TracesEndpoint: tc.ServerEndpoint, SamplingRatio: 1.0,
+			ReportersCacheLen: 16,
+		},
+	}, gctx(), make(<-chan []request.Span))
+	// Override eBPF tracer to send some fake data
+	graph.RegisterStart(gb.builder, func(_ traces.Reader) (node.StartFunc[[]request.Span], error) {
+		return func(out chan<- []request.Span) {
+			out <- newRequestWithTiming("svc1", 1, request.EventTypeHTTP, "GET", "/attach", "2.2.2.2:1234", 200, 60000, 59999, 70000)
+			// closing prematurely the input node would finish the whole graph processing
+			// and OTEL exporters could be closed, so we wait.
+			time.Sleep(testTimeout)
+		}, nil
+	})
+	pipe, err := gb.buildGraph()
+	require.NoError(t, err)
+
+	go pipe.Run(ctx)
+
+	event := testutil.ReadChannel(t, tc.TraceRecords, testTimeout)
+	matchNestedEvent(t, "GET", "GET", "/attach", "200", ptrace.SpanKindServer, event)
+}
+
 func TestRouteConsolidation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

@@ -427,16 +427,21 @@ func (r *TracesReporter) makeSpan(parentCtx context.Context, tracer trace2.Trace
 
 	parentCtx = handleTraceparentField(parentCtx, span.Traceparent)
 
+	realStart := t.RequestStart
+	if t.Start.Before(realStart) {
+		realStart = t.Start
+	}
+
 	// Create a parent span for the whole request session
 	ctx, sp := tracer.Start(parentCtx, traceName(span),
-		trace2.WithTimestamp(t.RequestStart),
+		trace2.WithTimestamp(realStart),
 		trace2.WithSpanKind(spanKind(span)),
 		trace2.WithAttributes(r.traceAttributes(span)...),
 	)
 
 	sp.SetStatus(spanStatusCode(span), "")
 
-	if span.RequestStart != span.Start {
+	if t.Start.After(realStart) {
 		var spP trace2.Span
 
 		// Create a child span showing the queue time

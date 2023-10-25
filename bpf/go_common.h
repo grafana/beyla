@@ -33,7 +33,7 @@ char __license[] SEC("license") = "Dual MIT/GPL";
 // attributes (method, path, and status code).
 typedef struct func_invocation_t {
     u64 start_monotime_ns;
-    bpf_user_pt_regs_t regs; // we store registers on invocation to be able to fetch the arguments at return
+    struct pt_regs regs; // we store registers on invocation to be able to fetch the arguments at return
 } func_invocation;
 
 struct {

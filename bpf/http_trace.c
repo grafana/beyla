@@ -10,7 +10,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "vmlinux.h"
 #include "http_trace.h"
 
 // Force emitting struct http_request_trace into the ELF for automatic creation of Golang struct

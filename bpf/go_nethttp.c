@@ -31,7 +31,7 @@ struct {
 // func (mux *ServeMux) ServeHTTP(w ResponseWriter, r *Request)
 // or other functions sharing the same signature (e.g http.Handler.ServeHTTP)
 SEC("uprobe/ServeHTTP")
-int uprobe_ServeHTTP(bpf_user_pt_regs_t *ctx) {
+int uprobe_ServeHTTP(struct pt_regs *ctx) {
     bpf_dbg_printk("=== uprobe/ServeHTTP === ");
     void *goroutine_addr = GOROUTINE_PTR(ctx);
     bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
@@ -50,7 +50,7 @@ int uprobe_ServeHTTP(bpf_user_pt_regs_t *ctx) {
 }
 
 SEC("uprobe/startBackgroundRead")
-int uprobe_startBackgroundRead(bpf_user_pt_regs_t *ctx) {
+int uprobe_startBackgroundRead(struct pt_regs *ctx) {
     bpf_dbg_printk("=== uprobe/proc startBackgroundRead === ");
 
     void *goroutine_addr = GOROUTINE_PTR(ctx);
@@ -74,7 +74,7 @@ int uprobe_startBackgroundRead(bpf_user_pt_regs_t *ctx) {
 }
 
 SEC("uprobe/WriteHeader")
-int uprobe_WriteHeader(bpf_user_pt_regs_t *ctx) {
+int uprobe_WriteHeader(struct pt_regs *ctx) {
     bpf_dbg_printk("=== uprobe/WriteHeader === ");
     void *goroutine_addr = GOROUTINE_PTR(ctx);
     bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
@@ -181,7 +181,7 @@ int uprobe_WriteHeader(bpf_user_pt_regs_t *ctx) {
 /* HTTP Client. We expect to see HTTP client in both HTTP server and gRPC server calls.*/
 
 SEC("uprobe/roundTrip")
-int uprobe_roundTrip(bpf_user_pt_regs_t *ctx) {
+int uprobe_roundTrip(struct pt_regs *ctx) {
     bpf_dbg_printk("=== uprobe/proc http roundTrip === ");
 
     void *goroutine_addr = GOROUTINE_PTR(ctx);
@@ -201,7 +201,7 @@ int uprobe_roundTrip(bpf_user_pt_regs_t *ctx) {
 }
 
 SEC("uprobe/roundTrip_return")
-int uprobe_roundTripReturn(bpf_user_pt_regs_t *ctx) {
+int uprobe_roundTripReturn(struct pt_regs *ctx) {
     bpf_dbg_printk("=== uprobe/proc http roundTrip return === ");
 
     void *goroutine_addr = GOROUTINE_PTR(ctx);

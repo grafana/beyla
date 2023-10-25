@@ -47,7 +47,7 @@ volatile const u64 value_context_val_ptr_pos;
 
 
 SEC("uprobe/server_handleStream")
-int uprobe_server_handleStream(bpf_user_pt_regs_t *ctx) {
+int uprobe_server_handleStream(struct pt_regs *ctx) {
     bpf_dbg_printk("=== uprobe/server_handleStream === ");
     void *goroutine_addr = GOROUTINE_PTR(ctx);
     bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
@@ -65,7 +65,7 @@ int uprobe_server_handleStream(bpf_user_pt_regs_t *ctx) {
 }
 
 SEC("uprobe/server_handleStream")
-int uprobe_server_handleStream_return(bpf_user_pt_regs_t *ctx) {
+int uprobe_server_handleStream_return(struct pt_regs *ctx) {
     bpf_dbg_printk("=== uprobe/server_handleStream return === ");
 
     void *goroutine_addr = GOROUTINE_PTR(ctx);
@@ -169,7 +169,7 @@ int uprobe_server_handleStream_return(bpf_user_pt_regs_t *ctx) {
 }
 
 SEC("uprobe/transport_writeStatus")
-int uprobe_transport_writeStatus(bpf_user_pt_regs_t *ctx) {
+int uprobe_transport_writeStatus(struct pt_regs *ctx) {
     bpf_dbg_printk("=== uprobe/transport_writeStatus === ");
 
     void *goroutine_addr = GOROUTINE_PTR(ctx);
@@ -198,7 +198,7 @@ int uprobe_transport_writeStatus(bpf_user_pt_regs_t *ctx) {
 /* GRPC client */
 
 SEC("uprobe/ClientConn_Invoke")
-int uprobe_ClientConn_Invoke(bpf_user_pt_regs_t *ctx) {
+int uprobe_ClientConn_Invoke(struct pt_regs *ctx) {
     bpf_dbg_printk("=== uprobe/proc grpc ClientConn.Invoke === ");
 
     void *goroutine_addr = GOROUTINE_PTR(ctx);
@@ -218,7 +218,7 @@ int uprobe_ClientConn_Invoke(bpf_user_pt_regs_t *ctx) {
 }
 
 SEC("uprobe/ClientConn_Invoke")
-int uprobe_ClientConn_Invoke_return(bpf_user_pt_regs_t *ctx) {
+int uprobe_ClientConn_Invoke_return(struct pt_regs *ctx) {
     bpf_dbg_printk("=== uprobe/proc grpc ClientConn.Invoke return === ");
 
     void *goroutine_addr = GOROUTINE_PTR(ctx);

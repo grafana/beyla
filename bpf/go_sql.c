@@ -26,7 +26,7 @@ struct {
 } ongoing_sql_queries SEC(".maps");
 
 SEC("uprobe/queryDC")
-int uprobe_queryDC(bpf_user_pt_regs_t *ctx) {
+int uprobe_queryDC(struct pt_regs *ctx) {
     bpf_dbg_printk("=== uprobe/queryDC === ");
     void *goroutine_addr = GOROUTINE_PTR(ctx);
     bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
@@ -45,7 +45,7 @@ int uprobe_queryDC(bpf_user_pt_regs_t *ctx) {
 }
 
 SEC("uprobe/queryDC")
-int uprobe_queryDCReturn(bpf_user_pt_regs_t *ctx) {
+int uprobe_queryDCReturn(struct pt_regs *ctx) {
 
     bpf_dbg_printk("=== uprobe/queryDCReturn === ");
     void *goroutine_addr = GOROUTINE_PTR(ctx);

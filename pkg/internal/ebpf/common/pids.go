@@ -1,7 +1,10 @@
 package ebpfcommon
 
 import (
+	"fmt"
 	"log/slog"
+	"os"
+	"strconv"
 
 	"github.com/grafana/beyla/pkg/internal/request"
 )
@@ -9,6 +12,7 @@ import (
 const updatesBufLen = 10
 
 type PIDsFilter struct {
+	pidNs   uint32
 	log     *slog.Logger
 	current map[uint32]struct{}
 	added   chan uint32
@@ -16,7 +20,15 @@ type PIDsFilter struct {
 }
 
 func NewPIDsFilter(log *slog.Logger) *PIDsFilter {
+	// WIP experiment. Don't  pay attention in the PR
+	dst, err := os.Readlink(fmt.Sprintf("/proc/%d/ns/pid", os.Getpid()))
+	if err != nil {
+		slog.Error("ERRRORACO: " + err.Error())
+	}
+	slog.Info("PID NS dst: " + dst)
+	ns, _ := strconv.ParseUint(dst[len("pid:["):len(dst)-1], 10, 32)
 	return &PIDsFilter{
+		pidNs:   uint32(ns),
 		log:     log,
 		current: map[uint32]struct{}{},
 		added:   make(chan uint32, updatesBufLen),
@@ -41,13 +53,21 @@ func (pf *PIDsFilter) Filter(inputSpans []request.Span) []request.Span {
 	outputSpans := make([]request.Span, 0, len(inputSpans))
 	pf.updatePIDs()
 	for i := range inputSpans {
-		if _, ok := pf.current[inputSpans[i].PID]; ok {
+		var pidView uint32
+		if inputSpans[i].Pid.Namespace == pf.pidNs {
+			pidView = inputSpans[i].Pid.User
+		} else {
+			pidView = inputSpans[i].Pid.Kernel
+		}
+		if _, ok := pf.current[pidView]; ok {
 			outputSpans = append(outputSpans, inputSpans[i])
 		}
 	}
 	if len(outputSpans) != len(inputSpans) {
 		pf.log.Debug("filtered spans from processes that did not match discovery",
-			"function", "PIDsFilter.Filter", "inLen", len(inputSpans), "outLen", len(outputSpans))
+			"function", "PIDsFilter.Filter", "inLen", len(inputSpans), "outLen", len(outputSpans),
+			"pids", pf.current, "spans", inputSpans,
+		)
 	}
 	return outputSpans
 }

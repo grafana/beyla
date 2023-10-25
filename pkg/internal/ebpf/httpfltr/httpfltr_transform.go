@@ -8,7 +8,6 @@ import (
 
 func httpInfoToSpan(info *HTTPInfo) request.Span {
 	return request.Span{
-		PID:           info.Pid,
 		Type:          request.EventType(info.Type),
 		ID:            0,
 		Method:        info.Method,
@@ -23,6 +22,11 @@ func httpInfoToSpan(info *HTTPInfo) request.Span {
 		Status:        int(info.Status),
 		ServiceID:     info.Service,
 		Traceparent:   info.Traceparent,
+		Pid: request.PidInfo{
+			Kernel:    info.Pid.Kernel,
+			User:      info.Pid.User,
+			Namespace: info.Pid.Namespace,
+		},
 	}
 }
 

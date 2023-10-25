@@ -39,13 +39,17 @@ type bpfHttpInfoT struct {
 	_               [4]byte
 	StartMonotimeNs uint64
 	EndMonotimeNs   uint64
-	Buf             [160]uint8
-	Pid             uint32
+	Buf             [136]uint8
 	Len             uint32
 	Status          uint16
 	Type            uint8
 	Ssl             uint8
-	_               [4]byte
+	Pid             struct {
+		Kernel    uint32
+		User      uint32
+		Namespace uint32
+	}
+	_ [4]byte
 }
 
 type bpfRecvArgsT struct {

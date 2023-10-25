@@ -48,7 +48,6 @@ func HTTPRequestTraceToSpan(trace *HTTPRequestTrace) request.Span {
 	}
 
 	return request.Span{
-		PID:           trace.Pid,
 		Type:          request.EventType(trace.Type),
 		ID:            trace.Id,
 		Method:        method,
@@ -62,6 +61,11 @@ func HTTPRequestTraceToSpan(trace *HTTPRequestTrace) request.Span {
 		End:           int64(trace.EndMonotimeNs),
 		Status:        int(trace.Status),
 		Traceparent:   traceparent,
+		Pid: request.PidInfo{
+			Kernel:    trace.Pid.Kernel,
+			User:      trace.Pid.User,
+			Namespace: trace.Pid.Namespace,
+		},
 	}
 }
 

@@ -8,24 +8,51 @@
 volatile const s32 current_pid = 0;
 volatile const s32 current_pid_ns_id = 0;
 
+typedef struct pid_info_t {
+    u32 kernel;    // pid as seen by the root cgroup (and by BPF)
+    u32 user;      // pid as seen by the userspace (for example, inside its container)
+    u32 namespace; // pids namespace for the process
+} __attribute__((packed)) pid_info;
+
+// ns_pid sets the pid as seen by the user (might differ from the kernel in containers and cgroups)
+// as well as the pids namespace
+
 // Good resource on this: https://mozillazg.com/2022/05/ebpf-libbpfgo-get-process-info-en.html
 // Using bpf_get_ns_current_pid_tgid is too restrictive for us
-static __always_inline void ns_pid_ppid(struct task_struct *task, int *pid, int *ppid, u32 *pid_ns_id) {
-    struct upid upid;    
+static __always_inline void ns_pid(struct task_struct *task, int *pid, u32 *pid_ns_id) {
+    struct upid upid;
 
+    // set user-side PID
     unsigned int level = BPF_CORE_READ(task, nsproxy, pid_ns_for_children, level);
     struct pid *ns_pid = (struct pid *)BPF_CORE_READ(task, group_leader, thread_pid);
     bpf_probe_read_kernel(&upid, sizeof(upid), &ns_pid->numbers[level]);
-
     *pid = upid.nr;
+
+    // set PIDs namespace
+    struct ns_common ns = BPF_CORE_READ(task, nsproxy, pid_ns_for_children, ns);
+    *pid_ns_id = ns.inum;
+}
+
+static __always_inline void
+ns_pid_ppid(struct task_struct *task, int *pid, int *ppid, u32 *pid_ns_id) {
+    ns_pid(task, pid, pid_ns_id);
+
+    // seet user-side parent PID
+    struct upid upid;
     unsigned int p_level = BPF_CORE_READ(task, real_parent, nsproxy, pid_ns_for_children, level);
-    
     struct pid *ns_ppid = (struct pid *)BPF_CORE_READ(task, real_parent, group_leader, thread_pid);
     bpf_probe_read_kernel(&upid, sizeof(upid), &ns_ppid->numbers[p_level]);
     *ppid = upid.nr;
+}
 
-    struct ns_common ns = BPF_CORE_READ(task, nsproxy, pid_ns_for_children, ns);
-    *pid_ns_id = ns.inum;
+// sets the pid_info value from the provided task
+static __always_inline void task_pid(struct task_struct *task, pid_info *pid) {
+    int user;
+    u32 namespace;
+    ns_pid(task, &user, &namespace);
+    pid->kernel = BPF_CORE_READ(task, pid);
+    pid->namespace = namespace;
+    pid->user = user;
 }
 
 static __always_inline u32 pid_from_pid_tgid(u64 id) {

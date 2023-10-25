@@ -5,7 +5,7 @@
 #include "bpf_helpers.h"
 #include "http_defs.h"
 
-#define FULL_BUF_SIZE 160 // should be enough for most URLs, we may need to extend it if not. Must be multiple of 16 for the copy to work.
+#define FULL_BUF_SIZE 136 // should be enough for most URLs, we may need to extend it if not. Must be multiple of 16 for the copy to work.
 #define BUF_COPY_BLOCK_SIZE 16
 #define TRACE_BUF_SIZE 1024 // must be power of 2, we do an & to limit the buffer size
 
@@ -29,11 +29,12 @@ typedef struct http_info {
     u64 start_monotime_ns;
     u64 end_monotime_ns;
     unsigned char buf[FULL_BUF_SIZE] __attribute__ ((aligned (8))); // ringbuffer memcpy complains unless this is 8 byte aligned
-    u32 pid; // we need this for system wide tracking so we can find the service name
     u32 len;
     u16 status;    
     u8  type;
     u8  ssl;
+
+    pid_info pid;
 } http_info_t;
 
 // Here we keep information on the packets passing through the socket filter

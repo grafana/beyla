@@ -10,6 +10,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include "pid.h"
 #include "utils.h"
 #include "go_str.h"
 #include "go_byte_arr.h"
@@ -100,7 +101,8 @@ int uprobe_WriteHeader(struct pt_regs *ctx) {
         bpf_dbg_printk("can't reserve space in the ringbuffer");
         return 0;
     }
-    trace->pid = bpf_get_current_pid_tgid() >> 32;
+    
+    task_pid((struct task_struct *)bpf_get_current_task(), &trace->pid);
     trace->type = EVENT_HTTP_REQUEST;
     trace->id = (u64)goroutine_addr;
     trace->start_monotime_ns = invocation->start_monotime_ns;
@@ -223,7 +225,7 @@ int uprobe_roundTripReturn(struct pt_regs *ctx) {
     }
 
     trace->id = find_parent_goroutine(goroutine_addr);
-    trace->pid = bpf_get_current_pid_tgid() >> 32;
+    task_pid((struct task_struct *)bpf_get_current_task(), &trace->pid);
     trace->type = EVENT_HTTP_CLIENT;
     trace->start_monotime_ns = invocation->start_monotime_ns;
     trace->go_start_monotime_ns = invocation->start_monotime_ns;

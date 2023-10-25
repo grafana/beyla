@@ -13,6 +13,7 @@
 #ifndef HTTP_TRACE_H
 #define HTTP_TRACE_H
 
+#include "pid.h"
 #include "utils.h"
 
 #define PATH_MAX_LEN 100
@@ -24,7 +25,6 @@
 // Trace of an HTTP call invocation. It is instantiated by the return uprobe and forwarded to the
 // user space through the events ringbuffer.
 typedef struct http_request_trace_t {
-    u32 pid;
     u8  type;
     u64 id;
     u64 go_start_monotime_ns;
@@ -40,6 +40,8 @@ typedef struct http_request_trace_t {
     u32 host_port;
     s64 content_length;
     u8  traceparent[TRACEPARENT_LEN];
+
+    pid_info pid;
 } __attribute__((packed)) http_request_trace;
 
 #endif

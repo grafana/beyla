@@ -34,10 +34,15 @@ type converter struct {
 
 var clocks = converter{monoClock: monotime.Now, clock: time.Now}
 
+type PidInfo struct {
+	Kernel    uint32
+	User      uint32
+	Namespace uint32
+}
+
 // Span contains the information being submitted by the following nodes in the graph.
 // It enables comfortable handling of data from Go.
 type Span struct {
-	PID           uint32
 	Type          EventType
 	IgnoreSpan    IgnoreMode
 	ID            uint64
@@ -55,6 +60,7 @@ type Span struct {
 	ServiceID     svc.ID
 	Metadata      map[string]string
 	Traceparent   string
+	Pid           PidInfo
 }
 
 func (s *Span) Inside(parent *Span) bool {

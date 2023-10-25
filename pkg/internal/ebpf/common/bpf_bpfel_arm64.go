@@ -14,7 +14,6 @@ import (
 )
 
 type bpfHttpRequestTrace struct {
-	Pid               uint32
 	Type              uint8
 	Id                uint64
 	GoStartMonotimeNs uint64
@@ -30,6 +29,11 @@ type bpfHttpRequestTrace struct {
 	HostPort          uint32
 	ContentLength     int64
 	Traceparent       [55]uint8
+	Pid               struct {
+		Kernel    uint32
+		User      uint32
+		Namespace uint32
+	}
 }
 
 // loadBpf returns the embedded CollectionSpec for bpf.

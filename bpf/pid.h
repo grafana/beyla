@@ -50,7 +50,7 @@ static __always_inline void task_pid(struct task_struct *task, pid_info *pid) {
     int user;
     u32 namespace;
     ns_pid(task, &user, &namespace);
-    pid->kernel = BPF_CORE_READ(task, pid);
+    pid->kernel = bpf_get_current_pid_tgid() >> 32;
     pid->namespace = namespace;
     pid->user = user;
 }

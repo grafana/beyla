@@ -3,7 +3,7 @@ module github.com/grafana/beyla/test/oats
 go 1.21.1
 
 require (
-	github.com/grafana/oats v0.0.0-20231004163855-07f6e62e76a3
+	github.com/grafana/oats v0.0.0-20231025143155-a8ecae950304 // indirect
 	github.com/onsi/ginkgo/v2 v2.12.1
 	github.com/onsi/gomega v1.28.0
 )

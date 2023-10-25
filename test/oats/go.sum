@@ -58,6 +58,8 @@ github.com/grafana/dashboard-linter v0.0.0-20230815114304-3c1213ef32d9 h1:NXsChA
 github.com/grafana/dashboard-linter v0.0.0-20230815114304-3c1213ef32d9/go.mod h1:4zovusCMljsbpo6ISSN/awpv+bjHhZJphYNLI1+7I74=
 github.com/grafana/oats v0.0.0-20231004163855-07f6e62e76a3 h1:Viyp4xu6ltWamZG9bUMR8yfHhsJlC08+wQvt3R33xv4=
 github.com/grafana/oats v0.0.0-20231004163855-07f6e62e76a3/go.mod h1:UlueL8BBVkLhE1RwSst5oa5KhO6qnvgoy45bQ//1VdE=
+github.com/grafana/oats v0.0.0-20231025143155-a8ecae950304 h1:wnNo6AlWG5IahNGHoi42fPBH6D9F6jz93qj6UfITYGQ=
+github.com/grafana/oats v0.0.0-20231025143155-a8ecae950304/go.mod h1:UlueL8BBVkLhE1RwSst5oa5KhO6qnvgoy45bQ//1VdE=
 github.com/grafana/regexp v0.0.0-20221122212121-6b5c0a4cb7fd h1:PpuIBO5P3e9hpqBD0O/HjhShYuM6XE0i/lbE6J94kww=
 github.com/grafana/regexp v0.0.0-20221122212121-6b5c0a4cb7fd/go.mod h1:M5qHK+eWfAv8VR/265dIuEpL3fNfeC21tXXp9itM24A=
 github.com/grpc-ecosystem/grpc-gateway/v2 v2.16.0 h1:YBftPWNWd4WwGqtY2yeZL2ef8rHAxPBD8KFhJpmcqms=

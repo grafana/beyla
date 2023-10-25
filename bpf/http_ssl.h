@@ -1,7 +1,7 @@
 #ifndef HTTP_SSL_H
 #define HTTP_SSL_H
 
-#include "common.h"
+#include "vmlinux.h"
 #include "bpf_helpers.h"
 #include "bpf_builtins.h"
 #include "http_types.h"

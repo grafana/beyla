@@ -2,7 +2,7 @@
 //go:build 386 || amd64
 // +build 386 amd64
 
-package goruntime
+package ebpfcommon
 
 import (
 	"bytes"
@@ -13,36 +13,23 @@ import (
 	"github.com/cilium/ebpf"
 )
 
-type bpfFuncInvocation struct {
-	StartMonotimeNs uint64
-	Regs            struct {
-		R15    uint64
-		R14    uint64
-		R13    uint64
-		R12    uint64
-		Bp     uint64
-		Bx     uint64
-		R11    uint64
-		R10    uint64
-		R9     uint64
-		R8     uint64
-		Ax     uint64
-		Cx     uint64
-		Dx     uint64
-		Si     uint64
-		Di     uint64
-		OrigAx uint64
-		Ip     uint64
-		Cs     uint64
-		Flags  uint64
-		Sp     uint64
-		Ss     uint64
-	}
-}
-
-type bpfGoroutineMetadata struct {
-	Parent    uint64
-	Timestamp uint64
+type bpfHttpRequestTrace struct {
+	Pid               uint32
+	Type              uint8
+	Id                uint64
+	GoStartMonotimeNs uint64
+	StartMonotimeNs   uint64
+	EndMonotimeNs     uint64
+	Method            [7]uint8
+	Path              [100]uint8
+	Status            uint16
+	RemoteAddr        [50]uint8
+	RemoteAddrLen     uint64
+	Host              [256]uint8
+	HostLen           uint64
+	HostPort          uint32
+	ContentLength     int64
+	Traceparent       [55]uint8
 }
 
 // loadBpf returns the embedded CollectionSpec for bpf.
@@ -86,19 +73,12 @@ type bpfSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpfProgramSpecs struct {
-	UprobeProcGoexit1     *ebpf.ProgramSpec `ebpf:"uprobe_proc_goexit1"`
-	UprobeProcNewproc1    *ebpf.ProgramSpec `ebpf:"uprobe_proc_newproc1"`
-	UprobeProcNewproc1Ret *ebpf.ProgramSpec `ebpf:"uprobe_proc_newproc1_ret"`
 }
 
 // bpfMapSpecs contains maps before they are loaded into the kernel.
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpfMapSpecs struct {
-	Events                *ebpf.MapSpec `ebpf:"events"`
-	Newproc1              *ebpf.MapSpec `ebpf:"newproc1"`
-	OngoingGoroutines     *ebpf.MapSpec `ebpf:"ongoing_goroutines"`
-	OngoingServerRequests *ebpf.MapSpec `ebpf:"ongoing_server_requests"`
 }
 
 // bpfObjects contains all objects after they have been loaded into the kernel.
@@ -120,36 +100,20 @@ func (o *bpfObjects) Close() error {
 //
 // It can be passed to loadBpfObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpfMaps struct {
-	Events                *ebpf.Map `ebpf:"events"`
-	Newproc1              *ebpf.Map `ebpf:"newproc1"`
-	OngoingGoroutines     *ebpf.Map `ebpf:"ongoing_goroutines"`
-	OngoingServerRequests *ebpf.Map `ebpf:"ongoing_server_requests"`
 }
 
 func (m *bpfMaps) Close() error {
-	return _BpfClose(
-		m.Events,
-		m.Newproc1,
-		m.OngoingGoroutines,
-		m.OngoingServerRequests,
-	)
+	return _BpfClose()
 }
 
 // bpfPrograms contains all programs after they have been loaded into the kernel.
 //
 // It can be passed to loadBpfObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpfPrograms struct {
-	UprobeProcGoexit1     *ebpf.Program `ebpf:"uprobe_proc_goexit1"`
-	UprobeProcNewproc1    *ebpf.Program `ebpf:"uprobe_proc_newproc1"`
-	UprobeProcNewproc1Ret *ebpf.Program `ebpf:"uprobe_proc_newproc1_ret"`
 }
 
 func (p *bpfPrograms) Close() error {
-	return _BpfClose(
-		p.UprobeProcGoexit1,
-		p.UprobeProcNewproc1,
-		p.UprobeProcNewproc1Ret,
-	)
+	return _BpfClose()
 }
 
 func _BpfClose(closers ...io.Closer) error {

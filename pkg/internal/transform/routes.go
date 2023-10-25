@@ -26,19 +26,77 @@ const (
 	UnmatchDefault = UnmatchWildcard
 )
 
+type IgnoreMode string
+
+const (
+	// IgnoreMetrics prevents sending metric events for ignored patterns
+	IgnoreMetrics = IgnoreMode("metrics")
+	// IgnoreTraces prevents sending trace events for ignored patterns
+	IgnoreTraces = IgnoreMode("traces")
+	// IgnoreAll prevents sending both metrics and traces for ignored patterns
+	IgnoreAll = IgnoreMode("all")
+
+	IgnoreDefault = IgnoreAll
+)
+
 const wildCard = "/**"
 
 // RoutesConfig allows grouping URLs sharing a given pattern.
 type RoutesConfig struct {
 	// Unmatch specifies what to do when a route pattern is not matched
-	Unmatch UnmatchType `yaml:"unmatch"`
+	Unmatch UnmatchType `yaml:"unmatched"`
 	// Patterns of the paths that will match to a route
-	Patterns []string `yaml:"patterns"`
+	Patterns       []string   `yaml:"patterns"`
+	IgnorePatterns []string   `yaml:"ignored_patterns"`
+	IgnoredEvents  IgnoreMode `yaml:"ignore_mode"`
 }
 
 func RoutesProvider(rc *RoutesConfig) (node.MiddleFunc[[]request.Span, []request.Span], error) {
 	// set default value for Unmatch action
+	unmatchAction, err := chooseUnmatchPolicy(rc)
+	if err != nil {
+		return nil, err
+	}
+	matcher := route.NewMatcher(rc.Patterns)
+	discarder := route.NewMatcher(rc.IgnorePatterns)
+	routesEnabled := len(rc.Patterns) > 0
+	ignoreEnabled := len(rc.IgnorePatterns) > 0
+
+	ignoreMode := rc.IgnoredEvents
+	if ignoreMode == "" {
+		ignoreMode = IgnoreDefault
+	}
+
+	return func(in <-chan []request.Span, out chan<- []request.Span) {
+		for spans := range in {
+			filtered := make([]request.Span, 0, len(spans))
+			for i := range spans {
+				s := &spans[i]
+				if ignoreEnabled {
+					if discarder.Find(s.Path) != "" {
+						if ignoreMode == IgnoreAll {
+							continue
+						}
+						// we can't discard it here, ignoring is selective (metrics | traces)
+						setSpanIgnoreMode(ignoreMode, s)
+					}
+				}
+				if routesEnabled {
+					s.Route = matcher.Find(s.Path)
+				}
+				unmatchAction(s)
+				filtered = append(filtered, *s)
+			}
+			if len(filtered) > 0 {
+				out <- filtered
+			}
+		}
+	}, nil
+}
+
+func chooseUnmatchPolicy(rc *RoutesConfig) (func(span *request.Span), error) {
 	var unmatchAction func(span *request.Span)
+
 	switch rc.Unmatch {
 	case UnmatchWildcard, "":
 		unmatchAction = setUnmatchToWildcard
@@ -57,7 +115,7 @@ func RoutesProvider(rc *RoutesConfig) (node.MiddleFunc[[]request.Span, []request
 		unmatchAction = leaveUnmatchEmpty
 	case UnmatchPath:
 		unmatchAction = setUnmatchToPath
-	case UnmatchHeuristic: // default
+	case UnmatchHeuristic:
 		err := route.InitAutoClassifier()
 		if err != nil {
 			return nil, err
@@ -69,16 +127,8 @@ func RoutesProvider(rc *RoutesConfig) (node.MiddleFunc[[]request.Span, []request
 				"value", rc.Unmatch)
 		unmatchAction = setUnmatchToWildcard
 	}
-	matcher := route.NewMatcher(rc.Patterns)
-	return func(in <-chan []request.Span, out chan<- []request.Span) {
-		for spans := range in {
-			for i := range spans {
-				spans[i].Route = matcher.Find(spans[i].Path)
-				unmatchAction(&spans[i])
-			}
-			out <- spans
-		}
-	}, nil
+
+	return unmatchAction, nil
 }
 
 func leaveUnmatchEmpty(_ *request.Span) {}
@@ -98,5 +148,14 @@ func setUnmatchToPath(str *request.Span) {
 func classifyFromPath(s *request.Span) {
 	if s.Route == "" && (s.Type == request.EventTypeHTTP || s.Type == request.EventTypeHTTPClient) {
 		s.Route = route.ClusterPath(s.Path)
+	}
+}
+
+func setSpanIgnoreMode(mode IgnoreMode, s *request.Span) {
+	switch mode {
+	case IgnoreMetrics:
+		s.IgnoreSpan = request.IgnoreMetrics
+	case IgnoreTraces:
+		s.IgnoreSpan = request.IgnoreTraces
 	}
 }

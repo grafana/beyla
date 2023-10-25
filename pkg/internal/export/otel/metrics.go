@@ -373,6 +373,12 @@ func (mr *MetricsReporter) reportMetrics(input <-chan []request.Span) {
 	for spans := range input {
 		for i := range spans {
 			s := &spans[i]
+
+			// If we are ignoring this span because of route patterns, don't do anything
+			if s.IgnoreSpan == request.IgnoreMetrics {
+				continue
+			}
+
 			// optimization: do not query the resources' cache if the
 			// previously processed span belongs to the same service name
 			// as the current.

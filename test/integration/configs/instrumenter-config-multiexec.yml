@@ -1,7 +1,7 @@
 routes:
   patterns:
     - /basic/:rnd
-  unmatch: path
+  unmatched: path
 otel_metrics_export:
   endpoint: http://otelcol:4318
 discovery:

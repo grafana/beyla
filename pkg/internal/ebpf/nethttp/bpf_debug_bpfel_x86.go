@@ -16,27 +16,27 @@ import (
 type bpf_debugFuncInvocation struct {
 	StartMonotimeNs uint64
 	Regs            struct {
-		R15     uint64
-		R14     uint64
-		R13     uint64
-		R12     uint64
-		Rbp     uint64
-		Rbx     uint64
-		R11     uint64
-		R10     uint64
-		R9      uint64
-		R8      uint64
-		Rax     uint64
-		Rcx     uint64
-		Rdx     uint64
-		Rsi     uint64
-		Rdi     uint64
-		OrigRax uint64
-		Rip     uint64
-		Cs      uint64
-		Eflags  uint64
-		Rsp     uint64
-		Ss      uint64
+		R15    uint64
+		R14    uint64
+		R13    uint64
+		R12    uint64
+		Bp     uint64
+		Bx     uint64
+		R11    uint64
+		R10    uint64
+		R9     uint64
+		R8     uint64
+		Ax     uint64
+		Cx     uint64
+		Dx     uint64
+		Si     uint64
+		Di     uint64
+		OrigAx uint64
+		Ip     uint64
+		Cs     uint64
+		Flags  uint64
+		Sp     uint64
+		Ss     uint64
 	}
 }
 

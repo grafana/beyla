@@ -1,7 +1,7 @@
 #ifndef HTTP_TYPES_H
 #define HTTP_TYPES_H
 
-#include "common.h"
+#include "vmlinux.h"
 #include "bpf_helpers.h"
 #include "http_defs.h"
 
@@ -60,16 +60,6 @@ const http_info_t *unused __attribute__((unused));
 const http_buf_t *unused_1 __attribute__((unused));
 
 const u8 ip4ip6_prefix[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff};
-
-#if defined(__TARGET_ARCH_arm64)
-// Copied from Linux include/uapi/asm/ptrace.h to make ARM64 happy
-struct user_pt_regs {
-	u64		regs[31];
-	u64		sp;
-	u64		pc;
-	u64		pstate;
-};
-#endif
 
 #ifdef BPF_DEBUG
 static __always_inline void dbg_print_http_connection_info(connection_info_t *info) {

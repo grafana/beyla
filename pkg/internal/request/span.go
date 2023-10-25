@@ -8,7 +8,7 @@ import (
 	"github.com/grafana/beyla/pkg/internal/svc"
 )
 
-type EventType int
+type EventType uint8
 
 // The following consts need to coincide with some C identifiers:
 // EVENT_HTTP_REQUEST, EVENT_GRPC_REQUEST, EVENT_HTTP_CLIENT, EVENT_GRPC_CLIENT, EVENT_SQL_CLIENT
@@ -18,6 +18,13 @@ const (
 	EventTypeHTTPClient
 	EventTypeGRPCClient
 	EventTypeSQLClient
+)
+
+type IgnoreMode uint8
+
+const (
+	IgnoreMetrics IgnoreMode = iota + 1
+	IgnoreTraces
 )
 
 type converter struct {
@@ -32,6 +39,7 @@ var clocks = converter{monoClock: monotime.Now, clock: time.Now}
 type Span struct {
 	PID           uint32
 	Type          EventType
+	IgnoreSpan    IgnoreMode
 	ID            uint64
 	Method        string
 	Path          string

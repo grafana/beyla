@@ -28,6 +28,9 @@ type node struct {
 
 	// Wildcard is a child subtree that, if not nil, matches any path folder
 	Wildcard *node
+
+	// AnyPath node is a node identified by '*', which terminates the search matching what's found
+	AnyPath *node
 }
 
 // NewMatcher creates a new Matcher that would allow validating given URL paths towards
@@ -57,6 +60,9 @@ func find(path []string, pathNode *node) string {
 	if child, ok := pathNode.Child[path[0]]; ok {
 		return find(path[1:], child)
 	}
+	if pathNode.AnyPath != nil {
+		return pathNode.FullRoute
+	}
 	// otherwise, keep searching through the wildcard child, if any
 	if pathNode.Wildcard != nil {
 		return find(path[1:], pathNode.Wildcard)
@@ -80,6 +86,13 @@ func appendRoute(fullRoute string, path []string, pathNode *node) {
 		appendRoute(fullRoute, path[1:], pathNode.Wildcard)
 		return
 	}
+
+	if currentName == "*" {
+		pathNode.FullRoute = fullRoute
+		pathNode.AnyPath = &node{Child: map[string]*node{}}
+		return
+	}
+
 	// keep processing the child node belonging to the current path token, adding it
 	// if it does not yet exist
 	child, ok := pathNode.Child[currentName]

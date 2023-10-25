@@ -213,13 +213,70 @@ property:
 /user/456/basket/3
 ```
 
-| YAML      | Env var | Type   | Default    |
-| --------- | ------- | ------ | ---------- |
-| `unmatch` | --      | string | `wildcard` |
+Additionally, the route matcher also supports the wildcard character `*`, which can be used to 
+match path prefixes. For example, if you define the following pattern:
+
+```yaml
+routes:
+  patterns:
+    - /user/*
+```
+
+Any traces with HTTP paths starting with `/user` (including `/user` itself) will be matched to the
+route `/user/*`. As per the example above, all of the following paths will be matched as `/user/*`:
+
+```
+/user
+/user/123
+/user/123/basket/1
+/user/456/basket/3
+```
+
+| YAML               | Env var | Type            | Default |
+| ------------------ | ------- | --------------- | ------- |
+| `ignored_patterns` | --      | list of strings | (unset) |
+
+Will match the provided URL path against the defined patterns, and discard the trace and/or metric events if
+they match any of the `ignored_patterns`. The format for the `ignored_patterns` field is identical
+to the `patterns` field described above. You can define the ignored patterns with or without
+any of the wildcard options. For example, if you define the following ignored patterns:
+
+```yaml
+routes:
+  ignored_patterns:
+    - /health
+    - /v1/*
+```
+
+Any event paths which have a prefix of `/v1` or are equal to `/health` will be ignored.
+
+This option is very useful if you want to prevent certain paths used development or service health monitoring, to be 
+recorded as traces or metrics.
+
+| YAML          | Env var | Type   | Default    |
+| ------------- | ------- | ------ | ---------- |
+| `ignore_mode` | --      | string | `all`      |
+
+This property can be used together with the `ignored_patterns` property to refine which type of events are ignored.
+
+Possible values for the `ignore_mode` property are:
+
+- `all` will discard both **metrics** and **traces** which match the `ignored_patterns`.
+- `traces` will discard only the **traces** which match the `ignored_patterns`. No metric events will be ignored.
+- `metrics` will discard only the **metrics** which match the `ignored_patterns`. No trace events will be ignored.
+
+Selectively ignoring only certain type of events might be useful in certain scenarios. For example, you may want to
+know the performance metrics of your health check API, but you wouldn't want the overhead of those trace records in
+your target traces database. In this this example scenario, you would set the `ignore_mode` property to `traces`, such
+that only traces matching the `ignored_patterns` will be discarded, while metrics will still be recorded. 
+
+| YAML        | Env var | Type   | Default    |
+| ----------- | ------- | ------ | ---------- |
+| `unmatched` | --      | string | `wildcard` |
 
 Specifies what to do when a trace HTTP path does not match any of the `patterns` entries.
 
-Possible values for the `unmatch` property are:
+Possible values for the `unmatched` property are:
 
 - `unset` will leave the `http.route` property as unset.
 - `path` will copy the `http.route` field property to the path value.

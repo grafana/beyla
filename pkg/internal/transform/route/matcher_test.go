@@ -11,6 +11,8 @@ func TestFind(t *testing.T) {
 		"/foo/bar/bae/",
 		"/foo/:id",
 		"/foo/{id}/push",
+		"/ski/*",
+		"/snow/mobile/*",
 		"/"})
 
 	assert.Equal(t, "/", m.Find("/"))
@@ -25,4 +27,12 @@ func TestFind(t *testing.T) {
 	assert.Empty(t, m.Find("/traca"))
 	assert.Empty(t, m.Find("/foo/1234/down"))
 	assert.Empty(t, m.Find("/foo/5678/push/up"))
+
+	assert.Equal(t, "/ski/*", m.Find("/ski"))
+	assert.Equal(t, "/ski/*", m.Find("/ski/doo"))
+	assert.Equal(t, "/ski/*", m.Find("/ski/doo/new/"))
+
+	assert.Equal(t, "", m.Find("/snow/man"))
+	assert.Equal(t, "/snow/mobile/*", m.Find("/snow/mobile"))
+	assert.Equal(t, "/snow/mobile/*", m.Find("/snow/mobile/long"))
 }

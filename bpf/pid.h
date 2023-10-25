@@ -1,7 +1,7 @@
 #ifndef PID_HELPERS_H
 #define PID_HELPERS_H
 
-#include "common.h"
+#include "vmlinux.h"
 #include "bpf_helpers.h"
 #include "bpf_core_read.h"
 

@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "common.h"
+#include "vmlinux.h"
 #include "bpf_helpers.h"
 #include "bpf_builtins.h"
 #include "go_common.h"
@@ -26,7 +26,7 @@ struct {
 } ongoing_sql_queries SEC(".maps");
 
 SEC("uprobe/queryDC")
-int uprobe_queryDC(struct pt_regs *ctx) {
+int uprobe_queryDC(bpf_user_pt_regs_t *ctx) {
     bpf_dbg_printk("=== uprobe/queryDC === ");
     void *goroutine_addr = GOROUTINE_PTR(ctx);
     bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
@@ -45,7 +45,7 @@ int uprobe_queryDC(struct pt_regs *ctx) {
 }
 
 SEC("uprobe/queryDC")
-int uprobe_queryDCReturn(struct pt_regs *ctx) {
+int uprobe_queryDCReturn(bpf_user_pt_regs_t *ctx) {
 
     bpf_dbg_printk("=== uprobe/queryDCReturn === ");
     void *goroutine_addr = GOROUTINE_PTR(ctx);

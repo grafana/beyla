@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include "vmlinux.h"
 #include "utils.h"
 #include "stdbool.h"
 #include "bpf_dbg.h"

@@ -15,7 +15,7 @@
 #include "go_common.h"
 
 SEC("uprobe/runtime_newproc1")
-int uprobe_proc_newproc1(struct pt_regs *ctx) {
+int uprobe_proc_newproc1(bpf_user_pt_regs_t *ctx) {
     bpf_dbg_printk("=== uprobe/proc newproc1 === ");
     void *creator_goroutine = GOROUTINE_PTR(ctx);
     bpf_dbg_printk("creator_goroutine_addr %lx", creator_goroutine);
@@ -33,7 +33,7 @@ int uprobe_proc_newproc1(struct pt_regs *ctx) {
 }
 
 SEC("uprobe/runtime_newproc1_return")
-int uprobe_proc_newproc1_ret(struct pt_regs *ctx) {
+int uprobe_proc_newproc1_ret(bpf_user_pt_regs_t *ctx) {
     bpf_dbg_printk("=== uprobe/proc newproc1 returns === ");
     void *creator_goroutine = GOROUTINE_PTR(ctx);
     bpf_dbg_printk("creator_goroutine_addr %lx", creator_goroutine);
@@ -68,7 +68,7 @@ int uprobe_proc_newproc1_ret(struct pt_regs *ctx) {
 }
 
 SEC("uprobe/runtime_goexit1")
-int uprobe_proc_goexit1(struct pt_regs *ctx) {
+int uprobe_proc_goexit1(bpf_user_pt_regs_t *ctx) {
     bpf_dbg_printk("=== uprobe/proc goexit1 === ");
 
     void *goroutine_addr = GOROUTINE_PTR(ctx);

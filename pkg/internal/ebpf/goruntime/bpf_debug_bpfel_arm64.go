@@ -16,20 +16,10 @@ import (
 type bpf_debugFuncInvocation struct {
 	StartMonotimeNs uint64
 	Regs            struct {
-		UserRegs struct {
-			Regs   [31]uint64
-			Sp     uint64
-			Pc     uint64
-			Pstate uint64
-		}
-		OrigX0          uint64
-		Syscallno       int32
-		Unused2         uint32
-		OrigAddrLimit   uint64
-		PmrSave         uint64
-		Stackframe      [2]uint64
-		LockdepHardirqs uint64
-		ExitRcu         uint64
+		Regs   [31]uint64
+		Sp     uint64
+		Pc     uint64
+		Pstate uint64
 	}
 }
 

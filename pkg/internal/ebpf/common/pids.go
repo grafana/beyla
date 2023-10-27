@@ -38,8 +38,19 @@ type PIDsFilter struct {
 	pidNs   uint32
 	log     *slog.Logger
 	current map[uint32]struct{}
-	added   chan uint32
-	deleted chan uint32
+	queue   chan pidEvent
+}
+
+type PIDEventOp uint8
+
+const (
+	ADD PIDEventOp = iota + 1
+	DEL
+)
+
+type pidEvent struct {
+	pid uint32
+	op  PIDEventOp
 }
 
 func NewPIDsFilter(log *slog.Logger) *PIDsFilter {
@@ -47,17 +58,16 @@ func NewPIDsFilter(log *slog.Logger) *PIDsFilter {
 		pidNs:   readNamespace(),
 		log:     log,
 		current: map[uint32]struct{}{},
-		added:   make(chan uint32, updatesBufLen),
-		deleted: make(chan uint32, updatesBufLen),
+		queue:   make(chan pidEvent, updatesBufLen),
 	}
 }
 
 func (pf *PIDsFilter) AllowPID(pid uint32) {
-	pf.added <- pid
+	pf.queue <- pidEvent{pid: pid, op: ADD}
 }
 
 func (pf *PIDsFilter) BlockPID(pid uint32) {
-	pf.deleted <- pid
+	pf.queue <- pidEvent{pid: pid, op: DEL}
 }
 
 func (pf *PIDsFilter) CurrentPIDs() map[uint32]struct{} {
@@ -103,10 +113,15 @@ func (pf *PIDsFilter) Filter(inputSpans []request.Span) []request.Span {
 func (pf *PIDsFilter) updatePIDs() {
 	for {
 		select {
-		case pid := <-pf.added:
-			pf.current[pid] = struct{}{}
-		case pid := <-pf.deleted:
-			delete(pf.current, pid)
+		case e := <-pf.queue:
+			switch e.op {
+			case ADD:
+				pf.current[e.pid] = struct{}{}
+			case DEL:
+				delete(pf.current, e.pid)
+			default:
+				pf.log.Error("Unsupported PID operation")
+			}
 		default:
 			// no more updates
 			return

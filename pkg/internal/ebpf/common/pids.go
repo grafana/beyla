@@ -11,6 +11,26 @@ import (
 
 const updatesBufLen = 10
 
+// injectable function (can be replaced in tests). It reads the
+// current process namespace from the /proc filesystem. It is required to
+// choose to filter traces using whether the User-space or Host-space PIDs
+var readNamespace = func() uint32 {
+	log := slog.With("component", "ebpfcommon.readNamespace")
+	dst, err := os.Readlink(fmt.Sprintf("/proc/%d/ns/pid", os.Getpid()))
+	if err != nil {
+		log.Warn("error reading pids namespace. Assuming 0", "error", err)
+		return 0
+	}
+	ns, err := strconv.ParseUint(dst[len("pid:["):len(dst)-1], 10, 32)
+	if err != nil {
+		log.Warn("parsing pids string. Assuming 0", "str", dst, "error", err)
+		return 0
+	}
+
+	log.Debug("fetched Beyla PID namespace", "str", dst, "value", dst)
+	return uint32(ns)
+}
+
 // PIDsFilter keeps a thread-safe copy of the PIDs whose traces are allowed to
 // be forwarded. Its Filter method filters the request.Span instances whose
 // PIDs are not in the allowed list.
@@ -24,14 +44,8 @@ type PIDsFilter struct {
 
 func NewPIDsFilter(log *slog.Logger) *PIDsFilter {
 	// WIP experiment. Don't  pay attention in the PR
-	dst, err := os.Readlink(fmt.Sprintf("/proc/%d/ns/pid", os.Getpid()))
-	if err != nil {
-		slog.Error("ERRRORACO: " + err.Error())
-	}
-	slog.Info("PID NS dst: " + dst)
-	ns, _ := strconv.ParseUint(dst[len("pid:["):len(dst)-1], 10, 32)
 	return &PIDsFilter{
-		pidNs:   uint32(ns),
+		pidNs:   readNamespace(),
 		log:     log,
 		current: map[uint32]struct{}{},
 		added:   make(chan uint32, updatesBufLen),

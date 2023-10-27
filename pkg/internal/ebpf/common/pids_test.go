@@ -3,6 +3,7 @@ package ebpfcommon
 import (
 	"log/slog"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 
@@ -64,7 +65,9 @@ func TestFilter_Block(t *testing.T) {
 
 	// with the same namespace, it filters by user PID, as it is the PID
 	// that is seen by Beyla's process discovery
-	assert.Equal(t, []request.Span{
-		{Pid: request.PidInfo{UserPID: 456, HostPID: 666, Namespace: 33}},
-	}, pf.Filter(spanSet))
+	assert.EventuallyWithT(t, func(c *assert.CollectT) {
+		assert.Equal(c, []request.Span{
+			{Pid: request.PidInfo{UserPID: 456, HostPID: 666, Namespace: 33}},
+		}, pf.Filter(spanSet))
+	}, 10*time.Second, 10*time.Millisecond, "still haven't seen pid 123 as blocked")
 }

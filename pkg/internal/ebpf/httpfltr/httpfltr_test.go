@@ -13,7 +13,7 @@ import (
 	"github.com/grafana/beyla/pkg/internal/svc"
 )
 
-const bufSize = 160
+const bufSize = 144
 
 func TestURL(t *testing.T) {
 	event := BPFHTTPInfo{

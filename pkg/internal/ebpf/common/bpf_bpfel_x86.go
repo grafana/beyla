@@ -30,8 +30,8 @@ type bpfHttpRequestTrace struct {
 	ContentLength     int64
 	Traceparent       [55]uint8
 	Pid               struct {
-		Kernel    uint32
-		User      uint32
+		HostPid   uint32
+		UserPid   uint32
 		Namespace uint32
 	}
 }

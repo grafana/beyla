@@ -39,14 +39,14 @@ type bpf_debugHttpInfoT struct {
 	_               [4]byte
 	StartMonotimeNs uint64
 	EndMonotimeNs   uint64
-	Buf             [136]uint8
+	Buf             [160]uint8
 	Len             uint32
 	Status          uint16
 	Type            uint8
 	Ssl             uint8
 	Pid             struct {
-		Kernel    uint32
-		User      uint32
+		HostPid   uint32
+		UserPid   uint32
 		Namespace uint32
 	}
 	_ [4]byte
@@ -145,6 +145,7 @@ type bpf_debugMapSpecs struct {
 	DeadPids            *ebpf.MapSpec `ebpf:"dead_pids"`
 	Events              *ebpf.MapSpec `ebpf:"events"`
 	FilteredConnections *ebpf.MapSpec `ebpf:"filtered_connections"`
+	HttpInfoMem         *ebpf.MapSpec `ebpf:"http_info_mem"`
 	HttpTcpSeq          *ebpf.MapSpec `ebpf:"http_tcp_seq"`
 	OngoingHttp         *ebpf.MapSpec `ebpf:"ongoing_http"`
 	PidTidToConn        *ebpf.MapSpec `ebpf:"pid_tid_to_conn"`
@@ -180,6 +181,7 @@ type bpf_debugMaps struct {
 	DeadPids            *ebpf.Map `ebpf:"dead_pids"`
 	Events              *ebpf.Map `ebpf:"events"`
 	FilteredConnections *ebpf.Map `ebpf:"filtered_connections"`
+	HttpInfoMem         *ebpf.Map `ebpf:"http_info_mem"`
 	HttpTcpSeq          *ebpf.Map `ebpf:"http_tcp_seq"`
 	OngoingHttp         *ebpf.Map `ebpf:"ongoing_http"`
 	PidTidToConn        *ebpf.Map `ebpf:"pid_tid_to_conn"`
@@ -198,6 +200,7 @@ func (m *bpf_debugMaps) Close() error {
 		m.DeadPids,
 		m.Events,
 		m.FilteredConnections,
+		m.HttpInfoMem,
 		m.HttpTcpSeq,
 		m.OngoingHttp,
 		m.PidTidToConn,

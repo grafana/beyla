@@ -190,7 +190,7 @@ static __always_inline void read_skb_bytes(const void *skb, u32 offset, unsigned
 }
 
 static __always_inline void finish_http(http_info_t *info) {
-    if (info->start_monotime_ns != 0 && info->status != 0 && info->pid.kernel != 0) {
+    if (info->start_monotime_ns != 0 && info->status != 0 && info->pid.host_pid != 0) {
         http_info_t *trace = bpf_ringbuf_reserve(&events, sizeof(http_info_t), 0);
         if (trace) {
             bpf_dbg_printk("Sending trace %lx", info);
@@ -233,7 +233,7 @@ static __always_inline void process_http_request(http_info_t *info) {
 }
 
 static __always_inline void process_http_response(http_info_t *info, unsigned char *buf, http_connection_metadata_t *meta) {
-    task_pid((struct task_struct *)bpf_get_current_task(), &info->pid);
+    task_pid(&info->pid);
     info->type = meta->type;
     info->status = 0;
     info->status += (buf[RESPONSE_STATUS_POS]     - '0') * 100;

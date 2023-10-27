@@ -95,7 +95,7 @@ int uprobe_server_handleStream_return(struct pt_regs *ctx) {
         bpf_dbg_printk("can't reserve space in the ringbuffer");
         return 0;
     }
-    task_pid((struct task_struct *)bpf_get_current_task(), &trace->pid);
+    task_pid(&trace->pid);
     trace->type = EVENT_GRPC_REQUEST;
     trace->id = (u64)goroutine_addr;
     trace->start_monotime_ns = invocation->start_monotime_ns;
@@ -241,7 +241,7 @@ int uprobe_ClientConn_Invoke_return(struct pt_regs *ctx) {
         return 0;
     }
 
-    task_pid((struct task_struct *)bpf_get_current_task(), &trace->pid);
+    task_pid(&trace->pid);
     trace->id = find_parent_goroutine(goroutine_addr);
     trace->type = EVENT_GRPC_CLIENT;
     trace->start_monotime_ns = invocation->start_monotime_ns;

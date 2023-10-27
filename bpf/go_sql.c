@@ -61,7 +61,7 @@ int uprobe_queryDCReturn(struct pt_regs *ctx) {
 
     http_request_trace *trace = bpf_ringbuf_reserve(&events, sizeof(http_request_trace), 0);
     if (trace) {
-        task_pid((struct task_struct *)bpf_get_current_task(), &trace->pid);
+        task_pid(&trace->pid);
         trace->type = EVENT_SQL_CLIENT;
         trace->id = (u64)goroutine_addr;
         trace->start_monotime_ns = invocation->start_monotime_ns;

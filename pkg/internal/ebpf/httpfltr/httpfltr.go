@@ -341,7 +341,7 @@ func (p *Tracer) readHTTPInfoIntoSpan(record *ringbuf.Record) (request.Span, boo
 	result.Method = event.method()
 
 	if p.Service == nil {
-		result.Service = p.serviceInfo(event.Pid.Kernel)
+		result.Service = p.serviceInfo(uint32(event.Pid.HostPid))
 	} else {
 		result.Service = *p.Service
 	}

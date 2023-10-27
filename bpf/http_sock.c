@@ -283,8 +283,12 @@ int socket__http_filter(struct __sk_buff *skb) {
 
     u8 packet_type = 0;
     if (is_http(buf, len, &packet_type) || tcp_close(&tcp)) { // we must check tcp_close second, a packet can be a close and a response
-        http_info_t info = {0};
-        info.conn_info = conn;
+        http_info_t *info = empty_http_info();
+        if (!info) {
+            bpf_dbg_printk("== socket__http_filter == Error: could not allocate http_info_t space");
+            return 0;
+        }
+        info->conn_info = conn;
         unsigned char *processing_buf = buf;
 
         http_connection_metadata_t *meta = NULL;
@@ -301,8 +305,8 @@ int socket__http_filter(struct __sk_buff *skb) {
                 if (full_len > FULL_BUF_SIZE) {
                     full_len = FULL_BUF_SIZE;
                 }
-                read_skb_bytes(skb, tcp.hdr_len, info.buf, full_len);
-                processing_buf = info.buf;
+                read_skb_bytes(skb, tcp.hdr_len, info->buf, full_len);
+                processing_buf = info->buf;
             }
         }
         if (packet_type) {
@@ -310,7 +314,7 @@ int socket__http_filter(struct __sk_buff *skb) {
             //dbg_print_http_connection_info(&conn);
         }
 
-        process_http(&info, &tcp, packet_type, (skb->len - tcp.hdr_len), processing_buf, meta);
+        process_http(info, &tcp, packet_type, (skb->len - tcp.hdr_len), processing_buf, meta);
     }
 
     return 0;

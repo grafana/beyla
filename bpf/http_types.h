@@ -1,11 +1,12 @@
 #ifndef HTTP_TYPES_H
 #define HTTP_TYPES_H
 
+#include <string.h>
 #include "vmlinux.h"
 #include "bpf_helpers.h"
 #include "http_defs.h"
 
-#define FULL_BUF_SIZE 136 // should be enough for most URLs, we may need to extend it if not. Must be multiple of 16 for the copy to work.
+#define FULL_BUF_SIZE 160 // should be enough for most URLs, we may need to extend it if not. Must be multiple of 16 for the copy to work.
 #define BUF_COPY_BLOCK_SIZE 16
 #define TRACE_BUF_SIZE 1024 // must be power of 2, we do an & to limit the buffer size
 
@@ -33,9 +34,30 @@ typedef struct http_info {
     u16 status;    
     u8  type;
     u8  ssl;
-
+    // we need this for system wide tracking so we can find the service name
+    // also to filter traces from unsolicited processes that share the executable
+    // with other instrumented processes
     pid_info pid;
 } http_info_t;
+
+// http_info_t became to big to be in the stack so we use a percpu array to keep a reusable
+// copy of it
+struct {
+        __uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
+        __type(key, u32);
+        __type(value, http_info_t);
+        __uint(max_entries, 1);
+} http_info_mem SEC(".maps");
+
+static __always_inline http_info_t* empty_http_info() {
+    int zero = 0;
+    http_info_t *value = bpf_map_lookup_elem(&http_info_mem, &zero);
+    if (value) {
+        memset(value, 0, sizeof(http_info_t));
+    }
+    return value;
+}
+
 
 // Here we keep information on the packets passing through the socket filter
 typedef struct protocol_info {

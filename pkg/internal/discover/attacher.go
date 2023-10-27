@@ -63,9 +63,13 @@ func (ta *TraceAttacher) getTracer(ie *Instrumentable) (*ebpf.ProcessTracer, boo
 	if tracer, ok := ta.existingTracers[ie.FileInfo.CmdExePath]; ok {
 		ta.log.Info("new process for already instrumented executable",
 			"pid", ie.FileInfo.Pid,
+			"child", ie.ChildPids,
 			"exec", ie.FileInfo.CmdExePath)
-		// allowing the tracer to forward traces from the new PID
+		// allowing the tracer to forward traces from the new PID and its children processes
 		tracer.AllowPID(uint32(ie.FileInfo.Pid))
+		for _, pid := range ie.ChildPids {
+			tracer.AllowPID(pid)
+		}
 		return nil, false
 	}
 	ta.log.Info("instrumenting process", "cmd", ie.FileInfo.CmdExePath, "pid", ie.FileInfo.Pid)
@@ -108,8 +112,11 @@ func (ta *TraceAttacher) getTracer(ie *Instrumentable) (*ebpf.ProcessTracer, boo
 		PinPath:    ta.buildPinPath(ie),
 		SystemWide: ta.Cfg.Discovery.SystemWide,
 	}
-	// allowing the tracer to forward traces from the discovered PID
+	// allowing the tracer to forward traces from the discovered PID and its children processes
 	tracer.AllowPID(uint32(ie.FileInfo.Pid))
+	for _, pid := range ie.ChildPids {
+		tracer.AllowPID(pid)
+	}
 	ta.existingTracers[ie.FileInfo.CmdExePath] = tracer
 	return tracer, true
 }

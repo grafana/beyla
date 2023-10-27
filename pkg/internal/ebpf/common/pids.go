@@ -43,7 +43,6 @@ type PIDsFilter struct {
 }
 
 func NewPIDsFilter(log *slog.Logger) *PIDsFilter {
-	// WIP experiment. Don't  pay attention in the PR
 	return &PIDsFilter{
 		pidNs:   readNamespace(),
 		log:     log,

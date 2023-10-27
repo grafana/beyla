@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"time"
 
 	"github.com/gorilla/mux"
 
@@ -21,9 +20,7 @@ func AuthMiddleware(next http.Handler) http.Handler {
 func LoggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Printf("I'm logging this request\n")
-		time.Sleep(1 * time.Second)
 		next.ServeHTTP(w, r.WithContext(r.Context()))
-		time.Sleep(2 * time.Second)
 	})
 }
 

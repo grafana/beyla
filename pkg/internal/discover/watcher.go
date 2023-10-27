@@ -86,7 +86,7 @@ func (pa *pollAccounter) Run(out chan<- []Event[processPorts]) {
 			log.Warn("can't get system processes", "error", err)
 		} else {
 			if events := pa.snapshot(procs); len(events) > 0 {
-				log.Debug("new process watching events", "len", len(events))
+				log.Debug("new process watching events", "events", events)
 				out <- events
 			}
 		}

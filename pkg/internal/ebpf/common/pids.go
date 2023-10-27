@@ -27,7 +27,7 @@ var readNamespace = func() uint32 {
 		return 0
 	}
 
-	log.Debug("fetched Beyla PID namespace", "str", dst, "value", dst)
+	log.Debug("fetched Beyla PID namespace", "str", dst, "value", ns)
 	return uint32(ns)
 }
 

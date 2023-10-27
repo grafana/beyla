@@ -44,7 +44,7 @@ typedef struct http_info {
 // We use a percpu array to keep a reusable copy of it
 struct {
         __uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
-        __type(key, u32);
+        __type(key, int);
         __type(value, http_info_t);
         __uint(max_entries, 1);
 } http_info_mem SEC(".maps");

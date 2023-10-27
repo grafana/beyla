@@ -24,6 +24,10 @@ import (
 
 const testTimeout = 5 * time.Second
 
+func identity(f []request.Span) []request.Span {
+	return f
+}
+
 func TestForwardRingbuf_CapacityFull(t *testing.T) {
 	// GIVEN a ring buffer forwarder
 	ringBuf, restore := replaceTestRingBuf()
@@ -36,6 +40,7 @@ func TestForwardRingbuf_CapacityFull(t *testing.T) {
 		slog.With("test", "TestForwardRingbuf_CapacityFull"),
 		nil, // the source ring buffer can be null
 		ReadHTTPRequestTraceAsSpan,
+		identity,
 		metrics,
 	)(context.Background(), forwardedMessages)
 
@@ -83,6 +88,7 @@ func TestForwardRingbuf_Deadline(t *testing.T) {
 		slog.With("test", "TestForwardRingbuf_Deadline"),
 		nil, // the source ring buffer can be null
 		ReadHTTPRequestTraceAsSpan,
+		identity,
 		metrics,
 	)(context.Background(), forwardedMessages)
 
@@ -120,6 +126,7 @@ func TestForwardRingbuf_Close(t *testing.T) {
 		slog.With("test", "TestForwardRingbuf_Close"),
 		nil, // the source ring buffer can be null
 		ReadHTTPRequestTraceAsSpan,
+		identity,
 		metrics,
 		&closable,
 	)(context.Background(), make(chan []request.Span, 100))

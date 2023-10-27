@@ -49,9 +49,9 @@ int uprobe_ServeHTTP(struct pt_regs *ctx) {
     return 0;
 }
 
-SEC("uprobe/startBackgroundRead")
-int uprobe_startBackgroundRead(struct pt_regs *ctx) {
-    bpf_dbg_printk("=== uprobe/proc startBackgroundRead === ");
+SEC("uprobe/readRequest")
+int uprobe_readRequestReturns(struct pt_regs *ctx) {
+    bpf_dbg_printk("=== uprobe/proc readRequest returns === ");
 
     void *goroutine_addr = GOROUTINE_PTR(ctx);
     bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);

@@ -23,8 +23,8 @@ func httpInfoToSpan(info *HTTPInfo) request.Span {
 		ServiceID:     info.Service,
 		Traceparent:   info.Traceparent,
 		Pid: request.PidInfo{
-			Kernel:    uint32(info.Pid.HostPid),
-			User:      uint32(info.Pid.UserPid),
+			HostPID:   info.Pid.HostPid,
+			UserPID:   info.Pid.UserPid,
 			Namespace: info.Pid.Namespace,
 		},
 	}

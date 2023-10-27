@@ -37,12 +37,12 @@ func New(cfg *ebpfcommon.TracerConfig, metrics imetrics.Reporter) *Tracer {
 	}
 }
 
-func (p *Tracer) AddPID(pid uint32) {
-	p.pidsFilter.AddPID(pid)
+func (p *Tracer) AllowPID(pid uint32) {
+	p.pidsFilter.AllowPID(pid)
 }
 
-func (p *Tracer) RemovePID(pid uint32) {
-	p.pidsFilter.RemovePID(pid)
+func (p *Tracer) BlockPID(pid uint32) {
+	p.pidsFilter.BlockPID(pid)
 }
 
 func (p *Tracer) Load() (*ebpf.CollectionSpec, error) {

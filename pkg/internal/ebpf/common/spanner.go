@@ -62,8 +62,8 @@ func HTTPRequestTraceToSpan(trace *HTTPRequestTrace) request.Span {
 		Status:        int(trace.Status),
 		Traceparent:   traceparent,
 		Pid: request.PidInfo{
-			Kernel:    uint32(trace.Pid.HostPid),
-			User:      uint32(trace.Pid.UserPid),
+			HostPID:   trace.Pid.HostPid,
+			UserPID:   trace.Pid.UserPid,
 			Namespace: trace.Pid.Namespace,
 		},
 	}

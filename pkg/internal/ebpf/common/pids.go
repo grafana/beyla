@@ -11,6 +11,9 @@ import (
 
 const updatesBufLen = 10
 
+// PIDsFilter keeps a thread-safe copy of the PIDs whose traces are allowed to
+// be forwarded. Its Filter method filters the request.Span instances whose
+// PIDs are not in the allowed list.
 type PIDsFilter struct {
 	pidNs   uint32
 	log     *slog.Logger
@@ -36,14 +39,11 @@ func NewPIDsFilter(log *slog.Logger) *PIDsFilter {
 	}
 }
 
-func (pf *PIDsFilter) AddPID(pid uint32) {
+func (pf *PIDsFilter) AllowPID(pid uint32) {
 	pf.added <- pid
 }
 
-// RemovePID notifies the tracer to stop accepting traces from the process
-// with the provided PID. After receiving them via ringbuffer, it should
-// stop discard them.
-func (pf *PIDsFilter) RemovePID(pid uint32) {
+func (pf *PIDsFilter) BlockPID(pid uint32) {
 	pf.deleted <- pid
 }
 
@@ -53,11 +53,20 @@ func (pf *PIDsFilter) Filter(inputSpans []request.Span) []request.Span {
 	outputSpans := make([]request.Span, 0, len(inputSpans))
 	pf.updatePIDs()
 	for i := range inputSpans {
+		// While BPF always see the processes in the same way (from the kernel-side)
+		// Beyla userspace might see them differently depending on how it is operating.
+		// If they are in different namespaces, the process finder will
 		var pidView uint32
 		if inputSpans[i].Pid.Namespace == pf.pidNs {
-			pidView = inputSpans[i].Pid.User
+			// If Beyla is in the same namespace as the inspected process (in the same host,
+			// or in the same Pod), they will both share the same view of the PID from
+			// the userspace, so we filter according to this value.
+			pidView = inputSpans[i].Pid.UserPID
 		} else {
-			pidView = inputSpans[i].Pid.Kernel
+			// If Beyla is in a different namespace than the inspected process (for example,
+			// in a different container with different pid cgroups),it will see the
+			// same PID as the host so we need to filter traces according to it.
+			pidView = inputSpans[i].Pid.HostPID
 		}
 		if _, ok := pf.current[pidView]; ok {
 			outputSpans = append(outputSpans, inputSpans[i])
@@ -91,9 +100,9 @@ func (pf *PIDsFilter) updatePIDs() {
 // for system-wide instrumenation
 type IdentityPidsFilter struct{}
 
-func (pf *IdentityPidsFilter) AddPID(_ uint32) {}
+func (pf *IdentityPidsFilter) AllowPID(_ uint32) {}
 
-func (pf *IdentityPidsFilter) RemovePID(_ uint32) {}
+func (pf *IdentityPidsFilter) BlockPID(_ uint32) {}
 
 func (pf *IdentityPidsFilter) Filter(inputSpans []request.Span) []request.Span {
 	return inputSpans

@@ -39,7 +39,7 @@ func TestMultiProcess(t *testing.T) {
 
 	// do some requests to the server at port 18090, which must not be instrumented
 	// as the instrumenter-config-multiexec.yml file only selects the process with port 18080.
-	// Doing it a bit earlier to give time to generate the traces (in case the test failed)
+	// Doing it early to give time to generate the traces (in case the test failed)
 	// while doing another test in between for the same container
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
 		resp, err := http.Get("http://localhost:18090/dont-instrument")
@@ -52,6 +52,7 @@ func TestMultiProcess(t *testing.T) {
 		checkReportedOnlyOnce(t, "http://localhost:18080", "some-server")
 	})
 
+	// testing the earlier invocations to /dont-instrument
 	t.Run("Non-selected processes must not be instrumented"+
 		" even if they share the executable of another instrumented process", func(t *testing.T) {
 		pq := prom.Client{HostPort: prometheusHostPort}

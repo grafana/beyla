@@ -40,8 +40,8 @@ typedef struct http_info {
     pid_info pid;
 } http_info_t;
 
-// http_info_t became to big to be in the stack so we use a percpu array to keep a reusable
-// copy of it
+// http_info_t became too big to be declared as a variable in the stack.
+// We use a percpu array to keep a reusable copy of it
 struct {
         __uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
         __type(key, u32);
@@ -49,6 +49,9 @@ struct {
         __uint(max_entries, 1);
 } http_info_mem SEC(".maps");
 
+// empty_http_info zeroes and return the unique percpu copy in the map
+// this function assumes that a given thread is not trying to use many
+// instances at the same time
 static __always_inline http_info_t* empty_http_info() {
     int zero = 0;
     http_info_t *value = bpf_map_lookup_elem(&http_info_mem, &zero);

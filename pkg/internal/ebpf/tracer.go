@@ -16,14 +16,14 @@ import (
 )
 
 type PIDsAccounter interface {
-	// AddPID notifies the tracer to accept traces from the process with the
+	// AllowPID notifies the tracer to accept traces from the process with the
 	// provided PID. Unless system-wide instrumentation, the Tracer should discard
-	// traces from processes whose PID has not been provided before
-	AddPID(uint32)
-	// RemovePID notifies the tracer to stop accepting traces from the process
+	// traces from processes whose PID has not been allowed before
+	AllowPID(uint32)
+	// BlockPID notifies the tracer to stop accepting traces from the process
 	// with the provided PID. After receiving them via ringbuffer, it should
-	// stop discard them.
-	RemovePID(uint32)
+	// discard them.
+	BlockPID(uint32)
 }
 
 // Tracer is an individual eBPF program (e.g. the net/http or the grpc tracers)
@@ -74,14 +74,14 @@ type ProcessTracer struct {
 	SystemWide bool
 }
 
-func (pt *ProcessTracer) AddPID(pid uint32) {
+func (pt *ProcessTracer) AllowPID(pid uint32) {
 	for i := range pt.Programs {
-		pt.Programs[i].AddPID(pid)
+		pt.Programs[i].AllowPID(pid)
 	}
 }
 
-func (pt *ProcessTracer) RemovePID(pid uint32) {
+func (pt *ProcessTracer) BlockPID(pid uint32) {
 	for i := range pt.Programs {
-		pt.Programs[i].RemovePID(pid)
+		pt.Programs[i].BlockPID(pid)
 	}
 }

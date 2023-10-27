@@ -78,12 +78,12 @@ func New(cfg *pipe.Config, metrics imetrics.Reporter) *Tracer {
 	}
 }
 
-func (p *Tracer) AddPID(pid uint32) {
-	p.pidsFilter.AddPID(pid)
+func (p *Tracer) AllowPID(pid uint32) {
+	p.pidsFilter.AllowPID(pid)
 }
 
-func (p *Tracer) RemovePID(pid uint32) {
-	p.pidsFilter.RemovePID(pid)
+func (p *Tracer) BlockPID(pid uint32) {
+	p.pidsFilter.BlockPID(pid)
 }
 
 func (p *Tracer) Load() (*ebpf.CollectionSpec, error) {
@@ -341,7 +341,7 @@ func (p *Tracer) readHTTPInfoIntoSpan(record *ringbuf.Record) (request.Span, boo
 	result.Method = event.method()
 
 	if p.Service == nil {
-		result.Service = p.serviceInfo(uint32(event.Pid.HostPid))
+		result.Service = p.serviceInfo(event.Pid.HostPid)
 	} else {
 		result.Service = *p.Service
 	}

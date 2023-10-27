@@ -34,7 +34,7 @@ static __always_inline void ns_pid_ppid(struct task_struct *task, int *pid, int 
     *pid_ns_id = ns.inum;
 }
 
-// sets the pid_info value from the provided task
+// sets the pid_info value from the current task
 static __always_inline void task_pid(pid_info *pid) {
 
     struct upid upid;

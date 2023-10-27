@@ -34,9 +34,14 @@ type converter struct {
 
 var clocks = converter{monoClock: monotime.Now, clock: time.Now}
 
+// PidInfo stores different views of the PID of the process that generated the span
 type PidInfo struct {
-	Kernel    uint32
-	User      uint32
+	// HostPID is the PID as seen by the host (root cgroup)
+	HostPID uint32
+	// UserID is the PID as seen by the user space.
+	// Might differ from HostPID if the process is in a different namespace/cgroup/container/etc.
+	UserPID uint32
+	// Namespace for the PIDs
 	Namespace uint32
 }
 

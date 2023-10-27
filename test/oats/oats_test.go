@@ -34,6 +34,8 @@ var _ = Describe("test case", Label("docker", "integration", "slow"), func() {
 		}
 	}
 
+	yaml.VerboseLogging = true
+
 	for _, c := range cases {
 		Describe(c.Name, Ordered, func() {
 			yaml.RunTestCase(c)

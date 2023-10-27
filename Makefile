@@ -265,7 +265,10 @@ update-licenses: prereqs
 .PHONY: artifact
 artifact: compile
 	@echo "### Packing generated artifact"
-	tar -C ./bin -cvzf bin/beyla.tar.gz beyla
+	cp LICENSE ./bin
+	cp NOTICE ./bin
+	cp third_party_licenses.csv ./bin
+	tar -C ./bin -cvzf bin/beyla.tar.gz beyla LICENSE NOTICE third_party_licenses.csv
 
 .PHONE: clean-testoutput
 clean-testoutput:

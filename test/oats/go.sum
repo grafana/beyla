@@ -58,6 +58,8 @@ github.com/grafana/dashboard-linter v0.0.0-20230815114304-3c1213ef32d9 h1:NXsChA
 github.com/grafana/dashboard-linter v0.0.0-20230815114304-3c1213ef32d9/go.mod h1:4zovusCMljsbpo6ISSN/awpv+bjHhZJphYNLI1+7I74=
 github.com/grafana/oats v0.0.0-20231004163855-07f6e62e76a3 h1:Viyp4xu6ltWamZG9bUMR8yfHhsJlC08+wQvt3R33xv4=
 github.com/grafana/oats v0.0.0-20231004163855-07f6e62e76a3/go.mod h1:UlueL8BBVkLhE1RwSst5oa5KhO6qnvgoy45bQ//1VdE=
+github.com/grafana/oats v0.0.0-20231025143155-a8ecae950304 h1:wnNo6AlWG5IahNGHoi42fPBH6D9F6jz93qj6UfITYGQ=
+github.com/grafana/oats v0.0.0-20231025143155-a8ecae950304/go.mod h1:UlueL8BBVkLhE1RwSst5oa5KhO6qnvgoy45bQ//1VdE=
 github.com/grafana/regexp v0.0.0-20221122212121-6b5c0a4cb7fd h1:PpuIBO5P3e9hpqBD0O/HjhShYuM6XE0i/lbE6J94kww=
 github.com/grafana/regexp v0.0.0-20221122212121-6b5c0a4cb7fd/go.mod h1:M5qHK+eWfAv8VR/265dIuEpL3fNfeC21tXXp9itM24A=
 github.com/grpc-ecosystem/grpc-gateway/v2 v2.16.0 h1:YBftPWNWd4WwGqtY2yeZL2ef8rHAxPBD8KFhJpmcqms=
@@ -199,8 +201,8 @@ google.golang.org/genproto/googleapis/api v0.0.0-20230717213848-3f92550aa753 h1:
 google.golang.org/genproto/googleapis/api v0.0.0-20230717213848-3f92550aa753/go.mod h1:rsr7RhLuwsDKL7RmgDDCUc6yaGr1iqceVb5Wv6f6YvQ=
 google.golang.org/genproto/googleapis/rpc v0.0.0-20230717213848-3f92550aa753 h1:XUODHrpzJEUeWmVo/jfNTLj0YyVveOo28oE6vkFbkO4=
 google.golang.org/genproto/googleapis/rpc v0.0.0-20230717213848-3f92550aa753/go.mod h1:TUfxEVdsvPg18p6AslUXFoLdpED4oBnGwyqk3dV1XzM=
-google.golang.org/grpc v1.58.0 h1:32JY8YpPMSR45K+c3o6b8VL73V+rR8k+DeMIr4vRH8o=
-google.golang.org/grpc v1.58.0/go.mod h1:tgX3ZQDlNJGU96V6yHh1T/JeoBQ2TXdr43YbYSsCJk0=
+google.golang.org/grpc v1.58.3 h1:BjnpXut1btbtgN/6sp+brB2Kbm2LjNXnidYujAVbSoQ=
+google.golang.org/grpc v1.58.3/go.mod h1:tgX3ZQDlNJGU96V6yHh1T/JeoBQ2TXdr43YbYSsCJk0=
 google.golang.org/protobuf v1.26.0-rc.1/go.mod h1:jlhhOSvTdKEhbULTjvd4ARK9grFBp09yW+WbY/TyQbw=
 google.golang.org/protobuf v1.26.0/go.mod h1:9q0QmTI4eRPtz6boOQmLYwt+qCgq0jsYwAQnmE0givc=
 google.golang.org/protobuf v1.31.0 h1:g0LDEJHgrBl9N9r17Ru3sqWhkIx2NB67okBHPwC7hs8=

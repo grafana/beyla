@@ -30,7 +30,7 @@ type config struct {
 	GorillaPort int `env:"GORILLA_PORT" envDefault:"8082"`
 	// GorillaPort to listen connections using the Gorilla Mux framework, but using a middleware that has custom ResposeWriter
 	GorillaMidPort  int    `env:"GORILLA_MID_PORT" envDefault:"8083"`
-	GorillaMid2Port int    `env:"GORILLA_MID_PORT" envDefault:"8084"`
+	GorillaMid2Port int    `env:"GORILLA_MID2_PORT" envDefault:"8084"`
 	LogLevel        string `env:"LOG_LEVEL" envDefault:"INFO"`
 }
 

@@ -97,6 +97,7 @@ type bpf_debugMapSpecs struct {
 	OngoingGrpcClientRequests *ebpf.MapSpec `ebpf:"ongoing_grpc_client_requests"`
 	OngoingGrpcRequestStatus  *ebpf.MapSpec `ebpf:"ongoing_grpc_request_status"`
 	OngoingServerRequests     *ebpf.MapSpec `ebpf:"ongoing_server_requests"`
+	ValidPids                 *ebpf.MapSpec `ebpf:"valid_pids"`
 }
 
 // bpf_debugObjects contains all objects after they have been loaded into the kernel.
@@ -125,6 +126,7 @@ type bpf_debugMaps struct {
 	OngoingGrpcClientRequests *ebpf.Map `ebpf:"ongoing_grpc_client_requests"`
 	OngoingGrpcRequestStatus  *ebpf.Map `ebpf:"ongoing_grpc_request_status"`
 	OngoingServerRequests     *ebpf.Map `ebpf:"ongoing_server_requests"`
+	ValidPids                 *ebpf.Map `ebpf:"valid_pids"`
 }
 
 func (m *bpf_debugMaps) Close() error {
@@ -136,6 +138,7 @@ func (m *bpf_debugMaps) Close() error {
 		m.OngoingGrpcClientRequests,
 		m.OngoingGrpcRequestStatus,
 		m.OngoingServerRequests,
+		m.ValidPids,
 	)
 }
 

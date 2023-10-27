@@ -99,6 +99,7 @@ type bpf_debugMapSpecs struct {
 	Newproc1              *ebpf.MapSpec `ebpf:"newproc1"`
 	OngoingGoroutines     *ebpf.MapSpec `ebpf:"ongoing_goroutines"`
 	OngoingServerRequests *ebpf.MapSpec `ebpf:"ongoing_server_requests"`
+	ValidPids             *ebpf.MapSpec `ebpf:"valid_pids"`
 }
 
 // bpf_debugObjects contains all objects after they have been loaded into the kernel.
@@ -124,6 +125,7 @@ type bpf_debugMaps struct {
 	Newproc1              *ebpf.Map `ebpf:"newproc1"`
 	OngoingGoroutines     *ebpf.Map `ebpf:"ongoing_goroutines"`
 	OngoingServerRequests *ebpf.Map `ebpf:"ongoing_server_requests"`
+	ValidPids             *ebpf.Map `ebpf:"valid_pids"`
 }
 
 func (m *bpf_debugMaps) Close() error {
@@ -132,6 +134,7 @@ func (m *bpf_debugMaps) Close() error {
 		m.Newproc1,
 		m.OngoingGoroutines,
 		m.OngoingServerRequests,
+		m.ValidPids,
 	)
 }
 

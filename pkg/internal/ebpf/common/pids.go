@@ -60,6 +60,11 @@ func (pf *PIDsFilter) BlockPID(pid uint32) {
 	pf.deleted <- pid
 }
 
+func (pf *PIDsFilter) CurrentPIDs() map[uint32]struct{} {
+	pf.updatePIDs()
+	return pf.current
+}
+
 func (pf *PIDsFilter) Filter(inputSpans []request.Span) []request.Span {
 	// todo: adaptive presizing as a function of the historical percentage
 	// of filtered spans
@@ -116,6 +121,10 @@ type IdentityPidsFilter struct{}
 func (pf *IdentityPidsFilter) AllowPID(_ uint32) {}
 
 func (pf *IdentityPidsFilter) BlockPID(_ uint32) {}
+
+func (pf *IdentityPidsFilter) CurrentPIDs() map[uint32]struct{} {
+	return nil
+}
 
 func (pf *IdentityPidsFilter) Filter(inputSpans []request.Span) []request.Span {
 	return inputSpans

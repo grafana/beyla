@@ -23,7 +23,7 @@ const (
 	instrumentedServiceGinURL         = "http://localhost:8081"
 	instrumentedServiceGorillaURL     = "http://localhost:8082"
 	instrumentedServiceGorillaMidURL  = "http://localhost:8083"
-	instrumentedServiceGorillaMid2URL = "http://localhost:8084"
+	instrumentedServiceGorillaMid2URL = "http://localhost:8087"
 	prometheusHostPort                = "localhost:9090"
 	jaegerQueryURL                    = "http://localhost:16686/api/traces"
 

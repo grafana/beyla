@@ -151,6 +151,7 @@ type bpfMapSpecs struct {
 	PidTidToConn        *ebpf.MapSpec `ebpf:"pid_tid_to_conn"`
 	SslToConn           *ebpf.MapSpec `ebpf:"ssl_to_conn"`
 	SslToPidTid         *ebpf.MapSpec `ebpf:"ssl_to_pid_tid"`
+	ValidPids           *ebpf.MapSpec `ebpf:"valid_pids"`
 }
 
 // bpfObjects contains all objects after they have been loaded into the kernel.
@@ -187,6 +188,7 @@ type bpfMaps struct {
 	PidTidToConn        *ebpf.Map `ebpf:"pid_tid_to_conn"`
 	SslToConn           *ebpf.Map `ebpf:"ssl_to_conn"`
 	SslToPidTid         *ebpf.Map `ebpf:"ssl_to_pid_tid"`
+	ValidPids           *ebpf.Map `ebpf:"valid_pids"`
 }
 
 func (m *bpfMaps) Close() error {
@@ -206,6 +208,7 @@ func (m *bpfMaps) Close() error {
 		m.PidTidToConn,
 		m.SslToConn,
 		m.SslToPidTid,
+		m.ValidPids,
 	)
 }
 

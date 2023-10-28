@@ -151,6 +151,7 @@ type bpf_debugMapSpecs struct {
 	PidTidToConn        *ebpf.MapSpec `ebpf:"pid_tid_to_conn"`
 	SslToConn           *ebpf.MapSpec `ebpf:"ssl_to_conn"`
 	SslToPidTid         *ebpf.MapSpec `ebpf:"ssl_to_pid_tid"`
+	ValidPids           *ebpf.MapSpec `ebpf:"valid_pids"`
 }
 
 // bpf_debugObjects contains all objects after they have been loaded into the kernel.
@@ -187,6 +188,7 @@ type bpf_debugMaps struct {
 	PidTidToConn        *ebpf.Map `ebpf:"pid_tid_to_conn"`
 	SslToConn           *ebpf.Map `ebpf:"ssl_to_conn"`
 	SslToPidTid         *ebpf.Map `ebpf:"ssl_to_pid_tid"`
+	ValidPids           *ebpf.Map `ebpf:"valid_pids"`
 }
 
 func (m *bpf_debugMaps) Close() error {
@@ -206,6 +208,7 @@ func (m *bpf_debugMaps) Close() error {
 		m.PidTidToConn,
 		m.SslToConn,
 		m.SslToPidTid,
+		m.ValidPids,
 	)
 }
 

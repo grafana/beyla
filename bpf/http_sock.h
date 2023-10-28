@@ -41,6 +41,15 @@ struct {
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
 } ongoing_http SEC(".maps");
 
+// http_info_t became too big to be declared as a variable in the stack.
+// We use a percpu array to keep a reusable copy of it
+struct {
+        __uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
+        __type(key, int);
+        __type(value, http_info_t);
+        __uint(max_entries, 1);
+} http_info_mem SEC(".maps");
+
 static __always_inline bool tcp_dup(connection_info_t *http, protocol_info_t *tcp) {
     u32 *prev_seq = bpf_map_lookup_elem(&http_tcp_seq, http);
 
@@ -187,6 +196,18 @@ static __always_inline void read_skb_bytes(const void *skb, u32 offset, unsigned
     if (remaining_to_copy <= space_in_buffer) {
         bpf_skb_load_bytes(skb, offset, (void *)(&buf[b * BUF_COPY_BLOCK_SIZE]), remaining_to_copy);
     }
+}
+
+// empty_http_info zeroes and return the unique percpu copy in the map
+// this function assumes that a given thread is not trying to use many
+// instances at the same time
+static __always_inline http_info_t* empty_http_info() {
+    int zero = 0;
+    http_info_t *value = bpf_map_lookup_elem(&http_info_mem, &zero);
+    if (value) {
+        bpf_memset(value, 0, sizeof(http_info_t));
+    }
+    return value;
 }
 
 static __always_inline void finish_http(http_info_t *info) {

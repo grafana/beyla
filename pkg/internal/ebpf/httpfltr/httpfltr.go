@@ -50,6 +50,7 @@ type HTTPInfo struct {
 type pidsFilter interface {
 	ebpf2.PIDsAccounter
 	Filter(inputSpans []request.Span) []request.Span
+	CurrentPIDs() map[uint32]struct{}
 }
 
 type Tracer struct {
@@ -79,10 +80,27 @@ func New(cfg *pipe.Config, metrics imetrics.Reporter) *Tracer {
 }
 
 func (p *Tracer) AllowPID(pid uint32) {
+	if p.bpfObjects.ValidPids != nil {
+		nsid, err := findNamespace(int32(pid))
+		if err == nil {
+			err = p.bpfObjects.ValidPids.Put(pid, nsid)
+			if err != nil {
+				p.log.Error("Error setting up pid in BPF space", "error", err)
+			}
+		} else {
+			p.log.Error("Error looking up namespace", "error", err)
+		}
+	}
 	p.pidsFilter.AllowPID(pid)
 }
 
 func (p *Tracer) BlockPID(pid uint32) {
+	if p.bpfObjects.ValidPids != nil {
+		err := p.bpfObjects.ValidPids.Delete(pid)
+		if err != nil {
+			p.log.Error("Error removing pid in BPF space", "error", err)
+		}
+	}
 	p.pidsFilter.BlockPID(pid)
 }
 
@@ -244,6 +262,14 @@ func (p *Tracer) SocketFilters() []*ebpf.Program {
 }
 
 func (p *Tracer) Run(ctx context.Context, eventsChan chan<- []request.Span, service svc.ID) {
+	// At this point we now have loaded the bpf objects, which means we should insert any
+	// pids that are allowed into the bpf map
+	p.log.Debug("Reallowing pids")
+	for pid := range p.pidsFilter.CurrentPIDs() {
+		p.log.Debug("Reallowing pid", "pid", pid)
+		p.AllowPID(pid)
+	}
+
 	p.Service = &service
 	ebpfcommon.ForwardRingbuf[HTTPInfo](
 		service,

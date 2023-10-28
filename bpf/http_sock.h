@@ -254,7 +254,9 @@ static __always_inline void process_http_request(http_info_t *info) {
 }
 
 static __always_inline void process_http_response(http_info_t *info, unsigned char *buf, http_connection_metadata_t *meta) {
-    task_pid(&info->pid);
+    info->pid.host_pid = meta->pid.host_pid;
+    info->pid.user_pid = meta->pid.user_pid;
+    info->pid.namespace = meta->pid.namespace;
     info->type = meta->type;
     info->status = 0;
     info->status += (buf[RESPONSE_STATUS_POS]     - '0') * 100;

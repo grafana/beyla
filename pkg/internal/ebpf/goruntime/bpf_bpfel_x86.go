@@ -99,6 +99,7 @@ type bpfMapSpecs struct {
 	Newproc1              *ebpf.MapSpec `ebpf:"newproc1"`
 	OngoingGoroutines     *ebpf.MapSpec `ebpf:"ongoing_goroutines"`
 	OngoingServerRequests *ebpf.MapSpec `ebpf:"ongoing_server_requests"`
+	PidCache              *ebpf.MapSpec `ebpf:"pid_cache"`
 	ValidPids             *ebpf.MapSpec `ebpf:"valid_pids"`
 }
 
@@ -125,6 +126,7 @@ type bpfMaps struct {
 	Newproc1              *ebpf.Map `ebpf:"newproc1"`
 	OngoingGoroutines     *ebpf.Map `ebpf:"ongoing_goroutines"`
 	OngoingServerRequests *ebpf.Map `ebpf:"ongoing_server_requests"`
+	PidCache              *ebpf.Map `ebpf:"pid_cache"`
 	ValidPids             *ebpf.Map `ebpf:"valid_pids"`
 }
 
@@ -134,6 +136,7 @@ func (m *bpfMaps) Close() error {
 		m.Newproc1,
 		m.OngoingGoroutines,
 		m.OngoingServerRequests,
+		m.PidCache,
 		m.ValidPids,
 	)
 }

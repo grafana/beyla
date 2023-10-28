@@ -349,6 +349,8 @@ func (p *Tracer) readHTTPInfoIntoSpan(record *ringbuf.Record) (request.Span, boo
 
 	result = HTTPInfo{BPFHTTPInfo: event}
 
+	p.log.Debug("Found event", "Host PID", result.Pid.HostPid, "NS Pid", result.Pid.UserPid, "NS ID", result.Pid.Namespace)
+
 	// When we can't find the connection info, we signal that through making the
 	// source and destination ports equal to max short. E.g. async SSL
 	if event.ConnInfo.S_port != 0 || event.ConnInfo.D_port != 0 {

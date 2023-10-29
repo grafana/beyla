@@ -83,6 +83,7 @@ type bpfProgramSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpfMapSpecs struct {
+	PidCache  *ebpf.MapSpec `ebpf:"pid_cache"`
 	ValidPids *ebpf.MapSpec `ebpf:"valid_pids"`
 }
 
@@ -105,11 +106,13 @@ func (o *bpfObjects) Close() error {
 //
 // It can be passed to loadBpfObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpfMaps struct {
+	PidCache  *ebpf.Map `ebpf:"pid_cache"`
 	ValidPids *ebpf.Map `ebpf:"valid_pids"`
 }
 
 func (m *bpfMaps) Close() error {
 	return _BpfClose(
+		m.PidCache,
 		m.ValidPids,
 	)
 }

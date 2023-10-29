@@ -17,6 +17,13 @@ struct {
     __type(value, u32);
 } valid_pids SEC(".maps");
 
+struct {
+    __uint(type, BPF_MAP_TYPE_LRU_HASH);
+    __uint(max_entries, MAX_CONCURRENT_PIDS);
+    __type(key, u32);
+    __type(value, u32);
+} pid_cache SEC(".maps");
+
 typedef struct pid_info_t {
     u32 host_pid;   // pid as seen by the root cgroup (and by BPF)
     u32 user_pid;   // pid as seen by the userspace (for example, inside its container)
@@ -76,6 +83,11 @@ static __always_inline u32 valid_pid(u64 id) {
     void *found = bpf_map_lookup_elem(&valid_pids, &host_pid);
 
     if (!found) {
+        u32 *cached_pid = bpf_map_lookup_elem(&pid_cache, &host_pid);
+        if (cached_pid) {
+            return *cached_pid;
+        }
+
         // some frameworks launch sub-processes for handling requests
         u32 host_ppid = 0;
         struct task_struct *task = (struct task_struct *)bpf_get_current_task();
@@ -96,17 +108,22 @@ static __always_inline u32 valid_pid(u64 id) {
                     u32 *found_ns_pid = bpf_map_lookup_elem(&valid_pids, &ns_pid);
 
                     if (found_ns_pid && (pid_ns_id == *found_ns_pid)) {
+                        bpf_map_update_elem(&pid_cache, &host_pid, &ns_pid, BPF_ANY);
                         return ns_pid;
                     } else if (ns_ppid != 0) {
                         u32 *found_ns_ppid = bpf_map_lookup_elem(&valid_pids, &ns_ppid);
                         
                         if (found_ns_ppid && (pid_ns_id == *found_ns_ppid)) {
+                            bpf_map_update_elem(&pid_cache, &host_pid, &ns_pid, BPF_ANY);
+
                             return ns_pid;
                         }
                     }
                 }
 
                 return 0;
+            } else {
+                bpf_map_update_elem(&pid_cache, &host_pid, &host_ppid, BPF_ANY);
             }
         }
     }

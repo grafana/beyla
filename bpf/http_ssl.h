@@ -123,12 +123,12 @@ static __always_inline void https_buffer_event(void *buf, int len, connection_in
             bpf_memcpy(info->buf, buf, FULL_BUF_SIZE);
         } else if (packet_type == PACKET_TYPE_RESPONSE) {
             http_connection_metadata_t *meta = bpf_map_lookup_elem(&filtered_connections, conn);
-            http_connection_metadata_t dummy_meta = {
-                .id = bpf_get_current_pid_tgid(),
+            http_connection_metadata_t dummy_meta = {                
                 .type = EVENT_HTTP_REQUEST
             };
 
             if (!meta) {
+                task_pid(&dummy_meta.pid);
                 meta = &dummy_meta;
             }
 

@@ -48,7 +48,7 @@ typedef struct protocol_info {
 
 // Here we keep information on the ongoing filtered connections, PID/TID and connection type
 typedef struct http_connection_metadata {
-    u64 id;
+    pid_info pid;
     u8  type;
 } http_connection_metadata_t;
 

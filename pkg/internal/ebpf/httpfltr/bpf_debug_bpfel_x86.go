@@ -28,9 +28,12 @@ type bpf_debugHttpBufT struct {
 }
 
 type bpf_debugHttpConnectionMetadataT struct {
-	Id   uint64
+	Pid struct {
+		HostPid   uint32
+		UserPid   uint32
+		Namespace uint32
+	}
 	Type uint8
-	_    [7]byte
 }
 
 type bpf_debugHttpInfoT struct {
@@ -148,6 +151,7 @@ type bpf_debugMapSpecs struct {
 	HttpInfoMem         *ebpf.MapSpec `ebpf:"http_info_mem"`
 	HttpTcpSeq          *ebpf.MapSpec `ebpf:"http_tcp_seq"`
 	OngoingHttp         *ebpf.MapSpec `ebpf:"ongoing_http"`
+	PidCache            *ebpf.MapSpec `ebpf:"pid_cache"`
 	PidTidToConn        *ebpf.MapSpec `ebpf:"pid_tid_to_conn"`
 	SslToConn           *ebpf.MapSpec `ebpf:"ssl_to_conn"`
 	SslToPidTid         *ebpf.MapSpec `ebpf:"ssl_to_pid_tid"`
@@ -185,6 +189,7 @@ type bpf_debugMaps struct {
 	HttpInfoMem         *ebpf.Map `ebpf:"http_info_mem"`
 	HttpTcpSeq          *ebpf.Map `ebpf:"http_tcp_seq"`
 	OngoingHttp         *ebpf.Map `ebpf:"ongoing_http"`
+	PidCache            *ebpf.Map `ebpf:"pid_cache"`
 	PidTidToConn        *ebpf.Map `ebpf:"pid_tid_to_conn"`
 	SslToConn           *ebpf.Map `ebpf:"ssl_to_conn"`
 	SslToPidTid         *ebpf.Map `ebpf:"ssl_to_pid_tid"`
@@ -205,6 +210,7 @@ func (m *bpf_debugMaps) Close() error {
 		m.HttpInfoMem,
 		m.HttpTcpSeq,
 		m.OngoingHttp,
+		m.PidCache,
 		m.PidTidToConn,
 		m.SslToConn,
 		m.SslToPidTid,

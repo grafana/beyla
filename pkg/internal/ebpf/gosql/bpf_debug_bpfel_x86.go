@@ -67,6 +67,7 @@ type bpf_debugMapSpecs struct {
 	OngoingGoroutines     *ebpf.MapSpec `ebpf:"ongoing_goroutines"`
 	OngoingServerRequests *ebpf.MapSpec `ebpf:"ongoing_server_requests"`
 	OngoingSqlQueries     *ebpf.MapSpec `ebpf:"ongoing_sql_queries"`
+	PidCache              *ebpf.MapSpec `ebpf:"pid_cache"`
 	ValidPids             *ebpf.MapSpec `ebpf:"valid_pids"`
 }
 
@@ -94,6 +95,7 @@ type bpf_debugMaps struct {
 	OngoingGoroutines     *ebpf.Map `ebpf:"ongoing_goroutines"`
 	OngoingServerRequests *ebpf.Map `ebpf:"ongoing_server_requests"`
 	OngoingSqlQueries     *ebpf.Map `ebpf:"ongoing_sql_queries"`
+	PidCache              *ebpf.Map `ebpf:"pid_cache"`
 	ValidPids             *ebpf.Map `ebpf:"valid_pids"`
 }
 
@@ -104,6 +106,7 @@ func (m *bpf_debugMaps) Close() error {
 		m.OngoingGoroutines,
 		m.OngoingServerRequests,
 		m.OngoingSqlQueries,
+		m.PidCache,
 		m.ValidPids,
 	)
 }

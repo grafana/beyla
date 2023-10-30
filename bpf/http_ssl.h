@@ -99,11 +99,16 @@ static __always_inline void send_trace_buff(void *orig_buf, int orig_len, connec
 static __always_inline void https_buffer_event(void *buf, int len, connection_info_t *conn, void *orig_buf, int orig_len) {
     u8 packet_type = 0;
     if (is_http(buf, len, &packet_type)) {
-        http_info_t in = {0};
-        in.conn_info = *conn;
-        in.ssl = 1;
+        http_info_t *in = empty_http_info();
+        if (!in) {
+            bpf_dbg_printk("== https_buffer_event == Error: could not allocate http_info_t space");
+            return;
+        }
+        
+        in->conn_info = *conn;
+        in->ssl = 1;
 
-        http_info_t *info = get_or_set_http_info(&in, packet_type);
+        http_info_t *info = get_or_set_http_info(in, packet_type);
         if (!info) {
             return;
         }
@@ -118,12 +123,12 @@ static __always_inline void https_buffer_event(void *buf, int len, connection_in
             bpf_memcpy(info->buf, buf, FULL_BUF_SIZE);
         } else if (packet_type == PACKET_TYPE_RESPONSE) {
             http_connection_metadata_t *meta = bpf_map_lookup_elem(&filtered_connections, conn);
-            http_connection_metadata_t dummy_meta = {
-                .id = bpf_get_current_pid_tgid(),
+            http_connection_metadata_t dummy_meta = {                
                 .type = EVENT_HTTP_REQUEST
             };
 
             if (!meta) {
+                task_pid(&dummy_meta.pid);
                 meta = &dummy_meta;
             }
 

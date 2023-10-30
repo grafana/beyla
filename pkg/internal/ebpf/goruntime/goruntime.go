@@ -31,15 +31,35 @@ import (
 //go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf_debug ../../../../bpf/go_runtime.c -- -I../../../../bpf/headers -DBPF_DEBUG
 
 type Tracer struct {
-	Cfg        *ebpfcommon.TracerConfig
-	Metrics    imetrics.Reporter
+	log        *slog.Logger
+	pidsFilter *ebpfcommon.PIDsFilter
+	cfg        *ebpfcommon.TracerConfig
+	metrics    imetrics.Reporter
 	bpfObjects bpfObjects
 	closers    []io.Closer
 }
 
+func New(cfg *ebpfcommon.TracerConfig, metrics imetrics.Reporter) *Tracer {
+	log := slog.With("component", "goruntime.Tracer")
+	return &Tracer{
+		log:        log,
+		cfg:        cfg,
+		metrics:    metrics,
+		pidsFilter: ebpfcommon.NewPIDsFilter(log),
+	}
+}
+
+func (p *Tracer) AllowPID(pid uint32) {
+	p.pidsFilter.AllowPID(pid)
+}
+
+func (p *Tracer) BlockPID(pid uint32) {
+	p.pidsFilter.BlockPID(pid)
+}
+
 func (p *Tracer) Load() (*ebpf.CollectionSpec, error) {
 	loader := loadBpf
-	if p.Cfg.BpfDebug {
+	if p.cfg.BpfDebug {
 		loader = loadBpf_debug
 	}
 	return loader()
@@ -82,12 +102,12 @@ func (p *Tracer) SocketFilters() []*ebpf.Program {
 }
 
 func (p *Tracer) Run(ctx context.Context, eventsChan chan<- []request.Span, service svc.ID) {
-	logger := slog.With("component", "goruntime.Tracer")
 	ebpfcommon.ForwardRingbuf[ebpfcommon.HTTPRequestTrace](
 		service,
-		p.Cfg, logger, p.bpfObjects.Events,
+		p.cfg, p.log, p.bpfObjects.Events,
 		ebpfcommon.ReadHTTPRequestTraceAsSpan,
-		p.Metrics,
+		p.pidsFilter.Filter,
+		p.metrics,
 		append(p.closers, &p.bpfObjects)...,
 	)(ctx, eventsChan)
 }

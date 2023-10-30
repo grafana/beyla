@@ -35,6 +35,7 @@ services:
       PRINT_TRACES: "true"
       EXECUTABLE_NAME: "${EXECUTABLE_NAME}"
       SERVICE_NAMESPACE: "integration-test"
+      DISCOVERY_POLL_INTERVAL: 500ms
       METRICS_INTERVAL: "10ms"
       BPF_BATCH_TIMEOUT: "10ms"
       LOG_LEVEL: "DEBUG"

@@ -96,7 +96,7 @@ int BPF_KPROBE(kprobe_tcp_rcv_established, struct sock *sk, struct sk_buff *skb)
         //dbg_print_http_connection_info(&info);
 
         http_connection_metadata_t meta = {};
-        meta.id = id;
+        task_pid(&meta.pid);
         meta.type = EVENT_HTTP_REQUEST;
         bpf_map_update_elem(&filtered_connections, &info, &meta, BPF_NOEXIST); // On purpose BPF_NOEXIST, we don't want to overwrite data by accept or connect
         bpf_map_update_elem(&pid_tid_to_conn, &id, &info, BPF_ANY); // to support SSL on missing handshake
@@ -143,7 +143,7 @@ int BPF_KRETPROBE(kretprobe_sys_accept4, uint fd)
         //dbg_print_http_connection_info(&info);
 
         http_connection_metadata_t meta = {};
-        meta.id = id;
+        task_pid(&meta.pid);
         meta.type = EVENT_HTTP_REQUEST;
         bpf_map_update_elem(&filtered_connections, &info, &meta, BPF_ANY); // On purpose BPF_ANY, we want to overwrite stale
         bpf_map_update_elem(&pid_tid_to_conn, &id, &info, BPF_ANY); // to support SSL on missing handshake
@@ -210,7 +210,7 @@ int BPF_KRETPROBE(kretprobe_sys_connect, int fd)
         //dbg_print_http_connection_info(&info);
 
         http_connection_metadata_t meta = {};
-        meta.id = id;
+        task_pid(&meta.pid);
         meta.type = EVENT_HTTP_CLIENT;
         bpf_map_update_elem(&filtered_connections, &info, &meta, BPF_ANY); // On purpose BPF_ANY, we want to overwrite stale
         bpf_map_update_elem(&pid_tid_to_conn, &id, &info, BPF_ANY); // to support SSL 
@@ -283,8 +283,12 @@ int socket__http_filter(struct __sk_buff *skb) {
 
     u8 packet_type = 0;
     if (is_http(buf, len, &packet_type) || tcp_close(&tcp)) { // we must check tcp_close second, a packet can be a close and a response
-        http_info_t info = {0};
-        info.conn_info = conn;
+        http_info_t *info = empty_http_info();
+        if (!info) {
+            bpf_dbg_printk("== socket__http_filter == Error: could not allocate http_info_t space");
+            return 0;
+        }
+        info->conn_info = conn;
         unsigned char *processing_buf = buf;
 
         http_connection_metadata_t *meta = NULL;
@@ -301,16 +305,16 @@ int socket__http_filter(struct __sk_buff *skb) {
                 if (full_len > FULL_BUF_SIZE) {
                     full_len = FULL_BUF_SIZE;
                 }
-                read_skb_bytes(skb, tcp.hdr_len, info.buf, full_len);
-                processing_buf = info.buf;
+                read_skb_bytes(skb, tcp.hdr_len, info->buf, full_len);
+                processing_buf = info->buf;
             }
         }
         if (packet_type) {
-            bpf_dbg_printk("=== http_filter len=%d pid=%d %s ===", (skb->len - tcp.hdr_len), (meta != NULL) ? pid_from_pid_tgid(meta->id) : -1, buf);
+            bpf_dbg_printk("=== http_filter len=%d pid=%d %s ===", (skb->len - tcp.hdr_len), (meta != NULL) ? meta->pid.host_pid : -1, buf);
             //dbg_print_http_connection_info(&conn);
         }
 
-        process_http(&info, &tcp, packet_type, (skb->len - tcp.hdr_len), processing_buf, meta);
+        process_http(info, &tcp, packet_type, (skb->len - tcp.hdr_len), processing_buf, meta);
     }
 
     return 0;

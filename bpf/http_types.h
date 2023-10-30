@@ -29,11 +29,14 @@ typedef struct http_info {
     u64 start_monotime_ns;
     u64 end_monotime_ns;
     unsigned char buf[FULL_BUF_SIZE] __attribute__ ((aligned (8))); // ringbuffer memcpy complains unless this is 8 byte aligned
-    u32 pid; // we need this for system wide tracking so we can find the service name
     u32 len;
     u16 status;    
     u8  type;
     u8  ssl;
+    // we need this for system wide tracking so we can find the service name
+    // also to filter traces from unsolicited processes that share the executable
+    // with other instrumented processes
+    pid_info pid;
 } http_info_t;
 
 // Here we keep information on the packets passing through the socket filter
@@ -45,7 +48,7 @@ typedef struct protocol_info {
 
 // Here we keep information on the ongoing filtered connections, PID/TID and connection type
 typedef struct http_connection_metadata {
-    u64 id;
+    pid_info pid;
     u8  type;
 } http_connection_metadata_t;
 

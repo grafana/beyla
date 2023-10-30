@@ -7,8 +7,7 @@
 
 #define MAX_CONCURRENT_PIDS 1000
 
-volatile const s32 current_pid = 0;
-volatile const s32 current_pid_ns_id = 0;
+volatile const s32 filter_pids = 0;
 
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
@@ -76,7 +75,7 @@ static __always_inline u32 pid_from_pid_tgid(u64 id) {
 static __always_inline u32 valid_pid(u64 id) {
     u32 host_pid = id >> 32;
     // If we are doing system wide instrumenting, accept all PIDs
-    if (!current_pid) {
+    if (!filter_pids) {
         return host_pid;
     }
 

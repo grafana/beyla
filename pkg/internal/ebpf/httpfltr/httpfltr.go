@@ -114,18 +114,11 @@ func (p *Tracer) Load() (*ebpf.CollectionSpec, error) {
 }
 
 func (p *Tracer) Constants(finfo *exec.FileInfo, _ *goexec.Offsets) map[string]any {
-	if p.cfg.Discovery.SystemWide {
+	if p.cfg.Discovery.SystemWide || p.cfg.Discovery.BPFPidFilterOff {
 		return nil
 	}
 
-	m := map[string]any{"current_pid": finfo.Pid}
-
-	npid, err := findNamespace(finfo.Pid)
-	if err != nil {
-		p.log.Warn("error while looking up namespace pid, namespace pid matching will not work", err)
-	}
-
-	m["current_pid_ns_id"] = npid
+	m := map[string]any{"filter_pids": int32(1)}
 
 	return m
 }
@@ -258,7 +251,7 @@ func (p *Tracer) UProbes() map[string]map[string]ebpfcommon.FunctionPrograms {
 }
 
 func (p *Tracer) SocketFilters() []*ebpf.Program {
-	return []*ebpf.Program{p.bpfObjects.SocketHttpFilter}
+	return nil
 }
 
 func (p *Tracer) Run(ctx context.Context, eventsChan chan<- []request.Span, service svc.ID) {

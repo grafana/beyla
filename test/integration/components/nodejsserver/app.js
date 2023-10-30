@@ -2,8 +2,14 @@ var express = require("express");
 var app = express();
 const port = 3030;
 
+app.use(express.json({limit: "50mb"}));
+
 app.get("/greeting", (req, res, next) => {
     res.json("Hello!");
+});
+
+app.post("/greeting", (req, res, next) => {
+    res.json(req.body);
 });
 
 app.get("/bye", (req, res, next) => {

@@ -6,10 +6,11 @@ import (
 	"net"
 	"testing"
 
-	"github.com/grafana/beyla/test/integration/components/prom"
 	"github.com/mariomac/guara/pkg/test"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/grafana/beyla/test/integration/components/prom"
 )
 
 func testREDMetricsForPythonHTTPLibrary(t *testing.T, url string, comm string) {

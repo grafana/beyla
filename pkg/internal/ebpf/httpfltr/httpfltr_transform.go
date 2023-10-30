@@ -22,6 +22,11 @@ func httpInfoToSpan(info *HTTPInfo) request.Span {
 		Status:        int(info.Status),
 		ServiceID:     info.Service,
 		Traceparent:   info.Traceparent,
+		Pid: request.PidInfo{
+			HostPID:   info.Pid.HostPid,
+			UserPID:   info.Pid.UserPid,
+			Namespace: info.Pid.Namespace,
+		},
 	}
 }
 

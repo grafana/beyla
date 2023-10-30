@@ -34,15 +34,35 @@ import (
 //go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf_debug ../../../../bpf/go_nethttp.c -- -I../../../../bpf/headers -DBPF_DEBUG
 
 type Tracer struct {
-	Cfg        *ebpfcommon.TracerConfig
-	Metrics    imetrics.Reporter
+	log        *slog.Logger
+	pidsFilter *ebpfcommon.PIDsFilter
+	cfg        *ebpfcommon.TracerConfig
+	metrics    imetrics.Reporter
 	bpfObjects bpfObjects
 	closers    []io.Closer
 }
 
+func New(cfg *ebpfcommon.TracerConfig, metrics imetrics.Reporter) *Tracer {
+	log := slog.With("component", "nethttp.Tracer")
+	return &Tracer{
+		log:        log,
+		pidsFilter: ebpfcommon.NewPIDsFilter(log),
+		cfg:        cfg,
+		metrics:    metrics,
+	}
+}
+
+func (p *Tracer) AllowPID(pid uint32) {
+	p.pidsFilter.AllowPID(pid)
+}
+
+func (p *Tracer) BlockPID(pid uint32) {
+	p.pidsFilter.BlockPID(pid)
+}
+
 func (p *Tracer) Load() (*ebpf.CollectionSpec, error) {
 	loader := loadBpf
-	if p.Cfg.BpfDebug {
+	if p.cfg.BpfDebug {
 		loader = loadBpf_debug
 	}
 	return loader()
@@ -52,7 +72,7 @@ func (p *Tracer) Constants(_ *exec.FileInfo, offsets *goexec.Offsets) map[string
 	// Set the field offsets and the logLevel for nethttp BPF program,
 	// as well as some other configuration constants
 	constants := map[string]any{
-		"wakeup_data_bytes": uint32(p.Cfg.WakeupLen) * uint32(unsafe.Sizeof(ebpfcommon.HTTPRequestTrace{})),
+		"wakeup_data_bytes": uint32(p.cfg.WakeupLen) * uint32(unsafe.Sizeof(ebpfcommon.HTTPRequestTrace{})),
 	}
 	for _, s := range []string{
 		"url_ptr_pos",
@@ -110,12 +130,12 @@ func (p *Tracer) SocketFilters() []*ebpf.Program {
 }
 
 func (p *Tracer) Run(ctx context.Context, eventsChan chan<- []request.Span, service svc.ID) {
-	logger := slog.With("component", "nethttp.Tracer")
 	ebpfcommon.ForwardRingbuf[ebpfcommon.HTTPRequestTrace](
 		service,
-		p.Cfg, logger, p.bpfObjects.Events,
+		p.cfg, p.log, p.bpfObjects.Events,
 		ebpfcommon.ReadHTTPRequestTraceAsSpan,
-		p.Metrics,
+		p.pidsFilter.Filter,
+		p.metrics,
 		append(p.closers, &p.bpfObjects)...,
 	)(ctx, eventsChan)
 }
@@ -138,12 +158,12 @@ func (p *GinTracer) GoProbes() map[string]ebpfcommon.FunctionPrograms {
 }
 
 func (p *GinTracer) Run(ctx context.Context, eventsChan chan<- []request.Span, service svc.ID) {
-	logger := slog.With("component", "nethttp.GinTracer")
 	ebpfcommon.ForwardRingbuf[ebpfcommon.HTTPRequestTrace](
 		service,
-		p.Cfg, logger, p.bpfObjects.Events,
+		p.cfg, p.log, p.bpfObjects.Events,
 		ebpfcommon.ReadHTTPRequestTraceAsSpan,
-		p.Metrics,
+		p.pidsFilter.Filter,
+		p.metrics,
 		append(p.closers, &p.bpfObjects)...,
 	)(ctx, eventsChan)
 }

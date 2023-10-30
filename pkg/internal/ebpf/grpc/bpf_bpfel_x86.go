@@ -104,6 +104,8 @@ type bpfMapSpecs struct {
 	OngoingGrpcClientRequests *ebpf.MapSpec `ebpf:"ongoing_grpc_client_requests"`
 	OngoingGrpcRequestStatus  *ebpf.MapSpec `ebpf:"ongoing_grpc_request_status"`
 	OngoingServerRequests     *ebpf.MapSpec `ebpf:"ongoing_server_requests"`
+	PidCache                  *ebpf.MapSpec `ebpf:"pid_cache"`
+	ValidPids                 *ebpf.MapSpec `ebpf:"valid_pids"`
 }
 
 // bpfObjects contains all objects after they have been loaded into the kernel.
@@ -132,6 +134,8 @@ type bpfMaps struct {
 	OngoingGrpcClientRequests *ebpf.Map `ebpf:"ongoing_grpc_client_requests"`
 	OngoingGrpcRequestStatus  *ebpf.Map `ebpf:"ongoing_grpc_request_status"`
 	OngoingServerRequests     *ebpf.Map `ebpf:"ongoing_server_requests"`
+	PidCache                  *ebpf.Map `ebpf:"pid_cache"`
+	ValidPids                 *ebpf.Map `ebpf:"valid_pids"`
 }
 
 func (m *bpfMaps) Close() error {
@@ -143,6 +147,8 @@ func (m *bpfMaps) Close() error {
 		m.OngoingGrpcClientRequests,
 		m.OngoingGrpcRequestStatus,
 		m.OngoingServerRequests,
+		m.PidCache,
+		m.ValidPids,
 	)
 }
 

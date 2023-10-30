@@ -11,6 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include "pid.h"
 #include "vmlinux.h"
 #include "bpf_helpers.h"
 #include "bpf_builtins.h"
@@ -60,6 +61,7 @@ int uprobe_queryDCReturn(struct pt_regs *ctx) {
 
     http_request_trace *trace = bpf_ringbuf_reserve(&events, sizeof(http_request_trace), 0);
     if (trace) {
+        task_pid(&trace->pid);
         trace->type = EVENT_SQL_CLIENT;
         trace->id = (u64)goroutine_addr;
         trace->start_monotime_ns = invocation->start_monotime_ns;

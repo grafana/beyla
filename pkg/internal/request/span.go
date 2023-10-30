@@ -34,6 +34,17 @@ type converter struct {
 
 var clocks = converter{monoClock: monotime.Now, clock: time.Now}
 
+// PidInfo stores different views of the PID of the process that generated the span
+type PidInfo struct {
+	// HostPID is the PID as seen by the host (root cgroup)
+	HostPID uint32
+	// UserID is the PID as seen by the user space.
+	// Might differ from HostPID if the process is in a different namespace/cgroup/container/etc.
+	UserPID uint32
+	// Namespace for the PIDs
+	Namespace uint32
+}
+
 // Span contains the information being submitted by the following nodes in the graph.
 // It enables comfortable handling of data from Go.
 type Span struct {
@@ -54,6 +65,7 @@ type Span struct {
 	ServiceID     svc.ID
 	Metadata      map[string]string
 	Traceparent   string
+	Pid           PidInfo
 }
 
 func (s *Span) Inside(parent *Span) bool {

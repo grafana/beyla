@@ -40,14 +40,17 @@ func TraceAttacherProvider(ta TraceAttacher) (node.TerminalFunc[[]Event[Instrume
 	mainLoop:
 		for instrumentables := range in {
 			for _, instr := range instrumentables {
-				if pt, ok := ta.getTracer(&instr.Obj); ok {
-					// we can create multiple tracers for the same executable (ran from different processes)
-					// even if we just need to instrument the executable once. TODO: deduplicate
-					ta.DiscoveredTracers <- pt
-					if ta.Cfg.Discovery.SystemWide {
-						ta.log.Info("system wide instrumentation. Creating a single instrumenter")
-						break mainLoop
+				switch instr.Type {
+				case EventCreated:
+					if pt, ok := ta.getTracer(&instr.Obj); ok {
+						ta.DiscoveredTracers <- pt
+						if ta.Cfg.Discovery.SystemWide {
+							ta.log.Info("system wide instrumentation. Creating a single instrumenter")
+							break mainLoop
+						}
 					}
+				case EventDeleted:
+					ta.notifyProcessDeletion(&instr.Obj)
 				}
 			}
 		}
@@ -60,8 +63,13 @@ func (ta *TraceAttacher) getTracer(ie *Instrumentable) (*ebpf.ProcessTracer, boo
 	if tracer, ok := ta.existingTracers[ie.FileInfo.CmdExePath]; ok {
 		ta.log.Info("new process for already instrumented executable",
 			"pid", ie.FileInfo.Pid,
+			"child", ie.ChildPids,
 			"exec", ie.FileInfo.CmdExePath)
-		_ = tracer
+		// allowing the tracer to forward traces from the new PID and its children processes
+		tracer.AllowPID(uint32(ie.FileInfo.Pid))
+		for _, pid := range ie.ChildPids {
+			tracer.AllowPID(pid)
+		}
 		return nil, false
 	}
 	ta.log.Info("instrumenting process", "cmd", ie.FileInfo.CmdExePath, "pid", ie.FileInfo.Pid)
@@ -104,6 +112,11 @@ func (ta *TraceAttacher) getTracer(ie *Instrumentable) (*ebpf.ProcessTracer, boo
 		PinPath:    ta.buildPinPath(ie),
 		SystemWide: ta.Cfg.Discovery.SystemWide,
 	}
+	// allowing the tracer to forward traces from the discovered PID and its children processes
+	tracer.AllowPID(uint32(ie.FileInfo.Pid))
+	for _, pid := range ie.ChildPids {
+		tracer.AllowPID(pid)
+	}
 	ta.existingTracers[ie.FileInfo.CmdExePath] = tracer
 	return tracer, true
 }
@@ -123,6 +136,18 @@ func (ta *TraceAttacher) buildPinPath(ie *Instrumentable) string {
 	_, _ = execHash.Write([]byte(ie.FileInfo.CmdExePath))
 	return path.Join(ta.Cfg.EBPF.BpfBaseDir,
 		fmt.Sprintf("%d-%d-%x", os.Getpid(), ie.FileInfo.Pid, execHash.Sum32()))
+}
+
+func (ta *TraceAttacher) notifyProcessDeletion(ie *Instrumentable) {
+	if tracer, ok := ta.existingTracers[ie.FileInfo.CmdExePath]; ok {
+		ta.log.Info("process ended for already instrumented executable",
+			"pid", ie.FileInfo.Pid,
+			"exec", ie.FileInfo.CmdExePath)
+		// notifying the tracer to block any trace from that PID
+		// to avoid that a new process reusing this PID could send traces
+		// unless explicitly allowed
+		tracer.BlockPID(uint32(ie.FileInfo.Pid))
+	}
 }
 
 // filterNotFoundPrograms will filter these programs whose required functions (as

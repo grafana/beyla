@@ -36,6 +36,7 @@ func TestForwardRingbuf_CapacityFull(t *testing.T) {
 		slog.With("test", "TestForwardRingbuf_CapacityFull"),
 		nil, // the source ring buffer can be null
 		ReadHTTPRequestTraceAsSpan,
+		(&IdentityPidsFilter{}).Filter,
 		metrics,
 	)(context.Background(), forwardedMessages)
 
@@ -83,6 +84,7 @@ func TestForwardRingbuf_Deadline(t *testing.T) {
 		slog.With("test", "TestForwardRingbuf_Deadline"),
 		nil, // the source ring buffer can be null
 		ReadHTTPRequestTraceAsSpan,
+		(&IdentityPidsFilter{}).Filter,
 		metrics,
 	)(context.Background(), forwardedMessages)
 
@@ -120,6 +122,7 @@ func TestForwardRingbuf_Close(t *testing.T) {
 		slog.With("test", "TestForwardRingbuf_Close"),
 		nil, // the source ring buffer can be null
 		ReadHTTPRequestTraceAsSpan,
+		(&IdentityPidsFilter{}).Filter,
 		metrics,
 		&closable,
 	)(context.Background(), make(chan []request.Span, 100))

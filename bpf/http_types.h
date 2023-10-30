@@ -6,7 +6,6 @@
 #include "http_defs.h"
 
 #define FULL_BUF_SIZE 160 // should be enough for most URLs, we may need to extend it if not. Must be multiple of 16 for the copy to work.
-#define BUF_COPY_BLOCK_SIZE 16
 #define TRACE_BUF_SIZE 1024 // must be power of 2, we do an & to limit the buffer size
 
 #define CONN_INFO_FLAG_TRACE 0x1
@@ -30,6 +29,7 @@ typedef struct http_info {
     u64 end_monotime_ns;
     unsigned char buf[FULL_BUF_SIZE] __attribute__ ((aligned (8))); // ringbuffer memcpy complains unless this is 8 byte aligned
     u32 len;
+    u32 resp_len;
     u16 status;    
     u8  type;
     u8  ssl;

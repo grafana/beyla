@@ -41,7 +41,10 @@ type ringBufForwarder[T any] struct {
 	access     sync.Mutex
 	ticker     *time.Ticker
 	reader     func(*ringbuf.Record) (request.Span, bool, error)
-	metrics    imetrics.Reporter
+	// filter the input spans, eliminating these from processes whose PID
+	// belong to a process that does not match the discovery policies
+	filter  func([]request.Span) []request.Span
+	metrics imetrics.Reporter
 }
 
 // ForwardRingbuf returns a function reads HTTPRequestTraces from an input ring buffer, accumulates them into an
@@ -53,12 +56,13 @@ func ForwardRingbuf[T any](
 	logger *slog.Logger,
 	ringbuffer *ebpf.Map,
 	reader func(*ringbuf.Record) (request.Span, bool, error),
+	filter func([]request.Span) []request.Span,
 	metrics imetrics.Reporter,
 	closers ...io.Closer,
 ) func(context.Context, chan<- []request.Span) {
 	rbf := ringBufForwarder[T]{
 		service: service, cfg: cfg, logger: logger, ringbuffer: ringbuffer,
-		closers: closers, reader: reader, metrics: metrics,
+		closers: closers, reader: reader, filter: filter, metrics: metrics,
 	}
 	return rbf.readAndForward
 }
@@ -135,7 +139,7 @@ func (rbf *ringBufForwarder[T]) readAndForward(ctx context.Context, spansChan ch
 
 func (rbf *ringBufForwarder[T]) flushEvents(spansChan chan<- []request.Span) {
 	rbf.metrics.TracerFlush(rbf.spansLen)
-	spansChan <- rbf.spans[:rbf.spansLen]
+	spansChan <- rbf.filter(rbf.spans[:rbf.spansLen])
 	rbf.spans = make([]request.Span, rbf.cfg.BatchLength)
 	rbf.spansLen = 0
 }

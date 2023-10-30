@@ -101,7 +101,7 @@ func TestToRequestTrace(t *testing.T) {
 	err := binary.Write(buf, binary.LittleEndian, &record)
 	assert.NoError(t, err)
 
-	tracer := Tracer{Cfg: &pipe.Config{}}
+	tracer := Tracer{cfg: &pipe.Config{}}
 	result, _, err := tracer.readHTTPInfoIntoSpan(&ringbuf.Record{RawSample: buf.Bytes()})
 	assert.NoError(t, err)
 
@@ -135,7 +135,7 @@ func TestToRequestTraceNoConnection(t *testing.T) {
 	err := binary.Write(buf, binary.LittleEndian, &record)
 	assert.NoError(t, err)
 
-	tracer := Tracer{Cfg: &pipe.Config{}}
+	tracer := Tracer{cfg: &pipe.Config{}}
 	result, _, err := tracer.readHTTPInfoIntoSpan(&ringbuf.Record{RawSample: buf.Bytes()})
 	assert.NoError(t, err)
 
@@ -157,7 +157,7 @@ func TestToRequestTraceNoConnection(t *testing.T) {
 }
 
 func TestExtractTraceParent(t *testing.T) {
-	tracer := Tracer{Cfg: &pipe.Config{}}
+	tracer := Tracer{cfg: &pipe.Config{}}
 
 	// normal formulated request
 	assert.Equal(t, "ABBA", tracer.extractTraceParent([]byte(

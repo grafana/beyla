@@ -13,6 +13,7 @@
 #ifndef HTTP_TRACE_H
 #define HTTP_TRACE_H
 
+#include "pid.h"
 #include "utils.h"
 
 #define PATH_MAX_LEN 100
@@ -39,6 +40,8 @@ typedef struct http_request_trace_t {
     u32 host_port;
     s64 content_length;
     u8  traceparent[TRACEPARENT_LEN];
+
+    pid_info pid;
 } __attribute__((packed)) http_request_trace;
 
 #endif

@@ -1,4 +1,6 @@
-// Inspired by https://github.com/open-telemetry/opentelemetry-go-instrumentation/blob/ca1afccea6ec520d18238c3865024a9f5b9c17fe/internal/pkg/instrumentors/bpf/database/sql/bpf/probe.bpf.c
+// Copyright The OpenTelemetry Authors
+// Copyright Grafana Labs
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -11,12 +13,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// This implementation was inspired by https://github.com/open-telemetry/opentelemetry-go-instrumentation/blob/ca1afccea6ec520d18238c3865024a9f5b9c17fe/internal/pkg/instrumentors/bpf/database/sql/bpf/probe.bpf.c
+// and has been modified since.
+
+#include "pid.h"
 #include "vmlinux.h"
 #include "bpf_helpers.h"
 #include "bpf_builtins.h"
 #include "go_common.h"
 #include "bpf_dbg.h"
-#include <stdbool.h>
 
 struct {
     __uint(type, BPF_MAP_TYPE_HASH);
@@ -47,7 +52,7 @@ int uprobe_queryDC(struct pt_regs *ctx) {
 SEC("uprobe/queryDC")
 int uprobe_queryDCReturn(struct pt_regs *ctx) {
 
-    bpf_dbg_printk("=== uprobe/queryDCReturn === ");
+    bpf_dbg_printk("=== uprobe/queryDC return === ");
     void *goroutine_addr = GOROUTINE_PTR(ctx);
     bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
 
@@ -60,6 +65,7 @@ int uprobe_queryDCReturn(struct pt_regs *ctx) {
 
     http_request_trace *trace = bpf_ringbuf_reserve(&events, sizeof(http_request_trace), 0);
     if (trace) {
+        task_pid(&trace->pid);
         trace->type = EVENT_SQL_CLIENT;
         trace->id = (u64)goroutine_addr;
         trace->start_monotime_ns = invocation->start_monotime_ns;

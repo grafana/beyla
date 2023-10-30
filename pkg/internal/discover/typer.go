@@ -24,17 +24,20 @@ type ExecTyper struct {
 type Instrumentable struct {
 	Type svc.InstrumentableType
 
+	// in some runtimes, like python gunicorn, we need to allow
+	// tracing both the parent pid and all of its children pid
+	ChildPids []uint32
+
 	FileInfo *exec.FileInfo
 	Offsets  *goexec.Offsets
 }
 
 func ExecTyperProvider(ecfg ExecTyper) (node.MiddleFunc[[]Event[ProcessMatch], []Event[Instrumentable]], error) {
 	t := typer{
-		cfg:              ecfg.Cfg,
-		metrics:          ecfg.Metrics,
-		log:              slog.With("component", "discover.ExecTyper"),
-		currentPids:      map[int32]*exec.FileInfo{},
-		instrumentedPids: map[int32]struct{}{},
+		cfg:         ecfg.Cfg,
+		metrics:     ecfg.Metrics,
+		log:         slog.With("component", "discover.ExecTyper"),
+		currentPids: map[int32]*exec.FileInfo{},
 	}
 	// TODO: do it per executable
 	if !ecfg.Cfg.Discovery.SkipGoSpecificTracers {
@@ -48,12 +51,11 @@ func ExecTyperProvider(ecfg ExecTyper) (node.MiddleFunc[[]Event[ProcessMatch], [
 }
 
 type typer struct {
-	cfg              *pipe.Config
-	metrics          imetrics.Reporter
-	log              *slog.Logger
-	currentPids      map[int32]*exec.FileInfo
-	instrumentedPids map[int32]struct{}
-	allGoFunctions   []string
+	cfg            *pipe.Config
+	metrics        imetrics.Reporter
+	log            *slog.Logger
+	currentPids    map[int32]*exec.FileInfo
+	allGoFunctions []string
 }
 
 // FilterClassify returns the Instrumentable types for each received ProcessMatch,
@@ -78,7 +80,6 @@ func (t *typer) FilterClassify(evs []Event[ProcessMatch]) []Event[Instrumentable
 			}
 		case EventDeleted:
 			delete(t.currentPids, ev.Obj.Process.Pid)
-			delete(t.instrumentedPids, ev.Obj.Process.Pid)
 			out = append(out, Event[Instrumentable]{
 				Type: EventDeleted,
 				Obj:  Instrumentable{FileInfo: &exec.FileInfo{Pid: ev.Obj.Process.Pid}},
@@ -88,16 +89,11 @@ func (t *typer) FilterClassify(evs []Event[ProcessMatch]) []Event[Instrumentable
 
 	for i := range elfs {
 		inst := t.asInstrumentable(elfs[i])
-		// if we found a process and returned its parent, it might be already
-		// instrumented. We skip it in that case
-		if _, ok := t.instrumentedPids[inst.FileInfo.Pid]; !ok {
-			t.log.Debug(
-				"found an instrumentable process",
-				"type", inst.Type.String(),
-				"exec", inst.FileInfo.CmdExePath, "pid", inst.FileInfo.Pid)
-			out = append(out, Event[Instrumentable]{Type: EventCreated, Obj: inst})
-			t.instrumentedPids[inst.FileInfo.Pid] = struct{}{}
-		}
+		t.log.Debug(
+			"found an instrumentable process",
+			"type", inst.Type.String(),
+			"exec", inst.FileInfo.CmdExePath, "pid", inst.FileInfo.Pid)
+		out = append(out, Event[Instrumentable]{Type: EventCreated, Obj: inst})
 	}
 	return out
 }
@@ -121,19 +117,22 @@ func (t *typer) asInstrumentable(execElf *exec.FileInfo) Instrumentable {
 	}
 
 	// select the parent (or grandparent) of the executable, if any
+	var child []uint32
 	parent, ok := t.currentPids[execElf.Ppid]
 	for ok && execElf.Ppid != execElf.Pid {
 		log.Debug("replacing executable by its parent", "ppid", execElf.Ppid)
+		child = append(child, uint32(execElf.Pid))
 		execElf = parent
 		parent, ok = t.currentPids[parent.Ppid]
 	}
 
 	detectedType := exec.FindProcLanguage(execElf.Pid, execElf.ELF)
 
-	log.Debug("instrumented", "comm", execElf.CmdExePath, "pid", execElf.Pid, "language", detectedType.String())
-	// Return the instrumentable without offsets, at it is identified as a generic
+	log.Debug("instrumented", "comm", execElf.CmdExePath, "pid", execElf.Pid,
+		"child", child, "language", detectedType.String())
+	// Return the instrumentable without offsets, as it is identified as a generic
 	// (or non-instrumentable Go proxy) executable
-	return Instrumentable{Type: detectedType, FileInfo: execElf}
+	return Instrumentable{Type: detectedType, FileInfo: execElf, ChildPids: child}
 }
 
 func (t *typer) inspectOffsets(execElf *exec.FileInfo) (*goexec.Offsets, bool) {

@@ -41,6 +41,15 @@ struct {
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
 } ongoing_http SEC(".maps");
 
+// http_info_t became too big to be declared as a variable in the stack.
+// We use a percpu array to keep a reusable copy of it
+struct {
+        __uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
+        __type(key, int);
+        __type(value, http_info_t);
+        __uint(max_entries, 1);
+} http_info_mem SEC(".maps");
+
 static __always_inline bool tcp_dup(connection_info_t *http, protocol_info_t *tcp) {
     u32 *prev_seq = bpf_map_lookup_elem(&http_tcp_seq, http);
 
@@ -189,8 +198,20 @@ static __always_inline void read_skb_bytes(const void *skb, u32 offset, unsigned
     }
 }
 
+// empty_http_info zeroes and return the unique percpu copy in the map
+// this function assumes that a given thread is not trying to use many
+// instances at the same time
+static __always_inline http_info_t* empty_http_info() {
+    int zero = 0;
+    http_info_t *value = bpf_map_lookup_elem(&http_info_mem, &zero);
+    if (value) {
+        bpf_memset(value, 0, sizeof(http_info_t));
+    }
+    return value;
+}
+
 static __always_inline void finish_http(http_info_t *info) {
-    if (info->start_monotime_ns != 0 && info->status != 0 && info->pid != 0) {
+    if (info->start_monotime_ns != 0 && info->status != 0 && info->pid.host_pid != 0) {
         http_info_t *trace = bpf_ringbuf_reserve(&events, sizeof(http_info_t), 0);
         if (trace) {
             bpf_dbg_printk("Sending trace %lx", info);
@@ -233,7 +254,7 @@ static __always_inline void process_http_request(http_info_t *info) {
 }
 
 static __always_inline void process_http_response(http_info_t *info, unsigned char *buf, http_connection_metadata_t *meta) {
-    info->pid = pid_from_pid_tgid(meta->id);
+    info->pid = meta->pid;
     info->type = meta->type;
     info->status = 0;
     info->status += (buf[RESPONSE_STATUS_POS]     - '0') * 100;

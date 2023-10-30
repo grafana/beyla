@@ -29,6 +29,11 @@ type bpfHttpRequestTrace struct {
 	HostPort          uint32
 	ContentLength     int64
 	Traceparent       [55]uint8
+	Pid               struct {
+		HostPid   uint32
+		UserPid   uint32
+		Namespace uint32
+	}
 }
 
 // loadBpf returns the embedded CollectionSpec for bpf.
@@ -78,6 +83,8 @@ type bpfProgramSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpfMapSpecs struct {
+	PidCache  *ebpf.MapSpec `ebpf:"pid_cache"`
+	ValidPids *ebpf.MapSpec `ebpf:"valid_pids"`
 }
 
 // bpfObjects contains all objects after they have been loaded into the kernel.
@@ -99,10 +106,15 @@ func (o *bpfObjects) Close() error {
 //
 // It can be passed to loadBpfObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpfMaps struct {
+	PidCache  *ebpf.Map `ebpf:"pid_cache"`
+	ValidPids *ebpf.Map `ebpf:"valid_pids"`
 }
 
 func (m *bpfMaps) Close() error {
-	return _BpfClose()
+	return _BpfClose(
+		m.PidCache,
+		m.ValidPids,
+	)
 }
 
 // bpfPrograms contains all programs after they have been loaded into the kernel.

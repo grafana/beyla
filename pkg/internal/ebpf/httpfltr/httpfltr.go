@@ -113,7 +113,7 @@ func (p *Tracer) Load() (*ebpf.CollectionSpec, error) {
 	return loader()
 }
 
-func (p *Tracer) Constants(finfo *exec.FileInfo, _ *goexec.Offsets) map[string]any {
+func (p *Tracer) Constants(_ *exec.FileInfo, _ *goexec.Offsets) map[string]any {
 	if p.cfg.Discovery.SystemWide || p.cfg.Discovery.BPFPidFilterOff {
 		return nil
 	}

@@ -119,7 +119,12 @@ func (t *typer) asInstrumentable(execElf *exec.FileInfo) Instrumentable {
 	// select the parent (or grandparent) of the executable, if any
 	var child []uint32
 	parent, ok := t.currentPids[execElf.Ppid]
-	for ok && execElf.Ppid != execElf.Pid {
+	for ok && execElf.Ppid != execElf.Pid &&
+		// we will ignore parent processes that are not the same executable. For example,
+		// to avoid wrongly instrumenting process launcher such as systemd or containerd-shimd
+		// when they launch an instrumentable service
+		execElf.CmdExePath == parent.CmdExePath {
+
 		log.Debug("replacing executable by its parent", "ppid", execElf.Ppid)
 		child = append(child, uint32(execElf.Pid))
 		execElf = parent

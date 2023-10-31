@@ -19,12 +19,13 @@ import (
 )
 
 const (
-	instrumentedServiceStdURL        = "http://localhost:8080"
-	instrumentedServiceGinURL        = "http://localhost:8081"
-	instrumentedServiceGorillaURL    = "http://localhost:8082"
-	instrumentedServiceGorillaMidURL = "http://localhost:8083"
-	prometheusHostPort               = "localhost:9090"
-	jaegerQueryURL                   = "http://localhost:16686/api/traces"
+	instrumentedServiceStdURL         = "http://localhost:8080"
+	instrumentedServiceGinURL         = "http://localhost:8081"
+	instrumentedServiceGorillaURL     = "http://localhost:8082"
+	instrumentedServiceGorillaMidURL  = "http://localhost:8083"
+	instrumentedServiceGorillaMid2URL = "http://localhost:8087"
+	prometheusHostPort                = "localhost:9090"
+	jaegerQueryURL                    = "http://localhost:16686/api/traces"
 
 	testTimeout = 30 * time.Second
 )
@@ -43,6 +44,7 @@ func testREDMetricsHTTP(t *testing.T) {
 		instrumentedServiceGorillaURL,
 		instrumentedServiceGinURL,
 		instrumentedServiceGorillaMidURL,
+		instrumentedServiceGorillaMid2URL,
 	} {
 		t.Run(testCaseURL, func(t *testing.T) {
 			waitForTestComponents(t, testCaseURL)

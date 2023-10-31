@@ -130,7 +130,12 @@ func findGoSymbolTable(elfF *elf.File) (*gosym.Table, error) {
 			return nil, fmt.Errorf("acquiring .gopclntab data: %w", err)
 		}
 	}
-	pcln := gosym.NewLineTable(pclndat, elfF.Section(".text").Addr)
+	txtSection := elfF.Section(".text")
+	if txtSection == nil {
+		return nil, fmt.Errorf("can't find .text section in ELF file")
+	}
+
+	pcln := gosym.NewLineTable(pclndat, txtSection.Addr)
 	// First argument accepts the .gosymtab ELF section.
 	// Since Go 1.3, .gosymtab is empty so we just pass an nil slice
 	symTab, err := gosym.NewTable(nil, pcln)

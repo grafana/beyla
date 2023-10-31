@@ -101,11 +101,11 @@ func (p *Tracer) AddCloser(c ...io.Closer) {
 
 func (p *Tracer) GoProbes() map[string]ebpfcommon.FunctionPrograms {
 	return map[string]ebpfcommon.FunctionPrograms{
-		"net/http.HandlerFunc.ServeHTTP": {
+		"net/http.serverHandler.ServeHTTP": {
 			Start: p.bpfObjects.UprobeServeHTTP,
 		},
-		"net/http.(*connReader).startBackgroundRead": {
-			Start: p.bpfObjects.UprobeStartBackgroundRead,
+		"net/http.(*conn).readRequest": {
+			End: p.bpfObjects.UprobeReadRequestReturns,
 		},
 		"net/http.(*response).WriteHeader": {
 			Start: p.bpfObjects.UprobeWriteHeader,

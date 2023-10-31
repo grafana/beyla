@@ -50,13 +50,13 @@ spec:
             - mountPath: /config
               name: beyla-config
           env:
-            - name: DISCOVERY_POLL_INTERVAL
+            - name: BEYLA_DISCOVERY_POLL_INTERVAL
               value: "500ms"
-            - name: METRICS_INTERVAL
+            - name: BEYLA_METRICS_INTERVAL
               value: "10ms"
-            - name: BPF_BATCH_TIMEOUT
+            - name: BEYLA_BPF_BATCH_TIMEOUT
               value: "10ms"
-            - name: METRICS_REPORT_TARGET
+            - name: BEYLA_METRICS_REPORT_TARGET
               value: "true"
-            - name: METRICS_REPORT_PEER
+            - name: BEYLA_METRICS_REPORT_PEER
               value: "true"

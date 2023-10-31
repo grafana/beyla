@@ -29,17 +29,17 @@ services:
     pid: "service:testserver"
     environment:
       GOCOVERDIR: "/coverage"
-      PRINT_TRACES: "true"
-      OPEN_PORT: "${OPEN_PORT}"
-      DISCOVERY_POLL_INTERVAL: 500ms
-      EXECUTABLE_NAME: "${EXECUTABLE_NAME}"
-      SERVICE_NAMESPACE: "integration-test"
-      METRICS_INTERVAL: "10ms"
-      BPF_BATCH_TIMEOUT: "10ms"
-      LOG_LEVEL: "DEBUG"
-      BPF_DEBUG: "TRUE"
-      METRICS_REPORT_TARGET: "true"
-      METRICS_REPORT_PEER: "true"
+      BEYLA_PRINT_TRACES: "true"
+      BEYLA_OPEN_PORT: "${OPEN_PORT}"
+      BEYLA_DISCOVERY_POLL_INTERVAL: 500ms
+      BEYLA_EXECUTABLE_NAME: "${EXECUTABLE_NAME}"
+      BEYLA_SERVICE_NAMESPACE: "integration-test"
+      BEYLA_METRICS_INTERVAL: "10ms"
+      BEYLA_BPF_BATCH_TIMEOUT: "10ms"
+      BEYLA_LOG_LEVEL: "DEBUG"
+      BEYLA_BPF_DEBUG: "TRUE"
+      BEYLA_METRICS_REPORT_TARGET: "true"
+      BEYLA_METRICS_REPORT_PEER: "true"
     depends_on:
       testserver:
         condition: service_started

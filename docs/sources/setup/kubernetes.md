@@ -83,7 +83,7 @@ spec:
               add:
                 - SYS_ADMIN
           env:
-            - name: OPEN_PORT # The internal port of the goblog application container
+            - name: BEYLA_OPEN_PORT # The internal port of the goblog application container
               value: "8443"
             - name: OTEL_EXPORTER_OTLP_ENDPOINT
               value: "http://grafana-agent:4318"
@@ -139,6 +139,6 @@ spec:
           env:
             - name: EXECUTABLE_NAME # Select the executable by its name instead of OPEN_PORT
               value: "goblog"
-            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+            - name: BEYLA_OTEL_EXPORTER_OTLP_ENDPOINT
               value: "grafana-agent:4318"
 ```

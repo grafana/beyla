@@ -40,15 +40,15 @@ spec:
               add:
                 - SYS_ADMIN
           env:
-            - name: SERVICE_NAME
+            - name: BEYLA_SERVICE_NAME
               value: "goblog"
-            - name: PRINT_TRACES
+            - name: BEYLA_PRINT_TRACES
               value: "true"
-            - name: OPEN_PORT
+            - name: BEYLA_OPEN_PORT
               value: "8443"
             - name: OTEL_EXPORTER_OTLP_ENDPOINT
               value: "http://grafana-agent:4318"
-            - name: LOG_LEVEL
+            - name: BEYLA_LOG_LEVEL
               value: "DEBUG"
 ---
 apiVersion: v1

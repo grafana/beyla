@@ -9,6 +9,9 @@ ENV GOARCH=$TARGETARCH
 
 WORKDIR /opt/app-root
 
+RUN apt-get update
+RUN apt-get install -qy ca-certificates
+
 # Copy the go manifests and source
 COPY .git/ .git/
 COPY bpf/ bpf/
@@ -31,10 +34,14 @@ FROM debian:bookworm-slim
 LABEL maintainer="Grafana Labs <hello@grafana.com>"
 
 WORKDIR /
+
 COPY --from=builder /opt/app-root/bin/beyla .
 COPY --from=builder /opt/app-root/LICENSE .
 COPY --from=builder /opt/app-root/NOTICE .
 COPY --from=builder /opt/app-root/third_party_licenses.csv .
+
+COPY --from=builder /etc/ssl/certs /etc/ssl/certs
+
 USER 0:0
 
 CMD [ "/beyla" ]

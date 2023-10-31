@@ -157,6 +157,9 @@ func (ta *TraceAttacher) notifyProcessDeletion(ie *Instrumentable) {
 // filterNotFoundPrograms will filter these programs whose required functions (as
 // returned in the Offsets method) haven't been found in the offsets
 func filterNotFoundPrograms(programs []ebpf.Tracer, offsets *goexec.Offsets) []ebpf.Tracer {
+	if offsets == nil {
+		return nil
+	}
 	var filtered []ebpf.Tracer
 	funcs := offsets.Funcs
 programs:

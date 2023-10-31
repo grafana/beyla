@@ -7,8 +7,7 @@
 
 #define MAX_CONCURRENT_PIDS 1000
 
-volatile const s32 current_pid = 0;
-volatile const s32 current_pid_ns_id = 0;
+volatile const s32 filter_pids = 0;
 
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
@@ -76,59 +75,41 @@ static __always_inline u32 pid_from_pid_tgid(u64 id) {
 static __always_inline u32 valid_pid(u64 id) {
     u32 host_pid = id >> 32;
     // If we are doing system wide instrumenting, accept all PIDs
-    if (!current_pid) {
+    if (!filter_pids) {
         return host_pid;
     }
 
-    void *found = bpf_map_lookup_elem(&valid_pids, &host_pid);
+    u32 *found = bpf_map_lookup_elem(&pid_cache, &host_pid);
+    if (found) {
+        return *found;
+    }
 
-    if (!found) {
-        u32 *cached_pid = bpf_map_lookup_elem(&pid_cache, &host_pid);
-        if (cached_pid) {
-            return *cached_pid;
-        }
+    struct task_struct *task = (struct task_struct *)bpf_get_current_task();
 
-        // some frameworks launch sub-processes for handling requests
-        u32 host_ppid = 0;
-        struct task_struct *task = (struct task_struct *)bpf_get_current_task();
-        if (task) {
-            host_ppid = BPF_CORE_READ(task, real_parent, tgid);
+    int ns_pid = 0;
+    int ns_ppid = 0;
+    u32 pid_ns_id = 0;
 
-            void *found_ppid = bpf_map_lookup_elem(&valid_pids, &host_ppid);
+    ns_pid_ppid(task, &ns_pid, &ns_ppid, &pid_ns_id);
 
-            if (!found_ppid) {
-                // let's see if we are in a container pid space
-                int ns_pid = 0;
-                int ns_ppid = 0;
-                u32 pid_ns_id = 0;
+    if (ns_pid != 0) {
+        u32 *found_ns_pid = bpf_map_lookup_elem(&valid_pids, &ns_pid);
 
-                ns_pid_ppid(task, &ns_pid, &ns_ppid, &pid_ns_id);
+        if (found_ns_pid && (pid_ns_id == *found_ns_pid)) {
+            bpf_map_update_elem(&pid_cache, &host_pid, &ns_pid, BPF_ANY);
+            return ns_pid;
+        } else if (ns_ppid != 0) {
+            u32 *found_ns_ppid = bpf_map_lookup_elem(&valid_pids, &ns_ppid);
+            
+            if (found_ns_ppid && (pid_ns_id == *found_ns_ppid)) {
+                bpf_map_update_elem(&pid_cache, &host_pid, &ns_pid, BPF_ANY);
 
-                if (ns_pid != 0) {
-                    u32 *found_ns_pid = bpf_map_lookup_elem(&valid_pids, &ns_pid);
-
-                    if (found_ns_pid && (pid_ns_id == *found_ns_pid)) {
-                        bpf_map_update_elem(&pid_cache, &host_pid, &ns_pid, BPF_ANY);
-                        return ns_pid;
-                    } else if (ns_ppid != 0) {
-                        u32 *found_ns_ppid = bpf_map_lookup_elem(&valid_pids, &ns_ppid);
-                        
-                        if (found_ns_ppid && (pid_ns_id == *found_ns_ppid)) {
-                            bpf_map_update_elem(&pid_cache, &host_pid, &ns_pid, BPF_ANY);
-
-                            return ns_pid;
-                        }
-                    }
-                }
-
-                return 0;
-            } else {
-                bpf_map_update_elem(&pid_cache, &host_pid, &host_ppid, BPF_ANY);
+                return ns_pid;
             }
         }
     }
 
-    return host_pid;
+    return 0;
 }
 
 #endif

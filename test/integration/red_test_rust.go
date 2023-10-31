@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"net"
 	"net/http"
+	"os"
+	"path"
 	"testing"
 	"time"
 
@@ -18,15 +20,17 @@ import (
 )
 
 func testREDMetricsForRustHTTPLibrary(t *testing.T, url string, comm string, port int) {
-	path := "/greeting"
-	// Random fake body to cause the request to have some size (38 bytes)
-	jsonBody := []byte(`{"name": "Someone", "number": 123}`)
+	jsonBody, err := os.ReadFile(path.Join(pathRoot, "test", "integration", "components", "rusttestserver", "large_data.json"))
+	assert.NoError(t, err)
+	assert.GreaterOrEqual(t, len(jsonBody), 100)
 
-	// Call 3 times the instrumented service, forcing it to:
-	// - take at least 30ms to respond
-	// - returning a 204 code
+	urlPath := "/greeting"
+
+	// Call 4 times the instrumented service, forcing it to:
+	// - take a large JSON body
+	// - returning a 200 code
 	for i := 0; i < 4; i++ {
-		doHTTPPost(t, url+path, 200, jsonBody)
+		doHTTPPost(t, url+urlPath, 200, jsonBody)
 	}
 
 	// Eventually, Prometheus would make this query visible
@@ -39,7 +43,7 @@ func testREDMetricsForRustHTTPLibrary(t *testing.T, url string, comm string, por
 			`http_status_code="200",` +
 			`service_namespace="integration-test",` +
 			`service_name="` + comm + `",` +
-			`http_target="` + path + `"}`)
+			`http_target="` + urlPath + `"}`)
 		require.NoError(t, err)
 		enoughPromResults(t, results)
 		val := totalPromCount(t, results)

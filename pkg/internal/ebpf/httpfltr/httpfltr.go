@@ -87,6 +87,20 @@ func (p *Tracer) AllowPID(pid uint32) {
 			if err != nil {
 				p.log.Error("Error setting up pid in BPF space", "error", err)
 			}
+			// This is requied to ensure everything works when Beyla is running in pid=host mode.
+			// In host mode, Beyla will find the host pid, while the bpf code matches the user pid.
+			// Therefore we find all namespaced pids for the current pid we discovered and allow those too.
+			otherPids, err := findNamespacedPids(int32(pid))
+			if err != nil {
+				p.log.Error("Error finding namespaced pids", "error", err)
+			}
+			p.log.Debug("Found namespaced pids (will contain the existing pid too)", "pids", otherPids)
+			for _, op := range otherPids {
+				err = p.bpfObjects.ValidPids.Put(op, nsid)
+				if err != nil {
+					p.log.Error("Error setting up pid in BPF space", "error", err)
+				}
+			}
 		} else {
 			p.log.Error("Error looking up namespace", "error", err)
 		}
@@ -113,19 +127,12 @@ func (p *Tracer) Load() (*ebpf.CollectionSpec, error) {
 	return loader()
 }
 
-func (p *Tracer) Constants(finfo *exec.FileInfo, _ *goexec.Offsets) map[string]any {
-	if p.cfg.Discovery.SystemWide {
+func (p *Tracer) Constants(_ *exec.FileInfo, _ *goexec.Offsets) map[string]any {
+	if p.cfg.Discovery.SystemWide || p.cfg.Discovery.BPFPidFilterOff {
 		return nil
 	}
 
-	m := map[string]any{"current_pid": finfo.Pid}
-
-	npid, err := findNamespace(finfo.Pid)
-	if err != nil {
-		p.log.Warn("error while looking up namespace pid, namespace pid matching will not work", err)
-	}
-
-	m["current_pid_ns_id"] = npid
+	m := map[string]any{"filter_pids": int32(1)}
 
 	return m
 }
@@ -258,7 +265,7 @@ func (p *Tracer) UProbes() map[string]map[string]ebpfcommon.FunctionPrograms {
 }
 
 func (p *Tracer) SocketFilters() []*ebpf.Program {
-	return []*ebpf.Program{p.bpfObjects.SocketHttpFilter}
+	return nil
 }
 
 func (p *Tracer) Run(ctx context.Context, eventsChan chan<- []request.Span, service svc.ID) {

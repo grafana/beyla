@@ -1,6 +1,7 @@
 package httpfltr
 
 import (
+	"bufio"
 	"fmt"
 	"log/slog"
 	"os"
@@ -46,4 +47,38 @@ func findNamespace(pid int32) (uint32, error) {
 	}
 
 	return 0, fmt.Errorf("couldn't find ns pid in the symlink [%s]", nsPid)
+}
+
+func findNamespacedPids(pid int32) ([]uint32, error) {
+	statusPath := fmt.Sprintf("/proc/%d/status", pid)
+	f, err := os.Open(statusPath)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to open(/proc/%d/status): %w", pid, err)
+	}
+
+	defer f.Close()
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.HasPrefix(line, "NSpid:") {
+			l := line[6:]
+			parts := strings.Split(l, "\t")
+			result := make([]uint32, 0)
+			for _, p := range parts {
+				if len(p) == 0 {
+					continue
+				}
+				id, err := strconv.ParseUint(p, 10, 32)
+
+				if err == nil {
+					result = append(result, uint32(id))
+				} else {
+					return nil, err
+				}
+			}
+			return result, nil
+		}
+	}
+	return nil, nil
 }

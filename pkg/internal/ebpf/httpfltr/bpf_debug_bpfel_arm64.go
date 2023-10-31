@@ -44,6 +44,7 @@ type bpf_debugHttpInfoT struct {
 	EndMonotimeNs   uint64
 	Buf             [160]uint8
 	Len             uint32
+	RespLen         uint32
 	Status          uint16
 	Type            uint8
 	Ssl             uint8
@@ -52,12 +53,11 @@ type bpf_debugHttpInfoT struct {
 		UserPid   uint32
 		Namespace uint32
 	}
-	_ [4]byte
 }
 
 type bpf_debugRecvArgsT struct {
-	SockPtr   uint64
-	MsghdrPtr uint64
+	SockPtr  uint64
+	IovecPtr uint64
 }
 
 type bpf_debugSockArgsT struct {
@@ -121,7 +121,6 @@ type bpf_debugProgramSpecs struct {
 	KretprobeSysAccept4     *ebpf.ProgramSpec `ebpf:"kretprobe_sys_accept4"`
 	KretprobeSysConnect     *ebpf.ProgramSpec `ebpf:"kretprobe_sys_connect"`
 	KretprobeTcpRecvmsg     *ebpf.ProgramSpec `ebpf:"kretprobe_tcp_recvmsg"`
-	SocketHttpFilter        *ebpf.ProgramSpec `ebpf:"socket__http_filter"`
 	UprobeSslDoHandshake    *ebpf.ProgramSpec `ebpf:"uprobe_ssl_do_handshake"`
 	UprobeSslRead           *ebpf.ProgramSpec `ebpf:"uprobe_ssl_read"`
 	UprobeSslReadEx         *ebpf.ProgramSpec `ebpf:"uprobe_ssl_read_ex"`
@@ -149,7 +148,6 @@ type bpf_debugMapSpecs struct {
 	Events              *ebpf.MapSpec `ebpf:"events"`
 	FilteredConnections *ebpf.MapSpec `ebpf:"filtered_connections"`
 	HttpInfoMem         *ebpf.MapSpec `ebpf:"http_info_mem"`
-	HttpTcpSeq          *ebpf.MapSpec `ebpf:"http_tcp_seq"`
 	OngoingHttp         *ebpf.MapSpec `ebpf:"ongoing_http"`
 	PidCache            *ebpf.MapSpec `ebpf:"pid_cache"`
 	PidTidToConn        *ebpf.MapSpec `ebpf:"pid_tid_to_conn"`
@@ -187,7 +185,6 @@ type bpf_debugMaps struct {
 	Events              *ebpf.Map `ebpf:"events"`
 	FilteredConnections *ebpf.Map `ebpf:"filtered_connections"`
 	HttpInfoMem         *ebpf.Map `ebpf:"http_info_mem"`
-	HttpTcpSeq          *ebpf.Map `ebpf:"http_tcp_seq"`
 	OngoingHttp         *ebpf.Map `ebpf:"ongoing_http"`
 	PidCache            *ebpf.Map `ebpf:"pid_cache"`
 	PidTidToConn        *ebpf.Map `ebpf:"pid_tid_to_conn"`
@@ -208,7 +205,6 @@ func (m *bpf_debugMaps) Close() error {
 		m.Events,
 		m.FilteredConnections,
 		m.HttpInfoMem,
-		m.HttpTcpSeq,
 		m.OngoingHttp,
 		m.PidCache,
 		m.PidTidToConn,
@@ -231,7 +227,6 @@ type bpf_debugPrograms struct {
 	KretprobeSysAccept4     *ebpf.Program `ebpf:"kretprobe_sys_accept4"`
 	KretprobeSysConnect     *ebpf.Program `ebpf:"kretprobe_sys_connect"`
 	KretprobeTcpRecvmsg     *ebpf.Program `ebpf:"kretprobe_tcp_recvmsg"`
-	SocketHttpFilter        *ebpf.Program `ebpf:"socket__http_filter"`
 	UprobeSslDoHandshake    *ebpf.Program `ebpf:"uprobe_ssl_do_handshake"`
 	UprobeSslRead           *ebpf.Program `ebpf:"uprobe_ssl_read"`
 	UprobeSslReadEx         *ebpf.Program `ebpf:"uprobe_ssl_read_ex"`
@@ -256,7 +251,6 @@ func (p *bpf_debugPrograms) Close() error {
 		p.KretprobeSysAccept4,
 		p.KretprobeSysConnect,
 		p.KretprobeTcpRecvmsg,
-		p.SocketHttpFilter,
 		p.UprobeSslDoHandshake,
 		p.UprobeSslRead,
 		p.UprobeSslReadEx,

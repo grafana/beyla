@@ -13,6 +13,7 @@ import (
 
 const (
 	defaultPollInterval = 5 * time.Second
+	ephemeralPortMin    = 32768
 )
 
 // Watcher polls every PollInterval for new processes and forwards either new or deleted process PIDs
@@ -191,7 +192,9 @@ func fetchProcessPorts() (map[PID]processPorts, error) {
 		}
 		var openPorts []uint32
 		for _, conn := range conns {
-			openPorts = append(openPorts, conn.Laddr.Port)
+			if conn.Laddr.Port < ephemeralPortMin {
+				openPorts = append(openPorts, conn.Laddr.Port)
+			}
 		}
 		processes[PID(pid)] = processPorts{pid: PID(pid), openPorts: openPorts}
 	}

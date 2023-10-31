@@ -35,6 +35,9 @@ type DiscoveryConfig struct {
 
 	// This can be enabled to use generic HTTP tracers only, no Go-specifics will be used:
 	SkipGoSpecificTracers bool `yaml:"skip_go_specific_tracers" env:"SKIP_GO_SPECIFIC_TRACERS"`
+
+	// Debugging only option. Make sure the kernel side doesn't filter any PIDs, force user space filtering.
+	BPFPidFilterOff bool `yaml:"bpf_pid_filter_off" env:"BPF_PID_FILTER_OFF"`
 }
 
 // DefinitionCriteria allows defining a group of services to be instrumented according to a set

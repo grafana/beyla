@@ -30,7 +30,7 @@ struct {
 // Temporary tracking of tcp_recvmsg arguments
 typedef struct recv_args {
     u64 sock_ptr; // linux sock or socket address
-    u64 msghdr_ptr;
+    u64 iovec_ptr;
 } recv_args_t;
 
 struct {
@@ -241,80 +241,96 @@ int BPF_KPROBE(kprobe_sys_exit, int status) {
     return 0;
 }
 
-SEC("socket/http_filter")
-int socket__http_filter(struct __sk_buff *skb) {
-    protocol_info_t tcp = {};
-    connection_info_t conn = {};
+// Main HTTP read and write operations are handled with tcp_sendmsg and tcp_recvmsg 
+SEC("kprobe/tcp_sendmsg")
+int BPF_KPROBE(kprobe_tcp_sendmsg, struct sock *sk, struct msghdr *msg, size_t size) {
+    u64 id = bpf_get_current_pid_tgid();
 
-    if (!read_sk_buff(skb, &tcp, &conn)) {
+    if (!valid_pid(id)) {
         return 0;
     }
 
-    // ignore ACK packets
-    if (tcp_ack(&tcp)) {
-        return 0;
-    }
+    bpf_dbg_printk("=== kprobe tcp_sendmsg=%d sock=%llx size %d===", id, sk, size);
 
-    // ignore empty packets, unless it's TCP FIN or TCP RST
-    if (!tcp_close(&tcp) && tcp_empty(&tcp, skb)) {
-        return 0;
-    }
+    connection_info_t info = {};
 
-    bool client = client_call(&conn);
-    // sorting must happen here, before we check or set dups
-    sort_connection_info(&conn);
+    if (parse_sock_info(sk, &info)) {
+        //dbg_print_http_connection_info(&info); // commented out since GitHub CI doesn't like this call
+        sort_connection_info(&info);
 
-    // ignore duplicate sequences
-    // This doesn't seem to work on kernels 5.10
-    if (client && tcp_dup(&conn, &tcp)) {
-       return 0;
-    }
-
-    // we don't want to read the whole buffer for every packed that passes our checks, we read only a bit and check if it's trully HTTP request/response.
-    unsigned char buf[MIN_HTTP_SIZE] = {0};
-    // note: we load everything here in a pedestrian way using chunks of 16 bytes with bpf_skb_load_bytes, because skb->data and skb->data_end are not
-    // available with socket filters. Question answerered here https://github.com/iovisor/bcc/issues/3807#issuecomment-1011837033
-    bpf_skb_load_bytes(skb, tcp.hdr_len, (void *)buf, sizeof(buf));
-    // technically the read should be reversed, but eBPF verifier complains on read with variable length
-    u32 len = skb->len - tcp.hdr_len;
-    if (len > MIN_HTTP_SIZE) {
-        len = MIN_HTTP_SIZE;
-    }
-
-    u8 packet_type = 0;
-    if (is_http(buf, len, &packet_type) || tcp_close(&tcp)) { // we must check tcp_close second, a packet can be a close and a response
-        http_info_t *info = empty_http_info();
-        if (!info) {
-            bpf_dbg_printk("== socket__http_filter == Error: could not allocate http_info_t space");
-            return 0;
-        }
-        info->conn_info = conn;
-        unsigned char *processing_buf = buf;
-
-        http_connection_metadata_t *meta = NULL;
-        if (packet_type) {
-            if (packet_type == PACKET_TYPE_RESPONSE) {
-                // if we are filtering by application, ignore the packets not for this connection
-                meta = bpf_map_lookup_elem(&filtered_connections, &conn);
-                //bpf_dbg_printk("Response meta=%lx", meta);
-                if (!meta) {
-                    return 0;
-                }
-            } else { // it must be a request, let's read more bytes
-                u32 full_len = skb->len - tcp.hdr_len;
-                if (full_len > FULL_BUF_SIZE) {
-                    full_len = FULL_BUF_SIZE;
-                }
-                read_skb_bytes(skb, tcp.hdr_len, info->buf, full_len);
-                processing_buf = info->buf;
+        if (size > 0) {
+            void *iovec_ptr = find_msghdr_buf(msg);
+            if (iovec_ptr) {
+                handle_buf_with_connection(&info, iovec_ptr, size, 0);
+            } else {
+                bpf_dbg_printk("can't find iovec ptr in msghdr, not tracking sendmsg");
             }
         }
-        if (packet_type) {
-            bpf_dbg_printk("=== http_filter len=%d pid=%d %s ===", (skb->len - tcp.hdr_len), (meta != NULL) ? meta->pid.host_pid : -1, buf);
-            //dbg_print_http_connection_info(&conn);
+
+        // Checks if it's sandwitched between active SSL handshake uprobe/uretprobe
+        void **s = bpf_map_lookup_elem(&active_ssl_handshakes, &id);
+        if (!s) {
+            return 0;
         }
 
-        process_http(info, &tcp, packet_type, (skb->len - tcp.hdr_len), processing_buf, meta);
+        void *ssl = *s;
+        bpf_dbg_printk("=== kprobe SSL tcp_sendmsg=%d sock=%llx ssl=%llx ===", id, sk, ssl);
+        bpf_map_update_elem(&ssl_to_conn, &ssl, &info, BPF_ANY);
+    }
+
+    return 0;
+}
+
+//int tcp_recvmsg(struct sock *sk, struct msghdr *msg, size_t len, int flags, int *addr_len)
+SEC("kprobe/tcp_recvmsg")
+int BPF_KPROBE(kprobe_tcp_recvmsg, struct sock *sk, struct msghdr *msg, size_t len, int flags, int *addr_len) {
+    u64 id = bpf_get_current_pid_tgid();
+
+    if (!valid_pid(id)) {
+        return 0;
+    }
+
+    bpf_printk("=== tcp_recvmsg id=%d sock=%llx ===", id, sk);
+
+    // Important: We must work here to remember the iovec pointer, since the msghdr structure
+    // can get modified in non-reversible way if the incoming packet is large and broken down in parts. 
+    recv_args_t args = {
+        .sock_ptr = (u64)sk,
+        .iovec_ptr = (u64)find_msghdr_buf(msg)
+    };
+
+    bpf_map_update_elem(&active_recv_args, &id, &args, BPF_ANY);
+
+    return 0;
+}
+
+SEC("kretprobe/tcp_recvmsg")
+int BPF_KRETPROBE(kretprobe_tcp_recvmsg, int copied_len) {
+    u64 id = bpf_get_current_pid_tgid();
+
+    if (!valid_pid(id)) {
+        return 0;
+    }
+
+    recv_args_t *args = bpf_map_lookup_elem(&active_recv_args, &id);
+    bpf_map_delete_elem(&active_recv_args, &id);
+
+    if (!args || (copied_len <= 0)) {
+        return 0;
+    }
+
+    bpf_dbg_printk("=== tcp_recvmsg ret id=%d sock=%llx copied_len %d ===", id, args->sock_ptr, copied_len);
+
+    if (!args->iovec_ptr) {
+        bpf_dbg_printk("iovec_ptr found in kprobe is NULL, ignoring this tcp_recvmsg");
+    }
+
+    connection_info_t info = {};
+
+    if (parse_sock_info((struct sock *)args->sock_ptr, &info)) {
+        sort_connection_info(&info);
+        //dbg_print_http_connection_info(&info);
+        handle_buf_with_connection(&info, (void *)args->iovec_ptr, copied_len, 0);
     }
 
     return 0;
@@ -336,70 +352,6 @@ int BPF_UPROBE(uprobe_ssl_do_handshake, void *s) {
     bpf_dbg_printk("=== uprobe SSL_do_handshake=%d ssl=%llx===", id, s);
 
     bpf_map_update_elem(&active_ssl_handshakes, &id, &s, BPF_ANY);
-
-    return 0;
-}
-
-SEC("kprobe/tcp_sendmsg")
-int BPF_KPROBE(kprobe_tcp_sendmsg, struct sock *sk, struct msghdr *msg, size_t size) {
-    u64 id = bpf_get_current_pid_tgid();
-
-    if (!valid_pid(id)) {
-        return 0;
-    }
-
-    bpf_dbg_printk("=== kprobe tcp_sendmsg=%d sock=%llx size %d===", id, sk, size);
-
-    connection_info_t info = {};
-
-    if (parse_sock_info(sk, &info)) {
-        bool client_req = client_call(&info);
-        //dbg_print_http_connection_info(&info); // commented out since GitHub CI doesn't like this call
-        sort_connection_info(&info);
-
-        if (client_req) {
-            void *u_buf = read_msghdr_buf(msg);
-
-            if (u_buf) {
-                unsigned char small_buf[16];            
-                bpf_probe_read(small_buf, 16, u_buf);
-
-                u8 packet_type = 0;
-                if (is_http(small_buf, 16, &packet_type)) {
-                    if (packet_type == PACKET_TYPE_REQUEST) {
-                        http_buf_t *trace = bpf_ringbuf_reserve(&events, sizeof(http_buf_t), 0);
-                        if (trace) {
-                            trace->conn_info = info;
-                            trace->flags |= CONN_INFO_FLAG_TRACE;
-
-                            s64 buf_len = (s64)size & (TRACE_BUF_SIZE - 1);
-                            bpf_probe_read(trace->buf, buf_len, u_buf);
-
-                            if (buf_len < TRACE_BUF_SIZE) {
-                                trace->buf[buf_len] = '\0';
-                            }
-
-                            bpf_dbg_printk("Sending client buffer %s, copied_size %d", trace->buf, size);
-
-                            bpf_ringbuf_submit(trace, get_flags());
-                        }
-                    }
-                }
-            } else {
-                bpf_dbg_printk("couldn't find msghdr u_buf");
-            }
-        }
-
-        // Checks if it's sandwitched between active SSL handshake uprobe/uretprobe
-        void **s = bpf_map_lookup_elem(&active_ssl_handshakes, &id);
-        if (!s) {
-            return 0;
-        }
-
-        void *ssl = *s;
-        bpf_dbg_printk("=== kprobe SSL tcp_sendmsg=%d sock=%llx ssl=%llx ===", id, sk, ssl);
-        bpf_map_update_elem(&ssl_to_conn, &ssl, &info, BPF_ANY);
-    }
 
     return 0;
 }
@@ -601,82 +553,6 @@ int BPF_UPROBE(uprobe_ssl_shutdown, void *s) {
 
     bpf_map_delete_elem(&ssl_to_conn, &s);
     bpf_map_delete_elem(&pid_tid_to_conn, &id);
-
-    return 0;
-}
-
-//int tcp_recvmsg(struct sock *sk, struct msghdr *msg, size_t len, int flags, int *addr_len)
-SEC("kprobe/tcp_recvmsg")
-int BPF_KPROBE(kprobe_tcp_recvmsg, struct sock *sk, struct msghdr *msg, size_t len, int flags, int *addr_len) {
-    u64 id = bpf_get_current_pid_tgid();
-
-    if (!valid_pid(id)) {
-        return 0;
-    }
-
-    bpf_printk("=== tcp_recvmsg id=%d sock=%llx ===", id, sk);
-
-    recv_args_t args = {
-        .sock_ptr = (u64)sk,
-        .msghdr_ptr = (u64)msg
-    };
-
-    bpf_map_update_elem(&active_recv_args, &id, &args, BPF_ANY);
-
-    return 0;
-}
-
-SEC("kretprobe/tcp_recvmsg")
-int BPF_KRETPROBE(kretprobe_tcp_recvmsg, int copied_len) {
-    u64 id = bpf_get_current_pid_tgid();
-
-    if (!valid_pid(id)) {
-        return 0;
-    }
-
-    recv_args_t *args = bpf_map_lookup_elem(&active_recv_args, &id);
-    bpf_map_delete_elem(&active_recv_args, &id);
-
-    if (!args || (copied_len <= 0)) {
-        return 0;
-    }
-
-    bpf_dbg_printk("=== tcp_recvmsg ret id=%d sock=%llx ===", id, args->sock_ptr);
-
-    connection_info_t info = {};
-
-    if (parse_sock_info((struct sock *)args->sock_ptr, &info)) {
-        sort_connection_info(&info);
-        //dbg_print_http_connection_info(&info);
-
-        // we only care about connections setup by the socket filter as HTTP
-        http_info_t *http_info = bpf_map_lookup_elem(&ongoing_http, &info);
-        if (http_info && http_info->type != EVENT_HTTP_CLIENT && !http_info->ssl) {
-            struct msghdr *msg = (struct msghdr *)args->msghdr_ptr;
-            void *u_buf = read_msghdr_buf(msg);
-            
-            if (u_buf) {
-                http_buf_t *trace = bpf_ringbuf_reserve(&events, sizeof(http_buf_t), 0);
-                if (trace) {
-                    trace->conn_info = info;
-                    trace->flags |= CONN_INFO_FLAG_TRACE;
-
-                    int buf_len = copied_len & (TRACE_BUF_SIZE - 1);
-                    bpf_probe_read(trace->buf, buf_len, u_buf);
-
-                    if (buf_len < TRACE_BUF_SIZE) {
-                        trace->buf[buf_len] = '\0';
-                    }
-
-                    bpf_dbg_printk("Sending buffer %s, copied_size %d", trace->buf, copied_len);
-
-                    bpf_ringbuf_submit(trace, get_flags());
-                }
-            } else {
-                bpf_dbg_printk("Couldn't read msghdr buffer");
-            }
-        }
-    }
 
     return 0;
 }

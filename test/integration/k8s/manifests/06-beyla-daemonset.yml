@@ -1,0 +1,62 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: beyla-config
+data:
+  beyla-config.yml: |
+    print_traces: true
+    log_level: debug
+    discovery:
+      services:
+        - exe_path_regexp: testserver
+          namespace: integration-test
+    routes:
+      patterns:
+        - /pingpong
+      ignored_patterns:
+        - /metrics
+      unmatched: path
+    otel_metrics_export:
+      endpoint: http://otelcol:4318
+    otel_traces_export:
+      endpoint: http://jaeger:4318
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: beyla
+spec:
+  selector:
+    matchLabels:
+      instrumentation: beyla
+  template:
+    metadata:
+      labels:
+        instrumentation: beyla
+    spec:
+      hostPID: true  #important!
+      volumes:
+        - name: beyla-config
+          configMap:
+            name: beyla-config
+      containers:
+        - name: beyla
+          image: grafana/beyla:latest
+          command: ["/beyla", "--config=/config/beyla-config.yml"]
+          securityContext:
+            privileged: true
+            runAsUser: 0
+          volumeMounts:
+            - mountPath: /config
+              name: beyla-config
+          env:
+            - name: DISCOVERY_POLL_INTERVAL
+              value: "500ms"
+            - name: METRICS_INTERVAL
+              value: "10ms"
+            - name: BPF_BATCH_TIMEOUT
+              value: "10ms"
+            - name: METRICS_REPORT_TARGET
+              value: "true"
+            - name: METRICS_REPORT_PEER
+              value: "true"

@@ -112,6 +112,10 @@ func (ta *TraceAttacher) getTracer(ie *Instrumentable) (*ebpf.ProcessTracer, boo
 		PinPath:    ta.buildPinPath(ie),
 		SystemWide: ta.Cfg.Discovery.SystemWide,
 	}
+	ta.log.Debug("new executable for discovered process",
+		"pid", ie.FileInfo.Pid,
+		"child", ie.ChildPids,
+		"exec", ie.FileInfo.CmdExePath)
 	// allowing the tracer to forward traces from the discovered PID and its children processes
 	tracer.AllowPID(uint32(ie.FileInfo.Pid))
 	for _, pid := range ie.ChildPids {

@@ -41,7 +41,7 @@ spec:
             name: beyla-config
       containers:
         - name: beyla
-          image: grafana/beyla:latest
+          image: beyla:dev
           command: ["/beyla", "--config=/config/beyla-config.yml"]
           securityContext:
             privileged: true

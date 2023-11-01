@@ -50,7 +50,7 @@ type HTTPInfo struct {
 type pidsFilter interface {
 	ebpf2.PIDsAccounter
 	Filter(inputSpans []request.Span) []request.Span
-	CurrentPIDs() map[uint32]struct{}
+	CurrentPIDs() map[uint32]map[uint32]struct{}
 }
 
 type Tracer struct {
@@ -81,7 +81,7 @@ func New(cfg *pipe.Config, metrics imetrics.Reporter) *Tracer {
 
 func (p *Tracer) AllowPID(pid uint32) {
 	if p.bpfObjects.ValidPids != nil {
-		nsid, err := findNamespace(int32(pid))
+		nsid, err := ebpfcommon.FindNamespace(int32(pid))
 		if err == nil {
 			err = p.bpfObjects.ValidPids.Put(pid, nsid)
 			if err != nil {
@@ -90,7 +90,7 @@ func (p *Tracer) AllowPID(pid uint32) {
 			// This is requied to ensure everything works when Beyla is running in pid=host mode.
 			// In host mode, Beyla will find the host pid, while the bpf code matches the user pid.
 			// Therefore we find all namespaced pids for the current pid we discovered and allow those too.
-			otherPids, err := findNamespacedPids(int32(pid))
+			otherPids, err := ebpfcommon.FindNamespacedPids(int32(pid))
 			if err != nil {
 				p.log.Error("Error finding namespaced pids", "error", err)
 			}
@@ -271,10 +271,21 @@ func (p *Tracer) SocketFilters() []*ebpf.Program {
 func (p *Tracer) Run(ctx context.Context, eventsChan chan<- []request.Span, service svc.ID) {
 	// At this point we now have loaded the bpf objects, which means we should insert any
 	// pids that are allowed into the bpf map
-	p.log.Debug("Reallowing pids")
-	for pid := range p.pidsFilter.CurrentPIDs() {
-		p.log.Debug("Reallowing pid", "pid", pid)
-		p.AllowPID(pid)
+	if p.bpfObjects.ValidPids != nil {
+		p.log.Debug("Reallowing pids")
+		for nsid, pids := range p.pidsFilter.CurrentPIDs() {
+			for pid := range pids {
+				p.log.Debug("Reallowing pid", "pid", pid, "namespace", nsid)
+				err := p.bpfObjects.ValidPids.Put(pid, nsid)
+				if err != nil {
+					if err != nil {
+						p.log.Error("Error setting up pid in BPF space", "pid", pid, "namespace", nsid, "error", err)
+					}
+				}
+			}
+		}
+	} else {
+		p.log.Error("BPF Pids map is not created yet, this is a bug.")
 	}
 
 	p.Service = &service

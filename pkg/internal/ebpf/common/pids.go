@@ -35,9 +35,8 @@ var readNamespace = func() uint32 {
 // be forwarded. Its Filter method filters the request.Span instances whose
 // PIDs are not in the allowed list.
 type PIDsFilter struct {
-	pidNs   uint32
 	log     *slog.Logger
-	current map[uint32]struct{}
+	current map[uint32]map[uint32]struct{}
 	queue   chan pidEvent
 }
 
@@ -55,9 +54,8 @@ type pidEvent struct {
 
 func NewPIDsFilter(log *slog.Logger) *PIDsFilter {
 	return &PIDsFilter{
-		pidNs:   readNamespace(),
 		log:     log,
-		current: map[uint32]struct{}{},
+		current: map[uint32]map[uint32]struct{}{},
 		queue:   make(chan pidEvent, updatesBufLen),
 	}
 }
@@ -70,7 +68,7 @@ func (pf *PIDsFilter) BlockPID(pid uint32) {
 	pf.queue <- pidEvent{pid: pid, op: DEL}
 }
 
-func (pf *PIDsFilter) CurrentPIDs() map[uint32]struct{} {
+func (pf *PIDsFilter) CurrentPIDs() map[uint32]map[uint32]struct{} {
 	pf.updatePIDs()
 	return pf.current
 }
@@ -81,25 +79,23 @@ func (pf *PIDsFilter) Filter(inputSpans []request.Span) []request.Span {
 	outputSpans := make([]request.Span, 0, len(inputSpans))
 	pf.updatePIDs()
 	for i := range inputSpans {
-		// While BPF always see the processes in the same way (from the kernel-side)
-		// Beyla userspace might see them differently depending on how it is operating.
-		// If they are in different namespaces, the process finder will
-		var pidView uint32
-		if inputSpans[i].Pid.Namespace == pf.pidNs {
-			// If Beyla is in the same namespace as the inspected process (in the same host,
-			// or in the same Pod), they will both share the same view of the PID from
-			// the userspace, so we filter according to this value.
-			pidView = inputSpans[i].Pid.UserPID
-		} else {
-			// If Beyla is in a different namespace than the inspected process (for example,
-			// in a different container with different pid cgroups),it will see the
-			// same PID as the host so we need to filter traces according to it.
-			pidView = inputSpans[i].Pid.HostPID
+		span := &inputSpans[i]
+
+		// We first confirm that the current namespace seen by BPF is tracked by Beyla
+		ns, nsExists := pf.current[span.Pid.Namespace]
+
+		if !nsExists {
+			continue
 		}
-		if _, ok := pf.current[pidView]; ok {
+
+		// If the namespace exist, we confirm that we are tracking the user PID that Beyla
+		// saw. We don't check for the host pid, because we can't be sure of the number
+		// of container layers. The Host PID is always the outer most layer.
+		if _, pidExists := ns[span.Pid.UserPID]; pidExists {
 			outputSpans = append(outputSpans, inputSpans[i])
 		}
 	}
+
 	if len(outputSpans) != len(inputSpans) {
 		pf.log.Debug("filtered spans from processes that did not match discovery",
 			"function", "PIDsFilter.Filter", "inLen", len(inputSpans), "outLen", len(outputSpans),
@@ -116,9 +112,9 @@ func (pf *PIDsFilter) updatePIDs() {
 		case e := <-pf.queue:
 			switch e.op {
 			case ADD:
-				pf.current[e.pid] = struct{}{}
+				pf.addPID(e.pid)
 			case DEL:
-				delete(pf.current, e.pid)
+				pf.removePID(e.pid)
 			default:
 				pf.log.Error("Unsupported PID operation")
 			}
@@ -126,6 +122,51 @@ func (pf *PIDsFilter) updatePIDs() {
 			// no more updates
 			return
 		}
+	}
+}
+
+func (pf *PIDsFilter) addPID(pid uint32) {
+	nsid, err := FindNamespace(int32(pid))
+
+	if err != nil {
+		pf.log.Error("Error looking up namespace for tracking PID", "pid", pid, "error", err)
+		return
+	}
+
+	ns, nsExists := pf.current[nsid]
+	if !nsExists {
+		ns = make(map[uint32]struct{})
+		pf.current[nsid] = ns
+	}
+
+	allPids, err := FindNamespacedPids(int32(pid))
+
+	if err != nil {
+		pf.log.Error("Error looking up namespaced pids", "pid", pid, "error", err)
+		return
+	}
+
+	for _, p := range allPids {
+		ns[p] = struct{}{}
+	}
+}
+
+func (pf *PIDsFilter) removePID(pid uint32) {
+	nsid, err := FindNamespace(int32(pid))
+
+	if err != nil {
+		pf.log.Error("Error looking up namespace for removing PID", "pid", pid, "error", err)
+		return
+	}
+
+	ns, nsExists := pf.current[nsid]
+	if !nsExists {
+		return
+	}
+
+	delete(ns, pid)
+	if len(ns) == 0 {
+		delete(pf.current, nsid)
 	}
 }
 
@@ -137,7 +178,7 @@ func (pf *IdentityPidsFilter) AllowPID(_ uint32) {}
 
 func (pf *IdentityPidsFilter) BlockPID(_ uint32) {}
 
-func (pf *IdentityPidsFilter) CurrentPIDs() map[uint32]struct{} {
+func (pf *IdentityPidsFilter) CurrentPIDs() map[uint32]map[uint32]struct{} {
 	return nil
 }
 

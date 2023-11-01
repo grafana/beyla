@@ -74,11 +74,10 @@ func TestSuite_StaticCompilation(t *testing.T) {
 }
 
 func TestSuite_OldestGoVersion(t *testing.T) {
-	compose, err := docker.ComposeSuite("docker-compose.yml", path.Join(pathOutput, "test-suite-oldest-go.log"))
-	compose.Env = append(compose.Env, `TESTSERVER_DOCKERFILE_SUFFIX=_1.17`)
+	compose, err := docker.ComposeSuite("docker-compose-1.17.yml", path.Join(pathOutput, "test-suite-oldest-go.log"))
 	require.NoError(t, err)
 	require.NoError(t, compose.Up())
-	t.Run("RED metrics", testREDMetricsHTTP)
+	t.Run("RED metrics", testREDMetricsOldHTTP)
 	t.Run("HTTP traces", testHTTPTraces)
 	t.Run("GRPC traces", testGRPCTraces)
 	t.Run("GRPC RED metrics", testREDMetricsGRPC)

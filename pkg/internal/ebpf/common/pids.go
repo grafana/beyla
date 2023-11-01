@@ -1,34 +1,22 @@
 package ebpfcommon
 
 import (
-	"fmt"
 	"log/slog"
-	"os"
-	"strconv"
 
 	"github.com/grafana/beyla/pkg/internal/request"
 )
 
 const updatesBufLen = 10
 
-// injectable function (can be replaced in tests). It reads the
+// injectable functions (can be replaced in tests). It reads the
 // current process namespace from the /proc filesystem. It is required to
 // choose to filter traces using whether the User-space or Host-space PIDs
-var readNamespace = func() uint32 {
-	log := slog.With("component", "ebpfcommon.readNamespace")
-	dst, err := os.Readlink(fmt.Sprintf("/proc/%d/ns/pid", os.Getpid()))
-	if err != nil {
-		log.Warn("error reading pids namespace. Assuming 0", "error", err)
-		return 0
-	}
-	ns, err := strconv.ParseUint(dst[len("pid:["):len(dst)-1], 10, 32)
-	if err != nil {
-		log.Warn("parsing pids string. Assuming 0", "str", dst, "error", err)
-		return 0
-	}
+var readNamespace = func(pid int32) (uint32, error) {
+	return FindNamespace(pid)
+}
 
-	log.Debug("fetched Beyla PID namespace", "str", dst, "value", ns)
-	return uint32(ns)
+var readNamespacePIDs = func(pid int32) ([]uint32, error) {
+	return FindNamespacedPids(pid)
 }
 
 // PIDsFilter keeps a thread-safe copy of the PIDs whose traces are allowed to
@@ -126,7 +114,7 @@ func (pf *PIDsFilter) updatePIDs() {
 }
 
 func (pf *PIDsFilter) addPID(pid uint32) {
-	nsid, err := FindNamespace(int32(pid))
+	nsid, err := readNamespace(int32(pid))
 
 	if err != nil {
 		pf.log.Error("Error looking up namespace for tracking PID", "pid", pid, "error", err)
@@ -139,7 +127,7 @@ func (pf *PIDsFilter) addPID(pid uint32) {
 		pf.current[nsid] = ns
 	}
 
-	allPids, err := FindNamespacedPids(int32(pid))
+	allPids, err := readNamespacePIDs(int32(pid))
 
 	if err != nil {
 		pf.log.Error("Error looking up namespaced pids", "pid", pid, "error", err)
@@ -152,7 +140,7 @@ func (pf *PIDsFilter) addPID(pid uint32) {
 }
 
 func (pf *PIDsFilter) removePID(pid uint32) {
-	nsid, err := FindNamespace(int32(pid))
+	nsid, err := readNamespace(int32(pid))
 
 	if err != nil {
 		pf.log.Error("Error looking up namespace for removing PID", "pid", pid, "error", err)

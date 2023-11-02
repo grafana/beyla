@@ -8,14 +8,10 @@ data:
     log_level: debug
     discovery:
       services:
-        - exe_path_regexp: testserver
+        - open_ports: 8083
           namespace: integration-test
     routes:
-      patterns:
-        - /pingpong
-      ignored_patterns:
-        - /metrics
-      unmatched: path
+      unmatched: heuristic
     otel_metrics_export:
       endpoint: http://otelcol:4318
     otel_traces_export:
@@ -51,13 +47,13 @@ spec:
             - mountPath: /config
               name: beyla-config
           env:
-            - name: BEYLA_DISCOVERY_POLL_INTERVAL
+            - name: DISCOVERY_POLL_INTERVAL
               value: "500ms"
-            - name: BEYLA_METRICS_INTERVAL
+            - name: METRICS_INTERVAL
               value: "10ms"
-            - name: BEYLA_BPF_BATCH_TIMEOUT
+            - name: BPF_BATCH_TIMEOUT
               value: "10ms"
-            - name: BEYLA_METRICS_REPORT_TARGET
+            - name: METRICS_REPORT_TARGET
               value: "true"
-            - name: BEYLA_METRICS_REPORT_PEER
+            - name: METRICS_REPORT_PEER
               value: "true"

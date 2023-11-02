@@ -100,23 +100,27 @@ func NewKind(kindClusterName string, options ...Option) *Kind {
 
 // Run the Kind cluster for the later execution of tests.
 func (k *Kind) Run(m *testing.M) {
+	log := log()
 	var funcs []env.Func
 	if k.kindConfigPath != "" {
+		log.Info("adding func: createKindCluster", "name", k.clusterName, "image", kindImage,"path", k.kindConfigPath)
 		funcs = append(funcs,
 			// TODO: allow overriding kindImage
 			envfuncs.CreateKindClusterWithConfig(k.clusterName, kindImage, k.kindConfigPath))
 	} else {
+		log.Info("adding func: createKindCluster", "name", k.clusterName)
 		funcs = append(funcs,
 			envfuncs.CreateKindCluster(k.clusterName))
 	}
 	for _, img := range k.localImages {
+		log.Info("adding func: loadLocalImage", "img", img)
 		funcs = append(funcs, k.loadLocalImage(img))
 	}
 	for _, mf := range k.deployManifests {
+		log.Info("adding func: deployManifests", "manifest", mf)
 		funcs = append(funcs, deploy(mf))
 	}
 
-	log := log()
 	log.Info("starting kind setup")
 	code := k.testEnv.Setup(funcs...).
 		Finish(
@@ -136,7 +140,7 @@ func (k *Kind) exportLogs() env.Func {
 		log.With("directory", k.logsDir).Info("exporting cluster logs")
 		exe := gexe.New()
 		out := exe.Run("kind export logs " + k.logsDir + " --name " + k.clusterName)
-		log.With("out", out).Debug("exported cluster logs")
+		log.With("out", out).Info("exported cluster logs")
 		return ctx, nil
 	}
 }
@@ -264,7 +268,7 @@ func decodeAndApply(
 // methods, which will selectively work depending on the container backend type
 func (k *Kind) loadLocalImage(tag string) env.Func {
 	return func(ctx context.Context, config *envconf.Config) (context.Context, error) {
-		log().Debug("trying to load docker image from local registry")
+		log().Info("trying to load docker image from local registry")
 		ctx, err := envfuncs.LoadDockerImageToCluster(
 			k.clusterName, tag)(ctx, config)
 		if err == nil {

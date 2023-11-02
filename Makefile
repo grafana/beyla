@@ -211,7 +211,7 @@ cleanup-integration-test:
 run-integration-test:
 	@echo "### Running integration tests"
 	go clean -testcache
-	go test -failfast -v -timeout 60m -mod vendor -a ./test/integration/... --tags=integration
+	go test -p 1 -failfast -v -timeout 60m -mod vendor -a ./test/integration/... --tags=integration
 
 .PHONY: integration-test
 integration-test: prereqs prepare-integration-test

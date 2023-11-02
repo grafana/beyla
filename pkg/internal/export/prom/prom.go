@@ -49,9 +49,9 @@ const (
 // TODO: TLS
 type PrometheusConfig struct {
 	Port           int    `yaml:"port" env:"BEYLA_PROMETHEUS_PORT"`
-	Path           string `yaml:"path" env:"PROMETHEUS_PATH"`
-	ReportTarget   bool   `yaml:"report_target" env:"METRICS_REPORT_TARGET"`
-	ReportPeerInfo bool   `yaml:"report_peer" env:"METRICS_REPORT_PEER"`
+	Path           string `yaml:"path" env:"BEYLA_PROMETHEUS_PATH"`
+	ReportTarget   bool   `yaml:"report_target" env:"BEYLA_METRICS_REPORT_TARGET"`
+	ReportPeerInfo bool   `yaml:"report_peer" env:"BEYLA_METRICS_REPORT_PEER"`
 
 	Buckets otel.Buckets `yaml:"buckets"`
 }

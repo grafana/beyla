@@ -68,32 +68,32 @@ type Config struct {
 	Metrics    otel.MetricsConfig            `yaml:"otel_metrics_export"`
 	Traces     otel.TracesConfig             `yaml:"otel_traces_export"`
 	Prometheus prom.PrometheusConfig         `yaml:"prometheus_export"`
-	Printer    debug.PrintEnabled            `yaml:"print_traces" env:"PRINT_TRACES"`
+	Printer    debug.PrintEnabled            `yaml:"print_traces" env:"BEYLA_PRINT_TRACES"`
 
 	// Exec allows selecting the instrumented executable whose complete path contains the Exec value.
-	Exec services.PathRegexp `yaml:"executable_name" env:"EXECUTABLE_NAME"`
+	Exec services.PathRegexp `yaml:"executable_name" env:"BEYLA_EXECUTABLE_NAME"`
 	// Port allows selecting the instrumented executable that owns the Port value. If this value is set (and
 	// different to zero), the value of the Exec property won't take effect.
 	// It's important to emphasize that if your process opens multiple HTTP/GRPC ports, the auto-instrumenter
 	// will instrument all the service calls in all the ports, not only the port specified here.
-	Port services.PortEnum `yaml:"open_port" env:"OPEN_PORT"`
+	Port services.PortEnum `yaml:"open_port" env:"BEYLA_OPEN_PORT"`
 
-	// ServiceName is taken from either SERVICE_NAME env var or OTEL_SERVICE_NAME (for OTEL spec compatibility)
+	// ServiceName is taken from either BEYLA_SERVICE_NAME env var or OTEL_SERVICE_NAME (for OTEL spec compatibility)
 	// Using env and envDefault is a trick to get the value either from one of either variables
-	ServiceName      string `yaml:"service_name" env:"OTEL_SERVICE_NAME,expand" envDefault:"${SERVICE_NAME}"`
-	ServiceNamespace string `yaml:"service_namespace" env:"SERVICE_NAMESPACE"`
+	ServiceName      string `yaml:"service_name" env:"OTEL_SERVICE_NAME,expand" envDefault:"${BEYLA_SERVICE_NAME}"`
+	ServiceNamespace string `yaml:"service_namespace" env:"BEYLA_SERVICE_NAMESPACE"`
 
 	// Discovery configuration
 	Discovery services.DiscoveryConfig `yaml:"discovery"`
 
-	LogLevel string `yaml:"log_level" env:"LOG_LEVEL"`
+	LogLevel string `yaml:"log_level" env:"BEYLA_LOG_LEVEL"`
 
 	// From this comment, the properties below will remain undocumented, as they
 	// are useful for development purposes. They might be helpful for customer support.
 
-	ChannelBufferLen int               `yaml:"channel_buffer_len" env:"CHANNEL_BUFFER_LEN"`
-	Noop             debug.NoopEnabled `yaml:"noop" env:"NOOP_TRACES"`
-	ProfilePort      int               `yaml:"profile_port" env:"PROFILE_PORT"`
+	ChannelBufferLen int               `yaml:"channel_buffer_len" env:"BEYLA_CHANNEL_BUFFER_LEN"`
+	Noop             debug.NoopEnabled `yaml:"noop" env:"BEYLA_NOOP_TRACES"`
+	ProfilePort      int               `yaml:"profile_port" env:"BEYLA_PROFILE_PORT"`
 	InternalMetrics  imetrics.Config   `yaml:"internal_metrics"`
 }
 
@@ -108,13 +108,13 @@ func (c *Config) validateInstrumentation() error {
 		return ConfigError(fmt.Sprintf("error in services YAML property: %s", err.Error()))
 	}
 	if c.Port.Len() == 0 && !c.Exec.IsSet() && len(c.Discovery.Services) == 0 && !c.Discovery.SystemWide {
-		return ConfigError("missing EXECUTABLE_NAME, OPEN_PORT or SYSTEM_WIDE property")
+		return ConfigError("missing BEYLA_EXECUTABLE_NAME, BEYLA_OPEN_PORT or BEYLA_SYSTEM_WIDE property")
 	}
 	if (c.Port.Len() > 0 || c.Exec.IsSet() || len(c.Discovery.Services) > 0) && c.Discovery.SystemWide {
-		return ConfigError("you can't use SYSTEM_WIDE if any of EXECUTABLE_NAME, OPEN_PORT or services (YAML) is set")
+		return ConfigError("you can't use BEYLA_SYSTEM_WIDE if any of BEYLA_EXECUTABLE_NAME, BEYLA_OPEN_PORT or services (YAML) are set")
 	}
 	if c.EBPF.BatchLength == 0 {
-		return ConfigError("BATCH_LENGTH must be at least 1")
+		return ConfigError("BEYLA_BPF_BATCH_LENGTH must be at least 1")
 	}
 	return nil
 }
@@ -128,7 +128,7 @@ func (c *Config) Validate() error {
 		!c.Metrics.Enabled() && !c.Traces.Enabled() &&
 		!c.Prometheus.Enabled() {
 		return ConfigError("at least one of the following properties must be set: " +
-			"NOOP_TRACES, PRINT_TRACES, OTEL_EXPORTER_OTLP_ENDPOINT, " +
+			"BEYLA_NOOP_TRACES, BEYLA_PRINT_TRACES, OTEL_EXPORTER_OTLP_ENDPOINT, " +
 			"OTEL_EXPORTER_OTLP_METRICS_ENDPOINT, OTEL_EXPORTER_OTLP_TRACES_ENDPOINT, BEYLA_PROMETHEUS_PORT")
 	}
 	return nil

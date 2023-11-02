@@ -42,7 +42,7 @@ const (
 )
 
 type MetricsConfig struct {
-	Interval time.Duration `yaml:"interval" env:"METRICS_INTERVAL"`
+	Interval time.Duration `yaml:"interval" env:"BEYLA_METRICS_INTERVAL"`
 
 	CommonEndpoint  string `yaml:"-" env:"OTEL_EXPORTER_OTLP_ENDPOINT"`
 	MetricsEndpoint string `yaml:"endpoint" env:"OTEL_EXPORTER_OTLP_METRICS_ENDPOINT"`
@@ -51,17 +51,17 @@ type MetricsConfig struct {
 	MetricsProtocol Protocol `yaml:"-" env:"OTEL_EXPORTER_OTLP_METRICS_PROTOCOL"`
 
 	// InsecureSkipVerify is not standard, so we don't follow the same naming convention
-	InsecureSkipVerify bool `yaml:"insecure_skip_verify" env:"OTEL_INSECURE_SKIP_VERIFY"`
+	InsecureSkipVerify bool `yaml:"insecure_skip_verify" env:"BEYLA_OTEL_INSECURE_SKIP_VERIFY"`
 
 	// ReportTarget specifies whether http.target should be submitted as a metric attribute. It is disabled by
 	// default to avoid cardinality explosion in paths with IDs. In that case, it is recommended to group these
 	// requests in the Routes node
-	ReportTarget   bool `yaml:"report_target" env:"METRICS_REPORT_TARGET"`
-	ReportPeerInfo bool `yaml:"report_peer" env:"METRICS_REPORT_PEER"`
+	ReportTarget   bool `yaml:"report_target" env:"BEYLA_METRICS_REPORT_TARGET"`
+	ReportPeerInfo bool `yaml:"report_peer" env:"BEYLA_METRICS_REPORT_PEER"`
 
 	Buckets Buckets `yaml:"buckets"`
 
-	ReportersCacheLen int `yaml:"reporters_cache_len" env:"METRICS_REPORT_CACHE_LEN"`
+	ReportersCacheLen int `yaml:"reporters_cache_len" env:"BEYLA_METRICS_REPORT_CACHE_LEN"`
 }
 
 func (m *MetricsConfig) GetProtocol() Protocol {

@@ -29,11 +29,11 @@ services:
     network_mode: "service:nginx"
     pid: "service:nginx"
     environment:
-      PRINT_TRACES: "true"
-      OPEN_PORT: "3330"
-      SERVICE_NAMESPACE: "demo"
+      BEYLA_PRINT_TRACES: "true"
+      BEYLA_OPEN_PORT: "3330"
+      BEYLA_SERVICE_NAMESPACE: "demo"
       OTEL_SERVICE_NAME: "demo-nginx"
-      LOG_LEVEL: "DEBUG"
+      BEYLA_LOG_LEVEL: "DEBUG"
       OTEL_EXPORTER_OTLP_ENDPOINT: "http://agent:4018"
     depends_on:
       nginx:
@@ -60,11 +60,11 @@ services:
     network_mode: "service:gotestserver"
     pid: "service:gotestserver"
     environment:
-      PRINT_TRACES: "true"
-      OPEN_PORT: "8080"
-      SERVICE_NAMESPACE: "demo"
+      BEYLA_PRINT_TRACES: "true"
+      BEYLA_OPEN_PORT: "8080"
+      BEYLA_SERVICE_NAMESPACE: "demo"
       OTEL_SERVICE_NAME: "demo-go-service"
-      LOG_LEVEL: "DEBUG"
+      BEYLA_LOG_LEVEL: "DEBUG"
       OTEL_EXPORTER_OTLP_ENDPOINT: "http://agent:4018"
     depends_on:
       gotestserver:
@@ -91,11 +91,11 @@ services:
     network_mode: "service:javatestserver"
     pid: "service:javatestserver"
     environment:
-      PRINT_TRACES: "true"
-      OPEN_PORT: "8085"
-      SERVICE_NAMESPACE: "demo"
+      BEYLA_PRINT_TRACES: "true"
+      BEYLA_OPEN_PORT: "8085"
+      BEYLA_SERVICE_NAMESPACE: "demo"
       OTEL_SERVICE_NAME: "demo-graalvm-native-service"
-      LOG_LEVEL: "DEBUG"
+      BEYLA_LOG_LEVEL: "DEBUG"
       OTEL_EXPORTER_OTLP_ENDPOINT: "http://agent:4018"
     depends_on:
       javatestserver:
@@ -122,11 +122,11 @@ services:
     network_mode: "service:rusttestserver"
     pid: "service:rusttestserver"
     environment:
-      PRINT_TRACES: "true"
-      OPEN_PORT: "8090"
-      SERVICE_NAMESPACE: "demo"
+      BEYLA_PRINT_TRACES: "true"
+      BEYLA_OPEN_PORT: "8090"
+      BEYLA_SERVICE_NAMESPACE: "demo"
       OTEL_SERVICE_NAME: "demo-rust-service"
-      LOG_LEVEL: "DEBUG"
+      BEYLA_LOG_LEVEL: "DEBUG"
       OTEL_EXPORTER_OTLP_ENDPOINT: "http://agent:4018"
     depends_on:
       rusttestserver:

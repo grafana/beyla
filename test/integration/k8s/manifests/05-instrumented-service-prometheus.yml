@@ -120,27 +120,27 @@ spec:
       env:
         - name: GOCOVERDIR
           value: "/testoutput"
-        - name: DISCOVERY_POLL_INTERVAL
+        - name: BEYLA_DISCOVERY_POLL_INTERVAL
           value: "500ms"
-        - name: PRINT_TRACES
+        - name: BEYLA_PRINT_TRACES
           value: "true"
-        - name: OPEN_PORT
+        - name: BEYLA_OPEN_PORT
           value: "8080"
-        - name: SERVICE_NAMESPACE
+        - name: BEYLA_SERVICE_NAMESPACE
           value: "integration-test"
-        - name: METRICS_INTERVAL
+        - name: BEYLA_METRICS_INTERVAL
           value: "10ms"
-        - name: BPF_BATCH_TIMEOUT
+        - name: BEYLA_BPF_BATCH_TIMEOUT
           value: "10ms"
-        - name: LOG_LEVEL
+        - name: BEYLA_LOG_LEVEL
           value: "DEBUG"
-        - name: BPF_DEBUG
+        - name: BEYLA_BPF_DEBUG
           value: "TRUE"
-        - name: METRICS_REPORT_TARGET
+        - name: BEYLA_METRICS_REPORT_TARGET
           value: "true"
-        - name: METRICS_REPORT_PEER
+        - name: BEYLA_METRICS_REPORT_PEER
           value: "true"
-        - name: KUBE_METADATA_ENABLE
+        - name: BEYLA_KUBE_METADATA_ENABLE
           value: "autodetect"
       ports:
         - containerPort: 8999

@@ -6,4 +6,5 @@ func FindNamespace(_ int32) (uint32, error) {
 }
 
 func FindNamespacedPids(_ int32) ([]uint32, error) {
+	return nil, nil
 }

@@ -34,11 +34,11 @@ func klog() *slog.Logger {
 }
 
 type KubernetesDecorator struct {
-	Enable KubeEnableFlag `yaml:"enable" env:"KUBE_METADATA_ENABLE"`
+	Enable KubeEnableFlag `yaml:"enable" env:"BEYLA_KUBE_METADATA_ENABLE"`
 	// KubeconfigPath is optional. If unset, it will look in the usual location.
-	KubeconfigPath string `yaml:"kubeconfig_path" env:"KUBE_METADATA_KUBECONFIG_PATH"`
+	KubeconfigPath string `yaml:"kubeconfig_path" env:"BEYLA_KUBE_METADATA_KUBECONFIG_PATH"`
 
-	InformersSyncTimeout time.Duration `yaml:"informers_sync_timeout" env:"KUBE_INFORMERS_SYNC_TIMEOUT"`
+	InformersSyncTimeout time.Duration `yaml:"informers_sync_timeout" env:"BEYLA_KUBE_INFORMERS_SYNC_TIMEOUT"`
 }
 
 func (d KubernetesDecorator) Enabled() bool {

@@ -201,7 +201,8 @@ func FeatureGRPCMetricsDecorationPod2Pod() features.Feature {
 	pinger := kube.Template[Pinger]{
 		TemplateFile: GrpcPingerManifest,
 		Data: Pinger{
-			PodName: "internal-grpc-pinger-2pod",
+			PodName:   "internal-grpc-pinger-2pod",
+			TargetURL: "testserver:50051",
 		},
 	}
 	return features.New("Decoration of Pod-to-Service communications").

@@ -8,14 +8,10 @@ data:
     log_level: debug
     discovery:
       services:
-        - exe_path_regexp: testserver
+        - open_ports: 8083
           namespace: integration-test
     routes:
-      patterns:
-        - /pingpong
-      ignored_patterns:
-        - /metrics
-      unmatched: path
+      unmatched: heuristic
     otel_metrics_export:
       endpoint: http://otelcol:4318
     otel_traces_export:

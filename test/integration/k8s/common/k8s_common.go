@@ -10,9 +10,10 @@ var (
 	PathComponents      = path.Join(PathIntegrationTest, "components")
 	PathManifests       = path.Join(PathIntegrationTest, "k8s", "manifests")
 
-	DockerfileTestServer = path.Join(PathComponents, "testserver", "Dockerfile")
-	DockerfileBeyla      = path.Join(PathComponents, "beyla", "Dockerfile")
-	DockerfilePinger     = path.Join(PathComponents, "grpcpinger", "Dockerfile")
+	DockerfileTestServer       = path.Join(PathComponents, "testserver", "Dockerfile")
+	DockerfileBeyla            = path.Join(PathComponents, "beyla", "Dockerfile")
+	DockerfilePinger           = path.Join(PathComponents, "grpcpinger", "Dockerfile")
+	DockerfilePythonTestServer = path.Join(PathComponents, "pythonserver", "Dockerfile_8083")
 
 	PingerManifest     = path.Join(PathManifests, "/06-instrumented-client.template.yml")
 	GrpcPingerManifest = path.Join(PathManifests, "/06-instrumented-grpc-client.template.yml")

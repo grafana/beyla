@@ -83,6 +83,11 @@ type Config struct {
 	ServiceName      string `yaml:"service_name" env:"OTEL_SERVICE_NAME,expand" envDefault:"${BEYLA_SERVICE_NAME}"`
 	ServiceNamespace string `yaml:"service_namespace" env:"BEYLA_SERVICE_NAMESPACE"`
 
+	// InstanceID overrides the service instance ID. If unset, it will use the combination of `hostname-pid`.
+	InstanceID string `yaml:"instance_id" env:"BEYLA_INSTANCE_ID"`
+	// Hostname overrides the Beyla hostname that is used, for example, in the default instance ID decorator.
+	Hostname string `yaml:"hostname" env:"BEYLA_HOSTNAME"`
+
 	// Discovery configuration
 	Discovery services.DiscoveryConfig `yaml:"discovery"`
 

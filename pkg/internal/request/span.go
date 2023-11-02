@@ -63,6 +63,7 @@ type Span struct {
 	Start         int64
 	End           int64
 	ServiceID     svc.ID
+	InstanceID    string
 	Metadata      map[string]string
 	Traceparent   string
 	Pid           PidInfo

@@ -110,7 +110,11 @@ func (gb *graphFunctions) buildGraph() (*Instrumenter, error) {
 	// respective node providers
 
 	definedNodesMap := configToNodesMap(gb.config)
+	// wiring some unconnected node information
 	definedNodesMap.TracesReader.TracesInput = gb.tracesCh
+	definedNodesMap.Metrics.Grafana = &gb.config.Grafana.OTLP
+	definedNodesMap.Traces.Grafana = &gb.config.Grafana.OTLP
+
 	grp, err := gb.builder.Build(definedNodesMap)
 	if err != nil {
 		return nil, err

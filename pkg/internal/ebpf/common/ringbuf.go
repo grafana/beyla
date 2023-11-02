@@ -98,10 +98,13 @@ func (rbf *ringBufForwarder[T]) readAndForward(ctx context.Context, spansChan ch
 	// 3. Accumulate the HTTPRequestTrace into a batch slice
 	// 4. When the length of the batch slice reaches cfg.BatchLength,
 	//    submit it to the next stage of the pipeline
+
+	// We just log the first ring buffer read to check that the eBPF side is sending stuff
+	// Logging each message adds few information and a lot of noise to the debug logs
+	rbf.logger.Debug("starting to read ring buffer for the first time")
+	record, err := eventsReader.Read()
+	rbf.logger.Debug("received event")
 	for {
-		rbf.logger.Debug("starting to read perf buffer")
-		record, err := eventsReader.Read()
-		rbf.logger.Debug("received event")
 		if err != nil {
 			if errors.Is(err, ringbuf.ErrClosed) {
 				rbf.logger.Debug("ring buffer is closed")
@@ -111,7 +114,9 @@ func (rbf *ringBufForwarder[T]) readAndForward(ctx context.Context, spansChan ch
 			continue
 		}
 		rbf.access.Lock()
-		s, ignore, err := rbf.reader(&record)
+		var s request.Span
+		var ignore bool
+		s, ignore, err = rbf.reader(&record)
 		if err != nil {
 			rbf.logger.Error("error parsing perf event", err)
 			rbf.access.Unlock()
@@ -134,6 +139,9 @@ func (rbf *ringBufForwarder[T]) readAndForward(ctx context.Context, spansChan ch
 			}
 		}
 		rbf.access.Unlock()
+
+		// read another event before the next loop iteration
+		record, err = eventsReader.Read()
 	}
 }
 

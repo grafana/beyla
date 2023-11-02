@@ -21,7 +21,7 @@ import (
 
 const timeout = 5 * time.Second
 
-func TestHTTPMetricsEndpointOPtions(t *testing.T) {
+func TestHTTPMetricsEndpointOptions(t *testing.T) {
 	defer restoreEnvAfterExecution()()
 	mcfg := MetricsConfig{
 		CommonEndpoint:  "https://localhost:3131",
@@ -55,6 +55,37 @@ func TestHTTPMetricsEndpointOPtions(t *testing.T) {
 
 	t.Run("testing with skip TLS verification", func(t *testing.T) {
 		testMetricsHTTPOptions(t, otlpOptions{Endpoint: "localhost:3232", URLPath: "/v1/metrics", SkipTLSVerify: true}, &mcfg)
+	})
+}
+
+func TestHTTPMetricsWithGrafanaOptions(t *testing.T) {
+	defer restoreEnvAfterExecution()
+	mcfg := MetricsConfig{Grafana: &GrafanaOTLP{
+		Submit:     []string{submitMetrics, submitTraces},
+		CloudZone:  "eu-west-23",
+		InstanceID: "12345",
+		APIKey:     "affafafaafkd",
+	}}
+	t.Run("testing basic Grafana Cloud options", func(t *testing.T) {
+		testMetricsHTTPOptions(t, otlpOptions{
+			Endpoint: "otlp-gateway-eu-west-23.grafana.net",
+			URLPath:  "/otlp/v1/metrics",
+			HTTPHeaders: map[string]string{
+				// Basic + output of: echo -n 12345:affafafaafkd | gbase64 -w 0
+				"Authorization": "Basic MTIzNDU6YWZmYWZhZmFhZmtk",
+			},
+		}, &mcfg)
+	})
+	mcfg.CommonEndpoint = "https://localhost:3939"
+	t.Run("Overriding endpoint URL", func(t *testing.T) {
+		testMetricsHTTPOptions(t, otlpOptions{
+			Endpoint: "localhost:3939",
+			URLPath:  "/v1/metrics",
+			HTTPHeaders: map[string]string{
+				// Basic + output of: echo -n 12345:affafafaafkd | gbase64 -w 0
+				"Authorization": "Basic MTIzNDU6YWZmYWZhZmFhZmtk",
+			},
+		}, &mcfg)
 	})
 }
 
@@ -289,6 +320,18 @@ func TestMetricSetupHTTP_DoNotOverrideEnv(t *testing.T) {
 		assert.False(t, ok)
 		assert.Equal(t, "foo-proto", os.Getenv(envProtocol))
 	})
+}
+
+func TestMetricsConfig_Enabled(t *testing.T) {
+	assert.True(t, MetricsConfig{CommonEndpoint: "foo"}.Enabled())
+	assert.True(t, MetricsConfig{MetricsEndpoint: "foo"}.Enabled())
+	assert.True(t, MetricsConfig{Grafana: &GrafanaOTLP{Submit: []string{"traces", "metrics"}, InstanceID: "33221"}}.Enabled())
+}
+
+func TestMetricsConfig_Disabled(t *testing.T) {
+	assert.False(t, MetricsConfig{}.Enabled())
+	assert.False(t, MetricsConfig{Grafana: &GrafanaOTLP{Submit: []string{"traces"}, InstanceID: "33221"}}.Enabled())
+	assert.False(t, MetricsConfig{Grafana: &GrafanaOTLP{Submit: []string{"metrics"}}}.Enabled())
 }
 
 func (f *fakeInternalMetrics) OTELMetricExport(len int) {

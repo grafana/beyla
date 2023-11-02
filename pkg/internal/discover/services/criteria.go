@@ -20,24 +20,24 @@ type ProcessInfo struct {
 
 // DiscoveryConfig for the discover.ProcessFinder pipeline
 type DiscoveryConfig struct {
-	// Services selection. If the user defined the EXECUTABLE_NAME or OPEN_PORT variables, they will be automatically
+	// Services selection. If the user defined the BEYLA_EXECUTABLE_NAME or BEYLA_OPEN_PORT variables, they will be automatically
 	// added to the services definition criteria, with the lowest preference.
 	Services DefinitionCriteria `yaml:"services"`
 
 	// PollInterval specifies, for the poll service watcher, the interval time between
 	// process inspections
-	PollInterval time.Duration `yaml:"poll_interval" env:"DISCOVERY_POLL_INTERVAL"`
+	PollInterval time.Duration `yaml:"poll_interval" env:"BEYLA_DISCOVERY_POLL_INTERVAL"`
 
 	// SystemWide allows instrumentation of all HTTP (no gRPC) calls, incoming and outgoing at a system wide scale.
 	// No filtering per application will be done. Using this option may result in reduced quality of information
 	// gathered for certain languages, such as Golang.
-	SystemWide bool `yaml:"system_wide" env:"SYSTEM_WIDE"`
+	SystemWide bool `yaml:"system_wide" env:"BEYLA_SYSTEM_WIDE"`
 
 	// This can be enabled to use generic HTTP tracers only, no Go-specifics will be used:
-	SkipGoSpecificTracers bool `yaml:"skip_go_specific_tracers" env:"SKIP_GO_SPECIFIC_TRACERS"`
+	SkipGoSpecificTracers bool `yaml:"skip_go_specific_tracers" env:"BEYLA_SKIP_GO_SPECIFIC_TRACERS"`
 
 	// Debugging only option. Make sure the kernel side doesn't filter any PIDs, force user space filtering.
-	BPFPidFilterOff bool `yaml:"bpf_pid_filter_off" env:"BPF_PID_FILTER_OFF"`
+	BPFPidFilterOff bool `yaml:"bpf_pid_filter_off" env:"BEYLA_BPF_PID_FILTER_OFF"`
 }
 
 // DefinitionCriteria allows defining a group of services to be instrumented according to a set

@@ -33,15 +33,15 @@ prometheus_export:
 kubernetes:
   enable: true
 `)
-	require.NoError(t, os.Setenv("EXECUTABLE_NAME", "tras"))
-	require.NoError(t, os.Setenv("OPEN_PORT", "8080-8089"))
+	require.NoError(t, os.Setenv("BEYLA_EXECUTABLE_NAME", "tras"))
+	require.NoError(t, os.Setenv("BEYLA_OPEN_PORT", "8080-8089"))
 	require.NoError(t, os.Setenv("OTEL_SERVICE_NAME", "svc-name"))
-	require.NoError(t, os.Setenv("NOOP_TRACES", "true"))
+	require.NoError(t, os.Setenv("BEYLA_NOOP_TRACES", "true"))
 	require.NoError(t, os.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "localhost:3131"))
 	require.NoError(t, os.Setenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", "localhost:3232"))
-	require.NoError(t, os.Setenv("INTERNAL_METRICS_PROMETHEUS_PORT", "3210"))
+	require.NoError(t, os.Setenv("BEYLA_INTERNAL_METRICS_PROMETHEUS_PORT", "3210"))
 	defer unsetEnv(t, map[string]string{
-		"OPEN_PORT": "", "EXECUTABLE_NAME": "", "OTEL_SERVICE_NAME": "", "NOOP_TRACES": "",
+		"BEYLA_OPEN_PORT": "", "BEYLA_EXECUTABLE_NAME": "", "OTEL_SERVICE_NAME": "", "BEYLA_NOOP_TRACES": "",
 		"OTEL_EXPORTER_OTLP_ENDPOINT": "", "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT": "",
 	})
 
@@ -112,9 +112,9 @@ kubernetes:
 }
 
 func TestConfig_ServiceName(t *testing.T) {
-	// ServiceName property can be handled via two different env vars SERVICE_NAME and OTEL_SERVICE_NAME (for
+	// ServiceName property can be handled via two different env vars BEYLA_SERVICE_NAME and OTEL_SERVICE_NAME (for
 	// compatibility with OpenTelemetry)
-	require.NoError(t, os.Setenv("SERVICE_NAME", "some-svc-name"))
+	require.NoError(t, os.Setenv("BEYLA_SERVICE_NAME", "some-svc-name"))
 	cfg, err := LoadConfig(bytes.NewReader(nil))
 	require.NoError(t, err)
 	assert.Equal(t, "some-svc-name", cfg.ServiceName)
@@ -122,11 +122,11 @@ func TestConfig_ServiceName(t *testing.T) {
 
 func TestConfigValidate(t *testing.T) {
 	testCases := []map[string]string{
-		{"OTEL_EXPORTER_OTLP_ENDPOINT": "localhost:1234", "EXECUTABLE_NAME": "foo", "INSTRUMENT_FUNC_NAME": "bar"},
-		{"OTEL_EXPORTER_OTLP_METRICS_ENDPOINT": "localhost:1234", "EXECUTABLE_NAME": "foo", "INSTRUMENT_FUNC_NAME": "bar"},
-		{"OTEL_EXPORTER_OTLP_TRACES_ENDPOINT": "localhost:1234", "EXECUTABLE_NAME": "foo", "INSTRUMENT_FUNC_NAME": "bar"},
-		{"PRINT_TRACES": "true", "EXECUTABLE_NAME": "foo", "INSTRUMENT_FUNC_NAME": "bar"},
-		{"BEYLA_PROMETHEUS_PORT": "8080", "EXECUTABLE_NAME": "foo", "INSTRUMENT_FUNC_NAME": "bar"},
+		{"OTEL_EXPORTER_OTLP_ENDPOINT": "localhost:1234", "BEYLA_EXECUTABLE_NAME": "foo", "INSTRUMENT_FUNC_NAME": "bar"},
+		{"OTEL_EXPORTER_OTLP_METRICS_ENDPOINT": "localhost:1234", "BEYLA_EXECUTABLE_NAME": "foo", "INSTRUMENT_FUNC_NAME": "bar"},
+		{"OTEL_EXPORTER_OTLP_TRACES_ENDPOINT": "localhost:1234", "BEYLA_EXECUTABLE_NAME": "foo", "INSTRUMENT_FUNC_NAME": "bar"},
+		{"BEYLA_PRINT_TRACES": "true", "BEYLA_EXECUTABLE_NAME": "foo", "INSTRUMENT_FUNC_NAME": "bar"},
+		{"BEYLA_PROMETHEUS_PORT": "8080", "BEYLA_EXECUTABLE_NAME": "foo", "INSTRUMENT_FUNC_NAME": "bar"},
 	}
 	for n, tc := range testCases {
 		t.Run(fmt.Sprint("case", n), func(t *testing.T) {
@@ -139,7 +139,7 @@ func TestConfigValidate(t *testing.T) {
 func TestConfigValidate_error(t *testing.T) {
 	testCases := []map[string]string{
 		{"OTEL_EXPORTER_OTLP_ENDPOINT": "localhost:1234", "INSTRUMENT_FUNC_NAME": "bar"},
-		{"EXECUTABLE_NAME": "foo", "INSTRUMENT_FUNC_NAME": "bar", "PRINT_TRACES": "false"},
+		{"BEYLA_EXECUTABLE_NAME": "foo", "INSTRUMENT_FUNC_NAME": "bar", "BEYLA_PRINT_TRACES": "false"},
 	}
 	for n, tc := range testCases {
 		t.Run(fmt.Sprint("case", n), func(t *testing.T) {

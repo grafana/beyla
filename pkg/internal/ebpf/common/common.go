@@ -21,24 +21,24 @@ type HTTPRequestTrace bpfHttpRequestTrace
 
 // TracerConfig configuration for eBPF programs
 type TracerConfig struct {
-	BpfDebug bool `yaml:"bfp_debug" env:"BPF_DEBUG"`
+	BpfDebug bool `yaml:"bfp_debug" env:"BEYLA_BPF_DEBUG"`
 
 	// WakeupLen specifies how many messages need to be accumulated in the eBPF ringbuffer
 	// before sending a wakeup request.
 	// High values of WakeupLen could add a noticeable metric delay in services with low
 	// requests/second.
 	// TODO: see if there is a way to force eBPF to wakeup userspace on timeout
-	WakeupLen int `yaml:"wakeup_len" env:"BPF_WAKEUP_LEN"`
+	WakeupLen int `yaml:"wakeup_len" env:"BEYLA_BPF_WAKEUP_LEN"`
 	// BatchLength allows specifying how many traces will be batched at the initial
 	// stage before being forwarded to the next stage
-	BatchLength int `yaml:"batch_length" env:"BPF_BATCH_LENGTH"`
+	BatchLength int `yaml:"batch_length" env:"BEYLA_BPF_BATCH_LENGTH"`
 	// BatchTimeout specifies the timeout to forward the data batch if it didn't
 	// reach the BatchLength size
-	BatchTimeout time.Duration `yaml:"batch_timeout" env:"BPF_BATCH_TIMEOUT"`
+	BatchTimeout time.Duration `yaml:"batch_timeout" env:"BEYLA_BPF_BATCH_TIMEOUT"`
 
 	// BpfBaseDir specifies the base directory where the BPF pinned maps will be mounted.
 	// By default, it will be /var/run/beyla
-	BpfBaseDir string `yaml:"bpf_fs_base_dir" env:"BPF_FS_BASE_DIR"`
+	BpfBaseDir string `yaml:"bpf_fs_base_dir" env:"BEYLA_BPF_FS_BASE_DIR"`
 }
 
 // Probe holds the information of the instrumentation points of a given function: its start and end offsets and

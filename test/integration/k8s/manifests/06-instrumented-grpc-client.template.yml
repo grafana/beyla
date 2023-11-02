@@ -52,7 +52,7 @@ spec:
       ports:
         - containerPort: 8999
       env:
-        - name: BEYLA_BEYLA_PROMETHEUS_PORT
+        - name: BEYLA_PROMETHEUS_PORT
           value: "8999"
         - name: GOCOVERDIR
           value: "/testoutput"

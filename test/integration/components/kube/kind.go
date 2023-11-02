@@ -103,7 +103,7 @@ func (k *Kind) Run(m *testing.M) {
 	log := log()
 	var funcs []env.Func
 	if k.kindConfigPath != "" {
-		log.Info("adding func: createKindCluster", "name", k.clusterName, "image", kindImage,"path", k.kindConfigPath)
+		log.Info("adding func: createKindCluster", "name", k.clusterName, "image", kindImage, "path", k.kindConfigPath)
 		funcs = append(funcs,
 			// TODO: allow overriding kindImage
 			envfuncs.CreateKindClusterWithConfig(k.clusterName, kindImage, k.kindConfigPath))

@@ -139,6 +139,6 @@ spec:
           env:
             - name: EXECUTABLE_NAME # Select the executable by its name instead of OPEN_PORT
               value: "goblog"
-            - name: BEYLA_OTEL_EXPORTER_OTLP_ENDPOINT
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
               value: "grafana-agent:4318"
 ```

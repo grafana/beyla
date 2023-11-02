@@ -42,7 +42,7 @@ kubernetes:
 	require.NoError(t, os.Setenv("BEYLA_INTERNAL_METRICS_PROMETHEUS_PORT", "3210"))
 	defer unsetEnv(t, map[string]string{
 		"BEYLA_OPEN_PORT": "", "BEYLA_EXECUTABLE_NAME": "", "OTEL_SERVICE_NAME": "", "BEYLA_NOOP_TRACES": "",
-		"BEYLA_OTEL_EXPORTER_OTLP_ENDPOINT": "", "BEYLA_OTEL_EXPORTER_OTLP_TRACES_ENDPOINT": "",
+		"OTEL_EXPORTER_OTLP_ENDPOINT": "", "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT": "",
 	})
 
 	cfg, err := LoadConfig(userConfig)

@@ -39,7 +39,7 @@ For getting started, we'll tell Beyla to instrument the service running on port 
 
 ```
 export BEYLA_PROMETHEUS_PORT=9400
-export OPEN_PORT=8080
+export BEYLA_OPEN_PORT=8080
 sudo -E ./beyla
 ```
 

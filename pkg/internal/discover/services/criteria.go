@@ -20,7 +20,7 @@ type ProcessInfo struct {
 
 // DiscoveryConfig for the discover.ProcessFinder pipeline
 type DiscoveryConfig struct {
-	// Services selection. If the user defined the EXECUTABLE_NAME or OPEN_PORT variables, they will be automatically
+	// Services selection. If the user defined the BEYLA_EXECUTABLE_NAME or BEYLA_OPEN_PORT variables, they will be automatically
 	// added to the services definition criteria, with the lowest preference.
 	Services DefinitionCriteria `yaml:"services"`
 

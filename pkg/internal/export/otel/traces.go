@@ -61,7 +61,7 @@ type TracesConfig struct {
 	BatchTimeout       time.Duration `yaml:"batch_timeout" env:"BEYLA_OTLP_TRACES_BATCH_TIMEOUT"`
 	ExportTimeout      time.Duration `yaml:"export_timeout" env:"BEYLA_OTLP_TRACES_EXPORT_TIMEOUT"`
 
-	ReportersCacheLen int `yaml:"reporters_cache_len" env:"BEYLA_METRICS_REPORT_CACHE_LEN"`
+	ReportersCacheLen int `yaml:"reporters_cache_len" env:"BEYLA_TRACES_REPORT_CACHE_LEN"`
 }
 
 // Enabled specifies that the OTEL traces node is enabled if and only if

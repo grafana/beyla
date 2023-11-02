@@ -9,6 +9,8 @@ import (
 	"github.com/mariomac/pipes/pkg/node"
 	"github.com/shirou/gopsutil/net"
 	"github.com/shirou/gopsutil/process"
+
+	"github.com/grafana/beyla/pkg/internal/ebpf/watcher"
 )
 
 const (
@@ -184,7 +186,14 @@ func fetchProcessPorts() (map[PID]processPorts, error) {
 	if err != nil {
 		return nil, fmt.Errorf("can't get processes: %w", err)
 	}
+
+	scanPorts := watcher.PortScanRequired()
+
 	for _, pid := range pids {
+		if !scanPorts {
+			processes[PID(pid)] = processPorts{pid: PID(pid), openPorts: []uint32{}}
+			continue
+		}
 		conns, err := net.ConnectionsPid("inet", pid)
 		if err != nil {
 			log.Debug("can't get connections for process. Skipping", "pid", pid, "error", err)

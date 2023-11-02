@@ -62,4 +62,25 @@ static __always_inline bool parse_connect_sock_info(sock_args_t *args, connectio
     return parse_sock_info((struct sock*)(args->addr), info);
 }
 
+static __always_inline u16 get_sockaddr_port(struct sockaddr *addr) {
+    short unsigned int sa_family;
+
+    BPF_CORE_READ_INTO(&sa_family, addr, sa_family);
+    u16 bport = 0;
+
+    bpf_dbg_printk("addr = %llx, sa_family %d", addr, sa_family);
+
+    if (sa_family == AF_INET) {
+        struct sockaddr_in *baddr = (struct sockaddr_in *)addr;
+        BPF_CORE_READ_INTO(&bport, baddr, sin_port);
+        bport = bpf_ntohs(bport);
+    } else if (sa_family == AF_INET6) {
+        struct sockaddr_in6 *baddr = (struct sockaddr_in6 *)addr;
+        BPF_CORE_READ_INTO(&bport, baddr, sin6_port);
+        bport = bpf_ntohs(bport);
+    }
+
+    return bport;
+}
+
 #endif

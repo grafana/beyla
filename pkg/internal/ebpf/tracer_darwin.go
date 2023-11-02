@@ -9,3 +9,7 @@ import (
 // dummy implementations to avoid compilation errors in Darwin.
 // The tracer component is only usable in Linux.
 func (pt *ProcessTracer) Run(_ context.Context, _ chan<- []request.Span) {}
+
+func RunIndependentTracer(_ Tracer) error {
+	return nil
+}

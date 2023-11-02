@@ -14,6 +14,7 @@ import (
 	"golang.org/x/sys/unix"
 
 	"github.com/grafana/beyla/pkg/internal/request"
+	"github.com/grafana/beyla/pkg/internal/svc"
 )
 
 func ptlog() *slog.Logger { return slog.With("component", "ebpf.ProcessTracer") }
@@ -160,4 +161,28 @@ func printVerifierErrorInfo(err error) {
 
 func bpfMount(pinPath string) error {
 	return unix.Mount(pinPath, pinPath, "bpf", 0, "")
+}
+
+func RunIndependentTracer(p Tracer) error {
+	i := instrumenter{}
+	plog := ptlog()
+	plog.Debug("loading independent eBPF program")
+	spec, err := p.Load()
+	if err != nil {
+		return fmt.Errorf("loading eBPF program: %w", err)
+	}
+
+	if err := spec.LoadAndAssign(p.BpfObjects(), &ebpf.CollectionOptions{}); err != nil {
+		printVerifierErrorInfo(err)
+		return fmt.Errorf("loading and assigning BPF objects: %w", err)
+	}
+
+	if err := i.kprobes(p); err != nil {
+		printVerifierErrorInfo(err)
+		return err
+	}
+
+	go p.Run(context.Background(), nil, svc.ID{})
+
+	return nil
 }

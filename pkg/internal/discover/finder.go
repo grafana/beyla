@@ -13,6 +13,7 @@ import (
 	"github.com/grafana/beyla/pkg/internal/ebpf/grpc"
 	"github.com/grafana/beyla/pkg/internal/ebpf/httpfltr"
 	"github.com/grafana/beyla/pkg/internal/ebpf/nethttp"
+	"github.com/grafana/beyla/pkg/internal/ebpf/watcher"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/pipe"
 )
@@ -42,6 +43,15 @@ func NewProcessFinder(ctx context.Context, cfg *pipe.Config, metrics imetrics.Re
 // Start the ProcessFinder pipeline in background. It returns a channel where each new discovered
 // ebpf.ProcessTracer will be notified.
 func (pf *ProcessFinder) Start(cfg *pipe.Config) (<-chan *ebpf.ProcessTracer, error) {
+	if !cfg.Discovery.SystemWide {
+		wt := newWatcherGroup(cfg, nil)
+		for _, p := range wt {
+			if err := ebpf.RunIndependentTracer(p); err != nil {
+				return nil, fmt.Errorf("can't instantiate discovery.ProcessFinder pipeline: %w", err)
+			}
+		}
+	}
+
 	gb := graph.NewBuilder(node.ChannelBufferLen(cfg.ChannelBufferLen))
 	graph.RegisterStart(gb, WatcherProvider)
 	graph.RegisterMiddle(gb, CriteriaMatcherProvider)
@@ -71,4 +81,8 @@ func newGoTracersGroup(cfg *pipe.Config, metrics imetrics.Reporter) []ebpf.Trace
 
 func newNonGoTracersGroup(cfg *pipe.Config, metrics imetrics.Reporter) []ebpf.Tracer {
 	return []ebpf.Tracer{httpfltr.New(cfg, metrics)}
+}
+
+func newWatcherGroup(cfg *pipe.Config, metrics imetrics.Reporter) []ebpf.Tracer {
+	return []ebpf.Tracer{watcher.New(cfg, metrics)}
 }

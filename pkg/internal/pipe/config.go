@@ -14,6 +14,7 @@ import (
 	"github.com/grafana/beyla/pkg/internal/export/otel"
 	"github.com/grafana/beyla/pkg/internal/export/prom"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
+	"github.com/grafana/beyla/pkg/internal/traces"
 	"github.com/grafana/beyla/pkg/internal/transform"
 )
 
@@ -52,9 +53,14 @@ var defaultConfig = Config{
 			Path: "/internal/metrics",
 		},
 	},
-	Kubernetes: transform.KubernetesDecorator{
-		Enable:               transform.EnabledDefault,
-		InformersSyncTimeout: 30 * time.Second,
+	Attributes: Attributes{
+		InstanceID: traces.InstanceIDConfig{
+			HostnameDNSResolution: true,
+		},
+		Kubernetes: transform.KubernetesDecorator{
+			Enable:               transform.EnabledDefault,
+			InformersSyncTimeout: 30 * time.Second,
+		},
 	},
 	Routes: &transform.RoutesConfig{},
 }
@@ -62,13 +68,13 @@ var defaultConfig = Config{
 type Config struct {
 	EBPF ebpfcommon.TracerConfig `yaml:"ebpf"`
 
+	Attributes Attributes `yaml:"attributes"`
 	// Routes is an optional node. If not set, data will be directly forwarded to exporters.
-	Routes     *transform.RoutesConfig       `yaml:"routes"`
-	Kubernetes transform.KubernetesDecorator `yaml:"kubernetes"`
-	Metrics    otel.MetricsConfig            `yaml:"otel_metrics_export"`
-	Traces     otel.TracesConfig             `yaml:"otel_traces_export"`
-	Prometheus prom.PrometheusConfig         `yaml:"prometheus_export"`
-	Printer    debug.PrintEnabled            `yaml:"print_traces" env:"BEYLA_PRINT_TRACES"`
+	Routes     *transform.RoutesConfig `yaml:"routes"`
+	Metrics    otel.MetricsConfig      `yaml:"otel_metrics_export"`
+	Traces     otel.TracesConfig       `yaml:"otel_traces_export"`
+	Prometheus prom.PrometheusConfig   `yaml:"prometheus_export"`
+	Printer    debug.PrintEnabled      `yaml:"print_traces" env:"BEYLA_PRINT_TRACES"`
 
 	// Exec allows selecting the instrumented executable whose complete path contains the Exec value.
 	Exec services.PathRegexp `yaml:"executable_name" env:"BEYLA_EXECUTABLE_NAME"`
@@ -100,6 +106,13 @@ type Config struct {
 	Noop             debug.NoopEnabled `yaml:"noop" env:"BEYLA_NOOP_TRACES"`
 	ProfilePort      int               `yaml:"profile_port" env:"BEYLA_PROFILE_PORT"`
 	InternalMetrics  imetrics.Config   `yaml:"internal_metrics"`
+}
+
+// Attributes configures the decoration of some extra attributes that will be
+// added to each span
+type Attributes struct {
+	Kubernetes transform.KubernetesDecorator `yaml:"kubernetes"`
+	InstanceID traces.InstanceIDConfig       `yaml:"instance_id"`
 }
 
 type ConfigError string

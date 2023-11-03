@@ -51,15 +51,14 @@ var DefaultBuckets = Buckets{
 }
 
 func otelResource(service svc.ID) *resource.Resource {
-	telemetrySDK := semconv.TelemetrySDKLanguageKey.String(service.SDKLanguage.String())
-
 	attrs := []attribute.KeyValue{
 		semconv.ServiceName(service.Name),
+		semconv.ServiceInstanceID(service.Instance),
 		// SpanMetrics requires an extra attribute besides service name
 		// to generate the traces_target_info metric,
 		// so the service is visible in the ServicesList
 		// This attribute also allows that App O11y plugin shows this app as a Go application.
-		telemetrySDK,
+		semconv.TelemetrySDKLanguageKey.String(service.SDKLanguage.String()),
 	}
 
 	if service.Namespace != "" {

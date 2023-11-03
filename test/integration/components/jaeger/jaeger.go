@@ -104,6 +104,15 @@ func (s *Span) Diff(expected ...Tag) DiffResult {
 	return Diff(expected, s.Tags)
 }
 
+func FindIn(tags []Tag, key string) (Tag, bool) {
+	for _, t := range tags {
+		if t.Key == key {
+			return t, true
+		}
+	}
+	return Tag{}, false
+}
+
 type DiffResult []TagDiff
 
 func (mr DiffResult) String() string {

@@ -14,6 +14,7 @@ import (
 	"github.com/grafana/beyla/pkg/internal/export/otel"
 	"github.com/grafana/beyla/pkg/internal/export/prom"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
+	"github.com/grafana/beyla/pkg/internal/traces"
 	"github.com/grafana/beyla/pkg/internal/transform"
 )
 
@@ -30,8 +31,9 @@ otel_metrics_export:
 prometheus_export:
   buckets:
     request_size_histogram: [0, 10, 20, 22]
-kubernetes:
-  enable: true
+decoration:
+  kubernetes:
+    enable: true
 `)
 	require.NoError(t, os.Setenv("BEYLA_EXECUTABLE_NAME", "tras"))
 	require.NoError(t, os.Setenv("BEYLA_OPEN_PORT", "8080-8089"))
@@ -103,9 +105,14 @@ kubernetes:
 				Path: "/internal/metrics",
 			},
 		},
-		Kubernetes: transform.KubernetesDecorator{
-			Enable:               transform.EnabledTrue,
-			InformersSyncTimeout: 30 * time.Second,
+		Attributes: Attributes{
+			InstanceID: traces.InstanceIDConfig{
+				HostnameDNSResolution: true,
+			},
+			Kubernetes: transform.KubernetesDecorator{
+				Enable:               transform.EnabledTrue,
+				InformersSyncTimeout: 30 * time.Second,
+			},
 		},
 		Routes: &transform.RoutesConfig{},
 	}, cfg)

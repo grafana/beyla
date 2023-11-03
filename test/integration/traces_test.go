@@ -139,10 +139,16 @@ func testHTTPTracesCommon(t *testing.T, doTraceID bool, httpCode int) {
 	assert.Equal(t, parent.ProcessID, processing.ProcessID)
 	process := trace.Processes[parent.ProcessID]
 	assert.Equal(t, "testserver", process.ServiceName)
+
+	serviceInstance, ok := jaeger.FindIn(process.Tags, "service.instance.id")
+	require.Truef(t, ok, "service.instance.id not found in tags: %v", process.Tags)
+	assert.Regexp(t, `^beyla-\d+$`, serviceInstance.Value)
+
 	jaeger.Diff([]jaeger.Tag{
 		{Key: "otel.library.name", Type: "string", Value: "github.com/grafana/beyla"},
 		{Key: "telemetry.sdk.language", Type: "string", Value: "go"},
 		{Key: "service.namespace", Type: "string", Value: "integration-test"},
+		serviceInstance,
 	}, process.Tags)
 	assert.Empty(t, sd, sd.String())
 
@@ -319,10 +325,16 @@ func testGRPCTracesForServiceName(t *testing.T, svcName string) {
 	assert.Equal(t, parent.ProcessID, processing.ProcessID)
 	process := trace.Processes[parent.ProcessID]
 	assert.Equal(t, svcName, process.ServiceName)
+
+	serviceInstance, ok := jaeger.FindIn(process.Tags, "service.instance.id")
+	require.Truef(t, ok, "service.instance.id not found in tags: %v", process.Tags)
+	assert.Regexp(t, `^beyla-\d+$`, serviceInstance.Value)
+
 	jaeger.Diff([]jaeger.Tag{
 		{Key: "otel.library.name", Type: "string", Value: "github.com/grafana/beyla"},
 		{Key: "telemetry.sdk.language", Type: "string", Value: "go"},
 		{Key: "service.namespace", Type: "string", Value: "integration-test"},
+		serviceInstance,
 	}, process.Tags)
 	assert.Empty(t, sd, sd.String())
 
@@ -418,10 +430,16 @@ func testHTTPTracesKProbes(t *testing.T) {
 
 	process := trace.Processes[parent.ProcessID]
 	assert.Equal(t, "node", process.ServiceName)
+
+	serviceInstance, ok := jaeger.FindIn(process.Tags, "service.instance.id")
+	require.Truef(t, ok, "service.instance.id not found in tags: %v", process.Tags)
+	assert.Regexp(t, `^beyla-\d+$`, serviceInstance.Value)
+
 	jaeger.Diff([]jaeger.Tag{
 		{Key: "otel.library.name", Type: "string", Value: "github.com/grafana/beyla"},
 		{Key: "telemetry.sdk.language", Type: "string", Value: "nodejs"},
 		{Key: "service.namespace", Type: "string", Value: "integration-test"},
+		serviceInstance,
 	}, process.Tags)
 	assert.Empty(t, sd, sd.String())
 }

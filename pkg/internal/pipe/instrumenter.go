@@ -37,13 +37,14 @@ type nodesMap struct {
 
 func configToNodesMap(cfg *Config) *nodesMap {
 	return &nodesMap{
-		Routes:     cfg.Routes,
-		Kubernetes: cfg.Kubernetes,
-		Metrics:    cfg.Metrics,
-		Traces:     cfg.Traces,
-		Prometheus: cfg.Prometheus,
-		Printer:    cfg.Printer,
-		Noop:       cfg.Noop,
+		TracesReader: traces.ReadDecorator{InstanceID: cfg.Attributes.InstanceID},
+		Routes:       cfg.Routes,
+		Kubernetes:   cfg.Attributes.Kubernetes,
+		Metrics:      cfg.Metrics,
+		Traces:       cfg.Traces,
+		Prometheus:   cfg.Prometheus,
+		Printer:      cfg.Printer,
+		Noop:         cfg.Noop,
 	}
 }
 

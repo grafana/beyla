@@ -44,6 +44,7 @@ services:
       BEYLA_BPF_DEBUG: "TRUE"
       BEYLA_METRICS_REPORT_TARGET: "true"
       BEYLA_METRICS_REPORT_PEER: "true"
+      BEYLA_HOSTNAME: "beyla"
     depends_on:
       testserver:
         condition: service_started

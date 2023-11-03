@@ -2,16 +2,23 @@ package traces
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
-	"os"
 
 	"github.com/mariomac/pipes/pkg/node"
 
 	"github.com/grafana/beyla/pkg/internal/request"
+	"github.com/grafana/beyla/pkg/internal/traces/hostname"
 )
 
 func rlog() *slog.Logger {
 	return slog.With("component", "traces.ReadDecorator")
+}
+
+type InstanceIDConfig struct {
+	HostnameDNSResolution bool   `yaml:"dns" env:"BEYLA_HOSTNAME_DNS_RESOLUTION"`
+	OverrideHostname      string `yaml:"override_hostname" env:"BEYLA_HOSTNAME"`
+	OverrideInstanceID    string `yaml:"override_instance_id" env:"BEYLA_INSTANCE_ID"`
 }
 
 // ReadDecorator is the input node of the processing graph. The eBPF tracers will send their
@@ -20,23 +27,22 @@ func rlog() *slog.Logger {
 type ReadDecorator struct {
 	TracesInput <-chan []request.Span
 
-	OverrideHostname   string
-	OverrideInstanceID string
+	InstanceID InstanceIDConfig
 }
 
-// decorator modifies a request.Span to fill it with extra information that is not provided
+// decorator modifies a []request.Span slice to fill it with extra information that is not provided
 // by the tracers (for example, the instance ID)
-type decorator func(span *request.Span)
+type decorator func(spans []request.Span)
 
 func ReadFromChannel(ctx context.Context, r ReadDecorator) (node.StartFunc[[]request.Span], error) {
-	decorate := getDecorator(&r)
+	decorate := getDecorator(&r.InstanceID)
 	return func(out chan<- []request.Span) {
 		cancelChan := ctx.Done()
 		for {
 			select {
 			case trace, ok := <-r.TracesInput:
 				if ok {
-					decorate(&trace)
+					decorate(trace)
 					out <- trace
 				} else {
 					rlog().Debug("input channel closed. Exiting traces input loop")
@@ -50,31 +56,34 @@ func ReadFromChannel(ctx context.Context, r ReadDecorator) (node.StartFunc[[]req
 	}, nil
 }
 
-func getDecorator(cfg *ReadDecorator) decorator {
+func getDecorator(cfg *InstanceIDConfig) decorator {
 	if cfg.OverrideInstanceID != "" {
-		return func(span *request.Span) {
-			span.InstanceID = cfg.OverrideInstanceID
+		return func(spans []request.Span) {
+			for i := range spans {
+				spans[i].ServiceID.Instance = cfg.OverrideInstanceID
+			}
 		}
 	}
 	return hostNamePIDDecorator(cfg)
 }
 
-func hostNamePIDDecorator(cfg *ReadDecorator) decorator {
+func hostNamePIDDecorator(cfg *InstanceIDConfig) decorator {
+	// TODO: periodically update
+	resolver := hostname.CreateResolver(cfg.OverrideHostname, "", cfg.HostnameDNSResolution)
+	fullHostName, _, err := resolver.Query()
 	log := rlog().With("function", "instance_ID_hostNamePIDDecorator")
-	hostName := cfg.OverrideHostname
-	if hostName == "" {
-		var err error
-		// Know issue: this scenario will fail with users that install and run Beyla as a host
-		// process in a Virtual Machine (e.g. AWS instance) and then create a snapshot of that
-		// virtual machine
-		if hostName, err = os.Hostname(); err != nil {
-			log.Warn("can't read hostname. Leaving empty. Consider overriding" +
-				" the BEYLA_HOSTNAME or BEYLA_INSTANCE_ID properties",
-				"error", err)
-		}
+	if err != nil {
+		log.Warn("can't read hostname. Leaving empty. Consider overriding"+
+			" the BEYLA_HOSTNAME or BEYLA_INSTANCE_ID properties",
+			"error", err)
+	} else {
+		log.Info("using hostname", "hostname", fullHostName)
 	}
 
-	return func(span *request.Span) {
-
+	return func(spans []request.Span) {
+		for i := range spans {
+			// TODO: if this has a performance impact or generates too much unnecessary memory, use an LRU cache
+			spans[i].ServiceID.Instance = fmt.Sprintf("%s-%d", fullHostName, spans[i].Pid.HostPID)
+		}
 	}
 }

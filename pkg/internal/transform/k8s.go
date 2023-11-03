@@ -108,6 +108,7 @@ func (md *metadataDecorator) do(span *request.Span) {
 	// changes the way it works.
 	// Extensive integration test cases are provided as a safeguard.
 	switch span.Type {
+	// TODO: put here also SQL traces
 	case request.EventTypeGRPC, request.EventTypeHTTP:
 		if peerInfo, ok := md.kube.GetInfo(span.Peer); ok {
 			appendSRCMetadata(span.Metadata, peerInfo)

@@ -37,6 +37,7 @@ services:
       BEYLA_METRICS_REPORT_TARGET: "true"
       BEYLA_METRICS_REPORT_PEER: "true"
       BEYLA_INTERNAL_METRICS_PROMETHEUS_PORT: 8999
+      BEYLA_HOSTNAME: "beyla"
     ports:
       - "8999:8999" # Prometheus scrape port, if enabled via config
 

@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/mariomac/pipes/pkg/node"
-	"golang.org/x/exp/maps"
 
 	"github.com/grafana/beyla/pkg/internal/request"
 	"github.com/grafana/beyla/pkg/internal/transform/kube"
@@ -67,8 +66,6 @@ func KubeDecoratorProvider(cfg KubernetesDecorator) (node.MiddleFunc[[]request.S
 		return nil, fmt.Errorf("instantiating kubernetes metadata decorator: %w", err)
 	}
 	return func(in <-chan []request.Span, out chan<- []request.Span) {
-		decorator.refreshOwnPodMetadata()
-
 		klog().Debug("starting kubernetes decoration loop")
 		for spans := range in {
 			// in-place decoration and forwarding
@@ -84,9 +81,6 @@ func KubeDecoratorProvider(cfg KubernetesDecorator) (node.MiddleFunc[[]request.S
 type metadataDecorator struct {
 	kube kube.Metadata
 	cfg  *KubernetesDecorator
-
-	ownMetadataAsSrc map[string]string
-	ownMetadataAsDst map[string]string
 }
 
 func newMetadataDecorator(cfg *KubernetesDecorator) (*metadataDecorator, error) {
@@ -113,12 +107,18 @@ func (md *metadataDecorator) do(span *request.Span) {
 		if peerInfo, ok := md.kube.GetInfo(span.Peer); ok {
 			appendSRCMetadata(span.Metadata, peerInfo)
 		}
-		maps.Copy(span.Metadata, md.ownMetadataAsDst)
+		if peerInfo, ok := md.kube.GetInfo(span.Host); ok {
+			appendDSTMetadata(span.Metadata, peerInfo)
+			span.ServiceID.Instance = peerInfo.Namespace + "/" + peerInfo.Name
+		}
 	case request.EventTypeGRPCClient, request.EventTypeHTTPClient:
 		if peerInfo, ok := md.kube.GetInfo(span.Host); ok {
 			appendDSTMetadata(span.Metadata, peerInfo)
 		}
-		maps.Copy(span.Metadata, md.ownMetadataAsSrc)
+		if peerInfo, ok := md.kube.GetInfo(span.Peer); ok {
+			appendSRCMetadata(span.Metadata, peerInfo)
+			span.ServiceID.Instance = peerInfo.Namespace + "/" + peerInfo.Name
+		}
 	}
 }
 
@@ -133,21 +133,6 @@ func appendDSTMetadata(to map[string]string, info *kube.Info) {
 func appendSRCMetadata(to map[string]string, info *kube.Info) {
 	to[SrcNameKey] = info.Name
 	to[SrcNamespaceKey] = info.Namespace
-}
-
-func (md *metadataDecorator) refreshOwnPodMetadata() {
-	for {
-		if info, ok := md.kube.GetInfo(getLocalIP()); ok {
-			klog().Debug("found local pod metadata", "metadata", info)
-			md.ownMetadataAsSrc = make(map[string]string, 2)
-			md.ownMetadataAsDst = make(map[string]string, 2)
-			appendSRCMetadata(md.ownMetadataAsSrc, info)
-			appendDSTMetadata(md.ownMetadataAsDst, info)
-			return
-		}
-		klog().Info("local pod metadata not yet found. Waiting 5s and trying again before starting the kubernetes decorator")
-		time.Sleep(5 * time.Second)
-	}
 }
 
 // getLocalIP returns the first non-loopback local IP of the pod

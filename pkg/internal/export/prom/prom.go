@@ -25,6 +25,12 @@ const (
 	HTTPServerRequestSize = "http_server_request_size_bytes"
 	HTTPClientRequestSize = "http_client_request_size_bytes"
 
+	// target will expose the process hostname-pid (or K8s Pod).
+	// It is advised for users that to use relabeling rules to
+	// override the "instance" attribute with "target" in the
+	// Prometheus server. This would be similar to the "multi target pattern":
+	// https://prometheus.io/docs/guides/multi-target-exporter/
+	targetInstanceKey    = "target_instance"
 	serviceNameKey       = "service_name"
 	serviceNamespaceKey  = "service_namespace"
 	httpMethodKey        = "http_method"
@@ -171,7 +177,7 @@ func (r *metricsReporter) observe(span *request.Span) {
 // labelNamesSQL must return the label names in the same order as would be returned
 // by labelValuesSQL
 func labelNamesSQL(ctxInfo *global.ContextInfo) []string {
-	names := []string{serviceNameKey, serviceNamespaceKey, DBOperationKey}
+	names := []string{targetInstanceKey, serviceNameKey, serviceNamespaceKey, DBOperationKey}
 	if ctxInfo.K8sDecoration {
 		names = appendK8sLabelNames(names)
 	}
@@ -181,7 +187,7 @@ func labelNamesSQL(ctxInfo *global.ContextInfo) []string {
 // labelValuesSQL must return the label names in the same order as would be returned
 // by labelNamesSQL
 func (r *metricsReporter) labelValuesSQL(span *request.Span) []string {
-	values := []string{span.ServiceID.Name, span.ServiceID.Namespace, span.Method}
+	values := []string{span.ServiceID.Instance, span.ServiceID.Name, span.ServiceID.Namespace, span.Method}
 	if r.ctxInfo.K8sDecoration {
 		values = appendK8sLabelValues(values, span)
 	}
@@ -192,7 +198,7 @@ func (r *metricsReporter) labelValuesSQL(span *request.Span) []string {
 // by labelValuesGRPC
 func labelNamesGRPC(cfg *PrometheusConfig, ctxInfo *global.ContextInfo) []string {
 	// TODO: let user configure which keys are going to be added
-	names := []string{serviceNameKey, serviceNamespaceKey, rpcMethodKey, rpcSystemGRPC, rpcGRPCStatusCodeKey}
+	names := []string{targetInstanceKey, serviceNameKey, serviceNamespaceKey, rpcMethodKey, rpcSystemGRPC, rpcGRPCStatusCodeKey}
 	if cfg.ReportPeerInfo {
 		names = append(names, netSockPeerAddrKey)
 	}
@@ -206,7 +212,7 @@ func labelNamesGRPC(cfg *PrometheusConfig, ctxInfo *global.ContextInfo) []string
 // by labelNamesGRPC
 func (r *metricsReporter) labelValuesGRPC(span *request.Span) []string {
 	// serviceNameKey, rpcMethodKey, rpcSystemGRPC, rpcGRPCStatusCodeKey
-	values := []string{span.ServiceID.Name, span.ServiceID.Namespace, span.Path, "grpc", strconv.Itoa(span.Status)}
+	values := []string{span.ServiceID.Instance, span.ServiceID.Name, span.ServiceID.Namespace, span.Path, "grpc", strconv.Itoa(span.Status)}
 	if r.cfg.ReportPeerInfo {
 		values = append(values, span.Peer) // netSockPeerAddrKey
 	}
@@ -219,7 +225,7 @@ func (r *metricsReporter) labelValuesGRPC(span *request.Span) []string {
 // labelNamesHTTPClient must return the label names in the same order as would be returned
 // by labelValuesHTTPClient
 func labelNamesHTTPClient(cfg *PrometheusConfig, ctxInfo *global.ContextInfo) []string {
-	names := []string{serviceNameKey, serviceNamespaceKey, httpMethodKey, httpStatusCodeKey}
+	names := []string{targetInstanceKey, serviceNameKey, serviceNamespaceKey, httpMethodKey, httpStatusCodeKey}
 	if cfg.ReportPeerInfo {
 		names = append(names, netSockPeerNameKey, netSockPeerPortKey)
 	}
@@ -233,7 +239,7 @@ func labelNamesHTTPClient(cfg *PrometheusConfig, ctxInfo *global.ContextInfo) []
 // by labelNamesHTTPClient
 func (r *metricsReporter) labelValuesHTTPClient(span *request.Span) []string {
 	// httpMethodKey, httpStatusCodeKey
-	values := []string{span.ServiceID.Name, span.ServiceID.Namespace, span.Method, strconv.Itoa(span.Status)}
+	values := []string{span.ServiceID.Instance, span.ServiceID.Name, span.ServiceID.Namespace, span.Method, strconv.Itoa(span.Status)}
 	if r.cfg.ReportPeerInfo {
 		// netSockPeerAddrKey, netSockPeerPortKey
 		values = append(values, span.Host, strconv.Itoa(span.HostPort))
@@ -247,7 +253,7 @@ func (r *metricsReporter) labelValuesHTTPClient(span *request.Span) []string {
 // labelNamesHTTP must return the label names in the same order as would be returned
 // by labelValuesHTTP
 func labelNamesHTTP(cfg *PrometheusConfig, ctxInfo *global.ContextInfo) []string {
-	names := []string{serviceNameKey, serviceNamespaceKey, httpMethodKey, httpStatusCodeKey}
+	names := []string{targetInstanceKey, serviceNameKey, serviceNamespaceKey, httpMethodKey, httpStatusCodeKey}
 	if cfg.ReportTarget {
 		names = append(names, httpTargetKey)
 	}
@@ -267,7 +273,7 @@ func labelNamesHTTP(cfg *PrometheusConfig, ctxInfo *global.ContextInfo) []string
 // by labelNamesHTTP
 func (r *metricsReporter) labelValuesHTTP(span *request.Span) []string {
 	// httpMethodKey, httpStatusCodeKey
-	values := []string{span.ServiceID.Name, span.ServiceID.Namespace, span.Method, strconv.Itoa(span.Status)}
+	values := []string{span.ServiceID.Instance, span.ServiceID.Name, span.ServiceID.Namespace, span.Method, strconv.Itoa(span.Status)}
 	if r.cfg.ReportTarget {
 		values = append(values, span.Path) // httpTargetKey
 	}

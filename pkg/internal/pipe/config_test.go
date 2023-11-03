@@ -31,7 +31,7 @@ otel_metrics_export:
 prometheus_export:
   buckets:
     request_size_histogram: [0, 10, 20, 22]
-decoration:
+attributes:
   kubernetes:
     enable: true
 `)

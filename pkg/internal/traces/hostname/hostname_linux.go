@@ -41,7 +41,7 @@ func getFqdnHostname(osHost string) (string, error) {
 	for _, ip := range ips {
 		hosts, err := net.LookupAddr(ip.String())
 		if err != nil || len(hosts) == 0 {
-			return "", err
+			continue
 		}
 		logger().Debug("found FQDN hosts", "hosts", hosts)
 		return strings.TrimSuffix(hosts[0], "."), nil

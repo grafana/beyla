@@ -197,7 +197,7 @@ func (r *fallbackResolver) updateAndGet(queriedFull, queriedShort string, cause 
 	}
 
 	if r.lastShort == "" && full == "" {
-		err = fmt.Errorf("can't query neither full nor short hostname: %v", cause)
+		err = fmt.Errorf("can't query neither full nor short hostname: %w", cause)
 	}
 
 	// this is to avoid loops of query->update->query because we update when we query which is not a very good idea...

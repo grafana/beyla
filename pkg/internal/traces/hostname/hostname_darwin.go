@@ -12,6 +12,6 @@ func internalHostname() (hn string, err error) {
 	return os.Hostname()
 }
 
-func getFqdnHostname(osHost string) (string, error) {
+func getFqdnHostname(_ string) (string, error) {
 	return os.Hostname()
 }

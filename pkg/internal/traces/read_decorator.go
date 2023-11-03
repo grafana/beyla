@@ -15,10 +15,20 @@ func rlog() *slog.Logger {
 	return slog.With("component", "traces.ReadDecorator")
 }
 
+// InstanceIDConfig configures how Beyla will get the Instance ID of the traces/metrics
+// from the current hostname + the instrumented process PID
 type InstanceIDConfig struct {
-	HostnameDNSResolution bool   `yaml:"dns" env:"BEYLA_HOSTNAME_DNS_RESOLUTION"`
-	OverrideHostname      string `yaml:"override_hostname" env:"BEYLA_HOSTNAME"`
-	OverrideInstanceID    string `yaml:"override_instance_id" env:"BEYLA_INSTANCE_ID"`
+	// HostnameDNSResolution is true if Beyla uses the DNS to resolve the local hostname or
+	// false if it uses the local hostname.
+	HostnameDNSResolution bool `yaml:"dns" env:"BEYLA_HOSTNAME_DNS_RESOLUTION"`
+	// OverrideHostname can be optionally set to avoid resolving any hostname and using this
+	// value. Beyla will anyway attach the process ID to the given hostname for composing
+	// the instance ID.
+	OverrideHostname string `yaml:"override_hostname" env:"BEYLA_HOSTNAME"`
+	// OverrideInstanceID can be optionally set to avoid Beyla composing the instance ID
+	// and use this value. If you are managing multiple processes from a single Beyla instance,
+	// all the processes will have the same Instance ID.
+	OverrideInstanceID string `yaml:"override_instance_id" env:"BEYLA_INSTANCE_ID"`
 }
 
 // ReadDecorator is the input node of the processing graph. The eBPF tracers will send their
@@ -68,7 +78,7 @@ func getDecorator(cfg *InstanceIDConfig) decorator {
 }
 
 func hostNamePIDDecorator(cfg *InstanceIDConfig) decorator {
-	// TODO: periodically update
+	// TODO: periodically update in case the current Beyla instance is created from a VM snapshot running as a different hostname
 	resolver := hostname.CreateResolver(cfg.OverrideHostname, "", cfg.HostnameDNSResolution)
 	fullHostName, _, err := resolver.Query()
 	log := rlog().With("function", "instance_ID_hostNamePIDDecorator")

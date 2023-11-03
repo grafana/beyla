@@ -3,7 +3,6 @@ package transform
 import (
 	"fmt"
 	"log/slog"
-	"net"
 	"strings"
 	"time"
 
@@ -133,21 +132,4 @@ func appendDSTMetadata(to map[string]string, info *kube.Info) {
 func appendSRCMetadata(to map[string]string, info *kube.Info) {
 	to[SrcNameKey] = info.Name
 	to[SrcNamespaceKey] = info.Namespace
-}
-
-// getLocalIP returns the first non-loopback local IP of the pod
-func getLocalIP() string {
-	addrs, err := net.InterfaceAddrs()
-	if err != nil {
-		return ""
-	}
-	for _, address := range addrs {
-		// check the address type and if it is not a loopback the display it
-		if ipnet, ok := address.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
-			if ipnet.IP.To4() != nil {
-				return ipnet.IP.String()
-			}
-		}
-	}
-	return ""
 }

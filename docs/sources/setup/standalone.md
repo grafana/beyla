@@ -53,7 +53,7 @@ Beyla requires administrative (sudo) privileges, or at least it needs to be gran
 Let's instrument the process that owns the port 443, and expose the metrics as a Prometheus endpoint listening on the port 8999. In this example, the configuration is passed exclusively through environment variables:
 
 ```sh
-BEYLA_PROMETHEUS_PORT=8999 OPEN_PORT=443 sudo -E beyla
+BEYLA_PROMETHEUS_PORT=8999 BEYLA_OPEN_PORT=443 sudo -E beyla
 ```
 
 The equivalent execution, but configured via a YAML file would look like:

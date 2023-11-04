@@ -103,7 +103,7 @@ go run server.go
 
 Set up Beyla as a standalone linux process by following the [standalone setup]({{< relref "../setup/standalone.md" >}}) documentation.
 
-Metrics will be exported from a [Prometheus](https://prometheus.io/) scrape endpoint by setting the `BEYLA_PROMETHEUS_PORT` environment variable. Traces will be printed to stdout by setting the `PRINT_TRACES=true` environment variable.
+Metrics will be exported from a [Prometheus](https://prometheus.io/) scrape endpoint by setting the `BEYLA_PROMETHEUS_PORT` environment variable. Traces will be printed to stdout by setting the `BEYLA_PRINT_TRACES=true` environment variable.
 
 For information on how to configure other exporters like [OpenTelemetry](https://opentelemetry.io/), see the
 [configuration options]({{< relref "../configure/options.md" >}}) documentation.
@@ -111,7 +111,7 @@ For information on how to configure other exporters like [OpenTelemetry](https:/
 Set environment variables and run Beyla:
 
 ```sh
-BEYLA_PROMETHEUS_PORT=8999 PRINT_TRACES=true OPEN_PORT=8080 sudo -E beyla
+BEYLA_PROMETHEUS_PORT=8999 BEYLA_PRINT_TRACES=true BEYLA_OPEN_PORT=8080 sudo -E beyla
 ```
 
 Open a new terminal and send a few HTTP GET calls to the test service:

@@ -73,19 +73,17 @@ var defaultConfig = Config{
 type Config struct {
 	EBPF ebpfcommon.TracerConfig `yaml:"ebpf"`
 
-	Attributes Attributes `yaml:"attributes"`
-	// Routes is an optional node. If not set, data will be directly forwarded to exporters.
-	Routes     *transform.RoutesConfig       `yaml:"routes"`
-	Kubernetes transform.KubernetesDecorator `yaml:"kubernetes"`
-
 	// Grafana overrides some values of the otel.MetricsConfig and otel.TracesConfig below
 	// for a simpler submission of OTEL metrics to Grafana Cloud
 	Grafana otel.GrafanaConfig `yaml:"grafana"`
 
-	Metrics    otel.MetricsConfig    `yaml:"otel_metrics_export"`
-	Traces     otel.TracesConfig     `yaml:"otel_traces_export"`
-	Prometheus prom.PrometheusConfig `yaml:"prometheus_export"`
-	Printer    debug.PrintEnabled    `yaml:"print_traces" env:"BEYLA_PRINT_TRACES"`
+	Attributes Attributes `yaml:"attributes"`
+	// Routes is an optional node. If not set, data will be directly forwarded to exporters.
+	Routes     *transform.RoutesConfig `yaml:"routes"`
+	Metrics    otel.MetricsConfig      `yaml:"otel_metrics_export"`
+	Traces     otel.TracesConfig       `yaml:"otel_traces_export"`
+	Prometheus prom.PrometheusConfig   `yaml:"prometheus_export"`
+	Printer    debug.PrintEnabled      `yaml:"print_traces" env:"BEYLA_PRINT_TRACES"`
 
 	// Exec allows selecting the instrumented executable whose complete path contains the Exec value.
 	Exec services.PathRegexp `yaml:"executable_name" env:"BEYLA_EXECUTABLE_NAME"`
@@ -99,11 +97,6 @@ type Config struct {
 	// Using env and envDefault is a trick to get the value either from one of either variables
 	ServiceName      string `yaml:"service_name" env:"OTEL_SERVICE_NAME,expand" envDefault:"${BEYLA_SERVICE_NAME}"`
 	ServiceNamespace string `yaml:"service_namespace" env:"BEYLA_SERVICE_NAMESPACE"`
-
-	// InstanceID overrides the service instance ID. If unset, it will use the combination of `hostname-pid`.
-	InstanceID string `yaml:"instance_id" env:"BEYLA_INSTANCE_ID"`
-	// Hostname overrides the Beyla hostname that is used, for example, in the default instance ID decorator.
-	Hostname string `yaml:"hostname" env:"BEYLA_HOSTNAME"`
 
 	// Discovery configuration
 	Discovery services.DiscoveryConfig `yaml:"discovery"`

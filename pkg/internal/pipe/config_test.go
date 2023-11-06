@@ -33,7 +33,11 @@ prometheus_export:
     request_size_histogram: [0, 10, 20, 22]
 attributes:
   kubernetes:
+    kubeconfig_path: /foo/bar
     enable: true
+    informers_sync_timeout: 30s
+  instance_id:
+    dns: true
 `)
 	require.NoError(t, os.Setenv("BEYLA_EXECUTABLE_NAME", "tras"))
 	require.NoError(t, os.Setenv("BEYLA_OPEN_PORT", "8080-8089"))
@@ -47,7 +51,7 @@ attributes:
 	defer unsetEnv(t, map[string]string{
 		"BEYLA_KUBE_METADATA_KUBECONFIG_PATH": "",
 		"BEYLA_OPEN_PORT":                     "", "BEYLA_EXECUTABLE_NAME": "", "OTEL_SERVICE_NAME": "", "BEYLA_NOOP_TRACES": "",
-		"OTEL_EXPORTER_OTLP_ENDPOINT": "", "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT": "",  "GRAFANA_OTLP_SUBMIT": "",
+		"OTEL_EXPORTER_OTLP_ENDPOINT": "", "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT": "", "GRAFANA_OTLP_SUBMIT": "",
 	})
 
 	cfg, err := LoadConfig(userConfig)

@@ -37,7 +37,6 @@ var defaultConfig = Config{
 		TracesProtocol:     otel.ProtocolUnset,
 		MaxQueueSize:       4096,
 		MaxExportBatchSize: 4096,
-		SamplingRatio:      1.0,
 		ReportersCacheLen:  16,
 	},
 	Prometheus: prom.PrometheusConfig{

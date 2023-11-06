@@ -87,8 +87,8 @@ func TestTracerPipeline(t *testing.T) {
 
 	gb := newGraphBuilder(ctx, &Config{
 		Traces: otel.TracesConfig{
-			BatchTimeout:   10 * time.Millisecond,
-			TracesEndpoint: tc.ServerEndpoint, SamplingRatio: 1.0,
+			BatchTimeout:      10 * time.Millisecond,
+			TracesEndpoint:    tc.ServerEndpoint,
 			ReportersCacheLen: 16,
 		},
 	}, gctx(), make(<-chan []request.Span))
@@ -123,8 +123,8 @@ func TestTracerPipelineBadTimestamps(t *testing.T) {
 
 	gb := newGraphBuilder(ctx, &Config{
 		Traces: otel.TracesConfig{
-			BatchTimeout:   10 * time.Millisecond,
-			TracesEndpoint: tc.ServerEndpoint, SamplingRatio: 1.0,
+			BatchTimeout:      10 * time.Millisecond,
+			TracesEndpoint:    tc.ServerEndpoint,
 			ReportersCacheLen: 16,
 		},
 	}, gctx(), make(<-chan []request.Span))
@@ -272,8 +272,8 @@ func TestTraceGRPCPipeline(t *testing.T) {
 
 	gb := newGraphBuilder(ctx, &Config{
 		Traces: otel.TracesConfig{
-			TracesEndpoint: tc.ServerEndpoint, SamplingRatio: 1.0,
-			BatchTimeout: time.Millisecond, ReportersCacheLen: 16,
+			TracesEndpoint: tc.ServerEndpoint,
+			BatchTimeout:   time.Millisecond, ReportersCacheLen: 16,
 		},
 	}, gctx(), make(<-chan []request.Span))
 	// Override eBPF tracer to send some fake data
@@ -306,7 +306,7 @@ func TestNestedSpanMatching(t *testing.T) {
 	require.NoError(t, err)
 
 	gb := newGraphBuilder(ctx, &Config{
-		Traces: otel.TracesConfig{TracesEndpoint: tc.ServerEndpoint, SamplingRatio: 1.0, ReportersCacheLen: 16},
+		Traces: otel.TracesConfig{TracesEndpoint: tc.ServerEndpoint, ReportersCacheLen: 16},
 	}, gctx(), make(<-chan []request.Span))
 	// Override eBPF tracer to send some fake data with nested client span
 	graph.RegisterStart(gb.builder, func(_ traces.Reader) (node.StartFunc[[]request.Span], error) {
@@ -584,7 +584,7 @@ func TestTracerPipelineInfo(t *testing.T) {
 	require.NoError(t, err)
 
 	gb := newGraphBuilder(ctx, &Config{
-		Traces: otel.TracesConfig{TracesEndpoint: tc.ServerEndpoint, SamplingRatio: 1.0, ReportersCacheLen: 16},
+		Traces: otel.TracesConfig{TracesEndpoint: tc.ServerEndpoint, ReportersCacheLen: 16},
 	}, gctx(), make(<-chan []request.Span))
 	// Override eBPF tracer to send some fake data
 	graph.RegisterStart(gb.builder, func(_ traces.Reader) (node.StartFunc[[]request.Span], error) {

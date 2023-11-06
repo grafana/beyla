@@ -52,7 +52,7 @@ type TracesConfig struct {
 	// InsecureSkipVerify is not standard, so we don't follow the same naming convention
 	InsecureSkipVerify bool `yaml:"insecure_skip_verify" env:"BEYLA_OTEL_INSECURE_SKIP_VERIFY"`
 
-	SamplingRatio float64 `yaml:"sampling_ratio" env:"BEYLA_OTEL_TRACE_SAMPLING_RATIO"`
+	Sampler Sampler `yaml:"sampler"`
 
 	// Configuration options below this line will remain undocumented at the moment,
 	// but can be useful for performance-tuning of some customers.
@@ -561,7 +561,7 @@ func (r *TracesReporter) newTracers(service svc.ID) (*Tracers, error) {
 		provider: trace.NewTracerProvider(
 			trace.WithResource(otelResource(service)),
 			trace.WithSpanProcessor(r.bsp),
-			trace.WithSampler(trace.ParentBased(trace.TraceIDRatioBased(r.cfg.SamplingRatio))),
+			trace.WithSampler(r.cfg.Sampler.Implementation()),
 		),
 	}
 	tracers.tracer = tracers.provider.Tracer(reporterName)

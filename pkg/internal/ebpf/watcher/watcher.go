@@ -118,10 +118,12 @@ func PortScanRequired() bool {
 	mux.Lock()
 	defer mux.Unlock()
 
-	ret := newPortOfInterest
-	newPortOfInterest = false
+	return false
 
-	return ret
+	//ret := newPortOfInterest
+	//newPortOfInterest = false
+
+	//return ret
 }
 
 func (p *Tracer) checkPort(port uint16) {

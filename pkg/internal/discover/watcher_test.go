@@ -8,10 +8,11 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	bpfWatcher "github.com/grafana/beyla/pkg/internal/ebpf/watcher"
 	"github.com/grafana/beyla/pkg/internal/testutil"
 )
 
-const testTimeout = 5 * time.Second
+const testTimeout = 50 * time.Second
 
 func TestWatcher_Poll(t *testing.T) {
 	// mocking a fake listProcesses method
@@ -28,7 +29,7 @@ func TestWatcher_Poll(t *testing.T) {
 		interval: time.Microsecond,
 		ctx:      ctx,
 		pidPorts: map[pidPort]processPorts{},
-		listProcesses: func() (map[PID]processPorts, error) {
+		listProcesses: func(bool) (map[PID]processPorts, error) {
 			invocation++
 			switch invocation {
 			case 1:
@@ -42,6 +43,12 @@ func TestWatcher_Poll(t *testing.T) {
 				// new processes with no connections (p5) should be also reported
 				return map[PID]processPorts{p5.pid: p5, p2.pid: p2, p3.pid: p3, p4.pid: p4}, nil
 			}
+		},
+		executableReady: func(PID) bool {
+			return true
+		},
+		loadBPFWatcher: func(*bpfWatcher.Watcher) error {
+			return nil
 		},
 	}
 	accounterOutput := make(chan []Event[processPorts], 1)

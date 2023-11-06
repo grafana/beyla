@@ -10,6 +10,6 @@ import (
 // The tracer component is only usable in Linux.
 func (pt *ProcessTracer) Run(_ context.Context, _ chan<- []request.Span) {}
 
-func RunIndependentTracer(_ Tracer) error {
+func RunUtilityTracer(_ UtilityTracer) error {
 	return nil
 }

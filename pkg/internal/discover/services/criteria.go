@@ -57,12 +57,8 @@ func (dc DefinitionCriteria) Validate() error {
 
 func (dc DefinitionCriteria) PortOfInterest(port int) bool {
 	for i := range dc {
-		p := dc[i].OpenPorts
-		for _, pr := range p.ranges {
-			if pr.end == 0 && pr.start == port ||
-				pr.end != 0 && pr.start <= port && port <= pr.end {
-				return true
-			}
+		if dc[i].OpenPorts.Matches(port) {
+			return true
 		}
 	}
 	return false

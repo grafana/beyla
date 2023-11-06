@@ -14,7 +14,6 @@ import (
 	"golang.org/x/sys/unix"
 
 	"github.com/grafana/beyla/pkg/internal/request"
-	"github.com/grafana/beyla/pkg/internal/svc"
 )
 
 func ptlog() *slog.Logger { return slog.With("component", "ebpf.ProcessTracer") }
@@ -163,7 +162,7 @@ func bpfMount(pinPath string) error {
 	return unix.Mount(pinPath, pinPath, "bpf", 0, "")
 }
 
-func RunIndependentTracer(p Tracer) error {
+func RunUtilityTracer(p UtilityTracer) error {
 	i := instrumenter{}
 	plog := ptlog()
 	plog.Debug("loading independent eBPF program")
@@ -182,7 +181,7 @@ func RunIndependentTracer(p Tracer) error {
 		return err
 	}
 
-	go p.Run(context.Background(), nil, svc.ID{})
+	go p.Run(context.Background())
 
 	return nil
 }

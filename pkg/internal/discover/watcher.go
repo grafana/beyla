@@ -2,8 +2,10 @@ package discover
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
+	"os"
 	"time"
 
 	"github.com/mariomac/pipes/pkg/node"
@@ -109,17 +111,18 @@ func (pa *pollAccounter) snapshot(fetchedProcs map[PID]processPorts) []Event[pro
 	var events []Event[processPorts]
 	currentPidPorts := make(map[pidPort]processPorts, len(fetchedProcs))
 	reportedProcs := map[PID]struct{}{}
+	notReadyProcs := map[PID]struct{}{}
 	// notify processes that are new, or already existed but have a new connection
 	for pid, proc := range fetchedProcs {
 		// if the process does not have open ports, we might still notify it
 		// for example, if it's a client with ephemeral connections, which might be later matched by executable name
 		if len(proc.openPorts) == 0 {
-			if pa.checkNewProcessNotification(pid, reportedProcs) {
+			if pa.checkNewProcessNotification(pid, reportedProcs, notReadyProcs) {
 				events = append(events, Event[processPorts]{Type: EventCreated, Obj: proc})
 			}
 		} else {
 			for _, port := range proc.openPorts {
-				if pa.checkNewProcessConnectionNotification(proc, port, currentPidPorts, reportedProcs) {
+				if pa.checkNewProcessConnectionNotification(proc, port, currentPidPorts, reportedProcs, notReadyProcs) {
 					events = append(events, Event[processPorts]{Type: EventCreated, Obj: proc})
 					// skip checking new connections for that process
 					continue
@@ -133,16 +136,37 @@ func (pa *pollAccounter) snapshot(fetchedProcs map[PID]processPorts) []Event[pro
 			events = append(events, Event[processPorts]{Type: EventDeleted, Obj: proc})
 		}
 	}
+
+	// Remove the processes that are not fully instantiated from the list before
+	// caching the current pids in the snapshot.
+	for pid := range notReadyProcs {
+		delete(fetchedProcs, pid)
+	}
+
 	pa.pids = fetchedProcs
 	pa.pidPorts = currentPidPorts
 	return events
+}
+
+func (pa *pollAccounter) executableReady(pid PID) bool {
+	proc, err := process.NewProcess(int32(pid))
+	if err != nil {
+		return false
+	}
+	exePath, err := proc.Exe()
+
+	if err != nil {
+		return errors.Is(err, os.ErrNotExist)
+	}
+
+	return exePath != "/"
 }
 
 func (pa *pollAccounter) checkNewProcessConnectionNotification(
 	proc processPorts,
 	port uint32,
 	currentPidPorts map[pidPort]processPorts,
-	reportedProcs map[PID]struct{},
+	reportedProcs, notReadyProcs map[PID]struct{},
 ) bool {
 	pp := pidPort{Pid: proc.pid, Port: port}
 	currentPidPorts[pp] = proc
@@ -156,7 +180,12 @@ func (pa *pollAccounter) checkNewProcessConnectionNotification(
 		if _, ok := reportedProcs[pp.Pid]; !ok {
 			// avoid notifying multiple times the same process if it has multiple connections
 			reportedProcs[proc.pid] = struct{}{}
-			return true
+			if pa.executableReady(pp.Pid) {
+				return true
+			} else {
+				notReadyProcs[pp.Pid] = struct{}{}
+				wplog().Debug("Executable not ready", "pid", pp.Pid)
+			}
 		}
 	}
 	return false
@@ -164,14 +193,19 @@ func (pa *pollAccounter) checkNewProcessConnectionNotification(
 
 // checkNewProcessNotification returns true if the process has to be notified as new.
 // It accordingly updates the reportedProcs map
-func (pa *pollAccounter) checkNewProcessNotification(pid PID, reportedProcs map[PID]struct{}) bool {
+func (pa *pollAccounter) checkNewProcessNotification(pid PID, reportedProcs, notReadyProcs map[PID]struct{}) bool {
 	// the proc existed before iff we already had registered this pid from a previous snapshot
 	if _, existingProcess := pa.pids[pid]; !existingProcess {
 		// ...also if we haven't already reported the process in the last "snapshot" invocation
 		if _, ok := reportedProcs[pid]; !ok {
 			// avoid notifying multiple times the same process if it has multiple connections
 			reportedProcs[pid] = struct{}{}
-			return true
+			if pa.executableReady(pid) {
+				return true
+			} else {
+				notReadyProcs[pid] = struct{}{}
+				wplog().Debug("Executable not ready", "pid", pid)
+			}
 		}
 	}
 	return false

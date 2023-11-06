@@ -14,6 +14,8 @@
 #define PACKET_TYPE_REQUEST 1
 #define PACKET_TYPE_RESPONSE 2
 
+volatile const s32 capture_header_buffer = 0;
+
 // Keeps track of active accept or connect connection infos
 // From this table we extract the PID of the process and filter
 // HTTP calls we are not interested in
@@ -273,7 +275,11 @@ static __always_inline void handle_buf_with_connection(connection_info_t *conn, 
         bpf_dbg_printk("=== http_buffer_event len=%d pid=%d still_reading=%d ===", bytes_len, pid_from_pid_tgid(bpf_get_current_pid_tgid()), still_reading(info));
 
         if (packet_type == PACKET_TYPE_REQUEST && (info->status == 0)) {
-            send_http_trace_buf(u_buf, bytes_len, conn);
+            if (capture_header_buffer) {
+                // This can be expensive on high volume of requests. We make it optional
+                // for customers to enable it. Off by default.
+                send_http_trace_buf(u_buf, bytes_len, conn);
+            }
             
             // we copy some small part of the buffer to the info trace event, so that we can process an event even with
             // incomplete trace info in user space.

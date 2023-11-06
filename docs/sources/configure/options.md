@@ -169,6 +169,20 @@ can help with reducing the CPU overhead of Beyla.
 In low-load services (in terms of requests/second), high values of `wakeup_len` could
 add a noticeable delay in the time the metrics are submitted and become externally visible.
 
+| YAML                    | Env var                           | Type    | Default |
+|-------------------------|-----------------------------------|---------|---------|
+| `track_request_headers` | `BEYLA_BPF_TRACK_REQUEST_HEADERS` | boolean | (false) |
+
+Enables tracking of request headers for the purposes of processing any incoming 'Traceparent'
+header values. If this option is enabled, when Beyla encounters an incoming server request with 
+a 'Traceparent' header value, it will use the provided 'trace id' to create its own trace spans.
+
+This option does not have an effect on Go applications, where the 'Traceparent' field is always 
+processed, without additional tracking of the request headers.
+
+Enabling this option may increase Beyla's performance overhead in high request volume scenarios.
+Please note that this option is only useful when generating Beyla traces, it does not affect 
+generation of Beyla metrics.
 
 ## Routes decorator
 

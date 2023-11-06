@@ -62,6 +62,13 @@ type MetricsConfig struct {
 	Buckets Buckets `yaml:"buckets"`
 
 	ReportersCacheLen int `yaml:"reporters_cache_len" env:"BEYLA_METRICS_REPORT_CACHE_LEN"`
+
+	// SDKLogLevel works independently from the global LogLevel because it prints GBs of logs in Debug mode
+	// and the Info messages leak internal details that are not usually valuable for the final user.
+	SDKLogLevel string `yaml:"otel_sdk_log_level" env:"BEYLA_OTEL_SDK_LOG_LEVEL"`
+
+	// Grafana configuration needs to be explicitly set up before building the graph
+	Grafana *GrafanaOTLP `yaml:"-"`
 }
 
 func (m *MetricsConfig) GetProtocol() Protocol {
@@ -97,7 +104,7 @@ func (m *MetricsConfig) GuessProtocol() Protocol {
 // This method is invoked only once during startup time so it doesn't have a noticeable performance impact.
 // nolint:gocritic
 func (m MetricsConfig) Enabled() bool {
-	return m.CommonEndpoint != "" || m.MetricsEndpoint != ""
+	return m.CommonEndpoint != "" || m.MetricsEndpoint != "" || m.Grafana.MetricsEnabled()
 }
 
 // MetricsReporter implements the graph node that receives request.Span
@@ -126,6 +133,8 @@ type Metrics struct {
 func ReportMetrics(
 	ctx context.Context, cfg *MetricsConfig, ctxInfo *global.ContextInfo,
 ) (node.TerminalFunc[[]request.Span], error) {
+
+	SetupInternalOTELSDKLogger(cfg.SDKLogLevel)
 
 	mr, err := newMetricsReporter(ctx, cfg, ctxInfo)
 	if err != nil {
@@ -434,6 +443,9 @@ func getHTTPMetricEndpointOptions(cfg *MetricsConfig) (otlpOptions, error) {
 		log.Debug("Setting InsecureSkipVerify")
 		opts.SkipTLSVerify = cfg.InsecureSkipVerify
 	}
+
+	cfg.Grafana.setupOptions(&opts)
+
 	return opts, nil
 }
 
@@ -460,12 +472,21 @@ func getGRPCMetricEndpointOptions(cfg *MetricsConfig) (otlpOptions, error) {
 	return opts, nil
 }
 
+// the HTTP path will be defined from one of the following sources, from highest to lowest priority
+// - OTEL_EXPORTER_OTLP_METRICS_ENDPOINT, if defined
+// - OTEL_EXPORTER_OTLP_ENDPOINT, if defined
+// - https://otlp-gateway-${GRAFANA_OTLP_CLOUD_ZONE}.grafana.net/otlp, if GRAFANA_OTLP_CLOUD_ZONE is defined
+// If, by some reason, Grafana changes its OTLP Gateway URL in a distant future, you can still point to the
+// correct URL with the OTLP_EXPORTER_... variables.
 func parseMetricsEndpoint(cfg *MetricsConfig) (*url.URL, bool, error) {
 	isCommon := false
 	endpoint := cfg.MetricsEndpoint
 	if endpoint == "" {
 		isCommon = true
 		endpoint = cfg.CommonEndpoint
+		if endpoint == "" && cfg.Grafana != nil && cfg.Grafana.CloudZone != "" {
+			endpoint = cfg.Grafana.Endpoint()
+		}
 	}
 
 	murl, err := url.Parse(endpoint)

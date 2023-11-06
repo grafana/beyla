@@ -98,10 +98,14 @@ func (rbf *ringBufForwarder[T]) readAndForward(ctx context.Context, spansChan ch
 	// 3. Accumulate the HTTPRequestTrace into a batch slice
 	// 4. When the length of the batch slice reaches cfg.BatchLength,
 	//    submit it to the next stage of the pipeline
+
+	// We just log the first ring buffer read to check that the eBPF side is sending stuff
+	// Logging each message adds few information and a lot of noise to the debug logs
+	// in production systems with thousands of messages per second
+	rbf.logger.Debug("starting to read perf buffer")
+	record, err := eventsReader.Read()
+	rbf.logger.Debug("received event")
 	for {
-		rbf.logger.Debug("starting to read perf buffer")
-		record, err := eventsReader.Read()
-		rbf.logger.Debug("received event")
 		if err != nil {
 			if errors.Is(err, ringbuf.ErrClosed) {
 				rbf.logger.Debug("ring buffer is closed")
@@ -110,30 +114,35 @@ func (rbf *ringBufForwarder[T]) readAndForward(ctx context.Context, spansChan ch
 			rbf.logger.Error("error reading from perf reader", err)
 			continue
 		}
-		rbf.access.Lock()
-		s, ignore, err := rbf.reader(&record)
-		if err != nil {
-			rbf.logger.Error("error parsing perf event", err)
-			rbf.access.Unlock()
-			continue
+		rbf.processAndForward(record, spansChan)
+
+		// read another event before the next loop iteration
+		record, err = eventsReader.Read()
+	}
+}
+
+func (rbf *ringBufForwarder[T]) processAndForward(record ringbuf.Record, spansChan chan<- []request.Span) {
+	rbf.access.Lock()
+	defer rbf.access.Unlock()
+	s, ignore, err := rbf.reader(&record)
+	if err != nil {
+		rbf.logger.Error("error parsing perf event", err)
+		return
+	}
+	if ignore {
+		return
+	}
+	s.ServiceID = rbf.service
+	rbf.spans[rbf.spansLen] = s
+	// we need to decorate each span with the tracer's service name
+	// if this information is not forwarded from eBPF
+	rbf.spansLen++
+	if rbf.spansLen == rbf.cfg.BatchLength {
+		rbf.logger.Debug("submitting traces after batch is full", "len", rbf.spansLen)
+		rbf.flushEvents(spansChan)
+		if rbf.ticker != nil {
+			rbf.ticker.Reset(rbf.cfg.BatchTimeout)
 		}
-		if ignore {
-			rbf.access.Unlock()
-			continue
-		}
-		s.ServiceID = rbf.service
-		rbf.spans[rbf.spansLen] = s
-		// we need to decorate each span with the tracer's service name
-		// if this information is not forwarded from eBPF
-		rbf.spansLen++
-		if rbf.spansLen == rbf.cfg.BatchLength {
-			rbf.logger.Debug("submitting traces after batch is full", "len", rbf.spansLen)
-			rbf.flushEvents(spansChan)
-			if rbf.ticker != nil {
-				rbf.ticker.Reset(rbf.cfg.BatchTimeout)
-			}
-		}
-		rbf.access.Unlock()
 	}
 }
 

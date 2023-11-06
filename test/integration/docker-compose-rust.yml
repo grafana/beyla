@@ -40,6 +40,7 @@ services:
       BEYLA_BPF_DEBUG: "TRUE"
       BEYLA_METRICS_REPORT_TARGET: "true"
       BEYLA_METRICS_REPORT_PEER: "true"
+      BEYLA_BPF_TRACK_REQUEST_HEADERS: "true"
     depends_on:
       testserver:
         condition: service_started

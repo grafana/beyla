@@ -69,21 +69,21 @@ func testHTTPTracesOptions(t *testing.T, expected otlpOptions, tcfg *TracesConfi
 
 func TestMissingSchemeInHTTPTracesEndpoint(t *testing.T) {
 	defer restoreEnvAfterExecution()()
-	opts, err := getHTTPTracesEndpointOptions(&TracesConfig{CommonEndpoint: "http://foo:3030", SamplingRatio: 1.0})
+	opts, err := getHTTPTracesEndpointOptions(&TracesConfig{CommonEndpoint: "http://foo:3030"})
 	require.NoError(t, err)
 	require.NotEmpty(t, opts)
 
-	_, err = getHTTPTracesEndpointOptions(&TracesConfig{CommonEndpoint: "foo:3030", SamplingRatio: 1.0})
+	_, err = getHTTPTracesEndpointOptions(&TracesConfig{CommonEndpoint: "foo:3030"})
 	require.Error(t, err)
 
-	_, err = getHTTPTracesEndpointOptions(&TracesConfig{CommonEndpoint: "foo", SamplingRatio: 1.0})
+	_, err = getHTTPTracesEndpointOptions(&TracesConfig{CommonEndpoint: "foo"})
 	require.Error(t, err)
 }
 
 func TestGRPCTracesEndpointOptions(t *testing.T) {
 	defer restoreEnvAfterExecution()()
 	t.Run("do not accept URLs without a scheme", func(t *testing.T) {
-		_, err := getGRPCTracesEndpointOptions(&TracesConfig{CommonEndpoint: "foo:3939", SamplingRatio: 1.0})
+		_, err := getGRPCTracesEndpointOptions(&TracesConfig{CommonEndpoint: "foo:3939"})
 		assert.Error(t, err)
 	})
 	tcfg := TracesConfig{
@@ -165,7 +165,6 @@ func TestTracesSetupHTTP_Protocol(t *testing.T) {
 				TracesEndpoint: tc.Endpoint,
 				Protocol:       tc.ProtoVal,
 				TracesProtocol: tc.TraceProtoVal,
-				SamplingRatio:  1.0,
 			})
 			require.NoError(t, err)
 			assert.Equal(t, tc.ExpectedProtoEnv, os.Getenv(envProtocol))
@@ -184,7 +183,6 @@ func TestTracesSetupHTTP_DoNotOverrideEnv(t *testing.T) {
 			CommonEndpoint: "http://host:3333",
 			Protocol:       "foo",
 			TracesProtocol: "bar",
-			SamplingRatio:  1.0,
 		})
 		require.NoError(t, err)
 		assert.Equal(t, "foo-proto", os.Getenv(envProtocol))
@@ -196,7 +194,6 @@ func TestTracesSetupHTTP_DoNotOverrideEnv(t *testing.T) {
 		_, err := getHTTPTracesEndpointOptions(&TracesConfig{
 			CommonEndpoint: "http://host:3333",
 			Protocol:       "foo",
-			SamplingRatio:  1.0,
 		})
 		require.NoError(t, err)
 		_, ok := os.LookupEnv(envTracesProtocol)
@@ -234,7 +231,6 @@ func TestTraces_InternalInstrumentation(t *testing.T) {
 			CommonEndpoint:    coll.URL,
 			BatchTimeout:      10 * time.Millisecond,
 			ExportTimeout:     5 * time.Second,
-			SamplingRatio:     1.0,
 			ReportersCacheLen: 16,
 		},
 		&global.ContextInfo{
@@ -326,7 +322,7 @@ func TestTraces_InternalInstrumentationSampling(t *testing.T) {
 			CommonEndpoint:    coll.URL,
 			BatchTimeout:      10 * time.Millisecond,
 			ExportTimeout:     5 * time.Second,
-			SamplingRatio:     0.0, // sampling 0 means we won't generate any samples
+			Sampler:           Sampler{Name: "always_off"}, // we won't send any trace
 			ReportersCacheLen: 16,
 		},
 		&global.ContextInfo{

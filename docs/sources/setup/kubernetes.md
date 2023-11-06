@@ -137,7 +137,7 @@ spec:
             runAsUser: 0
             privileged: true # Alternative to the capabilities.add SYS_ADMIN setting
           env:
-            - name: EXECUTABLE_NAME # Select the executable by its name instead of OPEN_PORT
+            - name: BEYLA_EXECUTABLE_NAME # Select the executable by its name instead of BEYLA_OPEN_PORT
               value: "goblog"
             - name: OTEL_EXPORTER_OTLP_ENDPOINT
               value: "grafana-agent:4318"

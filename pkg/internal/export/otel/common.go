@@ -1,10 +1,15 @@
 package otel
 
 import (
+	"context"
 	"crypto/tls"
 	"fmt"
+	"log/slog"
+	"os"
 
+	"github.com/go-logr/logr"
 	"github.com/hashicorp/golang-lru/v2/simplelru"
+	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp"
@@ -111,6 +116,7 @@ type otlpOptions struct {
 	Insecure      bool
 	URLPath       string
 	SkipTLSVerify bool
+	HTTPHeaders   map[string]string
 }
 
 func (o *otlpOptions) AsMetricHTTP() []otlpmetrichttp.Option {
@@ -125,6 +131,9 @@ func (o *otlpOptions) AsMetricHTTP() []otlpmetrichttp.Option {
 	}
 	if o.SkipTLSVerify {
 		opts = append(opts, otlpmetrichttp.WithTLSClientConfig(&tls.Config{InsecureSkipVerify: true}))
+	}
+	if len(o.HTTPHeaders) > 0 {
+		opts = append(opts, otlpmetrichttp.WithHeaders(o.HTTPHeaders))
 	}
 	return opts
 }
@@ -155,6 +164,9 @@ func (o *otlpOptions) AsTraceHTTP() []otlptracehttp.Option {
 	if o.SkipTLSVerify {
 		opts = append(opts, otlptracehttp.WithTLSClientConfig(&tls.Config{InsecureSkipVerify: true}))
 	}
+	if len(o.HTTPHeaders) > 0 {
+		opts = append(opts, otlptracehttp.WithHeaders(o.HTTPHeaders))
+	}
 	return opts
 }
 
@@ -169,4 +181,60 @@ func (o *otlpOptions) AsTraceGRPC() []otlptracegrpc.Option {
 		opts = append(opts, otlptracegrpc.WithTLSCredentials(credentials.NewTLS(&tls.Config{InsecureSkipVerify: true})))
 	}
 	return opts
+}
+
+// LogrAdaptor allows using our on logger to peek any warning or error in the OTEL exporters
+type LogrAdaptor struct {
+	inner *slog.Logger
+}
+
+func SetupInternalOTELSDKLogger(levelStr string) {
+	log := slog.With("component", "otel.BatchSpanProcessor")
+	if levelStr != "" {
+		var lvl slog.Level
+		err := lvl.UnmarshalText([]byte(levelStr))
+		if err != nil {
+			log.Warn("can't setup internal SDK logger level value. Ignoring", "error", err)
+			return
+		}
+		log = slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
+			Level: &lvl,
+		})).With("component", "otel.BatchSpanProcessor")
+		otel.SetLogger(logr.New(&LogrAdaptor{inner: log}))
+	}
+}
+
+func (l *LogrAdaptor) Init(_ logr.RuntimeInfo) {}
+
+// Enabled returns, according to OTEL internal description:
+// To see Warn messages use a logger with `l.V(1).Enabled() == true`
+// To see Info messages use a logger with `l.V(4).Enabled() == true`
+// To see Debug messages use a logger with `l.V(8).Enabled() == true`.
+// However, we will "degrade" their info messages to our log level,
+// as they leak many internal information that is not interesting for the final user.
+func (l *LogrAdaptor) Enabled(level int) bool {
+	if level < 4 {
+		return l.inner.Enabled(context.TODO(), slog.LevelWarn)
+	}
+	return l.inner.Enabled(context.TODO(), slog.LevelDebug)
+}
+
+func (l *LogrAdaptor) Info(level int, msg string, keysAndValues ...interface{}) {
+	if level > 1 {
+		l.inner.Debug(msg, keysAndValues...)
+	} else {
+		l.inner.Warn(msg, keysAndValues...)
+	}
+}
+
+func (l *LogrAdaptor) Error(err error, msg string, keysAndValues ...interface{}) {
+	l.inner.Error(msg, append(keysAndValues, "error", err)...)
+}
+
+func (l *LogrAdaptor) WithValues(keysAndValues ...interface{}) logr.LogSink {
+	return &LogrAdaptor{inner: l.inner.With(keysAndValues...)}
+}
+
+func (l *LogrAdaptor) WithName(name string) logr.LogSink {
+	return &LogrAdaptor{inner: l.inner.With("name", name)}
 }

@@ -60,6 +60,37 @@ func TestHTTPTracesEndpoint(t *testing.T) {
 	})
 }
 
+func TestHTTPTracesWithGrafanaOptions(t *testing.T) {
+	defer restoreEnvAfterExecution()
+	mcfg := TracesConfig{Grafana: &GrafanaOTLP{
+		Submit:     []string{submitMetrics, submitTraces},
+		CloudZone:  "eu-west-23",
+		InstanceID: "12345",
+		APIKey:     "affafafaafkd",
+	}}
+	t.Run("testing basic Grafana Cloud options", func(t *testing.T) {
+		testHTTPTracesOptions(t, otlpOptions{
+			Endpoint: "otlp-gateway-eu-west-23.grafana.net",
+			URLPath:  "/otlp/v1/traces",
+			HTTPHeaders: map[string]string{
+				// Basic + output of: echo -n 12345:affafafaafkd | gbase64 -w 0
+				"Authorization": "Basic MTIzNDU6YWZmYWZhZmFhZmtk",
+			},
+		}, &mcfg)
+	})
+	mcfg.CommonEndpoint = "https://localhost:3939"
+	t.Run("Overriding endpoint URL", func(t *testing.T) {
+		testHTTPTracesOptions(t, otlpOptions{
+			Endpoint: "localhost:3939",
+			URLPath:  "/v1/traces",
+			HTTPHeaders: map[string]string{
+				// Base64 representation of 12345:affafafaafkd
+				"Authorization": "Basic MTIzNDU6YWZmYWZhZmFhZmtk",
+			},
+		}, &mcfg)
+	})
+}
+
 func testHTTPTracesOptions(t *testing.T, expected otlpOptions, tcfg *TracesConfig) {
 	defer restoreEnvAfterExecution()()
 	opts, err := getHTTPTracesEndpointOptions(tcfg)
@@ -69,21 +100,21 @@ func testHTTPTracesOptions(t *testing.T, expected otlpOptions, tcfg *TracesConfi
 
 func TestMissingSchemeInHTTPTracesEndpoint(t *testing.T) {
 	defer restoreEnvAfterExecution()()
-	opts, err := getHTTPTracesEndpointOptions(&TracesConfig{CommonEndpoint: "http://foo:3030", SamplingRatio: 1.0})
+	opts, err := getHTTPTracesEndpointOptions(&TracesConfig{CommonEndpoint: "http://foo:3030"})
 	require.NoError(t, err)
 	require.NotEmpty(t, opts)
 
-	_, err = getHTTPTracesEndpointOptions(&TracesConfig{CommonEndpoint: "foo:3030", SamplingRatio: 1.0})
+	_, err = getHTTPTracesEndpointOptions(&TracesConfig{CommonEndpoint: "foo:3030"})
 	require.Error(t, err)
 
-	_, err = getHTTPTracesEndpointOptions(&TracesConfig{CommonEndpoint: "foo", SamplingRatio: 1.0})
+	_, err = getHTTPTracesEndpointOptions(&TracesConfig{CommonEndpoint: "foo"})
 	require.Error(t, err)
 }
 
 func TestGRPCTracesEndpointOptions(t *testing.T) {
 	defer restoreEnvAfterExecution()()
 	t.Run("do not accept URLs without a scheme", func(t *testing.T) {
-		_, err := getGRPCTracesEndpointOptions(&TracesConfig{CommonEndpoint: "foo:3939", SamplingRatio: 1.0})
+		_, err := getGRPCTracesEndpointOptions(&TracesConfig{CommonEndpoint: "foo:3939"})
 		assert.Error(t, err)
 	})
 	tcfg := TracesConfig{
@@ -165,7 +196,6 @@ func TestTracesSetupHTTP_Protocol(t *testing.T) {
 				TracesEndpoint: tc.Endpoint,
 				Protocol:       tc.ProtoVal,
 				TracesProtocol: tc.TraceProtoVal,
-				SamplingRatio:  1.0,
 			})
 			require.NoError(t, err)
 			assert.Equal(t, tc.ExpectedProtoEnv, os.Getenv(envProtocol))
@@ -184,7 +214,6 @@ func TestTracesSetupHTTP_DoNotOverrideEnv(t *testing.T) {
 			CommonEndpoint: "http://host:3333",
 			Protocol:       "foo",
 			TracesProtocol: "bar",
-			SamplingRatio:  1.0,
 		})
 		require.NoError(t, err)
 		assert.Equal(t, "foo-proto", os.Getenv(envProtocol))
@@ -196,7 +225,6 @@ func TestTracesSetupHTTP_DoNotOverrideEnv(t *testing.T) {
 		_, err := getHTTPTracesEndpointOptions(&TracesConfig{
 			CommonEndpoint: "http://host:3333",
 			Protocol:       "foo",
-			SamplingRatio:  1.0,
 		})
 		require.NoError(t, err)
 		_, ok := os.LookupEnv(envTracesProtocol)
@@ -234,7 +262,6 @@ func TestTraces_InternalInstrumentation(t *testing.T) {
 			CommonEndpoint:    coll.URL,
 			BatchTimeout:      10 * time.Millisecond,
 			ExportTimeout:     5 * time.Second,
-			SamplingRatio:     1.0,
 			ReportersCacheLen: 16,
 		},
 		&global.ContextInfo{
@@ -326,7 +353,7 @@ func TestTraces_InternalInstrumentationSampling(t *testing.T) {
 			CommonEndpoint:    coll.URL,
 			BatchTimeout:      10 * time.Millisecond,
 			ExportTimeout:     5 * time.Second,
-			SamplingRatio:     0.0, // sampling 0 means we won't generate any samples
+			Sampler:           Sampler{Name: "always_off"}, // we won't send any trace
 			ReportersCacheLen: 16,
 		},
 		&global.ContextInfo{
@@ -350,6 +377,18 @@ func TestTraces_InternalInstrumentationSampling(t *testing.T) {
 		// no call should return error
 		assert.Empty(t, internalTraces.Errors())
 	})
+}
+
+func TestTracesConfig_Enabled(t *testing.T) {
+	assert.True(t, TracesConfig{CommonEndpoint: "foo"}.Enabled())
+	assert.True(t, MetricsConfig{MetricsEndpoint: "foo"}.Enabled())
+	assert.True(t, MetricsConfig{Grafana: &GrafanaOTLP{Submit: []string{"traces", "metrics"}, InstanceID: "33221"}}.Enabled())
+}
+
+func TestTracesConfig_Disabled(t *testing.T) {
+	assert.False(t, TracesConfig{}.Enabled())
+	assert.False(t, TracesConfig{Grafana: &GrafanaOTLP{Submit: []string{"metrics"}, InstanceID: "33221"}}.Enabled())
+	assert.False(t, TracesConfig{Grafana: &GrafanaOTLP{Submit: []string{"traces"}}}.Enabled())
 }
 
 type fakeInternalTraces struct {

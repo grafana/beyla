@@ -25,6 +25,12 @@ var defaultConfig = Config{
 		BatchTimeout: time.Second,
 		BpfBaseDir:   "/var/run/beyla",
 	},
+	Grafana: otel.GrafanaConfig{
+		OTLP: otel.GrafanaOTLP{
+			// by default we will only submit traces, assuming span2metrics will do the metrics conversion
+			Submit: []string{"traces"},
+		},
+	},
 	Metrics: otel.MetricsConfig{
 		Protocol:          otel.ProtocolUnset,
 		MetricsProtocol:   otel.ProtocolUnset,
@@ -64,10 +70,15 @@ type Config struct {
 	// Routes is an optional node. If not set, data will be directly forwarded to exporters.
 	Routes     *transform.RoutesConfig       `yaml:"routes"`
 	Kubernetes transform.KubernetesDecorator `yaml:"kubernetes"`
-	Metrics    otel.MetricsConfig            `yaml:"otel_metrics_export"`
-	Traces     otel.TracesConfig             `yaml:"otel_traces_export"`
-	Prometheus prom.PrometheusConfig         `yaml:"prometheus_export"`
-	Printer    debug.PrintEnabled            `yaml:"print_traces" env:"BEYLA_PRINT_TRACES"`
+
+	// Grafana overrides some values of the otel.MetricsConfig and otel.TracesConfig below
+	// for a simpler submission of OTEL metrics to Grafana Cloud
+	Grafana otel.GrafanaConfig `yaml:"grafana"`
+
+	Metrics    otel.MetricsConfig    `yaml:"otel_metrics_export"`
+	Traces     otel.TracesConfig     `yaml:"otel_traces_export"`
+	Prometheus prom.PrometheusConfig `yaml:"prometheus_export"`
+	Printer    debug.PrintEnabled    `yaml:"print_traces" env:"BEYLA_PRINT_TRACES"`
 
 	// Exec allows selecting the instrumented executable whose complete path contains the Exec value.
 	Exec services.PathRegexp `yaml:"executable_name" env:"BEYLA_EXECUTABLE_NAME"`
@@ -124,11 +135,11 @@ func (c *Config) Validate() error {
 	}
 
 	if !c.Noop.Enabled() && !c.Printer.Enabled() &&
+		!c.Grafana.OTLP.MetricsEnabled() && !c.Grafana.OTLP.TracesEnabled() &&
 		!c.Metrics.Enabled() && !c.Traces.Enabled() &&
 		!c.Prometheus.Enabled() {
-		return ConfigError("at least one of the following properties must be set: " +
-			"BEYLA_NOOP_TRACES, BEYLA_PRINT_TRACES, OTEL_EXPORTER_OTLP_ENDPOINT, " +
-			"OTEL_EXPORTER_OTLP_METRICS_ENDPOINT, OTEL_EXPORTER_OTLP_TRACES_ENDPOINT, BEYLA_PROMETHEUS_PORT")
+		return ConfigError("you need to define at least one exporter: print_traces," +
+			" grafana, otel_metrics_export, otel_traces_export or prometheus_export")
 	}
 	return nil
 }

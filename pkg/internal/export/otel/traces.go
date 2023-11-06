@@ -62,13 +62,20 @@ type TracesConfig struct {
 	ExportTimeout      time.Duration `yaml:"export_timeout" env:"BEYLA_OTLP_TRACES_EXPORT_TIMEOUT"`
 
 	ReportersCacheLen int `yaml:"reporters_cache_len" env:"BEYLA_TRACES_REPORT_CACHE_LEN"`
+
+	// SDKLogLevel works independently from the global LogLevel because it prints GBs of logs in Debug mode
+	// and the Info messages leak internal details that are not usually valuable for the final user.
+	SDKLogLevel string `yaml:"otel_sdk_log_level" env:"BEYLA_OTEL_SDK_LOG_LEVEL"`
+
+	// Grafana configuration needs to be explicitly set up before building the graph
+	Grafana *GrafanaOTLP `yaml:"-"`
 }
 
 // Enabled specifies that the OTEL traces node is enabled if and only if
 // either the OTEL endpoint and OTEL traces endpoint is defined.
 // If not enabled, this node won't be instantiated
 func (m TracesConfig) Enabled() bool { //nolint:gocritic
-	return m.CommonEndpoint != "" || m.TracesEndpoint != ""
+	return m.CommonEndpoint != "" || m.TracesEndpoint != "" || m.Grafana.TracesEnabled()
 }
 
 func (m *TracesConfig) GetProtocol() Protocol {
@@ -115,6 +122,9 @@ type Tracers struct {
 }
 
 func ReportTraces(ctx context.Context, cfg *TracesConfig, ctxInfo *global.ContextInfo) (node.TerminalFunc[[]request.Span], error) {
+
+	SetupInternalOTELSDKLogger(cfg.SDKLogLevel)
+
 	tr, err := newTracesReporter(ctx, cfg, ctxInfo)
 	if err != nil {
 		slog.Error("can't instantiate OTEL traces reporter", err)
@@ -172,7 +182,6 @@ func newTracesReporter(ctx context.Context, cfg *TracesConfig, ctxInfo *global.C
 	}
 
 	r.bsp = trace.NewBatchSpanProcessor(r.traceExporter, opts...)
-
 	return &r, nil
 }
 
@@ -568,12 +577,21 @@ func (r *TracesReporter) newTracers(service svc.ID) (*Tracers, error) {
 	return &tracers, nil
 }
 
+// the HTTP path will be defined from one of the following sources, from highest to lowest priority
+// - OTEL_EXPORTER_OTLP_TRACES_ENDPOINT, if defined
+// - OTEL_EXPORTER_OTLP_ENDPOINT, if defined
+// - https://otlp-gateway-${GRAFANA_OTLP_CLOUD_ZONE}.grafana.net/otlp, if GRAFANA_OTLP_CLOUD_ZONE is defined
+// If, by some reason, Grafana changes its OTLP Gateway URL in a distant future, you can still point to the
+// correct URL with the OTLP_EXPORTER_... variables.
 func parseTracesEndpoint(cfg *TracesConfig) (*url.URL, bool, error) {
 	isCommon := false
 	endpoint := cfg.TracesEndpoint
 	if endpoint == "" {
 		isCommon = true
 		endpoint = cfg.CommonEndpoint
+		if endpoint == "" && cfg.Grafana != nil && cfg.Grafana.CloudZone != "" {
+			endpoint = cfg.Grafana.Endpoint()
+		}
 	}
 
 	murl, err := url.Parse(endpoint)
@@ -619,6 +637,8 @@ func getHTTPTracesEndpointOptions(cfg *TracesConfig) (otlpOptions, error) {
 		log.Debug("Setting InsecureSkipVerify")
 		opts.SkipTLSVerify = true
 	}
+
+	cfg.Grafana.setupOptions(&opts)
 
 	return opts, nil
 }

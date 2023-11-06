@@ -60,6 +60,37 @@ func TestHTTPTracesEndpoint(t *testing.T) {
 	})
 }
 
+func TestHTTPTracesWithGrafanaOptions(t *testing.T) {
+	defer restoreEnvAfterExecution()
+	mcfg := TracesConfig{Grafana: &GrafanaOTLP{
+		Submit:     []string{submitMetrics, submitTraces},
+		CloudZone:  "eu-west-23",
+		InstanceID: "12345",
+		APIKey:     "affafafaafkd",
+	}}
+	t.Run("testing basic Grafana Cloud options", func(t *testing.T) {
+		testHTTPTracesOptions(t, otlpOptions{
+			Endpoint: "otlp-gateway-eu-west-23.grafana.net",
+			URLPath:  "/otlp/v1/traces",
+			HTTPHeaders: map[string]string{
+				// Basic + output of: echo -n 12345:affafafaafkd | gbase64 -w 0
+				"Authorization": "Basic MTIzNDU6YWZmYWZhZmFhZmtk",
+			},
+		}, &mcfg)
+	})
+	mcfg.CommonEndpoint = "https://localhost:3939"
+	t.Run("Overriding endpoint URL", func(t *testing.T) {
+		testHTTPTracesOptions(t, otlpOptions{
+			Endpoint: "localhost:3939",
+			URLPath:  "/v1/traces",
+			HTTPHeaders: map[string]string{
+				// Base64 representation of 12345:affafafaafkd
+				"Authorization": "Basic MTIzNDU6YWZmYWZhZmFhZmtk",
+			},
+		}, &mcfg)
+	})
+}
+
 func testHTTPTracesOptions(t *testing.T, expected otlpOptions, tcfg *TracesConfig) {
 	defer restoreEnvAfterExecution()()
 	opts, err := getHTTPTracesEndpointOptions(tcfg)
@@ -346,6 +377,18 @@ func TestTraces_InternalInstrumentationSampling(t *testing.T) {
 		// no call should return error
 		assert.Empty(t, internalTraces.Errors())
 	})
+}
+
+func TestTracesConfig_Enabled(t *testing.T) {
+	assert.True(t, TracesConfig{CommonEndpoint: "foo"}.Enabled())
+	assert.True(t, MetricsConfig{MetricsEndpoint: "foo"}.Enabled())
+	assert.True(t, MetricsConfig{Grafana: &GrafanaOTLP{Submit: []string{"traces", "metrics"}, InstanceID: "33221"}}.Enabled())
+}
+
+func TestTracesConfig_Disabled(t *testing.T) {
+	assert.False(t, TracesConfig{}.Enabled())
+	assert.False(t, TracesConfig{Grafana: &GrafanaOTLP{Submit: []string{"metrics"}, InstanceID: "33221"}}.Enabled())
+	assert.False(t, TracesConfig{Grafana: &GrafanaOTLP{Submit: []string{"traces"}}}.Enabled())
 }
 
 type fakeInternalTraces struct {

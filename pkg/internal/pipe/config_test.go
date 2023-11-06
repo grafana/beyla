@@ -40,9 +40,10 @@ kubernetes:
 	require.NoError(t, os.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "localhost:3131"))
 	require.NoError(t, os.Setenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", "localhost:3232"))
 	require.NoError(t, os.Setenv("BEYLA_INTERNAL_METRICS_PROMETHEUS_PORT", "3210"))
+	require.NoError(t, os.Setenv("GRAFANA_OTLP_SUBMIT", "metrics,traces"))
 	defer unsetEnv(t, map[string]string{
 		"BEYLA_OPEN_PORT": "", "BEYLA_EXECUTABLE_NAME": "", "OTEL_SERVICE_NAME": "", "BEYLA_NOOP_TRACES": "",
-		"OTEL_EXPORTER_OTLP_ENDPOINT": "", "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT": "",
+		"OTEL_EXPORTER_OTLP_ENDPOINT": "", "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT": "", "GRAFANA_OTLP_SUBMIT": "",
 	})
 
 	cfg, err := LoadConfig(userConfig)
@@ -70,6 +71,11 @@ kubernetes:
 			BatchLength:  100,
 			BatchTimeout: time.Second,
 			BpfBaseDir:   "/var/run/beyla",
+		},
+		Grafana: otel.GrafanaConfig{
+			OTLP: otel.GrafanaOTLP{
+				Submit: []string{"metrics", "traces"},
+			},
 		},
 		Metrics: otel.MetricsConfig{
 			Interval:          5 * time.Second,

@@ -63,6 +63,10 @@ type TracesConfig struct {
 
 	ReportersCacheLen int `yaml:"reporters_cache_len" env:"BEYLA_TRACES_REPORT_CACHE_LEN"`
 
+	// SDKLogLevel works independently from the global LogLevel because it prints GBs of logs in Debug mode
+	// and the Info messages leak internal details that are not usually valuable for the final user.
+	SDKLogLevel string `yaml:"otel_sdk_log_level" env:"BEYLA_OTEL_SDK_LOG_LEVEL"`
+
 	// Grafana configuration needs to be explicitly set up before building the graph
 	Grafana *GrafanaOTLP `yaml:"-"`
 }
@@ -108,9 +112,6 @@ type TracesReporter struct {
 	traceExporter trace.SpanExporter
 	bsp           trace.SpanProcessor
 	reporters     ReporterPool[*Tracers]
-
-	// Grafana configuration needs to be explicitly set up before building the graph
-	Grafana *GrafanaOTLP
 }
 
 // Tracers handles the OTEL traces providers and exporters.
@@ -122,7 +123,7 @@ type Tracers struct {
 
 func ReportTraces(ctx context.Context, cfg *TracesConfig, ctxInfo *global.ContextInfo) (node.TerminalFunc[[]request.Span], error) {
 
-	SetupInternalOTELSDKLogger()
+	SetupInternalOTELSDKLogger(cfg.SDKLogLevel)
 
 	tr, err := newTracesReporter(ctx, cfg, ctxInfo)
 	if err != nil {

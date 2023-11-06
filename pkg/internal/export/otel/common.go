@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"log/slog"
+	"os"
 
 	"github.com/go-logr/logr"
 	"github.com/hashicorp/golang-lru/v2/simplelru"
@@ -187,8 +188,20 @@ type LogrAdaptor struct {
 	inner *slog.Logger
 }
 
-func SetupInternalOTELSDKLogger() {
-	otel.SetLogger(logr.New(&LogrAdaptor{inner: slog.With("component", "otel.BatchSpanProcessor")}))
+func SetupInternalOTELSDKLogger(levelStr string) {
+	log := slog.With("component", "otel.BatchSpanProcessor")
+	if levelStr != "" {
+		var lvl slog.Level
+		err := lvl.UnmarshalText([]byte(levelStr))
+		if err != nil {
+			log.Warn("can't setup internal SDK logger level value. Ignoring", "error", err)
+			return
+		}
+		log = slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
+			Level: &lvl,
+		})).With("component", "otel.BatchSpanProcessor")
+		otel.SetLogger(logr.New(&LogrAdaptor{inner: log}))
+	}
 }
 
 func (l *LogrAdaptor) Init(_ logr.RuntimeInfo) {}

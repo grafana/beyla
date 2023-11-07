@@ -37,8 +37,8 @@ The above command runs a simple HTTPS application. The process opens the contain
 Set environment variables to configure Beyla to print to stdout and listen to a port (container) to inspect the executable:
 
 ```sh
-export PRINT_TRACES=true
-export OPEN_PORT=8443
+export BEYLA_PRINT_TRACES=true
+export BEYLA_OPEN_PORT=8443
 ```
 
 Beyla needs to be run with the following settings:
@@ -48,8 +48,8 @@ Beyla needs to be run with the following settings:
 
 ```sh
 docker run --rm \
-  -e OPEN_PORT=8443 \
-  -e PRINT_TRACES=true \
+  -e BEYLA_OPEN_PORT=8443 \
+  -e BEYLA_PRINT_TRACES=true \
   --pid="container:goblog" \
   --privileged \
   grafana/beyla:latest
@@ -96,8 +96,8 @@ services:
     # and uncomment the line below
     # privileged: true
     environment:
-      PRINT_TRACES: true
-      OPEN_PORT: 8443
+      BEYLA_PRINT_TRACES: true
+      BEYLA_OPEN_PORT: 8443
 ```
 
 Run the Docker compose file with the following command and use the app to generate traces:

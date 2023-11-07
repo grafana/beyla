@@ -17,7 +17,7 @@ import (
 	"github.com/grafana/beyla/pkg/internal/testutil"
 )
 
-const testTimeout = 50 * time.Second
+const testTimeout = 20 * time.Second
 
 func TestWatcher_Poll(t *testing.T) {
 	// mocking a fake listProcesses method
@@ -166,7 +166,7 @@ func TestPortsFetchRequired(t *testing.T) {
 	cfg, err := pipe.LoadConfig(userConfig)
 	require.NoError(t, err)
 
-	var eventsChan chan<- watcher.Event
+	channelReturner := make(chan chan<- watcher.Event)
 
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -182,7 +182,7 @@ func TestPortsFetchRequired(t *testing.T) {
 			return true
 		},
 		loadBPFWatcher: func(cfg *pipe.Config, events chan<- watcher.Event) error {
-			eventsChan = events
+			channelReturner <- events
 			return nil
 		},
 		stateMux:          sync.Mutex{},
@@ -198,9 +198,7 @@ func TestPortsFetchRequired(t *testing.T) {
 		close(accounterExited)
 	}()
 
-	assert.EventuallyWithTf(t, func(c *assert.CollectT) {
-		assert.True(c, eventsChan != nil, "expected 'eventsChan' to be set")
-	}, 5*time.Second, 100*time.Millisecond, "eventsChan was never set")
+	eventsChan := testutil.ReadChannel(t, channelReturner, testTimeout)
 
 	assert.True(t, acc.portFetchRequired()) // initial state means poll all ports until we are ready to look for binds in bpf
 	eventsChan <- watcher.Event{Type: watcher.NewPort}

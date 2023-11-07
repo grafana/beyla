@@ -145,18 +145,18 @@ func TestProcessNotReady(t *testing.T) {
 	assert.Equal(t, 3, len(acc.pids))     // this should equal the first invocation of snapshot
 	assert.Equal(t, 2, len(acc.pidPorts)) // only 2 ports opened, p5 has no ports
 
-	events_next := acc.snapshot(procs)
-	assert.Equal(t, 0, len(events_next)) // 0 new events
-	assert.Equal(t, 3, len(acc.pids))    // this should equal the first invocation of snapshot, no changes
+	eventsNext := acc.snapshot(procs)
+	assert.Equal(t, 0, len(eventsNext)) // 0 new events
+	assert.Equal(t, 3, len(acc.pids))   // this should equal the first invocation of snapshot, no changes
 
 	acc.executableReady = func(pid PID) bool { // we change so that pid=1 becomes ready
 		return pid != 2
 	}
 
-	events_next_next := acc.snapshot(procs)
-	assert.Equal(t, 1, len(events_next_next)) // 1 net new event
-	assert.Equal(t, 4, len(acc.pids))         // this should increase by one since we have one more PID we are caching now
-	assert.Equal(t, 4, len(acc.pidPorts))     // this is now 4 because pid=1 has 2 port mappings
+	eventsNextNext := acc.snapshot(procs)
+	assert.Equal(t, 1, len(eventsNextNext)) // 1 net new event
+	assert.Equal(t, 4, len(acc.pids))       // this should increase by one since we have one more PID we are caching now
+	assert.Equal(t, 4, len(acc.pidPorts))   // this is now 4 because pid=1 has 2 port mappings
 }
 
 func TestPortsFetchRequired(t *testing.T) {

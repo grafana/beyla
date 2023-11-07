@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"os"
 	"sync"
 	"time"
@@ -82,6 +83,7 @@ type pidPort struct {
 }
 
 // TODO: combine the poller with an eBPF listener (poll at start and e.g. every 30 seconds, and keep listening eBPF in background)
+// ^ This is partially done, although it's not fully async, we only use the info to reduce the overhead of port scanning.
 type pollAccounter struct {
 	ctx      context.Context
 	cfg      *pipe.Config
@@ -96,7 +98,7 @@ type pollAccounter struct {
 	// injectable function
 	executableReady func(PID) bool
 	// injectable function to load the bpf program
-	loadBPFWatcher func(*watcher.Watcher) error
+	loadBPFWatcher func(cfg *pipe.Config, events chan<- watcher.Event) error
 	// we use these to ensure we poll for the open ports effectively
 	stateMux          sync.Mutex
 	bpfWatcherEnabled bool
@@ -108,8 +110,7 @@ func (pa *pollAccounter) Run(out chan<- []Event[processPorts]) {
 	log := slog.With("component", "discover.Watcher", "interval", pa.interval)
 
 	bpfWatchEvents := make(chan watcher.Event, 100)
-	wt := watcher.New(pa.cfg, bpfWatchEvents)
-	if err := pa.loadBPFWatcher(wt); err != nil {
+	if err := pa.loadBPFWatcher(pa.cfg, bpfWatchEvents); err != nil {
 		log.Error("Unable to load eBPF watcher for process events", "error", err)
 	}
 
@@ -209,13 +210,21 @@ func (pa *pollAccounter) snapshot(fetchedProcs map[PID]processPorts) []Event[pro
 		}
 	}
 
+	currentProcs := maps.Clone(fetchedProcs)
+
 	// Remove the processes that are not fully instantiated from the list before
 	// caching the current pids in the snapshot.
 	for pid := range notReadyProcs {
-		delete(fetchedProcs, pid)
+		delete(currentProcs, pid)
 	}
 
-	pa.pids = fetchedProcs
+	for pp := range currentPidPorts {
+		if _, ok := notReadyProcs[pp.Pid]; ok {
+			delete(currentPidPorts, pp)
+		}
+	}
+
+	pa.pids = currentProcs
 	pa.pidPorts = currentPidPorts
 	return events
 }
@@ -312,6 +321,7 @@ func fetchProcessPorts(scanPorts bool) (map[PID]processPorts, error) {
 	return processes, nil
 }
 
-func loadBPFWatcher(w *watcher.Watcher) error {
-	return ebpf.RunUtilityTracer(w)
+func loadBPFWatcher(cfg *pipe.Config, events chan<- watcher.Event) error {
+	wt := watcher.New(cfg, events)
+	return ebpf.RunUtilityTracer(wt)
 }

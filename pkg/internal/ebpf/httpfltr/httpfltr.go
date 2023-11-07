@@ -128,11 +128,19 @@ func (p *Tracer) Load() (*ebpf.CollectionSpec, error) {
 }
 
 func (p *Tracer) Constants(_ *exec.FileInfo, _ *goexec.Offsets) map[string]any {
-	if p.cfg.Discovery.SystemWide || p.cfg.Discovery.BPFPidFilterOff {
-		return nil
+	m := make(map[string]any, 2)
+
+	if !p.cfg.Discovery.SystemWide && !p.cfg.Discovery.BPFPidFilterOff {
+		m["filter_pids"] = int32(1)
+	} else {
+		m["filter_pids"] = int32(0)
 	}
 
-	m := map[string]any{"filter_pids": int32(1)}
+	if p.cfg.EBPF.TrackRequestHeaders {
+		m["capture_header_buffer"] = int32(1)
+	} else {
+		m["capture_header_buffer"] = int32(0)
+	}
 
 	return m
 }

@@ -101,10 +101,14 @@ func testREDMetricsForRustHTTPLibrary(t *testing.T, url string, comm string, por
 
 	process := trace.Processes[parent.ProcessID]
 	assert.Equal(t, comm, process.ServiceName)
+	serviceInstance, ok := jaeger.FindIn(process.Tags, "service.instance.id")
+	require.Truef(t, ok, "service.instance.id not found in tags: %v", process.Tags)
+	assert.Regexp(t, `^beyla-\d+$`, serviceInstance.Value)
 	sd = jaeger.Diff([]jaeger.Tag{
 		{Key: "otel.library.name", Type: "string", Value: "github.com/grafana/beyla"},
 		{Key: "telemetry.sdk.language", Type: "string", Value: "rust"},
 		{Key: "service.namespace", Type: "string", Value: "integration-test"},
+		serviceInstance,
 	}, process.Tags)
 	assert.Empty(t, sd, sd.String())
 

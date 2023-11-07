@@ -14,6 +14,7 @@ import (
 	"github.com/grafana/beyla/pkg/internal/export/otel"
 	"github.com/grafana/beyla/pkg/internal/export/prom"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
+	"github.com/grafana/beyla/pkg/internal/traces"
 	"github.com/grafana/beyla/pkg/internal/transform"
 )
 
@@ -30,8 +31,13 @@ otel_metrics_export:
 prometheus_export:
   buckets:
     request_size_histogram: [0, 10, 20, 22]
-kubernetes:
-  enable: true
+attributes:
+  kubernetes:
+    kubeconfig_path: /foo/bar
+    enable: true
+    informers_sync_timeout: 30s
+  instance_id:
+    dns: true
 `)
 	require.NoError(t, os.Setenv("BEYLA_EXECUTABLE_NAME", "tras"))
 	require.NoError(t, os.Setenv("BEYLA_OPEN_PORT", "8080-8089"))
@@ -41,8 +47,10 @@ kubernetes:
 	require.NoError(t, os.Setenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", "localhost:3232"))
 	require.NoError(t, os.Setenv("BEYLA_INTERNAL_METRICS_PROMETHEUS_PORT", "3210"))
 	require.NoError(t, os.Setenv("GRAFANA_OTLP_SUBMIT", "metrics,traces"))
+	require.NoError(t, os.Setenv("BEYLA_KUBE_METADATA_KUBECONFIG_PATH", "/foo/bar"))
 	defer unsetEnv(t, map[string]string{
-		"BEYLA_OPEN_PORT": "", "BEYLA_EXECUTABLE_NAME": "", "OTEL_SERVICE_NAME": "", "BEYLA_NOOP_TRACES": "",
+		"BEYLA_KUBE_METADATA_KUBECONFIG_PATH": "",
+		"BEYLA_OPEN_PORT":                     "", "BEYLA_EXECUTABLE_NAME": "", "OTEL_SERVICE_NAME": "", "BEYLA_NOOP_TRACES": "",
 		"OTEL_EXPORTER_OTLP_ENDPOINT": "", "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT": "", "GRAFANA_OTLP_SUBMIT": "",
 	})
 
@@ -108,9 +116,15 @@ kubernetes:
 				Path: "/internal/metrics",
 			},
 		},
-		Kubernetes: transform.KubernetesDecorator{
-			Enable:               transform.EnabledTrue,
-			InformersSyncTimeout: 30 * time.Second,
+		Attributes: Attributes{
+			InstanceID: traces.InstanceIDConfig{
+				HostnameDNSResolution: true,
+			},
+			Kubernetes: transform.KubernetesDecorator{
+				KubeconfigPath:       "/foo/bar",
+				Enable:               transform.EnabledTrue,
+				InformersSyncTimeout: 30 * time.Second,
+			},
 		},
 		Routes: &transform.RoutesConfig{},
 	}, cfg)

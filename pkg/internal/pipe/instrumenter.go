@@ -20,7 +20,7 @@ import (
 // nodesMap provides the architecture of the whole processing pipeline:
 // each node and which nodes are they connected to
 type nodesMap struct {
-	TracesReader traces.Reader `sendTo:"Routes"`
+	TracesReader traces.ReadDecorator `sendTo:"Routes"`
 
 	// Routes is an optional node. If not set, data will be bypassed to the next stage in the pipeline.
 	Routes *transform.RoutesConfig `forwardTo:"Kubernetes"`
@@ -37,13 +37,14 @@ type nodesMap struct {
 
 func configToNodesMap(cfg *Config) *nodesMap {
 	return &nodesMap{
-		Routes:     cfg.Routes,
-		Kubernetes: cfg.Kubernetes,
-		Metrics:    cfg.Metrics,
-		Traces:     cfg.Traces,
-		Prometheus: cfg.Prometheus,
-		Printer:    cfg.Printer,
-		Noop:       cfg.Noop,
+		TracesReader: traces.ReadDecorator{InstanceID: cfg.Attributes.InstanceID},
+		Routes:       cfg.Routes,
+		Kubernetes:   cfg.Attributes.Kubernetes,
+		Metrics:      cfg.Metrics,
+		Traces:       cfg.Traces,
+		Prometheus:   cfg.Prometheus,
+		Printer:      cfg.Printer,
+		Noop:         cfg.Noop,
 	}
 }
 
@@ -139,7 +140,7 @@ func (i *Instrumenter) Run(ctx context.Context) {
 // Gocritic is disabled because we need to violate the "hugeParam" check, as the second
 // argument in the functions below need to be a value.
 
-func (gb *graphFunctions) tracesListenerProvider(config traces.Reader) (node.StartFunc[[]request.Span], error) {
+func (gb *graphFunctions) tracesListenerProvider(config traces.ReadDecorator) (node.StartFunc[[]request.Span], error) {
 	return traces.ReadFromChannel(gb.ctx, config)
 }
 

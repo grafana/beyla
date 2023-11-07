@@ -21,7 +21,7 @@ flowchart TD
         EBPF1 -.-> TR
         EBPF2 -.-> |"[]request.Span"| TR
         EBPF3 -.-> TR
-        TR(traces.Reader) --> ROUT(Routes<br/>decorator)
+        TR(traces.ReadDecorator) --> ROUT(Routes<br/>decorator)
         ROUT --> KD(Kubernetes<br/>decorator)
 
         KD --> OTELM(OTEL<br/> metrics<br/> exporter)

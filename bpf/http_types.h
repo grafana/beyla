@@ -4,6 +4,7 @@
 #include "vmlinux.h"
 #include "bpf_helpers.h"
 #include "http_defs.h"
+#include "pid.h"
 
 #define FULL_BUF_SIZE 160 // should be enough for most URLs, we may need to extend it if not. Must be multiple of 16 for the copy to work.
 #define TRACE_BUF_SIZE 1024 // must be power of 2, we do an & to limit the buffer size

@@ -3,12 +3,12 @@ package transform
 import (
 	"fmt"
 	"log/slog"
+	"maps"
 	"net"
 	"strings"
 	"time"
 
 	"github.com/mariomac/pipes/pkg/node"
-	"golang.org/x/exp/maps"
 
 	"github.com/grafana/beyla/pkg/internal/request"
 	"github.com/grafana/beyla/pkg/internal/transform/kube"
@@ -108,10 +108,15 @@ func (md *metadataDecorator) do(span *request.Span) {
 	// changes the way it works.
 	// Extensive integration test cases are provided as a safeguard.
 	switch span.Type {
+	// TODO: put here also SQL traces
 	case request.EventTypeGRPC, request.EventTypeHTTP:
 		if peerInfo, ok := md.kube.GetInfo(span.Peer); ok {
 			appendSRCMetadata(span.Metadata, peerInfo)
 		}
+		// TODO: this will only work Ok for Beyla as a sidecar.
+		// However, for Beyla as a daemonset will assume that
+		// Beyla is in the same pod as the destination Pod,
+		// which might not be always correct
 		maps.Copy(span.Metadata, md.ownMetadataAsDst)
 	case request.EventTypeGRPCClient, request.EventTypeHTTPClient:
 		if peerInfo, ok := md.kube.GetInfo(span.Host); ok {

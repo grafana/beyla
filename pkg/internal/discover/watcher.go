@@ -2,13 +2,22 @@ package discover
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
+	"os"
+	"sync"
 	"time"
 
 	"github.com/mariomac/pipes/pkg/node"
 	"github.com/shirou/gopsutil/net"
 	"github.com/shirou/gopsutil/process"
+
+	"github.com/grafana/beyla/pkg/internal/discover/services"
+	"github.com/grafana/beyla/pkg/internal/ebpf"
+	"github.com/grafana/beyla/pkg/internal/ebpf/watcher"
+	"github.com/grafana/beyla/pkg/internal/pipe"
 )
 
 const (
@@ -19,8 +28,8 @@ const (
 // Watcher polls every PollInterval for new processes and forwards either new or deleted process PIDs
 // as well as PIDs from processes that setup a new connection
 type Watcher struct {
-	Ctx          context.Context
-	PollInterval time.Duration
+	Ctx context.Context
+	Cfg *pipe.Config
 }
 
 type WatchEventType int
@@ -48,11 +57,18 @@ func wplog() *slog.Logger {
 
 func WatcherProvider(w Watcher) (node.StartFunc[[]Event[processPorts]], error) {
 	acc := pollAccounter{
-		ctx:           w.Ctx,
-		interval:      w.PollInterval,
-		pids:          map[PID]processPorts{},
-		pidPorts:      map[pidPort]processPorts{},
-		listProcesses: fetchProcessPorts,
+		ctx:               w.Ctx,
+		cfg:               w.Cfg,
+		interval:          w.Cfg.Discovery.PollInterval,
+		pids:              map[PID]processPorts{},
+		pidPorts:          map[pidPort]processPorts{},
+		listProcesses:     fetchProcessPorts,
+		executableReady:   executableReady,
+		loadBPFWatcher:    loadBPFWatcher,
+		fetchPorts:        true,  // must be true until we've activated the bpf watcher component
+		bpfWatcherEnabled: false, // async set by listening on the bpfWatchEvents channel
+		stateMux:          sync.Mutex{},
+		findingCriteria:   FindingCriteria(w.Cfg),
 	}
 	if acc.interval == 0 {
 		acc.interval = defaultPollInterval
@@ -67,8 +83,10 @@ type pidPort struct {
 }
 
 // TODO: combine the poller with an eBPF listener (poll at start and e.g. every 30 seconds, and keep listening eBPF in background)
+// ^ This is partially done, although it's not fully async, we only use the info to reduce the overhead of port scanning.
 type pollAccounter struct {
 	ctx      context.Context
+	cfg      *pipe.Config
 	interval time.Duration
 	// last polled process:ports accessible by its pid
 	pids map[PID]processPorts
@@ -76,13 +94,30 @@ type pollAccounter struct {
 	// same process might appear several times
 	pidPorts map[pidPort]processPorts
 	// injectable function
-	listProcesses func() (map[PID]processPorts, error)
+	listProcesses func(bool) (map[PID]processPorts, error)
+	// injectable function
+	executableReady func(PID) bool
+	// injectable function to load the bpf program
+	loadBPFWatcher func(cfg *pipe.Config, events chan<- watcher.Event) error
+	// we use these to ensure we poll for the open ports effectively
+	stateMux          sync.Mutex
+	bpfWatcherEnabled bool
+	fetchPorts        bool
+	findingCriteria   services.DefinitionCriteria
 }
 
 func (pa *pollAccounter) Run(out chan<- []Event[processPorts]) {
 	log := slog.With("component", "discover.Watcher", "interval", pa.interval)
+
+	bpfWatchEvents := make(chan watcher.Event, 100)
+	if err := pa.loadBPFWatcher(pa.cfg, bpfWatchEvents); err != nil {
+		log.Error("Unable to load eBPF watcher for process events", "error", err)
+	}
+
+	go pa.watchForProcessEvents(log, bpfWatchEvents)
+
 	for {
-		procs, err := pa.listProcesses()
+		procs, err := pa.listProcesses(pa.portFetchRequired())
 		if err != nil {
 			log.Warn("can't get system processes", "error", err)
 		} else {
@@ -101,23 +136,66 @@ func (pa *pollAccounter) Run(out chan<- []Event[processPorts]) {
 	}
 }
 
+func (pa *pollAccounter) bpfWatcherIsReady() {
+	pa.stateMux.Lock()
+	defer pa.stateMux.Unlock()
+	pa.bpfWatcherEnabled = true
+}
+
+func (pa *pollAccounter) refetchPorts() {
+	pa.stateMux.Lock()
+	defer pa.stateMux.Unlock()
+	pa.fetchPorts = true
+}
+
+func (pa *pollAccounter) portFetchRequired() bool {
+	pa.stateMux.Lock()
+	defer pa.stateMux.Unlock()
+
+	if !pa.bpfWatcherEnabled {
+		return true
+	}
+
+	ret := pa.fetchPorts
+	pa.fetchPorts = false
+
+	return ret
+}
+
+func (pa *pollAccounter) watchForProcessEvents(log *slog.Logger, events <-chan watcher.Event) {
+	for e := range events {
+		switch e.Type {
+		case watcher.Ready:
+			pa.bpfWatcherIsReady()
+		case watcher.NewPort:
+			port := int(e.Payload)
+			if pa.cfg.Port.Matches(port) || pa.findingCriteria.PortOfInterest(port) {
+				pa.refetchPorts()
+			}
+		default:
+			log.Warn("Unknown ebpf process watch event", "type", e.Type)
+		}
+	}
+}
+
 // snapshot compares the current processes with the status of the previous poll
 // and forwards a list of process creation/deletion events
 func (pa *pollAccounter) snapshot(fetchedProcs map[PID]processPorts) []Event[processPorts] {
 	var events []Event[processPorts]
 	currentPidPorts := make(map[pidPort]processPorts, len(fetchedProcs))
 	reportedProcs := map[PID]struct{}{}
+	notReadyProcs := map[PID]struct{}{}
 	// notify processes that are new, or already existed but have a new connection
 	for pid, proc := range fetchedProcs {
 		// if the process does not have open ports, we might still notify it
 		// for example, if it's a client with ephemeral connections, which might be later matched by executable name
 		if len(proc.openPorts) == 0 {
-			if pa.checkNewProcessNotification(pid, reportedProcs) {
+			if pa.checkNewProcessNotification(pid, reportedProcs, notReadyProcs) {
 				events = append(events, Event[processPorts]{Type: EventCreated, Obj: proc})
 			}
 		} else {
 			for _, port := range proc.openPorts {
-				if pa.checkNewProcessConnectionNotification(proc, port, currentPidPorts, reportedProcs) {
+				if pa.checkNewProcessConnectionNotification(proc, port, currentPidPorts, reportedProcs, notReadyProcs) {
 					events = append(events, Event[processPorts]{Type: EventCreated, Obj: proc})
 					// skip checking new connections for that process
 					continue
@@ -131,16 +209,45 @@ func (pa *pollAccounter) snapshot(fetchedProcs map[PID]processPorts) []Event[pro
 			events = append(events, Event[processPorts]{Type: EventDeleted, Obj: proc})
 		}
 	}
-	pa.pids = fetchedProcs
+
+	currentProcs := maps.Clone(fetchedProcs)
+
+	// Remove the processes that are not fully instantiated from the list before
+	// caching the current pids in the snapshot.
+	for pid := range notReadyProcs {
+		delete(currentProcs, pid)
+	}
+
+	for pp := range currentPidPorts {
+		if _, ok := notReadyProcs[pp.Pid]; ok {
+			delete(currentPidPorts, pp)
+		}
+	}
+
+	pa.pids = currentProcs
 	pa.pidPorts = currentPidPorts
 	return events
+}
+
+func executableReady(pid PID) bool {
+	proc, err := process.NewProcess(int32(pid))
+	if err != nil {
+		return false
+	}
+	exePath, err := proc.Exe()
+
+	if err != nil {
+		return errors.Is(err, os.ErrNotExist)
+	}
+
+	return exePath != "/"
 }
 
 func (pa *pollAccounter) checkNewProcessConnectionNotification(
 	proc processPorts,
 	port uint32,
 	currentPidPorts map[pidPort]processPorts,
-	reportedProcs map[PID]struct{},
+	reportedProcs, notReadyProcs map[PID]struct{},
 ) bool {
 	pp := pidPort{Pid: proc.pid, Port: port}
 	currentPidPorts[pp] = proc
@@ -154,7 +261,11 @@ func (pa *pollAccounter) checkNewProcessConnectionNotification(
 		if _, ok := reportedProcs[pp.Pid]; !ok {
 			// avoid notifying multiple times the same process if it has multiple connections
 			reportedProcs[proc.pid] = struct{}{}
-			return true
+			if pa.executableReady(pp.Pid) {
+				return true
+			}
+			notReadyProcs[pp.Pid] = struct{}{}
+			wplog().Debug("Executable not ready", "pid", pp.Pid)
 		}
 	}
 	return false
@@ -162,14 +273,18 @@ func (pa *pollAccounter) checkNewProcessConnectionNotification(
 
 // checkNewProcessNotification returns true if the process has to be notified as new.
 // It accordingly updates the reportedProcs map
-func (pa *pollAccounter) checkNewProcessNotification(pid PID, reportedProcs map[PID]struct{}) bool {
+func (pa *pollAccounter) checkNewProcessNotification(pid PID, reportedProcs, notReadyProcs map[PID]struct{}) bool {
 	// the proc existed before iff we already had registered this pid from a previous snapshot
 	if _, existingProcess := pa.pids[pid]; !existingProcess {
 		// ...also if we haven't already reported the process in the last "snapshot" invocation
 		if _, ok := reportedProcs[pid]; !ok {
 			// avoid notifying multiple times the same process if it has multiple connections
 			reportedProcs[pid] = struct{}{}
-			return true
+			if pa.executableReady(pid) {
+				return true
+			}
+			notReadyProcs[pid] = struct{}{}
+			wplog().Debug("Executable not ready", "pid", pid)
 		}
 	}
 	return false
@@ -177,14 +292,19 @@ func (pa *pollAccounter) checkNewProcessNotification(pid PID, reportedProcs map[
 
 // fetchProcessConnections returns a map with the PIDs of all the running processes as a key,
 // and the open ports for the given process as a value
-func fetchProcessPorts() (map[PID]processPorts, error) {
+func fetchProcessPorts(scanPorts bool) (map[PID]processPorts, error) {
 	log := wplog()
 	processes := map[PID]processPorts{}
 	pids, err := process.Pids()
 	if err != nil {
 		return nil, fmt.Errorf("can't get processes: %w", err)
 	}
+
 	for _, pid := range pids {
+		if !scanPorts {
+			processes[PID(pid)] = processPorts{pid: PID(pid), openPorts: []uint32{}}
+			continue
+		}
 		conns, err := net.ConnectionsPid("inet", pid)
 		if err != nil {
 			log.Debug("can't get connections for process. Skipping", "pid", pid, "error", err)
@@ -199,4 +319,9 @@ func fetchProcessPorts() (map[PID]processPorts, error) {
 		processes[PID(pid)] = processPorts{pid: PID(pid), openPorts: openPorts}
 	}
 	return processes, nil
+}
+
+func loadBPFWatcher(cfg *pipe.Config, events chan<- watcher.Event) error {
+	wt := watcher.New(cfg, events)
+	return ebpf.RunUtilityTracer(wt)
 }

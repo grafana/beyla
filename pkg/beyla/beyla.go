@@ -113,7 +113,7 @@ func buildContextInfo(config *pipe.Config) *global.ContextInfo {
 	ctxInfo := &global.ContextInfo{
 		ReportRoutes:  config.Routes != nil,
 		Prometheus:    promMgr,
-		K8sDecoration: config.Kubernetes.Enabled(),
+		K8sDecoration: config.Attributes.Kubernetes.Enabled(),
 	}
 	if config.InternalMetrics.Prometheus.Port != 0 {
 		slog.Debug("reporting internal metrics as Prometheus")

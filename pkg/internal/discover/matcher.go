@@ -23,7 +23,7 @@ type CriteriaMatcher struct {
 func CriteriaMatcherProvider(cm CriteriaMatcher) (node.MiddleFunc[[]Event[processPorts], []Event[ProcessMatch]], error) {
 	m := &matcher{
 		log:            slog.With("component", "discover.CriteriaMatcher"),
-		criteria:       findingCriteria(cm.Cfg),
+		criteria:       FindingCriteria(cm.Cfg),
 		processHistory: map[PID]struct{}{},
 	}
 	return m.run, nil
@@ -113,7 +113,7 @@ func (m *matcher) matchByExecutable(p *services.ProcessInfo, a *services.Attribu
 	return a.Path.MatchString(p.ExePath)
 }
 
-func findingCriteria(cfg *pipe.Config) services.DefinitionCriteria {
+func FindingCriteria(cfg *pipe.Config) services.DefinitionCriteria {
 	if cfg.Discovery.SystemWide {
 		// will return all the executables in the system
 		return services.DefinitionCriteria{

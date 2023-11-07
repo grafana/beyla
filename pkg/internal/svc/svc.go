@@ -44,6 +44,7 @@ type ID struct {
 	Name        string
 	Namespace   string
 	SDKLanguage InstrumentableType
+	Instance    string
 }
 
 func (i *ID) String() string {

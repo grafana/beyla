@@ -82,7 +82,7 @@ func (i *instrumenter) goprobe(probe ebpfcommon.Probe) error {
 	return nil
 }
 
-func (i *instrumenter) kprobes(p Tracer) error {
+func (i *instrumenter) kprobes(p KprobesTracer) error {
 	log := ilog().With("probes", "kprobes")
 	for kfunc, kprobes := range p.KProbes() {
 		log.Debug("going to add kprobe to function", "function", kfunc, "probes", kprobes)

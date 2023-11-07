@@ -55,6 +55,15 @@ func (dc DefinitionCriteria) Validate() error {
 	return nil
 }
 
+func (dc DefinitionCriteria) PortOfInterest(port int) bool {
+	for i := range dc {
+		if dc[i].OpenPorts.Matches(port) {
+			return true
+		}
+	}
+	return false
+}
+
 // Attributes that specify a given instrumented service.
 // Each instance has to define either the OpenPorts or Path property, or both. These are used to match
 // a given executable. If both OpenPorts and Path are defined, the inspected executable must fulfill both

@@ -27,7 +27,7 @@ type ProcessFinder struct {
 
 func NewProcessFinder(ctx context.Context, cfg *pipe.Config, metrics imetrics.Reporter) *ProcessFinder {
 	return &ProcessFinder{
-		Watcher:         Watcher{Ctx: ctx, PollInterval: cfg.Discovery.PollInterval},
+		Watcher:         Watcher{Ctx: ctx, Cfg: cfg},
 		CriteriaMatcher: CriteriaMatcher{Cfg: cfg},
 		ExecTyper:       ExecTyper{Cfg: cfg, Metrics: metrics},
 		TraceAttacher: TraceAttacher{

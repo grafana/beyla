@@ -580,7 +580,7 @@ func (r *TracesReporter) newTracers(service svc.ID) (*Tracers, error) {
 // the HTTP path will be defined from one of the following sources, from highest to lowest priority
 // - OTEL_EXPORTER_OTLP_TRACES_ENDPOINT, if defined
 // - OTEL_EXPORTER_OTLP_ENDPOINT, if defined
-// - https://otlp-gateway-${GRAFANA_OTLP_CLOUD_ZONE}.grafana.net/otlp, if GRAFANA_OTLP_CLOUD_ZONE is defined
+// - https://otlp-gateway-${GRAFANA_CLOUD_ZONE}.grafana.net/otlp, if GRAFANA_CLOUD_ZONE is defined
 // If, by some reason, Grafana changes its OTLP Gateway URL in a distant future, you can still point to the
 // correct URL with the OTLP_EXPORTER_... variables.
 func parseTracesEndpoint(cfg *TracesConfig) (*url.URL, bool, error) {

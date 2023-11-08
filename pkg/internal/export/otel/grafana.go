@@ -22,7 +22,7 @@ const (
 )
 
 // GrafanaConfig simplifies the submission of information to Grafana Cloud, but it can
-// be actually used for any OTEl endpoint, as it uses the standard OTEL authentication
+// be actually used for any OTEL endpoint, as it uses the standard OTEL authentication
 // under the hood
 type GrafanaConfig struct {
 	// OTLP endpoint from Grafana Cloud.
@@ -32,17 +32,17 @@ type GrafanaConfig struct {
 type GrafanaOTLP struct {
 	// Submit accepts a comma-separated list of the kind of data that will be submit to the
 	// OTLP endpoint. It accepts `metrics` and/or `traces` as values.
-	Submit []string `yaml:"submit" env:"GRAFANA_OTLP_SUBMIT"`
+	Submit []string `yaml:"cloud_submit" env:"GRAFANA_CLOUD_SUBMIT"`
 
 	// CloudZone of your Grafana Endpoint. For example: prod-eu-west-0.
-	CloudZone string `yaml:"cloud_zone" env:"GRAFANA_OTLP_CLOUD_ZONE"`
+	CloudZone string `yaml:"cloud_zone" env:"GRAFANA_CLOUD_ZONE"`
 
 	// InstanceID is your Grafana user name. It is usually a number but it must be set as a
 	// string inside the YAML file.
-	InstanceID string `yaml:"instance_id" env:"GRAFANA_OTLP_CLOUD_INSTANCE_ID"`
+	InstanceID string `yaml:"cloud_instance_id" env:"GRAFANA_CLOUD_INSTANCE_ID"`
 
 	// APIKey of your Grafana Cloud account.
-	APIKey string `yaml:"api_key" env:"GRAFANA_OTLP_CLOUD_API_KEY"`
+	APIKey string `yaml:"cloud_api_key" env:"GRAFANA_CLOUD_API_KEY"`
 }
 
 func (cfg *GrafanaOTLP) MetricsEnabled() bool {

@@ -6,6 +6,12 @@ Open source zero-code automatic instrumentation with eBPF and OpenTelemetry.
 
 [![Build Status](https://drone.grafana.net/api/badges/grafana/beyla/status.svg?ref=refs/heads/main)](https://drone.grafana.net/grafana/beyla)
 
+## Introduction
+
+Beyla is a vendor agnostic, eBPF-based, OpenTelemetry application auto-instrumentation tool, which lets you easily get started with Application Observability. 
+eBPF is used to automatically inspect application executables and the OS networking layer, allowing us to capture essential application observability events
+for HTTP/S and gRPC services. From these captured eBPF events, we produce OpenTelemetry web transaction trace spans and Rate-Errors-Duration (RED) metrics. 
+As with most eBPF tools, all data capture and instrumentation occurs without any modifications to your application code or configuration.
 
 ## Getting Started
 
@@ -47,19 +53,23 @@ See [Documentation](https://grafana.com/docs/grafana-cloud/monitor-applications/
 
 ## Requirements
 
-- Linux with Kernel 4.18 or higher
+- Linux with Kernel 4.18 or higher with [BTF](https://www.kernel.org/doc/html/latest/bpf/btf.html)
+  enabled. BTF became enabled by default on most Linux distributions with kernel 5.14 or higher. 
+  You can check if your kernel has BTF enabled by verifying if `/sys/kernel/btf/vmlinux` exists on your system.
+  If you need to recompile your kernel to enable BTF, the configuration option `CONFIG_DEBUG_INFO_BTF=y` must be
+  set. 
 - eBPF enabled in the host
-- For instrumenting Go programs, they must have been compiled with Go 1.17 or higher
+- For instrumenting Go programs, they must have been compiled with at least Go 1.17. We currently
+  support Go applications built with a major **Go version no earlier than 3 versions** behind the current
+  stable major release.  
 - Administrative access to execute the instrumenter
     - Or execute it from a user enabling the `SYS_ADMIN` capability.
-- If you want to instrument HTTP calls at kernel-level (for other languages than Go),
-  your Kernel needs to enable BTF ([compiled with `CONFIG_DEBUG_INFO_BTF`](https://www.baeldung.com/linux/kernel-config))
 
-| Library                                       | Working |
-|-----------------------------------------------|---------|
+| Library                                       | Working  |
+|-----------------------------------------------|----------|
 | Kernel-level HTTP calls                       | ✅       |
 | OpenSSL library                               | ✅       |
-| Standard `net/http`                           | ✅       |
+| Standard Go `net/http`                        | ✅       |
 | [Gorilla Mux](https://github.com/gorilla/mux) | ✅       |
 | [Gin](https://gin-gonic.com/)                 | ✅       |
 | [gRPC-Go](https://github.com/grpc/grpc-go)    | ✅       |

@@ -1,19 +1,8 @@
----
-title: Beyla profiling
-menuTitle: Profiling
-description: Learn how to profile Beyla performance analysis.
-weight: 5
-keywords:
-  - Beyla
-  - eBPF
-  - profiling
----
-
 # Beyla profiling
 
-To profile a Beyla instrumented application do the following:
+To profile a Beyla while it is instrumenting an application do the following:
 
-1. Run the auto-instrumentation tool with the `BEYLA_PROFILE_PORT` variable set, e.g. 6060.
+1. Run Beyla with the `BEYLA_PROFILE_PORT` variable set, e.g. 6060.
 2. Download the required profiles:
 
    ```sh

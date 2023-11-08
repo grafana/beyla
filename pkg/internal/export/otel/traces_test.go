@@ -15,7 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
-	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
+	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 	trace2 "go.opentelemetry.io/otel/trace"
 
 	"github.com/grafana/beyla/pkg/internal/imetrics"

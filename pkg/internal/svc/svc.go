@@ -1,6 +1,6 @@
 package svc
 
-import semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
+import semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 
 type InstrumentableType int
 

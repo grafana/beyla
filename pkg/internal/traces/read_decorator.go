@@ -2,14 +2,17 @@ package traces
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
+	"strconv"
 
+	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/mariomac/pipes/pkg/node"
 
 	"github.com/grafana/beyla/pkg/internal/request"
 	"github.com/grafana/beyla/pkg/internal/traces/hostname"
 )
+
+const defaultIDCacheLen = 128
 
 func rlog() *slog.Logger {
 	return slog.With("component", "traces.ReadDecorator")
@@ -29,6 +32,12 @@ type InstanceIDConfig struct {
 	// and use this value. If you are managing multiple processes from a single Beyla instance,
 	// all the processes will have the same Instance ID.
 	OverrideInstanceID string `yaml:"override_instance_id" env:"BEYLA_INSTANCE_ID"`
+
+	// Undocumented properties aimed at fine-grained tuning
+
+	// InternalIDCacheLen will need to be increased if the number of instrumented processes by
+	// a single instance is larger than defaultIDCacheLen
+	InternalIDCacheLen int `yaml:"internal_cache_len" env:"BEYLA_INSTANCE_ID_INTERNAL_CACHE_LEN"`
 }
 
 // ReadDecorator is the input node of the processing graph. The eBPF tracers will send their
@@ -90,10 +99,21 @@ func hostNamePIDDecorator(cfg *InstanceIDConfig) decorator {
 		log.Info("using hostname", "hostname", fullHostName)
 	}
 
+	// caching instance ID composition for speed and saving memory generation
+	cacheLen := defaultIDCacheLen
+	if cfg.InternalIDCacheLen != 0 {
+		cacheLen = cfg.InternalIDCacheLen
+	}
+	idsCache, _ := lru.New[uint32, string](cacheLen)
+
 	return func(spans []request.Span) {
 		for i := range spans {
-			// TODO: if this has a performance impact or generates too much unnecessary memory, use an LRU cache
-			spans[i].ServiceID.Instance = fmt.Sprintf("%s-%d", fullHostName, spans[i].Pid.HostPID)
+			instanceID, ok := idsCache.Get(spans[i].Pid.HostPID)
+			if !ok {
+				instanceID = fullHostName + "-" + strconv.Itoa(int(spans[i].Pid.HostPID))
+				idsCache.Add(spans[i].Pid.HostPID, instanceID)
+			}
+			spans[i].ServiceID.Instance = instanceID
 		}
 	}
 }

@@ -308,14 +308,14 @@ func (mr *MetricsReporter) metricAttributes(span *request.Span) attribute.Set {
 	switch span.Type {
 	case request.EventTypeHTTP:
 		attrs = []attribute.KeyValue{
-			semconv.HTTPMethod(span.Method),
-			semconv.HTTPStatusCode(span.Status),
+			HTTPRequestMethod(span.Method),
+			HTTPResponseStatusCode(span.Status),
 		}
 		if mr.cfg.ReportTarget {
-			attrs = append(attrs, semconv.HTTPTarget(span.Path))
+			attrs = append(attrs, HTTPUrlPath(span.Path))
 		}
 		if mr.cfg.ReportPeerInfo {
-			attrs = append(attrs, semconv.NetSockPeerAddr(span.Peer))
+			attrs = append(attrs, ClientAddr(span.Peer))
 		}
 		if span.Route != "" {
 			attrs = append(attrs, semconv.HTTPRoute(span.Route))
@@ -327,16 +327,16 @@ func (mr *MetricsReporter) metricAttributes(span *request.Span) attribute.Set {
 			semconv.RPCGRPCStatusCodeKey.Int(span.Status),
 		}
 		if mr.cfg.ReportPeerInfo {
-			attrs = append(attrs, semconv.NetSockPeerAddr(span.Peer))
+			attrs = append(attrs, ClientAddr(span.Peer))
 		}
 	case request.EventTypeHTTPClient:
 		attrs = []attribute.KeyValue{
-			semconv.HTTPMethod(span.Method),
-			semconv.HTTPStatusCode(span.Status),
+			HTTPRequestMethod(span.Method),
+			HTTPResponseStatusCode(span.Status),
 		}
 		if mr.cfg.ReportPeerInfo {
-			attrs = append(attrs, semconv.NetSockPeerName(span.Host))
-			attrs = append(attrs, semconv.NetSockPeerPort(span.HostPort))
+			attrs = append(attrs, ServerAddr(span.Host))
+			attrs = append(attrs, ServerPort(span.HostPort))
 		}
 	case request.EventTypeSQLClient:
 		attrs = []attribute.KeyValue{

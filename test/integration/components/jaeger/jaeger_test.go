@@ -8,6 +8,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// This test is still using the old OpenTelemetry semantic convention, but that's fine
+// since we only test our Jaeger request parsing functionality.
 func TestFind(t *testing.T) {
 	traces := Fixture().FindBySpan(
 		Tag{Key: "http.method", Type: "string", Value: "GET"},

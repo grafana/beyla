@@ -56,7 +56,7 @@ func TestMultiProcess(t *testing.T) {
 	t.Run("Non-selected processes must not be instrumented"+
 		" even if they share the executable of another instrumented process", func(t *testing.T) {
 		pq := prom.Client{HostPort: prometheusHostPort}
-		results, err := pq.Query(`http_server_duration_seconds_count{http_target="/dont-instrument"}`)
+		results, err := pq.Query(`http_server_duration_seconds_count{url_path="/dont-instrument"}`)
 		require.NoError(t, err)
 		assert.Empty(t, results)
 	})
@@ -86,10 +86,10 @@ func checkReportedOnlyOnce(t *testing.T, baseURL, serviceName string) {
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
 		var err error
 		results, err = pq.Query(`http_server_duration_seconds_count{` +
-			`http_method="GET",` +
-			`http_status_code="200",` +
+			`http_request_method="GET",` +
+			`http_response_status_code="200",` +
 			`service_name="` + serviceName + `",` +
-			`http_target="` + path + `"}`)
+			`url_path="` + path + `"}`)
 		require.NoError(t, err)
 		// check duration_count has 3 calls and all the arguments
 		require.Len(t, results, 1)

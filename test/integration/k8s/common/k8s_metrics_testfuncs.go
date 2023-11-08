@@ -73,7 +73,7 @@ func DoTestHTTPMetricsDecorationExternalToPod(t *testing.T) {
 		// now, verify that the metric has been reported.
 		// we don't really care that this metric could be from a previous
 		// test. Once one it is visible, it means that Otel and Prometheus are healthy
-		results, err = pq.Query(`http_server_duration_seconds_count{http_target="` + subpath + `",k8s_dst_name="testserver"}`)
+		results, err = pq.Query(`http_server_duration_seconds_count{url_path="` + subpath + `",k8s_dst_name="testserver"}`)
 		require.NoError(t, err)
 		require.NotEmpty(t, results)
 	}, test.Interval(time.Second))
@@ -99,7 +99,7 @@ func FeatureHTTPDecorationPod2Service() features.Feature {
 		Setup(pinger.Deploy()).
 		Teardown(pinger.Delete()).
 		Assess("all the server metrics are properly decorated",
-			testMetricsDecoration(httpServerMetrics, `{http_target="/iping",k8s_src_name="internal-pinger"}`, map[string]string{
+			testMetricsDecoration(httpServerMetrics, `{url_path="/iping",k8s_src_name="internal-pinger"}`, map[string]string{
 				"k8s_src_name":      "internal-pinger",
 				"k8s_dst_name":      "testserver",
 				"k8s_src_namespace": "default",

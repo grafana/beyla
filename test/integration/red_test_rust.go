@@ -39,18 +39,18 @@ func testREDMetricsForRustHTTPLibrary(t *testing.T, url string, comm string, por
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
 		var err error
 		results, err = pq.Query(`http_server_duration_seconds_count{` +
-			`http_method="POST",` +
-			`http_status_code="200",` +
+			`http_request_method="POST",` +
+			`http_response_status_code="200",` +
 			`service_namespace="integration-test",` +
 			`service_name="` + comm + `",` +
-			`http_target="` + urlPath + `"}`)
+			`url_path="` + urlPath + `"}`)
 		require.NoError(t, err)
 		enoughPromResults(t, results)
 		val := totalPromCount(t, results)
 		assert.LessOrEqual(t, 3, val)
 		if len(results) > 0 {
 			res := results[0]
-			addr := net.ParseIP(res.Metric["net_sock_peer_addr"])
+			addr := net.ParseIP(res.Metric["client_address"])
 			assert.NotNil(t, addr)
 		}
 	})
@@ -71,7 +71,7 @@ func testREDMetricsForRustHTTPLibrary(t *testing.T, url string, comm string, por
 		require.Equal(t, http.StatusOK, resp.StatusCode)
 		var tq jaeger.TracesQuery
 		require.NoError(t, json.NewDecoder(resp.Body).Decode(&tq))
-		traces := tq.FindBySpan(jaeger.Tag{Key: "http.target", Type: "string", Value: "/trace"})
+		traces := tq.FindBySpan(jaeger.Tag{Key: "url.path", Type: "string", Value: "/trace"})
 		require.Len(t, traces, 1)
 		trace = traces[0]
 	}, test.Interval(100*time.Millisecond))
@@ -90,10 +90,10 @@ func testREDMetricsForRustHTTPLibrary(t *testing.T, url string, comm string, por
 	assert.Less(t, (2 * time.Microsecond).Microseconds(), parent.Duration)
 	// check span attributes
 	sd := parent.Diff(
-		jaeger.Tag{Key: "http.method", Type: "string", Value: "GET"},
-		jaeger.Tag{Key: "http.status_code", Type: "int64", Value: float64(200)},
-		jaeger.Tag{Key: "http.target", Type: "string", Value: "/trace"},
-		jaeger.Tag{Key: "net.host.port", Type: "int64", Value: float64(port)},
+		jaeger.Tag{Key: "http.request.method", Type: "string", Value: "GET"},
+		jaeger.Tag{Key: "http.response.status_code", Type: "int64", Value: float64(200)},
+		jaeger.Tag{Key: "url.path", Type: "string", Value: "/trace"},
+		jaeger.Tag{Key: "server.port", Type: "int64", Value: float64(port)},
 		jaeger.Tag{Key: "http.route", Type: "string", Value: "/trace"},
 		jaeger.Tag{Key: "span.kind", Type: "string", Value: "server"},
 	)

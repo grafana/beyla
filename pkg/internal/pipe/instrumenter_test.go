@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/pdata/pmetric"
 	"go.opentelemetry.io/collector/pdata/ptrace"
-	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
+	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 
 	"github.com/grafana/beyla/pkg/internal/export/otel"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
@@ -67,11 +67,11 @@ func TestBasicPipeline(t *testing.T) {
 		Name: "http.server.duration",
 		Unit: "s",
 		Attributes: map[string]string{
-			string(semconv.HTTPMethodKey):      "GET",
-			string(semconv.HTTPStatusCodeKey):  "404",
-			string(semconv.HTTPTargetKey):      "/foo/bar",
-			string(semconv.NetSockPeerAddrKey): "1.1.1.1",
-			string(semconv.ServiceNameKey):     "foo-svc",
+			string(otel.HTTPRequestMethodKey):      "GET",
+			string(otel.HTTPResponseStatusCodeKey): "404",
+			string(otel.HTTPUrlPathKey):            "/foo/bar",
+			string(otel.ClientAddrKey):             "1.1.1.1",
+			string(semconv.ServiceNameKey):         "foo-svc",
 		},
 		Type: pmetric.MetricTypeHistogram,
 	}, event)
@@ -188,10 +188,10 @@ func TestRouteConsolidation(t *testing.T) {
 		Name: "http.server.duration",
 		Unit: "s",
 		Attributes: map[string]string{
-			string(semconv.ServiceNameKey):    "svc-1",
-			string(semconv.HTTPMethodKey):     "GET",
-			string(semconv.HTTPStatusCodeKey): "200",
-			string(semconv.HTTPRouteKey):      "/user/{id}",
+			string(semconv.ServiceNameKey):         "svc-1",
+			string(otel.HTTPRequestMethodKey):      "GET",
+			string(otel.HTTPResponseStatusCodeKey): "200",
+			string(semconv.HTTPRouteKey):           "/user/{id}",
 		},
 		Type: pmetric.MetricTypeHistogram,
 	}, events["/user/{id}"])
@@ -200,10 +200,10 @@ func TestRouteConsolidation(t *testing.T) {
 		Name: "http.server.duration",
 		Unit: "s",
 		Attributes: map[string]string{
-			string(semconv.ServiceNameKey):    "svc-1",
-			string(semconv.HTTPMethodKey):     "GET",
-			string(semconv.HTTPStatusCodeKey): "200",
-			string(semconv.HTTPRouteKey):      "/products/{id}/push",
+			string(semconv.ServiceNameKey):         "svc-1",
+			string(otel.HTTPRequestMethodKey):      "GET",
+			string(otel.HTTPResponseStatusCodeKey): "200",
+			string(semconv.HTTPRouteKey):           "/products/{id}/push",
 		},
 		Type: pmetric.MetricTypeHistogram,
 	}, events["/products/{id}/push"])
@@ -212,10 +212,10 @@ func TestRouteConsolidation(t *testing.T) {
 		Name: "http.server.duration",
 		Unit: "s",
 		Attributes: map[string]string{
-			string(semconv.ServiceNameKey):    "svc-1",
-			string(semconv.HTTPMethodKey):     "GET",
-			string(semconv.HTTPStatusCodeKey): "200",
-			string(semconv.HTTPRouteKey):      "/**",
+			string(semconv.ServiceNameKey):         "svc-1",
+			string(otel.HTTPRequestMethodKey):      "GET",
+			string(otel.HTTPResponseStatusCodeKey): "200",
+			string(semconv.HTTPRouteKey):           "/**",
 		},
 		Type: pmetric.MetricTypeHistogram,
 	}, events["/**"])
@@ -257,7 +257,7 @@ func TestGRPCPipeline(t *testing.T) {
 			string(semconv.RPCSystemKey):         "grpc",
 			string(semconv.RPCGRPCStatusCodeKey): "3",
 			string(semconv.RPCMethodKey):         "/foo/bar",
-			string(semconv.NetSockPeerAddrKey):   "1.1.1.1",
+			string(otel.ClientAddrKey):           "1.1.1.1",
 		},
 		Type: pmetric.MetricTypeHistogram,
 	}, event)
@@ -441,15 +441,15 @@ func matchTraceEvent(t require.TestingT, name string, event collector.TraceRecor
 	assert.Equal(t, collector.TraceRecord{
 		Name: name,
 		Attributes: map[string]string{
-			string(semconv.HTTPMethodKey):               "GET",
-			string(semconv.HTTPStatusCodeKey):           "404",
-			string(semconv.HTTPTargetKey):               "/foo/bar",
-			string(semconv.NetSockPeerAddrKey):          "1.1.1.1",
-			string(semconv.NetHostNameKey):              getHostname(),
-			string(semconv.NetHostPortKey):              "8080",
-			string(semconv.HTTPRequestContentLengthKey): "0",
-			"span_id":        event.Attributes["span_id"],
-			"parent_span_id": event.Attributes["parent_span_id"],
+			string(otel.HTTPRequestMethodKey):      "GET",
+			string(otel.HTTPResponseStatusCodeKey): "404",
+			string(otel.HTTPUrlPathKey):            "/foo/bar",
+			string(otel.ClientAddrKey):             "1.1.1.1",
+			string(otel.ServerAddrKey):             getHostname(),
+			string(otel.ServerPortKey):             "8080",
+			string(otel.HTTPRequestBodySizeKey):    "0",
+			"span_id":                              event.Attributes["span_id"],
+			"parent_span_id":                       event.Attributes["parent_span_id"],
 		},
 		Kind: ptrace.SpanKindServer,
 	}, event)
@@ -473,9 +473,9 @@ func matchGRPCTraceEvent(t *testing.T, name string, event collector.TraceRecord)
 			string(semconv.RPCSystemKey):         "grpc",
 			string(semconv.RPCGRPCStatusCodeKey): "3",
 			string(semconv.RPCMethodKey):         "foo.bar",
-			string(semconv.NetSockPeerAddrKey):   "1.1.1.1",
-			string(semconv.NetHostNameKey):       "127.0.0.1",
-			string(semconv.NetHostPortKey):       "8080",
+			string(otel.ClientAddrKey):           "1.1.1.1",
+			string(otel.ServerAddrKey):           "127.0.0.1",
+			string(otel.ServerPortKey):           "8080",
 			"span_id":                            event.Attributes["span_id"],
 			"parent_span_id":                     event.Attributes["parent_span_id"],
 		},
@@ -496,12 +496,12 @@ func matchInnerGRPCTraceEvent(t *testing.T, name string, event collector.TraceRe
 
 func matchNestedEvent(t *testing.T, name, method, target, status string, kind ptrace.SpanKind, event collector.TraceRecord) {
 	assert.Equal(t, name, event.Name)
-	assert.Equal(t, method, event.Attributes["http.method"])
-	assert.Equal(t, status, event.Attributes["http.status_code"])
+	assert.Equal(t, method, event.Attributes[string(otel.HTTPRequestMethodKey)])
+	assert.Equal(t, status, event.Attributes[string(otel.HTTPResponseStatusCodeKey)])
 	if kind == ptrace.SpanKindClient {
-		assert.Equal(t, target, event.Attributes["http.url"])
+		assert.Equal(t, target, event.Attributes[string(otel.HTTPUrlFullKey)])
 	} else {
-		assert.Equal(t, target, event.Attributes["http.target"])
+		assert.Equal(t, target, event.Attributes[string(otel.HTTPUrlPathKey)])
 	}
 	assert.Equal(t, kind, event.Kind)
 }
@@ -526,15 +526,15 @@ func matchInfoEvent(t *testing.T, name string, event collector.TraceRecord) {
 	assert.Equal(t, collector.TraceRecord{
 		Name: name,
 		Attributes: map[string]string{
-			string(semconv.HTTPMethodKey):               "PATCH",
-			string(semconv.HTTPStatusCodeKey):           "204",
-			string(semconv.HTTPTargetKey):               "/aaa/bbb",
-			string(semconv.NetSockPeerAddrKey):          "1.1.1.1",
-			string(semconv.NetHostNameKey):              getHostname(),
-			string(semconv.NetHostPortKey):              "8080",
-			string(semconv.HTTPRequestContentLengthKey): "0",
-			"span_id":        event.Attributes["span_id"],
-			"parent_span_id": "",
+			string(otel.HTTPRequestMethodKey):      "PATCH",
+			string(otel.HTTPResponseStatusCodeKey): "204",
+			string(otel.HTTPUrlPathKey):            "/aaa/bbb",
+			string(otel.ClientAddrKey):             "1.1.1.1",
+			string(otel.ServerAddrKey):             getHostname(),
+			string(otel.ServerPortKey):             "8080",
+			string(otel.HTTPRequestBodySizeKey):    "0",
+			"span_id":                              event.Attributes["span_id"],
+			"parent_span_id":                       "",
 		},
 		Kind: ptrace.SpanKindServer,
 	}, event)
@@ -566,11 +566,11 @@ func TestBasicPipelineInfo(t *testing.T) {
 		Name: "http.server.duration",
 		Unit: "s",
 		Attributes: map[string]string{
-			string(semconv.HTTPMethodKey):      "PATCH",
-			string(semconv.HTTPStatusCodeKey):  "204",
-			string(semconv.HTTPTargetKey):      "/aaa/bbb",
-			string(semconv.NetSockPeerAddrKey): "1.1.1.1",
-			string(semconv.ServiceNameKey):     "comm",
+			string(otel.HTTPRequestMethodKey):      "PATCH",
+			string(otel.HTTPResponseStatusCodeKey): "204",
+			string(otel.HTTPUrlPathKey):            "/aaa/bbb",
+			string(otel.ClientAddrKey):             "1.1.1.1",
+			string(semconv.ServiceNameKey):         "comm",
 		},
 		Type: pmetric.MetricTypeHistogram,
 	}, event)

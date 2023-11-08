@@ -40,11 +40,11 @@ func testREDMetricsForJavaHTTPLibrary(t *testing.T, url string, comm string) {
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
 		var err error
 		results, err = pq.Query(`http_server_duration_seconds_count{` +
-			`http_method="GET",` +
-			`http_status_code="204",` +
+			`http_request_method="GET",` +
+			`http_response_status_code="204",` +
 			`service_namespace="integration-test",` +
 			commMatch +
-			`http_target="` + path + `"}`)
+			`url_path="` + path + `"}`)
 		require.NoError(t, err)
 		// check duration_count has 3 calls and all the arguments
 		enoughPromResults(t, results)
@@ -53,7 +53,7 @@ func testREDMetricsForJavaHTTPLibrary(t *testing.T, url string, comm string) {
 			assert.LessOrEqual(t, 3, val)
 
 			res := results[0]
-			addr := net.ParseIP(res.Metric["net_sock_peer_addr"])
+			addr := net.ParseIP(res.Metric["client_address"])
 			assert.NotNil(t, addr)
 		}
 	})

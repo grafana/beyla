@@ -25,8 +25,8 @@ func testNodeClientWithMethodAndStatusCode(t *testing.T, method string, statusCo
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
 		var err error
 		results, err = pq.Query(`http_client_duration_seconds_count{` +
-			fmt.Sprintf(`http_method="%s",`, method) +
-			fmt.Sprintf(`http_status_code="%d",`, statusCode) +
+			fmt.Sprintf(`http_request_method="%s",`, method) +
+			fmt.Sprintf(`http_response_status_code="%d",`, statusCode) +
 			`service_namespace="integration-test",` +
 			`service_name="node"}`)
 		require.NoError(t, err)
@@ -38,8 +38,8 @@ func testNodeClientWithMethodAndStatusCode(t *testing.T, method string, statusCo
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
 		var err error
 		results, err = pq.Query(`http_client_request_size_bytes_count{` +
-			fmt.Sprintf(`http_method="%s",`, method) +
-			fmt.Sprintf(`http_status_code="%d",`, statusCode) +
+			fmt.Sprintf(`http_request_method="%s",`, method) +
+			fmt.Sprintf(`http_response_status_code="%d",`, statusCode) +
 			`service_namespace="integration-test",` +
 			`service_name="node"}`)
 		require.NoError(t, err)
@@ -58,7 +58,7 @@ func testNodeClientWithMethodAndStatusCode(t *testing.T, method string, statusCo
 		require.Equal(t, http.StatusOK, resp.StatusCode)
 		var tq jaeger.TracesQuery
 		require.NoError(t, json.NewDecoder(resp.Body).Decode(&tq))
-		traces := tq.FindBySpan(jaeger.Tag{Key: "http.status_code", Type: "int64", Value: float64(statusCode)})
+		traces := tq.FindBySpan(jaeger.Tag{Key: "http.response.status_code", Type: "int64", Value: float64(statusCode)})
 		require.GreaterOrEqual(t, len(traces), 1)
 		trace = traces[0]
 	}, test.Interval(100*time.Millisecond))
@@ -68,10 +68,10 @@ func testNodeClientWithMethodAndStatusCode(t *testing.T, method string, statusCo
 	span := spans[0]
 
 	sd := span.Diff(
-		jaeger.Tag{Key: "http.method", Type: "string", Value: "GET"},
-		jaeger.Tag{Key: "http.status_code", Type: "int64", Value: float64(statusCode)},
-		jaeger.Tag{Key: "http.url", Type: "string", Value: "/"},
-		jaeger.Tag{Key: "net.peer.port", Type: "int64", Value: float64(port)},
+		jaeger.Tag{Key: "http.request.method", Type: "string", Value: "GET"},
+		jaeger.Tag{Key: "http.response.status_code", Type: "int64", Value: float64(statusCode)},
+		jaeger.Tag{Key: "url.full", Type: "string", Value: "/"},
+		jaeger.Tag{Key: "server.port", Type: "int64", Value: float64(port)},
 		jaeger.Tag{Key: "span.kind", Type: "string", Value: "client"},
 	)
 	assert.Empty(t, sd, sd.String())

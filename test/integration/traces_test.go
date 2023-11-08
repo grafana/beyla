@@ -55,7 +55,7 @@ func testHTTPTracesCommon(t *testing.T, doTraceID bool, httpCode int) {
 		require.Equal(t, http.StatusOK, resp.StatusCode)
 		var tq jaeger.TracesQuery
 		require.NoError(t, json.NewDecoder(resp.Body).Decode(&tq))
-		traces := tq.FindBySpan(jaeger.Tag{Key: "http.target", Type: "string", Value: "/" + slug})
+		traces := tq.FindBySpan(jaeger.Tag{Key: "url.path", Type: "string", Value: "/" + slug})
 		require.Len(t, traces, 1)
 		trace = traces[0]
 		require.Len(t, trace.Spans, 3) // parent - in queue - processing
@@ -77,10 +77,10 @@ func testHTTPTracesCommon(t *testing.T, doTraceID bool, httpCode int) {
 	assert.Less(t, (10 * time.Millisecond).Microseconds(), parent.Duration)
 	// check span attributes
 	sd := parent.Diff(
-		jaeger.Tag{Key: "http.method", Type: "string", Value: "GET"},
-		jaeger.Tag{Key: "http.status_code", Type: "int64", Value: float64(httpCode)},
-		jaeger.Tag{Key: "http.target", Type: "string", Value: "/" + slug},
-		jaeger.Tag{Key: "net.host.port", Type: "int64", Value: float64(8080)},
+		jaeger.Tag{Key: "http.request.method", Type: "string", Value: "GET"},
+		jaeger.Tag{Key: "http.response.status_code", Type: "int64", Value: float64(httpCode)},
+		jaeger.Tag{Key: "url.path", Type: "string", Value: "/" + slug},
+		jaeger.Tag{Key: "server.port", Type: "int64", Value: float64(8080)},
 		jaeger.Tag{Key: "http.route", Type: "string", Value: "/" + slug},
 		jaeger.Tag{Key: "span.kind", Type: "string", Value: "server"},
 	)
@@ -161,7 +161,7 @@ func testHTTPTracesCommon(t *testing.T, doTraceID bool, httpCode int) {
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 	var tq jaeger.TracesQuery
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&tq))
-	traces := tq.FindBySpan(jaeger.Tag{Key: "http.target", Type: "string", Value: "/metrics"})
+	traces := tq.FindBySpan(jaeger.Tag{Key: "url.path", Type: "string", Value: "/metrics"})
 	require.Len(t, traces, 0)
 }
 
@@ -210,7 +210,7 @@ func testHTTPTracesBadTraceparent(t *testing.T) {
 			require.Equal(t, http.StatusOK, resp.StatusCode)
 			var tq jaeger.TracesQuery
 			require.NoError(t, json.NewDecoder(resp.Body).Decode(&tq))
-			traces := tq.FindBySpan(jaeger.Tag{Key: "http.target", Type: "string", Value: "/" + slug})
+			traces := tq.FindBySpan(jaeger.Tag{Key: "url.path", Type: "string", Value: "/" + slug})
 			require.Len(t, traces, 1)
 			trace = traces[0]
 		}, test.Interval(100*time.Millisecond))
@@ -237,7 +237,7 @@ func testHTTPTracesBadTraceparent(t *testing.T) {
 		require.Equal(t, http.StatusOK, resp.StatusCode)
 		var tq jaeger.TracesQuery
 		require.NoError(t, json.NewDecoder(resp.Body).Decode(&tq))
-		traces := tq.FindBySpan(jaeger.Tag{Key: "http.target", Type: "string", Value: "/" + slug})
+		traces := tq.FindBySpan(jaeger.Tag{Key: "url.path", Type: "string", Value: "/" + slug})
 		require.Len(t, traces, 0)
 	}
 }
@@ -272,7 +272,7 @@ func testGRPCTracesForServiceName(t *testing.T, svcName string) {
 	assert.Less(t, (10 * time.Millisecond).Microseconds(), parent.Duration)
 	// check span attributes
 	sd := parent.Diff(
-		jaeger.Tag{Key: "net.host.port", Type: "int64", Value: float64(50051)},
+		jaeger.Tag{Key: "server.port", Type: "int64", Value: float64(50051)},
 		jaeger.Tag{Key: "rpc.grpc.status_code", Type: "int64", Value: float64(2)},
 		jaeger.Tag{Key: "rpc.method", Type: "string", Value: "/routeguide.RouteGuide/Debug"},
 		jaeger.Tag{Key: "rpc.system", Type: "string", Value: "grpc"},
@@ -400,7 +400,7 @@ func testHTTPTracesKProbes(t *testing.T) {
 		require.Equal(t, http.StatusOK, resp.StatusCode)
 		var tq jaeger.TracesQuery
 		require.NoError(t, json.NewDecoder(resp.Body).Decode(&tq))
-		traces := tq.FindBySpan(jaeger.Tag{Key: "http.target", Type: "string", Value: "/bye"})
+		traces := tq.FindBySpan(jaeger.Tag{Key: "url.path", Type: "string", Value: "/bye"})
 		require.Len(t, traces, 1)
 		trace = traces[0]
 	}, test.Interval(100*time.Millisecond))
@@ -419,10 +419,10 @@ func testHTTPTracesKProbes(t *testing.T) {
 	assert.Less(t, (2 * time.Microsecond).Microseconds(), parent.Duration)
 	// check span attributes
 	sd := parent.Diff(
-		jaeger.Tag{Key: "http.method", Type: "string", Value: "GET"},
-		jaeger.Tag{Key: "http.status_code", Type: "int64", Value: float64(200)},
-		jaeger.Tag{Key: "http.target", Type: "string", Value: "/bye"},
-		jaeger.Tag{Key: "net.host.port", Type: "int64", Value: float64(3030)},
+		jaeger.Tag{Key: "http.request.method", Type: "string", Value: "GET"},
+		jaeger.Tag{Key: "http.response.status_code", Type: "int64", Value: float64(200)},
+		jaeger.Tag{Key: "url.path", Type: "string", Value: "/bye"},
+		jaeger.Tag{Key: "server.port", Type: "int64", Value: float64(3030)},
 		jaeger.Tag{Key: "http.route", Type: "string", Value: "/bye"},
 		jaeger.Tag{Key: "span.kind", Type: "string", Value: "server"},
 	)

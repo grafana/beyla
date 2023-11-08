@@ -25,8 +25,8 @@ func testClientWithMethodAndStatusCode(t *testing.T, method string, statusCode i
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
 		var err error
 		results, err = pq.Query(`http_client_duration_seconds_count{` +
-			fmt.Sprintf(`http_method="%s",`, method) +
-			fmt.Sprintf(`http_status_code="%d",`, statusCode) +
+			fmt.Sprintf(`http_request_method="%s",`, method) +
+			fmt.Sprintf(`http_response_status_code="%d",`, statusCode) +
 			`service_namespace="integration-test",` +
 			`service_name="pingclient"}`)
 		require.NoError(t, err)
@@ -38,8 +38,8 @@ func testClientWithMethodAndStatusCode(t *testing.T, method string, statusCode i
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
 		var err error
 		results, err = pq.Query(`http_client_request_size_bytes_count{` +
-			fmt.Sprintf(`http_method="%s",`, method) +
-			fmt.Sprintf(`http_status_code="%d",`, statusCode) +
+			fmt.Sprintf(`http_request_method="%s",`, method) +
+			fmt.Sprintf(`http_response_status_code="%d",`, statusCode) +
 			`service_namespace="integration-test",` +
 			`service_name="pingclient"}`)
 		require.NoError(t, err)
@@ -58,7 +58,7 @@ func testClientWithMethodAndStatusCode(t *testing.T, method string, statusCode i
 		require.Equal(t, http.StatusOK, resp.StatusCode)
 		var tq jaeger.TracesQuery
 		require.NoError(t, json.NewDecoder(resp.Body).Decode(&tq))
-		traces := tq.FindBySpan(jaeger.Tag{Key: "net.peer.name", Type: "string", Value: "grafana.com"})
+		traces := tq.FindBySpan(jaeger.Tag{Key: "server.address", Type: "string", Value: "grafana.com"})
 		require.GreaterOrEqual(t, len(traces), 1)
 		trace = traces[0]
 	}, test.Interval(100*time.Millisecond))

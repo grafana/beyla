@@ -16,7 +16,7 @@ import (
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	"go.opentelemetry.io/otel/sdk/resource"
-	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
+	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 	"google.golang.org/grpc/credentials"
 
 	"github.com/grafana/beyla/pkg/internal/svc"
@@ -236,4 +236,58 @@ func (l *LogrAdaptor) WithValues(keysAndValues ...interface{}) logr.LogSink {
 
 func (l *LogrAdaptor) WithName(name string) logr.LogSink {
 	return &LogrAdaptor{inner: l.inner.With("name", name)}
+}
+
+// OpenTelemetry 1.23 semantic convention
+const (
+	HTTPRequestMethodKey      = attribute.Key("http.request.method")
+	HTTPResponseStatusCodeKey = attribute.Key("http.response.status_code")
+	HTTPUrlPathKey            = attribute.Key("url.path")
+	HTTPUrlFullKey            = attribute.Key("url.full")
+	ClientAddrKey             = attribute.Key("client.address")
+	ClientPortKey             = attribute.Key("client.port")
+	ServerAddrKey             = attribute.Key("server.address")
+	ServerPortKey             = attribute.Key("server.port")
+	HTTPRequestBodySizeKey    = attribute.Key("http.request.body.size")
+	HTTPResponseBodySizeKey   = attribute.Key("http.response.body.size")
+)
+
+func HTTPRequestMethod(val string) attribute.KeyValue {
+	return HTTPRequestMethodKey.String(val)
+}
+
+func HTTPResponseStatusCode(val int) attribute.KeyValue {
+	return HTTPResponseStatusCodeKey.Int(val)
+}
+
+func HTTPUrlPath(val string) attribute.KeyValue {
+	return HTTPUrlPathKey.String(val)
+}
+
+func HTTPUrlFull(val string) attribute.KeyValue {
+	return HTTPUrlFullKey.String(val)
+}
+
+func ClientAddr(val string) attribute.KeyValue {
+	return ClientAddrKey.String(val)
+}
+
+func ClientPort(val int) attribute.KeyValue {
+	return ClientPortKey.Int(val)
+}
+
+func ServerAddr(val string) attribute.KeyValue {
+	return ServerAddrKey.String(val)
+}
+
+func ServerPort(val int) attribute.KeyValue {
+	return ServerPortKey.Int(val)
+}
+
+func HTTPRequestBodySize(val int) attribute.KeyValue {
+	return HTTPRequestBodySizeKey.Int(val)
+}
+
+func HTTPResponseBodySize(val int) attribute.KeyValue {
+	return HTTPResponseBodySizeKey.Int(val)
 }

@@ -33,18 +33,18 @@ func testREDMetricsForRubyHTTPLibrary(t *testing.T, url string, comm string) {
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
 		var err error
 		results, err = pq.Query(`http_server_duration_seconds_count{` +
-			`http_method="POST",` +
-			`http_status_code="201",` +
+			`http_request_method="POST",` +
+			`http_response_status_code="201",` +
 			`service_namespace="integration-test",` +
 			`service_name="` + comm + `",` +
-			`http_target="` + path + `"}`)
+			`url_path="` + path + `"}`)
 		require.NoError(t, err)
 		enoughPromResults(t, results)
 		val := totalPromCount(t, results)
 		assert.LessOrEqual(t, 1, val)
 		if len(results) > 0 {
 			res := results[0]
-			addr := net.ParseIP(res.Metric["net_sock_peer_addr"])
+			addr := net.ParseIP(res.Metric["client_address"])
 			assert.NotNil(t, addr)
 		}
 	})
@@ -60,19 +60,19 @@ func testREDMetricsForRubyHTTPLibrary(t *testing.T, url string, comm string) {
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
 		var err error
 		results, err = pq.Query(`http_server_duration_seconds_count{` +
-			`http_method="GET",` +
-			`http_status_code="200",` +
+			`http_request_method="GET",` +
+			`http_response_status_code="200",` +
 			`service_namespace="integration-test",` +
 			`service_name="` + comm + `",` +
 			`http_route="/users/:user_id",` +
-			`http_target="` + path + `/1"}`)
+			`url_path="` + path + `/1"}`)
 		require.NoError(t, err)
 		enoughPromResults(t, results)
 		val := totalPromCount(t, results)
 		assert.LessOrEqual(t, 3, val)
 		if len(results) > 0 {
 			res := results[0]
-			addr := net.ParseIP(res.Metric["net_sock_peer_addr"])
+			addr := net.ParseIP(res.Metric["client_address"])
 			assert.NotNil(t, addr)
 		}
 	})

@@ -88,12 +88,12 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url, svcName, svcNs string) {
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
 		var err error
 		results, err = pq.Query(`http_server_duration_seconds_count{` +
-			`http_method="GET",` +
-			`http_status_code="404",` +
+			`http_request_method="GET",` +
+			`http_response_status_code="404",` +
 			`service_namespace="` + svcNs + `",` +
 			`service_name="` + svcName + `",` +
 			`http_route="/basic/:rnd",` +
-			`http_target="` + path + `"}`)
+			`url_path="` + path + `"}`)
 		require.NoError(t, err)
 		// check duration_count has 3 calls and all the arguments
 		enoughPromResults(t, results)
@@ -101,7 +101,7 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url, svcName, svcNs string) {
 		assert.LessOrEqual(t, 3, val)
 		if len(results) > 0 {
 			res := results[0]
-			addr := net.ParseIP(res.Metric["net_sock_peer_addr"])
+			addr := net.ParseIP(res.Metric["client_address"])
 			assert.NotNil(t, addr)
 		}
 	})
@@ -109,12 +109,12 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url, svcName, svcNs string) {
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
 		var err error
 		results, err = pq.Query(`http_server_request_size_bytes_count{` +
-			`http_method="GET",` +
-			`http_status_code="404",` +
+			`http_request_method="GET",` +
+			`http_response_status_code="404",` +
 			`service_namespace="` + svcNs + `",` +
 			`service_name="` + svcName + `",` +
 			`http_route="/basic/:rnd",` +
-			`http_target="` + path + `"}`)
+			`url_path="` + path + `"}`)
 		require.NoError(t, err)
 		// check duration_count has 3 calls and all the arguments
 		enoughPromResults(t, results)
@@ -122,7 +122,7 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url, svcName, svcNs string) {
 		assert.LessOrEqual(t, 3, val)
 		if len(results) > 0 {
 			res := results[0]
-			addr := net.ParseIP(res.Metric["net_sock_peer_addr"])
+			addr := net.ParseIP(res.Metric["client_address"])
 			assert.NotNil(t, addr)
 		}
 	})
@@ -132,8 +132,8 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url, svcName, svcNs string) {
 		test.Eventually(t, testTimeout, func(t require.TestingT) {
 			var err error
 			results, err = pq.Query(`http_server_duration_seconds_count{` +
-				`http_method="GET",` +
-				`http_status_code="203",` +
+				`http_request_method="GET",` +
+				`http_response_status_code="203",` +
 				`service_namespace="` + svcNs + `",` +
 				`http_route="/echo",` +
 				`service_name="` + svcName + `"}`)
@@ -147,8 +147,8 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url, svcName, svcNs string) {
 		test.Eventually(t, testTimeout, func(t require.TestingT) {
 			var err error
 			results, err = pq.Query(`http_server_request_size_bytes_count{` +
-				`http_method="GET",` +
-				`http_status_code="203",` +
+				`http_request_method="GET",` +
+				`http_response_status_code="203",` +
 				`service_namespace="` + svcNs + `",` +
 				`http_route="/echo",` +
 				`service_name="` + svcName + `"}`)
@@ -163,8 +163,8 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url, svcName, svcNs string) {
 		test.Eventually(t, testTimeout, func(t require.TestingT) {
 			var err error
 			results, err = pq.Query(`http_server_duration_seconds_count{` +
-				`http_method="GET",` +
-				`http_status_code="203",` +
+				`http_request_method="GET",` +
+				`http_response_status_code="203",` +
 				`service_namespace="` + svcNs + `",` +
 				`http_route="/echoBack",` +
 				`service_name="` + svcName + `"}`)
@@ -178,8 +178,8 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url, svcName, svcNs string) {
 		test.Eventually(t, testTimeout, func(t require.TestingT) {
 			var err error
 			results, err = pq.Query(`http_server_request_size_bytes_count{` +
-				`http_method="GET",` +
-				`http_status_code="203",` +
+				`http_request_method="GET",` +
+				`http_response_status_code="203",` +
 				`service_namespace="` + svcNs + `",` +
 				`http_route="/echoBack",` +
 				`service_name="` + svcName + `"}`)
@@ -194,8 +194,8 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url, svcName, svcNs string) {
 		test.Eventually(t, testTimeout, func(t require.TestingT) {
 			var err error
 			results, err = pq.Query(`http_client_duration_seconds_count{` +
-				`http_method="GET",` +
-				`http_status_code="203",` +
+				`http_request_method="GET",` +
+				`http_response_status_code="203",` +
 				`service_namespace="` + svcNs + `",` +
 				`service_name="` + svcName + `"}`)
 			require.NoError(t, err)
@@ -208,8 +208,8 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url, svcName, svcNs string) {
 		test.Eventually(t, testTimeout, func(t require.TestingT) {
 			var err error
 			results, err = pq.Query(`http_client_request_size_bytes_count{` +
-				`http_method="GET",` +
-				`http_status_code="203",` +
+				`http_request_method="GET",` +
+				`http_response_status_code="203",` +
 				`service_namespace="` + svcNs + `",` +
 				`service_name="` + svcName + `"}`)
 			require.NoError(t, err)
@@ -237,12 +237,12 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url, svcName, svcNs string) {
 	// check duration_sum is at least 90ms (3 * 30ms)
 	var err error
 	results, err = pq.Query(`http_server_duration_seconds_sum{` +
-		`http_method="GET",` +
-		`http_status_code="404",` +
+		`http_request_method="GET",` +
+		`http_response_status_code="404",` +
 		`service_name="` + svcName + `",` +
 		`service_namespace="` + svcNs + `",` +
 		`http_route="/basic/:rnd",` +
-		`http_target="` + path + `"}`)
+		`url_path="` + path + `"}`)
 	require.NoError(t, err)
 	enoughPromResults(t, results)
 	res := results[0]
@@ -251,17 +251,17 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url, svcName, svcNs string) {
 	require.NoError(t, err)
 	assert.Less(t, sum, 1.0)
 	assert.Greater(t, sum, (90 * time.Millisecond).Seconds())
-	addr := net.ParseIP(res.Metric["net_sock_peer_addr"])
+	addr := net.ParseIP(res.Metric["client_address"])
 	assert.NotNil(t, addr)
 
 	// check request_size_sum is at least 114B (3 * 38B)
 	results, err = pq.Query(`http_server_request_size_bytes_sum{` +
-		`http_method="GET",` +
-		`http_status_code="404",` +
+		`http_request_method="GET",` +
+		`http_response_status_code="404",` +
 		`service_name="` + svcName + `",` +
 		`service_namespace="` + svcNs + `",` +
 		`http_route="/basic/:rnd",` +
-		`http_target="` + path + `"}`)
+		`url_path="` + path + `"}`)
 	require.NoError(t, err)
 	enoughPromResults(t, results)
 	res = results[0]
@@ -269,7 +269,7 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url, svcName, svcNs string) {
 	sum, err = strconv.ParseFloat(fmt.Sprint(res.Value[1]), 64)
 	require.NoError(t, err)
 	assert.GreaterOrEqual(t, sum, 114.0)
-	addr = net.ParseIP(res.Metric["net_sock_peer_addr"])
+	addr = net.ParseIP(res.Metric["client_address"])
 	assert.NotNil(t, addr)
 
 	// Check that we never recorded metrics for /metrics, in the basic test only traces are ignored
@@ -295,7 +295,7 @@ func testREDMetricsGRPC(t *testing.T) {
 		results, err = pq.Query(`rpc_server_duration_seconds_count{` +
 			`rpc_grpc_status_code="0",` +
 			`service_namespace="integration-test",` +
-			`net_sock_peer_addr!="127.0.0.1",` + // discard the metrics from testREDMetricsForHTTPLibrary/GorillaURL
+			`client_address!="127.0.0.1",` + // discard the metrics from testREDMetricsForHTTPLibrary/GorillaURL
 			`service_name="testserver",` +
 			`rpc_method="/routeguide.RouteGuide/GetFeature"}`)
 		require.NoError(t, err)
@@ -305,7 +305,7 @@ func testREDMetricsGRPC(t *testing.T) {
 		assert.LessOrEqual(t, 3, val)
 		if len(results) > 0 {
 			res := results[0]
-			addr := net.ParseIP(res.Metric["net_sock_peer_addr"])
+			addr := net.ParseIP(res.Metric["client_address"])
 			assert.NotNil(t, addr)
 		}
 	})
@@ -330,12 +330,12 @@ func testREDMetricsForHTTPLibraryNoRoute(t *testing.T, url, svcName string) {
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
 		var err error
 		results, err = pq.Query(`http_server_duration_seconds_count{` +
-			`http_method="GET",` +
-			`http_status_code="404",` +
+			`http_request_method="GET",` +
+			`http_response_status_code="404",` +
 			`service_namespace="integration-test",` +
 			`service_name="` + svcName + `",` +
 			`http_route="/basic/*",` +
-			`http_target="` + path + `"}`)
+			`url_path="` + path + `"}`)
 		require.NoError(t, err)
 		// check duration_count has 3 calls and all the arguments
 		enoughPromResults(t, results)
@@ -343,7 +343,7 @@ func testREDMetricsForHTTPLibraryNoRoute(t *testing.T, url, svcName string) {
 		assert.LessOrEqual(t, 3, val)
 		if len(results) > 0 {
 			res := results[0]
-			addr := net.ParseIP(res.Metric["net_sock_peer_addr"])
+			addr := net.ParseIP(res.Metric["client_address"])
 			assert.NotNil(t, addr)
 		}
 	})
@@ -351,12 +351,12 @@ func testREDMetricsForHTTPLibraryNoRoute(t *testing.T, url, svcName string) {
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
 		var err error
 		results, err = pq.Query(`http_server_request_size_bytes_count{` +
-			`http_method="GET",` +
-			`http_status_code="404",` +
+			`http_request_method="GET",` +
+			`http_response_status_code="404",` +
 			`service_namespace="integration-test",` +
 			`service_name="` + svcName + `",` +
 			`http_route="/basic/*",` +
-			`http_target="` + path + `"}`)
+			`url_path="` + path + `"}`)
 		require.NoError(t, err)
 		// check duration_count has 3 calls and all the arguments
 		enoughPromResults(t, results)
@@ -364,7 +364,7 @@ func testREDMetricsForHTTPLibraryNoRoute(t *testing.T, url, svcName string) {
 		assert.LessOrEqual(t, 3, val)
 		if len(results) > 0 {
 			res := results[0]
-			addr := net.ParseIP(res.Metric["net_sock_peer_addr"])
+			addr := net.ParseIP(res.Metric["client_address"])
 			assert.NotNil(t, addr)
 		}
 	})
@@ -373,8 +373,8 @@ func testREDMetricsForHTTPLibraryNoRoute(t *testing.T, url, svcName string) {
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
 		var err error
 		results, err = pq.Query(`http_server_duration_seconds_count{` +
-			`http_method="GET",` +
-			`http_status_code="203",` +
+			`http_request_method="GET",` +
+			`http_response_status_code="203",` +
 			`service_namespace="integration-test",` +
 			`http_route="/echo",` +
 			`service_name="` + svcName + `"}`)
@@ -388,8 +388,8 @@ func testREDMetricsForHTTPLibraryNoRoute(t *testing.T, url, svcName string) {
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
 		var err error
 		results, err = pq.Query(`http_server_request_size_bytes_count{` +
-			`http_method="GET",` +
-			`http_status_code="203",` +
+			`http_request_method="GET",` +
+			`http_response_status_code="203",` +
 			`service_namespace="integration-test",` +
 			`http_route="/echo",` +
 			`service_name="` + svcName + `"}`)
@@ -404,8 +404,8 @@ func testREDMetricsForHTTPLibraryNoRoute(t *testing.T, url, svcName string) {
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
 		var err error
 		results, err = pq.Query(`http_server_duration_seconds_count{` +
-			`http_method="GET",` +
-			`http_status_code="203",` +
+			`http_request_method="GET",` +
+			`http_response_status_code="203",` +
 			`service_namespace="integration-test",` +
 			`http_route="/echoBack",` +
 			`service_name="` + svcName + `"}`)
@@ -419,8 +419,8 @@ func testREDMetricsForHTTPLibraryNoRoute(t *testing.T, url, svcName string) {
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
 		var err error
 		results, err = pq.Query(`http_server_request_size_bytes_count{` +
-			`http_method="GET",` +
-			`http_status_code="203",` +
+			`http_request_method="GET",` +
+			`http_response_status_code="203",` +
 			`service_namespace="integration-test",` +
 			`http_route="/echoBack",` +
 			`service_name="` + svcName + `"}`)
@@ -435,8 +435,8 @@ func testREDMetricsForHTTPLibraryNoRoute(t *testing.T, url, svcName string) {
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
 		var err error
 		results, err = pq.Query(`http_client_duration_seconds_count{` +
-			`http_method="GET",` +
-			`http_status_code="203",` +
+			`http_request_method="GET",` +
+			`http_response_status_code="203",` +
 			`service_namespace="integration-test",` +
 			`service_name="` + svcName + `"}`)
 		require.NoError(t, err)
@@ -449,8 +449,8 @@ func testREDMetricsForHTTPLibraryNoRoute(t *testing.T, url, svcName string) {
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
 		var err error
 		results, err = pq.Query(`http_client_request_size_bytes_count{` +
-			`http_method="GET",` +
-			`http_status_code="203",` +
+			`http_request_method="GET",` +
+			`http_response_status_code="203",` +
 			`service_namespace="integration-test",` +
 			`service_name="` + svcName + `"}`)
 		require.NoError(t, err)
@@ -477,12 +477,12 @@ func testREDMetricsForHTTPLibraryNoRoute(t *testing.T, url, svcName string) {
 	// check duration_sum is at least 90ms (3 * 30ms)
 	var err error
 	results, err = pq.Query(`http_server_duration_seconds_sum{` +
-		`http_method="GET",` +
-		`http_status_code="404",` +
+		`http_request_method="GET",` +
+		`http_response_status_code="404",` +
 		`service_name="` + svcName + `",` +
 		`service_namespace="integration-test",` +
 		`http_route="/basic/*",` +
-		`http_target="` + path + `"}`)
+		`url_path="` + path + `"}`)
 	require.NoError(t, err)
 	enoughPromResults(t, results)
 	res := results[0]
@@ -491,17 +491,17 @@ func testREDMetricsForHTTPLibraryNoRoute(t *testing.T, url, svcName string) {
 	require.NoError(t, err)
 	assert.Less(t, sum, 1.0)
 	assert.Greater(t, sum, (90 * time.Millisecond).Seconds())
-	addr := net.ParseIP(res.Metric["net_sock_peer_addr"])
+	addr := net.ParseIP(res.Metric["client_address"])
 	assert.NotNil(t, addr)
 
 	// check request_size_sum is at least 114B (3 * 38B)
 	results, err = pq.Query(`http_server_request_size_bytes_sum{` +
-		`http_method="GET",` +
-		`http_status_code="404",` +
+		`http_request_method="GET",` +
+		`http_response_status_code="404",` +
 		`service_name="` + svcName + `",` +
 		`service_namespace="integration-test",` +
 		`http_route="/basic/*",` +
-		`http_target="` + path + `"}`)
+		`url_path="` + path + `"}`)
 	require.NoError(t, err)
 	enoughPromResults(t, results)
 	res = results[0]
@@ -509,7 +509,7 @@ func testREDMetricsForHTTPLibraryNoRoute(t *testing.T, url, svcName string) {
 	sum, err = strconv.ParseFloat(fmt.Sprint(res.Value[1]), 64)
 	require.NoError(t, err)
 	assert.GreaterOrEqual(t, sum, 114.0)
-	addr = net.ParseIP(res.Metric["net_sock_peer_addr"])
+	addr = net.ParseIP(res.Metric["client_address"])
 	assert.NotNil(t, addr)
 
 	// Check that we never recorded any /metrics calls

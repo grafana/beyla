@@ -33,13 +33,13 @@ const (
 	targetInstanceKey    = "target_instance"
 	serviceNameKey       = "service_name"
 	serviceNamespaceKey  = "service_namespace"
-	httpMethodKey        = "http_method"
+	httpMethodKey        = "http_request_method"
 	httpRouteKey         = "http_route"
-	httpStatusCodeKey    = "http_status_code"
-	httpTargetKey        = "http_target"
-	netSockPeerAddrKey   = "net_sock_peer_addr"
-	netSockPeerNameKey   = "net_sock_peer_name"
-	netSockPeerPortKey   = "net_sock_peer_port"
+	httpStatusCodeKey    = "http_response_status_code"
+	httpTargetKey        = "url_path"
+	clientAddrKey        = "client_address"
+	serverAddrKey        = "server_address"
+	serverPortKey        = "server_port"
 	rpcGRPCStatusCodeKey = "rpc_grpc_status_code"
 	rpcMethodKey         = "rpc_method"
 	rpcSystemGRPC        = "rpc_system"
@@ -116,7 +116,7 @@ func newReporter(ctx context.Context, cfg *PrometheusConfig, ctxInfo *global.Con
 			Name:    RPCClientDuration,
 			Help:    "duration of GRPC service calls from the client side, in seconds",
 			Buckets: cfg.Buckets.DurationHistogram,
-		}, labelNamesGRPC(cfg, ctxInfo)),
+		}, labelNamesGRPCClient(cfg, ctxInfo)),
 		sqlClientDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Name:    SQLClientDuration,
 			Help:    "duration of SQL client operations, in seconds",
@@ -200,7 +200,21 @@ func labelNamesGRPC(cfg *PrometheusConfig, ctxInfo *global.ContextInfo) []string
 	// TODO: let user configure which keys are going to be added
 	names := []string{targetInstanceKey, serviceNameKey, serviceNamespaceKey, rpcMethodKey, rpcSystemGRPC, rpcGRPCStatusCodeKey}
 	if cfg.ReportPeerInfo {
-		names = append(names, netSockPeerAddrKey)
+		names = append(names, clientAddrKey)
+	}
+	if ctxInfo.K8sDecoration {
+		names = appendK8sLabelNames(names)
+	}
+	return names
+}
+
+// labelNamesGRPCClient must return the label names in the same order as would be returned
+// by labelValuesGRPC
+func labelNamesGRPCClient(cfg *PrometheusConfig, ctxInfo *global.ContextInfo) []string {
+	// TODO: let user configure which keys are going to be added
+	names := []string{targetInstanceKey, serviceNameKey, serviceNamespaceKey, rpcMethodKey, rpcSystemGRPC, rpcGRPCStatusCodeKey}
+	if cfg.ReportPeerInfo {
+		names = append(names, serverAddrKey)
 	}
 	if ctxInfo.K8sDecoration {
 		names = appendK8sLabelNames(names)
@@ -227,7 +241,7 @@ func (r *metricsReporter) labelValuesGRPC(span *request.Span) []string {
 func labelNamesHTTPClient(cfg *PrometheusConfig, ctxInfo *global.ContextInfo) []string {
 	names := []string{targetInstanceKey, serviceNameKey, serviceNamespaceKey, httpMethodKey, httpStatusCodeKey}
 	if cfg.ReportPeerInfo {
-		names = append(names, netSockPeerNameKey, netSockPeerPortKey)
+		names = append(names, serverAddrKey, serverPortKey)
 	}
 	if ctxInfo.K8sDecoration {
 		names = appendK8sLabelNames(names)
@@ -258,7 +272,7 @@ func labelNamesHTTP(cfg *PrometheusConfig, ctxInfo *global.ContextInfo) []string
 		names = append(names, httpTargetKey)
 	}
 	if cfg.ReportPeerInfo {
-		names = append(names, netSockPeerAddrKey)
+		names = append(names, clientAddrKey)
 	}
 	if ctxInfo.ReportRoutes {
 		names = append(names, httpRouteKey)

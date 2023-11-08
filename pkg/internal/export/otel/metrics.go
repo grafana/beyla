@@ -327,7 +327,11 @@ func (mr *MetricsReporter) metricAttributes(span *request.Span) attribute.Set {
 			semconv.RPCGRPCStatusCodeKey.Int(span.Status),
 		}
 		if mr.cfg.ReportPeerInfo {
-			attrs = append(attrs, ClientAddr(span.Peer))
+			if span.Type == request.EventTypeGRPC {
+				attrs = append(attrs, ClientAddr(span.Peer))
+			} else {
+				attrs = append(attrs, ServerAddr(span.Peer))
+			}
 		}
 	case request.EventTypeHTTPClient:
 		attrs = []attribute.KeyValue{

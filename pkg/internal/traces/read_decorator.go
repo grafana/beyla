@@ -99,6 +99,7 @@ func hostNamePIDDecorator(cfg *InstanceIDConfig) decorator {
 		log.Info("using hostname", "hostname", fullHostName)
 	}
 
+	// caching instance ID composition for speed and saving memory generation
 	cacheLen := defaultIDCacheLen
 	if cfg.InternalIDCacheLen != 0 {
 		cacheLen = cfg.InternalIDCacheLen
@@ -107,11 +108,12 @@ func hostNamePIDDecorator(cfg *InstanceIDConfig) decorator {
 
 	return func(spans []request.Span) {
 		for i := range spans {
-			if instanceID, ok := idsCache.Get(spans[i].Pid.HostPID); ok {
-				spans[i].ServiceID.Instance = instanceID
-			} else {
-				spans[i].ServiceID.Instance = fullHostName + "-" + strconv.Itoa(int(spans[i].Pid.HostPID))
+			instanceID, ok := idsCache.Get(spans[i].Pid.HostPID)
+			if !ok {
+				instanceID = fullHostName + "-" + strconv.Itoa(int(spans[i].Pid.HostPID))
+				idsCache.Add(spans[i].Pid.HostPID, instanceID)
 			}
+			spans[i].ServiceID.Instance = instanceID
 		}
 	}
 }

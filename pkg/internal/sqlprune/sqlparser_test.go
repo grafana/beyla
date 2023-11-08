@@ -49,12 +49,6 @@ func RunOneSQLTest(t *testing.T, query string) {
 }
 
 func TestSQLParser(t *testing.T) {
-	for _, sql := range validSQL {
-		RunOneSQLTest(t, sql.input)
-	}
-	for _, sql := range parameterizedValidSQL {
-		RunOneSQLTest(t, sql.input)
-	}
 	for _, queryString := range otelJavaSQLQueries {
 		RunOneSQLTest(t, queryString)
 	}

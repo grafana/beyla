@@ -55,6 +55,7 @@ func ClusterPath(path string) string {
 	sFwd := 0
 
 	skip := false
+	skipGrace := true
 	nSegments := 0
 	for _, c := range p {
 		if c == '/' {
@@ -79,10 +80,15 @@ func ClusterPath(path string) string {
 			sPos++
 			sFwd = sPos
 			skip = false
+			skipGrace = true
 		} else if !skip {
 			p[sFwd] = c
 			sFwd++
 			if !isAlpha(c) {
+				if skipGrace && (sFwd-sPos) == 2 {
+					skipGrace = false
+					continue
+				}
 				skip = true
 			}
 		}

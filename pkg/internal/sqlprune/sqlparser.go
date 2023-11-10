@@ -43,8 +43,6 @@ func SQLParseOperationAndTable(query string) (string, string) {
 	addedTable := false
 	addMoreTables := false
 	for tokenType, data := tokens.Scan(); tokenType != 0; tokenType, data = tokens.Scan() {
-		// Uncomment to run "go test -v" and print out token types and data:
-		//debugSQLParseOperationAndTable(tokenType, data)
 		if tokenType == sqlparser.LEX_ERROR {
 			break
 		}

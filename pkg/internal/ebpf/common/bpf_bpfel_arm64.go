@@ -36,6 +36,20 @@ type bpfHttpRequestTrace struct {
 	}
 }
 
+type bpfSqlRequestTrace struct {
+	Type            uint8
+	Id              uint64
+	StartMonotimeNs uint64
+	EndMonotimeNs   uint64
+	Sql             [500]uint8
+	Status          uint16
+	Pid             struct {
+		HostPid   uint32
+		UserPid   uint32
+		Namespace uint32
+	}
+}
+
 // loadBpf returns the embedded CollectionSpec for bpf.
 func loadBpf() (*ebpf.CollectionSpec, error) {
 	reader := bytes.NewReader(_BpfBytes)

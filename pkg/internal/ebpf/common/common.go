@@ -13,11 +13,14 @@ import (
 	"github.com/grafana/beyla/pkg/internal/request"
 )
 
-//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 -type http_request_trace bpf ../../../../bpf/http_trace.c -- -I../../../../bpf/headers
+//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 -type http_request_trace -type sql_request_trace bpf ../../../../bpf/http_trace.c -- -I../../../../bpf/headers
 
 // HTTPRequestTrace contains information from an HTTP request as directly received from the
 // eBPF layer. This contains low-level C structures for accurate binary read from ring buffer.
 type HTTPRequestTrace bpfHttpRequestTrace
+type SQLRequestTrace bpfSqlRequestTrace
+
+const EventTypeSQL = 5 // EVENT_SQL_CLIENT
 
 // TracerConfig configuration for eBPF programs
 type TracerConfig struct {
@@ -66,12 +69,33 @@ type Filter struct {
 }
 
 func ReadHTTPRequestTraceAsSpan(record *ringbuf.Record) (request.Span, bool, error) {
+	var eventType uint8
+
+	// we read the type first, depending on the type we decide what kind of record we have
+	err := binary.Read(bytes.NewBuffer(record.RawSample), binary.LittleEndian, &eventType)
+	if err != nil {
+		return request.Span{}, true, err
+	}
+
+	if eventType == EventTypeSQL {
+		return ReadSQLRequestTraceAsSpan(record)
+	}
+
 	var event HTTPRequestTrace
 
-	err := binary.Read(bytes.NewBuffer(record.RawSample), binary.LittleEndian, &event)
+	err = binary.Read(bytes.NewBuffer(record.RawSample), binary.LittleEndian, &event)
 	if err != nil {
 		return request.Span{}, true, err
 	}
 
 	return HTTPRequestTraceToSpan(&event), false, nil
+}
+
+func ReadSQLRequestTraceAsSpan(record *ringbuf.Record) (request.Span, bool, error) {
+	var event SQLRequestTrace
+	if err := binary.Read(bytes.NewBuffer(record.RawSample), binary.LittleEndian, &event); err != nil {
+		return request.Span{}, true, err
+	}
+
+	return SQLRequestTraceToSpan(&event), false, nil
 }

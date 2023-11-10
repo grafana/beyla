@@ -63,18 +63,23 @@ int uprobe_queryDCReturn(struct pt_regs *ctx) {
     }
     bpf_map_delete_elem(&ongoing_sql_queries, &goroutine_addr);
 
-    http_request_trace *trace = bpf_ringbuf_reserve(&events, sizeof(http_request_trace), 0);
+    sql_request_trace *trace = bpf_ringbuf_reserve(&events, sizeof(sql_request_trace), 0);
     if (trace) {
         task_pid(&trace->pid);
         trace->type = EVENT_SQL_CLIENT;
         trace->id = (u64)goroutine_addr;
         trace->start_monotime_ns = invocation->start_monotime_ns;
         trace->end_monotime_ns = bpf_ktime_get_ns();
+
+        void *resp_ptr = GO_PARAM1(ctx);
+        trace->status = (resp_ptr == NULL);
+
         u64 query_len = (u64)GO_PARAM9(&(invocation->regs));
-        if (query_len > sizeof(trace->path)) {
-            query_len = sizeof(trace->path);
+        if (query_len > sizeof(trace->sql)) {
+            query_len = sizeof(trace->sql);
         }
-        bpf_probe_read(trace->path, query_len, (void*)GO_PARAM8(&(invocation->regs)));
+        bpf_probe_read(trace->sql, query_len, (void*)GO_PARAM8(&(invocation->regs)));
+        bpf_dbg_printk("Found sql statement %s", trace->sql);
         // submit the completed trace via ringbuffer
         bpf_ringbuf_submit(trace, get_flags());
     } else {

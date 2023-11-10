@@ -283,6 +283,11 @@ func spanStatusCode(span *request.Span) codes.Code {
 		return httpSpanStatusCode(span)
 	case request.EventTypeGRPC, request.EventTypeGRPCClient:
 		return grpcSpanStatusCode(span)
+	case request.EventTypeSQLClient:
+		if span.Status != 0 {
+			return codes.Error
+		}
+		return codes.Unset
 	}
 	return codes.Unset
 }

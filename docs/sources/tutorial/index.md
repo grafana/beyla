@@ -256,7 +256,7 @@ Metrics Browser input field and you should see the available metric names in the
 
 You could start composing your PromQL queries for better visualization of
 your auto-instrumented RED metrics; to save you time, we provide a sample
-[public dashboard with some basic information](/grafana/dashboards/19077-beyla-red-metrics/).
+[public dashboard with some basic information](https://grafana.com/grafana/dashboards/19923-beyla-red-metrics/).
 
 To import the sample dashboard into your Grafana instance, choose "Dashboards" in the Grafana left panel.
 Next, in the Dashboards page, click on the "New" drop-down menu and select "Import":
@@ -264,8 +264,8 @@ Next, in the Dashboards page, click on the "New" drop-down menu and select "Impo
 ![](https://grafana.com/media/docs/grafana-cloud/beyla/tutorial/import-dashboard.png)
 
 In the "Import via grafana.com" textbox, copy the Grafana ID from the
-[Beyla RED Metrics](/grafana/dashboards/19077-beyla-red-metrics/)
-dashboard: `19077`.
+[Beyla RED Metrics](/grafana/dashboards/19923-beyla-red-metrics/)
+dashboard: `19923`.
 
 Rename the dashboard to match your service, select the folder and, most importantly, select the
 data source in the `prometheus-data-source` drop-down at the bottom.

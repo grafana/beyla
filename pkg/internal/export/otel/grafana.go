@@ -30,7 +30,7 @@ type GrafanaConfig struct {
 }
 
 type GrafanaOTLP struct {
-	// Submit accepts a comma-separated list of the kind of data that will be submit to the
+	// Submit accepts a comma-separated list of the kind of data that will be submitted to the
 	// OTLP endpoint. It accepts `metrics` and/or `traces` as values.
 	Submit []string `yaml:"cloud_submit" env:"GRAFANA_CLOUD_SUBMIT"`
 

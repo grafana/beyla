@@ -325,7 +325,7 @@ document/d/*/edit
 
 ## OTEL metrics exporter
 
-YAML section `otel_metrics`.
+YAML section `otel_metrics_export`.
 
 This component exports OpenTelemetry metrics to a given endpoint. It will be enabled if
 its `endpoint` attribute is set (either via an YAML configuration file or via environment variables).
@@ -453,7 +453,7 @@ conventions recommend a different set of bucket boundaries.
 
 ## OTEL traces exporter
 
-YAML section `otel_traces`.
+YAML section `otel_traces_export`.
 
 This component exports OpenTelemetry traces to a given endpoint. It will be enabled if
 its `endpoint` attribute is set (either via an YAML configuration file or via environment variables).
@@ -505,14 +505,62 @@ If set to `true`, the OTEL client accepts any certificate presented by the serve
 and any host name in that certificate. In this mode, TLS is susceptible to a man-in-the-middle
 attacks. This option should be used only for testing and development purposes.
 
-| YAML             | Env var                           | Type  | Default |
-|------------------|-----------------------------------|-------|---------|
-| `sampling_ratio` | `BEYLA_OTEL_TRACE_SAMPLING_RATIO` | float | `1.0`   |
+### Sampling policy
 
-Specifies the ratio of generated traces that will be sampled for sending to an OTEL collector.
-By default, all traces are sampled, meaning that all traces will be sent downstream. In production, you
-may want to lower this number to reduce the amount of generated trace data. If you are using the
-Grafana Agent as your OTEL collector, you can configure the sampling policy at that level instead.
+Beyla accepts the standard OpenTelemetry environment variables to configure the
+sampling ratio of traces.
+
+In addition, you can configure the sampling under the `sampler` YAML subsection of the
+`otel_traces_export` section. For example:
+
+```yaml
+otel_traces_export:
+  sampler:
+    name: "traceidratio"
+    arg: "0.1" 
+```
+
+If you are using the Grafana Agent as your OTEL collector, you can configure the sampling
+policy at that level instead.
+
+| YAML   | Env var               | Type   | Default                 |
+|--------|-----------------------|--------|-------------------------|
+| `name` | `OTEL_TRACES_SAMPLER` | string | `parentbased_always_on` |
+
+Specifies the name of the sampler. It accepts the following standard sampler
+names from the [OpenTelemetry specification](https://opentelemetry.io/docs/concepts/sdk-configuration/general-sdk-configuration/#otel_traces_sampler):
+
+* `always_on`: samples every trace. Be careful about using this sampler in an
+  application with significant traffic: a new trace will be started and exported
+  for every request.
+* `always_off`: samples no traces.
+* `traceidratio`: samples a given fraction of traces (specified by the `arg` property
+  that is explained below). The fraction must be a real value between 0 and 1.
+  For example, a value of `"0.5"` would sample 50% of the traces.
+  Fractions >= 1 will always sample. Fractions < 0 are treated as zero. To respect the
+  parent trace's sampling configuration, the `parentbased_traceidratio` sampler should be used.
+* `parentbased_always_on` (default): parent-based version of `always_on` sampler (see
+  explanation below).
+* `parentbased_always_off`: parent-based version of `always_off` sampler (see
+  explanation below).
+* `parentbased_traceidratio`: parent-based version of `traceidratio` sampler (see
+  explanation below).
+
+Parent-based samplers are composite samplers which behave differently based on the
+parent of the traced span. If the span has no parent, the root sampler is used to
+make sampling decision. If the span has a parent, the sampling configuration
+would depend on the sampling parent.
+
+| YAML  | Env var                   | Type   | Default |
+|-------|---------------------------|--------|---------|
+| `arg` | `OTEL_TRACES_SAMPLER_ARG` | string | (unset) |
+
+Specifies the argument of the selected sampler. Currently, only `traceidratio`
+and `parentbased_traceidratio` require an argument.
+
+In YAML, this value MUST be provided as a string, so even if the value
+is numeric, make sure that it is enclosed between quotes in the YAML file,
+(for example, `arg: "0.25"`).
 
 ## Prometheus HTTP endpoint
 
@@ -601,7 +649,7 @@ log_level: DEBUG
 ebpf:
   wakeup_len: 100
 
-otel_traces:
+otel_traces_export:
   endpoint: https://otlp-gateway-prod-eu-west-0.grafana.net/otlp
 
 prometheus_export:

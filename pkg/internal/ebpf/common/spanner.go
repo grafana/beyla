@@ -40,9 +40,6 @@ func HTTPRequestTraceToSpan(trace *HTTPRequestTrace) request.Span {
 		hostname = extractIP(trace.Host[:], int(trace.HostLen))
 	case request.EventTypeGRPCClient:
 		hostname, hostPort = extractHostPort(trace.Host[:])
-	case request.EventTypeSQLClient:
-		trace.GoStartMonotimeNs = trace.StartMonotimeNs
-		method, path = sqlprune.SQLParseOperationAndTable(path)
 	default:
 		log.Warn("unknown trace type", "type", trace.Type)
 	}
@@ -61,6 +58,43 @@ func HTTPRequestTraceToSpan(trace *HTTPRequestTrace) request.Span {
 		End:           int64(trace.EndMonotimeNs),
 		Status:        int(trace.Status),
 		Traceparent:   traceparent,
+		Pid: request.PidInfo{
+			HostPID:   trace.Pid.HostPid,
+			UserPID:   trace.Pid.UserPid,
+			Namespace: trace.Pid.Namespace,
+		},
+	}
+}
+
+func SQLRequestTraceToSpan(trace *SQLRequestTrace) request.Span {
+	if request.EventType(trace.Type) != request.EventTypeSQLClient {
+		log.Warn("unknown trace type", "type", trace.Type)
+		return request.Span{}
+	}
+
+	// From C, assuming 0-ended strings
+	sqlLen := bytes.IndexByte(trace.Sql[:], 0)
+	if sqlLen < 0 {
+		sqlLen = len(trace.Sql)
+	}
+	sql := string(trace.Sql[:sqlLen])
+
+	method, path := sqlprune.SQLParseOperationAndTable(sql)
+
+	return request.Span{
+		Type:          request.EventType(trace.Type),
+		ID:            trace.Id,
+		Method:        method,
+		Path:          path,
+		Peer:          "",
+		Host:          "",
+		HostPort:      0,
+		ContentLength: 0,
+		RequestStart:  int64(trace.StartMonotimeNs),
+		Start:         int64(trace.StartMonotimeNs),
+		End:           int64(trace.EndMonotimeNs),
+		Status:        int(trace.Status),
+		Traceparent:   "",
 		Pid: request.PidInfo{
 			HostPID:   trace.Pid.HostPid,
 			UserPID:   trace.Pid.UserPid,

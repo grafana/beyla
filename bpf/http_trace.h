@@ -21,11 +21,12 @@
 #define REMOTE_ADDR_MAX_LEN 50 // We need 48: 39(ip v6 max) + 1(: separator) + 7(port length max value 65535) + 1(null terminator)
 #define HOST_LEN 256 // can be a fully qualified DNS name
 #define TRACEPARENT_LEN 55
+#define SQL_MAX_LEN 500
 
 // Trace of an HTTP call invocation. It is instantiated by the return uprobe and forwarded to the
 // user space through the events ringbuffer.
 typedef struct http_request_trace_t {
-    u8  type;
+    u8  type;                           // Must be first
     u64 id;
     u64 go_start_monotime_ns;
     u64 start_monotime_ns;
@@ -43,5 +44,17 @@ typedef struct http_request_trace_t {
 
     pid_info pid;
 } __attribute__((packed)) http_request_trace;
+
+typedef struct sql_request_trace_t {
+    u8  type;                           // Must be first
+    u64 id;
+    u64 start_monotime_ns;
+    u64 end_monotime_ns;
+    u8  sql[SQL_MAX_LEN];
+    u16 status;
+
+    pid_info pid;
+} __attribute__((packed)) sql_request_trace;
+
 
 #endif

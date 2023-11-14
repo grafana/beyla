@@ -22,11 +22,16 @@ const (
 	EnabledAutodetect = KubeEnableFlag("autodetect")
 	EnabledDefault    = EnabledFalse
 
-	SrcNameKey      = "k8s.src.name"
-	SrcNamespaceKey = "k8s.src.namespace"
-	DstNameKey      = "k8s.dst.name"
-	DstNamespaceKey = "k8s.dst.namespace"
-	DstTypeKey      = "k8s.dst.type"
+	// TODO: report also peer attributes if BEYLA_METRICS_REPORT_PEER is set
+	NamespaceName  = "k8s.namespace.name"
+	PodName        = "k8s.pod.name"
+	DeploymentName = "k8s.deployment.name"
+	NodeName       = "k8s.node.name"
+
+	// From the standard default attributes, we aren't reporting
+	// "k8s.pod.uid" nor "k8s.pod.start_time" to avoid cardinality
+	// explosion in metrics.
+	// TODO: let the user decide which attributes to add, as in https://opentelemetry.io/docs/kubernetes/collector/components/#kubernetes-attributes-processor
 )
 
 func klog() *slog.Logger {
@@ -110,7 +115,7 @@ func (md *metadataDecorator) do(span *request.Span) {
 	switch span.Type {
 	// TODO: put here also SQL traces
 	case request.EventTypeGRPC, request.EventTypeHTTP:
-		if peerInfo, ok := md.kube.GetInfo(span.Peer); ok {
+		if peerInfo, ok := md.completePodInfo(span.Peer); ok {
 			appendSRCMetadata(span.Metadata, peerInfo)
 		}
 		// TODO: this will only work Ok for Beyla as a sidecar.
@@ -119,24 +124,42 @@ func (md *metadataDecorator) do(span *request.Span) {
 		// which might not be always correct
 		maps.Copy(span.Metadata, md.ownMetadataAsDst)
 	case request.EventTypeGRPCClient, request.EventTypeHTTPClient:
-		if peerInfo, ok := md.kube.GetInfo(span.Host); ok {
+		if peerInfo, ok := md.completePodInfo(span.Host); ok {
 			appendDSTMetadata(span.Metadata, peerInfo)
 		}
 		maps.Copy(span.Metadata, md.ownMetadataAsSrc)
 	}
 }
 
-// TODO: allow users to filter which attributes they want, instead of adding all of them
-// TODO: cache
-func appendDSTMetadata(to map[string]string, info *kube.Info) {
+func appendDSTMetadata(to map[string]string, info *kube.PodInfo) {
+	to[NamespaceName] = info.Namespace
+	to[PodName] = info.Name
+	to[NodeName] = info.Nod
+	if info.DeploymentName != "" {
+		to[DeploymentName] = info.DeploymentName
+	}
 	to[DstNameKey] = info.Name
 	to[DstNamespaceKey] = info.Namespace
 	to[DstTypeKey] = info.Type
 }
 
-func appendSRCMetadata(to map[string]string, info *kube.Info) {
+func appendSRCMetadata(to map[string]string, info *kube.PodInfo) {
 	to[SrcNameKey] = info.Name
 	to[SrcNamespaceKey] = info.Namespace
+}
+
+// gets the Pod Info and updates its Deployment Name
+func (md *metadataDecorator) completePodInfo(ip string) (*kube.PodInfo, bool) {
+	info, ok := md.kube.GetPodInfo(ip)
+	if !ok {
+		return nil, false
+	}
+	if info.ReplicaSetName != "" && info.DeploymentName == "" {
+		if rsi, ok := md.kube.GetReplicaSetInfo(info.ReplicaSetName); ok {
+			info.DeploymentName = rsi.DeploymentName
+		}
+	}
+	return info, true
 }
 
 func (md *metadataDecorator) refreshOwnPodMetadata() {

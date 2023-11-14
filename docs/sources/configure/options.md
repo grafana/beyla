@@ -184,6 +184,52 @@ Enabling this option may increase Beyla's performance overhead in high request v
 Please note that this option is only useful when generating Beyla traces, it does not affect 
 generation of Beyla metrics.
 
+## Configuration of metrics and traces attributes
+
+Grafana Beyla allows configuring how some attributes for metrics and traces
+are decorated. Under the `attributes` top YAML sections, you can enable
+other subsections configure how some attributes are set.
+
+### Instance ID decoration
+
+The metrics and the traces are decorated with a unique instance ID string, identifying
+each instrumented application. By default, Beyla uses the host name that runs Beyla
+(can be a container or Pod name), followed by the PID of the instrumented process;
+but you can override how the instance ID is composed in the
+`instance_id` YAML subsection under the `attributes` top-level section.
+
+For example:
+
+```yaml
+attributes:
+  instance_id:
+    dns: false
+```
+
+| YAML  | Env var                         | Type    | Default |
+|-------|---------------------------------|---------|---------|
+| `dns` | `BEYLA_HOSTNAME_DNS_RESOLUTION` | boolean | `true`  |
+
+If `true`, it will try to resolve the Beyla local hostname against the network DNS.
+If `false`, it will use the local hostname.
+
+| YAML                | Env var          | Type   | Default |
+|---------------------|------------------|--------|---------|
+| `override_hostname` | `BEYLA_HOSTNAME` | string | (unset) |
+
+If set, the host part of the Instance ID will use the provided string
+instead of trying to automatically resolve the host name.
+
+This option takes precedence over `dns`.
+
+| YAML                   | Env var             | Type   | Default |
+|------------------------|---------------------|--------|---------|
+| `override_instance_id` | `BEYLA_INSTANCE_ID` | string | (unset) |
+
+If set, Beyla will use this value directly as instance ID of any instrumented
+process. If you are managing multiple processes from a single Beyla instance,
+all the processes will have the same instance ID.
+
 ## Routes decorator
 
 YAML section `routes`.
@@ -325,7 +371,7 @@ document/d/*/edit
 
 ## OTEL metrics exporter
 
-YAML section `otel_metrics`.
+YAML section `otel_metrics_export`.
 
 This component exports OpenTelemetry metrics to a given endpoint. It will be enabled if
 its `endpoint` attribute is set (either via an YAML configuration file or via environment variables).
@@ -337,7 +383,11 @@ the environment variables from the [standard OTEL exporter configuration](https:
 | ---------- | -------------------------------------------------------------------------- | ---- | ------- |
 | `endpoint` | `OTEL_EXPORTER_OTLP_ENDPOINT` or<br/>`OTEL_EXPORTER_OTLP_METRICS_ENDPOINT` | URL  | (unset) |
 
-Specifies the OpenTelemetry endpoint where metrics will be sent.
+Specifies the OpenTelemetry endpoint where metrics will be sent. If you plan to send the
+metrics directly to the Grafana Cloud OpenTelemetry endpoint, you might prefer to use the
+configuration options in the
+[Using the Grafana Cloud OTEL endpoint to ingest metrics and traces](#using-the-grafana-cloud-otel-endpoint-to-ingest-metrics-and-traces)
+section.
 
 The `OTEL_EXPORTER_OTLP_ENDPOINT` environment variable sets a common endpoint for both the metrics and the
 [traces](#otel-traces-exporter) exporters. The `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT` environment variable,
@@ -453,7 +503,7 @@ conventions recommend a different set of bucket boundaries.
 
 ## OTEL traces exporter
 
-YAML section `otel_traces`.
+YAML section `otel_traces_export`.
 
 This component exports OpenTelemetry traces to a given endpoint. It will be enabled if
 its `endpoint` attribute is set (either via an YAML configuration file or via environment variables).
@@ -465,7 +515,11 @@ the environment variables from the [standard OTEL exporter configuration](https:
 | ---------- | ------------------------------------------------------------------------- | ---- | ------- |
 | `endpoint` | `OTEL_EXPORTER_OTLP_ENDPOINT` or<br/>`OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` | URL  | (unset) |
 
-Specifies the OpenTelemetry endpoint where the traces will be sent.
+Specifies the OpenTelemetry endpoint where the traces will be sent. If you plan to send the
+metrics directly to the Grafana Cloud OpenTelemetry endpoint, you might prefer to use the
+configuration options in the
+[Using the Grafana Cloud OTEL endpoint to ingest metrics and traces](#using-the-grafana-cloud-otel-endpoint-to-ingest-metrics-and-traces)
+section.
 
 The `OTEL_EXPORTER_OTLP_ENDPOINT` environment variable sets a common endpoint for both the
 [metrics](#otel-metrics-exporter) and the traces exporters. The `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` environment variable
@@ -505,14 +559,114 @@ If set to `true`, the OTEL client accepts any certificate presented by the serve
 and any host name in that certificate. In this mode, TLS is susceptible to a man-in-the-middle
 attacks. This option should be used only for testing and development purposes.
 
-| YAML             | Env var                           | Type  | Default |
-|------------------|-----------------------------------|-------|---------|
-| `sampling_ratio` | `BEYLA_OTEL_TRACE_SAMPLING_RATIO` | float | `1.0`   |
+### Sampling policy
 
-Specifies the ratio of generated traces that will be sampled for sending to an OTEL collector.
-By default, all traces are sampled, meaning that all traces will be sent downstream. In production, you
-may want to lower this number to reduce the amount of generated trace data. If you are using the
-Grafana Agent as your OTEL collector, you can configure the sampling policy at that level instead.
+Beyla accepts the standard OpenTelemetry environment variables to configure the
+sampling ratio of traces.
+
+In addition, you can configure the sampling under the `sampler` YAML subsection of the
+`otel_traces_export` section. For example:
+
+```yaml
+otel_traces_export:
+  sampler:
+    name: "traceidratio"
+    arg: "0.1" 
+```
+
+If you are using the Grafana Agent as your OTEL collector, you can configure the sampling
+policy at that level instead.
+
+| YAML   | Env var               | Type   | Default                 |
+|--------|-----------------------|--------|-------------------------|
+| `name` | `OTEL_TRACES_SAMPLER` | string | `parentbased_always_on` |
+
+Specifies the name of the sampler. It accepts the following standard sampler
+names from the [OpenTelemetry specification](https://opentelemetry.io/docs/concepts/sdk-configuration/general-sdk-configuration/#otel_traces_sampler):
+
+* `always_on`: samples every trace. Be careful about using this sampler in an
+  application with significant traffic: a new trace will be started and exported
+  for every request.
+* `always_off`: samples no traces.
+* `traceidratio`: samples a given fraction of traces (specified by the `arg` property
+  that is explained below). The fraction must be a real value between 0 and 1.
+  For example, a value of `"0.5"` would sample 50% of the traces.
+  Fractions >= 1 will always sample. Fractions < 0 are treated as zero. To respect the
+  parent trace's sampling configuration, the `parentbased_traceidratio` sampler should be used.
+* `parentbased_always_on` (default): parent-based version of `always_on` sampler (see
+  explanation below).
+* `parentbased_always_off`: parent-based version of `always_off` sampler (see
+  explanation below).
+* `parentbased_traceidratio`: parent-based version of `traceidratio` sampler (see
+  explanation below).
+
+Parent-based samplers are composite samplers which behave differently based on the
+parent of the traced span. If the span has no parent, the root sampler is used to
+make sampling decision. If the span has a parent, the sampling configuration
+would depend on the sampling parent.
+
+| YAML  | Env var                   | Type   | Default |
+|-------|---------------------------|--------|---------|
+| `arg` | `OTEL_TRACES_SAMPLER_ARG` | string | (unset) |
+
+Specifies the argument of the selected sampler. Currently, only `traceidratio`
+and `parentbased_traceidratio` require an argument.
+
+In YAML, this value MUST be provided as a string, so even if the value
+is numeric, make sure that it is enclosed between quotes in the YAML file,
+(for example, `arg: "0.25"`).
+
+## Using the Grafana Cloud OTEL endpoint to ingest metrics and traces
+
+You can use the standard OpenTelemetry variables to submit the metrics and
+traces to any standard OpenTelemetry endpoint, including Grafana Cloud.
+
+Alternatively, Beyla can be configured to submit OpenTelemetry data to
+the Grafana Cloud OTEL endpoint using its own custom variables, allowing an
+easier setup of the endpoint and the authentication.
+
+The properties can be defined via environment variables, or under the
+`grafana` top-level YAML section, `otlp` subsection. For example:
+
+```yaml
+grafana:
+  otlp:
+    cloud_zone: prod-eu-west-0
+    cloud_instance_id: 123456
+```
+
+| YAML           | Env var                | Type     | Default  |
+|----------------|------------------------|----------|----------|
+| `cloud_submit` | `GRAFANA_CLOUD_SUBMIT` | []string | `traces` |
+
+Accepts a list of strings with the kind of data that will be submitted to the
+OTLP endpoint. It accepts `metrics` and/or `traces` as values.
+
+| YAML         | Env var              | Type   | Default |
+|--------------|----------------------|--------|---------|
+| `cloud_zone` | `GRAFANA_CLOUD_ZONE` | string | (unset) |
+
+The cloud zone of your Grafana endpoint. This will be used to compose the
+Grafana OTLP URL. For example, if the value is `prod-eu-west-0`, the
+used OTLP URL will be `https://otlp-gateway-prod-eu-west-0.grafana.net/otlp`.
+
+If any of the `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT`
+or `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` variables are defined, they will
+override the destination endpoint, so the `cloud_zone` configuration option
+will be ignored.
+
+| YAML                | Env var                     | Type   | Default |
+|---------------------|-----------------------------|--------|---------|
+| `cloud_instance_id` | `GRAFANA_CLOUD_INSTANCE_ID` | string | (unset) |
+
+Your Grafana user name.  It is usually a number but it must be set as a
+string inside the YAML file.
+
+| YAML            | Env var                 | Type   | Default |
+|-----------------|-------------------------|--------|---------|
+| `cloud_api_key` | `GRAFANA_CLOUD_API_KEY` | string | (unset) |
+
+API key of your Grafana Cloud account.
 
 ## Prometheus HTTP endpoint
 
@@ -601,7 +755,7 @@ log_level: DEBUG
 ebpf:
   wakeup_len: 100
 
-otel_traces:
+otel_traces_export:
   endpoint: https://otlp-gateway-prod-eu-west-0.grafana.net/otlp
 
 prometheus_export:

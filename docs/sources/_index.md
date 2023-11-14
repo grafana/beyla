@@ -15,10 +15,6 @@ keywords:
 
 # Grafana Beyla
 
-{{% admonition type="caution" %}}
-Beyla is currently in [public preview](/docs/release-life-cycle/). Grafana Labs offers limited support, and breaking changes might occur prior to the feature being made generally available.
-{{% /admonition %}}
-
 ![Grafana Beyla Logo](https://grafana.com/media/docs/grafana-cloud/beyla/beyla-logo.png)
 
 ## eBPF application auto-instrumentation

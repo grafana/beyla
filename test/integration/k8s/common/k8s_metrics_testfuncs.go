@@ -79,11 +79,14 @@ func DoTestHTTPMetricsDecorationExternalToPod(t *testing.T) {
 	}, test.Interval(time.Second))
 
 	for _, r := range results {
-		assert.Equal(t, "default", r.Metric["k8s_dst_namespace"])
-		assert.Equal(t, "Pod", r.Metric["k8s_dst_type"])
-
-		assert.NotContains(t, r.Metric, "k8s_src_name")
-		assert.NotContains(t, r.Metric, "k8s_src_namespace")
+		assert.Equal(t, "default", r.Metric["k8s_namespace_name"])
+		assert.Equal(t, "testserver", r.Metric["k8s_pod_name"])
+		assert.Empty(t, r.Metric["k8s_deployment_name"])
+		assert.Equal(t, "triki-traka", r.Metric["k8s_node_name"])
+		// todo: chcek it has correct UID format
+		assert.NotEmpty(t, r.Metric["k8s_pod_uid"])
+		// todo: parse it and check that is not too old or a future ts
+		assert.NotEmpty(t, r.Metric["k8s.pod.start_time"])
 	}
 }
 

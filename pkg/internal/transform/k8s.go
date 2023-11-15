@@ -3,8 +3,6 @@ package transform
 import (
 	"fmt"
 	"log/slog"
-	"maps"
-	"net"
 	"strings"
 	"time"
 
@@ -23,15 +21,13 @@ const (
 	EnabledDefault    = EnabledFalse
 
 	// TODO: report also peer attributes if BEYLA_METRICS_REPORT_PEER is set
+	// TODO: let the user decide which attributes to add, as in https://opentelemetry.io/docs/kubernetes/collector/components/#kubernetes-attributes-processor
 	NamespaceName  = "k8s.namespace.name"
 	PodName        = "k8s.pod.name"
 	DeploymentName = "k8s.deployment.name"
 	NodeName       = "k8s.node.name"
-
-	// From the standard default attributes, we aren't reporting
-	// "k8s.pod.uid" nor "k8s.pod.start_time" to avoid cardinality
-	// explosion in metrics.
-	// TODO: let the user decide which attributes to add, as in https://opentelemetry.io/docs/kubernetes/collector/components/#kubernetes-attributes-processor
+	PodUID         = "k8s.pod.uid"
+	PodStartTime   = "k8s.pod.start_time"
 )
 
 func klog() *slog.Logger {
@@ -72,8 +68,6 @@ func KubeDecoratorProvider(cfg KubernetesDecorator) (node.MiddleFunc[[]request.S
 		return nil, fmt.Errorf("instantiating kubernetes metadata decorator: %w", err)
 	}
 	return func(in <-chan []request.Span, out chan<- []request.Span) {
-		decorator.refreshOwnPodMetadata()
-
 		klog().Debug("starting kubernetes decoration loop")
 		for spans := range in {
 			// in-place decoration and forwarding
@@ -89,9 +83,6 @@ func KubeDecoratorProvider(cfg KubernetesDecorator) (node.MiddleFunc[[]request.S
 type metadataDecorator struct {
 	kube kube.Metadata
 	cfg  *KubernetesDecorator
-
-	ownMetadataAsSrc map[string]string
-	ownMetadataAsDst map[string]string
 }
 
 func newMetadataDecorator(cfg *KubernetesDecorator) (*metadataDecorator, error) {
@@ -115,41 +106,30 @@ func (md *metadataDecorator) do(span *request.Span) {
 	switch span.Type {
 	// TODO: put here also SQL traces
 	case request.EventTypeGRPC, request.EventTypeHTTP:
-		if peerInfo, ok := md.completePodInfo(span.Peer); ok {
-			appendSRCMetadata(span.Metadata, peerInfo)
-		}
-		// TODO: this will only work Ok for Beyla as a sidecar.
-		// However, for Beyla as a daemonset will assume that
-		// Beyla is in the same pod as the destination Pod,
-		// which might not be always correct
-		maps.Copy(span.Metadata, md.ownMetadataAsDst)
-	case request.EventTypeGRPCClient, request.EventTypeHTTPClient:
 		if peerInfo, ok := md.completePodInfo(span.Host); ok {
-			appendDSTMetadata(span.Metadata, peerInfo)
+			appendMetadata(span.Metadata, peerInfo)
 		}
-		maps.Copy(span.Metadata, md.ownMetadataAsSrc)
+	case request.EventTypeGRPCClient, request.EventTypeHTTPClient:
+		if peerInfo, ok := md.completePodInfo(span.Peer); ok {
+			appendMetadata(span.Metadata, peerInfo)
+		}
 	}
 }
 
-func appendDSTMetadata(to map[string]string, info *kube.PodInfo) {
+func appendMetadata(to map[string]string, info *kube.PodInfo) {
 	to[NamespaceName] = info.Namespace
 	to[PodName] = info.Name
-	to[NodeName] = info.Nod
+	to[NodeName] = info.NodeName
+	to[PodUID] = string(info.UID)
+	to[PodStartTime] = info.StartTimeStr
 	if info.DeploymentName != "" {
 		to[DeploymentName] = info.DeploymentName
 	}
-	to[DstNameKey] = info.Name
-	to[DstNamespaceKey] = info.Namespace
-	to[DstTypeKey] = info.Type
-}
-
-func appendSRCMetadata(to map[string]string, info *kube.PodInfo) {
-	to[SrcNameKey] = info.Name
-	to[SrcNamespaceKey] = info.Namespace
 }
 
 // gets the Pod Info and updates its Deployment Name
 func (md *metadataDecorator) completePodInfo(ip string) (*kube.PodInfo, bool) {
+	klog().Debug("asking for pod info", "ip", ip)
 	info, ok := md.kube.GetPodInfo(ip)
 	if !ok {
 		return nil, false
@@ -160,36 +140,4 @@ func (md *metadataDecorator) completePodInfo(ip string) (*kube.PodInfo, bool) {
 		}
 	}
 	return info, true
-}
-
-func (md *metadataDecorator) refreshOwnPodMetadata() {
-	for {
-		if info, ok := md.kube.GetInfo(getLocalIP()); ok {
-			klog().Debug("found local pod metadata", "metadata", info)
-			md.ownMetadataAsSrc = make(map[string]string, 2)
-			md.ownMetadataAsDst = make(map[string]string, 2)
-			appendSRCMetadata(md.ownMetadataAsSrc, info)
-			appendDSTMetadata(md.ownMetadataAsDst, info)
-			return
-		}
-		klog().Info("local pod metadata not yet found. Waiting 5s and trying again before starting the kubernetes decorator")
-		time.Sleep(5 * time.Second)
-	}
-}
-
-// getLocalIP returns the first non-loopback local IP of the pod
-func getLocalIP() string {
-	addrs, err := net.InterfaceAddrs()
-	if err != nil {
-		return ""
-	}
-	for _, address := range addrs {
-		// check the address type and if it is not a loopback the display it
-		if ipnet, ok := address.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
-			if ipnet.IP.To4() != nil {
-				return ipnet.IP.String()
-			}
-		}
-	}
-	return ""
 }

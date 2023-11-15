@@ -1,6 +1,7 @@
 package kube
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"os"
@@ -50,7 +51,10 @@ type PodInfo struct {
 	// has Deployment as owner reference. We initially do a two-steps lookup to
 	// get the Pod's Deployment, but then cache the Deployment value here
 	DeploymentName string
-	ips            []string
+	NodeName       string
+	// StartTimeStr caches value of ObjectMeta.StartTimestamp.String()
+	StartTimeStr string
+	ips          []string
 }
 
 type ReplicaSetInfo struct {
@@ -86,6 +90,7 @@ func (k *Metadata) GetPodInfo(ip string) (*PodInfo, bool) {
 }
 
 func (k *Metadata) initPodInformer(informerFactory informers.SharedInformerFactory) error {
+	log := klog().With("informer", "Pod")
 	pods := informerFactory.Core().V1().Pods().Informer()
 	// Transform any *v1.Pod instance into a *PodInfo instance to save space
 	// in the informer's cache
@@ -109,12 +114,22 @@ func (k *Metadata) initPodInformer(informerFactory informers.SharedInformerFacto
 				break
 			}
 		}
+		startTime := pod.GetCreationTimestamp().String()
+		if log.Enabled(context.TODO(), slog.LevelDebug) {
+			log.Debug("inserting pod", "name", pod.Name, "namespace", pod.Namespace,
+				"uid", pod.UID, "replicaSet", replicaSet,
+				"node", pod.Spec.NodeName, "startTime", startTime,
+				"ips", ips)
+		}
 		return &PodInfo{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      pod.Name,
 				Namespace: pod.Namespace,
+				UID:       pod.UID,
 			},
 			ReplicaSetName: replicaSet,
+			NodeName:       pod.Spec.NodeName,
+			StartTimeStr:   startTime,
 			ips:            ips,
 		}, nil
 	}); err != nil {
@@ -143,6 +158,7 @@ func (k *Metadata) GetReplicaSetInfo(name string) (*PodInfo, bool) {
 }
 
 func (k *Metadata) initReplicaSetInformer(informerFactory informers.SharedInformerFactory) error {
+	log := klog().With("informer", "ReplicaSet")
 	rss := informerFactory.Apps().V1().ReplicaSets().Informer()
 	// Transform any *appsv1.Replicaset instance into a *ReplicaSetInfo instance to save space
 	// in the informer's cache
@@ -158,6 +174,10 @@ func (k *Metadata) initReplicaSetInformer(informerFactory informers.SharedInform
 				deployment = or.Name
 				break
 			}
+		}
+		if log.Enabled(context.TODO(), slog.LevelDebug) {
+			log.Debug("inserting ReplicaSet", "name", rs.Name, "namespace", rs.Namespace,
+				"deployment", deployment)
 		}
 		return &ReplicaSetInfo{
 			ObjectMeta: metav1.ObjectMeta{

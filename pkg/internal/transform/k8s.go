@@ -8,8 +8,8 @@ import (
 
 	"github.com/mariomac/pipes/pkg/node"
 
+	"github.com/grafana/beyla/pkg/internal/helpers/kube"
 	"github.com/grafana/beyla/pkg/internal/request"
-	"github.com/grafana/beyla/pkg/internal/transform/kube"
 )
 
 type KubeEnableFlag string

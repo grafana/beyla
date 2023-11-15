@@ -1,0 +1,16 @@
+version: '3.8'
+
+services:
+  minio:
+    image: quay.io/minio/minio
+    command: ["server", "/data", "--console-address", ":9001"]
+    ports:
+      - 9000:9000
+      - 9001:9001
+  beyla:
+    image: grafana/beyla:latest
+    pid: "service:minio"
+    privileged: true
+    environment:
+      BEYLA_PRINT_TRACES: true
+      BEYLA_OPEN_PORT: 9000

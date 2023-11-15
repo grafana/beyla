@@ -8,6 +8,7 @@ import (
 
 	"github.com/grafana/beyla/pkg/internal/exec"
 	"github.com/grafana/beyla/pkg/internal/goexec"
+	"github.com/grafana/beyla/pkg/internal/helpers/container"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/pipe"
 	"github.com/grafana/beyla/pkg/internal/svc"
@@ -76,6 +77,18 @@ func (t *typer) FilterClassify(evs []Event[ProcessMatch]) []Event[Instrumentable
 				t.log.Warn("error finding process ELF. Ignoring", "error", err)
 			} else {
 				t.currentPids[ev.Obj.Process.Pid] = elfFile
+				info, err := container.InfoForPID(int(ev.Obj.Process.Pid))
+				if err != nil {
+					t.log.Debug("can't find container info for process",
+						"process", ev.Obj.Process.ExePath,
+						"pid", ev.Obj.Process.Pid,
+						"error", err)
+				} else {
+					t.log.Debug("found container info for process",
+						"process", ev.Obj.Process.ExePath,
+						"pid", ev.Obj.Process.Pid,
+						"info", info)
+				}
 				elfs = append(elfs, elfFile)
 			}
 		case EventDeleted:

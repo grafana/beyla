@@ -11,7 +11,7 @@ require (
 	github.com/go-logr/logr v1.2.4
 	github.com/goccy/go-json v0.10.2
 	github.com/gorilla/mux v1.8.0
-	github.com/grafana/go-offsets-tracker v0.1.2
+	github.com/grafana/go-offsets-tracker v0.1.5
 	github.com/hashicorp/golang-lru/v2 v2.0.2
 	github.com/mariomac/guara v0.0.0-20230621100729-42bd7716e524
 	github.com/mariomac/pipes v0.9.0

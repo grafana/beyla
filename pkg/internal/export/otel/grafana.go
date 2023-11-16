@@ -1,16 +1,10 @@
 package otel
 
 import (
-	"bytes"
 	"encoding/base64"
 	"fmt"
-	"log/slog"
 	"strings"
 )
-
-func gclog() *slog.Logger {
-	return slog.With("component", "otel.GrafanaConfig")
-}
 
 const (
 	submitMetrics = "metrics"
@@ -80,16 +74,7 @@ func (cfg *GrafanaOTLP) Endpoint() string {
 }
 
 func (cfg *GrafanaOTLP) AuthHeader() string {
-	encodedKey := bytes.Buffer{}
-	encodedKey.WriteString("Basic ")
-	encoder := base64.NewEncoder(base64.StdEncoding, &encodedKey)
-	_, err := encoder.Write([]byte(cfg.InstanceID + ":" + cfg.APIKey))
-	if err != nil {
-		// This should never happen, as the bytes.Buffer reader will never return error on Write
-		gclog().Error("can't encode Grafana OTLP Authorization header. Leaving empty", "error", err)
-		return ""
-	}
-	return encodedKey.String()
+	return "Basic " + base64.StdEncoding.EncodeToString([]byte(cfg.InstanceID+":"+cfg.APIKey))
 }
 
 func (cfg *GrafanaOTLP) setupOptions(opt *otlpOptions) {

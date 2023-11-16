@@ -21,7 +21,6 @@ The following table describes the exported metrics in both OpenTelemetry and Pro
 | `http.server.request.size` | `http_server_request_size_bytes` | Histogram | bytes   | Size of the HTTP request body as received at the server side |
 | `rpc.client.duration`      | `rpc_client_duration_seconds`    | Histogram | seconds | Duration of GRPC service calls from the client side          |
 | `rpc.server.duration`      | `rpc_server_duration_seconds`    | Histogram | seconds | Duration of RPC service calls from the server side           |
-| `sql.client.duration`      | `sql_client_duration_seconds`    | Histogram | seconds | Duration of SQL client operations (Experimental)             |
 
 ## Internal metrics
 

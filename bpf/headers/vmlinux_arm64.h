@@ -30623,7 +30623,9 @@ enum bpf_func_id {
 	BPF_FUNC_get_func_ip = 173,
 	BPF_FUNC_get_attach_cookie = 174,
 	BPF_FUNC_task_pt_regs = 175,
-	__BPF_FUNC_MAX_ID = 176,
+	BPF_FUNC_loop = 181,
+	BPF_FUNC_strncmp = 182,
+	__BPF_FUNC_MAX_ID = 183,
 };
 
 enum {

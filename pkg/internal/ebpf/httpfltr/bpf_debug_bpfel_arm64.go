@@ -71,6 +71,12 @@ type bpf_debugSslArgsT struct {
 	LenPtr uint64
 }
 
+type bpf_debugTpInfoT struct {
+	TraceId  [16]uint8
+	SpanId   [8]uint8
+	ParentId [8]uint8
+}
+
 // loadBpf_debug returns the embedded CollectionSpec for bpf_debug.
 func loadBpf_debug() (*ebpf.CollectionSpec, error) {
 	reader := bytes.NewReader(_Bpf_debugBytes)
@@ -153,6 +159,9 @@ type bpf_debugMapSpecs struct {
 	PidTidToConn        *ebpf.MapSpec `ebpf:"pid_tid_to_conn"`
 	SslToConn           *ebpf.MapSpec `ebpf:"ssl_to_conn"`
 	SslToPidTid         *ebpf.MapSpec `ebpf:"ssl_to_pid_tid"`
+	TpCharBufMem        *ebpf.MapSpec `ebpf:"tp_char_buf_mem"`
+	TpInfoMem           *ebpf.MapSpec `ebpf:"tp_info_mem"`
+	TraceMap            *ebpf.MapSpec `ebpf:"trace_map"`
 	ValidPids           *ebpf.MapSpec `ebpf:"valid_pids"`
 }
 
@@ -190,6 +199,9 @@ type bpf_debugMaps struct {
 	PidTidToConn        *ebpf.Map `ebpf:"pid_tid_to_conn"`
 	SslToConn           *ebpf.Map `ebpf:"ssl_to_conn"`
 	SslToPidTid         *ebpf.Map `ebpf:"ssl_to_pid_tid"`
+	TpCharBufMem        *ebpf.Map `ebpf:"tp_char_buf_mem"`
+	TpInfoMem           *ebpf.Map `ebpf:"tp_info_mem"`
+	TraceMap            *ebpf.Map `ebpf:"trace_map"`
 	ValidPids           *ebpf.Map `ebpf:"valid_pids"`
 }
 
@@ -210,6 +222,9 @@ func (m *bpf_debugMaps) Close() error {
 		m.PidTidToConn,
 		m.SslToConn,
 		m.SslToPidTid,
+		m.TpCharBufMem,
+		m.TpInfoMem,
+		m.TraceMap,
 		m.ValidPids,
 	)
 }

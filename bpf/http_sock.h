@@ -7,6 +7,7 @@
 #include "http_types.h"
 #include "ringbuf.h"
 #include "pid.h"
+#include "trace_common.h"
 
 #define MIN_HTTP_SIZE 12 // HTTP/1.1 CCC is the smallest valid request we can have
 #define RESPONSE_STATUS_POS 9 // HTTP/1.1 <--
@@ -274,11 +275,11 @@ static __always_inline void handle_buf_with_connection(connection_info_t *conn, 
 
         bpf_dbg_printk("=== http_buffer_event len=%d pid=%d still_reading=%d ===", bytes_len, pid_from_pid_tgid(bpf_get_current_pid_tgid()), still_reading(info));
 
-        if (packet_type == PACKET_TYPE_REQUEST && (info->status == 0)) {
+        if (packet_type == PACKET_TYPE_REQUEST && (info->status == 0)) {    
             if (capture_header_buffer) {
                 // This can be expensive on high volume of requests. We make it optional
                 // for customers to enable it. Off by default.
-                send_http_trace_buf(u_buf, bytes_len, conn);
+                get_or_create_trace_info(conn, u_buf, bytes_len);
             }
             
             // we copy some small part of the buffer to the info trace event, so that we can process an event even with

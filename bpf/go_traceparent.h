@@ -11,6 +11,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+#ifndef GO_TRACEPARENT_H
+#define GO_TRACEPARENT_H
 
 #include "utils.h"
 #include "stdbool.h"
@@ -115,7 +117,7 @@ static __always_inline void *extract_traceparent_from_req_headers(void *headers_
         return NULL;
     }
     u32 map_id = 0;
-    struct map_bucket *map_value = bpf_map_lookup_elem(&golang_mapbucket_storage_map, &map_id);
+    struct map_bucket *map_value = (struct map_bucket *)bpf_map_lookup_elem(&golang_mapbucket_storage_map, &map_id);
     if (!map_value)
     {
         return NULL;
@@ -164,3 +166,5 @@ static __always_inline void *extract_traceparent_from_req_headers(void *headers_
     }
     return NULL;
 }
+
+#endif

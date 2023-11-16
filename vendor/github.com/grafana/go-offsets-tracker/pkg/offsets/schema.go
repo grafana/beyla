@@ -21,8 +21,9 @@ import (
 	"os"
 	"sort"
 
-	"github.com/grafana/go-offsets-tracker/pkg/versions"
 	"github.com/hashicorp/go-version"
+
+	"github.com/grafana/go-offsets-tracker/pkg/versions"
 )
 
 type Track struct {
@@ -95,6 +96,7 @@ func (to *Track) Find(structName, fieldName, libVersion string) (uint64, bool) {
 
 // GetOffset assumes that the fields offsets list is sorted from older to newer version
 func (field *Field) GetOffset(libVersion string) (uint64, bool) {
+	libVersion = versions.CleanVersion(libVersion)
 	target, err := version.NewVersion(libVersion)
 	if err != nil {
 		// shouldn't happen unless a bug in our code/files

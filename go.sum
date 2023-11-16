@@ -112,8 +112,8 @@ github.com/google/uuid v1.3.0/go.mod h1:TIyPZe4MgqvfeYDBFedMoGGpEw/LqOeaOT+nhxU+
 github.com/gorilla/mux v1.8.0 h1:i40aqfkR1h2SlN9hojwV5ZA91wcXFOvkdNIeFDP5koI=
 github.com/gorilla/mux v1.8.0/go.mod h1:DVbg23sWSpFRCP0SfiEN6jmj59UnW/n46BH5rLB71So=
 github.com/gorilla/websocket v1.4.2/go.mod h1:YR8l580nyteQvAITg2hZ9XVh4b55+EU/adAjf1fMHhE=
-github.com/grafana/go-offsets-tracker v0.1.2 h1:f3OBkgYlsOzk+1x/ld06g8OUn5xG/nFbwxGkdr+iUFM=
-github.com/grafana/go-offsets-tracker v0.1.2/go.mod h1:kMOoQRWLsRz5tecLQXB3skxgEqexj6bWwySL9nZSohw=
+github.com/grafana/go-offsets-tracker v0.1.5 h1:abTdxqjjWYlAYxJSBDgoI4DvgmHJjERRD7eUbrDQ7e8=
+github.com/grafana/go-offsets-tracker v0.1.5/go.mod h1:kMOoQRWLsRz5tecLQXB3skxgEqexj6bWwySL9nZSohw=
 github.com/grpc-ecosystem/grpc-gateway/v2 v2.16.0 h1:YBftPWNWd4WwGqtY2yeZL2ef8rHAxPBD8KFhJpmcqms=
 github.com/grpc-ecosystem/grpc-gateway/v2 v2.16.0/go.mod h1:YN5jB8ie0yfIUg6VvR9Kz84aCaG7AsGZnLjhHbUqwPg=
 github.com/hashicorp/go-version v1.6.0 h1:feTTfFNnjP967rlCxM/I9g701jU+RN74YKx2mOkIeek=

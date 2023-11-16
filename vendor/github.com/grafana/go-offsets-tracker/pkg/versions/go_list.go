@@ -3,6 +3,8 @@ package versions
 import (
 	"encoding/json"
 	"fmt"
+	"log"
+
 	"github.com/grafana/go-offsets-tracker/pkg/utils"
 )
 
@@ -12,8 +14,9 @@ type goListResponse struct {
 }
 
 func FindVersionsUsingGoList(moduleName string) ([]string, error) {
-	err, stdout, _ := utils.RunCommand(fmt.Sprintf("go list -m -mod=readonly -json -versions %s", moduleName), "")
+	stdout, err := utils.RunCommand(fmt.Sprintf("go list -m -mod=readonly -json -versions %s", moduleName), "")
 	if err != nil {
+		log.Println("error running go list:\n", stdout)
 		return nil, err
 	}
 

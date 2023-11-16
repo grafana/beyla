@@ -12,6 +12,15 @@ type LibQuery struct {
 	// it will analyse an empty main file that forces the inclusion of the inspected library.
 	Inspect string `json:"inspect"`
 
+	// Branch will force downloading the branch name specified here, ignoring the
+	// Versions field. This is useful for source repositories without release tags.
+	Branch string `json:"branch"`
+
+	// Packages overrides the packages that need to be downloaded for inspection. If empty, it will
+	// download the root package (same as the library URL). Setting this value is useful for libraries that do
+	// not have any root package and the download would fail (e.g. google.golang.org/genproto)
+	Packages []string `json:"packages"`
+
 	// Versions constraint. E.g. ">= 1.12" will only download versions
 	// larger or equal to 1.12
 	Versions string `json:"versions"`

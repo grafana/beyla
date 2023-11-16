@@ -2,9 +2,9 @@ name: Pull request integration tests
 
 on:
   push:
-    branches: [ 'main' ]
+    branches: [ 'main', 'release-*' ]
   pull_request:
-    branches: [ 'main' ]
+    branches: [ 'main', 'release-*' ]
 
 jobs:
   test:

@@ -3,13 +3,8 @@ package otel
 import (
 	"encoding/base64"
 	"fmt"
-	"log/slog"
 	"strings"
 )
-
-func gclog() *slog.Logger {
-	return slog.With("component", "otel.GrafanaConfig")
-}
 
 const (
 	submitMetrics = "metrics"

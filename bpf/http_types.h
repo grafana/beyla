@@ -11,6 +11,18 @@
 
 #define CONN_INFO_FLAG_TRACE 0x1
 
+#define TRACE_ID_SIZE_BYTES 16
+#define SPAN_ID_SIZE_BYTES   8
+#define TRACE_ID_CHAR_LEN   32
+#define SPAN_ID_CHAR_LEN    16
+
+typedef struct tp_info {
+    unsigned char trace_id[TRACE_ID_SIZE_BYTES];
+    unsigned char span_id[SPAN_ID_SIZE_BYTES];
+    unsigned char parent_id[SPAN_ID_SIZE_BYTES];
+    u64 epoch;
+} tp_info_t;
+
 // Struct to keep information on the connections in flight 
 // s = source, d = destination
 // h = high word, l = low word
@@ -38,6 +50,7 @@ typedef struct http_info {
     // also to filter traces from unsolicited processes that share the executable
     // with other instrumented processes
     pid_info pid;
+    tp_info_t tp;
 } http_info_t;
 
 // Here we keep information on the packets passing through the socket filter

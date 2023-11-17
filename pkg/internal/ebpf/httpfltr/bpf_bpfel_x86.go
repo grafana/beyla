@@ -53,6 +53,7 @@ type bpfHttpInfoT struct {
 		UserPid   uint32
 		Namespace uint32
 	}
+	Tp bpfTpInfoT
 }
 
 type bpfRecvArgsT struct {
@@ -75,6 +76,7 @@ type bpfTpInfoT struct {
 	TraceId  [16]uint8
 	SpanId   [8]uint8
 	ParentId [8]uint8
+	Epoch    uint64
 }
 
 // loadBpf returns the embedded CollectionSpec for bpf.

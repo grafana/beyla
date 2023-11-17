@@ -2,7 +2,6 @@ package otel
 
 import (
 	"context"
-	"encoding/hex"
 	"fmt"
 	"log/slog"
 	"net/url"
@@ -394,52 +393,29 @@ func spanKind(span *request.Span) trace2.SpanKind {
 	return trace2.SpanKindInternal
 }
 
-func handleTraceparentField(parentCtx context.Context, traceparent string) context.Context {
-	// If traceparent was not set in eBPF, entire field should be zeroed bytes.
-	if len(traceparent) < 55 || traceparent[0] == 0 {
-		return parentCtx
-	}
-
-	// See https://www.w3.org/TR/trace-context/#traceparent-header-field-values for format.
-	// 2 hex version + dash + 32 hex traceID + dash + 16 hex parent + dash + 2 hex flags
-	traceID := string(traceparent[3:35])
-
-	if traceID != "" {
-		tid, err := trace2.TraceIDFromHex(traceID)
-		if err != nil {
-			slog.Debug("Invalid TraceID", "error:", err, "traceId:", traceID)
+func handleTraceparent(parentCtx context.Context, span *request.Span) context.Context {
+	if span.ParentSpanID.IsValid() {
+		parentCtx = ContextWithTraceParent(parentCtx, span.TraceID, span.ParentSpanID)
+		// if there's no processing span, make new sub span
+		if span.RequestStart == span.Start {
+			parentCtx = ContextWithTraceParent(parentCtx, span.TraceID, span.SpanID)
+		}
+	} else {
+		if span.RequestStart == span.Start {
+			parentCtx = ContextWithTraceParent(parentCtx, span.TraceID, span.SpanID)
 		} else {
-			spanCtx := trace2.SpanContextFromContext(parentCtx).WithTraceID(tid)
-			parentCtx = trace2.ContextWithSpanContext(parentCtx, spanCtx)
-
-			// Otel loads parent-id into SpanID
-			parentID := string(traceparent[36:52])
-			spanID, err := trace2.SpanIDFromHex(parentID)
-			if err != nil {
-				slog.Debug("Invalid ParentID", "error:", err, "parentId:", parentID)
-			} else {
-				spanCtx := trace2.SpanContextFromContext(parentCtx).WithSpanID(spanID)
-				parentCtx = trace2.ContextWithSpanContext(parentCtx, spanCtx)
-			}
-
-			// Propagate the trace flags
-			traceFlags := string(traceparent[53:55])
-			flags, err := hex.DecodeString(traceFlags)
-			if err != nil {
-				slog.Debug("Invalid trace flags", "error:", err, "traceFlags:", traceFlags)
-			} else {
-				spanCtx = trace2.SpanContextFromContext(parentCtx).WithTraceFlags(trace2.TraceFlags(flags[0]))
-				parentCtx = trace2.ContextWithSpanContext(parentCtx, spanCtx)
-			}
+			// let the SpanID be generated, we'll use the one remembered in eBPF in the processing span
+			parentCtx = ContextWithTrace(parentCtx, span.TraceID)
 		}
 	}
+
 	return parentCtx
 }
 
 func (r *TracesReporter) makeSpan(parentCtx context.Context, tracer trace2.Tracer, span *request.Span) SessionSpan {
 	t := span.Timings()
 
-	parentCtx = handleTraceparentField(parentCtx, span.Traceparent)
+	parentCtx = handleTraceparent(parentCtx, span)
 
 	realStart := t.RequestStart
 	if t.Start.Before(realStart) {
@@ -467,7 +443,8 @@ func (r *TracesReporter) makeSpan(parentCtx context.Context, tracer trace2.Trace
 
 		// Create a child span showing the processing time
 		// Override the active context for the span to be the processing span
-		ctx, spP = tracer.Start(ctx, "processing",
+		ctx = ContextWithTraceParent(ctx, span.TraceID, span.SpanID)
+		_, spP = tracer.Start(ctx, "processing",
 			trace2.WithTimestamp(t.Start),
 			trace2.WithSpanKind(trace2.SpanKindInternal),
 		)
@@ -507,7 +484,6 @@ func (r *TracesReporter) reportClientSpan(span *request.Span, tracer trace2.Trac
 }
 
 func (r *TracesReporter) reportServerSpan(span *request.Span, tracer trace2.Tracer) {
-
 	s := r.makeSpan(r.ctx, tracer, span)
 	if span.ID != 0 {
 		topSpans.Add(span.ID, s)
@@ -576,6 +552,7 @@ func (r *TracesReporter) newTracers(service svc.ID) (*Tracers, error) {
 			trace.WithResource(otelResource(service)),
 			trace.WithSpanProcessor(r.bsp),
 			trace.WithSampler(r.cfg.Sampler.Implementation()),
+			trace.WithIDGenerator(&BeylaIDGenerator{}),
 		),
 	}
 	tracers.tracer = tracers.provider.Tracer(reporterName)

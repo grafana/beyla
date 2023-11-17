@@ -226,6 +226,13 @@ static __always_inline void handle_http_response(unsigned char *small_buf, conne
         meta = &dummy_meta;
     }
 
+    tp_info_t *tp = trace_info_for_connection(conn);
+    if (tp) {
+        info->tp = *tp;
+    } else {
+        bpf_dbg_printk("Can't find trace info, this is a bug!");
+    }
+
     process_http_response(info, small_buf, meta, orig_len);
     finish_http(info);
 }
@@ -276,11 +283,7 @@ static __always_inline void handle_buf_with_connection(connection_info_t *conn, 
         bpf_dbg_printk("=== http_buffer_event len=%d pid=%d still_reading=%d ===", bytes_len, pid_from_pid_tgid(bpf_get_current_pid_tgid()), still_reading(info));
 
         if (packet_type == PACKET_TYPE_REQUEST && (info->status == 0)) {    
-            if (capture_header_buffer) {
-                // This can be expensive on high volume of requests. We make it optional
-                // for customers to enable it. Off by default.
-                get_or_create_trace_info(conn, u_buf, bytes_len);
-            }
+            get_or_create_trace_info(conn, u_buf, bytes_len, capture_header_buffer);
             
             // we copy some small part of the buffer to the info trace event, so that we can process an event even with
             // incomplete trace info in user space.

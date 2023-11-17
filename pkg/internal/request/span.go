@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/gavv/monotime"
+	trace2 "go.opentelemetry.io/otel/trace"
 
 	"github.com/grafana/beyla/pkg/internal/svc"
 )
@@ -64,7 +65,9 @@ type Span struct {
 	End           int64
 	ServiceID     svc.ID
 	Metadata      map[string]string
-	Traceparent   string
+	TraceID       trace2.TraceID
+	SpanID        trace2.SpanID
+	ParentSpanID  trace2.SpanID
 	Pid           PidInfo
 }
 

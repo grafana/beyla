@@ -28,7 +28,6 @@ func HTTPRequestTraceToSpan(trace *HTTPRequestTrace) request.Span {
 	peer := ""
 	hostname := ""
 	hostPort := 0
-	traceparent := extractTraceparent(trace.Traceparent)
 
 	switch request.EventType(trace.Type) {
 	case request.EventTypeHTTPClient, request.EventTypeHTTP:
@@ -57,7 +56,6 @@ func HTTPRequestTraceToSpan(trace *HTTPRequestTrace) request.Span {
 		Start:         int64(trace.StartMonotimeNs),
 		End:           int64(trace.EndMonotimeNs),
 		Status:        int(trace.Status),
-		Traceparent:   traceparent,
 		Pid: request.PidInfo{
 			HostPID:   trace.Pid.HostPid,
 			UserPID:   trace.Pid.UserPid,
@@ -94,7 +92,6 @@ func SQLRequestTraceToSpan(trace *SQLRequestTrace) request.Span {
 		Start:         int64(trace.StartMonotimeNs),
 		End:           int64(trace.EndMonotimeNs),
 		Status:        int(trace.Status),
-		Traceparent:   "",
 		Pid: request.PidInfo{
 			HostPID:   trace.Pid.HostPid,
 			UserPID:   trace.Pid.UserPid,
@@ -131,12 +128,4 @@ func extractIP(b []uint8, size int) string {
 		size = len(b)
 	}
 	return net.IP(b[:size]).String()
-}
-
-func extractTraceparent(traceparent [55]byte) string {
-	// If traceparent was not set, array should be all zeroes.
-	if traceparent[0] == 0 {
-		return ""
-	}
-	return string(traceparent[:])
 }

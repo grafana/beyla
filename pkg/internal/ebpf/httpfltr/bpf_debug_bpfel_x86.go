@@ -53,6 +53,7 @@ type bpf_debugHttpInfoT struct {
 		UserPid   uint32
 		Namespace uint32
 	}
+	Tp bpf_debugTpInfoT
 }
 
 type bpf_debugRecvArgsT struct {
@@ -75,6 +76,7 @@ type bpf_debugTpInfoT struct {
 	TraceId  [16]uint8
 	SpanId   [8]uint8
 	ParentId [8]uint8
+	Epoch    uint64
 }
 
 // loadBpf_debug returns the embedded CollectionSpec for bpf_debug.

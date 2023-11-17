@@ -9,7 +9,6 @@ import (
 	"strings"
 	"time"
 
-	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/mariomac/pipes/pkg/node"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
@@ -29,15 +28,6 @@ import (
 func tlog() *slog.Logger {
 	return slog.With("component", "otel.TracesReporter")
 }
-
-type SessionSpan struct {
-	ReqSpan request.Span
-	RootCtx context.Context
-}
-
-// TODO: global variables, move as fields of TracesReporter
-var topSpans, _ = lru.New[uint64, SessionSpan](8192)
-var clientSpans, _ = lru.New[uint64, []request.Span](8192)
 
 const reporterName = "github.com/grafana/beyla"
 
@@ -408,7 +398,7 @@ func handleTraceparent(parentCtx context.Context, span *request.Span) context.Co
 	return parentCtx
 }
 
-func (r *TracesReporter) makeSpan(parentCtx context.Context, tracer trace2.Tracer, span *request.Span) SessionSpan {
+func (r *TracesReporter) makeSpan(parentCtx context.Context, tracer trace2.Tracer, span *request.Span) {
 	t := span.Timings()
 
 	parentCtx = handleTraceparent(parentCtx, span)
@@ -448,62 +438,6 @@ func (r *TracesReporter) makeSpan(parentCtx context.Context, tracer trace2.Trace
 	}
 
 	sp.End(trace2.WithTimestamp(t.End))
-
-	return SessionSpan{*span, ctx}
-}
-
-func (r *TracesReporter) reportClientSpan(span *request.Span, tracer trace2.Tracer) {
-	ctx := r.ctx
-
-	// we have a parent request span
-	if span.ID != 0 {
-		sp, ok := topSpans.Get(span.ID)
-		if ok && span.Inside(&sp.ReqSpan) {
-			// parent span exists, use it
-			ctx = sp.RootCtx
-		} else {
-			// stash the client span for later addition
-			cs, ok := clientSpans.Get(span.ID)
-			if !ok {
-				cs = []request.Span{*span}
-			} else {
-				cs = append(cs, *span)
-			}
-			clientSpans.Add(span.ID, cs)
-
-			// don't add the span just yet, the parent span isn't ready
-			return
-		}
-	}
-
-	r.makeSpan(ctx, tracer, span)
-}
-
-func (r *TracesReporter) reportServerSpan(span *request.Span, tracer trace2.Tracer) {
-	s := r.makeSpan(r.ctx, tracer, span)
-	if span.ID != 0 {
-		topSpans.Add(span.ID, s)
-		cs, ok := clientSpans.Get(span.ID)
-		newer := []request.Span{}
-		if ok {
-			// finish any client spans that were waiting for this parent span
-			for j := range cs {
-				cspan := &cs[j]
-				if cspan.Inside(span) {
-					r.makeSpan(s.RootCtx, tracer, cspan)
-				} else if cspan.Start > span.RequestStart {
-					newer = append(newer, *cspan)
-				} else {
-					r.makeSpan(r.ctx, tracer, cspan)
-				}
-			}
-			if len(newer) == 0 {
-				clientSpans.Remove(span.ID)
-			} else {
-				clientSpans.Add(span.ID, newer)
-			}
-		}
-	}
 }
 
 func (r *TracesReporter) reportTraces(input <-chan []request.Span) {
@@ -530,12 +464,7 @@ func (r *TracesReporter) reportTraces(input <-chan []request.Span) {
 				reporter = lm.tracer
 			}
 
-			switch span.Type {
-			case request.EventTypeHTTPClient, request.EventTypeGRPCClient, request.EventTypeSQLClient:
-				r.reportClientSpan(span, reporter)
-			case request.EventTypeHTTP, request.EventTypeGRPC:
-				r.reportServerSpan(span, reporter)
-			}
+			r.makeSpan(r.ctx, reporter, span)
 		}
 	}
 	r.close()

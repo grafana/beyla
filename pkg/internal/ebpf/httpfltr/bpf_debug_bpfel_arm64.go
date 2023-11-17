@@ -159,6 +159,7 @@ type bpf_debugMapSpecs struct {
 	OngoingHttp         *ebpf.MapSpec `ebpf:"ongoing_http"`
 	PidCache            *ebpf.MapSpec `ebpf:"pid_cache"`
 	PidTidToConn        *ebpf.MapSpec `ebpf:"pid_tid_to_conn"`
+	ServerTraces        *ebpf.MapSpec `ebpf:"server_traces"`
 	SslToConn           *ebpf.MapSpec `ebpf:"ssl_to_conn"`
 	SslToPidTid         *ebpf.MapSpec `ebpf:"ssl_to_pid_tid"`
 	TpCharBufMem        *ebpf.MapSpec `ebpf:"tp_char_buf_mem"`
@@ -199,6 +200,7 @@ type bpf_debugMaps struct {
 	OngoingHttp         *ebpf.Map `ebpf:"ongoing_http"`
 	PidCache            *ebpf.Map `ebpf:"pid_cache"`
 	PidTidToConn        *ebpf.Map `ebpf:"pid_tid_to_conn"`
+	ServerTraces        *ebpf.Map `ebpf:"server_traces"`
 	SslToConn           *ebpf.Map `ebpf:"ssl_to_conn"`
 	SslToPidTid         *ebpf.Map `ebpf:"ssl_to_pid_tid"`
 	TpCharBufMem        *ebpf.Map `ebpf:"tp_char_buf_mem"`
@@ -222,6 +224,7 @@ func (m *bpf_debugMaps) Close() error {
 		m.OngoingHttp,
 		m.PidCache,
 		m.PidTidToConn,
+		m.ServerTraces,
 		m.SslToConn,
 		m.SslToPidTid,
 		m.TpCharBufMem,

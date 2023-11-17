@@ -16,6 +16,13 @@ struct {
 } trace_map SEC(".maps");
 
 struct {
+    __uint(type, BPF_MAP_TYPE_LRU_HASH);
+    __type(key, u64); // key: pid_tid
+    __type(value, tp_info_t);  // value: traceparent info
+    __uint(max_entries, MAX_CONCURRENT_REQUESTS);
+} server_traces SEC(".maps");
+
+struct {
     __uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
     __type(key, int);
     __type(value, tp_info_t);
@@ -54,6 +61,15 @@ static __always_inline u64 current_epoch() {
     return temp * NANOSECONDS_PER_EPOCH;
 }
 
+static __always_inline void setup_if_server_trace(connection_info_t *conn, tp_info_t *tp) {
+    http_connection_metadata_t *meta = bpf_map_lookup_elem(&filtered_connections, conn);
+    if (meta && meta->type == EVENT_HTTP_REQUEST) {
+        u64 pid_tid = bpf_get_current_pid_tgid();
+        bpf_dbg_printk("Saving server span for id=%llx", pid_tid);
+        bpf_map_update_elem(&server_traces, &pid_tid, tp, BPF_ANY);
+    }
+}
+
 static __always_inline void get_or_create_trace_info(connection_info_t *conn, void *u_buf, int bytes_len, s32 capture_header_buffer) {
     tp_info_t *tp = tp_buf();
 
@@ -71,6 +87,7 @@ static __always_inline void get_or_create_trace_info(connection_info_t *conn, vo
         urand_bytes(tp->span_id, SPAN_ID_SIZE_BYTES);
 
         bpf_map_update_elem(&trace_map, conn, tp, BPF_ANY);
+        setup_if_server_trace(conn, tp);
         return;
     }
 
@@ -103,12 +120,17 @@ static __always_inline void get_or_create_trace_info(connection_info_t *conn, vo
     }
 
     bpf_map_update_elem(&trace_map, conn, tp, BPF_ANY);
+    setup_if_server_trace(conn, tp);
 
     return;
 }
 
 static __always_inline tp_info_t *trace_info_for_connection(connection_info_t *conn) {
     return (tp_info_t *)bpf_map_lookup_elem(&trace_map, conn);
+}
+
+static __always_inline u8 valid_span(unsigned char *span_id) {
+    return *((u64 *)span_id) != 0;
 }
 
 #endif

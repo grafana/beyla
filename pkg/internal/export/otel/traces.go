@@ -394,19 +394,15 @@ func spanKind(span *request.Span) trace2.SpanKind {
 }
 
 func handleTraceparent(parentCtx context.Context, span *request.Span) context.Context {
+	t := span.Timings()
 	if span.ParentSpanID.IsValid() {
-		parentCtx = ContextWithTraceParent(parentCtx, span.TraceID, span.ParentSpanID)
-		// if there's no processing span, make new sub span
-		if span.RequestStart == span.Start {
-			parentCtx = ContextWithTraceParent(parentCtx, span.TraceID, span.SpanID)
-		}
-	} else {
-		if span.RequestStart == span.Start {
-			parentCtx = ContextWithTraceParent(parentCtx, span.TraceID, span.SpanID)
-		} else {
-			// let the SpanID be generated, we'll use the one remembered in eBPF in the processing span
-			parentCtx = ContextWithTrace(parentCtx, span.TraceID)
-		}
+		parentCtx = trace2.ContextWithSpanContext(parentCtx, trace2.SpanContext{}.WithTraceID(span.TraceID).WithSpanID(span.ParentSpanID).WithTraceFlags(trace2.FlagsSampled))
+	} else if span.TraceID.IsValid() {
+		parentCtx = ContextWithTrace(parentCtx, span.TraceID)
+	}
+
+	if t.Start.Compare(t.RequestStart) <= 0 {
+		parentCtx = ContextWithTraceParent(parentCtx, span.TraceID, span.SpanID)
 	}
 
 	return parentCtx

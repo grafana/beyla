@@ -72,6 +72,17 @@ typedef struct http_buf {
     u8  buf[TRACE_BUF_SIZE];
 } http_buf_t;
 
+// Keeps track of active accept or connect connection infos
+// From this table we extract the PID of the process and filter
+// HTTP calls we are not interested in
+struct {
+    __uint(type, BPF_MAP_TYPE_LRU_HASH);
+    __type(key, connection_info_t);
+    __type(value, http_connection_metadata_t); // PID_TID group and connection type
+    __uint(max_entries, MAX_CONCURRENT_REQUESTS);
+} filtered_connections SEC(".maps");
+
+
 // Force emitting struct http_request_trace into the ELF for automatic creation of Golang struct
 const http_info_t *unused __attribute__((unused));
 const http_buf_t *unused_1 __attribute__((unused));

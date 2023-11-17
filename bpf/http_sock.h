@@ -17,16 +17,6 @@
 
 volatile const s32 capture_header_buffer = 0;
 
-// Keeps track of active accept or connect connection infos
-// From this table we extract the PID of the process and filter
-// HTTP calls we are not interested in
-struct {
-    __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, connection_info_t);
-    __type(value, http_connection_metadata_t); // PID_TID group and connection type
-    __uint(max_entries, MAX_CONCURRENT_REQUESTS);
-} filtered_connections SEC(".maps");
-
 // Keeps track of the ongoing http connections we match for request/response
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
@@ -229,6 +219,18 @@ static __always_inline void handle_http_response(unsigned char *small_buf, conne
     tp_info_t *tp = trace_info_for_connection(conn);
     if (tp) {
         info->tp = *tp;
+        if (meta->type == EVENT_HTTP_CLIENT && !valid_span(tp->parent_id)) {
+            bpf_dbg_printk("Looking for trace id of a client span");
+            u64 pid_tid = bpf_get_current_pid_tgid();
+            tp_info_t *server_tp = bpf_map_lookup_elem(&server_traces, &pid_tid);
+            if (server_tp) {
+                bpf_dbg_printk("Found existing server span for id=%llx", pid_tid);
+                bpf_memcpy(info->tp.trace_id, server_tp->trace_id, sizeof(info->tp.trace_id));
+                bpf_memcpy(info->tp.parent_id, server_tp->span_id, sizeof(info->tp.parent_id));
+            } else {
+                bpf_dbg_printk("Cannot find server span for id=%llx", pid_tid);
+            }
+        }
     } else {
         bpf_dbg_printk("Can't find trace info, this is a bug!");
     }

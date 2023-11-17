@@ -66,30 +66,6 @@ static __always_inline bool is_traceparent(unsigned char *p) {
     return false;
 }
 
-static __always_inline unsigned char *bpf_strstr_tp(unsigned char *buf, int buf_len) {
-    if (buf_len < 55) {
-        return 0;
-    }
-
-    int p = 0;
-    unsigned char *s = 0;
-
-    for (; p < buf_len-3; p++) {
-        s = &(buf[p]);
-        if (s[0]=='\n' && s[1]=='T' && s[2]=='r') {
-            break;
-        }
-    }
-
-    if (s) {
-        unsigned char *s1 = &(buf[p+1]);
-        if (is_traceparent(s1)) {
-            return s1;
-        }
-    }
-    return 0;
-}
-
 struct callback_ctx {
     unsigned char *buf;
 	u32 pos;

@@ -67,6 +67,19 @@ func testREDMetricsOldHTTP(t *testing.T) {
 		})
 	}
 }
+
+// this needs to be removed once we figure out why Gorilla async didn't work.
+func testREDMetricsShortHTTP(t *testing.T) {
+	for _, testCaseURL := range []string{
+		instrumentedServiceStdURL,
+	} {
+		t.Run(testCaseURL, func(t *testing.T) {
+			waitForTestComponents(t, testCaseURL)
+			testREDMetricsForHTTPLibrary(t, testCaseURL, "testserver", "integration-test")
+		})
+	}
+}
+
 func testREDMetricsForHTTPLibrary(t *testing.T, url, svcName, svcNs string) {
 	path := "/basic/" + rndStr()
 

@@ -13,29 +13,18 @@ import (
 	"github.com/cilium/ebpf"
 )
 
-type bpfFuncInvocation struct {
-	StartMonotimeNs uint64
-	Regs            struct {
-		UserRegs struct {
-			Regs   [31]uint64
-			Sp     uint64
-			Pc     uint64
-			Pstate uint64
-		}
-		OrigX0          uint64
-		Syscallno       int32
-		Unused2         uint32
-		SdeiTtbr1       uint64
-		PmrSave         uint64
-		Stackframe      [2]uint64
-		LockdepHardirqs uint64
-		ExitRcu         uint64
-	}
-}
-
 type bpfGoroutineMetadata struct {
 	Parent    uint64
 	Timestamp uint64
+}
+
+type bpfNewFuncInvocationT struct{ Parent uint64 }
+
+type bpfTpInfoT struct {
+	TraceId  [16]uint8
+	SpanId   [8]uint8
+	ParentId [8]uint8
+	Epoch    uint64
 }
 
 // loadBpf returns the embedded CollectionSpec for bpf.
@@ -88,12 +77,13 @@ type bpfProgramSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpfMapSpecs struct {
-	Events                *ebpf.MapSpec `ebpf:"events"`
-	Newproc1              *ebpf.MapSpec `ebpf:"newproc1"`
-	OngoingGoroutines     *ebpf.MapSpec `ebpf:"ongoing_goroutines"`
-	OngoingServerRequests *ebpf.MapSpec `ebpf:"ongoing_server_requests"`
-	PidCache              *ebpf.MapSpec `ebpf:"pid_cache"`
-	ValidPids             *ebpf.MapSpec `ebpf:"valid_pids"`
+	Events                    *ebpf.MapSpec `ebpf:"events"`
+	GoTraceMap                *ebpf.MapSpec `ebpf:"go_trace_map"`
+	GolangMapbucketStorageMap *ebpf.MapSpec `ebpf:"golang_mapbucket_storage_map"`
+	Newproc1                  *ebpf.MapSpec `ebpf:"newproc1"`
+	OngoingGoroutines         *ebpf.MapSpec `ebpf:"ongoing_goroutines"`
+	PidCache                  *ebpf.MapSpec `ebpf:"pid_cache"`
+	ValidPids                 *ebpf.MapSpec `ebpf:"valid_pids"`
 }
 
 // bpfObjects contains all objects after they have been loaded into the kernel.
@@ -115,20 +105,22 @@ func (o *bpfObjects) Close() error {
 //
 // It can be passed to loadBpfObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpfMaps struct {
-	Events                *ebpf.Map `ebpf:"events"`
-	Newproc1              *ebpf.Map `ebpf:"newproc1"`
-	OngoingGoroutines     *ebpf.Map `ebpf:"ongoing_goroutines"`
-	OngoingServerRequests *ebpf.Map `ebpf:"ongoing_server_requests"`
-	PidCache              *ebpf.Map `ebpf:"pid_cache"`
-	ValidPids             *ebpf.Map `ebpf:"valid_pids"`
+	Events                    *ebpf.Map `ebpf:"events"`
+	GoTraceMap                *ebpf.Map `ebpf:"go_trace_map"`
+	GolangMapbucketStorageMap *ebpf.Map `ebpf:"golang_mapbucket_storage_map"`
+	Newproc1                  *ebpf.Map `ebpf:"newproc1"`
+	OngoingGoroutines         *ebpf.Map `ebpf:"ongoing_goroutines"`
+	PidCache                  *ebpf.Map `ebpf:"pid_cache"`
+	ValidPids                 *ebpf.Map `ebpf:"valid_pids"`
 }
 
 func (m *bpfMaps) Close() error {
 	return _BpfClose(
 		m.Events,
+		m.GoTraceMap,
+		m.GolangMapbucketStorageMap,
 		m.Newproc1,
 		m.OngoingGoroutines,
-		m.OngoingServerRequests,
 		m.PidCache,
 		m.ValidPids,
 	)

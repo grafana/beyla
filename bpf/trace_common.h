@@ -46,6 +46,47 @@ static __always_inline tp_info_t *tp_buf() {
     return bpf_map_lookup_elem(&tp_info_mem, &zero);
 }
 
+struct callback_ctx {
+    unsigned char *buf;
+	u32 pos;
+};
+
+static int tp_match(u32 index, void *data)
+{
+    if (index >= (TRACE_BUF_SIZE-TRACE_PARENT_HEADER_LEN)) {
+        return 1;
+    }
+
+	struct callback_ctx *ctx = data;    
+    unsigned char *s = &(ctx->buf[index]);
+
+    if (is_traceparent(s)) {
+        ctx->pos = index;
+        return 1;
+    }
+
+	return 0;
+}
+
+
+static __always_inline unsigned char *bpf_strstr_tp_loop(unsigned char *buf, int buf_len) {
+    struct callback_ctx data = {
+        .buf = buf,
+        .pos = 0
+    };
+
+    u32 nr_loops = (u32)buf_len;
+
+	bpf_loop(nr_loops, tp_match, &data, 0);
+
+    if (data.pos) {
+        u32 pos = (data.pos > (TRACE_BUF_SIZE-TRACE_PARENT_HEADER_LEN)) ? 0 : data.pos;
+        return &(buf[pos]);
+    }
+
+    return 0;
+}
+
 // Traceparent format: Traceparent: ver (2 chars) - trace_id (32 chars) - span_id (16 chars) - flags (2 chars)
 static __always_inline unsigned char *extract_trace_id(unsigned char *tp_start) {
     return tp_start + 13 + 2 + 1; // strlen("Traceparent: ") + strlen(ver) + strlen('-')

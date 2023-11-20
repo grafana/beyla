@@ -28,7 +28,6 @@
 // user space through the events ringbuffer.
 typedef struct http_request_trace_t {
     u8  type;                           // Must be first
-    u64 id;
     u64 go_start_monotime_ns;
     u64 start_monotime_ns;
     u64 end_monotime_ns;
@@ -48,11 +47,11 @@ typedef struct http_request_trace_t {
 
 typedef struct sql_request_trace_t {
     u8  type;                           // Must be first
-    u64 id;
     u64 start_monotime_ns;
     u64 end_monotime_ns;
     u8  sql[SQL_MAX_LEN];
     u16 status;
+    tp_info_t tp;
 
     pid_info pid;
 } __attribute__((packed)) sql_request_trace;

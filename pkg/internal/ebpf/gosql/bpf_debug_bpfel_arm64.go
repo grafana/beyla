@@ -62,13 +62,13 @@ type bpf_debugProgramSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpf_debugMapSpecs struct {
-	Events                *ebpf.MapSpec `ebpf:"events"`
-	Newproc1              *ebpf.MapSpec `ebpf:"newproc1"`
-	OngoingGoroutines     *ebpf.MapSpec `ebpf:"ongoing_goroutines"`
-	OngoingServerRequests *ebpf.MapSpec `ebpf:"ongoing_server_requests"`
-	OngoingSqlQueries     *ebpf.MapSpec `ebpf:"ongoing_sql_queries"`
-	PidCache              *ebpf.MapSpec `ebpf:"pid_cache"`
-	ValidPids             *ebpf.MapSpec `ebpf:"valid_pids"`
+	Events                    *ebpf.MapSpec `ebpf:"events"`
+	GoTraceMap                *ebpf.MapSpec `ebpf:"go_trace_map"`
+	GolangMapbucketStorageMap *ebpf.MapSpec `ebpf:"golang_mapbucket_storage_map"`
+	OngoingGoroutines         *ebpf.MapSpec `ebpf:"ongoing_goroutines"`
+	OngoingSqlQueries         *ebpf.MapSpec `ebpf:"ongoing_sql_queries"`
+	PidCache                  *ebpf.MapSpec `ebpf:"pid_cache"`
+	ValidPids                 *ebpf.MapSpec `ebpf:"valid_pids"`
 }
 
 // bpf_debugObjects contains all objects after they have been loaded into the kernel.
@@ -90,21 +90,21 @@ func (o *bpf_debugObjects) Close() error {
 //
 // It can be passed to loadBpf_debugObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpf_debugMaps struct {
-	Events                *ebpf.Map `ebpf:"events"`
-	Newproc1              *ebpf.Map `ebpf:"newproc1"`
-	OngoingGoroutines     *ebpf.Map `ebpf:"ongoing_goroutines"`
-	OngoingServerRequests *ebpf.Map `ebpf:"ongoing_server_requests"`
-	OngoingSqlQueries     *ebpf.Map `ebpf:"ongoing_sql_queries"`
-	PidCache              *ebpf.Map `ebpf:"pid_cache"`
-	ValidPids             *ebpf.Map `ebpf:"valid_pids"`
+	Events                    *ebpf.Map `ebpf:"events"`
+	GoTraceMap                *ebpf.Map `ebpf:"go_trace_map"`
+	GolangMapbucketStorageMap *ebpf.Map `ebpf:"golang_mapbucket_storage_map"`
+	OngoingGoroutines         *ebpf.Map `ebpf:"ongoing_goroutines"`
+	OngoingSqlQueries         *ebpf.Map `ebpf:"ongoing_sql_queries"`
+	PidCache                  *ebpf.Map `ebpf:"pid_cache"`
+	ValidPids                 *ebpf.Map `ebpf:"valid_pids"`
 }
 
 func (m *bpf_debugMaps) Close() error {
 	return _Bpf_debugClose(
 		m.Events,
-		m.Newproc1,
+		m.GoTraceMap,
+		m.GolangMapbucketStorageMap,
 		m.OngoingGoroutines,
-		m.OngoingServerRequests,
 		m.OngoingSqlQueries,
 		m.PidCache,
 		m.ValidPids,

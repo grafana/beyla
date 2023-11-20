@@ -8,6 +8,7 @@ import (
 
 	"github.com/grafana/beyla/pkg/internal/request"
 	"github.com/grafana/beyla/pkg/internal/sqlprune"
+	trace2 "go.opentelemetry.io/otel/trace"
 )
 
 var log = slog.With("component", "goexec.spanner")
@@ -45,7 +46,6 @@ func HTTPRequestTraceToSpan(trace *HTTPRequestTrace) request.Span {
 
 	return request.Span{
 		Type:          request.EventType(trace.Type),
-		ID:            trace.Id,
 		Method:        method,
 		Path:          path,
 		Peer:          peer,
@@ -56,6 +56,9 @@ func HTTPRequestTraceToSpan(trace *HTTPRequestTrace) request.Span {
 		Start:         int64(trace.StartMonotimeNs),
 		End:           int64(trace.EndMonotimeNs),
 		Status:        int(trace.Status),
+		TraceID:       trace2.TraceID(trace.Tp.TraceId),
+		SpanID:        trace2.SpanID(trace.Tp.SpanId),
+		ParentSpanID:  trace2.SpanID(trace.Tp.ParentId),
 		Pid: request.PidInfo{
 			HostPID:   trace.Pid.HostPid,
 			UserPID:   trace.Pid.UserPid,
@@ -81,7 +84,6 @@ func SQLRequestTraceToSpan(trace *SQLRequestTrace) request.Span {
 
 	return request.Span{
 		Type:          request.EventType(trace.Type),
-		ID:            trace.Id,
 		Method:        method,
 		Path:          path,
 		Peer:          "",
@@ -92,6 +94,9 @@ func SQLRequestTraceToSpan(trace *SQLRequestTrace) request.Span {
 		Start:         int64(trace.StartMonotimeNs),
 		End:           int64(trace.EndMonotimeNs),
 		Status:        int(trace.Status),
+		TraceID:       trace2.TraceID(trace.Tp.TraceId),
+		SpanID:        trace2.SpanID(trace.Tp.SpanId),
+		ParentSpanID:  trace2.SpanID(trace.Tp.ParentId),
 		Pid: request.PidInfo{
 			HostPID:   trace.Pid.HostPid,
 			UserPID:   trace.Pid.UserPid,

@@ -17,6 +17,9 @@
 #include "bpf_dbg.h"
 #include "http_trace.h"
 #include "ringbuf.h"
+#include "tracing.h"
+#include "trace_util.h"
+#include "go_traceparent.h"
 
 char __license[] SEC("license") = "Dual MIT/GPL";
 
@@ -31,17 +34,6 @@ char __license[] SEC("license") = "Dual MIT/GPL";
 // This element is created in the function start probe and stored in the ongoing_http_requests hashmaps.
 // Then it is retrieved in the return uprobes and used to know the HTTP call duration as well as its
 // attributes (method, path, and status code).
-typedef struct func_invocation_t {
-    u64 start_monotime_ns;
-    struct pt_regs regs; // we store registers on invocation to be able to fetch the arguments at return
-} func_invocation;
-
-struct {
-    __uint(type, BPF_MAP_TYPE_HASH);
-    __type(key, void *); // key: pointer to the request goroutine
-    __type(value, func_invocation);
-    __uint(max_entries, MAX_CONCURRENT_REQUESTS);
-} newproc1 SEC(".maps");
 
 typedef struct goroutine_metadata_t {
     u64 parent;
@@ -56,22 +48,19 @@ struct {
     __uint(pinning, LIBBPF_PIN_BY_NAME);
 } ongoing_goroutines SEC(".maps");
 
-
-// Shared structure that keeps track of ongoing server requests, HTTP or gRPC
 struct {
-    __uint(type, BPF_MAP_TYPE_HASH);
-    __type(key, void *); // key: pointer to the request goroutine
-    __type(value, func_invocation);
+    __uint(type, BPF_MAP_TYPE_LRU_HASH);
+    __type(key, void *); // key: pointer to the goroutine
+    __type(value, tp_info_t);  // value: traceparent info
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
     __uint(pinning, LIBBPF_PIN_BY_NAME);
-} ongoing_server_requests SEC(".maps");
-
+} go_trace_map SEC(".maps");
 
 static __always_inline u64 find_parent_goroutine(void *goroutine_addr) {
     void *r_addr = goroutine_addr;
     int attempts = 0;
     do {
-        func_invocation *p_inv = bpf_map_lookup_elem(&ongoing_server_requests, &r_addr);
+        void *p_inv = bpf_map_lookup_elem(&go_trace_map, &r_addr);
         if (!p_inv) { // not this goroutine running the server request processing
             // Let's find the parent scope
             goroutine_metadata *g_metadata = bpf_map_lookup_elem(&ongoing_goroutines, &r_addr);
@@ -91,5 +80,76 @@ static __always_inline u64 find_parent_goroutine(void *goroutine_addr) {
 
     return 0;
 }
+
+static __always_inline void decode_go_traceparent(unsigned char *buf, unsigned char *trace_id, unsigned char *span_id) {
+    unsigned char *t_id = buf + 2 + 1; // strlen(ver) + strlen("-")
+    unsigned char *s_id = buf + 2 + 1 + 32 + 1; // strlen(ver) + strlen("-") + strlen(trace_id) + strlen("-")
+
+    decode_hex(trace_id, t_id, TRACE_ID_CHAR_LEN);
+    decode_hex(span_id, s_id, SPAN_ID_CHAR_LEN);
+} 
+
+static __always_inline void server_trace_parent(void *goroutine_addr, tp_info_t *tp, void *req_header) {
+    // Get traceparent from the Request.Header
+    void *traceparent_ptr = extract_traceparent_from_req_headers(req_header);
+    if (traceparent_ptr != NULL) {
+        unsigned char buf[W3C_VAL_LENGTH];
+        long res = bpf_probe_read(buf, sizeof(buf), traceparent_ptr);
+        if (res < 0) {
+            bpf_printk("can't copy traceparent header");
+            urand_bytes(tp->trace_id, TRACE_ID_SIZE_BYTES);
+            *((u64 *)tp->parent_id) = 0;
+        } else {
+            decode_go_traceparent(buf, tp->trace_id, tp->parent_id);
+        }
+    } else {
+        urand_bytes(tp->trace_id, TRACE_ID_SIZE_BYTES);
+        *((u64 *)tp->parent_id) = 0;
+    }
+
+    urand_bytes(tp->span_id, SPAN_ID_SIZE_BYTES);
+    bpf_map_update_elem(&go_trace_map, &goroutine_addr, tp, BPF_ANY);
+}
+
+static __always_inline void client_trace_parent(void *goroutine_addr, tp_info_t *tp_i, void *req_header) {
+    // Get traceparent from the Request.Header
+    u8 found_trace_id = 0;
+    
+    if (req_header) {
+        void *traceparent_ptr = extract_traceparent_from_req_headers(req_header);
+        if (traceparent_ptr != NULL) {
+            unsigned char buf[W3C_VAL_LENGTH];
+            long res = bpf_probe_read(buf, sizeof(buf), traceparent_ptr);
+            if (res < 0) {
+                bpf_printk("can't copy traceparent header");
+            } else {
+                found_trace_id = 1;
+                decode_go_traceparent(buf, tp_i->trace_id, tp_i->span_id);
+            }
+        }
+    }
+
+    if (!found_trace_id) {
+        tp_info_t *tp = 0;
+
+        u64 parent_id = find_parent_goroutine(goroutine_addr);
+
+        if (parent_id) {// we found a parent request
+            tp = bpf_map_lookup_elem(&go_trace_map, &parent_id);
+        }
+
+        if (tp) {
+            bpf_dbg_printk("Found parent request trace_parent %llx", tp);
+            *((u64 *)tp_i->trace_id) = *((u64 *)tp->trace_id);
+            *((u64 *)(tp_i->trace_id + 8)) = *((u64 *)(tp->trace_id + 8));
+            *((u64 *)tp_i->parent_id) = *((u64 *)tp->span_id);
+        } else {
+            urand_bytes(tp_i->trace_id, TRACE_ID_SIZE_BYTES);    
+        }
+    }
+
+    urand_bytes(tp_i->span_id, SPAN_ID_SIZE_BYTES);
+}
+
 
 #endif // GO_COMMON_H

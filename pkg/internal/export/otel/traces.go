@@ -392,6 +392,7 @@ func handleTraceparent(parentCtx context.Context, span *request.Span) context.Co
 	}
 
 	if t.Start.Compare(t.RequestStart) <= 0 {
+		fmt.Printf("AAAAAAA %s %d\n", span.TraceID, span.Type)
 		parentCtx = ContextWithTraceParent(parentCtx, span.TraceID, span.SpanID)
 	}
 
@@ -430,6 +431,7 @@ func (r *TracesReporter) makeSpan(parentCtx context.Context, tracer trace2.Trace
 		// Create a child span showing the processing time
 		// Override the active context for the span to be the processing span
 		ctx = ContextWithTraceParent(ctx, span.TraceID, span.SpanID)
+		fmt.Printf("BBBBBBBA %s\n", span.TraceID)
 		_, spP = tracer.Start(ctx, "processing",
 			trace2.WithTimestamp(t.Start),
 			trace2.WithSpanKind(trace2.SpanKindInternal),

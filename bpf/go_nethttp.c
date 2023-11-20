@@ -18,13 +18,27 @@
 #include "go_common.h"
 #include "go_nethttp.h"
 #include "go_traceparent.h"
+#include "tracing.h"
+
+typedef struct http_func_invocation {
+    u64 start_monotime_ns;
+    u64 req_ptr;
+    tp_info_t tp;
+} http_func_invocation_t;
 
 struct {
     __uint(type, BPF_MAP_TYPE_HASH);
     __type(key, void *); // key: pointer to the request goroutine
-    __type(value, func_invocation);
+    __type(value, http_func_invocation_t);
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
 } ongoing_http_client_requests SEC(".maps");
+
+struct {
+    __uint(type, BPF_MAP_TYPE_HASH);
+    __type(key, void *); // key: pointer to the request goroutine
+    __type(value, http_func_invocation_t);
+    __uint(max_entries, MAX_CONCURRENT_REQUESTS);
+} ongoing_http_server_requests SEC(".maps");
 
 /* HTTP Server */
 
@@ -37,13 +51,20 @@ int uprobe_ServeHTTP(struct pt_regs *ctx) {
     void *goroutine_addr = GOROUTINE_PTR(ctx);
     bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
 
-    func_invocation invocation = {
+    void *req = GO_PARAM4(ctx);
+
+    http_func_invocation_t invocation = {
         .start_monotime_ns = bpf_ktime_get_ns(),
-        .regs = *ctx,
+        .req_ptr = (u64)req,
+        .tp = {0}
     };
 
+    if (req) {
+        server_trace_parent(goroutine_addr, &invocation.tp, (void*)(req + req_header_ptr_pos));
+    }
+    
     // Write event
-    if (bpf_map_update_elem(&ongoing_server_requests, &goroutine_addr, &invocation, BPF_ANY)) {
+    if (bpf_map_update_elem(&ongoing_http_server_requests, &goroutine_addr, &invocation, BPF_ANY)) {
         bpf_dbg_printk("can't update map element");
     }
 
@@ -80,15 +101,16 @@ int uprobe_WriteHeader(struct pt_regs *ctx) {
     void *goroutine_addr = GOROUTINE_PTR(ctx);
     bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
 
-    func_invocation *invocation =
-        bpf_map_lookup_elem(&ongoing_server_requests, &goroutine_addr);
-    bpf_map_delete_elem(&ongoing_server_requests, &goroutine_addr);
+    http_func_invocation_t *invocation =
+        bpf_map_lookup_elem(&ongoing_http_server_requests, &goroutine_addr);
+    bpf_map_delete_elem(&ongoing_http_server_requests, &goroutine_addr);
     if (invocation == NULL) {
         void *parent_go = (void *)find_parent_goroutine(goroutine_addr);
         if (parent_go) {
             bpf_dbg_printk("found parent goroutine for header [%llx]", parent_go);
-            invocation = bpf_map_lookup_elem(&ongoing_server_requests, &parent_go);
-            bpf_map_delete_elem(&ongoing_server_requests, &parent_go);
+            invocation = bpf_map_lookup_elem(&ongoing_http_server_requests, &parent_go);
+            bpf_map_delete_elem(&ongoing_http_server_requests, &parent_go);
+            goroutine_addr = parent_go;
         }
         if (!invocation) {
             bpf_dbg_printk("can't read http invocation metadata");
@@ -104,7 +126,6 @@ int uprobe_WriteHeader(struct pt_regs *ctx) {
     
     task_pid(&trace->pid);
     trace->type = EVENT_HTTP_REQUEST;
-    trace->id = (u64)goroutine_addr;
     trace->start_monotime_ns = invocation->start_monotime_ns;
     trace->end_monotime_ns = bpf_ktime_get_ns();
 
@@ -162,16 +183,7 @@ int uprobe_WriteHeader(struct pt_regs *ctx) {
 
     bpf_probe_read(&trace->content_length, sizeof(trace->content_length), (void *)(req_ptr + content_length_ptr_pos));
 
-    // Get traceparent from the Request.Header
-    void *traceparent_ptr = extract_traceparent_from_req_headers((void*)(req_ptr + req_header_ptr_pos));
-    if (traceparent_ptr != NULL) {
-        long res = bpf_probe_read(trace->traceparent, sizeof(trace->traceparent), traceparent_ptr);
-        if (res < 0) {
-            bpf_printk("can't copy traceparent header");
-            bpf_ringbuf_discard(trace, 0);
-            return 0;
-        }
-    }
+    trace->tp = invocation->tp;
 
     trace->status = (u16)(((u64)GO_PARAM2(ctx)) & 0x0ffff);
 
@@ -190,10 +202,15 @@ int uprobe_roundTrip(struct pt_regs *ctx) {
     void *goroutine_addr = GOROUTINE_PTR(ctx);
     bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
 
-    func_invocation invocation = {
+    void *req = GO_PARAM2(ctx);
+
+    http_func_invocation_t invocation = {
         .start_monotime_ns = bpf_ktime_get_ns(),
-        .regs = *ctx,
+        .req_ptr = (u64)req,
+        .tp = {0}
     };
+
+    client_trace_parent(goroutine_addr, &invocation.tp, (void*)(req + req_header_ptr_pos));
 
     // Write event
     if (bpf_map_update_elem(&ongoing_http_client_requests, &goroutine_addr, &invocation, BPF_ANY)) {
@@ -210,7 +227,7 @@ int uprobe_roundTripReturn(struct pt_regs *ctx) {
     void *goroutine_addr = GOROUTINE_PTR(ctx);
     bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
 
-    func_invocation *invocation =
+    http_func_invocation_t *invocation =
         bpf_map_lookup_elem(&ongoing_http_client_requests, &goroutine_addr);
     bpf_map_delete_elem(&ongoing_http_client_requests, &goroutine_addr);
     if (invocation == NULL) {
@@ -224,7 +241,6 @@ int uprobe_roundTripReturn(struct pt_regs *ctx) {
         return 0;
     }
 
-    trace->id = find_parent_goroutine(goroutine_addr);
     task_pid(&trace->pid);
     trace->type = EVENT_HTTP_CLIENT;
     trace->start_monotime_ns = invocation->start_monotime_ns;
@@ -234,7 +250,7 @@ int uprobe_roundTripReturn(struct pt_regs *ctx) {
     // Read arguments from the original set of registers
 
     // Get request/response struct
-    void *req_ptr = GO_PARAM2(&(invocation->regs));
+    void *req_ptr = (void *)invocation->req_ptr;
     void *resp_ptr = (void *)GO_PARAM1(ctx);
 
     // Get method from Request.Method
@@ -261,16 +277,7 @@ int uprobe_roundTripReturn(struct pt_regs *ctx) {
         return 0;
     }
 
-    // Get traceparent from the Request.Header
-    void *traceparent_ptr = extract_traceparent_from_req_headers((void*)(req_ptr + req_header_ptr_pos));
-    if (traceparent_ptr != NULL) {
-        long res = bpf_probe_read(trace->traceparent, sizeof(trace->traceparent), traceparent_ptr);
-        if (res < 0) {
-            bpf_printk("can't copy traceparent header");
-            bpf_ringbuf_discard(trace, 0);
-            return 0;
-        }
-    }
+    trace->tp = invocation->tp;
 
     bpf_probe_read(&trace->content_length, sizeof(trace->content_length), (void *)(req_ptr + content_length_ptr_pos));
 

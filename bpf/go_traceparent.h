@@ -19,7 +19,7 @@
 #include "bpf_dbg.h"
 #include "bpf_helpers.h"
 
-#define MAX_BUCKETS 1
+#define MAX_BUCKETS 8
 #define W3C_KEY_LENGTH 11
 #define W3C_VAL_LENGTH 55
 

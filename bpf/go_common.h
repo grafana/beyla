@@ -100,9 +100,11 @@ static __always_inline void server_trace_parent(void *goroutine_addr, tp_info_t 
             urand_bytes(tp->trace_id, TRACE_ID_SIZE_BYTES);
             *((u64 *)tp->parent_id) = 0;
         } else {
+            bpf_dbg_printk("Decoding traceparent from headers %s", buf);
             decode_go_traceparent(buf, tp->trace_id, tp->parent_id);
         }
     } else {
+        bpf_dbg_printk("No traceparent in headers, generating");
         urand_bytes(tp->trace_id, TRACE_ID_SIZE_BYTES);
         *((u64 *)tp->parent_id) = 0;
     }

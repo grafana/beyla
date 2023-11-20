@@ -312,9 +312,9 @@ func fetchProcessPorts(scanPorts bool) (map[PID]processPorts, error) {
 		}
 		var openPorts []uint32
 		for _, conn := range conns {
-			if conn.Laddr.Port < ephemeralPortMin {
-				openPorts = append(openPorts, conn.Laddr.Port)
-			}
+			//if conn.Laddr.Port < ephemeralPortMin {
+			openPorts = append(openPorts, conn.Laddr.Port)
+			//}
 		}
 		processes[PID(pid)] = processPorts{pid: PID(pid), openPorts: openPorts}
 	}

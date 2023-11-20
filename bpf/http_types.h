@@ -5,23 +5,12 @@
 #include "bpf_helpers.h"
 #include "http_defs.h"
 #include "pid.h"
+#include "tracing.h"
 
 #define FULL_BUF_SIZE 160 // should be enough for most URLs, we may need to extend it if not. Must be multiple of 16 for the copy to work.
 #define TRACE_BUF_SIZE 1024 // must be power of 2, we do an & to limit the buffer size
 
 #define CONN_INFO_FLAG_TRACE 0x1
-
-#define TRACE_ID_SIZE_BYTES 16
-#define SPAN_ID_SIZE_BYTES   8
-#define TRACE_ID_CHAR_LEN   32
-#define SPAN_ID_CHAR_LEN    16
-
-typedef struct tp_info {
-    unsigned char trace_id[TRACE_ID_SIZE_BYTES];
-    unsigned char span_id[SPAN_ID_SIZE_BYTES];
-    unsigned char parent_id[SPAN_ID_SIZE_BYTES];
-    u64 epoch;
-} tp_info_t;
 
 // Struct to keep information on the connections in flight 
 // s = source, d = destination

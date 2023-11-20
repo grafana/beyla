@@ -3,8 +3,9 @@ package httpfltr
 import (
 	"strings"
 
-	"github.com/grafana/beyla/pkg/internal/request"
 	"go.opentelemetry.io/otel/trace"
+
+	"github.com/grafana/beyla/pkg/internal/request"
 )
 
 func httpInfoToSpan(info *HTTPInfo) request.Span {

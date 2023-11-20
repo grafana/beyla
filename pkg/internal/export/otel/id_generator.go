@@ -3,7 +3,6 @@ package otel
 import (
 	"context"
 	"encoding/binary"
-	"fmt"
 	"math/rand"
 
 	"go.opentelemetry.io/otel/trace"
@@ -81,17 +80,15 @@ func (e *BeylaIDGenerator) NewIDs(ctx context.Context) (trace.TraceID, trace.Spa
 		if traceID != nil {
 			return *traceID, randomSpanID()
 		}
-		fmt.Println("BAD BAD BAD")
 		return randomTraceID(), randomSpanID()
 	}
 
 	return trace.TraceID(pair.traceID), trace.SpanID(pair.spanID)
 }
 
-func (e *BeylaIDGenerator) NewSpanID(ctx context.Context, traceID trace.TraceID) trace.SpanID {
+func (e *BeylaIDGenerator) NewSpanID(ctx context.Context, _ trace.TraceID) trace.SpanID {
 	pair := currentTraceAndSpan(ctx)
 	if pair == nil || !trace.SpanID(pair.spanID).IsValid() {
-		fmt.Printf("I'm getting new random SpanID, this is OK\n")
 		return randomSpanID()
 	}
 

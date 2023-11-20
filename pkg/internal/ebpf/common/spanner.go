@@ -6,9 +6,10 @@ import (
 	"net"
 	"strconv"
 
+	trace2 "go.opentelemetry.io/otel/trace"
+
 	"github.com/grafana/beyla/pkg/internal/request"
 	"github.com/grafana/beyla/pkg/internal/sqlprune"
-	trace2 "go.opentelemetry.io/otel/trace"
 )
 
 var log = slog.With("component", "goexec.spanner")

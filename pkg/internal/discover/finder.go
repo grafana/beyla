@@ -15,26 +15,34 @@ import (
 	"github.com/grafana/beyla/pkg/internal/ebpf/nethttp"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/pipe"
+	"github.com/grafana/beyla/pkg/internal/pipe/global"
 )
 
 // ProcessFinder pipeline architecture. It uses the Pipes library to instantiate and connect all the nodes.
 type ProcessFinder struct {
 	Watcher         `sendTo:"CriteriaMatcher"`
 	CriteriaMatcher `sendTo:"ExecTyper"`
-	ExecTyper       `sendTo:"TraceAttacher"`
+	ExecTyper       `sendTo:"ContainerDBUpdater"`
+	// ContainerDBUpdater will be only enabled if Kubernetes configuration is enabled
+	*ContainerDBUpdater `forwardTo:"TraceAttacher"`
 	TraceAttacher
 }
 
-func NewProcessFinder(ctx context.Context, cfg *pipe.Config, metrics imetrics.Reporter) *ProcessFinder {
+func NewProcessFinder(ctx context.Context, cfg *pipe.Config, ctxInfo *global.ContextInfo) *ProcessFinder {
+	var cntDB *ContainerDBUpdater
+	if cfg.Attributes.Kubernetes.Enabled() {
+		cntDB = &ContainerDBUpdater{DB: ctxInfo.K8sDatabase}
+	}
 	return &ProcessFinder{
-		Watcher:         Watcher{Ctx: ctx, Cfg: cfg},
-		CriteriaMatcher: CriteriaMatcher{Cfg: cfg},
-		ExecTyper:       ExecTyper{Cfg: cfg, Metrics: metrics},
+		Watcher:            Watcher{Ctx: ctx, Cfg: cfg},
+		CriteriaMatcher:    CriteriaMatcher{Cfg: cfg},
+		ExecTyper:          ExecTyper{Cfg: cfg, Metrics: ctxInfo.Metrics},
+		ContainerDBUpdater: cntDB,
 		TraceAttacher: TraceAttacher{
 			Cfg:               cfg,
 			Ctx:               ctx,
 			DiscoveredTracers: make(chan *ebpf.ProcessTracer),
-			Metrics:           metrics,
+			Metrics:           ctxInfo.Metrics,
 		},
 	}
 }
@@ -46,6 +54,7 @@ func (pf *ProcessFinder) Start(cfg *pipe.Config) (<-chan *ebpf.ProcessTracer, er
 	graph.RegisterStart(gb, WatcherProvider)
 	graph.RegisterMiddle(gb, CriteriaMatcherProvider)
 	graph.RegisterMiddle(gb, ExecTyperProvider)
+	graph.RegisterMiddle(gb, ContainerDBUpdaterProvider)
 	graph.RegisterTerminal(gb, TraceAttacherProvider)
 	pipeline, err := gb.Build(pf)
 	if err != nil {

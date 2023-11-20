@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"path"
+	"strings"
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -19,10 +20,10 @@ import (
 )
 
 const (
-	kubeConfigEnvVariable = "KUBECONFIG"
-	syncTime              = 10 * time.Minute
-	IndexPodIPs           = "idx_pod"
-	IndexReplicaSetNames  = "idx_rs"
+	kubeConfigEnvVariable  = "KUBECONFIG"
+	syncTime               = 10 * time.Minute
+	IndexPodByContainerIDs = "idx_pod_by_container"
+	IndexReplicaSetNames   = "idx_rs"
 )
 
 func klog() *slog.Logger {
@@ -54,7 +55,7 @@ type PodInfo struct {
 	NodeName       string
 	// StartTimeStr caches value of ObjectMeta.StartTimestamp.String()
 	StartTimeStr string
-	ips          []string
+	ContainerIDs []string
 }
 
 type ReplicaSetInfo struct {
@@ -63,8 +64,9 @@ type ReplicaSetInfo struct {
 }
 
 var podIndexer = cache.Indexers{
-	IndexPodIPs: func(obj interface{}) ([]string, error) {
-		return obj.(*PodInfo).ips, nil
+	IndexPodByContainerIDs: func(obj interface{}) ([]string, error) {
+		pi := obj.(*PodInfo)
+		return pi.ContainerIDs, nil
 	},
 }
 
@@ -76,11 +78,11 @@ var rsIndexer = cache.Indexers{
 	},
 }
 
-// GetPodInfo fetches metadata from a Pod given its IP
-func (k *Metadata) GetPodInfo(ip string) (*PodInfo, bool) {
-	objs, err := k.pods.GetIndexer().ByIndex(IndexPodIPs, ip)
+// GetContanerPod fetches metadata from a Pod given the name of one of its containera
+func (k *Metadata) GetContanerPod(containerID string) (*PodInfo, bool) {
+	objs, err := k.pods.GetIndexer().ByIndex(IndexPodByContainerIDs, containerID)
 	if err != nil {
-		klog().Debug("error accessing index by IP. Ignoring", "error", err, "ip", ip)
+		klog().Debug("error accessing index by IP. Ignoring", "error", err, "containerID", containerID)
 		return nil, false
 	}
 	if len(objs) == 0 {
@@ -99,13 +101,23 @@ func (k *Metadata) initPodInformer(informerFactory informers.SharedInformerFacto
 		if !ok {
 			return nil, fmt.Errorf("was expecting a Pod. Got: %T", i)
 		}
-		ips := make([]string, 0, len(pod.Status.PodIPs))
-		for _, ip := range pod.Status.PodIPs {
-			// ignoring host-networked Pod IPs
-			if ip.IP != pod.Status.HostIP {
-				ips = append(ips, ip.IP)
-			}
+		containerIDs := make([]string, 0,
+			len(pod.Status.ContainerStatuses)+
+				len(pod.Status.InitContainerStatuses)+
+				len(pod.Status.EphemeralContainerStatuses))
+		for i := range pod.Status.ContainerStatuses {
+			containerIDs = append(containerIDs,
+				rmContainerIDSchema(pod.Status.ContainerStatuses[i].ContainerID))
 		}
+		for i := range pod.Status.InitContainerStatuses {
+			containerIDs = append(containerIDs,
+				rmContainerIDSchema(pod.Status.InitContainerStatuses[i].ContainerID))
+		}
+		for i := range pod.Status.EphemeralContainerStatuses {
+			containerIDs = append(containerIDs,
+				rmContainerIDSchema(pod.Status.EphemeralContainerStatuses[i].ContainerID))
+		}
+
 		var replicaSet string
 		for i := range pod.OwnerReferences {
 			or := &pod.OwnerReferences[i]
@@ -119,7 +131,7 @@ func (k *Metadata) initPodInformer(informerFactory informers.SharedInformerFacto
 			log.Debug("inserting pod", "name", pod.Name, "namespace", pod.Namespace,
 				"uid", pod.UID, "replicaSet", replicaSet,
 				"node", pod.Spec.NodeName, "startTime", startTime,
-				"ips", ips)
+				"containerIDs", containerIDs)
 		}
 		return &PodInfo{
 			ObjectMeta: metav1.ObjectMeta{
@@ -130,17 +142,27 @@ func (k *Metadata) initPodInformer(informerFactory informers.SharedInformerFacto
 			ReplicaSetName: replicaSet,
 			NodeName:       pod.Spec.NodeName,
 			StartTimeStr:   startTime,
-			ips:            ips,
+			ContainerIDs:   containerIDs,
 		}, nil
 	}); err != nil {
 		return fmt.Errorf("can't set pods transform: %w", err)
 	}
 	if err := pods.AddIndexers(podIndexer); err != nil {
-		return fmt.Errorf("can't add %s indexer to Pods informer: %w", IndexPodIPs, err)
+		return fmt.Errorf("can't add %s indexer to Pods informer: %w", IndexPodByContainerIDs, err)
 	}
 
 	k.pods = pods
 	return nil
+}
+
+// rmContainerIDSchema extracts the hex ID of a container ID that is provided in the form:
+// containerd://40c03570b6f4c30bc8d69923d37ee698f5cfcced92c7b7df1c47f6f7887378a9
+func rmContainerIDSchema(containerID string) string {
+	if parts := strings.Split(containerID, "://"); len(parts) > 1 {
+		return parts[1]
+	} else {
+		return parts[0]
+	}
 }
 
 // GetReplicaSetInfo fetches metadata from a ReplicaSet given its name

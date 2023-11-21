@@ -1,6 +1,7 @@
 package ebpfcommon
 
 import (
+	"fmt"
 	"log/slog"
 
 	"github.com/grafana/beyla/pkg/internal/request"
@@ -8,23 +9,27 @@ import (
 
 const updatesBufLen = 10
 
+// NSPIDsMap associates any
+type NSPIDsMap[T any] struct {
+	nsPids map[uint32]map[uint32]T
+}
+
+func NewNSPIDsMap[T any]() NSPIDsMap[T] {
+	return NSPIDsMap[T]{nsPids: make(map[uint32]map[uint32]T)}
+}
+
 // injectable functions (can be replaced in tests). It reads the
 // current process namespace from the /proc filesystem. It is required to
 // choose to filter traces using whether the User-space or Host-space PIDs
-var readNamespace = func(pid int32) (uint32, error) {
-	return FindNamespace(pid)
-}
-
-var readNamespacePIDs = func(pid int32) ([]uint32, error) {
-	return FindNamespacedPids(pid)
-}
+var readNamespace = FindNamespace
+var readNamespacePIDs = FindNamespacedPids
 
 // PIDsFilter keeps a thread-safe copy of the PIDs whose traces are allowed to
 // be forwarded. Its Filter method filters the request.Span instances whose
 // PIDs are not in the allowed list.
 type PIDsFilter struct {
 	log     *slog.Logger
-	current map[uint32]map[uint32]struct{}
+	current NSPIDsMap[struct{}]
 	queue   chan pidEvent
 }
 
@@ -43,7 +48,7 @@ type pidEvent struct {
 func NewPIDsFilter(log *slog.Logger) *PIDsFilter {
 	return &PIDsFilter{
 		log:     log,
-		current: map[uint32]map[uint32]struct{}{},
+		current: NewNSPIDsMap[struct{}](),
 		queue:   make(chan pidEvent, updatesBufLen),
 	}
 }
@@ -58,7 +63,7 @@ func (pf *PIDsFilter) BlockPID(pid uint32) {
 
 func (pf *PIDsFilter) CurrentPIDs() map[uint32]map[uint32]struct{} {
 	pf.updatePIDs()
-	return pf.current
+	return pf.current.nsPids
 }
 
 func (pf *PIDsFilter) Filter(inputSpans []request.Span) []request.Span {
@@ -70,7 +75,7 @@ func (pf *PIDsFilter) Filter(inputSpans []request.Span) []request.Span {
 		span := &inputSpans[i]
 
 		// We first confirm that the current namespace seen by BPF is tracked by Beyla
-		ns, nsExists := pf.current[span.Pid.Namespace]
+		ns, nsExists := pf.current.nsPids[span.Pid.Namespace]
 
 		if !nsExists {
 			continue
@@ -100,9 +105,13 @@ func (pf *PIDsFilter) updatePIDs() {
 		case e := <-pf.queue:
 			switch e.op {
 			case ADD:
-				pf.addPID(e.pid)
+				if err := pf.current.AddPID(e.pid, struct{}{}); err != nil {
+					pf.log.Error("setting PID namespace", "error", err)
+				}
 			case DEL:
-				pf.removePID(e.pid)
+				if _, err := pf.current.RemovePID(e.pid); err != nil {
+					pf.log.Error("removing PID", "error", err)
+				}
 			default:
 				pf.log.Error("Unsupported PID operation")
 			}
@@ -113,49 +122,58 @@ func (pf *PIDsFilter) updatePIDs() {
 	}
 }
 
-func (pf *PIDsFilter) addPID(pid uint32) {
-	nsid, err := readNamespace(int32(pid))
-
+func (pm *NSPIDsMap[T]) AddPID(pid uint32, val T) error {
+	nsid, err := readNamespace(pid)
 	if err != nil {
-		pf.log.Error("Error looking up namespace for tracking PID", "pid", pid, "error", err)
-		return
+		return fmt.Errorf("looking up namespace for tracking PID %d: %w", pid, err)
 	}
-
-	ns, nsExists := pf.current[nsid]
+	fmt.Println("namespace for pid", pid, ":", nsid)
+	ns, nsExists := pm.nsPids[nsid]
 	if !nsExists {
-		ns = make(map[uint32]struct{})
-		pf.current[nsid] = ns
+		ns = map[uint32]T{}
+		pm.nsPids[nsid] = ns
 	}
 
-	allPids, err := readNamespacePIDs(int32(pid))
+	allPids, err := readNamespacePIDs(pid)
 
 	if err != nil {
-		pf.log.Error("Error looking up namespaced pids", "pid", pid, "error", err)
-		return
+		return fmt.Errorf("PID %d, NS %d. Looking up for namespaced PIDs: %w", pid, nsid, err)
 	}
 
 	for _, p := range allPids {
-		ns[p] = struct{}{}
+		ns[p] = val
 	}
+	return nil
 }
 
-func (pf *PIDsFilter) removePID(pid uint32) {
-	nsid, err := readNamespace(int32(pid))
+// RemovePID removes the PID namespace, if the PID could be removed
+func (pm *NSPIDsMap[T]) RemovePID(pid uint32) (uint32, error) {
+	nsid, err := readNamespace(pid)
 
 	if err != nil {
-		pf.log.Error("Error looking up namespace for removing PID", "pid", pid, "error", err)
-		return
+		return 0, fmt.Errorf("looking up namespace for removing PID %d: %w", pid, err)
 	}
 
-	ns, nsExists := pf.current[nsid]
+	ns, nsExists := pm.nsPids[nsid]
 	if !nsExists {
-		return
+		return nsid, nil
 	}
 
 	delete(ns, pid)
 	if len(ns) == 0 {
-		delete(pf.current, nsid)
+		delete(pm.nsPids, nsid)
 	}
+	return nsid, nil
+}
+
+func (pm *NSPIDsMap[T]) Get(namespace, pid uint32) (T, bool) {
+	if pids, ok := pm.nsPids[namespace]; ok {
+		if t, ok := pids[pid]; ok {
+			return t, true
+		}
+	}
+	var t T
+	return t, false
 }
 
 // IdentityPidsFilter is a PIDsFilter that does not filter anything. It is feasible

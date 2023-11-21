@@ -78,8 +78,8 @@ var rsIndexer = cache.Indexers{
 	},
 }
 
-// GetContanerPod fetches metadata from a Pod given the name of one of its containera
-func (k *Metadata) GetContanerPod(containerID string) (*PodInfo, bool) {
+// GetContainerPod fetches metadata from a Pod given the name of one of its containera
+func (k *Metadata) GetContainerPod(containerID string) (*PodInfo, bool) {
 	objs, err := k.pods.GetIndexer().ByIndex(IndexPodByContainerIDs, containerID)
 	if err != nil {
 		klog().Debug("error accessing index by IP. Ignoring", "error", err, "containerID", containerID)
@@ -166,7 +166,7 @@ func rmContainerIDSchema(containerID string) string {
 }
 
 // GetReplicaSetInfo fetches metadata from a ReplicaSet given its name
-func (k *Metadata) GetReplicaSetInfo(name string) (*PodInfo, bool) {
+func (k *Metadata) GetReplicaSetInfo(name string) (*ReplicaSetInfo, bool) {
 	objs, err := k.replicaSets.GetIndexer().ByIndex(IndexReplicaSetNames, name)
 	if err != nil {
 		klog().Debug("error accessing ReplicaSet index by name. Ignoring",
@@ -176,7 +176,7 @@ func (k *Metadata) GetReplicaSetInfo(name string) (*PodInfo, bool) {
 	if len(objs) == 0 {
 		return nil, false
 	}
-	return objs[0].(*PodInfo), true
+	return objs[0].(*ReplicaSetInfo), true
 }
 
 func (k *Metadata) initReplicaSetInformer(informerFactory informers.SharedInformerFactory) error {

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/grafana/beyla/pkg/internal/request"
 )
@@ -20,10 +21,10 @@ var spanSet = []request.Span{
 }
 
 func TestFilter_SameNS(t *testing.T) {
-	readNamespace = func(_ int32) (uint32, error) {
+	readNamespace = func(_ uint32) (uint32, error) {
 		return 33, nil
 	}
-	readNamespacePIDs = func(pid int32) ([]uint32, error) {
+	readNamespacePIDs = func(pid uint32) ([]uint32, error) {
 		return []uint32{uint32(pid)}, nil
 	}
 	pf := NewPIDsFilter(slog.With("env", "testing"))
@@ -41,11 +42,11 @@ func TestFilter_SameNS(t *testing.T) {
 }
 
 func TestFilter_DifferentNS(t *testing.T) {
-	readNamespace = func(_ int32) (uint32, error) {
+	readNamespace = func(_ uint32) (uint32, error) {
 		return 22, nil
 	}
-	readNamespacePIDs = func(pid int32) ([]uint32, error) {
-		return []uint32{uint32(pid)}, nil
+	readNamespacePIDs = func(pid uint32) ([]uint32, error) {
+		return []uint32{pid}, nil
 	}
 	pf := NewPIDsFilter(slog.With("env", "testing"))
 	pf.AllowPID(123)
@@ -58,10 +59,10 @@ func TestFilter_DifferentNS(t *testing.T) {
 }
 
 func TestFilter_Block(t *testing.T) {
-	readNamespace = func(_ int32) (uint32, error) {
+	readNamespace = func(_ uint32) (uint32, error) {
 		return 33, nil
 	}
-	readNamespacePIDs = func(pid int32) ([]uint32, error) {
+	readNamespacePIDs = func(pid uint32) ([]uint32, error) {
 		return []uint32{uint32(pid)}, nil
 	}
 	pf := NewPIDsFilter(slog.With("env", "testing"))
@@ -79,13 +80,13 @@ func TestFilter_Block(t *testing.T) {
 }
 
 func TestFilter_NewNSLater(t *testing.T) {
-	readNamespace = func(pid int32) (uint32, error) {
+	readNamespace = func(pid uint32) (uint32, error) {
 		if pid == 1000 {
 			return 44, nil
 		}
 		return 33, nil
 	}
-	readNamespacePIDs = func(pid int32) ([]uint32, error) {
+	readNamespacePIDs = func(pid uint32) ([]uint32, error) {
 		return []uint32{uint32(pid)}, nil
 	}
 	pf := NewPIDsFilter(slog.With("env", "testing"))
@@ -124,4 +125,32 @@ func TestFilter_NewNSLater(t *testing.T) {
 		{Pid: request.PidInfo{UserPID: 123, HostPID: 333, Namespace: 33}},
 		{Pid: request.PidInfo{UserPID: 789, HostPID: 234, Namespace: 33}},
 	}, pf.Filter(spanSet))
+}
+
+func TestNSPidsMap(t *testing.T) {
+	readNamespace = func(pid uint32) (uint32, error) {
+		return pid + 1000, nil
+	}
+	readNamespacePIDs = func(pid uint32) ([]uint32, error) {
+		return []uint32{pid, pid + 1, pid + 2}, nil
+	}
+	pm := NewNSPIDsMap[string]()
+	require.NoError(t, pm.AddPID(123, "foo"))
+
+	val, ok := pm.Get(1123, 123)
+	require.True(t, ok)
+	assert.Equal(t, "foo", val)
+	val, ok = pm.Get(1123, 124)
+	require.True(t, ok)
+	assert.Equal(t, "foo", val)
+	val, ok = pm.Get(1123, 125)
+	require.True(t, ok)
+	assert.Equal(t, "foo", val)
+
+	ns, err := pm.RemovePID(123)
+	require.NoError(t, err)
+	assert.EqualValues(t, 1123, ns)
+
+	_, ok = pm.Get(1123, 123)
+	require.False(t, ok)
 }

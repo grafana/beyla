@@ -17,9 +17,9 @@ func ContainerDBUpdaterProvider(cn *ContainerDBUpdater) (node.MiddleFunc[[]Event
 				ev := &instrumentables[i]
 				switch ev.Type {
 				case EventCreated:
-					cn.DB.AddProcess(int(ev.Obj.FileInfo.Pid))
+					cn.DB.AddProcess(uint32(ev.Obj.FileInfo.Pid))
 				case EventDeleted:
-					cn.DB.DeleteProcess(int(ev.Obj.FileInfo.Pid))
+					cn.DB.DeleteProcess(uint32(ev.Obj.FileInfo.Pid))
 				}
 			}
 			out <- instrumentables

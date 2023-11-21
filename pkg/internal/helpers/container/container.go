@@ -19,10 +19,10 @@ type Info struct {
 // 0::/docker/<hex...>/kubelet.slice/kubelet-kubepods.slice/kubelet-kubepods-besteffort.slice/
 // kubelet-kubepods-besteffort-pod<hex...>.slice/cri-containerd-<hex...>.scope
 // where the last <hex...> chain is the container ID inside its Pod
-var dockerCgroup = regexp.MustCompile(`^\d+:.*:/docker/.*-(.+).scope$`)
+var dockerCgroup = regexp.MustCompile(`^\d+:.*:.*/kubelet.slice/.*-(.+).scope$`)
 
-func InfoForPID(pid int) (Info, error) {
-	cgroupFile := procRoot + strconv.Itoa(pid) + "/cgroup"
+func InfoForPID(pid uint32) (Info, error) {
+	cgroupFile := procRoot + strconv.Itoa(int(pid)) + "/cgroup"
 	cgroupBytes, err := os.ReadFile(cgroupFile)
 	if err != nil {
 		return Info{}, fmt.Errorf("reading %s: %w", cgroupFile, err)

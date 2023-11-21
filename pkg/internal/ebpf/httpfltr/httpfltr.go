@@ -27,7 +27,9 @@ import (
 )
 
 //go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -type http_buf_t -target amd64,arm64 bpf ../../../../bpf/http_sock.c -- -I../../../../bpf/headers
+//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -type http_buf_t -target amd64,arm64 bpf_tp ../../../../bpf/http_sock.c -- -I../../../../bpf/headers -DBPF_TRACEPARENT
 //go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -type http_buf_t -target amd64,arm64 bpf_debug ../../../../bpf/http_sock.c -- -I../../../../bpf/headers -DBPF_DEBUG
+//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -type http_buf_t -target amd64,arm64 bpf_tp_debug ../../../../bpf/http_sock.c -- -I../../../../bpf/headers -DBPF_DEBUG -DBPF_TRACEPARENT
 
 var activePids, _ = lru.New[uint32, svc.ID](256)
 
@@ -118,6 +120,15 @@ func (p *Tracer) Load() (*ebpf.CollectionSpec, error) {
 	loader := loadBpf
 	if p.cfg.EBPF.BpfDebug {
 		loader = loadBpf_debug
+	}
+
+	kernelMajor, kernelMinor := ebpf2.KernelVersion()
+	if kernelMajor > 5 || (kernelMajor == 5 && kernelMinor >= 17) {
+		p.log.Info("Found Linux kernel later than 5.17, enabling trace information parsing", "major", kernelMajor, "minor", kernelMinor)
+		loader = loadBpf_tp
+		if p.cfg.EBPF.BpfDebug {
+			loader = loadBpf_tp_debug
+		}
 	}
 
 	return loader()

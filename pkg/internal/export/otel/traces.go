@@ -224,7 +224,7 @@ func (r *TracesReporter) close() {
 		}
 	}
 	if err := r.traceExporter.Shutdown(r.ctx); err != nil {
-		log.Error("closing traces exporter", err)
+		log.Error("closing traces exporter", "error", err)
 	}
 }
 

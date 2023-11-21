@@ -329,7 +329,7 @@ int BPF_KRETPROBE(kretprobe_tcp_recvmsg, int copied_len) {
 
     if (parse_sock_info((struct sock *)args->sock_ptr, &info)) {
         sort_connection_info(&info);
-        dbg_print_http_connection_info(&info);
+        //dbg_print_http_connection_info(&info);
         handle_buf_with_connection(&info, (void *)args->iovec_ptr, copied_len, 0);
     }
 

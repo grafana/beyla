@@ -51,6 +51,7 @@ struct callback_ctx {
 	u32 pos;
 };
 
+#ifdef BPF_TRACEPARENT
 static int tp_match(u32 index, void *data)
 {
     if (index >= (TRACE_BUF_SIZE-TRACE_PARENT_HEADER_LEN)) {
@@ -86,6 +87,7 @@ static __always_inline unsigned char *bpf_strstr_tp_loop(unsigned char *buf, int
 
     return 0;
 }
+#endif
 
 // Traceparent format: Traceparent: ver (2 chars) - trace_id (32 chars) - span_id (16 chars) - flags (2 chars)
 static __always_inline unsigned char *extract_trace_id(unsigned char *tp_start) {
@@ -124,6 +126,7 @@ static __always_inline void get_or_create_trace_info(http_connection_metadata_t 
     urand_bytes(tp->span_id, SPAN_ID_SIZE_BYTES);
     bpf_memset(tp->parent_id, 0, sizeof(tp->span_id));
 
+#ifdef BPF_TRACEPARENT
     // The below buffer scan can be expensive on high volume of requests. We make it optional
     // for customers to enable it. Off by default.
     if (!capture_header_buffer || !bpf_core_enum_value_exists(enum bpf_func_id, BPF_FUNC_loop)) {
@@ -163,6 +166,9 @@ static __always_inline void get_or_create_trace_info(http_connection_metadata_t 
     } else {
         return;
     }
+#else
+    urand_bytes(tp->trace_id, TRACE_ID_SIZE_BYTES);
+#endif
 
     bpf_map_update_elem(&trace_map, conn, tp, BPF_ANY);
     server_or_client_trace(meta, conn, tp);

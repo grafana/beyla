@@ -13,3 +13,7 @@ func (pt *ProcessTracer) Run(_ context.Context, _ chan<- []request.Span) {}
 func RunUtilityTracer(_ UtilityTracer) error {
 	return nil
 }
+
+func KernelVersion() (major, minor int) {
+	return 0, 0
+}

@@ -1,7 +1,6 @@
 package transform
 
 import (
-	"fmt"
 	"log/slog"
 	"strings"
 	"time"
@@ -92,9 +91,7 @@ func (md *metadataDecorator) do(span *request.Span) {
 	if span.Metadata == nil {
 		span.Metadata = make(map[string]string, 5)
 	}
-	//fmt.Println("checking for ns/upid", span.Pid.Namespace, span.Pid.UserPID)
 	if podInfo, ok := md.db.OwnerPodInfo(span.Pid.Namespace, span.Pid.UserPID); ok {
-		fmt.Printf("Found peerinfo %+v\n", podInfo)
 		appendMetadata(span.Metadata, podInfo)
 	}
 }

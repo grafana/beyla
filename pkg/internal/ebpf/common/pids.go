@@ -127,7 +127,6 @@ func (pm *NSPIDsMap[T]) AddPID(pid uint32, val T) error {
 	if err != nil {
 		return fmt.Errorf("looking up namespace for tracking PID %d: %w", pid, err)
 	}
-	fmt.Println("namespace for pid", pid, ":", nsid)
 	ns, nsExists := pm.nsPids[nsid]
 	if !nsExists {
 		ns = map[uint32]T{}

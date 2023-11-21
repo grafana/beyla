@@ -42,7 +42,6 @@ func (id *Database) AddProcess(pid uint32) {
 		dblog().Debug("failing to get container information", "pid", pid, "error", err)
 		return
 	}
-	fmt.Printf("add: %p %p %d/%d %#v\n", id, id.containerPIDs, pid, id.containerPIDs)
 	if err := id.containerPIDs.AddPID(pid, &ifp); err != nil {
 		dblog().Debug("failing to associate container info to PID", "pid", pid, "error", err)
 	}
@@ -57,7 +56,6 @@ func (id *Database) DeleteProcess(pid uint32) {
 }
 
 func (id *Database) OwnerPodInfo(namespace, pid uint32) (*PodInfo, bool) {
-	fmt.Printf("%p %p %d/%d %#v\n", id, id.containerPIDs, namespace, pid, id.containerPIDs)
 	nsp := nsPid{ns: namespace, pid: pid}
 	pod, ok := id.fetchedContainersCache[nsp]
 	if !ok {

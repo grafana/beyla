@@ -102,16 +102,18 @@ static __always_inline u64 current_epoch() {
     return temp * NANOSECONDS_PER_EPOCH;
 }
 
-static __always_inline void setup_if_server_trace(connection_info_t *conn, tp_info_t *tp) {
-    http_connection_metadata_t *meta = bpf_map_lookup_elem(&filtered_connections, conn);
-    if (meta && meta->type == EVENT_HTTP_REQUEST) {
+static __always_inline void server_or_client_trace(http_connection_metadata_t *meta, connection_info_t *conn, tp_info_t *tp) {
+    if (!meta) {
+        return;
+    }
+    if (meta->type == EVENT_HTTP_REQUEST) {
         u64 pid_tid = bpf_get_current_pid_tgid();
         bpf_dbg_printk("Saving server span for id=%llx", pid_tid);
         bpf_map_update_elem(&server_traces, &pid_tid, tp, BPF_ANY);
     }
 }
 
-static __always_inline void get_or_create_trace_info(connection_info_t *conn, void *u_buf, int bytes_len, s32 capture_header_buffer, u8 client) {
+static __always_inline void get_or_create_trace_info(http_connection_metadata_t *meta, connection_info_t *conn, void *u_buf, int bytes_len, s32 capture_header_buffer) {
     tp_info_t *tp = tp_buf();
 
     if (!tp) {
@@ -119,16 +121,16 @@ static __always_inline void get_or_create_trace_info(connection_info_t *conn, vo
     }
 
     tp->epoch = current_epoch();
+    urand_bytes(tp->span_id, SPAN_ID_SIZE_BYTES);
+    bpf_memset(tp->parent_id, 0, sizeof(tp->span_id));
 
     // The below buffer scan can be expensive on high volume of requests. We make it optional
     // for customers to enable it. Off by default.
     if (!capture_header_buffer || !bpf_core_enum_value_exists(enum bpf_func_id, BPF_FUNC_loop)) {
         urand_bytes(tp->trace_id, TRACE_ID_SIZE_BYTES);
-        bpf_memset(tp->parent_id, 0, sizeof(tp->span_id));
-        urand_bytes(tp->span_id, SPAN_ID_SIZE_BYTES);
-
+    
         bpf_map_update_elem(&trace_map, conn, tp, BPF_ANY);
-        setup_if_server_trace(conn, tp);
+        server_or_client_trace(meta, conn, tp);
         return;
     }
 
@@ -144,12 +146,12 @@ static __always_inline void get_or_create_trace_info(connection_info_t *conn, vo
         unsigned char *res = bpf_strstr_tp_loop(buf, buf_len);
 
         if (res) {
-            bpf_dbg_printk("Found buf %s", res);
+            bpf_dbg_printk("Found traceparent %s", res);
             unsigned char *t_id = extract_trace_id(res);
             unsigned char *s_id = extract_span_id(res);
 
             decode_hex(tp->trace_id, t_id, TRACE_ID_CHAR_LEN);
-            if (client) {
+            if (meta && meta->type == EVENT_HTTP_CLIENT) {
                 decode_hex(tp->span_id, s_id, SPAN_ID_CHAR_LEN);
             } else {
                 decode_hex(tp->parent_id, s_id, SPAN_ID_CHAR_LEN);
@@ -157,17 +159,13 @@ static __always_inline void get_or_create_trace_info(connection_info_t *conn, vo
         } else {
             bpf_dbg_printk("No traceparent, making a new trace_id", res);
             urand_bytes(tp->trace_id, TRACE_ID_SIZE_BYTES);
-            bpf_memset(tp->parent_id, 0, sizeof(tp->span_id));
-        }            
-        if (!client || !res) {
-            urand_bytes(tp->span_id, SPAN_ID_SIZE_BYTES);
         }
     } else {
         return;
     }
 
     bpf_map_update_elem(&trace_map, conn, tp, BPF_ANY);
-    setup_if_server_trace(conn, tp);
+    server_or_client_trace(meta, conn, tp);
 
     return;
 }

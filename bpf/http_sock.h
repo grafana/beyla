@@ -273,11 +273,15 @@ static __always_inline void handle_buf_with_connection(connection_info_t *conn, 
 
     u8 packet_type = 0;
     if (is_http(small_buf, MIN_HTTP_SIZE, &packet_type)) {
-        http_info_t in = {0};
-        in.conn_info = *conn;
-        in.ssl = ssl;
+        http_info_t *in = empty_http_info();
+        if (!in) {
+            bpf_dbg_printk("Error allocating http info from per CPU map");
+            return;
+        }
+        in->conn_info = *conn;
+        in->ssl = ssl;
 
-        http_info_t *info = get_or_set_http_info(&in, packet_type);
+        http_info_t *info = get_or_set_http_info(in, packet_type);
         if (!info) {
             return;
         }
@@ -286,9 +290,7 @@ static __always_inline void handle_buf_with_connection(connection_info_t *conn, 
 
         if (packet_type == PACKET_TYPE_REQUEST && (info->status == 0)) {    
             http_connection_metadata_t *meta = bpf_map_lookup_elem(&filtered_connections, conn);
-            u8 is_client = (meta && meta->type == EVENT_HTTP_CLIENT);
-
-            get_or_create_trace_info(conn, u_buf, bytes_len, capture_header_buffer, is_client);
+            get_or_create_trace_info(meta, conn, u_buf, bytes_len, capture_header_buffer);
             
             // we copy some small part of the buffer to the info trace event, so that we can process an event even with
             // incomplete trace info in user space.

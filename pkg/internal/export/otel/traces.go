@@ -384,15 +384,10 @@ func spanKind(span *request.Span) trace2.SpanKind {
 }
 
 func handleTraceparent(parentCtx context.Context, span *request.Span) context.Context {
-	t := span.Timings()
 	if span.ParentSpanID.IsValid() {
 		parentCtx = trace2.ContextWithSpanContext(parentCtx, trace2.SpanContext{}.WithTraceID(span.TraceID).WithSpanID(span.ParentSpanID).WithTraceFlags(trace2.FlagsSampled))
 	} else if span.TraceID.IsValid() {
 		parentCtx = ContextWithTrace(parentCtx, span.TraceID)
-	}
-
-	if t.Start.Compare(t.RequestStart) <= 0 {
-		parentCtx = ContextWithTraceParent(parentCtx, span.TraceID, span.SpanID)
 	}
 
 	return parentCtx
@@ -408,6 +403,13 @@ func (r *TracesReporter) makeSpan(parentCtx context.Context, tracer trace2.Trace
 		realStart = t.Start
 	}
 
+	hasSubspans := t.Start.After(realStart)
+
+	if !hasSubspans {
+		// We set the eBPF calculated trace_id and span_id to be the main span
+		parentCtx = ContextWithTraceParent(parentCtx, span.TraceID, span.SpanID)
+	}
+
 	// Create a parent span for the whole request session
 	ctx, sp := tracer.Start(parentCtx, traceName(span),
 		trace2.WithTimestamp(realStart),
@@ -417,7 +419,7 @@ func (r *TracesReporter) makeSpan(parentCtx context.Context, tracer trace2.Trace
 
 	sp.SetStatus(spanStatusCode(span), "")
 
-	if t.Start.After(realStart) {
+	if hasSubspans {
 		var spP trace2.Span
 
 		// Create a child span showing the queue time
@@ -429,6 +431,7 @@ func (r *TracesReporter) makeSpan(parentCtx context.Context, tracer trace2.Trace
 
 		// Create a child span showing the processing time
 		// Override the active context for the span to be the processing span
+		// The trace_id and span_id from eBPF are attached here
 		ctx = ContextWithTraceParent(ctx, span.TraceID, span.SpanID)
 		_, spP = tracer.Start(ctx, "processing",
 			trace2.WithTimestamp(t.Start),

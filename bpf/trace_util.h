@@ -57,7 +57,7 @@ static __always_inline void encode_hex(unsigned char *dst, unsigned char *src, i
 
 static __always_inline bool is_traceparent(unsigned char *p) {
     if (((p[0] == 'T') || (p[0] == 't')) && (p[1] == 'r') && (p[2] == 'a') && (p[3] == 'c') && 
-        (p[4] == 'e') && (p[5] == 'p') && (p[6] == 'a') && (p[7] == 'r') &&
+        (p[4] == 'e') && ((p[5] == 'p') || (p[5] == 'P')) && (p[6] == 'a') && (p[7] == 'r') &&
         (p[8] == 'e') && (p[9] == 'n') && (p[10] == 't') && (p[11] == ':') && (p[12] == ' ')
     ) {
         return true;

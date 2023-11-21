@@ -103,35 +103,50 @@ go run server.go
 
 Set up Beyla as a standalone linux process by following the [standalone setup]({{< relref "../setup/standalone.md" >}}) documentation.
 
-Metrics will be exported from a [Prometheus](https://prometheus.io/) scrape endpoint by setting the `BEYLA_PROMETHEUS_PORT` environment variable. Traces will be printed to stdout by setting the `BEYLA_PRINT_TRACES=true` environment variable.
-
-For information on how to configure other exporters like [OpenTelemetry](https://opentelemetry.io/), see the
-[configuration options]({{< relref "../configure/options.md" >}}) documentation.
+First, we will locally check that Beyla is able to instrument the provided test server application,
+after configuring it to print the traces to the standard output.
 
 Set environment variables and run Beyla:
 
 ```sh
-BEYLA_PROMETHEUS_PORT=8999 BEYLA_PRINT_TRACES=true BEYLA_OPEN_PORT=8080 sudo -E beyla
+BEYLA_PRINT_TRACES=true BEYLA_OPEN_PORT=8080 sudo -E beyla
 ```
 
-Open a new terminal and send a few HTTP GET calls to the test service:
+The `BEYLA_PRINT_TRACES=true` configuration option tells Beyla to log any trace to the standard output.
+The `BEYLA_OPEN_PORT=true` option tells Beyla to instrument the service that owns the port 8080.
+Since Beyla requires administrator rights to load eBPF programs, the `beyla` command
+must run with `sudo -E` (or as a `root` user).
 
-```sh
-curl "http://localhost:8080/hello"
-curl "http://localhost:8080/bye"
+After running the above command, you should see a log message confirming that the
+test service has been found:
+
+```
+time=2023-11-14T09:10:00.513Z level=INFO msg="instrumenting process"
+component=discover.TraceAttacher cmd=/tmp/go-build898688565/b001/exe/server pid=8710
 ```
 
-Beyla will log trace information to the first terminal:
+Now, open a new terminal and send a few HTTP GET calls to the test service:
 
 ```sh
-2023-04-19 13:49:04 (15.22ms[689.9µs]) 200 GET /hello [::1]->[localhost:8080] size:0B
-2023-04-19 13:49:07 (2.74ms[135.9µs]) 200 GET /bye [::1]->[localhost:8080] size:0B
+curl -v "http://localhost:8080/hello"
+curl -v "http://localhost:8080/bye"
+```
+
+For each request, Beyla will log trace information to the first terminal:
+
+```sh
+2023-11-14 09:11:13 (2.89ms[859.99µs]) 200 GET /hello
+  [127.0.0.1]->[localhost:8080] size:0B svc=[{server go your-hostname-8710}]
+
+2023-11-14 09:11:13 (1.87ms[191µs]) 200 GET /bye
+  [127.0.0.1]->[localhost:8080] size:0B svc=[{server go your-hostname-8710}]
 ```
 
 The output format is:
 
 ```
-Request_time (response_duration) status_code http_method path source->destination request_size
+Request_time (response_duration) status_code http_method path
+  source->destination request_size service_id 
 ```
 
 Experiment with the `curl` command and make additional requests to see how it affects the trace output. For example, the following request would send a 6-bytes POST request and the service will take 200ms to respond:
@@ -143,120 +158,74 @@ curl -X POST -d "abcdef" "http://localhost:8080/post?delay=200ms"
 Beyla will log the following trace information:
 
 ```sh
-2023-04-19 15:17:54 (210.91ms[203.28ms]) 200 POST /post [::1]->[localhost:8080] size:6B
+2023-11-14 09:12:49 (208.32ms[206.79ms]) 200 POST /post
+[127.0.0.1]->[localhost:8080] size:6B svc=[{server go your-hostname-8710}]
 ```
-
-Optionally, open another terminal and run the following command to generate some artificial load:
-
-```sh
-while true; do curl "http://localhost:8080/service?delay=1s"; done
-```
-
-Next, query the Prometheus metrics exposed on port `8999`:
-
-```sh
-curl http://localhost:8999/metrics
-```
-
-Which will output a result similar to:
-
-```sh
-# HELP http_server_duration_seconds duration of HTTP service calls from the server side, in milliseconds
-# TYPE http_server_duration_seconds histogram
-http_server_duration_seconds_bucket{http_method="GET",http_status_code="200",service_name="testserver",le="0.005"} 1
-http_server_duration_seconds_bucket{http_method="GET",http_status_code="200",service_name="testserver",le="0.005"} 1
-http_server_duration_seconds_bucket{http_method="GET",http_status_code="200",service_name="testserver",le="0.01"} 1
-
-(... output snipped for sake of brevity ...)
-```
-
-For information on the metrics Beyla exports, see the [exported metrics]({{< relref "../metrics.md" >}}) documentation.
 
 ## Send data to Grafana Cloud
 
-Once we have verified that our application is correctly instrumented, we can add a Prometheus
-collector to read the generated metrics and forward them to Grafana Cloud.
-You can get a [Free Grafana Cloud Account at Grafana's website](/pricing/).
+Once we have verified that our application is correctly instrumented, we can set up
+a Grafana Cloud OpenTelemetry exporter to read the generated traces and forward them
+to Grafana Cloud. You can get a [Free Grafana Cloud Account at Grafana's website](/pricing/).
 
-There are two ways to forward your metrics to Grafana Cloud:
+For information on how to configure Beyla to submit data to other [OpenTelemetry](https://opentelemetry.io/)
+collectors, or how to generate [Prometheus](https://prometheus.io) metrics, see the
+[configuration options]({{< relref "../configure/options.md" >}}) documentation.
 
-- [Install Prometheus on your host, configure the scrape and remote write to read-and-forward the metrics
-  ](/docs/grafana-cloud/quickstart/noagent_linuxnode/#install-prometheus-on-the-node)
-- Use the [Grafana Agent](/docs/agent/latest/), as shown by this tutorial.
+There are two ways to forward your OpenTelemetry traces to Grafana Cloud:
 
-### Downloading and configuring the Grafana Agent Flow
+- Using the [Grafana Agent](/docs/agent/latest/) and configuring Beyla to forward the traces to it via
+  the standard OpenTelemetry export.
+- Configuring Beyla to submit data directly to the
+  [Grafana Cloud OpenTelemetry Protocol endpoint](/docs/grafana-cloud/send-data/otlp/send-data-otlp/),
+  as shown in this tutorial.
 
-> ⚠️ This section explains how to download and configure the Grafana Agent Flow manually.
-> For a complete description of the Grafana Agent Flow setup, its configuration process,
-> and the recommended modes, please refer to the [Install Grafana Agent Flow](/docs/agent/latest/flow/setup/install/)
-> documentation.
+### Running Grafana Beyla with your Grafana Credentials
 
-1. Go to the [Grafana Agent Releases page](https://github.com/grafana/agent/releases/).
-2. Choose the latest version for your system architecture.
-   - For example, we are downloading zipped 0.34.3 version for Linux Intel/AMD 64-bit architecture:
-     ```
-     $ wget https://github.com/grafana/agent/releases/download/v0.34.3/grafana-agent-linux-amd64.zip
-     $ unzip grafana-agent-linux-amd64.zip
-     ```
-3. Create a plain text file named `ebpf-tutorial.river` and paste the
-   following text:
+In your Grafana Cloud Portal, click on the "Details" button in the "Grafana" box. Next,
+copy your Grafana Instance ID and Zone, as in the image below.
 
-   ```
-   prometheus.scrape "default" {
-       targets = [{"__address__" = "localhost:8999"}]
-       forward_to = [prometheus.remote_write.mimir.receiver]
-   }
-   prometheus.remote_write "mimir" {
-       endpoint {
-           url = env("MIMIR_ENDPOINT")
-           basic_auth {
-               username = env("MIMIR_USER")
-               password = env("GRAFANA_API_KEY")
-           }
-       }
-   }
-   ```
+![](https://grafana.com/media/docs/grafana-cloud/beyla/tutorial/grafana-cloud-instance-id.png)
 
-The configuration file instructs the Agent to scrape Prometheus metrics, from Beyla and forward them to [Grafana Mimir](/oss/mimir/).
+Also create a Grafana API Key with metrics push privileges.
 
-Note that we configured the Agent to scrape the metrics from the `localhost:8999` address,
-same as the value of the `BEYLA_PROMETHEUS_PORT` variable from the previous section.
-At the same time, the connection details and the authentication credentials for Grafana Mimir are
-to be provided via environment variables.
+Now you can run Beyla by using the above information to set the
+`GRAFANA_CLOUD_ZONE`, `GRAFANA_CLOUD_INSTANCE_ID` and `GRAFANA_CLOUD_API_KEY`
+environment variables.
 
-### Running the Grafana Agent Flow with your Grafana Credentials
+The `GRAFANA_CLOUD_SUBMIT` environment variable (whose value defaults to `traces`)
+lets you choose which type of data to submit to the Grafana OpenTelemetry endpoint:
+metrics and/or traces. To make use of the metrics dashboard presented in the next section,
+we will set `GRAFANA_CLOUD_SUBMIT=metrics`.
 
-In your Grafana Cloud Portal, click on the "Details" button in the "Prometheus" box. Next,
-copy your Grafana Prometheus (Mimir) Remote Write endpoint, your username, and generate/copy
-a Grafana API Key with metrics push privileges:
-
-![](https://grafana.com/media/docs/grafana-cloud/beyla/tutorial/grafana-instance-id.png)
-
-Now you can run the Agent by using the above information to set the
-`MIMIR_ENDPOINT`, `MIMIR_USER` and `GRAFANA_API_KEY` environment variables. For example:
+For example:
 
 ```sh
-export MIMIR_ENDPOINT="https://prometheus-prod-01-eu-west-0.grafana.net/api/prom/push"
-export MIMIR_USER="123456"
-export GRAFANA_API_KEY="your api key here"
-AGENT_MODE=flow ./grafana-agent-linux-amd64 run ebpf-tutorial.river
+export GRAFANA_CLOUD_SUBMIT=metrics
+export GRAFANA_CLOUD_ZONE=prod-eu-west-0
+export GRAFANA_CLOUD_INSTANCE_ID=123456
+export GRAFANA_CLOUD_API_KEY="your api key here..."
 
-ts=2023-06-29T08:02:58.761420514Z level=info msg="now listening for http traffic" addr=127.0.0.1:12345
-ts=2023-06-29T08:02:58.761546307Z level=info trace_id=359c08a12e833f29bf21457d95c09a08 msg="starting complete graph evaluation"
-(more logs....)
+BEYLA_OPEN_PORT=8080 sudo -E beyla
+
+```
+Optionally, open another terminal and run the following command to generate some artificial load:
+
+```sh
+while true; do curl -v "http://localhost:8080/service?delay=1s"; done
 ```
 
 To verify that metrics are properly received by Grafana, you can go to the left panel,
 choose the Explore tab and your Prometheus data source. Next, write `http_` in the
 Metrics Browser input field and you should see the available metric names in the auto-complete drop-down.
 
-![](https://grafana.com/media/docs/grafana-cloud/beyla/tutorial/dropdown-metrics.png)
+![](https://grafana.com/media/docs/grafana-cloud/beyla/tutorial/dropdown-metrics-v1.0.png)
 
 ## Add the Beyla RED Metrics Dashboard
 
 You could start composing your PromQL queries for better visualization of
 your auto-instrumented RED metrics; to save you time, we provide a sample
-[public dashboard with some basic information](/grafana/dashboards/19077-beyla-red-metrics/).
+[public dashboard with some basic information](/grafana/dashboards/19923-beyla-red-metrics/).
 
 To import the sample dashboard into your Grafana instance, choose "Dashboards" in the Grafana left panel.
 Next, in the Dashboards page, click on the "New" drop-down menu and select "Import":
@@ -264,15 +233,15 @@ Next, in the Dashboards page, click on the "New" drop-down menu and select "Impo
 ![](https://grafana.com/media/docs/grafana-cloud/beyla/tutorial/import-dashboard.png)
 
 In the "Import via grafana.com" textbox, copy the Grafana ID from the
-[Beyla RED Metrics](/grafana/dashboards/19077-beyla-red-metrics/)
-dashboard: `19077`.
+[Beyla RED Metrics](/grafana/dashboards/19923-beyla-red-metrics/)
+dashboard: `19923`.
 
 Rename the dashboard to match your service, select the folder and, most importantly, select the
 data source in the `prometheus-data-source` drop-down at the bottom.
 
 And _voilà!_ you can see some of your test RED metrics:
 
-![](https://grafana.com/media/docs/grafana-cloud/beyla/tutorial/beyla-dashboard-screenshot.png)
+![](https://grafana.com/media/docs/grafana-cloud/beyla/tutorial/beyla-dashboard-screenshot-v1.0.png)
 
 The dashboard contains the following components:
 

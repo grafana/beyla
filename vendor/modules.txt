@@ -167,7 +167,7 @@ github.com/google/uuid
 # github.com/gorilla/mux v1.8.0
 ## explicit; go 1.12
 github.com/gorilla/mux
-# github.com/grafana/go-offsets-tracker v0.1.2
+# github.com/grafana/go-offsets-tracker v0.1.5
 ## explicit; go 1.20
 github.com/grafana/go-offsets-tracker/pkg/offsets
 github.com/grafana/go-offsets-tracker/pkg/utils

@@ -7,16 +7,15 @@ import (
 
 const ShellToUse = "bash"
 
-func RunCommand(command string, dir string) (error, string, string) {
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
+func RunCommand(command string, dir string) (string, error) {
+	var output bytes.Buffer
 	cmd := exec.Command(ShellToUse, "-c", command)
 	if dir != "" {
 		cmd.Dir = dir
 	}
 
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
+	cmd.Stdout = &output
+	cmd.Stderr = &output
 	err := cmd.Run()
-	return err, stdout.String(), stderr.String()
+	return output.String(), err
 }

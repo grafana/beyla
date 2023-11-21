@@ -1,9 +1,13 @@
 package versions
 
-import "github.com/hashicorp/go-version"
+import (
+	"regexp"
+
+	"github.com/hashicorp/go-version"
+)
 
 func Between(target, lowerBound, higherBound string) bool {
-	v := MustParse(target)
+	v := OrZero(target)
 
 	return v.GreaterThanOrEqual(MustParse(lowerBound)) &&
 		v.LessThanOrEqual(MustParse(higherBound))
@@ -19,4 +23,30 @@ func MustParse(v string) *version.Version {
 		panic(err)
 	}
 	return p
+}
+
+var zero = MustParse("v0.0.0")
+
+// OrZero parses and returns the semantic version passed as argument. If the version format is
+// incorrect, it returns "0.0.0"
+func OrZero(v string) *version.Version {
+	ver, err := version.NewVersion(v)
+	if err == nil {
+		return ver
+	}
+	return zero
+}
+
+var disallowedChars = regexp.MustCompile(`[^v0-9A-Za-z\-~.]`)
+
+// CleanVersion fixes some versions that might not follow the A.B.C-prefix syntax. In that case we fix them
+// to avoid hashicorp's go-version library to crash.
+func CleanVersion(v string) string {
+	// We will cut any disallowed suffix
+	idx := disallowedChars.FindIndex([]byte(v))
+	if len(idx) == 0 {
+		return v
+	} else {
+		return v[:idx[0]]
+	}
 }

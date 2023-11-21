@@ -137,7 +137,7 @@ static __always_inline void client_trace_parent(void *goroutine_addr, tp_info_t 
         u64 parent_id = find_parent_goroutine(goroutine_addr);
 
         if (parent_id) {// we found a parent request
-            tp = bpf_map_lookup_elem(&go_trace_map, &parent_id);
+            tp = (tp_info_t *)bpf_map_lookup_elem(&go_trace_map, &parent_id);
         }
 
         if (tp) {
@@ -148,9 +148,9 @@ static __always_inline void client_trace_parent(void *goroutine_addr, tp_info_t 
         } else {
             urand_bytes(tp_i->trace_id, TRACE_ID_SIZE_BYTES);    
         }
+        
+        urand_bytes(tp_i->span_id, SPAN_ID_SIZE_BYTES);
     }
-
-    urand_bytes(tp_i->span_id, SPAN_ID_SIZE_BYTES);
 }
 
 

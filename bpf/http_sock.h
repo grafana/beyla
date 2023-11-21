@@ -285,7 +285,10 @@ static __always_inline void handle_buf_with_connection(connection_info_t *conn, 
         bpf_dbg_printk("=== http_buffer_event len=%d pid=%d still_reading=%d ===", bytes_len, pid_from_pid_tgid(bpf_get_current_pid_tgid()), still_reading(info));
 
         if (packet_type == PACKET_TYPE_REQUEST && (info->status == 0)) {    
-            get_or_create_trace_info(conn, u_buf, bytes_len, capture_header_buffer);
+            http_connection_metadata_t *meta = bpf_map_lookup_elem(&filtered_connections, conn);
+            u8 is_client = (meta && meta->type == EVENT_HTTP_CLIENT);
+
+            get_or_create_trace_info(conn, u_buf, bytes_len, capture_header_buffer, is_client);
             
             // we copy some small part of the buffer to the info trace event, so that we can process an event even with
             // incomplete trace info in user space.

@@ -111,7 +111,7 @@ static __always_inline void setup_if_server_trace(connection_info_t *conn, tp_in
     }
 }
 
-static __always_inline void get_or_create_trace_info(connection_info_t *conn, void *u_buf, int bytes_len, s32 capture_header_buffer) {
+static __always_inline void get_or_create_trace_info(connection_info_t *conn, void *u_buf, int bytes_len, s32 capture_header_buffer, u8 client) {
     tp_info_t *tp = tp_buf();
 
     if (!tp) {
@@ -149,13 +149,19 @@ static __always_inline void get_or_create_trace_info(connection_info_t *conn, vo
             unsigned char *s_id = extract_span_id(res);
 
             decode_hex(tp->trace_id, t_id, TRACE_ID_CHAR_LEN);
-            decode_hex(tp->parent_id, s_id, SPAN_ID_CHAR_LEN);
+            if (client) {
+                decode_hex(tp->span_id, s_id, SPAN_ID_CHAR_LEN);
+            } else {
+                decode_hex(tp->parent_id, s_id, SPAN_ID_CHAR_LEN);
+            }
         } else {
             bpf_dbg_printk("No traceparent, making a new trace_id", res);
             urand_bytes(tp->trace_id, TRACE_ID_SIZE_BYTES);
             bpf_memset(tp->parent_id, 0, sizeof(tp->span_id));
         }            
-        urand_bytes(tp->span_id, SPAN_ID_SIZE_BYTES);
+        if (!client || !res) {
+            urand_bytes(tp->span_id, SPAN_ID_SIZE_BYTES);
+        }
     } else {
         return;
     }

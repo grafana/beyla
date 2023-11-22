@@ -27,6 +27,16 @@ func TestSuite(t *testing.T) {
 	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
 }
 
+func TestSuiteNestedTraces(t *testing.T) {
+	compose, err := docker.ComposeSuite("docker-compose.yml", path.Join(pathOutput, "test-suite-nested.log"))
+	require.NoError(t, err)
+	require.NoError(t, compose.Up())
+	t.Run("HTTP traces (nested client span)", testHTTPTracesNestedClient)
+	t.Run("BPF pinning folder mounted", testBPFPinningMounted)
+	require.NoError(t, compose.Close())
+	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
+}
+
 func TestSuiteClient(t *testing.T) {
 	compose, err := docker.ComposeSuite("docker-compose-client.yml", path.Join(pathOutput, "test-suite-client.log"))
 	compose.Env = append(compose.Env, `BEYLA_EXECUTABLE_NAME=pingclient`)

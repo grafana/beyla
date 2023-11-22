@@ -419,13 +419,13 @@ func TestTracesIdGenerator(t *testing.T) {
 	})
 
 	t.Run("testing that we can generate span for fixed parent set eBPF", func(t *testing.T) {
-		tId1, spId1 := NewIDs(1)
-		assert.True(t, tId1.IsValid())
-		assert.True(t, spId1.IsValid())
+		tID1, spID1 := NewIDs(1)
+		assert.True(t, tID1.IsValid())
+		assert.True(t, spID1.IsValid())
 
 		parentCtx := trace.ContextWithSpanContext(
 			context.Background(),
-			trace.SpanContext{}.WithTraceID(tId1).WithSpanID(spId1).WithTraceFlags(trace.FlagsSampled),
+			trace.SpanContext{}.WithTraceID(tID1).WithSpanID(spID1).WithTraceFlags(trace.FlagsSampled),
 		)
 
 		_, sp := tracers.tracer.Start(parentCtx, "Test1",
@@ -434,15 +434,15 @@ func TestTracesIdGenerator(t *testing.T) {
 		)
 
 		assert.True(t, sp.SpanContext().HasSpanID())
-		assert.Equal(t, tId1, sp.SpanContext().TraceID())
-		assert.NotEqual(t, spId1, sp.SpanContext().SpanID())
+		assert.Equal(t, tID1, sp.SpanContext().TraceID())
+		assert.NotEqual(t, spID1, sp.SpanContext().SpanID())
 
 	})
 
 	t.Run("testing that we can generate span for fixed traceID set by eBPF", func(t *testing.T) {
-		tId2, spId2 := NewIDs(2)
+		tID2, spID2 := NewIDs(2)
 
-		parentCtx := ContextWithTrace(context.Background(), tId2)
+		parentCtx := ContextWithTrace(context.Background(), tID2)
 
 		_, sp := tracers.tracer.Start(parentCtx, "Test2",
 			trace.WithTimestamp(time.Now()),
@@ -450,14 +450,14 @@ func TestTracesIdGenerator(t *testing.T) {
 		)
 
 		assert.True(t, sp.SpanContext().HasSpanID())
-		assert.Equal(t, tId2, sp.SpanContext().TraceID())
-		assert.NotEqual(t, spId2, sp.SpanContext().SpanID())
+		assert.Equal(t, tID2, sp.SpanContext().TraceID())
+		assert.NotEqual(t, spID2, sp.SpanContext().SpanID())
 	})
 
 	t.Run("testing that we can generate fixed traceID and spanID set by eBPF", func(t *testing.T) {
-		tId3, spId3 := NewIDs(3)
+		tID3, spID3 := NewIDs(3)
 
-		parentCtx := ContextWithTraceParent(context.Background(), tId3, spId3)
+		parentCtx := ContextWithTraceParent(context.Background(), tID3, spID3)
 
 		_, sp := tracers.tracer.Start(parentCtx, "Test3",
 			trace.WithTimestamp(time.Now()),
@@ -465,8 +465,8 @@ func TestTracesIdGenerator(t *testing.T) {
 		)
 
 		assert.True(t, sp.SpanContext().HasSpanID())
-		assert.Equal(t, tId3, sp.SpanContext().TraceID())
-		assert.Equal(t, spId3, sp.SpanContext().SpanID())
+		assert.Equal(t, tID3, sp.SpanContext().TraceID())
+		assert.Equal(t, spID3, sp.SpanContext().SpanID())
 	})
 }
 

@@ -11,6 +11,7 @@ const fixtureContainerID = "40c03570b6f4c30bc8d69923d37ee698f5cfcced92c7b7df1c47
 
 func TestContainerID(t *testing.T) {
 	procRoot = "./fixtures/"
+	namespaceFinder = func(_ int32) (uint32, error) { return 0, nil }
 	info, err := InfoForPID(123)
 	require.NoError(t, err)
 	assert.Equal(t, fixtureContainerID, info.ContainerID)

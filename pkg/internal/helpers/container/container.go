@@ -27,7 +27,7 @@ type Info struct {
 var dockerCgroup = regexp.MustCompile(`^\d+:.*:.*/kubelet\.slice/.*-(.+)\.scope$`)
 
 func InfoForPID(pid uint32) (Info, error) {
-	ns, err := namespaceFinder(pid)
+	ns, err := namespaceFinder(int32(pid))
 	if err != nil {
 		return Info{}, fmt.Errorf("finding PID %d namespace: %w", pid, err)
 	}

@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/mariomac/pipes/pkg/node"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/grafana/beyla/pkg/internal/request"
 )
@@ -32,11 +33,18 @@ func PrinterNode(_ PrintEnabled) (node.TerminalFunc[[]request.Span], error) {
 					spans[i].HostPort,
 					spans[i].ContentLength,
 					spans[i].ServiceID,
-					spans[i].Traceparent,
+					traceparent(&spans[i]),
 				)
 			}
 		}
 	}, nil
+}
+
+func traceparent(span *request.Span) string {
+	if !trace.TraceID(span.TraceID).IsValid() {
+		return ""
+	}
+	return fmt.Sprintf("00-%s-%s-01", trace.TraceID(span.TraceID).String(), trace.SpanID(span.ParentSpanID).String())
 }
 
 type NoopEnabled bool

@@ -14,14 +14,25 @@
 #include "bpf_dbg.h"
 #include "go_common.h"
 
+typedef struct new_func_invocation {
+    u64 parent;
+} new_func_invocation_t;
+
+struct {
+    __uint(type, BPF_MAP_TYPE_HASH);
+    __type(key, void *); // key: pointer to the request goroutine
+    __type(value, new_func_invocation_t);
+    __uint(max_entries, MAX_CONCURRENT_REQUESTS);
+} newproc1 SEC(".maps");
+
 SEC("uprobe/runtime_newproc1")
 int uprobe_proc_newproc1(struct pt_regs *ctx) {
     bpf_dbg_printk("=== uprobe/proc newproc1 === ");
     void *creator_goroutine = GOROUTINE_PTR(ctx);
     bpf_dbg_printk("creator_goroutine_addr %lx", creator_goroutine);
 
-    func_invocation invocation = {
-        .regs = *ctx,
+    new_func_invocation_t invocation = {
+        .parent = (u64)GO_PARAM2(ctx) 
     };
 
     // Save the registers on invocation to be able to fetch the arguments at return of newproc1
@@ -39,7 +50,7 @@ int uprobe_proc_newproc1_ret(struct pt_regs *ctx) {
     bpf_dbg_printk("creator_goroutine_addr %lx", creator_goroutine);
 
     // Lookup the newproc1 invocation metadata
-    func_invocation *invocation =
+    new_func_invocation_t *invocation =
         bpf_map_lookup_elem(&newproc1, &creator_goroutine);
     bpf_map_delete_elem(&newproc1, &creator_goroutine);
     if (invocation == NULL) {
@@ -48,7 +59,7 @@ int uprobe_proc_newproc1_ret(struct pt_regs *ctx) {
     }
 
     // The parent goroutine is the second argument of newproc1
-    void *parent_goroutine = (void *)GO_PARAM2(&invocation->regs);
+    void *parent_goroutine = (void *)invocation->parent;
     bpf_dbg_printk("parent goroutine_addr %lx", parent_goroutine);
 
     // The result of newproc1 is the new goroutine
@@ -75,9 +86,9 @@ int uprobe_proc_goexit1(struct pt_regs *ctx) {
     bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
 
     bpf_map_delete_elem(&ongoing_goroutines, &goroutine_addr);
-    // We also clean-up ongoing_server_requests so that we can handle hijacked requests, where the ServeHTTP
-    // finishes, but we never call WriteHeader to clean-up the ongoing requests
-    bpf_map_delete_elem(&ongoing_server_requests, &goroutine_addr);
+    // We also clean-up the go routine based trace map, it's an LRU
+    // but at this point we are sure we don't need the data.
+    bpf_map_delete_elem(&go_trace_map, &goroutine_addr);
 
     return 0;
 }

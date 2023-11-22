@@ -53,6 +53,7 @@ type bpfHttpInfoT struct {
 		UserPid   uint32
 		Namespace uint32
 	}
+	Tp bpfTpInfoT
 }
 
 type bpfRecvArgsT struct {
@@ -69,6 +70,13 @@ type bpfSslArgsT struct {
 	Ssl    uint64
 	Buf    uint64
 	LenPtr uint64
+}
+
+type bpfTpInfoT struct {
+	TraceId  [16]uint8
+	SpanId   [8]uint8
+	ParentId [8]uint8
+	Epoch    uint64
 }
 
 // loadBpf returns the embedded CollectionSpec for bpf.
@@ -151,8 +159,12 @@ type bpfMapSpecs struct {
 	OngoingHttp         *ebpf.MapSpec `ebpf:"ongoing_http"`
 	PidCache            *ebpf.MapSpec `ebpf:"pid_cache"`
 	PidTidToConn        *ebpf.MapSpec `ebpf:"pid_tid_to_conn"`
+	ServerTraces        *ebpf.MapSpec `ebpf:"server_traces"`
 	SslToConn           *ebpf.MapSpec `ebpf:"ssl_to_conn"`
 	SslToPidTid         *ebpf.MapSpec `ebpf:"ssl_to_pid_tid"`
+	TpCharBufMem        *ebpf.MapSpec `ebpf:"tp_char_buf_mem"`
+	TpInfoMem           *ebpf.MapSpec `ebpf:"tp_info_mem"`
+	TraceMap            *ebpf.MapSpec `ebpf:"trace_map"`
 	ValidPids           *ebpf.MapSpec `ebpf:"valid_pids"`
 }
 
@@ -188,8 +200,12 @@ type bpfMaps struct {
 	OngoingHttp         *ebpf.Map `ebpf:"ongoing_http"`
 	PidCache            *ebpf.Map `ebpf:"pid_cache"`
 	PidTidToConn        *ebpf.Map `ebpf:"pid_tid_to_conn"`
+	ServerTraces        *ebpf.Map `ebpf:"server_traces"`
 	SslToConn           *ebpf.Map `ebpf:"ssl_to_conn"`
 	SslToPidTid         *ebpf.Map `ebpf:"ssl_to_pid_tid"`
+	TpCharBufMem        *ebpf.Map `ebpf:"tp_char_buf_mem"`
+	TpInfoMem           *ebpf.Map `ebpf:"tp_info_mem"`
+	TraceMap            *ebpf.Map `ebpf:"trace_map"`
 	ValidPids           *ebpf.Map `ebpf:"valid_pids"`
 }
 
@@ -208,8 +224,12 @@ func (m *bpfMaps) Close() error {
 		m.OngoingHttp,
 		m.PidCache,
 		m.PidTidToConn,
+		m.ServerTraces,
 		m.SslToConn,
 		m.SslToPidTid,
+		m.TpCharBufMem,
+		m.TpInfoMem,
+		m.TraceMap,
 		m.ValidPids,
 	)
 }

@@ -18,6 +18,12 @@
 #include "go_common.h"
 #include "go_traceparent.h"
 
+typedef struct grpc_srv_func_invocation {
+    u64 start_monotime_ns;
+    u64 stream;
+    tp_info_t tp;
+} grpc_srv_func_invocation_t;
+
 struct {
     __uint(type, BPF_MAP_TYPE_HASH);
     __type(key, void *); // key: pointer to the request goroutine
@@ -25,12 +31,27 @@ struct {
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
 } ongoing_grpc_request_status SEC(".maps");
 
+typedef struct grpc_client_func_invocation {
+    u64 start_monotime_ns;
+    u64 cc;
+    u64 ctx;
+    u64 method;
+    u64 method_len;
+} grpc_client_func_invocation_t;
+
 struct {
     __uint(type, BPF_MAP_TYPE_HASH);
     __type(key, void *); // key: pointer to the request goroutine
-    __type(value, func_invocation);
+    __type(value, grpc_client_func_invocation_t);
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
 } ongoing_grpc_client_requests SEC(".maps");
+
+struct {
+    __uint(type, BPF_MAP_TYPE_HASH);
+    __type(key, void *); // key: pointer to the request goroutine
+    __type(value, grpc_srv_func_invocation_t);
+    __uint(max_entries, MAX_CONCURRENT_REQUESTS);
+} ongoing_grpc_server_requests SEC(".maps");
 
 // To be Injected from the user space during the eBPF program load & initialization
 
@@ -46,19 +67,31 @@ volatile const u64 grpc_client_target_ptr_pos;
 volatile const u64 grpc_stream_ctx_ptr_pos;
 volatile const u64 value_context_val_ptr_pos;
 
-
 SEC("uprobe/server_handleStream")
 int uprobe_server_handleStream(struct pt_regs *ctx) {
     bpf_dbg_printk("=== uprobe/server_handleStream === ");
     void *goroutine_addr = GOROUTINE_PTR(ctx);
     bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
 
-    func_invocation invocation = {
+    void *stream_ptr = GO_PARAM4(ctx);
+
+    grpc_srv_func_invocation_t invocation = {
         .start_monotime_ns = bpf_ktime_get_ns(),
-        .regs = *ctx
+        .stream = (u64)stream_ptr,
+        .tp = {0}
     };
 
-    if (bpf_map_update_elem(&ongoing_server_requests, &goroutine_addr, &invocation, BPF_ANY)) {
+    if (stream_ptr) {
+        void *ctx_ptr = 0;
+        // Read the embedded context object ptr
+        bpf_probe_read(&ctx_ptr, sizeof(ctx_ptr), (void *)(stream_ptr + grpc_stream_ctx_ptr_pos + sizeof(void *)));
+
+        if (ctx_ptr) {
+            server_trace_parent(goroutine_addr, &invocation.tp, (void *)(ctx_ptr + value_context_val_ptr_pos + sizeof(void *)));
+        }
+    }
+
+    if (bpf_map_update_elem(&ongoing_grpc_server_requests, &goroutine_addr, &invocation, BPF_ANY)) {
         bpf_dbg_printk("can't update grpc map element");
     }
 
@@ -72,9 +105,9 @@ int uprobe_server_handleStream_return(struct pt_regs *ctx) {
     void *goroutine_addr = GOROUTINE_PTR(ctx);
     bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
 
-    func_invocation *invocation =
-        bpf_map_lookup_elem(&ongoing_server_requests, &goroutine_addr);
-    bpf_map_delete_elem(&ongoing_server_requests, &goroutine_addr);
+    grpc_srv_func_invocation_t *invocation =
+        bpf_map_lookup_elem(&ongoing_grpc_server_requests, &goroutine_addr);
+    bpf_map_delete_elem(&ongoing_grpc_server_requests, &goroutine_addr);
     if (invocation == NULL) {
         bpf_dbg_printk("can't read grpc invocation metadata");
         return 0;
@@ -87,7 +120,7 @@ int uprobe_server_handleStream_return(struct pt_regs *ctx) {
         return 0;
     }
 
-    void *stream_ptr = GO_PARAM4(&(invocation->regs));
+    void *stream_ptr = (void *)invocation->stream;
     bpf_dbg_printk("stream_ptr %lx, method pos %lx", stream_ptr, grpc_stream_method_ptr_pos);
 
     http_request_trace *trace = bpf_ringbuf_reserve(&events, sizeof(http_request_trace), 0);
@@ -97,7 +130,6 @@ int uprobe_server_handleStream_return(struct pt_regs *ctx) {
     }
     task_pid(&trace->pid);
     trace->type = EVENT_GRPC_REQUEST;
-    trace->id = (u64)goroutine_addr;
     trace->start_monotime_ns = invocation->start_monotime_ns;
     trace->status = *status;
 
@@ -151,17 +183,7 @@ int uprobe_server_handleStream_return(struct pt_regs *ctx) {
         }
     }
 
-    void *ctx_ptr = 0;
-    // Read the embedded context object ptr
-    bpf_probe_read(&ctx_ptr, sizeof(ctx_ptr), (void *)(stream_ptr + grpc_stream_ctx_ptr_pos + sizeof(void *)));
-
-    if (ctx_ptr) {
-        void *tp_ptr = extract_traceparent_from_req_headers((void *)(ctx_ptr + value_context_val_ptr_pos + sizeof(void *)));
-        if (tp_ptr) {
-            bpf_probe_read(trace->traceparent, sizeof(trace->traceparent), tp_ptr);
-            bpf_dbg_printk("traceparent %s", trace->traceparent);
-        }
-    }
+    trace->tp = invocation->tp;
 
     trace->end_monotime_ns = bpf_ktime_get_ns();
     // submit the completed trace via ringbuffer
@@ -198,7 +220,6 @@ int uprobe_transport_writeStatus(struct pt_regs *ctx) {
 }
 
 /* GRPC client */
-
 SEC("uprobe/ClientConn_Invoke")
 int uprobe_ClientConn_Invoke(struct pt_regs *ctx) {
     bpf_dbg_printk("=== uprobe/proc grpc ClientConn.Invoke === ");
@@ -206,9 +227,17 @@ int uprobe_ClientConn_Invoke(struct pt_regs *ctx) {
     void *goroutine_addr = GOROUTINE_PTR(ctx);
     bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
 
-    func_invocation invocation = {
+    void *cc_ptr = GO_PARAM1(ctx);
+    void *ctx_ptr = GO_PARAM3(ctx);
+    void *method_ptr = GO_PARAM4(ctx);
+    void *method_len = GO_PARAM5(ctx);
+
+    grpc_client_func_invocation_t invocation = {
         .start_monotime_ns = bpf_ktime_get_ns(),
-        .regs = *ctx,
+        .cc = (u64)cc_ptr,
+        .ctx = (u64)ctx_ptr,
+        .method = (u64)method_ptr,
+        .method_len = (u64)method_len,
     };
 
     // Write event
@@ -226,7 +255,7 @@ int uprobe_ClientConn_Invoke_return(struct pt_regs *ctx) {
     void *goroutine_addr = GOROUTINE_PTR(ctx);
     bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
 
-    func_invocation *invocation =
+    grpc_client_func_invocation_t *invocation =
         bpf_map_lookup_elem(&ongoing_grpc_client_requests, &goroutine_addr);
     bpf_map_delete_elem(&ongoing_grpc_client_requests, &goroutine_addr);
 
@@ -242,7 +271,6 @@ int uprobe_ClientConn_Invoke_return(struct pt_regs *ctx) {
     }
 
     task_pid(&trace->pid);
-    trace->id = find_parent_goroutine(goroutine_addr);
     trace->type = EVENT_GRPC_CLIENT;
     trace->start_monotime_ns = invocation->start_monotime_ns;
     trace->go_start_monotime_ns = invocation->start_monotime_ns;
@@ -251,9 +279,9 @@ int uprobe_ClientConn_Invoke_return(struct pt_regs *ctx) {
     // Read arguments from the original set of registers
 
     // Get client request value pointers
-    void *cc_ptr = GO_PARAM1(&(invocation->regs));
-    void *method_ptr = GO_PARAM4(&(invocation->regs));
-    void *method_len = GO_PARAM5(&(invocation->regs));
+    void *cc_ptr = (void *)invocation->cc;
+    void *method_ptr = (void *)invocation->method;
+    void *method_len = (void *)invocation->method_len;
     void *err = (void *)GO_PARAM1(ctx);
 
     bpf_dbg_printk("method ptr = %lx, method_len = %d", method_ptr, method_len);
@@ -272,18 +300,26 @@ int uprobe_ClientConn_Invoke_return(struct pt_regs *ctx) {
         return 0;
     }
 
-    void *ctx_ptr = GO_PARAM3(&(invocation->regs));
-    void *val_ptr = 0;
-    // Read the embedded val object ptr from ctx
-    bpf_probe_read(&val_ptr, sizeof(val_ptr), (void *)(ctx_ptr + value_context_val_ptr_pos + sizeof(void *)));
+    void *ctx_ptr = (void *)invocation->ctx;
 
-    if (val_ptr) {
-        void *tp_ptr = extract_traceparent_from_req_headers((void *)(val_ptr)); // embedded metadata.rawMD is at 0 offset 
-        if (tp_ptr) {
-            bpf_probe_read(trace->traceparent, sizeof(trace->traceparent), tp_ptr);
-            bpf_dbg_printk("traceparent %s", trace->traceparent);
+    tp_info_t tp = {0};
+
+    if (ctx_ptr) {
+        void *val_ptr = 0;
+        // Read the embedded val object ptr from ctx
+        bpf_probe_read(&val_ptr, sizeof(val_ptr), (void *)(ctx_ptr + value_context_val_ptr_pos + sizeof(void *)));
+
+        if (val_ptr) {
+            client_trace_parent(goroutine_addr, &tp, (void *)(val_ptr));
+        } else {
+            bpf_dbg_printk("No val_ptr %llx", val_ptr);
         }
+    } else {
+        // it's OK sending empty tp for a client, the userspace id generator will make random trace_id, span_id
+        bpf_dbg_printk("No ctx_ptr %llx", ctx_ptr);
     }
+
+    trace->tp = tp;
 
     trace->status = (err) ? 2 : 0; // Getting the gRPC client status is complex, if there's an error we set Code.Unknown = 2
 

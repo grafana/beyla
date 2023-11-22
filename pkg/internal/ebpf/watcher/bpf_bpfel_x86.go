@@ -13,6 +13,22 @@ import (
 	"github.com/cilium/ebpf"
 )
 
+type bpfConnectionInfoT struct {
+	S_addr [16]uint8
+	D_addr [16]uint8
+	S_port uint16
+	D_port uint16
+}
+
+type bpfHttpConnectionMetadataT struct {
+	Pid struct {
+		HostPid   uint32
+		UserPid   uint32
+		Namespace uint32
+	}
+	Type uint8
+}
+
 type bpfWatchInfoT struct {
 	Flags   uint64
 	Payload uint64
@@ -66,9 +82,10 @@ type bpfProgramSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpfMapSpecs struct {
-	PidCache    *ebpf.MapSpec `ebpf:"pid_cache"`
-	ValidPids   *ebpf.MapSpec `ebpf:"valid_pids"`
-	WatchEvents *ebpf.MapSpec `ebpf:"watch_events"`
+	FilteredConnections *ebpf.MapSpec `ebpf:"filtered_connections"`
+	PidCache            *ebpf.MapSpec `ebpf:"pid_cache"`
+	ValidPids           *ebpf.MapSpec `ebpf:"valid_pids"`
+	WatchEvents         *ebpf.MapSpec `ebpf:"watch_events"`
 }
 
 // bpfObjects contains all objects after they have been loaded into the kernel.
@@ -90,13 +107,15 @@ func (o *bpfObjects) Close() error {
 //
 // It can be passed to loadBpfObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpfMaps struct {
-	PidCache    *ebpf.Map `ebpf:"pid_cache"`
-	ValidPids   *ebpf.Map `ebpf:"valid_pids"`
-	WatchEvents *ebpf.Map `ebpf:"watch_events"`
+	FilteredConnections *ebpf.Map `ebpf:"filtered_connections"`
+	PidCache            *ebpf.Map `ebpf:"pid_cache"`
+	ValidPids           *ebpf.Map `ebpf:"valid_pids"`
+	WatchEvents         *ebpf.Map `ebpf:"watch_events"`
 }
 
 func (m *bpfMaps) Close() error {
 	return _BpfClose(
+		m.FilteredConnections,
 		m.PidCache,
 		m.ValidPids,
 		m.WatchEvents,

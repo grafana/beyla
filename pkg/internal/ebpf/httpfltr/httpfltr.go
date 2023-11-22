@@ -27,24 +27,22 @@ import (
 )
 
 //go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -type http_buf_t -target amd64,arm64 bpf ../../../../bpf/http_sock.c -- -I../../../../bpf/headers
+//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -type http_buf_t -target amd64,arm64 bpf_tp ../../../../bpf/http_sock.c -- -I../../../../bpf/headers -DBPF_TRACEPARENT
 //go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -type http_buf_t -target amd64,arm64 bpf_debug ../../../../bpf/http_sock.c -- -I../../../../bpf/headers -DBPF_DEBUG
+//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -type http_buf_t -target amd64,arm64 bpf_tp_debug ../../../../bpf/http_sock.c -- -I../../../../bpf/headers -DBPF_DEBUG -DBPF_TRACEPARENT
 
 var activePids, _ = lru.New[uint32, svc.ID](256)
-var recvBufs, _ = lru.New[bpfConnectionInfoT, string](8192)
-
-const tpLookup = "traceparent: "
 
 type BPFHTTPInfo bpfHttpInfoT
 type BPFConnInfo bpfConnectionInfoT
 
 type HTTPInfo struct {
 	BPFHTTPInfo
-	Method      string
-	URL         string
-	Host        string
-	Peer        string
-	Traceparent string
-	Service     svc.ID
+	Method  string
+	URL     string
+	Host    string
+	Peer    string
+	Service svc.ID
 }
 
 type pidsFilter interface {
@@ -122,6 +120,17 @@ func (p *Tracer) Load() (*ebpf.CollectionSpec, error) {
 	loader := loadBpf
 	if p.cfg.EBPF.BpfDebug {
 		loader = loadBpf_debug
+	}
+
+	if p.cfg.EBPF.TrackRequestHeaders {
+		kernelMajor, kernelMinor := ebpf2.KernelVersion()
+		if kernelMajor > 5 || (kernelMajor == 5 && kernelMinor >= 17) {
+			p.log.Info("Found Linux kernel later than 5.17, enabling trace information parsing", "major", kernelMajor, "minor", kernelMinor)
+			loader = loadBpf_tp
+			if p.cfg.EBPF.BpfDebug {
+				loader = loadBpf_tp_debug
+			}
+		}
 	}
 
 	return loader()
@@ -307,47 +316,6 @@ func (p *Tracer) Run(ctx context.Context, eventsChan chan<- []request.Span, serv
 	)(ctx, eventsChan)
 }
 
-func (p *Tracer) extractTraceParent(b []uint8) string {
-	sLen := bytes.IndexByte(b, 0)
-	if sLen < 0 {
-		sLen = len(b)
-	}
-
-	s := string(b[:sLen])
-
-	hdrEnd := strings.Index(s, "\r\n\r\n")
-
-	if hdrEnd < 0 {
-		return ""
-	}
-
-	s = s[:hdrEnd]
-
-	ls := strings.ToLower(s)
-	keyIdx := strings.Index(ls, tpLookup)
-	if keyIdx >= 0 {
-		end := strings.Index(ls[keyIdx:], "\r\n")
-		if end < 0 {
-			end = hdrEnd
-		} else {
-			end += keyIdx
-		}
-		tp := s[keyIdx+len(tpLookup) : end]
-		return tp
-	}
-
-	return ""
-}
-
-func (p *Tracer) processHTTPBuf(event *bpfHttpBufT) {
-	b := event.Buf[:]
-	tp := p.extractTraceParent(b)
-	if tp != "" {
-		p.log.Debug("Found traceparent in buffer", "Traceparent", tp)
-		recvBufs.Add(event.ConnInfo, tp)
-	}
-}
-
 func (p *Tracer) readHTTPInfoIntoSpan(record *ringbuf.Record) (request.Span, bool, error) {
 	var flags uint64
 	var event BPFHTTPInfo
@@ -356,16 +324,6 @@ func (p *Tracer) readHTTPInfoIntoSpan(record *ringbuf.Record) (request.Span, boo
 	err := binary.Read(bytes.NewBuffer(record.RawSample), binary.LittleEndian, &flags)
 	if err != nil {
 		return request.Span{}, true, err
-	}
-
-	if flags != 0 {
-		var buf bpfHttpBufT
-		err = binary.Read(bytes.NewBuffer(record.RawSample), binary.LittleEndian, &buf)
-		if err != nil {
-			return request.Span{}, true, err
-		}
-		p.processHTTPBuf(&buf)
-		return request.Span{}, true, nil
 	}
 
 	err = binary.Read(bytes.NewBuffer(record.RawSample), binary.LittleEndian, &event)
@@ -396,15 +354,6 @@ func (p *Tracer) readHTTPInfoIntoSpan(record *ringbuf.Record) (request.Span, boo
 		result.Service = p.serviceInfo(event.Pid.HostPid)
 	} else {
 		result.Service = *p.Service
-	}
-
-	tp, ok := recvBufs.Get(event.ConnInfo)
-
-	if ok {
-		p.log.Debug("Found traceparent for request", "Traceparent", tp)
-		result.Traceparent = tp
-		// Clean up the LRU map once we know we have what we need
-		recvBufs.Remove(event.ConnInfo)
 	}
 
 	return httpInfoToSpan(&result), false, nil

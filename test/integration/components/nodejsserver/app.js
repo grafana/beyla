@@ -1,4 +1,5 @@
 var express = require("express");
+const http = require('http');
 var app = express();
 const port = 3030;
 
@@ -19,6 +20,17 @@ app.get("/bye", (req, res, next) => {
 app.get("/smoke", (req, res, next) => {
     res.sendStatus(200)
 });
+
+app.get("/dist", (req, res, next) => {
+    http.get('http://grafana.com', {}, (r) => {
+        if (r.statusCode !== 301) {
+          console.error(`Did not get an OK from the server. Code: ${r.statusCode}`);
+          res.sendStatus(500)
+          return
+        }
+        res.sendStatus(200)
+    });
+})
 
 app.listen(port, () => {
     console.log("Server running on port " + port);

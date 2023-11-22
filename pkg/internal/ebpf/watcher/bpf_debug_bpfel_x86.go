@@ -13,6 +13,22 @@ import (
 	"github.com/cilium/ebpf"
 )
 
+type bpf_debugConnectionInfoT struct {
+	S_addr [16]uint8
+	D_addr [16]uint8
+	S_port uint16
+	D_port uint16
+}
+
+type bpf_debugHttpConnectionMetadataT struct {
+	Pid struct {
+		HostPid   uint32
+		UserPid   uint32
+		Namespace uint32
+	}
+	Type uint8
+}
+
 type bpf_debugWatchInfoT struct {
 	Flags   uint64
 	Payload uint64
@@ -66,9 +82,10 @@ type bpf_debugProgramSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpf_debugMapSpecs struct {
-	PidCache    *ebpf.MapSpec `ebpf:"pid_cache"`
-	ValidPids   *ebpf.MapSpec `ebpf:"valid_pids"`
-	WatchEvents *ebpf.MapSpec `ebpf:"watch_events"`
+	FilteredConnections *ebpf.MapSpec `ebpf:"filtered_connections"`
+	PidCache            *ebpf.MapSpec `ebpf:"pid_cache"`
+	ValidPids           *ebpf.MapSpec `ebpf:"valid_pids"`
+	WatchEvents         *ebpf.MapSpec `ebpf:"watch_events"`
 }
 
 // bpf_debugObjects contains all objects after they have been loaded into the kernel.
@@ -90,13 +107,15 @@ func (o *bpf_debugObjects) Close() error {
 //
 // It can be passed to loadBpf_debugObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpf_debugMaps struct {
-	PidCache    *ebpf.Map `ebpf:"pid_cache"`
-	ValidPids   *ebpf.Map `ebpf:"valid_pids"`
-	WatchEvents *ebpf.Map `ebpf:"watch_events"`
+	FilteredConnections *ebpf.Map `ebpf:"filtered_connections"`
+	PidCache            *ebpf.Map `ebpf:"pid_cache"`
+	ValidPids           *ebpf.Map `ebpf:"valid_pids"`
+	WatchEvents         *ebpf.Map `ebpf:"watch_events"`
 }
 
 func (m *bpf_debugMaps) Close() error {
 	return _Bpf_debugClose(
+		m.FilteredConnections,
 		m.PidCache,
 		m.ValidPids,
 		m.WatchEvents,

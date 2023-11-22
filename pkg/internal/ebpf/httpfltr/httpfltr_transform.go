@@ -3,6 +3,8 @@ package httpfltr
 import (
 	"strings"
 
+	"go.opentelemetry.io/otel/trace"
+
 	"github.com/grafana/beyla/pkg/internal/request"
 )
 
@@ -21,7 +23,9 @@ func httpInfoToSpan(info *HTTPInfo) request.Span {
 		End:           int64(info.EndMonotimeNs),
 		Status:        int(info.Status),
 		ServiceID:     info.Service,
-		Traceparent:   info.Traceparent,
+		TraceID:       trace.TraceID(info.Tp.TraceId),
+		SpanID:        trace.SpanID(info.Tp.SpanId),
+		ParentSpanID:  trace.SpanID(info.Tp.ParentId),
 		Pid: request.PidInfo{
 			HostPID:   info.Pid.HostPid,
 			UserPID:   info.Pid.UserPid,

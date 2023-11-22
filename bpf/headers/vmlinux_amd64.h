@@ -41019,7 +41019,13 @@ enum bpf_func_id {
 	BPF_FUNC_get_func_ip = 173,
 	BPF_FUNC_get_attach_cookie = 174,
 	BPF_FUNC_task_pt_regs = 175,
-	__BPF_FUNC_MAX_ID = 176,
+	BPF_FUNC_get_branch_snapshot = 176,
+	BPF_FUNC_trace_vprintk = 177,
+	BPF_FUNC_skc_to_unix_sock = 178,
+	BPF_FUNC_kallsyms_lookup_name = 179,
+	BPF_FUNC_find_vma = 180,
+	BPF_FUNC_loop = 181,	
+	__BPF_FUNC_MAX_ID = 182,
 };
 
 enum {

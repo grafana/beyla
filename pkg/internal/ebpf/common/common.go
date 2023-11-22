@@ -1,9 +1,13 @@
 package ebpfcommon
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/binary"
 	"io"
+	"log/slog"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/cilium/ebpf"
@@ -68,6 +72,8 @@ type Filter struct {
 	Fd int
 }
 
+func ptlog() *slog.Logger { return slog.With("component", "ebpf.ProcessTracer") }
+
 func ReadHTTPRequestTraceAsSpan(record *ringbuf.Record) (request.Span, bool, error) {
 	var eventType uint8
 
@@ -98,4 +104,50 @@ func ReadSQLRequestTraceAsSpan(record *ringbuf.Record) (request.Span, bool, erro
 	}
 
 	return SQLRequestTraceToSpan(&event), false, nil
+}
+
+type KernelLockdown uint8
+
+const (
+	KernelLockdownNone KernelLockdown = iota + 1
+	KernelLockdownIntegrity
+	KernelLockdownConfidentiality
+	KernelLockdownOther
+)
+
+// Injectable for tests
+var lockdownPath = "/sys/kernel/security/lockdown"
+
+func KernelLockdownMode() KernelLockdown {
+	plog := ptlog()
+	plog.Debug("checking kernel lockdown mode, [none] allows us to propagate trace context")
+	// If we can't find the file, assume no lockdown
+	if _, err := os.Stat(lockdownPath); err == nil {
+		f, err := os.Open(lockdownPath)
+
+		if err != nil {
+			plog.Warn("failed to open /sys/kernel/security/lockdown, assuming lockdown [integrity]", "error", err)
+			return KernelLockdownIntegrity
+		}
+
+		defer f.Close()
+		scanner := bufio.NewScanner(f)
+		if scanner.Scan() {
+			lockdown := scanner.Text()
+			if strings.Contains(lockdown, "[none]") {
+				return KernelLockdownNone
+			} else if strings.Contains(lockdown, "[integrity]") {
+				return KernelLockdownIntegrity
+			} else if strings.Contains(lockdown, "[confidentiality]") {
+				return KernelLockdownConfidentiality
+			}
+			return KernelLockdownOther
+		} else {
+			plog.Warn("file /sys/kernel/security/lockdown is empty, assuming lockdown [integrity]")
+			return KernelLockdownIntegrity
+		}
+	} else {
+		plog.Debug("can't find /sys/kernel/security/lockdown, assuming no lockdown")
+		return KernelLockdownNone
+	}
 }

@@ -122,12 +122,14 @@ func (p *Tracer) Load() (*ebpf.CollectionSpec, error) {
 		loader = loadBpf_debug
 	}
 
-	kernelMajor, kernelMinor := ebpf2.KernelVersion()
-	if kernelMajor > 5 || (kernelMajor == 5 && kernelMinor >= 17) {
-		p.log.Info("Found Linux kernel later than 5.17, enabling trace information parsing", "major", kernelMajor, "minor", kernelMinor)
-		loader = loadBpf_tp
-		if p.cfg.EBPF.BpfDebug {
-			loader = loadBpf_tp_debug
+	if p.cfg.EBPF.TrackRequestHeaders {
+		kernelMajor, kernelMinor := ebpf2.KernelVersion()
+		if kernelMajor > 5 || (kernelMajor == 5 && kernelMinor >= 17) {
+			p.log.Info("Found Linux kernel later than 5.17, enabling trace information parsing", "major", kernelMajor, "minor", kernelMinor)
+			loader = loadBpf_tp
+			if p.cfg.EBPF.BpfDebug {
+				loader = loadBpf_tp_debug
+			}
 		}
 	}
 

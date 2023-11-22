@@ -63,7 +63,7 @@ static __always_inline u64 find_parent_goroutine(void *goroutine_addr) {
         void *p_inv = bpf_map_lookup_elem(&go_trace_map, &r_addr);
         if (!p_inv) { // not this goroutine running the server request processing
             // Let's find the parent scope
-            goroutine_metadata *g_metadata = bpf_map_lookup_elem(&ongoing_goroutines, &r_addr);
+            goroutine_metadata *g_metadata = (goroutine_metadata *)bpf_map_lookup_elem(&ongoing_goroutines, &r_addr);
             if (g_metadata) {
                 // Lookup now to see if the parent was a request
                 r_addr = (void *)g_metadata->parent;
@@ -96,7 +96,7 @@ static __always_inline void server_trace_parent(void *goroutine_addr, tp_info_t 
         unsigned char buf[W3C_VAL_LENGTH];
         long res = bpf_probe_read(buf, sizeof(buf), traceparent_ptr);
         if (res < 0) {
-            bpf_printk("can't copy traceparent header");
+            bpf_dbg_printk("can't copy traceparent header");
             urand_bytes(tp->trace_id, TRACE_ID_SIZE_BYTES);
             *((u64 *)tp->parent_id) = 0;
         } else {
@@ -123,7 +123,7 @@ static __always_inline void client_trace_parent(void *goroutine_addr, tp_info_t 
             unsigned char buf[W3C_VAL_LENGTH];
             long res = bpf_probe_read(buf, sizeof(buf), traceparent_ptr);
             if (res < 0) {
-                bpf_printk("can't copy traceparent header");
+                bpf_dbg_printk("can't copy traceparent header");
             } else {
                 found_trace_id = 1;
                 decode_go_traceparent(buf, tp_i->trace_id, tp_i->span_id);

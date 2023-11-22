@@ -310,6 +310,7 @@ func fetchProcessPorts(scanPorts bool) (map[PID]processPorts, error) {
 			continue
 		}
 		var openPorts []uint32
+		// TODO: Cap the size of this array, leaking client ephemeral ports will cause this to grow very long
 		for _, conn := range conns {
 			openPorts = append(openPorts, conn.Laddr.Port)
 		}

@@ -315,6 +315,7 @@ int uprobe_ClientConn_Invoke_return(struct pt_regs *ctx) {
             bpf_dbg_printk("No val_ptr %llx", val_ptr);
         }
     } else {
+        // it's OK sending empty tp for a client, the userspace id generator will make random trace_id, span_id
         bpf_dbg_printk("No ctx_ptr %llx", ctx_ptr);
     }
 

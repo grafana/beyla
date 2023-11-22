@@ -23,7 +23,7 @@ type ProcessFinder struct {
 	Watcher         `sendTo:"CriteriaMatcher"`
 	CriteriaMatcher `sendTo:"ExecTyper"`
 	ExecTyper       `sendTo:"ContainerDBUpdater"`
-	// ContainerDBUpdater will be only enabled if Kubernetes configuration is enabled
+	// ContainerDBUpdater will be only enabled (non-nil value) if Kubernetes decoration is enabled
 	*ContainerDBUpdater `forwardTo:"TraceAttacher"`
 	TraceAttacher
 }

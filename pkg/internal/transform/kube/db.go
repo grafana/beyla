@@ -12,12 +12,19 @@ func dblog() *slog.Logger {
 	return slog.With("component", "kube.Database")
 }
 
+// Database aggregates Kubernetes information from multiple sources:
+// - the informer that keep an indexed copy of the existing pods and replicasets.
+// - the inspected container.Info objects, indexed either by container ID and PID namespace
+// - a cache of decorated PodInfo that would avoid reconstructing them on each trace decoration
 type Database struct {
 	informer Metadata
 
 	containerIDs map[string]*container.Info
-	namespaces   map[uint32]*container.Info
+	// a single namespace will point to any container inside the pod
+	// but we don't care which one
+	namespaces map[uint32]*container.Info
 
+	// key: pid namespace
 	fetchedPodsCache map[uint32]*PodInfo
 }
 
@@ -34,7 +41,8 @@ func StartDatabase(kubeConfigPath string, informersTimeout time.Duration) (*Data
 	return &db, nil
 }
 
-func (id *Database) OnRemoval(containerID ...string) {
+// OnRemoval implements ContainerEventHandler
+func (id *Database) OnDeletion(containerID []string) {
 	for _, cid := range containerID {
 		if info, ok := id.containerIDs[cid]; ok {
 			delete(id.namespaces, info.PIDNamespace)
@@ -54,6 +62,7 @@ func (id *Database) AddProcess(pid uint32) {
 	id.containerIDs[ifp.ContainerID] = &ifp
 }
 
+// OwnerPodInfo returns the information of the pod owning the passed namespace
 func (id *Database) OwnerPodInfo(pidNamespace uint32) (*PodInfo, bool) {
 	pod, ok := id.fetchedPodsCache[pidNamespace]
 	if !ok {
@@ -68,7 +77,7 @@ func (id *Database) OwnerPodInfo(pidNamespace uint32) (*PodInfo, bool) {
 		id.fetchedPodsCache[pidNamespace] = pod
 	}
 	// we check DeploymentName after caching, as the replicasetInfo might be
-	// received late by the other informer
+	// received late by the replicaset informer
 	if pod.DeploymentName == "" && pod.ReplicaSetName != "" {
 		if rsi, ok := id.informer.GetReplicaSetInfo(pod.ReplicaSetName); ok {
 			pod.DeploymentName = rsi.DeploymentName

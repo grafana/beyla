@@ -8,9 +8,9 @@ import (
 	"github.com/mariomac/pipes/pkg/graph/stage"
 	"github.com/mariomac/pipes/pkg/node"
 
-	"github.com/grafana/beyla/pkg/internal/kube"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/pkg/internal/request"
+	kube2 "github.com/grafana/beyla/pkg/internal/transform/kube"
 )
 
 type KubeEnableFlag string
@@ -21,7 +21,6 @@ const (
 	EnabledAutodetect = KubeEnableFlag("autodetect")
 	EnabledDefault    = EnabledFalse
 
-	// TODO: report also peer attributes if BEYLA_METRICS_REPORT_PEER is set
 	// TODO: let the user decide which attributes to add, as in https://opentelemetry.io/docs/kubernetes/collector/components/#kubernetes-attributes-processor
 	NamespaceName  = "k8s.namespace.name"
 	PodName        = "k8s.pod.name"
@@ -51,7 +50,7 @@ func (d KubernetesDecorator) Enabled() bool {
 		return false
 	case string(EnabledAutodetect):
 		// We autodetect that we are in a kubernetes if we can properly load a K8s configuration file
-		_, err := kube.LoadConfig(d.KubeconfigPath)
+		_, err := kube2.LoadConfig(d.KubeconfigPath)
 		if err != nil {
 			klog().Debug("kubeconfig can't be detected. Assuming we are not in Kubernetes", "error", err)
 			return false
@@ -83,7 +82,7 @@ func KubeDecoratorProvider(
 }
 
 type metadataDecorator struct {
-	db  *kube.Database
+	db  *kube2.Database
 	cfg *KubernetesDecorator
 }
 
@@ -96,7 +95,7 @@ func (md *metadataDecorator) do(span *request.Span) {
 	}
 }
 
-func appendMetadata(to map[string]string, info *kube.PodInfo) {
+func appendMetadata(to map[string]string, info *kube2.PodInfo) {
 	to[NamespaceName] = info.Namespace
 	to[PodName] = info.Name
 	to[NodeName] = info.NodeName

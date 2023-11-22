@@ -11,10 +11,10 @@ import (
 	"github.com/grafana/beyla/pkg/internal/connector"
 	"github.com/grafana/beyla/pkg/internal/discover"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
-	"github.com/grafana/beyla/pkg/internal/kube"
 	"github.com/grafana/beyla/pkg/internal/pipe"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/pkg/internal/request"
+	"github.com/grafana/beyla/pkg/internal/transform/kube"
 )
 
 // Config as provided by the user to configure and run Beyla
@@ -118,6 +118,8 @@ func buildContextInfo(config *pipe.Config) *global.ContextInfo {
 		K8sDecoration: k8sCfg.Enabled(),
 	}
 	if ctxInfo.K8sDecoration {
+		// Creating a common Kubernetes database that needs to be accessed from different points
+		// in the Beyla pipeline
 		var err error
 		if ctxInfo.K8sDatabase, err = kube.StartDatabase(k8sCfg.KubeconfigPath, k8sCfg.InformersSyncTimeout); err != nil {
 			slog.Error("can't setup Kubernetes database. Your traces won't be decorated with Kubernetes metadata",

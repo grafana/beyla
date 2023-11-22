@@ -30,8 +30,10 @@ func klog() *slog.Logger {
 	return slog.With("component", "kube.Metadata")
 }
 
+// ContainerEventHandler listens for the deletion of containers, as triggered
+// by a Pod deletion.
 type ContainerEventHandler interface {
-	OnRemoval(containerID ...string)
+	OnDeletion(containerID []string)
 }
 
 // Metadata stores an in-memory copy of the different Kubernetes objects whose metadata is relevant to us.
@@ -52,12 +54,12 @@ type Metadata struct {
 type PodInfo struct {
 	// Informers need that internal object is an ObjectMeta instance
 	metav1.ObjectMeta
+	NodeName       string
 	ReplicaSetName string
 	// Pod Info includes the ReplicaSet as owner reference, and ReplicaSet info
 	// has Deployment as owner reference. We initially do a two-steps lookup to
 	// get the Pod's Deployment, but then cache the Deployment value here
 	DeploymentName string
-	NodeName       string
 	// StartTimeStr caches value of ObjectMeta.StartTimestamp.String()
 	StartTimeStr string
 	ContainerIDs []string
@@ -75,7 +77,7 @@ var podIndexer = cache.Indexers{
 	},
 }
 
-var rsIndexer = cache.Indexers{
+var replicaSetIndexer = cache.Indexers{
 	IndexReplicaSetNames: func(obj interface{}) ([]string, error) {
 		// we don't index by namespace too, as name collisions are unlikely happening,
 		// because the replicaset between a pod and its deployment has names like frontend-64f8f4c645
@@ -96,7 +98,7 @@ func (k *Metadata) GetContainerPod(containerID string) (*PodInfo, bool) {
 	return objs[0].(*PodInfo), true
 }
 
-// AddPodEventHandler must be invoked before InitFromConfig
+// AddContainerEventHandler must be invoked before InitFromConfig
 func (k *Metadata) AddContainerEventHandler(eh ContainerEventHandler) {
 	k.containerEventHandlers = append(k.containerEventHandlers, eh)
 }
@@ -105,30 +107,7 @@ func (k *Metadata) initPodInformer(informerFactory informers.SharedInformerFacto
 	log := klog().With("informer", "Pod")
 	pods := informerFactory.Core().V1().Pods().Informer()
 
-	if _, err := pods.AddEventHandler(cache.ResourceEventHandlerFuncs{
-		DeleteFunc: func(obj interface{}) {
-			pod := obj.(*v1.Pod)
-			deletedContainers := make([]string, 0,
-				len(pod.Status.ContainerStatuses)+
-					len(pod.Status.InitContainerStatuses)+
-					len(pod.Status.EphemeralContainerStatuses))
-			for i := range pod.Status.ContainerStatuses {
-				deletedContainers = append(deletedContainers,
-					pod.Status.ContainerStatuses[i].ContainerID)
-			}
-			for i := range pod.Status.InitContainerStatuses {
-				deletedContainers = append(deletedContainers,
-					pod.Status.InitContainerStatuses[i].ContainerID)
-			}
-			for i := range pod.Status.EphemeralContainerStatuses {
-				deletedContainers = append(deletedContainers,
-					pod.Status.EphemeralContainerStatuses[i].ContainerID)
-			}
-		},
-	}); err != nil {
-		log.Warn("can't attach container listener to the Kubernetes informer."+
-			" Your kubernetes metadata might be outdated in the long term", "error", err)
-	}
+	k.initContainerDeletionListeners(log, pods)
 
 	// Transform any *v1.Pod instance into a *PodInfo instance to save space
 	// in the informer's cache
@@ -191,14 +170,44 @@ func (k *Metadata) initPodInformer(informerFactory informers.SharedInformerFacto
 	return nil
 }
 
+// initContainerDeletionListeners listens for deletions of pods, to forward them to the ContainerEventHandler subscribers.
+func (k *Metadata) initContainerDeletionListeners(log *slog.Logger, pods cache.SharedIndexInformer) {
+	if _, err := pods.AddEventHandler(cache.ResourceEventHandlerFuncs{
+		DeleteFunc: func(obj interface{}) {
+			pod := obj.(*v1.Pod)
+			deletedContainers := make([]string, 0,
+				len(pod.Status.ContainerStatuses)+
+					len(pod.Status.InitContainerStatuses)+
+					len(pod.Status.EphemeralContainerStatuses))
+			for i := range pod.Status.ContainerStatuses {
+				deletedContainers = append(deletedContainers,
+					pod.Status.ContainerStatuses[i].ContainerID)
+			}
+			for i := range pod.Status.InitContainerStatuses {
+				deletedContainers = append(deletedContainers,
+					pod.Status.InitContainerStatuses[i].ContainerID)
+			}
+			for i := range pod.Status.EphemeralContainerStatuses {
+				deletedContainers = append(deletedContainers,
+					pod.Status.EphemeralContainerStatuses[i].ContainerID)
+			}
+			for _, listener := range k.containerEventHandlers {
+				listener.OnDeletion(deletedContainers)
+			}
+		},
+	}); err != nil {
+		log.Warn("can't attach container listener to the Kubernetes informer."+
+			" Your kubernetes metadata might be outdated in the long term", "error", err)
+	}
+}
+
 // rmContainerIDSchema extracts the hex ID of a container ID that is provided in the form:
 // containerd://40c03570b6f4c30bc8d69923d37ee698f5cfcced92c7b7df1c47f6f7887378a9
 func rmContainerIDSchema(containerID string) string {
 	if parts := strings.Split(containerID, "://"); len(parts) > 1 {
 		return parts[1]
-	} else {
-		return parts[0]
 	}
+	return containerID
 }
 
 // GetReplicaSetInfo fetches metadata from a ReplicaSet given its name
@@ -247,7 +256,7 @@ func (k *Metadata) initReplicaSetInformer(informerFactory informers.SharedInform
 	}); err != nil {
 		return fmt.Errorf("can't set pods transform: %w", err)
 	}
-	if err := rss.AddIndexers(rsIndexer); err != nil {
+	if err := rss.AddIndexers(replicaSetIndexer); err != nil {
 		return fmt.Errorf("can't add %s indexer to ReplicaSets informer: %w", IndexReplicaSetNames, err)
 	}
 

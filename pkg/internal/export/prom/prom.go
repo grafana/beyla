@@ -45,7 +45,6 @@ const (
 	rpcSystemGRPC        = "rpc_system"
 	DBOperationKey       = "db_operation"
 
-	// TODO: report also peer attributes if BEYLA_METRICS_REPORT_PEER is set
 	k8sNamespaceName  = "k8s_namespace_name"
 	k8sPodName        = "k8s_pod_name"
 	k8sDeploymentName = "k8s_deployment_name"

@@ -3,9 +3,12 @@ package discover
 import (
 	"github.com/mariomac/pipes/pkg/node"
 
-	"github.com/grafana/beyla/pkg/internal/kube"
+	"github.com/grafana/beyla/pkg/internal/transform/kube"
 )
 
+// ContainerDBUpdater is a stage in the Process Finder pipeline that will be
+// enabled only if Kubernetes decoration is enabled.
+// It just updates part of the kubernetes database when a new process is discovered.
 type ContainerDBUpdater struct {
 	DB *kube.Database
 }
@@ -19,8 +22,8 @@ func ContainerDBUpdaterProvider(cn *ContainerDBUpdater) (node.MiddleFunc[[]Event
 				case EventCreated:
 					cn.DB.AddProcess(uint32(ev.Obj.FileInfo.Pid))
 				case EventDeleted:
-					// we don't need to handle this from here, as the Kubernetes informer will clean up the
-					// database
+					// we don't need to handle process deletion from here, as the Kubernetes informer will
+					// remove the process from the database when the Pod that contains it is deleted
 				}
 			}
 			out <- instrumentables

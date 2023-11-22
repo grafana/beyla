@@ -2,6 +2,7 @@ package otel
 
 import (
 	"context"
+	"encoding/binary"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -15,12 +16,14 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
-	trace2 "go.opentelemetry.io/otel/trace"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/pkg/internal/request"
+	"github.com/grafana/beyla/pkg/internal/svc"
 )
 
 func TestHTTPTracesEndpoint(t *testing.T) {
@@ -391,6 +394,82 @@ func TestTracesConfig_Disabled(t *testing.T) {
 	assert.False(t, TracesConfig{Grafana: &GrafanaOTLP{Submit: []string{"traces"}}}.Enabled())
 }
 
+func TestTracesIdGenerator(t *testing.T) {
+	defer restoreEnvAfterExecution()
+	mcfg := TracesConfig{Grafana: &GrafanaOTLP{
+		Submit:     []string{submitMetrics, submitTraces},
+		CloudZone:  "eu-west-23",
+		InstanceID: "12345",
+		APIKey:     "affafafaafkd",
+	}}
+	r := TracesReporter{ctx: context.Background(), cfg: &mcfg}
+	r.bsp = sdktrace.NewSimpleSpanProcessor(nil)
+
+	tracers, err := r.newTracers(svc.ID{})
+	assert.NoError(t, err)
+	assert.NotNil(t, tracers)
+
+	t.Run("testing that we can generate random spans in userspace, if not set by eBPF", func(t *testing.T) {
+		_, sp := tracers.tracer.Start(context.Background(), "Test",
+			trace.WithTimestamp(time.Now()),
+			trace.WithSpanKind(trace.SpanKindServer),
+		)
+		assert.True(t, sp.SpanContext().HasSpanID())
+		assert.True(t, sp.SpanContext().HasTraceID())
+	})
+
+	t.Run("testing that we can generate span for fixed parent set eBPF", func(t *testing.T) {
+		tID1, spID1 := NewIDs(1)
+		assert.True(t, tID1.IsValid())
+		assert.True(t, spID1.IsValid())
+
+		parentCtx := trace.ContextWithSpanContext(
+			context.Background(),
+			trace.SpanContext{}.WithTraceID(tID1).WithSpanID(spID1).WithTraceFlags(trace.FlagsSampled),
+		)
+
+		_, sp := tracers.tracer.Start(parentCtx, "Test1",
+			trace.WithTimestamp(time.Now()),
+			trace.WithSpanKind(trace.SpanKindServer),
+		)
+
+		assert.True(t, sp.SpanContext().HasSpanID())
+		assert.Equal(t, tID1, sp.SpanContext().TraceID())
+		assert.NotEqual(t, spID1, sp.SpanContext().SpanID())
+
+	})
+
+	t.Run("testing that we can generate span for fixed traceID set by eBPF", func(t *testing.T) {
+		tID2, spID2 := NewIDs(2)
+
+		parentCtx := ContextWithTrace(context.Background(), tID2)
+
+		_, sp := tracers.tracer.Start(parentCtx, "Test2",
+			trace.WithTimestamp(time.Now()),
+			trace.WithSpanKind(trace.SpanKindServer),
+		)
+
+		assert.True(t, sp.SpanContext().HasSpanID())
+		assert.Equal(t, tID2, sp.SpanContext().TraceID())
+		assert.NotEqual(t, spID2, sp.SpanContext().SpanID())
+	})
+
+	t.Run("testing that we can generate fixed traceID and spanID set by eBPF", func(t *testing.T) {
+		tID3, spID3 := NewIDs(3)
+
+		parentCtx := ContextWithTraceParent(context.Background(), tID3, spID3)
+
+		_, sp := tracers.tracer.Start(parentCtx, "Test3",
+			trace.WithTimestamp(time.Now()),
+			trace.WithSpanKind(trace.SpanKindServer),
+		)
+
+		assert.True(t, sp.SpanContext().HasSpanID())
+		assert.Equal(t, tID3, sp.SpanContext().TraceID())
+		assert.Equal(t, spID3, sp.SpanContext().SpanID())
+	})
+}
+
 type fakeInternalTraces struct {
 	imetrics.NoopReporter
 	sum  atomic.Int32
@@ -435,72 +514,6 @@ func restoreEnvAfterExecution() func() {
 				os.Setenv(v.name, v.val)
 			} else {
 				os.Unsetenv(v.name)
-			}
-		}
-	}
-}
-
-func TestTraces_Traceparent(t *testing.T) {
-	type traceparentTest struct {
-		badTid bool
-		badPid bool
-		tp     [55]byte
-	}
-
-	// Traceparents are byte arrays here, like what is provided by eBPF.
-	testTraceparents := []traceparentTest{
-		{badTid: false, badPid: false, tp: [55]byte([]byte("00-fe211fdbe7577019574171229dc11c68-0795b6fd135d1cad-01"))},
-		{badTid: false, badPid: false, tp: [55]byte([]byte("00-fe211fdbe7577019574171229dc11c68-0795b6fd135d1cad-00"))},
-		{badTid: false, badPid: false, tp: [55]byte([]byte("00-4fa876be53b9e76974dc030d4cf346ea-2620fa5719017438-01"))},
-		{badTid: false, badPid: false, tp: [55]byte([]byte("00-4fa876be53b9e76974dc030d4cf346ea-2620fa5719017438-00"))},
-		{badTid: false, badPid: false, tp: [55]byte([]byte("00-55b136efe14761a763df0779a2e4c057-0fb91de9e2199abe-01"))},
-		{badTid: false, badPid: false, tp: [55]byte([]byte("00-55b136efe14761a763df0779a2e4c057-0fb91de9e2199abe-00"))},
-		{badTid: false, badPid: false, tp: [55]byte([]byte("00-55b136efe14761a763df0779a2e4c057-0fb91de9e2199abe-0x"))},
-		{badTid: false, badPid: false, tp: [55]byte([]byte("00-55b136efe14761a763df0779a2e4c057-0fb91de9e2199abe-gg"))},
-		{badTid: true, badPid: true, tp: [55]byte{'\r', '\n'}},
-		{badTid: true, badPid: true, tp: [55]byte{0}},
-		{badTid: true, badPid: true, tp: [55]byte{'0'}},
-		{badTid: true, badPid: true, tp: [55]byte{'0', '0', '-'}},
-		{badTid: true, badPid: false, tp: [55]byte([]byte("00-Zfe865607da112abd799ea8108c38bcb-4c59e9a913c480a3-01"))},
-		{badTid: true, badPid: false, tp: [55]byte([]byte("00-5fe865607da112abd799ea8108c38bcL-4c59e9a913c480a3-01"))},
-		{badTid: true, badPid: false, tp: [55]byte([]byte("00-5fe865607Ra112abd799ea8108c38bcb-4c59e9a913c480a3-01"))},
-		{badTid: true, badPid: false, tp: [55]byte([]byte("00-0x5fe865607da112abd799ea8108c3cb-4c59e9a913c480a3-01"))},
-		{badTid: true, badPid: false, tp: [55]byte([]byte("00-5FE865607DA112ABD799EA8108C38BCB-4c59e9a913c480a3-01"))},
-		{badTid: false, badPid: true, tp: [55]byte([]byte("00-11111111111111111111111111111111-Zc59e9a913c480a3-01"))},
-		{badTid: false, badPid: true, tp: [55]byte([]byte("00-22222222222222222222222222222222-4C59E9A913C480A3-01"))},
-		{badTid: false, badPid: true, tp: [55]byte([]byte("00-33333333333333333333333333333333-4c59e9aW13c480a3-01"))},
-		{badTid: false, badPid: true, tp: [55]byte([]byte("00-44444444444444444444444444444444-4c59e9a9-3c480a3-01"))},
-		{badTid: false, badPid: true, tp: [55]byte([]byte("00-55555555555555555555555555555555-0x59e9a913c480a3-01"))},
-		{badTid: true, badPid: true, tp: [55]byte([]byte("00-16fddc390bba20bG11ae0ea4e1073735-130c93e94b0x9436-01"))},
-		{badTid: true, badPid: false, tp: [55]byte(append([]byte("00-Z8ded37f8a156b0d8b78a861bf0a3b52-0f9b26893b"), []byte{0, 0, 0, 0, 0, 0, 0, 0, 0}...))},
-	}
-	for _, tpTest := range testTraceparents {
-		parentCtx := context.Background()
-		originalTraceID := "12345678901234567890123456789012"
-		originalParentID := "1122334455667788"
-
-		// Create context with original values to compare afterwards
-		traceID, err := trace2.TraceIDFromHex(originalTraceID)
-		assert.Nil(t, err)
-		parentSpanID, err := trace2.SpanIDFromHex(originalParentID)
-		assert.Nil(t, err)
-		spanCtx := trace2.SpanContextFromContext(parentCtx).WithTraceID(traceID).WithSpanID(parentSpanID)
-		parentCtx = trace2.ContextWithSpanContext(parentCtx, spanCtx)
-
-		t.Log("Testing traceparent:", tpTest.tp)
-		parentCtx = handleTraceparentField(parentCtx, string(tpTest.tp[:]))
-
-		if tpTest.badTid {
-			assert.Equal(t, traceID, trace2.SpanContextFromContext(parentCtx).TraceID())
-		} else {
-			assert.NotEqual(t, traceID, trace2.SpanContextFromContext(parentCtx).TraceID())
-		}
-		if tpTest.badPid {
-			assert.Equal(t, parentSpanID, trace2.SpanContextFromContext(parentCtx).SpanID())
-		} else {
-			if !tpTest.badTid {
-				// We only set parent-ID when trace ID is not invalid
-				assert.NotEqual(t, parentSpanID, trace2.SpanContextFromContext(parentCtx).SpanID())
 			}
 		}
 	}
@@ -612,4 +625,13 @@ func TestTraces_GRPCStatus(t *testing.T) {
 			assert.Equal(t, p.statusCode, spanStatusCode(&request.Span{Status: int(p.grpcCode.Value.AsInt64()), Type: request.EventTypeGRPCClient}))
 		}
 	})
+}
+
+func NewIDs(counter int) (trace.TraceID, trace.SpanID) {
+	var traceID [16]byte
+	var spanID [8]byte
+	binary.BigEndian.PutUint64(traceID[:8], uint64(counter))
+	binary.BigEndian.PutUint64(spanID[:], uint64(counter))
+
+	return trace.TraceID(traceID), trace.SpanID(spanID)
 }

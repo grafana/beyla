@@ -270,7 +270,7 @@ func grpcMetricsExporter(ctx context.Context, cfg *MetricsConfig) (metric.Export
 
 func (mr *MetricsReporter) close() {
 	if err := mr.exporter.Shutdown(mr.ctx); err != nil {
-		slog.With("component", "MetricsReporter").Error("closing metrics provider", err)
+		slog.With("component", "MetricsReporter").Error("closing metrics provider", "error", err)
 	}
 }
 

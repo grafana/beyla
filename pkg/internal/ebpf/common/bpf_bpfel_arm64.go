@@ -15,7 +15,6 @@ import (
 
 type bpfHttpRequestTrace struct {
 	Type              uint8
-	Id                uint64
 	GoStartMonotimeNs uint64
 	StartMonotimeNs   uint64
 	EndMonotimeNs     uint64
@@ -28,8 +27,13 @@ type bpfHttpRequestTrace struct {
 	HostLen           uint64
 	HostPort          uint32
 	ContentLength     int64
-	Traceparent       [55]uint8
-	Pid               struct {
+	Tp                struct {
+		TraceId  [16]uint8
+		SpanId   [8]uint8
+		ParentId [8]uint8
+		Epoch    uint64
+	}
+	Pid struct {
 		HostPid   uint32
 		UserPid   uint32
 		Namespace uint32
@@ -38,12 +42,17 @@ type bpfHttpRequestTrace struct {
 
 type bpfSqlRequestTrace struct {
 	Type            uint8
-	Id              uint64
 	StartMonotimeNs uint64
 	EndMonotimeNs   uint64
 	Sql             [500]uint8
 	Status          uint16
-	Pid             struct {
+	Tp              struct {
+		TraceId  [16]uint8
+		SpanId   [8]uint8
+		ParentId [8]uint8
+		Epoch    uint64
+	}
+	Pid struct {
 		HostPid   uint32
 		UserPid   uint32
 		Namespace uint32

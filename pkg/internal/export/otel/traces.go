@@ -2,7 +2,6 @@ package otel
 
 import (
 	"context"
-	"encoding/hex"
 	"fmt"
 	"log/slog"
 	"net/url"
@@ -10,7 +9,6 @@ import (
 	"strings"
 	"time"
 
-	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/mariomac/pipes/pkg/node"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
@@ -30,15 +28,6 @@ import (
 func tlog() *slog.Logger {
 	return slog.With("component", "otel.TracesReporter")
 }
-
-type SessionSpan struct {
-	ReqSpan request.Span
-	RootCtx context.Context
-}
-
-// TODO: global variables, move as fields of TracesReporter
-var topSpans, _ = lru.New[uint64, SessionSpan](8192)
-var clientSpans, _ = lru.New[uint64, []request.Span](8192)
 
 const reporterName = "github.com/grafana/beyla"
 
@@ -235,7 +224,7 @@ func (r *TracesReporter) close() {
 		}
 	}
 	if err := r.traceExporter.Shutdown(r.ctx); err != nil {
-		log.Error("closing traces exporter", err)
+		log.Error("closing traces exporter", "error", err)
 	}
 }
 
@@ -394,56 +383,31 @@ func spanKind(span *request.Span) trace2.SpanKind {
 	return trace2.SpanKindInternal
 }
 
-func handleTraceparentField(parentCtx context.Context, traceparent string) context.Context {
-	// If traceparent was not set in eBPF, entire field should be zeroed bytes.
-	if len(traceparent) < 55 || traceparent[0] == 0 {
-		return parentCtx
+func handleTraceparent(parentCtx context.Context, span *request.Span) context.Context {
+	if span.ParentSpanID.IsValid() {
+		parentCtx = trace2.ContextWithSpanContext(parentCtx, trace2.SpanContext{}.WithTraceID(span.TraceID).WithSpanID(span.ParentSpanID).WithTraceFlags(trace2.FlagsSampled))
+	} else if span.TraceID.IsValid() {
+		parentCtx = ContextWithTrace(parentCtx, span.TraceID)
 	}
 
-	// See https://www.w3.org/TR/trace-context/#traceparent-header-field-values for format.
-	// 2 hex version + dash + 32 hex traceID + dash + 16 hex parent + dash + 2 hex flags
-	traceID := string(traceparent[3:35])
-
-	if traceID != "" {
-		tid, err := trace2.TraceIDFromHex(traceID)
-		if err != nil {
-			slog.Debug("Invalid TraceID", "error:", err, "traceId:", traceID)
-		} else {
-			spanCtx := trace2.SpanContextFromContext(parentCtx).WithTraceID(tid)
-			parentCtx = trace2.ContextWithSpanContext(parentCtx, spanCtx)
-
-			// Otel loads parent-id into SpanID
-			parentID := string(traceparent[36:52])
-			spanID, err := trace2.SpanIDFromHex(parentID)
-			if err != nil {
-				slog.Debug("Invalid ParentID", "error:", err, "parentId:", parentID)
-			} else {
-				spanCtx := trace2.SpanContextFromContext(parentCtx).WithSpanID(spanID)
-				parentCtx = trace2.ContextWithSpanContext(parentCtx, spanCtx)
-			}
-
-			// Propagate the trace flags
-			traceFlags := string(traceparent[53:55])
-			flags, err := hex.DecodeString(traceFlags)
-			if err != nil {
-				slog.Debug("Invalid trace flags", "error:", err, "traceFlags:", traceFlags)
-			} else {
-				spanCtx = trace2.SpanContextFromContext(parentCtx).WithTraceFlags(trace2.TraceFlags(flags[0]))
-				parentCtx = trace2.ContextWithSpanContext(parentCtx, spanCtx)
-			}
-		}
-	}
 	return parentCtx
 }
 
-func (r *TracesReporter) makeSpan(parentCtx context.Context, tracer trace2.Tracer, span *request.Span) SessionSpan {
+func (r *TracesReporter) makeSpan(parentCtx context.Context, tracer trace2.Tracer, span *request.Span) {
 	t := span.Timings()
 
-	parentCtx = handleTraceparentField(parentCtx, span.Traceparent)
+	parentCtx = handleTraceparent(parentCtx, span)
 
 	realStart := t.RequestStart
 	if t.Start.Before(realStart) {
 		realStart = t.Start
+	}
+
+	hasSubspans := t.Start.After(realStart)
+
+	if !hasSubspans {
+		// We set the eBPF calculated trace_id and span_id to be the main span
+		parentCtx = ContextWithTraceParent(parentCtx, span.TraceID, span.SpanID)
 	}
 
 	// Create a parent span for the whole request session
@@ -455,7 +419,7 @@ func (r *TracesReporter) makeSpan(parentCtx context.Context, tracer trace2.Trace
 
 	sp.SetStatus(spanStatusCode(span), "")
 
-	if t.Start.After(realStart) {
+	if hasSubspans {
 		var spP trace2.Span
 
 		// Create a child span showing the queue time
@@ -467,7 +431,9 @@ func (r *TracesReporter) makeSpan(parentCtx context.Context, tracer trace2.Trace
 
 		// Create a child span showing the processing time
 		// Override the active context for the span to be the processing span
-		ctx, spP = tracer.Start(ctx, "processing",
+		// The trace_id and span_id from eBPF are attached here
+		ctx = ContextWithTraceParent(ctx, span.TraceID, span.SpanID)
+		_, spP = tracer.Start(ctx, "processing",
 			trace2.WithTimestamp(t.Start),
 			trace2.WithSpanKind(trace2.SpanKindInternal),
 		)
@@ -475,63 +441,6 @@ func (r *TracesReporter) makeSpan(parentCtx context.Context, tracer trace2.Trace
 	}
 
 	sp.End(trace2.WithTimestamp(t.End))
-
-	return SessionSpan{*span, ctx}
-}
-
-func (r *TracesReporter) reportClientSpan(span *request.Span, tracer trace2.Tracer) {
-	ctx := r.ctx
-
-	// we have a parent request span
-	if span.ID != 0 {
-		sp, ok := topSpans.Get(span.ID)
-		if ok && span.Inside(&sp.ReqSpan) {
-			// parent span exists, use it
-			ctx = sp.RootCtx
-		} else {
-			// stash the client span for later addition
-			cs, ok := clientSpans.Get(span.ID)
-			if !ok {
-				cs = []request.Span{*span}
-			} else {
-				cs = append(cs, *span)
-			}
-			clientSpans.Add(span.ID, cs)
-
-			// don't add the span just yet, the parent span isn't ready
-			return
-		}
-	}
-
-	r.makeSpan(ctx, tracer, span)
-}
-
-func (r *TracesReporter) reportServerSpan(span *request.Span, tracer trace2.Tracer) {
-
-	s := r.makeSpan(r.ctx, tracer, span)
-	if span.ID != 0 {
-		topSpans.Add(span.ID, s)
-		cs, ok := clientSpans.Get(span.ID)
-		newer := []request.Span{}
-		if ok {
-			// finish any client spans that were waiting for this parent span
-			for j := range cs {
-				cspan := &cs[j]
-				if cspan.Inside(span) {
-					r.makeSpan(s.RootCtx, tracer, cspan)
-				} else if cspan.Start > span.RequestStart {
-					newer = append(newer, *cspan)
-				} else {
-					r.makeSpan(r.ctx, tracer, cspan)
-				}
-			}
-			if len(newer) == 0 {
-				clientSpans.Remove(span.ID)
-			} else {
-				clientSpans.Add(span.ID, newer)
-			}
-		}
-	}
 }
 
 func (r *TracesReporter) reportTraces(input <-chan []request.Span) {
@@ -558,12 +467,7 @@ func (r *TracesReporter) reportTraces(input <-chan []request.Span) {
 				reporter = lm.tracer
 			}
 
-			switch span.Type {
-			case request.EventTypeHTTPClient, request.EventTypeGRPCClient, request.EventTypeSQLClient:
-				r.reportClientSpan(span, reporter)
-			case request.EventTypeHTTP, request.EventTypeGRPC:
-				r.reportServerSpan(span, reporter)
-			}
+			r.makeSpan(r.ctx, reporter, span)
 		}
 	}
 	r.close()
@@ -576,6 +480,7 @@ func (r *TracesReporter) newTracers(service svc.ID) (*Tracers, error) {
 			trace.WithResource(otelResource(service)),
 			trace.WithSpanProcessor(r.bsp),
 			trace.WithSampler(r.cfg.Sampler.Implementation()),
+			trace.WithIDGenerator(&BeylaIDGenerator{}),
 		),
 	}
 	tracers.tracer = tracers.provider.Tracer(reporterName)

@@ -13,21 +13,21 @@ import (
 	"github.com/cilium/ebpf"
 )
 
-type bpf_debugConnectionInfoT struct {
+type bpf_tp_debugConnectionInfoT struct {
 	S_addr [16]uint8
 	D_addr [16]uint8
 	S_port uint16
 	D_port uint16
 }
 
-type bpf_debugHttpBufT struct {
+type bpf_tp_debugHttpBufT struct {
 	Flags    uint64
-	ConnInfo bpf_debugConnectionInfoT
+	ConnInfo bpf_tp_debugConnectionInfoT
 	Buf      [1024]uint8
 	_        [4]byte
 }
 
-type bpf_debugHttpConnectionMetadataT struct {
+type bpf_tp_debugHttpConnectionMetadataT struct {
 	Pid struct {
 		HostPid   uint32
 		UserPid   uint32
@@ -36,9 +36,9 @@ type bpf_debugHttpConnectionMetadataT struct {
 	Type uint8
 }
 
-type bpf_debugHttpInfoT struct {
+type bpf_tp_debugHttpInfoT struct {
 	Flags           uint64
-	ConnInfo        bpf_debugConnectionInfoT
+	ConnInfo        bpf_tp_debugConnectionInfoT
 	_               [4]byte
 	StartMonotimeNs uint64
 	EndMonotimeNs   uint64
@@ -53,54 +53,54 @@ type bpf_debugHttpInfoT struct {
 		UserPid   uint32
 		Namespace uint32
 	}
-	Tp bpf_debugTpInfoT
+	Tp bpf_tp_debugTpInfoT
 }
 
-type bpf_debugRecvArgsT struct {
+type bpf_tp_debugRecvArgsT struct {
 	SockPtr  uint64
 	IovecPtr uint64
 }
 
-type bpf_debugSockArgsT struct {
+type bpf_tp_debugSockArgsT struct {
 	Addr       uint64
 	AcceptTime uint64
 }
 
-type bpf_debugSslArgsT struct {
+type bpf_tp_debugSslArgsT struct {
 	Ssl    uint64
 	Buf    uint64
 	LenPtr uint64
 }
 
-type bpf_debugTpInfoT struct {
+type bpf_tp_debugTpInfoT struct {
 	TraceId  [16]uint8
 	SpanId   [8]uint8
 	ParentId [8]uint8
 	Epoch    uint64
 }
 
-// loadBpf_debug returns the embedded CollectionSpec for bpf_debug.
-func loadBpf_debug() (*ebpf.CollectionSpec, error) {
-	reader := bytes.NewReader(_Bpf_debugBytes)
+// loadBpf_tp_debug returns the embedded CollectionSpec for bpf_tp_debug.
+func loadBpf_tp_debug() (*ebpf.CollectionSpec, error) {
+	reader := bytes.NewReader(_Bpf_tp_debugBytes)
 	spec, err := ebpf.LoadCollectionSpecFromReader(reader)
 	if err != nil {
-		return nil, fmt.Errorf("can't load bpf_debug: %w", err)
+		return nil, fmt.Errorf("can't load bpf_tp_debug: %w", err)
 	}
 
 	return spec, err
 }
 
-// loadBpf_debugObjects loads bpf_debug and converts it into a struct.
+// loadBpf_tp_debugObjects loads bpf_tp_debug and converts it into a struct.
 //
 // The following types are suitable as obj argument:
 //
-//	*bpf_debugObjects
-//	*bpf_debugPrograms
-//	*bpf_debugMaps
+//	*bpf_tp_debugObjects
+//	*bpf_tp_debugPrograms
+//	*bpf_tp_debugMaps
 //
 // See ebpf.CollectionSpec.LoadAndAssign documentation for details.
-func loadBpf_debugObjects(obj interface{}, opts *ebpf.CollectionOptions) error {
-	spec, err := loadBpf_debug()
+func loadBpf_tp_debugObjects(obj interface{}, opts *ebpf.CollectionOptions) error {
+	spec, err := loadBpf_tp_debug()
 	if err != nil {
 		return err
 	}
@@ -108,18 +108,18 @@ func loadBpf_debugObjects(obj interface{}, opts *ebpf.CollectionOptions) error {
 	return spec.LoadAndAssign(obj, opts)
 }
 
-// bpf_debugSpecs contains maps and programs before they are loaded into the kernel.
+// bpf_tp_debugSpecs contains maps and programs before they are loaded into the kernel.
 //
 // It can be passed ebpf.CollectionSpec.Assign.
-type bpf_debugSpecs struct {
-	bpf_debugProgramSpecs
-	bpf_debugMapSpecs
+type bpf_tp_debugSpecs struct {
+	bpf_tp_debugProgramSpecs
+	bpf_tp_debugMapSpecs
 }
 
-// bpf_debugSpecs contains programs before they are loaded into the kernel.
+// bpf_tp_debugSpecs contains programs before they are loaded into the kernel.
 //
 // It can be passed ebpf.CollectionSpec.Assign.
-type bpf_debugProgramSpecs struct {
+type bpf_tp_debugProgramSpecs struct {
 	KprobeSysExit           *ebpf.ProgramSpec `ebpf:"kprobe_sys_exit"`
 	KprobeTcpConnect        *ebpf.ProgramSpec `ebpf:"kprobe_tcp_connect"`
 	KprobeTcpRcvEstablished *ebpf.ProgramSpec `ebpf:"kprobe_tcp_rcv_established"`
@@ -142,10 +142,10 @@ type bpf_debugProgramSpecs struct {
 	UretprobeSslWriteEx     *ebpf.ProgramSpec `ebpf:"uretprobe_ssl_write_ex"`
 }
 
-// bpf_debugMapSpecs contains maps before they are loaded into the kernel.
+// bpf_tp_debugMapSpecs contains maps before they are loaded into the kernel.
 //
 // It can be passed ebpf.CollectionSpec.Assign.
-type bpf_debugMapSpecs struct {
+type bpf_tp_debugMapSpecs struct {
 	ActiveAcceptArgs    *ebpf.MapSpec `ebpf:"active_accept_args"`
 	ActiveConnectArgs   *ebpf.MapSpec `ebpf:"active_connect_args"`
 	ActiveRecvArgs      *ebpf.MapSpec `ebpf:"active_recv_args"`
@@ -168,25 +168,25 @@ type bpf_debugMapSpecs struct {
 	ValidPids           *ebpf.MapSpec `ebpf:"valid_pids"`
 }
 
-// bpf_debugObjects contains all objects after they have been loaded into the kernel.
+// bpf_tp_debugObjects contains all objects after they have been loaded into the kernel.
 //
-// It can be passed to loadBpf_debugObjects or ebpf.CollectionSpec.LoadAndAssign.
-type bpf_debugObjects struct {
-	bpf_debugPrograms
-	bpf_debugMaps
+// It can be passed to loadBpf_tp_debugObjects or ebpf.CollectionSpec.LoadAndAssign.
+type bpf_tp_debugObjects struct {
+	bpf_tp_debugPrograms
+	bpf_tp_debugMaps
 }
 
-func (o *bpf_debugObjects) Close() error {
-	return _Bpf_debugClose(
-		&o.bpf_debugPrograms,
-		&o.bpf_debugMaps,
+func (o *bpf_tp_debugObjects) Close() error {
+	return _Bpf_tp_debugClose(
+		&o.bpf_tp_debugPrograms,
+		&o.bpf_tp_debugMaps,
 	)
 }
 
-// bpf_debugMaps contains all maps after they have been loaded into the kernel.
+// bpf_tp_debugMaps contains all maps after they have been loaded into the kernel.
 //
-// It can be passed to loadBpf_debugObjects or ebpf.CollectionSpec.LoadAndAssign.
-type bpf_debugMaps struct {
+// It can be passed to loadBpf_tp_debugObjects or ebpf.CollectionSpec.LoadAndAssign.
+type bpf_tp_debugMaps struct {
 	ActiveAcceptArgs    *ebpf.Map `ebpf:"active_accept_args"`
 	ActiveConnectArgs   *ebpf.Map `ebpf:"active_connect_args"`
 	ActiveRecvArgs      *ebpf.Map `ebpf:"active_recv_args"`
@@ -209,8 +209,8 @@ type bpf_debugMaps struct {
 	ValidPids           *ebpf.Map `ebpf:"valid_pids"`
 }
 
-func (m *bpf_debugMaps) Close() error {
-	return _Bpf_debugClose(
+func (m *bpf_tp_debugMaps) Close() error {
+	return _Bpf_tp_debugClose(
 		m.ActiveAcceptArgs,
 		m.ActiveConnectArgs,
 		m.ActiveRecvArgs,
@@ -234,10 +234,10 @@ func (m *bpf_debugMaps) Close() error {
 	)
 }
 
-// bpf_debugPrograms contains all programs after they have been loaded into the kernel.
+// bpf_tp_debugPrograms contains all programs after they have been loaded into the kernel.
 //
-// It can be passed to loadBpf_debugObjects or ebpf.CollectionSpec.LoadAndAssign.
-type bpf_debugPrograms struct {
+// It can be passed to loadBpf_tp_debugObjects or ebpf.CollectionSpec.LoadAndAssign.
+type bpf_tp_debugPrograms struct {
 	KprobeSysExit           *ebpf.Program `ebpf:"kprobe_sys_exit"`
 	KprobeTcpConnect        *ebpf.Program `ebpf:"kprobe_tcp_connect"`
 	KprobeTcpRcvEstablished *ebpf.Program `ebpf:"kprobe_tcp_rcv_established"`
@@ -260,8 +260,8 @@ type bpf_debugPrograms struct {
 	UretprobeSslWriteEx     *ebpf.Program `ebpf:"uretprobe_ssl_write_ex"`
 }
 
-func (p *bpf_debugPrograms) Close() error {
-	return _Bpf_debugClose(
+func (p *bpf_tp_debugPrograms) Close() error {
+	return _Bpf_tp_debugClose(
 		p.KprobeSysExit,
 		p.KprobeTcpConnect,
 		p.KprobeTcpRcvEstablished,
@@ -285,7 +285,7 @@ func (p *bpf_debugPrograms) Close() error {
 	)
 }
 
-func _Bpf_debugClose(closers ...io.Closer) error {
+func _Bpf_tp_debugClose(closers ...io.Closer) error {
 	for _, closer := range closers {
 		if err := closer.Close(); err != nil {
 			return err
@@ -296,5 +296,5 @@ func _Bpf_debugClose(closers ...io.Closer) error {
 
 // Do not access this directly.
 //
-//go:embed bpf_debug_bpfel_arm64.o
-var _Bpf_debugBytes []byte
+//go:embed bpf_tp_debug_bpfel_arm64.o
+var _Bpf_tp_debugBytes []byte

@@ -77,15 +77,7 @@ func testClientWithMethodAndStatusCode(t *testing.T, method string, statusCode i
 	*/
 	require.True(t, span.TraceID != "")
 	require.True(t, strings.HasSuffix(span.TraceID, traceIDLookup))
-
-	// The first 16 characters of traceID must match the spanID if pingclient
-	// generated the spans
-	parent := span.TraceID[:16]
-	childOfPID := trace.ChildrenOf(parent)
-	require.Len(t, childOfPID, 1)
-	childSpan := childOfPID[0]
-	require.Equal(t, childSpan.TraceID, span.TraceID)
-	require.Equal(t, childSpan.SpanID, span.SpanID)
+	require.True(t, strings.HasPrefix(span.SpanID, "00"))
 }
 
 func testREDMetricsForClientHTTPLibrary(t *testing.T) {

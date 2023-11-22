@@ -86,13 +86,5 @@ func testNodeClientWithMethodAndStatusCode(t *testing.T, method string, statusCo
 	*/
 	require.True(t, span.TraceID != "")
 	require.True(t, strings.HasSuffix(span.TraceID, traceIDLookup))
-
-	// The first 16 characters of traceID must match the spanID if client.js
-	// generated the spans
-	parent := span.TraceID[:16]
-	childOfPID := trace.ChildrenOf(parent)
-	require.Len(t, childOfPID, 1)
-	childSpan := childOfPID[0]
-	require.Equal(t, childSpan.TraceID, span.TraceID)
-	require.Equal(t, childSpan.SpanID, span.SpanID)
+	require.True(t, strings.HasPrefix(span.SpanID, "00"))
 }

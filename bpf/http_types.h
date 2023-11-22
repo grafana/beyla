@@ -5,6 +5,7 @@
 #include "bpf_helpers.h"
 #include "http_defs.h"
 #include "pid.h"
+#include "tracing.h"
 
 #define FULL_BUF_SIZE 160 // should be enough for most URLs, we may need to extend it if not. Must be multiple of 16 for the copy to work.
 #define TRACE_BUF_SIZE 1024 // must be power of 2, we do an & to limit the buffer size
@@ -38,6 +39,7 @@ typedef struct http_info {
     // also to filter traces from unsolicited processes that share the executable
     // with other instrumented processes
     pid_info pid;
+    tp_info_t tp;
 } http_info_t;
 
 // Here we keep information on the packets passing through the socket filter
@@ -58,6 +60,17 @@ typedef struct http_buf {
     connection_info_t conn_info;
     u8  buf[TRACE_BUF_SIZE];
 } http_buf_t;
+
+// Keeps track of active accept or connect connection infos
+// From this table we extract the PID of the process and filter
+// HTTP calls we are not interested in
+struct {
+    __uint(type, BPF_MAP_TYPE_LRU_HASH);
+    __type(key, connection_info_t);
+    __type(value, http_connection_metadata_t); // PID_TID group and connection type
+    __uint(max_entries, MAX_CONCURRENT_REQUESTS);
+} filtered_connections SEC(".maps");
+
 
 // Force emitting struct http_request_trace into the ELF for automatic creation of Golang struct
 const http_info_t *unused __attribute__((unused));

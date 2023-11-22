@@ -13,36 +13,30 @@ import (
 	"github.com/cilium/ebpf"
 )
 
-type bpf_debugFuncInvocation struct {
-	StartMonotimeNs uint64
-	Regs            struct {
-		R15    uint64
-		R14    uint64
-		R13    uint64
-		R12    uint64
-		Bp     uint64
-		Bx     uint64
-		R11    uint64
-		R10    uint64
-		R9     uint64
-		R8     uint64
-		Ax     uint64
-		Cx     uint64
-		Dx     uint64
-		Si     uint64
-		Di     uint64
-		OrigAx uint64
-		Ip     uint64
-		Cs     uint64
-		Flags  uint64
-		Sp     uint64
-		Ss     uint64
-	}
-}
-
 type bpf_debugGoroutineMetadata struct {
 	Parent    uint64
 	Timestamp uint64
+}
+
+type bpf_debugGrpcClientFuncInvocationT struct {
+	StartMonotimeNs uint64
+	Cc              uint64
+	Ctx             uint64
+	Method          uint64
+	MethodLen       uint64
+}
+
+type bpf_debugGrpcSrvFuncInvocationT struct {
+	StartMonotimeNs uint64
+	Stream          uint64
+	Tp              bpf_debugTpInfoT
+}
+
+type bpf_debugTpInfoT struct {
+	TraceId  [16]uint8
+	SpanId   [8]uint8
+	ParentId [8]uint8
+	Epoch    uint64
 }
 
 // loadBpf_debug returns the embedded CollectionSpec for bpf_debug.
@@ -98,12 +92,12 @@ type bpf_debugProgramSpecs struct {
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpf_debugMapSpecs struct {
 	Events                    *ebpf.MapSpec `ebpf:"events"`
+	GoTraceMap                *ebpf.MapSpec `ebpf:"go_trace_map"`
 	GolangMapbucketStorageMap *ebpf.MapSpec `ebpf:"golang_mapbucket_storage_map"`
-	Newproc1                  *ebpf.MapSpec `ebpf:"newproc1"`
 	OngoingGoroutines         *ebpf.MapSpec `ebpf:"ongoing_goroutines"`
 	OngoingGrpcClientRequests *ebpf.MapSpec `ebpf:"ongoing_grpc_client_requests"`
 	OngoingGrpcRequestStatus  *ebpf.MapSpec `ebpf:"ongoing_grpc_request_status"`
-	OngoingServerRequests     *ebpf.MapSpec `ebpf:"ongoing_server_requests"`
+	OngoingGrpcServerRequests *ebpf.MapSpec `ebpf:"ongoing_grpc_server_requests"`
 	PidCache                  *ebpf.MapSpec `ebpf:"pid_cache"`
 	ValidPids                 *ebpf.MapSpec `ebpf:"valid_pids"`
 }
@@ -128,12 +122,12 @@ func (o *bpf_debugObjects) Close() error {
 // It can be passed to loadBpf_debugObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpf_debugMaps struct {
 	Events                    *ebpf.Map `ebpf:"events"`
+	GoTraceMap                *ebpf.Map `ebpf:"go_trace_map"`
 	GolangMapbucketStorageMap *ebpf.Map `ebpf:"golang_mapbucket_storage_map"`
-	Newproc1                  *ebpf.Map `ebpf:"newproc1"`
 	OngoingGoroutines         *ebpf.Map `ebpf:"ongoing_goroutines"`
 	OngoingGrpcClientRequests *ebpf.Map `ebpf:"ongoing_grpc_client_requests"`
 	OngoingGrpcRequestStatus  *ebpf.Map `ebpf:"ongoing_grpc_request_status"`
-	OngoingServerRequests     *ebpf.Map `ebpf:"ongoing_server_requests"`
+	OngoingGrpcServerRequests *ebpf.Map `ebpf:"ongoing_grpc_server_requests"`
 	PidCache                  *ebpf.Map `ebpf:"pid_cache"`
 	ValidPids                 *ebpf.Map `ebpf:"valid_pids"`
 }
@@ -141,12 +135,12 @@ type bpf_debugMaps struct {
 func (m *bpf_debugMaps) Close() error {
 	return _Bpf_debugClose(
 		m.Events,
+		m.GoTraceMap,
 		m.GolangMapbucketStorageMap,
-		m.Newproc1,
 		m.OngoingGoroutines,
 		m.OngoingGrpcClientRequests,
 		m.OngoingGrpcRequestStatus,
-		m.OngoingServerRequests,
+		m.OngoingGrpcServerRequests,
 		m.PidCache,
 		m.ValidPids,
 	)

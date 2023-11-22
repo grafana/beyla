@@ -30,13 +30,18 @@ func klog() *slog.Logger {
 	return slog.With("component", "kube.Metadata")
 }
 
+type ContainerEventHandler interface {
+	OnRemoval(containerID ...string)
+}
+
 // Metadata stores an in-memory copy of the different Kubernetes objects whose metadata is relevant to us.
 type Metadata struct {
 	// pods and replicaSets cache the different K8s types to custom, smaller object types
 	pods        cache.SharedIndexInformer
 	replicaSets cache.SharedIndexInformer
 
-	stopChan chan struct{}
+	stopChan               chan struct{}
+	containerEventHandlers []ContainerEventHandler
 }
 
 // PodInfo contains precollected metadata for Pods, Nodes and Services.
@@ -91,9 +96,40 @@ func (k *Metadata) GetContainerPod(containerID string) (*PodInfo, bool) {
 	return objs[0].(*PodInfo), true
 }
 
+// AddPodEventHandler must be invoked before InitFromConfig
+func (k *Metadata) AddContainerEventHandler(eh ContainerEventHandler) {
+	k.containerEventHandlers = append(k.containerEventHandlers, eh)
+}
+
 func (k *Metadata) initPodInformer(informerFactory informers.SharedInformerFactory) error {
 	log := klog().With("informer", "Pod")
 	pods := informerFactory.Core().V1().Pods().Informer()
+
+	if _, err := pods.AddEventHandler(cache.ResourceEventHandlerFuncs{
+		DeleteFunc: func(obj interface{}) {
+			pod := obj.(*v1.Pod)
+			deletedContainers := make([]string, 0,
+				len(pod.Status.ContainerStatuses)+
+					len(pod.Status.InitContainerStatuses)+
+					len(pod.Status.EphemeralContainerStatuses))
+			for i := range pod.Status.ContainerStatuses {
+				deletedContainers = append(deletedContainers,
+					pod.Status.ContainerStatuses[i].ContainerID)
+			}
+			for i := range pod.Status.InitContainerStatuses {
+				deletedContainers = append(deletedContainers,
+					pod.Status.InitContainerStatuses[i].ContainerID)
+			}
+			for i := range pod.Status.EphemeralContainerStatuses {
+				deletedContainers = append(deletedContainers,
+					pod.Status.EphemeralContainerStatuses[i].ContainerID)
+			}
+		},
+	}); err != nil {
+		log.Warn("can't attach container listener to the Kubernetes informer."+
+			" Your kubernetes metadata might be outdated in the long term", "error", err)
+	}
+
 	// Transform any *v1.Pod instance into a *PodInfo instance to save space
 	// in the informer's cache
 	if err := pods.SetTransform(func(i interface{}) (interface{}, error) {

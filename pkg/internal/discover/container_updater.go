@@ -19,7 +19,8 @@ func ContainerDBUpdaterProvider(cn *ContainerDBUpdater) (node.MiddleFunc[[]Event
 				case EventCreated:
 					cn.DB.AddProcess(uint32(ev.Obj.FileInfo.Pid))
 				case EventDeleted:
-					cn.DB.DeleteProcess(uint32(ev.Obj.FileInfo.Pid))
+					// we don't need to handle this from here, as the Kubernetes informer will clean up the
+					// database
 				}
 			}
 			out <- instrumentables

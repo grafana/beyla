@@ -7,12 +7,17 @@ import (
 	"os"
 	"regexp"
 	"strconv"
+
+	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
 )
 
+// injectable values for testing
 var procRoot = "/proc/"
+var namespaceFinder = ebpfcommon.FindNamespace
 
 type Info struct {
-	ContainerID string
+	ContainerID  string
+	PIDNamespace uint32
 }
 
 // A docker cgroup entry is a string like:
@@ -22,6 +27,10 @@ type Info struct {
 var dockerCgroup = regexp.MustCompile(`^\d+:.*:.*/kubelet\.slice/.*-(.+)\.scope$`)
 
 func InfoForPID(pid uint32) (Info, error) {
+	ns, err := namespaceFinder(pid)
+	if err != nil {
+		return Info{}, fmt.Errorf("finding PID %d namespace: %w", pid, err)
+	}
 	cgroupFile := procRoot + strconv.Itoa(int(pid)) + "/cgroup"
 	cgroupBytes, err := os.ReadFile(cgroupFile)
 	if err != nil {
@@ -32,7 +41,7 @@ func InfoForPID(pid uint32) (Info, error) {
 		if len(submatches) < 2 {
 			continue
 		}
-		return Info{ContainerID: string(submatches[1])}, nil
+		return Info{PIDNamespace: ns, ContainerID: string(submatches[1])}, nil
 	}
 	return Info{}, fmt.Errorf("%s: couldn't find any docker entry for process with PID %d", cgroupFile, pid)
 }

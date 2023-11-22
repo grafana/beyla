@@ -91,7 +91,7 @@ func (md *metadataDecorator) do(span *request.Span) {
 	if span.Metadata == nil {
 		span.Metadata = make(map[string]string, 5)
 	}
-	if podInfo, ok := md.db.OwnerPodInfo(span.Pid.Namespace, span.Pid.UserPID); ok {
+	if podInfo, ok := md.db.OwnerPodInfo(span.Pid.Namespace); ok {
 		appendMetadata(span.Metadata, podInfo)
 	}
 }

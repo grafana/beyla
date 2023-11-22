@@ -139,6 +139,8 @@ func (pm *NSPIDsMap[T]) AddPID(pid uint32, val T) error {
 		return fmt.Errorf("PID %d, NS %d. Looking up for namespaced PIDs: %w", pid, nsid, err)
 	}
 
+	slog.Debug("matching PID info", "component", "ebpfcommon.NSPIDsMap", "pids", allPids, "info", val)
+
 	for _, p := range allPids {
 		ns[p] = val
 	}

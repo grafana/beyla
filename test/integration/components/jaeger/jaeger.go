@@ -5,6 +5,7 @@ package jaeger
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 )
 
@@ -104,6 +105,12 @@ func (s *Span) Diff(expected ...Tag) DiffResult {
 	return Diff(expected, s.Tags)
 }
 
+// DiffAsRegexp works like Diff but it matches the expected tags values
+// as regular expressions
+func (s *Span) DiffAsRegexp(expected ...Tag) DiffResult {
+	return DiffAsRegexp(expected, s.Tags)
+}
+
 func FindIn(tags []Tag, key string) (Tag, bool) {
 	for _, t := range tags {
 		if t.Key == key {
@@ -121,9 +128,10 @@ func (mr DiffResult) String() string {
 		sb.WriteString("The following tags did not match:\n")
 	}
 	for _, td := range mr {
-		if td.ErrType == ErrTypeMissing {
+		switch td.ErrType {
+		case ErrTypeMissing:
 			sb.WriteString(fmt.Sprintf("\tmissing tag: %+v\n", td.Expected))
-		} else {
+		case ErrTypeNotEqual, ErrTypeNotMatching:
 			sb.WriteString(fmt.Sprintf("\ttag values do not match:\n\t\twant: %+v\n\t\tgot:  %+v\n", td.Expected, td.Actual))
 		}
 	}
@@ -135,6 +143,7 @@ type ErrType int
 const (
 	ErrTypeMissing = ErrType(iota)
 	ErrTypeNotEqual
+	ErrTypeNotMatching
 )
 
 type TagDiff struct {
@@ -152,6 +161,30 @@ func Diff(expected, actual []Tag) DiffResult {
 	for _, exp := range expected {
 		if act, ok := actualTags[exp.Key]; ok {
 			if act.Type != exp.Type || act.Value != exp.Value {
+				dr = append(dr, TagDiff{ErrType: ErrTypeNotEqual, Expected: exp, Actual: act})
+			}
+		} else {
+			dr = append(dr, TagDiff{ErrType: ErrTypeMissing, Expected: exp})
+		}
+	}
+	return dr
+}
+
+// DiffAsRegexp works like Diff but it matches the expected tags values
+// as regular expressions when type is "String"
+func DiffAsRegexp(expected, actual []Tag) DiffResult {
+	dr := DiffResult{}
+	actualTags := map[string]Tag{}
+	for _, d := range actual {
+		actualTags[d.Key] = d
+	}
+	for _, exp := range expected {
+		if act, ok := actualTags[exp.Key]; ok {
+			if act.Type == "string" && exp.Type == "string" {
+				if !regexp.MustCompile(fmt.Sprint(exp.Value)).MatchString(fmt.Sprint(act.Value)) {
+					dr = append(dr, TagDiff{ErrType: ErrTypeNotMatching, Expected: exp, Actual: act})
+				}
+			} else if act.Type != exp.Type || act.Value != exp.Value {
 				dr = append(dr, TagDiff{ErrType: ErrTypeNotEqual, Expected: exp, Actual: act})
 			}
 		} else {

@@ -29,7 +29,7 @@ func TestTracesDecoration(t *testing.T) {
 			TargetURL: "http://testserver:8080/traced-ping",
 		},
 	}
-	feat := features.New("Decoration of Pod-to-Service communications").
+	feat := features.New("Decoration of server communications").
 		Setup(pinger.Deploy()).
 		Teardown(pinger.Delete()).
 		Assess("all the traces are properly decorated",
@@ -48,8 +48,8 @@ func TestTracesDecoration(t *testing.T) {
 					require.NotEmpty(t, traces)
 					trace = traces[0]
 					require.NotEmpty(t, trace.Spans)
-					sd := trace.Spans[0].Diff(jaeger.Tag{
-						Key: "k8s.src.name", Type: "string", Value: "internal-pinger",
+					sd := trace.Spans[0].DiffAsRegexp(jaeger.Tag{
+						Key: "k8s.pod.name", Type: "string", Value: "^testserver-.*",
 					})
 					require.Empty(t, sd, sd.String())
 				}, test.Interval(100*time.Millisecond))
@@ -59,12 +59,13 @@ func TestTracesDecoration(t *testing.T) {
 				if p, ok := trace.ParentOf(&span); ok {
 					span = p
 				}
-				sd := span.Diff(
-					jaeger.Tag{Key: "k8s.src.name", Type: "string", Value: "internal-pinger"},
-					jaeger.Tag{Key: "k8s.dst.name", Type: "string", Value: "testserver"},
-					jaeger.Tag{Key: "k8s.src.namespace", Type: "string", Value: "default"},
-					jaeger.Tag{Key: "k8s.src.namespace", Type: "string", Value: "default"},
-					jaeger.Tag{Key: "k8s.dst.type", Type: "string", Value: "Pod"},
+				sd := span.DiffAsRegexp(
+					jaeger.Tag{Key: "k8s.pod.name", Type: "string", Value: "^testserver-.*"},
+					jaeger.Tag{Key: "k8s.node.name", Type: "string", Value: ".+-control-plane$"},
+					jaeger.Tag{Key: "k8s.pod.uid", Type: "string", Value: k8s.UUIDRegex},
+					jaeger.Tag{Key: "k8s.pod.start_time", Type: "string", Value: k8s.TimeRegex},
+					jaeger.Tag{Key: "k8s.namespace.name", Type: "string", Value: "^default$"},
+					jaeger.Tag{Key: "k8s.deployment.name", Type: "string", Value: "^testserver$"},
 				)
 				require.Empty(t, sd, sd.String())
 				return ctx

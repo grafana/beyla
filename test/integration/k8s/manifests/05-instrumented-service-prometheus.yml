@@ -1,35 +1,3 @@
-# TODO: Need to document the ServiceAccount needs. Beyla requires to setup a service account
-# and roles to watch and get information about Nodes, Services, ReplicaSets and Pods
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: beyla
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  name: beyla
-rules:
-  - apiGroups: ["apps"]
-    resources: ["replicasets"]
-    verbs: ["list", "watch"]
-  - apiGroups: [""]
-    resources: ["services", "pods", "nodes"]
-    verbs: ["list", "watch"]
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  name: beyla
-subjects:
-  - kind: ServiceAccount
-    name: beyla
-    namespace: default
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: beyla
----
 apiVersion: v1
 kind: Service
 metadata:
@@ -66,83 +34,93 @@ spec:
     - port: 8999
       name: prometheus
 ---
-apiVersion: v1
-kind: Pod
+apiVersion: apps/v1
+kind: Deployment
 metadata:
   name: testserver
   labels:
     app: testserver
 spec:
-  shareProcessNamespace: true
-  serviceAccountName: beyla
-  volumes:
-    - name: configs
-      persistentVolumeClaim:
-        claimName: configs
-    - name: testoutput
-      persistentVolumeClaim:
-        claimName: testoutput
-  containers:
-    - name: testserver
-      image: testserver:dev
-      imagePullPolicy: Never # loaded into Kind from localhost
-      ports:
-        # exposing hostports to enable operation from tests
-        - containerPort: 8080
-          hostPort: 8080
-          name: http0
-        - containerPort: 8081
-          hostPort: 8081
-          name: http1
-        - containerPort: 8082
-          hostPort: 8082
-          name: http2
-        - containerPort: 8083
-          hostPort: 8083
-          name: http3
-        - containerPort: 50051
-          hostPort: 50051
-          name: grpc
-      env:
-        - name: LOG_LEVEL
-          value: "DEBUG"
-    - name: beyla
-      image: beyla:dev
-      imagePullPolicy: Never # loaded into Kind from localhost
-      securityContext:
-        privileged: true
-      command: ["/beyla", "--config=/configs/instrumenter-config-promscrape.yml"]
-      volumeMounts:
-        - mountPath: /configs
-          name: configs
-        - mountPath: /testoutput
-          name: testoutput
-      env:
-        - name: GOCOVERDIR
-          value: "/testoutput"
-        - name: BEYLA_DISCOVERY_POLL_INTERVAL
-          value: "500ms"
-        - name: BEYLA_PRINT_TRACES
-          value: "true"
-        - name: BEYLA_OPEN_PORT
-          value: "8080"
-        - name: BEYLA_SERVICE_NAMESPACE
-          value: "integration-test"
-        - name: BEYLA_METRICS_INTERVAL
-          value: "10ms"
-        - name: BEYLA_BPF_BATCH_TIMEOUT
-          value: "10ms"
-        - name: BEYLA_LOG_LEVEL
-          value: "DEBUG"
-        - name: BEYLA_BPF_DEBUG
-          value: "TRUE"
-        - name: BEYLA_METRICS_REPORT_TARGET
-          value: "true"
-        - name: BEYLA_METRICS_REPORT_PEER
-          value: "true"
-        - name: BEYLA_KUBE_METADATA_ENABLE
-          value: "autodetect"
-      ports:
-        - containerPort: 8999
-          hostPort: 8999
-          name: prometheus
+  replicas: 1
+  selector:
+    matchLabels:
+      app: testserver
+  template:
+    metadata:
+      name: testserver
+      labels:
+        app: testserver
+    spec:
+      shareProcessNamespace: true
+      serviceAccountName: beyla
+      volumes:
+        - name: configs
+          persistentVolumeClaim:
+            claimName: configs
+        - name: testoutput
+          persistentVolumeClaim:
+            claimName: testoutput
+      containers:
+        - name: testserver
+          image: testserver:dev
+          imagePullPolicy: Never # loaded into Kind from localhost
+          ports:
+            # exposing hostports to enable operation from tests
+            - containerPort: 8080
+              hostPort: 8080
+              name: http0
+            - containerPort: 8081
+              hostPort: 8081
+              name: http1
+            - containerPort: 8082
+              hostPort: 8082
+              name: http2
+            - containerPort: 8083
+              hostPort: 8083
+              name: http3
+            - containerPort: 50051
+              hostPort: 50051
+              name: grpc
+          env:
+            - name: LOG_LEVEL
+              value: "DEBUG"
+        - name: beyla
+          image: beyla:dev
+          imagePullPolicy: Never # loaded into Kind from localhost
+          securityContext:
+            privileged: true
+          command: ["/beyla", "--config=/configs/instrumenter-config-promscrape.yml"]
+          volumeMounts:
+            - mountPath: /configs
+              name: configs
+            - mountPath: /testoutput
+              name: testoutput
+          env:
+            - name: GOCOVERDIR
+              value: "/testoutput"
+            - name: BEYLA_DISCOVERY_POLL_INTERVAL
+              value: "500ms"
+            - name: BEYLA_PRINT_TRACES
+              value: "true"
+            - name: BEYLA_OPEN_PORT
+              value: "8080"
+            - name: BEYLA_SERVICE_NAMESPACE
+              value: "integration-test"
+            - name: BEYLA_METRICS_INTERVAL
+              value: "10ms"
+            - name: BEYLA_BPF_BATCH_TIMEOUT
+              value: "10ms"
+            - name: BEYLA_LOG_LEVEL
+              value: "DEBUG"
+            - name: BEYLA_BPF_DEBUG
+              value: "TRUE"
+            - name: BEYLA_METRICS_REPORT_TARGET
+              value: "true"
+            - name: BEYLA_METRICS_REPORT_PEER
+              value: "true"
+            - name: BEYLA_KUBE_METADATA_ENABLE
+              value: "autodetect"
+          ports:
+            - containerPort: 8999
+              hostPort: 8999
+              name: prometheus

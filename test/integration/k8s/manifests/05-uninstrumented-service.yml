@@ -22,34 +22,44 @@ spec:
       name: grpc
       targetPort: grpc
 ---
-apiVersion: v1
-kind: Pod
+apiVersion: apps/v1
+kind: Deployment
 metadata:
   name: testserver
   labels:
     app: testserver
 spec:
-  containers:
-    - name: testserver
-      image: testserver:dev
-      imagePullPolicy: Never # loaded into Kind from localhost
-      ports:
-        # exposing hostports to enable operation from tests
-        - containerPort: 8080
-          hostPort: 8080
-          name: http0
-        - containerPort: 8081
-          hostPort: 8081
-          name: http1
-        - containerPort: 8082
-          hostPort: 8082
-          name: http2
-        - containerPort: 8083
-          hostPort: 8083
-          name: http3
-        - containerPort: 50051
-          hostPort: 50051
-          name: grpc
-      env:
-        - name: LOG_LEVEL
-          value: "DEBUG"
+  replicas: 1
+  selector:
+    matchLabels:
+      app: testserver
+  template:
+    metadata:
+      name: testserver
+      labels:
+        app: testserver
+    spec:
+      containers:
+        - name: testserver
+          image: testserver:dev
+          imagePullPolicy: Never # loaded into Kind from localhost
+          ports:
+            # exposing hostports to enable operation from tests
+            - containerPort: 8080
+              hostPort: 8080
+              name: http0
+            - containerPort: 8081
+              hostPort: 8081
+              name: http1
+            - containerPort: 8082
+              hostPort: 8082
+              name: http2
+            - containerPort: 8083
+              hostPort: 8083
+              name: http3
+            - containerPort: 50051
+              hostPort: 50051
+              name: grpc
+          env:
+            - name: LOG_LEVEL
+              value: "DEBUG"

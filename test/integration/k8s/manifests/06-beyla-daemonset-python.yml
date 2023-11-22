@@ -4,6 +4,9 @@ metadata:
   name: beyla-config
 data:
   beyla-config.yml: |
+    attributes:
+      kubernetes:
+        enable: true    
     print_traces: true
     log_level: debug
     discovery:
@@ -31,6 +34,7 @@ spec:
         instrumentation: beyla
     spec:
       hostPID: true  #important!
+      serviceAccountName: beyla
       volumes:
         - name: beyla-config
           configMap:

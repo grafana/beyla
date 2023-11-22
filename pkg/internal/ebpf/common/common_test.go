@@ -8,12 +8,14 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func setIntegrity(path, text string) {
-	os.WriteFile(path, []byte(text), 0644)
+func setIntegrity(t *testing.T, path, text string) {
+	err := os.WriteFile(path, []byte(text), 0644)
+	assert.NoError(t, err)
 }
 
-func setNotReadable(path string) {
-	os.Chmod(path, 000)
+func setNotReadable(t *testing.T, path string) {
+	err := os.Chmod(path, 000)
+	assert.NoError(t, err)
 }
 
 func TestLockdownParsing(t *testing.T) {
@@ -38,22 +40,22 @@ func TestLockdownParsing(t *testing.T) {
 	// Setup for testing
 	lockdownPath = path
 
-	setIntegrity(path, "none [integrity] confidentiality\n")
+	setIntegrity(t, path, "none [integrity] confidentiality\n")
 	assert.Equal(t, KernelLockdownIntegrity, KernelLockdownMode())
 
-	setIntegrity(path, "[none] integrity confidentiality\n")
+	setIntegrity(t, path, "[none] integrity confidentiality\n")
 	assert.Equal(t, KernelLockdownNone, KernelLockdownMode())
 
-	setIntegrity(path, "none integrity [confidentiality]\n")
+	setIntegrity(t, path, "none integrity [confidentiality]\n")
 	assert.Equal(t, KernelLockdownConfidentiality, KernelLockdownMode())
 
-	setIntegrity(path, "whatever\n")
+	setIntegrity(t, path, "whatever\n")
 	assert.Equal(t, KernelLockdownOther, KernelLockdownMode())
 
-	setIntegrity(path, "")
+	setIntegrity(t, path, "")
 	assert.Equal(t, KernelLockdownIntegrity, KernelLockdownMode())
 
-	setIntegrity(path, "[none] integrity confidentiality\n")
-	setNotReadable(path)
+	setIntegrity(t, path, "[none] integrity confidentiality\n")
+	setNotReadable(t, path)
 	assert.Equal(t, KernelLockdownIntegrity, KernelLockdownMode())
 }

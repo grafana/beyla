@@ -142,12 +142,12 @@ func KernelLockdownMode() KernelLockdown {
 				return KernelLockdownConfidentiality
 			}
 			return KernelLockdownOther
-		} else {
-			plog.Warn("file /sys/kernel/security/lockdown is empty, assuming lockdown [integrity]")
-			return KernelLockdownIntegrity
 		}
-	} else {
-		plog.Debug("can't find /sys/kernel/security/lockdown, assuming no lockdown")
-		return KernelLockdownNone
+
+		plog.Warn("file /sys/kernel/security/lockdown is empty, assuming lockdown [integrity]")
+		return KernelLockdownIntegrity
 	}
+
+	plog.Debug("can't find /sys/kernel/security/lockdown, assuming no lockdown")
+	return KernelLockdownNone
 }

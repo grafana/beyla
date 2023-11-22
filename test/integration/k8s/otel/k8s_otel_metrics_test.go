@@ -10,7 +10,7 @@ import (
 
 // Run it alphabetically first (AA-prefix), with a longer timeout, to wait until all the components are up and
 // traces/metrics are flowing normally
-func TestOTEL_MetricsDecoration_AA_HTTP_ExternalToPod(t *testing.T) {
+func TestOTEL_MetricsDecoration_AA_WaitForComponents(t *testing.T) {
 	k8s.DoWaitForComponentsAvailable(t)
 }
 

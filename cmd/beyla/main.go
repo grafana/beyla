@@ -10,13 +10,17 @@ import (
 	_ "net/http/pprof"
 	"os"
 	"os/signal"
+	"runtime"
 	"syscall"
 	"time"
 
-	otelsdk "go.opentelemetry.io/otel/sdk"
-
 	"github.com/grafana/beyla/pkg/beyla"
+
+	"github.com/go-delve/delve/pkg/goversion"
+	otelsdk "go.opentelemetry.io/otel/sdk"
 )
+
+const minGoVersion = 17 // go1.17.0
 
 var Version = "main"
 
@@ -31,6 +35,11 @@ func main() {
 
 	configPath := flag.String("config", "", "path to the configuration file")
 	flag.Parse()
+
+	if !goversion.VersionAfterOrEqual(runtime.Version(), 1, minGoVersion) {
+		slog.Error("Go version", runtime.Version(), "does not fulfil minimum requirement", fmt.Sprintf(">=v1.%s.0", minGoVersion))
+		os.Exit(-1)
+	}
 
 	config := loadConfig(configPath)
 

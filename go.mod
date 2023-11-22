@@ -8,6 +8,7 @@ require (
 	github.com/cilium/ebpf v0.11.0
 	github.com/gavv/monotime v0.0.0-20190418164738-30dba4353424
 	github.com/gin-gonic/gin v1.9.1
+	github.com/go-delve/delve v1.21.2
 	github.com/go-logr/logr v1.2.4
 	github.com/goccy/go-json v0.10.2
 	github.com/gorilla/mux v1.8.0
@@ -87,6 +88,7 @@ require (
 	github.com/pelletier/go-toml/v2 v2.0.8 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
+	github.com/sirupsen/logrus v1.8.1 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/stretchr/objx v0.5.0 // indirect
 	github.com/tklauser/go-sysconf v0.3.11 // indirect

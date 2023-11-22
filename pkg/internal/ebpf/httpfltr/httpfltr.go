@@ -81,7 +81,7 @@ func New(cfg *pipe.Config, metrics imetrics.Reporter) *Tracer {
 
 func (p *Tracer) AllowPID(pid uint32) {
 	if p.bpfObjects.ValidPids != nil {
-		nsid, err := ebpfcommon.FindNamespace(pid)
+		nsid, err := ebpfcommon.FindNamespace(int32(pid))
 		if err == nil {
 			err = p.bpfObjects.ValidPids.Put(pid, nsid)
 			if err != nil {
@@ -90,7 +90,7 @@ func (p *Tracer) AllowPID(pid uint32) {
 			// This is requied to ensure everything works when Beyla is running in pid=host mode.
 			// In host mode, Beyla will find the host pid, while the bpf code matches the user pid.
 			// Therefore we find all namespaced pids for the current pid we discovered and allow those too.
-			otherPids, err := ebpfcommon.FindNamespacedPids(pid)
+			otherPids, err := ebpfcommon.FindNamespacedPids(int32(pid))
 			if err != nil {
 				p.log.Error("Error finding namespaced pids", "error", err)
 			}

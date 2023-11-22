@@ -10,7 +10,7 @@ import (
 	"syscall"
 )
 
-func FindNamespace(pid uint32) (uint32, error) {
+func FindNamespace(pid int32) (uint32, error) {
 	pidPath := fmt.Sprintf("/proc/%d/ns/pid", pid)
 	f, err := os.Open(pidPath)
 
@@ -49,7 +49,7 @@ func FindNamespace(pid uint32) (uint32, error) {
 	return 0, fmt.Errorf("couldn't find ns pid in the symlink [%s]", nsPid)
 }
 
-func FindNamespacedPids(pid uint32) ([]uint32, error) {
+func FindNamespacedPids(pid int32) ([]uint32, error) {
 	statusPath := fmt.Sprintf("/proc/%d/status", pid)
 	f, err := os.Open(statusPath)
 

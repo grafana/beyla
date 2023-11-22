@@ -2,6 +2,7 @@ package otel
 
 import (
 	"context"
+	"encoding/binary"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -15,11 +16,14 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/pkg/internal/request"
+	"github.com/grafana/beyla/pkg/internal/svc"
 )
 
 func TestHTTPTracesEndpoint(t *testing.T) {
@@ -390,6 +394,82 @@ func TestTracesConfig_Disabled(t *testing.T) {
 	assert.False(t, TracesConfig{Grafana: &GrafanaOTLP{Submit: []string{"traces"}}}.Enabled())
 }
 
+func TestTracesIdGenerator(t *testing.T) {
+	defer restoreEnvAfterExecution()
+	mcfg := TracesConfig{Grafana: &GrafanaOTLP{
+		Submit:     []string{submitMetrics, submitTraces},
+		CloudZone:  "eu-west-23",
+		InstanceID: "12345",
+		APIKey:     "affafafaafkd",
+	}}
+	r := TracesReporter{ctx: context.Background(), cfg: &mcfg}
+	r.bsp = sdktrace.NewSimpleSpanProcessor(nil)
+
+	tracers, err := r.newTracers(svc.ID{})
+	assert.NoError(t, err)
+	assert.NotNil(t, tracers)
+
+	t.Run("testing that we can generate random spans in userspace, if not set by eBPF", func(t *testing.T) {
+		_, sp := tracers.tracer.Start(context.Background(), "Test",
+			trace.WithTimestamp(time.Now()),
+			trace.WithSpanKind(trace.SpanKindServer),
+		)
+		assert.True(t, sp.SpanContext().HasSpanID())
+		assert.True(t, sp.SpanContext().HasTraceID())
+	})
+
+	t.Run("testing that we can generate span for fixed parent set eBPF", func(t *testing.T) {
+		tId1, spId1 := NewIDs(1)
+		assert.True(t, tId1.IsValid())
+		assert.True(t, spId1.IsValid())
+
+		parentCtx := trace.ContextWithSpanContext(
+			context.Background(),
+			trace.SpanContext{}.WithTraceID(tId1).WithSpanID(spId1).WithTraceFlags(trace.FlagsSampled),
+		)
+
+		_, sp := tracers.tracer.Start(parentCtx, "Test1",
+			trace.WithTimestamp(time.Now()),
+			trace.WithSpanKind(trace.SpanKindServer),
+		)
+
+		assert.True(t, sp.SpanContext().HasSpanID())
+		assert.Equal(t, tId1, sp.SpanContext().TraceID())
+		assert.NotEqual(t, spId1, sp.SpanContext().SpanID())
+
+	})
+
+	t.Run("testing that we can generate span for fixed traceID set by eBPF", func(t *testing.T) {
+		tId2, spId2 := NewIDs(2)
+
+		parentCtx := ContextWithTrace(context.Background(), tId2)
+
+		_, sp := tracers.tracer.Start(parentCtx, "Test2",
+			trace.WithTimestamp(time.Now()),
+			trace.WithSpanKind(trace.SpanKindServer),
+		)
+
+		assert.True(t, sp.SpanContext().HasSpanID())
+		assert.Equal(t, tId2, sp.SpanContext().TraceID())
+		assert.NotEqual(t, spId2, sp.SpanContext().SpanID())
+	})
+
+	t.Run("testing that we can generate fixed traceID and spanID set by eBPF", func(t *testing.T) {
+		tId3, spId3 := NewIDs(3)
+
+		parentCtx := ContextWithTraceParent(context.Background(), tId3, spId3)
+
+		_, sp := tracers.tracer.Start(parentCtx, "Test3",
+			trace.WithTimestamp(time.Now()),
+			trace.WithSpanKind(trace.SpanKindServer),
+		)
+
+		assert.True(t, sp.SpanContext().HasSpanID())
+		assert.Equal(t, tId3, sp.SpanContext().TraceID())
+		assert.Equal(t, spId3, sp.SpanContext().SpanID())
+	})
+}
+
 type fakeInternalTraces struct {
 	imetrics.NoopReporter
 	sum  atomic.Int32
@@ -545,4 +625,13 @@ func TestTraces_GRPCStatus(t *testing.T) {
 			assert.Equal(t, p.statusCode, spanStatusCode(&request.Span{Status: int(p.grpcCode.Value.AsInt64()), Type: request.EventTypeGRPCClient}))
 		}
 	})
+}
+
+func NewIDs(counter int) (trace.TraceID, trace.SpanID) {
+	var traceID [16]byte
+	var spanID [8]byte
+	binary.BigEndian.PutUint64(traceID[:8], uint64(counter))
+	binary.BigEndian.PutUint64(spanID[:], uint64(counter))
+
+	return trace.TraceID(traceID), trace.SpanID(spanID)
 }

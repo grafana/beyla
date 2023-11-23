@@ -9,12 +9,12 @@ keywords:
   - Kubernetes
 ---
 
-# Running Beyla in Kubernetes
+# Deploy Beyla in Kubernetes
 
 Contents:
 
 <!-- TOC -->
-* [Running Beyla in Kubernetes](#running-beyla-in-kubernetes)
+* [Deploy Beyla in Kubernetes](#deploy-beyla-in-kubernetes)
   * [Configuring Kubernetes metadata decoration](#configuring-kubernetes-metadata-decoration)
   * [Deploying Beyla](#deploying-beyla)
     * [Deploy Beyla as a sidecar container](#deploy-beyla-as-a-sidecar-container)

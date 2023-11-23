@@ -255,7 +255,7 @@ attributes:
 
 It is IMPORTANT to consider that enabling this feature requires a previous step of
 providing some extra permissions to the Beyla Pod. Please check the
-["Configuring Kubernetes metadata decoration section" in the "Running Beyla in Kubernetes"]({{< relref "../setup/kubernetes.md" >}}#configuring-kubernetes-metadata-decoration) page.
+["Configuring Kubernetes metadata decoration section" in the "Running Beyla in Kubernetes"]({{< relref "../setup/kubernetes.md" >}}) page.
 
 | YAML     | Env var                      | Type    | Default |
 |----------|------------------------------|---------|---------|

@@ -34,6 +34,7 @@ func TestMain(m *testing.M) {
 		kube.LocalImage("beyla:dev"),
 		kube.LocalImage("grpcpinger:dev"),
 		kube.Deploy(k8s.PathManifests+"/01-volumes.yml"),
+		kube.Deploy(k8s.PathManifests+"/01-serviceaccount.yml"),
 		kube.Deploy(k8s.PathManifests+"/02-prometheus-promscrape.yml"),
 		kube.Deploy(k8s.PathManifests+"/05-instrumented-service-prometheus.yml"),
 	)

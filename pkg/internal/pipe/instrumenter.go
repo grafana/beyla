@@ -90,11 +90,11 @@ func newGraphBuilder(ctx context.Context, config *Config, ctxInfo *global.Contex
 	// Second, we register providers for each node. Each provider is a function that receives the
 	// type of each of the "nodesMap" struct fields, and returns the function that represents
 	// each node. Each function will have input and/or output channels.
-	graph.RegisterStart(gnb, gb.tracesListenerProvider)
+	graph.RegisterStart(gnb, gb.readDecoratorProvider)
 	graph.RegisterMiddle(gnb, transform.RoutesProvider)
-	graph.RegisterMiddle(gnb, transform.KubeDecoratorProvider)
+	graph.RegisterMiddle(gnb, transform.KubeDecoratorProvider(ctxInfo))
 	graph.RegisterTerminal(gnb, gb.metricsReporterProvider)
-	graph.RegisterTerminal(gnb, gb.tracesReporterProvicer)
+	graph.RegisterTerminal(gnb, gb.tracesReporterProvider)
 	graph.RegisterTerminal(gnb, gb.prometheusProvider)
 	graph.RegisterTerminal(gnb, debug.NoopNode)
 	graph.RegisterTerminal(gnb, debug.PrinterNode)
@@ -140,12 +140,12 @@ func (i *Instrumenter) Run(ctx context.Context) {
 // Gocritic is disabled because we need to violate the "hugeParam" check, as the second
 // argument in the functions below need to be a value.
 
-func (gb *graphFunctions) tracesListenerProvider(config traces.ReadDecorator) (node.StartFunc[[]request.Span], error) {
+func (gb *graphFunctions) readDecoratorProvider(config traces.ReadDecorator) (node.StartFunc[[]request.Span], error) {
 	return traces.ReadFromChannel(gb.ctx, config)
 }
 
 //nolint:gocritic
-func (gb *graphFunctions) tracesReporterProvicer(config otel.TracesConfig) (node.TerminalFunc[[]request.Span], error) {
+func (gb *graphFunctions) tracesReporterProvider(config otel.TracesConfig) (node.TerminalFunc[[]request.Span], error) {
 	return otel.ReportTraces(gb.ctx, &config, gb.ctxInfo)
 }
 

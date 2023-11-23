@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	testTimeout = 2 * time.Minute
+	testTimeout = 3 * time.Minute
 
 	jaegerQueryURL = "http://localhost:36686/api/traces"
 )
@@ -37,6 +37,7 @@ func TestMain(m *testing.M) {
 		kube.LocalImage("pythontestserver:dev"),
 		kube.LocalImage("beyla:dev"),
 		kube.Deploy(k8s.PathManifests+"/01-volumes.yml"),
+		kube.Deploy(k8s.PathManifests+"/01-serviceaccount.yml"),
 		kube.Deploy(k8s.PathManifests+"/03-otelcol.yml"),
 		kube.Deploy(k8s.PathManifests+"/04-jaeger.yml"),
 		kube.Deploy(k8s.PathManifests+"/05-uninstrumented-service-python.yml"),

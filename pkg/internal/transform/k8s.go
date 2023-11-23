@@ -1,17 +1,16 @@
 package transform
 
 import (
-	"fmt"
 	"log/slog"
-	"maps"
-	"net"
 	"strings"
 	"time"
 
+	"github.com/mariomac/pipes/pkg/graph/stage"
 	"github.com/mariomac/pipes/pkg/node"
 
+	"github.com/grafana/beyla/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/pkg/internal/request"
-	"github.com/grafana/beyla/pkg/internal/transform/kube"
+	kube2 "github.com/grafana/beyla/pkg/internal/transform/kube"
 )
 
 type KubeEnableFlag string
@@ -22,11 +21,13 @@ const (
 	EnabledAutodetect = KubeEnableFlag("autodetect")
 	EnabledDefault    = EnabledFalse
 
-	SrcNameKey      = "k8s.src.name"
-	SrcNamespaceKey = "k8s.src.namespace"
-	DstNameKey      = "k8s.dst.name"
-	DstNamespaceKey = "k8s.dst.namespace"
-	DstTypeKey      = "k8s.dst.type"
+	// TODO: let the user decide which attributes to add, as in https://opentelemetry.io/docs/kubernetes/collector/components/#kubernetes-attributes-processor
+	NamespaceName  = "k8s.namespace.name"
+	PodName        = "k8s.pod.name"
+	DeploymentName = "k8s.deployment.name"
+	NodeName       = "k8s.node.name"
+	PodUID         = "k8s.pod.uid"
+	PodStartTime   = "k8s.pod.start_time"
 )
 
 func klog() *slog.Logger {
@@ -36,7 +37,7 @@ func klog() *slog.Logger {
 type KubernetesDecorator struct {
 	Enable KubeEnableFlag `yaml:"enable" env:"BEYLA_KUBE_METADATA_ENABLE"`
 	// KubeconfigPath is optional. If unset, it will look in the usual location.
-	KubeconfigPath string `yaml:"kubeconfig_path" env:"BEYLA_KUBE_METADATA_KUBECONFIG_PATH"`
+	KubeconfigPath string `yaml:"kubeconfig_path" env:"KUBECONFIG"`
 
 	InformersSyncTimeout time.Duration `yaml:"informers_sync_timeout" env:"BEYLA_KUBE_INFORMERS_SYNC_TIMEOUT"`
 }
@@ -49,7 +50,7 @@ func (d KubernetesDecorator) Enabled() bool {
 		return false
 	case string(EnabledAutodetect):
 		// We autodetect that we are in a kubernetes if we can properly load a K8s configuration file
-		_, err := kube.LoadConfig(d.KubeconfigPath)
+		_, err := kube2.LoadConfig(d.KubeconfigPath)
 		if err != nil {
 			klog().Debug("kubeconfig can't be detected. Assuming we are not in Kubernetes", "error", err)
 			return false
@@ -61,112 +62,46 @@ func (d KubernetesDecorator) Enabled() bool {
 	}
 }
 
-func KubeDecoratorProvider(cfg KubernetesDecorator) (node.MiddleFunc[[]request.Span, []request.Span], error) {
-	decorator, err := newMetadataDecorator(&cfg)
-	if err != nil {
-		return nil, fmt.Errorf("instantiating kubernetes metadata decorator: %w", err)
-	}
-	return func(in <-chan []request.Span, out chan<- []request.Span) {
-		decorator.refreshOwnPodMetadata()
-
-		klog().Debug("starting kubernetes decoration loop")
-		for spans := range in {
-			// in-place decoration and forwarding
-			for i := range spans {
-				decorator.do(&spans[i])
+func KubeDecoratorProvider(
+	ctxInfo *global.ContextInfo,
+) stage.MiddleProvider[KubernetesDecorator, []request.Span, []request.Span] {
+	return func(cfg KubernetesDecorator) (node.MiddleFunc[[]request.Span, []request.Span], error) {
+		decorator := &metadataDecorator{cfg: &cfg, db: ctxInfo.K8sDatabase}
+		return func(in <-chan []request.Span, out chan<- []request.Span) {
+			klog().Debug("starting kubernetes decoration loop")
+			for spans := range in {
+				// in-place decoration and forwarding
+				for i := range spans {
+					decorator.do(&spans[i])
+				}
+				out <- spans
 			}
-			out <- spans
-		}
-		klog().Debug("stopping kubernetes decoration loop")
-	}, nil
+			klog().Debug("stopping kubernetes decoration loop")
+		}, nil
+	}
 }
 
 type metadataDecorator struct {
-	kube kube.Metadata
-	cfg  *KubernetesDecorator
-
-	ownMetadataAsSrc map[string]string
-	ownMetadataAsDst map[string]string
-}
-
-func newMetadataDecorator(cfg *KubernetesDecorator) (*metadataDecorator, error) {
-	dec := &metadataDecorator{cfg: cfg}
-	if err := dec.kube.InitFromConfig(cfg.KubeconfigPath, cfg.InformersSyncTimeout); err != nil {
-		return nil, err
-	}
-	return dec, nil
+	db  *kube2.Database
+	cfg *KubernetesDecorator
 }
 
 func (md *metadataDecorator) do(span *request.Span) {
 	if span.Metadata == nil {
 		span.Metadata = make(map[string]string, 5)
 	}
-	// We decorate each trace by looking up into the local kubernetes cache for the
-	// Peer address, when we are instrumenting server-side traces, or the
-	// Host name, when we are instrumenting client-side traces.
-	// This assumption is a bit fragile and might break if the spanner.go
-	// changes the way it works.
-	// Extensive integration test cases are provided as a safeguard.
-	switch span.Type {
-	// TODO: put here also SQL traces
-	case request.EventTypeGRPC, request.EventTypeHTTP:
-		if peerInfo, ok := md.kube.GetInfo(span.Peer); ok {
-			appendSRCMetadata(span.Metadata, peerInfo)
-		}
-		// TODO: this will only work Ok for Beyla as a sidecar.
-		// However, for Beyla as a daemonset will assume that
-		// Beyla is in the same pod as the destination Pod,
-		// which might not be always correct
-		maps.Copy(span.Metadata, md.ownMetadataAsDst)
-	case request.EventTypeGRPCClient, request.EventTypeHTTPClient:
-		if peerInfo, ok := md.kube.GetInfo(span.Host); ok {
-			appendDSTMetadata(span.Metadata, peerInfo)
-		}
-		maps.Copy(span.Metadata, md.ownMetadataAsSrc)
+	if podInfo, ok := md.db.OwnerPodInfo(span.Pid.Namespace); ok {
+		appendMetadata(span.Metadata, podInfo)
 	}
 }
 
-// TODO: allow users to filter which attributes they want, instead of adding all of them
-// TODO: cache
-func appendDSTMetadata(to map[string]string, info *kube.Info) {
-	to[DstNameKey] = info.Name
-	to[DstNamespaceKey] = info.Namespace
-	to[DstTypeKey] = info.Type
-}
-
-func appendSRCMetadata(to map[string]string, info *kube.Info) {
-	to[SrcNameKey] = info.Name
-	to[SrcNamespaceKey] = info.Namespace
-}
-
-func (md *metadataDecorator) refreshOwnPodMetadata() {
-	for {
-		if info, ok := md.kube.GetInfo(getLocalIP()); ok {
-			klog().Debug("found local pod metadata", "metadata", info)
-			md.ownMetadataAsSrc = make(map[string]string, 2)
-			md.ownMetadataAsDst = make(map[string]string, 2)
-			appendSRCMetadata(md.ownMetadataAsSrc, info)
-			appendDSTMetadata(md.ownMetadataAsDst, info)
-			return
-		}
-		klog().Info("local pod metadata not yet found. Waiting 5s and trying again before starting the kubernetes decorator")
-		time.Sleep(5 * time.Second)
+func appendMetadata(to map[string]string, info *kube2.PodInfo) {
+	to[NamespaceName] = info.Namespace
+	to[PodName] = info.Name
+	to[NodeName] = info.NodeName
+	to[PodUID] = string(info.UID)
+	to[PodStartTime] = info.StartTimeStr
+	if info.DeploymentName != "" {
+		to[DeploymentName] = info.DeploymentName
 	}
-}
-
-// getLocalIP returns the first non-loopback local IP of the pod
-func getLocalIP() string {
-	addrs, err := net.InterfaceAddrs()
-	if err != nil {
-		return ""
-	}
-	for _, address := range addrs {
-		// check the address type and if it is not a loopback the display it
-		if ipnet, ok := address.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
-			if ipnet.IP.To4() != nil {
-				return ipnet.IP.String()
-			}
-		}
-	}
-	return ""
 }

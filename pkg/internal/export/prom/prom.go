@@ -45,11 +45,12 @@ const (
 	rpcSystemGRPC        = "rpc_system"
 	DBOperationKey       = "db_operation"
 
-	k8sSrcNameKey      = "k8s_src_name"
-	k8sSrcNamespaceKey = "k8s_src_namespace"
-	k8sDstNameKey      = "k8s_dst_name"
-	k8sDstNamespaceKey = "k8s_dst_namespace"
-	k8sDstTypeKey      = "k8s_dst_type"
+	k8sNamespaceName  = "k8s_namespace_name"
+	k8sPodName        = "k8s_pod_name"
+	k8sDeploymentName = "k8s_deployment_name"
+	k8sNodeName       = "k8s_node_name"
+	k8sPodUID         = "k8s_pod_uid"
+	k8sPodStartTime   = "k8s_pod_start_time"
 )
 
 // TODO: TLS
@@ -304,18 +305,19 @@ func (r *metricsReporter) labelValuesHTTP(span *request.Span) []string {
 }
 
 func appendK8sLabelNames(names []string) []string {
-	names = append(names, k8sSrcNameKey, k8sSrcNamespaceKey, k8sDstNameKey, k8sDstNamespaceKey, k8sDstTypeKey)
+	names = append(names, k8sNamespaceName, k8sDeploymentName, k8sPodName, k8sNodeName, k8sPodUID, k8sPodStartTime)
 	return names
 }
 
 func appendK8sLabelValues(values []string, span *request.Span) []string {
-	// k8sSrcNameKey, k8sSrcNamespaceKey, k8sDstNameKey, k8sDstNamespaceKey, k8sDstTypeKey
+	// must follow the order in appendK8sLabelNames
 	values = append(values,
-		span.Metadata[transform.SrcNameKey],
-		span.Metadata[transform.SrcNamespaceKey],
-		span.Metadata[transform.DstNameKey],
-		span.Metadata[transform.DstNamespaceKey],
-		span.Metadata[transform.DstTypeKey],
+		span.Metadata[transform.NamespaceName],
+		span.Metadata[transform.DeploymentName],
+		span.Metadata[transform.PodName],
+		span.Metadata[transform.NodeName],
+		span.Metadata[transform.PodUID],
+		span.Metadata[transform.PodStartTime],
 	)
 	return values
 }

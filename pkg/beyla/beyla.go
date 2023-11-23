@@ -14,6 +14,7 @@ import (
 	"github.com/grafana/beyla/pkg/internal/pipe"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/pkg/internal/request"
+	"github.com/grafana/beyla/pkg/internal/transform/kube"
 )
 
 // Config as provided by the user to configure and run Beyla
@@ -62,7 +63,7 @@ func LoadConfig(reader io.Reader) (*Config, error) {
 // FindAndInstrument searches in background for any new executable matching the
 // selection criteria.
 func (i *Instrumenter) FindAndInstrument(ctx context.Context) error {
-	finder := discover.NewProcessFinder(ctx, i.config, i.ctxInfo.Metrics)
+	finder := discover.NewProcessFinder(ctx, i.config, i.ctxInfo)
 	foundProcesses, err := finder.Start(i.config)
 	if err != nil {
 		return fmt.Errorf("couldn't start Process Finder: %w", err)
@@ -110,10 +111,22 @@ func (i *Instrumenter) ReadAndForward(ctx context.Context) error {
 // from the user-provided configuration
 func buildContextInfo(config *pipe.Config) *global.ContextInfo {
 	promMgr := &connector.PrometheusManager{}
+	k8sCfg := &config.Attributes.Kubernetes
 	ctxInfo := &global.ContextInfo{
 		ReportRoutes:  config.Routes != nil,
 		Prometheus:    promMgr,
-		K8sDecoration: config.Attributes.Kubernetes.Enabled(),
+		K8sDecoration: k8sCfg.Enabled(),
+	}
+	if ctxInfo.K8sDecoration {
+		// Creating a common Kubernetes database that needs to be accessed from different points
+		// in the Beyla pipeline
+		var err error
+		if ctxInfo.K8sDatabase, err = kube.StartDatabase(k8sCfg.KubeconfigPath, k8sCfg.InformersSyncTimeout); err != nil {
+			slog.Error("can't setup Kubernetes database. Your traces won't be decorated with Kubernetes metadata",
+				"error", err)
+			ctxInfo.K8sDecoration = false
+		}
+
 	}
 	if config.InternalMetrics.Prometheus.Port != 0 {
 		slog.Debug("reporting internal metrics as Prometheus")

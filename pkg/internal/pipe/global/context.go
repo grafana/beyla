@@ -3,6 +3,7 @@ package global
 import (
 	"github.com/grafana/beyla/pkg/internal/connector"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
+	"github.com/grafana/beyla/pkg/internal/transform/kube"
 )
 
 // ContextInfo stores some context information that must be shared across some nodes of the
@@ -12,6 +13,8 @@ type ContextInfo struct {
 	ReportRoutes bool
 	// K8sDecoration specifies whether kubernetes decoration is enabled
 	K8sDecoration bool
+	// K8sDatabase provides access to shared kubernetes metadata
+	K8sDatabase *kube.Database
 	// Metrics  that are internal to the pipe components
 	Metrics imetrics.Reporter
 	// Prometheus connection manager to coordinate metrics exposition from diverse nodes

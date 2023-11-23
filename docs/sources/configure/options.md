@@ -29,7 +29,7 @@ YAML configuration, each component has its own first-level section.
 The architecture below shows the different components of Beyla.
 The dashed boxes in the diagram below can be enabled and disabled according to the configuration.
 
-![Grafana Beyla architecture](https://grafana.com/media/docs/grafana-cloud/beyla/architecture.png)
+![Grafana Beyla architecture](https://grafana.com/media/docs/grafana-cloud/beyla/architecture-1.1.png)
 
 A quick description of the components:
 
@@ -38,6 +38,8 @@ A quick description of the components:
 - [Routes decorator](#routes-decorator) will match HTTP paths (e.g. `/user/1234/info`)
   into user-provided HTTP routes (e.g. `/user/{id}/info`). If no routes are defined,
   the incoming data will be directly forwarded to the next stage.
+- [Kubernetes decorator](#kubernetes-decorator) will decorate the metrics and traces
+  with Kubernetes metadata of the instrumented Pods.
 - [OTEL metrics exporter](#otel-metrics-exporter) exports metrics data to an external
   [OpenTelemetry](https://opentelemetry.io/) metrics collector.
 - [OTEL traces exporter](#otel-traces-exporter) exports span data to an external
@@ -229,6 +231,52 @@ This option takes precedence over `dns`.
 If set, Beyla will use this value directly as instance ID of any instrumented
 process. If you are managing multiple processes from a single Beyla instance,
 all the processes will have the same instance ID.
+
+### Kubernetes decorator
+
+If you run Beyla in a Kubernetes environment, you can configure it to decorate the traces
+and metrics with the Standard OpenTelemetry labels:
+
+- `k8s.namespace.name`
+- `k8s.deployment.name`
+- `k8s.node.name`
+- `k8s.pod.name`
+- `k8s.pod.uid`
+- `k8s.pod.start_time`
+
+In YAML, this section is named `kubernetes`, and is located under the
+`attributes` top-level section. For example:
+
+```yaml
+attributes:
+  kubernetes:
+    enable: true
+```
+
+It is IMPORTANT to consider that enabling this feature requires a previous step of
+providing some extra permissions to the Beyla Pod. Please check the
+["Configuring Kubernetes metadata decoration section" in the "Running Beyla in Kubernetes"]({{< relref "../setup/kubernetes.md" >}}#configuring-kubernetes-metadata-decoration) page.
+
+| YAML     | Env var                      | Type    | Default |
+|----------|------------------------------|---------|---------|
+| `enable` | `BEYLA_KUBE_METADATA_ENABLE` | boolean | `false` |
+
+If set to `true`, Beyla will decorate the metrics and traces with Kubernetes metadata.
+
+If set to `false`, the Kubernetes metadata decorator will be disabled.
+
+If set to `autodetect`, Beyla will try to automatically detect if it is running inside
+Kubernetes, and enable the metadata decoration if that is the case.
+
+| YAML              | Env var      | Type   | Default          |
+|-------------------|--------------|--------|------------------|
+| `kubeconfig_path` | `KUBECONFIG` | string | `~/.kube/config` |
+
+This is a standard Kubernetes configuration environment variable, and is used
+to tell Beyla where to find the Kubernetes configuration in order to try to
+establish communication with the Kubernetes Cluster.
+
+Usually you won't need to change this value.
 
 ## Routes decorator
 

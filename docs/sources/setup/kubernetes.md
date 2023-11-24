@@ -11,32 +11,105 @@ keywords:
 
 # Deploy Beyla in Kubernetes
 
-You can deploy Beyla in Kubernetes in two separate ways:
+Contents:
 
-- As a Sidecar Container (recommended)
+<!-- TOC -->
+* [Deploy Beyla in Kubernetes](#deploy-beyla-in-kubernetes)
+  * [Configuring Kubernetes metadata decoration](#configuring-kubernetes-metadata-decoration)
+  * [Deploying Beyla](#deploying-beyla)
+    * [Deploy Beyla as a sidecar container](#deploy-beyla-as-a-sidecar-container)
+    * [Deploy Beyla as a Daemonset](#deploy-beyla-as-a-daemonset)
+  * [Providing an external configuration file](#providing-an-external-configuration-file)
+  * [Providing secret configuration](#providing-secret-configuration)
+<!-- TOC -->
+
+## Configuring Kubernetes metadata decoration
+
+Beyla can decorate your traces with the following Kubernetes labels:
+
+- `k8s.namespace.name`
+- `k8s.deployment.name`
+- `k8s.node.name`
+- `k8s.pod.name`
+- `k8s.pod.uid`
+- `k8s.pod.start_time`
+
+To enable metadata decoration, you need to:
+- Create a ServiceAccount and bind a ClusterRole granting list and watch permissions
+  for both Pods and ReplicaSets. You can do it by deploying this example file:
+
+```yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: beyla
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: beyla
+rules:
+  - apiGroups: ["apps"]
+    resources: ["replicasets"]
+    verbs: ["list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: beyla
+subjects:
+  - kind: ServiceAccount
+    name: beyla
+    namespace: default
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: beyla
+```
+
+(You need to change the `namespace: default` value if you are deploying Beyla
+in another namespace).
+
+2. Configure Beyla with the `BEYLA_KUBE_METADATA_ENABLE=true` environment variable,
+  or the `attributes.kubernetes.enable: true` YAML configuration.
+
+3. Don't forget to specify the `serviceAccountName: beyla` property in your Beyla
+   Pod (as shown in the later deployment examples).
+
+## Deploying Beyla
+
+You can deploy Beyla in Kubernetes in two different ways:
+
+- As a sidecar container
 - As a DaemonSet
 
-In the future, we will release a [Beyla operator](https://github.com/grafana/beyla-operator)
-but at the moment it is work in progress and its API is not stable enough. 
+### Deploy Beyla as a sidecar container
 
-## Deploying as a sidecar container
-
-This is the recommended way of deploying Beyla for the following reason:
-
-- You can configure the auto-instrumentation per instance, instead of having
-  Beyla monitor all of the service instances on the host.
-- You will save on compute and memory resources. If the auto-instrumented service is present only in a subset
-  of the containers running on the host, you won't need to deploy the auto-instrument tool for all containers.
+This is the way you can deploy Beyla if you want to monitor a given service that
+might not be deployed in all the hosts, so you only have to deploy one Beyla instance
+per each service instance.
 
 Deploying Beyla as a sidecar container has the following configuration
 requirements:
 
 - The process namespace must be shared between all containers in the Pod (`shareNamespace: true`
   pod variable)
-- The auto-instrument tool must internally run as privileged user in the container
-  (`securityContext.runAsUser: 0` property in the container configuration).
 - The auto-instrument container must run in privileged mode (`securityContext.privileged: true` property of the
-  container configuration) or at least with `SYS_ADMIN` capability (`securityContext.capabilities.add: ["SYS_ADMIN"])
+  container configuration).
+  - Some Kubernetes installation allow the following `securityContext` configuration,
+    but it might not work with all the container runtime configurations, as some of them confine
+    the containers and remove some permissions:
+    ```yaml
+    securityContext:
+      runAsUser: 0
+      capabilities:
+        add:
+          - SYS_ADMIN
+          - SYS_RESOURCE # not required for kernels 5.11+
+    ```
 
 The following example instruments the `goblog` pod by attaching Beyla
 as a container (image available at `grafana/beyla:latest`). The
@@ -62,6 +135,7 @@ spec:
     spec:
       # Required so the sidecar instrument tool can access the service process
       shareProcessNamespace: true
+      serviceAccountName: beyla # required if you want kubernetes metadata decoration
       containers:
         # Container for the instrumented service
         - name: goblog
@@ -75,42 +149,40 @@ spec:
             - containerPort: 8443
               name: https
         # Sidecar container with Beyla - the eBPF auto-instrumentation tool
-        - name: autoinstrument
+        - name: beyla
           image: grafana/beyla:latest
           securityContext: # Privileges are required to install the eBPF probes
-            runAsUser: 0
-            capabilities:
-              add:
-                - SYS_ADMIN
+            privileged: true
           env:
-            - name: BEYLA_OPEN_PORT # The internal port of the goblog application container
+            # The internal port of the goblog application container
+            - name: BEYLA_OPEN_PORT
               value: "8443"
             - name: OTEL_EXPORTER_OTLP_ENDPOINT
               value: "http://grafana-agent:4318"
+              # required if you want kubernetes metadata decoration
+            - name: BEYLA_KUBE_METADATA_ENABLE
+              value: "true"
 ```
 
 For more information about the different configuration options, please check the
 [Configuration]({{< relref "../configure/options.md" >}}) section of this documentation site.
 
-Deploying as a sidecar container, is the default deployment mode for the
-[eBPF auto-instrument Kubernetes Operator](https://github.com/grafana/beyla-operator).
+### Deploy Beyla as a Daemonset
 
-## Deploying as a Daemonset
+You can also deploy Beyla as a Daemonset. This is the preferred way if:
+- You want to instrument a Daemonset
+- You want to instrument multiple processes from a single Beyla instance, or even
+  all the instrumentable processes in your cluster.
 
-Alternatively, you can deploy the auto-instrumentation tool as a DaemonSet. Using the
-previous example (the `goblog` pod), we cannot select the process to instrument by using
-its open port, because the port is internal to the Pod. At the same time multiple instances of the
+Using the previous example (the `goblog` pod), we cannot select the process
+to instrument by using its open port, because the port is internal to the Pod.
+At the same time multiple instances of the
 service would have different open ports. In this case, we will need to instrument by
 using the application service executable name (see later example).
 
-For security reasons, you should not deploy as DaemonSet unless you can be sure
-that no external users can deploy pods to the Kubernetes cluster. This is to avoid
-deploying a pod with a process whose name collides with the original instrumented
-process.
-
 In addition to the privilege requirements of the sidecar scenario,
 you will need to configure the auto-instrument pod template with the `hostPID: true`
-option enabled, so that it can access all of the processes running on the same host.
+option enabled, so that it can access all the processes running on the same host.
 
 ```yaml
 ---
@@ -129,16 +201,132 @@ spec:
       labels:
         app: beyla
     spec:
-      hostPID: true # Require to access the processes on the host
+      hostPID: true # Required to access the processes on the host
+      serviceAccountName: beyla # required if you want kubernetes metadata decoration
       containers:
         - name: autoinstrument
           image: grafana/beyla:latest
           securityContext:
             runAsUser: 0
-            privileged: true # Alternative to the capabilities.add SYS_ADMIN setting
+            privileged: true
           env:
-            - name: BEYLA_EXECUTABLE_NAME # Select the executable by its name instead of BEYLA_OPEN_PORT
+            # Select the executable by its name instead of BEYLA_OPEN_PORT
+            - name: BEYLA_EXECUTABLE_NAME
               value: "goblog"
             - name: OTEL_EXPORTER_OTLP_ENDPOINT
               value: "grafana-agent:4318"
+              # required if you want kubernetes metadata decoration
+            - name: BEYLA_KUBE_METADATA_ENABLE
+              value: "true"
 ```
+
+## Providing an external configuration file
+
+In the previous examples, Beyla was configured via environment variables.
+However, you can also configure it via an external YAML file (as documented
+in the [Configuration]({{< relref "../configure/options.md" >}}) section of
+this site).
+
+To provide the configuration as a file, the recommended way is to deploy
+a ConfigMap with the intended configuration, then mount it into the Beyla
+Pod, and refer to it by overriding the Beyla container command.
+
+Example of ConfigMap with the Beyla YAML documentation:
+
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: beyla-config
+data:
+  beyla-config.yml: |
+    print_traces: true
+    grafana:
+      otlp:
+        submit: ["metrics","traces"]
+    otel_traces_export:
+      sampler:
+        name: parentbased_traceidratio
+        arg: "0.01"
+    routes:
+      patterns:
+        - /factorial/{num}
+```
+
+Example of Beyla DaemonSet configuration, mounting and accessing to the
+previous ConfigMap:
+
+```yaml
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: beyla
+spec:
+  selector:
+    matchLabels:
+      instrumentation: beyla
+  template:
+    metadata:
+      labels:
+        instrumentation: beyla
+    spec:
+      serviceAccountName: beyla
+      hostPID: true  #important!
+      volumes:
+        - name: beyla-config
+          configMap:
+            name: beyla-config
+      containers:
+        - name: beyla
+          image: grafana/beyla:latest
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            privileged: true
+          # mount the previous ConfigMap as a folder
+          volumeMounts:
+            - mountPath: /config
+              name: beyla-config
+          # tell beyla where to find the configuration file
+          command: ["/beyla", "--config=/config/beyla-config.yml"]
+```
+
+## Providing secret configuration
+
+The previous example is valid for regular configuration but should not be
+used to pass secret information like passwords or API keys.
+
+To provide secret information, the recommended way is to deploy a Kubernetes
+Secret. For example, this secret contains some fictional Grafana Cloud
+credentials:
+
+```yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: grafana-secret
+type: Opaque
+stringData:
+  grafana-user: "123456"
+  grafana-api-key: "xxxxxxxxxxxxxxx"
+```
+
+Then you can access the secret values as environment variables. Following the
+previous DaemonSet example, this would be achieved by adding the following
+`env` section to the Beyla container:
+
+```yaml
+env:
+  - name: GRAFANA_CLOUD_ZONE
+    value: prod-eu-west-0
+  - name: GRAFANA_CLOUD_INSTANCE_ID
+    valueFrom:
+      secretKeyRef:
+        key: grafana-user
+        name: grafana-secret
+  - name: GRAFANA_CLOUD_API_KEY
+    valueFrom:
+      secretKeyRef:
+        key: grafana-api-key
+        name: grafana-secret
+```
+

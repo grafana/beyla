@@ -30,7 +30,7 @@ type Info struct {
 // where the last <hex...> chain is the container ID inside its Pod
 // The /docker/<hex...> part might not be visible inside the Pod (e.g. deploying Beyla
 // as a sidecar). That's why we search for the "kubelet.slice" string.
-var dockerCgroup = regexp.MustCompile(`^\d+:.*:.*/kubelet\.slice/.*-(.+)\.scope$`)
+var dockerCgroup = regexp.MustCompile(`^\d+:.*:.*/.*-(.+)\.scope$`)
 
 // InfoForPID returns the container ID and PID namespace for the given PID.
 func InfoForPID(pid uint32) (Info, error) {

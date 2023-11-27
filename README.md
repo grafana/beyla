@@ -49,7 +49,7 @@ sudo -E ./beyla
 
 Now, you should see metrics on [http://localhost:9400/metrics](http://localhost:9400/metrics).
 
-See [Documentation](https://grafana.com/docs/grafana-cloud/monitor-applications/beyla/) and the [quickstart tutorial](docs/sources/tutorial/index.md) for more info.
+See [Documentation](https://grafana.com/docs/beyla/) and the [quickstart tutorial](docs/sources/tutorial/index.md) for more info.
 
 ## Requirements
 

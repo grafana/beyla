@@ -11,8 +11,6 @@ import (
 	"syscall"
 
 	"github.com/cilium/ebpf"
-	"github.com/cilium/ebpf/rlimit"
-	"golang.org/x/sys/unix"
 
 	"github.com/grafana/beyla/pkg/internal/request"
 )
@@ -20,10 +18,8 @@ import (
 func ptlog() *slog.Logger { return slog.With("component", "ebpf.ProcessTracer") }
 
 func (pt *ProcessTracer) Run(ctx context.Context, out chan<- []request.Span) {
-	if err := pt.init(); err != nil {
-		pt.log.Error("cant start process tracer. Stopping it", "error", err)
-		return
-	}
+	pt.log = ptlog().With("path", pt.ELFInfo.CmdExePath, "pid", pt.ELFInfo.Pid)
+
 	pt.log.Debug("starting process tracer")
 	// Searches for traceable functions
 	trcrs, err := pt.tracers()
@@ -46,51 +42,7 @@ func (pt *ProcessTracer) Run(ctx context.Context, out chan<- []request.Span) {
 	}
 	go func() {
 		<-ctx.Done()
-		pt.close()
 	}()
-}
-
-func (pt *ProcessTracer) init() error {
-	pt.log = ptlog().With("path", pt.ELFInfo.CmdExePath, "pid", pt.ELFInfo.Pid)
-	if err := rlimit.RemoveMemlock(); err != nil {
-		return fmt.Errorf("removing memory lock: %w", err)
-	}
-	if err := pt.mountBpfPinPath(); err != nil {
-		return fmt.Errorf("can't mount BPF filesystem: %w", err)
-	}
-	return nil
-}
-
-func (pt *ProcessTracer) close() {
-	pt.unmountBpfPinPath()
-}
-
-func (pt *ProcessTracer) mountBpfPinPath() error {
-	pt.log.Debug("mounting BPF map pinning", "path", pt.PinPath)
-	if _, err := os.Stat(pt.PinPath); err != nil {
-		if !os.IsNotExist(err) {
-			return fmt.Errorf("accessing %s stat: %w", pt.PinPath, err)
-		}
-		pt.log.Debug("BPF map pinning path does not exist. Creating before mounting")
-		if err := os.MkdirAll(pt.PinPath, 0700); err != nil {
-			return fmt.Errorf("creating directory %s: %w", pt.PinPath, err)
-		}
-	}
-
-	return bpfMount(pt.PinPath)
-}
-
-func (pt *ProcessTracer) unmountBpfPinPath() {
-	if err := unix.Unmount(pt.PinPath, unix.MNT_FORCE); err != nil {
-		pt.log.Warn("can't unmount pinned root. Try unmounting and removing it manually", err)
-		return
-	}
-	pt.log.Debug("unmounted bpf file system")
-	if err := os.RemoveAll(pt.PinPath); err != nil {
-		pt.log.Warn("can't remove pinned root. Try removing it manually", err)
-	} else {
-		pt.log.Debug("removed pin path")
-	}
 }
 
 // tracers returns Tracer implementer for each discovered eBPF traceable source: GRPC, HTTP...
@@ -157,10 +109,6 @@ func printVerifierErrorInfo(err error) {
 	if errors.As(err, &ve) {
 		_, _ = fmt.Fprintf(os.Stderr, "Error Log:\n %v\n", strings.Join(ve.Log, "\n"))
 	}
-}
-
-func bpfMount(pinPath string) error {
-	return unix.Mount(pinPath, pinPath, "bpf", 0, "")
 }
 
 func RunUtilityTracer(p UtilityTracer) error {

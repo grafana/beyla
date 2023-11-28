@@ -78,6 +78,8 @@ func (p *Watcher) KProbes() map[string]ebpfcommon.FunctionPrograms {
 	return kprobes
 }
 
+func (p *Watcher) SkipKProbes(_ bool) {}
+
 func (p *Watcher) Run(ctx context.Context) {
 	p.events <- Event{Type: Ready}
 	ebpfcommon.ForwardRingbuf[any](

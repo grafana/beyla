@@ -52,13 +52,14 @@ type pidsFilter interface {
 }
 
 type Tracer struct {
-	pidsFilter pidsFilter
-	cfg        *pipe.Config
-	metrics    imetrics.Reporter
-	bpfObjects bpfObjects
-	closers    []io.Closer
-	log        *slog.Logger
-	Service    *svc.ID
+	pidsFilter  pidsFilter
+	cfg         *pipe.Config
+	metrics     imetrics.Reporter
+	bpfObjects  bpfObjects
+	closers     []io.Closer
+	log         *slog.Logger
+	Service     *svc.ID
+	skipKProbes bool
 }
 
 func New(cfg *pipe.Config, metrics imetrics.Reporter) *Tracer {
@@ -116,6 +117,10 @@ func (p *Tracer) BlockPID(pid uint32) {
 	p.pidsFilter.BlockPID(pid)
 }
 
+func (p *Tracer) SkipKProbes(skip bool) {
+	p.skipKProbes = skip
+}
+
 func (p *Tracer) Load() (*ebpf.CollectionSpec, error) {
 	loader := loadBpf
 	if p.cfg.EBPF.BpfDebug {
@@ -133,7 +138,39 @@ func (p *Tracer) Load() (*ebpf.CollectionSpec, error) {
 		}
 	}
 
-	return loader()
+	spec, err := loader()
+
+	if err != nil {
+		return nil, err
+	}
+
+	if p.skipKProbes {
+		for _, probe := range []string{
+			"kprobe_sys_exit",
+			"kprobe_tcp_recvmsg",
+			"kretprobe_tcp_recvmsg",
+			"kretprobe_sock_alloc",
+			"kprobe_tcp_connect",
+			"kprobe_tcp_sendmsg",
+			"kretprobe_sys_connect",
+			"kprobe_tcp_rcv_established",
+			"kretprobe_sys_accept4",
+			"kprobe_tcp_recvmsg",
+			"kretprobe_sys_connect",
+			"kretprobe_sock_alloc",
+			"kprobe_tcp_connect",
+			"kretprobe_sys_accept4",
+			"kprobe_sys_exit",
+			"kprobe_tcp_rcv_established",
+			"kprobe_tcp_sendmsg",
+			"kretprobe_tcp_recvmsg",
+		} {
+			p.log.Debug("Removing duplicate kprobe", "probe", probe)
+			delete(spec.Programs, probe)
+		}
+	}
+
+	return spec, nil
 }
 
 func (p *Tracer) Constants(_ *exec.FileInfo, _ *goexec.Offsets) map[string]any {

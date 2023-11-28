@@ -3,7 +3,6 @@ package discover
 import (
 	"context"
 	"fmt"
-	"hash/fnv"
 	"log/slog"
 	"os"
 	"path"
@@ -27,6 +26,7 @@ type TraceAttacher struct {
 	Ctx               context.Context
 	DiscoveredTracers chan *ebpf.ProcessTracer
 	Metrics           imetrics.Reporter
+	pinPath           string
 
 	// keeps a copy of all the tracers for a given executable path
 	existingTracers map[string]*ebpf.ProcessTracer
@@ -35,6 +35,12 @@ type TraceAttacher struct {
 func TraceAttacherProvider(ta TraceAttacher) (node.TerminalFunc[[]Event[Instrumentable]], error) {
 	ta.log = slog.With("component", "discover.TraceAttacher")
 	ta.existingTracers = map[string]*ebpf.ProcessTracer{}
+	ta.pinPath = ta.buildPinPath()
+
+	if err := ta.init(); err != nil {
+		ta.log.Error("cant start process tracer. Stopping it", "error", err)
+		return nil, err
+	}
 
 	return func(in <-chan []Event[Instrumentable]) {
 	mainLoop:
@@ -56,6 +62,7 @@ func TraceAttacherProvider(ta TraceAttacher) (node.TerminalFunc[[]Event[Instrume
 		}
 		// waiting until context is done, in the case of SystemWide instrumentation
 		<-ta.Ctx.Done()
+		ta.close()
 	}, nil
 }
 
@@ -113,7 +120,7 @@ func (ta *TraceAttacher) getTracer(ie *Instrumentable) (*ebpf.ProcessTracer, boo
 		ELFInfo:    ie.FileInfo,
 		Goffsets:   ie.Offsets,
 		Exe:        exe,
-		PinPath:    ta.buildPinPath(ie),
+		PinPath:    ta.buildPinPath(),
 		SystemWide: ta.Cfg.Discovery.SystemWide,
 	}
 	ta.log.Debug("new executable for discovered process",
@@ -132,18 +139,8 @@ func (ta *TraceAttacher) getTracer(ie *Instrumentable) (*ebpf.ProcessTracer, boo
 // pinpath must be unique for a given executable group
 // it will be:
 //   - current beyla PID
-//   - PID of the first process that matched that executable
-//     (don't mind if that process stops and other processes of the same executable keep using this pinPath)
-//   - Hash of the executable path
-//
-// This way we prevent improbable (almost impossible) collisions of the exec hash
-// or that the first process stopped and a different process with the same PID
-// started, with a different executable
-func (ta *TraceAttacher) buildPinPath(ie *Instrumentable) string {
-	execHash := fnv.New32()
-	_, _ = execHash.Write([]byte(ie.FileInfo.CmdExePath))
-	return path.Join(ta.Cfg.EBPF.BpfBaseDir,
-		fmt.Sprintf("%d-%d-%x", os.Getpid(), ie.FileInfo.Pid, execHash.Sum32()))
+func (ta *TraceAttacher) buildPinPath() string {
+	return path.Join(ta.Cfg.EBPF.BpfBaseDir, fmt.Sprintf("%d-%d-%x", os.Getpid()))
 }
 
 func (ta *TraceAttacher) notifyProcessDeletion(ie *Instrumentable) {

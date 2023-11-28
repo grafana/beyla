@@ -217,6 +217,12 @@ func (p *Tracer) SocketFilters() []*ebpf.Program {
 	return nil
 }
 
+func (p *Tracer) InstrumentedSharedLib(_ uint64) {}
+
+func (p *Tracer) AlreadyInstrumentedSharedLib(_ uint64) bool {
+	return false
+}
+
 func (p *Tracer) Run(ctx context.Context, eventsChan chan<- []request.Span, service svc.ID) {
 	// At this point we now have loaded the bpf objects, which means we should insert any
 	// pids that are allowed into the bpf map

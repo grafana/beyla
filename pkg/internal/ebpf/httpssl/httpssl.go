@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"log/slog"
+	"sync"
 
 	"github.com/cilium/ebpf"
 
@@ -22,6 +23,9 @@ import (
 //go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -type http_buf_t -target amd64,arm64 bpf_tp ../../../../bpf/http_ssl.c -- -I../../../../bpf/headers -DBPF_TRACEPARENT
 //go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -type http_buf_t -target amd64,arm64 bpf_debug ../../../../bpf/http_ssl.c -- -I../../../../bpf/headers -DBPF_DEBUG
 //go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -type http_buf_t -target amd64,arm64 bpf_tp_debug ../../../../bpf/http_ssl.c -- -I../../../../bpf/headers -DBPF_DEBUG -DBPF_TRACEPARENT
+
+var instrumentedLibs = make(map[uint64]bool)
+var libsMux sync.Mutex
 
 type BPFHTTPInfo bpfHttpInfoT
 type BPFConnInfo bpfConnectionInfoT
@@ -182,6 +186,21 @@ func (p *Tracer) UProbes() map[string]map[string]ebpfcommon.FunctionPrograms {
 
 func (p *Tracer) SocketFilters() []*ebpf.Program {
 	return nil
+}
+
+func (p *Tracer) InstrumentedSharedLib(id uint64) {
+	libsMux.Lock()
+	defer libsMux.Unlock()
+	instrumentedLibs[id] = true
+}
+
+func (p *Tracer) AlreadyInstrumentedSharedLib(id uint64) bool {
+	libsMux.Lock()
+	defer libsMux.Unlock()
+
+	_, ok := instrumentedLibs[id]
+
+	return ok
 }
 
 func (p *Tracer) Run(ctx context.Context, eventsChan chan<- []request.Span, service svc.ID) {

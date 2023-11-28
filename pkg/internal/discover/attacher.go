@@ -75,7 +75,7 @@ func (ta *TraceAttacher) getTracer(ie *Instrumentable) (*ebpf.ProcessTracer, boo
 			"exec", ie.FileInfo.CmdExePath)
 		// allowing the tracer to forward traces from the new PID and its children processes
 		monitorPIDs(tracer, ie)
-		if tracer.UsesGenericKprobes {
+		if tracer.MainTracer || tracer.DependentTracer {
 			monitorPIDs(ta.kprobesTracer, ie)
 		}
 		return nil, false
@@ -128,13 +128,14 @@ func (ta *TraceAttacher) getTracer(ie *Instrumentable) (*ebpf.ProcessTracer, boo
 	}
 
 	tracer := &ebpf.ProcessTracer{
-		Programs:           programs,
-		ELFInfo:            ie.FileInfo,
-		Goffsets:           ie.Offsets,
-		Exe:                exe,
-		PinPath:            ta.buildPinPath(),
-		SystemWide:         ta.Cfg.Discovery.SystemWide,
-		UsesGenericKprobes: usingKProbes,
+		Programs:        programs,
+		ELFInfo:         ie.FileInfo,
+		Goffsets:        ie.Offsets,
+		Exe:             exe,
+		PinPath:         ta.buildPinPath(),
+		SystemWide:      ta.Cfg.Discovery.SystemWide,
+		DependentTracer: usingKProbes && ta.kprobesTracer != nil,
+		MainTracer:      usingKProbes && ta.kprobesTracer == nil,
 	}
 	ta.log.Debug("new executable for discovered process",
 		"pid", ie.FileInfo.Pid,
@@ -143,7 +144,7 @@ func (ta *TraceAttacher) getTracer(ie *Instrumentable) (*ebpf.ProcessTracer, boo
 	// allowing the tracer to forward traces from the discovered PID and its children processes
 	monitorPIDs(tracer, ie)
 	ta.existingTracers[ie.FileInfo.CmdExePath] = tracer
-	if tracer.UsesGenericKprobes {
+	if usingKProbes {
 		if ta.kprobesTracer != nil {
 			monitorPIDs(ta.kprobesTracer, ie)
 		} else {

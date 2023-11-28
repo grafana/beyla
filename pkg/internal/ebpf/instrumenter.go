@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"os"
 	"syscall"
 	"unsafe"
 
@@ -132,10 +133,23 @@ func (i *instrumenter) uprobes(pid int32, p Tracer) error {
 		libMap := exec.LibPath(lib, maps)
 		instrPath := fmt.Sprintf("/proc/%d/exe", pid)
 
+		ino := uint64(0)
+
 		if libMap != nil {
 			log.Debug("instrumenting library", "lib", lib, "path", libMap.Pathname)
 			// we do this to make sure instrumenting something like libssl.so works with Docker
 			instrPath = fmt.Sprintf("/proc/%d/map_files/%x-%x", pid, libMap.StartAddr, libMap.EndAddr)
+
+			info, err := os.Stat(instrPath)
+			if err == nil {
+				stat, ok := info.Sys().(*syscall.Stat_t)
+				if ok {
+					if p.AlreadyInstrumentedSharedLib(stat.Ino) {
+						continue
+					}
+					ino = stat.Ino
+				}
+			}
 		} else {
 			// E.g. NodeJS uses OpenSSL but they ship it as statically linked in the node binary
 			log.Debug(fmt.Sprintf("%s not linked, attempting to instrument executable", lib), "path", instrPath)
@@ -158,6 +172,10 @@ func (i *instrumenter) uprobes(pid int32, p Tracer) error {
 				log.Debug("error instrumenting uprobe", "function", funcName, "error", err)
 			}
 			p.AddCloser(i.closables...)
+		}
+
+		if ino != 0 {
+			p.InstrumentedSharedLib(ino)
 		}
 	}
 

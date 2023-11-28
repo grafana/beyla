@@ -132,7 +132,9 @@ func (rbf *ringBufForwarder[T]) processAndForward(record ringbuf.Record, spansCh
 	if ignore {
 		return
 	}
-	s.ServiceID = rbf.service
+	if s.ServiceID.Name == "" {
+		s.ServiceID = rbf.service
+	}
 	rbf.spans[rbf.spansLen] = s
 	// we need to decorate each span with the tracer's service name
 	// if this information is not forwarded from eBPF

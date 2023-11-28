@@ -1,11 +1,9 @@
 #include "vmlinux.h"
 #include "bpf_helpers.h"
-#include "bpf_tracing.h"
 #include "bpf_dbg.h"
+#include "pid.h"
 #include "sockaddr.h"
 #include "tcp_info.h"
-#include "ringbuf.h"
-#include "http_sock.h"
 #include "http_ssl.h"
 
 char __license[] SEC("license") = "Dual MIT/GPL";
@@ -19,6 +17,10 @@ SEC("uprobe/libssl.so:SSL_do_handshake")
 int BPF_UPROBE(uprobe_ssl_do_handshake, void *s) {
     u64 id = bpf_get_current_pid_tgid();
 
+    if (!valid_pid(id)) {
+        return 0;
+    }
+
     bpf_dbg_printk("=== uprobe SSL_do_handshake=%d ssl=%llx===", id, s);
 
     bpf_map_update_elem(&active_ssl_handshakes, &id, &s, BPF_ANY);
@@ -30,6 +32,10 @@ SEC("uretprobe/libssl.so:SSL_do_handshake")
 int BPF_URETPROBE(uretprobe_ssl_do_handshake, int ret) {
     u64 id = bpf_get_current_pid_tgid();
     
+    if (!valid_pid(id)) {
+        return 0;
+    }
+
     bpf_dbg_printk("=== uretprobe SSL_do_handshake=%d", id);
 
     bpf_map_delete_elem(&active_ssl_handshakes, &id);
@@ -43,6 +49,10 @@ int BPF_URETPROBE(uretprobe_ssl_do_handshake, int ret) {
 SEC("uprobe/libssl.so:SSL_read")
 int BPF_UPROBE(uprobe_ssl_read, void *ssl, const void *buf, int num) {
     u64 id = bpf_get_current_pid_tgid();
+
+    if (!valid_pid(id)) {
+        return 0;
+    }
 
     bpf_dbg_printk("=== uprobe SSL_read id=%d ssl=%llx ===", id, ssl);
 
@@ -61,6 +71,10 @@ SEC("uretprobe/libssl.so:SSL_read")
 int BPF_URETPROBE(uretprobe_ssl_read, int ret) {
     u64 id = bpf_get_current_pid_tgid();
 
+    if (!valid_pid(id)) {
+        return 0;
+    }
+
     bpf_dbg_printk("=== uretprobe SSL_read id=%d ===", id);
 
     ssl_args_t *args = bpf_map_lookup_elem(&active_ssl_read_args, &id);
@@ -73,6 +87,10 @@ int BPF_URETPROBE(uretprobe_ssl_read, int ret) {
 SEC("uprobe/libssl.so:SSL_read_ex")
 int BPF_UPROBE(uprobe_ssl_read_ex, void *ssl, const void *buf, int num, size_t *readbytes) {
     u64 id = bpf_get_current_pid_tgid();
+
+    if (!valid_pid(id)) {
+        return 0;
+    }
 
     bpf_dbg_printk("=== SSL_read_ex id=%d ===", id);
 
@@ -90,6 +108,10 @@ int BPF_UPROBE(uprobe_ssl_read_ex, void *ssl, const void *buf, int num, size_t *
 SEC("uretprobe/libssl.so:SSL_read_ex")
 int BPF_URETPROBE(uretprobe_ssl_read_ex, int ret) {
     u64 id = bpf_get_current_pid_tgid();
+
+    if (!valid_pid(id)) {
+        return 0;
+    }
 
     bpf_dbg_printk("=== uretprobe SSL_read_ex id=%d ===", id);
 
@@ -114,6 +136,10 @@ SEC("uprobe/libssl.so:SSL_write")
 int BPF_UPROBE(uprobe_ssl_write, void *ssl, const void *buf, int num) {
     u64 id = bpf_get_current_pid_tgid();
 
+    if (!valid_pid(id)) {
+        return 0;
+    }
+
     bpf_dbg_printk("=== uprobe SSL_write id=%d ssl=%llx ===", id, ssl);
 
     ssl_args_t args = {};
@@ -130,6 +156,10 @@ SEC("uretprobe/libssl.so:SSL_write")
 int BPF_URETPROBE(uretprobe_ssl_write, int ret) {
     u64 id = bpf_get_current_pid_tgid();
 
+    if (!valid_pid(id)) {
+        return 0;
+    }
+
     bpf_dbg_printk("=== uretprobe SSL_write id=%d ===", id);
 
     ssl_args_t *args = bpf_map_lookup_elem(&active_ssl_write_args, &id);
@@ -142,6 +172,10 @@ int BPF_URETPROBE(uretprobe_ssl_write, int ret) {
 SEC("uprobe/libssl.so:SSL_write_ex")
 int BPF_UPROBE(uprobe_ssl_write_ex, void *ssl, const void *buf, int num, size_t *written) {
     u64 id = bpf_get_current_pid_tgid();
+
+    if (!valid_pid(id)) {
+        return 0;
+    }
 
     bpf_dbg_printk("=== SSL_write_ex id=%d ===", id);
 
@@ -158,6 +192,10 @@ int BPF_UPROBE(uprobe_ssl_write_ex, void *ssl, const void *buf, int num, size_t 
 SEC("uretprobe/libssl.so:SSL_write_ex")
 int BPF_URETPROBE(uretprobe_ssl_write_ex, int ret) {
     u64 id = bpf_get_current_pid_tgid();
+
+    if (!valid_pid(id)) {
+        return 0;
+    }
 
     bpf_dbg_printk("=== uretprobe SSL_write_ex id=%d ===", id);
 
@@ -178,6 +216,10 @@ int BPF_URETPROBE(uretprobe_ssl_write_ex, int ret) {
 SEC("uprobe/libssl.so:SSL_shutdown")
 int BPF_UPROBE(uprobe_ssl_shutdown, void *s) {
     u64 id = bpf_get_current_pid_tgid();
+
+    if (!valid_pid(id)) {
+        return 0;
+    }
 
     bpf_dbg_printk("=== SSL_shutdown id=%d ssl=%llx ===", id, s);
 

@@ -8,12 +8,15 @@ import (
 	"os"
 	"reflect"
 	"strings"
+	"sync"
 	"syscall"
 
 	"github.com/cilium/ebpf"
 
 	"github.com/grafana/beyla/pkg/internal/request"
 )
+
+var loadMux sync.Mutex
 
 func ptlog() *slog.Logger { return slog.With("component", "ebpf.ProcessTracer") }
 
@@ -27,7 +30,6 @@ func (pt *ProcessTracer) Run(ctx context.Context, out chan<- []request.Span) {
 		pt.log.Error("couldn't trace process. Stopping process tracer", "error", err)
 		return
 	}
-
 	service := pt.ELFInfo.Service
 	// If the user does not override the service name via configuration
 	// the service name is the name of the found executable
@@ -36,7 +38,7 @@ func (pt *ProcessTracer) Run(ctx context.Context, out chan<- []request.Span) {
 	if service.Name == "" && !pt.SystemWide {
 		service.Name = pt.ELFInfo.ExecutableName()
 	}
-	// run each tracer program
+
 	for _, t := range trcrs {
 		go t.Run(ctx, out, service)
 	}
@@ -47,6 +49,8 @@ func (pt *ProcessTracer) Run(ctx context.Context, out chan<- []request.Span) {
 
 // tracers returns Tracer implementer for each discovered eBPF traceable source: GRPC, HTTP...
 func (pt *ProcessTracer) tracers() ([]Tracer, error) {
+	loadMux.Lock()
+	defer loadMux.Unlock()
 	var log = ptlog()
 
 	// tracerFuncs contains the eBPF Programs (HTTP, GRPC tracers...)

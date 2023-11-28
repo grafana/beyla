@@ -101,6 +101,12 @@ func (p *Tracer) SocketFilters() []*ebpf.Program {
 	return nil
 }
 
+func (p *Tracer) InstrumentedSharedLib(_ uint64) {}
+
+func (p *Tracer) AlreadyInstrumentedSharedLib(_ uint64) bool {
+	return false
+}
+
 func (p *Tracer) Run(ctx context.Context, eventsChan chan<- []request.Span, service svc.ID) {
 	ebpfcommon.ForwardRingbuf[ebpfcommon.HTTPRequestTrace](
 		service,

@@ -60,6 +60,11 @@ type Tracer interface {
 	// SocketFilters  returns a list of programs that need to be loaded as a
 	// generic eBPF socket filter
 	SocketFilters() []*ebpf.Program
+	// Probes can potentially instrument a shared library among multiple executables
+	// These two functions alow programs to remember this and avoid duplicated instrumentations
+	// The argument is the OS file id
+	InstrumentedSharedLib(uint64)
+	AlreadyInstrumentedSharedLib(uint64) bool
 	// Run will do the action of listening for eBPF traces and forward them
 	// periodically to the output channel.
 	// It optionally receives the service svc.ID, to
@@ -86,8 +91,9 @@ type ProcessTracer struct {
 	Exe      *link.Executable
 	PinPath  string
 
-	SystemWide         bool
-	UsesGenericKprobes bool
+	SystemWide      bool
+	DependentTracer bool
+	MainTracer      bool
 }
 
 func (pt *ProcessTracer) AllowPID(pid uint32) {

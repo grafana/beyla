@@ -120,7 +120,6 @@ type bpfSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpfProgramSpecs struct {
-	KprobeSysExit           *ebpf.ProgramSpec `ebpf:"kprobe_sys_exit"`
 	KprobeTcpConnect        *ebpf.ProgramSpec `ebpf:"kprobe_tcp_connect"`
 	KprobeTcpRcvEstablished *ebpf.ProgramSpec `ebpf:"kprobe_tcp_rcv_established"`
 	KprobeTcpRecvmsg        *ebpf.ProgramSpec `ebpf:"kprobe_tcp_recvmsg"`
@@ -129,17 +128,6 @@ type bpfProgramSpecs struct {
 	KretprobeSysAccept4     *ebpf.ProgramSpec `ebpf:"kretprobe_sys_accept4"`
 	KretprobeSysConnect     *ebpf.ProgramSpec `ebpf:"kretprobe_sys_connect"`
 	KretprobeTcpRecvmsg     *ebpf.ProgramSpec `ebpf:"kretprobe_tcp_recvmsg"`
-	UprobeSslDoHandshake    *ebpf.ProgramSpec `ebpf:"uprobe_ssl_do_handshake"`
-	UprobeSslRead           *ebpf.ProgramSpec `ebpf:"uprobe_ssl_read"`
-	UprobeSslReadEx         *ebpf.ProgramSpec `ebpf:"uprobe_ssl_read_ex"`
-	UprobeSslShutdown       *ebpf.ProgramSpec `ebpf:"uprobe_ssl_shutdown"`
-	UprobeSslWrite          *ebpf.ProgramSpec `ebpf:"uprobe_ssl_write"`
-	UprobeSslWriteEx        *ebpf.ProgramSpec `ebpf:"uprobe_ssl_write_ex"`
-	UretprobeSslDoHandshake *ebpf.ProgramSpec `ebpf:"uretprobe_ssl_do_handshake"`
-	UretprobeSslRead        *ebpf.ProgramSpec `ebpf:"uretprobe_ssl_read"`
-	UretprobeSslReadEx      *ebpf.ProgramSpec `ebpf:"uretprobe_ssl_read_ex"`
-	UretprobeSslWrite       *ebpf.ProgramSpec `ebpf:"uretprobe_ssl_write"`
-	UretprobeSslWriteEx     *ebpf.ProgramSpec `ebpf:"uretprobe_ssl_write_ex"`
 }
 
 // bpfMapSpecs contains maps before they are loaded into the kernel.
@@ -152,7 +140,6 @@ type bpfMapSpecs struct {
 	ActiveSslHandshakes *ebpf.MapSpec `ebpf:"active_ssl_handshakes"`
 	ActiveSslReadArgs   *ebpf.MapSpec `ebpf:"active_ssl_read_args"`
 	ActiveSslWriteArgs  *ebpf.MapSpec `ebpf:"active_ssl_write_args"`
-	DeadPids            *ebpf.MapSpec `ebpf:"dead_pids"`
 	Events              *ebpf.MapSpec `ebpf:"events"`
 	FilteredConnections *ebpf.MapSpec `ebpf:"filtered_connections"`
 	HttpInfoMem         *ebpf.MapSpec `ebpf:"http_info_mem"`
@@ -193,7 +180,6 @@ type bpfMaps struct {
 	ActiveSslHandshakes *ebpf.Map `ebpf:"active_ssl_handshakes"`
 	ActiveSslReadArgs   *ebpf.Map `ebpf:"active_ssl_read_args"`
 	ActiveSslWriteArgs  *ebpf.Map `ebpf:"active_ssl_write_args"`
-	DeadPids            *ebpf.Map `ebpf:"dead_pids"`
 	Events              *ebpf.Map `ebpf:"events"`
 	FilteredConnections *ebpf.Map `ebpf:"filtered_connections"`
 	HttpInfoMem         *ebpf.Map `ebpf:"http_info_mem"`
@@ -217,7 +203,6 @@ func (m *bpfMaps) Close() error {
 		m.ActiveSslHandshakes,
 		m.ActiveSslReadArgs,
 		m.ActiveSslWriteArgs,
-		m.DeadPids,
 		m.Events,
 		m.FilteredConnections,
 		m.HttpInfoMem,
@@ -238,7 +223,6 @@ func (m *bpfMaps) Close() error {
 //
 // It can be passed to loadBpfObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpfPrograms struct {
-	KprobeSysExit           *ebpf.Program `ebpf:"kprobe_sys_exit"`
 	KprobeTcpConnect        *ebpf.Program `ebpf:"kprobe_tcp_connect"`
 	KprobeTcpRcvEstablished *ebpf.Program `ebpf:"kprobe_tcp_rcv_established"`
 	KprobeTcpRecvmsg        *ebpf.Program `ebpf:"kprobe_tcp_recvmsg"`
@@ -247,22 +231,10 @@ type bpfPrograms struct {
 	KretprobeSysAccept4     *ebpf.Program `ebpf:"kretprobe_sys_accept4"`
 	KretprobeSysConnect     *ebpf.Program `ebpf:"kretprobe_sys_connect"`
 	KretprobeTcpRecvmsg     *ebpf.Program `ebpf:"kretprobe_tcp_recvmsg"`
-	UprobeSslDoHandshake    *ebpf.Program `ebpf:"uprobe_ssl_do_handshake"`
-	UprobeSslRead           *ebpf.Program `ebpf:"uprobe_ssl_read"`
-	UprobeSslReadEx         *ebpf.Program `ebpf:"uprobe_ssl_read_ex"`
-	UprobeSslShutdown       *ebpf.Program `ebpf:"uprobe_ssl_shutdown"`
-	UprobeSslWrite          *ebpf.Program `ebpf:"uprobe_ssl_write"`
-	UprobeSslWriteEx        *ebpf.Program `ebpf:"uprobe_ssl_write_ex"`
-	UretprobeSslDoHandshake *ebpf.Program `ebpf:"uretprobe_ssl_do_handshake"`
-	UretprobeSslRead        *ebpf.Program `ebpf:"uretprobe_ssl_read"`
-	UretprobeSslReadEx      *ebpf.Program `ebpf:"uretprobe_ssl_read_ex"`
-	UretprobeSslWrite       *ebpf.Program `ebpf:"uretprobe_ssl_write"`
-	UretprobeSslWriteEx     *ebpf.Program `ebpf:"uretprobe_ssl_write_ex"`
 }
 
 func (p *bpfPrograms) Close() error {
 	return _BpfClose(
-		p.KprobeSysExit,
 		p.KprobeTcpConnect,
 		p.KprobeTcpRcvEstablished,
 		p.KprobeTcpRecvmsg,
@@ -271,17 +243,6 @@ func (p *bpfPrograms) Close() error {
 		p.KretprobeSysAccept4,
 		p.KretprobeSysConnect,
 		p.KretprobeTcpRecvmsg,
-		p.UprobeSslDoHandshake,
-		p.UprobeSslRead,
-		p.UprobeSslReadEx,
-		p.UprobeSslShutdown,
-		p.UprobeSslWrite,
-		p.UprobeSslWriteEx,
-		p.UretprobeSslDoHandshake,
-		p.UretprobeSslRead,
-		p.UretprobeSslReadEx,
-		p.UretprobeSslWrite,
-		p.UretprobeSslWriteEx,
 	)
 }
 

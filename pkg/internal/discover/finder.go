@@ -12,6 +12,7 @@ import (
 	"github.com/grafana/beyla/pkg/internal/ebpf/gosql"
 	"github.com/grafana/beyla/pkg/internal/ebpf/grpc"
 	"github.com/grafana/beyla/pkg/internal/ebpf/httpfltr"
+	"github.com/grafana/beyla/pkg/internal/ebpf/httpssl"
 	"github.com/grafana/beyla/pkg/internal/ebpf/nethttp"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/pipe"
@@ -79,5 +80,9 @@ func newGoTracersGroup(cfg *pipe.Config, metrics imetrics.Reporter) []ebpf.Trace
 }
 
 func newNonGoTracersGroup(cfg *pipe.Config, metrics imetrics.Reporter) []ebpf.Tracer {
-	return []ebpf.Tracer{httpfltr.New(cfg, metrics)}
+	return []ebpf.Tracer{httpfltr.New(cfg, metrics), httpssl.New(cfg, metrics)}
+}
+
+func newNonGoTracersGroupUProbes(cfg *pipe.Config, metrics imetrics.Reporter) []ebpf.Tracer {
+	return []ebpf.Tracer{httpssl.New(cfg, metrics)}
 }

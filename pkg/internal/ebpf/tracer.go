@@ -41,7 +41,6 @@ type KprobesTracer interface {
 	// KProbes returns a map with the name of the kernel probes that need to be
 	// tapped into. Start matches kprobe, End matches kretprobe
 	KProbes() map[string]ebpfcommon.FunctionPrograms
-	SkipKProbes(bool)
 }
 
 // Tracer is an individual eBPF program (e.g. the net/http or the grpc tracers)
@@ -87,7 +86,8 @@ type ProcessTracer struct {
 	Exe      *link.Executable
 	PinPath  string
 
-	SystemWide bool
+	SystemWide         bool
+	UsesGenericKprobes bool
 }
 
 func (pt *ProcessTracer) AllowPID(pid uint32) {

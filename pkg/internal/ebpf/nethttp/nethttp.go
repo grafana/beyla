@@ -129,8 +129,6 @@ func (p *Tracer) SocketFilters() []*ebpf.Program {
 	return nil
 }
 
-func (p *Tracer) SkipKProbes(_ bool) {}
-
 func (p *Tracer) Run(ctx context.Context, eventsChan chan<- []request.Span, service svc.ID) {
 	ebpfcommon.ForwardRingbuf[ebpfcommon.HTTPRequestTrace](
 		service,

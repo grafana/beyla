@@ -30,6 +30,7 @@ type TraceAttacher struct {
 
 	// keeps a copy of all the tracers for a given executable path
 	existingTracers map[string]*ebpf.ProcessTracer
+	kprobesTracer   *ebpf.ProcessTracer
 }
 
 func TraceAttacherProvider(ta TraceAttacher) (node.TerminalFunc[[]Event[Instrumentable]], error) {
@@ -73,9 +74,9 @@ func (ta *TraceAttacher) getTracer(ie *Instrumentable) (*ebpf.ProcessTracer, boo
 			"child", ie.ChildPids,
 			"exec", ie.FileInfo.CmdExePath)
 		// allowing the tracer to forward traces from the new PID and its children processes
-		tracer.AllowPID(uint32(ie.FileInfo.Pid))
-		for _, pid := range ie.ChildPids {
-			tracer.AllowPID(pid)
+		monitorPIDs(tracer, ie)
+		if tracer.UsesGenericKprobes {
+			monitorPIDs(ta.kprobesTracer, ie)
 		}
 		return nil, false
 	}
@@ -83,19 +84,30 @@ func (ta *TraceAttacher) getTracer(ie *Instrumentable) (*ebpf.ProcessTracer, boo
 
 	// builds a tracer for that executable
 	var programs []ebpf.Tracer
+	var usingKProbes bool
 	switch ie.Type {
 	case svc.InstrumentableGolang:
 		// gets all the possible supported tracers for a go program, and filters out
 		// those whose symbols are not present in the ELF functions list
 		if ta.Cfg.Discovery.SkipGoSpecificTracers {
-			programs = newNonGoTracersGroup(ta.Cfg, ta.Metrics)
+			if ta.kprobesTracer != nil {
+				programs = newNonGoTracersGroupUProbes(ta.Cfg, ta.Metrics)
+			} else {
+				programs = newNonGoTracersGroup(ta.Cfg, ta.Metrics)
+			}
+			usingKProbes = true
 		} else {
 			programs = filterNotFoundPrograms(newGoTracersGroup(ta.Cfg, ta.Metrics), ie.Offsets)
 		}
 	case svc.InstrumentableJava, svc.InstrumentableNodejs, svc.InstrumentableRuby, svc.InstrumentablePython, svc.InstrumentableDotnet, svc.InstrumentableGeneric, svc.InstrumentableRust:
 		// We are not instrumenting a Go application, we override the programs
 		// list with the generic kernel/socket space filters
-		programs = newNonGoTracersGroup(ta.Cfg, ta.Metrics)
+		if ta.kprobesTracer != nil {
+			programs = newNonGoTracersGroupUProbes(ta.Cfg, ta.Metrics)
+		} else {
+			programs = newNonGoTracersGroup(ta.Cfg, ta.Metrics)
+		}
+		usingKProbes = true
 	default:
 		ta.log.Warn("unexpected instrumentable type. This is basically a bug", "type", ie.Type)
 	}
@@ -116,31 +128,44 @@ func (ta *TraceAttacher) getTracer(ie *Instrumentable) (*ebpf.ProcessTracer, boo
 	}
 
 	tracer := &ebpf.ProcessTracer{
-		Programs:   programs,
-		ELFInfo:    ie.FileInfo,
-		Goffsets:   ie.Offsets,
-		Exe:        exe,
-		PinPath:    ta.buildPinPath(),
-		SystemWide: ta.Cfg.Discovery.SystemWide,
+		Programs:           programs,
+		ELFInfo:            ie.FileInfo,
+		Goffsets:           ie.Offsets,
+		Exe:                exe,
+		PinPath:            ta.buildPinPath(),
+		SystemWide:         ta.Cfg.Discovery.SystemWide,
+		UsesGenericKprobes: usingKProbes,
 	}
 	ta.log.Debug("new executable for discovered process",
 		"pid", ie.FileInfo.Pid,
 		"child", ie.ChildPids,
 		"exec", ie.FileInfo.CmdExePath)
 	// allowing the tracer to forward traces from the discovered PID and its children processes
+	monitorPIDs(tracer, ie)
+	ta.existingTracers[ie.FileInfo.CmdExePath] = tracer
+	if tracer.UsesGenericKprobes {
+		if ta.kprobesTracer != nil {
+			monitorPIDs(ta.kprobesTracer, ie)
+		} else {
+			ta.kprobesTracer = tracer
+		}
+	}
+	return tracer, true
+}
+
+func monitorPIDs(tracer *ebpf.ProcessTracer, ie *Instrumentable) {
+	// allowing the tracer to forward traces from the discovered PID and its children processes
 	tracer.AllowPID(uint32(ie.FileInfo.Pid))
 	for _, pid := range ie.ChildPids {
 		tracer.AllowPID(pid)
 	}
-	ta.existingTracers[ie.FileInfo.CmdExePath] = tracer
-	return tracer, true
 }
 
 // pinpath must be unique for a given executable group
 // it will be:
 //   - current beyla PID
 func (ta *TraceAttacher) buildPinPath() string {
-	return path.Join(ta.Cfg.EBPF.BpfBaseDir, fmt.Sprintf("%d-%d-%x", os.Getpid()))
+	return path.Join(ta.Cfg.EBPF.BpfBaseDir, fmt.Sprintf("beyla-%d", os.Getpid()))
 }
 
 func (ta *TraceAttacher) notifyProcessDeletion(ie *Instrumentable) {

@@ -52,14 +52,13 @@ type pidsFilter interface {
 }
 
 type Tracer struct {
-	pidsFilter  pidsFilter
-	cfg         *pipe.Config
-	metrics     imetrics.Reporter
-	bpfObjects  bpfObjects
-	closers     []io.Closer
-	log         *slog.Logger
-	Service     *svc.ID
-	skipKProbes bool
+	pidsFilter pidsFilter
+	cfg        *pipe.Config
+	metrics    imetrics.Reporter
+	bpfObjects bpfObjects
+	closers    []io.Closer
+	log        *slog.Logger
+	Service    *svc.ID
 }
 
 func New(cfg *pipe.Config, metrics imetrics.Reporter) *Tracer {
@@ -117,10 +116,6 @@ func (p *Tracer) BlockPID(pid uint32) {
 	p.pidsFilter.BlockPID(pid)
 }
 
-func (p *Tracer) SkipKProbes(skip bool) {
-	p.skipKProbes = skip
-}
-
 func (p *Tracer) Load() (*ebpf.CollectionSpec, error) {
 	loader := loadBpf
 	if p.cfg.EBPF.BpfDebug {
@@ -138,39 +133,7 @@ func (p *Tracer) Load() (*ebpf.CollectionSpec, error) {
 		}
 	}
 
-	spec, err := loader()
-
-	if err != nil {
-		return nil, err
-	}
-
-	if p.skipKProbes {
-		for _, probe := range []string{
-			"kprobe_sys_exit",
-			"kprobe_tcp_recvmsg",
-			"kretprobe_tcp_recvmsg",
-			"kretprobe_sock_alloc",
-			"kprobe_tcp_connect",
-			"kprobe_tcp_sendmsg",
-			"kretprobe_sys_connect",
-			"kprobe_tcp_rcv_established",
-			"kretprobe_sys_accept4",
-			"kprobe_tcp_recvmsg",
-			"kretprobe_sys_connect",
-			"kretprobe_sock_alloc",
-			"kprobe_tcp_connect",
-			"kretprobe_sys_accept4",
-			"kprobe_sys_exit",
-			"kprobe_tcp_rcv_established",
-			"kprobe_tcp_sendmsg",
-			"kretprobe_tcp_recvmsg",
-		} {
-			p.log.Debug("Removing duplicate kprobe", "probe", probe)
-			delete(spec.Programs, probe)
-		}
-	}
-
-	return spec, nil
+	return loader()
 }
 
 func (p *Tracer) Constants(_ *exec.FileInfo, _ *goexec.Offsets) map[string]any {
@@ -204,7 +167,7 @@ func (p *Tracer) GoProbes() map[string]ebpfcommon.FunctionPrograms {
 }
 
 func (p *Tracer) KProbes() map[string]ebpfcommon.FunctionPrograms {
-	kprobes := map[string]ebpfcommon.FunctionPrograms{
+	return map[string]ebpfcommon.FunctionPrograms{
 		// Both sys accept probes use the same kretprobe.
 		// We could tap into __sys_accept4, but we might be more prone to
 		// issues with the internal kernel code changing.
@@ -244,78 +207,10 @@ func (p *Tracer) KProbes() map[string]ebpfcommon.FunctionPrograms {
 			End:      p.bpfObjects.KretprobeTcpRecvmsg,
 		},
 	}
-
-	// Track system exit so we can find program names of dead programs
-	// when we process the events
-	if p.cfg.Discovery.SystemWide {
-		kprobes["sys_exit"] = ebpfcommon.FunctionPrograms{
-			Required: true,
-			Start:    p.bpfObjects.KprobeSysExit,
-		}
-		kprobes["sys_exit_group"] = ebpfcommon.FunctionPrograms{
-			Required: true,
-			Start:    p.bpfObjects.KprobeSysExit,
-		}
-	}
-
-	return kprobes
 }
 
 func (p *Tracer) UProbes() map[string]map[string]ebpfcommon.FunctionPrograms {
-	return map[string]map[string]ebpfcommon.FunctionPrograms{
-		"libssl.so": {
-			"SSL_read": {
-				Required: false,
-				Start:    p.bpfObjects.UprobeSslRead,
-				End:      p.bpfObjects.UretprobeSslRead,
-			},
-			"SSL_write": {
-				Required: false,
-				Start:    p.bpfObjects.UprobeSslWrite,
-				End:      p.bpfObjects.UretprobeSslWrite,
-			},
-			"SSL_read_ex": {
-				Required: false,
-				Start:    p.bpfObjects.UprobeSslReadEx,
-				End:      p.bpfObjects.UretprobeSslReadEx,
-			},
-			"SSL_write_ex": {
-				Required: false,
-				Start:    p.bpfObjects.UprobeSslWriteEx,
-				End:      p.bpfObjects.UretprobeSslWriteEx,
-			},
-			"SSL_do_handshake": {
-				Required: false,
-				Start:    p.bpfObjects.UprobeSslDoHandshake,
-				End:      p.bpfObjects.UretprobeSslDoHandshake,
-			},
-			"SSL_shutdown": {
-				Required: false,
-				Start:    p.bpfObjects.UprobeSslShutdown,
-			},
-		},
-		"libSystem.Security.Cryptography.Native.OpenSsl.so": {
-			"CryptoNative_SslRead": {
-				Required: false,
-				Start:    p.bpfObjects.UprobeSslRead,
-				End:      p.bpfObjects.UretprobeSslRead,
-			},
-			"CryptoNative_SslWrite": {
-				Required: false,
-				Start:    p.bpfObjects.UprobeSslWrite,
-				End:      p.bpfObjects.UretprobeSslWrite,
-			},
-			"CryptoNative_SslDoHandshake": {
-				Required: false,
-				Start:    p.bpfObjects.UprobeSslDoHandshake,
-				End:      p.bpfObjects.UretprobeSslDoHandshake,
-			},
-			"CryptoNative_SslShutdown": {
-				Required: false,
-				Start:    p.bpfObjects.UprobeSslShutdown,
-			},
-		},
-	}
+	return nil
 }
 
 func (p *Tracer) SocketFilters() []*ebpf.Program {
@@ -346,14 +241,14 @@ func (p *Tracer) Run(ctx context.Context, eventsChan chan<- []request.Span, serv
 	ebpfcommon.ForwardRingbuf[HTTPInfo](
 		service,
 		&p.cfg.EBPF, p.log, p.bpfObjects.Events,
-		p.readHTTPInfoIntoSpan,
+		ReadHTTPInfoIntoSpan,
 		p.pidsFilter.Filter,
 		p.metrics,
 		append(p.closers, &p.bpfObjects)...,
 	)(ctx, eventsChan)
 }
 
-func (p *Tracer) readHTTPInfoIntoSpan(record *ringbuf.Record) (request.Span, bool, error) {
+func ReadHTTPInfoIntoSpan(record *ringbuf.Record) (request.Span, bool, error) {
 	var flags uint64
 	var event BPFHTTPInfo
 	var result HTTPInfo
@@ -386,12 +281,7 @@ func (p *Tracer) readHTTPInfoIntoSpan(record *ringbuf.Record) (request.Span, boo
 	}
 	result.URL = event.url()
 	result.Method = event.method()
-
-	if p.Service == nil {
-		result.Service = p.serviceInfo(event.Pid.HostPid)
-	} else {
-		result.Service = *p.Service
-	}
+	result.Service = serviceInfo(event.Pid.HostPid)
 
 	return httpInfoToSpan(&result), false, nil
 }
@@ -452,50 +342,28 @@ func (event *BPFHTTPInfo) hostInfo() (source, target string) {
 	return src.String(), dst.String()
 }
 
-func cstr(chars []uint8) string {
-	addrLen := bytes.IndexByte(chars[:], 0)
-	if addrLen < 0 {
-		addrLen = len(chars)
-	}
-
-	return string(chars[:addrLen])
-}
-
-func (p *Tracer) commNameOfDeadPid(pid uint32) string {
-	var name [16]uint8
-	if p.bpfObjects.DeadPids == nil {
-		return ""
-	}
-	err := p.bpfObjects.DeadPids.Lookup(pid, &name)
-	if err != nil {
-		return ""
-	}
-
-	return cstr(name[:])
-}
-
-func (p *Tracer) commName(pid uint32) string {
+func commName(pid uint32) string {
 	procPath := filepath.Join("/proc", strconv.FormatUint(uint64(pid), 10), "comm")
 	_, err := os.Stat(procPath)
 	if os.IsNotExist(err) {
-		return p.commNameOfDeadPid(pid)
+		return ""
 	}
 
 	name, err := os.ReadFile(procPath)
 	if err != nil {
-		p.commNameOfDeadPid(pid)
+		return ""
 	}
 
 	return strings.TrimSpace(string(name))
 }
 
-func (p *Tracer) serviceInfo(pid uint32) svc.ID {
+func serviceInfo(pid uint32) svc.ID {
 	cached, ok := activePids.Get(pid)
 	if ok {
 		return cached
 	}
 
-	name := p.commName(pid)
+	name := commName(pid)
 	lang := exec.FindProcLanguage(int32(pid), nil)
 	result := svc.ID{Name: name, SDKLanguage: lang}
 

@@ -16,6 +16,7 @@ struct {
     __type(key, u64);   // the pid_tid 
     __type(value, u64); // the SSL struct pointer
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
+    __uint(pinning, LIBBPF_PIN_BY_NAME);
 } active_ssl_handshakes SEC(".maps");
 
 // LRU map, we don't clean-it up at the moment, which holds onto the mapping
@@ -26,6 +27,7 @@ struct {
     __type(key, u64);   // the SSL struct pointer
     __type(value, connection_info_t); // the pointer to the file descriptor matching ssl
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
+    __uint(pinning, LIBBPF_PIN_BY_NAME);
 } ssl_to_conn SEC(".maps");
 
 // LRU map, we don't clean-it up at the moment, which holds onto the mapping
@@ -36,6 +38,7 @@ struct {
     __type(key, u64);   // the pid-tid pair
     __type(value, connection_info_t); // the pointer to the file descriptor matching ssl
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
+    __uint(pinning, LIBBPF_PIN_BY_NAME);
 } pid_tid_to_conn SEC(".maps");
 
 // LRU map which holds onto the mapping of an ssl pointer to pid-tid,

@@ -8,7 +8,6 @@ import (
 	"github.com/cilium/ebpf/ringbuf"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/grafana/beyla/pkg/internal/pipe"
 	"github.com/grafana/beyla/pkg/internal/request"
 	"github.com/grafana/beyla/pkg/internal/svc"
 )
@@ -101,8 +100,7 @@ func TestToRequestTrace(t *testing.T) {
 	err := binary.Write(buf, binary.LittleEndian, &record)
 	assert.NoError(t, err)
 
-	tracer := Tracer{cfg: &pipe.Config{}}
-	result, _, err := tracer.readHTTPInfoIntoSpan(&ringbuf.Record{RawSample: buf.Bytes()})
+	result, _, err := ReadHTTPInfoIntoSpan(&ringbuf.Record{RawSample: buf.Bytes()})
 	assert.NoError(t, err)
 
 	expected := request.Span{
@@ -135,8 +133,7 @@ func TestToRequestTraceNoConnection(t *testing.T) {
 	err := binary.Write(buf, binary.LittleEndian, &record)
 	assert.NoError(t, err)
 
-	tracer := Tracer{cfg: &pipe.Config{}}
-	result, _, err := tracer.readHTTPInfoIntoSpan(&ringbuf.Record{RawSample: buf.Bytes()})
+	result, _, err := ReadHTTPInfoIntoSpan(&ringbuf.Record{RawSample: buf.Bytes()})
 	assert.NoError(t, err)
 
 	// change the expected port just before testing
@@ -154,4 +151,13 @@ func TestToRequestTraceNoConnection(t *testing.T) {
 		ServiceID:    svc.ID{SDKLanguage: svc.InstrumentableGeneric},
 	}
 	assert.Equal(t, expected, result)
+}
+
+func cstr(chars []uint8) string {
+	addrLen := bytes.IndexByte(chars[:], 0)
+	if addrLen < 0 {
+		addrLen = len(chars)
+	}
+
+	return string(chars[:addrLen])
 }

@@ -62,10 +62,8 @@ func TestMultiProcess(t *testing.T) {
 	})
 
 	t.Run("BPF pinning folders mounted", func(t *testing.T) {
-		// 1 pinned map for testserver and testserver-unused containers
-		// 1 pinned map for testserver1 container
-		// 1 pinned map for testserver-duplicate container
-		testBPFPinningMountedWithCount(t, 3)
+		// 1 beyla pinned map folder for all processes
+		testBPFPinningMounted(t)
 	})
 
 	require.NoError(t, compose.Close())

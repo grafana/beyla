@@ -117,6 +117,7 @@ func (i *instrumenter) kprobe(funcName string, programs ebpfcommon.FunctionProgr
 	return nil
 }
 
+//nolint:cyclop
 func (i *instrumenter) uprobes(pid int32, p Tracer) error {
 	maps, err := processMaps(pid)
 	if err != nil {

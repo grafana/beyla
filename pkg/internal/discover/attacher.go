@@ -33,6 +33,7 @@ type TraceAttacher struct {
 	reusableTracer  *ebpf.ProcessTracer
 }
 
+//nolint:gocritic
 func TraceAttacherProvider(ta TraceAttacher) (node.TerminalFunc[[]Event[Instrumentable]], error) {
 	ta.log = slog.With("component", "discover.TraceAttacher")
 	ta.existingTracers = map[string]*ebpf.ProcessTracer{}
@@ -68,6 +69,7 @@ func TraceAttacherProvider(ta TraceAttacher) (node.TerminalFunc[[]Event[Instrume
 	}, nil
 }
 
+//nolint:cyclop
 func (ta *TraceAttacher) getTracer(ie *Instrumentable) (*ebpf.ProcessTracer, bool) {
 	if tracer, ok := ta.existingTracers[ie.FileInfo.CmdExePath]; ok {
 		ta.log.Info("new process for already instrumented executable",

@@ -144,10 +144,12 @@ func (i *instrumenter) uprobes(pid int32, p Tracer) error {
 			if err == nil {
 				stat, ok := info.Sys().(*syscall.Stat_t)
 				if ok {
-					if p.AlreadyInstrumentedSharedLib(stat.Ino) {
+					if p.AlreadyInstrumentedLib(stat.Ino) {
+						log.Debug("library already instrumented", "lib", lib, "path", libMap.Pathname, "ino", stat.Ino)
 						continue
 					}
 					ino = stat.Ino
+					log.Debug("found inode number, recording this instrumentation if successful", "lib", lib, "path", libMap.Pathname, "ino", ino)
 				}
 			}
 		} else {
@@ -175,7 +177,7 @@ func (i *instrumenter) uprobes(pid int32, p Tracer) error {
 		}
 
 		if ino != 0 {
-			p.InstrumentedSharedLib(ino)
+			p.RecordInstrumentedLib(ino)
 		}
 	}
 

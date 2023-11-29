@@ -24,6 +24,7 @@ import (
 //go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -type http_buf_t -target amd64,arm64 bpf_debug ../../../../bpf/http_ssl.c -- -I../../../../bpf/headers -DBPF_DEBUG
 //go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -type http_buf_t -target amd64,arm64 bpf_tp_debug ../../../../bpf/http_ssl.c -- -I../../../../bpf/headers -DBPF_DEBUG -DBPF_TRACEPARENT
 
+// Hold onto Linux inode numbers of files that are already instrumented, e.g. libssl.so.3
 var instrumentedLibs = make(map[uint64]bool)
 var libsMux sync.Mutex
 
@@ -61,7 +62,7 @@ func New(cfg *pipe.Config, metrics imetrics.Reporter) *Tracer {
 	if cfg.Discovery.SystemWide {
 		filter = &ebpfcommon.IdentityPidsFilter{}
 	} else {
-		filter = ebpfcommon.NewPIDsFilter(log)
+		filter = ebpfcommon.CommonPIDsFilter()
 	}
 	return &Tracer{
 		log:        log,
@@ -188,13 +189,13 @@ func (p *Tracer) SocketFilters() []*ebpf.Program {
 	return nil
 }
 
-func (p *Tracer) InstrumentedSharedLib(id uint64) {
+func (p *Tracer) RecordInstrumentedLib(id uint64) {
 	libsMux.Lock()
 	defer libsMux.Unlock()
 	instrumentedLibs[id] = true
 }
 
-func (p *Tracer) AlreadyInstrumentedSharedLib(id uint64) bool {
+func (p *Tracer) AlreadyInstrumentedLib(id uint64) bool {
 	libsMux.Lock()
 	defer libsMux.Unlock()
 

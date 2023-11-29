@@ -63,8 +63,8 @@ type Tracer interface {
 	// Probes can potentially instrument a shared library among multiple executables
 	// These two functions alow programs to remember this and avoid duplicated instrumentations
 	// The argument is the OS file id
-	InstrumentedSharedLib(uint64)
-	AlreadyInstrumentedSharedLib(uint64) bool
+	RecordInstrumentedLib(uint64)
+	AlreadyInstrumentedLib(uint64) bool
 	// Run will do the action of listening for eBPF traces and forward them
 	// periodically to the output channel.
 	// It optionally receives the service svc.ID, to
@@ -81,6 +81,13 @@ type UtilityTracer interface {
 	Run(context.Context)
 }
 
+type ProcessTracerType int
+
+const (
+	Go = ProcessTracerType(iota)
+	Generic
+)
+
 // ProcessTracer instruments an executable with eBPF and provides the eBPF readers
 // that will forward the traces to later stages in the pipeline
 type ProcessTracer struct {
@@ -91,9 +98,8 @@ type ProcessTracer struct {
 	Exe      *link.Executable
 	PinPath  string
 
-	SystemWide      bool
-	DependentTracer bool
-	MainTracer      bool
+	SystemWide bool
+	Type       ProcessTracerType
 }
 
 func (pt *ProcessTracer) AllowPID(pid uint32) {

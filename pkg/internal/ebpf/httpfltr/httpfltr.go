@@ -67,7 +67,7 @@ func New(cfg *pipe.Config, metrics imetrics.Reporter) *Tracer {
 	if cfg.Discovery.SystemWide {
 		filter = &ebpfcommon.IdentityPidsFilter{}
 	} else {
-		filter = ebpfcommon.NewPIDsFilter(log)
+		filter = ebpfcommon.CommonPIDsFilter()
 	}
 	return &Tracer{
 		log:        log,
@@ -217,9 +217,9 @@ func (p *Tracer) SocketFilters() []*ebpf.Program {
 	return nil
 }
 
-func (p *Tracer) InstrumentedSharedLib(_ uint64) {}
+func (p *Tracer) RecordInstrumentedLib(_ uint64) {}
 
-func (p *Tracer) AlreadyInstrumentedSharedLib(_ uint64) bool {
+func (p *Tracer) AlreadyInstrumentedLib(_ uint64) bool {
 	return false
 }
 

@@ -2,6 +2,7 @@ package ebpfcommon
 
 import (
 	"log/slog"
+	"sync"
 
 	"github.com/grafana/beyla/pkg/internal/request"
 )
@@ -40,12 +41,30 @@ type pidEvent struct {
 	op  PIDEventOp
 }
 
+var commonPIDsFilter *PIDsFilter
+var commonLock sync.Mutex
+
 func NewPIDsFilter(log *slog.Logger) *PIDsFilter {
 	return &PIDsFilter{
 		log:     log,
 		current: map[uint32]map[uint32]struct{}{},
 		queue:   make(chan pidEvent, updatesBufLen),
 	}
+}
+
+func CommonPIDsFilter() *PIDsFilter {
+	commonLock.Lock()
+	defer commonLock.Unlock()
+
+	if commonPIDsFilter == nil {
+		commonPIDsFilter = &PIDsFilter{
+			log:     slog.With("component", "ebpfCommon.CommonPIDsFilter"),
+			current: map[uint32]map[uint32]struct{}{},
+			queue:   make(chan pidEvent, updatesBufLen),
+		}
+	}
+
+	return commonPIDsFilter
 }
 
 func (pf *PIDsFilter) AllowPID(pid uint32) {

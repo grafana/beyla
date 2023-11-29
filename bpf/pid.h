@@ -9,11 +9,16 @@
 
 volatile const s32 filter_pids = 0;
 
+typedef struct pid_key {
+    u32 pid;        // pid as seen by the userspace (for example, inside its container)
+    u32 namespace;  // pids namespace for the process
+} __attribute__((packed)) pid_key_t;
+
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __uint(max_entries, MAX_CONCURRENT_PIDS);
-    __type(key, u32);
-    __type(value, u32);
+    __type(key, pid_key_t);
+    __type(value, u8);
     __uint(pinning, LIBBPF_PIN_BY_NAME);
 } valid_pids SEC(".maps");
 
@@ -95,15 +100,25 @@ static __always_inline u32 valid_pid(u64 id) {
     ns_pid_ppid(task, &ns_pid, &ns_ppid, &pid_ns_id);
 
     if (ns_pid != 0) {
-        u32 *found_ns_pid = bpf_map_lookup_elem(&valid_pids, &ns_pid);
+        pid_key_t p_key = {
+            .pid = ns_pid,
+            .namespace = pid_ns_id
+        };
 
-        if (found_ns_pid && (pid_ns_id == *found_ns_pid)) {
+        u32 *found_ns_pid = bpf_map_lookup_elem(&valid_pids, &p_key);
+
+        if (found_ns_pid) {
             bpf_map_update_elem(&pid_cache, &host_pid, &ns_pid, BPF_ANY);
             return ns_pid;
         } else if (ns_ppid != 0) {
-            u32 *found_ns_ppid = bpf_map_lookup_elem(&valid_pids, &ns_ppid);
+            pid_key_t pp_key = {
+                .pid = ns_ppid,
+                .namespace = pid_ns_id
+            };
+
+            u32 *found_ns_ppid = bpf_map_lookup_elem(&valid_pids, &pp_key);
             
-            if (found_ns_ppid && (pid_ns_id == *found_ns_ppid)) {
+            if (found_ns_ppid) {
                 bpf_map_update_elem(&pid_cache, &host_pid, &ns_pid, BPF_ANY);
 
                 return ns_pid;

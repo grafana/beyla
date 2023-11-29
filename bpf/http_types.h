@@ -2,6 +2,7 @@
 #define HTTP_TYPES_H
 
 #include "vmlinux.h"
+#include "map_sizing.h"
 #include "bpf_helpers.h"
 #include "http_defs.h"
 #include "pid.h"

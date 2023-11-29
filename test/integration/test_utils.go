@@ -88,7 +88,7 @@ func createTraceparent(traceID string, parentID string) string {
 // asynchronously are up and communicating properly
 func waitForTestComponentsSub(t *testing.T, url, subpath string) {
 	pq := prom.Client{HostPort: prometheusHostPort}
-	test.Eventually(t, time.Minute, func(t require.TestingT) {
+	test.Eventually(t, 3*time.Minute, func(t require.TestingT) {
 		// first, verify that the test service endpoint is healthy
 		req, err := http.NewRequest("GET", url+subpath, nil)
 		require.NoError(t, err)

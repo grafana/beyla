@@ -1,8 +1,6 @@
 #ifndef HTTP_DEFS_H
 #define HTTP_DEFS_H
 
-#define MAX_CONCURRENT_REQUESTS 10000
-
 // Taken from linux/socket.h
 #define AF_INET		2	/* Internet IP Protocol 	*/
 #define AF_INET6	10	/* IP version 6			    */

@@ -14,6 +14,7 @@
 #define GO_COMMON_H
 
 #include "utils.h"
+#include "map_sizing.h"
 #include "bpf_dbg.h"
 #include "http_trace.h"
 #include "ringbuf.h"
@@ -22,10 +23,6 @@
 #include "go_traceparent.h"
 
 char __license[] SEC("license") = "Dual MIT/GPL";
-
-// TODO: make this user-configurable and modify the value from the userspace when
-// loading the maps with the Cilium library
-#define MAX_CONCURRENT_REQUESTS 500
 
 // Temporary information about a function invocation. It stores the invocation time of a function
 // as well as the value of registers at the invocation time. This way we can retrieve them at the
@@ -44,7 +41,7 @@ struct {
     __uint(type, BPF_MAP_TYPE_HASH);
     __type(key, void *); // key: pointer to the goroutine
     __type(value, goroutine_metadata);  // value: timestamp of the goroutine creation
-    __uint(max_entries, MAX_CONCURRENT_REQUESTS);
+    __uint(max_entries, MAX_CONCURRENT_SHARED_REQUESTS);
     __uint(pinning, LIBBPF_PIN_BY_NAME);
 } ongoing_goroutines SEC(".maps");
 
@@ -52,7 +49,7 @@ struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __type(key, void *); // key: pointer to the goroutine
     __type(value, tp_info_t);  // value: traceparent info
-    __uint(max_entries, MAX_CONCURRENT_REQUESTS);
+    __uint(max_entries, MAX_CONCURRENT_SHARED_REQUESTS);
     __uint(pinning, LIBBPF_PIN_BY_NAME);
 } go_trace_map SEC(".maps");
 

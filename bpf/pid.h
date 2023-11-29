@@ -5,7 +5,7 @@
 #include "bpf_helpers.h"
 #include "bpf_core_read.h"
 
-#define MAX_CONCURRENT_PIDS 1000
+#define MAX_CONCURRENT_PIDS 3000 // estimate: 1000 concurrent processes (including children) * 3 namespaces per pid
 
 volatile const s32 filter_pids = 0;
 
@@ -15,7 +15,7 @@ typedef struct pid_key {
 } __attribute__((packed)) pid_key_t;
 
 struct {
-    __uint(type, BPF_MAP_TYPE_LRU_HASH);
+    __uint(type, BPF_MAP_TYPE_LRU_HASH);    
     __uint(max_entries, MAX_CONCURRENT_PIDS);
     __type(key, pid_key_t);
     __type(value, u8);

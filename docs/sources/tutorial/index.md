@@ -91,7 +91,7 @@ The code implements an HTTP service that accepts request on port 8080. The HTTP 
 - `status` will override the returned HTTP status code (which defaults to 200). For example `curl -v "http://localhost:8080/foo?status=404"` will return a 404 status code.
 - `delay` will artificially increase the service response time. For example `curl "http://localhost:8080/bar?delay=3s"` will take at least 3 seconds to complete.
 
-Download the [server.go](/docs/beyla/latest/tutorial/resources/server.go) file from this tutorial.
+Download the [server.go](/docs/grafana-cloud/monitor-applications/beyla/tutorial/resources/server.go) file from this tutorial.
 
 Run the test HTTP service with the following command:
 

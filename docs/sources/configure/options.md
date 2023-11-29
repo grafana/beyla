@@ -33,6 +33,8 @@ The dashed boxes in the diagram below can be enabled and disabled according to t
 
 A quick description of the components:
 
+- [Process discovery](#process-discovery) searches for instrumentable processes matching
+  a given criteria.
 - [EBPF tracer](#ebpf-tracer) instruments the HTTP and GRPC services of an external process,
   creates service traces and forwards them to the next stage of the pipeline.
 - [Routes decorator](#routes-decorator) will match HTTP paths (e.g. `/user/1234/info`)
@@ -63,6 +65,10 @@ Selects the process to instrument by the executable name path. This property acc
 a regular expression to be matched against the full executable command line, including the directory
 where the executable resides on the file system.
 
+This property is used to select a single process to instrument, or a group of processes of
+similar characteristics. For more fine-grained process selection and grouping, you can
+follow the instructions in the [service discovery section](#process-discovery).
+
 If the `open_port` property is set, the executable to be selected needs to match both properties.
 
 When instrumenting by using the executable name, choose a non-ambiguous name, a name that
@@ -75,8 +81,9 @@ have the following paths:
 /opt/app/server
 ```
 
-Beyla will match indistinctly one of the above processes. To avoid this
-issue, you should be as concrete as possible about the value of the setting. For example, `BEYLA_EXECUTABLE_NAME=/opt/app/server`
+Beyla will match indistinctly one of the above processes and instrument both.
+If you just want to instrument one of them, you should be as concrete as possible about
+the value of the setting. For example, `BEYLA_EXECUTABLE_NAME=/opt/app/server`
 or just `BEYLA_EXECUTABLE_NAME=/server`.
 
 | YAML        | Env var           | Type   | Default |
@@ -94,6 +101,10 @@ open_port: 80,443,8000-8999
 ```
 Would make Beyla to select any executable that opens port 80, 443, or any of the ports between 8000 and 8999 included. 
 
+This property is used to select a single process to instrument, or a group of processes of
+similar characteristics. For more fine-grained process selection and grouping, you can
+follow the instructions in the [service discovery section](#process-discovery).
+
 If the `executable_name` property is set, the executable to be selected needs to match both properties.
 
 If an executable opens multiple ports, only one of the ports needs to be specified
@@ -101,20 +112,8 @@ for Beyla **to instrument all the
 HTTP/S and GRPC requests on all application ports**. At the moment, there is no way to
 restrict the instrumentation only to the methods exposed through a specific port.
 
-| YAML          | Env var             | Type    | Default |
-|---------------|---------------------|---------|---------|
-| `system_wide` | `BEYLA_SYSTEM_WIDE` | boolean | false   |
-
-Causes instrumentation of all processes on the system. This includes all
-existing processes, and all newly launched processes after the instrumentation
-has been enabled.
-
-This property is mutually exclusive with the `executable_name` and `open_port` properties.
-
-At present time only HTTP (non SSL) requests are tracked system-wide, and there's no support for gRPC yet.
-When you are instrumenting Go applications, you should explicitly use `executable_name` or
-`open_port` instead of `system_wide` instrumentation. The Go specific instrumentation is of higher
-fidelity and incurs lesser overall overhead.
+If the specified port range is wide (e.g. `1-65535`) Beyla will try to execute all the processes
+owning one of the ports in the range.
 
 | YAML           | Env var                                     | Type   | Default         |
 |----------------|---------------------------------------------|--------|-----------------|
@@ -123,11 +122,24 @@ fidelity and incurs lesser overall overhead.
 Overrides the name of the instrumented service to be reported by the metrics exporter.
 If unset, it will be the name of the executable of the service.
 
+If a single instance of Beyla is instrumenting multiple instances of different processes,
+they will share the same service name even if they are different. If you need that a
+single instance of Beyla report different service names, follow the instructions in the
+[service discovery section](#process-discovery).
+
 | YAML                | Env var                   | Type   | Default |
 |---------------------|---------------------------|--------|---------|
 | `service_namespace` | `BEYLA_SERVICE_NAMESPACE` | string | (unset) |
 
-Optionally, allows assigning a namespace for the service.
+Optionally, allows assigning a namespace for the service selected from the `executable_name`
+or `open_port` properties. This will assume a single namespace for all the services instrumented
+by Beyla. If you need that a single instance of Beyla groups multiple services
+into different namespaces, follow the instructions in the
+[service discovery section](#process-discovery).
+
+It is important to notice that this namespace is not a selector for Kubernetes namespaces. Its
+value will be use to set the value of standard telemetry attributes. For example, the
+[OpenTelemetry `service.namespace` attribute](https://opentelemetry.io/docs/specs/otel/common/attribute-naming/).
 
 | YAML        | Env var           | Type   | Default |
 |-------------|-------------------|--------|---------|
@@ -145,12 +157,117 @@ Valid log level values are: `DEBUG`, `INFO`, `WARN` and `ERROR`.
 
 If `true`, prints any instrumented trace on the standard output (stdout).
 
+## Process discovery
+
+The `executable_name`, `open_port`, `service_name` and `service_namespace` are top-level
+properties that simplify the configuration of Beyla to instrument a single service, or
+a group of related services.
+
+In some scenarios, Beyla will instrument a big variety of services; for example,
+as a [Kubernetes DaemonSet]({{< relref "../setup/kubernetes.md" >}}) that instruments all
+the services in a node. The `discovery` YAML section will let you specify a higher
+differentiation degree in the services that Beyla can instrument.
+
+For example, it will allow overriding the service name and namespace per service type.
+
+| YAML       | Env var | Type            | Default |
+|------------|---------|-----------------|---------|
+| `services` | N/A     | list of objects | (unset) |
+
+This section allows specifying different selection criteria for different services,
+as well as overriding some of their metadata, such as their reported name or
+namespace.
+
+For more details about this section, please go to the [discovery services section](#discovery-services-section)
+of this document.
+
 | YAML                       | Env var                          | Type    | Default |
 |----------------------------|----------------------------------|---------|---------|
 | `skip_go_specific_tracers` | `BEYLA_SKIP_GO_SPECIFIC_TRACERS` | boolean | false   |
 
 Disables the detection of Go specifics when ebpf tracer inspects executables to be instrumented.
 The tracer will fallback to using generic instrumentation, which will generally be less efficient.
+
+### Discovery services section
+
+Example of YAML file allowing the selection of multiple groups of services:
+
+```yaml
+discovery:
+  services:
+    - exe_path_regexp: (worker)|(backend)|(frontend)
+      namespace: MyApplication
+    - exe_path_regexp: loadgen
+      namespace: testing
+      name: "TestLoadGenerator"
+```
+
+The above example YAML will select two groups of executables. The first group will be formed by any
+process whose executable path contains the `worker`, `backend` or `frontend` text. For each
+service, Beyla will take the service name attribute from the executable name. The reported
+service namespace for all the processes matching this group will be `MyApplication`.
+
+The second group in the above example YAML will select any executable whose path contains
+`regexp`, but instead of taking the service name from the executable name, it will override 
+the service name with `TestLoadGenerator`.
+
+The rest of this section describes the properties that are accepted in each entry of the
+`services` list.
+
+
+| YAML         | Env var | Type   | Default |
+|--------------|---------|--------|---------|
+| `open_ports` | --      | string | (unset) |
+
+Selects the process to instrument by the port it has open (listens to). This property
+accepts a comma-separated list of ports (for example, `80`), and port ranges (for example, `8000-8999`).
+If the executable matching only one of the ports in the list, it is considered to match
+the selection criteria.
+
+For example, specifying the following property:
+```
+open_port: 80,443,8000-8999
+```
+Would make Beyla to select any executable that opens port 80, 443, or any of the ports between 8000 and 8999 included.
+
+If the `exe_path_regexp` property is set, the executables to be selected need to match both properties.
+
+If an executable opens multiple ports, only one of the ports needs to be specified
+for Beyla **to instrument all the
+HTTP/S and GRPC requests on all application ports**. At the moment, there is no way to
+restrict the instrumentation only to the methods exposed through a specific port.
+
+| YAML              | Env var | Type   | Default |
+|-------------------|---------|--------|---------|
+| `exe_path_regexp` | --      | string | (unset) |
+
+Selects the processes to instrument by their executable name path. This property accepts
+a regular expression to be matched against the full executable command line, including the directory
+where the executable resides on the file system.
+
+If the `open_port` property is set, the executables to be selected need to match both properties.
+
+Beyla will try to instrument all the processes with an executable path matching this property.
+For example, setting `exe_path_regexp: .*` will make Beyla to try to instrument all the
+executables in the host.
+
+| YAML   | Env var | Type   | Default                                  |
+|--------|---------|--------|------------------------------------------|
+| `name` | --      | string | Name of the instrumented executable file |
+
+Defines a name for the instrumented service. If unset, it will take the name of the executable process.
+If set, and multiple processes match the above `open_ports` or `exe_path_regexp` selectors,
+the metrics and traces for all the instances will share the same service name.
+
+| YAML        | Env var | Type   | Default |
+|-------------|---------|--------|---------|
+| `namespace` | --      | string | (unset) |
+
+Defines a namespace for the matching service. If unset, it will be left empty.
+
+It is important to notice that this namespace is not a selector for Kubernetes namespaces. Its
+value will be use to set the value of standard telemetry attributes. For example, the 
+[OpenTelemetry `service.namespace` attribute](https://opentelemetry.io/docs/specs/otel/common/attribute-naming/).
 
 ## EBPF tracer
 

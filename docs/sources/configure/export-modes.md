@@ -58,7 +58,7 @@ Next, you'll need to specify the following nodes by using the
 
 ![](https://grafana.com/media/docs/grafana-cloud/beyla/nodes.png)
 
-You can download the [example of the whole River configuration file](/docs/grafana-cloud/monitor-applications/beyla/configure/resources/agent-config.river), which will be explained in the rest of this section.
+You can download the [example of the whole River configuration file](/docs/beyla/v1.0.x/configure/resources/agent-config.river), which will be explained in the rest of this section.
 
 The Agent needs to expose an **OpenTelemetry receiver** endpoint, such that the
 auto-instrumentation tool can forward both metrics and traces. The Agent
@@ -163,7 +163,7 @@ a configuration YAML file, which is what we will use in this example.
 Please refer to the complete [Configuration documentation]({{< relref "./options.md" >}}) for
 more detailed description of each configuration option.
 
-You can download the whole [example configuration file](/docs/grafana-cloud/monitor-applications/beyla/configure/resources/instrumenter-config.yml),
+You can download the whole [example configuration file](/docs/beyla/v1.0.x/configure/resources/instrumenter-config.yml),
 which we will explain in the rest of this section.
 
 First, you will need to specify the executable to instrument. If, for example,

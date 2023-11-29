@@ -56,6 +56,11 @@ type bpf_tpHttpInfoT struct {
 	Tp bpf_tpTpInfoT
 }
 
+type bpf_tpPidKeyT struct {
+	Pid       uint32
+	Namespace uint32
+}
+
 type bpf_tpRecvArgsT struct {
 	SockPtr  uint64
 	IovecPtr uint64

@@ -40,6 +40,11 @@ type bpfHttpRequestTrace struct {
 	}
 }
 
+type bpfPidKeyT struct {
+	Pid       uint32
+	Namespace uint32
+}
+
 type bpfSqlRequestTrace struct {
 	Type            uint8
 	StartMonotimeNs uint64

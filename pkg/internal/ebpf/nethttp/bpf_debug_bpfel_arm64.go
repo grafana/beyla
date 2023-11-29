@@ -24,6 +24,11 @@ type bpf_debugHttpFuncInvocationT struct {
 	Tp              bpf_debugTpInfoT
 }
 
+type bpf_debugPidKeyT struct {
+	Pid       uint32
+	Namespace uint32
+}
+
 type bpf_debugTpInfoT struct {
 	TraceId  [16]uint8
 	SpanId   [8]uint8

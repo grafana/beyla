@@ -37,6 +37,26 @@ func TestMultiProcess(t *testing.T) {
 		checkReportedOnlyOnce(t, "http://localhost:8900", "rename1")
 	})
 
+	t.Run("Go RED metrics: rust service ssl", func(t *testing.T) {
+		waitForTestComponents(t, "https://localhost:8491")
+		testREDMetricsForRustHTTPLibrary(t, "https://localhost:8491", "rust-service-ssl", "multi-k", 8490, true)
+	})
+
+	t.Run("Go RED metrics: python service ssl", func(t *testing.T) {
+		waitForTestComponents(t, "https://localhost:8381")
+		testREDMetricsForPythonHTTPLibrary(t, "https://localhost:8381", "python-service-ssl", "multi-k")
+	})
+
+	t.Run("Go RED metrics: node service ssl", func(t *testing.T) {
+		waitForTestComponents(t, "https://localhost:3034")
+		testREDMetricsForNodeHTTPLibrary(t, "https://localhost:3034", "/greeting", "nodejs-service-ssl", "multi-k")
+	})
+
+	t.Run("Go RED metrics: node service", func(t *testing.T) {
+		waitForTestComponents(t, "http://localhost:3031")
+		testREDMetricsForNodeHTTPLibrary(t, "http://localhost:3031", "/bye", "nodejs-service", "multi-k")
+	})
+
 	// do some requests to the server at port 18090, which must not be instrumented
 	// as the instrumenter-config-multiexec.yml file only selects the process with port 18080.
 	// Doing it early to give time to generate the traces (in case the test failed)

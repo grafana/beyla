@@ -56,6 +56,11 @@ type bpf_tp_debugHttpInfoT struct {
 	Tp bpf_tp_debugTpInfoT
 }
 
+type bpf_tp_debugPidKeyT struct {
+	Pid       uint32
+	Namespace uint32
+}
+
 type bpf_tp_debugRecvArgsT struct {
 	SockPtr  uint64
 	IovecPtr uint64

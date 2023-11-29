@@ -24,6 +24,11 @@ type bpfHttpFuncInvocationT struct {
 	Tp              bpfTpInfoT
 }
 
+type bpfPidKeyT struct {
+	Pid       uint32
+	Namespace uint32
+}
+
 type bpfTpInfoT struct {
 	TraceId  [16]uint8
 	SpanId   [8]uint8

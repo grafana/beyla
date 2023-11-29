@@ -40,14 +40,8 @@ type HTTPInfo struct {
 	Service svc.ID
 }
 
-type pidsFilter interface {
-	ebpf2.PIDsAccounter
-	Filter(inputSpans []request.Span) []request.Span
-	CurrentPIDs() map[uint32]map[uint32]struct{}
-}
-
 type Tracer struct {
-	pidsFilter pidsFilter
+	pidsFilter httpfltr.PidsFilter
 	cfg        *pipe.Config
 	metrics    imetrics.Reporter
 	bpfObjects bpfObjects
@@ -58,7 +52,7 @@ type Tracer struct {
 
 func New(cfg *pipe.Config, metrics imetrics.Reporter) *Tracer {
 	log := slog.With("component", "httpfltr.Tracer")
-	var filter pidsFilter
+	var filter httpfltr.PidsFilter
 	if cfg.Discovery.SystemWide {
 		filter = &ebpfcommon.IdentityPidsFilter{}
 	} else {
@@ -72,11 +66,13 @@ func New(cfg *pipe.Config, metrics imetrics.Reporter) *Tracer {
 	}
 }
 
-func (p *Tracer) AllowPID(pid uint32) {
+func (p *Tracer) AllowPID(pid uint32, svc svc.ID) {
+	httpfltr.RegisterActiveService(pid, svc)
 	p.pidsFilter.AllowPID(pid)
 }
 
 func (p *Tracer) BlockPID(pid uint32) {
+	httpfltr.UnregisterActiveService(pid)
 	p.pidsFilter.BlockPID(pid)
 }
 

@@ -56,6 +56,11 @@ type bpfHttpInfoT struct {
 	Tp bpfTpInfoT
 }
 
+type bpfPidKeyT struct {
+	Pid       uint32
+	Namespace uint32
+}
+
 type bpfSslArgsT struct {
 	Ssl    uint64
 	Buf    uint64

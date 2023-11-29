@@ -29,5 +29,5 @@ def users():
     return content
 
 if __name__ == '__main__':
-    print(f"Server running: port={8080} process_id={os.getpid()}")
-    app.run(host="localhost", port=8080, debug=False)
+    print(f"Server running: port={8380} process_id={os.getpid()}")
+    app.run(host="localhost", port=8380, debug=False)

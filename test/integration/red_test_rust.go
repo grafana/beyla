@@ -19,7 +19,7 @@ import (
 	"github.com/grafana/beyla/test/integration/components/prom"
 )
 
-func testREDMetricsForRustHTTPLibrary(t *testing.T, url string, comm string, port int) {
+func testREDMetricsForRustHTTPLibrary(t *testing.T, url, comm, namespace string, port int, notraces bool) {
 	jsonBody, err := os.ReadFile(path.Join(pathRoot, "test", "integration", "components", "rusttestserver", "large_data.json"))
 	assert.NoError(t, err)
 	assert.GreaterOrEqual(t, len(jsonBody), 100)
@@ -41,7 +41,7 @@ func testREDMetricsForRustHTTPLibrary(t *testing.T, url string, comm string, por
 		results, err = pq.Query(`http_server_duration_seconds_count{` +
 			`http_request_method="POST",` +
 			`http_response_status_code="200",` +
-			`service_namespace="integration-test",` +
+			`service_namespace="` + namespace + `",` +
 			`service_name="` + comm + `",` +
 			`url_path="` + urlPath + `"}`)
 		require.NoError(t, err)
@@ -54,6 +54,10 @@ func testREDMetricsForRustHTTPLibrary(t *testing.T, url string, comm string, por
 			assert.NotNil(t, addr)
 		}
 	})
+
+	if notraces {
+		return
+	}
 
 	// Add and check for specific trace ID
 	traceID := createTraceID()
@@ -111,7 +115,6 @@ func testREDMetricsForRustHTTPLibrary(t *testing.T, url string, comm string, por
 		serviceInstance,
 	}, process.Tags)
 	assert.Empty(t, sd, sd.String())
-
 }
 
 func testREDMetricsRustHTTP(t *testing.T) {
@@ -120,7 +123,7 @@ func testREDMetricsRustHTTP(t *testing.T) {
 	} {
 		t.Run(testCaseURL, func(t *testing.T) {
 			waitForTestComponents(t, testCaseURL)
-			testREDMetricsForRustHTTPLibrary(t, testCaseURL, "greetings", 8090)
+			testREDMetricsForRustHTTPLibrary(t, testCaseURL, "greetings", "integration-test", 8090, false)
 		})
 	}
 }
@@ -131,7 +134,7 @@ func testREDMetricsRustHTTPS(t *testing.T) {
 	} {
 		t.Run(testCaseURL, func(t *testing.T) {
 			waitForTestComponents(t, testCaseURL)
-			testREDMetricsForRustHTTPLibrary(t, testCaseURL, "greetings", 8490)
+			testREDMetricsForRustHTTPLibrary(t, testCaseURL, "greetings", "integration-test", 8490, false)
 		})
 	}
 }

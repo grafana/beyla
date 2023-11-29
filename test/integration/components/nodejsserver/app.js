@@ -17,6 +17,10 @@ app.get("/bye", (req, res, next) => {
     res.json("Goodbye!");
 });
 
+app.post("/bye", (req, res, next) => {
+    res.json(req.body);
+});
+
 app.get("/smoke", (req, res, next) => {
     res.sendStatus(200)
 });

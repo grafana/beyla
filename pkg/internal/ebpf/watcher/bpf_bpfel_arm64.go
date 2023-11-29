@@ -29,6 +29,11 @@ type bpfHttpConnectionMetadataT struct {
 	Type uint8
 }
 
+type bpfPidKeyT struct {
+	Pid       uint32
+	Namespace uint32
+}
+
 type bpfWatchInfoT struct {
 	Flags   uint64
 	Payload uint64

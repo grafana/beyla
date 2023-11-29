@@ -52,7 +52,7 @@ func New(cfg *ebpfcommon.TracerConfig, metrics imetrics.Reporter) *Tracer {
 	}
 }
 
-func (p *Tracer) AllowPID(pid uint32) {
+func (p *Tracer) AllowPID(pid uint32, _ svc.ID) {
 	p.pidsFilter.AllowPID(pid)
 }
 

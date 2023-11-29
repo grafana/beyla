@@ -157,9 +157,9 @@ func (ta *TraceAttacher) getTracer(ie *Instrumentable) (*ebpf.ProcessTracer, boo
 
 func monitorPIDs(tracer *ebpf.ProcessTracer, ie *Instrumentable) {
 	// allowing the tracer to forward traces from the discovered PID and its children processes
-	tracer.AllowPID(uint32(ie.FileInfo.Pid))
+	tracer.AllowPID(uint32(ie.FileInfo.Pid), ie.FileInfo.Service)
 	for _, pid := range ie.ChildPids {
-		tracer.AllowPID(pid)
+		tracer.AllowPID(pid, ie.FileInfo.Service)
 	}
 }
 

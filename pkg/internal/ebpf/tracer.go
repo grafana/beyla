@@ -19,7 +19,7 @@ type PIDsAccounter interface {
 	// AllowPID notifies the tracer to accept traces from the process with the
 	// provided PID. Unless system-wide instrumentation, the Tracer should discard
 	// traces from processes whose PID has not been allowed before
-	AllowPID(uint32)
+	AllowPID(uint32, svc.ID)
 	// BlockPID notifies the tracer to stop accepting traces from the process
 	// with the provided PID. After receiving them via ringbuffer, it should
 	// discard them.
@@ -102,9 +102,9 @@ type ProcessTracer struct {
 	Type       ProcessTracerType
 }
 
-func (pt *ProcessTracer) AllowPID(pid uint32) {
+func (pt *ProcessTracer) AllowPID(pid uint32, svc svc.ID) {
 	for i := range pt.Programs {
-		pt.Programs[i].AllowPID(pid)
+		pt.Programs[i].AllowPID(pid, svc)
 	}
 }
 

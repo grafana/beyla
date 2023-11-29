@@ -20,6 +20,11 @@ type bpf_debugGoroutineMetadata struct {
 
 type bpf_debugNewFuncInvocationT struct{ Parent uint64 }
 
+type bpf_debugPidKeyT struct {
+	Pid       uint32
+	Namespace uint32
+}
+
 type bpf_debugTpInfoT struct {
 	TraceId  [16]uint8
 	SpanId   [8]uint8

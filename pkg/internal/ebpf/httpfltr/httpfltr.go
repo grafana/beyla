@@ -32,6 +32,8 @@ import (
 //go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -type http_buf_t -target amd64,arm64 bpf_tp_debug ../../../../bpf/http_sock.c -- -I../../../../bpf/headers -DBPF_DEBUG -DBPF_TRACEPARENT
 
 var activePids, _ = lru.New[uint32, svc.ID](256)
+var activeServices = make(map[uint32]svc.ID)
+var activeNamespaces = make(map[uint32]uint32)
 
 type BPFHTTPInfo bpfHttpInfoT
 type BPFConnInfo bpfConnectionInfoT
@@ -45,14 +47,15 @@ type HTTPInfo struct {
 	Service svc.ID
 }
 
-type pidsFilter interface {
-	ebpf2.PIDsAccounter
+type PidsFilter interface {
+	AllowPID(uint32)
+	BlockPID(uint32)
 	Filter(inputSpans []request.Span) []request.Span
 	CurrentPIDs() map[uint32]map[uint32]struct{}
 }
 
 type Tracer struct {
-	pidsFilter pidsFilter
+	pidsFilter PidsFilter
 	cfg        *pipe.Config
 	metrics    imetrics.Reporter
 	bpfObjects bpfObjects
@@ -63,7 +66,7 @@ type Tracer struct {
 
 func New(cfg *pipe.Config, metrics imetrics.Reporter) *Tracer {
 	log := slog.With("component", "httpfltr.Tracer")
-	var filter pidsFilter
+	var filter PidsFilter
 	if cfg.Discovery.SystemWide {
 		filter = &ebpfcommon.IdentityPidsFilter{}
 	} else {
@@ -77,11 +80,20 @@ func New(cfg *pipe.Config, metrics imetrics.Reporter) *Tracer {
 	}
 }
 
-func (p *Tracer) AllowPID(pid uint32) {
+func RegisterActiveService(pid uint32, svc svc.ID) {
+	activeServices[pid] = svc
+}
+
+func UnregisterActiveService(pid uint32) {
+	delete(activeServices, pid)
+}
+
+func (p *Tracer) AllowPID(pid uint32, svc svc.ID) {
 	if p.bpfObjects.ValidPids != nil {
 		nsid, err := ebpfcommon.FindNamespace(int32(pid))
+		activeNamespaces[pid] = nsid
 		if err == nil {
-			err = p.bpfObjects.ValidPids.Put(pid, nsid)
+			err = p.bpfObjects.ValidPids.Put(bpfPidKeyT{Pid: pid, Namespace: nsid}, uint8(1))
 			if err != nil {
 				p.log.Error("Error setting up pid in BPF space", "error", err)
 			}
@@ -94,7 +106,7 @@ func (p *Tracer) AllowPID(pid uint32) {
 			}
 			p.log.Debug("Found namespaced pids (will contain the existing pid too)", "pids", otherPids)
 			for _, op := range otherPids {
-				err = p.bpfObjects.ValidPids.Put(op, nsid)
+				err = p.bpfObjects.ValidPids.Put(bpfPidKeyT{Pid: op, Namespace: nsid}, uint8(1))
 				if err != nil {
 					p.log.Error("Error setting up pid in BPF space", "error", err)
 				}
@@ -103,16 +115,24 @@ func (p *Tracer) AllowPID(pid uint32) {
 			p.log.Error("Error looking up namespace", "error", err)
 		}
 	}
+	RegisterActiveService(pid, svc)
 	p.pidsFilter.AllowPID(pid)
 }
 
 func (p *Tracer) BlockPID(pid uint32) {
 	if p.bpfObjects.ValidPids != nil {
-		err := p.bpfObjects.ValidPids.Delete(pid)
-		if err != nil {
-			p.log.Error("Error removing pid in BPF space", "error", err)
+		ns, ok := activeNamespaces[pid]
+		if ok {
+			err := p.bpfObjects.ValidPids.Delete(bpfPidKeyT{Pid: pid, Namespace: ns})
+			if err != nil {
+				p.log.Error("Error removing pid in BPF space", "error", err)
+			}
+		} else {
+			p.log.Warn("Couldn't find active namespace", "pid", pid)
 		}
 	}
+	delete(activeNamespaces, pid)
+	UnregisterActiveService(pid)
 	p.pidsFilter.BlockPID(pid)
 }
 
@@ -231,7 +251,7 @@ func (p *Tracer) Run(ctx context.Context, eventsChan chan<- []request.Span, serv
 		for nsid, pids := range p.pidsFilter.CurrentPIDs() {
 			for pid := range pids {
 				p.log.Debug("Reallowing pid", "pid", pid, "namespace", nsid)
-				err := p.bpfObjects.ValidPids.Put(pid, nsid)
+				err := p.bpfObjects.ValidPids.Put(bpfPidKeyT{Pid: pid, Namespace: nsid}, uint8(1))
 				if err != nil {
 					if err != nil {
 						p.log.Error("Error setting up pid in BPF space", "pid", pid, "namespace", nsid, "error", err)
@@ -364,6 +384,10 @@ func commName(pid uint32) string {
 }
 
 func serviceInfo(pid uint32) svc.ID {
+	active, ok := activeServices[pid]
+	if ok {
+		return active
+	}
 	cached, ok := activePids.Get(pid)
 	if ok {
 		return cached

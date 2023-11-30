@@ -48,7 +48,7 @@ type HTTPInfo struct {
 type pidsFilter interface {
 	ebpf2.PIDsAccounter
 	Filter(inputSpans []request.Span) []request.Span
-	CurrentPIDs() map[uint32]map[uint32]struct{}
+	CurrentPIDs() []ebpfcommon.NamespacedPID
 }
 
 type Tracer struct {
@@ -290,14 +290,12 @@ func (p *Tracer) Run(ctx context.Context, eventsChan chan<- []request.Span, serv
 	// pids that are allowed into the bpf map
 	if p.bpfObjects.ValidPids != nil {
 		p.log.Debug("Reallowing pids")
-		for nsid, pids := range p.pidsFilter.CurrentPIDs() {
-			for pid := range pids {
-				p.log.Debug("Reallowing pid", "pid", pid, "namespace", nsid)
-				err := p.bpfObjects.ValidPids.Put(pid, nsid)
+		for nsid, pid := range p.pidsFilter.CurrentPIDs() {
+			p.log.Debug("Reallowing pid", "pid", pid, "namespace", nsid)
+			err := p.bpfObjects.ValidPids.Put(pid, nsid)
+			if err != nil {
 				if err != nil {
-					if err != nil {
-						p.log.Error("Error setting up pid in BPF space", "pid", pid, "namespace", nsid, "error", err)
-					}
+					p.log.Error("Error setting up pid in BPF space", "pid", pid, "namespace", nsid, "error", err)
 				}
 			}
 		}

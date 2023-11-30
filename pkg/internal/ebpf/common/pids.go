@@ -24,7 +24,7 @@ var readNamespacePIDs = func(pid int32) ([]uint32, error) {
 type PIDsFilter struct {
 	log     *slog.Logger
 	current map[uint32]map[uint32]struct{}
-	mux     *sync.Mutex
+	mux     *sync.RWMutex
 }
 
 var commonPIDsFilter *PIDsFilter
@@ -34,7 +34,7 @@ func NewPIDsFilter(log *slog.Logger) *PIDsFilter {
 	return &PIDsFilter{
 		log:     log,
 		current: map[uint32]map[uint32]struct{}{},
-		mux:     &sync.Mutex{},
+		mux:     &sync.RWMutex{},
 	}
 }
 
@@ -62,8 +62,8 @@ func (pf *PIDsFilter) BlockPID(pid uint32) {
 }
 
 func (pf *PIDsFilter) CurrentPIDs() map[uint32]map[uint32]struct{} {
-	pf.mux.Lock()
-	defer pf.mux.Unlock()
+	pf.mux.RLock()
+	defer pf.mux.RUnlock()
 	cp := map[uint32]map[uint32]struct{}{}
 
 	for k, v := range pf.current {

@@ -71,3 +71,27 @@ func testREDMetricsNodeJSHTTPS(t *testing.T) {
 		})
 	}
 }
+
+func checkReportedNodeJSEvents(t *testing.T, urlPath, comm, namespace string, numEvents int) {
+	// Eventually, Prometheus would make this query visible
+	pq := prom.Client{HostPort: prometheusHostPort}
+	var results []prom.Result
+	test.Eventually(t, testTimeout, func(t require.TestingT) {
+		var err error
+		results, err = pq.Query(`http_server_duration_seconds_count{` +
+			`http_request_method="POST",` +
+			`http_response_status_code="200",` +
+			`service_namespace="` + namespace + `",` +
+			`service_name="` + comm + `",` +
+			`url_path="` + urlPath + `"}`)
+		require.NoError(t, err)
+		enoughPromResults(t, results)
+		val := totalPromCount(t, results)
+		assert.LessOrEqual(t, val, numEvents)
+		if len(results) > 0 {
+			res := results[0]
+			addr := net.ParseIP(res.Metric["client_address"])
+			assert.NotNil(t, addr)
+		}
+	})
+}

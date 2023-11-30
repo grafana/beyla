@@ -41,21 +41,25 @@ func TestMultiProcess(t *testing.T) {
 	t.Run("Go RED metrics: rust service ssl", func(t *testing.T) {
 		waitForTestComponents(t, "https://localhost:8491")
 		testREDMetricsForRustHTTPLibrary(t, "https://localhost:8491", "rust-service-ssl", "multi-k", 8490, true)
+		checkReportedRustEvents(t, "rust-service-ssl", "multi-k", 4)
 	})
 
 	t.Run("Go RED metrics: python service ssl", func(t *testing.T) {
 		waitForTestComponents(t, "https://localhost:8381")
 		testREDMetricsForPythonHTTPLibrary(t, "https://localhost:8381", "python-service-ssl", "multi-k")
+		checkReportedPythonEvents(t, "python-service-ssl", "multi-k", 4)
 	})
 
 	t.Run("Go RED metrics: node service ssl", func(t *testing.T) {
 		waitForTestComponents(t, "https://localhost:3034")
 		testREDMetricsForNodeHTTPLibrary(t, "https://localhost:3034", "/greeting", "nodejs-service-ssl", "multi-k")
+		checkReportedNodeJSEvents(t, "/greeting", "nodejs-service-ssl", "multi-k", 4)
 	})
 
 	t.Run("Go RED metrics: node service", func(t *testing.T) {
 		waitForTestComponents(t, "http://localhost:3031")
 		testREDMetricsForNodeHTTPLibrary(t, "http://localhost:3031", "/bye", "nodejs-service", "multi-k")
+		checkReportedNodeJSEvents(t, "/bye", "nodejs-service", "multi-k", 4)
 	})
 
 	// do some requests to the server at port 18090, which must not be instrumented

@@ -115,7 +115,7 @@ func printVerifierErrorInfo(err error) {
 	}
 }
 
-func RunUtilityTracer(p UtilityTracer) error {
+func RunUtilityTracer(p UtilityTracer, pinPath string) error {
 	i := instrumenter{}
 	plog := ptlog()
 	plog.Debug("loading independent eBPF program")
@@ -124,7 +124,10 @@ func RunUtilityTracer(p UtilityTracer) error {
 		return fmt.Errorf("loading eBPF program: %w", err)
 	}
 
-	if err := spec.LoadAndAssign(p.BpfObjects(), &ebpf.CollectionOptions{}); err != nil {
+	if err := spec.LoadAndAssign(p.BpfObjects(), &ebpf.CollectionOptions{
+		Maps: ebpf.MapOptions{
+			PinPath: pinPath,
+		}}); err != nil {
 		printVerifierErrorInfo(err)
 		return fmt.Errorf("loading and assigning BPF objects: %w", err)
 	}

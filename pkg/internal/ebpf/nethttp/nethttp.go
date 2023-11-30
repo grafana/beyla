@@ -46,7 +46,7 @@ func New(cfg *ebpfcommon.TracerConfig, metrics imetrics.Reporter) *Tracer {
 	log := slog.With("component", "nethttp.Tracer")
 	return &Tracer{
 		log:        log,
-		pidsFilter: ebpfcommon.CommonPIDsFilter(),
+		pidsFilter: ebpfcommon.NewPIDsFilter(log),
 		cfg:        cfg,
 		metrics:    metrics,
 	}

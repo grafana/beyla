@@ -45,7 +45,7 @@ func New(cfg *ebpfcommon.TracerConfig, metrics imetrics.Reporter) *Tracer {
 		log:        log,
 		cfg:        cfg,
 		metrics:    metrics,
-		pidsFilter: ebpfcommon.CommonPIDsFilter(),
+		pidsFilter: ebpfcommon.NewPIDsFilter(log),
 	}
 }
 

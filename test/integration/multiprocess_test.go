@@ -22,6 +22,11 @@ func TestMultiProcess(t *testing.T) {
 	compose.Env = append(compose.Env, `BEYLA_EXECUTABLE_NAME=`, `BEYLA_OPEN_PORT=`)
 	require.NoError(t, err)
 	require.NoError(t, compose.Up())
+
+	t.Run("Ensuring all services instrumented", func(t *testing.T) {
+		waitForTestComponentsLong(t, instrumentedServiceStdURL)
+	})
+
 	t.Run("Go RED metrics: usual service", func(t *testing.T) {
 		waitForTestComponents(t, instrumentedServiceStdURL)
 		testREDMetricsForHTTPLibrary(t, instrumentedServiceStdURL, "testserver", "initial-set")
@@ -35,6 +40,26 @@ func TestMultiProcess(t *testing.T) {
 		// checks that, instrumenting the process from this container,
 		// it doesn't instrument too the process from the other container
 		checkReportedOnlyOnce(t, "http://localhost:8900", "rename1")
+	})
+
+	t.Run("Go RED metrics: rust service ssl", func(t *testing.T) {
+		waitForTestComponents(t, "https://localhost:8491")
+		testREDMetricsForRustHTTPLibrary(t, "https://localhost:8491", "rust-service-ssl", "multi-k", 8490, true)
+	})
+
+	t.Run("Go RED metrics: python service ssl", func(t *testing.T) {
+		waitForTestComponents(t, "https://localhost:8381")
+		testREDMetricsForPythonHTTPLibrary(t, "https://localhost:8381", "python-service-ssl", "multi-k")
+	})
+
+	t.Run("Go RED metrics: node service ssl", func(t *testing.T) {
+		waitForTestComponents(t, "https://localhost:3034")
+		testREDMetricsForNodeHTTPLibrary(t, "https://localhost:3034", "/greeting", "nodejs-service-ssl", "multi-k")
+	})
+
+	t.Run("Go RED metrics: node service", func(t *testing.T) {
+		waitForTestComponents(t, "http://localhost:3031")
+		testREDMetricsForNodeHTTPLibrary(t, "http://localhost:3031", "/bye", "nodejs-service", "multi-k")
 	})
 
 	// do some requests to the server at port 18090, which must not be instrumented
@@ -62,10 +87,8 @@ func TestMultiProcess(t *testing.T) {
 	})
 
 	t.Run("BPF pinning folders mounted", func(t *testing.T) {
-		// 1 pinned map for testserver and testserver-unused containers
-		// 1 pinned map for testserver1 container
-		// 1 pinned map for testserver-duplicate container
-		testBPFPinningMountedWithCount(t, 3)
+		// 1 beyla pinned map folder for all processes
+		testBPFPinningMounted(t)
 	})
 
 	require.NoError(t, compose.Close())

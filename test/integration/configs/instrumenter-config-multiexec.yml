@@ -3,7 +3,7 @@ routes:
     - /basic/:rnd
   unmatched: path
 otel_metrics_export:
-  endpoint: http://otelcol:4318
+  endpoint: http://127.0.0.1:4318
 discovery:
   services:
     - namespace: just-will-be-ignored
@@ -15,5 +15,15 @@ discovery:
       exe_path_regexp: dupe # choose only the dupe.* process that uses port 18080
     - namespace: initial-set
       exe_path_regexp: ((testserver)|(rename1))
-
-
+    - namespace: multi-k
+      name: rust-service-ssl
+      open_ports: 8490
+    - namespace: multi-k
+      name: python-service-ssl
+      open_ports: 8380
+    - namespace: multi-k
+      name: nodejs-service-ssl
+      open_ports: 3033
+    - namespace: multi-k
+      name: nodejs-service
+      open_ports: 3030

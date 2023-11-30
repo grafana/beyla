@@ -23,10 +23,6 @@ func TestMultiProcess(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, compose.Up())
 
-	t.Run("Ensuring all services instrumented", func(t *testing.T) {
-		waitForTestComponentsLong(t, instrumentedServiceStdURL)
-	})
-
 	t.Run("Go RED metrics: usual service", func(t *testing.T) {
 		waitForTestComponents(t, instrumentedServiceStdURL)
 		testREDMetricsForHTTPLibrary(t, instrumentedServiceStdURL, "testserver", "initial-set")

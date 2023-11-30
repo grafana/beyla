@@ -290,12 +290,12 @@ func (p *Tracer) Run(ctx context.Context, eventsChan chan<- []request.Span, serv
 	// pids that are allowed into the bpf map
 	if p.bpfObjects.ValidPids != nil {
 		p.log.Debug("Reallowing pids")
-		for nsid, pid := range p.pidsFilter.CurrentPIDs() {
-			p.log.Debug("Reallowing pid", "pid", pid, "namespace", nsid)
-			err := p.bpfObjects.ValidPids.Put(pid, nsid)
+		for _, np := range p.pidsFilter.CurrentPIDs() {
+			p.log.Debug("Reallowing pid", "pid", np.PID, "namespace", np.PIDNamespace)
+			err := p.bpfObjects.ValidPids.Put(np.PID, np.PIDNamespace)
 			if err != nil {
 				if err != nil {
-					p.log.Error("Error setting up pid in BPF space", "pid", pid, "namespace", nsid, "error", err)
+					p.log.Error("Error setting up pid in BPF space", "pid", np.PID, "namespace", np.PIDNamespace, "error", err)
 				}
 			}
 		}

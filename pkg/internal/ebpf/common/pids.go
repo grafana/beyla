@@ -7,8 +7,6 @@ import (
 	"github.com/grafana/beyla/pkg/internal/request"
 )
 
-const updatesBufLen = 10
-
 // injectable functions (can be replaced in tests). It reads the
 // current process namespace from the /proc filesystem. It is required to
 // choose to filter traces using whether the User-space or Host-space PIDs
@@ -26,19 +24,7 @@ var readNamespacePIDs = func(pid int32) ([]uint32, error) {
 type PIDsFilter struct {
 	log     *slog.Logger
 	current map[uint32]map[uint32]struct{}
-	queue   chan pidEvent
-}
-
-type PIDEventOp uint8
-
-const (
-	ADD PIDEventOp = iota + 1
-	DEL
-)
-
-type pidEvent struct {
-	pid uint32
-	op  PIDEventOp
+	mux     *sync.Mutex
 }
 
 var commonPIDsFilter *PIDsFilter
@@ -48,7 +34,7 @@ func NewPIDsFilter(log *slog.Logger) *PIDsFilter {
 	return &PIDsFilter{
 		log:     log,
 		current: map[uint32]map[uint32]struct{}{},
-		queue:   make(chan pidEvent, updatesBufLen),
+		mux:     &sync.Mutex{},
 	}
 }
 
@@ -57,39 +43,50 @@ func CommonPIDsFilter() *PIDsFilter {
 	defer commonLock.Unlock()
 
 	if commonPIDsFilter == nil {
-		commonPIDsFilter = &PIDsFilter{
-			log:     slog.With("component", "ebpfCommon.CommonPIDsFilter"),
-			current: map[uint32]map[uint32]struct{}{},
-			queue:   make(chan pidEvent, updatesBufLen),
-		}
+		commonPIDsFilter = NewPIDsFilter(slog.With("component", "ebpfCommon.CommonPIDsFilter"))
 	}
 
 	return commonPIDsFilter
 }
 
 func (pf *PIDsFilter) AllowPID(pid uint32) {
-	pf.queue <- pidEvent{pid: pid, op: ADD}
+	pf.mux.Lock()
+	defer pf.mux.Unlock()
+	pf.addPID(pid)
 }
 
 func (pf *PIDsFilter) BlockPID(pid uint32) {
-	pf.queue <- pidEvent{pid: pid, op: DEL}
+	pf.mux.Lock()
+	defer pf.mux.Unlock()
+	pf.removePID(pid)
 }
 
 func (pf *PIDsFilter) CurrentPIDs() map[uint32]map[uint32]struct{} {
-	pf.updatePIDs()
-	return pf.current
+	pf.mux.Lock()
+	defer pf.mux.Unlock()
+	cp := map[uint32]map[uint32]struct{}{}
+
+	for k, v := range pf.current {
+		cVal := map[uint32]struct{}{}
+		for kv, vv := range v {
+			cVal[kv] = vv
+		}
+		cp[k] = cVal
+	}
+
+	return cp
 }
 
 func (pf *PIDsFilter) Filter(inputSpans []request.Span) []request.Span {
 	// todo: adaptive presizing as a function of the historical percentage
 	// of filtered spans
 	outputSpans := make([]request.Span, 0, len(inputSpans))
-	pf.updatePIDs()
+	current := pf.CurrentPIDs()
 	for i := range inputSpans {
 		span := &inputSpans[i]
 
 		// We first confirm that the current namespace seen by BPF is tracked by Beyla
-		ns, nsExists := pf.current[span.Pid.Namespace]
+		ns, nsExists := current[span.Pid.Namespace]
 
 		if !nsExists {
 			continue
@@ -106,30 +103,10 @@ func (pf *PIDsFilter) Filter(inputSpans []request.Span) []request.Span {
 	if len(outputSpans) != len(inputSpans) {
 		pf.log.Debug("filtered spans from processes that did not match discovery",
 			"function", "PIDsFilter.Filter", "inLen", len(inputSpans), "outLen", len(outputSpans),
-			"pids", pf.current, "spans", inputSpans,
+			"pids", current, "spans", inputSpans,
 		)
 	}
 	return outputSpans
-}
-
-// update added/deleted PIDs, if any
-func (pf *PIDsFilter) updatePIDs() {
-	for {
-		select {
-		case e := <-pf.queue:
-			switch e.op {
-			case ADD:
-				pf.addPID(e.pid)
-			case DEL:
-				pf.removePID(e.pid)
-			default:
-				pf.log.Error("Unsupported PID operation")
-			}
-		default:
-			// no more updates
-			return
-		}
-	}
 }
 
 func (pf *PIDsFilter) addPID(pid uint32) {

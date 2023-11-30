@@ -38,10 +38,6 @@ func waitForTestComponents(t *testing.T, url string) {
 	waitForTestComponentsSub(t, url, "/smoke")
 }
 
-func waitForTestComponentsLong(t *testing.T, url string) {
-	waitForTestComponentsSubWithTime(t, url, "/smoke", 10)
-}
-
 func testREDMetricsHTTP(t *testing.T) {
 	for _, testCaseURL := range []string{
 		instrumentedServiceStdURL,

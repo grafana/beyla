@@ -4,7 +4,9 @@ package exec
 import (
 	"debug/elf"
 	"fmt"
+	"os"
 	"strings"
+	"syscall"
 
 	"github.com/grafana/beyla/pkg/internal/discover/services"
 	"github.com/grafana/beyla/pkg/internal/svc"
@@ -18,6 +20,7 @@ type FileInfo struct {
 	ELF            *elf.File
 	Pid            int32
 	Ppid           int32
+	Ino            uint64
 }
 
 func (fi *FileInfo) ExecutableName() string {
@@ -39,6 +42,17 @@ func FindExecELF(p *services.ProcessInfo, svcID svc.ID) (*FileInfo, error) {
 	var err error
 	if file.ELF, err = elf.Open(file.ProExeLinkPath); err != nil {
 		return nil, fmt.Errorf("can't open ELF file in %s: %w", file.ProExeLinkPath, err)
+	}
+
+	info, err := os.Stat(file.ProExeLinkPath)
+	if err == nil {
+		stat, ok := info.Sys().(*syscall.Stat_t)
+		if !ok {
+			return nil, fmt.Errorf("couldn't cast stat into syscall.Stat_t for %s", file.ProExeLinkPath)
+		}
+		file.Ino = stat.Ino
+	} else {
+		return nil, err
 	}
 	return &file, nil
 }

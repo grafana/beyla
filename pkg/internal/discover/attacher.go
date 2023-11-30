@@ -29,14 +29,14 @@ type TraceAttacher struct {
 	pinPath           string
 
 	// keeps a copy of all the tracers for a given executable path
-	existingTracers map[string]*ebpf.ProcessTracer
+	existingTracers map[uint64]*ebpf.ProcessTracer
 	reusableTracer  *ebpf.ProcessTracer
 }
 
 //nolint:gocritic
 func TraceAttacherProvider(ta TraceAttacher) (node.TerminalFunc[[]Event[Instrumentable]], error) {
 	ta.log = slog.With("component", "discover.TraceAttacher")
-	ta.existingTracers = map[string]*ebpf.ProcessTracer{}
+	ta.existingTracers = map[uint64]*ebpf.ProcessTracer{}
 	ta.pinPath = BuildPinPath(ta.Cfg)
 
 	if err := ta.init(); err != nil {
@@ -71,7 +71,7 @@ func TraceAttacherProvider(ta TraceAttacher) (node.TerminalFunc[[]Event[Instrume
 
 //nolint:cyclop
 func (ta *TraceAttacher) getTracer(ie *Instrumentable) (*ebpf.ProcessTracer, bool) {
-	if tracer, ok := ta.existingTracers[ie.FileInfo.CmdExePath]; ok {
+	if tracer, ok := ta.existingTracers[ie.FileInfo.Ino]; ok {
 		ta.log.Info("new process for already instrumented executable",
 			"pid", ie.FileInfo.Pid,
 			"child", ie.ChildPids,
@@ -145,7 +145,7 @@ func (ta *TraceAttacher) getTracer(ie *Instrumentable) (*ebpf.ProcessTracer, boo
 		"exec", ie.FileInfo.CmdExePath)
 	// allowing the tracer to forward traces from the discovered PID and its children processes
 	monitorPIDs(tracer, ie)
-	ta.existingTracers[ie.FileInfo.CmdExePath] = tracer
+	ta.existingTracers[ie.FileInfo.Ino] = tracer
 	if tracer.Type == ebpf.Generic {
 		if ta.reusableTracer != nil {
 			monitorPIDs(ta.reusableTracer, ie)
@@ -173,7 +173,7 @@ func BuildPinPath(cfg *pipe.Config) string {
 }
 
 func (ta *TraceAttacher) notifyProcessDeletion(ie *Instrumentable) {
-	if tracer, ok := ta.existingTracers[ie.FileInfo.CmdExePath]; ok {
+	if tracer, ok := ta.existingTracers[ie.FileInfo.Ino]; ok {
 		ta.log.Info("process ended for already instrumented executable",
 			"pid", ie.FileInfo.Pid,
 			"exec", ie.FileInfo.CmdExePath)

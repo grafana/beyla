@@ -78,15 +78,16 @@ func (pf *PIDsFilter) CurrentPIDs() map[uint32]map[uint32]struct{} {
 }
 
 func (pf *PIDsFilter) Filter(inputSpans []request.Span) []request.Span {
+	pf.mux.RLock()
+	defer pf.mux.RUnlock()
 	// todo: adaptive presizing as a function of the historical percentage
 	// of filtered spans
 	outputSpans := make([]request.Span, 0, len(inputSpans))
-	current := pf.CurrentPIDs()
 	for i := range inputSpans {
 		span := &inputSpans[i]
 
 		// We first confirm that the current namespace seen by BPF is tracked by Beyla
-		ns, nsExists := current[span.Pid.Namespace]
+		ns, nsExists := pf.current[span.Pid.Namespace]
 
 		if !nsExists {
 			continue
@@ -103,7 +104,7 @@ func (pf *PIDsFilter) Filter(inputSpans []request.Span) []request.Span {
 	if len(outputSpans) != len(inputSpans) {
 		pf.log.Debug("filtered spans from processes that did not match discovery",
 			"function", "PIDsFilter.Filter", "inLen", len(inputSpans), "outLen", len(outputSpans),
-			"pids", current, "spans", inputSpans,
+			"pids", pf.current, "spans", inputSpans,
 		)
 	}
 	return outputSpans

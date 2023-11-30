@@ -37,7 +37,7 @@ type TraceAttacher struct {
 func TraceAttacherProvider(ta TraceAttacher) (node.TerminalFunc[[]Event[Instrumentable]], error) {
 	ta.log = slog.With("component", "discover.TraceAttacher")
 	ta.existingTracers = map[string]*ebpf.ProcessTracer{}
-	ta.pinPath = ta.buildPinPath()
+	ta.pinPath = BuildPinPath(ta.Cfg)
 
 	if err := ta.init(); err != nil {
 		ta.log.Error("cant start process tracer. Stopping it", "error", err)
@@ -48,7 +48,7 @@ func TraceAttacherProvider(ta TraceAttacher) (node.TerminalFunc[[]Event[Instrume
 	mainLoop:
 		for instrumentables := range in {
 			for _, instr := range instrumentables {
-				ta.log.Debug("Instrumentable", "inst", instr)
+				ta.log.Debug("Instrumentable", "len", len(instrumentables), "inst", instr)
 				switch instr.Type {
 				case EventCreated:
 					if pt, ok := ta.getTracer(&instr.Obj); ok {
@@ -81,6 +81,7 @@ func (ta *TraceAttacher) getTracer(ie *Instrumentable) (*ebpf.ProcessTracer, boo
 		if tracer.Type == ebpf.Generic {
 			monitorPIDs(ta.reusableTracer, ie)
 		}
+		ta.log.Debug(".done")
 		return nil, false
 	}
 	ta.log.Info("instrumenting process", "cmd", ie.FileInfo.CmdExePath, "pid", ie.FileInfo.Pid)
@@ -134,7 +135,7 @@ func (ta *TraceAttacher) getTracer(ie *Instrumentable) (*ebpf.ProcessTracer, boo
 		ELFInfo:    ie.FileInfo,
 		Goffsets:   ie.Offsets,
 		Exe:        exe,
-		PinPath:    ta.buildPinPath(),
+		PinPath:    BuildPinPath(ta.Cfg),
 		SystemWide: ta.Cfg.Discovery.SystemWide,
 		Type:       tracerType,
 	}
@@ -152,6 +153,7 @@ func (ta *TraceAttacher) getTracer(ie *Instrumentable) (*ebpf.ProcessTracer, boo
 			ta.reusableTracer = tracer
 		}
 	}
+	ta.log.Debug(".done")
 	return tracer, true
 }
 
@@ -166,8 +168,8 @@ func monitorPIDs(tracer *ebpf.ProcessTracer, ie *Instrumentable) {
 // pinpath must be unique for a given executable group
 // it will be:
 //   - current beyla PID
-func (ta *TraceAttacher) buildPinPath() string {
-	return path.Join(ta.Cfg.EBPF.BpfBaseDir, fmt.Sprintf("beyla-%d", os.Getpid()))
+func BuildPinPath(cfg *pipe.Config) string {
+	return path.Join(cfg.EBPF.BpfBaseDir, fmt.Sprintf("beyla-%d", os.Getpid()))
 }
 
 func (ta *TraceAttacher) notifyProcessDeletion(ie *Instrumentable) {

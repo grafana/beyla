@@ -19,7 +19,7 @@ type PIDsAccounter interface {
 	// AllowPID notifies the tracer to accept traces from the process with the
 	// provided PID. Unless system-wide instrumentation, the Tracer should discard
 	// traces from processes whose PID has not been allowed before
-	AllowPID(uint32)
+	AllowPID(uint32, svc.ID)
 	// BlockPID notifies the tracer to stop accepting traces from the process
 	// with the provided PID. After receiving them via ringbuffer, it should
 	// discard them.
@@ -60,6 +60,11 @@ type Tracer interface {
 	// SocketFilters  returns a list of programs that need to be loaded as a
 	// generic eBPF socket filter
 	SocketFilters() []*ebpf.Program
+	// Probes can potentially instrument a shared library among multiple executables
+	// These two functions alow programs to remember this and avoid duplicated instrumentations
+	// The argument is the OS file id
+	RecordInstrumentedLib(uint64)
+	AlreadyInstrumentedLib(uint64) bool
 	// Run will do the action of listening for eBPF traces and forward them
 	// periodically to the output channel.
 	// It optionally receives the service svc.ID, to
@@ -76,6 +81,13 @@ type UtilityTracer interface {
 	Run(context.Context)
 }
 
+type ProcessTracerType int
+
+const (
+	Go = ProcessTracerType(iota)
+	Generic
+)
+
 // ProcessTracer instruments an executable with eBPF and provides the eBPF readers
 // that will forward the traces to later stages in the pipeline
 type ProcessTracer struct {
@@ -87,11 +99,12 @@ type ProcessTracer struct {
 	PinPath  string
 
 	SystemWide bool
+	Type       ProcessTracerType
 }
 
-func (pt *ProcessTracer) AllowPID(pid uint32) {
+func (pt *ProcessTracer) AllowPID(pid uint32, svc svc.ID) {
 	for i := range pt.Programs {
-		pt.Programs[i].AllowPID(pid)
+		pt.Programs[i].AllowPID(pid, svc)
 	}
 }
 

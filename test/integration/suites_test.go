@@ -315,7 +315,7 @@ func TestSuite_DotNetTLS(t *testing.T) {
 
 func TestSuite_Python(t *testing.T) {
 	compose, err := docker.ComposeSuite("docker-compose-python.yml", path.Join(pathOutput, "test-suite-python.log"))
-	compose.Env = append(compose.Env, `BEYLA_OPEN_PORT=8080`, `BEYLA_EXECUTABLE_NAME=`, `TEST_SERVICE_PORTS=8081:8080`)
+	compose.Env = append(compose.Env, `BEYLA_OPEN_PORT=8380`, `BEYLA_EXECUTABLE_NAME=`, `TEST_SERVICE_PORTS=8381:8380`)
 	require.NoError(t, err)
 	require.NoError(t, compose.Up())
 	t.Run("Python RED metrics", testREDMetricsPythonHTTP)
@@ -326,7 +326,7 @@ func TestSuite_Python(t *testing.T) {
 
 func TestSuite_PythonTLS(t *testing.T) {
 	compose, err := docker.ComposeSuite("docker-compose-python.yml", path.Join(pathOutput, "test-suite-python-tls.log"))
-	compose.Env = append(compose.Env, `BEYLA_OPEN_PORT=8080`, `BEYLA_EXECUTABLE_NAME=`, `TEST_SERVICE_PORTS=8081:8080`, `TESTSERVER_DOCKERFILE_SUFFIX=_tls`)
+	compose.Env = append(compose.Env, `BEYLA_OPEN_PORT=8380`, `BEYLA_EXECUTABLE_NAME=`, `TEST_SERVICE_PORTS=8381:8380`, `TESTSERVER_DOCKERFILE_SUFFIX=_tls`)
 	require.NoError(t, err)
 	require.NoError(t, compose.Up())
 	t.Run("Python SSL RED metrics", testREDMetricsPythonHTTPS)

@@ -30,8 +30,10 @@ func testREDMetricsForJavaHTTPLibrary(t *testing.T, url string, comm string) {
 	}
 
 	commMatch := `service_name="` + comm + `",`
+	namespaceMatch := `service_namespace="integration-test",`
 	if comm == "" {
 		commMatch = ""
+		namespaceMatch = ""
 	}
 
 	// Eventually, Prometheus would make this query visible
@@ -42,7 +44,7 @@ func testREDMetricsForJavaHTTPLibrary(t *testing.T, url string, comm string) {
 		results, err = pq.Query(`http_server_duration_seconds_count{` +
 			`http_request_method="GET",` +
 			`http_response_status_code="204",` +
-			`service_namespace="integration-test",` +
+			namespaceMatch +
 			commMatch +
 			`url_path="` + path + `"}`)
 		require.NoError(t, err)

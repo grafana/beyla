@@ -43,6 +43,43 @@ services:
     environment:
       LOG_LEVEL: DEBUG
 
+  rtestserverssl:
+    image: ghcr.io/grafana/beyla-test/greeting-rust-ssl/0.0.1
+    ports:
+      - 8491:8490
+    environment:
+      LOG_LEVEL: DEBUG
+
+  pytestserverssl:
+    build:
+      context: ../..
+      dockerfile: test/integration/components/pythonserver/Dockerfile_tls
+    image: hatest-testserver-python-ssl
+    ports:
+      - 8381:8380
+
+  ntestserverssl:
+    build:
+      context: ../..
+      dockerfile: test/integration/components/nodejsserver/Dockerfile
+    image: hatest-testserver-node-ssl
+    command:
+      - node
+      - app_tls.js
+    ports:
+      - 3034:3033
+
+  ntestserver:
+    build:
+      context: ../..
+      dockerfile: test/integration/components/nodejsserver/Dockerfile
+    image: hatest-testserver-node-ssl
+    command:
+      - node
+      - app.js
+    ports:
+      - 3031:3030
+
   autoinstrumenter:
     build:
       context: ../..
@@ -57,6 +94,7 @@ services:
     image: hatest-autoinstrumenter
     privileged: true # in some environments (not GH Pull Requests) you can set it to false and then cap_add: [ SYS_ADMIN ]
     pid: "host"
+    network_mode: "host"
     environment:
       GOCOVERDIR: "/coverage"
       BEYLA_PRINT_TRACES: "true"

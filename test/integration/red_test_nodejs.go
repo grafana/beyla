@@ -15,12 +15,10 @@ import (
 	"github.com/grafana/beyla/test/integration/components/prom"
 )
 
-func testREDMetricsForNodeHTTPLibrary(t *testing.T, url string, comm string) {
+func testREDMetricsForNodeHTTPLibrary(t *testing.T, url, urlPath, comm, namespace string) {
 	jsonBody, err := os.ReadFile(path.Join(pathRoot, "test", "integration", "components", "rusttestserver", "large_data.json"))
 	assert.NoError(t, err)
 	assert.GreaterOrEqual(t, len(jsonBody), 100)
-
-	urlPath := "/greeting"
 
 	// Call 3 times the instrumented service, forcing it to:
 	// - take a large JSON file
@@ -37,7 +35,7 @@ func testREDMetricsForNodeHTTPLibrary(t *testing.T, url string, comm string) {
 		results, err = pq.Query(`http_server_duration_seconds_count{` +
 			`http_request_method="POST",` +
 			`http_response_status_code="200",` +
-			`service_namespace="integration-test",` +
+			`service_namespace="` + namespace + `",` +
 			`service_name="` + comm + `",` +
 			`url_path="` + urlPath + `"}`)
 		require.NoError(t, err)
@@ -58,7 +56,7 @@ func testREDMetricsNodeJSHTTP(t *testing.T) {
 	} {
 		t.Run(testCaseURL, func(t *testing.T) {
 			waitForTestComponents(t, testCaseURL)
-			testREDMetricsForNodeHTTPLibrary(t, testCaseURL, "node")
+			testREDMetricsForNodeHTTPLibrary(t, testCaseURL, "/greeting", "node", "integration-test")
 		})
 	}
 }
@@ -69,7 +67,31 @@ func testREDMetricsNodeJSHTTPS(t *testing.T) {
 	} {
 		t.Run(testCaseURL, func(t *testing.T) {
 			waitForTestComponents(t, testCaseURL)
-			testREDMetricsForNodeHTTPLibrary(t, testCaseURL, "node")
+			testREDMetricsForNodeHTTPLibrary(t, testCaseURL, "/greeting", "node", "integration-test")
 		})
 	}
+}
+
+func checkReportedNodeJSEvents(t *testing.T, urlPath, comm, namespace string, numEvents int) {
+	// Eventually, Prometheus would make this query visible
+	pq := prom.Client{HostPort: prometheusHostPort}
+	var results []prom.Result
+	test.Eventually(t, testTimeout, func(t require.TestingT) {
+		var err error
+		results, err = pq.Query(`http_server_duration_seconds_count{` +
+			`http_request_method="POST",` +
+			`http_response_status_code="200",` +
+			`service_namespace="` + namespace + `",` +
+			`service_name="` + comm + `",` +
+			`url_path="` + urlPath + `"}`)
+		require.NoError(t, err)
+		enoughPromResults(t, results)
+		val := totalPromCount(t, results)
+		assert.LessOrEqual(t, val, numEvents)
+		if len(results) > 0 {
+			res := results[0]
+			addr := net.ParseIP(res.Metric["client_address"])
+			assert.NotNil(t, addr)
+		}
+	})
 }

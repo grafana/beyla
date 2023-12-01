@@ -32,6 +32,8 @@ import (
 //go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -type http_buf_t -target amd64,arm64 bpf_tp_debug ../../../../bpf/http_sock.c -- -I../../../../bpf/headers -DBPF_DEBUG -DBPF_TRACEPARENT
 
 var activePids, _ = lru.New[uint32, svc.ID](256)
+var activeServices = make(map[uint32]svc.ID)
+var activeNamespaces = make(map[uint32]uint32)
 
 type BPFHTTPInfo bpfHttpInfoT
 type BPFConnInfo bpfConnectionInfoT
@@ -45,14 +47,15 @@ type HTTPInfo struct {
 	Service svc.ID
 }
 
-type pidsFilter interface {
-	ebpf2.PIDsAccounter
+type PidsFilter interface {
+	AllowPID(uint32)
+	BlockPID(uint32)
 	Filter(inputSpans []request.Span) []request.Span
-	CurrentPIDs() []ebpfcommon.NamespacedPID
+	CurrentPIDs() map[uint32]map[uint32]struct{}
 }
 
 type Tracer struct {
-	pidsFilter pidsFilter
+	pidsFilter PidsFilter
 	cfg        *pipe.Config
 	metrics    imetrics.Reporter
 	bpfObjects bpfObjects
@@ -63,11 +66,11 @@ type Tracer struct {
 
 func New(cfg *pipe.Config, metrics imetrics.Reporter) *Tracer {
 	log := slog.With("component", "httpfltr.Tracer")
-	var filter pidsFilter
+	var filter PidsFilter
 	if cfg.Discovery.SystemWide {
 		filter = &ebpfcommon.IdentityPidsFilter{}
 	} else {
-		filter = ebpfcommon.NewPIDsFilter(log)
+		filter = ebpfcommon.CommonPIDsFilter()
 	}
 	return &Tracer{
 		log:        log,
@@ -77,11 +80,20 @@ func New(cfg *pipe.Config, metrics imetrics.Reporter) *Tracer {
 	}
 }
 
-func (p *Tracer) AllowPID(pid uint32) {
+func RegisterActiveService(pid uint32, svc svc.ID) {
+	activeServices[pid] = svc
+}
+
+func UnregisterActiveService(pid uint32) {
+	delete(activeServices, pid)
+}
+
+func (p *Tracer) AllowPID(pid uint32, svc svc.ID) {
 	if p.bpfObjects.ValidPids != nil {
 		nsid, err := ebpfcommon.FindNamespace(int32(pid))
+		activeNamespaces[pid] = nsid
 		if err == nil {
-			err = p.bpfObjects.ValidPids.Put(pid, nsid)
+			err = p.bpfObjects.ValidPids.Put(bpfPidKeyT{Pid: pid, Namespace: nsid}, uint8(1))
 			if err != nil {
 				p.log.Error("Error setting up pid in BPF space", "error", err)
 			}
@@ -94,7 +106,7 @@ func (p *Tracer) AllowPID(pid uint32) {
 			}
 			p.log.Debug("Found namespaced pids (will contain the existing pid too)", "pids", otherPids)
 			for _, op := range otherPids {
-				err = p.bpfObjects.ValidPids.Put(op, nsid)
+				err = p.bpfObjects.ValidPids.Put(bpfPidKeyT{Pid: op, Namespace: nsid}, uint8(1))
 				if err != nil {
 					p.log.Error("Error setting up pid in BPF space", "error", err)
 				}
@@ -103,16 +115,24 @@ func (p *Tracer) AllowPID(pid uint32) {
 			p.log.Error("Error looking up namespace", "error", err)
 		}
 	}
+	RegisterActiveService(pid, svc)
 	p.pidsFilter.AllowPID(pid)
 }
 
 func (p *Tracer) BlockPID(pid uint32) {
 	if p.bpfObjects.ValidPids != nil {
-		err := p.bpfObjects.ValidPids.Delete(pid)
-		if err != nil {
-			p.log.Error("Error removing pid in BPF space", "error", err)
+		ns, ok := activeNamespaces[pid]
+		if ok {
+			err := p.bpfObjects.ValidPids.Delete(bpfPidKeyT{Pid: pid, Namespace: ns})
+			if err != nil {
+				p.log.Error("Error removing pid in BPF space", "error", err)
+			}
+		} else {
+			p.log.Warn("Couldn't find active namespace", "pid", pid)
 		}
 	}
+	delete(activeNamespaces, pid)
+	UnregisterActiveService(pid)
 	p.pidsFilter.BlockPID(pid)
 }
 
@@ -167,7 +187,7 @@ func (p *Tracer) GoProbes() map[string]ebpfcommon.FunctionPrograms {
 }
 
 func (p *Tracer) KProbes() map[string]ebpfcommon.FunctionPrograms {
-	kprobes := map[string]ebpfcommon.FunctionPrograms{
+	return map[string]ebpfcommon.FunctionPrograms{
 		// Both sys accept probes use the same kretprobe.
 		// We could tap into __sys_accept4, but we might be more prone to
 		// issues with the internal kernel code changing.
@@ -207,82 +227,20 @@ func (p *Tracer) KProbes() map[string]ebpfcommon.FunctionPrograms {
 			End:      p.bpfObjects.KretprobeTcpRecvmsg,
 		},
 	}
-
-	// Track system exit so we can find program names of dead programs
-	// when we process the events
-	if p.cfg.Discovery.SystemWide {
-		kprobes["sys_exit"] = ebpfcommon.FunctionPrograms{
-			Required: true,
-			Start:    p.bpfObjects.KprobeSysExit,
-		}
-		kprobes["sys_exit_group"] = ebpfcommon.FunctionPrograms{
-			Required: true,
-			Start:    p.bpfObjects.KprobeSysExit,
-		}
-	}
-
-	return kprobes
 }
 
 func (p *Tracer) UProbes() map[string]map[string]ebpfcommon.FunctionPrograms {
-	return map[string]map[string]ebpfcommon.FunctionPrograms{
-		"libssl.so": {
-			"SSL_read": {
-				Required: false,
-				Start:    p.bpfObjects.UprobeSslRead,
-				End:      p.bpfObjects.UretprobeSslRead,
-			},
-			"SSL_write": {
-				Required: false,
-				Start:    p.bpfObjects.UprobeSslWrite,
-				End:      p.bpfObjects.UretprobeSslWrite,
-			},
-			"SSL_read_ex": {
-				Required: false,
-				Start:    p.bpfObjects.UprobeSslReadEx,
-				End:      p.bpfObjects.UretprobeSslReadEx,
-			},
-			"SSL_write_ex": {
-				Required: false,
-				Start:    p.bpfObjects.UprobeSslWriteEx,
-				End:      p.bpfObjects.UretprobeSslWriteEx,
-			},
-			"SSL_do_handshake": {
-				Required: false,
-				Start:    p.bpfObjects.UprobeSslDoHandshake,
-				End:      p.bpfObjects.UretprobeSslDoHandshake,
-			},
-			"SSL_shutdown": {
-				Required: false,
-				Start:    p.bpfObjects.UprobeSslShutdown,
-			},
-		},
-		"libSystem.Security.Cryptography.Native.OpenSsl.so": {
-			"CryptoNative_SslRead": {
-				Required: false,
-				Start:    p.bpfObjects.UprobeSslRead,
-				End:      p.bpfObjects.UretprobeSslRead,
-			},
-			"CryptoNative_SslWrite": {
-				Required: false,
-				Start:    p.bpfObjects.UprobeSslWrite,
-				End:      p.bpfObjects.UretprobeSslWrite,
-			},
-			"CryptoNative_SslDoHandshake": {
-				Required: false,
-				Start:    p.bpfObjects.UprobeSslDoHandshake,
-				End:      p.bpfObjects.UretprobeSslDoHandshake,
-			},
-			"CryptoNative_SslShutdown": {
-				Required: false,
-				Start:    p.bpfObjects.UprobeSslShutdown,
-			},
-		},
-	}
+	return nil
 }
 
 func (p *Tracer) SocketFilters() []*ebpf.Program {
 	return nil
+}
+
+func (p *Tracer) RecordInstrumentedLib(_ uint64) {}
+
+func (p *Tracer) AlreadyInstrumentedLib(_ uint64) bool {
+	return false
 }
 
 func (p *Tracer) Run(ctx context.Context, eventsChan chan<- []request.Span, service svc.ID) {
@@ -290,12 +248,14 @@ func (p *Tracer) Run(ctx context.Context, eventsChan chan<- []request.Span, serv
 	// pids that are allowed into the bpf map
 	if p.bpfObjects.ValidPids != nil {
 		p.log.Debug("Reallowing pids")
-		for _, np := range p.pidsFilter.CurrentPIDs() {
-			p.log.Debug("Reallowing pid", "pid", np.PID, "namespace", np.PIDNamespace)
-			err := p.bpfObjects.ValidPids.Put(np.PID, np.PIDNamespace)
-			if err != nil {
+		for nsid, pids := range p.pidsFilter.CurrentPIDs() {
+			for pid := range pids {
+				p.log.Debug("Reallowing pid", "pid", pid, "namespace", nsid)
+				err := p.bpfObjects.ValidPids.Put(bpfPidKeyT{Pid: pid, Namespace: nsid}, uint8(1))
 				if err != nil {
-					p.log.Error("Error setting up pid in BPF space", "pid", np.PID, "namespace", np.PIDNamespace, "error", err)
+					if err != nil {
+						p.log.Error("Error setting up pid in BPF space", "pid", pid, "namespace", nsid, "error", err)
+					}
 				}
 			}
 		}
@@ -307,14 +267,14 @@ func (p *Tracer) Run(ctx context.Context, eventsChan chan<- []request.Span, serv
 	ebpfcommon.ForwardRingbuf[HTTPInfo](
 		service,
 		&p.cfg.EBPF, p.log, p.bpfObjects.Events,
-		p.readHTTPInfoIntoSpan,
+		ReadHTTPInfoIntoSpan,
 		p.pidsFilter.Filter,
 		p.metrics,
 		append(p.closers, &p.bpfObjects)...,
 	)(ctx, eventsChan)
 }
 
-func (p *Tracer) readHTTPInfoIntoSpan(record *ringbuf.Record) (request.Span, bool, error) {
+func ReadHTTPInfoIntoSpan(record *ringbuf.Record) (request.Span, bool, error) {
 	var flags uint64
 	var event BPFHTTPInfo
 	var result HTTPInfo
@@ -347,12 +307,7 @@ func (p *Tracer) readHTTPInfoIntoSpan(record *ringbuf.Record) (request.Span, boo
 	}
 	result.URL = event.url()
 	result.Method = event.method()
-
-	if p.Service == nil {
-		result.Service = p.serviceInfo(event.Pid.HostPid)
-	} else {
-		result.Service = *p.Service
-	}
+	result.Service = serviceInfo(event.Pid.HostPid)
 
 	return httpInfoToSpan(&result), false, nil
 }
@@ -413,50 +368,32 @@ func (event *BPFHTTPInfo) hostInfo() (source, target string) {
 	return src.String(), dst.String()
 }
 
-func cstr(chars []uint8) string {
-	addrLen := bytes.IndexByte(chars[:], 0)
-	if addrLen < 0 {
-		addrLen = len(chars)
-	}
-
-	return string(chars[:addrLen])
-}
-
-func (p *Tracer) commNameOfDeadPid(pid uint32) string {
-	var name [16]uint8
-	if p.bpfObjects.DeadPids == nil {
-		return ""
-	}
-	err := p.bpfObjects.DeadPids.Lookup(pid, &name)
-	if err != nil {
-		return ""
-	}
-
-	return cstr(name[:])
-}
-
-func (p *Tracer) commName(pid uint32) string {
+func commName(pid uint32) string {
 	procPath := filepath.Join("/proc", strconv.FormatUint(uint64(pid), 10), "comm")
 	_, err := os.Stat(procPath)
 	if os.IsNotExist(err) {
-		return p.commNameOfDeadPid(pid)
+		return ""
 	}
 
 	name, err := os.ReadFile(procPath)
 	if err != nil {
-		p.commNameOfDeadPid(pid)
+		return ""
 	}
 
 	return strings.TrimSpace(string(name))
 }
 
-func (p *Tracer) serviceInfo(pid uint32) svc.ID {
+func serviceInfo(pid uint32) svc.ID {
+	active, ok := activeServices[pid]
+	if ok {
+		return active
+	}
 	cached, ok := activePids.Get(pid)
 	if ok {
 		return cached
 	}
 
-	name := p.commName(pid)
+	name := commName(pid)
 	lang := exec.FindProcLanguage(int32(pid), nil)
 	result := svc.ID{Name: name, SDKLanguage: lang}
 

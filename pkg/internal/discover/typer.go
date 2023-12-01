@@ -79,11 +79,13 @@ func (t *typer) FilterClassify(evs []Event[ProcessMatch]) []Event[Instrumentable
 				elfs = append(elfs, elfFile)
 			}
 		case EventDeleted:
-			delete(t.currentPids, ev.Obj.Process.Pid)
-			out = append(out, Event[Instrumentable]{
-				Type: EventDeleted,
-				Obj:  Instrumentable{FileInfo: &exec.FileInfo{Pid: ev.Obj.Process.Pid}},
-			})
+			if fInfo, ok := t.currentPids[ev.Obj.Process.Pid]; ok {
+				delete(t.currentPids, ev.Obj.Process.Pid)
+				out = append(out, Event[Instrumentable]{
+					Type: EventDeleted,
+					Obj:  Instrumentable{FileInfo: fInfo},
+				})
+			}
 		}
 	}
 

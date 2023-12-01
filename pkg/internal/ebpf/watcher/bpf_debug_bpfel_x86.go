@@ -29,6 +29,11 @@ type bpf_debugHttpConnectionMetadataT struct {
 	Type uint8
 }
 
+type bpf_debugPidKeyT struct {
+	Pid       uint32
+	Namespace uint32
+}
+
 type bpf_debugWatchInfoT struct {
 	Flags   uint64
 	Payload uint64

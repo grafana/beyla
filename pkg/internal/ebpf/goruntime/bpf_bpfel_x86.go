@@ -20,6 +20,11 @@ type bpfGoroutineMetadata struct {
 
 type bpfNewFuncInvocationT struct{ Parent uint64 }
 
+type bpfPidKeyT struct {
+	Pid       uint32
+	Namespace uint32
+}
+
 type bpfTpInfoT struct {
 	TraceId  [16]uint8
 	SpanId   [8]uint8

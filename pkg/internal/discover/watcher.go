@@ -321,5 +321,5 @@ func fetchProcessPorts(scanPorts bool) (map[PID]processPorts, error) {
 
 func loadBPFWatcher(cfg *pipe.Config, events chan<- watcher.Event) error {
 	wt := watcher.New(cfg, events)
-	return ebpf.RunUtilityTracer(wt)
+	return ebpf.RunUtilityTracer(wt, BuildPinPath(cfg))
 }

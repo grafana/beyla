@@ -84,11 +84,15 @@ func createTraceparent(traceID string, parentID string) string {
 	return "00-" + traceID + "-" + parentID + "-01"
 }
 
+func waitForTestComponentsSub(t *testing.T, url, subpath string) {
+	waitForTestComponentsSubWithTime(t, url, subpath, 1)
+}
+
 // does a smoke test to verify that all the components that started
 // asynchronously are up and communicating properly
-func waitForTestComponentsSub(t *testing.T, url, subpath string) {
+func waitForTestComponentsSubWithTime(t *testing.T, url, subpath string, minutes int) {
 	pq := prom.Client{HostPort: prometheusHostPort}
-	test.Eventually(t, time.Minute, func(t require.TestingT) {
+	test.Eventually(t, time.Duration(minutes)*time.Minute, func(t require.TestingT) {
 		// first, verify that the test service endpoint is healthy
 		req, err := http.NewRequest("GET", url+subpath, nil)
 		require.NoError(t, err)

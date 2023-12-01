@@ -2,6 +2,7 @@
 #define HTTP_TYPES_H
 
 #include "vmlinux.h"
+#include "map_sizing.h"
 #include "bpf_helpers.h"
 #include "http_defs.h"
 #include "pid.h"
@@ -68,7 +69,8 @@ struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __type(key, connection_info_t);
     __type(value, http_connection_metadata_t); // PID_TID group and connection type
-    __uint(max_entries, MAX_CONCURRENT_REQUESTS);
+    __uint(max_entries, MAX_CONCURRENT_SHARED_REQUESTS);
+    __uint(pinning, LIBBPF_PIN_BY_NAME);
 } filtered_connections SEC(".maps");
 
 

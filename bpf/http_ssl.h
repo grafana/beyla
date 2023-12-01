@@ -7,15 +7,14 @@
 #include "http_types.h"
 #include "http_sock.h"
 
-#define MAX_CONCURRENT_SSL_REQUESTS 10000
-
 // We use this map to track ssl handshake enter/exit, it should be only
 // temporary
 struct {
     __uint(type, BPF_MAP_TYPE_HASH);
     __type(key, u64);   // the pid_tid 
     __type(value, u64); // the SSL struct pointer
-    __uint(max_entries, MAX_CONCURRENT_REQUESTS);
+    __uint(max_entries, MAX_CONCURRENT_SHARED_REQUESTS);
+    __uint(pinning, LIBBPF_PIN_BY_NAME);
 } active_ssl_handshakes SEC(".maps");
 
 // LRU map, we don't clean-it up at the moment, which holds onto the mapping
@@ -25,7 +24,8 @@ struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __type(key, u64);   // the SSL struct pointer
     __type(value, connection_info_t); // the pointer to the file descriptor matching ssl
-    __uint(max_entries, MAX_CONCURRENT_REQUESTS);
+    __uint(max_entries, MAX_CONCURRENT_SHARED_REQUESTS);
+    __uint(pinning, LIBBPF_PIN_BY_NAME);
 } ssl_to_conn SEC(".maps");
 
 // LRU map, we don't clean-it up at the moment, which holds onto the mapping
@@ -35,7 +35,8 @@ struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __type(key, u64);   // the pid-tid pair
     __type(value, connection_info_t); // the pointer to the file descriptor matching ssl
-    __uint(max_entries, MAX_CONCURRENT_REQUESTS);
+    __uint(max_entries, MAX_CONCURRENT_SHARED_REQUESTS);
+    __uint(pinning, LIBBPF_PIN_BY_NAME);
 } pid_tid_to_conn SEC(".maps");
 
 // LRU map which holds onto the mapping of an ssl pointer to pid-tid,

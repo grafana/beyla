@@ -104,7 +104,7 @@ func (rbf *ringBufForwarder[T]) readAndForward(ctx context.Context, spansChan ch
 	// in production systems with thousands of messages per second
 	rbf.logger.Debug("starting to read perf buffer")
 	record, err := eventsReader.Read()
-	rbf.logger.Debug("received event")
+	rbf.logger.Debug("received event", "service", rbf.service)
 	for {
 		if err != nil {
 			if errors.Is(err, ringbuf.ErrClosed) {
@@ -132,7 +132,9 @@ func (rbf *ringBufForwarder[T]) processAndForward(record ringbuf.Record, spansCh
 	if ignore {
 		return
 	}
-	s.ServiceID = rbf.service
+	if s.ServiceID.Name == "" {
+		s.ServiceID = rbf.service
+	}
 	rbf.spans[rbf.spansLen] = s
 	// we need to decorate each span with the tracer's service name
 	// if this information is not forwarded from eBPF

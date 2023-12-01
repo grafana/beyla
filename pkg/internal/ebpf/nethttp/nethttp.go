@@ -52,7 +52,7 @@ func New(cfg *ebpfcommon.TracerConfig, metrics imetrics.Reporter) *Tracer {
 	}
 }
 
-func (p *Tracer) AllowPID(pid uint32) {
+func (p *Tracer) AllowPID(pid uint32, _ svc.ID) {
 	p.pidsFilter.AllowPID(pid)
 }
 
@@ -127,6 +127,12 @@ func (p *Tracer) UProbes() map[string]map[string]ebpfcommon.FunctionPrograms {
 
 func (p *Tracer) SocketFilters() []*ebpf.Program {
 	return nil
+}
+
+func (p *Tracer) RecordInstrumentedLib(_ uint64) {}
+
+func (p *Tracer) AlreadyInstrumentedLib(_ uint64) bool {
+	return false
 }
 
 func (p *Tracer) Run(ctx context.Context, eventsChan chan<- []request.Span, service svc.ID) {

@@ -3,7 +3,6 @@ package discover
 import (
 	"context"
 	"fmt"
-	"hash/fnv"
 	"log/slog"
 	"os"
 	"path"
@@ -27,19 +26,29 @@ type TraceAttacher struct {
 	Ctx               context.Context
 	DiscoveredTracers chan *ebpf.ProcessTracer
 	Metrics           imetrics.Reporter
+	pinPath           string
 
 	// keeps a copy of all the tracers for a given executable path
-	existingTracers map[string]*ebpf.ProcessTracer
+	existingTracers map[uint64]*ebpf.ProcessTracer
+	reusableTracer  *ebpf.ProcessTracer
 }
 
+//nolint:gocritic
 func TraceAttacherProvider(ta TraceAttacher) (node.TerminalFunc[[]Event[Instrumentable]], error) {
 	ta.log = slog.With("component", "discover.TraceAttacher")
-	ta.existingTracers = map[string]*ebpf.ProcessTracer{}
+	ta.existingTracers = map[uint64]*ebpf.ProcessTracer{}
+	ta.pinPath = BuildPinPath(ta.Cfg)
+
+	if err := ta.init(); err != nil {
+		ta.log.Error("cant start process tracer. Stopping it", "error", err)
+		return nil, err
+	}
 
 	return func(in <-chan []Event[Instrumentable]) {
 	mainLoop:
 		for instrumentables := range in {
 			for _, instr := range instrumentables {
+				ta.log.Debug("Instrumentable", "len", len(instrumentables), "inst", instr)
 				switch instr.Type {
 				case EventCreated:
 					if pt, ok := ta.getTracer(&instr.Obj); ok {
@@ -56,39 +65,52 @@ func TraceAttacherProvider(ta TraceAttacher) (node.TerminalFunc[[]Event[Instrume
 		}
 		// waiting until context is done, in the case of SystemWide instrumentation
 		<-ta.Ctx.Done()
+		ta.close()
 	}, nil
 }
 
+//nolint:cyclop
 func (ta *TraceAttacher) getTracer(ie *Instrumentable) (*ebpf.ProcessTracer, bool) {
-	if tracer, ok := ta.existingTracers[ie.FileInfo.CmdExePath]; ok {
+	if tracer, ok := ta.existingTracers[ie.FileInfo.Ino]; ok {
 		ta.log.Info("new process for already instrumented executable",
 			"pid", ie.FileInfo.Pid,
 			"child", ie.ChildPids,
 			"exec", ie.FileInfo.CmdExePath)
 		// allowing the tracer to forward traces from the new PID and its children processes
-		tracer.AllowPID(uint32(ie.FileInfo.Pid))
-		for _, pid := range ie.ChildPids {
-			tracer.AllowPID(pid)
+		monitorPIDs(tracer, ie)
+		if tracer.Type == ebpf.Generic {
+			monitorPIDs(ta.reusableTracer, ie)
 		}
+		ta.log.Debug(".done")
 		return nil, false
 	}
 	ta.log.Info("instrumenting process", "cmd", ie.FileInfo.CmdExePath, "pid", ie.FileInfo.Pid)
 
 	// builds a tracer for that executable
 	var programs []ebpf.Tracer
+	tracerType := ebpf.Generic
 	switch ie.Type {
 	case svc.InstrumentableGolang:
 		// gets all the possible supported tracers for a go program, and filters out
 		// those whose symbols are not present in the ELF functions list
 		if ta.Cfg.Discovery.SkipGoSpecificTracers {
-			programs = newNonGoTracersGroup(ta.Cfg, ta.Metrics)
+			if ta.reusableTracer != nil {
+				programs = newNonGoTracersGroupUProbes(ta.Cfg, ta.Metrics)
+			} else {
+				programs = newNonGoTracersGroup(ta.Cfg, ta.Metrics)
+			}
 		} else {
+			tracerType = ebpf.Go
 			programs = filterNotFoundPrograms(newGoTracersGroup(ta.Cfg, ta.Metrics), ie.Offsets)
 		}
 	case svc.InstrumentableJava, svc.InstrumentableNodejs, svc.InstrumentableRuby, svc.InstrumentablePython, svc.InstrumentableDotnet, svc.InstrumentableGeneric, svc.InstrumentableRust:
 		// We are not instrumenting a Go application, we override the programs
 		// list with the generic kernel/socket space filters
-		programs = newNonGoTracersGroup(ta.Cfg, ta.Metrics)
+		if ta.reusableTracer != nil {
+			programs = newNonGoTracersGroupUProbes(ta.Cfg, ta.Metrics)
+		} else {
+			programs = newNonGoTracersGroup(ta.Cfg, ta.Metrics)
+		}
 	default:
 		ta.log.Warn("unexpected instrumentable type. This is basically a bug", "type", ie.Type)
 	}
@@ -113,41 +135,45 @@ func (ta *TraceAttacher) getTracer(ie *Instrumentable) (*ebpf.ProcessTracer, boo
 		ELFInfo:    ie.FileInfo,
 		Goffsets:   ie.Offsets,
 		Exe:        exe,
-		PinPath:    ta.buildPinPath(ie),
+		PinPath:    BuildPinPath(ta.Cfg),
 		SystemWide: ta.Cfg.Discovery.SystemWide,
+		Type:       tracerType,
 	}
 	ta.log.Debug("new executable for discovered process",
 		"pid", ie.FileInfo.Pid,
 		"child", ie.ChildPids,
 		"exec", ie.FileInfo.CmdExePath)
 	// allowing the tracer to forward traces from the discovered PID and its children processes
-	tracer.AllowPID(uint32(ie.FileInfo.Pid))
-	for _, pid := range ie.ChildPids {
-		tracer.AllowPID(pid)
+	monitorPIDs(tracer, ie)
+	ta.existingTracers[ie.FileInfo.Ino] = tracer
+	if tracer.Type == ebpf.Generic {
+		if ta.reusableTracer != nil {
+			monitorPIDs(ta.reusableTracer, ie)
+		} else {
+			ta.reusableTracer = tracer
+		}
 	}
-	ta.existingTracers[ie.FileInfo.CmdExePath] = tracer
+	ta.log.Debug(".done")
 	return tracer, true
+}
+
+func monitorPIDs(tracer *ebpf.ProcessTracer, ie *Instrumentable) {
+	// allowing the tracer to forward traces from the discovered PID and its children processes
+	tracer.AllowPID(uint32(ie.FileInfo.Pid), ie.FileInfo.Service)
+	for _, pid := range ie.ChildPids {
+		tracer.AllowPID(pid, ie.FileInfo.Service)
+	}
 }
 
 // pinpath must be unique for a given executable group
 // it will be:
 //   - current beyla PID
-//   - PID of the first process that matched that executable
-//     (don't mind if that process stops and other processes of the same executable keep using this pinPath)
-//   - Hash of the executable path
-//
-// This way we prevent improbable (almost impossible) collisions of the exec hash
-// or that the first process stopped and a different process with the same PID
-// started, with a different executable
-func (ta *TraceAttacher) buildPinPath(ie *Instrumentable) string {
-	execHash := fnv.New32()
-	_, _ = execHash.Write([]byte(ie.FileInfo.CmdExePath))
-	return path.Join(ta.Cfg.EBPF.BpfBaseDir,
-		fmt.Sprintf("%d-%d-%x", os.Getpid(), ie.FileInfo.Pid, execHash.Sum32()))
+func BuildPinPath(cfg *pipe.Config) string {
+	return path.Join(cfg.EBPF.BpfBaseDir, fmt.Sprintf("beyla-%d", os.Getpid()))
 }
 
 func (ta *TraceAttacher) notifyProcessDeletion(ie *Instrumentable) {
-	if tracer, ok := ta.existingTracers[ie.FileInfo.CmdExePath]; ok {
+	if tracer, ok := ta.existingTracers[ie.FileInfo.Ino]; ok {
 		ta.log.Info("process ended for already instrumented executable",
 			"pid", ie.FileInfo.Pid,
 			"exec", ie.FileInfo.CmdExePath)

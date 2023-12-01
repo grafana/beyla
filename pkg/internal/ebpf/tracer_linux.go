@@ -8,22 +8,21 @@ import (
 	"os"
 	"reflect"
 	"strings"
+	"sync"
 	"syscall"
 
 	"github.com/cilium/ebpf"
-	"github.com/cilium/ebpf/rlimit"
-	"golang.org/x/sys/unix"
 
 	"github.com/grafana/beyla/pkg/internal/request"
 )
 
+var loadMux sync.Mutex
+
 func ptlog() *slog.Logger { return slog.With("component", "ebpf.ProcessTracer") }
 
 func (pt *ProcessTracer) Run(ctx context.Context, out chan<- []request.Span) {
-	if err := pt.init(); err != nil {
-		pt.log.Error("cant start process tracer. Stopping it", "error", err)
-		return
-	}
+	pt.log = ptlog().With("path", pt.ELFInfo.CmdExePath, "pid", pt.ELFInfo.Pid)
+
 	pt.log.Debug("starting process tracer")
 	// Searches for traceable functions
 	trcrs, err := pt.tracers()
@@ -31,7 +30,6 @@ func (pt *ProcessTracer) Run(ctx context.Context, out chan<- []request.Span) {
 		pt.log.Error("couldn't trace process. Stopping process tracer", "error", err)
 		return
 	}
-
 	service := pt.ELFInfo.Service
 	// If the user does not override the service name via configuration
 	// the service name is the name of the found executable
@@ -40,61 +38,19 @@ func (pt *ProcessTracer) Run(ctx context.Context, out chan<- []request.Span) {
 	if service.Name == "" && !pt.SystemWide {
 		service.Name = pt.ELFInfo.ExecutableName()
 	}
-	// run each tracer program
+
 	for _, t := range trcrs {
 		go t.Run(ctx, out, service)
 	}
 	go func() {
 		<-ctx.Done()
-		pt.close()
 	}()
-}
-
-func (pt *ProcessTracer) init() error {
-	pt.log = ptlog().With("path", pt.ELFInfo.CmdExePath, "pid", pt.ELFInfo.Pid)
-	if err := rlimit.RemoveMemlock(); err != nil {
-		return fmt.Errorf("removing memory lock: %w", err)
-	}
-	if err := pt.mountBpfPinPath(); err != nil {
-		return fmt.Errorf("can't mount BPF filesystem: %w", err)
-	}
-	return nil
-}
-
-func (pt *ProcessTracer) close() {
-	pt.unmountBpfPinPath()
-}
-
-func (pt *ProcessTracer) mountBpfPinPath() error {
-	pt.log.Debug("mounting BPF map pinning", "path", pt.PinPath)
-	if _, err := os.Stat(pt.PinPath); err != nil {
-		if !os.IsNotExist(err) {
-			return fmt.Errorf("accessing %s stat: %w", pt.PinPath, err)
-		}
-		pt.log.Debug("BPF map pinning path does not exist. Creating before mounting")
-		if err := os.MkdirAll(pt.PinPath, 0700); err != nil {
-			return fmt.Errorf("creating directory %s: %w", pt.PinPath, err)
-		}
-	}
-
-	return bpfMount(pt.PinPath)
-}
-
-func (pt *ProcessTracer) unmountBpfPinPath() {
-	if err := unix.Unmount(pt.PinPath, unix.MNT_FORCE); err != nil {
-		pt.log.Warn("can't unmount pinned root. Try unmounting and removing it manually", err)
-		return
-	}
-	pt.log.Debug("unmounted bpf file system")
-	if err := os.RemoveAll(pt.PinPath); err != nil {
-		pt.log.Warn("can't remove pinned root. Try removing it manually", err)
-	} else {
-		pt.log.Debug("removed pin path")
-	}
 }
 
 // tracers returns Tracer implementer for each discovered eBPF traceable source: GRPC, HTTP...
 func (pt *ProcessTracer) tracers() ([]Tracer, error) {
+	loadMux.Lock()
+	defer loadMux.Unlock()
 	var log = ptlog()
 
 	// tracerFuncs contains the eBPF Programs (HTTP, GRPC tracers...)
@@ -159,11 +115,7 @@ func printVerifierErrorInfo(err error) {
 	}
 }
 
-func bpfMount(pinPath string) error {
-	return unix.Mount(pinPath, pinPath, "bpf", 0, "")
-}
-
-func RunUtilityTracer(p UtilityTracer) error {
+func RunUtilityTracer(p UtilityTracer, pinPath string) error {
 	i := instrumenter{}
 	plog := ptlog()
 	plog.Debug("loading independent eBPF program")
@@ -172,7 +124,10 @@ func RunUtilityTracer(p UtilityTracer) error {
 		return fmt.Errorf("loading eBPF program: %w", err)
 	}
 
-	if err := spec.LoadAndAssign(p.BpfObjects(), &ebpf.CollectionOptions{}); err != nil {
+	if err := spec.LoadAndAssign(p.BpfObjects(), &ebpf.CollectionOptions{
+		Maps: ebpf.MapOptions{
+			PinPath: pinPath,
+		}}); err != nil {
 		printVerifierErrorInfo(err)
 		return fmt.Errorf("loading and assigning BPF objects: %w", err)
 	}

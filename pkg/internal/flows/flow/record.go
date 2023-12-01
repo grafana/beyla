@@ -64,6 +64,7 @@ type Transport struct {
 
 // RecordKey identifies a flow
 // Must coincide byte by byte with kernel-side flow_id_t (bpf/flow.h)
+// TODO: let cilium bpf2go create this
 type RecordKey struct {
 	EthProtocol uint16 `json:"Etype"`
 	Direction   uint8  `json:"FlowDirection"`

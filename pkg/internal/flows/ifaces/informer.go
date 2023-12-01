@@ -21,9 +21,8 @@ package ifaces
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net"
-
-	"github.com/sirupsen/logrus"
 )
 
 // EventType for an interface: added, deleted
@@ -45,7 +44,9 @@ func (e EventType) String() string {
 	}
 }
 
-var ilog = logrus.WithField("component", "ifaces.Informer")
+func ilog() *slog.Logger {
+	return slog.With("component", "ifaces.Informer")
+}
 
 // Event of a network interface, given the type (added, removed) and the interface name
 type Event struct {

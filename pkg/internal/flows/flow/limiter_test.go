@@ -84,7 +84,7 @@ func TestCapacityLimiter_Drop(t *testing.T) {
 func capacityLimiterPipe() (in chan<- []*Record, out <-chan []*Record) {
 	inCh, outCh := make(chan []*Record), make(chan []*Record)
 
-	init := node.AsInit(func(initOut chan<- []*Record) {
+	init := node.AsStart(func(initOut chan<- []*Record) {
 		for i := range inCh {
 			initOut <- i
 		}
@@ -96,8 +96,8 @@ func capacityLimiterPipe() (in chan<- []*Record, out <-chan []*Record) {
 		}
 	}, node.ChannelBufferLen(limiterLen))
 
-	init.SendsTo(limiter)
-	limiter.SendsTo(term)
+	init.SendTo(limiter)
+	limiter.SendTo(term)
 
 	init.Start()
 

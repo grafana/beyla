@@ -22,15 +22,16 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"log/slog"
 	"strings"
 
 	"github.com/cilium/ebpf/ringbuf"
 	"github.com/cilium/ebpf/rlimit"
-	"github.com/netobserv/netobserv-ebpf-agent/pkg/flow"
-	"github.com/netobserv/netobserv-ebpf-agent/pkg/ifaces"
-	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
+
+	"github.com/grafana/beyla/pkg/internal/flows/flow"
+	"github.com/grafana/beyla/pkg/internal/flows/ifaces"
 )
 
 // $BPF_CLANG and $BPF_CFLAGS are set by the Makefile.
@@ -44,7 +45,9 @@ const (
 	aggregatedFlowsMap = "aggregated_flows"
 )
 
-var log = logrus.WithField("component", "ebpf.FlowFetcher")
+func tlog() *slog.Logger {
+	return slog.With("component", "ebpf.FlowFetcher")
+}
 
 // FlowFetcher reads and forwards the Flows from the Traffic Control hooks in the eBPF kernel space.
 // It provides access both to flows that are aggregated in the kernel space (via PerfCPU hashmap)
@@ -67,8 +70,8 @@ func NewFlowFetcher(
 	ingress, egress bool,
 ) (*FlowFetcher, error) {
 	if err := rlimit.RemoveMemlock(); err != nil {
-		log.WithError(err).
-			Warn("can't remove mem lock. The agent could not be able to start eBPF programs")
+		tlog().Warn("can't remove mem lock. The agent could not be able to start eBPF programs",
+			"error", err)
 	}
 
 	objects := bpfObjects{}
@@ -114,7 +117,7 @@ func NewFlowFetcher(
 // Register and links the eBPF fetcher into the system. The program should invoke Unregister
 // before exiting.
 func (m *FlowFetcher) Register(iface ifaces.Interface) error {
-	ilog := log.WithField("iface", iface)
+	ilog := tlog().With("interface", iface)
 	// Load pre-compiled programs and maps into the kernel, and rewrites the configuration
 	ipvlan, err := netlink.LinkByIndex(iface.Index)
 	if err != nil {
@@ -134,7 +137,7 @@ func (m *FlowFetcher) Register(iface ifaces.Interface) error {
 	}
 	if err := netlink.QdiscAdd(qdisc); err != nil {
 		if errors.Is(err, fs.ErrExist) {
-			ilog.WithError(err).Warn("qdisc clsact already exists. Ignoring")
+			ilog.Warn("qdisc clsact already exists. Ignoring", "error", err)
 		} else {
 			return fmt.Errorf("failed to create clsact qdisc on %d (%s): %T %w", iface.Index, iface.Name, err, err)
 		}
@@ -153,7 +156,7 @@ func (m *FlowFetcher) Register(iface ifaces.Interface) error {
 }
 
 func (m *FlowFetcher) registerEgress(iface ifaces.Interface, ipvlan netlink.Link) error {
-	ilog := log.WithField("iface", iface)
+	ilog := tlog().With("interface", iface)
 	if !m.enableEgress {
 		ilog.Debug("ignoring egress traffic, according to user configuration")
 		return nil
@@ -187,7 +190,7 @@ func (m *FlowFetcher) registerEgress(iface ifaces.Interface, ipvlan netlink.Link
 }
 
 func (m *FlowFetcher) registerIngress(iface ifaces.Interface, ipvlan netlink.Link) error {
-	ilog := log.WithField("iface", iface)
+	ilog := tlog().With("interface", iface)
 	if !m.enableIngress {
 		ilog.Debug("ignoring ingress traffic, according to user configuration")
 		return nil
@@ -224,6 +227,7 @@ func (m *FlowFetcher) registerIngress(iface ifaces.Interface, ipvlan netlink.Lin
 // We don't need an "Close(iface)" method because the filters and qdiscs
 // are automatically removed when the interface is down
 func (m *FlowFetcher) Close() error {
+	log := tlog()
 	log.Debug("unregistering eBPF objects")
 
 	var errs []error
@@ -251,25 +255,22 @@ func (m *FlowFetcher) Close() error {
 		m.objects = nil
 	}
 	for iface, ef := range m.egressFilters {
-		log := log.WithField("interface", iface)
-		log.Debug("deleting egress filter")
-		if err := doIgnoreNoDev(netlink.FilterDel, netlink.Filter(ef), log); err != nil {
+		log.Debug("deleting egress filter", "interface", iface)
+		if err := doIgnoreNoDev(netlink.FilterDel, netlink.Filter(ef)); err != nil {
 			errs = append(errs, fmt.Errorf("deleting egress filter: %w", err))
 		}
 	}
 	m.egressFilters = map[ifaces.Interface]*netlink.BpfFilter{}
 	for iface, igf := range m.ingressFilters {
-		log := log.WithField("interface", iface)
-		log.Debug("deleting ingress filter")
-		if err := doIgnoreNoDev(netlink.FilterDel, netlink.Filter(igf), log); err != nil {
+		log.Debug("deleting ingress filter", "interface", iface)
+		if err := doIgnoreNoDev(netlink.FilterDel, netlink.Filter(igf)); err != nil {
 			errs = append(errs, fmt.Errorf("deleting ingress filter: %w", err))
 		}
 	}
 	m.ingressFilters = map[ifaces.Interface]*netlink.BpfFilter{}
 	for iface, qd := range m.qdiscs {
-		log := log.WithField("interface", iface)
-		log.Debug("deleting Qdisc")
-		if err := doIgnoreNoDev(netlink.QdiscDel, netlink.Qdisc(qd), log); err != nil {
+		log.Debug("deleting Qdisc", "interface", iface)
+		if err := doIgnoreNoDev(netlink.QdiscDel, netlink.Qdisc(qd)); err != nil {
 			errs = append(errs, fmt.Errorf("deleting qdisc: %w", err))
 		}
 	}
@@ -294,12 +295,13 @@ func (m *FlowFetcher) Close() error {
 // user's attention.
 // This function uses generics because the set of provided functions accept different argument
 // types.
-func doIgnoreNoDev[T any](sysCall func(T) error, dev T, log *logrus.Entry) error {
+func doIgnoreNoDev[T any](sysCall func(T) error, dev T) error {
 	if err := sysCall(dev); err != nil {
 		if errors.Is(err, unix.ENODEV) {
-			log.WithError(err).Error("can't delete. Ignore this error if other pods or interfaces " +
-				" are also being deleted at this moment. For example, if you are undeploying " +
-				" a FlowCollector or Deployment where this agent is part of")
+			tlog().Error("can't delete. Ignore this error if other pods or interfaces "+
+				" are also being deleted at this moment. For example, if you are undeploying "+
+				" a FlowCollector or Deployment where this agent is part of",
+				"error", err)
 		} else {
 			return err
 		}
@@ -332,8 +334,7 @@ func (m *FlowFetcher) LookupAndDeleteMap() map[flow.RecordKey][]flow.RecordMetri
 	// TODO: detect whether LookupAndDelete is supported (Kernel>=4.20) and use it selectively
 	for iterator.Next(&id, &metrics) {
 		if err := flowMap.Delete(id); err != nil {
-			log.WithError(err).WithField("flowId", id).
-				Warnf("couldn't delete flow entry")
+			tlog().Warn("couldn't delete flow entry", "flowId", id)
 		}
 		// We observed that eBFP PerCPU map might insert multiple times the same key in the map
 		// (probably due to race conditions) so we need to re-join metrics again at userspace

@@ -19,9 +19,8 @@
 package flow
 
 import (
+	"log/slog"
 	"time"
-
-	"github.com/sirupsen/logrus"
 )
 
 // Accounter accumulates flows metrics in memory and eventually evicts them via an evictor channel.
@@ -36,7 +35,9 @@ type Accounter struct {
 	monoClock    func() time.Duration
 }
 
-var alog = logrus.WithField("component", "flow/Accounter")
+func alog() *slog.Logger {
+	return slog.With("component", "flow/Accounter")
+}
 
 // NewAccounter creates a new Accounter.
 // The cache has no limit and it's assumed that eviction is done by the caller.
@@ -58,6 +59,7 @@ func NewAccounter(
 // and accumulate their metrics internally. Once the metrics have reached their max size
 // or the eviction times out, it evicts all the accumulated flows by the returned channel.
 func (c *Accounter) Account(in <-chan *RawRecord, out chan<- []*Record) {
+	alog := alog()
 	evictTick := time.NewTicker(c.evictTimeout)
 	defer evictTick.Stop()
 	for {
@@ -68,8 +70,7 @@ func (c *Accounter) Account(in <-chan *RawRecord, out chan<- []*Record) {
 			}
 			evictingEntries := c.entries
 			c.entries = map[RecordKey]*RecordMetrics{}
-			logrus.WithField("flows", len(evictingEntries)).
-				Debug("evicting flows from userspace accounter on timeout")
+			alog.Debug("evicting flows from userspace accounter on timeout", "flows", len(evictingEntries))
 			c.evict(evictingEntries, out)
 		case record, ok := <-in:
 			if !ok {
@@ -87,8 +88,8 @@ func (c *Accounter) Account(in <-chan *RawRecord, out chan<- []*Record) {
 				if len(c.entries) >= c.maxEntries {
 					evictingEntries := c.entries
 					c.entries = map[RecordKey]*RecordMetrics{}
-					logrus.WithField("flows", len(evictingEntries)).
-						Debug("evicting flows from userspace accounter after reaching cache max length")
+					alog.Debug("evicting flows from userspace accounter after reaching cache max length",
+						"flows", len(evictingEntries))
 					c.evict(evictingEntries, out)
 				}
 				c.entries[record.RecordKey] = &record.RecordMetrics
@@ -104,6 +105,6 @@ func (c *Accounter) evict(entries map[RecordKey]*RecordMetrics, evictor chan<- [
 	for key, metrics := range entries {
 		records = append(records, NewRecord(key, *metrics, now, monotonicNow))
 	}
-	alog.WithField("numEntries", len(records)).Debug("records evicted from userspace accounter")
+	alog().Debug("records evicted from userspace accounter", "numEntries", len(records))
 	evictor <- records
 }

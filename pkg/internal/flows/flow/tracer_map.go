@@ -20,15 +20,17 @@ package flow
 
 import (
 	"context"
+	"log/slog"
 	"sync"
 	"time"
 
 	"github.com/gavv/monotime"
 	"github.com/mariomac/pipes/pkg/node"
-	"github.com/sirupsen/logrus"
 )
 
-var mtlog = logrus.WithField("component", "flow.MapTracer")
+func mtlog() *slog.Logger {
+	return slog.With("component", "flow.MapTracer")
+}
 
 // MapTracer accesses a mapped source of flows (the eBPF PerCPU HashMap), deserializes it into
 // a flow Record structure, and performs the accumulation of each perCPU-record into a single flow
@@ -63,6 +65,7 @@ func (m *MapTracer) TraceLoop(ctx context.Context) node.StartFunc[[]*Record] {
 	return func(out chan<- []*Record) {
 		evictionTicker := time.NewTicker(m.evictionTimeout)
 		go m.evictionSynchronization(ctx, out)
+		mtlog := mtlog()
 		for {
 			select {
 			case <-ctx.Done():
@@ -83,6 +86,7 @@ func (m *MapTracer) TraceLoop(ctx context.Context) node.StartFunc[[]*Record] {
 func (m *MapTracer) evictionSynchronization(ctx context.Context, out chan<- []*Record) {
 	// flow eviction loop. It just keeps waiting for eviction until someone triggers the
 	// evictionCond.Broadcast signal
+	mtlog := mtlog()
 	for {
 		// make sure we only evict once at a time, even if there are multiple eviction signals
 		m.evictionCond.L.Lock()
@@ -125,18 +129,19 @@ func (m *MapTracer) evictFlows(ctx context.Context, forwardFlows chan<- []*Recor
 		))
 	}
 	m.lastEvictionNs = laterFlowNs
+	mtlog := mtlog()
 	select {
 	case <-ctx.Done():
 		mtlog.Debug("skipping flow eviction as agent is being stopped")
 	default:
 		forwardFlows <- forwardingFlows
 	}
-	mtlog.Debugf("%d flows evicted", len(forwardingFlows))
+	mtlog.Debug("flows evicted", "len", len(forwardingFlows))
 }
 
 func (m *MapTracer) aggregate(metrics []RecordMetrics) RecordMetrics {
 	if len(metrics) == 0 {
-		mtlog.Warn("invoked aggregate with no values")
+		mtlog().Warn("invoked aggregate with no values")
 		return RecordMetrics{}
 	}
 	aggr := RecordMetrics{}

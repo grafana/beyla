@@ -23,16 +23,18 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"sync/atomic"
 	"syscall"
 	"time"
 
 	"github.com/cilium/ebpf/ringbuf"
 	"github.com/mariomac/pipes/pkg/node"
-	"github.com/sirupsen/logrus"
 )
 
-var rtlog = logrus.WithField("component", "flow.RingBufTracer")
+func rtlog() *slog.Logger {
+	return slog.With("component", "flow.RingBufTracer")
+}
 
 // RingBufTracer receives single-packet flows via ringbuffer (usually, these that couldn't be
 // added in the eBPF kernel space due to the map being full or busy) and submits them to the
@@ -71,7 +73,8 @@ func NewRingBufTracer(
 
 func (m *RingBufTracer) TraceLoop(ctx context.Context) node.StartFunc[*RawRecord] {
 	return func(out chan<- *RawRecord) {
-		debugging := logrus.IsLevelEnabled(logrus.DebugLevel)
+		rtlog := rtlog()
+		debugging := rtlog.Enabled(ctx, slog.LevelDebug)
 		for {
 			select {
 			case <-ctx.Done():
@@ -83,7 +86,7 @@ func (m *RingBufTracer) TraceLoop(ctx context.Context) node.StartFunc[*RawRecord
 						rtlog.Debug("Received signal, exiting..")
 						return
 					}
-					rtlog.WithError(err).Warn("ignoring flow event")
+					rtlog.Warn("ignoring flow event", "error", err)
 					continue
 				}
 			}
@@ -128,14 +131,14 @@ func (m *stats) logRingBufferFlows(mapFullErr bool) {
 		go func() {
 			time.Sleep(m.loggingTimeout)
 			mfe := atomic.LoadInt32(&m.mapFullErrs)
-			l := rtlog.WithFields(logrus.Fields{
-				"flows":       atomic.LoadInt32(&m.forwardedFlows),
-				"mapFullErrs": mfe,
-			})
+			l := rtlog().With(
+				"flows", atomic.LoadInt32(&m.forwardedFlows),
+				"mapFullErrs", mfe,
+			)
 			if mfe == 0 {
 				l.Debug("received flows via ringbuffer")
 			} else {
-				l.Debug("received flows via ringbuffer. You might want to increase the CACHE_MAX_FLOWS value")
+				l.Debug("received flows via ringbuffer due to Map Full. You might want to increase the CACHE_MAX_FLOWS value")
 			}
 			atomic.StoreInt32(&m.forwardedFlows, 0)
 			atomic.StoreInt32(&m.isForwarding, 0)

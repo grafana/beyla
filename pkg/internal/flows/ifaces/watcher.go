@@ -20,9 +20,9 @@ package ifaces
 
 import (
 	"context"
+	"log/slog"
 	"syscall"
 
-	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 )
 
@@ -55,19 +55,19 @@ func (w *Watcher) Subscribe(ctx context.Context) (<-chan Event, error) {
 }
 
 func (w *Watcher) sendUpdates(ctx context.Context, out chan Event) {
-	log := logrus.WithField("component", "ifaces.Watcher")
+	log := slog.With("component", "ifaces.Watcher")
 
 	// subscribe for interface events
 	links := make(chan netlink.LinkUpdate)
 	if err := w.linkSubscriber(links, ctx.Done()); err != nil {
-		log.WithError(err).Error("can't subscribe to links")
+		log.Error("can't subscribe to links", "error", err)
 		return
 	}
 
 	// before sending netlink updates, send all the existing interfaces at the moment of starting
 	// the Watcher
 	if names, err := w.interfaces(); err != nil {
-		log.WithError(err).Error("can't fetch network interfaces. You might be missing flows")
+		log.Error("can't fetch network interfaces. You might be missing flows", "error", err)
 	} else {
 		for _, name := range names {
 			w.current[name] = struct{}{}
@@ -78,26 +78,24 @@ func (w *Watcher) sendUpdates(ctx context.Context, out chan Event) {
 	for link := range links {
 		attrs := link.Attrs()
 		if attrs == nil {
-			log.WithField("link", link).Debug("received link update without attributes. Ignoring")
+			log.Debug("received link update without attributes. Ignoring", "link", link)
 			continue
 		}
 		iface := Interface{Name: attrs.Name, Index: attrs.Index}
 		if link.Flags&(syscall.IFF_UP|syscall.IFF_RUNNING) != 0 {
-			log.WithFields(logrus.Fields{
-				"operstate": attrs.OperState,
-				"flags":     attrs.Flags,
-				"name":      attrs.Name,
-			}).Debug("Interface up and running")
+			log.Debug("Interface up and running",
+				"operstate", attrs.OperState,
+				"flags", attrs.Flags,
+				"name", attrs.Name)
 			if _, ok := w.current[iface]; !ok {
 				w.current[iface] = struct{}{}
 				out <- Event{Type: EventAdded, Interface: iface}
 			}
 		} else {
-			log.WithFields(logrus.Fields{
-				"operstate": attrs.OperState,
-				"flags":     attrs.Flags,
-				"name":      attrs.Name,
-			}).Debug("Interface down or not running")
+			log.Debug("Interface down or not running",
+				"operstate", attrs.OperState,
+				"flags", attrs.Flags,
+				"name", attrs.Name)
 			if _, ok := w.current[iface]; ok {
 				delete(w.current, iface)
 				out <- Event{Type: EventDeleted, Interface: iface}

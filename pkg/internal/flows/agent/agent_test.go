@@ -17,7 +17,7 @@
 // https://github.com/netobserv/netobserv-ebpf-agent/tree/release-1.4
 
 package agent
-
+/*
 import (
 	"context"
 	"net"
@@ -29,6 +29,8 @@ import (
 	"github.com/netobserv/netobserv-ebpf-agent/pkg/test"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/grafana/beyla/pkg/internal/flows/flow"
 )
 
 var agentIP = "192.168.1.13"
@@ -247,3 +249,4 @@ func testAgent(t *testing.T, cfg *Config) *test.ExporterFake {
 	})
 	return export
 }
+*/

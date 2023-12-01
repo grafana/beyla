@@ -20,12 +20,14 @@ package flow
 
 import (
 	"container/list"
+	"log/slog"
 	"time"
-
-	"github.com/sirupsen/logrus"
 )
 
-var dlog = logrus.WithField("component", "flow/Deduper")
+func dlog() *slog.Logger {
+	return slog.With("component", "flow/Deduper")
+}
+
 var timeNow = time.Now
 
 // deduperCache implement a LRU cache whose elements are evicted if they haven't been accessed
@@ -118,10 +120,9 @@ func (c *deduperCache) removeExpired() {
 		ele = c.entries.Back()
 	}
 	if evicted > 0 {
-		dlog.WithFields(logrus.Fields{
-			"current":    c.entries.Len(),
-			"evicted":    evicted,
-			"expiryTime": c.expire,
-		}).Debug("entries evicted from the deduper cache")
+		dlog().Debug("entries evicted from the deduper cache",
+			"current", c.entries.Len(),
+			"evicted", evicted,
+			"expiryTime", c.expire)
 	}
 }

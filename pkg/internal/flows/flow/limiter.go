@@ -19,15 +19,17 @@
 package flow
 
 import (
+	"context"
+	"log/slog"
 	"time"
-
-	"github.com/sirupsen/logrus"
 )
 
 const initialLogPeriod = time.Minute
 const maxLogPeriod = time.Hour
 
-var cllog = logrus.WithField("component", "capacity.Limiter")
+func cllog() *slog.Logger {
+	return slog.With("component", "capacity.Limiter")
+}
 
 // CapacityLimiter forwards the flows between two nodes but checks the status of the destination
 // node's buffered channel. If it is already full, it drops the incoming flow and periodically will
@@ -48,8 +50,9 @@ func (c *CapacityLimiter) Limit(in <-chan []*Record, out chan<- []*Record) {
 }
 
 func (c *CapacityLimiter) logDroppedFlows() {
+	cllog := cllog()
 	logPeriod := initialLogPeriod
-	debugging := logrus.IsLevelEnabled(logrus.DebugLevel)
+	debugging := cllog.Enabled(context.TODO(), slog.LevelDebug)
 	for {
 		time.Sleep(logPeriod)
 
@@ -58,10 +61,10 @@ func (c *CapacityLimiter) logDroppedFlows() {
 		df := c.droppedFlows
 		if df > 0 {
 			c.droppedFlows = 0
-			cllog.Warnf("%d flows were dropped during the last %s because the agent is forwarding "+
+			cllog.Warn("Flows were dropped during the last period because the agent is forwarding "+
 				"more flows than the remote ingestor is able to process. You might "+
 				"want to increase the CACHE_MAX_FLOWS and CACHE_ACTIVE_TIMEOUT property",
-				df, logPeriod)
+				"droppedFlows", df, "period", logPeriod)
 
 			// if not debug logs, backoff to avoid flooding the log with warning messages
 			if !debugging && logPeriod < maxLogPeriod {

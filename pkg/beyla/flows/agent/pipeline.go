@@ -10,7 +10,6 @@ import (
 	"github.com/grafana/beyla/pkg/beyla/flows/export"
 	flow2 "github.com/grafana/beyla/pkg/beyla/flows/flow"
 	"github.com/grafana/beyla/pkg/beyla/flows/transform"
-	"github.com/grafana/beyla/pkg/internal/export/otel"
 )
 
 type FlowsPipeline struct {
@@ -24,7 +23,7 @@ type FlowsPipeline struct {
 
 	//Kubernetes *transform.NetworkTransformConfig `sendTo:"Exporter"`
 
-	Exporter otel.MetricsConfig
+	Exporter export.ExportConfig
 }
 
 type Codec struct{}
@@ -88,6 +87,6 @@ func (f *Flows) buildAndStartPipeline(ctx context.Context) (graph.Graph, error) 
 		},
 		//Kubernetes: &f.cfg.Transform,
 		// TODO: put here any extra configuration for the exporter
-		Exporter: cfg.Metrics,
+		Exporter: export.ExportConfig{Metrics: &cfg.Metrics},
 	})
 }

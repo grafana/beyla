@@ -64,7 +64,7 @@ type TracesConfig struct {
 // either the OTEL endpoint and OTEL traces endpoint is defined.
 // If not enabled, this node won't be instantiated
 func (m TracesConfig) Enabled() bool { //nolint:gocritic
-	return m.CommonEndpoint != "" || m.TracesEndpoint != "" || m.Grafana.TracesEnabled()
+	return false
 }
 
 func (m *TracesConfig) GetProtocol() Protocol {

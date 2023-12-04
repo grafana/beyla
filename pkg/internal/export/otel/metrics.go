@@ -104,7 +104,7 @@ func (m *MetricsConfig) GuessProtocol() Protocol {
 // This method is invoked only once during startup time so it doesn't have a noticeable performance impact.
 // nolint:gocritic
 func (m MetricsConfig) Enabled() bool {
-	return m.CommonEndpoint != "" || m.MetricsEndpoint != "" || m.Grafana.MetricsEnabled()
+	return false
 }
 
 // MetricsReporter implements the graph node that receives request.Span

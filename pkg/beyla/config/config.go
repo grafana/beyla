@@ -159,11 +159,11 @@ var defaultConfig = Config{
 	Routes: &transform.RoutesConfig{},
 	Network: AgentConfig{
 		Transform: transform2.NetworkTransformConfig{
-			Rules: transform2.NetworkTransformRules{{
+			Rules: transform2.NetworkTransformRules{transform2.NetworkTransformRule{
 				Input:  "SrcAddr",
 				Output: "SrcK8s",
 				Type:   "add_kubernetes",
-			}, {
+			}, transform2.NetworkTransformRule{
 				Input:  "DstAddr",
 				Output: "DstK8s",
 				Type:   "add_kubernetes",

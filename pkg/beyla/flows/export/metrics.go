@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/grafana/beyla/pkg/beyla/flows/flow"
 	"github.com/grafana/beyla/pkg/internal/export/otel"
 	"github.com/mariomac/pipes/pkg/node"
 	otel2 "go.opentelemetry.io/otel"
@@ -24,7 +25,7 @@ func mlog() *slog.Logger {
 
 func newResource() (*resource.Resource, error) {
 	return resource.Merge(resource.Default(),
-		resource.NewWithAttributes(semconv.SchemaURL,
+		resource.NewWithAttributes("https://opentelemetry.io/schemas/1.21.0",
 			semconv.ServiceName("beyla-network"),
 			semconv.ServiceVersion("0.1.0"),
 		))
@@ -40,9 +41,9 @@ func newMeterProvider(res *resource.Resource, exporter *metric.Exporter) (*metri
 	return meterProvider, nil
 }
 
-func MetricsExporterProvider(cfg otel.MetricsConfig) (node.TerminalFunc[[]map[string]interface{}], error) {
+func MetricsExporterProvider(cfg ExportConfig) (node.TerminalFunc[[]*flow.Record], error) {
 	log := mlog()
-	exporter, err := otel.InstantiateMetricsExporter(context.Background(), &cfg, log)
+	exporter, err := otel.InstantiateMetricsExporter(context.Background(), cfg.Metrics, log)
 	if err != nil {
 		log.Error("", "error", err)
 		return nil, err
@@ -73,7 +74,7 @@ func MetricsExporterProvider(cfg otel.MetricsConfig) (node.TerminalFunc[[]map[st
 
 	fmt.Printf("aaa %v", ebpfObserved)
 
-	return func(in <-chan []map[string]interface{}) {
+	return func(in <-chan []*flow.Record) {
 		for i := range in {
 
 			// TODO: replace by something more useful

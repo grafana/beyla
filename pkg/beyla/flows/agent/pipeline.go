@@ -17,7 +17,8 @@ type FlowsPipeline struct {
 	Accounter       `sendTo:"Deduper"`
 	Deduper         flow2.Deduper `forwardTo:"CapacityLimiter"`
 	CapacityLimiter `sendTo:"Decorator"`
-	Decorator       `sendTo:"Kubernetes"`
+	//Decorator       `sendTo:"Kubernetes"`
+	Decorator `sendTo:"Exporter"`
 
 	Kubernetes *transform.NetworkTransformConfig `sendTo:"Exporter"`
 

@@ -29,7 +29,7 @@ type NetworkTransformConfig struct {
 
 // TODO: quick hackathon patch. Do it properly.
 func (nc *NetworkTransformConfig) Enabled() bool {
-	return transform.KubernetesDecorator{Enable: transform.EnabledAutodetect}.Enabled()
+	return transform.KubernetesDecorator{Enable: transform.EnabledFalse}.Enabled()
 }
 
 func (tn *NetworkTransformConfig) GetServiceFiles() (string, string) {

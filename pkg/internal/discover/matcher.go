@@ -11,13 +11,13 @@ import (
 	"github.com/mariomac/pipes/pkg/node"
 	"github.com/shirou/gopsutil/process"
 
+	"github.com/grafana/beyla/pkg/beyla/config"
 	"github.com/grafana/beyla/pkg/internal/discover/services"
-	"github.com/grafana/beyla/pkg/internal/pipe"
 )
 
 // CriteriaMatcher filters the processes that match the discovery criteria.
 type CriteriaMatcher struct {
-	Cfg *pipe.Config
+	Cfg *config.Config
 }
 
 func CriteriaMatcherProvider(cm CriteriaMatcher) (node.MiddleFunc[[]Event[processPorts], []Event[ProcessMatch]], error) {
@@ -113,7 +113,7 @@ func (m *matcher) matchByExecutable(p *services.ProcessInfo, a *services.Attribu
 	return a.Path.MatchString(p.ExePath)
 }
 
-func FindingCriteria(cfg *pipe.Config) services.DefinitionCriteria {
+func FindingCriteria(cfg *config.Config) services.DefinitionCriteria {
 	if cfg.Discovery.SystemWide {
 		// will return all the executables in the system
 		return services.DefinitionCriteria{

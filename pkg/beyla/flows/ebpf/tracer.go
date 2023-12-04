@@ -19,6 +19,7 @@
 package ebpf
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -30,12 +31,12 @@ import (
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
 
-	"github.com/grafana/beyla/pkg/internal/flows/flow"
-	"github.com/grafana/beyla/pkg/internal/flows/ifaces"
+	"github.com/grafana/beyla/pkg/beyla/flows/flow"
+	"github.com/grafana/beyla/pkg/beyla/flows/ifaces"
 )
 
 // $BPF_CLANG and $BPF_CFLAGS are set by the Makefile.
-//go:generate bpf2go -cc $BPF_CLANG -cflags $BPF_CFLAGS bpf ../../bpf/flows.c -- -I../../bpf/headers
+//go:generate bpf2go -cc $BPF_CLANG -cflags $BPF_CFLAGS bpf ../../../../bpf/flows.c -- -I../../../../bpf/headers
 
 const (
 	qdiscType = "clsact"
@@ -65,12 +66,12 @@ type FlowFetcher struct {
 }
 
 func NewFlowFetcher(
-	traceMessages bool,
 	sampling, cacheMaxSize int,
 	ingress, egress bool,
 ) (*FlowFetcher, error) {
+	tlog := tlog()
 	if err := rlimit.RemoveMemlock(); err != nil {
-		tlog().Warn("can't remove mem lock. The agent could not be able to start eBPF programs",
+		tlog.Warn("can't remove mem lock. The agent could not be able to start eBPF programs",
 			"error", err)
 	}
 
@@ -84,7 +85,7 @@ func NewFlowFetcher(
 	spec.Maps[aggregatedFlowsMap].MaxEntries = uint32(cacheMaxSize)
 
 	traceMsgs := 0
-	if traceMessages {
+	if tlog.Enabled(context.TODO(), slog.LevelDebug) {
 		traceMsgs = 1
 	}
 	if err := spec.RewriteConstants(map[string]interface{}{
@@ -180,7 +181,7 @@ func (m *FlowFetcher) registerEgress(iface ifaces.Interface, ipvlan netlink.Link
 	}
 	if err := netlink.FilterAdd(egressFilter); err != nil {
 		if errors.Is(err, fs.ErrExist) {
-			ilog.WithError(err).Warn("egress filter already exists. Ignoring")
+			ilog.Warn("egress filter already exists. Ignoring", "error", err)
 		} else {
 			return fmt.Errorf("failed to create egress filter: %w", err)
 		}
@@ -214,7 +215,7 @@ func (m *FlowFetcher) registerIngress(iface ifaces.Interface, ipvlan netlink.Lin
 	}
 	if err := netlink.FilterAdd(ingressFilter); err != nil {
 		if errors.Is(err, fs.ErrExist) {
-			ilog.WithError(err).Warn("ingress filter already exists. Ignoring")
+			ilog.Warn("ingress filter already exists. Ignoring", "error", err)
 		} else {
 			return fmt.Errorf("failed to create ingress filter: %w", err)
 		}

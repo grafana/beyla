@@ -5,9 +5,9 @@ package beyla
 import (
 	"context"
 	"fmt"
-	"io"
 	"log/slog"
 
+	"github.com/grafana/beyla/pkg/beyla/config"
 	"github.com/grafana/beyla/pkg/internal/connector"
 	"github.com/grafana/beyla/pkg/internal/discover"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
@@ -17,9 +17,6 @@ import (
 	"github.com/grafana/beyla/pkg/internal/transform/kube"
 )
 
-// Config as provided by the user to configure and run Beyla
-type Config pipe.Config
-
 func log() *slog.Logger {
 	return slog.With("component", "beyla.Instrumenter")
 }
@@ -27,7 +24,7 @@ func log() *slog.Logger {
 // Instrumenter finds and instrument a service/process, and forwards the traces as
 // configured by the user
 type Instrumenter struct {
-	config  *pipe.Config
+	config  *config.Config
 	ctxInfo *global.ContextInfo
 
 	// tracesInput is used to communicate the found traces between the ProcessFinder and
@@ -38,26 +35,12 @@ type Instrumenter struct {
 }
 
 // New Instrumenter, given a Config
-func New(config *Config) *Instrumenter {
+func New(config *config.Config) *Instrumenter {
 	return &Instrumenter{
-		config:      (*pipe.Config)(config),
-		ctxInfo:     buildContextInfo((*pipe.Config)(config)),
+		config:      config,
+		ctxInfo:     buildContextInfo(config),
 		tracesInput: make(chan []request.Span, config.ChannelBufferLen),
 	}
-}
-
-// LoadConfig loads and validates configuration.
-// Configuration from multiple source is overridden in the following order
-// (from less to most priority):
-// 1 - Default configuration
-// 2 - Contents of the provided file reader (nillable)
-// 3 - Environment variables
-func LoadConfig(reader io.Reader) (*Config, error) {
-	cfg, err := pipe.LoadConfig(reader)
-	if err != nil {
-		return nil, err
-	}
-	return (*Config)(cfg), nil
 }
 
 // FindAndInstrument searches in background for any new executable matching the
@@ -109,7 +92,7 @@ func (i *Instrumenter) ReadAndForward(ctx context.Context) error {
 
 // buildContextInfo populates some globally shared components and properties
 // from the user-provided configuration
-func buildContextInfo(config *pipe.Config) *global.ContextInfo {
+func buildContextInfo(config *config.Config) *global.ContextInfo {
 	promMgr := &connector.PrometheusManager{}
 	k8sCfg := &config.Attributes.Kubernetes
 	ctxInfo := &global.ContextInfo{

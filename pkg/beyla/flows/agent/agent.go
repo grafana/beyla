@@ -30,9 +30,9 @@ import (
 	"github.com/gavv/monotime"
 	"github.com/mariomac/pipes/pkg/node"
 
-	"github.com/grafana/beyla/pkg/internal/flows/ebpf"
-	"github.com/grafana/beyla/pkg/internal/flows/flow"
-	"github.com/grafana/beyla/pkg/internal/flows/ifaces"
+	"github.com/grafana/beyla/pkg/beyla/flows/ebpf"
+	flow2 "github.com/grafana/beyla/pkg/beyla/flows/flow"
+	ifaces2 "github.com/grafana/beyla/pkg/beyla/flows/ifaces"
 )
 
 func alog() *slog.Logger {
@@ -73,18 +73,18 @@ type Flows struct {
 	cfg *Config
 
 	// input data providers
-	interfaces ifaces.Informer
+	interfaces ifaces2.Informer
 	filter     interfaceFilter
 	ebpf       ebpfFlowFetcher
 
 	// processing nodes to be wired in the buildAndStartPipeline method
-	mapTracer *flow.MapTracer
-	rbTracer  *flow.RingBufTracer
-	accounter *flow.Accounter
-	exporter  node.TerminalFunc[[]*flow.Record]
+	mapTracer *flow2.MapTracer
+	rbTracer  *flow2.RingBufTracer
+	accounter *flow2.Accounter
+	exporter  node.TerminalFunc[[]*flow2.Record]
 
 	// elements used to decorate flows with extra information
-	interfaceNamer flow.InterfaceNamer
+	interfaceNamer flow2.InterfaceNamer
 	agentIP        net.IP
 
 	status Status
@@ -93,9 +93,9 @@ type Flows struct {
 // ebpfFlowFetcher abstracts the interface of ebpf.FlowFetcher to allow dependency injection in tests
 type ebpfFlowFetcher interface {
 	io.Closer
-	Register(iface ifaces.Interface) error
+	Register(iface ifaces2.Interface) error
 
-	LookupAndDeleteMap() map[flow.RecordKey][]flow.RecordMetrics
+	LookupAndDeleteMap() map[flow2.RecordKey][]flow2.RecordMetrics
 	ReadRingBuf() (ringbuf.Record, error)
 }
 
@@ -105,19 +105,19 @@ func FlowsAgent(cfg *Config) (*Flows, error) {
 	alog.Info("initializing Flows agent")
 
 	// configure informer for new interfaces
-	var informer ifaces.Informer
+	var informer ifaces2.Informer
 	switch cfg.ListenInterfaces {
 	case ListenPoll:
 		alog.Debug("listening for new interfaces: use polling",
 			"period", cfg.ListenPollPeriod)
-		informer = ifaces.NewPoller(cfg.ListenPollPeriod, cfg.BuffersLength)
+		informer = ifaces2.NewPoller(cfg.ListenPollPeriod, cfg.BuffersLength)
 	case ListenWatch:
 		alog.Debug("listening for new interfaces: use watching")
-		informer = ifaces.NewWatcher(cfg.BuffersLength)
+		informer = ifaces2.NewWatcher(cfg.BuffersLength)
 	default:
 		alog.Warn("wrong interface listen method. Using file watcher as default",
 			"providedValue", cfg.ListenInterfaces)
-		informer = ifaces.NewWatcher(cfg.BuffersLength)
+		informer = ifaces2.NewWatcher(cfg.BuffersLength)
 	}
 
 	alog.Debug("acquiring Agent IP")
@@ -135,12 +135,7 @@ func FlowsAgent(cfg *Config) (*Flows, error) {
 
 	ingress, egress := flowDirections(cfg)
 
-	debug := false
-	if cfg.LogLevel == slog.LevelDebug.String() {
-		debug = true
-	}
-
-	fetcher, err := ebpf.NewFlowFetcher(debug, cfg.Sampling, cfg.CacheMaxFlows, ingress, egress)
+	fetcher, err := ebpf.NewFlowFetcher(cfg.Sampling, cfg.CacheMaxFlows, ingress, egress)
 	if err != nil {
 		return nil, err
 	}
@@ -150,9 +145,9 @@ func FlowsAgent(cfg *Config) (*Flows, error) {
 
 // flowsAgent is a private constructor with injectable dependencies, usable for tests
 func flowsAgent(cfg *Config,
-	informer ifaces.Informer,
+	informer ifaces2.Informer,
 	fetcher ebpfFlowFetcher,
-	exporter node.TerminalFunc[[]*flow.Record],
+	exporter node.TerminalFunc[[]*flow2.Record],
 	agentIP net.IP,
 ) (*Flows, error) {
 	// configure allow/deny interfaces filter
@@ -161,7 +156,7 @@ func flowsAgent(cfg *Config,
 		return nil, fmt.Errorf("configuring interface filters: %w", err)
 	}
 
-	registerer := ifaces.NewRegisterer(informer, cfg.BuffersLength)
+	registerer := ifaces2.NewRegisterer(informer, cfg.BuffersLength)
 
 	interfaceNamer := func(ifIndex int) string {
 		iface, ok := registerer.IfaceNameForIndex(ifIndex)
@@ -171,9 +166,9 @@ func flowsAgent(cfg *Config,
 		return iface
 	}
 
-	mapTracer := flow.NewMapTracer(fetcher, cfg.CacheActiveTimeout)
-	rbTracer := flow.NewRingBufTracer(fetcher, mapTracer, cfg.CacheActiveTimeout)
-	accounter := flow.NewAccounter(
+	mapTracer := flow2.NewMapTracer(fetcher, cfg.CacheActiveTimeout)
+	rbTracer := flow2.NewRingBufTracer(fetcher, mapTracer, cfg.CacheActiveTimeout)
+	accounter := flow2.NewAccounter(
 		cfg.CacheMaxFlows, cfg.CacheActiveTimeout, time.Now, monotime.Now)
 	return &Flows{
 		ebpf:           fetcher,
@@ -258,9 +253,9 @@ func (f *Flows) interfacesManager(ctx context.Context) error {
 			case event := <-ifaceEvents:
 				slog.Debug("received event", "event", event)
 				switch event.Type {
-				case ifaces.EventAdded:
+				case ifaces2.EventAdded:
 					f.onInterfaceAdded(event.Interface)
-				case ifaces.EventDeleted:
+				case ifaces2.EventDeleted:
 					// qdiscs, ingress and egress filters are automatically deleted so we don't need to
 					// specifically detach them from the ebpfFetcher
 				default:
@@ -275,7 +270,7 @@ func (f *Flows) interfacesManager(ctx context.Context) error {
 
 // buildAndStartPipeline creates the ETL flow processing graph.
 // For a more visual view, check the docs/architecture.md document.
-func (f *Flows) buildAndStartPipeline(ctx context.Context) (*node.Terminal[[]*flow.Record], error) {
+func (f *Flows) buildAndStartPipeline(ctx context.Context) (*node.Terminal[[]*flow2.Record], error) {
 	alog := alog()
 	alog.Debug("registering interfaces' listener in background")
 	err := f.interfacesManager(ctx)
@@ -283,6 +278,8 @@ func (f *Flows) buildAndStartPipeline(ctx context.Context) (*node.Terminal[[]*fl
 		return nil, err
 	}
 
+	// this uses the low-level pipes node API
+	// TODO: integrate it with the high-level graph API of Beyla
 	alog.Debug("connecting flows' processing graph")
 	mapTracer := node.AsStart(f.mapTracer.TraceLoop(ctx))
 	rbTracer := node.AsStart(f.rbTracer.TraceLoop(ctx))
@@ -290,10 +287,10 @@ func (f *Flows) buildAndStartPipeline(ctx context.Context) (*node.Terminal[[]*fl
 	accounter := node.AsMiddle(f.accounter.Account,
 		node.ChannelBufferLen(f.cfg.BuffersLength))
 
-	limiter := node.AsMiddle((&flow.CapacityLimiter{}).Limit,
+	limiter := node.AsMiddle((&flow2.CapacityLimiter{}).Limit,
 		node.ChannelBufferLen(f.cfg.BuffersLength))
 
-	decorator := node.AsMiddle(flow.Decorate(f.agentIP, f.interfaceNamer),
+	decorator := node.AsMiddle(flow2.Decorate(f.agentIP, f.interfaceNamer),
 		node.ChannelBufferLen(f.cfg.BuffersLength))
 
 	ebl := f.cfg.ExporterBufferLength
@@ -307,7 +304,7 @@ func (f *Flows) buildAndStartPipeline(ctx context.Context) (*node.Terminal[[]*fl
 	rbTracer.SendTo(accounter)
 
 	if f.cfg.Deduper == DeduperFirstCome {
-		deduper := node.AsMiddle(flow.Dedupe(f.cfg.DeduperFCExpiry, f.cfg.DeduperJustMark),
+		deduper := node.AsMiddle(flow2.Dedupe(f.cfg.DeduperFCExpiry, f.cfg.DeduperJustMark),
 			node.ChannelBufferLen(f.cfg.BuffersLength))
 		mapTracer.SendTo(deduper)
 		accounter.SendTo(deduper)
@@ -325,7 +322,7 @@ func (f *Flows) buildAndStartPipeline(ctx context.Context) (*node.Terminal[[]*fl
 	return export, nil
 }
 
-func (f *Flows) onInterfaceAdded(iface ifaces.Interface) {
+func (f *Flows) onInterfaceAdded(iface ifaces2.Interface) {
 	alog := alog().With("interface", iface)
 	// ignore interfaces that do not match the user configuration acceptance/exclusion lists
 	if !f.filter.Allowed(iface.Name) {
@@ -337,4 +334,15 @@ func (f *Flows) onInterfaceAdded(iface ifaces.Interface) {
 		alog.Warn("can't register flow ebpfFetcher. Ignoring", "error", err)
 		return
 	}
+}
+
+func buildFlowExporter(_ *Config) (node.TerminalFunc[[]*flow2.Record], error) {
+	return func(in <-chan []*flow2.Record) {
+		for flows := range in {
+			fmt.Printf("received %d flows\n", len(flows))
+			for _, f := range flows {
+				fmt.Printf("%#v\n", *f)
+			}
+		}
+	}, nil
 }

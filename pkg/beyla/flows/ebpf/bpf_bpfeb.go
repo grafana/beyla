@@ -13,6 +13,28 @@ import (
 	"github.com/cilium/ebpf"
 )
 
+type bpfFlowId struct {
+	EthProtocol       uint16
+	Direction         uint8
+	SrcMac            [6]uint8
+	DstMac            [6]uint8
+	SrcIp             struct{ In6U struct{ U6Addr8 [16]uint8 } }
+	DstIp             struct{ In6U struct{ U6Addr8 [16]uint8 } }
+	SrcPort           uint16
+	DstPort           uint16
+	TransportProtocol uint8
+	IfIndex           uint32
+}
+
+type bpfFlowMetrics struct {
+	Packets         uint32
+	Bytes           uint64
+	StartMonoTimeTs uint64
+	EndMonoTimeTs   uint64
+	Flags           uint16
+	Errno           uint8
+}
+
 // loadBpf returns the embedded CollectionSpec for bpf.
 func loadBpf() (*ebpf.CollectionSpec, error) {
 	reader := bytes.NewReader(_BpfBytes)
@@ -28,9 +50,9 @@ func loadBpf() (*ebpf.CollectionSpec, error) {
 //
 // The following types are suitable as obj argument:
 //
-//     *bpfObjects
-//     *bpfPrograms
-//     *bpfMaps
+//	*bpfObjects
+//	*bpfPrograms
+//	*bpfMaps
 //
 // See ebpf.CollectionSpec.LoadAndAssign documentation for details.
 func loadBpfObjects(obj interface{}, opts *ebpf.CollectionOptions) error {
@@ -121,5 +143,6 @@ func _BpfClose(closers ...io.Closer) error {
 }
 
 // Do not access this directly.
+//
 //go:embed bpf_bpfeb.o
 var _BpfBytes []byte

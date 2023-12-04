@@ -7,6 +7,7 @@ import (
 	"github.com/mariomac/pipes/pkg/graph"
 	"github.com/mariomac/pipes/pkg/node"
 
+	"github.com/grafana/beyla/pkg/beyla/config"
 	"github.com/grafana/beyla/pkg/internal/ebpf"
 	"github.com/grafana/beyla/pkg/internal/ebpf/goruntime"
 	"github.com/grafana/beyla/pkg/internal/ebpf/gosql"
@@ -14,7 +15,6 @@ import (
 	"github.com/grafana/beyla/pkg/internal/ebpf/httpfltr"
 	"github.com/grafana/beyla/pkg/internal/ebpf/nethttp"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
-	"github.com/grafana/beyla/pkg/internal/pipe"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 )
 
@@ -28,7 +28,7 @@ type ProcessFinder struct {
 	TraceAttacher
 }
 
-func NewProcessFinder(ctx context.Context, cfg *pipe.Config, ctxInfo *global.ContextInfo) *ProcessFinder {
+func NewProcessFinder(ctx context.Context, cfg *config.Config, ctxInfo *global.ContextInfo) *ProcessFinder {
 	var cntDB *ContainerDBUpdater
 	if ctxInfo.K8sDecoration {
 		cntDB = &ContainerDBUpdater{DB: ctxInfo.K8sDatabase}
@@ -49,7 +49,7 @@ func NewProcessFinder(ctx context.Context, cfg *pipe.Config, ctxInfo *global.Con
 
 // Start the ProcessFinder pipeline in background. It returns a channel where each new discovered
 // ebpf.ProcessTracer will be notified.
-func (pf *ProcessFinder) Start(cfg *pipe.Config) (<-chan *ebpf.ProcessTracer, error) {
+func (pf *ProcessFinder) Start(cfg *config.Config) (<-chan *ebpf.ProcessTracer, error) {
 	gb := graph.NewBuilder(node.ChannelBufferLen(cfg.ChannelBufferLen))
 	graph.RegisterStart(gb, WatcherProvider)
 	graph.RegisterMiddle(gb, CriteriaMatcherProvider)
@@ -67,7 +67,7 @@ func (pf *ProcessFinder) Start(cfg *pipe.Config) (<-chan *ebpf.ProcessTracer, er
 // auxiliary functions to instantiate the go and non-go tracers on diverse steps of the
 // discovery pipeline
 
-func newGoTracersGroup(cfg *pipe.Config, metrics imetrics.Reporter) []ebpf.Tracer {
+func newGoTracersGroup(cfg *config.Config, metrics imetrics.Reporter) []ebpf.Tracer {
 	// Each program is an eBPF source: net/http, grpc...
 	return []ebpf.Tracer{
 		nethttp.New(&cfg.EBPF, metrics),
@@ -78,6 +78,6 @@ func newGoTracersGroup(cfg *pipe.Config, metrics imetrics.Reporter) []ebpf.Trace
 	}
 }
 
-func newNonGoTracersGroup(cfg *pipe.Config, metrics imetrics.Reporter) []ebpf.Tracer {
+func newNonGoTracersGroup(cfg *config.Config, metrics imetrics.Reporter) []ebpf.Tracer {
 	return []ebpf.Tracer{httpfltr.New(cfg, metrics)}
 }

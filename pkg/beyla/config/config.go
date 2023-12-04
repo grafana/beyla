@@ -1,4 +1,4 @@
-package pipe
+package config
 
 import (
 	"fmt"
@@ -8,6 +8,7 @@ import (
 	"github.com/caarlos0/env/v9"
 	"gopkg.in/yaml.v3"
 
+	"github.com/grafana/beyla/pkg/beyla/flows/agent"
 	"github.com/grafana/beyla/pkg/internal/discover/services"
 	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
 	"github.com/grafana/beyla/pkg/internal/export/debug"
@@ -17,6 +18,23 @@ import (
 	"github.com/grafana/beyla/pkg/internal/traces"
 	"github.com/grafana/beyla/pkg/internal/transform"
 )
+
+type Feature uint
+
+const (
+	FeatureAppO11y = Feature(1 << iota)
+	FeatureNetO11y
+)
+
+type Features uint
+
+func (fs *Features) Add(f Feature) {
+	*fs |= Features(f)
+}
+
+func (fs Features) Has(f Feature) bool {
+	return fs&Features(f) != 0
+}
 
 var defaultConfig = Config{
 	ChannelBufferLen: 10,
@@ -71,7 +89,8 @@ var defaultConfig = Config{
 }
 
 type Config struct {
-	EBPF ebpfcommon.TracerConfig `yaml:"ebpf"`
+	Network agent.Config            `yaml:"network"`
+	EBPF    ebpfcommon.TracerConfig `yaml:"ebpf"`
 
 	// Grafana overrides some values of the otel.MetricsConfig and otel.TracesConfig below
 	// for a simpler submission of OTEL metrics to Grafana Cloud
@@ -129,8 +148,8 @@ func (c *Config) validateInstrumentation() error {
 	if err := c.Discovery.Services.Validate(); err != nil {
 		return ConfigError(fmt.Sprintf("error in services YAML property: %s", err.Error()))
 	}
-	if c.Port.Len() == 0 && !c.Exec.IsSet() && len(c.Discovery.Services) == 0 && !c.Discovery.SystemWide {
-		return ConfigError("missing BEYLA_EXECUTABLE_NAME, BEYLA_OPEN_PORT or BEYLA_SYSTEM_WIDE property")
+	if !c.Network.Enable && c.Port.Len() == 0 && !c.Exec.IsSet() && len(c.Discovery.Services) == 0 && !c.Discovery.SystemWide {
+		return ConfigError("missing BEYLA_NETWORK_OBSERVABILITY, BEYLA_EXECUTABLE_NAME, BEYLA_OPEN_PORT or BEYLA_SYSTEM_WIDE property")
 	}
 	if (c.Port.Len() > 0 || c.Exec.IsSet() || len(c.Discovery.Services) > 0) && c.Discovery.SystemWide {
 		return ConfigError("you can't use BEYLA_SYSTEM_WIDE if any of BEYLA_EXECUTABLE_NAME, BEYLA_OPEN_PORT or services (YAML) are set")
@@ -141,19 +160,29 @@ func (c *Config) validateInstrumentation() error {
 	return nil
 }
 
-func (c *Config) Validate() error {
+func (c *Config) Validate() (Features, error) {
+	var feat Features
 	if err := c.validateInstrumentation(); err != nil {
-		return err
+		return feat, err
+	}
+	if c.Network.Enable {
+		feat.Add(FeatureNetO11y)
 	}
 
-	if !c.Noop.Enabled() && !c.Printer.Enabled() &&
-		!c.Grafana.OTLP.MetricsEnabled() && !c.Grafana.OTLP.TracesEnabled() &&
-		!c.Metrics.Enabled() && !c.Traces.Enabled() &&
-		!c.Prometheus.Enabled() {
-		return ConfigError("you need to define at least one exporter: print_traces," +
-			" grafana, otel_metrics_export, otel_traces_export or prometheus_export")
+	if c.Noop.Enabled() || c.Printer.Enabled() ||
+		c.Grafana.OTLP.MetricsEnabled() || c.Grafana.OTLP.TracesEnabled() ||
+		c.Metrics.Enabled() || c.Traces.Enabled() ||
+		c.Prometheus.Enabled() {
+		feat.Add(FeatureAppO11y)
 	}
-	return nil
+
+	if feat != 0 {
+		return feat, nil
+	}
+
+	return feat, ConfigError("you need to enable at least NetO11y or one AppO11y exporter: print_traces," +
+		" grafana, otel_metrics_export, otel_traces_export or prometheus_export")
+
 }
 
 // LoadConfig overrides configuration in the following order (from less to most priority)

@@ -2,11 +2,11 @@ package pipe
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/mariomac/pipes/pkg/graph"
 	"github.com/mariomac/pipes/pkg/node"
 
+	"github.com/grafana/beyla/pkg/beyla/config"
 	"github.com/grafana/beyla/pkg/internal/export/debug"
 	"github.com/grafana/beyla/pkg/internal/export/otel"
 	"github.com/grafana/beyla/pkg/internal/export/prom"
@@ -35,7 +35,7 @@ type nodesMap struct {
 	Noop       debug.NoopEnabled
 }
 
-func configToNodesMap(cfg *Config) *nodesMap {
+func configToNodesMap(cfg *config.Config) *nodesMap {
 	return &nodesMap{
 		TracesReader: traces.ReadDecorator{InstanceID: cfg.Attributes.InstanceID},
 		Routes:       cfg.Routes,
@@ -52,7 +52,7 @@ func configToNodesMap(cfg *Config) *nodesMap {
 type graphFunctions struct {
 	ctx context.Context
 
-	config  *Config
+	config  *config.Config
 	builder *graph.Builder
 	ctxInfo *global.ContextInfo
 
@@ -64,17 +64,13 @@ type graphFunctions struct {
 
 // Build instantiates the whole instrumentation --> processing --> submit
 // pipeline graph and returns it as a startable item
-func Build(ctx context.Context, config *Config, ctxInfo *global.ContextInfo, tracesCh <-chan []request.Span) (*Instrumenter, error) {
-	if err := config.Validate(); err != nil {
-		return nil, fmt.Errorf("validating configuration: %w", err)
-	}
-
+func Build(ctx context.Context, config *config.Config, ctxInfo *global.ContextInfo, tracesCh <-chan []request.Span) (*Instrumenter, error) {
 	return newGraphBuilder(ctx, config, ctxInfo, tracesCh).buildGraph()
 }
 
 // private constructor that can be instantiated from tests to override the node providers
 // and offsets inspector
-func newGraphBuilder(ctx context.Context, config *Config, ctxInfo *global.ContextInfo, tracesCh <-chan []request.Span) *graphFunctions {
+func newGraphBuilder(ctx context.Context, config *config.Config, ctxInfo *global.ContextInfo, tracesCh <-chan []request.Span) *graphFunctions {
 	// This is how the github.com/mariomac/pipes library, works:
 	// https://github.com/mariomac/pipes/tree/main/docs/tutorial/b-highlevel/01-basic-nodes
 

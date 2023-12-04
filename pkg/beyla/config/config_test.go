@@ -1,4 +1,4 @@
-package pipe
+package config
 
 import (
 	"bytes"
@@ -56,7 +56,8 @@ attributes:
 
 	cfg, err := LoadConfig(userConfig)
 	require.NoError(t, err)
-	assert.NoError(t, cfg.Validate())
+	_, err = cfg.Validate()
+	assert.NoError(t, err)
 
 	// first test executable, as we can't test equality on it
 	assert.True(t, cfg.Exec.MatchString("atrassss"))
@@ -150,7 +151,8 @@ func TestConfigValidate(t *testing.T) {
 	for n, tc := range testCases {
 		t.Run(fmt.Sprint("case", n), func(t *testing.T) {
 			defer unsetEnv(t, tc)
-			assert.NoError(t, loadConfig(t, tc).Validate())
+			_, err := loadConfig(t, tc).Validate()
+			assert.NoError(t, err)
 		})
 	}
 }
@@ -163,7 +165,8 @@ func TestConfigValidate_error(t *testing.T) {
 	for n, tc := range testCases {
 		t.Run(fmt.Sprint("case", n), func(t *testing.T) {
 			defer unsetEnv(t, tc)
-			assert.Error(t, loadConfig(t, tc).Validate())
+			_, err := loadConfig(t, tc).Validate()
+			assert.Error(t, err)
 		})
 	}
 }

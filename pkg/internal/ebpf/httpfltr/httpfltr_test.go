@@ -8,7 +8,7 @@ import (
 	"github.com/cilium/ebpf/ringbuf"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/grafana/beyla/pkg/internal/pipe"
+	"github.com/grafana/beyla/pkg/beyla/config"
 	"github.com/grafana/beyla/pkg/internal/request"
 	"github.com/grafana/beyla/pkg/internal/svc"
 )
@@ -101,7 +101,7 @@ func TestToRequestTrace(t *testing.T) {
 	err := binary.Write(buf, binary.LittleEndian, &record)
 	assert.NoError(t, err)
 
-	tracer := Tracer{cfg: &pipe.Config{}}
+	tracer := Tracer{cfg: &config.Config{}}
 	result, _, err := tracer.readHTTPInfoIntoSpan(&ringbuf.Record{RawSample: buf.Bytes()})
 	assert.NoError(t, err)
 
@@ -135,7 +135,7 @@ func TestToRequestTraceNoConnection(t *testing.T) {
 	err := binary.Write(buf, binary.LittleEndian, &record)
 	assert.NoError(t, err)
 
-	tracer := Tracer{cfg: &pipe.Config{}}
+	tracer := Tracer{cfg: &config.Config{}}
 	result, _, err := tracer.readHTTPInfoIntoSpan(&ringbuf.Record{RawSample: buf.Bytes()})
 	assert.NoError(t, err)
 

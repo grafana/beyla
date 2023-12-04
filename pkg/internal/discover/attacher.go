@@ -11,10 +11,10 @@ import (
 	"github.com/cilium/ebpf/link"
 	"github.com/mariomac/pipes/pkg/node"
 
+	"github.com/grafana/beyla/pkg/beyla/config"
 	"github.com/grafana/beyla/pkg/internal/ebpf"
 	"github.com/grafana/beyla/pkg/internal/goexec"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
-	"github.com/grafana/beyla/pkg/internal/pipe"
 	"github.com/grafana/beyla/pkg/internal/svc"
 )
 
@@ -23,7 +23,7 @@ import (
 // instrumenting the executable
 type TraceAttacher struct {
 	log               *slog.Logger
-	Cfg               *pipe.Config
+	Cfg               *config.Config
 	Ctx               context.Context
 	DiscoveredTracers chan *ebpf.ProcessTracer
 	Metrics           imetrics.Reporter

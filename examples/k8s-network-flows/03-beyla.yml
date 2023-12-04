@@ -1,23 +1,23 @@
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
-  name: netobserv-ebpf-agent
+  name: beyla
   labels:
-    k8s-app: netobserv-ebpf-agent
+    k8s-app: beyla
 spec:
   selector:
     matchLabels:
-      k8s-app: netobserv-ebpf-agent
+      k8s-app: beyla
   template:
     metadata:
       labels:
-        k8s-app: netobserv-ebpf-agent
+        k8s-app: beyla
     spec:
       hostNetwork: true
       dnsPolicy: ClusterFirstWithHostNet
       serviceAccountName: beyla-network-observability-test
       containers:
-      - name: netobserv-ebpf-agent
+      - name: beyla
         image: beyla-local:netobserv
         securityContext:
           privileged: true

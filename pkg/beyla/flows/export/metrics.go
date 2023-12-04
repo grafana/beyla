@@ -2,15 +2,13 @@ package export
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
 	"log/slog"
 	"time"
 
-	"github.com/grafana/beyla/pkg/beyla/flows/flow"
 	"github.com/grafana/beyla/pkg/internal/export/otel"
 	"github.com/mariomac/pipes/pkg/node"
 	otel2 "go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 	metric2 "go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/resource"
@@ -41,7 +39,52 @@ func newMeterProvider(res *resource.Resource, exporter *metric.Exporter) (*metri
 	return meterProvider, nil
 }
 
-func MetricsExporterProvider(cfg ExportConfig) (node.TerminalFunc[[]*flow.Record], error) {
+func metricValue(m map[string]interface{}) int {
+	v, ok := m["Bytes"].(int)
+
+	if !ok {
+		return 0
+	}
+
+	return v
+}
+
+func attributes(m map[string]interface{}) []attribute.KeyValue {
+	res := make([]attribute.KeyValue, 0)
+
+	v, ok := m["SrcAddr"].(string)
+
+	if ok {
+		res = append(res, attribute.String("client.name", v))
+		res = append(res, attribute.String("client.namespace", "test"))
+		res = append(res, attribute.String("client.kind", "generator"))
+	}
+
+	v, ok = m["DstAddr"].(string)
+
+	if ok {
+		res = append(res, attribute.String("server.name", v))
+		res = append(res, attribute.String("server.namespace", "test"))
+		res = append(res, attribute.String("server.kind", "deployment"))
+	}
+
+	direction := 2 // server
+	serverPort, _ := m["DstPort"].(int)
+	i, ok := m["FlowDirection"].(int)
+
+	if ok {
+		if i == 1 {
+			direction = 1
+		}
+	}
+
+	res = append(res, attribute.Int("server.port", serverPort))
+	res = append(res, attribute.Int("role", direction))
+
+	return res
+}
+
+func MetricsExporterProvider(cfg ExportConfig) (node.TerminalFunc[[]map[string]interface{}], error) {
 	log := mlog()
 	exporter, err := otel.InstantiateMetricsExporter(context.Background(), cfg.Metrics, log)
 	if err != nil {
@@ -72,14 +115,20 @@ func MetricsExporterProvider(cfg ExportConfig) (node.TerminalFunc[[]*flow.Record
 		metric2.WithUnit("{bytes}"),
 	)
 
-	fmt.Printf("aaa %v", ebpfObserved)
+	if err != nil {
+		log.Error("", "error", err)
+		return nil, err
+	}
 
-	return func(in <-chan []*flow.Record) {
+	return func(in <-chan []map[string]interface{}) {
 		for i := range in {
-
-			// TODO: replace by something more useful
-			bytes, _ := json.Marshal(i)
-			fmt.Println(string(bytes))
+			for _, v := range i {
+				ebpfObserved.Add(
+					context.Background(),
+					int64(metricValue(v)),
+					metric2.WithAttributes(attributes(v)...),
+				)
+			}
 		}
 	}, nil
 }

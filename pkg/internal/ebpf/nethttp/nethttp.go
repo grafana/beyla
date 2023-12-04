@@ -30,8 +30,10 @@ import (
 	"github.com/grafana/beyla/pkg/internal/svc"
 )
 
-//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf ../../../../bpf/go_nethttp.c -- -I../../../../bpf/headers
-//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf_debug ../../../../bpf/go_nethttp.c -- -I../../../../bpf/headers -DBPF_DEBUG
+//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf ../../../../bpf/go_nethttp.c -- -I../../../../bpf/headers -DNO_HEADER_PROPAGATION
+//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf_debug ../../../../bpf/go_nethttp.c -- -I../../../../bpf/headers -DBPF_DEBUG -DNO_HEADER_PROPAGATION
+//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf_tp ../../../../bpf/go_nethttp.c -- -I../../../../bpf/headers
+//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf_tp_debug ../../../../bpf/go_nethttp.c -- -I../../../../bpf/headers -DBPF_DEBUG
 
 type Tracer struct {
 	log        *slog.Logger
@@ -65,6 +67,15 @@ func (p *Tracer) Load() (*ebpf.CollectionSpec, error) {
 	if p.cfg.BpfDebug {
 		loader = loadBpf_debug
 	}
+
+	lockdown := ebpfcommon.KernelLockdownMode()
+
+	if lockdown == ebpfcommon.KernelLockdownNone {
+		loader = loadBpf_tp
+		if p.cfg.BpfDebug {
+			loader = loadBpf_tp_debug
+		}
+	}
 	return loader()
 }
 
@@ -85,6 +96,8 @@ func (p *Tracer) Constants(_ *exec.FileInfo, offsets *goexec.Offsets) map[string
 		"content_length_ptr_pos",
 		"resp_req_pos",
 		"req_header_ptr_pos",
+		"io_writer_buf_ptr_pos",
+		"io_writer_n_pos",
 	} {
 		constants[s] = offsets.Field[s]
 	}

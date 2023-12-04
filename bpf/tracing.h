@@ -1,6 +1,7 @@
 #ifndef TRACING_H
 #define TRACING_H
 #include "vmlinux.h"
+#include "trace_util.h"
 
 #define TRACE_ID_SIZE_BYTES 16
 #define SPAN_ID_SIZE_BYTES   8
@@ -14,5 +15,23 @@ typedef struct tp_info {
     unsigned char parent_id[SPAN_ID_SIZE_BYTES];
     u64 epoch;
 } tp_info_t;
+
+static __always_inline void make_tp_string(unsigned char *buf, tp_info_t *tp) {
+    // Version
+    *buf++ = '0'; *buf++ = '0'; *buf++ = '-';
+
+    // TraceID
+    encode_hex(buf, tp->trace_id, TRACE_ID_SIZE_BYTES);
+    buf += TRACE_ID_CHAR_LEN;
+    *buf++ = '-';
+
+    // SpanID
+    encode_hex(buf, tp->span_id, SPAN_ID_SIZE_BYTES);
+    buf += SPAN_ID_CHAR_LEN;
+    *buf++ = '-';
+
+    // Flags
+    *buf++ = '0'; *buf = '1';
+}
 
 #endif

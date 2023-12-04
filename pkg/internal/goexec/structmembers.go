@@ -101,6 +101,13 @@ var structMembers = map[string]structInfo{
 			"target": "grpc_client_target_ptr_pos",
 		},
 	},
+	"bufio.Writer": {
+		lib: "go",
+		fields: map[string]string{
+			"buf": "io_writer_buf_ptr_pos",
+			"n":   "io_writer_n_pos",
+		},
+	},
 	"context.valueCtx": {
 		lib: "go",
 		fields: map[string]string{

@@ -110,14 +110,16 @@ static __always_inline void server_trace_parent(void *goroutine_addr, tp_info_t 
     bpf_map_update_elem(&go_trace_map, &goroutine_addr, tp, BPF_ANY);
 }
 
-static __always_inline void client_trace_parent(void *goroutine_addr, tp_info_t *tp_i, void *req_header) {
+static __always_inline u8 client_trace_parent(void *goroutine_addr, tp_info_t *tp_i, void *req_header) {
     // Get traceparent from the Request.Header
     u8 found_trace_id = 0;
+    u8 trace_id_exists = 0;
     
     if (req_header) {
         void *traceparent_ptr = extract_traceparent_from_req_headers(req_header);
         if (traceparent_ptr != NULL) {
             unsigned char buf[W3C_VAL_LENGTH];
+            trace_id_exists = 1;
             long res = bpf_probe_read(buf, sizeof(buf), traceparent_ptr);
             if (res < 0) {
                 bpf_dbg_printk("can't copy traceparent header");
@@ -148,6 +150,8 @@ static __always_inline void client_trace_parent(void *goroutine_addr, tp_info_t 
         
         urand_bytes(tp_i->span_id, SPAN_ID_SIZE_BYTES);
     }
+
+    return trace_id_exists;
 }
 
 

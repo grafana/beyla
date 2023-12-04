@@ -193,6 +193,16 @@ int uprobe_WriteHeader(struct pt_regs *ctx) {
     return 0;
 }
 
+#ifndef NO_HEADER_PROPAGATION
+struct {
+    __uint(type, BPF_MAP_TYPE_HASH);
+    __type(key, void *); // key: pointer to the request header map
+    __type(value, u64); // the goroutine of the transport request
+    __uint(max_entries, MAX_CONCURRENT_REQUESTS);
+} header_req_map SEC(".maps");
+
+#endif
+
 /* HTTP Client. We expect to see HTTP client in both HTTP server and gRPC server calls.*/
 
 SEC("uprobe/roundTrip")
@@ -210,12 +220,24 @@ int uprobe_roundTrip(struct pt_regs *ctx) {
         .tp = {0}
     };
 
-    client_trace_parent(goroutine_addr, &invocation.tp, (void*)(req + req_header_ptr_pos));
+    __attribute__((__unused__)) u8 existing_tp = client_trace_parent(goroutine_addr, &invocation.tp, (void*)(req + req_header_ptr_pos));
 
     // Write event
     if (bpf_map_update_elem(&ongoing_http_client_requests, &goroutine_addr, &invocation, BPF_ANY)) {
         bpf_dbg_printk("can't update http client map element");
     }
+
+#ifndef NO_HEADER_PROPAGATION
+    if (!existing_tp) {
+        void *headers_ptr = 0;
+        bpf_probe_read(&headers_ptr, sizeof(headers_ptr), (void*)(req + req_header_ptr_pos));
+        bpf_dbg_printk("goroutine_addr %lx, req ptr %llx, headers_ptr %llx", goroutine_addr, req, headers_ptr);
+        
+        if (headers_ptr) {
+            bpf_map_update_elem(&header_req_map, &headers_ptr, &goroutine_addr, BPF_ANY);
+        }
+    }
+#endif    
 
     return 0;
 }
@@ -290,3 +312,63 @@ int uprobe_roundTripReturn(struct pt_regs *ctx) {
 
     return 0;
 }
+
+#ifndef NO_HEADER_PROPAGATION
+// Context propagation through HTTP headers
+SEC("uprobe/header_writeSubset")
+int uprobe_writeSubset(struct pt_regs *ctx) {
+    bpf_dbg_printk("=== uprobe/proc header writeSubset === ");
+
+    void *header_addr = GO_PARAM1(ctx);
+    void *io_writer_addr = GO_PARAM3(ctx);
+
+    bpf_dbg_printk("goroutine_addr %lx, header ptr %llx", GOROUTINE_PTR(ctx), header_addr);
+
+    u64 *request_goaddr = bpf_map_lookup_elem(&header_req_map, &header_addr);
+
+    if (!request_goaddr) {
+        bpf_dbg_printk("Can't find parent go routine for header %llx", header_addr);
+        return 0;
+    }
+
+    u64 parent_goaddr = *request_goaddr;
+
+    http_func_invocation_t *func_inv = bpf_map_lookup_elem(&ongoing_http_client_requests, &parent_goaddr);
+    if (!func_inv) {
+        bpf_dbg_printk("Can't find client request for goroutine %llx", parent_goaddr);
+        return 0;
+    }
+
+    unsigned char buf[TRACEPARENT_LEN];
+
+    make_tp_string(buf, &func_inv->tp);
+
+    void *buf_ptr = 0;
+    bpf_probe_read(&buf_ptr, sizeof(buf_ptr), (void *)(io_writer_addr + io_writer_buf_ptr_pos));
+    if (!buf_ptr) {
+        return 0;
+    }
+    
+    s64 size = 0;
+    bpf_probe_read(&size, sizeof(s64), (void *)(io_writer_addr + io_writer_buf_ptr_pos + 8)); // grab size
+
+    s64 len = 0;
+    bpf_probe_read(&len, sizeof(s64), (void *)(io_writer_addr + io_writer_n_pos)); // grab len
+
+    bpf_dbg_printk("buf_ptr %llx, len=%d, size=%d", (void*)buf_ptr, len, size);
+
+    if (len < (size - W3C_VAL_LENGTH - W3C_KEY_LENGTH - 4)) { // 4 = :<space>\r\n
+        char key[W3C_KEY_LENGTH + 2] = "Traceparent: ";
+        char end[2] = "\r\n";
+        bpf_probe_write_user(buf_ptr + (len & 0x0ffff), key, sizeof(key));
+        len += W3C_KEY_LENGTH + 2;
+        bpf_probe_write_user(buf_ptr + (len & 0x0ffff), buf, sizeof(buf));
+        len += W3C_VAL_LENGTH;
+        bpf_probe_write_user(buf_ptr + (len & 0x0ffff), end, sizeof(end));
+        len += 2;
+        bpf_probe_write_user((void *)(io_writer_addr + io_writer_n_pos), &len, sizeof(len));
+    }
+
+    return 0;
+}
+#endif

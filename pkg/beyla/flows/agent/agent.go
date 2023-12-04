@@ -30,6 +30,7 @@ import (
 	"github.com/gavv/monotime"
 	"github.com/mariomac/pipes/pkg/node"
 
+	"github.com/grafana/beyla/pkg/beyla/config"
 	"github.com/grafana/beyla/pkg/beyla/flows/ebpf"
 	flow2 "github.com/grafana/beyla/pkg/beyla/flows/flow"
 	ifaces2 "github.com/grafana/beyla/pkg/beyla/flows/ifaces"
@@ -70,7 +71,7 @@ func (s Status) String() string {
 
 // Flows reporting agent
 type Flows struct {
-	cfg *Config
+	cfg *config.AgentConfig
 
 	// input data providers
 	interfaces ifaces2.Informer
@@ -100,7 +101,7 @@ type ebpfFlowFetcher interface {
 }
 
 // FlowsAgent instantiates a new agent, given a configuration.
-func FlowsAgent(cfg *Config) (*Flows, error) {
+func FlowsAgent(cfg *config.AgentConfig) (*Flows, error) {
 	alog := alog()
 	alog.Info("initializing Flows agent")
 
@@ -144,7 +145,7 @@ func FlowsAgent(cfg *Config) (*Flows, error) {
 }
 
 // flowsAgent is a private constructor with injectable dependencies, usable for tests
-func flowsAgent(cfg *Config,
+func flowsAgent(cfg *config.AgentConfig,
 	informer ifaces2.Informer,
 	fetcher ebpfFlowFetcher,
 	exporter node.TerminalFunc[[]*flow2.Record],
@@ -184,7 +185,7 @@ func flowsAgent(cfg *Config,
 	}, nil
 }
 
-func flowDirections(cfg *Config) (ingress, egress bool) {
+func flowDirections(cfg *config.AgentConfig) (ingress, egress bool) {
 	switch cfg.Direction {
 	case DirectionIngress:
 		return true, false
@@ -288,7 +289,7 @@ func (f *Flows) onInterfaceAdded(iface ifaces2.Interface) {
 	}
 }
 
-func buildFlowExporter(_ *Config) (node.TerminalFunc[[]*flow2.Record], error) {
+func buildFlowExporter(_ *config.AgentConfig) (node.TerminalFunc[[]*flow2.Record], error) {
 	return func(in <-chan []*flow2.Record) {
 		for flows := range in {
 			fmt.Printf("received %d flows\n", len(flows))

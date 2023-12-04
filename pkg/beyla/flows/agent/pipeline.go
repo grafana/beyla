@@ -6,9 +6,11 @@ import (
 	"github.com/mariomac/pipes/pkg/graph"
 	"github.com/mariomac/pipes/pkg/node"
 
+	"github.com/grafana/beyla/pkg/beyla/config"
 	"github.com/grafana/beyla/pkg/beyla/flows/export"
 	flow2 "github.com/grafana/beyla/pkg/beyla/flows/flow"
 	"github.com/grafana/beyla/pkg/beyla/flows/transform"
+	"github.com/grafana/beyla/pkg/internal/export/otel"
 )
 
 type FlowsPipeline struct {
@@ -20,9 +22,9 @@ type FlowsPipeline struct {
 	//Decorator       `sendTo:"Kubernetes"`
 	Decorator `sendTo:"Exporter"`
 
-	Kubernetes *transform.NetworkTransformConfig `sendTo:"Exporter"`
+	//Kubernetes *transform.NetworkTransformConfig `sendTo:"Exporter"`
 
-	Exporter export.ExportConfig
+	Exporter otel.MetricsConfig
 }
 
 type Codec struct{}
@@ -35,9 +37,15 @@ type Decorator struct{}
 // buildAndStartPipeline creates the ETL flow processing graph.
 // For a more visual view, check the docs/architecture.md document.
 func (f *Flows) buildAndStartPipeline(ctx context.Context) (graph.Graph, error) {
+
+	cfg, err := config.LoadConfig(nil)
+	if err != nil {
+		return graph.Graph{}, err
+	}
+
 	alog := alog()
 	alog.Debug("registering interfaces' listener in background")
-	err := f.interfacesManager(ctx)
+	err = f.interfacesManager(ctx)
 	if err != nil {
 		return graph.Graph{}, err
 	}
@@ -68,9 +76,9 @@ func (f *Flows) buildAndStartPipeline(ctx context.Context) (graph.Graph, error) 
 	graph.RegisterMiddle(gb, func(_ Decorator) (node.MiddleFunc[[]*flow2.Record, []*flow2.Record], error) {
 		return flow2.Decorate(f.agentIP, f.interfaceNamer), nil
 	})
-	graph.RegisterMiddle(gb, transform.Network)
+	//graph.RegisterMiddle(gb, transform.Network)
 
-	graph.RegisterTerminal(gb, export.ExporterProvider)
+	graph.RegisterTerminal(gb, export.MetricsExporterProvider)
 
 	return gb.Build(&FlowsPipeline{
 		Deduper: flow2.Deduper{
@@ -78,8 +86,8 @@ func (f *Flows) buildAndStartPipeline(ctx context.Context) (graph.Graph, error) 
 			ExpireTime: f.cfg.DeduperFCExpiry,
 			JustMark:   f.cfg.DeduperJustMark,
 		},
-		Kubernetes: &f.cfg.Transform,
+		//Kubernetes: &f.cfg.Transform,
 		// TODO: put here any extra configuration for the exporter
-		Exporter: export.ExportConfig{},
+		Exporter: cfg.Metrics,
 	})
 }

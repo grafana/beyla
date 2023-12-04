@@ -75,6 +75,8 @@ func (p *Tracer) Load() (*ebpf.CollectionSpec, error) {
 		if p.cfg.BpfDebug {
 			loader = loadBpf_tp_debug
 		}
+	} else {
+		p.log.Info("Kernel in lockdown mode, trace info propagation in HTTP headers is disabled.")
 	}
 	return loader()
 }

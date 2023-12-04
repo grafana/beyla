@@ -210,6 +210,12 @@ func (f *Flows) Run(ctx context.Context) error {
 		return fmt.Errorf("starting processing graph: %w", err)
 	}
 
+	graphDone := make(chan struct{})
+	go func() {
+		graph.Run()
+		close(graphDone)
+	}()
+
 	f.status = StatusStarted
 	alog.Info("Flows agent successfully started")
 	<-ctx.Done()
@@ -221,7 +227,7 @@ func (f *Flows) Run(ctx context.Context) error {
 	}
 
 	alog.Debug("waiting for all nodes to finish their pending work")
-	<-graph.Done()
+	<-graphDone
 
 	f.status = StatusStopped
 	alog.Info("Flows agent stopped")
@@ -266,60 +272,6 @@ func (f *Flows) interfacesManager(ctx context.Context) error {
 	}()
 
 	return nil
-}
-
-// buildAndStartPipeline creates the ETL flow processing graph.
-// For a more visual view, check the docs/architecture.md document.
-func (f *Flows) buildAndStartPipeline(ctx context.Context) (*node.Terminal[[]*flow2.Record], error) {
-	alog := alog()
-	alog.Debug("registering interfaces' listener in background")
-	err := f.interfacesManager(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	// this uses the low-level pipes node API
-	// TODO: integrate it with the high-level graph API of Beyla
-	alog.Debug("connecting flows' processing graph")
-	mapTracer := node.AsStart(f.mapTracer.TraceLoop(ctx))
-	rbTracer := node.AsStart(f.rbTracer.TraceLoop(ctx))
-
-	accounter := node.AsMiddle(f.accounter.Account,
-		node.ChannelBufferLen(f.cfg.BuffersLength))
-
-	limiter := node.AsMiddle((&flow2.CapacityLimiter{}).Limit,
-		node.ChannelBufferLen(f.cfg.BuffersLength))
-
-	decorator := node.AsMiddle(flow2.Decorate(f.agentIP, f.interfaceNamer),
-		node.ChannelBufferLen(f.cfg.BuffersLength))
-
-	ebl := f.cfg.ExporterBufferLength
-	if ebl == 0 {
-		ebl = f.cfg.BuffersLength
-	}
-
-	export := node.AsTerminal(f.exporter,
-		node.ChannelBufferLen(ebl))
-
-	rbTracer.SendTo(accounter)
-
-	if f.cfg.Deduper == DeduperFirstCome {
-		deduper := node.AsMiddle(flow2.Dedupe(f.cfg.DeduperFCExpiry, f.cfg.DeduperJustMark),
-			node.ChannelBufferLen(f.cfg.BuffersLength))
-		mapTracer.SendTo(deduper)
-		accounter.SendTo(deduper)
-		deduper.SendTo(limiter)
-	} else {
-		mapTracer.SendTo(limiter)
-		accounter.SendTo(limiter)
-	}
-	limiter.SendTo(decorator)
-	decorator.SendTo(export)
-
-	alog.Debug("starting graph")
-	mapTracer.Start()
-	rbTracer.Start()
-	return export, nil
 }
 
 func (f *Flows) onInterfaceAdded(iface ifaces2.Interface) {

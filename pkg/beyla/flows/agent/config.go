@@ -20,13 +20,13 @@ package agent
 
 import (
 	"time"
+
+	"github.com/grafana/beyla/pkg/beyla/flows/transform"
 )
 
 const (
 	ListenPoll       = "poll"
 	ListenWatch      = "watch"
-	DeduperNone      = "none"
-	DeduperFirstCome = "firstCome"
 	DirectionIngress = "ingress"
 	DirectionEgress  = "egress"
 	DirectionBoth    = "both"
@@ -107,4 +107,7 @@ type Config struct {
 	// ListenPollPeriod specifies the periodicity to query the network interfaces when the
 	// ListenInterfaces value is set to "poll".
 	ListenPollPeriod time.Duration `env:"LISTEN_POLL_PERIOD" envDefault:"10s"`
+
+	// Property taken from FLPLite: document.
+	Transform transform.NetworkTransformConfig `yaml:"transform"`
 }

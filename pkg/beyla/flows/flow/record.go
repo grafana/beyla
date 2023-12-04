@@ -112,7 +112,7 @@ type Record struct {
 	Duplicate bool
 
 	// AgentIP provides information about the source of the flow (the Agent that traced it)
-	AgentIP net.IP
+	AgentIP string
 }
 
 func NewRecord(

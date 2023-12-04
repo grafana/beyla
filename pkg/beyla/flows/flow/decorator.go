@@ -28,11 +28,12 @@ type InterfaceNamer func(ifIndex int) string
 // - The interface name (corresponding to the interface index in the flow).
 // - The IP address of the agent host.
 func Decorate(agentIP net.IP, ifaceNamer InterfaceNamer) func(in <-chan []*Record, out chan<- []*Record) {
+	ip := agentIP.String()
 	return func(in <-chan []*Record, out chan<- []*Record) {
 		for flows := range in {
 			for _, flow := range flows {
 				flow.Interface = ifaceNamer(int(flow.IFIndex))
-				flow.AgentIP = agentIP
+				flow.AgentIP = ip
 			}
 			out <- flows
 		}

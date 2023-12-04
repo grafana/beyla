@@ -42,4 +42,4 @@ roleRef:
 subjects:
   - kind: ServiceAccount
     name: beyla-network-observability-test
-    namespace: netobserv
+    namespace: default

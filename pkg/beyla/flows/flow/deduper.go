@@ -22,10 +22,27 @@ import (
 	"container/list"
 	"log/slog"
 	"time"
+
+	"github.com/mariomac/pipes/pkg/node"
 )
 
 func dlog() *slog.Logger {
 	return slog.With("component", "flow/Deduper")
+}
+
+const (
+	DeduperNone      = "none"
+	DeduperFirstCome = "firstCome"
+)
+
+type Deduper struct {
+	Type       string
+	ExpireTime time.Duration
+	JustMark   bool
+}
+
+func (d Deduper) Enabled() bool {
+	return d.Type == DeduperFirstCome
 }
 
 var timeNow = time.Now
@@ -48,14 +65,14 @@ type entry struct {
 	expiryTime time.Time
 }
 
-// Dedupe receives flows and filters these belonging to duplicate interfaces. It will forward
+// DeduperProvider receives flows and filters these belonging to duplicate interfaces. It will forward
 // the flows from the first interface coming to it, until that flow expires in the cache
 // (no activity for it during the expiration time)
 // The justMark argument tells that the deduper should not drop the duplicate flows but
 // set their Duplicate field.
-func Dedupe(expireTime time.Duration, justMark bool) func(in <-chan []*Record, out chan<- []*Record) {
+func DeduperProvider(dd Deduper) (node.MiddleFunc[[]*Record, []*Record], error) {
 	cache := &deduperCache{
-		expire:  expireTime,
+		expire:  dd.ExpireTime,
 		entries: list.New(),
 		ifaces:  map[RecordKey]*list.Element{},
 	}
@@ -65,7 +82,7 @@ func Dedupe(expireTime time.Duration, justMark bool) func(in <-chan []*Record, o
 			fwd := make([]*Record, 0, len(records))
 			for _, record := range records {
 				if cache.isDupe(&record.RecordKey) {
-					if justMark {
+					if dd.JustMark {
 						record.Duplicate = true
 					} else {
 						continue
@@ -77,7 +94,7 @@ func Dedupe(expireTime time.Duration, justMark bool) func(in <-chan []*Record, o
 				out <- fwd
 			}
 		}
-	}
+	}, nil
 }
 
 // isDupe returns whether the passed record has been already checked for duplicate for

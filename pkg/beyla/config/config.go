@@ -9,6 +9,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/grafana/beyla/pkg/beyla/flows/agent"
+	transform2 "github.com/grafana/beyla/pkg/beyla/flows/transform"
 	"github.com/grafana/beyla/pkg/internal/discover/services"
 	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
 	"github.com/grafana/beyla/pkg/internal/export/debug"
@@ -86,6 +87,19 @@ var defaultConfig = Config{
 		},
 	},
 	Routes: &transform.RoutesConfig{},
+	Network: agent.Config{
+		Transform: transform2.NetworkTransformConfig{
+			Rules: transform2.NetworkTransformRules{{
+				Input:  "SrcAddr",
+				Output: "SrcK8s",
+				Type:   "add_kubernetes",
+			}, {
+				Input:  "DstAddr",
+				Output: "DstK8s",
+				Type:   "add_kubernetes",
+			}},
+		},
+	},
 }
 
 type Config struct {

@@ -16,8 +16,7 @@
 // This implementation is a derivation of the code in
 // https://github.com/netobserv/netobserv-ebpf-agent/tree/release-1.4
 
-#include "vmlinux_amd64.h"
-//#include <vmlinux.h>
+#include <vmlinux.h>
 #include <string.h>
 #include <stdbool.h>
 

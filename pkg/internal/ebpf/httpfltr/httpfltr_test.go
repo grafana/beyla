@@ -153,11 +153,62 @@ func TestToRequestTraceNoConnection(t *testing.T) {
 	assert.Equal(t, expected, result)
 }
 
-func cstr(chars []uint8) string {
-	addrLen := bytes.IndexByte(chars[:], 0)
-	if addrLen < 0 {
-		addrLen = len(chars)
-	}
+func TestToRequestTrace_BadHost(t *testing.T) {
+	var record BPFHTTPInfo
+	record.Type = 1
+	record.StartMonotimeNs = 123456
+	record.EndMonotimeNs = 789012
+	record.Status = 200
+	record.ConnInfo.D_port = 0
+	record.ConnInfo.S_port = 0
+	record.ConnInfo.S_addr = [16]byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff, 192, 168, 0, 1}
+	record.ConnInfo.D_addr = [16]byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff, 8, 8, 8, 8}
+	copy(record.Buf[:], "GET /hello HTTP/1.1\r\nHost: example.c")
 
-	return string(chars[:addrLen])
+	buf := new(bytes.Buffer)
+	err := binary.Write(buf, binary.LittleEndian, &record)
+	assert.NoError(t, err)
+
+	result, _, err := ReadHTTPInfoIntoSpan(&ringbuf.Record{RawSample: buf.Bytes()})
+	assert.NoError(t, err)
+
+	expected := request.Span{
+		Host:         "",
+		Peer:         "",
+		Path:         "/hello",
+		Method:       "GET",
+		Status:       200,
+		Type:         request.EventTypeHTTP,
+		RequestStart: 123456,
+		Start:        123456,
+		End:          789012,
+		HostPort:     0,
+		ServiceID:    svc.ID{SDKLanguage: svc.InstrumentableGeneric},
+	}
+	assert.Equal(t, expected, result)
+
+	s, p := record.hostFromBuf()
+	assert.Equal(t, s, "")
+	assert.Equal(t, p, -1)
+
+	var record1 BPFHTTPInfo
+	copy(record1.Buf[:], "GET /hello HTTP/1.1\r\nHost: example.c:23")
+
+	s, p = record1.hostFromBuf()
+	assert.Equal(t, s, "example.c")
+	assert.Equal(t, p, 23)
+
+	var record2 BPFHTTPInfo
+	copy(record2.Buf[:], "GET /hello HTTP/1.1\r\nHost: ")
+
+	s, p = record2.hostFromBuf()
+	assert.Equal(t, s, "")
+	assert.Equal(t, p, -1)
+
+	var record3 BPFHTTPInfo
+	copy(record3.Buf[:], "GET /hello HTTP/1.1\r\nHost")
+
+	s, p = record3.hostFromBuf()
+	assert.Equal(t, s, "")
+	assert.Equal(t, p, -1)
 }

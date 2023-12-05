@@ -140,5 +140,5 @@ spec:
             - name: BEYLA_EXECUTABLE_NAME # Select the executable by its name instead of BEYLA_OPEN_PORT
               value: "goblog"
             - name: OTEL_EXPORTER_OTLP_ENDPOINT
-              value: "grafana-agent:4318"
+              value: "http://grafana-agent:4318"
 ```

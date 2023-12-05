@@ -81,8 +81,8 @@ func MetricsExporterProvider(cfg ExportConfig) (node.TerminalFunc[[]map[string]i
 		evictTicker := time.NewTicker(metricsEvictionPeriod)
 		submitTicker := time.NewTicker(cfg.RemoteWritePeriod)
 		for {
-			// handling all the cases from the same goroutine prevents us from implementing
-			// synchronization mechanisms
+			// handling all the cases from the same goroutine prevents us from
+			// having to implement synchronization mechanisms
 			select {
 			case <-evictTicker.C:
 				mr.cleanupOldMetrics()
@@ -110,7 +110,6 @@ type metricsExporter struct {
 	counters map[labelSet]*promwrite.Sample
 }
 
-// TODO: expire old connections
 func (m *metricsExporter) account(metric map[string]interface{}) {
 	ls := metricLabels(metric)
 	bytes := metricValue(metric)

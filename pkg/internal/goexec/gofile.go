@@ -7,8 +7,28 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
+
+	"golang.org/x/mod/semver"
 )
+
+// minGoVersion defines the minimum instrumentable Go version. If the target binary was
+// compiled using an older Go version, it will be treated as a non-Go program.
+const minGoVersion = "1.17"
+
+// supportedGoVersion checks if the given Go version string is equal or greater than the
+// minimum supported version.
+func supportedGoVersion(version string) bool {
+	re := regexp.MustCompile(`\d+\.\d+(?:\.\d+)?`)
+	match := re.FindStringSubmatch(version)
+	if match == nil {
+		return false
+	}
+	version = match[0]
+	// 'semver' package requires version strings to begin with a leading "v".
+	return semver.Compare("v"+version, "v"+minGoVersion) >= 0
+}
 
 // findLibraryVersions looks for all the libraries and versions inside the elf file.
 // It returns a map where the key is the library name and the value is the library version
@@ -20,6 +40,11 @@ func findLibraryVersions(elfFile *elf.File) (map[string]string, error) {
 
 	goVersion = strings.ReplaceAll(goVersion, "go", "")
 	log().Debug("Go version detected", "version", goVersion)
+
+	if !supportedGoVersion(goVersion) {
+		return nil, fmt.Errorf("unsupported Go version: %v. Minimum version is %v", goVersion, minGoVersion)
+	}
+
 	modsMap := parseModules(modules)
 	modsMap["go"] = goVersion
 	return modsMap, nil

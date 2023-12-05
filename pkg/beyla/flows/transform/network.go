@@ -21,18 +21,27 @@ package transform
 import (
 	"fmt"
 	"log/slog"
+	"net"
 	"strconv"
 
 	"github.com/mariomac/pipes/pkg/node"
 
+	"github.com/grafana/beyla/pkg/beyla/config"
 	"github.com/grafana/beyla/pkg/beyla/flows/transform/kubernetes"
 	"github.com/grafana/beyla/pkg/beyla/flows/transform/netdb"
+	lrucache "github.com/hashicorp/golang-lru/v2"
 )
+
+const MAX_RESOLVED_DNS = 10000 // arbitrary limit
 
 func log() *slog.Logger { return slog.With("component", "transform.Network") }
 
-func Network(cfg *NetworkTransformConfig) (node.MiddleFunc[[]map[string]interface{}, []map[string]interface{}], error) {
-	nt, err := newTransformNetwork(cfg)
+type NetworkConfig struct {
+	TransformConfig *config.NetworkTransformConfig
+}
+
+func Network(cfg NetworkConfig) (node.MiddleFunc[[]map[string]interface{}, []map[string]interface{}], error) {
+	nt, err := newTransformNetwork(cfg.TransformConfig)
 	if err != nil {
 		return nil, fmt.Errorf("instantiating network transformer: %w", err)
 	}
@@ -49,12 +58,42 @@ func Network(cfg *NetworkTransformConfig) (node.MiddleFunc[[]map[string]interfac
 }
 
 type networkTransformer struct {
-	kube     kubernetes.KubeData
-	cfg      *NetworkTransformConfig
-	svcNames *netdb.ServiceNames
+	kube           kubernetes.KubeData
+	cfg            *config.NetworkTransformConfig
+	svcNames       *netdb.ServiceNames
+	dnsResolvedIps *lrucache.Cache[string, string]
+	kubeOff        bool
+}
+
+func (n *networkTransformer) dns(key string, outKey string, outputEntry map[string]interface{}) {
+	ip, ok := outputEntry[key].(string)
+
+	if !ok {
+		return
+	}
+
+	host := ""
+
+	val, ok := n.dnsResolvedIps.Get(ip)
+	if ok {
+		host = val
+	} else {
+		hosts, err := net.LookupAddr(ip)
+		if err == nil && len(hosts) > 0 {
+			host = hosts[0]
+		} else {
+			host = "unresolved"
+		}
+		n.dnsResolvedIps.Add(ip, host)
+	}
+
+	outputEntry[outKey] = host
 }
 
 func (n *networkTransformer) transform(outputEntry map[string]interface{}) {
+
+	n.dns("SrcAddr", "SrcHost", outputEntry)
+	n.dns("DstAddr", "DstHost", outputEntry)
 
 	// TODO: for efficiency and maintainability, maybe each case in the switch below should be an individual implementation of Transformer
 	for _, rule := range n.cfg.Rules {
@@ -84,6 +123,9 @@ func (n *networkTransformer) transform(outputEntry map[string]interface{}) {
 			}
 			outputEntry[rule.Output] = serviceName
 		case "add_kubernetes":
+			if n.kubeOff {
+				continue
+			}
 			kubeInfo, err := n.kube.GetInfo(fmt.Sprintf("%s", outputEntry[rule.Input]))
 			if err != nil {
 				log().Debug("Can't find kubernetes info for IP", "ip", outputEntry[rule.Input], "error", err)
@@ -113,11 +155,17 @@ func (n *networkTransformer) transform(outputEntry map[string]interface{}) {
 }
 
 // newTransformNetwork create a new transform
-func newTransformNetwork(cfg *NetworkTransformConfig) (*networkTransformer, error) {
-	nt := networkTransformer{cfg: cfg}
-	err := nt.kube.InitFromConfig(cfg.KubeConfigPath)
+func newTransformNetwork(cfg *config.NetworkTransformConfig) (*networkTransformer, error) {
+	dnsCache, err := lrucache.New[string, string](MAX_RESOLVED_DNS)
 	if err != nil {
 		return nil, err
+	}
+
+	nt := networkTransformer{cfg: cfg, dnsResolvedIps: dnsCache}
+	err = nt.kube.InitFromConfig(cfg.KubeConfigPath)
+	if err != nil {
+		nt.kubeOff = true
+		log().Warn("no k8s API available", "error", err)
 	}
 	/*
 		TODO: fix kubernetes failing because /etc/protocols not found

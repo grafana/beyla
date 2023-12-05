@@ -18,10 +18,9 @@ type FlowsPipeline struct {
 	Accounter       `sendTo:"Deduper"`
 	Deduper         flow2.Deduper `forwardTo:"CapacityLimiter"`
 	CapacityLimiter `sendTo:"Decorator"`
-	//Decorator       `sendTo:"Kubernetes"`
-	Decorator `sendTo:"Exporter"`
+	Decorator       `sendTo:"Kubernetes"`
 
-	//Kubernetes *transform.NetworkTransformConfig `sendTo:"Exporter"`
+	Kubernetes transform.NetworkConfig `sendTo:"Exporter"`
 
 	Exporter export.ExportConfig
 }
@@ -75,7 +74,7 @@ func (f *Flows) buildAndStartPipeline(ctx context.Context) (graph.Graph, error) 
 	graph.RegisterMiddle(gb, func(_ Decorator) (node.MiddleFunc[[]*flow2.Record, []*flow2.Record], error) {
 		return flow2.Decorate(f.agentIP, f.interfaceNamer), nil
 	})
-	//graph.RegisterMiddle(gb, transform.Network)
+	graph.RegisterMiddle(gb, transform.Network)
 
 	graph.RegisterTerminal(gb, export.MetricsExporterProvider)
 
@@ -85,7 +84,7 @@ func (f *Flows) buildAndStartPipeline(ctx context.Context) (graph.Graph, error) 
 			ExpireTime: f.cfg.DeduperFCExpiry,
 			JustMark:   f.cfg.DeduperJustMark,
 		},
-		//Kubernetes: &f.cfg.Transform,
+		Kubernetes: transform.NetworkConfig{TransformConfig: &cfg.Network.Transform},
 		// TODO: put here any extra configuration for the exporter
 		Exporter: export.ExportConfig{Metrics: &cfg.Metrics},
 	})

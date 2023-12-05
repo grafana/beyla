@@ -8,7 +8,6 @@ import (
 	"github.com/caarlos0/env/v9"
 	"gopkg.in/yaml.v3"
 
-	transform2 "github.com/grafana/beyla/pkg/beyla/flows/transform"
 	"github.com/grafana/beyla/pkg/internal/discover/services"
 	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
 	"github.com/grafana/beyla/pkg/internal/export/debug"
@@ -104,7 +103,7 @@ type AgentConfig struct {
 	ListenPollPeriod time.Duration `env:"LISTEN_POLL_PERIOD" envDefault:"10s"`
 
 	// Property taken from FLPLite: document.
-	Transform transform2.NetworkTransformConfig `yaml:"transform"`
+	Transform NetworkTransformConfig `yaml:"transform"`
 }
 
 var defaultConfig = Config{
@@ -158,12 +157,12 @@ var defaultConfig = Config{
 	},
 	Routes: &transform.RoutesConfig{},
 	Network: AgentConfig{
-		Transform: transform2.NetworkTransformConfig{
-			Rules: transform2.NetworkTransformRules{transform2.NetworkTransformRule{
+		Transform: NetworkTransformConfig{
+			Rules: NetworkTransformRules{NetworkTransformRule{
 				Input:  "SrcAddr",
 				Output: "SrcK8s",
 				Type:   "add_kubernetes",
-			}, transform2.NetworkTransformRule{
+			}, NetworkTransformRule{
 				Input:  "DstAddr",
 				Output: "DstK8s",
 				Type:   "add_kubernetes",

@@ -2,6 +2,8 @@ package export
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"log/slog"
 	"time"
 
@@ -52,34 +54,44 @@ func metricValue(m map[string]interface{}) int {
 func attributes(m map[string]interface{}) []attribute.KeyValue {
 	res := make([]attribute.KeyValue, 0)
 
-	v, ok := m["SrcAddr"].(string)
-
-	if ok {
-		res = append(res, attribute.String("client.name", v))
-		res = append(res, attribute.String("client.namespace", "test"))
-		res = append(res, attribute.String("client.kind", "generator"))
+	direction, _ := m["FlowDirection"].(int) // not used, they rely on client<->server
+	serverPort := 0
+	if direction == 0 {
+		serverPort, _ = m["SrcPort"].(int)
+	} else {
+		serverPort, _ = m["DstPort"].(int)
 	}
 
-	v, ok = m["DstAddr"].(string)
+	client, ok := m["SrcHost"].(string)
 
-	if ok {
-		res = append(res, attribute.String("server.name", v))
-		res = append(res, attribute.String("server.namespace", "test"))
-		res = append(res, attribute.String("server.kind", "deployment"))
+	if !ok {
+		client, _ = m["SrcAddr"].(string)
 	}
 
-	direction := 2 // server
-	serverPort, _ := m["DstPort"].(int)
-	i, ok := m["FlowDirection"].(int)
+	server, ok := m["DstHost"].(string)
 
-	if ok {
-		if i == 1 {
-			direction = 1
-		}
+	if !ok {
+		server, _ = m["DstAddr"].(string)
 	}
+
+	if direction == 0 {
+		tmp := server
+		server = client
+		client = tmp
+	}
+
+	res = append(res, attribute.String("client.name", client))
+	res = append(res, attribute.String("client.namespace", "test"))
+	res = append(res, attribute.String("client.kind", "generator"))
+	res = append(res, attribute.String("server.name", server))
+	res = append(res, attribute.String("server.namespace", "test"))
+	res = append(res, attribute.String("server.kind", "deployment"))
 
 	res = append(res, attribute.Int("server.port", serverPort))
-	res = append(res, attribute.Int("role", direction))
+
+	// probably not needed
+	res = append(res, attribute.String("asserts.env", "dev"))
+	res = append(res, attribute.String("asserts.site", "beekeepers"))
 
 	return res
 }
@@ -122,6 +134,9 @@ func MetricsExporterProvider(cfg ExportConfig) (node.TerminalFunc[[]map[string]i
 
 	return func(in <-chan []map[string]interface{}) {
 		for i := range in {
+			bytes, _ := json.Marshal(i)
+			fmt.Println(string(bytes))
+
 			for _, v := range i {
 				ebpfObserved.Add(
 					context.Background(),

@@ -22,6 +22,8 @@ import (
 	"fmt"
 	"net"
 	"strings"
+
+	"github.com/grafana/beyla/pkg/beyla/config"
 )
 
 // dependencies that can be injected from testing
@@ -40,7 +42,7 @@ var (
 //   - AgentIPIface specifies which interface this function should look into in order to pickup an address.
 //   - AgentIPType specifies which type of IP address should the agent pickup ("any" to pickup whichever
 //     ipv4 or ipv6 address is found first)
-func fetchAgentIP(cfg *Config) (net.IP, error) {
+func fetchAgentIP(cfg *config.AgentConfig) (net.IP, error) {
 	if cfg.AgentIP != "" {
 		if ip := net.ParseIP(cfg.AgentIP); ip != nil {
 			return ip, nil

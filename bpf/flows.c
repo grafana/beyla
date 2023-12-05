@@ -16,20 +16,9 @@
 // This implementation is a derivation of the code in
 // https://github.com/netobserv/netobserv-ebpf-agent/tree/release-1.4
 
-#include <linux/bpf.h>
-#include <linux/in.h>
-#include <linux/if_packet.h>
-#include <linux/if_vlan.h>
-#include <linux/ip.h>
-#include <linux/if_ether.h>
-#include <linux/ipv6.h>
-#include <linux/icmp.h>
-#include <linux/icmpv6.h>
-#include <linux/udp.h>
-#include <linux/tcp.h>
+#include <vmlinux.h>
 #include <string.h>
 #include <stdbool.h>
-#include <linux/if_ether.h>
 
 #include <bpf_helpers.h>
 #include <bpf_endian.h>
@@ -66,7 +55,7 @@ struct {
 // Key: the flow identifier. Value: the flow metrics for that identifier.
 // The userspace will aggregate them into a single flow.
 struct {
-    __uint(type, BPF_MAP_TYPE_PERCPU_HASH);
+    __uint(type, BPF_MAP_TYPE_LRU_PERCPU_HASH);
     __type(key, flow_id);
     __type(value, flow_metrics);
 } aggregated_flows SEC(".maps");

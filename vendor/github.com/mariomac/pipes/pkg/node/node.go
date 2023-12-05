@@ -7,6 +7,7 @@ package node
 
 import (
 	"errors"
+	"fmt"
 	"reflect"
 
 	"github.com/mariomac/pipes/pkg/node/internal/connect"
@@ -170,7 +171,7 @@ func (i *Start[OUT]) Start() {
 
 func (i *Middle[IN, OUT]) start() {
 	if len(i.outs) == 0 {
-		panic("Middle node should have outputs")
+		panic(fmt.Sprintf("Middle node should have outputs %v", i))
 	}
 	i.started = true
 	joiners := make([]*connect.Joiner[OUT], 0, len(i.outs))

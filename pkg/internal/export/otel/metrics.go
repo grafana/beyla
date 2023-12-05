@@ -104,7 +104,7 @@ func (m *MetricsConfig) GuessProtocol() Protocol {
 // This method is invoked only once during startup time so it doesn't have a noticeable performance impact.
 // nolint:gocritic
 func (m MetricsConfig) Enabled() bool {
-	return m.CommonEndpoint != "" || m.MetricsEndpoint != "" || m.Grafana.MetricsEnabled()
+	return false
 }
 
 // MetricsReporter implements the graph node that receives request.Span
@@ -160,7 +160,7 @@ func newMetricsReporter(ctx context.Context, cfg *MetricsConfig, ctxInfo *global
 			}()
 		}, mr.newMetricSet)
 	// Instantiate the OTLP HTTP or GRPC metrics exporter
-	exporter, err := instantiateMetricsExporter(ctx, cfg, log)
+	exporter, err := InstantiateMetricsExporter(ctx, cfg, log)
 	if err != nil {
 		return nil, err
 	}
@@ -223,7 +223,7 @@ func (mr *MetricsReporter) newMetricSet(service svc.ID) (*Metrics, error) {
 	return &m, nil
 }
 
-func instantiateMetricsExporter(ctx context.Context, cfg *MetricsConfig, log *slog.Logger) (metric.Exporter, error) {
+func InstantiateMetricsExporter(ctx context.Context, cfg *MetricsConfig, log *slog.Logger) (metric.Exporter, error) {
 	var err error
 	var exporter metric.Exporter
 	switch proto := cfg.GetProtocol(); proto {

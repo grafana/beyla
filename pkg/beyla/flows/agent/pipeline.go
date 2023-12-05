@@ -6,6 +6,7 @@ import (
 	"github.com/mariomac/pipes/pkg/graph"
 	"github.com/mariomac/pipes/pkg/node"
 
+	"github.com/grafana/beyla/pkg/beyla/config"
 	"github.com/grafana/beyla/pkg/beyla/flows/export"
 	flow2 "github.com/grafana/beyla/pkg/beyla/flows/flow"
 	"github.com/grafana/beyla/pkg/beyla/flows/transform"
@@ -19,7 +20,7 @@ type FlowsPipeline struct {
 	CapacityLimiter `sendTo:"Decorator"`
 	Decorator       `sendTo:"Kubernetes"`
 
-	Kubernetes *transform.NetworkTransformConfig `sendTo:"Exporter"`
+	Kubernetes transform.NetworkConfig `sendTo:"Exporter"`
 
 	Exporter export.ExportConfig
 }
@@ -34,9 +35,15 @@ type Decorator struct{}
 // buildAndStartPipeline creates the ETL flow processing graph.
 // For a more visual view, check the docs/architecture.md document.
 func (f *Flows) buildAndStartPipeline(ctx context.Context) (graph.Graph, error) {
+
+	cfg, err := config.LoadConfig(nil)
+	if err != nil {
+		return graph.Graph{}, err
+	}
+
 	alog := alog()
 	alog.Debug("registering interfaces' listener in background")
-	err := f.interfacesManager(ctx)
+	err = f.interfacesManager(ctx)
 	if err != nil {
 		return graph.Graph{}, err
 	}
@@ -69,7 +76,7 @@ func (f *Flows) buildAndStartPipeline(ctx context.Context) (graph.Graph, error) 
 	})
 	graph.RegisterMiddle(gb, transform.Network)
 
-	graph.RegisterTerminal(gb, export.ExporterProvider)
+	graph.RegisterTerminal(gb, export.MetricsExporterProvider)
 
 	return gb.Build(&FlowsPipeline{
 		Deduper: flow2.Deduper{
@@ -77,8 +84,8 @@ func (f *Flows) buildAndStartPipeline(ctx context.Context) (graph.Graph, error) 
 			ExpireTime: f.cfg.DeduperFCExpiry,
 			JustMark:   f.cfg.DeduperJustMark,
 		},
-		Kubernetes: &f.cfg.Transform,
+		Kubernetes: transform.NetworkConfig{TransformConfig: &cfg.Network.Transform},
 		// TODO: put here any extra configuration for the exporter
-		Exporter: export.ExportConfig{},
+		Exporter: export.ExportConfig{Metrics: &cfg.Metrics},
 	})
 }

@@ -36,7 +36,8 @@ func (fs Features) Has(f Feature) bool {
 }
 
 type AgentConfig struct {
-	Enable bool `env:"BEYLA_NETWORK_OBSERVABILITY" yaml:"enable"`
+	Enable         bool   `env:"BEYLA_NETWORK_OBSERVABILITY" yaml:"enable"`
+	RemoteWriteURL string `env:"BEYLA_NETWORK_REMOTE_WRITE_URL"`
 
 	// AgentIP allows overriding the reported Agent IP address on each flow.
 	AgentIP string `env:"AGENT_IP"`

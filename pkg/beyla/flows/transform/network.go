@@ -24,12 +24,12 @@ import (
 	"net"
 	"strconv"
 
+	lrucache "github.com/hashicorp/golang-lru/v2"
 	"github.com/mariomac/pipes/pkg/node"
 
 	"github.com/grafana/beyla/pkg/beyla/config"
 	"github.com/grafana/beyla/pkg/beyla/flows/transform/kubernetes"
 	"github.com/grafana/beyla/pkg/beyla/flows/transform/netdb"
-	lrucache "github.com/hashicorp/golang-lru/v2"
 )
 
 const MAX_RESOLVED_DNS = 10000 // arbitrary limit

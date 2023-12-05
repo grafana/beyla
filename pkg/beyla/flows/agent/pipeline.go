@@ -86,6 +86,6 @@ func (f *Flows) buildAndStartPipeline(ctx context.Context) (graph.Graph, error) 
 		},
 		Kubernetes: transform.NetworkConfig{TransformConfig: &cfg.Network.Transform},
 		// TODO: put here any extra configuration for the exporter
-		Exporter: export.ExportConfig{Metrics: &cfg.Metrics},
+		Exporter: export.ExportConfig{RemoteWriteURL: cfg.Network.RemoteWriteURL},
 	})
 }

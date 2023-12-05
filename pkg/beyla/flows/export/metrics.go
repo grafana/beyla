@@ -5,40 +5,16 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"time"
 
-	"github.com/grafana/beyla/pkg/internal/export/otel"
+	"github.com/castai/promwrite"
 	"github.com/mariomac/pipes/pkg/node"
-	otel2 "go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
-	metric2 "go.opentelemetry.io/otel/metric"
-	"go.opentelemetry.io/otel/sdk/metric"
-	"go.opentelemetry.io/otel/sdk/resource"
-	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 // TODO: put here any exporter configuration
 
 func mlog() *slog.Logger {
 	return slog.With("component", "otel.MetricsReporter")
-}
-
-func newResource() (*resource.Resource, error) {
-	return resource.Merge(resource.Default(),
-		resource.NewWithAttributes("https://opentelemetry.io/schemas/1.21.0",
-			semconv.ServiceName("beyla-network"),
-			semconv.ServiceVersion("0.1.0"),
-		))
-}
-
-func newMeterProvider(res *resource.Resource, exporter *metric.Exporter) (*metric.MeterProvider, error) {
-	meterProvider := metric.NewMeterProvider(
-		metric.WithResource(res),
-		metric.WithReader(metric.NewPeriodicReader(*exporter,
-			// Default is 1m. Set to 3s for demonstrative purposes.
-			metric.WithInterval(10*time.Second))),
-	)
-	return meterProvider, nil
 }
 
 func metricValue(m map[string]interface{}) int {
@@ -51,8 +27,8 @@ func metricValue(m map[string]interface{}) int {
 	return v
 }
 
-func attributes(m map[string]interface{}) []attribute.KeyValue {
-	res := make([]attribute.KeyValue, 0)
+func labelValues(m map[string]interface{}) []string {
+	res := make([]string, 0, 9)
 
 	direction, _ := m["FlowDirection"].(int) // not used, they rely on client<->server
 	serverPort := 0
@@ -80,57 +56,37 @@ func attributes(m map[string]interface{}) []attribute.KeyValue {
 		client = tmp
 	}
 
-	res = append(res, attribute.String("client.name", client))
-	res = append(res, attribute.String("client.namespace", "test"))
-	res = append(res, attribute.String("client.kind", "generator"))
-	res = append(res, attribute.String("server.name", server))
-	res = append(res, attribute.String("server.namespace", "test"))
-	res = append(res, attribute.String("server.kind", "deployment"))
+	res = append(res, client)       // "client.name
+	res = append(res, "test")       // "client.namespace
+	res = append(res, "generator")  // "client.kind
+	res = append(res, server)       // "server.name
+	res = append(res, "test")       // "server.namespace
+	res = append(res, "deployment") // "server.kind
 
-	res = append(res, attribute.Int("server.port", serverPort))
+	res = append(res, fmt.Sprint(serverPort)) // "server.port
 
 	// probably not needed
-	res = append(res, attribute.String("asserts.env", "dev"))
-	res = append(res, attribute.String("asserts.site", "beekeepers"))
+	res = append(res, "dev")        // "asserts.env
+	res = append(res, "beekeepers") // "asserts.site
 
 	return res
 }
 
 func MetricsExporterProvider(cfg ExportConfig) (node.TerminalFunc[[]map[string]interface{}], error) {
-	log := mlog()
-	exporter, err := otel.InstantiateMetricsExporter(context.Background(), cfg.Metrics, log)
-	if err != nil {
-		log.Error("", "error", err)
-		return nil, err
-	}
+	client := promwrite.NewClient(cfg.RemoteWriteURL)
 
-	resource, err := newResource()
-	if err != nil {
-		log.Error("", "error", err)
-		return nil, err
-	}
+	counter := prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "ebpf_connections_observed",
+		Help: "total bytes_sent value of connections observed by probe since its launch",
+	}, []string{
+		// need to keep the same order as labelValues returned attributes
+		"client_name", "client_namespace", "client_kind", "server_name", "server_namespace",
+		"server_kind", "server_port", "asserts_env", "asserts_site",
+	})
 
-	provider, err := newMeterProvider(resource, &exporter)
-
-	if err != nil {
-		log.Error("", "error", err)
-		return nil, err
-	}
-
-	otel2.SetMeterProvider(provider)
-
-	ebpfEvents := otel2.Meter("ebpf_events")
-
-	ebpfObserved, err := ebpfEvents.Int64Counter(
-		"ebpf.connections.observed",
-		metric2.WithDescription("total bytes_sent value of connections observed by probe since its launch"),
-		metric2.WithUnit("{bytes}"),
-	)
-
-	if err != nil {
-		log.Error("", "error", err)
-		return nil, err
-	}
+	client.Write(context.TODO(), &promwrite.WriteRequest{
+		TimeSeries: []promwrite.TimeSeries{{}},
+	})
 
 	return func(in <-chan []map[string]interface{}) {
 		for i := range in {
@@ -138,11 +94,7 @@ func MetricsExporterProvider(cfg ExportConfig) (node.TerminalFunc[[]map[string]i
 			fmt.Println(string(bytes))
 
 			for _, v := range i {
-				ebpfObserved.Add(
-					context.Background(),
-					int64(metricValue(v)),
-					metric2.WithAttributes(attributes(v)...),
-				)
+				counter.WithLabelValues(labelValues(v)...).Add(float64(metricValue(v)))
 			}
 		}
 	}, nil

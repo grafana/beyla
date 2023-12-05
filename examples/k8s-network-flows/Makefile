@@ -1,3 +1,4 @@
+SHELL := /bin/bash
 IMG ?= beyla-local:netobserv
 
 build:

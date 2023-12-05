@@ -51,41 +51,78 @@ func metricValue(m map[string]interface{}) int {
 	return v
 }
 
+func clientK8SField(field string, m map[string]interface{}, direction int) string {
+	if direction == 1 { // client
+		v, ok := m["SrcK8s_"+field].(string)
+
+		if !ok {
+			return ""
+		}
+		return v
+	}
+
+	v, ok := m["DstK8s_"+field].(string)
+
+	if !ok {
+		return ""
+	}
+	return v
+}
+
+func clientNamespace(m map[string]interface{}, direction int) string {
+	return clientK8SField("Namespace", m, direction)
+}
+
+func clientKind(m map[string]interface{}, direction int) string {
+	kind := clientK8SField("Type", m, direction)
+	if kind == "" {
+		kind = "external"
+	}
+
+	return kind
+}
+
+func clientName(m map[string]interface{}, direction int) string {
+	name := clientK8SField("Name", m, direction)
+	if name == "" {
+		if direction == 1 { // client
+			v, ok := m["SrcHost"].(string)
+			if !ok {
+				v, _ = m["SrcAddr"].(string)
+			}
+			name = v
+		} else {
+			v, ok := m["DstHost"].(string)
+			if !ok {
+				v, _ = m["DstAddr"].(string)
+			}
+			name = v
+		}
+	}
+
+	return name
+}
+
 func attributes(m map[string]interface{}) []attribute.KeyValue {
 	res := make([]attribute.KeyValue, 0)
 
+	oppositeDirection := 1
 	direction, _ := m["FlowDirection"].(int) // not used, they rely on client<->server
-	serverPort := 0
-	if direction == 0 {
-		serverPort, _ = m["SrcPort"].(int)
-	} else {
-		serverPort, _ = m["DstPort"].(int)
+	serverPort, _ := m["SrcPort"].(int)
+	destPort, _ := m["DstPort"].(int)
+	if destPort < serverPort {
+		serverPort = destPort
+	}
+	if direction == 1 {
+		oppositeDirection = 0
 	}
 
-	client, ok := m["SrcHost"].(string)
-
-	if !ok {
-		client, _ = m["SrcAddr"].(string)
-	}
-
-	server, ok := m["DstHost"].(string)
-
-	if !ok {
-		server, _ = m["DstAddr"].(string)
-	}
-
-	if direction == 0 {
-		tmp := server
-		server = client
-		client = tmp
-	}
-
-	res = append(res, attribute.String("client.name", client))
-	res = append(res, attribute.String("client.namespace", "test"))
-	res = append(res, attribute.String("client.kind", "generator"))
-	res = append(res, attribute.String("server.name", server))
-	res = append(res, attribute.String("server.namespace", "test"))
-	res = append(res, attribute.String("server.kind", "deployment"))
+	res = append(res, attribute.String("client.name", clientName(m, direction)))
+	res = append(res, attribute.String("client.namespace", clientNamespace(m, direction)))
+	res = append(res, attribute.String("client.kind", clientKind(m, direction)))
+	res = append(res, attribute.String("server.name", clientName(m, oppositeDirection)))
+	res = append(res, attribute.String("server.namespace", clientNamespace(m, oppositeDirection)))
+	res = append(res, attribute.String("server.kind", clientKind(m, oppositeDirection)))
 
 	res = append(res, attribute.Int("server.port", serverPort))
 
@@ -94,6 +131,15 @@ func attributes(m map[string]interface{}) []attribute.KeyValue {
 	res = append(res, attribute.String("asserts.site", "beekeepers"))
 
 	return res
+}
+
+func processEvents(i []map[string]interface{}) {
+	bytes, _ := json.Marshal(i)
+	fmt.Println(string(bytes))
+
+	for _, v := range i {
+		fmt.Println(attributes(v))
+	}
 }
 
 func MetricsExporterProvider(cfg ExportConfig) (node.TerminalFunc[[]map[string]interface{}], error) {

@@ -81,8 +81,6 @@ func (n *networkTransformer) dns(key string, outKey string, outputEntry map[stri
 		hosts, err := net.LookupAddr(ip)
 		if err == nil && len(hosts) > 0 {
 			host = hosts[0]
-		} else {
-			host = "unresolved"
 		}
 		n.dnsResolvedIps.Add(ip, host)
 	}
@@ -92,8 +90,10 @@ func (n *networkTransformer) dns(key string, outKey string, outputEntry map[stri
 
 func (n *networkTransformer) transform(outputEntry map[string]interface{}) {
 
-	n.dns("SrcAddr", "SrcHost", outputEntry)
-	n.dns("DstAddr", "DstHost", outputEntry)
+	if n.kubeOff {
+		n.dns("SrcAddr", "SrcHost", outputEntry)
+		n.dns("DstAddr", "DstHost", outputEntry)
+	}
 
 	// TODO: for efficiency and maintainability, maybe each case in the switch below should be an individual implementation of Transformer
 	for _, rule := range n.cfg.Rules {
@@ -128,6 +128,9 @@ func (n *networkTransformer) transform(outputEntry map[string]interface{}) {
 			}
 			kubeInfo, err := n.kube.GetInfo(fmt.Sprintf("%s", outputEntry[rule.Input]))
 			if err != nil {
+				n.dns("SrcAddr", "SrcHost", outputEntry)
+				n.dns("DstAddr", "DstHost", outputEntry)
+
 				log().Debug("Can't find kubernetes info for IP", "ip", outputEntry[rule.Input], "error", err)
 				continue
 			}

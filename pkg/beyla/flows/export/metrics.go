@@ -131,7 +131,11 @@ func (m *metricsExporter) remoteWrite() {
 			Sample: *val,
 		})
 	}
-	wr, err := m.client.Write(context.TODO(), &promwrite.WriteRequest{TimeSeries: series})
+	wr, err := m.client.Write(context.TODO(), &promwrite.WriteRequest{TimeSeries: series},
+		promwrite.WriteHeaders(map[string]string{
+		// TODO: add here authentication headers
+		}))
+
 	if err != nil {
 		m.log.Error("can't write metrics", "error", err)
 	} else {

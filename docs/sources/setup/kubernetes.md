@@ -214,7 +214,7 @@ spec:
             - name: BEYLA_EXECUTABLE_NAME
               value: "goblog"
             - name: OTEL_EXPORTER_OTLP_ENDPOINT
-              value: "grafana-agent:4318"
+              value: "http://grafana-agent:4318"
               # required if you want kubernetes metadata decoration
             - name: BEYLA_KUBE_METADATA_ENABLE
               value: "true"

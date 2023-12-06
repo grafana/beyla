@@ -61,6 +61,8 @@ int uprobe_ServeHTTP(struct pt_regs *ctx) {
 
     if (req) {
         server_trace_parent(goroutine_addr, &invocation.tp, (void*)(req + req_header_ptr_pos));
+        // TODO: if context propagation is supported, overwrite the header value in the map with the 
+        // new span context and the same thread id.
     }
     
     // Write event

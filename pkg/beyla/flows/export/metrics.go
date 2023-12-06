@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/grafana/beyla/pkg/internal/export/otel"
@@ -203,7 +204,7 @@ func flowAttributes(m map[string]interface{}) []attribute.KeyValue {
 	}
 
 	res = append(res, attribute.String("protocol", protocol))
-	res = append(res, attribute.String("inteface", strAttr(m, "Interface")))
+	res = append(res, attribute.String("interface", strAttr(m, "Interface")))
 
 	res = append(res, attribute.String("dst.ip", strAttr(m, "DstAddr")))
 	res = append(res, attribute.String("dst.host", eitherOr(strAttr(m, "DstK8s_Name"), strAttr(m, "SrcHost"))))
@@ -211,7 +212,36 @@ func flowAttributes(m map[string]interface{}) []attribute.KeyValue {
 	res = append(res, attribute.String("dst.type", strAttr(m, "DstK8s_Type")))
 	res = append(res, attribute.String("dst.node.ip", strAttr(m, "DstK8s_HostIP")))
 
+	dstPort := intAttr(m, "DstPort")
+	if dstPort > 32768 {
+		dstPort = 0
+	}
+	res = append(res, attribute.Int("dst.port", dstPort))
+
 	return res
+}
+
+func agentMetric(m map[string]interface{}) bool {
+	agentIP := strAttr(m, "AgentIP")
+
+	if agentIP != "" {
+		src := strAttr(m, "SrcAddr")
+		dst := strAttr(m, "DstAddr")
+
+		return src == agentIP || dst == agentIP
+	}
+
+	return false
+}
+
+func anyK8sMetrics(m map[string]interface{}) bool {
+	for k, _ := range m {
+		if strings.Contains(k, "K8s_") {
+			return true
+		}
+	}
+
+	return false
 }
 
 func MetricsExporterProvider(cfg ExportConfig) (node.TerminalFunc[[]map[string]interface{}], error) {
@@ -276,6 +306,11 @@ func MetricsExporterProvider(cfg ExportConfig) (node.TerminalFunc[[]map[string]i
 			fmt.Println(string(bytes))
 
 			for _, v := range i {
+				// Don't report metrics for the agent itself
+				if agentMetric(v) && anyK8sMetrics(v) {
+					continue
+				}
+
 				ebpfObserved.Add(
 					context.Background(),
 					int64(metricValue(v)),

@@ -66,18 +66,17 @@ func (p *Tracer) BlockPID(pid uint32) {
 func (p *Tracer) supportsContextPropagation() bool {
 	kernelMajor, kernelMinor := ebpf2.KernelVersion()
 	if kernelMajor < 5 || (kernelMajor == 5 && kernelMinor < 14) {
-		p.log.Info("Found Linux kernel earlier than 5.14, trace context propagation is supported", "major", kernelMajor, "minor", kernelMinor)
+		p.log.Debug("Found Linux kernel earlier than 5.14, trace context propagation is supported", "major", kernelMajor, "minor", kernelMinor)
 		return true
 	}
 
 	lockdown := ebpfcommon.KernelLockdownMode()
 
 	if lockdown == ebpfcommon.KernelLockdownNone {
-		p.log.Info("Kernel not in lockdown mode, trace context propagation is supported.")
+		p.log.Debug("Kernel not in lockdown mode, trace context propagation is supported.")
 		return true
 	}
 
-	p.log.Info("Kernel in lockdown mode, trace info propagation in HTTP headers is disabled.")
 	return false
 }
 
@@ -92,6 +91,8 @@ func (p *Tracer) Load() (*ebpf.CollectionSpec, error) {
 		if p.cfg.BpfDebug {
 			loader = loadBpf_tp_debug
 		}
+	} else {
+		p.log.Info("Kernel in lockdown mode, trace info propagation in HTTP headers is disabled.")
 	}
 	return loader()
 }
@@ -130,7 +131,7 @@ func (p *Tracer) AddCloser(c ...io.Closer) {
 }
 
 func (p *Tracer) GoProbes() map[string]ebpfcommon.FunctionPrograms {
-	return map[string]ebpfcommon.FunctionPrograms{
+	m := map[string]ebpfcommon.FunctionPrograms{
 		"net/http.serverHandler.ServeHTTP": {
 			Start: p.bpfObjects.UprobeServeHTTP,
 		},
@@ -145,6 +146,14 @@ func (p *Tracer) GoProbes() map[string]ebpfcommon.FunctionPrograms {
 			End:   p.bpfObjects.UprobeRoundTripReturn,
 		},
 	}
+
+	if p.supportsContextPropagation() {
+		m["net/http.Header.writeSubset"] = ebpfcommon.FunctionPrograms{
+			Start: p.bpfObjects.UprobeWriteSubset,
+		}
+	}
+
+	return m
 }
 
 func (p *Tracer) KProbes() map[string]ebpfcommon.FunctionPrograms {

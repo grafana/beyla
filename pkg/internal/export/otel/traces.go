@@ -385,7 +385,7 @@ func spanKind(span *request.Span) trace2.SpanKind {
 
 func handleTraceparent(parentCtx context.Context, span *request.Span) context.Context {
 	if span.ParentSpanID.IsValid() {
-		parentCtx = trace2.ContextWithSpanContext(parentCtx, trace2.SpanContext{}.WithTraceID(span.TraceID).WithSpanID(span.ParentSpanID).WithTraceFlags(trace2.FlagsSampled))
+		parentCtx = trace2.ContextWithSpanContext(parentCtx, trace2.SpanContext{}.WithTraceID(span.TraceID).WithSpanID(span.ParentSpanID).WithTraceFlags(trace2.TraceFlags(span.Flags)))
 	} else if span.TraceID.IsValid() {
 		parentCtx = ContextWithTrace(parentCtx, span.TraceID)
 	}

@@ -34,6 +34,8 @@ type bpfTpInfoT struct {
 	SpanId   [8]uint8
 	ParentId [8]uint8
 	Epoch    uint64
+	Flags    uint8
+	_        [7]byte
 }
 
 // loadBpf returns the embedded CollectionSpec for bpf.
@@ -82,6 +84,7 @@ type bpfProgramSpecs struct {
 	UprobeReadRequestReturns *ebpf.ProgramSpec `ebpf:"uprobe_readRequestReturns"`
 	UprobeRoundTrip          *ebpf.ProgramSpec `ebpf:"uprobe_roundTrip"`
 	UprobeRoundTripReturn    *ebpf.ProgramSpec `ebpf:"uprobe_roundTripReturn"`
+	UprobeWriteSubset        *ebpf.ProgramSpec `ebpf:"uprobe_writeSubset"`
 }
 
 // bpfMapSpecs contains maps before they are loaded into the kernel.
@@ -149,6 +152,7 @@ type bpfPrograms struct {
 	UprobeReadRequestReturns *ebpf.Program `ebpf:"uprobe_readRequestReturns"`
 	UprobeRoundTrip          *ebpf.Program `ebpf:"uprobe_roundTrip"`
 	UprobeRoundTripReturn    *ebpf.Program `ebpf:"uprobe_roundTripReturn"`
+	UprobeWriteSubset        *ebpf.Program `ebpf:"uprobe_writeSubset"`
 }
 
 func (p *bpfPrograms) Close() error {
@@ -158,6 +162,7 @@ func (p *bpfPrograms) Close() error {
 		p.UprobeReadRequestReturns,
 		p.UprobeRoundTrip,
 		p.UprobeRoundTripReturn,
+		p.UprobeWriteSubset,
 	)
 }
 

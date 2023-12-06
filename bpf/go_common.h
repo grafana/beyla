@@ -78,19 +78,23 @@ static __always_inline u64 find_parent_goroutine(void *goroutine_addr) {
     return 0;
 }
 
-static __always_inline void decode_go_traceparent(unsigned char *buf, unsigned char *trace_id, unsigned char *span_id) {
+static __always_inline void decode_go_traceparent(unsigned char *buf, unsigned char *trace_id, unsigned char *span_id, unsigned char *flags) {
     unsigned char *t_id = buf + 2 + 1; // strlen(ver) + strlen("-")
     unsigned char *s_id = buf + 2 + 1 + 32 + 1; // strlen(ver) + strlen("-") + strlen(trace_id) + strlen("-")
+    unsigned char *f_id = buf + 2 + 1 + 32 + 1 + 16 + 1; // strlen(ver) + strlen("-") + strlen(trace_id) + strlen("-") + strlen(span_id) + strlen("-")
 
     decode_hex(trace_id, t_id, TRACE_ID_CHAR_LEN);
     decode_hex(span_id, s_id, SPAN_ID_CHAR_LEN);
+    decode_hex(flags, f_id, FLAGS_CHAR_LEN);
 } 
 
 static __always_inline void server_trace_parent(void *goroutine_addr, tp_info_t *tp, void *req_header) {
+    // May get overriden when decoding existing traceparent, but otherwise we set sample ON
+    tp->flags = 1;
     // Get traceparent from the Request.Header
     void *traceparent_ptr = extract_traceparent_from_req_headers(req_header);
     if (traceparent_ptr != NULL) {
-        unsigned char buf[W3C_VAL_LENGTH];
+        unsigned char buf[TP_MAX_VAL_LENGTH];
         long res = bpf_probe_read(buf, sizeof(buf), traceparent_ptr);
         if (res < 0) {
             bpf_dbg_printk("can't copy traceparent header");
@@ -98,7 +102,7 @@ static __always_inline void server_trace_parent(void *goroutine_addr, tp_info_t 
             *((u64 *)tp->parent_id) = 0;
         } else {
             bpf_dbg_printk("Decoding traceparent from headers %s", buf);
-            decode_go_traceparent(buf, tp->trace_id, tp->parent_id);
+            decode_go_traceparent(buf, tp->trace_id, tp->parent_id, &tp->flags);
         }
     } else {
         bpf_dbg_printk("No traceparent in headers, generating");
@@ -115,6 +119,9 @@ static __always_inline u8 client_trace_parent(void *goroutine_addr, tp_info_t *t
     u8 found_trace_id = 0;
     u8 trace_id_exists = 0;
     
+    // May get overriden when decoding existing traceparent or finding a server span, but otherwise we set sample ON
+    tp_i->flags = 1;
+
     if (req_header) {
         void *traceparent_ptr = extract_traceparent_from_req_headers(req_header);
         if (traceparent_ptr != NULL) {
@@ -125,7 +132,7 @@ static __always_inline u8 client_trace_parent(void *goroutine_addr, tp_info_t *t
                 bpf_dbg_printk("can't copy traceparent header");
             } else {
                 found_trace_id = 1;
-                decode_go_traceparent(buf, tp_i->trace_id, tp_i->span_id);
+                decode_go_traceparent(buf, tp_i->trace_id, tp_i->span_id, &tp_i->flags);
             }
         }
     }
@@ -144,6 +151,7 @@ static __always_inline u8 client_trace_parent(void *goroutine_addr, tp_info_t *t
             *((u64 *)tp_i->trace_id) = *((u64 *)tp->trace_id);
             *((u64 *)(tp_i->trace_id + 8)) = *((u64 *)(tp->trace_id + 8));
             *((u64 *)tp_i->parent_id) = *((u64 *)tp->span_id);
+            tp_i->flags = tp->flags;
         } else {
             urand_bytes(tp_i->trace_id, TRACE_ID_SIZE_BYTES);    
         }

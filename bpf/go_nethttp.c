@@ -359,18 +359,23 @@ int uprobe_writeSubset(struct pt_regs *ctx) {
 
     bpf_dbg_printk("buf_ptr %llx, len=%d, size=%d", (void*)buf_ptr, len, size);
 
-    if (len < (size - W3C_VAL_LENGTH - W3C_KEY_LENGTH - 4)) { // 4 = :<space>\r\n
-        char key[W3C_KEY_LENGTH + 2] = "Traceparent: ";
+    if (len < (size - TP_MAX_VAL_LENGTH - TP_MAX_KEY_LENGTH - 4)) { // 4 = strlen(":_") + strlen("\r\n")
+        char key[TP_MAX_KEY_LENGTH + 2] = "Traceparent: ";
         char end[2] = "\r\n";
         bpf_probe_write_user(buf_ptr + (len & 0x0ffff), key, sizeof(key));
-        len += W3C_KEY_LENGTH + 2;
+        len += TP_MAX_KEY_LENGTH + 2;
         bpf_probe_write_user(buf_ptr + (len & 0x0ffff), buf, sizeof(buf));
-        len += W3C_VAL_LENGTH;
+        len += TP_MAX_VAL_LENGTH;
         bpf_probe_write_user(buf_ptr + (len & 0x0ffff), end, sizeof(end));
         len += 2;
         bpf_probe_write_user((void *)(io_writer_addr + io_writer_n_pos), &len, sizeof(len));
     }
 
+    return 0;
+}
+#else
+SEC("uprobe/header_writeSubset")
+int uprobe_writeSubset(struct pt_regs *ctx) {
     return 0;
 }
 #endif

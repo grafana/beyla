@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/caarlos0/env/v9"
+	"github.com/caarlos0/env/v8"
 	gin2 "github.com/gin-gonic/gin"
 
 	"github.com/grafana/beyla/testserver_1.16/gin"

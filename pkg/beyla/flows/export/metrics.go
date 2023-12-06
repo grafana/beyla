@@ -110,11 +110,20 @@ func attributes(m map[string]interface{}) []attribute.KeyValue {
 	direction, _ := m["FlowDirection"].(int) // not used, they rely on client<->server
 	serverPort, _ := m["SrcPort"].(int)
 	destPort, _ := m["DstPort"].(int)
-	if destPort < serverPort {
-		serverPort = destPort
-	}
+
 	if direction == 1 {
 		oppositeDirection = 0
+	}
+
+	if destPort < serverPort {
+		serverPort = destPort
+		if direction == 0 {
+			direction = 1
+			oppositeDirection = 0
+		} else {
+			direction = 0
+			oppositeDirection = 1
+		}
 	}
 
 	res = append(res, attribute.String("client.name", clientName(m, direction)))
@@ -140,6 +149,69 @@ func processEvents(i []map[string]interface{}) {
 	for _, v := range i {
 		fmt.Println(attributes(v))
 	}
+}
+
+func strAttr(m map[string]interface{}, name string) string {
+	v, ok := m[name].(string)
+	if !ok {
+		return ""
+	}
+
+	return v
+}
+
+func intAttr(m map[string]interface{}, name string) int {
+	v, ok := m[name].(int)
+	if !ok {
+		return 0
+	}
+
+	return v
+}
+
+func eitherOr(first, second string) string {
+	if first != "" {
+		return first
+	}
+
+	return second
+}
+
+func flowAttributes(m map[string]interface{}) []attribute.KeyValue {
+	res := make([]attribute.KeyValue, 0)
+
+	res = append(res, attribute.String("src.ip", strAttr(m, "SrcAddr")))
+	res = append(res, attribute.String("src.host", eitherOr(strAttr(m, "SrcK8s_Name"), strAttr(m, "SrcHost"))))
+	res = append(res, attribute.String("src.namespace", strAttr(m, "SrcK8s_Namespace")))
+	res = append(res, attribute.String("src.type", strAttr(m, "SrcK8s_Type")))
+	res = append(res, attribute.String("src.node.ip", strAttr(m, "SrcK8s_HostIP")))
+
+	srcPort := intAttr(m, "SrcPort")
+	if srcPort > 32768 {
+		srcPort = 0
+	}
+	res = append(res, attribute.Int("src.port", srcPort))
+
+	res = append(res, attribute.Int("direction", intAttr(m, "FlowDirection")))
+
+	proto := intAttr(m, "Proto")
+	protocol := ""
+	if proto == 6 {
+		protocol = "TCP"
+	} else if proto == 17 {
+		protocol = "UDP"
+	}
+
+	res = append(res, attribute.String("protocol", protocol))
+	res = append(res, attribute.String("inteface", strAttr(m, "Interface")))
+
+	res = append(res, attribute.String("dst.ip", strAttr(m, "DstAddr")))
+	res = append(res, attribute.String("dst.host", eitherOr(strAttr(m, "DstK8s_Name"), strAttr(m, "SrcHost"))))
+	res = append(res, attribute.String("dst.namespace", strAttr(m, "DstK8s_Namespace")))
+	res = append(res, attribute.String("dst.type", strAttr(m, "DstK8s_Type")))
+	res = append(res, attribute.String("dst.node.ip", strAttr(m, "DstK8s_HostIP")))
+
+	return res
 }
 
 func MetricsExporterProvider(cfg ExportConfig) (node.TerminalFunc[[]map[string]interface{}], error) {
@@ -172,6 +244,26 @@ func MetricsExporterProvider(cfg ExportConfig) (node.TerminalFunc[[]map[string]i
 		metric2.WithDescription("total bytes_sent value of connections observed by probe since its launch"),
 		metric2.WithUnit("{bytes}"),
 	)
+	if err != nil {
+		log.Error("", "error", err)
+		return nil, err
+	}
+
+	flowsBytes, err := ebpfEvents.Int64Counter(
+		"ebpf.flows.observed",
+		metric2.WithDescription("total bytes_sent value of connections observed by probe since its launch"),
+		metric2.WithUnit("{bytes}"),
+	)
+	if err != nil {
+		log.Error("", "error", err)
+		return nil, err
+	}
+
+	flowsPackets, err := ebpfEvents.Int64Counter(
+		"ebpf.flows.observed.packets",
+		metric2.WithDescription("total packets_sent value of connections observed by probe since its launch"),
+		metric2.WithUnit("{packets}"),
+	)
 
 	if err != nil {
 		log.Error("", "error", err)
@@ -188,6 +280,16 @@ func MetricsExporterProvider(cfg ExportConfig) (node.TerminalFunc[[]map[string]i
 					context.Background(),
 					int64(metricValue(v)),
 					metric2.WithAttributes(attributes(v)...),
+				)
+				flowsBytes.Add(
+					context.Background(),
+					int64(metricValue(v)),
+					metric2.WithAttributes(flowAttributes(v)...),
+				)
+				flowsPackets.Add(
+					context.Background(),
+					int64(intAttr(v, "Packets")),
+					metric2.WithAttributes(flowAttributes(v)...),
 				)
 			}
 		}

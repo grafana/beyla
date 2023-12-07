@@ -367,7 +367,7 @@ func testHTTPTracesKProbes(t *testing.T) {
 	assert.Empty(t, sd, sd.String())
 }
 
-func testHTTPTracesNestedClient(t *testing.T) {
+func testHTTPTracesNestedCalls(t *testing.T, contextPropagation bool) {
 	var traceID string
 	var parentID string
 
@@ -420,9 +420,15 @@ func testHTTPTracesNestedClient(t *testing.T) {
 	)
 	assert.Empty(t, sd, sd.String())
 
+	numNested := 1
+
+	if contextPropagation {
+		numNested = 2
+	}
+
 	// Check the information of the "in queue" span
 	res = trace.FindByOperationName("in queue")
-	require.GreaterOrEqual(t, len(res), 1)
+	require.Equal(t, len(res), numNested)
 
 	var queue *jaeger.Span
 
@@ -447,7 +453,7 @@ func testHTTPTracesNestedClient(t *testing.T) {
 
 	// Check the information of the "processing" span
 	res = trace.FindByOperationName("processing")
-	require.GreaterOrEqual(t, len(res), 1)
+	require.Equal(t, len(res), numNested)
 
 	var processing *jaeger.Span
 
@@ -487,4 +493,12 @@ func testHTTPTracesNestedClient(t *testing.T) {
 		jaeger.Tag{Key: "span.kind", Type: "string", Value: "client"},
 	)
 	assert.Empty(t, sd, sd.String())
+}
+
+func testHTTPTracesNestedClient(t *testing.T) {
+	testHTTPTracesNestedCalls(t, false)
+}
+
+func testHTTPTracesNestedClientWithContextPropagation(t *testing.T) {
+	testHTTPTracesNestedCalls(t, true)
 }

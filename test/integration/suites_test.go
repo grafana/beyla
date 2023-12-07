@@ -3,13 +3,47 @@
 package integration
 
 import (
+	"bufio"
+	"os"
 	"path"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/grafana/beyla/test/integration/components/docker"
 )
+
+var lockdownPath = "/sys/kernel/security/lockdown"
+
+func KernelLockdownMode() bool {
+	// If we can't find the file, assume no lockdown
+	if _, err := os.Stat(lockdownPath); err == nil {
+		f, err := os.Open(lockdownPath)
+
+		if err != nil {
+			return true
+		}
+
+		defer f.Close()
+		scanner := bufio.NewScanner(f)
+		if scanner.Scan() {
+			lockdown := scanner.Text()
+			if strings.Contains(lockdown, "[none]") {
+				return false
+			} else if strings.Contains(lockdown, "[integrity]") {
+				return true
+			} else if strings.Contains(lockdown, "[confidentiality]") {
+				return true
+			}
+			return true
+		}
+
+		return true
+	}
+
+	return false
+}
 
 func TestSuite(t *testing.T) {
 	compose, err := docker.ComposeSuite("docker-compose.yml", path.Join(pathOutput, "test-suite.log"))
@@ -28,10 +62,18 @@ func TestSuite(t *testing.T) {
 }
 
 func TestSuiteNestedTraces(t *testing.T) {
+	lockdown := KernelLockdownMode()
 	compose, err := docker.ComposeSuite("docker-compose.yml", path.Join(pathOutput, "test-suite-nested.log"))
+	if !lockdown {
+		compose.Env = append(compose.Env, `SECURITY_CONFIG_SUFFIX=_none`)
+	}
 	require.NoError(t, err)
 	require.NoError(t, compose.Up())
-	t.Run("HTTP traces (nested client span)", testHTTPTracesNestedClient)
+	if !lockdown {
+		t.Run("HTTP traces (all spans nested)", testHTTPTracesNestedClientWithContextPropagation)
+	} else {
+		t.Run("HTTP traces (nested client span)", testHTTPTracesNestedClient)
+	}
 	t.Run("BPF pinning folder mounted", testBPFPinningMounted)
 	require.NoError(t, compose.Close())
 	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)

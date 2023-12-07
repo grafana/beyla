@@ -27,6 +27,10 @@
       ],
       "context.valueCtx": [
         "val"
+      ],
+      "bufio.Writer": [
+        "buf",
+        "n"
       ]
     }
   },

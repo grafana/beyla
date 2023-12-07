@@ -424,11 +424,12 @@ func testHTTPTracesNestedClient(t *testing.T) {
 	res = trace.FindByOperationName("in queue")
 	require.GreaterOrEqual(t, len(res), 1)
 
-	var queue jaeger.Span
+	var queue *jaeger.Span
 
-	for _, r := range res {
+	for i := range res {
+		r := &res[i]
 		// Check parenthood
-		p, ok := trace.ParentOf(&r)
+		p, ok := trace.ParentOf(r)
 
 		if ok {
 			if p.TraceID == server.TraceID && p.SpanID == server.SpanID {
@@ -448,11 +449,12 @@ func testHTTPTracesNestedClient(t *testing.T) {
 	res = trace.FindByOperationName("processing")
 	require.GreaterOrEqual(t, len(res), 1)
 
-	var processing jaeger.Span
+	var processing *jaeger.Span
 
-	for _, r := range res {
+	for i := range res {
+		r := &res[i]
 		// Check parenthood
-		p, ok := trace.ParentOf(&r)
+		p, ok := trace.ParentOf(r)
 
 		if ok {
 			if p.TraceID == server.TraceID && p.SpanID == server.SpanID {

@@ -22,7 +22,8 @@ type ExecTyper struct {
 }
 
 type Instrumentable struct {
-	Type svc.InstrumentableType
+	Type                 svc.InstrumentableType
+	InstrumentationError error
 
 	// in some runtimes, like python gunicorn, we need to allow
 	// tracing both the parent pid and all of its children pid
@@ -106,7 +107,7 @@ func (t *typer) asInstrumentable(execElf *exec.FileInfo) Instrumentable {
 	log := t.log.With("pid", execElf.Pid, "comm", execElf.CmdExePath)
 	log.Debug("getting instrumentable information")
 	// look for suitable Go application first
-	offsets, ok := t.inspectOffsets(execElf)
+	offsets, ok, err := t.inspectOffsets(execElf)
 	if ok {
 		// we found go offsets, let's see if this application is not a proxy
 		if !isGoProxy(offsets) {
@@ -139,10 +140,10 @@ func (t *typer) asInstrumentable(execElf *exec.FileInfo) Instrumentable {
 		"child", child, "language", detectedType.String())
 	// Return the instrumentable without offsets, as it is identified as a generic
 	// (or non-instrumentable Go proxy) executable
-	return Instrumentable{Type: detectedType, FileInfo: execElf, ChildPids: child}
+	return Instrumentable{Type: detectedType, FileInfo: execElf, ChildPids: child, InstrumentationError: err}
 }
 
-func (t *typer) inspectOffsets(execElf *exec.FileInfo) (*goexec.Offsets, bool) {
+func (t *typer) inspectOffsets(execElf *exec.FileInfo) (*goexec.Offsets, bool, error) {
 	if !t.cfg.Discovery.SystemWide {
 		if t.cfg.Discovery.SkipGoSpecificTracers {
 			t.log.Debug("skipping inspection for Go functions", "pid", execElf.Pid, "comm", execElf.CmdExePath)
@@ -150,12 +151,13 @@ func (t *typer) inspectOffsets(execElf *exec.FileInfo) (*goexec.Offsets, bool) {
 			t.log.Debug("inspecting", "pid", execElf.Pid, "comm", execElf.CmdExePath)
 			if offsets, err := goexec.InspectOffsets(execElf, t.allGoFunctions); err != nil {
 				t.log.Debug("couldn't find go specific tracers", "error", err)
+				return nil, false, err
 			} else {
-				return offsets, true
+				return offsets, true, nil
 			}
 		}
 	}
-	return nil, false
+	return nil, false, nil
 }
 
 func isGoProxy(offsets *goexec.Offsets) bool {

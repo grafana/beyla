@@ -24,6 +24,11 @@ func instrumentationPoints(elfF *elf.File, funcNames []string) (map[string]FuncO
 		return nil, err
 	}
 
+	goVersion, _, err := getGoDetails(elfF)
+	if err == nil && !supportedGoVersion(goVersion) {
+		return nil, fmt.Errorf("unsupported Go version: %v. Minimum supported version is %v", goVersion, minGoVersion)
+	}
+
 	gosyms := elfF.Section(".gosymtab")
 
 	var allSyms map[string]exec.Sym

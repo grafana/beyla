@@ -115,11 +115,6 @@ func structMemberOffsets(elfFile *elf.File) (FieldOffsets, error) {
 	var expected map[string]struct{}
 	dwarfData, err := elfFile.DWARF()
 	if err == nil {
-		_, _, err := getGoDetails(elfFile)
-		if err != nil {
-			return nil, fmt.Errorf("getting Go details: %w", err)
-		}
-
 		offs, expected = structMemberOffsetsFromDwarf(dwarfData)
 		if len(expected) > 0 {
 			log().Debug("Fields not found in the DWARF file", "fields", expected)

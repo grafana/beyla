@@ -41,10 +41,6 @@ func findLibraryVersions(elfFile *elf.File) (map[string]string, error) {
 	goVersion = strings.ReplaceAll(goVersion, "go", "")
 	log().Debug("Go version detected", "version", goVersion)
 
-	if !supportedGoVersion(goVersion) {
-		return nil, fmt.Errorf("unsupported Go version: %v. Minimum version is %v", goVersion, minGoVersion)
-	}
-
 	modsMap := parseModules(modules)
 	modsMap["go"] = goVersion
 	return modsMap, nil

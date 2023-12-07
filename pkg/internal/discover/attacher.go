@@ -93,7 +93,10 @@ func (ta *TraceAttacher) getTracer(ie *Instrumentable) (*ebpf.ProcessTracer, boo
 	case svc.InstrumentableGolang:
 		// gets all the possible supported tracers for a go program, and filters out
 		// those whose symbols are not present in the ELF functions list
-		if ta.Cfg.Discovery.SkipGoSpecificTracers {
+		if ta.Cfg.Discovery.SkipGoSpecificTracers || ie.InstrumentationError != nil {
+			if ie.InstrumentationError != nil {
+				ta.log.Warn("Unsupported Go program detected, using generic instrumentation", "error", ie.InstrumentationError)
+			}
 			if ta.reusableTracer != nil {
 				programs = newNonGoTracersGroupUProbes(ta.Cfg, ta.Metrics)
 			} else {

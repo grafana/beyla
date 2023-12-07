@@ -14,37 +14,6 @@ import (
 	"github.com/grafana/beyla/test/integration/components/docker"
 )
 
-var lockdownPath = "/sys/kernel/security/lockdown"
-
-func KernelLockdownMode() bool {
-	// If we can't find the file, assume no lockdown
-	if _, err := os.Stat(lockdownPath); err == nil {
-		f, err := os.Open(lockdownPath)
-
-		if err != nil {
-			return true
-		}
-
-		defer f.Close()
-		scanner := bufio.NewScanner(f)
-		if scanner.Scan() {
-			lockdown := scanner.Text()
-			if strings.Contains(lockdown, "[none]") {
-				return false
-			} else if strings.Contains(lockdown, "[integrity]") {
-				return true
-			} else if strings.Contains(lockdown, "[confidentiality]") {
-				return true
-			}
-			return true
-		}
-
-		return true
-	}
-
-	return false
-}
-
 func TestSuite(t *testing.T) {
 	compose, err := docker.ComposeSuite("docker-compose.yml", path.Join(pathOutput, "test-suite.log"))
 	require.NoError(t, err)
@@ -62,6 +31,11 @@ func TestSuite(t *testing.T) {
 }
 
 func TestSuiteNestedTraces(t *testing.T) {
+	// We run the test depending on what the host environment is. If the host is in lockdown mode integrity
+	// the nesting of spans will be limited. If we are in none (which should be in any non secure boot environment, e.g. Virtual Machines or CI)
+	// then we expect full nesting of trace spans in this test.
+
+	// Echo (server) -> echo (client) -> EchoBack (server)
 	lockdown := KernelLockdownMode()
 	compose, err := docker.ComposeSuite("docker-compose.yml", path.Join(pathOutput, "test-suite-nested.log"))
 	if !lockdown {
@@ -453,4 +427,37 @@ func TestSuiteNoRoutes(t *testing.T) {
 	t.Run("BPF pinning folder mounted", testBPFPinningMounted)
 	require.NoError(t, compose.Close())
 	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
+}
+
+// Helpers
+
+var lockdownPath = "/sys/kernel/security/lockdown"
+
+func KernelLockdownMode() bool {
+	// If we can't find the file, assume no lockdown
+	if _, err := os.Stat(lockdownPath); err == nil {
+		f, err := os.Open(lockdownPath)
+
+		if err != nil {
+			return true
+		}
+
+		defer f.Close()
+		scanner := bufio.NewScanner(f)
+		if scanner.Scan() {
+			lockdown := scanner.Text()
+			if strings.Contains(lockdown, "[none]") {
+				return false
+			} else if strings.Contains(lockdown, "[integrity]") {
+				return true
+			} else if strings.Contains(lockdown, "[confidentiality]") {
+				return true
+			}
+			return true
+		}
+
+		return true
+	}
+
+	return false
 }

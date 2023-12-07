@@ -19,7 +19,6 @@
 package kubernetes
 
 import (
-	"errors"
 	"fmt"
 	"log/slog"
 	"net"
@@ -55,6 +54,7 @@ type kubeDataInterface interface {
 
 type KubeData struct {
 	kubeDataInterface
+	log *slog.Logger
 	// pods, nodes and services cache the different object types as *Info pointers
 	pods     cache.SharedIndexInformer
 	nodes    cache.SharedIndexInformer
@@ -258,7 +258,8 @@ func (k *KubeData) initServiceInformer(informerFactory informers.SharedInformerF
 			return nil, fmt.Errorf("was expecting a Service. Got: %T", i)
 		}
 		if svc.Spec.ClusterIP == v1.ClusterIPNone {
-			return nil, errors.New("not indexing service without ClusterIP")
+			k.log.Warn("Service doesn't have any ClusterIP. Beyla won't decorate their flows",
+				"namespace", svc.Namespace, "name", svc.Name)
 		}
 		return &Info{
 			ObjectMeta: metav1.ObjectMeta{
@@ -301,6 +302,7 @@ func (k *KubeData) initReplicaSetInformer(informerFactory informers.SharedInform
 }
 
 func (k *KubeData) InitFromConfig(kubeConfigPath string) error {
+	k.log = slog.With("component", "kubernetes.KubeData")
 	// Initialization variables
 	k.stopChan = make(chan struct{})
 

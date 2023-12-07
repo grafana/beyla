@@ -86,6 +86,7 @@ services:
       - --config=/configs/beyla-config.yml
     volumes:
       - ./configs/:/configs
+      - ./system/sys/kernel/security:/sys/kernel/security
     container_name: demo-javabeyla
     privileged: true 
     network_mode: "service:javatestserver"

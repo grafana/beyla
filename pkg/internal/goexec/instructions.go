@@ -12,6 +12,8 @@ import (
 
 // instrumentationPoints loads the provided executable and looks for the addresses
 // where the start and return probes must be inserted.
+//
+//nolint:cyclop
 func instrumentationPoints(elfF *elf.File, funcNames []string) (map[string]FuncOffsets, error) {
 	ilog := slog.With("component", "goexec.instructions")
 	ilog.Debug("searching for instrumentation points", "functions", funcNames)

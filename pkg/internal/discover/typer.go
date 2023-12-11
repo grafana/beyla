@@ -149,12 +149,12 @@ func (t *typer) inspectOffsets(execElf *exec.FileInfo) (*goexec.Offsets, bool, e
 			t.log.Debug("skipping inspection for Go functions", "pid", execElf.Pid, "comm", execElf.CmdExePath)
 		} else {
 			t.log.Debug("inspecting", "pid", execElf.Pid, "comm", execElf.CmdExePath)
-			if offsets, err := goexec.InspectOffsets(execElf, t.allGoFunctions); err != nil {
+			offsets, err := goexec.InspectOffsets(execElf, t.allGoFunctions)
+			if err != nil {
 				t.log.Debug("couldn't find go specific tracers", "error", err)
 				return nil, false, err
-			} else {
-				return offsets, true, nil
 			}
+			return offsets, true, nil
 		}
 	}
 	return nil, false, nil

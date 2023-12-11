@@ -24,7 +24,7 @@ func CriteriaMatcherProvider(cm CriteriaMatcher) (node.MiddleFunc[[]Event[proces
 	m := &matcher{
 		log:            slog.With("component", "discover.CriteriaMatcher"),
 		criteria:       FindingCriteria(cm.Cfg),
-		processHistory: map[PID]struct{}{},
+		processHistory: map[PID]*services.ProcessInfo{},
 	}
 	return m.run, nil
 }
@@ -35,8 +35,7 @@ type matcher struct {
 	// processHistory keeps track of the processes that have been already matched and submitted for
 	// instrumentation.
 	// This avoids keep inspecting again and again client processes each time they open a new connection port
-	// TODO: move to a deduper node when we handle the process elimination
-	processHistory map[PID]struct{}
+	processHistory map[PID]*services.ProcessInfo
 }
 
 // ProcessMatch matches a found process with the first selection criteria it fulfilled.
@@ -59,32 +58,54 @@ func (m *matcher) filter(events []Event[processPorts]) []Event[ProcessMatch] {
 	var matches []Event[ProcessMatch]
 	for _, ev := range events {
 		if ev.Type == EventDeleted {
-			delete(m.processHistory, ev.Obj.pid)
-			continue
-		}
-		if _, ok := m.processHistory[ev.Obj.pid]; ok {
-			// this was already matched and submitted for inspection. Ignoring!
-			continue
-		}
-		proc, err := processInfo(ev.Obj)
-		if err != nil {
-			m.log.Debug("can't get information for process", "pid", ev.Obj.pid, "error", err)
-			continue
-		}
-		for i := range m.criteria {
-			if m.matchProcess(proc, &m.criteria[i]) {
-				comm := proc.ExePath
-				m.log.Debug("found process", "pid", proc.Pid, "comm", comm)
-				matches = append(matches, Event[ProcessMatch]{
-					Type: EventCreated,
-					Obj:  ProcessMatch{Criteria: &m.criteria[i], Process: proc},
-				})
-				m.processHistory[ev.Obj.pid] = struct{}{}
-				break
+			if ev, ok := m.filterDeleted(ev.Obj); ok {
+				matches = append(matches, ev)
+			}
+		} else {
+			if ev, ok := m.filterCreated(ev.Obj); ok {
+				matches = append(matches, ev)
 			}
 		}
 	}
 	return matches
+}
+
+func (m *matcher) filterCreated(obj processPorts) (Event[ProcessMatch], bool) {
+	if _, ok := m.processHistory[obj.pid]; ok {
+		// this was already matched and submitted for inspection. Ignoring!
+		return Event[ProcessMatch]{}, false
+	}
+	proc, err := processInfo(obj)
+	if err != nil {
+		m.log.Debug("can't get information for process", "pid", obj.pid, "error", err)
+		return Event[ProcessMatch]{}, false
+	}
+	for i := range m.criteria {
+		if m.matchProcess(proc, &m.criteria[i]) {
+			comm := proc.ExePath
+			m.log.Debug("found process", "pid", proc.Pid, "comm", comm)
+			m.processHistory[obj.pid] = proc
+			return Event[ProcessMatch]{
+				Type: EventCreated,
+				Obj:  ProcessMatch{Criteria: &m.criteria[i], Process: proc},
+			}, true
+		}
+	}
+	return Event[ProcessMatch]{}, false
+}
+
+func (m *matcher) filterDeleted(obj processPorts) (Event[ProcessMatch], bool) {
+	proc, ok := m.processHistory[obj.pid]
+	if !ok {
+		m.log.Debug("deleted untracked process. Ignoring", "pid", obj.pid)
+		return Event[ProcessMatch]{}, false
+	}
+	delete(m.processHistory, obj.pid)
+	m.log.Debug("stopped process", "pid", proc.Pid, "comm", proc.ExePath)
+	return Event[ProcessMatch]{
+		Type: EventDeleted,
+		Obj:  ProcessMatch{Process: proc},
+	}, true
 }
 
 func (m *matcher) matchProcess(p *services.ProcessInfo, a *services.Attributes) bool {

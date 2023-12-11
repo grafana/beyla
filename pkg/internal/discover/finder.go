@@ -43,6 +43,7 @@ func NewProcessFinder(ctx context.Context, cfg *pipe.Config, ctxInfo *global.Con
 			Cfg:               cfg,
 			Ctx:               ctx,
 			DiscoveredTracers: make(chan *ebpf.ProcessTracer),
+			DeleteTracers:     make(chan *Instrumentable),
 			Metrics:           ctxInfo.Metrics,
 		},
 	}
@@ -50,7 +51,7 @@ func NewProcessFinder(ctx context.Context, cfg *pipe.Config, ctxInfo *global.Con
 
 // Start the ProcessFinder pipeline in background. It returns a channel where each new discovered
 // ebpf.ProcessTracer will be notified.
-func (pf *ProcessFinder) Start(cfg *pipe.Config) (<-chan *ebpf.ProcessTracer, error) {
+func (pf *ProcessFinder) Start(cfg *pipe.Config) (<-chan *ebpf.ProcessTracer, <-chan *Instrumentable, error) {
 	gb := graph.NewBuilder(node.ChannelBufferLen(cfg.ChannelBufferLen))
 	graph.RegisterStart(gb, WatcherProvider)
 	graph.RegisterMiddle(gb, CriteriaMatcherProvider)
@@ -59,10 +60,10 @@ func (pf *ProcessFinder) Start(cfg *pipe.Config) (<-chan *ebpf.ProcessTracer, er
 	graph.RegisterTerminal(gb, TraceAttacherProvider)
 	pipeline, err := gb.Build(pf)
 	if err != nil {
-		return nil, fmt.Errorf("can't instantiate discovery.ProcessFinder pipeline: %w", err)
+		return nil, nil, fmt.Errorf("can't instantiate discovery.ProcessFinder pipeline: %w", err)
 	}
 	go pipeline.Run()
-	return pf.DiscoveredTracers, nil
+	return pf.DiscoveredTracers, pf.DeleteTracers, nil
 }
 
 // auxiliary functions to instantiate the go and non-go tracers on diverse steps of the

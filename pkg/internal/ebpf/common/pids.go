@@ -140,7 +140,11 @@ func (pf *PIDsFilter) removePID(pid uint32) {
 	nsid, err := readNamespace(int32(pid))
 
 	if err != nil {
-		pf.log.Error("Error looking up namespace for removing PID", "pid", pid, "error", err)
+		// this will always happen on process removal, as /proc/<pid>/ns/pid won't be found
+		// the code is kept here as a placeholder for a future fix (e.g. using eBPF notifications
+		// to get both the PID and the nsid)
+		// TODO: fix
+		pf.log.Debug("Error looking up namespace for removing PID", "pid", pid, "error", err)
 		return
 	}
 

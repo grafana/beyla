@@ -41,7 +41,7 @@ func StartDatabase(kubeConfigPath string, informersTimeout time.Duration) (*Data
 	return &db, nil
 }
 
-// OnRemoval implements ContainerEventHandler
+// OnDeletion implements ContainerEventHandler
 func (id *Database) OnDeletion(containerID []string) {
 	for _, cid := range containerID {
 		if info, ok := id.containerIDs[cid]; ok {

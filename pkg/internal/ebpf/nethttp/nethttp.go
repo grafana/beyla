@@ -22,6 +22,7 @@ import (
 
 	"github.com/cilium/ebpf"
 
+	ebpf2 "github.com/grafana/beyla/pkg/internal/ebpf"
 	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
 	"github.com/grafana/beyla/pkg/internal/exec"
 	"github.com/grafana/beyla/pkg/internal/goexec"
@@ -30,8 +31,10 @@ import (
 	"github.com/grafana/beyla/pkg/internal/svc"
 )
 
-//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf ../../../../bpf/go_nethttp.c -- -I../../../../bpf/headers
-//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf_debug ../../../../bpf/go_nethttp.c -- -I../../../../bpf/headers -DBPF_DEBUG
+//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf ../../../../bpf/go_nethttp.c -- -I../../../../bpf/headers -DNO_HEADER_PROPAGATION
+//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf_debug ../../../../bpf/go_nethttp.c -- -I../../../../bpf/headers -DBPF_DEBUG -DNO_HEADER_PROPAGATION
+//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf_tp ../../../../bpf/go_nethttp.c -- -I../../../../bpf/headers
+//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf_tp_debug ../../../../bpf/go_nethttp.c -- -I../../../../bpf/headers -DBPF_DEBUG
 
 type Tracer struct {
 	log        *slog.Logger
@@ -60,10 +63,36 @@ func (p *Tracer) BlockPID(pid uint32) {
 	p.pidsFilter.BlockPID(pid)
 }
 
+func (p *Tracer) supportsContextPropagation() bool {
+	kernelMajor, kernelMinor := ebpf2.KernelVersion()
+	if kernelMajor < 5 || (kernelMajor == 5 && kernelMinor < 14) {
+		p.log.Debug("Found Linux kernel earlier than 5.14, trace context propagation is supported", "major", kernelMajor, "minor", kernelMinor)
+		return true
+	}
+
+	lockdown := ebpfcommon.KernelLockdownMode()
+
+	if lockdown == ebpfcommon.KernelLockdownNone {
+		p.log.Debug("Kernel not in lockdown mode, trace context propagation is supported.")
+		return true
+	}
+
+	return false
+}
+
 func (p *Tracer) Load() (*ebpf.CollectionSpec, error) {
 	loader := loadBpf
 	if p.cfg.BpfDebug {
 		loader = loadBpf_debug
+	}
+
+	if p.supportsContextPropagation() {
+		loader = loadBpf_tp
+		if p.cfg.BpfDebug {
+			loader = loadBpf_tp_debug
+		}
+	} else {
+		p.log.Info("Kernel in lockdown mode, trace info propagation in HTTP headers is disabled.")
 	}
 	return loader()
 }
@@ -85,6 +114,8 @@ func (p *Tracer) Constants(_ *exec.FileInfo, offsets *goexec.Offsets) map[string
 		"content_length_ptr_pos",
 		"resp_req_pos",
 		"req_header_ptr_pos",
+		"io_writer_buf_ptr_pos",
+		"io_writer_n_pos",
 	} {
 		constants[s] = offsets.Field[s]
 	}
@@ -100,7 +131,7 @@ func (p *Tracer) AddCloser(c ...io.Closer) {
 }
 
 func (p *Tracer) GoProbes() map[string]ebpfcommon.FunctionPrograms {
-	return map[string]ebpfcommon.FunctionPrograms{
+	m := map[string]ebpfcommon.FunctionPrograms{
 		"net/http.serverHandler.ServeHTTP": {
 			Start: p.bpfObjects.UprobeServeHTTP,
 		},
@@ -115,6 +146,14 @@ func (p *Tracer) GoProbes() map[string]ebpfcommon.FunctionPrograms {
 			End:   p.bpfObjects.UprobeRoundTripReturn,
 		},
 	}
+
+	if p.supportsContextPropagation() {
+		m["net/http.Header.writeSubset"] = ebpfcommon.FunctionPrograms{
+			Start: p.bpfObjects.UprobeWriteSubset,
+		}
+	}
+
+	return m
 }
 
 func (p *Tracer) KProbes() map[string]ebpfcommon.FunctionPrograms {

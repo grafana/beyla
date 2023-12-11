@@ -1,5 +1,31 @@
 {
   "data": {
+    "bufio.Writer": {
+      "buf": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.21.5"
+        },
+        "offsets": [
+          {
+            "offset": 16,
+            "since": "1.17.0"
+          }
+        ]
+      },
+      "n": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.21.5"
+        },
+        "offsets": [
+          {
+            "offset": 40,
+            "since": "1.17.0"
+          }
+        ]
+      }
+    },
     "context.valueCtx": {
       "val": {
         "versions": {

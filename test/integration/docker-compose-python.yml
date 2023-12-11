@@ -21,6 +21,7 @@ services:
       - --config=/configs/instrumenter-config-java.yml
     volumes:
       - ./configs/:/configs
+      - ./system/sys/kernel/security:/sys/kernel/security
       - ../../testoutput:/coverage
       - ../../testoutput/run:/var/run/beyla
     image: hatest-autoinstrumenter

@@ -44,7 +44,7 @@ func traceparent(span *request.Span) string {
 	if !trace.TraceID(span.TraceID).IsValid() {
 		return ""
 	}
-	return fmt.Sprintf("00-%s-%s-01", trace.TraceID(span.TraceID).String(), trace.SpanID(span.ParentSpanID).String())
+	return fmt.Sprintf("00-%s-%s-%02x", trace.TraceID(span.TraceID).String(), trace.SpanID(span.ParentSpanID).String(), span.Flags)
 }
 
 type NoopEnabled bool

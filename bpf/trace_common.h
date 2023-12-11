@@ -97,6 +97,10 @@ static __always_inline unsigned char *extract_span_id(unsigned char *tp_start) {
     return tp_start + 13 + 2 + 1 + 32 + 1; // strlen("Traceparent: ") + strlen(ver) + strlen("-") + strlen(trace_id) + strlen("-")
 }
 
+static __always_inline unsigned char *extract_flags(unsigned char *tp_start) {
+    return tp_start + 13 + 2 + 1 + 32 + 1 + 16 + 1; // strlen("Traceparent: ") + strlen(ver) + strlen("-") + strlen(trace_id) + strlen("-") + strlen(span_id) + strlen("-")
+}
+
 static __always_inline u64 current_epoch() {
     u64 ts = bpf_ktime_get_ns();
     u64 temp = ts / NANOSECONDS_PER_EPOCH;
@@ -122,6 +126,7 @@ static __always_inline void get_or_create_trace_info(http_connection_metadata_t 
     }
 
     tp->epoch = current_epoch();
+    tp->flags = 1;
     urand_bytes(tp->span_id, SPAN_ID_SIZE_BYTES);
     bpf_memset(tp->parent_id, 0, sizeof(tp->span_id));
 
@@ -151,8 +156,10 @@ static __always_inline void get_or_create_trace_info(http_connection_metadata_t 
             bpf_dbg_printk("Found traceparent %s", res);
             unsigned char *t_id = extract_trace_id(res);
             unsigned char *s_id = extract_span_id(res);
+            unsigned char *f_id = extract_flags(res);
 
             decode_hex(tp->trace_id, t_id, TRACE_ID_CHAR_LEN);
+            decode_hex((unsigned char *)&tp->flags, f_id, FLAGS_CHAR_LEN);
             if (meta && meta->type == EVENT_HTTP_CLIENT) {
                 decode_hex(tp->span_id, s_id, SPAN_ID_CHAR_LEN);
             } else {

@@ -68,6 +68,7 @@ type Span struct {
 	TraceID       trace2.TraceID
 	SpanID        trace2.SpanID
 	ParentSpanID  trace2.SpanID
+	Flags         uint8
 	Pid           PidInfo
 }
 

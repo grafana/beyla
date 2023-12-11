@@ -367,7 +367,7 @@ func testHTTPTracesKProbes(t *testing.T) {
 	assert.Empty(t, sd, sd.String())
 }
 
-func testHTTPTracesNestedClient(t *testing.T) {
+func testHTTPTracesNestedCalls(t *testing.T, contextPropagation bool) {
 	var traceID string
 	var parentID string
 
@@ -420,15 +420,31 @@ func testHTTPTracesNestedClient(t *testing.T) {
 	)
 	assert.Empty(t, sd, sd.String())
 
+	numNested := 1
+
+	if contextPropagation {
+		numNested = 2
+	}
+
 	// Check the information of the "in queue" span
 	res = trace.FindByOperationName("in queue")
-	require.Len(t, res, 1)
-	queue := res[0]
-	// Check parenthood
-	p, ok := trace.ParentOf(&queue)
-	require.True(t, ok)
-	assert.Equal(t, server.TraceID, p.TraceID)
-	assert.Equal(t, server.SpanID, p.SpanID)
+	require.Equal(t, len(res), numNested)
+
+	var queue *jaeger.Span
+
+	for i := range res {
+		r := &res[i]
+		// Check parenthood
+		p, ok := trace.ParentOf(r)
+
+		if ok {
+			if p.TraceID == server.TraceID && p.SpanID == server.SpanID {
+				queue = r
+				break
+			}
+		}
+	}
+	require.NotNil(t, queue)
 	// check span attributes
 	sd = queue.Diff(
 		jaeger.Tag{Key: "span.kind", Type: "string", Value: "internal"},
@@ -437,13 +453,24 @@ func testHTTPTracesNestedClient(t *testing.T) {
 
 	// Check the information of the "processing" span
 	res = trace.FindByOperationName("processing")
-	require.Len(t, res, 1)
-	processing := res[0]
-	// Check parenthood
-	p, ok = trace.ParentOf(&processing)
-	require.True(t, ok)
-	assert.Equal(t, server.TraceID, p.TraceID)
-	assert.Equal(t, server.SpanID, p.SpanID)
+	require.Equal(t, len(res), numNested)
+
+	var processing *jaeger.Span
+
+	for i := range res {
+		r := &res[i]
+		// Check parenthood
+		p, ok := trace.ParentOf(r)
+
+		if ok {
+			if p.TraceID == server.TraceID && p.SpanID == server.SpanID {
+				processing = r
+				break
+			}
+		}
+	}
+
+	require.NotNil(t, processing)
 	sd = queue.Diff(
 		jaeger.Tag{Key: "span.kind", Type: "string", Value: "internal"},
 	)
@@ -454,7 +481,7 @@ func testHTTPTracesNestedClient(t *testing.T) {
 	require.Len(t, res, 1)
 	client := res[0]
 	// Check parenthood
-	p, ok = trace.ParentOf(&client)
+	p, ok := trace.ParentOf(&client)
 	require.True(t, ok)
 	assert.Equal(t, processing.TraceID, p.TraceID)
 	assert.Equal(t, processing.SpanID, p.SpanID)
@@ -466,4 +493,12 @@ func testHTTPTracesNestedClient(t *testing.T) {
 		jaeger.Tag{Key: "span.kind", Type: "string", Value: "client"},
 	)
 	assert.Empty(t, sd, sd.String())
+}
+
+func testHTTPTracesNestedClient(t *testing.T) {
+	testHTTPTracesNestedCalls(t, false)
+}
+
+func testHTTPTracesNestedClientWithContextPropagation(t *testing.T) {
+	testHTTPTracesNestedCalls(t, true)
 }

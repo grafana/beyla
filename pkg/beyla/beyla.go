@@ -64,20 +64,40 @@ func LoadConfig(reader io.Reader) (*Config, error) {
 // selection criteria.
 func (i *Instrumenter) FindAndInstrument(ctx context.Context) error {
 	finder := discover.NewProcessFinder(ctx, i.config, i.ctxInfo)
-	foundProcesses, err := finder.Start(i.config)
+	foundProcesses, deletedProcesses, err := finder.Start(i.config)
 	if err != nil {
 		return fmt.Errorf("couldn't start Process Finder: %w", err)
 	}
 	// In background, listen indefinitely for each new process and run its
 	// associated ebpf.ProcessTracer once it is found.
 	go func() {
+		log := log()
+		type cancelCtx struct {
+			ctx    context.Context
+			cancel func()
+		}
+		contexts := map[uint64]cancelCtx{}
 		for {
 			select {
 			case <-ctx.Done():
-				log().Debug("stopped searching for new processes to instrument")
+				log.Debug("stopped searching for new processes to instrument")
 				return
 			case pt := <-foundProcesses:
-				go pt.Run(ctx, i.tracesInput)
+				log.Debug("running tracer for new process",
+					"inode", pt.ELFInfo.Ino, "pid", pt.ELFInfo.Pid, "exec", pt.ELFInfo.CmdExePath)
+				cctx, ok := contexts[pt.ELFInfo.Ino]
+				if !ok {
+					cctx.ctx, cctx.cancel = context.WithCancel(ctx)
+					contexts[pt.ELFInfo.Ino] = cctx
+				}
+				go pt.Run(cctx.ctx, i.tracesInput)
+			case dp := <-deletedProcesses:
+				log.Debug("stopping ProcessTracer because there are no more instances of such process",
+					"inode", dp.FileInfo.Ino, "pid", dp.FileInfo.Pid, "exec", dp.FileInfo.CmdExePath)
+				if cctx, ok := contexts[dp.FileInfo.Ino]; ok {
+					delete(contexts, dp.FileInfo.Ino)
+					cctx.cancel()
+				}
 			}
 		}
 	}()

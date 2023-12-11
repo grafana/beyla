@@ -53,7 +53,7 @@ See [Documentation](https://grafana.com/docs/beyla/v1.0.x/) and the [quickstart 
 
 ## Requirements
 
-- Linux with Kernel 4.18 or higher with [BTF](https://www.kernel.org/doc/html/latest/bpf/btf.html)
+- Linux with Kernel 5.8 or higher with [BTF](https://www.kernel.org/doc/html/latest/bpf/btf.html)
   enabled. BTF became enabled by default on most Linux distributions with kernel 5.14 or higher. 
   You can check if your kernel has BTF enabled by verifying if `/sys/kernel/btf/vmlinux` exists on your system.
   If you need to recompile your kernel to enable BTF, the configuration option `CONFIG_DEBUG_INFO_BTF=y` must be

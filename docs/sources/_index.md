@@ -32,6 +32,19 @@ Beyla offers the following features:
 - listen to the Kubernetes API to decorate metrics and traces with Pods and Services metadata
 - simple setup for Grafana customers already using Grafana Agent
 
+## Requirements
+
+- Linux with Kernel 5.8 or higher with [BTF](https://www.kernel.org/doc/html/latest/bpf/btf.html)
+  enabled. BTF became enabled by default on most Linux distributions with kernel 5.14 or higher.
+  You can check if your kernel has BTF enabled by verifying if `/sys/kernel/btf/vmlinux` exists on your system.
+  If you need to recompile your kernel to enable BTF, the configuration option `CONFIG_DEBUG_INFO_BTF=y` must be
+  set.
+- eBPF enabled in the host.
+- For instrumenting Go programs, they must have been compiled with at least Go 1.17. We currently
+  support Go applications built with a major **Go version no earlier than 3 versions** behind the current
+  stable major release.
+- Administrative access rights to execute Beyla.
+
 ## Get started
 
 Follow the [setup]({{< relref "./setup/_index.md" >}}) documentation to get started with Beyla either as a standalone

@@ -35,6 +35,7 @@ require (
 	go.opentelemetry.io/otel/sdk/metric v0.41.0
 	go.opentelemetry.io/otel/trace v1.19.0
 	golang.org/x/arch v0.3.0
+	golang.org/x/mod v0.8.0
 	golang.org/x/sys v0.12.0
 	google.golang.org/grpc v1.58.3
 	google.golang.org/protobuf v1.31.0
@@ -88,7 +89,6 @@ require (
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
-	github.com/stretchr/objx v0.5.0 // indirect
 	github.com/tklauser/go-sysconf v0.3.11 // indirect
 	github.com/tklauser/numcpus v0.6.0 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect

@@ -174,25 +174,9 @@ func (k *Metadata) initPodInformer(informerFactory informers.SharedInformerFacto
 func (k *Metadata) initContainerDeletionListeners(log *slog.Logger, pods cache.SharedIndexInformer) {
 	if _, err := pods.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		DeleteFunc: func(obj interface{}) {
-			pod := obj.(*v1.Pod)
-			deletedContainers := make([]string, 0,
-				len(pod.Status.ContainerStatuses)+
-					len(pod.Status.InitContainerStatuses)+
-					len(pod.Status.EphemeralContainerStatuses))
-			for i := range pod.Status.ContainerStatuses {
-				deletedContainers = append(deletedContainers,
-					pod.Status.ContainerStatuses[i].ContainerID)
-			}
-			for i := range pod.Status.InitContainerStatuses {
-				deletedContainers = append(deletedContainers,
-					pod.Status.InitContainerStatuses[i].ContainerID)
-			}
-			for i := range pod.Status.EphemeralContainerStatuses {
-				deletedContainers = append(deletedContainers,
-					pod.Status.EphemeralContainerStatuses[i].ContainerID)
-			}
+			pod := obj.(*PodInfo)
 			for _, listener := range k.containerEventHandlers {
-				listener.OnDeletion(deletedContainers)
+				listener.OnDeletion(pod.ContainerIDs)
 			}
 		},
 	}); err != nil {

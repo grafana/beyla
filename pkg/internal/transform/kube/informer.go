@@ -175,6 +175,7 @@ func (k *Metadata) initContainerDeletionListeners(log *slog.Logger, pods cache.S
 	if _, err := pods.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		DeleteFunc: func(obj interface{}) {
 			pod := obj.(*PodInfo)
+			log.Debug("deleting containers for pod", "pod", pod.Name, "containers", pod.ContainerIDs)
 			for _, listener := range k.containerEventHandlers {
 				listener.OnDeletion(pod.ContainerIDs)
 			}

@@ -134,6 +134,10 @@ func (p *Tracer) GoProbes() map[string]ebpfcommon.FunctionPrograms {
 			Required: true,
 			Start:    p.bpfObjects.UprobeClientConnNewStream,
 		},
+		"google.golang.org/grpc.(*ClientConn).Close": {
+			Required: true,
+			Start:    p.bpfObjects.UprobeClientConnClose,
+		},
 	}
 
 	if ebpfcommon.SupportsContextPropagation(p.log) {

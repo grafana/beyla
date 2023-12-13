@@ -88,6 +88,7 @@ type bpfSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpfProgramSpecs struct {
+	UprobeClientConnClose                       *ebpf.ProgramSpec `ebpf:"uprobe_ClientConn_Close"`
 	UprobeClientConnInvoke                      *ebpf.ProgramSpec `ebpf:"uprobe_ClientConn_Invoke"`
 	UprobeClientConnInvokeReturn                *ebpf.ProgramSpec `ebpf:"uprobe_ClientConn_Invoke_return"`
 	UprobeClientConnNewStream                   *ebpf.ProgramSpec `ebpf:"uprobe_ClientConn_NewStream"`
@@ -169,6 +170,7 @@ func (m *bpfMaps) Close() error {
 //
 // It can be passed to loadBpfObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpfPrograms struct {
+	UprobeClientConnClose                       *ebpf.Program `ebpf:"uprobe_ClientConn_Close"`
 	UprobeClientConnInvoke                      *ebpf.Program `ebpf:"uprobe_ClientConn_Invoke"`
 	UprobeClientConnInvokeReturn                *ebpf.Program `ebpf:"uprobe_ClientConn_Invoke_return"`
 	UprobeClientConnNewStream                   *ebpf.Program `ebpf:"uprobe_ClientConn_NewStream"`
@@ -183,6 +185,7 @@ type bpfPrograms struct {
 
 func (p *bpfPrograms) Close() error {
 	return _BpfClose(
+		p.UprobeClientConnClose,
 		p.UprobeClientConnInvoke,
 		p.UprobeClientConnInvokeReturn,
 		p.UprobeClientConnNewStream,

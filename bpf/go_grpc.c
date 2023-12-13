@@ -305,6 +305,18 @@ int uprobe_ClientConn_NewStream(struct pt_regs *ctx) {
     return 0;
 }
 
+SEC("uprobe/ClientConn_Close")
+int uprobe_ClientConn_Close(struct pt_regs *ctx) {
+    bpf_dbg_printk("=== uprobe/proc grpc ClientConn.Close === ");
+
+    void *goroutine_addr = GOROUTINE_PTR(ctx);
+    bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
+
+    bpf_map_delete_elem(&ongoing_grpc_client_requests, &goroutine_addr);
+    
+    return 0;
+}
+
 SEC("uprobe/ClientConn_Invoke")
 int uprobe_ClientConn_Invoke_return(struct pt_regs *ctx) {
     bpf_dbg_printk("=== uprobe/proc grpc ClientConn.Invoke/ClientConn.NewStream return === ");

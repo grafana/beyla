@@ -336,7 +336,7 @@ func (event *BPFHTTPInfo) method() string {
 }
 
 func (event *BPFHTTPInfo) hostFromBuf() (string, int) {
-	buf := string(event.Buf[:])
+	buf := cstr(event.Buf[:])
 	idx := strings.Index(buf, "Host: ")
 
 	if idx < 0 {
@@ -346,6 +346,10 @@ func (event *BPFHTTPInfo) hostFromBuf() (string, int) {
 	buf = buf[idx+6:]
 
 	rIdx := strings.Index(buf, "\r")
+
+	if rIdx < 0 {
+		rIdx = len(buf)
+	}
 
 	host, portStr, err := net.SplitHostPort(buf[:rIdx])
 
@@ -399,4 +403,13 @@ func serviceInfo(pid uint32) svc.ID {
 	activePids.Add(pid, result)
 
 	return result
+}
+
+func cstr(chars []uint8) string {
+	addrLen := bytes.IndexByte(chars[:], 0)
+	if addrLen < 0 {
+		addrLen = len(chars)
+	}
+
+	return string(chars[:addrLen])
 }

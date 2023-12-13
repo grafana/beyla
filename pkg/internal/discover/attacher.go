@@ -12,6 +12,7 @@ import (
 
 	"github.com/grafana/beyla/pkg/internal/ebpf"
 	"github.com/grafana/beyla/pkg/internal/goexec"
+	"github.com/grafana/beyla/pkg/internal/helpers"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/pipe"
 	"github.com/grafana/beyla/pkg/internal/svc"
@@ -25,8 +26,14 @@ type TraceAttacher struct {
 	Cfg               *pipe.Config
 	Ctx               context.Context
 	DiscoveredTracers chan *ebpf.ProcessTracer
+	DeleteTracers     chan *Instrumentable
 	Metrics           imetrics.Reporter
 	pinPath           string
+
+	// processInstances keeps track of the instances of each process. This will help making sure
+	// that we don't remove the BPF resources of an executable until all their instances are removed
+	// are stopped
+	processInstances helpers.MultiCounter[uint64]
 
 	// keeps a copy of all the tracers for a given executable path
 	existingTracers map[uint64]*ebpf.ProcessTracer
@@ -37,6 +44,7 @@ type TraceAttacher struct {
 func TraceAttacherProvider(ta TraceAttacher) (node.TerminalFunc[[]Event[Instrumentable]], error) {
 	ta.log = slog.With("component", "discover.TraceAttacher")
 	ta.existingTracers = map[uint64]*ebpf.ProcessTracer{}
+	ta.processInstances = helpers.MultiCounter[uint64]{}
 	ta.pinPath = BuildPinPath(ta.Cfg)
 
 	if err := ta.init(); err != nil {
@@ -51,6 +59,7 @@ func TraceAttacherProvider(ta TraceAttacher) (node.TerminalFunc[[]Event[Instrume
 				ta.log.Debug("Instrumentable", "len", len(instrumentables), "inst", instr)
 				switch instr.Type {
 				case EventCreated:
+					ta.processInstances.Inc(instr.Obj.FileInfo.Ino)
 					if pt, ok := ta.getTracer(&instr.Obj); ok {
 						ta.DiscoveredTracers <- pt
 						if ta.Cfg.Discovery.SystemWide {
@@ -93,7 +102,10 @@ func (ta *TraceAttacher) getTracer(ie *Instrumentable) (*ebpf.ProcessTracer, boo
 	case svc.InstrumentableGolang:
 		// gets all the possible supported tracers for a go program, and filters out
 		// those whose symbols are not present in the ELF functions list
-		if ta.Cfg.Discovery.SkipGoSpecificTracers {
+		if ta.Cfg.Discovery.SkipGoSpecificTracers || ie.InstrumentationError != nil {
+			if ie.InstrumentationError != nil {
+				ta.log.Warn("Unsupported Go program detected, using generic instrumentation", "error", ie.InstrumentationError)
+			}
 			if ta.reusableTracer != nil {
 				programs = newNonGoTracersGroupUProbes(ta.Cfg, ta.Metrics)
 			} else {
@@ -181,6 +193,14 @@ func (ta *TraceAttacher) notifyProcessDeletion(ie *Instrumentable) {
 		// to avoid that a new process reusing this PID could send traces
 		// unless explicitly allowed
 		tracer.BlockPID(uint32(ie.FileInfo.Pid))
+
+		// if there are no more trace instances for a Go program, we need to notify that
+		// the tracer needs to be stopped and deleted.
+		// We don't remove kernel-based traces as there is only one tracer per host
+		if tracer.Type != ebpf.Generic && ta.processInstances.Dec(ie.FileInfo.Ino) == 0 {
+			delete(ta.existingTracers, ie.FileInfo.Ino)
+			ta.DeleteTracers <- ie
+		}
 	}
 }
 

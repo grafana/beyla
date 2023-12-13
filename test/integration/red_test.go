@@ -541,3 +541,56 @@ func testREDMetricsHTTPNoRoute(t *testing.T) {
 		})
 	}
 }
+
+func testREDMetricsUnsupportedHTTP(t *testing.T) {
+	for _, testCaseURL := range []string{
+		instrumentedServiceStdURL,
+	} {
+		t.Run(testCaseURL, func(t *testing.T) {
+			waitForTestComponents(t, testCaseURL)
+			testREDMetricsForGoBasicOnly(t, testCaseURL, "testserver")
+		})
+	}
+}
+
+func testREDMetricsForGoBasicOnly(t *testing.T, url string, comm string) {
+	path := "/old"
+
+	// Call 3 times the instrumented service, forcing it to:
+	// - take at least 30ms to respond
+	// - returning a 204 code
+	for i := 0; i < 4; i++ {
+		doHTTPGet(t, url+path+"?delay=30", 200)
+	}
+
+	commMatch := `service_name="` + comm + `",`
+	namespaceMatch := `service_namespace="integration-test",`
+	if comm == "" {
+		commMatch = ""
+		namespaceMatch = ""
+	}
+
+	// Eventually, Prometheus would make this query visible
+	pq := prom.Client{HostPort: prometheusHostPort}
+	var results []prom.Result
+	test.Eventually(t, testTimeout, func(t require.TestingT) {
+		var err error
+		results, err = pq.Query(`http_server_duration_seconds_count{` +
+			`http_request_method="GET",` +
+			`http_response_status_code="200",` +
+			namespaceMatch +
+			commMatch +
+			`url_path="` + path + `"}`)
+		require.NoError(t, err)
+		// check duration_count has 3 calls and all the arguments
+		enoughPromResults(t, results)
+		if len(results) > 0 {
+			val := totalPromCount(t, results)
+			assert.LessOrEqual(t, 3, val)
+
+			res := results[0]
+			addr := net.ParseIP(res.Metric["client_address"])
+			assert.NotNil(t, addr)
+		}
+	})
+}

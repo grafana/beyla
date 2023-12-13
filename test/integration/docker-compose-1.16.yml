@@ -1,0 +1,83 @@
+version: '3.8'
+
+services:
+  testserver:
+    image: ghcr.io/grafana/beyla-test/testserver-go-1.16/0.0.1
+    ports:
+      - "8080:8080"
+      - "8081:8081"
+      - "8082:8082"
+      - "8083:8083"
+      - "8087:8087"
+      - "50051:50051"
+    environment:
+      LOG_LEVEL: DEBUG
+
+  autoinstrumenter:
+    build:
+      context: ../..
+      dockerfile: ./test/integration/components/beyla/Dockerfile
+    command:
+      - /beyla
+      - --config=/configs/instrumenter-config-java.yml
+    volumes:
+      - ./configs/:/configs
+      - ../../testoutput:/coverage
+      - ../../testoutput/run:/var/run/beyla
+    image: hatest-autoinstrumenter
+    privileged: true # in some environments (not GH Pull Requests) you can set it to false and then cap_add: [ SYS_ADMIN ]
+    pid: "service:testserver"
+    environment:
+      GOCOVERDIR: "/coverage"
+      BEYLA_PRINT_TRACES: "true"
+      BEYLA_OPEN_PORT: 8080
+      BEYLA_DISCOVERY_POLL_INTERVAL: 500ms
+      BEYLA_SERVICE_NAMESPACE: "integration-test"
+      BEYLA_METRICS_INTERVAL: "10ms"
+      BEYLA_BPF_BATCH_TIMEOUT: "10ms"
+      BEYLA_LOG_LEVEL: "DEBUG"
+      BEYLA_BPF_DEBUG: "TRUE"
+      BEYLA_METRICS_REPORT_TARGET: "true"
+      BEYLA_METRICS_REPORT_PEER: "true"
+      BEYLA_INTERNAL_METRICS_PROMETHEUS_PORT: 8999
+      BEYLA_HOSTNAME: "beyla"
+    ports:
+      - "8999:8999" # Prometheus scrape port, if enabled via config
+
+  # OpenTelemetry Collector for Metrics. For Traces, we use directly Jaeger
+  otelcol:
+    image: otel/opentelemetry-collector-contrib:0.77.0
+    container_name: otel-col
+    deploy:
+      resources:
+        limits:
+          memory: 125M
+    restart: unless-stopped
+    command: [ "--config=/etc/otelcol-config/otelcol-config.yml" ]
+    volumes:
+      - ./configs/:/etc/otelcol-config
+    ports:
+      - "4317"          # OTLP over gRPC receiver
+      - "4318"          # OTLP over HTTP receiver
+      - "9464"          # Prometheus exporter
+      - "8888"          # metrics endpoint
+    depends_on:
+      autoinstrumenter:
+        condition: service_started
+      prometheus:
+        condition: service_started
+
+  # Prometheus
+  prometheus:
+    image: quay.io/prometheus/prometheus:v2.34.0
+    container_name: prometheus
+    command:
+      - --storage.tsdb.retention.time=1m
+      - --config.file=/etc/prometheus/prometheus-config${PROM_CONFIG_SUFFIX}.yml
+      - --storage.tsdb.path=/prometheus
+      - --web.enable-lifecycle
+      - --web.route-prefix=/
+    volumes:
+      - ./configs/:/etc/prometheus
+    ports:
+      - "9090:9090"

@@ -12,6 +12,8 @@ import (
 
 // instrumentationPoints loads the provided executable and looks for the addresses
 // where the start and return probes must be inserted.
+//
+//nolint:cyclop
 func instrumentationPoints(elfF *elf.File, funcNames []string) (map[string]FuncOffsets, error) {
 	ilog := slog.With("component", "goexec.instructions")
 	ilog.Debug("searching for instrumentation points", "functions", funcNames)
@@ -22,6 +24,11 @@ func instrumentationPoints(elfF *elf.File, funcNames []string) (map[string]FuncO
 	symTab, err := findGoSymbolTable(elfF)
 	if err != nil {
 		return nil, err
+	}
+
+	goVersion, _, err := getGoDetails(elfF)
+	if err == nil && !supportedGoVersion(goVersion) {
+		return nil, fmt.Errorf("unsupported Go version: %v. Minimum supported version is %v", goVersion, minGoVersion)
 	}
 
 	gosyms := elfF.Section(".gosymtab")

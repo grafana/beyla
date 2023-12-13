@@ -51,7 +51,7 @@ func printFeature(client pb.RouteGuideClient, point *pb.Point, counter int) {
 	ctx := context.Background()
 
 	var traceID [16]byte
-	var spanID [8]byte 
+	var spanID [8]byte
 	binary.BigEndian.PutUint64(traceID[:8], uint64(counter))
 	binary.BigEndian.PutUint64(spanID[:], uint64(counter))
 
@@ -244,6 +244,11 @@ func main() {
 	printFeature(client, &pb.Point{Latitude: 409146138, Longitude: -746188906}, counter)
 
 	if !*ping {
+		fmt.Printf("Sleeping, press any key\n")
+
+		var input string
+		fmt.Scanln(&input)
+
 		counter++
 		// Feature missing.
 		printFeature(client, &pb.Point{Latitude: 0, Longitude: 0}, counter)

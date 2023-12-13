@@ -88,14 +88,15 @@ type bpf_tp_debugSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpf_tp_debugProgramSpecs struct {
-	UprobeClientConnInvoke                *ebpf.ProgramSpec `ebpf:"uprobe_ClientConn_Invoke"`
-	UprobeClientConnInvokeReturn          *ebpf.ProgramSpec `ebpf:"uprobe_ClientConn_Invoke_return"`
-	UprobeHpackEncoderWriteField          *ebpf.ProgramSpec `ebpf:"uprobe_hpack_Encoder_WriteField"`
-	UprobeServerHandleStream              *ebpf.ProgramSpec `ebpf:"uprobe_server_handleStream"`
-	UprobeServerHandleStreamReturn        *ebpf.ProgramSpec `ebpf:"uprobe_server_handleStream_return"`
-	UprobeTransportHttp2ClientNewStream   *ebpf.ProgramSpec `ebpf:"uprobe_transport_http2Client_NewStream"`
-	UprobeTransportLoopyWriterWriteHeader *ebpf.ProgramSpec `ebpf:"uprobe_transport_loopyWriter_writeHeader"`
-	UprobeTransportWriteStatus            *ebpf.ProgramSpec `ebpf:"uprobe_transport_writeStatus"`
+	UprobeClientConnInvoke                      *ebpf.ProgramSpec `ebpf:"uprobe_ClientConn_Invoke"`
+	UprobeClientConnInvokeReturn                *ebpf.ProgramSpec `ebpf:"uprobe_ClientConn_Invoke_return"`
+	UprobeHpackEncoderWriteField                *ebpf.ProgramSpec `ebpf:"uprobe_hpack_Encoder_WriteField"`
+	UprobeServerHandleStream                    *ebpf.ProgramSpec `ebpf:"uprobe_server_handleStream"`
+	UprobeServerHandleStreamReturn              *ebpf.ProgramSpec `ebpf:"uprobe_server_handleStream_return"`
+	UprobeTransportHttp2ClientNewStream         *ebpf.ProgramSpec `ebpf:"uprobe_transport_http2Client_NewStream"`
+	UprobeTransportLoopyWriterWriteHeader       *ebpf.ProgramSpec `ebpf:"uprobe_transport_loopyWriter_writeHeader"`
+	UprobeTransportLoopyWriterWriteHeaderReturn *ebpf.ProgramSpec `ebpf:"uprobe_transport_loopyWriter_writeHeader_return"`
+	UprobeTransportWriteStatus                  *ebpf.ProgramSpec `ebpf:"uprobe_transport_writeStatus"`
 }
 
 // bpf_tp_debugMapSpecs contains maps before they are loaded into the kernel.
@@ -167,14 +168,15 @@ func (m *bpf_tp_debugMaps) Close() error {
 //
 // It can be passed to loadBpf_tp_debugObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpf_tp_debugPrograms struct {
-	UprobeClientConnInvoke                *ebpf.Program `ebpf:"uprobe_ClientConn_Invoke"`
-	UprobeClientConnInvokeReturn          *ebpf.Program `ebpf:"uprobe_ClientConn_Invoke_return"`
-	UprobeHpackEncoderWriteField          *ebpf.Program `ebpf:"uprobe_hpack_Encoder_WriteField"`
-	UprobeServerHandleStream              *ebpf.Program `ebpf:"uprobe_server_handleStream"`
-	UprobeServerHandleStreamReturn        *ebpf.Program `ebpf:"uprobe_server_handleStream_return"`
-	UprobeTransportHttp2ClientNewStream   *ebpf.Program `ebpf:"uprobe_transport_http2Client_NewStream"`
-	UprobeTransportLoopyWriterWriteHeader *ebpf.Program `ebpf:"uprobe_transport_loopyWriter_writeHeader"`
-	UprobeTransportWriteStatus            *ebpf.Program `ebpf:"uprobe_transport_writeStatus"`
+	UprobeClientConnInvoke                      *ebpf.Program `ebpf:"uprobe_ClientConn_Invoke"`
+	UprobeClientConnInvokeReturn                *ebpf.Program `ebpf:"uprobe_ClientConn_Invoke_return"`
+	UprobeHpackEncoderWriteField                *ebpf.Program `ebpf:"uprobe_hpack_Encoder_WriteField"`
+	UprobeServerHandleStream                    *ebpf.Program `ebpf:"uprobe_server_handleStream"`
+	UprobeServerHandleStreamReturn              *ebpf.Program `ebpf:"uprobe_server_handleStream_return"`
+	UprobeTransportHttp2ClientNewStream         *ebpf.Program `ebpf:"uprobe_transport_http2Client_NewStream"`
+	UprobeTransportLoopyWriterWriteHeader       *ebpf.Program `ebpf:"uprobe_transport_loopyWriter_writeHeader"`
+	UprobeTransportLoopyWriterWriteHeaderReturn *ebpf.Program `ebpf:"uprobe_transport_loopyWriter_writeHeader_return"`
+	UprobeTransportWriteStatus                  *ebpf.Program `ebpf:"uprobe_transport_writeStatus"`
 }
 
 func (p *bpf_tp_debugPrograms) Close() error {
@@ -186,6 +188,7 @@ func (p *bpf_tp_debugPrograms) Close() error {
 		p.UprobeServerHandleStreamReturn,
 		p.UprobeTransportHttp2ClientNewStream,
 		p.UprobeTransportLoopyWriterWriteHeader,
+		p.UprobeTransportLoopyWriterWriteHeaderReturn,
 		p.UprobeTransportWriteStatus,
 	)
 }

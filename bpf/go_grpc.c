@@ -349,6 +349,8 @@ int uprobe_ClientConn_Invoke_return(struct pt_regs *ctx) {
     return 0;
 }
 
+// The gRPC client stream is written on another goroutine in transport loopyWriter (controlbuf.go).
+// We extract the stream ID when it's just created and make a mapping of it to our goroutine that's executing ClientConn.Invoke.
 SEC("uprobe/transport_http2Client_NewStream")
 int uprobe_transport_http2Client_NewStream(struct pt_regs *ctx) {
 #ifndef NO_HEADER_PROPAGATION
@@ -357,14 +359,16 @@ int uprobe_transport_http2Client_NewStream(struct pt_regs *ctx) {
     void *goroutine_addr = GOROUTINE_PTR(ctx);
     void *t_ptr = GO_PARAM1(ctx);
 
-    bpf_printk("goroutine_addr %lx, t_ptr %llx", goroutine_addr, t_ptr);
+    bpf_dbg_printk("goroutine_addr %lx, t_ptr %llx", goroutine_addr, t_ptr);
 
     if (t_ptr) {
         u32 next_id = 0;
         // Read the next stream id from the httpClient
         bpf_probe_read(&next_id, sizeof(next_id), (void *)(t_ptr + http2_client_next_id_pos));
 
-        bpf_printk("next_id %d", next_id);
+        bpf_dbg_printk("next_id %d", next_id);
+        // This map is an LRU map, we can't be sure that all created streams are going to be
+        // seen later by writeHeader to clean up this mapping.
         bpf_map_update_elem(&ongoing_streams, &next_id, &goroutine_addr, BPF_ANY);
     }
     
@@ -372,6 +376,9 @@ int uprobe_transport_http2Client_NewStream(struct pt_regs *ctx) {
     return 0;
 }
 
+// LoopyWriter is about to write the headers, we lookup to see if this StreamID (first argument after the receiver)
+// to see if it has a ClientConn.Invoke mapping. If we find one, we duplicate the invocation metadata on the loopyWriter
+// goroutine.
 SEC("uprobe/transport_loopyWriter_writeHeader")
 int uprobe_transport_loopyWriter_writeHeader(struct pt_regs *ctx) {
 #ifndef NO_HEADER_PROPAGATION
@@ -380,7 +387,7 @@ int uprobe_transport_loopyWriter_writeHeader(struct pt_regs *ctx) {
     void *goroutine_addr = GOROUTINE_PTR(ctx);    
     u64 stream_id = (u64)GO_PARAM2(ctx);
 
-    bpf_printk("goroutine_addr %lx, stream_id %d", goroutine_addr, stream_id);
+    bpf_dbg_printk("goroutine_addr %lx, stream_id %d", goroutine_addr, stream_id);
 
     if (stream_id) {
         void **invocation_go_ptr = bpf_map_lookup_elem(&ongoing_streams, &stream_id);
@@ -388,12 +395,12 @@ int uprobe_transport_loopyWriter_writeHeader(struct pt_regs *ctx) {
 
         if (invocation_go_ptr) {
             void *invocation_go = *invocation_go_ptr;
-            bpf_printk("invocation goroutine_addr %lx", invocation_go);
+            bpf_dbg_printk("invocation goroutine_addr %lx", invocation_go);
 
             grpc_client_func_invocation_t *invocation = bpf_map_lookup_elem(&ongoing_grpc_client_requests, &invocation_go);
 
             if (invocation && !invocation->flags) {
-                bpf_printk("found invocation metadata %llx", invocation);
+                bpf_dbg_printk("found invocation metadata %llx", invocation);
 
                 grpc_client_func_invocation_t inv_save = *invocation;
                 bpf_map_update_elem(&ongoing_grpc_header_writes, &goroutine_addr, &inv_save, BPF_ANY);
@@ -404,25 +411,48 @@ int uprobe_transport_loopyWriter_writeHeader(struct pt_regs *ctx) {
     return 0;
 }
 
+SEC("uprobe/transport_loopyWriter_writeHeader_return")
+int uprobe_transport_loopyWriter_writeHeader_return(struct pt_regs *ctx) {
+#ifndef NO_HEADER_PROPAGATION
+    bpf_dbg_printk("=== uprobe/proc transport.(*loopyWriter).writeHeader returns === ");
+    void *goroutine_addr = GOROUTINE_PTR(ctx);
+    // Delete the extra metadata just in case we didn't write the fields
+    bpf_map_delete_elem(&ongoing_grpc_header_writes, &goroutine_addr);
+#endif
+    return 0;
+}
+
+// WriteField will insert the traceparent in an appropriate location. We look into
+// all incoming headers, skip until we get past the protocol headers, e.g. :method and
+// then we inject traceparent at the first opportunity.
+// 
+// This may not work for two reasons, although both are rare:
+// - gRPC buffers are short and we need 69 characters of capacity in w.buf. It usually has 128, but it can be
+//   as low as 64, in which case we can't add the traceparent. We can cut this 69 to 47 if we did Huffman encoding
+//   but it's complicated to implement in eBPF, rounding, adding trailing padding and all.
+// - There are no headers other than the protocol headers, in which case we'll never find a spot to insert the
+//   traceparent header. (Theoretical situation)
 SEC("uprobe/hpack_Encoder_WriteField")
 int uprobe_hpack_Encoder_WriteField(struct pt_regs *ctx) {
 #ifndef NO_HEADER_PROPAGATION
     bpf_dbg_printk("=== uprobe/proc grpc hpack.(*Encoder).WriteField === ");
 
     void *goroutine_addr = GOROUTINE_PTR(ctx);
-    bpf_printk("goroutine_addr %lx", goroutine_addr);
+    bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
 
-    void *field_ptr = GO_PARAM2(ctx); // read the incoming field name ptr
+    void *field_ptr = GO_PARAM2(ctx); // read the incoming field name ptr (HeaderField)
 
     if (!field_ptr) {
         return 0;
     }
 
+    // We need to read the first char of the HeaderField buffer, Name is first.
     u8 first_char = 0;
     bpf_probe_read(&first_char, sizeof(first_char), (void *)(field_ptr));
 
+    // If the name starts with :, we skip processing. e.g. ':method'
     if (first_char == 0x3a) {
-        bpf_printk("Skipping until we find non-protocol headers, field starts with `:`.");
+        bpf_dbg_printk("Skipping until we find non-protocol headers, field starts with `:`.");
         return 0;
     }
 
@@ -446,7 +476,7 @@ int uprobe_hpack_Encoder_WriteField(struct pt_regs *ctx) {
                 bpf_probe_read(&len, sizeof(len), (void *)(w_ptr + 8));
                 bpf_probe_read(&cap, sizeof(cap), (void *)(w_ptr + 16));
 
-                bpf_printk("Found invocation w_ptr %llx, buf_arr %llx, len %d, cap %d", w_ptr, buf_arr, len, cap);
+                bpf_dbg_printk("Found invocation w_ptr %llx, buf_arr %llx, len %d, cap %d", w_ptr, buf_arr, len, cap);
 
                 if (len >= 0 && cap > 0 && cap > len) {
                     s64 available_bytes = (cap - len);
@@ -460,26 +490,33 @@ int uprobe_hpack_Encoder_WriteField(struct pt_regs *ctx) {
 
                         make_tp_string(tp_buf, &invocation->tp);
 
-                        bpf_printk("Will write %s", tp_buf);
+                        bpf_dbg_printk("Will write %s", tp_buf);
 
+                        // This mimics hpack encode appendNewName, assuming no Huffman encoding
+                        // Write record type 0
                         bpf_probe_write_user(buf_arr + (len & 0x0ffff), &type_byte, sizeof(type_byte));
                         len++;
+                        // Write the length of the key = 11
                         bpf_probe_write_user(buf_arr + (len & 0x0ffff), &key_len, sizeof(key_len));
                         len++;
+                        // Write 'traceparent'
                         bpf_probe_write_user(buf_arr + (len & 0x0ffff), key, sizeof(key));
                         len += TP_MAX_KEY_LENGTH;
+                        // Write the length of the traceparent field value = 55
                         bpf_probe_write_user(buf_arr + (len & 0x0ffff), &val_len, sizeof(val_len));
                         len++;
+                        // Write the actual traceparent
                         bpf_probe_write_user(buf_arr + (len & 0x0ffff), tp_buf, sizeof(tp_buf));
                         len += TP_MAX_VAL_LENGTH;
+                        // Update the buffer length to the new value
                         bpf_probe_write_user((void *)(w_ptr + 8), &len, sizeof(len));
                     }
                 }
             } else {
-                bpf_printk("Can't find w_ptr");
+                bpf_dbg_printk("Can't find w_ptr");
             }
         } else {
-            bpf_printk("Can't find e_ptr");
+            bpf_dbg_printk("Can't find e_ptr");
         }
 
     }

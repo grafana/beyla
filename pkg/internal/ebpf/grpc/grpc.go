@@ -144,6 +144,7 @@ func (p *Tracer) GoProbes() map[string]ebpfcommon.FunctionPrograms {
 		m["google.golang.org/grpc/internal/transport.(*loopyWriter).writeHeader"] = ebpfcommon.FunctionPrograms{
 			Required: true,
 			Start:    p.bpfObjects.UprobeTransportLoopyWriterWriteHeader,
+			End:      p.bpfObjects.UprobeTransportLoopyWriterWriteHeaderReturn,
 		}
 	}
 

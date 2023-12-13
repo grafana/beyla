@@ -242,6 +242,40 @@ int uprobe_transport_writeStatus(struct pt_regs *ctx) {
     return 0;
 }
 
+static __always_inline void clientConnStart(void *goroutine_addr, void *cc_ptr, void *ctx_ptr, void *method_ptr, void *method_len) {
+    grpc_client_func_invocation_t *existing_i = bpf_map_lookup_elem(&ongoing_grpc_client_requests, &goroutine_addr);
+
+    if (existing_i) {
+        bpf_dbg_printk("found existing connection info, ignoring");
+        return;
+    }
+
+    grpc_client_func_invocation_t invocation = {
+        .start_monotime_ns = bpf_ktime_get_ns(),
+        .cc = (u64)cc_ptr,
+        .method = (u64)method_ptr,
+        .method_len = (u64)method_len,
+        .tp = {0},
+        .flags = 0,
+    };
+
+    if (ctx_ptr) {
+        void *val_ptr = 0;
+        // Read the embedded val object ptr from ctx if there's one
+        bpf_probe_read(&val_ptr, sizeof(val_ptr), (void *)(ctx_ptr + value_context_val_ptr_pos + sizeof(void *)));
+
+        invocation.flags = client_trace_parent(goroutine_addr, &invocation.tp, (void *)(val_ptr));
+    } else {
+        // it's OK sending empty tp for a client, the userspace id generator will make random trace_id, span_id
+        bpf_dbg_printk("No ctx_ptr %llx", ctx_ptr);
+    }
+
+    // Write event
+    if (bpf_map_update_elem(&ongoing_grpc_client_requests, &goroutine_addr, &invocation, BPF_ANY)) {
+        bpf_dbg_printk("can't update grpc client map element");
+    }
+}
+
 /* GRPC client */
 SEC("uprobe/ClientConn_Invoke")
 int uprobe_ClientConn_Invoke(struct pt_regs *ctx) {
@@ -255,41 +289,32 @@ int uprobe_ClientConn_Invoke(struct pt_regs *ctx) {
     void *method_ptr = GO_PARAM4(ctx);
     void *method_len = GO_PARAM5(ctx);
 
-    grpc_client_func_invocation_t invocation = {
-        .start_monotime_ns = bpf_ktime_get_ns(),
-        .cc = (u64)cc_ptr,
-        .method = (u64)method_ptr,
-        .method_len = (u64)method_len,
-        .tp = {0},
-        .flags = 0,
-    };
+    clientConnStart(goroutine_addr, cc_ptr, ctx_ptr, method_ptr, method_len);
 
-    if (ctx_ptr) {
-        void *val_ptr = 0;
-        // Read the embedded val object ptr from ctx
-        bpf_probe_read(&val_ptr, sizeof(val_ptr), (void *)(ctx_ptr + value_context_val_ptr_pos + sizeof(void *)));
+    return 0;
+}
 
-        if (val_ptr) {
-            invocation.flags = client_trace_parent(goroutine_addr, &invocation.tp, (void *)(val_ptr));
-        } else {
-            bpf_dbg_printk("No val_ptr %llx", val_ptr);
-        }
-    } else {
-        // it's OK sending empty tp for a client, the userspace id generator will make random trace_id, span_id
-        bpf_dbg_printk("No ctx_ptr %llx", ctx_ptr);
-    }
+// Same as ClientConn_Invoke, registers for the method are offset by one
+SEC("uprobe/ClientConn_NewStream")
+int uprobe_ClientConn_NewStream(struct pt_regs *ctx) {
+    bpf_dbg_printk("=== uprobe/proc grpc ClientConn.NewStream === ");
 
-    // Write event
-    if (bpf_map_update_elem(&ongoing_grpc_client_requests, &goroutine_addr, &invocation, BPF_ANY)) {
-        bpf_dbg_printk("can't update grpc client map element");
-    }
+    void *goroutine_addr = GOROUTINE_PTR(ctx);
+    bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
+
+    void *cc_ptr = GO_PARAM1(ctx);
+    void *ctx_ptr = GO_PARAM3(ctx);
+    void *method_ptr = GO_PARAM5(ctx);
+    void *method_len = GO_PARAM6(ctx);
+
+    clientConnStart(goroutine_addr, cc_ptr, ctx_ptr, method_ptr, method_len);
 
     return 0;
 }
 
 SEC("uprobe/ClientConn_Invoke")
 int uprobe_ClientConn_Invoke_return(struct pt_regs *ctx) {
-    bpf_dbg_printk("=== uprobe/proc grpc ClientConn.Invoke return === ");
+    bpf_dbg_printk("=== uprobe/proc grpc ClientConn.Invoke/ClientConn.NewStream return === ");
 
     void *goroutine_addr = GOROUTINE_PTR(ctx);
     bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);

@@ -130,6 +130,11 @@ func (p *Tracer) GoProbes() map[string]ebpfcommon.FunctionPrograms {
 			Start:    p.bpfObjects.UprobeClientConnInvoke,
 			End:      p.bpfObjects.UprobeClientConnInvokeReturn,
 		},
+		"google.golang.org/grpc.(*ClientConn).NewStream": {
+			Required: true,
+			Start:    p.bpfObjects.UprobeClientConnNewStream,
+			End:      p.bpfObjects.UprobeClientConnInvokeReturn, // reusing the same helper as for Invoke
+		},
 	}
 
 	if ebpfcommon.SupportsContextPropagation(p.log) {

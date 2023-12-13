@@ -438,11 +438,11 @@ int uprobe_hpack_Encoder_WriteField(struct pt_regs *ctx) {
                     s64 available_bytes = (cap - len);
                 
                     if (available_bytes > GRPC_ENCODED_HEADER_LEN) {
-                        __attribute__((__unused__)) char key[TP_MAX_KEY_LENGTH] = "traceparent";
+                        char key[TP_MAX_KEY_LENGTH] = "traceparent";
                         unsigned char tp_buf[TP_MAX_VAL_LENGTH];
-                        __attribute__((__unused__)) u8 type_byte = 0;
-                        __attribute__((__unused__)) u8 key_len = TP_MAX_KEY_LENGTH;
-                        __attribute__((__unused__)) u8 val_len = TP_MAX_VAL_LENGTH;
+                        u8 type_byte = 0;
+                        u8 key_len = TP_MAX_KEY_LENGTH;
+                        u8 val_len = TP_MAX_VAL_LENGTH;
 
                         make_tp_string(tp_buf, &invocation->tp);
 
@@ -457,6 +457,8 @@ int uprobe_hpack_Encoder_WriteField(struct pt_regs *ctx) {
                         bpf_probe_write_user(buf_arr + (len & 0x0ffff), &val_len, sizeof(val_len));
                         len++;
                         bpf_probe_write_user(buf_arr + (len & 0x0ffff), tp_buf, sizeof(tp_buf));
+                        len += TP_MAX_VAL_LENGTH;
+                        bpf_probe_write_user((void *)(w_ptr + 8), &len, sizeof(len));
                     }
                 }
             } else {

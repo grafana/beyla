@@ -412,6 +412,20 @@ int uprobe_hpack_Encoder_WriteField(struct pt_regs *ctx) {
     void *goroutine_addr = GOROUTINE_PTR(ctx);
     bpf_printk("goroutine_addr %lx", goroutine_addr);
 
+    void *field_ptr = GO_PARAM2(ctx); // read the incoming field name ptr
+
+    if (!field_ptr) {
+        return 0;
+    }
+
+    u8 first_char = 0;
+    bpf_probe_read(&first_char, sizeof(first_char), (void *)(field_ptr));
+
+    if (first_char == 0x3a) {
+        bpf_printk("Skipping until we find non-protocol headers, field starts with `:`.");
+        return 0;
+    }
+
     grpc_client_func_invocation_t *invocation = bpf_map_lookup_elem(&ongoing_grpc_header_writes, &goroutine_addr);
     bpf_map_delete_elem(&ongoing_grpc_header_writes, &goroutine_addr);
 

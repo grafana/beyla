@@ -14,6 +14,8 @@ package main
 import (
 	"context"
 	"crypto/tls"
+	"encoding/binary"
+	"encoding/hex"
 	"errors"
 	"flag"
 	"fmt"
@@ -28,6 +30,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/metadata"
 
 	pb "github.com/grafana/beyla/test/cmd/grpc/routeguide"
 )
@@ -47,17 +50,18 @@ func printFeature(client pb.RouteGuideClient, point *pb.Point, counter int) {
 
 	ctx := context.Background()
 
-	// var traceID [16]byte
-	// var spanID [8]byte
-	// binary.BigEndian.PutUint64(traceID[:8], uint64(counter))
-	// binary.BigEndian.PutUint64(spanID[:], uint64(counter))
+	var traceID [16]byte
+	var spanID [8]byte 
+	binary.BigEndian.PutUint64(traceID[:8], uint64(counter))
+	binary.BigEndian.PutUint64(spanID[:], uint64(counter))
 
-	// // Generate a traceparent that we easily recognize
-	// tp := fmt.Sprintf("00-%s-%s-01", hex.EncodeToString(traceID[:]), hex.EncodeToString(spanID[:]))
+	// Generate a traceparent that we easily recognize
+	tp := fmt.Sprintf("00-%s-%s-01", hex.EncodeToString(traceID[:]), hex.EncodeToString(spanID[:]))
 
-	// // Anything linked to this variable will transmit request headers.
-	// md := metadata.New(map[string]string{"traceparent": tp})
-	// ctx = metadata.NewOutgoingContext(ctx, md)
+	// Anything linked to this variable will transmit request headers.
+	md := metadata.New(map[string]string{"traceparent": tp})
+	nCtx := metadata.NewOutgoingContext(ctx, md)
+	slog.Info("New ctx", "ctx", nCtx)
 
 	feature, err := client.GetFeature(ctx, point)
 	if err != nil {

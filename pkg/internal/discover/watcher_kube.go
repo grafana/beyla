@@ -3,6 +3,7 @@ package discover
 import (
 	"fmt"
 	"log/slog"
+	"sync"
 
 	"github.com/mariomac/pipes/pkg/node"
 	"k8s.io/client-go/tools/cache"
@@ -26,6 +27,8 @@ type kubeMetadata interface {
 }
 
 type WatcherKubeEnricher struct {
+	sync sync.Mutex
+
 	log      *slog.Logger
 	informer kubeMetadata
 
@@ -100,6 +103,8 @@ func (wk *WatcherKubeEnricher) enrich(in <-chan Event[processPorts], out chan<- 
 				}
 			case EventDeleted:
 				wk.onDeletedPod(podEvent.Obj)
+				// we don't forward process deletion, as it will be eventually done in the
+				// last case of this switch
 			}
 		case rsEvent := <-wk.rsInfoCh:
 			switch rsEvent.Type {
@@ -108,7 +113,9 @@ func (wk *WatcherKubeEnricher) enrich(in <-chan Event[processPorts], out chan<- 
 					out <- Event[processPorts]{Type: EventCreated, Obj: pp}
 				}
 			case EventDeleted:
-				// TODO
+				wk.onDeletedReplicaSet(rsEvent.Obj)
+				// we don't forward process deletion, as it will be eventually done in the
+				// last case of this switch
 			}
 		case pp, ok := <-in:
 			if !ok {
@@ -118,10 +125,10 @@ func (wk *WatcherKubeEnricher) enrich(in <-chan Event[processPorts], out chan<- 
 			switch pp.Type {
 			case EventCreated:
 				wk.onNewProcess(&pp.Obj)
-				out <- pp
 			case EventDeleted:
 				wk.onDeletedProcess(&pp.Obj)
 			}
+			out <- pp
 		}
 	}
 }

@@ -87,6 +87,8 @@ func (p *Tracer) Constants(_ *exec.FileInfo, offsets *goexec.Offsets) map[string
 		"grpc_client_target_ptr_pos",
 		"grpc_stream_ctx_ptr_pos",
 		"value_context_val_ptr_pos",
+		"http2_client_next_id_pos",
+		"hpack_encoder_w_pos",
 	} {
 		constants[s] = offsets.Field[s]
 	}
@@ -116,6 +118,18 @@ func (p *Tracer) GoProbes() map[string]ebpfcommon.FunctionPrograms {
 			Required: true,
 			Start:    p.bpfObjects.UprobeClientConnInvoke,
 			End:      p.bpfObjects.UprobeClientConnInvokeReturn,
+		},
+		"golang.org/x/net/http2/hpack.(*Encoder).WriteField": {
+			Required: true,
+			Start:    p.bpfObjects.UprobeHpackEncoderWriteField,
+		},
+		"google.golang.org/grpc/internal/transport.(*http2Client).NewStream": {
+			Required: true,
+			Start:    p.bpfObjects.UprobeTransportHttp2ClientNewStream,
+		},
+		"google.golang.org/grpc/internal/transport.(*loopyWriter).writeHeader": {
+			Required: true,
+			Start:    p.bpfObjects.UprobeTransportLoopyWriterWriteHeader,
 		},
 	}
 }

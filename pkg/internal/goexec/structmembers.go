@@ -114,6 +114,18 @@ var structMembers = map[string]structInfo{
 			"val": "value_context_val_ptr_pos",
 		},
 	},
+	"google.golang.org/grpc/internal/transport.http2Client": {
+		lib: "google.golang.org/grpc",
+		fields: map[string]string{
+			"nextID": "http2_client_next_id_pos",
+		},
+	},
+	"golang.org/x/net/http2/hpack.Encoder": {
+		lib: "golang.org/x",
+		fields: map[string]string{
+			"w": "hpack_encoder_w_pos",
+		},
+	},
 }
 
 func structMemberOffsets(elfFile *elf.File) (FieldOffsets, error) {

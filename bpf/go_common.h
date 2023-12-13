@@ -125,7 +125,7 @@ static __always_inline u8 client_trace_parent(void *goroutine_addr, tp_info_t *t
     if (req_header) {
         void *traceparent_ptr = extract_traceparent_from_req_headers(req_header);
         if (traceparent_ptr != NULL) {
-            unsigned char buf[W3C_VAL_LENGTH];
+            unsigned char buf[TP_MAX_VAL_LENGTH];
             trace_id_exists = 1;
             long res = bpf_probe_read(buf, sizeof(buf), traceparent_ptr);
             if (res < 0) {

@@ -34,9 +34,9 @@ struct {
 typedef struct grpc_client_func_invocation {
     u64 start_monotime_ns;
     u64 cc;
-    u64 ctx;
     u64 method;
     u64 method_len;
+    tp_info_t tp;
 } grpc_client_func_invocation_t;
 
 struct {
@@ -53,6 +53,22 @@ struct {
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
 } ongoing_grpc_server_requests SEC(".maps");
 
+// Context propagation
+struct {
+    __uint(type, BPF_MAP_TYPE_LRU_HASH);
+    __type(key, u32); // key: stream id
+    __type(value, void *); // pointer to the request goroutine
+    __uint(max_entries, MAX_CONCURRENT_REQUESTS);
+} ongoing_streams SEC(".maps");
+
+struct {
+    __uint(type, BPF_MAP_TYPE_HASH);
+    __type(key, void *); // key: pointer to the request goroutine
+    __type(value, grpc_client_func_invocation_t);
+    __uint(max_entries, MAX_CONCURRENT_REQUESTS);
+} ongoing_grpc_header_writes SEC(".maps");
+
+
 // To be Injected from the user space during the eBPF program load & initialization
 
 volatile const u64 grpc_stream_st_ptr_pos;
@@ -66,6 +82,12 @@ volatile const u64 tcp_addr_ip_ptr_pos;
 volatile const u64 grpc_client_target_ptr_pos;
 volatile const u64 grpc_stream_ctx_ptr_pos;
 volatile const u64 value_context_val_ptr_pos;
+
+// Context propagation
+volatile const u64 http2_client_next_id_pos;
+volatile const u64 hpack_encoder_w_pos;
+
+#define GRPC_ENCODED_HEADER_LEN 69 // 1 + 1 + TP_MAX_KEY_LENGTH + 1 + TP_MAX_VAL_LENGTH = type byte + len_as_byte("traceparent") + strlen(traceparent) + len_as_byte(TP_MAX_VAL_LENGTH) + TP_MAX_VAL_LENGTH 
 
 SEC("uprobe/server_handleStream")
 int uprobe_server_handleStream(struct pt_regs *ctx) {
@@ -235,10 +257,25 @@ int uprobe_ClientConn_Invoke(struct pt_regs *ctx) {
     grpc_client_func_invocation_t invocation = {
         .start_monotime_ns = bpf_ktime_get_ns(),
         .cc = (u64)cc_ptr,
-        .ctx = (u64)ctx_ptr,
         .method = (u64)method_ptr,
         .method_len = (u64)method_len,
+        .tp = {0}
     };
+
+    if (ctx_ptr) {
+        void *val_ptr = 0;
+        // Read the embedded val object ptr from ctx
+        bpf_probe_read(&val_ptr, sizeof(val_ptr), (void *)(ctx_ptr + value_context_val_ptr_pos + sizeof(void *)));
+
+        if (val_ptr) {
+            client_trace_parent(goroutine_addr, &invocation.tp, (void *)(val_ptr));
+        } else {
+            bpf_dbg_printk("No val_ptr %llx", val_ptr);
+        }
+    } else {
+        // it's OK sending empty tp for a client, the userspace id generator will make random trace_id, span_id
+        bpf_dbg_printk("No ctx_ptr %llx", ctx_ptr);
+    }
 
     // Write event
     if (bpf_map_update_elem(&ongoing_grpc_client_requests, &goroutine_addr, &invocation, BPF_ANY)) {
@@ -300,31 +337,131 @@ int uprobe_ClientConn_Invoke_return(struct pt_regs *ctx) {
         return 0;
     }
 
-    void *ctx_ptr = (void *)invocation->ctx;
-
-    tp_info_t tp = {0};
-
-    if (ctx_ptr) {
-        void *val_ptr = 0;
-        // Read the embedded val object ptr from ctx
-        bpf_probe_read(&val_ptr, sizeof(val_ptr), (void *)(ctx_ptr + value_context_val_ptr_pos + sizeof(void *)));
-
-        if (val_ptr) {
-            client_trace_parent(goroutine_addr, &tp, (void *)(val_ptr));
-        } else {
-            bpf_dbg_printk("No val_ptr %llx", val_ptr);
-        }
-    } else {
-        // it's OK sending empty tp for a client, the userspace id generator will make random trace_id, span_id
-        bpf_dbg_printk("No ctx_ptr %llx", ctx_ptr);
-    }
-
-    trace->tp = tp;
+    trace->tp = invocation->tp;
 
     trace->status = (err) ? 2 : 0; // Getting the gRPC client status is complex, if there's an error we set Code.Unknown = 2
 
     // submit the completed trace via ringbuffer
     bpf_ringbuf_submit(trace, get_flags());
 
+    return 0;
+}
+
+SEC("uprobe/transport_http2Client_NewStream")
+int uprobe_transport_http2Client_NewStream(struct pt_regs *ctx) {
+    bpf_dbg_printk("=== uprobe/proc transport.(*http2Client).NewStream === ");
+
+    void *goroutine_addr = GOROUTINE_PTR(ctx);
+    void *t_ptr = GO_PARAM1(ctx);
+
+    bpf_printk("goroutine_addr %lx, t_ptr %llx", goroutine_addr, t_ptr);
+
+    if (t_ptr) {
+        u32 next_id = 0;
+        // Read the next stream id from the httpClient
+        bpf_probe_read(&next_id, sizeof(next_id), (void *)(t_ptr + http2_client_next_id_pos));
+
+        bpf_printk("next_id %d", next_id);
+        bpf_map_update_elem(&ongoing_streams, &next_id, &goroutine_addr, BPF_ANY);
+    }
+    
+    return 0;
+}
+
+SEC("uprobe/transport_loopyWriter_writeHeader")
+int uprobe_transport_loopyWriter_writeHeader(struct pt_regs *ctx) {
+    bpf_dbg_printk("=== uprobe/proc transport.(*loopyWriter).writeHeader === ");
+
+    void *goroutine_addr = GOROUTINE_PTR(ctx);    
+    u64 stream_id = (u64)GO_PARAM2(ctx);
+
+    bpf_printk("goroutine_addr %lx, stream_id %d", goroutine_addr, stream_id);
+
+    if (stream_id) {
+        void **invocation_go_ptr = bpf_map_lookup_elem(&ongoing_streams, &stream_id);
+        bpf_map_delete_elem(&ongoing_streams, &stream_id);
+
+        if (invocation_go_ptr) {
+            void *invocation_go = *invocation_go_ptr;
+            bpf_printk("invocation goroutine_addr %lx", invocation_go);
+
+            grpc_client_func_invocation_t *invocation = bpf_map_lookup_elem(&ongoing_grpc_client_requests, &invocation_go);
+
+            if (invocation) {
+                bpf_printk("found invocation metadata %llx", invocation);
+
+                grpc_client_func_invocation_t inv_save = *invocation;
+                bpf_map_update_elem(&ongoing_grpc_header_writes, &goroutine_addr, &inv_save, BPF_ANY);
+            }
+        }
+    }
+
+    return 0;
+}
+
+SEC("uprobe/hpack_Encoder_WriteField")
+int uprobe_hpack_Encoder_WriteField(struct pt_regs *ctx) {
+    bpf_dbg_printk("=== uprobe/proc grpc hpack.(*Encoder).WriteField === ");
+
+    void *goroutine_addr = GOROUTINE_PTR(ctx);
+    bpf_printk("goroutine_addr %lx", goroutine_addr);
+
+    grpc_client_func_invocation_t *invocation = bpf_map_lookup_elem(&ongoing_grpc_header_writes, &goroutine_addr);
+    bpf_map_delete_elem(&ongoing_grpc_header_writes, &goroutine_addr);
+
+    if (invocation) {
+        void *e_ptr = GO_PARAM1(ctx);
+
+        if (e_ptr) {
+            void *w_ptr = 0;
+            bpf_probe_read(&w_ptr, sizeof(w_ptr), (void *)(e_ptr + hpack_encoder_w_pos + sizeof(void *)));
+
+            // No need to dereference one more time, w.buf is embedded.
+            if (w_ptr) {
+                void *buf_arr = 0;
+                s64 len = 0;
+                s64 cap = 0;
+
+                bpf_probe_read(&buf_arr, sizeof(buf_arr), (void *)(w_ptr));
+                bpf_probe_read(&len, sizeof(len), (void *)(w_ptr + 8));
+                bpf_probe_read(&cap, sizeof(cap), (void *)(w_ptr + 16));
+
+                bpf_printk("Found invocation w_ptr %llx, buf_arr %llx, len %d, cap %d", w_ptr, buf_arr, len, cap);
+
+                if (len >= 0 && cap > 0 && cap > len) {
+                    s64 available_bytes = (cap - len);
+                
+                    if (available_bytes > GRPC_ENCODED_HEADER_LEN) {
+                        __attribute__((__unused__)) char key[TP_MAX_KEY_LENGTH] = "traceparent";
+                        unsigned char tp_buf[TP_MAX_VAL_LENGTH];
+                        __attribute__((__unused__)) u8 type_byte = 0;
+                        __attribute__((__unused__)) u8 key_len = TP_MAX_KEY_LENGTH;
+                        __attribute__((__unused__)) u8 val_len = TP_MAX_VAL_LENGTH;
+
+                        make_tp_string(tp_buf, &invocation->tp);
+
+                        bpf_printk("Will write %s", tp_buf);
+
+#ifdef NO_HEADER_PROPAGATION
+                        bpf_probe_write_user(buf_arr + (len & 0x0ffff), &type_byte, sizeof(type_byte));
+                        len++;
+                        bpf_probe_write_user(buf_arr + (len & 0x0ffff), &key_len, sizeof(key_len));
+                        len++;
+                        bpf_probe_write_user(buf_arr + (len & 0x0ffff), key, sizeof(key));
+                        len += TP_MAX_KEY_LENGTH;
+                        bpf_probe_write_user(buf_arr + (len & 0x0ffff), &val_len, sizeof(val_len));
+                        len++;
+                        bpf_probe_write_user(buf_arr + (len & 0x0ffff), tp_buf, sizeof(tp_buf));
+#endif
+                    }
+                }
+            } else {
+                bpf_printk("Can't find w_ptr");
+            }
+        } else {
+            bpf_printk("Can't find e_ptr");
+        }
+
+    }
     return 0;
 }

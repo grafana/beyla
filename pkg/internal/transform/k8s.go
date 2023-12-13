@@ -8,6 +8,7 @@ import (
 	"github.com/mariomac/pipes/pkg/graph/stage"
 	"github.com/mariomac/pipes/pkg/node"
 
+	"github.com/grafana/beyla/pkg/internal/kube"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/pkg/internal/request"
 	kube2 "github.com/grafana/beyla/pkg/internal/transform/kube"
@@ -50,7 +51,7 @@ func (d KubernetesDecorator) Enabled() bool {
 		return false
 	case string(EnabledAutodetect):
 		// We autodetect that we are in a kubernetes if we can properly load a K8s configuration file
-		_, err := kube2.LoadConfig(d.KubeconfigPath)
+		_, err := kube.LoadConfig(d.KubeconfigPath)
 		if err != nil {
 			klog().Debug("kubeconfig can't be detected. Assuming we are not in Kubernetes", "error", err)
 			return false
@@ -95,7 +96,7 @@ func (md *metadataDecorator) do(span *request.Span) {
 	}
 }
 
-func appendMetadata(to map[string]string, info *kube2.PodInfo) {
+func appendMetadata(to map[string]string, info *kube.PodInfo) {
 	to[NamespaceName] = info.Namespace
 	to[PodName] = info.Name
 	to[NodeName] = info.NodeName

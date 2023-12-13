@@ -23,6 +23,7 @@ const (
 	kubeConfigEnvVariable  = "KUBECONFIG"
 	syncTime               = 10 * time.Minute
 	IndexPodByContainerIDs = "idx_pod_by_container"
+	IndexPodByOwner        = "idx_pod_by_owner"
 	IndexReplicaSetNames   = "idx_rs"
 )
 
@@ -70,6 +71,10 @@ type ReplicaSetInfo struct {
 	DeploymentName string
 }
 
+func qName(namespace, name string) string {
+	return namespace + "/" + name
+}
+
 var podIndexer = cache.Indexers{
 	IndexPodByContainerIDs: func(obj interface{}) ([]string, error) {
 		pi := obj.(*PodInfo)
@@ -79,9 +84,8 @@ var podIndexer = cache.Indexers{
 
 var replicaSetIndexer = cache.Indexers{
 	IndexReplicaSetNames: func(obj interface{}) ([]string, error) {
-		// we don't index by namespace too, as name collisions are unlikely happening,
-		// because the replicaset between a pod and its deployment has names like frontend-64f8f4c645
-		return []string{obj.(*ReplicaSetInfo).Name}, nil
+		rs := obj.(*ReplicaSetInfo)
+		return []string{qName(rs.Namespace, rs.Name)}, nil
 	},
 }
 
@@ -89,7 +93,7 @@ var replicaSetIndexer = cache.Indexers{
 func (k *Metadata) GetContainerPod(containerID string) (*PodInfo, bool) {
 	objs, err := k.pods.GetIndexer().ByIndex(IndexPodByContainerIDs, containerID)
 	if err != nil {
-		klog().Debug("error accessing index by IP. Ignoring", "error", err, "containerID", containerID)
+		klog().Debug("error accessing index by container ID. Ignoring", "error", err, "containerID", containerID)
 		return nil, false
 	}
 	if len(objs) == 0 {
@@ -107,7 +111,7 @@ func (k *Metadata) initPodInformer(informerFactory informers.SharedInformerFacto
 	log := klog().With("informer", "Pod")
 	pods := informerFactory.Core().V1().Pods().Informer()
 
-	k.initContainerDeletionListeners(log, pods)
+	k.initContainerListeners(log, pods)
 
 	// Transform any *v1.Pod instance into a *PodInfo instance to save space
 	// in the informer's cache
@@ -163,15 +167,15 @@ func (k *Metadata) initPodInformer(informerFactory informers.SharedInformerFacto
 		return fmt.Errorf("can't set pods transform: %w", err)
 	}
 	if err := pods.AddIndexers(podIndexer); err != nil {
-		return fmt.Errorf("can't add %s indexer to Pods informer: %w", IndexPodByContainerIDs, err)
+		return fmt.Errorf("can't add indexers to Pods informer: %w", err)
 	}
 
 	k.pods = pods
 	return nil
 }
 
-// initContainerDeletionListeners listens for deletions of pods, to forward them to the ContainerEventHandler subscribers.
-func (k *Metadata) initContainerDeletionListeners(log *slog.Logger, pods cache.SharedIndexInformer) {
+// initContainerListeners listens for deletions of pods, to forward them to the ContainerEventHandler subscribers.
+func (k *Metadata) initContainerListeners(log *slog.Logger, pods cache.SharedIndexInformer) {
 	if _, err := pods.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		DeleteFunc: func(obj interface{}) {
 			pod := obj.(*PodInfo)
@@ -196,8 +200,8 @@ func rmContainerIDSchema(containerID string) string {
 }
 
 // GetReplicaSetInfo fetches metadata from a ReplicaSet given its name
-func (k *Metadata) GetReplicaSetInfo(name string) (*ReplicaSetInfo, bool) {
-	objs, err := k.replicaSets.GetIndexer().ByIndex(IndexReplicaSetNames, name)
+func (k *Metadata) GetReplicaSetInfo(namespace, name string) (*ReplicaSetInfo, bool) {
+	objs, err := k.replicaSets.GetIndexer().ByIndex(IndexReplicaSetNames, qName(namespace, name))
 	if err != nil {
 		klog().Debug("error accessing ReplicaSet index by name. Ignoring",
 			"error", err, "name", name)
@@ -324,5 +328,22 @@ func (k *Metadata) initInformers(client kubernetes.Interface, timeout time.Durat
 	case <-time.After(timeout):
 		return fmt.Errorf("kubernetes cache has not been synced after %s timeout", timeout)
 	}
+}
 
+// FetchPodOwnerInfo updates the passed pod with the owner Desployment info, if required and
+// if it exists.
+func (k *Metadata) FetchPodOwnerInfo(pod *PodInfo) {
+	if pod.DeploymentName == "" && pod.ReplicaSetName != "" {
+		if rsi, ok := k.GetReplicaSetInfo(pod.Namespace, pod.ReplicaSetName); ok {
+			pod.DeploymentName = rsi.DeploymentName
+		}
+	}
+}
+
+func (k *Metadata) AddPodEventHandler(h cache.ResourceEventHandler) (cache.ResourceEventHandlerRegistration, error) {
+	return k.pods.AddEventHandler(h)
+}
+
+func (k *Metadata) AddReplicaSetEventHandler(h cache.ResourceEventHandler) (cache.ResourceEventHandlerRegistration, error) {
+	return k.replicaSets.AddEventHandler(h)
 }

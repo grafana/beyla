@@ -17,6 +17,7 @@ import (
 	"github.com/grafana/beyla/pkg/internal/discover/services"
 	"github.com/grafana/beyla/pkg/internal/ebpf"
 	"github.com/grafana/beyla/pkg/internal/ebpf/watcher"
+	"github.com/grafana/beyla/pkg/internal/kube"
 	"github.com/grafana/beyla/pkg/internal/pipe"
 )
 
@@ -24,9 +25,9 @@ const (
 	defaultPollInterval = 5 * time.Second
 )
 
-// Watcher polls every PollInterval for new processes and forwards either new or deleted process PIDs
+// ProcessWatcher polls every PollInterval for new processes and forwards either new or deleted process PIDs
 // as well as PIDs from processes that setup a new connection
-type Watcher struct {
+type ProcessWatcher struct {
 	Ctx context.Context
 	Cfg *pipe.Config
 }
@@ -48,13 +49,14 @@ type PID int32
 type processPorts struct {
 	pid       PID
 	openPorts []uint32
+	ownerPod  *kube.PodInfo
 }
 
 func wplog() *slog.Logger {
-	return slog.With("component", "discover.Watcher")
+	return slog.With("component", "discover.ProcessWatcher")
 }
 
-func WatcherProvider(w Watcher) (node.StartFunc[[]Event[processPorts]], error) {
+func WatcherProvider(w ProcessWatcher) (node.StartFunc[[]Event[processPorts]], error) {
 	acc := pollAccounter{
 		ctx:               w.Ctx,
 		cfg:               w.Cfg,
@@ -106,7 +108,7 @@ type pollAccounter struct {
 }
 
 func (pa *pollAccounter) Run(out chan<- []Event[processPorts]) {
-	log := slog.With("component", "discover.Watcher", "interval", pa.interval)
+	log := slog.With("component", "discover.ProcessWatcher", "interval", pa.interval)
 
 	bpfWatchEvents := make(chan watcher.Event, 100)
 	if err := pa.loadBPFWatcher(pa.cfg, bpfWatchEvents); err != nil {

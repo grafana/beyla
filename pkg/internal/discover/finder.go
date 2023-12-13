@@ -21,7 +21,7 @@ import (
 
 // ProcessFinder pipeline architecture. It uses the Pipes library to instantiate and connect all the nodes.
 type ProcessFinder struct {
-	Watcher         `sendTo:"CriteriaMatcher"`
+	ProcessWatcher  `sendTo:"CriteriaMatcher"`
 	CriteriaMatcher `sendTo:"ExecTyper"`
 	ExecTyper       `sendTo:"ContainerDBUpdater"`
 	// ContainerDBUpdater will be only enabled (non-nil value) if Kubernetes decoration is enabled
@@ -35,7 +35,7 @@ func NewProcessFinder(ctx context.Context, cfg *pipe.Config, ctxInfo *global.Con
 		cntDB = &ContainerDBUpdater{DB: ctxInfo.K8sDatabase}
 	}
 	return &ProcessFinder{
-		Watcher:            Watcher{Ctx: ctx, Cfg: cfg},
+		ProcessWatcher:     ProcessWatcher{Ctx: ctx, Cfg: cfg},
 		CriteriaMatcher:    CriteriaMatcher{Cfg: cfg},
 		ExecTyper:          ExecTyper{Cfg: cfg, Metrics: ctxInfo.Metrics},
 		ContainerDBUpdater: cntDB,

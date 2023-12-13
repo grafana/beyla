@@ -58,7 +58,7 @@ struct {
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __type(key, u32); // key: stream id
-    __type(value, void *); // pointer to the request goroutine
+    __type(value, grpc_client_func_invocation_t); // stored info for the client request
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
 } ongoing_streams SEC(".maps");
 
@@ -313,7 +313,7 @@ int uprobe_ClientConn_Close(struct pt_regs *ctx) {
     bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
 
     bpf_map_delete_elem(&ongoing_grpc_client_requests, &goroutine_addr);
-    
+
     return 0;
 }
 
@@ -397,9 +397,17 @@ int uprobe_transport_http2Client_NewStream(struct pt_regs *ctx) {
         bpf_probe_read(&next_id, sizeof(next_id), (void *)(t_ptr + http2_client_next_id_pos));
 
         bpf_dbg_printk("next_id %d", next_id);
-        // This map is an LRU map, we can't be sure that all created streams are going to be
-        // seen later by writeHeader to clean up this mapping.
-        bpf_map_update_elem(&ongoing_streams, &next_id, &goroutine_addr, BPF_ANY);
+
+        grpc_client_func_invocation_t *invocation = bpf_map_lookup_elem(&ongoing_grpc_client_requests, &goroutine_addr);
+
+        if (invocation) {
+            grpc_client_func_invocation_t inv_save = *invocation;
+            // This map is an LRU map, we can't be sure that all created streams are going to be
+            // seen later by writeHeader to clean up this mapping.
+            bpf_map_update_elem(&ongoing_streams, &next_id, &inv_save, BPF_ANY);
+        } else {
+            bpf_dbg_printk("Couldn't find invocation metadata for goroutite %lx", goroutine_addr);
+        }
     }
     
 #endif    
@@ -420,21 +428,14 @@ int uprobe_transport_loopyWriter_writeHeader(struct pt_regs *ctx) {
     bpf_dbg_printk("goroutine_addr %lx, stream_id %d", goroutine_addr, stream_id);
 
     if (stream_id) {
-        void **invocation_go_ptr = bpf_map_lookup_elem(&ongoing_streams, &stream_id);
+        grpc_client_func_invocation_t *invocation = bpf_map_lookup_elem(&ongoing_streams, &stream_id);
         bpf_map_delete_elem(&ongoing_streams, &stream_id);
 
-        if (invocation_go_ptr) {
-            void *invocation_go = *invocation_go_ptr;
-            bpf_dbg_printk("invocation goroutine_addr %lx", invocation_go);
+        if (invocation && !invocation->flags) {
+            bpf_dbg_printk("found invocation metadata %llx", invocation);
 
-            grpc_client_func_invocation_t *invocation = bpf_map_lookup_elem(&ongoing_grpc_client_requests, &invocation_go);
-
-            if (invocation && !invocation->flags) {
-                bpf_dbg_printk("found invocation metadata %llx", invocation);
-
-                grpc_client_func_invocation_t inv_save = *invocation;
-                bpf_map_update_elem(&ongoing_grpc_header_writes, &goroutine_addr, &inv_save, BPF_ANY);
-            }
+            grpc_client_func_invocation_t inv_save = *invocation;
+            bpf_map_update_elem(&ongoing_grpc_header_writes, &goroutine_addr, &inv_save, BPF_ANY);
         }
     }
 #endif

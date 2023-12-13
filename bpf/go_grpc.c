@@ -41,7 +41,7 @@ typedef struct grpc_client_func_invocation {
 } grpc_client_func_invocation_t;
 
 struct {
-    __uint(type, BPF_MAP_TYPE_HASH);
+    __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __type(key, void *); // key: pointer to the request goroutine
     __type(value, grpc_client_func_invocation_t);
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
@@ -242,14 +242,8 @@ int uprobe_transport_writeStatus(struct pt_regs *ctx) {
     return 0;
 }
 
+/* GRPC client */
 static __always_inline void clientConnStart(void *goroutine_addr, void *cc_ptr, void *ctx_ptr, void *method_ptr, void *method_len) {
-    grpc_client_func_invocation_t *existing_i = bpf_map_lookup_elem(&ongoing_grpc_client_requests, &goroutine_addr);
-
-    if (existing_i) {
-        bpf_dbg_printk("found existing connection info, ignoring");
-        return;
-    }
-
     grpc_client_func_invocation_t invocation = {
         .start_monotime_ns = bpf_ktime_get_ns(),
         .cc = (u64)cc_ptr,
@@ -276,7 +270,6 @@ static __always_inline void clientConnStart(void *goroutine_addr, void *cc_ptr, 
     }
 }
 
-/* GRPC client */
 SEC("uprobe/ClientConn_Invoke")
 int uprobe_ClientConn_Invoke(struct pt_regs *ctx) {
     bpf_dbg_printk("=== uprobe/proc grpc ClientConn.Invoke === ");

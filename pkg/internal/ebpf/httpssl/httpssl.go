@@ -8,7 +8,6 @@ import (
 
 	"github.com/cilium/ebpf"
 
-	ebpf2 "github.com/grafana/beyla/pkg/internal/ebpf"
 	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
 	"github.com/grafana/beyla/pkg/internal/ebpf/httpfltr"
 	"github.com/grafana/beyla/pkg/internal/exec"
@@ -83,7 +82,7 @@ func (p *Tracer) Load() (*ebpf.CollectionSpec, error) {
 	}
 
 	if p.cfg.EBPF.TrackRequestHeaders {
-		kernelMajor, kernelMinor := ebpf2.KernelVersion()
+		kernelMajor, kernelMinor := ebpfcommon.KernelVersion()
 		if kernelMajor > 5 || (kernelMajor == 5 && kernelMinor >= 17) {
 			p.log.Info("Found Linux kernel later than 5.17, enabling trace information parsing", "major", kernelMajor, "minor", kernelMinor)
 			loader = loadBpf_tp

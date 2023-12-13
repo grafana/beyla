@@ -351,6 +351,7 @@ int uprobe_ClientConn_Invoke_return(struct pt_regs *ctx) {
 
 SEC("uprobe/transport_http2Client_NewStream")
 int uprobe_transport_http2Client_NewStream(struct pt_regs *ctx) {
+#ifndef NO_HEADER_PROPAGATION
     bpf_dbg_printk("=== uprobe/proc transport.(*http2Client).NewStream === ");
 
     void *goroutine_addr = GOROUTINE_PTR(ctx);
@@ -367,11 +368,13 @@ int uprobe_transport_http2Client_NewStream(struct pt_regs *ctx) {
         bpf_map_update_elem(&ongoing_streams, &next_id, &goroutine_addr, BPF_ANY);
     }
     
+#endif    
     return 0;
 }
 
 SEC("uprobe/transport_loopyWriter_writeHeader")
 int uprobe_transport_loopyWriter_writeHeader(struct pt_regs *ctx) {
+#ifndef NO_HEADER_PROPAGATION
     bpf_dbg_printk("=== uprobe/proc transport.(*loopyWriter).writeHeader === ");
 
     void *goroutine_addr = GOROUTINE_PTR(ctx);    
@@ -397,12 +400,13 @@ int uprobe_transport_loopyWriter_writeHeader(struct pt_regs *ctx) {
             }
         }
     }
-
+#endif
     return 0;
 }
 
 SEC("uprobe/hpack_Encoder_WriteField")
 int uprobe_hpack_Encoder_WriteField(struct pt_regs *ctx) {
+#ifndef NO_HEADER_PROPAGATION
     bpf_dbg_printk("=== uprobe/proc grpc hpack.(*Encoder).WriteField === ");
 
     void *goroutine_addr = GOROUTINE_PTR(ctx);
@@ -444,7 +448,6 @@ int uprobe_hpack_Encoder_WriteField(struct pt_regs *ctx) {
 
                         bpf_printk("Will write %s", tp_buf);
 
-#ifdef NO_HEADER_PROPAGATION
                         bpf_probe_write_user(buf_arr + (len & 0x0ffff), &type_byte, sizeof(type_byte));
                         len++;
                         bpf_probe_write_user(buf_arr + (len & 0x0ffff), &key_len, sizeof(key_len));
@@ -454,7 +457,6 @@ int uprobe_hpack_Encoder_WriteField(struct pt_regs *ctx) {
                         bpf_probe_write_user(buf_arr + (len & 0x0ffff), &val_len, sizeof(val_len));
                         len++;
                         bpf_probe_write_user(buf_arr + (len & 0x0ffff), tp_buf, sizeof(tp_buf));
-#endif
                     }
                 }
             } else {
@@ -465,5 +467,6 @@ int uprobe_hpack_Encoder_WriteField(struct pt_regs *ctx) {
         }
 
     }
+#endif
     return 0;
 }

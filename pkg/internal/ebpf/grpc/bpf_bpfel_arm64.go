@@ -24,6 +24,7 @@ type bpfGrpcClientFuncInvocationT struct {
 	Method          uint64
 	MethodLen       uint64
 	Tp              bpfTpInfoT
+	Flags           uint64
 }
 
 type bpfGrpcSrvFuncInvocationT struct {

@@ -24,6 +24,7 @@ type bpf_debugGrpcClientFuncInvocationT struct {
 	Method          uint64
 	MethodLen       uint64
 	Tp              bpf_debugTpInfoT
+	Flags           uint64
 }
 
 type bpf_debugGrpcSrvFuncInvocationT struct {

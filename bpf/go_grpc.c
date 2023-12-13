@@ -37,6 +37,7 @@ typedef struct grpc_client_func_invocation {
     u64 method;
     u64 method_len;
     tp_info_t tp;
+    u64 flags;
 } grpc_client_func_invocation_t;
 
 struct {
@@ -259,7 +260,8 @@ int uprobe_ClientConn_Invoke(struct pt_regs *ctx) {
         .cc = (u64)cc_ptr,
         .method = (u64)method_ptr,
         .method_len = (u64)method_len,
-        .tp = {0}
+        .tp = {0},
+        .flags = 0,
     };
 
     if (ctx_ptr) {
@@ -268,7 +270,7 @@ int uprobe_ClientConn_Invoke(struct pt_regs *ctx) {
         bpf_probe_read(&val_ptr, sizeof(val_ptr), (void *)(ctx_ptr + value_context_val_ptr_pos + sizeof(void *)));
 
         if (val_ptr) {
-            client_trace_parent(goroutine_addr, &invocation.tp, (void *)(val_ptr));
+            invocation.flags = client_trace_parent(goroutine_addr, &invocation.tp, (void *)(val_ptr));
         } else {
             bpf_dbg_printk("No val_ptr %llx", val_ptr);
         }
@@ -387,7 +389,7 @@ int uprobe_transport_loopyWriter_writeHeader(struct pt_regs *ctx) {
 
             grpc_client_func_invocation_t *invocation = bpf_map_lookup_elem(&ongoing_grpc_client_requests, &invocation_go);
 
-            if (invocation) {
+            if (invocation && !invocation->flags) {
                 bpf_printk("found invocation metadata %llx", invocation);
 
                 grpc_client_func_invocation_t inv_save = *invocation;

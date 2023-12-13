@@ -5,6 +5,8 @@ import (
 	"log/slog"
 	"time"
 
+	"k8s.io/client-go/kubernetes"
+
 	"github.com/grafana/beyla/pkg/internal/helpers/container"
 	"github.com/grafana/beyla/pkg/internal/kube"
 )
@@ -36,7 +38,17 @@ func StartDatabase(kubeConfigPath string, informersTimeout time.Duration) (*Data
 		namespaces:       map[uint32]*container.Info{},
 	}
 	db.informer.AddContainerEventHandler(&db)
-	if err := db.informer.InitFromConfig(kubeConfigPath, informersTimeout); err != nil {
+	config, err := kube.LoadConfig(kubeConfigPath)
+	if err != nil {
+		return nil, err
+	}
+
+	kubeClient, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := db.informer.InitFromClient(kubeClient, informersTimeout); err != nil {
 		return nil, fmt.Errorf("starting informers' database: %w", err)
 	}
 	return &db, nil

@@ -243,21 +243,13 @@ func (wk *WatcherKubeEnricher) getReplicaSetPods(namespace, name string) []*kube
 }
 
 func (wk *WatcherKubeEnricher) updateNewPodsByOwnerIndex(pod *kube.PodInfo) {
-	for i := range pod.GetOwnerReferences() {
-		or := &pod.OwnerReferences[i]
-		if or.APIVersion == "apps/v1" && or.Kind == "ReplicaSet" {
-			wk.podsByOwner.Put(nsName{namespace: pod.Namespace, name: or.Name}, pod.Name, pod)
-			break
-		}
+	if pod.ReplicaSetName != "" {
+		wk.podsByOwner.Put(nsName{namespace: pod.Namespace, name: pod.ReplicaSetName}, pod.Name, pod)
 	}
 }
 
 func (wk *WatcherKubeEnricher) updateDeletedPodsByOwnerIndex(pod *kube.PodInfo) {
-	for i := range pod.GetOwnerReferences() {
-		or := &pod.OwnerReferences[i]
-		if or.APIVersion == "apps/v1" && or.Kind == "ReplicaSet" {
-			wk.podsByOwner.Delete(nsName{namespace: pod.Namespace, name: or.Name}, pod.Name)
-			break
-		}
+	if pod.ReplicaSetName != "" {
+		wk.podsByOwner.Delete(nsName{namespace: pod.Namespace, name: pod.ReplicaSetName}, pod.Name)
 	}
 }

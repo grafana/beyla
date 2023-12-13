@@ -1,13 +1,17 @@
 package discover
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/tools/cache"
+	fakek8sclientset "k8s.io/client-go/kubernetes/fake"
 
 	"github.com/grafana/beyla/pkg/internal/helpers/container"
 	"github.com/grafana/beyla/pkg/internal/kube"
@@ -17,7 +21,10 @@ func TestWatcherKubeEnricher(t *testing.T) {
 	containerInfoForPID = fakeContainerInfo{
 		123: container.Info{ContainerID: "container-123"},
 	}.forPID
-	informer := fakeKubeMetadata{}
+	k8sClient := fakek8sclientset.NewSimpleClientset()
+
+	informer := kube.Metadata{}
+	require.NoError(t, informer.InitFromClient(k8sClient, 30*time.Minute))
 	wkeNodeFunc, err := WatcherKubeEnricherProvider(&WatcherKubeEnricher{
 		informer: &informer,
 	})
@@ -32,39 +39,77 @@ func TestWatcherKubeEnricher(t *testing.T) {
 	j, _ := json.Marshal(o.Obj.ownerPod)
 	fmt.Printf("pid: %v. ports: %v. owner: %s\n", o.Obj.pid, o.Obj.openPorts, string(j))
 
-	informer.addPod(&kube.PodInfo{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "foo",
-			Namespace: "ns",
+	ns := "test-ns"
+	_, err = k8sClient.CoreV1().Namespaces().Create(
+		context.Background(),
+		&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}},
+		metav1.CreateOptions{})
+	require.NoError(t, err)
+
+	_, err = k8sClient.CoreV1().Pods(ns).Create(
+		context.Background(),
+		&corev1.Pod{ObjectMeta: metav1.ObjectMeta{
+			Name: "foo", Namespace: ns,
 			OwnerReferences: []metav1.OwnerReference{{
 				APIVersion: "apps/v1",
 				Kind:       "ReplicaSet",
 				Name:       "rs-3321",
 			}},
-		},
-		ContainerIDs: []string{"container-123"},
-	})
+		}, Status: corev1.PodStatus{
+			ContainerStatuses: []corev1.ContainerStatus{{
+				ContainerID: "container-123",
+			}},
+		}},
+		metav1.CreateOptions{})
+	require.NoError(t, err)
 
 	o = <-outputCh
 	j, _ = json.Marshal(o.Obj.ownerPod)
 	fmt.Printf("pid: %v. ports: %v. owner: %s\n", o.Obj.pid, o.Obj.openPorts, string(j))
 
-	informer.addReplicaSet(&kube.ReplicaSetInfo{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "rs-3321",
-			Namespace: "ns",
+	_, err = k8sClient.AppsV1().ReplicaSets(ns).Create(context.Background(),
+		&appsv1.ReplicaSet{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: ns,
+				Name:      "rs-3321",
+				OwnerReferences: []metav1.OwnerReference{{
+					APIVersion: "apps/v1",
+					Kind:       "Deployment",
+					Name:       "the-deployment",
+				}},
+			},
 		},
-		DeploymentName: "deployment",
-	})
+		metav1.CreateOptions{})
+
+	require.NoError(t, err)
 
 	o = <-outputCh
 	j, _ = json.Marshal(o.Obj.ownerPod)
 	fmt.Printf("pid: %v. ports: %v. owner: %s\n", o.Obj.pid, o.Obj.openPorts, string(j))
 
-	for o := range outputCh {
-		j, _ := json.Marshal(o.Obj.ownerPod)
-		fmt.Printf("pid: %v. ports: %v. owner: %s\n", o.Obj.pid, o.Obj.openPorts, string(j))
-	}
+	o = <-outputCh
+	j, _ = json.Marshal(o.Obj.ownerPod)
+	fmt.Printf("pid: %v. ports: %v. owner: %s\n", o.Obj.pid, o.Obj.openPorts, string(j))
+	o = <-outputCh
+	j, _ = json.Marshal(o.Obj.ownerPod)
+	fmt.Printf("pid: %v. ports: %v. owner: %s\n", o.Obj.pid, o.Obj.openPorts, string(j))
+
+	//informer.addReplicaSet(&kube.ReplicaSetInfo{
+	//	ObjectMeta: metav1.ObjectMeta{
+	//		Name:      "rs-3321",
+	//		Namespace: "ns",
+	//	},
+	//	DeploymentName: "deployment",
+	//})
+	//
+	//o = <-outputCh
+	//j, _ = json.Marshal(o.Obj.ownerPod)
+	//fmt.Printf("pid: %v. ports: %v. owner: %s\n", o.Obj.pid, o.Obj.openPorts, string(j))
+	//
+	//for o := range outputCh {
+	//	j, _ := json.Marshal(o.Obj.ownerPod)
+	//	fmt.Printf("pid: %v. ports: %v. owner: %s\n", o.Obj.pid, o.Obj.openPorts, string(j))
+	//}
 }
 
 // test cases
@@ -82,89 +127,4 @@ type fakeContainerInfo map[uint32]container.Info
 
 func (f fakeContainerInfo) forPID(pid uint32) (container.Info, error) {
 	return f[pid], nil
-}
-
-type fakeKubeMetadata struct {
-	podsByContainer  map[string]*kube.PodInfo
-	replicaSets      map[nsName]*kube.ReplicaSetInfo
-	podEventHandlers []cache.ResourceEventHandler
-	rsEventhandlers  []cache.ResourceEventHandler
-}
-
-func (f *fakeKubeMetadata) addPod(pod *kube.PodInfo) {
-	if f.podsByContainer == nil {
-		f.podsByContainer = map[string]*kube.PodInfo{}
-	}
-	for _, c := range pod.ContainerIDs {
-		f.podsByContainer[c] = pod
-	}
-	for _, eh := range f.podEventHandlers {
-		eh.OnAdd(pod, false)
-	}
-}
-
-func (f *fakeKubeMetadata) deletePod(pod *kube.PodInfo) {
-	for _, c := range pod.ContainerIDs {
-		delete(f.podsByContainer, c)
-	}
-	for _, eh := range f.podEventHandlers {
-		eh.OnDelete(pod)
-	}
-}
-
-func (f *fakeKubeMetadata) addReplicaSet(rs *kube.ReplicaSetInfo) {
-	if f.replicaSets == nil {
-		f.replicaSets = map[nsName]*kube.ReplicaSetInfo{}
-	}
-	f.replicaSets[nsName{namespace: rs.Namespace, name: rs.Name}] = rs
-	for _, eh := range f.rsEventhandlers {
-		eh.OnAdd(rs, false)
-	}
-}
-
-func (f *fakeKubeMetadata) deleteReplicaSet(rs *kube.ReplicaSetInfo) {
-	delete(f.replicaSets, nsName{namespace: rs.Namespace, name: rs.Name})
-	for _, eh := range f.rsEventhandlers {
-		eh.OnDelete(rs)
-	}
-}
-
-func (f *fakeKubeMetadata) FetchPodOwnerInfo(pod *kube.PodInfo) {
-	if f.replicaSets != nil && pod.DeploymentName == "" && pod.ReplicaSetName != "" {
-		if rsi, ok := f.replicaSets[nsName{namespace: pod.Namespace, name: pod.ReplicaSetName}]; ok {
-			pod.DeploymentName = rsi.DeploymentName
-		}
-	}
-}
-
-func (f *fakeKubeMetadata) GetContainerPod(containerID string) (*kube.PodInfo, bool) {
-	if f.podsByContainer == nil {
-		return nil, false
-	}
-	pod, ok := f.podsByContainer[containerID]
-	return pod, ok
-}
-
-func (f *fakeKubeMetadata) AddPodEventHandler(handler cache.ResourceEventHandler) (cache.ResourceEventHandlerRegistration, error) {
-	f.podEventHandlers = append(f.podEventHandlers, handler)
-	return nil, nil
-}
-
-func (f *fakeKubeMetadata) AddReplicaSetEventHandler(handler cache.ResourceEventHandler) (cache.ResourceEventHandlerRegistration, error) {
-	f.rsEventhandlers = append(f.rsEventhandlers, handler)
-	return nil, nil
-}
-
-type fakeNode[T any] chan T
-
-func (fn fakeNode[T]) asStartNode(out chan<- T) {
-	for i := range fn {
-		out <- i
-	}
-}
-
-func (fn fakeNode[T]) asTermNode(in <-chan T) {
-	for i := range in {
-		fn <- i
-	}
 }

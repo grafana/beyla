@@ -102,7 +102,7 @@ func (k *Metadata) GetContainerPod(containerID string) (*PodInfo, bool) {
 	return objs[0].(*PodInfo), true
 }
 
-// AddContainerEventHandler must be invoked before InitFromConfig
+// AddContainerEventHandler must be invoked before InitFromClient
 func (k *Metadata) AddContainerEventHandler(eh ContainerEventHandler) {
 	k.containerEventHandlers = append(k.containerEventHandlers, eh)
 }
@@ -253,26 +253,11 @@ func (k *Metadata) initReplicaSetInformer(informerFactory informers.SharedInform
 	return nil
 }
 
-func (k *Metadata) InitFromConfig(kubeConfigPath string, timeout time.Duration) error {
+func (k *Metadata) InitFromClient(client kubernetes.Interface, timeout time.Duration) error {
 	// Initialization variables
 	k.stopChan = make(chan struct{})
 
-	config, err := LoadConfig(kubeConfigPath)
-	if err != nil {
-		return err
-	}
-
-	kubeClient, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		return err
-	}
-
-	err = k.initInformers(kubeClient, timeout)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return k.initInformers(client, timeout)
 }
 
 func LoadConfig(kubeConfigPath string) (*rest.Config, error) {

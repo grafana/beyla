@@ -140,6 +140,9 @@ func (p *Tracer) GoProbes() map[string]ebpfcommon.FunctionPrograms {
 		"google.golang.org/grpc.(*clientStream).RecvMsg": {
 			End: p.bpfObjects.UprobeClientConnInvokeReturn,
 		},
+		"google.golang.org/grpc.(*clientStream).CloseSend": {
+			End: p.bpfObjects.UprobeClientConnInvokeReturn,
+		},
 	}
 
 	if ebpfcommon.SupportsContextPropagation(p.log) {

@@ -75,6 +75,13 @@ var structMembers = map[string]structInfo{
 			"s": "grpc_status_s_pos",
 		},
 	},
+	"google.golang.org/grpc/peer.Peer": {
+		lib: "google.golang.org/grpc",
+		fields: map[string]string{
+			"Addr":      "grpc_peer_addr_pos",
+			"LocalAddr": "grpc_peer_localaddr_pos",
+		},
+	},
 	"google.golang.org/genproto/googleapis/rpc/status.Status": {
 		lib: "google.golang.org/genproto",
 		fields: map[string]string{
@@ -86,6 +93,7 @@ var structMembers = map[string]structInfo{
 		fields: map[string]string{
 			"remoteAddr": "grpc_st_remoteaddr_ptr_pos",
 			"localAddr":  "grpc_st_localaddr_ptr_pos",
+			"peer":       "grpc_st_peer_ptr_pos",
 		},
 	},
 	"net.TCPAddr": {
@@ -120,8 +128,8 @@ var structMembers = map[string]structInfo{
 			"nextID": "http2_client_next_id_pos",
 		},
 	},
-	"golang.org/x/net/http2/hpack.Encoder": {
-		lib: "golang.org/x",
+	"vendor/golang.org/x/net/http2/hpack.Encoder": {
+		lib: "go",
 		fields: map[string]string{
 			"w": "hpack_encoder_w_pos",
 		},

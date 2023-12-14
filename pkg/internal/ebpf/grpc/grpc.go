@@ -100,8 +100,16 @@ func (p *Tracer) Constants(_ *exec.FileInfo, offsets *goexec.Offsets) map[string
 		"value_context_val_ptr_pos",
 		"http2_client_next_id_pos",
 		"hpack_encoder_w_pos",
+		"grpc_peer_localaddr_pos",
+		"grpc_peer_addr_pos",
+		"grpc_st_peer_ptr_pos",
 	} {
-		constants[s] = offsets.Field[s]
+		off := offsets.Field[s]
+		if off != nil {
+			constants[s] = offsets.Field[s]
+		} else {
+			constants[s] = -1
+		}
 	}
 	return constants
 }

@@ -78,11 +78,14 @@ volatile const u64 grpc_status_s_pos;
 volatile const u64 grpc_status_code_ptr_pos;
 volatile const u64 grpc_st_remoteaddr_ptr_pos;
 volatile const u64 grpc_st_localaddr_ptr_pos;
+volatile const u64 grpc_st_peer_ptr_pos;
 volatile const u64 tcp_addr_port_ptr_pos;
 volatile const u64 tcp_addr_ip_ptr_pos;
 volatile const u64 grpc_client_target_ptr_pos;
 volatile const u64 grpc_stream_ctx_ptr_pos;
 volatile const u64 value_context_val_ptr_pos;
+volatile const u64 grpc_peer_addr_pos;
+volatile const u64 grpc_peer_localaddr_pos;
 
 // Context propagation
 volatile const u64 http2_client_next_id_pos;

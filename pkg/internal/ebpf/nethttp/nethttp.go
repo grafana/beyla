@@ -16,13 +16,13 @@ package nethttp
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"log/slog"
 	"unsafe"
 
 	"github.com/cilium/ebpf"
 
-	ebpf2 "github.com/grafana/beyla/pkg/internal/ebpf"
 	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
 	"github.com/grafana/beyla/pkg/internal/exec"
 	"github.com/grafana/beyla/pkg/internal/goexec"
@@ -61,23 +61,6 @@ func (p *Tracer) AllowPID(pid uint32, _ svc.ID) {
 
 func (p *Tracer) BlockPID(pid uint32) {
 	p.pidsFilter.BlockPID(pid)
-}
-
-func (p *Tracer) supportsContextPropagation() bool {
-	kernelMajor, kernelMinor := ebpf2.KernelVersion()
-	if kernelMajor < 5 || (kernelMajor == 5 && kernelMinor < 14) {
-		p.log.Debug("Found Linux kernel earlier than 5.14, trace context propagation is supported", "major", kernelMajor, "minor", kernelMinor)
-		return true
-	}
-
-	lockdown := ebpfcommon.KernelLockdownMode()
-
-	if lockdown == ebpfcommon.KernelLockdownNone {
-		p.log.Debug("Kernel not in lockdown mode, trace context propagation is supported.")
-		return true
-	}
-
-	return false
 }
 
 func (p *Tracer) Load() (*ebpf.CollectionSpec, error) {
@@ -121,6 +104,9 @@ func (p *Tracer) Constants(_ *exec.FileInfo, offsets *goexec.Offsets) map[string
 	} {
 		constants[s] = offsets.Field[s]
 	}
+
+	fmt.Printf("constants %v", constants)
+
 	return constants
 }
 
@@ -133,7 +119,6 @@ func (p *Tracer) AddCloser(c ...io.Closer) {
 }
 
 func (p *Tracer) GoProbes() map[string]ebpfcommon.FunctionPrograms {
-	m := map[string]ebpfcommon.FunctionPrograms{
 	m := map[string]ebpfcommon.FunctionPrograms{
 		"net/http.serverHandler.ServeHTTP": {
 			Start: p.bpfObjects.UprobeServeHTTP,

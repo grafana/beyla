@@ -179,33 +179,51 @@ int uprobe_server_handleStream_return(struct pt_regs *ctx) {
     bpf_probe_read(&st_ptr, sizeof(st_ptr), (void *)(stream_ptr + grpc_stream_st_ptr_pos + sizeof(void *)));
 
     if (st_ptr) {
-        void *peer_ptr = 0; 
-        bpf_probe_read(&peer_ptr, sizeof(peer_ptr), (void *)(st_ptr + grpc_st_remoteaddr_ptr_pos + sizeof(void *)));
 
-        if (peer_ptr) {
-            u64 remote_addr_len = 0;
-            if (!read_go_byte_arr("grpc peer ptr", peer_ptr, tcp_addr_ip_ptr_pos, &trace->remote_addr, &remote_addr_len, sizeof(trace->remote_addr))) {
-                bpf_printk("can't read grpc peer ptr");
-                bpf_ringbuf_discard(trace, 0);
-                return 0;
-            }
-            trace->remote_addr_len = remote_addr_len;
+        void *remote_addr = 0;
+        void *local_addr = 0;
+
+        if (grpc_st_remoteaddr_ptr_pos != (u64)(-1)) {
+            bpf_dbg_printk("pre 1.60 grpc peer info");
+            remote_addr = (void *)(st_ptr + grpc_st_remoteaddr_ptr_pos + sizeof(void *));
+            local_addr = (void *)(st_ptr + grpc_st_localaddr_ptr_pos + sizeof(void *));
+        } else if (grpc_st_peer_ptr_pos != (u64)(-1)) {
+            bpf_dbg_printk("1.60 grpc or later peer info");
+            remote_addr = (void *)(st_ptr + grpc_st_peer_ptr_pos + grpc_peer_addr_pos + sizeof(void *));
+            local_addr = (void *)(st_ptr + grpc_st_peer_ptr_pos + grpc_peer_localaddr_pos + sizeof(void *));
         }
 
-        void *host_ptr = 0;
-        bpf_probe_read(&host_ptr, sizeof(host_ptr), (void *)(st_ptr + grpc_st_localaddr_ptr_pos + sizeof(void *)));
+        if (remote_addr != 0 && local_addr != 0) {
+            void *peer_ptr = 0; 
+            bpf_probe_read(&peer_ptr, sizeof(peer_ptr), remote_addr);
 
-        if (host_ptr) {
-            u64 host_len = 0;
-
-            if (!read_go_byte_arr("grpc host ptr", host_ptr, tcp_addr_ip_ptr_pos, &trace->host, &host_len,  sizeof(trace->host))) {
-                bpf_printk("can't read grpc host ptr");
-                bpf_ringbuf_discard(trace, 0);
-                return 0;
+            if (peer_ptr) {
+                u64 remote_addr_len = 0;
+                if (!read_go_byte_arr("grpc peer ptr", peer_ptr, tcp_addr_ip_ptr_pos, &trace->remote_addr, &remote_addr_len, sizeof(trace->remote_addr))) {
+                    bpf_printk("can't read grpc peer ptr");
+                    bpf_ringbuf_discard(trace, 0);
+                    return 0;
+                }
+                trace->remote_addr_len = remote_addr_len;
             }
-            trace->host_len = host_len;
 
-            bpf_probe_read(&trace->host_port, sizeof(trace->host_port), (void *)(host_ptr + tcp_addr_port_ptr_pos));
+            void *host_ptr = 0;
+            bpf_probe_read(&host_ptr, sizeof(host_ptr), local_addr);
+
+            if (host_ptr) {
+                u64 host_len = 0;
+
+                if (!read_go_byte_arr("grpc host ptr", host_ptr, tcp_addr_ip_ptr_pos, &trace->host, &host_len, sizeof(trace->host))) {
+                    bpf_printk("can't read grpc host ptr");
+                    bpf_ringbuf_discard(trace, 0);
+                    return 0;
+                }
+                trace->host_len = host_len;
+
+                bpf_probe_read(&trace->host_port, sizeof(trace->host_port), (void *)(host_ptr + tcp_addr_port_ptr_pos));
+            }
+        } else {
+            bpf_dbg_printk("can't find peer grpc information");
         }
     }
 

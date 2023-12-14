@@ -104,11 +104,14 @@ func (p *Tracer) Constants(_ *exec.FileInfo, offsets *goexec.Offsets) map[string
 		"grpc_peer_addr_pos",
 		"grpc_st_peer_ptr_pos",
 	} {
+		// Since gRPC 1.60 remoteaddr and localaddr were replaced by peer.
+		// We don't fail the store of unknown fields, we make them -1 so we detect
+		// what to read from the Go structures.
 		off := offsets.Field[s]
 		if off != nil {
 			constants[s] = offsets.Field[s]
 		} else {
-			constants[s] = -1
+			constants[s] = uint64(0xffffffffffffffff)
 		}
 	}
 	return constants

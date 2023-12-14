@@ -115,6 +115,23 @@ const (
 	KernelLockdownOther
 )
 
+func SupportsContextPropagation(log *slog.Logger) bool {
+	kernelMajor, kernelMinor := KernelVersion()
+	if kernelMajor < 5 || (kernelMajor == 5 && kernelMinor < 14) {
+		log.Debug("Found Linux kernel earlier than 5.14, trace context propagation is supported", "major", kernelMajor, "minor", kernelMinor)
+		return true
+	}
+
+	lockdown := KernelLockdownMode()
+
+	if lockdown == KernelLockdownNone {
+		log.Debug("Kernel not in lockdown mode, trace context propagation is supported.")
+		return true
+	}
+
+	return false
+}
+
 // Injectable for tests
 var lockdownPath = "/sys/kernel/security/lockdown"
 

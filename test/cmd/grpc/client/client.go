@@ -26,6 +26,7 @@ import (
 	"os"
 	"time"
 
+	"golang.org/x/net/http2/hpack"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
@@ -44,8 +45,10 @@ var (
 // printFeature gets the feature for the given point.
 func printFeature(client pb.RouteGuideClient, point *pb.Point, counter int) {
 	slog.Debug("Getting feature for point", "lat", point.Latitude, "long", point.Longitude)
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
+	// ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	// defer cancel()
+
+	ctx := context.Background()
 
 	var traceID [16]byte
 	var spanID [8]byte
@@ -57,7 +60,8 @@ func printFeature(client pb.RouteGuideClient, point *pb.Point, counter int) {
 
 	// Anything linked to this variable will transmit request headers.
 	md := metadata.New(map[string]string{"traceparent": tp})
-	ctx = metadata.NewOutgoingContext(ctx, md)
+	nCtx := metadata.NewOutgoingContext(ctx, md)
+	slog.Info("New ctx", "ctx", nCtx)
 
 	feature, err := client.GetFeature(ctx, point)
 	if err != nil {
@@ -240,6 +244,11 @@ func main() {
 	printFeature(client, &pb.Point{Latitude: 409146138, Longitude: -746188906}, counter)
 
 	if !*ping {
+		fmt.Printf("Sleeping, press any key\n")
+
+		var input string
+		fmt.Scanln(&input)
+
 		counter++
 		// Feature missing.
 		printFeature(client, &pb.Point{Latitude: 0, Longitude: 0}, counter)
@@ -257,7 +266,15 @@ func main() {
 		runRouteChat(client)
 	} else {
 		for {
-			time.Sleep(5 * time.Second)
+			var buf []byte
+
+			l := hpack.HuffmanEncodeLength("traceparent")
+			l1 := hpack.HuffmanEncodeLength("00-5fe865607da112abd799ea8108c38bcd-4c59e9a913c480a3-01")
+
+			fmt.Printf("Sleeping, press any key %d, len = %d, len1 = %d\n", cap(buf), l, l1)
+
+			var input string
+			fmt.Scanln(&input)
 			counter++
 			printFeature(client, &pb.Point{Latitude: 409146138, Longitude: -746188906}, counter)
 		}

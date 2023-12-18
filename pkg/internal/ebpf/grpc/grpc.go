@@ -30,8 +30,10 @@ import (
 	"github.com/grafana/beyla/pkg/internal/svc"
 )
 
-//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf ../../../../bpf/go_grpc.c -- -I../../../../bpf/headers
-//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf_debug ../../../../bpf/go_grpc.c -- -I../../../../bpf/headers -DBPF_DEBUG
+//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf ../../../../bpf/go_grpc.c -- -I../../../../bpf/headers -DNO_HEADER_PROPAGATION
+//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf_debug ../../../../bpf/go_grpc.c -- -I../../../../bpf/headers -DBPF_DEBUG -DNO_HEADER_PROPAGATION
+//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf_tp ../../../../bpf/go_grpc.c -- -I../../../../bpf/headers
+//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf_tp_debug ../../../../bpf/go_grpc.c -- -I../../../../bpf/headers -DBPF_DEBUG
 
 type Tracer struct {
 	log        *slog.Logger
@@ -66,6 +68,15 @@ func (p *Tracer) Load() (*ebpf.CollectionSpec, error) {
 	if p.cfg.BpfDebug {
 		loader = loadBpf_debug
 	}
+
+	if ebpfcommon.SupportsContextPropagation(p.log) {
+		loader = loadBpf_tp
+		if p.cfg.BpfDebug {
+			loader = loadBpf_tp_debug
+		}
+	} else {
+		p.log.Info("Kernel in lockdown mode, trace info propagation in gRPC headers is disabled.")
+	}
 	return loader()
 }
 
@@ -87,8 +98,21 @@ func (p *Tracer) Constants(_ *exec.FileInfo, offsets *goexec.Offsets) map[string
 		"grpc_client_target_ptr_pos",
 		"grpc_stream_ctx_ptr_pos",
 		"value_context_val_ptr_pos",
+		"http2_client_next_id_pos",
+		"hpack_encoder_w_pos",
+		"grpc_peer_localaddr_pos",
+		"grpc_peer_addr_pos",
+		"grpc_st_peer_ptr_pos",
 	} {
-		constants[s] = offsets.Field[s]
+		// Since gRPC 1.60 remoteaddr and localaddr were replaced by peer.
+		// We don't fail the store of unknown fields, we make them -1 so we detect
+		// what to read from the Go structures.
+		off := offsets.Field[s]
+		if off != nil {
+			constants[s] = offsets.Field[s]
+		} else {
+			constants[s] = uint64(0xffffffffffffffff)
+		}
 	}
 	return constants
 }
@@ -102,7 +126,7 @@ func (p *Tracer) AddCloser(c ...io.Closer) {
 }
 
 func (p *Tracer) GoProbes() map[string]ebpfcommon.FunctionPrograms {
-	return map[string]ebpfcommon.FunctionPrograms{
+	m := map[string]ebpfcommon.FunctionPrograms{
 		"google.golang.org/grpc.(*Server).handleStream": {
 			Required: true,
 			Start:    p.bpfObjects.UprobeServerHandleStream,
@@ -115,9 +139,40 @@ func (p *Tracer) GoProbes() map[string]ebpfcommon.FunctionPrograms {
 		"google.golang.org/grpc.(*ClientConn).Invoke": {
 			Required: true,
 			Start:    p.bpfObjects.UprobeClientConnInvoke,
-			End:      p.bpfObjects.UprobeClientConnInvokeReturn,
+		},
+		"google.golang.org/grpc.(*ClientConn).NewStream": {
+			Required: true,
+			Start:    p.bpfObjects.UprobeClientConnNewStream,
+		},
+		"google.golang.org/grpc.(*ClientConn).Close": {
+			Required: true,
+			Start:    p.bpfObjects.UprobeClientConnClose,
+		},
+		"google.golang.org/grpc.(*clientStream).RecvMsg": {
+			End: p.bpfObjects.UprobeClientConnInvokeReturn,
+		},
+		"google.golang.org/grpc.(*clientStream).CloseSend": {
+			End: p.bpfObjects.UprobeClientConnInvokeReturn,
 		},
 	}
+
+	if ebpfcommon.SupportsContextPropagation(p.log) {
+		m["golang.org/x/net/http2/hpack.(*Encoder).WriteField"] = ebpfcommon.FunctionPrograms{
+			Required: true,
+			Start:    p.bpfObjects.UprobeHpackEncoderWriteField,
+		}
+		m["google.golang.org/grpc/internal/transport.(*http2Client).NewStream"] = ebpfcommon.FunctionPrograms{
+			Required: true,
+			Start:    p.bpfObjects.UprobeTransportHttp2ClientNewStream,
+		}
+		m["google.golang.org/grpc/internal/transport.(*loopyWriter).writeHeader"] = ebpfcommon.FunctionPrograms{
+			Required: true,
+			Start:    p.bpfObjects.UprobeTransportLoopyWriterWriteHeader,
+			End:      p.bpfObjects.UprobeTransportLoopyWriterWriteHeaderReturn,
+		}
+	}
+
+	return m
 }
 
 func (p *Tracer) KProbes() map[string]ebpfcommon.FunctionPrograms {

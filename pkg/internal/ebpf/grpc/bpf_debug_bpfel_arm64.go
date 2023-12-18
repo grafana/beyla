@@ -21,9 +21,10 @@ type bpf_debugGoroutineMetadata struct {
 type bpf_debugGrpcClientFuncInvocationT struct {
 	StartMonotimeNs uint64
 	Cc              uint64
-	Ctx             uint64
 	Method          uint64
 	MethodLen       uint64
+	Tp              bpf_debugTpInfoT
+	Flags           uint64
 }
 
 type bpf_debugGrpcSrvFuncInvocationT struct {
@@ -87,11 +88,17 @@ type bpf_debugSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpf_debugProgramSpecs struct {
-	UprobeClientConnInvoke         *ebpf.ProgramSpec `ebpf:"uprobe_ClientConn_Invoke"`
-	UprobeClientConnInvokeReturn   *ebpf.ProgramSpec `ebpf:"uprobe_ClientConn_Invoke_return"`
-	UprobeServerHandleStream       *ebpf.ProgramSpec `ebpf:"uprobe_server_handleStream"`
-	UprobeServerHandleStreamReturn *ebpf.ProgramSpec `ebpf:"uprobe_server_handleStream_return"`
-	UprobeTransportWriteStatus     *ebpf.ProgramSpec `ebpf:"uprobe_transport_writeStatus"`
+	UprobeClientConnClose                       *ebpf.ProgramSpec `ebpf:"uprobe_ClientConn_Close"`
+	UprobeClientConnInvoke                      *ebpf.ProgramSpec `ebpf:"uprobe_ClientConn_Invoke"`
+	UprobeClientConnInvokeReturn                *ebpf.ProgramSpec `ebpf:"uprobe_ClientConn_Invoke_return"`
+	UprobeClientConnNewStream                   *ebpf.ProgramSpec `ebpf:"uprobe_ClientConn_NewStream"`
+	UprobeHpackEncoderWriteField                *ebpf.ProgramSpec `ebpf:"uprobe_hpack_Encoder_WriteField"`
+	UprobeServerHandleStream                    *ebpf.ProgramSpec `ebpf:"uprobe_server_handleStream"`
+	UprobeServerHandleStreamReturn              *ebpf.ProgramSpec `ebpf:"uprobe_server_handleStream_return"`
+	UprobeTransportHttp2ClientNewStream         *ebpf.ProgramSpec `ebpf:"uprobe_transport_http2Client_NewStream"`
+	UprobeTransportLoopyWriterWriteHeader       *ebpf.ProgramSpec `ebpf:"uprobe_transport_loopyWriter_writeHeader"`
+	UprobeTransportLoopyWriterWriteHeaderReturn *ebpf.ProgramSpec `ebpf:"uprobe_transport_loopyWriter_writeHeader_return"`
+	UprobeTransportWriteStatus                  *ebpf.ProgramSpec `ebpf:"uprobe_transport_writeStatus"`
 }
 
 // bpf_debugMapSpecs contains maps before they are loaded into the kernel.
@@ -103,8 +110,10 @@ type bpf_debugMapSpecs struct {
 	GolangMapbucketStorageMap *ebpf.MapSpec `ebpf:"golang_mapbucket_storage_map"`
 	OngoingGoroutines         *ebpf.MapSpec `ebpf:"ongoing_goroutines"`
 	OngoingGrpcClientRequests *ebpf.MapSpec `ebpf:"ongoing_grpc_client_requests"`
+	OngoingGrpcHeaderWrites   *ebpf.MapSpec `ebpf:"ongoing_grpc_header_writes"`
 	OngoingGrpcRequestStatus  *ebpf.MapSpec `ebpf:"ongoing_grpc_request_status"`
 	OngoingGrpcServerRequests *ebpf.MapSpec `ebpf:"ongoing_grpc_server_requests"`
+	OngoingStreams            *ebpf.MapSpec `ebpf:"ongoing_streams"`
 	PidCache                  *ebpf.MapSpec `ebpf:"pid_cache"`
 	ValidPids                 *ebpf.MapSpec `ebpf:"valid_pids"`
 }
@@ -133,8 +142,10 @@ type bpf_debugMaps struct {
 	GolangMapbucketStorageMap *ebpf.Map `ebpf:"golang_mapbucket_storage_map"`
 	OngoingGoroutines         *ebpf.Map `ebpf:"ongoing_goroutines"`
 	OngoingGrpcClientRequests *ebpf.Map `ebpf:"ongoing_grpc_client_requests"`
+	OngoingGrpcHeaderWrites   *ebpf.Map `ebpf:"ongoing_grpc_header_writes"`
 	OngoingGrpcRequestStatus  *ebpf.Map `ebpf:"ongoing_grpc_request_status"`
 	OngoingGrpcServerRequests *ebpf.Map `ebpf:"ongoing_grpc_server_requests"`
+	OngoingStreams            *ebpf.Map `ebpf:"ongoing_streams"`
 	PidCache                  *ebpf.Map `ebpf:"pid_cache"`
 	ValidPids                 *ebpf.Map `ebpf:"valid_pids"`
 }
@@ -146,8 +157,10 @@ func (m *bpf_debugMaps) Close() error {
 		m.GolangMapbucketStorageMap,
 		m.OngoingGoroutines,
 		m.OngoingGrpcClientRequests,
+		m.OngoingGrpcHeaderWrites,
 		m.OngoingGrpcRequestStatus,
 		m.OngoingGrpcServerRequests,
+		m.OngoingStreams,
 		m.PidCache,
 		m.ValidPids,
 	)
@@ -157,19 +170,31 @@ func (m *bpf_debugMaps) Close() error {
 //
 // It can be passed to loadBpf_debugObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpf_debugPrograms struct {
-	UprobeClientConnInvoke         *ebpf.Program `ebpf:"uprobe_ClientConn_Invoke"`
-	UprobeClientConnInvokeReturn   *ebpf.Program `ebpf:"uprobe_ClientConn_Invoke_return"`
-	UprobeServerHandleStream       *ebpf.Program `ebpf:"uprobe_server_handleStream"`
-	UprobeServerHandleStreamReturn *ebpf.Program `ebpf:"uprobe_server_handleStream_return"`
-	UprobeTransportWriteStatus     *ebpf.Program `ebpf:"uprobe_transport_writeStatus"`
+	UprobeClientConnClose                       *ebpf.Program `ebpf:"uprobe_ClientConn_Close"`
+	UprobeClientConnInvoke                      *ebpf.Program `ebpf:"uprobe_ClientConn_Invoke"`
+	UprobeClientConnInvokeReturn                *ebpf.Program `ebpf:"uprobe_ClientConn_Invoke_return"`
+	UprobeClientConnNewStream                   *ebpf.Program `ebpf:"uprobe_ClientConn_NewStream"`
+	UprobeHpackEncoderWriteField                *ebpf.Program `ebpf:"uprobe_hpack_Encoder_WriteField"`
+	UprobeServerHandleStream                    *ebpf.Program `ebpf:"uprobe_server_handleStream"`
+	UprobeServerHandleStreamReturn              *ebpf.Program `ebpf:"uprobe_server_handleStream_return"`
+	UprobeTransportHttp2ClientNewStream         *ebpf.Program `ebpf:"uprobe_transport_http2Client_NewStream"`
+	UprobeTransportLoopyWriterWriteHeader       *ebpf.Program `ebpf:"uprobe_transport_loopyWriter_writeHeader"`
+	UprobeTransportLoopyWriterWriteHeaderReturn *ebpf.Program `ebpf:"uprobe_transport_loopyWriter_writeHeader_return"`
+	UprobeTransportWriteStatus                  *ebpf.Program `ebpf:"uprobe_transport_writeStatus"`
 }
 
 func (p *bpf_debugPrograms) Close() error {
 	return _Bpf_debugClose(
+		p.UprobeClientConnClose,
 		p.UprobeClientConnInvoke,
 		p.UprobeClientConnInvokeReturn,
+		p.UprobeClientConnNewStream,
+		p.UprobeHpackEncoderWriteField,
 		p.UprobeServerHandleStream,
 		p.UprobeServerHandleStreamReturn,
+		p.UprobeTransportHttp2ClientNewStream,
+		p.UprobeTransportLoopyWriterWriteHeader,
+		p.UprobeTransportLoopyWriterWriteHeaderReturn,
 		p.UprobeTransportWriteStatus,
 	)
 }

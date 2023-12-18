@@ -81,9 +81,8 @@ func (m *matcher) filterCreated(obj processAttrs) (Event[ProcessMatch], bool) {
 		return Event[ProcessMatch]{}, false
 	}
 	for i := range m.criteria {
-		if m.matchProcess(proc, &m.criteria[i]) {
-			comm := proc.ExePath
-			m.log.Debug("found process", "pid", proc.Pid, "comm", comm)
+		if m.matchProcess(&obj, proc, &m.criteria[i]) {
+			m.log.Debug("found process", "pid", proc.Pid, "comm", proc.ExePath, "metadata", obj.metadata)
 			m.processHistory[obj.pid] = proc
 			return Event[ProcessMatch]{
 				Type: EventCreated,
@@ -108,17 +107,20 @@ func (m *matcher) filterDeleted(obj processAttrs) (Event[ProcessMatch], bool) {
 	}, true
 }
 
-func (m *matcher) matchProcess(p *services.ProcessInfo, a *services.Attributes) bool {
+func (m *matcher) matchProcess(obj *processAttrs, p *services.ProcessInfo, a *services.Attributes) bool {
 	if !a.Path.IsSet() && a.OpenPorts.Len() == 0 {
 		return false
 	}
 	if a.Path.IsSet() && !m.matchByExecutable(p, a) {
 		return false
 	}
-	if a.OpenPorts.Len() > 0 {
-		return m.matchByPort(p, a)
+	if a.OpenPorts.Len() > 0 && !m.matchByPort(p, a) {
+		return false
 	}
-	return true
+	// after matching by process basic information, we check if it matches
+	// by metadata.
+	// If there is no metadata, this will return true.
+	return m.matchByAttributes(obj.metadata, a.Metadata)
 }
 
 func (m *matcher) matchByPort(p *services.ProcessInfo, a *services.Attributes) bool {
@@ -132,6 +134,15 @@ func (m *matcher) matchByPort(p *services.ProcessInfo, a *services.Attributes) b
 
 func (m *matcher) matchByExecutable(p *services.ProcessInfo, a *services.Attributes) bool {
 	return a.Path.MatchString(p.ExePath)
+}
+
+func (m *matcher) matchByAttributes(actual map[string]string, required map[string]*services.RegexpAttr) bool {
+	for attrName, criteriaRegexp := range required {
+		if attrValue, ok := actual[attrName]; !ok || !criteriaRegexp.MatchString(attrValue) {
+			return false
+		}
+	}
+	return true
 }
 
 func FindingCriteria(cfg *pipe.Config) services.DefinitionCriteria {
@@ -156,6 +167,19 @@ func FindingCriteria(cfg *pipe.Config) services.DefinitionCriteria {
 			OpenPorts: cfg.Port,
 		})
 	}
+	// normalize criteria that only define metadata (e.g. k8s)
+	// but do neither define executable name nor port: configure them to match
+	// any executable in the matched k8s entities
+	for i := range finderCriteria {
+		fc := &finderCriteria[i]
+		if !fc.Path.IsSet() && fc.OpenPorts.Len() == 0 && len(fc.Metadata) > 0 {
+			// match any executable path
+			if err := fc.Path.UnmarshalText([]byte(".")); err != nil {
+				panic("bug! " + err.Error())
+			}
+		}
+	}
+
 	return finderCriteria
 }
 

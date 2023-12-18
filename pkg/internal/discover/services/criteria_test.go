@@ -152,7 +152,7 @@ services:
 
 	require.Len(t, yf.Services, 1)
 
-	other := yf.Services[0].Other
+	other := yf.Services[0].Metadata
 	assert.True(t, other["k8s_namespace"].MatchString("aaa"))
 	assert.False(t, other["k8s_namespace"].MatchString("aa"))
 	assert.True(t, other["k8s_pod_name"].MatchString("abc"))

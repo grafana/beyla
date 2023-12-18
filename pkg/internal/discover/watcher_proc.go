@@ -46,9 +46,9 @@ type Event[T any] struct {
 type PID int32
 
 type processAttrs struct {
-	pid        PID
-	openPorts  []uint32
-	attributes map[string]string
+	pid       PID
+	openPorts []uint32
+	metadata  map[string]string
 }
 
 func wplog() *slog.Logger {

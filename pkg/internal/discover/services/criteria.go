@@ -84,18 +84,20 @@ func (dc DefinitionCriteria) PortOfInterest(port int) bool {
 // properties.
 type Attributes struct {
 	// Name will define a name for the matching service. If unset, it will take the name of the executable process
-	Name string `yaml:"name"`
+	Name string
 	// Namespace will define a namespace for the matching service. If unset, it will be left empty.
-	Namespace string `yaml:"namespace"`
+	Namespace string
 	// OpenPorts allows defining a group of ports that this service could open. It accepts a comma-separated
 	// list of port numbers (e.g. 80) and port ranges (e.g. 8080-8089)
-	OpenPorts PortEnum `yaml:"open_ports"`
+	OpenPorts PortEnum
 	// Path allows defining the regular expression matching the full executable path.
-	Path RegexpAttr `yaml:"exe_path_regexp"`
+	Path RegexpAttr
 
-	Other map[string]*RegexpAttr
+	Metadata map[string]*RegexpAttr
 }
 
+// UnmarshalYAML implementation for a custom unmarshaller that stores the properties
+// belonging to the Attributes struct members, and the rest of attributes in the Metadata map.
 func (a *Attributes) UnmarshalYAML(value *yaml.Node) error {
 	if value.Kind != yaml.MappingNode {
 		return fmt.Errorf("line %d:%d: expecting Attributes to be a Document Node", value.Line, value.Column)
@@ -127,14 +129,14 @@ func (a *Attributes) UnmarshalYAML(value *yaml.Node) error {
 			if _, ok := allowedAttributeNames[key.Value]; !ok {
 				return fmt.Errorf("unknow attribute in line %d:%d -> %v", key.Line, key.Column, key.Value)
 			}
-			if a.Other == nil {
-				a.Other = map[string]*RegexpAttr{}
+			if a.Metadata == nil {
+				a.Metadata = map[string]*RegexpAttr{}
 			}
 			ov := RegexpAttr{}
 			if err := ov.UnmarshalText([]byte(val.Value)); err != nil {
 				return fmt.Errorf("regexp in line %d:%d: %w", val.Line, val.Column, err)
 			}
-			a.Other[key.Value] = &ov
+			a.Metadata[key.Value] = &ov
 		}
 	}
 	return nil

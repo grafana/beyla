@@ -65,7 +65,7 @@ type nsName struct {
 	name      string
 }
 
-func WatcherKubeEnricherProvider(wk *WatcherKubeEnricher) (node.MiddleFunc[Event[processAttrs], Event[processAttrs]], error) {
+func WatcherKubeEnricherProvider(wk *WatcherKubeEnricher) (node.MiddleFunc[[]Event[processAttrs], []Event[processAttrs]], error) {
 	if err := wk.init(); err != nil {
 		return nil, err
 	}
@@ -106,7 +106,7 @@ func (wk *WatcherKubeEnricher) init() error {
 	return nil
 }
 
-func (wk *WatcherKubeEnricher) enrich(in <-chan Event[processAttrs], out chan<- Event[processAttrs]) {
+func (wk *WatcherKubeEnricher) enrich(in <-chan []Event[processAttrs], out chan<- []Event[processAttrs]) {
 	wk.log.Debug("starting WatcherKubeEnricher")
 	for {
 		select {
@@ -114,7 +114,7 @@ func (wk *WatcherKubeEnricher) enrich(in <-chan Event[processAttrs], out chan<- 
 			switch podEvent.Type {
 			case EventCreated:
 				for _, pp := range wk.onNewPod(podEvent.Obj) {
-					out <- Event[processAttrs]{Type: EventCreated, Obj: pp}
+					out <- []Event[processAttrs]{{Type: EventCreated, Obj: pp}}
 				}
 			case EventDeleted:
 				wk.onDeletedPod(podEvent.Obj)
@@ -125,25 +125,28 @@ func (wk *WatcherKubeEnricher) enrich(in <-chan Event[processAttrs], out chan<- 
 			switch rsEvent.Type {
 			case EventCreated:
 				for _, pp := range wk.onNewReplicaSet(rsEvent.Obj) {
-					out <- Event[processAttrs]{Type: EventCreated, Obj: pp}
+					out <- []Event[processAttrs]{{Type: EventCreated, Obj: pp}}
 				}
 			case EventDeleted:
 				wk.onDeletedReplicaSet(rsEvent.Obj)
 				// we don't forward process deletion, as it will be eventually done in the
 				// last case of this switch
 			}
-		case pp, ok := <-in:
+		case pps, ok := <-in:
 			if !ok {
 				wk.log.Debug("input channel closed. Stopping")
 				return
 			}
-			switch pp.Type {
-			case EventCreated:
-				wk.onNewProcess(&pp.Obj)
-			case EventDeleted:
-				wk.onDeletedProcess(&pp.Obj)
+			for i := range pps {
+				pp := &pps[i]
+				switch pp.Type {
+				case EventCreated:
+					wk.onNewProcess(&pp.Obj)
+				case EventDeleted:
+					wk.onDeletedProcess(&pp.Obj)
+				}
 			}
-			out <- pp
+			out <- pps
 		}
 	}
 }
@@ -270,15 +273,15 @@ func (wk *WatcherKubeEnricher) updateDeletedPodsByOwnerIndex(pod *kube.PodInfo) 
 }
 
 func addPodAttributes(info *kube.PodInfo, pp *processAttrs) {
-	if pp.attributes == nil {
-		pp.attributes = map[string]string{}
+	if pp.metadata == nil {
+		pp.metadata = map[string]string{}
 	}
-	pp.attributes[services.AttrNamespace] = info.Namespace
-	pp.attributes[services.AttrPodName] = info.Name
+	pp.metadata[services.AttrNamespace] = info.Namespace
+	pp.metadata[services.AttrPodName] = info.Name
 	if info.DeploymentName != "" {
-		pp.attributes[services.AttrDeploymentName] = info.DeploymentName
+		pp.metadata[services.AttrDeploymentName] = info.DeploymentName
 	}
 	if info.ReplicaSetName != "" {
-		pp.attributes[services.AttrReplicaSetName] = info.ReplicaSetName
+		pp.metadata[services.AttrReplicaSetName] = info.ReplicaSetName
 	}
 }

@@ -20,7 +20,7 @@ type CriteriaMatcher struct {
 	Cfg *pipe.Config
 }
 
-func CriteriaMatcherProvider(cm CriteriaMatcher) (node.MiddleFunc[[]Event[processPorts], []Event[ProcessMatch]], error) {
+func CriteriaMatcherProvider(cm CriteriaMatcher) (node.MiddleFunc[[]Event[processAttrs], []Event[ProcessMatch]], error) {
 	m := &matcher{
 		log:            slog.With("component", "discover.CriteriaMatcher"),
 		criteria:       FindingCriteria(cm.Cfg),
@@ -44,7 +44,7 @@ type ProcessMatch struct {
 	Process  *services.ProcessInfo
 }
 
-func (m *matcher) run(in <-chan []Event[processPorts], out chan<- []Event[ProcessMatch]) {
+func (m *matcher) run(in <-chan []Event[processAttrs], out chan<- []Event[ProcessMatch]) {
 	m.log.Debug("starting criteria matcher node")
 	for i := range in {
 		m.log.Debug("filtering processes", "len", len(i))
@@ -54,7 +54,7 @@ func (m *matcher) run(in <-chan []Event[processPorts], out chan<- []Event[Proces
 	}
 }
 
-func (m *matcher) filter(events []Event[processPorts]) []Event[ProcessMatch] {
+func (m *matcher) filter(events []Event[processAttrs]) []Event[ProcessMatch] {
 	var matches []Event[ProcessMatch]
 	for _, ev := range events {
 		if ev.Type == EventDeleted {
@@ -70,7 +70,7 @@ func (m *matcher) filter(events []Event[processPorts]) []Event[ProcessMatch] {
 	return matches
 }
 
-func (m *matcher) filterCreated(obj processPorts) (Event[ProcessMatch], bool) {
+func (m *matcher) filterCreated(obj processAttrs) (Event[ProcessMatch], bool) {
 	if _, ok := m.processHistory[obj.pid]; ok {
 		// this was already matched and submitted for inspection. Ignoring!
 		return Event[ProcessMatch]{}, false
@@ -94,7 +94,7 @@ func (m *matcher) filterCreated(obj processPorts) (Event[ProcessMatch], bool) {
 	return Event[ProcessMatch]{}, false
 }
 
-func (m *matcher) filterDeleted(obj processPorts) (Event[ProcessMatch], bool) {
+func (m *matcher) filterDeleted(obj processAttrs) (Event[ProcessMatch], bool) {
 	proc, ok := m.processHistory[obj.pid]
 	if !ok {
 		m.log.Debug("deleted untracked process. Ignoring", "pid", obj.pid)
@@ -160,7 +160,7 @@ func FindingCriteria(cfg *pipe.Config) services.DefinitionCriteria {
 }
 
 // replaceable function to allow unit tests with faked processes
-var processInfo = func(pp processPorts) (*services.ProcessInfo, error) {
+var processInfo = func(pp processAttrs) (*services.ProcessInfo, error) {
 	proc, err := process.NewProcess(int32(pp.pid))
 	if err != nil {
 		return nil, fmt.Errorf("can't read process: %w", err)

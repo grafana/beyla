@@ -28,25 +28,25 @@ func TestCriteriaMatcher(t *testing.T) {
 
 	matcherFunc, err := CriteriaMatcherProvider(CriteriaMatcher{Cfg: &pipeConfig})
 	require.NoError(t, err)
-	discoveredProcesses := make(chan []Event[processPorts], 10)
+	discoveredProcesses := make(chan []Event[processAttrs], 10)
 	filteredProcesses := make(chan []Event[ProcessMatch], 10)
 	go matcherFunc(discoveredProcesses, filteredProcesses)
 	defer close(discoveredProcesses)
 
 	// it will filter unmatching processes and return a ProcessMatch for these that match
-	processInfo = func(pp processPorts) (*services.ProcessInfo, error) {
+	processInfo = func(pp processAttrs) (*services.ProcessInfo, error) {
 		exePath := map[PID]string{
 			1: "/bin/weird33", 2: "/bin/weird33", 3: "server",
 			4: "/bin/something", 5: "server", 6: "/bin/clientweird99"}[pp.pid]
 		return &services.ProcessInfo{Pid: int32(pp.pid), ExePath: exePath, OpenPorts: pp.openPorts}, nil
 	}
-	discoveredProcesses <- []Event[processPorts]{
-		{Type: EventCreated, Obj: processPorts{pid: 1, openPorts: []uint32{1, 2, 3}}}, // pass
-		{Type: EventDeleted, Obj: processPorts{pid: 2, openPorts: []uint32{4}}},       // filter
-		{Type: EventCreated, Obj: processPorts{pid: 3, openPorts: []uint32{8433}}},    // filter
-		{Type: EventCreated, Obj: processPorts{pid: 4, openPorts: []uint32{8083}}},    //pass
-		{Type: EventCreated, Obj: processPorts{pid: 5, openPorts: []uint32{443}}},     // pass
-		{Type: EventCreated, Obj: processPorts{pid: 6}},                               // pass
+	discoveredProcesses <- []Event[processAttrs]{
+		{Type: EventCreated, Obj: processAttrs{pid: 1, openPorts: []uint32{1, 2, 3}}}, // pass
+		{Type: EventDeleted, Obj: processAttrs{pid: 2, openPorts: []uint32{4}}},       // filter
+		{Type: EventCreated, Obj: processAttrs{pid: 3, openPorts: []uint32{8433}}},    // filter
+		{Type: EventCreated, Obj: processAttrs{pid: 4, openPorts: []uint32{8083}}},    //pass
+		{Type: EventCreated, Obj: processAttrs{pid: 5, openPorts: []uint32{443}}},     // pass
+		{Type: EventCreated, Obj: processAttrs{pid: 6}},                               // pass
 	}
 
 	matches := testutil.ReadChannel(t, filteredProcesses, testTimeout)

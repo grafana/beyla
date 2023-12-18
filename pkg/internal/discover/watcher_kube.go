@@ -13,6 +13,27 @@ import (
 	"github.com/grafana/beyla/pkg/internal/kube"
 )
 
+const (
+	attrNamespace      = "k8s_namespace"
+	attrPodName        = "k8s_pod_name"
+	attrDeploymentName = "k8s_deployment_name"
+	attrReplicaSetName = "k8s_replicaset_name"
+)
+
+/*
+	// Informers need that internal object is an ObjectMeta instance
+	metav1.ObjectMeta
+	NodeName       string
+	ReplicaSetName string
+	// Pod Info includes the ReplicaSet as owner reference, and ReplicaSet info
+	// has Deployment as owner reference. We initially do a two-steps lookup to
+	// get the Pod's Deployment, but then cache the Deployment value here
+	DeploymentName string
+	// StartTimeStr caches value of ObjectMeta.StartTimestamp.String()
+	StartTimeStr string
+	ContainerIDs []string
+*/
+
 // injectable functions for testing
 var (
 	containerInfoForPID = container.InfoForPID
@@ -34,7 +55,7 @@ type WatcherKubeEnricher struct {
 
 	// caches
 	containerByPID     map[PID]container.Info
-	processByContainer map[string]*processPorts
+	processByContainer map[string]*processAttrs
 	// podByOwners indexes all the PodInfos owned by a given ReplicaSet
 	// we use our own indexer instead an informer indexer because we need a 1:N relation while
 	// the other indices provide N:1 relation
@@ -50,7 +71,7 @@ type nsName struct {
 	name      string
 }
 
-func WatcherKubeEnricherProvider(wk *WatcherKubeEnricher) (node.MiddleFunc[Event[processPorts], Event[processPorts]], error) {
+func WatcherKubeEnricherProvider(wk *WatcherKubeEnricher) (node.MiddleFunc[Event[processAttrs], Event[processAttrs]], error) {
 	if err := wk.init(); err != nil {
 		return nil, err
 	}
@@ -61,7 +82,7 @@ func WatcherKubeEnricherProvider(wk *WatcherKubeEnricher) (node.MiddleFunc[Event
 func (wk *WatcherKubeEnricher) init() error {
 	wk.log = slog.With("component", "discover.WatcherKubeEnricher")
 	wk.containerByPID = map[PID]container.Info{}
-	wk.processByContainer = map[string]*processPorts{}
+	wk.processByContainer = map[string]*processAttrs{}
 	wk.podsByOwner = helpers.Map2[nsName, string, *kube.PodInfo]{}
 
 	wk.podsInfoCh = make(chan Event[*kube.PodInfo], 10)
@@ -91,7 +112,7 @@ func (wk *WatcherKubeEnricher) init() error {
 	return nil
 }
 
-func (wk *WatcherKubeEnricher) enrich(in <-chan Event[processPorts], out chan<- Event[processPorts]) {
+func (wk *WatcherKubeEnricher) enrich(in <-chan Event[processAttrs], out chan<- Event[processAttrs]) {
 	wk.log.Debug("starting WatcherKubeEnricher")
 	for {
 		select {
@@ -99,7 +120,7 @@ func (wk *WatcherKubeEnricher) enrich(in <-chan Event[processPorts], out chan<- 
 			switch podEvent.Type {
 			case EventCreated:
 				for _, pp := range wk.onNewPod(podEvent.Obj) {
-					out <- Event[processPorts]{Type: EventCreated, Obj: pp}
+					out <- Event[processAttrs]{Type: EventCreated, Obj: pp}
 				}
 			case EventDeleted:
 				wk.onDeletedPod(podEvent.Obj)
@@ -110,7 +131,7 @@ func (wk *WatcherKubeEnricher) enrich(in <-chan Event[processPorts], out chan<- 
 			switch rsEvent.Type {
 			case EventCreated:
 				for _, pp := range wk.onNewReplicaSet(rsEvent.Obj) {
-					out <- Event[processPorts]{Type: EventCreated, Obj: pp}
+					out <- Event[processAttrs]{Type: EventCreated, Obj: pp}
 				}
 			case EventDeleted:
 				wk.onDeletedReplicaSet(rsEvent.Obj)
@@ -133,7 +154,7 @@ func (wk *WatcherKubeEnricher) enrich(in <-chan Event[processPorts], out chan<- 
 	}
 }
 
-func (wk *WatcherKubeEnricher) onNewProcess(pp *processPorts) {
+func (wk *WatcherKubeEnricher) onNewProcess(pp *processAttrs) {
 	containerInfo, err := wk.getContainerInfo(pp.pid)
 	if err != nil {
 		// it is expected for any process not running inside a container
@@ -146,31 +167,31 @@ func (wk *WatcherKubeEnricher) onNewProcess(pp *processPorts) {
 
 	pod, ok := wk.getPodInfo(containerInfo.ContainerID)
 	if ok {
-		pp.ownerPod = pod
+		addPodAttributes(pod, pp)
 	}
 }
 
-func (wk *WatcherKubeEnricher) onDeletedProcess(pp *processPorts) {
+func (wk *WatcherKubeEnricher) onDeletedProcess(pp *processAttrs) {
 	delete(wk.containerByPID, pp.pid)
 }
 
-func (wk *WatcherKubeEnricher) onNewPod(pod *kube.PodInfo) []processPorts {
+func (wk *WatcherKubeEnricher) onNewPod(pod *kube.PodInfo) []processAttrs {
 	wk.updateNewPodsByOwnerIndex(pod)
 
 	// get deployment/rs info
 	// get stored process, if any
 	// if all the information is available
-	//		- forward enriched processPorts data
+	//		- forward enriched processAttrs data
 	// else
 	// 		for each pod container
 	// 			- get associated process
 	//			- cache by pid
 	wk.informer.FetchPodOwnerInfo(pod)
 
-	var pps []processPorts
+	var pps []processAttrs
 	for _, cntID := range pod.ContainerIDs {
 		if pp, ok := wk.processByContainer[cntID]; ok {
-			pp.ownerPod = pod
+			addPodAttributes(pod, pp)
 			pps = append(pps, *pp)
 		}
 	}
@@ -185,21 +206,21 @@ func (wk *WatcherKubeEnricher) onDeletedPod(pod *kube.PodInfo) {
 	}
 }
 
-func (wk *WatcherKubeEnricher) onNewReplicaSet(p *kube.ReplicaSetInfo) []processPorts {
+func (wk *WatcherKubeEnricher) onNewReplicaSet(p *kube.ReplicaSetInfo) []processAttrs {
 	// get pod info
 	// get stored process, if any
 	// if all the information is available
-	//		- forward enriched processPorts data
+	//		- forward enriched processAttrs data
 	// else
 	// 		cache by pod name
 	podInfos := wk.getReplicaSetPods(p.Namespace, p.Name)
-	var allProcessPorts []processPorts
+	var allProcessPorts []processAttrs
 	for _, pod := range podInfos {
 		for _, cntID := range pod.ContainerIDs {
 			if pp, ok := wk.processByContainer[cntID]; ok {
 				pod.ReplicaSetName = p.Name
 				pod.DeploymentName = p.DeploymentName
-				pp.ownerPod = pod
+				addPodAttributes(pod, pp)
 				allProcessPorts = append(allProcessPorts, *pp)
 			}
 		}
@@ -251,5 +272,19 @@ func (wk *WatcherKubeEnricher) updateNewPodsByOwnerIndex(pod *kube.PodInfo) {
 func (wk *WatcherKubeEnricher) updateDeletedPodsByOwnerIndex(pod *kube.PodInfo) {
 	if pod.ReplicaSetName != "" {
 		wk.podsByOwner.Delete(nsName{namespace: pod.Namespace, name: pod.ReplicaSetName}, pod.Name)
+	}
+}
+
+func addPodAttributes(info *kube.PodInfo, pp *processAttrs) {
+	if pp.attributes == nil {
+		pp.attributes = map[string]string{}
+	}
+	pp.attributes[attrNamespace] = info.Namespace
+	pp.attributes[attrPodName] = info.Name
+	if info.DeploymentName != "" {
+		pp.attributes[attrDeploymentName] = info.DeploymentName
+	}
+	if info.ReplicaSetName != "" {
+		pp.attributes[attrReplicaSetName] = info.ReplicaSetName
 	}
 }

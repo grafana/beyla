@@ -17,7 +17,6 @@ import (
 	"github.com/grafana/beyla/pkg/internal/discover/services"
 	"github.com/grafana/beyla/pkg/internal/ebpf"
 	"github.com/grafana/beyla/pkg/internal/ebpf/watcher"
-	"github.com/grafana/beyla/pkg/internal/kube"
 	"github.com/grafana/beyla/pkg/internal/pipe"
 )
 
@@ -46,23 +45,23 @@ type Event[T any] struct {
 
 type PID int32
 
-type processPorts struct {
-	pid       PID
-	openPorts []uint32
-	ownerPod  *kube.PodInfo
+type processAttrs struct {
+	pid        PID
+	openPorts  []uint32
+	attributes map[string]string
 }
 
 func wplog() *slog.Logger {
 	return slog.With("component", "discover.ProcessWatcher")
 }
 
-func WatcherProvider(w ProcessWatcher) (node.StartFunc[[]Event[processPorts]], error) {
+func WatcherProvider(w ProcessWatcher) (node.StartFunc[[]Event[processAttrs]], error) {
 	acc := pollAccounter{
 		ctx:               w.Ctx,
 		cfg:               w.Cfg,
 		interval:          w.Cfg.Discovery.PollInterval,
-		pids:              map[PID]processPorts{},
-		pidPorts:          map[pidPort]processPorts{},
+		pids:              map[PID]processAttrs{},
+		pidPorts:          map[pidPort]processAttrs{},
 		listProcesses:     fetchProcessPorts,
 		executableReady:   executableReady,
 		loadBPFWatcher:    loadBPFWatcher,
@@ -90,12 +89,12 @@ type pollAccounter struct {
 	cfg      *pipe.Config
 	interval time.Duration
 	// last polled process:ports accessible by its pid
-	pids map[PID]processPorts
+	pids map[PID]processAttrs
 	// last polled process:ports accessible by a combination of pid/connection port
 	// same process might appear several times
-	pidPorts map[pidPort]processPorts
+	pidPorts map[pidPort]processAttrs
 	// injectable function
-	listProcesses func(bool) (map[PID]processPorts, error)
+	listProcesses func(bool) (map[PID]processAttrs, error)
 	// injectable function
 	executableReady func(PID) bool
 	// injectable function to load the bpf program
@@ -107,7 +106,7 @@ type pollAccounter struct {
 	findingCriteria   services.DefinitionCriteria
 }
 
-func (pa *pollAccounter) Run(out chan<- []Event[processPorts]) {
+func (pa *pollAccounter) Run(out chan<- []Event[processAttrs]) {
 	log := slog.With("component", "discover.ProcessWatcher", "interval", pa.interval)
 
 	bpfWatchEvents := make(chan watcher.Event, 100)
@@ -181,9 +180,9 @@ func (pa *pollAccounter) watchForProcessEvents(log *slog.Logger, events <-chan w
 
 // snapshot compares the current processes with the status of the previous poll
 // and forwards a list of process creation/deletion events
-func (pa *pollAccounter) snapshot(fetchedProcs map[PID]processPorts) []Event[processPorts] {
-	var events []Event[processPorts]
-	currentPidPorts := make(map[pidPort]processPorts, len(fetchedProcs))
+func (pa *pollAccounter) snapshot(fetchedProcs map[PID]processAttrs) []Event[processAttrs] {
+	var events []Event[processAttrs]
+	currentPidPorts := make(map[pidPort]processAttrs, len(fetchedProcs))
 	reportedProcs := map[PID]struct{}{}
 	notReadyProcs := map[PID]struct{}{}
 	// notify processes that are new, or already existed but have a new connection
@@ -192,12 +191,12 @@ func (pa *pollAccounter) snapshot(fetchedProcs map[PID]processPorts) []Event[pro
 		// for example, if it's a client with ephemeral connections, which might be later matched by executable name
 		if len(proc.openPorts) == 0 {
 			if pa.checkNewProcessNotification(pid, reportedProcs, notReadyProcs) {
-				events = append(events, Event[processPorts]{Type: EventCreated, Obj: proc})
+				events = append(events, Event[processAttrs]{Type: EventCreated, Obj: proc})
 			}
 		} else {
 			for _, port := range proc.openPorts {
 				if pa.checkNewProcessConnectionNotification(proc, port, currentPidPorts, reportedProcs, notReadyProcs) {
-					events = append(events, Event[processPorts]{Type: EventCreated, Obj: proc})
+					events = append(events, Event[processAttrs]{Type: EventCreated, Obj: proc})
 					// skip checking new connections for that process
 					continue
 				}
@@ -207,7 +206,7 @@ func (pa *pollAccounter) snapshot(fetchedProcs map[PID]processPorts) []Event[pro
 	// notify processes that are removed
 	for pid, proc := range pa.pids {
 		if _, ok := fetchedProcs[pid]; !ok {
-			events = append(events, Event[processPorts]{Type: EventDeleted, Obj: proc})
+			events = append(events, Event[processAttrs]{Type: EventDeleted, Obj: proc})
 		}
 	}
 
@@ -245,9 +244,9 @@ func executableReady(pid PID) bool {
 }
 
 func (pa *pollAccounter) checkNewProcessConnectionNotification(
-	proc processPorts,
+	proc processAttrs,
 	port uint32,
-	currentPidPorts map[pidPort]processPorts,
+	currentPidPorts map[pidPort]processAttrs,
 	reportedProcs, notReadyProcs map[PID]struct{},
 ) bool {
 	pp := pidPort{Pid: proc.pid, Port: port}
@@ -293,9 +292,9 @@ func (pa *pollAccounter) checkNewProcessNotification(pid PID, reportedProcs, not
 
 // fetchProcessConnections returns a map with the PIDs of all the running processes as a key,
 // and the open ports for the given process as a value
-func fetchProcessPorts(scanPorts bool) (map[PID]processPorts, error) {
+func fetchProcessPorts(scanPorts bool) (map[PID]processAttrs, error) {
 	log := wplog()
-	processes := map[PID]processPorts{}
+	processes := map[PID]processAttrs{}
 	pids, err := process.Pids()
 	if err != nil {
 		return nil, fmt.Errorf("can't get processes: %w", err)
@@ -303,7 +302,7 @@ func fetchProcessPorts(scanPorts bool) (map[PID]processPorts, error) {
 
 	for _, pid := range pids {
 		if !scanPorts {
-			processes[PID(pid)] = processPorts{pid: PID(pid), openPorts: []uint32{}}
+			processes[PID(pid)] = processAttrs{pid: PID(pid), openPorts: []uint32{}}
 			continue
 		}
 		conns, err := net.ConnectionsPid("inet", pid)
@@ -316,7 +315,7 @@ func fetchProcessPorts(scanPorts bool) (map[PID]processPorts, error) {
 		for _, conn := range conns {
 			openPorts = append(openPorts, conn.Laddr.Port)
 		}
-		processes[PID(pid)] = processPorts{pid: PID(pid), openPorts: openPorts}
+		processes[PID(pid)] = processAttrs{pid: PID(pid), openPorts: openPorts}
 	}
 	return processes, nil
 }

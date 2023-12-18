@@ -36,38 +36,24 @@ func TestWatcherKubeEnricher(t *testing.T) {
 		name  string
 		steps []fn
 	}
-
-	testCases := []testCase{{
-		name:  "process-pod-rs",
-		steps: []fn{newProcess, deployOwnedPod, deployReplicaSet},
-	}, {
-		name:  "process-rs-pod",
-		steps: []fn{newProcess, deployReplicaSet, deployOwnedPod},
-	}, {
-		name:  "pod-process-rs",
-		steps: []fn{deployOwnedPod, newProcess, deployReplicaSet},
-	}, {
-		name:  "pod-rs-process",
-		steps: []fn{deployOwnedPod, deployReplicaSet, newProcess},
-	}, {
-		name:  "rs-pod-process",
-		steps: []fn{deployReplicaSet, deployOwnedPod, newProcess},
-	}, {
-		name:  "rs-process-pod",
-		steps: []fn{newProcess, deployOwnedPod, deployReplicaSet},
-	}, {
-		name:  "process-pod (no rs)",
-		steps: []fn{newProcess, deployPod},
-	}, {
-		name:  "pod-process (no rs)",
-		steps: []fn{deployPod, newProcess},
-	}}
+	// The WatcherKubeEnricher has to listen and relate information from multiple asynchronous sources.
+	// Each test case verifies that whatever the order of the events is,
+	testCases := []testCase{
+		{name: "process-pod-rs", steps: []fn{newProcess, deployOwnedPod, deployReplicaSet}},
+		{name: "process-rs-pod", steps: []fn{newProcess, deployReplicaSet, deployOwnedPod}},
+		{name: "pod-process-rs", steps: []fn{deployOwnedPod, newProcess, deployReplicaSet}},
+		{name: "pod-rs-process", steps: []fn{deployOwnedPod, deployReplicaSet, newProcess}},
+		{name: "rs-pod-process", steps: []fn{deployReplicaSet, deployOwnedPod, newProcess}},
+		{name: "rs-process-pod", steps: []fn{newProcess, deployOwnedPod, deployReplicaSet}},
+		{name: "process-pod (no rs)", steps: []fn{newProcess, deployPod}},
+		{name: "pod-process (no rs)", steps: []fn{deployPod, newProcess}}}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			containerInfoForPID = fakeContainerInfo{
 				containerPID: container.Info{ContainerID: containerID},
 			}.forPID
+			// Setup a fake K8s API connected to the WatcherKubeEnricher
 			k8sClient := fakek8sclientset.NewSimpleClientset()
 			informer := kube.Metadata{}
 			require.NoError(t, informer.InitFromClient(k8sClient, 30*time.Minute))
@@ -78,16 +64,19 @@ func TestWatcherKubeEnricher(t *testing.T) {
 			inputCh, outputCh := make(chan Event[processAttrs], 10), make(chan Event[processAttrs], 10)
 			defer close(inputCh)
 			go wkeNodeFunc(inputCh, outputCh)
+
 			_, err = k8sClient.CoreV1().Namespaces().Create(
 				context.Background(),
 				&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: namespace}},
 				metav1.CreateOptions{})
 			require.NoError(t, err)
 
+			// deploy all the involved elements where the attributes are composed of
 			for _, step := range tc.steps {
 				step(t, inputCh, k8sClient)
 			}
 
+			// check that the WatcherKubeEnricher eventually submits an event with the expected attributes
 			test.Eventually(t, timeout, func(t require.TestingT) {
 				event := <-outputCh
 				assert.Equal(t, EventCreated, event.Type)

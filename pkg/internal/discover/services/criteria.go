@@ -10,6 +10,20 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+const (
+	AttrNamespace      = "k8s_namespace"
+	AttrPodName        = "k8s_pod_name"
+	AttrDeploymentName = "k8s_deployment_name"
+	AttrReplicaSetName = "k8s_replicaset_name"
+)
+
+var allowedAttributeNames = map[string]struct{}{
+	AttrNamespace:      {},
+	AttrPodName:        {},
+	AttrDeploymentName: {},
+	AttrReplicaSetName: {},
+}
+
 // ProcessInfo stores some relevant information about a running process
 type ProcessInfo struct {
 	Pid       int32
@@ -77,7 +91,53 @@ type Attributes struct {
 	// list of port numbers (e.g. 80) and port ranges (e.g. 8080-8089)
 	OpenPorts PortEnum `yaml:"open_ports"`
 	// Path allows defining the regular expression matching the full executable path.
-	Path PathRegexp `yaml:"exe_path_regexp"`
+	Path RegexpAttr `yaml:"exe_path_regexp"`
+
+	Other map[string]*RegexpAttr
+}
+
+func (a *Attributes) UnmarshalYAML(value *yaml.Node) error {
+	if value.Kind != yaml.MappingNode {
+		return fmt.Errorf("line %d:%d: expecting Attributes to be a Document Node", value.Line, value.Column)
+	}
+	for n := 0; n < len(value.Content)-1; n += 2 {
+		key, val := value.Content[n], value.Content[n+1]
+		if key.Kind != yaml.ScalarNode {
+			return fmt.Errorf("line %d:%d expecting node %s to be a Scalar node", key.Line, key.Column, key.Value)
+		}
+		if val.Kind != yaml.ScalarNode {
+			return fmt.Errorf("line %d:%d expecting node %s to be a Scalar node", val.Line, val.Column, val.Value)
+		}
+		switch key.Value {
+		case "name":
+			a.Name = val.Value
+		case "namespace":
+			a.Namespace = val.Value
+		case "open_ports":
+			if err := a.OpenPorts.UnmarshalText([]byte(val.Value)); err != nil {
+				return fmt.Errorf("line %d:%d: %w", val.Line, val.Column, err)
+			}
+		// exe_path_regexp is deprecated but kept for backwards compatibility with Beyla 1.0.x
+		case "exe_path_regexp", "exe_path":
+			if err := a.Path.UnmarshalText([]byte(val.Value)); err != nil {
+				return fmt.Errorf("executable path regexp in line %d:%d: %w", val.Line, val.Column, err)
+			}
+		// assume other possible attributes and store them in a map (e.g. K8s discovery)
+		default:
+			if _, ok := allowedAttributeNames[key.Value]; !ok {
+				return fmt.Errorf("unknow attribute in line %d:%d -> %v", key.Line, key.Column, key.Value)
+			}
+			if a.Other == nil {
+				a.Other = map[string]*RegexpAttr{}
+			}
+			ov := RegexpAttr{}
+			if err := ov.UnmarshalText([]byte(val.Value)); err != nil {
+				return fmt.Errorf("regexp in line %d:%d: %w", val.Line, val.Column, err)
+			}
+			a.Other[key.Value] = &ov
+		}
+	}
+	return nil
 }
 
 // PortEnum defines an enumeration of ports. It allows defining a set of single ports as well a set of
@@ -140,22 +200,22 @@ func (p *PortEnum) Matches(port int) bool {
 	return false
 }
 
-// PathRegexp stores a regular expression representing an executable file path.
-type PathRegexp struct {
+// RegexpAttr stores a regular expression representing an executable file path.
+type RegexpAttr struct {
 	re *regexp.Regexp
 }
 
-func NewPathRegexp(re *regexp.Regexp) PathRegexp {
-	return PathRegexp{re: re}
+func NewPathRegexp(re *regexp.Regexp) RegexpAttr {
+	return RegexpAttr{re: re}
 }
 
-func (p *PathRegexp) IsSet() bool {
+func (p *RegexpAttr) IsSet() bool {
 	return p.re != nil
 }
 
-func (p *PathRegexp) UnmarshalYAML(value *yaml.Node) error {
+func (p *RegexpAttr) UnmarshalYAML(value *yaml.Node) error {
 	if value.Kind != yaml.ScalarNode {
-		return fmt.Errorf("PathRegexp: unexpected YAML node kind %d", value.Kind)
+		return fmt.Errorf("RegexpAttr: unexpected YAML node kind %d", value.Kind)
 	}
 	if len(value.Value) == 0 {
 		p.re = nil
@@ -169,7 +229,7 @@ func (p *PathRegexp) UnmarshalYAML(value *yaml.Node) error {
 	return nil
 }
 
-func (p *PathRegexp) UnmarshalText(text []byte) error {
+func (p *RegexpAttr) UnmarshalText(text []byte) error {
 	if len(text) == 0 {
 		p.re = nil
 		return nil
@@ -182,7 +242,7 @@ func (p *PathRegexp) UnmarshalText(text []byte) error {
 	return nil
 }
 
-func (p *PathRegexp) MatchString(input string) bool {
+func (p *RegexpAttr) MatchString(input string) bool {
 	// no regexp means "empty regexp", so anything will match it
 	if p.re == nil {
 		return true

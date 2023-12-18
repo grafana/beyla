@@ -86,7 +86,7 @@ type Config struct {
 	Printer    debug.PrintEnabled      `yaml:"print_traces" env:"BEYLA_PRINT_TRACES"`
 
 	// Exec allows selecting the instrumented executable whose complete path contains the Exec value.
-	Exec services.PathRegexp `yaml:"executable_name" env:"BEYLA_EXECUTABLE_NAME"`
+	Exec services.RegexpAttr `yaml:"executable_name" env:"BEYLA_EXECUTABLE_NAME"`
 	// Port allows selecting the instrumented executable that owns the Port value. If this value is set (and
 	// different to zero), the value of the Exec property won't take effect.
 	// It's important to emphasize that if your process opens multiple HTTP/GRPC ports, the auto-instrumenter

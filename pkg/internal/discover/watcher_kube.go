@@ -8,16 +8,10 @@ import (
 	"github.com/mariomac/pipes/pkg/node"
 	"k8s.io/client-go/tools/cache"
 
+	"github.com/grafana/beyla/pkg/internal/discover/services"
 	"github.com/grafana/beyla/pkg/internal/helpers"
 	"github.com/grafana/beyla/pkg/internal/helpers/container"
 	"github.com/grafana/beyla/pkg/internal/kube"
-)
-
-const (
-	attrNamespace      = "k8s_namespace"
-	attrPodName        = "k8s_pod_name"
-	attrDeploymentName = "k8s_deployment_name"
-	attrReplicaSetName = "k8s_replicaset_name"
 )
 
 /*
@@ -279,12 +273,12 @@ func addPodAttributes(info *kube.PodInfo, pp *processAttrs) {
 	if pp.attributes == nil {
 		pp.attributes = map[string]string{}
 	}
-	pp.attributes[attrNamespace] = info.Namespace
-	pp.attributes[attrPodName] = info.Name
+	pp.attributes[services.AttrNamespace] = info.Namespace
+	pp.attributes[services.AttrPodName] = info.Name
 	if info.DeploymentName != "" {
-		pp.attributes[attrDeploymentName] = info.DeploymentName
+		pp.attributes[services.AttrDeploymentName] = info.DeploymentName
 	}
 	if info.ReplicaSetName != "" {
-		pp.attributes[attrReplicaSetName] = info.ReplicaSetName
+		pp.attributes[services.AttrReplicaSetName] = info.ReplicaSetName
 	}
 }

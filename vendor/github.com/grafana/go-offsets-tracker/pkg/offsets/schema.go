@@ -98,26 +98,10 @@ func (to *Track) Find(structName, fieldName, libVersion string) (uint64, bool) {
 func (field *Field) GetOffset(libVersion string) (uint64, bool) {
 	libVersion = versions.CleanVersion(libVersion)
 	target, err := version.NewVersion(libVersion)
-
 	if err != nil {
 		// shouldn't happen unless a bug in our code/files
 		panic(err.Error())
 	}
-
-	newestVer := versions.CleanVersion(field.Versions.Newest)
-	newest, err := version.NewVersion(newestVer)
-
-	if err != nil {
-		// shouldn't happen unless a bug in our offsets tracker generator
-		panic(err.Error())
-	}
-
-	// If what we are looking in as library is newer than our remembered offsets
-	// don't play dice and don't read unknown offsets
-	if target.Compare(newest) > 0 {
-		return 0, false
-	}
-
 	// Search from the newest version (last in the slice)
 	for o := len(field.Offsets) - 1; o >= 0; o-- {
 		od := &field.Offsets[o]

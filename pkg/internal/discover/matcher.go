@@ -137,9 +137,8 @@ func (m *matcher) matchByPort(p *services.ProcessInfo, a *services.Attributes) b
 func (m *matcher) matchByExecutable(p *services.ProcessInfo, a *services.Attributes) bool {
 	if a.Path.IsSet() {
 		return a.Path.MatchString(p.ExePath)
-	} else {
-		return a.PathRegexp.MatchString(p.ExePath)
 	}
+	return a.PathRegexp.MatchString(p.ExePath)
 }
 
 func (m *matcher) matchByAttributes(actual map[string]string, required map[string]*services.RegexpAttr) bool {

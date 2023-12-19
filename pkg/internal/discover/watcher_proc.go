@@ -55,7 +55,7 @@ func wplog() *slog.Logger {
 	return slog.With("component", "discover.ProcessWatcher")
 }
 
-func WatcherProvider(w ProcessWatcher) (node.StartFunc[[]Event[processAttrs]], error) {
+func ProcessWatcherProvider(w ProcessWatcher) (node.StartFunc[[]Event[processAttrs]], error) {
 	acc := pollAccounter{
 		ctx:               w.Ctx,
 		cfg:               w.Cfg,

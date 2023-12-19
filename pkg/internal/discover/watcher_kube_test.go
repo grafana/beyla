@@ -124,6 +124,7 @@ func TestWatcherKubeEnricherWithMatcher(t *testing.T) {
 	wkeNodeFunc, err := WatcherKubeEnricherProvider(&WatcherKubeEnricher{
 		informer: &informer,
 	})
+	require.NoError(t, err)
 	pipeConfig := pipe.Config{}
 	require.NoError(t, yaml.Unmarshal([]byte(`discovery:
   services:

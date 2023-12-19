@@ -53,7 +53,7 @@ func NewProcessFinder(ctx context.Context, cfg *pipe.Config, ctxInfo *global.Con
 // ebpf.ProcessTracer will be notified.
 func (pf *ProcessFinder) Start(cfg *pipe.Config) (<-chan *ebpf.ProcessTracer, <-chan *Instrumentable, error) {
 	gb := graph.NewBuilder(node.ChannelBufferLen(cfg.ChannelBufferLen))
-	graph.RegisterStart(gb, WatcherProvider)
+	graph.RegisterStart(gb, ProcessWatcherProvider)
 	graph.RegisterMiddle(gb, CriteriaMatcherProvider)
 	graph.RegisterMiddle(gb, ExecTyperProvider)
 	graph.RegisterMiddle(gb, ContainerDBUpdaterProvider)

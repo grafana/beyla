@@ -72,3 +72,5 @@ func TestCriteriaMatcher(t *testing.T) {
 	assert.Equal(t, "", m.Obj.Criteria.Namespace)
 	assert.Equal(t, services.ProcessInfo{Pid: 6, ExePath: "/bin/clientweird99"}, *m.Obj.Process)
 }
+
+// TODO matcher tests for attributes

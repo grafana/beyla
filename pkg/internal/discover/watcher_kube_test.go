@@ -2,6 +2,7 @@ package discover
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -19,6 +20,7 @@ import (
 	"github.com/grafana/beyla/pkg/internal/helpers/container"
 	"github.com/grafana/beyla/pkg/internal/kube"
 	"github.com/grafana/beyla/pkg/internal/pipe"
+	"github.com/grafana/beyla/pkg/internal/testutil"
 )
 
 const timeout = 5 * time.Second
@@ -38,23 +40,35 @@ func TestWatcherKubeEnricher(t *testing.T) {
 		name  string
 		steps []fn
 	}
+	// test deployment functions
+	var process = func(_ *testing.T, inputCh chan []Event[processAttrs], _ *fakek8sclientset.Clientset) {
+		newProcess(inputCh, containerPID, []uint32{containerPort})
+	}
+	var pod = func(t *testing.T, _ chan []Event[processAttrs], k8sClient *fakek8sclientset.Clientset) {
+		deployPod(t, k8sClient, namespace, podName, containerID)
+	}
+	var ownedPod = func(t *testing.T, _ chan []Event[processAttrs], k8sClient *fakek8sclientset.Clientset) {
+		deployOwnedPod(t, k8sClient, namespace, podName, replicaSetName, containerID)
+	}
+	var replicaSet = func(t *testing.T, _ chan []Event[processAttrs], k8sClient *fakek8sclientset.Clientset) {
+		deployReplicaSet(t, k8sClient, namespace, replicaSetName, deploymentName)
+	}
+
 	// The WatcherKubeEnricher has to listen and relate information from multiple asynchronous sources.
 	// Each test case verifies that whatever the order of the events is,
 	testCases := []testCase{
-		{name: "process-pod-rs", steps: []fn{newProcess, deployOwnedPod, deployReplicaSet}},
-		{name: "process-rs-pod", steps: []fn{newProcess, deployReplicaSet, deployOwnedPod}},
-		{name: "pod-process-rs", steps: []fn{deployOwnedPod, newProcess, deployReplicaSet}},
-		{name: "pod-rs-process", steps: []fn{deployOwnedPod, deployReplicaSet, newProcess}},
-		{name: "rs-pod-process", steps: []fn{deployReplicaSet, deployOwnedPod, newProcess}},
-		{name: "rs-process-pod", steps: []fn{newProcess, deployOwnedPod, deployReplicaSet}},
-		{name: "process-pod (no rs)", steps: []fn{newProcess, deployPod}},
-		{name: "pod-process (no rs)", steps: []fn{deployPod, newProcess}}}
+		{name: "process-pod-rs", steps: []fn{process, ownedPod, replicaSet}},
+		{name: "process-rs-pod", steps: []fn{process, replicaSet, ownedPod}},
+		{name: "pod-process-rs", steps: []fn{ownedPod, process, replicaSet}},
+		{name: "pod-rs-process", steps: []fn{ownedPod, replicaSet, process}},
+		{name: "rs-pod-process", steps: []fn{replicaSet, ownedPod, process}},
+		{name: "rs-process-pod", steps: []fn{process, ownedPod, replicaSet}},
+		{name: "process-pod (no rs)", steps: []fn{process, pod}},
+		{name: "pod-process (no rs)", steps: []fn{pod, process}}}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			containerInfoForPID = fakeContainerInfo{
-				containerPID: container.Info{ContainerID: containerID},
-			}.forPID
+			containerInfoForPID = fakeContainerInfo
 			// Setup a fake K8s API connected to the WatcherKubeEnricher
 			k8sClient := fakek8sclientset.NewSimpleClientset()
 			informer := kube.Metadata{}
@@ -100,10 +114,11 @@ func TestWatcherKubeEnricher(t *testing.T) {
 	}
 }
 
+// TODO: test deletion
+
 func TestWatcherKubeEnricherWithMatcher(t *testing.T) {
-	containerInfoForPID = fakeContainerInfo{
-		containerPID: container.Info{ContainerID: containerID},
-	}.forPID
+	containerInfoForPID = fakeContainerInfo
+	processInfo = fakeProcessInfo
 	// Setup a fake K8s API connected to the WatcherKubeEnricher
 	k8sClient := fakek8sclientset.NewSimpleClientset()
 	informer := kube.Metadata{}
@@ -121,7 +136,7 @@ func TestWatcherKubeEnricherWithMatcher(t *testing.T) {
     k8s_pod_name: chichi
   - name: both
     open_ports: 443
-    k8s_pod_name: chacha
+    k8s_deployment_name: chacha
 `), &pipeConfig))
 	mtchNodeFunc, err := CriteriaMatcherProvider(CriteriaMatcher{Cfg: &pipeConfig})
 	require.NoError(t, err)
@@ -131,22 +146,64 @@ func TestWatcherKubeEnricherWithMatcher(t *testing.T) {
 	go wkeNodeFunc(inputCh, connectCh)
 	go mtchNodeFunc(connectCh, outputCh)
 
-	voy poraki
+	// sending some events that shouldn't match any of the above discovery criteria
+	// so they won't be forwarded before any of later matched events
+	t.Run("unmatched events", func(t *testing.T) {
+		newProcess(inputCh, 123, []uint32{777})
+		newProcess(inputCh, 456, []uint32{})
+		newProcess(inputCh, 789, []uint32{443})
+		deployOwnedPod(t, k8sClient, namespace, "pod-789", "rs-789", "container-789")
+		deployReplicaSet(t, k8sClient, namespace, "rs-789", "ouyeah")
+	})
+
+	// sending events that will match and will be forwarded
+	t.Run("port-only match", func(t *testing.T) {
+		newProcess(inputCh, 12, []uint32{80})
+		matches := testutil.ReadChannel(t, outputCh, timeout)
+		require.Len(t, matches, 1)
+		m := matches[0]
+		assert.Equal(t, EventCreated, m.Type)
+		assert.Equal(t, "port-only", m.Obj.Criteria.Name)
+		assert.EqualValues(t, 12, m.Obj.Process.Pid)
+	})
+
+	t.Run("metadata-only match", func(t *testing.T) {
+		newProcess(inputCh, 34, []uint32{8080})
+		deployPod(t, k8sClient, namespace, "chichi", "container-34")
+		matches := testutil.ReadChannel(t, outputCh, timeout)
+		require.Len(t, matches, 1)
+		m := matches[0]
+		assert.Equal(t, EventCreated, m.Type)
+		assert.Equal(t, "metadata-only", m.Obj.Criteria.Name)
+		assert.EqualValues(t, 34, m.Obj.Process.Pid)
+	})
+
+	t.Run("both process and metadata match", func(t *testing.T) {
+		newProcess(inputCh, 56, []uint32{443})
+		deployOwnedPod(t, k8sClient, namespace, "pod-56", "rs-56", "container-56")
+		deployReplicaSet(t, k8sClient, namespace, "rs-56", "chacha")
+		matches := testutil.ReadChannel(t, outputCh, timeout)
+		require.Len(t, matches, 1)
+		m := matches[0]
+		assert.Equal(t, EventCreated, m.Type)
+		assert.Equal(t, "both", m.Obj.Criteria.Name)
+		assert.EqualValues(t, 56, m.Obj.Process.Pid)
+	})
 }
 
-func newProcess(_ *testing.T, inputCh chan []Event[processAttrs], _ *fakek8sclientset.Clientset) {
+func newProcess(inputCh chan []Event[processAttrs], pid PID, ports []uint32) {
 	inputCh <- []Event[processAttrs]{{
 		Type: EventCreated,
-		Obj:  processAttrs{pid: containerPID, openPorts: []uint32{containerPort}},
+		Obj:  processAttrs{pid: pid, openPorts: ports},
 	}}
 }
 
-func deployPod(t *testing.T, _ chan []Event[processAttrs], k8sClient *fakek8sclientset.Clientset) {
+func deployPod(t *testing.T, k8sClient *fakek8sclientset.Clientset, ns, name, containerID string) {
 	t.Helper()
-	_, err := k8sClient.CoreV1().Pods(namespace).Create(
+	_, err := k8sClient.CoreV1().Pods(ns).Create(
 		context.Background(),
 		&corev1.Pod{ObjectMeta: metav1.ObjectMeta{
-			Name: podName, Namespace: namespace,
+			Name: name, Namespace: ns,
 		}, Status: corev1.PodStatus{
 			ContainerStatuses: []corev1.ContainerStatus{{
 				ContainerID: containerID,
@@ -156,16 +213,16 @@ func deployPod(t *testing.T, _ chan []Event[processAttrs], k8sClient *fakek8scli
 	require.NoError(t, err)
 }
 
-func deployOwnedPod(t *testing.T, _ chan []Event[processAttrs], k8sClient *fakek8sclientset.Clientset) {
+func deployOwnedPod(t *testing.T, k8sClient *fakek8sclientset.Clientset, ns, name, rsName, containerID string) {
 	t.Helper()
-	_, err := k8sClient.CoreV1().Pods(namespace).Create(
+	_, err := k8sClient.CoreV1().Pods(ns).Create(
 		context.Background(),
 		&corev1.Pod{ObjectMeta: metav1.ObjectMeta{
-			Name: podName, Namespace: namespace,
+			Name: name, Namespace: ns,
 			OwnerReferences: []metav1.OwnerReference{{
 				APIVersion: "apps/v1",
 				Kind:       "ReplicaSet",
-				Name:       replicaSetName,
+				Name:       rsName,
 			}},
 		}, Status: corev1.PodStatus{
 			ContainerStatuses: []corev1.ContainerStatus{{
@@ -176,13 +233,13 @@ func deployOwnedPod(t *testing.T, _ chan []Event[processAttrs], k8sClient *fakek
 	require.NoError(t, err)
 }
 
-func deployReplicaSet(t *testing.T, _ chan []Event[processAttrs], k8sClient *fakek8sclientset.Clientset) {
+func deployReplicaSet(t *testing.T, k8sClient *fakek8sclientset.Clientset, ns, name, deploymentName string) {
 	t.Helper()
-	_, err := k8sClient.AppsV1().ReplicaSets(namespace).Create(context.Background(),
+	_, err := k8sClient.AppsV1().ReplicaSets(ns).Create(context.Background(),
 		&appsv1.ReplicaSet{
 			ObjectMeta: metav1.ObjectMeta{
-				Namespace: namespace,
-				Name:      replicaSetName,
+				Namespace: ns,
+				Name:      name,
 				OwnerReferences: []metav1.OwnerReference{{
 					APIVersion: "apps/v1",
 					Kind:       "Deployment",
@@ -194,8 +251,14 @@ func deployReplicaSet(t *testing.T, _ chan []Event[processAttrs], k8sClient *fak
 	require.NoError(t, err)
 }
 
-type fakeContainerInfo map[uint32]container.Info
+func fakeContainerInfo(pid uint32) (container.Info, error) {
+	return container.Info{ContainerID: fmt.Sprintf("container-%d", pid)}, nil
+}
 
-func (f fakeContainerInfo) forPID(pid uint32) (container.Info, error) {
-	return f[pid], nil
+func fakeProcessInfo(pp processAttrs) (*services.ProcessInfo, error) {
+	return &services.ProcessInfo{
+		Pid:       int32(pp.pid),
+		OpenPorts: pp.openPorts,
+		ExePath:   fmt.Sprintf("/bin/process%d", pp.pid),
+	}, nil
 }

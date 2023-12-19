@@ -50,7 +50,9 @@ func (m *matcher) run(in <-chan []Event[processAttrs], out chan<- []Event[Proces
 		m.log.Debug("filtering processes", "len", len(i))
 		o := m.filter(i)
 		m.log.Debug("processes matching selection criteria", "len", len(o))
-		out <- o
+		if len(o) > 0 {
+			out <- o
+		}
 	}
 }
 

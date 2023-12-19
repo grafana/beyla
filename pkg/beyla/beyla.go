@@ -8,12 +8,16 @@ import (
 	"io"
 	"log/slog"
 
+	"k8s.io/client-go/kubernetes"
+
 	"github.com/grafana/beyla/pkg/internal/connector"
 	"github.com/grafana/beyla/pkg/internal/discover"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
+	kube2 "github.com/grafana/beyla/pkg/internal/kube"
 	"github.com/grafana/beyla/pkg/internal/pipe"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/pkg/internal/request"
+	"github.com/grafana/beyla/pkg/internal/transform"
 	"github.com/grafana/beyla/pkg/internal/transform/kube"
 )
 
@@ -133,20 +137,12 @@ func buildContextInfo(config *pipe.Config) *global.ContextInfo {
 	promMgr := &connector.PrometheusManager{}
 	k8sCfg := &config.Attributes.Kubernetes
 	ctxInfo := &global.ContextInfo{
-		ReportRoutes:  config.Routes != nil,
-		Prometheus:    promMgr,
-		K8sDecoration: k8sCfg.Enabled(),
+		ReportRoutes: config.Routes != nil,
+		Prometheus:   promMgr,
+		K8sEnabled:   k8sCfg.Enabled(),
 	}
-	if ctxInfo.K8sDecoration {
-		// Creating a common Kubernetes database that needs to be accessed from different points
-		// in the Beyla pipeline
-		var err error
-		if ctxInfo.K8sDatabase, err = kube.StartDatabase(k8sCfg.KubeconfigPath, k8sCfg.InformersSyncTimeout); err != nil {
-			slog.Error("can't setup Kubernetes database. Your traces won't be decorated with Kubernetes metadata",
-				"error", err)
-			ctxInfo.K8sDecoration = false
-		}
-
+	if ctxInfo.K8sEnabled {
+		setupKubernetes(k8sCfg, ctxInfo)
 	}
 	if config.InternalMetrics.Prometheus.Port != 0 {
 		slog.Debug("reporting internal metrics as Prometheus")
@@ -159,4 +155,40 @@ func buildContextInfo(config *pipe.Config) *global.ContextInfo {
 		ctxInfo.Metrics = imetrics.NoopReporter{}
 	}
 	return ctxInfo
+}
+
+// setupKubernetes sets up common Kubernetes database and API clients that need to be accessed
+// from different stages in the Beyla pipeline
+func setupKubernetes(k8sCfg *transform.KubernetesDecorator, ctxInfo *global.ContextInfo) {
+
+	config, err := kube2.LoadConfig(k8sCfg.KubeconfigPath)
+	if err != nil {
+		slog.Error("can't read kubernetes config. You can't setup Kubernetes discovery and your"+
+			" traces won't be decorated with Kubernetes metadata", "error", err)
+		ctxInfo.K8sEnabled = false
+		return
+	}
+
+	kubeClient, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		slog.Error("can't init Kubernetes client. You can't setup Kubernetes discovery and your"+
+			" traces won't be decorated with Kubernetes metadata", "error", err)
+		ctxInfo.K8sEnabled = false
+		return
+	}
+
+	ctxInfo.K8sInformer = &kube2.Metadata{}
+	if err := ctxInfo.K8sInformer.InitFromClient(kubeClient, k8sCfg.InformersSyncTimeout); err != nil {
+		slog.Error("can't init Kubernetes informer. You can't setup Kubernetes discovery and your"+
+			" traces won't be decorated with Kubernetes metadata", "error", err)
+		ctxInfo.K8sInformer = nil
+		ctxInfo.K8sEnabled = false
+		return
+	}
+
+	if ctxInfo.K8sDatabase, err = kube.StartDatabase(ctxInfo.K8sInformer); err != nil {
+		slog.Error("can't setup Kubernetes database. Your traces won't be decorated with Kubernetes metadata",
+			"error", err)
+		ctxInfo.K8sEnabled = false
+	}
 }

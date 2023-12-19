@@ -31,7 +31,7 @@ type ProcessFinder struct {
 
 func NewProcessFinder(ctx context.Context, cfg *pipe.Config, ctxInfo *global.ContextInfo) *ProcessFinder {
 	var cntDB *ContainerDBUpdater
-	if ctxInfo.K8sDecoration {
+	if ctxInfo.K8sEnabled {
 		cntDB = &ContainerDBUpdater{DB: ctxInfo.K8sDatabase}
 	}
 	return &ProcessFinder{

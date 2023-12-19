@@ -1,11 +1,7 @@
 package kube
 
 import (
-	"fmt"
 	"log/slog"
-	"time"
-
-	"k8s.io/client-go/kubernetes"
 
 	"github.com/grafana/beyla/pkg/internal/helpers/container"
 	"github.com/grafana/beyla/pkg/internal/kube"
@@ -20,7 +16,7 @@ func dblog() *slog.Logger {
 // - the inspected container.Info objects, indexed either by container ID and PID namespace
 // - a cache of decorated PodInfo that would avoid reconstructing them on each trace decoration
 type Database struct {
-	informer kube.Metadata
+	informer *kube.Metadata
 
 	containerIDs map[string]*container.Info
 	// a single namespace will point to any container inside the pod
@@ -31,26 +27,15 @@ type Database struct {
 	fetchedPodsCache map[uint32]*kube.PodInfo
 }
 
-func StartDatabase(kubeConfigPath string, informersTimeout time.Duration) (*Database, error) {
+func StartDatabase(kubeMetadata *kube.Metadata) (*Database, error) {
 	db := Database{
 		fetchedPodsCache: map[uint32]*kube.PodInfo{},
 		containerIDs:     map[string]*container.Info{},
 		namespaces:       map[uint32]*container.Info{},
+		informer:         kubeMetadata,
 	}
 	db.informer.AddContainerEventHandler(&db)
-	config, err := kube.LoadConfig(kubeConfigPath)
-	if err != nil {
-		return nil, err
-	}
 
-	kubeClient, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		return nil, err
-	}
-
-	if err := db.informer.InitFromClient(kubeClient, informersTimeout); err != nil {
-		return nil, fmt.Errorf("starting informers' database: %w", err)
-	}
 	return &db, nil
 }
 

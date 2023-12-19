@@ -179,7 +179,7 @@ func (r *metricsReporter) observe(span *request.Span) {
 // by labelValuesSQL
 func labelNamesSQL(ctxInfo *global.ContextInfo) []string {
 	names := []string{targetInstanceKey, serviceNameKey, serviceNamespaceKey, DBOperationKey}
-	if ctxInfo.K8sDecoration {
+	if ctxInfo.K8sEnabled {
 		names = appendK8sLabelNames(names)
 	}
 	return names
@@ -189,7 +189,7 @@ func labelNamesSQL(ctxInfo *global.ContextInfo) []string {
 // by labelNamesSQL
 func (r *metricsReporter) labelValuesSQL(span *request.Span) []string {
 	values := []string{span.ServiceID.Instance, span.ServiceID.Name, span.ServiceID.Namespace, span.Method}
-	if r.ctxInfo.K8sDecoration {
+	if r.ctxInfo.K8sEnabled {
 		values = appendK8sLabelValues(values, span)
 	}
 	return values
@@ -203,7 +203,7 @@ func labelNamesGRPC(cfg *PrometheusConfig, ctxInfo *global.ContextInfo) []string
 	if cfg.ReportPeerInfo {
 		names = append(names, clientAddrKey)
 	}
-	if ctxInfo.K8sDecoration {
+	if ctxInfo.K8sEnabled {
 		names = appendK8sLabelNames(names)
 	}
 	return names
@@ -217,7 +217,7 @@ func labelNamesGRPCClient(cfg *PrometheusConfig, ctxInfo *global.ContextInfo) []
 	if cfg.ReportPeerInfo {
 		names = append(names, serverAddrKey)
 	}
-	if ctxInfo.K8sDecoration {
+	if ctxInfo.K8sEnabled {
 		names = appendK8sLabelNames(names)
 	}
 	return names
@@ -231,7 +231,7 @@ func (r *metricsReporter) labelValuesGRPC(span *request.Span) []string {
 	if r.cfg.ReportPeerInfo {
 		values = append(values, span.Peer) // netSockPeerAddrKey
 	}
-	if r.ctxInfo.K8sDecoration {
+	if r.ctxInfo.K8sEnabled {
 		values = appendK8sLabelValues(values, span)
 	}
 	return values
@@ -244,7 +244,7 @@ func labelNamesHTTPClient(cfg *PrometheusConfig, ctxInfo *global.ContextInfo) []
 	if cfg.ReportPeerInfo {
 		names = append(names, serverAddrKey, serverPortKey)
 	}
-	if ctxInfo.K8sDecoration {
+	if ctxInfo.K8sEnabled {
 		names = appendK8sLabelNames(names)
 	}
 	return names
@@ -259,7 +259,7 @@ func (r *metricsReporter) labelValuesHTTPClient(span *request.Span) []string {
 		// netSockPeerAddrKey, netSockPeerPortKey
 		values = append(values, span.Host, strconv.Itoa(span.HostPort))
 	}
-	if r.ctxInfo.K8sDecoration {
+	if r.ctxInfo.K8sEnabled {
 		values = appendK8sLabelValues(values, span)
 	}
 	return values
@@ -278,7 +278,7 @@ func labelNamesHTTP(cfg *PrometheusConfig, ctxInfo *global.ContextInfo) []string
 	if ctxInfo.ReportRoutes {
 		names = append(names, httpRouteKey)
 	}
-	if ctxInfo.K8sDecoration {
+	if ctxInfo.K8sEnabled {
 		names = appendK8sLabelNames(names)
 	}
 	return names
@@ -298,7 +298,7 @@ func (r *metricsReporter) labelValuesHTTP(span *request.Span) []string {
 	if r.ctxInfo.ReportRoutes {
 		values = append(values, span.Route) // httpRouteKey
 	}
-	if r.ctxInfo.K8sDecoration {
+	if r.ctxInfo.K8sEnabled {
 		values = appendK8sLabelValues(values, span)
 	}
 	return values

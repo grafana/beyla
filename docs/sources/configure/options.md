@@ -42,6 +42,8 @@ A quick description of the components:
   the incoming data will be directly forwarded to the next stage.
 - [Kubernetes decorator](#kubernetes-decorator) will decorate the metrics and traces
   with Kubernetes metadata of the instrumented Pods.
+- [Grafana Cloud OTEL exporter for metrics and traces](#using-the-grafana-cloud-otel-endpoint-to-ingest-metrics-and-traces)
+  simplifies the submission of OpenTelemetry metrics and traces to Grafana cloud.
 - [OTEL metrics exporter](#otel-metrics-exporter) exports metrics data to an external
   [OpenTelemetry](https://opentelemetry.io/) metrics collector.
 - [OTEL traces exporter](#otel-traces-exporter) exports span data to an external
@@ -536,6 +538,10 @@ document/d/*/edit
 
 ## OTEL metrics exporter
 
+> ℹ️ If you plan to use Beyla to send metrics to Grafana Cloud,
+> please check the [Grafana Cloud OTEL exporter for metrics and traces](#using-the-grafana-cloud-otel-endpoint-to-ingest-metrics-and-traces)
+> section for easier configuration.
+
 YAML section `otel_metrics_export`.
 
 This component exports OpenTelemetry metrics to a given endpoint. It will be enabled if
@@ -667,6 +673,10 @@ The default values are UNSTABLE and could change if Prometheus or OpenTelemetry 
 conventions recommend a different set of bucket boundaries.
 
 ## OTEL traces exporter
+
+> ℹ️ If you plan to use Beyla to send metrics to Grafana Cloud,
+> please check the [Grafana Cloud OTEL exporter for metrics and traces](#using-the-grafana-cloud-otel-endpoint-to-ingest-metrics-and-traces)
+> section for easier configuration.
 
 YAML section `otel_traces_export`.
 

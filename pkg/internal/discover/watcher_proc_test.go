@@ -17,7 +17,7 @@ import (
 	"github.com/grafana/beyla/pkg/internal/testutil"
 )
 
-const testTimeout = 20 * time.Second
+const testTimeout = 5 * time.Second
 
 func TestWatcher_Poll(t *testing.T) {
 	// mocking a fake listProcesses method

@@ -17,25 +17,6 @@ func TestYAMLParse_PathRegexp(t *testing.T) {
 	inputFile := `
 services:
   - name: foo
-    exe_path_regexp: "^abc$"
-`
-	yf := yamlFile{}
-	require.NoError(t, yaml.Unmarshal([]byte(inputFile), &yf))
-
-	require.Len(t, yf.Services, 1)
-
-	assert.True(t, yf.Services[0].Path.IsSet())
-	assert.True(t, yf.Services[0].Path.MatchString("abc"))
-	assert.False(t, yf.Services[0].Path.MatchString("cabc"))
-	assert.False(t, yf.Services[0].Path.MatchString("abca"))
-
-	assert.Zero(t, yf.Services[0].OpenPorts.Len())
-}
-
-func TestYAMLParse_PathRegexp_Legacy(t *testing.T) {
-	inputFile := `
-services:
-  - name: foo
     exe_path: "^abc$"
 `
 	yf := yamlFile{}
@@ -54,21 +35,19 @@ services:
 func TestYAMLParse_PathRegexp_Errors(t *testing.T) {
 	t.Run("wrong regular expression", func(t *testing.T) {
 		require.Error(t, yaml.Unmarshal([]byte(`services:
-  - exe_path_regexp: "$a\("`), &yamlFile{}))
+  - exe_path: "$a\("`), &yamlFile{}))
 	})
 	t.Run("wrong regular pathregexp type", func(t *testing.T) {
 		require.Error(t, yaml.Unmarshal([]byte(`services:
-  - exe_path_regexp:
+  - exe_path:
       other: kind`), &yamlFile{}))
 	})
 	t.Run("unknown attribute name", func(t *testing.T) {
-		t.Run("wrong regular pathregexp type", func(t *testing.T) {
-			require.Error(t, yaml.Unmarshal([]byte(`services:
+		require.Error(t, yaml.Unmarshal([]byte(`services:
   - name: foo
-    exe_path_regexp: "^abc$"
+    exe_path: "^abc$"
 	chaca_chaca: foolss
 `), &yamlFile{}))
-		})
 	})
 }
 

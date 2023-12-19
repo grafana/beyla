@@ -199,9 +199,9 @@ Example of YAML file allowing the selection of multiple groups of services:
 ```yaml
 discovery:
   services:
-    - exe_path_regexp: (worker)|(backend)|(frontend)
+    - exe_path: (worker)|(backend)|(frontend)
       namespace: MyApplication
-    - exe_path_regexp: loadgen
+    - exe_path: loadgen
       namespace: testing
       name: "TestLoadGenerator"
 ```
@@ -234,16 +234,16 @@ open_port: 80,443,8000-8999
 ```
 Would make Beyla to select any executable that opens port 80, 443, or any of the ports between 8000 and 8999 included.
 
-If the `exe_path_regexp` property is set, the executables to be selected need to match both properties.
+If the `exe_path` property is set, the executables to be selected need to match both properties.
 
 If an executable opens multiple ports, only one of the ports needs to be specified
 for Beyla **to instrument all the
 HTTP/S and GRPC requests on all application ports**. At the moment, there is no way to
 restrict the instrumentation only to the methods exposed through a specific port.
 
-| YAML              | Env var | Type   | Default |
-|-------------------|---------|--------|---------|
-| `exe_path_regexp` | --      | string | (unset) |
+| YAML       | Env var | Type   | Default |
+|------------|---------|--------|---------|
+| `exe_path` | --      | string | (unset) |
 
 Selects the processes to instrument by their executable name path. This property accepts
 a regular expression to be matched against the full executable command line, including the directory
@@ -252,7 +252,7 @@ where the executable resides on the file system.
 If the `open_port` property is set, the executables to be selected need to match both properties.
 
 Beyla will try to instrument all the processes with an executable path matching this property.
-For example, setting `exe_path_regexp: .*` will make Beyla to try to instrument all the
+For example, setting `exe_path: .*` will make Beyla to try to instrument all the
 executables in the host.
 
 | YAML   | Env var | Type   | Default                                  |
@@ -260,7 +260,7 @@ executables in the host.
 | `name` | --      | string | Name of the instrumented executable file |
 
 Defines a name for the instrumented service. If unset, it will take the name of the executable process.
-If set, and multiple processes match the above `open_ports` or `exe_path_regexp` selectors,
+If set, and multiple processes match the above `open_ports` or `exe_path` selectors,
 the metrics and traces for all the instances will share the same service name.
 
 | YAML        | Env var | Type   | Default |

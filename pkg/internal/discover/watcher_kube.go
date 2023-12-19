@@ -14,20 +14,6 @@ import (
 	"github.com/grafana/beyla/pkg/internal/kube"
 )
 
-/*
-	// Informers need that internal object is an ObjectMeta instance
-	metav1.ObjectMeta
-	NodeName       string
-	ReplicaSetName string
-	// Pod Info includes the ReplicaSet as owner reference, and ReplicaSet info
-	// has Deployment as owner reference. We initially do a two-steps lookup to
-	// get the Pod's Deployment, but then cache the Deployment value here
-	DeploymentName string
-	// StartTimeStr caches value of ObjectMeta.StartTimestamp.String()
-	StartTimeStr string
-	ContainerIDs []string
-*/
-
 // injectable functions for testing
 var (
 	containerInfoForPID = container.InfoForPID
@@ -41,13 +27,15 @@ type kubeMetadata interface {
 	AddReplicaSetEventHandler(handler cache.ResourceEventHandler) (cache.ResourceEventHandlerRegistration, error)
 }
 
+// WatcherKubeEnricher keeps an update relational snapshot of the in-host process-pods-deployments,
+// which is continuously updated from two sources: the input from the ProcessWatcher and the kube.Metadata informers.
 type WatcherKubeEnricher struct {
 	sync sync.Mutex
 
 	log      *slog.Logger
 	informer kubeMetadata
 
-	// caches
+	// cached system objects
 	containerByPID     map[PID]container.Info
 	processByContainer map[string]*processAttrs
 	// podByOwners indexes all the PodInfos owned by a given ReplicaSet
@@ -106,6 +94,11 @@ func (wk *WatcherKubeEnricher) init() error {
 	return nil
 }
 
+// enrich listens for any potential instrumentable process from three asyncronous sources:
+// ProcessWatcher, and the ReplicaSet and Pod informers in the kube.Metadata informers.
+// We can't assume any order in the reception of the events, so we always keep an in-memory
+// snapshot of the process-pod-replicaset 3-tuple that is updated as long as each event
+// is received from different sources.
 func (wk *WatcherKubeEnricher) enrich(in <-chan []Event[processAttrs], out chan<- []Event[processAttrs]) {
 	wk.log.Debug("starting WatcherKubeEnricher")
 	for {
@@ -152,6 +145,8 @@ func (wk *WatcherKubeEnricher) enrich(in <-chan []Event[processAttrs], out chan<
 }
 
 func (wk *WatcherKubeEnricher) onNewProcess(pp *processAttrs) {
+	// 1. get container owning the process and cache it
+	// 2. if there is already a pod registered for that container, decorate processAttrs with pod attributes
 	containerInfo, err := wk.getContainerInfo(pp.pid)
 	if err != nil {
 		// it is expected for any process not running inside a container
@@ -175,14 +170,10 @@ func (wk *WatcherKubeEnricher) onDeletedProcess(pp *processAttrs) {
 func (wk *WatcherKubeEnricher) onNewPod(pod *kube.PodInfo) []processAttrs {
 	wk.updateNewPodsByOwnerIndex(pod)
 
-	// get deployment/rs info
-	// get stored process, if any
-	// if all the information is available
+	// update PodInfo with its owner's info, if any
+	// for each container in the Pod
+	//   - get matching process, if available
 	//		- forward enriched processAttrs data
-	// else
-	// 		for each pod container
-	// 			- get associated process
-	//			- cache by pid
 	wk.informer.FetchPodOwnerInfo(pod)
 
 	var pps []processAttrs
@@ -204,12 +195,10 @@ func (wk *WatcherKubeEnricher) onDeletedPod(pod *kube.PodInfo) {
 }
 
 func (wk *WatcherKubeEnricher) onNewReplicaSet(p *kube.ReplicaSetInfo) []processAttrs {
-	// get pod info
-	// get stored process, if any
-	// if all the information is available
-	//		- forward enriched processAttrs data
-	// else
-	// 		cache by pod name
+	// for each Pod in the ReplicaSet
+	//   for each container in the Pod
+	//      - get matching process, if any
+	//         - enrich and forward it
 	podInfos := wk.getReplicaSetPods(p.Namespace, p.Name)
 	var allProcessPorts []processAttrs
 	for _, pod := range podInfos {

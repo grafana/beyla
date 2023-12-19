@@ -114,8 +114,6 @@ func TestWatcherKubeEnricher(t *testing.T) {
 	}
 }
 
-// TODO: test deletion
-
 func TestWatcherKubeEnricherWithMatcher(t *testing.T) {
 	containerInfoForPID = fakeContainerInfo
 	processInfo = fakeProcessInfo
@@ -188,6 +186,27 @@ func TestWatcherKubeEnricherWithMatcher(t *testing.T) {
 		assert.Equal(t, EventCreated, m.Type)
 		assert.Equal(t, "both", m.Obj.Criteria.Name)
 		assert.EqualValues(t, 56, m.Obj.Process.Pid)
+	})
+
+	t.Run("process deletion", func(t *testing.T) {
+		inputCh <- []Event[processAttrs]{
+			{Type: EventDeleted, Obj: processAttrs{pid: 123}},
+			{Type: EventDeleted, Obj: processAttrs{pid: 456}},
+			{Type: EventDeleted, Obj: processAttrs{pid: 789}},
+			{Type: EventDeleted, Obj: processAttrs{pid: 1011}},
+			{Type: EventDeleted, Obj: processAttrs{pid: 12}},
+			{Type: EventDeleted, Obj: processAttrs{pid: 34}},
+			{Type: EventDeleted, Obj: processAttrs{pid: 56}},
+		}
+		// only forwards the deletion of the processes that were already matched
+		matches := testutil.ReadChannel(t, outputCh, timeout)
+		require.Len(t, matches, 3)
+		assert.Equal(t, EventDeleted, matches[0].Type)
+		assert.EqualValues(t, 12, matches[0].Obj.Process.Pid)
+		assert.Equal(t, EventDeleted, matches[1].Type)
+		assert.EqualValues(t, 34, matches[1].Obj.Process.Pid)
+		assert.Equal(t, EventDeleted, matches[2].Type)
+		assert.EqualValues(t, 56, matches[2].Obj.Process.Pid)
 	})
 }
 

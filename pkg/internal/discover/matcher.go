@@ -113,7 +113,7 @@ func (m *matcher) matchProcess(obj *processAttrs, p *services.ProcessInfo, a *se
 	if !a.Path.IsSet() && a.OpenPorts.Len() == 0 {
 		return false
 	}
-	if a.Path.IsSet() && !m.matchByExecutable(p, a) {
+	if (a.Path.IsSet() || a.PathRegexp.IsSet()) && !m.matchByExecutable(p, a) {
 		return false
 	}
 	if a.OpenPorts.Len() > 0 && !m.matchByPort(p, a) {
@@ -135,7 +135,11 @@ func (m *matcher) matchByPort(p *services.ProcessInfo, a *services.Attributes) b
 }
 
 func (m *matcher) matchByExecutable(p *services.ProcessInfo, a *services.Attributes) bool {
-	return a.Path.MatchString(p.ExePath)
+	if a.Path.IsSet() {
+		return a.Path.MatchString(p.ExePath)
+	} else {
+		return a.PathRegexp.MatchString(p.ExePath)
+	}
 }
 
 func (m *matcher) matchByAttributes(actual map[string]string, required map[string]*services.RegexpAttr) bool {

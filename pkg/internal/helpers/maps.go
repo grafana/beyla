@@ -30,6 +30,7 @@ func (m MultiCounter[K]) Dec(key K) int {
 	return *n
 }
 
+// Map2 implements a 2-level map where each 1st-level key maps to a 2nd level map.
 type Map2[K1, K2 comparable, V any] map[K1]map[K2]V
 
 func (m Map2[K1, K2, V]) Put(key1 K1, key2 K2, val V) {
@@ -60,6 +61,7 @@ func (m Map2[K1, K2, V]) Delete(key1 K1, key2 K2) {
 	}
 }
 
+// DeleteAll the 2nd-level entries associated with the 1st-level key.
 func (m Map2[K1, K2, V]) DeleteAll(key1 K1) {
 	delete(m, key1)
 }

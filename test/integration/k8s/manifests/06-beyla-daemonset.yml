@@ -11,7 +11,7 @@ data:
     log_level: debug
     discovery:
       services:
-        - exe_path_regexp: testserver
+        - exe_path: testserver
           namespace: integration-test
     routes:
       patterns:

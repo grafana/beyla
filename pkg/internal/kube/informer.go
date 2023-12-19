@@ -23,7 +23,6 @@ const (
 	kubeConfigEnvVariable  = "KUBECONFIG"
 	syncTime               = 10 * time.Minute
 	IndexPodByContainerIDs = "idx_pod_by_container"
-	IndexPodByOwner        = "idx_pod_by_owner"
 	IndexReplicaSetNames   = "idx_rs"
 )
 

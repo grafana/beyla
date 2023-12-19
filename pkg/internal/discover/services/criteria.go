@@ -17,6 +17,7 @@ const (
 	AttrReplicaSetName = "k8s_replicaset_name"
 )
 
+// any attribute name not in this set will cause an error during the YAML unmarshalling
 var allowedAttributeNames = map[string]struct{}{
 	AttrNamespace:      {},
 	AttrPodName:        {},
@@ -62,8 +63,16 @@ type DefinitionCriteria []Attributes
 func (dc DefinitionCriteria) Validate() error {
 	// an empty definition criteria is valid
 	for i := range dc {
-		if len(dc[i].OpenPorts.ranges) == 0 && dc[i].Path.re == nil {
-			return fmt.Errorf("attribute [%d] should define at least the open_ports or exe_path_regexp property", i)
+		if dc[i].OpenPorts.Len() == 0 &&
+			!dc[i].Path.IsSet() &&
+			!dc[i].PathRegexp.IsSet() &&
+			len(dc[i].Metadata) == 0 {
+			return fmt.Errorf("discovery.services[%d] should define at least one selection criteria", i)
+		}
+		for k := range dc[i].Metadata {
+			if _, ok := allowedAttributeNames[k]; !ok {
+				return fmt.Errorf("unknown attribute in discovery.services[%d]: %s", i, k)
+			}
 		}
 	}
 	return nil
@@ -84,62 +93,20 @@ func (dc DefinitionCriteria) PortOfInterest(port int) bool {
 // properties.
 type Attributes struct {
 	// Name will define a name for the matching service. If unset, it will take the name of the executable process
-	Name string
+	Name string `yaml:"name"`
 	// Namespace will define a namespace for the matching service. If unset, it will be left empty.
-	Namespace string
+	Namespace string `yaml:"namespace"`
 	// OpenPorts allows defining a group of ports that this service could open. It accepts a comma-separated
 	// list of port numbers (e.g. 80) and port ranges (e.g. 8080-8089)
-	OpenPorts PortEnum
+	OpenPorts PortEnum `yaml:"open_ports"`
 	// Path allows defining the regular expression matching the full executable path.
-	Path RegexpAttr
+	Path RegexpAttr `yaml:"exe_path"`
+	// PathRegexp is deprecated but kept here for backwards compatibility with Beyla 1.0.x.
+	// Deprecated. Please use Path (exe_path YAML attribute)
+	PathRegexp RegexpAttr `yaml:"exe_path_regexp"`
 
-	Metadata map[string]*RegexpAttr
-}
-
-// UnmarshalYAML implementation for a custom unmarshaller that stores the properties
-// belonging to the Attributes struct members, and the rest of attributes in the Metadata map.
-func (a *Attributes) UnmarshalYAML(value *yaml.Node) error {
-	if value.Kind != yaml.MappingNode {
-		return fmt.Errorf("line %d:%d: expecting Attributes to be a Document Node", value.Line, value.Column)
-	}
-	for n := 0; n < len(value.Content)-1; n += 2 {
-		key, val := value.Content[n], value.Content[n+1]
-		if key.Kind != yaml.ScalarNode {
-			return fmt.Errorf("line %d:%d expecting node %s to be a Scalar node", key.Line, key.Column, key.Value)
-		}
-		if val.Kind != yaml.ScalarNode {
-			return fmt.Errorf("line %d:%d expecting node %s to be a Scalar node", val.Line, val.Column, val.Value)
-		}
-		switch key.Value {
-		case "name":
-			a.Name = val.Value
-		case "namespace":
-			a.Namespace = val.Value
-		case "open_ports":
-			if err := a.OpenPorts.UnmarshalText([]byte(val.Value)); err != nil {
-				return fmt.Errorf("line %d:%d: %w", val.Line, val.Column, err)
-			}
-		// exe_path_regexp is deprecated but kept for backwards compatibility with Beyla 1.0.x
-		case "exe_path_regexp", "exe_path":
-			if err := a.Path.UnmarshalText([]byte(val.Value)); err != nil {
-				return fmt.Errorf("executable path regexp in line %d:%d: %w", val.Line, val.Column, err)
-			}
-		// assume other possible attributes and store them in a map (e.g. K8s discovery)
-		default:
-			if _, ok := allowedAttributeNames[key.Value]; !ok {
-				return fmt.Errorf("unknow attribute in line %d:%d -> %v", key.Line, key.Column, key.Value)
-			}
-			if a.Metadata == nil {
-				a.Metadata = map[string]*RegexpAttr{}
-			}
-			ov := RegexpAttr{}
-			if err := ov.UnmarshalText([]byte(val.Value)); err != nil {
-				return fmt.Errorf("regexp in line %d:%d: %w", val.Line, val.Column, err)
-			}
-			a.Metadata[key.Value] = &ov
-		}
-	}
-	return nil
+	// Metadata stores other attributes, such as Kubernetes object metadata
+	Metadata map[string]*RegexpAttr `yaml:",inline"`
 }
 
 // PortEnum defines an enumeration of ports. It allows defining a set of single ports as well a set of

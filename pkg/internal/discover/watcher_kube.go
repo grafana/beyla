@@ -1,7 +1,6 @@
 package discover
 
 import (
-	"encoding/json"
 	"fmt"
 	"log/slog"
 

@@ -1,11 +1,10 @@
 package kube
 
 import (
-	"fmt"
 	"log/slog"
-	"time"
 
 	"github.com/grafana/beyla/pkg/internal/helpers/container"
+	"github.com/grafana/beyla/pkg/internal/kube"
 )
 
 func dblog() *slog.Logger {
@@ -17,7 +16,7 @@ func dblog() *slog.Logger {
 // - the inspected container.Info objects, indexed either by container ID and PID namespace
 // - a cache of decorated PodInfo that would avoid reconstructing them on each trace decoration
 type Database struct {
-	informer Metadata
+	informer *kube.Metadata
 
 	containerIDs map[string]*container.Info
 	// a single namespace will point to any container inside the pod
@@ -25,19 +24,18 @@ type Database struct {
 	namespaces map[uint32]*container.Info
 
 	// key: pid namespace
-	fetchedPodsCache map[uint32]*PodInfo
+	fetchedPodsCache map[uint32]*kube.PodInfo
 }
 
-func StartDatabase(kubeConfigPath string, informersTimeout time.Duration) (*Database, error) {
+func StartDatabase(kubeMetadata *kube.Metadata) (*Database, error) {
 	db := Database{
-		fetchedPodsCache: map[uint32]*PodInfo{},
+		fetchedPodsCache: map[uint32]*kube.PodInfo{},
 		containerIDs:     map[string]*container.Info{},
 		namespaces:       map[uint32]*container.Info{},
+		informer:         kubeMetadata,
 	}
 	db.informer.AddContainerEventHandler(&db)
-	if err := db.informer.InitFromConfig(kubeConfigPath, informersTimeout); err != nil {
-		return nil, fmt.Errorf("starting informers' database: %w", err)
-	}
+
 	return &db, nil
 }
 
@@ -45,6 +43,7 @@ func StartDatabase(kubeConfigPath string, informersTimeout time.Duration) (*Data
 func (id *Database) OnDeletion(containerID []string) {
 	for _, cid := range containerID {
 		if info, ok := id.containerIDs[cid]; ok {
+			delete(id.fetchedPodsCache, info.PIDNamespace)
 			delete(id.namespaces, info.PIDNamespace)
 		}
 		delete(id.containerIDs, cid)
@@ -63,7 +62,7 @@ func (id *Database) AddProcess(pid uint32) {
 }
 
 // OwnerPodInfo returns the information of the pod owning the passed namespace
-func (id *Database) OwnerPodInfo(pidNamespace uint32) (*PodInfo, bool) {
+func (id *Database) OwnerPodInfo(pidNamespace uint32) (*kube.PodInfo, bool) {
 	pod, ok := id.fetchedPodsCache[pidNamespace]
 	if !ok {
 		info, ok := id.namespaces[pidNamespace]
@@ -78,10 +77,6 @@ func (id *Database) OwnerPodInfo(pidNamespace uint32) (*PodInfo, bool) {
 	}
 	// we check DeploymentName after caching, as the replicasetInfo might be
 	// received late by the replicaset informer
-	if pod.DeploymentName == "" && pod.ReplicaSetName != "" {
-		if rsi, ok := id.informer.GetReplicaSetInfo(pod.ReplicaSetName); ok {
-			pod.DeploymentName = rsi.DeploymentName
-		}
-	}
+	id.informer.FetchPodOwnerInfo(pod)
 	return pod, true
 }

@@ -20,25 +20,24 @@ import (
 )
 
 // ProcessFinder pipeline architecture. It uses the Pipes library to instantiate and connect all the nodes.
+// Nodes tagged as "forwardTo" are optional nodes that might not be instantiated. In that case, any
+// information directed to them will be automatically forwarded to the next pipeline stage.
+// For example WatcherKubeEnricher and ContainerDBUpdater will be only enabled
+// (non-nil values) if Kubernetes decoration is enabled
 type ProcessFinder struct {
-	Watcher         `sendTo:"CriteriaMatcher"`
-	CriteriaMatcher `sendTo:"ExecTyper"`
-	ExecTyper       `sendTo:"ContainerDBUpdater"`
-	// ContainerDBUpdater will be only enabled (non-nil value) if Kubernetes decoration is enabled
-	*ContainerDBUpdater `forwardTo:"TraceAttacher"`
+	ProcessWatcher       `sendTo:"WatcherKubeEnricher"`
+	*WatcherKubeEnricher `forwardTo:"CriteriaMatcher"`
+	CriteriaMatcher      `sendTo:"ExecTyper"`
+	ExecTyper            `sendTo:"ContainerDBUpdater"`
+	*ContainerDBUpdater  `forwardTo:"TraceAttacher"`
 	TraceAttacher
 }
 
 func NewProcessFinder(ctx context.Context, cfg *pipe.Config, ctxInfo *global.ContextInfo) *ProcessFinder {
-	var cntDB *ContainerDBUpdater
-	if ctxInfo.K8sDecoration {
-		cntDB = &ContainerDBUpdater{DB: ctxInfo.K8sDatabase}
-	}
-	return &ProcessFinder{
-		Watcher:            Watcher{Ctx: ctx, Cfg: cfg},
-		CriteriaMatcher:    CriteriaMatcher{Cfg: cfg},
-		ExecTyper:          ExecTyper{Cfg: cfg, Metrics: ctxInfo.Metrics},
-		ContainerDBUpdater: cntDB,
+	processFinder := ProcessFinder{
+		ProcessWatcher:  ProcessWatcher{Ctx: ctx, Cfg: cfg},
+		CriteriaMatcher: CriteriaMatcher{Cfg: cfg},
+		ExecTyper:       ExecTyper{Cfg: cfg, Metrics: ctxInfo.Metrics},
 		TraceAttacher: TraceAttacher{
 			Cfg:               cfg,
 			Ctx:               ctx,
@@ -47,13 +46,19 @@ func NewProcessFinder(ctx context.Context, cfg *pipe.Config, ctxInfo *global.Con
 			Metrics:           ctxInfo.Metrics,
 		},
 	}
+	if ctxInfo.K8sEnabled {
+		processFinder.ContainerDBUpdater = &ContainerDBUpdater{DB: ctxInfo.K8sDatabase}
+		processFinder.WatcherKubeEnricher = &WatcherKubeEnricher{Informer: ctxInfo.K8sInformer}
+	}
+	return &processFinder
 }
 
 // Start the ProcessFinder pipeline in background. It returns a channel where each new discovered
 // ebpf.ProcessTracer will be notified.
 func (pf *ProcessFinder) Start(cfg *pipe.Config) (<-chan *ebpf.ProcessTracer, <-chan *Instrumentable, error) {
 	gb := graph.NewBuilder(node.ChannelBufferLen(cfg.ChannelBufferLen))
-	graph.RegisterStart(gb, WatcherProvider)
+	graph.RegisterStart(gb, ProcessWatcherProvider)
+	graph.RegisterMiddle(gb, WatcherKubeEnricherProvider)
 	graph.RegisterMiddle(gb, CriteriaMatcherProvider)
 	graph.RegisterMiddle(gb, ExecTyperProvider)
 	graph.RegisterMiddle(gb, ContainerDBUpdaterProvider)

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"regexp"
 	"testing"
 	"time"
 
@@ -164,6 +165,41 @@ func TestConfigValidate_error(t *testing.T) {
 		t.Run(fmt.Sprint("case", n), func(t *testing.T) {
 			defer unsetEnv(t, tc)
 			assert.Error(t, loadConfig(t, tc).Validate())
+		})
+	}
+}
+
+func TestConfigValidateDiscovery(t *testing.T) {
+	userConfig := bytes.NewBufferString(`print_traces: true
+discovery:
+  services:
+    - name: foo
+      k8s_pod_name: tralara
+`)
+	cfg, err := LoadConfig(userConfig)
+	require.NoError(t, err)
+	require.NoError(t, cfg.Validate())
+}
+
+func TestConfigValidateDiscovery_Errors(t *testing.T) {
+	for _, tc := range []string{
+		`print_traces: true
+discovery:
+  services:
+    - name: missing-attributes
+`, `print_traces: true
+discovery:
+  services:
+    - name: invalid-attribute
+      k8s_unexisting_stuff: lalala
+`,
+	} {
+		testCaseName := regexp.MustCompile("name: (.+)\n").FindStringSubmatch(tc)[1]
+		t.Run(testCaseName, func(t *testing.T) {
+			userConfig := bytes.NewBufferString(tc)
+			cfg, err := LoadConfig(userConfig)
+			require.NoError(t, err)
+			require.Error(t, cfg.Validate())
 		})
 	}
 }

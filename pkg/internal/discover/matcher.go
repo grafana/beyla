@@ -20,7 +20,7 @@ type CriteriaMatcher struct {
 	Cfg *pipe.Config
 }
 
-func CriteriaMatcherProvider(cm CriteriaMatcher) (node.MiddleFunc[[]Event[processPorts], []Event[ProcessMatch]], error) {
+func CriteriaMatcherProvider(cm CriteriaMatcher) (node.MiddleFunc[[]Event[processAttrs], []Event[ProcessMatch]], error) {
 	m := &matcher{
 		log:            slog.With("component", "discover.CriteriaMatcher"),
 		criteria:       FindingCriteria(cm.Cfg),
@@ -44,17 +44,19 @@ type ProcessMatch struct {
 	Process  *services.ProcessInfo
 }
 
-func (m *matcher) run(in <-chan []Event[processPorts], out chan<- []Event[ProcessMatch]) {
+func (m *matcher) run(in <-chan []Event[processAttrs], out chan<- []Event[ProcessMatch]) {
 	m.log.Debug("starting criteria matcher node")
 	for i := range in {
 		m.log.Debug("filtering processes", "len", len(i))
 		o := m.filter(i)
 		m.log.Debug("processes matching selection criteria", "len", len(o))
-		out <- o
+		if len(o) > 0 {
+			out <- o
+		}
 	}
 }
 
-func (m *matcher) filter(events []Event[processPorts]) []Event[ProcessMatch] {
+func (m *matcher) filter(events []Event[processAttrs]) []Event[ProcessMatch] {
 	var matches []Event[ProcessMatch]
 	for _, ev := range events {
 		if ev.Type == EventDeleted {
@@ -70,7 +72,7 @@ func (m *matcher) filter(events []Event[processPorts]) []Event[ProcessMatch] {
 	return matches
 }
 
-func (m *matcher) filterCreated(obj processPorts) (Event[ProcessMatch], bool) {
+func (m *matcher) filterCreated(obj processAttrs) (Event[ProcessMatch], bool) {
 	if _, ok := m.processHistory[obj.pid]; ok {
 		// this was already matched and submitted for inspection. Ignoring!
 		return Event[ProcessMatch]{}, false
@@ -81,9 +83,8 @@ func (m *matcher) filterCreated(obj processPorts) (Event[ProcessMatch], bool) {
 		return Event[ProcessMatch]{}, false
 	}
 	for i := range m.criteria {
-		if m.matchProcess(proc, &m.criteria[i]) {
-			comm := proc.ExePath
-			m.log.Debug("found process", "pid", proc.Pid, "comm", comm)
+		if m.matchProcess(&obj, proc, &m.criteria[i]) {
+			m.log.Debug("found process", "pid", proc.Pid, "comm", proc.ExePath, "metadata", obj.metadata)
 			m.processHistory[obj.pid] = proc
 			return Event[ProcessMatch]{
 				Type: EventCreated,
@@ -94,7 +95,7 @@ func (m *matcher) filterCreated(obj processPorts) (Event[ProcessMatch], bool) {
 	return Event[ProcessMatch]{}, false
 }
 
-func (m *matcher) filterDeleted(obj processPorts) (Event[ProcessMatch], bool) {
+func (m *matcher) filterDeleted(obj processAttrs) (Event[ProcessMatch], bool) {
 	proc, ok := m.processHistory[obj.pid]
 	if !ok {
 		m.log.Debug("deleted untracked process. Ignoring", "pid", obj.pid)
@@ -108,17 +109,20 @@ func (m *matcher) filterDeleted(obj processPorts) (Event[ProcessMatch], bool) {
 	}, true
 }
 
-func (m *matcher) matchProcess(p *services.ProcessInfo, a *services.Attributes) bool {
+func (m *matcher) matchProcess(obj *processAttrs, p *services.ProcessInfo, a *services.Attributes) bool {
 	if !a.Path.IsSet() && a.OpenPorts.Len() == 0 {
 		return false
 	}
-	if a.Path.IsSet() && !m.matchByExecutable(p, a) {
+	if (a.Path.IsSet() || a.PathRegexp.IsSet()) && !m.matchByExecutable(p, a) {
 		return false
 	}
-	if a.OpenPorts.Len() > 0 {
-		return m.matchByPort(p, a)
+	if a.OpenPorts.Len() > 0 && !m.matchByPort(p, a) {
+		return false
 	}
-	return true
+	// after matching by process basic information, we check if it matches
+	// by metadata.
+	// If there is no metadata, this will return true.
+	return m.matchByAttributes(obj.metadata, a.Metadata)
 }
 
 func (m *matcher) matchByPort(p *services.ProcessInfo, a *services.Attributes) bool {
@@ -131,7 +135,19 @@ func (m *matcher) matchByPort(p *services.ProcessInfo, a *services.Attributes) b
 }
 
 func (m *matcher) matchByExecutable(p *services.ProcessInfo, a *services.Attributes) bool {
-	return a.Path.MatchString(p.ExePath)
+	if a.Path.IsSet() {
+		return a.Path.MatchString(p.ExePath)
+	}
+	return a.PathRegexp.MatchString(p.ExePath)
+}
+
+func (m *matcher) matchByAttributes(actual map[string]string, required map[string]*services.RegexpAttr) bool {
+	for attrName, criteriaRegexp := range required {
+		if attrValue, ok := actual[attrName]; !ok || !criteriaRegexp.MatchString(attrValue) {
+			return false
+		}
+	}
+	return true
 }
 
 func FindingCriteria(cfg *pipe.Config) services.DefinitionCriteria {
@@ -156,11 +172,24 @@ func FindingCriteria(cfg *pipe.Config) services.DefinitionCriteria {
 			OpenPorts: cfg.Port,
 		})
 	}
+	// normalize criteria that only define metadata (e.g. k8s)
+	// but do neither define executable name nor port: configure them to match
+	// any executable in the matched k8s entities
+	for i := range finderCriteria {
+		fc := &finderCriteria[i]
+		if !fc.Path.IsSet() && fc.OpenPorts.Len() == 0 && len(fc.Metadata) > 0 {
+			// match any executable path
+			if err := fc.Path.UnmarshalText([]byte(".")); err != nil {
+				panic("bug! " + err.Error())
+			}
+		}
+	}
+
 	return finderCriteria
 }
 
 // replaceable function to allow unit tests with faked processes
-var processInfo = func(pp processPorts) (*services.ProcessInfo, error) {
+var processInfo = func(pp processAttrs) (*services.ProcessInfo, error) {
 	proc, err := process.NewProcess(int32(pp.pid))
 	if err != nil {
 		return nil, fmt.Errorf("can't read process: %w", err)

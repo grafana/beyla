@@ -17,7 +17,7 @@ func TestYAMLParse_PathRegexp(t *testing.T) {
 	inputFile := `
 services:
   - name: foo
-    exe_path_regexp: "^abc$"
+    exe_path: "^abc$"
 `
 	yf := yamlFile{}
 	require.NoError(t, yaml.Unmarshal([]byte(inputFile), &yf))
@@ -35,12 +35,19 @@ services:
 func TestYAMLParse_PathRegexp_Errors(t *testing.T) {
 	t.Run("wrong regular expression", func(t *testing.T) {
 		require.Error(t, yaml.Unmarshal([]byte(`services:
-  - exe_path_regexp: "$a\("`), &yamlFile{}))
+  - exe_path: "$a\("`), &yamlFile{}))
 	})
 	t.Run("wrong regular pathregexp type", func(t *testing.T) {
 		require.Error(t, yaml.Unmarshal([]byte(`services:
-  - exe_path_regexp:
+  - exe_path:
       other: kind`), &yamlFile{}))
+	})
+	t.Run("unknown attribute name", func(t *testing.T) {
+		require.Error(t, yaml.Unmarshal([]byte(`services:
+  - name: foo
+    exe_path: "^abc$"
+	chaca_chaca: foolss
+`), &yamlFile{}))
 	})
 }
 
@@ -108,4 +115,29 @@ func TestYAMLParse_PortEnum_Errors(t *testing.T) {
 	assertError("unfinished range", "32,15-")
 	assertError("unstarted range", "12,-13")
 	assertError("wrong symbols", "1,2,*3,4")
+}
+
+func TestYAMLParse_OtherAttrs(t *testing.T) {
+	inputFile := `
+services:
+  - name: foo
+    k8s_namespace: "^aaa$"
+    k8s_pod_name: "^abc$"
+    k8s_deployment_name: "^bbb$"
+    k8s_replicaset_name: "^bbc$"
+`
+	yf := yamlFile{}
+	require.NoError(t, yaml.Unmarshal([]byte(inputFile), &yf))
+
+	require.Len(t, yf.Services, 1)
+
+	other := yf.Services[0].Metadata
+	assert.True(t, other["k8s_namespace"].MatchString("aaa"))
+	assert.False(t, other["k8s_namespace"].MatchString("aa"))
+	assert.True(t, other["k8s_pod_name"].MatchString("abc"))
+	assert.False(t, other["k8s_pod_name"].MatchString("aa"))
+	assert.True(t, other["k8s_deployment_name"].MatchString("bbb"))
+	assert.False(t, other["k8s_deployment_name"].MatchString("aa"))
+	assert.True(t, other["k8s_replicaset_name"].MatchString("bbc"))
+	assert.False(t, other["k8s_replicaset_name"].MatchString("aa"))
 }

@@ -101,11 +101,6 @@ func (k *Metadata) GetContainerPod(containerID string) (*PodInfo, bool) {
 	return objs[0].(*PodInfo), true
 }
 
-// AddContainerEventHandler must be invoked before InitFromClient
-func (k *Metadata) AddContainerEventHandler(eh ContainerEventHandler) {
-	k.containerEventHandlers = append(k.containerEventHandlers, eh)
-}
-
 func (k *Metadata) initPodInformer(informerFactory informers.SharedInformerFactory) error {
 	log := klog().With("informer", "Pod")
 	pods := informerFactory.Core().V1().Pods().Informer()
@@ -324,10 +319,28 @@ func (k *Metadata) FetchPodOwnerInfo(pod *PodInfo) {
 	}
 }
 
-func (k *Metadata) AddPodEventHandler(h cache.ResourceEventHandler) (cache.ResourceEventHandlerRegistration, error) {
-	return k.pods.AddEventHandler(h)
+func (k *Metadata) AddContainerEventHandler(eh ContainerEventHandler) {
+	k.containerEventHandlers = append(k.containerEventHandlers, eh)
 }
 
-func (k *Metadata) AddReplicaSetEventHandler(h cache.ResourceEventHandler) (cache.ResourceEventHandlerRegistration, error) {
-	return k.replicaSets.AddEventHandler(h)
+func (k *Metadata) AddPodEventHandler(h cache.ResourceEventHandler) error {
+	_, err := k.pods.AddEventHandler(h)
+	// passing a snapshot of the currently stored entities
+	go func() {
+		for _, pod := range k.pods.GetStore().List() {
+			h.OnAdd(pod, true)
+		}
+	}()
+	return err
+}
+
+func (k *Metadata) AddReplicaSetEventHandler(h cache.ResourceEventHandler) error {
+	_, err := k.replicaSets.AddEventHandler(h)
+	// passing a snapshot of the currently stored entities
+	go func() {
+		for _, pod := range k.replicaSets.GetStore().List() {
+			h.OnAdd(pod, true)
+		}
+	}()
+	return err
 }

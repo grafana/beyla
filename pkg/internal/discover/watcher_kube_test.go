@@ -74,7 +74,7 @@ func TestWatcherKubeEnricher(t *testing.T) {
 			informer := kube.Metadata{}
 			require.NoError(t, informer.InitFromClient(k8sClient, 30*time.Minute))
 			wkeNodeFunc, err := WatcherKubeEnricherProvider(&WatcherKubeEnricher{
-				informer: &informer,
+				Informer: &informer,
 			})
 			require.NoError(t, err)
 			inputCh, outputCh := make(chan []Event[processAttrs], 10), make(chan []Event[processAttrs], 10)
@@ -122,7 +122,7 @@ func TestWatcherKubeEnricherWithMatcher(t *testing.T) {
 	informer := kube.Metadata{}
 	require.NoError(t, informer.InitFromClient(k8sClient, 30*time.Minute))
 	wkeNodeFunc, err := WatcherKubeEnricherProvider(&WatcherKubeEnricher{
-		informer: &informer,
+		Informer: &informer,
 	})
 	require.NoError(t, err)
 	pipeConfig := pipe.Config{}

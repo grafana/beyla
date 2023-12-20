@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/mariomac/guara/pkg/test"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"sigs.k8s.io/e2e-framework/pkg/envconf"
 	"sigs.k8s.io/e2e-framework/pkg/features"
@@ -25,13 +26,18 @@ func TestBasicTracing(t *testing.T) {
 	feat := features.New("Beyla is able to instrument an arbitrary process").
 		Assess("it sends traces for that service",
 			func(ctx context.Context, t *testing.T, config *envconf.Config) context.Context {
-				var trace jaeger.Trace
 				test.Eventually(t, testTimeout, func(t require.TestingT) {
+					// Invoking both service instances, but we will expect that only one
+					// is instrumented, according to the discovery mechanisms
 					resp, err := http.Get("http://localhost:38080/pingpong")
 					require.NoError(t, err)
 					require.Equal(t, http.StatusOK, resp.StatusCode)
 
-					resp, err = http.Get(jaegerQueryURL + "?service=testserver&operation=GET%20%2Fpingpong")
+					resp, err = http.Get("http://localhost:38081/pingpong")
+					require.NoError(t, err)
+					require.Equal(t, http.StatusOK, resp.StatusCode)
+
+					resp, err = http.Get(jaegerQueryURL + "?service=testserver&?service=testserver&tags=%7B%22k8s.deployment.name%22%3A%22testserver%22%7D")
 					require.NoError(t, err)
 					if resp == nil {
 						return
@@ -41,7 +47,7 @@ func TestBasicTracing(t *testing.T) {
 					require.NoError(t, json.NewDecoder(resp.Body).Decode(&tq))
 					traces := tq.FindBySpan(jaeger.Tag{Key: "url.path", Type: "string", Value: "/pingpong"})
 					require.NotEmpty(t, traces)
-					trace = traces[0]
+					trace := traces[0]
 					require.NotEmpty(t, trace.Spans)
 
 					// Check the information of the parent span
@@ -58,6 +64,14 @@ func TestBasicTracing(t *testing.T) {
 					}, parent.Tags)
 					require.Empty(t, sd, sd.String())
 				}, test.Interval(100*time.Millisecond))
+
+				// Check that the "otherinstance" service is never instrumented
+				resp, err := http.Get(jaegerQueryURL + "?service=testserver&tags=%7B%22k8s.deployment.name%22%3A%22otherinstance%22%7D")
+				require.NoError(t, err)
+				require.Equal(t, http.StatusOK, resp.StatusCode)
+				var tq jaeger.TracesQuery
+				require.NoError(t, json.NewDecoder(resp.Body).Decode(&tq))
+				assert.Empty(t, tq.Data)
 				return ctx
 			},
 		).Feature()

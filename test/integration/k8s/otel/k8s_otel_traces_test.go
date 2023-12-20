@@ -23,7 +23,7 @@ import (
 // composition process is shared too with the rest of metrics decoration
 func TestTracesDecoration(t *testing.T) {
 	pinger := kube.Template[k8s.Pinger]{
-		TemplateFile: k8s.PingerManifest,
+		TemplateFile: k8s.UninstrumentedPingerManifest,
 		Data: k8s.Pinger{
 			PodName:   "internal-pinger",
 			TargetURL: "http://testserver:8080/traced-ping",

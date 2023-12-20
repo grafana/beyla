@@ -1,0 +1,70 @@
+# this file is actually a Go template that needs to be processed before deploying
+# Mandatory variables are PodName and TargetURL
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: maincode
+  labels:
+    component: pinger
+data:
+  main.go: |
+    package main
+    import (
+      "fmt"
+      "net/http"
+      "time"
+    )
+    func main() {
+      for {
+        r, err := http.Get("{{.TargetURL}}")
+        if err != nil {
+          fmt.Println("error!", err)
+        }
+        if r != nil {
+          fmt.Println("response:", r.Status)
+        }
+        time.Sleep(time.Second)
+      }
+    }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  # this is the service name as expected by configs/prometheus-config-promscrape.yml
+  name: beyla-pinger
+spec:
+  selector:
+    component: pinger
+  ports:
+    - port: 8999
+      name: prometheus
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: "{{.PodName}}"
+  labels:
+    component: pinger
+spec:
+  shareProcessNamespace: true
+  serviceAccountName: beyla
+  volumes:
+    - name: configs
+      persistentVolumeClaim:
+        claimName: configs
+    - name: testoutput
+      persistentVolumeClaim:
+        claimName: testoutput
+    - name: maincode
+      configMap:
+        name: maincode
+  containers:
+    - name: pinger
+      image: golang:1.21
+      command:
+        - sh
+        - -c
+        - 'go build -o pinger-cmd /code/main.go && ./pinger-cmd '
+      volumeMounts:
+        - mountPath: /code
+          name: maincode

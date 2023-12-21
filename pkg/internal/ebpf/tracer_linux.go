@@ -36,6 +36,9 @@ func (pt *ProcessTracer) Run(ctx context.Context, out chan<- []request.Span) {
 	// executable will be dynamically set for each traced http request call.
 	if service.Name == "" && !pt.SystemWide {
 		service.Name = pt.ELFInfo.ExecutableName()
+		// we mark the service ID as automatically named in case we want to look,
+		// in later stages of the pipeline, for better automatic service name
+		service.AutoName = true
 	}
 
 	for _, t := range trcrs {

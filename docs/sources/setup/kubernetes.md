@@ -31,7 +31,7 @@ This is the recommended way of deploying Beyla for the following reason:
 Deploying Beyla as a sidecar container has the following configuration
 requirements:
 
-- The process namespace must be shared between all containers in the Pod (`shareNamespace: true`
+- The process namespace must be shared between all containers in the Pod (`shareProcessNamespace: true`
   pod variable)
 - The auto-instrument tool must internally run as privileged user in the container
   (`securityContext.runAsUser: 0` property in the container configuration).

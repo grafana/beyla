@@ -118,5 +118,3 @@ spec:
           value: "true"
         - name: BEYLA_INTERNAL_METRICS_PROMETHEUS_PORT
           value: "8999"
-        - name: BEYLA_KUBE_METADATA_ENABLE
-          value: "autodetect"

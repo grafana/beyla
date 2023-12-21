@@ -376,9 +376,9 @@ It is IMPORTANT to consider that enabling this feature requires a previous step 
 providing some extra permissions to the Beyla Pod. Please check the
 ["Configuring Kubernetes metadata decoration section" in the "Running Beyla in Kubernetes"]({{< relref "../setup/kubernetes.md" >}}) page.
 
-| YAML     | Env var                      | Type    | Default |
-|----------|------------------------------|---------|---------|
-| `enable` | `BEYLA_KUBE_METADATA_ENABLE` | boolean | `false` |
+| YAML     | Env var                      | Type   | Default      |
+|----------|------------------------------|--------|--------------|
+| `enable` | `BEYLA_KUBE_METADATA_ENABLE` | string | `autodetect` |
 
 If set to `true`, Beyla will decorate the metrics and traces with Kubernetes metadata.
 

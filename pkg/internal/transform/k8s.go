@@ -19,7 +19,7 @@ const (
 	EnabledTrue       = KubeEnableFlag("true")
 	EnabledFalse      = KubeEnableFlag("false")
 	EnabledAutodetect = KubeEnableFlag("autodetect")
-	EnabledDefault    = EnabledFalse
+	EnabledDefault    = EnabledAutodetect
 
 	// TODO: let the user decide which attributes to add, as in https://opentelemetry.io/docs/kubernetes/collector/components/#kubernetes-attributes-processor
 	NamespaceName  = "k8s.namespace.name"

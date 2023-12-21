@@ -119,24 +119,30 @@ restrict the instrumentation only to the methods exposed through a specific port
 If the specified port range is wide (e.g. `1-65535`) Beyla will try to execute all the processes
 owning one of the ports in the range.
 
-| YAML           | Env var                                     | Type   | Default         |
-|----------------|---------------------------------------------|--------|-----------------|
-| `service_name` | `BEYLA_SERVICE_NAME` or `OTEL_SERVICE_NAME` | string | executable name |
+| YAML           | Env var                                     | Type   | Default                                               |
+|----------------|---------------------------------------------|--------|-------------------------------------------------------|
+| `service_name` | `BEYLA_SERVICE_NAME` or `OTEL_SERVICE_NAME` | string | (see [service discovery](#process-discovery) section) |
 
 Overrides the name of the instrumented service to be reported by the metrics exporter.
-If unset, it will be the name of the executable of the service.
+Defining this property is equivalent to add a `name` entry into the [`discovery.services` YAML
+section](#process-discovery).
 
 If a single instance of Beyla is instrumenting multiple instances of different processes,
 they will share the same service name even if they are different. If you need that a
 single instance of Beyla report different service names, follow the instructions in the
 [service discovery section](#process-discovery).
 
-| YAML                | Env var                   | Type   | Default |
-|---------------------|---------------------------|--------|---------|
-| `service_namespace` | `BEYLA_SERVICE_NAMESPACE` | string | (unset) |
+| YAML                | Env var                   | Type   | Default                                               |
+|---------------------|---------------------------|--------|-------------------------------------------------------|
+| `service_namespace` | `BEYLA_SERVICE_NAMESPACE` | string | (see [service discovery](#process-discovery) section) |
 
 Optionally, allows assigning a namespace for the service selected from the `executable_name`
-or `open_port` properties. This will assume a single namespace for all the services instrumented
+or `open_port` properties.
+
+Defining this property is equivalent to add a `name` entry into the [`discovery.services` YAML
+section](#process-discovery).
+
+This will assume a single namespace for all the services instrumented
 by Beyla. If you need that a single instance of Beyla groups multiple services
 into different namespaces, follow the instructions in the
 [service discovery section](#process-discovery).
@@ -218,6 +224,47 @@ the service name with `TestLoadGenerator`.
 The rest of this section describes the properties that are accepted in each entry of the
 `services` list.
 
+Each `services` entry is a map where the properties can be grouped according to two purposes:
+
+* Overriding the reported service name and namespace: `name` and `namespace` properties.
+* Selecting the process to instrument: the rest of the properties, referred as _selectors_ in
+  this documentation.
+
+| YAML   | Env var | Type   | Default           |
+|--------|---------|--------|-------------------|
+| `name` | --      | string | (see description) |
+
+Defines a name for the matching instrumented service. It will be used to populate the `service.name` 
+OTEL property and/or the `service_name` prometheus property in the exported metrics/traces.
+
+If the property is not set, it will default to any of the following properties, in order of
+precedence:
+* If Kubernetes is enabled:
+  1. The name of the Deployment that runs the instrumented process, if any.
+  2. The name of the ReplicaSet that runs the instrumented process, if any.
+  3. The name of the Pod that runs the instrumented process.
+* If kubernetes is not enabled:
+  1. The name of the process executable file.
+
+If multiple processes match the service selection criteria described below,
+the metrics and traces for all the instances might share the same service name;
+for example, when multiple instrumented processes run under the same Deployment,
+or have the same executable name. In that case, the reported `instance.id` (OTEL) or
+`target_instance` (Prometheus) would allow differentiating the different instances
+of the service.
+
+| YAML        | Env var | Type   | Default                  |
+|-------------|---------|--------|--------------------------|
+| `namespace` | --      | string | (empty or K8s namespace) |
+
+Defines a namespace for the matching instrumented service.
+If the property is not set, it will be defaulted to the Kubernetes namespace of
+that runs the instrumented process, if Kubernetes is available, or empty when
+Kubernetes is not available.
+
+It is important to notice that this namespace is not a selector for Kubernetes namespaces. Its
+value will be use to set the value of standard telemetry attributes. For example, the
+[OpenTelemetry `service.namespace` attribute](https://opentelemetry.io/docs/specs/otel/common/attribute-naming/).
 
 | YAML         | Env var | Type   | Default |
 |--------------|---------|--------|---------|
@@ -234,44 +281,72 @@ open_port: 80,443,8000-8999
 ```
 Would make Beyla to select any executable that opens port 80, 443, or any of the ports between 8000 and 8999 included.
 
-If the `exe_path` property is set, the executables to be selected need to match both properties.
+If other selectors are specified in the same `services` entry, the processes to be
+selected need to match all the selector properties.
 
 If an executable opens multiple ports, only one of the ports needs to be specified
 for Beyla **to instrument all the
 HTTP/S and GRPC requests on all application ports**. At the moment, there is no way to
 restrict the instrumentation only to the methods exposed through a specific port.
 
-| YAML       | Env var | Type   | Default |
-|------------|---------|--------|---------|
-| `exe_path` | --      | string | (unset) |
+| YAML       | Env var | Type                        | Default |
+|------------|---------|-----------------------------|---------|
+| `exe_path` | --      | string (regular expression) | (unset) |
 
 Selects the processes to instrument by their executable name path. This property accepts
 a regular expression to be matched against the full executable command line, including the directory
 where the executable resides on the file system.
 
-If the `open_port` property is set, the executables to be selected need to match both properties.
-
 Beyla will try to instrument all the processes with an executable path matching this property.
 For example, setting `exe_path: .*` will make Beyla to try to instrument all the
 executables in the host.
 
-| YAML   | Env var | Type   | Default                                  |
-|--------|---------|--------|------------------------------------------|
-| `name` | --      | string | Name of the instrumented executable file |
+If other selectors are specified in the same `services` entry, the processes to be
+selected need to match all the selector properties.
 
-Defines a name for the instrumented service. If unset, it will take the name of the executable process.
-If set, and multiple processes match the above `open_ports` or `exe_path` selectors,
-the metrics and traces for all the instances will share the same service name.
+| YAML            | Env var | Type                        | Default |
+|-----------------|---------|-----------------------------|---------|
+| `k8s_namespace` | --      | string (regular expression) | (unset) |
 
-| YAML        | Env var | Type   | Default |
-|-------------|---------|--------|---------|
-| `namespace` | --      | string | (unset) |
+This selector property will limit the instrumentation to the services
+running in the Kubernetes Namespaces with a name matching the provided regular
+expression.
 
-Defines a namespace for the matching service. If unset, it will be left empty.
+If other selectors are specified in the same `services` entry, the processes to be
+selected need to match all the selector properties.
 
-It is important to notice that this namespace is not a selector for Kubernetes namespaces. Its
-value will be use to set the value of standard telemetry attributes. For example, the 
-[OpenTelemetry `service.namespace` attribute](https://opentelemetry.io/docs/specs/otel/common/attribute-naming/).
+| YAML           | Env var | Type                        | Default |
+|----------------|---------|-----------------------------|---------|
+| `k8s_pod_name` | --      | string (regular expression) | (unset) |
+
+This selector property will limit the instrumentation to the services
+running in the Kubernetes Pods with a name matching the provided regular
+expression.
+
+If other selectors are specified in the same `services` entry, the processes to be
+selected need to match all the selector properties.
+
+| YAML       | Env var | Type                        | Default |
+|------------|---------|-----------------------------|---------|
+| `k8s_deployment_name` | --      | string (regular expression) | (unset) |
+
+This selector property will limit the instrumentation to the services
+running in the Kubernetes Deployments with a name matching the provided regular
+expression.
+
+If other selectors are specified in the same `services` entry, the processes to be
+selected need to match all the selector properties.
+
+| YAML                  | Env var | Type                        | Default |
+|-----------------------|---------|-----------------------------|---------|
+| `k8s_replicaset_name` | --      | string (regular expression) | (unset) |
+
+This selector property will limit the instrumentation to the services
+running in the Kubernetes ReplicaSets with a name matching the provided regular
+expression.
+
+If other selectors are specified in the same `services` entry, the processes to be
+selected need to match all the selector properties.
 
 ## EBPF tracer
 

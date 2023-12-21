@@ -95,7 +95,7 @@ per each service instance.
 Deploying Beyla as a sidecar container has the following configuration
 requirements:
 
-- The process namespace must be shared between all containers in the Pod (`shareNamespace: true`
+- The process namespace must be shared between all containers in the Pod (`shareProcessNamespace: true`
   pod variable)
 - The auto-instrument container must run in privileged mode (`securityContext.privileged: true` property of the
   container configuration).

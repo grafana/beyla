@@ -33,7 +33,7 @@ The dashed boxes in the diagram below can be enabled and disabled according to t
 
 A quick description of the components:
 
-- [Process discovery](#process-discovery) searches for instrumentable processes matching
+- [Service discovery](#service-discovery) searches for instrumentable processes matching
   a given criteria.
 - [EBPF tracer](#ebpf-tracer) instruments the HTTP and GRPC services of an external process,
   creates service traces and forwards them to the next stage of the pipeline.
@@ -71,7 +71,7 @@ where the executable resides on the file system.
 
 This property is used to select a single process to instrument, or a group of processes of
 similar characteristics. For more fine-grained process selection and grouping, you can
-follow the instructions in the [service discovery section](#process-discovery).
+follow the instructions in the [service discovery section](#service-discovery).
 
 If the `open_port` property is set, the executable to be selected needs to match both properties.
 
@@ -107,7 +107,7 @@ Would make Beyla to select any executable that opens port 80, 443, or any of the
 
 This property is used to select a single process to instrument, or a group of processes of
 similar characteristics. For more fine-grained process selection and grouping, you can
-follow the instructions in the [service discovery section](#process-discovery).
+follow the instructions in the [service discovery section](#service-discovery).
 
 If the `executable_name` property is set, the executable to be selected needs to match both properties.
 
@@ -119,33 +119,33 @@ restrict the instrumentation only to the methods exposed through a specific port
 If the specified port range is wide (e.g. `1-65535`) Beyla will try to execute all the processes
 owning one of the ports in the range.
 
-| YAML           | Env var                                     | Type   | Default                                               |
-|----------------|---------------------------------------------|--------|-------------------------------------------------------|
-| `service_name` | `BEYLA_SERVICE_NAME` or `OTEL_SERVICE_NAME` | string | (see [service discovery](#process-discovery) section) |
+| YAML           | Env var                                     | Type   | Default                               |
+|----------------|---------------------------------------------|--------|---------------------------------------|
+| `service_name` | `BEYLA_SERVICE_NAME` or `OTEL_SERVICE_NAME` | string | (see [service discovery](#service-discovery) section) |
 
 Overrides the name of the instrumented service to be reported by the metrics exporter.
 Defining this property is equivalent to add a `name` entry into the [`discovery.services` YAML
-section](#process-discovery).
+section](#service-discovery).
 
 If a single instance of Beyla is instrumenting multiple instances of different processes,
 they will share the same service name even if they are different. If you need that a
 single instance of Beyla report different service names, follow the instructions in the
-[service discovery section](#process-discovery).
+[service discovery section](#service-discovery).
 
-| YAML                | Env var                   | Type   | Default                                               |
-|---------------------|---------------------------|--------|-------------------------------------------------------|
-| `service_namespace` | `BEYLA_SERVICE_NAMESPACE` | string | (see [service discovery](#process-discovery) section) |
+| YAML                | Env var                   | Type   | Default                               |
+|---------------------|---------------------------|--------|---------------------------------------|
+| `service_namespace` | `BEYLA_SERVICE_NAMESPACE` | string | (see [service discovery](#service-discovery) section) |
 
 Optionally, allows assigning a namespace for the service selected from the `executable_name`
 or `open_port` properties.
 
 Defining this property is equivalent to add a `name` entry into the [`discovery.services` YAML
-section](#process-discovery).
+section](#service-discovery).
 
 This will assume a single namespace for all the services instrumented
 by Beyla. If you need that a single instance of Beyla groups multiple services
 into different namespaces, follow the instructions in the
-[service discovery section](#process-discovery).
+[service discovery section](#service-discovery).
 
 It is important to notice that this namespace is not a selector for Kubernetes namespaces. Its
 value will be use to set the value of standard telemetry attributes. For example, the
@@ -167,7 +167,7 @@ Valid log level values are: `DEBUG`, `INFO`, `WARN` and `ERROR`.
 
 If `true`, prints any instrumented trace on the standard output (stdout).
 
-## Process discovery
+## Service discovery
 
 The `executable_name`, `open_port`, `service_name` and `service_namespace` are top-level
 properties that simplify the configuration of Beyla to instrument a single service, or

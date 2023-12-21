@@ -11,7 +11,6 @@ import (
 	"github.com/grafana/beyla/pkg/internal/kube"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/pkg/internal/request"
-	kube2 "github.com/grafana/beyla/pkg/internal/transform/kube"
 )
 
 type KubeEnableFlag string
@@ -67,24 +66,30 @@ func KubeDecoratorProvider(
 	ctxInfo *global.ContextInfo,
 ) stage.MiddleProvider[KubernetesDecorator, []request.Span, []request.Span] {
 	return func(cfg KubernetesDecorator) (node.MiddleFunc[[]request.Span, []request.Span], error) {
-		decorator := &metadataDecorator{cfg: &cfg, db: ctxInfo.K8sDatabase}
-		return func(in <-chan []request.Span, out chan<- []request.Span) {
-			klog().Debug("starting kubernetes decoration loop")
-			for spans := range in {
-				// in-place decoration and forwarding
-				for i := range spans {
-					decorator.do(&spans[i])
-				}
-				out <- spans
-			}
-			klog().Debug("stopping kubernetes decoration loop")
-		}, nil
+		decorator := &metadataDecorator{db: ctxInfo.K8sDatabase}
+		return decorator.nodeLoop, nil
 	}
 }
 
+// production implementer: kube.Database
+type kubeDatabase interface {
+	OwnerPodInfo(pidNamespace uint32) (*kube.PodInfo, bool)
+}
+
 type metadataDecorator struct {
-	db  *kube2.Database
-	cfg *KubernetesDecorator
+	db kubeDatabase
+}
+
+func (md *metadataDecorator) nodeLoop(in <-chan []request.Span, out chan<- []request.Span) {
+	klog().Debug("starting kubernetes decoration loop")
+	for spans := range in {
+		// in-place decoration and forwarding
+		for i := range spans {
+			md.do(&spans[i])
+		}
+		out <- spans
+	}
+	klog().Debug("stopping kubernetes decoration loop")
 }
 
 func (md *metadataDecorator) do(span *request.Span) {
@@ -92,17 +97,33 @@ func (md *metadataDecorator) do(span *request.Span) {
 		span.Metadata = make(map[string]string, 5)
 	}
 	if podInfo, ok := md.db.OwnerPodInfo(span.Pid.Namespace); ok {
-		appendMetadata(span.Metadata, podInfo)
+		appendMetadata(span, podInfo)
 	}
 }
 
-func appendMetadata(to map[string]string, info *kube.PodInfo) {
-	to[NamespaceName] = info.Namespace
-	to[PodName] = info.Name
-	to[NodeName] = info.NodeName
-	to[PodUID] = string(info.UID)
-	to[PodStartTime] = info.StartTimeStr
+func appendMetadata(span *request.Span, info *kube.PodInfo) {
+	// If the user has not defined criteria values for the reported
+	// service name and namespace, we will automatically set it from
+	// the kubernetes metadata
+	if span.ServiceID.AutoName {
+		if info.DeploymentName != "" {
+			span.ServiceID.Name = info.DeploymentName
+		} else if info.ReplicaSetName != "" {
+			span.ServiceID.Name = info.ReplicaSetName
+		} else {
+			span.ServiceID.Name = info.Name
+		}
+	}
+	if span.ServiceID.Namespace == "" {
+		span.ServiceID.Namespace = info.Namespace
+	}
+
+	span.Metadata[NamespaceName] = info.Namespace
+	span.Metadata[PodName] = info.Name
+	span.Metadata[NodeName] = info.NodeName
+	span.Metadata[PodUID] = string(info.UID)
+	span.Metadata[PodStartTime] = info.StartTimeStr
 	if info.DeploymentName != "" {
-		to[DeploymentName] = info.DeploymentName
+		span.Metadata[DeploymentName] = info.DeploymentName
 	}
 }

@@ -32,7 +32,7 @@ func PrinterNode(_ PrintEnabled) (node.TerminalFunc[[]request.Span], error) {
 					spans[i].Host,
 					spans[i].HostPort,
 					spans[i].ContentLength,
-					spans[i].ServiceID,
+					&spans[i].ServiceID,
 					traceparent(&spans[i]),
 				)
 			}

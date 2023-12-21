@@ -131,7 +131,7 @@ func (ta *TraceAttacher) getTracer(ie *Instrumentable) (*ebpf.ProcessTracer, boo
 		return nil, false
 	}
 
-	ie.FileInfo.Service = svc.ID{Name: ie.FileInfo.Service.Name, Namespace: ie.FileInfo.Service.Namespace, SDKLanguage: ie.Type}
+	ie.FileInfo.Service.SDKLanguage = ie.Type
 
 	// Instead of the executable file in the disk, we pass the /proc/<pid>/exec
 	// to allow loading it from different container/pods in containerized environments

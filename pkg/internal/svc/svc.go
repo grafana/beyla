@@ -41,7 +41,11 @@ func (it InstrumentableType) String() string {
 // ID stores the coordinates that uniquely identifies a service:
 // its name and optionally a namespace
 type ID struct {
-	Name        string
+	Name string
+	// AutoName is true if the Name has been automatically set by Beyla (e.g. executable name when
+	// the Name is empty). This will allow later refinement of the Name value (e.g. to override it
+	// again with Kubernetes metadata).
+	AutoName    bool
 	Namespace   string
 	SDKLanguage InstrumentableType
 	Instance    string

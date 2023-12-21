@@ -11,10 +11,10 @@ data:
     log_level: debug
     discovery:
       services:
-        # testing that K8s discovery only picks the testserver from a given
-        # deployment (ignoring the testserver in the other pod)
-        - k8s_deployment_name: testserver
-          namespace: integration-test
+        # testing that K8s discovery only picks the "otherinstance"
+        # deployment (ignoring the "testserver" in the other pod)
+        # name and namespace will be automatically set from the K8s metadata
+        - k8s_deployment_name: otherinstance
     routes:
       patterns:
         - /pingpong

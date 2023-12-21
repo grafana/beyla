@@ -103,7 +103,7 @@ func (rp *ReporterPool[T]) For(service svc.ID) (T, error) {
 	m, err := rp.itemConstructor(service)
 	if err != nil {
 		var t T
-		return t, fmt.Errorf("creating resource for service %q: %w", service, err)
+		return t, fmt.Errorf("creating resource for service %q: %w", &service, err)
 	}
 	rp.pool.Add(service, m)
 	return m, nil

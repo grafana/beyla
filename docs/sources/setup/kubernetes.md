@@ -79,7 +79,7 @@ in another namespace).
 3. Don't forget to specify the `serviceAccountName: beyla` property in your Beyla
    Pod (as shown in the later deployment examples).
 
-Optionally, you can select which Kubernetes services to instrument in the `discovery -> services`
+Optionally, select which Kubernetes services to instrument in the `discovery -> services`
 section of the YAML configuration file. For more information, please refer to the
 _Service discovery_ section in the [Configuration document]({{< relref "../configure/options.md" >}}),
 as well as the [Providing an external configuration file](#providing-an-external-configuration-file)

@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/url"
 	"os"
+	"runtime"
 	"strings"
 	"time"
 
@@ -153,11 +154,7 @@ func newMetricsReporter(ctx context.Context, cfg *MetricsConfig, ctxInfo *global
 		func(id svc.ID, v *Metrics) {
 			llog := log.With("service", id)
 			llog.Debug("evicting metrics reporter from cache")
-			go func() {
-				if err := v.provider.Shutdown(ctx); err != nil {
-					log.Warn("error shutting down metrics provider", "error", err)
-				}
-			}()
+			// a finalizer shuts down the metrics provider
 		}, mr.newMetricSet)
 	// Instantiate the OTLP HTTP or GRPC metrics exporter
 	exporter, err := instantiateMetricsExporter(ctx, cfg, log)
@@ -167,6 +164,16 @@ func newMetricsReporter(ctx context.Context, cfg *MetricsConfig, ctxInfo *global
 	mr.exporter = instrumentMetricsExporter(ctxInfo.Metrics, exporter)
 
 	return &mr, nil
+}
+
+func (r *Metrics) release() error {
+	go func() {
+		if err := r.provider.Shutdown(r.ctx); err != nil {
+			mlog().Warn("error shutting down metrics provider", "error", err)
+		}
+	}()
+	runtime.SetFinalizer(r, nil)
+	return nil
 }
 
 func (mr *MetricsReporter) newMetricSet(service svc.ID) (*Metrics, error) {
@@ -187,6 +194,7 @@ func (mr *MetricsReporter) newMetricSet(service svc.ID) (*Metrics, error) {
 			metric.WithView(otelHistogramBuckets(HTTPClientRequestSize, mr.cfg.Buckets.RequestSizeHistogram)),
 		),
 	}
+	runtime.SetFinalizer(&m, (*Metrics).release)
 	// time units for HTTP and GRPC durations are in seconds, according to the OTEL specification:
 	// https://github.com/open-telemetry/opentelemetry-specification/tree/main/specification/metrics/semantic_conventions
 	// TODO: set ExplicitBucketBoundaries here and in prometheus from the previous specification

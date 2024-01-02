@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/url"
 	"os"
+	"runtime"
 	"strings"
 	"time"
 
@@ -117,6 +118,7 @@ type TracesReporter struct {
 // Tracers handles the OTEL traces providers and exporters.
 // There is a Tracers instance for each instrumented service/process.
 type Tracers struct {
+	ctx      context.Context
 	provider *trace.TracerProvider
 	tracer   trace2.Tracer
 }
@@ -140,11 +142,7 @@ func newTracesReporter(ctx context.Context, cfg *TracesConfig, ctxInfo *global.C
 		func(k svc.ID, v *Tracers) {
 			llog := log.With("service", k)
 			llog.Debug("evicting metrics reporter from cache")
-			go func() {
-				if err := v.provider.Shutdown(ctx); err != nil {
-					log.Warn("error shutting down metrics provider", "error", err)
-				}
-			}()
+			// a finalizer shuts down the tracer provider
 		}, r.newTracers)
 	// Instantiate the OTLP HTTP or GRPC traceExporter
 	var err error
@@ -569,9 +567,20 @@ func (r *TracesReporter) reportTraces(input <-chan []request.Span) {
 	r.close()
 }
 
+func (t *Tracers) release() error {
+	go func() {
+		if err := t.provider.Shutdown(t.ctx); err != nil {
+			tlog().Warn("error shutting down traces provider", "error", err)
+		}
+	}()
+	runtime.SetFinalizer(t, nil)
+	return nil
+}
+
 func (r *TracesReporter) newTracers(service svc.ID) (*Tracers, error) {
 	tlog().Debug("creating new Tracers reporter", "service", service)
 	tracers := Tracers{
+		ctx: r.ctx,
 		provider: trace.NewTracerProvider(
 			trace.WithResource(otelResource(service)),
 			trace.WithSpanProcessor(r.bsp),
@@ -579,6 +588,7 @@ func (r *TracesReporter) newTracers(service svc.ID) (*Tracers, error) {
 		),
 	}
 	tracers.tracer = tracers.provider.Tracer(reporterName)
+	runtime.SetFinalizer(&tracers, (*Tracers).release)
 	return &tracers, nil
 }
 

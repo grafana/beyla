@@ -113,7 +113,7 @@ BEYLA_PRINT_TRACES=true BEYLA_OPEN_PORT=8080 sudo -E beyla
 ```
 
 The `BEYLA_PRINT_TRACES=true` configuration option tells Beyla to log any trace to the standard output.
-The `BEYLA_OPEN_PORT=true` option tells Beyla to instrument the service that owns the port 8080.
+The `BEYLA_OPEN_PORT=8080` option tells Beyla to instrument the service that owns the port 8080.
 Since Beyla requires administrator rights to load eBPF programs, the `beyla` command
 must run with `sudo -E` (or as a `root` user).
 

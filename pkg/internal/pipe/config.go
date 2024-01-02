@@ -18,6 +18,8 @@ import (
 	"github.com/grafana/beyla/pkg/internal/transform"
 )
 
+const ReporterLRUSize = 256
+
 var defaultConfig = Config{
 	ChannelBufferLen: 10,
 	LogLevel:         "INFO",
@@ -37,14 +39,14 @@ var defaultConfig = Config{
 		MetricsProtocol:   otel.ProtocolUnset,
 		Interval:          5 * time.Second,
 		Buckets:           otel.DefaultBuckets,
-		ReportersCacheLen: 16,
+		ReportersCacheLen: ReporterLRUSize,
 	},
 	Traces: otel.TracesConfig{
 		Protocol:           otel.ProtocolUnset,
 		TracesProtocol:     otel.ProtocolUnset,
 		MaxQueueSize:       4096,
 		MaxExportBatchSize: 4096,
-		ReportersCacheLen:  16,
+		ReportersCacheLen:  ReporterLRUSize,
 	},
 	Prometheus: prom.PrometheusConfig{
 		Path:    "/metrics",

@@ -123,6 +123,11 @@ make generate
 
 Tested in Fedora 35, 38 and Red Hat Enterprise Linux 8.
 
+## Community
+
+To engage with the Beyla community and to chat with us on our community Slack channel, 
+please invite yourself to the Grafana Slack, visit https://slack.grafana.com/ and join the #beyla channel.
+
 ## Credits
 
 Part of the code is taken from: https://github.com/open-telemetry/opentelemetry-go-instrumentation

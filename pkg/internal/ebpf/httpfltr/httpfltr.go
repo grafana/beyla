@@ -337,13 +337,15 @@ func (event *BPFHTTPInfo) method() string {
 
 func (event *BPFHTTPInfo) hostFromBuf() (string, int) {
 	buf := cstr(event.Buf[:])
-	idx := strings.Index(buf, "Host: ")
+
+	host := "Host: "
+	idx := strings.Index(buf, host)
 
 	if idx < 0 {
 		return "", -1
 	}
 
-	buf = buf[idx+6:]
+	buf = buf[idx+len(host):]
 
 	rIdx := strings.Index(buf, "\r")
 

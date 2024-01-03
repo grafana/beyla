@@ -16,7 +16,6 @@ package nethttp
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"log/slog"
 	"unsafe"
@@ -104,8 +103,6 @@ func (p *Tracer) Constants(_ *exec.FileInfo, offsets *goexec.Offsets) map[string
 	} {
 		constants[s] = offsets.Field[s]
 	}
-
-	fmt.Printf("constants %v", constants)
 
 	return constants
 }

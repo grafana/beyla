@@ -288,7 +288,7 @@ part of the code to be instrumented, putting the focus on your critical operatio
 Another limitation to consider is that Beyla requires
 elevated privileges; not actually a `root` user, but at least it has to run with the
 `CAP_SYS_ADMIN` capability. If you run the tool as a container (Docker, Kubernetes...), it
-has to be privileged, or configured with the `CAP_SYS_ADMIN` capability.
+has to be privileged.
 
 In the future, we plan to add metrics about other well-established protocols, like
 database or message queuing connections.

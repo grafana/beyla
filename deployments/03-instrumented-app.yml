@@ -33,12 +33,8 @@ spec:
           image: grafana/beyla:latest
           imagePullPolicy: IfNotPresent
           securityContext:
+            privileged: true
             runAsUser: 0
-            # uncomment the following line if the logs still show permission errors:
-            # privileged: true
-            capabilities:
-              add:
-                - SYS_ADMIN
           env:
             - name: BEYLA_SERVICE_NAME
               value: "goblog"

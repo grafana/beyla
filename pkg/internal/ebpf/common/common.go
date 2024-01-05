@@ -132,6 +132,11 @@ func SupportsContextPropagation(log *slog.Logger) bool {
 	return false
 }
 
+func SupportsEBPFLoops() bool {
+	kernelMajor, kernelMinor := KernelVersion()
+	return kernelMajor > 5 || (kernelMajor == 5 && kernelMinor >= 17)
+}
+
 // Injectable for tests
 var lockdownPath = "/sys/kernel/security/lockdown"
 

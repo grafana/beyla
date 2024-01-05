@@ -53,4 +53,10 @@
 
 #endif /*defined(__TARGET_ARCH_arm64)*/
 
+#define bpf_clamp_umax(VAR, UMAX)                                                                  \
+    asm volatile("if %0 <= %[max] goto +1\n"                                                       \
+                 "%0 = %[max]\n"                                                                   \
+                 : "+r"(VAR)                                                                       \
+                 : [max] "i"(UMAX))
+                 
 #endif /* __UTILS_H__ */

@@ -17,6 +17,7 @@
 #include "bpf_dbg.h"
 #include "go_common.h"
 #include "go_traceparent.h"
+#include "hpack.h"
 
 typedef struct grpc_srv_func_invocation {
     u64 start_monotime_ns;
@@ -91,7 +92,7 @@ volatile const u64 grpc_peer_localaddr_pos;
 volatile const u64 http2_client_next_id_pos;
 volatile const u64 hpack_encoder_w_pos;
 
-#define GRPC_ENCODED_HEADER_LEN 69 // 1 + 1 + TP_MAX_KEY_LENGTH + 1 + TP_MAX_VAL_LENGTH = type byte + len_as_byte("traceparent") + strlen(traceparent) + len_as_byte(TP_MAX_VAL_LENGTH) + TP_MAX_VAL_LENGTH 
+#define OPTIMISTIC_GRPC_ENCODED_HEADER_LEN 51 // 1 + 1 + 8 + 1 +~ 40 = type byte + hpack_len_as_byte("traceparent") + strlen(traceparent) + len_as_byte(TP_MAX_VAL_LENGTH) + hpack(TP_MAX_VAL_LENGTH)
 
 SEC("uprobe/server_handleStream")
 int uprobe_server_handleStream(struct pt_regs *ctx) {
@@ -509,7 +510,6 @@ int uprobe_hpack_Encoder_WriteField(struct pt_regs *ctx) {
     }
 
     grpc_client_func_invocation_t *invocation = bpf_map_lookup_elem(&ongoing_grpc_header_writes, &goroutine_addr);
-    bpf_map_delete_elem(&ongoing_grpc_header_writes, &goroutine_addr);
 
     if (invocation) {
         void *e_ptr = GO_PARAM1(ctx);
@@ -533,35 +533,48 @@ int uprobe_hpack_Encoder_WriteField(struct pt_regs *ctx) {
                 if (len >= 0 && cap > 0 && cap > len) {
                     s64 available_bytes = (cap - len);
                 
-                    if (available_bytes > GRPC_ENCODED_HEADER_LEN) {
-                        char key[TP_MAX_KEY_LENGTH] = "traceparent";
+                    if (available_bytes > OPTIMISTIC_GRPC_ENCODED_HEADER_LEN) {                        
                         unsigned char tp_buf[TP_MAX_VAL_LENGTH];
+                        unsigned char out_buf[TP_MAX_VAL_LENGTH];
                         u8 type_byte = 0;
-                        u8 key_len = TP_MAX_KEY_LENGTH;
+                        u8 key_len = TP_ENCODED_LEN;
                         u8 val_len = TP_MAX_VAL_LENGTH;
 
                         make_tp_string(tp_buf, &invocation->tp);
+                        val_len = hpack_encode(out_buf, TP_MAX_VAL_LENGTH, tp_buf, TP_MAX_VAL_LENGTH);
 
-                        bpf_dbg_printk("Will write %s", tp_buf);
+                        if (val_len < 0) {
+                            bpf_dbg_printk("Encoded traceparent value too large");
+                            return 0;
+                        }
 
-                        // This mimics hpack encode appendNewName, assuming no Huffman encoding
-                        // Write record type 0
-                        bpf_probe_write_user(buf_arr + (len & 0x0ffff), &type_byte, sizeof(type_byte));
-                        len++;
-                        // Write the length of the key = 11
-                        bpf_probe_write_user(buf_arr + (len & 0x0ffff), &key_len, sizeof(key_len));
-                        len++;
-                        // Write 'traceparent'
-                        bpf_probe_write_user(buf_arr + (len & 0x0ffff), key, sizeof(key));
-                        len += TP_MAX_KEY_LENGTH;
-                        // Write the length of the traceparent field value = 55
-                        bpf_probe_write_user(buf_arr + (len & 0x0ffff), &val_len, sizeof(val_len));
-                        len++;
-                        // Write the actual traceparent
-                        bpf_probe_write_user(buf_arr + (len & 0x0ffff), tp_buf, sizeof(tp_buf));
-                        len += TP_MAX_VAL_LENGTH;
-                        // Update the buffer length to the new value
-                        bpf_probe_write_user((void *)(w_ptr + 8), &len, sizeof(len));
+                        if (val_len + 11 <= available_bytes) {
+                            bpf_map_delete_elem(&ongoing_grpc_header_writes, &goroutine_addr);
+                            bpf_dbg_printk("Will write %s", tp_buf);
+
+                            // This mimics hpack encode appendNewName, assuming no Huffman encoding
+                            // Write record type 0
+                            //bpf_probe_write_user(buf_arr + (len & 0x0ffff), &type_byte, sizeof(type_byte));
+                            bpf_printk("%s %s %d %d %d", tp_encoded, tp_buf, type_byte, key_len, val_len);
+                            len++;
+                            // Write the length of the key = 11
+                            //bpf_probe_write_user(buf_arr + (len & 0x0ffff), &key_len, sizeof(key_len));
+                            len++;
+                            // Write 'traceparent'
+                            //bpf_probe_write_user(buf_arr + (len & 0x0ffff), key, sizeof(key));
+                            len += TP_MAX_KEY_LENGTH;
+                            // Write the length of the traceparent field value = 55
+                            //bpf_probe_write_user(buf_arr + (len & 0x0ffff), &val_len, sizeof(val_len));
+                            len++;
+                            // Write the actual traceparent
+                            //bpf_probe_write_user(buf_arr + (len & 0x0ffff), tp_buf, sizeof(tp_buf));
+                            len += TP_MAX_VAL_LENGTH;
+                            // Update the buffer length to the new value
+                            //bpf_probe_write_user((void *)(w_ptr + 8), &len, sizeof(len));
+                        } else {
+                            bpf_dbg_printk("val_len = %d available = %d", val_len, available_bytes);
+                            bpf_dbg_printk("not enough space in the buffer, trying later");
+                        }
                     }
                 }
             } else {

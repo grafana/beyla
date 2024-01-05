@@ -1,3 +1,19 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: beyla-config
+data:
+  beyla-config.yml: |
+    routes:
+      unmatched: heuristic
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: system-config
+data:
+  lockdown: none [integrity] confidentiality    
+---
 # Feel free to replace the demo app by something different,
 # but it needs to bring the autoinstrumenter as a sidecar container
 apiVersion: apps/v1
@@ -18,6 +34,13 @@ spec:
     spec:
       # required so the sidecar instrumenter can access the service process
       shareProcessNamespace: true
+      volumes:
+        - name: beyla-config
+          configMap:
+            name: beyla-config
+        - name: system-config
+          configMap:
+            name: system-config
       containers:
         - name: goblog
           image: mariomac/goblog:dev
@@ -30,8 +53,9 @@ spec:
             - containerPort: 8443
               name: https
         - name: autoinstrumenter
-          image: grafana/beyla:latest
+          image: grafana/beyla:main
           imagePullPolicy: IfNotPresent
+          command: ["/beyla", "--config=/config/beyla-config.yml"]          
           securityContext:
             runAsUser: 0
             # uncomment the following line if the logs still show permission errors:
@@ -39,6 +63,11 @@ spec:
             capabilities:
               add:
                 - SYS_ADMIN
+          volumeMounts:
+            - mountPath: /config
+              name: beyla-config
+            - mountPath: /sys/kernel/security
+              name: system-config
           env:
             - name: BEYLA_SERVICE_NAME
               value: "goblog"
@@ -50,6 +79,8 @@ spec:
               value: "http://grafana-agent:4318"
             - name: BEYLA_LOG_LEVEL
               value: "DEBUG"
+            - name: OTEL_RESOURCE_ATTRIBUTES
+              value: "deployment.environment=production"
 ---
 apiVersion: v1
 kind: Service

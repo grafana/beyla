@@ -69,7 +69,7 @@ func (p *Tracer) Load() (*ebpf.CollectionSpec, error) {
 		loader = loadBpf_debug
 	}
 
-	if ebpfcommon.SupportsContextPropagation(p.log) {
+	if ebpfcommon.SupportsContextPropagation(p.log) || true {
 		loader = loadBpf_tp
 		if p.cfg.BpfDebug {
 			loader = loadBpf_tp_debug
@@ -156,7 +156,7 @@ func (p *Tracer) GoProbes() map[string]ebpfcommon.FunctionPrograms {
 		},
 	}
 
-	if ebpfcommon.SupportsContextPropagation(p.log) {
+	if ebpfcommon.SupportsContextPropagation(p.log) || true {
 		m["golang.org/x/net/http2/hpack.(*Encoder).WriteField"] = ebpfcommon.FunctionPrograms{
 			Required: true,
 			Start:    p.bpfObjects.UprobeHpackEncoderWriteField,

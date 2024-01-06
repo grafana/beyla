@@ -63,7 +63,8 @@ See [Documentation](https://grafana.com/docs/beyla/) and the [quickstart tutoria
   support Go applications built with a major **Go version no earlier than 3 versions** behind the current
   stable major release.  
 - Administrative access to execute the instrumenter
-    - Or execute it from a user enabling the `SYS_ADMIN` capability.
+    - Or execute it from a user enabling the `SYS_ADMIN` capability. This might not work in some
+      container environments.
 
 | Library                                       | Working  |
 |-----------------------------------------------|----------|

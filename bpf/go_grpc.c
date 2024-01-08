@@ -533,15 +533,20 @@ int uprobe_hpack_Encoder_WriteField(struct pt_regs *ctx) {
                 if (len >= 0 && cap > 0 && cap > len) {
                     s64 available_bytes = (cap - len);
                 
-                    if (available_bytes > OPTIMISTIC_GRPC_ENCODED_HEADER_LEN) {                        
-                        unsigned char tp_buf[TP_MAX_VAL_LENGTH];
-                        unsigned char out_buf[TP_MAX_VAL_LENGTH];
+                    if (available_bytes > OPTIMISTIC_GRPC_ENCODED_HEADER_LEN) {
+                        struct hpack_ctx d = {
+                            .dst_len = TP_MAX_VAL_LENGTH,
+                            .len = 0,
+                            .m_bytes = 0,
+                            .m_count = 0,
+                        };
+
                         u8 type_byte = 0;
                         u8 key_len = TP_ENCODED_LEN | 0x80; // high tagged to signify hpack encoded value
                         u8 val_len = TP_MAX_VAL_LENGTH;
 
-                        make_tp_string(tp_buf, &invocation->tp);
-                        val_len = hpack_encode_tp(out_buf, TP_MAX_VAL_LENGTH, tp_buf);
+                        make_tp_string(d.src, &invocation->tp);
+                        val_len = hpack_encode_tp(&d);
 
                         if (val_len <= 0) {
                             bpf_dbg_printk("Encoded traceparent value too large or empty");
@@ -552,9 +557,9 @@ int uprobe_hpack_Encoder_WriteField(struct pt_regs *ctx) {
                             u8 val_len_tagged = val_len | 0x80;
 
                             bpf_map_delete_elem(&ongoing_grpc_header_writes, &goroutine_addr);
-                            bpf_dbg_printk("Will write %s", tp_buf);
+                            bpf_dbg_printk("Will write %s", d.src);
 
-                            bpf_dbg_printk("%s %s %d %d %d", tp_encoded, tp_buf, type_byte, key_len, val_len);
+                            bpf_dbg_printk("%s %s %d %d %d", tp_encoded, d.src, type_byte, key_len, val_len);
                             // This mimics hpack encode appendNewName, with Huffman encoding
                             // Write record type 0
                             bpf_probe_write_user(buf_arr + (len & 0x0ffff), &type_byte, sizeof(type_byte));                        
@@ -571,7 +576,7 @@ int uprobe_hpack_Encoder_WriteField(struct pt_regs *ctx) {
                             int v_l = val_len;
                             bpf_clamp_umax(v_l, TP_MAX_VAL_LENGTH);
                             if (v_l > 0) {
-                                bpf_probe_write_user(buf_arr + (len & 0x0ffff), out_buf, v_l);
+                                bpf_probe_write_user(buf_arr + (len & 0x0ffff), d.dst, v_l);
                             }
                             len += val_len;                        
                             // Update the buffer length to the new value

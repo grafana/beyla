@@ -531,16 +531,16 @@ uint8_t huffman_code_len[256] = {
 
 static unsigned char tp_encoded[TP_ENCODED_LEN] = { 0x4d, 0x83, 0x21, 0x6b, 0x1d, 0x85, 0xa9, 0x3f }; // hpack encoded "traceparent"
 
-struct callback_ctx {
-    uint8_t *dst;
+struct hpack_ctx {
+    uint8_t dst[TP_MAX_VAL_LENGTH];
     int32 dst_len;
-    uint8_t *src;
+    uint8_t src[TP_MAX_VAL_LENGTH];
 	uint64_t m_bytes;
     uint32_t m_count;
     int32 len;
 };
 
-static int encode_iter(u32 index, struct callback_ctx *d) {
+static int encode_iter(u32 index, struct hpack_ctx *d) {
     int len = d->len;
 
     if (len >= (TP_MAX_VAL_LENGTH-4)) {
@@ -570,21 +570,12 @@ static int encode_iter(u32 index, struct callback_ctx *d) {
     return 0;
 }
 
-static __always_inline int32_t hpack_encode_tp(uint8_t *dst, int dst_len, uint8_t *src) {
-    struct callback_ctx d = {
-        .src = src,
-        .dst = dst,
-        .dst_len = dst_len,
-        .len = 0,
-        .m_bytes = 0,
-        .m_count = 0,
-    };
-
+static __always_inline int32_t hpack_encode_tp(struct hpack_ctx *d) {
     uint32_t nr_loops = TP_MAX_VAL_LENGTH;
 
-    bpf_loop(nr_loops, encode_iter, &d, 0);
+    bpf_loop(nr_loops, encode_iter, d, 0);
 
-    int len = d.len;
+    int len = d->len;
 
     if (len < 0) {
         return -1;
@@ -594,54 +585,54 @@ static __always_inline int32_t hpack_encode_tp(uint8_t *dst, int dst_len, uint8_
         return -1;
     }
 
-    uint32_t over = d.m_count % 8;
+    uint32_t over = d->m_count % 8;
 
     if (over > 0 && over < 8) {
         uint32_t pad = (8 - over) & 0x0ff;
-        d.m_bytes = (d.m_bytes << pad) | (EOS_PAD_BYTE >> over);
-        d.m_count += pad; // 8 now divides into n exactly
+        d->m_bytes = (d->m_bytes << pad) | (EOS_PAD_BYTE >> over);
+        d->m_count += pad; // 8 now divides into n exactly
     }
 
-    uint32_t rem = (d.m_count / 8);
+    uint32_t rem = (d->m_count / 8);
 
     // n in (0, 8, 16, 24, 32)
     switch (rem) {
         case 0:
-            return d.len;
+            return d->len;
         case 1:
-            dst[len] = (uint8_t)(d.m_bytes);
-            d.len += 1;
-            return d.len;
+            d->dst[len] = (uint8_t)(d->m_bytes);
+            d->len += 1;
+            return d->len;
         case 2:
         {
-            uint16_t y = (uint16_t)(d.m_bytes);
-            dst[len] = (uint8_t)(y >> 8);
-            dst[len+1] = (uint8_t)(y);
+            uint16_t y = (uint16_t)(d->m_bytes);
+            d->dst[len] = (uint8_t)(y >> 8);
+            d->dst[len+1] = (uint8_t)(y);
 
-            d.len += 2;
+            d->len += 2;
 
-            return d.len;
+            return d->len;
         }
         case 3:
         {            
-            uint16_t y = (uint16_t)(d.m_bytes >> 8);
-            dst[len] = (uint8_t)(y >> 8);
-            dst[len+1] = (uint8_t)(y);
-            dst[len+2] = (uint8_t)(d.m_bytes);
-            d.len += 3;
-            return d.len;
+            uint16_t y = (uint16_t)(d->m_bytes >> 8);
+            d->dst[len] = (uint8_t)(y >> 8);
+            d->dst[len+1] = (uint8_t)(y);
+            d->dst[len+2] = (uint8_t)(d->m_bytes);
+            d->len += 3;
+            return d->len;
         }
     }
     //	case 4:
-    uint32_t y = (uint32_t)(d.m_bytes);
-    dst[len] = (uint8_t)(y >> 24);
-    dst[len+1] = (uint8_t)(y >> 16);
-    dst[len+2] = (uint8_t)(y >> 8);
-    dst[len+3] = (uint8_t)(y);
+    uint32_t y = (uint32_t)(d->m_bytes);
+    d->dst[len] = (uint8_t)(y >> 24);
+    d->dst[len+1] = (uint8_t)(y >> 16);
+    d->dst[len+2] = (uint8_t)(y >> 8);
+    d->dst[len+3] = (uint8_t)(y);
 
-    d.len += 4;
+    d->len += 4;
 
-    return d.len;
+    return d->len;
 }
 
 #endif

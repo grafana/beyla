@@ -502,3 +502,151 @@ func testHTTPTracesNestedClient(t *testing.T) {
 func testHTTPTracesNestedClientWithContextPropagation(t *testing.T) {
 	testHTTPTracesNestedCalls(t, true)
 }
+
+func testHTTP2GRPCTracesNestedCalls(t *testing.T, contextPropagation bool) {
+	var traceID string
+	var parentID string
+
+	waitForTestComponents(t, "http://localhost:8080")
+
+	// Add and check for specific trace ID
+	traceID = createTraceID()
+	parentID = createParentID()
+	traceparent := createTraceparent(traceID, parentID)
+	doHTTPGetWithTraceparent(t, "http://localhost:8080/echoCall", 204, traceparent)
+	// Do some requests to make sure we see all events
+	for i := 0; i < 10; i++ {
+		doHTTPGet(t, "http://localhost:8080/metrics", 200)
+	}
+
+	var trace jaeger.Trace
+	test.Eventually(t, testTimeout, func(t require.TestingT) {
+		resp, err := http.Get(jaegerQueryURL + "?service=testserver&operation=GET%20%2FechoCall")
+		require.NoError(t, err)
+		if resp == nil {
+			return
+		}
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+		var tq jaeger.TracesQuery
+		require.NoError(t, json.NewDecoder(resp.Body).Decode(&tq))
+		traces := tq.FindBySpan(jaeger.Tag{Key: "url.path", Type: "string", Value: "/echoCall"})
+		require.Len(t, traces, 1)
+		trace = traces[0]
+	}, test.Interval(100*time.Millisecond))
+
+	// Check the information of the parent span
+	res := trace.FindByOperationName("GET /echoCall")
+	require.Len(t, res, 1)
+	server := res[0]
+	require.NotEmpty(t, server.TraceID)
+	require.Equal(t, traceID, server.TraceID)
+	// Validate that "server" is a CHILD_OF the traceparent's "parent-id"
+	childOfPID := trace.ChildrenOf(parentID)
+	require.Len(t, childOfPID, 1)
+	require.NotEmpty(t, server.SpanID)
+
+	// check span attributes
+	sd := server.Diff(
+		jaeger.Tag{Key: "http.request.method", Type: "string", Value: "GET"},
+		jaeger.Tag{Key: "http.response.status_code", Type: "int64", Value: float64(204)},
+		jaeger.Tag{Key: "url.path", Type: "string", Value: "/echoCall"},
+		jaeger.Tag{Key: "server.port", Type: "int64", Value: float64(8080)},
+		jaeger.Tag{Key: "http.route", Type: "string", Value: "/echoCall"},
+		jaeger.Tag{Key: "span.kind", Type: "string", Value: "server"},
+	)
+	assert.Empty(t, sd, sd.String())
+
+	numNested := 1
+
+	if contextPropagation {
+		numNested = 2
+	}
+
+	// Check the information of the "in queue" span
+	res = trace.FindByOperationName("in queue")
+	require.Equal(t, len(res), numNested)
+
+	var queue *jaeger.Span
+
+	for i := range res {
+		r := &res[i]
+		// Check parenthood
+		p, ok := trace.ParentOf(r)
+
+		if ok {
+			if p.TraceID == server.TraceID && p.SpanID == server.SpanID {
+				queue = r
+				break
+			}
+		}
+	}
+	require.NotNil(t, queue)
+	// check span attributes
+	sd = queue.Diff(
+		jaeger.Tag{Key: "span.kind", Type: "string", Value: "internal"},
+	)
+	assert.Empty(t, sd, sd.String())
+
+	// Check the information of the "processing" span
+	res = trace.FindByOperationName("processing")
+	require.Equal(t, len(res), numNested)
+
+	var processing *jaeger.Span
+
+	for i := range res {
+		r := &res[i]
+		// Check parenthood
+		p, ok := trace.ParentOf(r)
+
+		if ok {
+			if p.TraceID == server.TraceID && p.SpanID == server.SpanID {
+				processing = r
+				break
+			}
+		}
+	}
+
+	require.NotNil(t, processing)
+	sd = queue.Diff(
+		jaeger.Tag{Key: "span.kind", Type: "string", Value: "internal"},
+	)
+	assert.Empty(t, sd, sd.String())
+
+	// Check the information of the "processing" span
+	res = trace.FindByOperationName("/routeguide.RouteGuide/GetFeature")
+	require.Len(t, res, numNested)
+	for index := range res {
+		grpc := res[index]
+		if contextPropagation {
+			assert.Equal(t, processing.TraceID, grpc.TraceID)
+		}
+		isClient := false
+
+		for _, tag := range grpc.Tags {
+			if tag.Key == "span.kind" && tag.Value == "client" {
+				isClient = true
+			}
+		}
+
+		if isClient {
+			p, ok := trace.ParentOf(&grpc)
+			require.True(t, ok)
+			assert.Equal(t, processing.TraceID, p.TraceID)
+			assert.Equal(t, processing.SpanID, p.SpanID)
+		}
+
+		sd = grpc.Diff(
+			jaeger.Tag{Key: "rpc.method", Type: "string", Value: "/routeguide.RouteGuide/GetFeature"},
+			jaeger.Tag{Key: "rpc.grpc.status_code", Type: "int64", Value: float64(0)},
+		)
+		assert.Empty(t, sd, sd.String())
+	}
+}
+
+func testHTTP2GRPCTracesNestedCallsNoPropagation(t *testing.T) {
+	testHTTP2GRPCTracesNestedCalls(t, false)
+}
+
+func testHTTP2GRPCTracesNestedCallsWithContextPropagation(t *testing.T) {
+	testHTTP2GRPCTracesNestedCalls(t, true)
+}

@@ -45,8 +45,10 @@ func TestSuiteNestedTraces(t *testing.T) {
 	require.NoError(t, compose.Up())
 	if !lockdown {
 		t.Run("HTTP traces (all spans nested)", testHTTPTracesNestedClientWithContextPropagation)
+		t.Run("HTTP -> gRPC traces (all spans nested)", testHTTP2GRPCTracesNestedCallsWithContextPropagation)
 	} else {
 		t.Run("HTTP traces (nested client span)", testHTTPTracesNestedClient)
+		t.Run("HTTP -> gRPC traces (nested client span)", testHTTP2GRPCTracesNestedCallsNoPropagation)
 	}
 	t.Run("BPF pinning folder mounted", testBPFPinningMounted)
 	require.NoError(t, compose.Close())

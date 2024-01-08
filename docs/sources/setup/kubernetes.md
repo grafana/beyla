@@ -98,6 +98,9 @@ This is the way you can deploy Beyla if you want to monitor a given service that
 might not be deployed in all the hosts, so you only have to deploy one Beyla instance
 per each service instance.
 
+{{< youtube id="d7clTdz0bA4" >}}
+
+
 Deploying Beyla as a sidecar container has the following configuration
 requirements:
 

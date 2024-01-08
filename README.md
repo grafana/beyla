@@ -63,7 +63,8 @@ See [Documentation](https://grafana.com/docs/beyla/) and the [quickstart tutoria
   support Go applications built with a major **Go version no earlier than 3 versions** behind the current
   stable major release.  
 - Administrative access to execute the instrumenter
-    - Or execute it from a user enabling the `SYS_ADMIN` capability.
+    - Or execute it from a user enabling the `SYS_ADMIN` capability. This might not work in some
+      container environments.
 
 | Library                                       | Working  |
 |-----------------------------------------------|----------|
@@ -122,6 +123,11 @@ make generate
 ```
 
 Tested in Fedora 35, 38 and Red Hat Enterprise Linux 8.
+
+## Community
+
+To engage with the Beyla community and to chat with us on our community Slack channel, 
+please invite yourself to the Grafana Slack, visit https://slack.grafana.com/ and join the #beyla channel.
 
 ## Credits
 

@@ -289,18 +289,18 @@ func main() {
 	} else {
 		for {
 			var buf []byte
-			var tp_buf []byte
+			var tpBuf []byte
 
 			l := hpack.HuffmanEncodeLength("traceparent")
 			l1 := hpack.HuffmanEncodeLength("00-5fe865607da112abd799ea8108c38bcd-4c59e9a913c480a3-01")
 
 			buf = hpack.AppendHuffmanString(buf, "00-5fe865607da112abd799ea8108c38bcd-4c59e9a913c480a3-01")
-			tp_buf = hpack.AppendHuffmanString(tp_buf, "traceparent")
+			tpBuf = hpack.AppendHuffmanString(tpBuf, "traceparent")
 
 			fmt.Printf("Sleeping, press any key %d, len = %d, len1 = %d\n", len(buf), l, l1)
 
 			fmt.Printf("buf: %x\n", buf)
-			fmt.Printf("tp_buf: %x\n", tp_buf)
+			fmt.Printf("tp_buf: %x\n", tpBuf)
 
 			var input string
 			fmt.Scanln(&input)

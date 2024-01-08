@@ -503,6 +503,7 @@ func testHTTPTracesNestedClientWithContextPropagation(t *testing.T) {
 	testHTTPTracesNestedCalls(t, true)
 }
 
+//nolint:cyclop
 func testHTTP2GRPCTracesNestedCalls(t *testing.T, contextPropagation bool) {
 	var traceID string
 	var parentID string

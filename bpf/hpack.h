@@ -3,6 +3,7 @@
 
 #include "vmlinux.h"
 #include "bpf_helpers.h"
+#include "tracing.h"
 
 uint32_t huffman_codes[256] = {
     0x1ff8,
@@ -539,17 +540,15 @@ struct callback_ctx {
     int32 len;
 };
 
-static int encode_iter(u32 index, void *data) {
-    struct callback_ctx *d = data;
-
+static int encode_iter(u32 index, struct callback_ctx *d) {
     int len = d->len;
 
-    if (len >= 51) {
+    if (len >= (TP_MAX_VAL_LENGTH-4)) {
         d->len = -1;
         return 1;
     }
 
-    if (index >= 55) {
+    if (index >= TP_MAX_VAL_LENGTH) {
         return 1;
     }
 
@@ -581,7 +580,9 @@ static __always_inline int32_t hpack_encode_tp(uint8_t *dst, int dst_len, uint8_
         .m_count = 0,
     };
 
-    bpf_loop(55, encode_iter, &d, 0);
+    uint32_t nr_loops = TP_MAX_VAL_LENGTH;
+
+    bpf_loop(nr_loops, encode_iter, &d, 0);
 
     int len = d.len;
 
@@ -589,7 +590,7 @@ static __always_inline int32_t hpack_encode_tp(uint8_t *dst, int dst_len, uint8_
         return -1;
     }
 
-    if (len > 51) {
+    if (len > (TP_MAX_VAL_LENGTH-4)) {
         return -1;
     }
 

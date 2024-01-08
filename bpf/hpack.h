@@ -1,8 +1,7 @@
 #ifndef HTTP_HPACK_H
 #define HTTP_HPACK_H
 
-#include "vmlinux.h"
-#include "bpf_helpers.h"
+#include "utils.h"
 
 uint32_t huffman_codes[256] = {
     0x1ff8,
@@ -571,7 +570,7 @@ static int encode_iter(u32 index, void *data) {
     return 0;
 }
 
-static __always_inline int32_t hpack_encode(uint8_t *dst, int dst_len, uint8_t *src, int src_len) {
+static __always_inline int32_t hpack_encode(uint8_t *dst, uint32_t dst_len, uint8_t *src, uint32_t src_len) {
     struct callback_ctx d = {
         .src = src,
         .dst = dst,
@@ -581,7 +580,8 @@ static __always_inline int32_t hpack_encode(uint8_t *dst, int dst_len, uint8_t *
         .m_count = 0,
     };
 
-    u32 nr_loops = 55;
+    u32 nr_loops = src_len;
+    bpf_clamp_umax(nr_loops, 1000);
     bpf_loop(nr_loops, encode_iter, &d, 0);
 
     int len = d.len;
@@ -590,7 +590,7 @@ static __always_inline int32_t hpack_encode(uint8_t *dst, int dst_len, uint8_t *
         return -1;
     }
 
-    if (len > 51) {
+    if (len > (dst_len - 4)) {
         return -1;
     }
 

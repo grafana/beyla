@@ -541,7 +541,7 @@ int uprobe_hpack_Encoder_WriteField(struct pt_regs *ctx) {
                         u8 val_len = TP_MAX_VAL_LENGTH;
 
                         make_tp_string(tp_buf, &invocation->tp);
-                        val_len = hpack_encode(out_buf, TP_MAX_VAL_LENGTH, tp_buf, TP_MAX_VAL_LENGTH);
+                        val_len = hpack_encode_tp(out_buf, TP_MAX_VAL_LENGTH, tp_buf);
 
                         if (val_len <= 0) {
                             bpf_dbg_printk("Encoded traceparent value too large or empty");

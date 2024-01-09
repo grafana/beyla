@@ -117,6 +117,8 @@ const (
 
 func SupportsContextPropagation(log *slog.Logger) bool {
 	kernelMajor, kernelMinor := KernelVersion()
+	log.Debug("Linux kernel version", "major", kernelMajor, "minor", kernelMinor)
+
 	if kernelMajor < 5 || (kernelMajor == 5 && kernelMinor < 14) {
 		log.Debug("Found Linux kernel earlier than 5.14, trace context propagation is supported", "major", kernelMajor, "minor", kernelMinor)
 		return true
@@ -130,6 +132,11 @@ func SupportsContextPropagation(log *slog.Logger) bool {
 	}
 
 	return false
+}
+
+func SupportsEBPFLoops() bool {
+	kernelMajor, kernelMinor := KernelVersion()
+	return kernelMajor > 5 || (kernelMajor == 5 && kernelMinor >= 17)
 }
 
 // Injectable for tests

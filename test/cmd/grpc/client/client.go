@@ -42,6 +42,28 @@ var (
 	wrapper    = flag.Bool("wrapper", false, "Simple ping with wrapper call to pingserver")
 )
 
+func printFeatureWithClient(point *pb.Point, counter int) {
+	var opts []grpc.DialOption
+	if *ssl {
+		tlsConfig := &tls.Config{
+			InsecureSkipVerify: true,
+		}
+		opts = append(opts, grpc.WithTransportCredentials(credentials.NewTLS(tlsConfig)))
+	} else {
+		opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	}
+
+	conn, err := grpc.Dial(*serverAddr, opts...)
+	if err != nil {
+		slog.Error("fail to dial", err)
+		os.Exit(-1)
+	}
+	defer conn.Close()
+	client := pb.NewRouteGuideClient(conn)
+
+	printFeature(client, point, counter)
+}
+
 // printFeature gets the feature for the given point.
 func printFeature(client pb.RouteGuideClient, point *pb.Point, counter int) {
 	slog.Debug("Getting feature for point", "lat", point.Latitude, "long", point.Longitude)
@@ -241,7 +263,7 @@ func main() {
 	counter := 1
 
 	// Looking for a valid feature
-	printFeature(client, &pb.Point{Latitude: 409146138, Longitude: -746188906}, counter)
+	//printFeature(client, &pb.Point{Latitude: 409146138, Longitude: -746188906}, counter)
 
 	if !*ping {
 		fmt.Printf("Sleeping, press any key\n")
@@ -267,16 +289,23 @@ func main() {
 	} else {
 		for {
 			var buf []byte
+			var tpBuf []byte
 
 			l := hpack.HuffmanEncodeLength("traceparent")
 			l1 := hpack.HuffmanEncodeLength("00-5fe865607da112abd799ea8108c38bcd-4c59e9a913c480a3-01")
 
-			fmt.Printf("Sleeping, press any key %d, len = %d, len1 = %d\n", cap(buf), l, l1)
+			buf = hpack.AppendHuffmanString(buf, "00-5fe865607da112abd799ea8108c38bcd-4c59e9a913c480a3-01")
+			tpBuf = hpack.AppendHuffmanString(tpBuf, "traceparent")
+
+			fmt.Printf("Sleeping, press any key %d, len = %d, len1 = %d\n", len(buf), l, l1)
+
+			fmt.Printf("buf: %x\n", buf)
+			fmt.Printf("tp_buf: %x\n", tpBuf)
 
 			var input string
 			fmt.Scanln(&input)
 			counter++
-			printFeature(client, &pb.Point{Latitude: 409146138, Longitude: -746188906}, counter)
+			printFeatureWithClient(&pb.Point{Latitude: 409146138, Longitude: -746188906}, counter)
 		}
 	}
 }

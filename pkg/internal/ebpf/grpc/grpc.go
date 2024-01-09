@@ -63,19 +63,23 @@ func (p *Tracer) BlockPID(pid uint32) {
 	p.pidsFilter.BlockPID(pid)
 }
 
+func (p *Tracer) supportsContextPropagation() bool {
+	return ebpfcommon.SupportsContextPropagation(p.log) && ebpfcommon.SupportsEBPFLoops()
+}
+
 func (p *Tracer) Load() (*ebpf.CollectionSpec, error) {
 	loader := loadBpf
 	if p.cfg.BpfDebug {
 		loader = loadBpf_debug
 	}
 
-	if ebpfcommon.SupportsContextPropagation(p.log) {
+	if p.supportsContextPropagation() {
 		loader = loadBpf_tp
 		if p.cfg.BpfDebug {
 			loader = loadBpf_tp_debug
 		}
 	} else {
-		p.log.Info("Kernel in lockdown mode, trace info propagation in gRPC headers is disabled.")
+		p.log.Info("Kernel in lockdown mode or older than 5.17, trace info propagation in gRPC headers is disabled.")
 	}
 	return loader()
 }
@@ -156,7 +160,7 @@ func (p *Tracer) GoProbes() map[string]ebpfcommon.FunctionPrograms {
 		},
 	}
 
-	if ebpfcommon.SupportsContextPropagation(p.log) {
+	if p.supportsContextPropagation() {
 		m["golang.org/x/net/http2/hpack.(*Encoder).WriteField"] = ebpfcommon.FunctionPrograms{
 			Required: true,
 			Start:    p.bpfObjects.UprobeHpackEncoderWriteField,

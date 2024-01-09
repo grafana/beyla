@@ -1,10 +1,14 @@
 package exec
 
 import (
+	"regexp"
 	"strings"
 
 	"github.com/grafana/beyla/pkg/internal/svc"
 )
+
+var rubyModule = regexp.MustCompile(`^(.*/)?ruby[\d.]*$`)
+var pythonModule = regexp.MustCompile(`^(.*/)?python[\d.]*$`)
 
 func instrumentableFromModuleMap(moduleName string) svc.InstrumentableType {
 	if strings.Contains(moduleName, "libcoreclr.so") {
@@ -16,10 +20,10 @@ func instrumentableFromModuleMap(moduleName string) svc.InstrumentableType {
 	if strings.HasSuffix(moduleName, "/node") || moduleName == "node" {
 		return svc.InstrumentableNodejs
 	}
-	if strings.HasSuffix(moduleName, "/ruby") || moduleName == "ruby" {
+	if rubyModule.MatchString(moduleName) {
 		return svc.InstrumentableRuby
 	}
-	if strings.Contains(moduleName, "/python") || moduleName == "python" || moduleName == "python3" {
+	if pythonModule.MatchString(moduleName) {
 		return svc.InstrumentablePython
 	}
 

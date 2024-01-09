@@ -18,11 +18,18 @@ func TestModuleDetection(t *testing.T) {
 	assert.Equal(t, svc.InstrumentableNodejs, instrumentableFromModuleMap("/usr/bin/node"))
 	assert.Equal(t, svc.InstrumentableNodejs, instrumentableFromModuleMap("node"))
 	assert.Equal(t, svc.InstrumentableRuby, instrumentableFromModuleMap("/usr/bin/ruby"))
+	assert.Equal(t, svc.InstrumentableRuby, instrumentableFromModuleMap("/usr/bin/ruby3"))
+	assert.Equal(t, svc.InstrumentableRuby, instrumentableFromModuleMap("/usr/bin/ruby3.0"))
 	assert.Equal(t, svc.InstrumentableRuby, instrumentableFromModuleMap("ruby"))
+	assert.Equal(t, svc.InstrumentableRuby, instrumentableFromModuleMap("ruby3"))
+	assert.Equal(t, svc.InstrumentableRuby, instrumentableFromModuleMap("ruby3.1.2"))
 	assert.Equal(t, svc.InstrumentablePython, instrumentableFromModuleMap("/usr/bin/python3.18"))
 	assert.Equal(t, svc.InstrumentablePython, instrumentableFromModuleMap("python"))
 	assert.Equal(t, svc.InstrumentablePython, instrumentableFromModuleMap("/usr/bin/python"))
 	assert.Equal(t, svc.InstrumentablePython, instrumentableFromModuleMap("python3"))
+
+	assert.Equal(t, svc.InstrumentableGeneric, instrumentableFromModuleMap("/usr/lib/rubybutnotreallyruby"))
+	assert.Equal(t, svc.InstrumentableGeneric, instrumentableFromModuleMap("/usr/lib/pythonbutnotreallypython"))
 }
 
 func TestSymbolDetection(t *testing.T) {

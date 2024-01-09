@@ -14,6 +14,7 @@ This section shows how to quickly instrument your applications for different pro
 
 * [Quickstart: instrument a C/C++ service with Beyla]({{< relref "./cpp.md" >}})
 * [Quickstart: instrument a Go service with Beyla]({{< relref "./golang.md" >}})
+* [Quickstart: instrument a Node.js service with Beyla]({{< relref "./nodejs.md" >}})
 
 <!-- TODO: uncomment as long as we create new entries
 * [Quickstart: instrument a Rust service with Beyla]({{< relref "./rust.md" >}})

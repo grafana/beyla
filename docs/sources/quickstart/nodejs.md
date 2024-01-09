@@ -1,29 +1,27 @@
 ---
-title: "Quickstart: instrument a C/C++ service with Beyla"
-menuTitle: C/C++ quickstart
-description: Learn how to quickly set up and run Beyla to instrument a C/C++ service
+title: "Quickstart: instrument a Node.js service with Beyla"
+menuTitle: Node.js quickstart
+description: Learn how to quickly set up and run Beyla to instrument a Node.js service
 weight: 2
 keywords:
   - Beyla
   - eBPF
-  - C
-  - C++
+  - Node.js
+  - Javascript
 ---
 
-# Quickstart: instrument a C/C++ service with Beyla
+# Quickstart: instrument a Node.js service with Beyla
 
-## 1. Run your instrumentable C/C++ service
+## 1. Run your instrumentable Node.js service
 
 You can use any service of your own. For testing purposes, you can also download and run this
-[simple C++ HTTP service](https://github.com/grafana/beyla/tree/main/examples/quickstart/cpp).
+[simple Node.js HTTP service](https://github.com/grafana/beyla/tree/main/examples/quickstart/nodejs).
 
 ```
-curl -OL https://raw.githubusercontent.com/grafana/beyla/main/examples/quickstart/cpp/httplib.h
-curl -OL https://raw.githubusercontent.com/grafana/beyla/main/examples/quickstart/cpp/quickstart.cpp
-g++ -std=c++11 quickstart.cpp -o quickstart && ./quickstart
+curl -OL https://raw.githubusercontent.com/grafana/beyla/main/examples/quickstart/nodejs/package.json
+curl -OL https://raw.githubusercontent.com/grafana/beyla/main/examples/quickstart/nodejs/quickstart.js
+npm install && npm start
 ```
-
-You can replace the `g++` command by another compiler supporting C++11.
 
 ## 2. Download Beyla
 
@@ -60,9 +58,14 @@ To facilitate local testing, we will also set the `BEYLA_PRINT_TRACES=true` envi
 variable. This will print the traces of your instrumented service in the standard output
 of Beyla.
 
+We are also setting the `BEYLA_SERVICE_NAME=quickstart` to properly name the service
+as reported by the traces and metrics. If we did not set it, Beyla would automatically
+report the name of the process executable: `node`.
+
 Please notice that Beyla requires to run with administrative privileges.
 
 ```sh
+export BEYLA_SERVICE_NAME=quickstart
 export OTEL_EXPORTER_OTLP_ENDPOINT=https://otlp-gateway-prod-eu-west-0.grafana.net/otlp
 export GRAFANA_CLOUD_INSTANCE_ID=123456
 export GRAFANA_CLOUD_API_KEY="your api key here..."
@@ -85,7 +88,7 @@ In the Beyla standard output, you will see the information of the intercepted tr
 
 ```
 2024-01-09 10:31:33.19103133 (3.254486ms[3.254486ms]) 200 GET /foo [127.0.0.1]->[127.0.0.1:8080]
-size:80B svc=[{quickstart  generic lima-ubuntu-lts-5074}] traceparent=[00-46214bd23716280eef43cf798dbe5522-0000000000000000-01]
+size:80B svc=[{quickstart nodejs lima-ubuntu-lts-5074}] traceparent=[00-46214bd23716280eef43cf798dbe5522-0000000000000000-01]
 ```
 
 The above trace shows, in the following order:
@@ -95,8 +98,8 @@ The above trace shows, in the following order:
 * `200 GET /foo`: response code, HTTP method, and URL path.
 * `[127.0.0.1]->[127.0.0.1:8080]` source and destination host:port.
 * `size:80B`: size of the HTTP request (sum of the headers and the body).
-* `svc=[{quickstart  generic lima-ubuntu-lts-5074}]`: `quickstart` service, using the
-  generic kernel-based instrumenter, with an automatically created service instance name
+* `svc=[{quickstart nodejs lima-ubuntu-lts-5074}]`: `quickstart` service, running in
+  Node.js, with an automatically created service instance name
   `lima-ubuntu-lts-5074`.
 * `traceparent` as received by the parent request, or a new random one if the parent request
   didn't specify it.

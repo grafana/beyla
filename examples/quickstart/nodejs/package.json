@@ -1,0 +1,15 @@
+{
+    "name": "nodejsserver",
+    "version": "1.0.0",
+    "description": "NodeJS Express API test server",
+    "main": "quickstart.js",
+    "scripts": {
+        "start": "node quickstart.js"
+    },
+    "author": "Grafana Labs",
+    "license": "APL",
+    "dependencies": {
+        "express": "^4.18.2",
+        "start": "^5.1.0"
+    }
+}

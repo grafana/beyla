@@ -15,7 +15,7 @@ keywords:
 ## 1. Run your instrumentable Go service
 
 You can use any Go service of your own. For testing purposes, you can also download and run this
-[simple Go HTTP service](https://raw.githubusercontent.com/grafana/beyla/main/examples/quickstart/golang/quickstart.go).
+[simple Go HTTP service](https://github.com/grafana/beyla/tree/main/examples/quickstart/golang).
 
 ```
 curl -OL https://raw.githubusercontent.com/grafana/beyla/main/examples/quickstart/golang/quickstart.go
@@ -101,8 +101,8 @@ The above trace shows, in the following order:
 * `[127.0.0.1]->[localhost:8080]` source and destination host:port.
 * `size:0B`: size of the HTTP request body (0 bytes, as it was a `GET` request).
   For non-go programs, this size would also include the size of the request headers.
-* `svc=[{quickstart  go lima-ubuntu-lts-8222}]`: `quickstart` service, using the
-  Go instrumenter, with an automatically created service instance name `lima-ubuntu-lts-8222`.
+* `svc=[{quickstart  go lima-ubuntu-lts-8222}]`: `quickstart` service, written
+  in Go, with an automatically created service instance name `lima-ubuntu-lts-8222`.
 * `traceparent=[00-0f82735dab5798dfbf7f7a26d5df827b-0000000000000000-01]` as used for distributed
   tracing.
 
@@ -129,10 +129,10 @@ routes:
   unmatched: heuristic
 ```
 
-And now run Beyla with the `--config` argument:
+And now run Beyla with the `-config` argument:
 
 ```
-sudo -E beyla --config config.yml
+sudo -E beyla -config config.yml
 ```
 
 And do some HTTP request calls:

@@ -58,11 +58,11 @@ To facilitate local testing, we will also set the `BEYLA_PRINT_TRACES=true` envi
 variable. This will print the traces of your instrumented service in the standard output
 of Beyla.
 
-We are also setting the `BEYLA_SERVICE_NAME=quickstart` to properly name the service
-as reported by the traces and metrics. If we did not set it, Beyla would automatically
+We are also setting the `BEYLA_SERVICE_NAME=quickstart` to properly set the service
+name in the traces and metrics. If we did not set it, Beyla would automatically
 report the name of the process executable: `node`.
 
-Please notice that Beyla requires to run with administrative privileges.
+Notice that Beyla requires to run with administrative privileges.
 
 ```sh
 export BEYLA_SERVICE_NAME=quickstart

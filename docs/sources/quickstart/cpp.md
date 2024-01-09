@@ -60,7 +60,7 @@ To facilitate local testing, we will also set the `BEYLA_PRINT_TRACES=true` envi
 variable. This will print the traces of your instrumented service in the standard output
 of Beyla.
 
-Please notice that Beyla requires to run with administrative privileges.
+Notice that Beyla requires to run with administrative privileges.
 
 ```sh
 export OTEL_EXPORTER_OTLP_ENDPOINT=https://otlp-gateway-prod-eu-west-0.grafana.net/otlp

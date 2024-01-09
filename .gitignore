@@ -20,7 +20,7 @@ testoutput
 deployments/01-grafana-credentials.yml
 test/cmd/pingserver/server
 *.log
-.vscode/
+**/.vscode
 .idea/
 test/cmd/grpc/server/server
 test/cmd/grpc/client/client

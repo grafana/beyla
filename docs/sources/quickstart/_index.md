@@ -12,11 +12,12 @@ keywords:
 
 This section shows how to quickly instrument your applications for different programming languages.
 
+* [Quickstart: instrument a C/C++ service with Beyla]({{< relref "./cpp.md" >}})
 * [Quickstart: instrument a Go service with Beyla]({{< relref "./golang.md" >}})
+
 <!-- TODO: uncomment as long as we create new entries
 * [Quickstart: instrument a Rust service with Beyla]({{< relref "./rust.md" >}})
 * [Quickstart: instrument a Python service with Beyla]({{< relref "./python.md" >}})
-* [Quickstart: instrument a C/C++ service with Beyla]({{< relref "./c.md" >}})
 * [Quickstart: instrument a Java service with Beyla]({{< relref "./java.md" >}})
 * [Quickstart: instrument a .NET service with Beyla]({{< relref "./dotnet.md" >}})
 * [Quickstart: instrument a Ruby service with Beyla]({{< relref "./ruby.md" >}})

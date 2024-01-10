@@ -19,14 +19,16 @@ func waitForJavaTestComponents(t *testing.T, url string) {
 	waitForTestComponentsSub(t, url, "/greeting")
 }
 
-func testREDMetricsForJavaHTTPLibrary(t *testing.T, url string, comm string) {
+func testREDMetricsForJavaHTTPLibrary(t *testing.T, urls []string, comm string) {
 	path := "/greeting"
 
 	// Call 3 times the instrumented service, forcing it to:
 	// - take at least 30ms to respond
 	// - returning a 204 code
 	for i := 0; i < 4; i++ {
-		doHTTPGet(t, url+path+"?delay=30&response=204", 204)
+		for _, url := range urls {
+			doHTTPGet(t, url+path+"?delay=30&response=204", 204)
+		}
 	}
 
 	commMatch := `service_name="` + comm + `",`
@@ -60,23 +62,15 @@ func testREDMetricsForJavaHTTPLibrary(t *testing.T, url string, comm string) {
 }
 
 func testREDMetricsJavaHTTP(t *testing.T) {
-	for _, testCaseURL := range []string{
-		"http://localhost:8086",
-	} {
-		t.Run(testCaseURL, func(t *testing.T) {
-			waitForJavaTestComponents(t, testCaseURL)
-			testREDMetricsForJavaHTTPLibrary(t, testCaseURL, "greeting")
-		})
-	}
+	t.Run("http://localhost:8086", func(t *testing.T) {
+		waitForJavaTestComponents(t, "http://localhost:8086")
+		testREDMetricsForJavaHTTPLibrary(t, []string{"http://localhost:8086"}, "greeting")
+	})
 }
 
 func testREDMetricsJavaHTTPSystemWide(t *testing.T) {
-	for _, testCaseURL := range []string{
-		"http://localhost:8086",
-	} {
-		t.Run(testCaseURL, func(t *testing.T) {
-			waitForJavaTestComponents(t, testCaseURL)
-			testREDMetricsForJavaHTTPLibrary(t, testCaseURL, "") // The test is flaky, sometimes we get docker-proxy sometimes greeting
-		})
-	}
+	t.Run("http://localhost:8086", func(t *testing.T) {
+		waitForJavaTestComponents(t, "http://localhost:8086")
+		testREDMetricsForJavaHTTPLibrary(t, []string{"http://localhost:8086", "http://localhost:8087"}, "") // The test is flaky, sometimes we get docker-proxy sometimes greeting
+	})
 }

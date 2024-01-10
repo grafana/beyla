@@ -7,7 +7,6 @@ import (
 	"log/slog"
 	"net/url"
 	"os"
-	"runtime"
 	"strings"
 	"time"
 
@@ -141,8 +140,12 @@ func newTracesReporter(ctx context.Context, cfg *TracesConfig, ctxInfo *global.C
 	r.reporters = NewReporterPool[*Tracers](cfg.ReportersCacheLen,
 		func(k svc.ID, v *Tracers) {
 			llog := log.With("service", k)
-			llog.Debug("evicting metrics reporter from cache")
-			// a finalizer shuts down the tracer provider
+			llog.Debug("evicting traces reporter from cache")
+			go func() {
+				if err := v.provider.ForceFlush(v.ctx); err != nil {
+					llog.Warn("error flushing evicted traces provider", "error", err)
+				}
+			}()
 		}, r.newTracers)
 	// Instantiate the OTLP HTTP or GRPC traceExporter
 	var err error
@@ -567,16 +570,6 @@ func (r *TracesReporter) reportTraces(input <-chan []request.Span) {
 	r.close()
 }
 
-func (t *Tracers) release() error {
-	go func() {
-		if err := t.provider.Shutdown(t.ctx); err != nil {
-			tlog().Warn("error shutting down traces provider", "error", err)
-		}
-	}()
-	runtime.SetFinalizer(t, nil)
-	return nil
-}
-
 func (r *TracesReporter) newTracers(service svc.ID) (*Tracers, error) {
 	tlog().Debug("creating new Tracers reporter", "service", service)
 	tracers := Tracers{
@@ -588,7 +581,6 @@ func (r *TracesReporter) newTracers(service svc.ID) (*Tracers, error) {
 		),
 	}
 	tracers.tracer = tracers.provider.Tracer(reporterName)
-	runtime.SetFinalizer(&tracers, (*Tracers).release)
 	return &tracers, nil
 }
 

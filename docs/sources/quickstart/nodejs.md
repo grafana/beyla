@@ -1,38 +1,32 @@
 ---
-title: "Quickstart: instrument a Go service with Beyla"
-menuTitle: Go quickstart
-description: Learn how to quickly set up and run Beyla to instrument a Go service
+title: "Quickstart: instrument a Node.js service with Beyla"
+menuTitle: Node.js quickstart
+description: Learn how to quickly set up and run Beyla to instrument a Node.js service
 weight: 2
 keywords:
   - Beyla
   - eBPF
-  - Go
-  - Golang
+  - Node.js
+  - Javascript
 ---
 
-# Quickstart: instrument a Go service with Beyla
+# Quickstart: instrument a Node.js service with Beyla
 
-## 1. Run your instrumentable Go service
+## 1. Run your instrumentable Node.js service
 
-You can use any Go service of your own. For testing purposes, you can also download and run this
-[simple Go HTTP service](https://github.com/grafana/beyla/tree/main/examples/quickstart/golang).
+You can use any service of your own. For testing purposes, you can also download and run this
+[simple Node.js HTTP service](https://github.com/grafana/beyla/tree/main/examples/quickstart/nodejs).
 
 ```
-curl -OL https://raw.githubusercontent.com/grafana/beyla/main/examples/quickstart/golang/quickstart.go
-go run quickstart.go
+curl -OL https://raw.githubusercontent.com/grafana/beyla/main/examples/quickstart/nodejs/package.json
+curl -OL https://raw.githubusercontent.com/grafana/beyla/main/examples/quickstart/nodejs/quickstart.js
+npm install && npm start
 ```
 
 ## 2. Download Beyla
 
 You can download the latest Beyla executable from the [Beyla releases page](https://github.com/grafana/beyla/releases).
 Uncompress and copy the Beyla executable to any location in your `$PATH`.
-
-As an alternative (if your host has the Go toolset installed), you can directly download the
-Beyla executable with the `go install` command:
-
-```sh
-go install github.com/grafana/beyla/cmd/beyla@latest
-```
 
 ## 3. (Optional) get your Grafana Cloud credentials
 
@@ -64,9 +58,14 @@ To facilitate local testing, we will also set the `BEYLA_PRINT_TRACES=true` envi
 variable. This will print the traces of your instrumented service in the standard output
 of Beyla.
 
+We are also setting the `BEYLA_SERVICE_NAME=quickstart` to properly set the service
+name in the traces and metrics. If we did not set it, Beyla would automatically
+report the name of the process executable: `node`.
+
 Notice that Beyla requires to run with administrative privileges.
 
 ```sh
+export BEYLA_SERVICE_NAME=quickstart
 export OTEL_EXPORTER_OTLP_ENDPOINT=https://otlp-gateway-prod-eu-west-0.grafana.net/otlp
 export GRAFANA_CLOUD_INSTANCE_ID=123456
 export GRAFANA_CLOUD_API_KEY="your api key here..."
@@ -88,28 +87,27 @@ curl http://localhost:8080/foo
 In the Beyla standard output, you will see the information of the intercepted trace:
 
 ```
-2024-01-08 14:06:14.182614 (432.191µs[80.421µs]) 200 GET /foo [127.0.0.1]->[localhost:8080]
-size:0B svc=[{quickstart  go lima-ubuntu-lts-8222}] traceparent=[00-0f82735dab5798dfbf7f7a26d5df827b-0000000000000000-01]
+2024-01-09 10:31:33.19103133 (3.254486ms[3.254486ms]) 200 GET /foo [127.0.0.1]->[127.0.0.1:8080]
+size:80B svc=[{quickstart nodejs lima-ubuntu-lts-5074}] traceparent=[00-46214bd23716280eef43cf798dbe5522-0000000000000000-01]
 ```
 
 The above trace shows, in the following order:
 
-* `2024-01-08 14:06:14.182614`: time of the trace.
-* `(432.191µs[80.421µs])`: total response time for the request, with the actual internal execution
-  time of the request (not counting the request enqueuing time).
+* `2024-01-09 10:31:33.19103133`: time of the trace.
+* `(3.254486ms[3.254486ms])`: total response time for the request.
 * `200 GET /foo`: response code, HTTP method, and URL path.
-* `[127.0.0.1]->[localhost:8080]` source and destination host:port.
-* `size:0B`: size of the HTTP request body (0 bytes, as it was a `GET` request).
-  For non-go programs, this size would also include the size of the request headers.
-* `svc=[{quickstart  go lima-ubuntu-lts-8222}]`: `quickstart` service, written
-  in Go, with an automatically created service instance name `lima-ubuntu-lts-8222`.
-* `traceparent=[00-0f82735dab5798dfbf7f7a26d5df827b-0000000000000000-01]` as used for distributed
-  tracing.
+* `[127.0.0.1]->[127.0.0.1:8080]` source and destination host:port.
+* `size:80B`: size of the HTTP request (sum of the headers and the body).
+* `svc=[{quickstart nodejs lima-ubuntu-lts-5074}]`: `quickstart` service, running in
+  Node.js, with an automatically created service instance name
+  `lima-ubuntu-lts-5074`.
+* `traceparent` as received by the parent request, or a new random one if the parent request
+  didn't specify it.
 
 If your Grafana Cloud credentials were properly set, you should see the trace also
 in Grafana Cloud. For example, in the traces explorer:
 
-![](https://grafana.com/media/docs/grafana-cloud/beyla/quickstart/trace.png)
+![](https://grafana.com/media/docs/grafana-cloud/beyla/quickstart/trace-generic.png)
 
 ## 6. Configure routing
 

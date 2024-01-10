@@ -10,7 +10,6 @@ import (
 // Simple web service that just returns Ok to any path.
 // For testing, it accepts the following arguments in order to change the
 // response:
-
 const (
 	argForceReturnCode = "force_ret"
 	argForceDelay      = "force_delay"

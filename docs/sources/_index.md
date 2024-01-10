@@ -11,6 +11,8 @@ keywords:
   - Beyla
   - eBPF
   - instrumentation
+aliases:
+  - /docs/grafana-cloud/monitor-applications/beyla/
 ---
 
 # Grafana Beyla

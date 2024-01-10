@@ -7,6 +7,8 @@ keywords:
   - Beyla
   - eBPF
   - Docker
+aliases:
+  - /docs/grafana-cloud/monitor-applications/beyla/setup/docker/
 ---
 
 # Run Beyla as a Docker container

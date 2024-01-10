@@ -36,25 +36,28 @@ Beyla can export metrics and traces to any OpenTelemetry endpoint, as well as ex
 metrics as a Prometheus endpoint. However, we recommend using the OpenTelemetry
 endpoint in Grafana Cloud. You can get a [Free Grafana Cloud Account at Grafana's website](/pricing/).
 
-In your Grafana Cloud Portal, click on the "Details" button in the "OpenTelemetry" box. Next,
-copy your Grafana OTLP Endpoint and Instance ID, as in the image below.
+In your Grafana Cloud Portal, look for the "OpenTelemetry box" and push the "Configure" button.
 
-![](https://grafana.com/media/docs/grafana-cloud/beyla/tutorial/otlp-connection-details.png)
+![](https://grafana.com/media/docs/grafana-cloud/beyla/quickstart/otel-cloud-portal-box.png)
 
-Also generate a Password/API token with metrics push privileges.
+Once there, you will see a section titled "Password / API token". Click into "Generate now"
+and follow the instructions to create a default API token. Then a section named "Environment
+Variables" is populated with a set of standard OpenTelemetry environment variables which will
+provide the connection endpoint and credentials information for Beyla.
+
+![](https://grafana.com/media/docs/grafana-cloud/beyla/quickstart/otlp-connection-headers.png)
+
+You need to copy the content of the Environment Variables box and keep it for the next step.
 
 ## 4. Run Beyla with minimal configuration
 
 To run Beyla, you will require to set the following environment variables:
 
+* The `OTEL_EXPORTER_OTLP_PROTOCOL`, `OTEL_EXPORTER_OTLP_ENDPOINT` and `OTEL_EXPORTER_OTLP_HEADERS`
+  variables copied from the previous step.
 * `BEYLA_OPEN_PORT`: the port where your instrumented service is listening
   (for example, `80` or `443`). If you are using the example service in the
   first section of this guide, you need to set this variable to `8080`.
-* `OTEL_EXPORTER_OTLP_ENDPOINT`: the OpenTelemetry endpoint URL, as obtained
-  in the previous section (for example: `https://otlp-gateway-prod-eu-west-0.grafana.net/otlp`)
-* `GRAFANA_CLOUD_INSTANCE_ID`: the Grafana Cloud Username / Instance ID, as
-  obtained in the previous section.
-* `GRAFANA_CLOUD_API_KEY`: your Grafana Cloud API Key.
 
 To facilitate local testing, we will also set the `BEYLA_PRINT_TRACES=true` environment
 variable. This will print the traces of your instrumented service in the standard output
@@ -63,12 +66,11 @@ of Beyla.
 Notice that Beyla requires to run with administrative privileges.
 
 ```sh
-export OTEL_EXPORTER_OTLP_ENDPOINT=https://otlp-gateway-prod-eu-west-0.grafana.net/otlp
-export GRAFANA_CLOUD_INSTANCE_ID=123456
-export GRAFANA_CLOUD_API_KEY="your api key here..."
 export BEYLA_OPEN_PORT=8080
 export BEYLA_PRINT_TRACES=true
-
+export OTEL_EXPORTER_OTLP_PROTOCOL="http/protobuf"
+export OTEL_EXPORTER_OTLP_ENDPOINT="https://otlp-gateway-prod-eu-west-0.grafana.net/otlp"
+export OTEL_EXPORTER_OTLP_HEADERS="Authorization=Basic ...your-encoded-credentials..."
 sudo -E beyla
 ```
 

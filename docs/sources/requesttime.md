@@ -8,6 +8,8 @@ keywords:
   - eBPF
   - request timing
   - service time
+aliases:
+  - /docs/grafana-cloud/monitor-applications/beyla/requesttime/
 ---
 
 # Measuring total request times, instead of service times

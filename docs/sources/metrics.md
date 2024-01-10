@@ -7,6 +7,8 @@ keywords:
   - Beyla
   - eBPF
   - metrics
+aliases:
+  - /docs/grafana-cloud/monitor-applications/beyla/metrics/
 ---
 
 # Beyla exported metrics

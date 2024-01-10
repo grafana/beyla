@@ -10,6 +10,8 @@ keywords:
   - Grafana Cloud
   - tutorial
   - RED metrics
+aliases:
+  - /docs/grafana-cloud/monitor-applications/beyla/tutorial/
 ---
 
 ![Grafana Beyla Logo](https://grafana.com/media/docs/grafana-cloud/beyla/beyla-logo-2.png)
@@ -146,7 +148,7 @@ The output format is:
 
 ```
 Request_time (response_duration) status_code http_method path
-  source->destination request_size service_id 
+  source->destination request_size service_id
 ```
 
 Experiment with the `curl` command and make additional requests to see how it affects the trace output. For example, the following request would send a 6-bytes POST request and the service will take 200ms to respond:

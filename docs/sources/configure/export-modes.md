@@ -6,6 +6,8 @@ weight: 2
 keywords:
   - Beyla
   - eBPF
+aliases:
+  - /docs/grafana-cloud/monitor-applications/beyla/configure/export-modes/
 ---
 
 # Beyla export modes

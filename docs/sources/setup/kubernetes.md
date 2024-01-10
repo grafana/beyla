@@ -7,6 +7,8 @@ keywords:
   - Beyla
   - eBPF
   - Kubernetes
+aliases:
+  - /docs/grafana-cloud/monitor-applications/beyla/setup/kubernetes/
 ---
 
 # Deploy Beyla in Kubernetes

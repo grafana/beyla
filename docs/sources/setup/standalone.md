@@ -6,6 +6,8 @@ weight: 1
 keywords:
   - Beyla
   - eBPF
+aliases:
+  - /docs/grafana-cloud/monitor-applications/beyla/setup/standalone/
 ---
 
 ![Grafana Beyla Logo](https://grafana.com/media/docs/grafana-cloud/beyla/beyla-logo-2.png)

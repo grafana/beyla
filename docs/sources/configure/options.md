@@ -6,6 +6,8 @@ weight: 1
 keywords:
   - Beyla
   - eBPF
+aliases:
+  - /docs/grafana-cloud/monitor-applications/beyla/configure/options/
 ---
 
 # Beyla configuration options
@@ -103,7 +105,7 @@ For example, specifying the following property:
 ```
 open_port: 80,443,8000-8999
 ```
-Would make Beyla to select any executable that opens port 80, 443, or any of the ports between 8000 and 8999 included. 
+Would make Beyla to select any executable that opens port 80, 443, or any of the ports between 8000 and 8999 included.
 
 This property is used to select a single process to instrument, or a group of processes of
 similar characteristics. For more fine-grained process selection and grouping, you can
@@ -218,7 +220,7 @@ service, Beyla will take the service name attribute from the executable name. Th
 service namespace for all the processes matching this group will be `MyApplication`.
 
 The second group in the above example YAML will select any executable whose path contains
-`regexp`, but instead of taking the service name from the executable name, it will override 
+`regexp`, but instead of taking the service name from the executable name, it will override
 the service name with `TestLoadGenerator`.
 
 The rest of this section describes the properties that are accepted in each entry of the
@@ -234,7 +236,7 @@ Each `services` entry is a map where the properties can be grouped according to 
 |--------|---------|--------|-------------------|
 | `name` | --      | string | (see description) |
 
-Defines a name for the matching instrumented service. It will be used to populate the `service.name` 
+Defines a name for the matching instrumented service. It will be used to populate the `service.name`
 OTEL property and/or the `service_name` prometheus property in the exported metrics/traces.
 
 If the property is not set, it will default to any of the following properties, in order of
@@ -370,14 +372,14 @@ add a noticeable delay in the time the metrics are submitted and become external
 | `track_request_headers` | `BEYLA_BPF_TRACK_REQUEST_HEADERS` | boolean | (false) |
 
 Enables tracking of request headers for the purposes of processing any incoming 'Traceparent'
-header values. If this option is enabled, when Beyla encounters an incoming server request with 
+header values. If this option is enabled, when Beyla encounters an incoming server request with
 a 'Traceparent' header value, it will use the provided 'trace id' to create its own trace spans.
 
-This option does not have an effect on Go applications, where the 'Traceparent' field is always 
+This option does not have an effect on Go applications, where the 'Traceparent' field is always
 processed, without additional tracking of the request headers.
 
 Enabling this option may increase Beyla's performance overhead in high request volume scenarios.
-Please note that this option is only useful when generating Beyla traces, it does not affect 
+Please note that this option is only useful when generating Beyla traces, it does not affect
 generation of Beyla metrics.
 
 ## Configuration of metrics and traces attributes
@@ -515,7 +517,7 @@ property:
 /user/456/basket/3
 ```
 
-Additionally, the route matcher also supports the wildcard character `*`, which can be used to 
+Additionally, the route matcher also supports the wildcard character `*`, which can be used to
 match path prefixes. For example, if you define the following pattern:
 
 ```yaml
@@ -552,7 +554,7 @@ routes:
 
 Any event paths which have a prefix of `/v1` or are equal to `/health` will be ignored.
 
-This option is very useful if you want to prevent certain paths used development or service health monitoring, to be 
+This option is very useful if you want to prevent certain paths used development or service health monitoring, to be
 recorded as traces or metrics.
 
 | YAML          | Env var | Type   | Default    |
@@ -570,7 +572,7 @@ Possible values for the `ignore_mode` property are:
 Selectively ignoring only certain type of events might be useful in certain scenarios. For example, you may want to
 know the performance metrics of your health check API, but you wouldn't want the overhead of those trace records in
 your target traces database. In this this example scenario, you would set the `ignore_mode` property to `traces`, such
-that only traces matching the `ignored_patterns` will be discarded, while metrics will still be recorded. 
+that only traces matching the `ignored_patterns` will be discarded, while metrics will still be recorded.
 
 | YAML        | Env var | Type   | Default    |
 | ----------- | ------- | ------ | ---------- |
@@ -821,7 +823,7 @@ In addition, you can configure the sampling under the `sampler` YAML subsection 
 otel_traces_export:
   sampler:
     name: "traceidratio"
-    arg: "0.1" 
+    arg: "0.1"
 ```
 
 If you are using the Grafana Agent as your OTEL collector, you can configure the sampling

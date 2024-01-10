@@ -66,7 +66,7 @@ sudo -E beyla
 
 ## 5. Test the service
 
-With the Beyla and the service running, make HTTP requests to the instrumented service:
+With Beyla and the service running, make HTTP requests to the instrumented service:
 
 ```
 curl http://localhost:8080/foo

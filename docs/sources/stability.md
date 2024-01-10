@@ -2,7 +2,7 @@
 title: Stability Guarantees
 menuTitle: Stability Guarantees
 description: This section covers the major version stability guarantees for Beyla.
-weight: 6
+weight: 7
 keywords:
   - Beyla
   - Stability

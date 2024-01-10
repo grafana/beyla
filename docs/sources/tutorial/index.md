@@ -18,7 +18,7 @@ aliases:
 
 # Beyla quick start tutorial
 
-To reduce the time it takes to instrument an application and improve the adoption of Application Observability, Grafana built Beyla, an eBPF auto-instrumentation tool, that is able to report basic transactions span information, as well as [RED metrics](/blog/2018/08/02/the-red-method-how-to-instrument-your-services/) for Linux HTTP/S and gRPC services, without any application code or configuration changes.
+To reduce the time it takes to instrument an application and improve the adoption of Application Observability, Grafana built Beyla, an eBPF auto-instrumentation tool, that is able to report transactions span information, as well as [RED metrics](/blog/2018/08/02/the-red-method-how-to-instrument-your-services/) for Linux HTTP/S and gRPC services, without any application code or configuration changes.
 
 ## eBPF overview
 
@@ -283,7 +283,7 @@ OpenTelemetry traces]({{< relref "../configure/options.md#otel-traces-exporter" 
 but this functionality is not explained in this tutorial).
 
 Beyla has its limitations too. It only provides generic metrics and
-single spans trace information (no distributed traces, yet). Language agents and manual
+transaction level trace span information. Language agents and manual
 instrumentation is still recommended, so that you can specify the granularity of each
 part of the code to be instrumented, putting the focus on your critical operations.
 
@@ -295,7 +295,8 @@ has to be privileged.
 In the future, we plan to add metrics about other well-established protocols, like
 database or message queuing connections.
 
-Distributed tracing is also on our road-map. With distributed tracing we will be able to correlate
+Distributed tracing is currently only supported for Go services, while other programming language 
+support remains on our road-map. With distributed tracing we will be able to correlate
 requests from multiple services (web, database, messaging...). One complexity of
 distributed tracing is the injection of client-side headers and matching them to the context of
 the server-side requests. We are making progressive advances towards this goal with each

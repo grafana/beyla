@@ -106,6 +106,7 @@ type TracesReporter struct {
 // Tracers handles the OTEL traces providers and exporters.
 // There is a Tracers instance for each instrumented service/process.
 type Tracers struct {
+	ctx      context.Context
 	provider *trace.TracerProvider
 	tracer   trace2.Tracer
 }
@@ -128,10 +129,10 @@ func newTracesReporter(ctx context.Context, cfg *TracesConfig, ctxInfo *global.C
 	r.reporters = NewReporterPool[*Tracers](cfg.ReportersCacheLen,
 		func(k svc.ID, v *Tracers) {
 			llog := log.With("service", k)
-			llog.Debug("evicting metrics reporter from cache")
+			llog.Debug("evicting traces reporter from cache")
 			go func() {
-				if err := v.provider.Shutdown(ctx); err != nil {
-					log.Warn("error shutting down metrics provider", "error", err)
+				if err := v.provider.ForceFlush(v.ctx); err != nil {
+					llog.Warn("error flushing evicted traces provider", "error", err)
 				}
 			}()
 		}, r.newTracers)
@@ -476,6 +477,7 @@ func (r *TracesReporter) reportTraces(input <-chan []request.Span) {
 func (r *TracesReporter) newTracers(service svc.ID) (*Tracers, error) {
 	tlog().Debug("creating new Tracers reporter", "service", service)
 	tracers := Tracers{
+		ctx: r.ctx,
 		provider: trace.NewTracerProvider(
 			trace.WithResource(otelResource(service)),
 			trace.WithSpanProcessor(r.bsp),

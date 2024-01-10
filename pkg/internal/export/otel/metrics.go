@@ -154,8 +154,8 @@ func newMetricsReporter(ctx context.Context, cfg *MetricsConfig, ctxInfo *global
 			llog := log.With("service", id)
 			llog.Debug("evicting metrics reporter from cache")
 			go func() {
-				if err := v.provider.Shutdown(ctx); err != nil {
-					log.Warn("error shutting down metrics provider", "error", err)
+				if err := v.provider.ForceFlush(ctx); err != nil {
+					llog.Warn("error flushing evicted metrics provider", "error", err)
 				}
 			}()
 		}, mr.newMetricSet)

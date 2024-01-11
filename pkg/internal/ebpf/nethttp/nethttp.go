@@ -62,13 +62,17 @@ func (p *Tracer) BlockPID(pid uint32) {
 	p.pidsFilter.BlockPID(pid)
 }
 
+func (p *Tracer) supportsContextPropagation() bool {
+	return !ebpfcommon.IntegrityModeOverride && ebpfcommon.SupportsContextPropagation(p.log)
+}
+
 func (p *Tracer) Load() (*ebpf.CollectionSpec, error) {
 	loader := loadBpf
 	if p.cfg.BpfDebug {
 		loader = loadBpf_debug
 	}
 
-	if ebpfcommon.SupportsContextPropagation(p.log) {
+	if p.supportsContextPropagation() {
 		loader = loadBpf_tp
 		if p.cfg.BpfDebug {
 			loader = loadBpf_tp_debug
@@ -132,7 +136,7 @@ func (p *Tracer) GoProbes() map[string]ebpfcommon.FunctionPrograms {
 		},
 	}
 
-	if ebpfcommon.SupportsContextPropagation(p.log) {
+	if p.supportsContextPropagation() {
 		m["net/http.Header.writeSubset"] = ebpfcommon.FunctionPrograms{
 			Start: p.bpfObjects.UprobeWriteSubset,
 		}

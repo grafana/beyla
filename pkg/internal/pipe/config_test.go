@@ -91,7 +91,7 @@ attributes:
 			CommonEndpoint:    "localhost:3131",
 			MetricsEndpoint:   "localhost:3030",
 			Protocol:          otel.ProtocolUnset,
-			ReportersCacheLen: 16,
+			ReportersCacheLen: ReporterLRUSize,
 			Buckets: otel.Buckets{
 				DurationHistogram:    []float64{0, 1, 2},
 				RequestSizeHistogram: otel.DefaultBuckets.RequestSizeHistogram,
@@ -103,7 +103,7 @@ attributes:
 			TracesEndpoint:     "localhost:3232",
 			MaxQueueSize:       4096,
 			MaxExportBatchSize: 4096,
-			ReportersCacheLen:  16,
+			ReportersCacheLen:  ReporterLRUSize,
 		},
 		Prometheus: prom.PrometheusConfig{
 			Path: "/metrics",

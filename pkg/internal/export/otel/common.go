@@ -64,6 +64,8 @@ func otelResource(service svc.ID) *resource.Resource {
 		// so the service is visible in the ServicesList
 		// This attribute also allows that App O11y plugin shows this app as a Go application.
 		semconv.TelemetrySDKLanguageKey.String(service.SDKLanguage.String()),
+		// We set the SDK name as Beyla, so we can distinguish beyla generated metrics from other SDKs
+		semconv.TelemetrySDKNameKey.String("beyla"),
 	}
 
 	if service.Namespace != "" {

@@ -147,6 +147,7 @@ func testHTTPTracesCommon(t *testing.T, doTraceID bool, httpCode int) {
 	jaeger.Diff([]jaeger.Tag{
 		{Key: "otel.library.name", Type: "string", Value: "github.com/grafana/beyla"},
 		{Key: "telemetry.sdk.language", Type: "string", Value: "go"},
+		{Key: "telemetry.sdk.name", Type: "string", Value: "beyla"},
 		{Key: "service.namespace", Type: "string", Value: "integration-test"},
 		serviceInstance,
 	}, process.Tags)
@@ -361,6 +362,7 @@ func testHTTPTracesKProbes(t *testing.T) {
 	jaeger.Diff([]jaeger.Tag{
 		{Key: "otel.library.name", Type: "string", Value: "github.com/grafana/beyla"},
 		{Key: "telemetry.sdk.language", Type: "string", Value: "nodejs"},
+		{Key: "telemetry.sdk.name", Type: "string", Value: "beyla"},
 		{Key: "service.namespace", Type: "string", Value: "integration-test"},
 		serviceInstance,
 	}, process.Tags)

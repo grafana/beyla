@@ -111,6 +111,7 @@ func testREDMetricsForRustHTTPLibrary(t *testing.T, url, comm, namespace string,
 	sd = jaeger.Diff([]jaeger.Tag{
 		{Key: "otel.library.name", Type: "string", Value: "github.com/grafana/beyla"},
 		{Key: "telemetry.sdk.language", Type: "string", Value: "rust"},
+		{Key: "telemetry.sdk.name", Type: "string", Value: "beyla"},
 		{Key: "service.namespace", Type: "string", Value: "integration-test"},
 		serviceInstance,
 	}, process.Tags)

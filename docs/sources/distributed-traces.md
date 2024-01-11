@@ -35,9 +35,9 @@ cat /sys/kernel/security/lockdown
 
 If that file exists and the mode is anything other than `[none]`, Beyla will not be able to perform context propagation and distributed tracing will be disabled.
 
-### Configuring distributed tracing for Docker environments (including Kubernetes)
+### Configuring distributed tracing for containerized environments (including Kubernetes)
 
-Because of the Kernel lockdown mode restrictions, Docker and Kubernetes configuration files must mount the `/sys/kernel/security/` volume for the **Beyla docker container** from the host system. This way Beyla can correctly determine the Linux Kernel lockdown mode. Here's an example docker compose configuration, which ensures Beyla has sufficient information to determine the lockdown mode:
+Because of the Kernel lockdown mode restrictions, Docker and Kubernetes configuration files should mount the `/sys/kernel/security/` volume for the **Beyla docker container** from the host system. This way Beyla can correctly determine the Linux Kernel lockdown mode. Here's an example Docker compose configuration, which ensures Beyla has sufficient information to determine the lockdown mode:
 
 ```yaml
 version: '3.8'
@@ -52,6 +52,8 @@ services:
     volumes:
       - /sys/kernel/security:/sys/kernel/security
 ```
+
+If the volume is not mounted, Beyla will assume that the Linux Kernel is not running in integrity mode.
 
 ### Linux Kernel version limitations for gRPC context propagation (5.17+)
 

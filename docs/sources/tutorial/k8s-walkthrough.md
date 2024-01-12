@@ -1,11 +1,22 @@
-# Kubernetes as a first-class citizen in Beyla
+---
+title:  Beyla and Kubernetes walkthrough
+menuTitle: Beyla and Kubernetes tutorial
+description: Learn how to instrument an application export data with Prometheus to Grafana Cloud.
+weight: 3
+keywords:
+  - Beyla
+  - eBPF
+  - Kubernetes
+  - tutorial
+---
 
-With the release of Beyla v1.1, Kubernetes has been fully integrated into the
-Beyla operation mode.
+# Beyla and Kubernetes walkthrough
+
+Kubernetes is fully integrated into the Beyla operation mode.
 
 On one side, metrics and traces can be decorated
 with the metadata of the kubernetes entities running the automatically instrumented
-services. 
+services.
 
 On the other side, DaemonSet has become the preferred deployment
 mode for Beyla: thanks to the versatility of the new service selectors,
@@ -234,12 +245,12 @@ And now, deploy Beyla by creating the following Kubernetes entities:
 
 * A `ConfigMap` storing the `config.yml` Beyla configuration file, which defines
   the service discovery criteria. To verify that Beyla is able to discriminate
-  by service instance even if they run the same image and executable, 
+  by service instance even if they run the same image and executable,
   Beyla is configured to select ONLY the `docs` Apache web server.
 * A Beyla `DaemonSet` providing the Beyla pod and its configuration:
-  - Loads the `config.yml` file from the `ConfigMap`.
-  - References to the `grafana-secrets` values for the endpoint and credentials.
-  - Uses the `beyla` `ServiceAccount` to get all the permissions.
+    - Loads the `config.yml` file from the `ConfigMap`.
+    - References to the `grafana-secrets` values for the endpoint and credentials.
+    - Uses the `beyla` `ServiceAccount` to get all the permissions.
 
 Copy and deploy the following YAML file:
 
@@ -341,7 +352,7 @@ service:
 
 ![](/Users/mmacias/Desktop/tut-trace-details.png)
 
-# Links
+## Links
 
-* [Documentation: Beyla configuration options](https://grafana.com/docs/beyla/latest/configure/options/)
-* [Documentation: run Beyla as Kubernetes DaemonSet](https://grafana.com/docs/beyla/latest/setup/kubernetes/#deploying-as-a-daemonset)
+* [Documentation: Beyla configuration options]({{< relref "../configure/options.md" >}})
+* [Documentation: run Beyla as Kubernetes DaemonSet]({{< relref "../setup/kubernetes.md" >}})

@@ -56,7 +56,7 @@ Beyla offers the following features:
 * Follow the [setup]({{< relref "./setup/_index.md" >}}) documentation to get started with Beyla either as a standalone
   service, with Docker or with Kubernetes.
 
-* Follow the [Quick start tutorial]({{< relref "./tutorial/index.md" >}}) to get a complete guide to instrument an application with Beyla and data to Grafana Cloud.
+* Follow the [tutorials]({{< relref "./tutorial/_index.md" >}}) to get a complete guide to instrument an application with Beyla and data to Grafana Cloud.
 
 ## Learn more about Grafana Beyla
 

@@ -16,7 +16,7 @@ aliases:
 
 Beyla can run as a standalone Linux OS process with elevated privileges that can inspect other running processes.
 
-For a complete introduction tutorial on how to collect and visualize the instrumented data, follow the [quick start tutorial]({{< relref "../tutorial/index.md" >}}).
+For a complete introduction tutorial on how to collect and visualize the instrumented data, follow the [getting started tutorial]({{< relref "../tutorial/getting-started.md" >}}).
 
 ## Download and install
 

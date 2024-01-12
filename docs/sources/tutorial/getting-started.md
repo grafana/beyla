@@ -1,6 +1,6 @@
 ---
-title: Beyla quick start tutorial
-menuTitle: Quick start tutorial
+title: Getting started with Beyla
+menuTitle: Getting started tutorial
 description: Learn how to instrument an application export data with Prometheus to Grafana Cloud.
 weight: 3
 keywords:
@@ -14,9 +14,7 @@ aliases:
   - /docs/grafana-cloud/monitor-applications/beyla/tutorial/
 ---
 
-![Grafana Beyla Logo](https://grafana.com/media/docs/grafana-cloud/beyla/beyla-logo-2.png)
-
-# Beyla quick start tutorial
+# Getting started with Beyla
 
 To reduce the time it takes to instrument an application and improve the adoption of Application Observability, Grafana built Beyla, an eBPF auto-instrumentation tool, that is able to report transactions span information, as well as [RED metrics](/blog/2018/08/02/the-red-method-how-to-instrument-your-services/) for Linux HTTP/S and gRPC services, without any application code or configuration changes.
 

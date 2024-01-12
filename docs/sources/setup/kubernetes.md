@@ -13,6 +13,9 @@ aliases:
 
 # Deploy Beyla in Kubernetes
 
+For a step-by-step walkthrough by the basics for Beyla and Kubernetes, you can also
+follow the [Beyla and Kubernetes walkthrough tutorial]({{< relref "../tutorial/k8s-walkthrough.md" >}}).
+
 Contents:
 
 <!-- TOC -->

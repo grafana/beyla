@@ -81,7 +81,7 @@ services:
     build:
       context: ../..
       dockerfile: test/integration/components/nodejsserver/Dockerfile
-    image: hatest-testserver-node-ssl
+    image: hatest-testserver-node
     command:
       - node
       - app.js

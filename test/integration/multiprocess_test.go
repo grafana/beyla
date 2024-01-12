@@ -86,6 +86,14 @@ func TestMultiProcess(t *testing.T) {
 		assert.Empty(t, results)
 	})
 
+	t.Run("Nested traces with kprobes: node python rails", func(t *testing.T) {
+		testNestedHTTPTracesKProbes(t)
+	})
+
+	t.Run("Nested traces with kprobes: SSL node python rails", func(t *testing.T) {
+		testNestedHTTPSTracesKProbes(t)
+	})
+
 	t.Run("BPF pinning folders mounted", func(t *testing.T) {
 		// 1 beyla pinned map folder for all processes
 		testBPFPinningMounted(t)

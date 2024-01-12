@@ -1,7 +1,7 @@
 # Dockerfile that will build a container that runs python flask with gunicorn on port 8380
 FROM python:3.11.6-slim
 EXPOSE 8380
-RUN pip install flask gunicorn
+RUN pip install flask gunicorn requests
 # Alternative: RUN pip install flask uwsgi
 
 # Set the working directory to /build

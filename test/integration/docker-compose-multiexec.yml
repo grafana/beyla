@@ -58,6 +58,14 @@ services:
     ports:
       - 8381:8380
 
+  pytestserver:
+    build:
+      context: ../..
+      dockerfile: test/integration/components/pythonserver/Dockerfile_8083
+    image: hatest-testserver-python
+    ports:
+      - 8183:8083
+
   ntestserverssl:
     build:
       context: ../..
@@ -80,6 +88,16 @@ services:
     ports:
       - 3031:3030
 
+  utestserver:
+    image: ghcr.io/grafana/beyla-test/greeting-rails/0.0.1
+    ports:
+      - 3041:3040
+
+  utestserverssl:
+    image: ghcr.io/grafana/beyla-test/greeting-rails-ssl/0.0.1
+    ports:
+      - 3044:3043
+        
   autoinstrumenter:
     build:
       context: ../..
@@ -116,12 +134,12 @@ services:
         limits:
           memory: 125M
     restart: unless-stopped
-    command: [ "--config=/etc/otelcol-config/otelcol-config.yml" ]
+    command: [ "--config=/etc/otelcol-config/otelcol-config-4017.yml" ]
     volumes:
       - ./configs/:/etc/otelcol-config
     ports:
-      - "4317"          # OTLP over gRPC receiver
-      - "4318:4318"     # OTLP over HTTP receiver
+      - "4017"          # OTLP over gRPC receiver
+      - "4018:4018"     # OTLP over HTTP receiver
       - "9464"          # Prometheus exporter
       - "8888"          # metrics endpoint
     depends_on:
@@ -142,3 +160,17 @@ services:
       - ./configs/:/etc/prometheus
     ports:
       - "9090:9090"
+
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    ports:
+      - "16686:16686" # Query frontend
+      - "4317:4317"   # OTEL GRPC traces collector
+      - "4318:4318"   # OTEL HTTP traces collector
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+      - LOG_LEVEL=debug
+
+
+# curl http://localhost:16686/api/services
+# curl http://localhost:16686/api/traces?service=testserver

@@ -1,6 +1,7 @@
 from flask import Flask, request, Response
 import os
 import click
+import requests
 
 app = Flask(__name__)
 
@@ -21,6 +22,13 @@ def smoke():
 
 @app.route("/greeting")
 def ping():
+    return "PONG!"
+
+@app.route("/tracemetoo")
+def traceme():
+    response = requests.get("https://utestserverssl:3043/users", verify=False)
+    if response.status_code == 200:
+        return response.json()
     return "PONG!"
 
 @app.route("/users", methods=['POST'])

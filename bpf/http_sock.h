@@ -162,8 +162,7 @@ static __always_inline void finish_http(http_info_t *info) {
             bpf_ringbuf_submit(trace, get_flags());
         }
 
-        bpf_map_delete_elem(&ongoing_http, &info->conn_info);
-        // bpf_map_delete_elem(&filtered_connections, &info->conn_info); // don't clean this up, doesn't work with keepalive
+        bpf_map_delete_elem(&ongoing_http, &info->conn_info);        
     }        
 }
 
@@ -205,8 +204,8 @@ static __always_inline void process_http_response(http_info_t *info, unsigned ch
     info->status += (buf[RESPONSE_STATUS_POS + 2] - '0');
 }
 
-static __always_inline void handle_http_response(unsigned char *small_buf, connection_info_t *conn, http_info_t *info, int orig_len) {
-    http_connection_metadata_t *meta = bpf_map_lookup_elem(&filtered_connections, conn);
+static __always_inline void handle_http_response(unsigned char *small_buf, pid_connection_info_t *pid_conn, http_info_t *info, int orig_len) {
+    http_connection_metadata_t *meta = bpf_map_lookup_elem(&filtered_connections, pid_conn);
     http_connection_metadata_t dummy_meta = {
         .type = EVENT_HTTP_REQUEST
     };
@@ -216,7 +215,7 @@ static __always_inline void handle_http_response(unsigned char *small_buf, conne
         meta = &dummy_meta;
     }
 
-    tp_info_t *tp = trace_info_for_connection(conn);
+    tp_info_t *tp = trace_info_for_connection(&pid_conn->conn);
     if (tp) {
         info->tp = *tp;
         if (meta->type == EVENT_HTTP_CLIENT && !valid_span(tp->parent_id)) {
@@ -265,7 +264,7 @@ static __always_inline void send_http_trace_buf(void *u_buf, int size, connectio
     }
 }
 
-static __always_inline void handle_buf_with_connection(connection_info_t *conn, void *u_buf, int bytes_len, u8 ssl) {
+static __always_inline void handle_buf_with_connection(pid_connection_info_t *pid_conn, void *u_buf, int bytes_len, u8 ssl) {
     unsigned char small_buf[MIN_HTTP_SIZE] = {0};
     bpf_probe_read(small_buf, MIN_HTTP_SIZE, u_buf);
 
@@ -278,7 +277,7 @@ static __always_inline void handle_buf_with_connection(connection_info_t *conn, 
             bpf_dbg_printk("Error allocating http info from per CPU map");
             return;
         }
-        in->conn_info = *conn;
+        in->conn_info = pid_conn->conn;
         in->ssl = ssl;
 
         http_info_t *info = get_or_set_http_info(in, packet_type);
@@ -289,15 +288,15 @@ static __always_inline void handle_buf_with_connection(connection_info_t *conn, 
         bpf_dbg_printk("=== http_buffer_event len=%d pid=%d still_reading=%d ===", bytes_len, pid_from_pid_tgid(bpf_get_current_pid_tgid()), still_reading(info));
 
         if (packet_type == PACKET_TYPE_REQUEST && (info->status == 0)) {    
-            http_connection_metadata_t *meta = bpf_map_lookup_elem(&filtered_connections, conn);
-            get_or_create_trace_info(meta, conn, u_buf, bytes_len, capture_header_buffer);
+            http_connection_metadata_t *meta = bpf_map_lookup_elem(&filtered_connections, pid_conn);
+            get_or_create_trace_info(meta, &pid_conn->conn, u_buf, bytes_len, capture_header_buffer);
             
             // we copy some small part of the buffer to the info trace event, so that we can process an event even with
             // incomplete trace info in user space.
             bpf_probe_read(info->buf, FULL_BUF_SIZE, u_buf);
             process_http_request(info, bytes_len);
         } else if (packet_type == PACKET_TYPE_RESPONSE) {
-            handle_http_response(small_buf, conn, info, bytes_len);
+            handle_http_response(small_buf, pid_conn, info, bytes_len);
         } else if (still_reading(info)) {
             info->len += bytes_len;
         }       

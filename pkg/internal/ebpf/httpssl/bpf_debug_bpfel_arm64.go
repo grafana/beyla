@@ -56,6 +56,11 @@ type bpf_debugHttpInfoT struct {
 	Tp bpf_debugTpInfoT
 }
 
+type bpf_debugPidConnectionInfoT struct {
+	Conn bpf_debugConnectionInfoT
+	Pid  uint32
+}
+
 type bpf_debugPidKeyT struct {
 	Pid       uint32
 	Namespace uint32
@@ -71,7 +76,7 @@ type bpf_debugTpInfoT struct {
 	TraceId  [16]uint8
 	SpanId   [8]uint8
 	ParentId [8]uint8
-	Epoch    uint64
+	Ts       uint64
 	Flags    uint8
 	_        [7]byte
 }

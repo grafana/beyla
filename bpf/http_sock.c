@@ -80,11 +80,12 @@ int BPF_KPROBE(kprobe_tcp_rcv_established, struct sock *sk, struct sk_buff *skb)
         return 0;
     }
 
-    connection_info_t info = {};
+    pid_connection_info_t info = {};
 
-    if (parse_sock_info(sk, &info)) {
-        sort_connection_info(&info);
-        //dbg_print_http_connection_info(&info);
+    if (parse_sock_info(sk, &info.conn)) {
+        sort_connection_info(&info.conn);
+        info.pid = pid_from_pid_tgid(id);        
+        //dbg_print_http_connection_info(&info.conn);
 
         http_connection_metadata_t meta = {};
         task_pid(&meta.pid);
@@ -127,11 +128,12 @@ int BPF_KRETPROBE(kretprobe_sys_accept4, uint fd)
 
     bpf_dbg_printk("=== accept 4 ret id=%d, sock=%llx, fd=%d ===", id, args->addr, fd);
 
-    connection_info_t info = {};
+    pid_connection_info_t info = {};
 
-    if (parse_accept_socket_info(args, &info)) {
-        sort_connection_info(&info);
-        //dbg_print_http_connection_info(&info);
+    if (parse_accept_socket_info(args, &info.conn)) {
+        sort_connection_info(&info.conn);
+        //dbg_print_http_connection_info(&info.conn);
+        info.pid = pid_from_pid_tgid(id);
 
         http_connection_metadata_t meta = {};
         task_pid(&meta.pid);
@@ -193,12 +195,13 @@ int BPF_KRETPROBE(kretprobe_sys_connect, int fd)
         goto cleanup;
     }
 
-    connection_info_t info = {};
+    pid_connection_info_t info = {};
 
-    if (parse_connect_sock_info(args, &info)) {
+    if (parse_connect_sock_info(args, &info.conn)) {
         bpf_dbg_printk("=== connect ret id=%d, pid=%d ===", id, pid_from_pid_tgid(id));
-        sort_connection_info(&info);
-        //dbg_print_http_connection_info(&info);
+        sort_connection_info(&info.conn);
+        //dbg_print_http_connection_info(&info.conn);
+        info.pid = pid_from_pid_tgid(id);
 
         http_connection_metadata_t meta = {};
         task_pid(&meta.pid);
@@ -223,11 +226,12 @@ int BPF_KPROBE(kprobe_tcp_sendmsg, struct sock *sk, struct msghdr *msg, size_t s
 
     bpf_dbg_printk("=== kprobe tcp_sendmsg=%d sock=%llx size %d===", id, sk, size);
 
-    connection_info_t info = {};
+    pid_connection_info_t info = {};
 
-    if (parse_sock_info(sk, &info)) {
+    if (parse_sock_info(sk, &info.conn)) {
         //dbg_print_http_connection_info(&info); // commented out since GitHub CI doesn't like this call
-        sort_connection_info(&info);
+        sort_connection_info(&info.conn);
+        info.pid = pid_from_pid_tgid(id);
 
         if (size > 0) {
             void *iovec_ptr = find_msghdr_buf(msg);
@@ -296,11 +300,12 @@ int BPF_KRETPROBE(kretprobe_tcp_recvmsg, int copied_len) {
         bpf_dbg_printk("iovec_ptr found in kprobe is NULL, ignoring this tcp_recvmsg");
     }
 
-    connection_info_t info = {};
+    pid_connection_info_t info = {};
 
-    if (parse_sock_info((struct sock *)args->sock_ptr, &info)) {
-        sort_connection_info(&info);
-        //dbg_print_http_connection_info(&info);
+    if (parse_sock_info((struct sock *)args->sock_ptr, &info.conn)) {
+        sort_connection_info(&info.conn);
+        //dbg_print_http_connection_info(&info.conn);
+        info.pid = pid_from_pid_tgid(id);
         handle_buf_with_connection(&info, (void *)args->iovec_ptr, copied_len, 0);
     }
 

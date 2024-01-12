@@ -56,6 +56,11 @@ type bpf_tpHttpInfoT struct {
 	Tp bpf_tpTpInfoT
 }
 
+type bpf_tpPidConnectionInfoT struct {
+	Conn bpf_tpConnectionInfoT
+	Pid  uint32
+}
+
 type bpf_tpPidKeyT struct {
 	Pid       uint32
 	Namespace uint32
@@ -71,7 +76,7 @@ type bpf_tpTpInfoT struct {
 	TraceId  [16]uint8
 	SpanId   [8]uint8
 	ParentId [8]uint8
-	Epoch    uint64
+	Ts       uint64
 	Flags    uint8
 	_        [7]byte
 }

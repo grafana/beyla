@@ -2,7 +2,7 @@
 title: Measuring total request times, instead of service times
 menuTitle: Measuring total request times
 description: Measure request time instead of service time, for your server-side application code.
-weight: 5
+weight: 6
 keywords:
   - Beyla
   - eBPF

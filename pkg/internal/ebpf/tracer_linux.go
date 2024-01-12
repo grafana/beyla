@@ -12,6 +12,7 @@ import (
 
 	"github.com/cilium/ebpf"
 
+	common "github.com/grafana/beyla/pkg/internal/ebpf/common"
 	"github.com/grafana/beyla/pkg/internal/request"
 )
 
@@ -49,6 +50,18 @@ func (pt *ProcessTracer) Run(ctx context.Context, out chan<- []request.Span) {
 	}()
 }
 
+func (pt *ProcessTracer) loadSpec(p Tracer) (*ebpf.CollectionSpec, error) {
+	spec, err := p.Load()
+	if err != nil {
+		return nil, fmt.Errorf("loading eBPF program: %w", err)
+	}
+	if err := spec.RewriteConstants(p.Constants(pt.ELFInfo, pt.Goffsets)); err != nil {
+		return nil, fmt.Errorf("rewriting BPF constants definition: %w", err)
+	}
+
+	return spec, nil
+}
+
 // tracers returns Tracer implementer for each discovered eBPF traceable source: GRPC, HTTP...
 func (pt *ProcessTracer) tracers() ([]Tracer, error) {
 	loadMux.Lock()
@@ -61,19 +74,32 @@ func (pt *ProcessTracer) tracers() ([]Tracer, error) {
 	for _, p := range pt.Programs {
 		plog := log.With("program", reflect.TypeOf(p))
 		plog.Debug("loading eBPF program", "PinPath", pt.PinPath, "pid", pt.ELFInfo.Pid, "cmd", pt.ELFInfo.CmdExePath)
-		spec, err := p.Load()
+		spec, err := pt.loadSpec(p)
 		if err != nil {
-			return nil, fmt.Errorf("loading eBPF program: %w", err)
-		}
-		if err := spec.RewriteConstants(p.Constants(pt.ELFInfo, pt.Goffsets)); err != nil {
-			return nil, fmt.Errorf("rewriting BPF constants definition: %w", err)
+			return nil, err
 		}
 		if err := spec.LoadAndAssign(p.BpfObjects(), &ebpf.CollectionOptions{
 			Maps: ebpf.MapOptions{
 				PinPath: pt.PinPath,
 			}}); err != nil {
-			printVerifierErrorInfo(err)
-			return nil, fmt.Errorf("loading and assigning BPF objects: %w", err)
+			if strings.Contains(err.Error(), "unknown func bpf_probe_write_user") {
+				plog.Warn("Failed to enable distributed tracing context-propagation on a Linux Kernel without write memory support. " +
+					"To avoid seeing this message, please ensure you have correctly mounted /sys/kernel/security. " +
+					"For more details set BEYLA_LOG_LEVEL=DEBUG.")
+
+				common.IntegrityModeOverride = true
+				spec, err = pt.loadSpec(p)
+				if err == nil {
+					err = spec.LoadAndAssign(p.BpfObjects(), &ebpf.CollectionOptions{
+						Maps: ebpf.MapOptions{
+							PinPath: pt.PinPath,
+						}})
+				}
+			}
+			if err != nil {
+				printVerifierErrorInfo(err)
+				return nil, fmt.Errorf("loading and assigning BPF objects: %w", err)
+			}
 		}
 		i := instrumenter{
 			exe:     pt.Exe,

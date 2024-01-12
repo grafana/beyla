@@ -26,6 +26,8 @@ type SQLRequestTrace bpfSqlRequestTrace
 
 const EventTypeSQL = 5 // EVENT_SQL_CLIENT
 
+var IntegrityModeOverride = false
+
 // TracerConfig configuration for eBPF programs
 type TracerConfig struct {
 	BpfDebug bool `yaml:"bfp_debug" env:"BEYLA_BPF_DEBUG"`

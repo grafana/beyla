@@ -39,7 +39,8 @@ First, download and unpack the latest release from the [GitHub releases page](ht
 The release should contain the `./beyla` executable.
 
 Beyla supports multiple ways to find the service to be instrumented (by network port, executable name, process ID),
-and multiple exposition formats (Prometheus, OpenTelemetry metrics, Single Span traces).
+and multiple exposition formats (Prometheus, OpenTelemetry metrics, Distributed Traces for Go, Single Span traces for 
+other languages).
 
 For getting started, we'll tell Beyla to instrument the service running on port 8080 (our example service) and expose metrics in Prometheus format on port 9400.
 

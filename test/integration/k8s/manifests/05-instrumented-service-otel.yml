@@ -83,7 +83,7 @@ spec:
             - mountPath: /testoutput
               name: testoutput
           env:
-            - name: BEYLA_CONFIG
+            - name: BEYLA_CONFIG_PATH
               value: "/configs/instrumenter-config.yml"
             - name: GOCOVERDIR
               value: "/testoutput"

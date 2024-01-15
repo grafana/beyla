@@ -307,7 +307,7 @@ spec:
             - mountPath: /config
               name: beyla-config
           env:
-            - name: BEYLA_CONFIG
+            - name: BEYLA_CONFIG_PATH
               value: "/config/beyla-config.yml"
             - name: OTEL_EXPORTER_OTLP_ENDPOINT
               valueFrom:

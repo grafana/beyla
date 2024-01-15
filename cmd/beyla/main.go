@@ -32,7 +32,7 @@ func main() {
 	configPath := flag.String("config", "", "path to the configuration file")
 	flag.Parse()
 
-	if cfg := os.Getenv("BEYLA_CONFIG"); cfg != "" {
+	if cfg := os.Getenv("BEYLA_CONFIG_PATH"); cfg != "" {
 		configPath = &cfg
 	}
 

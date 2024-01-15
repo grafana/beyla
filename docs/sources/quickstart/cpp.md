@@ -48,10 +48,10 @@ Copy the **Environment Variables** and keep it for the next step.
 
 To run Beyla, first set the following environment variables:
 
-* The `OTEL_EXPORTER_OTLP_PROTOCOL`, `OTEL_EXPORTER_OTLP_ENDPOINT` and `OTEL_EXPORTER_OTLP_HEADERS` variables copied from the previous step.
-* `BEYLA_OPEN_PORT`: the port the instrumented service is using (for example, `80` or `443`). If using the example service in the first section of this guide, set this variable to `8080`.
+- The `OTEL_EXPORTER_OTLP_PROTOCOL`, `OTEL_EXPORTER_OTLP_ENDPOINT` and `OTEL_EXPORTER_OTLP_HEADERS` variables copied from the previous step.
+- `BEYLA_OPEN_PORT`: the port the instrumented service is using (for example, `80` or `443`). If using the example service in the first section of this guide, set this variable to `8080`.
 
-To facilitate local testing, set the `BEYLA_PRINT_TRACES=true` environment variable. This will cause Beyla to print traces  to standard output.
+To facilitate local testing, set the `BEYLA_PRINT_TRACES=true` environment variable. This will cause Beyla to print traces to standard output.
 
 Notice: Beyla requires administrative (sudo) privileges, or at least it needs to be granted the `CAP_SYS_ADMIN` capability.
 
@@ -98,7 +98,7 @@ After a few minutes traces will appear in Grafana Cloud. For example, in the tra
 The exposed span name in Grafana Cloud is a generic `GET /**`, where it should say something like `GET /foo` (the path of the
 test request URL).
 
-Beyla groups any unknown URL path as `/**` to avoid unexpected cardinality explosions. 
+Beyla groups any unknown URL path as `/**` to avoid unexpected cardinality explosions.
 
 Configure routing to tell Beyla about expected routes.
 

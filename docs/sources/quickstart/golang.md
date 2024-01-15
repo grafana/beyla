@@ -53,11 +53,11 @@ Copy the **Environment Variables** and keep it for the next step.
 
 To run Beyla, first set the following environment variables:
 
-* The `OTEL_EXPORTER_OTLP_PROTOCOL`, `OTEL_EXPORTER_OTLP_ENDPOINT` and `OTEL_EXPORTER_OTLP_HEADERS`
+- The `OTEL_EXPORTER_OTLP_PROTOCOL`, `OTEL_EXPORTER_OTLP_ENDPOINT` and `OTEL_EXPORTER_OTLP_HEADERS`
   variables copied from the previous step.
-* `BEYLA_OPEN_PORT`: the port the instrumented service is using
+- `BEYLA_OPEN_PORT`: the port the instrumented service is using
   (for example, `80` or `443`). If using the example service in the
-  first section of this guide,  set this variable to `8080`.
+  first section of this guide, set this variable to `8080`.
 
 To facilitate local testing, set the `BEYLA_PRINT_TRACES=true` environment variable. This will cause Beyla to print traces to standard output.
 
@@ -89,16 +89,16 @@ size:0B svc=[{quickstart  go lima-ubuntu-lts-8222}] traceparent=[00-0f82735dab57
 
 The above trace shows:
 
-* `2024-01-08 14:06:14.182614`: time of the trace
-* `(432.191µs[80.421µs])`: total response time for the request, with the actual internal execution
+- `2024-01-08 14:06:14.182614`: time of the trace
+- `(432.191µs[80.421µs])`: total response time for the request, with the actual internal execution
   time of the request (not counting the request enqueuing time)
-* `200 GET /foo`: response code, HTTP method, and URL path
-* `[127.0.0.1]->[localhost:8080]` source and destination host:port
-* `size:0B`: size of the HTTP request body (0 bytes, as it was a `GET` request).
+- `200 GET /foo`: response code, HTTP method, and URL path
+- `[127.0.0.1]->[localhost:8080]` source and destination host:port
+- `size:0B`: size of the HTTP request body (0 bytes, as it was a `GET` request).
   For non-go programs, this size would also include the size of the request headers
-* `svc=[{quickstart  go lima-ubuntu-lts-8222}]`: `quickstart` service, written
+- `svc=[{quickstart  go lima-ubuntu-lts-8222}]`: `quickstart` service, written
   in Go, with an automatically created service instance name `lima-ubuntu-lts-8222`
-* `traceparent` as received by the parent request, or a new random one if the parent request didn't specify it
+- `traceparent` as received by the parent request, or a new random one if the parent request didn't specify it
 
 After a few minutes traces will appear in Grafana Cloud. For example, in the traces explorer:
 
@@ -109,7 +109,7 @@ After a few minutes traces will appear in Grafana Cloud. For example, in the tra
 The exposed span name in Grafana Cloud is a generic `GET /**`, where it should say something like `GET /foo` (the path of the
 test request URL).
 
-Beyla groups any unknown URL path as `/**` to avoid unexpected cardinality explosions. 
+Beyla groups any unknown URL path as `/**` to avoid unexpected cardinality explosions.
 
 Configure routing to tell Beyla about expected routes.
 

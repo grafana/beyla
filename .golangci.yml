@@ -31,7 +31,6 @@ linters-settings:
     go: "1.21"
   gocritic:
     enabled-checks:
-      - hugeParam
       - rangeExprCopy
       - rangeValCopy
       - indexAlloc

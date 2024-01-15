@@ -35,6 +35,7 @@ func TestTracesDecoration(t *testing.T) {
 		Assess("all the traces are properly decorated",
 			func(ctx context.Context, t *testing.T, config *envconf.Config) context.Context {
 				var trace jaeger.Trace
+				var parent jaeger.Span
 				test.Eventually(t, testTimeout, func(t require.TestingT) {
 					resp, err := http.Get(jaegerQueryURL + "?service=testserver&operation=GET%20%2Ftraced-ping")
 					require.NoError(t, err)
@@ -46,28 +47,25 @@ func TestTracesDecoration(t *testing.T) {
 					require.NoError(t, json.NewDecoder(resp.Body).Decode(&tq))
 					traces := tq.FindBySpan(jaeger.Tag{Key: "url.path", Type: "string", Value: "/traced-ping"})
 					require.NotEmpty(t, traces)
+
+					// Check the K8s metadata information of the parent span's process
 					trace = traces[0]
+					res := trace.FindByOperationName("GET /traced-ping")
+					require.Len(t, res, 1)
+					parent = res[0]
+
 					require.NotEmpty(t, trace.Spans)
-					sd := trace.Spans[0].DiffAsRegexp(jaeger.Tag{
-						Key: "k8s.pod.name", Type: "string", Value: "^testserver-.*",
-					})
+					sd := jaeger.DiffAsRegexp([]jaeger.Tag{
+						{Key: "k8s.pod.name", Type: "string", Value: "^testserver-.*"},
+						{Key: "k8s.node.name", Type: "string", Value: ".+-control-plane$"},
+						{Key: "k8s.pod.uid", Type: "string", Value: k8s.UUIDRegex},
+						{Key: "k8s.pod.start_time", Type: "string", Value: k8s.TimeRegex},
+						{Key: "k8s.namespace.name", Type: "string", Value: "^default$"},
+						{Key: "k8s.deployment.name", Type: "string", Value: "^testserver$"},
+					}, trace.Processes[parent.ProcessID].Tags)
 					require.Empty(t, sd, sd.String())
 				}, test.Interval(100*time.Millisecond))
 
-				// Check that the parent Span has the required metadata
-				span := trace.Spans[0]
-				if p, ok := trace.ParentOf(&span); ok {
-					span = p
-				}
-				sd := span.DiffAsRegexp(
-					jaeger.Tag{Key: "k8s.pod.name", Type: "string", Value: "^testserver-.*"},
-					jaeger.Tag{Key: "k8s.node.name", Type: "string", Value: ".+-control-plane$"},
-					jaeger.Tag{Key: "k8s.pod.uid", Type: "string", Value: k8s.UUIDRegex},
-					jaeger.Tag{Key: "k8s.pod.start_time", Type: "string", Value: k8s.TimeRegex},
-					jaeger.Tag{Key: "k8s.namespace.name", Type: "string", Value: "^default$"},
-					jaeger.Tag{Key: "k8s.deployment.name", Type: "string", Value: "^testserver$"},
-				)
-				require.Empty(t, sd, sd.String())
 				return ctx
 			},
 		).Feature()

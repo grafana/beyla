@@ -312,12 +312,12 @@ func appendK8sLabelNames(names []string) []string {
 func appendK8sLabelValues(values []string, span *request.Span) []string {
 	// must follow the order in appendK8sLabelNames
 	values = append(values,
-		span.Metadata[transform.NamespaceName],
-		span.Metadata[transform.DeploymentName],
-		span.Metadata[transform.PodName],
-		span.Metadata[transform.NodeName],
-		span.Metadata[transform.PodUID],
-		span.Metadata[transform.PodStartTime],
+		span.ServiceID.Metadata[transform.NamespaceName],
+		span.ServiceID.Metadata[transform.DeploymentName],
+		span.ServiceID.Metadata[transform.PodName],
+		span.ServiceID.Metadata[transform.NodeName],
+		span.ServiceID.Metadata[transform.PodUID],
+		span.ServiceID.Metadata[transform.PodStartTime],
 	)
 	return values
 }

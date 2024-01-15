@@ -63,7 +63,7 @@ func TestDecoration(t *testing.T) {
 			"k8s.pod.uid":         "uid-12",
 			"k8s.deployment.name": "deployment-12",
 			"k8s.pod.start_time":  "2020-01-02 12:12:56",
-		}, deco[0].Metadata)
+		}, deco[0].ServiceID.Metadata)
 	})
 	t.Run("pod info without deployment should set replicaset as name", func(t *testing.T) {
 		inputCh <- []request.Span{{
@@ -79,7 +79,7 @@ func TestDecoration(t *testing.T) {
 			"k8s.pod.name":       "pod-34",
 			"k8s.pod.uid":        "uid-34",
 			"k8s.pod.start_time": "2020-01-02 12:34:56",
-		}, deco[0].Metadata)
+		}, deco[0].ServiceID.Metadata)
 	})
 	t.Run("pod info with only pod name should set pod name as name", func(t *testing.T) {
 		inputCh <- []request.Span{{
@@ -95,7 +95,7 @@ func TestDecoration(t *testing.T) {
 			"k8s.pod.name":       "the-pod",
 			"k8s.pod.uid":        "uid-56",
 			"k8s.pod.start_time": "2020-01-02 12:56:56",
-		}, deco[0].Metadata)
+		}, deco[0].ServiceID.Metadata)
 	})
 	t.Run("process without pod Info won't be decorated", func(t *testing.T) {
 		inputCh <- []request.Span{{
@@ -105,7 +105,7 @@ func TestDecoration(t *testing.T) {
 		require.Len(t, deco, 1)
 		assert.Empty(t, deco[0].ServiceID.Namespace)
 		assert.Equal(t, "exec", deco[0].ServiceID.Name)
-		assert.Empty(t, deco[0].Metadata)
+		assert.Empty(t, deco[0].ServiceID.Metadata)
 	})
 	t.Run("if service name or namespace are manually specified, don't override them", func(t *testing.T) {
 		inputCh <- []request.Span{{
@@ -122,7 +122,7 @@ func TestDecoration(t *testing.T) {
 			"k8s.pod.uid":         "uid-12",
 			"k8s.deployment.name": "deployment-12",
 			"k8s.pod.start_time":  "2020-01-02 12:12:56",
-		}, deco[0].Metadata)
+		}, deco[0].ServiceID.Metadata)
 	})
 }
 

@@ -70,7 +70,7 @@ func TestBasicTracing(t *testing.T) {
 						{Key: "k8s.pod.start_time", Type: "string", Value: k8s.TimeRegex},
 						{Key: "k8s.deployment.name", Type: "string", Value: "^otherinstance"},
 						{Key: "k8s.namespace.name", Type: "string", Value: "^default$"},
-					}, parent.Tags)
+					}, trace.Processes[parent.ProcessID].Tags)
 					require.Empty(t, sd)
 
 				}, test.Interval(100*time.Millisecond))

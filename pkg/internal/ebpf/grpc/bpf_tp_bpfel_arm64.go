@@ -24,6 +24,7 @@ type bpf_tpGrpcClientFuncInvocationT struct {
 	Method          uint64
 	MethodLen       uint64
 	Tp              bpf_tpTpInfoT
+	_               [7]byte
 	Flags           uint64
 }
 
@@ -31,6 +32,7 @@ type bpf_tpGrpcSrvFuncInvocationT struct {
 	StartMonotimeNs uint64
 	Stream          uint64
 	Tp              bpf_tpTpInfoT
+	_               [7]byte
 }
 
 type bpf_tpPidKeyT struct {
@@ -42,9 +44,7 @@ type bpf_tpTpInfoT struct {
 	TraceId  [16]uint8
 	SpanId   [8]uint8
 	ParentId [8]uint8
-	Ts       uint64
 	Flags    uint8
-	_        [7]byte
 }
 
 // loadBpf_tp returns the embedded CollectionSpec for bpf_tp.

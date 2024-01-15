@@ -22,6 +22,7 @@ type bpf_tp_debugHttpFuncInvocationT struct {
 	StartMonotimeNs uint64
 	ReqPtr          uint64
 	Tp              bpf_tp_debugTpInfoT
+	_               [7]byte
 }
 
 type bpf_tp_debugPidKeyT struct {
@@ -33,9 +34,7 @@ type bpf_tp_debugTpInfoT struct {
 	TraceId  [16]uint8
 	SpanId   [8]uint8
 	ParentId [8]uint8
-	Ts       uint64
 	Flags    uint8
-	_        [7]byte
 }
 
 // loadBpf_tp_debug returns the embedded CollectionSpec for bpf_tp_debug.

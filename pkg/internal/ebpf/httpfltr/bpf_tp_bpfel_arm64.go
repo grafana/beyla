@@ -53,7 +53,13 @@ type bpf_tpHttpInfoT struct {
 		UserPid   uint32
 		Namespace uint32
 	}
-	Tp bpf_tpTpInfoT
+	Tp struct {
+		TraceId  [16]uint8
+		SpanId   [8]uint8
+		ParentId [8]uint8
+		Flags    uint8
+	}
+	_ [7]byte
 }
 
 type bpf_tpPidConnectionInfoT struct {
@@ -82,13 +88,17 @@ type bpf_tpSslArgsT struct {
 	LenPtr uint64
 }
 
-type bpf_tpTpInfoT struct {
-	TraceId  [16]uint8
-	SpanId   [8]uint8
-	ParentId [8]uint8
-	Ts       uint64
-	Flags    uint8
-	_        [7]byte
+type bpf_tpTpInfoPidT struct {
+	Tp struct {
+		TraceId  [16]uint8
+		SpanId   [8]uint8
+		ParentId [8]uint8
+		Flags    uint8
+	}
+	_   [7]byte
+	Ts  uint64
+	Pid uint32
+	_   [4]byte
 }
 
 // loadBpf_tp returns the embedded CollectionSpec for bpf_tp.

@@ -72,13 +72,17 @@ func otelResource(service svc.ID) *resource.Resource {
 		attrs = append(attrs, semconv.ServiceNamespace(service.Namespace))
 	}
 
+	for k, v := range service.Metadata {
+		attrs = append(attrs, attribute.String(k, v))
+	}
+
 	return resource.NewWithAttributes(semconv.SchemaURL, attrs...)
 }
 
 // ReporterPool keeps an LRU cache of different OTEL reporters given a service name.
 // TODO: evict reporters after a time without being accessed
 type ReporterPool[T any] struct {
-	pool *simplelru.LRU[svc.ID, T]
+	pool *simplelru.LRU[svc.UID, T]
 
 	itemConstructor func(svc.ID) (T, error)
 }
@@ -89,17 +93,17 @@ type ReporterPool[T any] struct {
 // instantiate the generic OTEL metrics/traces reporter.
 func NewReporterPool[T any](
 	cacheLen int,
-	callback simplelru.EvictCallback[svc.ID, T],
+	callback simplelru.EvictCallback[svc.UID, T],
 	itemConstructor func(id svc.ID) (T, error),
 ) ReporterPool[T] {
-	pool, _ := simplelru.NewLRU[svc.ID, T](cacheLen, callback)
+	pool, _ := simplelru.NewLRU[svc.UID, T](cacheLen, callback)
 	return ReporterPool[T]{pool: pool, itemConstructor: itemConstructor}
 }
 
 // For retrieves the associated item for the given service name, or
 // creates a new one if it does not exist
 func (rp *ReporterPool[T]) For(service svc.ID) (T, error) {
-	if m, ok := rp.pool.Get(service); ok {
+	if m, ok := rp.pool.Get(service.UID); ok {
 		return m, nil
 	}
 	m, err := rp.itemConstructor(service)
@@ -107,7 +111,7 @@ func (rp *ReporterPool[T]) For(service svc.ID) (T, error) {
 		var t T
 		return t, fmt.Errorf("creating resource for service %q: %w", &service, err)
 	}
-	rp.pool.Add(service, m)
+	rp.pool.Add(service.UID, m)
 	return m, nil
 }
 

@@ -63,8 +63,7 @@ type Span struct {
 	RequestStart  int64
 	Start         int64
 	End           int64
-	ServiceID     svc.ID
-	Metadata      map[string]string
+	ServiceID     svc.ID // TODO: rename to Service or ResourceAttrs
 	TraceID       trace2.TraceID
 	SpanID        trace2.SpanID
 	ParentSpanID  trace2.SpanID

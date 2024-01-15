@@ -9,6 +9,7 @@ import (
 	"github.com/mariomac/pipes/pkg/node"
 
 	"github.com/grafana/beyla/pkg/internal/request"
+	"github.com/grafana/beyla/pkg/internal/svc"
 	"github.com/grafana/beyla/pkg/internal/traces/hostname"
 )
 
@@ -76,14 +77,18 @@ func ReadFromChannel(ctx context.Context, r ReadDecorator) (node.StartFunc[[]req
 }
 
 func getDecorator(cfg *InstanceIDConfig) decorator {
-	if cfg.OverrideInstanceID != "" {
-		return func(spans []request.Span) {
-			for i := range spans {
-				spans[i].ServiceID.Instance = cfg.OverrideInstanceID
-			}
+	hnPidDecorator := hostNamePIDDecorator(cfg)
+	if cfg.OverrideInstanceID == "" {
+		return hnPidDecorator
+	}
+	return func(spans []request.Span) {
+		// first decorate normally
+		hnPidDecorator(spans)
+		// later, override instance IDs
+		for i := range spans {
+			spans[i].ServiceID.Instance = cfg.OverrideInstanceID
 		}
 	}
-	return hostNamePIDDecorator(cfg)
 }
 
 func hostNamePIDDecorator(cfg *InstanceIDConfig) decorator {
@@ -114,6 +119,7 @@ func hostNamePIDDecorator(cfg *InstanceIDConfig) decorator {
 				idsCache.Add(spans[i].Pid.HostPID, instanceID)
 			}
 			spans[i].ServiceID.Instance = instanceID
+			spans[i].ServiceID.UID = svc.UID(instanceID)
 		}
 	}
 }

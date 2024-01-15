@@ -38,9 +38,18 @@ func (it InstrumentableType) String() string {
 	}
 }
 
-// ID stores the coordinates that uniquely identifies a service:
-// its name and optionally a namespace
+// UID uniquely identifies a service instance
+type UID string
+
+// ID stores the metadata attributes of a service/resource
+// TODO: rename to svc.Attributes
 type ID struct {
+	// UID might coincide with other fields (usually, Instance), but UID
+	// can't be overriden by the user, so it's the only field that can be
+	// used for internal differentiation of the users.
+	// UID is not exported in the metrics or traces.
+	UID UID
+
 	Name string
 	// AutoName is true if the Name has been automatically set by Beyla (e.g. executable name when
 	// the Name is empty). This will allow later refinement of the Name value (e.g. to override it
@@ -49,6 +58,8 @@ type ID struct {
 	Namespace   string
 	SDKLanguage InstrumentableType
 	Instance    string
+
+	Metadata map[string]string
 }
 
 func (i *ID) String() string {

@@ -150,7 +150,7 @@ func newMetricsReporter(ctx context.Context, cfg *MetricsConfig, ctxInfo *global
 		cfg: cfg,
 	}
 	mr.reporters = NewReporterPool[*Metrics](cfg.ReportersCacheLen,
-		func(id svc.ID, v *Metrics) {
+		func(id svc.UID, v *Metrics) {
 			llog := log.With("service", id)
 			llog.Debug("evicting metrics reporter from cache")
 			go func() {
@@ -370,10 +370,6 @@ func (mr *MetricsReporter) metricAttributes(span *request.Span) attribute.Set {
 		attrs = append(attrs, semconv.ServiceName(span.ServiceID.Name))
 	}
 
-	for key, val := range span.Metadata {
-		attrs = append(attrs, attribute.String(key, val))
-	}
-
 	return attribute.NewSet(attrs...)
 }
 
@@ -399,7 +395,7 @@ func (r *Metrics) record(span *request.Span, attrs attribute.Set) {
 }
 
 func (mr *MetricsReporter) reportMetrics(input <-chan []request.Span) {
-	var lastSvc svc.ID
+	var lastSvcUID svc.UID
 	var reporter *Metrics
 	for spans := range input {
 		for i := range spans {
@@ -417,14 +413,14 @@ func (mr *MetricsReporter) reportMetrics(input <-chan []request.Span) {
 			// only a single instrumented process.
 			// In multi-process tracing, this is likely to happen as most
 			// tracers group traces belonging to the same service in the same slice.
-			if s.ServiceID != lastSvc || reporter == nil {
+			if s.ServiceID.UID != lastSvcUID || reporter == nil {
 				lm, err := mr.reporters.For(s.ServiceID)
 				if err != nil {
 					mlog().Error("unexpected error creating OTEL resource. Ignoring metric",
 						err, "service", s.ServiceID)
 					continue
 				}
-				lastSvc = s.ServiceID
+				lastSvcUID = s.ServiceID.UID
 				reporter = lm
 			}
 			reporter.record(s, mr.metricAttributes(s))

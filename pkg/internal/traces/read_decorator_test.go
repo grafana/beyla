@@ -25,25 +25,32 @@ func TestReadDecorator(t *testing.T) {
 	require.NotEmpty(t, dnsHostname)
 
 	type testCase struct {
-		desc     string
-		cfg      ReadDecorator
-		expected string
+		desc        string
+		cfg         ReadDecorator
+		expectedID  string
+		expectedUID svc.UID
 	}
 	for _, tc := range []testCase{{
-		desc:     "dns",
-		cfg:      ReadDecorator{InstanceID: InstanceIDConfig{HostnameDNSResolution: true}},
-		expected: dnsHostname + "-1234",
+		desc:        "dns",
+		cfg:         ReadDecorator{InstanceID: InstanceIDConfig{HostnameDNSResolution: true}},
+		expectedID:  dnsHostname + "-1234",
+		expectedUID: svc.UID(dnsHostname + "-1234"),
 	}, {
-		desc:     "no-dns",
-		expected: localHostname + "-1234",
+		desc:        "no-dns",
+		expectedID:  localHostname + "-1234",
+		expectedUID: svc.UID(localHostname + "-1234"),
 	}, {
-		desc:     "override hostname",
-		cfg:      ReadDecorator{InstanceID: InstanceIDConfig{OverrideHostname: "foooo"}},
-		expected: "foooo-1234",
+		desc:        "override hostname",
+		cfg:         ReadDecorator{InstanceID: InstanceIDConfig{OverrideHostname: "foooo"}},
+		expectedID:  "foooo-1234",
+		expectedUID: "foooo-1234",
 	}, {
-		desc:     "override HN",
-		cfg:      ReadDecorator{InstanceID: InstanceIDConfig{OverrideInstanceID: "instanceee"}},
-		expected: "instanceee",
+		desc:       "override HN",
+		cfg:        ReadDecorator{InstanceID: InstanceIDConfig{OverrideInstanceID: "instanceee"}},
+		expectedID: "instanceee",
+		// even if we override instance ID, the UID should be set to a really unique value
+		// (same as the automatic instanceID value)
+		expectedUID: svc.UID(localHostname + "-1234"),
 	}} {
 		t.Run(tc.desc, func(t *testing.T) {
 			cfg := tc.cfg
@@ -61,8 +68,8 @@ func TestReadDecorator(t *testing.T) {
 			}
 			outSpans := testutil.ReadChannel(t, decoratedOutput, testTimeout)
 			assert.Equal(t, []request.Span{
-				{ServiceID: svc.ID{Instance: tc.expected}, Path: "/foo", Pid: request.PidInfo{HostPID: 1234}},
-				{ServiceID: svc.ID{Instance: tc.expected}, Path: "/bar", Pid: request.PidInfo{HostPID: 1234}},
+				{ServiceID: svc.ID{Instance: tc.expectedID, UID: tc.expectedUID}, Path: "/foo", Pid: request.PidInfo{HostPID: 1234}},
+				{ServiceID: svc.ID{Instance: tc.expectedID, UID: tc.expectedUID}, Path: "/bar", Pid: request.PidInfo{HostPID: 1234}},
 			}, outSpans)
 		})
 	}

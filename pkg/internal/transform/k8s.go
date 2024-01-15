@@ -11,6 +11,7 @@ import (
 	"github.com/grafana/beyla/pkg/internal/kube"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/pkg/internal/request"
+	"github.com/grafana/beyla/pkg/internal/svc"
 )
 
 type KubeEnableFlag string
@@ -93,11 +94,11 @@ func (md *metadataDecorator) nodeLoop(in <-chan []request.Span, out chan<- []req
 }
 
 func (md *metadataDecorator) do(span *request.Span) {
-	if span.Metadata == nil {
-		span.Metadata = make(map[string]string, 5)
-	}
 	if podInfo, ok := md.db.OwnerPodInfo(span.Pid.Namespace); ok {
 		appendMetadata(span, podInfo)
+	} else {
+		// do not leave the service attributes map as nil
+		span.ServiceID.Metadata = map[string]string{}
 	}
 }
 
@@ -117,13 +118,18 @@ func appendMetadata(span *request.Span, info *kube.PodInfo) {
 	if span.ServiceID.Namespace == "" {
 		span.ServiceID.Namespace = info.Namespace
 	}
+	span.ServiceID.UID = svc.UID(info.UID)
 
-	span.Metadata[NamespaceName] = info.Namespace
-	span.Metadata[PodName] = info.Name
-	span.Metadata[NodeName] = info.NodeName
-	span.Metadata[PodUID] = string(info.UID)
-	span.Metadata[PodStartTime] = info.StartTimeStr
+	// if, in the future, other pipeline steps modify the service metadata, we should
+	// replace the map literal by individual entry insertions
+	span.ServiceID.Metadata = map[string]string{
+		NamespaceName: info.Namespace,
+		PodName:       info.Name,
+		NodeName:      info.NodeName,
+		PodUID:        string(info.UID),
+		PodStartTime:  info.StartTimeStr,
+	}
 	if info.DeploymentName != "" {
-		span.Metadata[DeploymentName] = info.DeploymentName
+		span.ServiceID.Metadata[DeploymentName] = info.DeploymentName
 	}
 }

@@ -127,7 +127,7 @@ func newTracesReporter(ctx context.Context, cfg *TracesConfig, ctxInfo *global.C
 	log := tlog()
 	r := TracesReporter{ctx: ctx, cfg: cfg}
 	r.reporters = NewReporterPool[*Tracers](cfg.ReportersCacheLen,
-		func(k svc.ID, v *Tracers) {
+		func(k svc.UID, v *Tracers) {
 			llog := log.With("service", k)
 			llog.Debug("evicting traces reporter from cache")
 			go func() {
@@ -338,11 +338,6 @@ func (r *TracesReporter) traceAttributes(span *request.Span) []attribute.KeyValu
 		}
 	}
 
-	// append extra metadata
-	for key, val := range span.Metadata {
-		attrs = append(attrs, attribute.String(key, val))
-	}
-
 	return attrs
 }
 
@@ -445,7 +440,7 @@ func (r *TracesReporter) makeSpan(parentCtx context.Context, tracer trace2.Trace
 }
 
 func (r *TracesReporter) reportTraces(input <-chan []request.Span) {
-	var lastSvc svc.ID
+	var lastSvcUID svc.UID
 	var reporter trace2.Tracer
 	for spans := range input {
 		for i := range spans {
@@ -457,14 +452,14 @@ func (r *TracesReporter) reportTraces(input <-chan []request.Span) {
 			}
 
 			// small optimization: read explanation in MetricsReporter.reportMetrics
-			if span.ServiceID != lastSvc || reporter == nil {
+			if span.ServiceID.UID != lastSvcUID || reporter == nil {
 				lm, err := r.reporters.For(span.ServiceID)
 				if err != nil {
 					mlog().Error("unexpected error creating OTEL resource. Ignoring trace",
 						err, "service", span.ServiceID)
 					continue
 				}
-				lastSvc = span.ServiceID
+				lastSvcUID = span.ServiceID.UID
 				reporter = lm.tracer
 			}
 

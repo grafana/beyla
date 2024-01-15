@@ -61,16 +61,18 @@ typedef struct ssl_args {
 // 100% certain that SSL_read will never do an SSL_write, then these can be a single map. 
 struct {
     __uint(type, BPF_MAP_TYPE_HASH);
-    __uint(max_entries, MAX_CONCURRENT_REQUESTS);
+    __uint(max_entries, MAX_CONCURRENT_SHARED_REQUESTS);
     __type(key, u64);
     __type(value, ssl_args_t);
+    __uint(pinning, LIBBPF_PIN_BY_NAME);
 } active_ssl_read_args SEC(".maps");
 
 struct {
     __uint(type, BPF_MAP_TYPE_HASH);
-    __uint(max_entries, MAX_CONCURRENT_REQUESTS);
+    __uint(max_entries, MAX_CONCURRENT_SHARED_REQUESTS);
     __type(key, u64);
     __type(value, ssl_args_t);
+    __uint(pinning, LIBBPF_PIN_BY_NAME);
 } active_ssl_write_args SEC(".maps");
 
 static __always_inline void handle_ssl_buf(u64 id, ssl_args_t *args, int bytes_len) {
@@ -106,12 +108,12 @@ static __always_inline void handle_ssl_buf(u64 id, ssl_args_t *args, int bytes_l
             // we missed a SSL_do_handshake, update our ssl to connection map to be
             // used by the rest of the SSL lifecycle. We shouldn't rely on the SSL_write
             // being on the same thread as the SSL_read. 
-            // if (conn) {
-            //     bpf_map_delete_elem(&pid_tid_to_conn, &id);
-            //     connection_info_t c;
-            //     bpf_probe_read(&c, sizeof(connection_info_t), conn);
-            //     bpf_map_update_elem(&ssl_to_conn, &ssl, &c, BPF_ANY);
-            // }
+            if (conn) {
+                bpf_map_delete_elem(&pid_tid_to_conn, &id);
+                connection_info_t c;
+                bpf_probe_read(&c, sizeof(connection_info_t), conn);
+                bpf_map_update_elem(&ssl_to_conn, &ssl, &c, BPF_ANY);
+            }
         }
 
         bpf_map_delete_elem(&ssl_to_pid_tid, &ssl_ptr);

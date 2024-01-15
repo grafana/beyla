@@ -242,13 +242,24 @@ int BPF_KPROBE(kprobe_tcp_sendmsg, struct sock *sk, struct msghdr *msg, size_t s
             }
         }
 
-        // Checks if it's sandwitched between active SSL handshake uprobe/uretprobe
+        void *ssl = 0;
+        // Checks if it's sandwitched between active SSL handshake, read or write uprobe/uretprobe
         void **s = bpf_map_lookup_elem(&active_ssl_handshakes, &id);
-        if (!s) {
-            return 0;
+        if (s) {
+            ssl = *s;
+        } else {
+            ssl_args_t *ssl_args = bpf_map_lookup_elem(&active_ssl_read_args, &id);
+            if (!ssl_args) {
+                ssl_args = bpf_map_lookup_elem(&active_ssl_write_args, &id);
+            }
+            if (ssl_args) {
+                ssl = (void *)ssl_args->ssl;
+            }
         }
 
-        void *ssl = *s;
+        if (!ssl) {
+            return 0;
+        }
         bpf_dbg_printk("=== kprobe SSL tcp_sendmsg=%d sock=%llx ssl=%llx ===", id, sk, ssl);
         bpf_map_update_elem(&ssl_to_conn, &ssl, &info, BPF_ANY);
     }

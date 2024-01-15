@@ -194,8 +194,15 @@ allow exporting both metrics and traces, or only one of them to export either
 metrics or traces.
 
 To run the auto-instrumentation tool (previously downloaded from the [Beyla releases page](https://github.com/grafana/beyla/releases)),
-you will need to specify the path to the configuration YAML file. For example `instrument-config.yml`:
+you will need to specify the path to the configuration YAML file, either with the
+`-config` command-line argument or the `BEYLA_CONFIG` environment variable.
+For example `instrument-config.yml`:
 
 ```
 beyla -config instrument-config.yml
 ```
+or
+```
+BEYLA_CONFIG=instrument-config.yml beyla
+```
+

@@ -17,9 +17,6 @@ services:
     build:
       context: ../..
       dockerfile: ./test/integration/components/beyla/Dockerfile
-    command:
-      - /beyla
-      - --config=/configs/instrumenter-config-java.yml
     volumes:
       - ./configs/:/configs
       - ../../testoutput:/coverage
@@ -28,6 +25,7 @@ services:
     privileged: true # in some environments (not GH Pull Requests) you can set it to false and then cap_add: [ SYS_ADMIN ]
     pid: "service:testserver"
     environment:
+      BEYLA_CONFIG: "/configs/instrumenter-config-java.yml"
       GOCOVERDIR: "/coverage"
       BEYLA_PRINT_TRACES: "true"
       BEYLA_OPEN_PORT: 8080

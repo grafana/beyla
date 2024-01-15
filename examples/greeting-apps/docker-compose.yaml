@@ -19,9 +19,6 @@ services:
   # Beyla for NGINX
   nginxbeyla:
     image: grafana/beyla:latest
-    command:
-      - /beyla
-      - --config=/configs/beyla-config.yml
     volumes:
       - ./configs/:/configs
       - ./system/sys/kernel/security:/sys/kernel/security
@@ -30,6 +27,7 @@ services:
     network_mode: "service:nginx"
     pid: "service:nginx"
     environment:
+      BEYLA_CONFIG: "/configs/beyla-config.yml"
       BEYLA_PRINT_TRACES: "true"
       BEYLA_OPEN_PORT: "3330"
       BEYLA_SERVICE_NAMESPACE: "demo"
@@ -51,9 +49,6 @@ services:
   # Beyla for Java Spring Boot 3.0 GraalVM Native Image
   gobeyla:
     image: grafana/beyla:latest
-    command:
-      - /beyla
-      - --config=/configs/beyla-config.yml
     volumes:
       - ./configs/:/configs
       - ./system/sys/kernel/security:/sys/kernel/security
@@ -62,6 +57,7 @@ services:
     network_mode: "service:gotestserver"
     pid: "service:gotestserver"
     environment:
+      BEYLA_CONFIG: "/configs/beyla-config.yml"
       BEYLA_PRINT_TRACES: "true"
       BEYLA_OPEN_PORT: "8080"
       BEYLA_SERVICE_NAMESPACE: "demo"
@@ -83,9 +79,6 @@ services:
   # Beyla for Java Spring Boot 3.0 GraalVM Native Image
   javabeyla:
     image: grafana/beyla:latest
-    command:
-      - /beyla
-      - --config=/configs/beyla-config.yml
     volumes:
       - ./configs/:/configs
       - ./system/sys/kernel/security:/sys/kernel/security
@@ -94,6 +87,7 @@ services:
     network_mode: "service:javatestserver"
     pid: "service:javatestserver"
     environment:
+      BEYLA_CONFIG: "/configs/beyla-config.yml"
       BEYLA_PRINT_TRACES: "true"
       BEYLA_OPEN_PORT: "8085"
       BEYLA_SERVICE_NAMESPACE: "demo"
@@ -115,9 +109,6 @@ services:
   # Beyla for Rust Actix
   rustbeyla:
     image: grafana/beyla:latest
-    command:
-      - /beyla
-      - --config=/configs/beyla-config.yml
     volumes:
       - ./configs/:/configs
       - ./system/sys/kernel/security:/sys/kernel/security
@@ -126,6 +117,7 @@ services:
     network_mode: "service:rusttestserver"
     pid: "service:rusttestserver"
     environment:
+      BEYLA_CONFIG: "/configs/beyla-config.yml"
       BEYLA_PRINT_TRACES: "true"
       BEYLA_OPEN_PORT: "8090"
       BEYLA_SERVICE_NAMESPACE: "demo"

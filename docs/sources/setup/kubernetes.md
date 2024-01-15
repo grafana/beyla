@@ -245,7 +245,7 @@ this site).
 
 To provide the configuration as a file, the recommended way is to deploy
 a ConfigMap with the intended configuration, then mount it into the Beyla
-Pod, and refer to it by overriding the Beyla container command.
+Pod, and refer to it with the `BEYLA_CONFIG` environment variable.
 
 Example of ConfigMap with the Beyla YAML documentation:
 
@@ -302,8 +302,11 @@ spec:
           volumeMounts:
             - mountPath: /config
               name: beyla-config
-          # tell beyla where to find the configuration file
-          command: ["/beyla", "--config=/config/beyla-config.yml"]
+          env:
+            # tell beyla where to find the configuration file
+            - name: BEYLA_CONFIG
+              value: "/config/beyla-config.yml"
+
 ```
 
 ## Providing secret configuration

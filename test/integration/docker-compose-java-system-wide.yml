@@ -25,9 +25,6 @@ services:
     build:
       context: ../..
       dockerfile: ./test/integration/components/beyla/Dockerfile
-    command:
-      - /beyla
-      - --config=/configs/instrumenter-config-java.yml
     volumes:
       - ./configs/:/configs
       - ../../testoutput:/coverage
@@ -37,6 +34,7 @@ services:
     network_mode: "service:testserver"
     pid: "host"
     environment:
+      BEYLA_CONFIG: "/configs/instrumenter-config-java.yml"
       GOCOVERDIR: "/coverage"
       BEYLA_PRINT_TRACES: "true"
       BEYLA_OPEN_PORT: "${JAVA_OPEN_PORT}"

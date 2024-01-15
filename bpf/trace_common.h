@@ -9,7 +9,6 @@
 
 typedef struct tp_info_pid {
     tp_info_t tp;
-    u64 ts;
     u32 pid;
 } tp_info_pid_t;
 
@@ -131,8 +130,8 @@ static __always_inline u8 correlated_requests(tp_info_pid_t *tp, tp_info_pid_t *
     // We check for correlated requests which are in order, but from different PIDs
     // Same PID means that we had client port reuse, which might falsely match prior
     // transaction if it happened during the same epoch.
-    if ((tp->ts > existing_tp->ts) && (tp->pid != existing_tp->pid)) {
-        return current_epoch(tp->ts) == current_epoch(existing_tp->ts);
+    if ((tp->tp.ts > existing_tp->tp.ts) && (tp->pid != existing_tp->pid)) {
+        return current_epoch(tp->tp.ts) == current_epoch(existing_tp->tp.ts);
     }
 
     return 0;
@@ -155,15 +154,16 @@ static __always_inline void get_or_create_trace_info(http_connection_metadata_t 
 
     //dbg_print_http_connection_info(conn);
 
-    tp_p->ts = bpf_ktime_get_ns();
+    tp_p->tp.ts = bpf_ktime_get_ns();
     tp_p->tp.flags = 1;
-    tp_p->pid = pid;
+    tp_p->pid = pid; // used for avoiding finding stale server requests with client port reuse
     urand_bytes(tp_p->tp.span_id, SPAN_ID_SIZE_BYTES);
 
     u8 found_tp = 0;
 
     if (meta) {
         if (meta->type == EVENT_HTTP_CLIENT) {
+            tp_p->pid = -1; // we only want to prevent correlation of duplicate server calls by PID
             u64 pid_tid = bpf_get_current_pid_tgid();
             tp_info_pid_t *server_tp = bpf_map_lookup_elem(&server_traces, &pid_tid);
 

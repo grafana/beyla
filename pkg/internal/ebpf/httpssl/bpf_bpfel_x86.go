@@ -57,9 +57,10 @@ type bpfHttpInfoT struct {
 		TraceId  [16]uint8
 		SpanId   [8]uint8
 		ParentId [8]uint8
+		Ts       uint64
 		Flags    uint8
+		_        [7]byte
 	}
-	_ [7]byte
 }
 
 type bpfPidConnectionInfoT struct {
@@ -83,10 +84,10 @@ type bpfTpInfoPidT struct {
 		TraceId  [16]uint8
 		SpanId   [8]uint8
 		ParentId [8]uint8
+		Ts       uint64
 		Flags    uint8
+		_        [7]byte
 	}
-	_   [7]byte
-	Ts  uint64
 	Pid uint32
 	_   [4]byte
 }

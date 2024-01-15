@@ -31,7 +31,9 @@ type bpfHttpRequestTrace struct {
 		TraceId  [16]uint8
 		SpanId   [8]uint8
 		ParentId [8]uint8
+		Ts       uint64
 		Flags    uint8
+		_        [7]byte
 	}
 	Pid struct {
 		HostPid   uint32
@@ -55,7 +57,9 @@ type bpfSqlRequestTrace struct {
 		TraceId  [16]uint8
 		SpanId   [8]uint8
 		ParentId [8]uint8
+		Ts       uint64
 		Flags    uint8
+		_        [7]byte
 	}
 	Pid struct {
 		HostPid   uint32

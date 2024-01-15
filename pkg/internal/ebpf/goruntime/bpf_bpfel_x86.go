@@ -29,7 +29,9 @@ type bpfTpInfoT struct {
 	TraceId  [16]uint8
 	SpanId   [8]uint8
 	ParentId [8]uint8
+	Ts       uint64
 	Flags    uint8
+	_        [7]byte
 }
 
 // loadBpf returns the embedded CollectionSpec for bpf.

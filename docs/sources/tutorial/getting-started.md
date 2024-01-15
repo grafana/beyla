@@ -12,6 +12,9 @@ keywords:
   - RED metrics
 aliases:
   - /docs/grafana-cloud/monitor-applications/beyla/tutorial/
+  - /docs/beyla/latest/tutorial/
+  - /docs/beyla/next/tutorial/
+  - /docs/beyla/v1.0.x/tutorial/
 ---
 
 # Getting started with Beyla

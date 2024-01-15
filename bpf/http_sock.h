@@ -281,13 +281,15 @@ static __always_inline void handle_buf_with_connection(pid_connection_info_t *pi
             http_connection_metadata_t *meta = bpf_map_lookup_elem(&filtered_connections, pid_conn);
             get_or_create_trace_info(meta, pid_conn->pid, &pid_conn->conn, u_buf, bytes_len, capture_header_buffer);
 
+            if (!meta) {
+                bpf_dbg_printk("No META!");
+            }
+
             if (meta) {            
                 tp_info_pid_t *tp_p = trace_info_for_connection(&pid_conn->conn);
                 if (tp_p) {
-                    bpf_memcpy(info->tp.trace_id, tp_p->tp.trace_id, sizeof(info->tp.trace_id));
-                    bpf_memcpy(info->tp.span_id, tp_p->tp.span_id, sizeof(info->tp.span_id));
-                    bpf_memcpy(info->tp.parent_id, tp_p->tp.parent_id, sizeof(info->tp.parent_id));
                     info->tp = tp_p->tp;
+
                     if (meta->type == EVENT_HTTP_CLIENT && !valid_span(tp_p->tp.parent_id)) {
                         bpf_dbg_printk("Looking for trace id of a client span");
                         u64 pid_tid = bpf_get_current_pid_tgid();

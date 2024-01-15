@@ -152,8 +152,6 @@ static __always_inline void get_or_create_trace_info(http_connection_metadata_t 
         return;
     }
 
-    //dbg_print_http_connection_info(conn);
-
     tp_p->tp.ts = bpf_ktime_get_ns();
     tp_p->tp.flags = 1;
     tp_p->pid = pid; // used for avoiding finding stale server requests with client port reuse

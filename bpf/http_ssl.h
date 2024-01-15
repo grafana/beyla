@@ -106,12 +106,12 @@ static __always_inline void handle_ssl_buf(u64 id, ssl_args_t *args, int bytes_l
             // we missed a SSL_do_handshake, update our ssl to connection map to be
             // used by the rest of the SSL lifecycle. We shouldn't rely on the SSL_write
             // being on the same thread as the SSL_read. 
-            if (conn) {
-                bpf_map_delete_elem(&pid_tid_to_conn, &id);
-                connection_info_t c;
-                bpf_probe_read(&c, sizeof(connection_info_t), conn);
-                bpf_map_update_elem(&ssl_to_conn, &ssl, &c, BPF_ANY);
-            }
+            // if (conn) {
+            //     bpf_map_delete_elem(&pid_tid_to_conn, &id);
+            //     connection_info_t c;
+            //     bpf_probe_read(&c, sizeof(connection_info_t), conn);
+            //     bpf_map_update_elem(&ssl_to_conn, &ssl, &c, BPF_ANY);
+            // }
         }
 
         bpf_map_delete_elem(&ssl_to_pid_tid, &ssl_ptr);
@@ -135,6 +135,10 @@ static __always_inline void handle_ssl_buf(u64 id, ssl_args_t *args, int bytes_l
                 .conn = *conn,
                 .pid = pid_from_pid_tgid(id)
             };
+
+            bpf_printk("conn pid %d", pid_conn.pid);
+            dbg_print_http_connection_info(&pid_conn.conn);
+
             handle_buf_with_connection(&pid_conn, (void *)args->buf, bytes_len, 1);
         } else {
             bpf_dbg_printk("No connection info! This is a bug.");

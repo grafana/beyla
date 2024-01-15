@@ -31,7 +31,6 @@ for Linux kernel, or eBPF features of the Linux kernel, versions released at the
   (see "detection of new programming languages" below).
 - The type of telemetry data we produce, e.g. metrics and traces.
 
-
 ## Things considered unstable for 1.x:
 
 - Any features marked as experimental in the documentation are subject to
@@ -43,4 +42,3 @@ for Linux kernel, or eBPF features of the Linux kernel, versions released at the
 - The detection of new programming languages. We may add support for detecting
   new programming languages, so the reported telemetry SDK language field may
   change between minors for previously undetected languages.
-

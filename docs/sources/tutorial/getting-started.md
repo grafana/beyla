@@ -212,6 +212,7 @@ export GRAFANA_CLOUD_API_KEY="your api key here..."
 BEYLA_OPEN_PORT=8080 sudo -E beyla
 
 ```
+
 Optionally, open another terminal and run the following command to generate some artificial load:
 
 ```sh

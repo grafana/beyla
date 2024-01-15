@@ -1,5 +1,5 @@
 ---
-title:  Beyla and Kubernetes walkthrough
+title: Beyla and Kubernetes walkthrough
 menuTitle: Beyla and Kubernetes tutorial
 description: Learn how to instrument an application export data with Prometheus to Grafana Cloud.
 weight: 3
@@ -58,13 +58,13 @@ For that reason, Beyla v1.1 introduces the new Kubernetes service
 selection criteria. All of them accept a [Go RE2-syntax regular expression](https://github.com/google/re2/wiki/Syntax)
 as value:
 
-* `k8s_namespace`: only instrument applications in the
+- `k8s_namespace`: only instrument applications in the
   namespace matching the provided regular expression.
-* `k8s_deployment_name`: only instrument Pods that belong to
+- `k8s_deployment_name`: only instrument Pods that belong to
   a Deployment with a name matching the provided regular expression.
-* `k8s_replicaset_name`: only instrument Pods that belong to
+- `k8s_replicaset_name`: only instrument Pods that belong to
   a ReplicaSet with a name matching the provided regular expression.
-* `k8s_pod_name`: only instrument Pods with a name matching the provided regular expression.
+- `k8s_pod_name`: only instrument Pods with a name matching the provided regular expression.
 
 ## Example scenario
 
@@ -190,6 +190,7 @@ The **Environment Variables** will be populated with a set of standard OpenTelem
 
 From the **Environment Variables** section, copy the `OTEL_EXPORTER_OTLP_ENDPOINT` and `OTEL_EXPORTER_OTLP_HEADERS`
 values and create a new secret from them. For example, create the following secret file and apply it:
+
 ```yaml
 apiVersion: v1
 kind: Secret
@@ -243,14 +244,14 @@ roleRef:
 
 And now, deploy Beyla by creating the following Kubernetes entities:
 
-* A `ConfigMap` storing the `config.yml` Beyla configuration file, which defines
+- A `ConfigMap` storing the `config.yml` Beyla configuration file, which defines
   the service discovery criteria. To verify that Beyla is able to discriminate
   by service instance even if they run the same image and executable,
   Beyla is configured to select ONLY the `docs` Apache web server.
-* A Beyla `DaemonSet` providing the Beyla pod and its configuration:
-    - Loads the `config.yml` file from the `ConfigMap`.
-    - References to the `grafana-secrets` values for the endpoint and credentials.
-    - Uses the `beyla` `ServiceAccount` to get all the permissions.
+- A Beyla `DaemonSet` providing the Beyla pod and its configuration:
+  - Loads the `config.yml` file from the `ConfigMap`.
+  - References to the `grafana-secrets` values for the endpoint and credentials.
+  - Uses the `beyla` `ServiceAccount` to get all the permissions.
 
 Copy and deploy the following YAML file:
 
@@ -320,9 +321,10 @@ spec:
 ```
 
 Also notice:
-* To run in DaemonSet mode, Beyla requires to have access to all the
+
+- To run in DaemonSet mode, Beyla requires to have access to all the
   processes in the node. Then the Beyla Pod requires to run with `hostPID: true`.
-* The Beyla container needs to run with `privileged: true`, as it requires
+- The Beyla container needs to run with `privileged: true`, as it requires
   to perform privileged actions such as loading BPF programs and creating
   BPF maps.
 
@@ -340,7 +342,7 @@ curl http://localhost:8081/foo
 
 Some requests will return 404 error, but it's OK because they are also instrumented.
 
-Now, go to your Grafana Cloud instance and, in the *Explore* section, search for
+Now, go to your Grafana Cloud instance and, in the _Explore_ section, search for
 all the traces. In the list, you will see only the traces from the `docs`
 instance (port 8081):
 
@@ -354,5 +356,5 @@ service:
 
 ## Links
 
-* [Documentation: Beyla configuration options]({{< relref "../configure/options.md" >}})
-* [Documentation: run Beyla as Kubernetes DaemonSet]({{< relref "../setup/kubernetes.md" >}})
+- [Documentation: Beyla configuration options]({{< relref "../configure/options.md" >}})
+- [Documentation: run Beyla as Kubernetes DaemonSet]({{< relref "../setup/kubernetes.md" >}})

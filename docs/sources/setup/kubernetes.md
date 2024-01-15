@@ -19,14 +19,15 @@ follow the [Beyla and Kubernetes walkthrough tutorial]({{< relref "../tutorial/k
 Contents:
 
 <!-- TOC -->
-* [Deploy Beyla in Kubernetes](#deploy-beyla-in-kubernetes)
-  * [Configuring Kubernetes metadata decoration](#configuring-kubernetes-metadata-decoration)
-  * [Deploying Beyla](#deploying-beyla)
-    * [Deploy Beyla as a sidecar container](#deploy-beyla-as-a-sidecar-container)
-    * [Deploy Beyla as a Daemonset](#deploy-beyla-as-a-daemonset)
-  * [Providing an external configuration file](#providing-an-external-configuration-file)
-  * [Providing secret configuration](#providing-secret-configuration)
-<!-- TOC -->
+
+- [Deploy Beyla in Kubernetes](#deploy-beyla-in-kubernetes)
+  - [Configuring Kubernetes metadata decoration](#configuring-kubernetes-metadata-decoration)
+  - [Deploying Beyla](#deploying-beyla)
+    - [Deploy Beyla as a sidecar container](#deploy-beyla-as-a-sidecar-container)
+    - [Deploy Beyla as a Daemonset](#deploy-beyla-as-a-daemonset)
+  - [Providing an external configuration file](#providing-an-external-configuration-file)
+  - [Providing secret configuration](#providing-secret-configuration)
+  <!-- TOC -->
 
 ## Configuring Kubernetes metadata decoration
 
@@ -40,6 +41,7 @@ Beyla can decorate your traces with the following Kubernetes labels:
 - `k8s.pod.start_time`
 
 To enable metadata decoration, you need to:
+
 - Create a ServiceAccount and bind a ClusterRole granting list and watch permissions
   for both Pods and ReplicaSets. You can do it by deploying this example file:
 
@@ -79,7 +81,7 @@ roleRef:
 in another namespace).
 
 2. Configure Beyla with the `BEYLA_KUBE_METADATA_ENABLE=true` environment variable,
-  or the `attributes.kubernetes.enable: true` YAML configuration.
+   or the `attributes.kubernetes.enable: true` YAML configuration.
 
 3. Don't forget to specify the `serviceAccountName: beyla` property in your Beyla
    Pod (as shown in the later deployment examples).
@@ -104,7 +106,6 @@ might not be deployed in all the hosts, so you only have to deploy one Beyla ins
 per each service instance.
 
 {{< youtube id="d7clTdz0bA4" >}}
-
 
 Deploying Beyla as a sidecar container has the following configuration
 requirements:
@@ -184,6 +185,7 @@ For more information about the different configuration options, please check the
 ### Deploy Beyla as a Daemonset
 
 You can also deploy Beyla as a Daemonset. This is the preferred way if:
+
 - You want to instrument a Daemonset
 - You want to instrument multiple processes from a single Beyla instance, or even
   all the instrumentable processes in your cluster.
@@ -285,7 +287,7 @@ spec:
         instrumentation: beyla
     spec:
       serviceAccountName: beyla
-      hostPID: true  #important!
+      hostPID: true #important!
       volumes:
         - name: beyla-config
           configMap:
@@ -343,4 +345,3 @@ env:
         key: grafana-api-key
         name: grafana-secret
 ```
-

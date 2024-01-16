@@ -49,7 +49,7 @@ spec:
         - name: beyla
           image: beyla:dev
           imagePullPolicy: Never # loaded into Kind from localhost
-          command: ["/beyla", "--config=/config/beyla-config.yml"]
+          command: ["--config=/config/beyla-config.yml"]
           securityContext:
             privileged: true
             runAsUser: 0

@@ -29,4 +29,4 @@ WORKDIR /
 COPY --from=builder /src/bin/beyla .
 USER 0:0
 
-CMD [ "/beyla" ]
+ENTRYPOINT [ "/beyla" ]

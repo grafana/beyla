@@ -21,7 +21,7 @@ func PrinterNode(_ PrintEnabled) (node.TerminalFunc[[]request.Span], error) {
 		for spans := range input {
 			for i := range spans {
 				t := spans[i].Timings()
-				fmt.Printf("%s (%s[%s]) %v %s %s [%s]->[%s:%d] size:%dB svc=[%s] traceparent=[%s]\n",
+				fmt.Printf("%s (%s[%s]) %v %s %s [%s]->[%s:%d] size:%dB svc=[%s %s] traceparent=[%s]\n",
 					t.Start.Format("2006-01-02 15:04:05.12345"),
 					t.End.Sub(t.RequestStart),
 					t.End.Sub(t.Start),
@@ -33,6 +33,7 @@ func PrinterNode(_ PrintEnabled) (node.TerminalFunc[[]request.Span], error) {
 					spans[i].HostPort,
 					spans[i].ContentLength,
 					&spans[i].ServiceID,
+					spans[i].ServiceID.SDKLanguage.String(),
 					traceparent(&spans[i]),
 				)
 			}

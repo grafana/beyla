@@ -121,7 +121,7 @@ routes:
   unmatched: heuristic
 ```
 
-Then, run Beyla with the `-config` argument:
+Then, run Beyla with the `-config` argument (or use the `BEYLA_CONFIG_PATH` environment variable instead):
 
 ```
 sudo -E beyla -config config.yml

@@ -301,13 +301,14 @@ spec:
         - name: beyla
           image: grafana/beyla:main
           imagePullPolicy: IfNotPresent
-          command: ["/beyla", "--config=/config/beyla-config.yml"]
           securityContext:
             privileged: true # mandatory!
           volumeMounts:
             - mountPath: /config
               name: beyla-config
           env:
+            - name: BEYLA_CONFIG_PATH
+              value: "/config/beyla-config.yml"
             - name: OTEL_EXPORTER_OTLP_ENDPOINT
               valueFrom:
                 secretKeyRef:

@@ -55,7 +55,6 @@ spec:
         - name: autoinstrumenter
           image: grafana/beyla:main
           imagePullPolicy: IfNotPresent
-          command: ["/beyla", "--config=/config/beyla-config.yml"]          
           securityContext:
             privileged: true
             runAsUser: 0
@@ -65,6 +64,8 @@ spec:
             - mountPath: /sys/kernel/security
               name: system-config
           env:
+            - name: BEYLA_CONFIG_PATH
+              value: "/config/beyla-config.yml"
             - name: BEYLA_SERVICE_NAME
               value: "goblog"
             - name: BEYLA_PRINT_TRACES

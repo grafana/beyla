@@ -32,6 +32,10 @@ func main() {
 	configPath := flag.String("config", "", "path to the configuration file")
 	flag.Parse()
 
+	if cfg := os.Getenv("BEYLA_CONFIG_PATH"); cfg != "" {
+		configPath = &cfg
+	}
+
 	config := loadConfig(configPath)
 
 	if err := lvl.UnmarshalText([]byte(config.LogLevel)); err != nil {

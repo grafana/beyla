@@ -46,9 +46,8 @@ services:
   ...
   beyla:
     image: grafana/beyla:latest
-    command:
-      - /beyla
-      - --config=/configs/beyla-config.yml
+    environment:
+      BEYLA_CONFIG_PATH: "/configs/beyla-config.yml"
     volumes:
       - /sys/kernel/security:/sys/kernel/security
 ```

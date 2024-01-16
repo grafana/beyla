@@ -89,13 +89,14 @@ spec:
           imagePullPolicy: Never # loaded into Kind from localhost
           securityContext:
             privileged: true
-          command: ["/beyla", "--config=/configs/instrumenter-config-promscrape.yml"]
           volumeMounts:
             - mountPath: /configs
               name: configs
             - mountPath: /testoutput
               name: testoutput
           env:
+            - name: BEYLA_CONFIG_PATH
+              value: "/configs/instrumenter-config-promscrape.yml"
             - name: GOCOVERDIR
               value: "/testoutput"
             - name: BEYLA_DISCOVERY_POLL_INTERVAL

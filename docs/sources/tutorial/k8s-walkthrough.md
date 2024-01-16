@@ -347,13 +347,13 @@ Now, go to your Grafana Cloud instance and, in the _Explore_ section, search for
 all the traces. In the list, you will see only the traces from the `docs`
 instance (port 8081):
 
-![](https://grafana.com/media/docs/grafana-cloud/beyla/tutorial/k8s/tut-traces-list.png)
+![Grafana Cloud list of traces](https://grafana.com/media/docs/grafana-cloud/beyla/tutorial/k8s/tut-traces-list.png)
 
 If you enter into the trace details, you will also see that the resource attributes of the traces are
 decorated with the metadata of the Kubernetes Pod running the instrumented
 service:
 
-![](https://grafana.com/media/docs/grafana-cloud/beyla/tutorial/k8s/tut-trace-details.png)
+![Details of the trace](https://grafana.com/media/docs/grafana-cloud/beyla/tutorial/k8s/tut-trace-details.png)
 
 ## Links
 

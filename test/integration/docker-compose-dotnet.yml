@@ -17,8 +17,9 @@ services:
     build:
       context: ../..
       dockerfile: ./test/integration/components/beyla/Dockerfile${INSTRUMENT_DOCKERFILE_SUFFIX}
-    command:
+    entrypoint:
       - /beyla${INSTRUMENT_COMMAND_SUFFIX}
+    command:
       - --config=/configs/instrumenter-config-java.yml
     volumes:
       - ./configs/:/configs

@@ -24,7 +24,8 @@ struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __type(key, u64); // key: pid_tid
     __type(value, tp_info_pid_t);  // value: traceparent info
-    __uint(max_entries, MAX_CONCURRENT_REQUESTS);
+    __uint(max_entries, MAX_CONCURRENT_SHARED_REQUESTS);
+    __uint(pinning, LIBBPF_PIN_BY_NAME);
 } server_traces SEC(".maps");
 
 struct {
@@ -130,7 +131,7 @@ static __always_inline u8 correlated_requests(tp_info_pid_t *tp, tp_info_pid_t *
     // We check for correlated requests which are in order, but from different PIDs
     // Same PID means that we had client port reuse, which might falsely match prior
     // transaction if it happened during the same epoch.
-    if ((tp->tp.ts > existing_tp->tp.ts) && (tp->pid != existing_tp->pid)) {
+    if ((tp->tp.ts >= existing_tp->tp.ts) && (tp->pid != existing_tp->pid)) {
         return current_epoch(tp->tp.ts) == current_epoch(existing_tp->tp.ts);
     }
 

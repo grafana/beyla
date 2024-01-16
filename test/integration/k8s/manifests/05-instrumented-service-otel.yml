@@ -76,7 +76,7 @@ spec:
           imagePullPolicy: Never # loaded into Kind from localhost
           securityContext:
             privileged: true
-          command: ["--config=/configs/instrumenter-config.yml"]
+          args: ["--config=/configs/instrumenter-config.yml"]
           volumeMounts:
             - mountPath: /configs
               name: configs

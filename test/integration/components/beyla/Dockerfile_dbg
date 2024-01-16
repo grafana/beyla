@@ -35,4 +35,4 @@ COPY --from=builder /beyla_wrapper.sh /beyla_wrapper.sh
 WORKDIR /
 USER 0:0
 
-CMD [ "/beyla_wrapper.sh" ]
+ENTRYPOINT [ "/beyla_wrapper.sh" ]

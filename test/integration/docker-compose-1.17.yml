@@ -21,7 +21,6 @@ services:
       context: ../..
       dockerfile: ./test/integration/components/beyla/Dockerfile
     command:
-      - /beyla
       - --config=/configs/instrumenter-config${INSTRUMENTER_CONFIG_SUFFIX}.yml
     volumes:
       - ./configs/:/configs

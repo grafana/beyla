@@ -44,4 +44,4 @@ COPY --from=builder /etc/ssl/certs /etc/ssl/certs
 
 USER 0:0
 
-CMD [ "/beyla" ]
+ENTRYPOINT [ "/beyla" ]

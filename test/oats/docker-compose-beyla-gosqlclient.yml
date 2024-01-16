@@ -13,7 +13,6 @@ services:
       context: ../..
       dockerfile: ./test/integration/components/beyla/Dockerfile
     command:
-      - /beyla
       - --config=/configs/instrumenter-config-traces.yml
     volumes:
       - {{ .ConfigDir }}:/configs

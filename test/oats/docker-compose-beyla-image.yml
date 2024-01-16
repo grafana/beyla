@@ -4,7 +4,6 @@ services:
   autoinstrumenter:
     image: grafana/beyla:latest
     command:
-      - /beyla
       - --config=/configs/instrumenter-config-traces.yml
     volumes:
       - {{ .ConfigDir }}:/configs

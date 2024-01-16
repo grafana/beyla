@@ -16,7 +16,7 @@ typedef struct tp_info {
     unsigned char trace_id[TRACE_ID_SIZE_BYTES];
     unsigned char span_id[SPAN_ID_SIZE_BYTES];
     unsigned char parent_id[SPAN_ID_SIZE_BYTES];
-    u64 epoch;
+    u64 ts;
     u8  flags;
 } tp_info_t;
 

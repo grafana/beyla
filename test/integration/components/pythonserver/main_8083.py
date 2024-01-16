@@ -1,9 +1,9 @@
 from flask import Flask, request, Response
 import os
 import click
+import requests
 
 app = Flask(__name__)
-
 
 @app.cli.command("hello")
 @click.argument("name")
@@ -21,6 +21,13 @@ def smoke():
 
 @app.route("/greeting")
 def ping():
+    return "PONG!"
+
+@app.route("/tracemetoo")
+def traceme():
+    response = requests.get("http://utestserver:3040/users")
+    if response.status_code == 200:
+        return response.json()
     return "PONG!"
 
 @app.route("/users", methods=['POST'])

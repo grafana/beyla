@@ -13,13 +13,6 @@ import (
 	"github.com/cilium/ebpf"
 )
 
-type bpfConnectionInfoT struct {
-	S_addr [16]uint8
-	D_addr [16]uint8
-	S_port uint16
-	D_port uint16
-}
-
 type bpfHttpConnectionMetadataT struct {
 	Pid struct {
 		HostPid   uint32
@@ -27,6 +20,16 @@ type bpfHttpConnectionMetadataT struct {
 		Namespace uint32
 	}
 	Type uint8
+}
+
+type bpfPidConnectionInfoT struct {
+	Conn struct {
+		S_addr [16]uint8
+		D_addr [16]uint8
+		S_port uint16
+		D_port uint16
+	}
+	Pid uint32
 }
 
 type bpfPidKeyT struct {

@@ -53,7 +53,19 @@ type bpf_tp_debugHttpInfoT struct {
 		UserPid   uint32
 		Namespace uint32
 	}
-	Tp bpf_tp_debugTpInfoT
+	Tp struct {
+		TraceId  [16]uint8
+		SpanId   [8]uint8
+		ParentId [8]uint8
+		Ts       uint64
+		Flags    uint8
+		_        [7]byte
+	}
+}
+
+type bpf_tp_debugPidConnectionInfoT struct {
+	Conn bpf_tp_debugConnectionInfoT
+	Pid  uint32
 }
 
 type bpf_tp_debugPidKeyT struct {
@@ -77,13 +89,17 @@ type bpf_tp_debugSslArgsT struct {
 	LenPtr uint64
 }
 
-type bpf_tp_debugTpInfoT struct {
-	TraceId  [16]uint8
-	SpanId   [8]uint8
-	ParentId [8]uint8
-	Epoch    uint64
-	Flags    uint8
-	_        [7]byte
+type bpf_tp_debugTpInfoPidT struct {
+	Tp struct {
+		TraceId  [16]uint8
+		SpanId   [8]uint8
+		ParentId [8]uint8
+		Ts       uint64
+		Flags    uint8
+		_        [7]byte
+	}
+	Pid uint32
+	_   [4]byte
 }
 
 // loadBpf_tp_debug returns the embedded CollectionSpec for bpf_tp_debug.

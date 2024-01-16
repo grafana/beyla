@@ -3,6 +3,8 @@ routes:
     - /basic/:rnd
   unmatched: path
 otel_metrics_export:
+  endpoint: http://127.0.0.1:4018
+otel_traces_export:
   endpoint: http://127.0.0.1:4318
 discovery:
   services:
@@ -22,9 +24,18 @@ discovery:
       name: python-service-ssl
       open_ports: 8380      
     - namespace: multi-k
+      name: python-service
+      open_ports: 8083  
+    - namespace: multi-k
       name: nodejs-service-ssl
       open_ports: 3033      
     - namespace: multi-k
       name: nodejs-service
       open_ports: 3030
+    - namespace: multi-k
+      name: rails-service-ssl
+      open_ports: 3043      
+    - namespace: multi-k
+      name: rails-service
+      open_ports: 3040
 

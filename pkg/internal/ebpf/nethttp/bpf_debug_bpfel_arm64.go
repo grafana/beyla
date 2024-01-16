@@ -33,7 +33,7 @@ type bpf_debugTpInfoT struct {
 	TraceId  [16]uint8
 	SpanId   [8]uint8
 	ParentId [8]uint8
-	Epoch    uint64
+	Ts       uint64
 	Flags    uint8
 	_        [7]byte
 }

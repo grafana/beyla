@@ -36,6 +36,17 @@ app.get("/dist", (req, res, next) => {
     });
 })
 
+app.get("/traceme", (req, res, next) => {
+    http.get('http://pytestserver:8083/tracemetoo', {}, (r) => {
+        if (r.statusCode !== 200) {
+          console.error(`Did not get an OK from the server. Code: ${r.statusCode}`);
+          res.sendStatus(500)
+          return
+        }
+        res.sendStatus(200)
+    });
+})
+
 app.listen(port, () => {
     console.log("Server running on port " + port);
 });

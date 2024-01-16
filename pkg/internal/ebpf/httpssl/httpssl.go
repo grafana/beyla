@@ -98,6 +98,16 @@ func (p *Tracer) Load() (*ebpf.CollectionSpec, error) {
 func (p *Tracer) Constants(_ *exec.FileInfo, _ *goexec.Offsets) map[string]any {
 	m := make(map[string]any, 2)
 
+	// The eBPF side does some basic filtering of events that do not belong to
+	// processes which we monitor. We filter more accurately in the userspace, but
+	// for performance reasons we enable the PID based filtering in eBPF.
+	// This must match httpfltr.go, otherwise we get partial events in userspace.
+	if !p.cfg.Discovery.SystemWide && !p.cfg.Discovery.BPFPidFilterOff {
+		m["filter_pids"] = int32(1)
+	} else {
+		m["filter_pids"] = int32(0)
+	}
+
 	if p.cfg.EBPF.TrackRequestHeaders {
 		m["capture_header_buffer"] = int32(1)
 	} else {

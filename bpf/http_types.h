@@ -24,6 +24,11 @@ typedef struct http_connection_info {
     u16 d_port;
 } connection_info_t;
 
+typedef struct http_pid_connection_info {
+    connection_info_t conn;
+    u32 pid;
+} pid_connection_info_t;
+
 // Here we keep the information that is sent on the ring buffer
 typedef struct http_info {
     u64 flags; // Must be fist we use it to tell what kind of packet we have on the ring buffer
@@ -67,7 +72,7 @@ typedef struct http_buf {
 // HTTP calls we are not interested in
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, connection_info_t);
+    __type(key, pid_connection_info_t);
     __type(value, http_connection_metadata_t); // PID_TID group and connection type
     __uint(max_entries, MAX_CONCURRENT_SHARED_REQUESTS);
     __uint(pinning, LIBBPF_PIN_BY_NAME);

@@ -85,6 +85,7 @@ func (ta *TraceAttacher) getTracer(ie *Instrumentable) (*ebpf.ProcessTracer, boo
 			"pid", ie.FileInfo.Pid,
 			"child", ie.ChildPids,
 			"exec", ie.FileInfo.CmdExePath)
+		ie.FileInfo.Service.SDKLanguage = ie.Type
 		// allowing the tracer to forward traces from the new PID and its children processes
 		monitorPIDs(tracer, ie)
 		if tracer.Type == ebpf.Generic {

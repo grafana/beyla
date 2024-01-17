@@ -138,8 +138,8 @@ static __always_inline void handle_ssl_buf(u64 id, ssl_args_t *args, int bytes_l
                 .pid = pid_from_pid_tgid(id)
             };
 
-            bpf_printk("conn pid %d", pid_conn.pid);
-            dbg_print_http_connection_info(&pid_conn.conn);
+            // bpf_dbg_printk("conn pid %d", pid_conn.pid);
+            // dbg_print_http_connection_info(&pid_conn.conn);
 
             handle_buf_with_connection(&pid_conn, (void *)args->buf, bytes_len, 1);
         } else {

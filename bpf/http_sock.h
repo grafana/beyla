@@ -22,7 +22,8 @@ struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __type(key, pid_connection_info_t);
     __type(value, http_info_t);
-    __uint(max_entries, MAX_CONCURRENT_REQUESTS);
+    __uint(max_entries, MAX_CONCURRENT_SHARED_REQUESTS);
+    __uint(pinning, LIBBPF_PIN_BY_NAME);
 } ongoing_http SEC(".maps");
 
 // http_info_t became too big to be declared as a variable in the stack.
@@ -154,7 +155,7 @@ static __always_inline http_info_t* empty_http_info() {
 
 static __always_inline void finish_http(http_info_t *info) {
     if (info->start_monotime_ns != 0 && info->status != 0 && info->pid.host_pid != 0) {
-        http_info_t *trace = bpf_ringbuf_reserve(&events, sizeof(http_info_t), 0);
+        http_info_t *trace = bpf_ringbuf_reserve(&events, sizeof(http_info_t), 0);        
         if (trace) {
             bpf_dbg_printk("Sending trace %lx", info);
 
@@ -165,6 +166,8 @@ static __always_inline void finish_http(http_info_t *info) {
         u64 pid_tid = bpf_get_current_pid_tgid();
         bpf_map_delete_elem(&server_traces, &pid_tid);
 
+        // bpf_dbg_printk("Terminating trace for pid=%d", pid_from_pid_tgid(pid_tid));
+        // dbg_print_http_connection_info(&info->conn_info); // commented out since GitHub CI doesn't like this call
         pid_connection_info_t pid_conn = {
             .conn = info->conn_info,
             .pid = pid_from_pid_tgid(pid_tid)
@@ -271,7 +274,8 @@ static __always_inline void handle_buf_with_connection(pid_connection_info_t *pi
 
         http_info_t *info = get_or_set_http_info(in, pid_conn, packet_type);
         if (!info) {
-            bpf_printk("No info?");
+            bpf_dbg_printk("No info, pid =%d?", pid_conn->pid);
+            //dbg_print_http_connection_info(&pid_conn->conn); // commented out since GitHub CI doesn't like this call
             return;
         }
 

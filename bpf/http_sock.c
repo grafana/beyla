@@ -276,7 +276,7 @@ int BPF_KPROBE(kprobe_tcp_recvmsg, struct sock *sk, struct msghdr *msg, size_t l
         return 0;
     }
 
-    bpf_printk("=== tcp_recvmsg id=%d sock=%llx ===", id, sk);
+    bpf_dbg_printk("=== tcp_recvmsg id=%d sock=%llx ===", id, sk);
 
     // Important: We must work here to remember the iovec pointer, since the msghdr structure
     // can get modified in non-reversible way if the incoming packet is large and broken down in parts. 

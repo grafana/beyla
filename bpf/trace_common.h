@@ -10,6 +10,7 @@
 typedef struct tp_info_pid {
     tp_info_t tp;
     u32 pid;
+    u8  valid;
 } tp_info_pid_t;
 
 struct {
@@ -118,6 +119,15 @@ static __always_inline void server_or_client_trace(http_connection_metadata_t *m
     }
     if (meta->type == EVENT_HTTP_REQUEST) {
         u64 pid_tid = bpf_get_current_pid_tgid();
+
+        tp_info_pid_t *existing = bpf_map_lookup_elem(&server_traces, &pid_tid);
+        // we have a conflict, mark this invalid and do nothing
+        if (existing) {
+            bpf_dbg_printk("Found conflicting server span, marking as invalid, id=%llx", pid_tid);
+            existing->valid = 0;
+            return;
+        }
+
         bpf_dbg_printk("Saving server span for id=%llx", pid_tid);
         bpf_map_update_elem(&server_traces, &pid_tid, tp_p, BPF_ANY);
     }
@@ -155,19 +165,19 @@ static __always_inline void get_or_create_trace_info(http_connection_metadata_t 
 
     tp_p->tp.ts = bpf_ktime_get_ns();
     tp_p->tp.flags = 1;
+    tp_p->valid = 1;
     tp_p->pid = pid; // used for avoiding finding stale server requests with client port reuse
     urand_bytes(tp_p->tp.span_id, SPAN_ID_SIZE_BYTES);
 
     u8 found_tp = 0;
 
-#if 0 // disabled for now, until we have better way to detect when it's safe to assume same thread
     if (meta) {
         if (meta->type == EVENT_HTTP_CLIENT) {
             tp_p->pid = -1; // we only want to prevent correlation of duplicate server calls by PID
             u64 pid_tid = bpf_get_current_pid_tgid();
             tp_info_pid_t *server_tp = bpf_map_lookup_elem(&server_traces, &pid_tid);
 
-            if (server_tp) {
+            if (server_tp && server_tp->valid) {
                 found_tp = 1;
                 bpf_dbg_printk("Found existing server tp for client call");
                 bpf_memcpy(tp_p->tp.trace_id, server_tp->tp.trace_id, sizeof(tp_p->tp.trace_id));
@@ -183,8 +193,7 @@ static __always_inline void get_or_create_trace_info(http_connection_metadata_t 
                 bpf_memcpy(tp_p->tp.parent_id, existing_tp->tp.span_id, sizeof(tp_p->tp.parent_id));
             } 
         }
-    }
-#endif    
+    }   
 
     if (!found_tp) {
         bpf_dbg_printk("Generating new traceparent id");

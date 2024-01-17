@@ -88,8 +88,9 @@ type bpf_tpTpInfoPidT struct {
 		Flags    uint8
 		_        [7]byte
 	}
-	Pid uint32
-	_   [4]byte
+	Pid   uint32
+	Valid uint8
+	_     [3]byte
 }
 
 // loadBpf_tp returns the embedded CollectionSpec for bpf_tp.

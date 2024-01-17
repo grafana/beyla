@@ -41,12 +41,23 @@
       "google.golang.org/grpc/internal/status.Status": [
         "s"
       ],
+      "google.golang.org/grpc/internal/status.Status": [
+        "s"
+      ],
+      "google.golang.org/grpc/peer.Peer": [
+        "[1.60.0]Addr",
+        "[1.60.0]LocalAddr"
+      ],
       "google.golang.org/grpc/internal/transport.http2Server": [
-        "localAddr",
-        "remoteAddr"
+        "[,1.59.99]localAddr",
+        "[,1.59.99]remoteAddr",
+        "[1.60.0]peer"
       ],
       "google.golang.org/grpc.ClientConn": [
         "target"
+      ],
+      "google.golang.org/grpc/internal/transport.http2Client": [
+        "nextID"
       ]
     }
   },

@@ -54,7 +54,7 @@ discovery:
 The above criteria are insufficient for Kubernetes pods where the ports are ephemeral
 and internal to the pods. Also, pods are a level of abstraction that should hide
 details such as the name of their executables.
-For that reason, Beyla v1.1 introduces the new Kubernetes service
+For that reason, Beyla v1.2 introduces the new Kubernetes service
 selection criteria. All of them accept a [Go RE2-syntax regular expression](https://github.com/google/re2/wiki/Syntax)
 as value:
 

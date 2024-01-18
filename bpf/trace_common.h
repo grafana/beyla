@@ -160,6 +160,7 @@ static __always_inline void get_or_create_trace_info(http_connection_metadata_t 
 
     u8 found_tp = 0;
 
+#if 0 // disabled for now, until we have better way to detect when it's safe to assume same thread
     if (meta) {
         if (meta->type == EVENT_HTTP_CLIENT) {
             tp_p->pid = -1; // we only want to prevent correlation of duplicate server calls by PID
@@ -183,7 +184,8 @@ static __always_inline void get_or_create_trace_info(http_connection_metadata_t 
             } 
         }
     }
-    
+#endif    
+
     if (!found_tp) {
         bpf_dbg_printk("Generating new traceparent id");
         urand_bytes(tp_p->tp.trace_id, TRACE_ID_SIZE_BYTES);        

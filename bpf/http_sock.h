@@ -285,10 +285,7 @@ static __always_inline void handle_buf_with_connection(pid_connection_info_t *pi
             http_connection_metadata_t *meta = bpf_map_lookup_elem(&filtered_connections, pid_conn);
             get_or_create_trace_info(meta, pid_conn->pid, &pid_conn->conn, u_buf, bytes_len, capture_header_buffer);
 
-            if (!meta) {
-                bpf_dbg_printk("No META!");
-            }
-
+#if 0 // disabled for now, until we have better way to detect when it's safe to assume same thread
             if (meta) {            
                 tp_info_pid_t *tp_p = trace_info_for_connection(&pid_conn->conn);
                 if (tp_p) {
@@ -309,7 +306,10 @@ static __always_inline void handle_buf_with_connection(pid_connection_info_t *pi
                 } else {
                     bpf_dbg_printk("Can't find trace info, this is a bug!");
                 }
+            } else {
+                bpf_dbg_printk("No META!");
             }
+#endif            
             // we copy some small part of the buffer to the info trace event, so that we can process an event even with
             // incomplete trace info in user space.
             bpf_probe_read(info->buf, FULL_BUF_SIZE, u_buf);

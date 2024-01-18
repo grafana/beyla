@@ -84,7 +84,9 @@ func testNodeClientWithMethodAndStatusCode(t *testing.T, method string, statusCo
 	 We check that the traceID has that 16 character 0 suffix and then we
 	 use the first 16 characters for looking up by Parent span.
 	*/
-	require.True(t, span.TraceID != "")
-	require.True(t, strings.HasSuffix(span.TraceID, traceIDLookup))
-	require.True(t, strings.HasPrefix(span.SpanID, "00"))
+	if kprobeTraces {
+		require.True(t, span.TraceID != "")
+		require.True(t, strings.HasSuffix(span.TraceID, traceIDLookup))
+		require.True(t, strings.HasPrefix(span.SpanID, "00"))
+	}
 }

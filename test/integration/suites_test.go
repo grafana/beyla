@@ -14,7 +14,7 @@ import (
 	"github.com/grafana/beyla/test/integration/components/docker"
 )
 
-var kprobeTraces = false // disabled for now until we figure a safe way to determine server client relationships
+var kprobeTraces = true // allow tests to run distributed traces tests
 
 func TestSuite(t *testing.T) {
 	compose, err := docker.ComposeSuite("docker-compose.yml", path.Join(pathOutput, "test-suite.log"))

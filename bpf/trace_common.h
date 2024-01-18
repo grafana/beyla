@@ -193,7 +193,7 @@ static __always_inline void get_or_create_trace_info(http_connection_metadata_t 
                 bpf_memcpy(tp_p->tp.parent_id, existing_tp->tp.span_id, sizeof(tp_p->tp.parent_id));
             } 
         }
-    }   
+    }
 
     if (!found_tp) {
         bpf_dbg_printk("Generating new traceparent id");

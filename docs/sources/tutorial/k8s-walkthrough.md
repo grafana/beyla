@@ -54,7 +54,7 @@ discovery:
 The above criteria are insufficient for Kubernetes pods where the ports are ephemeral
 and internal to the pods. Also, pods are a level of abstraction that should hide
 details such as the name of their executables.
-For that reason, Beyla v1.1 introduces the new Kubernetes service
+For that reason, Beyla v1.2 introduces the new Kubernetes service
 selection criteria. All of them accept a [Go RE2-syntax regular expression](https://github.com/google/re2/wiki/Syntax)
 as value:
 
@@ -244,12 +244,13 @@ roleRef:
 
 And now, deploy Beyla by creating the following Kubernetes entities:
 
-- A `ConfigMap` storing the `config.yml` Beyla configuration file, which defines
+- A `ConfigMap` storing the `beyla-config.yml` Beyla configuration file, which defines
   the service discovery criteria. To verify that Beyla is able to discriminate
   by service instance even if they run the same image and executable,
   Beyla is configured to select ONLY the `docs` Apache web server.
 - A Beyla `DaemonSet` providing the Beyla pod and its configuration:
-  - Loads the `config.yml` file from the `ConfigMap`.
+  - Loads the `beyla-config.yml` file from the `ConfigMap`, as specified in the `BEYLA_CONFIG_PATH`
+    environment variable.
   - References to the `grafana-secrets` values for the endpoint and credentials.
   - Uses the `beyla` `ServiceAccount` to get all the permissions.
 
@@ -299,7 +300,7 @@ spec:
             name: beyla-config
       containers:
         - name: beyla
-          image: grafana/beyla:main
+          image: grafana/beyla:1.2
           imagePullPolicy: IfNotPresent
           securityContext:
             privileged: true # mandatory!

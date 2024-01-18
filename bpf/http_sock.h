@@ -293,7 +293,7 @@ static __always_inline void handle_buf_with_connection(pid_connection_info_t *pi
                     if (meta->type == EVENT_HTTP_CLIENT && !valid_span(tp_p->tp.parent_id)) {
                         bpf_dbg_printk("Looking for trace id of a client span");
                         u64 pid_tid = bpf_get_current_pid_tgid();
-                        tp_info_pid_t *server_tp = bpf_map_lookup_elem(&server_traces, &pid_tid);
+                        tp_info_pid_t *server_tp = find_parent_trace(pid_from_pid_tgid(pid_tid), (u32)pid_tid);
                         if (server_tp && server_tp->valid) {
                             bpf_dbg_printk("Found existing server span for id=%llx", pid_tid);
                             bpf_memcpy(info->tp.trace_id, server_tp->tp.trace_id, sizeof(info->tp.trace_id));

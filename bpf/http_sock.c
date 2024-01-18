@@ -322,3 +322,35 @@ int BPF_KRETPROBE(kretprobe_tcp_recvmsg, int copied_len) {
 
     return 0;
 }
+
+SEC("kretprobe/sys_clone")
+int BPF_KRETPROBE(kretprobe_sys_clone, int tid) {
+    u64 id = bpf_get_current_pid_tgid();
+
+    if (!valid_pid(id) || tid < 0) {
+        return 0;
+    }
+    
+    u32 parent = (u32)id;
+
+    bpf_dbg_printk("sys_clone_ret %d -> %d", id, tid);
+    bpf_map_update_elem(&clone_map, &tid, &parent, BPF_ANY);
+    
+    return 0;
+}
+
+SEC("kprobe/sys_exit")
+int BPF_KPROBE(kprobe_sys_exit, int status) {
+    u64 id = bpf_get_current_pid_tgid();
+
+    if (!valid_pid(id)) {
+        return 0;
+    }
+
+    u32 tid = (u32)id;
+
+    bpf_dbg_printk("sys_exit %d, pid=%d, valid_pid(id)=%d", tid, pid_from_pid_tgid(id), valid_pid(id));
+    bpf_map_delete_elem(&clone_map, &tid);
+    
+    return 0;
+}

@@ -43,6 +43,15 @@ struct {
     __uint(max_entries, 1);
 } tp_char_buf_mem SEC(".maps");
 
+struct {
+    __uint(type, BPF_MAP_TYPE_LRU_HASH);
+    __type(key, u32); // key: the child pid
+    __type(value, u32);  // value: the parent pid
+    __uint(max_entries, MAX_CONCURRENT_SHARED_REQUESTS);
+    __uint(pinning, LIBBPF_PIN_BY_NAME);
+} clone_map SEC(".maps");
+
+
 static __always_inline unsigned char *tp_char_buf() {
     int zero = 0;
     return bpf_map_lookup_elem(&tp_char_buf_mem, &zero);
@@ -94,6 +103,33 @@ static __always_inline unsigned char *bpf_strstr_tp_loop(unsigned char *buf, int
     return 0;
 }
 #endif
+
+static __always_inline tp_info_pid_t *find_parent_trace(u32 pid, u32 tid) {
+    u32 c_tid = tid;
+    int attempts = 0;
+    do {
+        u64 pid_tid = to_pid_tgid(pid, c_tid);
+        tp_info_pid_t *server_tp = bpf_map_lookup_elem(&server_traces, &pid_tid);
+
+        if (!server_tp) { // not this goroutine running the server request processing
+            // Let's find the parent scope
+            u32 *p_tid = (u32 *)bpf_map_lookup_elem(&clone_map, &c_tid);
+            if (p_tid) {
+                // Lookup now to see if the parent was a request
+                c_tid = *p_tid;
+            } else {
+                break;
+            }
+        } else {
+            bpf_dbg_printk("Found parent trace for %d", c_tid);
+            return server_tp;
+        }
+
+        attempts++;
+    } while (attempts < 3); // Up to 3 levels of goroutine nesting allowed
+
+    return 0;
+}
 
 // Traceparent format: Traceparent: ver (2 chars) - trace_id (32 chars) - span_id (16 chars) - flags (2 chars)
 static __always_inline unsigned char *extract_trace_id(unsigned char *tp_start) {
@@ -175,7 +211,7 @@ static __always_inline void get_or_create_trace_info(http_connection_metadata_t 
         if (meta->type == EVENT_HTTP_CLIENT) {
             tp_p->pid = -1; // we only want to prevent correlation of duplicate server calls by PID
             u64 pid_tid = bpf_get_current_pid_tgid();
-            tp_info_pid_t *server_tp = bpf_map_lookup_elem(&server_traces, &pid_tid);
+            tp_info_pid_t *server_tp = find_parent_trace(pid_from_pid_tgid(pid_tid), (u32)pid_tid);
 
             if (server_tp && server_tp->valid) {
                 found_tp = 1;

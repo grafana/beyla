@@ -79,6 +79,10 @@ static __always_inline u32 pid_from_pid_tgid(u64 id) {
     return (u32)(id >> 32);
 }
 
+static __always_inline u64 to_pid_tgid(u32 pid, u32 tid) {
+    return (u64)((u64)pid << 32) | tid;
+}
+
 static __always_inline u32 valid_pid(u64 id) {
     u32 host_pid = id >> 32;
     // If we are doing system wide instrumenting, accept all PIDs

@@ -144,12 +144,14 @@ type bpf_debugSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpf_debugProgramSpecs struct {
+	KprobeSysExit           *ebpf.ProgramSpec `ebpf:"kprobe_sys_exit"`
 	KprobeTcpConnect        *ebpf.ProgramSpec `ebpf:"kprobe_tcp_connect"`
 	KprobeTcpRcvEstablished *ebpf.ProgramSpec `ebpf:"kprobe_tcp_rcv_established"`
 	KprobeTcpRecvmsg        *ebpf.ProgramSpec `ebpf:"kprobe_tcp_recvmsg"`
 	KprobeTcpSendmsg        *ebpf.ProgramSpec `ebpf:"kprobe_tcp_sendmsg"`
 	KretprobeSockAlloc      *ebpf.ProgramSpec `ebpf:"kretprobe_sock_alloc"`
 	KretprobeSysAccept4     *ebpf.ProgramSpec `ebpf:"kretprobe_sys_accept4"`
+	KretprobeSysClone       *ebpf.ProgramSpec `ebpf:"kretprobe_sys_clone"`
 	KretprobeSysConnect     *ebpf.ProgramSpec `ebpf:"kretprobe_sys_connect"`
 	KretprobeTcpRecvmsg     *ebpf.ProgramSpec `ebpf:"kretprobe_tcp_recvmsg"`
 }
@@ -164,6 +166,7 @@ type bpf_debugMapSpecs struct {
 	ActiveSslHandshakes *ebpf.MapSpec `ebpf:"active_ssl_handshakes"`
 	ActiveSslReadArgs   *ebpf.MapSpec `ebpf:"active_ssl_read_args"`
 	ActiveSslWriteArgs  *ebpf.MapSpec `ebpf:"active_ssl_write_args"`
+	CloneMap            *ebpf.MapSpec `ebpf:"clone_map"`
 	Events              *ebpf.MapSpec `ebpf:"events"`
 	FilteredConnections *ebpf.MapSpec `ebpf:"filtered_connections"`
 	HttpInfoMem         *ebpf.MapSpec `ebpf:"http_info_mem"`
@@ -204,6 +207,7 @@ type bpf_debugMaps struct {
 	ActiveSslHandshakes *ebpf.Map `ebpf:"active_ssl_handshakes"`
 	ActiveSslReadArgs   *ebpf.Map `ebpf:"active_ssl_read_args"`
 	ActiveSslWriteArgs  *ebpf.Map `ebpf:"active_ssl_write_args"`
+	CloneMap            *ebpf.Map `ebpf:"clone_map"`
 	Events              *ebpf.Map `ebpf:"events"`
 	FilteredConnections *ebpf.Map `ebpf:"filtered_connections"`
 	HttpInfoMem         *ebpf.Map `ebpf:"http_info_mem"`
@@ -227,6 +231,7 @@ func (m *bpf_debugMaps) Close() error {
 		m.ActiveSslHandshakes,
 		m.ActiveSslReadArgs,
 		m.ActiveSslWriteArgs,
+		m.CloneMap,
 		m.Events,
 		m.FilteredConnections,
 		m.HttpInfoMem,
@@ -247,24 +252,28 @@ func (m *bpf_debugMaps) Close() error {
 //
 // It can be passed to loadBpf_debugObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpf_debugPrograms struct {
+	KprobeSysExit           *ebpf.Program `ebpf:"kprobe_sys_exit"`
 	KprobeTcpConnect        *ebpf.Program `ebpf:"kprobe_tcp_connect"`
 	KprobeTcpRcvEstablished *ebpf.Program `ebpf:"kprobe_tcp_rcv_established"`
 	KprobeTcpRecvmsg        *ebpf.Program `ebpf:"kprobe_tcp_recvmsg"`
 	KprobeTcpSendmsg        *ebpf.Program `ebpf:"kprobe_tcp_sendmsg"`
 	KretprobeSockAlloc      *ebpf.Program `ebpf:"kretprobe_sock_alloc"`
 	KretprobeSysAccept4     *ebpf.Program `ebpf:"kretprobe_sys_accept4"`
+	KretprobeSysClone       *ebpf.Program `ebpf:"kretprobe_sys_clone"`
 	KretprobeSysConnect     *ebpf.Program `ebpf:"kretprobe_sys_connect"`
 	KretprobeTcpRecvmsg     *ebpf.Program `ebpf:"kretprobe_tcp_recvmsg"`
 }
 
 func (p *bpf_debugPrograms) Close() error {
 	return _Bpf_debugClose(
+		p.KprobeSysExit,
 		p.KprobeTcpConnect,
 		p.KprobeTcpRcvEstablished,
 		p.KprobeTcpRecvmsg,
 		p.KprobeTcpSendmsg,
 		p.KretprobeSockAlloc,
 		p.KretprobeSysAccept4,
+		p.KretprobeSysClone,
 		p.KretprobeSysConnect,
 		p.KretprobeTcpRecvmsg,
 	)

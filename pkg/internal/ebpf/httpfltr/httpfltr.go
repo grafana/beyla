@@ -228,6 +228,18 @@ func (p *Tracer) KProbes() map[string]ebpfcommon.FunctionPrograms {
 			Start:    p.bpfObjects.KprobeTcpRecvmsg,
 			End:      p.bpfObjects.KretprobeTcpRecvmsg,
 		},
+		"sys_clone": {
+			Required: true,
+			End:      p.bpfObjects.KretprobeSysClone,
+		},
+		"sys_clone3": {
+			Required: true,
+			End:      p.bpfObjects.KretprobeSysClone,
+		},
+		"sys_exit": {
+			Required: true,
+			Start:    p.bpfObjects.KprobeSysExit,
+		},
 	}
 }
 

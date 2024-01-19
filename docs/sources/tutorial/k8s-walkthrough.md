@@ -344,25 +344,19 @@ curl http://localhost:8081/foo
 
 Some requests will return 404 error, but it's OK because they are also instrumented.
 
-Now, go to your Grafana Cloud instance and, in the _Explore_ section of the
-left panel, select your data source for the traces (usually named `grafanacloud-<your user name>-traces`).
+Now, go to the instance in Grafana Cloud, and from the **Explore** section in the left panel, select the data source for the traces (usually named `grafanacloud-<your user name>-traces`).
 
-![Selecting the data source of the traces](https://grafana.com/media/docs/grafana-cloud/beyla/tutorial/k8s/select-traces.png)
+![Select the traces data source](https://grafana.com/media/docs/grafana-cloud/beyla/tutorial/k8s/select-traces.png)
 
-To search for all the traces, select the _Search_ box in the Query type bar and, leaving the
-form empty, push the blue _Run query_ button in the top right corner:
+To search for all the traces, select the **Search** box in the Query bar, leave the form empty, and click **Run query**:
 
 ![Searching for all the traces in the system](https://grafana.com/media/docs/grafana-cloud/beyla/tutorial/k8s/run-query.png)
 
-You should now see the traces of the `docs` instance (port 8081).
-You might see traces from your own services, but you shouldn't see traces from
-the `website` service, as it has not been instrumented by Beyla.
+This will show the traces for the `docs` instance (port 8081). You might see traces from your own services, but shouldn't see traces from the `website` service, as it has not been instrumented by Beyla.
 
 ![Grafana Cloud list of traces](https://grafana.com/media/docs/grafana-cloud/beyla/tutorial/k8s/tut-traces-list.png)
 
-If you enter into the trace details, you will also see that the resource attributes of the traces are
-decorated with the metadata of the Kubernetes Pod running the instrumented
-service:
+In the trace details, the resource attributes of the traces are decorated with the metadata of the Kubernetes Pod running the instrumented service:
 
 ![Details of the trace](https://grafana.com/media/docs/grafana-cloud/beyla/tutorial/k8s/tut-trace-details.png)
 

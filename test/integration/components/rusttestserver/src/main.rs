@@ -3,6 +3,8 @@ use serde::{Deserialize, Serialize};
 use rand::Rng;
 use std::time::Duration;
 use std::thread;
+use reqwest;
+use tokio;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct MyObj {
@@ -27,6 +29,37 @@ async fn trace() -> HttpResponse {
     HttpResponse::Ok().into()
 }
 
+async fn dist() -> HttpResponse {
+    let handle = tokio::task::spawn_blocking(move || {
+        let r = reqwest::blocking::get("http://jtestserver:8085/jtrace").unwrap().text();        
+        r
+    });
+
+    let result = handle.await.unwrap();
+
+    match result {
+        Ok(value) => {
+            //println!("Result: {:?}", value);
+            HttpResponse::Ok().body(value)
+        }
+        Err(_) => {
+            HttpResponse::Ok().body("ERROR")
+        }
+    }
+}
+
+async fn dist2() -> HttpResponse {
+    let handle = tokio::task::spawn(async {
+        let r = reqwest::get("http://jtestserver:8085/jtrace2").await.unwrap().text().await.unwrap();
+        r
+    });
+
+    let result = handle.await.unwrap();
+    //println!("Result: {:?}", result);
+    
+    HttpResponse::Ok().body(result)
+}
+
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     env_logger::init_from_env(env_logger::Env::new().default_filter_or("info"));
@@ -41,6 +74,8 @@ async fn main() -> std::io::Result<()> {
             .service(web::resource("/greeting").route(web::post().to(greeting)))
             .service(web::resource("/smoke").route(web::get().to(smoke)))
             .service(web::resource("/trace").route(web::get().to(trace)))
+            .service(web::resource("/dist").route(web::get().to(dist)))
+            .service(web::resource("/dist2").route(web::get().to(dist2)))
     })
     .bind(("0.0.0.0", 8090))?
     .run()

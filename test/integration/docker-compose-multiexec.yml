@@ -43,6 +43,11 @@ services:
     environment:
       LOG_LEVEL: DEBUG
 
+  rtestserver:
+    image: ghcr.io/grafana/beyla-test/greeting-rust/0.0.2
+    ports:
+      - 8091:8090
+
   rtestserverssl:
     image: ghcr.io/grafana/beyla-test/greeting-rust-ssl/0.0.1
     ports:
@@ -98,6 +103,11 @@ services:
     ports:
       - 3044:3043
         
+  jtestserver:
+    image: ghcr.io/grafana/beyla-test/greeting-java-jar/0.0.3
+    ports:
+      - "8086:8085"
+
   autoinstrumenter:
     build:
       context: ../..

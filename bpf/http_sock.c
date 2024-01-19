@@ -330,7 +330,7 @@ int BPF_KRETPROBE(kretprobe_sys_clone, int tid) {
     if (!valid_pid(id) || tid < 0) {
         return 0;
     }
-    
+
     u32 parent = (u32)id;
 
     bpf_dbg_printk("sys_clone_ret %d -> %d", id, tid);

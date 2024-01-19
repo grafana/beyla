@@ -344,9 +344,19 @@ curl http://localhost:8081/foo
 
 Some requests will return 404 error, but it's OK because they are also instrumented.
 
-Now, go to your Grafana Cloud instance and, in the _Explore_ section, search for
-all the traces. In the list, you will see only the traces from the `docs`
-instance (port 8081):
+Now, go to your Grafana Cloud instance and, in the _Explore_ section of the
+left panel, select your data source for the traces (usually named `grafanacloud-<your user name>-traces`).
+
+![Selecting the data source of the traces](https://grafana.com/media/docs/grafana-cloud/beyla/tutorial/k8s/select-traces.png)
+
+To search for all the traces, select the _Search_ box in the Query type bar and, leaving the
+form empty, push the blue _Run query_ button in the top right corner:
+
+![Searching for all the traces in the system](https://grafana.com/media/docs/grafana-cloud/beyla/tutorial/k8s/run-query.png)
+
+You should now see the traces of the `docs` instance (port 8081).
+You might see traces from your own services, but you shouldn't see traces from
+the `website` service, as it has not been instrumented by Beyla.
 
 ![Grafana Cloud list of traces](https://grafana.com/media/docs/grafana-cloud/beyla/tutorial/k8s/tut-traces-list.png)
 

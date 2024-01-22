@@ -38,4 +38,10 @@ discovery:
     - namespace: multi-k
       name: rails-service
       open_ports: 3040
+    - namespace: multi-k
+      name: java-service
+      open_ports: 8085
+    - namespace: multi-k
+      name: rust-service
+      open_ports: 8090
 

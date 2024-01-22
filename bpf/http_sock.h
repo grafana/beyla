@@ -163,8 +163,9 @@ static __always_inline void finish_http(http_info_t *info) {
             bpf_ringbuf_submit(trace, get_flags());
         }
 
+        delete_server_trace();
+
         u64 pid_tid = bpf_get_current_pid_tgid();
-        bpf_map_delete_elem(&server_traces, &pid_tid);
 
         // bpf_dbg_printk("Terminating trace for pid=%d", pid_from_pid_tgid(pid_tid));
         // dbg_print_http_connection_info(&info->conn_info); // commented out since GitHub CI doesn't like this call
@@ -291,15 +292,14 @@ static __always_inline void handle_buf_with_connection(pid_connection_info_t *pi
                     info->tp = tp_p->tp;
 
                     if (meta->type == EVENT_HTTP_CLIENT && !valid_span(tp_p->tp.parent_id)) {
-                        bpf_dbg_printk("Looking for trace id of a client span");
-                        u64 pid_tid = bpf_get_current_pid_tgid();
-                        tp_info_pid_t *server_tp = bpf_map_lookup_elem(&server_traces, &pid_tid);
+                        bpf_dbg_printk("Looking for trace id of a client span");                        
+                        tp_info_pid_t *server_tp = find_parent_trace();
                         if (server_tp && server_tp->valid) {
-                            bpf_dbg_printk("Found existing server span for id=%llx", pid_tid);
+                            bpf_dbg_printk("Found existing server span for id=%llx", bpf_get_current_pid_tgid());
                             bpf_memcpy(info->tp.trace_id, server_tp->tp.trace_id, sizeof(info->tp.trace_id));
                             bpf_memcpy(info->tp.parent_id, server_tp->tp.span_id, sizeof(info->tp.parent_id));
                         } else {
-                            bpf_dbg_printk("Cannot find server span for id=%llx", pid_tid);
+                            bpf_dbg_printk("Cannot find server span for id=%llx", bpf_get_current_pid_tgid());
                         }
                     }
                 } else {

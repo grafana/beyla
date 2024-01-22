@@ -4,16 +4,16 @@
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>de.fstab.demo</groupId>
 	<artifactId>greeting-service</artifactId>
-	<version>1.0.0-SNAPSHOT</version>
+	<version>1.2.0</version>
 
 	<parent>
 		<groupId>org.springframework.boot</groupId>
 		<artifactId>spring-boot-starter-parent</artifactId>
-		<version>3.0.6</version>
+		<version>3.2.1</version>
 	</parent>
 
 	<properties>
-		<java.version>1.8</java.version>
+		<java.version>17</java.version>
 	</properties>
 
 	<dependencyManagement>
@@ -21,7 +21,7 @@
 			<dependency>
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-dependencies</artifactId>
-				<version>3.0.6</version>
+				<version>3.2.1</version>
 				<type>pom</type>
 				<scope>import</scope>
 			</dependency>
@@ -38,6 +38,11 @@
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-actuator</artifactId>
+		</dependency>
+
+		<dependency>
+			<groupId>org.springframework</groupId>
+			<artifactId>spring-web</artifactId>
 		</dependency>
 
 	</dependencies>

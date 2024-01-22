@@ -322,3 +322,49 @@ int BPF_KRETPROBE(kretprobe_tcp_recvmsg, int copied_len) {
 
     return 0;
 }
+
+/*
+    The tracking of the clones is complicated by the fact that in container environments
+    the tid returned by the sys_clone call is the namespaced tid, not the host tid which 
+    bpf sees normally. To mitigate this we work exclusively with namespaces. Only the clone_map
+    and server_traces are keyed off the namespace:pid.
+*/
+SEC("kretprobe/sys_clone")
+int BPF_KRETPROBE(kretprobe_sys_clone, int tid) {
+    u64 id = bpf_get_current_pid_tgid();
+
+    if (!valid_pid(id) || tid < 0) {
+        return 0;
+    }
+
+    pid_key_t parent = {0};
+    task_tid(&parent);
+
+    pid_key_t child = {
+        .pid = (u32)tid,
+        .namespace = parent.namespace,
+    };
+
+    bpf_dbg_printk("sys_clone_ret %d -> %d", id, tid);
+    bpf_map_update_elem(&clone_map, &child, &parent, BPF_ANY);
+    
+    return 0;
+}
+
+SEC("kprobe/sys_exit")
+int BPF_KPROBE(kprobe_sys_exit, int status) {
+    u64 id = bpf_get_current_pid_tgid();
+
+    if (!valid_pid(id)) {
+        return 0;
+    }
+
+    pid_key_t task = {0};
+    task_tid(&task);
+
+    bpf_dbg_printk("sys_exit %d, pid=%d, valid_pid(id)=%d", id, pid_from_pid_tgid(id), valid_pid(id));
+    bpf_map_delete_elem(&clone_map, &task);
+    bpf_map_delete_elem(&server_traces, &task);
+    
+    return 0;
+}

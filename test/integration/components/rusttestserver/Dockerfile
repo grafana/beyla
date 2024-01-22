@@ -12,7 +12,8 @@ RUN cargo build --release
 # The App Image
 FROM debian:bookworm-slim
 
-#RUN apt update
+RUN apt update
+RUN apt install libssl3 -y
 #RUN apt install strace -y
 
 EXPOSE 8090

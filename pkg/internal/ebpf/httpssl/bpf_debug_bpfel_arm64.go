@@ -154,6 +154,7 @@ type bpf_debugMapSpecs struct {
 	ActiveSslHandshakes *ebpf.MapSpec `ebpf:"active_ssl_handshakes"`
 	ActiveSslReadArgs   *ebpf.MapSpec `ebpf:"active_ssl_read_args"`
 	ActiveSslWriteArgs  *ebpf.MapSpec `ebpf:"active_ssl_write_args"`
+	CloneMap            *ebpf.MapSpec `ebpf:"clone_map"`
 	Events              *ebpf.MapSpec `ebpf:"events"`
 	FilteredConnections *ebpf.MapSpec `ebpf:"filtered_connections"`
 	HttpInfoMem         *ebpf.MapSpec `ebpf:"http_info_mem"`
@@ -191,6 +192,7 @@ type bpf_debugMaps struct {
 	ActiveSslHandshakes *ebpf.Map `ebpf:"active_ssl_handshakes"`
 	ActiveSslReadArgs   *ebpf.Map `ebpf:"active_ssl_read_args"`
 	ActiveSslWriteArgs  *ebpf.Map `ebpf:"active_ssl_write_args"`
+	CloneMap            *ebpf.Map `ebpf:"clone_map"`
 	Events              *ebpf.Map `ebpf:"events"`
 	FilteredConnections *ebpf.Map `ebpf:"filtered_connections"`
 	HttpInfoMem         *ebpf.Map `ebpf:"http_info_mem"`
@@ -211,6 +213,7 @@ func (m *bpf_debugMaps) Close() error {
 		m.ActiveSslHandshakes,
 		m.ActiveSslReadArgs,
 		m.ActiveSslWriteArgs,
+		m.CloneMap,
 		m.Events,
 		m.FilteredConnections,
 		m.HttpInfoMem,

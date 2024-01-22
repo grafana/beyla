@@ -323,6 +323,12 @@ int BPF_KRETPROBE(kretprobe_tcp_recvmsg, int copied_len) {
     return 0;
 }
 
+/*
+    The tracking of the clones is complicated by the fact that in container environments
+    the tid returned by the sys_clone call is the namespaced tid, not the host tid which 
+    bpf sees normally. To mitigate this we work exclusively with namespaces. Only the clone_map
+    and server_traces are keyed off the namespace:pid.
+*/
 SEC("kretprobe/sys_clone")
 int BPF_KRETPROBE(kretprobe_sys_clone, int tid) {
     u64 id = bpf_get_current_pid_tgid();

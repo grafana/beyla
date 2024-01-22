@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"time"
 
 	"golang.org/x/net/http2"
 )
@@ -26,16 +25,12 @@ func main() {
 		fmt.Scanln(&input)
 		HttpClientExample()
 		RoundTripExample()
+		HttpClientDoExample()
 	}
 }
 
-const url = "https://localhost:8080/ping"
-
 func RoundTripExample() {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
-	defer cancel()
-
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	req, err := http.NewRequestWithContext(context.Background(), "GET", "https://localhost:8080/pingrt", nil)
 	checkErr(err, "during new request")
 
 	tr := &http2.Transport{
@@ -55,7 +50,23 @@ func HttpClientExample() {
 		},
 	}
 
-	resp, err := client.Get(url)
+	resp, err := client.Get("https://localhost:8080/ping")
+	checkErr(err, "during get")
+
+	fmt.Printf("Client Proto: %d\n", resp.ProtoMajor)
+}
+
+func HttpClientDoExample() {
+	client := http.Client{
+		Transport: &http2.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		},
+	}
+
+	req, err := http.NewRequestWithContext(context.Background(), "GET", "https://localhost:8080/pingdo", nil)
+	checkErr(err, "during new request")
+
+	resp, err := client.Do(req)
 	checkErr(err, "during get")
 
 	fmt.Printf("Client Proto: %d\n", resp.ProtoMajor)

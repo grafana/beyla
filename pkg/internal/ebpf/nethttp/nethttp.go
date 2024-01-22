@@ -134,6 +134,10 @@ func (p *Tracer) GoProbes() map[string]ebpfcommon.FunctionPrograms {
 			Start: p.bpfObjects.UprobeRoundTrip,
 			End:   p.bpfObjects.UprobeRoundTripReturn,
 		},
+		"golang.org/x/net/http2.(*ClientConn).RoundTrip": {
+			Start: p.bpfObjects.UprobeRoundTrip,
+			End:   p.bpfObjects.UprobeRoundTripReturn,
+		},
 	}
 
 	if p.supportsContextPropagation() {

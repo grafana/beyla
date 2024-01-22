@@ -331,10 +331,16 @@ int BPF_KRETPROBE(kretprobe_sys_clone, int tid) {
         return 0;
     }
 
-    u32 parent = (u32)id;
+    pid_key_t parent = {0};
+    task_tid(&parent);
+
+    pid_key_t child = {
+        .pid = (u32)tid,
+        .namespace = parent.namespace,
+    };
 
     bpf_dbg_printk("sys_clone_ret %d -> %d", id, tid);
-    bpf_map_update_elem(&clone_map, &tid, &parent, BPF_ANY);
+    bpf_map_update_elem(&clone_map, &child, &parent, BPF_ANY);
     
     return 0;
 }
@@ -347,10 +353,12 @@ int BPF_KPROBE(kprobe_sys_exit, int status) {
         return 0;
     }
 
-    u32 tid = (u32)id;
+    pid_key_t task = {0};
+    task_tid(&task);
 
-    bpf_dbg_printk("sys_exit %d, pid=%d, valid_pid(id)=%d", tid, pid_from_pid_tgid(id), valid_pid(id));
-    bpf_map_delete_elem(&clone_map, &tid);
+    bpf_dbg_printk("sys_exit %d, pid=%d, valid_pid(id)=%d", id, pid_from_pid_tgid(id), valid_pid(id));
+    bpf_map_delete_elem(&clone_map, &task);
+    bpf_map_delete_elem(&server_traces, &task);
     
     return 0;
 }

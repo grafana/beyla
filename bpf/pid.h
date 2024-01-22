@@ -75,6 +75,22 @@ static __always_inline void task_pid(pid_info *pid) {
     pid->namespace = (u32)ns.inum;
 }
 
+static __always_inline void task_tid(pid_key_t *tid) {
+    struct upid upid;
+    struct task_struct *task = (struct task_struct *)bpf_get_current_task();
+
+    // https://github.com/torvalds/linux/blob/556e2d17cae620d549c5474b1ece053430cd50bc/kernel/pid.c#L324 (type is )
+    // set user-side PID
+    unsigned int level = BPF_CORE_READ(task, nsproxy, pid_ns_for_children, level);
+    struct pid *ns_pid = (struct pid *)BPF_CORE_READ(task, thread_pid);
+    bpf_probe_read_kernel(&upid, sizeof(upid), &ns_pid->numbers[level]);
+    tid->pid = (u32)upid.nr;
+
+    // set PIDs namespace
+    struct ns_common ns = BPF_CORE_READ(task, nsproxy, pid_ns_for_children, ns);
+    tid->namespace = (u32)ns.inum;
+}
+
 static __always_inline u32 pid_from_pid_tgid(u64 id) {
     return (u32)(id >> 32);
 }

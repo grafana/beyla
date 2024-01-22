@@ -4,6 +4,7 @@
 #include "utils.h"
 #include "http_types.h"
 #include "trace_util.h"
+#include "pid.h"
 
 #define NANOSECONDS_PER_EPOCH (15LL * 1000000000LL) // 15 seconds
 
@@ -23,7 +24,7 @@ struct {
 
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, u64); // key: pid_tid
+    __type(key, pid_key_t); // key: pid_tid
     __type(value, tp_info_pid_t);  // value: traceparent info
     __uint(max_entries, MAX_CONCURRENT_SHARED_REQUESTS);
     __uint(pinning, LIBBPF_PIN_BY_NAME);
@@ -45,8 +46,8 @@ struct {
 
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, u32); // key: the child pid
-    __type(value, u32);  // value: the parent pid
+    __type(key, pid_key_t); // key: the child pid
+    __type(value, pid_key_t);  // value: the parent pid
     __uint(max_entries, MAX_CONCURRENT_SHARED_REQUESTS);
     __uint(pinning, LIBBPF_PIN_BY_NAME);
 } clone_map SEC(".maps");
@@ -104,16 +105,18 @@ static __always_inline unsigned char *bpf_strstr_tp_loop(unsigned char *buf, int
 }
 #endif
 
-static __always_inline tp_info_pid_t *find_parent_trace(u32 pid, u32 tid) {
-    u32 c_tid = tid;
+static __always_inline tp_info_pid_t *find_parent_trace() {
+    pid_key_t c_tid = {0};
+
+    task_tid(&c_tid);
     int attempts = 0;
-    do {
-        u64 pid_tid = to_pid_tgid(pid, c_tid);
-        tp_info_pid_t *server_tp = bpf_map_lookup_elem(&server_traces, &pid_tid);
+
+    do {        
+        tp_info_pid_t *server_tp = bpf_map_lookup_elem(&server_traces, &c_tid);
 
         if (!server_tp) { // not this goroutine running the server request processing
             // Let's find the parent scope
-            u32 *p_tid = (u32 *)bpf_map_lookup_elem(&clone_map, &c_tid);
+            pid_key_t *p_tid = (pid_key_t *)bpf_map_lookup_elem(&clone_map, &c_tid);
             if (p_tid) {
                 // Lookup now to see if the parent was a request
                 c_tid = *p_tid;
@@ -121,7 +124,7 @@ static __always_inline tp_info_pid_t *find_parent_trace(u32 pid, u32 tid) {
                 break;
             }
         } else {
-            bpf_dbg_printk("Found parent trace for %d", c_tid);
+            bpf_dbg_printk("Found parent trace for pid=%d, ns=%lx", c_tid.pid, c_tid.namespace);
             return server_tp;
         }
 
@@ -149,23 +152,31 @@ static __always_inline u64 current_epoch(u64 ts) {
     return temp * NANOSECONDS_PER_EPOCH;
 }
 
+static __always_inline void delete_server_trace() {
+    pid_key_t c_tid = {0};
+    task_tid(&c_tid);
+
+    bpf_map_delete_elem(&server_traces, &c_tid);
+}
+
 static __always_inline void server_or_client_trace(http_connection_metadata_t *meta, connection_info_t *conn, tp_info_pid_t *tp_p) {
     if (!meta) {
         return;
     }
     if (meta->type == EVENT_HTTP_REQUEST) {
-        u64 pid_tid = bpf_get_current_pid_tgid();
+        pid_key_t c_tid = {0};
+        task_tid(&c_tid);
 
-        tp_info_pid_t *existing = bpf_map_lookup_elem(&server_traces, &pid_tid);
+        tp_info_pid_t *existing = bpf_map_lookup_elem(&server_traces, &c_tid);
         // we have a conflict, mark this invalid and do nothing
         if (existing) {
-            bpf_dbg_printk("Found conflicting server span, marking as invalid, id=%llx", pid_tid);
+            bpf_dbg_printk("Found conflicting server span, marking as invalid, id=%llx", bpf_get_current_pid_tgid());
             existing->valid = 0;
             return;
         }
 
-        bpf_dbg_printk("Saving server span for id=%llx", pid_tid);
-        bpf_map_update_elem(&server_traces, &pid_tid, tp_p, BPF_ANY);
+        bpf_dbg_printk("Saving server span for id=%llx", bpf_get_current_pid_tgid());
+        bpf_map_update_elem(&server_traces, &c_tid, tp_p, BPF_ANY);
     }
 }
 
@@ -210,8 +221,7 @@ static __always_inline void get_or_create_trace_info(http_connection_metadata_t 
     if (meta) {
         if (meta->type == EVENT_HTTP_CLIENT) {
             tp_p->pid = -1; // we only want to prevent correlation of duplicate server calls by PID
-            u64 pid_tid = bpf_get_current_pid_tgid();
-            tp_info_pid_t *server_tp = find_parent_trace(pid_from_pid_tgid(pid_tid), (u32)pid_tid);
+            tp_info_pid_t *server_tp = find_parent_trace();
 
             if (server_tp && server_tp->valid) {
                 found_tp = 1;

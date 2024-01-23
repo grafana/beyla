@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"time"
 
 	"golang.org/x/net/http2"
 )
@@ -20,12 +21,11 @@ func checkErr(err error, msg string) {
 
 func main() {
 	for {
-		fmt.Printf("Waiting on input, press any key to continue...")
-		var input string
-		fmt.Scanln(&input)
 		HttpClientExample()
 		RoundTripExample()
 		HttpClientDoExample()
+
+		time.Sleep(time.Second)
 	}
 }
 
@@ -69,5 +69,5 @@ func HttpClientDoExample() {
 	resp, err := client.Do(req)
 	checkErr(err, "during get")
 
-	fmt.Printf("Client Proto: %d\n", resp.ProtoMajor)
+	fmt.Printf("Client.Do Proto: %d\n", resp.ProtoMajor)
 }

@@ -1,7 +1,7 @@
 {
   "go": {
-    "versions": ">= 1.17",
-    "inspect": "./configs/offsets/std_inspect.go",
+    "versions": ">= 1.18",
+    "inspect": "./configs/offsets/go/http2/inspect.go",
     "fields": {
       "net/http.Request": [
         "Method",
@@ -34,7 +34,10 @@
       ],
       "vendor/golang.org/x/net/http2/hpack.Encoder": [
         "w"
-      ]          
+      ],
+      "golang.org/x/net/http2.responseWriterState": [
+        "req"
+      ]
     }
   },
   "google.golang.org/grpc": {

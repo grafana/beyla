@@ -3,25 +3,25 @@
     "bufio.Writer": {
       "buf": {
         "versions": {
-          "oldest": "1.17.0",
+          "oldest": "1.18.0",
           "newest": "1.21.6"
         },
         "offsets": [
           {
             "offset": 16,
-            "since": "1.17.0"
+            "since": "1.18.0"
           }
         ]
       },
       "n": {
         "versions": {
-          "oldest": "1.17.0",
+          "oldest": "1.18.0",
           "newest": "1.21.6"
         },
         "offsets": [
           {
             "offset": 40,
-            "since": "1.17.0"
+            "since": "1.18.0"
           }
         ]
       }
@@ -29,13 +29,27 @@
     "context.valueCtx": {
       "val": {
         "versions": {
-          "oldest": "1.17.0",
+          "oldest": "1.18.0",
           "newest": "1.21.6"
         },
         "offsets": [
           {
             "offset": 32,
-            "since": "1.17.0"
+            "since": "1.18.0"
+          }
+        ]
+      }
+    },
+    "golang.org/x/net/http2.responseWriterState": {
+      "req": {
+        "versions": {
+          "oldest": "1.18.0",
+          "newest": "1.21.6"
+        },
+        "offsets": [
+          {
+            "offset": 8,
+            "since": "1.18.0"
           }
         ]
       }
@@ -217,25 +231,25 @@
     "net.TCPAddr": {
       "IP": {
         "versions": {
-          "oldest": "1.17.0",
+          "oldest": "1.18.0",
           "newest": "1.21.6"
         },
         "offsets": [
           {
             "offset": 0,
-            "since": "1.17.0"
+            "since": "1.18.0"
           }
         ]
       },
       "Port": {
         "versions": {
-          "oldest": "1.17.0",
+          "oldest": "1.18.0",
           "newest": "1.21.6"
         },
         "offsets": [
           {
             "offset": 24,
-            "since": "1.17.0"
+            "since": "1.18.0"
           }
         ]
       }
@@ -243,73 +257,73 @@
     "net/http.Request": {
       "ContentLength": {
         "versions": {
-          "oldest": "1.17.0",
+          "oldest": "1.18.0",
           "newest": "1.21.6"
         },
         "offsets": [
           {
             "offset": 88,
-            "since": "1.17.0"
+            "since": "1.18.0"
           }
         ]
       },
       "Header": {
         "versions": {
-          "oldest": "1.17.0",
+          "oldest": "1.18.0",
           "newest": "1.21.6"
         },
         "offsets": [
           {
             "offset": 56,
-            "since": "1.17.0"
+            "since": "1.18.0"
           }
         ]
       },
       "Host": {
         "versions": {
-          "oldest": "1.17.0",
+          "oldest": "1.18.0",
           "newest": "1.21.6"
         },
         "offsets": [
           {
             "offset": 128,
-            "since": "1.17.0"
+            "since": "1.18.0"
           }
         ]
       },
       "Method": {
         "versions": {
-          "oldest": "1.17.0",
+          "oldest": "1.18.0",
           "newest": "1.21.6"
         },
         "offsets": [
           {
             "offset": 0,
-            "since": "1.17.0"
+            "since": "1.18.0"
           }
         ]
       },
       "RemoteAddr": {
         "versions": {
-          "oldest": "1.17.0",
+          "oldest": "1.18.0",
           "newest": "1.21.6"
         },
         "offsets": [
           {
             "offset": 176,
-            "since": "1.17.0"
+            "since": "1.18.0"
           }
         ]
       },
       "URL": {
         "versions": {
-          "oldest": "1.17.0",
+          "oldest": "1.18.0",
           "newest": "1.21.6"
         },
         "offsets": [
           {
             "offset": 16,
-            "since": "1.17.0"
+            "since": "1.18.0"
           }
         ]
       }
@@ -317,13 +331,13 @@
     "net/http.Response": {
       "StatusCode": {
         "versions": {
-          "oldest": "1.17.0",
+          "oldest": "1.18.0",
           "newest": "1.21.6"
         },
         "offsets": [
           {
             "offset": 16,
-            "since": "1.17.0"
+            "since": "1.18.0"
           }
         ]
       }
@@ -331,25 +345,25 @@
     "net/http.response": {
       "req": {
         "versions": {
-          "oldest": "1.17.0",
+          "oldest": "1.18.0",
           "newest": "1.21.6"
         },
         "offsets": [
           {
             "offset": 8,
-            "since": "1.17.0"
+            "since": "1.18.0"
           }
         ]
       },
       "status": {
         "versions": {
-          "oldest": "1.17.0",
+          "oldest": "1.18.0",
           "newest": "1.21.6"
         },
         "offsets": [
           {
             "offset": 120,
-            "since": "1.17.0"
+            "since": "1.18.0"
           }
         ]
       }
@@ -357,13 +371,13 @@
     "net/url.URL": {
       "Path": {
         "versions": {
-          "oldest": "1.17.0",
+          "oldest": "1.18.0",
           "newest": "1.21.6"
         },
         "offsets": [
           {
             "offset": 56,
-            "since": "1.17.0"
+            "since": "1.18.0"
           }
         ]
       }
@@ -371,13 +385,13 @@
     "vendor/golang.org/x/net/http2/hpack.Encoder": {
       "w": {
         "versions": {
-          "oldest": "1.17.0",
+          "oldest": "1.18.0",
           "newest": "1.21.6"
         },
         "offsets": [
           {
             "offset": 80,
-            "since": "1.17.0"
+            "since": "1.18.0"
           }
         ]
       }

@@ -79,12 +79,13 @@ type bpf_tp_debugSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpf_tp_debugProgramSpecs struct {
-	UprobeServeHTTP          *ebpf.ProgramSpec `ebpf:"uprobe_ServeHTTP"`
-	UprobeWriteHeader        *ebpf.ProgramSpec `ebpf:"uprobe_WriteHeader"`
-	UprobeReadRequestReturns *ebpf.ProgramSpec `ebpf:"uprobe_readRequestReturns"`
-	UprobeRoundTrip          *ebpf.ProgramSpec `ebpf:"uprobe_roundTrip"`
-	UprobeRoundTripReturn    *ebpf.ProgramSpec `ebpf:"uprobe_roundTripReturn"`
-	UprobeWriteSubset        *ebpf.ProgramSpec `ebpf:"uprobe_writeSubset"`
+	UprobeServeHTTP                           *ebpf.ProgramSpec `ebpf:"uprobe_ServeHTTP"`
+	UprobeWriteHeader                         *ebpf.ProgramSpec `ebpf:"uprobe_WriteHeader"`
+	UprobeHttp2ResponseWriterStateWriteHeader *ebpf.ProgramSpec `ebpf:"uprobe_http2ResponseWriterStateWriteHeader"`
+	UprobeReadRequestReturns                  *ebpf.ProgramSpec `ebpf:"uprobe_readRequestReturns"`
+	UprobeRoundTrip                           *ebpf.ProgramSpec `ebpf:"uprobe_roundTrip"`
+	UprobeRoundTripReturn                     *ebpf.ProgramSpec `ebpf:"uprobe_roundTripReturn"`
+	UprobeWriteSubset                         *ebpf.ProgramSpec `ebpf:"uprobe_writeSubset"`
 }
 
 // bpf_tp_debugMapSpecs contains maps before they are loaded into the kernel.
@@ -150,18 +151,20 @@ func (m *bpf_tp_debugMaps) Close() error {
 //
 // It can be passed to loadBpf_tp_debugObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpf_tp_debugPrograms struct {
-	UprobeServeHTTP          *ebpf.Program `ebpf:"uprobe_ServeHTTP"`
-	UprobeWriteHeader        *ebpf.Program `ebpf:"uprobe_WriteHeader"`
-	UprobeReadRequestReturns *ebpf.Program `ebpf:"uprobe_readRequestReturns"`
-	UprobeRoundTrip          *ebpf.Program `ebpf:"uprobe_roundTrip"`
-	UprobeRoundTripReturn    *ebpf.Program `ebpf:"uprobe_roundTripReturn"`
-	UprobeWriteSubset        *ebpf.Program `ebpf:"uprobe_writeSubset"`
+	UprobeServeHTTP                           *ebpf.Program `ebpf:"uprobe_ServeHTTP"`
+	UprobeWriteHeader                         *ebpf.Program `ebpf:"uprobe_WriteHeader"`
+	UprobeHttp2ResponseWriterStateWriteHeader *ebpf.Program `ebpf:"uprobe_http2ResponseWriterStateWriteHeader"`
+	UprobeReadRequestReturns                  *ebpf.Program `ebpf:"uprobe_readRequestReturns"`
+	UprobeRoundTrip                           *ebpf.Program `ebpf:"uprobe_roundTrip"`
+	UprobeRoundTripReturn                     *ebpf.Program `ebpf:"uprobe_roundTripReturn"`
+	UprobeWriteSubset                         *ebpf.Program `ebpf:"uprobe_writeSubset"`
 }
 
 func (p *bpf_tp_debugPrograms) Close() error {
 	return _Bpf_tp_debugClose(
 		p.UprobeServeHTTP,
 		p.UprobeWriteHeader,
+		p.UprobeHttp2ResponseWriterStateWriteHeader,
 		p.UprobeReadRequestReturns,
 		p.UprobeRoundTrip,
 		p.UprobeRoundTripReturn,

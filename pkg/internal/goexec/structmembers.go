@@ -128,10 +128,22 @@ var structMembers = map[string]structInfo{
 			"nextID": "http2_client_next_id_pos",
 		},
 	},
+	"golang.org/x/net/http2/hpack.Encoder": {
+		lib: "go",
+		fields: map[string]string{
+			"w": "hpack_encoder_w_pos",
+		},
+	},
 	"vendor/golang.org/x/net/http2/hpack.Encoder": {
 		lib: "go",
 		fields: map[string]string{
 			"w": "hpack_encoder_w_pos",
+		},
+	},
+	"golang.org/x/net/http2.responseWriterState": {
+		lib: "go",
+		fields: map[string]string{
+			"req": "rws_req_pos",
 		},
 	},
 }

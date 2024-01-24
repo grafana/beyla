@@ -40,6 +40,34 @@
         ]
       }
     },
+    "golang.org/x/net/http2.responseWriterState": {
+      "req": {
+        "versions": {
+          "oldest": "0.12.0",
+          "newest": "0.20.0"
+        },
+        "offsets": [
+          {
+            "offset": 8,
+            "since": "0.12.0"
+          }
+        ]
+      }
+    },
+    "golang.org/x/net/http2/hpack.Encoder": {
+      "w": {
+        "versions": {
+          "oldest": "0.12.0",
+          "newest": "0.20.0"
+        },
+        "offsets": [
+          {
+            "offset": 80,
+            "since": "0.12.0"
+          }
+        ]
+      }
+    },
     "google.golang.org/genproto/googleapis/rpc/status.Status": {
       "Code": {
         "versions": {

@@ -29,5 +29,6 @@ volatile const u64 resp_req_pos;
 volatile const u64 req_header_ptr_pos;
 volatile const u64 io_writer_buf_ptr_pos;
 volatile const u64 io_writer_n_pos;
+volatile const u64 rws_req_pos;
 
 #endif

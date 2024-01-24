@@ -34,9 +34,21 @@
       ],
       "vendor/golang.org/x/net/http2/hpack.Encoder": [
         "w"
-      ]          
+      ]
     }
   },
+  "golang.org/x/net": {
+    "inspect": "./configs/offsets/http2/inspect.go",
+    "versions": ">= 0.12.0",
+    "fields": {
+      "golang.org/x/net/http2.responseWriterState": [
+        "req"
+      ],
+      "golang.org/x/net/http2/hpack.Encoder": [
+        "w"
+      ]
+    }
+  },  
   "google.golang.org/grpc": {
     "versions": ">= 1.40",
     "fields": {

@@ -97,9 +97,8 @@ int uprobe_readRequestReturns(struct pt_regs *ctx) {
     return 0;
 }
 
-SEC("uprobe/WriteHeader")
-int uprobe_WriteHeader(struct pt_regs *ctx) {
-    bpf_dbg_printk("=== uprobe/WriteHeader === ");
+static __always_inline int writeHeaderHelper(struct pt_regs *ctx, u64 req_offset) {
+        bpf_dbg_printk("=== uprobe/WriteHeader === ");
     void *goroutine_addr = GOROUTINE_PTR(ctx);
     bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
 
@@ -144,7 +143,7 @@ int uprobe_WriteHeader(struct pt_regs *ctx) {
 
     // Get request struct
     void *req_ptr = 0;
-    bpf_probe_read(&req_ptr, sizeof(req_ptr), (void *)(resp_ptr + resp_req_pos));
+    bpf_probe_read(&req_ptr, sizeof(req_ptr), (void *)(resp_ptr + req_offset));
 
     if (!req_ptr) {
         bpf_printk("can't find req inside the response value");
@@ -193,6 +192,11 @@ int uprobe_WriteHeader(struct pt_regs *ctx) {
     bpf_ringbuf_submit(trace, get_flags());
 
     return 0;
+}
+
+SEC("uprobe/WriteHeader")
+int uprobe_WriteHeader(struct pt_regs *ctx) {
+    return writeHeaderHelper(ctx, resp_req_pos);
 }
 
 #ifndef NO_HEADER_PROPAGATION
@@ -379,3 +383,11 @@ int uprobe_writeSubset(struct pt_regs *ctx) {
     return 0;
 }
 #endif
+
+// HTTP 2.0 server support
+SEC("uprobe/http2ResponseWriterStateWriteHeader")
+int uprobe_http2ResponseWriterStateWriteHeader(struct pt_regs *ctx) {
+    bpf_dbg_printk("=== uprobe/proc http2 responseWriterState writeHeader === ");
+
+    return writeHeaderHelper(ctx, rws_req_pos);
+}

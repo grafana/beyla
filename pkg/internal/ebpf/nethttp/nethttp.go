@@ -108,6 +108,16 @@ func (p *Tracer) Constants(_ *exec.FileInfo, offsets *goexec.Offsets) map[string
 		constants[s] = offsets.Field[s]
 	}
 
+	// Optional list
+	for _, s := range []string{
+		"rws_req_pos",
+	} {
+		constants[s] = offsets.Field[s]
+		if constants[s] == nil {
+			constants[s] = uint64(0xffffffffffffffff)
+		}
+	}
+
 	return constants
 }
 
@@ -133,6 +143,13 @@ func (p *Tracer) GoProbes() map[string]ebpfcommon.FunctionPrograms {
 		"net/http.(*Transport).roundTrip": { // HTTP client, works with Client.Do as well as using the RoundTripper directly
 			Start: p.bpfObjects.UprobeRoundTrip,
 			End:   p.bpfObjects.UprobeRoundTripReturn,
+		},
+		"golang.org/x/net/http2.(*ClientConn).RoundTrip": { // http2 client
+			Start: p.bpfObjects.UprobeRoundTrip,
+			End:   p.bpfObjects.UprobeRoundTripReturn,
+		},
+		"golang.org/x/net/http2.(*responseWriterState).writeHeader": { // http2 server request done, capture the response code
+			Start: p.bpfObjects.UprobeHttp2ResponseWriterStateWriteHeader,
 		},
 	}
 

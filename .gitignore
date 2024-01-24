@@ -70,3 +70,5 @@ test/integration/components/rubytestserver/testapi/tmp/storage/*
 test/integration/components/dotnetserver/obj/*
 test/oats/build/*
 test/cmd/grpc/client/grpclient
+test/integration/components/gohttp2/client/client
+test/integration/components/gohttp2/server/http2srv

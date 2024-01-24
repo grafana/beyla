@@ -252,7 +252,7 @@ static __always_inline void get_or_create_trace_info(http_connection_metadata_t 
 #ifdef BPF_TRACEPARENT
     // The below buffer scan can be expensive on high volume of requests. We make it optional
     // for customers to enable it. Off by default.
-    if (!capture_header_buffer || !bpf_core_enum_value_exists(enum bpf_func_id, BPF_FUNC_loop)) {    
+    if (!capture_header_buffer) {
         bpf_map_update_elem(&trace_map, conn, tp_p, BPF_ANY);
         server_or_client_trace(meta, conn, tp_p);
         return;

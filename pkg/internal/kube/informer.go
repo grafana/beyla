@@ -54,12 +54,10 @@ type Metadata struct {
 type PodInfo struct {
 	// Informers need that internal object is an ObjectMeta instance
 	metav1.ObjectMeta
-	NodeName       string
-	ReplicaSetName string
-	// Pod Info includes the ReplicaSet as owner reference, and ReplicaSet info
-	// has Deployment as owner reference. We initially do a two-steps lookup to
-	// get the Pod's Deployment, but then cache the Deployment value here
-	DeploymentName string
+	NodeName string
+
+	Owner *Owner
+
 	// StartTimeStr caches value of ObjectMeta.StartTimestamp.String()
 	StartTimeStr string
 	ContainerIDs []string
@@ -81,6 +79,11 @@ var podIndexer = cache.Indexers{
 	},
 }
 
+// usually all the data required by the discovery and enrichement is inside
+// te v1.Pod object. However, when the Pod object has a ReplicaSet as owner,
+// if the ReplicaSet is owned by a Deployment, the reported Pod Owner should
+// be the Deployment, as the Replicaset is just an intermediate entity
+// used by the Deployment that it's actually defined by the user
 var replicaSetIndexer = cache.Indexers{
 	IndexReplicaSetNames: func(obj interface{}) ([]string, error) {
 		rs := obj.(*ReplicaSetInfo)
@@ -131,18 +134,11 @@ func (k *Metadata) initPodInformer(informerFactory informers.SharedInformerFacto
 				rmContainerIDSchema(pod.Status.EphemeralContainerStatuses[i].ContainerID))
 		}
 
-		var replicaSet string
-		for i := range pod.OwnerReferences {
-			or := &pod.OwnerReferences[i]
-			if or.APIVersion == "apps/v1" && or.Kind == "ReplicaSet" {
-				replicaSet = or.Name
-				break
-			}
-		}
+		owner := OwnerFromPodInfo(pod)
 		startTime := pod.GetCreationTimestamp().String()
 		if log.Enabled(context.TODO(), slog.LevelDebug) {
 			log.Debug("inserting pod", "name", pod.Name, "namespace", pod.Namespace,
-				"uid", pod.UID, "replicaSet", replicaSet,
+				"uid", pod.UID, "owner", owner,
 				"node", pod.Spec.NodeName, "startTime", startTime,
 				"containerIDs", containerIDs)
 		}
@@ -152,10 +148,10 @@ func (k *Metadata) initPodInformer(informerFactory informers.SharedInformerFacto
 				Namespace: pod.Namespace,
 				UID:       pod.UID,
 			},
-			ReplicaSetName: replicaSet,
-			NodeName:       pod.Spec.NodeName,
-			StartTimeStr:   startTime,
-			ContainerIDs:   containerIDs,
+			Owner:        owner,
+			NodeName:     pod.Spec.NodeName,
+			StartTimeStr: startTime,
+			ContainerIDs: containerIDs,
 		}, nil
 	}); err != nil {
 		return fmt.Errorf("can't set pods transform: %w", err)
@@ -309,12 +305,14 @@ func (k *Metadata) initInformers(client kubernetes.Interface, timeout time.Durat
 	}
 }
 
-// FetchPodOwnerInfo updates the passed pod with the owner Desployment info, if required and
-// if it exists.
+// FetchPodOwnerInfo updates the pod owner with the Deployment information, if it exists.
+// Pod Info might include a ReplicaSet as owner, and ReplicaSet info
+// usually has a Deployment as owner reference, which is the one that we'd really like
+// to report as owner.
 func (k *Metadata) FetchPodOwnerInfo(pod *PodInfo) {
-	if pod.DeploymentName == "" && pod.ReplicaSetName != "" {
-		if rsi, ok := k.GetReplicaSetInfo(pod.Namespace, pod.ReplicaSetName); ok {
-			pod.DeploymentName = rsi.DeploymentName
+	if pod.Owner != nil && pod.Owner.Type == OwnerReplicaSet {
+		if rsi, ok := k.GetReplicaSetInfo(pod.Namespace, pod.Owner.Name); ok {
+			pod.Owner.Owner = &Owner{Type: OwnerDeployment, Name: rsi.DeploymentName}
 		}
 	}
 }

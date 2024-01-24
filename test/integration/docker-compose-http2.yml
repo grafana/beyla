@@ -8,6 +8,9 @@ services:
     image: hatest-testclient
     environment:
       TARGET_URL: "https://testserver:7373"
+    depends_on:
+      testserver:
+        condition: service_started
 
   testserver:
     build:
@@ -15,9 +18,7 @@ services:
       dockerfile: test/integration/components/gohttp2/server/Dockerfile
     image: hatest-server
     ports:
-      - "7373:7070"
-    testserver:
-      condition: service_started
+      - "7373:7373"
       
   autoinstrumenter:
     build:

@@ -38,7 +38,7 @@
     }
   },
   "golang.org/x/net": {
-    "inspect": "./configs/offsets/http2_inspect.go",
+    "inspect": "./configs/offsets/http2/inspect.go",
     "versions": ">= 0.12.0",
     "fields": {
       "golang.org/x/net/http2.responseWriterState": [

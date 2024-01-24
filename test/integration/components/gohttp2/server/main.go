@@ -22,11 +22,11 @@ func main() {
 	})
 
 	server := &http.Server{
-		Addr:    "0.0.0.0:8080",
+		Addr:    "0.0.0.0:7373",
 		Handler: handler,
 	}
 	http2.ConfigureServer(server, nil)
 
-	fmt.Printf("Listening [0.0.0.0:8080]...\n")
+	fmt.Printf("Listening [0.0.0.0:7373]...\n")
 	checkErr(server.ListenAndServeTLS("cert.pem", "key.pem"), "while listening")
 }

@@ -30,7 +30,7 @@ func main() {
 }
 
 func RoundTripExample() {
-	req, err := http.NewRequestWithContext(context.Background(), "GET", "https://localhost:8080/pingrt", nil)
+	req, err := http.NewRequestWithContext(context.Background(), "GET", os.Getenv("TARGET_URL")+"/pingrt", nil)
 	checkErr(err, "during new request")
 
 	tr := &http2.Transport{
@@ -50,7 +50,7 @@ func HttpClientExample() {
 		},
 	}
 
-	resp, err := client.Get("https://localhost:8080/ping")
+	resp, err := client.Get(os.Getenv("TARGET_URL") + "/ping")
 	checkErr(err, "during get")
 
 	fmt.Printf("Client Proto: %d\n", resp.ProtoMajor)
@@ -63,7 +63,7 @@ func HttpClientDoExample() {
 		},
 	}
 
-	req, err := http.NewRequestWithContext(context.Background(), "GET", "https://localhost:8080/pingdo", nil)
+	req, err := http.NewRequestWithContext(context.Background(), "GET", os.Getenv("TARGET_URL")+"/pingdo", nil)
 	checkErr(err, "during new request")
 
 	resp, err := client.Do(req)

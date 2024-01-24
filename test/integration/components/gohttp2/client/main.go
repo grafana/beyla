@@ -16,7 +16,6 @@ func checkErr(err error, msg string) {
 		return
 	}
 	fmt.Printf("ERROR: %s: %s\n", msg, err)
-	os.Exit(1)
 }
 
 func main() {
@@ -40,7 +39,9 @@ func RoundTripExample() {
 	resp, err := tr.RoundTrip(req)
 	checkErr(err, "during roundtrip")
 
-	fmt.Printf("RoundTrip Proto: %d\n", resp.ProtoMajor)
+	if err == nil {
+		fmt.Printf("RoundTrip Proto: %d\n", resp.ProtoMajor)
+	}
 }
 
 func HttpClientExample() {
@@ -53,7 +54,9 @@ func HttpClientExample() {
 	resp, err := client.Get(os.Getenv("TARGET_URL") + "/ping")
 	checkErr(err, "during get")
 
-	fmt.Printf("Client Proto: %d\n", resp.ProtoMajor)
+	if err == nil {
+		fmt.Printf("Client Proto: %d\n", resp.ProtoMajor)
+	}
 }
 
 func HttpClientDoExample() {
@@ -69,5 +72,7 @@ func HttpClientDoExample() {
 	resp, err := client.Do(req)
 	checkErr(err, "during get")
 
-	fmt.Printf("Client.Do Proto: %d\n", resp.ProtoMajor)
+	if err == nil {
+		fmt.Printf("Client.Do Proto: %d\n", resp.ProtoMajor)
+	}
 }

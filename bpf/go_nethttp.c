@@ -19,6 +19,7 @@
 #include "go_nethttp.h"
 #include "go_traceparent.h"
 #include "tracing.h"
+#include "hpack.h"
 
 typedef struct http_func_invocation {
     u64 start_monotime_ns;
@@ -210,9 +211,7 @@ struct {
 #endif
 
 /* HTTP Client. We expect to see HTTP client in both HTTP server and gRPC server calls.*/
-
-SEC("uprobe/roundTrip")
-int uprobe_roundTrip(struct pt_regs *ctx) {
+static __always_inline void roundTripStartHelper(struct pt_regs *ctx) {
     bpf_dbg_printk("=== uprobe/proc http roundTrip === ");
 
     void *goroutine_addr = GOROUTINE_PTR(ctx);
@@ -243,8 +242,12 @@ int uprobe_roundTrip(struct pt_regs *ctx) {
             bpf_map_update_elem(&header_req_map, &headers_ptr, &goroutine_addr, BPF_ANY);
         }
     }
-#endif    
+#endif
+}
 
+SEC("uprobe/roundTrip")
+int uprobe_roundTrip(struct pt_regs *ctx) {
+    roundTripStartHelper(ctx);
     return 0;
 }
 
@@ -390,4 +393,140 @@ int uprobe_http2ResponseWriterStateWriteHeader(struct pt_regs *ctx) {
     bpf_dbg_printk("=== uprobe/proc http2 responseWriterState writeHeader === ");
 
     return writeHeaderHelper(ctx, rws_req_pos);
+}
+
+// HTTP 2.0 client support
+struct {
+    __uint(type, BPF_MAP_TYPE_LRU_HASH);
+    __type(key, u32); // key: stream id
+    __type(value, u64); // the goroutine of the round trip request, which is the key for our traceparent info
+    __uint(max_entries, MAX_CONCURRENT_REQUESTS);
+} http2_req_map SEC(".maps");
+
+SEC("uprobe/http2RoundTrip")
+int uprobe_http2RoundTrip(struct pt_regs *ctx) {
+    // we use the usual start helper, just like for normal http calls, but we later save
+    // more context, like the streamID
+    roundTripStartHelper(ctx);
+
+    void *cc_ptr = GO_PARAM1(ctx);
+
+    if (cc_ptr) {
+        u32 stream_id = 0;
+        bpf_probe_read(&stream_id, sizeof(stream_id), (void *)(cc_ptr + cc_next_stream_id_pos));
+        
+        bpf_dbg_printk("cc_ptr = %llx, nextStreamID=%d", cc_ptr, stream_id);
+        if (stream_id) {
+            void *goroutine_addr = GOROUTINE_PTR(ctx);
+
+            bpf_map_update_elem(&http2_req_map, &stream_id, &goroutine_addr, BPF_ANY);
+        }
+    }
+
+    return 0;
+}
+
+typedef struct framer_func_invocation {
+    u64 framer_ptr;
+    tp_info_t tp;
+} framer_func_invocation_t;
+
+struct {
+    __uint(type, BPF_MAP_TYPE_HASH);
+    __type(key, void*); // key: go routine doing framer write headers
+    __type(value, framer_func_invocation_t); // the goroutine of the round trip request, which is the key for our traceparent info
+    __uint(max_entries, MAX_CONCURRENT_REQUESTS);
+} framer_invocation_map SEC(".maps");
+
+SEC("uprobe/http2FramerWriteHeaders")
+int uprobe_http2FramerWriteHeaders(struct pt_regs *ctx) {
+    bpf_dbg_printk("=== uprobe/proc http2 Framer writeHeaders === ");
+
+    void *framer = GO_PARAM1(ctx);
+    u64 stream_id = (u64)GO_PARAM2(ctx);
+
+    bpf_printk("framer=%llx, stream_id=%lld", framer, ((u64)stream_id));
+
+    u32 stream_lookup = (u32)stream_id;
+
+    void **go_ptr = bpf_map_lookup_elem(&http2_req_map, &stream_lookup);
+    bpf_map_delete_elem(&http2_req_map, &stream_lookup);
+
+    if (go_ptr) {
+        void *go_addr = *go_ptr;
+        bpf_printk("Found existing stream data goaddr = %llx", go_addr);
+
+        http_func_invocation_t *info = bpf_map_lookup_elem(&ongoing_http_client_requests, &go_addr);
+
+        if (info) {
+            bpf_printk("Found func info %llx", info);
+            void *goroutine_addr = GOROUTINE_PTR(ctx);
+
+            framer_func_invocation_t f_info = {
+                .tp = info->tp,
+                .framer_ptr = (u64)framer,
+            };
+
+            bpf_map_update_elem(&framer_invocation_map, &goroutine_addr, &f_info, BPF_ANY);
+        }
+    }
+
+    return 0;
+}
+
+#define HTTP2_ENCODED_HEADER_LEN 66 // 1 + 1 + 8 + 1 + 55 = type byte + hpack_len_as_byte("traceparent") + strlen(hpack("traceparent")) + len_as_byte(55) + hpack(generated tracepanent id)
+
+SEC("uprobe/http2FramerWriteHeaders_returns")
+int uprobe_http2FramerWriteHeaders_returns(struct pt_regs *ctx) {
+    bpf_dbg_printk("=== uprobe/proc http2 Framer writeHeaders returns === ");
+
+    void *goroutine_addr = GOROUTINE_PTR(ctx);
+
+    framer_func_invocation_t *f_info = bpf_map_lookup_elem(&framer_invocation_map, &goroutine_addr);
+    bpf_map_delete_elem(&framer_invocation_map, &goroutine_addr);
+
+    if (f_info) {
+        void *w_ptr = 0;
+        bpf_probe_read(&w_ptr, sizeof(w_ptr), (void *)(f_info->framer_ptr + framer_w_pos + 8));
+
+        if (w_ptr) {
+            void *buf_arr = 0;
+            s64 n = 0;
+            s64 cap = 0;
+
+            bpf_probe_read(&buf_arr, sizeof(buf_arr), (void *)(w_ptr + 16));
+            bpf_probe_read(&n, sizeof(n), (void *)(w_ptr + 40));
+            bpf_probe_read(&cap, sizeof(cap), (void *)(w_ptr + 24));
+
+            bpf_printk("Found f_info, this is the place to write to w = %llx, buf=%llx, n=%d, size=%d", w_ptr, buf_arr, n, cap);
+            if (buf_arr && n < (cap - HTTP2_ENCODED_HEADER_LEN)) {
+                uint8_t tp_str[TP_MAX_VAL_LENGTH];
+
+                u8 type_byte = 0;
+                u8 key_len = TP_ENCODED_LEN | 0x80; // high tagged to signify hpack encoded value
+                u8 val_len = TP_MAX_VAL_LENGTH;
+
+                make_tp_string(tp_str, &f_info->tp);
+                bpf_printk("Will write %s, type = %d, key_len = %d, val_len = %d", tp_str, type_byte, key_len, val_len);
+
+                //bpf_probe_write_user(buf_arr + (n & 0x0ffff), &type_byte, sizeof(type_byte));                        
+                n++;
+                // Write the length of the key = 8
+                //bpf_probe_write_user(buf_arr + (n & 0x0ffff), &key_len, sizeof(key_len));
+                n++;
+                // Write 'traceparent' encoded as hpack
+                //bpf_probe_write_user(buf_arr + (n & 0x0ffff), tp_encoded, sizeof(tp_encoded));;
+                n += TP_ENCODED_LEN;
+                // Write the length of the hpack encoded traceparent field 
+                //bpf_probe_write_user(buf_arr + (n & 0x0ffff), &val_len, sizeof(val_len));
+                n++;
+                //bpf_probe_write_user(buf_arr + (n & 0x0ffff), tp_str, sizeof(tp_str));
+                n += TP_MAX_VAL_LENGTH;
+                // Update the value of n in w to reflect the new size
+                //bpf_probe_write_user((void *)(w_ptr + 40), &n, sizeof(n));
+            }
+        }
+    }
+
+    return 0;
 }

@@ -111,6 +111,8 @@ func (p *Tracer) Constants(_ *exec.FileInfo, offsets *goexec.Offsets) map[string
 	// Optional list
 	for _, s := range []string{
 		"rws_req_pos",
+		"cc_next_stream_id_pos",
+		"framer_w_pos",
 	} {
 		constants[s] = offsets.Field[s]
 		if constants[s] == nil {
@@ -145,11 +147,15 @@ func (p *Tracer) GoProbes() map[string]ebpfcommon.FunctionPrograms {
 			End:   p.bpfObjects.UprobeRoundTripReturn,
 		},
 		"golang.org/x/net/http2.(*ClientConn).RoundTrip": { // http2 client
-			Start: p.bpfObjects.UprobeRoundTrip,
-			End:   p.bpfObjects.UprobeRoundTripReturn,
+			Start: p.bpfObjects.UprobeHttp2RoundTrip,
+			End:   p.bpfObjects.UprobeRoundTripReturn, // return is the same as for http 1.1
 		},
 		"golang.org/x/net/http2.(*responseWriterState).writeHeader": { // http2 server request done, capture the response code
 			Start: p.bpfObjects.UprobeHttp2ResponseWriterStateWriteHeader,
+		},
+		"golang.org/x/net/http2.(*Framer).WriteHeaders": { // TODO: Move to supports context prop
+			Start: p.bpfObjects.UprobeHttp2FramerWriteHeaders,
+			End:   p.bpfObjects.UprobeHttp2FramerWriteHeadersReturns,
 		},
 	}
 

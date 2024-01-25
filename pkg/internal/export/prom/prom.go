@@ -45,12 +45,15 @@ const (
 	rpcSystemGRPC        = "rpc_system"
 	DBOperationKey       = "db_operation"
 
-	k8sNamespaceName  = "k8s_namespace_name"
-	k8sPodName        = "k8s_pod_name"
-	k8sDeploymentName = "k8s_deployment_name"
-	k8sNodeName       = "k8s_node_name"
-	k8sPodUID         = "k8s_pod_uid"
-	k8sPodStartTime   = "k8s_pod_start_time"
+	k8sNamespaceName   = "k8s_namespace_name"
+	k8sPodName         = "k8s_pod_name"
+	k8sDeploymentName  = "k8s_deployment_name"
+	k8sStatefulSetName = "k8s_statefulset_name"
+	k8sReplicaSetName  = "k8s_replicaset_name"
+	k8sDaemonSetName   = "k8s_daemonset_name"
+	k8sNodeName        = "k8s_node_name"
+	k8sPodUID          = "k8s_pod_uid"
+	k8sPodStartTime    = "k8s_pod_start_time"
 )
 
 // TODO: TLS
@@ -305,7 +308,8 @@ func (r *metricsReporter) labelValuesHTTP(span *request.Span) []string {
 }
 
 func appendK8sLabelNames(names []string) []string {
-	names = append(names, k8sNamespaceName, k8sDeploymentName, k8sPodName, k8sNodeName, k8sPodUID, k8sPodStartTime)
+	names = append(names, k8sNamespaceName, k8sPodName, k8sNodeName, k8sPodUID, k8sPodStartTime,
+		k8sDeploymentName, k8sReplicaSetName, k8sStatefulSetName, k8sDaemonSetName)
 	return names
 }
 
@@ -313,11 +317,14 @@ func appendK8sLabelValues(values []string, span *request.Span) []string {
 	// must follow the order in appendK8sLabelNames
 	values = append(values,
 		span.ServiceID.Metadata[kube.NamespaceName],
-		span.ServiceID.Metadata[kube.DeploymentName],
 		span.ServiceID.Metadata[kube.PodName],
 		span.ServiceID.Metadata[kube.NodeName],
 		span.ServiceID.Metadata[kube.PodUID],
 		span.ServiceID.Metadata[kube.PodStartTime],
+		span.ServiceID.Metadata[kube.DeploymentName],
+		span.ServiceID.Metadata[kube.ReplicaSetName],
+		span.ServiceID.Metadata[kube.StatefulSetName],
+		span.ServiceID.Metadata[kube.DaemonSetName],
 	)
 	return values
 }

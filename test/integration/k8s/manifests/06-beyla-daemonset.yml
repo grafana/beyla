@@ -15,6 +15,9 @@ data:
         # deployment (ignoring the "testserver" in the other pod)
         # name and namespace will be automatically set from the K8s metadata
         - k8s_deployment_name: otherinstance
+        # used in the k8s_owners_*_test.go
+        - k8s_statefulset_name: statefulservice
+        - k8s_daemonset_name: dsservice
     routes:
       patterns:
         - /pingpong

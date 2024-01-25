@@ -23,18 +23,17 @@ func TestDecoration(t *testing.T) {
 			ObjectMeta: v1.ObjectMeta{
 				Name: "pod-12", Namespace: "the-ns", UID: "uid-12",
 			},
-			NodeName:       "the-node",
-			StartTimeStr:   "2020-01-02 12:12:56",
-			DeploymentName: "deployment-12",
-			ReplicaSetName: "rs-12",
+			NodeName:     "the-node",
+			StartTimeStr: "2020-01-02 12:12:56",
+			Owner:        &kube.Owner{Type: kube.OwnerDeployment, Name: "deployment-12"},
 		},
 		34: &kube.PodInfo{
 			ObjectMeta: v1.ObjectMeta{
 				Name: "pod-34", Namespace: "the-ns", UID: "uid-34",
 			},
-			NodeName:       "the-node",
-			StartTimeStr:   "2020-01-02 12:34:56",
-			ReplicaSetName: "rs-34",
+			NodeName:     "the-node",
+			StartTimeStr: "2020-01-02 12:34:56",
+			Owner:        &kube.Owner{Type: kube.OwnerReplicaSet, Name: "rs-34"},
 		},
 		56: &kube.PodInfo{
 			ObjectMeta: v1.ObjectMeta{
@@ -74,11 +73,12 @@ func TestDecoration(t *testing.T) {
 		assert.Equal(t, "the-ns", deco[0].ServiceID.Namespace)
 		assert.Equal(t, "rs-34", deco[0].ServiceID.Name)
 		assert.Equal(t, map[string]string{
-			"k8s.node.name":      "the-node",
-			"k8s.namespace.name": "the-ns",
-			"k8s.pod.name":       "pod-34",
-			"k8s.pod.uid":        "uid-34",
-			"k8s.pod.start_time": "2020-01-02 12:34:56",
+			"k8s.node.name":       "the-node",
+			"k8s.namespace.name":  "the-ns",
+			"k8s.replicaset.name": "rs-34",
+			"k8s.pod.name":        "pod-34",
+			"k8s.pod.uid":         "uid-34",
+			"k8s.pod.start_time":  "2020-01-02 12:34:56",
 		}, deco[0].ServiceID.Metadata)
 	})
 	t.Run("pod info with only pod name should set pod name as name", func(t *testing.T) {

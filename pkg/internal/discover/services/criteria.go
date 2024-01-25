@@ -11,18 +11,26 @@ import (
 )
 
 const (
-	AttrNamespace      = "k8s_namespace"
-	AttrPodName        = "k8s_pod_name"
-	AttrDeploymentName = "k8s_deployment_name"
-	AttrReplicaSetName = "k8s_replicaset_name"
+	AttrNamespace       = "k8s_namespace"
+	AttrPodName         = "k8s_pod_name"
+	AttrDeploymentName  = "k8s_deployment_name"
+	AttrReplicaSetName  = "k8s_replicaset_name"
+	AttrDaemonSetName   = "k8s_daemonset_name"
+	AttrStatefulSetName = "k8s_statefulset_name"
+	// AttrOwnerName would be a generic search criteria that would
+	// match against deployment, replicaset, daemonset and statefulset names
+	AttrOwnerName = "k8s_owner_name"
 )
 
 // any attribute name not in this set will cause an error during the YAML unmarshalling
 var allowedAttributeNames = map[string]struct{}{
-	AttrNamespace:      {},
-	AttrPodName:        {},
-	AttrDeploymentName: {},
-	AttrReplicaSetName: {},
+	AttrNamespace:       {},
+	AttrPodName:         {},
+	AttrDeploymentName:  {},
+	AttrReplicaSetName:  {},
+	AttrDaemonSetName:   {},
+	AttrStatefulSetName: {},
+	AttrOwnerName:       {},
 }
 
 // ProcessInfo stores some relevant information about a running process

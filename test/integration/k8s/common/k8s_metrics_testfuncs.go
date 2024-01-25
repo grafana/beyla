@@ -105,6 +105,7 @@ func FeatureHTTPMetricsDecoration() features.Feature {
 				"k8s_pod_uid":         UUIDRegex,
 				"k8s_pod_start_time":  TimeRegex,
 				"k8s_deployment_name": "^testserver$",
+				"k8s_replicaset_name": "^testserver-",
 			}),
 		).Feature()
 }
@@ -134,6 +135,7 @@ func FeatureGRPCMetricsDecoration() features.Feature {
 				"k8s_pod_uid":         UUIDRegex,
 				"k8s_pod_start_time":  TimeRegex,
 				"k8s_deployment_name": "^testserver$",
+				"k8s_replicaset_name": "^testserver-",
 			}),
 		).Feature()
 }
@@ -156,10 +158,10 @@ func testMetricsDecoration(
 
 				for _, r := range results {
 					for ek, ev := range expectedLabels {
-						assert.Regexpf(t, ev, r.Metric[ek], "expected %q:%q entry in map %v", ek, ev, r.Metric)
+						assert.Regexpf(t, ev, r.Metric[ek], "%s: expected %q:%q entry in map %v", metric, ek, ev, r.Metric)
 					}
 					for _, ek := range expectedMissingLabels {
-						assert.NotContainsf(t, r.Metric, ek, "not expected %q entry in map %v", ek, r.Metric)
+						assert.NotContainsf(t, r.Metric, ek, "%s: not expected %q entry in map %v", metric, ek, r.Metric)
 					}
 				}
 			})

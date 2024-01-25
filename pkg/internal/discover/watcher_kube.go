@@ -232,8 +232,10 @@ func (wk *WatcherKubeEnricher) onNewReplicaSet(rsInfo *kube.ReplicaSetInfo) []Ev
 	for _, pod := range podInfos {
 		for _, containerID := range pod.ContainerIDs {
 			if procInfo, ok := wk.processByContainer[containerID]; ok {
-				pod.ReplicaSetName = rsInfo.Name
-				pod.DeploymentName = rsInfo.DeploymentName
+				pod.Owner = &kube.Owner{Type: kube.OwnerReplicaSet, Name: rsInfo.Name}
+				if rsInfo.DeploymentName != "" {
+					pod.Owner.Owner = &kube.Owner{Type: kube.OwnerDeployment, Name: rsInfo.DeploymentName}
+				}
 				allProcesses = append(allProcesses, Event[processAttrs]{
 					Type: EventCreated,
 					Obj:  withMetadata(procInfo, pod),
@@ -280,14 +282,14 @@ func (wk *WatcherKubeEnricher) getReplicaSetPods(namespace, name string) []*kube
 }
 
 func (wk *WatcherKubeEnricher) updateNewPodsByOwnerIndex(pod *kube.PodInfo) {
-	if pod.ReplicaSetName != "" {
-		wk.podsByOwner.Put(nsName{namespace: pod.Namespace, name: pod.ReplicaSetName}, pod.Name, pod)
+	if pod.Owner != nil {
+		wk.podsByOwner.Put(nsName{namespace: pod.Namespace, name: pod.Owner.Name}, pod.Name, pod)
 	}
 }
 
 func (wk *WatcherKubeEnricher) updateDeletedPodsByOwnerIndex(pod *kube.PodInfo) {
-	if pod.ReplicaSetName != "" {
-		wk.podsByOwner.Delete(nsName{namespace: pod.Namespace, name: pod.ReplicaSetName}, pod.Name)
+	if pod.Owner != nil {
+		wk.podsByOwner.Delete(nsName{namespace: pod.Namespace, name: pod.Owner.Name}, pod.Name)
 	}
 }
 
@@ -298,11 +300,20 @@ func withMetadata(pp processAttrs, info *kube.PodInfo) processAttrs {
 		services.AttrNamespace: info.Namespace,
 		services.AttrPodName:   info.Name,
 	}
-	if info.DeploymentName != "" {
-		ret.metadata[services.AttrDeploymentName] = info.DeploymentName
-	}
-	if info.ReplicaSetName != "" {
-		ret.metadata[services.AttrReplicaSetName] = info.ReplicaSetName
+	owner := info.Owner
+	for owner != nil {
+		ret.metadata[services.AttrOwnerName] = owner.Name
+		switch owner.Type {
+		case kube.OwnerDaemonSet:
+			ret.metadata[services.AttrDaemonSetName] = owner.Name
+		case kube.OwnerReplicaSet:
+			ret.metadata[services.AttrReplicaSetName] = owner.Name
+		case kube.OwnerDeployment:
+			ret.metadata[services.AttrDeploymentName] = owner.Name
+		case kube.OwnerStatefulSet:
+			ret.metadata[services.AttrStatefulSetName] = owner.Name
+		}
+		owner = owner.Owner
 	}
 	return ret
 }

@@ -23,12 +23,6 @@ const (
 	EnabledDefault    = EnabledFalse
 
 	// TODO: let the user decide which attributes to add, as in https://opentelemetry.io/docs/kubernetes/collector/components/#kubernetes-attributes-processor
-	NamespaceName  = "k8s.namespace.name"
-	PodName        = "k8s.pod.name"
-	DeploymentName = "k8s.deployment.name"
-	NodeName       = "k8s.node.name"
-	PodUID         = "k8s.pod.uid"
-	PodStartTime   = "k8s.pod.start_time"
 )
 
 func klog() *slog.Logger {
@@ -107,10 +101,13 @@ func appendMetadata(span *request.Span, info *kube.PodInfo) {
 	// service name and namespace, we will automatically set it from
 	// the kubernetes metadata
 	if span.ServiceID.AutoName {
-		if info.DeploymentName != "" {
-			span.ServiceID.Name = info.DeploymentName
-		} else if info.ReplicaSetName != "" {
-			span.ServiceID.Name = info.ReplicaSetName
+		if info.Owner != nil {
+			// we have two levels of ownership at most
+			if info.Owner.Owner != nil {
+				span.ServiceID.Name = info.Owner.Owner.Name
+			} else {
+				span.ServiceID.Name = info.Owner.Name
+			}
 		} else {
 			span.ServiceID.Name = info.Name
 		}
@@ -123,13 +120,15 @@ func appendMetadata(span *request.Span, info *kube.PodInfo) {
 	// if, in the future, other pipeline steps modify the service metadata, we should
 	// replace the map literal by individual entry insertions
 	span.ServiceID.Metadata = map[string]string{
-		NamespaceName: info.Namespace,
-		PodName:       info.Name,
-		NodeName:      info.NodeName,
-		PodUID:        string(info.UID),
-		PodStartTime:  info.StartTimeStr,
+		kube.NamespaceName: info.Namespace,
+		kube.PodName:       info.Name,
+		kube.NodeName:      info.NodeName,
+		kube.PodUID:        string(info.UID),
+		kube.PodStartTime:  info.StartTimeStr,
 	}
-	if info.DeploymentName != "" {
-		span.ServiceID.Metadata[DeploymentName] = info.DeploymentName
+	owner := info.Owner
+	for owner != nil {
+		span.ServiceID.Metadata[owner.Type.LabelName()] = owner.Name
+		owner = owner.Owner
 	}
 }

@@ -9,9 +9,9 @@ import (
 
 	"github.com/grafana/beyla/pkg/internal/connector"
 	"github.com/grafana/beyla/pkg/internal/export/otel"
+	"github.com/grafana/beyla/pkg/internal/kube"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/pkg/internal/request"
-	"github.com/grafana/beyla/pkg/internal/transform"
 )
 
 // using labels and names that are equivalent names to the OTEL attributes
@@ -312,12 +312,12 @@ func appendK8sLabelNames(names []string) []string {
 func appendK8sLabelValues(values []string, span *request.Span) []string {
 	// must follow the order in appendK8sLabelNames
 	values = append(values,
-		span.ServiceID.Metadata[transform.NamespaceName],
-		span.ServiceID.Metadata[transform.DeploymentName],
-		span.ServiceID.Metadata[transform.PodName],
-		span.ServiceID.Metadata[transform.NodeName],
-		span.ServiceID.Metadata[transform.PodUID],
-		span.ServiceID.Metadata[transform.PodStartTime],
+		span.ServiceID.Metadata[kube.NamespaceName],
+		span.ServiceID.Metadata[kube.DeploymentName],
+		span.ServiceID.Metadata[kube.PodName],
+		span.ServiceID.Metadata[kube.NodeName],
+		span.ServiceID.Metadata[kube.PodUID],
+		span.ServiceID.Metadata[kube.PodStartTime],
 	)
 	return values
 }

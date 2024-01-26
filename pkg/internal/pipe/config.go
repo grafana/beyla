@@ -8,6 +8,7 @@ import (
 	"github.com/caarlos0/env/v9"
 	"gopkg.in/yaml.v3"
 
+	"github.com/grafana/beyla/pkg/internal/discover/network"
 	"github.com/grafana/beyla/pkg/internal/discover/services"
 	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
 	"github.com/grafana/beyla/pkg/internal/export/debug"
@@ -26,87 +27,6 @@ const (
 	FeatureAppO11y = Feature(1 << iota)
 	FeatureNetO11y
 )
-
-type Features uint
-
-func (fs *Features) Add(f Feature) {
-	*fs |= Features(f)
-}
-
-func (fs Features) Has(f Feature) bool {
-	return fs&Features(f) != 0
-}
-
-type AgentConfig struct {
-	Enable bool `env:"BEYLA_NETWORK_OBSERVABILITY" yaml:"enable"`
-
-	// AgentIP allows overriding the reported Agent IP address on each flow.
-	AgentIP string `env:"AGENT_IP"`
-	// AgentIPIface specifies which interface should the agent pick the IP address from in order to
-	// report it in the AgentIP field on each flow. Accepted values are: external (default), local,
-	// or name:<interface name> (e.g. name:eth0).
-	// If the AgentIP configuration property is set, this property has no effect.
-	AgentIPIface string `env:"AGENT_IP_IFACE" envDefault:"external"`
-	// AgentIPType specifies which type of IP address (IPv4 or IPv6 or any) should the agent report
-	// in the AgentID field of each flow. Accepted values are: any (default), ipv4, ipv6.
-	// If the AgentIP configuration property is set, this property has no effect.
-	AgentIPType string `env:"AGENT_IP_TYPE" envDefault:"any"`
-	// Interfaces contains the interface names from where flows will be collected. If empty, the agent
-	// will fetch all the interfaces in the system, excepting the ones listed in ExcludeInterfaces.
-	// If an entry is enclosed by slashes (e.g. `/br-/`), it will match as regular expression,
-	// otherwise it will be matched as a case-sensitive string.
-	Interfaces []string `env:"INTERFACES" envSeparator:","`
-	// ExcludeInterfaces contains the interface names that will be excluded from flow tracing. Default:
-	// "lo" (loopback).
-	// If an entry is enclosed by slashes (e.g. `/br-/`), it will match as regular expression,
-	// otherwise it will be matched as a case-sensitive string.
-	ExcludeInterfaces []string `env:"EXCLUDE_INTERFACES" envSeparator:"," envDefault:"lo"`
-	// BuffersLength establishes the length of communication channels between the different processing
-	// stages
-	BuffersLength int `env:"BUFFERS_LENGTH" envDefault:"50"`
-	// ExporterBufferLength establishes the length of the buffer of flow batches (not individual flows)
-	// that can be accumulated before the Kafka or GRPC exporter. When this buffer is full (e.g.
-	// because the Kafka or GRPC endpoint is slow), incoming flow batches will be dropped. If unset,
-	// its value is the same as the BUFFERS_LENGTH property.
-	ExporterBufferLength int `env:"EXPORTER_BUFFER_LENGTH"`
-	// CacheMaxFlows specifies how many flows can be accumulated in the accounting cache before
-	// being flushed for its later export
-	CacheMaxFlows int `env:"CACHE_MAX_FLOWS" envDefault:"5000"`
-	// CacheActiveTimeout specifies the maximum duration that flows are kept in the accounting
-	// cache before being flushed for its later export
-	CacheActiveTimeout time.Duration `env:"CACHE_ACTIVE_TIMEOUT" envDefault:"5s"`
-	// Deduper specifies the deduper type. Accepted values are "none" (disabled) and "firstCome".
-	// When enabled, it will detect duplicate flows (flows that have been detected e.g. through
-	// both the physical and a virtual interface).
-	// "firstCome" will forward only flows from the first interface the flows are received from.
-	Deduper string `env:"DEDUPER" envDefault:"none"`
-	// DeduperFCExpiry specifies the expiry duration of the flows "firstCome" deduplicator. After
-	// a flow hasn't been received for that expiry time, the deduplicator forgets it. That means
-	// that a flow from a connection that has been inactive during that period could be forwarded
-	// again from a different interface.
-	// If the value is not set, it will default to 2 * CacheActiveTimeout
-	DeduperFCExpiry time.Duration `env:"DEDUPER_FC_EXPIRY"`
-	// DeduperJustMark will just mark duplicates (boolean field) instead of dropping them.
-	DeduperJustMark bool `env:"DEDUPER_JUST_MARK"`
-	// Direction allows selecting which flows to trace according to its direction. Accepted values
-	// are "ingress", "egress" or "both" (default).
-	Direction string `env:"DIRECTION" envDefault:"both"`
-	// Sampling holds the rate at which packets should be sampled and sent to the target collector.
-	// E.g. if set to 100, one out of 100 packets, on average, will be sent to the target collector.
-	Sampling int `env:"SAMPLING" envDefault:"0"`
-	// ListenInterfaces specifies the mechanism used by the agent to listen for added or removed
-	// network interfaces. Accepted values are "watch" (default) or "poll".
-	// If the value is "watch", interfaces are traced immediately after they are created. This is
-	// the recommended setting for most configurations. "poll" value is a fallback mechanism that
-	// periodically queries the current network interfaces (frequency specified by ListenPollPeriod).
-	ListenInterfaces string `env:"LISTEN_INTERFACES" envDefault:"watch"`
-	// ListenPollPeriod specifies the periodicity to query the network interfaces when the
-	// ListenInterfaces value is set to "poll".
-	ListenPollPeriod time.Duration `env:"LISTEN_POLL_PERIOD" envDefault:"10s"`
-
-	// Property taken from FLPLite: document.
-	Transform NetworkTransformConfig `yaml:"transform"`
-}
 
 var defaultConfig = Config{
 	ChannelBufferLen: 10,
@@ -158,24 +78,34 @@ var defaultConfig = Config{
 		},
 	},
 	Routes: &transform.RoutesConfig{},
-	Network: AgentConfig{
-		Transform: NetworkTransformConfig{
-			Rules: NetworkTransformRules{NetworkTransformRule{
-				Input:  "SrcAddr",
-				Output: "SrcK8s",
-				Type:   "add_kubernetes",
-			}, NetworkTransformRule{
-				Input:  "DstAddr",
-				Output: "DstK8s",
-				Type:   "add_kubernetes",
-			}},
+	Discovery: services.DiscoveryConfig{
+		Network: network.Config{
+			AgentIPIface:       "external",
+			AgentIPType:        "any",
+			ExcludeInterfaces:  []string{"lo"},
+			CacheMaxFlows:      5000,
+			CacheActiveTimeout: 5 * time.Second,
+			Deduper:            "firstCome",
+			Direction:          "both",
+			ListenInterfaces:   "watch",
+			ListenPollPeriod:   10 * time.Second,
+			Transform: NetworkTransformConfig{
+				Rules: NetworkTransformRules{NetworkTransformRule{
+					Input:  "SrcAddr",
+					Output: "SrcK8s",
+					Type:   "add_kubernetes",
+				}, NetworkTransformRule{
+					Input:  "DstAddr",
+					Output: "DstK8s",
+					Type:   "add_kubernetes",
+				}},
+			},
 		},
 	},
 }
 
 type Config struct {
-	Network AgentConfig             `yaml:"network"`
-	EBPF    ebpfcommon.TracerConfig `yaml:"ebpf"`
+	EBPF ebpfcommon.TracerConfig `yaml:"ebpf"`
 
 	// Grafana overrides some values of the otel.MetricsConfig and otel.TracesConfig below
 	// for a simpler submission of OTEL metrics to Grafana Cloud
@@ -229,12 +159,12 @@ func (e ConfigError) Error() string {
 	return string(e)
 }
 
-func (c *Config) validateInstrumentation() error {
+func (c *Config) Validate() error {
 	if err := c.Discovery.Services.Validate(); err != nil {
 		return ConfigError(fmt.Sprintf("error in services YAML property: %s", err.Error()))
 	}
-	if !c.Network.Enable && c.Port.Len() == 0 && !c.Exec.IsSet() && len(c.Discovery.Services) == 0 && !c.Discovery.SystemWide {
-		return ConfigError("missing BEYLA_NETWORK_OBSERVABILITY, BEYLA_EXECUTABLE_NAME, BEYLA_OPEN_PORT or BEYLA_SYSTEM_WIDE property")
+	if !c.Enabled(FeatureNetO11y) && !c.Enabled(FeatureAppO11y) {
+		return ConfigError("missing BEYLA_NETWORK_METRICS, BEYLA_EXECUTABLE_NAME, BEYLA_OPEN_PORT or BEYLA_SYSTEM_WIDE property")
 	}
 	if (c.Port.Len() > 0 || c.Exec.IsSet() || len(c.Discovery.Services) > 0) && c.Discovery.SystemWide {
 		return ConfigError("you can't use BEYLA_SYSTEM_WIDE if any of BEYLA_EXECUTABLE_NAME, BEYLA_OPEN_PORT or services (YAML) are set")
@@ -242,33 +172,31 @@ func (c *Config) validateInstrumentation() error {
 	if c.EBPF.BatchLength == 0 {
 		return ConfigError("BEYLA_BPF_BATCH_LENGTH must be at least 1")
 	}
+
+	if c.Enabled(FeatureNetO11y) && !c.Grafana.OTLP.MetricsEnabled() && !c.Metrics.Enabled() {
+		return ConfigError("enabling network observability requires to enable at least the OpenTelemetry" +
+			" metrics exporter: grafana or otel_metrics_export sections in the YAML configuration file; or the" +
+			" OTEL_EXPORTER_OTLP_ENDPOINT or OTEL_EXPORTER_OTLP_METRICS_ENDPOINT environment variables")
+	}
+
+	if !c.Noop.Enabled() && !c.Printer.Enabled() &&
+		!c.Grafana.OTLP.MetricsEnabled() && !c.Grafana.OTLP.TracesEnabled() &&
+		!c.Metrics.Enabled() && !c.Traces.Enabled() &&
+		!c.Prometheus.Enabled() {
+		return ConfigError("you need to define at least one exporter: print_traces," +
+			" grafana, otel_metrics_export, otel_traces_export or prometheus_export")
+	}
 	return nil
 }
-// TODO: no hacer que validate añada features. Que se haga en el mismo loadConfig o en
-// los métodos
-func (c *Config) Validate() (Features, error) {
-	var feat Features
-	if err := c.validateInstrumentation(); err != nil {
-		return feat, err
-	}
-	if c.Network.Enable {
-		feat.Add(FeatureNetO11y)
-	}
 
-	if c.Noop.Enabled() || c.Printer.Enabled() ||
-		c.Grafana.OTLP.MetricsEnabled() || c.Grafana.OTLP.TracesEnabled() ||
-		c.Metrics.Enabled() || c.Traces.Enabled() ||
-		c.Prometheus.Enabled() {
-		feat.Add(FeatureAppO11y)
+func (c *Config) Enabled(feature Feature) bool {
+	switch feature {
+	case FeatureNetO11y:
+		return len(c.Discovery.Network.Metrics) > 0
+	case FeatureAppO11y:
+		return c.Port.Len() == 0 && !c.Exec.IsSet() && len(c.Discovery.Services) == 0 && !c.Discovery.SystemWide
 	}
-
-	if feat != 0 {
-		return feat, nil
-	}
-
-	return feat, ConfigError("you need to enable at least NetO11y or one AppO11y exporter: print_traces," +
-		" grafana, otel_metrics_export, otel_traces_export or prometheus_export")
-
+	return false
 }
 
 // LoadConfig overrides configuration in the following order (from less to most priority)

@@ -30,10 +30,11 @@ import (
 	"github.com/gavv/monotime"
 	"github.com/mariomac/pipes/pkg/node"
 
-	"github.com/grafana/beyla/pkg/beyla/config"
-	"github.com/grafana/beyla/pkg/beyla/flows/ebpf"
-	flow2 "github.com/grafana/beyla/pkg/beyla/flows/flow"
-	ifaces2 "github.com/grafana/beyla/pkg/beyla/flows/ifaces"
+	"github.com/grafana/beyla/pkg/internal/discover/network"
+	"github.com/grafana/beyla/pkg/internal/flows/ebpf"
+	"github.com/grafana/beyla/pkg/internal/flows/flow"
+	"github.com/grafana/beyla/pkg/internal/flows/ifaces"
+	"github.com/grafana/beyla/pkg/internal/pipe"
 )
 
 func alog() *slog.Logger {
@@ -71,21 +72,21 @@ func (s Status) String() string {
 
 // Flows reporting agent
 type Flows struct {
-	cfg *config.AgentConfig
+	cfg *pipe.Config
 
 	// input data providers
-	interfaces ifaces2.Informer
+	interfaces ifaces.Informer
 	filter     interfaceFilter
 	ebpf       ebpfFlowFetcher
 
 	// processing nodes to be wired in the buildAndStartPipeline method
-	mapTracer *flow2.MapTracer
-	rbTracer  *flow2.RingBufTracer
-	accounter *flow2.Accounter
-	exporter  node.TerminalFunc[[]*flow2.Record]
+	mapTracer *flow.MapTracer
+	rbTracer  *flow.RingBufTracer
+	accounter *flow.Accounter
+	exporter  node.TerminalFunc[[]*flow.Record]
 
 	// elements used to decorate flows with extra information
-	interfaceNamer flow2.InterfaceNamer
+	interfaceNamer flow.InterfaceNamer
 	agentIP        net.IP
 
 	status Status
@@ -94,31 +95,31 @@ type Flows struct {
 // ebpfFlowFetcher abstracts the interface of ebpf.FlowFetcher to allow dependency injection in tests
 type ebpfFlowFetcher interface {
 	io.Closer
-	Register(iface ifaces2.Interface) error
+	Register(iface ifaces.Interface) error
 
-	LookupAndDeleteMap() map[flow2.RecordKey][]flow2.RecordMetrics
+	LookupAndDeleteMap() map[flow.RecordKey][]flow.RecordMetrics
 	ReadRingBuf() (ringbuf.Record, error)
 }
 
 // FlowsAgent instantiates a new agent, given a configuration.
-func FlowsAgent(cfg *config.AgentConfig) (*Flows, error) {
+func FlowsAgent(cfg *pipe.Config) (*Flows, error) {
 	alog := alog()
 	alog.Info("initializing Flows agent")
 
 	// configure informer for new interfaces
-	var informer ifaces2.Informer
-	switch cfg.ListenInterfaces {
+	var informer ifaces.Informer
+	switch cfg.Discovery.Network.ListenInterfaces {
 	case ListenPoll:
 		alog.Debug("listening for new interfaces: use polling",
-			"period", cfg.ListenPollPeriod)
-		informer = ifaces2.NewPoller(cfg.ListenPollPeriod, cfg.BuffersLength)
+			"period", cfg.Discovery.Network.ListenPollPeriod)
+		informer = ifaces.NewPoller(cfg.Discovery.Network.ListenPollPeriod, cfg.ChannelBufferLen)
 	case ListenWatch:
 		alog.Debug("listening for new interfaces: use watching")
-		informer = ifaces2.NewWatcher(cfg.BuffersLength)
+		informer = ifaces.NewWatcher(cfg.ChannelBufferLen)
 	default:
 		alog.Warn("wrong interface listen method. Using file watcher as default",
-			"providedValue", cfg.ListenInterfaces)
-		informer = ifaces2.NewWatcher(cfg.BuffersLength)
+			"providedValue", cfg.Discovery.Network.ListenInterfaces)
+		informer = ifaces.NewWatcher(cfg.ChannelBufferLen)
 	}
 
 	alog.Debug("acquiring Agent IP")
@@ -134,9 +135,9 @@ func FlowsAgent(cfg *config.AgentConfig) (*Flows, error) {
 		return nil, err
 	}
 
-	ingress, egress := flowDirections(cfg)
+	ingress, egress := flowDirections(&cfg.Discovery.Network)
 
-	fetcher, err := ebpf.NewFlowFetcher(cfg.Sampling, cfg.CacheMaxFlows, ingress, egress)
+	fetcher, err := ebpf.NewFlowFetcher(cfg.Discovery.Network.Sampling, cfg.Discovery.Network.CacheMaxFlows, ingress, egress)
 	if err != nil {
 		return nil, err
 	}
@@ -145,19 +146,19 @@ func FlowsAgent(cfg *config.AgentConfig) (*Flows, error) {
 }
 
 // flowsAgent is a private constructor with injectable dependencies, usable for tests
-func flowsAgent(cfg *config.AgentConfig,
-	informer ifaces2.Informer,
+func flowsAgent(cfg *pipe.Config,
+	informer ifaces.Informer,
 	fetcher ebpfFlowFetcher,
-	exporter node.TerminalFunc[[]*flow2.Record],
+	exporter node.TerminalFunc[[]*flow.Record],
 	agentIP net.IP,
 ) (*Flows, error) {
 	// configure allow/deny interfaces filter
-	filter, err := initInterfaceFilter(cfg.Interfaces, cfg.ExcludeInterfaces)
+	filter, err := initInterfaceFilter(cfg.Discovery.Network.Interfaces, cfg.Discovery.Network.ExcludeInterfaces)
 	if err != nil {
 		return nil, fmt.Errorf("configuring interface filters: %w", err)
 	}
 
-	registerer := ifaces2.NewRegisterer(informer, cfg.BuffersLength)
+	registerer := ifaces.NewRegisterer(informer, cfg.ChannelBufferLen)
 
 	interfaceNamer := func(ifIndex int) string {
 		iface, ok := registerer.IfaceNameForIndex(ifIndex)
@@ -167,10 +168,10 @@ func flowsAgent(cfg *config.AgentConfig,
 		return iface
 	}
 
-	mapTracer := flow2.NewMapTracer(fetcher, cfg.CacheActiveTimeout)
-	rbTracer := flow2.NewRingBufTracer(fetcher, mapTracer, cfg.CacheActiveTimeout)
-	accounter := flow2.NewAccounter(
-		cfg.CacheMaxFlows, cfg.CacheActiveTimeout, time.Now, monotime.Now)
+	mapTracer := flow.NewMapTracer(fetcher, cfg.Discovery.Network.CacheActiveTimeout)
+	rbTracer := flow.NewRingBufTracer(fetcher, mapTracer, cfg.Discovery.Network.CacheActiveTimeout)
+	accounter := flow.NewAccounter(
+		cfg.Discovery.Network.CacheMaxFlows, cfg.Discovery.Network.CacheActiveTimeout, time.Now, monotime.Now)
 	return &Flows{
 		ebpf:           fetcher,
 		exporter:       exporter,
@@ -185,7 +186,7 @@ func flowsAgent(cfg *config.AgentConfig,
 	}, nil
 }
 
-func flowDirections(cfg *config.AgentConfig) (ingress, egress bool) {
+func flowDirections(cfg *network.Config) (ingress, egress bool) {
 	switch cfg.Direction {
 	case DirectionIngress:
 		return true, false
@@ -260,9 +261,9 @@ func (f *Flows) interfacesManager(ctx context.Context) error {
 			case event := <-ifaceEvents:
 				slog.Debug("received event", "event", event)
 				switch event.Type {
-				case ifaces2.EventAdded:
+				case ifaces.EventAdded:
 					f.onInterfaceAdded(event.Interface)
-				case ifaces2.EventDeleted:
+				case ifaces.EventDeleted:
 					// qdiscs, ingress and egress filters are automatically deleted so we don't need to
 					// specifically detach them from the ebpfFetcher
 				default:
@@ -275,7 +276,7 @@ func (f *Flows) interfacesManager(ctx context.Context) error {
 	return nil
 }
 
-func (f *Flows) onInterfaceAdded(iface ifaces2.Interface) {
+func (f *Flows) onInterfaceAdded(iface ifaces.Interface) {
 	alog := alog().With("interface", iface)
 	// ignore interfaces that do not match the user configuration acceptance/exclusion lists
 	if !f.filter.Allowed(iface.Name) {
@@ -289,8 +290,9 @@ func (f *Flows) onInterfaceAdded(iface ifaces2.Interface) {
 	}
 }
 
-func buildFlowExporter(_ *config.AgentConfig) (node.TerminalFunc[[]*flow2.Record], error) {
-	return func(in <-chan []*flow2.Record) {
+func buildFlowExporter(_ *pipe.Config) (node.TerminalFunc[[]*flow.Record], error) {
+	// TODO: remove
+	return func(in <-chan []*flow.Record) {
 		for flows := range in {
 			fmt.Printf("received %d flows\n", len(flows))
 			for _, f := range flows {

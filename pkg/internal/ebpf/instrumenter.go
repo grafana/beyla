@@ -107,7 +107,10 @@ func (i *instrumenter) kprobe(funcName string, programs ebpfcommon.FunctionProgr
 	}
 
 	if programs.End != nil {
-		kp, err := link.Kretprobe(funcName, programs.End, nil)
+		// We should make RetprobeMaxActive configurable when we make the num concurrent requests configurable
+		// By default it sets itself to at least 10, but at most 2 * num cpus, which is low for something like tcp_recvmsg
+		// https://elixir.bootlin.com/linux/v5.19/source/kernel/kprobes.c#L2202
+		kp, err := link.Kretprobe(funcName, programs.End, &link.KprobeOptions{RetprobeMaxActive: 1024})
 		if err != nil {
 			return fmt.Errorf("setting kretprobe: %w", err)
 		}

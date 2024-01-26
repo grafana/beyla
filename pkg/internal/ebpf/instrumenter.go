@@ -107,10 +107,9 @@ func (i *instrumenter) kprobe(funcName string, programs ebpfcommon.FunctionProgr
 	}
 
 	if programs.End != nil {
-		// We should make RetprobeMaxActive configurable when we make the num concurrent requests configurable
-		// By default it sets itself to at least 10, but at most 2 * num cpus, which is low for something like tcp_recvmsg. Max value is 4096.
-		// https://elixir.bootlin.com/linux/v5.19/source/kernel/kprobes.c#L2202
-		kp, err := link.Kretprobe(funcName, programs.End, &link.KprobeOptions{RetprobeMaxActive: 1024})
+		// The commented code doesn't work on certain kernels. We need to invesigate more to see if it's possible
+		// to productize it. Failure says: "neither debugfs nor tracefs are mounted".
+		kp, err := link.Kretprobe(funcName, programs.End, nil /*&link.KprobeOptions{RetprobeMaxActive: 1024}*/)
 		if err != nil {
 			return fmt.Errorf("setting kretprobe: %w", err)
 		}

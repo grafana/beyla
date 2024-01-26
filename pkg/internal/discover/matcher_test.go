@@ -133,3 +133,48 @@ func TestCriteriaMatcher_MustMatchAllAttributes(t *testing.T) {
 	assert.Equal(t, "foons", m.Obj.Criteria.Namespace)
 	assert.Equal(t, services.ProcessInfo{Pid: 1, ExePath: "/bin/foo", OpenPorts: []uint32{8081}}, *m.Obj.Process)
 }
+
+func TestCriteriaMatcherMissingPort(t *testing.T) {
+	pipeConfig := pipe.Config{}
+	require.NoError(t, yaml.Unmarshal([]byte(`discovery:
+  services:
+  - name: port-only
+    namespace: foo
+    open_ports: 80
+`), &pipeConfig))
+
+	matcherFunc, err := CriteriaMatcherProvider(CriteriaMatcher{Cfg: &pipeConfig})
+	require.NoError(t, err)
+	discoveredProcesses := make(chan []Event[processAttrs], 10)
+	filteredProcesses := make(chan []Event[ProcessMatch], 10)
+	go matcherFunc(discoveredProcesses, filteredProcesses)
+	defer close(discoveredProcesses)
+
+	// it will filter unmatching processes and return a ProcessMatch for these that match
+	processInfo = func(pp processAttrs) (*services.ProcessInfo, error) {
+		proc := map[PID]struct {
+			Exe  string
+			PPid int32
+		}{
+			1: {Exe: "/bin/weird33", PPid: 0}, 2: {Exe: "/bin/weird33", PPid: 16}, 3: {Exe: "/bin/weird33", PPid: 1}}[pp.pid]
+		return &services.ProcessInfo{Pid: int32(pp.pid), ExePath: proc.Exe, PPid: proc.PPid, OpenPorts: pp.openPorts}, nil
+	}
+	discoveredProcesses <- []Event[processAttrs]{
+		{Type: EventCreated, Obj: processAttrs{pid: 1, openPorts: []uint32{80}}}, // this one is the parent, matches on port
+		{Type: EventDeleted, Obj: processAttrs{pid: 2, openPorts: []uint32{}}},   // we'll skip 2 since PPid is 16, not 1
+		{Type: EventCreated, Obj: processAttrs{pid: 3, openPorts: []uint32{}}},   // this one is the child, without port, but matches the parent by port
+	}
+
+	matches := testutil.ReadChannel(t, filteredProcesses, testTimeout)
+	require.Len(t, matches, 2)
+	m := matches[0]
+	assert.Equal(t, EventCreated, m.Type)
+	assert.Equal(t, "port-only", m.Obj.Criteria.Name)
+	assert.Equal(t, "foo", m.Obj.Criteria.Namespace)
+	assert.Equal(t, services.ProcessInfo{Pid: 1, ExePath: "/bin/weird33", OpenPorts: []uint32{80}, PPid: 0}, *m.Obj.Process)
+	m = matches[1]
+	assert.Equal(t, EventCreated, m.Type)
+	assert.Equal(t, "port-only", m.Obj.Criteria.Name)
+	assert.Equal(t, "foo", m.Obj.Criteria.Namespace)
+	assert.Equal(t, services.ProcessInfo{Pid: 3, ExePath: "/bin/weird33", OpenPorts: []uint32{}, PPid: 1}, *m.Obj.Process)
+}

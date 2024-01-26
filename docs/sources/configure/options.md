@@ -321,7 +321,7 @@ selected need to match all the selector properties.
 | --------------- | ------- | --------------------------- | ------- |
 | `k8s_namespace` | --      | string (regular expression) | (unset) |
 
-This selector property will limit the instrumentation to the services
+This selector property will limit the instrumentation to the applications
 running in the Kubernetes Namespaces with a name matching the provided regular
 expression.
 
@@ -332,7 +332,7 @@ selected need to match all the selector properties.
 | -------------- | ------- | --------------------------- | ------- |
 | `k8s_pod_name` | --      | string (regular expression) | (unset) |
 
-This selector property will limit the instrumentation to the services
+This selector property will limit the instrumentation to the applications
 running in the Kubernetes Pods with a name matching the provided regular
 expression.
 
@@ -343,7 +343,7 @@ selected need to match all the selector properties.
 | --------------------- | ------- | --------------------------- | ------- |
 | `k8s_deployment_name` | --      | string (regular expression) | (unset) |
 
-This selector property will limit the instrumentation to the services
+This selector property will limit the instrumentation to the applications
 running in the Kubernetes Deployments with a name matching the provided regular
 expression.
 
@@ -354,12 +354,47 @@ selected need to match all the selector properties.
 | --------------------- | ------- | --------------------------- | ------- |
 | `k8s_replicaset_name` | --      | string (regular expression) | (unset) |
 
-This selector property will limit the instrumentation to the services
+This selector property will limit the instrumentation to the applications
 running in the Kubernetes ReplicaSets with a name matching the provided regular
 expression.
 
 If other selectors are specified in the same `services` entry, the processes to be
 selected need to match all the selector properties.
+
+| YAML                   | Env var | Type                        | Default |
+|------------------------| ------- | --------------------------- | ------- |
+| `k8s_statefulset_name` | --      | string (regular expression) | (unset) |
+
+This selector property will limit the instrumentation to the applications
+running in the Kubernetes StatefulSets with a name matching the provided regular
+expression.
+
+If other selectors are specified in the same `services` entry, the processes to be
+selected need to match all the selector properties.
+
+| YAML                 | Env var | Type                        | Default |
+|----------------------| ------- | --------------------------- | ------- |
+| `k8s_daemonset_name` | --      | string (regular expression) | (unset) |
+
+This selector property will limit the instrumentation to the applications
+running in the Kubernetes DaemonSet with a name matching the provided regular
+expression.
+
+If other selectors are specified in the same `services` entry, the processes to be
+selected need to match all the selector properties.
+
+| YAML             | Env var | Type                        | Default |
+|------------------| ------- | --------------------------- | ------- |
+| `k8s_owner_name` | --      | string (regular expression) | (unset) |
+
+This selector property will limit the instrumentation to the applications
+running in the Pods having owned by either a `Deployment`, `ReplicaSet`, 
+`DaemonSet` or `StatefulSet` with a name matching the provided regular
+expression.
+
+If other selectors are specified in the same `services` entry, the processes to be
+selected need to match all the selector properties.
+
 
 ## EBPF tracer
 
@@ -446,6 +481,9 @@ and metrics with the Standard OpenTelemetry labels:
 
 - `k8s.namespace.name`
 - `k8s.deployment.name`
+- `k8s.statefulset.name`
+- `k8s.replicaset.name`
+- `k8s.daemonset.name`
 - `k8s.node.name`
 - `k8s.pod.name`
 - `k8s.pod.uid`

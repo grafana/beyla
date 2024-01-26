@@ -498,7 +498,7 @@ int uprobe_http2FramerWriteHeaders_returns(struct pt_regs *ctx) {
             bpf_probe_read(&n, sizeof(n), (void *)(w_ptr + 40));
             bpf_probe_read(&cap, sizeof(cap), (void *)(w_ptr + 24));
 
-            bpf_printk("Found f_info, this is the place to write to w = %llx, buf=%llx, n=%d, size=%d", w_ptr, buf_arr, n, cap);
+            bpf_dbg_printk("Found f_info, this is the place to write to w = %llx, buf=%llx, n=%d, size=%d", w_ptr, buf_arr, n, cap);
             if (buf_arr && n < (cap - HTTP2_ENCODED_HEADER_LEN)) {
                 uint8_t tp_str[TP_MAX_VAL_LENGTH];
 
@@ -507,23 +507,44 @@ int uprobe_http2FramerWriteHeaders_returns(struct pt_regs *ctx) {
                 u8 val_len = TP_MAX_VAL_LENGTH;
 
                 make_tp_string(tp_str, &f_info->tp);
-                bpf_printk("Will write %s, type = %d, key_len = %d, val_len = %d", tp_str, type_byte, key_len, val_len);
+                bpf_dbg_printk("Will write %s, type = %d, key_len = %d, val_len = %d", tp_str, type_byte, key_len, val_len);
 
-                //bpf_probe_write_user(buf_arr + (n & 0x0ffff), &type_byte, sizeof(type_byte));                        
+                bpf_probe_write_user(buf_arr + (n & 0x0ffff), &type_byte, sizeof(type_byte));                        
                 n++;
                 // Write the length of the key = 8
-                //bpf_probe_write_user(buf_arr + (n & 0x0ffff), &key_len, sizeof(key_len));
+                bpf_probe_write_user(buf_arr + (n & 0x0ffff), &key_len, sizeof(key_len));
                 n++;
                 // Write 'traceparent' encoded as hpack
-                //bpf_probe_write_user(buf_arr + (n & 0x0ffff), tp_encoded, sizeof(tp_encoded));;
+                bpf_probe_write_user(buf_arr + (n & 0x0ffff), tp_encoded, sizeof(tp_encoded));;
                 n += TP_ENCODED_LEN;
                 // Write the length of the hpack encoded traceparent field 
-                //bpf_probe_write_user(buf_arr + (n & 0x0ffff), &val_len, sizeof(val_len));
+                bpf_probe_write_user(buf_arr + (n & 0x0ffff), &val_len, sizeof(val_len));
                 n++;
-                //bpf_probe_write_user(buf_arr + (n & 0x0ffff), tp_str, sizeof(tp_str));
+                bpf_probe_write_user(buf_arr + (n & 0x0ffff), tp_str, sizeof(tp_str));
                 n += TP_MAX_VAL_LENGTH;
                 // Update the value of n in w to reflect the new size
-                //bpf_probe_write_user((void *)(w_ptr + 40), &n, sizeof(n));
+                bpf_probe_write_user((void *)(w_ptr + 40), &n, sizeof(n));
+
+                // http2 encodes the length of the headers in the first 3 bytes of buf, we need to update those
+                s8 size_1 = 0;
+                s8 size_2 = 0;
+                s8 size_3 = 0;
+
+                bpf_probe_read(&size_1, sizeof(size_1), (void *)(buf_arr));
+                bpf_probe_read(&size_2, sizeof(size_2), (void *)(buf_arr + 1));
+                bpf_probe_read(&size_3, sizeof(size_3), (void *)(buf_arr + 2));
+
+                s32 original_size = ((s32)(size_1) << 16) | ((s32)(size_2) << 8) | size_3;
+                s32 new_size = original_size + HTTP2_ENCODED_HEADER_LEN;
+
+                bpf_dbg_printk("Changing size from %d to %d", original_size, new_size);
+                size_1 = (s8)(new_size >> 16);
+                size_2 = (s8)(new_size >> 8);
+                size_3 = (s8)(new_size);
+
+                bpf_probe_write_user((void *)(buf_arr), &size_1, sizeof(size_1));
+                bpf_probe_write_user((void *)(buf_arr+1), &size_2, sizeof(size_2));
+                bpf_probe_write_user((void *)(buf_arr+2), &size_3, sizeof(size_3));
             }
         }
     }

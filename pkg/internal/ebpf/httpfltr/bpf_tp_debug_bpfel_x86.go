@@ -154,6 +154,7 @@ type bpf_tp_debugProgramSpecs struct {
 	KretprobeSysClone       *ebpf.ProgramSpec `ebpf:"kretprobe_sys_clone"`
 	KretprobeSysConnect     *ebpf.ProgramSpec `ebpf:"kretprobe_sys_connect"`
 	KretprobeTcpRecvmsg     *ebpf.ProgramSpec `ebpf:"kretprobe_tcp_recvmsg"`
+	SocketHttpFilter        *ebpf.ProgramSpec `ebpf:"socket__http_filter"`
 }
 
 // bpf_tp_debugMapSpecs contains maps before they are loaded into the kernel.
@@ -171,6 +172,7 @@ type bpf_tp_debugMapSpecs struct {
 	FilteredConnections *ebpf.MapSpec `ebpf:"filtered_connections"`
 	HttpInfoMem         *ebpf.MapSpec `ebpf:"http_info_mem"`
 	OngoingHttp         *ebpf.MapSpec `ebpf:"ongoing_http"`
+	OngoingHttpFallback *ebpf.MapSpec `ebpf:"ongoing_http_fallback"`
 	PidCache            *ebpf.MapSpec `ebpf:"pid_cache"`
 	PidTidToConn        *ebpf.MapSpec `ebpf:"pid_tid_to_conn"`
 	ServerTraces        *ebpf.MapSpec `ebpf:"server_traces"`
@@ -212,6 +214,7 @@ type bpf_tp_debugMaps struct {
 	FilteredConnections *ebpf.Map `ebpf:"filtered_connections"`
 	HttpInfoMem         *ebpf.Map `ebpf:"http_info_mem"`
 	OngoingHttp         *ebpf.Map `ebpf:"ongoing_http"`
+	OngoingHttpFallback *ebpf.Map `ebpf:"ongoing_http_fallback"`
 	PidCache            *ebpf.Map `ebpf:"pid_cache"`
 	PidTidToConn        *ebpf.Map `ebpf:"pid_tid_to_conn"`
 	ServerTraces        *ebpf.Map `ebpf:"server_traces"`
@@ -236,6 +239,7 @@ func (m *bpf_tp_debugMaps) Close() error {
 		m.FilteredConnections,
 		m.HttpInfoMem,
 		m.OngoingHttp,
+		m.OngoingHttpFallback,
 		m.PidCache,
 		m.PidTidToConn,
 		m.ServerTraces,
@@ -262,6 +266,7 @@ type bpf_tp_debugPrograms struct {
 	KretprobeSysClone       *ebpf.Program `ebpf:"kretprobe_sys_clone"`
 	KretprobeSysConnect     *ebpf.Program `ebpf:"kretprobe_sys_connect"`
 	KretprobeTcpRecvmsg     *ebpf.Program `ebpf:"kretprobe_tcp_recvmsg"`
+	SocketHttpFilter        *ebpf.Program `ebpf:"socket__http_filter"`
 }
 
 func (p *bpf_tp_debugPrograms) Close() error {
@@ -276,6 +281,7 @@ func (p *bpf_tp_debugPrograms) Close() error {
 		p.KretprobeSysClone,
 		p.KretprobeSysConnect,
 		p.KretprobeTcpRecvmsg,
+		p.SocketHttpFilter,
 	)
 }
 

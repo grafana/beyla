@@ -1,0 +1,33 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: beyla
+  labels:
+    k8s-app: beyla
+spec:
+  selector:
+    matchLabels:
+      k8s-app: beyla
+  template:
+    metadata:
+      labels:
+        k8s-app: beyla
+    spec:
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      serviceAccountName: beyla-network-observability-test
+      containers:
+      - name: beyla
+        image: beyla-local:netobserv
+        securityContext:
+          privileged: true
+          runAsUser: 0
+        env:
+          - name: BEYLA_LOG_LEVEL
+            value: debug
+          - name: BEYLA_NETWORK_OBSERVABILITY
+            value: "true"
+          - name: OTEL_EXPORTER_OTLP_ENDPOINT
+            value: "http://172.17.0.1:4317"
+          - name: OTEL_EXPORTER_OTLP_PROTOCOL
+            value: "grpc"

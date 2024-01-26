@@ -2,7 +2,6 @@ package pipe
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/mariomac/pipes/pkg/graph"
 	"github.com/mariomac/pipes/pkg/node"
@@ -65,10 +64,6 @@ type graphFunctions struct {
 // Build instantiates the whole instrumentation --> processing --> submit
 // pipeline graph and returns it as a startable item
 func Build(ctx context.Context, config *Config, ctxInfo *global.ContextInfo, tracesCh <-chan []request.Span) (*Instrumenter, error) {
-	if err := config.Validate(); err != nil {
-		return nil, fmt.Errorf("validating configuration: %w", err)
-	}
-
 	return newGraphBuilder(ctx, config, ctxInfo, tracesCh).buildGraph()
 }
 

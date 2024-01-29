@@ -146,6 +146,37 @@ var structMembers = map[string]structInfo{
 			"req": "rws_req_pos",
 		},
 	},
+	"net/http.conn": {
+		lib: "go",
+		fields: map[string]string{
+			"rwc": "c_rwc_pos",
+		},
+	},
+	"net.TCPConn": {
+		lib: "go",
+		fields: map[string]string{
+			"conn": "rwc_conn_pos",
+		},
+	},
+	"net.conn": {
+		lib: "go",
+		fields: map[string]string{
+			"fd": "conn_fd_pos",
+		},
+	},
+	"net.netFD": {
+		lib: "go",
+		fields: map[string]string{
+			"laddr": "fd_laddr_pos",
+			"raddr": "fd_raddr_pos",
+		},
+	},
+	"net/http.persistConn": {
+		lib: "go",
+		fields: map[string]string{
+			"conn": "pc_conn_pos",
+		},
+	},
 }
 
 func structMemberOffsets(elfFile *elf.File) (FieldOffsets, error) {

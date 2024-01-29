@@ -104,6 +104,14 @@ func (p *Tracer) Constants(_ *exec.FileInfo, offsets *goexec.Offsets) map[string
 		"io_writer_n_pos",
 		"io_writer_buf_ptr_pos",
 		"io_writer_n_pos",
+		"tcp_addr_port_ptr_pos",
+		"tcp_addr_ip_ptr_pos",
+		"c_rwc_pos",
+		"pc_conn_pos",
+		"rwc_conn_pos",
+		"conn_fd_pos",
+		"fd_laddr_pos",
+		"fd_raddr_pos",
 	} {
 		constants[s] = offsets.Field[s]
 	}
@@ -150,6 +158,13 @@ func (p *Tracer) GoProbes() map[string]ebpfcommon.FunctionPrograms {
 		},
 		"golang.org/x/net/http2.(*responseWriterState).writeHeader": { // http2 server request done, capture the response code
 			Start: p.bpfObjects.UprobeHttp2ResponseWriterStateWriteHeader,
+		},
+		// tracking of tcp connections for black-box propagation
+		"net/http.(*conn).serve": { // http server
+			Start: p.bpfObjects.UprobeConnServe,
+		},
+		"net/http.(*persistConn).roundTrip": { // http client
+			Start: p.bpfObjects.UprobePersistConnRoundTrip,
 		},
 	}
 

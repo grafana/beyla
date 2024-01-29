@@ -68,7 +68,7 @@ static __always_inline u16 get_sockaddr_port(struct sockaddr *addr) {
     BPF_CORE_READ_INTO(&sa_family, addr, sa_family);
     u16 bport = 0;
 
-    bpf_dbg_printk("addr = %llx, sa_family %d", addr, sa_family);
+    //bpf_dbg_printk("addr = %llx, sa_family %d", addr, sa_family);
 
     if (sa_family == AF_INET) {
         struct sockaddr_in *baddr = (struct sockaddr_in *)addr;

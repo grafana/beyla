@@ -18,6 +18,7 @@
 #include "go_common.h"
 #include "go_nethttp.h"
 #include "go_traceparent.h"
+#include "http_types.h"
 #include "tracing.h"
 
 typedef struct http_func_invocation {
@@ -390,4 +391,94 @@ int uprobe_http2ResponseWriterStateWriteHeader(struct pt_regs *ctx) {
     bpf_dbg_printk("=== uprobe/proc http2 responseWriterState writeHeader === ");
 
     return writeHeaderHelper(ctx, rws_req_pos);
+}
+
+// HTTP black-box context propagation
+
+static __always_inline void get_conn_info(void *conn_ptr, connection_info_t *info) {
+    if (conn_ptr) {
+        void *fd_ptr = 0;
+        bpf_probe_read(&fd_ptr, sizeof(fd_ptr), (void *)(conn_ptr + conn_fd_pos)); // find fd
+
+        bpf_printk("Found fd ptr %llx", fd_ptr);
+
+        if (fd_ptr) {
+            void *laddr_ptr = 0;
+            void *raddr_ptr = 0;
+
+            bpf_probe_read(&laddr_ptr, sizeof(laddr_ptr), (void *)(fd_ptr + fd_laddr_pos + 8)); // find laddr
+            bpf_probe_read(&raddr_ptr, sizeof(raddr_ptr), (void *)(fd_ptr + fd_raddr_pos + 8)); // find raddr
+
+            if (laddr_ptr && raddr_ptr) {
+                bpf_printk("laddr %llx, raddr %llx", laddr_ptr, raddr_ptr);
+
+                // read local
+                bpf_probe_read(&info->s_port, sizeof(info->s_port), (void *)(laddr_ptr + tcp_addr_port_ptr_pos));
+                s64 addr_len = 0;
+                void *addr_ip = 0;
+                bpf_probe_read(&addr_ip, sizeof(addr_ip), (void *)(laddr_ptr + tcp_addr_ip_ptr_pos));
+                if (addr_ip) {
+                    bpf_probe_read(&addr_len, sizeof(addr_len), (void *)(laddr_ptr + tcp_addr_ip_ptr_pos + 8));
+                    if (addr_len == 4) {
+                        __builtin_memcpy(info->s_addr, ip4ip6_prefix, sizeof(ip4ip6_prefix));
+                        bpf_probe_read(info->s_addr + sizeof(ip4ip6_prefix), 4, addr_ip);
+                    } else if (addr_len == 16) {
+                        bpf_probe_read(info->s_addr, sizeof(info->s_addr), addr_ip);
+                    }
+                }
+
+                // read remote
+                bpf_probe_read(&info->d_port, sizeof(info->d_port), (void *)(raddr_ptr + tcp_addr_port_ptr_pos));
+                bpf_probe_read(&addr_ip, sizeof(addr_ip), (void *)(raddr_ptr + tcp_addr_ip_ptr_pos));
+                if (addr_ip) {
+                    bpf_probe_read(&addr_len, sizeof(addr_len), (void *)(raddr_ptr + tcp_addr_ip_ptr_pos + 8));
+                    if (addr_len == 4) {
+                        __builtin_memcpy(info->d_addr, ip4ip6_prefix, sizeof(ip4ip6_prefix));
+                        bpf_probe_read(info->d_addr + sizeof(ip4ip6_prefix), 4, addr_ip);
+                    } else if (addr_len == 16) {
+                        bpf_probe_read(info->d_addr, sizeof(info->d_addr), addr_ip);
+                    }
+                }
+
+                sort_connection_info(info);
+                dbg_print_http_connection_info(info);
+            }
+        }
+    }
+}
+
+SEC("uprobe/connServe")
+int uprobe_connServe(struct pt_regs *ctx) {
+    bpf_dbg_printk("=== uprobe/proc http conn serve === ");
+
+    void *c_ptr = GO_PARAM1(ctx);
+    if (c_ptr) {
+        void *rwc_ptr = c_ptr + 8 + c_rwc_pos; // embedded struct
+        if (rwc_ptr) {
+            void *conn_ptr = 0;
+            bpf_probe_read(&conn_ptr, sizeof(conn_ptr), (void *)(rwc_ptr + rwc_conn_pos)); // find conn
+            connection_info_t conn = {0};
+            get_conn_info(conn_ptr, &conn);
+        }
+    }
+
+    return 0;
+}
+
+SEC("uprobe/persistConnRoundTrip")
+int uprobe_persistConnRoundTrip(struct pt_regs *ctx) {
+    bpf_dbg_printk("=== uprobe/proc http persistConn roundTrip === ");
+
+    void *pc_ptr = GO_PARAM1(ctx);
+    if (pc_ptr) {
+        void *conn_conn_ptr = pc_ptr + 8 + pc_conn_pos; // embedded struct
+        if (conn_conn_ptr) {
+            void *conn_ptr = 0;
+            bpf_probe_read(&conn_ptr, sizeof(conn_ptr), (void *)(conn_conn_ptr + rwc_conn_pos)); // find conn
+            connection_info_t conn = {0};
+            get_conn_info(conn_ptr, &conn);
+        }
+    }
+
+    return 0;
 }

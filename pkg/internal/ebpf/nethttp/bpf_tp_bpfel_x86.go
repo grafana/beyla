@@ -18,10 +18,29 @@ type bpf_tpGoroutineMetadata struct {
 	Timestamp uint64
 }
 
+type bpf_tpHttpConnectionMetadataT struct {
+	Pid struct {
+		HostPid   uint32
+		UserPid   uint32
+		Namespace uint32
+	}
+	Type uint8
+}
+
 type bpf_tpHttpFuncInvocationT struct {
 	StartMonotimeNs uint64
 	ReqPtr          uint64
 	Tp              bpf_tpTpInfoT
+}
+
+type bpf_tpPidConnectionInfoT struct {
+	Conn struct {
+		S_addr [16]uint8
+		D_addr [16]uint8
+		S_port uint16
+		D_port uint16
+	}
+	Pid uint32
 }
 
 type bpf_tpPidKeyT struct {
@@ -81,7 +100,9 @@ type bpf_tpSpecs struct {
 type bpf_tpProgramSpecs struct {
 	UprobeServeHTTP                           *ebpf.ProgramSpec `ebpf:"uprobe_ServeHTTP"`
 	UprobeWriteHeader                         *ebpf.ProgramSpec `ebpf:"uprobe_WriteHeader"`
+	UprobeConnServe                           *ebpf.ProgramSpec `ebpf:"uprobe_connServe"`
 	UprobeHttp2ResponseWriterStateWriteHeader *ebpf.ProgramSpec `ebpf:"uprobe_http2ResponseWriterStateWriteHeader"`
+	UprobePersistConnRoundTrip                *ebpf.ProgramSpec `ebpf:"uprobe_persistConnRoundTrip"`
 	UprobeReadRequestReturns                  *ebpf.ProgramSpec `ebpf:"uprobe_readRequestReturns"`
 	UprobeRoundTrip                           *ebpf.ProgramSpec `ebpf:"uprobe_roundTrip"`
 	UprobeRoundTripReturn                     *ebpf.ProgramSpec `ebpf:"uprobe_roundTripReturn"`
@@ -93,6 +114,7 @@ type bpf_tpProgramSpecs struct {
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpf_tpMapSpecs struct {
 	Events                    *ebpf.MapSpec `ebpf:"events"`
+	FilteredConnections       *ebpf.MapSpec `ebpf:"filtered_connections"`
 	GoTraceMap                *ebpf.MapSpec `ebpf:"go_trace_map"`
 	GolangMapbucketStorageMap *ebpf.MapSpec `ebpf:"golang_mapbucket_storage_map"`
 	HeaderReqMap              *ebpf.MapSpec `ebpf:"header_req_map"`
@@ -123,6 +145,7 @@ func (o *bpf_tpObjects) Close() error {
 // It can be passed to loadBpf_tpObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpf_tpMaps struct {
 	Events                    *ebpf.Map `ebpf:"events"`
+	FilteredConnections       *ebpf.Map `ebpf:"filtered_connections"`
 	GoTraceMap                *ebpf.Map `ebpf:"go_trace_map"`
 	GolangMapbucketStorageMap *ebpf.Map `ebpf:"golang_mapbucket_storage_map"`
 	HeaderReqMap              *ebpf.Map `ebpf:"header_req_map"`
@@ -136,6 +159,7 @@ type bpf_tpMaps struct {
 func (m *bpf_tpMaps) Close() error {
 	return _Bpf_tpClose(
 		m.Events,
+		m.FilteredConnections,
 		m.GoTraceMap,
 		m.GolangMapbucketStorageMap,
 		m.HeaderReqMap,
@@ -153,7 +177,9 @@ func (m *bpf_tpMaps) Close() error {
 type bpf_tpPrograms struct {
 	UprobeServeHTTP                           *ebpf.Program `ebpf:"uprobe_ServeHTTP"`
 	UprobeWriteHeader                         *ebpf.Program `ebpf:"uprobe_WriteHeader"`
+	UprobeConnServe                           *ebpf.Program `ebpf:"uprobe_connServe"`
 	UprobeHttp2ResponseWriterStateWriteHeader *ebpf.Program `ebpf:"uprobe_http2ResponseWriterStateWriteHeader"`
+	UprobePersistConnRoundTrip                *ebpf.Program `ebpf:"uprobe_persistConnRoundTrip"`
 	UprobeReadRequestReturns                  *ebpf.Program `ebpf:"uprobe_readRequestReturns"`
 	UprobeRoundTrip                           *ebpf.Program `ebpf:"uprobe_roundTrip"`
 	UprobeRoundTripReturn                     *ebpf.Program `ebpf:"uprobe_roundTripReturn"`
@@ -164,7 +190,9 @@ func (p *bpf_tpPrograms) Close() error {
 	return _Bpf_tpClose(
 		p.UprobeServeHTTP,
 		p.UprobeWriteHeader,
+		p.UprobeConnServe,
 		p.UprobeHttp2ResponseWriterStateWriteHeader,
+		p.UprobePersistConnRoundTrip,
 		p.UprobeReadRequestReturns,
 		p.UprobeRoundTrip,
 		p.UprobeRoundTripReturn,

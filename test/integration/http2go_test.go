@@ -154,6 +154,12 @@ func TestHTTP2Go(t *testing.T) {
 	compose, err := docker.ComposeSuite("docker-compose-http2.yml", path.Join(pathOutput, "test-suite-http2.log"))
 	// we are going to setup discovery directly in the configuration file
 	compose.Env = append(compose.Env, `BEYLA_EXECUTABLE_NAME=`, `BEYLA_OPEN_PORT=`)
+	lockdown := KernelLockdownMode()
+
+	if !lockdown {
+		compose.Env = append(compose.Env, `SECURITY_CONFIG_SUFFIX=_none`)
+	}
+
 	require.NoError(t, err)
 	require.NoError(t, compose.Up())
 
@@ -163,7 +169,7 @@ func TestHTTP2Go(t *testing.T) {
 		testREDMetricsForHTTP2Library(t, "/pingrt", "http2-go")
 	})
 
-	if lockdown := KernelLockdownMode(); !lockdown {
+	if !lockdown {
 		t.Run("Go RED metrics: http2 context propagation ", func(t *testing.T) {
 			testNestedHTTP2Traces(t, "ping")
 			testNestedHTTP2Traces(t, "pingdo")

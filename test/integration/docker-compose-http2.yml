@@ -28,7 +28,7 @@ services:
       - --config=/configs/instrumenter-config-http2.yml
     volumes:
       - ./configs/:/configs
-      - ./system/sys/kernel/security:/sys/kernel/security
+      - ./system/sys/kernel/security${SECURITY_CONFIG_SUFFIX}:/sys/kernel/security
       - ../../testoutput:/coverage
       - ../../testoutput/run:/var/run/beyla
     image: hatest-autoinstrumenter

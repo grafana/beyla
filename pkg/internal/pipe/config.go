@@ -132,7 +132,7 @@ func (c *Config) validateInstrumentation() error {
 		return ConfigError(fmt.Sprintf("error in services YAML property: %s", err.Error()))
 	}
 	if c.Port.Len() == 0 && !c.Exec.IsSet() && len(c.Discovery.Services) == 0 && !c.Discovery.SystemWide {
-		return ConfigError("missing BEYLA_EXECUTABLE_NAME, BEYLA_OPEN_PORT or BEYLA_SYSTEM_WIDE property")
+		return ConfigError("missing BEYLA_EXECUTABLE_NAME or BEYLA_OPEN_PORT property, or a 'discovery' section in the configuration file. Please check the documentation for more information")
 	}
 	if (c.Port.Len() > 0 || c.Exec.IsSet() || len(c.Discovery.Services) > 0) && c.Discovery.SystemWide {
 		return ConfigError("you can't use BEYLA_SYSTEM_WIDE if any of BEYLA_EXECUTABLE_NAME, BEYLA_OPEN_PORT or services (YAML) are set")

@@ -153,15 +153,15 @@ func (p *Tracer) GoProbes() map[string]ebpfcommon.FunctionPrograms {
 		"golang.org/x/net/http2.(*responseWriterState).writeHeader": { // http2 server request done, capture the response code
 			Start: p.bpfObjects.UprobeHttp2ResponseWriterStateWriteHeader,
 		},
-		"golang.org/x/net/http2.(*Framer).WriteHeaders": { // TODO: Move to supports context prop
-			Start: p.bpfObjects.UprobeHttp2FramerWriteHeaders,
-			End:   p.bpfObjects.UprobeHttp2FramerWriteHeadersReturns,
-		},
 	}
 
 	if p.supportsContextPropagation() {
 		m["net/http.Header.writeSubset"] = ebpfcommon.FunctionPrograms{
-			Start: p.bpfObjects.UprobeWriteSubset,
+			Start: p.bpfObjects.UprobeWriteSubset, // http 1.x context propagation
+		}
+		m["golang.org/x/net/http2.(*Framer).WriteHeaders"] = ebpfcommon.FunctionPrograms{ // http2 context propagation
+			Start: p.bpfObjects.UprobeHttp2FramerWriteHeaders,
+			End:   p.bpfObjects.UprobeHttp2FramerWriteHeadersReturns,
 		}
 	}
 

@@ -13,11 +13,6 @@ import (
 	"github.com/cilium/ebpf"
 )
 
-type bpfFramerFuncInvocationT struct {
-	FramerPtr uint64
-	Tp        bpfTpInfoT
-}
-
 type bpfGoroutineMetadata struct {
 	Parent    uint64
 	Timestamp uint64
@@ -101,10 +96,8 @@ type bpfProgramSpecs struct {
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpfMapSpecs struct {
 	Events                    *ebpf.MapSpec `ebpf:"events"`
-	FramerInvocationMap       *ebpf.MapSpec `ebpf:"framer_invocation_map"`
 	GoTraceMap                *ebpf.MapSpec `ebpf:"go_trace_map"`
 	GolangMapbucketStorageMap *ebpf.MapSpec `ebpf:"golang_mapbucket_storage_map"`
-	Http2ReqMap               *ebpf.MapSpec `ebpf:"http2_req_map"`
 	OngoingGoroutines         *ebpf.MapSpec `ebpf:"ongoing_goroutines"`
 	OngoingHttpClientRequests *ebpf.MapSpec `ebpf:"ongoing_http_client_requests"`
 	OngoingHttpServerRequests *ebpf.MapSpec `ebpf:"ongoing_http_server_requests"`
@@ -132,10 +125,8 @@ func (o *bpfObjects) Close() error {
 // It can be passed to loadBpfObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpfMaps struct {
 	Events                    *ebpf.Map `ebpf:"events"`
-	FramerInvocationMap       *ebpf.Map `ebpf:"framer_invocation_map"`
 	GoTraceMap                *ebpf.Map `ebpf:"go_trace_map"`
 	GolangMapbucketStorageMap *ebpf.Map `ebpf:"golang_mapbucket_storage_map"`
-	Http2ReqMap               *ebpf.Map `ebpf:"http2_req_map"`
 	OngoingGoroutines         *ebpf.Map `ebpf:"ongoing_goroutines"`
 	OngoingHttpClientRequests *ebpf.Map `ebpf:"ongoing_http_client_requests"`
 	OngoingHttpServerRequests *ebpf.Map `ebpf:"ongoing_http_server_requests"`
@@ -146,10 +137,8 @@ type bpfMaps struct {
 func (m *bpfMaps) Close() error {
 	return _BpfClose(
 		m.Events,
-		m.FramerInvocationMap,
 		m.GoTraceMap,
 		m.GolangMapbucketStorageMap,
-		m.Http2ReqMap,
 		m.OngoingGoroutines,
 		m.OngoingHttpClientRequests,
 		m.OngoingHttpServerRequests,

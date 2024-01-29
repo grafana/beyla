@@ -396,12 +396,14 @@ int uprobe_http2ResponseWriterStateWriteHeader(struct pt_regs *ctx) {
 }
 
 // HTTP 2.0 client support
+#ifndef NO_HEADER_PROPAGATION
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __type(key, u32); // key: stream id
     __type(value, u64); // the goroutine of the round trip request, which is the key for our traceparent info
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
 } http2_req_map SEC(".maps");
+#endif
 
 SEC("uprobe/http2RoundTrip")
 int uprobe_http2RoundTrip(struct pt_regs *ctx) {
@@ -409,6 +411,7 @@ int uprobe_http2RoundTrip(struct pt_regs *ctx) {
     // more context, like the streamID
     roundTripStartHelper(ctx);
 
+#ifndef NO_HEADER_PROPAGATION
     void *cc_ptr = GO_PARAM1(ctx);
 
     if (cc_ptr) {
@@ -422,10 +425,12 @@ int uprobe_http2RoundTrip(struct pt_regs *ctx) {
             bpf_map_update_elem(&http2_req_map, &stream_id, &goroutine_addr, BPF_ANY);
         }
     }
+#endif    
 
     return 0;
 }
 
+#ifndef NO_HEADER_PROPAGATION
 typedef struct framer_func_invocation {
     u64 framer_ptr;
     tp_info_t tp;
@@ -454,12 +459,12 @@ int uprobe_http2FramerWriteHeaders(struct pt_regs *ctx) {
 
     if (go_ptr) {
         void *go_addr = *go_ptr;
-        bpf_printk("Found existing stream data goaddr = %llx", go_addr);
+        bpf_dbg_printk("Found existing stream data goaddr = %llx", go_addr);
 
         http_func_invocation_t *info = bpf_map_lookup_elem(&ongoing_http_client_requests, &go_addr);
 
         if (info) {
-            bpf_printk("Found func info %llx", info);
+            bpf_dbg_printk("Found func info %llx", info);
             void *goroutine_addr = GOROUTINE_PTR(ctx);
 
             framer_func_invocation_t f_info = {
@@ -473,8 +478,15 @@ int uprobe_http2FramerWriteHeaders(struct pt_regs *ctx) {
 
     return 0;
 }
+#else
+SEC("uprobe/http2FramerWriteHeaders")
+int uprobe_http2FramerWriteHeaders(struct pt_regs *ctx) {
+    return 0;
+}
+#endif
 
-#define HTTP2_ENCODED_HEADER_LEN 66 // 1 + 1 + 8 + 1 + 55 = type byte + hpack_len_as_byte("traceparent") + strlen(hpack("traceparent")) + len_as_byte(55) + hpack(generated tracepanent id)
+#ifndef NO_HEADER_PROPAGATION
+#define HTTP2_ENCODED_HEADER_LEN 66 // 1 + 1 + 8 + 1 + 55 = type byte + hpack_len_as_byte("traceparent") + strlen(hpack("traceparent")) + len_as_byte(55) + generated traceparent id
 
 SEC("uprobe/http2FramerWriteHeaders_returns")
 int uprobe_http2FramerWriteHeaders_returns(struct pt_regs *ctx) {
@@ -506,6 +518,8 @@ int uprobe_http2FramerWriteHeaders_returns(struct pt_regs *ctx) {
                 u8 key_len = TP_ENCODED_LEN | 0x80; // high tagged to signify hpack encoded value
                 u8 val_len = TP_MAX_VAL_LENGTH;
 
+                // We don't hpack encode the value of the traceparent field, because that will require that 
+                // we use bpf_loop, which in turn increases the kernel requirement to 5.17+.
                 make_tp_string(tp_str, &f_info->tp);
                 bpf_dbg_printk("Will write %s, type = %d, key_len = %d, val_len = %d", tp_str, type_byte, key_len, val_len);
 
@@ -551,3 +565,10 @@ int uprobe_http2FramerWriteHeaders_returns(struct pt_regs *ctx) {
 
     return 0;
 }
+#else
+SEC("uprobe/http2FramerWriteHeaders_returns")
+int uprobe_http2FramerWriteHeaders_returns(struct pt_regs *ctx) {
+    return 0;
+}
+#endif 
+

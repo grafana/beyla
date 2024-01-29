@@ -7,6 +7,7 @@ import (
 	"github.com/mariomac/pipes/pkg/graph"
 	"github.com/mariomac/pipes/pkg/node"
 
+	"github.com/grafana/beyla/pkg/beyla"
 	"github.com/grafana/beyla/pkg/internal/ebpf"
 	"github.com/grafana/beyla/pkg/internal/ebpf/goruntime"
 	"github.com/grafana/beyla/pkg/internal/ebpf/gosql"
@@ -15,7 +16,6 @@ import (
 	"github.com/grafana/beyla/pkg/internal/ebpf/httpssl"
 	"github.com/grafana/beyla/pkg/internal/ebpf/nethttp"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
-	"github.com/grafana/beyla/pkg/internal/pipe"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 )
 
@@ -33,7 +33,7 @@ type ProcessFinder struct {
 	TraceAttacher
 }
 
-func NewProcessFinder(ctx context.Context, cfg *pipe.Config, ctxInfo *global.ContextInfo) *ProcessFinder {
+func NewProcessFinder(ctx context.Context, cfg *beyla.Config, ctxInfo *global.ContextInfo) *ProcessFinder {
 	processFinder := ProcessFinder{
 		ProcessWatcher:  ProcessWatcher{Ctx: ctx, Cfg: cfg},
 		CriteriaMatcher: CriteriaMatcher{Cfg: cfg},
@@ -55,7 +55,7 @@ func NewProcessFinder(ctx context.Context, cfg *pipe.Config, ctxInfo *global.Con
 
 // Start the ProcessFinder pipeline in background. It returns a channel where each new discovered
 // ebpf.ProcessTracer will be notified.
-func (pf *ProcessFinder) Start(cfg *pipe.Config) (<-chan *ebpf.ProcessTracer, <-chan *Instrumentable, error) {
+func (pf *ProcessFinder) Start(cfg *beyla.Config) (<-chan *ebpf.ProcessTracer, <-chan *Instrumentable, error) {
 	gb := graph.NewBuilder(node.ChannelBufferLen(cfg.ChannelBufferLen))
 	graph.RegisterStart(gb, ProcessWatcherProvider)
 	graph.RegisterMiddle(gb, WatcherKubeEnricherProvider)
@@ -74,7 +74,7 @@ func (pf *ProcessFinder) Start(cfg *pipe.Config) (<-chan *ebpf.ProcessTracer, <-
 // auxiliary functions to instantiate the go and non-go tracers on diverse steps of the
 // discovery pipeline
 
-func newGoTracersGroup(cfg *pipe.Config, metrics imetrics.Reporter) []ebpf.Tracer {
+func newGoTracersGroup(cfg *beyla.Config, metrics imetrics.Reporter) []ebpf.Tracer {
 	// Each program is an eBPF source: net/http, grpc...
 	return []ebpf.Tracer{
 		nethttp.New(&cfg.EBPF, metrics),
@@ -85,10 +85,10 @@ func newGoTracersGroup(cfg *pipe.Config, metrics imetrics.Reporter) []ebpf.Trace
 	}
 }
 
-func newNonGoTracersGroup(cfg *pipe.Config, metrics imetrics.Reporter) []ebpf.Tracer {
+func newNonGoTracersGroup(cfg *beyla.Config, metrics imetrics.Reporter) []ebpf.Tracer {
 	return []ebpf.Tracer{httpfltr.New(cfg, metrics), httpssl.New(cfg, metrics)}
 }
 
-func newNonGoTracersGroupUProbes(cfg *pipe.Config, metrics imetrics.Reporter) []ebpf.Tracer {
+func newNonGoTracersGroupUProbes(cfg *beyla.Config, metrics imetrics.Reporter) []ebpf.Tracer {
 	return []ebpf.Tracer{httpssl.New(cfg, metrics)}
 }

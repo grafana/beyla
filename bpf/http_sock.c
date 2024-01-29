@@ -323,6 +323,58 @@ int BPF_KRETPROBE(kretprobe_tcp_recvmsg, int copied_len) {
     return 0;
 }
 
+// Fall-back in case we don't see kretprobe on tcp_recvmsg in high network volume situations
+SEC("socket/http_filter")
+int socket__http_filter(struct __sk_buff *skb) {
+    protocol_info_t tcp = {};
+    connection_info_t conn = {};
+
+    if (!read_sk_buff(skb, &tcp, &conn)) {
+        return 0;
+    }
+
+    // ignore ACK packets
+    if (tcp_ack(&tcp)) {
+        return 0;
+    }
+
+    // ignore empty packets, unless it's TCP FIN or TCP RST
+    if (!tcp_close(&tcp) && tcp_empty(&tcp, skb)) {
+        return 0;
+    }
+
+    // sorting must happen here, before we check or set dups
+    sort_connection_info(&conn);
+    
+    // we don't want to read the whole buffer for every packed that passes our checks, we read only a bit and check if it's trully HTTP request/response.
+    unsigned char buf[MIN_HTTP_SIZE] = {0};
+    bpf_skb_load_bytes(skb, tcp.hdr_len, (void *)buf, sizeof(buf));
+    // technically the read should be reversed, but eBPF verifier complains on read with variable length
+    u32 len = skb->len - tcp.hdr_len;
+    if (len > MIN_HTTP_SIZE) {
+        len = MIN_HTTP_SIZE;
+    }
+
+    u8 packet_type = 0;
+    if (is_http(buf, len, &packet_type)) { // we must check tcp_close second, a packet can be a close and a response
+        http_info_t info = {0};
+        info.conn_info = conn;
+
+        if (packet_type == PACKET_TYPE_REQUEST) {
+            u32 full_len = skb->len - tcp.hdr_len;
+            if (full_len > FULL_BUF_SIZE) {
+                full_len = FULL_BUF_SIZE;
+            }
+            read_skb_bytes(skb, tcp.hdr_len, info.buf, full_len);
+            bpf_dbg_printk("=== http_filter len=%d %s ===", len, buf);
+            //dbg_print_http_connection_info(&conn);
+            set_fallback_http_info(&info, &conn, skb->len - tcp.hdr_len);
+        }
+    }
+
+    return 0;
+}
+
 /*
     The tracking of the clones is complicated by the fact that in container environments
     the tid returned by the sys_clone call is the namespaced tid, not the host tid which 

@@ -159,6 +159,7 @@ type bpf_tpMapSpecs struct {
 	FilteredConnections *ebpf.MapSpec `ebpf:"filtered_connections"`
 	HttpInfoMem         *ebpf.MapSpec `ebpf:"http_info_mem"`
 	OngoingHttp         *ebpf.MapSpec `ebpf:"ongoing_http"`
+	OngoingHttpFallback *ebpf.MapSpec `ebpf:"ongoing_http_fallback"`
 	PidCache            *ebpf.MapSpec `ebpf:"pid_cache"`
 	PidTidToConn        *ebpf.MapSpec `ebpf:"pid_tid_to_conn"`
 	ServerTraces        *ebpf.MapSpec `ebpf:"server_traces"`
@@ -197,6 +198,7 @@ type bpf_tpMaps struct {
 	FilteredConnections *ebpf.Map `ebpf:"filtered_connections"`
 	HttpInfoMem         *ebpf.Map `ebpf:"http_info_mem"`
 	OngoingHttp         *ebpf.Map `ebpf:"ongoing_http"`
+	OngoingHttpFallback *ebpf.Map `ebpf:"ongoing_http_fallback"`
 	PidCache            *ebpf.Map `ebpf:"pid_cache"`
 	PidTidToConn        *ebpf.Map `ebpf:"pid_tid_to_conn"`
 	ServerTraces        *ebpf.Map `ebpf:"server_traces"`
@@ -218,6 +220,7 @@ func (m *bpf_tpMaps) Close() error {
 		m.FilteredConnections,
 		m.HttpInfoMem,
 		m.OngoingHttp,
+		m.OngoingHttpFallback,
 		m.PidCache,
 		m.PidTidToConn,
 		m.ServerTraces,

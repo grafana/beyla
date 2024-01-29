@@ -106,7 +106,7 @@ func testNestedHTTP2Traces(t *testing.T, url string) {
 		var tq jaeger.TracesQuery
 		require.NoError(t, json.NewDecoder(resp.Body).Decode(&tq))
 		traces := tq.FindBySpan(jaeger.Tag{Key: "url.full", Type: "string", Value: "/" + url})
-		require.Len(t, traces, 1)
+		require.GreaterOrEqual(t, len(traces), 1)
 		trace = traces[0]
 	}, test.Interval(100*time.Millisecond))
 

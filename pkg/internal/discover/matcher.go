@@ -92,6 +92,17 @@ func (m *matcher) filterCreated(obj processAttrs) (Event[ProcessMatch], bool) {
 			}, true
 		}
 	}
+
+	// We didn't match the process, but let's see if the parent PID is tracked, it might be the child hasn't opened the port yet
+	if _, ok := m.processHistory[PID(proc.PPid)]; ok {
+		m.log.Debug("found process by matching the process parent id", "pid", proc.Pid, "ppid", proc.PPid, "comm", proc.ExePath, "metadata", obj.metadata)
+		m.processHistory[obj.pid] = proc
+		return Event[ProcessMatch]{
+			Type: EventCreated,
+			Obj:  ProcessMatch{Criteria: &m.criteria[0], Process: proc},
+		}, true
+	}
+
 	return Event[ProcessMatch]{}, false
 }
 

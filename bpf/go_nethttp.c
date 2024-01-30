@@ -393,6 +393,23 @@ int uprobe_http2ResponseWriterStateWriteHeader(struct pt_regs *ctx) {
     return writeHeaderHelper(ctx, rws_req_pos);
 }
 
+static __always_inline void read_ip_and_port(u8 *dst_ip, u16 *dst_port, void *src) {
+    s64 addr_len = 0;
+    void *addr_ip = 0;
+
+    bpf_probe_read(&dst_port, sizeof(u16), (void *)(src + tcp_addr_port_ptr_pos));
+    bpf_probe_read(&addr_ip, sizeof(addr_ip), (void *)(src + tcp_addr_ip_ptr_pos));
+    if (addr_ip) {
+        bpf_probe_read(&addr_len, sizeof(addr_len), (void *)(src + tcp_addr_ip_ptr_pos + 8));
+        if (addr_len == 4) {
+            __builtin_memcpy(dst_ip, ip4ip6_prefix, sizeof(ip4ip6_prefix));
+            bpf_probe_read(dst_ip + sizeof(ip4ip6_prefix), 4, addr_ip);
+        } else if (addr_len == 16) {
+            bpf_probe_read(dst_ip, 16, addr_ip);
+        }
+    }
+}
+
 // HTTP black-box context propagation
 static __always_inline void get_conn_info(void *conn_ptr, connection_info_t *info) {
     if (conn_ptr) {
@@ -412,32 +429,10 @@ static __always_inline void get_conn_info(void *conn_ptr, connection_info_t *inf
                 bpf_dbg_printk("laddr %llx, raddr %llx", laddr_ptr, raddr_ptr);
 
                 // read local
-                bpf_probe_read(&info->s_port, sizeof(info->s_port), (void *)(laddr_ptr + tcp_addr_port_ptr_pos));
-                s64 addr_len = 0;
-                void *addr_ip = 0;
-                bpf_probe_read(&addr_ip, sizeof(addr_ip), (void *)(laddr_ptr + tcp_addr_ip_ptr_pos));
-                if (addr_ip) {
-                    bpf_probe_read(&addr_len, sizeof(addr_len), (void *)(laddr_ptr + tcp_addr_ip_ptr_pos + 8));
-                    if (addr_len == 4) {
-                        __builtin_memcpy(info->s_addr, ip4ip6_prefix, sizeof(ip4ip6_prefix));
-                        bpf_probe_read(info->s_addr + sizeof(ip4ip6_prefix), 4, addr_ip);
-                    } else if (addr_len == 16) {
-                        bpf_probe_read(info->s_addr, sizeof(info->s_addr), addr_ip);
-                    }
-                }
+                read_ip_and_port(info->s_addr, &info->s_port, laddr_ptr);
 
                 // read remote
-                bpf_probe_read(&info->d_port, sizeof(info->d_port), (void *)(raddr_ptr + tcp_addr_port_ptr_pos));
-                bpf_probe_read(&addr_ip, sizeof(addr_ip), (void *)(raddr_ptr + tcp_addr_ip_ptr_pos));
-                if (addr_ip) {
-                    bpf_probe_read(&addr_len, sizeof(addr_len), (void *)(raddr_ptr + tcp_addr_ip_ptr_pos + 8));
-                    if (addr_len == 4) {
-                        __builtin_memcpy(info->d_addr, ip4ip6_prefix, sizeof(ip4ip6_prefix));
-                        bpf_probe_read(info->d_addr + sizeof(ip4ip6_prefix), 4, addr_ip);
-                    } else if (addr_len == 16) {
-                        bpf_probe_read(info->d_addr, sizeof(info->d_addr), addr_ip);
-                    }
-                }
+                read_ip_and_port(info->d_addr, &info->d_port, raddr_ptr);
 
                 sort_connection_info(info);
                 dbg_print_http_connection_info(info);

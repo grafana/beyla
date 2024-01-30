@@ -24,6 +24,11 @@ func HTTPHandler(log *slog.Logger, echoPort int) http.HandlerFunc {
 			return
 		}
 
+		if req.RequestURI == "/gotracemetoo" {
+			echoDist(rw, echoPort)
+			return
+		}
+
 		if req.RequestURI == "/echoCall" {
 			echoCall(rw)
 			return
@@ -86,6 +91,22 @@ func echoAsync(rw http.ResponseWriter, port int) {
 
 func echo(rw http.ResponseWriter, port int) {
 	requestURL := "http://localhost:" + strconv.Itoa(port) + "/echoBack?delay=20ms&status=203"
+
+	slog.Debug("calling", "url", requestURL)
+
+	res, err := http.Get(requestURL)
+	if err != nil {
+		slog.Error("error making http request", err)
+		rw.WriteHeader(500)
+		return
+	}
+
+	defer res.Body.Close()
+	rw.WriteHeader(res.StatusCode)
+}
+
+func echoDist(rw http.ResponseWriter, port int) {
+	requestURL := "http://pytestserver:8083/tracemetoo"
 
 	slog.Debug("calling", "url", requestURL)
 

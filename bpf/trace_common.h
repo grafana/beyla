@@ -7,8 +7,6 @@
 #include "tracing.h"
 #include "pid.h"
 
-#define NANOSECONDS_PER_EPOCH (15LL * 1000000000LL) // 15 seconds
-
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __type(key, pid_key_t); // key: pid_tid
@@ -134,11 +132,6 @@ static __always_inline unsigned char *extract_flags(unsigned char *tp_start) {
     return tp_start + 13 + 2 + 1 + 32 + 1 + 16 + 1; // strlen("Traceparent: ") + strlen(ver) + strlen("-") + strlen(trace_id) + strlen("-") + strlen(span_id) + strlen("-")
 }
 
-static __always_inline u64 current_epoch(u64 ts) {
-    u64 temp = ts / NANOSECONDS_PER_EPOCH;
-    return temp * NANOSECONDS_PER_EPOCH;
-}
-
 static __always_inline void delete_server_trace() {
     pid_key_t c_tid = {0};
     task_tid(&c_tid);
@@ -165,21 +158,6 @@ static __always_inline void server_or_client_trace(http_connection_metadata_t *m
         bpf_dbg_printk("Saving server span for id=%llx", bpf_get_current_pid_tgid());
         bpf_map_update_elem(&server_traces, &c_tid, tp_p, BPF_ANY);
     }
-}
-
-static __always_inline u8 correlated_requests(tp_info_pid_t *tp, tp_info_pid_t *existing_tp) {
-    if (!existing_tp) {
-        return 0;
-    }
-
-    // We check for correlated requests which are in order, but from different PIDs
-    // Same PID means that we had client port reuse, which might falsely match prior
-    // transaction if it happened during the same epoch.
-    if ((tp->tp.ts >= existing_tp->tp.ts) && (tp->pid != existing_tp->pid)) {
-        return current_epoch(tp->tp.ts) == current_epoch(existing_tp->tp.ts);
-    }
-
-    return 0;
 }
 
 static __always_inline void get_or_create_trace_info(http_connection_metadata_t *meta, u32 pid, connection_info_t *conn, void *u_buf, int bytes_len, s32 capture_header_buffer) {

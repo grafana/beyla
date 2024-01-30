@@ -125,9 +125,8 @@ static __always_inline void server_trace_parent(void *goroutine_addr, tp_info_t 
         if (info) {
             bpf_dbg_printk("Looking up traceparent for connection info");
             tp_info_pid_t *tp_p = trace_info_for_connection(info);
-            if (tp_p) {
-                u64 pid_tid = bpf_get_current_pid_tgid();
-                if (tp_p->pid != pid_from_pid_tgid(pid_tid)) {
+            if (tp_p) {                
+                if (correlated_request_with_current(tp_p)) {
                     bpf_dbg_printk("Found traceparent from trace map, another process.");
                     found_info = 1;
                     tp_from_parent(tp, &tp_p->tp);

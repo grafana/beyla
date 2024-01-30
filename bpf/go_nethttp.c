@@ -397,7 +397,7 @@ static __always_inline void read_ip_and_port(u8 *dst_ip, u16 *dst_port, void *sr
     s64 addr_len = 0;
     void *addr_ip = 0;
 
-    bpf_probe_read(&dst_port, sizeof(u16), (void *)(src + tcp_addr_port_ptr_pos));
+    bpf_probe_read(dst_port, sizeof(u16), (void *)(src + tcp_addr_port_ptr_pos));
     bpf_probe_read(&addr_ip, sizeof(addr_ip), (void *)(src + tcp_addr_ip_ptr_pos));
     if (addr_ip) {
         bpf_probe_read(&addr_len, sizeof(addr_len), (void *)(src + tcp_addr_ip_ptr_pos + 8));

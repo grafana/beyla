@@ -616,7 +616,7 @@ static __always_inline void get_conn_info(void *conn_ptr, connection_info_t *inf
                 read_ip_and_port(info->d_addr, &info->d_port, raddr_ptr);
 
                 sort_connection_info(info);
-                dbg_print_http_connection_info(info);
+                //dbg_print_http_connection_info(info);
             }
         }
     }
@@ -676,7 +676,8 @@ int uprobe_persistConnRoundTrip(struct pt_regs *ctx) {
             if (conn_ptr) {
                 connection_info_t conn = {0};
                 get_conn_info(conn_ptr, &conn);
-                u32 pid = pid_from_pid_tgid(bpf_get_current_pid_tgid());
+                u64 pid_tid = bpf_get_current_pid_tgid();
+                u32 pid = pid_from_pid_tgid(pid_tid);
                 tp_info_pid_t tp_p = {
                     .pid = pid,
                     .valid = 1,

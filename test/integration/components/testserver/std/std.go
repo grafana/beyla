@@ -25,7 +25,7 @@ func HTTPHandler(log *slog.Logger, echoPort int) http.HandlerFunc {
 		}
 
 		if req.RequestURI == "/gotracemetoo" {
-			echoDist(rw, echoPort)
+			echoDist(rw)
 			return
 		}
 
@@ -105,7 +105,7 @@ func echo(rw http.ResponseWriter, port int) {
 	rw.WriteHeader(res.StatusCode)
 }
 
-func echoDist(rw http.ResponseWriter, port int) {
+func echoDist(rw http.ResponseWriter) {
 	requestURL := "http://pytestserver:8083/tracemetoo"
 
 	slog.Debug("calling", "url", requestURL)

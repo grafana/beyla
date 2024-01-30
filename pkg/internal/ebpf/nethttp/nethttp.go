@@ -162,6 +162,7 @@ func (p *Tracer) GoProbes() map[string]ebpfcommon.FunctionPrograms {
 		// tracking of tcp connections for black-box propagation
 		"net/http.(*conn).serve": { // http server
 			Start: p.bpfObjects.UprobeConnServe,
+			End:   p.bpfObjects.UprobeConnServeRet,
 		},
 		"net/http.(*persistConn).roundTrip": { // http client
 			Start: p.bpfObjects.UprobePersistConnRoundTrip,

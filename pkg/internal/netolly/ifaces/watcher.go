@@ -1,3 +1,5 @@
+//go:build linux
+
 // Copyright Red Hat / IBM
 // Copyright Grafana Labs
 //

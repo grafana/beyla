@@ -3,10 +3,10 @@ package transform
 import (
 	"time"
 
-	flow2 "github.com/grafana/beyla/pkg/beyla/flows/flow"
+	"github.com/grafana/beyla/pkg/internal/netolly/flow"
 )
 
-func RecordToMapCodec(in <-chan []*flow2.Record, out chan<- []map[string]interface{}) {
+func RecordToMapCodec(in <-chan []*flow.Record, out chan<- []map[string]interface{}) {
 	for flows := range in {
 		maps := make([]map[string]interface{}, 0, cap(flows))
 		for _, flow := range flows {
@@ -16,7 +16,7 @@ func RecordToMapCodec(in <-chan []*flow2.Record, out chan<- []map[string]interfa
 	}
 }
 
-func flowToMap(flow *flow2.Record) map[string]interface{} {
+func flowToMap(flow *flow.Record) map[string]interface{} {
 	return map[string]interface{}{
 		"Etype":         int(flow.EthProtocol),
 		"FlowDirection": int(flow.Direction),

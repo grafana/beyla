@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/grafana/beyla/pkg/internal/export/otel"
 	"github.com/mariomac/pipes/pkg/node"
 	otel2 "go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -16,6 +15,8 @@ import (
 	"go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/resource"
 	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
+
+	"github.com/grafana/beyla/pkg/internal/export/otel"
 )
 
 // TODO: put here any exporter configuration

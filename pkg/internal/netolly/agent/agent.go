@@ -30,11 +30,10 @@ import (
 	"github.com/gavv/monotime"
 	"github.com/mariomac/pipes/pkg/node"
 
-	"github.com/grafana/beyla/pkg/internal/discover/network"
-	"github.com/grafana/beyla/pkg/internal/flows/ebpf"
-	"github.com/grafana/beyla/pkg/internal/flows/flow"
-	"github.com/grafana/beyla/pkg/internal/flows/ifaces"
-	"github.com/grafana/beyla/pkg/internal/pipe"
+	"github.com/grafana/beyla/pkg/beyla"
+	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
+	"github.com/grafana/beyla/pkg/internal/netolly/flow"
+	"github.com/grafana/beyla/pkg/internal/netolly/ifaces"
 )
 
 func alog() *slog.Logger {
@@ -72,7 +71,7 @@ func (s Status) String() string {
 
 // Flows reporting agent
 type Flows struct {
-	cfg *pipe.Config
+	cfg *beyla.Config
 
 	// input data providers
 	interfaces ifaces.Informer
@@ -102,28 +101,28 @@ type ebpfFlowFetcher interface {
 }
 
 // FlowsAgent instantiates a new agent, given a configuration.
-func FlowsAgent(cfg *pipe.Config) (*Flows, error) {
+func FlowsAgent(cfg *beyla.Config) (*Flows, error) {
 	alog := alog()
 	alog.Info("initializing Flows agent")
 
 	// configure informer for new interfaces
 	var informer ifaces.Informer
-	switch cfg.Discovery.Network.ListenInterfaces {
+	switch cfg.NetworkFlows.ListenInterfaces {
 	case ListenPoll:
 		alog.Debug("listening for new interfaces: use polling",
-			"period", cfg.Discovery.Network.ListenPollPeriod)
-		informer = ifaces.NewPoller(cfg.Discovery.Network.ListenPollPeriod, cfg.ChannelBufferLen)
+			"period", cfg.NetworkFlows.ListenPollPeriod)
+		informer = ifaces.NewPoller(cfg.NetworkFlows.ListenPollPeriod, cfg.ChannelBufferLen)
 	case ListenWatch:
 		alog.Debug("listening for new interfaces: use watching")
 		informer = ifaces.NewWatcher(cfg.ChannelBufferLen)
 	default:
 		alog.Warn("wrong interface listen method. Using file watcher as default",
-			"providedValue", cfg.Discovery.Network.ListenInterfaces)
+			"providedValue", cfg.NetworkFlows.ListenInterfaces)
 		informer = ifaces.NewWatcher(cfg.ChannelBufferLen)
 	}
 
 	alog.Debug("acquiring Agent IP")
-	agentIP, err := fetchAgentIP(cfg)
+	agentIP, err := fetchAgentIP(&cfg.NetworkFlows)
 	if err != nil {
 		return nil, fmt.Errorf("acquiring Agent IP: %w", err)
 	}
@@ -135,9 +134,9 @@ func FlowsAgent(cfg *pipe.Config) (*Flows, error) {
 		return nil, err
 	}
 
-	ingress, egress := flowDirections(&cfg.Discovery.Network)
+	ingress, egress := flowDirections(&cfg.NetworkFlows)
 
-	fetcher, err := ebpf.NewFlowFetcher(cfg.Discovery.Network.Sampling, cfg.Discovery.Network.CacheMaxFlows, ingress, egress)
+	fetcher, err := ebpf.NewFlowFetcher(cfg.NetworkFlows.Sampling, cfg.NetworkFlows.CacheMaxFlows, ingress, egress)
 	if err != nil {
 		return nil, err
 	}
@@ -146,14 +145,14 @@ func FlowsAgent(cfg *pipe.Config) (*Flows, error) {
 }
 
 // flowsAgent is a private constructor with injectable dependencies, usable for tests
-func flowsAgent(cfg *pipe.Config,
+func flowsAgent(cfg *beyla.Config,
 	informer ifaces.Informer,
 	fetcher ebpfFlowFetcher,
 	exporter node.TerminalFunc[[]*flow.Record],
 	agentIP net.IP,
 ) (*Flows, error) {
 	// configure allow/deny interfaces filter
-	filter, err := initInterfaceFilter(cfg.Discovery.Network.Interfaces, cfg.Discovery.Network.ExcludeInterfaces)
+	filter, err := initInterfaceFilter(cfg.NetworkFlows.Interfaces, cfg.NetworkFlows.ExcludeInterfaces)
 	if err != nil {
 		return nil, fmt.Errorf("configuring interface filters: %w", err)
 	}
@@ -168,10 +167,10 @@ func flowsAgent(cfg *pipe.Config,
 		return iface
 	}
 
-	mapTracer := flow.NewMapTracer(fetcher, cfg.Discovery.Network.CacheActiveTimeout)
-	rbTracer := flow.NewRingBufTracer(fetcher, mapTracer, cfg.Discovery.Network.CacheActiveTimeout)
+	mapTracer := flow.NewMapTracer(fetcher, cfg.NetworkFlows.CacheActiveTimeout)
+	rbTracer := flow.NewRingBufTracer(fetcher, mapTracer, cfg.NetworkFlows.CacheActiveTimeout)
 	accounter := flow.NewAccounter(
-		cfg.Discovery.Network.CacheMaxFlows, cfg.Discovery.Network.CacheActiveTimeout, time.Now, monotime.Now)
+		cfg.NetworkFlows.CacheMaxFlows, cfg.NetworkFlows.CacheActiveTimeout, time.Now, monotime.Now)
 	return &Flows{
 		ebpf:           fetcher,
 		exporter:       exporter,
@@ -186,7 +185,7 @@ func flowsAgent(cfg *pipe.Config,
 	}, nil
 }
 
-func flowDirections(cfg *network.Config) (ingress, egress bool) {
+func flowDirections(cfg *beyla.NetworkConfig) (ingress, egress bool) {
 	switch cfg.Direction {
 	case DirectionIngress:
 		return true, false
@@ -290,7 +289,7 @@ func (f *Flows) onInterfaceAdded(iface ifaces.Interface) {
 	}
 }
 
-func buildFlowExporter(_ *pipe.Config) (node.TerminalFunc[[]*flow.Record], error) {
+func buildFlowExporter(_ *beyla.Config) (node.TerminalFunc[[]*flow.Record], error) {
 	// TODO: remove
 	return func(in <-chan []*flow.Record) {
 		for flows := range in {

@@ -160,7 +160,7 @@ func newMetricsReporter(ctx context.Context, cfg *MetricsConfig, ctxInfo *global
 			}()
 		}, mr.newMetricSet)
 	// Instantiate the OTLP HTTP or GRPC metrics exporter
-	exporter, err := instantiateMetricsExporter(ctx, cfg, log)
+	exporter, err := InstantiateMetricsExporter(ctx, cfg, log)
 	if err != nil {
 		return nil, err
 	}
@@ -223,7 +223,8 @@ func (mr *MetricsReporter) newMetricSet(service svc.ID) (*Metrics, error) {
 	return &m, nil
 }
 
-func instantiateMetricsExporter(ctx context.Context, cfg *MetricsConfig, log *slog.Logger) (metric.Exporter, error) {
+// TODO: restore as private
+func InstantiateMetricsExporter(ctx context.Context, cfg *MetricsConfig, log *slog.Logger) (metric.Exporter, error) {
 	var err error
 	var exporter metric.Exporter
 	switch proto := cfg.GetProtocol(); proto {

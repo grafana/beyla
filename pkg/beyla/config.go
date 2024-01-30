@@ -8,7 +8,6 @@ import (
 	"github.com/caarlos0/env/v9"
 	"gopkg.in/yaml.v3"
 
-	"github.com/grafana/beyla/pkg/internal/discover/network"
 	"github.com/grafana/beyla/pkg/internal/discover/services"
 	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
 	"github.com/grafana/beyla/pkg/internal/export/debug"
@@ -78,34 +77,35 @@ var defaultConfig = Config{
 		},
 	},
 	Routes: &transform.RoutesConfig{},
-	Discovery: services.DiscoveryConfig{
-		Network: network.Config{
-			AgentIPIface:       "external",
-			AgentIPType:        "any",
-			ExcludeInterfaces:  []string{"lo"},
-			CacheMaxFlows:      5000,
-			CacheActiveTimeout: 5 * time.Second,
-			Deduper:            "firstCome",
-			Direction:          "both",
-			ListenInterfaces:   "watch",
-			ListenPollPeriod:   10 * time.Second,
-			Transform: NetworkTransformConfig{
-				Rules: NetworkTransformRules{NetworkTransformRule{
-					Input:  "SrcAddr",
-					Output: "SrcK8s",
-					Type:   "add_kubernetes",
-				}, NetworkTransformRule{
-					Input:  "DstAddr",
-					Output: "DstK8s",
-					Type:   "add_kubernetes",
-				}},
-			},
+	NetworkFlows: NetworkConfig{
+		AgentIPIface:       "external",
+		AgentIPType:        "any",
+		ExcludeInterfaces:  []string{"lo"},
+		CacheMaxFlows:      5000,
+		CacheActiveTimeout: 5 * time.Second,
+		Deduper:            "firstCome",
+		Direction:          "both",
+		ListenInterfaces:   "watch",
+		ListenPollPeriod:   10 * time.Second,
+		Transform: NetworkTransformConfig{
+			Rules: NetworkTransformRules{NetworkTransformRule{
+				Input:  "SrcAddr",
+				Output: "SrcK8s",
+				Type:   "add_kubernetes",
+			}, NetworkTransformRule{
+				Input:  "DstAddr",
+				Output: "DstK8s",
+				Type:   "add_kubernetes",
+			}},
 		},
 	},
 }
 
 type Config struct {
 	EBPF ebpfcommon.TracerConfig `yaml:"ebpf"`
+
+	// NetworkFlows configuration for Network Observability feature
+	NetworkFlows NetworkConfig
 
 	// Grafana overrides some values of the otel.MetricsConfig and otel.TracesConfig below
 	// for a simpler submission of OTEL metrics to Grafana Cloud
@@ -159,6 +159,7 @@ func (e ConfigError) Error() string {
 	return string(e)
 }
 
+// nolint:cyclop
 func (c *Config) Validate() error {
 	if err := c.Discovery.Services.Validate(); err != nil {
 		return ConfigError(fmt.Sprintf("error in services YAML property: %s", err.Error()))
@@ -192,9 +193,9 @@ func (c *Config) Validate() error {
 func (c *Config) Enabled(feature Feature) bool {
 	switch feature {
 	case FeatureNetO11y:
-		return len(c.Discovery.Network.Metrics) > 0
+		return len(c.NetworkFlows.Metrics) > 0
 	case FeatureAppO11y:
-		return c.Port.Len() == 0 && !c.Exec.IsSet() && len(c.Discovery.Services) == 0 && !c.Discovery.SystemWide
+		return c.Port.Len() > 0 || c.Exec.IsSet() || len(c.Discovery.Services) > 0 || c.Discovery.SystemWide
 	}
 	return false
 }

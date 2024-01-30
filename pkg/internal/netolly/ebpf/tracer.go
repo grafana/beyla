@@ -1,3 +1,5 @@
+//go:build linux
+
 // Copyright Red Hat / IBM
 // Copyright Grafana Labs
 //
@@ -31,8 +33,8 @@ import (
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
 
-	"github.com/grafana/beyla/pkg/beyla/flows/flow"
-	"github.com/grafana/beyla/pkg/beyla/flows/ifaces"
+	"github.com/grafana/beyla/pkg/internal/netolly/flow"
+	"github.com/grafana/beyla/pkg/internal/netolly/ifaces"
 )
 
 // $BPF_CLANG and $BPF_CFLAGS are set by the Makefile.

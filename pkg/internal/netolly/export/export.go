@@ -4,8 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/grafana/beyla/pkg/internal/export/otel"
 	"github.com/mariomac/pipes/pkg/node"
+
+	"github.com/grafana/beyla/pkg/internal/export/otel"
 )
 
 // TODO: put here any exporter configuration

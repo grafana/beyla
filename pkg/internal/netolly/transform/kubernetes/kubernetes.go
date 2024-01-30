@@ -35,7 +35,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/clientcmd"
 
-	"github.com/grafana/beyla/pkg/beyla/flows/transform/kubernetes/cni"
+	"github.com/grafana/beyla/pkg/internal/netolly/transform/kubernetes/cni"
 )
 
 const (

@@ -48,7 +48,7 @@ func findOvnMp0IP(annotations map[string]string) (string, error) {
 		var subnets map[string]string
 		err := json.Unmarshal([]byte(subnetsJSON), &subnets)
 		if err != nil {
-			return "", fmt.Errorf("cannot read annotation %s: %v", ovnSubnetAnnotation, err)
+			return "", fmt.Errorf("cannot read annotation %s: %w", ovnSubnetAnnotation, err)
 		}
 		if subnet, ok := subnets["default"]; ok {
 			// From subnet like 10.128.0.0/23, we want to index IP 10.128.0.2

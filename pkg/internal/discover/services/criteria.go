@@ -8,8 +8,6 @@ import (
 	"time"
 
 	"gopkg.in/yaml.v3"
-
-	"github.com/grafana/beyla/pkg/internal/discover/network"
 )
 
 const (
@@ -45,9 +43,6 @@ type ProcessInfo struct {
 
 // DiscoveryConfig for the discover.ProcessFinder pipeline
 type DiscoveryConfig struct {
-	// Network observability stuff
-	Network network.Config `yaml:"network"`
-
 	// Services selection. If the user defined the BEYLA_EXECUTABLE_NAME or BEYLA_OPEN_PORT variables, they will be automatically
 	// added to the services definition criteria, with the lowest preference.
 	Services DefinitionCriteria `yaml:"services"`

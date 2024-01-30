@@ -24,24 +24,23 @@ import (
 	"net"
 	"strconv"
 
+	lrucache "github.com/hashicorp/golang-lru/v2"
 	"github.com/mariomac/pipes/pkg/node"
 
-	"github.com/grafana/beyla/pkg/internal/pipe"
-
-	"github.com/grafana/beyla/pkg/beyla/flows/transform/kubernetes"
-	"github.com/grafana/beyla/pkg/beyla/flows/transform/netdb"
-	lrucache "github.com/hashicorp/golang-lru/v2"
+	"github.com/grafana/beyla/pkg/beyla"
+	"github.com/grafana/beyla/pkg/internal/netolly/transform/kubernetes"
+	"github.com/grafana/beyla/pkg/internal/netolly/transform/netdb"
 )
 
 const MAX_RESOLVED_DNS = 10000 // arbitrary limit
 
-func log() *slog.Logger { return slog.With("component", "transform.Network") }
+func log() *slog.Logger { return slog.With("component", "transform.NetworkTransform") }
 
-type NetworkConfig struct {
-	TransformConfig *pipe.NetworkTransformConfig
+type NetworkTransformConfig struct {
+	TransformConfig *beyla.NetworkTransformConfig
 }
 
-func Network(cfg NetworkConfig) (node.MiddleFunc[[]map[string]interface{}, []map[string]interface{}], error) {
+func NetworkTransform(cfg NetworkTransformConfig) (node.MiddleFunc[[]map[string]interface{}, []map[string]interface{}], error) {
 	nt, err := newTransformNetwork(cfg.TransformConfig)
 	if err != nil {
 		return nil, fmt.Errorf("instantiating network transformer: %w", err)
@@ -60,7 +59,7 @@ func Network(cfg NetworkConfig) (node.MiddleFunc[[]map[string]interface{}, []map
 
 type networkTransformer struct {
 	kube           kubernetes.KubeData
-	cfg            *pipe.NetworkTransformConfig
+	cfg            *beyla.NetworkTransformConfig
 	svcNames       *netdb.ServiceNames
 	dnsResolvedIps *lrucache.Cache[string, string]
 	kubeOff        bool
@@ -153,13 +152,13 @@ func (n *networkTransformer) transform(outputEntry map[string]interface{}) {
 			}
 		default:
 			// TODO: this should be verified at instantiation time
-			panic(fmt.Sprintf("unknown type %s for transform.Network rule: %v", rule.Type, rule))
+			panic(fmt.Sprintf("unknown type %s for transform.NetworkTransform rule: %v", rule.Type, rule))
 		}
 	}
 }
 
 // newTransformNetwork create a new transform
-func newTransformNetwork(cfg *pipe.NetworkTransformConfig) (*networkTransformer, error) {
+func newTransformNetwork(cfg *beyla.NetworkTransformConfig) (*networkTransformer, error) {
 	dnsCache, err := lrucache.New[string, string](MAX_RESOLVED_DNS)
 	if err != nil {
 		return nil, err

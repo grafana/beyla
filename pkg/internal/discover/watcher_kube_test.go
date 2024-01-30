@@ -16,10 +16,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	fakek8sclientset "k8s.io/client-go/kubernetes/fake"
 
+	"github.com/grafana/beyla/pkg/beyla"
 	"github.com/grafana/beyla/pkg/internal/discover/services"
 	"github.com/grafana/beyla/pkg/internal/helpers/container"
 	"github.com/grafana/beyla/pkg/internal/kube"
-	"github.com/grafana/beyla/pkg/internal/pipe"
 	"github.com/grafana/beyla/pkg/internal/testutil"
 )
 
@@ -125,7 +125,7 @@ func TestWatcherKubeEnricherWithMatcher(t *testing.T) {
 		Informer: &informer,
 	})
 	require.NoError(t, err)
-	pipeConfig := pipe.Config{}
+	pipeConfig := beyla.Config{}
 	require.NoError(t, yaml.Unmarshal([]byte(`discovery:
   services:
   - name: port-only

@@ -10,11 +10,11 @@ import (
 	"github.com/cilium/ebpf/link"
 	"github.com/mariomac/pipes/pkg/node"
 
+	"github.com/grafana/beyla/pkg/beyla"
 	"github.com/grafana/beyla/pkg/internal/ebpf"
 	"github.com/grafana/beyla/pkg/internal/goexec"
 	"github.com/grafana/beyla/pkg/internal/helpers"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
-	"github.com/grafana/beyla/pkg/internal/pipe"
 	"github.com/grafana/beyla/pkg/internal/svc"
 )
 
@@ -23,7 +23,7 @@ import (
 // instrumenting the executable
 type TraceAttacher struct {
 	log               *slog.Logger
-	Cfg               *pipe.Config
+	Cfg               *beyla.Config
 	Ctx               context.Context
 	DiscoveredTracers chan *ebpf.ProcessTracer
 	DeleteTracers     chan *Instrumentable
@@ -178,10 +178,10 @@ func monitorPIDs(tracer *ebpf.ProcessTracer, ie *Instrumentable) {
 	}
 }
 
-// pinpath must be unique for a given executable group
+// BuildPinPath pinpath must be unique for a given executable group
 // it will be:
 //   - current beyla PID
-func BuildPinPath(cfg *pipe.Config) string {
+func BuildPinPath(cfg *beyla.Config) string {
 	return path.Join(cfg.EBPF.BpfBaseDir, fmt.Sprintf("beyla-%d", os.Getpid()))
 }
 

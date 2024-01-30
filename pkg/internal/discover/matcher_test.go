@@ -7,13 +7,13 @@ import (
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
 
+	"github.com/grafana/beyla/pkg/beyla"
 	"github.com/grafana/beyla/pkg/internal/discover/services"
-	"github.com/grafana/beyla/pkg/internal/pipe"
 	"github.com/grafana/beyla/pkg/internal/testutil"
 )
 
 func TestCriteriaMatcher(t *testing.T) {
-	pipeConfig := pipe.Config{}
+	pipeConfig := beyla.Config{}
 	require.NoError(t, yaml.Unmarshal([]byte(`discovery:
   services:
   - name: port-only
@@ -74,7 +74,7 @@ func TestCriteriaMatcher(t *testing.T) {
 }
 
 func TestCriteriaMatcher_MustMatchAllAttributes(t *testing.T) {
-	pipeConfig := pipe.Config{}
+	pipeConfig := beyla.Config{}
 	require.NoError(t, yaml.Unmarshal([]byte(`discovery:
   services:
   - name: all-attributes-must-match
@@ -135,7 +135,7 @@ func TestCriteriaMatcher_MustMatchAllAttributes(t *testing.T) {
 }
 
 func TestCriteriaMatcherMissingPort(t *testing.T) {
-	pipeConfig := pipe.Config{}
+	pipeConfig := beyla.Config{}
 	require.NoError(t, yaml.Unmarshal([]byte(`discovery:
   services:
   - name: port-only

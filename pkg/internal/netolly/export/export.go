@@ -10,6 +10,7 @@ import (
 )
 
 // TODO: put here any exporter configuration
+// nolint:revive
 type ExportConfig struct {
 	Metrics *otel.MetricsConfig
 }

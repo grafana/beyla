@@ -142,6 +142,7 @@ func (m *FlowFetcher) Register(iface ifaces.Interface) error {
 		if errors.Is(err, fs.ErrExist) {
 			ilog.Warn("qdisc clsact already exists. Ignoring", "error", err)
 		} else {
+			// nolint:errorlint
 			return fmt.Errorf("failed to create clsact qdisc on %d (%s): %T %w", iface.Index, iface.Name, err, err)
 		}
 	}
@@ -151,11 +152,7 @@ func (m *FlowFetcher) Register(iface ifaces.Interface) error {
 		return err
 	}
 
-	if err := m.registerIngress(iface, ipvlan); err != nil {
-		return err
-	}
-
-	return nil
+	return m.registerIngress(iface, ipvlan)
 }
 
 func (m *FlowFetcher) registerEgress(iface ifaces.Interface, ipvlan netlink.Link) error {
@@ -243,19 +240,7 @@ func (m *FlowFetcher) Close() error {
 		}
 	}
 	if m.objects != nil {
-		if err := m.objects.EgressFlowParse.Close(); err != nil {
-			errs = append(errs, err)
-		}
-		if err := m.objects.IngressFlowParse.Close(); err != nil {
-			errs = append(errs, err)
-		}
-		if err := m.objects.AggregatedFlows.Close(); err != nil {
-			errs = append(errs, err)
-		}
-		if err := m.objects.DirectFlows.Close(); err != nil {
-			errs = append(errs, err)
-		}
-		m.objects = nil
+		errs = append(errs, m.closeObjects()...)
 	}
 	for iface, ef := range m.egressFilters {
 		log.Debug("deleting egress filter", "interface", iface)
@@ -287,6 +272,24 @@ func (m *FlowFetcher) Close() error {
 		errStrings = append(errStrings, err.Error())
 	}
 	return errors.New(`errors: "` + strings.Join(errStrings, `", "`) + `"`)
+}
+
+func (m *FlowFetcher) closeObjects() []error {
+	var errs []error
+	if err := m.objects.EgressFlowParse.Close(); err != nil {
+		errs = append(errs, err)
+	}
+	if err := m.objects.IngressFlowParse.Close(); err != nil {
+		errs = append(errs, err)
+	}
+	if err := m.objects.AggregatedFlows.Close(); err != nil {
+		errs = append(errs, err)
+	}
+	if err := m.objects.DirectFlows.Close(); err != nil {
+		errs = append(errs, err)
+	}
+	m.objects = nil
+	return errs
 }
 
 // doIgnoreNoDev runs the provided syscall over the provided device and ignores the error

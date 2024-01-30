@@ -144,15 +144,6 @@ func attributes(m map[string]interface{}) []attribute.KeyValue {
 	return res
 }
 
-func processEvents(i []map[string]interface{}) {
-	bytes, _ := json.Marshal(i)
-	fmt.Println(string(bytes))
-
-	for _, v := range i {
-		fmt.Println(attributes(v))
-	}
-}
-
 func strAttr(m map[string]interface{}, name string) string {
 	v, ok := m[name].(string)
 	if !ok {
@@ -236,7 +227,7 @@ func agentMetric(m map[string]interface{}) bool {
 }
 
 func anyK8sMetrics(m map[string]interface{}) bool {
-	for k, _ := range m {
+	for k := range m {
 		if strings.Contains(k, "K8s_") {
 			return true
 		}

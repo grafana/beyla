@@ -32,7 +32,7 @@ import (
 	"github.com/grafana/beyla/pkg/internal/netolly/transform/netdb"
 )
 
-const MAX_RESOLVED_DNS = 10000 // arbitrary limit
+const maxResolvedDNS = 10000 // arbitrary limit
 
 func log() *slog.Logger { return slog.With("component", "transform.NetworkTransform") }
 
@@ -88,8 +88,8 @@ func (n *networkTransformer) dns(key string, outKey string, outputEntry map[stri
 	outputEntry[outKey] = host
 }
 
+// nolint:cyclop
 func (n *networkTransformer) transform(outputEntry map[string]interface{}) {
-
 	if n.kubeOff {
 		n.dns("SrcAddr", "SrcHost", outputEntry)
 		n.dns("DstAddr", "DstHost", outputEntry)
@@ -159,7 +159,7 @@ func (n *networkTransformer) transform(outputEntry map[string]interface{}) {
 
 // newTransformNetwork create a new transform
 func newTransformNetwork(cfg *beyla.NetworkTransformConfig) (*networkTransformer, error) {
-	dnsCache, err := lrucache.New[string, string](MAX_RESOLVED_DNS)
+	dnsCache, err := lrucache.New[string, string](maxResolvedDNS)
 	if err != nil {
 		return nil, err
 	}

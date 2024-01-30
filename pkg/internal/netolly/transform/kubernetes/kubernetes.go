@@ -47,13 +47,7 @@ const (
 	typeService           = "Service"
 )
 
-type kubeDataInterface interface {
-	GetInfo(string) (*Info, error)
-	InitFromConfig(string) error
-}
-
 type KubeData struct {
-	kubeDataInterface
 	log *slog.Logger
 	// pods, nodes and services cache the different object types as *Info pointers
 	pods     cache.SharedIndexInformer

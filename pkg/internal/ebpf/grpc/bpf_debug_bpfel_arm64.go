@@ -13,6 +13,13 @@ import (
 	"github.com/cilium/ebpf"
 )
 
+type bpf_debugConnectionInfoT struct {
+	S_addr [16]uint8
+	D_addr [16]uint8
+	S_port uint16
+	D_port uint16
+}
+
 type bpf_debugGoroutineMetadata struct {
 	Parent    uint64
 	Timestamp uint64
@@ -33,9 +40,30 @@ type bpf_debugGrpcSrvFuncInvocationT struct {
 	Tp              bpf_debugTpInfoT
 }
 
+type bpf_debugHttpConnectionMetadataT struct {
+	Pid struct {
+		HostPid   uint32
+		UserPid   uint32
+		Namespace uint32
+	}
+	Type uint8
+}
+
+type bpf_debugPidConnectionInfoT struct {
+	Conn bpf_debugConnectionInfoT
+	Pid  uint32
+}
+
 type bpf_debugPidKeyT struct {
 	Pid       uint32
 	Namespace uint32
+}
+
+type bpf_debugTpInfoPidT struct {
+	Tp    bpf_debugTpInfoT
+	Pid   uint32
+	Valid uint8
+	_     [3]byte
 }
 
 type bpf_debugTpInfoT struct {
@@ -105,17 +133,20 @@ type bpf_debugProgramSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpf_debugMapSpecs struct {
-	Events                    *ebpf.MapSpec `ebpf:"events"`
-	GoTraceMap                *ebpf.MapSpec `ebpf:"go_trace_map"`
-	GolangMapbucketStorageMap *ebpf.MapSpec `ebpf:"golang_mapbucket_storage_map"`
-	OngoingGoroutines         *ebpf.MapSpec `ebpf:"ongoing_goroutines"`
-	OngoingGrpcClientRequests *ebpf.MapSpec `ebpf:"ongoing_grpc_client_requests"`
-	OngoingGrpcHeaderWrites   *ebpf.MapSpec `ebpf:"ongoing_grpc_header_writes"`
-	OngoingGrpcRequestStatus  *ebpf.MapSpec `ebpf:"ongoing_grpc_request_status"`
-	OngoingGrpcServerRequests *ebpf.MapSpec `ebpf:"ongoing_grpc_server_requests"`
-	OngoingStreams            *ebpf.MapSpec `ebpf:"ongoing_streams"`
-	PidCache                  *ebpf.MapSpec `ebpf:"pid_cache"`
-	ValidPids                 *ebpf.MapSpec `ebpf:"valid_pids"`
+	Events                       *ebpf.MapSpec `ebpf:"events"`
+	FilteredConnections          *ebpf.MapSpec `ebpf:"filtered_connections"`
+	GoTraceMap                   *ebpf.MapSpec `ebpf:"go_trace_map"`
+	GolangMapbucketStorageMap    *ebpf.MapSpec `ebpf:"golang_mapbucket_storage_map"`
+	OngoingGoroutines            *ebpf.MapSpec `ebpf:"ongoing_goroutines"`
+	OngoingGrpcClientRequests    *ebpf.MapSpec `ebpf:"ongoing_grpc_client_requests"`
+	OngoingGrpcHeaderWrites      *ebpf.MapSpec `ebpf:"ongoing_grpc_header_writes"`
+	OngoingGrpcRequestStatus     *ebpf.MapSpec `ebpf:"ongoing_grpc_request_status"`
+	OngoingGrpcServerRequests    *ebpf.MapSpec `ebpf:"ongoing_grpc_server_requests"`
+	OngoingHttpServerConnections *ebpf.MapSpec `ebpf:"ongoing_http_server_connections"`
+	OngoingStreams               *ebpf.MapSpec `ebpf:"ongoing_streams"`
+	PidCache                     *ebpf.MapSpec `ebpf:"pid_cache"`
+	TraceMap                     *ebpf.MapSpec `ebpf:"trace_map"`
+	ValidPids                    *ebpf.MapSpec `ebpf:"valid_pids"`
 }
 
 // bpf_debugObjects contains all objects after they have been loaded into the kernel.
@@ -137,22 +168,26 @@ func (o *bpf_debugObjects) Close() error {
 //
 // It can be passed to loadBpf_debugObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpf_debugMaps struct {
-	Events                    *ebpf.Map `ebpf:"events"`
-	GoTraceMap                *ebpf.Map `ebpf:"go_trace_map"`
-	GolangMapbucketStorageMap *ebpf.Map `ebpf:"golang_mapbucket_storage_map"`
-	OngoingGoroutines         *ebpf.Map `ebpf:"ongoing_goroutines"`
-	OngoingGrpcClientRequests *ebpf.Map `ebpf:"ongoing_grpc_client_requests"`
-	OngoingGrpcHeaderWrites   *ebpf.Map `ebpf:"ongoing_grpc_header_writes"`
-	OngoingGrpcRequestStatus  *ebpf.Map `ebpf:"ongoing_grpc_request_status"`
-	OngoingGrpcServerRequests *ebpf.Map `ebpf:"ongoing_grpc_server_requests"`
-	OngoingStreams            *ebpf.Map `ebpf:"ongoing_streams"`
-	PidCache                  *ebpf.Map `ebpf:"pid_cache"`
-	ValidPids                 *ebpf.Map `ebpf:"valid_pids"`
+	Events                       *ebpf.Map `ebpf:"events"`
+	FilteredConnections          *ebpf.Map `ebpf:"filtered_connections"`
+	GoTraceMap                   *ebpf.Map `ebpf:"go_trace_map"`
+	GolangMapbucketStorageMap    *ebpf.Map `ebpf:"golang_mapbucket_storage_map"`
+	OngoingGoroutines            *ebpf.Map `ebpf:"ongoing_goroutines"`
+	OngoingGrpcClientRequests    *ebpf.Map `ebpf:"ongoing_grpc_client_requests"`
+	OngoingGrpcHeaderWrites      *ebpf.Map `ebpf:"ongoing_grpc_header_writes"`
+	OngoingGrpcRequestStatus     *ebpf.Map `ebpf:"ongoing_grpc_request_status"`
+	OngoingGrpcServerRequests    *ebpf.Map `ebpf:"ongoing_grpc_server_requests"`
+	OngoingHttpServerConnections *ebpf.Map `ebpf:"ongoing_http_server_connections"`
+	OngoingStreams               *ebpf.Map `ebpf:"ongoing_streams"`
+	PidCache                     *ebpf.Map `ebpf:"pid_cache"`
+	TraceMap                     *ebpf.Map `ebpf:"trace_map"`
+	ValidPids                    *ebpf.Map `ebpf:"valid_pids"`
 }
 
 func (m *bpf_debugMaps) Close() error {
 	return _Bpf_debugClose(
 		m.Events,
+		m.FilteredConnections,
 		m.GoTraceMap,
 		m.GolangMapbucketStorageMap,
 		m.OngoingGoroutines,
@@ -160,8 +195,10 @@ func (m *bpf_debugMaps) Close() error {
 		m.OngoingGrpcHeaderWrites,
 		m.OngoingGrpcRequestStatus,
 		m.OngoingGrpcServerRequests,
+		m.OngoingHttpServerConnections,
 		m.OngoingStreams,
 		m.PidCache,
+		m.TraceMap,
 		m.ValidPids,
 	)
 }

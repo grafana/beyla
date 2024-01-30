@@ -4,23 +4,10 @@
 #include "utils.h"
 #include "http_types.h"
 #include "trace_util.h"
+#include "tracing.h"
 #include "pid.h"
 
 #define NANOSECONDS_PER_EPOCH (15LL * 1000000000LL) // 15 seconds
-
-typedef struct tp_info_pid {
-    tp_info_t tp;
-    u32 pid;
-    u8  valid;
-} tp_info_pid_t;
-
-struct {
-    __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, connection_info_t); // key: the connection info
-    __type(value, tp_info_pid_t);  // value: traceparent info
-    __uint(max_entries, MAX_CONCURRENT_SHARED_REQUESTS);
-    __uint(pinning, LIBBPF_PIN_BY_NAME);
-} trace_map SEC(".maps");
 
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
@@ -193,14 +180,6 @@ static __always_inline u8 correlated_requests(tp_info_pid_t *tp, tp_info_pid_t *
     }
 
     return 0;
-}
-
-static __always_inline tp_info_pid_t *trace_info_for_connection(connection_info_t *conn) {
-    return (tp_info_pid_t *)bpf_map_lookup_elem(&trace_map, conn);
-}
-
-static __always_inline void delete_trace_info_for_connection(connection_info_t *conn) {
-    bpf_map_delete_elem(&trace_map, conn);
 }
 
 static __always_inline void get_or_create_trace_info(http_connection_metadata_t *meta, u32 pid, connection_info_t *conn, void *u_buf, int bytes_len, s32 capture_header_buffer) {

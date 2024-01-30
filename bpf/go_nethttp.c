@@ -101,7 +101,7 @@ int uprobe_readRequestReturns(struct pt_regs *ctx) {
 static __always_inline int writeHeaderHelper(struct pt_regs *ctx, u64 req_offset) {
         bpf_dbg_printk("=== uprobe/WriteHeader === ");
     void *goroutine_addr = GOROUTINE_PTR(ctx);
-    bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
+    bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);    
 
     http_func_invocation_t *invocation =
         bpf_map_lookup_elem(&ongoing_http_server_requests, &goroutine_addr);
@@ -118,7 +118,7 @@ static __always_inline int writeHeaderHelper(struct pt_regs *ctx, u64 req_offset
             bpf_dbg_printk("can't read http invocation metadata");
             return 0;
         }
-    }
+    }    
 
     http_request_trace *trace = bpf_ringbuf_reserve(&events, sizeof(http_request_trace), 0);
     if (!trace) {
@@ -394,13 +394,12 @@ int uprobe_http2ResponseWriterStateWriteHeader(struct pt_regs *ctx) {
 }
 
 // HTTP black-box context propagation
-
 static __always_inline void get_conn_info(void *conn_ptr, connection_info_t *info) {
     if (conn_ptr) {
         void *fd_ptr = 0;
         bpf_probe_read(&fd_ptr, sizeof(fd_ptr), (void *)(conn_ptr + conn_fd_pos)); // find fd
 
-        bpf_printk("Found fd ptr %llx", fd_ptr);
+        bpf_dbg_printk("Found fd ptr %llx", fd_ptr);
 
         if (fd_ptr) {
             void *laddr_ptr = 0;
@@ -410,7 +409,7 @@ static __always_inline void get_conn_info(void *conn_ptr, connection_info_t *inf
             bpf_probe_read(&raddr_ptr, sizeof(raddr_ptr), (void *)(fd_ptr + fd_raddr_pos + 8)); // find raddr
 
             if (laddr_ptr && raddr_ptr) {
-                bpf_printk("laddr %llx, raddr %llx", laddr_ptr, raddr_ptr);
+                bpf_dbg_printk("laddr %llx, raddr %llx", laddr_ptr, raddr_ptr);
 
                 // read local
                 bpf_probe_read(&info->s_port, sizeof(info->s_port), (void *)(laddr_ptr + tcp_addr_port_ptr_pos));
@@ -457,10 +456,25 @@ int uprobe_connServe(struct pt_regs *ctx) {
         if (rwc_ptr) {
             void *conn_ptr = 0;
             bpf_probe_read(&conn_ptr, sizeof(conn_ptr), (void *)(rwc_ptr + rwc_conn_pos)); // find conn
-            connection_info_t conn = {0};
-            get_conn_info(conn_ptr, &conn);
+            if (conn_ptr) {
+                void *goroutine_addr = GOROUTINE_PTR(ctx);
+                connection_info_t conn = {0};
+                get_conn_info(conn_ptr, &conn);
+
+                bpf_map_update_elem(&ongoing_http_server_connections, &goroutine_addr, &conn, BPF_ANY);
+            }
         }
     }
+
+    return 0;
+}
+
+SEC("uprobe/connServeRet")
+int uprobe_connServeRet(struct pt_regs *ctx) {
+    bpf_dbg_printk("=== uprobe/proc http conn serve ret === ");
+    void *goroutine_addr = GOROUTINE_PTR(ctx);
+
+    bpf_map_delete_elem(&ongoing_http_server_connections, &goroutine_addr);
 
     return 0;
 }
@@ -468,6 +482,14 @@ int uprobe_connServe(struct pt_regs *ctx) {
 SEC("uprobe/persistConnRoundTrip")
 int uprobe_persistConnRoundTrip(struct pt_regs *ctx) {
     bpf_dbg_printk("=== uprobe/proc http persistConn roundTrip === ");
+    void *goroutine_addr = GOROUTINE_PTR(ctx);
+    bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
+
+    http_func_invocation_t *invocation = bpf_map_lookup_elem(&ongoing_http_client_requests, &goroutine_addr);
+    if (!invocation) {
+        bpf_dbg_printk("can't find invocation info for client call, this might be a bug");
+        return 0;
+    }
 
     void *pc_ptr = GO_PARAM1(ctx);
     if (pc_ptr) {
@@ -475,8 +497,20 @@ int uprobe_persistConnRoundTrip(struct pt_regs *ctx) {
         if (conn_conn_ptr) {
             void *conn_ptr = 0;
             bpf_probe_read(&conn_ptr, sizeof(conn_ptr), (void *)(conn_conn_ptr + rwc_conn_pos)); // find conn
-            connection_info_t conn = {0};
-            get_conn_info(conn_ptr, &conn);
+            if (conn_ptr) {
+                connection_info_t conn = {0};
+                get_conn_info(conn_ptr, &conn);
+                u32 pid = pid_from_pid_tgid(bpf_get_current_pid_tgid());
+                tp_info_pid_t tp_p = {
+                    .pid = pid,
+                    .valid = 1,
+                    .tp = invocation->tp
+                };
+            
+                tp_p.tp.ts = bpf_ktime_get_ns();
+                bpf_dbg_printk("storing trace_map info for black-box tracing");
+                bpf_map_update_elem(&trace_map, &conn, &tp_p, BPF_ANY);
+            }
         }
     }
 

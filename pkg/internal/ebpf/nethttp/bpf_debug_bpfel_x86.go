@@ -111,7 +111,10 @@ type bpf_debugProgramSpecs struct {
 	UprobeWriteHeader                         *ebpf.ProgramSpec `ebpf:"uprobe_WriteHeader"`
 	UprobeConnServe                           *ebpf.ProgramSpec `ebpf:"uprobe_connServe"`
 	UprobeConnServeRet                        *ebpf.ProgramSpec `ebpf:"uprobe_connServeRet"`
+	UprobeHttp2FramerWriteHeaders             *ebpf.ProgramSpec `ebpf:"uprobe_http2FramerWriteHeaders"`
+	UprobeHttp2FramerWriteHeadersReturns      *ebpf.ProgramSpec `ebpf:"uprobe_http2FramerWriteHeaders_returns"`
 	UprobeHttp2ResponseWriterStateWriteHeader *ebpf.ProgramSpec `ebpf:"uprobe_http2ResponseWriterStateWriteHeader"`
+	UprobeHttp2RoundTrip                      *ebpf.ProgramSpec `ebpf:"uprobe_http2RoundTrip"`
 	UprobePersistConnRoundTrip                *ebpf.ProgramSpec `ebpf:"uprobe_persistConnRoundTrip"`
 	UprobeReadRequestReturns                  *ebpf.ProgramSpec `ebpf:"uprobe_readRequestReturns"`
 	UprobeRoundTrip                           *ebpf.ProgramSpec `ebpf:"uprobe_roundTrip"`
@@ -192,7 +195,10 @@ type bpf_debugPrograms struct {
 	UprobeWriteHeader                         *ebpf.Program `ebpf:"uprobe_WriteHeader"`
 	UprobeConnServe                           *ebpf.Program `ebpf:"uprobe_connServe"`
 	UprobeConnServeRet                        *ebpf.Program `ebpf:"uprobe_connServeRet"`
+	UprobeHttp2FramerWriteHeaders             *ebpf.Program `ebpf:"uprobe_http2FramerWriteHeaders"`
+	UprobeHttp2FramerWriteHeadersReturns      *ebpf.Program `ebpf:"uprobe_http2FramerWriteHeaders_returns"`
 	UprobeHttp2ResponseWriterStateWriteHeader *ebpf.Program `ebpf:"uprobe_http2ResponseWriterStateWriteHeader"`
+	UprobeHttp2RoundTrip                      *ebpf.Program `ebpf:"uprobe_http2RoundTrip"`
 	UprobePersistConnRoundTrip                *ebpf.Program `ebpf:"uprobe_persistConnRoundTrip"`
 	UprobeReadRequestReturns                  *ebpf.Program `ebpf:"uprobe_readRequestReturns"`
 	UprobeRoundTrip                           *ebpf.Program `ebpf:"uprobe_roundTrip"`
@@ -206,7 +212,10 @@ func (p *bpf_debugPrograms) Close() error {
 		p.UprobeWriteHeader,
 		p.UprobeConnServe,
 		p.UprobeConnServeRet,
+		p.UprobeHttp2FramerWriteHeaders,
+		p.UprobeHttp2FramerWriteHeadersReturns,
 		p.UprobeHttp2ResponseWriterStateWriteHeader,
+		p.UprobeHttp2RoundTrip,
 		p.UprobePersistConnRoundTrip,
 		p.UprobeReadRequestReturns,
 		p.UprobeRoundTrip,

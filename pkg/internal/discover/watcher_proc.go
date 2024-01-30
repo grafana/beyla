@@ -14,10 +14,10 @@ import (
 	"github.com/shirou/gopsutil/net"
 	"github.com/shirou/gopsutil/process"
 
+	"github.com/grafana/beyla/pkg/beyla"
 	"github.com/grafana/beyla/pkg/internal/discover/services"
 	"github.com/grafana/beyla/pkg/internal/ebpf"
 	"github.com/grafana/beyla/pkg/internal/ebpf/watcher"
-	"github.com/grafana/beyla/pkg/internal/pipe"
 )
 
 const (
@@ -28,7 +28,7 @@ const (
 // as well as PIDs from processes that setup a new connection
 type ProcessWatcher struct {
 	Ctx context.Context
-	Cfg *pipe.Config
+	Cfg *beyla.Config
 }
 
 type WatchEventType int
@@ -86,7 +86,7 @@ type pidPort struct {
 // ^ This is partially done, although it's not fully async, we only use the info to reduce the overhead of port scanning.
 type pollAccounter struct {
 	ctx      context.Context
-	cfg      *pipe.Config
+	cfg      *beyla.Config
 	interval time.Duration
 	// last polled process:ports accessible by its pid
 	pids map[PID]processAttrs
@@ -98,7 +98,7 @@ type pollAccounter struct {
 	// injectable function
 	executableReady func(PID) bool
 	// injectable function to load the bpf program
-	loadBPFWatcher func(cfg *pipe.Config, events chan<- watcher.Event) error
+	loadBPFWatcher func(cfg *beyla.Config, events chan<- watcher.Event) error
 	// we use these to ensure we poll for the open ports effectively
 	stateMux          sync.Mutex
 	bpfWatcherEnabled bool
@@ -320,7 +320,7 @@ func fetchProcessPorts(scanPorts bool) (map[PID]processAttrs, error) {
 	return processes, nil
 }
 
-func loadBPFWatcher(cfg *pipe.Config, events chan<- watcher.Event) error {
+func loadBPFWatcher(cfg *beyla.Config, events chan<- watcher.Event) error {
 	wt := watcher.New(cfg, events)
 	return ebpf.RunUtilityTracer(wt, BuildPinPath(cfg))
 }

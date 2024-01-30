@@ -30,6 +30,8 @@ volatile const u64 req_header_ptr_pos;
 volatile const u64 io_writer_buf_ptr_pos;
 volatile const u64 io_writer_n_pos;
 volatile const u64 rws_req_pos;
+volatile const u64 cc_next_stream_id_pos;
+volatile const u64 framer_w_pos;
 
 volatile const u64 c_rwc_pos;
 volatile const u64 pc_conn_pos;

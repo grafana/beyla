@@ -10,8 +10,8 @@ import (
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/ringbuf"
 
+	"github.com/grafana/beyla/pkg/beyla"
 	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
-	"github.com/grafana/beyla/pkg/internal/pipe"
 	"github.com/grafana/beyla/pkg/internal/request"
 	"github.com/grafana/beyla/pkg/internal/svc"
 )
@@ -22,7 +22,7 @@ import (
 type BPFWatchInfo bpfWatchInfoT
 
 type Watcher struct {
-	cfg        *pipe.Config
+	cfg        *beyla.Config
 	bpfObjects bpfObjects
 	closers    []io.Closer
 	log        *slog.Logger
@@ -41,7 +41,7 @@ type Event struct {
 	Payload uint32 // this will be either port or pid
 }
 
-func New(cfg *pipe.Config, events chan<- Event) *Watcher {
+func New(cfg *beyla.Config, events chan<- Event) *Watcher {
 	log := slog.With("component", "watcher.Tracer")
 	return &Watcher{
 		log:    log,

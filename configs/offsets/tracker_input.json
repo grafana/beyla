@@ -62,6 +62,12 @@
       ],
       "golang.org/x/net/http2/hpack.Encoder": [
         "w"
+      ],
+      "golang.org/x/net/http2.ClientConn": [
+        "nextStreamID"
+      ],
+      "golang.org/x/net/http2.Framer": [
+        "w"
       ]
     }
   },  

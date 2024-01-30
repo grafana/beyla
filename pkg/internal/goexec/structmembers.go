@@ -141,9 +141,21 @@ var structMembers = map[string]structInfo{
 		},
 	},
 	"golang.org/x/net/http2.responseWriterState": {
-		lib: "go",
+		lib: "golang.org/x/net",
 		fields: map[string]string{
 			"req": "rws_req_pos",
+		},
+	},
+	"golang.org/x/net/http2.ClientConn": {
+		lib: "golang.org/x/net",
+		fields: map[string]string{
+			"nextStreamID": "cc_next_stream_id_pos",
+		},
+	},
+	"golang.org/x/net/http2.Framer": {
+		lib: "golang.org/x/net",
+		fields: map[string]string{
+			"w": "framer_w_pos",
 		},
 	},
 	"net/http.conn": {

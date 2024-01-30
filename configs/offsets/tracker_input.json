@@ -34,6 +34,22 @@
       ],
       "vendor/golang.org/x/net/http2/hpack.Encoder": [
         "w"
+      ],
+      "net/http.conn": [
+        "rwc" 
+      ],
+      "net.TCPConn": [
+        "conn" 
+      ],
+      "net.conn": [
+        "fd" 
+      ],
+      "net.netFD": [
+        "laddr",
+        "raddr"
+      ],
+      "net/http.persistConn": [
+        "conn"
       ]
     }
   },

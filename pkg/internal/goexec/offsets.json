@@ -268,6 +268,60 @@
         ]
       }
     },
+    "net.TCPConn": {
+      "conn": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.21.6"
+        },
+        "offsets": [
+          {
+            "offset": 0,
+            "since": "1.17.0"
+          }
+        ]
+      }
+    },
+    "net.conn": {
+      "fd": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.21.6"
+        },
+        "offsets": [
+          {
+            "offset": 0,
+            "since": "1.17.0"
+          }
+        ]
+      }
+    },
+    "net.netFD": {
+      "laddr": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.21.6"
+        },
+        "offsets": [
+          {
+            "offset": 96,
+            "since": "1.17.0"
+          }
+        ]
+      },
+      "raddr": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.21.6"
+        },
+        "offsets": [
+          {
+            "offset": 112,
+            "since": "1.17.0"
+          }
+        ]
+      }
+    },
     "net/http.Request": {
       "ContentLength": {
         "versions": {
@@ -351,6 +405,34 @@
         "offsets": [
           {
             "offset": 16,
+            "since": "1.17.0"
+          }
+        ]
+      }
+    },
+    "net/http.conn": {
+      "rwc": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.21.6"
+        },
+        "offsets": [
+          {
+            "offset": 16,
+            "since": "1.17.0"
+          }
+        ]
+      }
+    },
+    "net/http.persistConn": {
+      "conn": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.21.6"
+        },
+        "offsets": [
+          {
+            "offset": 80,
             "since": "1.17.0"
           }
         ]

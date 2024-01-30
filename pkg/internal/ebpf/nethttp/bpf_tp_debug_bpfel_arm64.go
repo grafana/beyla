@@ -13,6 +13,11 @@ import (
 	"github.com/cilium/ebpf"
 )
 
+type bpf_tp_debugFramerFuncInvocationT struct {
+	FramerPtr uint64
+	Tp        bpf_tp_debugTpInfoT
+}
+
 type bpf_tp_debugGoroutineMetadata struct {
 	Parent    uint64
 	Timestamp uint64
@@ -81,7 +86,10 @@ type bpf_tp_debugSpecs struct {
 type bpf_tp_debugProgramSpecs struct {
 	UprobeServeHTTP                           *ebpf.ProgramSpec `ebpf:"uprobe_ServeHTTP"`
 	UprobeWriteHeader                         *ebpf.ProgramSpec `ebpf:"uprobe_WriteHeader"`
+	UprobeHttp2FramerWriteHeaders             *ebpf.ProgramSpec `ebpf:"uprobe_http2FramerWriteHeaders"`
+	UprobeHttp2FramerWriteHeadersReturns      *ebpf.ProgramSpec `ebpf:"uprobe_http2FramerWriteHeaders_returns"`
 	UprobeHttp2ResponseWriterStateWriteHeader *ebpf.ProgramSpec `ebpf:"uprobe_http2ResponseWriterStateWriteHeader"`
+	UprobeHttp2RoundTrip                      *ebpf.ProgramSpec `ebpf:"uprobe_http2RoundTrip"`
 	UprobeReadRequestReturns                  *ebpf.ProgramSpec `ebpf:"uprobe_readRequestReturns"`
 	UprobeRoundTrip                           *ebpf.ProgramSpec `ebpf:"uprobe_roundTrip"`
 	UprobeRoundTripReturn                     *ebpf.ProgramSpec `ebpf:"uprobe_roundTripReturn"`
@@ -93,9 +101,11 @@ type bpf_tp_debugProgramSpecs struct {
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpf_tp_debugMapSpecs struct {
 	Events                    *ebpf.MapSpec `ebpf:"events"`
+	FramerInvocationMap       *ebpf.MapSpec `ebpf:"framer_invocation_map"`
 	GoTraceMap                *ebpf.MapSpec `ebpf:"go_trace_map"`
 	GolangMapbucketStorageMap *ebpf.MapSpec `ebpf:"golang_mapbucket_storage_map"`
 	HeaderReqMap              *ebpf.MapSpec `ebpf:"header_req_map"`
+	Http2ReqMap               *ebpf.MapSpec `ebpf:"http2_req_map"`
 	OngoingGoroutines         *ebpf.MapSpec `ebpf:"ongoing_goroutines"`
 	OngoingHttpClientRequests *ebpf.MapSpec `ebpf:"ongoing_http_client_requests"`
 	OngoingHttpServerRequests *ebpf.MapSpec `ebpf:"ongoing_http_server_requests"`
@@ -123,9 +133,11 @@ func (o *bpf_tp_debugObjects) Close() error {
 // It can be passed to loadBpf_tp_debugObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpf_tp_debugMaps struct {
 	Events                    *ebpf.Map `ebpf:"events"`
+	FramerInvocationMap       *ebpf.Map `ebpf:"framer_invocation_map"`
 	GoTraceMap                *ebpf.Map `ebpf:"go_trace_map"`
 	GolangMapbucketStorageMap *ebpf.Map `ebpf:"golang_mapbucket_storage_map"`
 	HeaderReqMap              *ebpf.Map `ebpf:"header_req_map"`
+	Http2ReqMap               *ebpf.Map `ebpf:"http2_req_map"`
 	OngoingGoroutines         *ebpf.Map `ebpf:"ongoing_goroutines"`
 	OngoingHttpClientRequests *ebpf.Map `ebpf:"ongoing_http_client_requests"`
 	OngoingHttpServerRequests *ebpf.Map `ebpf:"ongoing_http_server_requests"`
@@ -136,9 +148,11 @@ type bpf_tp_debugMaps struct {
 func (m *bpf_tp_debugMaps) Close() error {
 	return _Bpf_tp_debugClose(
 		m.Events,
+		m.FramerInvocationMap,
 		m.GoTraceMap,
 		m.GolangMapbucketStorageMap,
 		m.HeaderReqMap,
+		m.Http2ReqMap,
 		m.OngoingGoroutines,
 		m.OngoingHttpClientRequests,
 		m.OngoingHttpServerRequests,
@@ -153,7 +167,10 @@ func (m *bpf_tp_debugMaps) Close() error {
 type bpf_tp_debugPrograms struct {
 	UprobeServeHTTP                           *ebpf.Program `ebpf:"uprobe_ServeHTTP"`
 	UprobeWriteHeader                         *ebpf.Program `ebpf:"uprobe_WriteHeader"`
+	UprobeHttp2FramerWriteHeaders             *ebpf.Program `ebpf:"uprobe_http2FramerWriteHeaders"`
+	UprobeHttp2FramerWriteHeadersReturns      *ebpf.Program `ebpf:"uprobe_http2FramerWriteHeaders_returns"`
 	UprobeHttp2ResponseWriterStateWriteHeader *ebpf.Program `ebpf:"uprobe_http2ResponseWriterStateWriteHeader"`
+	UprobeHttp2RoundTrip                      *ebpf.Program `ebpf:"uprobe_http2RoundTrip"`
 	UprobeReadRequestReturns                  *ebpf.Program `ebpf:"uprobe_readRequestReturns"`
 	UprobeRoundTrip                           *ebpf.Program `ebpf:"uprobe_roundTrip"`
 	UprobeRoundTripReturn                     *ebpf.Program `ebpf:"uprobe_roundTripReturn"`
@@ -164,7 +181,10 @@ func (p *bpf_tp_debugPrograms) Close() error {
 	return _Bpf_tp_debugClose(
 		p.UprobeServeHTTP,
 		p.UprobeWriteHeader,
+		p.UprobeHttp2FramerWriteHeaders,
+		p.UprobeHttp2FramerWriteHeadersReturns,
 		p.UprobeHttp2ResponseWriterStateWriteHeader,
+		p.UprobeHttp2RoundTrip,
 		p.UprobeReadRequestReturns,
 		p.UprobeRoundTrip,
 		p.UprobeRoundTripReturn,

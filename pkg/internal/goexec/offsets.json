@@ -40,6 +40,38 @@
         ]
       }
     },
+    "golang.org/x/net/http2.ClientConn": {
+      "nextStreamID": {
+        "versions": {
+          "oldest": "0.12.0",
+          "newest": "0.20.0"
+        },
+        "offsets": [
+          {
+            "offset": 176,
+            "since": "0.12.0"
+          },
+          {
+            "offset": 168,
+            "since": "0.15.0"
+          }
+        ]
+      }
+    },
+    "golang.org/x/net/http2.Framer": {
+      "w": {
+        "versions": {
+          "oldest": "0.12.0",
+          "newest": "0.20.0"
+        },
+        "offsets": [
+          {
+            "offset": 120,
+            "since": "0.12.0"
+          }
+        ]
+      }
+    },
     "golang.org/x/net/http2.responseWriterState": {
       "req": {
         "versions": {

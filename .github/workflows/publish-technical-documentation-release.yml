@@ -55,7 +55,10 @@ jobs:
         # Tags aren't necessarily made to the HEAD of the version branch.
         # The documentation to be published is always on the HEAD of the version branch.
         if: steps.has-matching-release-tag.outputs.bool == 'true' && github.ref_type == 'tag'
-        run: git switch --detach origin/${{ steps.target.output.target }}.x
+        # Strip the 'v' prefix from docs-target output.
+        run: git switch --detach origin/release-${TARGET#v}
+        env:
+          TARGET: ${{ steps.target.outputs.target }}
 
       - name: Publish to website repository (release)
         if: steps.has-matching-release-tag.outputs.bool == 'true'

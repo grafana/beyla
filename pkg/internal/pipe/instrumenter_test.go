@@ -15,7 +15,7 @@ import (
 	"go.opentelemetry.io/collector/pdata/ptrace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 
-	"github.com/grafana/beyla/pkg/beyla/config"
+	"github.com/grafana/beyla/pkg/beyla"
 	"github.com/grafana/beyla/pkg/internal/export/otel"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
@@ -42,7 +42,7 @@ func TestBasicPipeline(t *testing.T) {
 	tc, err := collector.Start(ctx)
 	require.NoError(t, err)
 
-	gb := newGraphBuilder(ctx, &config.Config{
+	gb := newGraphBuilder(ctx, &beyla.Config{
 		Metrics: otel.MetricsConfig{
 			MetricsEndpoint: tc.ServerEndpoint, ReportTarget: true,
 			ReportPeerInfo: true, Interval: 10 * time.Millisecond,
@@ -86,7 +86,7 @@ func TestTracerPipeline(t *testing.T) {
 	tc, err := collector.Start(ctx)
 	require.NoError(t, err)
 
-	gb := newGraphBuilder(ctx, &config.Config{
+	gb := newGraphBuilder(ctx, &beyla.Config{
 		Traces: otel.TracesConfig{
 			BatchTimeout:      10 * time.Millisecond,
 			TracesEndpoint:    tc.ServerEndpoint,
@@ -122,7 +122,7 @@ func TestTracerPipelineBadTimestamps(t *testing.T) {
 	tc, err := collector.Start(ctx)
 	require.NoError(t, err)
 
-	gb := newGraphBuilder(ctx, &config.Config{
+	gb := newGraphBuilder(ctx, &beyla.Config{
 		Traces: otel.TracesConfig{
 			BatchTimeout:      10 * time.Millisecond,
 			TracesEndpoint:    tc.ServerEndpoint,
@@ -154,7 +154,7 @@ func TestRouteConsolidation(t *testing.T) {
 	tc, err := collector.Start(ctx)
 	require.NoError(t, err)
 
-	gb := newGraphBuilder(ctx, &config.Config{
+	gb := newGraphBuilder(ctx, &beyla.Config{
 		Metrics: otel.MetricsConfig{
 			ReportPeerInfo:  false, // no peer info
 			MetricsEndpoint: tc.ServerEndpoint, Interval: 10 * time.Millisecond,
@@ -229,7 +229,7 @@ func TestGRPCPipeline(t *testing.T) {
 	tc, err := collector.Start(ctx)
 	require.NoError(t, err)
 
-	gb := newGraphBuilder(ctx, &config.Config{
+	gb := newGraphBuilder(ctx, &beyla.Config{
 		Metrics: otel.MetricsConfig{
 			MetricsEndpoint: tc.ServerEndpoint, ReportTarget: true, ReportPeerInfo: true, Interval: time.Millisecond,
 			ReportersCacheLen: 16,
@@ -271,7 +271,7 @@ func TestTraceGRPCPipeline(t *testing.T) {
 	tc, err := collector.Start(ctx)
 	require.NoError(t, err)
 
-	gb := newGraphBuilder(ctx, &config.Config{
+	gb := newGraphBuilder(ctx, &beyla.Config{
 		Traces: otel.TracesConfig{
 			TracesEndpoint: tc.ServerEndpoint,
 			BatchTimeout:   time.Millisecond, ReportersCacheLen: 16,
@@ -468,7 +468,7 @@ func TestBasicPipelineInfo(t *testing.T) {
 	require.NoError(t, err)
 
 	tracesInput := make(chan []request.Span, 10)
-	gb := newGraphBuilder(ctx, &config.Config{
+	gb := newGraphBuilder(ctx, &beyla.Config{
 		Metrics: otel.MetricsConfig{
 			MetricsEndpoint: tc.ServerEndpoint, ReportTarget: true, ReportPeerInfo: true,
 			Interval: 10 * time.Millisecond, ReportersCacheLen: 16,
@@ -503,7 +503,7 @@ func TestTracerPipelineInfo(t *testing.T) {
 	tc, err := collector.Start(ctx)
 	require.NoError(t, err)
 
-	gb := newGraphBuilder(ctx, &config.Config{
+	gb := newGraphBuilder(ctx, &beyla.Config{
 		Traces: otel.TracesConfig{TracesEndpoint: tc.ServerEndpoint, ReportersCacheLen: 16},
 	}, gctx(), make(<-chan []request.Span))
 	// Override eBPF tracer to send some fake data

@@ -16,11 +16,11 @@ import (
 	"github.com/cilium/ebpf/ringbuf"
 	lru "github.com/hashicorp/golang-lru/v2"
 
+	"github.com/grafana/beyla/pkg/beyla"
 	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
 	"github.com/grafana/beyla/pkg/internal/exec"
 	"github.com/grafana/beyla/pkg/internal/goexec"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
-	"github.com/grafana/beyla/pkg/internal/pipe"
 	"github.com/grafana/beyla/pkg/internal/request"
 	"github.com/grafana/beyla/pkg/internal/svc"
 )
@@ -55,7 +55,7 @@ type PidsFilter interface {
 
 type Tracer struct {
 	pidsFilter PidsFilter
-	cfg        *pipe.Config
+	cfg        *beyla.Config
 	metrics    imetrics.Reporter
 	bpfObjects bpfObjects
 	closers    []io.Closer
@@ -63,7 +63,7 @@ type Tracer struct {
 	Service    *svc.ID
 }
 
-func New(cfg *pipe.Config, metrics imetrics.Reporter) *Tracer {
+func New(cfg *beyla.Config, metrics imetrics.Reporter) *Tracer {
 	log := slog.With("component", "httpfltr.Tracer")
 	var filter PidsFilter
 	if cfg.Discovery.SystemWide {
@@ -248,7 +248,7 @@ func (p *Tracer) UProbes() map[string]map[string]ebpfcommon.FunctionPrograms {
 }
 
 func (p *Tracer) SocketFilters() []*ebpf.Program {
-	return nil
+	return []*ebpf.Program{p.bpfObjects.SocketHttpFilter}
 }
 
 func (p *Tracer) RecordInstrumentedLib(_ uint64) {}

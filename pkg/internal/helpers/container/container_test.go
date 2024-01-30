@@ -30,6 +30,7 @@ var fixturesWithContainer = map[uint32]string{
 1:name=systemd:/docker/a2ffe0e97ac22657a2a023ad628e9df837c38a03b1ebc904d3f6d644eb1a1a81
 0::/system.slice/containerd.service`,
 	789: `0::/../cri-containerd-40c03570b6f4c30bc8d69923d37ee698f5cfcced92c7b7df1c47f6f7887378a9.scope`,
+	999: `0::/system.slice/docker-40c03570b6f4c30bc8d69923d37ee698f5cfcced92c7b7df1c47f6f7887378a9.scope/kubepods/burstable/podc55ba69a-e39f-44af-925d-c4794fd57878/264c1e319d1f6080a48a9fabcf9ac8fd9afd9a5930cf35e8d0eeb03b258c3152`,
 }
 
 var fixturesWithoutContainer = map[uint32]string{

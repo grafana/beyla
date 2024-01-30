@@ -15,6 +15,7 @@ import (
 
 	otelsdk "go.opentelemetry.io/otel/sdk"
 
+	"github.com/grafana/beyla/pkg/appobserv"
 	"github.com/grafana/beyla/pkg/beyla"
 	"github.com/grafana/beyla/pkg/beyla/config"
 	"github.com/grafana/beyla/pkg/beyla/flows/agent"
@@ -84,7 +85,7 @@ func setupAppO11y(ctx context.Context, config *config.Config) {
 	// in two parts:
 	// 1st executable - Invoke FindTarget, which also mounts the BPF maps
 	// 2nd executable - Invoke ReadAndForward, receiving the BPF map mountpoint as argument
-	instr := beyla.New(config)
+	instr := appobserv.New(config)
 	if err := instr.FindAndInstrument(ctx); err != nil {
 		slog.Error("Beyla couldn't find target process", "error", err)
 		os.Exit(-1)

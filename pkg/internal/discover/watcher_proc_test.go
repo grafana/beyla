@@ -12,8 +12,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/grafana/beyla/pkg/beyla"
 	"github.com/grafana/beyla/pkg/internal/ebpf/watcher"
-	"github.com/grafana/beyla/pkg/internal/pipe"
 	"github.com/grafana/beyla/pkg/internal/testutil"
 )
 
@@ -52,7 +52,7 @@ func TestWatcher_Poll(t *testing.T) {
 		executableReady: func(PID) bool {
 			return true
 		},
-		loadBPFWatcher: func(*pipe.Config, chan<- watcher.Event) error {
+		loadBPFWatcher: func(*beyla.Config, chan<- watcher.Event) error {
 			return nil
 		},
 	}
@@ -132,7 +132,7 @@ func TestProcessNotReady(t *testing.T) {
 		executableReady: func(pid PID) bool {
 			return pid >= 3
 		},
-		loadBPFWatcher: func(*pipe.Config, chan<- watcher.Event) error {
+		loadBPFWatcher: func(*beyla.Config, chan<- watcher.Event) error {
 			return nil
 		},
 	}
@@ -163,7 +163,7 @@ func TestPortsFetchRequired(t *testing.T) {
 	userConfig := bytes.NewBufferString("channel_buffer_len: 33")
 	require.NoError(t, os.Setenv("BEYLA_OPEN_PORT", "8080-8089"))
 
-	cfg, err := pipe.LoadConfig(userConfig)
+	cfg, err := beyla.LoadConfig(userConfig)
 	require.NoError(t, err)
 
 	channelReturner := make(chan chan<- watcher.Event)
@@ -181,7 +181,7 @@ func TestPortsFetchRequired(t *testing.T) {
 		executableReady: func(pid PID) bool {
 			return true
 		},
-		loadBPFWatcher: func(cfg *pipe.Config, events chan<- watcher.Event) error {
+		loadBPFWatcher: func(cfg *beyla.Config, events chan<- watcher.Event) error {
 			channelReturner <- events
 			return nil
 		},

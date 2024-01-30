@@ -26,6 +26,14 @@ struct {
     __uint(pinning, LIBBPF_PIN_BY_NAME);
 } ongoing_http SEC(".maps");
 
+struct {
+    __uint(type, BPF_MAP_TYPE_LRU_HASH);
+    __type(key, connection_info_t);
+    __type(value, http_info_t);
+    __uint(max_entries, MAX_CONCURRENT_SHARED_REQUESTS);
+    __uint(pinning, LIBBPF_PIN_BY_NAME);
+} ongoing_http_fallback SEC(".maps");
+
 // http_info_t became too big to be declared as a variable in the stack.
 // We use a percpu array to keep a reusable copy of it
 struct {
@@ -191,6 +199,13 @@ static __always_inline http_info_t *get_or_set_http_info(http_info_t *info, pid_
     return bpf_map_lookup_elem(&ongoing_http, pid_conn);
 }
 
+static __always_inline void set_fallback_http_info(http_info_t *info, connection_info_t *conn, int len) {
+    info->start_monotime_ns = bpf_ktime_get_ns();
+    info->status = 0;
+    info->len = len;
+    bpf_map_update_elem(&ongoing_http_fallback, conn, info, BPF_ANY);
+}
+
 static __always_inline bool still_responding(http_info_t *info) {
     return info->status != 0;
 }
@@ -275,9 +290,16 @@ static __always_inline void handle_buf_with_connection(pid_connection_info_t *pi
 
         http_info_t *info = get_or_set_http_info(in, pid_conn, packet_type);
         if (!info) {
-            bpf_dbg_printk("No info, pid =%d?", pid_conn->pid);
-            //dbg_print_http_connection_info(&pid_conn->conn); // commented out since GitHub CI doesn't like this call
-            return;
+            bpf_dbg_printk("No info, pid =%d?, looking for fallback...", pid_conn->pid);
+            info = bpf_map_lookup_elem(&ongoing_http_fallback, &pid_conn->conn);
+            bpf_map_delete_elem(&ongoing_http_fallback, &pid_conn->conn);
+            if (!info) {
+                bpf_dbg_printk("No fallback either, giving up");
+                //dbg_print_http_connection_info(&pid_conn->conn); // commented out since GitHub CI doesn't like this call
+                return;
+            }
+        } else {
+            bpf_map_delete_elem(&ongoing_http_fallback, &pid_conn->conn);
         }
 
         bpf_dbg_printk("=== http_buffer_event len=%d pid=%d still_reading=%d ===", bytes_len, pid_from_pid_tgid(bpf_get_current_pid_tgid()), still_reading(info));
@@ -318,6 +340,38 @@ static __always_inline void handle_buf_with_connection(pid_connection_info_t *pi
         } else if (still_reading(info)) {
             info->len += bytes_len;
         }       
+    }
+}
+
+#define BUF_COPY_BLOCK_SIZE 16
+
+static __always_inline void read_skb_bytes(const void *skb, u32 offset, unsigned char *buf, const u32 len) {
+    u32 max = offset + len;
+    int b = 0;
+    for (; b < (FULL_BUF_SIZE/BUF_COPY_BLOCK_SIZE); b++) {
+        if ((offset + (BUF_COPY_BLOCK_SIZE - 1)) >= max) {
+            break;
+        }
+        bpf_skb_load_bytes(skb, offset, (void *)(&buf[b * BUF_COPY_BLOCK_SIZE]), BUF_COPY_BLOCK_SIZE);
+        offset += BUF_COPY_BLOCK_SIZE;
+    }
+
+    if ((b * BUF_COPY_BLOCK_SIZE) >= len) {
+        return;
+    }
+
+    // This code is messy to make sure the eBPF verifier is happy. I had to cast to signed 64bit.
+    s64 remainder = (s64)max - (s64)offset;
+
+    if (remainder <= 0) {
+        return;
+    }
+
+    int remaining_to_copy = (remainder < (BUF_COPY_BLOCK_SIZE - 1)) ? remainder : (BUF_COPY_BLOCK_SIZE - 1);
+    int space_in_buffer = (len < (b * BUF_COPY_BLOCK_SIZE)) ? 0 : len - (b * BUF_COPY_BLOCK_SIZE);
+
+    if (remaining_to_copy <= space_in_buffer) {
+        bpf_skb_load_bytes(skb, offset, (void *)(&buf[b * BUF_COPY_BLOCK_SIZE]), remaining_to_copy);
     }
 }
 

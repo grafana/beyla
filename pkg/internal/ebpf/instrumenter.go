@@ -107,7 +107,9 @@ func (i *instrumenter) kprobe(funcName string, programs ebpfcommon.FunctionProgr
 	}
 
 	if programs.End != nil {
-		kp, err := link.Kretprobe(funcName, programs.End, nil)
+		// The commented code doesn't work on certain kernels. We need to invesigate more to see if it's possible
+		// to productize it. Failure says: "neither debugfs nor tracefs are mounted".
+		kp, err := link.Kretprobe(funcName, programs.End, nil /*&link.KprobeOptions{RetprobeMaxActive: 1024}*/)
 		if err != nil {
 			return fmt.Errorf("setting kretprobe: %w", err)
 		}

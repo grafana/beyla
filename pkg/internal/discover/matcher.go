@@ -11,13 +11,13 @@ import (
 	"github.com/mariomac/pipes/pkg/node"
 	"github.com/shirou/gopsutil/process"
 
+	"github.com/grafana/beyla/pkg/beyla"
 	"github.com/grafana/beyla/pkg/internal/discover/services"
-	"github.com/grafana/beyla/pkg/internal/pipe"
 )
 
 // CriteriaMatcher filters the processes that match the discovery criteria.
 type CriteriaMatcher struct {
-	Cfg *pipe.Config
+	Cfg *beyla.Config
 }
 
 func CriteriaMatcherProvider(cm CriteriaMatcher) (node.MiddleFunc[[]Event[processAttrs], []Event[ProcessMatch]], error) {
@@ -92,6 +92,17 @@ func (m *matcher) filterCreated(obj processAttrs) (Event[ProcessMatch], bool) {
 			}, true
 		}
 	}
+
+	// We didn't match the process, but let's see if the parent PID is tracked, it might be the child hasn't opened the port yet
+	if _, ok := m.processHistory[PID(proc.PPid)]; ok {
+		m.log.Debug("found process by matching the process parent id", "pid", proc.Pid, "ppid", proc.PPid, "comm", proc.ExePath, "metadata", obj.metadata)
+		m.processHistory[obj.pid] = proc
+		return Event[ProcessMatch]{
+			Type: EventCreated,
+			Obj:  ProcessMatch{Criteria: &m.criteria[0], Process: proc},
+		}, true
+	}
+
 	return Event[ProcessMatch]{}, false
 }
 
@@ -150,7 +161,7 @@ func (m *matcher) matchByAttributes(actual map[string]string, required map[strin
 	return true
 }
 
-func FindingCriteria(cfg *pipe.Config) services.DefinitionCriteria {
+func FindingCriteria(cfg *beyla.Config) services.DefinitionCriteria {
 	if cfg.Discovery.SystemWide {
 		// will return all the executables in the system
 		return services.DefinitionCriteria{

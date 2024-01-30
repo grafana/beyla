@@ -6,10 +6,10 @@ import (
 
 	"github.com/mariomac/pipes/pkg/node"
 
+	"github.com/grafana/beyla/pkg/beyla"
 	"github.com/grafana/beyla/pkg/internal/exec"
 	"github.com/grafana/beyla/pkg/internal/goexec"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
-	"github.com/grafana/beyla/pkg/internal/pipe"
 	"github.com/grafana/beyla/pkg/internal/svc"
 )
 
@@ -17,7 +17,7 @@ import (
 // executable type (Go, generic...), and filters these executables
 // that are not instrumentable.
 type ExecTyper struct {
-	Cfg     *pipe.Config
+	Cfg     *beyla.Config
 	Metrics imetrics.Reporter
 }
 
@@ -52,7 +52,7 @@ func ExecTyperProvider(ecfg ExecTyper) (node.MiddleFunc[[]Event[ProcessMatch], [
 }
 
 type typer struct {
-	cfg            *pipe.Config
+	cfg            *beyla.Config
 	metrics        imetrics.Reporter
 	log            *slog.Logger
 	currentPids    map[int32]*exec.FileInfo

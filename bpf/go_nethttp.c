@@ -681,9 +681,9 @@ int uprobe_persistConnRoundTrip(struct pt_regs *ctx) {
                 tp_info_pid_t tp_p = {
                     .pid = pid,
                     .valid = 1,
-                    .tp = invocation->tp
                 };
-            
+
+                tp_clone(&tp_p.tp, &invocation->tp);
                 tp_p.tp.ts = bpf_ktime_get_ns();
                 bpf_dbg_printk("storing trace_map info for black-box tracing");
                 bpf_map_update_elem(&trace_map, &conn, &tp_p, BPF_ANY);

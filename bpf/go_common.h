@@ -102,6 +102,14 @@ static __always_inline void tp_from_parent(tp_info_t *tp, tp_info_t *parent) {
     tp->flags = parent->flags;
 }
 
+static __always_inline void tp_clone(tp_info_t *dest, tp_info_t *src) {
+    *((u64 *)dest->trace_id) = *((u64 *)src->trace_id);
+    *((u64 *)(dest->trace_id + 8)) = *((u64 *)(src->trace_id + 8));
+    *((u64 *)dest->span_id) = *((u64 *)src->span_id);
+    *((u64 *)dest->parent_id) = *((u64 *)src->parent_id);
+    dest->flags = src->flags;
+}
+
 static __always_inline void server_trace_parent(void *goroutine_addr, tp_info_t *tp, void *req_header) {
     // May get overriden when decoding existing traceparent, but otherwise we set sample ON
     tp->flags = 1;

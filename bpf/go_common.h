@@ -46,6 +46,13 @@ struct {
 } ongoing_goroutines SEC(".maps");
 
 struct {
+    __uint(type, BPF_MAP_TYPE_HASH);
+    __type(key, void *); // key: pointer to the request goroutine
+    __type(value, connection_info_t);
+    __uint(max_entries, MAX_CONCURRENT_REQUESTS);
+} ongoing_http_server_connections SEC(".maps");
+
+struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __type(key, void *); // key: pointer to the goroutine
     __type(value, tp_info_t);  // value: traceparent info
@@ -88,6 +95,21 @@ static __always_inline void decode_go_traceparent(unsigned char *buf, unsigned c
     decode_hex(flags, f_id, FLAGS_CHAR_LEN);
 } 
 
+static __always_inline void tp_from_parent(tp_info_t *tp, tp_info_t *parent) {
+    *((u64 *)tp->trace_id) = *((u64 *)parent->trace_id);
+    *((u64 *)(tp->trace_id + 8)) = *((u64 *)(parent->trace_id + 8));
+    *((u64 *)tp->parent_id) = *((u64 *)parent->span_id);
+    tp->flags = parent->flags;
+}
+
+static __always_inline void tp_clone(tp_info_t *dest, tp_info_t *src) {
+    *((u64 *)dest->trace_id) = *((u64 *)src->trace_id);
+    *((u64 *)(dest->trace_id + 8)) = *((u64 *)(src->trace_id + 8));
+    *((u64 *)dest->span_id) = *((u64 *)src->span_id);
+    *((u64 *)dest->parent_id) = *((u64 *)src->parent_id);
+    dest->flags = src->flags;
+}
+
 static __always_inline void server_trace_parent(void *goroutine_addr, tp_info_t *tp, void *req_header) {
     // May get overriden when decoding existing traceparent, but otherwise we set sample ON
     tp->flags = 1;
@@ -105,9 +127,26 @@ static __always_inline void server_trace_parent(void *goroutine_addr, tp_info_t 
             decode_go_traceparent(buf, tp->trace_id, tp->parent_id, &tp->flags);
         }
     } else {
-        bpf_dbg_printk("No traceparent in headers, generating");
-        urand_bytes(tp->trace_id, TRACE_ID_SIZE_BYTES);
-        *((u64 *)tp->parent_id) = 0;
+        connection_info_t *info = bpf_map_lookup_elem(&ongoing_http_server_connections, &goroutine_addr);
+        u8 found_info = 0;
+
+        if (info) {
+            bpf_dbg_printk("Looking up traceparent for connection info");
+            tp_info_pid_t *tp_p = trace_info_for_connection(info);
+            if (tp_p) {                
+                if (correlated_request_with_current(tp_p)) {
+                    bpf_dbg_printk("Found traceparent from trace map, another process.");
+                    found_info = 1;
+                    tp_from_parent(tp, &tp_p->tp);
+                }
+            }
+        }
+
+        if (!found_info) {
+            bpf_dbg_printk("No traceparent in headers, generating");
+            urand_bytes(tp->trace_id, TRACE_ID_SIZE_BYTES);
+            *((u64 *)tp->parent_id) = 0;
+        }
     }
 
     urand_bytes(tp->span_id, SPAN_ID_SIZE_BYTES);
@@ -148,10 +187,7 @@ static __always_inline u8 client_trace_parent(void *goroutine_addr, tp_info_t *t
 
         if (tp) {
             bpf_dbg_printk("Found parent request trace_parent %llx", tp);
-            *((u64 *)tp_i->trace_id) = *((u64 *)tp->trace_id);
-            *((u64 *)(tp_i->trace_id + 8)) = *((u64 *)(tp->trace_id + 8));
-            *((u64 *)tp_i->parent_id) = *((u64 *)tp->span_id);
-            tp_i->flags = tp->flags;
+            tp_from_parent(tp_i, tp);
         } else {
             urand_bytes(tp_i->trace_id, TRACE_ID_SIZE_BYTES);    
         }

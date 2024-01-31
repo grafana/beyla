@@ -229,7 +229,7 @@ int BPF_KPROBE(kprobe_tcp_sendmsg, struct sock *sk, struct msghdr *msg, size_t s
     pid_connection_info_t info = {};
 
     if (parse_sock_info(sk, &info.conn)) {
-        //dbg_print_http_connection_info(&info); // commented out since GitHub CI doesn't like this call
+        //dbg_print_http_connection_info(&info.conn); // commented out since GitHub CI doesn't like this call
         sort_connection_info(&info.conn);
         info.pid = pid_from_pid_tgid(id);
 

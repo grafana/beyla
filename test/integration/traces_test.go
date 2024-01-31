@@ -660,6 +660,7 @@ func testNestedHTTPTracesKProbes(t *testing.T) {
 	var traceID string
 
 	waitForTestComponents(t, "http://localhost:3031")                 // nodejs
+	waitForTestComponents(t, "http://localhost:8080")                 // go
 	waitForTestComponents(t, "http://localhost:8183")                 // python
 	waitForRubyTestComponents(t, "http://localhost:3041")             // ruby
 	waitForTestComponentsSub(t, "http://localhost:8086", "/greeting") // java
@@ -668,8 +669,8 @@ func testNestedHTTPTracesKProbes(t *testing.T) {
 	// Add and check for specific trace ID
 	doHTTPGet(t, "http://localhost:8091/dist", 200)
 
-	// rust   -> java     -> nodejs   -> python      -> rails
-	// /dist2 -> /jtrace2 -> /traceme -> /tracemetoo -> /users
+	// rust   -> java     -> nodejs   -> go            -> python      -> rails
+	// /dist2 -> /jtrace2 -> /traceme -> /gotracemetoo -> /tracemetoo -> /users
 
 	var trace jaeger.Trace
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
@@ -742,6 +743,26 @@ func testNestedHTTPTracesKProbes(t *testing.T) {
 		jaeger.Tag{Key: "url.path", Type: "string", Value: "/traceme"},
 		jaeger.Tag{Key: "server.port", Type: "int64", Value: float64(3030)},
 		jaeger.Tag{Key: "http.route", Type: "string", Value: "/traceme"},
+		jaeger.Tag{Key: "span.kind", Type: "string", Value: "server"},
+	)
+	assert.Empty(t, sd, sd.String())
+
+	// Check the information of the go parent span
+	res = trace.FindByOperationName("GET /gotracemetoo")
+	require.Len(t, res, 1)
+	parent = res[0]
+	require.NotEmpty(t, parent.TraceID)
+	require.Equal(t, traceID, parent.TraceID)
+	require.NotEmpty(t, parent.SpanID)
+	// check duration is at least 2us
+	assert.Less(t, (2 * time.Microsecond).Microseconds(), parent.Duration)
+	// check span attributes
+	sd = parent.Diff(
+		jaeger.Tag{Key: "http.request.method", Type: "string", Value: "GET"},
+		jaeger.Tag{Key: "http.response.status_code", Type: "int64", Value: float64(200)},
+		jaeger.Tag{Key: "url.path", Type: "string", Value: "/gotracemetoo"},
+		jaeger.Tag{Key: "server.port", Type: "int64", Value: float64(8080)},
+		jaeger.Tag{Key: "http.route", Type: "string", Value: "/gotracemetoo"},
 		jaeger.Tag{Key: "span.kind", Type: "string", Value: "server"},
 	)
 	assert.Empty(t, sd, sd.String())

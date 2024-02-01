@@ -65,7 +65,7 @@ func TestBasicPipeline(t *testing.T) {
 
 	event := testutil.ReadChannel(t, tc.Records, testTimeout)
 	assert.Equal(t, collector.MetricRecord{
-		Name: "http.server.duration",
+		Name: "http.server.request.duration",
 		Unit: "s",
 		Attributes: map[string]string{
 			string(otel.HTTPRequestMethodKey):      "GET",
@@ -186,7 +186,7 @@ func TestRouteConsolidation(t *testing.T) {
 	}
 
 	assert.Equal(t, collector.MetricRecord{
-		Name: "http.server.duration",
+		Name: "http.server.request.duration",
 		Unit: "s",
 		Attributes: map[string]string{
 			string(semconv.ServiceNameKey):         "svc-1",
@@ -198,7 +198,7 @@ func TestRouteConsolidation(t *testing.T) {
 	}, events["/user/{id}"])
 
 	assert.Equal(t, collector.MetricRecord{
-		Name: "http.server.duration",
+		Name: "http.server.request.duration",
 		Unit: "s",
 		Attributes: map[string]string{
 			string(semconv.ServiceNameKey):         "svc-1",
@@ -210,7 +210,7 @@ func TestRouteConsolidation(t *testing.T) {
 	}, events["/products/{id}/push"])
 
 	assert.Equal(t, collector.MetricRecord{
-		Name: "http.server.duration",
+		Name: "http.server.request.duration",
 		Unit: "s",
 		Attributes: map[string]string{
 			string(semconv.ServiceNameKey):         "svc-1",
@@ -483,7 +483,7 @@ func TestBasicPipelineInfo(t *testing.T) {
 
 	event := testutil.ReadChannel(t, tc.Records, testTimeout)
 	assert.Equal(t, collector.MetricRecord{
-		Name: "http.server.duration",
+		Name: "http.server.request.duration",
 		Unit: "s",
 		Attributes: map[string]string{
 			string(otel.HTTPRequestMethodKey):      "PATCH",

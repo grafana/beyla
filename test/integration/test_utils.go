@@ -103,7 +103,7 @@ func waitForTestComponentsSubWithTime(t *testing.T, url, subpath string, minutes
 		// now, verify that the metric has been reported.
 		// we don't really care that this metric could be from a previous
 		// test. Once one it is visible, it means that Otel and Prometheus are healthy
-		results, err := pq.Query(`http_server_duration_seconds_count{url_path="` + subpath + `"}`)
+		results, err := pq.Query(`http_server_request_duration_seconds_count{url_path="` + subpath + `"}`)
 		require.NoError(t, err)
 		require.NotEmpty(t, results)
 	}, test.Interval(time.Second))

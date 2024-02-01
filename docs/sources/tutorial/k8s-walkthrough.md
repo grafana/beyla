@@ -294,19 +294,18 @@ spec:
     spec:
       serviceAccountName: beyla
       hostPID: true # mandatory!
-      volumes:
-        - name: beyla-config
-          configMap:
-            name: beyla-config
       containers:
         - name: beyla
           image: grafana/beyla:1.2
           imagePullPolicy: IfNotPresent
           securityContext:
             privileged: true # mandatory!
+            readOnlyRootFilesystem: true
           volumeMounts:
             - mountPath: /config
               name: beyla-config
+            - mountPath: /var/run/beyla
+              name: var-run-beyla
           env:
             - name: BEYLA_CONFIG_PATH
               value: "/config/beyla-config.yml"
@@ -320,6 +319,12 @@ spec:
                 secretKeyRef:
                   name: grafana-credentials
                   key: otlp-headers
+      volumes:
+        - name: beyla-config
+          configMap:
+            name: beyla-config
+        - name: var-run-beyla
+          emptyDir: {}
 ```
 
 Also notice:

@@ -1,0 +1,9 @@
+name: keep-alive
+groups:
+  - name: keep-alive
+    rules:
+      - record: asserts:mixin_pod_job_workload
+        expr: 1
+        labels:
+          job: beyla-network
+          asserts_env: dev

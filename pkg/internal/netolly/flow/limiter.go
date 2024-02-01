@@ -63,7 +63,7 @@ func (c *CapacityLimiter) logDroppedFlows() {
 			c.droppedFlows = 0
 			cllog.Warn("Flows were dropped during the last period because the agent is forwarding "+
 				"more flows than the remote ingestor is able to process. You might "+
-				"want to increase the CACHE_MAX_FLOWS and CACHE_ACTIVE_TIMEOUT property",
+				"want to increase the BEYLA_NETWORK_CACHE_MAX_FLOWS and BEYLA_NETWORK_CACHE_ACTIVE_TIMEOUT property",
 				"droppedFlows", df, "period", logPeriod)
 
 			// if not debug logs, backoff to avoid flooding the log with warning messages

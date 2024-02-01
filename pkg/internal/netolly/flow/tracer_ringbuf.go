@@ -138,7 +138,7 @@ func (m *stats) logRingBufferFlows(mapFullErr bool) {
 			if mfe == 0 {
 				l.Debug("received flows via ringbuffer")
 			} else {
-				l.Debug("received flows via ringbuffer due to Map Full. You might want to increase the CACHE_MAX_FLOWS value")
+				l.Debug("received flows via ringbuffer due to Map Full. You might want to increase the BEYLA_NETWORK_CACHE_MAX_FLOWS value")
 			}
 			atomic.StoreInt32(&m.forwardedFlows, 0)
 			atomic.StoreInt32(&m.isForwarding, 0)

@@ -346,6 +346,9 @@ func (mr *MetricsReporter) httpClientAttributes(span *request.Span) []attribute.
 		attrs = append(attrs, ServerAddr(span.Host))
 		attrs = append(attrs, ServerPort(span.HostPort))
 	}
+	if span.Route != "" {
+		attrs = append(attrs, semconv.HTTPRoute(span.Route))
+	}
 
 	return attrs
 }

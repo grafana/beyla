@@ -83,7 +83,7 @@ var defaultConfig = Config{
 		ExcludeInterfaces:  []string{"lo"},
 		CacheMaxFlows:      5000,
 		CacheActiveTimeout: 5 * time.Second,
-		Deduper:            "firstCome",
+		Deduper:            "none",
 		Direction:          "both",
 		ListenInterfaces:   "watch",
 		ListenPollPeriod:   10 * time.Second,

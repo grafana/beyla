@@ -26,6 +26,8 @@ import (
 
 	"github.com/gavv/monotime"
 	"github.com/mariomac/pipes/pkg/node"
+
+	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
 )
 
 func mtlog() *slog.Logger {
@@ -43,7 +45,7 @@ type MapTracer struct {
 }
 
 type mapFetcher interface {
-	LookupAndDeleteMap() map[RecordKey][]RecordMetrics
+	LookupAndDeleteMap() map[ebpf.NetFlowId][]ebpf.NetFlowMetrics
 }
 
 func NewMapTracer(fetcher mapFetcher, evictionTimeout time.Duration) *MapTracer {
@@ -61,8 +63,8 @@ func (m *MapTracer) Flush() {
 	m.evictionCond.Broadcast()
 }
 
-func (m *MapTracer) TraceLoop(ctx context.Context) node.StartFunc[[]*Record] {
-	return func(out chan<- []*Record) {
+func (m *MapTracer) TraceLoop(ctx context.Context) node.StartFunc[[]*ebpf.Record] {
+	return func(out chan<- []*ebpf.Record) {
 		evictionTicker := time.NewTicker(m.evictionTimeout)
 		go m.evictionSynchronization(ctx, out)
 		mtlog := mtlog()
@@ -83,7 +85,7 @@ func (m *MapTracer) TraceLoop(ctx context.Context) node.StartFunc[[]*Record] {
 // evictionSynchronization loop just waits for the evictionCond to happen
 // and triggers the actual eviction. It makes sure that only one eviction
 // is being triggered at the same time
-func (m *MapTracer) evictionSynchronization(ctx context.Context, out chan<- []*Record) {
+func (m *MapTracer) evictionSynchronization(ctx context.Context, out chan<- []*ebpf.Record) {
 	// flow eviction loop. It just keeps waiting for eviction until someone triggers the
 	// evictionCond.Broadcast signal
 	mtlog := mtlog()
@@ -104,12 +106,12 @@ func (m *MapTracer) evictionSynchronization(ctx context.Context, out chan<- []*R
 	}
 }
 
-func (m *MapTracer) evictFlows(ctx context.Context, forwardFlows chan<- []*Record) {
+func (m *MapTracer) evictFlows(ctx context.Context, forwardFlows chan<- []*ebpf.Record) {
 	// it's important that this monotonic timer reports same or approximate values as kernel-side bpf_ktime_get_ns()
 	monotonicTimeNow := monotime.Now()
 	currentTime := time.Now()
 
-	var forwardingFlows []*Record
+	var forwardingFlows []*ebpf.Record
 	laterFlowNs := uint64(0)
 	for flowKey, flowMetrics := range m.mapFetcher.LookupAndDeleteMap() {
 		aggregatedMetrics := m.aggregate(flowMetrics)
@@ -121,7 +123,7 @@ func (m *MapTracer) evictFlows(ctx context.Context, forwardFlows chan<- []*Recor
 		if aggregatedMetrics.EndMonoTimeNs > laterFlowNs {
 			laterFlowNs = aggregatedMetrics.EndMonoTimeNs
 		}
-		forwardingFlows = append(forwardingFlows, NewRecord(
+		forwardingFlows = append(forwardingFlows, ebpf.NewRecord(
 			flowKey,
 			aggregatedMetrics,
 			currentTime,
@@ -139,12 +141,12 @@ func (m *MapTracer) evictFlows(ctx context.Context, forwardFlows chan<- []*Recor
 	mtlog.Debug("flows evicted", "len", len(forwardingFlows))
 }
 
-func (m *MapTracer) aggregate(metrics []RecordMetrics) RecordMetrics {
+func (m *MapTracer) aggregate(metrics []ebpf.NetFlowMetrics) ebpf.NetFlowMetrics {
 	if len(metrics) == 0 {
 		mtlog().Warn("invoked aggregate with no values")
-		return RecordMetrics{}
+		return ebpf.NetFlowMetrics{}
 	}
-	aggr := RecordMetrics{}
+	aggr := ebpf.NetFlowMetrics{}
 	for _, mt := range metrics {
 		// eBPF hashmap values are not zeroed when the entry is removed. That causes that we
 		// might receive entries from previous collect-eviction timeslots.

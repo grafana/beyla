@@ -30,6 +30,8 @@ import (
 
 	"github.com/cilium/ebpf/ringbuf"
 	"github.com/mariomac/pipes/pkg/node"
+
+	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
 )
 
 func rtlog() *slog.Logger {
@@ -71,8 +73,8 @@ func NewRingBufTracer(
 	}
 }
 
-func (m *RingBufTracer) TraceLoop(ctx context.Context) node.StartFunc[*RawRecord] {
-	return func(out chan<- *RawRecord) {
+func (m *RingBufTracer) TraceLoop(ctx context.Context) node.StartFunc[*ebpf.NetFlowRecordT] {
+	return func(out chan<- *ebpf.NetFlowRecordT) {
 		rtlog := rtlog()
 		debugging := rtlog.Enabled(ctx, slog.LevelDebug)
 		for {
@@ -94,17 +96,17 @@ func (m *RingBufTracer) TraceLoop(ctx context.Context) node.StartFunc[*RawRecord
 	}
 }
 
-func (m *RingBufTracer) listenAndForwardRingBuffer(debugging bool, forwardCh chan<- *RawRecord) error {
+func (m *RingBufTracer) listenAndForwardRingBuffer(debugging bool, forwardCh chan<- *ebpf.NetFlowRecordT) error {
 	event, err := m.ringBuffer.ReadRingBuf()
 	if err != nil {
 		return fmt.Errorf("reading from ring buffer: %w", err)
 	}
 	// Parses the ringbuf event entry into an Event structure.
-	readFlow, err := ReadFrom(bytes.NewBuffer(event.RawSample))
+	readFlow, err := ebpf.ReadFrom(bytes.NewBuffer(event.RawSample))
 	if err != nil {
 		return fmt.Errorf("parsing data received from the ring buffer: %w", err)
 	}
-	mapFullError := readFlow.Errno == uint8(syscall.E2BIG)
+	mapFullError := readFlow.Metrics.Errno == uint8(syscall.E2BIG)
 	if debugging {
 		m.stats.logRingBufferFlows(mapFullError)
 	}

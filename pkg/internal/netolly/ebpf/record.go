@@ -16,7 +16,7 @@
 // This implementation is a derivation of the code in
 // https://github.com/netobserv/netobserv-ebpf-agent/tree/release-1.4
 
-package flow
+package ebpf
 
 import (
 	"encoding/binary"
@@ -31,14 +31,13 @@ const (
 	DirectionIngress = uint8(0)
 	DirectionEgress  = uint8(1)
 )
+
 const MacLen = 6
 
 // IPv6Type value as defined in IEEE 802: https://www.iana.org/assignments/ieee-802-numbers/ieee-802-numbers.xhtml
 const IPv6Type = 0x86DD
 
-type HumanBytes uint64
 type MacAddr [MacLen]uint8
-type Direction uint8
 
 // IPAddr encodes v4 and v6 IPs with a fixed length.
 // IPv4 addresses are encoded as IPv6 addresses with prefix ::ffff/96
@@ -46,59 +45,10 @@ type Direction uint8
 // (same behavior as Go's net.IP type)
 type IPAddr [net.IPv6len]uint8
 
-type DataLink struct {
-	SrcMac MacAddr
-	DstMac MacAddr
-}
-
-type Network struct {
-	SrcAddr IPAddr
-	DstAddr IPAddr
-}
-
-type Transport struct {
-	SrcPort  uint16
-	DstPort  uint16
-	Protocol uint8 `json:"Proto"`
-}
-
-// RecordKey identifies a flow
-// Must coincide byte by byte with kernel-side flow_id_t (bpf/flow.h)
-// TODO: let cilium bpf2go create this
-type RecordKey struct {
-	EthProtocol uint16 `json:"Etype"`
-	Direction   uint8  `json:"FlowDirection"`
-	DataLink
-	Network
-	Transport
-	IFIndex uint32
-}
-
-// RecordMetrics provides flows metrics and timing information
-// Must coincide byte by byte with kernel-side flow_metrics_t (bpf/flow.h)
-type RecordMetrics struct {
-	Packets uint32
-	Bytes   uint64
-	// StartMonoTimeNs and EndMonoTimeNs are the start and end times as system monotonic timestamps
-	// in nanoseconds, as output from bpf_ktime_get_ns() (kernel space)
-	// and monotime.Now() (user space)
-	StartMonoTimeNs uint64
-	EndMonoTimeNs   uint64
-	Flags           uint16
-	Errno           uint8
-}
-
-// record structure as parsed from eBPF
-// it's important to emphasize that the fields in this structure have to coincide,
-// byte by byte, with the flow_record_t structure in the bpf/flow.h file
-type RawRecord struct {
-	RecordKey
-	RecordMetrics
-}
-
-// Record contains accumulated metrics from a flow
+// Record contains accumulated metrics from a flow, with extra metadata
+// that is added from the user space
 type Record struct {
-	RawRecord
+	NetFlowRecordT
 	// TODO: redundant field from RecordMetrics. Reorganize structs
 	TimeFlowStart time.Time
 	TimeFlowEnd   time.Time
@@ -116,34 +66,54 @@ type Record struct {
 }
 
 func NewRecord(
-	key RecordKey,
-	metrics RecordMetrics,
+	key NetFlowId,
+	metrics NetFlowMetrics,
 	currentTime time.Time,
 	monotonicCurrentTime uint64,
 ) *Record {
 	startDelta := time.Duration(monotonicCurrentTime - metrics.StartMonoTimeNs)
 	endDelta := time.Duration(monotonicCurrentTime - metrics.EndMonoTimeNs)
 	return &Record{
-		RawRecord: RawRecord{
-			RecordKey:     key,
-			RecordMetrics: metrics,
+		NetFlowRecordT: NetFlowRecordT{
+			Id:      key,
+			Metrics: metrics,
 		},
 		TimeFlowStart: currentTime.Add(-startDelta),
 		TimeFlowEnd:   currentTime.Add(-endDelta),
 	}
 }
 
-func (r *RecordMetrics) Accumulate(src *RecordMetrics) {
+func (fm *NetFlowMetrics) Accumulate(src *NetFlowMetrics) {
 	// time == 0 if the value has not been yet set
-	if r.StartMonoTimeNs == 0 || r.StartMonoTimeNs > src.StartMonoTimeNs {
-		r.StartMonoTimeNs = src.StartMonoTimeNs
+	if fm.StartMonoTimeNs == 0 || fm.StartMonoTimeNs > src.StartMonoTimeNs {
+		fm.StartMonoTimeNs = src.StartMonoTimeNs
 	}
-	if r.EndMonoTimeNs == 0 || r.EndMonoTimeNs < src.EndMonoTimeNs {
-		r.EndMonoTimeNs = src.EndMonoTimeNs
+	if fm.EndMonoTimeNs == 0 || fm.EndMonoTimeNs < src.EndMonoTimeNs {
+		fm.EndMonoTimeNs = src.EndMonoTimeNs
 	}
-	r.Bytes += src.Bytes
-	r.Packets += src.Packets
-	r.Flags |= src.Flags
+	fm.Bytes += src.Bytes
+	fm.Packets += src.Packets
+	fm.Flags |= src.Flags
+}
+
+// SrcIP is never null. Returned as pointer for efficiency.
+func (fi *NetFlowId) SrcIP() *IPAddr {
+	return (*IPAddr)(&fi.SrcIp.In6U.U6Addr8)
+}
+
+// DstIP is never null. Returned as pointer for efficiency.
+func (fi *NetFlowId) DstIP() *IPAddr {
+	return (*IPAddr)(&fi.DstIp.In6U.U6Addr8)
+}
+
+// SrcMAC is never null. Returned as pointer for efficiency.
+func (fi *NetFlowId) SrcMAC() *MacAddr {
+	return (*MacAddr)(&fi.SrcMac)
+}
+
+// DstMAC is never null. Returned as pointer for efficiency.
+func (fi *NetFlowId) DstMAC() *MacAddr {
+	return (*MacAddr)(&fi.DstMac)
 }
 
 // IP returns the net.IP equivalent object
@@ -171,8 +141,8 @@ func (m *MacAddr) MarshalJSON() ([]byte, error) {
 }
 
 // ReadFrom reads a Record from a binary source, in LittleEndian order
-func ReadFrom(reader io.Reader) (*RawRecord, error) {
-	var fr RawRecord
+func ReadFrom(reader io.Reader) (*NetFlowRecordT, error) {
+	var fr NetFlowRecordT
 	err := binary.Read(reader, binary.LittleEndian, &fr)
 	return &fr, err
 }

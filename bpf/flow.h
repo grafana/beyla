@@ -36,10 +36,11 @@ typedef __u64 u64;
 typedef struct flow_metrics_t {
     u32 packets;
     u64 bytes;
-    // Flow start and end times as monotomic timestamps in nanoseconds
-    // as output from bpf_ktime_get_ns()
-    u64 start_mono_time_ts;
-    u64 end_mono_time_ts;
+    // start_mono_time_ts and end_mono_time_ts are the start and end times as system monotonic timestamps
+    // in nanoseconds, as output from bpf_ktime_get_ns() (kernel space)
+    // and monotime.Now() (user space)
+    u64 start_mono_time_ns;
+    u64 end_mono_time_ns;
     // TCP Flags from https://www.ietf.org/rfc/rfc793.txt
     u16 flags;
     // The positive errno of a failed map insertion that caused a flow
@@ -76,4 +77,5 @@ typedef struct flow_record_t {
     flow_id id;
     flow_metrics metrics;
 } __attribute__((packed)) flow_record;
+
 #endif

@@ -6,6 +6,7 @@ import (
 	"github.com/mariomac/pipes/pkg/graph"
 	"github.com/mariomac/pipes/pkg/node"
 
+	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
 	"github.com/grafana/beyla/pkg/internal/netolly/export"
 	"github.com/grafana/beyla/pkg/internal/netolly/flow"
 	"github.com/grafana/beyla/pkg/internal/netolly/transform"
@@ -48,20 +49,20 @@ func (f *Flows) buildAndStartPipeline(ctx context.Context) (graph.Graph, error) 
 	// whose input is []map[string]interface{}]
 	graph.RegisterCodec(gb, transform.RecordToMapCodec)
 
-	graph.RegisterStart(gb, func(_ MapTracer) (node.StartFunc[[]*flow.Record], error) {
+	graph.RegisterStart(gb, func(_ MapTracer) (node.StartFunc[[]*ebpf.Record], error) {
 		return f.mapTracer.TraceLoop(ctx), nil
 	})
-	graph.RegisterStart(gb, func(_ RingBufTracer) (node.StartFunc[*flow.RawRecord], error) {
+	graph.RegisterStart(gb, func(_ RingBufTracer) (node.StartFunc[*ebpf.NetFlowRecordT], error) {
 		return f.rbTracer.TraceLoop(ctx), nil
 	})
-	graph.RegisterMiddle(gb, func(_ Accounter) (node.MiddleFunc[*flow.RawRecord, []*flow.Record], error) {
+	graph.RegisterMiddle(gb, func(_ Accounter) (node.MiddleFunc[*ebpf.NetFlowRecordT, []*ebpf.Record], error) {
 		return f.accounter.Account, nil
 	})
 	graph.RegisterMiddle(gb, flow.DeduperProvider)
-	graph.RegisterMiddle(gb, func(_ CapacityLimiter) (node.MiddleFunc[[]*flow.Record, []*flow.Record], error) {
+	graph.RegisterMiddle(gb, func(_ CapacityLimiter) (node.MiddleFunc[[]*ebpf.Record, []*ebpf.Record], error) {
 		return (&flow.CapacityLimiter{}).Limit, nil
 	})
-	graph.RegisterMiddle(gb, func(_ Decorator) (node.MiddleFunc[[]*flow.Record, []*flow.Record], error) {
+	graph.RegisterMiddle(gb, func(_ Decorator) (node.MiddleFunc[[]*ebpf.Record, []*ebpf.Record], error) {
 		return flow.Decorate(f.agentIP, f.interfaceNamer), nil
 	})
 	graph.RegisterMiddle(gb, transform.NetworkTransform)

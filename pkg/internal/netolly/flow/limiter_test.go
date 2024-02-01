@@ -25,6 +25,8 @@ import (
 	"github.com/mariomac/pipes/pkg/node"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
 )
 
 const limiterLen = 50
@@ -35,7 +37,7 @@ func TestCapacityLimiter_NoDrop(t *testing.T) {
 
 	// WHEN it buffers less elements than it's maximum capacity
 	for i := 0; i < 33; i++ {
-		pipeIn <- []*Record{{Interface: strconv.Itoa(i)}}
+		pipeIn <- []*ebpf.Record{{Interface: strconv.Itoa(i)}}
 	}
 
 	// THEN it is able to retrieve all the buffered elements
@@ -61,7 +63,7 @@ func TestCapacityLimiter_Drop(t *testing.T) {
 	// WHEN it receives more elements than its maximum capacity
 	// (it's not blocking)
 	for i := 0; i < limiterLen*2; i++ {
-		pipeIn <- []*Record{{Interface: strconv.Itoa(i)}}
+		pipeIn <- []*ebpf.Record{{Interface: strconv.Itoa(i)}}
 	}
 
 	// THEN it is only able to retrieve all the nth first buffered elements
@@ -81,16 +83,16 @@ func TestCapacityLimiter_Drop(t *testing.T) {
 	}
 }
 
-func capacityLimiterPipe() (in chan<- []*Record, out <-chan []*Record) {
-	inCh, outCh := make(chan []*Record), make(chan []*Record)
+func capacityLimiterPipe() (in chan<- []*ebpf.Record, out <-chan []*ebpf.Record) {
+	inCh, outCh := make(chan []*ebpf.Record), make(chan []*ebpf.Record)
 
-	init := node.AsStart(func(initOut chan<- []*Record) {
+	init := node.AsStart(func(initOut chan<- []*ebpf.Record) {
 		for i := range inCh {
 			initOut <- i
 		}
 	})
 	limiter := node.AsMiddle((&CapacityLimiter{}).Limit)
-	term := node.AsTerminal(func(termIn <-chan []*Record) {
+	term := node.AsTerminal(func(termIn <-chan []*ebpf.Record) {
 		for i := range termIn {
 			outCh <- i
 		}

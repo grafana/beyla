@@ -24,6 +24,8 @@ import (
 	"time"
 
 	"github.com/mariomac/pipes/pkg/node"
+
+	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
 )
 
 func dlog() *slog.Logger {
@@ -52,15 +54,15 @@ var timeNow = time.Now
 // It is not safe for concurrent access.
 type deduperCache struct {
 	expire time.Duration
-	// key: RecordKey with the interface and MACs erased, to detect duplicates
+	// key: ebpf.NetFlowId with the interface and MACs erased, to detect duplicates
 	// value: listElement pointing to a struct entry
-	ifaces map[RecordKey]*list.Element
+	ifaces map[ebpf.NetFlowId]*list.Element
 	// element: entry structs of the ifaces map ordered by expiry time
 	entries *list.List
 }
 
 type entry struct {
-	key        *RecordKey
+	key        *ebpf.NetFlowId
 	ifIndex    uint32
 	expiryTime time.Time
 }
@@ -70,18 +72,18 @@ type entry struct {
 // (no activity for it during the expiration time)
 // The justMark argument tells that the deduper should not drop the duplicate flows but
 // set their Duplicate field.
-func DeduperProvider(dd Deduper) (node.MiddleFunc[[]*Record, []*Record], error) {
+func DeduperProvider(dd Deduper) (node.MiddleFunc[[]*ebpf.Record, []*ebpf.Record], error) {
 	cache := &deduperCache{
 		expire:  dd.ExpireTime,
 		entries: list.New(),
-		ifaces:  map[RecordKey]*list.Element{},
+		ifaces:  map[ebpf.NetFlowId]*list.Element{},
 	}
-	return func(in <-chan []*Record, out chan<- []*Record) {
+	return func(in <-chan []*ebpf.Record, out chan<- []*ebpf.Record) {
 		for records := range in {
 			cache.removeExpired()
-			fwd := make([]*Record, 0, len(records))
+			fwd := make([]*ebpf.Record, 0, len(records))
 			for _, record := range records {
-				if cache.isDupe(&record.RecordKey) {
+				if cache.isDupe(&record.Id) {
 					if dd.JustMark {
 						record.Duplicate = true
 					} else {
@@ -99,11 +101,12 @@ func DeduperProvider(dd Deduper) (node.MiddleFunc[[]*Record, []*Record], error) 
 
 // isDupe returns whether the passed record has been already checked for duplicate for
 // another interface
-func (c *deduperCache) isDupe(key *RecordKey) bool {
+func (c *deduperCache) isDupe(key *ebpf.NetFlowId) bool {
 	rk := *key
 	// zeroes fields from key that should be ignored from the flow comparison
-	rk.IFIndex = 0
-	rk.DataLink = DataLink{}
+	rk.IfIndex = 0
+	rk.SrcMac = ebpf.MacAddr{}
+	rk.DstMac = ebpf.MacAddr{}
 	rk.Direction = 0
 	// If a flow has been accounted previously, whatever its interface was,
 	// it updates the expiry time for that flow
@@ -113,13 +116,13 @@ func (c *deduperCache) isDupe(key *RecordKey) bool {
 		c.entries.MoveToFront(ele)
 		// The input flow is duplicate if its interface is different to the interface
 		// of the non-duplicate flow that was first registered in the cache
-		return fEntry.ifIndex != key.IFIndex
+		return fEntry.ifIndex != key.IfIndex
 	}
 	// The flow has not been accounted previously (or was forgotten after expiration)
 	// so we register it for that concrete interface
 	e := entry{
 		key:        &rk,
-		ifIndex:    key.IFIndex,
+		ifIndex:    key.IfIndex,
 		expiryTime: timeNow().Add(c.expire),
 	}
 	c.ifaces[rk] = c.entries.PushFront(&e)

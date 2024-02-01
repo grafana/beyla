@@ -22,6 +22,8 @@ import (
 	"context"
 	"log/slog"
 	"time"
+
+	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
 )
 
 const initialLogPeriod = time.Minute
@@ -38,7 +40,7 @@ type CapacityLimiter struct {
 	droppedFlows int
 }
 
-func (c *CapacityLimiter) Limit(in <-chan []*Record, out chan<- []*Record) {
+func (c *CapacityLimiter) Limit(in <-chan []*ebpf.Record, out chan<- []*ebpf.Record) {
 	go c.logDroppedFlows()
 	for i := range in {
 		if len(out) < cap(out) || cap(out) == 0 {

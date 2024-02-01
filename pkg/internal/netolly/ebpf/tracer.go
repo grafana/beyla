@@ -33,12 +33,11 @@ import (
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
 
-	"github.com/grafana/beyla/pkg/internal/netolly/flow"
 	"github.com/grafana/beyla/pkg/internal/netolly/ifaces"
 )
 
 // $BPF_CLANG and $BPF_CFLAGS are set by the Makefile.
-//go:generate bpf2go -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf ../../../../bpf/flows.c -- -I../../../../bpf/headers
+//go:generate bpf2go -cc $BPF_CLANG -cflags $BPF_CFLAGS -type flow_metrics_t -type flow_id_t  -type flow_record_t -target amd64,arm64 Net ../../../../bpf/flows.c -- -I../../../../bpf/headers
 
 const (
 	qdiscType = "clsact"
@@ -57,7 +56,7 @@ func tlog() *slog.Logger {
 // and to flows that are forwarded by the kernel via ringbuffer because could not be aggregated
 // in the map
 type FlowFetcher struct {
-	objects        *bpfObjects
+	objects        *NetObjects
 	qdiscs         map[ifaces.Interface]*netlink.GenericQdisc
 	egressFilters  map[ifaces.Interface]*netlink.BpfFilter
 	ingressFilters map[ifaces.Interface]*netlink.BpfFilter
@@ -77,8 +76,8 @@ func NewFlowFetcher(
 			"error", err)
 	}
 
-	objects := bpfObjects{}
-	spec, err := loadBpf()
+	objects := NetObjects{}
+	spec, err := LoadNet()
 	if err != nil {
 		return nil, fmt.Errorf("loading BPF data: %w", err)
 	}
@@ -328,14 +327,14 @@ func (m *FlowFetcher) ReadRingBuf() (ringbuf.Record, error) {
 // TODO: detect whether BatchLookupAndDelete is supported (Kernel>=5.6) and use it selectively
 // Supported Lookup/Delete operations by kernel: https://github.com/iovisor/bcc/blob/master/docs/kernel-versions.md
 // Race conditions here causes that some flows are lost in high-load scenarios
-func (m *FlowFetcher) LookupAndDeleteMap() map[flow.RecordKey][]flow.RecordMetrics {
+func (m *FlowFetcher) LookupAndDeleteMap() map[NetFlowId][]NetFlowMetrics {
 	flowMap := m.objects.AggregatedFlows
 
 	iterator := flowMap.Iterate()
-	flows := make(map[flow.RecordKey][]flow.RecordMetrics, m.cacheMaxSize)
+	flows := make(map[NetFlowId][]NetFlowMetrics, m.cacheMaxSize)
 
-	id := flow.RecordKey{}
-	var metrics []flow.RecordMetrics
+	id := NetFlowId{}
+	var metrics []NetFlowMetrics
 	// Changing Iterate+Delete by LookupAndDelete would prevent some possible race conditions
 	// TODO: detect whether LookupAndDelete is supported (Kernel>=4.20) and use it selectively
 	for iterator.Next(&id, &metrics) {

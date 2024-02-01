@@ -196,28 +196,32 @@ static inline int flow_monitor(struct __sk_buff *skb, u8 direction) {
     void *data = (void *)(long)skb->data;
 
     flow_id id;
+    __builtin_memset(&id, 0, sizeof(id));
     u64 current_time = bpf_ktime_get_ns();
     struct ethhdr *eth = data;
     u16 flags = 0;
     if (fill_ethhdr(eth, data_end, &id, &flags) == DISCARD) {
         return TC_ACT_OK;
     }
+
+    //Set extra fields
     id.if_index = skb->ifindex;
     id.direction = direction;
 
     // TODO: we need to add spinlock here when we deprecate versions prior to 5.1, or provide
     // a spinlocked alternative version and use it selectively https://lwn.net/Articles/779120/
-    flow_metrics *aggregate_flow = bpf_map_lookup_elem(&aggregated_flows, &id);
+    flow_metrics *aggregate_flow = (flow_metrics *)bpf_map_lookup_elem(&aggregated_flows, &id);
     if (aggregate_flow != NULL) {
         aggregate_flow->packets += 1;
         aggregate_flow->bytes += skb->len;
-        aggregate_flow->end_mono_time_ts = current_time;
+        aggregate_flow->end_mono_time_ns = current_time;
         // it might happen that start_mono_time hasn't been set due to
         // the way percpu hashmap deal with concurrent map entries
-        if (aggregate_flow->start_mono_time_ts == 0) {
-            aggregate_flow->start_mono_time_ts = current_time;
+        if (aggregate_flow->start_mono_time_ns == 0) {
+            aggregate_flow->start_mono_time_ns = current_time;
         }
         aggregate_flow->flags |= flags;
+
         long ret = bpf_map_update_elem(&aggregated_flows, &id, aggregate_flow, BPF_ANY);
         if (trace_messages && ret != 0) {
             // usually error -16 (-EBUSY) is printed here.
@@ -232,8 +236,8 @@ static inline int flow_monitor(struct __sk_buff *skb, u8 direction) {
         flow_metrics new_flow = {
             .packets = 1,
             .bytes = skb->len,
-            .start_mono_time_ts = current_time,
-            .end_mono_time_ts = current_time,
+            .start_mono_time_ns = current_time,
+            .end_mono_time_ns = current_time,
             .flags = flags, 
         };
 
@@ -251,7 +255,7 @@ static inline int flow_monitor(struct __sk_buff *skb, u8 direction) {
             }
 
             new_flow.errno = -ret;
-            flow_record *record = bpf_ringbuf_reserve(&direct_flows, sizeof(flow_record), 0);
+            flow_record *record = (flow_record *)bpf_ringbuf_reserve(&direct_flows, sizeof(flow_record), 0);
             if (!record) {
                 if (trace_messages) {
                     bpf_printk("couldn't reserve space in the ringbuf. Dropping flow");
@@ -265,6 +269,7 @@ static inline int flow_monitor(struct __sk_buff *skb, u8 direction) {
     }
     return TC_ACT_OK;
 }
+
 SEC("tc_ingress")
 int ingress_flow_parse(struct __sk_buff *skb) {
     return flow_monitor(skb, INGRESS);
@@ -274,4 +279,10 @@ SEC("tc_egress")
 int egress_flow_parse(struct __sk_buff *skb) {
     return flow_monitor(skb, EGRESS);
 }
+
+// Force emitting structs into the ELF for automatic creation of Golang struct
+const flow_metrics *unused_flow_metrics __attribute__((unused));
+const flow_id *unused_flow_id __attribute__((unused));
+const flow_record *unused_flow_record __attribute__((unused));
+
 char _license[] SEC("license") = "GPL";

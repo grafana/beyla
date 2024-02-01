@@ -2,8 +2,9 @@ package export
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"log/slog"
-	"strings"
 	"time"
 
 	"github.com/mariomac/pipes/pkg/node"
@@ -50,7 +51,6 @@ func metricValue(m map[string]interface{}) int {
 
 	return v
 }
-
 
 func mapStr(m map[string]interface{}, key string) (string, bool) {
 	if val, ok := m[key]; ok {
@@ -136,16 +136,6 @@ func agentMetric(m map[string]interface{}) bool {
 	return false
 }
 
-func anyK8sMetrics(m map[string]interface{}) bool {
-	for k, _ := range m {
-		if strings.Contains(k, "K8s_") {
-			return true
-		}
-	}
-
-	return false
-}
-
 func MetricsExporterProvider(cfg ExportConfig) (node.TerminalFunc[[]map[string]interface{}], error) {
 	log := mlog()
 	exporter, err := otel.InstantiateMetricsExporter(context.Background(), cfg.Metrics, log)
@@ -173,7 +163,7 @@ func MetricsExporterProvider(cfg ExportConfig) (node.TerminalFunc[[]map[string]i
 
 	flowBytes, err := ebpfEvents.Int64Counter(
 		"network.flow.bytes",
-		metric2.WithDescription("total bytes_sent value of connections observed by probe since its launch"),
+		metric2.WithDescription("total bytes_sent value of network flows observed by probe since its launch"),
 		metric2.WithUnit("{bytes}"),
 	)
 	if err != nil {
@@ -188,15 +178,20 @@ func MetricsExporterProvider(cfg ExportConfig) (node.TerminalFunc[[]map[string]i
 
 	return func(in <-chan []map[string]interface{}) {
 		for i := range in {
-			//bytes, _ := json.Marshal(i)
-			//fmt.Println(string(bytes))
+			bytes, err := json.Marshal(i)
+			if err != nil {
+				log.Error("can't marshall JSON flows", "error", err)
+			} else {
+				log.Info("sending flows", "len", len(i))
+				fmt.Println(string(bytes))
+			}
 
 			for _, v := range i {
 				// Don't report metrics for the agent itself
 				// TODO: make configurable, as the agent flow metrics are ok
-				if agentMetric(v) && anyK8sMetrics(v) {
-					continue
-				}
+				//if agentMetric(v)  {
+				//	continue
+				//}
 
 				flowBytes.Add(
 					context.Background(),

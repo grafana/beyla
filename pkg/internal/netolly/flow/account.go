@@ -21,6 +21,8 @@ package flow
 import (
 	"log/slog"
 	"time"
+
+	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
 )
 
 // Accounter accumulates flows metrics in memory and eventually evicts them via an evictor channel.
@@ -30,7 +32,7 @@ import (
 type Accounter struct {
 	maxEntries   int
 	evictTimeout time.Duration
-	entries      map[RecordKey]*RecordMetrics
+	entries      map[ebpf.NetFlowId]*ebpf.NetFlowMetrics
 	clock        func() time.Time
 	monoClock    func() time.Duration
 }
@@ -49,7 +51,7 @@ func NewAccounter(
 	return &Accounter{
 		maxEntries:   maxEntries,
 		evictTimeout: evictTimeout,
-		entries:      map[RecordKey]*RecordMetrics{},
+		entries:      map[ebpf.NetFlowId]*ebpf.NetFlowMetrics{},
 		clock:        clock,
 		monoClock:    monoClock,
 	}
@@ -58,7 +60,7 @@ func NewAccounter(
 // Account runs in a new goroutine. It reads all the records from the input channel
 // and accumulate their metrics internally. Once the metrics have reached their max size
 // or the eviction times out, it evicts all the accumulated flows by the returned channel.
-func (c *Accounter) Account(in <-chan *RawRecord, out chan<- []*Record) {
+func (c *Accounter) Account(in <-chan *ebpf.NetFlowRecordT, out chan<- []*ebpf.Record) {
 	alog := alog()
 	evictTick := time.NewTicker(c.evictTimeout)
 	defer evictTick.Stop()
@@ -69,7 +71,7 @@ func (c *Accounter) Account(in <-chan *RawRecord, out chan<- []*Record) {
 				break
 			}
 			evictingEntries := c.entries
-			c.entries = map[RecordKey]*RecordMetrics{}
+			c.entries = map[ebpf.NetFlowId]*ebpf.NetFlowMetrics{}
 			alog.Debug("evicting flows from userspace accounter on timeout", "flows", len(evictingEntries))
 			c.evict(evictingEntries, out)
 		case record, ok := <-in:
@@ -82,28 +84,28 @@ func (c *Accounter) Account(in <-chan *RawRecord, out chan<- []*Record) {
 				alog.Debug("exiting account routine")
 				return
 			}
-			if stored, ok := c.entries[record.RecordKey]; ok {
-				stored.Accumulate(&record.RecordMetrics)
+			if stored, ok := c.entries[record.Id]; ok {
+				stored.Accumulate(&record.Metrics)
 			} else {
 				if len(c.entries) >= c.maxEntries {
 					evictingEntries := c.entries
-					c.entries = map[RecordKey]*RecordMetrics{}
+					c.entries = map[ebpf.NetFlowId]*ebpf.NetFlowMetrics{}
 					alog.Debug("evicting flows from userspace accounter after reaching cache max length",
 						"flows", len(evictingEntries))
 					c.evict(evictingEntries, out)
 				}
-				c.entries[record.RecordKey] = &record.RecordMetrics
+				c.entries[record.Id] = &record.Metrics
 			}
 		}
 	}
 }
 
-func (c *Accounter) evict(entries map[RecordKey]*RecordMetrics, evictor chan<- []*Record) {
+func (c *Accounter) evict(entries map[ebpf.NetFlowId]*ebpf.NetFlowMetrics, evictor chan<- []*ebpf.Record) {
 	now := c.clock()
 	monotonicNow := uint64(c.monoClock())
-	records := make([]*Record, 0, len(entries))
+	records := make([]*ebpf.Record, 0, len(entries))
 	for key, metrics := range entries {
-		records = append(records, NewRecord(key, *metrics, now, monotonicNow))
+		records = append(records, ebpf.NewRecord(key, *metrics, now, monotonicNow))
 	}
 	alog().Debug("records evicted from userspace accounter", "numEntries", len(records))
 	evictor <- records

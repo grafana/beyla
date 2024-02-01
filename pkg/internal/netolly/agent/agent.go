@@ -82,7 +82,7 @@ type Flows struct {
 	mapTracer *flow.MapTracer
 	rbTracer  *flow.RingBufTracer
 	accounter *flow.Accounter
-	exporter  node.TerminalFunc[[]*flow.Record]
+	exporter  node.TerminalFunc[[]*ebpf.Record]
 
 	// elements used to decorate flows with extra information
 	interfaceNamer flow.InterfaceNamer
@@ -96,7 +96,7 @@ type ebpfFlowFetcher interface {
 	io.Closer
 	Register(iface ifaces.Interface) error
 
-	LookupAndDeleteMap() map[flow.RecordKey][]flow.RecordMetrics
+	LookupAndDeleteMap() map[ebpf.NetFlowId][]ebpf.NetFlowMetrics
 	ReadRingBuf() (ringbuf.Record, error)
 }
 
@@ -148,7 +148,7 @@ func FlowsAgent(cfg *beyla.Config) (*Flows, error) {
 func flowsAgent(cfg *beyla.Config,
 	informer ifaces.Informer,
 	fetcher ebpfFlowFetcher,
-	exporter node.TerminalFunc[[]*flow.Record],
+	exporter node.TerminalFunc[[]*ebpf.Record],
 	agentIP net.IP,
 ) (*Flows, error) {
 	// configure allow/deny interfaces filter
@@ -289,9 +289,9 @@ func (f *Flows) onInterfaceAdded(iface ifaces.Interface) {
 	}
 }
 
-func buildFlowExporter(_ *beyla.Config) (node.TerminalFunc[[]*flow.Record], error) {
+func buildFlowExporter(_ *beyla.Config) (node.TerminalFunc[[]*ebpf.Record], error) {
 	// TODO: remove
-	return func(in <-chan []*flow.Record) {
+	return func(in <-chan []*ebpf.Record) {
 		for flows := range in {
 			fmt.Printf("received %d flows\n", len(flows))
 			for _, f := range flows {

@@ -24,6 +24,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
 )
 
 const timeout = 5 * time.Second
@@ -63,7 +65,7 @@ func TestEvict_MaxEntries(t *testing.T) {
 
 	// WHEN it starts accounting new records
 	inputs := make(chan *RawRecord, 20)
-	evictor := make(chan []*Record, 20)
+	evictor := make(chan []*ebpf.Record, 20)
 
 	go acc.Account(inputs, evictor)
 
@@ -99,7 +101,7 @@ func TestEvict_MaxEntries(t *testing.T) {
 	}
 
 	// THEN the old records are evicted
-	received := map[RecordKey]Record{}
+	received := map[RecordKey]ebpf.Record{}
 	r := receiveTimeout(t, evictor)
 	require.Len(t, r, 2)
 	received[r[0].RecordKey] = *r[0]
@@ -109,7 +111,7 @@ func TestEvict_MaxEntries(t *testing.T) {
 
 	// AND the returned records summarize the number of bytes and packages
 	// of each flow
-	assert.Equal(t, map[RecordKey]Record{
+	assert.Equal(t, map[RecordKey]ebpf.Record{
 		k1: {
 			RawRecord: RawRecord{
 				RecordKey: k1,
@@ -144,7 +146,7 @@ func TestEvict_Period(t *testing.T) {
 
 	// WHEN it starts accounting new records
 	inputs := make(chan *RawRecord, 20)
-	evictor := make(chan []*Record, 20)
+	evictor := make(chan []*ebpf.Record, 20)
 	go acc.Account(inputs, evictor)
 
 	inputs <- &RawRecord{
@@ -184,7 +186,7 @@ func TestEvict_Period(t *testing.T) {
 	// has not reached the maximum size
 	records := receiveTimeout(t, evictor)
 	require.Len(t, records, 1)
-	assert.Equal(t, Record{
+	assert.Equal(t, ebpf.Record{
 		RawRecord: RawRecord{
 			RecordKey: k1,
 			RecordMetrics: RecordMetrics{
@@ -200,7 +202,7 @@ func TestEvict_Period(t *testing.T) {
 	}, *records[0])
 	records = receiveTimeout(t, evictor)
 	require.Len(t, records, 1)
-	assert.Equal(t, Record{
+	assert.Equal(t, ebpf.Record{
 		RawRecord: RawRecord{
 			RecordKey: k1,
 			RecordMetrics: RecordMetrics{
@@ -220,7 +222,7 @@ func TestEvict_Period(t *testing.T) {
 	requireNoEviction(t, evictor)
 }
 
-func receiveTimeout(t *testing.T, evictor <-chan []*Record) []*Record {
+func receiveTimeout(t *testing.T, evictor <-chan []*ebpf.Record) []*ebpf.Record {
 	t.Helper()
 	select {
 	case r := <-evictor:
@@ -231,7 +233,7 @@ func receiveTimeout(t *testing.T, evictor <-chan []*Record) []*Record {
 	return nil
 }
 
-func requireNoEviction(t *testing.T, evictor <-chan []*Record) {
+func requireNoEviction(t *testing.T, evictor <-chan []*ebpf.Record) {
 	t.Helper()
 	select {
 	case r := <-evictor:

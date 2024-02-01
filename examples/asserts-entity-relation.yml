@@ -1,7 +1,7 @@
 name: dummy-entities
 entities:
   - type: Service
-    name: source
+    name: src_name
     scope:
       namespace: src_namespace
       env: asserts_env
@@ -10,7 +10,7 @@ entities:
       - query: |
           group by (asserts_env, asserts_site, src_namespace, src_name) (network_flow_bytes_total)
   - type: Service
-    name: destination
+    name: dst_name
     scope:
       namespace: dst_namespace
       env: asserts_env

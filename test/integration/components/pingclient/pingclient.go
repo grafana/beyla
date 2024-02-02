@@ -83,8 +83,8 @@ func rtRequest(url string, counter int) {
 func main() {
 	counter := 1
 	for {
-		regularGetRequest("https://grafana.com", counter)
-		rtRequest("https://grafana.com", counter)
+		regularGetRequest("https://grafana.com/oss/", counter)
+		rtRequest("https://grafana.com/oss/", counter)
 		time.Sleep(time.Second)
 		counter++
 	}

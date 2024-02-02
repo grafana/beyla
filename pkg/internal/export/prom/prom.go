@@ -250,6 +250,9 @@ func labelNamesHTTPClient(cfg *PrometheusConfig, ctxInfo *global.ContextInfo) []
 	if ctxInfo.K8sEnabled {
 		names = appendK8sLabelNames(names)
 	}
+	if ctxInfo.ReportRoutes {
+		names = append(names, httpRouteKey)
+	}
 	return names
 }
 
@@ -264,6 +267,9 @@ func (r *metricsReporter) labelValuesHTTPClient(span *request.Span) []string {
 	}
 	if r.ctxInfo.K8sEnabled {
 		values = appendK8sLabelValues(values, span)
+	}
+	if r.ctxInfo.ReportRoutes {
+		values = append(values, span.Route) // httpRouteKey
 	}
 	return values
 }

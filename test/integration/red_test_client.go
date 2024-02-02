@@ -27,6 +27,7 @@ func testClientWithMethodAndStatusCode(t *testing.T, method string, statusCode i
 		results, err = pq.Query(`http_client_duration_seconds_count{` +
 			fmt.Sprintf(`http_request_method="%s",`, method) +
 			fmt.Sprintf(`http_response_status_code="%d",`, statusCode) +
+			`http_route="/oss/",` +
 			`service_namespace="integration-test",` +
 			`service_name="pingclient"}`)
 		require.NoError(t, err)
@@ -40,6 +41,7 @@ func testClientWithMethodAndStatusCode(t *testing.T, method string, statusCode i
 		results, err = pq.Query(`http_client_request_size_bytes_count{` +
 			fmt.Sprintf(`http_request_method="%s",`, method) +
 			fmt.Sprintf(`http_response_status_code="%d",`, statusCode) +
+			`http_route="/oss/",` +
 			`service_namespace="integration-test",` +
 			`service_name="pingclient"}`)
 		require.NoError(t, err)

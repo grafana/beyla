@@ -18,7 +18,7 @@ import (
 	"github.com/grafana/beyla/test/integration/components/prom"
 )
 
-func testClientWithMethodAndStatusCode(t *testing.T, method string, statusCode int, traceIDLookup string) {
+func testClientWithMethodAndStatusCode(t *testing.T, method string, statusCode int, traces bool, traceIDLookup string) {
 	// Eventually, Prometheus would make this query visible
 	pq := prom.Client{HostPort: prometheusHostPort}
 	var results []prom.Result
@@ -49,6 +49,10 @@ func testClientWithMethodAndStatusCode(t *testing.T, method string, statusCode i
 		val := totalPromCount(t, results)
 		assert.LessOrEqual(t, 1, val)
 	})
+
+	if !traces {
+		return
+	}
 
 	var trace jaeger.Trace
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
@@ -83,6 +87,11 @@ func testClientWithMethodAndStatusCode(t *testing.T, method string, statusCode i
 }
 
 func testREDMetricsForClientHTTPLibrary(t *testing.T) {
-	testClientWithMethodAndStatusCode(t, "GET", 200, "0000000000000000")
-	testClientWithMethodAndStatusCode(t, "OPTIONS", 204, "0000000000000001")
+	testClientWithMethodAndStatusCode(t, "GET", 200, true, "0000000000000000")
+	testClientWithMethodAndStatusCode(t, "OPTIONS", 204, true, "0000000000000001")
+}
+
+func testREDMetricsForClientHTTPLibraryNoTraces(t *testing.T) {
+	testClientWithMethodAndStatusCode(t, "GET", 200, false, "0000000000000000")
+	testClientWithMethodAndStatusCode(t, "OPTIONS", 204, false, "0000000000000001")
 }

@@ -150,7 +150,7 @@ all: generate build
 .PHONY: compile
 compile:
 	@echo "### Compiling project"
-	GOOS=$(GOOS) GOARCH=$(GOARCH) go build -mod vendor -ldflags="-X 'main.Version=$(RELEASE_VERSION)'" -a -o bin/$(CMD) $(MAIN_GO_FILE)
+	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -mod vendor -ldflags="-X 'main.Version=$(RELEASE_VERSION)'" -a -o bin/$(CMD) $(MAIN_GO_FILE)
 
 .PHONY: dev
 dev: prereqs generate compile-for-coverage
@@ -159,7 +159,7 @@ dev: prereqs generate compile-for-coverage
 .PHONY: compile-for-coverage
 compile-for-coverage:
 	@echo "### Compiling project to generate coverage profiles"
-	GOOS=$(GOOS) GOARCH=$(GOARCH) go build -mod vendor -cover -a -o bin/$(CMD) $(MAIN_GO_FILE)
+	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -mod vendor -cover -a -o bin/$(CMD) $(MAIN_GO_FILE)
 
 .PHONY: test
 test:

@@ -68,6 +68,21 @@ func TestSuiteClient(t *testing.T) {
 	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
 }
 
+func TestSuiteClientPromScrape(t *testing.T) {
+	compose, err := docker.ComposeSuite("docker-compose-client.yml", path.Join(pathOutput, "test-suite-client-promscrape.log"))
+	compose.Env = append(compose.Env, `BEYLA_EXECUTABLE_NAME=pingclient`)
+	compose.Env = append(compose.Env,
+		`INSTRUMENTER_CONFIG_SUFFIX=-promscrape`,
+		`PROM_CONFIG_SUFFIX=-promscrape`,
+	)
+	require.NoError(t, err)
+	require.NoError(t, compose.Up())
+	t.Run("Client RED metrics", testREDMetricsForClientHTTPLibraryNoTraces)
+	t.Run("BPF pinning folder mounted", testBPFPinningMounted)
+	require.NoError(t, compose.Close())
+	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
+}
+
 // Same as Test suite, but the generated test image does not contain debug information
 func TestSuite_NoDebugInfo(t *testing.T) {
 	compose, err := docker.ComposeSuite("docker-compose.yml", path.Join(pathOutput, "test-suite-nodebug.log"))

@@ -21,9 +21,12 @@ aliases:
 
 ## eBPF application auto-instrumentation
 
-Instrumenting an application to obtain metrics and traces typically requires adding a language agent to the application deployment/packages. In some compiled languages like Go or Rust, tracepoints have to be manually added to the code. In both cases, the instrumented version of the application must be redeployed to the staging/production servers.
+Instrumenting an application to obtain metrics and traces typically requires adding a language agent to the application deployment/packages.
+In some compiled languages like Go or Rust, you must manually add tracepoints to the code.
 
-Grafana Beyla is an eBPF-based application auto-instrumentation tool to easily get started with Application Observability. eBPF is used to automatically inspect application executables and the OS networking layer and capture trace spans related to web transactions and Rate-Errors-Duration (RED) metrics for Linux HTTP/S and gRPC services. All data capture occurs without any modifications to application code or configuration.
+Grafana Beyla is an eBPF-based application auto-instrumentation tool to easily get started with Application Observability.
+Beyla uses eBPF to automatically inspect application executables and the OS networking layer, and capture trace spans related to web transactions and Rate Errors Duration (RED) metrics for Linux HTTP/S and gRPC services.
+All data capture occurs without any modifications to application code or configuration.
 
 Beyla offers the following features:
 
@@ -37,7 +40,7 @@ Beyla offers the following features:
 
 ## Requirements
 
-- Linux with Kernel 5.8 or higher with [BTF](https://www.kernel.org/doc/html/latest/bpf/btf.html)
+- Linux with Kernel 5.8 or higher with BPF Type Format [(BTF)](https://www.kernel.org/doc/html/latest/bpf/btf.html)
   enabled. BTF became enabled by default on most Linux distributions with kernel 5.14 or higher.
   You can check if your kernel has BTF enabled by verifying if `/sys/kernel/btf/vmlinux` exists on your system.
   If you need to recompile your kernel to enable BTF, the configuration option `CONFIG_DEBUG_INFO_BTF=y` must be

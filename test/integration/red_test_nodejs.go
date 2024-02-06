@@ -32,7 +32,7 @@ func testREDMetricsForNodeHTTPLibrary(t *testing.T, url, urlPath, comm, namespac
 	var results []prom.Result
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
 		var err error
-		results, err = pq.Query(`http_server_duration_seconds_count{` +
+		results, err = pq.Query(`http_server_request_duration_seconds_count{` +
 			`http_request_method="POST",` +
 			`http_response_status_code="200",` +
 			`service_namespace="` + namespace + `",` +
@@ -78,7 +78,7 @@ func checkReportedNodeJSEvents(t *testing.T, urlPath, comm, namespace string, nu
 	var results []prom.Result
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
 		var err error
-		results, err = pq.Query(`http_server_duration_seconds_count{` +
+		results, err = pq.Query(`http_server_request_duration_seconds_count{` +
 			`http_request_method="POST",` +
 			`http_response_status_code="200",` +
 			`service_namespace="` + namespace + `",` +

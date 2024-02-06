@@ -768,8 +768,8 @@ boundaries via a configuration file (see `buckets` YAML section of your metrics 
 
 Sets the bucket boundaries for the metrics related to the request duration. Specifically:
 
-- `http.server.duration` (OTEL) / `http_server_duration_seconds` (Prometheus)
-- `http.client.duration` (OTEL) / `http_client_duration_seconds` (Prometheus)
+- `http.server.request.duration` (OTEL) / `http_server_request_duration_seconds` (Prometheus)
+- `http.client.request.duration` (OTEL) / `http_client_request_duration_seconds` (Prometheus)
 - `rpc.server.duration` (OTEL) / `rpc_server_duration_seconds` (Prometheus)
 - `rpc.client.duration` (OTEL) / `rpc_client_duration_seconds` (Prometheus)
 
@@ -786,8 +786,8 @@ If the value is unset, the default bucket boundaries follow the
 
 Sets the bucket boundaries for the metrics related to request sizes. This is:
 
-- `http.server.request.size` (OTEL) / `http_server_request_size_bytes` (Prometheus)
-- `http.client.request.size` (OTEL) / `http_client_request_size_bytes` (Prometheus)
+- `http.server.request.body.size` (OTEL) / `http_server_request_body_size_bytes` (Prometheus)
+- `http.client.request.body.size` (OTEL) / `http_client_request_body_size_bytes` (Prometheus)
 
 If the value is unset, the default bucket boundaries are:
 

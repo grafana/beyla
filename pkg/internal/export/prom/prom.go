@@ -17,13 +17,13 @@ import (
 // using labels and names that are equivalent names to the OTEL attributes
 // but following the different naming conventions
 const (
-	HTTPServerDuration    = "http_server_duration_seconds"
-	HTTPClientDuration    = "http_client_duration_seconds"
+	HTTPServerDuration    = "http_server_request_duration_seconds"
+	HTTPClientDuration    = "http_client_request_duration_seconds"
 	RPCServerDuration     = "rpc_server_duration_seconds"
 	RPCClientDuration     = "rpc_client_duration_seconds"
 	SQLClientDuration     = "sql_client_duration_seconds"
-	HTTPServerRequestSize = "http_server_request_size_bytes"
-	HTTPClientRequestSize = "http_client_request_size_bytes"
+	HTTPServerRequestSize = "http_server_request_body_size_bytes"
+	HTTPClientRequestSize = "http_client_request_body_size_bytes"
 
 	// target will expose the process hostname-pid (or K8s Pod).
 	// It is advised for users that to use relabeling rules to

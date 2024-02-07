@@ -16,7 +16,7 @@
 // This implementation is a derivation of the code in
 // https://github.com/netobserv/netobserv-ebpf-agent/tree/release-1.4
 
-package kubernetes
+package k8s
 
 import (
 	"fmt"
@@ -35,7 +35,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/clientcmd"
 
-	"github.com/grafana/beyla/pkg/internal/netolly/transform/kubernetes/cni"
+	"github.com/grafana/beyla/pkg/internal/netolly/transform/k8s/cni"
 )
 
 const (
@@ -47,7 +47,8 @@ const (
 	typeService           = "Service"
 )
 
-type KubeData struct {
+// TODO: merge this data structure with the appo11y kubernetes informers
+type NetworkInformers struct {
 	log *slog.Logger
 	// pods, nodes and services cache the different object types as *Info pointers
 	pods     cache.SharedIndexInformer
@@ -84,7 +85,7 @@ var commonIndexers = map[string]cache.IndexFunc{
 	},
 }
 
-func (k *KubeData) GetInfo(ip string) (*Info, error) {
+func (k *NetworkInformers) GetInfo(ip string) (*Info, error) {
 	if info, ok := k.fetchInformers(ip); ok {
 		// Owner data might be discovered after the owned, so we fetch it
 		// at the last moment
@@ -97,7 +98,7 @@ func (k *KubeData) GetInfo(ip string) (*Info, error) {
 	return nil, fmt.Errorf("informers can't find IP %s", ip)
 }
 
-func (k *KubeData) fetchInformers(ip string) (*Info, bool) {
+func (k *NetworkInformers) fetchInformers(ip string) (*Info, bool) {
 	if info, ok := infoForIP(k.pods.GetIndexer(), ip); ok {
 		// it might happen that the Host is discovered after the Pod
 		if info.HostName == "" {
@@ -126,7 +127,7 @@ func infoForIP(idx cache.Indexer, ip string) (*Info, bool) {
 	return objs[0].(*Info), true
 }
 
-func (k *KubeData) getOwner(info *Info) Owner {
+func (k *NetworkInformers) getOwner(info *Info) Owner {
 	if len(info.OwnerReferences) != 0 {
 		ownerReference := info.OwnerReferences[0]
 		if ownerReference.Kind != "ReplicaSet" {
@@ -157,7 +158,7 @@ func (k *KubeData) getOwner(info *Info) Owner {
 	}
 }
 
-func (k *KubeData) getHostName(hostIP string) string {
+func (k *NetworkInformers) getHostName(hostIP string) string {
 	if hostIP != "" {
 		if info, ok := infoForIP(k.nodes.GetIndexer(), hostIP); ok {
 			return info.Name
@@ -166,7 +167,7 @@ func (k *KubeData) getHostName(hostIP string) string {
 	return ""
 }
 
-func (k *KubeData) initNodeInformer(informerFactory informers.SharedInformerFactory) error {
+func (k *NetworkInformers) initNodeInformer(informerFactory informers.SharedInformerFactory) error {
 	nodes := informerFactory.Core().V1().Nodes().Informer()
 	// Transform any *v1.Node instance into a *Info instance to save space
 	// in the informer's cache
@@ -204,7 +205,7 @@ func (k *KubeData) initNodeInformer(informerFactory informers.SharedInformerFact
 	return nil
 }
 
-func (k *KubeData) initPodInformer(informerFactory informers.SharedInformerFactory) error {
+func (k *NetworkInformers) initPodInformer(informerFactory informers.SharedInformerFactory) error {
 	pods := informerFactory.Core().V1().Pods().Informer()
 	// Transform any *v1.Pod instance into a *Info instance to save space
 	// in the informer's cache
@@ -242,7 +243,7 @@ func (k *KubeData) initPodInformer(informerFactory informers.SharedInformerFacto
 	return nil
 }
 
-func (k *KubeData) initServiceInformer(informerFactory informers.SharedInformerFactory) error {
+func (k *NetworkInformers) initServiceInformer(informerFactory informers.SharedInformerFactory) error {
 	services := informerFactory.Core().V1().Services().Informer()
 	// Transform any *v1.Service instance into a *Info instance to save space
 	// in the informer's cache
@@ -275,7 +276,7 @@ func (k *KubeData) initServiceInformer(informerFactory informers.SharedInformerF
 	return nil
 }
 
-func (k *KubeData) initReplicaSetInformer(informerFactory informers.SharedInformerFactory) error {
+func (k *NetworkInformers) initReplicaSetInformer(informerFactory informers.SharedInformerFactory) error {
 	k.replicaSets = informerFactory.Apps().V1().ReplicaSets().Informer()
 	// To save space, instead of storing a complete *appvs1.Replicaset instance, the
 	// informer's cache will store a *metav1.ObjectMeta with the minimal required fields
@@ -295,8 +296,8 @@ func (k *KubeData) initReplicaSetInformer(informerFactory informers.SharedInform
 	return nil
 }
 
-func (k *KubeData) InitFromConfig(kubeConfigPath string) error {
-	k.log = slog.With("component", "kubernetes.KubeData")
+func (k *NetworkInformers) InitFromConfig(kubeConfigPath string) error {
+	k.log = slog.With("component", "kubernetes.NetworkInformers")
 	// Initialization variables
 	k.stopChan = make(chan struct{})
 
@@ -345,7 +346,7 @@ func LoadConfig(kubeConfigPath string) (*rest.Config, error) {
 	return config, nil
 }
 
-func (k *KubeData) initInformers(client kubernetes.Interface) error {
+func (k *NetworkInformers) initInformers(client kubernetes.Interface) error {
 	informerFactory := informers.NewSharedInformerFactory(client, syncTime)
 	err := k.initNodeInformer(informerFactory)
 	if err != nil {

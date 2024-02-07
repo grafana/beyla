@@ -9,7 +9,7 @@ import (
 	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
 	"github.com/grafana/beyla/pkg/internal/netolly/export"
 	"github.com/grafana/beyla/pkg/internal/netolly/flow"
-	"github.com/grafana/beyla/pkg/internal/netolly/transform"
+	"github.com/grafana/beyla/pkg/internal/netolly/transform/k8s"
 )
 
 type FlowsPipeline struct {
@@ -20,7 +20,7 @@ type FlowsPipeline struct {
 	CapacityLimiter `sendTo:"Decorator"`
 	Decorator       `sendTo:"Kubernetes"`
 
-	Kubernetes transform.NetworkTransformConfig `sendTo:"Exporter"`
+	Kubernetes k8s.NetworkTransformConfig `sendTo:"Exporter"`
 
 	Exporter export.MetricsConfig
 }
@@ -45,9 +45,6 @@ func (f *Flows) buildAndStartPipeline(ctx context.Context) (graph.Graph, error) 
 
 	alog.Debug("creating flows' processing graph")
 	gb := graph.NewBuilder(node.ChannelBufferLen(f.cfg.ChannelBufferLen))
-	// A codec allows automatically connecting a node whose output is []*flow.Record with a node
-	// whose input is []map[string]interface{}]
-	graph.RegisterCodec(gb, transform.RecordToMapCodec)
 
 	graph.RegisterStart(gb, func(_ MapTracer) (node.StartFunc[[]*ebpf.Record], error) {
 		return f.mapTracer.TraceLoop(ctx), nil
@@ -65,7 +62,7 @@ func (f *Flows) buildAndStartPipeline(ctx context.Context) (graph.Graph, error) 
 	graph.RegisterMiddle(gb, func(_ Decorator) (node.MiddleFunc[[]*ebpf.Record, []*ebpf.Record], error) {
 		return flow.Decorate(f.agentIP, f.interfaceNamer), nil
 	})
-	graph.RegisterMiddle(gb, transform.NetworkTransform)
+	graph.RegisterMiddle(gb, k8s.NetworkTransform)
 
 	graph.RegisterTerminal(gb, export.MetricsExporterProvider)
 
@@ -75,7 +72,7 @@ func (f *Flows) buildAndStartPipeline(ctx context.Context) (graph.Graph, error) 
 			ExpireTime: f.cfg.NetworkFlows.DeduperFCExpiry,
 			JustMark:   f.cfg.NetworkFlows.DeduperJustMark,
 		},
-		Kubernetes: transform.NetworkTransformConfig{TransformConfig: &f.cfg.NetworkFlows.Transform},
+		Kubernetes: k8s.NetworkTransformConfig{TransformConfig: &f.cfg.NetworkFlows.Transform},
 		// TODO: put here any extra configuration for the exporter
 		Exporter: export.MetricsConfig{Metrics: &f.cfg.Metrics},
 	})

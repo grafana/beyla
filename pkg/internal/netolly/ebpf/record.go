@@ -63,6 +63,8 @@ type Record struct {
 
 	// AgentIP provides information about the source of the flow (the Agent that traced it)
 	AgentIP string
+
+	Metadata map[string]string
 }
 
 func NewRecord(

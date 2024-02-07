@@ -16,6 +16,8 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 
 	"github.com/grafana/beyla/pkg/internal/export/otel"
+	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
+	"github.com/grafana/beyla/pkg/internal/netolly/transform/k8s"
 )
 
 type MetricsConfig struct {
@@ -39,84 +41,65 @@ func newMeterProvider(res *resource.Resource, exporter *metric.Exporter) (*metri
 		metric.WithResource(res),
 		metric.WithReader(metric.NewPeriodicReader(*exporter,
 			// Default is 1m. Set to 3s for demonstrative purposes.
-			metric.WithInterval(10*time.Second))),
+			metric.WithInterval(1*time.Second))),
 	)
 	return meterProvider, nil
 }
 
-func metricValue(m map[string]interface{}) int {
-	v, ok := m["Bytes"].(int)
-
-	if !ok {
-		return 0
+func sourceAttrs(m *ebpf.Record) (namespace, name string) {
+	if srcName, ok := m.Metadata[k8s.AttrSrcName]; ok && srcName != "" {
+		return m.Metadata[k8s.AttrSrcNamespace], srcName
 	}
-
-	return v
+	return "", m.Id.SrcIP().IP().String()
 }
 
-func mapStr(m map[string]interface{}, key string) (string, bool) {
-	if val, ok := m[key]; ok {
-		return val.(string), true
+func destinationAttrs(m *ebpf.Record) (namespace, name string) {
+	if dstName, ok := m.Metadata[k8s.AttrDstName]; ok && dstName != "" {
+		return m.Metadata[k8s.AttrDstNamespace], dstName
 	}
-	return "", false
+	return "", m.Id.DstIP().IP().String()
 }
 
-func sourceAttrs(m map[string]interface{}) (namespace, name string) {
-	if srcName, ok := mapStr(m, "SrcK8s_Name"); ok && srcName != "" {
-		srcNS, _ := mapStr(m, "SrcK8s_Namespace")
-		return srcNS, srcName
-	}
-	srcName, _ := mapStr(m, "SrcAddr")
-	return "", srcName
-}
-
-func destinationAttrs(m map[string]interface{}) (namespace, name, kind string) {
-	kind, _ = mapStr(m, "DstK8s_Kind")
-	if dstName, ok := mapStr(m, "DstK8s_Name"); ok && dstName != "" {
-		dstNs, _ := mapStr(m, "DstK8s_Namespace")
-		return dstNs, dstName, kind
-	}
-	dstName, _ := mapStr(m, "DstAddr")
-	return "", dstName, kind
-}
-
-func direction(m map[string]interface{}) string {
-	if dir, ok := m["FlowDirection"]; ok {
-		if dirInt, ok := dir.(int); ok {
-			switch dirInt {
-			case 0:
-				return "ingress"
-			case 1:
-				return "egress"
-			}
-		}
+func direction(m *ebpf.Record) string {
+	switch m.Id.Direction {
+	case 0:
+		return "ingress"
+	case 1:
+		return "egress"
 	}
 	return "unknown"
 }
 
-func attributes(m map[string]interface{}) []attribute.KeyValue {
-	res := make([]attribute.KeyValue, 0)
+func attributes(m *ebpf.Record) []attribute.KeyValue {
+	res := make([]attribute.KeyValue,0, 8+len(m.Metadata))
 
-	serverPort, _ := m["DstPort"].(int)
 	srcNS, srcName := sourceAttrs(m)
-	dstNS, dstName, dstKind := destinationAttrs(m)
+	dstNS, dstName := destinationAttrs(m)
 
 	res = append(res, attribute.String("flow.direction", direction(m)))
-	res = append(res, attribute.Int("server.port", serverPort))
+	res = append(res, attribute.Int("server.port", int(m.Id.DstPort)))
 	res = append(res, attribute.String("src.name", srcName))
 	res = append(res, attribute.String("src.namespace", srcNS))
 	res = append(res, attribute.String("dst.name", dstName))
 	res = append(res, attribute.String("dst.namespace", dstNS))
-	res = append(res, attribute.String("dst.kind", dstKind))
-
 	// probably not needed
 	res = append(res, attribute.String("asserts.env", "dev"))
 	res = append(res, attribute.String("asserts.site", "dev"))
 
+	// metadata attributes
+	for k, v := range m.Metadata {
+		res = append(res, attribute.String(k, v))
+	}
+
+	bytes, _ := json.Marshal(res)
+	fmt.Println(string(bytes))
+
+
 	return res
 }
 
-func MetricsExporterProvider(cfg MetricsConfig) (node.TerminalFunc[[]map[string]interface{}], error) {
+// TODO: merge with AppO11y's otel.Exporter
+func MetricsExporterProvider(cfg MetricsConfig) (node.TerminalFunc[[]*ebpf.Record], error) {
 	log := mlog()
 	exporter, err := otel.InstantiateMetricsExporter(context.Background(), cfg.Metrics, log)
 	if err != nil {
@@ -156,26 +139,21 @@ func MetricsExporterProvider(cfg MetricsConfig) (node.TerminalFunc[[]map[string]
 		return nil, err
 	}
 
-	return func(in <-chan []map[string]interface{}) {
+	return func(in <-chan []*ebpf.Record) {
 		for i := range in {
-			bytes, err := json.Marshal(i)
-			if err != nil {
-				log.Error("can't marshall JSON flows", "error", err)
-			} else {
-				log.Info("sending flows", "len", len(i))
-				fmt.Println(string(bytes))
-			}
+			// TODO: move to a print_flows node
+			//bytes, err := json.Marshal(i)
+			//if err != nil {
+			//	log.Error("can't marshall JSON flows", "error", err)
+			//} else {
+			//	log.Info("sending flows", "len", len(i))
+			//	fmt.Println(string(bytes))
+			//}
 
 			for _, v := range i {
-				// Don't report metrics for the agent itself
-				// TODO: make configurable, as the agent flow metrics are ok
-				//if agentMetric(v)  {
-				//	continue
-				//}
-
 				flowBytes.Add(
 					context.Background(),
-					int64(metricValue(v)),
+					int64(v.Metrics.Bytes),
 					metric2.WithAttributes(attributes(v)...),
 				)
 			}

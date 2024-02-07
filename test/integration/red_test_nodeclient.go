@@ -24,7 +24,7 @@ func testNodeClientWithMethodAndStatusCode(t *testing.T, method string, statusCo
 	var results []prom.Result
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
 		var err error
-		results, err = pq.Query(`http_client_duration_seconds_count{` +
+		results, err = pq.Query(`http_client_request_duration_seconds_count{` +
 			fmt.Sprintf(`http_request_method="%s",`, method) +
 			fmt.Sprintf(`http_response_status_code="%d",`, statusCode) +
 			`service_namespace="integration-test",` +
@@ -37,7 +37,7 @@ func testNodeClientWithMethodAndStatusCode(t *testing.T, method string, statusCo
 
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
 		var err error
-		results, err = pq.Query(`http_client_request_size_bytes_count{` +
+		results, err = pq.Query(`http_client_request_body_size_bytes_count{` +
 			fmt.Sprintf(`http_request_method="%s",`, method) +
 			fmt.Sprintf(`http_response_status_code="%d",`, statusCode) +
 			`service_namespace="integration-test",` +

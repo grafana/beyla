@@ -30,20 +30,20 @@ const (
 
 var (
 	httpServerMetrics = []string{
-		"http_server_duration_seconds_count",
-		"http_server_duration_seconds_sum",
-		"http_server_duration_seconds_bucket",
-		"http_server_request_size_bytes_count",
-		"http_server_request_size_bytes_sum",
-		"http_server_request_size_bytes_bucket",
+		"http_server_request_duration_seconds_count",
+		"http_server_request_duration_seconds_sum",
+		"http_server_request_duration_seconds_bucket",
+		"http_server_request_body_size_bytes_count",
+		"http_server_request_body_size_bytes_sum",
+		"http_server_request_body_size_bytes_bucket",
 	}
 	httpClientMetrics = []string{
-		"http_client_duration_seconds_count",
-		"http_client_duration_seconds_sum",
-		"http_client_duration_seconds_bucket",
-		"http_client_request_size_bytes_count",
-		"http_client_request_size_bytes_sum",
-		"http_client_request_size_bytes_bucket",
+		"http_client_request_duration_seconds_count",
+		"http_client_request_duration_seconds_sum",
+		"http_client_request_duration_seconds_bucket",
+		"http_client_request_body_size_bytes_count",
+		"http_client_request_body_size_bytes_sum",
+		"http_client_request_body_size_bytes_bucket",
 	}
 	grpcServerMetrics = []string{
 		"rpc_server_duration_seconds_count",
@@ -73,7 +73,7 @@ func DoWaitForComponentsAvailable(t *testing.T) {
 		// now, verify that the metric has been reported.
 		// we don't really care that this metric could be from a previous
 		// test. Once one it is visible, it means that Otel and Prometheus are healthy
-		results, err = pq.Query(`http_server_duration_seconds_count{url_path="` + subpath + `",k8s_pod_name=~"testserver-.*"}`)
+		results, err = pq.Query(`http_server_request_duration_seconds_count{url_path="` + subpath + `",k8s_pod_name=~"testserver-.*"}`)
 		require.NoError(t, err)
 		require.NotEmpty(t, results)
 	}, test.Interval(time.Second))

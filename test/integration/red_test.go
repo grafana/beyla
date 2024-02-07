@@ -100,7 +100,7 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url, svcName, svcNs string) {
 	var results []prom.Result
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
 		var err error
-		results, err = pq.Query(`http_server_duration_seconds_count{` +
+		results, err = pq.Query(`http_server_request_duration_seconds_count{` +
 			`http_request_method="GET",` +
 			`http_response_status_code="404",` +
 			`service_namespace="` + svcNs + `",` +
@@ -121,7 +121,7 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url, svcName, svcNs string) {
 
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
 		var err error
-		results, err = pq.Query(`http_server_request_size_bytes_count{` +
+		results, err = pq.Query(`http_server_request_body_size_bytes_count{` +
 			`http_request_method="GET",` +
 			`http_response_status_code="404",` +
 			`service_namespace="` + svcNs + `",` +
@@ -144,7 +144,7 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url, svcName, svcNs string) {
 		// Make sure we see /echo
 		test.Eventually(t, testTimeout, func(t require.TestingT) {
 			var err error
-			results, err = pq.Query(`http_server_duration_seconds_count{` +
+			results, err = pq.Query(`http_server_request_duration_seconds_count{` +
 				`http_request_method="GET",` +
 				`http_response_status_code="203",` +
 				`service_namespace="` + svcNs + `",` +
@@ -159,7 +159,7 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url, svcName, svcNs string) {
 
 		test.Eventually(t, testTimeout, func(t require.TestingT) {
 			var err error
-			results, err = pq.Query(`http_server_request_size_bytes_count{` +
+			results, err = pq.Query(`http_server_request_body_size_bytes_count{` +
 				`http_request_method="GET",` +
 				`http_response_status_code="203",` +
 				`service_namespace="` + svcNs + `",` +
@@ -175,7 +175,7 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url, svcName, svcNs string) {
 		// Make sure we see /echoBack server
 		test.Eventually(t, testTimeout, func(t require.TestingT) {
 			var err error
-			results, err = pq.Query(`http_server_duration_seconds_count{` +
+			results, err = pq.Query(`http_server_request_duration_seconds_count{` +
 				`http_request_method="GET",` +
 				`http_response_status_code="203",` +
 				`service_namespace="` + svcNs + `",` +
@@ -190,7 +190,7 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url, svcName, svcNs string) {
 
 		test.Eventually(t, testTimeout, func(t require.TestingT) {
 			var err error
-			results, err = pq.Query(`http_server_request_size_bytes_count{` +
+			results, err = pq.Query(`http_server_request_body_size_bytes_count{` +
 				`http_request_method="GET",` +
 				`http_response_status_code="203",` +
 				`service_namespace="` + svcNs + `",` +
@@ -206,7 +206,7 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url, svcName, svcNs string) {
 		// make sure we see /echo client
 		test.Eventually(t, testTimeout, func(t require.TestingT) {
 			var err error
-			results, err = pq.Query(`http_client_duration_seconds_count{` +
+			results, err = pq.Query(`http_client_request_duration_seconds_count{` +
 				`http_request_method="GET",` +
 				`http_response_status_code="203",` +
 				`service_namespace="` + svcNs + `",` +
@@ -220,7 +220,7 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url, svcName, svcNs string) {
 
 		test.Eventually(t, testTimeout, func(t require.TestingT) {
 			var err error
-			results, err = pq.Query(`http_client_request_size_bytes_count{` +
+			results, err = pq.Query(`http_client_request_body_size_bytes_count{` +
 				`http_request_method="GET",` +
 				`http_response_status_code="203",` +
 				`service_namespace="` + svcNs + `",` +
@@ -249,7 +249,7 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url, svcName, svcNs string) {
 
 	// check duration_sum is at least 90ms (3 * 30ms)
 	var err error
-	results, err = pq.Query(`http_server_duration_seconds_sum{` +
+	results, err = pq.Query(`http_server_request_duration_seconds_sum{` +
 		`http_request_method="GET",` +
 		`http_response_status_code="404",` +
 		`service_name="` + svcName + `",` +
@@ -268,7 +268,7 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url, svcName, svcNs string) {
 	assert.NotNil(t, addr)
 
 	// check request_size_sum is at least 114B (3 * 38B)
-	results, err = pq.Query(`http_server_request_size_bytes_sum{` +
+	results, err = pq.Query(`http_server_request_body_size_bytes_sum{` +
 		`http_request_method="GET",` +
 		`http_response_status_code="404",` +
 		`service_name="` + svcName + `",` +
@@ -286,7 +286,7 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url, svcName, svcNs string) {
 	assert.NotNil(t, addr)
 
 	// Check that we never recorded metrics for /metrics, in the basic test only traces are ignored
-	results, err = pq.Query(`http_server_duration_seconds_count{http_route="/metrics"}`)
+	results, err = pq.Query(`http_server_request_duration_seconds_count{http_route="/metrics"}`)
 	require.NoError(t, err)
 	enoughPromResults(t, results)
 }
@@ -342,7 +342,7 @@ func testREDMetricsForHTTPLibraryNoRoute(t *testing.T, url, svcName string) {
 	var results []prom.Result
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
 		var err error
-		results, err = pq.Query(`http_server_duration_seconds_count{` +
+		results, err = pq.Query(`http_server_request_duration_seconds_count{` +
 			`http_request_method="GET",` +
 			`http_response_status_code="404",` +
 			`service_namespace="integration-test",` +
@@ -363,7 +363,7 @@ func testREDMetricsForHTTPLibraryNoRoute(t *testing.T, url, svcName string) {
 
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
 		var err error
-		results, err = pq.Query(`http_server_request_size_bytes_count{` +
+		results, err = pq.Query(`http_server_request_body_size_bytes_count{` +
 			`http_request_method="GET",` +
 			`http_response_status_code="404",` +
 			`service_namespace="integration-test",` +
@@ -385,7 +385,7 @@ func testREDMetricsForHTTPLibraryNoRoute(t *testing.T, url, svcName string) {
 	// Make sure we see /echo
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
 		var err error
-		results, err = pq.Query(`http_server_duration_seconds_count{` +
+		results, err = pq.Query(`http_server_request_duration_seconds_count{` +
 			`http_request_method="GET",` +
 			`http_response_status_code="203",` +
 			`service_namespace="integration-test",` +
@@ -400,7 +400,7 @@ func testREDMetricsForHTTPLibraryNoRoute(t *testing.T, url, svcName string) {
 
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
 		var err error
-		results, err = pq.Query(`http_server_request_size_bytes_count{` +
+		results, err = pq.Query(`http_server_request_body_size_bytes_count{` +
 			`http_request_method="GET",` +
 			`http_response_status_code="203",` +
 			`service_namespace="integration-test",` +
@@ -416,7 +416,7 @@ func testREDMetricsForHTTPLibraryNoRoute(t *testing.T, url, svcName string) {
 	// Make sure we see /echoBack server
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
 		var err error
-		results, err = pq.Query(`http_server_duration_seconds_count{` +
+		results, err = pq.Query(`http_server_request_duration_seconds_count{` +
 			`http_request_method="GET",` +
 			`http_response_status_code="203",` +
 			`service_namespace="integration-test",` +
@@ -431,7 +431,7 @@ func testREDMetricsForHTTPLibraryNoRoute(t *testing.T, url, svcName string) {
 
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
 		var err error
-		results, err = pq.Query(`http_server_request_size_bytes_count{` +
+		results, err = pq.Query(`http_server_request_body_size_bytes_count{` +
 			`http_request_method="GET",` +
 			`http_response_status_code="203",` +
 			`service_namespace="integration-test",` +
@@ -447,7 +447,7 @@ func testREDMetricsForHTTPLibraryNoRoute(t *testing.T, url, svcName string) {
 	// make sure we see /echo client
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
 		var err error
-		results, err = pq.Query(`http_client_duration_seconds_count{` +
+		results, err = pq.Query(`http_client_request_duration_seconds_count{` +
 			`http_request_method="GET",` +
 			`http_response_status_code="203",` +
 			`service_namespace="integration-test",` +
@@ -461,7 +461,7 @@ func testREDMetricsForHTTPLibraryNoRoute(t *testing.T, url, svcName string) {
 
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
 		var err error
-		results, err = pq.Query(`http_client_request_size_bytes_count{` +
+		results, err = pq.Query(`http_client_request_body_size_bytes_count{` +
 			`http_request_method="GET",` +
 			`http_response_status_code="203",` +
 			`service_namespace="integration-test",` +
@@ -489,7 +489,7 @@ func testREDMetricsForHTTPLibraryNoRoute(t *testing.T, url, svcName string) {
 
 	// check duration_sum is at least 90ms (3 * 30ms)
 	var err error
-	results, err = pq.Query(`http_server_duration_seconds_sum{` +
+	results, err = pq.Query(`http_server_request_duration_seconds_sum{` +
 		`http_request_method="GET",` +
 		`http_response_status_code="404",` +
 		`service_name="` + svcName + `",` +
@@ -508,7 +508,7 @@ func testREDMetricsForHTTPLibraryNoRoute(t *testing.T, url, svcName string) {
 	assert.NotNil(t, addr)
 
 	// check request_size_sum is at least 114B (3 * 38B)
-	results, err = pq.Query(`http_server_request_size_bytes_sum{` +
+	results, err = pq.Query(`http_server_request_body_size_bytes_sum{` +
 		`http_request_method="GET",` +
 		`http_response_status_code="404",` +
 		`service_name="` + svcName + `",` +
@@ -526,7 +526,7 @@ func testREDMetricsForHTTPLibraryNoRoute(t *testing.T, url, svcName string) {
 	assert.NotNil(t, addr)
 
 	// Check that we never recorded any /metrics calls
-	results, err = pq.Query(`http_server_duration_seconds_count{http_route="/metrics"}`)
+	results, err = pq.Query(`http_server_request_duration_seconds_count{http_route="/metrics"}`)
 	require.NoError(t, err)
 	require.Equal(t, len(results), 0)
 }
@@ -575,7 +575,7 @@ func testREDMetricsForGoBasicOnly(t *testing.T, url string, comm string) {
 	var results []prom.Result
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
 		var err error
-		results, err = pq.Query(`http_server_duration_seconds_count{` +
+		results, err = pq.Query(`http_server_request_duration_seconds_count{` +
 			`http_request_method="GET",` +
 			`http_response_status_code="200",` +
 			namespaceMatch +

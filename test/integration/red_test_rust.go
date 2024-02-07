@@ -38,7 +38,7 @@ func testREDMetricsForRustHTTPLibrary(t *testing.T, url, comm, namespace string,
 	var results []prom.Result
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
 		var err error
-		results, err = pq.Query(`http_server_duration_seconds_count{` +
+		results, err = pq.Query(`http_server_request_duration_seconds_count{` +
 			`http_request_method="POST",` +
 			`http_response_status_code="200",` +
 			`service_namespace="` + namespace + `",` +
@@ -154,7 +154,7 @@ func checkReportedRustEvents(t *testing.T, comm, namespace string, numEvents int
 	var results []prom.Result
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
 		var err error
-		results, err = pq.Query(`http_server_duration_seconds_count{` +
+		results, err = pq.Query(`http_server_request_duration_seconds_count{` +
 			`http_request_method="POST",` +
 			`http_response_status_code="200",` +
 			`service_namespace="` + namespace + `",` +

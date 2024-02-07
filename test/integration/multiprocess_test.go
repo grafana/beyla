@@ -81,13 +81,13 @@ func TestMultiProcess(t *testing.T) {
 	t.Run("Non-selected processes must not be instrumented"+
 		" even if they share the executable of another instrumented process", func(t *testing.T) {
 		pq := prom.Client{HostPort: prometheusHostPort}
-		results, err := pq.Query(`http_server_duration_seconds_count{url_path="/dont-instrument"}`)
+		results, err := pq.Query(`http_server_request_duration_seconds_count{url_path="/dont-instrument"}`)
 		require.NoError(t, err)
 		assert.Empty(t, results)
 	})
 
 	if kprobeTraces {
-		t.Run("Nested traces with kprobes: rust -> java -> node -> python -> rails", func(t *testing.T) {
+		t.Run("Nested traces with kprobes: rust -> java -> node -> go -> python -> rails", func(t *testing.T) {
 			testNestedHTTPTracesKProbes(t)
 		})
 
@@ -118,7 +118,7 @@ func checkReportedOnlyOnce(t *testing.T, baseURL, serviceName string) {
 	var results []prom.Result
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
 		var err error
-		results, err = pq.Query(`http_server_duration_seconds_count{` +
+		results, err = pq.Query(`http_server_request_duration_seconds_count{` +
 			`http_request_method="GET",` +
 			`http_response_status_code="200",` +
 			`service_name="` + serviceName + `",` +

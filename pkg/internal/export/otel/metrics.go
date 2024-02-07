@@ -29,13 +29,13 @@ func mlog() *slog.Logger {
 }
 
 const (
-	HTTPServerDuration    = "http.server.duration"
-	HTTPClientDuration    = "http.client.duration"
+	HTTPServerDuration    = "http.server.request.duration"
+	HTTPClientDuration    = "http.client.request.duration"
 	RPCServerDuration     = "rpc.server.duration"
 	RPCClientDuration     = "rpc.client.duration"
 	SQLClientDuration     = "sql.client.duration"
-	HTTPServerRequestSize = "http.server.request.size"
-	HTTPClientRequestSize = "http.client.request.size"
+	HTTPServerRequestSize = "http.server.request.body.size"
+	HTTPClientRequestSize = "http.client.request.body.size"
 
 	UsualPortGRPC = "4317"
 	UsualPortHTTP = "4318"
@@ -346,6 +346,9 @@ func (mr *MetricsReporter) httpClientAttributes(span *request.Span) []attribute.
 	if mr.cfg.ReportPeerInfo {
 		attrs = append(attrs, ServerAddr(span.Host))
 		attrs = append(attrs, ServerPort(span.HostPort))
+	}
+	if span.Route != "" {
+		attrs = append(attrs, semconv.HTTPRoute(span.Route))
 	}
 
 	return attrs

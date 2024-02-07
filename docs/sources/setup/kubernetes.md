@@ -226,7 +226,6 @@ spec:
         - name: autoinstrument
           image: grafana/beyla:latest
           securityContext:
-            runAsUser: 0
             privileged: true
           env:
             # Select the executable by its name instead of BEYLA_OPEN_PORT
@@ -291,25 +290,29 @@ spec:
     spec:
       serviceAccountName: beyla
       hostPID: true #important!
-      volumes:
-        - name: beyla-config
-          configMap:
-            name: beyla-config
       containers:
         - name: beyla
           image: grafana/beyla:latest
           imagePullPolicy: IfNotPresent
           securityContext:
             privileged: true
+            readOnlyRootFilesystem: true
           # mount the previous ConfigMap as a folder
           volumeMounts:
             - mountPath: /config
               name: beyla-config
+            - mountPath: /var/run/beyla
+              name: var-run-beyla
           env:
             # tell beyla where to find the configuration file
             - name: BEYLA_CONFIG_PATH
               value: "/config/beyla-config.yml"
-
+      volumes:
+        - name: beyla-config
+          configMap:
+            name: beyla-config
+        - name: var-run-beyla
+          emptyDir: {}
 ```
 
 ## Providing secret configuration

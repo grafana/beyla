@@ -121,8 +121,8 @@ func SupportsContextPropagation(log *slog.Logger) bool {
 	kernelMajor, kernelMinor := KernelVersion()
 	log.Debug("Linux kernel version", "major", kernelMajor, "minor", kernelMinor)
 
-	if kernelMajor < 5 || (kernelMajor == 5 && kernelMinor < 14) {
-		log.Debug("Found Linux kernel earlier than 5.14, trace context propagation is supported", "major", kernelMajor, "minor", kernelMinor)
+	if kernelMajor < 5 || (kernelMajor == 5 && kernelMinor < 10) {
+		log.Debug("Found Linux kernel earlier than 5.10, trace context propagation is supported", "major", kernelMajor, "minor", kernelMinor)
 		return true
 	}
 

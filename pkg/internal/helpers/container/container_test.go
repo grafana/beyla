@@ -31,6 +31,14 @@ var fixturesWithContainer = map[uint32]string{
 0::/system.slice/containerd.service`,
 	789: `0::/../cri-containerd-40c03570b6f4c30bc8d69923d37ee698f5cfcced92c7b7df1c47f6f7887378a9.scope`,
 	999: `0::/system.slice/docker-40c03570b6f4c30bc8d69923d37ee698f5cfcced92c7b7df1c47f6f7887378a9.scope/kubepods/burstable/podc55ba69a-e39f-44af-925d-c4794fd57878/264c1e319d1f6080a48a9fabcf9ac8fd9afd9a5930cf35e8d0eeb03b258c3152`,
+	// GKE cgroup entry
+	589: `0::/kubepods/burstable/pod4a163a05-439d-484b-8e53-2968bc15824f/40c03570b6f4c30bc8d69923d37ee698f5cfcced92c7b7df1c47f6f7887378a9`,
+	// GKE-containerd cgroup entry
+	689: `0::/kubepods/burstable/podb53dfa9e2dc9b890f7fadb2770857b03/40c03570b6f4c30bc8d69923d37ee698f5cfcced92c7b7df1c47f6f7887378a9`,
+	// EKS cgroup entry
+	788: `0::/kubepods.slice/kubepods-burstable.slice/kubepods-burstable-poddde1244b_5bb5_4297_b544_85f3bc0d80bf.slice/cri-containerd-40c03570b6f4c30bc8d69923d37ee698f5cfcced92c7b7df1c47f6f7887378a9.scope`,
+	// Containerd cgroup entry
+	889: `0::/kubepods.slice/kubepods-burstable.slice/kubepods-burstable-pod7260904bbd08e72e4dff95d9fccd2ee8.slice/cri-containerd-40c03570b6f4c30bc8d69923d37ee698f5cfcced92c7b7df1c47f6f7887378a9.scope`,
 }
 
 var fixturesWithoutContainer = map[uint32]string{

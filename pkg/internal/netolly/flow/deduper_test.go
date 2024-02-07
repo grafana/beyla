@@ -29,34 +29,40 @@ import (
 	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
 )
 
-var (
-	// the same flow from 2 different interfaces
-	oneIf1 = &ebpf.Record{RawRecord: RawRecord{RecordKey: RecordKey{
-		EthProtocol: 1, Direction: 1, Transport: Transport{SrcPort: 123, DstPort: 456},
-		DataLink: DataLink{DstMac: MacAddr{0x1}, SrcMac: MacAddr{0x1}}, IFIndex: 1,
-	}, RecordMetrics: RecordMetrics{
+var oneIf1, oneIf2, twoIf1, twoIf2 *ebpf.Record
+
+func init() {
+	// oneIf1 and oneIf2 represent the same flow from 2 different interfaces
+	oneIf1 = &ebpf.Record{NetFlowRecordT: ebpf.NetFlowRecordT{Id: ebpf.NetFlowId{
+		EthProtocol: 1, Direction: 1, SrcPort: 123, DstPort: 456, IfIndex: 1,
+	}, Metrics: ebpf.NetFlowMetrics{
 		Packets: 2, Bytes: 456, Flags: 1,
 	}}, Interface: "eth0"}
-	oneIf2 = &ebpf.Record{RawRecord: RawRecord{RecordKey: RecordKey{
-		EthProtocol: 1, Direction: 1, Transport: Transport{SrcPort: 123, DstPort: 456},
-		DataLink: DataLink{DstMac: MacAddr{0x2}, SrcMac: MacAddr{0x2}}, IFIndex: 2,
-	}, RecordMetrics: RecordMetrics{
+	oneIf1.Id.SrcMac, oneIf1.Id.DstMac = [6]uint8{0x1}, [6]uint8{0x1}
+
+	oneIf2 = &ebpf.Record{NetFlowRecordT: ebpf.NetFlowRecordT{Id: ebpf.NetFlowId{
+		EthProtocol: 1, Direction: 1, SrcPort: 123, DstPort: 456, IfIndex: 2,
+	}, Metrics: ebpf.NetFlowMetrics{
 		Packets: 2, Bytes: 456, Flags: 1,
 	}}, Interface: "123456789"}
-	// another fow from 2 different interfaces and directions
-	twoIf1 = &ebpf.Record{RawRecord: RawRecord{RecordKey: RecordKey{
-		EthProtocol: 1, Direction: 1, Transport: Transport{SrcPort: 333, DstPort: 456},
-		DataLink: DataLink{DstMac: MacAddr{0x1}, SrcMac: MacAddr{0x1}}, IFIndex: 1,
-	}, RecordMetrics: RecordMetrics{
+	oneIf2.Id.SrcMac, oneIf2.Id.DstMac = [6]uint8{0x2}, [6]uint8{0x2}
+
+	// twoIf1 and twoIf2 are another fow from 2 different interfaces and directions
+	twoIf1 = &ebpf.Record{NetFlowRecordT: ebpf.NetFlowRecordT{Id: ebpf.NetFlowId{
+		EthProtocol: 1, Direction: 1, SrcPort: 333, DstPort: 456, IfIndex: 1,
+	}, Metrics: ebpf.NetFlowMetrics{
 		Packets: 2, Bytes: 456, Flags: 1,
 	}}, Interface: "eth0"}
-	twoIf2 = &ebpf.Record{RawRecord: RawRecord{RecordKey: RecordKey{
-		EthProtocol: 1, Direction: 0, Transport: Transport{SrcPort: 333, DstPort: 456},
-		DataLink: DataLink{DstMac: MacAddr{0x2}, SrcMac: MacAddr{0x2}}, IFIndex: 2,
-	}, RecordMetrics: RecordMetrics{
+	twoIf1.Id.SrcMac, twoIf1.Id.DstMac = [6]uint8{0x1}, [6]uint8{0x1}
+
+	twoIf2 = &ebpf.Record{NetFlowRecordT: ebpf.NetFlowRecordT{Id: ebpf.NetFlowId{
+		EthProtocol: 1, Direction: 0, SrcPort: 333, DstPort: 456, IfIndex: 2,
+	}, Metrics: ebpf.NetFlowMetrics{
 		Packets: 2, Bytes: 456, Flags: 1,
 	}}, Interface: "123456789"}
-)
+	twoIf2.Id.SrcMac, twoIf2.Id.DstMac = [6]uint8{0x2}, [6]uint8{0x2}
+
+}
 
 func TestDedupe(t *testing.T) {
 	input := make(chan []*ebpf.Record, 100)

@@ -5,7 +5,6 @@ package ebpf
 import (
 	"github.com/cilium/ebpf/ringbuf"
 
-	"github.com/grafana/beyla/pkg/internal/netolly/flow"
 	"github.com/grafana/beyla/pkg/internal/netolly/ifaces"
 )
 
@@ -28,6 +27,6 @@ func (m *FlowFetcher) ReadRingBuf() (ringbuf.Record, error) {
 	return ringbuf.Record{}, nil
 }
 
-func (m *FlowFetcher) LookupAndDeleteMap() map[flow.RecordKey][]flow.RecordMetrics {
+func (m *FlowFetcher) LookupAndDeleteMap() map[NetFlowId][]NetFlowMetrics {
 	return nil
 }

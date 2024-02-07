@@ -23,31 +23,33 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
+	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
 )
 
 func TestPacketAggregation(t *testing.T) {
 	type testCase struct {
-		input    []RecordMetrics
-		expected RecordMetrics
+		input    []ebpf.NetFlowMetrics
+		expected ebpf.NetFlowMetrics
 	}
 	tcs := []testCase{{
-		input: []RecordMetrics{
+		input: []ebpf.NetFlowMetrics{
 			{Packets: 0, Bytes: 0, StartMonoTimeNs: 0, EndMonoTimeNs: 0, Flags: 1},
 			{Packets: 0x7, Bytes: 0x22d, StartMonoTimeNs: 0x176a790b240b, EndMonoTimeNs: 0x176a792a755b, Flags: 1},
 			{Packets: 0x0, Bytes: 0x0, StartMonoTimeNs: 0x0, EndMonoTimeNs: 0x0, Flags: 1},
 			{Packets: 0x0, Bytes: 0x0, StartMonoTimeNs: 0x0, EndMonoTimeNs: 0x0, Flags: 1},
 		},
-		expected: RecordMetrics{
+		expected: ebpf.NetFlowMetrics{
 			Packets: 0x7, Bytes: 0x22d, StartMonoTimeNs: 0x176a790b240b, EndMonoTimeNs: 0x176a792a755b, Flags: 1,
 		},
 	}, {
-		input: []RecordMetrics{
+		input: []ebpf.NetFlowMetrics{
 			{Packets: 0x3, Bytes: 0x5c4, StartMonoTimeNs: 0x17f3e9613a7f, EndMonoTimeNs: 0x17f3e979816e, Flags: 1},
 			{Packets: 0x2, Bytes: 0x8c, StartMonoTimeNs: 0x17f3e9633a7f, EndMonoTimeNs: 0x17f3e96f164e, Flags: 1},
 			{Packets: 0x0, Bytes: 0x0, StartMonoTimeNs: 0x0, EndMonoTimeNs: 0x0, Flags: 1},
 			{Packets: 0x0, Bytes: 0x0, StartMonoTimeNs: 0x0, EndMonoTimeNs: 0x0, Flags: 1},
 		},
-		expected: RecordMetrics{
+		expected: ebpf.NetFlowMetrics{
 			Packets: 0x5, Bytes: 0x5c4 + 0x8c, StartMonoTimeNs: 0x17f3e9613a7f, EndMonoTimeNs: 0x17f3e979816e, Flags: 1,
 		},
 	}}

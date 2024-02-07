@@ -18,7 +18,9 @@ import (
 	"github.com/grafana/beyla/pkg/internal/export/otel"
 )
 
-// TODO: put here any exporter configuration
+type MetricsConfig struct {
+	Metrics *otel.MetricsConfig
+}
 
 func mlog() *slog.Logger {
 	return slog.With("component", "otel.MetricsReporter")
@@ -114,29 +116,7 @@ func attributes(m map[string]interface{}) []attribute.KeyValue {
 	return res
 }
 
-func strAttr(m map[string]interface{}, name string) string {
-	v, ok := m[name].(string)
-	if !ok {
-		return ""
-	}
-
-	return v
-}
-
-func agentMetric(m map[string]interface{}) bool {
-	agentIP := strAttr(m, "AgentIP")
-
-	if agentIP != "" {
-		src := strAttr(m, "SrcAddr")
-		dst := strAttr(m, "DstAddr")
-
-		return src == agentIP || dst == agentIP
-	}
-
-	return false
-}
-
-func MetricsExporterProvider(cfg ExportConfig) (node.TerminalFunc[[]map[string]interface{}], error) {
+func MetricsExporterProvider(cfg MetricsConfig) (node.TerminalFunc[[]map[string]interface{}], error) {
 	log := mlog()
 	exporter, err := otel.InstantiateMetricsExporter(context.Background(), cfg.Metrics, log)
 	if err != nil {

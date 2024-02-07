@@ -2,8 +2,8 @@ name: keep-alive
 groups:
   - name: keep-alive
     rules:
-      - record: asserts:mixin_pod_job_workload
+      - record: kube_pod_info
         expr: 1
         labels:
-          job: beyla-network
+          pod: dummy
           asserts_env: dev

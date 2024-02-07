@@ -22,7 +22,7 @@ type FlowsPipeline struct {
 
 	Kubernetes transform.NetworkTransformConfig `sendTo:"Exporter"`
 
-	Exporter export.ExportConfig
+	Exporter export.MetricsConfig
 }
 
 type Codec struct{}
@@ -77,6 +77,6 @@ func (f *Flows) buildAndStartPipeline(ctx context.Context) (graph.Graph, error) 
 		},
 		Kubernetes: transform.NetworkTransformConfig{TransformConfig: &f.cfg.NetworkFlows.Transform},
 		// TODO: put here any extra configuration for the exporter
-		Exporter: export.ExportConfig{Metrics: &f.cfg.Metrics},
+		Exporter: export.MetricsConfig{Metrics: &f.cfg.Metrics},
 	})
 }

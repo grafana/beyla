@@ -496,6 +496,7 @@ int uprobe_http2FramerWriteHeaders_returns(struct pt_regs *ctx) {
     void *goroutine_addr = GOROUTINE_PTR(ctx);
 
     framer_func_invocation_t *f_info = bpf_map_lookup_elem(&framer_invocation_map, &goroutine_addr);
+    bpf_map_delete_elem(&framer_invocation_map, &goroutine_addr);
 
     if (f_info) {
         void *w_ptr = 0;
@@ -562,7 +563,6 @@ int uprobe_http2FramerWriteHeaders_returns(struct pt_regs *ctx) {
             }
         }
     }
-    bpf_map_delete_elem(&framer_invocation_map, &goroutine_addr);
 
     return 0;
 }

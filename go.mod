@@ -11,7 +11,7 @@ require (
 	github.com/go-logr/logr v1.2.4
 	github.com/goccy/go-json v0.10.2
 	github.com/gorilla/mux v1.8.0
-	github.com/grafana/go-offsets-tracker v0.1.5
+	github.com/grafana/go-offsets-tracker v0.1.7
 	github.com/hashicorp/golang-lru/v2 v2.0.2
 	github.com/mariomac/guara v0.0.0-20230621100729-42bd7716e524
 	github.com/mariomac/pipes v0.9.0
@@ -35,7 +35,7 @@ require (
 	go.opentelemetry.io/otel/sdk/metric v0.41.0
 	go.opentelemetry.io/otel/trace v1.19.0
 	golang.org/x/arch v0.3.0
-	golang.org/x/mod v0.8.0
+	golang.org/x/mod v0.14.0
 	golang.org/x/net v0.12.0
 	golang.org/x/sys v0.12.0
 	google.golang.org/grpc v1.58.3

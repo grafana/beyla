@@ -93,7 +93,7 @@ prereqs:
 	mkdir -p $(TEST_OUTPUT)/run
 	$(call go-install-tool,$(GOLANGCI_LINT),github.com/golangci/golangci-lint/cmd/golangci-lint@v1.54.2)
 	$(call go-install-tool,$(BPF2GO),github.com/cilium/ebpf/cmd/bpf2go@$(call gomod-version,cilium/ebpf))
-	$(call go-install-tool,$(GO_OFFSETS_TRACKER),github.com/grafana/go-offsets-tracker/cmd/go-offsets-tracker@v0.1.7)
+	$(call go-install-tool,$(GO_OFFSETS_TRACKER),github.com/grafana/go-offsets-tracker/cmd/go-offsets-tracker@$(call gomod-version,grafana/go-offsets-tracker))
 	$(call go-install-tool,$(GOIMPORTS_REVISER),github.com/incu6us/goimports-reviser/v3@v3.4.5)
 	$(call go-install-tool,$(GO_LICENSES),github.com/google/go-licenses@v1.6.0)
 	$(call go-install-tool,$(KIND),sigs.k8s.io/kind@v0.20.0)

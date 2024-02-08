@@ -25,6 +25,7 @@ import (
 	"sigs.k8s.io/e2e-framework/pkg/env"
 	"sigs.k8s.io/e2e-framework/pkg/envconf"
 	"sigs.k8s.io/e2e-framework/pkg/envfuncs"
+	"sigs.k8s.io/e2e-framework/support/kind"
 )
 
 const (
@@ -106,11 +107,11 @@ func (k *Kind) Run(m *testing.M) {
 		log.Info("adding func: createKindCluster", "name", k.clusterName, "image", kindImage, "path", k.kindConfigPath)
 		funcs = append(funcs,
 			// TODO: allow overriding kindImage
-			envfuncs.CreateKindClusterWithConfig(k.clusterName, kindImage, k.kindConfigPath))
+			envfuncs.CreateClusterWithConfig(kind.NewProvider(), k.clusterName, k.kindConfigPath, kind.WithImage(kindImage)))
 	} else {
 		log.Info("adding func: createKindCluster", "name", k.clusterName)
 		funcs = append(funcs,
-			envfuncs.CreateKindCluster(k.clusterName))
+			envfuncs.CreateCluster(kind.NewProvider(), k.clusterName))
 	}
 	for _, img := range k.localImages {
 		log.Info("adding func: loadLocalImage", "img", img)
@@ -125,7 +126,7 @@ func (k *Kind) Run(m *testing.M) {
 	code := k.testEnv.Setup(funcs...).
 		Finish(
 			k.exportLogs(),
-			envfuncs.DestroyKindCluster(k.clusterName),
+			envfuncs.DestroyCluster(k.clusterName),
 		).Run(m)
 	log.With("returnCode", code).Info("tests finished run")
 }

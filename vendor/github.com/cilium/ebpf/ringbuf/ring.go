@@ -91,6 +91,24 @@ func (rr *ringReader) skipRead(skipBytes uint64) {
 	rr.cons += clamp(rr.cons, atomic.LoadUint64(rr.prod_pos), skipBytes)
 }
 
+func (rr *ringReader) isEmpty() bool {
+	cons := atomic.LoadUint64(rr.cons_pos)
+	prod := atomic.LoadUint64(rr.prod_pos)
+
+	return prod == cons
+}
+
+func (rr *ringReader) size() int {
+	return cap(rr.ring)
+}
+
+func (rr *ringReader) remaining() int {
+	cons := atomic.LoadUint64(rr.cons_pos)
+	prod := atomic.LoadUint64(rr.prod_pos)
+
+	return int((prod - cons) & rr.mask)
+}
+
 func (rr *ringReader) Read(p []byte) (int, error) {
 	prod := atomic.LoadUint64(rr.prod_pos)
 

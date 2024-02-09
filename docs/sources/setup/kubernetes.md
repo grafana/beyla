@@ -239,42 +239,26 @@ spec:
               value: "true"
 ```
 
-### Deploy Beyla Unprivileged
+### Deploy Beyla unprivileged
 
-In all of the examples so far, `privileged:true` was used in the Beyla deployment
-`securityContext` section. While this works in all circumstances, there are ways
-to deploy Beyla in Kubernetes with reduced privileges, if your security configuration
-requires you to do so. Whether it is possible to run Beyla without `privileged:true`,
-depends a lot on the Kubernetes version you have and the underlying container
-runtime used (e.g. **Containerd**, **CRI-O** or **Docker**).
+In all of the examples so far, `privileged:true` was used in the Beyla deployment `securityContext` section. While this works in all circumstances, there are ways to deploy Beyla in Kubernetes with reduced privileges, if your security configuration requires you to do so. Whether it is possible to run Beyla without `privileged:true`, depends a lot on the Kubernetes version you have and the underlying container runtime used (e.g. **Containerd**, **CRI-O** or **Docker**).
 
-The following guide is based on tests performed mainly by running `containerd` with
-`kubeadm`, `k3s`, `microk8s` and `kind`.
+The following guide is based on tests performed mainly by running `containerd` with `kubeadm`, `k3s`, `microk8s` and `kind`.
 
-To run Beyla unprivileged, you need to replace the `privileged:true` setting with a
-set of Linux [capabilities](https://www.man7.org/linux/man-pages/man7/capabilities.7.html).
-The two main capabilities which Beyla needs are `CAP_SYS_ADMIN` and `CAP_SYS_PTRACE`. On
-kernel versions before **5.11**, `CAP_SYS_RESOURCE` is also required.
+To run Beyla unprivileged, you need to replace the `privileged:true` setting with a set of Linux [capabilities](https://www.man7.org/linux/man-pages/man7/capabilities.7.html). The two main capabilities which Beyla needs are `CAP_SYS_ADMIN` and `CAP_SYS_PTRACE`. On kernel versions before **5.11**, `CAP_SYS_RESOURCE` is also required.
 
-- `CAP_SYS_ADMIN` is required to install most of the eBPF probes, because Beyla tracks system calls.
-- `CAP_SYS_PTRACE` is required so that Beyla is able to look into the processes namespaces and inspect the executables.
-  Beyla doesn't use `ptrace`, but some of the operations it does require this capability.
-- `CAP_SYS_RESOURCE` is required only on kernels **< 5.11** so that Beyla can increase the amount of locked memory available.
+- `CAP_SYS_ADMIN` is required to install most of the eBPF probes, because Beyla tracks system calls
+- `CAP_SYS_PTRACE` is required so that Beyla is able to look into the processes namespaces and inspect the executables. Beyla doesn't use `ptrace`, but for some of the operations it does require this capability
+- `CAP_SYS_RESOURCE` is required only on kernels **< 5.11** so that Beyla can increase the amount of locked memory available
 
-In addition to these Linux capabilities, many Kubernetes versions include [AppArmour](https://kubernetes.io/docs/tutorials/security/apparmor/),
-which though policies adds additional restrictions to unprivileged containers.
-By [default](https://github.com/moby/moby/blob/master/profiles/apparmor/template.go), the AppArmour
-policy restricts the use of `mount` and the access to `/sys/fs/` directories. Beyla uses the BPF Linux file system
-to store pinned BPF maps, for communication among the different BPF programs. For this reason, Beyla
-either needs to `mount` a BPF file system, or write to `/sys/fs/bpf`, which are both restricted.
+In addition to these Linux capabilities, many Kubernetes versions include [AppArmour](https://kubernetes.io/docs/tutorials/security/apparmor/), which tough policies adds additional restrictions to unprivileged containers. By [default](https://github.com/moby/moby/blob/master/profiles/apparmor/template.go), the AppArmour policy restricts the use of `mount` and the access to `/sys/fs/` directories. Beyla uses the BPF Linux file system to store pinned BPF maps, for communication among the different BPF programs. For this reason, Beyla either needs to `mount` a BPF file system, or write to `/sys/fs/bpf`, which are both restricted.
 
 Because of the AppArmour restriction, to run Beyla as unprivileged container, you need to either:
 
 - Set `container.apparmor.security.beta.kubernetes.io/beyla: "unconfined"` in your Kubernetes deployment files.
 - Set a modified AppArmour policy which allows Beyla to perform `mount`.
 
-An example of a Beyla unprivileged container configuration can be found below, or you can download
-the [full example deployment](https://github.com/grafana/beyla/tree/main/examples/k8s/unprivileged.yaml) file:
+An example of a Beyla unprivileged container configuration can be found below, or you can download the [full example deployment](https://github.com/grafana/beyla/tree/main/examples/k8s/unprivileged.yaml) file:
 
 ```yaml
 ...

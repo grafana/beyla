@@ -301,7 +301,7 @@ Distributed tracing is only supported for Go services, while other programming l
 support remains on the road-map. Distributed tracing can correlate
 requests from multiple services (web, database, messaging...). One complexity of
 distributed tracing is the injection of client-side headers and matching them to the context of
-the server-side requests. Each new release is making progressive advances towards this goal.
+the server-side requests. Each release is making progressive advances towards this goal.
 
 Another shorter term goal is to reduce the surface of the code that requires administrative
 privileges, executing a small eBPF loader with `root` or `CAP_SYS_ADMIN` privileges,

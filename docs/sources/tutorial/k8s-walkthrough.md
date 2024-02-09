@@ -334,7 +334,7 @@ Also notice:
 - The Beyla container needs to run with `privileged: true`, as it requires
   to perform privileged actions such as loading BPF programs and creating
   BPF maps. For running Beyla as `unprivileged` container, i.e. without the
-  `privileged: true` option, please visit our 
+  `privileged: true` option, visit the 
   [Deploy Beyla unprivileged]({{< relref "../setup/kubernetes.md#deploy-beyla-unprivileged" >}})
   guide.
 

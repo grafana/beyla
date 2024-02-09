@@ -245,7 +245,7 @@ In all of the examples so far, `privileged:true` was used in the Beyla deploymen
 `securityContext` section. While this works in all circumstances, there are ways
 to deploy Beyla in Kubernetes with reduced privileges, if your security configuration
 requires you to do so. Whether it is possible to run Beyla without `privileged:true`,
-depends a lot on the Kubernetes version you have and the underlying container 
+depends a lot on the Kubernetes version you have and the underlying container
 runtime used (e.g. **Containerd**, **CRI-O** or **Docker**).
 
 The following guide is based on tests performed mainly by running `containerd` with
@@ -254,7 +254,7 @@ The following guide is based on tests performed mainly by running `containerd` w
 To run Beyla unprivileged, you need to replace the `privileged:true` setting with a
 set of Linux [capabilities](https://www.man7.org/linux/man-pages/man7/capabilities.7.html).
 The two main capabilities which Beyla needs are `CAP_SYS_ADMIN` and `CAP_SYS_PTRACE`. On
-kernel versions before **5.11**, `CAP_SYS_RESOURCE` is also required. 
+kernel versions before **5.11**, `CAP_SYS_RESOURCE` is also required.
 
 - `CAP_SYS_ADMIN` is required to install most of the eBPF probes, because Beyla tracks system calls.
 - `CAP_SYS_PTRACE` is required so that Beyla is able to look into the processes namespaces and inspect the executables.
@@ -262,8 +262,8 @@ kernel versions before **5.11**, `CAP_SYS_RESOURCE` is also required.
 - `CAP_SYS_RESOURCE` is required only on kernels **< 5.11** so that Beyla can increase the amount of locked memory available.
 
 In addition to these Linux capabilities, many Kubernetes versions include [AppArmour](https://kubernetes.io/docs/tutorials/security/apparmor/),
-which though policies adds additional restrictions to unprivileged containers. 
-By [default](https://github.com/moby/moby/blob/master/profiles/apparmor/template.go), the AppArmour 
+which though policies adds additional restrictions to unprivileged containers.
+By [default](https://github.com/moby/moby/blob/master/profiles/apparmor/template.go), the AppArmour
 policy restricts the use of `mount` and the access to `/sys/fs/` directories. Beyla uses the BPF Linux file system
 to store pinned BPF maps, for communication among the different BPF programs. For this reason, Beyla
 either needs to `mount` a BPF file system, or write to `/sys/fs/bpf`, which are both restricted.
@@ -297,11 +297,11 @@ spec:
       annotations:
         # We need to set beyla container as unconfined so it is able to write
         # the BPF file system.
-        # Instead of 'unconfined', you can define a more refined policy which allows Beyla to use 'mount' 
+        # Instead of 'unconfined', you can define a more refined policy which allows Beyla to use 'mount'
         container.apparmor.security.beta.kubernetes.io/beyla: "unconfined" # <-- Important
     spec:
       serviceAccount: beyla
-      hostPID: true           # <-- Important. Required in Daemonset mode so Beyla can discover all monitored processes 
+      hostPID: true           # <-- Important. Required in Daemonset mode so Beyla can discover all monitored processes
       containers:
       - name: beyla
         terminationMessagePolicy: FallbackToLogsOnError
@@ -334,7 +334,7 @@ spec:
         operator: Exists
       volumes:
       - name: var-run-beyla
-        emptyDir: {}      
+        emptyDir: {}
       - name: cgroup
         hostPath:
           path: /sys/fs/cgroup
@@ -345,10 +345,9 @@ metadata:
   name: some-service
   namespace: beyla-demo
   ...
----          
+---
 
 ```
-
 
 ## Providing an external configuration file
 

@@ -256,7 +256,7 @@ set of Linux [capabilities](https://www.man7.org/linux/man-pages/man7/capabiliti
 The two main capabilities which Beyla needs are `CAP_SYS_ADMIN` and `CAP_SYS_PTRACE`. On
 kernel versions before **5.11**, `CAP_SYS_RESOURCE` is also required. 
 
-- `CAP_SYS_ADMIN` is required to install most of Beyla's eBPF probes, because Beyla tracks system calls.
+- `CAP_SYS_ADMIN` is required to install most of the eBPF probes, because Beyla tracks system calls.
 - `CAP_SYS_PTRACE` is required so that Beyla is able to look into the processes namespaces and inspect the executables.
   Beyla doesn't use `ptrace`, but some of the operations it does require this capability.
 - `CAP_SYS_RESOURCE` is required only on kernels **< 5.11** so that Beyla can increase the amount of locked memory available.

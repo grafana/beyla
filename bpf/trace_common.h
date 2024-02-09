@@ -217,11 +217,8 @@ static __always_inline void get_or_create_trace_info(http_connection_metadata_t 
 
     unsigned char *buf = tp_char_buf();
     if (buf) {        
-        s64 buf_len = (s64)bytes_len;
-        if (buf_len >= TRACE_BUF_SIZE) {
-            buf_len = TRACE_BUF_SIZE - 1;
-        }
-        buf_len &= (TRACE_BUF_SIZE - 1);
+        int buf_len = (int)bytes_len;
+        bpf_clamp_umax(buf_len, TRACE_BUF_SIZE-1);
 
         bpf_probe_read(buf, buf_len, u_buf);
         unsigned char *res = bpf_strstr_tp_loop(buf, buf_len);

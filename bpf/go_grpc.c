@@ -184,14 +184,14 @@ int uprobe_server_handleStream_return(struct pt_regs *ctx) {
         void *remote_addr = 0;
         void *local_addr = 0;
 
-        if (grpc_st_remoteaddr_ptr_pos != (u64)(-1)) {
-            bpf_dbg_printk("pre 1.60 grpc peer info");
-            remote_addr = (void *)(st_ptr + grpc_st_remoteaddr_ptr_pos + sizeof(void *));
-            local_addr = (void *)(st_ptr + grpc_st_localaddr_ptr_pos + sizeof(void *));
-        } else if (grpc_st_peer_ptr_pos != (u64)(-1)) {
+        if (grpc_st_peer_ptr_pos != (u64)(-1)) {
             bpf_dbg_printk("1.60 grpc or later peer info");
             remote_addr = (void *)(st_ptr + grpc_st_peer_ptr_pos + grpc_peer_addr_pos + sizeof(void *));
             local_addr = (void *)(st_ptr + grpc_st_peer_ptr_pos + grpc_peer_localaddr_pos + sizeof(void *));
+        } else if (grpc_st_remoteaddr_ptr_pos != (u64)(-1)) {
+            bpf_dbg_printk("pre 1.60 grpc peer info");
+            remote_addr = (void *)(st_ptr + grpc_st_remoteaddr_ptr_pos + sizeof(void *));
+            local_addr = (void *)(st_ptr + grpc_st_localaddr_ptr_pos + sizeof(void *));
         }
 
         if (remote_addr != 0 && local_addr != 0) {

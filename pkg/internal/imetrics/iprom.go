@@ -2,6 +2,7 @@ package imetrics
 
 import (
 	"context"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 
@@ -33,9 +34,12 @@ func NewPrometheusReporter(cfg *PrometheusConfig, manager *connector.PrometheusM
 	pr := &PrometheusReporter{
 		connector: manager,
 		tracerFlushes: prometheus.NewHistogram(prometheus.HistogramOpts{
-			Name:    "ebpf_tracer_flushes",
-			Help:    "length of the groups of traces flushed from the eBPF tracer to the next pipeline stage",
-			Buckets: pipelineBufferLengths,
+			Name:                            "ebpf_tracer_flushes",
+			Help:                            "length of the groups of traces flushed from the eBPF tracer to the next pipeline stage",
+			Buckets:                         pipelineBufferLengths,
+			NativeHistogramBucketFactor:     1.1,
+			NativeHistogramMaxBucketNumber:  100,
+			NativeHistogramMinResetDuration: 1 * time.Hour,
 		}),
 		otelMetricExports: prometheus.NewCounter(prometheus.CounterOpts{
 			Name: "otel_metric_exports",

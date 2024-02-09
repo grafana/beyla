@@ -1,14 +1,15 @@
-FROM fedora:37
+FROM ubuntu:latest
 
-ARG GOVERSION="1.21.2"
+ARG GOVERSION="1.21.7"
 
 ARG TARGETARCH
 
 RUN echo "using TARGETARCH: $TARGETARCH"
 
 # Installs dependencies that are required to compile eBPF programs
-RUN dnf install -y git kernel-devel make llvm clang unzip
-RUN dnf clean all
+RUN apt update -y
+RUN apt install -y curl git linux-headers-generic make llvm clang unzip
+RUN apt clean
 
 VOLUME ["/src"]
 

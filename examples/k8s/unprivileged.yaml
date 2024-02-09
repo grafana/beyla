@@ -1,0 +1,174 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: beyla-demo
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: beyla
+  namespace: beyla-demo
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  namespace: beyla-demo
+  name: beyla-role
+rules:
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["update"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: beyla-role-binding
+  namespace: beyla-demo
+subjects:
+- kind: ServiceAccount
+  name: beyla
+roleRef:
+  kind: Role
+  name: beyla-role
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: beyla-cluster-role
+rules:
+- apiGroups: [""]
+  resources: ["namespaces", "nodes", "pods"]
+  verbs: ["get", "watch", "list"]
+- apiGroups: [""]
+  resources: ["services"]
+  # list services is needed by network-policy beyla.
+  verbs: ["list"]
+- apiGroups: ["*"]
+  resources: ["deployments", "replicasets", "statefulsets", "daemonsets", "jobs", "cronjobs", "replicationcontrollers"]
+  # Required to retrieve the owner references used by the seccomp beyla.
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["security-profiles-operator.x-k8s.io"]
+  resources: ["seccompprofiles"]
+  # Required for integration with the Kubernetes Security Profiles Operator
+  verbs: ["list", "watch", "create"]
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: beyla-cluster-role-binding
+subjects:
+- kind: ServiceAccount
+  name: beyla
+  namespace: beyla-demo
+roleRef:
+  kind: ClusterRole
+  name: beyla-cluster-role
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: beyla
+  namespace: beyla-demo
+  labels:
+    k8s-app: beyla
+spec:
+  selector:
+    matchLabels:
+      k8s-app: beyla
+  template:
+    metadata:
+      labels:
+        k8s-app: beyla
+      annotations:
+        # We need to set beyla container as unconfined so it is able to write
+        # the BPF file system.
+        # Otherwise, we can have error like:
+        # "failed to create server failed to create or mount folder for pinning bpf maps: can't mount BPF filesystem: permission denied""
+        # 
+        # Default rules can be found here: https://github.com/moby/moby/blob/master/profiles/apparmor/template.go
+        # Both 'mount' and access to /sys/fs/bpf are denied by default.
+        #
+        # Instead of 'unconfined', you can define a more refined policy which allows Beyla to use 'mount' 
+        container.apparmor.security.beta.kubernetes.io/beyla: "unconfined" # <-- Important
+    spec:
+      serviceAccount: beyla
+      hostPID: true           # <-- Important. Required in Daemonset mode so Beyla can discover all monitored processes 
+      containers:
+      - name: beyla
+        terminationMessagePolicy: FallbackToLogsOnError
+        image: "docker.io/grafana/beyla:main"
+        imagePullPolicy: "Always"
+        command: [ "/beyla" ]
+        env:
+          - name: BEYLA_PRINT_TRACES
+            value: "true"
+          - name: BEYLA_EXECUTABLE_NAME
+            value: "greetings"
+          - name: BEYLA_SERVICE_NAMESPACE
+            value: "k8s-test"
+          - name: BEYLA_LOG_LEVEL
+            value: "INFO"
+          - name: BEYLA_INTERNAL_METRICS_PROMETHEUS_PORT
+            value: "8999"
+          - name: BEYLA_KUBE_METADATA_ENABLE
+            value: "autodetect"
+        securityContext:
+          runAsUser: 0
+          readOnlyRootFilesystem: true
+          capabilities:
+            add:
+              - SYS_ADMIN     # <-- Important. Required for most eBPF probes to function correctly.
+              - SYS_PTRACE    # <-- Important. Allows Beyla to access the container namespaces and inspect executables.
+        volumeMounts:
+        - name: var-run-beyla
+          mountPath: /var/run/beyla
+        - name: cgroup
+          mountPath: /sys/fs/cgroup
+      tolerations:
+      - effect: NoSchedule
+        operator: Exists
+      - effect: NoExecute
+        operator: Exists
+      volumes:
+      - name: var-run-beyla
+        emptyDir: {}      
+      - name: cgroup
+        hostPath:
+          path: /sys/fs/cgroup
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rust-service
+  namespace: beyla-demo
+  labels:
+    k8s-app: rust-service
+spec:
+  selector:
+    matchLabels:
+      k8s-app: rust-service
+  template:
+    metadata:
+      labels:
+        k8s-app: rust-service
+    spec:
+      serviceAccount: beyla
+      containers:
+        - name: rust-service
+          image: 'ghcr.io/grafana/beyla-demo/greeting-actix-rust/0.0.1'
+          imagePullPolicy: IfNotPresent
+          ports:          
+          - containerPort: 8090
+            hostPort: 8090
+            name: service
+          resources:
+            limits:
+              memory: 120Mi
+          securityContext:
+            runAsGroup: 1000
+            runAsNonRoot: true
+            runAsUser: 1000
+---          

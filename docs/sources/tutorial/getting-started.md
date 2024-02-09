@@ -297,12 +297,11 @@ has to be privileged.
 In the future, we plan to add metrics about other well-established protocols, like
 database or message queuing connections.
 
-Distributed tracing is currently only supported for Go services, while other programming language 
-support remains on our road-map. With distributed tracing we will be able to correlate
+Distributed tracing is only supported for Go services, while other programming language
+support remains on the road-map. Distributed tracing can correlate
 requests from multiple services (web, database, messaging...). One complexity of
 distributed tracing is the injection of client-side headers and matching them to the context of
-the server-side requests. We are making progressive advances towards this goal with each
-new pull request.
+the server-side requests. Each release is making progressive advances towards this goal.
 
 Another shorter term goal is to reduce the surface of the code that requires administrative
 privileges, executing a small eBPF loader with `root` or `CAP_SYS_ADMIN` privileges,

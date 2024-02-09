@@ -22,11 +22,12 @@ is used to override any open_port settings inside the config.yaml file:
 ```
 $ BEYLA_OPEN_PORT=8080 beyla -config /path/to/config.yaml
 ```
+
 or
+
 ```
 $ BEYLA_OPEN_PORT=8080 BEYLA_CONFIG_PATH=/path/to/config.yaml beyla
 ```
-
 
 At the end of this document, there is an [example of YAML configuration file](#yaml-file-example).
 
@@ -362,7 +363,7 @@ If other selectors are specified in the same `services` entry, the processes to 
 selected need to match all the selector properties.
 
 | YAML                   | Env var | Type                        | Default |
-|------------------------| ------- | --------------------------- | ------- |
+| ---------------------- | ------- | --------------------------- | ------- |
 | `k8s_statefulset_name` | --      | string (regular expression) | (unset) |
 
 This selector property will limit the instrumentation to the applications
@@ -373,7 +374,7 @@ If other selectors are specified in the same `services` entry, the processes to 
 selected need to match all the selector properties.
 
 | YAML                 | Env var | Type                        | Default |
-|----------------------| ------- | --------------------------- | ------- |
+| -------------------- | ------- | --------------------------- | ------- |
 | `k8s_daemonset_name` | --      | string (regular expression) | (unset) |
 
 This selector property will limit the instrumentation to the applications
@@ -384,17 +385,16 @@ If other selectors are specified in the same `services` entry, the processes to 
 selected need to match all the selector properties.
 
 | YAML             | Env var | Type                        | Default |
-|------------------| ------- | --------------------------- | ------- |
+| ---------------- | ------- | --------------------------- | ------- |
 | `k8s_owner_name` | --      | string (regular expression) | (unset) |
 
 This selector property will limit the instrumentation to the applications
-running in the Pods having owned by either a `Deployment`, `ReplicaSet`, 
+running in the Pods having owned by either a `Deployment`, `ReplicaSet`,
 `DaemonSet` or `StatefulSet` with a name matching the provided regular
 expression.
 
 If other selectors are specified in the same `services` entry, the processes to be
 selected need to match all the selector properties.
-
 
 ## EBPF tracer
 

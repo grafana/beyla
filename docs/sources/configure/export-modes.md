@@ -201,8 +201,9 @@ For example `instrument-config.yml`:
 ```
 beyla -config instrument-config.yml
 ```
+
 or
+
 ```
 BEYLA_CONFIG_PATH=instrument-config.yml beyla
 ```
-

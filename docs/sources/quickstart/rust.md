@@ -47,7 +47,7 @@ To run Beyla, first set the following environment variables:
 - The `OTEL_EXPORTER_OTLP_PROTOCOL`, `OTEL_EXPORTER_OTLP_ENDPOINT` and `OTEL_EXPORTER_OTLP_HEADERS` variables copied from the previous step.
 - `BEYLA_OPEN_PORT`: the port the instrumented service is using (for example, `80` or `443`). If using the example service in the first section of this guide, set this variable to `8080`.
 
-To facilitate local testing, set the `BEYLA_PRINT_TRACES=true` environment variable. This will cause Beyla to print traces to standard output.
+To facilitate local testing, set the `BEYLA_PRINT_TRACES=true` environment variable. This causes Beyla to print traces to the standard output.
 
 Notice: Beyla requires administrative (sudo) privileges, or at least it needs to be granted the `CAP_SYS_ADMIN` capability.
 

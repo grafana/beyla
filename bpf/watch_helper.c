@@ -21,15 +21,18 @@ struct {
     __uint(max_entries, 1 << 24);
 } watch_events SEC(".maps");
 
-SEC("kprobe/security_socket_bind")
-int kprobe_security_socket_bind(struct pt_regs *ctx) {
-    struct sockaddr *addr = (struct sockaddr *)PT_REGS_PARM2(ctx);
+SEC("kprobe/sys_bind")
+int kprobe_sys_bind(struct pt_regs *ctx) {    
+    // unwrap the args because it's a sys call
+    struct pt_regs * __ctx = (struct pt_regs *)PT_REGS_PARM1(ctx);
+    void *addr;
+    bpf_probe_read(&addr, sizeof(void *), (void *)&PT_REGS_PARM2(__ctx));
 
     if (!addr) {
         return 0;
     }
 
-    u16 port = get_sockaddr_port(addr);
+    u16 port = get_sockaddr_port_user(addr);
 
     if (!port) {
         return 0;

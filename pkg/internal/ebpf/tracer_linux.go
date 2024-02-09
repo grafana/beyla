@@ -124,6 +124,12 @@ func (pt *ProcessTracer) tracers() ([]Tracer, error) {
 			return nil, err
 		}
 
+		//Tracepoints support
+		if err := i.tracepoints(p); err != nil {
+			printVerifierErrorInfo(err)
+			return nil, err
+		}
+
 		//Sock filters support
 		if err := i.sockfilters(p); err != nil {
 			printVerifierErrorInfo(err)
@@ -161,6 +167,11 @@ func RunUtilityTracer(p UtilityTracer, pinPath string) error {
 	}
 
 	if err := i.kprobes(p); err != nil {
+		printVerifierErrorInfo(err)
+		return err
+	}
+
+	if err := i.tracepoints(p); err != nil {
 		printVerifierErrorInfo(err)
 		return err
 	}

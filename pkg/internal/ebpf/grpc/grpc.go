@@ -186,6 +186,10 @@ func (p *Tracer) UProbes() map[string]map[string]ebpfcommon.FunctionPrograms {
 	return nil
 }
 
+func (p *Tracer) Tracepoints() map[string]ebpfcommon.FunctionPrograms {
+	return nil
+}
+
 func (p *Tracer) SocketFilters() []*ebpf.Program {
 	return nil
 }

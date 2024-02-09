@@ -34,7 +34,9 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/e2e-framework/klient/k8s"
 	"sigs.k8s.io/e2e-framework/klient/k8s/resources"
 )
@@ -346,4 +348,8 @@ func CreateIgnoreAlreadyExists(r *resources.Resources, opts ...resources.CreateO
 // DeleteIgnoreNotFound returns a HandlerFunc that will delete objects if they do not already exist
 func DeleteIgnoreNotFound(r *resources.Resources, opts ...resources.DeleteOption) HandlerFunc {
 	return IgnoreErrorHandler(DeleteHandler(r, opts...), apierrors.IsNotFound)
+}
+
+func init() {
+	log.SetLogger(klog.NewKlogr())
 }

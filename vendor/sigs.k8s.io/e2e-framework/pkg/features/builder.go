@@ -29,7 +29,11 @@ type FeatureBuilder struct {
 }
 
 func New(name string) *FeatureBuilder {
-	return &FeatureBuilder{feat: newDefaultFeature(name)}
+	return &FeatureBuilder{feat: newDefaultFeature(name, "")}
+}
+
+func NewWithDescription(name, description string) *FeatureBuilder {
+	return &FeatureBuilder{feat: newDefaultFeature(name, description)}
 }
 
 // WithLabel adds a test label key/value pair
@@ -41,6 +45,11 @@ func (b *FeatureBuilder) WithLabel(key, value string) *FeatureBuilder {
 // WithStep adds a new step that will be applied prior to feature test.
 func (b *FeatureBuilder) WithStep(name string, level Level, fn Func) *FeatureBuilder {
 	b.feat.steps = append(b.feat.steps, newStep(name, level, fn))
+	return b
+}
+
+func (b *FeatureBuilder) WithStepDescription(name, description string, level Level, fn Func) *FeatureBuilder {
+	b.feat.steps = append(b.feat.steps, newStepWithDescription(name, description, level, fn))
 	return b
 }
 
@@ -69,6 +78,10 @@ func (b *FeatureBuilder) WithTeardown(name string, fn Func) *FeatureBuilder {
 // Assess adds an assessment step to the feature test.
 func (b *FeatureBuilder) Assess(desc string, fn Func) *FeatureBuilder {
 	return b.WithStep(desc, types.LevelAssess, fn)
+}
+
+func (b *FeatureBuilder) AssessWithDescription(name, description string, fn Func) *FeatureBuilder {
+	return b.WithStepDescription(name, description, types.LevelAssess, fn)
 }
 
 // Feature returns a feature configured by builder.

@@ -19,6 +19,7 @@ import (
 var debugData *dwarf.Data
 var grpcElf *dwarf.Data
 var smallELF *elf.File
+var smallGRPCElf *elf.File
 
 func compileELF(source string, extraArgs ...string) *elf.File {
 	tempDir := os.TempDir()
@@ -49,8 +50,12 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		panic(err)
 	}
-	grpcElf, _ = compileELF(baseDir + "/test/cmd/grpc/server/server.go").DWARF()
 	smallELF = compileELF(baseDir+"/test/cmd/pingserver/server.go", "-ldflags", "-s -w")
+	grpcElf, err = compileELF(baseDir + "/test/cmd/grpc/server/server.go").DWARF()
+	if err != nil {
+		panic(err)
+	}
+	smallGRPCElf = compileELF(baseDir+"/test/cmd/grpc/server/server.go", "-ldflags", "-s -w")
 	m.Run()
 }
 
@@ -84,8 +89,9 @@ func TestGrpcOffsetsFromDwarf(t *testing.T) {
 		"grpc_stream_method_ptr_pos": uint64(80),
 		"grpc_status_s_pos":          uint64(0),
 		"grpc_status_code_ptr_pos":   uint64(40),
-		"grpc_st_remoteaddr_ptr_pos": uint64(72),
-		"grpc_st_localaddr_ptr_pos":  uint64(88),
+		"grpc_st_peer_ptr_pos":       uint64(56),
+		"grpc_peer_addr_pos":         uint64(0),
+		"grpc_peer_localaddr_pos":    uint64(16),
 		"grpc_client_target_ptr_pos": uint64(24),
 	}, offsets)
 }
@@ -101,6 +107,21 @@ func TestGoOffsetsWithoutDwarf(t *testing.T) {
 		"host_ptr_pos":       uint64(128),
 		"method_ptr_pos":     uint64(0),
 		"status_ptr_pos":     uint64(120),
+	}, offsets)
+}
+
+func TestGrpcOffsetsWithoutDwarf(t *testing.T) {
+	offsets, _ := structMemberOffsets(smallGRPCElf)
+	// this test might fail if a future Go gRPC version updates the internal structure of the used structs.
+	mustMatch(t, FieldOffsets{
+		"grpc_stream_st_ptr_pos":     uint64(8),
+		"grpc_stream_method_ptr_pos": uint64(80),
+		"grpc_status_s_pos":          uint64(0),
+		"grpc_status_code_ptr_pos":   uint64(40),
+		"grpc_st_peer_ptr_pos":       uint64(56),
+		"grpc_peer_addr_pos":         uint64(0),
+		"grpc_peer_localaddr_pos":    uint64(16),
+		"grpc_client_target_ptr_pos": uint64(24),
 	}, offsets)
 }
 

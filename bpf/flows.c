@@ -16,12 +16,11 @@
 // This implementation is a derivation of the code in
 // https://github.com/netobserv/netobserv-ebpf-agent/tree/release-1.4
 
-#include <vmlinux.h>
-#include <string.h>
+#include "vmlinux.h"
 #include <stdbool.h>
 
-#include <bpf_helpers.h>
-#include <bpf_endian.h>
+#include "bpf_helpers.h"
+#include "bpf_endian.h"
 
 #include "flow.h"
 
@@ -178,8 +177,8 @@ static inline int fill_ethhdr(struct ethhdr *eth, void *data_end, flow_id *id, u
     } else {
         // TODO : Need to implement other specific ethertypes if needed
         // For now other parts of flow id remain zero
-        memset(&(id->src_ip), 0, sizeof(struct in6_addr));
-        memset(&(id->dst_ip), 0, sizeof(struct in6_addr));
+        __builtin_memset(&(id->src_ip), 0, sizeof(struct in6_addr));
+        __builtin_memset(&(id->dst_ip), 0, sizeof(struct in6_addr));
         id->transport_protocol = 0;
         id->src_port = 0;
         id->dst_port = 0;

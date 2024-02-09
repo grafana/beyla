@@ -21,11 +21,10 @@ package env
 import (
 	"context"
 	"fmt"
-	"math/rand"
 	"regexp"
+	"runtime/debug"
 	"sync"
 	"testing"
-	"time"
 
 	"k8s.io/klog/v2"
 
@@ -45,7 +44,6 @@ type testEnv struct {
 	ctx     context.Context
 	cfg     *envconf.Config
 	actions []action
-	rnd     rand.Source
 }
 
 // New creates a test environment with no config attached.
@@ -106,7 +104,6 @@ func newTestEnv() *testEnv {
 	return &testEnv{
 		ctx: context.Background(),
 		cfg: envconf.New(),
-		rnd: rand.NewSource(time.Now().UnixNano()),
 	}
 }
 
@@ -191,38 +188,44 @@ func (e *testEnv) panicOnMissingContext() {
 
 // processTestActions is used to run a series of test action that were configured as
 // BeforeEachTest or AfterEachTest
-func (e *testEnv) processTestActions(t *testing.T, actions []action) {
+func (e *testEnv) processTestActions(ctx context.Context, t *testing.T, actions []action) context.Context {
 	var err error
+	out := ctx
 	for _, action := range actions {
-		if e.ctx, err = action.runWithT(e.ctx, e.cfg, t); err != nil {
+		out, err = action.runWithT(ctx, e.cfg, t)
+		if err != nil {
 			t.Fatalf("%s failure: %s", action.role, err)
 		}
 	}
+	return out
 }
 
 // processTestFeature is used to trigger the execution of the actual feature. This function wraps the entire
 // workflow of orchestrating the feature execution be running the action configured by BeforeEachFeature /
 // AfterEachFeature.
-func (e *testEnv) processTestFeature(t *testing.T, featureName string, feature types.Feature) {
+func (e *testEnv) processTestFeature(ctx context.Context, t *testing.T, featureName string, feature types.Feature) context.Context {
 	// execute beforeEachFeature actions
-	e.processFeatureActions(t, feature, e.getBeforeFeatureActions())
+	ctx = e.processFeatureActions(ctx, t, feature, e.getBeforeFeatureActions())
 
 	// execute feature test
-	e.ctx = e.execFeature(e.ctx, t, featureName, feature)
+	ctx = e.execFeature(ctx, t, featureName, feature)
 
 	// execute afterEachFeature actions
-	e.processFeatureActions(t, feature, e.getAfterFeatureActions())
+	return e.processFeatureActions(ctx, t, feature, e.getAfterFeatureActions())
 }
 
 // processFeatureActions is used to run a series of feature action that were configured as
 // BeforeEachFeature or AfterEachFeature
-func (e *testEnv) processFeatureActions(t *testing.T, feature types.Feature, actions []action) {
+func (e *testEnv) processFeatureActions(ctx context.Context, t *testing.T, feature types.Feature, actions []action) context.Context {
 	var err error
+	out := ctx
 	for _, action := range actions {
-		if e.ctx, err = action.runWithFeature(e.ctx, e.cfg, t, deepCopyFeature(feature)); err != nil {
+		out, err = action.runWithFeature(out, e.cfg, t, deepCopyFeature(feature))
+		if err != nil {
 			t.Fatalf("%s failure: %s", action.role, err)
 		}
 	}
+	return out
 }
 
 // processTests is a wrapper function that can be invoked by either Test or TestInParallel methods.
@@ -231,25 +234,27 @@ func (e *testEnv) processFeatureActions(t *testing.T, feature types.Feature, act
 //
 // In case if the parallel run of test features are enabled, this function will invoke the processTestFeature
 // as a go-routine to get them to run in parallel
-func (e *testEnv) processTests(t *testing.T, enableParallelRun bool, testFeatures ...types.Feature) {
+func (e *testEnv) processTests(ctx context.Context, t *testing.T, enableParallelRun bool, testFeatures ...types.Feature) context.Context {
 	if e.cfg.DryRunMode() {
 		klog.V(2).Info("e2e-framework is being run in dry-run mode. This will skip all the before/after step functions configured around your test assessments and features")
 	}
-	e.panicOnMissingContext()
+	if ctx == nil {
+		panic("nil context") // this should never happen
+	}
 	if len(testFeatures) == 0 {
 		t.Log("No test testFeatures provided, skipping test")
-		return
+		return ctx
 	}
 	beforeTestActions := e.getBeforeTestActions()
 	afterTestActions := e.getAfterTestActions()
-
-	e.processTestActions(t, beforeTestActions)
 
 	runInParallel := e.cfg.ParallelTestEnabled() && enableParallelRun
 
 	if runInParallel {
 		klog.V(4).Info("Running test features in parallel")
 	}
+
+	ctx = e.processTestActions(ctx, t, beforeTestActions)
 
 	var wg sync.WaitGroup
 	for i, feature := range testFeatures {
@@ -260,12 +265,12 @@ func (e *testEnv) processTests(t *testing.T, enableParallelRun bool, testFeature
 		}
 		if runInParallel {
 			wg.Add(1)
-			go func(w *sync.WaitGroup, featName string, f types.Feature) {
+			go func(ctx context.Context, w *sync.WaitGroup, featName string, f types.Feature) {
 				defer w.Done()
-				e.processTestFeature(t, featName, f)
-			}(&wg, featName, featureCopy)
+				_ = e.processTestFeature(ctx, t, featName, f)
+			}(ctx, &wg, featName, featureCopy)
 		} else {
-			e.processTestFeature(t, featName, featureCopy)
+			ctx = e.processTestFeature(ctx, t, featName, featureCopy)
 			// In case if the feature under test has failed, skip reset of the features
 			// that are part of the same test
 			if e.cfg.FailFast() && t.Failed() {
@@ -276,7 +281,7 @@ func (e *testEnv) processTests(t *testing.T, enableParallelRun bool, testFeature
 	if runInParallel {
 		wg.Wait()
 	}
-	e.processTestActions(t, afterTestActions)
+	return e.processTestActions(ctx, t, afterTestActions)
 }
 
 // TestInParallel executes a series a feature tests from within a
@@ -297,8 +302,8 @@ func (e *testEnv) processTests(t *testing.T, enableParallelRun bool, testFeature
 // set of features being passed to this call while the feature themselves
 // are executed in parallel to avoid duplication of action that might happen
 // in BeforeTest and AfterTest actions
-func (e *testEnv) TestInParallel(t *testing.T, testFeatures ...types.Feature) {
-	e.processTests(t, true, testFeatures...)
+func (e *testEnv) TestInParallel(t *testing.T, testFeatures ...types.Feature) context.Context {
+	return e.processTests(e.ctx, t, true, testFeatures...)
 }
 
 // Test executes a feature test from within a TestXXX function.
@@ -313,8 +318,8 @@ func (e *testEnv) TestInParallel(t *testing.T, testFeatures ...types.Feature) {
 //
 // BeforeTest and AfterTest operations are executed before and after
 // the feature is tested respectively.
-func (e *testEnv) Test(t *testing.T, testFeatures ...types.Feature) {
-	e.processTests(t, false, testFeatures...)
+func (e *testEnv) Test(t *testing.T, testFeatures ...types.Feature) context.Context {
+	return e.processTests(e.ctx, t, false, testFeatures...)
 }
 
 // Finish registers funcs that are executed at the end of the
@@ -334,9 +339,8 @@ func (e *testEnv) Finish(funcs ...Func) types.Environment {
 // starting the tests and run all Env.Finish operations after
 // before completing the suite.
 func (e *testEnv) Run(m *testing.M) int {
-	if e.ctx == nil {
-		panic("context not set") // something is terribly wrong.
-	}
+	e.panicOnMissingContext()
+	ctx := e.ctx
 
 	setups := e.getSetupActions()
 	// fail fast on setup, upon err exit
@@ -350,7 +354,7 @@ func (e *testEnv) Run(m *testing.M) int {
 			if e.cfg.DisableGracefulTeardown() {
 				panic(rErr)
 			}
-			klog.Error("Recovering from panic and running finish actions", rErr)
+			klog.Errorf("Recovering from panic and running finish actions: %s, stack: %s", rErr, string(debug.Stack()))
 		}
 
 		finishes := e.getFinishActions()
@@ -358,18 +362,20 @@ func (e *testEnv) Run(m *testing.M) int {
 		// Upon error, log and continue.
 		for _, fin := range finishes {
 			// context passed down to each finish step
-			if e.ctx, err = fin.run(e.ctx, e.cfg); err != nil {
+			if ctx, err = fin.run(ctx, e.cfg); err != nil {
 				klog.V(2).ErrorS(err, "Cleanup failed", "action", fin.role)
 			}
 		}
+		e.ctx = ctx
 	}()
 
 	for _, setup := range setups {
 		// context passed down to each setup
-		if e.ctx, err = setup.run(e.ctx, e.cfg); err != nil {
+		if ctx, err = setup.run(ctx, e.cfg); err != nil {
 			klog.Fatalf("%s failure: %s", setup.role, err)
 		}
 	}
+	e.ctx = ctx
 
 	// Execute the test suite
 	return m.Run()
@@ -426,15 +432,19 @@ func (e *testEnv) executeSteps(ctx context.Context, t *testing.T, steps []types.
 
 func (e *testEnv) execFeature(ctx context.Context, t *testing.T, featName string, f types.Feature) context.Context {
 	// feature-level subtest
-	t.Run(featName, func(t *testing.T) {
+	t.Run(featName, func(newT *testing.T) {
 		skipped, message := e.requireFeatureProcessing(f)
 		if skipped {
-			t.Skipf(message)
+			newT.Skipf(message)
+		}
+
+		if fDescription, ok := f.(types.DescribableFeature); ok && fDescription.Description() != "" {
+			t.Logf("Processing Feature: %s", fDescription.Description())
 		}
 
 		// setups run at feature-level
 		setups := features.GetStepsByLevel(f.Steps(), types.LevelSetup)
-		ctx = e.executeSteps(ctx, t, setups)
+		ctx = e.executeSteps(ctx, newT, setups)
 
 		// assessments run as feature/assessment sub level
 		assessments := features.GetStepsByLevel(f.Steps(), types.LevelAssess)
@@ -442,20 +452,23 @@ func (e *testEnv) execFeature(ctx context.Context, t *testing.T, featName string
 		failed := false
 		for i, assess := range assessments {
 			assessName := assess.Name()
+			if dAssess, ok := assess.(types.DescribableStep); ok && dAssess.Description() != "" {
+				t.Logf("Processing Assessment: %s", dAssess.Description())
+			}
 			if assessName == "" {
 				assessName = fmt.Sprintf("Assessment-%d", i+1)
 			}
-			t.Run(assessName, func(t *testing.T) {
+			newT.Run(assessName, func(internalT *testing.T) {
 				skipped, message := e.requireAssessmentProcessing(assess, i+1)
 				if skipped {
-					t.Skipf(message)
+					internalT.Skipf(message)
 				}
-				ctx = e.executeSteps(ctx, t, []types.Step{assess})
+				ctx = e.executeSteps(ctx, internalT, []types.Step{assess})
 			})
 			// Check if the Test assessment under question performed a `t.Fail()` or `t.Failed()` invocation.
 			// We need to track that and stop the next set of assessment in the feature under test from getting
 			// executed
-			if e.cfg.FailFast() && t.Failed() {
+			if e.cfg.FailFast() && newT.Failed() {
 				failed = true
 				break
 			}
@@ -465,12 +478,12 @@ func (e *testEnv) execFeature(ctx context.Context, t *testing.T, featName string
 		// invoked to make sure we leave the traces of the failed test behind to enable better debugging for the
 		// test developers
 		if e.cfg.FailFast() && failed {
-			t.FailNow()
+			newT.FailNow()
 		}
 
 		// teardowns run at feature-level
 		teardowns := features.GetStepsByLevel(f.Steps(), types.LevelTeardown)
-		ctx = e.executeSteps(ctx, t, teardowns)
+		ctx = e.executeSteps(ctx, newT, teardowns)
 	})
 
 	return ctx
@@ -513,14 +526,26 @@ func (e *testEnv) requireProcessing(kind, testName string, requiredRegexp, skipR
 	}
 
 	if labels != nil {
+		// only run a feature if all its label keys and values match those specified
+		// with --labels
+		matches := 0
 		for key, vals := range e.cfg.Labels() {
 			for _, v := range vals {
-				if !labels.Contains(key, v) {
-					skip = true
-					message = fmt.Sprintf(`Skipping feature "%s": unmatched label "%s=%s"`, testName, key, v)
-					return skip, message
+				if labels.Contains(key, v) {
+					matches++
+					break // continue with next key
 				}
 			}
+		}
+
+		if len(e.cfg.Labels()) != matches {
+			skip = true
+			var kvs []string
+			for k, v := range labels {
+				kvs = append(kvs, fmt.Sprintf("%s=%s", k, v)) // prettify output
+			}
+			message = fmt.Sprintf(`Skipping feature "%s": unmatched labels "%s"`, testName, kvs)
+			return skip, message
 		}
 
 		// skip running a feature if labels matches with --skip-labels

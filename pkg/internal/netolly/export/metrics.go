@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/mariomac/pipes/pkg/node"
 	otel2 "go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -25,15 +26,23 @@ type MetricsConfig struct {
 }
 
 func mlog() *slog.Logger {
-	return slog.With("component", "otel.MetricsReporter")
+	return slog.With("component", "flows.MetricsReporter")
 }
 
-func newResource() (*resource.Resource, error) {
-	return resource.Merge(resource.Default(),
-		resource.NewWithAttributes("https://opentelemetry.io/schemas/1.21.0",
-			semconv.ServiceName("beyla-network"),
-			semconv.ServiceVersion("0.1.0"),
-		))
+func newResource() *resource.Resource {
+	attrs := []attribute.KeyValue{
+		semconv.ServiceName("beyla-network-flows"),
+		semconv.ServiceInstanceID(uuid.New().String()),
+		// SpanMetrics requires an extra attribute besides service name
+		// to generate the traces_target_info metric,
+		// so the service is visible in the ServicesList
+		// This attribute also allows that App O11y plugin shows this app as a Go application.
+		semconv.TelemetrySDKLanguageKey.String(semconv.TelemetrySDKLanguageGo.Value.AsString()),
+		// We set the SDK name as Beyla, so we can distinguish beyla generated metrics from other SDKs
+		semconv.TelemetrySDKNameKey.String("beyla"),
+	}
+
+	return resource.NewWithAttributes(semconv.SchemaURL, attrs...)
 }
 
 func newMeterProvider(res *resource.Resource, exporter *metric.Exporter) (*metric.MeterProvider, error) {
@@ -71,12 +80,14 @@ func direction(m *ebpf.Record) string {
 }
 
 func attributes(m *ebpf.Record) []attribute.KeyValue {
-	res := make([]attribute.KeyValue,0, 8+len(m.Metadata))
+	res := make([]attribute.KeyValue, 0, 10+len(m.Metadata))
 
 	srcNS, srcName := sourceAttrs(m)
 	dstNS, dstName := destinationAttrs(m)
 
 	res = append(res, attribute.String("flow.direction", direction(m)))
+	res = append(res, attribute.String("src.address", m.Id.SrcIP().IP().String()))
+	res = append(res, attribute.String("server.address", m.Id.DstIP().IP().String()))
 	res = append(res, attribute.Int("server.port", int(m.Id.DstPort)))
 	res = append(res, attribute.String("src.name", srcName))
 	res = append(res, attribute.String("src.namespace", srcNS))
@@ -94,7 +105,6 @@ func attributes(m *ebpf.Record) []attribute.KeyValue {
 	bytes, _ := json.Marshal(res)
 	fmt.Println(string(bytes))
 
-
 	return res
 }
 
@@ -107,13 +117,7 @@ func MetricsExporterProvider(cfg MetricsConfig) (node.TerminalFunc[[]*ebpf.Recor
 		return nil, err
 	}
 
-	resource, err := newResource()
-	if err != nil {
-		log.Error("", "error", err)
-		return nil, err
-	}
-
-	provider, err := newMeterProvider(resource, &exporter)
+	provider, err := newMeterProvider(newResource(), &exporter)
 
 	if err != nil {
 		log.Error("", "error", err)

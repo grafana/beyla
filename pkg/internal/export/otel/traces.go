@@ -455,7 +455,7 @@ func (r *TracesReporter) reportTraces(input <-chan []request.Span) {
 			if span.ServiceID.UID != lastSvcUID || reporter == nil {
 				lm, err := r.reporters.For(span.ServiceID)
 				if err != nil {
-					mlog().Error("unexpected error creating OTEL resource. Ignoring trace",
+					tlog().Error("unexpected error creating OTEL resource. Ignoring trace",
 						err, "service", span.ServiceID)
 					continue
 				}

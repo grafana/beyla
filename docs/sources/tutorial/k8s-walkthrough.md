@@ -333,7 +333,10 @@ Also notice:
   processes in the node. Then the Beyla Pod requires to run with `hostPID: true`.
 - The Beyla container needs to run with `privileged: true`, as it requires
   to perform privileged actions such as loading BPF programs and creating
-  BPF maps.
+  BPF maps. For running Beyla as `unprivileged` container, i.e. without the
+  `privileged: true` option, please visit our 
+  [Deploy Beyla unprivileged]({{< relref "../setup/kubernetes.md#deploy-beyla-unprivileged" >}})
+  guide.
 
 ### 4. Test your instrumented services and see the results in Grafana
 

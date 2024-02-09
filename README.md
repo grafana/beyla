@@ -10,10 +10,18 @@ Open source zero-code automatic instrumentation with eBPF and OpenTelemetry.
 
 ## Introduction
 
-Beyla is a vendor agnostic, eBPF-based, OpenTelemetry application auto-instrumentation tool, which lets you easily get started with Application Observability. 
+Beyla is a vendor agnostic, eBPF-based, OpenTelemetry/Prometheus application auto-instrumentation tool, which lets you easily get started with Application Observability. 
 eBPF is used to automatically inspect application executables and the OS networking layer, allowing us to capture essential application observability events
 for HTTP/S and gRPC services. From these captured eBPF events, we produce OpenTelemetry web transaction trace spans and Rate-Errors-Duration (RED) metrics. 
 As with most eBPF tools, all data capture and instrumentation occurs without any modifications to your application code or configuration.
+
+## Community
+
+To engage with the Beyla community and to chat with us on our community Slack channel, 
+please invite yourself to the Grafana Slack, visit https://slack.grafana.com/ and join the #beyla channel.
+
+We also run a monthly Beyla community call, on the second Wednesday of the month at **4pm UTC**. You can
+find all of the details about our community call on the [Grafana Community Calendar](https://calendar.google.com/calendar/u/0/embed?src=grafana.com_n57lluqpn4h4edroeje6199o00@group.calendar.google.com).
 
 ## Getting Started
 
@@ -126,11 +134,6 @@ make generate
 ```
 
 Tested in Fedora 35, 38 and Red Hat Enterprise Linux 8.
-
-## Community
-
-To engage with the Beyla community and to chat with us on our community Slack channel, 
-please invite yourself to the Grafana Slack, visit https://slack.grafana.com/ and join the #beyla channel.
 
 ## Credits
 

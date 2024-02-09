@@ -241,7 +241,7 @@ spec:
 
 ### Deploy Beyla Unprivileged
 
-In all of the examples so far we've used `privileged:true` in the Beyla deployment
+In all of the examples so far, `privileged:true` was used in the Beyla deployment
 `securityContext` section. While this works in all circumstances, there are ways
 to deploy Beyla in Kubernetes with reduced privileges, if your security configuration
 requires you to do so. Whether it is possible to run Beyla without `privileged:true`,
@@ -254,9 +254,9 @@ The following guide is based on tests performed mainly by running `containerd` w
 To run Beyla unprivileged, you need to replace the `privileged:true` setting with a
 set of Linux [capabilities](https://www.man7.org/linux/man-pages/man7/capabilities.7.html).
 The two main capabilities which Beyla needs are `CAP_SYS_ADMIN` and `CAP_SYS_PTRACE`. On
-kernel versions older than **5.11**, `CAP_SYS_RESOURCE` is also required. 
+kernel versions before **5.11**, `CAP_SYS_RESOURCE` is also required. 
 
-- `CAP_SYS_ADMIN` is required to install most of our eBPF probes, because Beyla tracks system calls.
+- `CAP_SYS_ADMIN` is required to install most of Beyla's eBPF probes, because Beyla tracks system calls.
 - `CAP_SYS_PTRACE` is required so that Beyla is able to look into the processes namespaces and inspect the executables.
   Beyla doesn't use `ptrace`, but some of the operations it does require this capability.
 - `CAP_SYS_RESOURCE` is required only on kernels **< 5.11** so that Beyla can increase the amount of locked memory available.

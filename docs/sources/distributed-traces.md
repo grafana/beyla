@@ -15,7 +15,7 @@ aliases:
 
 ## Introduction
 
-Beyla currently supports distributed traces for Go applications, both HTTP/S and gRPC, with some limitations and version restrictions. 
+Beyla supports distributed traces for Go applications, both HTTP/S and gRPC, with some limitations and version restrictions.
 
 Go distributed tracing is implemented through the propagation of the [W3C `traceparent`](https://www.w3.org/TR/trace-context/) header value. `traceparent` context propagation is automatic and it doesn't require any action or configuration.
 

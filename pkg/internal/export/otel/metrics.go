@@ -59,7 +59,8 @@ type MetricsConfig struct {
 	ReportTarget   bool `yaml:"report_target" env:"BEYLA_METRICS_REPORT_TARGET"`
 	ReportPeerInfo bool `yaml:"report_peer" env:"BEYLA_METRICS_REPORT_PEER"`
 
-	Buckets Buckets `yaml:"buckets"`
+	Buckets                  Buckets `yaml:"buckets"`
+	UseExponentialHistograms bool    `yaml:"use_exponential_histograms" env:"BEYLA_OTEL_USE_EXPONENTIAL_HISTOGRAMS"`
 
 	ReportersCacheLen int `yaml:"reporters_cache_len" env:"BEYLA_METRICS_REPORT_CACHE_LEN"`
 
@@ -178,13 +179,13 @@ func (mr *MetricsReporter) newMetricSet(service svc.ID) (*Metrics, error) {
 			metric.WithResource(resources),
 			metric.WithReader(metric.NewPeriodicReader(mr.exporter,
 				metric.WithInterval(mr.cfg.Interval))),
-			metric.WithView(otelHistogramBuckets(HTTPServerDuration, mr.cfg.Buckets.DurationHistogram)),
-			metric.WithView(otelHistogramBuckets(HTTPClientDuration, mr.cfg.Buckets.DurationHistogram)),
-			metric.WithView(otelHistogramBuckets(RPCServerDuration, mr.cfg.Buckets.DurationHistogram)),
-			metric.WithView(otelHistogramBuckets(RPCClientDuration, mr.cfg.Buckets.DurationHistogram)),
-			metric.WithView(otelHistogramBuckets(SQLClientDuration, mr.cfg.Buckets.DurationHistogram)),
-			metric.WithView(otelHistogramBuckets(HTTPServerRequestSize, mr.cfg.Buckets.RequestSizeHistogram)),
-			metric.WithView(otelHistogramBuckets(HTTPClientRequestSize, mr.cfg.Buckets.RequestSizeHistogram)),
+			metric.WithView(otelHistogramConfig(HTTPServerDuration, mr.cfg.Buckets.DurationHistogram, mr.cfg.UseExponentialHistograms)),
+			metric.WithView(otelHistogramConfig(HTTPClientDuration, mr.cfg.Buckets.DurationHistogram, mr.cfg.UseExponentialHistograms)),
+			metric.WithView(otelHistogramConfig(RPCServerDuration, mr.cfg.Buckets.DurationHistogram, mr.cfg.UseExponentialHistograms)),
+			metric.WithView(otelHistogramConfig(RPCClientDuration, mr.cfg.Buckets.DurationHistogram, mr.cfg.UseExponentialHistograms)),
+			metric.WithView(otelHistogramConfig(SQLClientDuration, mr.cfg.Buckets.DurationHistogram, mr.cfg.UseExponentialHistograms)),
+			metric.WithView(otelHistogramConfig(HTTPServerRequestSize, mr.cfg.Buckets.RequestSizeHistogram, mr.cfg.UseExponentialHistograms)),
+			metric.WithView(otelHistogramConfig(HTTPClientRequestSize, mr.cfg.Buckets.RequestSizeHistogram, mr.cfg.UseExponentialHistograms)),
 		),
 	}
 	// time units for HTTP and GRPC durations are in seconds, according to the OTEL specification:
@@ -288,7 +289,21 @@ func instrumentMetricsExporter(internalMetrics imetrics.Reporter, in metric.Expo
 	}
 }
 
-func otelHistogramBuckets(metricName string, buckets []float64) metric.View {
+func otelHistogramConfig(metricName string, buckets []float64, useExponentialHistogram bool) metric.View {
+	if useExponentialHistogram {
+		return metric.NewView(
+			metric.Instrument{
+				Name:  metricName,
+				Scope: instrumentation.Scope{Name: reporterName},
+			},
+			metric.Stream{
+				Name: metricName,
+				Aggregation: metric.AggregationBase2ExponentialHistogram{
+					MaxScale: 20,
+					MaxSize:  160,
+				},
+			})
+	}
 	return metric.NewView(
 		metric.Instrument{
 			Name:  metricName,
@@ -300,6 +315,7 @@ func otelHistogramBuckets(metricName string, buckets []float64) metric.View {
 				Boundaries: buckets,
 			},
 		})
+
 }
 
 func (mr *MetricsReporter) grpcAttributes(span *request.Span) []attribute.KeyValue {

@@ -69,13 +69,17 @@ func (p *Watcher) AddCloser(c ...io.Closer) {
 
 func (p *Watcher) KProbes() map[string]ebpfcommon.FunctionPrograms {
 	kprobes := map[string]ebpfcommon.FunctionPrograms{
-		"security_socket_bind": {
+		"sys_bind": {
 			Required: true,
-			Start:    p.bpfObjects.KprobeSecuritySocketBind,
+			Start:    p.bpfObjects.KprobeSysBind,
 		},
 	}
 
 	return kprobes
+}
+
+func (p *Watcher) Tracepoints() map[string]ebpfcommon.FunctionPrograms {
+	return nil
 }
 
 func (p *Watcher) Run(ctx context.Context) {

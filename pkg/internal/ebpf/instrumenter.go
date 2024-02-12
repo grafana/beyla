@@ -8,6 +8,7 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"strings"
 	"syscall"
 	"unsafe"
 
@@ -231,6 +232,35 @@ func attachSocketFilter(filter *ebpf.Program) (int, error) {
 	}
 
 	return -1, err
+}
+
+func (i *instrumenter) tracepoints(p KprobesTracer) error {
+	for sfunc, sprobes := range p.Tracepoints() {
+		slog.Debug("going to add syscall", "function", sfunc, "probes", sprobes)
+
+		if err := i.tracepoint(sfunc, sprobes); err != nil {
+			return fmt.Errorf("instrumenting function %q: %w", sfunc, err)
+		}
+		p.AddCloser(i.closables...)
+	}
+
+	return nil
+}
+
+func (i *instrumenter) tracepoint(funcName string, programs ebpfcommon.FunctionPrograms) error {
+	if programs.Start != nil {
+		if !strings.Contains(funcName, "/") {
+			return fmt.Errorf("invalid tracepoint type, must contain / in the name to separate the type and function name")
+		}
+		parts := strings.Split(funcName, "/")
+		kp, err := link.Tracepoint(parts[0], parts[1], programs.Start, nil)
+		if err != nil {
+			return fmt.Errorf("setting syscall: %w", err)
+		}
+		i.closables = append(i.closables, kp)
+	}
+
+	return nil
 }
 
 func isLittleEndian() bool {

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"time"
 
 	"github.com/go-logr/logr"
 	"github.com/hashicorp/golang-lru/v2/simplelru"
@@ -55,12 +54,6 @@ var DefaultBuckets = Buckets{
 
 	RequestSizeHistogram: []float64{0, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192},
 }
-
-// Default values for the histogram configuration
-// From https://grafana.com/docs/mimir/latest/send/native-histograms/#migrate-from-classic-histograms
-var DefaultHistogramBucketFactor = 1.1
-var DefaultHistogramMaxBucketNumber = uint32(100)
-var DefaultHistogramMinResetDuration = 1 * time.Hour
 
 func otelResource(service svc.ID) *resource.Resource {
 	attrs := []attribute.KeyValue{

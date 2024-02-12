@@ -106,13 +106,11 @@ static __always_inline int writeHeaderHelper(struct pt_regs *ctx, u64 req_offset
 
     http_func_invocation_t *invocation =
         bpf_map_lookup_elem(&ongoing_http_server_requests, &goroutine_addr);
-    bpf_map_delete_elem(&ongoing_http_server_requests, &goroutine_addr);
     if (invocation == NULL) {
         void *parent_go = (void *)find_parent_goroutine(goroutine_addr);
         if (parent_go) {
             bpf_dbg_printk("found parent goroutine for header [%llx]", parent_go);
             invocation = bpf_map_lookup_elem(&ongoing_http_server_requests, &parent_go);
-            bpf_map_delete_elem(&ongoing_http_server_requests, &parent_go);
             goroutine_addr = parent_go;
         }
         if (!invocation) {
@@ -124,7 +122,7 @@ static __always_inline int writeHeaderHelper(struct pt_regs *ctx, u64 req_offset
     http_request_trace *trace = bpf_ringbuf_reserve(&events, sizeof(http_request_trace), 0);
     if (!trace) {
         bpf_dbg_printk("can't reserve space in the ringbuffer");
-        return 0;
+        goto done;
     }
     
     task_pid(&trace->pid);
@@ -150,28 +148,28 @@ static __always_inline int writeHeaderHelper(struct pt_regs *ctx, u64 req_offset
     if (!req_ptr) {
         bpf_printk("can't find req inside the response value");
         bpf_ringbuf_discard(trace, 0);
-        return 0;
+        goto done;
     }
 
     // Get method from Request.Method
     if (!read_go_str("method", req_ptr, method_ptr_pos, &trace->method, sizeof(trace->method))) {
         bpf_printk("can't read http Request.Method");
         bpf_ringbuf_discard(trace, 0);
-        return 0;
+        goto done;
     }
 
     // Get the remote peer information from Request.RemoteAddr
     if (!read_go_str("remote_addr", req_ptr, remoteaddr_ptr_pos, &trace->remote_addr, sizeof(trace->remote_addr))) {
         bpf_printk("can't read http Request.RemoteAddr");
         bpf_ringbuf_discard(trace, 0);
-        return 0;
+        goto done;
     }
 
     // Get the host information the remote supplied
     if (!read_go_str("host", req_ptr, host_ptr_pos, &trace->host, sizeof(trace->host))) {
         bpf_printk("can't read http Request.Host");
         bpf_ringbuf_discard(trace, 0);
-        return 0;
+        goto done;
     }
 
     // Get path from Request.URL
@@ -181,7 +179,7 @@ static __always_inline int writeHeaderHelper(struct pt_regs *ctx, u64 req_offset
     if (!url_ptr || !read_go_str("path", url_ptr, path_ptr_pos, &trace->path, sizeof(trace->path))) {
         bpf_printk("can't read http Request.URL.Path");
         bpf_ringbuf_discard(trace, 0);
-        return 0;
+        goto done;
     }
 
     bpf_probe_read(&trace->content_length, sizeof(trace->content_length), (void *)(req_ptr + content_length_ptr_pos));
@@ -193,6 +191,8 @@ static __always_inline int writeHeaderHelper(struct pt_regs *ctx, u64 req_offset
     // submit the completed trace via ringbuffer
     bpf_ringbuf_submit(trace, get_flags());
 
+done:
+    bpf_map_delete_elem(&ongoing_http_server_requests, &goroutine_addr);
     return 0;
 }
 
@@ -261,16 +261,15 @@ int uprobe_roundTripReturn(struct pt_regs *ctx) {
 
     http_func_invocation_t *invocation =
         bpf_map_lookup_elem(&ongoing_http_client_requests, &goroutine_addr);
-    bpf_map_delete_elem(&ongoing_http_client_requests, &goroutine_addr);
     if (invocation == NULL) {
         bpf_dbg_printk("can't read http invocation metadata");
-        return 0;
+        goto done;
     }
 
     http_request_trace *trace = bpf_ringbuf_reserve(&events, sizeof(http_request_trace), 0);
     if (!trace) {
         bpf_dbg_printk("can't reserve space in the ringbuffer");
-        return 0;
+        goto done;
     }
 
     task_pid(&trace->pid);
@@ -289,14 +288,14 @@ int uprobe_roundTripReturn(struct pt_regs *ctx) {
     if (!read_go_str("method", req_ptr, method_ptr_pos, &trace->method, sizeof(trace->method))) {
         bpf_printk("can't read http Request.Method");
         bpf_ringbuf_discard(trace, 0);
-        return 0;
+        goto done;
     }
 
     // Get the host information of the remote
     if (!read_go_str("host", req_ptr, host_ptr_pos, &trace->host, sizeof(trace->host))) {
         bpf_printk("can't read http Request.Host");
         bpf_ringbuf_discard(trace, 0);
-        return 0;
+        goto done;
     }
 
     // Get path from Request.URL
@@ -306,7 +305,7 @@ int uprobe_roundTripReturn(struct pt_regs *ctx) {
     if (!url_ptr || !read_go_str("path", url_ptr, path_ptr_pos, &trace->path, sizeof(trace->path))) {
         bpf_printk("can't read http Request.URL.Path");
         bpf_ringbuf_discard(trace, 0);
-        return 0;
+        goto done;
     }
 
     trace->tp = invocation->tp;
@@ -320,6 +319,8 @@ int uprobe_roundTripReturn(struct pt_regs *ctx) {
     // submit the completed trace via ringbuffer
     bpf_ringbuf_submit(trace, get_flags());
 
+done:
+    bpf_map_delete_elem(&ongoing_http_client_requests, &goroutine_addr);
     return 0;
 }
 

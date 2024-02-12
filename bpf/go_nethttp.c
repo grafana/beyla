@@ -24,9 +24,17 @@
 
 typedef struct http_func_invocation {
     u64 start_monotime_ns;
-    u64 req_ptr;
     tp_info_t tp;
 } http_func_invocation_t;
+
+typedef struct http_client_data {
+    u8  method[METHOD_MAX_LEN];
+    u8  path[PATH_MAX_LEN];
+    u8  host[HOST_LEN];
+    s64 content_length;
+
+    pid_info pid;
+} http_client_data_t;
 
 struct {
     __uint(type, BPF_MAP_TYPE_HASH);
@@ -34,6 +42,13 @@ struct {
     __type(value, http_func_invocation_t);
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
 } ongoing_http_client_requests SEC(".maps");
+
+struct {
+    __uint(type, BPF_MAP_TYPE_HASH);
+    __type(key, void *); // key: pointer to the request goroutine
+    __type(value, http_client_data_t);
+    __uint(max_entries, MAX_CONCURRENT_REQUESTS);
+} ongoing_http_client_requests_data SEC(".maps");
 
 struct {
     __uint(type, BPF_MAP_TYPE_HASH);
@@ -57,7 +72,6 @@ int uprobe_ServeHTTP(struct pt_regs *ctx) {
 
     http_func_invocation_t invocation = {
         .start_monotime_ns = bpf_ktime_get_ns(),
-        .req_ptr = (u64)req,
         .tp = {0}
     };
 
@@ -222,16 +236,42 @@ static __always_inline void roundTripStartHelper(struct pt_regs *ctx) {
 
     http_func_invocation_t invocation = {
         .start_monotime_ns = bpf_ktime_get_ns(),
-        .req_ptr = (u64)req,
         .tp = {0}
     };
 
     __attribute__((__unused__)) u8 existing_tp = client_trace_parent(goroutine_addr, &invocation.tp, (void*)(req + req_header_ptr_pos));
 
+    http_client_data_t trace = {0};
+
+    // Get method from Request.Method
+    if (!read_go_str("method", req, method_ptr_pos, &trace.method, sizeof(trace.method))) {
+        bpf_printk("can't read http Request.Method");
+        return;
+    }
+
+    // Get the host information of the remote
+    if (!read_go_str("host", req, host_ptr_pos, &trace.host, sizeof(trace.host))) {
+        bpf_printk("can't read http Request.Host");
+        return;
+    }
+
+    bpf_probe_read(&trace.content_length, sizeof(trace.content_length), (void *)(req + content_length_ptr_pos));
+
+    // Get path from Request.URL
+    void *url_ptr = 0;
+    bpf_probe_read(&url_ptr, sizeof(url_ptr), (void *)(req + url_ptr_pos));
+
+    if (!url_ptr || !read_go_str("path", url_ptr, path_ptr_pos, &trace.path, sizeof(trace.path))) {
+        bpf_printk("can't read http Request.URL.Path");
+        return;
+    }
+
     // Write event
     if (bpf_map_update_elem(&ongoing_http_client_requests, &goroutine_addr, &invocation, BPF_ANY)) {
         bpf_dbg_printk("can't update http client map element");
     }
+
+    bpf_map_update_elem(&ongoing_http_client_requests_data, &goroutine_addr, &trace, BPF_ANY);
 
 #ifndef NO_HEADER_PROPAGATION
     if (!existing_tp) {
@@ -266,6 +306,12 @@ int uprobe_roundTripReturn(struct pt_regs *ctx) {
         goto done;
     }
 
+    http_client_data_t *data = bpf_map_lookup_elem(&ongoing_http_client_requests_data, &goroutine_addr);
+    if (data == NULL) {
+        bpf_dbg_printk("can't read http client invocation data");
+        goto done;
+    }
+
     http_request_trace *trace = bpf_ringbuf_reserve(&events, sizeof(http_request_trace), 0);
     if (!trace) {
         bpf_dbg_printk("can't reserve space in the ringbuffer");
@@ -278,39 +324,17 @@ int uprobe_roundTripReturn(struct pt_regs *ctx) {
     trace->go_start_monotime_ns = invocation->start_monotime_ns;
     trace->end_monotime_ns = bpf_ktime_get_ns();
 
-    // Read arguments from the original set of registers
+    // Copy the values read on request start
+    __builtin_memcpy(trace->method, data->method, sizeof(trace->method));
+    __builtin_memcpy(trace->host, data->host, sizeof(trace->host));
+    __builtin_memcpy(trace->path, data->path, sizeof(trace->path));
+    trace->content_length = data->content_length;
 
     // Get request/response struct
-    void *req_ptr = (void *)invocation->req_ptr;
+
     void *resp_ptr = (void *)GO_PARAM1(ctx);
 
-    // Get method from Request.Method
-    if (!read_go_str("method", req_ptr, method_ptr_pos, &trace->method, sizeof(trace->method))) {
-        bpf_printk("can't read http Request.Method");
-        bpf_ringbuf_discard(trace, 0);
-        goto done;
-    }
-
-    // Get the host information of the remote
-    if (!read_go_str("host", req_ptr, host_ptr_pos, &trace->host, sizeof(trace->host))) {
-        bpf_printk("can't read http Request.Host");
-        bpf_ringbuf_discard(trace, 0);
-        goto done;
-    }
-
-    // Get path from Request.URL
-    void *url_ptr = 0;
-    bpf_probe_read(&url_ptr, sizeof(url_ptr), (void *)(req_ptr + url_ptr_pos));
-
-    if (!url_ptr || !read_go_str("path", url_ptr, path_ptr_pos, &trace->path, sizeof(trace->path))) {
-        bpf_printk("can't read http Request.URL.Path");
-        bpf_ringbuf_discard(trace, 0);
-        goto done;
-    }
-
     trace->tp = invocation->tp;
-
-    bpf_probe_read(&trace->content_length, sizeof(trace->content_length), (void *)(req_ptr + content_length_ptr_pos));
 
     bpf_probe_read(&trace->status, sizeof(trace->status), (void *)(resp_ptr + status_code_ptr_pos));
 
@@ -321,6 +345,7 @@ int uprobe_roundTripReturn(struct pt_regs *ctx) {
 
 done:
     bpf_map_delete_elem(&ongoing_http_client_requests, &goroutine_addr);
+    bpf_map_delete_elem(&ongoing_http_client_requests_data, &goroutine_addr);
     return 0;
 }
 

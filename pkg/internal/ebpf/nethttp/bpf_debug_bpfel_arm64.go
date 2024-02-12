@@ -24,6 +24,20 @@ type bpf_debugGoroutineMetadata struct {
 	Timestamp uint64
 }
 
+type bpf_debugHttpClientDataT struct {
+	Method        [7]uint8
+	Path          [100]uint8
+	Host          [64]uint8
+	_             [5]byte
+	ContentLength int64
+	Pid           struct {
+		HostPid   uint32
+		UserPid   uint32
+		Namespace uint32
+	}
+	_ [4]byte
+}
+
 type bpf_debugHttpConnectionMetadataT struct {
 	Pid struct {
 		HostPid   uint32
@@ -35,7 +49,6 @@ type bpf_debugHttpConnectionMetadataT struct {
 
 type bpf_debugHttpFuncInvocationT struct {
 	StartMonotimeNs uint64
-	ReqPtr          uint64
 	Tp              bpf_debugTpInfoT
 }
 
@@ -125,17 +138,18 @@ type bpf_debugProgramSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpf_debugMapSpecs struct {
-	Events                       *ebpf.MapSpec `ebpf:"events"`
-	FilteredConnections          *ebpf.MapSpec `ebpf:"filtered_connections"`
-	GoTraceMap                   *ebpf.MapSpec `ebpf:"go_trace_map"`
-	GolangMapbucketStorageMap    *ebpf.MapSpec `ebpf:"golang_mapbucket_storage_map"`
-	OngoingGoroutines            *ebpf.MapSpec `ebpf:"ongoing_goroutines"`
-	OngoingHttpClientRequests    *ebpf.MapSpec `ebpf:"ongoing_http_client_requests"`
-	OngoingHttpServerConnections *ebpf.MapSpec `ebpf:"ongoing_http_server_connections"`
-	OngoingHttpServerRequests    *ebpf.MapSpec `ebpf:"ongoing_http_server_requests"`
-	PidCache                     *ebpf.MapSpec `ebpf:"pid_cache"`
-	TraceMap                     *ebpf.MapSpec `ebpf:"trace_map"`
-	ValidPids                    *ebpf.MapSpec `ebpf:"valid_pids"`
+	Events                        *ebpf.MapSpec `ebpf:"events"`
+	FilteredConnections           *ebpf.MapSpec `ebpf:"filtered_connections"`
+	GoTraceMap                    *ebpf.MapSpec `ebpf:"go_trace_map"`
+	GolangMapbucketStorageMap     *ebpf.MapSpec `ebpf:"golang_mapbucket_storage_map"`
+	OngoingGoroutines             *ebpf.MapSpec `ebpf:"ongoing_goroutines"`
+	OngoingHttpClientRequests     *ebpf.MapSpec `ebpf:"ongoing_http_client_requests"`
+	OngoingHttpClientRequestsData *ebpf.MapSpec `ebpf:"ongoing_http_client_requests_data"`
+	OngoingHttpServerConnections  *ebpf.MapSpec `ebpf:"ongoing_http_server_connections"`
+	OngoingHttpServerRequests     *ebpf.MapSpec `ebpf:"ongoing_http_server_requests"`
+	PidCache                      *ebpf.MapSpec `ebpf:"pid_cache"`
+	TraceMap                      *ebpf.MapSpec `ebpf:"trace_map"`
+	ValidPids                     *ebpf.MapSpec `ebpf:"valid_pids"`
 }
 
 // bpf_debugObjects contains all objects after they have been loaded into the kernel.
@@ -157,17 +171,18 @@ func (o *bpf_debugObjects) Close() error {
 //
 // It can be passed to loadBpf_debugObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpf_debugMaps struct {
-	Events                       *ebpf.Map `ebpf:"events"`
-	FilteredConnections          *ebpf.Map `ebpf:"filtered_connections"`
-	GoTraceMap                   *ebpf.Map `ebpf:"go_trace_map"`
-	GolangMapbucketStorageMap    *ebpf.Map `ebpf:"golang_mapbucket_storage_map"`
-	OngoingGoroutines            *ebpf.Map `ebpf:"ongoing_goroutines"`
-	OngoingHttpClientRequests    *ebpf.Map `ebpf:"ongoing_http_client_requests"`
-	OngoingHttpServerConnections *ebpf.Map `ebpf:"ongoing_http_server_connections"`
-	OngoingHttpServerRequests    *ebpf.Map `ebpf:"ongoing_http_server_requests"`
-	PidCache                     *ebpf.Map `ebpf:"pid_cache"`
-	TraceMap                     *ebpf.Map `ebpf:"trace_map"`
-	ValidPids                    *ebpf.Map `ebpf:"valid_pids"`
+	Events                        *ebpf.Map `ebpf:"events"`
+	FilteredConnections           *ebpf.Map `ebpf:"filtered_connections"`
+	GoTraceMap                    *ebpf.Map `ebpf:"go_trace_map"`
+	GolangMapbucketStorageMap     *ebpf.Map `ebpf:"golang_mapbucket_storage_map"`
+	OngoingGoroutines             *ebpf.Map `ebpf:"ongoing_goroutines"`
+	OngoingHttpClientRequests     *ebpf.Map `ebpf:"ongoing_http_client_requests"`
+	OngoingHttpClientRequestsData *ebpf.Map `ebpf:"ongoing_http_client_requests_data"`
+	OngoingHttpServerConnections  *ebpf.Map `ebpf:"ongoing_http_server_connections"`
+	OngoingHttpServerRequests     *ebpf.Map `ebpf:"ongoing_http_server_requests"`
+	PidCache                      *ebpf.Map `ebpf:"pid_cache"`
+	TraceMap                      *ebpf.Map `ebpf:"trace_map"`
+	ValidPids                     *ebpf.Map `ebpf:"valid_pids"`
 }
 
 func (m *bpf_debugMaps) Close() error {
@@ -178,6 +193,7 @@ func (m *bpf_debugMaps) Close() error {
 		m.GolangMapbucketStorageMap,
 		m.OngoingGoroutines,
 		m.OngoingHttpClientRequests,
+		m.OngoingHttpClientRequestsData,
 		m.OngoingHttpServerConnections,
 		m.OngoingHttpServerRequests,
 		m.PidCache,

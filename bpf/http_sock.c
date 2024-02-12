@@ -13,7 +13,7 @@ char __license[] SEC("license") = "Dual MIT/GPL";
 
 // Temporary tracking of accept arguments
 struct {
-    __uint(type, BPF_MAP_TYPE_HASH);
+    __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
     __type(key, u64);
     __type(value, sock_args_t);
@@ -21,7 +21,7 @@ struct {
 
 // Temporary tracking of connect arguments
 struct {
-    __uint(type, BPF_MAP_TYPE_HASH);
+    __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
     __type(key, u64);
     __type(value, sock_args_t);
@@ -34,7 +34,7 @@ typedef struct recv_args {
 } recv_args_t;
 
 struct {
-    __uint(type, BPF_MAP_TYPE_HASH);
+    __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
     __type(key, u64);
     __type(value, recv_args_t);

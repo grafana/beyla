@@ -203,7 +203,7 @@ int uprobe_WriteHeader(struct pt_regs *ctx) {
 
 #ifndef NO_HEADER_PROPAGATION
 struct {
-    __uint(type, BPF_MAP_TYPE_HASH);
+    __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __type(key, void *); // key: pointer to the request header map
     __type(value, u64); // the goroutine of the transport request
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
@@ -347,7 +347,7 @@ int uprobe_writeSubset(struct pt_regs *ctx) {
     http_func_invocation_t *func_inv = bpf_map_lookup_elem(&ongoing_http_client_requests, &parent_goaddr);
     if (!func_inv) {
         bpf_dbg_printk("Can't find client request for goroutine %llx", parent_goaddr);
-        return 0;
+        goto done;
     }
 
     unsigned char buf[TRACEPARENT_LEN];
@@ -357,7 +357,7 @@ int uprobe_writeSubset(struct pt_regs *ctx) {
     void *buf_ptr = 0;
     bpf_probe_read(&buf_ptr, sizeof(buf_ptr), (void *)(io_writer_addr + io_writer_buf_ptr_pos));
     if (!buf_ptr) {
-        return 0;
+        goto done;
     }
     
     s64 size = 0;
@@ -380,6 +380,8 @@ int uprobe_writeSubset(struct pt_regs *ctx) {
         bpf_probe_write_user((void *)(io_writer_addr + io_writer_n_pos), &len, sizeof(len));
     }
 
+done:
+    bpf_map_delete_elem(&header_req_map, &header_addr);
     return 0;
 }
 #else
@@ -457,7 +459,6 @@ int uprobe_http2FramerWriteHeaders(struct pt_regs *ctx) {
     u32 stream_lookup = (u32)stream_id;
 
     void **go_ptr = bpf_map_lookup_elem(&http2_req_map, &stream_lookup);
-    bpf_map_delete_elem(&http2_req_map, &stream_lookup);
 
     if (go_ptr) {
         void *go_addr = *go_ptr;
@@ -478,6 +479,7 @@ int uprobe_http2FramerWriteHeaders(struct pt_regs *ctx) {
         }
     }
 
+    bpf_map_delete_elem(&http2_req_map, &stream_lookup);
     return 0;
 }
 #else
@@ -497,7 +499,6 @@ int uprobe_http2FramerWriteHeaders_returns(struct pt_regs *ctx) {
     void *goroutine_addr = GOROUTINE_PTR(ctx);
 
     framer_func_invocation_t *f_info = bpf_map_lookup_elem(&framer_invocation_map, &goroutine_addr);
-    bpf_map_delete_elem(&framer_invocation_map, &goroutine_addr);
 
     if (f_info) {
         void *w_ptr = 0;
@@ -565,6 +566,7 @@ int uprobe_http2FramerWriteHeaders_returns(struct pt_regs *ctx) {
         }
     }
 
+    bpf_map_delete_elem(&framer_invocation_map, &goroutine_addr);
     return 0;
 }
 #else

@@ -553,6 +553,7 @@ int uprobe_hpack_Encoder_WriteField(struct pt_regs *ctx) {
 
                         if (val_len <= 0) {
                             bpf_dbg_printk("Encoded traceparent value too large or empty");
+                            bpf_map_delete_elem(&ongoing_grpc_header_writes, &goroutine_addr);
                             return 0;
                         }
 

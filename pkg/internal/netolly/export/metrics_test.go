@@ -4,44 +4,44 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"go.opentelemetry.io/otel/attribute"
+
+	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
 )
 
-func TestAttributesMaking(t *testing.T) {
-	m := map[string]interface{}{
-		"AgentIP":          "172.19.0.2",
-		"Bytes":            192,
-		"DstAddr":          "10.244.0.3",
-		"DstK8s_HostIP":    "172.19.0.2",
-		"DstK8s_HostName":  "network-observability-testbed-control-plane",
-		"DstK8s_Name":      "coredns-565d847f94-kbgws",
-		"DstK8s_Namespace": "kube-system",
-		"DstK8s_OwnerName": "coredns",
-		"DstK8s_OwnerType": "Deployment",
-		"DstK8s_Type":      "Pod",
-		"DstMac":           "a2:0f:bf:d2:24:06",
-		"DstPort":          53,
-		"Duplicate":        false,
-		"Etype":            2048,
-		"FlowDirection":    1,
-		"Interface":        "veth727426ed",
-		"Packets":          2,
-		"Proto":            17,
-		"SrcAddr":          "10.244.0.6",
-		"SrcK8s_HostIP":    "172.19.0.2",
-		"SrcK8s_HostName":  "network-observability-testbed-control-plane",
-		"SrcK8s_Name":      "testclient",
-		"SrcK8s_Namespace": "default",
-		"SrcK8s_OwnerName": "testclient",
-		"SrcK8s_OwnerType": "Pod",
-		"SrcK8s_Type":      "Pod",
-		"SrcMac":           "9e:59:b0:c8:16:fd",
-		"SrcPort":          40152,
-		"TimeFlowEndMs":    1701799089328,
-		"TimeFlowStartMs":  1701799089328,
-		"TimeReceived":     1701799094,
+func TestMetricAttributes(t *testing.T) {
+	in := &ebpf.Record{
+		NetFlowRecordT: ebpf.NetFlowRecordT{
+			Id: ebpf.NetFlowId{
+				Direction: 1,
+				DstPort:   3210,
+			},
+		},
+		Metadata: map[string]string{
+			"k8s.src.name":      "srcname",
+			"k8s.src.namespace": "srcnamespace",
+			"k8s.dst.name":      "dstname",
+			"k8s.dst.namespace": "dstnamespace",
+		},
 	}
-
-	attrs := attributes(m)
-
-	assert.Equal(t, 9, len(attrs))
+	in.Id.SrcIp.In6U.U6Addr8 = [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 255, 12, 34, 56, 78}
+	in.Id.DstIp.In6U.U6Addr8 = [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 255, 33, 22, 11, 1}
+	assert.Equal(t,
+		[]attribute.KeyValue{
+			attribute.String("flow.direction", "egress"),
+			attribute.String("src.address", "12.34.56.78"),
+			attribute.String("server.address", "33.22.11.1"),
+			attribute.Int("server.port", 3210),
+			attribute.String("src.name", "srcname"),
+			attribute.String("src.namespace", "srcnamespace"),
+			attribute.String("dst.name", "dstname"),
+			attribute.String("dst.namespace", "dstnamespace"),
+			attribute.String("asserts.env", "dev"),
+			attribute.String("asserts.site", "dev"),
+			attribute.String("k8s.src.name", "srcname"),
+			attribute.String("k8s.src.namespace", "srcnamespace"),
+			attribute.String("k8s.dst.name", "dstname"),
+			attribute.String("k8s.dst.namespace", "dstnamespace"),
+		},
+		attributes(in))
 }

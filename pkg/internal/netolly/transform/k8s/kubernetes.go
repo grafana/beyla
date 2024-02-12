@@ -36,24 +36,24 @@ const (
 	attrSuffixType      = ".type"
 	attrSuffixOwnerName = ".owner.name"
 	attrSuffixOwnerType = ".owner.type"
-	attrSuffixHostIp    = ".host.ip"
+	attrSuffixHostIP    = ".host.ip"
 	attrSuffixHostName  = ".host.name"
 
-	AttrDstNamespace = attrPrefixSrc + attrSuffixNs
-	AttrDstName      = attrPrefixSrc + attrSuffixName
-	AttrDstType      = attrPrefixSrc + attrSuffixType
-	AttrDstOwnerName = attrPrefixSrc + attrSuffixOwnerName
-	AttrDstOwnerType = attrPrefixSrc + attrSuffixOwnerType
-	AttrDstHostIP    = attrPrefixSrc + attrSuffixHostIp
-	AttrDstHostName  = attrPrefixSrc + attrSuffixHostName
+	AttrDstNamespace = attrPrefixDst + attrSuffixNs
+	AttrDstName      = attrPrefixDst + attrSuffixName
+	AttrDstType      = attrPrefixDst + attrSuffixType
+	AttrDstOwnerName = attrPrefixDst + attrSuffixOwnerName
+	AttrDstOwnerType = attrPrefixDst + attrSuffixOwnerType
+	AttrDstHostIP    = attrPrefixDst + attrSuffixHostIP
+	AttrDstHostName  = attrPrefixDst + attrSuffixHostName
 
-	AttrSrcNamespace = attrPrefixDst + attrSuffixNs
-	AttrSrcName      = attrPrefixDst + attrSuffixName
-	AttrSrcType      = attrPrefixDst + attrSuffixType
-	AttrSrcOwnerName = attrPrefixDst + attrSuffixOwnerName
-	AttrSrcOwnerType = attrPrefixDst + attrSuffixOwnerType
-	AttrSrcHostIP    = attrPrefixDst + attrSuffixHostIp
-	AttrSrcHostName  = attrPrefixDst + attrSuffixHostName
+	AttrSrcNamespace = attrPrefixSrc + attrSuffixNs
+	AttrSrcName      = attrPrefixSrc + attrSuffixName
+	AttrSrcType      = attrPrefixSrc + attrSuffixType
+	AttrSrcOwnerName = attrPrefixSrc + attrSuffixOwnerName
+	AttrSrcOwnerType = attrPrefixSrc + attrSuffixOwnerType
+	AttrSrcHostIP    = attrPrefixSrc + attrSuffixHostIP
+	AttrSrcHostName  = attrPrefixSrc + attrSuffixHostName
 )
 
 func log() *slog.Logger { return slog.With("component", "transform.NetworkTransform") }
@@ -105,7 +105,7 @@ func (n *networkTransformer) decorate(flow *ebpf.Record, prefix, ip string) {
 	flow.Metadata[prefix+attrSuffixOwnerName] = kubeInfo.Owner.Name
 	flow.Metadata[prefix+attrSuffixOwnerType] = kubeInfo.Owner.Type
 	if kubeInfo.HostIP != "" {
-		flow.Metadata[prefix+attrSuffixHostIp] = kubeInfo.HostIP
+		flow.Metadata[prefix+attrSuffixHostIP] = kubeInfo.HostIP
 		if kubeInfo.HostName != "" {
 			flow.Metadata[prefix+attrSuffixHostName] = kubeInfo.HostName
 		}

@@ -36,6 +36,22 @@ import (
 	"github.com/grafana/beyla/pkg/internal/netolly/ifaces"
 )
 
+const (
+	listenPoll       = "poll"
+	listenWatch      = "watch"
+	directionIngress = "ingress"
+	directionEgress  = "egress"
+	directionBoth    = "both"
+
+	ipTypeAny  = "any"
+	ipTypeIPV4 = "ipv4"
+	ipTypeIPV6 = "ipv6"
+
+	ipIfaceExternal    = "external"
+	ipIfaceLocal       = "local"
+	ipIfaceNamedPrefix = "name:"
+)
+
 func alog() *slog.Logger {
 	return slog.With("component", "agent.Flows")
 }
@@ -108,11 +124,11 @@ func FlowsAgent(cfg *beyla.Config) (*Flows, error) {
 	// configure informer for new interfaces
 	var informer ifaces.Informer
 	switch cfg.NetworkFlows.ListenInterfaces {
-	case ListenPoll:
+	case listenPoll:
 		alog.Debug("listening for new interfaces: use polling",
 			"period", cfg.NetworkFlows.ListenPollPeriod)
 		informer = ifaces.NewPoller(cfg.NetworkFlows.ListenPollPeriod, cfg.ChannelBufferLen)
-	case ListenWatch:
+	case listenWatch:
 		alog.Debug("listening for new interfaces: use watching")
 		informer = ifaces.NewWatcher(cfg.ChannelBufferLen)
 	default:
@@ -187,11 +203,11 @@ func flowsAgent(cfg *beyla.Config,
 
 func flowDirections(cfg *beyla.NetworkConfig) (ingress, egress bool) {
 	switch cfg.Direction {
-	case DirectionIngress:
+	case directionIngress:
 		return true, false
-	case DirectionEgress:
+	case directionEgress:
 		return false, true
-	case DirectionBoth:
+	case directionBoth:
 		return true, true
 	default:
 		alog().Warn("unknown DIRECTION. Tracing both ingress and egress traffic",

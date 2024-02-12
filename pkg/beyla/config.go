@@ -20,6 +20,7 @@ import (
 
 const ReporterLRUSize = 256
 
+// Features that can be enabled in Beyla (can be at the same time): App O11y and/or Net O11y
 type Feature uint
 
 const (
@@ -87,17 +88,6 @@ var defaultConfig = Config{
 		Direction:          "both",
 		ListenInterfaces:   "watch",
 		ListenPollPeriod:   10 * time.Second,
-		Transform: NetworkTransformConfig{
-			Rules: NetworkTransformRules{NetworkTransformRule{
-				Input:  "SrcAddr",
-				Output: "SrcK8s",
-				Type:   "add_kubernetes",
-			}, NetworkTransformRule{
-				Input:  "DstAddr",
-				Output: "DstK8s",
-				Type:   "add_kubernetes",
-			}},
-		},
 	},
 }
 
@@ -190,6 +180,7 @@ func (c *Config) Validate() error {
 	return nil
 }
 
+// Enabled checks if a given Beyla feature is enabled according to the global configuration
 func (c *Config) Enabled(feature Feature) bool {
 	switch feature {
 	case FeatureNetO11y:

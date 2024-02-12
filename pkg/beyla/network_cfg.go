@@ -20,8 +20,6 @@ package beyla
 
 import (
 	"time"
-
-	"github.com/grafana/beyla/pkg/internal/transform"
 )
 
 type NetworkConfig struct {
@@ -85,51 +83,4 @@ type NetworkConfig struct {
 	// ListenPollPeriod specifies the periodicity to query the network interfaces when the
 	// ListenInterfaces value is set to "poll".
 	ListenPollPeriod time.Duration `env:"BEYLA_NETWORK_LISTEN_POLL_PERIOD" envDefault:"10s"`
-
-	// Property taken from FLPLite. TODO: use a hardcoded decorator. Don't let tis to be configurable
-	Transform NetworkTransformConfig `yaml:"transform"`
 }
-
-// TODO: remove this and just hardcode
-type NetworkTransformConfig struct {
-	Rules          NetworkTransformRules `yaml:"rules" json:"rules" doc:"list of transform rules, each includes:"`
-	KubeConfigPath string                `yaml:"kubeConfigPath,omitempty" json:"kubeConfigPath,omitempty" doc:"path to kubeconfig file (optional)"`
-	ServicesFile   string                `yaml:"servicesFile,omitempty" json:"servicesFile,omitempty" doc:"path to services file (optional, default: /etc/services)"`
-	ProtocolsFile  string                `yaml:"protocolsFile,omitempty" json:"protocolsFile,omitempty" doc:"path to protocols file (optional, default: /etc/protocols)"`
-}
-
-// TODO: quick hackathon patch. Do it properly.
-func (tn *NetworkTransformConfig) Enabled() bool {
-	return transform.KubernetesDecorator{Enable: transform.EnabledFalse}.Enabled()
-}
-
-func (tn *NetworkTransformConfig) GetServiceFiles() (string, string) {
-	p := tn.ProtocolsFile
-	if p == "" {
-		p = "/etc/protocols"
-	}
-	s := tn.ServicesFile
-	if s == "" {
-		s = "/etc/services"
-	}
-	return p, s
-}
-
-type TransformNetworkOperationEnum struct {
-	AddRegExIf    string `yaml:"add_regex_if" json:"add_regex_if" doc:"add output field if input field satisfies regex pattern from parameters field"`
-	AddIf         string `yaml:"add_if" json:"add_if" doc:"add output field if input field satisfies criteria from parameters field"`
-	AddSubnet     string `yaml:"add_subnet" json:"add_subnet" doc:"add output subnet field from input field and prefix length from parameters field"`
-	AddLocation   string `yaml:"add_location" json:"add_location" doc:"add output location fields from input"`
-	AddService    string `yaml:"add_service" json:"add_service" doc:"add output network service field from input port and parameters protocol field"`
-	AddKubernetes string `yaml:"add_kubernetes" json:"add_kubernetes" doc:"add output kubernetes fields from input"`
-}
-
-type NetworkTransformRule struct {
-	Input      string `yaml:"input,omitempty" json:"input,omitempty" doc:"entry input field"`
-	Output     string `yaml:"output,omitempty" json:"output,omitempty" doc:"entry output field"`
-	Type       string `yaml:"type,omitempty" json:"type,omitempty" enum:"TransformNetworkOperationEnum" doc:"one of the following:"`
-	Parameters string `yaml:"parameters,omitempty" json:"parameters,omitempty" doc:"parameters specific to type"`
-	Assignee   string `yaml:"assignee,omitempty" json:"assignee,omitempty" doc:"value needs to assign to output field"`
-}
-
-type NetworkTransformRules []NetworkTransformRule

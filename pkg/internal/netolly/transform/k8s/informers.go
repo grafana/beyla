@@ -40,7 +40,7 @@ import (
 
 const (
 	kubeConfigEnvVariable = "KUBECONFIG"
-	syncTime              = 10 * time.Minute
+	defaultSyncTimeout    = 10 * time.Minute
 	IndexIP               = "byIP"
 	typeNode              = "Node"
 	typePod               = "Pod"
@@ -296,7 +296,7 @@ func (k *NetworkInformers) initReplicaSetInformer(informerFactory informers.Shar
 	return nil
 }
 
-func (k *NetworkInformers) InitFromConfig(kubeConfigPath string) error {
+func (k *NetworkInformers) InitFromConfig(kubeConfigPath string, syncTimeout time.Duration) error {
 	k.log = slog.With("component", "kubernetes.NetworkInformers")
 	// Initialization variables
 	k.stopChan = make(chan struct{})
@@ -311,7 +311,7 @@ func (k *NetworkInformers) InitFromConfig(kubeConfigPath string) error {
 		return err
 	}
 
-	err = k.initInformers(kubeClient)
+	err = k.initInformers(kubeClient, syncTimeout)
 	if err != nil {
 		return err
 	}
@@ -346,8 +346,11 @@ func LoadConfig(kubeConfigPath string) (*rest.Config, error) {
 	return config, nil
 }
 
-func (k *NetworkInformers) initInformers(client kubernetes.Interface) error {
-	informerFactory := informers.NewSharedInformerFactory(client, syncTime)
+func (k *NetworkInformers) initInformers(client kubernetes.Interface, syncTimeout time.Duration) error {
+	if syncTimeout <= 0 {
+		syncTimeout = defaultSyncTimeout
+	}
+	informerFactory := informers.NewSharedInformerFactory(client, syncTimeout)
 	err := k.initNodeInformer(informerFactory)
 	if err != nil {
 		return err

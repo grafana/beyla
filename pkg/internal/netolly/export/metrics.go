@@ -2,8 +2,6 @@ package export
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
 	"log/slog"
 	"time"
 
@@ -69,6 +67,7 @@ func destinationAttrs(m *ebpf.Record) (namespace, name string) {
 	return "", m.Id.DstIP().IP().String()
 }
 
+// direction values according to field 61 in https://www.iana.org/assignments/ipfix/ipfix.xhtml
 func direction(m *ebpf.Record) string {
 	switch m.Id.Direction {
 	case 0:
@@ -101,9 +100,6 @@ func attributes(m *ebpf.Record) []attribute.KeyValue {
 	for k, v := range m.Metadata {
 		res = append(res, attribute.String(k, v))
 	}
-
-	bytes, _ := json.Marshal(res)
-	fmt.Println(string(bytes))
 
 	return res
 }
@@ -145,15 +141,6 @@ func MetricsExporterProvider(cfg MetricsConfig) (node.TerminalFunc[[]*ebpf.Recor
 
 	return func(in <-chan []*ebpf.Record) {
 		for i := range in {
-			// TODO: move to a print_flows node
-			//bytes, err := json.Marshal(i)
-			//if err != nil {
-			//	log.Error("can't marshall JSON flows", "error", err)
-			//} else {
-			//	log.Info("sending flows", "len", len(i))
-			//	fmt.Println(string(bytes))
-			//}
-
 			for _, v := range i {
 				flowBytes.Add(
 					context.Background(),

@@ -27,6 +27,7 @@
 
 #define s6_addr			in6_u.u6_addr8
 #define ETH_P_IP	0x0800		/* Internet Protocol packet	*/
+// ETH_P_IPV6 value as defined in IEEE 802: https://www.iana.org/assignments/ieee-802-numbers/ieee-802-numbers.xhtml
 #define ETH_P_IPV6	0x86DD		/* IPv6 over bluebook		*/
 typedef __u8 u8;
 typedef __u16 u16;
@@ -51,6 +52,7 @@ typedef struct flow_metrics_t {
 } __attribute__((packed)) flow_metrics;
 
 // Attributes that uniquely identify a flow
+// TODO: remove attributes that won't be used in Beyla (e.g. MAC, maybe protocol...)
 typedef struct flow_id_t {
     u16 eth_protocol;
     u8 direction;

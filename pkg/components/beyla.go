@@ -22,10 +22,10 @@ func StartBeyla(ctx context.Context, cfg *beyla.Config) {
 
 func setupAppO11y(ctx context.Context, config *beyla.Config) {
 	slog.Info("starting Beyla in Application Observability mode")
-	// TODO: when we split Beyla in two executables, this code can be split:
+	// TODO: when we split Beyla in two processes with different permissions, this code can be split:
 	// in two parts:
-	// 1st executable - Invoke FindTarget, which also mounts the BPF maps
-	// 2nd executable - Invoke ReadAndForward, receiving the BPF map mountpoint as argument
+	// 1st process (privileged) - Invoke FindTarget, which also mounts the BPF maps
+	// 2nd executable (unprivileged) - Invoke ReadAndForward, receiving the BPF map mountpoint as argument
 	instr := appolly.New(config)
 	if err := instr.FindAndInstrument(ctx); err != nil {
 		slog.Error("Beyla couldn't find target process", "error", err)

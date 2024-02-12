@@ -12,6 +12,9 @@ import (
 	"github.com/grafana/beyla/pkg/internal/netolly/transform/k8s"
 )
 
+// FlowsPipeline defines the different nodes in the Beyla's NetO11y module,
+// as well as how they are interconnected
+// TODO: add flow_printer node
 type FlowsPipeline struct {
 	MapTracer       `sendTo:"Deduper"`
 	RingBufTracer   `sendTo:"Accounter"`
@@ -25,7 +28,6 @@ type FlowsPipeline struct {
 	Exporter export.MetricsConfig
 }
 
-type Codec struct{}
 type MapTracer struct{}
 type RingBufTracer struct{}
 type Accounter struct{}
@@ -72,8 +74,9 @@ func (f *Flows) buildAndStartPipeline(ctx context.Context) (graph.Graph, error) 
 			ExpireTime: f.cfg.NetworkFlows.DeduperFCExpiry,
 			JustMark:   f.cfg.NetworkFlows.DeduperJustMark,
 		},
-		Kubernetes: k8s.NetworkTransformConfig{TransformConfig: &f.cfg.NetworkFlows.Transform},
+		Kubernetes: k8s.NetworkTransformConfig{Kubernetes: &f.cfg.Attributes.Kubernetes},
 		// TODO: put here any extra configuration for the exporter
+		// TODO: allow prometheus exporting
 		Exporter: export.MetricsConfig{Metrics: &f.cfg.Metrics},
 	})
 }

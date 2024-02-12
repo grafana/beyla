@@ -26,16 +26,7 @@ import (
 	"time"
 )
 
-// Values according to field 61 in https://www.iana.org/assignments/ipfix/ipfix.xhtml
-const (
-	DirectionIngress = uint8(0)
-	DirectionEgress  = uint8(1)
-)
-
 const MacLen = 6
-
-// IPv6Type value as defined in IEEE 802: https://www.iana.org/assignments/ieee-802-numbers/ieee-802-numbers.xhtml
-const IPv6Type = 0x86DD
 
 type MacAddr [MacLen]uint8
 

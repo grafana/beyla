@@ -90,6 +90,40 @@ func TestDedupe(t *testing.T) {
 	assert.Equal(t, []*ebpf.Record{oneIf2}, deduped)
 }
 
+func TestDedupe_JustMark(t *testing.T) {
+	input := make(chan []*ebpf.Record, 100)
+	output := make(chan []*ebpf.Record, 100)
+
+	dedupe, err := DeduperProvider(Deduper{Type: DeduperFirstCome, ExpireTime: time.Minute, JustMark: true})
+	require.NoError(t, err)
+	go dedupe(input, output)
+
+	input <- []*ebpf.Record{
+		clone(oneIf2), // record 1 at interface 2: not duplicate
+		clone(twoIf1), // record 2 at interface 1: not duplicate
+		clone(oneIf1), // record 1 duplicate at interface 1: should be marked as duplicate
+		clone(oneIf1), //                                        (same record key, different interface)
+		clone(twoIf2), // record 2 duplicate at interface 2: should be marked as duplicate
+		clone(oneIf2), // record 1 at interface 1: not duplicate (same record key, same interface)
+	}
+	deduped := receiveTimeout(t, output)
+
+	assert.Equal(t, []*ebpf.Record{
+		oneIf2,
+		twoIf1,
+		asDuplicate(oneIf1),
+		asDuplicate(oneIf1),
+		asDuplicate(twoIf2),
+		oneIf2,
+	}, deduped)
+
+	// should still accept as non-duplicate records with same key, same interface,
+	// and mark as duplicate these with same key, different interface
+	input <- []*ebpf.Record{clone(oneIf1), clone(oneIf2)}
+	deduped = receiveTimeout(t, output)
+	assert.Equal(t, []*ebpf.Record{asDuplicate(oneIf1), oneIf2}, deduped)
+}
+
 func TestDedupe_EvictFlows(t *testing.T) {
 	tm := &timerMock{now: time.Now()}
 	timeNow = tm.Now
@@ -145,4 +179,15 @@ func (tm *timerMock) Now() time.Time {
 	tm.RLock()
 	defer tm.RUnlock()
 	return tm.now
+}
+
+func clone(in *ebpf.Record) *ebpf.Record {
+	out := *in
+	return &out
+}
+
+func asDuplicate(in *ebpf.Record) *ebpf.Record {
+	out := clone(in)
+	out.Duplicate = true
+	return out
 }

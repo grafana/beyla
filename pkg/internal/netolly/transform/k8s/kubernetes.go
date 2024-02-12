@@ -24,8 +24,8 @@ import (
 
 	"github.com/mariomac/pipes/pkg/node"
 
-	"github.com/grafana/beyla/pkg/beyla"
 	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
+	"github.com/grafana/beyla/pkg/internal/transform"
 )
 
 const (
@@ -59,11 +59,11 @@ const (
 func log() *slog.Logger { return slog.With("component", "transform.NetworkTransform") }
 
 type NetworkTransformConfig struct {
-	TransformConfig *beyla.NetworkTransformConfig
+	Kubernetes *transform.KubernetesDecorator
 }
 
 func NetworkTransform(cfg NetworkTransformConfig) (node.MiddleFunc[[]*ebpf.Record, []*ebpf.Record], error) {
-	nt, err := newTransformNetwork(cfg.TransformConfig)
+	nt, err := newTransformNetwork(&cfg)
 	if err != nil {
 		return nil, fmt.Errorf("instantiating network transformer: %w", err)
 	}
@@ -81,7 +81,6 @@ func NetworkTransform(cfg NetworkTransformConfig) (node.MiddleFunc[[]*ebpf.Recor
 
 type networkTransformer struct {
 	kube NetworkInformers
-	cfg  *beyla.NetworkTransformConfig
 }
 
 func (n *networkTransformer) transform(flow *ebpf.Record) {
@@ -113,10 +112,10 @@ func (n *networkTransformer) decorate(flow *ebpf.Record, prefix, ip string) {
 }
 
 // newTransformNetwork create a new transform
-func newTransformNetwork(cfg *beyla.NetworkTransformConfig) (*networkTransformer, error) {
-	nt := networkTransformer{cfg: cfg}
+func newTransformNetwork(cfg *NetworkTransformConfig) (*networkTransformer, error) {
+	nt := networkTransformer{}
 
-	if err := nt.kube.InitFromConfig(cfg.KubeConfigPath); err != nil {
+	if err := nt.kube.InitFromConfig(cfg.Kubernetes.KubeconfigPath, cfg.Kubernetes.InformersSyncTimeout); err != nil {
 		return nil, err
 	}
 	return &nt, nil

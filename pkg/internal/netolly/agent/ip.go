@@ -50,25 +50,25 @@ func fetchAgentIP(cfg *beyla.NetworkConfig) (net.IP, error) {
 		return nil, fmt.Errorf("can't parse provided IP %v", cfg.AgentIP)
 	}
 
-	if cfg.AgentIPType != IPTypeAny &&
-		cfg.AgentIPType != IPTypeIPV6 &&
-		cfg.AgentIPType != IPTypeIPV4 {
+	if cfg.AgentIPType != ipTypeAny &&
+		cfg.AgentIPType != ipTypeIPV6 &&
+		cfg.AgentIPType != ipTypeIPV4 {
 		return nil, fmt.Errorf("invalid IP type %q. Valid values are: %s, %s or %s",
-			cfg.AgentIPType, IPTypeIPV4, IPTypeIPV6, IPTypeAny)
+			cfg.AgentIPType, ipTypeIPV4, ipTypeIPV6, ipTypeAny)
 	}
 
 	switch cfg.AgentIPIface {
-	case IPIfaceLocal:
+	case ipIfaceLocal:
 		return fromLocal(cfg.AgentIPType)
-	case IPIfaceExternal:
+	case ipIfaceExternal:
 		return fromExternal(cfg.AgentIPType)
 	default:
-		if !strings.HasPrefix(cfg.AgentIPIface, IPIfaceNamedPrefix) {
+		if !strings.HasPrefix(cfg.AgentIPIface, ipIfaceNamedPrefix) {
 			return nil, fmt.Errorf(
 				"invalid IP interface %q. Valid values are: %s, %s or %s<iface_name>",
-				cfg.AgentIPIface, IPIfaceLocal, IPIfaceExternal, IPIfaceNamedPrefix)
+				cfg.AgentIPIface, ipIfaceLocal, ipIfaceExternal, ipIfaceNamedPrefix)
 		}
-		return fromInterface(cfg.AgentIPIface[len(IPIfaceNamedPrefix):], cfg.AgentIPType)
+		return fromInterface(cfg.AgentIPIface[len(ipIfaceNamedPrefix):], cfg.AgentIPType)
 	}
 }
 
@@ -103,7 +103,7 @@ func fromExternal(ipType string) (net.IP, error) {
 	// This will just establish an external dialer where we can pickup the external
 	// host address
 	addrStr := "8.8.8.8:80"
-	if ipType == IPTypeIPV6 {
+	if ipType == ipTypeIPV6 {
 		addrStr = "[2001:4860:4860::8888]:80"
 	}
 	conn, err := dial("udp", addrStr)
@@ -135,11 +135,11 @@ func getIP(pip net.IP, ipType string) (net.IP, bool) {
 		return nil, false
 	}
 	switch ipType {
-	case IPTypeIPV4:
+	case ipTypeIPV4:
 		if ip := pip.To4(); ip != nil {
 			return ip, true
 		}
-	case IPTypeIPV6:
+	case ipTypeIPV6:
 		// as any IP4 address can be converted to IP6, we only return any
 		// address that can be converted to IP6 but not to IP4
 		if ip := pip.To16(); ip != nil && pip.To4() == nil {

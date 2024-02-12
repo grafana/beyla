@@ -82,7 +82,7 @@ type bpf_debugSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpf_debugProgramSpecs struct {
-	KprobeSecuritySocketBind *ebpf.ProgramSpec `ebpf:"kprobe_security_socket_bind"`
+	KprobeSysBind *ebpf.ProgramSpec `ebpf:"kprobe_sys_bind"`
 }
 
 // bpf_debugMapSpecs contains maps before they are loaded into the kernel.
@@ -133,12 +133,12 @@ func (m *bpf_debugMaps) Close() error {
 //
 // It can be passed to loadBpf_debugObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpf_debugPrograms struct {
-	KprobeSecuritySocketBind *ebpf.Program `ebpf:"kprobe_security_socket_bind"`
+	KprobeSysBind *ebpf.Program `ebpf:"kprobe_sys_bind"`
 }
 
 func (p *bpf_debugPrograms) Close() error {
 	return _Bpf_debugClose(
-		p.KprobeSecuritySocketBind,
+		p.KprobeSysBind,
 	)
 }
 

@@ -83,4 +83,23 @@ static __always_inline u16 get_sockaddr_port(struct sockaddr *addr) {
     return bport;
 }
 
+static __always_inline u16 get_sockaddr_port_user(struct sockaddr *addr) {
+    short unsigned int sa_family;
+
+    bpf_probe_read(&sa_family, sizeof(short unsigned int), &addr->sa_family);
+    u16 bport = 0;
+
+    //bpf_dbg_printk("addr = %llx, sa_family %d", addr, sa_family);
+
+    if (sa_family == AF_INET) {
+        bpf_probe_read(&bport, sizeof(u16), &(((struct sockaddr_in*)addr)->sin_port));
+    } else if (sa_family == AF_INET6) {
+        bpf_probe_read(&bport, sizeof(u16), &(((struct sockaddr_in6*)addr)->sin6_port));
+    }
+    
+    bport = bpf_ntohs(bport);
+
+    return bport;
+}
+
 #endif

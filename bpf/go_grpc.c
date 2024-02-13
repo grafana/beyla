@@ -18,6 +18,7 @@
 #include "go_common.h"
 #include "go_traceparent.h"
 #include "hpack.h"
+#include "ringbuf.h"
 
 typedef struct grpc_srv_func_invocation {
     u64 start_monotime_ns;

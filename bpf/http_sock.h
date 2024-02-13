@@ -5,7 +5,7 @@
 #include "bpf_helpers.h"
 #include "bpf_builtins.h"
 #include "http_types.h"
-#include "ringbuf.h"
+#include "kringbuf.h"
 #include "pid.h"
 #include "trace_common.h"
 
@@ -30,7 +30,7 @@ struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __type(key, connection_info_t);
     __type(value, http_info_t);
-    __uint(max_entries, MAX_CONCURRENT_SHARED_REQUESTS);
+    __uint(max_entries, 1024);
     __uint(pinning, LIBBPF_PIN_BY_NAME);
 } ongoing_http_fallback SEC(".maps");
 

@@ -112,12 +112,5 @@ func (p *Tracer) AlreadyInstrumentedLib(_ uint64) bool {
 }
 
 func (p *Tracer) Run(ctx context.Context, eventsChan chan<- []request.Span, service svc.ID) {
-	ebpfcommon.ForwardRingbuf[ebpfcommon.HTTPRequestTrace](
-		service,
-		p.cfg, p.log, p.bpfObjects.Events,
-		ebpfcommon.ReadHTTPRequestTraceAsSpan,
-		p.pidsFilter.Filter,
-		p.metrics,
-		append(p.closers, &p.bpfObjects)...,
-	)(ctx, eventsChan)
+	<-ctx.Done()
 }

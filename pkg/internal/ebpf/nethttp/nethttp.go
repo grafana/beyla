@@ -169,6 +169,11 @@ func (p *Tracer) GoProbes() map[string]ebpfcommon.FunctionPrograms {
 		"net/http.(*persistConn).roundTrip": { // http client
 			Start: p.bpfObjects.UprobePersistConnRoundTrip,
 		},
+		// sql
+		"database/sql.(*DB).queryDC": {
+			Start: p.bpfObjects.UprobeQueryDC,
+			End:   p.bpfObjects.UprobeQueryDCReturn,
+		},
 	}
 
 	if p.supportsContextPropagation() {

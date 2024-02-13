@@ -54,6 +54,13 @@ type bpf_tpPidKeyT struct {
 	Namespace uint32
 }
 
+type bpf_tpSqlFuncInvocationT struct {
+	StartMonotimeNs uint64
+	SqlParam        uint64
+	QueryLen        uint64
+	Tp              bpf_tpTpInfoT
+}
+
 type bpf_tpTpInfoPidT struct {
 	Tp    bpf_tpTpInfoT
 	Pid   uint32
@@ -120,6 +127,8 @@ type bpf_tpProgramSpecs struct {
 	UprobeHttp2ResponseWriterStateWriteHeader *ebpf.ProgramSpec `ebpf:"uprobe_http2ResponseWriterStateWriteHeader"`
 	UprobeHttp2RoundTrip                      *ebpf.ProgramSpec `ebpf:"uprobe_http2RoundTrip"`
 	UprobePersistConnRoundTrip                *ebpf.ProgramSpec `ebpf:"uprobe_persistConnRoundTrip"`
+	UprobeQueryDC                             *ebpf.ProgramSpec `ebpf:"uprobe_queryDC"`
+	UprobeQueryDCReturn                       *ebpf.ProgramSpec `ebpf:"uprobe_queryDCReturn"`
 	UprobeReadRequestReturns                  *ebpf.ProgramSpec `ebpf:"uprobe_readRequestReturns"`
 	UprobeRoundTrip                           *ebpf.ProgramSpec `ebpf:"uprobe_roundTrip"`
 	UprobeRoundTripReturn                     *ebpf.ProgramSpec `ebpf:"uprobe_roundTripReturn"`
@@ -141,6 +150,7 @@ type bpf_tpMapSpecs struct {
 	OngoingHttpClientRequests    *ebpf.MapSpec `ebpf:"ongoing_http_client_requests"`
 	OngoingHttpServerConnections *ebpf.MapSpec `ebpf:"ongoing_http_server_connections"`
 	OngoingHttpServerRequests    *ebpf.MapSpec `ebpf:"ongoing_http_server_requests"`
+	OngoingSqlQueries            *ebpf.MapSpec `ebpf:"ongoing_sql_queries"`
 	PidCache                     *ebpf.MapSpec `ebpf:"pid_cache"`
 	TraceMap                     *ebpf.MapSpec `ebpf:"trace_map"`
 	ValidPids                    *ebpf.MapSpec `ebpf:"valid_pids"`
@@ -176,6 +186,7 @@ type bpf_tpMaps struct {
 	OngoingHttpClientRequests    *ebpf.Map `ebpf:"ongoing_http_client_requests"`
 	OngoingHttpServerConnections *ebpf.Map `ebpf:"ongoing_http_server_connections"`
 	OngoingHttpServerRequests    *ebpf.Map `ebpf:"ongoing_http_server_requests"`
+	OngoingSqlQueries            *ebpf.Map `ebpf:"ongoing_sql_queries"`
 	PidCache                     *ebpf.Map `ebpf:"pid_cache"`
 	TraceMap                     *ebpf.Map `ebpf:"trace_map"`
 	ValidPids                    *ebpf.Map `ebpf:"valid_pids"`
@@ -194,6 +205,7 @@ func (m *bpf_tpMaps) Close() error {
 		m.OngoingHttpClientRequests,
 		m.OngoingHttpServerConnections,
 		m.OngoingHttpServerRequests,
+		m.OngoingSqlQueries,
 		m.PidCache,
 		m.TraceMap,
 		m.ValidPids,
@@ -213,6 +225,8 @@ type bpf_tpPrograms struct {
 	UprobeHttp2ResponseWriterStateWriteHeader *ebpf.Program `ebpf:"uprobe_http2ResponseWriterStateWriteHeader"`
 	UprobeHttp2RoundTrip                      *ebpf.Program `ebpf:"uprobe_http2RoundTrip"`
 	UprobePersistConnRoundTrip                *ebpf.Program `ebpf:"uprobe_persistConnRoundTrip"`
+	UprobeQueryDC                             *ebpf.Program `ebpf:"uprobe_queryDC"`
+	UprobeQueryDCReturn                       *ebpf.Program `ebpf:"uprobe_queryDCReturn"`
 	UprobeReadRequestReturns                  *ebpf.Program `ebpf:"uprobe_readRequestReturns"`
 	UprobeRoundTrip                           *ebpf.Program `ebpf:"uprobe_roundTrip"`
 	UprobeRoundTripReturn                     *ebpf.Program `ebpf:"uprobe_roundTripReturn"`
@@ -230,6 +244,8 @@ func (p *bpf_tpPrograms) Close() error {
 		p.UprobeHttp2ResponseWriterStateWriteHeader,
 		p.UprobeHttp2RoundTrip,
 		p.UprobePersistConnRoundTrip,
+		p.UprobeQueryDC,
+		p.UprobeQueryDCReturn,
 		p.UprobeReadRequestReturns,
 		p.UprobeRoundTrip,
 		p.UprobeRoundTripReturn,

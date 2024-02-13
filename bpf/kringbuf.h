@@ -1,5 +1,5 @@
-#ifndef RINGBUF_H
-#define RINGBUF_H
+#ifndef KRINGBUF_H
+#define KRINGBUF_H
 
 #include "utils.h"
 
@@ -21,7 +21,7 @@
 // we can share them later if we find is worth not including code per duplicate
 struct {
     __uint(type, BPF_MAP_TYPE_RINGBUF);
-    __uint(max_entries, 1 << 16);
+    __uint(max_entries, 1 << 24);
 } events SEC(".maps");
 
 // To be Injected from the user space during the eBPF program load & initialization

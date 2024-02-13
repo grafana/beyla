@@ -111,7 +111,6 @@ type bpfProgramSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpfMapSpecs struct {
-	Events                       *ebpf.MapSpec `ebpf:"events"`
 	FilteredConnections          *ebpf.MapSpec `ebpf:"filtered_connections"`
 	GoTraceMap                   *ebpf.MapSpec `ebpf:"go_trace_map"`
 	GolangMapbucketStorageMap    *ebpf.MapSpec `ebpf:"golang_mapbucket_storage_map"`
@@ -142,7 +141,6 @@ func (o *bpfObjects) Close() error {
 //
 // It can be passed to loadBpfObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpfMaps struct {
-	Events                       *ebpf.Map `ebpf:"events"`
 	FilteredConnections          *ebpf.Map `ebpf:"filtered_connections"`
 	GoTraceMap                   *ebpf.Map `ebpf:"go_trace_map"`
 	GolangMapbucketStorageMap    *ebpf.Map `ebpf:"golang_mapbucket_storage_map"`
@@ -156,7 +154,6 @@ type bpfMaps struct {
 
 func (m *bpfMaps) Close() error {
 	return _BpfClose(
-		m.Events,
 		m.FilteredConnections,
 		m.GoTraceMap,
 		m.GolangMapbucketStorageMap,

@@ -806,7 +806,7 @@ For OpenTelemetry you can use [exponential histograms](https://opentelemetry.io/
 
 | YAML       | Environment variable                                                      | Type | Default |
 | ---------- | ------------------------------------------------------------------------- | ---- | ------- |
-| `use_exponential_histograms` | `BEYLA_OTEL_USE_EXPONENTIAL_HISTOGRAMS`  | boolean  | `false` |
+| `use_exponential_histograms` | `BEYLA_OTEL_USE_EXPONENTIAL_HISTOGRAMS`  | `boolean` | `false` |
 
 
 ## OTEL traces exporter

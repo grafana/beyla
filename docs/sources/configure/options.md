@@ -800,7 +800,7 @@ conventions recommend a different set of bucket boundaries.
 
 ### Use native histograms and exponential histograms
 
-For Prometheus [native histograms](https://prometheus.io/docs/concepts/metric_types/#histogram) are enabled. Your Prometheus server should be able to handle them if you have the `native-histograms` feature enabled.
+For Prometheus [native histograms](https://prometheus.io/docs/concepts/metric_types/#histogram) are enabled if you have the `native-histograms` feature enabled.
 
 For OpenTelemetry you can use [exponential histograms](https://opentelemetry.io/docs/specs/otel/metrics/data-model/#exponentialhistogram) for the predefined histograms instead of defining the buckets manually.
 

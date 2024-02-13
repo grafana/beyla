@@ -46,9 +46,8 @@ Beyla offers the following features:
   If you need to recompile your kernel to enable BTF, the configuration option `CONFIG_DEBUG_INFO_BTF=y` must be
   set.
 - eBPF enabled in the host.
-- For instrumenting Go programs, they must have been compiled with at least Go 1.17. We currently
-  support Go applications built with a major **Go version no earlier than 3 versions** behind the current
-  stable major release.
+- For instrumenting Go programs, they must have been compiled with at least Go 1.17.
+  Beyla supports Go applications built with a major Go version no earlier than 3 versions behind the current stable major release.
 - Administrative access rights to execute Beyla.
 
 ## Get started

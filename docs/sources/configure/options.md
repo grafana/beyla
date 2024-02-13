@@ -804,7 +804,7 @@ For Prometheus [native histograms](https://prometheus.io/docs/concepts/metric_ty
 
 For OpenTelemetry you can use [exponential histograms](https://opentelemetry.io/docs/specs/otel/metrics/data-model/#exponentialhistogram) for the predefined histograms instead of defining the buckets manually.
 
-| YAML       | Env var                                                                   | Type | Default |
+| YAML       | Environment variable                                                      | Type | Default |
 | ---------- | ------------------------------------------------------------------------- | ---- | ------- |
 | `use_exponential_histograms` | `BEYLA_OTEL_USE_EXPONENTIAL_HISTOGRAMS`  | boolean  | `false` |
 

@@ -27,6 +27,7 @@ jobs:
           --conf=/etc/vale/.reviewdog.yml
           --fail-on-error
           --f=rdjsonl
+          --filter-mode=nofilter
           --name=vale
           --reporter=github-pr-review
         env:

@@ -112,7 +112,7 @@ func (p *Tracer) AlreadyInstrumentedLib(_ uint64) bool {
 	return false
 }
 
-func (p *Tracer) Run(ctx context.Context, eventsChan chan<- []request.Span) {
+func (p *Tracer) Run(ctx context.Context, _ chan<- []request.Span) {
 	<-ctx.Done()
 	for _, c := range p.closers {
 		_ = c.Close()

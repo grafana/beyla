@@ -9,9 +9,9 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/cilium/ebpf/ringbuf"
 	"go.opentelemetry.io/otel/trace"
 
-	"github.com/cilium/ebpf/ringbuf"
 	"github.com/grafana/beyla/pkg/internal/request"
 	"github.com/grafana/beyla/pkg/internal/svc"
 )

@@ -4,10 +4,11 @@ import (
 	"log/slog"
 	"sync"
 
+	lru "github.com/hashicorp/golang-lru/v2"
+
 	"github.com/grafana/beyla/pkg/internal/exec"
 	"github.com/grafana/beyla/pkg/internal/request"
 	"github.com/grafana/beyla/pkg/internal/svc"
-	lru "github.com/hashicorp/golang-lru/v2"
 )
 
 var activePids, _ = lru.New[uint32, svc.ID](1024)

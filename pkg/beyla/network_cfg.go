@@ -50,10 +50,11 @@ type NetworkConfig struct {
 	// otherwise it will be matched as a case-sensitive string.
 	ExcludeInterfaces []string `yaml:"exclude_interfaces" env:"BEYLA_NETWORK_EXCLUDE_INTERFACES" envSeparator:","`
 	// CacheMaxFlows specifies how many flows can be accumulated in the accounting cache before
-	// being flushed for its later export
+	// being flushed for its later export. Default value is 5000.
+	// Decrease it if you see the "received message larger than max" error in Beyla logs.
 	CacheMaxFlows int `yaml:"cache_max_flows" env:"BEYLA_NETWORK_CACHE_MAX_FLOWS"`
 	// CacheActiveTimeout specifies the maximum duration that flows are kept in the accounting
-	// cache before being flushed for its later export
+	// cache before being flushed for its later export.
 	CacheActiveTimeout time.Duration `yaml:"cache_active_timeout" env:"BEYLA_NETWORK_CACHE_ACTIVE_TIMEOUT"`
 	// Deduper specifies the deduper type. Accepted values are "none" (disabled) and "firstCome".
 	// When enabled, it will detect duplicate flows (flows that have been detected e.g. through

@@ -38,7 +38,7 @@ func testNetFlowBytesForExistingConnections(ctx context.Context, t *testing.T, _
 	pq := prom.Client{HostPort: prometheusHostPort}
 
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
-		results, err := pq.Query(`network_flows_bytes_total{k8s_src_name="internal-pinger",k8s_dst_name="testserver"}`)
+		results, err := pq.Query(`network_flow_bytes_total{src_name="internal-pinger",dst_name="testserver"}`)
 		require.NoError(t, err)
 		require.NotEmpty(t, results)
 		txt, _ := json.Marshal(results)

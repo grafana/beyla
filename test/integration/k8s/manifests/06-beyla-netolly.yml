@@ -9,7 +9,7 @@ data:
         enable: true
     log_level: debug
     otel_metrics_export:
-      endpoint: http://otelcol:4317
+      endpoint: http://otelcol.default:4317
 ---
 apiVersion: apps/v1
 kind: DaemonSet
@@ -26,6 +26,7 @@ spec:
     spec:
       hostPID: true  #important for appo11y!
       hostNetwork: true #important for neto11y!
+      dnsPolicy: ClusterFirstWithHostNet # important to get connection to otelcollector from hostnetwork !!
       serviceAccountName: beyla
       volumes:
         - name: beyla-config
@@ -48,6 +49,8 @@ spec:
               value: "true"
             - name: BEYLA_NETWORK_CACHE_ACTIVE_TIMEOUT
               value: "100ms"
+            - name: BEYLA_NETWORK_CACHE_MAX_FLOWS
+              value: "20"
             - name: BEYLA_METRICS_INTERVAL
               value: "10ms"
             - name: BEYLA_BPF_BATCH_TIMEOUT

@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/binary"
-	"fmt"
 	"io"
 	"log/slog"
 	"os"
@@ -90,8 +89,6 @@ func ReadHTTPRequestTraceAsSpan(record *ringbuf.Record) (request.Span, bool, err
 	if err != nil {
 		return request.Span{}, true, err
 	}
-
-	fmt.Printf("Event type: %d\n", eventType)
 
 	switch eventType {
 	case EventTypeSQL:

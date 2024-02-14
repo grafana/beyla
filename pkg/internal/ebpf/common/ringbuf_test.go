@@ -30,12 +30,12 @@ func TestForwardRingbuf_CapacityFull(t *testing.T) {
 	defer restore()
 	metrics := &metricsReporter{}
 	forwardedMessages := make(chan []request.Span, 100)
-	fltr := NewPIDsFilter(&slog.Logger{})
+	fltr := TestPidsFilter{services: map[uint32]svc.ID{}}
 	fltr.AllowPID(1, svc.ID{Name: "myService"})
 	go ForwardRingbuf(
 		&TracerConfig{BatchLength: 10},
 		nil, // the source ring buffer can be null
-		fltr,
+		&fltr,
 		ReadHTTPRequestTraceAsSpan,
 		slog.With("test", "TestForwardRingbuf_CapacityFull"),
 		metrics,
@@ -82,12 +82,12 @@ func TestForwardRingbuf_Deadline(t *testing.T) {
 
 	metrics := &metricsReporter{}
 	forwardedMessages := make(chan []request.Span, 100)
-	fltr := NewPIDsFilter(&slog.Logger{})
+	fltr := TestPidsFilter{services: map[uint32]svc.ID{}}
 	fltr.AllowPID(1, svc.ID{Name: "myService"})
 	go ForwardRingbuf(
 		&TracerConfig{BatchLength: 10, BatchTimeout: 20 * time.Millisecond},
-		nil, // the source ring buffer can be null
-		fltr,
+		nil,   // the source ring buffer can be null
+		&fltr, // change fltr to a pointer
 		ReadHTTPRequestTraceAsSpan,
 		slog.With("test", "TestForwardRingbuf_Deadline"),
 		metrics,
@@ -213,4 +213,28 @@ type metricsReporter struct {
 func (m *metricsReporter) TracerFlush(len int) {
 	m.flushes++
 	m.flushedLen += len
+}
+
+type TestPidsFilter struct {
+	services map[uint32]svc.ID
+}
+
+func (pf *TestPidsFilter) AllowPID(p uint32, s svc.ID) {
+	pf.services[p] = s
+}
+
+func (pf *TestPidsFilter) BlockPID(p uint32) {
+	delete(pf.services, p)
+}
+
+func (pf *TestPidsFilter) CurrentPIDs() map[uint32]map[uint32]svc.ID {
+	return nil
+}
+
+func (pf *TestPidsFilter) Filter(inputSpans []request.Span) []request.Span {
+	for i := range inputSpans {
+		s := &inputSpans[i]
+		s.ServiceID = pf.services[s.Pid.HostPID]
+	}
+	return inputSpans
 }

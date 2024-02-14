@@ -68,14 +68,17 @@ func (f *Flows) buildAndStartPipeline(ctx context.Context) (graph.Graph, error) 
 
 	graph.RegisterTerminal(gb, export.MetricsExporterProvider)
 
+	var deduperExpireTime = f.cfg.NetworkFlows.DeduperFCExpiry
+	if deduperExpireTime <= 0 {
+		deduperExpireTime = 2 * f.cfg.NetworkFlows.CacheActiveTimeout
+	}
 	return gb.Build(&FlowsPipeline{
 		Deduper: flow.Deduper{
 			Type:       f.cfg.NetworkFlows.Deduper,
-			ExpireTime: f.cfg.NetworkFlows.DeduperFCExpiry,
+			ExpireTime: deduperExpireTime,
 			JustMark:   f.cfg.NetworkFlows.DeduperJustMark,
 		},
 		Kubernetes: k8s.NetworkTransformConfig{Kubernetes: &f.cfg.Attributes.Kubernetes},
-		// TODO: put here any extra configuration for the exporter
 		// TODO: allow prometheus exporting
 		Exporter: export.MetricsConfig{Metrics: &f.cfg.Metrics},
 	})

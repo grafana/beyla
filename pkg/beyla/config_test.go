@@ -39,8 +39,11 @@ attributes:
     informers_sync_timeout: 30s
   instance_id:
     dns: true
+network:
+  enable: true
 `)
 	require.NoError(t, os.Setenv("BEYLA_EXECUTABLE_NAME", "tras"))
+	require.NoError(t, os.Setenv("BEYLA_NETWORK_AGENT_IP", "1.2.3.4"))
 	require.NoError(t, os.Setenv("BEYLA_OPEN_PORT", "8080-8089"))
 	require.NoError(t, os.Setenv("OTEL_SERVICE_NAME", "svc-name"))
 	require.NoError(t, os.Setenv("BEYLA_NOOP_TRACES", "true"))
@@ -68,8 +71,9 @@ attributes:
 	assert.False(t, cfg.Port.Matches(8078))
 	assert.False(t, cfg.Port.Matches(8098))
 
-	// TODO: restore this when netobserv is finished
-	cfg.NetworkFlows = NetworkConfig{}
+	nc := defaultNetworkConfig
+	nc.Enable = true
+	nc.AgentIP = "1.2.3.4"
 
 	assert.Equal(t, &Config{
 		Exec:             cfg.Exec,
@@ -89,6 +93,7 @@ attributes:
 				Submit: []string{"metrics", "traces"},
 			},
 		},
+		NetworkFlows: nc,
 		Metrics: otel.MetricsConfig{
 			Interval:          5 * time.Second,
 			CommonEndpoint:    "localhost:3131",

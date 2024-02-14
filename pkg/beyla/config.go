@@ -77,25 +77,15 @@ var defaultConfig = Config{
 			InformersSyncTimeout: 30 * time.Second,
 		},
 	},
-	Routes: &transform.RoutesConfig{},
-	NetworkFlows: NetworkConfig{
-		AgentIPIface:       "external",
-		AgentIPType:        "any",
-		ExcludeInterfaces:  []string{"lo"},
-		CacheMaxFlows:      5000,
-		CacheActiveTimeout: 5 * time.Second,
-		Deduper:            "none",
-		Direction:          "both",
-		ListenInterfaces:   "watch",
-		ListenPollPeriod:   10 * time.Second,
-	},
+	Routes:       &transform.RoutesConfig{},
+	NetworkFlows: defaultNetworkConfig,
 }
 
 type Config struct {
 	EBPF ebpfcommon.TracerConfig `yaml:"ebpf"`
 
 	// NetworkFlows configuration for Network Observability feature
-	NetworkFlows NetworkConfig
+	NetworkFlows NetworkConfig `yaml:"network"`
 
 	// Grafana overrides some values of the otel.MetricsConfig and otel.TracesConfig below
 	// for a simpler submission of OTEL metrics to Grafana Cloud
@@ -155,7 +145,7 @@ func (c *Config) Validate() error {
 		return ConfigError(fmt.Sprintf("error in services YAML property: %s", err.Error()))
 	}
 	if !c.Enabled(FeatureNetO11y) && !c.Enabled(FeatureAppO11y) {
-		return ConfigError("missing BEYLA_NETWORK_METRICS, BEYLA_EXECUTABLE_NAME, BEYLA_OPEN_PORT or BEYLA_SYSTEM_WIDE property")
+		return ConfigError("missing at least one of BEYLA_NETWORK_METRICS, BEYLA_EXECUTABLE_NAME or BEYLA_OPEN_PORT property")
 	}
 	if (c.Port.Len() > 0 || c.Exec.IsSet() || len(c.Discovery.Services) > 0) && c.Discovery.SystemWide {
 		return ConfigError("you can't use BEYLA_SYSTEM_WIDE if any of BEYLA_EXECUTABLE_NAME, BEYLA_OPEN_PORT or services (YAML) are set")
@@ -184,7 +174,7 @@ func (c *Config) Validate() error {
 func (c *Config) Enabled(feature Feature) bool {
 	switch feature {
 	case FeatureNetO11y:
-		return len(c.NetworkFlows.Metrics) > 0
+		return c.NetworkFlows.Enable
 	case FeatureAppO11y:
 		return c.Port.Len() > 0 || c.Exec.IsSet() || len(c.Discovery.Services) > 0 || c.Discovery.SystemWide
 	}

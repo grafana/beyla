@@ -85,17 +85,17 @@ var commonIndexers = map[string]cache.IndexFunc{
 	},
 }
 
-func (k *NetworkInformers) GetInfo(ip string) (*Info, error) {
+func (k *NetworkInformers) GetInfo(ip string) (*Info, bool) {
 	if info, ok := k.fetchInformers(ip); ok {
 		// Owner data might be discovered after the owned, so we fetch it
 		// at the last moment
 		if info.Owner.Name == "" {
 			info.Owner = k.getOwner(info)
 		}
-		return info, nil
+		return info, true
 	}
 
-	return nil, fmt.Errorf("informers can't find IP %s", ip)
+	return nil, false
 }
 
 func (k *NetworkInformers) fetchInformers(ip string) (*Info, bool) {

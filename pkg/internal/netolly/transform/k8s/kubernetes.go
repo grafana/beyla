@@ -19,9 +19,11 @@
 package k8s
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 
+	"github.com/hashicorp/golang-lru/v2/simplelru"
 	"github.com/mariomac/pipes/pkg/node"
 
 	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
@@ -56,6 +58,8 @@ const (
 	AttrSrcHostName  = attrPrefixSrc + attrSuffixHostName
 )
 
+const alreadyLoggedIPsCacheLen = 256
+
 func log() *slog.Logger { return slog.With("component", "transform.NetworkTransform") }
 
 type NetworkTransformConfig struct {
@@ -80,7 +84,9 @@ func NetworkTransform(cfg NetworkTransformConfig) (node.MiddleFunc[[]*ebpf.Recor
 }
 
 type networkTransformer struct {
-	kube NetworkInformers
+	log              *slog.Logger
+	alreadyLoggedIPs *simplelru.LRU[string, struct{}]
+	kube             NetworkInformers
 }
 
 func (n *networkTransformer) transform(flow *ebpf.Record) {
@@ -93,9 +99,15 @@ func (n *networkTransformer) transform(flow *ebpf.Record) {
 }
 
 func (n *networkTransformer) decorate(flow *ebpf.Record, prefix, ip string) {
-	kubeInfo, err := n.kube.GetInfo(ip)
-	if err != nil {
-		log().Debug("Can't find kubernetes info for IP", "ip", ip, "error", err)
+	kubeInfo, ok := n.kube.GetInfo(ip)
+	if !ok {
+		if n.log.Enabled(context.TODO(), slog.LevelDebug) {
+			// avoid spoofing the debug logs with the same message for each flow whose IP can't be decorated
+			if !n.alreadyLoggedIPs.Contains(ip) {
+				n.alreadyLoggedIPs.Add(ip, struct{}{})
+				n.log.Debug("Can't find kubernetes info for IP", "ip", ip)
+			}
+		}
 		return
 	}
 	flow.Metadata[prefix+attrSuffixNs] = kubeInfo.Namespace
@@ -113,7 +125,14 @@ func (n *networkTransformer) decorate(flow *ebpf.Record, prefix, ip string) {
 
 // newTransformNetwork create a new transform
 func newTransformNetwork(cfg *NetworkTransformConfig) (*networkTransformer, error) {
-	nt := networkTransformer{}
+	nt := networkTransformer{log: log()}
+	if nt.log.Enabled(context.TODO(), slog.LevelDebug) {
+		var err error
+		nt.alreadyLoggedIPs, err = simplelru.NewLRU[string, struct{}](alreadyLoggedIPsCacheLen, nil)
+		if err != nil {
+			return nil, fmt.Errorf("instantiating debug notified error cache: %w")
+		}
+	}
 
 	if err := nt.kube.InitFromConfig(cfg.Kubernetes.KubeconfigPath, cfg.Kubernetes.InformersSyncTimeout); err != nil {
 		return nil, err

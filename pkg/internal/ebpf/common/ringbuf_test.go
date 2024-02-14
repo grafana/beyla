@@ -30,14 +30,14 @@ func TestForwardRingbuf_CapacityFull(t *testing.T) {
 	defer restore()
 	metrics := &metricsReporter{}
 	forwardedMessages := make(chan []request.Span, 100)
-	go ForwardRingbuf[HTTPRequestTrace](
-		svc.ID{Name: "myService"},
+	go ForwardRingbuf(
 		&TracerConfig{BatchLength: 10},
-		slog.With("test", "TestForwardRingbuf_CapacityFull"),
 		nil, // the source ring buffer can be null
+		&IdentityPidsFilter{},
 		ReadHTTPRequestTraceAsSpan,
-		(&IdentityPidsFilter{}).Filter,
+		slog.With("test", "TestForwardRingbuf_CapacityFull"),
 		metrics,
+		nil,
 	)(context.Background(), forwardedMessages)
 
 	// WHEN it starts receiving trace events
@@ -78,13 +78,12 @@ func TestForwardRingbuf_Deadline(t *testing.T) {
 
 	metrics := &metricsReporter{}
 	forwardedMessages := make(chan []request.Span, 100)
-	go ForwardRingbuf[HTTPRequestTrace](
-		svc.ID{Name: "myService"},
+	go ForwardRingbuf(
 		&TracerConfig{BatchLength: 10, BatchTimeout: 20 * time.Millisecond},
-		slog.With("test", "TestForwardRingbuf_Deadline"),
 		nil, // the source ring buffer can be null
+		(&IdentityPidsFilter{}),
 		ReadHTTPRequestTraceAsSpan,
-		(&IdentityPidsFilter{}).Filter,
+		slog.With("test", "TestForwardRingbuf_Deadline"),
 		metrics,
 	)(context.Background(), forwardedMessages)
 
@@ -116,13 +115,12 @@ func TestForwardRingbuf_Close(t *testing.T) {
 
 	metrics := &metricsReporter{}
 	closable := closableObject{}
-	go ForwardRingbuf[HTTPRequestTrace](
-		svc.ID{Name: "myService"},
+	go ForwardRingbuf(
 		&TracerConfig{BatchLength: 10},
-		slog.With("test", "TestForwardRingbuf_Close"),
 		nil, // the source ring buffer can be null
+		(&IdentityPidsFilter{}),
 		ReadHTTPRequestTraceAsSpan,
-		(&IdentityPidsFilter{}).Filter,
+		slog.With("test", "TestForwardRingbuf_Close"),
 		metrics,
 		&closable,
 	)(context.Background(), make(chan []request.Span, 100))

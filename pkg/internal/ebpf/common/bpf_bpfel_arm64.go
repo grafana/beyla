@@ -19,13 +19,32 @@ type bpfConnectionInfoT struct {
 	D_port uint16
 }
 
-type bpfHttpConnectionMetadataT struct {
-	Pid struct {
-		HostPid   uint32
-		UserPid   uint32
-		Namespace uint32
+type bpfHttpInfoT struct {
+	Flags           uint8
+	_               [1]byte
+	ConnInfo        bpfConnectionInfoT
+	_               [2]byte
+	StartMonotimeNs uint64
+	EndMonotimeNs   uint64
+	Buf             [160]uint8
+	Len             uint32
+	RespLen         uint32
+	Status          uint16
+	Type            uint8
+	Ssl             uint8
+	Pid             struct {
+		HostPid uint32
+		UserPid uint32
+		Ns      uint32
 	}
-	Type uint8
+	Tp struct {
+		TraceId  [16]uint8
+		SpanId   [8]uint8
+		ParentId [8]uint8
+		Ts       uint64
+		Flags    uint8
+		_        [7]byte
+	}
 }
 
 type bpfHttpRequestTrace struct {
@@ -51,20 +70,10 @@ type bpfHttpRequestTrace struct {
 		_        [7]byte
 	}
 	Pid struct {
-		HostPid   uint32
-		UserPid   uint32
-		Namespace uint32
+		HostPid uint32
+		UserPid uint32
+		Ns      uint32
 	}
-}
-
-type bpfPidConnectionInfoT struct {
-	Conn bpfConnectionInfoT
-	Pid  uint32
-}
-
-type bpfPidKeyT struct {
-	Pid       uint32
-	Namespace uint32
 }
 
 type bpfSqlRequestTrace struct {
@@ -82,24 +91,10 @@ type bpfSqlRequestTrace struct {
 		_        [7]byte
 	}
 	Pid struct {
-		HostPid   uint32
-		UserPid   uint32
-		Namespace uint32
+		HostPid uint32
+		UserPid uint32
+		Ns      uint32
 	}
-}
-
-type bpfTpInfoPidT struct {
-	Tp struct {
-		TraceId  [16]uint8
-		SpanId   [8]uint8
-		ParentId [8]uint8
-		Ts       uint64
-		Flags    uint8
-		_        [7]byte
-	}
-	Pid   uint32
-	Valid uint8
-	_     [3]byte
 }
 
 // loadBpf returns the embedded CollectionSpec for bpf.
@@ -149,10 +144,6 @@ type bpfProgramSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpfMapSpecs struct {
-	FilteredConnections *ebpf.MapSpec `ebpf:"filtered_connections"`
-	PidCache            *ebpf.MapSpec `ebpf:"pid_cache"`
-	TraceMap            *ebpf.MapSpec `ebpf:"trace_map"`
-	ValidPids           *ebpf.MapSpec `ebpf:"valid_pids"`
 }
 
 // bpfObjects contains all objects after they have been loaded into the kernel.
@@ -174,19 +165,10 @@ func (o *bpfObjects) Close() error {
 //
 // It can be passed to loadBpfObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpfMaps struct {
-	FilteredConnections *ebpf.Map `ebpf:"filtered_connections"`
-	PidCache            *ebpf.Map `ebpf:"pid_cache"`
-	TraceMap            *ebpf.Map `ebpf:"trace_map"`
-	ValidPids           *ebpf.Map `ebpf:"valid_pids"`
 }
 
 func (m *bpfMaps) Close() error {
-	return _BpfClose(
-		m.FilteredConnections,
-		m.PidCache,
-		m.TraceMap,
-		m.ValidPids,
-	)
+	return _BpfClose()
 }
 
 // bpfPrograms contains all programs after they have been loaded into the kernel.

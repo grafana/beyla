@@ -5,7 +5,7 @@
 #include "bpf_helpers.h"
 #include "bpf_builtins.h"
 #include "http_types.h"
-#include "kringbuf.h"
+#include "ringbuf.h"
 #include "pid.h"
 #include "trace_common.h"
 
@@ -16,6 +16,17 @@
 #define PACKET_TYPE_RESPONSE 2
 
 volatile const s32 capture_header_buffer = 0;
+
+// Keeps track of active accept or connect connection infos
+// From this table we extract the PID of the process and filter
+// HTTP calls we are not interested in
+struct {
+    __uint(type, BPF_MAP_TYPE_LRU_HASH);
+    __type(key, pid_connection_info_t);
+    __type(value, http_connection_metadata_t); // PID_TID group and connection type
+    __uint(max_entries, MAX_CONCURRENT_SHARED_REQUESTS);
+    __uint(pinning, LIBBPF_PIN_BY_NAME);
+} filtered_connections SEC(".maps");
 
 // Keeps track of the ongoing http connections we match for request/response
 struct {
@@ -168,6 +179,7 @@ static __always_inline void finish_http(http_info_t *info) {
             bpf_dbg_printk("Sending trace %lx", info);
 
             bpf_memcpy(trace, info, sizeof(http_info_t));
+            trace->flags = EVENT_K_HTTP_REQUEST;
             bpf_ringbuf_submit(trace, get_flags());
         }
 
@@ -244,32 +256,6 @@ static __always_inline void handle_http_response(unsigned char *small_buf, pid_c
 
     process_http_response(info, small_buf, meta, orig_len);
     finish_http(info);
-}
-
-static __always_inline void send_http_trace_buf(void *u_buf, int size, connection_info_t *conn) {
-    if (size <= 0) {
-        return;
-    }
-
-    http_buf_t *trace = bpf_ringbuf_reserve(&events, sizeof(http_buf_t), 0);
-    if (trace) {
-        trace->conn_info = *conn;
-        trace->flags |= CONN_INFO_FLAG_TRACE;
-
-        s64 buf_len = (s64)size;
-        if (buf_len >= TRACE_BUF_SIZE) {
-            buf_len = TRACE_BUF_SIZE - 1;
-        }
-        buf_len &= (TRACE_BUF_SIZE - 1);
-        bpf_probe_read(trace->buf, buf_len, u_buf);
-
-        if (buf_len < TRACE_BUF_SIZE) {
-            trace->buf[buf_len] = '\0';
-        }
-        
-        bpf_dbg_printk("Sending http buffer %s", trace->buf);
-        bpf_ringbuf_submit(trace, get_flags());
-    }
 }
 
 static __always_inline void handle_buf_with_connection(pid_connection_info_t *pid_conn, void *u_buf, int bytes_len, u8 ssl) {

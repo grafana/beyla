@@ -10,7 +10,6 @@ import (
 
 	"github.com/grafana/beyla/pkg/beyla"
 	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
-	"github.com/grafana/beyla/pkg/internal/ebpf/httpfltr"
 	"github.com/grafana/beyla/pkg/internal/exec"
 	"github.com/grafana/beyla/pkg/internal/goexec"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
@@ -18,29 +17,17 @@ import (
 	"github.com/grafana/beyla/pkg/internal/svc"
 )
 
-//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -type http_buf_t -target amd64,arm64 bpf ../../../../bpf/http_ssl.c -- -I../../../../bpf/headers
-//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -type http_buf_t -target amd64,arm64 bpf_tp ../../../../bpf/http_ssl.c -- -I../../../../bpf/headers -DBPF_TRACEPARENT
-//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -type http_buf_t -target amd64,arm64 bpf_debug ../../../../bpf/http_ssl.c -- -I../../../../bpf/headers -DBPF_DEBUG
-//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -type http_buf_t -target amd64,arm64 bpf_tp_debug ../../../../bpf/http_ssl.c -- -I../../../../bpf/headers -DBPF_DEBUG -DBPF_TRACEPARENT
+//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf ../../../../bpf/http_ssl.c -- -I../../../../bpf/headers
+//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf_tp ../../../../bpf/http_ssl.c -- -I../../../../bpf/headers -DBPF_TRACEPARENT
+//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf_debug ../../../../bpf/http_ssl.c -- -I../../../../bpf/headers -DBPF_DEBUG
+//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf_tp_debug ../../../../bpf/http_ssl.c -- -I../../../../bpf/headers -DBPF_DEBUG -DBPF_TRACEPARENT
 
 // Hold onto Linux inode numbers of files that are already instrumented, e.g. libssl.so.3
 var instrumentedLibs = make(map[uint64]bool)
 var libsMux sync.Mutex
 
-type BPFHTTPInfo bpfHttpInfoT
-type BPFConnInfo bpfConnectionInfoT
-
-type HTTPInfo struct {
-	BPFHTTPInfo
-	Method  string
-	URL     string
-	Host    string
-	Peer    string
-	Service svc.ID
-}
-
 type Tracer struct {
-	pidsFilter httpfltr.PidsFilter
+	pidsFilter ebpfcommon.ServiceFilter
 	cfg        *beyla.Config
 	metrics    imetrics.Reporter
 	bpfObjects bpfObjects
@@ -51,27 +38,21 @@ type Tracer struct {
 
 func New(cfg *beyla.Config, metrics imetrics.Reporter) *Tracer {
 	log := slog.With("component", "httpfltr.Tracer")
-	var filter httpfltr.PidsFilter
-	if cfg.Discovery.SystemWide {
-		filter = &ebpfcommon.IdentityPidsFilter{}
-	} else {
-		filter = ebpfcommon.CommonPIDsFilter()
-	}
 	return &Tracer{
 		log:        log,
 		cfg:        cfg,
 		metrics:    metrics,
-		pidsFilter: filter,
+		pidsFilter: ebpfcommon.CommonPIDsFilter(cfg.Discovery.SystemWide),
 	}
 }
 
 func (p *Tracer) AllowPID(pid uint32, svc svc.ID) {
-	httpfltr.RegisterActiveService(pid, svc)
+	ebpfcommon.RegisterActiveService(pid, svc)
 	p.pidsFilter.AllowPID(pid)
 }
 
 func (p *Tracer) BlockPID(pid uint32) {
-	httpfltr.UnregisterActiveService(pid)
+	ebpfcommon.UnregisterActiveService(pid)
 	p.pidsFilter.BlockPID(pid)
 }
 
@@ -214,12 +195,10 @@ func (p *Tracer) AlreadyInstrumentedLib(id uint64) bool {
 }
 
 func (p *Tracer) Run(ctx context.Context, eventsChan chan<- []request.Span, service svc.ID) {
-	p.Service = &service
-	ebpfcommon.ForwardRingbuf[HTTPInfo](
-		service,
-		&p.cfg.EBPF, p.log, p.bpfObjects.Events,
-		httpfltr.ReadHTTPInfoIntoSpan,
-		p.pidsFilter.Filter,
+	ebpfcommon.SharedRingbuf(
+		&p.cfg.EBPF,
+		p.pidsFilter,
+		p.bpfObjects.Events,
 		p.metrics,
 		append(p.closers, &p.bpfObjects)...,
 	)(ctx, eventsChan)

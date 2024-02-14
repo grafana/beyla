@@ -10,7 +10,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "pid.h"
+#include "pid_types.h"
 #include "utils.h"
 #include "go_str.h"
 #include "go_byte_arr.h"

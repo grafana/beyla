@@ -171,6 +171,17 @@ func (ta *TraceAttacher) getTracer(ie *Instrumentable) (*ebpf.ProcessTracer, boo
 }
 
 func monitorPIDs(tracer *ebpf.ProcessTracer, ie *Instrumentable) {
+	// If the user does not override the service name via configuration
+	// the service name is the name of the found executable
+	// Unless the case of system-wide tracing, where the name of the
+	// executable will be dynamically set for each traced http request call.
+	if ie.FileInfo.Service.Name == "" {
+		ie.FileInfo.Service.Name = ie.FileInfo.ExecutableName()
+		// we mark the service ID as automatically named in case we want to look,
+		// in later stages of the pipeline, for better automatic service name
+		ie.FileInfo.Service.AutoName = true
+	}
+
 	// allowing the tracer to forward traces from the discovered PID and its children processes
 	tracer.AllowPID(uint32(ie.FileInfo.Pid), ie.FileInfo.Service)
 	for _, pid := range ie.ChildPids {

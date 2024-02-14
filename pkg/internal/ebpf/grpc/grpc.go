@@ -22,6 +22,7 @@ import (
 
 	"github.com/cilium/ebpf"
 
+	"github.com/grafana/beyla/pkg/beyla"
 	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
 	"github.com/grafana/beyla/pkg/internal/exec"
 	"github.com/grafana/beyla/pkg/internal/goexec"
@@ -37,7 +38,7 @@ import (
 
 type Tracer struct {
 	log        *slog.Logger
-	pidsFilter *ebpfcommon.PIDsFilter
+	pidsFilter ebpfcommon.ServiceFilter
 	cfg        *ebpfcommon.TracerConfig
 	metrics    imetrics.Reporter
 
@@ -45,21 +46,23 @@ type Tracer struct {
 	closers    []io.Closer
 }
 
-func New(cfg *ebpfcommon.TracerConfig, metrics imetrics.Reporter) *Tracer {
+func New(cfg *beyla.Config, metrics imetrics.Reporter) *Tracer {
 	log := slog.With("component", "grpc.Tracer")
 	return &Tracer{
 		log:        log,
-		cfg:        cfg,
+		cfg:        &cfg.EBPF,
 		metrics:    metrics,
-		pidsFilter: ebpfcommon.NewPIDsFilter(log),
+		pidsFilter: ebpfcommon.CommonPIDsFilter(cfg.Discovery.SystemWide),
 	}
 }
 
-func (p *Tracer) AllowPID(pid uint32, _ svc.ID) {
+func (p *Tracer) AllowPID(pid uint32, svc svc.ID) {
+	ebpfcommon.RegisterActiveService(pid, svc)
 	p.pidsFilter.AllowPID(pid)
 }
 
 func (p *Tracer) BlockPID(pid uint32) {
+	ebpfcommon.UnregisterActiveService(pid)
 	p.pidsFilter.BlockPID(pid)
 }
 
@@ -201,11 +204,10 @@ func (p *Tracer) AlreadyInstrumentedLib(_ uint64) bool {
 }
 
 func (p *Tracer) Run(ctx context.Context, eventsChan chan<- []request.Span, service svc.ID) {
-	ebpfcommon.ForwardRingbuf[ebpfcommon.HTTPRequestTrace](
-		service,
-		p.cfg, p.log, p.bpfObjects.Events,
-		ebpfcommon.ReadHTTPRequestTraceAsSpan,
-		p.pidsFilter.Filter,
+	ebpfcommon.SharedRingbuf(
+		p.cfg,
+		p.pidsFilter,
+		p.bpfObjects.Events,
 		p.metrics,
 		append(p.closers, &p.bpfObjects)...,
 	)(ctx, eventsChan)

@@ -19,26 +19,20 @@ type bpfConnectionInfoT struct {
 	D_port uint16
 }
 
-type bpfHttpBufT struct {
-	Flags    uint64
-	ConnInfo bpfConnectionInfoT
-	Buf      [1024]uint8
-	_        [4]byte
-}
-
 type bpfHttpConnectionMetadataT struct {
 	Pid struct {
-		HostPid   uint32
-		UserPid   uint32
-		Namespace uint32
+		HostPid uint32
+		UserPid uint32
+		Ns      uint32
 	}
 	Type uint8
 }
 
 type bpfHttpInfoT struct {
-	Flags           uint64
+	Flags           uint8
+	_               [1]byte
 	ConnInfo        bpfConnectionInfoT
-	_               [4]byte
+	_               [2]byte
 	StartMonotimeNs uint64
 	EndMonotimeNs   uint64
 	Buf             [160]uint8
@@ -48,9 +42,9 @@ type bpfHttpInfoT struct {
 	Type            uint8
 	Ssl             uint8
 	Pid             struct {
-		HostPid   uint32
-		UserPid   uint32
-		Namespace uint32
+		HostPid uint32
+		UserPid uint32
+		Ns      uint32
 	}
 	Tp struct {
 		TraceId  [16]uint8
@@ -68,8 +62,8 @@ type bpfPidConnectionInfoT struct {
 }
 
 type bpfPidKeyT struct {
-	Pid       uint32
-	Namespace uint32
+	Pid uint32
+	Ns  uint32
 }
 
 type bpfRecvArgsT struct {

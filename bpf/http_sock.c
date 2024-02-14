@@ -5,7 +5,6 @@
 #include "pid.h"
 #include "sockaddr.h"
 #include "tcp_info.h"
-#include "kringbuf.h"
 #include "http_sock.h"
 #include "http_ssl.h"
 
@@ -394,7 +393,7 @@ int BPF_KRETPROBE(kretprobe_sys_clone, int tid) {
 
     pid_key_t child = {
         .pid = (u32)tid,
-        .namespace = parent.namespace,
+        .ns = parent.ns,
     };
 
     bpf_dbg_printk("sys_clone_ret %d -> %d", id, tid);

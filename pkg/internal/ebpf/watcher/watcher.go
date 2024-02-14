@@ -13,7 +13,6 @@ import (
 	"github.com/grafana/beyla/pkg/beyla"
 	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
 	"github.com/grafana/beyla/pkg/internal/request"
-	"github.com/grafana/beyla/pkg/internal/svc"
 )
 
 //go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -type watch_info_t -target amd64,arm64 bpf ../../../../bpf/watch_helper.c -- -I../../../../bpf/headers
@@ -84,11 +83,12 @@ func (p *Watcher) Tracepoints() map[string]ebpfcommon.FunctionPrograms {
 
 func (p *Watcher) Run(ctx context.Context) {
 	p.events <- Event{Type: Ready}
-	ebpfcommon.ForwardRingbuf[any](
-		svc.ID{},
-		&p.cfg.EBPF, p.log, p.bpfObjects.WatchEvents,
+	ebpfcommon.ForwardRingbuf(
+		&p.cfg.EBPF,
+		p.bpfObjects.WatchEvents,
+		&ebpfcommon.IdentityPidsFilter{},
 		p.processWatchEvent,
-		nil,
+		p.log,
 		nil,
 		append(p.closers, &p.bpfObjects)...,
 	)(ctx, nil)

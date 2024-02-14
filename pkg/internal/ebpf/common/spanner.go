@@ -64,8 +64,9 @@ func HTTPRequestTraceToSpan(trace *HTTPRequestTrace) request.Span {
 		Pid: request.PidInfo{
 			HostPID:   trace.Pid.HostPid,
 			UserPID:   trace.Pid.UserPid,
-			Namespace: trace.Pid.Namespace,
+			Namespace: trace.Pid.Ns,
 		},
+		ServiceID: serviceInfo(trace.Pid.HostPid),
 	}
 }
 
@@ -103,8 +104,9 @@ func SQLRequestTraceToSpan(trace *SQLRequestTrace) request.Span {
 		Pid: request.PidInfo{
 			HostPID:   trace.Pid.HostPid,
 			UserPID:   trace.Pid.UserPid,
-			Namespace: trace.Pid.Namespace,
+			Namespace: trace.Pid.Ns,
 		},
+		ServiceID: serviceInfo(trace.Pid.HostPid),
 	}
 }
 

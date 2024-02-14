@@ -18,6 +18,13 @@ var readNamespacePIDs = func(pid int32) ([]uint32, error) {
 	return FindNamespacedPids(pid)
 }
 
+type ServiceFilter interface {
+	AllowPID(uint32)
+	BlockPID(uint32)
+	Filter(inputSpans []request.Span) []request.Span
+	CurrentPIDs() map[uint32]map[uint32]struct{}
+}
+
 // PIDsFilter keeps a thread-safe copy of the PIDs whose traces are allowed to
 // be forwarded. Its Filter method filters the request.Span instances whose
 // PIDs are not in the allowed list.
@@ -38,9 +45,13 @@ func NewPIDsFilter(log *slog.Logger) *PIDsFilter {
 	}
 }
 
-func CommonPIDsFilter() *PIDsFilter {
+func CommonPIDsFilter(systemWide bool) ServiceFilter {
 	commonLock.Lock()
 	defer commonLock.Unlock()
+
+	if systemWide {
+		return &IdentityPidsFilter{}
+	}
 
 	if commonPIDsFilter == nil {
 		commonPIDsFilter = NewPIDsFilter(slog.With("component", "ebpfCommon.CommonPIDsFilter"))

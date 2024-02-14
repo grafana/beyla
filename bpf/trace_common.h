@@ -5,7 +5,7 @@
 #include "http_types.h"
 #include "trace_util.h"
 #include "tracing.h"
-#include "pid.h"
+#include "pid_types.h"
 
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
@@ -109,7 +109,7 @@ static __always_inline tp_info_pid_t *find_parent_trace() {
                 break;
             }
         } else {
-            bpf_dbg_printk("Found parent trace for pid=%d, ns=%lx", c_tid.pid, c_tid.namespace);
+            bpf_dbg_printk("Found parent trace for pid=%d, ns=%lx", c_tid.pid, c_tid.ns);
             return server_tp;
         }
 

@@ -52,10 +52,9 @@ int uprobe_proc_newproc1_ret(struct pt_regs *ctx) {
     // Lookup the newproc1 invocation metadata
     new_func_invocation_t *invocation =
         bpf_map_lookup_elem(&newproc1, &creator_goroutine);
-    bpf_map_delete_elem(&newproc1, &creator_goroutine);
     if (invocation == NULL) {
         bpf_dbg_printk("can't read newproc1 invocation metadata");
-        return 0;
+        goto done;
     }
 
     // The parent goroutine is the second argument of newproc1
@@ -74,6 +73,9 @@ int uprobe_proc_newproc1_ret(struct pt_regs *ctx) {
     if (bpf_map_update_elem(&ongoing_goroutines, &goroutine_addr, &metadata, BPF_ANY)) {
         bpf_dbg_printk("can't update active goroutine");
     }
+
+done:
+    bpf_map_delete_elem(&newproc1, &creator_goroutine);
 
     return 0;
 }

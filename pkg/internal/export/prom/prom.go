@@ -3,6 +3,7 @@ package prom
 import (
 	"context"
 	"strconv"
+	"time"
 
 	"github.com/mariomac/pipes/pkg/node"
 	"github.com/prometheus/client_golang/prometheus"
@@ -54,6 +55,12 @@ const (
 	k8sNodeName        = "k8s_node_name"
 	k8sPodUID          = "k8s_pod_uid"
 	k8sPodStartTime    = "k8s_pod_start_time"
+
+	// default values for the histogram configuration
+	// from https://grafana.com/docs/mimir/latest/send/native-histograms/#migrate-from-classic-histograms
+	defaultHistogramBucketFactor     = 1.1
+	defaultHistogramMaxBucketNumber  = uint32(100)
+	defaultHistogramMinResetDuration = 1 * time.Hour
 )
 
 // TODO: TLS
@@ -102,39 +109,60 @@ func newReporter(ctx context.Context, cfg *PrometheusConfig, ctxInfo *global.Con
 		cfg:         cfg,
 		promConnect: ctxInfo.Prometheus,
 		httpDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
-			Name:    HTTPServerDuration,
-			Help:    "duration of HTTP service calls from the server side, in seconds",
-			Buckets: cfg.Buckets.DurationHistogram,
+			Name:                            HTTPServerDuration,
+			Help:                            "duration of HTTP service calls from the server side, in seconds",
+			Buckets:                         cfg.Buckets.DurationHistogram,
+			NativeHistogramBucketFactor:     defaultHistogramBucketFactor,
+			NativeHistogramMaxBucketNumber:  defaultHistogramMaxBucketNumber,
+			NativeHistogramMinResetDuration: defaultHistogramMinResetDuration,
 		}, labelNamesHTTP(cfg, ctxInfo)),
 		httpClientDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
-			Name:    HTTPClientDuration,
-			Help:    "duration of HTTP service calls from the client side, in seconds",
-			Buckets: cfg.Buckets.DurationHistogram,
+			Name:                            HTTPClientDuration,
+			Help:                            "duration of HTTP service calls from the client side, in seconds",
+			Buckets:                         cfg.Buckets.DurationHistogram,
+			NativeHistogramBucketFactor:     defaultHistogramBucketFactor,
+			NativeHistogramMaxBucketNumber:  defaultHistogramMaxBucketNumber,
+			NativeHistogramMinResetDuration: defaultHistogramMinResetDuration,
 		}, labelNamesHTTPClient(cfg, ctxInfo)),
 		grpcDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
-			Name:    RPCServerDuration,
-			Help:    "duration of RCP service calls from the server side, in seconds",
-			Buckets: cfg.Buckets.DurationHistogram,
+			Name:                            RPCServerDuration,
+			Help:                            "duration of RCP service calls from the server side, in seconds",
+			Buckets:                         cfg.Buckets.DurationHistogram,
+			NativeHistogramBucketFactor:     defaultHistogramBucketFactor,
+			NativeHistogramMaxBucketNumber:  defaultHistogramMaxBucketNumber,
+			NativeHistogramMinResetDuration: defaultHistogramMinResetDuration,
 		}, labelNamesGRPC(cfg, ctxInfo)),
 		grpcClientDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
-			Name:    RPCClientDuration,
-			Help:    "duration of GRPC service calls from the client side, in seconds",
-			Buckets: cfg.Buckets.DurationHistogram,
+			Name:                            RPCClientDuration,
+			Help:                            "duration of GRPC service calls from the client side, in seconds",
+			Buckets:                         cfg.Buckets.DurationHistogram,
+			NativeHistogramBucketFactor:     defaultHistogramBucketFactor,
+			NativeHistogramMaxBucketNumber:  defaultHistogramMaxBucketNumber,
+			NativeHistogramMinResetDuration: defaultHistogramMinResetDuration,
 		}, labelNamesGRPCClient(cfg, ctxInfo)),
 		sqlClientDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
-			Name:    SQLClientDuration,
-			Help:    "duration of SQL client operations, in seconds",
-			Buckets: cfg.Buckets.DurationHistogram,
+			Name:                            SQLClientDuration,
+			Help:                            "duration of SQL client operations, in seconds",
+			Buckets:                         cfg.Buckets.DurationHistogram,
+			NativeHistogramBucketFactor:     defaultHistogramBucketFactor,
+			NativeHistogramMaxBucketNumber:  defaultHistogramMaxBucketNumber,
+			NativeHistogramMinResetDuration: defaultHistogramMinResetDuration,
 		}, labelNamesSQL(ctxInfo)),
 		httpRequestSize: prometheus.NewHistogramVec(prometheus.HistogramOpts{
-			Name:    HTTPServerRequestSize,
-			Help:    "size, in bytes, of the HTTP request body as received at the server side",
-			Buckets: cfg.Buckets.RequestSizeHistogram,
+			Name:                            HTTPServerRequestSize,
+			Help:                            "size, in bytes, of the HTTP request body as received at the server side",
+			Buckets:                         cfg.Buckets.RequestSizeHistogram,
+			NativeHistogramBucketFactor:     defaultHistogramBucketFactor,
+			NativeHistogramMaxBucketNumber:  defaultHistogramMaxBucketNumber,
+			NativeHistogramMinResetDuration: defaultHistogramMinResetDuration,
 		}, labelNamesHTTP(cfg, ctxInfo)),
 		httpClientRequestSize: prometheus.NewHistogramVec(prometheus.HistogramOpts{
-			Name:    HTTPClientRequestSize,
-			Help:    "size, in bytes, of the HTTP request body as sent from the client side",
-			Buckets: cfg.Buckets.RequestSizeHistogram,
+			Name:                            HTTPClientRequestSize,
+			Help:                            "size, in bytes, of the HTTP request body as sent from the client side",
+			Buckets:                         cfg.Buckets.RequestSizeHistogram,
+			NativeHistogramBucketFactor:     defaultHistogramBucketFactor,
+			NativeHistogramMaxBucketNumber:  defaultHistogramMaxBucketNumber,
+			NativeHistogramMinResetDuration: defaultHistogramMinResetDuration,
 		}, labelNamesHTTPClient(cfg, ctxInfo)),
 	}
 	mr.promConnect.Register(cfg.Port, cfg.Path,

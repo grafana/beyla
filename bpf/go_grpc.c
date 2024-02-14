@@ -135,17 +135,15 @@ int uprobe_server_handleStream_return(struct pt_regs *ctx) {
 
     grpc_srv_func_invocation_t *invocation =
         bpf_map_lookup_elem(&ongoing_grpc_server_requests, &goroutine_addr);
-    bpf_map_delete_elem(&ongoing_grpc_server_requests, &goroutine_addr);
     if (invocation == NULL) {
         bpf_dbg_printk("can't read grpc invocation metadata");
-        return 0;
+        goto done;
     }
 
     u16 *status = bpf_map_lookup_elem(&ongoing_grpc_request_status, &goroutine_addr);
-    bpf_map_delete_elem(&ongoing_grpc_request_status, &goroutine_addr);
     if (status == NULL) {
         bpf_dbg_printk("can't read grpc invocation status");
-        return 0;
+        goto done;
     }
 
     void *stream_ptr = (void *)invocation->stream;
@@ -154,7 +152,7 @@ int uprobe_server_handleStream_return(struct pt_regs *ctx) {
     http_request_trace *trace = bpf_ringbuf_reserve(&events, sizeof(http_request_trace), 0);
     if (!trace) {
         bpf_dbg_printk("can't reserve space in the ringbuffer");
-        return 0;
+        goto done;
     }
     task_pid(&trace->pid);
     trace->type = EVENT_GRPC_REQUEST;
@@ -173,7 +171,7 @@ int uprobe_server_handleStream_return(struct pt_regs *ctx) {
     if (!read_go_str("grpc method", stream_ptr, grpc_stream_method_ptr_pos, &trace->path, sizeof(trace->path))) {
         bpf_printk("can't read grpc transport.Stream.Method");
         bpf_ringbuf_discard(trace, 0);
-        return 0;
+        goto done;
     }
 
     void *st_ptr = 0;
@@ -204,7 +202,7 @@ int uprobe_server_handleStream_return(struct pt_regs *ctx) {
                 if (!read_go_byte_arr("grpc peer ptr", peer_ptr, tcp_addr_ip_ptr_pos, &trace->remote_addr, &remote_addr_len, sizeof(trace->remote_addr))) {
                     bpf_printk("can't read grpc peer ptr");
                     bpf_ringbuf_discard(trace, 0);
-                    return 0;
+                    goto done;
                 }
                 trace->remote_addr_len = remote_addr_len;
             }
@@ -218,7 +216,7 @@ int uprobe_server_handleStream_return(struct pt_regs *ctx) {
                 if (!read_go_byte_arr("grpc host ptr", host_ptr, tcp_addr_ip_ptr_pos, &trace->host, &host_len, sizeof(trace->host))) {
                     bpf_printk("can't read grpc host ptr");
                     bpf_ringbuf_discard(trace, 0);
-                    return 0;
+                    goto done;
                 }
                 trace->host_len = host_len;
 
@@ -234,6 +232,10 @@ int uprobe_server_handleStream_return(struct pt_regs *ctx) {
     trace->end_monotime_ns = bpf_ktime_get_ns();
     // submit the completed trace via ringbuffer
     bpf_ringbuf_submit(trace, get_flags());
+
+done:
+    bpf_map_delete_elem(&ongoing_grpc_server_requests, &goroutine_addr);
+    bpf_map_delete_elem(&ongoing_grpc_request_status, &goroutine_addr);
 
     return 0;
 }
@@ -349,17 +351,16 @@ int uprobe_ClientConn_Invoke_return(struct pt_regs *ctx) {
 
     grpc_client_func_invocation_t *invocation =
         bpf_map_lookup_elem(&ongoing_grpc_client_requests, &goroutine_addr);
-    bpf_map_delete_elem(&ongoing_grpc_client_requests, &goroutine_addr);
 
     if (invocation == NULL) {
         bpf_dbg_printk("can't read grpc client invocation metadata");
-        return 0;
+        goto done;
     }
 
     http_request_trace *trace = bpf_ringbuf_reserve(&events, sizeof(http_request_trace), 0);
     if (!trace) {
         bpf_dbg_printk("can't reserve space in the ringbuffer");
-        return 0;
+        goto done;
     }
 
     task_pid(&trace->pid);
@@ -382,14 +383,14 @@ int uprobe_ClientConn_Invoke_return(struct pt_regs *ctx) {
     if (!read_go_str_n("method", method_ptr, (u64)method_len, &trace->path, sizeof(trace->path))) {
         bpf_printk("can't read grpc client method");
         bpf_ringbuf_discard(trace, 0);
-        return 0;
+        goto done;
     }
 
     // Get the host information of the remote
     if (!read_go_str("host", cc_ptr, grpc_client_target_ptr_pos, &trace->host, sizeof(trace->host))) {
         bpf_printk("can't read http Request.Host");
         bpf_ringbuf_discard(trace, 0);
-        return 0;
+        goto done;
     }
 
     trace->tp = invocation->tp;
@@ -399,6 +400,8 @@ int uprobe_ClientConn_Invoke_return(struct pt_regs *ctx) {
     // submit the completed trace via ringbuffer
     bpf_ringbuf_submit(trace, get_flags());
 
+done:
+    bpf_map_delete_elem(&ongoing_grpc_client_requests, &goroutine_addr);
     return 0;
 }
 
@@ -551,6 +554,7 @@ int uprobe_hpack_Encoder_WriteField(struct pt_regs *ctx) {
 
                         if (val_len <= 0) {
                             bpf_dbg_printk("Encoded traceparent value too large or empty");
+                            bpf_map_delete_elem(&ongoing_grpc_header_writes, &goroutine_addr);
                             return 0;
                         }
 

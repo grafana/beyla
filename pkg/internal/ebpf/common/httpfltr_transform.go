@@ -87,7 +87,8 @@ func ReadHTTPInfoIntoSpan(record *ringbuf.Record) (request.Span, bool, error) {
 	}
 	result.URL = event.url()
 	result.Method = event.method()
-	//result.Service = serviceInfo(event.Pid.HostPid)
+	// set generic service to be overwritten later by the PID filters
+	result.Service = svc.ID{SDKLanguage: svc.InstrumentableGeneric}
 
 	return httpInfoToSpan(&result), false, nil
 }

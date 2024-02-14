@@ -87,7 +87,7 @@ func ReadHTTPInfoIntoSpan(record *ringbuf.Record) (request.Span, bool, error) {
 	}
 	result.URL = event.url()
 	result.Method = event.method()
-	result.Service = serviceInfo(event.Pid.HostPid)
+	//result.Service = serviceInfo(event.Pid.HostPid)
 
 	return httpInfoToSpan(&result), false, nil
 }

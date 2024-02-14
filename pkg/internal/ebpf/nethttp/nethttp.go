@@ -56,12 +56,10 @@ func New(cfg *beyla.Config, metrics imetrics.Reporter) *Tracer {
 }
 
 func (p *Tracer) AllowPID(pid uint32, svc svc.ID) {
-	ebpfcommon.RegisterActiveService(pid, svc)
-	p.pidsFilter.AllowPID(pid)
+	p.pidsFilter.AllowPID(pid, svc)
 }
 
 func (p *Tracer) BlockPID(pid uint32) {
-	ebpfcommon.UnregisterActiveService(pid)
 	p.pidsFilter.BlockPID(pid)
 }
 
@@ -214,7 +212,7 @@ func (p *Tracer) AlreadyInstrumentedLib(_ uint64) bool {
 	return false
 }
 
-func (p *Tracer) Run(ctx context.Context, eventsChan chan<- []request.Span, service svc.ID) {
+func (p *Tracer) Run(ctx context.Context, eventsChan chan<- []request.Span) {
 	ebpfcommon.SharedRingbuf(
 		p.cfg,
 		p.pidsFilter,
@@ -241,7 +239,7 @@ func (p *GinTracer) GoProbes() map[string]ebpfcommon.FunctionPrograms {
 	}
 }
 
-func (p *GinTracer) Run(ctx context.Context, eventsChan chan<- []request.Span, service svc.ID) {
+func (p *GinTracer) Run(ctx context.Context, eventsChan chan<- []request.Span) {
 	ebpfcommon.SharedRingbuf(
 		p.cfg,
 		p.pidsFilter,

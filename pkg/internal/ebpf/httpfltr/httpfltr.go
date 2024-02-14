@@ -68,8 +68,7 @@ func (p *Tracer) AllowPID(pid uint32, svc svc.ID) {
 			p.log.Error("Error looking up namespace", "error", err)
 		}
 	}
-	ebpfcommon.RegisterActiveService(pid, svc)
-	p.pidsFilter.AllowPID(pid)
+	p.pidsFilter.AllowPID(pid, svc)
 }
 
 func (p *Tracer) BlockPID(pid uint32) {
@@ -85,7 +84,6 @@ func (p *Tracer) BlockPID(pid uint32) {
 		}
 	}
 	delete(ebpfcommon.ActiveNamespaces, pid)
-	ebpfcommon.UnregisterActiveService(pid)
 	p.pidsFilter.BlockPID(pid)
 }
 
@@ -215,7 +213,7 @@ func (p *Tracer) AlreadyInstrumentedLib(_ uint64) bool {
 	return false
 }
 
-func (p *Tracer) Run(ctx context.Context, eventsChan chan<- []request.Span, service svc.ID) {
+func (p *Tracer) Run(ctx context.Context, eventsChan chan<- []request.Span) {
 	// At this point we now have loaded the bpf objects, which means we should insert any
 	// pids that are allowed into the bpf map
 	if p.bpfObjects.ValidPids != nil {

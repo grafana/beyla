@@ -30,10 +30,12 @@ func TestForwardRingbuf_CapacityFull(t *testing.T) {
 	defer restore()
 	metrics := &metricsReporter{}
 	forwardedMessages := make(chan []request.Span, 100)
+	fltr := NewPIDsFilter(&slog.Logger{})
+	fltr.AllowPID(1, svc.ID{Name: "myService"})
 	go ForwardRingbuf(
 		&TracerConfig{BatchLength: 10},
 		nil, // the source ring buffer can be null
-		&IdentityPidsFilter{},
+		fltr,
 		ReadHTTPRequestTraceAsSpan,
 		slog.With("test", "TestForwardRingbuf_CapacityFull"),
 		metrics,
@@ -43,20 +45,22 @@ func TestForwardRingbuf_CapacityFull(t *testing.T) {
 	// WHEN it starts receiving trace events
 	var get = [7]byte{'G', 'E', 'T', 0, 0, 0, 0}
 	for i := 0; i < 20; i++ {
-		ringBuf.events <- HTTPRequestTrace{Type: 1, Method: get, ContentLength: int64(i)}
+		t := HTTPRequestTrace{Type: 1, Method: get, ContentLength: int64(i)}
+		t.Pid.HostPid = 1
+		ringBuf.events <- t
 	}
 
 	// THEN the RingBuf reader forwards them in batches
 	batch := testutil.ReadChannel(t, forwardedMessages, testTimeout)
 	require.Len(t, batch, 10)
 	for i := range batch {
-		assert.Equal(t, request.Span{Type: 1, Method: "GET", ContentLength: int64(i), ServiceID: svc.ID{Name: "myService"}}, batch[i])
+		assert.Equal(t, request.Span{Type: 1, Method: "GET", ContentLength: int64(i), ServiceID: svc.ID{Name: "myService"}, Pid: request.PidInfo{HostPID: 1}}, batch[i])
 	}
 
 	batch = testutil.ReadChannel(t, forwardedMessages, testTimeout)
 	require.Len(t, batch, 10)
 	for i := range batch {
-		assert.Equal(t, request.Span{Type: 1, Method: "GET", ContentLength: int64(10 + i), ServiceID: svc.ID{Name: "myService"}}, batch[i])
+		assert.Equal(t, request.Span{Type: 1, Method: "GET", ContentLength: int64(10 + i), ServiceID: svc.ID{Name: "myService"}, Pid: request.PidInfo{HostPID: 1}}, batch[i])
 	}
 	// AND metrics are properly updated
 	assert.Equal(t, 2, metrics.flushes)
@@ -78,10 +82,12 @@ func TestForwardRingbuf_Deadline(t *testing.T) {
 
 	metrics := &metricsReporter{}
 	forwardedMessages := make(chan []request.Span, 100)
+	fltr := NewPIDsFilter(&slog.Logger{})
+	fltr.AllowPID(1, svc.ID{Name: "myService"})
 	go ForwardRingbuf(
 		&TracerConfig{BatchLength: 10, BatchTimeout: 20 * time.Millisecond},
 		nil, // the source ring buffer can be null
-		(&IdentityPidsFilter{}),
+		fltr,
 		ReadHTTPRequestTraceAsSpan,
 		slog.With("test", "TestForwardRingbuf_Deadline"),
 		metrics,
@@ -90,7 +96,10 @@ func TestForwardRingbuf_Deadline(t *testing.T) {
 	// WHEN it receives, after a timeout, less events than its internal buffer
 	var get = [7]byte{'G', 'E', 'T', 0, 0, 0, 0}
 	for i := 0; i < 7; i++ {
-		ringBuf.events <- HTTPRequestTrace{Type: 1, Method: get, ContentLength: int64(i)}
+		t := HTTPRequestTrace{Type: 1, Method: get, ContentLength: int64(i)}
+		t.Pid.HostPid = 1
+
+		ringBuf.events <- t
 	}
 
 	// THEN the RingBuf reader forwards them in a smaller batch
@@ -100,7 +109,7 @@ func TestForwardRingbuf_Deadline(t *testing.T) {
 	}
 	require.Len(t, batch, 7)
 	for i := range batch {
-		assert.Equal(t, request.Span{Type: 1, Method: "GET", ContentLength: int64(i), ServiceID: svc.ID{Name: "myService"}}, batch[i])
+		assert.Equal(t, request.Span{Type: 1, Method: "GET", ContentLength: int64(i), ServiceID: svc.ID{Name: "myService"}, Pid: request.PidInfo{HostPID: 1}}, batch[i])
 	}
 
 	// AND metrics are properly updated

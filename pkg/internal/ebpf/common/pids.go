@@ -4,8 +4,13 @@ import (
 	"log/slog"
 	"sync"
 
+	"github.com/grafana/beyla/pkg/internal/exec"
 	"github.com/grafana/beyla/pkg/internal/request"
+	"github.com/grafana/beyla/pkg/internal/svc"
+	lru "github.com/hashicorp/golang-lru/v2"
 )
+
+var activePids, _ = lru.New[uint32, svc.ID](1024)
 
 // injectable functions (can be replaced in tests). It reads the
 // current process namespace from the /proc filesystem. It is required to
@@ -19,10 +24,10 @@ var readNamespacePIDs = func(pid int32) ([]uint32, error) {
 }
 
 type ServiceFilter interface {
-	AllowPID(uint32)
+	AllowPID(uint32, svc.ID)
 	BlockPID(uint32)
 	Filter(inputSpans []request.Span) []request.Span
-	CurrentPIDs() map[uint32]map[uint32]struct{}
+	CurrentPIDs() map[uint32]map[uint32]svc.ID
 }
 
 // PIDsFilter keeps a thread-safe copy of the PIDs whose traces are allowed to
@@ -30,7 +35,7 @@ type ServiceFilter interface {
 // PIDs are not in the allowed list.
 type PIDsFilter struct {
 	log     *slog.Logger
-	current map[uint32]map[uint32]struct{}
+	current map[uint32]map[uint32]svc.ID
 	mux     *sync.RWMutex
 }
 
@@ -40,7 +45,7 @@ var commonLock sync.Mutex
 func NewPIDsFilter(log *slog.Logger) *PIDsFilter {
 	return &PIDsFilter{
 		log:     log,
-		current: map[uint32]map[uint32]struct{}{},
+		current: map[uint32]map[uint32]svc.ID{},
 		mux:     &sync.RWMutex{},
 	}
 }
@@ -60,10 +65,10 @@ func CommonPIDsFilter(systemWide bool) ServiceFilter {
 	return commonPIDsFilter
 }
 
-func (pf *PIDsFilter) AllowPID(pid uint32) {
+func (pf *PIDsFilter) AllowPID(pid uint32, svc svc.ID) {
 	pf.mux.Lock()
 	defer pf.mux.Unlock()
-	pf.addPID(pid)
+	pf.addPID(pid, svc)
 }
 
 func (pf *PIDsFilter) BlockPID(pid uint32) {
@@ -72,13 +77,13 @@ func (pf *PIDsFilter) BlockPID(pid uint32) {
 	pf.removePID(pid)
 }
 
-func (pf *PIDsFilter) CurrentPIDs() map[uint32]map[uint32]struct{} {
+func (pf *PIDsFilter) CurrentPIDs() map[uint32]map[uint32]svc.ID {
 	pf.mux.RLock()
 	defer pf.mux.RUnlock()
-	cp := map[uint32]map[uint32]struct{}{}
+	cp := map[uint32]map[uint32]svc.ID{}
 
 	for k, v := range pf.current {
-		cVal := map[uint32]struct{}{}
+		cVal := map[uint32]svc.ID{}
 		for kv, vv := range v {
 			cVal[kv] = vv
 		}
@@ -107,7 +112,8 @@ func (pf *PIDsFilter) Filter(inputSpans []request.Span) []request.Span {
 		// If the namespace exist, we confirm that we are tracking the user PID that Beyla
 		// saw. We don't check for the host pid, because we can't be sure of the number
 		// of container layers. The Host PID is always the outer most layer.
-		if _, pidExists := ns[span.Pid.UserPID]; pidExists {
+		if svc, pidExists := ns[span.Pid.UserPID]; pidExists {
+			inputSpans[i].ServiceID = svc
 			outputSpans = append(outputSpans, inputSpans[i])
 		}
 	}
@@ -121,7 +127,7 @@ func (pf *PIDsFilter) Filter(inputSpans []request.Span) []request.Span {
 	return outputSpans
 }
 
-func (pf *PIDsFilter) addPID(pid uint32) {
+func (pf *PIDsFilter) addPID(pid uint32, s svc.ID) {
 	nsid, err := readNamespace(int32(pid))
 
 	if err != nil {
@@ -131,7 +137,7 @@ func (pf *PIDsFilter) addPID(pid uint32) {
 
 	ns, nsExists := pf.current[nsid]
 	if !nsExists {
-		ns = make(map[uint32]struct{})
+		ns = make(map[uint32]svc.ID)
 		pf.current[nsid] = ns
 	}
 
@@ -143,7 +149,7 @@ func (pf *PIDsFilter) addPID(pid uint32) {
 	}
 
 	for _, p := range allPids {
-		ns[p] = struct{}{}
+		ns[p] = s
 	}
 }
 
@@ -174,14 +180,33 @@ func (pf *PIDsFilter) removePID(pid uint32) {
 // for system-wide instrumenation
 type IdentityPidsFilter struct{}
 
-func (pf *IdentityPidsFilter) AllowPID(_ uint32) {}
+func (pf *IdentityPidsFilter) AllowPID(_ uint32, _ svc.ID) {}
 
 func (pf *IdentityPidsFilter) BlockPID(_ uint32) {}
 
-func (pf *IdentityPidsFilter) CurrentPIDs() map[uint32]map[uint32]struct{} {
+func (pf *IdentityPidsFilter) CurrentPIDs() map[uint32]map[uint32]svc.ID {
 	return nil
 }
 
 func (pf *IdentityPidsFilter) Filter(inputSpans []request.Span) []request.Span {
+	for i := range inputSpans {
+		s := &inputSpans[i]
+		s.ServiceID = serviceInfo(s.Pid.HostPID)
+	}
 	return inputSpans
+}
+
+func serviceInfo(pid uint32) svc.ID {
+	cached, ok := activePids.Get(pid)
+	if ok {
+		return cached
+	}
+
+	name := commName(pid)
+	lang := exec.FindProcLanguage(int32(pid), nil)
+	result := svc.ID{Name: name, SDKLanguage: lang}
+
+	activePids.Add(pid, result)
+
+	return result
 }

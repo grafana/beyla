@@ -62,7 +62,7 @@ func SharedRingbuf(
 
 	if singleRbf != nil {
 		singleRbf.closers = append(singleRbf.closers, closers...)
-		return singleRbf.readAndForward
+		return singleRbf.alreadyForwarded
 	}
 
 	log := slog.With("component", "ringbuf.Tracer")
@@ -143,6 +143,10 @@ func (rbf *ringBufForwarder) readAndForward(ctx context.Context, spansChan chan<
 		// read another event before the next loop iteration
 		record, err = eventsReader.Read()
 	}
+}
+
+func (rbf *ringBufForwarder) alreadyForwarded(ctx context.Context, _ chan<- []request.Span) {
+	<-ctx.Done()
 }
 
 func (rbf *ringBufForwarder) processAndForward(record ringbuf.Record, spansChan chan<- []request.Span) {

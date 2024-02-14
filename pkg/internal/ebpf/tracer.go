@@ -68,11 +68,7 @@ type Tracer interface {
 	AlreadyInstrumentedLib(uint64) bool
 	// Run will do the action of listening for eBPF traces and forward them
 	// periodically to the output channel.
-	// It optionally receives the service svc.ID, to
-	// populate each forwarded span with its value. But some
-	// tracers might ignore it (e.g. system-wide HTTP filter will directly set the
-	// executable name of each request).
-	Run(context.Context, chan<- []request.Span, svc.ID)
+	Run(context.Context, chan<- []request.Span)
 }
 
 // Subset of the above interface, which supports loading eBPF programs which

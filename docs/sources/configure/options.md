@@ -798,6 +798,17 @@ If the value is unset, the default bucket boundaries are:
 The default values are UNSTABLE and could change if Prometheus or OpenTelemetry semantic
 conventions recommend a different set of bucket boundaries.
 
+### Use native histograms and exponential histograms
+
+For Prometheus [native histograms](https://prometheus.io/docs/concepts/metric_types/#histogram) are enabled if you have the `native-histograms` feature enabled.
+
+For OpenTelemetry you can use [exponential histograms](https://opentelemetry.io/docs/specs/otel/metrics/data-model/#exponentialhistogram) for the predefined histograms instead of defining the buckets manually.
+
+| YAML       | Environment variable                                                      | Type | Default |
+| ---------- | ------------------------------------------------------------------------- | ---- | ------- |
+| `use_exponential_histograms` | `BEYLA_OTEL_USE_EXPONENTIAL_HISTOGRAMS`  | `boolean` | `false` |
+
+
 ## OTEL traces exporter
 
 > ℹ️ If you plan to use Beyla to send metrics to Grafana Cloud,

@@ -31,6 +31,8 @@ ENV TOOLS_DIR $GOBIN
 WORKDIR /tmp
 # Copies some pre-required Go dependencies to avoid downloading them on each build
 COPY Makefile Makefile
+COPY go.mod go.mod
+
 RUN make prereqs
 
 WORKDIR /src

@@ -292,15 +292,12 @@ static __always_inline void handle_buf_with_connection(pid_connection_info_t *pi
         if (!info) {
             bpf_dbg_printk("No info, pid =%d?, looking for fallback...", pid_conn->pid);
             info = bpf_map_lookup_elem(&ongoing_http_fallback, &pid_conn->conn);
-            bpf_map_delete_elem(&ongoing_http_fallback, &pid_conn->conn);
             if (!info) {
                 bpf_dbg_printk("No fallback either, giving up");
                 //dbg_print_http_connection_info(&pid_conn->conn); // commented out since GitHub CI doesn't like this call
                 return;
             }
-        } else {
-            bpf_map_delete_elem(&ongoing_http_fallback, &pid_conn->conn);
-        }
+        } 
 
         bpf_dbg_printk("=== http_buffer_event len=%d pid=%d still_reading=%d ===", bytes_len, pid_from_pid_tgid(bpf_get_current_pid_tgid()), still_reading(info));
 
@@ -339,7 +336,9 @@ static __always_inline void handle_buf_with_connection(pid_connection_info_t *pi
             handle_http_response(small_buf, pid_conn, info, bytes_len);
         } else if (still_reading(info)) {
             info->len += bytes_len;
-        }       
+        }     
+
+        bpf_map_delete_elem(&ongoing_http_fallback, &pid_conn->conn);
     }
 }
 

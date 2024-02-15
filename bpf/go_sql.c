@@ -76,8 +76,7 @@ int uprobe_queryDCReturn(struct pt_regs *ctx) {
         bpf_dbg_printk("Request not found for this goroutine");
         return 0;
     }
-    bpf_map_delete_elem(&ongoing_sql_queries, &goroutine_addr);
-
+    
     sql_request_trace *trace = bpf_ringbuf_reserve(&events, sizeof(sql_request_trace), 0);
     if (trace) {
         task_pid(&trace->pid);
@@ -100,5 +99,7 @@ int uprobe_queryDCReturn(struct pt_regs *ctx) {
     } else {
         bpf_dbg_printk("can't reserve space in the ringbuffer");
     }
+
+    bpf_map_delete_elem(&ongoing_sql_queries, &goroutine_addr);
     return 0;
 }

@@ -38,7 +38,7 @@ type bpfHttpRequestTrace struct {
 	Status            uint16
 	RemoteAddr        [50]uint8
 	RemoteAddrLen     uint64
-	Host              [256]uint8
+	Host              [64]uint8
 	HostLen           uint64
 	HostPort          uint32
 	ContentLength     int64

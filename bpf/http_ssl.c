@@ -78,9 +78,9 @@ int BPF_URETPROBE(uretprobe_ssl_read, int ret) {
     bpf_dbg_printk("=== uretprobe SSL_read id=%d ===", id);
 
     ssl_args_t *args = bpf_map_lookup_elem(&active_ssl_read_args, &id);
-    bpf_map_delete_elem(&active_ssl_read_args, &id);
 
     handle_ssl_buf(id, args, ret);
+    bpf_map_delete_elem(&active_ssl_read_args, &id);
     return 0;
 }
 
@@ -116,16 +116,17 @@ int BPF_URETPROBE(uretprobe_ssl_read_ex, int ret) {
     bpf_dbg_printk("=== uretprobe SSL_read_ex id=%d ===", id);
 
     ssl_args_t *args = bpf_map_lookup_elem(&active_ssl_read_args, &id);
-    bpf_map_delete_elem(&active_ssl_read_args, &id);
 
     if (ret != 1 || !args || !args->len_ptr) {
-        return 0;
+        goto done;
     }
 
     size_t read_len = 0;
     bpf_probe_read(&read_len, sizeof(read_len), (void *)args->len_ptr);
 
     handle_ssl_buf(id, args, read_len);
+done:
+    bpf_map_delete_elem(&active_ssl_read_args, &id);
     return 0;
 }
 
@@ -163,9 +164,9 @@ int BPF_URETPROBE(uretprobe_ssl_write, int ret) {
     bpf_dbg_printk("=== uretprobe SSL_write id=%d ===", id);
 
     ssl_args_t *args = bpf_map_lookup_elem(&active_ssl_write_args, &id);
-    bpf_map_delete_elem(&active_ssl_write_args, &id);
 
     handle_ssl_buf(id, args, ret);
+    bpf_map_delete_elem(&active_ssl_write_args, &id);
     return 0;
 }
 
@@ -200,16 +201,17 @@ int BPF_URETPROBE(uretprobe_ssl_write_ex, int ret) {
     bpf_dbg_printk("=== uretprobe SSL_write_ex id=%d ===", id);
 
     ssl_args_t *args = bpf_map_lookup_elem(&active_ssl_write_args, &id);
-    bpf_map_delete_elem(&active_ssl_write_args, &id);
 
     if (ret != 1 || !args || !args->len_ptr) {
-        return 0;
+        goto done;
     }
 
     size_t wrote_len = 0;
     bpf_probe_read(&wrote_len, sizeof(wrote_len), (void *)args->len_ptr);
 
     handle_ssl_buf(id, args, wrote_len);
+done:
+    bpf_map_delete_elem(&active_ssl_write_args, &id);
     return 0;
 }
 

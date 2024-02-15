@@ -11,6 +11,13 @@ import (
 	"github.com/grafana/beyla/pkg/internal/svc"
 )
 
+type PIDType uint8
+
+const (
+	PIDTypeKProbes PIDType = iota + 1
+	PIDTypeGo
+)
+
 var activePids, _ = lru.New[uint32, svc.ID](1024)
 
 // injectable functions (can be replaced in tests). It reads the
@@ -24,11 +31,16 @@ var readNamespacePIDs = func(pid int32) ([]uint32, error) {
 	return FindNamespacedPids(pid)
 }
 
+type PIDInfo struct {
+	service svc.ID
+	pidType PIDType
+}
+
 type ServiceFilter interface {
-	AllowPID(uint32, svc.ID)
+	AllowPID(uint32, svc.ID, PIDType)
 	BlockPID(uint32)
 	Filter(inputSpans []request.Span) []request.Span
-	CurrentPIDs() map[uint32]map[uint32]svc.ID
+	CurrentPIDs(PIDType) map[uint32]map[uint32]svc.ID
 }
 
 // PIDsFilter keeps a thread-safe copy of the PIDs whose traces are allowed to
@@ -36,7 +48,7 @@ type ServiceFilter interface {
 // PIDs are not in the allowed list.
 type PIDsFilter struct {
 	log     *slog.Logger
-	current map[uint32]map[uint32]svc.ID
+	current map[uint32]map[uint32]PIDInfo
 	mux     *sync.RWMutex
 }
 
@@ -46,7 +58,7 @@ var commonLock sync.Mutex
 func NewPIDsFilter(log *slog.Logger) *PIDsFilter {
 	return &PIDsFilter{
 		log:     log,
-		current: map[uint32]map[uint32]svc.ID{},
+		current: map[uint32]map[uint32]PIDInfo{},
 		mux:     &sync.RWMutex{},
 	}
 }
@@ -66,10 +78,10 @@ func CommonPIDsFilter(systemWide bool) ServiceFilter {
 	return commonPIDsFilter
 }
 
-func (pf *PIDsFilter) AllowPID(pid uint32, svc svc.ID) {
+func (pf *PIDsFilter) AllowPID(pid uint32, svc svc.ID, pidType PIDType) {
 	pf.mux.Lock()
 	defer pf.mux.Unlock()
-	pf.addPID(pid, svc)
+	pf.addPID(pid, svc, pidType)
 }
 
 func (pf *PIDsFilter) BlockPID(pid uint32) {
@@ -78,7 +90,7 @@ func (pf *PIDsFilter) BlockPID(pid uint32) {
 	pf.removePID(pid)
 }
 
-func (pf *PIDsFilter) CurrentPIDs() map[uint32]map[uint32]svc.ID {
+func (pf *PIDsFilter) CurrentPIDs(t PIDType) map[uint32]map[uint32]svc.ID {
 	pf.mux.RLock()
 	defer pf.mux.RUnlock()
 	cp := map[uint32]map[uint32]svc.ID{}
@@ -86,7 +98,9 @@ func (pf *PIDsFilter) CurrentPIDs() map[uint32]map[uint32]svc.ID {
 	for k, v := range pf.current {
 		cVal := map[uint32]svc.ID{}
 		for kv, vv := range v {
-			cVal[kv] = vv
+			if vv.pidType == t {
+				cVal[kv] = vv.service
+			}
 		}
 		cp[k] = cVal
 	}
@@ -113,8 +127,8 @@ func (pf *PIDsFilter) Filter(inputSpans []request.Span) []request.Span {
 		// If the namespace exist, we confirm that we are tracking the user PID that Beyla
 		// saw. We don't check for the host pid, because we can't be sure of the number
 		// of container layers. The Host PID is always the outer most layer.
-		if svc, pidExists := ns[span.Pid.UserPID]; pidExists {
-			inputSpans[i].ServiceID = svc
+		if info, pidExists := ns[span.Pid.UserPID]; pidExists {
+			inputSpans[i].ServiceID = info.service
 			outputSpans = append(outputSpans, inputSpans[i])
 		}
 	}
@@ -128,7 +142,7 @@ func (pf *PIDsFilter) Filter(inputSpans []request.Span) []request.Span {
 	return outputSpans
 }
 
-func (pf *PIDsFilter) addPID(pid uint32, s svc.ID) {
+func (pf *PIDsFilter) addPID(pid uint32, s svc.ID, t PIDType) {
 	nsid, err := readNamespace(int32(pid))
 
 	if err != nil {
@@ -138,7 +152,7 @@ func (pf *PIDsFilter) addPID(pid uint32, s svc.ID) {
 
 	ns, nsExists := pf.current[nsid]
 	if !nsExists {
-		ns = make(map[uint32]svc.ID)
+		ns = make(map[uint32]PIDInfo)
 		pf.current[nsid] = ns
 	}
 
@@ -150,7 +164,7 @@ func (pf *PIDsFilter) addPID(pid uint32, s svc.ID) {
 	}
 
 	for _, p := range allPids {
-		ns[p] = s
+		ns[p] = PIDInfo{service: s, pidType: t}
 	}
 }
 
@@ -181,11 +195,11 @@ func (pf *PIDsFilter) removePID(pid uint32) {
 // for system-wide instrumenation
 type IdentityPidsFilter struct{}
 
-func (pf *IdentityPidsFilter) AllowPID(_ uint32, _ svc.ID) {}
+func (pf *IdentityPidsFilter) AllowPID(_ uint32, _ svc.ID, _ PIDType) {}
 
 func (pf *IdentityPidsFilter) BlockPID(_ uint32) {}
 
-func (pf *IdentityPidsFilter) CurrentPIDs() map[uint32]map[uint32]svc.ID {
+func (pf *IdentityPidsFilter) CurrentPIDs(_ PIDType) map[uint32]map[uint32]svc.ID {
 	return nil
 }
 

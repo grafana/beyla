@@ -21,9 +21,6 @@ import (
 //go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf_debug ../../../../bpf/http_sock.c -- -I../../../../bpf/headers -DBPF_DEBUG
 //go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf_tp_debug ../../../../bpf/http_sock.c -- -I../../../../bpf/headers -DBPF_DEBUG -DBPF_TRACEPARENT
 
-// we need a separate collection to keep track of the pids we'll reallow, the pidFilter is common
-var kprobesPids = make(map[uint32]struct{})
-
 type Tracer struct {
 	pidsFilter ebpfcommon.ServiceFilter
 	cfg        *beyla.Config
@@ -71,8 +68,7 @@ func (p *Tracer) AllowPID(pid uint32, svc svc.ID) {
 			p.log.Error("Error looking up namespace", "error", err)
 		}
 	}
-	kprobesPids[pid] = struct{}{}
-	p.pidsFilter.AllowPID(pid, svc)
+	p.pidsFilter.AllowPID(pid, svc, ebpfcommon.PIDTypeKProbes)
 }
 
 func (p *Tracer) BlockPID(pid uint32) {
@@ -88,7 +84,6 @@ func (p *Tracer) BlockPID(pid uint32) {
 		}
 	}
 	delete(ebpfcommon.ActiveNamespaces, pid)
-	delete(kprobesPids, pid)
 	p.pidsFilter.BlockPID(pid)
 }
 
@@ -223,12 +218,9 @@ func (p *Tracer) Run(ctx context.Context, eventsChan chan<- []request.Span) {
 	// pids that are allowed into the bpf map
 	if p.bpfObjects.ValidPids != nil {
 		p.log.Debug("Reallowing pids")
-		for nsid, pids := range p.pidsFilter.CurrentPIDs() {
+		for nsid, pids := range p.pidsFilter.CurrentPIDs(ebpfcommon.PIDTypeKProbes) {
 			for pid := range pids {
 				// skip any pids that might've been added, but are not tracked by the kprobes
-				if _, exists := kprobesPids[pid]; !exists {
-					continue
-				}
 				p.log.Debug("Reallowing pid", "pid", pid, "namespace", nsid)
 				err := p.bpfObjects.ValidPids.Put(bpfPidKeyT{Pid: pid, Ns: nsid}, uint8(1))
 				if err != nil {

@@ -56,7 +56,7 @@ func New(cfg *beyla.Config, metrics imetrics.Reporter) *Tracer {
 }
 
 func (p *Tracer) AllowPID(pid uint32, svc svc.ID) {
-	p.pidsFilter.AllowPID(pid, svc)
+	p.pidsFilter.AllowPID(pid, svc, ebpfcommon.PIDTypeGo)
 }
 
 func (p *Tracer) BlockPID(pid uint32) {

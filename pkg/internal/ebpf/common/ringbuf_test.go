@@ -219,7 +219,7 @@ type TestPidsFilter struct {
 	services map[uint32]svc.ID
 }
 
-func (pf *TestPidsFilter) AllowPID(p uint32, s svc.ID, t PIDType) {
+func (pf *TestPidsFilter) AllowPID(p uint32, s svc.ID, _ PIDType) {
 	pf.services[p] = s
 }
 

@@ -294,7 +294,7 @@ func structMemberOffsetsFromDwarf(data *dwarf.Data) (FieldOffsets, map[string]st
 		}
 		log.Debug("inspecting fields for struct type", "type", typeName)
 		if err := readMembers(reader, structMember.fields, expectedReturns, fieldOffsets); err != nil {
-			log.Debug("error reading DRWARF info", "type", typeName, "members", err)
+			log.Debug("error reading DWARF info", "type", typeName, "error", err)
 			return nil, expectedReturns
 		}
 	}
@@ -306,6 +306,7 @@ func readMembers(
 	expectedReturns map[string]struct{},
 	offsets FieldOffsets,
 ) error {
+	log := log()
 	for {
 		entry, err := reader.Next()
 		if err != nil {
@@ -320,11 +321,18 @@ func readMembers(
 		}
 		attrs := getAttrs(entry)
 		if constName, ok := fields[attrs[dwarf.AttrName].(string)]; ok {
-			delete(expectedReturns, constName)
 			value := attrs[dwarf.AttrDataMemberLoc]
-			log().Debug("found struct member offset",
-				"const", constName, "offset", attrs[dwarf.AttrDataMemberLoc])
-			offsets[constName] = uint64(value.(int64))
+			if constLocation, ok := value.(int64); ok {
+				delete(expectedReturns, constName)
+				log.Debug("found struct member offset",
+					"const", constName, "offset", attrs[dwarf.AttrDataMemberLoc])
+				offsets[constName] = uint64(constLocation)
+			} else {
+				// Temporary workaround
+				// TODO: properly address issue https://github.com/grafana/beyla/issues/625
+				return fmt.Errorf("at the moment, Beyla only supports constant values for DW_AT_data_member_location;"+
+					"got %s. Beyla will read the offsets from a pre-fetched database", attrs[dwarf.AttrDataMemberLoc])
+			}
 		}
 	}
 }

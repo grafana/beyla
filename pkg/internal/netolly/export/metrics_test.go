@@ -29,10 +29,8 @@ func TestMetricAttributes(t *testing.T) {
 
 	reportedAttributes := attributes(in)
 	for _, mustContain := range []attribute.KeyValue{
-		attribute.String("flow.direction", "egress"),
 		attribute.String("src.address", "12.34.56.78"),
-		attribute.String("server.address", "33.22.11.1"),
-		attribute.Int("server.port", 3210),
+		attribute.String("dst.address", "33.22.11.1"),
 		attribute.String("src.name", "srcname"),
 		attribute.String("src.namespace", "srcnamespace"),
 		attribute.String("dst.name", "dstname"),

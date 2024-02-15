@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	testTimeout = 3 * time.Minute
+	testTimeout        = 3 * time.Minute
 	prometheusHostPort = "localhost:39090"
 )
 
@@ -36,7 +36,6 @@ func TestMain(m *testing.M) {
 		kube.KindConfig(k8s.PathManifests+"/00-kind.yml"),
 		kube.LocalImage("testserver:dev"),
 		kube.LocalImage("beyla:dev"),
-		kube.LocalImage("grpcpinger:dev"),
 		kube.Deploy(k8s.PathManifests+"/01-volumes.yml"),
 		kube.Deploy(k8s.PathManifests+"/01-serviceaccount.yml"),
 		kube.Deploy(k8s.PathManifests+"/02-prometheus-otelscrape.yml"),

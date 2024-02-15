@@ -130,7 +130,7 @@ func newTransformNetwork(cfg *NetworkTransformConfig) (*networkTransformer, erro
 		var err error
 		nt.alreadyLoggedIPs, err = simplelru.NewLRU[string, struct{}](alreadyLoggedIPsCacheLen, nil)
 		if err != nil {
-			return nil, fmt.Errorf("instantiating debug notified error cache: %w")
+			return nil, fmt.Errorf("instantiating debug notified error cache: %w", err)
 		}
 	}
 

@@ -67,34 +67,24 @@ func destinationAttrs(m *ebpf.Record) (namespace, name string) {
 	return "", m.Id.DstIP().IP().String()
 }
 
-// direction values according to field 61 in https://www.iana.org/assignments/ipfix/ipfix.xhtml
-func direction(m *ebpf.Record) string {
-	switch m.Id.Direction {
-	case 0:
-		return "ingress"
-	case 1:
-		return "egress"
-	}
-	return "unknown"
-}
-
 func attributes(m *ebpf.Record) []attribute.KeyValue {
-	res := make([]attribute.KeyValue, 0, 10+len(m.Metadata))
+	res := make([]attribute.KeyValue, 0, 8+len(m.Metadata))
 
 	srcNS, srcName := sourceAttrs(m)
 	dstNS, dstName := destinationAttrs(m)
 
-	res = append(res, attribute.String("flow.direction", direction(m)))
-	res = append(res, attribute.String("src.address", m.Id.SrcIP().IP().String()))
-	res = append(res, attribute.String("server.address", m.Id.DstIP().IP().String()))
-	res = append(res, attribute.Int("server.port", int(m.Id.DstPort)))
-	res = append(res, attribute.String("src.name", srcName))
-	res = append(res, attribute.String("src.namespace", srcNS))
-	res = append(res, attribute.String("dst.name", dstName))
-	res = append(res, attribute.String("dst.namespace", dstNS))
-	// probably not needed
-	res = append(res, attribute.String("asserts.env", "dev"))
-	res = append(res, attribute.String("asserts.site", "dev"))
+	// this will cause cardinality explosion. Discuss what to do
+	//res = append(res, attribute.Int("dst.port", int(m.Id.DstPort)))
+	res = append(res,
+		attribute.String("src.address", m.Id.SrcIP().IP().String()),
+		attribute.String("dst.address", m.Id.DstIP().IP().String()),
+		attribute.String("src.name", srcName),
+		attribute.String("src.namespace", srcNS),
+		attribute.String("dst.name", dstName),
+		attribute.String("dst.namespace", dstNS),
+		// probably not needed
+		attribute.String("asserts.env", "dev"),
+		attribute.String("asserts.site", "dev"))
 
 	// metadata attributes
 	for k, v := range m.Metadata {

@@ -7,6 +7,8 @@ steps:
   privileged: true
   settings:
     auto_tag: false
+    build_args_from_env:
+    - DRONE_TAG
     dockerfile: Dockerfile
     dry_run: true
     password:
@@ -26,6 +28,8 @@ steps:
   privileged: true
   settings:
     auto_tag: true
+    build_args_from_env:
+    - DRONE_TAG
     dockerfile: Dockerfile
     dry_run: false
     password:
@@ -45,6 +49,8 @@ steps:
   privileged: true
   settings:
     auto_tag: false
+    build_args_from_env:
+    - DRONE_TAG
     dockerfile: Dockerfile
     dry_run: false
     password:
@@ -64,6 +70,8 @@ steps:
   privileged: true
   settings:
     auto_tag: false
+    build_args_from_env:
+    - DRONE_TAG
     dockerfile: Dockerfile
     dry_run: false
     password:
@@ -96,6 +104,6 @@ kind: secret
 name: docker_password
 ---
 kind: signature
-hmac: b2d0a0ed30050f8632ab6331f58a4d147c8e155e5f28a51de72a1d3b3a46759e
+hmac: 80d28c3b23c53bdd6b5c90e2881d39901c0b01d4cdcc435de61d34112a267965
 
 ...

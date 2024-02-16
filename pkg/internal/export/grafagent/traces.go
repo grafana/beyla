@@ -7,10 +7,11 @@ import (
 	"go.opentelemetry.io/collector/pdata/ptrace"
 
 	"github.com/grafana/beyla/pkg/internal/request"
+	otelconsumer "go.opentelemetry.io/collector/consumer"
 )
 
 type traceConsumer interface {
-	ConsumeTraces(ctx context.Context, traces ptrace.Traces)
+	otelconsumer.Traces
 }
 
 type TracesExporterConfig struct {
@@ -27,7 +28,6 @@ func TracesExporterProvider(cfg *TracesExporterConfig) (node.TerminalFunc[[]*req
 }
 
 func convert([]*request.Span) ptrace.Traces {
-	trace := ptrace.NewTraces()
-	trace.ResourceSpans().
-	return ptrace.Traces{}
+	traces := ptrace.NewTraces()
+	return traces
 }

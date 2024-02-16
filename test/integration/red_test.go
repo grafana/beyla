@@ -594,3 +594,14 @@ func testREDMetricsForGoBasicOnly(t *testing.T, url string, comm string) {
 		}
 	})
 }
+
+func testPrometheusBeylaBuildInfo(t *testing.T) {
+	pq := prom.Client{HostPort: prometheusHostPort}
+	var results []prom.Result
+	test.Eventually(t, testTimeout, func(t require.TestingT) {
+		var err error
+		results, err = pq.Query(`beyla_build_info{target_lang="go"}`)
+		require.NoError(t, err)
+		require.NotEmpty(t, results)
+	})
+}

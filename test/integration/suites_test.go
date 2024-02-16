@@ -78,6 +78,8 @@ func TestSuiteClientPromScrape(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, compose.Up())
 	t.Run("Client RED metrics", testREDMetricsForClientHTTPLibraryNoTraces)
+	t.Run("Testing Beyla Build Info metric", testPrometheusBeylaBuildInfo)
+
 	t.Run("BPF pinning folder mounted", testBPFPinningMounted)
 	require.NoError(t, compose.Close())
 	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
@@ -199,6 +201,7 @@ func TestSuite_PrometheusScrape(t *testing.T) {
 	t.Run("RED metrics", testREDMetricsHTTP)
 	t.Run("GRPC RED metrics", testREDMetricsGRPC)
 	t.Run("Internal Prometheus metrics", testInternalPrometheusExport)
+	t.Run("Testing Beyla Build Info metric", testPrometheusBeylaBuildInfo)
 
 	t.Run("BPF pinning folder mounted", testBPFPinningMounted)
 	require.NoError(t, compose.Close())

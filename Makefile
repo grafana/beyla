@@ -4,8 +4,10 @@ MAIN_GO_FILE ?= cmd/$(CMD)/main.go
 GOOS ?= linux
 GOARCH ?= amd64
 
-RELEASE_VERSION := $(shell git describe --tags --always)
-
+# DRONE_TAG is set from Drone. Required for building container images.
+RELEASE_VERSION := $(if $(DRONE_TAG),$(DRONE_TAG),$(shell git describe --tags --always))
+RELEASE_REVISION := $(shell git rev-parse --short HEAD )
+BUILDINFO_PKG ?= github.com/grafana/beyla/pkg/buildinfo
 TEST_OUTPUT ?= ./testoutput
 
 IMG_REGISTRY ?= docker.io
@@ -155,7 +157,7 @@ all: generate build
 .PHONY: compile
 compile:
 	@echo "### Compiling project"
-	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -mod vendor -ldflags="-X 'main.Version=$(RELEASE_VERSION)'" -a -o bin/$(CMD) $(MAIN_GO_FILE)
+	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -mod vendor -ldflags="-X '$(BUILDINFO_PKG).Version=$(RELEASE_VERSION)' -X '$(BUILDINFO_PKG).Revision=$(RELEASE_REVISION)'" -a -o bin/$(CMD) $(MAIN_GO_FILE)
 
 .PHONY: dev
 dev: prereqs generate compile-for-coverage

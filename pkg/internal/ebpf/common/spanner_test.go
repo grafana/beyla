@@ -8,18 +8,18 @@ import (
 	"github.com/grafana/beyla/pkg/internal/request"
 )
 
-func cstr(s string) []byte {
+func tocstr(s string) []byte {
 	b := []byte(s)
 	return append(b, 0)
 }
 
 func makeHTTPRequestTrace(method, path, peerInfo string, status uint16, durationMs uint64) HTTPRequestTrace {
 	m := [7]uint8{}
-	copy(m[:], cstr(method)[:])
+	copy(m[:], tocstr(method)[:])
 	p := [100]uint8{}
-	copy(p[:], cstr(path)[:])
+	copy(p[:], tocstr(path)[:])
 	r := [50]uint8{}
-	copy(r[:], cstr(peerInfo)[:])
+	copy(r[:], tocstr(peerInfo)[:])
 
 	return HTTPRequestTrace{
 		Type:              1, // transform.EventTypeHTTP
@@ -35,7 +35,7 @@ func makeHTTPRequestTrace(method, path, peerInfo string, status uint16, duration
 
 func makeGRPCRequestTrace(path string, peerInfo []byte, status uint16, durationMs uint64) HTTPRequestTrace {
 	p := [100]uint8{}
-	copy(p[:], cstr(path)[:])
+	copy(p[:], tocstr(path)[:])
 	r := [50]uint8{}
 	copy(r[:], peerInfo[:])
 

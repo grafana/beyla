@@ -39,25 +39,6 @@ type bpf_tpGrpcSrvFuncInvocationT struct {
 	Tp              bpf_tpTpInfoT
 }
 
-type bpf_tpHttpConnectionMetadataT struct {
-	Pid struct {
-		HostPid   uint32
-		UserPid   uint32
-		Namespace uint32
-	}
-	Type uint8
-}
-
-type bpf_tpPidConnectionInfoT struct {
-	Conn bpf_tpConnectionInfoT
-	Pid  uint32
-}
-
-type bpf_tpPidKeyT struct {
-	Pid       uint32
-	Namespace uint32
-}
-
 type bpf_tpTpInfoPidT struct {
 	Tp    bpf_tpTpInfoT
 	Pid   uint32
@@ -133,7 +114,6 @@ type bpf_tpProgramSpecs struct {
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpf_tpMapSpecs struct {
 	Events                       *ebpf.MapSpec `ebpf:"events"`
-	FilteredConnections          *ebpf.MapSpec `ebpf:"filtered_connections"`
 	GoTraceMap                   *ebpf.MapSpec `ebpf:"go_trace_map"`
 	GolangMapbucketStorageMap    *ebpf.MapSpec `ebpf:"golang_mapbucket_storage_map"`
 	OngoingGoroutines            *ebpf.MapSpec `ebpf:"ongoing_goroutines"`
@@ -143,9 +123,7 @@ type bpf_tpMapSpecs struct {
 	OngoingGrpcServerRequests    *ebpf.MapSpec `ebpf:"ongoing_grpc_server_requests"`
 	OngoingHttpServerConnections *ebpf.MapSpec `ebpf:"ongoing_http_server_connections"`
 	OngoingStreams               *ebpf.MapSpec `ebpf:"ongoing_streams"`
-	PidCache                     *ebpf.MapSpec `ebpf:"pid_cache"`
 	TraceMap                     *ebpf.MapSpec `ebpf:"trace_map"`
-	ValidPids                    *ebpf.MapSpec `ebpf:"valid_pids"`
 }
 
 // bpf_tpObjects contains all objects after they have been loaded into the kernel.
@@ -168,7 +146,6 @@ func (o *bpf_tpObjects) Close() error {
 // It can be passed to loadBpf_tpObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpf_tpMaps struct {
 	Events                       *ebpf.Map `ebpf:"events"`
-	FilteredConnections          *ebpf.Map `ebpf:"filtered_connections"`
 	GoTraceMap                   *ebpf.Map `ebpf:"go_trace_map"`
 	GolangMapbucketStorageMap    *ebpf.Map `ebpf:"golang_mapbucket_storage_map"`
 	OngoingGoroutines            *ebpf.Map `ebpf:"ongoing_goroutines"`
@@ -178,15 +155,12 @@ type bpf_tpMaps struct {
 	OngoingGrpcServerRequests    *ebpf.Map `ebpf:"ongoing_grpc_server_requests"`
 	OngoingHttpServerConnections *ebpf.Map `ebpf:"ongoing_http_server_connections"`
 	OngoingStreams               *ebpf.Map `ebpf:"ongoing_streams"`
-	PidCache                     *ebpf.Map `ebpf:"pid_cache"`
 	TraceMap                     *ebpf.Map `ebpf:"trace_map"`
-	ValidPids                    *ebpf.Map `ebpf:"valid_pids"`
 }
 
 func (m *bpf_tpMaps) Close() error {
 	return _Bpf_tpClose(
 		m.Events,
-		m.FilteredConnections,
 		m.GoTraceMap,
 		m.GolangMapbucketStorageMap,
 		m.OngoingGoroutines,
@@ -196,9 +170,7 @@ func (m *bpf_tpMaps) Close() error {
 		m.OngoingGrpcServerRequests,
 		m.OngoingHttpServerConnections,
 		m.OngoingStreams,
-		m.PidCache,
 		m.TraceMap,
-		m.ValidPids,
 	)
 }
 

@@ -17,7 +17,6 @@
 #include "map_sizing.h"
 #include "bpf_dbg.h"
 #include "http_trace.h"
-#include "ringbuf.h"
 #include "tracing.h"
 #include "trace_util.h"
 #include "go_traceparent.h"

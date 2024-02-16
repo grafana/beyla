@@ -13,9 +13,9 @@
 #ifndef HTTP_TRACE_H
 #define HTTP_TRACE_H
 
-#include "pid.h"
+#include "pid_types.h"
 #include "utils.h"
-#include "tracing.h"
+#include "http_types.h"
 
 #define PATH_MAX_LEN 100
 #define METHOD_MAX_LEN 7 // Longest method: OPTIONS

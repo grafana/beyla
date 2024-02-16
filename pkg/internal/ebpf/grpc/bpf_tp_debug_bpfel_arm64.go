@@ -39,25 +39,6 @@ type bpf_tp_debugGrpcSrvFuncInvocationT struct {
 	Tp              bpf_tp_debugTpInfoT
 }
 
-type bpf_tp_debugHttpConnectionMetadataT struct {
-	Pid struct {
-		HostPid   uint32
-		UserPid   uint32
-		Namespace uint32
-	}
-	Type uint8
-}
-
-type bpf_tp_debugPidConnectionInfoT struct {
-	Conn bpf_tp_debugConnectionInfoT
-	Pid  uint32
-}
-
-type bpf_tp_debugPidKeyT struct {
-	Pid       uint32
-	Namespace uint32
-}
-
 type bpf_tp_debugTpInfoPidT struct {
 	Tp    bpf_tp_debugTpInfoT
 	Pid   uint32
@@ -133,7 +114,6 @@ type bpf_tp_debugProgramSpecs struct {
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpf_tp_debugMapSpecs struct {
 	Events                       *ebpf.MapSpec `ebpf:"events"`
-	FilteredConnections          *ebpf.MapSpec `ebpf:"filtered_connections"`
 	GoTraceMap                   *ebpf.MapSpec `ebpf:"go_trace_map"`
 	GolangMapbucketStorageMap    *ebpf.MapSpec `ebpf:"golang_mapbucket_storage_map"`
 	OngoingGoroutines            *ebpf.MapSpec `ebpf:"ongoing_goroutines"`
@@ -143,9 +123,7 @@ type bpf_tp_debugMapSpecs struct {
 	OngoingGrpcServerRequests    *ebpf.MapSpec `ebpf:"ongoing_grpc_server_requests"`
 	OngoingHttpServerConnections *ebpf.MapSpec `ebpf:"ongoing_http_server_connections"`
 	OngoingStreams               *ebpf.MapSpec `ebpf:"ongoing_streams"`
-	PidCache                     *ebpf.MapSpec `ebpf:"pid_cache"`
 	TraceMap                     *ebpf.MapSpec `ebpf:"trace_map"`
-	ValidPids                    *ebpf.MapSpec `ebpf:"valid_pids"`
 }
 
 // bpf_tp_debugObjects contains all objects after they have been loaded into the kernel.
@@ -168,7 +146,6 @@ func (o *bpf_tp_debugObjects) Close() error {
 // It can be passed to loadBpf_tp_debugObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpf_tp_debugMaps struct {
 	Events                       *ebpf.Map `ebpf:"events"`
-	FilteredConnections          *ebpf.Map `ebpf:"filtered_connections"`
 	GoTraceMap                   *ebpf.Map `ebpf:"go_trace_map"`
 	GolangMapbucketStorageMap    *ebpf.Map `ebpf:"golang_mapbucket_storage_map"`
 	OngoingGoroutines            *ebpf.Map `ebpf:"ongoing_goroutines"`
@@ -178,15 +155,12 @@ type bpf_tp_debugMaps struct {
 	OngoingGrpcServerRequests    *ebpf.Map `ebpf:"ongoing_grpc_server_requests"`
 	OngoingHttpServerConnections *ebpf.Map `ebpf:"ongoing_http_server_connections"`
 	OngoingStreams               *ebpf.Map `ebpf:"ongoing_streams"`
-	PidCache                     *ebpf.Map `ebpf:"pid_cache"`
 	TraceMap                     *ebpf.Map `ebpf:"trace_map"`
-	ValidPids                    *ebpf.Map `ebpf:"valid_pids"`
 }
 
 func (m *bpf_tp_debugMaps) Close() error {
 	return _Bpf_tp_debugClose(
 		m.Events,
-		m.FilteredConnections,
 		m.GoTraceMap,
 		m.GolangMapbucketStorageMap,
 		m.OngoingGoroutines,
@@ -196,9 +170,7 @@ func (m *bpf_tp_debugMaps) Close() error {
 		m.OngoingGrpcServerRequests,
 		m.OngoingHttpServerConnections,
 		m.OngoingStreams,
-		m.PidCache,
 		m.TraceMap,
-		m.ValidPids,
 	)
 }
 

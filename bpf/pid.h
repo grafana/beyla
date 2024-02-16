@@ -1,18 +1,14 @@
-#ifndef PID_HELPERS_H
-#define PID_HELPERS_H
+#ifndef PID_H
+#define PID_H
 
 #include "vmlinux.h"
 #include "bpf_helpers.h"
 #include "bpf_core_read.h"
+#include "pid_types.h"
 
 #define MAX_CONCURRENT_PIDS 3000 // estimate: 1000 concurrent processes (including children) * 3 namespaces per pid
 
 volatile const s32 filter_pids = 0;
-
-typedef struct pid_key {
-    u32 pid;        // pid as seen by the userspace (for example, inside its container)
-    u32 namespace;  // pids namespace for the process
-} __attribute__((packed)) pid_key_t;
 
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);    
@@ -29,75 +25,6 @@ struct {
     __type(value, u32);
     __uint(pinning, LIBBPF_PIN_BY_NAME);
 } pid_cache SEC(".maps");
-
-typedef struct pid_info_t {
-    u32 host_pid;   // pid as seen by the root cgroup (and by BPF)
-    u32 user_pid;   // pid as seen by the userspace (for example, inside its container)
-    u32 namespace;  // pids namespace for the process
-} __attribute__((packed)) pid_info;
-
-// Good resource on this: https://mozillazg.com/2022/05/ebpf-libbpfgo-get-process-info-en.html
-// Using bpf_get_ns_current_pid_tgid is too restrictive for us
-static __always_inline void ns_pid_ppid(struct task_struct *task, int *pid, int *ppid, u32 *pid_ns_id) {
-    struct upid upid;
-
-    unsigned int level = BPF_CORE_READ(task, nsproxy, pid_ns_for_children, level);
-    struct pid *ns_pid = (struct pid *)BPF_CORE_READ(task, group_leader, thread_pid);
-    bpf_probe_read_kernel(&upid, sizeof(upid), &ns_pid->numbers[level]);
-
-    *pid = upid.nr;
-    unsigned int p_level = BPF_CORE_READ(task, real_parent, nsproxy, pid_ns_for_children, level);
-
-    struct pid *ns_ppid = (struct pid *)BPF_CORE_READ(task, real_parent, group_leader, thread_pid);
-    bpf_probe_read_kernel(&upid, sizeof(upid), &ns_ppid->numbers[p_level]);
-    *ppid = upid.nr;
-
-    struct ns_common ns = BPF_CORE_READ(task, nsproxy, pid_ns_for_children, ns);
-    *pid_ns_id = ns.inum;
-}
-
-// sets the pid_info value from the current task
-static __always_inline void task_pid(pid_info *pid) {
-    struct upid upid;
-    struct task_struct *task = (struct task_struct *)bpf_get_current_task();
-
-    // set host-side PID
-    pid->host_pid = (u32)BPF_CORE_READ(task, tgid);
-
-    // set user-side PID
-    unsigned int level = BPF_CORE_READ(task, nsproxy, pid_ns_for_children, level);
-    struct pid *ns_pid = (struct pid *)BPF_CORE_READ(task, group_leader, thread_pid);
-    bpf_probe_read_kernel(&upid, sizeof(upid), &ns_pid->numbers[level]);
-    pid->user_pid = (u32)upid.nr;
-
-    // set PIDs namespace
-    struct ns_common ns = BPF_CORE_READ(task, nsproxy, pid_ns_for_children, ns);
-    pid->namespace = (u32)ns.inum;
-}
-
-static __always_inline void task_tid(pid_key_t *tid) {
-    struct upid upid;
-    struct task_struct *task = (struct task_struct *)bpf_get_current_task();
-
-    // https://github.com/torvalds/linux/blob/556e2d17cae620d549c5474b1ece053430cd50bc/kernel/pid.c#L324 (type is )
-    // set user-side PID
-    unsigned int level = BPF_CORE_READ(task, nsproxy, pid_ns_for_children, level);
-    struct pid *ns_pid = (struct pid *)BPF_CORE_READ(task, thread_pid);
-    bpf_probe_read_kernel(&upid, sizeof(upid), &ns_pid->numbers[level]);
-    tid->pid = (u32)upid.nr;
-
-    // set PIDs namespace
-    struct ns_common ns = BPF_CORE_READ(task, nsproxy, pid_ns_for_children, ns);
-    tid->namespace = (u32)ns.inum;
-}
-
-static __always_inline u32 pid_from_pid_tgid(u64 id) {
-    return (u32)(id >> 32);
-}
-
-static __always_inline u64 to_pid_tgid(u32 pid, u32 tid) {
-    return (u64)((u64)pid << 32) | tid;
-}
 
 static __always_inline u32 valid_pid(u64 id) {
     u32 host_pid = id >> 32;
@@ -122,7 +49,7 @@ static __always_inline u32 valid_pid(u64 id) {
     if (ns_pid != 0) {
         pid_key_t p_key = {
             .pid = ns_pid,
-            .namespace = pid_ns_id
+            .ns = pid_ns_id
         };
 
         u32 *found_ns_pid = bpf_map_lookup_elem(&valid_pids, &p_key);
@@ -133,7 +60,7 @@ static __always_inline u32 valid_pid(u64 id) {
         } else if (ns_ppid != 0) {
             pid_key_t pp_key = {
                 .pid = ns_ppid,
-                .namespace = pid_ns_id
+                .ns = pid_ns_id
             };
 
             u32 *found_ns_ppid = bpf_map_lookup_elem(&valid_pids, &pp_key);

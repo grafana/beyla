@@ -30,20 +30,9 @@ func (pt *ProcessTracer) Run(ctx context.Context, out chan<- []request.Span) {
 		pt.log.Error("couldn't trace process. Stopping process tracer", "error", err)
 		return
 	}
-	service := pt.ELFInfo.Service
-	// If the user does not override the service name via configuration
-	// the service name is the name of the found executable
-	// Unless the case of system-wide tracing, where the name of the
-	// executable will be dynamically set for each traced http request call.
-	if service.Name == "" && !pt.SystemWide {
-		service.Name = pt.ELFInfo.ExecutableName()
-		// we mark the service ID as automatically named in case we want to look,
-		// in later stages of the pipeline, for better automatic service name
-		service.AutoName = true
-	}
 
 	for _, t := range trcrs {
-		go t.Run(ctx, out, service)
+		go t.Run(ctx, out)
 	}
 	go func() {
 		<-ctx.Done()

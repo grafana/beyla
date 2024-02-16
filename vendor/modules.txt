@@ -339,6 +339,9 @@ github.com/xwb1989/sqlparser/dependency/sqltypes
 # github.com/yusufpapurcu/wmi v1.2.4
 ## explicit; go 1.16
 github.com/yusufpapurcu/wmi
+# go.opentelemetry.io/collector/consumer v0.94.1
+## explicit; go 1.20
+go.opentelemetry.io/collector/consumer
 # go.opentelemetry.io/collector/pdata v1.1.0
 ## explicit; go 1.20
 go.opentelemetry.io/collector/pdata/internal
@@ -354,6 +357,7 @@ go.opentelemetry.io/collector/pdata/internal/data/protogen/trace/v1
 go.opentelemetry.io/collector/pdata/internal/json
 go.opentelemetry.io/collector/pdata/internal/otlp
 go.opentelemetry.io/collector/pdata/pcommon
+go.opentelemetry.io/collector/pdata/plog
 go.opentelemetry.io/collector/pdata/pmetric
 go.opentelemetry.io/collector/pdata/pmetric/pmetricotlp
 go.opentelemetry.io/collector/pdata/ptrace

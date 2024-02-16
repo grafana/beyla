@@ -15,8 +15,8 @@ import (
 
 	otelsdk "go.opentelemetry.io/otel/sdk"
 
-	"github.com/grafana/beyla/pkg/appobserv"
 	"github.com/grafana/beyla/pkg/beyla"
+	"github.com/grafana/beyla/pkg/components"
 )
 
 var Version = "main"
@@ -38,6 +38,10 @@ func main() {
 	}
 
 	config := loadConfig(configPath)
+	if err := config.Validate(); err != nil {
+		slog.Error("wrong Beyla configuration", "error", err)
+		os.Exit(-1)
+	}
 
 	if err := lvl.UnmarshalText([]byte(config.LogLevel)); err != nil {
 		slog.Error("unknown log level specified, choices are [DEBUG, INFO, WARN, ERROR]", err)
@@ -57,19 +61,8 @@ func main() {
 	// child process isn't found.
 	ctx, _ := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 
-	// TODO: when we split Beyla in two executables, this code can be split:
-	// in two parts:
-	// 1st executable - Invoke FindTarget, which also mounts the BPF maps
-	// 2nd executable - Invoke ReadAndForward, receiving the BPF map mountpoint as argument
-	instr := appobserv.New(config)
-	if err := instr.FindAndInstrument(ctx); err != nil {
-		slog.Error("Beyla couldn't find target process", "error", err)
-		os.Exit(-1)
-	}
-	if err := instr.ReadAndForward(ctx); err != nil {
-		slog.Error("Beyla couldn't start read and forwarding", "error", err)
-		os.Exit(-1)
-	}
+	components.StartBeyla(ctx, config)
+	<-ctx.Done()
 
 	if gc := os.Getenv("GOCOVERDIR"); gc != "" {
 		slog.Info("Waiting 1s to collect coverage data...")

@@ -20,6 +20,14 @@ import (
 
 const ReporterLRUSize = 256
 
+// Features that can be enabled in Beyla (can be at the same time): App O11y and/or Net O11y
+type Feature uint
+
+const (
+	FeatureAppO11y = Feature(1 << iota)
+	FeatureNetO11y
+)
+
 var defaultConfig = Config{
 	ChannelBufferLen: 10,
 	LogLevel:         "INFO",
@@ -69,11 +77,15 @@ var defaultConfig = Config{
 			InformersSyncTimeout: 30 * time.Second,
 		},
 	},
-	Routes: &transform.RoutesConfig{},
+	Routes:       &transform.RoutesConfig{},
+	NetworkFlows: defaultNetworkConfig,
 }
 
 type Config struct {
 	EBPF ebpfcommon.TracerConfig `yaml:"ebpf"`
+
+	// NetworkFlows configuration for Network Observability feature
+	NetworkFlows NetworkConfig `yaml:"network"`
 
 	// Grafana overrides some values of the otel.MetricsConfig and otel.TracesConfig below
 	// for a simpler submission of OTEL metrics to Grafana Cloud
@@ -127,12 +139,13 @@ func (e ConfigError) Error() string {
 	return string(e)
 }
 
-func (c *Config) validateInstrumentation() error {
+// nolint:cyclop
+func (c *Config) Validate() error {
 	if err := c.Discovery.Services.Validate(); err != nil {
 		return ConfigError(fmt.Sprintf("error in services YAML property: %s", err.Error()))
 	}
-	if c.Port.Len() == 0 && !c.Exec.IsSet() && len(c.Discovery.Services) == 0 && !c.Discovery.SystemWide {
-		return ConfigError("missing BEYLA_EXECUTABLE_NAME or BEYLA_OPEN_PORT property, or a 'discovery' section in the configuration file. Please check the documentation for more information")
+	if !c.Enabled(FeatureNetO11y) && !c.Enabled(FeatureAppO11y) {
+		return ConfigError("missing at least one of BEYLA_NETWORK_METRICS, BEYLA_EXECUTABLE_NAME or BEYLA_OPEN_PORT property")
 	}
 	if (c.Port.Len() > 0 || c.Exec.IsSet() || len(c.Discovery.Services) > 0) && c.Discovery.SystemWide {
 		return ConfigError("you can't use BEYLA_SYSTEM_WIDE if any of BEYLA_EXECUTABLE_NAME, BEYLA_OPEN_PORT or services (YAML) are set")
@@ -140,12 +153,11 @@ func (c *Config) validateInstrumentation() error {
 	if c.EBPF.BatchLength == 0 {
 		return ConfigError("BEYLA_BPF_BATCH_LENGTH must be at least 1")
 	}
-	return nil
-}
 
-func (c *Config) Validate() error {
-	if err := c.validateInstrumentation(); err != nil {
-		return err
+	if c.Enabled(FeatureNetO11y) && !c.Grafana.OTLP.MetricsEnabled() && !c.Metrics.Enabled() {
+		return ConfigError("enabling network observability requires to enable at least the OpenTelemetry" +
+			" metrics exporter: grafana or otel_metrics_export sections in the YAML configuration file; or the" +
+			" OTEL_EXPORTER_OTLP_ENDPOINT or OTEL_EXPORTER_OTLP_METRICS_ENDPOINT environment variables")
 	}
 
 	if !c.Noop.Enabled() && !c.Printer.Enabled() &&
@@ -156,6 +168,17 @@ func (c *Config) Validate() error {
 			" grafana, otel_metrics_export, otel_traces_export or prometheus_export")
 	}
 	return nil
+}
+
+// Enabled checks if a given Beyla feature is enabled according to the global configuration
+func (c *Config) Enabled(feature Feature) bool {
+	switch feature {
+	case FeatureNetO11y:
+		return c.NetworkFlows.Enable
+	case FeatureAppO11y:
+		return c.Port.Len() > 0 || c.Exec.IsSet() || len(c.Discovery.Services) > 0 || c.Discovery.SystemWide
+	}
+	return false
 }
 
 // LoadConfig overrides configuration in the following order (from less to most priority)

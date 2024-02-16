@@ -1,6 +1,6 @@
 // Package appobserv provides public access to Beyla application observability as a library. All the other subcomponents
 // of Beyla are hidden.
-package appobserv
+package appolly
 
 import (
 	"context"

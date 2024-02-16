@@ -1,0 +1,9 @@
+name: keep-alive
+groups:
+  - name: keep-alive
+    rules:
+      - record: kube_pod_info
+        expr: 1
+        labels:
+          pod: dummy
+          asserts_env: dev

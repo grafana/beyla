@@ -135,3 +135,49 @@ func TestGoOffsetsFromDwarf_ErrorIfConstantNotFound(t *testing.T) {
 	_, missing := structMemberOffsetsFromDwarf(debugData)
 	assert.Contains(t, missing, "tralara")
 }
+
+func TestReadMembers_UnsupportedLocationType(t *testing.T) {
+	fdr := &fakeDwarfReader{
+		entries: []*dwarf.Entry{{
+			Tag: dwarf.TagStructType,
+			Field: []dwarf.Field{
+				{Attr: dwarf.AttrName, Val: "supported_loc"},
+				{Attr: dwarf.AttrDataMemberLoc, Val: int64(33)},
+			},
+		}, {
+			Tag: dwarf.TagStructType,
+			Field: []dwarf.Field{
+				{Attr: dwarf.AttrName, Val: "unsupported_loc"},
+				{Attr: dwarf.AttrDataMemberLoc, Val: []byte("#\x00")},
+			}},
+		},
+	}
+	notFoundFields := map[string]struct{}{
+		"supported_loc":   {},
+		"unsupported_loc": {},
+	}
+	// Must return an error if there is a field with unsupported location type
+	require.Error(t, readMembers(fdr, map[string]string{
+		"supported_loc":   "supported_loc",
+		"unsupported_loc": "unsupported_loc",
+	}, notFoundFields, FieldOffsets{}))
+	// And this field will be kept in the "expectedFields" map, so Beyla will
+	// later know that it didn't manage to get that information from dwarf
+	// and will try to look for it in the precompiled offsets DB
+	assert.Equal(t, map[string]struct{}{
+		"unsupported_loc": {},
+	}, notFoundFields)
+}
+
+type fakeDwarfReader struct {
+	entries []*dwarf.Entry
+}
+
+func (f *fakeDwarfReader) Next() (*dwarf.Entry, error) {
+	if len(f.entries) == 0 {
+		return nil, nil
+	}
+	entry := f.entries[0]
+	f.entries = f.entries[1:]
+	return entry, nil
+}

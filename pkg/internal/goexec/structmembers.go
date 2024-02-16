@@ -300,8 +300,12 @@ func structMemberOffsetsFromDwarf(data *dwarf.Data) (FieldOffsets, map[string]st
 	}
 }
 
+type dwarfReader interface {
+	Next() (*dwarf.Entry, error)
+}
+
 func readMembers(
-	reader *dwarf.Reader,
+	reader dwarfReader,
 	fields map[string]string,
 	expectedReturns map[string]struct{},
 	offsets FieldOffsets,
@@ -329,7 +333,6 @@ func readMembers(
 				offsets[constName] = uint64(constLocation)
 			} else {
 				// Temporary workaround
-				// TODO: properly address issue https://github.com/grafana/beyla/issues/625
 				return fmt.Errorf("at the moment, Beyla only supports constant values for DW_AT_data_member_location;"+
 					"got %s. Beyla will read the offsets from a pre-fetched database", attrs[dwarf.AttrDataMemberLoc])
 			}

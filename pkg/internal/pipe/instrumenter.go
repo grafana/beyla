@@ -8,6 +8,7 @@ import (
 
 	"github.com/grafana/beyla/pkg/beyla"
 	"github.com/grafana/beyla/pkg/internal/export/debug"
+	"github.com/grafana/beyla/pkg/internal/export/grafagent"
 	"github.com/grafana/beyla/pkg/internal/export/otel"
 	"github.com/grafana/beyla/pkg/internal/export/prom"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
@@ -26,13 +27,14 @@ type nodesMap struct {
 	Routes *transform.RoutesConfig `forwardTo:"Kubernetes"`
 
 	// Kubernetes is an optional node. If not set, data will be bypassed to the exporters.
-	Kubernetes transform.KubernetesDecorator `forwardTo:"Metrics,Traces,Prometheus,Printer,Noop"`
+	Kubernetes transform.KubernetesDecorator `forwardTo:"Metrics,Traces,Prometheus,Printer,Noop,AgentTraces"`
 
-	Metrics    otel.MetricsConfig
-	Traces     otel.TracesConfig
-	Prometheus prom.PrometheusConfig
-	Printer    debug.PrintEnabled
-	Noop       debug.NoopEnabled
+	AgentTraces *grafagent.TracesExporterConfig
+	Metrics     otel.MetricsConfig
+	Traces      otel.TracesConfig
+	Prometheus  prom.PrometheusConfig
+	Printer     debug.PrintEnabled
+	Noop        debug.NoopEnabled
 }
 
 func configToNodesMap(cfg *beyla.Config) *nodesMap {
@@ -45,6 +47,7 @@ func configToNodesMap(cfg *beyla.Config) *nodesMap {
 		Prometheus:   cfg.Prometheus,
 		Printer:      cfg.Printer,
 		Noop:         cfg.Noop,
+		AgentTraces:  cfg.TracesExport,
 	}
 }
 
@@ -94,6 +97,7 @@ func newGraphBuilder(ctx context.Context, config *beyla.Config, ctxInfo *global.
 	graph.RegisterTerminal(gnb, gb.prometheusProvider)
 	graph.RegisterTerminal(gnb, debug.NoopNode)
 	graph.RegisterTerminal(gnb, debug.PrinterNode)
+	graph.RegisterTerminal(gnb, grafagent.TracesExporterProvider)
 
 	// The returned builder later invokes its "Build" function that, given
 	// the contents of the nodesMap struct, will automagically instantiate

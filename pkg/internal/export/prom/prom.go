@@ -2,12 +2,14 @@ package prom
 
 import (
 	"context"
+	"runtime"
 	"strconv"
 	"time"
 
 	"github.com/mariomac/pipes/pkg/node"
 	"github.com/prometheus/client_golang/prometheus"
 
+	"github.com/grafana/beyla/pkg/buildinfo"
 	"github.com/grafana/beyla/pkg/internal/connector"
 	"github.com/grafana/beyla/pkg/internal/export/otel"
 	"github.com/grafana/beyla/pkg/internal/kube"
@@ -63,12 +65,24 @@ const (
 	defaultHistogramMinResetDuration = 1 * time.Hour
 )
 
+// metrics for Beyla statistics
+const (
+	BeylaBuildInfo = "beyla_build_info"
+
+	LanguageLabel = "target_lang"
+)
+
+// not adding version, as it is a fixed value
+var beylaInfoLabelNames = []string{LanguageLabel}
+
 // TODO: TLS
 type PrometheusConfig struct {
 	Port           int    `yaml:"port" env:"BEYLA_PROMETHEUS_PORT"`
 	Path           string `yaml:"path" env:"BEYLA_PROMETHEUS_PATH"`
 	ReportTarget   bool   `yaml:"report_target" env:"BEYLA_METRICS_REPORT_TARGET"`
 	ReportPeerInfo bool   `yaml:"report_peer" env:"BEYLA_METRICS_REPORT_PEER"`
+
+	DisableBuildInfo bool `yaml:"disable_build_info" env:"BEYLA_PROMETHEUS_DISABLE_BUILD_INFO"`
 
 	Buckets otel.Buckets `yaml:"buckets"`
 }
@@ -81,6 +95,7 @@ func (p PrometheusConfig) Enabled() bool {
 type metricsReporter struct {
 	cfg *PrometheusConfig
 
+	beylaInfo             *prometheus.GaugeVec
 	httpDuration          *prometheus.HistogramVec
 	httpClientDuration    *prometheus.HistogramVec
 	grpcDuration          *prometheus.HistogramVec
@@ -108,6 +123,19 @@ func newReporter(ctx context.Context, cfg *PrometheusConfig, ctxInfo *global.Con
 		ctxInfo:     ctxInfo,
 		cfg:         cfg,
 		promConnect: ctxInfo.Prometheus,
+		beylaInfo: prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Name: BeylaBuildInfo,
+			Help: "A metric with a constant '1' value labeled by version, revision, branch, " +
+				"goversion from which Beyla was built, the goos and goarch for the build, and the" +
+				"language of the reported services",
+			ConstLabels: map[string]string{
+				"goarch":    runtime.GOARCH,
+				"goos":      runtime.GOOS,
+				"goversion": runtime.Version(),
+				"version":   buildinfo.Version,
+				"revision":  buildinfo.Revision,
+			},
+		}, beylaInfoLabelNames),
 		httpDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Name:                            HTTPServerDuration,
 			Help:                            "duration of HTTP service calls from the server side, in seconds",
@@ -165,7 +193,12 @@ func newReporter(ctx context.Context, cfg *PrometheusConfig, ctxInfo *global.Con
 			NativeHistogramMinResetDuration: defaultHistogramMinResetDuration,
 		}, labelNamesHTTPClient(cfg, ctxInfo)),
 	}
-	mr.promConnect.Register(cfg.Port, cfg.Path,
+
+	var registeredMetrics []prometheus.Collector
+	if !mr.cfg.DisableBuildInfo {
+		registeredMetrics = append(registeredMetrics, mr.beylaInfo)
+	}
+	registeredMetrics = append(registeredMetrics,
 		mr.httpClientRequestSize,
 		mr.httpClientDuration,
 		mr.grpcClientDuration,
@@ -173,6 +206,9 @@ func newReporter(ctx context.Context, cfg *PrometheusConfig, ctxInfo *global.Con
 		mr.httpRequestSize,
 		mr.httpDuration,
 		mr.grpcDuration)
+
+	mr.promConnect.Register(cfg.Port, cfg.Path, registeredMetrics...)
+
 	return mr
 }
 
@@ -187,6 +223,7 @@ func (r *metricsReporter) reportMetrics(input <-chan []request.Span) {
 
 func (r *metricsReporter) observe(span *request.Span) {
 	t := span.Timings()
+	r.beylaInfo.WithLabelValues(span.ServiceID.SDKLanguage.String()).Set(1.0)
 	duration := t.End.Sub(t.RequestStart).Seconds()
 	switch span.Type {
 	case request.EventTypeHTTP:

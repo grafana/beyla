@@ -40,6 +40,7 @@ local buildx(stepName, app, auto_tag, tags) = {
   privileged: true,
   settings: {
     auto_tag: auto_tag,
+    build_args_from_env: ['DRONE_TAG'],
     tags: tags,
     repo: 'grafana/%s' % app,
     dockerfile: 'Dockerfile',

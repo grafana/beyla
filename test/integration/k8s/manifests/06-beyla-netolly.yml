@@ -32,6 +32,9 @@ spec:
         - name: beyla-config
           configMap:
             name: beyla-config
+        - name: testoutput
+          persistentVolumeClaim:
+            claimName: testoutput
       containers:
         - name: beyla
           image: beyla:dev
@@ -42,7 +45,11 @@ spec:
           volumeMounts:
             - mountPath: /config
               name: beyla-config
+            - mountPath: /testoutput
+              name: testoutput
           env:
+            - name: GOCOVERDIR
+              value: "/testoutput"
             - name: BEYLA_CONFIG_PATH
               value: /config/beyla-config.yml
             - name: BEYLA_NETWORK_METRICS

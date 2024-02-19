@@ -136,6 +136,10 @@ type TracesExporterConfig struct {
 	Consumer otelconsumer.Traces
 }
 
+func (t TracesExporterConfig) Enabled() bool {
+	return t.Consumer != nil
+}
+
 // Attributes configures the decoration of some extra attributes that will be
 // added to each span
 type Attributes struct {

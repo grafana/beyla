@@ -30,7 +30,7 @@ const (
 	FeatureNetO11y
 )
 
-var defaultConfig = Config{
+var DefaultConfig = Config{
 	ChannelBufferLen: 10,
 	LogLevel:         "INFO",
 	EBPF: ebpfcommon.TracerConfig{
@@ -81,6 +81,7 @@ var defaultConfig = Config{
 	},
 	Routes:       &transform.RoutesConfig{},
 	NetworkFlows: defaultNetworkConfig,
+	Port:         services.PortEnum{Ranges: []services.PortRange{{Start: 8080, End: 0}}},
 }
 
 type Config struct {
@@ -195,7 +196,7 @@ func (c *Config) Enabled(feature Feature) bool {
 // 2 - Contents of the provided file reader (nillable)
 // 3 - Environment variables
 func LoadConfig(file io.Reader) (*Config, error) {
-	cfg := defaultConfig
+	cfg := DefaultConfig
 	if file != nil {
 		cfgBuf, err := io.ReadAll(file)
 		if err != nil {

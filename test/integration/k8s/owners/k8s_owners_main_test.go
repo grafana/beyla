@@ -46,6 +46,8 @@ func TestMain(m *testing.M) {
 		kube.Deploy(k8s.PathManifests+"/05-uninstrumented-statefulset.yml"),
 		kube.Deploy(k8s.PathManifests+"/05-uninstrumented-daemonset.yml"),
 		kube.Deploy(k8s.PathManifests+"/06-beyla-daemonset.yml"),
+
+		kube.DeleteBeforeDestroy(k8s.PathManifests+"/06-beyla-daemonset.yml"),
 	)
 
 	cluster.Run(m)

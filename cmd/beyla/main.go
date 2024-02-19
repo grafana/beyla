@@ -64,8 +64,8 @@ func main() {
 	<-ctx.Done()
 
 	if gc := os.Getenv("GOCOVERDIR"); gc != "" {
-		slog.Info("Waiting 5s to collect coverage data...")
-		time.Sleep(5 * time.Second)
+		slog.Info("Waiting 1s to collect coverage data...")
+		time.Sleep(time.Second)
 	}
 }
 

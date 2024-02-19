@@ -38,13 +38,14 @@ func log() *slog.Logger {
 
 // Kind cluster deployed by each TestMain function, prepared to run a given test scenario.
 type Kind struct {
-	kindConfigPath  string
-	clusterName     string
-	testEnv         env.Environment
-	timeout         time.Duration
-	deployManifests []string
-	localImages     []string
-	logsDir         string
+	kindConfigPath    string
+	clusterName       string
+	testEnv           env.Environment
+	timeout           time.Duration
+	deployManifests   []string
+	deletionManifests []string
+	localImages       []string
+	logsDir           string
 }
 
 // Option that can be passed to the NewKind function in order to change the configuration
@@ -55,6 +56,15 @@ type Option func(k *Kind)
 func Deploy(manifest string) Option {
 	return func(k *Kind) {
 		k.deployManifests = append(k.deployManifests, manifest)
+	}
+}
+
+// DeleteBeforeDestroy specifies which manifests should be deleted before destroying kind. This is
+// useful to specify which manifests contain a Beyla instance, so it is first undeployed and the
+// coverage data is properly written
+func DeleteBeforeDestroy(manifest string) Option {
+	return func(k *Kind) {
+		k.deletionManifests = append(k.deletionManifests, manifest)
 	}
 }
 
@@ -125,6 +135,7 @@ func (k *Kind) Run(m *testing.M) {
 	log.Info("starting kind setup")
 	code := k.testEnv.Setup(funcs...).
 		Finish(
+			k.deleteManifests(),
 			k.exportLogs(),
 			envfuncs.DestroyCluster(k.clusterName),
 		).Run(m)
@@ -142,6 +153,19 @@ func (k *Kind) exportLogs() env.Func {
 		exe := gexe.New()
 		out := exe.Run("kind export logs " + k.logsDir + " --name " + k.clusterName)
 		log.With("out", out).Info("exported cluster logs")
+		return ctx, nil
+	}
+}
+
+func (k *Kind) deleteManifests() env.Func {
+	return func(ctx context.Context, config *envconf.Config) (context.Context, error) {
+		for _, mf := range k.deletionManifests {
+			log := log().With("manifest", mf)
+			log.Info("deleting manifest")
+			if err := deleteManifest(config, mf); err != nil {
+				log.Error("can't delete manifest", "error", err)
+			}
+		}
 		return ctx, nil
 	}
 }

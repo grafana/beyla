@@ -13,7 +13,7 @@ import (
 // 	otelconsumer.Traces
 // }
 
-func TracesExporterProvider(cfg *beyla.TracesExporterConfig) (node.TerminalFunc[[]*request.Span], error) {
+func TracesExporterProvider(cfg beyla.TracesExporterConfig) (node.TerminalFunc[[]*request.Span], error) {
 	return func(in <-chan []*request.Span) {
 		for i := range in {
 			cfg.Consumer.ConsumeTraces(cfg.Context, convert(i))
@@ -21,12 +21,6 @@ func TracesExporterProvider(cfg *beyla.TracesExporterConfig) (node.TerminalFunc[
 	}, nil
 }
 
-//	func convert([]*request.Span) ptrace.Traces {
-//		traces := ptrace.NewTraces()
-//		spans := traces.ResourceSpans().AppendEmpty()
-//		return traces
-//
-// /
 func convert(spans []*request.Span) ptrace.Traces {
 	traces := ptrace.NewTraces()
 

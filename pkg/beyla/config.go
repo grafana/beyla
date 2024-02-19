@@ -137,7 +137,7 @@ type TracesExporterConfig struct {
 }
 
 func (t TracesExporterConfig) Enabled() bool {
-	return true
+	return t.Consumer != nil
 }
 
 // Attributes configures the decoration of some extra attributes that will be

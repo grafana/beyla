@@ -1,6 +1,7 @@
 package beyla
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"time"
@@ -11,12 +12,12 @@ import (
 	"github.com/grafana/beyla/pkg/internal/discover/services"
 	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
 	"github.com/grafana/beyla/pkg/internal/export/debug"
-	"github.com/grafana/beyla/pkg/internal/export/grafagent"
 	"github.com/grafana/beyla/pkg/internal/export/otel"
 	"github.com/grafana/beyla/pkg/internal/export/prom"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/traces"
 	"github.com/grafana/beyla/pkg/internal/transform"
+	otelconsumer "go.opentelemetry.io/collector/consumer"
 )
 
 const ReporterLRUSize = 256
@@ -126,7 +127,12 @@ type Config struct {
 	ProfilePort      int               `yaml:"profile_port" env:"BEYLA_PROFILE_PORT"`
 	InternalMetrics  imetrics.Config   `yaml:"internal_metrics"`
 
-	TracesExport *grafagent.TracesExporterConfig `yaml:"-"`
+	TracesExport TracesExporterConfig `yaml:"-"`
+}
+
+type TracesExporterConfig struct {
+	Context  context.Context
+	Consumer otelconsumer.Traces
 }
 
 // Attributes configures the decoration of some extra attributes that will be

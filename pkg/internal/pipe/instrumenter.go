@@ -29,7 +29,7 @@ type nodesMap struct {
 	// Kubernetes is an optional node. If not set, data will be bypassed to the exporters.
 	Kubernetes transform.KubernetesDecorator `forwardTo:"Metrics,Traces,Prometheus,Printer,Noop,AgentTraces"`
 
-	AgentTraces *grafagent.TracesExporterConfig
+	AgentTraces beyla.TracesExporterConfig
 	Metrics     otel.MetricsConfig
 	Traces      otel.TracesConfig
 	Prometheus  prom.PrometheusConfig

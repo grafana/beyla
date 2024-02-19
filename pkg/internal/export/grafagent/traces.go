@@ -10,13 +10,13 @@ import (
 	otelconsumer "go.opentelemetry.io/collector/consumer"
 )
 
-type traceConsumer interface {
-	otelconsumer.Traces
-}
+// type traceConsumer interface {
+// 	otelconsumer.Traces
+// }
 
 type TracesExporterConfig struct {
 	Context  context.Context
-	Consumer traceConsumer
+	Consumer otelconsumer.Traces
 }
 
 func TracesExporterProvider(cfg *TracesExporterConfig) (node.TerminalFunc[[]*request.Span], error) {

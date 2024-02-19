@@ -29,7 +29,7 @@ func setupAppO11y(ctx context.Context, config *beyla.Config) {
 
 	// example to be included in the grafana agent before instantiating the code below
 	// TODO: remove from here
-	// config.TracesExport = &grafagent.TracesExporterConfig{Context: ctx, Consumer: nil, /* the agent consumer */}
+	//config.TracesExport = &grafagent.TracesExporterConfig{Context: ctx, Consumer: nil /* the agent consumer */}
 
 	instr := appolly.New(config)
 	if err := instr.FindAndInstrument(ctx); err != nil {

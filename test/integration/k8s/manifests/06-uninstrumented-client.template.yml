@@ -52,9 +52,6 @@ spec:
     - name: configs
       persistentVolumeClaim:
         claimName: configs
-    - name: testoutput
-      persistentVolumeClaim:
-        claimName: testoutput
     - name: maincode
       configMap:
         name: maincode

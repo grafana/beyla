@@ -282,7 +282,7 @@ func spanStatusCode(span *request.Span) codes.Code {
 	return codes.Unset
 }
 
-func (r *TracesReporter) traceAttributes(span *request.Span) []attribute.KeyValue {
+func TraceAttributes(span *request.Span) []attribute.KeyValue {
 	var attrs []attribute.KeyValue
 
 	switch span.Type {
@@ -410,7 +410,7 @@ func (r *TracesReporter) makeSpan(parentCtx context.Context, tracer trace2.Trace
 	ctx, sp := tracer.Start(parentCtx, traceName(span),
 		trace2.WithTimestamp(realStart),
 		trace2.WithSpanKind(spanKind(span)),
-		trace2.WithAttributes(r.traceAttributes(span)...),
+		trace2.WithAttributes(TraceAttributes(span)...),
 	)
 
 	sp.SetStatus(spanStatusCode(span), "")

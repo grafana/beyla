@@ -5,6 +5,7 @@ import (
 	"go.opentelemetry.io/collector/pdata/ptrace"
 
 	"github.com/grafana/beyla/pkg/beyla"
+	"github.com/grafana/beyla/pkg/internal/export/otel"
 	"github.com/grafana/beyla/pkg/internal/request"
 )
 
@@ -20,7 +21,22 @@ func TracesExporterProvider(cfg *beyla.TracesExporterConfig) (node.TerminalFunc[
 	}, nil
 }
 
-func convert([]*request.Span) ptrace.Traces {
+//	func convert([]*request.Span) ptrace.Traces {
+//		traces := ptrace.NewTraces()
+//		spans := traces.ResourceSpans().AppendEmpty()
+//		return traces
+//
+// /
+func convert(spans []*request.Span) ptrace.Traces {
 	traces := ptrace.NewTraces()
+
+	for _, span := range spans {
+		rs := traces.ResourceSpans().AppendEmpty()
+		res := rs.Resource()
+		attrs := otel.TraceAttributes(span)
+		for _, kv := range attrs {
+			res.Attributes().PutStr(string(kv.Key), kv.Value.AsString())
+		}
+	}
 	return traces
 }

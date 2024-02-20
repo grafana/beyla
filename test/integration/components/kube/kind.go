@@ -168,7 +168,8 @@ func (k *Kind) deleteLabeled() env.Func {
 			log.Error("can't list pods", "error", err)
 			return ctx, err
 		}
-		for _, pod := range pods.Items {
+		for i := range pods.Items {
+			pod := &pods.Items[i]
 			plog := log.With("podName", pod.Name, "namespace", pod.Namespace)
 			plog.Info("deleting")
 			pc := kclient.CoreV1().Pods(pod.Namespace)

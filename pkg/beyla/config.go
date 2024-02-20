@@ -132,12 +132,12 @@ type Config struct {
 }
 
 type TracesExporterConfig struct {
-	Context  context.Context
-	Consumer otelconsumer.Traces
+	Context   context.Context
+	Consumers []otelconsumer.Traces
 }
 
 func (t TracesExporterConfig) Enabled() bool {
-	return t.Consumer != nil
+	return len(t.Consumers) > 0
 }
 
 // Attributes configures the decoration of some extra attributes that will be

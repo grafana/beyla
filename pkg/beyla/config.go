@@ -131,13 +131,19 @@ type Config struct {
 	TracesExport TracesExporterConfig `yaml:"-"`
 }
 
+type Consumer interface {
+	otelconsumer.Traces
+	otelconsumer.Metrics
+	otelconsumer.Logs
+}
+
 type TracesExporterConfig struct {
-	Context   context.Context
-	Consumers []otelconsumer.Traces
+	Context context.Context
+	Traces  []Consumer
 }
 
 func (t TracesExporterConfig) Enabled() bool {
-	return len(t.Consumers) > 0
+	return len(t.Traces) > 0
 }
 
 // Attributes configures the decoration of some extra attributes that will be

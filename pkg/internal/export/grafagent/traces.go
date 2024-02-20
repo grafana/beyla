@@ -29,8 +29,8 @@ func TracesExporterProvider(cfg beyla.TracesExporterConfig) (node.TerminalFunc[[
 					// We set the eBPF calculated trace_id and span_id to be the main span
 					parentCtx = otel.ContextWithTraceParent(parentCtx, span.TraceID, span.SpanID)
 				}
-				for _, c := range cfg.Consumers {
-					c.ConsumeTraces(parentCtx, generateTraces(span, t, realStart, hasSubspans))
+				for _, tc := range cfg.Traces {
+					tc.ConsumeTraces(parentCtx, generateTraces(span, t, realStart, hasSubspans))
 				}
 			}
 		}

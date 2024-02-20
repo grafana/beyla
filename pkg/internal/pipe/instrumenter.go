@@ -29,7 +29,7 @@ type nodesMap struct {
 	// Kubernetes is an optional node. If not set, data will be bypassed to the exporters.
 	Kubernetes transform.KubernetesDecorator `forwardTo:"Metrics,Traces,Prometheus,Printer,Noop,AgentTraces"`
 
-	AgentTraces beyla.TracesExporterConfig
+	AgentTraces beyla.TracesReceiverConfig
 	Metrics     otel.MetricsConfig
 	Traces      otel.TracesConfig
 	Prometheus  prom.PrometheusConfig
@@ -97,7 +97,7 @@ func newGraphBuilder(ctx context.Context, config *beyla.Config, ctxInfo *global.
 	graph.RegisterTerminal(gnb, gb.prometheusProvider)
 	graph.RegisterTerminal(gnb, debug.NoopNode)
 	graph.RegisterTerminal(gnb, debug.PrinterNode)
-	graph.RegisterTerminal(gnb, grafagent.TracesExporterProvider)
+	graph.RegisterTerminal(gnb, gb.grafanaAgentTracesProvider)
 
 	// The returned builder later invokes its "Build" function that, given
 	// the contents of the nodesMap struct, will automagically instantiate
@@ -157,4 +157,9 @@ func (gb *graphFunctions) metricsReporterProvider(config otel.MetricsConfig) (no
 //nolint:gocritic
 func (gb *graphFunctions) prometheusProvider(config prom.PrometheusConfig) (node.TerminalFunc[[]request.Span], error) {
 	return prom.PrometheusEndpoint(gb.ctx, &config, gb.ctxInfo)
+}
+
+//nolint:gocritic
+func (gb *graphFunctions) grafanaAgentTracesProvider(config beyla.TracesReceiverConfig) (node.TerminalFunc[[]request.Span], error) {
+	return grafagent.TracesReceiver(gb.ctx, config)
 }

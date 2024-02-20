@@ -1,6 +1,7 @@
 package grafagent
 
 import (
+	"context"
 	"time"
 
 	"github.com/mariomac/pipes/pkg/node"
@@ -13,7 +14,8 @@ import (
 	"github.com/grafana/beyla/pkg/internal/request"
 )
 
-func TracesExporterProvider(cfg beyla.TracesExporterConfig) (node.TerminalFunc[[]request.Span], error) {
+// TracesReceiver creates a terminal node that consumes request.Spans and sends OpenTelemetry traces to the configured consumers.
+func TracesReceiver(ctx context.Context, cfg beyla.TracesReceiverConfig) (node.TerminalFunc[[]request.Span], error) {
 	return func(in <-chan []request.Span) {
 		for spans := range in {
 			for _, span := range spans {
@@ -22,7 +24,7 @@ func TracesExporterProvider(cfg beyla.TracesExporterConfig) (node.TerminalFunc[[
 				}
 
 				t := span.Timings()
-				parentCtx := otel.HandleTraceparent(cfg.Context, &span)
+				parentCtx := otel.HandleTraceparent(ctx, &span)
 				realStart := otel.SpanStartTime(t)
 				hasSubspans := t.Start.After(realStart)
 				if !hasSubspans {

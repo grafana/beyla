@@ -1,7 +1,6 @@
 package beyla
 
 import (
-	"context"
 	"fmt"
 	"io"
 	"time"
@@ -128,7 +127,7 @@ type Config struct {
 	ProfilePort      int               `yaml:"profile_port" env:"BEYLA_PROFILE_PORT"`
 	InternalMetrics  imetrics.Config   `yaml:"internal_metrics"`
 
-	TracesExport TracesExporterConfig `yaml:"-"`
+	TracesExport TracesReceiverConfig `yaml:"-"`
 }
 
 type Consumer interface {
@@ -137,12 +136,11 @@ type Consumer interface {
 	otelconsumer.Logs
 }
 
-type TracesExporterConfig struct {
-	Context context.Context
-	Traces  []Consumer
+type TracesReceiverConfig struct {
+	Traces []Consumer
 }
 
-func (t TracesExporterConfig) Enabled() bool {
+func (t TracesReceiverConfig) Enabled() bool {
 	return len(t.Traces) > 0
 }
 

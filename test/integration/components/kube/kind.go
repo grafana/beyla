@@ -30,6 +30,8 @@ import (
 
 const (
 	kindImage = "kindest/node:v1.27.3"
+
+	destroyPodsWithLabel = "teardown=delete"
 )
 
 func log() *slog.Logger {
@@ -125,6 +127,7 @@ func (k *Kind) Run(m *testing.M) {
 	log.Info("starting kind setup")
 	code := k.testEnv.Setup(funcs...).
 		Finish(
+			k.deleteLabeled(),
 			k.exportLogs(),
 			envfuncs.DestroyCluster(k.clusterName),
 		).Run(m)
@@ -142,6 +145,45 @@ func (k *Kind) exportLogs() env.Func {
 		exe := gexe.New()
 		out := exe.Run("kind export logs " + k.logsDir + " --name " + k.clusterName)
 		log.With("out", out).Info("exported cluster logs")
+		return ctx, nil
+	}
+}
+
+// deleteLabeled sends a kill signal to all the Beyla instances before tearing down the
+// kind cluster, in order to force them to write the coverage information
+// This method assumes that all the beyla pod instances are labeled as "teardown=delete"
+func (k *Kind) deleteLabeled() env.Func {
+	return func(ctx context.Context, config *envconf.Config) (context.Context, error) {
+		kclient, err := kubernetes.NewForConfig(config.Client().RESTConfig())
+		if err != nil {
+			return ctx, fmt.Errorf("creating kubernetes client for deletion: %w", err)
+		}
+		log := log().With("method", "deleteLabeled")
+		log.Info("searching for pods to delete before tearing down Kind")
+		podsClient := kclient.CoreV1().Pods("")
+		pods, err := podsClient.List(ctx, metav1.ListOptions{
+			LabelSelector: destroyPodsWithLabel,
+		})
+		if err != nil {
+			log.Error("can't list pods", "error", err)
+			return ctx, err
+		}
+		for i := range pods.Items {
+			pod := &pods.Items[i]
+			plog := log.With("podName", pod.Name, "namespace", pod.Namespace)
+			plog.Info("deleting")
+			pc := kclient.CoreV1().Pods(pod.Namespace)
+			if err := pc.Delete(ctx, pod.Name, metav1.DeleteOptions{}); err != nil {
+				plog.Error("can't delete pod", "error", err)
+				continue
+			}
+			// wait for the pod to be stopped
+			for p, err := pc.Get(ctx, pod.Name, metav1.GetOptions{}); err == nil && p != nil; {
+				plog.Info("waiting 1s for pod to be stopped " + string(p.Status.Phase))
+				time.Sleep(time.Second)
+				p, err = pc.Get(ctx, pod.Name, metav1.GetOptions{})
+			}
+		}
 		return ctx, nil
 	}
 }

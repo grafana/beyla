@@ -33,7 +33,7 @@ CLANG ?= clang
 CFLAGS := -O2 -g -Wall -Werror $(CFLAGS)
 
 # regular expressions for excluded file patterns
-EXCLUDE_COVERAGE_FILES="(bpf_)|(/pingserver/)|(/test/collector/)"
+EXCLUDE_COVERAGE_FILES="(bpfel_)|(/pingserver/)|(/test/collector/)|(integration/components)|(test/cmd)"
 
 .DEFAULT_GOAL := all
 

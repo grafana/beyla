@@ -46,8 +46,6 @@ func TestMain(m *testing.M) {
 		kube.Deploy(k8s.PathManifests+"/03-otelcol.yml"),
 		kube.Deploy(k8s.PathManifests+"/04-jaeger.yml"),
 		kube.Deploy(k8s.PathManifests+"/05-instrumented-service-otel.yml"),
-
-		kube.DeleteBeforeDestroy(k8s.PathManifests+"/05-instrumented-service-otel.yml"),
 	)
 
 	cluster.Run(m)

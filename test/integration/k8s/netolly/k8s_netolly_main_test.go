@@ -42,8 +42,6 @@ func TestMain(m *testing.M) {
 		kube.Deploy(k8s.PathManifests+"/03-otelcol.yml"),
 		kube.Deploy(k8s.PathManifests+"/05-uninstrumented-service.yml"),
 		kube.Deploy(k8s.PathManifests+"/06-beyla-netolly.yml"),
-
-		kube.DeleteBeforeDestroy(k8s.PathManifests+"/06-beyla-netolly.yml"),
 	)
 
 	cluster.Run(m)

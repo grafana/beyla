@@ -41,6 +41,9 @@ spec:
     metadata:
       labels:
         instrumentation: beyla
+        # this label will trigger a deletion of beyla pods before tearing down
+        # kind, to force Beyla writing the coverage data
+        teardown: delete
     spec:
       hostPID: true  #important!
       serviceAccountName: beyla

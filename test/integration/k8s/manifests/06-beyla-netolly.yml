@@ -23,6 +23,9 @@ spec:
     metadata:
       labels:
         instrumentation: beyla
+        # this label will trigger a deletion of beyla pods before tearing down
+        # kind, to force Beyla writing the coverage data
+        teardown: delete
     spec:
       hostPID: true  #important for appo11y!
       hostNetwork: true #important for neto11y!

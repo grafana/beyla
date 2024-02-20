@@ -42,8 +42,6 @@ func TestMain(m *testing.M) {
 		kube.Deploy(k8s.PathManifests+"/04-jaeger.yml"),
 		kube.Deploy(k8s.PathManifests+"/05-uninstrumented-service-python.yml"),
 		kube.Deploy(k8s.PathManifests+"/06-beyla-daemonset-python.yml"),
-
-		kube.DeleteBeforeDestroy(k8s.PathManifests+"/06-beyla-daemonset-python.yml"),
 	)
 
 	cluster.Run(m)

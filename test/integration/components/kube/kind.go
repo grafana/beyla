@@ -30,6 +30,8 @@ import (
 
 const (
 	kindImage = "kindest/node:v1.27.3"
+
+	destroyPodsWithLabel = "teardown=delete"
 )
 
 func log() *slog.Logger {
@@ -38,14 +40,13 @@ func log() *slog.Logger {
 
 // Kind cluster deployed by each TestMain function, prepared to run a given test scenario.
 type Kind struct {
-	kindConfigPath    string
-	clusterName       string
-	testEnv           env.Environment
-	timeout           time.Duration
-	deployManifests   []string
-	deletionManifests []string
-	localImages       []string
-	logsDir           string
+	kindConfigPath  string
+	clusterName     string
+	testEnv         env.Environment
+	timeout         time.Duration
+	deployManifests []string
+	localImages     []string
+	logsDir         string
 }
 
 // Option that can be passed to the NewKind function in order to change the configuration
@@ -56,15 +57,6 @@ type Option func(k *Kind)
 func Deploy(manifest string) Option {
 	return func(k *Kind) {
 		k.deployManifests = append(k.deployManifests, manifest)
-	}
-}
-
-// DeleteBeforeDestroy specifies which manifests should be deleted before destroying kind. This is
-// useful to specify which manifests contain a Beyla instance, so it is first undeployed and the
-// coverage data is properly written
-func DeleteBeforeDestroy(manifest string) Option {
-	return func(k *Kind) {
-		k.deletionManifests = append(k.deletionManifests, manifest)
 	}
 }
 
@@ -135,7 +127,7 @@ func (k *Kind) Run(m *testing.M) {
 	log.Info("starting kind setup")
 	code := k.testEnv.Setup(funcs...).
 		Finish(
-			k.deleteManifests(),
+			k.deleteLabeled(),
 			k.exportLogs(),
 			envfuncs.DestroyCluster(k.clusterName),
 		).Run(m)
@@ -157,13 +149,38 @@ func (k *Kind) exportLogs() env.Func {
 	}
 }
 
-func (k *Kind) deleteManifests() env.Func {
+// deleteLabeled sends a kill signal to all the Beyla instances before tearing down the
+// kind cluster, in order to force them to write the logs
+// This method assumes that all the beyla pod instances are labeled as "teardown=delete"
+func (k *Kind) deleteLabeled() env.Func {
 	return func(ctx context.Context, config *envconf.Config) (context.Context, error) {
-		for _, mf := range k.deletionManifests {
-			log := log().With("manifest", mf)
-			log.Info("deleting manifest")
-			if err := deleteManifest(config, mf); err != nil {
-				log.Error("can't delete manifest", "error", err)
+		kclient, err := kubernetes.NewForConfig(config.Client().RESTConfig())
+		if err != nil {
+			return ctx, fmt.Errorf("creating kubernetes client for deletion: %w", err)
+		}
+		log := log().With("method", "deleteLabeled")
+		log.Info("searching for pods to delete before tearing down Kind")
+		podsClient := kclient.CoreV1().Pods("")
+		pods, err := podsClient.List(ctx, metav1.ListOptions{
+			LabelSelector: destroyPodsWithLabel,
+		})
+		if err != nil {
+			log.Error("can't list pods", "error", err)
+			return ctx, err
+		}
+		for _, pod := range pods.Items {
+			plog := log.With("podName", pod.Name, "namespace", pod.Namespace)
+			plog.Info("deleting")
+			pc := kclient.CoreV1().Pods(pod.Namespace)
+			if err := pc.Delete(ctx, pod.Name, metav1.DeleteOptions{}); err != nil {
+				plog.Error("can't delete pod", "error", err)
+				continue
+			}
+			// wait for the pod to be stopped
+			for p, err := pc.Get(ctx, pod.Name, metav1.GetOptions{}); err == nil && p != nil; {
+				plog.Info("waiting 1s for pod to be stopped " + string(p.Status.Phase))
+				time.Sleep(time.Second)
+				p, err = pc.Get(ctx, pod.Name, metav1.GetOptions{})
 			}
 		}
 		return ctx, nil

@@ -150,7 +150,7 @@ func (k *Kind) exportLogs() env.Func {
 }
 
 // deleteLabeled sends a kill signal to all the Beyla instances before tearing down the
-// kind cluster, in order to force them to write the logs
+// kind cluster, in order to force them to write the coverage information
 // This method assumes that all the beyla pod instances are labeled as "teardown=delete"
 func (k *Kind) deleteLabeled() env.Func {
 	return func(ctx context.Context, config *envconf.Config) (context.Context, error) {

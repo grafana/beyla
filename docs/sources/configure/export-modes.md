@@ -56,7 +56,7 @@ to the different Grafana product endpoints (Mimir and/or Tempo).
 ### Configuring the Agent pipeline
 
 Next, you'll need to specify the following nodes by using the
-[River configuration language](/docs/agent/latest/flow/config-language/):
+[River configuration language](/docs/agent/latest/flow/):
 
 ![](https://grafana.com/media/docs/grafana-cloud/beyla/nodes.png)
 

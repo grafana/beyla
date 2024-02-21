@@ -211,6 +211,7 @@ static __always_inline int writeHeaderHelper(struct pt_regs *ctx, u64 req_offset
 
 done:
     bpf_map_delete_elem(&ongoing_http_server_requests, &goroutine_addr);
+    bpf_map_delete_elem(&go_trace_map, &goroutine_addr);
     return 0;
 }
 
@@ -542,7 +543,7 @@ int uprobe_http2FramerWriteHeaders_returns(struct pt_regs *ctx) {
             bpf_probe_read(&n, sizeof(n), (void *)(w_ptr + 40));
             bpf_probe_read(&cap, sizeof(cap), (void *)(w_ptr + 24));
 
-            bpf_dbg_printk("Found f_info, this is the place to write to w = %llx, buf=%llx, n=%d, size=%d", w_ptr, buf_arr, n, cap);
+            bpf_dbg_printk("Found f_info, this is the place to write to w = %llx, buf=%llx, n=%lld, size=%lld", w_ptr, buf_arr, n, cap);
             if (buf_arr && n < (cap - HTTP2_ENCODED_HEADER_LEN)) {
                 uint8_t tp_str[TP_MAX_VAL_LENGTH];
 

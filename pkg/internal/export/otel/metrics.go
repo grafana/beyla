@@ -39,6 +39,9 @@ const (
 
 	UsualPortGRPC = "4317"
 	UsualPortHTTP = "4318"
+
+	AggregationExplicit    = "explicit_bucket_histogram"
+	AggregationExponential = "base2_exponential_bucket_histogram"
 )
 
 type MetricsConfig struct {
@@ -59,8 +62,8 @@ type MetricsConfig struct {
 	ReportTarget   bool `yaml:"report_target" env:"BEYLA_METRICS_REPORT_TARGET"`
 	ReportPeerInfo bool `yaml:"report_peer" env:"BEYLA_METRICS_REPORT_PEER"`
 
-	Buckets                  Buckets `yaml:"buckets"`
-	UseExponentialHistograms bool    `yaml:"use_exponential_histograms" env:"BEYLA_OTEL_USE_EXPONENTIAL_HISTOGRAMS"`
+	Buckets              Buckets `yaml:"buckets"`
+	HistogramAggregation string  `yaml:"histogram_aggregation" env:"OTEL_EXPORTER_OTLP_METRICS_DEFAULT_HISTOGRAM_AGGREGATION"`
 
 	ReportersCacheLen int `yaml:"reporters_cache_len" env:"BEYLA_METRICS_REPORT_CACHE_LEN"`
 
@@ -171,7 +174,9 @@ func newMetricsReporter(ctx context.Context, cfg *MetricsConfig, ctxInfo *global
 }
 
 func (mr *MetricsReporter) newMetricSet(service svc.ID) (*Metrics, error) {
-	mlog().Debug("creating new Metrics reporter", "service", service)
+	mlog := mlog().With("service", service)
+	mlog.Debug("creating new Metrics reporter")
+	useExponentialHistograms := isExponentialAggregation(mr.cfg, mlog)
 	resources := otelResource(service)
 	m := Metrics{
 		ctx: mr.ctx,
@@ -179,13 +184,13 @@ func (mr *MetricsReporter) newMetricSet(service svc.ID) (*Metrics, error) {
 			metric.WithResource(resources),
 			metric.WithReader(metric.NewPeriodicReader(mr.exporter,
 				metric.WithInterval(mr.cfg.Interval))),
-			metric.WithView(otelHistogramConfig(HTTPServerDuration, mr.cfg.Buckets.DurationHistogram, mr.cfg.UseExponentialHistograms)),
-			metric.WithView(otelHistogramConfig(HTTPClientDuration, mr.cfg.Buckets.DurationHistogram, mr.cfg.UseExponentialHistograms)),
-			metric.WithView(otelHistogramConfig(RPCServerDuration, mr.cfg.Buckets.DurationHistogram, mr.cfg.UseExponentialHistograms)),
-			metric.WithView(otelHistogramConfig(RPCClientDuration, mr.cfg.Buckets.DurationHistogram, mr.cfg.UseExponentialHistograms)),
-			metric.WithView(otelHistogramConfig(SQLClientDuration, mr.cfg.Buckets.DurationHistogram, mr.cfg.UseExponentialHistograms)),
-			metric.WithView(otelHistogramConfig(HTTPServerRequestSize, mr.cfg.Buckets.RequestSizeHistogram, mr.cfg.UseExponentialHistograms)),
-			metric.WithView(otelHistogramConfig(HTTPClientRequestSize, mr.cfg.Buckets.RequestSizeHistogram, mr.cfg.UseExponentialHistograms)),
+			metric.WithView(otelHistogramConfig(HTTPServerDuration, mr.cfg.Buckets.DurationHistogram, useExponentialHistograms)),
+			metric.WithView(otelHistogramConfig(HTTPClientDuration, mr.cfg.Buckets.DurationHistogram, useExponentialHistograms)),
+			metric.WithView(otelHistogramConfig(RPCServerDuration, mr.cfg.Buckets.DurationHistogram, useExponentialHistograms)),
+			metric.WithView(otelHistogramConfig(RPCClientDuration, mr.cfg.Buckets.DurationHistogram, useExponentialHistograms)),
+			metric.WithView(otelHistogramConfig(SQLClientDuration, mr.cfg.Buckets.DurationHistogram, useExponentialHistograms)),
+			metric.WithView(otelHistogramConfig(HTTPServerRequestSize, mr.cfg.Buckets.RequestSizeHistogram, useExponentialHistograms)),
+			metric.WithView(otelHistogramConfig(HTTPClientRequestSize, mr.cfg.Buckets.RequestSizeHistogram, useExponentialHistograms)),
 		),
 	}
 	// time units for HTTP and GRPC durations are in seconds, according to the OTEL specification:
@@ -222,6 +227,20 @@ func (mr *MetricsReporter) newMetricSet(service svc.ID) (*Metrics, error) {
 		return nil, fmt.Errorf("creating http size histogram metric: %w", err)
 	}
 	return &m, nil
+}
+
+func isExponentialAggregation(mc *MetricsConfig, mlog *slog.Logger) bool {
+	switch mc.HistogramAggregation {
+	case AggregationExponential:
+		return true
+	case AggregationExplicit:
+	// do nothing
+	default:
+		mlog.Warn("invalid value for histogram aggregation. Accepted values are: "+
+			AggregationExponential+", "+AggregationExplicit+" (default). Using default",
+			"value", mc.HistogramAggregation)
+	}
+	return false
 }
 
 // TODO: restore as private

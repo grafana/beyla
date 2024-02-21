@@ -34,7 +34,7 @@ eBPF allows us to overcome the limitations of manual instrumentation tools. Beyl
 
 Beyla reports traces that are divided in different spans:
 
-![](https://grafana.com/media/docs/grafana-cloud/beyla/server-side-trace.png)
+![Beyla traces and spans](https://grafana.com/media/docs/grafana-cloud/beyla/server-side-trace.png)
 
 The above image shows the typical structure of a trace as reported by Beyla:
 

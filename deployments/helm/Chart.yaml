@@ -1,0 +1,14 @@
+
+apiVersion: v2
+name: grafana/beyla
+version: 1.0.0
+appVersion: 1.2.0 
+kubeVersion: "^1.8.0-0"
+description: eBPF-based autoinstrumentation of HTTP and HTTPS services 
+sources:
+  - https://github.com/grafana/beyla
+type: application
+keywords:
+  - observability
+  - autoinstrumentation
+  - eBPF-based

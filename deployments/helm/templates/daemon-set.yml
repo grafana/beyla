@@ -1,0 +1,49 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: {{ include "beyla.fullname" . }}
+  labels:
+    {{- include "beyla.labels" . | nindent 2 }}
+  {{- with .Values.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  selector:
+    matchLabels:
+      instrumentation: {{ include "beyla.fullname" . }}
+  template:
+    metadata:
+      labels:
+        instrumentation: {{ include "beyla.fullname" . }}
+    spec:
+     {{- if .Values.serviceAccount.create }}
+      serviceAccountName: {{ include "beyla.serviceAccountName" . }}
+     {{- end }}
+      hostPID: true  #important!
+      volumes:
+        - name: beyla-config
+          configMap:
+            name: beyla-config
+      containers:
+        - name: beyla
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            privileged: true
+          volumeMounts:
+            - mountPath: /config
+              name: beyla-config
+          env:
+            - name: BEYLA_CONFIG_PATH
+              value: "/config/beyla-config.yml"
+            - name: BEYLA_PRINT_TRACES
+              value: "true"
+            - name: BEYLA_OPEN_PORT
+              value: "8443"
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: "http://grafana-agent:4318"
+            - name: BEYLA_LOG_LEVEL
+              value: "DEBUG"
+            - name: OTEL_RESOURCE_ATTRIBUTES
+              value: "deployment.environment=production"

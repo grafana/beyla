@@ -20,12 +20,6 @@ This section shows how to quickly instrument your applications for different pro
 * [Quickstart: instrument a Rust service with Beyla]({{< relref "./rust.md" >}})
 * [Quickstart: instrument a Java service with Beyla]({{< relref "./java.md" >}})
 
-<!-- TODO: uncomment as long as we create new entries
-* [Quickstart: instrument a .NET service with Beyla]({{< relref "./dotnet.md" >}})
-* [Quickstart: instrument a Nginx server with Beyla]({{< relref "./nginx.md" >}})
-* [Quickstart: instrument an Apache HTTP server with Beyla]({{< relref "./apache.md" >}})
--->
-
 For more information about the different ways you can deploy Beyla (standalone Linux process, Docker container,
 Kubernetes Pod or DaemonSet), refer to the [Set up Beyla]({{< relref "../setup" >}}) section.
 

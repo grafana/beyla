@@ -31,7 +31,7 @@ After being the eBPF binaries have been verified they are compiled with a Just-I
 
 The eBPF code is loaded from ordinary applications running in user space. The kernel and the user space applications can share information through a set of well defined communication mechanisms, which are provided by the eBPF specification. For example: ring buffers, arrays, hash maps, etc.
 
-![](https://grafana.com/media/docs/grafana-cloud/beyla/tutorial/ebpf-arch.svg)
+![Beyla eBPF architecture](https://grafana.com/media/docs/grafana-cloud/beyla/tutorial/ebpf-arch.svg)
 
 ## Running an instrumented service
 
@@ -188,7 +188,7 @@ There are two ways to forward your OpenTelemetry traces to Grafana Cloud:
 In your Grafana Cloud Portal, click on the "Details" button in the "OpenTelemetry" box. Next,
 copy your Grafana OTLP Endpoint and Instance ID, as in the image below.
 
-![](https://grafana.com/media/docs/grafana-cloud/beyla/tutorial/otlp-connection-details.png)
+![Beyla OTLP connection details](https://grafana.com/media/docs/grafana-cloud/beyla/tutorial/otlp-connection-details.png)
 
 Also generate a Password/API token with metrics push privileges.
 
@@ -223,7 +223,7 @@ To verify that metrics are properly received by Grafana, you can go to the left 
 choose the Explore tab and your Prometheus data source. Next, write `http_` in the
 Metrics Browser input field and you should see the available metric names in the auto-complete drop-down.
 
-![](https://grafana.com/media/docs/grafana-cloud/beyla/tutorial/dropdown-metrics-v1.0.png)
+![Beyla metrics](https://grafana.com/media/docs/grafana-cloud/beyla/tutorial/dropdown-metrics-v1.0.png)
 
 ## Add the Beyla RED Metrics Dashboard
 
@@ -234,7 +234,7 @@ your auto-instrumented RED metrics; to save you time, we provide a sample
 To import the sample dashboard into your Grafana instance, choose "Dashboards" in the Grafana left panel.
 Next, in the Dashboards page, click on the "New" drop-down menu and select "Import":
 
-![](https://grafana.com/media/docs/grafana-cloud/beyla/tutorial/import-dashboard.png)
+![Beyla import dashboard](https://grafana.com/media/docs/grafana-cloud/beyla/tutorial/import-dashboard.png)
 
 In the "Import via grafana.com" textbox, copy the Grafana ID from the
 [Beyla RED Metrics](/grafana/dashboards/19923-beyla-red-metrics/)
@@ -245,7 +245,7 @@ data source in the `prometheus-data-source` drop-down at the bottom.
 
 And _voilà!_ you can see some of your test RED metrics:
 
-![](https://grafana.com/media/docs/grafana-cloud/beyla/tutorial/beyla-dashboard-screenshot-v1.0.png)
+![Beyla RED metrics](https://grafana.com/media/docs/grafana-cloud/beyla/tutorial/beyla-dashboard-screenshot-v1.0.png)
 
 The dashboard contains the following components:
 

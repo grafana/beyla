@@ -102,7 +102,7 @@ The above trace shows:
 
 After a few minutes traces will appear in Grafana Cloud. For example, in the traces explorer:
 
-![](https://grafana.com/media/docs/grafana-cloud/beyla/quickstart/trace.png)
+![Beyla traces explorer](https://grafana.com/media/docs/grafana-cloud/beyla/quickstart/trace.png)
 
 ## 6. Configure routing
 

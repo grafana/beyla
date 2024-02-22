@@ -279,7 +279,7 @@ static __always_inline void roundTripStartHelper(struct pt_regs *ctx) {
     bpf_map_update_elem(&ongoing_http_client_requests_data, &goroutine_addr, &trace, BPF_ANY);
 
 #ifndef NO_HEADER_PROPAGATION
-    if (!existing_tp) {
+    //if (!existing_tp) {
         void *headers_ptr = 0;
         bpf_probe_read(&headers_ptr, sizeof(headers_ptr), (void*)(req + req_header_ptr_pos));
         bpf_dbg_printk("goroutine_addr %lx, req ptr %llx, headers_ptr %llx", goroutine_addr, req, headers_ptr);
@@ -287,7 +287,7 @@ static __always_inline void roundTripStartHelper(struct pt_regs *ctx) {
         if (headers_ptr) {
             bpf_map_update_elem(&header_req_map, &headers_ptr, &goroutine_addr, BPF_ANY);
         }
-    }
+    //}
 #endif
 }
 

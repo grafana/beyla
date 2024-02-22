@@ -8,8 +8,9 @@
 #include "ringbuf.h"
 #include "pid.h"
 #include "trace_common.h"
+#include "http2_grpc.h"
 
-#define MIN_HTTP_SIZE 12 // HTTP/1.1 CCC is the smallest valid request we can have
+#define MIN_HTTP_SIZE  12 // HTTP/1.1 CCC is the smallest valid request we can have
 #define RESPONSE_STATUS_POS 9 // HTTP/1.1 <--
 
 #define PACKET_TYPE_REQUEST 1
@@ -54,13 +55,14 @@ struct {
     __uint(max_entries, 1);
 } http_info_mem SEC(".maps");
 
-static __always_inline bool is_http(unsigned char *p, u32 len, u8 *packet_type) {
+static __always_inline u8 is_http(unsigned char *p, u32 len, u8 *packet_type) {
     if (len < MIN_HTTP_SIZE) {
-        return false;
+        return 0;
     }
     //HTTP
     if ((p[0] == 'H') && (p[1] == 'T') && (p[2] == 'T') && (p[3] == 'P')) {
        *packet_type = PACKET_TYPE_RESPONSE;
+       return 1;
     } else if (
         ((p[0] == 'G') && (p[1] == 'E') && (p[2] == 'T') && (p[3] == ' ') && (p[4] == '/')) ||                                                      // GET
         ((p[0] == 'P') && (p[1] == 'O') && (p[2] == 'S') && (p[3] == 'T') && (p[4] == ' ') && (p[5] == '/')) ||                                     // POST
@@ -71,9 +73,10 @@ static __always_inline bool is_http(unsigned char *p, u32 len, u8 *packet_type) 
         ((p[0] == 'O') && (p[1] == 'P') && (p[2] == 'T') && (p[3] == 'I') && (p[4] == 'O') && (p[5] == 'N') && (p[6] == 'S') && (p[7] == ' ') && (p[8] == '/'))   // OPTIONS
     ) {
         *packet_type = PACKET_TYPE_REQUEST;
+        return 1;
     }
 
-    return true;
+    return 0;
 }
 
 // Newer version of uio.h iov_iter than what we have in vmlinux.h.
@@ -259,8 +262,8 @@ static __always_inline void handle_http_response(unsigned char *small_buf, pid_c
 }
 
 static __always_inline void handle_buf_with_connection(pid_connection_info_t *pid_conn, void *u_buf, int bytes_len, u8 ssl) {
-    unsigned char small_buf[MIN_HTTP_SIZE] = {0};
-    bpf_probe_read(small_buf, MIN_HTTP_SIZE, u_buf);
+    unsigned char small_buf[MIN_HTTP2_SIZE] = {0};   // MIN_HTTP2_SIZE > MIN_HTTP_SIZE
+    bpf_probe_read(small_buf, MIN_HTTP2_SIZE, u_buf);
 
     bpf_dbg_printk("buf=[%s], pid=%d", small_buf, pid_conn->pid);
 
@@ -325,6 +328,9 @@ static __always_inline void handle_buf_with_connection(pid_connection_info_t *pi
         }     
 
         bpf_map_delete_elem(&ongoing_http_fallback, &pid_conn->conn);
+    } else if (is_http2_or_grpc(small_buf, MIN_HTTP2_SIZE)) {
+        bpf_dbg_printk("Found HTTP2 or gRPC!");
+        
     }
 }
 

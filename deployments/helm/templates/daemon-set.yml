@@ -1,7 +1,7 @@
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
-  name: {{- define "beyla.fullname" -}}
+  name: {{- include "beyla.fullname" . -}}
   labels:
     {{- include "beyla.labels" . | nindent 4 }}
   {{- with .Values.annotations }}
@@ -11,11 +11,11 @@ metadata:
 spec:
   selector:
     matchLabels:
-      instrumentation: {{- define "beyla.fullname" -}}
+      instrumentation: {{- include "beyla.fullname" . -}}
   template:
     metadata:
       labels:
-        instrumentation: {{- define "beyla.fullname" -}}
+        instrumentation: {{- include "beyla.fullname" . -}}
     spec:
      {{- if .Values.serviceAccount.create -}}
       serviceAccountName: {{ include "beyla.serviceAccountName" . }}

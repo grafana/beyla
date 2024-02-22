@@ -8,7 +8,7 @@ imagePullSecrets: []
 nameOverride: ""
 fullnameOverride: ""
 
-## Deployment annotations
+## DaemonSet annotations
 # annotations: {}
 
 rbac:

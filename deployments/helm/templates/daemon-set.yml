@@ -1,17 +1,25 @@
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
-  name: beyla
+  name: {{- define "beyla.fullname" -}}
+  labels:
+    {{- include "beyla.labels" . | nindent 4 }}
+  {{- with .Values.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
 spec:
   selector:
     matchLabels:
-      instrumentation: beyla
+      instrumentation: {{- define "beyla.fullname" -}}
   template:
     metadata:
       labels:
-        instrumentation: beyla
+        instrumentation: {{- define "beyla.fullname" -}}
     spec:
-      serviceAccountName: beyla
+     {{- if .Values.serviceAccount.create -}}
+      serviceAccountName: {{ include "beyla.serviceAccountName" . }}
+     {{- end }}
       hostPID: true  #important!
       volumes:
         - name: beyla-config

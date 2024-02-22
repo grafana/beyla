@@ -8,6 +8,8 @@ imagePullSecrets: []
 nameOverride: ""
 fullnameOverride: ""
 
+## Deployment annotations
+# annotations: {}
 
 rbac:
   create: true
@@ -30,6 +32,8 @@ serviceAccount:
   create: true
   # Automatically mount a ServiceAccount's API credentials?
   automount: true
+  # ServiceAccount labels.
+  labels: {}
   # Annotations to add to the service account
   annotations: {}
   # The name of the service account to use.

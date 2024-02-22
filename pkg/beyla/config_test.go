@@ -29,6 +29,7 @@ otel_metrics_export:
   endpoint: localhost:3030
   buckets:
     duration_histogram: [0, 1, 2]
+  histogram_aggregation: base2_exponential_bucket_histogram
 prometheus_export:
   buckets:
     request_size_histogram: [0, 10, 20, 22]
@@ -104,6 +105,7 @@ network:
 				DurationHistogram:    []float64{0, 1, 2},
 				RequestSizeHistogram: otel.DefaultBuckets.RequestSizeHistogram,
 			},
+			HistogramAggregation: "base2_exponential_bucket_histogram",
 		},
 		Traces: otel.TracesConfig{
 			Protocol:           otel.ProtocolUnset,

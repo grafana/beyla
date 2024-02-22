@@ -43,11 +43,12 @@ var defaultConfig = Config{
 		},
 	},
 	Metrics: otel.MetricsConfig{
-		Protocol:          otel.ProtocolUnset,
-		MetricsProtocol:   otel.ProtocolUnset,
-		Interval:          5 * time.Second,
-		Buckets:           otel.DefaultBuckets,
-		ReportersCacheLen: ReporterLRUSize,
+		Protocol:             otel.ProtocolUnset,
+		MetricsProtocol:      otel.ProtocolUnset,
+		Interval:             5 * time.Second,
+		Buckets:              otel.DefaultBuckets,
+		ReportersCacheLen:    ReporterLRUSize,
+		HistogramAggregation: otel.AggregationExplicit,
 	},
 	Traces: otel.TracesConfig{
 		Protocol:           otel.ProtocolUnset,

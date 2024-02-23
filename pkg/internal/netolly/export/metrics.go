@@ -2,6 +2,7 @@ package export
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"time"
 
@@ -17,6 +18,12 @@ import (
 	"github.com/grafana/beyla/pkg/internal/export/otel"
 	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
 	"github.com/grafana/beyla/pkg/internal/netolly/transform/k8s"
+)
+
+const (
+	// according to field 61 in https://www.iana.org/assignments/ipfix/ipfix.xhtml
+	directionIngress = 0
+	directionEgress  = 1
 )
 
 type MetricsConfig struct {
@@ -68,7 +75,7 @@ func destinationAttrs(m *ebpf.Record) (namespace, name string) {
 }
 
 func attributes(m *ebpf.Record) []attribute.KeyValue {
-	res := make([]attribute.KeyValue, 0, 8+len(m.Metadata))
+	res := make([]attribute.KeyValue, 0, 11+len(m.Metadata))
 
 	srcNS, srcName := sourceAttrs(m)
 	dstNS, dstName := destinationAttrs(m)
@@ -76,6 +83,9 @@ func attributes(m *ebpf.Record) []attribute.KeyValue {
 	// this will cause cardinality explosion. Discuss what to do
 	//res = append(res, attribute.Int("dst.port", int(m.Id.DstPort)))
 	res = append(res,
+		attribute.String("beyla.ip", m.AgentIP),
+		attribute.String("iface", m.Interface),
+		attribute.String("direction", directionStr(m.Id.Direction)),
 		attribute.String("src.address", m.Id.SrcIP().IP().String()),
 		attribute.String("dst.address", m.Id.DstIP().IP().String()),
 		attribute.String("src.name", srcName),
@@ -94,9 +104,20 @@ func attributes(m *ebpf.Record) []attribute.KeyValue {
 	return res
 }
 
-// TODO: merge with AppO11y's otel.Exporter
+func directionStr(direction uint8) string {
+	switch direction {
+	case directionIngress:
+		return "ingress"
+	case directionEgress:
+		return "egress"
+	}
+	// should never happen. Logging received value in case of bug
+	return fmt.Sprint(direction)
+}
+
 func MetricsExporterProvider(cfg MetricsConfig) (node.TerminalFunc[[]*ebpf.Record], error) {
 	log := mlog()
+	log.Debug("instantiating network metrics exporter provider")
 	exporter, err := otel.InstantiateMetricsExporter(context.Background(), cfg.Metrics, log)
 	if err != nil {
 		log.Error("", "error", err)

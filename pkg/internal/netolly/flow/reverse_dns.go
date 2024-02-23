@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/golang-lru/v2/expirable"
+	"github.com/mariomac/pipes/pkg/node"
 
 	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
 )
@@ -13,6 +14,7 @@ import (
 const (
 	ReverseDNSNone        = "none"
 	ReverseDNSLocalLookup = "local"
+	// añadir como opcion un dns externo como aqui https://github.com/hakluke/hakrevdns/blob/master/main.go
 )
 
 func rdlog() *slog.Logger {
@@ -22,8 +24,14 @@ func rdlog() *slog.Logger {
 var netLookupAddr = net.LookupAddr
 
 type ReverseDNS struct {
-	Type     string        `yaml:"type" env:"BEYLA_NETWORK_REVERSE_DNS_TYPE"`
-	CacheLen int           `yaml:"cache_len" env:"BEYLA_NETWORK_REVERSE_DNS_CACHE_LEN"`
+	// Type of ReverseDNS. Values are "none" (default) and "local".
+	Type string `yaml:"type" env:"BEYLA_NETWORK_REVERSE_DNS_TYPE"`
+	// CacheLen specifies the max size of the LRU cache that is checked before
+	// performing the name lookup. Default: 256
+	CacheLen int `yaml:"cache_len" env:"BEYLA_NETWORK_REVERSE_DNS_CACHE_LEN"`
+	// CacheTTL specifies the time-to-live of a cached IP->hostname entry. After the
+	// cached entry becomes older than this time, the IP->hostname entry will be looked
+	// up again.
 	CacheTTL time.Duration `yaml:"cache_expiry" env:"BEYLA_NETWORK_REVERSE_DNS_CACHE_TTL"`
 }
 
@@ -31,10 +39,10 @@ func (r ReverseDNS) Enabled() bool {
 	return r.Type == ReverseDNSLocalLookup
 }
 
-func ReverseDNSProvider(cfg ReverseDNS) (func(in <-chan []*ebpf.Record, out chan<- []*ebpf.Record), error) {
+func ReverseDNSProvider(cfg ReverseDNS) (node.MiddleFunc[[]*ebpf.Record, []*ebpf.Record], error) {
 	// TODO: replace by a cache with fuzzy expiration time to avoid cache stampede
 	cache := expirable.NewLRU[ebpf.IPAddr, string](cfg.CacheLen, nil, cfg.CacheTTL)
-	cache.RemoveOldest()
+
 	log := rdlog()
 	return func(in <-chan []*ebpf.Record, out chan<- []*ebpf.Record) {
 		log.Debug("starting reverse DNS node")

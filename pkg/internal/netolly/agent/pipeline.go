@@ -21,7 +21,9 @@ type FlowsPipeline struct {
 	Accounter       `sendTo:"Deduper"`
 	Deduper         flow.Deduper `forwardTo:"CapacityLimiter"`
 	CapacityLimiter `sendTo:"Kubernetes"`
-	Kubernetes      k8s.NetworkTransformConfig `sendTo:"Decorator"`
+	Kubernetes      k8s.MetadataDecorator `forwardTo:"ReverseDNS"`
+
+	ReverseDNS flow.ReverseDNS `forwardTo:"Decorator"`
 
 	Decorator `sendTo:"Exporter"`
 
@@ -64,8 +66,8 @@ func (f *Flows) buildAndStartPipeline(ctx context.Context) (graph.Graph, error) 
 	graph.RegisterMiddle(gb, func(_ Decorator) (node.MiddleFunc[[]*ebpf.Record, []*ebpf.Record], error) {
 		return flow.Decorate(f.agentIP, f.interfaceNamer), nil
 	})
-	graph.RegisterMiddle(gb, k8s.NetworkTransform)
-
+	graph.RegisterMiddle(gb, k8s.MetadataDecoratorProvider)
+	graph.RegisterMiddle(gb, flow.ReverseDNSProvider)
 	graph.RegisterTerminal(gb, export.MetricsExporterProvider)
 
 	var deduperExpireTime = f.cfg.NetworkFlows.DeduperFCExpiry
@@ -78,8 +80,9 @@ func (f *Flows) buildAndStartPipeline(ctx context.Context) (graph.Graph, error) 
 			ExpireTime: deduperExpireTime,
 			JustMark:   f.cfg.NetworkFlows.DeduperJustMark,
 		},
-		Kubernetes: k8s.NetworkTransformConfig{Kubernetes: &f.cfg.Attributes.Kubernetes},
+		Kubernetes: k8s.MetadataDecorator{Kubernetes: &f.cfg.Attributes.Kubernetes},
 		// TODO: allow prometheus exporting
-		Exporter: export.MetricsConfig{Metrics: &f.cfg.Metrics},
+		Exporter:   export.MetricsConfig{Metrics: &f.cfg.Metrics},
+		ReverseDNS: f.cfg.NetworkFlows.ReverseDNS,
 	})
 }

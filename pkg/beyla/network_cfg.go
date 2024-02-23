@@ -87,6 +87,10 @@ type NetworkConfig struct {
 	// ListenPollPeriod specifies the periodicity to query the network interfaces when the
 	// ListenInterfaces value is set to "poll".
 	ListenPollPeriod time.Duration `yaml:"listen_poll_period" env:"BEYLA_NETWORK_LISTEN_POLL_PERIOD"`
+
+	// ReverseDNS allows flows that haven't been previously decorated with any source/destination name
+	// to override the name with the network hostname of the source and destination IPs.
+	ReverseDNS flow.ReverseDNS `yaml:"reverse_dns"`
 }
 
 var defaultNetworkConfig = NetworkConfig{
@@ -100,4 +104,9 @@ var defaultNetworkConfig = NetworkConfig{
 	Direction:          "both",
 	ListenInterfaces:   "watch",
 	ListenPollPeriod:   10 * time.Second,
+	ReverseDNS: flow.ReverseDNS{
+		Type:     flow.ReverseDNSNone,
+		CacheLen: 256,
+		CacheTTL: time.Hour,
+	},
 }

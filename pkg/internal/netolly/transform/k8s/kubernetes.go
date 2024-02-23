@@ -60,14 +60,18 @@ const (
 
 const alreadyLoggedIPsCacheLen = 256
 
-func log() *slog.Logger { return slog.With("component", "transform.NetworkTransform") }
+func log() *slog.Logger { return slog.With("component", "k8s.MetadataDecorator") }
 
-type NetworkTransformConfig struct {
+type MetadataDecorator struct {
 	Kubernetes *transform.KubernetesDecorator
 }
 
-func NetworkTransform(cfg NetworkTransformConfig) (node.MiddleFunc[[]*ebpf.Record, []*ebpf.Record], error) {
-	nt, err := newTransformNetwork(&cfg)
+func (ntc MetadataDecorator) Enabled() bool {
+	return ntc.Kubernetes != nil && ntc.Kubernetes.Enabled()
+}
+
+func MetadataDecoratorProvider(cfg MetadataDecorator) (node.MiddleFunc[[]*ebpf.Record, []*ebpf.Record], error) {
+	nt, err := newDecorator(&cfg)
 	if err != nil {
 		return nil, fmt.Errorf("instantiating network transformer: %w", err)
 	}
@@ -83,13 +87,13 @@ func NetworkTransform(cfg NetworkTransformConfig) (node.MiddleFunc[[]*ebpf.Recor
 	}, nil
 }
 
-type networkTransformer struct {
+type decorator struct {
 	log              *slog.Logger
 	alreadyLoggedIPs *simplelru.LRU[string, struct{}]
 	kube             NetworkInformers
 }
 
-func (n *networkTransformer) transform(flow *ebpf.Record) {
+func (n *decorator) transform(flow *ebpf.Record) {
 	if flow.Attrs.Metadata == nil {
 		flow.Attrs.Metadata = map[string]string{}
 	}
@@ -98,7 +102,7 @@ func (n *networkTransformer) transform(flow *ebpf.Record) {
 
 }
 
-func (n *networkTransformer) decorate(flow *ebpf.Record, prefix, ip string) {
+func (n *decorator) decorate(flow *ebpf.Record, prefix, ip string) {
 	kubeInfo, ok := n.kube.GetInfo(ip)
 	if !ok {
 		if n.log.Enabled(context.TODO(), slog.LevelDebug) {
@@ -123,9 +127,9 @@ func (n *networkTransformer) decorate(flow *ebpf.Record, prefix, ip string) {
 	}
 }
 
-// newTransformNetwork create a new transform
-func newTransformNetwork(cfg *NetworkTransformConfig) (*networkTransformer, error) {
-	nt := networkTransformer{log: log()}
+// newDecorator create a new transform
+func newDecorator(cfg *MetadataDecorator) (*decorator, error) {
+	nt := decorator{log: log()}
 	if nt.log.Enabled(context.TODO(), slog.LevelDebug) {
 		var err error
 		nt.alreadyLoggedIPs, err = simplelru.NewLRU[string, struct{}](alreadyLoggedIPsCacheLen, nil)

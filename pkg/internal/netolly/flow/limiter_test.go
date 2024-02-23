@@ -37,14 +37,14 @@ func TestCapacityLimiter_NoDrop(t *testing.T) {
 
 	// WHEN it buffers less elements than it's maximum capacity
 	for i := 0; i < 33; i++ {
-		pipeIn <- []*ebpf.Record{{Interface: strconv.Itoa(i)}}
+		pipeIn <- []*ebpf.Record{{Attrs: ebpf.RecordAttrs{Interface: strconv.Itoa(i)}}}
 	}
 
 	// THEN it is able to retrieve all the buffered elements
 	for i := 0; i < 33; i++ {
 		elem := <-pipeOut
 		require.Len(t, elem, 1)
-		assert.Equal(t, strconv.Itoa(i), elem[0].Interface)
+		assert.Equal(t, strconv.Itoa(i), elem[0].Attrs.Interface)
 	}
 
 	// AND not a single extra element
@@ -63,7 +63,7 @@ func TestCapacityLimiter_Drop(t *testing.T) {
 	// WHEN it receives more elements than its maximum capacity
 	// (it's not blocking)
 	for i := 0; i < limiterLen*2; i++ {
-		pipeIn <- []*ebpf.Record{{Interface: strconv.Itoa(i)}}
+		pipeIn <- []*ebpf.Record{{Attrs: ebpf.RecordAttrs{Interface: strconv.Itoa(i)}}}
 	}
 
 	// THEN it is only able to retrieve all the nth first buffered elements
@@ -71,7 +71,7 @@ func TestCapacityLimiter_Drop(t *testing.T) {
 	for i := 0; i < limiterLen+1; i++ {
 		elem := <-pipeOut
 		require.Len(t, elem, 1)
-		assert.Equal(t, strconv.Itoa(i), elem[0].Interface)
+		assert.Equal(t, strconv.Itoa(i), elem[0].Attrs.Interface)
 	}
 
 	// BUT not a single extra element

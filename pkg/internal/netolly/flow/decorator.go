@@ -34,8 +34,8 @@ func Decorate(agentIP net.IP, ifaceNamer InterfaceNamer) func(in <-chan []*ebpf.
 	return func(in <-chan []*ebpf.Record, out chan<- []*ebpf.Record) {
 		for flows := range in {
 			for _, flow := range flows {
-				flow.Interface = ifaceNamer(int(flow.Id.IfIndex))
-				flow.AgentIP = ip
+				flow.Attrs.Interface = ifaceNamer(int(flow.Id.IfIndex))
+				flow.Attrs.AgentIP = ip
 			}
 			out <- flows
 		}

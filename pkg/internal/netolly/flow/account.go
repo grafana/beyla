@@ -33,8 +33,6 @@ type Accounter struct {
 	maxEntries   int
 	evictTimeout time.Duration
 	entries      map[ebpf.NetFlowId]*ebpf.NetFlowMetrics
-	clock        func() time.Time
-	monoClock    func() time.Duration
 }
 
 func alog() *slog.Logger {
@@ -43,17 +41,11 @@ func alog() *slog.Logger {
 
 // NewAccounter creates a new Accounter.
 // The cache has no limit and it's assumed that eviction is done by the caller.
-func NewAccounter(
-	maxEntries int, evictTimeout time.Duration,
-	clock func() time.Time,
-	monoClock func() time.Duration,
-) *Accounter {
+func NewAccounter(maxEntries int, evictTimeout time.Duration) *Accounter {
 	return &Accounter{
 		maxEntries:   maxEntries,
 		evictTimeout: evictTimeout,
 		entries:      map[ebpf.NetFlowId]*ebpf.NetFlowMetrics{},
-		clock:        clock,
-		monoClock:    monoClock,
 	}
 }
 
@@ -101,11 +93,9 @@ func (c *Accounter) Account(in <-chan *ebpf.NetFlowRecordT, out chan<- []*ebpf.R
 }
 
 func (c *Accounter) evict(entries map[ebpf.NetFlowId]*ebpf.NetFlowMetrics, evictor chan<- []*ebpf.Record) {
-	now := c.clock()
-	monotonicNow := uint64(c.monoClock())
 	records := make([]*ebpf.Record, 0, len(entries))
 	for key, metrics := range entries {
-		records = append(records, ebpf.NewRecord(key, *metrics, now, monotonicNow))
+		records = append(records, ebpf.NewRecord(key, *metrics))
 	}
 	alog().Debug("records evicted from userspace accounter", "numEntries", len(records))
 	evictor <- records

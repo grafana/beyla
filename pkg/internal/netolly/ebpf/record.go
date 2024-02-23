@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"time"
 )
 
 const MacLen = 6
@@ -40,10 +39,7 @@ type IPAddr [net.IPv6len]uint8
 // that is added from the user space
 type Record struct {
 	NetFlowRecordT
-	// TODO: redundant field from RecordMetrics. Reorganize structs
-	TimeFlowStart time.Time
-	TimeFlowEnd   time.Time
-	Interface     string
+
 	// Duplicate tells whether this flow has another duplicate so it has to be excluded from
 	// any metrics' aggregation (e.g. bytes/second rates between two pods).
 	// The reason for this field is that the same flow can be observed from multiple interfaces,
@@ -52,27 +48,31 @@ type Record struct {
 	// number of interfaces this flow is observed from.
 	Duplicate bool
 
-	// AgentIP provides information about the source of the flow (the Agent that traced it)
-	AgentIP string
+	Attrs RecordAttrs
+}
 
+type RecordAttrs struct {
+	// SrcName and DstName might be set from several sources along the processing/decoration pipeline:
+	// - K8s entity
+	// - Host name
+	// - IP
+	SrcName string
+	DstName string
+	Interface string
+	// AgentIP provides information about the source of the flow (the Agent that traced it)
+	AgentIP  string
 	Metadata map[string]string
 }
 
 func NewRecord(
 	key NetFlowId,
 	metrics NetFlowMetrics,
-	currentTime time.Time,
-	monotonicCurrentTime uint64,
 ) *Record {
-	startDelta := time.Duration(monotonicCurrentTime - metrics.StartMonoTimeNs)
-	endDelta := time.Duration(monotonicCurrentTime - metrics.EndMonoTimeNs)
 	return &Record{
 		NetFlowRecordT: NetFlowRecordT{
 			Id:      key,
 			Metrics: metrics,
 		},
-		TimeFlowStart: currentTime.Add(-startDelta),
-		TimeFlowEnd:   currentTime.Add(-endDelta),
 	}
 }
 

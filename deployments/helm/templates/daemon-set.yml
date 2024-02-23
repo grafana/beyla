@@ -2,6 +2,7 @@ apiVersion: apps/v1
 kind: DaemonSet
 metadata:
   name: {{ include "beyla.fullname" . }}
+  namespace: {{ include "beyla.namespace" .}}
   labels:
     {{- include "beyla.labels" . | nindent 2 }}
   {{- with .Values.annotations }}
@@ -24,7 +25,11 @@ spec:
       volumes:
         - name: beyla-config
           configMap:
-            name: beyla-config
+            {{- if .Values.useExistingConfigMap }}
+            name: {{ .Values.useExistingConfigMap }}
+            {{- else }}
+            name: {{ include "beyla.fullname" . }}
+            {{- end }}
       containers:
         - name: beyla
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
@@ -39,11 +44,14 @@ spec:
               value: "/config/beyla-config.yml"
             - name: BEYLA_PRINT_TRACES
               value: "true"
-            - name: BEYLA_OPEN_PORT
-              value: "8443"
-            - name: OTEL_EXPORTER_OTLP_ENDPOINT
-              value: "http://grafana-agent:4318"
-            - name: BEYLA_LOG_LEVEL
-              value: "DEBUG"
             - name: OTEL_RESOURCE_ATTRIBUTES
               value: "deployment.environment=production"
+          {{- range $key, $value := .Values.env }}
+            - name: {{ $key }}
+              value: "{{ $value }}"
+          {{- end }}
+          {{- range $key, $value := .Values.envValueFrom }}
+            - name: {{ $key | quote }}
+              valueFrom:
+                {{- tpl (toYaml $value) $ | nindent 10 }}
+          {{- end }}

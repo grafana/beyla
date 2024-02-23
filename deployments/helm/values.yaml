@@ -121,7 +121,7 @@ tolerations: []
 
 affinity: {}
 
-# Enable creating the grafana configmap
+
 createConfigmap: true
 ## or use an existing configmap
 # useExistingConfigMap: name-of-some-configmap

@@ -2,6 +2,7 @@ apiVersion: apps/v1
 kind: DaemonSet
 metadata:
   name: {{ include "beyla.fullname" . }}
+  namespace: {{ include "beyla.namespace" .}}
   labels:
     {{- include "beyla.labels" . | nindent 2 }}
   {{- with .Values.annotations }}

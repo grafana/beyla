@@ -5,8 +5,11 @@ image:
   tag: "main"
 
 imagePullSecrets: []
+
 nameOverride: ""
 fullnameOverride: ""
+## Override the deployment namespace
+namespaceOverride: ""
 
 ## DaemonSet annotations
 # annotations: {}

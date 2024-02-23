@@ -3,7 +3,6 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   name: {{ include "beyla.fullname" . }}
-  namespace: {{ include "beyla.namespace" .}}
   labels:
     {{- include "beyla.labels" . | nindent 4 }}
   {{- with .Values.annotations }}

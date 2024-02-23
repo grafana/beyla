@@ -26,16 +26,24 @@ import (
 
 type InterfaceNamer func(ifIndex int) string
 
-// Decorate adds to the flows extra metadata fields that are not directly fetched by eBPF:
+// Decorate adds to the flows extra metadata fields that are not directly fetched by eBPF
+// or by any intermediate pipeline stage (DNS, Kubernetes...):
 // - The interface name (corresponding to the interface index in the flow).
 // - The IP address of the agent host.
+// - If there is no source or destination hostname, the source IP and destination
 func Decorate(agentIP net.IP, ifaceNamer InterfaceNamer) func(in <-chan []*ebpf.Record, out chan<- []*ebpf.Record) {
 	ip := agentIP.String()
 	return func(in <-chan []*ebpf.Record, out chan<- []*ebpf.Record) {
 		for flows := range in {
 			for _, flow := range flows {
 				flow.Attrs.Interface = ifaceNamer(int(flow.Id.IfIndex))
-				flow.Attrs.AgentIP = ip
+				flow.Attrs.BeylaIP = ip
+				if flow.Attrs.DstName == "" {
+					flow.Attrs.DstName = flow.Id.DstIP().IP().String()
+				}
+				if flow.Attrs.SrcName == "" {
+					flow.Attrs.SrcName = flow.Id.SrcIP().IP().String()
+				}
 			}
 			out <- flows
 		}

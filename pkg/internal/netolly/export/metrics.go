@@ -61,21 +61,21 @@ func newMeterProvider(res *resource.Resource, exporter *metric.Exporter) (*metri
 }
 
 func sourceAttrs(m *ebpf.Record) (namespace, name string) {
-	if srcName, ok := m.Metadata[k8s.AttrSrcName]; ok && srcName != "" {
-		return m.Metadata[k8s.AttrSrcNamespace], srcName
+	if srcName, ok := m.Attrs.Metadata[k8s.AttrSrcName]; ok && srcName != "" {
+		return m.Attrs.Metadata[k8s.AttrSrcNamespace], srcName
 	}
 	return "", m.Id.SrcIP().IP().String()
 }
 
 func destinationAttrs(m *ebpf.Record) (namespace, name string) {
-	if dstName, ok := m.Metadata[k8s.AttrDstName]; ok && dstName != "" {
-		return m.Metadata[k8s.AttrDstNamespace], dstName
+	if dstName, ok := m.Attrs.Metadata[k8s.AttrDstName]; ok && dstName != "" {
+		return m.Attrs.Metadata[k8s.AttrDstNamespace], dstName
 	}
 	return "", m.Id.DstIP().IP().String()
 }
 
 func attributes(m *ebpf.Record) []attribute.KeyValue {
-	res := make([]attribute.KeyValue, 0, 11+len(m.Metadata))
+	res := make([]attribute.KeyValue, 0, 11+len(m.Attrs.Metadata))
 
 	srcNS, srcName := sourceAttrs(m)
 	dstNS, dstName := destinationAttrs(m)
@@ -83,8 +83,8 @@ func attributes(m *ebpf.Record) []attribute.KeyValue {
 	// this will cause cardinality explosion. Discuss what to do
 	//res = append(res, attribute.Int("dst.port", int(m.Id.DstPort)))
 	res = append(res,
-		attribute.String("beyla.ip", m.AgentIP),
-		attribute.String("iface", m.Interface),
+		attribute.String("beyla.ip", m.Attrs.BeylaIP),
+		attribute.String("iface", m.Attrs.Interface),
 		attribute.String("direction", directionStr(m.Id.Direction)),
 		attribute.String("src.address", m.Id.SrcIP().IP().String()),
 		attribute.String("dst.address", m.Id.DstIP().IP().String()),
@@ -97,7 +97,7 @@ func attributes(m *ebpf.Record) []attribute.KeyValue {
 		attribute.String("asserts.site", "dev"))
 
 	// metadata attributes
-	for k, v := range m.Metadata {
+	for k, v := range m.Attrs.Metadata {
 		res = append(res, attribute.String(k, v))
 	}
 

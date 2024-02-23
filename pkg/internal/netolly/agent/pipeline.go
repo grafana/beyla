@@ -20,10 +20,10 @@ type FlowsPipeline struct {
 	RingBufTracer   `sendTo:"Accounter"`
 	Accounter       `sendTo:"Deduper"`
 	Deduper         flow.Deduper `forwardTo:"CapacityLimiter"`
-	CapacityLimiter `sendTo:"Decorator"`
-	Decorator       `sendTo:"Kubernetes"`
+	CapacityLimiter `sendTo:"Kubernetes"`
+	Kubernetes      k8s.NetworkTransformConfig `sendTo:"Decorator"`
 
-	Kubernetes k8s.NetworkTransformConfig `sendTo:"Exporter"`
+	Decorator `sendTo:"Exporter"`
 
 	Exporter export.MetricsConfig
 }

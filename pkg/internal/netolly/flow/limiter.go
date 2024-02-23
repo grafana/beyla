@@ -37,6 +37,7 @@ func cllog() *slog.Logger {
 // node's buffered channel. If it is already full, it drops the incoming flow and periodically will
 // log a message about the number of lost flows.
 type CapacityLimiter struct {
+	// TODO: add to internal instrumentation
 	droppedFlows int
 }
 

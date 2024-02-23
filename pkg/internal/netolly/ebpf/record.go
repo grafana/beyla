@@ -58,9 +58,14 @@ type RecordAttrs struct {
 	// - IP
 	SrcName string
 	DstName string
+	// SrcNamespace and DstNamespace might be empty, but they are required by
+	// asserts. TODO: let user override them
+	SrcNamespace string
+	DstNamespace string
+
 	Interface string
-	// AgentIP provides information about the source of the flow (the Agent that traced it)
-	AgentIP  string
+	// BeylaIP provides information about the source of the flow (the Agent that traced it)
+	BeylaIP  string
 	Metadata map[string]string
 }
 

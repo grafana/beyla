@@ -17,11 +17,13 @@ func TestMetricAttributes(t *testing.T) {
 				DstPort:   3210,
 			},
 		},
-		Metadata: map[string]string{
-			"k8s.src.name":      "srcname",
-			"k8s.src.namespace": "srcnamespace",
-			"k8s.dst.name":      "dstname",
-			"k8s.dst.namespace": "dstnamespace",
+		Attrs: ebpf.RecordAttrs{
+			Metadata: map[string]string{
+				"k8s.src.name":      "srcname",
+				"k8s.src.namespace": "srcnamespace",
+				"k8s.dst.name":      "dstname",
+				"k8s.dst.namespace": "dstnamespace",
+			},
 		},
 	}
 	in.Id.SrcIp.In6U.U6Addr8 = [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 255, 12, 34, 56, 78}

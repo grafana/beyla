@@ -90,8 +90,8 @@ type networkTransformer struct {
 }
 
 func (n *networkTransformer) transform(flow *ebpf.Record) {
-	if flow.Metadata == nil {
-		flow.Metadata = map[string]string{}
+	if flow.Attrs.Metadata == nil {
+		flow.Attrs.Metadata = map[string]string{}
 	}
 	n.decorate(flow, attrPrefixSrc, flow.Id.SrcIP().IP().String())
 	n.decorate(flow, attrPrefixDst, flow.Id.DstIP().IP().String())
@@ -110,15 +110,15 @@ func (n *networkTransformer) decorate(flow *ebpf.Record, prefix, ip string) {
 		}
 		return
 	}
-	flow.Metadata[prefix+attrSuffixNs] = kubeInfo.Namespace
-	flow.Metadata[prefix+attrSuffixName] = kubeInfo.Name
-	flow.Metadata[prefix+attrSuffixType] = kubeInfo.Type
-	flow.Metadata[prefix+attrSuffixOwnerName] = kubeInfo.Owner.Name
-	flow.Metadata[prefix+attrSuffixOwnerType] = kubeInfo.Owner.Type
+	flow.Attrs.Metadata[prefix+attrSuffixNs] = kubeInfo.Namespace
+	flow.Attrs.Metadata[prefix+attrSuffixName] = kubeInfo.Name
+	flow.Attrs.Metadata[prefix+attrSuffixType] = kubeInfo.Type
+	flow.Attrs.Metadata[prefix+attrSuffixOwnerName] = kubeInfo.Owner.Name
+	flow.Attrs.Metadata[prefix+attrSuffixOwnerType] = kubeInfo.Owner.Type
 	if kubeInfo.HostIP != "" {
-		flow.Metadata[prefix+attrSuffixHostIP] = kubeInfo.HostIP
+		flow.Attrs.Metadata[prefix+attrSuffixHostIP] = kubeInfo.HostIP
 		if kubeInfo.HostName != "" {
-			flow.Metadata[prefix+attrSuffixHostName] = kubeInfo.HostName
+			flow.Attrs.Metadata[prefix+attrSuffixHostName] = kubeInfo.HostName
 		}
 	}
 }

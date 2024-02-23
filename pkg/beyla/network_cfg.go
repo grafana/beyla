@@ -20,6 +20,8 @@ package beyla
 
 import (
 	"time"
+
+	"github.com/grafana/beyla/pkg/internal/netolly/flow"
 )
 
 type NetworkConfig struct {
@@ -60,6 +62,7 @@ type NetworkConfig struct {
 	// When enabled, it will detect duplicate flows (flows that have been detected e.g. through
 	// both the physical and a virtual interface).
 	// "firstCome" will forward only flows from the first interface the flows are received from.
+	// Default value: firstCome
 	Deduper string `yaml:"deduper" env:"BEYLA_NETWORK_DEDUPER"`
 	// DeduperFCExpiry specifies the expiry duration of the flows "firstCome" deduplicator. After
 	// a flow hasn't been received for that expiry time, the deduplicator forgets it. That means
@@ -92,7 +95,7 @@ var defaultNetworkConfig = NetworkConfig{
 	ExcludeInterfaces:  []string{"lo"},
 	CacheMaxFlows:      5000,
 	CacheActiveTimeout: 5 * time.Second,
-	Deduper:            "none",
+	Deduper:            flow.DeduperFirstCome,
 	DeduperJustMark:    false,
 	Direction:          "both",
 	ListenInterfaces:   "watch",

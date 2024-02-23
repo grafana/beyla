@@ -121,9 +121,7 @@ tolerations: []
 
 affinity: {}
 
-
-createConfigmap: true
-## or use an existing configmap
+# use an existing configmap
 # useExistingConfigMap: name-of-some-configmap
 
 ## More configuration options available at https://grafana.com/docs/beyla/latest/configure/options/

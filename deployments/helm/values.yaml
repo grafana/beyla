@@ -122,12 +122,9 @@ tolerations: []
 affinity: {}
 
 # Enable creating the grafana configmap
-configmap:
-  create: true
-  ## Use an existing ClusterRole/Role (depending on rbac.namespaced false/true)
-  # useExistingRole: name-of-some-role
-  # useExistingClusterRole: name-of-some-clusterRole
-  namespaced: false
+createConfigmap: true
+## or use an existing configmap
+# useExistingConfigMap: name-of-some-configmap
 
 ## More configuration options available at https://grafana.com/docs/beyla/latest/configure/options/
 configmapData:
@@ -139,10 +136,12 @@ configmapData:
     endpoint: http://grafana-agent:4318
   discovery:
     services:
-      - k8s_namespace: [default, demo]
+      - k8s_namespace: default
   attributes:
     kubernetes:
       enable: true
 
 ## Env variables that will override configmap values
+## For example:
+##   BEYLA_BPF_WAKEUP_LEN: 100
 env: {}

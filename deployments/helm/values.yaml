@@ -145,3 +145,9 @@ configmapData:
 ## For example:
 ##   BEYLA_BPF_WAKEUP_LEN: 100
 env: {}
+
+envValueFrom: {}
+  #  ENV_NAME:
+  #    secretKeyRef:
+  #      name: secret-name
+  #      key: value_key

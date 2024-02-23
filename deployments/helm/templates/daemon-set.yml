@@ -46,7 +46,12 @@ spec:
               value: "true"
             - name: OTEL_RESOURCE_ATTRIBUTES
               value: "deployment.environment=production"
-         {{- range $key, $value := .Values.env }}
+          {{- range $key, $value := .Values.env }}
             - name: {{ $key }}
               value: "{{ $value }}"
-        {{- end }}
+          {{- end }}
+          {{- range $key, $value := .Values.envValueFrom }}
+            - name: {{ $key | quote }}
+              valueFrom:
+                {{- tpl (toYaml $value) $ | nindent 10 }}
+          {{- end }}

@@ -11,6 +11,8 @@
 
 #define FRAME_HEADER_LEN 9
 
+#define FLAG_DATA_END_STREAM 0x1
+
 typedef enum {
 	FrameData         = 0x0,
 	FrameHeaders      = 0x1,
@@ -68,6 +70,10 @@ static __always_inline u8 has_preface(unsigned char *p, u32 len) {
 
 static __always_inline u8 is_http2_or_grpc(unsigned char *p, u32 len) {
     return has_preface(p, len) || is_settings_frame(p, len);
+}
+
+static __always_inline u8 http_grpc_stream_ended(frame_header_t *frame) {
+    return frame->flags == FLAG_DATA_END_STREAM;
 }
 
 #endif // HTTP2_GRPC_HELPERS

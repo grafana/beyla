@@ -330,7 +330,21 @@ static __always_inline void handle_buf_with_connection(pid_connection_info_t *pi
         bpf_map_delete_elem(&ongoing_http_fallback, &pid_conn->conn);
     } else if (is_http2_or_grpc(small_buf, MIN_HTTP2_SIZE)) {
         bpf_dbg_printk("Found HTTP2 or gRPC!");
-        
+        unsigned char buf[FULL_BUF_SIZE];
+        bpf_probe_read(buf, FULL_BUF_SIZE, u_buf);
+
+        frame_header_t frame = {0};
+        read_http2_grpc_frame_header(&frame, buf + MIN_HTTP2_SIZE, FULL_BUF_SIZE);
+
+        bpf_dbg_printk("%llx", *(u64 *)(buf + MIN_HTTP2_SIZE));
+        bpf_dbg_printk("type = %d, len = %d, stream_id = %d, flags = %d", frame.type, frame.length, frame.stream_id, frame.flags);
+        read_http2_grpc_frame_header(&frame, buf + MIN_HTTP2_SIZE + FRAME_HEADER_LEN, FULL_BUF_SIZE);
+        bpf_dbg_printk("type = %d, len = %d, stream_id = %d, flags = %d", frame.type, frame.length, frame.stream_id, frame.flags);        
+        read_http2_grpc_frame_header(&frame, buf + MIN_HTTP2_SIZE + FRAME_HEADER_LEN + FRAME_HEADER_LEN, FULL_BUF_SIZE);
+        bpf_dbg_printk("type = %d, len = %d, stream_id = %d, flags = %d", frame.type, frame.length, frame.stream_id, frame.flags);        
+
+
+        // TODO: Pack this up in a trace buffer and send it to userspace to be parsed.
     }
 }
 

@@ -134,6 +134,12 @@ configmapData:
   log_level: debug
   otel_traces_export:
     endpoint: http://grafana-agent:4318
+ ## or alternatively use
+  # grafana:
+  #   otlp:
+  #     cloud_zone: prod-eu-west-0
+  #     cloud_instance_id: 123456  
+  #     cloud_api_key:  
   discovery:
     services:
       - k8s_namespace: default

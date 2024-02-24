@@ -19,6 +19,32 @@ type bpfConnectionInfoT struct {
 	D_port uint16
 }
 
+type bpfHttp2GrpcRequestT struct {
+	Type            uint8
+	_               [1]byte
+	ConnInfo        bpfConnectionInfoT
+	Data            [256]uint8
+	_               [2]byte
+	Len             int32
+	_               [4]byte
+	StartMonotimeNs uint64
+	EndMonotimeNs   uint64
+	Pid             struct {
+		HostPid uint32
+		UserPid uint32
+		Ns      uint32
+	}
+	_  [4]byte
+	Tp struct {
+		TraceId  [16]uint8
+		SpanId   [8]uint8
+		ParentId [8]uint8
+		Ts       uint64
+		Flags    uint8
+		_        [7]byte
+	}
+}
+
 type bpfHttpConnectionMetadataT struct {
 	Pid struct {
 		HostPid uint32
@@ -144,24 +170,27 @@ type bpfProgramSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpfMapSpecs struct {
-	ActiveSslHandshakes *ebpf.MapSpec `ebpf:"active_ssl_handshakes"`
-	ActiveSslReadArgs   *ebpf.MapSpec `ebpf:"active_ssl_read_args"`
-	ActiveSslWriteArgs  *ebpf.MapSpec `ebpf:"active_ssl_write_args"`
-	CloneMap            *ebpf.MapSpec `ebpf:"clone_map"`
-	Events              *ebpf.MapSpec `ebpf:"events"`
-	FilteredConnections *ebpf.MapSpec `ebpf:"filtered_connections"`
-	HttpInfoMem         *ebpf.MapSpec `ebpf:"http_info_mem"`
-	OngoingHttp         *ebpf.MapSpec `ebpf:"ongoing_http"`
-	OngoingHttpFallback *ebpf.MapSpec `ebpf:"ongoing_http_fallback"`
-	PidCache            *ebpf.MapSpec `ebpf:"pid_cache"`
-	PidTidToConn        *ebpf.MapSpec `ebpf:"pid_tid_to_conn"`
-	ServerTraces        *ebpf.MapSpec `ebpf:"server_traces"`
-	SslToConn           *ebpf.MapSpec `ebpf:"ssl_to_conn"`
-	SslToPidTid         *ebpf.MapSpec `ebpf:"ssl_to_pid_tid"`
-	TpCharBufMem        *ebpf.MapSpec `ebpf:"tp_char_buf_mem"`
-	TpInfoMem           *ebpf.MapSpec `ebpf:"tp_info_mem"`
-	TraceMap            *ebpf.MapSpec `ebpf:"trace_map"`
-	ValidPids           *ebpf.MapSpec `ebpf:"valid_pids"`
+	ActiveSslHandshakes     *ebpf.MapSpec `ebpf:"active_ssl_handshakes"`
+	ActiveSslReadArgs       *ebpf.MapSpec `ebpf:"active_ssl_read_args"`
+	ActiveSslWriteArgs      *ebpf.MapSpec `ebpf:"active_ssl_write_args"`
+	CloneMap                *ebpf.MapSpec `ebpf:"clone_map"`
+	Events                  *ebpf.MapSpec `ebpf:"events"`
+	FilteredConnections     *ebpf.MapSpec `ebpf:"filtered_connections"`
+	Http2InfoMem            *ebpf.MapSpec `ebpf:"http2_info_mem"`
+	HttpInfoMem             *ebpf.MapSpec `ebpf:"http_info_mem"`
+	OngoingHttp             *ebpf.MapSpec `ebpf:"ongoing_http"`
+	OngoingHttp2Connections *ebpf.MapSpec `ebpf:"ongoing_http2_connections"`
+	OngoingHttp2Grpc        *ebpf.MapSpec `ebpf:"ongoing_http2_grpc"`
+	OngoingHttpFallback     *ebpf.MapSpec `ebpf:"ongoing_http_fallback"`
+	PidCache                *ebpf.MapSpec `ebpf:"pid_cache"`
+	PidTidToConn            *ebpf.MapSpec `ebpf:"pid_tid_to_conn"`
+	ServerTraces            *ebpf.MapSpec `ebpf:"server_traces"`
+	SslToConn               *ebpf.MapSpec `ebpf:"ssl_to_conn"`
+	SslToPidTid             *ebpf.MapSpec `ebpf:"ssl_to_pid_tid"`
+	TpCharBufMem            *ebpf.MapSpec `ebpf:"tp_char_buf_mem"`
+	TpInfoMem               *ebpf.MapSpec `ebpf:"tp_info_mem"`
+	TraceMap                *ebpf.MapSpec `ebpf:"trace_map"`
+	ValidPids               *ebpf.MapSpec `ebpf:"valid_pids"`
 }
 
 // bpfObjects contains all objects after they have been loaded into the kernel.
@@ -183,24 +212,27 @@ func (o *bpfObjects) Close() error {
 //
 // It can be passed to loadBpfObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpfMaps struct {
-	ActiveSslHandshakes *ebpf.Map `ebpf:"active_ssl_handshakes"`
-	ActiveSslReadArgs   *ebpf.Map `ebpf:"active_ssl_read_args"`
-	ActiveSslWriteArgs  *ebpf.Map `ebpf:"active_ssl_write_args"`
-	CloneMap            *ebpf.Map `ebpf:"clone_map"`
-	Events              *ebpf.Map `ebpf:"events"`
-	FilteredConnections *ebpf.Map `ebpf:"filtered_connections"`
-	HttpInfoMem         *ebpf.Map `ebpf:"http_info_mem"`
-	OngoingHttp         *ebpf.Map `ebpf:"ongoing_http"`
-	OngoingHttpFallback *ebpf.Map `ebpf:"ongoing_http_fallback"`
-	PidCache            *ebpf.Map `ebpf:"pid_cache"`
-	PidTidToConn        *ebpf.Map `ebpf:"pid_tid_to_conn"`
-	ServerTraces        *ebpf.Map `ebpf:"server_traces"`
-	SslToConn           *ebpf.Map `ebpf:"ssl_to_conn"`
-	SslToPidTid         *ebpf.Map `ebpf:"ssl_to_pid_tid"`
-	TpCharBufMem        *ebpf.Map `ebpf:"tp_char_buf_mem"`
-	TpInfoMem           *ebpf.Map `ebpf:"tp_info_mem"`
-	TraceMap            *ebpf.Map `ebpf:"trace_map"`
-	ValidPids           *ebpf.Map `ebpf:"valid_pids"`
+	ActiveSslHandshakes     *ebpf.Map `ebpf:"active_ssl_handshakes"`
+	ActiveSslReadArgs       *ebpf.Map `ebpf:"active_ssl_read_args"`
+	ActiveSslWriteArgs      *ebpf.Map `ebpf:"active_ssl_write_args"`
+	CloneMap                *ebpf.Map `ebpf:"clone_map"`
+	Events                  *ebpf.Map `ebpf:"events"`
+	FilteredConnections     *ebpf.Map `ebpf:"filtered_connections"`
+	Http2InfoMem            *ebpf.Map `ebpf:"http2_info_mem"`
+	HttpInfoMem             *ebpf.Map `ebpf:"http_info_mem"`
+	OngoingHttp             *ebpf.Map `ebpf:"ongoing_http"`
+	OngoingHttp2Connections *ebpf.Map `ebpf:"ongoing_http2_connections"`
+	OngoingHttp2Grpc        *ebpf.Map `ebpf:"ongoing_http2_grpc"`
+	OngoingHttpFallback     *ebpf.Map `ebpf:"ongoing_http_fallback"`
+	PidCache                *ebpf.Map `ebpf:"pid_cache"`
+	PidTidToConn            *ebpf.Map `ebpf:"pid_tid_to_conn"`
+	ServerTraces            *ebpf.Map `ebpf:"server_traces"`
+	SslToConn               *ebpf.Map `ebpf:"ssl_to_conn"`
+	SslToPidTid             *ebpf.Map `ebpf:"ssl_to_pid_tid"`
+	TpCharBufMem            *ebpf.Map `ebpf:"tp_char_buf_mem"`
+	TpInfoMem               *ebpf.Map `ebpf:"tp_info_mem"`
+	TraceMap                *ebpf.Map `ebpf:"trace_map"`
+	ValidPids               *ebpf.Map `ebpf:"valid_pids"`
 }
 
 func (m *bpfMaps) Close() error {
@@ -211,8 +243,11 @@ func (m *bpfMaps) Close() error {
 		m.CloneMap,
 		m.Events,
 		m.FilteredConnections,
+		m.Http2InfoMem,
 		m.HttpInfoMem,
 		m.OngoingHttp,
+		m.OngoingHttp2Connections,
+		m.OngoingHttp2Grpc,
 		m.OngoingHttpFallback,
 		m.PidCache,
 		m.PidTidToConn,

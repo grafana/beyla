@@ -5,6 +5,7 @@
 #include "bpf_helpers.h"
 #include "bpf_builtins.h"
 #include "bpf_endian.h"
+#include "http_types.h"
 
 #define MIN_HTTP2_SIZE 24 // Preface PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n https://datatracker.ietf.org/doc/html/rfc7540#section-3.5
 #define HTTP2_GRPC_PREFACE "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n"
@@ -44,8 +45,8 @@ static __always_inline u8 read_http2_grpc_frame_header(frame_header_t *frame, un
         return 0;
     }
 
-    frame->length = bpf_ntohl(frame->length);
-    frame->stream_id = bpf_ntohl(frame->stream_id);
+    frame->length = bpf_ntohl(frame->length << 8);
+    frame->stream_id = bpf_ntohl(frame->stream_id << 1);
 
     return 1;
 }
@@ -58,6 +59,10 @@ static __always_inline u8 is_settings_frame(unsigned char *p, u32 len) {
     }
 
     return frame.type == FrameSettings && !frame.stream_id;
+}
+
+static __always_inline u8 is_headers_frame(frame_header_t *frame) {
+    return frame->type == FrameHeaders;
 }
 
 static __always_inline u8 has_preface(unsigned char *p, u32 len) {
@@ -73,7 +78,7 @@ static __always_inline u8 is_http2_or_grpc(unsigned char *p, u32 len) {
 }
 
 static __always_inline u8 http_grpc_stream_ended(frame_header_t *frame) {
-    return frame->flags == FLAG_DATA_END_STREAM;
+    return is_headers_frame(frame) && ((frame->flags & FLAG_DATA_END_STREAM) == FLAG_DATA_END_STREAM);
 }
 
 #endif // HTTP2_GRPC_HELPERS

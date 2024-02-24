@@ -46,6 +46,21 @@ struct {
     __uint(pinning, LIBBPF_PIN_BY_NAME);
 } ongoing_http_fallback SEC(".maps");
 
+struct {
+    __uint(type, BPF_MAP_TYPE_LRU_HASH);
+    __type(key, pid_connection_info_t);
+    __type(value, u8); // ssl or not
+    __uint(max_entries, MAX_CONCURRENT_REQUESTS);
+} ongoing_http2_connections SEC(".maps");
+
+struct {
+    __uint(type, BPF_MAP_TYPE_LRU_HASH);
+    __type(key, pid_connection_info_t);
+    __type(value, http2_grpc_request_t);
+    __uint(max_entries, MAX_CONCURRENT_SHARED_REQUESTS);
+    __uint(pinning, LIBBPF_PIN_BY_NAME);
+} ongoing_http2_grpc SEC(".maps");
+
 // http_info_t became too big to be declared as a variable in the stack.
 // We use a percpu array to keep a reusable copy of it
 struct {
@@ -54,6 +69,14 @@ struct {
     __type(value, http_info_t);
     __uint(max_entries, 1);
 } http_info_mem SEC(".maps");
+
+// We want to be able to collect larger amount of data for the grpc/http headers
+struct {
+    __uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
+    __type(key, int);
+    __type(value, http2_grpc_request_t);
+    __uint(max_entries, 1);
+} http2_info_mem SEC(".maps");
 
 static __always_inline u8 is_http(unsigned char *p, u32 len, u8 *packet_type) {
     if (len < MIN_HTTP_SIZE) {
@@ -175,6 +198,15 @@ static __always_inline http_info_t* empty_http_info() {
     return value;
 }
 
+static __always_inline http2_grpc_request_t* empty_http2_info() {
+    int zero = 0;
+    http2_grpc_request_t *value = bpf_map_lookup_elem(&http2_info_mem, &zero);
+    if (value) {
+        bpf_memset(value, 0, sizeof(http2_grpc_request_t));
+    }
+    return value;
+}
+
 static __always_inline void finish_http(http_info_t *info) {
     if (info->start_monotime_ns != 0 && info->status != 0 && info->pid.host_pid != 0) {
         http_info_t *trace = bpf_ringbuf_reserve(&events, sizeof(http_info_t), 0);        
@@ -261,11 +293,52 @@ static __always_inline void handle_http_response(unsigned char *small_buf, pid_c
     finish_http(info);
 }
 
+static __always_inline void http2_grpc_start(pid_connection_info_t *pid_conn, void *u_buf, int len) {
+    http2_grpc_request_t *h2g_info = empty_http2_info();
+    if (h2g_info) {
+        http_connection_metadata_t *meta = bpf_map_lookup_elem(&filtered_connections, pid_conn);
+        http_connection_metadata_t dummy_meta = {
+            .type = EVENT_HTTP_REQUEST
+        };
+
+        if (!meta) {
+            task_pid(&dummy_meta.pid);
+            meta = &dummy_meta;
+        }
+
+        h2g_info->type = EVENT_K_HTTP2_REQUEST;
+        h2g_info->start_monotime_ns = bpf_ktime_get_ns();
+        h2g_info->len = len;
+        h2g_info->conn_info = pid_conn->conn;
+        h2g_info->pid = meta->pid;
+        bpf_probe_read(h2g_info->data, KPROBES_HTTP2_BUF_SIZE, u_buf);
+
+        bpf_map_update_elem(&ongoing_http2_grpc, pid_conn, h2g_info, BPF_ANY);
+    }
+}
+
+static __always_inline void http2_grpc_end(http2_grpc_request_t *prev_info, pid_connection_info_t *pid_conn) {
+    if (prev_info) {
+        prev_info->end_monotime_ns = bpf_ktime_get_ns();
+
+        http2_grpc_request_t *trace = bpf_ringbuf_reserve(&events, sizeof(http2_grpc_request_t), 0);        
+        if (trace) {
+            bpf_memcpy(trace, prev_info, sizeof(http2_grpc_request_t));
+
+            trace->type = EVENT_K_HTTP2_REQUEST;
+            bpf_ringbuf_submit(trace, get_flags());
+        }
+    }
+
+    bpf_map_delete_elem(&ongoing_http2_connections, pid_conn);
+    bpf_map_delete_elem(&ongoing_http2_grpc, pid_conn);
+}
+
 static __always_inline void handle_buf_with_connection(pid_connection_info_t *pid_conn, void *u_buf, int bytes_len, u8 ssl) {
     unsigned char small_buf[MIN_HTTP2_SIZE] = {0};   // MIN_HTTP2_SIZE > MIN_HTTP_SIZE
     bpf_probe_read(small_buf, MIN_HTTP2_SIZE, u_buf);
 
-    bpf_dbg_printk("buf=[%s], pid=%d", small_buf, pid_conn->pid);
+    bpf_dbg_printk("buf=[%s], pid=%d, len=%d", small_buf, pid_conn->pid, bytes_len);
 
     u8 packet_type = 0;
     if (is_http(small_buf, MIN_HTTP_SIZE, &packet_type)) {
@@ -329,22 +402,28 @@ static __always_inline void handle_buf_with_connection(pid_connection_info_t *pi
 
         bpf_map_delete_elem(&ongoing_http_fallback, &pid_conn->conn);
     } else if (is_http2_or_grpc(small_buf, MIN_HTTP2_SIZE)) {
-        bpf_dbg_printk("Found HTTP2 or gRPC!");
-        unsigned char buf[FULL_BUF_SIZE];
-        bpf_probe_read(buf, FULL_BUF_SIZE, u_buf);
+        bpf_dbg_printk("Found HTTP2 or gRPC connection");
+        u8 is_ssl = ssl;
+        bpf_map_update_elem(&ongoing_http2_connections, pid_conn, &is_ssl, BPF_ANY);
+        bpf_map_delete_elem(&ongoing_http2_grpc, pid_conn);
+    } else {
+        u8 *h2g = bpf_map_lookup_elem(&ongoing_http2_connections, pid_conn);
+        if (h2g && *h2g == ssl) {
+            frame_header_t frame = {0};
+            read_http2_grpc_frame_header(&frame, small_buf, FRAME_HEADER_LEN);
+            bpf_dbg_printk("http2 frame type = %d, len = %d, stream_id = %d, flags = %d", frame.type, frame.length, frame.stream_id, frame.flags);
+            if (is_headers_frame(&frame)) {
+                http2_grpc_request_t *prev_info = bpf_map_lookup_elem(&ongoing_http2_grpc, pid_conn);
 
-        frame_header_t frame = {0};
-        read_http2_grpc_frame_header(&frame, buf + MIN_HTTP2_SIZE, FULL_BUF_SIZE);
-
-        bpf_dbg_printk("%llx", *(u64 *)(buf + MIN_HTTP2_SIZE));
-        bpf_dbg_printk("type = %d, len = %d, stream_id = %d, flags = %d", frame.type, frame.length, frame.stream_id, frame.flags);
-        read_http2_grpc_frame_header(&frame, buf + MIN_HTTP2_SIZE + FRAME_HEADER_LEN, FULL_BUF_SIZE);
-        bpf_dbg_printk("type = %d, len = %d, stream_id = %d, flags = %d", frame.type, frame.length, frame.stream_id, frame.flags);        
-        read_http2_grpc_frame_header(&frame, buf + MIN_HTTP2_SIZE + FRAME_HEADER_LEN + FRAME_HEADER_LEN, FULL_BUF_SIZE);
-        bpf_dbg_printk("type = %d, len = %d, stream_id = %d, flags = %d", frame.type, frame.length, frame.stream_id, frame.flags);        
-
-
-        // TODO: Pack this up in a trace buffer and send it to userspace to be parsed.
+                if (prev_info) {
+                    if (http_grpc_stream_ended(&frame)) {
+                        http2_grpc_end(prev_info, pid_conn);
+                    }
+                } else {
+                    http2_grpc_start(pid_conn, u_buf, bytes_len);                    
+                }
+            }
+        }
     }
 }
 

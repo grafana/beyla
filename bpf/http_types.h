@@ -9,6 +9,7 @@
 
 #define FULL_BUF_SIZE 160 // should be enough for most URLs, we may need to extend it if not. Must be multiple of 16 for the copy to work.
 #define TRACE_BUF_SIZE 1024 // must be power of 2, we do an & to limit the buffer size
+#define KPROBES_HTTP2_BUF_SIZE 256
 
 #define CONN_INFO_FLAG_TRACE 0x1
 
@@ -83,8 +84,23 @@ typedef struct http_connection_metadata {
     u8  type;
 } http_connection_metadata_t;
 
+typedef struct http2_grpc_request {
+    u8  type;                           // Must be first
+    connection_info_t conn_info;
+    u8  data[KPROBES_HTTP2_BUF_SIZE];
+    int len;
+    u64 start_monotime_ns;
+    u64 end_monotime_ns;
+    // we need this for system wide tracking so we can find the service name
+    // also to filter traces from unsolicited processes that share the executable
+    // with other instrumented processes
+    pid_info pid;
+    tp_info_t tp;
+} http2_grpc_request_t;
+
 // Force emitting struct http_request_trace into the ELF for automatic creation of Golang struct
 const http_info_t *unused __attribute__((unused));
+const http2_grpc_request_t *unused_http2 __attribute__((unused));
 
 const u8 ip4ip6_prefix[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff};
 

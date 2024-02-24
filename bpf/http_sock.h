@@ -413,6 +413,7 @@ static __always_inline void handle_buf_with_connection(pid_connection_info_t *pi
             read_http2_grpc_frame_header(&frame, small_buf, FRAME_HEADER_LEN);
             bpf_dbg_printk("http2 frame type = %d, len = %d, stream_id = %d, flags = %d", frame.type, frame.length, frame.stream_id, frame.flags);
             if (is_headers_frame(&frame)) {
+                // TODO: This needs a different key, pid_conn + stream_id.
                 http2_grpc_request_t *prev_info = bpf_map_lookup_elem(&ongoing_http2_grpc, pid_conn);
 
                 if (prev_info) {

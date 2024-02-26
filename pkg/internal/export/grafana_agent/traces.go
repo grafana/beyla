@@ -1,7 +1,8 @@
-package grafana_agent
+package grafanaagent
 
 import (
 	"context"
+	"log/slog"
 	"time"
 
 	"github.com/mariomac/pipes/pkg/node"
@@ -19,13 +20,14 @@ import (
 func TracesReceiver(ctx context.Context, cfg beyla.TracesReceiverConfig) (node.TerminalFunc[[]request.Span], error) {
 	return func(in <-chan []request.Span) {
 		for spans := range in {
-			for _, span := range spans {
+			for i := range spans {
+				span := &spans[i]
 				if span.IgnoreSpan == request.IgnoreTraces {
 					continue
 				}
 
 				t := span.Timings()
-				parentCtx := otel.HandleTraceparent(ctx, &span)
+				parentCtx := otel.HandleTraceparent(ctx, span)
 				realStart := otel.SpanStartTime(t)
 				hasSubSpans := t.Start.After(realStart)
 				if !hasSubSpans {
@@ -33,7 +35,10 @@ func TracesReceiver(ctx context.Context, cfg beyla.TracesReceiverConfig) (node.T
 					parentCtx = otel.ContextWithTraceParent(parentCtx, span.TraceID, span.SpanID)
 				}
 				for _, tc := range cfg.Traces {
-					tc.ConsumeTraces(parentCtx, generateTraces(span, t, realStart, hasSubSpans))
+					err := tc.ConsumeTraces(parentCtx, generateTraces(span, t, realStart, hasSubSpans))
+					if err != nil {
+						slog.Error("error sending trace to consumer", "error", err)
+					}
 				}
 			}
 		}
@@ -41,35 +46,35 @@ func TracesReceiver(ctx context.Context, cfg beyla.TracesReceiverConfig) (node.T
 }
 
 // generateTraces creates a pdata.Traces from a request.Span
-func generateTraces(span request.Span, t request.Timings, start time.Time, hasSubSpans bool) ptrace.Traces {
+func generateTraces(span *request.Span, t request.Timings, start time.Time, hasSubSpans bool) ptrace.Traces {
 	traces := ptrace.NewTraces()
 	rs := traces.ResourceSpans().AppendEmpty()
 	ss := rs.ScopeSpans().AppendEmpty()
 
 	if hasSubSpans {
-		createSubSpans(&ss, span, t)
+		createSubSpans(&ss, t)
 	}
 
 	// Create a parent span for the whole request session
 	s := ss.Spans().AppendEmpty()
-	s.SetName(otel.TraceName(&span))
-	s.SetKind(ptrace.SpanKind(otel.SpanKind(&span)))
+	s.SetName(otel.TraceName(span))
+	s.SetKind(ptrace.SpanKind(otel.SpanKind(span)))
 	s.SetStartTimestamp(pcommon.NewTimestampFromTime(start))
 
 	// Set span attributes
-	attrs := otel.TraceAttributes(&span)
+	attrs := otel.TraceAttributes(span)
 	m := attrsToMap(attrs)
 	m.CopyTo(s.Attributes())
 
 	// Set status code
-	statusCode := codeToStatusCode(otel.SpanStatusCode(&span))
+	statusCode := codeToStatusCode(otel.SpanStatusCode(span))
 	s.Status().SetCode(statusCode)
 	s.SetEndTimestamp(pcommon.NewTimestampFromTime(t.End))
 	return traces
 }
 
 // createSubSpans creates the internal spans for a request.Span
-func createSubSpans(ss *ptrace.ScopeSpans, span request.Span, t request.Timings) {
+func createSubSpans(ss *ptrace.ScopeSpans, t request.Timings) {
 	// Create a child span showing the queue time
 	spQ := ss.Spans().AppendEmpty()
 	spQ.SetName("in queue")

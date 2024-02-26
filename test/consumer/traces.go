@@ -17,7 +17,7 @@ type MockTraceConsumer struct {
 
 // ConsumeTraces implements the consumer.Traces interface, sends pdata.Traces to the collector
 // specified in the endpoint.
-func (m *MockTraceConsumer) ConsumeTraces(ctx context.Context, td ptrace.Traces) error {
+func (m *MockTraceConsumer) ConsumeTraces(_ context.Context, td ptrace.Traces) error {
 	req := ptraceotlp.NewExportRequestFromTraces(td)
 	body, err := req.MarshalProto()
 	if err != nil {

@@ -1,4 +1,4 @@
-package grafana_agent
+package grafanaagent
 
 import (
 	"testing"

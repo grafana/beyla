@@ -18,6 +18,10 @@ func TestMetricAttributes(t *testing.T) {
 			},
 		},
 		Attrs: ebpf.RecordAttrs{
+			SrcName:      "srcname",
+			SrcNamespace: "srcnamespace",
+			DstName:      "dstname",
+			DstNamespace: "dstnamespace",
 			Metadata: map[string]string{
 				"k8s.src.name":      "srcname",
 				"k8s.src.namespace": "srcnamespace",

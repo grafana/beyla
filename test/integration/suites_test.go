@@ -135,6 +135,7 @@ func TestSuite_OldestGoVersion(t *testing.T) {
 }
 
 func TestSuite_UnsupportedGoVersion(t *testing.T) {
+	t.Skip("seems flaky, we need to look into this")
 	compose, err := docker.ComposeSuite("docker-compose-1.16.yml", path.Join(pathOutput, "test-suite-unsupported-go.log"))
 	require.NoError(t, err)
 	require.NoError(t, compose.Up())

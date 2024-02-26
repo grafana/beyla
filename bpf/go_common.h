@@ -155,7 +155,6 @@ static __always_inline void server_trace_parent(void *goroutine_addr, tp_info_t 
 static __always_inline u8 client_trace_parent(void *goroutine_addr, tp_info_t *tp_i, void *req_header) {
     // Get traceparent from the Request.Header
     u8 found_trace_id = 0;
-    u8 trace_id_exists = 0;
     
     // May get overriden when decoding existing traceparent or finding a server span, but otherwise we set sample ON
     tp_i->flags = 1;
@@ -164,7 +163,6 @@ static __always_inline u8 client_trace_parent(void *goroutine_addr, tp_info_t *t
         void *traceparent_ptr = extract_traceparent_from_req_headers(req_header);
         if (traceparent_ptr != NULL) {
             unsigned char buf[TP_MAX_VAL_LENGTH];
-            trace_id_exists = 1;
             long res = bpf_probe_read(buf, sizeof(buf), traceparent_ptr);
             if (res < 0) {
                 bpf_dbg_printk("can't copy traceparent header");
@@ -194,7 +192,7 @@ static __always_inline u8 client_trace_parent(void *goroutine_addr, tp_info_t *t
         urand_bytes(tp_i->span_id, SPAN_ID_SIZE_BYTES);
     }
 
-    return trace_id_exists;
+    return found_trace_id;
 }
 
 

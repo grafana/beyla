@@ -85,4 +85,8 @@ static __always_inline u8 is_invalid_frame(frame_header_t *frame) {
     return frame->length == 0 && frame->type == FrameData;
 }
 
+static __always_inline u8 is_data_frame(frame_header_t *frame) {
+    return frame->length && frame->type == FrameData;
+}
+
 #endif // HTTP2_GRPC_HELPERS

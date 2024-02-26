@@ -4,17 +4,57 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"strings"
 
 	"github.com/cilium/ebpf/ringbuf"
 	"github.com/grafana/beyla/pkg/internal/request"
 	"golang.org/x/net/http2"
+	"golang.org/x/net/http2/hpack"
 )
 
 type BPFHTTP2Info bpfHttp2GrpcRequestT
 
 func byteFramer(data []uint8) (*http2.Framer, *bytes.Buffer) {
 	buf := bytes.NewBuffer(data)
-	return http2.NewFramer(buf, buf), buf
+	fr := http2.NewFramer(buf, buf)
+
+	return fr, buf
+}
+
+func readMetaFrame(fr *http2.Framer, hf *http2.HeadersFrame) (string, string) {
+	method := ""
+	path := ""
+
+	hdec := hpack.NewDecoder(0, nil)
+	hdec.SetMaxStringLength(4096)
+	hdec.SetEmitFunc(func(hf hpack.HeaderField) {
+		fmt.Printf("AAAA %s\n", hf.Name)
+		hfKey := strings.ToLower(hf.Name)
+		switch hfKey {
+		case ":method":
+			method = hf.Value
+		case ":path":
+			path = hf.Value
+		}
+	})
+	// Lose reference to MetaHeadersFrame:
+	defer hdec.SetEmitFunc(func(hf hpack.HeaderField) {})
+
+	for {
+		frag := hf.HeaderBlockFragment()
+		if _, err := hdec.Write(frag); err != nil {
+			return method, path
+		}
+
+		if hf.HeadersEnded() {
+			break
+		}
+		if _, err := fr.ReadFrame(); err != nil {
+			return method, path
+		}
+	}
+
+	return method, path
 }
 
 func ReadHTTP2InfoIntoSpan(record *ringbuf.Record) (request.Span, bool, error) {
@@ -25,15 +65,24 @@ func ReadHTTP2InfoIntoSpan(record *ringbuf.Record) (request.Span, bool, error) {
 		return request.Span{}, true, err
 	}
 
-	_, b := byteFramer(event.Data[:])
+	framer, _ := byteFramer(event.Data[:])
 
-	hf, err := http2.ReadFrameHeader(b)
-	if err != nil {
-		fmt.Printf("Got error reading frame %v\n", err)
-		return request.Span{}, false, nil
+	f, _ := framer.ReadFrame()
+
+	switch ff := f.(type) {
+	case *http2.HeadersFrame:
+		method, path := readMetaFrame(framer, ff)
+		fmt.Printf("HTTP2/gRPC method %s path %s\n", method, path)
 	}
 
-	fmt.Printf("type=%d, len=%d, stream_id=%d", hf.Type, hf.Length, hf.StreamID)
+	// if err != nil {
+	// 	fmt.Printf("Got error reading frame data %v\n", err)
+	// 	return request.Span{}, false, nil
+	// }
+
+	// if f != nil {
+	// 	fmt.Printf("Frame: type = %d, stream_id = %d, len = %d\n", f.Header().Type, f.Header().StreamID, f.Header().Length)
+	// }
 
 	return request.Span{}, false, nil
 }

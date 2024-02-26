@@ -335,32 +335,47 @@ static __always_inline void http2_grpc_end(http2_conn_stream_t *stream, http2_gr
 
 static __always_inline void process_http2_grpc_frames(pid_connection_info_t *pid_conn, void *u_buf, int bytes_len) {
     int pos = 0;
+    u8 found_frame = 0;
+    http2_grpc_request_t *prev_info = 0;
+    u32 saved_stream_id = 0;
+    u8 found_data_frame = 0;
+    
     for (int i = 0; i < 8; i++) {
         u8 found = 0;
         unsigned char frame_buf[FRAME_HEADER_LEN];
         frame_header_t frame = {0};
+        
         bpf_probe_read(&frame_buf, FRAME_HEADER_LEN, (void *)((u8 *)u_buf + pos));
         read_http2_grpc_frame_header(&frame, frame_buf, FRAME_HEADER_LEN);
+        
         bpf_dbg_printk("http2 frame type = %d, len = %d, stream_id = %d, flags = %d", frame.type, frame.length, frame.stream_id, frame.flags);
+        
         if (is_headers_frame(&frame)) {
             http2_conn_stream_t stream = {0};
             stream.pid_conn = *pid_conn;
             stream.stream_id = frame.stream_id;
-            http2_grpc_request_t *prev_info = bpf_map_lookup_elem(&ongoing_http2_grpc, &stream);
+            if (!prev_info) {
+                prev_info = bpf_map_lookup_elem(&ongoing_http2_grpc, &stream);
+            }
 
             if (prev_info) {
+                saved_stream_id = stream.stream_id;
                 if (http_grpc_stream_ended(&frame)) {
                     http2_grpc_end(&stream, prev_info);
-                    found = 1;
+                    found_frame = 1;
                 } 
             } else {
                 http2_grpc_start(&stream, (void *)((u8 *)u_buf + pos), bytes_len);
-                found = 1;
+                found_frame = 1;
             }
         } 
 
         if (found) {
             break;
+        }
+
+        if (is_data_frame(&frame)) {
+            found_data_frame = 1;
         }
 
         if (is_invalid_frame(&frame)) {
@@ -377,6 +392,16 @@ static __always_inline void process_http2_grpc_frames(pid_connection_info_t *pid
             pos += (frame.length + FRAME_HEADER_LEN);
             bpf_dbg_printk("New buf read pos = %d", pos);
         }
+    }
+
+    // We only loop 8 times looking for the stream termination. If the data packed is large we'll miss the
+    // frame saying the stream closed. In that case we try this backup path.
+    if (!found_frame && prev_info && found_data_frame && saved_stream_id) {
+        http2_conn_stream_t stream = {0};
+        stream.pid_conn = *pid_conn;
+        stream.stream_id = saved_stream_id;
+
+        http2_grpc_end(&stream, prev_info);
     }
 }
 

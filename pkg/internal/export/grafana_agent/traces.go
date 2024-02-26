@@ -1,4 +1,4 @@
-package grafagent
+package grafana_agent
 
 import (
 	"context"
@@ -7,6 +7,7 @@ import (
 	"github.com/mariomac/pipes/pkg/node"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/ptrace"
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 
 	"github.com/grafana/beyla/pkg/beyla"
@@ -26,13 +27,13 @@ func TracesReceiver(ctx context.Context, cfg beyla.TracesReceiverConfig) (node.T
 				t := span.Timings()
 				parentCtx := otel.HandleTraceparent(ctx, &span)
 				realStart := otel.SpanStartTime(t)
-				hasSubspans := t.Start.After(realStart)
-				if !hasSubspans {
+				hasSubSpans := t.Start.After(realStart)
+				if !hasSubSpans {
 					// We set the eBPF calculated trace_id and span_id to be the main span
 					parentCtx = otel.ContextWithTraceParent(parentCtx, span.TraceID, span.SpanID)
 				}
 				for _, tc := range cfg.Traces {
-					tc.ConsumeTraces(parentCtx, generateTraces(span, t, realStart, hasSubspans))
+					tc.ConsumeTraces(parentCtx, generateTraces(span, t, realStart, hasSubSpans))
 				}
 			}
 		}
@@ -40,31 +41,30 @@ func TracesReceiver(ctx context.Context, cfg beyla.TracesReceiverConfig) (node.T
 }
 
 // generateTraces creates a pdata.Traces from a request.Span
-func generateTraces(span request.Span, t request.Timings, start time.Time, hasSubspans bool) ptrace.Traces {
+func generateTraces(span request.Span, t request.Timings, start time.Time, hasSubSpans bool) ptrace.Traces {
 	traces := ptrace.NewTraces()
-
 	rs := traces.ResourceSpans().AppendEmpty()
 	ss := rs.ScopeSpans().AppendEmpty()
+
+	if hasSubSpans {
+		createSubSpans(&ss, span, t)
+	}
 
 	// Create a parent span for the whole request session
 	s := ss.Spans().AppendEmpty()
 	s.SetName(otel.TraceName(&span))
 	s.SetKind(ptrace.SpanKind(otel.SpanKind(&span)))
 	s.SetStartTimestamp(pcommon.NewTimestampFromTime(start))
-	res := rs.Resource()
+
+	// Set span attributes
 	attrs := otel.TraceAttributes(&span)
-	for _, kv := range attrs {
-		res.Attributes().PutStr(string(kv.Key), kv.Value.AsString())
-		s.Attributes().PutStr(string(kv.Key), kv.Value.AsString())
-	}
+	m := attrsToMap(attrs)
+	m.CopyTo(s.Attributes())
+
+	// Set status code
 	statusCode := codeToStatusCode(otel.SpanStatusCode(&span))
 	s.Status().SetCode(statusCode)
-
-	if hasSubspans {
-		createSubSpans(&ss, span, t)
-	}
 	s.SetEndTimestamp(pcommon.NewTimestampFromTime(t.End))
-
 	return traces
 }
 
@@ -87,6 +87,25 @@ func createSubSpans(ss *ptrace.ScopeSpans, span request.Span, t request.Timings)
 	spP.SetEndTimestamp(pcommon.NewTimestampFromTime(t.End))
 }
 
+// attrsToMap converts a slice of attribute.KeyValue to a pcommon.Map
+func attrsToMap(attrs []attribute.KeyValue) pcommon.Map {
+	m := pcommon.NewMap()
+	for _, attr := range attrs {
+		switch v := attr.Value.AsInterface().(type) {
+		case string:
+			m.PutStr(string(attr.Key), v)
+		case int64:
+			m.PutInt(string(attr.Key), v)
+		case float64:
+			m.PutDouble(string(attr.Key), v)
+		case bool:
+			m.PutBool(string(attr.Key), v)
+		}
+	}
+	return m
+}
+
+// codeToStatusCode converts a codes.Code to a ptrace.StatusCode
 func codeToStatusCode(code codes.Code) ptrace.StatusCode {
 	switch code {
 	case codes.Unset:

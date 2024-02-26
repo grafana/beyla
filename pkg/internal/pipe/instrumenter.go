@@ -8,7 +8,7 @@ import (
 
 	"github.com/grafana/beyla/pkg/beyla"
 	"github.com/grafana/beyla/pkg/internal/export/debug"
-	"github.com/grafana/beyla/pkg/internal/export/grafagent"
+	"github.com/grafana/beyla/pkg/internal/export/grafana_agent"
 	"github.com/grafana/beyla/pkg/internal/export/otel"
 	"github.com/grafana/beyla/pkg/internal/export/prom"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
@@ -47,7 +47,7 @@ func configToNodesMap(cfg *beyla.Config) *nodesMap {
 		Prometheus:   cfg.Prometheus,
 		Printer:      cfg.Printer,
 		Noop:         cfg.Noop,
-		AgentTraces:  cfg.TracesExport,
+		AgentTraces:  cfg.TracesReceiver,
 	}
 }
 
@@ -161,5 +161,5 @@ func (gb *graphFunctions) prometheusProvider(config prom.PrometheusConfig) (node
 
 //nolint:gocritic
 func (gb *graphFunctions) grafanaAgentTracesProvider(config beyla.TracesReceiverConfig) (node.TerminalFunc[[]request.Span], error) {
-	return grafagent.TracesReceiver(gb.ctx, config)
+	return grafana_agent.TracesReceiver(gb.ctx, config)
 }

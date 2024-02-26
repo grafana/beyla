@@ -127,13 +127,11 @@ type Config struct {
 	ProfilePort      int               `yaml:"profile_port" env:"BEYLA_PROFILE_PORT"`
 	InternalMetrics  imetrics.Config   `yaml:"internal_metrics"`
 
-	TracesExport TracesReceiverConfig `yaml:"-"`
+	TracesReceiver TracesReceiverConfig `yaml:"-"`
 }
 
 type Consumer interface {
 	otelconsumer.Traces
-	otelconsumer.Metrics
-	otelconsumer.Logs
 }
 
 type TracesReceiverConfig struct {

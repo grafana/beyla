@@ -19,6 +19,11 @@ type bpf_debugConnectionInfoT struct {
 	D_port uint16
 }
 
+type bpf_debugHttp2ConnStreamT struct {
+	PidConn  bpf_debugPidConnectionInfoT
+	StreamId uint32
+}
+
 type bpf_debugHttp2GrpcRequestT struct {
 	Type            uint8
 	_               [1]byte

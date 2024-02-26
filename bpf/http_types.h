@@ -84,6 +84,11 @@ typedef struct http_connection_metadata {
     u8  type;
 } http_connection_metadata_t;
 
+typedef struct http2_conn_stream {
+    pid_connection_info_t pid_conn;
+    u32 stream_id;
+} http2_conn_stream_t;
+
 typedef struct http2_grpc_request {
     u8  type;                           // Must be first
     connection_info_t conn_info;

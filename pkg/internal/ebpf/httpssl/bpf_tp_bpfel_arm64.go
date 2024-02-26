@@ -19,6 +19,11 @@ type bpf_tpConnectionInfoT struct {
 	D_port uint16
 }
 
+type bpf_tpHttp2ConnStreamT struct {
+	PidConn  bpf_tpPidConnectionInfoT
+	StreamId uint32
+}
+
 type bpf_tpHttp2GrpcRequestT struct {
 	Type            uint8
 	_               [1]byte

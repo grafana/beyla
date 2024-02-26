@@ -55,7 +55,7 @@ struct {
 
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, pid_connection_info_t);
+    __type(key, http2_conn_stream_t);
     __type(value, http2_grpc_request_t);
     __uint(max_entries, MAX_CONCURRENT_SHARED_REQUESTS);
     __uint(pinning, LIBBPF_PIN_BY_NAME);
@@ -293,10 +293,10 @@ static __always_inline void handle_http_response(unsigned char *small_buf, pid_c
     finish_http(info);
 }
 
-static __always_inline void http2_grpc_start(pid_connection_info_t *pid_conn, void *u_buf, int len) {
+static __always_inline void http2_grpc_start(http2_conn_stream_t *s_key, void *u_buf, int len) {
     http2_grpc_request_t *h2g_info = empty_http2_info();
     if (h2g_info) {
-        http_connection_metadata_t *meta = bpf_map_lookup_elem(&filtered_connections, pid_conn);
+        http_connection_metadata_t *meta = bpf_map_lookup_elem(&filtered_connections, &s_key->pid_conn);
         http_connection_metadata_t dummy_meta = {
             .type = EVENT_HTTP_REQUEST
         };
@@ -309,15 +309,15 @@ static __always_inline void http2_grpc_start(pid_connection_info_t *pid_conn, vo
         h2g_info->type = EVENT_K_HTTP2_REQUEST;
         h2g_info->start_monotime_ns = bpf_ktime_get_ns();
         h2g_info->len = len;
-        h2g_info->conn_info = pid_conn->conn;
+        h2g_info->conn_info = s_key->pid_conn.conn;
         h2g_info->pid = meta->pid;
         bpf_probe_read(h2g_info->data, KPROBES_HTTP2_BUF_SIZE, u_buf);
 
-        bpf_map_update_elem(&ongoing_http2_grpc, pid_conn, h2g_info, BPF_ANY);
+        bpf_map_update_elem(&ongoing_http2_grpc, s_key, h2g_info, BPF_ANY);
     }
 }
 
-static __always_inline void http2_grpc_end(http2_grpc_request_t *prev_info, pid_connection_info_t *pid_conn) {
+static __always_inline void http2_grpc_end(http2_conn_stream_t *stream, http2_grpc_request_t *prev_info) {
     if (prev_info) {
         prev_info->end_monotime_ns = bpf_ktime_get_ns();
 
@@ -330,8 +330,54 @@ static __always_inline void http2_grpc_end(http2_grpc_request_t *prev_info, pid_
         }
     }
 
-    bpf_map_delete_elem(&ongoing_http2_connections, pid_conn);
-    bpf_map_delete_elem(&ongoing_http2_grpc, pid_conn);
+    bpf_map_delete_elem(&ongoing_http2_grpc, stream);
+}
+
+static __always_inline void process_http2_grpc_frames(pid_connection_info_t *pid_conn, void *u_buf, int bytes_len) {
+    int pos = 0;
+    for (int i = 0; i < 8; i++) {
+        u8 found = 0;
+        unsigned char frame_buf[FRAME_HEADER_LEN];
+        frame_header_t frame = {0};
+        bpf_probe_read(&frame_buf, FRAME_HEADER_LEN, (void *)((u8 *)u_buf + pos));
+        read_http2_grpc_frame_header(&frame, frame_buf, FRAME_HEADER_LEN);
+        bpf_dbg_printk("http2 frame type = %d, len = %d, stream_id = %d, flags = %d", frame.type, frame.length, frame.stream_id, frame.flags);
+        if (is_headers_frame(&frame)) {
+            http2_conn_stream_t stream = {0};
+            stream.pid_conn = *pid_conn;
+            stream.stream_id = frame.stream_id;
+            http2_grpc_request_t *prev_info = bpf_map_lookup_elem(&ongoing_http2_grpc, &stream);
+
+            if (prev_info) {
+                if (http_grpc_stream_ended(&frame)) {
+                    http2_grpc_end(&stream, prev_info);
+                    found = 1;
+                } 
+            } else {
+                http2_grpc_start(&stream, (void *)((u8 *)u_buf + pos), bytes_len);
+                found = 1;
+            }
+        } 
+
+        if (found) {
+            break;
+        }
+
+        if (is_invalid_frame(&frame)) {
+            bpf_dbg_printk("Invalid frame, terminating search");
+            break;
+        }
+
+        if (frame.length + FRAME_HEADER_LEN >= bytes_len) {
+            bpf_dbg_printk("Frame length bigger than bytes len");
+            break;
+        }
+
+        if (pos < (bytes_len - frame.length + FRAME_HEADER_LEN)) {
+            pos += (frame.length + FRAME_HEADER_LEN);
+            bpf_dbg_printk("New buf read pos = %d", pos);
+        }
+    }
 }
 
 static __always_inline void handle_buf_with_connection(pid_connection_info_t *pid_conn, void *u_buf, int bytes_len, u8 ssl) {
@@ -409,22 +455,12 @@ static __always_inline void handle_buf_with_connection(pid_connection_info_t *pi
     } else {
         u8 *h2g = bpf_map_lookup_elem(&ongoing_http2_connections, pid_conn);
         if (h2g && *h2g == ssl) {
-            frame_header_t frame = {0};
-            read_http2_grpc_frame_header(&frame, small_buf, FRAME_HEADER_LEN);
-            bpf_dbg_printk("http2 frame type = %d, len = %d, stream_id = %d, flags = %d", frame.type, frame.length, frame.stream_id, frame.flags);
-            if (is_headers_frame(&frame)) {
-                // TODO: This needs a different key, pid_conn + stream_id.
-                http2_grpc_request_t *prev_info = bpf_map_lookup_elem(&ongoing_http2_grpc, pid_conn);
-
-                if (prev_info) {
-                    if (http_grpc_stream_ended(&frame)) {
-                        http2_grpc_end(prev_info, pid_conn);
-                    }
-                } else {
-                    http2_grpc_start(pid_conn, u_buf, bytes_len);                    
-                }
-            }
+            process_http2_grpc_frames(pid_conn, u_buf, bytes_len);
         }
+
+        frame_header_t frame = {0};
+        read_http2_grpc_frame_header(&frame, small_buf, FRAME_HEADER_LEN);
+        bpf_dbg_printk("NEXT: http2 frame type = %d, len = %d, stream_id = %d, flags = %d", frame.type, frame.length, frame.stream_id, frame.flags);
     }
 }
 

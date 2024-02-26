@@ -757,6 +757,17 @@ It is disabled by default to avoid cardinality explosion.
 The `buckets` object allows overriding the bucket boundaries of diverse histograms. See
 [Overriding histogram buckets](#overriding-histogram-buckets) section for more details.
 
+| YAML                    | Environment variable                                       | Type     | Default                     |
+|-------------------------|------------------------------------------------------------|----------|-----------------------------|
+| `histogram_aggregation` | `OTEL_EXPORTER_OTLP_METRICS_DEFAULT_HISTOGRAM_AGGREGATION` | `string` | `explicit_bucket_histogram` |
+
+Specifies the default aggregation to use for histogram instruments.
+
+Accepted values are:
+
+* `explicit_bucket_histogram` (default): use [Explicit Bucket Histogram Aggregation](https://opentelemetry.io/docs/specs/otel/metrics/sdk/#explicit-bucket-histogram-aggregation).
+* `base2_exponential_bucket_histogram`: use [Base2 Exponential Bucket Histogram Aggregation](https://opentelemetry.io/docs/specs/otel/metrics/sdk/#base2-exponential-bucket-histogram-aggregation).
+
 ### Overriding histogram buckets
 
 For both OpenTelemetry and Prometheus metrics exporters, you can override the histogram bucket
@@ -800,14 +811,14 @@ conventions recommend a different set of bucket boundaries.
 
 ### Use native histograms and exponential histograms
 
-For Prometheus [native histograms](https://prometheus.io/docs/concepts/metric_types/#histogram) are enabled if you have the `native-histograms` feature enabled.
+For Prometheus, [native histograms](https://prometheus.io/docs/concepts/metric_types/#histogram) are enabled if you
+[enable the `native-histograms` feature in your Prometheus collector](https://prometheus.io/docs/prometheus/latest/feature_flags/#native-histograms).
 
-For OpenTelemetry you can use [exponential histograms](https://opentelemetry.io/docs/specs/otel/metrics/data-model/#exponentialhistogram) for the predefined histograms instead of defining the buckets manually.
-
-| YAML       | Environment variable                                                      | Type | Default |
-| ---------- | ------------------------------------------------------------------------- | ---- | ------- |
-| `use_exponential_histograms` | `BEYLA_OTEL_USE_EXPONENTIAL_HISTOGRAMS`  | `boolean` | `false` |
-
+For OpenTelemetry you can use [exponential histograms](https://opentelemetry.io/docs/specs/otel/metrics/data-model/#exponentialhistogram)
+for the predefined histograms instead of defining the buckets manually. You need to set up the standard
+[OTEL_EXPORTER_OTLP_METRICS_DEFAULT_HISTOGRAM_AGGREGATION](https://opentelemetry.io/docs/specs/otel/metrics/sdk_exporters/otlp/#additional-configuration)
+environment variable. See the `histogram_aggregation` section in the [OTEL metrics exporter](#otel-metrics-exporter) section
+for more information.
 
 ## OTEL traces exporter
 

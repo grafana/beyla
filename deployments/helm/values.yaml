@@ -5,8 +5,11 @@ image:
   tag: "main"
 
 imagePullSecrets: []
+
 nameOverride: ""
 fullnameOverride: ""
+## Override the deployment namespace
+namespaceOverride: ""
 
 ## DaemonSet annotations
 # annotations: {}
@@ -117,3 +120,40 @@ nodeSelector: {}
 tolerations: []
 
 affinity: {}
+
+# To use an external configmap for Beyla - this will replace existing configmap from chart
+# kubectl create cm --from-file=beyla-config.yaml=<name-of-config-file> -n <namespace>
+# externalBeylaConfigMap: 
+
+
+## More configuration options available at https://grafana.com/docs/beyla/latest/configure/options/
+configmapData:
+  open_port: 8443
+  routes:
+    unmatched: heuristic
+  log_level: debug
+  otel_traces_export:
+    endpoint: http://grafana-agent:4318
+ ## or alternatively use
+  # grafana:
+  #   otlp:
+  #     cloud_zone: prod-eu-west-0
+  #     cloud_instance_id: 123456  
+  #     cloud_api_key:  
+  discovery:
+    services:
+      - k8s_namespace: default
+  attributes:
+    kubernetes:
+      enable: true
+
+## Env variables that will override configmap values
+## For example:
+##   BEYLA_BPF_WAKEUP_LEN: 100
+env: {}
+
+envValueFrom: {}
+  #  ENV_NAME:
+  #    secretKeyRef:
+  #      name: secret-name
+  #      key: value_key

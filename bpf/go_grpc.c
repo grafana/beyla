@@ -236,6 +236,7 @@ int uprobe_server_handleStream_return(struct pt_regs *ctx) {
 done:
     bpf_map_delete_elem(&ongoing_grpc_server_requests, &goroutine_addr);
     bpf_map_delete_elem(&ongoing_grpc_request_status, &goroutine_addr);
+    bpf_map_delete_elem(&go_trace_map, &goroutine_addr);
 
     return 0;
 }

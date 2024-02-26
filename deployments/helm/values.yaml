@@ -121,8 +121,10 @@ tolerations: []
 
 affinity: {}
 
-# use an external configmap for Beyla - this will replace existing configmap from chart
-# externalBeylaConfigMap: name-of-some-configmap
+# To use an external configmap for Beyla - this will replace existing configmap from chart
+# kubectl create cm --from-file=beyla-config.yaml=<name-of-config-file> -n <namespace>
+# externalBeylaConfigMap: 
+
 
 ## More configuration options available at https://grafana.com/docs/beyla/latest/configure/options/
 configmapData:

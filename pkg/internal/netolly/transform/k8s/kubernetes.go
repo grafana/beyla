@@ -125,6 +125,23 @@ func (n *decorator) decorate(flow *ebpf.Record, prefix, ip string) {
 			flow.Attrs.Metadata[prefix+attrSuffixHostName] = kubeInfo.HostName
 		}
 	}
+	// decorate other names from metadata, if required
+	if prefix == attrPrefixDst {
+		if flow.Attrs.DstName == "" {
+			flow.Attrs.DstName = kubeInfo.Name
+		}
+		if flow.Attrs.DstNamespace == "" {
+			flow.Attrs.DstNamespace = kubeInfo.Namespace
+		}
+	} else {
+		if flow.Attrs.SrcName == "" {
+			flow.Attrs.SrcName = kubeInfo.Name
+		}
+		if flow.Attrs.SrcNamespace == "" {
+			flow.Attrs.SrcNamespace = kubeInfo.Namespace
+		}
+	}
+
 }
 
 // newDecorator create a new transform

@@ -25,11 +25,7 @@ spec:
       volumes:
         - name: beyla-config
           configMap:
-            {{- if .Values.useExistingConfigMap }}
-            name: {{ .Values.useExistingConfigMap }}
-            {{- else }}
-            name: {{ include "beyla.fullname" . }}
-            {{- end }}
+            name: {{ default (include "beyla.fullname" .) .Values.externalBeylaConfigMap}}
       containers:
         - name: beyla
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
@@ -53,5 +49,5 @@ spec:
           {{- range $key, $value := .Values.envValueFrom }}
             - name: {{ $key | quote }}
               valueFrom:
-                {{- tpl (toYaml $value) $ | nindent 10 }}
+          {{- tpl (toYaml $value) $ | nindent 16 }}
           {{- end }}

@@ -1,4 +1,4 @@
-{{- if (not .Values.useExistingConfigMap) }}
+{{- if (not .Values.externalBeylaConfigMap) }}
 apiVersion: v1
 kind: ConfigMap
 metadata:

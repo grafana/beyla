@@ -8,7 +8,6 @@ import (
 	"github.com/caarlos0/env/v9"
 	"gopkg.in/yaml.v3"
 
-	"github.com/grafana/beyla/pkg/internal/discover/services"
 	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
 	"github.com/grafana/beyla/pkg/internal/export/debug"
 	"github.com/grafana/beyla/pkg/internal/export/otel"
@@ -16,6 +15,7 @@ import (
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/traces"
 	"github.com/grafana/beyla/pkg/internal/transform"
+	"github.com/grafana/beyla/pkg/services"
 	otelconsumer "go.opentelemetry.io/collector/consumer"
 )
 
@@ -80,7 +80,6 @@ var DefaultConfig = Config{
 	},
 	Routes:       &transform.RoutesConfig{},
 	NetworkFlows: defaultNetworkConfig,
-	Port:         services.PortEnum{Ranges: []services.PortRange{{Start: 8080, End: 0}}},
 }
 
 type Config struct {
@@ -127,6 +126,7 @@ type Config struct {
 	ProfilePort      int               `yaml:"profile_port" env:"BEYLA_PROFILE_PORT"`
 	InternalMetrics  imetrics.Config   `yaml:"internal_metrics"`
 
+	// Grafana Agent specific configuration
 	TracesReceiver TracesReceiverConfig `yaml:"-"`
 }
 

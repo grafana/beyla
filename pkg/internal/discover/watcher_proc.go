@@ -15,9 +15,9 @@ import (
 	"github.com/shirou/gopsutil/process"
 
 	"github.com/grafana/beyla/pkg/beyla"
-	"github.com/grafana/beyla/pkg/internal/discover/services"
 	"github.com/grafana/beyla/pkg/internal/ebpf"
 	"github.com/grafana/beyla/pkg/internal/ebpf/watcher"
+	"github.com/grafana/beyla/pkg/services"
 )
 
 const (

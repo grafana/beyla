@@ -17,10 +17,10 @@ import (
 	fakek8sclientset "k8s.io/client-go/kubernetes/fake"
 
 	"github.com/grafana/beyla/pkg/beyla"
-	"github.com/grafana/beyla/pkg/internal/discover/services"
 	"github.com/grafana/beyla/pkg/internal/helpers/container"
 	"github.com/grafana/beyla/pkg/internal/kube"
 	"github.com/grafana/beyla/pkg/internal/testutil"
+	"github.com/grafana/beyla/pkg/services"
 )
 
 const timeout = 5 * time.Second

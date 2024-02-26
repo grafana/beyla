@@ -8,8 +8,8 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/grafana/beyla/pkg/internal/discover/services"
 	"github.com/grafana/beyla/pkg/internal/svc"
+	"github.com/grafana/beyla/pkg/services"
 )
 
 type FileInfo struct {

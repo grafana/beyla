@@ -48,6 +48,7 @@ type Record struct {
 	// number of interfaces this flow is observed from.
 	Duplicate bool
 
+	// Attrs of the flow record: source/destination, Interface, Beyla IP, etc...
 	Attrs RecordAttrs
 }
 

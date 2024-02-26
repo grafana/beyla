@@ -26,8 +26,8 @@ import (
 
 type InterfaceNamer func(ifIndex int) string
 
-// Decorate adds to the flows extra metadata fields that are not directly fetched by eBPF
-// or by any intermediate pipeline stage (DNS, Kubernetes...):
+// Decorate the flows with extra metadata fields that are not directly fetched by eBPF
+// or by any previous pipeline stage (DNS, Kubernetes...):
 // - The interface name (corresponding to the interface index in the flow).
 // - The IP address of the agent host.
 // - If there is no source or destination hostname, the source IP and destination

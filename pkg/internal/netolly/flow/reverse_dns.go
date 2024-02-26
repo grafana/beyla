@@ -14,7 +14,6 @@ import (
 const (
 	ReverseDNSNone        = "none"
 	ReverseDNSLocalLookup = "local"
-	// añadir como opcion un dns externo como aqui https://github.com/hakluke/hakrevdns/blob/master/main.go
 )
 
 func rdlog() *slog.Logger {
@@ -23,6 +22,8 @@ func rdlog() *slog.Logger {
 
 var netLookupAddr = net.LookupAddr
 
+// ReverseDNS is currently experimental. It is kept disabled by default and will be hidden
+// from the documentation. This means that it does not impact in the overall Beyla performance.
 type ReverseDNS struct {
 	// Type of ReverseDNS. Values are "none" (default) and "local".
 	Type string `yaml:"type" env:"BEYLA_NETWORK_REVERSE_DNS_TYPE"`

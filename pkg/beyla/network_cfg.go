@@ -90,6 +90,8 @@ type NetworkConfig struct {
 
 	// ReverseDNS allows flows that haven't been previously decorated with any source/destination name
 	// to override the name with the network hostname of the source and destination IPs.
+	// This is an experimental feature and it is not guaranteed to work on most virtualized environments
+	// for external traffic.
 	ReverseDNS flow.ReverseDNS `yaml:"reverse_dns"`
 }
 

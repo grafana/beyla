@@ -121,8 +121,8 @@ tolerations: []
 
 affinity: {}
 
-# use an existing configmap
-# useExistingConfigMap: name-of-some-configmap
+# use an external configmap for Beyla - this will replace existing configmap from chart
+# externalBeylaConfigMap: name-of-some-configmap
 
 ## More configuration options available at https://grafana.com/docs/beyla/latest/configure/options/
 configmapData:

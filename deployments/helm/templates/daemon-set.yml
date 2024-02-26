@@ -25,11 +25,7 @@ spec:
       volumes:
         - name: beyla-config
           configMap:
-            {{- if .Values.useExistingConfigMap }}
-            name: {{ .Values.useExistingConfigMap }}
-            {{- else }}
-            name: {{ include "beyla.fullname" . }}
-            {{- end }}
+            name: {{ default (include "beyla.fullname" .) .Values.useExistingConfigMap}}
       containers:
         - name: beyla
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"

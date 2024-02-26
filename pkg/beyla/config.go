@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/caarlos0/env/v9"
+	otelconsumer "go.opentelemetry.io/collector/consumer"
 	"gopkg.in/yaml.v3"
 
 	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
@@ -16,7 +17,6 @@ import (
 	"github.com/grafana/beyla/pkg/internal/traces"
 	"github.com/grafana/beyla/pkg/internal/transform"
 	"github.com/grafana/beyla/pkg/services"
-	otelconsumer "go.opentelemetry.io/collector/consumer"
 )
 
 const ReporterLRUSize = 256

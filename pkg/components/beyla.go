@@ -27,10 +27,6 @@ func setupAppO11y(ctx context.Context, config *beyla.Config) {
 	// 1st process (privileged) - Invoke FindTarget, which also mounts the BPF maps
 	// 2nd executable (unprivileged) - Invoke ReadAndForward, receiving the BPF map mountpoint as argument
 
-	// example to be included in the grafana agent before instantiating the code below
-	// TODO: remove from here
-	//config.TracesExport = &grafagent.TracesExporterConfig{Context: ctx, Consumer: nil /* the agent consumer */}
-
 	instr := appolly.New(config)
 	if err := instr.FindAndInstrument(ctx); err != nil {
 		slog.Error("Beyla couldn't find target process", "error", err)

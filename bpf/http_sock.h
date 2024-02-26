@@ -482,10 +482,6 @@ static __always_inline void handle_buf_with_connection(pid_connection_info_t *pi
         if (h2g && *h2g == ssl) {
             process_http2_grpc_frames(pid_conn, u_buf, bytes_len);
         }
-
-        frame_header_t frame = {0};
-        read_http2_grpc_frame_header(&frame, small_buf, FRAME_HEADER_LEN);
-        bpf_dbg_printk("NEXT: http2 frame type = %d, len = %d, stream_id = %d, flags = %d", frame.type, frame.length, frame.stream_id, frame.flags);
     }
 }
 

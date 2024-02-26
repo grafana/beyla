@@ -12,7 +12,7 @@ metadata:
 subjects:
   - kind: ServiceAccount
     name: {{ include "beyla.serviceAccountName" . }}
-    namespace: beyla
+    namespace: {{ include "beyla.namespace" .}}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole

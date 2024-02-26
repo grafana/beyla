@@ -16,12 +16,11 @@ import (
 // as well as how they are interconnected
 // TODO: add flow_printer node
 type FlowsPipeline struct {
-	MapTracer       `sendTo:"Deduper"`
-	RingBufTracer   `sendTo:"Accounter"`
-	Accounter       `sendTo:"Deduper"`
-	Deduper         flow.Deduper `forwardTo:"CapacityLimiter"`
-	CapacityLimiter `sendTo:"Kubernetes"`
-	Kubernetes      k8s.MetadataDecorator `forwardTo:"ReverseDNS"`
+	MapTracer     `sendTo:"Deduper"`
+	RingBufTracer `sendTo:"Accounter"`
+	Accounter     `sendTo:"Deduper"`
+	Deduper       flow.Deduper          `forwardTo:"Kubernetes"`
+	Kubernetes    k8s.MetadataDecorator `forwardTo:"ReverseDNS"`
 
 	ReverseDNS flow.ReverseDNS `forwardTo:"Decorator"`
 
@@ -33,7 +32,6 @@ type FlowsPipeline struct {
 type MapTracer struct{}
 type RingBufTracer struct{}
 type Accounter struct{}
-type CapacityLimiter struct{}
 type Decorator struct{}
 
 // buildAndStartPipeline creates the ETL flow processing graph.
@@ -60,9 +58,6 @@ func (f *Flows) buildAndStartPipeline(ctx context.Context) (graph.Graph, error) 
 		return f.accounter.Account, nil
 	})
 	graph.RegisterMiddle(gb, flow.DeduperProvider)
-	graph.RegisterMiddle(gb, func(_ CapacityLimiter) (node.MiddleFunc[[]*ebpf.Record, []*ebpf.Record], error) {
-		return (&flow.CapacityLimiter{}).Limit, nil
-	})
 	graph.RegisterMiddle(gb, func(_ Decorator) (node.MiddleFunc[[]*ebpf.Record, []*ebpf.Record], error) {
 		return flow.Decorate(f.agentIP, f.interfaceNamer), nil
 	})

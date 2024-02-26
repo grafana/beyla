@@ -92,9 +92,7 @@ func attributes(m *ebpf.Record) []attribute.KeyValue {
 		attribute.String("src.namespace", srcNS),
 		attribute.String("dst.name", dstName),
 		attribute.String("dst.namespace", dstNS),
-		// probably not needed
-		attribute.String("asserts.env", "dev"),
-		attribute.String("asserts.site", "dev"))
+	)
 
 	// metadata attributes
 	for k, v := range m.Attrs.Metadata {

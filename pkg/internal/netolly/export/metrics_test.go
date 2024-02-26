@@ -37,8 +37,7 @@ func TestMetricAttributes(t *testing.T) {
 		attribute.String("src.namespace", "srcnamespace"),
 		attribute.String("dst.name", "dstname"),
 		attribute.String("dst.namespace", "dstnamespace"),
-		attribute.String("asserts.env", "dev"),
-		attribute.String("asserts.site", "dev"),
+
 		attribute.String("k8s.src.name", "srcname"),
 		attribute.String("k8s.src.namespace", "srcnamespace"),
 		attribute.String("k8s.dst.name", "dstname"),

@@ -7,11 +7,12 @@ import (
 	"strings"
 
 	"github.com/cilium/ebpf/ringbuf"
-	"github.com/grafana/beyla/pkg/internal/request"
-	"github.com/grafana/beyla/pkg/internal/svc"
 	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/hpack"
+
+	"github.com/grafana/beyla/pkg/internal/request"
+	"github.com/grafana/beyla/pkg/internal/svc"
 )
 
 type BPFHTTP2Info bpfHttp2GrpcRequestT

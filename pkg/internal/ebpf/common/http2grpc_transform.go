@@ -3,22 +3,24 @@ package ebpfcommon
 import (
 	"bytes"
 	"encoding/binary"
-	"fmt"
+	"net"
 	"strings"
 
 	"github.com/cilium/ebpf/ringbuf"
 	"github.com/grafana/beyla/pkg/internal/request"
+	"github.com/grafana/beyla/pkg/internal/svc"
+	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/hpack"
 )
 
 type BPFHTTP2Info bpfHttp2GrpcRequestT
 
-func byteFramer(data []uint8) (*http2.Framer, *bytes.Buffer) {
+func byteFramer(data []uint8) *http2.Framer {
 	buf := bytes.NewBuffer(data)
-	fr := http2.NewFramer(buf, buf)
+	fr := http2.NewFramer(buf, buf) // the write is same as read, but we never write
 
-	return fr, buf
+	return fr
 }
 
 func readMetaFrame(fr *http2.Framer, hf *http2.HeadersFrame) (string, string) {
@@ -28,7 +30,6 @@ func readMetaFrame(fr *http2.Framer, hf *http2.HeadersFrame) (string, string) {
 	hdec := hpack.NewDecoder(0, nil)
 	hdec.SetMaxStringLength(4096)
 	hdec.SetEmitFunc(func(hf hpack.HeaderField) {
-		fmt.Printf("AAAA %s\n", hf.Name)
 		hfKey := strings.ToLower(hf.Name)
 		switch hfKey {
 		case ":method":
@@ -57,6 +58,44 @@ func readMetaFrame(fr *http2.Framer, hf *http2.HeadersFrame) (string, string) {
 	return method, path
 }
 
+var genericServiceID = svc.ID{SDKLanguage: svc.InstrumentableGeneric}
+
+func http2InfoToSpan(info *BPFHTTP2Info, method, path, peer, host string) request.Span {
+	return request.Span{
+		Type:          request.EventType(info.Type),
+		ID:            0,
+		Method:        method,
+		Path:          removeQuery(path),
+		Peer:          peer,
+		Host:          host,
+		HostPort:      int(info.ConnInfo.D_port),
+		ContentLength: int64(info.Len),
+		RequestStart:  int64(info.StartMonotimeNs),
+		Start:         int64(info.StartMonotimeNs),
+		End:           int64(info.EndMonotimeNs),
+		Status:        1,
+		ServiceID:     genericServiceID, // set generic service to be overwritten later by the PID filters
+		TraceID:       trace.TraceID(info.Tp.TraceId),
+		SpanID:        trace.SpanID(info.Tp.SpanId),
+		ParentSpanID:  trace.SpanID(info.Tp.ParentId),
+		Flags:         info.Tp.Flags,
+		Pid: request.PidInfo{
+			HostPID:   info.Pid.HostPid,
+			UserPID:   info.Pid.UserPid,
+			Namespace: info.Pid.Ns,
+		},
+	}
+}
+
+func (event *BPFHTTP2Info) hostInfo() (source, target string) {
+	src := make(net.IP, net.IPv6len)
+	dst := make(net.IP, net.IPv6len)
+	copy(src, event.ConnInfo.S_addr[:])
+	copy(dst, event.ConnInfo.D_addr[:])
+
+	return src.String(), dst.String()
+}
+
 func ReadHTTP2InfoIntoSpan(record *ringbuf.Record) (request.Span, bool, error) {
 	var event BPFHTTP2Info
 
@@ -65,24 +104,29 @@ func ReadHTTP2InfoIntoSpan(record *ringbuf.Record) (request.Span, bool, error) {
 		return request.Span{}, true, err
 	}
 
-	framer, _ := byteFramer(event.Data[:])
+	framer := byteFramer(event.Data[:])
+	// We don't set the framer.ReadMetaHeaders function to hpack.NewDecoder because
+	// the http2.MetaHeadersFrame code wants a full grpc buffer with all the fields,
+	// and if it sees our partially captured eBPF buffers, it will not parse the frame
+	// while returning a (nil, error) tuple. We read the meta frame ourselves as long as
+	// we can and terminate without an error when things fail to decode because of
+	// partial buffers.
 
 	f, _ := framer.ReadFrame()
 
 	switch ff := f.(type) {
 	case *http2.HeadersFrame:
 		method, path := readMetaFrame(framer, ff)
-		fmt.Printf("HTTP2/gRPC method %s path %s\n", method, path)
+		peer := ""
+		host := ""
+		if event.ConnInfo.S_port != 0 || event.ConnInfo.D_port != 0 {
+			source, target := event.hostInfo()
+			host = target
+			peer = source
+		}
+
+		return http2InfoToSpan(&event, method, path, peer, host), false, nil
 	}
 
-	// if err != nil {
-	// 	fmt.Printf("Got error reading frame data %v\n", err)
-	// 	return request.Span{}, false, nil
-	// }
-
-	// if f != nil {
-	// 	fmt.Printf("Frame: type = %d, stream_id = %d, len = %d\n", f.Header().Type, f.Header().StreamID, f.Header().Length)
-	// }
-
-	return request.Span{}, false, nil
+	return request.Span{}, true, nil // ignore if we couldn't parse it
 }

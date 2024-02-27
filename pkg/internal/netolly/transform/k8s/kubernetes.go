@@ -60,14 +60,18 @@ const (
 
 const alreadyLoggedIPsCacheLen = 256
 
-func log() *slog.Logger { return slog.With("component", "transform.NetworkTransform") }
+func log() *slog.Logger { return slog.With("component", "k8s.MetadataDecorator") }
 
-type NetworkTransformConfig struct {
+type MetadataDecorator struct {
 	Kubernetes *transform.KubernetesDecorator
 }
 
-func NetworkTransform(cfg NetworkTransformConfig) (node.MiddleFunc[[]*ebpf.Record, []*ebpf.Record], error) {
-	nt, err := newTransformNetwork(&cfg)
+func (ntc MetadataDecorator) Enabled() bool {
+	return ntc.Kubernetes != nil && ntc.Kubernetes.Enabled()
+}
+
+func MetadataDecoratorProvider(cfg MetadataDecorator) (node.MiddleFunc[[]*ebpf.Record, []*ebpf.Record], error) {
+	nt, err := newDecorator(&cfg)
 	if err != nil {
 		return nil, fmt.Errorf("instantiating network transformer: %w", err)
 	}
@@ -83,22 +87,22 @@ func NetworkTransform(cfg NetworkTransformConfig) (node.MiddleFunc[[]*ebpf.Recor
 	}, nil
 }
 
-type networkTransformer struct {
+type decorator struct {
 	log              *slog.Logger
 	alreadyLoggedIPs *simplelru.LRU[string, struct{}]
 	kube             NetworkInformers
 }
 
-func (n *networkTransformer) transform(flow *ebpf.Record) {
-	if flow.Metadata == nil {
-		flow.Metadata = map[string]string{}
+func (n *decorator) transform(flow *ebpf.Record) {
+	if flow.Attrs.Metadata == nil {
+		flow.Attrs.Metadata = map[string]string{}
 	}
 	n.decorate(flow, attrPrefixSrc, flow.Id.SrcIP().IP().String())
 	n.decorate(flow, attrPrefixDst, flow.Id.DstIP().IP().String())
 
 }
 
-func (n *networkTransformer) decorate(flow *ebpf.Record, prefix, ip string) {
+func (n *decorator) decorate(flow *ebpf.Record, prefix, ip string) {
 	kubeInfo, ok := n.kube.GetInfo(ip)
 	if !ok {
 		if n.log.Enabled(context.TODO(), slog.LevelDebug) {
@@ -110,22 +114,39 @@ func (n *networkTransformer) decorate(flow *ebpf.Record, prefix, ip string) {
 		}
 		return
 	}
-	flow.Metadata[prefix+attrSuffixNs] = kubeInfo.Namespace
-	flow.Metadata[prefix+attrSuffixName] = kubeInfo.Name
-	flow.Metadata[prefix+attrSuffixType] = kubeInfo.Type
-	flow.Metadata[prefix+attrSuffixOwnerName] = kubeInfo.Owner.Name
-	flow.Metadata[prefix+attrSuffixOwnerType] = kubeInfo.Owner.Type
+	flow.Attrs.Metadata[prefix+attrSuffixNs] = kubeInfo.Namespace
+	flow.Attrs.Metadata[prefix+attrSuffixName] = kubeInfo.Name
+	flow.Attrs.Metadata[prefix+attrSuffixType] = kubeInfo.Type
+	flow.Attrs.Metadata[prefix+attrSuffixOwnerName] = kubeInfo.Owner.Name
+	flow.Attrs.Metadata[prefix+attrSuffixOwnerType] = kubeInfo.Owner.Type
 	if kubeInfo.HostIP != "" {
-		flow.Metadata[prefix+attrSuffixHostIP] = kubeInfo.HostIP
+		flow.Attrs.Metadata[prefix+attrSuffixHostIP] = kubeInfo.HostIP
 		if kubeInfo.HostName != "" {
-			flow.Metadata[prefix+attrSuffixHostName] = kubeInfo.HostName
+			flow.Attrs.Metadata[prefix+attrSuffixHostName] = kubeInfo.HostName
 		}
 	}
+	// decorate other names from metadata, if required
+	if prefix == attrPrefixDst {
+		if flow.Attrs.DstName == "" {
+			flow.Attrs.DstName = kubeInfo.Name
+		}
+		if flow.Attrs.DstNamespace == "" {
+			flow.Attrs.DstNamespace = kubeInfo.Namespace
+		}
+	} else {
+		if flow.Attrs.SrcName == "" {
+			flow.Attrs.SrcName = kubeInfo.Name
+		}
+		if flow.Attrs.SrcNamespace == "" {
+			flow.Attrs.SrcNamespace = kubeInfo.Namespace
+		}
+	}
+
 }
 
-// newTransformNetwork create a new transform
-func newTransformNetwork(cfg *NetworkTransformConfig) (*networkTransformer, error) {
-	nt := networkTransformer{log: log()}
+// newDecorator create a new transform
+func newDecorator(cfg *MetadataDecorator) (*decorator, error) {
+	nt := decorator{log: log()}
 	if nt.log.Enabled(context.TODO(), slog.LevelDebug) {
 		var err error
 		nt.alreadyLoggedIPs, err = simplelru.NewLRU[string, struct{}](alreadyLoggedIPsCacheLen, nil)

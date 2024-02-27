@@ -46,8 +46,9 @@ Upon death of a member, they leave the team automatically.
 
 In case a member leaves, the [offboarding](#offboarding) procedure is applied.
 
-The current team members are:
+The current team members are, in alphabetical order:
 
+- Marc Tudurí - [@marctc](https://github.com/marctc) ([Grafana Labs](https://grafana.com/))
 - Mario Macías - [@mariomac](https://github.com/mariomac) ([Grafana Labs](https://grafana.com/))
 - Nikola Grcevski - [@grcevski](https://github.com/grcevski) ([Grafana Labs](https://grafana.com/))
 

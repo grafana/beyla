@@ -12,7 +12,7 @@ import (
 	"github.com/shirou/gopsutil/process"
 
 	"github.com/grafana/beyla/pkg/beyla"
-	"github.com/grafana/beyla/pkg/internal/discover/services"
+	"github.com/grafana/beyla/pkg/services"
 )
 
 // CriteriaMatcher filters the processes that match the discovery criteria.

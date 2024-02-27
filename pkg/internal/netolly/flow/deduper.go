@@ -34,7 +34,7 @@ func dlog() *slog.Logger {
 
 const (
 	DeduperNone      = "none"
-	DeduperFirstCome = "firstCome"
+	DeduperFirstCome = "first_come"
 )
 
 type Deduper struct {

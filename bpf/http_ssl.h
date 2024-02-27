@@ -10,7 +10,7 @@
 // We use this map to track ssl handshake enter/exit, it should be only
 // temporary
 struct {
-    __uint(type, BPF_MAP_TYPE_HASH);
+    __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __type(key, u64);   // the pid_tid 
     __type(value, u64); // the SSL struct pointer
     __uint(max_entries, MAX_CONCURRENT_SHARED_REQUESTS);
@@ -60,7 +60,7 @@ typedef struct ssl_args {
 // tracking the parameters of SSL_read and SSL_write, so their memory consumption is minimal. If we can be
 // 100% certain that SSL_read will never do an SSL_write, then these can be a single map. 
 struct {
-    __uint(type, BPF_MAP_TYPE_HASH);
+    __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __uint(max_entries, MAX_CONCURRENT_SHARED_REQUESTS);
     __type(key, u64);
     __type(value, ssl_args_t);
@@ -68,7 +68,7 @@ struct {
 } active_ssl_read_args SEC(".maps");
 
 struct {
-    __uint(type, BPF_MAP_TYPE_HASH);
+    __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __uint(max_entries, MAX_CONCURRENT_SHARED_REQUESTS);
     __type(key, u64);
     __type(value, ssl_args_t);

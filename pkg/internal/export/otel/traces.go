@@ -267,7 +267,7 @@ func grpcSpanStatusCode(span *request.Span) codes.Code {
 	return codes.Unset
 }
 
-func spanStatusCode(span *request.Span) codes.Code {
+func SpanStatusCode(span *request.Span) codes.Code {
 	switch span.Type {
 	case request.EventTypeHTTP, request.EventTypeHTTPClient:
 		return httpSpanStatusCode(span)
@@ -282,7 +282,7 @@ func spanStatusCode(span *request.Span) codes.Code {
 	return codes.Unset
 }
 
-func (r *TracesReporter) traceAttributes(span *request.Span) []attribute.KeyValue {
+func TraceAttributes(span *request.Span) []attribute.KeyValue {
 	var attrs []attribute.KeyValue
 
 	switch span.Type {
@@ -341,7 +341,7 @@ func (r *TracesReporter) traceAttributes(span *request.Span) []attribute.KeyValu
 	return attrs
 }
 
-func traceName(span *request.Span) string {
+func TraceName(span *request.Span) string {
 	switch span.Type {
 	case request.EventTypeHTTP:
 		name := span.Method
@@ -369,7 +369,7 @@ func traceName(span *request.Span) string {
 	return ""
 }
 
-func spanKind(span *request.Span) trace2.SpanKind {
+func SpanKind(span *request.Span) trace2.SpanKind {
 	switch span.Type {
 	case request.EventTypeHTTP, request.EventTypeGRPC:
 		return trace2.SpanKindServer
@@ -379,7 +379,7 @@ func spanKind(span *request.Span) trace2.SpanKind {
 	return trace2.SpanKindInternal
 }
 
-func handleTraceparent(parentCtx context.Context, span *request.Span) context.Context {
+func HandleTraceparent(parentCtx context.Context, span *request.Span) context.Context {
 	if span.ParentSpanID.IsValid() {
 		parentCtx = trace2.ContextWithSpanContext(parentCtx, trace2.SpanContext{}.WithTraceID(span.TraceID).WithSpanID(span.ParentSpanID).WithTraceFlags(trace2.TraceFlags(span.Flags)))
 	} else if span.TraceID.IsValid() {
@@ -389,16 +389,19 @@ func handleTraceparent(parentCtx context.Context, span *request.Span) context.Co
 	return parentCtx
 }
 
-func (r *TracesReporter) makeSpan(parentCtx context.Context, tracer trace2.Tracer, span *request.Span) {
-	t := span.Timings()
-
-	parentCtx = handleTraceparent(parentCtx, span)
-
+func SpanStartTime(t request.Timings) time.Time {
 	realStart := t.RequestStart
 	if t.Start.Before(realStart) {
 		realStart = t.Start
 	}
+	return realStart
+}
 
+func (r *TracesReporter) makeSpan(parentCtx context.Context, tracer trace2.Tracer, span *request.Span) {
+	t := span.Timings()
+
+	parentCtx = HandleTraceparent(parentCtx, span)
+	realStart := SpanStartTime(t)
 	hasSubspans := t.Start.After(realStart)
 
 	if !hasSubspans {
@@ -407,13 +410,13 @@ func (r *TracesReporter) makeSpan(parentCtx context.Context, tracer trace2.Trace
 	}
 
 	// Create a parent span for the whole request session
-	ctx, sp := tracer.Start(parentCtx, traceName(span),
+	ctx, sp := tracer.Start(parentCtx, TraceName(span),
 		trace2.WithTimestamp(realStart),
-		trace2.WithSpanKind(spanKind(span)),
-		trace2.WithAttributes(r.traceAttributes(span)...),
+		trace2.WithSpanKind(SpanKind(span)),
+		trace2.WithAttributes(TraceAttributes(span)...),
 	)
 
-	sp.SetStatus(spanStatusCode(span), "")
+	sp.SetStatus(SpanStatusCode(span), "")
 
 	if hasSubspans {
 		var spP trace2.Span

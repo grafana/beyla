@@ -8,6 +8,7 @@ import (
 
 	"github.com/grafana/beyla/pkg/beyla"
 	"github.com/grafana/beyla/pkg/internal/export/debug"
+	agent "github.com/grafana/beyla/pkg/internal/export/grafana_agent"
 	"github.com/grafana/beyla/pkg/internal/export/otel"
 	"github.com/grafana/beyla/pkg/internal/export/prom"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
@@ -26,13 +27,14 @@ type nodesMap struct {
 	Routes *transform.RoutesConfig `forwardTo:"Kubernetes"`
 
 	// Kubernetes is an optional node. If not set, data will be bypassed to the exporters.
-	Kubernetes transform.KubernetesDecorator `forwardTo:"Metrics,Traces,Prometheus,Printer,Noop"`
+	Kubernetes transform.KubernetesDecorator `forwardTo:"Metrics,Traces,Prometheus,Printer,Noop,AgentTraces"`
 
-	Metrics    otel.MetricsConfig
-	Traces     otel.TracesConfig
-	Prometheus prom.PrometheusConfig
-	Printer    debug.PrintEnabled
-	Noop       debug.NoopEnabled
+	AgentTraces beyla.TracesReceiverConfig
+	Metrics     otel.MetricsConfig
+	Traces      otel.TracesConfig
+	Prometheus  prom.PrometheusConfig
+	Printer     debug.PrintEnabled
+	Noop        debug.NoopEnabled
 }
 
 func configToNodesMap(cfg *beyla.Config) *nodesMap {
@@ -45,6 +47,7 @@ func configToNodesMap(cfg *beyla.Config) *nodesMap {
 		Prometheus:   cfg.Prometheus,
 		Printer:      cfg.Printer,
 		Noop:         cfg.Noop,
+		AgentTraces:  cfg.TracesReceiver,
 	}
 }
 
@@ -94,6 +97,7 @@ func newGraphBuilder(ctx context.Context, config *beyla.Config, ctxInfo *global.
 	graph.RegisterTerminal(gnb, gb.prometheusProvider)
 	graph.RegisterTerminal(gnb, debug.NoopNode)
 	graph.RegisterTerminal(gnb, debug.PrinterNode)
+	graph.RegisterTerminal(gnb, gb.grafanaAgentTracesProvider)
 
 	// The returned builder later invokes its "Build" function that, given
 	// the contents of the nodesMap struct, will automagically instantiate
@@ -153,4 +157,9 @@ func (gb *graphFunctions) metricsReporterProvider(config otel.MetricsConfig) (no
 //nolint:gocritic
 func (gb *graphFunctions) prometheusProvider(config prom.PrometheusConfig) (node.TerminalFunc[[]request.Span], error) {
 	return prom.PrometheusEndpoint(gb.ctx, &config, gb.ctxInfo)
+}
+
+//nolint:gocritic
+func (gb *graphFunctions) grafanaAgentTracesProvider(config beyla.TracesReceiverConfig) (node.TerminalFunc[[]request.Span], error) {
+	return agent.TracesReceiver(gb.ctx, config)
 }

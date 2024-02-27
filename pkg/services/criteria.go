@@ -122,17 +122,17 @@ type Attributes struct {
 // list of port numbers (e.g. 80) and port ranges (e.g. 8080-8089). For example, this would be a valid
 // port range: 80,443,8000-8999
 type PortEnum struct {
-	ranges []portRange
+	Ranges []PortRange
 }
 
-type portRange struct {
-	start int
-	// if end == 0, it means this entry is not a port range but a single port
-	end int
+type PortRange struct {
+	Start int
+	// if End == 0, it means this entry is not a port range but a single port
+	End int
 }
 
 func (p *PortEnum) Len() int {
-	return len(p.ranges)
+	return len(p.Ranges)
 }
 
 // Valid port Enums (printer pages-like notation)
@@ -155,22 +155,22 @@ func (p *PortEnum) UnmarshalText(text []byte) error {
 		return fmt.Errorf("invalid port range %q. Must be a comma-separated list of numeric ports or port ranges (e.g. 8000-8999)", val)
 	}
 	for _, entry := range strings.Split(val, ",") {
-		e := portRange{}
+		e := PortRange{}
 		ports := strings.Split(entry, "-")
 		// don't need to check integer parsing, as we already did it via regular expression
-		e.start, _ = strconv.Atoi(strings.TrimSpace(ports[0]))
+		e.Start, _ = strconv.Atoi(strings.TrimSpace(ports[0]))
 		if len(ports) > 1 {
-			e.end, _ = strconv.Atoi(strings.TrimSpace(ports[1]))
+			e.End, _ = strconv.Atoi(strings.TrimSpace(ports[1]))
 		}
-		p.ranges = append(p.ranges, e)
+		p.Ranges = append(p.Ranges, e)
 	}
 	return nil
 }
 
 func (p *PortEnum) Matches(port int) bool {
-	for _, pr := range p.ranges {
-		if pr.end == 0 && pr.start == port ||
-			pr.end != 0 && pr.start <= port && port <= pr.end {
+	for _, pr := range p.Ranges {
+		if pr.End == 0 && pr.Start == port ||
+			pr.End != 0 && pr.Start <= port && port <= pr.End {
 			return true
 		}
 	}

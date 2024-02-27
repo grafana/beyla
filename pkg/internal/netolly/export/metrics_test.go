@@ -17,11 +17,17 @@ func TestMetricAttributes(t *testing.T) {
 				DstPort:   3210,
 			},
 		},
-		Metadata: map[string]string{
-			"k8s.src.name":      "srcname",
-			"k8s.src.namespace": "srcnamespace",
-			"k8s.dst.name":      "dstname",
-			"k8s.dst.namespace": "dstnamespace",
+		Attrs: ebpf.RecordAttrs{
+			SrcName:      "srcname",
+			SrcNamespace: "srcnamespace",
+			DstName:      "dstname",
+			DstNamespace: "dstnamespace",
+			Metadata: map[string]string{
+				"k8s.src.name":      "srcname",
+				"k8s.src.namespace": "srcnamespace",
+				"k8s.dst.name":      "dstname",
+				"k8s.dst.namespace": "dstnamespace",
+			},
 		},
 	}
 	in.Id.SrcIp.In6U.U6Addr8 = [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 255, 12, 34, 56, 78}
@@ -35,8 +41,7 @@ func TestMetricAttributes(t *testing.T) {
 		attribute.String("src.namespace", "srcnamespace"),
 		attribute.String("dst.name", "dstname"),
 		attribute.String("dst.namespace", "dstnamespace"),
-		attribute.String("asserts.env", "dev"),
-		attribute.String("asserts.site", "dev"),
+
 		attribute.String("k8s.src.name", "srcname"),
 		attribute.String("k8s.src.namespace", "srcnamespace"),
 		attribute.String("k8s.dst.name", "dstname"),

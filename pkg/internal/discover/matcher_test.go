@@ -8,8 +8,8 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/grafana/beyla/pkg/beyla"
-	"github.com/grafana/beyla/pkg/internal/discover/services"
 	"github.com/grafana/beyla/pkg/internal/testutil"
+	"github.com/grafana/beyla/pkg/services"
 )
 
 func TestCriteriaMatcher(t *testing.T) {

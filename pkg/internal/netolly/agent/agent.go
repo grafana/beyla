@@ -24,10 +24,8 @@ import (
 	"io"
 	"log/slog"
 	"net"
-	"time"
 
 	"github.com/cilium/ebpf/ringbuf"
-	"github.com/gavv/monotime"
 	"github.com/mariomac/pipes/pkg/node"
 
 	"github.com/grafana/beyla/pkg/beyla"
@@ -185,8 +183,7 @@ func flowsAgent(cfg *beyla.Config,
 
 	mapTracer := flow.NewMapTracer(fetcher, cfg.NetworkFlows.CacheActiveTimeout)
 	rbTracer := flow.NewRingBufTracer(fetcher, mapTracer, cfg.NetworkFlows.CacheActiveTimeout)
-	accounter := flow.NewAccounter(
-		cfg.NetworkFlows.CacheMaxFlows, cfg.NetworkFlows.CacheActiveTimeout, time.Now, monotime.Now)
+	accounter := flow.NewAccounter(cfg.NetworkFlows.CacheMaxFlows, cfg.NetworkFlows.CacheActiveTimeout)
 	return &Flows{
 		ebpf:           fetcher,
 		exporter:       exporter,

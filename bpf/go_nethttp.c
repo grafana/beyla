@@ -41,21 +41,21 @@ typedef struct http_client_data {
 } http_client_data_t;
 
 struct {
-    __uint(type, BPF_MAP_TYPE_HASH);
+    __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __type(key, void *); // key: pointer to the request goroutine
     __type(value, http_func_invocation_t);
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
 } ongoing_http_client_requests SEC(".maps");
 
 struct {
-    __uint(type, BPF_MAP_TYPE_HASH);
+    __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __type(key, void *); // key: pointer to the request goroutine
     __type(value, http_client_data_t);
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
 } ongoing_http_client_requests_data SEC(".maps");
 
 struct {
-    __uint(type, BPF_MAP_TYPE_HASH);
+    __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __type(key, void *); // key: pointer to the request goroutine
     __type(value, http_func_invocation_t);
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
@@ -471,7 +471,7 @@ typedef struct framer_func_invocation {
 } framer_func_invocation_t;
 
 struct {
-    __uint(type, BPF_MAP_TYPE_HASH);
+    __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __type(key, void*); // key: go routine doing framer write headers
     __type(value, framer_func_invocation_t); // the goroutine of the round trip request, which is the key for our traceparent info
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
@@ -739,7 +739,7 @@ typedef struct sql_func_invocation {
 } sql_func_invocation_t;
 
 struct {
-    __uint(type, BPF_MAP_TYPE_HASH);
+    __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __type(key, void *); // key: pointer to the request goroutine
     __type(value, sql_func_invocation_t);
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);

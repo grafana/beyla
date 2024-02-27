@@ -27,14 +27,15 @@ type nodesMap struct {
 	Routes *transform.RoutesConfig `forwardTo:"Kubernetes"`
 
 	// Kubernetes is an optional node. If not set, data will be bypassed to the exporters.
-	Kubernetes transform.KubernetesDecorator `forwardTo:"Metrics,Traces,Prometheus,Printer,Noop,AgentTraces"`
+	Kubernetes transform.KubernetesDecorator `forwardTo:"Metrics,Traces,Prometheus,Printer,Noop,AgentTraces,AgentMetrics"`
 
-	AgentTraces beyla.TracesReceiverConfig
-	Metrics     otel.MetricsConfig
-	Traces      otel.TracesConfig
-	Prometheus  prom.PrometheusConfig
-	Printer     debug.PrintEnabled
-	Noop        debug.NoopEnabled
+	AgentTraces  beyla.TracesReceiverConfig
+	AgentMetrics beyla.Config
+	Metrics      otel.MetricsConfig
+	Traces       otel.TracesConfig
+	Prometheus   prom.PrometheusConfig
+	Printer      debug.PrintEnabled
+	Noop         debug.NoopEnabled
 }
 
 func configToNodesMap(cfg *beyla.Config) *nodesMap {
@@ -48,6 +49,7 @@ func configToNodesMap(cfg *beyla.Config) *nodesMap {
 		Printer:      cfg.Printer,
 		Noop:         cfg.Noop,
 		AgentTraces:  cfg.TracesReceiver,
+		AgentMetrics: *cfg,
 	}
 }
 
@@ -98,6 +100,7 @@ func newGraphBuilder(ctx context.Context, config *beyla.Config, ctxInfo *global.
 	graph.RegisterTerminal(gnb, debug.NoopNode)
 	graph.RegisterTerminal(gnb, debug.PrinterNode)
 	graph.RegisterTerminal(gnb, gb.grafanaAgentTracesProvider)
+	graph.RegisterTerminal(gnb, gb.grafanaAgentMetricsProvider)
 
 	// The returned builder later invokes its "Build" function that, given
 	// the contents of the nodesMap struct, will automagically instantiate
@@ -162,4 +165,9 @@ func (gb *graphFunctions) prometheusProvider(config prom.PrometheusConfig) (node
 //nolint:gocritic
 func (gb *graphFunctions) grafanaAgentTracesProvider(config beyla.TracesReceiverConfig) (node.TerminalFunc[[]request.Span], error) {
 	return agent.TracesReceiver(gb.ctx, config)
+}
+
+//nolint:gocritic
+func (gb *graphFunctions) grafanaAgentMetricsProvider(config beyla.Config) (node.TerminalFunc[[]request.Span], error) {
+	return agent.MetricsReceiver(gb.ctx, config)
 }

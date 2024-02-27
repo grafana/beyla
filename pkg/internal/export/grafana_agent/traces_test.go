@@ -20,7 +20,7 @@ func TestAttrsToMap(t *testing.T) {
 		expected.PutStr("key1", "value1")
 		expected.PutStr("key2", "value2")
 
-		result := attrsToMap(attrs)
+		result := AttrsToMap(attrs)
 		assert.Equal(t, expected, result)
 	})
 
@@ -33,7 +33,7 @@ func TestAttrsToMap(t *testing.T) {
 		expected.PutInt("key1", 10)
 		expected.PutInt("key2", 20)
 
-		result := attrsToMap(attrs)
+		result := AttrsToMap(attrs)
 		assert.Equal(t, expected, result)
 	})
 
@@ -46,7 +46,7 @@ func TestAttrsToMap(t *testing.T) {
 		expected.PutDouble("key1", 3.14)
 		expected.PutDouble("key2", 2.718)
 
-		result := attrsToMap(attrs)
+		result := AttrsToMap(attrs)
 		assert.Equal(t, expected, result)
 	})
 
@@ -59,7 +59,7 @@ func TestAttrsToMap(t *testing.T) {
 		expected.PutBool("key1", true)
 		expected.PutBool("key2", false)
 
-		result := attrsToMap(attrs)
+		result := AttrsToMap(attrs)
 		assert.Equal(t, expected, result)
 	})
 }

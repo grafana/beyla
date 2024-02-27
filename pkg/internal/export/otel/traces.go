@@ -29,7 +29,7 @@ func tlog() *slog.Logger {
 	return slog.With("component", "otel.TracesReporter")
 }
 
-const reporterName = "github.com/grafana/beyla"
+const ReporterName = "github.com/grafana/beyla"
 
 type TracesConfig struct {
 	CommonEndpoint string `yaml:"-" env:"OTEL_EXPORTER_OTLP_ENDPOINT"`
@@ -483,7 +483,7 @@ func (r *TracesReporter) newTracers(service svc.ID) (*Tracers, error) {
 			trace.WithIDGenerator(&BeylaIDGenerator{}),
 		),
 	}
-	tracers.tracer = tracers.provider.Tracer(reporterName)
+	tracers.tracer = tracers.provider.Tracer(ReporterName)
 	return &tracers, nil
 }
 

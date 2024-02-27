@@ -128,19 +128,32 @@ type Config struct {
 	InternalMetrics  imetrics.Config   `yaml:"internal_metrics"`
 
 	// Grafana Agent specific configuration
-	TracesReceiver TracesReceiverConfig `yaml:"-"`
+	TracesReceiver  TracesReceiverConfig  `yaml:"-"`
+	MetricsReceiver MetricsReceiverConfig `yaml:"-"`
 }
 
-type Consumer interface {
+type TracesConsumer interface {
 	otelconsumer.Traces
 }
 
+type MetricsConsumer interface {
+	otelconsumer.Metrics
+}
+
 type TracesReceiverConfig struct {
-	Traces []Consumer
+	Traces []TracesConsumer
 }
 
 func (t TracesReceiverConfig) Enabled() bool {
 	return len(t.Traces) > 0
+}
+
+type MetricsReceiverConfig struct {
+	Metrics []MetricsConsumer
+}
+
+func (t MetricsReceiverConfig) Enabled() bool {
+	return len(t.Metrics) > 0
 }
 
 // Attributes configures the decoration of some extra attributes that will be

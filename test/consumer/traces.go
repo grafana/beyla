@@ -10,14 +10,14 @@ import (
 	"go.opentelemetry.io/collector/pdata/ptrace/ptraceotlp"
 )
 
-type MockTraceConsumer struct {
+type MockTracesConsumer struct {
 	Endpoint string
 	consumer.Traces
 }
 
-// ConsumeTraces implements the consumer.Traces interface, sends pdata.Traces to the collector
+// ConsumeTraces implements the consumer.Traces interface, sends ptrace.Traces to the collector
 // specified in the endpoint.
-func (m *MockTraceConsumer) ConsumeTraces(_ context.Context, td ptrace.Traces) error {
+func (m *MockTracesConsumer) ConsumeTraces(_ context.Context, td ptrace.Traces) error {
 	req := ptraceotlp.NewExportRequestFromTraces(td)
 	body, err := req.MarshalProto()
 	if err != nil {

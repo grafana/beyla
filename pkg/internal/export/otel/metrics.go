@@ -197,7 +197,7 @@ func (mr *MetricsReporter) newMetricSet(service svc.ID) (*Metrics, error) {
 	// https://github.com/open-telemetry/opentelemetry-specification/tree/main/specification/metrics/semantic_conventions
 	// TODO: set ExplicitBucketBoundaries here and in prometheus from the previous specification
 	var err error
-	meter := m.provider.Meter(reporterName)
+	meter := m.provider.Meter(ReporterName)
 	m.httpDuration, err = meter.Float64Histogram(HTTPServerDuration, instrument.WithUnit("s"))
 	if err != nil {
 		return nil, fmt.Errorf("creating http duration histogram metric: %w", err)
@@ -314,7 +314,7 @@ func otelHistogramConfig(metricName string, buckets []float64, useExponentialHis
 		return metric.NewView(
 			metric.Instrument{
 				Name:  metricName,
-				Scope: instrumentation.Scope{Name: reporterName},
+				Scope: instrumentation.Scope{Name: ReporterName},
 			},
 			metric.Stream{
 				Name: metricName,
@@ -327,7 +327,7 @@ func otelHistogramConfig(metricName string, buckets []float64, useExponentialHis
 	return metric.NewView(
 		metric.Instrument{
 			Name:  metricName,
-			Scope: instrumentation.Scope{Name: reporterName},
+			Scope: instrumentation.Scope{Name: ReporterName},
 		},
 		metric.Stream{
 			Name: metricName,
@@ -355,15 +355,15 @@ func (mr *MetricsReporter) grpcAttributes(span *request.Span) []attribute.KeyVal
 	return attrs
 }
 
-func (mr *MetricsReporter) httpServerAttributes(span *request.Span) []attribute.KeyValue {
+func HttpServerAttributes(cfg *MetricsConfig, span *request.Span) []attribute.KeyValue {
 	attrs := []attribute.KeyValue{
 		HTTPRequestMethod(span.Method),
 		HTTPResponseStatusCode(span.Status),
 	}
-	if mr.cfg.ReportTarget {
+	if cfg.ReportTarget {
 		attrs = append(attrs, HTTPUrlPath(span.Path))
 	}
-	if mr.cfg.ReportPeerInfo {
+	if cfg.ReportPeerInfo {
 		attrs = append(attrs, ClientAddr(span.Peer))
 	}
 	if span.Route != "" {
@@ -389,30 +389,30 @@ func (mr *MetricsReporter) httpClientAttributes(span *request.Span) []attribute.
 	return attrs
 }
 
-func (mr *MetricsReporter) metricAttributes(span *request.Span) attribute.Set {
+func MetricAttributes(cfg *MetricsConfig, span *request.Span) []attribute.KeyValue {
 	var attrs []attribute.KeyValue
 
 	switch span.Type {
 	case request.EventTypeHTTP:
-		attrs = mr.httpServerAttributes(span)
-	case request.EventTypeGRPC, request.EventTypeGRPCClient:
-		attrs = mr.grpcAttributes(span)
-	case request.EventTypeHTTPClient:
-		attrs = mr.httpClientAttributes(span)
-	case request.EventTypeSQLClient:
-		attrs = []attribute.KeyValue{
-			semconv.DBOperation(span.Method),
-		}
+		attrs = HttpServerAttributes(cfg, span)
+		// case request.EventTypeGRPC, request.EventTypeGRPCClient:
+		// 	attrs = mr.grpcAttributes(span)
+		// case request.EventTypeHTTPClient:
+		// 	attrs = mr.httpClientAttributes(span)
+		// case request.EventTypeSQLClient:
+		// 	attrs = []attribute.KeyValue{
+		// 		semconv.DBOperation(span.Method),
+		// 	}
 	}
 
 	if span.ServiceID.Name != "" { // we don't have service name set, system wide instrumentation
 		attrs = append(attrs, semconv.ServiceName(span.ServiceID.Name))
 	}
 
-	return attribute.NewSet(attrs...)
+	return attrs
 }
 
-func (r *Metrics) record(span *request.Span, attrs attribute.Set) {
+func (r *Metrics) Record(span *request.Span, attrs attribute.Set) {
 	t := span.Timings()
 	duration := t.End.Sub(t.RequestStart).Seconds()
 	attrOpt := instrument.WithAttributeSet(attrs)
@@ -462,7 +462,8 @@ func (mr *MetricsReporter) reportMetrics(input <-chan []request.Span) {
 				lastSvcUID = s.ServiceID.UID
 				reporter = lm
 			}
-			reporter.record(s, mr.metricAttributes(s))
+			attrs := attribute.NewSet(MetricAttributes(mr.cfg, s)...)
+			reporter.Record(s, attrs)
 		}
 	}
 	mr.close()

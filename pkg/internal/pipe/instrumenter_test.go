@@ -36,7 +36,7 @@ func gctx() *global.ContextInfo {
 	}
 }
 
-func TestBasicPipeline(t *testing.T) {
+func TestMetricsPipeline(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -122,11 +122,11 @@ func TestTracerReceiverPipeline(t *testing.T) {
 
 	tc, err := collector.Start(ctx)
 	require.NoError(t, err)
-	consumer := consumer.MockTraceConsumer{Endpoint: tc.ServerEndpoint}
+	consumer := consumer.MockTracesConsumer{Endpoint: tc.ServerEndpoint}
 	require.NoError(t, err)
 	gb := newGraphBuilder(ctx, &beyla.Config{
 		TracesReceiver: beyla.TracesReceiverConfig{
-			Traces: []beyla.Consumer{&consumer},
+			Traces: []beyla.TracesConsumer{&consumer},
 		},
 	}, gctx(), make(<-chan []request.Span))
 	// Override eBPF tracer to send some fake data
@@ -149,6 +149,53 @@ func TestTracerReceiverPipeline(t *testing.T) {
 	matchInnerTraceEvent(t, "processing", event)
 	event = testutil.ReadChannel(t, tc.TraceRecords, testTimeout)
 	matchTraceEvent(t, "GET", event)
+}
+
+func TestMetricsReceiverPipeline(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	tc, err := collector.Start(ctx)
+	require.NoError(t, err)
+	consumer := consumer.MockMetricsConsumer{Endpoint: tc.ServerEndpoint}
+	require.NoError(t, err)
+	gb := newGraphBuilder(ctx, &beyla.Config{
+		Metrics: otel.MetricsConfig{
+			ReportTarget:   true,
+			ReportPeerInfo: true,
+		},
+		MetricsReceiver: beyla.MetricsReceiverConfig{
+			Metrics: []beyla.MetricsConsumer{&consumer},
+		},
+	}, gctx(), make(<-chan []request.Span))
+	// Override eBPF tracer to send some fake data
+	graph.RegisterStart(gb.builder, func(_ traces.ReadDecorator) (node.StartFunc[[]request.Span], error) {
+		return func(out chan<- []request.Span) {
+			out <- newRequest("foo-svc", 1, "GET", "/foo/bar", "1.1.1.1:3456", 404)
+			// closing prematurely the input node would finish the whole graph processing
+			// and OTEL exporters could be closed, so we wait.
+			time.Sleep(testTimeout)
+		}, nil
+	})
+	pipe, err := gb.buildGraph()
+	require.NoError(t, err)
+
+	go pipe.Run(ctx)
+
+	event := testutil.ReadChannel(t, tc.Records, testTimeout)
+	assert.Equal(t, collector.MetricRecord{
+		Name: "http.server.request.duration",
+		Unit: "s",
+		Attributes: map[string]string{
+			string(otel.HTTPRequestMethodKey):      "GET",
+			string(otel.HTTPResponseStatusCodeKey): "404",
+			string(otel.HTTPUrlPathKey):            "/foo/bar",
+			string(otel.ClientAddrKey):             "1.1.1.1",
+			string(semconv.ServiceNameKey):         "foo-svc",
+		},
+		Type: pmetric.MetricTypeHistogram,
+	}, event)
+
 }
 
 func TestTracerPipelineBadTimestamps(t *testing.T) {

@@ -63,7 +63,7 @@ func generateTraces(span *request.Span, t request.Timings, start time.Time, hasS
 
 	// Set span attributes
 	attrs := otel.TraceAttributes(span)
-	m := attrsToMap(attrs)
+	m := AttrsToMap(attrs)
 	m.CopyTo(s.Attributes())
 
 	// Set status code
@@ -92,8 +92,8 @@ func createSubSpans(ss *ptrace.ScopeSpans, t request.Timings) {
 	spP.SetEndTimestamp(pcommon.NewTimestampFromTime(t.End))
 }
 
-// attrsToMap converts a slice of attribute.KeyValue to a pcommon.Map
-func attrsToMap(attrs []attribute.KeyValue) pcommon.Map {
+// AttrsToMap converts a slice of attribute.KeyValue to a pcommon.Map
+func AttrsToMap(attrs []attribute.KeyValue) pcommon.Map {
 	m := pcommon.NewMap()
 	for _, attr := range attrs {
 		switch v := attr.Value.AsInterface().(type) {

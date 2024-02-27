@@ -6,9 +6,9 @@ import (
 	"time"
 
 	"github.com/caarlos0/env/v9"
+	otelconsumer "go.opentelemetry.io/collector/consumer"
 	"gopkg.in/yaml.v3"
 
-	"github.com/grafana/beyla/pkg/internal/discover/services"
 	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
 	"github.com/grafana/beyla/pkg/internal/export/debug"
 	"github.com/grafana/beyla/pkg/internal/export/otel"
@@ -16,6 +16,7 @@ import (
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/traces"
 	"github.com/grafana/beyla/pkg/internal/transform"
+	"github.com/grafana/beyla/pkg/services"
 )
 
 const ReporterLRUSize = 256
@@ -28,7 +29,7 @@ const (
 	FeatureNetO11y
 )
 
-var defaultConfig = Config{
+var DefaultConfig = Config{
 	ChannelBufferLen: 10,
 	LogLevel:         "INFO",
 	EBPF: ebpfcommon.TracerConfig{
@@ -125,6 +126,21 @@ type Config struct {
 	Noop             debug.NoopEnabled `yaml:"noop" env:"BEYLA_NOOP_TRACES"`
 	ProfilePort      int               `yaml:"profile_port" env:"BEYLA_PROFILE_PORT"`
 	InternalMetrics  imetrics.Config   `yaml:"internal_metrics"`
+
+	// Grafana Agent specific configuration
+	TracesReceiver TracesReceiverConfig `yaml:"-"`
+}
+
+type Consumer interface {
+	otelconsumer.Traces
+}
+
+type TracesReceiverConfig struct {
+	Traces []Consumer
+}
+
+func (t TracesReceiverConfig) Enabled() bool {
+	return len(t.Traces) > 0
 }
 
 // Attributes configures the decoration of some extra attributes that will be
@@ -187,7 +203,7 @@ func (c *Config) Enabled(feature Feature) bool {
 // 2 - Contents of the provided file reader (nillable)
 // 3 - Environment variables
 func LoadConfig(file io.Reader) (*Config, error) {
-	cfg := defaultConfig
+	cfg := DefaultConfig
 	if file != nil {
 		cfgBuf, err := io.ReadAll(file)
 		if err != nil {

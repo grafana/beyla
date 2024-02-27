@@ -84,7 +84,7 @@ func (tc *TestCollector) traceEvent(writer http.ResponseWriter, body []byte) {
 	}
 	writer.WriteHeader(http.StatusOK)
 	json, _ := req.MarshalJSON()
-	slog.Debug("received metric", "json", string(json))
+	slog.Debug("received trace", "json", string(json))
 
 	forEach[ptrace.ResourceSpans](req.Traces().ResourceSpans(), func(rs ptrace.ResourceSpans) {
 		forEach[ptrace.ScopeSpans](rs.ScopeSpans(), func(ss ptrace.ScopeSpans) {

@@ -543,7 +543,7 @@ func TestTraces_HTTPStatus(t *testing.T) {
 			{5999, codes.Error},
 		} {
 			assert.Equal(t, p.statusCode, httpSpanStatusCode(&request.Span{Status: p.httpCode, Type: request.EventTypeHTTP}))
-			assert.Equal(t, p.statusCode, spanStatusCode(&request.Span{Status: p.httpCode, Type: request.EventTypeHTTP}))
+			assert.Equal(t, p.statusCode, SpanStatusCode(&request.Span{Status: p.httpCode, Type: request.EventTypeHTTP}))
 		}
 	})
 
@@ -565,7 +565,7 @@ func TestTraces_HTTPStatus(t *testing.T) {
 			{5999, codes.Error},
 		} {
 			assert.Equal(t, p.statusCode, httpSpanStatusCode(&request.Span{Status: p.httpCode, Type: request.EventTypeHTTPClient}))
-			assert.Equal(t, p.statusCode, spanStatusCode(&request.Span{Status: p.httpCode, Type: request.EventTypeHTTPClient}))
+			assert.Equal(t, p.statusCode, SpanStatusCode(&request.Span{Status: p.httpCode, Type: request.EventTypeHTTPClient}))
 		}
 	})
 }
@@ -597,7 +597,7 @@ func TestTraces_GRPCStatus(t *testing.T) {
 			{semconv.RPCGRPCStatusCodeUnauthenticated, codes.Unset},
 		} {
 			assert.Equal(t, p.statusCode, grpcSpanStatusCode(&request.Span{Status: int(p.grpcCode.Value.AsInt64()), Type: request.EventTypeGRPC}))
-			assert.Equal(t, p.statusCode, spanStatusCode(&request.Span{Status: int(p.grpcCode.Value.AsInt64()), Type: request.EventTypeGRPC}))
+			assert.Equal(t, p.statusCode, SpanStatusCode(&request.Span{Status: int(p.grpcCode.Value.AsInt64()), Type: request.EventTypeGRPC}))
 		}
 	})
 
@@ -622,7 +622,7 @@ func TestTraces_GRPCStatus(t *testing.T) {
 			{semconv.RPCGRPCStatusCodeUnauthenticated, codes.Error},
 		} {
 			assert.Equal(t, p.statusCode, grpcSpanStatusCode(&request.Span{Status: int(p.grpcCode.Value.AsInt64()), Type: request.EventTypeGRPCClient}))
-			assert.Equal(t, p.statusCode, spanStatusCode(&request.Span{Status: int(p.grpcCode.Value.AsInt64()), Type: request.EventTypeGRPCClient}))
+			assert.Equal(t, p.statusCode, SpanStatusCode(&request.Span{Status: int(p.grpcCode.Value.AsInt64()), Type: request.EventTypeGRPCClient}))
 		}
 	})
 }

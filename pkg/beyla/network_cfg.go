@@ -93,6 +93,9 @@ type NetworkConfig struct {
 	// This is an experimental feature and it is not guaranteed to work on most virtualized environments
 	// for external traffic.
 	ReverseDNS flow.ReverseDNS `yaml:"reverse_dns"`
+
+	// Print the network flows in the Standard Output, if true
+	Print bool `yaml:"print_flows" env:"BEYLA_NETWORK_PRINT_FLOWS"`
 }
 
 var defaultNetworkConfig = NetworkConfig{

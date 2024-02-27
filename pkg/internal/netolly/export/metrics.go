@@ -71,7 +71,6 @@ func attributes(m *ebpf.Record) []attribute.KeyValue {
 		attribute.String("src.namespace", m.Attrs.SrcNamespace),
 		attribute.String("dst.name", m.Attrs.DstName),
 		attribute.String("dst.namespace", m.Attrs.DstNamespace),
-		attribute.String("cluster.name", m.Attrs.ClusterName),
 	)
 
 	// metadata attributes

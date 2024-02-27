@@ -42,6 +42,8 @@ const (
 	attrSuffixHostIP    = ".host.ip"
 	attrSuffixHostName  = ".host.name"
 
+	AttrClusterName = "k8s.cluster.name"
+
 	AttrDstNamespace = attrPrefixDst + attrSuffixNs
 	AttrDstName      = attrPrefixDst + attrSuffixName
 	AttrDstType      = attrPrefixDst + attrSuffixType
@@ -103,7 +105,9 @@ func (n *decorator) transform(flow *ebpf.Record) {
 	if flow.Attrs.Metadata == nil {
 		flow.Attrs.Metadata = map[string]string{}
 	}
-	flow.Attrs.ClusterName = n.clusterName
+	if n.clusterName != "" {
+		flow.Attrs.Metadata[AttrClusterName] = n.clusterName
+	}
 	n.decorate(flow, attrPrefixSrc, flow.Id.SrcIP().IP().String())
 	n.decorate(flow, attrPrefixDst, flow.Id.DstIP().IP().String())
 }

@@ -64,8 +64,6 @@ type RecordAttrs struct {
 	SrcNamespace string
 	DstNamespace string
 
-	ClusterName string
-
 	Interface string
 	// BeylaIP provides information about the source of the flow (the Agent that traced it)
 	BeylaIP  string

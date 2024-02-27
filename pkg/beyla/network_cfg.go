@@ -70,8 +70,6 @@ type NetworkConfig struct {
 	// again from a different interface.
 	// If the value is not set, it will default to 2 * CacheActiveTimeout
 	DeduperFCExpiry time.Duration `yaml:"deduper_fc_expiry" env:"BEYLA_NETWORK_DEDUPER_FC_EXPIRY"`
-	// DeduperJustMark will just mark duplicates (boolean field) instead of dropping them. Default: false.
-	DeduperJustMark bool `yaml:"deduper_just_mark" env:"BEYLA_NETWORK_DEDUPER_JUST_MARK"`
 	// Direction allows selecting which flows to trace according to its direction. Accepted values
 	// are "ingress", "egress" or "both" (default).
 	Direction string `yaml:"direction" env:"BEYLA_NETWORK_DIRECTION"`
@@ -102,7 +100,6 @@ var defaultNetworkConfig = NetworkConfig{
 	CacheMaxFlows:      5000,
 	CacheActiveTimeout: 5 * time.Second,
 	Deduper:            flow.DeduperFirstCome,
-	DeduperJustMark:    false,
 	Direction:          "both",
 	ListenInterfaces:   "watch",
 	ListenPollPeriod:   10 * time.Second,

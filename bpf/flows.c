@@ -164,8 +164,7 @@ static inline int fill_ethhdr(struct ethhdr *eth, void *data_end, flow_id *id, u
     if ((void *)eth + sizeof(*eth) > data_end) {
         return DISCARD;
     }
-    __builtin_memcpy(id->dst_mac, eth->h_dest, ETH_ALEN);
-    __builtin_memcpy(id->src_mac, eth->h_source, ETH_ALEN);
+
     id->eth_protocol = __bpf_ntohs(eth->h_proto);
 
     if (id->eth_protocol == ETH_P_IP) {

@@ -19,13 +19,13 @@ func FlowPrinterProvider(_ FlowPrinterEnabled) (node.TerminalFunc[[]*ebpf.Record
 	return func(in <-chan []*ebpf.Record) {
 		for flows := range in {
 			for _, flow := range flows {
-				print(flow)
+				printFlow(flow)
 			}
 		}
 	}, nil
 }
 
-func print(f *ebpf.Record) {
+func printFlow(f *ebpf.Record) {
 	sb := strings.Builder{}
 	sb.WriteString("beyla.ip==")
 	sb.WriteString(f.Attrs.BeylaIP)

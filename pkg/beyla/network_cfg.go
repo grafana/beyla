@@ -58,13 +58,13 @@ type NetworkConfig struct {
 	// CacheActiveTimeout specifies the maximum duration that flows are kept in the accounting
 	// cache before being flushed for its later export.
 	CacheActiveTimeout time.Duration `yaml:"cache_active_timeout" env:"BEYLA_NETWORK_CACHE_ACTIVE_TIMEOUT"`
-	// Deduper specifies the deduper type. Accepted values are "none" (disabled) and "firstCome".
+	// Deduper specifies the deduper type. Accepted values are "none" (disabled) and "first_come".
 	// When enabled, it will detect duplicate flows (flows that have been detected e.g. through
 	// both the physical and a virtual interface).
-	// "firstCome" will forward only flows from the first interface the flows are received from.
-	// Default value: firstCome
+	// "first_come" will forward only flows from the first interface the flows are received from.
+	// Default value: first_come
 	Deduper string `yaml:"deduper" env:"BEYLA_NETWORK_DEDUPER"`
-	// DeduperFCExpiry specifies the expiry duration of the flows "firstCome" deduplicator. After
+	// DeduperFCExpiry specifies the expiry duration of the flows "first_come" deduplicator. After
 	// a flow hasn't been received for that expiry time, the deduplicator forgets it. That means
 	// that a flow from a connection that has been inactive during that period could be forwarded
 	// again from a different interface.
@@ -87,6 +87,12 @@ type NetworkConfig struct {
 	// ListenPollPeriod specifies the periodicity to query the network interfaces when the
 	// ListenInterfaces value is set to "poll".
 	ListenPollPeriod time.Duration `yaml:"listen_poll_period" env:"BEYLA_NETWORK_LISTEN_POLL_PERIOD"`
+
+	// ReverseDNS allows flows that haven't been previously decorated with any source/destination name
+	// to override the name with the network hostname of the source and destination IPs.
+	// This is an experimental feature and it is not guaranteed to work on most virtualized environments
+	// for external traffic.
+	ReverseDNS flow.ReverseDNS `yaml:"reverse_dns"`
 }
 
 var defaultNetworkConfig = NetworkConfig{
@@ -100,4 +106,9 @@ var defaultNetworkConfig = NetworkConfig{
 	Direction:          "both",
 	ListenInterfaces:   "watch",
 	ListenPollPeriod:   10 * time.Second,
+	ReverseDNS: flow.ReverseDNS{
+		Type:     flow.ReverseDNSNone,
+		CacheLen: 256,
+		CacheTTL: time.Hour,
+	},
 }

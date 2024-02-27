@@ -16,14 +16,15 @@ import (
 // as well as how they are interconnected
 // TODO: add flow_printer node
 type FlowsPipeline struct {
-	MapTracer       `sendTo:"Deduper"`
-	RingBufTracer   `sendTo:"Accounter"`
-	Accounter       `sendTo:"Deduper"`
-	Deduper         flow.Deduper `forwardTo:"CapacityLimiter"`
-	CapacityLimiter `sendTo:"Decorator"`
-	Decorator       `sendTo:"Kubernetes"`
+	MapTracer     `sendTo:"Deduper"`
+	RingBufTracer `sendTo:"Accounter"`
+	Accounter     `sendTo:"Deduper"`
+	Deduper       flow.Deduper          `forwardTo:"Kubernetes"`
+	Kubernetes    k8s.MetadataDecorator `forwardTo:"ReverseDNS"`
 
-	Kubernetes k8s.NetworkTransformConfig `sendTo:"Exporter"`
+	ReverseDNS flow.ReverseDNS `forwardTo:"Decorator"`
+
+	Decorator `sendTo:"Exporter"`
 
 	Exporter export.MetricsConfig
 }
@@ -31,7 +32,6 @@ type FlowsPipeline struct {
 type MapTracer struct{}
 type RingBufTracer struct{}
 type Accounter struct{}
-type CapacityLimiter struct{}
 type Decorator struct{}
 
 // buildAndStartPipeline creates the ETL flow processing graph.
@@ -58,14 +58,11 @@ func (f *Flows) buildAndStartPipeline(ctx context.Context) (graph.Graph, error) 
 		return f.accounter.Account, nil
 	})
 	graph.RegisterMiddle(gb, flow.DeduperProvider)
-	graph.RegisterMiddle(gb, func(_ CapacityLimiter) (node.MiddleFunc[[]*ebpf.Record, []*ebpf.Record], error) {
-		return (&flow.CapacityLimiter{}).Limit, nil
-	})
 	graph.RegisterMiddle(gb, func(_ Decorator) (node.MiddleFunc[[]*ebpf.Record, []*ebpf.Record], error) {
 		return flow.Decorate(f.agentIP, f.interfaceNamer), nil
 	})
-	graph.RegisterMiddle(gb, k8s.NetworkTransform)
-
+	graph.RegisterMiddle(gb, k8s.MetadataDecoratorProvider)
+	graph.RegisterMiddle(gb, flow.ReverseDNSProvider)
 	graph.RegisterTerminal(gb, export.MetricsExporterProvider)
 
 	var deduperExpireTime = f.cfg.NetworkFlows.DeduperFCExpiry
@@ -78,8 +75,9 @@ func (f *Flows) buildAndStartPipeline(ctx context.Context) (graph.Graph, error) 
 			ExpireTime: deduperExpireTime,
 			JustMark:   f.cfg.NetworkFlows.DeduperJustMark,
 		},
-		Kubernetes: k8s.NetworkTransformConfig{Kubernetes: &f.cfg.Attributes.Kubernetes},
+		Kubernetes: k8s.MetadataDecorator{Kubernetes: &f.cfg.Attributes.Kubernetes},
 		// TODO: allow prometheus exporting
-		Exporter: export.MetricsConfig{Metrics: &f.cfg.Metrics},
+		Exporter:   export.MetricsConfig{Metrics: &f.cfg.Metrics},
+		ReverseDNS: f.cfg.NetworkFlows.ReverseDNS,
 	})
 }

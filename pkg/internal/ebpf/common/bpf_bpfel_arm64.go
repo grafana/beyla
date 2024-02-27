@@ -20,11 +20,13 @@ type bpfConnectionInfoT struct {
 }
 
 type bpfHttp2GrpcRequestT struct {
-	Type            uint8
+	Flags           uint8
 	_               [1]byte
 	ConnInfo        bpfConnectionInfoT
 	Data            [256]uint8
-	_               [2]byte
+	RetData         [64]uint8
+	Type            uint8
+	_               [1]byte
 	Len             int32
 	_               [4]byte
 	StartMonotimeNs uint64

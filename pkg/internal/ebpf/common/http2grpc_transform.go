@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"net"
+	"strconv"
 	"strings"
 
 	"github.com/cilium/ebpf/ringbuf"
@@ -16,6 +17,15 @@ import (
 )
 
 type BPFHTTP2Info bpfHttp2GrpcRequestT
+
+type Protocol uint8
+
+// The following consts need to coincide with some C identifiers:
+// EVENT_HTTP_REQUEST, EVENT_GRPC_REQUEST, EVENT_HTTP_CLIENT, EVENT_GRPC_CLIENT, EVENT_SQL_CLIENT
+const (
+	HTTP2 Protocol = iota + 1
+	GRPC
+)
 
 func byteFramer(data []uint8) *http2.Framer {
 	buf := bytes.NewBuffer(data)
@@ -59,11 +69,48 @@ func readMetaFrame(fr *http2.Framer, hf *http2.HeadersFrame) (string, string) {
 	return method, path
 }
 
+func readRetMetaFrame(fr *http2.Framer, hf *http2.HeadersFrame) (int, Protocol) {
+	status := 0
+	proto := HTTP2
+
+	hdec := hpack.NewDecoder(0, nil)
+	hdec.SetMaxStringLength(4096)
+	hdec.SetEmitFunc(func(hf hpack.HeaderField) {
+		hfKey := strings.ToLower(hf.Name)
+		switch hfKey {
+		case ":status":
+			status, _ = strconv.Atoi(hf.Value)
+			proto = HTTP2
+		case ":grpc-status":
+			status, _ = strconv.Atoi(hf.Value)
+			proto = GRPC
+		}
+	})
+	// Lose reference to MetaHeadersFrame:
+	defer hdec.SetEmitFunc(func(hf hpack.HeaderField) {})
+
+	for {
+		frag := hf.HeaderBlockFragment()
+		if _, err := hdec.Write(frag); err != nil {
+			return status, proto
+		}
+
+		if hf.HeadersEnded() {
+			break
+		}
+		if _, err := fr.ReadFrame(); err != nil {
+			return status, proto
+		}
+	}
+
+	return status, proto
+}
+
 var genericServiceID = svc.ID{SDKLanguage: svc.InstrumentableGeneric}
 
-func http2InfoToSpan(info *BPFHTTP2Info, method, path, peer, host string) request.Span {
+func http2InfoToSpan(info *BPFHTTP2Info, method, path, peer, host string, status int, protocol Protocol) request.Span {
 	return request.Span{
-		Type:          request.EventType(info.Type),
+		Type:          info.eventType(protocol),
 		ID:            0,
 		Method:        method,
 		Path:          removeQuery(path),
@@ -74,7 +121,7 @@ func http2InfoToSpan(info *BPFHTTP2Info, method, path, peer, host string) reques
 		RequestStart:  int64(info.StartMonotimeNs),
 		Start:         int64(info.StartMonotimeNs),
 		End:           int64(info.EndMonotimeNs),
-		Status:        1,
+		Status:        status,
 		ServiceID:     genericServiceID, // set generic service to be overwritten later by the PID filters
 		TraceID:       trace.TraceID(info.Tp.TraceId),
 		SpanID:        trace.SpanID(info.Tp.SpanId),
@@ -86,6 +133,26 @@ func http2InfoToSpan(info *BPFHTTP2Info, method, path, peer, host string) reques
 			Namespace: info.Pid.Ns,
 		},
 	}
+}
+
+// The eBPF kernel side gives us information only if the event type is server or client. We reuse what's
+// done for HTTP 1.1. We figure out what the protocol is by looking at the response status, is it :grpc-status,
+// or :status. Then we know what the protocol actually is.
+func (event *BPFHTTP2Info) eventType(protocol Protocol) request.EventType {
+	eventType := request.EventType(event.Type)
+	switch protocol {
+	case HTTP2:
+		return eventType // just use HTTP as is, no special handling
+	case GRPC:
+		switch eventType {
+		case request.EventTypeHTTP:
+			return request.EventTypeGRPC
+		case request.EventTypeHTTPClient:
+			return request.EventTypeGRPCClient
+		}
+	}
+
+	return 0
 }
 
 func (event *BPFHTTP2Info) hostInfo() (source, target string) {
@@ -106,12 +173,23 @@ func ReadHTTP2InfoIntoSpan(record *ringbuf.Record) (request.Span, bool, error) {
 	}
 
 	framer := byteFramer(event.Data[:])
+	ret_framer := byteFramer(event.RetData[:])
 	// We don't set the framer.ReadMetaHeaders function to hpack.NewDecoder because
 	// the http2.MetaHeadersFrame code wants a full grpc buffer with all the fields,
 	// and if it sees our partially captured eBPF buffers, it will not parse the frame
 	// while returning a (nil, error) tuple. We read the meta frame ourselves as long as
 	// we can and terminate without an error when things fail to decode because of
 	// partial buffers.
+
+	retF, _ := ret_framer.ReadFrame()
+
+	status := 0
+	eventType := HTTP2
+
+	switch ff := retF.(type) {
+	case *http2.HeadersFrame:
+		status, eventType = readRetMetaFrame(ret_framer, ff)
+	}
 
 	f, _ := framer.ReadFrame()
 
@@ -126,7 +204,7 @@ func ReadHTTP2InfoIntoSpan(record *ringbuf.Record) (request.Span, bool, error) {
 			peer = source
 		}
 
-		return http2InfoToSpan(&event, method, path, peer, host), false, nil
+		return http2InfoToSpan(&event, method, path, peer, host, status, eventType), false, nil
 	}
 
 	return request.Span{}, true, nil // ignore if we couldn't parse it

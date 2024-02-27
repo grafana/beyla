@@ -10,6 +10,7 @@
 #define FULL_BUF_SIZE 160 // should be enough for most URLs, we may need to extend it if not. Must be multiple of 16 for the copy to work.
 #define TRACE_BUF_SIZE 1024 // must be power of 2, we do an & to limit the buffer size
 #define KPROBES_HTTP2_BUF_SIZE 256
+#define KPROBES_HTTP2_RET_BUF_SIZE 64
 
 #define CONN_INFO_FLAG_TRACE 0x1
 
@@ -90,9 +91,11 @@ typedef struct http2_conn_stream {
 } http2_conn_stream_t;
 
 typedef struct http2_grpc_request {
-    u8  type;                           // Must be first
+    u8  flags;                           // Must be first
     connection_info_t conn_info;
     u8  data[KPROBES_HTTP2_BUF_SIZE];
+    u8  ret_data[KPROBES_HTTP2_RET_BUF_SIZE];
+    u8  type;
     int len;
     u64 start_monotime_ns;
     u64 end_monotime_ns;

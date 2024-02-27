@@ -306,24 +306,28 @@ static __always_inline void http2_grpc_start(http2_conn_stream_t *s_key, void *u
             meta = &dummy_meta;
         }
 
-        h2g_info->type = EVENT_K_HTTP2_REQUEST;
+        h2g_info->flags = EVENT_K_HTTP2_REQUEST;
         h2g_info->start_monotime_ns = bpf_ktime_get_ns();
         h2g_info->len = len;
         h2g_info->conn_info = s_key->pid_conn.conn;
-        h2g_info->pid = meta->pid;
+        if (meta) { // keep verifier happy
+            h2g_info->pid = meta->pid;
+            h2g_info->type = meta->type;
+        }
         bpf_probe_read(h2g_info->data, KPROBES_HTTP2_BUF_SIZE, u_buf);
 
         bpf_map_update_elem(&ongoing_http2_grpc, s_key, h2g_info, BPF_ANY);
     }
 }
 
-static __always_inline void http2_grpc_end(http2_conn_stream_t *stream, http2_grpc_request_t *prev_info) {
+static __always_inline void http2_grpc_end(http2_conn_stream_t *stream, http2_grpc_request_t *prev_info, void *u_buf) {
     if (prev_info) {
         prev_info->end_monotime_ns = bpf_ktime_get_ns();
 
         http2_grpc_request_t *trace = bpf_ringbuf_reserve(&events, sizeof(http2_grpc_request_t), 0);        
         if (trace) {
             bpf_memcpy(trace, prev_info, sizeof(http2_grpc_request_t));
+            bpf_probe_read(trace->ret_data, KPROBES_HTTP2_RET_BUF_SIZE, u_buf);
 
             trace->type = EVENT_K_HTTP2_REQUEST;
             bpf_ringbuf_submit(trace, get_flags());
@@ -338,6 +342,7 @@ static __always_inline void process_http2_grpc_frames(pid_connection_info_t *pid
     u8 found_frame = 0;
     http2_grpc_request_t *prev_info = 0;
     u32 saved_stream_id = 0;
+    int saved_buf_pos = 0;
     u8 found_data_frame = 0;
     
     for (int i = 0; i < 8; i++) {
@@ -360,8 +365,11 @@ static __always_inline void process_http2_grpc_frames(pid_connection_info_t *pid
 
             if (prev_info) {
                 saved_stream_id = stream.stream_id;
+                if (!saved_buf_pos) {
+                    saved_buf_pos = pos;
+                }
                 if (http_grpc_stream_ended(&frame)) {
-                    http2_grpc_end(&stream, prev_info);
+                    http2_grpc_end(&stream, prev_info, (void *)((u8 *)u_buf + saved_buf_pos));
                     found_frame = 1;
                 } 
             } else {
@@ -401,7 +409,7 @@ static __always_inline void process_http2_grpc_frames(pid_connection_info_t *pid
         stream.pid_conn = *pid_conn;
         stream.stream_id = saved_stream_id;
 
-        http2_grpc_end(&stream, prev_info);
+        http2_grpc_end(&stream, prev_info, (void *)((u8 *)u_buf + saved_buf_pos));
     }
 }
 

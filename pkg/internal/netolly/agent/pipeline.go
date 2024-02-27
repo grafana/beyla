@@ -61,7 +61,9 @@ func (f *Flows) buildAndStartPipeline(ctx context.Context) (graph.Graph, error) 
 	graph.RegisterMiddle(gb, func(_ Decorator) (node.MiddleFunc[[]*ebpf.Record, []*ebpf.Record], error) {
 		return flow.Decorate(f.agentIP, f.interfaceNamer), nil
 	})
-	graph.RegisterMiddle(gb, k8s.MetadataDecoratorProvider)
+	graph.RegisterMiddle(gb, func(cfg k8s.MetadataDecorator) (node.MiddleFunc[[]*ebpf.Record, []*ebpf.Record], error) {
+		return k8s.MetadataDecoratorProvider(ctx, cfg)
+	})
 	graph.RegisterMiddle(gb, flow.ReverseDNSProvider)
 	graph.RegisterTerminal(gb, export.MetricsExporterProvider)
 

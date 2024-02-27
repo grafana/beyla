@@ -22,6 +22,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/hashicorp/golang-lru/v2/simplelru"
 	"github.com/mariomac/pipes/pkg/node"
@@ -59,6 +60,10 @@ const (
 )
 
 const alreadyLoggedIPsCacheLen = 256
+const (
+	clusterMetadataRetries       = 5
+	clusterMetadataFailRetryTime = 500 * time.Millisecond
+)
 
 func log() *slog.Logger { return slog.With("component", "k8s.MetadataDecorator") }
 
@@ -70,8 +75,8 @@ func (ntc MetadataDecorator) Enabled() bool {
 	return ntc.Kubernetes != nil && ntc.Kubernetes.Enabled()
 }
 
-func MetadataDecoratorProvider(cfg MetadataDecorator) (node.MiddleFunc[[]*ebpf.Record, []*ebpf.Record], error) {
-	nt, err := newDecorator(&cfg)
+func MetadataDecoratorProvider(ctx context.Context, cfg MetadataDecorator) (node.MiddleFunc[[]*ebpf.Record, []*ebpf.Record], error) {
+	nt, err := newDecorator(ctx, &cfg)
 	if err != nil {
 		return nil, fmt.Errorf("instantiating network transformer: %w", err)
 	}
@@ -91,15 +96,16 @@ type decorator struct {
 	log              *slog.Logger
 	alreadyLoggedIPs *simplelru.LRU[string, struct{}]
 	kube             NetworkInformers
+	clusterName      string
 }
 
 func (n *decorator) transform(flow *ebpf.Record) {
 	if flow.Attrs.Metadata == nil {
 		flow.Attrs.Metadata = map[string]string{}
 	}
+	flow.Attrs.ClusterName = n.clusterName
 	n.decorate(flow, attrPrefixSrc, flow.Id.SrcIP().IP().String())
 	n.decorate(flow, attrPrefixDst, flow.Id.DstIP().IP().String())
-
 }
 
 func (n *decorator) decorate(flow *ebpf.Record, prefix, ip string) {
@@ -145,9 +151,12 @@ func (n *decorator) decorate(flow *ebpf.Record, prefix, ip string) {
 }
 
 // newDecorator create a new transform
-func newDecorator(cfg *MetadataDecorator) (*decorator, error) {
-	nt := decorator{log: log()}
-	if nt.log.Enabled(context.TODO(), slog.LevelDebug) {
+func newDecorator(ctx context.Context, cfg *MetadataDecorator) (*decorator, error) {
+	nt := decorator{
+		log:         log(),
+		clusterName: kubeClusterName(ctx, cfg),
+	}
+	if nt.log.Enabled(ctx, slog.LevelDebug) {
 		var err error
 		nt.alreadyLoggedIPs, err = simplelru.NewLRU[string, struct{}](alreadyLoggedIPsCacheLen, nil)
 		if err != nil {
@@ -159,4 +168,30 @@ func newDecorator(cfg *MetadataDecorator) (*decorator, error) {
 		return nil, err
 	}
 	return &nt, nil
+}
+
+func kubeClusterName(ctx context.Context, cfg *MetadataDecorator) string {
+	log := log().With("func", "kubeClusterName")
+	if cfg.Kubernetes.ClusterName != "" {
+		return cfg.Kubernetes.ClusterName
+	}
+	retries := 0
+	for retries < clusterMetadataRetries {
+		if clusterName := fetchClusterName(ctx); clusterName != "" {
+			return clusterName
+		}
+		retries++
+		log.Debug("retrying cluster name fetching in 500 ms...")
+		select {
+		case <-ctx.Done():
+			log.Debug("context canceled before starting the kubernetes decorator node")
+			return ""
+		case <-time.After(clusterMetadataFailRetryTime):
+			// retry or end!
+		}
+	}
+	log.Warn("can't fetch Kubernetes Cluster Name from EC2, GCE or Azure." +
+		" Network metrics won't contain that field unless you explicitly set " +
+		" the BEYLA_KUBE_CLUSTER_NAME environment variable")
+	return ""
 }

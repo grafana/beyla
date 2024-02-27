@@ -49,6 +49,7 @@ func testNetFlowBytesForExistingConnections(ctx context.Context, t *testing.T, _
 		metric := results[0].Metric
 		assertIsIP(t, metric["src_address"])
 		assertIsIP(t, metric["dst_address"])
+		assert.Equal(t, "my-kube", metric["cluster_name"])
 		assert.Equal(t, "default", metric["src_namespace"])
 		assert.Equal(t, "default", metric["dst_namespace"])
 		assert.Equal(t, "beyla-network-flows", metric["job"])

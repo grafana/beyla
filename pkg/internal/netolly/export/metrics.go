@@ -59,7 +59,7 @@ func newMeterProvider(res *resource.Resource, exporter *metric.Exporter) (*metri
 }
 
 func attributes(m *ebpf.Record) []attribute.KeyValue {
-	res := make([]attribute.KeyValue, 0, 11+len(m.Attrs.Metadata))
+	res := make([]attribute.KeyValue, 0, 10+len(m.Attrs.Metadata))
 
 	res = append(res,
 		attribute.String("beyla.ip", m.Attrs.BeylaIP),
@@ -71,6 +71,7 @@ func attributes(m *ebpf.Record) []attribute.KeyValue {
 		attribute.String("src.namespace", m.Attrs.SrcNamespace),
 		attribute.String("dst.name", m.Attrs.DstName),
 		attribute.String("dst.namespace", m.Attrs.DstNamespace),
+		attribute.String("cluster.name", m.Attrs.ClusterName),
 	)
 
 	// metadata attributes

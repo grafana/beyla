@@ -173,7 +173,7 @@ func ReadHTTP2InfoIntoSpan(record *ringbuf.Record) (request.Span, bool, error) {
 	}
 
 	framer := byteFramer(event.Data[:])
-	ret_framer := byteFramer(event.RetData[:])
+	retFramer := byteFramer(event.RetData[:])
 	// We don't set the framer.ReadMetaHeaders function to hpack.NewDecoder because
 	// the http2.MetaHeadersFrame code wants a full grpc buffer with all the fields,
 	// and if it sees our partially captured eBPF buffers, it will not parse the frame
@@ -181,14 +181,14 @@ func ReadHTTP2InfoIntoSpan(record *ringbuf.Record) (request.Span, bool, error) {
 	// we can and terminate without an error when things fail to decode because of
 	// partial buffers.
 
-	retF, _ := ret_framer.ReadFrame()
+	retF, _ := retFramer.ReadFrame()
 
 	status := 0
 	eventType := HTTP2
 
 	switch ff := retF.(type) {
 	case *http2.HeadersFrame:
-		status, eventType = readRetMetaFrame(ret_framer, ff)
+		status, eventType = readRetMetaFrame(retFramer, ff)
 	}
 
 	f, _ := framer.ReadFrame()

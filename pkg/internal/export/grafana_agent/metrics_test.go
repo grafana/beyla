@@ -13,10 +13,11 @@ import (
 
 func TestGenerateMetrics(t *testing.T) {
 	cfg := &otel.MetricsConfig{}
+	start := time.Now()
 	span := &request.Span{
 		Type:         request.EventTypeHTTP,
-		RequestStart: time.Now().UnixNano(),
-		End:          time.Now().Add(time.Second).UnixNano(),
+		RequestStart: start.UnixNano(),
+		End:          start.Add(3 * time.Second).UnixNano(),
 		Method:       "GET",
 		Status:       200,
 	}
@@ -43,9 +44,7 @@ func TestGenerateMetrics(t *testing.T) {
 	dataPoints := histogramMetric.Histogram().DataPoints()
 	assert.Equal(t, 1, dataPoints.Len())
 	dp := dataPoints.At(0)
-	assert.Equal(t, float64(time.Second), dp.Count())
-
-	//assert.Equal(t, pcommon.NewTimestampFromTime(span.Timings.RequestStart), dp.StartTimestamp())
+	assert.Equal(t, 3.0, dp.Sum())
 
 	// Assert metric attributes
 	attributes := dp.Attributes()

@@ -46,13 +46,13 @@ func generateMetrics(cfg *otel.MetricsConfig, span *request.Span) pmetric.Metric
 	switch span.Type {
 	case request.EventTypeHTTP:
 		attrs := AttrsToMap(otel.MetricAttributes(cfg, span))
-		m := generateHistogram(otel.HTTPServerDuration, "s", duration, t.RequestStart, attrs)
+		m := generateHistogram(otel.HTTPServerDuration, "s", duration, t.RequestStart, attrs, cfg.Buckets.DurationHistogram)
 		m.CopyTo(ilm.Metrics().At(0))
 	}
 	return metrics
 }
 
-func generateHistogram(metricName string, unit string, value float64, ts time.Time, attrs pcommon.Map) pmetric.Metric {
+func generateHistogram(metricName string, unit string, value float64, ts time.Time, attrs pcommon.Map, buckets []float64) pmetric.Metric {
 	// Prepare the metric
 	m := pmetric.NewMetric()
 	m.SetName(metricName)
@@ -65,6 +65,11 @@ func generateHistogram(metricName string, unit string, value float64, ts time.Ti
 	dp := m.Histogram().DataPoints().AppendEmpty()
 	dp.SetTimestamp(timestamp)
 	dp.SetStartTimestamp(startTs)
+	dp.ExplicitBounds().FromRaw(buckets)
+
+	// Set the value
+	dp.SetCount(1)
+	dp.SetSum(value)
 
 	// Set metric attributes
 	attrs.CopyTo(dp.Attributes())

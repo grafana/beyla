@@ -7,18 +7,27 @@ package k8s
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/service/ec2"
+	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
 )
 
 const (
 	gcpMetadataURL   = "http://metadata.google.internal/computeMetadata/v1/instance/attributes/cluster-name"
 	azureMetadataURL = "http://169.254.169.254/metadata/instance/compute/vmId?api-version=2017-04-02&format=text"
-	ec2MetadataURL   = "http://169.254.169.254/latest/meta-data/tags/instance"
+
+	ec2MetadataURL         = "http://169.254.169.254/latest/meta-data"
+	ec2SecurityCredsURL    = ec2MetadataURL + "/iam/security-credentials/"
+	ec2InstanceIdentityURL = "http://169.254.169.254/latest/dynamic/instance-identity/document/"
 )
 
 var (
@@ -46,6 +55,7 @@ func fetchClusterName(ctx context.Context) string {
 		if name, err := fetch(ctx); err != nil {
 			log.Debug("didn't get cluster name", "error", err)
 		} else if name != "" {
+			log.Debug("successfully got cluster name", "name", name)
 			return name
 		}
 	}
@@ -95,17 +105,102 @@ func azureClusterNameFetcher(ctx context.Context) (string, error) {
 	return splitAll[len(splitAll)-2], nil
 }
 
+type ec2Identity struct {
+	Region     string
+	InstanceID string
+	AccountID  string
+}
+
+func getInstanceIdentity(ctx context.Context) (*ec2Identity, error) {
+	instanceIdentity := &ec2Identity{}
+
+	res, err := httpGet(ctx, ec2InstanceIdentityURL, nil)
+	if err != nil {
+		return instanceIdentity, fmt.Errorf("unable to fetch EC2 API to get identity: %w", err)
+	}
+
+	err = json.Unmarshal([]byte(res), &instanceIdentity)
+	if err != nil {
+		return instanceIdentity, fmt.Errorf("unable to unmarshall json, %w", err)
+	}
+
+	return instanceIdentity, nil
+}
+
+type ec2SecurityCred struct {
+	AccessKeyID     string
+	SecretAccessKey string
+	Token           string
+}
+
+func getSecurityCreds(ctx context.Context) (*ec2SecurityCred, error) {
+	iamParams := &ec2SecurityCred{}
+
+	iamRole, err := getIAMRole(ctx)
+	if err != nil {
+		return iamParams, err
+	}
+
+	res, err := httpGet(ctx, ec2SecurityCredsURL+iamRole, nil)
+	if err != nil {
+		return iamParams, fmt.Errorf("unable to fetch EC2 API to get iam role: %w", err)
+	}
+
+	err = json.Unmarshal([]byte(res), &iamParams)
+	if err != nil {
+		return iamParams, fmt.Errorf("unable to unmarshall json, %w", err)
+	}
+	return iamParams, nil
+}
+
+func getIAMRole(ctx context.Context) (string, error) {
+	res, err := httpGet(ctx, ec2SecurityCredsURL, nil)
+	if err != nil {
+		return "", fmt.Errorf("unable to fetch EC2 API to get security credentials: %w", err)
+	}
+
+	return res, nil
+}
+
 func ec2ClusterNameFetcher(ctx context.Context) (string, error) {
-	// using IMDSv1 service
-	tagsStr, err := httpGet(ctx, ec2MetadataURL, nil)
+	instanceIdentity, err := getInstanceIdentity(ctx)
 	if err != nil {
 		return "", err
 	}
+
+	secCreds, err := getSecurityCreds(ctx)
+	if err != nil {
+		return "", err
+	}
+	awsCreds := credentials.NewStaticCredentialsProvider(secCreds.AccessKeyID, secCreds.SecretAccessKey, secCreds.Token)
+
+	connection := ec2.New(ec2.Options{
+		Region:      instanceIdentity.Region,
+		Credentials: awsCreds,
+	})
+
+	ec2Tags, err := connection.DescribeTags(ctx,
+		&ec2.DescribeTagsInput{
+			Filters: []types.Filter{{
+				Name: aws.String("resource-id"),
+				Values: []string{
+					instanceIdentity.InstanceID,
+				},
+			}},
+		},
+	)
+	if err != nil {
+		return "", fmt.Errorf("retrieving EC2 tags: %w", err)
+	}
+
 	// tagsStr is a newline-separated list of strings containing tag keys
-	for _, key := range strings.Split(tagsStr, "\n") {
+	for _, tag := range ec2Tags.Tags {
+		if tag.Key == nil {
+			continue
+		}
 		// tag key format: kubernetes.io/cluster/clustername"
-		if strings.HasPrefix(key, "kubernetes.io/cluster/") {
-			return strings.Split(key, "/")[2], nil
+		if strings.HasPrefix(*tag.Key, "kubernetes.io/cluster/") {
+			return strings.Split(*tag.Key, "/")[2], nil
 		}
 	}
 	return "", errors.New("did not find any kubernetes.io/cluster/... tag")

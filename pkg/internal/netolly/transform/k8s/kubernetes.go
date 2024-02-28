@@ -194,7 +194,7 @@ func kubeClusterName(ctx context.Context, cfg *MetadataDecorator) string {
 			// retry or end!
 		}
 	}
-	log.Warn("can't fetch Kubernetes Cluster Name from EC2, GCE or Azure." +
+	log.Warn("can't fetch Kubernetes Cluster Name." +
 		" Network metrics won't contain that field unless you explicitly set " +
 		" the BEYLA_KUBE_CLUSTER_NAME environment variable")
 	return ""

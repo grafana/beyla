@@ -59,7 +59,15 @@ func (f *Flows) buildAndStartPipeline(ctx context.Context) (graph.Graph, error) 
 	})
 	graph.RegisterMiddle(gb, flow.DeduperProvider)
 	graph.RegisterMiddle(gb, func(_ Decorator) (node.MiddleFunc[[]*ebpf.Record, []*ebpf.Record], error) {
-		return flow.Decorate(f.agentIP, f.interfaceNamer), nil
+		// If deduper is enabled, we know that interfaces are unset.
+		// As an optimization, we just pass here an empty-string interface namer
+		ifaceNamer := f.interfaceNamer
+		if f.cfg.NetworkFlows.Deduper == flow.DeduperFirstCome {
+			ifaceNamer = func(_ int) string {
+				return ""
+			}
+		}
+		return flow.Decorate(f.agentIP, ifaceNamer), nil
 	})
 	graph.RegisterMiddle(gb, k8s.MetadataDecoratorProvider)
 	graph.RegisterMiddle(gb, flow.ReverseDNSProvider)
@@ -73,7 +81,6 @@ func (f *Flows) buildAndStartPipeline(ctx context.Context) (graph.Graph, error) 
 		Deduper: flow.Deduper{
 			Type:       f.cfg.NetworkFlows.Deduper,
 			ExpireTime: deduperExpireTime,
-			JustMark:   f.cfg.NetworkFlows.DeduperJustMark,
 		},
 		Kubernetes: k8s.MetadataDecorator{Kubernetes: &f.cfg.Attributes.Kubernetes},
 		// TODO: allow prometheus exporting

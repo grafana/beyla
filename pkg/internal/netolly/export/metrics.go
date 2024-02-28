@@ -18,12 +18,6 @@ import (
 	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
 )
 
-const (
-	// according to field 61 in https://www.iana.org/assignments/ipfix/ipfix.xhtml
-	directionIngress = 0
-	directionEgress  = 1
-)
-
 type MetricsConfig struct {
 	Metrics *otel.MetricsConfig
 }
@@ -63,8 +57,6 @@ func attributes(m *ebpf.Record) []attribute.KeyValue {
 
 	res = append(res,
 		attribute.String("beyla.ip", m.Attrs.BeylaIP),
-		attribute.String("iface", m.Attrs.Interface),
-		attribute.String("direction", directionStr(m.Id.Direction)),
 		attribute.String("src.address", m.Id.SrcIP().IP().String()),
 		attribute.String("dst.address", m.Id.DstIP().IP().String()),
 		attribute.String("src.name", m.Attrs.SrcName),
@@ -72,6 +64,14 @@ func attributes(m *ebpf.Record) []attribute.KeyValue {
 		attribute.String("dst.name", m.Attrs.DstName),
 		attribute.String("dst.namespace", m.Attrs.DstNamespace),
 	)
+
+	// direction and interface will be only set if the user disabled
+	// the flow deduplication node
+	if direction, ok := directionStr(m.Id.Direction); ok {
+		res = append(res,
+			attribute.String("direction", direction),
+			attribute.String("iface", m.Attrs.Interface))
+	}
 
 	// metadata attributes
 	for k, v := range m.Attrs.Metadata {
@@ -81,15 +81,15 @@ func attributes(m *ebpf.Record) []attribute.KeyValue {
 	return res
 }
 
-func directionStr(direction uint8) string {
+func directionStr(direction uint8) (string, bool) {
 	switch direction {
-	case directionIngress:
-		return "ingress"
-	case directionEgress:
-		return "egress"
+	case ebpf.DirectionIngress:
+		return "ingress", true
+	case ebpf.DirectionEgress:
+		return "egress", true
+	default:
+		return "", false
 	}
-	// should never happen
-	return "unknown"
 }
 
 func MetricsExporterProvider(cfg MetricsConfig) (node.TerminalFunc[[]*ebpf.Record], error) {

@@ -40,7 +40,6 @@ const (
 type Deduper struct {
 	Type       string
 	ExpireTime time.Duration
-	JustMark   bool
 }
 
 func (d Deduper) Enabled() bool {
@@ -70,8 +69,7 @@ type entry struct {
 // DeduperProvider receives flows and filters these belonging to duplicate interfaces. It will forward
 // the flows from the first interface coming to it, until that flow expires in the cache
 // (no activity for it during the expiration time)
-// The justMark argument tells that the deduper should not drop the duplicate flows but
-// set their Duplicate field.
+// After passing by the deduper, the ebpf.Record instances loose their IfIndex and Direction fields.
 func DeduperProvider(dd Deduper) (node.MiddleFunc[[]*ebpf.Record, []*ebpf.Record], error) {
 	cache := &deduperCache{
 		expire:  dd.ExpireTime,
@@ -84,12 +82,15 @@ func DeduperProvider(dd Deduper) (node.MiddleFunc[[]*ebpf.Record, []*ebpf.Record
 			fwd := make([]*ebpf.Record, 0, len(records))
 			for _, record := range records {
 				if cache.isDupe(&record.Id) {
-					if dd.JustMark {
-						record.Duplicate = true
-					} else {
-						continue
-					}
+					continue
 				}
+				// Before forwarding, unset the non-common fields of deduplicate flows.
+				// These values are not relevant after deduplication and keeping them
+				// would unnecessarily increase cardinality, as they could chaotically
+				// contain the different directions and interfaces.
+				record.Id.IfIndex = ebpf.InterfaceUnset
+				record.Id.Direction = ebpf.DirectionUnset
+
 				fwd = append(fwd, record)
 			}
 			if len(fwd) > 0 {
@@ -105,8 +106,6 @@ func (c *deduperCache) isDupe(key *ebpf.NetFlowId) bool {
 	rk := *key
 	// zeroes fields from key that should be ignored from the flow comparison
 	rk.IfIndex = 0
-	rk.SrcMac = ebpf.MacAddr{}
-	rk.DstMac = ebpf.MacAddr{}
 	rk.Direction = 0
 	// If a flow has been accounted previously, whatever its interface was,
 	// it updates the expiry time for that flow

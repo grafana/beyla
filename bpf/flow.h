@@ -56,9 +56,7 @@ typedef struct flow_metrics_t {
 typedef struct flow_id_t {
     u16 eth_protocol;
     u8 direction;
-    // L2 data link layer
-    u8 src_mac[ETH_ALEN];
-    u8 dst_mac[ETH_ALEN];
+
     // L3 network layer
     // IPv4 addresses are encoded as IPv6 addresses with prefix ::ffff/96
     // as described in https://datatracker.ietf.org/doc/html/rfc4038#section-4.2

@@ -62,7 +62,7 @@ func (f *Flows) buildAndStartPipeline(ctx context.Context) (graph.Graph, error) 
 		// If deduper is enabled, we know that interfaces are unset.
 		// As an optimization, we just pass here an empty-string interface namer
 		ifaceNamer := f.interfaceNamer
-		if f.cfg.NetworkFlows.Deduper != flow.DeduperFirstCome {
+		if f.cfg.NetworkFlows.Deduper == flow.DeduperFirstCome {
 			ifaceNamer = func(_ int) string {
 				return ""
 			}

@@ -84,9 +84,10 @@ func DeduperProvider(dd Deduper) (node.MiddleFunc[[]*ebpf.Record, []*ebpf.Record
 				if cache.isDupe(&record.Id) {
 					continue
 				}
-				// Before forwarding, unset the non-common fields of non-duplicate flows.
+				// Before forwarding, unset the non-common fields of deduplicate flows.
 				// These values are not relevant after deduplication and keeping them
-				// would unnecessarily increase cardinality.
+				// would unnecessarily increase cardinality, as they could chaotically
+				// contain the different directions and interfaces.
 				record.Id.IfIndex = ebpf.InterfaceUnset
 				record.Id.Direction = ebpf.DirectionUnset
 

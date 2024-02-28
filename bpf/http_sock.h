@@ -328,8 +328,6 @@ static __always_inline void http2_grpc_end(http2_conn_stream_t *stream, http2_gr
         if (trace) {
             bpf_memcpy(trace, prev_info, sizeof(http2_grpc_request_t));
             bpf_probe_read(trace->ret_data, KPROBES_HTTP2_RET_BUF_SIZE, u_buf);
-
-            trace->type = EVENT_K_HTTP2_REQUEST;
             bpf_ringbuf_submit(trace, get_flags());
         }
     }

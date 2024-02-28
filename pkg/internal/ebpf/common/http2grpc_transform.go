@@ -3,6 +3,7 @@ package ebpfcommon
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"net"
 	"strconv"
 	"strings"
@@ -111,11 +112,14 @@ func readRetMetaFrame(conn *BPFConnInfo, fr *http2.Framer, hf *http2.HeadersFram
 
 	hdec.SetEmitFunc(func(hf hpack.HeaderField) {
 		hfKey := strings.ToLower(hf.Name)
+		// grpc requests may have :status and grpc-status. :status will be HTTP code.
+		// we prefer the grpc one if it exists, it's always later since : tagged headers
+		// end up first in the headers list.
 		switch hfKey {
 		case ":status":
 			status, _ = strconv.Atoi(hf.Value)
 			proto = HTTP2
-		case ":grpc-status":
+		case "grpc-status":
 			status, _ = strconv.Atoi(hf.Value)
 			protocolIsGRPC(conn)
 			proto = GRPC
@@ -175,6 +179,9 @@ func http2InfoToSpan(info *BPFHTTP2Info, method, path, peer, host string, status
 // or :status. Then we know what the protocol actually is.
 func (event *BPFHTTP2Info) eventType(protocol Protocol) request.EventType {
 	eventType := request.EventType(event.Type)
+
+	fmt.Printf("event type %d, protocol %d\n", eventType, protocol)
+
 	switch protocol {
 	case HTTP2:
 		return eventType // just use HTTP as is, no special handling

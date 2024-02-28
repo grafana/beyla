@@ -29,6 +29,7 @@ test/cmd/grpc/client/client
 
 bin/
 test/integration/components/server
+test/integration/components/testserver/testserver
 
 test/cmd/rust_pingserver/target
 test/cmd/rust_pingiron/target

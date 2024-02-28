@@ -350,6 +350,10 @@ static __always_inline void process_http2_grpc_frames(pid_connection_info_t *pid
         unsigned char frame_buf[FRAME_HEADER_LEN];
         frame_header_t frame = {0};
         
+        if (pos >= bytes_len) {
+            break;
+        }
+
         bpf_probe_read(&frame_buf, FRAME_HEADER_LEN, (void *)((u8 *)u_buf + pos));
         read_http2_grpc_frame_header(&frame, frame_buf, FRAME_HEADER_LEN);
         
@@ -365,9 +369,7 @@ static __always_inline void process_http2_grpc_frames(pid_connection_info_t *pid
 
             if (prev_info) {
                 saved_stream_id = stream.stream_id;
-                if (!saved_buf_pos) {
-                    saved_buf_pos = pos;
-                }
+                saved_buf_pos = pos;
                 if (http_grpc_stream_ended(&frame)) {
                     http2_grpc_end(&stream, prev_info, (void *)((u8 *)u_buf + saved_buf_pos));
                     found_frame = 1;

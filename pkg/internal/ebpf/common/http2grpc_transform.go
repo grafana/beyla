@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/cilium/ebpf/ringbuf"
+	lru "github.com/hashicorp/golang-lru/v2"
 	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/hpack"
@@ -27,6 +28,13 @@ const (
 	GRPC
 )
 
+var hdec = hpack.NewDecoder(0, nil)
+
+// not all requests for a given stream specify the protocol, but one must
+// we remember if we see grpc mentioned and tag the rest of the streams for
+// a given connection as grpc. default assumes plain HTTP2
+var activeGRPCConnections, _ = lru.New[BPFConnInfo, Protocol](1024)
+
 func byteFramer(data []uint8) *http2.Framer {
 	buf := bytes.NewBuffer(data)
 	fr := http2.NewFramer(buf, buf) // the write is same as read, but we never write
@@ -34,12 +42,24 @@ func byteFramer(data []uint8) *http2.Framer {
 	return fr
 }
 
-func readMetaFrame(fr *http2.Framer, hf *http2.HeadersFrame) (string, string) {
+func defaultProtocol(conn *BPFConnInfo) Protocol {
+	proto, ok := activeGRPCConnections.Get(*conn)
+	if !ok {
+		proto = HTTP2
+	}
+
+	return proto
+}
+
+func protocolIsGRPC(conn *BPFConnInfo) {
+	activeGRPCConnections.Add(*conn, GRPC)
+}
+
+func readMetaFrame(conn *BPFConnInfo, fr *http2.Framer, hf *http2.HeadersFrame) (string, string, Protocol) {
 	method := ""
 	path := ""
+	proto := defaultProtocol(conn)
 
-	hdec := hpack.NewDecoder(0, nil)
-	hdec.SetMaxStringLength(4096)
 	hdec.SetEmitFunc(func(hf hpack.HeaderField) {
 		hfKey := strings.ToLower(hf.Name)
 		switch hfKey {
@@ -47,6 +67,11 @@ func readMetaFrame(fr *http2.Framer, hf *http2.HeadersFrame) (string, string) {
 			method = hf.Value
 		case ":path":
 			path = hf.Value
+		case "content-type":
+			if strings.ToLower(hf.Value) == "application/grpc" {
+				protocolIsGRPC(conn)
+				proto = GRPC
+			}
 		}
 	})
 	// Lose reference to MetaHeadersFrame:
@@ -55,26 +80,35 @@ func readMetaFrame(fr *http2.Framer, hf *http2.HeadersFrame) (string, string) {
 	for {
 		frag := hf.HeaderBlockFragment()
 		if _, err := hdec.Write(frag); err != nil {
-			return method, path
+			return method, path, proto
 		}
 
 		if hf.HeadersEnded() {
 			break
 		}
 		if _, err := fr.ReadFrame(); err != nil {
-			return method, path
+			return method, path, proto
 		}
 	}
 
-	return method, path
+	return method, path, proto
 }
 
-func readRetMetaFrame(fr *http2.Framer, hf *http2.HeadersFrame) (int, Protocol) {
-	status := 0
-	proto := HTTP2
+func http2grpcStatus(status int) int {
+	if status < 100 {
+		return status
+	}
+	if status < 400 {
+		return 0
+	}
 
-	hdec := hpack.NewDecoder(0, nil)
-	hdec.SetMaxStringLength(4096)
+	return 2 // Unknown
+}
+
+func readRetMetaFrame(conn *BPFConnInfo, fr *http2.Framer, hf *http2.HeadersFrame) (int, Protocol) {
+	status := 0
+	proto := defaultProtocol(conn)
+
 	hdec.SetEmitFunc(func(hf hpack.HeaderField) {
 		hfKey := strings.ToLower(hf.Name)
 		switch hfKey {
@@ -83,6 +117,7 @@ func readRetMetaFrame(fr *http2.Framer, hf *http2.HeadersFrame) (int, Protocol) 
 			proto = HTTP2
 		case ":grpc-status":
 			status, _ = strconv.Atoi(hf.Value)
+			protocolIsGRPC(conn)
 			proto = GRPC
 		}
 	})
@@ -188,14 +223,20 @@ func ReadHTTP2InfoIntoSpan(record *ringbuf.Record) (request.Span, bool, error) {
 
 	switch ff := retF.(type) {
 	case *http2.HeadersFrame:
-		status, eventType = readRetMetaFrame(retFramer, ff)
+		status, eventType = readRetMetaFrame((*BPFConnInfo)(&event.ConnInfo), retFramer, ff)
 	}
 
 	f, _ := framer.ReadFrame()
 
 	switch ff := f.(type) {
 	case *http2.HeadersFrame:
-		method, path := readMetaFrame(framer, ff)
+		method, path, proto := readMetaFrame((*BPFConnInfo)(&event.ConnInfo), framer, ff)
+
+		if eventType != GRPC && proto == GRPC {
+			eventType = proto
+			status = http2grpcStatus(status)
+		}
+
 		peer := ""
 		host := ""
 		if event.ConnInfo.S_port != 0 || event.ConnInfo.D_port != 0 {

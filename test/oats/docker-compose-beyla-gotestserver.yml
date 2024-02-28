@@ -9,7 +9,7 @@ services:
       - "8081:8081"
       - "8082:8082"
       - "8083:8083"
-      - "50051:50051"
+      - "5051:5051"
     environment:
       LOG_LEVEL: DEBUG
   # eBPF auto instrumenter

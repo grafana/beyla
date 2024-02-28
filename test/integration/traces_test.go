@@ -196,7 +196,7 @@ func testGRPCTracesForServiceName(t *testing.T, svcName string) {
 	assert.Less(t, (10 * time.Millisecond).Microseconds(), parent.Duration)
 	// check span attributes
 	sd := parent.Diff(
-		jaeger.Tag{Key: "server.port", Type: "int64", Value: float64(50051)},
+		jaeger.Tag{Key: "server.port", Type: "int64", Value: float64(5051)},
 		jaeger.Tag{Key: "rpc.grpc.status_code", Type: "int64", Value: float64(2)},
 		jaeger.Tag{Key: "rpc.method", Type: "string", Value: "/routeguide.RouteGuide/Debug"},
 		jaeger.Tag{Key: "rpc.system", Type: "string", Value: "grpc"},
@@ -331,7 +331,7 @@ func testGRPCKProbeTraces(t *testing.T) {
 	assert.Less(t, (10 * time.Millisecond).Microseconds(), parent.Duration)
 	// check span attributes
 	sd := parent.Diff(
-		jaeger.Tag{Key: "server.port", Type: "int64", Value: float64(50051)},
+		jaeger.Tag{Key: "server.port", Type: "int64", Value: float64(5051)},
 		jaeger.Tag{Key: "rpc.grpc.status_code", Type: "int64", Value: float64(2)},
 		jaeger.Tag{Key: "rpc.method", Type: "string", Value: "/routeguide.RouteGuide/Debug"},
 		jaeger.Tag{Key: "rpc.system", Type: "string", Value: "grpc"},

@@ -115,7 +115,7 @@ func FeatureGRPCMetricsDecoration() features.Feature {
 		TemplateFile: GrpcPingerManifest,
 		Data: Pinger{
 			PodName:   "internal-grpc-pinger",
-			TargetURL: "testserver:50051",
+			TargetURL: "testserver:5051",
 		},
 	}
 	return features.New("Decoration of Pod-to-Service communications").

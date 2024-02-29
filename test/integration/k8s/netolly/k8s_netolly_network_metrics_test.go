@@ -52,6 +52,7 @@ func testNetFlowBytesForExistingConnections(ctx context.Context, t *testing.T, _
 		assert.Equal(t, "default", metric["src_namespace"])
 		assert.Equal(t, "default", metric["dst_namespace"])
 		assert.Equal(t, "beyla-network-flows", metric["job"])
+		assert.Equal(t, "my-kube", metric["k8s_cluster_name"])
 		assert.Equal(t, "default", metric["k8s_src_namespace"])
 		assert.Equal(t, "internal-pinger", metric["k8s_src_name"])
 		assert.Equal(t, "Pod", metric["k8s_src_owner_type"])

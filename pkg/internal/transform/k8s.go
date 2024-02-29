@@ -31,6 +31,11 @@ func klog() *slog.Logger {
 
 type KubernetesDecorator struct {
 	Enable KubeEnableFlag `yaml:"enable" env:"BEYLA_KUBE_METADATA_ENABLE"`
+
+	// ClusterName overrides cluster name. If empty, the NetO11y module will try to retrieve
+	// it from the Cloud Provider Metadata (EC2, GCP and Azure), and leave it empty if it fails to.
+	ClusterName string `yaml:"cluster_name" env:"BEYLA_KUBE_CLUSTER_NAME"`
+
 	// KubeconfigPath is optional. If unset, it will look in the usual location.
 	KubeconfigPath string `yaml:"kubeconfig_path" env:"KUBECONFIG"`
 

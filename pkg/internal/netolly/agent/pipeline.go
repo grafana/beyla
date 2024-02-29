@@ -24,9 +24,10 @@ type FlowsPipeline struct {
 
 	ReverseDNS flow.ReverseDNS `forwardTo:"Decorator"`
 
-	Decorator `sendTo:"Exporter"`
+	Decorator `sendTo:"Exporter,Printer"`
 
 	Exporter export.MetricsConfig
+	Printer  export.FlowPrinterEnabled
 }
 
 type MapTracer struct{}
@@ -48,12 +49,15 @@ func (f *Flows) buildAndStartPipeline(ctx context.Context) (graph.Graph, error) 
 	alog.Debug("creating flows' processing graph")
 	gb := graph.NewBuilder(node.ChannelBufferLen(f.cfg.ChannelBufferLen))
 
+	// Start nodes: those generating flow records (reading them from eBPF)
 	graph.RegisterStart(gb, func(_ MapTracer) (node.StartFunc[[]*ebpf.Record], error) {
 		return f.mapTracer.TraceLoop(ctx), nil
 	})
 	graph.RegisterStart(gb, func(_ RingBufTracer) (node.StartFunc[*ebpf.NetFlowRecordT], error) {
 		return f.rbTracer.TraceLoop(ctx), nil
 	})
+
+	// Middle nodes: apply transformations to the flow records, decorating and even removing them.
 	graph.RegisterMiddle(gb, func(_ Accounter) (node.MiddleFunc[*ebpf.NetFlowRecordT, []*ebpf.Record], error) {
 		return f.accounter.Account, nil
 	})
@@ -69,9 +73,14 @@ func (f *Flows) buildAndStartPipeline(ctx context.Context) (graph.Graph, error) 
 		}
 		return flow.Decorate(f.agentIP, ifaceNamer), nil
 	})
-	graph.RegisterMiddle(gb, k8s.MetadataDecoratorProvider)
+	graph.RegisterMiddle(gb, func(cfg k8s.MetadataDecorator) (node.MiddleFunc[[]*ebpf.Record, []*ebpf.Record], error) {
+		return k8s.MetadataDecoratorProvider(ctx, cfg)
+	})
 	graph.RegisterMiddle(gb, flow.ReverseDNSProvider)
+
+	// Terminal nodes export the flow record information out of the pipeline: OTEL and printer
 	graph.RegisterTerminal(gb, export.MetricsExporterProvider)
+	graph.RegisterTerminal(gb, export.FlowPrinterProvider)
 
 	var deduperExpireTime = f.cfg.NetworkFlows.DeduperFCExpiry
 	if deduperExpireTime <= 0 {
@@ -84,7 +93,8 @@ func (f *Flows) buildAndStartPipeline(ctx context.Context) (graph.Graph, error) 
 		},
 		Kubernetes: k8s.MetadataDecorator{Kubernetes: &f.cfg.Attributes.Kubernetes},
 		// TODO: allow prometheus exporting
-		Exporter:   export.MetricsConfig{Metrics: &f.cfg.Metrics},
 		ReverseDNS: f.cfg.NetworkFlows.ReverseDNS,
+		Exporter:   export.MetricsConfig{Metrics: &f.cfg.Metrics},
+		Printer:    export.FlowPrinterEnabled(f.cfg.NetworkFlows.Print),
 	})
 }

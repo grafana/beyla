@@ -7,6 +7,7 @@ data:
     attributes:
       kubernetes:
         enable: true
+        cluster_name: my-kube
     log_level: debug
     otel_metrics_export:
       endpoint: http://otelcol.default:4317

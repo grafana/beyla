@@ -1,3 +1,4 @@
+{{ $internalMetricsPort := include "beyla.internalMetricsPort" . }}
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
@@ -12,7 +13,7 @@ metadata:
 spec:
   selector:
     matchLabels:
-      instrumentation: {{ include "beyla.fullname" . }}
+{{ include "beyla.selectorLabels" . | indent 6 }}
   {{- with .Values.updateStrategy }}
   strategy:
     {{- toYaml . | trim | nindent 4 }}
@@ -20,7 +21,7 @@ spec:
   template:
     metadata:
       labels:
-        instrumentation: {{ include "beyla.fullname" . }}
+{{ include "beyla.selectorLabels" . | indent 8 }}
     spec:
      {{- if .Values.serviceAccount.create }}
       serviceAccountName: {{ include "beyla.serviceAccountName" . }}
@@ -36,6 +37,11 @@ spec:
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           securityContext:
             privileged: true
+          ports:
+          {{- if ne $internalMetricsPort "0" }}
+          - containerPort: {{ $internalMetricsPort }}
+            protocol: TCP
+          {{- end }}
           volumeMounts:
             - mountPath: /config
               name: beyla-config

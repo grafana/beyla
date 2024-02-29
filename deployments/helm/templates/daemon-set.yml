@@ -13,6 +13,10 @@ spec:
   selector:
     matchLabels:
       instrumentation: {{ include "beyla.fullname" . }}
+  {{- with .Values.updateStrategy }}
+  strategy:
+    {{- toYaml . | trim | nindent 4 }}
+  {{- end }}
   template:
     metadata:
       labels:
@@ -50,4 +54,16 @@ spec:
             - name: {{ $key | quote }}
               valueFrom:
           {{- tpl (toYaml $value) $ | nindent 16 }}
+          {{- end }}
+          {{- with .Values.nodeSelector }}          
+          nodeSelector:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.affinity }}
+          affinity:
+            {{- tpl (toYaml .) $ | nindent 12 }}
+          {{- end }}
+          {{- with .Values.tolerations }}
+          tolerations:
+            {{- toYaml . | nindent 12 }}
           {{- end }}

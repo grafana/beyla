@@ -95,6 +95,12 @@ readinessProbe:
     path: /
     port: http
 
+
+## See `kubectl explain deployment.spec.strategy` for more
+## ref: https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#strategy
+updateStrategy:
+  type: RollingUpdate
+
 autoscaling:
   enabled: false
   minReplicas: 1

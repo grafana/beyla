@@ -20,14 +20,9 @@ package ebpf
 
 import (
 	"encoding/binary"
-	"fmt"
 	"io"
 	"net"
 )
-
-const MacLen = 6
-
-type MacAddr [MacLen]uint8
 
 // IPAddr encodes v4 and v6 IPs with a fixed length.
 // IPv4 addresses are encoded as IPv6 addresses with prefix ::ffff/96
@@ -39,14 +34,6 @@ type IPAddr [net.IPv6len]uint8
 // that is added from the user space
 type Record struct {
 	NetFlowRecordT
-
-	// Duplicate tells whether this flow has another duplicate so it has to be excluded from
-	// any metrics' aggregation (e.g. bytes/second rates between two pods).
-	// The reason for this field is that the same flow can be observed from multiple interfaces,
-	// so the agent needs to choose only a view of the same flow and mark the others as
-	// "exclude from aggregation". Otherwise rates, sums, etc... values would be multiplied by the
-	// number of interfaces this flow is observed from.
-	Duplicate bool
 
 	// Attrs of the flow record: source/destination, Interface, Beyla IP, etc...
 	Attrs RecordAttrs
@@ -105,16 +92,6 @@ func (fi *NetFlowId) DstIP() *IPAddr {
 	return (*IPAddr)(&fi.DstIp.In6U.U6Addr8)
 }
 
-// SrcMAC is never null. Returned as pointer for efficiency.
-func (fi *NetFlowId) SrcMAC() *MacAddr {
-	return (*MacAddr)(&fi.SrcMac)
-}
-
-// DstMAC is never null. Returned as pointer for efficiency.
-func (fi *NetFlowId) DstMAC() *MacAddr {
-	return (*MacAddr)(&fi.DstMac)
-}
-
 // IP returns the net.IP equivalent object
 func (ia *IPAddr) IP() net.IP {
 	return ia[:]
@@ -129,14 +106,6 @@ func (ia *IPAddr) IntEncodeV4() uint32 {
 
 func (ia *IPAddr) MarshalJSON() ([]byte, error) {
 	return []byte(`"` + ia.IP().String() + `"`), nil
-}
-
-func (m *MacAddr) String() string {
-	return fmt.Sprintf("%02x:%02x:%02x:%02x:%02x:%02x", m[0], m[1], m[2], m[3], m[4], m[5])
-}
-
-func (m *MacAddr) MarshalJSON() ([]byte, error) {
-	return []byte("\"" + m.String() + "\""), nil
 }
 
 // ReadFrom reads a Record from a binary source, in LittleEndian order

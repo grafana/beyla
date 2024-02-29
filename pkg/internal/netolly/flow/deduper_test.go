@@ -38,14 +38,12 @@ func init() {
 	}, Metrics: ebpf.NetFlowMetrics{
 		Packets: 2, Bytes: 456, Flags: 1,
 	}}, Attrs: ebpf.RecordAttrs{Interface: "eth0"}}
-	oneIf1.Id.SrcMac, oneIf1.Id.DstMac = [6]uint8{0x1}, [6]uint8{0x1}
 
 	oneIf2 = &ebpf.Record{NetFlowRecordT: ebpf.NetFlowRecordT{Id: ebpf.NetFlowId{
 		EthProtocol: 1, Direction: 1, SrcPort: 123, DstPort: 456, IfIndex: 2,
 	}, Metrics: ebpf.NetFlowMetrics{
 		Packets: 2, Bytes: 456, Flags: 1,
 	}}, Attrs: ebpf.RecordAttrs{Interface: "123456789"}}
-	oneIf2.Id.SrcMac, oneIf2.Id.DstMac = [6]uint8{0x2}, [6]uint8{0x2}
 
 	// twoIf1 and twoIf2 are another fow from 2 different interfaces and directions
 	twoIf1 = &ebpf.Record{NetFlowRecordT: ebpf.NetFlowRecordT{Id: ebpf.NetFlowId{
@@ -53,75 +51,38 @@ func init() {
 	}, Metrics: ebpf.NetFlowMetrics{
 		Packets: 2, Bytes: 456, Flags: 1,
 	}}, Attrs: ebpf.RecordAttrs{Interface: "eth0"}}
-	twoIf1.Id.SrcMac, twoIf1.Id.DstMac = [6]uint8{0x1}, [6]uint8{0x1}
 
 	twoIf2 = &ebpf.Record{NetFlowRecordT: ebpf.NetFlowRecordT{Id: ebpf.NetFlowId{
 		EthProtocol: 1, Direction: 0, SrcPort: 333, DstPort: 456, IfIndex: 2,
 	}, Metrics: ebpf.NetFlowMetrics{
 		Packets: 2, Bytes: 456, Flags: 1,
 	}}, Attrs: ebpf.RecordAttrs{Interface: "123456789"}}
-	twoIf2.Id.SrcMac, twoIf2.Id.DstMac = [6]uint8{0x2}, [6]uint8{0x2}
-
 }
 
 func TestDedupe(t *testing.T) {
 	input := make(chan []*ebpf.Record, 100)
 	output := make(chan []*ebpf.Record, 100)
 
-	dedupe, err := DeduperProvider(Deduper{Type: DeduperFirstCome, ExpireTime: time.Minute, JustMark: false})
+	dedupe, err := DeduperProvider(Deduper{Type: DeduperFirstCome, ExpireTime: time.Minute})
 	require.NoError(t, err)
 	go dedupe(input, output)
 
 	input <- []*ebpf.Record{
-		oneIf2, // record 1 at interface 2: should be accepted
-		twoIf1, // record 2 at interface 1: should be accepted
-		oneIf1, // record 1 duplicate at interface 1: should NOT be accepted
-		oneIf1, //                                        (same record key, different interface)
-		twoIf2, // record 2 duplicate at interface 2: should NOT be accepted
-		oneIf2, // record 1 at interface 1: should be accepted (same record key, same interface)
+		clone(oneIf2), // record 1 at interface 2: should be accepted
+		clone(twoIf1), // record 2 at interface 1: should be accepted
+		clone(oneIf1), // record 1 duplicate at interface 1: should NOT be accepted
+		clone(oneIf1), //                                        (same record key, different interface)
+		clone(twoIf2), // record 2 duplicate at interface 2: should NOT be accepted
+		clone(oneIf2), // record 1 at interface 1: should be accepted (same record key, same interface)
 	}
 	deduped := receiveTimeout(t, output)
-	assert.Equal(t, []*ebpf.Record{oneIf2, twoIf1, oneIf2}, deduped)
+	assert.Equal(t, []*ebpf.Record{unset(oneIf2), unset(twoIf1), unset(oneIf2)}, deduped)
 
 	// should still accept records with same key, same interface,
 	// and discard these with same key, different interface
-	input <- []*ebpf.Record{oneIf1, oneIf2}
-	deduped = receiveTimeout(t, output)
-	assert.Equal(t, []*ebpf.Record{oneIf2}, deduped)
-}
-
-func TestDedupe_JustMark(t *testing.T) {
-	input := make(chan []*ebpf.Record, 100)
-	output := make(chan []*ebpf.Record, 100)
-
-	dedupe, err := DeduperProvider(Deduper{Type: DeduperFirstCome, ExpireTime: time.Minute, JustMark: true})
-	require.NoError(t, err)
-	go dedupe(input, output)
-
-	input <- []*ebpf.Record{
-		clone(oneIf2), // record 1 at interface 2: not duplicate
-		clone(twoIf1), // record 2 at interface 1: not duplicate
-		clone(oneIf1), // record 1 duplicate at interface 1: should be marked as duplicate
-		clone(oneIf1), //                                        (same record key, different interface)
-		clone(twoIf2), // record 2 duplicate at interface 2: should be marked as duplicate
-		clone(oneIf2), // record 1 at interface 1: not duplicate (same record key, same interface)
-	}
-	deduped := receiveTimeout(t, output)
-
-	assert.Equal(t, []*ebpf.Record{
-		oneIf2,
-		twoIf1,
-		asDuplicate(oneIf1),
-		asDuplicate(oneIf1),
-		asDuplicate(twoIf2),
-		oneIf2,
-	}, deduped)
-
-	// should still accept as non-duplicate records with same key, same interface,
-	// and mark as duplicate these with same key, different interface
 	input <- []*ebpf.Record{clone(oneIf1), clone(oneIf2)}
 	deduped = receiveTimeout(t, output)
-	assert.Equal(t, []*ebpf.Record{asDuplicate(oneIf1), oneIf2}, deduped)
+	assert.Equal(t, []*ebpf.Record{unset(oneIf2)}, deduped)
 }
 
 func TestDedupe_EvictFlows(t *testing.T) {
@@ -130,7 +91,7 @@ func TestDedupe_EvictFlows(t *testing.T) {
 	input := make(chan []*ebpf.Record, 100)
 	output := make(chan []*ebpf.Record, 100)
 
-	dedupe, err := DeduperProvider(Deduper{Type: DeduperFirstCome, ExpireTime: 15 * time.Second, JustMark: false})
+	dedupe, err := DeduperProvider(Deduper{Type: DeduperFirstCome, ExpireTime: 15 * time.Second})
 	require.NoError(t, err)
 	go dedupe(input, output)
 
@@ -186,8 +147,9 @@ func clone(in *ebpf.Record) *ebpf.Record {
 	return &out
 }
 
-func asDuplicate(in *ebpf.Record) *ebpf.Record {
+func unset(in *ebpf.Record) *ebpf.Record {
 	out := clone(in)
-	out.Duplicate = true
+	out.Id.IfIndex = ebpf.InterfaceUnset
+	out.Id.Direction = ebpf.DirectionUnset
 	return out
 }

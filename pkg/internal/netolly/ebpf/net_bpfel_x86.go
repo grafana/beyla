@@ -18,8 +18,6 @@ type NetFlowId NetFlowIdT
 type NetFlowIdT struct {
 	EthProtocol       uint16
 	Direction         uint8
-	SrcMac            [6]uint8
-	DstMac            [6]uint8
 	SrcIp             struct{ In6U struct{ U6Addr8 [16]uint8 } }
 	DstIp             struct{ In6U struct{ U6Addr8 [16]uint8 } }
 	SrcPort           uint16

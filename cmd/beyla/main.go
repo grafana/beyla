@@ -29,6 +29,11 @@ func main() {
 
 	slog.Info("Grafana Beyla", "Version", buildinfo.Version, "Revision", buildinfo.Revision, "OpenTelemetry SDK Version", otelsdk.Version())
 
+	if err := beyla.CheckOSSupport(); err != nil {
+		slog.Error("can't start Beyla", "error", err)
+		os.Exit(-1)
+	}
+
 	configPath := flag.String("config", "", "path to the configuration file")
 	flag.Parse()
 

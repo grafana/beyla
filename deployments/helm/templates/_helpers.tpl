@@ -81,8 +81,12 @@ Note: Precedence is given for environment variable
 {{- define "beyla.internalMetricsPort" -}}
 {{- if .Values.env.BEYLA_INTERNAL_METRICS_PROMETHEUS_PORT }}
 {{- print .Values.env.BEYLA_INTERNAL_METRICS_PROMETHEUS_PORT }}
-{{ else if and (.Values.configmapData.prometheus_export) (ne (.Values.configmapData.prometheus_export.port | quote ) "") }}
+{{ else if and (.Values.configmapData.prometheus_export) }}
+  {{- if ne (.Values.configmapData.prometheus_export.port | quote ) ""}}
 {{- print .Values.configmapData.prometheus_export.port }}
+  {{- else }}
+  {{- print 0 }}
+  {{- end }}
 {{- else }}
 {{- print 0 }}
 {{- end }}

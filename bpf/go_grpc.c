@@ -27,7 +27,7 @@ typedef struct grpc_srv_func_invocation {
 } grpc_srv_func_invocation_t;
 
 struct {
-    __uint(type, BPF_MAP_TYPE_HASH);
+    __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __type(key, void *); // key: pointer to the request goroutine
     __type(value, u16);
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
@@ -50,7 +50,7 @@ struct {
 } ongoing_grpc_client_requests SEC(".maps");
 
 struct {
-    __uint(type, BPF_MAP_TYPE_HASH);
+    __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __type(key, void *); // key: pointer to the request goroutine
     __type(value, grpc_srv_func_invocation_t);
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
@@ -65,7 +65,7 @@ struct {
 } ongoing_streams SEC(".maps");
 
 struct {
-    __uint(type, BPF_MAP_TYPE_HASH);
+    __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __type(key, void *); // key: pointer to the request goroutine
     __type(value, grpc_client_func_invocation_t);
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);

@@ -50,7 +50,7 @@ spec:
     - port: 8083
       name: http
       targetPort: http3
-    - port: 50051
+    - port: 5051
       name: grpc
       targetPort: grpc
 ---

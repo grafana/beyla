@@ -132,6 +132,11 @@ func extractHostPort(b []uint8) (string, int) {
 }
 
 func extractIP(b []uint8, size int) string {
+	// Temporary fix to avoid crashes if the data is not correct.
+	// We saw issues with peer location changes in grpc 1.60
+	if size < 0 || size > 4096 {
+		return ""
+	}
 	if size > len(b) {
 		size = len(b)
 	}

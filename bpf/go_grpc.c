@@ -178,8 +178,13 @@ int uprobe_server_handleStream_return(struct pt_regs *ctx) {
     // Read the embedded object ptr
     bpf_probe_read(&st_ptr, sizeof(st_ptr), (void *)(stream_ptr + grpc_stream_st_ptr_pos + sizeof(void *)));
 
-    if (st_ptr) {
+    trace->host_len = 0;
+    trace->remote_addr_len = 0;
+    trace->host_port = 0;
+    __builtin_memset(trace->host, 0, sizeof(trace->host));    
+    __builtin_memset(trace->remote_addr, 0, sizeof(trace->remote_addr));
 
+    if (st_ptr) {
         void *remote_addr = 0;
         void *local_addr = 0;
 

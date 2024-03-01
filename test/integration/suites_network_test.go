@@ -62,7 +62,7 @@ func getNetFlows(t *testing.T) []prom.Result {
 		require.Equal(t, http.StatusOK, r.StatusCode)
 
 		// now, verify that the network metric has been reported.
-		results, err = pq.Query(`network_flow_bytes_total`)
+		results, err = pq.Query(`beyla_network_flow_bytes_total`)
 		require.NoError(t, err)
 		require.NotEmpty(t, results)
 	}, test.Interval(time.Second))

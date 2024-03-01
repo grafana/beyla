@@ -113,7 +113,7 @@ func MetricsExporterProvider(cfg MetricsConfig) (node.TerminalFunc[[]*ebpf.Recor
 	ebpfEvents := otel2.Meter("network_ebpf_events")
 
 	flowBytes, err := ebpfEvents.Int64Counter(
-		"network.flow.bytes",
+		"beyla.network.flow.bytes",
 		metric2.WithDescription("total bytes_sent value of network flows observed by probe since its launch"),
 		metric2.WithUnit("{bytes}"),
 	)

@@ -8,7 +8,7 @@ entities:
       site: asserts_site
     definedBy:
       - query: |
-          group by (asserts_env, asserts_site, k8s_src_namespace, k8s_src_owner_name) (network_flow_bytes_total{k8s_src_owner_type=~"Pod|Deployment|Node|DaemonSet|ReplicaSet|StatefulSet"})
+          group by (asserts_env, asserts_site, k8s_src_namespace, k8s_src_owner_name) (beyla_network_flow_bytes_total{k8s_src_owner_type=~"Pod|Deployment|Node|DaemonSet|ReplicaSet|StatefulSet"})
   - type: Service
     name: k8s_dst_owner_name
     scope:
@@ -17,7 +17,7 @@ entities:
       site: asserts_site
     definedBy:
       - query: |
-          group by (asserts_env, asserts_site, k8s_dst_namespace, k8s_dst_owner_name) (network_flow_bytes_total{k8s_dst_owner_type=~"Pod|Deployment|Node|DaemonSet|ReplicaSet|StatefulSet"})
+          group by (asserts_env, asserts_site, k8s_dst_namespace, k8s_dst_owner_name) (beyla_network_flow_bytes_total{k8s_dst_owner_type=~"Pod|Deployment|Node|DaemonSet|ReplicaSet|StatefulSet"})
   - type: Node
     name: k8s_src_host_name
     scope:
@@ -26,7 +26,7 @@ entities:
       site: asserts_site
     definedBy:
       - query: |
-          group by (asserts_env, asserts_site, k8s_src_host_name) (network_flow_bytes_total{k8s_src_type=~"Pod|Node"})
+          group by (asserts_env, asserts_site, k8s_src_host_name) (beyla_network_flow_bytes_total{k8s_src_type=~"Pod|Node"})
   - type: Node
     name: k8s_dst_host_name
     scope:
@@ -35,7 +35,7 @@ entities:
       site: asserts_site
     definedBy:
       - query: |
-          group by (asserts_env, asserts_site, k8s_dst_host_name) (network_flow_bytes_total{k8s_dst_type=~"Pod|Node"})
+          group by (asserts_env, asserts_site, k8s_dst_host_name) (beyla_network_flow_bytes_total{k8s_dst_type=~"Pod|Node"})
   - type: Namespace
     name: k8s_src_namespace
     scope:
@@ -44,7 +44,7 @@ entities:
       site: asserts_site
     definedBy:
       - query: |
-          group by (asserts_env, asserts_site, k8s_src_namespace) (network_flow_bytes_total{k8s_src_type="Pod"})
+          group by (asserts_env, asserts_site, k8s_src_namespace) (beyla_network_flow_bytes_total{k8s_src_type="Pod"})
   - type: Namespace
     name: k8s_dst_namespace
     scope:
@@ -53,7 +53,7 @@ entities:
       site: asserts_site
     definedBy:
       - query: |
-          group by (asserts_env, asserts_site, k8s_dst_namespace) (network_flow_bytes_total{k8s_dst_type="Pod"})
+          group by (asserts_env, asserts_site, k8s_dst_namespace) (beyla_network_flow_bytes_total{k8s_dst_type="Pod"})
   - type: Pod
     name: k8s_src_name
     scope:
@@ -62,7 +62,7 @@ entities:
       site: asserts_site
     definedBy:
       - query: |
-          group by (asserts_env, asserts_site, k8s_src_namespace, k8s_src_name) (network_flow_bytes_total{k8s_src_type="Pod"})
+          group by (asserts_env, asserts_site, k8s_src_namespace, k8s_src_name) (beyla_network_flow_bytes_total{k8s_src_type="Pod"})
   - type: Pod
     name: k8s_dst_name
     scope:
@@ -71,7 +71,7 @@ entities:
       site: asserts_site
     definedBy:
       - query: |
-          group by (asserts_env, asserts_site, k8s_dst_namespace, k8s_dst_name) (network_flow_bytes_total{k8s_dst_type="Pod"})
+          group by (asserts_env, asserts_site, k8s_dst_namespace, k8s_dst_name) (beyla_network_flow_bytes_total{k8s_dst_type="Pod"})
   - type: Service
     name: k8s_src_name
     scope:
@@ -80,7 +80,7 @@ entities:
       site: asserts_site
     definedBy:
       - query: |
-          group by (asserts_env, asserts_site, k8s_src_namespace, k8s_src_name) (network_flow_bytes_total{k8s_src_type="Service"})
+          group by (asserts_env, asserts_site, k8s_src_namespace, k8s_src_name) (beyla_network_flow_bytes_total{k8s_src_type="Service"})
   - type: Service
     name: k8s_dst_name
     scope:
@@ -89,7 +89,7 @@ entities:
       site: asserts_site
     definedBy:
       - query: |
-          group by (asserts_env, asserts_site, k8s_dst_namespace, k8s_dst_name) (network_flow_bytes_total{k8s_dst_ype="Service"})
+          group by (asserts_env, asserts_site, k8s_dst_namespace, k8s_dst_name) (beyla_network_flow_bytes_total{k8s_dst_ype="Service"})
 relations:
   - type: ROUTES
     startEntityType: Pod
@@ -97,7 +97,7 @@ relations:
     definedBy: !<METRICS>
       pattern: |
         group by (asserts_env, asserts_site, k8s_src_namespace, k8s_src_name, k8s_dst_namespace, k8s_dst_name) (
-            rate(network_flow_bytes_total{k8s_src_type="Pod",k8s_dst_type="Pod"}[1m])
+            rate(beyla_network_flow_bytes_total{k8s_src_type="Pod",k8s_dst_type="Pod"}[1m])
         )
       startEntityMatchers:
         name: k8s_src_name
@@ -115,7 +115,7 @@ relations:
     definedBy: !<METRICS>
       pattern: |
         group by (asserts_env, asserts_site, k8s_src_namespace, k8s_dst_namespace) (
-            rate(network_flow_bytes_total{k8s_src_type="Pod",k8s_dst_type="Service"}[1m])
+            rate(beyla_network_flow_bytes_total{k8s_src_type="Pod",k8s_dst_type="Service"}[1m])
         )
       startEntityMatchers:
         name: k8s_src_namespace
@@ -133,7 +133,7 @@ relations:
     definedBy: !<METRICS>
       pattern: |
         group by (asserts_env, asserts_site, k8s_src_host_name, k8s_dst_host_name) (
-            rate(network_flow_bytes_total{k8s_src_type=~"Pod|Node",k8s_dst_type=~"Pod|Node"}[1m])
+            rate(beyla_network_flow_bytes_total{k8s_src_type=~"Pod|Node",k8s_dst_type=~"Pod|Node"}[1m])
         )
       startEntityMatchers:
         name: k8s_src_host_name
@@ -151,7 +151,7 @@ relations:
     definedBy: !<METRICS>
       pattern: |
         group by (asserts_env, asserts_site, k8s_src_namespace, k8s_dst_namespace, k8s_src_owner_name, k8s_dst_owner_name) (
-            rate(network_flow_bytes_total{k8s_src_owner_type=~"Pod|Deployment|DaemonSet|ReplicaSet|StatefulSet|Service",k8s_dst_owner_type=~"Pod|Deployment|DaemonSet|ReplicaSet|StatefulSet|Service"}[1m])
+            rate(beyla_network_flow_bytes_total{k8s_src_owner_type=~"Pod|Deployment|DaemonSet|ReplicaSet|StatefulSet|Service",k8s_dst_owner_type=~"Pod|Deployment|DaemonSet|ReplicaSet|StatefulSet|Service"}[1m])
         )
       startEntityMatchers:
         name: k8s_src_owner_name

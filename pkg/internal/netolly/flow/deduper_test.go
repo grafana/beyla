@@ -153,3 +153,24 @@ func unset(in *ebpf.Record) *ebpf.Record {
 	out.Id.Direction = ebpf.DirectionUnset
 	return out
 }
+
+func receiveTimeout(t *testing.T, evictor <-chan []*ebpf.Record) []*ebpf.Record {
+	t.Helper()
+	select {
+	case r := <-evictor:
+		return r
+	case <-time.After(timeout):
+		require.Fail(t, "timeout while waiting for evicted record")
+	}
+	return nil
+}
+
+func requireNoEviction(t *testing.T, evictor <-chan []*ebpf.Record) {
+	t.Helper()
+	select {
+	case r := <-evictor:
+		require.Failf(t, "unexpected evicted record", "%+v", r)
+	default:
+		// ok!
+	}
+}

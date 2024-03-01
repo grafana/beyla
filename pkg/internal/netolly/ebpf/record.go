@@ -109,8 +109,8 @@ func (ia *IPAddr) MarshalJSON() ([]byte, error) {
 }
 
 // ReadFrom reads a Record from a binary source, in LittleEndian order
-func ReadFrom(reader io.Reader) (*NetFlowRecordT, error) {
+func ReadFrom(reader io.Reader) (NetFlowRecordT, error) {
 	var fr NetFlowRecordT
 	err := binary.Read(reader, binary.LittleEndian, &fr)
-	return &fr, err
+	return fr, err
 }

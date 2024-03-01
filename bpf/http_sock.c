@@ -402,10 +402,12 @@ int socket__http_filter(struct __sk_buff *skb) {
                 if (prev_conn) {
                     tp_info_pid_t *trace_info = trace_info_for_connection(prev_conn);
                     if (trace_info) {
-                        bpf_dbg_printk("Found trace info on another interface, setting it up for this connection");
-                        tp_info_pid_t other_info = {0};
-                        bpf_memcpy(&other_info, trace_info, sizeof(tp_info_pid_t));
-                        bpf_map_update_elem(&trace_map, &conn, &other_info, BPF_ANY);
+                        if (current_epoch(trace_info->tp.ts) == current_epoch(bpf_ktime_get_ns())) {
+                            bpf_dbg_printk("Found trace info on another interface, setting it up for this connection");
+                            tp_info_pid_t other_info = {0};
+                            bpf_memcpy(&other_info, trace_info, sizeof(tp_info_pid_t));
+                            bpf_map_update_elem(&trace_map, &conn, &other_info, BPF_ANY);
+                        }
                     }
                 }
             }

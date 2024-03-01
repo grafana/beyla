@@ -39,6 +39,14 @@ struct {
     __type(value, recv_args_t);
 } active_recv_args SEC(".maps");
 
+struct {
+    __uint(type, BPF_MAP_TYPE_LRU_HASH);
+    __type(key, partial_connection_info_t); // key: the connection info without the destination address, but with the tcp sequence
+    __type(value, connection_info_t);  // value: traceparent info
+    __uint(max_entries, 1024);
+    __uint(pinning, LIBBPF_PIN_BY_NAME);
+} tcp_connection_map SEC(".maps");
+
 // Used by accept to grab the sock details
 SEC("kretprobe/sock_alloc")
 int BPF_KRETPROBE(kretprobe_sock_alloc, struct socket *sock) {
@@ -368,8 +376,39 @@ int socket__http_filter(struct __sk_buff *skb) {
             }
             read_skb_bytes(skb, tcp.hdr_len, info.buf, full_len);
             bpf_dbg_printk("=== http_filter len=%d %s ===", len, buf);
-            //dbg_print_http_connection_info(&conn);
+            dbg_print_http_connection_info(&conn);
             set_fallback_http_info(&info, &conn, skb->len - tcp.hdr_len);
+
+            // The code below is looking to see if we have recorded black-box trace info on 
+            // another interface. We do this for client calls, where essentially the original 
+            // request may go out on one interface, but then get re-routed to another, which is
+            // common with some k8s environments.
+            //
+            // This casting is done here to save allocating memory on a per CPU buffer, since
+            // we don't need info anymore, we reuse it's space and it's much bigger than
+            // partial_connection_info_t.
+            partial_connection_info_t *partial = (partial_connection_info_t *)(&info);
+            partial->d_port = conn.d_port;
+            partial->s_port = conn.s_port;
+            partial->tcp_seq = tcp.seq;
+            bpf_memcpy(partial->s_addr, conn.s_addr, sizeof(partial->s_addr));
+
+            tp_info_pid_t *trace_info = trace_info_for_connection(&conn);
+            if (trace_info) {
+                bpf_map_update_elem(&tcp_connection_map, partial, &conn, BPF_ANY);
+            } else {
+                connection_info_t *prev_conn = bpf_map_lookup_elem(&tcp_connection_map, partial);
+
+                if (prev_conn) {
+                    tp_info_pid_t *trace_info = trace_info_for_connection(prev_conn);
+                    if (trace_info) {
+                        bpf_dbg_printk("Found trace info on another interface, setting it up for this connection");
+                        tp_info_pid_t other_info = {0};
+                        bpf_memcpy(&other_info, trace_info, sizeof(tp_info_pid_t));
+                        bpf_map_update_elem(&trace_map, &conn, &other_info, BPF_ANY);
+                    }
+                }
+            }
         }
     }
 

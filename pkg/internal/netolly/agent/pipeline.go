@@ -94,7 +94,10 @@ func (f *Flows) buildAndStartPipeline(ctx context.Context) (graph.Graph, error) 
 		Kubernetes: k8s.MetadataDecorator{Kubernetes: &f.cfg.Attributes.Kubernetes},
 		// TODO: allow prometheus exporting
 		ReverseDNS: f.cfg.NetworkFlows.ReverseDNS,
-		Exporter:   export.MetricsConfig{Metrics: &f.cfg.Metrics},
-		Printer:    export.FlowPrinterEnabled(f.cfg.NetworkFlows.Print),
+		Exporter: export.MetricsConfig{
+			Metrics:           &f.cfg.Metrics,
+			AllowedAttributes: f.cfg.NetworkFlows.AllowedAttributes,
+		},
+		Printer: export.FlowPrinterEnabled(f.cfg.NetworkFlows.Print),
 	})
 }

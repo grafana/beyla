@@ -94,6 +94,13 @@ type NetworkConfig struct {
 
 	// Print the network flows in the Standard Output, if true
 	Print bool `yaml:"print_flows" env:"BEYLA_NETWORK_PRINT_FLOWS"`
+
+	// AllowedAttributes is a hidden/unstable/incomplete/epxerimental feature. This configuration API
+	// could change and be moved to other part, if we decide to extend this functionality also
+	// to AppO11y and Prometheus exporter.
+	// This won't filter some meta-attributes such as
+	// instance, job, service_instance_id, service_name, telemetry_sdk_*, etc...
+	AllowedAttributes []string `yaml:"allowed_attributes" env:"BEYLA_NETWORK_ALLOWED_ATTRIBUTES" envSeparator:","`
 }
 
 var defaultNetworkConfig = NetworkConfig{

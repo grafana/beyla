@@ -19,7 +19,8 @@ import (
 )
 
 type MetricsConfig struct {
-	Metrics *otel.MetricsConfig
+	Metrics           *otel.MetricsConfig
+	AllowedAttributes []string
 }
 
 func mlog() *slog.Logger {
@@ -52,33 +53,35 @@ func newMeterProvider(res *resource.Resource, exporter *metric.Exporter) (*metri
 	return meterProvider, nil
 }
 
-func attributes(m *ebpf.Record) []attribute.KeyValue {
-	res := make([]attribute.KeyValue, 0, 10+len(m.Attrs.Metadata))
+type metricsExporter struct {
+	flowBytes metric2.Int64Counter
+	attrs     AttributesFilter
+}
 
-	res = append(res,
-		attribute.String("beyla.ip", m.Attrs.BeylaIP),
-		attribute.String("src.address", m.Id.SrcIP().IP().String()),
-		attribute.String("dst.address", m.Id.DstIP().IP().String()),
-		attribute.String("src.name", m.Attrs.SrcName),
-		attribute.String("src.namespace", m.Attrs.SrcNamespace),
-		attribute.String("dst.name", m.Attrs.DstName),
-		attribute.String("dst.namespace", m.Attrs.DstNamespace),
-	)
+func (me *metricsExporter) attributes(m *ebpf.Record) []attribute.KeyValue {
+	attrs := me.attrs.New()
+
+	attrs.PutString("beyla.ip", m.Attrs.BeylaIP)
+	attrs.PutString("src.address", m.Id.SrcIP().IP().String())
+	attrs.PutString("dst.address", m.Id.DstIP().IP().String())
+	attrs.PutString("src.name", m.Attrs.SrcName)
+	attrs.PutString("src.namespace", m.Attrs.SrcNamespace)
+	attrs.PutString("dst.name", m.Attrs.DstName)
+	attrs.PutString("dst.namespace", m.Attrs.DstNamespace)
 
 	// direction and interface will be only set if the user disabled
 	// the flow deduplication node
 	if direction, ok := directionStr(m.Id.Direction); ok {
-		res = append(res,
-			attribute.String("direction", direction),
-			attribute.String("iface", m.Attrs.Interface))
+		attrs.PutString("direction", direction)
+		attrs.PutString("iface", m.Attrs.Interface)
 	}
 
 	// metadata attributes
 	for k, v := range m.Attrs.Metadata {
-		res = append(res, attribute.String(k, v))
+		attrs.PutString(k, v)
 	}
 
-	return res
+	return attrs.Slice()
 }
 
 func directionStr(direction uint8) (string, bool) {
@@ -126,16 +129,23 @@ func MetricsExporterProvider(cfg MetricsConfig) (node.TerminalFunc[[]*ebpf.Recor
 		log.Error("", "error", err)
 		return nil, err
 	}
+	if len(cfg.AllowedAttributes) > 0 {
+		log.Debug("restricting attributes not in this list", "attributes", cfg.AllowedAttributes)
+	}
+	return (&metricsExporter{
+		flowBytes: flowBytes,
+		attrs:     NewAttributesFilter(cfg.AllowedAttributes),
+	}).Do, nil
+}
 
-	return func(in <-chan []*ebpf.Record) {
-		for i := range in {
-			for _, v := range i {
-				flowBytes.Add(
-					context.Background(),
-					int64(v.Metrics.Bytes),
-					metric2.WithAttributes(attributes(v)...),
-				)
-			}
+func (me *metricsExporter) Do(in <-chan []*ebpf.Record) {
+	for i := range in {
+		for _, v := range i {
+			me.flowBytes.Add(
+				context.Background(),
+				int64(v.Metrics.Bytes),
+				metric2.WithAttributes(me.attributes(v)...),
+			)
 		}
-	}, nil
+	}
 }

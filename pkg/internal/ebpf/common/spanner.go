@@ -132,6 +132,9 @@ func extractHostPort(b []uint8) (string, int) {
 }
 
 func extractIP(b []uint8, size int) string {
+	if size < 0 || size > 4096 {
+		return ""
+	}
 	if size > len(b) {
 		size = len(b)
 	}

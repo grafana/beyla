@@ -13,9 +13,12 @@ import (
 	"github.com/mariomac/guara/pkg/test"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel/attribute"
+	semconv "go.opentelemetry.io/otel/semconv/v1.24.0"
 
 	"github.com/grafana/beyla/test/integration/components/jaeger"
 	grpcclient "github.com/grafana/beyla/test/integration/components/testserver/grpc/client"
+	"github.com/grafana/beyla/test/tools"
 )
 
 func testHTTPTracesNoTraceID(t *testing.T) {
@@ -55,7 +58,7 @@ func testHTTPTracesCommon(t *testing.T, doTraceID bool, httpCode int) {
 		require.Equal(t, http.StatusOK, resp.StatusCode)
 		var tq jaeger.TracesQuery
 		require.NoError(t, json.NewDecoder(resp.Body).Decode(&tq))
-		traces := tq.FindBySpan(jaeger.Tag{Key: "url.path", Type: "string", Value: "/" + slug})
+		traces := tq.FindBySpan(tools.KeyValueToJaegerTag(semconv.URLPath("/" + slug)))
 		require.Len(t, traces, 1)
 		trace = traces[0]
 		require.Len(t, trace.Spans, 3) // parent - in queue - processing
@@ -76,20 +79,20 @@ func testHTTPTracesCommon(t *testing.T, doTraceID bool, httpCode int) {
 	// check duration is at least 10ms
 	assert.Less(t, (10 * time.Millisecond).Microseconds(), parent.Duration)
 	// check span attributes
-	sd := parent.Diff(
-		jaeger.Tag{Key: "http.request.method", Type: "string", Value: "GET"},
-		jaeger.Tag{Key: "http.response.status_code", Type: "int64", Value: float64(httpCode)},
-		jaeger.Tag{Key: "url.path", Type: "string", Value: "/" + slug},
-		jaeger.Tag{Key: "server.port", Type: "int64", Value: float64(8080)},
-		jaeger.Tag{Key: "http.route", Type: "string", Value: "/" + slug},
+	tags := append(
+		tools.KeyValuesToJaegerTags([]attribute.KeyValue{
+			semconv.HTTPRequestMethodGet,
+			semconv.HTTPResponseStatusCode(httpCode),
+			semconv.ServerPort(8080),
+			semconv.HTTPRoute("/" + slug),
+		}),
 		jaeger.Tag{Key: "span.kind", Type: "string", Value: "server"},
 	)
+	sd := parent.Diff(tags...)
 	assert.Empty(t, sd, sd.String())
 
 	if httpCode >= 500 {
-		sd := parent.Diff(
-			jaeger.Tag{Key: "otel.status_code", Type: "string", Value: "ERROR"},
-		)
+		sd := parent.Diff(tools.KeyValueToJaegerTag(semconv.OTelStatusCodeError))
 		assert.Empty(t, sd, sd.String())
 	}
 
@@ -107,7 +110,7 @@ func testHTTPTracesCommon(t *testing.T, doTraceID bool, httpCode int) {
 	assert.LessOrEqual(t,
 		queue.StartTime+queue.Duration,
 		parent.StartTime+parent.Duration+1) // adding 1 to tolerate inaccuracies from rounding from ns to ms
-	// check span attributes
+
 	// check span attributes
 	sd = queue.Diff(
 		jaeger.Tag{Key: "span.kind", Type: "string", Value: "internal"},
@@ -145,10 +148,10 @@ func testHTTPTracesCommon(t *testing.T, doTraceID bool, httpCode int) {
 	assert.Regexp(t, `^beyla-\d+$`, serviceInstance.Value)
 
 	jaeger.Diff([]jaeger.Tag{
-		{Key: "otel.library.name", Type: "string", Value: "github.com/grafana/beyla"},
-		{Key: "telemetry.sdk.language", Type: "string", Value: "go"},
-		{Key: "telemetry.sdk.name", Type: "string", Value: "beyla"},
-		{Key: "service.namespace", Type: "string", Value: "integration-test"},
+		tools.KeyValueToJaegerTag(semconv.OTelScopeName("github.com/grafana/beyla")),
+		tools.KeyValueToJaegerTag(semconv.TelemetrySDKLanguageGo),
+		tools.KeyValueToJaegerTag(semconv.TelemetrySDKName("beyla")),
+		tools.KeyValueToJaegerTag(semconv.ServiceNamespace("integration-test")),
 		serviceInstance,
 	}, process.Tags)
 	assert.Empty(t, sd, sd.String())
@@ -162,7 +165,7 @@ func testHTTPTracesCommon(t *testing.T, doTraceID bool, httpCode int) {
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 	var tq jaeger.TracesQuery
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&tq))
-	traces := tq.FindBySpan(jaeger.Tag{Key: "url.path", Type: "string", Value: "/metrics"})
+	traces := tq.FindBySpan(tools.KeyValueToJaegerTag(semconv.URLPath("/metrics")))
 	require.Len(t, traces, 0)
 }
 
@@ -180,7 +183,7 @@ func testGRPCTracesForServiceName(t *testing.T, svcName string) {
 		require.Equal(t, http.StatusOK, resp.StatusCode)
 		var tq jaeger.TracesQuery
 		require.NoError(t, json.NewDecoder(resp.Body).Decode(&tq))
-		traces := tq.FindBySpan(jaeger.Tag{Key: "rpc.method", Type: "string", Value: "/routeguide.RouteGuide/Debug"})
+		traces := tq.FindBySpan(tools.KeyValueToJaegerTag(semconv.RPCMethod("/routeguide.RouteGuide/Debug")))
 		require.Len(t, traces, 1)
 		trace = traces[0]
 		require.Len(t, trace.Spans, 3) // parent - in queue - processing
@@ -195,13 +198,15 @@ func testGRPCTracesForServiceName(t *testing.T, svcName string) {
 	// check duration is at least 10ms (10,000 microseconds)
 	assert.Less(t, (10 * time.Millisecond).Microseconds(), parent.Duration)
 	// check span attributes
-	sd := parent.Diff(
-		jaeger.Tag{Key: "server.port", Type: "int64", Value: float64(5051)},
-		jaeger.Tag{Key: "rpc.grpc.status_code", Type: "int64", Value: float64(2)},
-		jaeger.Tag{Key: "rpc.method", Type: "string", Value: "/routeguide.RouteGuide/Debug"},
-		jaeger.Tag{Key: "rpc.system", Type: "string", Value: "grpc"},
+	tags := append(
+		tools.KeyValuesToJaegerTags([]attribute.KeyValue{
+			semconv.ServerPort(5051),
+			semconv.RPCGRPCStatusCodeUnknown,
+			semconv.RPCMethod("/routeguide.RouteGuide/Debug"),
+			semconv.RPCSystemGRPC}),
 		jaeger.Tag{Key: "span.kind", Type: "string", Value: "server"},
 	)
+	sd := parent.Diff(tags...)
 	assert.Empty(t, sd, sd.String())
 
 	// Check the information of the "in queue" span

@@ -40,7 +40,7 @@ func testNetFlowBytesForExistingConnections(ctx context.Context, t *testing.T, _
 
 	// testing request flows (to testserver as Service)
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
-		results, err := pq.Query(`network_flow_bytes_total{src_name="internal-pinger",dst_name="testserver"}`)
+		results, err := pq.Query(`beyla_network_flow_bytes_total{src_name="internal-pinger",dst_name="testserver"}`)
 		require.NoError(t, err)
 		require.NotEmpty(t, results)
 
@@ -68,7 +68,7 @@ func testNetFlowBytesForExistingConnections(ctx context.Context, t *testing.T, _
 	})
 	// testing request flows (to testserver as Pod)
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
-		results, err := pq.Query(`network_flow_bytes_total{src_name="internal-pinger",dst_name=~"testserver-.*"}`)
+		results, err := pq.Query(`beyla_network_flow_bytes_total{src_name="internal-pinger",dst_name=~"testserver-.*"}`)
 		require.NoError(t, err)
 		require.NotEmpty(t, results)
 
@@ -99,7 +99,7 @@ func testNetFlowBytesForExistingConnections(ctx context.Context, t *testing.T, _
 
 	// testing response flows (from testserver Pod)
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
-		results, err := pq.Query(`network_flow_bytes_total{src_name=~"testserver-.*",dst_name="internal-pinger"}`)
+		results, err := pq.Query(`beyla_network_flow_bytes_total{src_name=~"testserver-.*",dst_name="internal-pinger"}`)
 		require.NoError(t, err)
 		require.NotEmpty(t, results)
 
@@ -127,7 +127,7 @@ func testNetFlowBytesForExistingConnections(ctx context.Context, t *testing.T, _
 
 	// testing response flows (from testserver Service)
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
-		results, err := pq.Query(`network_flow_bytes_total{src_name="testserver",dst_name="internal-pinger"}`)
+		results, err := pq.Query(`beyla_network_flow_bytes_total{src_name="testserver",dst_name="internal-pinger"}`)
 		require.NoError(t, err)
 		require.NotEmpty(t, results)
 
@@ -153,7 +153,7 @@ func testNetFlowBytesForExistingConnections(ctx context.Context, t *testing.T, _
 	})
 
 	// check that there aren't captured flows if there is no communication
-	results, err := pq.Query(`network_flow_bytes_total{src_name="internal-pinger",dst_name="otherinstance"}`)
+	results, err := pq.Query(`beyla_network_flow_bytes_total{src_name="internal-pinger",dst_name="otherinstance"}`)
 	require.NoError(t, err)
 	require.Empty(t, results)
 

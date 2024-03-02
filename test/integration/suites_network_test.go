@@ -50,6 +50,30 @@ func TestNetwork_NoDeduplication(t *testing.T) {
 	require.NoError(t, compose.Close())
 }
 
+func TestNetwork_AllowedAttributes(t *testing.T) {
+	compose, err := docker.ComposeSuite("docker-compose-netolly.yml", path.Join(pathOutput, "test-suite-netolly-allowed-attrs.log"))
+	compose.Env = append(compose.Env, "BEYLA_EXECUTABLE_NAME=",
+		`BEYLA_NETWORK_ALLOWED_ATTRIBUTES=beyla.ip,src.name`)
+	require.NoError(t, err)
+	require.NoError(t, compose.Up())
+
+	// When there flow deduplication, results must only include the BEYLA_NETWORK_ALLOWED_ATTRIBUTES
+	for _, f := range getNetFlows(t) {
+		require.Contains(t, f.Metric, "beyla_ip")
+		require.Contains(t, f.Metric, "src_name")
+		assert.NotEmpty(t, f.Metric["beyla_ip"])
+		assert.NotEmpty(t, f.Metric["src_name"])
+
+		assert.NotContains(t, f.Metric, "src_address")
+		assert.NotContains(t, f.Metric, "dst_address")
+		assert.NotContains(t, f.Metric, "src_namespace")
+		assert.NotContains(t, f.Metric, "dst_name")
+		assert.NotContains(t, f.Metric, "dst_namespace")
+	}
+
+	require.NoError(t, compose.Close())
+}
+
 func getNetFlows(t *testing.T) []prom.Result {
 	var results []prom.Result
 	pq := prom.Client{HostPort: prometheusHostPort}
@@ -62,7 +86,7 @@ func getNetFlows(t *testing.T) []prom.Result {
 		require.Equal(t, http.StatusOK, r.StatusCode)
 
 		// now, verify that the network metric has been reported.
-		results, err = pq.Query(`network_flow_bytes_total`)
+		results, err = pq.Query(`beyla_network_flow_bytes_total`)
 		require.NoError(t, err)
 		require.NotEmpty(t, results)
 	}, test.Interval(time.Second))

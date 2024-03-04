@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+
+	"go.opentelemetry.io/otel/attribute"
 )
 
 type TracesQuery struct {
@@ -192,4 +194,20 @@ func DiffAsRegexp(expected, actual []Tag) DiffResult {
 		}
 	}
 	return dr
+}
+
+func TagFromOtel(kv attribute.KeyValue) Tag {
+	return Tag{
+		Key:   string(kv.Key),
+		Type:  kv.Value.Type().String(),
+		Value: kv.Value.AsInterface(),
+	}
+}
+
+func TagsFromOtel(kvs []attribute.KeyValue) []Tag {
+	tags := make([]Tag, len(kvs))
+	for i, kv := range kvs {
+		tags[i] = TagFromOtel(kv)
+	}
+	return tags
 }

@@ -18,7 +18,6 @@ import (
 
 	"github.com/grafana/beyla/test/integration/components/jaeger"
 	grpcclient "github.com/grafana/beyla/test/integration/components/testserver/grpc/client"
-	"github.com/grafana/beyla/test/tools"
 )
 
 func testHTTPTracesNoTraceID(t *testing.T) {
@@ -58,7 +57,7 @@ func testHTTPTracesCommon(t *testing.T, doTraceID bool, httpCode int) {
 		require.Equal(t, http.StatusOK, resp.StatusCode)
 		var tq jaeger.TracesQuery
 		require.NoError(t, json.NewDecoder(resp.Body).Decode(&tq))
-		traces := tq.FindBySpan(tools.KeyValueToJaegerTag(semconv.URLPath("/" + slug)))
+		traces := tq.FindBySpan(jaeger.TagFromOtel(semconv.URLPath("/" + slug)))
 		require.Len(t, traces, 1)
 		trace = traces[0]
 		require.Len(t, trace.Spans, 3) // parent - in queue - processing
@@ -80,7 +79,7 @@ func testHTTPTracesCommon(t *testing.T, doTraceID bool, httpCode int) {
 	assert.Less(t, (10 * time.Millisecond).Microseconds(), parent.Duration)
 	// check span attributes
 	tags := append(
-		tools.KeyValuesToJaegerTags([]attribute.KeyValue{
+		jaeger.TagsFromOtel([]attribute.KeyValue{
 			semconv.HTTPRequestMethodGet,
 			semconv.HTTPResponseStatusCode(httpCode),
 			semconv.ServerPort(8080),
@@ -92,7 +91,7 @@ func testHTTPTracesCommon(t *testing.T, doTraceID bool, httpCode int) {
 	assert.Empty(t, sd, sd.String())
 
 	if httpCode >= 500 {
-		sd := parent.Diff(tools.KeyValueToJaegerTag(semconv.OTelStatusCodeError))
+		sd := parent.Diff(jaeger.TagFromOtel(semconv.OTelStatusCodeError))
 		assert.Empty(t, sd, sd.String())
 	}
 
@@ -148,10 +147,10 @@ func testHTTPTracesCommon(t *testing.T, doTraceID bool, httpCode int) {
 	assert.Regexp(t, `^beyla-\d+$`, serviceInstance.Value)
 
 	jaeger.Diff([]jaeger.Tag{
-		tools.KeyValueToJaegerTag(semconv.OTelScopeName("github.com/grafana/beyla")),
-		tools.KeyValueToJaegerTag(semconv.TelemetrySDKLanguageGo),
-		tools.KeyValueToJaegerTag(semconv.TelemetrySDKName("beyla")),
-		tools.KeyValueToJaegerTag(semconv.ServiceNamespace("integration-test")),
+		jaeger.TagFromOtel(semconv.OTelScopeName("github.com/grafana/beyla")),
+		jaeger.TagFromOtel(semconv.TelemetrySDKLanguageGo),
+		jaeger.TagFromOtel(semconv.TelemetrySDKName("beyla")),
+		jaeger.TagFromOtel(semconv.ServiceNamespace("integration-test")),
 		serviceInstance,
 	}, process.Tags)
 	assert.Empty(t, sd, sd.String())
@@ -165,7 +164,7 @@ func testHTTPTracesCommon(t *testing.T, doTraceID bool, httpCode int) {
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 	var tq jaeger.TracesQuery
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&tq))
-	traces := tq.FindBySpan(tools.KeyValueToJaegerTag(semconv.URLPath("/metrics")))
+	traces := tq.FindBySpan(jaeger.TagFromOtel(semconv.URLPath("/metrics")))
 	require.Len(t, traces, 0)
 }
 
@@ -183,7 +182,7 @@ func testGRPCTracesForServiceName(t *testing.T, svcName string) {
 		require.Equal(t, http.StatusOK, resp.StatusCode)
 		var tq jaeger.TracesQuery
 		require.NoError(t, json.NewDecoder(resp.Body).Decode(&tq))
-		traces := tq.FindBySpan(tools.KeyValueToJaegerTag(semconv.RPCMethod("/routeguide.RouteGuide/Debug")))
+		traces := tq.FindBySpan(jaeger.TagFromOtel(semconv.RPCMethod("/routeguide.RouteGuide/Debug")))
 		require.Len(t, traces, 1)
 		trace = traces[0]
 		require.Len(t, trace.Spans, 3) // parent - in queue - processing
@@ -199,7 +198,7 @@ func testGRPCTracesForServiceName(t *testing.T, svcName string) {
 	assert.Less(t, (10 * time.Millisecond).Microseconds(), parent.Duration)
 	// check span attributes
 	tags := append(
-		tools.KeyValuesToJaegerTags([]attribute.KeyValue{
+		jaeger.TagsFromOtel([]attribute.KeyValue{
 			semconv.ServerPort(5051),
 			semconv.RPCGRPCStatusCodeUnknown,
 			semconv.RPCMethod("/routeguide.RouteGuide/Debug"),

@@ -17,10 +17,10 @@ import (
 // TODO: add flow_printer node
 type FlowsPipeline struct {
 	MapTracer     `sendTo:"Deduper"`
-	RingBufTracer `sendTo:"Accounter"`
-	Accounter     `sendTo:"Deduper"`
-	Deduper       flow.Deduper          `forwardTo:"Kubernetes"`
-	Kubernetes    k8s.MetadataDecorator `forwardTo:"ReverseDNS"`
+	RingBufTracer `sendTo:"Deduper"`
+
+	Deduper    flow.Deduper          `forwardTo:"Kubernetes"`
+	Kubernetes k8s.MetadataDecorator `forwardTo:"ReverseDNS"`
 
 	ReverseDNS flow.ReverseDNS `forwardTo:"Decorator"`
 
@@ -32,7 +32,6 @@ type FlowsPipeline struct {
 
 type MapTracer struct{}
 type RingBufTracer struct{}
-type Accounter struct{}
 type Decorator struct{}
 
 // buildAndStartPipeline creates the ETL flow processing graph.
@@ -53,14 +52,10 @@ func (f *Flows) buildAndStartPipeline(ctx context.Context) (graph.Graph, error) 
 	graph.RegisterStart(gb, func(_ MapTracer) (node.StartFunc[[]*ebpf.Record], error) {
 		return f.mapTracer.TraceLoop(ctx), nil
 	})
-	graph.RegisterStart(gb, func(_ RingBufTracer) (node.StartFunc[*ebpf.NetFlowRecordT], error) {
+	graph.RegisterStart(gb, func(_ RingBufTracer) (node.StartFunc[[]*ebpf.Record], error) {
 		return f.rbTracer.TraceLoop(ctx), nil
 	})
 
-	// Middle nodes: apply transformations to the flow records, decorating and even removing them.
-	graph.RegisterMiddle(gb, func(_ Accounter) (node.MiddleFunc[*ebpf.NetFlowRecordT, []*ebpf.Record], error) {
-		return f.accounter.Account, nil
-	})
 	graph.RegisterMiddle(gb, flow.DeduperProvider)
 	graph.RegisterMiddle(gb, func(_ Decorator) (node.MiddleFunc[[]*ebpf.Record, []*ebpf.Record], error) {
 		// If deduper is enabled, we know that interfaces are unset.

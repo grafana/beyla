@@ -4,20 +4,39 @@ import (
 	"context"
 	"log/slog"
 	"os"
+	"sync"
 
 	"github.com/grafana/beyla/pkg/beyla"
 	"github.com/grafana/beyla/pkg/internal/appolly"
 	"github.com/grafana/beyla/pkg/internal/netolly/agent"
 )
 
-// StartBeyla in background
-func StartBeyla(ctx context.Context, cfg *beyla.Config) {
-	if cfg.Enabled(beyla.FeatureAppO11y) {
-		go setupAppO11y(ctx, cfg)
+// RunBeyla in the foreground process. This is a blocking function and won't exit
+// until both the AppO11y and NetO11y components end
+func RunBeyla(ctx context.Context, cfg *beyla.Config) {
+	wg := sync.WaitGroup{}
+	app := cfg.Enabled(beyla.FeatureAppO11y)
+	if app {
+		wg.Add(1)
 	}
-	if cfg.Enabled(beyla.FeatureNetO11y) {
-		setupNetO11y(ctx, cfg)
+	net := cfg.Enabled(beyla.FeatureNetO11y)
+	if net {
+		wg.Add(1)
 	}
+
+	if app {
+		go func() {
+			defer wg.Done()
+			setupAppO11y(ctx, cfg)
+		}()
+	}
+	if net {
+		go func() {
+			defer wg.Done()
+			setupNetO11y(ctx, cfg)
+		}()
+	}
+	wg.Wait()
 }
 
 func setupAppO11y(ctx context.Context, config *beyla.Config) {

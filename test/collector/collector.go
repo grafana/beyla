@@ -130,13 +130,19 @@ func (tc *TestCollector) metricEvent(writer http.ResponseWriter, body []byte) {
 				case pmetric.MetricTypeHistogram:
 					forEach[pmetric.HistogramDataPoint](m.Histogram().DataPoints(), func(hdp pmetric.HistogramDataPoint) {
 						mr := MetricRecord{
-							Name:       m.Name(),
-							Unit:       m.Unit(),
-							Type:       m.Type(),
-							Attributes: map[string]string{},
+							Name:               m.Name(),
+							Unit:               m.Unit(),
+							Type:               m.Type(),
+							Attributes:         map[string]string{},
+							ResourceAttributes: map[string]string{},
+							Value:              hdp.Sum(),
 						}
 						hdp.Attributes().Range(func(k string, v pcommon.Value) bool {
 							mr.Attributes[k] = v.AsString()
+							return true
+						})
+						rm.Resource().Attributes().Range(func(k string, v pcommon.Value) bool {
+							mr.ResourceAttributes[k] = v.AsString()
 							return true
 						})
 						tc.Records <- mr
@@ -151,10 +157,12 @@ func (tc *TestCollector) metricEvent(writer http.ResponseWriter, body []byte) {
 
 // MetricRecord stores some metadata from the received metrics
 type MetricRecord struct {
-	Attributes map[string]string
-	Name       string
-	Unit       string
-	Type       pmetric.MetricType
+	ResourceAttributes map[string]string
+	Attributes         map[string]string
+	Name               string
+	Unit               string
+	Type               pmetric.MetricType
+	Value              float64
 }
 
 type TraceRecord struct {

@@ -38,6 +38,9 @@ func MetricsReceiver(ctx context.Context, cfg beyla.Config) (node.TerminalFunc[[
 func generateMetrics(cfg *otel.MetricsConfig, span *request.Span) pmetric.Metrics {
 	metrics := pmetric.NewMetrics()
 	rm := metrics.ResourceMetrics().AppendEmpty()
+	resourceAttrs := AttrsToMap(otel.OTELResource(span.ServiceID).Attributes())
+	resourceAttrs.CopyTo(rm.Resource().Attributes())
+
 	ilm := rm.ScopeMetrics().AppendEmpty()
 	ilm.Scope().SetName(otel.ReporterName)
 	ilm.Metrics().AppendEmpty()
@@ -57,7 +60,7 @@ func generateHistogram(metricName string, unit string, value float64, ts time.Ti
 	m := pmetric.NewMetric()
 	m.SetName(metricName)
 	m.SetUnit(unit)
-	m.SetEmptyHistogram().SetAggregationTemporality(pmetric.AggregationTemporalityDelta)
+	m.SetEmptyHistogram().SetAggregationTemporality(pmetric.AggregationTemporalityCumulative)
 
 	// Prepare the data point
 	timestamp := pcommon.NewTimestampFromTime(time.Now())

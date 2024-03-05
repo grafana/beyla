@@ -477,7 +477,7 @@ func (r *TracesReporter) newTracers(service svc.ID) (*Tracers, error) {
 	tracers := Tracers{
 		ctx: r.ctx,
 		provider: trace.NewTracerProvider(
-			trace.WithResource(otelResource(service)),
+			trace.WithResource(OTELResource(service)),
 			trace.WithSpanProcessor(r.bsp),
 			trace.WithSampler(r.cfg.Sampler.Implementation()),
 			trace.WithIDGenerator(&BeylaIDGenerator{}),

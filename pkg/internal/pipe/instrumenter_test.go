@@ -65,18 +65,7 @@ func TestMetricsPipeline(t *testing.T) {
 	go pipe.Run(ctx)
 
 	event := testutil.ReadChannel(t, tc.Records, testTimeout)
-	assert.Equal(t, collector.MetricRecord{
-		Name: "http.server.request.duration",
-		Unit: "s",
-		Attributes: map[string]string{
-			string(otel.HTTPRequestMethodKey):      "GET",
-			string(otel.HTTPResponseStatusCodeKey): "404",
-			string(otel.HTTPUrlPathKey):            "/foo/bar",
-			string(otel.ClientAddrKey):             "1.1.1.1",
-			string(semconv.ServiceNameKey):         "foo-svc",
-		},
-		Type: pmetric.MetricTypeHistogram,
-	}, event)
+	matchMetricEvent(t, event)
 
 }
 
@@ -183,18 +172,7 @@ func TestMetricsReceiverPipeline(t *testing.T) {
 	go pipe.Run(ctx)
 
 	event := testutil.ReadChannel(t, tc.Records, testTimeout)
-	assert.Equal(t, collector.MetricRecord{
-		Name: "http.server.request.duration",
-		Unit: "s",
-		Attributes: map[string]string{
-			string(otel.HTTPRequestMethodKey):      "GET",
-			string(otel.HTTPResponseStatusCodeKey): "404",
-			string(otel.HTTPUrlPathKey):            "/foo/bar",
-			string(otel.ClientAddrKey):             "1.1.1.1",
-			string(semconv.ServiceNameKey):         "foo-svc",
-		},
-		Type: pmetric.MetricTypeHistogram,
-	}, event)
+	matchMetricEvent(t, event)
 
 }
 
@@ -438,6 +416,28 @@ func getHostname() string {
 		return ""
 	}
 	return hostname
+}
+
+func matchMetricEvent(t require.TestingT, event collector.MetricRecord) {
+	assert.Equal(t, collector.MetricRecord{
+		Name:  "http.server.request.duration",
+		Unit:  "s",
+		Value: 2.0,
+		Attributes: map[string]string{
+			string(otel.HTTPRequestMethodKey):      "GET",
+			string(otel.HTTPResponseStatusCodeKey): "404",
+			string(otel.HTTPUrlPathKey):            "/foo/bar",
+			string(otel.ClientAddrKey):             "1.1.1.1",
+			string(semconv.ServiceNameKey):         "foo-svc",
+		},
+		ResourceAttributes: map[string]string{
+			string(semconv.ServiceNameKey):          "foo-svc",
+			string(semconv.ServiceInstanceIDKey):    "",
+			string(semconv.TelemetrySDKLanguageKey): "go",
+			string(semconv.TelemetrySDKNameKey):     "beyla",
+		},
+		Type: pmetric.MetricTypeHistogram,
+	}, event)
 }
 
 func matchTraceEvent(t require.TestingT, name string, event collector.TraceRecord) {

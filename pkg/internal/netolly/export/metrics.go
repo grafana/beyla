@@ -23,6 +23,10 @@ type MetricsConfig struct {
 	AllowedAttributes []string
 }
 
+func (mc MetricsConfig) Enabled() bool {
+	return mc.Metrics != nil && mc.Metrics.Enabled()
+}
+
 func mlog() *slog.Logger {
 	return slog.With("component", "flows.MetricsReporter")
 }

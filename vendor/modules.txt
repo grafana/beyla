@@ -403,6 +403,10 @@ github.com/xwb1989/sqlparser/dependency/bytes2
 github.com/xwb1989/sqlparser/dependency/hack
 github.com/xwb1989/sqlparser/dependency/querypb
 github.com/xwb1989/sqlparser/dependency/sqltypes
+# github.com/yl2chen/cidranger v1.0.2
+## explicit; go 1.13
+github.com/yl2chen/cidranger
+github.com/yl2chen/cidranger/net
 # github.com/yusufpapurcu/wmi v1.2.4
 ## explicit; go 1.16
 github.com/yusufpapurcu/wmi

@@ -3,13 +3,19 @@ package group
 import (
 	"net"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
+	"github.com/grafana/beyla/pkg/internal/testutil"
 )
 
+const testTimeout = 5 * time.Second
+
 func TestIPGrouper(t *testing.T) {
-	g, err := newIPGrouper(&Group{CIDR: []string{
+	grouper, err := GrouperProvider(Group{CIDR: []string{
 		"10.0.0.0/8",
 		"10.1.2.0/24",
 		"140.130.22.0/24",
@@ -17,13 +23,59 @@ func TestIPGrouper(t *testing.T) {
 		"2001::/16",
 	}})
 	require.NoError(t, err)
+	inCh, outCh := make(chan []*ebpf.Record, 10), make(chan []*ebpf.Record, 10)
+	go grouper(inCh, outCh)
+	inCh <- []*ebpf.Record{
+		flow("10.3.4.5", "10.1.2.3"),
+		flow("2001:db8:3c4d:15:3210::", "2001:3333:3333::"),
+		flow("140.130.22.11", "140.130.23.11"),
+		flow("180.130.22.11", "10.1.2.4"),
+	}
+	decorated := testutil.ReadChannel(t, outCh, testTimeout)
+	require.Len(t, decorated, 4)
+	assert.Equal(t, "10.0.0.0/8", decorated[0].Attrs.Metadata["src.cidr"])
+	assert.Equal(t, "10.1.2.0/24", decorated[0].Attrs.Metadata["dst.cidr"])
+	assert.Equal(t, "2001:db8:3c4d:15::/64", decorated[1].Attrs.Metadata["src.cidr"])
+	assert.Equal(t, "2001::/16", decorated[1].Attrs.Metadata["dst.cidr"])
+	assert.Equal(t, "140.130.22.0/24", decorated[2].Attrs.Metadata["src.cidr"])
+	assert.Empty(t, decorated[2].Attrs.Metadata["dst.cidr"])
+	assert.Empty(t, decorated[3].Attrs.Metadata["src.cidr"])
+	assert.Equal(t, "10.1.2.0/24", decorated[3].Attrs.Metadata["dst.cidr"])
+}
 
-	assert.Equal(t, "10.0.0.0/8", g.CIDR(net.ParseIP("10.3.4.5")))
-	assert.Equal(t, "10.1.2.0/24", g.CIDR(net.ParseIP("10.1.2.3")))
-	assert.Equal(t, "2001:db8:3c4d:15::/64", g.CIDR(net.ParseIP("2001:db8:3c4d:15:3210::")))
-	assert.Equal(t, "2001::/16", g.CIDR(net.ParseIP("2001:3333:3333::")))
-	assert.Equal(t, "140.130.22.0/24", g.CIDR(net.ParseIP("140.130.22.11")))
+func TestIPGrouper_GroupAllUnknownTraffic(t *testing.T) {
+	grouper, err := GrouperProvider(Group{CIDR: []string{
+		"10.0.0.0/8",
+		"10.1.2.0/24",
+		"0.0.0.0/0", // this entry will capture all the unknown traffic
+		"140.130.22.0/24",
+		"2001:db8:3c4d:15::/64",
+		"2001::/16",
+	}})
+	require.NoError(t, err)
+	inCh, outCh := make(chan []*ebpf.Record, 10), make(chan []*ebpf.Record, 10)
+	go grouper(inCh, outCh)
+	inCh <- []*ebpf.Record{
+		flow("10.3.4.5", "10.1.2.3"),
+		flow("2001:db8:3c4d:15:3210::", "2001:3333:3333::"),
+		flow("140.130.22.11", "140.130.23.11"),
+		flow("180.130.22.11", "10.1.2.4"),
+	}
+	decorated := testutil.ReadChannel(t, outCh, testTimeout)
+	require.Len(t, decorated, 4)
+	assert.Equal(t, "10.0.0.0/8", decorated[0].Attrs.Metadata["src.cidr"])
+	assert.Equal(t, "10.1.2.0/24", decorated[0].Attrs.Metadata["dst.cidr"])
+	assert.Equal(t, "2001:db8:3c4d:15::/64", decorated[1].Attrs.Metadata["src.cidr"])
+	assert.Equal(t, "2001::/16", decorated[1].Attrs.Metadata["dst.cidr"])
+	assert.Equal(t, "140.130.22.0/24", decorated[2].Attrs.Metadata["src.cidr"])
+	assert.Equal(t, "0.0.0.0/0", decorated[2].Attrs.Metadata["dst.cidr"])
+	assert.Equal(t, "0.0.0.0/0", decorated[3].Attrs.Metadata["src.cidr"])
+	assert.Equal(t, "10.1.2.0/24", decorated[3].Attrs.Metadata["dst.cidr"])
+}
 
-	assert.Empty(t, g.CIDR(net.ParseIP("140.130.23.11")))
-	assert.Empty(t, g.CIDR(net.ParseIP("180.130.22.11")))
+func flow(srcIP, dstIP string) *ebpf.Record {
+	er := ebpf.Record{}
+	copy(er.Id.SrcIp.In6U.U6Addr8[:], net.ParseIP(srcIP).To16())
+	copy(er.Id.DstIp.In6U.U6Addr8[:], net.ParseIP(dstIP).To16())
+	return &er
 }

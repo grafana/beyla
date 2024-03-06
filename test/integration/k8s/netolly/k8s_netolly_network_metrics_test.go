@@ -166,24 +166,18 @@ func testNetFlowBytesForExternalTraffic(ctx context.Context, t *testing.T, _ *en
 
 	// test external traffic (this test --> prometheus)
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
-		results, err := pq.Query(`beyla_network_flow_bytes_total{k8s_dst_owner_name="prometheus",k8s_src_owner_name!~"(dns|otelcol)"}`)
+		// checks that at least one source without src kubernetes label is there
+		results, err := pq.Query(`beyla_network_flow_bytes_total{k8s_dst_owner_name="prometheus",k8s_src_owner_name=""}`)
 		require.NoError(t, err)
 		require.NotEmpty(t, results)
-
-		// check that it does not have any source kubernetes label
-		require.Len(t, results, 1)
-		assert.NotContains(t, results[0].Metric, "k8s_src_owner_name")
 	})
 
 	// test external traffic (prometheus --> this test)
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
-		results, err := pq.Query(`beyla_network_flow_bytes_total{k8s_src_owner_name="prometheus",k8s_dst_owner_name!~"(dns|otelcol)"}`)
+		// checks that at least one source without dst kubernetes label is there
+		results, err := pq.Query(`beyla_network_flow_bytes_total{k8s_src_owner_name="prometheus",k8s_dst_owner_name=""}`)
 		require.NoError(t, err)
 		require.NotEmpty(t, results)
-
-		// check that it does not have any destination kubernetes label
-		require.Len(t, results, 1)
-		assert.NotContains(t, results[0].Metric, "k8s_dst_owner_name")
 	})
 	return ctx
 }

@@ -54,7 +54,7 @@ func TestMain(m *testing.M) {
 	cluster.Run(m)
 }
 
-func TestNetworkFlowBytes(t *testing.T) {
+func TestNetworkFlowBytes_DropExternal(t *testing.T) {
 	pinger := kube.Template[k8s.Pinger]{
 		TemplateFile: k8s.UninstrumentedPingerManifest,
 		Data: k8s.Pinger{

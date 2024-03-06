@@ -7,7 +7,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/mariomac/pipes/pkg/node"
-	otel2 "go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	metric2 "go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/sdk/metric"
@@ -115,9 +114,7 @@ func MetricsExporterProvider(cfg MetricsConfig) (node.TerminalFunc[[]*ebpf.Recor
 		return nil, err
 	}
 
-	otel2.SetMeterProvider(provider)
-
-	ebpfEvents := otel2.Meter("network_ebpf_events")
+	ebpfEvents := provider.Meter("network_ebpf_events")
 
 	flowBytes, err := ebpfEvents.Int64Counter(
 		"beyla.network.flow.bytes",

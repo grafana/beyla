@@ -31,6 +31,7 @@ func TestNetworkFlowBytes(t *testing.T) {
 		Setup(pinger.Deploy()).
 		Teardown(pinger.Delete()).
 		Assess("catches network metrics between connected pods", testNetFlowBytesForExistingConnections).
+		Assess("catches external traffic", testNetFlowBytesForExternalTraffic).
 		Feature(),
 	)
 }
@@ -157,6 +158,27 @@ func testNetFlowBytesForExistingConnections(ctx context.Context, t *testing.T, _
 	require.NoError(t, err)
 	require.Empty(t, results)
 
+	return ctx
+}
+
+func testNetFlowBytesForExternalTraffic(ctx context.Context, t *testing.T, _ *envconf.Config) context.Context {
+	pq := prom.Client{HostPort: prometheusHostPort}
+
+	// test external traffic (this test --> prometheus)
+	test.Eventually(t, testTimeout, func(t require.TestingT) {
+		// checks that at least one source without src kubernetes label is there
+		results, err := pq.Query(`beyla_network_flow_bytes_total{k8s_dst_owner_name="prometheus",k8s_src_owner_name=""}`)
+		require.NoError(t, err)
+		require.NotEmpty(t, results)
+	})
+
+	// test external traffic (prometheus --> this test)
+	test.Eventually(t, testTimeout, func(t require.TestingT) {
+		// checks that at least one source without dst kubernetes label is there
+		results, err := pq.Query(`beyla_network_flow_bytes_total{k8s_src_owner_name="prometheus",k8s_dst_owner_name=""}`)
+		require.NoError(t, err)
+		require.NotEmpty(t, results)
+	})
 	return ctx
 }
 

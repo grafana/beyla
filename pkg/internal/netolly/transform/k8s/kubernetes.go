@@ -82,13 +82,17 @@ func MetadataDecoratorProvider(ctx context.Context, cfg MetadataDecorator) (node
 	if err != nil {
 		return nil, fmt.Errorf("instantiating network transformer: %w", err)
 	}
+	var decorate func([]*ebpf.Record) []*ebpf.Record
+	if cfg.Kubernetes.DropExternal {
+		log().Debug("will drop external flows")
+		decorate = nt.decorateMightDrop
+	} else {
+		decorate = nt.decorateNoDrop
+	}
 	return func(in <-chan []*ebpf.Record, out chan<- []*ebpf.Record) {
 		log().Debug("starting network transformation loop")
 		for flows := range in {
-			for _, flow := range flows {
-				nt.transform(flow)
-			}
-			out <- flows
+			out <- decorate(flows)
 		}
 		log().Debug("stopping network transformation loop")
 	}, nil
@@ -101,18 +105,37 @@ type decorator struct {
 	clusterName      string
 }
 
-func (n *decorator) transform(flow *ebpf.Record) {
+func (n *decorator) decorateNoDrop(flows []*ebpf.Record) []*ebpf.Record {
+	for _, flow := range flows {
+		n.transform(flow)
+	}
+	return flows
+}
+
+func (n *decorator) decorateMightDrop(flows []*ebpf.Record) []*ebpf.Record {
+	out := make([]*ebpf.Record, 0, len(flows))
+	for _, flow := range flows {
+		if n.transform(flow) {
+			out = append(out, flow)
+		}
+	}
+	return out
+}
+
+func (n *decorator) transform(flow *ebpf.Record) bool {
 	if flow.Attrs.Metadata == nil {
 		flow.Attrs.Metadata = map[string]string{}
 	}
 	if n.clusterName != "" {
 		flow.Attrs.Metadata[AttrClusterName] = n.clusterName
 	}
-	n.decorate(flow, attrPrefixSrc, flow.Id.SrcIP().IP().String())
-	n.decorate(flow, attrPrefixDst, flow.Id.DstIP().IP().String())
+	srcOk := n.decorate(flow, attrPrefixSrc, flow.Id.SrcIP().IP().String())
+	dstOk := n.decorate(flow, attrPrefixDst, flow.Id.DstIP().IP().String())
+	return srcOk && dstOk
 }
 
-func (n *decorator) decorate(flow *ebpf.Record, prefix, ip string) {
+// decorate the flow with Kube metadata. Returns false if there is no metadata found for such IP
+func (n *decorator) decorate(flow *ebpf.Record, prefix, ip string) bool {
 	kubeInfo, ok := n.kube.GetInfo(ip)
 	if !ok {
 		if n.log.Enabled(context.TODO(), slog.LevelDebug) {
@@ -122,7 +145,7 @@ func (n *decorator) decorate(flow *ebpf.Record, prefix, ip string) {
 				n.log.Debug("Can't find kubernetes info for IP", "ip", ip)
 			}
 		}
-		return
+		return false
 	}
 	flow.Attrs.Metadata[prefix+attrSuffixNs] = kubeInfo.Namespace
 	flow.Attrs.Metadata[prefix+attrSuffixName] = kubeInfo.Name
@@ -151,7 +174,7 @@ func (n *decorator) decorate(flow *ebpf.Record, prefix, ip string) {
 			flow.Attrs.SrcNamespace = kubeInfo.Namespace
 		}
 	}
-
+	return true
 }
 
 // newDecorator create a new transform

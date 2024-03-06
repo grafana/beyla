@@ -22,10 +22,6 @@ func glog() *slog.Logger {
 
 // Definitions contains a list of CIDRs to be set as the "src.cidr" and "dst.cidr"
 // attribute as a function of the source and destination IP addresses.
-// If an IP does not match any
-// If an IP matches multiple CIDR definitions, the flow will be decorated with the
-// narrowest CIDR. By this reason, you can safely add a 0.0.0.0/0 entry to group there
-// all the traffic that does not match any of the other CIDRs.
 type Definitions []string
 
 func (c Definitions) Enabled() bool {
@@ -81,7 +77,7 @@ func (g *ipGrouper) CIDR(ip net.IP) string {
 	if len(entries) == 0 {
 		return ""
 	}
-	// will always return the lower-range CIDR
+	// will always return the narrower matching CIDR
 	return entries[len(entries)-1].(*customRangerEntry).cidr
 }
 

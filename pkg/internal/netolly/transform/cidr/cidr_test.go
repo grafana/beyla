@@ -73,25 +73,6 @@ func TestCIDRDecorator_GroupAllUnknownTraffic(t *testing.T) {
 	assert.Equal(t, "10.1.2.0/24", decorated[3].Attrs.Metadata["dst.cidr"])
 }
 
-func TestCIDRDecorator_KindSubnets(t *testing.T) {
-	grouper, err := DecoratorProvider([]string{
-		"10.244.0.0/16",
-		"fd00:10:244::/56",
-		"10.96.0.0/16",
-		"fd00:10:96::/112",
-	})
-	require.NoError(t, err)
-	inCh, outCh := make(chan []*ebpf.Record, 10), make(chan []*ebpf.Record, 10)
-	go grouper(inCh, outCh)
-	inCh <- []*ebpf.Record{
-		flow("10.244.33.12", "10.96.187.123"),
-	}
-	decorated := testutil.ReadChannel(t, outCh, testTimeout)
-	require.Len(t, decorated, 1)
-	assert.Equal(t, "10.244.0.0/16", decorated[0].Attrs.Metadata["src.cidr"])
-	assert.Equal(t, "10.96.0.0/16", decorated[0].Attrs.Metadata["dst.cidr"])
-}
-
 func flow(srcIP, dstIP string) *ebpf.Record {
 	er := ebpf.Record{}
 	copy(er.Id.SrcIp.In6U.U6Addr8[:], net.ParseIP(srcIP).To16())

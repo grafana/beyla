@@ -1,4 +1,4 @@
-package group
+package cidr
 
 import (
 	"fmt"
@@ -17,40 +17,39 @@ const (
 )
 
 func glog() *slog.Logger {
-	return slog.With("component", "group.Group")
+	return slog.With("component", "cidr.Decorator")
 }
 
-type Group struct {
-	// CIDR list to decorate the "src.cidr" and "dst.cidr" from the source and destination
-	// IP addresses.
-	// If an IP matches multiple CIDR definitions, the flow will be decorated with the
-	// narrowest CIDR. By this reason, you can safely add a 0.0.0.0/0 entry to group there
-	// all the traffic that does not match any of the other CIDRs.
-	CIDR []string `yaml:"cidr" env:"BEYLA_NETWORK_GROUP_CIDR" envSeparator:","`
-}
+// Definitions contains a list of CIDRs to be set as the "src.cidr" and "dst.cidr"
+// attribute as a function of the source and destination IP addresses.
+// If an IP does not match any
+// If an IP matches multiple CIDR definitions, the flow will be decorated with the
+// narrowest CIDR. By this reason, you can safely add a 0.0.0.0/0 entry to group there
+// all the traffic that does not match any of the other CIDRs.
+type Definitions []string
 
-func (g *Group) Enabled() bool {
-	return len(g.CIDR) > 0
+func (c Definitions) Enabled() bool {
+	return len(c) > 0
 }
 
 type ipGrouper struct {
 	ranger cidranger.Ranger
 }
 
-func GrouperProvider(g Group) (node.MiddleFunc[[]*ebpf.Record, []*ebpf.Record], error) {
-	grouper, err := newIPGrouper(&g)
+func DecoratorProvider(g Definitions) (node.MiddleFunc[[]*ebpf.Record, []*ebpf.Record], error) {
+	grouper, err := newIPGrouper(g)
 	if err != nil {
 		return nil, fmt.Errorf("instantiating IP grouper: %w", err)
 	}
 	return func(in <-chan []*ebpf.Record, out chan<- []*ebpf.Record) {
-		glog().Debug("starting Grouper node")
+		glog().Debug("starting node")
 		for flows := range in {
 			for _, flow := range flows {
 				grouper.decorate(flow)
 			}
 			out <- flows
 		}
-		glog().Debug("stopping Grouper node")
+		glog().Debug("stopping node")
 	}, nil
 }
 
@@ -63,9 +62,9 @@ func (b *customRangerEntry) Network() net.IPNet {
 	return b.ipNet
 }
 
-func newIPGrouper(cfg *Group) (ipGrouper, error) {
+func newIPGrouper(cfg Definitions) (ipGrouper, error) {
 	g := ipGrouper{ranger: cidranger.NewPCTrieRanger()}
-	for _, cidr := range cfg.CIDR {
+	for _, cidr := range cfg {
 		_, ipNet, err := net.ParseCIDR(cidr)
 		if err != nil {
 			return g, fmt.Errorf("parsing CIDR %s: %w", cidr, err)

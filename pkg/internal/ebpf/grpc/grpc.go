@@ -108,6 +108,8 @@ func (p *Tracer) Constants(_ *exec.FileInfo, offsets *goexec.Offsets) map[string
 		"grpc_peer_localaddr_pos",
 		"grpc_peer_addr_pos",
 		"grpc_st_peer_ptr_pos",
+		"grpc_transport_buf_writer_buf_pos",
+		"grpc_transport_buf_writer_offset_pos",
 	} {
 		// Since gRPC 1.60 remoteaddr and localaddr were replaced by peer.
 		// We don't fail the store of unknown fields, we make them -1 so we detect

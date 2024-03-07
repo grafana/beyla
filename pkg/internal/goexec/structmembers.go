@@ -177,6 +177,13 @@ var structMembers = map[string]structInfo{
 			"conn": "pc_conn_pos",
 		},
 	},
+	"google.golang.org/grpc/internal/transport.bufWriter": {
+		lib: "google.golang.org/grpc",
+		fields: map[string]string{
+			"buf":    "grpc_transport_buf_writer_buf_pos",
+			"offset": "grpc_transport_buf_writer_offset_pos",
+		},
+	},
 }
 
 func structMemberOffsets(elfFile *elf.File) (FieldOffsets, error) {

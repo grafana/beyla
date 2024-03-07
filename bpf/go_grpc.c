@@ -92,6 +92,8 @@ volatile const u64 grpc_peer_localaddr_pos;
 // Context propagation
 volatile const u64 http2_client_next_id_pos;
 volatile const u64 framer_w_pos;
+volatile const u64 grpc_transport_buf_writer_buf_pos;
+volatile const u64 grpc_transport_buf_writer_offset_pos;
 
 #define OPTIMISTIC_GRPC_ENCODED_HEADER_LEN 49 // 1 + 1 + 8 + 1 +~ 38 = type byte + hpack_len_as_byte("traceparent") + strlen(hpack("traceparent")) + len_as_byte(38) + hpack(generated tracepanent id)
 
@@ -453,6 +455,8 @@ typedef struct grpc_framer_func_invocation {
     s64 offset;
 } grpc_framer_func_invocation_t;
 
+#define MAX_W_PTR_OFFSET 1024
+
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __type(key, void*); // key: go routine doing framer write headers
@@ -482,11 +486,14 @@ int uprobe_grpcFramerWriteHeaders(struct pt_regs *ctx) {
 
         if (w_ptr) {
             s64 offset;
-            bpf_probe_read(&offset, sizeof(offset), (void *)(w_ptr + 32));
+            bpf_probe_read(&offset, sizeof(offset), (void *)(w_ptr + grpc_transport_buf_writer_offset_pos));
 
             bpf_dbg_printk("Found initial data offset %d", offset);
 
-            if (offset < 1024) {
+            // The offset will be 0 on first connection through the stream and 9 on subsequent.
+            // If we read some very large offset, we don't do anything since it might be a situation
+            // we can't handle
+            if (offset < MAX_W_PTR_OFFSET) {
                 grpc_framer_func_invocation_t f_info = {
                     .tp = invocation->tp,
                     .framer_ptr = (u64)framer,
@@ -531,11 +538,11 @@ int uprobe_grpcFramerWriteHeaders_returns(struct pt_regs *ctx) {
             s64 cap = 0;
             u64 off = f_info->offset;
 
-            bpf_probe_read(&buf_arr, sizeof(buf_arr), (void *)(w_ptr + 8));
-            bpf_probe_read(&n, sizeof(n), (void *)(w_ptr + 32));
-            bpf_probe_read(&cap, sizeof(cap), (void *)(w_ptr + 24));
+            bpf_probe_read(&buf_arr, sizeof(buf_arr), (void *)(w_ptr + grpc_transport_buf_writer_buf_pos)); // the buffer is the first field
+            bpf_probe_read(&n, sizeof(n), (void *)(w_ptr + grpc_transport_buf_writer_offset_pos));
+            bpf_probe_read(&cap, sizeof(cap), (void *)(w_ptr + grpc_transport_buf_writer_offset_pos + 16)); // the offset of the capacity is 2 * 8 bytes from the buf
 
-            bpf_clamp_umax(off, 1024);
+            bpf_clamp_umax(off, MAX_W_PTR_OFFSET);
 
             bpf_dbg_printk("Found f_info, this is the place to write to w = %llx, buf=%llx, n=%lld, size=%lld", w_ptr, buf_arr, n, cap);
             if (buf_arr && n < (cap - HTTP2_ENCODED_HEADER_LEN)) {

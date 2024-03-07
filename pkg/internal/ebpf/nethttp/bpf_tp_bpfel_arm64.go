@@ -22,6 +22,7 @@ type bpf_tpConnectionInfoT struct {
 type bpf_tpFramerFuncInvocationT struct {
 	FramerPtr uint64
 	Tp        bpf_tpTpInfoT
+	InitialN  int64
 }
 
 type bpf_tpGoroutineMetadata struct {

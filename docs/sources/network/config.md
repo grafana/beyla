@@ -37,13 +37,13 @@ network:
 
 ## Network metrics configuration properties
 
-| YAML     | Env var                 | Type    | Default |
+| YAML     | Environment variable    | Type    | Default |
 |----------|-------------------------|---------|---------|
 | `enable` | `BEYLA_NETWORK_METRICS` | boolean | `false` |
 
 Enables network metrics reporting in Beyla.
 
-| YAML                 | Env var                            | Type     | Default |
+| YAML                 | Environment variable               | Type     | Default |
 |----------------------|------------------------------------|----------|---------|
 | `allowed_attributes` | `BEYLA_NETWORK_ALLOWED_ATTRIBUTES` | []string | (empty) |
 
@@ -68,7 +68,7 @@ For example:
 BEYLA_NETWORK_ALLOWED_ATTRIBUTES=src.name,dst.name
 ```
 
-| YAML    | Env var                     | Type     | Default |
+| YAML    | Environment variable        | Type     | Default |
 |---------|-----------------------------|----------|---------|
 | `cidrs` | `BEYLA_NETWORK_GROUP_CIDRS` | []string | (empty) |
 
@@ -88,14 +88,14 @@ For example:
 BEYLA_NETWORK_GROUP_CIDRS=10.0.0.0/8,192.168.0.0/16
 ```
 
-| YAML       | Env var                  | Type   | Default   |
+| YAML       | Environment variable     | Type   | Default   |
 |------------|--------------------------|--------|-----------|
 | `agent_ip` | `BEYLA_NETWORK_AGENT_IP` | string | (not set) |
 
 Allows overriding the reported `beyla.ip` attribute on each metric. If not set, Beyla will
 automatically detect its own IP from the specified network interface (see next property).
 
-| YAML             | Env var                        | Type   | Default    |
+| YAML             | Environment variable           | Type   | Default    |
 |------------------|--------------------------------|--------|------------|
 | `agent_ip_iface` | `BEYLA_NETWORK_AGENT_IP_IFACE` | string | `external` |
 
@@ -105,7 +105,7 @@ or `name:<interface name>` (e.g. `name:eth0`).
 
 If the `agent_ip` configuration property is set, this property has no effect.
 
-| YAML            | Env var                       | Type   | Default |
+| YAML            | Environment variable          | Type   | Default |
 |-----------------|-------------------------------|--------|---------|
 | `agent_ip_type` | `BEYLA_NETWORK_AGENT_IP_TYPE` | string | `any`   |
 
@@ -113,7 +113,7 @@ Specifies which type of IP address (IPv4 or IPv6 or both) should the Beyla repor
 in the `beyla.ip` field of each flow. Accepted values are: `any` (default), `ipv4`, `ipv6`.
 If the `agent_ip` configuration property is set, this property has no effect.
 
-| YAML         | Env var                    | Type     | Default |
+| YAML         | Environment variable       | Type     | Default |
 |--------------|----------------------------|----------|---------|
 | `interfaces` | `BEYLA_NETWORK_INTERFACES` | []string | (empty) |
 
@@ -129,7 +129,7 @@ For example:
 BEYLA_NETWORK_INTERFACES=eth0,eth1,/^veth/
 ```
 
-| YAML                 | Env var                            | Type     | Default |
+| YAML                 | Environment variable               | Type     | Default |
 |----------------------|------------------------------------|----------|---------|
 | `exclude_interfaces` | `BEYLA_NETWORK_EXCLUDE_INTERFACES` | []string | `lo`    |
 
@@ -144,7 +144,7 @@ For example:
 BEYLA_NETWORK_EXCLUDE_INTERFACES=lo,/^veth/
 ```
 
-| YAML              | Env var                         | Type    | Default |
+| YAML              | Environment variable            | Type    | Default |
 |-------------------|---------------------------------|---------|---------|
 | `cache_max_flows` | `BEYLA_NETWORK_CACHE_MAX_FLOWS` | integer | `5000`  |
 
@@ -152,14 +152,14 @@ Specifies how many flows can be accumulated in the accounting cache before
 being flushed for its later export. Default value is 5000.
 Decrease it if you see the "received message larger than max" error in Beyla logs.
 
-| YAML                   | Env var                              | Type     | Default |
+| YAML                   | Environment variable                 | Type     | Default |
 |------------------------|--------------------------------------|----------|---------|
 | `cache_active_timeout` | `BEYLA_NETWORK_CACHE_ACTIVE_TIMEOUT` | duration | `5s`    |
 
 Specifies the maximum duration that flows are kept in the accounting
 cache before being flushed for its later export.
 
-| YAML        | Env var                   | Type   | Default |
+| YAML        | Environment variable      | Type   | Default |
 |-------------|---------------------------|--------|---------|
 | `direction` | `BEYLA_NETWORK_DIRECTION` | string | `both`  |
 
@@ -171,7 +171,7 @@ traffic from outside the node or the cluster, but the network interface. This me
 the same network packet could be seen as "ingress" in a virtual network device and as "egress" in the
 backing phisical network interface.
 
-| YAML       | Env var                  | Type    | Default        |
+| YAML       | Environment variable     | Type    | Default        |
 |------------|--------------------------|---------|----------------|
 | `sampling` | `BEYLA_NETWORK_SAMPLING` | integer | `0` (disabled) |
 
@@ -179,7 +179,7 @@ Sampling holds the rate at which packets should be sampled and sent to the targe
 E.g. if set to 100, one out of 100 packets, on average, will be sent to the target collector.
 
 
-| YAML          | Env var                     | Type    | Default |
+| YAML          | Environment variable        | Type    | Default |
 |---------------|-----------------------------|---------|---------|
 | `print_flows` | `BEYLA_NETWORK_PRINT_FLOWS` | boolean | `false` |
 

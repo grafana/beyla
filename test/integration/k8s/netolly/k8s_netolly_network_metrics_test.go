@@ -19,6 +19,10 @@ import (
 	k8s "github.com/grafana/beyla/test/integration/k8s/common"
 )
 
+// values according to official Kind documentation: https://kind.sigs.k8s.io/docs/user/configuration/#pod-subnet
+var podSubnets = []string{"10.244.0.0/16", "fd00:10:244::/56"}
+var svcSubnets = []string{"10.96.0.0/16", "fd00:10:96::/112"}
+
 func TestNetworkFlowBytes(t *testing.T) {
 	pinger := kube.Template[k8s.Pinger]{
 		TemplateFile: k8s.UninstrumentedPingerManifest,
@@ -65,6 +69,8 @@ func testNetFlowBytesForExistingConnections(ctx context.Context, t *testing.T, _
 		assert.Equal(t, "testserver", metric["k8s_dst_name"])
 		assert.Equal(t, "Service", metric["k8s_dst_owner_type"])
 		assert.Equal(t, "Service", metric["k8s_dst_type"])
+		assert.Contains(t, podSubnets, metric["src_cidr"], metric)
+		assert.Contains(t, svcSubnets, metric["dst_cidr"], metric)
 		// services don't have host IP or name
 	})
 	// testing request flows (to testserver as Pod)
@@ -96,6 +102,8 @@ func testNetFlowBytesForExistingConnections(ctx context.Context, t *testing.T, _
 		assert.Equal(t, "test-kind-cluster-netolly-control-plane",
 			metric["k8s_dst_host_name"])
 		assertIsIP(t, metric["k8s_dst_host_ip"])
+		assert.Contains(t, podSubnets, metric["src_cidr"], metric)
+		assert.Contains(t, podSubnets, metric["dst_cidr"], metric)
 	})
 
 	// testing response flows (from testserver Pod)
@@ -124,6 +132,8 @@ func testNetFlowBytesForExistingConnections(ctx context.Context, t *testing.T, _
 		assert.Equal(t, "Pod", metric["k8s_dst_type"])
 		assert.Equal(t, "test-kind-cluster-netolly-control-plane", metric["k8s_dst_host_name"])
 		assertIsIP(t, metric["k8s_dst_host_ip"])
+		assert.Contains(t, podSubnets, metric["src_cidr"], metric)
+		assert.Contains(t, podSubnets, metric["dst_cidr"], metric)
 	})
 
 	// testing response flows (from testserver Service)
@@ -151,6 +161,8 @@ func testNetFlowBytesForExistingConnections(ctx context.Context, t *testing.T, _
 		assert.Equal(t, "Pod", metric["k8s_dst_type"])
 		assert.Equal(t, "test-kind-cluster-netolly-control-plane", metric["k8s_dst_host_name"])
 		assertIsIP(t, metric["k8s_dst_host_ip"])
+		assert.Contains(t, svcSubnets, metric["src_cidr"], metric)
+		assert.Contains(t, podSubnets, metric["dst_cidr"], metric)
 	})
 
 	// check that there aren't captured flows if there is no communication

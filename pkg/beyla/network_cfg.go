@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/grafana/beyla/pkg/internal/netolly/flow"
+	"github.com/grafana/beyla/pkg/internal/netolly/transform/cidr"
 )
 
 type NetworkConfig struct {
@@ -101,6 +102,14 @@ type NetworkConfig struct {
 	// This won't filter some meta-attributes such as
 	// instance, job, service_instance_id, service_name, telemetry_sdk_*, etc...
 	AllowedAttributes []string `yaml:"allowed_attributes" env:"BEYLA_NETWORK_ALLOWED_ATTRIBUTES" envSeparator:","`
+
+	// CIDRs list, to be set as the "src.cidr" and "dst.cidr"
+	// attribute as a function of the source and destination IP addresses.
+	// If an IP does not match any address here, the attributes won't be set.
+	// If an IP matches multiple CIDR definitions, the flow will be decorated with the
+	// narrowest CIDR. By this reason, you can safely add a 0.0.0.0/0 entry to group there
+	// all the traffic that does not match any of the other CIDRs.
+	CIDRs cidr.Definitions `yaml:"cidrs" env:"BEYLA_NETWORK_GROUP_CIDRS" envSeparator:","`
 }
 
 var defaultNetworkConfig = NetworkConfig{

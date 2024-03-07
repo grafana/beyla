@@ -28,6 +28,7 @@ require (
 	github.com/vishvananda/netlink v1.1.0
 	github.com/vladimirvivien/gexe v0.2.0
 	github.com/xwb1989/sqlparser v0.0.0-20180606152119-120387863bf2
+	github.com/yl2chen/cidranger v1.0.2
 	go.opentelemetry.io/collector/consumer v0.94.1
 	go.opentelemetry.io/collector/pdata v1.1.0
 	go.opentelemetry.io/otel v1.23.1

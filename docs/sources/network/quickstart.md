@@ -1,5 +1,5 @@
 ---
-title: Beyla Network Metrics Quickstart
+title: Beyla network metrics quickstart
 menuTitle: Quickstart
 description: A quickstart guide to produce Network Metrics from Grafana Beyla
 weight: 2

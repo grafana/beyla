@@ -28,7 +28,7 @@ linters:
     - exhaustive
 linters-settings:
   stylecheck:
-    go: "1.21"
+    go: "1.22"
   gocritic:
     enabled-checks:
       - rangeExprCopy

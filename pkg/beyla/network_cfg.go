@@ -26,7 +26,7 @@ import (
 )
 
 type NetworkConfig struct {
-	// Enable network observability.
+	// Enable network metrics.
 	// Default value is false (disabled)
 	Enable bool `yaml:"enable" env:"BEYLA_NETWORK_METRICS"`
 

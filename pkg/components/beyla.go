@@ -58,14 +58,14 @@ func setupAppO11y(ctx context.Context, config *beyla.Config) {
 }
 
 func setupNetO11y(ctx context.Context, cfg *beyla.Config) {
-	slog.Info("starting Beyla in Network Observability mode")
+	slog.Info("starting Beyla in Network metrics mode")
 	flowsAgent, err := agent.FlowsAgent(cfg)
 	if err != nil {
-		slog.Error("can't start network observability", "error", err)
+		slog.Error("can't start network metrics capture", "error", err)
 		os.Exit(-1)
 	}
 	if err := flowsAgent.Run(ctx); err != nil {
-		slog.Error("can't start network observability", "error", err)
+		slog.Error("can't start network metrics capture", "error", err)
 		os.Exit(-1)
 	}
 }

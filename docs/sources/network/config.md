@@ -11,7 +11,7 @@ keywords:
 
 # Beyla Network Metrics configuration options
 
-> ⚠️ This is an unstable, unsupported, under-development feature and might be subject to breaking changes in
+> ⚠️ This is an unstable, under-development feature and might be subject to breaking changes in
 > the short term. Use it at your own risk.
 
 Network metrics are configured under the `network` property of the [Beyla Configuration YAML file]({{< relref "../configure/options" >}})

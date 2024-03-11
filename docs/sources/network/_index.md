@@ -14,7 +14,7 @@ keywords:
 Grafana Beyla can be configured to provide network metrics between different endpoints (physical nodes,
 containers, Kubernetes pods and services, etc.).
 
-> ⚠️ This is an unstable, unsupported, under-development feature and might be subject to breaking changes in
+> ⚠️ This is an unstable, under-development feature and might be subject to breaking changes in
 > the short term. Use it at your own risk.
 
 - [Beyla Network Metrics quickstart]({{< relref "./quickstart" >}})

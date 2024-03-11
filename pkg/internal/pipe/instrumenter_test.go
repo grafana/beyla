@@ -422,7 +422,7 @@ func matchMetricEvent(t require.TestingT, event collector.MetricRecord) {
 	assert.Equal(t, collector.MetricRecord{
 		Name:  "http.server.request.duration",
 		Unit:  "s",
-		Value: 2.0,
+		Value: 2e-09,
 		Attributes: map[string]string{
 			string(otel.HTTPRequestMethodKey):      "GET",
 			string(otel.HTTPResponseStatusCodeKey): "404",

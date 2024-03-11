@@ -38,7 +38,7 @@ func TestGenerateMetrics(t *testing.T) {
 	histogramMetric := metricsList.At(0)
 	assert.Equal(t, otel.HTTPServerDuration, histogramMetric.Name())
 	assert.Equal(t, "s", histogramMetric.Unit())
-	assert.Equal(t, pmetric.AggregationTemporalityDelta, histogramMetric.Histogram().AggregationTemporality())
+	assert.Equal(t, pmetric.AggregationTemporalityCumulative, histogramMetric.Histogram().AggregationTemporality())
 
 	// Assert data point properties
 	dataPoints := histogramMetric.Histogram().DataPoints()

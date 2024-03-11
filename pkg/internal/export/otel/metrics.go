@@ -338,13 +338,13 @@ func otelHistogramConfig(metricName string, buckets []float64, useExponentialHis
 
 }
 
-func (mr *MetricsReporter) grpcAttributes(span *request.Span) []attribute.KeyValue {
+func grpcAttributes(cfg *MetricsConfig, span *request.Span) []attribute.KeyValue {
 	attrs := []attribute.KeyValue{
 		semconv.RPCMethod(span.Path),
 		semconv.RPCSystemGRPC,
 		semconv.RPCGRPCStatusCodeKey.Int(span.Status),
 	}
-	if mr.cfg.ReportPeerInfo {
+	if cfg.ReportPeerInfo {
 		if span.Type == request.EventTypeGRPC {
 			attrs = append(attrs, ClientAddr(span.Peer))
 		} else {
@@ -355,7 +355,7 @@ func (mr *MetricsReporter) grpcAttributes(span *request.Span) []attribute.KeyVal
 	return attrs
 }
 
-func HttpServerAttributes(cfg *MetricsConfig, span *request.Span) []attribute.KeyValue {
+func httpServerAttributes(cfg *MetricsConfig, span *request.Span) []attribute.KeyValue {
 	attrs := []attribute.KeyValue{
 		HTTPRequestMethod(span.Method),
 		HTTPResponseStatusCode(span.Status),
@@ -373,12 +373,12 @@ func HttpServerAttributes(cfg *MetricsConfig, span *request.Span) []attribute.Ke
 	return attrs
 }
 
-func (mr *MetricsReporter) httpClientAttributes(span *request.Span) []attribute.KeyValue {
+func httpClientAttributes(cfg *MetricsConfig, span *request.Span) []attribute.KeyValue {
 	attrs := []attribute.KeyValue{
 		HTTPRequestMethod(span.Method),
 		HTTPResponseStatusCode(span.Status),
 	}
-	if mr.cfg.ReportPeerInfo {
+	if cfg.ReportPeerInfo {
 		attrs = append(attrs, ServerAddr(span.Host))
 		attrs = append(attrs, ServerPort(span.HostPort))
 	}
@@ -394,15 +394,15 @@ func MetricAttributes(cfg *MetricsConfig, span *request.Span) []attribute.KeyVal
 
 	switch span.Type {
 	case request.EventTypeHTTP:
-		attrs = HttpServerAttributes(cfg, span)
-		// case request.EventTypeGRPC, request.EventTypeGRPCClient:
-		// 	attrs = mr.grpcAttributes(span)
-		// case request.EventTypeHTTPClient:
-		// 	attrs = mr.httpClientAttributes(span)
-		// case request.EventTypeSQLClient:
-		// 	attrs = []attribute.KeyValue{
-		// 		semconv.DBOperation(span.Method),
-		// 	}
+		attrs = httpServerAttributes(cfg, span)
+	case request.EventTypeGRPC, request.EventTypeGRPCClient:
+		attrs = grpcAttributes(cfg, span)
+	case request.EventTypeHTTPClient:
+		attrs = httpClientAttributes(cfg, span)
+	case request.EventTypeSQLClient:
+		attrs = []attribute.KeyValue{
+			semconv.DBOperation(span.Method),
+		}
 	}
 
 	if span.ServiceID.Name != "" { // we don't have service name set, system wide instrumentation

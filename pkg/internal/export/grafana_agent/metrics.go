@@ -46,12 +46,33 @@ func generateMetrics(cfg *otel.MetricsConfig, span *request.Span) pmetric.Metric
 	ilm.Metrics().AppendEmpty()
 	t := span.Timings()
 	duration := t.End.Sub(t.RequestStart).Seconds()
+	attrs := AttrsToMap(otel.MetricAttributes(cfg, span))
 	switch span.Type {
 	case request.EventTypeHTTP:
-		attrs := AttrsToMap(otel.MetricAttributes(cfg, span))
 		m := generateHistogram(otel.HTTPServerDuration, "s", duration, t.RequestStart, attrs, cfg.Buckets.DurationHistogram)
 		m.CopyTo(ilm.Metrics().At(0))
+
+		ilm.Metrics().AppendEmpty()
+		m = generateHistogram(otel.HTTPServerRequestSize, "By", float64(span.ContentLength), t.RequestStart, attrs, cfg.Buckets.RequestSizeHistogram)
+		m.CopyTo(ilm.Metrics().At(1))
+	case request.EventTypeHTTPClient:
+		m := generateHistogram(otel.HTTPClientDuration, "s", duration, t.RequestStart, attrs, cfg.Buckets.DurationHistogram)
+		m.CopyTo(ilm.Metrics().At(0))
+
+		ilm.Metrics().AppendEmpty()
+		m = generateHistogram(otel.HTTPClientRequestSize, "By", float64(span.ContentLength), t.RequestStart, attrs, cfg.Buckets.RequestSizeHistogram)
+		m.CopyTo(ilm.Metrics().At(1))
+	case request.EventTypeGRPC:
+		m := generateHistogram(otel.RPCServerDuration, "s", duration, t.RequestStart, attrs, cfg.Buckets.DurationHistogram)
+		m.CopyTo(ilm.Metrics().At(0))
+	case request.EventTypeGRPCClient:
+		m := generateHistogram(otel.RPCClientDuration, "s", duration, t.RequestStart, attrs, cfg.Buckets.DurationHistogram)
+		m.CopyTo(ilm.Metrics().At(0))
+	case request.EventTypeSQLClient:
+		m := generateHistogram(otel.SQLClientDuration, "s", duration, t.RequestStart, attrs, cfg.Buckets.DurationHistogram)
+		m.CopyTo(ilm.Metrics().At(0))
 	}
+
 	return metrics
 }
 

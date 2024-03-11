@@ -247,43 +247,64 @@ func TestRouteConsolidation(t *testing.T) {
 	}
 
 	assert.Equal(t, collector.MetricRecord{
-		Name: "http.server.request.duration",
-		Unit: "s",
+		Name:  "http.server.request.duration",
+		Unit:  "s",
+		Value: 2e-09,
 		Attributes: map[string]string{
 			string(semconv.ServiceNameKey):         "svc-1",
 			string(otel.HTTPRequestMethodKey):      "GET",
 			string(otel.HTTPResponseStatusCodeKey): "200",
 			string(semconv.HTTPRouteKey):           "/user/{id}",
 		},
+		ResourceAttributes: map[string]string{
+			string(semconv.ServiceNameKey):          "svc-1",
+			string(semconv.ServiceInstanceIDKey):    "",
+			string(semconv.TelemetrySDKLanguageKey): "go",
+			string(semconv.TelemetrySDKNameKey):     "beyla",
+		},
 		Type: pmetric.MetricTypeHistogram,
 	}, events["/user/{id}"])
 
 	assert.Equal(t, collector.MetricRecord{
-		Name: "http.server.request.duration",
-		Unit: "s",
+		Name:  "http.server.request.duration",
+		Unit:  "s",
+		Value: 2e-09,
 		Attributes: map[string]string{
 			string(semconv.ServiceNameKey):         "svc-1",
 			string(otel.HTTPRequestMethodKey):      "GET",
 			string(otel.HTTPResponseStatusCodeKey): "200",
 			string(semconv.HTTPRouteKey):           "/products/{id}/push",
 		},
+		ResourceAttributes: map[string]string{
+			string(semconv.ServiceNameKey):          "svc-1",
+			string(semconv.ServiceInstanceIDKey):    "",
+			string(semconv.TelemetrySDKLanguageKey): "go",
+			string(semconv.TelemetrySDKNameKey):     "beyla",
+		},
 		Type: pmetric.MetricTypeHistogram,
 	}, events["/products/{id}/push"])
 
 	assert.Equal(t, collector.MetricRecord{
-		Name: "http.server.request.duration",
-		Unit: "s",
+		Name:  "http.server.request.duration",
+		Unit:  "s",
+		Value: 2e-09,
 		Attributes: map[string]string{
 			string(semconv.ServiceNameKey):         "svc-1",
 			string(otel.HTTPRequestMethodKey):      "GET",
 			string(otel.HTTPResponseStatusCodeKey): "200",
 			string(semconv.HTTPRouteKey):           "/**",
 		},
+		ResourceAttributes: map[string]string{
+			string(semconv.ServiceNameKey):          "svc-1",
+			string(semconv.ServiceInstanceIDKey):    "",
+			string(semconv.TelemetrySDKLanguageKey): "go",
+			string(semconv.TelemetrySDKNameKey):     "beyla",
+		},
 		Type: pmetric.MetricTypeHistogram,
 	}, events["/**"])
 }
 
-func TestGRPCPipeline(t *testing.T) {
+func TestMetricsGRPCPipeline(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -311,18 +332,44 @@ func TestGRPCPipeline(t *testing.T) {
 	go pipe.Run(ctx)
 
 	event := testutil.ReadChannel(t, tc.Records, testTimeout)
-	assert.Equal(t, collector.MetricRecord{
-		Name: "rpc.server.duration",
-		Unit: "s",
-		Attributes: map[string]string{
-			string(semconv.ServiceNameKey):       "grpc-svc",
-			string(semconv.RPCSystemKey):         "grpc",
-			string(semconv.RPCGRPCStatusCodeKey): "3",
-			string(semconv.RPCMethodKey):         "/foo/bar",
-			string(otel.ClientAddrKey):           "1.1.1.1",
+	matchGRPCMetricEvent(t, event)
+}
+
+func TestMetricsReceiverGRPCPipeline(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	tc, err := collector.Start(ctx)
+	require.NoError(t, err)
+
+	consumer := consumer.MockMetricsConsumer{Endpoint: tc.ServerEndpoint}
+	require.NoError(t, err)
+
+	gb := newGraphBuilder(ctx, &beyla.Config{
+		Metrics: otel.MetricsConfig{
+			MetricsEndpoint: tc.ServerEndpoint, ReportTarget: true, ReportPeerInfo: true, Interval: time.Millisecond,
+			ReportersCacheLen: 16,
 		},
-		Type: pmetric.MetricTypeHistogram,
-	}, event)
+		MetricsReceiver: beyla.MetricsReceiverConfig{
+			Metrics: []beyla.MetricsConsumer{&consumer},
+		},
+	}, gctx(), make(<-chan []request.Span))
+	// Override eBPF tracer to send some fake data
+	graph.RegisterStart(gb.builder, func(_ traces.ReadDecorator) (node.StartFunc[[]request.Span], error) {
+		return func(out chan<- []request.Span) {
+			out <- newGRPCRequest("grpc-svc", 1, "/foo/bar", 3)
+			// closing prematurely the input node would finish the whole graph processing
+			// and OTEL exporters could be closed, so we wait.
+			time.Sleep(testTimeout)
+		}, nil
+	})
+	pipe, err := gb.buildGraph()
+	require.NoError(t, err)
+
+	go pipe.Run(ctx)
+
+	event := testutil.ReadChannel(t, tc.Records, testTimeout)
+	matchGRPCMetricEvent(t, event)
 }
 
 func TestTraceGRPCPipeline(t *testing.T) {
@@ -432,6 +479,28 @@ func matchMetricEvent(t require.TestingT, event collector.MetricRecord) {
 		},
 		ResourceAttributes: map[string]string{
 			string(semconv.ServiceNameKey):          "foo-svc",
+			string(semconv.ServiceInstanceIDKey):    "",
+			string(semconv.TelemetrySDKLanguageKey): "go",
+			string(semconv.TelemetrySDKNameKey):     "beyla",
+		},
+		Type: pmetric.MetricTypeHistogram,
+	}, event)
+}
+
+func matchGRPCMetricEvent(t *testing.T, event collector.MetricRecord) {
+	assert.Equal(t, collector.MetricRecord{
+		Name:  "rpc.server.duration",
+		Unit:  "s",
+		Value: 2e-09,
+		Attributes: map[string]string{
+			string(semconv.ServiceNameKey):       "grpc-svc",
+			string(semconv.RPCSystemKey):         "grpc",
+			string(semconv.RPCGRPCStatusCodeKey): "3",
+			string(semconv.RPCMethodKey):         "/foo/bar",
+			string(otel.ClientAddrKey):           "1.1.1.1",
+		},
+		ResourceAttributes: map[string]string{
+			string(semconv.ServiceNameKey):          "grpc-svc",
 			string(semconv.ServiceInstanceIDKey):    "",
 			string(semconv.TelemetrySDKLanguageKey): "go",
 			string(semconv.TelemetrySDKNameKey):     "beyla",
@@ -566,14 +635,21 @@ func TestBasicPipelineInfo(t *testing.T) {
 
 	event := testutil.ReadChannel(t, tc.Records, testTimeout)
 	assert.Equal(t, collector.MetricRecord{
-		Name: "http.server.request.duration",
-		Unit: "s",
+		Name:  "http.server.request.duration",
+		Unit:  "s",
+		Value: 1e-09,
 		Attributes: map[string]string{
 			string(otel.HTTPRequestMethodKey):      "PATCH",
 			string(otel.HTTPResponseStatusCodeKey): "204",
 			string(otel.HTTPUrlPathKey):            "/aaa/bbb",
 			string(otel.ClientAddrKey):             "1.1.1.1",
 			string(semconv.ServiceNameKey):         "comm",
+		},
+		ResourceAttributes: map[string]string{
+			string(semconv.ServiceNameKey):          "comm",
+			string(semconv.ServiceInstanceIDKey):    "grafana-0",
+			string(semconv.TelemetrySDKLanguageKey): "go",
+			string(semconv.TelemetrySDKNameKey):     "beyla",
 		},
 		Type: pmetric.MetricTypeHistogram,
 	}, event)

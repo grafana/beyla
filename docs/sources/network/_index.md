@@ -49,7 +49,7 @@ Network metrics provides a single **OpenTelemetry** metric `beyla.network.flow.b
 
 If the metric with all the attributes is reported it might lead to a cardinality explosion, especially when including external traffic in the `src.address`/`dst.address` attributes.
 
-You can specify which attributes are allowed in the Belya configuration. Allowed attributes and aggregates the metrics by them. For example:
+You can specify which attributes are allowed in the Beyla configuration. Allowed attributes and aggregates the metrics by them. For example:
 
 ```yaml
 network:

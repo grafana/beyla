@@ -15,7 +15,7 @@ Network metrics is an [experimental](/docs/release-life-cycle/) under developmen
 
 # Beyla network metrics quickstart
 
-Beyla can generate network metrics in any environment (physical host, virtual host, or container). While the feature is in experimental development, we recommend using a Kubernetes environment, as Beyla is able to decorate each metric with the metadata of the source and destination Kubernetes entities.
+Beyla can generate network metrics in any environment (physical host, virtual host, or container). While the feature is in experimental development, it is recommended to use a Kubernetes environment, as Beyla is able to decorate each metric with the metadata of the source and destination Kubernetes entities.
 
 ## Deploy Beyla with network metrics
 
@@ -46,7 +46,7 @@ Or export the following environment variable
 export BEYLA_KUBE_METADATA_ENABLE=true
 ```
 
-Finally, network metrics requires administrative (sudo) privileges with the following capabilities:
+Finally, network metrics requires administrative `sudo` privileges with the following capabilities:
 
 - Full privileged access, `root`, `sudo`, or `privileged: true` for Kubernetes
 - The following capabilities: `BPF`, `PERFMON`, `NET_ADMIN`, `SYS_RESOURCE`
@@ -142,7 +142,7 @@ Note the following requirements for this deployment configuration:
 
 The configuration does not set an endpoint to export metrics. Instead, the `print_traces: true` option outputs the captured network flows to standard output.
 
-Once deployed, use `kubectl logs` to see network flow entries, for example:
+Use `kubectl logs` to see network flow entries, for example:
 
 ```
 network_flow: beyla.ip=172.18.0.2 iface= direction=255 src.address=10.244.0.4 dst.address=10.96.0.1
@@ -155,7 +155,7 @@ k8s.src.owner.name=local-path-provisioner k8s.src.owner.type=Deployment
 k8s.dst.type=Service k8s.dst.owner.name=kubernetes
 ```
 
-For further information on the above attributes, consult the [network metrics documentation]({{< relref "./_index.md" >}}).
+For further information on the attributes used, consult the [network metrics documentation]({{< relref "./_index.md" >}}).
 
 ## Export OpenTelemetry metrics
 
@@ -166,7 +166,7 @@ format to an OpenTelemetry endpoint.
 Prometheus exporting for network metrics is not currently supported.
 {{% /admonition %}}
 
-Beyla works with any OpenTelemetry endpoint, for this quickstart we use the OpenTelemetry endpoint in Grafana Cloud. You can get a [Free Grafana Cloud Account at Grafana's website](/pricing/).
+Beyla works with any OpenTelemetry endpoint. This quickstart uses the OpenTelemetry endpoint in Grafana Cloud. You can get a [Free Grafana Cloud Account at Grafana's website](/pricing/).
 
 To get your stack's OpenTelemetry endpoint, login to the Grafana Cloud Portal, and click **Configure** under the **OpenTelemetry** section.
 
@@ -174,7 +174,7 @@ To get your stack's OpenTelemetry endpoint, login to the Grafana Cloud Portal, a
 
 Under **Password / API token**, click **Generate now** and follow the instructions to create an API token.
 
-The **Environment Variables** will be populated with a set of standard OpenTelemetry environment variables which will provide the connection endpoint and credentials information for Beyla.
+The **Environment Variables** section is populated with a set of standard OpenTelemetry environment variables which provide the connection endpoint and credentials information for Beyla.
 
 ![OTLP connection headers](https://grafana.com/media/docs/grafana-cloud/beyla/quickstart/otlp-connection-headers.png)
 
@@ -210,4 +210,4 @@ Also Add `OTEL_EXPORTER_OTLP_ENDPOINT` and its value as an environment variable 
 ## Select metrics attributes to reduce cardinality
 
 
-## Group IPs by CIDR
+## Group IP addresses by CIDR

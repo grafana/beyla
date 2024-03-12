@@ -5,12 +5,13 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/grafana/beyla/pkg/beyla"
-	"github.com/grafana/beyla/pkg/internal/export/otel"
-	"github.com/grafana/beyla/pkg/internal/request"
 	"github.com/mariomac/pipes/pkg/node"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/pmetric"
+
+	"github.com/grafana/beyla/pkg/beyla"
+	"github.com/grafana/beyla/pkg/internal/export/otel"
+	"github.com/grafana/beyla/pkg/internal/request"
 )
 
 // MetricsReceiver creates a terminal node that consumes request.Spans and sends OpenTelemetry metrics to the configured consumers.

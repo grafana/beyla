@@ -2,40 +2,60 @@
 title: Beyla network metrics quickstart
 menuTitle: Quickstart
 description: A quickstart guide to produce Network Metrics from Grafana Beyla
-weight: 2
+weight: 1
 keywords:
   - Beyla
   - eBPF
   - Network
 ---
 
+{{% admonition type="warning" %}}
+Network metrics is an [experimental](/docs/release-life-cycle/) under development feature, expect breaking changes.
+{{% /admonition %}}
+
 # Beyla network metrics quickstart
 
-> ⚠️ This is an unstable, under-development feature and might be subject to breaking changes in
-> the short term. Use it at your own risk.
+Beyla can generate network metrics in any environment (physical host, virtual host, or container). While the feature is in experimental development, we recommend using a Kubernetes environment, as Beyla is able to decorate each metric with the metadata of the source and destination Kubernetes entities.
 
-Beyla can generate network metrics in any environment (phisical host, virtual host or container), but
-we currently recommend using this feature in Kubernetes, because it is the environment that, in the current status
-of this feature, provides the most rich experience. Beyla is able to decorate each metric with the
-metadata of the source and destination Kubernetes entities. 
+## Deploy Beyla with network metrics
 
-## Deploying Beyla with network metrics
+To enable network metrics, set the following option in your Beyla configuration:
 
-To enable network metrics, Beyla requires to set the `network -> enable: true` YAML option (or 
-the `BEYLA_NETWORK_METRICS=true` environment variable). Check the 
-[Beyla Network Metrics configuration options]({{< relref "../options" >}}) document for more
-information about the configuration options that Beyla provides.
+```yaml
+network:
+  enable: true
+```
 
-As previously explained, the `attributes -> kubernetes -> enable : true` YAML option (or the
-`BEYLA_KUBE_METADATA_ENABLE=true` environment variable) are also required for a richer 
-decoration of metrics.
+Or export the following environment variable
 
-Beyla Network metrics requires also some privileges. Either:
+```sh
+export BEYLA_NETWORK_METRICS=true
+```
 
-* Full privileged access (`root`, `sudo` or `privileged: true` in the case of Kubernetes).
-* The following capabilities: `BPF`, `PERFMON`, `NET_ADMIN`, `SYS_RESOURCE`.
+Network metrics requires metrics to be decorated with Kubernetes metadata. To enable this feature, set the following option in your Beyla configuration:
 
-The following YAML would provide a basic Beyla deployment for network metrics:
+```yaml
+attributes:
+  kubernetes:
+    enable : true
+```
+
+Or export the following environment variable
+
+```sh
+export BEYLA_KUBE_METADATA_ENABLE=true
+```
+
+Finally, network metrics requires administrative (sudo) privileges with the following capabilities:
+
+- Full privileged access, `root`, `sudo`, or `privileged: true` for Kubernetes
+- The following capabilities: `BPF`, `PERFMON`, `NET_ADMIN`, `SYS_RESOURCE`
+
+To learn more about Beyla configuration, consult the [Beyla configuration documentation]({{< relref "../configure/options.md" >}}).
+
+## Example configuration
+
+The following YAML configuration provides a simple Beyla deployment for network metrics:
 
 ```yaml
 apiVersion: v1
@@ -113,22 +133,16 @@ spec:
               value: "/config/beyla-config.yml"
 ```
 
-Please notice the following requirements from the previous deployment:
-* Beyla needs to run as a DaemonSet, as it is required one and only one Beyla instance per node.
-* To allow Beyla decorating the network metrics with Kubernetes metadata,
-  we had to create a `ClusterRole` and `ClusterRoleBinding` with _list_ and _watch_ permissions
-  for ReplicaSets, Pods, Services and Nodes.
-* To be able to listen to any packet in the host, Beyla requires the `hostNetwork: true` permission
-  to be granted.
-* The container image does not point to any release version but for the latest, under-development
-  `grafana/beyla:main` image.
+Note the following requirements for this deployment configuration:
 
-The previous YAML does not provide any endpoint for exporting the metrics. Instead, the `print_traces: true`
-configuration option would print information in Beyla's standard output about the captured network flows:
-groups of network packets between two endpoints.
+- The container image uses the latest under-development `grafana/beyla:main` image.
+- Beyla needs to run as a DaemonSet, as it is requires only one Beyla instance per node
+- To listen to network packets on the host, Beyla requires the `hostNetwork: true` permission
+- To decorate the network metrics with Kubernetes metadata, create a `ClusterRole` and `ClusterRoleBinding` with `list` and `watch` permissions for ReplicaSets, Pods, Services and Nodes
 
-After deploying the previous YAML, you can use `kubectl logs` to see each network flow in entries like
-the following:
+The configuration does not set an endpoint to export metrics. Instead, the `print_traces: true` option outputs the captured network flows to standard output.
+
+Once deployed, use `kubectl logs` to see network flow entries, for example:
 
 ```
 network_flow: beyla.ip=172.18.0.2 iface= direction=255 src.address=10.244.0.4 dst.address=10.96.0.1
@@ -141,32 +155,32 @@ k8s.src.owner.name=local-path-provisioner k8s.src.owner.type=Deployment
 k8s.dst.type=Service k8s.dst.owner.name=kubernetes
 ```
 
-The [Network Metrics]({{< relref "../" >}}) main page describes each of the above attributes.
+For further information on the above attributes, consult the [network metrics documentation]({{< relref "./_index.md" >}}).
 
-## Configure OTEL exporter
+## Export OpenTelemetry metrics
 
-After running Beyla in network metrics mode and verify in its standard output that it is able
-to capture network information, Beyla needs to be configured to export the metrics in OpenTelemetry
-format.
+After you have confirmed that network metrics are being collected, configure Beyla to export the metrics in OpenTelemetry
+format to an OpenTelemetry endpoint.
 
-> ⚠️ Prometheus metrics export is not yet supported.
+{{% admonition type="note" %}}
+Prometheus exporting for network metrics is not currently supported.
+{{% /admonition %}}
 
-Despite working with any standard OpenTelemetry endpoint, for this quickstart we recommend using
-the OpenTelemetry endpoint in Grafana Cloud. You can get a [Free Grafana Cloud Account at Grafana's website](/pricing/).
+Beyla works with any OpenTelemetry endpoint, for this quickstart we use the OpenTelemetry endpoint in Grafana Cloud. You can get a [Free Grafana Cloud Account at Grafana's website](/pricing/).
 
-From the Grafana Cloud Portal, look for the **OpenTelemetry** box and click **Configure**.
+To get your stack's OpenTelemetry endpoint, login to the Grafana Cloud Portal, and click **Configure** under the **OpenTelemetry** section.
 
 ![OpenTelemetry Grafana Cloud portal](https://grafana.com/media/docs/grafana-cloud/beyla/quickstart/otel-cloud-portal-box.png)
 
-Under **Password / API token** click **Generate now** and follow the instructions to create a default API token.
+Under **Password / API token**, click **Generate now** and follow the instructions to create an API token.
 
 The **Environment Variables** will be populated with a set of standard OpenTelemetry environment variables which will provide the connection endpoint and credentials information for Beyla.
 
 ![OTLP connection headers](https://grafana.com/media/docs/grafana-cloud/beyla/quickstart/otlp-connection-headers.png)
 
-Copy the value of `OTEL_EXPORTER_OTLP_HEADERS` environment variable and paste it as a Kubernetes
-secret (and deploy it):
-```
+Copy the value of `OTEL_EXPORTER_OTLP_HEADERS` environment variable and paste it as a Kubernetes secret (and deploy it):
+
+```yaml
 apiVersion: v1
 kind: Secret
 metadata:
@@ -177,9 +191,8 @@ stringData:
 ```
 
 Now add the `OTEL_EXPORTER_OTLP_HEADERS` and reference this secret as the variable value.
-Also Add `OTEL_EXPORTER_OTLP_ENDPOINT` and its value as an environment variable to the Beyla
-container in the Kubernetes manifest. The `env` section of the `beyla` container in the
-manifest from the start of this document should look like:
+
+Also Add `OTEL_EXPORTER_OTLP_ENDPOINT` and its value as an environment variable to the Beyla container in the Kubernetes manifest. The `env` section of the `beyla` container in the manifest from the start of this document should look like:
 
 ```yaml
           env:

@@ -116,7 +116,7 @@ autoscaling:
   targetCPUUtilizationPercentage: 80
   # targetMemoryUtilizationPercentage: 80
 
-# Additional volumes on the output Deployment definition.
+# Additional volumes on the output daemonset definition.
 volumes: []
 # - name: foo
 #   secret:
@@ -145,7 +145,7 @@ configmapData:
   open_port: 8443
   routes:
     unmatched: heuristic
-  log_level: debug
+  log_level: info
   otel_traces_export:
     endpoint: http://grafana-agent:4318
  ## or alternatively use

@@ -85,11 +85,13 @@ type PrometheusConfig struct {
 	DisableBuildInfo bool `yaml:"disable_build_info" env:"BEYLA_PROMETHEUS_DISABLE_BUILD_INFO"`
 
 	Buckets otel.Buckets `yaml:"buckets"`
+
+	Reg *prometheus.Registry
 }
 
 // nolint:gocritic
 func (p PrometheusConfig) Enabled() bool {
-	return p.Port != 0
+	return p.Port != 0 || p.Reg != nil
 }
 
 type metricsReporter struct {
@@ -112,6 +114,9 @@ type metricsReporter struct {
 
 func PrometheusEndpoint(ctx context.Context, cfg *PrometheusConfig, ctxInfo *global.ContextInfo) (node.TerminalFunc[[]request.Span], error) {
 	reporter := newReporter(ctx, cfg, ctxInfo)
+	if cfg.Reg != nil {
+		return reporter.collectMetrics, nil
+	}
 	return reporter.reportMetrics, nil
 }
 
@@ -207,13 +212,21 @@ func newReporter(ctx context.Context, cfg *PrometheusConfig, ctxInfo *global.Con
 		mr.httpDuration,
 		mr.grpcDuration)
 
-	mr.promConnect.Register(cfg.Port, cfg.Path, registeredMetrics...)
+	if mr.cfg.Reg != nil {
+		mr.cfg.Reg.MustRegister(registeredMetrics...)
+	} else {
+		mr.promConnect.Register(cfg.Port, cfg.Path, registeredMetrics...)
+	}
 
 	return mr
 }
 
 func (r *metricsReporter) reportMetrics(input <-chan []request.Span) {
 	go r.promConnect.StartHTTP(r.bgCtx)
+	r.collectMetrics(input)
+}
+
+func (r *metricsReporter) collectMetrics(input <-chan []request.Span) {
 	for spans := range input {
 		for i := range spans {
 			r.observe(&spans[i])

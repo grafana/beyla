@@ -55,7 +55,7 @@ var DefaultBuckets = Buckets{
 	RequestSizeHistogram: []float64{0, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192},
 }
 
-func OTELResource(service svc.ID) *resource.Resource {
+func Resource(service svc.ID) *resource.Resource {
 	attrs := []attribute.KeyValue{
 		semconv.ServiceName(service.Name),
 		semconv.ServiceInstanceID(service.Instance),

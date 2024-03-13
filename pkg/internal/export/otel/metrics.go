@@ -177,7 +177,7 @@ func (mr *MetricsReporter) newMetricSet(service svc.ID) (*Metrics, error) {
 	mlog := mlog().With("service", service)
 	mlog.Debug("creating new Metrics reporter")
 	useExponentialHistograms := isExponentialAggregation(mr.cfg, mlog)
-	resources := OTELResource(service)
+	resources := Resource(service)
 	m := Metrics{
 		ctx: mr.ctx,
 		provider: metric.NewMeterProvider(

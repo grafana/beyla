@@ -33,7 +33,7 @@ func TestGenerateMetrics(t *testing.T) {
 	scopeName := ilm.Scope().Name()
 	assert.Equal(t, otel.ReporterName, scopeName)
 	metricsList := ilm.Metrics()
-	assert.Equal(t, 1, metricsList.Len())
+	assert.Equal(t, 2, metricsList.Len())
 
 	// Assert histogram metric
 	histogramMetric := metricsList.At(0)

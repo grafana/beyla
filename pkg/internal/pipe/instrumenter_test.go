@@ -258,7 +258,6 @@ func TestRouteConsolidation(t *testing.T) {
 		},
 		ResourceAttributes: map[string]string{
 			string(semconv.ServiceNameKey):          "svc-1",
-			string(semconv.ServiceInstanceIDKey):    "",
 			string(semconv.TelemetrySDKLanguageKey): "go",
 			string(semconv.TelemetrySDKNameKey):     "beyla",
 		},
@@ -277,7 +276,6 @@ func TestRouteConsolidation(t *testing.T) {
 		},
 		ResourceAttributes: map[string]string{
 			string(semconv.ServiceNameKey):          "svc-1",
-			string(semconv.ServiceInstanceIDKey):    "",
 			string(semconv.TelemetrySDKLanguageKey): "go",
 			string(semconv.TelemetrySDKNameKey):     "beyla",
 		},
@@ -296,7 +294,6 @@ func TestRouteConsolidation(t *testing.T) {
 		},
 		ResourceAttributes: map[string]string{
 			string(semconv.ServiceNameKey):          "svc-1",
-			string(semconv.ServiceInstanceIDKey):    "",
 			string(semconv.TelemetrySDKLanguageKey): "go",
 			string(semconv.TelemetrySDKNameKey):     "beyla",
 		},
@@ -479,7 +476,6 @@ func matchMetricEvent(t require.TestingT, event collector.MetricRecord) {
 		},
 		ResourceAttributes: map[string]string{
 			string(semconv.ServiceNameKey):          "foo-svc",
-			string(semconv.ServiceInstanceIDKey):    "",
 			string(semconv.TelemetrySDKLanguageKey): "go",
 			string(semconv.TelemetrySDKNameKey):     "beyla",
 		},
@@ -501,7 +497,6 @@ func matchGRPCMetricEvent(t *testing.T, event collector.MetricRecord) {
 		},
 		ResourceAttributes: map[string]string{
 			string(semconv.ServiceNameKey):          "grpc-svc",
-			string(semconv.ServiceInstanceIDKey):    "",
 			string(semconv.TelemetrySDKLanguageKey): "go",
 			string(semconv.TelemetrySDKNameKey):     "beyla",
 		},
@@ -647,7 +642,6 @@ func TestBasicPipelineInfo(t *testing.T) {
 		},
 		ResourceAttributes: map[string]string{
 			string(semconv.ServiceNameKey):          "comm",
-			string(semconv.ServiceInstanceIDKey):    "grafana-0",
 			string(semconv.TelemetrySDKLanguageKey): "go",
 			string(semconv.TelemetrySDKNameKey):     "beyla",
 		},

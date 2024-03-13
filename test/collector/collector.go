@@ -15,6 +15,7 @@ import (
 	"go.opentelemetry.io/collector/pdata/pmetric/pmetricotlp"
 	"go.opentelemetry.io/collector/pdata/ptrace"
 	"go.opentelemetry.io/collector/pdata/ptrace/ptraceotlp"
+	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 )
 
 // TestCollector is a dummy OLTP test collector that allows retrieving part of the collected metrics
@@ -145,6 +146,8 @@ func (tc *TestCollector) metricEvent(writer http.ResponseWriter, body []byte) {
 							mr.ResourceAttributes[k] = v.AsString()
 							return true
 						})
+						// remove ServiceInstanceIDKey to avoid flakiness
+						delete(mr.ResourceAttributes, string(semconv.ServiceInstanceIDKey))
 						tc.Records <- mr
 					})
 				default:

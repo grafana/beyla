@@ -66,9 +66,9 @@ If you set this property via environment variable each entry must be separated b
 BEYLA_NETWORK_ALLOWED_ATTRIBUTES=src.name,dst.name
 ```
 
-| YAML    | Environment variable        | Type     | Default |
-| ------- | --------------------------- | -------- | ------- |
-| `cidrs` | `BEYLA_NETWORK_GROUP_CIDRS` | []string | (empty) |
+| YAML    | Environment variable  | Type     | Default |
+| ------- | --------------------- | -------- | ------- |
+| `cidrs` | `BEYLA_NETWORK_CIDRS` | []string | (empty) |
 
 CIDRs list, to be set as the `src.cidr` and `dst.cidr` attribute with the entry that matches the `src.address` and `dst.address` respectively.
 
@@ -80,7 +80,7 @@ As a result, you can safely add a 0.0.0.0/0 entry to group there all the traffic
 If you set this property via environment variable each entry must be separated by a comma, for example:
 
 ```sh
-BEYLA_NETWORK_GROUP_CIDRS=10.0.0.0/8,192.168.0.0/16
+BEYLA_NETWORK_CIDRS=10.0.0.0/8,192.168.0.0/16
 ```
 
 | YAML       | Environment variable     | Type   | Default   |

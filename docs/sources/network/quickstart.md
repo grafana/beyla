@@ -209,5 +209,52 @@ Also Add `OTEL_EXPORTER_OTLP_ENDPOINT` and its value as an environment variable 
 
 ## Select metrics attributes to reduce cardinality
 
+Letting Beyla to include all the [attributes]({{< relref "./_index.md" >}}) in the reported metric might lead to
+a [cardinality explosion](/blog/2022/02/15/what-are-cardinality-spikes-and-why-do-they-matter/) in
+your metrics storage, especially if you are capturing external traffic and reporting their IP addresses in the
+`src.address` or `dst.address` metric attribute.
 
-## Group IP addresses by CIDR
+
+The `allowed_attributes` YAML subsection under `network` (or the `BEYLA_NETWORK_ALLOWED_ATTRIBUTES` environment variable)
+lets you selecting the attributes to report:
+
+```yaml
+network:
+  enable: true
+  allowed_attributes:
+    - k8s.src.owner.name
+    - k8s.src.namespace
+    - k8s.dst.owner.name
+    - k8s.dst.namespace
+```
+
+The previous example would aggregate the `beyla.network.flow.bytes` value by source and destination Kubernetes owner
+(Deployment, DaemonSet, StatefulSet, ReplicaSet), avoiding finer-grained attributes such as Pod name or IP addresses.
+
+### Group IP addresses by CIDR
+
+Reporting metric attributes containing IP addresses (`src.address` and `dst.address`) might lead to cardinality explosion,
+however it might be a useful network-level information to get a better view about how networks and sub-networks communicate.
+
+The `cidrs` YAML subsection in `network` (or the `BEYLA_NETWORK_CIDRS` environment variable) accepts a list of
+subnets in [CIDR notation](https://en.wikipedia.org/wiki/Classless_Inter-Domain_Routing), in both IPv4 and IPv6 format.
+
+The existence of the `cidrs` section leaves the `src.address` and `dst.address` fields untouched,
+and adds the `src.cidr` and `dst.cidr` attributes. Don't forget to add them to the `allowed_attributes`
+section:
+
+```yaml
+network:
+  enable: true
+  allowed_attributes:
+    - k8s.src.owner.name
+    - k8s.src.namespace
+    - k8s.dst.owner.name
+    - k8s.dst.namespace
+    - src.cidr
+    - dst.cidr
+  cidrs:
+    - 10.10.0.0/24
+    - 10.0.0.0/8
+    - 10.30.0.0/16
+```

@@ -27,7 +27,7 @@ To get started using Beyla networking metrics, consult the [quickstart setup doc
 
 ## Metric attributes
 
-Network metrics provides a single **OpenTelemetry** metric `beyla.network.flow.bytes`, a counter of the total bytes sent of network flows observed by the eBPF probe since its launch, with the following attributes:
+Network metrics provides a single **OpenTelemetry** metric `beyla.network.flow.bytes`, a counter of the number of bytes observed between two network endpoints, with the following attributes:
 
 - `beyla.ip`: the local IP address of the Beyla instance that emitted the metric
 - `src.address`/`dst.address`: the source/destination IP address of the network flow

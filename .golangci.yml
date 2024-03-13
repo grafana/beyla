@@ -6,7 +6,6 @@ run:
     - integration
 linters:
   enable:
-    - deadcode
     - errcheck
     - errorlint
     - cyclop
@@ -23,7 +22,6 @@ linters:
     - stylecheck
     - typecheck
     - unused
-    - varcheck
   disable:
     - exhaustive
 linters-settings:

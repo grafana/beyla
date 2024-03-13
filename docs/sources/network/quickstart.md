@@ -147,8 +147,8 @@ Use `kubectl logs` to see network flow entries, for example:
 ```
 network_flow: beyla.ip=172.18.0.2 iface= direction=255 src.address=10.244.0.4 dst.address=10.96.0.1
 src.name=local-path-provisioner-7577fdbbfb-g6b7d src.namespace=local-path-storage
-dst.name=kubernetes dst.namespace=default k8s.src.host.ip=172.18.0.2
-k8s.src.host.name=kind-control-plane k8s.dst.namespace=default k8s.dst.name=kubernetes
+dst.name=kubernetes dst.namespace=default k8s.src.node.ip=172.18.0.2
+k8s.src.node.name=kind-control-plane k8s.dst.namespace=default k8s.dst.name=kubernetes
 k8s.dst.owner.type=Service k8s.src.namespace=local-path-storage
 k8s.src.name=local-path-provisioner-7577fdbbfb-g6b7d k8s.src.type=Pod
 k8s.src.owner.name=local-path-provisioner k8s.src.owner.type=Deployment

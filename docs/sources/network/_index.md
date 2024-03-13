@@ -27,23 +27,32 @@ To get started using Beyla networking metrics, consult the [quickstart setup doc
 
 ## Metric attributes
 
-Network metrics provides a single **OpenTelemetry** metric `beyla.network.flow.bytes`, a counter of the number of bytes observed between two network endpoints, with the following attributes:
+Network metrics provides a single **OpenTelemetry** metric `beyla.network.flow.bytes`, a counter of Number of bytes observed between two network endpoints, with the following attributes:
 
-- `beyla.ip`: the local IP address of the Beyla instance that emitted the metric
-- `src.address`/`dst.address`: the source/destination IP address of the network flow
-- `src.name`/`dst.name`: the name of the network flow source/destination: Kubernetes name, host name, or IP address
-- `src.namespace`/`dst.namespace`: namespace of the network flow source/destination, could be empty in non-Kubernetes flows
-- `src.cidr`/`dst.cidr`: if the [`cidrs` configuration section]({{< relref "./config" >}}) is set, the CIDR
-  that matches the source/destination IP address
-- `k8s.src.namespace`/`k8s.dst.namespace`: the Kubernetes namespace of the source/destination of the flow
-- `k8s.src.name`/`k8s.dst.name`: the name of the source/destination Pod, Service, or Node
-- `k8s.src.owner.name`/`k8s.dst.owner.name`: the name of the owner of the source/destination Pod. If there is no owner,
-  the Pod name is shown
-- `k8s.src.owner.type`/`k8s.dst.owner.type`: the type of the owner of the source/destination Pod: `Deployment`, `DaemonSet`, `ReplicaSet`, `StatefulSet`, or `Pod` if there is no owner
-- `k8s.src.host.ip`/`k8s.dst.host.ip`: the IP address of the source/destination physical host
-- `k8s.src.host.name`/`k8s.dst.host.name`: the name of the source/destination physical host
-- `k8s.cluster.name`: the name of the Kubernetes cluster. Beyla can auto-detect it on Google Cloud, Microsoft Azure, and
-  Amazon Web Services. For other providers, set the `BEYLA_KUBE_CLUSTER_NAME` property
+| Attribute name       | Description                                                                                                                                                                         |
+|----------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `beyla.ip`           | Local IP address of the Beyla instance that emitted the metric                                                                                                                      |
+| `src.address`        | Source IP address of Network flow                                                                                                                                                   |
+| `dst.address`        | Destination IP address of Network flow                                                                                                                                              |
+| `src.name`           | Name of Network flow source: Kubernetes name, host name, or IP address                                                                                                              |
+| `dst.name`           | Name of Network flow destination: Kubernetes name, host name, or IP address                                                                                                         |
+| `src.namespace`      | Namespace of Network flow source. Could be empty in non-Kubernetes flows                                                                                                            |
+| `dst.namespace`      | Namespace of Network flow destination. Could be empty in non-Kubernetes flows                                                                                                       |
+| `src.cidr`           | If the [`cidrs` configuration section]({{< relref "./config" >}}) is set, the CIDR that matches the source IP address                                                               |
+| `dst.cidr`           | If the [`cidrs` configuration section]({{< relref "./config" >}}) is set, the CIDR that matches the destination IP address                                                          |
+| `k8s.src.namespace`  | Kubernetes namespace of the source of the flow                                                                                                                                      |
+| `k8s.dst.namespace`  | Kubernetes namespace of the destination of the flow                                                                                                                                 |
+| `k8s.src.name`       | Name of the source Pod, Service, or Node                                                                                                                                            |
+| `k8s.dst.name`       | Name of the destination Pod, Service, or Node                                                                                                                                       |
+| `k8s.src.owner.name` | Name of the owner of the source Pod. If there is no owner, the Pod name is used                                                                                                     |
+| `k8s.dst.owner.name` | Name of the owner of the destination Pod. If there is no owner, the Pod name is used                                                                                                |
+| `k8s.src.owner.type` | Type of the owner of the source Pod: `Deployment`, `DaemonSet`, `ReplicaSet`, `StatefulSet`, or `Pod` if there is no owner                                                          |
+| `k8s.dst.owner.type` | Type of the owner of the destination Pod: `Deployment`, `DaemonSet`, `ReplicaSet`, `StatefulSet`, or `Pod` if there is no owner                                                     |
+| `k8s.src.node.ip`    | IP address of the source Node                                                                                                                                                       |
+| `k8s.dst.node.ip`    | IP address of the destination Node                                                                                                                                                  |
+| `k8s.src.node.name`  | Name of the source Node                                                                                                                                                             |
+| `k8s.dst.node.name`  | Name of the destination Node                                                                                                                                                        |
+| `k8s.cluster.name`   | Name of the Kubernetes cluster. Beyla can auto-detect it on Google Cloud, Microsoft Azure, and Amazon Web Services. For other providers, set the `BEYLA_KUBE_CLUSTER_NAME` property |
 
 ### Allowed attributes
 

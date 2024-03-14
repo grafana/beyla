@@ -5,10 +5,6 @@ import (
 	"log/slog"
 
 	"github.com/mariomac/pipes/pkg/node"
-	"go.uber.org/zap"
-
-	"github.com/grafana/beyla/pkg/internal/export/otel"
-	"github.com/grafana/beyla/pkg/internal/request"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/config/confighttp"
 	"go.opentelemetry.io/collector/config/configtelemetry"
@@ -16,6 +12,10 @@ import (
 	"go.opentelemetry.io/collector/exporter/otlphttpexporter"
 	"go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/trace"
+	"go.uber.org/zap"
+
+	"github.com/grafana/beyla/pkg/internal/export/otel"
+	"github.com/grafana/beyla/pkg/internal/request"
 )
 
 // MetricsReceiver creates a terminal node that consumes request.Spans and sends OpenTelemetry metrics to the configured consumers.
@@ -52,9 +52,15 @@ func MetricsOTELReceiver(ctx context.Context, cfg otel.MetricsConfig) (node.Term
 			return
 		}
 		defer func() {
-			exp.Shutdown(ctx)
+			err := exp.Shutdown(ctx)
+			if err != nil {
+				slog.Error("error shutting down metrics exporter", "error", err)
+			}
 		}()
-		exp.Start(ctx, nil)
+		err = exp.Start(ctx, nil)
+		if err != nil {
+			slog.Error("error starting metrics exporter", "error", err)
+		}
 		for spans := range in {
 			for i := range spans {
 				span := &spans[i]

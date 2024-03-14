@@ -29,7 +29,7 @@ import (
 )
 
 type NetworkConfig struct {
-	// Enable network observability.
+	// Enable network metrics.
 	// Default value is false (disabled)
 	Enable bool `yaml:"enable" env:"BEYLA_NETWORK_METRICS"`
 
@@ -112,7 +112,7 @@ type NetworkConfig struct {
 	// If an IP matches multiple CIDR definitions, the flow will be decorated with the
 	// narrowest CIDR. By this reason, you can safely add a 0.0.0.0/0 entry to group there
 	// all the traffic that does not match any of the other CIDRs.
-	CIDRs cidr.Definitions `yaml:"cidrs" env:"BEYLA_NETWORK_GROUP_CIDRS" envSeparator:","`
+	CIDRs cidr.Definitions `yaml:"cidrs" env:"BEYLA_NETWORK_CIDRS" envSeparator:","`
 }
 
 var defaultNetworkConfig = NetworkConfig{

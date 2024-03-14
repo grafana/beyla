@@ -27,7 +27,7 @@ func FlowPrinterProvider(_ FlowPrinterEnabled) (node.TerminalFunc[[]*ebpf.Record
 
 func printFlow(f *ebpf.Record) {
 	sb := strings.Builder{}
-	sb.WriteString("beyla.ip==")
+	sb.WriteString("beyla.ip=")
 	sb.WriteString(f.Attrs.BeylaIP)
 	sb.WriteString(" iface=")
 	sb.WriteString(f.Attrs.Interface)

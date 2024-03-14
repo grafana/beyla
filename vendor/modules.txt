@@ -337,12 +337,6 @@ github.com/modern-go/concurrent
 # github.com/modern-go/reflect2 v1.0.2
 ## explicit; go 1.12
 github.com/modern-go/reflect2
-# github.com/mostynb/go-grpc-compression v1.2.2
-## explicit; go 1.17
-github.com/mostynb/go-grpc-compression/internal/snappy
-github.com/mostynb/go-grpc-compression/internal/zstd
-github.com/mostynb/go-grpc-compression/nonclobbering/snappy
-github.com/mostynb/go-grpc-compression/nonclobbering/zstd
 # github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822
 ## explicit
 github.com/munnerz/goautoneg
@@ -468,15 +462,9 @@ go.opentelemetry.io/collector/config/configauth
 # go.opentelemetry.io/collector/config/configcompression v0.96.0
 ## explicit; go 1.21
 go.opentelemetry.io/collector/config/configcompression
-# go.opentelemetry.io/collector/config/configgrpc v0.96.0
-## explicit; go 1.21
-go.opentelemetry.io/collector/config/configgrpc
 # go.opentelemetry.io/collector/config/confighttp v0.96.0
 ## explicit; go 1.21
 go.opentelemetry.io/collector/config/confighttp
-# go.opentelemetry.io/collector/config/confignet v0.96.0
-## explicit; go 1.21
-go.opentelemetry.io/collector/config/confignet
 # go.opentelemetry.io/collector/config/configopaque v1.3.0
 ## explicit; go 1.21
 go.opentelemetry.io/collector/config/configopaque
@@ -542,10 +530,6 @@ go.opentelemetry.io/collector/pdata/pmetric
 go.opentelemetry.io/collector/pdata/pmetric/pmetricotlp
 go.opentelemetry.io/collector/pdata/ptrace
 go.opentelemetry.io/collector/pdata/ptrace/ptraceotlp
-# go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.47.0
-## explicit; go 1.20
-go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc
-go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc/internal
 # go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.49.0
 ## explicit; go 1.20
 go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp
@@ -561,7 +545,6 @@ go.opentelemetry.io/otel/internal/attribute
 go.opentelemetry.io/otel/internal/baggage
 go.opentelemetry.io/otel/internal/global
 go.opentelemetry.io/otel/propagation
-go.opentelemetry.io/otel/semconv/v1.17.0
 go.opentelemetry.io/otel/semconv/v1.19.0
 go.opentelemetry.io/otel/semconv/v1.20.0
 go.opentelemetry.io/otel/semconv/v1.24.0

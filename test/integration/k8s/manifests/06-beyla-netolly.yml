@@ -7,9 +7,17 @@ data:
     attributes:
       kubernetes:
         enable: true
+        cluster_name: my-kube
     log_level: debug
     otel_metrics_export:
       endpoint: http://otelcol.default:4317
+    network:
+      cidrs:
+        # default subnets of Kind Pods and services
+        - 10.244.0.0/16
+        - fd00:10:244::/56
+        - 10.96.0.0/16
+        - fd00:10:96::/112
 ---
 apiVersion: apps/v1
 kind: DaemonSet

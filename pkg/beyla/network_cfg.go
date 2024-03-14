@@ -22,10 +22,11 @@ import (
 	"time"
 
 	"github.com/grafana/beyla/pkg/internal/netolly/flow"
+	"github.com/grafana/beyla/pkg/internal/netolly/transform/cidr"
 )
 
 type NetworkConfig struct {
-	// Enable network observability.
+	// Enable network metrics.
 	// Default value is false (disabled)
 	Enable bool `yaml:"enable" env:"BEYLA_NETWORK_METRICS"`
 
@@ -70,8 +71,6 @@ type NetworkConfig struct {
 	// again from a different interface.
 	// If the value is not set, it will default to 2 * CacheActiveTimeout
 	DeduperFCExpiry time.Duration `yaml:"deduper_fc_expiry" env:"BEYLA_NETWORK_DEDUPER_FC_EXPIRY"`
-	// DeduperJustMark will just mark duplicates (boolean field) instead of dropping them. Default: false.
-	DeduperJustMark bool `yaml:"deduper_just_mark" env:"BEYLA_NETWORK_DEDUPER_JUST_MARK"`
 	// Direction allows selecting which flows to trace according to its direction. Accepted values
 	// are "ingress", "egress" or "both" (default).
 	Direction string `yaml:"direction" env:"BEYLA_NETWORK_DIRECTION"`
@@ -93,6 +92,24 @@ type NetworkConfig struct {
 	// This is an experimental feature and it is not guaranteed to work on most virtualized environments
 	// for external traffic.
 	ReverseDNS flow.ReverseDNS `yaml:"reverse_dns"`
+
+	// Print the network flows in the Standard Output, if true
+	Print bool `yaml:"print_flows" env:"BEYLA_NETWORK_PRINT_FLOWS"`
+
+	// AllowedAttributes is a hidden/unstable/incomplete/epxerimental feature. This configuration API
+	// could change and be moved to other part, if we decide to extend this functionality also
+	// to AppO11y and Prometheus exporter.
+	// This won't filter some meta-attributes such as
+	// instance, job, service_instance_id, service_name, telemetry_sdk_*, etc...
+	AllowedAttributes []string `yaml:"allowed_attributes" env:"BEYLA_NETWORK_ALLOWED_ATTRIBUTES" envSeparator:","`
+
+	// CIDRs list, to be set as the "src.cidr" and "dst.cidr"
+	// attribute as a function of the source and destination IP addresses.
+	// If an IP does not match any address here, the attributes won't be set.
+	// If an IP matches multiple CIDR definitions, the flow will be decorated with the
+	// narrowest CIDR. By this reason, you can safely add a 0.0.0.0/0 entry to group there
+	// all the traffic that does not match any of the other CIDRs.
+	CIDRs cidr.Definitions `yaml:"cidrs" env:"BEYLA_NETWORK_CIDRS" envSeparator:","`
 }
 
 var defaultNetworkConfig = NetworkConfig{
@@ -102,7 +119,6 @@ var defaultNetworkConfig = NetworkConfig{
 	CacheMaxFlows:      5000,
 	CacheActiveTimeout: 5 * time.Second,
 	Deduper:            flow.DeduperFirstCome,
-	DeduperJustMark:    false,
 	Direction:          "both",
 	ListenInterfaces:   "watch",
 	ListenPollPeriod:   10 * time.Second,

@@ -9,6 +9,7 @@ import (
 	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
 	"github.com/grafana/beyla/pkg/internal/netolly/export"
 	"github.com/grafana/beyla/pkg/internal/netolly/flow"
+	"github.com/grafana/beyla/pkg/internal/netolly/transform/cidr"
 	"github.com/grafana/beyla/pkg/internal/netolly/transform/k8s"
 )
 
@@ -17,21 +18,20 @@ import (
 // TODO: add flow_printer node
 type FlowsPipeline struct {
 	MapTracer     `sendTo:"Deduper"`
-	RingBufTracer `sendTo:"Accounter"`
-	Accounter     `sendTo:"Deduper"`
-	Deduper       flow.Deduper          `forwardTo:"Kubernetes"`
-	Kubernetes    k8s.MetadataDecorator `forwardTo:"ReverseDNS"`
+	RingBufTracer `sendTo:"Deduper"`
 
-	ReverseDNS flow.ReverseDNS `forwardTo:"Decorator"`
-
-	Decorator `sendTo:"Exporter"`
+	Deduper    flow.Deduper          `forwardTo:"Kubernetes"`
+	Kubernetes k8s.MetadataDecorator `forwardTo:"ReverseDNS"`
+	ReverseDNS flow.ReverseDNS       `forwardTo:"CIDRs"`
+	CIDRs      cidr.Definitions      `forwardTo:"Decorator"`
+	Decorator  `sendTo:"Exporter,Printer"`
 
 	Exporter export.MetricsConfig
+	Printer  export.FlowPrinterEnabled
 }
 
 type MapTracer struct{}
 type RingBufTracer struct{}
-type Accounter struct{}
 type Decorator struct{}
 
 // buildAndStartPipeline creates the ETL flow processing graph.
@@ -48,22 +48,35 @@ func (f *Flows) buildAndStartPipeline(ctx context.Context) (graph.Graph, error) 
 	alog.Debug("creating flows' processing graph")
 	gb := graph.NewBuilder(node.ChannelBufferLen(f.cfg.ChannelBufferLen))
 
+	// Start nodes: those generating flow records (reading them from eBPF)
 	graph.RegisterStart(gb, func(_ MapTracer) (node.StartFunc[[]*ebpf.Record], error) {
 		return f.mapTracer.TraceLoop(ctx), nil
 	})
-	graph.RegisterStart(gb, func(_ RingBufTracer) (node.StartFunc[*ebpf.NetFlowRecordT], error) {
+	graph.RegisterStart(gb, func(_ RingBufTracer) (node.StartFunc[[]*ebpf.Record], error) {
 		return f.rbTracer.TraceLoop(ctx), nil
 	})
-	graph.RegisterMiddle(gb, func(_ Accounter) (node.MiddleFunc[*ebpf.NetFlowRecordT, []*ebpf.Record], error) {
-		return f.accounter.Account, nil
-	})
+
 	graph.RegisterMiddle(gb, flow.DeduperProvider)
 	graph.RegisterMiddle(gb, func(_ Decorator) (node.MiddleFunc[[]*ebpf.Record, []*ebpf.Record], error) {
-		return flow.Decorate(f.agentIP, f.interfaceNamer), nil
+		// If deduper is enabled, we know that interfaces are unset.
+		// As an optimization, we just pass here an empty-string interface namer
+		ifaceNamer := f.interfaceNamer
+		if f.cfg.NetworkFlows.Deduper == flow.DeduperFirstCome {
+			ifaceNamer = func(_ int) string {
+				return ""
+			}
+		}
+		return flow.Decorate(f.agentIP, ifaceNamer), nil
 	})
-	graph.RegisterMiddle(gb, k8s.MetadataDecoratorProvider)
+	graph.RegisterMiddle(gb, cidr.DecoratorProvider)
+	graph.RegisterMiddle(gb, func(cfg k8s.MetadataDecorator) (node.MiddleFunc[[]*ebpf.Record, []*ebpf.Record], error) {
+		return k8s.MetadataDecoratorProvider(ctx, cfg)
+	})
 	graph.RegisterMiddle(gb, flow.ReverseDNSProvider)
+
+	// Terminal nodes export the flow record information out of the pipeline: OTEL and printer
 	graph.RegisterTerminal(gb, export.MetricsExporterProvider)
+	graph.RegisterTerminal(gb, export.FlowPrinterProvider)
 
 	var deduperExpireTime = f.cfg.NetworkFlows.DeduperFCExpiry
 	if deduperExpireTime <= 0 {
@@ -73,11 +86,15 @@ func (f *Flows) buildAndStartPipeline(ctx context.Context) (graph.Graph, error) 
 		Deduper: flow.Deduper{
 			Type:       f.cfg.NetworkFlows.Deduper,
 			ExpireTime: deduperExpireTime,
-			JustMark:   f.cfg.NetworkFlows.DeduperJustMark,
 		},
 		Kubernetes: k8s.MetadataDecorator{Kubernetes: &f.cfg.Attributes.Kubernetes},
 		// TODO: allow prometheus exporting
-		Exporter:   export.MetricsConfig{Metrics: &f.cfg.Metrics},
 		ReverseDNS: f.cfg.NetworkFlows.ReverseDNS,
+		CIDRs:      f.cfg.NetworkFlows.CIDRs,
+		Exporter: export.MetricsConfig{
+			Metrics:           &f.cfg.Metrics,
+			AllowedAttributes: f.cfg.NetworkFlows.AllowedAttributes,
+		},
+		Printer: export.FlowPrinterEnabled(f.cfg.NetworkFlows.Print),
 	})
 }

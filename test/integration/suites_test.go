@@ -171,6 +171,23 @@ func TestSuite_GRPCExport(t *testing.T) {
 	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
 }
 
+func TestSuite_GRPCExportKProbes(t *testing.T) {
+	compose, err := docker.ComposeSuite("docker-compose.yml", path.Join(pathOutput, "test-suite-grpc-export-kprobes.log"))
+	compose.Env = append(compose.Env, "INSTRUMENTER_CONFIG_SUFFIX=-grpc-export")
+	compose.Env = append(compose.Env, `BEYLA_SKIP_GO_SPECIFIC_TRACERS=1`)
+	require.NoError(t, err)
+	require.NoError(t, compose.Up())
+
+	waitForTestComponents(t, instrumentedServiceStdURL)
+
+	t.Run("trace GRPC service and export as GRPC traces - kprobes", testGRPCKProbeTraces)
+	t.Run("GRPC RED metrics - kprobes", testREDMetricsGRPC)
+
+	t.Run("BPF pinning folder mounted", testBPFPinningMounted)
+	require.NoError(t, compose.Close())
+	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
+}
+
 // Same as Test suite, but searching the executable by port instead of executable name
 func TestSuite_OpenPort(t *testing.T) {
 	compose, err := docker.ComposeSuite("docker-compose.yml", path.Join(pathOutput, "test-suite-openport.log"))
@@ -287,6 +304,20 @@ func TestSuite_RustSSL(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, compose.Up())
 	t.Run("Rust RED metrics", testREDMetricsRustHTTPS)
+	t.Run("BPF pinning folder mounted", testBPFPinningMounted)
+	require.NoError(t, compose.Close())
+	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
+}
+
+// The actix server that we built our Rust example will enable HTTP2 for SSL automatically if the client supports it.
+// We use this feature to implement our kprobes HTTP2 tests, with special http client settings that triggers the Go
+// client to attempt http connection.
+func TestSuite_RustHTTP2(t *testing.T) {
+	compose, err := docker.ComposeSuite("docker-compose-rust.yml", path.Join(pathOutput, "test-suite-rust-http2.log"))
+	compose.Env = append(compose.Env, `BEYLA_OPEN_PORT=8490`, `BEYLA_EXECUTABLE_NAME=`, `TEST_SERVICE_PORTS=8491:8490`, `TESTSERVER_IMAGE_SUFFIX=-ssl`)
+	require.NoError(t, err)
+	require.NoError(t, compose.Up())
+	t.Run("Rust RED metrics", testREDMetricsRustHTTP2)
 	t.Run("BPF pinning folder mounted", testBPFPinningMounted)
 	require.NoError(t, compose.Close())
 	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)

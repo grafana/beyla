@@ -29,6 +29,11 @@ func main() {
 
 	slog.Info("Grafana Beyla", "Version", buildinfo.Version, "Revision", buildinfo.Revision, "OpenTelemetry SDK Version", otelsdk.Version())
 
+	if err := beyla.CheckOSSupport(); err != nil {
+		slog.Error("can't start Beyla", "error", err)
+		os.Exit(-1)
+	}
+
 	configPath := flag.String("config", "", "path to the configuration file")
 	flag.Parse()
 
@@ -60,8 +65,7 @@ func main() {
 	// child process isn't found.
 	ctx, _ := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 
-	components.StartBeyla(ctx, config)
-	<-ctx.Done()
+	components.RunBeyla(ctx, config)
 
 	if gc := os.Getenv("GOCOVERDIR"); gc != "" {
 		slog.Info("Waiting 1s to collect coverage data...")

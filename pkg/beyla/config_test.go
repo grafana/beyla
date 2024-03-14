@@ -15,6 +15,7 @@ import (
 	"github.com/grafana/beyla/pkg/internal/export/otel"
 	"github.com/grafana/beyla/pkg/internal/export/prom"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
+	"github.com/grafana/beyla/pkg/internal/netolly/transform/cidr"
 	"github.com/grafana/beyla/pkg/internal/traces"
 	"github.com/grafana/beyla/pkg/internal/transform"
 )
@@ -42,6 +43,8 @@ attributes:
     dns: true
 network:
   enable: true
+  cidrs:
+    - 10.244.0.0/16
 `)
 	require.NoError(t, os.Setenv("BEYLA_EXECUTABLE_NAME", "tras"))
 	require.NoError(t, os.Setenv("BEYLA_NETWORK_AGENT_IP", "1.2.3.4"))
@@ -75,6 +78,7 @@ network:
 	nc := defaultNetworkConfig
 	nc.Enable = true
 	nc.AgentIP = "1.2.3.4"
+	nc.CIDRs = cidr.Definitions{"10.244.0.0/16"}
 
 	assert.Equal(t, &Config{
 		Exec:             cfg.Exec,

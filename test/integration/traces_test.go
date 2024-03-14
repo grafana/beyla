@@ -196,7 +196,7 @@ func testGRPCTracesForServiceName(t *testing.T, svcName string) {
 	assert.Less(t, (10 * time.Millisecond).Microseconds(), parent.Duration)
 	// check span attributes
 	sd := parent.Diff(
-		jaeger.Tag{Key: "server.port", Type: "int64", Value: float64(50051)},
+		jaeger.Tag{Key: "server.port", Type: "int64", Value: float64(5051)},
 		jaeger.Tag{Key: "rpc.grpc.status_code", Type: "int64", Value: float64(2)},
 		jaeger.Tag{Key: "rpc.method", Type: "string", Value: "/routeguide.RouteGuide/Debug"},
 		jaeger.Tag{Key: "rpc.system", Type: "string", Value: "grpc"},
@@ -302,6 +302,42 @@ func testGRPCTracesForServiceName(t *testing.T, svcName string) {
 	childSpan := childOfPID[0]
 	require.Equal(t, childSpan.TraceID, parent.TraceID)
 	require.Equal(t, childSpan.SpanID, parent.SpanID)
+}
+
+func testGRPCKProbeTraces(t *testing.T) {
+	svcName := "testserver"
+	require.Error(t, grpcclient.Debug(10*time.Millisecond, true)) // this call doesn't add anything, the Go SDK will generate traceID and contextID
+
+	var trace jaeger.Trace
+	test.Eventually(t, testTimeout, func(t require.TestingT) {
+		resp, err := http.Get(jaegerQueryURL + "?service=" + svcName + "&operation=%2Frouteguide.RouteGuide%2FDebug")
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+		var tq jaeger.TracesQuery
+		require.NoError(t, json.NewDecoder(resp.Body).Decode(&tq))
+		traces := tq.FindBySpan(jaeger.Tag{Key: "rpc.method", Type: "string", Value: "/routeguide.RouteGuide/Debug"})
+		require.Len(t, traces, 1)
+		trace = traces[0]
+		require.Len(t, trace.Spans, 1) // single span for kprobes, we don't track goroutines
+	}, test.Interval(100*time.Millisecond))
+
+	// Check the information of the parent span
+	res := trace.FindByOperationName("/routeguide.RouteGuide/Debug")
+	require.Len(t, res, 1)
+	parent := res[0]
+	require.NotEmpty(t, parent.TraceID)
+	require.NotEmpty(t, parent.SpanID)
+	// check duration is at least 10ms (10,000 microseconds)
+	assert.Less(t, (10 * time.Millisecond).Microseconds(), parent.Duration)
+	// check span attributes
+	sd := parent.Diff(
+		jaeger.Tag{Key: "server.port", Type: "int64", Value: float64(5051)},
+		jaeger.Tag{Key: "rpc.grpc.status_code", Type: "int64", Value: float64(2)},
+		jaeger.Tag{Key: "rpc.method", Type: "string", Value: "/routeguide.RouteGuide/Debug"},
+		jaeger.Tag{Key: "rpc.system", Type: "string", Value: "grpc"},
+		jaeger.Tag{Key: "span.kind", Type: "string", Value: "server"},
+	)
+	assert.Empty(t, sd, sd.String())
 }
 
 func testHTTPTracesKProbes(t *testing.T) {

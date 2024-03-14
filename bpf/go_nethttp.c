@@ -573,21 +573,23 @@ int uprobe_http2FramerWriteHeaders_returns(struct pt_regs *ctx) {
                 bpf_probe_write_user((void *)(w_ptr + 40), &n, sizeof(n));
 
                 // http2 encodes the length of the headers in the first 3 bytes of buf, we need to update those
-                s8 size_1 = 0;
-                s8 size_2 = 0;
-                s8 size_3 = 0;
+                u8 size_1 = 0;
+                u8 size_2 = 0;
+                u8 size_3 = 0;
 
                 bpf_probe_read(&size_1, sizeof(size_1), (void *)(buf_arr));
                 bpf_probe_read(&size_2, sizeof(size_2), (void *)(buf_arr + 1));
                 bpf_probe_read(&size_3, sizeof(size_3), (void *)(buf_arr + 2));
 
-                s32 original_size = ((s32)(size_1) << 16) | ((s32)(size_2) << 8) | size_3;
-                s32 new_size = original_size + HTTP2_ENCODED_HEADER_LEN;
+                bpf_dbg_printk("size 1:%x, 2:%x, 3:%x", size_1, size_2, size_3);
+
+                u32 original_size = ((u32)(size_1) << 16) | ((u32)(size_2) << 8) | size_3;
+                u32 new_size = original_size + HTTP2_ENCODED_HEADER_LEN;
 
                 bpf_dbg_printk("Changing size from %d to %d", original_size, new_size);
-                size_1 = (s8)(new_size >> 16);
-                size_2 = (s8)(new_size >> 8);
-                size_3 = (s8)(new_size);
+                size_1 = (u8)(new_size >> 16);
+                size_2 = (u8)(new_size >> 8);
+                size_3 = (u8)(new_size);
 
                 bpf_probe_write_user((void *)(buf_arr), &size_1, sizeof(size_1));
                 bpf_probe_write_user((void *)(buf_arr+1), &size_2, sizeof(size_2));

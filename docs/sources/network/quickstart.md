@@ -210,15 +210,15 @@ Also Add `OTEL_EXPORTER_OTLP_ENDPOINT` and its value as an environment variable 
 
 Be default, Beyla includes the following [attributes]({{< relref "./_index.md" >}}) in the `beyla.network.flow.bytes` metric:
 
-- k8s.src.owner.name
-- k8s.src.namespace
-- k8s.dst.owner.name
-- k8s.dst.namespace
-- k8s.cluster.name
+- `k8s.src.owner.name`
+- `k8s.src.namespace`
+- `k8s.dst.owner.name`
+- `k8s.dst.namespace`
+- `k8s.cluster.name`
 
 Beyla only includes a subset of the available attributes to avoid leading to
 a [cardinality explosion](/blog/2022/02/15/what-are-cardinality-spikes-and-why-do-they-matter/) in
-the metrics storage, especially if some attributes like `src.address` or `dst.address` capture the IPs of the external traffic.
+the metrics storage, especially if some attributes like `src.address` or `dst.address` capture the IP addresses of the external traffic.
 
 The `allowed_attributes` YAML subsection under `network` (or the `BEYLA_NETWORK_ALLOWED_ATTRIBUTES` environment variable)
 lets to select the attributes to report:

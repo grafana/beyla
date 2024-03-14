@@ -43,9 +43,9 @@ network:
 
 Enables network metrics reporting in Beyla.
 
-| YAML                 | Environment variable               | Type     | Default |
-| -------------------- | ---------------------------------- | -------- | ------- |
-| `allowed_attributes` | `BEYLA_NETWORK_ALLOWED_ATTRIBUTES` | []string | (empty) |
+| YAML                 | Environment variable               | Type     | Default                                                                                                  |
+| -------------------- | ---------------------------------- | -------- | -------------------------------------------------------------------------------------------------------- |
+| `allowed_attributes` | `BEYLA_NETWORK_ALLOWED_ATTRIBUTES` | []string | `k8s.src.owner.name`, `k8s.src.namespace`, `k8s.dst.owner.name`, `k8s.dst.namespace`, `k8s.cluster.name` |
 
 Specifies which attributes are visible in the metrics.
 Beyla aggregates the metrics by their common visible attributes.
@@ -53,12 +53,12 @@ For example, hiding the `k8s.src.name` and allowing `k8s.src.owner.name` would a
 
 This property won't filter some meta-attributes such as `instance`, `job`, `service.instance.id`, `service_name`, `telemetry.sdk.*`, etc.
 
+See the [network metrics documentation]({{< relref "./_index.md" >}}) for a detailed list of all the available attributes.
+
 {{% admonition type="note" %}}
-If left empty, Beyla reports all attributes; which might greatly increase the cardinality of your metrics.
+Select carefully the reported attributes, as some attributes might greatly increase the cardinality of your metrics.
 Setting this value to list only the attributes you really need is highly recommended.
 {{% /admonition %}}
-
-See the [network metrics documentation]({{< relref "./_index.md" >}}) for a detailed list of all the available attributes.
 
 If you set this property via environment variable each entry must be separated by a comma, for example:
 

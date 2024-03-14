@@ -17,9 +17,14 @@ import (
 	"github.com/grafana/beyla/test/integration/components/prom"
 )
 
+const allowAllAttrs = "BEYLA_NETWORK_ALLOWED_ATTRIBUTES=beyla.ip,src.address,dst.address,src.name,dst.name," +
+	"src.namespace,dst.namespace,src.cidr,dst.cidr,k8s.src.namespace,k8s.dst.namespace,k8s.src.name,k8s.dst.name," +
+	"k8s.src.owner.name,k8s.dst.owner.name,k8s.src.owner.type,k8s.dst.owner.type,k8s.src.node.ip,k8s.dst.node.ip," +
+	"k8s.src.node.name,k8s.dst.node.name,k8s.cluster.name,iface,direction"
+
 func TestNetwork_Deduplication(t *testing.T) {
 	compose, err := docker.ComposeSuite("docker-compose-netolly.yml", path.Join(pathOutput, "test-suite-netolly-dedupe.log"))
-	compose.Env = append(compose.Env, "BEYLA_NETWORK_DEDUPER=first_come", "BEYLA_EXECUTABLE_NAME=")
+	compose.Env = append(compose.Env, "BEYLA_NETWORK_DEDUPER=first_come", "BEYLA_EXECUTABLE_NAME=", allowAllAttrs)
 	require.NoError(t, err)
 	require.NoError(t, compose.Up())
 
@@ -34,7 +39,7 @@ func TestNetwork_Deduplication(t *testing.T) {
 
 func TestNetwork_NoDeduplication(t *testing.T) {
 	compose, err := docker.ComposeSuite("docker-compose-netolly.yml", path.Join(pathOutput, "test-suite-netolly-nodedupe.log"))
-	compose.Env = append(compose.Env, "BEYLA_NETWORK_DEDUPER=none", "BEYLA_EXECUTABLE_NAME=")
+	compose.Env = append(compose.Env, "BEYLA_NETWORK_DEDUPER=none", "BEYLA_EXECUTABLE_NAME=", allowAllAttrs)
 	require.NoError(t, err)
 	require.NoError(t, compose.Up())
 
@@ -52,8 +57,7 @@ func TestNetwork_NoDeduplication(t *testing.T) {
 
 func TestNetwork_AllowedAttributes(t *testing.T) {
 	compose, err := docker.ComposeSuite("docker-compose-netolly.yml", path.Join(pathOutput, "test-suite-netolly-allowed-attrs.log"))
-	compose.Env = append(compose.Env, "BEYLA_EXECUTABLE_NAME=",
-		`BEYLA_NETWORK_ALLOWED_ATTRIBUTES=beyla.ip,src.name`)
+	compose.Env = append(compose.Env, "BEYLA_EXECUTABLE_NAME=", `BEYLA_NETWORK_ALLOWED_ATTRIBUTES=beyla.ip,src.name`)
 	require.NoError(t, err)
 	require.NoError(t, compose.Up())
 

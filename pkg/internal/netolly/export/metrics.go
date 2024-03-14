@@ -128,9 +128,7 @@ func MetricsExporterProvider(cfg MetricsConfig) (node.TerminalFunc[[]*ebpf.Recor
 		log.Error("", "error", err)
 		return nil, err
 	}
-	if len(cfg.AllowedAttributes) > 0 {
-		log.Debug("restricting attributes not in this list", "attributes", cfg.AllowedAttributes)
-	}
+	log.Debug("restricting attributes not in this list", "attributes", cfg.AllowedAttributes)
 	return (&metricsExporter{
 		flowBytes: flowBytes,
 		attrs:     NewAttributesFilter(cfg.AllowedAttributes),

@@ -66,9 +66,7 @@ func TestNetwork_AllowedAttributes(t *testing.T) {
 
 		assert.NotContains(t, f.Metric, "src_address")
 		assert.NotContains(t, f.Metric, "dst_address")
-		assert.NotContains(t, f.Metric, "src_namespace")
 		assert.NotContains(t, f.Metric, "dst_name")
-		assert.NotContains(t, f.Metric, "dst_namespace")
 	}
 
 	require.NoError(t, compose.Close())

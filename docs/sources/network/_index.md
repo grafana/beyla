@@ -27,7 +27,9 @@ To get started using Beyla networking metrics, consult the [quickstart setup doc
 
 ## Metric attributes
 
-Network metrics provides a single **OpenTelemetry** metric `beyla.network.flow.bytes`, a counter of Number of bytes observed between two network endpoints, with the following attributes:
+Network metrics provides a single **OpenTelemetry** metric `beyla.network.flow.bytes`, a counter of Number of bytes observed between two network endpoints, and can have the attributes in the following table.
+
+By default, only the following attributes are reported: `k8s.src.owner.name`, `k8s.src.namespace`, `k8s.dst.owner.name`, `k8s.dst.namespace`, and `k8s.cluster.name`.
 
 | Attribute name       | Description                                                                                                                                                                         |
 |----------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
@@ -36,8 +38,6 @@ Network metrics provides a single **OpenTelemetry** metric `beyla.network.flow.b
 | `dst.address`        | Destination IP address of Network flow                                                                                                                                              |
 | `src.name`           | Name of Network flow source: Kubernetes name, host name, or IP address                                                                                                              |
 | `dst.name`           | Name of Network flow destination: Kubernetes name, host name, or IP address                                                                                                         |
-| `src.namespace`      | Namespace of Network flow source. Could be empty in non-Kubernetes flows                                                                                                            |
-| `dst.namespace`      | Namespace of Network flow destination. Could be empty in non-Kubernetes flows                                                                                                       |
 | `src.cidr`           | If the [`cidrs` configuration section]({{< relref "./config" >}}) is set, the CIDR that matches the source IP address                                                               |
 | `dst.cidr`           | If the [`cidrs` configuration section]({{< relref "./config" >}}) is set, the CIDR that matches the destination IP address                                                          |
 | `k8s.src.namespace`  | Kubernetes namespace of the source of the flow                                                                                                                                      |
@@ -54,11 +54,13 @@ Network metrics provides a single **OpenTelemetry** metric `beyla.network.flow.b
 | `k8s.dst.node.name`  | Name of the destination Node                                                                                                                                                        |
 | `k8s.cluster.name`   | Name of the Kubernetes cluster. Beyla can auto-detect it on Google Cloud, Microsoft Azure, and Amazon Web Services. For other providers, set the `BEYLA_KUBE_CLUSTER_NAME` property |
 
-### Allowed attributes
+### How to specify reported attributes
 
-If the metric with all the attributes is reported it might lead to a cardinality explosion, especially when including external traffic in the `src.address`/`dst.address` attributes.
+If the metric with all the possible attributes is reported it might lead to a cardinality explosion, especially when including external traffic in the `src.address`/`dst.address` attributes.
 
-You can specify which attributes are allowed in the Beyla configuration. Allowed attributes and aggregates the metrics by them. For example:
+You can specify which attributes are allowed in the Beyla configuration, to aggregate the metric by them.
+
+For example:
 
 ```yaml
 network:
@@ -68,6 +70,7 @@ network:
     - k8s.src.namespace
     - k8s.dst.owner.name
     - k8s.dst.namespace
+    - k8s.cluster.name
 ```
 
 In this example, the bytes metric is the aggregated by the source and destination owners. This is, all the

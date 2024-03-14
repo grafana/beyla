@@ -146,8 +146,7 @@ Use `kubectl logs` to see network flow entries, for example:
 
 ```
 network_flow: beyla.ip=172.18.0.2 iface= direction=255 src.address=10.244.0.4 dst.address=10.96.0.1
-src.name=local-path-provisioner-7577fdbbfb-g6b7d src.namespace=local-path-storage
-dst.name=kubernetes dst.namespace=default k8s.src.node.ip=172.18.0.2
+src.name=local-path-provisioner-7577fdbbfb-g6b7d dst.name=kubernetes
 k8s.src.node.name=kind-control-plane k8s.dst.namespace=default k8s.dst.name=kubernetes
 k8s.dst.owner.type=Service k8s.src.namespace=local-path-storage
 k8s.src.name=local-path-provisioner-7577fdbbfb-g6b7d k8s.src.type=Pod
@@ -209,14 +208,20 @@ Also Add `OTEL_EXPORTER_OTLP_ENDPOINT` and its value as an environment variable 
 
 ## Select metrics attributes to reduce cardinality
 
-Letting Beyla to include all the [attributes]({{< relref "./_index.md" >}}) in the reported metric might lead to
-a [cardinality explosion](/blog/2022/02/15/what-are-cardinality-spikes-and-why-do-they-matter/) in
-your metrics storage, especially if you are capturing external traffic and reporting their IP addresses in the
-`src.address` or `dst.address` metric attribute.
+Be default, Beyla includes the following [attributes]({{< relref "./_index.md" >}}) in the `beyla.network.flow.bytes` metric:
 
+- `k8s.src.owner.name`
+- `k8s.src.namespace`
+- `k8s.dst.owner.name`
+- `k8s.dst.namespace`
+- `k8s.cluster.name`
+
+Beyla only includes a subset of the available attributes to avoid leading to
+a [cardinality explosion](/blog/2022/02/15/what-are-cardinality-spikes-and-why-do-they-matter/) in
+the metrics storage, especially if some attributes like `src.address` or `dst.address` capture the IP addresses of the external traffic.
 
 The `allowed_attributes` YAML subsection under `network` (or the `BEYLA_NETWORK_ALLOWED_ATTRIBUTES` environment variable)
-lets you selecting the attributes to report:
+lets to select the attributes to report:
 
 ```yaml
 network:

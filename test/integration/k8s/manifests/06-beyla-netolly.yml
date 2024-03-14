@@ -33,6 +33,8 @@ data:
         - k8s.dst.namespace
         - k8s.src.name
         - k8s.dst.name
+        - k8s.src.type
+        - k8s.dst.type
         - k8s.src.owner.name
         - k8s.dst.owner.name
         - k8s.src.owner.type

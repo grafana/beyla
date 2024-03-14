@@ -18,9 +18,7 @@ import (
 )
 
 const allowAllAttrs = "BEYLA_NETWORK_ALLOWED_ATTRIBUTES=beyla.ip,src.address,dst.address,src.name,dst.name," +
-	"src.namespace,dst.namespace,src.cidr,dst.cidr,k8s.src.namespace,k8s.dst.namespace,k8s.src.name,k8s.dst.name," +
-	"k8s.src.owner.name,k8s.dst.owner.name,k8s.src.owner.type,k8s.dst.owner.type,k8s.src.node.ip,k8s.dst.node.ip," +
-	"k8s.src.node.name,k8s.dst.node.name,k8s.cluster.name,iface,direction"
+	"src.namespace,dst.namespace,src.cidr,dst.cidr,iface,direction"
 
 func TestNetwork_Deduplication(t *testing.T) {
 	compose, err := docker.ComposeSuite("docker-compose-netolly.yml", path.Join(pathOutput, "test-suite-netolly-dedupe.log"))

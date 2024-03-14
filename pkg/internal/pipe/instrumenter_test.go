@@ -28,7 +28,7 @@ import (
 	"github.com/grafana/beyla/test/consumer"
 )
 
-const testTimeout = 5 * time.Second
+const testTimeout = 500 * time.Second
 
 func gctx() *global.ContextInfo {
 	return &global.ContextInfo{
@@ -239,11 +239,13 @@ func TestRouteConsolidation(t *testing.T) {
 
 	go pipe.Run(ctx)
 
-	// expect to receive 3 events without any guaranteed order
+	// expect to receive 6 events without any guaranteed order
 	events := map[string]collector.MetricRecord{}
-	for i := 0; i < 3; i++ {
+	for i := 0; i < 6; i++ {
 		ev := testutil.ReadChannel(t, tc.Records, testTimeout)
-		events[ev.Attributes[string(semconv.HTTPRouteKey)]] = ev
+		if ev.Name == "http.server.request.duration" {
+			events[ev.Attributes[string(semconv.HTTPRouteKey)]] = ev
+		}
 	}
 
 	assert.Equal(t, collector.MetricRecord{

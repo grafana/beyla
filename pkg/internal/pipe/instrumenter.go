@@ -154,7 +154,8 @@ func (gb *graphFunctions) tracesReporterProvider(config otel.TracesConfig) (node
 
 //nolint:gocritic
 func (gb *graphFunctions) metricsReporterProvider(config otel.MetricsConfig) (node.TerminalFunc[[]request.Span], error) {
-	return otel.ReportMetrics(gb.ctx, &config, gb.ctxInfo)
+	//return otel.ReportMetrics(gb.ctx, &config, gb.ctxInfo)
+	return agent.MetricsOTELReceiver(gb.ctx, config)
 }
 
 //nolint:gocritic

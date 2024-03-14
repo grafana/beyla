@@ -39,8 +39,8 @@ const (
 	attrSuffixType      = ".type"
 	attrSuffixOwnerName = ".owner.name"
 	attrSuffixOwnerType = ".owner.type"
-	attrSuffixHostIP    = ".host.ip"
-	attrSuffixHostName  = ".host.name"
+	attrSuffixHostIP    = ".node.ip"
+	attrSuffixHostName  = ".node.name"
 
 	AttrClusterName = "k8s.cluster.name"
 

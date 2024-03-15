@@ -39,12 +39,8 @@ func printFlow(f *ebpf.Record) {
 	sb.WriteString(f.Id.DstIP().IP().String())
 	sb.WriteString(" src.name=")
 	sb.WriteString(f.Attrs.SrcName)
-	sb.WriteString(" src.namespace=")
-	sb.WriteString(f.Attrs.SrcNamespace)
 	sb.WriteString(" dst.name=")
 	sb.WriteString(f.Attrs.DstName)
-	sb.WriteString(" dst.namespace=")
-	sb.WriteString(f.Attrs.DstNamespace)
 
 	for k, v := range f.Attrs.Metadata {
 		sb.WriteString(" ")

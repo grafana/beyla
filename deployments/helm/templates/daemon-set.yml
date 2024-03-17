@@ -43,11 +43,11 @@ spec:
             protocol: TCP
           {{- end }}
           volumeMounts:
-            - mountPath: /config
+            - mountPath: /etc/beyla/config
               name: beyla-config
           env:
             - name: BEYLA_CONFIG_PATH
-              value: "/config/beyla-config.yml"
+              value: "/etc/beyla/config/beyla-config.yml"
             - name: BEYLA_PRINT_TRACES
               value: "true"
             - name: OTEL_RESOURCE_ATTRIBUTES

@@ -2,7 +2,7 @@ image:
   repository: grafana/beyla
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
-  tag: "main"
+  tag: "latest"
 
 imagePullSecrets: []
 
@@ -109,12 +109,6 @@ resources: {}
 updateStrategy:
   type: RollingUpdate
 
-autoscaling:
-  enabled: false
-  minReplicas: 1
-  maxReplicas: 100
-  targetCPUUtilizationPercentage: 80
-  # targetMemoryUtilizationPercentage: 80
 
 # Additional volumes on the output daemonset definition.
 volumes: []

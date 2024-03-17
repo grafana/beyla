@@ -54,9 +54,25 @@ securityContext: {}
   # runAsNonRoot: true
   # runAsUser: 1000
 
+## Expose the beyla internal metrics service to be accessed from outside the cluster (LoadBalancer service).
+## or access it from within the cluster (ClusterIP service). Set the service type and the port to serve it.
+## ref: http://kubernetes.io/docs/user-guide/services/
+##
 service:
+  enabled: false
   type: ClusterIP
+  clusterIP: ""
+  loadBalancerIP: ""
+  loadBalancerClass: ""
+  loadBalancerSourceRanges: []
   port: 80
+  targetPort: '{{ include "beyla.internalMetricsPort" . }}'
+  ## Service annotations. Can be templated.
+  annotations: {}
+  labels: {}
+  portName: service
+  # Adds the appProtocol field to the service. This allows to work with istio protocol selection. Ex: "http" or "tcp"
+  appProtocol: ""
 
 ingress:
   enabled: false
@@ -86,14 +102,12 @@ resources: {}
   #   cpu: 100m
   #   memory: 128Mi
 
-livenessProbe:
-  httpGet:
-    path: /
-    port: http
-readinessProbe:
-  httpGet:
-    path: /
-    port: http
+
+
+## See `kubectl explain deployment.spec.strategy` for more
+## ref: https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#strategy
+updateStrategy:
+  type: RollingUpdate
 
 autoscaling:
   enabled: false
@@ -102,7 +116,7 @@ autoscaling:
   targetCPUUtilizationPercentage: 80
   # targetMemoryUtilizationPercentage: 80
 
-# Additional volumes on the output Deployment definition.
+# Additional volumes on the output daemonset definition.
 volumes: []
 # - name: foo
 #   secret:
@@ -121,17 +135,17 @@ tolerations: []
 
 affinity: {}
 
+# To use an external configmap for Beyla - this will replace existing configmap from chart
+# kubectl create cm --from-file=beyla-config.yaml=<name-of-config-file> -n <namespace>
+# externalBeylaConfigMap: 
 
-createConfigmap: true
-## or use an existing configmap
-# useExistingConfigMap: name-of-some-configmap
 
 ## More configuration options available at https://grafana.com/docs/beyla/latest/configure/options/
 configmapData:
   open_port: 8443
   routes:
     unmatched: heuristic
-  log_level: debug
+  log_level: info
   otel_traces_export:
     endpoint: http://grafana-agent:4318
  ## or alternatively use
@@ -146,11 +160,17 @@ configmapData:
   attributes:
     kubernetes:
       enable: true
+  # internal metrics reporting. Refer: https://grafana.com/docs/beyla/latest/configure/options/#internal-metrics-reporter
+  # If set, user can expose the metrics endpoint via k8s service by configuring .Values.service section
+  #prometheus_export:
+    #port: 9090
+    #path: /metrics
 
 ## Env variables that will override configmap values
 ## For example:
-##   BEYLA_BPF_WAKEUP_LEN: 100
+##   BEYLA_INTERNAL_METRICS_PROMETHEUS_PORT: 9090
 env: {}
+  #BEYLA_INTERNAL_METRICS_PROMETHEUS_PORT: 9090
 
 envValueFrom: {}
   #  ENV_NAME:

@@ -16,4 +16,7 @@ rules:
   - apiGroups: [""]
     resources: ["pods"]
     verbs: ["list", "watch"]
+  {{- with .Values.rbac.extraClusterRoleRules }}
+  {{- toYaml . | nindent 2 }}
+  {{- end}}
 {{- end }}

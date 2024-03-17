@@ -72,3 +72,22 @@ Create the name of the service account to use
 {{- default "default" .Values.serviceAccount.name }}
 {{- end }}
 {{- end }}
+
+
+{{/*
+Returns the internal metrics port if set via environment variable or via yaml configuration.
+Note: Precedence is given for environment variable
+*/}}
+{{- define "beyla.internalMetricsPort" -}}
+{{- if .Values.env.BEYLA_INTERNAL_METRICS_PROMETHEUS_PORT }}
+{{- print .Values.env.BEYLA_INTERNAL_METRICS_PROMETHEUS_PORT }}
+{{ else if and (.Values.configmapData.prometheus_export) }}
+  {{- if ne (.Values.configmapData.prometheus_export.port | quote ) ""}}
+{{- print .Values.configmapData.prometheus_export.port }}
+  {{- else }}
+  {{- print 0 }}
+  {{- end }}
+{{- else }}
+{{- print 0 }}
+{{- end }}
+{{- end }}

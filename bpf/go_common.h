@@ -37,7 +37,7 @@ typedef struct goroutine_metadata_t {
 } goroutine_metadata;
 
 struct {
-    __uint(type, BPF_MAP_TYPE_HASH);
+    __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __type(key, void *); // key: pointer to the goroutine
     __type(value, goroutine_metadata);  // value: timestamp of the goroutine creation
     __uint(max_entries, MAX_CONCURRENT_SHARED_REQUESTS);
@@ -45,7 +45,7 @@ struct {
 } ongoing_goroutines SEC(".maps");
 
 struct {
-    __uint(type, BPF_MAP_TYPE_HASH);
+    __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __type(key, void *); // key: pointer to the request goroutine
     __type(value, connection_info_t);
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);

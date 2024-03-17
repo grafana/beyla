@@ -13,10 +13,6 @@ eBPF-based autoinstrumentation of HTTP and HTTPS services
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | affinity | object | `{}` |  |
-| autoscaling.enabled | bool | `false` |  |
-| autoscaling.maxReplicas | int | `100` |  |
-| autoscaling.minReplicas | int | `1` |  |
-| autoscaling.targetCPUUtilizationPercentage | int | `80` |  |
 | configmapData.attributes.kubernetes.enable | bool | `true` |  |
 | configmapData.discovery.services[0].k8s_namespace | string | `"default"` |  |
 | configmapData.log_level | string | `"info"` |  |

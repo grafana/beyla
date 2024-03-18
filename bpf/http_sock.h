@@ -278,13 +278,20 @@ static __always_inline void process_http_response(http_info_t *info, unsigned ch
     info->status += (buf[RESPONSE_STATUS_POS + 2] - '0');
 }
 
-static __always_inline void handle_http_response(unsigned char *small_buf, pid_connection_info_t *pid_conn, http_info_t *info, int orig_len) {
+static __always_inline void handle_http_response(unsigned char *small_buf, pid_connection_info_t *pid_conn, http_info_t *info, int orig_len, u8 direction) {
     http_connection_metadata_t *meta = bpf_map_lookup_elem(&filtered_connections, pid_conn);
-    http_connection_metadata_t dummy_meta = {
-        .type = EVENT_HTTP_REQUEST
-    };
+    http_connection_metadata_t dummy_meta = {};
 
     if (!meta) {
+        // In case we can't find metadata stored by accept4 or sys_connect, we guess the
+        // HTTP type. If we are receiving a response, we should be a client, otherwise 
+        // guess a server.
+        if (direction == TCP_RECV) {
+            dummy_meta.type = EVENT_HTTP_CLIENT;
+        } else {
+            dummy_meta.type = EVENT_HTTP_REQUEST;
+        }
+
         task_pid(&dummy_meta.pid);
         meta = &dummy_meta;
     }
@@ -293,15 +300,22 @@ static __always_inline void handle_http_response(unsigned char *small_buf, pid_c
     finish_http(info);
 }
 
-static __always_inline void http2_grpc_start(http2_conn_stream_t *s_key, void *u_buf, int len) {
+static __always_inline void http2_grpc_start(http2_conn_stream_t *s_key, void *u_buf, int len, u8 direction) {
     http2_grpc_request_t *h2g_info = empty_http2_info();
     if (h2g_info) {
         http_connection_metadata_t *meta = bpf_map_lookup_elem(&filtered_connections, &s_key->pid_conn);
-        http_connection_metadata_t dummy_meta = {
-            .type = EVENT_HTTP_REQUEST
-        };
+        http_connection_metadata_t dummy_meta = {};
 
         if (!meta) {
+            // In case we can't find metadata stored by accept4 or sys_connect, we guess the
+            // HTTP type. If we are making a request, we should be a client, otherwise 
+            // guess a server.
+            if (direction == TCP_SEND) {
+                dummy_meta.type = EVENT_HTTP_CLIENT;
+            } else {
+                dummy_meta.type = EVENT_HTTP_REQUEST;
+            }
+
             task_pid(&dummy_meta.pid);
             meta = &dummy_meta;
         }
@@ -335,7 +349,7 @@ static __always_inline void http2_grpc_end(http2_conn_stream_t *stream, http2_gr
     bpf_map_delete_elem(&ongoing_http2_grpc, stream);
 }
 
-static __always_inline void process_http2_grpc_frames(pid_connection_info_t *pid_conn, void *u_buf, int bytes_len) {
+static __always_inline void process_http2_grpc_frames(pid_connection_info_t *pid_conn, void *u_buf, int bytes_len, u8 direction) {
     int pos = 0;
     u8 found_frame = 0;
     http2_grpc_request_t *prev_info = 0;
@@ -373,7 +387,7 @@ static __always_inline void process_http2_grpc_frames(pid_connection_info_t *pid
                     found_frame = 1;
                 } 
             } else {
-                http2_grpc_start(&stream, (void *)((u8 *)u_buf + pos), bytes_len);
+                http2_grpc_start(&stream, (void *)((u8 *)u_buf + pos), bytes_len, direction);
                 found_frame = 1;
             }
         } 
@@ -413,7 +427,7 @@ static __always_inline void process_http2_grpc_frames(pid_connection_info_t *pid
     }
 }
 
-static __always_inline void handle_buf_with_connection(pid_connection_info_t *pid_conn, void *u_buf, int bytes_len, u8 ssl) {
+static __always_inline void handle_buf_with_connection(pid_connection_info_t *pid_conn, void *u_buf, int bytes_len, u8 ssl, u8 direction) {
     unsigned char small_buf[MIN_HTTP2_SIZE] = {0};   // MIN_HTTP2_SIZE > MIN_HTTP_SIZE
     bpf_probe_read(small_buf, MIN_HTTP2_SIZE, u_buf);
 
@@ -474,7 +488,7 @@ static __always_inline void handle_buf_with_connection(pid_connection_info_t *pi
             bpf_probe_read(info->buf, FULL_BUF_SIZE, u_buf);
             process_http_request(info, bytes_len);
         } else if (packet_type == PACKET_TYPE_RESPONSE) {
-            handle_http_response(small_buf, pid_conn, info, bytes_len);
+            handle_http_response(small_buf, pid_conn, info, bytes_len, direction);
         } else if (still_reading(info)) {
             info->len += bytes_len;
         }     
@@ -488,7 +502,7 @@ static __always_inline void handle_buf_with_connection(pid_connection_info_t *pi
     } else {
         u8 *h2g = bpf_map_lookup_elem(&ongoing_http2_connections, pid_conn);
         if (h2g && *h2g == ssl) {
-            process_http2_grpc_frames(pid_conn, u_buf, bytes_len);
+            process_http2_grpc_frames(pid_conn, u_buf, bytes_len, direction);
         }
     }
 }

@@ -9,6 +9,7 @@ import (
 	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
 	"github.com/grafana/beyla/pkg/internal/netolly/export"
 	"github.com/grafana/beyla/pkg/internal/netolly/flow"
+	"github.com/grafana/beyla/pkg/internal/netolly/transform/cidr"
 	"github.com/grafana/beyla/pkg/internal/netolly/transform/k8s"
 )
 
@@ -21,10 +22,9 @@ type FlowsPipeline struct {
 
 	Deduper    flow.Deduper          `forwardTo:"Kubernetes"`
 	Kubernetes k8s.MetadataDecorator `forwardTo:"ReverseDNS"`
-
-	ReverseDNS flow.ReverseDNS `forwardTo:"Decorator"`
-
-	Decorator `sendTo:"Exporter,Printer"`
+	ReverseDNS flow.ReverseDNS       `forwardTo:"CIDRs"`
+	CIDRs      cidr.Definitions      `forwardTo:"Decorator"`
+	Decorator  `sendTo:"Exporter,Printer"`
 
 	Exporter export.MetricsConfig
 	Printer  export.FlowPrinterEnabled
@@ -68,6 +68,7 @@ func (f *Flows) buildAndStartPipeline(ctx context.Context) (graph.Graph, error) 
 		}
 		return flow.Decorate(f.agentIP, ifaceNamer), nil
 	})
+	graph.RegisterMiddle(gb, cidr.DecoratorProvider)
 	graph.RegisterMiddle(gb, func(cfg k8s.MetadataDecorator) (node.MiddleFunc[[]*ebpf.Record, []*ebpf.Record], error) {
 		return k8s.MetadataDecoratorProvider(ctx, cfg)
 	})
@@ -89,6 +90,7 @@ func (f *Flows) buildAndStartPipeline(ctx context.Context) (graph.Graph, error) 
 		Kubernetes: k8s.MetadataDecorator{Kubernetes: &f.cfg.Attributes.Kubernetes},
 		// TODO: allow prometheus exporting
 		ReverseDNS: f.cfg.NetworkFlows.ReverseDNS,
+		CIDRs:      f.cfg.NetworkFlows.CIDRs,
 		Exporter: export.MetricsConfig{
 			Metrics:           &f.cfg.Metrics,
 			AllowedAttributes: f.cfg.NetworkFlows.AllowedAttributes,

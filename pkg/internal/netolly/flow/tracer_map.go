@@ -107,7 +107,6 @@ func (m *MapTracer) evictionSynchronization(ctx context.Context, out chan<- []*e
 }
 
 func (m *MapTracer) evictFlows(ctx context.Context, forwardFlows chan<- []*ebpf.Record) {
-	// it's important that this monotonic timer reports same or approximate values as kernel-side bpf_ktime_get_ns()
 	var forwardingFlows []*ebpf.Record
 	laterFlowNs := uint64(0)
 	for flowKey, flowMetrics := range m.mapFetcher.LookupAndDeleteMap() {

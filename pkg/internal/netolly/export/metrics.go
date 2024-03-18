@@ -7,7 +7,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/mariomac/pipes/pkg/node"
-	otel2 "go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	metric2 "go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/sdk/metric"
@@ -69,9 +68,7 @@ func (me *metricsExporter) attributes(m *ebpf.Record) []attribute.KeyValue {
 	attrs.PutString("src.address", m.Id.SrcIP().IP().String())
 	attrs.PutString("dst.address", m.Id.DstIP().IP().String())
 	attrs.PutString("src.name", m.Attrs.SrcName)
-	attrs.PutString("src.namespace", m.Attrs.SrcNamespace)
 	attrs.PutString("dst.name", m.Attrs.DstName)
-	attrs.PutString("dst.namespace", m.Attrs.DstNamespace)
 
 	// direction and interface will be only set if the user disabled
 	// the flow deduplication node
@@ -115,9 +112,7 @@ func MetricsExporterProvider(cfg MetricsConfig) (node.TerminalFunc[[]*ebpf.Recor
 		return nil, err
 	}
 
-	otel2.SetMeterProvider(provider)
-
-	ebpfEvents := otel2.Meter("network_ebpf_events")
+	ebpfEvents := provider.Meter("network_ebpf_events")
 
 	flowBytes, err := ebpfEvents.Int64Counter(
 		"beyla.network.flow.bytes",
@@ -133,9 +128,7 @@ func MetricsExporterProvider(cfg MetricsConfig) (node.TerminalFunc[[]*ebpf.Recor
 		log.Error("", "error", err)
 		return nil, err
 	}
-	if len(cfg.AllowedAttributes) > 0 {
-		log.Debug("restricting attributes not in this list", "attributes", cfg.AllowedAttributes)
-	}
+	log.Debug("restricting attributes not in this list", "attributes", cfg.AllowedAttributes)
 	return (&metricsExporter{
 		flowBytes: flowBytes,
 		attrs:     NewAttributesFilter(cfg.AllowedAttributes),

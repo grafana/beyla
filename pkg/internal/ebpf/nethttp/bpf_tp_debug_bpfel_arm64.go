@@ -22,6 +22,7 @@ type bpf_tp_debugConnectionInfoT struct {
 type bpf_tp_debugFramerFuncInvocationT struct {
 	FramerPtr uint64
 	Tp        bpf_tp_debugTpInfoT
+	InitialN  int64
 }
 
 type bpf_tp_debugGoroutineMetadata struct {

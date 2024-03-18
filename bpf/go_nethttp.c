@@ -465,9 +465,12 @@ int uprobe_http2RoundTrip(struct pt_regs *ctx) {
 }
 
 #ifndef NO_HEADER_PROPAGATION
+#define MAX_W_PTR_N 1024
+
 typedef struct framer_func_invocation {
     u64 framer_ptr;
     tp_info_t tp;
+    s64 initial_n;
 } framer_func_invocation_t;
 
 struct {
@@ -500,12 +503,29 @@ int uprobe_http2FramerWriteHeaders(struct pt_regs *ctx) {
             bpf_dbg_printk("Found func info %llx", info);
             void *goroutine_addr = GOROUTINE_PTR(ctx);
 
-            framer_func_invocation_t f_info = {
-                .tp = info->tp,
-                .framer_ptr = (u64)framer,
-            };
+            void *w_ptr = 0;
+            bpf_probe_read(&w_ptr, sizeof(w_ptr), (void *)(framer + framer_w_pos + 8));
+            if (w_ptr) {
+                s64 n = 0;
+                bpf_probe_read(&n, sizeof(n), (void *)(w_ptr + io_writer_n_pos));
 
-            bpf_map_update_elem(&framer_invocation_map, &goroutine_addr, &f_info, BPF_ANY);
+                bpf_dbg_printk("Found initial n = %d", n);
+
+                // The offset is 0 on all connections we've tested with.
+                // If we read some very large offset, we don't do anything since it might be a situation
+                // we can't handle.
+                if (n < MAX_W_PTR_N) {
+                    framer_func_invocation_t f_info = {
+                        .tp = info->tp,
+                        .framer_ptr = (u64)framer,
+                        .initial_n = n,
+                    };
+
+                    bpf_map_update_elem(&framer_invocation_map, &goroutine_addr, &f_info, BPF_ANY);
+                } else {
+                   bpf_dbg_printk("N too large, ignoring...");
+                }
+            }
         }
     }
 
@@ -538,10 +558,13 @@ int uprobe_http2FramerWriteHeaders_returns(struct pt_regs *ctx) {
             void *buf_arr = 0;
             s64 n = 0;
             s64 cap = 0;
+            s64 initial_n = f_info->initial_n;
 
-            bpf_probe_read(&buf_arr, sizeof(buf_arr), (void *)(w_ptr + 16));
-            bpf_probe_read(&n, sizeof(n), (void *)(w_ptr + 40));
-            bpf_probe_read(&cap, sizeof(cap), (void *)(w_ptr + 24));
+            bpf_probe_read(&buf_arr, sizeof(buf_arr), (void *)(w_ptr + io_writer_buf_ptr_pos));
+            bpf_probe_read(&n, sizeof(n), (void *)(w_ptr + io_writer_n_pos));
+            bpf_probe_read(&cap, sizeof(cap), (void *)(w_ptr + io_writer_buf_ptr_pos + 16));
+
+            bpf_clamp_umax(initial_n, MAX_W_PTR_N);
 
             bpf_dbg_printk("Found f_info, this is the place to write to w = %llx, buf=%llx, n=%lld, size=%lld", w_ptr, buf_arr, n, cap);
             if (buf_arr && n < (cap - HTTP2_ENCODED_HEADER_LEN)) {
@@ -577,9 +600,9 @@ int uprobe_http2FramerWriteHeaders_returns(struct pt_regs *ctx) {
                 u8 size_2 = 0;
                 u8 size_3 = 0;
 
-                bpf_probe_read(&size_1, sizeof(size_1), (void *)(buf_arr));
-                bpf_probe_read(&size_2, sizeof(size_2), (void *)(buf_arr + 1));
-                bpf_probe_read(&size_3, sizeof(size_3), (void *)(buf_arr + 2));
+                bpf_probe_read(&size_1, sizeof(size_1), (void *)(buf_arr + initial_n));
+                bpf_probe_read(&size_2, sizeof(size_2), (void *)(buf_arr + initial_n + 1));
+                bpf_probe_read(&size_3, sizeof(size_3), (void *)(buf_arr + initial_n + 2));
 
                 bpf_dbg_printk("size 1:%x, 2:%x, 3:%x", size_1, size_2, size_3);
 
@@ -591,9 +614,9 @@ int uprobe_http2FramerWriteHeaders_returns(struct pt_regs *ctx) {
                 size_2 = (u8)(new_size >> 8);
                 size_3 = (u8)(new_size);
 
-                bpf_probe_write_user((void *)(buf_arr), &size_1, sizeof(size_1));
-                bpf_probe_write_user((void *)(buf_arr+1), &size_2, sizeof(size_2));
-                bpf_probe_write_user((void *)(buf_arr+2), &size_3, sizeof(size_3));
+                bpf_probe_write_user((void *)(buf_arr + initial_n), &size_1, sizeof(size_1));
+                bpf_probe_write_user((void *)(buf_arr + initial_n +1), &size_2, sizeof(size_2));
+                bpf_probe_write_user((void *)(buf_arr + initial_n + 2), &size_3, sizeof(size_3));
             }
         }
     }

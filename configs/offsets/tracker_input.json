@@ -96,6 +96,10 @@
       ],
       "google.golang.org/grpc/internal/transport.http2Client": [
         "nextID"
+      ],
+      "google.golang.org/grpc/internal/transport.bufWriter": [
+        "buf",
+        "offset"
       ]
     }
   },

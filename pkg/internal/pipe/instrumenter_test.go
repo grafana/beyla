@@ -28,7 +28,7 @@ import (
 	"github.com/grafana/beyla/test/consumer"
 )
 
-const testTimeout = 500 * time.Second
+const testTimeout = 5 * time.Second
 
 func gctx() *global.ContextInfo {
 	return &global.ContextInfo{
@@ -335,6 +335,67 @@ func TestTraceGRPCPipeline(t *testing.T) {
 	matchGRPCTraceEvent(t, "foo.bar", event)
 }
 
+func TestBasicPipelineInfo(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	tc, err := collector.Start(ctx)
+	require.NoError(t, err)
+
+	tracesInput := make(chan []request.Span, 10)
+	gb := newGraphBuilder(ctx, &beyla.Config{
+		Metrics: otel.MetricsConfig{
+			MetricsEndpoint: tc.ServerEndpoint, ReportTarget: true, ReportPeerInfo: true,
+			Interval: 10 * time.Millisecond, ReportersCacheLen: 16,
+		},
+	}, gctx(), tracesInput)
+	// send some fake data through the traces' input
+	tracesInput <- newHTTPInfo("PATCH", "/aaa/bbb", "1.1.1.1", 204)
+	pipe, err := gb.buildGraph()
+	require.NoError(t, err)
+
+	go pipe.Run(ctx)
+
+	event := testutil.ReadChannel(t, tc.Records, testTimeout)
+	assert.Equal(t, collector.MetricRecord{
+		Name: "http.server.request.duration",
+		Unit: "s",
+		Attributes: map[string]string{
+			string(otel.HTTPRequestMethodKey):      "PATCH",
+			string(otel.HTTPResponseStatusCodeKey): "204",
+			string(otel.HTTPUrlPathKey):            "/aaa/bbb",
+			string(otel.ClientAddrKey):             "1.1.1.1",
+			string(semconv.ServiceNameKey):         "comm",
+		},
+		Type: pmetric.MetricTypeHistogram,
+	}, event)
+}
+
+func TestTracerPipelineInfo(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	tc, err := collector.Start(ctx)
+	require.NoError(t, err)
+
+	gb := newGraphBuilder(ctx, &beyla.Config{
+		Traces: otel.TracesConfig{TracesEndpoint: tc.ServerEndpoint, ReportersCacheLen: 16},
+	}, gctx(), make(<-chan []request.Span))
+	// Override eBPF tracer to send some fake data
+	graph.RegisterStart(gb.builder, func(_ traces.ReadDecorator) (node.StartFunc[[]request.Span], error) {
+		return func(out chan<- []request.Span) {
+			out <- newHTTPInfo("PATCH", "/aaa/bbb", "1.1.1.1", 204)
+		}, nil
+	})
+	pipe, err := gb.buildGraph()
+	require.NoError(t, err)
+
+	go pipe.Run(ctx)
+
+	event := testutil.ReadChannel(t, tc.TraceRecords, testTimeout)
+	matchInfoEvent(t, "PATCH", event)
+}
+
 func newRequest(serviceName string, id uint64, method, path, peer string, status int) []request.Span {
 	return []request.Span{{
 		Path:         path,
@@ -515,71 +576,10 @@ func matchInfoEvent(t *testing.T, name string, event collector.TraceRecord) {
 			"parent_span_id":                       "",
 		},
 		ResourceAttributes: map[string]string{
-			string(semconv.ServiceNameKey):          "svc-1",
+			string(semconv.ServiceNameKey):          "comm",
 			string(semconv.TelemetrySDKLanguageKey): "go",
 			string(semconv.TelemetrySDKNameKey):     "beyla",
 		},
 		Kind: ptrace.SpanKindServer,
 	}, event)
-}
-
-func TestBasicPipelineInfo(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	tc, err := collector.Start(ctx)
-	require.NoError(t, err)
-
-	tracesInput := make(chan []request.Span, 10)
-	gb := newGraphBuilder(ctx, &beyla.Config{
-		Metrics: otel.MetricsConfig{
-			MetricsEndpoint: tc.ServerEndpoint, ReportTarget: true, ReportPeerInfo: true,
-			Interval: 10 * time.Millisecond, ReportersCacheLen: 16,
-		},
-	}, gctx(), tracesInput)
-	// send some fake data through the traces' input
-	tracesInput <- newHTTPInfo("PATCH", "/aaa/bbb", "1.1.1.1", 204)
-	pipe, err := gb.buildGraph()
-	require.NoError(t, err)
-
-	go pipe.Run(ctx)
-
-	event := testutil.ReadChannel(t, tc.Records, testTimeout)
-	assert.Equal(t, collector.MetricRecord{
-		Name: "http.server.request.duration",
-		Unit: "s",
-		Attributes: map[string]string{
-			string(otel.HTTPRequestMethodKey):      "PATCH",
-			string(otel.HTTPResponseStatusCodeKey): "204",
-			string(otel.HTTPUrlPathKey):            "/aaa/bbb",
-			string(otel.ClientAddrKey):             "1.1.1.1",
-			string(semconv.ServiceNameKey):         "comm",
-		},
-		Type: pmetric.MetricTypeHistogram,
-	}, event)
-}
-
-func TestTracerPipelineInfo(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	tc, err := collector.Start(ctx)
-	require.NoError(t, err)
-
-	gb := newGraphBuilder(ctx, &beyla.Config{
-		Traces: otel.TracesConfig{TracesEndpoint: tc.ServerEndpoint, ReportersCacheLen: 16},
-	}, gctx(), make(<-chan []request.Span))
-	// Override eBPF tracer to send some fake data
-	graph.RegisterStart(gb.builder, func(_ traces.ReadDecorator) (node.StartFunc[[]request.Span], error) {
-		return func(out chan<- []request.Span) {
-			out <- newHTTPInfo("PATCH", "/aaa/bbb", "1.1.1.1", 204)
-		}, nil
-	})
-	pipe, err := gb.buildGraph()
-	require.NoError(t, err)
-
-	go pipe.Run(ctx)
-
-	event := testutil.ReadChannel(t, tc.TraceRecords, testTimeout)
-	matchInfoEvent(t, "PATCH", event)
 }

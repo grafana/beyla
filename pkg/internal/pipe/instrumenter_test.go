@@ -394,6 +394,7 @@ func getHostname() string {
 }
 
 func matchTraceEvent(t require.TestingT, name string, event collector.TraceRecord) {
+	assert.NotEmpty(t, event.Attributes["span_id"])
 	assert.Equal(t, collector.TraceRecord{
 		Name: name,
 		Attributes: map[string]string{
@@ -412,6 +413,7 @@ func matchTraceEvent(t require.TestingT, name string, event collector.TraceRecor
 }
 
 func matchInnerTraceEvent(t require.TestingT, name string, event collector.TraceRecord) {
+	assert.NotEmpty(t, event.Attributes["span_id"])
 	assert.Equal(t, collector.TraceRecord{
 		Name: name,
 		Attributes: map[string]string{

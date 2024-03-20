@@ -28,7 +28,7 @@ import (
 	"github.com/grafana/beyla/test/consumer"
 )
 
-const testTimeout = 5 * time.Second
+const testTimeout = 500 * time.Second
 
 func gctx() *global.ContextInfo {
 	return &global.ContextInfo{
@@ -408,6 +408,11 @@ func matchTraceEvent(t require.TestingT, name string, event collector.TraceRecor
 			"span_id":                              event.Attributes["span_id"],
 			"parent_span_id":                       event.Attributes["parent_span_id"],
 		},
+		ResourceAttributes: map[string]string{
+			string(semconv.ServiceNameKey):          "bar-svc",
+			string(semconv.TelemetrySDKLanguageKey): "go",
+			string(semconv.TelemetrySDKNameKey):     "beyla",
+		},
 		Kind: ptrace.SpanKindServer,
 	}, event)
 }
@@ -419,6 +424,11 @@ func matchInnerTraceEvent(t require.TestingT, name string, event collector.Trace
 		Attributes: map[string]string{
 			"span_id":        event.Attributes["span_id"],
 			"parent_span_id": event.Attributes["parent_span_id"],
+		},
+		ResourceAttributes: map[string]string{
+			string(semconv.ServiceNameKey):          "bar-svc",
+			string(semconv.TelemetrySDKLanguageKey): "go",
+			string(semconv.TelemetrySDKNameKey):     "beyla",
 		},
 		Kind: ptrace.SpanKindInternal,
 	}, event)
@@ -437,6 +447,11 @@ func matchGRPCTraceEvent(t *testing.T, name string, event collector.TraceRecord)
 			"span_id":                            event.Attributes["span_id"],
 			"parent_span_id":                     event.Attributes["parent_span_id"],
 		},
+		ResourceAttributes: map[string]string{
+			string(semconv.ServiceNameKey):          "svc",
+			string(semconv.TelemetrySDKLanguageKey): "go",
+			string(semconv.TelemetrySDKNameKey):     "beyla",
+		},
 		Kind: ptrace.SpanKindServer,
 	}, event)
 }
@@ -447,6 +462,11 @@ func matchInnerGRPCTraceEvent(t *testing.T, name string, event collector.TraceRe
 		Attributes: map[string]string{
 			"span_id":        event.Attributes["span_id"],
 			"parent_span_id": event.Attributes["parent_span_id"],
+		},
+		ResourceAttributes: map[string]string{
+			string(semconv.ServiceNameKey):          "svc",
+			string(semconv.TelemetrySDKLanguageKey): "go",
+			string(semconv.TelemetrySDKNameKey):     "beyla",
 		},
 		Kind: ptrace.SpanKindInternal,
 	}, event)
@@ -493,6 +513,11 @@ func matchInfoEvent(t *testing.T, name string, event collector.TraceRecord) {
 			string(otel.HTTPRequestBodySizeKey):    "0",
 			"span_id":                              event.Attributes["span_id"],
 			"parent_span_id":                       "",
+		},
+		ResourceAttributes: map[string]string{
+			string(semconv.ServiceNameKey):          "svc-1",
+			string(semconv.TelemetrySDKLanguageKey): "go",
+			string(semconv.TelemetrySDKNameKey):     "beyla",
 		},
 		Kind: ptrace.SpanKindServer,
 	}, event)

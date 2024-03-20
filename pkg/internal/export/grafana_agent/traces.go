@@ -31,7 +31,6 @@ func TracesReceiver(ctx context.Context, cfg beyla.TracesReceiverConfig) (node.T
 				realStart := otel.SpanStartTime(t)
 				hasSubSpans := t.Start.After(realStart)
 
-				// TODO(marctc): this might be not necessary, delete after running integration tests
 				parentCtx := otel.HandleTraceparent(ctx, span)
 				if !hasSubSpans {
 					// We set the eBPF calculated trace_id and span_id to be the main span
@@ -55,6 +54,8 @@ func generateTraces(ctx context.Context, span *request.Span, t request.Timings, 
 	traces := ptrace.NewTraces()
 	rs := traces.ResourceSpans().AppendEmpty()
 	ss := rs.ScopeSpans().AppendEmpty()
+	resourceAttrs := attrsToMap(otel.Resource(span.ServiceID).Attributes())
+	resourceAttrs.CopyTo(rs.Resource().Attributes())
 
 	if hasSubSpans {
 		createSubSpans(ctx, span, &ss, t, idGen)

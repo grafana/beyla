@@ -369,7 +369,7 @@ static __always_inline void process_http2_grpc_frames(pid_connection_info_t *pid
         bpf_probe_read(&frame_buf, FRAME_HEADER_LEN, (void *)((u8 *)u_buf + pos));
         read_http2_grpc_frame_header(&frame, frame_buf, FRAME_HEADER_LEN);
         
-        bpf_dbg_printk("http2 frame type = %d, len = %d, stream_id = %d, flags = %d", frame.type, frame.length, frame.stream_id, frame.flags);
+        //bpf_dbg_printk("http2 frame type = %d, len = %d, stream_id = %d, flags = %d", frame.type, frame.length, frame.stream_id, frame.flags);
         
         if (is_headers_frame(&frame)) {
             http2_conn_stream_t stream = {0};
@@ -401,18 +401,18 @@ static __always_inline void process_http2_grpc_frames(pid_connection_info_t *pid
         }
 
         if (is_invalid_frame(&frame)) {
-            bpf_dbg_printk("Invalid frame, terminating search");
+            //bpf_dbg_printk("Invalid frame, terminating search");
             break;
         }
 
         if (frame.length + FRAME_HEADER_LEN >= bytes_len) {
-            bpf_dbg_printk("Frame length bigger than bytes len");
+            //bpf_dbg_printk("Frame length bigger than bytes len");
             break;
         }
 
         if (pos < (bytes_len - frame.length + FRAME_HEADER_LEN)) {
             pos += (frame.length + FRAME_HEADER_LEN);
-            bpf_dbg_printk("New buf read pos = %d", pos);
+            //bpf_dbg_printk("New buf read pos = %d", pos);
         }
     }
 

@@ -142,7 +142,7 @@ func newTracesReporter(ctx context.Context, cfg *TracesConfig, ctxInfo *global.C
 	switch proto := cfg.GetProtocol(); proto {
 	case ProtocolHTTPJSON, ProtocolHTTPProtobuf, "": // zero value defaults to HTTP for backwards-compatibility
 		log.Debug("instantiating HTTP TracesReporter", "protocol", proto)
-		if exporter, err = httpTracer(ctx, cfg); err != nil {
+		if exporter, err = HttpTracer(ctx, cfg); err != nil {
 			return nil, fmt.Errorf("can't instantiate OTEL HTTP traces exporter: %w", err)
 		}
 	case ProtocolGRPC:
@@ -175,7 +175,7 @@ func newTracesReporter(ctx context.Context, cfg *TracesConfig, ctxInfo *global.C
 	return &r, nil
 }
 
-func httpTracer(ctx context.Context, cfg *TracesConfig) (*otlptrace.Exporter, error) {
+func HttpTracer(ctx context.Context, cfg *TracesConfig) (*otlptrace.Exporter, error) {
 	topts, err := getHTTPTracesEndpointOptions(cfg)
 	if err != nil {
 		return nil, err

@@ -3,7 +3,6 @@ package grafanaagent
 import (
 	"context"
 	"log/slog"
-	"time"
 
 	"github.com/mariomac/pipes/pkg/node"
 	"go.opentelemetry.io/collector/pdata/pcommon"
@@ -27,18 +26,9 @@ func TracesReceiver(ctx context.Context, cfg beyla.TracesReceiverConfig) (node.T
 					continue
 				}
 
-				t := span.Timings()
-				realStart := otel.SpanStartTime(t)
-				hasSubSpans := t.Start.After(realStart)
-
-				parentCtx := otel.HandleTraceparent(ctx, span)
-				if !hasSubSpans {
-					// We set the eBPF calculated trace_id and span_id to be the main span
-					parentCtx = otel.ContextWithTraceParent(parentCtx, span.TraceID, span.SpanID)
-				}
-
 				for _, tc := range cfg.Traces {
-					err := tc.ConsumeTraces(parentCtx, generateTraces(parentCtx, span, t, realStart, hasSubSpans))
+					traces := generateTraces(ctx, span)
+					err := tc.ConsumeTraces(ctx, traces)
 					if err != nil {
 						slog.Error("error sending trace to consumer", "error", err)
 					}
@@ -48,9 +38,19 @@ func TracesReceiver(ctx context.Context, cfg beyla.TracesReceiverConfig) (node.T
 	}, nil
 }
 
-// generateTraces creates a pdata.Traces from a request.Span
-func generateTraces(ctx context.Context, span *request.Span, t request.Timings, start time.Time, hasSubSpans bool) ptrace.Traces {
+// generateTraces creates a ptrace.Traces from a request.Span
+func generateTraces(ctx context.Context, span *request.Span) ptrace.Traces {
 	idGen := &otel.BeylaIDGenerator{}
+	t := span.Timings()
+	start := otel.SpanStartTime(t)
+	hasSubSpans := t.Start.After(start)
+
+	parentCtx := otel.HandleTraceparent(ctx, span)
+	if !hasSubSpans {
+		// We set the eBPF calculated trace_id and span_id to be the main span
+		parentCtx = otel.ContextWithTraceParent(parentCtx, span.TraceID, span.SpanID)
+	}
+
 	traces := ptrace.NewTraces()
 	rs := traces.ResourceSpans().AppendEmpty()
 	ss := rs.ScopeSpans().AppendEmpty()
@@ -58,7 +58,7 @@ func generateTraces(ctx context.Context, span *request.Span, t request.Timings, 
 	resourceAttrs.CopyTo(rs.Resource().Attributes())
 
 	if hasSubSpans {
-		createSubSpans(ctx, span, &ss, t, idGen)
+		createSubSpans(parentCtx, span, &ss, t, idGen)
 	}
 
 	// Create a parent span for the whole request session
@@ -68,7 +68,7 @@ func generateTraces(ctx context.Context, span *request.Span, t request.Timings, 
 	s.SetStartTimestamp(pcommon.NewTimestampFromTime(start))
 
 	// Set trace and span IDs
-	setIds(ctx, &s, span.TraceID, span.ParentSpanID, idGen)
+	setIds(parentCtx, &s, span.TraceID, span.ParentSpanID, idGen)
 
 	// Set span attributes
 	attrs := otel.TraceAttributes(span)

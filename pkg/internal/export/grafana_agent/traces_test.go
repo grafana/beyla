@@ -12,7 +12,6 @@ import (
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 
-	"github.com/grafana/beyla/pkg/internal/export/otel"
 	"github.com/grafana/beyla/pkg/internal/request"
 )
 
@@ -24,6 +23,7 @@ func TestGenerateTraces(t *testing.T) {
 		span := &request.Span{
 			Type:         request.EventTypeHTTP,
 			RequestStart: start.UnixNano(),
+			Start:        start.Add(time.Second).UnixNano(),
 			End:          start.Add(3 * time.Second).UnixNano(),
 			Method:       "GET",
 			Route:        "/test",
@@ -31,18 +31,7 @@ func TestGenerateTraces(t *testing.T) {
 			SpanID:       spanID,
 			TraceID:      traceID,
 		}
-		timings := request.Timings{
-			End: time.Now(),
-		}
-		// Logic copied from TracesReceiver
-		hasSubSpans := true
-		parentCtx := otel.HandleTraceparent(context.TODO(), span)
-		if !hasSubSpans {
-			// We set the eBPF calculated trace_id and span_id to be the main span
-			parentCtx = otel.ContextWithTraceParent(parentCtx, span.TraceID, span.SpanID)
-		}
-
-		traces := generateTraces(parentCtx, span, timings, start, hasSubSpans)
+		traces := generateTraces(context.TODO(), span)
 
 		assert.Equal(t, 1, traces.ResourceSpans().Len())
 		assert.Equal(t, 1, traces.ResourceSpans().At(0).ScopeSpans().Len())
@@ -64,6 +53,7 @@ func TestGenerateTraces(t *testing.T) {
 		assert.NotEmpty(t, spans.At(2).SpanID().String())
 		assert.Equal(t, traceID.String(), spans.At(2).TraceID().String())
 	})
+
 	t.Run("test without subspans - ids set bpf layer", func(t *testing.T) {
 		start := time.Now()
 		spanID, _ := trace.SpanIDFromHex("89cbc1f60aab3b04")
@@ -78,18 +68,7 @@ func TestGenerateTraces(t *testing.T) {
 			SpanID:       spanID,
 			TraceID:      traceID,
 		}
-		timings := request.Timings{
-			End: time.Now(),
-		}
-		// Logic copied from TracesReceiver
-		hasSubSpans := false
-		parentCtx := otel.HandleTraceparent(context.TODO(), span)
-		if !hasSubSpans {
-			// We set the eBPF calculated trace_id and span_id to be the main span
-			parentCtx = otel.ContextWithTraceParent(parentCtx, span.TraceID, span.SpanID)
-		}
-
-		traces := generateTraces(parentCtx, span, timings, start, hasSubSpans)
+		traces := generateTraces(context.TODO(), span)
 
 		assert.Equal(t, 1, traces.ResourceSpans().Len())
 		assert.Equal(t, 1, traces.ResourceSpans().At(0).ScopeSpans().Len())
@@ -114,18 +93,7 @@ func TestGenerateTraces(t *testing.T) {
 			ParentSpanID: parentSpanID,
 			TraceID:      traceID,
 		}
-		timings := request.Timings{
-			End: time.Now(),
-		}
-		// Logic copied from TracesReceiver
-		hasSubSpans := false
-		parentCtx := otel.HandleTraceparent(context.TODO(), span)
-		if !hasSubSpans {
-			// We set the eBPF calculated trace_id and span_id to be the main span
-			parentCtx = otel.ContextWithTraceParent(parentCtx, span.TraceID, span.SpanID)
-		}
-
-		traces := generateTraces(parentCtx, span, timings, start, hasSubSpans)
+		traces := generateTraces(context.TODO(), span)
 
 		assert.Equal(t, 1, traces.ResourceSpans().Len())
 		assert.Equal(t, 1, traces.ResourceSpans().At(0).ScopeSpans().Len())
@@ -145,18 +113,7 @@ func TestGenerateTraces(t *testing.T) {
 			Method:       "GET",
 			Route:        "/test",
 		}
-		timings := request.Timings{
-			End: time.Now(),
-		}
-		// Logic copied from TracesReceiver
-		hasSubSpans := false
-		parentCtx := otel.HandleTraceparent(context.TODO(), span)
-		if !hasSubSpans {
-			// We set the eBPF calculated trace_id and span_id to be the main span
-			parentCtx = otel.ContextWithTraceParent(parentCtx, span.TraceID, span.SpanID)
-		}
-
-		traces := generateTraces(parentCtx, span, timings, start, hasSubSpans)
+		traces := generateTraces(context.TODO(), span)
 
 		assert.Equal(t, 1, traces.ResourceSpans().Len())
 		assert.Equal(t, 1, traces.ResourceSpans().At(0).ScopeSpans().Len())

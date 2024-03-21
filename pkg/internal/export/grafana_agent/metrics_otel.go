@@ -27,7 +27,7 @@ func MetricsOTELReceiver(ctx context.Context, cfg otel.MetricsConfig) (node.Term
 		// otherwise we will not see any errors.
 		config.QueueConfig.Enabled = false
 		config.ClientConfig = confighttp.ClientConfig{
-			Endpoint: cfg.MetricsEndpoint,
+			Endpoint: cfg.CommonEndpoint,
 		}
 
 		telemetrySettings := component.TelemetrySettings{

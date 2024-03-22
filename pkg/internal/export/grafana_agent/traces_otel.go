@@ -8,6 +8,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/grafana/beyla/pkg/internal/export/otel"
+	"github.com/grafana/beyla/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/pkg/internal/request"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/config/confighttp"
@@ -19,15 +20,19 @@ import (
 )
 
 // TracesOTELReceiver creates a terminal node that consumes request.Spans and sends OpenTelemetry metrics to the configured consumers.
-func TracesOTELReceiver(ctx context.Context, cfg otel.TracesConfig) (node.TerminalFunc[[]request.Span], error) {
+func TracesOTELReceiver(ctx context.Context, cfg otel.TracesConfig, ctxInfo *global.ContextInfo) (node.TerminalFunc[[]request.Span], error) {
 	return func(in <-chan []request.Span) {
 		factory := otlphttpexporter.NewFactory()
 		config := factory.CreateDefaultConfig().(*otlphttpexporter.Config)
 		// Disable queuing to ensure that we execute the request when calling ConsumeMetrics
 		// otherwise we will not see any errors.
-		config.QueueConfig.Enabled = false
+		//config.QueueConfig.Enabled = false
+		endpoint := cfg.CommonEndpoint
+		if endpoint == "" {
+			endpoint = cfg.TracesEndpoint
+		}
 		config.ClientConfig = confighttp.ClientConfig{
-			Endpoint: cfg.CommonEndpoint,
+			Endpoint: endpoint,
 		}
 		// var opts []trace.BatchSpanProcessorOption
 		// if cfg.MaxExportBatchSize > 0 {
@@ -42,16 +47,18 @@ func TracesOTELReceiver(ctx context.Context, cfg otel.TracesConfig) (node.Termin
 		// if cfg.ExportTimeout > 0 {
 		// 	opts = append(opts, trace.WithExportTimeout(cfg.ExportTimeout))
 		// }
-		// tracer, _ := otel.HttpTracer(ctx, &cfg)
+		// t, _ := otel.HttpTracer(ctx, &cfg)
+		// tracer := otel.InstrumentTraceExporter(t, ctxInfo.Metrics)
 		// bsp := trace.NewBatchSpanProcessor(tracer, opts...)
 		// provider := trace.NewTracerProvider(
 		// 	trace.WithSpanProcessor(bsp),
-		// 	trace.WithSampler(cfg.Sampler.Implementation()),
-		// 	trace.WithIDGenerator(&otel.BeylaIDGenerator{}),
+		// 	// trace.WithSampler(cfg.Sampler.Implementation()),
+		// 	// trace.WithIDGenerator(&otel.BeylaIDGenerator{}),
 		// )
 		telemetrySettings := component.TelemetrySettings{
-			Logger:         zap.NewNop(),
-			MeterProvider:  metric.NewMeterProvider(),
+			Logger:        zap.NewNop(),
+			MeterProvider: metric.NewMeterProvider(),
+			//TracerProvider: provider,
 			TracerProvider: trace.NewTracerProvider(),
 			MetricsLevel:   configtelemetry.LevelBasic,
 			ReportStatus: func(event *component.StatusEvent) {
@@ -72,6 +79,8 @@ func TracesOTELReceiver(ctx context.Context, cfg otel.TracesConfig) (node.Termin
 		}
 		defer func() {
 			exp.Shutdown(ctx)
+			// provider.Shutdown(ctx)
+			// tracer.Shutdown(ctx)
 		}()
 		exp.Start(ctx, nil)
 		for spans := range in {
@@ -80,7 +89,7 @@ func TracesOTELReceiver(ctx context.Context, cfg otel.TracesConfig) (node.Termin
 				if span.IgnoreSpan == request.IgnoreTraces {
 					continue
 				}
-				ctx, traces := generateTraces(ctx, span)
+				traces := generateTraces(ctx, span)
 				err := exp.ConsumeTraces(ctx, traces)
 				if err != nil {
 					slog.Error("error sending trace to consumer", "error", err)

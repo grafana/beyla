@@ -27,7 +27,7 @@ func TracesReceiver(ctx context.Context, cfg beyla.TracesReceiverConfig) (node.T
 				}
 
 				for _, tc := range cfg.Traces {
-					_, traces := generateTraces(ctx, span)
+					traces := generateTraces(ctx, span)
 					err := tc.ConsumeTraces(ctx, traces)
 					if err != nil {
 						slog.Error("error sending trace to consumer", "error", err)
@@ -39,7 +39,7 @@ func TracesReceiver(ctx context.Context, cfg beyla.TracesReceiverConfig) (node.T
 }
 
 // generateTraces creates a ptrace.Traces from a request.Span
-func generateTraces(ctx context.Context, span *request.Span) (context.Context, ptrace.Traces) {
+func generateTraces(ctx context.Context, span *request.Span) ptrace.Traces {
 	idGen := &otel.BeylaIDGenerator{}
 	t := span.Timings()
 	start := otel.SpanStartTime(t)
@@ -79,7 +79,7 @@ func generateTraces(ctx context.Context, span *request.Span) (context.Context, p
 	statusCode := codeToStatusCode(otel.SpanStatusCode(span))
 	s.Status().SetCode(statusCode)
 	s.SetEndTimestamp(pcommon.NewTimestampFromTime(t.End))
-	return parentCtx, traces
+	return traces
 }
 
 // createSubSpans creates the internal spans for a request.Span

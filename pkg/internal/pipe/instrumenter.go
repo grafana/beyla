@@ -146,7 +146,7 @@ func (gb *graphFunctions) readDecoratorProvider(config traces.ReadDecorator) (no
 
 //nolint:gocritic
 func (gb *graphFunctions) tracesReporterProvider(config otel.TracesConfig) (node.TerminalFunc[[]request.Span], error) {
-	return agent.TracesOTELReceiver(gb.ctx, config)
+	return agent.TracesOTELReceiver(gb.ctx, config, gb.ctxInfo)
 	//return otel.ReportTraces(gb.ctx, &config, gb.ctxInfo)
 }
 

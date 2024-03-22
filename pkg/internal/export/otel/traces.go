@@ -155,7 +155,7 @@ func newTracesReporter(ctx context.Context, cfg *TracesConfig, ctxInfo *global.C
 			proto, ProtocolGRPC, ProtocolHTTPJSON, ProtocolHTTPProtobuf)
 	}
 
-	r.traceExporter = instrumentTraceExporter(exporter, ctxInfo.Metrics)
+	r.traceExporter = InstrumentTraceExporter(exporter, ctxInfo.Metrics)
 
 	var opts []trace.BatchSpanProcessorOption
 	if cfg.MaxExportBatchSize > 0 {
@@ -199,9 +199,9 @@ func grpcTracer(ctx context.Context, cfg *TracesConfig) (*otlptrace.Exporter, er
 	return texp, nil
 }
 
-// instrumentTraceExporter checks whether the context is configured to report internal metrics and,
+// InstrumentTraceExporter checks whether the context is configured to report internal metrics and,
 // in this case, wraps the passed traces exporter inside an instrumented exporter
-func instrumentTraceExporter(in trace.SpanExporter, internalMetrics imetrics.Reporter) trace.SpanExporter {
+func InstrumentTraceExporter(in trace.SpanExporter, internalMetrics imetrics.Reporter) trace.SpanExporter {
 	// avoid wrapping the instrumented exporter if we don't have
 	// internal instrumentation (NoopReporter)
 	if _, ok := internalMetrics.(imetrics.NoopReporter); ok || internalMetrics == nil {

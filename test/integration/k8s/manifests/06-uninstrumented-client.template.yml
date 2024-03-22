@@ -57,7 +57,7 @@ spec:
         name: maincode
   containers:
     - name: pinger
-      image: golang:1.21
+      image: golang:1.22
       command:
         - sh
         - -c

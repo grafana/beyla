@@ -1,6 +1,6 @@
 module github.com/grafana/beyla/test/oats
 
-go 1.21.1
+go 1.22
 
 require (
 	github.com/grafana/oats v0.0.0-20231025143155-a8ecae950304 // indirect

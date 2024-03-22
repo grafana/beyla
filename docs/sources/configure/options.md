@@ -396,6 +396,29 @@ expression.
 If other selectors are specified in the same `services` entry, the processes to be
 selected need to match all the selector properties.
 
+| YAML             | Env var | Type                        | Default |
+| ---------------- | ------- | --------------------------- | ------- |
+| `k8s_pod_labels` | --      | map\[string\]string (regular expression) | (unset) |
+
+This selector property limits the instrumentation to the applications
+running in the Pods having labels with keys matching the provided value as regular expression.
+
+If other selectors are specified in the same `services` entry, the processes to be
+selected need to match all the selector properties.
+
+For example:
+
+```yaml
+discovery:
+  services:
+    - k8s_namespace: frontend
+      k8s_pod_labels:
+        instrument: beyla
+```
+
+The preceding example discovers all Pods in the `frontend` namespace that have a label
+`instrument` with a value that matches the regular expression `beyla`.
+
 ## EBPF tracer
 
 YAML section `ebpf`.

@@ -357,7 +357,7 @@ static __always_inline void process_http2_grpc_frames(pid_connection_info_t *pid
     int saved_buf_pos = 0;
     u8 found_data_frame = 0;
     
-    for (int i = 0; i < 8; i++) {
+    for (int i = 0; i < 4; i++) {
         u8 found = 0;
         unsigned char frame_buf[FRAME_HEADER_LEN];
         frame_header_t frame = {0};

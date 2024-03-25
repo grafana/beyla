@@ -571,9 +571,9 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum(rate(http_server_request_duration_seconds_count{service_name=\"$Service\",instance=~\"$instance\",job=~\"$job\"} [$__rate_interval])) by (http_status_code)",
+          "expr": "sum(rate(http_server_request_duration_seconds_count{service_name=\"$Service\",instance=~\"$instance\",job=~\"$job\"} [$__rate_interval])) by (http_response_status_code)",
           "hide": false,
-          "legendFormat": "HTTP server - {{http_status_code}}",
+          "legendFormat": "HTTP server - {{http_response_status_code}}",
           "range": true,
           "refId": "B"
         },
@@ -704,9 +704,9 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum by (http_status_code) (rate(http_server_request_duration_seconds_count{service_name=\"${Service}\",http_status_code=~\"(4|5).*\",instance=~\"$instance\",job=~\"$job\"}[$__rate_interval])) / ignoring(http_status_code) group_left sum(rate(http_server_request_duration_seconds_count{service_name=\"${Service}\",instance=~\"$instance\",job=~\"$job\"}[$__rate_interval]))",
+          "expr": "sum by (http_response_status_code) (rate(http_server_request_duration_seconds_count{service_name=\"${Service}\",http_response_status_code=~\"(4|5).*\",instance=~\"$instance\",job=~\"$job\"}[$__rate_interval])) / ignoring(http_response_status_code) group_left sum(rate(http_server_request_duration_seconds_count{service_name=\"${Service}\",instance=~\"$instance\",job=~\"$job\"}[$__rate_interval]))",
           "hide": false,
-          "legendFormat": "HTTP server - {{http_status_code}}",
+          "legendFormat": "HTTP server - {{http_response_status_code}}",
           "range": true,
           "refId": "B"
         },
@@ -980,8 +980,8 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum(rate(http_client_request_duration_count{service_name=\"$Service\",instance=~\"$instance\",job=~\"$job\"} [$__rate_interval])) by (service_name, http_status_code)",
-          "legendFormat": "HTTP client - {{http_status_code}}",
+          "expr": "sum(rate(http_client_request_duration_count{service_name=\"$Service\",instance=~\"$instance\",job=~\"$job\"} [$__rate_interval])) by (service_name, http_response_status_code)",
+          "legendFormat": "HTTP client - {{http_response_status_code}}",
           "range": true,
           "refId": "A"
         },
@@ -1112,9 +1112,9 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum by (http_status_code) (rate(http_client_request_duration_count{service_name=\"$Service\",http_status_code=~\"5.*\",instance=~\"$instance\",job=~\"$job\"}[$__rate_interval])) / ignoring(http_status_code) group_left sum(rate(http_client_request_duration_count{service_name=\"$Service\",instance=~\"$instance\",job=~\"$job\"}[$__rate_interval]))",
+          "expr": "sum by (http_response_status_code) (rate(http_client_request_duration_count{service_name=\"$Service\",http_response_status_code=~\"5.*\",instance=~\"$instance\",job=~\"$job\"}[$__rate_interval])) / ignoring(http_response_status_code) group_left sum(rate(http_client_request_duration_count{service_name=\"$Service\",instance=~\"$instance\",job=~\"$job\"}[$__rate_interval]))",
           "hide": false,
-          "legendFormat": "HTTP client - {{http_status_code}}",
+          "legendFormat": "HTTP client - {{http_response_status_code}}",
           "range": true,
           "refId": "B"
         },

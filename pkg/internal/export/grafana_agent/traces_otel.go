@@ -89,7 +89,7 @@ func TracesOTELReceiver(ctx context.Context, cfg otel.TracesConfig, ctxInfo *glo
 				if span.IgnoreSpan == request.IgnoreTraces {
 					continue
 				}
-				traces := generateTraces(ctx, span)
+				traces := generateTraces(span)
 				err := exp.ConsumeTraces(ctx, traces)
 				if err != nil {
 					slog.Error("error sending trace to consumer", "error", err)

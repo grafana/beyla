@@ -73,8 +73,8 @@ func NewRingBufTracer(
 	}
 }
 
-func (m *RingBufTracer) TraceLoop(ctx context.Context) node.StartFunc[*ebpf.NetFlowRecordT] {
-	return func(out chan<- *ebpf.NetFlowRecordT) {
+func (m *RingBufTracer) TraceLoop(ctx context.Context) node.StartFunc[[]*ebpf.Record] {
+	return func(out chan<- []*ebpf.Record) {
 		rtlog := rtlog()
 		debugging := rtlog.Enabled(ctx, slog.LevelDebug)
 		for {
@@ -96,7 +96,7 @@ func (m *RingBufTracer) TraceLoop(ctx context.Context) node.StartFunc[*ebpf.NetF
 	}
 }
 
-func (m *RingBufTracer) listenAndForwardRingBuffer(debugging bool, forwardCh chan<- *ebpf.NetFlowRecordT) error {
+func (m *RingBufTracer) listenAndForwardRingBuffer(debugging bool, forwardCh chan<- []*ebpf.Record) error {
 	event, err := m.ringBuffer.ReadRingBuf()
 	if err != nil {
 		return fmt.Errorf("reading from ring buffer: %w", err)
@@ -116,8 +116,9 @@ func (m *RingBufTracer) listenAndForwardRingBuffer(debugging bool, forwardCh cha
 		m.mapFlusher.Flush()
 	}
 
-	// Will need to send it to accounter anyway to account regardless of complete/ongoing flow
-	forwardCh <- readFlow
+	forwardCh <- []*ebpf.Record{{
+		NetFlowRecordT: readFlow,
+	}}
 
 	return nil
 }

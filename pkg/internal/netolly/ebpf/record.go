@@ -46,10 +46,6 @@ type RecordAttrs struct {
 	// - IP
 	SrcName string
 	DstName string
-	// SrcNamespace and DstNamespace might be empty, but they are required by
-	// asserts. TODO: let user override them
-	SrcNamespace string
-	DstNamespace string
 
 	Interface string
 	// BeylaIP provides information about the source of the flow (the Agent that traced it)
@@ -109,8 +105,8 @@ func (ia *IPAddr) MarshalJSON() ([]byte, error) {
 }
 
 // ReadFrom reads a Record from a binary source, in LittleEndian order
-func ReadFrom(reader io.Reader) (*NetFlowRecordT, error) {
+func ReadFrom(reader io.Reader) (NetFlowRecordT, error) {
 	var fr NetFlowRecordT
 	err := binary.Read(reader, binary.LittleEndian, &fr)
-	return &fr, err
+	return fr, err
 }

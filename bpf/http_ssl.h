@@ -75,7 +75,7 @@ struct {
     __uint(pinning, LIBBPF_PIN_BY_NAME);
 } active_ssl_write_args SEC(".maps");
 
-static __always_inline void handle_ssl_buf(u64 id, ssl_args_t *args, int bytes_len) {
+static __always_inline void handle_ssl_buf(u64 id, ssl_args_t *args, int bytes_len, u8 direction) {
     if (args && bytes_len > 0) {
         void *ssl = ((void *)args->ssl);
         u64 ssl_ptr = (u64)ssl;
@@ -147,7 +147,7 @@ static __always_inline void handle_ssl_buf(u64 id, ssl_args_t *args, int bytes_l
             //     bpf_dbg_printk("%x ", buf[i]);
             // }
 
-            handle_buf_with_connection(&pid_conn, (void *)args->buf, bytes_len, 1);
+            handle_buf_with_connection(&pid_conn, (void *)args->buf, bytes_len, 1, direction);
         } else {
             bpf_dbg_printk("No connection info! This is a bug.");
         }

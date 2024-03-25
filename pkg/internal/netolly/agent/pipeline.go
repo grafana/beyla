@@ -9,6 +9,7 @@ import (
 	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
 	"github.com/grafana/beyla/pkg/internal/netolly/export"
 	"github.com/grafana/beyla/pkg/internal/netolly/flow"
+	"github.com/grafana/beyla/pkg/internal/netolly/transform/cidr"
 	"github.com/grafana/beyla/pkg/internal/netolly/transform/k8s"
 )
 
@@ -17,14 +18,13 @@ import (
 // TODO: add flow_printer node
 type FlowsPipeline struct {
 	MapTracer     `sendTo:"Deduper"`
-	RingBufTracer `sendTo:"Accounter"`
-	Accounter     `sendTo:"Deduper"`
-	Deduper       flow.Deduper          `forwardTo:"Kubernetes"`
-	Kubernetes    k8s.MetadataDecorator `forwardTo:"ReverseDNS"`
+	RingBufTracer `sendTo:"Deduper"`
 
-	ReverseDNS flow.ReverseDNS `forwardTo:"Decorator"`
-
-	Decorator `sendTo:"Exporter,Printer"`
+	Deduper    flow.Deduper          `forwardTo:"Kubernetes"`
+	Kubernetes k8s.MetadataDecorator `forwardTo:"ReverseDNS"`
+	ReverseDNS flow.ReverseDNS       `forwardTo:"CIDRs"`
+	CIDRs      cidr.Definitions      `forwardTo:"Decorator"`
+	Decorator  `sendTo:"Exporter,Printer"`
 
 	Exporter export.MetricsConfig
 	Printer  export.FlowPrinterEnabled
@@ -32,7 +32,6 @@ type FlowsPipeline struct {
 
 type MapTracer struct{}
 type RingBufTracer struct{}
-type Accounter struct{}
 type Decorator struct{}
 
 // buildAndStartPipeline creates the ETL flow processing graph.
@@ -53,14 +52,10 @@ func (f *Flows) buildAndStartPipeline(ctx context.Context) (graph.Graph, error) 
 	graph.RegisterStart(gb, func(_ MapTracer) (node.StartFunc[[]*ebpf.Record], error) {
 		return f.mapTracer.TraceLoop(ctx), nil
 	})
-	graph.RegisterStart(gb, func(_ RingBufTracer) (node.StartFunc[*ebpf.NetFlowRecordT], error) {
+	graph.RegisterStart(gb, func(_ RingBufTracer) (node.StartFunc[[]*ebpf.Record], error) {
 		return f.rbTracer.TraceLoop(ctx), nil
 	})
 
-	// Middle nodes: apply transformations to the flow records, decorating and even removing them.
-	graph.RegisterMiddle(gb, func(_ Accounter) (node.MiddleFunc[*ebpf.NetFlowRecordT, []*ebpf.Record], error) {
-		return f.accounter.Account, nil
-	})
 	graph.RegisterMiddle(gb, flow.DeduperProvider)
 	graph.RegisterMiddle(gb, func(_ Decorator) (node.MiddleFunc[[]*ebpf.Record, []*ebpf.Record], error) {
 		// If deduper is enabled, we know that interfaces are unset.
@@ -73,6 +68,7 @@ func (f *Flows) buildAndStartPipeline(ctx context.Context) (graph.Graph, error) 
 		}
 		return flow.Decorate(f.agentIP, ifaceNamer), nil
 	})
+	graph.RegisterMiddle(gb, cidr.DecoratorProvider)
 	graph.RegisterMiddle(gb, func(cfg k8s.MetadataDecorator) (node.MiddleFunc[[]*ebpf.Record, []*ebpf.Record], error) {
 		return k8s.MetadataDecoratorProvider(ctx, cfg)
 	})
@@ -94,6 +90,7 @@ func (f *Flows) buildAndStartPipeline(ctx context.Context) (graph.Graph, error) 
 		Kubernetes: k8s.MetadataDecorator{Kubernetes: &f.cfg.Attributes.Kubernetes},
 		// TODO: allow prometheus exporting
 		ReverseDNS: f.cfg.NetworkFlows.ReverseDNS,
+		CIDRs:      f.cfg.NetworkFlows.CIDRs,
 		Exporter: export.MetricsConfig{
 			Metrics:           &f.cfg.Metrics,
 			AllowedAttributes: f.cfg.NetworkFlows.AllowedAttributes,

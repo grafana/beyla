@@ -23,6 +23,9 @@
 #define TP_MAX_VAL_LENGTH   55
 #define TP_MAX_KEY_LENGTH   11
 
+#define TCP_SEND 1
+#define TCP_RECV 0
+
 // Struct to keep information on the connections in flight 
 // s = source, d = destination
 // h = high word, l = low word

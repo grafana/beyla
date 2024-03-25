@@ -40,6 +40,10 @@ type KubernetesDecorator struct {
 	KubeconfigPath string `yaml:"kubeconfig_path" env:"KUBECONFIG"`
 
 	InformersSyncTimeout time.Duration `yaml:"informers_sync_timeout" env:"BEYLA_KUBE_INFORMERS_SYNC_TIMEOUT"`
+
+	// DropExternal will drop, in NetO11y component, any flow where the source or destination
+	// IPs are not matched to any kubernetes entity, assuming they are cluster-external
+	DropExternal bool `yaml:"drop_external" env:"BEYLA_NETWORK_DROP_EXTERNAL"`
 }
 
 func (d KubernetesDecorator) Enabled() bool {

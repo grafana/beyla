@@ -243,7 +243,7 @@ int BPF_KPROBE(kprobe_tcp_sendmsg, struct sock *sk, struct msghdr *msg, size_t s
         if (size > 0) {
             void *iovec_ptr = find_msghdr_buf(msg);
             if (iovec_ptr) {
-                handle_buf_with_connection(&info, iovec_ptr, size, 0);
+                handle_buf_with_connection(&info, iovec_ptr, size, 0, TCP_SEND);
             } else {
                 bpf_dbg_printk("can't find iovec ptr in msghdr, not tracking sendmsg");
             }
@@ -323,7 +323,7 @@ int BPF_KRETPROBE(kretprobe_tcp_recvmsg, int copied_len) {
         sort_connection_info(&info.conn);
         //dbg_print_http_connection_info(&info.conn);
         info.pid = pid_from_pid_tgid(id);
-        handle_buf_with_connection(&info, (void *)args->iovec_ptr, copied_len, 0);
+        handle_buf_with_connection(&info, (void *)args->iovec_ptr, copied_len, 0, TCP_RECV);
     }
 
 done:

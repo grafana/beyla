@@ -105,21 +105,21 @@ func TestMetricAttributes_Filter(t *testing.T) {
 
 func TestMetricsConfig_Enabled(t *testing.T) {
 	assert.True(t, MetricsConfig{Metrics: &otel.MetricsConfig{
-		Families: []string{otel.FamilyApplication, otel.FamilyNetwork}, CommonEndpoint: "foo"}}.Enabled())
+		Features: []string{otel.FeatureApplication, otel.FeatureNetwork}, CommonEndpoint: "foo"}}.Enabled())
 	assert.True(t, MetricsConfig{Metrics: &otel.MetricsConfig{
-		Families: []string{otel.FamilyNetwork, otel.FamilyApplication}, MetricsEndpoint: "foo"}}.Enabled())
+		Features: []string{otel.FeatureNetwork, otel.FeatureApplication}, MetricsEndpoint: "foo"}}.Enabled())
 	assert.True(t, MetricsConfig{Metrics: &otel.MetricsConfig{
-		Families: []string{otel.FamilyNetwork}, Grafana: &otel.GrafanaOTLP{Submit: []string{"traces", "metrics"}, InstanceID: "33221"}}}.Enabled())
+		Features: []string{otel.FeatureNetwork}, Grafana: &otel.GrafanaOTLP{Submit: []string{"traces", "metrics"}, InstanceID: "33221"}}}.Enabled())
 }
 
 func TestMetricsConfig_Disabled(t *testing.T) {
-	var fa = []string{otel.FamilyApplication}
-	var fn = []string{otel.FamilyNetwork}
-	assert.False(t, MetricsConfig{Metrics: &otel.MetricsConfig{Families: fn}}.Enabled())
-	assert.False(t, MetricsConfig{Metrics: &otel.MetricsConfig{Families: fn, Grafana: &otel.GrafanaOTLP{Submit: []string{"traces"}, InstanceID: "33221"}}}.Enabled())
-	assert.False(t, MetricsConfig{Metrics: &otel.MetricsConfig{Families: fn, Grafana: &otel.GrafanaOTLP{Submit: []string{"metrics"}}}}.Enabled())
-	// network family is not enabled
+	var fa = []string{otel.FeatureApplication}
+	var fn = []string{otel.FeatureNetwork}
+	assert.False(t, MetricsConfig{Metrics: &otel.MetricsConfig{Features: fn}}.Enabled())
+	assert.False(t, MetricsConfig{Metrics: &otel.MetricsConfig{Features: fn, Grafana: &otel.GrafanaOTLP{Submit: []string{"traces"}, InstanceID: "33221"}}}.Enabled())
+	assert.False(t, MetricsConfig{Metrics: &otel.MetricsConfig{Features: fn, Grafana: &otel.GrafanaOTLP{Submit: []string{"metrics"}}}}.Enabled())
+	// network feature is not enabled
 	assert.False(t, MetricsConfig{Metrics: &otel.MetricsConfig{CommonEndpoint: "foo"}}.Enabled())
-	assert.False(t, MetricsConfig{Metrics: &otel.MetricsConfig{MetricsEndpoint: "foo", Families: fa}}.Enabled())
+	assert.False(t, MetricsConfig{Metrics: &otel.MetricsConfig{MetricsEndpoint: "foo", Features: fa}}.Enabled())
 	assert.False(t, MetricsConfig{Metrics: &otel.MetricsConfig{Grafana: &otel.GrafanaOTLP{Submit: []string{"traces", "metrics"}, InstanceID: "33221"}}}.Enabled())
 }

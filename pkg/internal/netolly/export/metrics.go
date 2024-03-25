@@ -24,7 +24,7 @@ type MetricsConfig struct {
 }
 
 func (mc MetricsConfig) Enabled() bool {
-	return mc.Metrics != nil && mc.Metrics.EndpointEnabled() && slices.Contains(mc.Metrics.Families, otel.FamilyNetwork)
+	return mc.Metrics != nil && mc.Metrics.EndpointEnabled() && slices.Contains(mc.Metrics.Features, otel.FeatureNetwork)
 }
 
 func mlog() *slog.Logger {

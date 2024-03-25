@@ -44,8 +44,8 @@ const (
 	AggregationExplicit    = "explicit_bucket_histogram"
 	AggregationExponential = "base2_exponential_bucket_histogram"
 
-	FamilyNetwork     = "network"
-	FamilyApplication = "application"
+	FeatureNetwork     = "network"
+	FeatureApplication = "application"
 )
 
 type MetricsConfig struct {
@@ -75,8 +75,8 @@ type MetricsConfig struct {
 	// and the Info messages leak internal details that are not usually valuable for the final user.
 	SDKLogLevel string `yaml:"otel_sdk_log_level" env:"BEYLA_OTEL_SDK_LOG_LEVEL"`
 
-	// Families of metrics that are can be exported. Accepted values are "application" and "network".
-	Families []string `yaml:"families" env:"BEYLA_OTEL_METRIC_FAMILIES" envSeparator:","`
+	// Features of metrics that are can be exported. Accepted values are "application" and "network".
+	Features []string `yaml:"features" env:"BEYLA_OTEL_METRIC_FEATURES" envSeparator:","`
 
 	// Grafana configuration needs to be explicitly set up before building the graph
 	Grafana *GrafanaOTLP `yaml:"-"`
@@ -119,7 +119,7 @@ func (m MetricsConfig) EndpointEnabled() bool {
 }
 
 func (m MetricsConfig) Enabled() bool {
-	return m.EndpointEnabled() && slices.Contains(m.Families, FamilyApplication)
+	return m.EndpointEnabled() && slices.Contains(m.Features, FeatureApplication)
 }
 
 // MetricsReporter implements the graph node that receives request.Span

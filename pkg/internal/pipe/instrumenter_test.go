@@ -406,209 +406,6 @@ func TestTraceGRPCPipeline(t *testing.T) {
 	matchGRPCTraceEvent(t, "foo.bar", event)
 }
 
-func newRequest(serviceName string, id uint64, method, path, peer string, status int) []request.Span {
-	return []request.Span{{
-		Path:         path,
-		Method:       method,
-		Peer:         strings.Split(peer, ":")[0],
-		Host:         getHostname(),
-		HostPort:     8080,
-		Status:       status,
-		Type:         request.EventTypeHTTP,
-		ID:           id,
-		Start:        2,
-		RequestStart: 1,
-		End:          3,
-		ServiceID:    svc.ID{Name: serviceName},
-	}}
-}
-
-func newRequestWithTiming(svcName string, id uint64, kind request.EventType, method, path, peer string, status int, goStart, start, end uint64) []request.Span {
-	return []request.Span{{
-		Path:         path,
-		Method:       method,
-		Peer:         strings.Split(peer, ":")[0],
-		Host:         getHostname(),
-		HostPort:     8080,
-		Type:         kind,
-		Status:       status,
-		ID:           id,
-		RequestStart: int64(goStart),
-		Start:        int64(start),
-		End:          int64(end),
-		ServiceID:    svc.ID{Name: svcName},
-	}}
-}
-
-func newGRPCRequest(svcName string, id uint64, path string, status int) []request.Span {
-	return []request.Span{{
-		Path:         path,
-		Peer:         "1.1.1.1",
-		Host:         "127.0.0.1",
-		HostPort:     8080,
-		Status:       status,
-		Type:         request.EventTypeGRPC,
-		ID:           id,
-		Start:        2,
-		RequestStart: 1,
-		End:          3,
-		ServiceID:    svc.ID{Name: svcName},
-	}}
-}
-
-func getHostname() string {
-	hostname, err := os.Hostname()
-	if err != nil {
-		return ""
-	}
-	return hostname
-}
-
-func matchMetricEvent(t require.TestingT, event collector.MetricRecord) {
-	assert.Equal(t, collector.MetricRecord{
-		Name:  "http.server.request.duration",
-		Unit:  "s",
-		Value: 2e-09,
-		Attributes: map[string]string{
-			string(otel.HTTPRequestMethodKey):      "GET",
-			string(otel.HTTPResponseStatusCodeKey): "404",
-			string(otel.HTTPUrlPathKey):            "/foo/bar",
-			string(otel.ClientAddrKey):             "1.1.1.1",
-			string(semconv.ServiceNameKey):         "foo-svc",
-		},
-		ResourceAttributes: map[string]string{
-			string(semconv.ServiceNameKey):          "foo-svc",
-			string(semconv.TelemetrySDKLanguageKey): "go",
-			string(semconv.TelemetrySDKNameKey):     "beyla",
-		},
-		Type: pmetric.MetricTypeHistogram,
-	}, event)
-}
-
-func matchGRPCMetricEvent(t *testing.T, event collector.MetricRecord) {
-	assert.Equal(t, collector.MetricRecord{
-		Name:  "rpc.server.duration",
-		Unit:  "s",
-		Value: 2e-09,
-		Attributes: map[string]string{
-			string(semconv.ServiceNameKey):       "grpc-svc",
-			string(semconv.RPCSystemKey):         "grpc",
-			string(semconv.RPCGRPCStatusCodeKey): "3",
-			string(semconv.RPCMethodKey):         "/foo/bar",
-			string(otel.ClientAddrKey):           "1.1.1.1",
-		},
-		ResourceAttributes: map[string]string{
-			string(semconv.ServiceNameKey):          "grpc-svc",
-			string(semconv.TelemetrySDKLanguageKey): "go",
-			string(semconv.TelemetrySDKNameKey):     "beyla",
-		},
-		Type: pmetric.MetricTypeHistogram,
-	}, event)
-}
-
-func matchTraceEvent(t require.TestingT, name string, event collector.TraceRecord) {
-	assert.Equal(t, collector.TraceRecord{
-		Name: name,
-		Attributes: map[string]string{
-			string(otel.HTTPRequestMethodKey):      "GET",
-			string(otel.HTTPResponseStatusCodeKey): "404",
-			string(otel.HTTPUrlPathKey):            "/foo/bar",
-			string(otel.ClientAddrKey):             "1.1.1.1",
-			string(otel.ServerAddrKey):             getHostname(),
-			string(otel.ServerPortKey):             "8080",
-			string(otel.HTTPRequestBodySizeKey):    "0",
-			"span_id":                              event.Attributes["span_id"],
-			"parent_span_id":                       event.Attributes["parent_span_id"],
-		},
-		Kind: ptrace.SpanKindServer,
-	}, event)
-}
-
-func matchInnerTraceEvent(t require.TestingT, name string, event collector.TraceRecord) {
-	assert.Equal(t, collector.TraceRecord{
-		Name: name,
-		Attributes: map[string]string{
-			"span_id":        event.Attributes["span_id"],
-			"parent_span_id": event.Attributes["parent_span_id"],
-		},
-		Kind: ptrace.SpanKindInternal,
-	}, event)
-}
-
-func matchGRPCTraceEvent(t *testing.T, name string, event collector.TraceRecord) {
-	assert.Equal(t, collector.TraceRecord{
-		Name: name,
-		Attributes: map[string]string{
-			string(semconv.RPCSystemKey):         "grpc",
-			string(semconv.RPCGRPCStatusCodeKey): "3",
-			string(semconv.RPCMethodKey):         "foo.bar",
-			string(otel.ClientAddrKey):           "1.1.1.1",
-			string(otel.ServerAddrKey):           "127.0.0.1",
-			string(otel.ServerPortKey):           "8080",
-			"span_id":                            event.Attributes["span_id"],
-			"parent_span_id":                     event.Attributes["parent_span_id"],
-		},
-		Kind: ptrace.SpanKindServer,
-	}, event)
-}
-
-func matchInnerGRPCTraceEvent(t *testing.T, name string, event collector.TraceRecord) {
-	assert.Equal(t, collector.TraceRecord{
-		Name: name,
-		Attributes: map[string]string{
-			"span_id":        event.Attributes["span_id"],
-			"parent_span_id": event.Attributes["parent_span_id"],
-		},
-		Kind: ptrace.SpanKindInternal,
-	}, event)
-}
-
-func matchNestedEvent(t *testing.T, name, method, target, status string, kind ptrace.SpanKind, event collector.TraceRecord) {
-	assert.Equal(t, name, event.Name)
-	assert.Equal(t, method, event.Attributes[string(otel.HTTPRequestMethodKey)])
-	assert.Equal(t, status, event.Attributes[string(otel.HTTPResponseStatusCodeKey)])
-	if kind == ptrace.SpanKindClient {
-		assert.Equal(t, target, event.Attributes[string(otel.HTTPUrlFullKey)])
-	} else {
-		assert.Equal(t, target, event.Attributes[string(otel.HTTPUrlPathKey)])
-	}
-	assert.Equal(t, kind, event.Kind)
-}
-
-func newHTTPInfo(method, path, peer string, status int) []request.Span {
-	return []request.Span{{
-		Type:         1,
-		Method:       method,
-		Peer:         peer,
-		Path:         path,
-		Host:         getHostname(),
-		HostPort:     8080,
-		Status:       status,
-		Start:        2,
-		RequestStart: 2,
-		End:          3,
-		ServiceID:    svc.ID{Name: "comm"},
-	}}
-}
-
-func matchInfoEvent(t *testing.T, name string, event collector.TraceRecord) {
-	assert.Equal(t, collector.TraceRecord{
-		Name: name,
-		Attributes: map[string]string{
-			string(otel.HTTPRequestMethodKey):      "PATCH",
-			string(otel.HTTPResponseStatusCodeKey): "204",
-			string(otel.HTTPUrlPathKey):            "/aaa/bbb",
-			string(otel.ClientAddrKey):             "1.1.1.1",
-			string(otel.ServerAddrKey):             getHostname(),
-			string(otel.ServerPortKey):             "8080",
-			string(otel.HTTPRequestBodySizeKey):    "0",
-			"span_id":                              event.Attributes["span_id"],
-			"parent_span_id":                       "",
-		},
-		Kind: ptrace.SpanKindServer,
-	}, event)
-}
-
 func TestBasicPipelineInfo(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -674,4 +471,192 @@ func TestTracerPipelineInfo(t *testing.T) {
 
 	event := testutil.ReadChannel(t, tc.TraceRecords, testTimeout)
 	matchInfoEvent(t, "PATCH", event)
+}
+
+func newRequest(serviceName string, id uint64, method, path, peer string, status int) []request.Span {
+	return []request.Span{{
+		Path:         path,
+		Method:       method,
+		Peer:         strings.Split(peer, ":")[0],
+		Host:         getHostname(),
+		HostPort:     8080,
+		Status:       status,
+		Type:         request.EventTypeHTTP,
+		ID:           id,
+		Start:        2,
+		RequestStart: 1,
+		End:          3,
+		ServiceID:    svc.ID{Name: serviceName},
+	}}
+}
+
+func newRequestWithTiming(svcName string, id uint64, kind request.EventType, method, path, peer string, status int, goStart, start, end uint64) []request.Span {
+	return []request.Span{{
+		Path:         path,
+		Method:       method,
+		Peer:         strings.Split(peer, ":")[0],
+		Host:         getHostname(),
+		HostPort:     8080,
+		Type:         kind,
+		Status:       status,
+		ID:           id,
+		RequestStart: int64(goStart),
+		Start:        int64(start),
+		End:          int64(end),
+		ServiceID:    svc.ID{Name: svcName},
+	}}
+}
+
+func newGRPCRequest(svcName string, id uint64, path string, status int) []request.Span {
+	return []request.Span{{
+		Path:         path,
+		Peer:         "1.1.1.1",
+		Host:         "127.0.0.1",
+		HostPort:     8080,
+		Status:       status,
+		Type:         request.EventTypeGRPC,
+		ID:           id,
+		Start:        2,
+		RequestStart: 1,
+		End:          3,
+		ServiceID:    svc.ID{Name: svcName},
+	}}
+}
+
+func getHostname() string {
+	hostname, err := os.Hostname()
+	if err != nil {
+		return ""
+	}
+	return hostname
+}
+
+func matchTraceEvent(t require.TestingT, name string, event collector.TraceRecord) {
+	assert.NotEmpty(t, event.Attributes["span_id"])
+	assert.Equal(t, collector.TraceRecord{
+		Name: name,
+		Attributes: map[string]string{
+			string(otel.HTTPRequestMethodKey):      "GET",
+			string(otel.HTTPResponseStatusCodeKey): "404",
+			string(otel.HTTPUrlPathKey):            "/foo/bar",
+			string(otel.ClientAddrKey):             "1.1.1.1",
+			string(otel.ServerAddrKey):             getHostname(),
+			string(otel.ServerPortKey):             "8080",
+			string(otel.HTTPRequestBodySizeKey):    "0",
+			"span_id":                              event.Attributes["span_id"],
+			"parent_span_id":                       event.Attributes["parent_span_id"],
+		},
+		ResourceAttributes: map[string]string{
+			string(semconv.ServiceNameKey):          "bar-svc",
+			string(semconv.TelemetrySDKLanguageKey): "go",
+			string(semconv.TelemetrySDKNameKey):     "beyla",
+		},
+		Kind: ptrace.SpanKindServer,
+	}, event)
+}
+
+func matchInnerTraceEvent(t require.TestingT, name string, event collector.TraceRecord) {
+	assert.NotEmpty(t, event.Attributes["span_id"])
+	assert.Equal(t, collector.TraceRecord{
+		Name: name,
+		Attributes: map[string]string{
+			"span_id":        event.Attributes["span_id"],
+			"parent_span_id": event.Attributes["parent_span_id"],
+		},
+		ResourceAttributes: map[string]string{
+			string(semconv.ServiceNameKey):          "bar-svc",
+			string(semconv.TelemetrySDKLanguageKey): "go",
+			string(semconv.TelemetrySDKNameKey):     "beyla",
+		},
+		Kind: ptrace.SpanKindInternal,
+	}, event)
+}
+
+func matchGRPCTraceEvent(t *testing.T, name string, event collector.TraceRecord) {
+	assert.Equal(t, collector.TraceRecord{
+		Name: name,
+		Attributes: map[string]string{
+			string(semconv.RPCSystemKey):         "grpc",
+			string(semconv.RPCGRPCStatusCodeKey): "3",
+			string(semconv.RPCMethodKey):         "foo.bar",
+			string(otel.ClientAddrKey):           "1.1.1.1",
+			string(otel.ServerAddrKey):           "127.0.0.1",
+			string(otel.ServerPortKey):           "8080",
+			"span_id":                            event.Attributes["span_id"],
+			"parent_span_id":                     event.Attributes["parent_span_id"],
+		},
+		ResourceAttributes: map[string]string{
+			string(semconv.ServiceNameKey):          "svc",
+			string(semconv.TelemetrySDKLanguageKey): "go",
+			string(semconv.TelemetrySDKNameKey):     "beyla",
+		},
+		Kind: ptrace.SpanKindServer,
+	}, event)
+}
+
+func matchInnerGRPCTraceEvent(t *testing.T, name string, event collector.TraceRecord) {
+	assert.Equal(t, collector.TraceRecord{
+		Name: name,
+		Attributes: map[string]string{
+			"span_id":        event.Attributes["span_id"],
+			"parent_span_id": event.Attributes["parent_span_id"],
+		},
+		ResourceAttributes: map[string]string{
+			string(semconv.ServiceNameKey):          "svc",
+			string(semconv.TelemetrySDKLanguageKey): "go",
+			string(semconv.TelemetrySDKNameKey):     "beyla",
+		},
+		Kind: ptrace.SpanKindInternal,
+	}, event)
+}
+
+func matchNestedEvent(t *testing.T, name, method, target, status string, kind ptrace.SpanKind, event collector.TraceRecord) {
+	assert.Equal(t, name, event.Name)
+	assert.Equal(t, method, event.Attributes[string(otel.HTTPRequestMethodKey)])
+	assert.Equal(t, status, event.Attributes[string(otel.HTTPResponseStatusCodeKey)])
+	if kind == ptrace.SpanKindClient {
+		assert.Equal(t, target, event.Attributes[string(otel.HTTPUrlFullKey)])
+	} else {
+		assert.Equal(t, target, event.Attributes[string(otel.HTTPUrlPathKey)])
+	}
+	assert.Equal(t, kind, event.Kind)
+}
+
+func newHTTPInfo(method, path, peer string, status int) []request.Span {
+	return []request.Span{{
+		Type:         1,
+		Method:       method,
+		Peer:         peer,
+		Path:         path,
+		Host:         getHostname(),
+		HostPort:     8080,
+		Status:       status,
+		Start:        2,
+		RequestStart: 2,
+		End:          3,
+		ServiceID:    svc.ID{Name: "comm"},
+	}}
+}
+
+func matchInfoEvent(t *testing.T, name string, event collector.TraceRecord) {
+	assert.Equal(t, collector.TraceRecord{
+		Name: name,
+		Attributes: map[string]string{
+			string(otel.HTTPRequestMethodKey):      "PATCH",
+			string(otel.HTTPResponseStatusCodeKey): "204",
+			string(otel.HTTPUrlPathKey):            "/aaa/bbb",
+			string(otel.ClientAddrKey):             "1.1.1.1",
+			string(otel.ServerAddrKey):             getHostname(),
+			string(otel.ServerPortKey):             "8080",
+			string(otel.HTTPRequestBodySizeKey):    "0",
+			"span_id":                              event.Attributes["span_id"],
+			"parent_span_id":                       "",
+		},
+		ResourceAttributes: map[string]string{
+			string(semconv.ServiceNameKey):          "comm",
+			string(semconv.TelemetrySDKLanguageKey): "go",
+			string(semconv.TelemetrySDKNameKey):     "beyla",
+		},
+		Kind: ptrace.SpanKindServer,
+	}, event)
 }

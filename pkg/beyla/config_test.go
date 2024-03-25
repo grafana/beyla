@@ -218,6 +218,52 @@ discovery:
 	}
 }
 
+func TestConfigValidate_Network_Kube(t *testing.T) {
+	userConfig := bytes.NewBufferString(`
+otel_metrics_export:
+  endpoint: http://otelcol:4318
+attributes:
+  kubernetes:
+    enable: true
+network:
+  enable: true
+  allowed_attributes:
+    - k8s.src.name
+    - k8s.dst.name
+`)
+	cfg, err := LoadConfig(userConfig)
+	require.NoError(t, err)
+	require.NoError(t, cfg.Validate())
+}
+
+func TestConfigValidate_Network_Empty_Attrs(t *testing.T) {
+	userConfig := bytes.NewBufferString(`
+otel_metrics_export:
+  endpoint: http://otelcol:4318
+network:
+  enable: true
+  allowed_attributes: []
+`)
+	cfg, err := LoadConfig(userConfig)
+	require.NoError(t, err)
+	require.Error(t, cfg.Validate())
+}
+
+func TestConfigValidate_Network_NotKube(t *testing.T) {
+	userConfig := bytes.NewBufferString(`
+otel_metrics_export:
+  endpoint: http://otelcol:4318
+network:
+  enable: true
+allowed_attributes:
+    - k8s.src.name
+    - k8s.dst.name
+`)
+	cfg, err := LoadConfig(userConfig)
+	require.NoError(t, err)
+	require.Error(t, cfg.Validate())
+}
+
 func loadConfig(t *testing.T, env map[string]string) *Config {
 	for k, v := range env {
 		require.NoError(t, os.Setenv(k, v))

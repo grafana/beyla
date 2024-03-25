@@ -44,6 +44,8 @@ By default, only the following attributes are reported: `k8s.src.owner.name`, `k
 | `k8s.dst.namespace`  | Kubernetes namespace of the destination of the flow                                                                                                                                 |
 | `k8s.src.name`       | Name of the source Pod, Service, or Node                                                                                                                                            |
 | `k8s.dst.name`       | Name of the destination Pod, Service, or Node                                                                                                                                       |
+| `k8s.src.type`       | Type of the source: `Pod`, `Node`, or `Service`                                                                                                                                     |
+| `k8s.src.type`       | Type of the destination: `Pod`, `Node`, or `Service`                                                                                                                                |
 | `k8s.src.owner.name` | Name of the owner of the source Pod. If there is no owner, the Pod name is used                                                                                                     |
 | `k8s.dst.owner.name` | Name of the owner of the destination Pod. If there is no owner, the Pod name is used                                                                                                |
 | `k8s.src.owner.type` | Type of the owner of the source Pod: `Deployment`, `DaemonSet`, `ReplicaSet`, `StatefulSet`, or `Pod` if there is no owner                                                          |

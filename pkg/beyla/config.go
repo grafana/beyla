@@ -198,6 +198,11 @@ func (c *Config) Validate() error {
 		return ConfigError("you need to define at least one exporter: print_traces," +
 			" grafana, otel_metrics_export, otel_traces_export or prometheus_export")
 	}
+
+	if c.Enabled(FeatureNetO11y) {
+		return c.NetworkFlows.Validate(c.Attributes.Kubernetes.Enabled())
+	}
+
 	return nil
 }
 

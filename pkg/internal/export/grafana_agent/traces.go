@@ -54,7 +54,7 @@ func generateTraces(ctx context.Context, span *request.Span) ptrace.Traces {
 	traces := ptrace.NewTraces()
 	rs := traces.ResourceSpans().AppendEmpty()
 	ss := rs.ScopeSpans().AppendEmpty()
-	resourceAttrs := attrsToMap(otel.Resource(span.ServiceID).Attributes())
+	resourceAttrs := AttrsToMap(otel.Resource(span.ServiceID).Attributes())
 	resourceAttrs.CopyTo(rs.Resource().Attributes())
 
 	if hasSubSpans {

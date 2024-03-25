@@ -26,10 +26,13 @@ func MetricsOTELReceiver(ctx context.Context, cfg otel.MetricsConfig) (node.Term
 		// Disable queuing to ensure that we execute the request when calling ConsumeMetrics
 		// otherwise we will not see any errors.
 		config.QueueConfig.Enabled = false
-		config.ClientConfig = confighttp.ClientConfig{
-			Endpoint: cfg.CommonEndpoint,
+		endpoint := cfg.CommonEndpoint
+		if endpoint == "" {
+			endpoint = cfg.MetricsEndpoint
 		}
-
+		config.ClientConfig = confighttp.ClientConfig{
+			Endpoint: endpoint,
+		}
 		telemetrySettings := component.TelemetrySettings{
 			Logger:         zap.NewNop(),
 			MeterProvider:  metric.NewMeterProvider(),

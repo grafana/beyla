@@ -778,7 +778,7 @@ It is disabled by default to avoid cardinality explosion.
 | `features` | `BEYLA_OTEL_METRIC_FEATURES` | list of strings | `["application", "network"]` |
 
 A list of metric groups that are allowed to be exported. Each group belongs to a different feature
-of beyla: application-level metrics or network metrics.
+of Beyla: application-level metrics or network metrics.
 
 - If the list contains `application`, the Beyla OpenTelemetry exporter exports application-level metrics;
   but only if there is defined an OpenTelemetry endpoint, and Beyla was able to discover any

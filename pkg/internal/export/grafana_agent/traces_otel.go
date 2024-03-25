@@ -77,8 +77,8 @@ func TracesOTELReceiver(ctx context.Context, cfg otel.TracesConfig, ctxInfo *glo
 		}
 		defer func() {
 			exp.Shutdown(ctx)
-			// provider.Shutdown(ctx)
-			// tracer.Shutdown(ctx)
+			provider.Shutdown(ctx)
+			tracer.Shutdown(ctx)
 		}()
 		exp.Start(ctx, nil)
 		for spans := range in {

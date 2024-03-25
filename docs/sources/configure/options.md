@@ -779,10 +779,10 @@ It is disabled by default to avoid cardinality explosion.
 
 A list of metric families that are allowed to be exported.
 
-- If the list contains `application`, the Beyla OpenTelemetry exporter will export application-level metrics;
+- If the list contains `application`, the Beyla OpenTelemetry exporter exports application-level metrics;
   but only if there is defined an OpenTelemetry endpoint, and Beyla was able to discover any
   process matching the entries in the `discovery` section.
-- If the list contains `network`, the Beyla OpenTelemetry exporter will export network-level
+- If the list contains `network`, the Beyla OpenTelemetry exporter exports network-level
   metrics; but only if there is defined an OpenTelemetry endpoint and the
   [network metrics are enabled]({{< relref "../network" >}}).
 

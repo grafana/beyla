@@ -3,6 +3,7 @@ package export
 import (
 	"context"
 	"log/slog"
+	"slices"
 	"time"
 
 	"github.com/google/uuid"
@@ -23,7 +24,7 @@ type MetricsConfig struct {
 }
 
 func (mc MetricsConfig) Enabled() bool {
-	return mc.Metrics != nil && mc.Metrics.Enabled()
+	return mc.Metrics != nil && mc.Metrics.EndpointEnabled() && slices.Contains(mc.Metrics.Families, otel.FamilyNetwork)
 }
 
 func mlog() *slog.Logger {

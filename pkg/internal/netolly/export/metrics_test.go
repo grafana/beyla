@@ -6,6 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"go.opentelemetry.io/otel/attribute"
 
+	"github.com/grafana/beyla/pkg/internal/export/otel"
 	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
 )
 
@@ -100,4 +101,25 @@ func TestMetricAttributes_Filter(t *testing.T) {
 	} {
 		assert.NotContains(t, attrNames, mustNotContain)
 	}
+}
+
+func TestMetricsConfig_Enabled(t *testing.T) {
+	assert.True(t, MetricsConfig{Metrics: &otel.MetricsConfig{
+		Families: []string{otel.FamilyApplication, otel.FamilyNetwork}, CommonEndpoint: "foo"}}.Enabled())
+	assert.True(t, MetricsConfig{Metrics: &otel.MetricsConfig{
+		Families: []string{otel.FamilyNetwork, otel.FamilyApplication}, MetricsEndpoint: "foo"}}.Enabled())
+	assert.True(t, MetricsConfig{Metrics: &otel.MetricsConfig{
+		Families: []string{otel.FamilyNetwork}, Grafana: &otel.GrafanaOTLP{Submit: []string{"traces", "metrics"}, InstanceID: "33221"}}}.Enabled())
+}
+
+func TestMetricsConfig_Disabled(t *testing.T) {
+	var fa = []string{otel.FamilyApplication}
+	var fn = []string{otel.FamilyNetwork}
+	assert.False(t, MetricsConfig{Metrics: &otel.MetricsConfig{Families: fn}}.Enabled())
+	assert.False(t, MetricsConfig{Metrics: &otel.MetricsConfig{Families: fn, Grafana: &otel.GrafanaOTLP{Submit: []string{"traces"}, InstanceID: "33221"}}}.Enabled())
+	assert.False(t, MetricsConfig{Metrics: &otel.MetricsConfig{Families: fn, Grafana: &otel.GrafanaOTLP{Submit: []string{"metrics"}}}}.Enabled())
+	// network family is not enabled
+	assert.False(t, MetricsConfig{Metrics: &otel.MetricsConfig{CommonEndpoint: "foo"}}.Enabled())
+	assert.False(t, MetricsConfig{Metrics: &otel.MetricsConfig{MetricsEndpoint: "foo", Families: fa}}.Enabled())
+	assert.False(t, MetricsConfig{Metrics: &otel.MetricsConfig{Grafana: &otel.GrafanaOTLP{Submit: []string{"traces", "metrics"}, InstanceID: "33221"}}}.Enabled())
 }

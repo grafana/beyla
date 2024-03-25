@@ -74,7 +74,8 @@ func (dc DefinitionCriteria) Validate() error {
 		if dc[i].OpenPorts.Len() == 0 &&
 			!dc[i].Path.IsSet() &&
 			!dc[i].PathRegexp.IsSet() &&
-			len(dc[i].Metadata) == 0 {
+			len(dc[i].Metadata) == 0 &&
+			len(dc[i].PodLabels) == 0 {
 			return fmt.Errorf("discovery.services[%d] should define at least one selection criteria", i)
 		}
 		for k := range dc[i].Metadata {
@@ -115,6 +116,9 @@ type Attributes struct {
 
 	// Metadata stores other attributes, such as Kubernetes object metadata
 	Metadata map[string]*RegexpAttr `yaml:",inline"`
+
+	// PodLabels allows matching against the labels of a pod
+	PodLabels map[string]*RegexpAttr `yaml:"k8s_pod_labels"`
 }
 
 // PortEnum defines an enumeration of ports. It allows defining a set of single ports as well a set of

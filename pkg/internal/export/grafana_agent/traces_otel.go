@@ -34,32 +34,30 @@ func TracesOTELReceiver(ctx context.Context, cfg otel.TracesConfig, ctxInfo *glo
 		config.ClientConfig = confighttp.ClientConfig{
 			Endpoint: endpoint,
 		}
-		// var opts []trace.BatchSpanProcessorOption
-		// if cfg.MaxExportBatchSize > 0 {
-		// 	opts = append(opts, trace.WithMaxExportBatchSize(cfg.MaxExportBatchSize))
-		// }
-		// if cfg.MaxQueueSize > 0 {
-		// 	opts = append(opts, trace.WithMaxQueueSize(cfg.MaxQueueSize))
-		// }
-		// if cfg.BatchTimeout > 0 {
-		// 	opts = append(opts, trace.WithBatchTimeout(cfg.BatchTimeout))
-		// }
-		// if cfg.ExportTimeout > 0 {
-		// 	opts = append(opts, trace.WithExportTimeout(cfg.ExportTimeout))
-		// }
-		// t, _ := otel.HttpTracer(ctx, &cfg)
-		// tracer := otel.InstrumentTraceExporter(t, ctxInfo.Metrics)
-		// bsp := trace.NewBatchSpanProcessor(tracer, opts...)
-		// provider := trace.NewTracerProvider(
-		// 	trace.WithSpanProcessor(bsp),
-		// 	// trace.WithSampler(cfg.Sampler.Implementation()),
-		// 	// trace.WithIDGenerator(&otel.BeylaIDGenerator{}),
-		// )
+		var opts []trace.BatchSpanProcessorOption
+		if cfg.MaxExportBatchSize > 0 {
+			opts = append(opts, trace.WithMaxExportBatchSize(cfg.MaxExportBatchSize))
+		}
+		if cfg.MaxQueueSize > 0 {
+			opts = append(opts, trace.WithMaxQueueSize(cfg.MaxQueueSize))
+		}
+		if cfg.BatchTimeout > 0 {
+			opts = append(opts, trace.WithBatchTimeout(cfg.BatchTimeout))
+		}
+		if cfg.ExportTimeout > 0 {
+			opts = append(opts, trace.WithExportTimeout(cfg.ExportTimeout))
+		}
+		t, _ := otel.HttpTracer(ctx, &cfg)
+		tracer := otel.InstrumentTraceExporter(t, ctxInfo.Metrics)
+		bsp := trace.NewBatchSpanProcessor(tracer, opts...)
+		provider := trace.NewTracerProvider(
+			trace.WithSpanProcessor(bsp),
+			trace.WithSampler(cfg.Sampler.Implementation()),
+		)
 		telemetrySettings := component.TelemetrySettings{
-			Logger:        zap.NewNop(),
-			MeterProvider: metric.NewMeterProvider(),
-			//TracerProvider: provider,
-			TracerProvider: trace.NewTracerProvider(),
+			Logger:         zap.NewNop(),
+			MeterProvider:  metric.NewMeterProvider(),
+			TracerProvider: provider,
 			MetricsLevel:   configtelemetry.LevelBasic,
 			ReportStatus: func(event *component.StatusEvent) {
 				if err := event.Err(); err != nil {

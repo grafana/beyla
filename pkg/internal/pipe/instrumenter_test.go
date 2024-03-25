@@ -2,6 +2,7 @@ package pipe
 
 import (
 	"context"
+	"log/slog"
 	"os"
 	"strings"
 	"testing"
@@ -149,6 +150,79 @@ func TestTracerReceiverPipeline(t *testing.T) {
 	matchInnerTraceEvent(t, "processing", event)
 	event = testutil.ReadChannel(t, tc.TraceRecords, testTimeout)
 	matchTraceEvent(t, "GET", event)
+}
+
+func BenchmarkTestTracerPipeline(b *testing.B) {
+	l := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+		Level: slog.LevelInfo,
+	}))
+
+	slog.SetDefault(l)
+	for i := 0; i < b.N; i++ {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		tc, _ := collector.Start(ctx)
+
+		gb := newGraphBuilder(ctx, &beyla.Config{
+			Traces: otel.TracesConfig{
+				BatchTimeout:      10 * time.Millisecond,
+				TracesEndpoint:    tc.ServerEndpoint,
+				ReportersCacheLen: 16,
+			},
+		}, gctx(), make(<-chan []request.Span))
+		// Override eBPF tracer to send some fake data
+		graph.RegisterStart(gb.builder, func(_ traces.ReadDecorator) (node.StartFunc[[]request.Span], error) {
+			return func(out chan<- []request.Span) {
+				out <- newRequest("bar-svc", 1, "GET", "/foo/bar", "1.1.1.1:3456", 404)
+				// closing prematurely the input node would finish the whole graph processing
+				// and OTEL exporters could be closed, so we wait.
+				time.Sleep(testTimeout)
+			}, nil
+		})
+		pipe, _ := gb.buildGraph()
+
+		go pipe.Run(ctx)
+		t := &testing.T{}
+		testutil.ReadChannel(t, tc.TraceRecords, testTimeout)
+		testutil.ReadChannel(t, tc.TraceRecords, testTimeout)
+		testutil.ReadChannel(t, tc.TraceRecords, testTimeout)
+	}
+}
+
+func BenchmarkTestTracerReceiverPipeline(b *testing.B) {
+	l := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+		Level: slog.LevelInfo,
+	}))
+
+	slog.SetDefault(l)
+	for i := 0; i < b.N; i++ {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		tc, _ := collector.Start(ctx)
+		consumer := consumer.MockTraceConsumer{Endpoint: tc.ServerEndpoint}
+		gb := newGraphBuilder(ctx, &beyla.Config{
+			TracesReceiver: beyla.TracesReceiverConfig{
+				Traces: []beyla.Consumer{&consumer},
+			},
+		}, gctx(), make(<-chan []request.Span))
+		// Override eBPF tracer to send some fake data
+		graph.RegisterStart(gb.builder, func(_ traces.ReadDecorator) (node.StartFunc[[]request.Span], error) {
+			return func(out chan<- []request.Span) {
+				out <- newRequest("bar-svc", 1, "GET", "/foo/bar", "1.1.1.1:3456", 404)
+				// closing prematurely the input node would finish the whole graph processing
+				// and OTEL exporters could be closed, so we wait.
+				time.Sleep(testTimeout)
+			}, nil
+		})
+		pipe, _ := gb.buildGraph()
+		go pipe.Run(ctx)
+		t := &testing.T{}
+		testutil.ReadChannel(t, tc.TraceRecords, testTimeout)
+		testutil.ReadChannel(t, tc.TraceRecords, testTimeout)
+		testutil.ReadChannel(t, tc.TraceRecords, testTimeout)
+	}
 }
 
 func TestTracerPipelineBadTimestamps(t *testing.T) {

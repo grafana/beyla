@@ -109,6 +109,7 @@ network:
 				DurationHistogram:    []float64{0, 1, 2},
 				RequestSizeHistogram: otel.DefaultBuckets.RequestSizeHistogram,
 			},
+			Features:             []string{"network", "application"},
 			HistogramAggregation: "base2_exponential_bucket_histogram",
 		},
 		Traces: otel.TracesConfig{

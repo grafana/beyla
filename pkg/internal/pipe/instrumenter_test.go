@@ -531,6 +531,48 @@ func getHostname() string {
 	return hostname
 }
 
+func matchMetricEvent(t require.TestingT, event collector.MetricRecord) {
+	assert.Equal(t, collector.MetricRecord{
+		Name:  "http.server.request.duration",
+		Unit:  "s",
+		Value: 2e-09,
+		Attributes: map[string]string{
+			string(otel.HTTPRequestMethodKey):      "GET",
+			string(otel.HTTPResponseStatusCodeKey): "404",
+			string(otel.HTTPUrlPathKey):            "/foo/bar",
+			string(otel.ClientAddrKey):             "1.1.1.1",
+			string(semconv.ServiceNameKey):         "foo-svc",
+		},
+		ResourceAttributes: map[string]string{
+			string(semconv.ServiceNameKey):          "foo-svc",
+			string(semconv.TelemetrySDKLanguageKey): "go",
+			string(semconv.TelemetrySDKNameKey):     "beyla",
+		},
+		Type: pmetric.MetricTypeHistogram,
+	}, event)
+}
+
+func matchGRPCMetricEvent(t *testing.T, event collector.MetricRecord) {
+	assert.Equal(t, collector.MetricRecord{
+		Name:  "rpc.server.duration",
+		Unit:  "s",
+		Value: 2e-09,
+		Attributes: map[string]string{
+			string(semconv.ServiceNameKey):       "grpc-svc",
+			string(semconv.RPCSystemKey):         "grpc",
+			string(semconv.RPCGRPCStatusCodeKey): "3",
+			string(semconv.RPCMethodKey):         "/foo/bar",
+			string(otel.ClientAddrKey):           "1.1.1.1",
+		},
+		ResourceAttributes: map[string]string{
+			string(semconv.ServiceNameKey):          "grpc-svc",
+			string(semconv.TelemetrySDKLanguageKey): "go",
+			string(semconv.TelemetrySDKNameKey):     "beyla",
+		},
+		Type: pmetric.MetricTypeHistogram,
+	}, event)
+}
+
 func matchTraceEvent(t require.TestingT, name string, event collector.TraceRecord) {
 	assert.NotEmpty(t, event.Attributes["span_id"])
 	assert.Equal(t, collector.TraceRecord{

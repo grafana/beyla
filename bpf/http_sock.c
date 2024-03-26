@@ -355,7 +355,7 @@ int socket__http_filter(struct __sk_buff *skb) {
     // sorting must happen here, before we check or set dups
     sort_connection_info(&conn);
     
-    // we don't want to read the whole buffer for every packed that passes our checks, we read only a bit and check if it's trully HTTP request/response.
+    // we don't want to read the whole buffer for every packed that passes our checks, we read only a bit and check if it's truly HTTP request/response.
     unsigned char buf[MIN_HTTP_SIZE] = {0};
     bpf_skb_load_bytes(skb, tcp.hdr_len, (void *)buf, sizeof(buf));
     // technically the read should be reversed, but eBPF verifier complains on read with variable length
@@ -402,11 +402,26 @@ int socket__http_filter(struct __sk_buff *skb) {
                 if (prev_conn) {
                     tp_info_pid_t *trace_info = trace_info_for_connection(prev_conn);
                     if (trace_info) {
-                        if (current_epoch(trace_info->tp.ts) == current_epoch(bpf_ktime_get_ns())) {
-                            bpf_dbg_printk("Found trace info on another interface, setting it up for this connection");
-                            tp_info_pid_t other_info = {0};
-                            bpf_memcpy(&other_info, trace_info, sizeof(tp_info_pid_t));
-                            bpf_map_update_elem(&trace_map, &conn, &other_info, BPF_ANY);
+                        pid_connection_info_t *pid_conn = empty_pid_conn_info();
+                        if (pid_conn) {
+                            pid_conn->conn.s_port = conn.s_port;
+                            pid_conn->conn.d_port = conn.d_port;
+                            bpf_memcpy(pid_conn->conn.s_addr, conn.s_addr, sizeof(pid_conn->conn.s_addr));
+                            bpf_memcpy(pid_conn->conn.d_addr, conn.d_addr, sizeof(pid_conn->conn.d_addr));
+
+                            pid_conn->pid = trace_info->pid;
+
+                            http_connection_metadata_t *meta = bpf_map_lookup_elem(&filtered_connections, pid_conn);
+                            if (meta) {
+                                bpf_printk("Found meta %llx, type = %d", meta, meta->type);
+                            }
+
+                            if (current_epoch(trace_info->tp.ts) == current_epoch(bpf_ktime_get_ns())) {
+                                bpf_dbg_printk("Found trace info on another interface, setting it up for this connection");
+                                tp_info_pid_t other_info = {0};
+                                bpf_memcpy(&other_info, trace_info, sizeof(tp_info_pid_t));
+                                bpf_map_update_elem(&trace_map, &conn, &other_info, BPF_ANY);
+                            }
                         }
                     }
                 }

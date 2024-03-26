@@ -61,6 +61,13 @@ struct {
     __uint(pinning, LIBBPF_PIN_BY_NAME);
 } ongoing_http2_grpc SEC(".maps");
 
+struct {
+    __uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
+    __type(key, int);
+    __type(value, pid_connection_info_t);
+    __uint(max_entries, 1);
+} pid_conn_info_mem SEC(".maps");
+
 // http_info_t became too big to be declared as a variable in the stack.
 // We use a percpu array to keep a reusable copy of it
 struct {
@@ -203,6 +210,15 @@ static __always_inline http2_grpc_request_t* empty_http2_info() {
     http2_grpc_request_t *value = bpf_map_lookup_elem(&http2_info_mem, &zero);
     if (value) {
         bpf_memset(value, 0, sizeof(http2_grpc_request_t));
+    }
+    return value;
+}
+
+static __always_inline pid_connection_info_t* empty_pid_conn_info() {
+    int zero = 0;
+    pid_connection_info_t *value = bpf_map_lookup_elem(&pid_conn_info_mem, &zero);
+    if (value) {
+        bpf_memset(value, 0, sizeof(pid_connection_info_t));
     }
     return value;
 }

@@ -13,7 +13,9 @@ import (
 )
 
 func TestGenerateMetrics(t *testing.T) {
-	cfg := &otel.MetricsConfig{}
+	cfg := &otel.MetricsConfig{
+		Buckets: otel.DefaultBuckets,
+	}
 	start := time.Now()
 	span := &request.Span{
 		Type:         request.EventTypeHTTP,
@@ -46,6 +48,10 @@ func TestGenerateMetrics(t *testing.T) {
 	assert.Equal(t, 1, dataPoints.Len())
 	dp := dataPoints.At(0)
 	assert.Equal(t, 3.0, dp.Sum())
+
+	// Assert buckets
+	assert.Equal(t, otel.DefaultBuckets.DurationHistogram, dp.ExplicitBounds().AsRaw())
+	assert.Equal(t, []uint64{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0}, dp.BucketCounts().AsRaw())
 
 	// Assert metric attributes
 	attributes := dp.Attributes()

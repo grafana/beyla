@@ -70,7 +70,7 @@ the options for each component.
 The properties in this section are first-level YAML properties, as they apply to the
 whole Beyla configuration:
 
-| YAML              | Env var                 | Type   | Default |
+| YAML              | Environment variable                 | Type   | Default |
 | ----------------- | ----------------------- | ------ | ------- |
 | `executable_name` | `BEYLA_EXECUTABLE_NAME` | string | (unset) |
 
@@ -99,7 +99,7 @@ If you just want to instrument one of them, you should be as concrete as possibl
 the value of the setting. For example, `BEYLA_EXECUTABLE_NAME=/opt/app/server`
 or just `BEYLA_EXECUTABLE_NAME=/server`.
 
-| YAML        | Env var           | Type   | Default |
+| YAML        | Environment variable           | Type   | Default |
 | ----------- | ----------------- | ------ | ------- |
 | `open_port` | `BEYLA_OPEN_PORT` | string | (unset) |
 
@@ -130,7 +130,7 @@ restrict the instrumentation only to the methods exposed through a specific port
 If the specified port range is wide (e.g. `1-65535`) Beyla will try to execute all the processes
 owning one of the ports in the range.
 
-| YAML           | Env var                                     | Type   | Default                                               |
+| YAML           | Environment variable                                     | Type   | Default                                               |
 | -------------- | ------------------------------------------- | ------ | ----------------------------------------------------- |
 | `service_name` | `BEYLA_SERVICE_NAME` or `OTEL_SERVICE_NAME` | string | (see [service discovery](#service-discovery) section) |
 
@@ -143,7 +143,7 @@ they will share the same service name even if they are different. If you need th
 single instance of Beyla report different service names, follow the instructions in the
 [service discovery section](#service-discovery).
 
-| YAML                | Env var                   | Type   | Default                                               |
+| YAML                | Environment variable                   | Type   | Default                                               |
 | ------------------- | ------------------------- | ------ | ----------------------------------------------------- |
 | `service_namespace` | `BEYLA_SERVICE_NAMESPACE` | string | (see [service discovery](#service-discovery) section) |
 
@@ -162,7 +162,7 @@ It is important to notice that this namespace is not a selector for Kubernetes n
 value will be use to set the value of standard telemetry attributes. For example, the
 [OpenTelemetry `service.namespace` attribute](https://opentelemetry.io/docs/specs/otel/common/attribute-naming/).
 
-| YAML        | Env var           | Type   | Default |
+| YAML        | Environment variable           | Type   | Default |
 | ----------- | ----------------- | ------ | ------- |
 | `log_level` | `BEYLA_LOG_LEVEL` | string | `INFO`  |
 
@@ -170,7 +170,7 @@ Sets the verbosity level of the process standard output logger.
 Valid log level values are: `DEBUG`, `INFO`, `WARN` and `ERROR`.
 `DEBUG` being the most verbose and `ERROR` the least verbose.
 
-| YAML           | Env var              | Type    | Default |
+| YAML           | Environment variable              | Type    | Default |
 | -------------- | -------------------- | ------- | ------- |
 | `print_traces` | `BEYLA_PRINT_TRACES` | boolean | `false` |
 
@@ -191,7 +191,7 @@ differentiation degree in the services that Beyla can instrument.
 
 For example, it will allow overriding the service name and namespace per service type.
 
-| YAML       | Env var | Type            | Default |
+| YAML       | Environment variable | Type            | Default |
 | ---------- | ------- | --------------- | ------- |
 | `services` | N/A     | list of objects | (unset) |
 
@@ -202,7 +202,7 @@ namespace.
 For more details about this section, please go to the [discovery services section](#discovery-services-section)
 of this document.
 
-| YAML                       | Env var                          | Type    | Default |
+| YAML                       | Environment variable                          | Type    | Default |
 | -------------------------- | -------------------------------- | ------- | ------- |
 | `skip_go_specific_tracers` | `BEYLA_SKIP_GO_SPECIFIC_TRACERS` | boolean | false   |
 
@@ -241,7 +241,7 @@ Each `services` entry is a map where the properties can be grouped according to 
 - Selecting the process to instrument: the rest of the properties, referred as _selectors_ in
   this documentation.
 
-| YAML   | Env var | Type   | Default           |
+| YAML   | Environment variable | Type   | Default           |
 | ------ | ------- | ------ | ----------------- |
 | `name` | --      | string | (see description) |
 
@@ -265,7 +265,7 @@ or have the same executable name. In that case, the reported `instance.id` (OTEL
 `target_instance` (Prometheus) would allow differentiating the different instances
 of the service.
 
-| YAML        | Env var | Type   | Default                  |
+| YAML        | Environment variable | Type   | Default                  |
 | ----------- | ------- | ------ | ------------------------ |
 | `namespace` | --      | string | (empty or K8s namespace) |
 
@@ -278,7 +278,7 @@ It is important to notice that this namespace is not a selector for Kubernetes n
 value will be use to set the value of standard telemetry attributes. For example, the
 [OpenTelemetry `service.namespace` attribute](https://opentelemetry.io/docs/specs/otel/common/attribute-naming/).
 
-| YAML         | Env var | Type   | Default |
+| YAML         | Environment variable | Type   | Default |
 | ------------ | ------- | ------ | ------- |
 | `open_ports` | --      | string | (unset) |
 
@@ -303,7 +303,7 @@ for Beyla **to instrument all the
 HTTP/S and GRPC requests on all application ports**. At the moment, there is no way to
 restrict the instrumentation only to the methods exposed through a specific port.
 
-| YAML       | Env var | Type                        | Default |
+| YAML       | Environment variable | Type                        | Default |
 | ---------- | ------- | --------------------------- | ------- |
 | `exe_path` | --      | string (regular expression) | (unset) |
 
@@ -318,7 +318,7 @@ executables in the host.
 If other selectors are specified in the same `services` entry, the processes to be
 selected need to match all the selector properties.
 
-| YAML            | Env var | Type                        | Default |
+| YAML            | Environment variable | Type                        | Default |
 | --------------- | ------- | --------------------------- | ------- |
 | `k8s_namespace` | --      | string (regular expression) | (unset) |
 
@@ -329,7 +329,7 @@ expression.
 If other selectors are specified in the same `services` entry, the processes to be
 selected need to match all the selector properties.
 
-| YAML           | Env var | Type                        | Default |
+| YAML           | Environment variable | Type                        | Default |
 | -------------- | ------- | --------------------------- | ------- |
 | `k8s_pod_name` | --      | string (regular expression) | (unset) |
 
@@ -340,7 +340,7 @@ expression.
 If other selectors are specified in the same `services` entry, the processes to be
 selected need to match all the selector properties.
 
-| YAML                  | Env var | Type                        | Default |
+| YAML                  | Environment variable | Type                        | Default |
 | --------------------- | ------- | --------------------------- | ------- |
 | `k8s_deployment_name` | --      | string (regular expression) | (unset) |
 
@@ -351,7 +351,7 @@ expression.
 If other selectors are specified in the same `services` entry, the processes to be
 selected need to match all the selector properties.
 
-| YAML                  | Env var | Type                        | Default |
+| YAML                  | Environment variable | Type                        | Default |
 | --------------------- | ------- | --------------------------- | ------- |
 | `k8s_replicaset_name` | --      | string (regular expression) | (unset) |
 
@@ -362,7 +362,7 @@ expression.
 If other selectors are specified in the same `services` entry, the processes to be
 selected need to match all the selector properties.
 
-| YAML                   | Env var | Type                        | Default |
+| YAML                   | Environment variable | Type                        | Default |
 | ---------------------- | ------- | --------------------------- | ------- |
 | `k8s_statefulset_name` | --      | string (regular expression) | (unset) |
 
@@ -373,7 +373,7 @@ expression.
 If other selectors are specified in the same `services` entry, the processes to be
 selected need to match all the selector properties.
 
-| YAML                 | Env var | Type                        | Default |
+| YAML                 | Environment variable | Type                        | Default |
 | -------------------- | ------- | --------------------------- | ------- |
 | `k8s_daemonset_name` | --      | string (regular expression) | (unset) |
 
@@ -384,7 +384,7 @@ expression.
 If other selectors are specified in the same `services` entry, the processes to be
 selected need to match all the selector properties.
 
-| YAML             | Env var | Type                        | Default |
+| YAML             | Environment variable | Type                        | Default |
 | ---------------- | ------- | --------------------------- | ------- |
 | `k8s_owner_name` | --      | string (regular expression) | (unset) |
 
@@ -396,11 +396,34 @@ expression.
 If other selectors are specified in the same `services` entry, the processes to be
 selected need to match all the selector properties.
 
+| YAML             | Environment variable | Type                        | Default |
+| ---------------- | ------- | --------------------------- | ------- |
+| `k8s_pod_labels` | --      | map\[string\]string (regular expression) | (unset) |
+
+This selector property limits the instrumentation to the applications
+running in the Pods having labels with keys matching the provided value as regular expression.
+
+If other selectors are specified in the same `services` entry, the processes to be
+selected need to match all the selector properties.
+
+For example:
+
+```yaml
+discovery:
+  services:
+    - k8s_namespace: frontend
+      k8s_pod_labels:
+        instrument: beyla
+```
+
+The preceding example discovers all Pods in the `frontend` namespace that have a label
+`instrument` with a value that matches the regular expression `beyla`.
+
 ## EBPF tracer
 
 YAML section `ebpf`.
 
-| YAML         | Env var                | Type   | Default |
+| YAML         | Environment variable                | Type   | Default |
 | ------------ | ---------------------- | ------ | ------- |
 | `wakeup_len` | `BEYLA_BPF_WAKEUP_LEN` | string | (unset) |
 
@@ -413,7 +436,7 @@ can help with reducing the CPU overhead of Beyla.
 In low-load services (in terms of requests/second), high values of `wakeup_len` could
 add a noticeable delay in the time the metrics are submitted and become externally visible.
 
-| YAML                    | Env var                           | Type    | Default |
+| YAML                    | Environment variable                           | Type    | Default |
 | ----------------------- | --------------------------------- | ------- | ------- |
 | `track_request_headers` | `BEYLA_BPF_TRACK_REQUEST_HEADERS` | boolean | (false) |
 
@@ -450,14 +473,14 @@ attributes:
     dns: false
 ```
 
-| YAML  | Env var                         | Type    | Default |
+| YAML  | Environment variable                         | Type    | Default |
 | ----- | ------------------------------- | ------- | ------- |
 | `dns` | `BEYLA_HOSTNAME_DNS_RESOLUTION` | boolean | `true`  |
 
 If `true`, it will try to resolve the Beyla local hostname against the network DNS.
 If `false`, it will use the local hostname.
 
-| YAML                | Env var          | Type   | Default |
+| YAML                | Environment variable          | Type   | Default |
 | ------------------- | ---------------- | ------ | ------- |
 | `override_hostname` | `BEYLA_HOSTNAME` | string | (unset) |
 
@@ -466,7 +489,7 @@ instead of trying to automatically resolve the host name.
 
 This option takes precedence over `dns`.
 
-| YAML                   | Env var             | Type   | Default |
+| YAML                   | Environment variable             | Type   | Default |
 | ---------------------- | ------------------- | ------ | ------- |
 | `override_instance_id` | `BEYLA_INSTANCE_ID` | string | (unset) |
 
@@ -502,7 +525,7 @@ It is IMPORTANT to consider that enabling this feature requires a previous step 
 providing some extra permissions to the Beyla Pod. Please check the
 ["Configuring Kubernetes metadata decoration section" in the "Running Beyla in Kubernetes"]({{< relref "../setup/kubernetes.md" >}}) page.
 
-| YAML     | Env var                      | Type    | Default |
+| YAML     | Environment variable                      | Type    | Default |
 | -------- | ---------------------------- | ------- | ------- |
 | `enable` | `BEYLA_KUBE_METADATA_ENABLE` | boolean | `false` |
 
@@ -513,7 +536,7 @@ If set to `false`, the Kubernetes metadata decorator will be disabled.
 If set to `autodetect`, Beyla will try to automatically detect if it is running inside
 Kubernetes, and enable the metadata decoration if that is the case.
 
-| YAML              | Env var      | Type   | Default          |
+| YAML              | Environment variable      | Type   | Default          |
 | ----------------- | ------------ | ------ | ---------------- |
 | `kubeconfig_path` | `KUBECONFIG` | string | `~/.kube/config` |
 
@@ -531,7 +554,7 @@ This section can be only configured via the YAML file. If no `routes` section is
 the YAML file, a default routes' pipeline stage will be created and filtered with the `wildcard`
 routes decorator.
 
-| YAML       | Env var | Type            | Default |
+| YAML       | Environment variable | Type            | Default |
 | ---------- | ------- | --------------- | ------- |
 | `patterns` | --      | list of strings | (unset) |
 
@@ -585,7 +608,7 @@ route `/user/*`. As per the example above, all of the following paths will be ma
 /user/456/basket/3
 ```
 
-| YAML               | Env var | Type            | Default |
+| YAML               | Environment variable | Type            | Default |
 | ------------------ | ------- | --------------- | ------- |
 | `ignored_patterns` | --      | list of strings | (unset) |
 
@@ -606,7 +629,7 @@ Any event paths which have a prefix of `/v1` or are equal to `/health` will be i
 This option is very useful if you want to prevent certain paths used development or service health monitoring, to be
 recorded as traces or metrics.
 
-| YAML          | Env var | Type   | Default |
+| YAML          | Environment variable | Type   | Default |
 | ------------- | ------- | ------ | ------- |
 | `ignore_mode` | --      | string | `all`   |
 
@@ -623,7 +646,7 @@ know the performance metrics of your health check API, but you wouldn't want the
 your target traces database. In this this example scenario, you would set the `ignore_mode` property to `traces`, such
 that only traces matching the `ignored_patterns` will be discarded, while metrics will still be recorded.
 
-| YAML        | Env var | Type   | Default    |
+| YAML        | Environment variable | Type   | Default    |
 | ----------- | ------- | ------ | ---------- |
 | `unmatched` | --      | string | `wildcard` |
 
@@ -676,7 +699,7 @@ its `endpoint` attribute is set (either via an YAML configuration file or via en
 In addition to the properties exposed in this section, this component implicitly supports
 the environment variables from the [standard OTEL exporter configuration](https://opentelemetry.io/docs/concepts/sdk-configuration/otlp-exporter-configuration/).
 
-| YAML       | Env var                                                                    | Type | Default |
+| YAML       | Environment variable                                                                    | Type | Default |
 | ---------- | -------------------------------------------------------------------------- | ---- | ------- |
 | `endpoint` | `OTEL_EXPORTER_OTLP_ENDPOINT` or<br/>`OTEL_EXPORTER_OTLP_METRICS_ENDPOINT` | URL  | (unset) |
 
@@ -696,7 +719,7 @@ the OpenTelemetry exporter will automatically add the `/v1/metrics` path to the 
 addition, you can use either the `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT` environment variable or the `environment` YAML
 property to use exactly the provided URL without any addition.
 
-| YAML       | Env var                                                                    | Type   | Default   |
+| YAML       | Environment variable                                                                    | Type   | Default   |
 | ---------- | -------------------------------------------------------------------------- | ------ | --------- |
 | `protocol` | `OTEL_EXPORTER_OTLP_PROTOCOL` or<br/>`OTEL_EXPORTER_OTLP_METRICS_PROTOCOL` | string | (guessed) |
 
@@ -715,7 +738,7 @@ If this property is not provided, Beyla will guess it according to the following
 - Beyla will guess `http/protobuf` if the port ends in `4318` (`4318`, `14318`, `24318`, ...),
   as `4318` is the usual Port number for the OTEL HTTP collector.
 
-| YAML                   | Env var                           | Type | Default |
+| YAML                   | Environment variable                           | Type | Default |
 | ---------------------- | --------------------------------- | ---- | ------- |
 | `insecure_skip_verify` | `BEYLA_OTEL_INSECURE_SKIP_VERIFY` | bool | `false` |
 
@@ -724,13 +747,13 @@ If set to `true`, the OTEL client accepts any certificate presented by the serve
 and any host name in that certificate. In this mode, TLS is susceptible to a man-in-the-middle
 attacks. This option should be used only for testing and development purposes.
 
-| YAML       | Env var                  | Type     | Default |
+| YAML       | Environment variable                  | Type     | Default |
 | ---------- | ------------------------ | -------- | ------- |
 | `interval` | `BEYLA_METRICS_INTERVAL` | Duration | `5s`    |
 
 Configures the intervening time between exports.
 
-| YAML            | Env var                       | Type    | Default |
+| YAML            | Environment variable                       | Type    | Default |
 | --------------- | ----------------------------- | ------- | ------- |
 | `report_target` | `BEYLA_METRICS_REPORT_TARGET` | boolean | `false` |
 
@@ -742,7 +765,7 @@ path and query arguments.
 It is disabled by default to avoid cardinality explosion in paths with IDs. As an alternative,
 it is recommended to group these requests in the [routes' node](#routes-decorator).
 
-| YAML          | Env var                     | Type    | Default |
+| YAML          | Environment variable                     | Type    | Default |
 | ------------- | --------------------------- | ------- | ------- |
 | `report_peer` | `BEYLA_METRICS_REPORT_PEER` | boolean | `false` |
 
@@ -750,7 +773,7 @@ Specifies whether the exporter must submit the caller peer address as a metric a
 
 It is disabled by default to avoid cardinality explosion.
 
-| YAML      | Env var | Type   |
+| YAML      | Environment variable | Type   |
 | --------- | ------- | ------ |
 | `buckets` | (n/a)   | Object |
 
@@ -834,7 +857,7 @@ its `endpoint` attribute is set (either via an YAML configuration file or via en
 In addition to the properties exposed in this section, this component implicitly supports
 the environment variables from the [standard OTEL exporter configuration](https://opentelemetry.io/docs/concepts/sdk-configuration/otlp-exporter-configuration/).
 
-| YAML       | Env var                                                                   | Type | Default |
+| YAML       | Environment variable                                                                   | Type | Default |
 | ---------- | ------------------------------------------------------------------------- | ---- | ------- |
 | `endpoint` | `OTEL_EXPORTER_OTLP_ENDPOINT` or<br/>`OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` | URL  | (unset) |
 
@@ -854,7 +877,7 @@ the OpenTelemetry exporter will automatically add the `/v1/traces` path to the U
 addition, you can use either the `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` environment variable or the `environment` YAML
 property to use exactly the provided URL without any addition.
 
-| YAML       | Env var                                                                   | Type   | Default   |
+| YAML       | Environment variable                                                                   | Type   | Default   |
 | ---------- | ------------------------------------------------------------------------- | ------ | --------- |
 | `protocol` | `OTEL_EXPORTER_OTLP_PROTOCOL` or<br/>`OTEL_EXPORTER_OTLP_TRACES_PROTOCOL` | string | (guessed) |
 
@@ -873,7 +896,7 @@ If this property is not provided, Beyla will guess it according to the following
 - Beyla will guess `http/protobuf` if the port ends in `4318` (`4318`, `14318`, `24318`, ...),
   as `4318` is the usual Port number for the OTEL HTTP collector.
 
-| YAML                   | Env var                           | Type | Default |
+| YAML                   | Environment variable                           | Type | Default |
 | ---------------------- | --------------------------------- | ---- | ------- |
 | `insecure_skip_verify` | `BEYLA_OTEL_INSECURE_SKIP_VERIFY` | bool | `false` |
 
@@ -900,7 +923,7 @@ otel_traces_export:
 If you are using the Grafana Agent as your OTEL collector, you can configure the sampling
 policy at that level instead.
 
-| YAML   | Env var               | Type   | Default                 |
+| YAML   | Environment variable               | Type   | Default                 |
 | ------ | --------------------- | ------ | ----------------------- |
 | `name` | `OTEL_TRACES_SAMPLER` | string | `parentbased_always_on` |
 
@@ -928,7 +951,7 @@ parent of the traced span. If the span has no parent, the root sampler is used t
 make sampling decision. If the span has a parent, the sampling configuration
 would depend on the sampling parent.
 
-| YAML  | Env var                   | Type   | Default |
+| YAML  | Environment variable                   | Type   | Default |
 | ----- | ------------------------- | ------ | ------- |
 | `arg` | `OTEL_TRACES_SAMPLER_ARG` | string | (unset) |
 
@@ -958,14 +981,14 @@ grafana:
     cloud_instance_id: 123456
 ```
 
-| YAML           | Env var                | Type     | Default  |
+| YAML           | Environment variable                | Type     | Default  |
 | -------------- | ---------------------- | -------- | -------- |
 | `cloud_submit` | `GRAFANA_CLOUD_SUBMIT` | []string | `traces` |
 
 Accepts a list of strings with the kind of data that will be submitted to the
 OTLP endpoint. It accepts `metrics` and/or `traces` as values.
 
-| YAML         | Env var              | Type   | Default |
+| YAML         | Environment variable              | Type   | Default |
 | ------------ | -------------------- | ------ | ------- |
 | `cloud_zone` | `GRAFANA_CLOUD_ZONE` | string | (unset) |
 
@@ -978,14 +1001,14 @@ or `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` variables are defined, they will
 override the destination endpoint, so the `cloud_zone` configuration option
 will be ignored.
 
-| YAML                | Env var                     | Type   | Default |
+| YAML                | Environment variable                     | Type   | Default |
 | ------------------- | --------------------------- | ------ | ------- |
 | `cloud_instance_id` | `GRAFANA_CLOUD_INSTANCE_ID` | string | (unset) |
 
 Your Grafana user name. It is usually a number but it must be set as a
 string inside the YAML file.
 
-| YAML            | Env var                 | Type   | Default |
+| YAML            | Environment variable                 | Type   | Default |
 | --------------- | ----------------------- | ------ | ------- |
 | `cloud_api_key` | `GRAFANA_CLOUD_API_KEY` | string | (unset) |
 
@@ -999,20 +1022,20 @@ This component opens an HTTP endpoint in the auto-instrumentation tool
 that allows any external scraper to pull metrics in [Prometheus](https://prometheus.io/)
 format. It will be enabled if the `port` property is set.
 
-| YAML   | Env var                 | Type | Default |
+| YAML   | Environment variable                 | Type | Default |
 | ------ | ----------------------- | ---- | ------- |
 | `port` | `BEYLA_PROMETHEUS_PORT` | int  | (unset) |
 
 Specifies the HTTP port for the Prometheus scrape endpoint. If unset or 0,
 no Prometheus endpoint will be open.
 
-| YAML   | Env var                 | Type   | Default    |
+| YAML   | Environment variable                 | Type   | Default    |
 | ------ | ----------------------- | ------ | ---------- |
 | `path` | `BEYLA_PROMETHEUS_PATH` | string | `/metrics` |
 
 Specifies the HTTP query path to fetch the list of Prometheus metrics.
 
-| YAML            | Env var                       | Type    | Default |
+| YAML            | Environment variable                       | Type    | Default |
 | --------------- | ----------------------------- | ------- | ------- |
 | `report_target` | `BEYLA_METRICS_REPORT_TARGET` | boolean | `false` |
 
@@ -1024,7 +1047,7 @@ path and query arguments.
 It is disabled by default to avoid cardinality explosion in paths with IDs. As an alternative,
 it is recommended to group these requests in the [routes' node](#routes-decorator).
 
-| YAML          | Env var                     | Type    | Default |
+| YAML          | Environment variable                     | Type    | Default |
 | ------------- | --------------------------- | ------- | ------- |
 | `report_peer` | `BEYLA_METRICS_REPORT_PEER` | boolean | `false` |
 
@@ -1032,7 +1055,7 @@ Specifies whether the exporter must submit the caller peer address as a metric a
 
 It is disabled by default to avoid cardinality explosion.
 
-| YAML      | Env var | Type   |
+| YAML      | Environment variable | Type   |
 | --------- | ------- | ------ |
 | `buckets` | (n/a)   | Object |
 
@@ -1043,30 +1066,40 @@ The `buckets` object allows overriding the bucket boundaries of diverse histogra
 
 YAML section `internal_metrics`.
 
-This component will report certain internal metrics about the behavior
-of the auto-instrumentation tool, and expose them as a [Prometheus](https://prometheus.io/)
-scraper. It will be enabled if the `port` property is set.
+This component reports certain internal metrics about the behavior
+of the auto-instrumentation tool. Currently, only [Prometheus](https://prometheus.io/) export
+is supported. It is enabled if the `internal_metrics` section
+contains a `prometheus` subsection with the `port` property set.
 
-| YAML   | Env var                                  | Type | Default |
+Example:
+
+```yaml
+internal_metrics:
+  prometheus:
+    port: 6060
+    path: /internal/metrics
+```
+
+| YAML   | Environment variable                                  | Type | Default |
 | ------ | ---------------------------------------- | ---- | ------- |
 | `port` | `BEYLA_INTERNAL_METRICS_PROMETHEUS_PORT` | int  | (unset) |
 
 Specifies the HTTP port for the Prometheus scrape endpoint. If unset or 0,
-no Prometheus endpoint will be open and no metrics will be accounted.
+no Prometheus endpoint is open and no metrics are accounted.
 
 Its value can be the same as [`prometheus_export.port`](#prometheus-http-endpoint) (both metric families
-will share the same HTTP server, though they can be accessed in different paths),
+share the same HTTP server, though they can be accessed in different paths),
 or a different value (two different HTTP servers for the different metric families).
 
-| YAML   | Env var                                  | Type   | Default             |
+| YAML   | Environment variable                                  | Type   | Default             |
 | ------ | ---------------------------------------- | ------ | ------------------- |
 | `path` | `BEYLA_INTERNAL_METRICS_PROMETHEUS_PATH` | string | `/internal/metrics` |
 
 Specifies the HTTP query path to fetch the list of Prometheus metrics.
-If [`prometheus_export.port`](#prometheus-http-endpoint) and `internal_metrics.port` have the
-same values, this `internal_metrics.path` value can be
+If [`prometheus_export.port`](#prometheus-http-endpoint) and `internal_metrics.prometheus.port` have the
+same values, this `internal_metrics.prometheus.path` value can be
 different from `prometheus_export.path`, to keep both metric families separated,
-or the same (both metric families will be listed in the same scrape endpoint).
+or the same (both metric families are listed in the same scrape endpoint).
 
 ## YAML file example
 

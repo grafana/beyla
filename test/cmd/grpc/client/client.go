@@ -37,7 +37,7 @@ import (
 
 var (
 	ssl        = flag.Bool("tls", false, "Connection uses TLS if true, else plain TCP")
-	serverAddr = flag.String("addr", "localhost:50051", "The server address in the format of host:port")
+	serverAddr = flag.String("addr", "localhost:5051", "The server address in the format of host:port")
 	ping       = flag.Bool("ping", false, "Simple ping instead of full chatter")
 	wrapper    = flag.Bool("wrapper", false, "Simple ping with wrapper call to pingserver")
 )

@@ -91,7 +91,9 @@ volatile const u64 grpc_peer_localaddr_pos;
 
 // Context propagation
 volatile const u64 http2_client_next_id_pos;
-volatile const u64 hpack_encoder_w_pos;
+volatile const u64 framer_w_pos;
+volatile const u64 grpc_transport_buf_writer_buf_pos;
+volatile const u64 grpc_transport_buf_writer_offset_pos;
 
 #define OPTIMISTIC_GRPC_ENCODED_HEADER_LEN 49 // 1 + 1 + 8 + 1 +~ 38 = type byte + hpack_len_as_byte("traceparent") + strlen(hpack("traceparent")) + len_as_byte(38) + hpack(generated tracepanent id)
 
@@ -178,8 +180,13 @@ int uprobe_server_handleStream_return(struct pt_regs *ctx) {
     // Read the embedded object ptr
     bpf_probe_read(&st_ptr, sizeof(st_ptr), (void *)(stream_ptr + grpc_stream_st_ptr_pos + sizeof(void *)));
 
-    if (st_ptr) {
+    trace->host_len = 0;
+    trace->remote_addr_len = 0;
+    trace->host_port = 0;
+    __builtin_memset(trace->host, 0, sizeof(trace->host));    
+    __builtin_memset(trace->remote_addr, 0, sizeof(trace->remote_addr));
 
+    if (st_ptr) {
         void *remote_addr = 0;
         void *local_addr = 0;
 
@@ -441,166 +448,163 @@ int uprobe_transport_http2Client_NewStream(struct pt_regs *ctx) {
     return 0;
 }
 
-// LoopyWriter is about to write the headers, we lookup to see if this StreamID (first argument after the receiver)
-// to see if it has a ClientConn.Invoke mapping. If we find one, we duplicate the invocation metadata on the loopyWriter
-// goroutine.
-SEC("uprobe/transport_loopyWriter_writeHeader")
-int uprobe_transport_loopyWriter_writeHeader(struct pt_regs *ctx) {
 #ifndef NO_HEADER_PROPAGATION
-    bpf_dbg_printk("=== uprobe/proc transport.(*loopyWriter).writeHeader === ");
+typedef struct grpc_framer_func_invocation {
+    u64 framer_ptr;
+    tp_info_t tp;
+    s64 offset;
+} grpc_framer_func_invocation_t;
 
-    void *goroutine_addr = GOROUTINE_PTR(ctx);    
+#define MAX_W_PTR_OFFSET 1024
+
+struct {
+    __uint(type, BPF_MAP_TYPE_LRU_HASH);
+    __type(key, void*); // key: go routine doing framer write headers
+    __type(value, grpc_framer_func_invocation_t); // the goroutine of the round trip request, which is the key for our traceparent info
+    __uint(max_entries, MAX_CONCURRENT_REQUESTS);
+} grpc_framer_invocation_map SEC(".maps");
+
+SEC("uprobe/grpcFramerWriteHeaders")
+int uprobe_grpcFramerWriteHeaders(struct pt_regs *ctx) {
+    bpf_dbg_printk("=== uprobe/proc grpc Framer writeHeaders === ");
+
+    void *framer = GO_PARAM1(ctx);
     u64 stream_id = (u64)GO_PARAM2(ctx);
 
-    bpf_dbg_printk("goroutine_addr %lx, stream_id %d", goroutine_addr, stream_id);
+    bpf_printk("framer=%llx, stream_id=%lld", framer, ((u64)stream_id));
 
-    if (stream_id) {
-        grpc_client_func_invocation_t *invocation = bpf_map_lookup_elem(&ongoing_streams, &stream_id);
-        bpf_map_delete_elem(&ongoing_streams, &stream_id);
+    u32 stream_lookup = (u32)stream_id;
 
-        if (invocation && !invocation->flags) {
-            bpf_dbg_printk("found invocation metadata %llx", invocation);
-
-            grpc_client_func_invocation_t inv_save = *invocation;
-            bpf_map_update_elem(&ongoing_grpc_header_writes, &goroutine_addr, &inv_save, BPF_ANY);
-        }
-    }
-#endif
-    return 0;
-}
-
-SEC("uprobe/transport_loopyWriter_writeHeader_return")
-int uprobe_transport_loopyWriter_writeHeader_return(struct pt_regs *ctx) {
-#ifndef NO_HEADER_PROPAGATION
-    bpf_dbg_printk("=== uprobe/proc transport.(*loopyWriter).writeHeader returns === ");
-    void *goroutine_addr = GOROUTINE_PTR(ctx);
-    // Delete the extra metadata just in case we didn't write the fields
-    bpf_map_delete_elem(&ongoing_grpc_header_writes, &goroutine_addr);
-#endif
-    return 0;
-}
-
-// WriteField will insert the traceparent in an appropriate location. We look into
-// all incoming headers, skip until we get past the protocol headers, e.g. :method and
-// then we inject traceparent at the first opportunity.
-// 
-// This may not work for two reasons, although both are rare:
-// - gRPC buffers are short and we need 69 characters of capacity in w.buf. It usually has 128, but it can be
-//   as low as 64, in which case we can't add the traceparent. We can cut this 69 to 47 if we did Huffman encoding
-//   but it's complicated to implement in eBPF, rounding, adding trailing padding and all.
-// - There are no headers other than the protocol headers, in which case we'll never find a spot to insert the
-//   traceparent header. (Theoretical situation)
-SEC("uprobe/hpack_Encoder_WriteField")
-int uprobe_hpack_Encoder_WriteField(struct pt_regs *ctx) {
-#ifndef NO_HEADER_PROPAGATION
-    bpf_dbg_printk("=== uprobe/proc grpc hpack.(*Encoder).WriteField === ");
-
-    void *goroutine_addr = GOROUTINE_PTR(ctx);
-    bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
-
-    void *field_ptr = GO_PARAM2(ctx); // read the incoming field name ptr (HeaderField)
-
-    if (!field_ptr) {
-        return 0;
-    }
-
-    // We need to read the first char of the HeaderField buffer, Name is first.
-    u8 first_char = 0;
-    bpf_probe_read(&first_char, sizeof(first_char), (void *)(field_ptr));
-
-    // If the name starts with :, we skip processing. e.g. ':method'
-    if (first_char == 0x3a) {
-        bpf_dbg_printk("Skipping until we find non-protocol headers, field starts with `:`.");
-        return 0;
-    }
-
-    grpc_client_func_invocation_t *invocation = bpf_map_lookup_elem(&ongoing_grpc_header_writes, &goroutine_addr);
+    grpc_client_func_invocation_t *invocation = bpf_map_lookup_elem(&ongoing_streams, &stream_lookup);
 
     if (invocation) {
-        void *e_ptr = GO_PARAM1(ctx);
+        bpf_dbg_printk("Found invocation info %llx", invocation);
+        void *goroutine_addr = GOROUTINE_PTR(ctx);
 
-        if (e_ptr) {
-            void *w_ptr = 0;
-            bpf_probe_read(&w_ptr, sizeof(w_ptr), (void *)(e_ptr + hpack_encoder_w_pos + sizeof(void *)));
+        void *w_ptr = (void *)(framer + framer_w_pos + 16);
+        bpf_probe_read(&w_ptr, sizeof(w_ptr), (void *)(framer + framer_w_pos + 8));
 
-            // No need to dereference one more time, w.buf is embedded.
-            if (w_ptr) {
-                void *buf_arr = 0;
-                s64 len = 0;
-                s64 cap = 0;
+        if (w_ptr) {
+            s64 offset;
+            bpf_probe_read(&offset, sizeof(offset), (void *)(w_ptr + grpc_transport_buf_writer_offset_pos));
 
-                bpf_probe_read(&buf_arr, sizeof(buf_arr), (void *)(w_ptr));
-                bpf_probe_read(&len, sizeof(len), (void *)(w_ptr + 8));
-                bpf_probe_read(&cap, sizeof(cap), (void *)(w_ptr + 16));
+            bpf_dbg_printk("Found initial data offset %d", offset);
 
-                bpf_dbg_printk("Found invocation w_ptr %llx, buf_arr %llx, len %d, cap %d", w_ptr, buf_arr, len, cap);
+            // The offset will be 0 on first connection through the stream and 9 on subsequent.
+            // If we read some very large offset, we don't do anything since it might be a situation
+            // we can't handle
+            if (offset < MAX_W_PTR_OFFSET) {
+                grpc_framer_func_invocation_t f_info = {
+                    .tp = invocation->tp,
+                    .framer_ptr = (u64)framer,
+                    .offset = offset,
+                };
 
-                if (len >= 0 && cap > 0 && cap > len) {
-                    s64 available_bytes = (cap - len);
-                
-                    if (available_bytes > OPTIMISTIC_GRPC_ENCODED_HEADER_LEN) {
-                        struct hpack_ctx d = {
-                            .dst_len = TP_MAX_VAL_LENGTH,
-                            .len = 0,
-                            .m_bytes = 0,
-                            .m_count = 0,
-                        };
-
-                        u8 type_byte = 0;
-                        u8 key_len = TP_ENCODED_LEN | 0x80; // high tagged to signify hpack encoded value
-                        u8 val_len = TP_MAX_VAL_LENGTH;
-
-                        make_tp_string(d.src, &invocation->tp);
-                        val_len = hpack_encode_tp(&d);
-
-                        if (val_len <= 0) {
-                            bpf_dbg_printk("Encoded traceparent value too large or empty");
-                            bpf_map_delete_elem(&ongoing_grpc_header_writes, &goroutine_addr);
-                            return 0;
-                        }
-
-                        if (val_len + 11 <= available_bytes) {
-                            u8 val_len_tagged = val_len | 0x80;
-
-                            bpf_map_delete_elem(&ongoing_grpc_header_writes, &goroutine_addr);
-                            bpf_dbg_printk("Will write %s", d.src);
-
-                            bpf_dbg_printk("%s %s %d %d %d", tp_encoded, d.src, type_byte, key_len, val_len);
-                            // This mimics hpack encode appendNewName, with Huffman encoding
-                            // Write record type 0
-                            bpf_probe_write_user(buf_arr + (len & 0x0ffff), &type_byte, sizeof(type_byte));                        
-                            len++;
-                            // Write the length of the key = 8
-                            bpf_probe_write_user(buf_arr + (len & 0x0ffff), &key_len, sizeof(key_len));
-                            len++;
-                            // Write 'traceparent' encoded as hpack
-                            bpf_probe_write_user(buf_arr + (len & 0x0ffff), tp_encoded, sizeof(tp_encoded));
-                            len += TP_ENCODED_LEN;
-                            // Write the length of the hpack encoded traceparent field 
-                            bpf_probe_write_user(buf_arr + (len & 0x0ffff), &val_len_tagged, sizeof(val_len_tagged));
-                            len++;
-                            int v_l = val_len;
-                            bpf_clamp_umax(v_l, TP_MAX_VAL_LENGTH);
-                            if (v_l > 0) {
-                                bpf_probe_write_user(buf_arr + (len & 0x0ffff), d.dst, v_l);
-                            }
-                            len += val_len;                        
-                            // Update the buffer length to the new value
-                            bpf_probe_write_user((void *)(w_ptr + 8), &len, sizeof(len));
-                        } else {
-                            bpf_dbg_printk("val_len = %d available = %d", val_len, available_bytes);
-                            bpf_dbg_printk("not enough space in the buffer, trying later");
-                        }
-                    }
-                }
+                bpf_map_update_elem(&grpc_framer_invocation_map, &goroutine_addr, &f_info, BPF_ANY);
             } else {
-                bpf_dbg_printk("Can't find w_ptr");
+                bpf_dbg_printk("Offset too large, ignoring...");
             }
-        } else {
-            bpf_dbg_printk("Can't find e_ptr");
         }
-
     }
-#endif
+
+    bpf_map_delete_elem(&ongoing_streams, &stream_id);
     return 0;
 }
+#else
+SEC("uprobe/grpcFramerWriteHeaders")
+int uprobe_grpcFramerWriteHeaders(struct pt_regs *ctx) {
+    return 0;
+}
+#endif
+
+#ifndef NO_HEADER_PROPAGATION
+#define HTTP2_ENCODED_HEADER_LEN 66 // 1 + 1 + 8 + 1 + 55 = type byte + hpack_len_as_byte("traceparent") + strlen(hpack("traceparent")) + len_as_byte(55) + generated traceparent id
+
+SEC("uprobe/grpcFramerWriteHeaders_returns")
+int uprobe_grpcFramerWriteHeaders_returns(struct pt_regs *ctx) {
+    bpf_dbg_printk("=== uprobe/proc grpc Framer writeHeaders returns === ");
+
+    void *goroutine_addr = GOROUTINE_PTR(ctx);
+
+    grpc_framer_func_invocation_t *f_info = bpf_map_lookup_elem(&grpc_framer_invocation_map, &goroutine_addr);
+
+    if (f_info) {
+        void *w_ptr = (void *)(f_info->framer_ptr + framer_w_pos + 16);
+        bpf_probe_read(&w_ptr, sizeof(w_ptr), (void *)(f_info->framer_ptr + framer_w_pos + 8));
+
+        if (w_ptr) {
+            void *buf_arr = 0;
+            s64 n = 0;
+            s64 cap = 0;
+            u64 off = f_info->offset;
+
+            bpf_probe_read(&buf_arr, sizeof(buf_arr), (void *)(w_ptr + grpc_transport_buf_writer_buf_pos)); // the buffer is the first field
+            bpf_probe_read(&n, sizeof(n), (void *)(w_ptr + grpc_transport_buf_writer_offset_pos));
+            bpf_probe_read(&cap, sizeof(cap), (void *)(w_ptr + grpc_transport_buf_writer_offset_pos + 16)); // the offset of the capacity is 2 * 8 bytes from the buf
+
+            bpf_clamp_umax(off, MAX_W_PTR_OFFSET);
+
+            bpf_dbg_printk("Found f_info, this is the place to write to w = %llx, buf=%llx, n=%lld, size=%lld", w_ptr, buf_arr, n, cap);
+            if (buf_arr && n < (cap - HTTP2_ENCODED_HEADER_LEN)) {
+                uint8_t tp_str[TP_MAX_VAL_LENGTH];
+
+                u8 type_byte = 0;
+                u8 key_len = TP_ENCODED_LEN | 0x80; // high tagged to signify hpack encoded value
+                u8 val_len = TP_MAX_VAL_LENGTH;
+
+                // We don't hpack encode the value of the traceparent field, because that will require that 
+                // we use bpf_loop, which in turn increases the kernel requirement to 5.17+.
+                make_tp_string(tp_str, &f_info->tp);
+                bpf_dbg_printk("Will write %s, type = %d, key_len = %d, val_len = %d", tp_str, type_byte, key_len, val_len);
+
+                bpf_probe_write_user(buf_arr + (n & 0x0ffff), &type_byte, sizeof(type_byte));                        
+                n++;
+                // Write the length of the key = 8
+                bpf_probe_write_user(buf_arr + (n & 0x0ffff), &key_len, sizeof(key_len));
+                n++;
+                // Write 'traceparent' encoded as hpack
+                bpf_probe_write_user(buf_arr + (n & 0x0ffff), tp_encoded, sizeof(tp_encoded));;
+                n += TP_ENCODED_LEN;
+                // Write the length of the hpack encoded traceparent field 
+                bpf_probe_write_user(buf_arr + (n & 0x0ffff), &val_len, sizeof(val_len));
+                n++;
+                bpf_probe_write_user(buf_arr + (n & 0x0ffff), tp_str, sizeof(tp_str));
+                n += TP_MAX_VAL_LENGTH;
+                // Update the value of n in w to reflect the new size
+                bpf_probe_write_user((void *)(w_ptr + 32), &n, sizeof(n));
+
+                // http2 encodes the length of the headers in the first 3 bytes of buf, we need to update those
+                u8 size_1 = 0;
+                u8 size_2 = 0;
+                u8 size_3 = 0;
+
+                bpf_probe_read(&size_1, sizeof(size_1), (void *)(buf_arr + off));
+                bpf_probe_read(&size_2, sizeof(size_2), (void *)(buf_arr + off + 1));
+                bpf_probe_read(&size_3, sizeof(size_3), (void *)(buf_arr + off + 2));
+
+                bpf_dbg_printk("size 1:%x, 2:%x, 3:%x", size_1, size_2, size_3);
+
+                u32 original_size = ((u32)(size_1) << 16) | ((u32)(size_2) << 8) | size_3;
+                u32 new_size = original_size + HTTP2_ENCODED_HEADER_LEN;
+
+                bpf_dbg_printk("Changing size from %d to %d", original_size, new_size);
+                size_1 = (u8)(new_size >> 16);
+                size_2 = (u8)(new_size >> 8);
+                size_3 = (u8)(new_size);
+
+                bpf_probe_write_user((void *)(buf_arr + off), &size_1, sizeof(size_1));
+                bpf_probe_write_user((void *)(buf_arr + off + 1), &size_2, sizeof(size_2));
+                bpf_probe_write_user((void *)(buf_arr + off + 2), &size_3, sizeof(size_3));
+            }
+        }
+    }
+
+    bpf_map_delete_elem(&grpc_framer_invocation_map, &goroutine_addr);
+    return 0;
+}
+#else
+SEC("uprobe/grpcFramerWriteHeaders_returns")
+int uprobe_grpcFramerWriteHeaders_returns(struct pt_regs *ctx) {
+    return 0;
+}
+#endif 

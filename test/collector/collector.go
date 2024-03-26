@@ -15,6 +15,7 @@ import (
 	"go.opentelemetry.io/collector/pdata/pmetric/pmetricotlp"
 	"go.opentelemetry.io/collector/pdata/ptrace"
 	"go.opentelemetry.io/collector/pdata/ptrace/ptraceotlp"
+	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 )
 
 // TestCollector is a dummy OLTP test collector that allows retrieving part of the collected metrics
@@ -84,7 +85,7 @@ func (tc *TestCollector) traceEvent(writer http.ResponseWriter, body []byte) {
 	}
 	writer.WriteHeader(http.StatusOK)
 	json, _ := req.MarshalJSON()
-	slog.Debug("received metric", "json", string(json))
+	slog.Debug("received trace", "json", string(json))
 
 	forEach[ptrace.ResourceSpans](req.Traces().ResourceSpans(), func(rs ptrace.ResourceSpans) {
 		forEach[ptrace.ScopeSpans](rs.ScopeSpans(), func(ss ptrace.ScopeSpans) {
@@ -92,9 +93,10 @@ func (tc *TestCollector) traceEvent(writer http.ResponseWriter, body []byte) {
 				switch s.Kind() {
 				case ptrace.SpanKindServer, ptrace.SpanKindInternal, ptrace.SpanKindClient:
 					tr := TraceRecord{
-						Kind:       s.Kind(),
-						Name:       s.Name(),
-						Attributes: map[string]string{},
+						Kind:               s.Kind(),
+						Name:               s.Name(),
+						Attributes:         map[string]string{},
+						ResourceAttributes: map[string]string{},
 					}
 					s.Attributes().Range(func(k string, v pcommon.Value) bool {
 						tr.Attributes[k] = v.AsString()
@@ -102,7 +104,12 @@ func (tc *TestCollector) traceEvent(writer http.ResponseWriter, body []byte) {
 					})
 					tr.Attributes["span_id"] = s.SpanID().String()
 					tr.Attributes["parent_span_id"] = s.ParentSpanID().String()
-
+					rs.Resource().Attributes().Range(func(k string, v pcommon.Value) bool {
+						tr.ResourceAttributes[k] = v.AsString()
+						return true
+					})
+					// remove ServiceInstanceIDKey to avoid flakiness
+					delete(tr.ResourceAttributes, string(semconv.ServiceInstanceIDKey))
 					tc.TraceRecords <- tr
 				default:
 					slog.Warn("unsupported trace kind", "kind", s.Kind().String())
@@ -158,9 +165,10 @@ type MetricRecord struct {
 }
 
 type TraceRecord struct {
-	Attributes map[string]string
-	Name       string
-	Kind       ptrace.SpanKind
+	ResourceAttributes map[string]string
+	Attributes         map[string]string
+	Name               string
+	Kind               ptrace.SpanKind
 }
 
 type slice[T any] interface {

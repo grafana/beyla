@@ -12,7 +12,7 @@ import (
 	"github.com/shirou/gopsutil/process"
 
 	"github.com/grafana/beyla/pkg/beyla"
-	"github.com/grafana/beyla/pkg/internal/discover/services"
+	"github.com/grafana/beyla/pkg/services"
 )
 
 // CriteriaMatcher filters the processes that match the discovery criteria.
@@ -84,7 +84,7 @@ func (m *matcher) filterCreated(obj processAttrs) (Event[ProcessMatch], bool) {
 	}
 	for i := range m.criteria {
 		if m.matchProcess(&obj, proc, &m.criteria[i]) {
-			m.log.Debug("found process", "pid", proc.Pid, "comm", proc.ExePath, "metadata", obj.metadata)
+			m.log.Debug("found process", "pid", proc.Pid, "comm", proc.ExePath, "metadata", obj.metadata, "podLabels", obj.podLabels)
 			m.processHistory[obj.pid] = proc
 			return Event[ProcessMatch]{
 				Type: EventCreated,
@@ -133,7 +133,7 @@ func (m *matcher) matchProcess(obj *processAttrs, p *services.ProcessInfo, a *se
 	// after matching by process basic information, we check if it matches
 	// by metadata.
 	// If there is no metadata, this will return true.
-	return m.matchByAttributes(obj.metadata, a.Metadata)
+	return m.matchByAttributes(obj, a)
 }
 
 func (m *matcher) matchByPort(p *services.ProcessInfo, a *services.Attributes) bool {
@@ -152,9 +152,24 @@ func (m *matcher) matchByExecutable(p *services.ProcessInfo, a *services.Attribu
 	return a.PathRegexp.MatchString(p.ExePath)
 }
 
-func (m *matcher) matchByAttributes(actual map[string]string, required map[string]*services.RegexpAttr) bool {
-	for attrName, criteriaRegexp := range required {
-		if attrValue, ok := actual[attrName]; !ok || !criteriaRegexp.MatchString(attrValue) {
+func (m *matcher) matchByAttributes(actual *processAttrs, required *services.Attributes) bool {
+	if required == nil {
+		return true
+	}
+	if actual == nil {
+		return false
+	}
+
+	// match metadata
+	for attrName, criteriaRegexp := range required.Metadata {
+		if attrValue, ok := actual.metadata[attrName]; !ok || !criteriaRegexp.MatchString(attrValue) {
+			return false
+		}
+	}
+
+	// match pod labels
+	for labelName, criteriaRegexp := range required.PodLabels {
+		if actualPodLabelValue, ok := actual.podLabels[labelName]; !ok || !criteriaRegexp.MatchString(actualPodLabelValue) {
 			return false
 		}
 	}
@@ -188,7 +203,7 @@ func FindingCriteria(cfg *beyla.Config) services.DefinitionCriteria {
 	// any executable in the matched k8s entities
 	for i := range finderCriteria {
 		fc := &finderCriteria[i]
-		if !fc.Path.IsSet() && fc.OpenPorts.Len() == 0 && len(fc.Metadata) > 0 {
+		if !fc.Path.IsSet() && fc.OpenPorts.Len() == 0 && (len(fc.Metadata) > 0 || len(fc.PodLabels) > 0) {
 			// match any executable path
 			if err := fc.Path.UnmarshalText([]byte(".")); err != nil {
 				panic("bug! " + err.Error())

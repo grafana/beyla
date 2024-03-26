@@ -29,5 +29,5 @@ nodes:
         hostPort: 39090
       - containerPort: 16686
         hostPort: 36686
-      - containerPort: 50051
-        hostPort: 30051
+      - containerPort: 5051
+        hostPort: 30551

@@ -11,6 +11,7 @@
 #define EVENT_GRPC_CLIENT      4
 #define EVENT_SQL_CLIENT       5
 #define EVENT_K_HTTP_REQUEST   6
+#define EVENT_K_HTTP2_REQUEST  7
 
 // setting here the following map definitions without pinning them to a global namespace
 // would lead that services running both HTTP and GRPC server would duplicate 

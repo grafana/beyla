@@ -147,6 +147,7 @@ func (k *Metadata) initPodInformer(informerFactory informers.SharedInformerFacto
 				Name:      pod.Name,
 				Namespace: pod.Namespace,
 				UID:       pod.UID,
+				Labels:    pod.Labels,
 			},
 			Owner:        owner,
 			NodeName:     pod.Spec.NodeName,

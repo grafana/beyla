@@ -59,7 +59,7 @@ docker run --rm \
   grafana/beyla:latest
 ```
 
-Once Beyla is running, open `https://localhost:8443` in your browser, use the app to generate test data, and verify that Beyla prints trace requests to stdout similar to:
+After Beyla is running, open `https://localhost:18443` in your browser, use the app to generate test data, and verify that Beyla prints trace requests to stdout similar to:
 
 ```sh
 time=2023-05-22T14:03:42.402Z level=INFO msg="creating instrumentation pipeline"
@@ -95,9 +95,6 @@ services:
     image: grafana/beyla:latest
     pid: "service:goblog"
     privileged: true
-    # If using the above capability fails to instrument your service, remove it
-    # and uncomment the line below
-    # privileged: true
     environment:
       BEYLA_PRINT_TRACES: true
       BEYLA_OPEN_PORT: 8443

@@ -18,7 +18,7 @@ spec:
     - port: 8083
       name: http
       targetPort: http3
-    - port: 50051
+    - port: 5051
       name: grpc
       targetPort: grpc
 ---
@@ -68,8 +68,8 @@ spec:
             - containerPort: 8083
               hostPort: 8083
               name: http3
-            - containerPort: 50051
-              hostPort: 50051
+            - containerPort: 5051
+              hostPort: 5051
               name: grpc
           env:
             - name: LOG_LEVEL

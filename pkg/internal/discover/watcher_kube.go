@@ -7,10 +7,10 @@ import (
 	"github.com/mariomac/pipes/pkg/node"
 	"k8s.io/client-go/tools/cache"
 
-	"github.com/grafana/beyla/pkg/internal/discover/services"
 	"github.com/grafana/beyla/pkg/internal/helpers"
 	"github.com/grafana/beyla/pkg/internal/helpers/container"
 	"github.com/grafana/beyla/pkg/internal/kube"
+	"github.com/grafana/beyla/pkg/services"
 )
 
 // injectable functions for testing
@@ -300,6 +300,7 @@ func withMetadata(pp processAttrs, info *kube.PodInfo) processAttrs {
 		services.AttrNamespace: info.Namespace,
 		services.AttrPodName:   info.Name,
 	}
+	ret.podLabels = info.Labels
 	owner := info.Owner
 	for owner != nil {
 		ret.metadata[services.AttrOwnerName] = owner.Name

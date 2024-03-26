@@ -3,6 +3,7 @@ package grafanaagent
 import (
 	"context"
 	"log/slog"
+	"sort"
 	"time"
 
 	"github.com/mariomac/pipes/pkg/node"
@@ -78,6 +79,7 @@ func generateMetrics(cfg *otel.MetricsConfig, span *request.Span) pmetric.Metric
 }
 
 func generateHistogram(metricName string, unit string, value float64, ts time.Time, attrs pcommon.Map, buckets []float64) pmetric.Metric {
+	bucketCounts := make([]uint64, len(buckets)+1)
 	// Prepare the metric
 	m := pmetric.NewMetric()
 	m.SetName(metricName)
@@ -91,6 +93,9 @@ func generateHistogram(metricName string, unit string, value float64, ts time.Ti
 	dp.SetTimestamp(timestamp)
 	dp.SetStartTimestamp(startTS)
 	dp.ExplicitBounds().FromRaw(buckets)
+	index := sort.SearchFloat64s(buckets, value)
+	bucketCounts[index]++
+	dp.BucketCounts().FromRaw(bucketCounts)
 
 	// Set the value
 	dp.SetCount(1)

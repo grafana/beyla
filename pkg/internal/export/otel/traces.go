@@ -147,7 +147,7 @@ func newTracesReporter(ctx context.Context, cfg *TracesConfig, ctxInfo *global.C
 		}
 	case ProtocolGRPC:
 		log.Debug("instantiating GRPC TracesReporter", "protocol", proto)
-		if exporter, err = grpcTracer(ctx, cfg); err != nil {
+		if exporter, err = GRPCTracer(ctx, cfg); err != nil {
 			return nil, fmt.Errorf("can't instantiate OTEL GRPC traces exporter: %w", err)
 		}
 	default:
@@ -187,7 +187,7 @@ func HttpTracer(ctx context.Context, cfg *TracesConfig) (*otlptrace.Exporter, er
 	return texp, nil
 }
 
-func grpcTracer(ctx context.Context, cfg *TracesConfig) (*otlptrace.Exporter, error) {
+func GRPCTracer(ctx context.Context, cfg *TracesConfig) (*otlptrace.Exporter, error) {
 	topts, err := getGRPCTracesEndpointOptions(cfg)
 	if err != nil {
 		return nil, err

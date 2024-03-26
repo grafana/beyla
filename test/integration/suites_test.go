@@ -53,7 +53,7 @@ func TestSuiteNestedTraces(t *testing.T) {
 		t.Run("HTTP -> gRPC traces (nested client span)", testHTTP2GRPCTracesNestedCallsNoPropagation)
 	}
 	t.Run("BPF pinning folder mounted", testBPFPinningMounted)
-	//require.NoError(t, compose.Close())
+	require.NoError(t, compose.Close())
 	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
 }
 

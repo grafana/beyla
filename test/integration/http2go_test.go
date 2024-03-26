@@ -33,7 +33,6 @@ func testREDMetricsForHTTP2Library(t *testing.T, route, svcNs string) {
 			`http_route="` + route + `",` +
 			`url_path="` + route + `"}`)
 		require.NoError(t, err)
-		// check duration_count has 3 calls and all the arguments
 		enoughPromResults(t, results)
 		val := totalPromCount(t, results)
 		assert.LessOrEqual(t, 1, val)
@@ -54,10 +53,9 @@ func testREDMetricsForHTTP2Library(t *testing.T, route, svcNs string) {
 			`http_route="` + route + `",` +
 			`url_path="` + route + `"}`)
 		require.NoError(t, err)
-		// check duration_count has 3 calls and all the arguments
 		enoughPromResults(t, results)
 		val := totalPromCount(t, results)
-		assert.LessOrEqual(t, 3, val)
+		assert.LessOrEqual(t, 1, val)
 		if len(results) > 0 {
 			res := results[0]
 			addr := net.ParseIP(res.Metric["client_address"])

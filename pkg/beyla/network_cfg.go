@@ -19,13 +19,17 @@
 package beyla
 
 import (
+	"errors"
+	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/grafana/beyla/pkg/internal/netolly/flow"
+	"github.com/grafana/beyla/pkg/internal/netolly/transform/cidr"
 )
 
 type NetworkConfig struct {
-	// Enable network observability.
+	// Enable network metrics.
 	// Default value is false (disabled)
 	Enable bool `yaml:"enable" env:"BEYLA_NETWORK_METRICS"`
 
@@ -58,20 +62,18 @@ type NetworkConfig struct {
 	// CacheActiveTimeout specifies the maximum duration that flows are kept in the accounting
 	// cache before being flushed for its later export.
 	CacheActiveTimeout time.Duration `yaml:"cache_active_timeout" env:"BEYLA_NETWORK_CACHE_ACTIVE_TIMEOUT"`
-	// Deduper specifies the deduper type. Accepted values are "none" (disabled) and "firstCome".
+	// Deduper specifies the deduper type. Accepted values are "none" (disabled) and "first_come".
 	// When enabled, it will detect duplicate flows (flows that have been detected e.g. through
 	// both the physical and a virtual interface).
-	// "firstCome" will forward only flows from the first interface the flows are received from.
-	// Default value: firstCome
+	// "first_come" will forward only flows from the first interface the flows are received from.
+	// Default value: first_come
 	Deduper string `yaml:"deduper" env:"BEYLA_NETWORK_DEDUPER"`
-	// DeduperFCExpiry specifies the expiry duration of the flows "firstCome" deduplicator. After
+	// DeduperFCExpiry specifies the expiry duration of the flows "first_come" deduplicator. After
 	// a flow hasn't been received for that expiry time, the deduplicator forgets it. That means
 	// that a flow from a connection that has been inactive during that period could be forwarded
 	// again from a different interface.
 	// If the value is not set, it will default to 2 * CacheActiveTimeout
 	DeduperFCExpiry time.Duration `yaml:"deduper_fc_expiry" env:"BEYLA_NETWORK_DEDUPER_FC_EXPIRY"`
-	// DeduperJustMark will just mark duplicates (boolean field) instead of dropping them. Default: false.
-	DeduperJustMark bool `yaml:"deduper_just_mark" env:"BEYLA_NETWORK_DEDUPER_JUST_MARK"`
 	// Direction allows selecting which flows to trace according to its direction. Accepted values
 	// are "ingress", "egress" or "both" (default).
 	Direction string `yaml:"direction" env:"BEYLA_NETWORK_DIRECTION"`
@@ -87,6 +89,30 @@ type NetworkConfig struct {
 	// ListenPollPeriod specifies the periodicity to query the network interfaces when the
 	// ListenInterfaces value is set to "poll".
 	ListenPollPeriod time.Duration `yaml:"listen_poll_period" env:"BEYLA_NETWORK_LISTEN_POLL_PERIOD"`
+
+	// ReverseDNS allows flows that haven't been previously decorated with any source/destination name
+	// to override the name with the network hostname of the source and destination IPs.
+	// This is an experimental feature and it is not guaranteed to work on most virtualized environments
+	// for external traffic.
+	ReverseDNS flow.ReverseDNS `yaml:"reverse_dns"`
+
+	// Print the network flows in the Standard Output, if true
+	Print bool `yaml:"print_flows" env:"BEYLA_NETWORK_PRINT_FLOWS"`
+
+	// AllowedAttributes is a hidden/unstable/incomplete/epxerimental feature. This configuration API
+	// could change and be moved to other part, if we decide to extend this functionality also
+	// to AppO11y and Prometheus exporter.
+	// This won't filter some meta-attributes such as
+	// instance, job, service_instance_id, service_name, telemetry_sdk_*, etc...
+	AllowedAttributes []string `yaml:"allowed_attributes" env:"BEYLA_NETWORK_ALLOWED_ATTRIBUTES" envSeparator:","`
+
+	// CIDRs list, to be set as the "src.cidr" and "dst.cidr"
+	// attribute as a function of the source and destination IP addresses.
+	// If an IP does not match any address here, the attributes won't be set.
+	// If an IP matches multiple CIDR definitions, the flow will be decorated with the
+	// narrowest CIDR. By this reason, you can safely add a 0.0.0.0/0 entry to group there
+	// all the traffic that does not match any of the other CIDRs.
+	CIDRs cidr.Definitions `yaml:"cidrs" env:"BEYLA_NETWORK_CIDRS" envSeparator:","`
 }
 
 var defaultNetworkConfig = NetworkConfig{
@@ -96,8 +122,44 @@ var defaultNetworkConfig = NetworkConfig{
 	CacheMaxFlows:      5000,
 	CacheActiveTimeout: 5 * time.Second,
 	Deduper:            flow.DeduperFirstCome,
-	DeduperJustMark:    false,
 	Direction:          "both",
 	ListenInterfaces:   "watch",
 	ListenPollPeriod:   10 * time.Second,
+	AllowedAttributes: []string{
+		"k8s.src.owner.name",
+		"k8s.src.namespace",
+		"k8s.dst.owner.name",
+		"k8s.dst.namespace",
+		"k8s.cluster.name",
+	},
+	ReverseDNS: flow.ReverseDNS{
+		Type:     flow.ReverseDNSNone,
+		CacheLen: 256,
+		CacheTTL: time.Hour,
+	},
+}
+
+func (nc *NetworkConfig) Validate(isKubeEnabled bool) error {
+	if len(nc.AllowedAttributes) == 0 {
+		return errors.New("you must define some attributes in the allowed_attributes section. Please ceck documentation")
+	}
+	if isKubeEnabled {
+		return nil
+	}
+
+	actualAllowed := 0
+	for _, attr := range nc.AllowedAttributes {
+		if !strings.HasPrefix(attr, "k8s.") {
+			actualAllowed++
+		}
+	}
+	if actualAllowed == 0 {
+		return errors.New("allowed_attributes section (or its default) is only allowing Kubernetes metric attributes. " +
+			" You must define non-Kubernetes attributes there, or set BEYLA_KUBE_METADATA_ENABLE to true. Please check documentation")
+	}
+	if actualAllowed < len(nc.AllowedAttributes) {
+		slog.Warn("Network configuration allowed_attributes section is defining some Kubernetes attributes but " +
+			" Kubernetes metadata is disabled. Maybe you forgot to set BEYLA_KUBE_METADATA_ENABLE to true?")
+	}
+	return nil
 }

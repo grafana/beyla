@@ -41,7 +41,7 @@ type pingOpts struct {
 	serverAddr string
 }
 
-var defaultPingOpts = pingOpts{serverAddr: "localhost:50051"}
+var defaultPingOpts = pingOpts{serverAddr: "localhost:5051"}
 
 type PingOption func(*pingOpts)
 

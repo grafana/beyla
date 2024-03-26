@@ -53,9 +53,3 @@ services:
 ```
 
 If the volume is not mounted, Beyla will assume that the Linux Kernel is not running in integrity mode.
-
-### Linux Kernel version limitations for gRPC context propagation (5.17+)
-
-The gRPC protocol headers are typically compressed and encoded with the `hpack` algorithm. Uncompressed headers are also supported, however gRPC buffers in Go are typically small and writing uncompressed values is not feasible. We've implemented `hpack` encoding in eBPF to support context propagation in Go gRPC, by utilizing the eBPF helper [bfp_loop](https://www.man7.org/linux/man-pages/man7/bpf-helpers.7.html).
-
-The gRPC context propagation for Go requires Linux Kernel versions equal or later than **5.17**, because the `bpf_loop` helper is only available in those kernel versions.

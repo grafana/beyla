@@ -103,8 +103,6 @@ func (p *Tracer) Constants(_ *exec.FileInfo, offsets *goexec.Offsets) map[string
 		"req_header_ptr_pos",
 		"io_writer_buf_ptr_pos",
 		"io_writer_n_pos",
-		"io_writer_buf_ptr_pos",
-		"io_writer_n_pos",
 		"tcp_addr_port_ptr_pos",
 		"tcp_addr_ip_ptr_pos",
 		"c_rwc_pos",

@@ -6,9 +6,9 @@ import (
 	"time"
 
 	"github.com/caarlos0/env/v9"
+	otelconsumer "go.opentelemetry.io/collector/consumer"
 	"gopkg.in/yaml.v3"
 
-	"github.com/grafana/beyla/pkg/internal/discover/services"
 	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
 	"github.com/grafana/beyla/pkg/internal/export/debug"
 	"github.com/grafana/beyla/pkg/internal/export/otel"
@@ -16,6 +16,7 @@ import (
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/traces"
 	"github.com/grafana/beyla/pkg/internal/transform"
+	"github.com/grafana/beyla/pkg/services"
 )
 
 const ReporterLRUSize = 256
@@ -28,7 +29,7 @@ const (
 	FeatureNetO11y
 )
 
-var defaultConfig = Config{
+var DefaultConfig = Config{
 	ChannelBufferLen: 10,
 	LogLevel:         "INFO",
 	EBPF: ebpfcommon.TracerConfig{
@@ -125,6 +126,21 @@ type Config struct {
 	Noop             debug.NoopEnabled `yaml:"noop" env:"BEYLA_NOOP_TRACES"`
 	ProfilePort      int               `yaml:"profile_port" env:"BEYLA_PROFILE_PORT"`
 	InternalMetrics  imetrics.Config   `yaml:"internal_metrics"`
+
+	// Grafana Agent specific configuration
+	TracesReceiver TracesReceiverConfig `yaml:"-"`
+}
+
+type Consumer interface {
+	otelconsumer.Traces
+}
+
+type TracesReceiverConfig struct {
+	Traces []Consumer
+}
+
+func (t TracesReceiverConfig) Enabled() bool {
+	return len(t.Traces) > 0
 }
 
 // Attributes configures the decoration of some extra attributes that will be
@@ -155,19 +171,25 @@ func (c *Config) Validate() error {
 		return ConfigError("BEYLA_BPF_BATCH_LENGTH must be at least 1")
 	}
 
-	if c.Enabled(FeatureNetO11y) && !c.Grafana.OTLP.MetricsEnabled() && !c.Metrics.Enabled() {
-		return ConfigError("enabling network observability requires to enable at least the OpenTelemetry" +
+	if c.Enabled(FeatureNetO11y) && !c.Grafana.OTLP.MetricsEnabled() && !c.Metrics.Enabled() && !c.NetworkFlows.Print {
+		return ConfigError("enabling network metrics requires to enable at least the OpenTelemetry" +
 			" metrics exporter: grafana or otel_metrics_export sections in the YAML configuration file; or the" +
-			" OTEL_EXPORTER_OTLP_ENDPOINT or OTEL_EXPORTER_OTLP_METRICS_ENDPOINT environment variables")
+			" OTEL_EXPORTER_OTLP_ENDPOINT or OTEL_EXPORTER_OTLP_METRICS_ENDPOINT environment variables. For debugging" +
+			" purposes, you can also set BEYLA_NETWORK_PRINT_FLOWS=true")
 	}
 
-	if !c.Noop.Enabled() && !c.Printer.Enabled() &&
+	if c.Enabled(FeatureAppO11y) && !c.Noop.Enabled() && !c.Printer.Enabled() &&
 		!c.Grafana.OTLP.MetricsEnabled() && !c.Grafana.OTLP.TracesEnabled() &&
 		!c.Metrics.Enabled() && !c.Traces.Enabled() &&
 		!c.Prometheus.Enabled() {
 		return ConfigError("you need to define at least one exporter: print_traces," +
 			" grafana, otel_metrics_export, otel_traces_export or prometheus_export")
 	}
+
+	if c.Enabled(FeatureNetO11y) {
+		return c.NetworkFlows.Validate(c.Attributes.Kubernetes.Enabled())
+	}
+
 	return nil
 }
 
@@ -187,7 +209,7 @@ func (c *Config) Enabled(feature Feature) bool {
 // 2 - Contents of the provided file reader (nillable)
 // 3 - Environment variables
 func LoadConfig(file io.Reader) (*Config, error) {
-	cfg := defaultConfig
+	cfg := DefaultConfig
 	if file != nil {
 		cfgBuf, err := io.ReadAll(file)
 		if err != nil {

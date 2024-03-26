@@ -24,10 +24,8 @@ import (
 	"io"
 	"log/slog"
 	"net"
-	"time"
 
 	"github.com/cilium/ebpf/ringbuf"
-	"github.com/gavv/monotime"
 	"github.com/mariomac/pipes/pkg/node"
 
 	"github.com/grafana/beyla/pkg/beyla"
@@ -97,7 +95,6 @@ type Flows struct {
 	// processing nodes to be wired in the buildAndStartPipeline method
 	mapTracer *flow.MapTracer
 	rbTracer  *flow.RingBufTracer
-	accounter *flow.Accounter
 	exporter  node.TerminalFunc[[]*ebpf.Record]
 
 	// elements used to decorate flows with extra information
@@ -185,8 +182,6 @@ func flowsAgent(cfg *beyla.Config,
 
 	mapTracer := flow.NewMapTracer(fetcher, cfg.NetworkFlows.CacheActiveTimeout)
 	rbTracer := flow.NewRingBufTracer(fetcher, mapTracer, cfg.NetworkFlows.CacheActiveTimeout)
-	accounter := flow.NewAccounter(
-		cfg.NetworkFlows.CacheMaxFlows, cfg.NetworkFlows.CacheActiveTimeout, time.Now, monotime.Now)
 	return &Flows{
 		ebpf:           fetcher,
 		exporter:       exporter,
@@ -195,7 +190,6 @@ func flowsAgent(cfg *beyla.Config,
 		cfg:            cfg,
 		mapTracer:      mapTracer,
 		rbTracer:       rbTracer,
-		accounter:      accounter,
 		agentIP:        agentIP,
 		interfaceNamer: interfaceNamer,
 	}, nil

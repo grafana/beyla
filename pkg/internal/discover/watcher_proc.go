@@ -15,9 +15,9 @@ import (
 	"github.com/shirou/gopsutil/process"
 
 	"github.com/grafana/beyla/pkg/beyla"
-	"github.com/grafana/beyla/pkg/internal/discover/services"
 	"github.com/grafana/beyla/pkg/internal/ebpf"
 	"github.com/grafana/beyla/pkg/internal/ebpf/watcher"
+	"github.com/grafana/beyla/pkg/services"
 )
 
 const (
@@ -49,6 +49,7 @@ type processAttrs struct {
 	pid       PID
 	openPorts []uint32
 	metadata  map[string]string
+	podLabels map[string]string
 }
 
 func wplog() *slog.Logger {

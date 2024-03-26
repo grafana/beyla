@@ -14,6 +14,7 @@ import (
 
 	"github.com/mariomac/guara/pkg/test"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/net/http2"
 
 	"github.com/grafana/beyla/test/integration/components/prom"
 )
@@ -123,4 +124,43 @@ func totalPromCount(t require.TestingT, results []prom.Result) int {
 	}
 
 	return total
+}
+
+func doHTTP2Post(t *testing.T, path string, status int, jsonBody []byte) {
+	req, err := http.NewRequest(http.MethodPost, path, bytes.NewReader(jsonBody))
+	require.NoError(t, err)
+	req.Header.Set("Content-Type", "application/json")
+
+	tr := &http2.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	}
+
+	r, err := tr.RoundTrip(req)
+
+	require.NoError(t, err)
+	require.Equal(t, status, r.StatusCode)
+	require.Equal(t, 2, r.ProtoMajor)
+}
+
+func waitForTestComponentsHTTP2Sub(t *testing.T, url, subpath string, minutes int) {
+	pq := prom.Client{HostPort: prometheusHostPort}
+	test.Eventually(t, time.Duration(minutes)*time.Minute, func(t require.TestingT) {
+		// first, verify that the test service endpoint is healthy
+		req, err := http.NewRequest("GET", url+subpath, nil)
+		require.NoError(t, err)
+		tr := &http2.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		}
+
+		r, err := tr.RoundTrip(req)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, r.StatusCode)
+
+		// now, verify that the metric has been reported.
+		// we don't really care that this metric could be from a previous
+		// test. Once one it is visible, it means that Otel and Prometheus are healthy
+		results, err := pq.Query(`http_server_request_duration_seconds_count{url_path="` + subpath + `"}`)
+		require.NoError(t, err)
+		require.NotEmpty(t, results)
+	}, test.Interval(time.Second))
 }

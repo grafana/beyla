@@ -17,10 +17,10 @@ import (
 	fakek8sclientset "k8s.io/client-go/kubernetes/fake"
 
 	"github.com/grafana/beyla/pkg/beyla"
-	"github.com/grafana/beyla/pkg/internal/discover/services"
 	"github.com/grafana/beyla/pkg/internal/helpers/container"
 	"github.com/grafana/beyla/pkg/internal/kube"
 	"github.com/grafana/beyla/pkg/internal/testutil"
+	"github.com/grafana/beyla/pkg/services"
 )
 
 const timeout = 5 * time.Second
@@ -45,7 +45,7 @@ func TestWatcherKubeEnricher(t *testing.T) {
 		newProcess(inputCh, containerPID, []uint32{containerPort})
 	}
 	var pod = func(t *testing.T, _ chan []Event[processAttrs], k8sClient *fakek8sclientset.Clientset) {
-		deployPod(t, k8sClient, namespace, podName, containerID)
+		deployPod(t, k8sClient, namespace, podName, containerID, nil)
 	}
 	var ownedPod = func(t *testing.T, _ chan []Event[processAttrs], k8sClient *fakek8sclientset.Clientset) {
 		deployOwnedPod(t, k8sClient, namespace, podName, replicaSetName, containerID)
@@ -136,6 +136,13 @@ func TestWatcherKubeEnricherWithMatcher(t *testing.T) {
   - name: both
     open_ports: 443
     k8s_deployment_name: chacha
+  - name: pod-label-only
+    k8s_pod_labels:
+      instrument: "beyla"
+  - name: pod-multi-label-only
+    k8s_pod_labels:
+      instrument: "ebpf"
+      lang: "go.*"
 `), &pipeConfig))
 	mtchNodeFunc, err := CriteriaMatcherProvider(CriteriaMatcher{Cfg: &pipeConfig})
 	require.NoError(t, err)
@@ -168,13 +175,35 @@ func TestWatcherKubeEnricherWithMatcher(t *testing.T) {
 
 	t.Run("metadata-only match", func(t *testing.T) {
 		newProcess(inputCh, 34, []uint32{8080})
-		deployPod(t, k8sClient, namespace, "chichi", "container-34")
+		deployPod(t, k8sClient, namespace, "chichi", "container-34", nil)
 		matches := testutil.ReadChannel(t, outputCh, timeout)
 		require.Len(t, matches, 1)
 		m := matches[0]
 		assert.Equal(t, EventCreated, m.Type)
 		assert.Equal(t, "metadata-only", m.Obj.Criteria.Name)
 		assert.EqualValues(t, 34, m.Obj.Process.Pid)
+	})
+
+	t.Run("pod-label-only match", func(t *testing.T) {
+		newProcess(inputCh, 42, []uint32{8080})
+		deployPod(t, k8sClient, namespace, "labeltest", "container-42", map[string]string{"instrument": "beyla"})
+		matches := testutil.ReadChannel(t, outputCh, timeout)
+		require.Len(t, matches, 1)
+		m := matches[0]
+		assert.Equal(t, EventCreated, m.Type)
+		assert.Equal(t, "pod-label-only", m.Obj.Criteria.Name)
+		assert.EqualValues(t, 42, m.Obj.Process.Pid)
+	})
+
+	t.Run("pod-multi-label-only match", func(t *testing.T) {
+		newProcess(inputCh, 43, []uint32{8080})
+		deployPod(t, k8sClient, namespace, "multi-labeltest", "container-43", map[string]string{"instrument": "ebpf", "lang": "golang"})
+		matches := testutil.ReadChannel(t, outputCh, timeout)
+		require.Len(t, matches, 1)
+		m := matches[0]
+		assert.Equal(t, EventCreated, m.Type)
+		assert.Equal(t, "pod-multi-label-only", m.Obj.Criteria.Name)
+		assert.EqualValues(t, 43, m.Obj.Process.Pid)
 	})
 
 	t.Run("both process and metadata match", func(t *testing.T) {
@@ -218,12 +247,13 @@ func newProcess(inputCh chan []Event[processAttrs], pid PID, ports []uint32) {
 	}}
 }
 
-func deployPod(t *testing.T, k8sClient *fakek8sclientset.Clientset, ns, name, containerID string) {
+func deployPod(t *testing.T, k8sClient *fakek8sclientset.Clientset, ns, name, containerID string, labels map[string]string) {
 	t.Helper()
 	_, err := k8sClient.CoreV1().Pods(ns).Create(
 		context.Background(),
 		&corev1.Pod{ObjectMeta: metav1.ObjectMeta{
 			Name: name, Namespace: ns,
+			Labels: labels,
 		}, Status: corev1.PodStatus{
 			ContainerStatuses: []corev1.ContainerStatus{{
 				ContainerID: containerID,

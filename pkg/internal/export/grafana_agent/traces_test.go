@@ -1,7 +1,6 @@
 package grafanaagent
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -16,7 +15,54 @@ import (
 )
 
 func TestGenerateTraces(t *testing.T) {
-	t.Run("test with subtraces", func(t *testing.T) {
+	t.Run("test with subtraces - with parent spanId", func(t *testing.T) {
+		start := time.Now()
+		parentSpanID, _ := trace.SpanIDFromHex("89cbc1f60aab3b04")
+		spanID, _ := trace.SpanIDFromHex("89cbc1f60aab3b01")
+		traceID, _ := trace.TraceIDFromHex("eae56fbbec9505c102e8aabfc6b5c481")
+		span := &request.Span{
+			Type:         request.EventTypeHTTP,
+			RequestStart: start.UnixNano(),
+			Start:        start.Add(time.Second).UnixNano(),
+			End:          start.Add(3 * time.Second).UnixNano(),
+			Method:       "GET",
+			Route:        "/test",
+			Status:       200,
+			ParentSpanID: parentSpanID,
+			TraceID:      traceID,
+			SpanID:       spanID,
+		}
+		traces := generateTraces(span)
+
+		assert.Equal(t, 1, traces.ResourceSpans().Len())
+		assert.Equal(t, 1, traces.ResourceSpans().At(0).ScopeSpans().Len())
+		assert.Equal(t, 3, traces.ResourceSpans().At(0).ScopeSpans().At(0).Spans().Len())
+		spans := traces.ResourceSpans().At(0).ScopeSpans().At(0).Spans()
+		assert.Equal(t, "in queue", spans.At(0).Name())
+		assert.Equal(t, "processing", spans.At(1).Name())
+		assert.Equal(t, "GET /test", spans.At(2).Name())
+		assert.Equal(t, ptrace.SpanKindInternal, spans.At(0).Kind())
+		assert.Equal(t, ptrace.SpanKindInternal, spans.At(1).Kind())
+		assert.Equal(t, ptrace.SpanKindServer, spans.At(2).Kind())
+
+		assert.NotEmpty(t, spans.At(2).SpanID().String())
+		assert.Equal(t, traceID.String(), spans.At(2).TraceID().String())
+		topSpanID := spans.At(2).SpanID().String()
+		assert.Equal(t, parentSpanID.String(), spans.At(2).ParentSpanID().String())
+
+		assert.NotEmpty(t, spans.At(0).SpanID().String())
+		assert.Equal(t, traceID.String(), spans.At(0).TraceID().String())
+		assert.Equal(t, topSpanID, spans.At(0).ParentSpanID().String())
+
+		assert.Equal(t, spanID.String(), spans.At(1).SpanID().String())
+		assert.Equal(t, traceID.String(), spans.At(1).TraceID().String())
+		assert.Equal(t, topSpanID, spans.At(1).ParentSpanID().String())
+
+		assert.NotEqual(t, spans.At(0).SpanID().String(), spans.At(1).SpanID().String())
+		assert.NotEqual(t, spans.At(1).SpanID().String(), spans.At(2).SpanID().String())
+	})
+
+	t.Run("test with subtraces - ids set bpf layer", func(t *testing.T) {
 		start := time.Now()
 		spanID, _ := trace.SpanIDFromHex("89cbc1f60aab3b04")
 		traceID, _ := trace.TraceIDFromHex("eae56fbbec9505c102e8aabfc6b5c481")
@@ -31,7 +77,7 @@ func TestGenerateTraces(t *testing.T) {
 			SpanID:       spanID,
 			TraceID:      traceID,
 		}
-		traces := generateTraces(context.TODO(), span)
+		traces := generateTraces(span)
 
 		assert.Equal(t, 1, traces.ResourceSpans().Len())
 		assert.Equal(t, 1, traces.ResourceSpans().At(0).ScopeSpans().Len())
@@ -52,6 +98,42 @@ func TestGenerateTraces(t *testing.T) {
 
 		assert.NotEmpty(t, spans.At(2).SpanID().String())
 		assert.Equal(t, traceID.String(), spans.At(2).TraceID().String())
+		assert.NotEqual(t, spans.At(0).SpanID().String(), spans.At(1).SpanID().String())
+		assert.NotEqual(t, spans.At(1).SpanID().String(), spans.At(2).SpanID().String())
+	})
+
+	t.Run("test with subtraces - generated ids", func(t *testing.T) {
+		start := time.Now()
+		span := &request.Span{
+			Type:         request.EventTypeHTTP,
+			RequestStart: start.UnixNano(),
+			Start:        start.Add(time.Second).UnixNano(),
+			End:          start.Add(3 * time.Second).UnixNano(),
+			Method:       "GET",
+			Route:        "/test",
+			Status:       200,
+		}
+		traces := generateTraces(span)
+
+		assert.Equal(t, 1, traces.ResourceSpans().Len())
+		assert.Equal(t, 1, traces.ResourceSpans().At(0).ScopeSpans().Len())
+		assert.Equal(t, 3, traces.ResourceSpans().At(0).ScopeSpans().At(0).Spans().Len())
+		spans := traces.ResourceSpans().At(0).ScopeSpans().At(0).Spans()
+		assert.Equal(t, "in queue", spans.At(0).Name())
+		assert.Equal(t, "processing", spans.At(1).Name())
+		assert.Equal(t, "GET /test", spans.At(2).Name())
+		assert.Equal(t, ptrace.SpanKindInternal, spans.At(0).Kind())
+		assert.Equal(t, ptrace.SpanKindInternal, spans.At(1).Kind())
+		assert.Equal(t, ptrace.SpanKindServer, spans.At(2).Kind())
+
+		assert.NotEmpty(t, spans.At(0).SpanID().String())
+		assert.NotEmpty(t, spans.At(0).TraceID().String())
+		assert.NotEmpty(t, spans.At(1).SpanID().String())
+		assert.NotEmpty(t, spans.At(1).TraceID().String())
+		assert.NotEmpty(t, spans.At(2).SpanID().String())
+		assert.NotEmpty(t, spans.At(2).TraceID().String())
+		assert.NotEqual(t, spans.At(0).SpanID().String(), spans.At(1).SpanID().String())
+		assert.NotEqual(t, spans.At(1).SpanID().String(), spans.At(2).SpanID().String())
 	})
 
 	t.Run("test without subspans - ids set bpf layer", func(t *testing.T) {
@@ -68,7 +150,7 @@ func TestGenerateTraces(t *testing.T) {
 			SpanID:       spanID,
 			TraceID:      traceID,
 		}
-		traces := generateTraces(context.TODO(), span)
+		traces := generateTraces(span)
 
 		assert.Equal(t, 1, traces.ResourceSpans().Len())
 		assert.Equal(t, 1, traces.ResourceSpans().At(0).ScopeSpans().Len())
@@ -93,14 +175,14 @@ func TestGenerateTraces(t *testing.T) {
 			ParentSpanID: parentSpanID,
 			TraceID:      traceID,
 		}
-		traces := generateTraces(context.TODO(), span)
+		traces := generateTraces(span)
 
 		assert.Equal(t, 1, traces.ResourceSpans().Len())
 		assert.Equal(t, 1, traces.ResourceSpans().At(0).ScopeSpans().Len())
 		assert.Equal(t, 1, traces.ResourceSpans().At(0).ScopeSpans().At(0).Spans().Len())
 		spans := traces.ResourceSpans().At(0).ScopeSpans().At(0).Spans()
 
-		assert.Equal(t, parentSpanID.String(), spans.At(0).SpanID().String())
+		assert.Equal(t, parentSpanID.String(), spans.At(0).ParentSpanID().String())
 		assert.Equal(t, traceID.String(), spans.At(0).TraceID().String())
 	})
 
@@ -113,7 +195,7 @@ func TestGenerateTraces(t *testing.T) {
 			Method:       "GET",
 			Route:        "/test",
 		}
-		traces := generateTraces(context.TODO(), span)
+		traces := generateTraces(span)
 
 		assert.Equal(t, 1, traces.ResourceSpans().Len())
 		assert.Equal(t, 1, traces.ResourceSpans().At(0).ScopeSpans().Len())

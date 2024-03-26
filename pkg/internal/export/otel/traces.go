@@ -142,12 +142,12 @@ func newTracesReporter(ctx context.Context, cfg *TracesConfig, ctxInfo *global.C
 	switch proto := cfg.GetProtocol(); proto {
 	case ProtocolHTTPJSON, ProtocolHTTPProtobuf, "": // zero value defaults to HTTP for backwards-compatibility
 		log.Debug("instantiating HTTP TracesReporter", "protocol", proto)
-		if exporter, err = httpTracer(ctx, cfg); err != nil {
+		if exporter, err = HttpTracer(ctx, cfg); err != nil {
 			return nil, fmt.Errorf("can't instantiate OTEL HTTP traces exporter: %w", err)
 		}
 	case ProtocolGRPC:
 		log.Debug("instantiating GRPC TracesReporter", "protocol", proto)
-		if exporter, err = grpcTracer(ctx, cfg); err != nil {
+		if exporter, err = GRPCTracer(ctx, cfg); err != nil {
 			return nil, fmt.Errorf("can't instantiate OTEL GRPC traces exporter: %w", err)
 		}
 	default:
@@ -155,7 +155,7 @@ func newTracesReporter(ctx context.Context, cfg *TracesConfig, ctxInfo *global.C
 			proto, ProtocolGRPC, ProtocolHTTPJSON, ProtocolHTTPProtobuf)
 	}
 
-	r.traceExporter = instrumentTraceExporter(exporter, ctxInfo.Metrics)
+	r.traceExporter = InstrumentTraceExporter(exporter, ctxInfo.Metrics)
 
 	var opts []trace.BatchSpanProcessorOption
 	if cfg.MaxExportBatchSize > 0 {
@@ -175,7 +175,7 @@ func newTracesReporter(ctx context.Context, cfg *TracesConfig, ctxInfo *global.C
 	return &r, nil
 }
 
-func httpTracer(ctx context.Context, cfg *TracesConfig) (*otlptrace.Exporter, error) {
+func HttpTracer(ctx context.Context, cfg *TracesConfig) (*otlptrace.Exporter, error) {
 	topts, err := getHTTPTracesEndpointOptions(cfg)
 	if err != nil {
 		return nil, err
@@ -187,7 +187,7 @@ func httpTracer(ctx context.Context, cfg *TracesConfig) (*otlptrace.Exporter, er
 	return texp, nil
 }
 
-func grpcTracer(ctx context.Context, cfg *TracesConfig) (*otlptrace.Exporter, error) {
+func GRPCTracer(ctx context.Context, cfg *TracesConfig) (*otlptrace.Exporter, error) {
 	topts, err := getGRPCTracesEndpointOptions(cfg)
 	if err != nil {
 		return nil, err
@@ -199,9 +199,9 @@ func grpcTracer(ctx context.Context, cfg *TracesConfig) (*otlptrace.Exporter, er
 	return texp, nil
 }
 
-// instrumentTraceExporter checks whether the context is configured to report internal metrics and,
+// InstrumentTraceExporter checks whether the context is configured to report internal metrics and,
 // in this case, wraps the passed traces exporter inside an instrumented exporter
-func instrumentTraceExporter(in trace.SpanExporter, internalMetrics imetrics.Reporter) trace.SpanExporter {
+func InstrumentTraceExporter(in trace.SpanExporter, internalMetrics imetrics.Reporter) trace.SpanExporter {
 	// avoid wrapping the instrumented exporter if we don't have
 	// internal instrumentation (NoopReporter)
 	if _, ok := internalMetrics.(imetrics.NoopReporter); ok || internalMetrics == nil {

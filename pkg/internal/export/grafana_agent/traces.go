@@ -9,7 +9,6 @@ import (
 	"go.opentelemetry.io/collector/pdata/ptrace"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
-	"go.opentelemetry.io/otel/trace"
 
 	"github.com/grafana/beyla/pkg/beyla"
 	"github.com/grafana/beyla/pkg/internal/export/otel"
@@ -27,7 +26,7 @@ func TracesReceiver(ctx context.Context, cfg beyla.TracesReceiverConfig) (node.T
 				}
 
 				for _, tc := range cfg.Traces {
-					traces := generateTraces(ctx, span)
+					traces := generateTraces(span)
 					err := tc.ConsumeTraces(ctx, traces)
 					if err != nil {
 						slog.Error("error sending trace to consumer", "error", err)
@@ -39,28 +38,29 @@ func TracesReceiver(ctx context.Context, cfg beyla.TracesReceiverConfig) (node.T
 }
 
 // generateTraces creates a ptrace.Traces from a request.Span
-func generateTraces(ctx context.Context, span *request.Span) ptrace.Traces {
-	idGen := &otel.BeylaIDGenerator{}
+func generateTraces(span *request.Span) ptrace.Traces {
 	t := span.Timings()
 	start := otel.SpanStartTime(t)
 	hasSubSpans := t.Start.After(start)
-
-	parentCtx := otel.HandleTraceparent(ctx, span)
-	if !hasSubSpans {
-		// We set the eBPF calculated trace_id and span_id to be the main span
-		parentCtx = otel.ContextWithTraceParent(parentCtx, span.TraceID, span.SpanID)
-	}
-
 	traces := ptrace.NewTraces()
 	rs := traces.ResourceSpans().AppendEmpty()
 	ss := rs.ScopeSpans().AppendEmpty()
 	resourceAttrs := attrsToMap(otel.Resource(span.ServiceID).Attributes())
 	resourceAttrs.CopyTo(rs.Resource().Attributes())
 
-	if hasSubSpans {
-		createSubSpans(parentCtx, span, &ss, t, idGen)
+	traceID := pcommon.TraceID(span.TraceID)
+	spanID := pcommon.SpanID(otel.RandomSpanID())
+	if traceID.IsEmpty() {
+		traceID = pcommon.TraceID(otel.RandomTraceID())
 	}
 
+	if hasSubSpans {
+		createSubSpans(span, spanID, traceID, &ss, t)
+	} else {
+		if span.SpanID.IsValid() {
+			spanID = pcommon.SpanID(span.SpanID)
+		}
+	}
 	// Create a parent span for the whole request session
 	s := ss.Spans().AppendEmpty()
 	s.SetName(otel.TraceName(span))
@@ -68,7 +68,11 @@ func generateTraces(ctx context.Context, span *request.Span) ptrace.Traces {
 	s.SetStartTimestamp(pcommon.NewTimestampFromTime(start))
 
 	// Set trace and span IDs
-	setIds(parentCtx, &s, span.TraceID, span.ParentSpanID, idGen)
+	s.SetSpanID(spanID)
+	s.SetTraceID(traceID)
+	if span.ParentSpanID.IsValid() {
+		s.SetParentSpanID(pcommon.SpanID(span.ParentSpanID))
+	}
 
 	// Set span attributes
 	attrs := otel.TraceAttributes(span)
@@ -83,14 +87,16 @@ func generateTraces(ctx context.Context, span *request.Span) ptrace.Traces {
 }
 
 // createSubSpans creates the internal spans for a request.Span
-func createSubSpans(ctx context.Context, span *request.Span, ss *ptrace.ScopeSpans, t request.Timings, idGen *otel.BeylaIDGenerator) {
+func createSubSpans(span *request.Span, parentSpanID pcommon.SpanID, traceID pcommon.TraceID, ss *ptrace.ScopeSpans, t request.Timings) {
 	// Create a child span showing the queue time
 	spQ := ss.Spans().AppendEmpty()
 	spQ.SetName("in queue")
 	spQ.SetStartTimestamp(pcommon.NewTimestampFromTime(t.RequestStart))
 	spQ.SetKind(ptrace.SpanKindInternal)
 	spQ.SetEndTimestamp(pcommon.NewTimestampFromTime(t.Start))
-	setIds(ctx, &spQ, span.TraceID, span.ParentSpanID, idGen)
+	spQ.SetTraceID(traceID)
+	spQ.SetSpanID(pcommon.SpanID(otel.RandomSpanID()))
+	spQ.SetParentSpanID(parentSpanID)
 
 	// Create a child span showing the processing time
 	spP := ss.Spans().AppendEmpty()
@@ -98,23 +104,13 @@ func createSubSpans(ctx context.Context, span *request.Span, ss *ptrace.ScopeSpa
 	spP.SetStartTimestamp(pcommon.NewTimestampFromTime(t.Start))
 	spP.SetKind(ptrace.SpanKindInternal)
 	spP.SetEndTimestamp(pcommon.NewTimestampFromTime(t.End))
-	ctx = otel.ContextWithTraceParent(ctx, span.TraceID, span.SpanID)
-	setIds(ctx, &spP, span.TraceID, span.ParentSpanID, idGen)
-}
-
-func setIds(ctx context.Context, s *ptrace.Span, traceID trace.TraceID, parentSpanID trace.SpanID, idGen *otel.BeylaIDGenerator) {
-	var spanID trace.SpanID
-	if !traceID.IsValid() {
-		traceID, spanID = idGen.NewIDs(ctx)
+	spP.SetTraceID(traceID)
+	if span.SpanID.IsValid() {
+		spP.SetSpanID(pcommon.SpanID(span.SpanID))
 	} else {
-		spanID = idGen.NewSpanID(ctx, traceID)
+		spP.SetSpanID(pcommon.SpanID(otel.RandomSpanID()))
 	}
-	if parentSpanID.IsValid() {
-		s.SetSpanID(pcommon.SpanID(parentSpanID))
-	} else {
-		s.SetSpanID(pcommon.SpanID(spanID))
-	}
-	s.SetTraceID(pcommon.TraceID(traceID))
+	spP.SetParentSpanID(parentSpanID)
 }
 
 // attrsToMap converts a slice of attribute.KeyValue to a pcommon.Map

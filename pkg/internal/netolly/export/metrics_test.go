@@ -6,6 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"go.opentelemetry.io/otel/attribute"
 
+	"github.com/grafana/beyla/pkg/internal/export/otel"
 	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
 )
 
@@ -100,4 +101,25 @@ func TestMetricAttributes_Filter(t *testing.T) {
 	} {
 		assert.NotContains(t, attrNames, mustNotContain)
 	}
+}
+
+func TestMetricsConfig_Enabled(t *testing.T) {
+	assert.True(t, MetricsConfig{Metrics: &otel.MetricsConfig{
+		Features: []string{otel.FeatureApplication, otel.FeatureNetwork}, CommonEndpoint: "foo"}}.Enabled())
+	assert.True(t, MetricsConfig{Metrics: &otel.MetricsConfig{
+		Features: []string{otel.FeatureNetwork, otel.FeatureApplication}, MetricsEndpoint: "foo"}}.Enabled())
+	assert.True(t, MetricsConfig{Metrics: &otel.MetricsConfig{
+		Features: []string{otel.FeatureNetwork}, Grafana: &otel.GrafanaOTLP{Submit: []string{"traces", "metrics"}, InstanceID: "33221"}}}.Enabled())
+}
+
+func TestMetricsConfig_Disabled(t *testing.T) {
+	var fa = []string{otel.FeatureApplication}
+	var fn = []string{otel.FeatureNetwork}
+	assert.False(t, MetricsConfig{Metrics: &otel.MetricsConfig{Features: fn}}.Enabled())
+	assert.False(t, MetricsConfig{Metrics: &otel.MetricsConfig{Features: fn, Grafana: &otel.GrafanaOTLP{Submit: []string{"traces"}, InstanceID: "33221"}}}.Enabled())
+	assert.False(t, MetricsConfig{Metrics: &otel.MetricsConfig{Features: fn, Grafana: &otel.GrafanaOTLP{Submit: []string{"metrics"}}}}.Enabled())
+	// network feature is not enabled
+	assert.False(t, MetricsConfig{Metrics: &otel.MetricsConfig{CommonEndpoint: "foo"}}.Enabled())
+	assert.False(t, MetricsConfig{Metrics: &otel.MetricsConfig{MetricsEndpoint: "foo", Features: fa}}.Enabled())
+	assert.False(t, MetricsConfig{Metrics: &otel.MetricsConfig{Grafana: &otel.GrafanaOTLP{Submit: []string{"traces", "metrics"}, InstanceID: "33221"}}}.Enabled())
 }

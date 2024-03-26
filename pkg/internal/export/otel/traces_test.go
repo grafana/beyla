@@ -384,8 +384,8 @@ func TestTraces_InternalInstrumentationSampling(t *testing.T) {
 
 func TestTracesConfig_Enabled(t *testing.T) {
 	assert.True(t, TracesConfig{CommonEndpoint: "foo"}.Enabled())
-	assert.True(t, MetricsConfig{MetricsEndpoint: "foo"}.Enabled())
-	assert.True(t, MetricsConfig{Grafana: &GrafanaOTLP{Submit: []string{"traces", "metrics"}, InstanceID: "33221"}}.Enabled())
+	assert.True(t, TracesConfig{TracesEndpoint: "foo"}.Enabled())
+	assert.True(t, TracesConfig{Grafana: &GrafanaOTLP{Submit: []string{"traces", "metrics"}, InstanceID: "33221"}}.Enabled())
 }
 
 func TestTracesConfig_Disabled(t *testing.T) {

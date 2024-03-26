@@ -21,10 +21,11 @@ func PrinterNode(_ PrintEnabled) (node.TerminalFunc[[]request.Span], error) {
 		for spans := range input {
 			for i := range spans {
 				t := spans[i].Timings()
-				fmt.Printf("%s (%s[%s]) %v %s %s [%s]->[%s:%d] size:%dB svc=[%s %s] traceparent=[%s]\n",
+				fmt.Printf("%s (%s[%s]) %s %v %s %s [%s]->[%s:%d] size:%dB svc=[%s %s] traceparent=[%s]\n",
 					t.Start.Format("2006-01-02 15:04:05.12345"),
 					t.End.Sub(t.RequestStart),
 					t.End.Sub(t.Start),
+					spanType(&spans[i]),
 					spans[i].Status,
 					spans[i].Method,
 					spans[i].Path,
@@ -46,6 +47,23 @@ func traceparent(span *request.Span) string {
 		return ""
 	}
 	return fmt.Sprintf("00-%s-%s-%02x", trace.TraceID(span.TraceID).String(), trace.SpanID(span.ParentSpanID).String(), span.Flags)
+}
+
+func spanType(span *request.Span) string {
+	switch span.Type {
+	case request.EventTypeHTTP:
+		return "SRV"
+	case request.EventTypeHTTPClient:
+		return "CLNT"
+	case request.EventTypeGRPC:
+		return "GRPC_SRV"
+	case request.EventTypeGRPCClient:
+		return "GRPC_CLNT"
+	case request.EventTypeSQLClient:
+		return "SQL"
+	}
+
+	return ""
 }
 
 type NoopEnabled bool

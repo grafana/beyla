@@ -13,26 +13,14 @@ eBPF-based autoinstrumentation of HTTP and HTTPS services
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | affinity | object | `{}` |  |
-| configmapData.attributes.kubernetes.enable | bool | `true` |  |
-| configmapData.discovery.services[0].k8s_namespace | string | `"default"` |  |
-| configmapData.log_level | string | `"info"` |  |
-| configmapData.open_port | int | `8443` |  |
-| configmapData.otel_traces_export.endpoint | string | `"http://grafana-agent:4318"` |  |
-| configmapData.routes.unmatched | string | `"heuristic"` |  |
+| configmapData | string | `nil` |  |
 | env | object | `{}` |  |
 | envValueFrom | object | `{}` |  |
 | fullnameOverride | string | `""` |  |
 | image.pullPolicy | string | `"IfNotPresent"` |  |
 | image.repository | string | `"grafana/beyla"` |  |
-| image.tag | string | `"main"` |  |
+| image.tag | string | `"latest"` |  |
 | imagePullSecrets | list | `[]` |  |
-| ingress.annotations | object | `{}` |  |
-| ingress.className | string | `""` |  |
-| ingress.enabled | bool | `false` |  |
-| ingress.hosts[0].host | string | `"chart-example.local"` |  |
-| ingress.hosts[0].paths[0].path | string | `"/"` |  |
-| ingress.hosts[0].paths[0].pathType | string | `"ImplementationSpecific"` |  |
-| ingress.tls | list | `[]` |  |
 | nameOverride | string | `""` |  |
 | namespaceOverride | string | `""` |  |
 | nodeSelector | object | `{}` |  |

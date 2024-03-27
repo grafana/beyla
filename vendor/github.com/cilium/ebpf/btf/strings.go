@@ -6,9 +6,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"maps"
-	"slices"
 	"strings"
+
+	"golang.org/x/exp/maps"
+	"golang.org/x/exp/slices"
 )
 
 type stringTable struct {

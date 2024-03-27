@@ -86,7 +86,7 @@ type PrometheusConfig struct {
 
 	Buckets otel.Buckets `yaml:"buckets"`
 
-	Registry *prometheus.Registry
+	Registry *prometheus.Registry `yaml:"-"`
 }
 
 // nolint:gocritic

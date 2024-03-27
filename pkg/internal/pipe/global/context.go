@@ -4,7 +4,7 @@ import (
 	"github.com/grafana/beyla/pkg/internal/connector"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	kube2 "github.com/grafana/beyla/pkg/internal/kube"
-	"github.com/grafana/beyla/pkg/internal/transform/kube"
+	"github.com/grafana/beyla/pkg/transform/kube"
 )
 
 // ContextInfo stores some context information that must be shared across some nodes of the

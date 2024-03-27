@@ -121,7 +121,8 @@ network:
 			ReportersCacheLen:  ReporterLRUSize,
 		},
 		Prometheus: prom.PrometheusConfig{
-			Path: "/metrics",
+			Path:     "/metrics",
+			Features: []string{otel.FeatureNetwork, otel.FeatureApplication},
 			Buckets: otel.Buckets{
 				DurationHistogram:    otel.DefaultBuckets.DurationHistogram,
 				RequestSizeHistogram: []float64{0, 10, 20, 22},

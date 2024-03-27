@@ -86,12 +86,12 @@ type PrometheusConfig struct {
 
 	Buckets otel.Buckets `yaml:"buckets"`
 
-	Reg *prometheus.Registry
+	Registry *prometheus.Registry
 }
 
 // nolint:gocritic
 func (p PrometheusConfig) Enabled() bool {
-	return p.Port != 0 || p.Reg != nil
+	return p.Port != 0 || p.Registry != nil
 }
 
 type metricsReporter struct {
@@ -114,7 +114,7 @@ type metricsReporter struct {
 
 func PrometheusEndpoint(ctx context.Context, cfg *PrometheusConfig, ctxInfo *global.ContextInfo) (node.TerminalFunc[[]request.Span], error) {
 	reporter := newReporter(ctx, cfg, ctxInfo)
-	if cfg.Reg != nil {
+	if cfg.Registry != nil {
 		return reporter.collectMetrics, nil
 	}
 	return reporter.reportMetrics, nil
@@ -212,8 +212,8 @@ func newReporter(ctx context.Context, cfg *PrometheusConfig, ctxInfo *global.Con
 		mr.httpDuration,
 		mr.grpcDuration)
 
-	if mr.cfg.Reg != nil {
-		mr.cfg.Reg.MustRegister(registeredMetrics...)
+	if mr.cfg.Registry != nil {
+		mr.cfg.Registry.MustRegister(registeredMetrics...)
 	} else {
 		mr.promConnect.Register(cfg.Port, cfg.Path, registeredMetrics...)
 	}

@@ -1,4 +1,4 @@
-package export
+package otel
 
 import (
 	"context"
@@ -16,6 +16,7 @@ import (
 
 	"github.com/grafana/beyla/pkg/internal/export/otel"
 	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
+	"github.com/grafana/beyla/pkg/internal/netolly/export"
 )
 
 type MetricsConfig struct {
@@ -59,42 +60,18 @@ func newMeterProvider(res *resource.Resource, exporter *metric.Exporter) (*metri
 
 type metricsExporter struct {
 	flowBytes metric2.Int64Counter
-	attrs     AttributesFilter
+	attrs     []export.Attribute
 }
 
 func (me *metricsExporter) attributes(m *ebpf.Record) []attribute.KeyValue {
-	attrs := me.attrs.New()
+	keyVals := make([]attribute.KeyValue, 0, len(me.attrs))
 
-	attrs.PutString("beyla.ip", m.Attrs.BeylaIP)
-	attrs.PutString("src.address", m.Id.SrcIP().IP().String())
-	attrs.PutString("dst.address", m.Id.DstIP().IP().String())
-	attrs.PutString("src.name", m.Attrs.SrcName)
-	attrs.PutString("dst.name", m.Attrs.DstName)
-
-	// direction and interface will be only set if the user disabled
-	// the flow deduplication node
-	if direction, ok := directionStr(m.Id.Direction); ok {
-		attrs.PutString("direction", direction)
-		attrs.PutString("iface", m.Attrs.Interface)
+	for _, attr := range me.attrs {
+		keyVals = append(keyVals,
+			attribute.String(attr.Name, attr.Get(m)))
 	}
 
-	// metadata attributes
-	for k, v := range m.Attrs.Metadata {
-		attrs.PutString(k, v)
-	}
-
-	return attrs.Slice()
-}
-
-func directionStr(direction uint8) (string, bool) {
-	switch direction {
-	case ebpf.DirectionIngress:
-		return "ingress", true
-	case ebpf.DirectionEgress:
-		return "egress", true
-	default:
-		return "", false
-	}
+	return keyVals
 }
 
 func MetricsExporterProvider(cfg MetricsConfig) (node.TerminalFunc[[]*ebpf.Record], error) {
@@ -132,7 +109,7 @@ func MetricsExporterProvider(cfg MetricsConfig) (node.TerminalFunc[[]*ebpf.Recor
 	log.Debug("restricting attributes not in this list", "attributes", cfg.AllowedAttributes)
 	return (&metricsExporter{
 		flowBytes: flowBytes,
-		attrs:     NewAttributesFilter(cfg.AllowedAttributes),
+		attrs:     export.BuildOTELAttributeGetters(cfg.AllowedAttributes),
 	}).Do, nil
 }
 

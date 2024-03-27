@@ -7,7 +7,7 @@ import (
 	"github.com/mariomac/pipes/pkg/node"
 
 	"github.com/grafana/beyla/pkg/internal/request"
-	"github.com/grafana/beyla/pkg/transform/route"
+	"github.com/grafana/beyla/pkg/internal/transform/route"
 )
 
 // UnmatchType defines which actions to do when a route pattern is not recognized

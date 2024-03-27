@@ -3,7 +3,7 @@ package discover
 import (
 	"github.com/mariomac/pipes/pkg/node"
 
-	"github.com/grafana/beyla/pkg/transform/kube"
+	"github.com/grafana/beyla/pkg/internal/transform/kube"
 )
 
 // ContainerDBUpdater is a stage in the Process Finder pipeline that will be

@@ -142,7 +142,15 @@ func AssignMetadataToInstructions(
 
 // MarshalExtInfos encodes function and line info embedded in insns into kernel
 // wire format.
-func MarshalExtInfos(insns asm.Instructions, b *Builder) (funcInfos, lineInfos []byte, _ error) {
+//
+// Returns ErrNotSupported if the kernel doesn't support BTF-associated programs.
+func MarshalExtInfos(insns asm.Instructions) (_ *Handle, funcInfos, lineInfos []byte, _ error) {
+	// Bail out early if the kernel doesn't support Func(Proto). If this is the
+	// case, func_info will also be unsupported.
+	if err := haveProgBTF(); err != nil {
+		return nil, nil, nil, err
+	}
+
 	iter := insns.Iterate()
 	for iter.Next() {
 		_, ok := iter.Ins.Source().(*Line)
@@ -152,9 +160,10 @@ func MarshalExtInfos(insns asm.Instructions, b *Builder) (funcInfos, lineInfos [
 		}
 	}
 
-	return nil, nil, nil
+	return nil, nil, nil, nil
 
 marshal:
+	var b Builder
 	var fiBuf, liBuf bytes.Buffer
 	for {
 		if fn := FuncMetadata(iter.Ins); fn != nil {
@@ -162,8 +171,8 @@ marshal:
 				fn:     fn,
 				offset: iter.Offset,
 			}
-			if err := fi.marshal(&fiBuf, b); err != nil {
-				return nil, nil, fmt.Errorf("write func info: %w", err)
+			if err := fi.marshal(&fiBuf, &b); err != nil {
+				return nil, nil, nil, fmt.Errorf("write func info: %w", err)
 			}
 		}
 
@@ -172,8 +181,8 @@ marshal:
 				line:   line,
 				offset: iter.Offset,
 			}
-			if err := li.marshal(&liBuf, b); err != nil {
-				return nil, nil, fmt.Errorf("write line info: %w", err)
+			if err := li.marshal(&liBuf, &b); err != nil {
+				return nil, nil, nil, fmt.Errorf("write line info: %w", err)
 			}
 		}
 
@@ -182,7 +191,8 @@ marshal:
 		}
 	}
 
-	return fiBuf.Bytes(), liBuf.Bytes(), nil
+	handle, err := NewHandle(&b)
+	return handle, fiBuf.Bytes(), liBuf.Bytes(), err
 }
 
 // btfExtHeader is found at the start of the .BTF.ext section.

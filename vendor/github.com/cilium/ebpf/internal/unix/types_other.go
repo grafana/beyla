@@ -27,7 +27,6 @@ const (
 	EACCES
 	EILSEQ
 	EOPNOTSUPP
-	ESTALE
 )
 
 // Constants are distinct to avoid breaking switch statements.
@@ -42,7 +41,6 @@ const (
 	BPF_F_MMAPABLE
 	BPF_F_INNER_MAP
 	BPF_F_KPROBE_MULTI_RETURN
-	BPF_F_UPROBE_MULTI_RETURN
 	BPF_F_XDP_HAS_FRAGS
 	BPF_OBJ_NAME_LEN
 	BPF_TAG_SIZE

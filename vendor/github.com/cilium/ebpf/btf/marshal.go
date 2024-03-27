@@ -6,10 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"slices"
 	"sync"
 
 	"github.com/cilium/ebpf/internal"
+
+	"golang.org/x/exp/slices"
 )
 
 type MarshalOptions struct {
@@ -90,11 +91,6 @@ func NewBuilder(types []Type) (*Builder, error) {
 	}
 
 	return b, nil
-}
-
-// Empty returns true if [Add] has not been invoked on the builder.
-func (b *Builder) Empty() bool {
-	return len(b.types) == 0
 }
 
 // Add a Type and allocate a stable ID for it.

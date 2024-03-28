@@ -2,10 +2,11 @@ global:
   evaluation_interval: 30s
   scrape_interval: 5s
 scrape_configs:
-  - job_name: autoinstrumenter-collector
+  - job_name: beyla-network-flows
     static_configs:
       - targets:
           # Configuration for the K8s decoration tests in kind, where Prometheus must scrape
           # from two different endpoints
           - 'beyla-testserver:8999'
           - 'beyla-pinger:8999'
+          - 'beyla-netolly:8999'

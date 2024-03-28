@@ -1,6 +1,6 @@
 //go:build integration
 
-package otel
+package promtest
 
 import (
 	"log/slog"
@@ -12,6 +12,7 @@ import (
 	"github.com/grafana/beyla/test/integration/components/docker"
 	"github.com/grafana/beyla/test/integration/components/kube"
 	k8s "github.com/grafana/beyla/test/integration/k8s/common"
+	otel "github.com/grafana/beyla/test/integration/k8s/netolly"
 	"github.com/grafana/beyla/test/tools"
 )
 
@@ -34,16 +35,15 @@ func TestMain(m *testing.M) {
 		kube.LocalImage("beyla:dev"),
 		kube.Deploy(k8s.PathManifests+"/01-volumes.yml"),
 		kube.Deploy(k8s.PathManifests+"/01-serviceaccount.yml"),
-		kube.Deploy(k8s.PathManifests+"/02-prometheus-otelscrape.yml"),
-		kube.Deploy(k8s.PathManifests+"/03-otelcol.yml"),
+		kube.Deploy(k8s.PathManifests+"/02-prometheus-promscrape.yml"),
 		kube.Deploy(k8s.PathManifests+"/05-uninstrumented-service.yml"),
-		kube.Deploy(k8s.PathManifests+"/06-beyla-netolly.yml"),
+		kube.Deploy(k8s.PathManifests+"/06-beyla-netolly-promexport.yml"),
 	)
 
 	cluster.Run(m)
 }
 
-func TestNetworkFlowBytes(t *testing.T) {
+func TestNetworkFlowBytes_Prom(t *testing.T) {
 	pinger := kube.Template[k8s.Pinger]{
 		TemplateFile: k8s.UninstrumentedPingerManifest,
 		Data: k8s.Pinger{
@@ -54,8 +54,7 @@ func TestNetworkFlowBytes(t *testing.T) {
 	cluster.TestEnv().Test(t, features.New("network flow bytes").
 		Setup(pinger.Deploy()).
 		Teardown(pinger.Delete()).
-		Assess("catches network metrics between connected pods", DoTestNetFlowBytesForExistingConnections).
-		Assess("catches external traffic", testNetFlowBytesForExternalTraffic).
+		Assess("catches network metrics between connected pods", otel.DoTestNetFlowBytesForExistingConnections).
 		Feature(),
 	)
 }

@@ -3,6 +3,7 @@ package prom
 import (
 	"context"
 	"runtime"
+	"slices"
 	"strconv"
 	"time"
 
@@ -84,6 +85,9 @@ type PrometheusConfig struct {
 
 	DisableBuildInfo bool `yaml:"disable_build_info" env:"BEYLA_PROMETHEUS_DISABLE_BUILD_INFO"`
 
+	// Features of metrics that are can be exported. Accepted values are "application" and "network".
+	Features []string `yaml:"features" env:"BEYLA_PROMETHEUS_FEATURES" envSeparator:","`
+
 	Buckets otel.Buckets `yaml:"buckets"`
 
 	Registry *prometheus.Registry `yaml:"-"`
@@ -91,7 +95,7 @@ type PrometheusConfig struct {
 
 // nolint:gocritic
 func (p PrometheusConfig) Enabled() bool {
-	return p.Port != 0 || p.Registry != nil
+	return (p.Port != 0 || p.Registry != nil) && slices.Contains(p.Features, otel.FeatureApplication)
 }
 
 type metricsReporter struct {
@@ -328,7 +332,7 @@ func labelNamesHTTPClient(cfg *PrometheusConfig, ctxInfo *global.ContextInfo) []
 	if ctxInfo.K8sEnabled {
 		names = appendK8sLabelNames(names)
 	}
-	if ctxInfo.ReportRoutes {
+	if ctxInfo.AppO11y.ReportRoutes {
 		names = append(names, httpRouteKey)
 	}
 	return names
@@ -346,7 +350,7 @@ func (r *metricsReporter) labelValuesHTTPClient(span *request.Span) []string {
 	if r.ctxInfo.K8sEnabled {
 		values = appendK8sLabelValues(values, span)
 	}
-	if r.ctxInfo.ReportRoutes {
+	if r.ctxInfo.AppO11y.ReportRoutes {
 		values = append(values, span.Route) // httpRouteKey
 	}
 	return values
@@ -362,7 +366,7 @@ func labelNamesHTTP(cfg *PrometheusConfig, ctxInfo *global.ContextInfo) []string
 	if cfg.ReportPeerInfo {
 		names = append(names, clientAddrKey)
 	}
-	if ctxInfo.ReportRoutes {
+	if ctxInfo.AppO11y.ReportRoutes {
 		names = append(names, httpRouteKey)
 	}
 	if ctxInfo.K8sEnabled {
@@ -382,7 +386,7 @@ func (r *metricsReporter) labelValuesHTTP(span *request.Span) []string {
 	if r.cfg.ReportPeerInfo {
 		values = append(values, span.Peer) // netSockPeerAddrKey
 	}
-	if r.ctxInfo.ReportRoutes {
+	if r.ctxInfo.AppO11y.ReportRoutes {
 		values = append(values, span.Route) // httpRouteKey
 	}
 	if r.ctxInfo.K8sEnabled {

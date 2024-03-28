@@ -89,6 +89,13 @@ type bpf_tpHttpInfoT struct {
 	}
 }
 
+type bpf_tpPartialConnectionInfoT struct {
+	S_addr [16]uint8
+	S_port uint16
+	D_port uint16
+	TcpSeq uint32
+}
+
 type bpf_tpPidConnectionInfoT struct {
 	Conn bpf_tpConnectionInfoT
 	Pid  uint32
@@ -207,6 +214,7 @@ type bpf_tpMapSpecs struct {
 	ServerTraces            *ebpf.MapSpec `ebpf:"server_traces"`
 	SslToConn               *ebpf.MapSpec `ebpf:"ssl_to_conn"`
 	SslToPidTid             *ebpf.MapSpec `ebpf:"ssl_to_pid_tid"`
+	TcpConnectionMap        *ebpf.MapSpec `ebpf:"tcp_connection_map"`
 	TpCharBufMem            *ebpf.MapSpec `ebpf:"tp_char_buf_mem"`
 	TpInfoMem               *ebpf.MapSpec `ebpf:"tp_info_mem"`
 	TraceMap                *ebpf.MapSpec `ebpf:"trace_map"`
@@ -252,6 +260,7 @@ type bpf_tpMaps struct {
 	ServerTraces            *ebpf.Map `ebpf:"server_traces"`
 	SslToConn               *ebpf.Map `ebpf:"ssl_to_conn"`
 	SslToPidTid             *ebpf.Map `ebpf:"ssl_to_pid_tid"`
+	TcpConnectionMap        *ebpf.Map `ebpf:"tcp_connection_map"`
 	TpCharBufMem            *ebpf.Map `ebpf:"tp_char_buf_mem"`
 	TpInfoMem               *ebpf.Map `ebpf:"tp_info_mem"`
 	TraceMap                *ebpf.Map `ebpf:"trace_map"`
@@ -280,6 +289,7 @@ func (m *bpf_tpMaps) Close() error {
 		m.ServerTraces,
 		m.SslToConn,
 		m.SslToPidTid,
+		m.TcpConnectionMap,
 		m.TpCharBufMem,
 		m.TpInfoMem,
 		m.TraceMap,

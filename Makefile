@@ -118,6 +118,7 @@ checkfmt:
 
 .PHONY: lint-dashboard
 lint-dashboard: prereqs
+	@echo "### Linting dashboard"
 	$(DASHBOARD_LINTER) lint grafana/dashboard.json
 
 .PHONY: lint
@@ -146,7 +147,7 @@ docker-generate:
 	$(OCI_BIN) run --rm -v $(shell pwd):/src $(GEN_IMG)
 
 .PHONY: verify
-verify: prereqs lint test
+verify: prereqs lint-dashboard lint test
 
 .PHONY: build
 build: verify compile

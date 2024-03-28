@@ -333,6 +333,7 @@ int uprobe_roundTripReturn(struct pt_regs *ctx) {
     __builtin_memcpy(trace->method, data->method, sizeof(trace->method));
     __builtin_memcpy(trace->host, data->host, sizeof(trace->host));
     __builtin_memcpy(trace->path, data->path, sizeof(trace->path));
+    trace->remote_addr[0] = 0;
     trace->content_length = data->content_length;
 
     // Get request/response struct

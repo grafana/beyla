@@ -39,6 +39,14 @@ struct {
     __type(value, recv_args_t);
 } active_recv_args SEC(".maps");
 
+struct {
+    __uint(type, BPF_MAP_TYPE_LRU_HASH);
+    __type(key, partial_connection_info_t); // key: the connection info without the destination address, but with the tcp sequence
+    __type(value, connection_info_t);  // value: traceparent info
+    __uint(max_entries, 1024);
+    __uint(pinning, LIBBPF_PIN_BY_NAME);
+} tcp_connection_map SEC(".maps");
+
 // Used by accept to grab the sock details
 SEC("kretprobe/sock_alloc")
 int BPF_KRETPROBE(kretprobe_sock_alloc, struct socket *sock) {
@@ -347,7 +355,7 @@ int socket__http_filter(struct __sk_buff *skb) {
     // sorting must happen here, before we check or set dups
     sort_connection_info(&conn);
     
-    // we don't want to read the whole buffer for every packed that passes our checks, we read only a bit and check if it's trully HTTP request/response.
+    // we don't want to read the whole buffer for every packed that passes our checks, we read only a bit and check if it's truly HTTP request/response.
     unsigned char buf[MIN_HTTP_SIZE] = {0};
     bpf_skb_load_bytes(skb, tcp.hdr_len, (void *)buf, sizeof(buf));
     // technically the read should be reversed, but eBPF verifier complains on read with variable length
@@ -367,9 +375,45 @@ int socket__http_filter(struct __sk_buff *skb) {
                 full_len = FULL_BUF_SIZE;
             }
             read_skb_bytes(skb, tcp.hdr_len, info.buf, full_len);
-            bpf_dbg_printk("=== http_filter len=%d %s ===", len, buf);
-            //dbg_print_http_connection_info(&conn);
+            u64 cookie = bpf_get_socket_cookie(skb);
+            bpf_dbg_printk("=== http_filter cookie = %llx, tcp_seq=%d len=%d %s ===", cookie, tcp.seq, len, buf);
+            dbg_print_http_connection_info(&conn);
             set_fallback_http_info(&info, &conn, skb->len - tcp.hdr_len);
+
+            // The code below is looking to see if we have recorded black-box trace info on 
+            // another interface. We do this for client calls, where essentially the original 
+            // request may go out on one interface, but then get re-routed to another, which is
+            // common with some k8s environments.
+            //
+            // This casting is done here to save allocating memory on a per CPU buffer, since
+            // we don't need info anymore, we reuse it's space and it's much bigger than
+            // partial_connection_info_t.
+            partial_connection_info_t *partial = (partial_connection_info_t *)(&info);
+            partial->d_port = conn.d_port;
+            partial->s_port = conn.s_port;
+            partial->tcp_seq = tcp.seq;
+            bpf_memcpy(partial->s_addr, conn.s_addr, sizeof(partial->s_addr));
+
+            tp_info_pid_t *trace_info = trace_info_for_connection(&conn);
+            if (trace_info) {
+                if (cookie) { // we have an actual socket associated
+                    bpf_map_update_elem(&tcp_connection_map, partial, &conn, BPF_ANY);
+                }
+            } else if (!cookie) { // no actual socket for this skb, relayed to another interface
+                connection_info_t *prev_conn = bpf_map_lookup_elem(&tcp_connection_map, partial);
+
+                if (prev_conn) {
+                    tp_info_pid_t *trace_info = trace_info_for_connection(prev_conn);
+                    if (trace_info) {
+                        if (current_immediate_epoch(trace_info->tp.ts) == current_immediate_epoch(bpf_ktime_get_ns())) {
+                            bpf_dbg_printk("Found trace info on another interface, setting it up for this connection");
+                            tp_info_pid_t other_info = {0};
+                            bpf_memcpy(&other_info, trace_info, sizeof(tp_info_pid_t));
+                            bpf_map_update_elem(&trace_map, &conn, &other_info, BPF_ANY);
+                        }
+                    }
+                }
+            }
         }
     }
 

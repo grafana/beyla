@@ -33,7 +33,12 @@ network:
     - 10.10.0.0/24
     - 10.0.0.0/8
     - 10.30.0.0/16
+otel_metrics_export:
+  endpoint: http://localhost:4318
 ```
+
+In addition to the `network` YAML section, Beyla configuration requires an endpoint to export the
+network metrics (in the previous example, `otel_metrics_export`).
 
 ## Network metrics configuration properties
 

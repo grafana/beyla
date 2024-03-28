@@ -6,7 +6,8 @@ import (
 	"fmt"
 	"io"
 	"math"
-	"slices"
+
+	"golang.org/x/exp/slices"
 
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/btf"
@@ -119,7 +120,7 @@ func hasFunctionReferences(insns asm.Instructions) bool {
 //
 // Passing a nil target will relocate against the running kernel. insns are
 // modified in place.
-func applyRelocations(insns asm.Instructions, target *btf.Spec, bo binary.ByteOrder, b *btf.Builder) error {
+func applyRelocations(insns asm.Instructions, target *btf.Spec, bo binary.ByteOrder) error {
 	var relos []*btf.CORERelocation
 	var reloInsns []*asm.Instruction
 	iter := insns.Iterate()
@@ -138,7 +139,7 @@ func applyRelocations(insns asm.Instructions, target *btf.Spec, bo binary.ByteOr
 		bo = internal.NativeEndian
 	}
 
-	fixups, err := btf.CORERelocate(relos, target, bo, b.Add)
+	fixups, err := btf.CORERelocate(relos, target, bo)
 	if err != nil {
 		return err
 	}

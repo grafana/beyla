@@ -50,6 +50,7 @@ var DefaultConfig = Config{
 		Buckets:              otel.DefaultBuckets,
 		ReportersCacheLen:    ReporterLRUSize,
 		HistogramAggregation: otel.AggregationExplicit,
+		Features:             []string{otel.FeatureNetwork, otel.FeatureApplication},
 	},
 	Traces: otel.TracesConfig{
 		Protocol:           otel.ProtocolUnset,

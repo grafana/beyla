@@ -46,7 +46,7 @@ spec:
     - name: {{ .Values.service.portName }}
       port: {{ .Values.service.port }}
       protocol: TCP
-      targetPort: {{ tpl .Values.service.targetPort . }}
+      targetPort: {{ .Values.service.targetPort }}
       {{- with .Values.service.appProtocol }}
       appProtocol: {{ . }}
       {{- end }}

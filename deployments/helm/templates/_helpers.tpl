@@ -75,19 +75,18 @@ Create the name of the service account to use
 
 
 {{/*
-Returns the internal metrics port if set via environment variable or via yaml configuration.
-Note: Precedence is given for environment variable
+Calculate name of image ID to use for "beyla".
 */}}
-{{- define "beyla.internalMetricsPort" -}}
-{{- if .Values.env.BEYLA_INTERNAL_METRICS_PROMETHEUS_PORT }}
-{{- print .Values.env.BEYLA_INTERNAL_METRICS_PROMETHEUS_PORT }}
-{{ else if and (.Values.configmapData.prometheus_export) }}
-  {{- if ne (.Values.configmapData.prometheus_export.port | quote ) ""}}
-{{- print .Values.configmapData.prometheus_export.port }}
-  {{- else }}
-  {{- print 0 }}
-  {{- end }}
+{{- define "beyla.imageId" -}}
+{{- if .Values.image.digest }}
+{{- $digest := .Values.image.digest }}
+{{- if not (hasPrefix "sha256:" $digest) }}
+{{- $digest = printf "sha256:%s" $digest }}
+{{- end }}
+{{- printf "@%s" $digest }}
+{{- else if .Values.image.tag }}
+{{- printf ":%s" .Values.image.tag }}
 {{- else }}
-{{- print 0 }}
+{{- printf ":%s" .Chart.AppVersion }}
 {{- end }}
 {{- end }}

@@ -1,11 +1,10 @@
-{{ $internalMetricsPort := include "beyla.internalMetricsPort" . }}
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
   name: {{ include "beyla.fullname" . }}
   namespace: {{ include "beyla.namespace" .}}
   labels:
-    {{- include "beyla.labels" . | nindent 2 }}
+  {{- include "beyla.labels" . | nindent 4 }}
   {{- with .Values.annotations }}
   annotations:
     {{- toYaml . | nindent 4 }}
@@ -15,7 +14,7 @@ spec:
     matchLabels:
 {{ include "beyla.selectorLabels" . | indent 6 }}
   {{- with .Values.updateStrategy }}
-  strategy:
+  updateStrategy:
     {{- toYaml . | trim | nindent 4 }}
   {{- end }}
   template:
@@ -27,31 +26,18 @@ spec:
       serviceAccountName: {{ include "beyla.serviceAccountName" . }}
      {{- end }}
       hostPID: true  #important!
-      volumes:
-        - name: beyla-config
-          configMap:
-            name: {{ default (include "beyla.fullname" .) .Values.externalBeylaConfigMap}}
       containers:
         - name: beyla
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          image: {{ .Values.global.image.registry | default .Values.image.registry }}/{{ .Values.image.repository }}{{ include "beyla.imageId" . }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           securityContext:
             privileged: true
           ports:
-          {{- if ne $internalMetricsPort "0" }}
-          - containerPort: {{ $internalMetricsPort }}
+          - containerPort: {{ .Values.service.targetPort }}
             protocol: TCP
-          {{- end }}
-          volumeMounts:
-            - mountPath: /etc/beyla/config
-              name: beyla-config
           env:
             - name: BEYLA_CONFIG_PATH
               value: "/etc/beyla/config/beyla-config.yml"
-            - name: BEYLA_PRINT_TRACES
-              value: "true"
-            - name: OTEL_RESOURCE_ATTRIBUTES
-              value: "deployment.environment=production"
           {{- range $key, $value := .Values.env }}
             - name: {{ $key }}
               value: "{{ $value }}"
@@ -73,3 +59,18 @@ spec:
           tolerations:
             {{- toYaml . | nindent 12 }}
           {{- end }}
+          volumeMounts:
+            - mountPath: /etc/beyla/config
+              name: beyla-config
+        {{- if or .Values.global.image.pullSecrets .Values.image.pullSecrets }}
+        imagePullSecrets:
+          {{- if .Values.global.image.pullSecrets }}
+          {{- toYaml .Values.global.image.pullSecrets | nindent 4 }}
+          {{- else }}
+          {{- toYaml .Values.image.pullSecrets | nindent 4 }}
+          {{- end }}
+        {{- end }}
+      volumes:
+        - name: beyla-config
+          configMap:
+            name: {{ default (include "beyla.fullname" .) .Values.config.name }}

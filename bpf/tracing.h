@@ -5,6 +5,7 @@
 #include "http_types.h"
 
 #define NANOSECONDS_PER_EPOCH (15LL * 1000000000LL) // 15 seconds
+#define NANOSECONDS_PER_IMM_EPOCH (100000000LL) // 100 ms
 
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
@@ -43,6 +44,11 @@ static __always_inline void delete_trace_info_for_connection(connection_info_t *
 static __always_inline u64 current_epoch(u64 ts) {
     u64 temp = ts / NANOSECONDS_PER_EPOCH;
     return temp * NANOSECONDS_PER_EPOCH;
+}
+
+static __always_inline u64 current_immediate_epoch(u64 ts) {
+    u64 temp = ts / NANOSECONDS_PER_IMM_EPOCH;
+    return temp * NANOSECONDS_PER_IMM_EPOCH;
 }
 
 static __always_inline u8 correlated_requests(tp_info_pid_t *tp, tp_info_pid_t *existing_tp) {

@@ -23,7 +23,7 @@ import (
 	"github.com/grafana/beyla/pkg/internal/svc"
 	"github.com/grafana/beyla/pkg/internal/testutil"
 	"github.com/grafana/beyla/pkg/internal/traces"
-	"github.com/grafana/beyla/pkg/internal/transform"
+	"github.com/grafana/beyla/pkg/transform"
 	"github.com/grafana/beyla/test/collector"
 	"github.com/grafana/beyla/test/consumer"
 )

@@ -210,7 +210,6 @@ type bpf_tpMapSpecs struct {
 	OngoingHttp2Grpc        *ebpf.MapSpec `ebpf:"ongoing_http2_grpc"`
 	OngoingHttpFallback     *ebpf.MapSpec `ebpf:"ongoing_http_fallback"`
 	PidCache                *ebpf.MapSpec `ebpf:"pid_cache"`
-	PidConnInfoMem          *ebpf.MapSpec `ebpf:"pid_conn_info_mem"`
 	PidTidToConn            *ebpf.MapSpec `ebpf:"pid_tid_to_conn"`
 	ServerTraces            *ebpf.MapSpec `ebpf:"server_traces"`
 	SslToConn               *ebpf.MapSpec `ebpf:"ssl_to_conn"`
@@ -257,7 +256,6 @@ type bpf_tpMaps struct {
 	OngoingHttp2Grpc        *ebpf.Map `ebpf:"ongoing_http2_grpc"`
 	OngoingHttpFallback     *ebpf.Map `ebpf:"ongoing_http_fallback"`
 	PidCache                *ebpf.Map `ebpf:"pid_cache"`
-	PidConnInfoMem          *ebpf.Map `ebpf:"pid_conn_info_mem"`
 	PidTidToConn            *ebpf.Map `ebpf:"pid_tid_to_conn"`
 	ServerTraces            *ebpf.Map `ebpf:"server_traces"`
 	SslToConn               *ebpf.Map `ebpf:"ssl_to_conn"`
@@ -287,7 +285,6 @@ func (m *bpf_tpMaps) Close() error {
 		m.OngoingHttp2Grpc,
 		m.OngoingHttpFallback,
 		m.PidCache,
-		m.PidConnInfoMem,
 		m.PidTidToConn,
 		m.ServerTraces,
 		m.SslToConn,

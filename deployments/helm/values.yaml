@@ -1,0 +1,198 @@
+## Global properties for image pulling override the values defined under `image.registry`.
+## If you want to override only one image registry, use the specific fields but if you want to override them all, use `global.image.registry`
+global:
+  image:
+    # -- Global image registry to use if it needs to be overridden for some specific use cases (e.g local registries, custom images, ...)
+    registry: ""
+
+    # -- Optional set of global image pull secrets.
+    pullSecrets: []
+
+image:
+  # -- Beyla image registry (defaults to docker.io)
+  registry: "docker.io"
+  # -- Beyla image repository.
+  repository: grafana/beyla
+  # -- (string) Beyla image tag. When empty, the Chart's appVersion is
+  # used.
+  tag: null
+  # -- Beyla image's SHA256 digest (either in format "sha256:XYZ" or "XYZ"). When set, will override `image.tag`.
+  digest: null
+  # -- Beyla image pull policy.
+  pullPolicy: IfNotPresent
+  # -- Optional set of image pull secrets.
+  pullSecrets: []
+
+# -- Overrides the chart's name
+nameOverride: ""
+
+# -- Overrides the chart's computed fullname.
+fullnameOverride: ""
+
+# -- Override the deployment namespace
+namespaceOverride: ""
+
+## DaemonSet annotations
+# annotations: {}
+
+rbac:
+  # -- Whether to create RBAC resources for Belya
+  create: true
+  # -- Extra custer roles to be created for Belya
+  extraClusterRoleRules: []
+  # - apiGroups: []
+  #   resources: []
+  
+serviceAccount:
+  # -- Specifies whether a service account should be created
+  create: true
+  # -- Automatically mount a ServiceAccount's API credentials?
+  automount: true
+  # -- ServiceAccount labels.
+  labels: {}
+  # -- Annotations to add to the service account
+  annotations: {}
+  # -- The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: ""
+
+podSecurityContext: {}
+  # fsGroup: 2000
+
+securityContext: {}
+  # capabilities:
+  #   drop:
+  #   - ALL
+  # readOnlyRootFilesystem: true
+  # runAsNonRoot: true
+  # runAsUser: 1000
+
+## -- Expose the beyla internal metrics service to be accessed from outside the cluster (LoadBalancer service).
+## or access it from within the cluster (ClusterIP service). Set the service type and the port to serve it.
+## ref: http://kubernetes.io/docs/user-guide/services/
+##
+service:
+  # -- whether to create a service for internal metrics
+  enabled: false
+  # -- type of the service
+  type: ClusterIP
+  # -- cluster IP
+  clusterIP: ""
+  # -- loadbalancer IP
+  loadBalancerIP: ""
+  # -- loadbalancer class name
+  loadBalancerClass: ""
+  # -- source ranges for loadbalancer
+  loadBalancerSourceRanges: []
+  # -- service port
+  port: 80
+  # -- targetPort has to be configured based on the values of `BEYLA_INTERNAL_METRICS_PROMETHEUS_PORT` environment variable
+  # or the value of `prometheus_export.port` from beyla configuration file.
+  # see more at https://grafana.com/docs/beyla/latest/configure/options/#internal-metrics-reporter
+  targetPort: 9090
+  # -- Service annotations.
+  annotations: {}
+  # -- Service labels.
+  labels: {}
+  # -- name of the port for internal metrics service.
+  portName: service
+  # -- Adds the appProtocol field to the service. This allows to work with istio protocol selection. Ex: "http" or "tcp"
+  appProtocol: ""
+
+resources: {}
+  # We usually recommend not to specify default resources and to leave this as a conscious
+  # choice for the user. This also increases chances charts run on environments with little
+  # resources, such as Minikube. If you do want to specify resources, uncomment the following
+  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
+  # limits:
+  #   cpu: 100m
+  #   memory: 128Mi
+  # requests:
+  #   cpu: 100m
+  #   memory: 128Mi
+
+
+
+## -- See `kubectl explain daemonset.spec.updateStrategy` for more
+## ref: https://kubernetes.io/docs/tasks/manage-daemon/update-daemon-set/#daemonset-update-strategy
+updateStrategy:
+  # -- update strategy type
+  type: RollingUpdate
+
+
+# -- Additional volumes on the output daemonset definition.
+volumes: []
+# - name: foo
+#   secret:
+#     secretName: mysecret
+#     optional: false
+
+# -- Additional volumeMounts on the output Deployment definition.
+volumeMounts: []
+# - name: foo
+#   mountPath: "/etc/foo"
+#   readOnly: true
+
+# -- The nodeSelector field allows user to constrain which nodes your DaemonSet pods are scheduled to based on labels on the node
+nodeSelector: {}
+
+# -- Tolerations allow pods to be scheduled on nodes with specific taints
+tolerations: []
+
+# -- used for scheduling of pods based on affinity rules
+affinity: {}
+
+## More configuration options available at https://grafana.com/docs/beyla/latest/configure/options/
+## The below default configuration
+## 1. looks for ALL the services in the host
+## 2. export metrics as prometheus metrics by default at 9090 port
+## 3. enables kubernetes attribute
+## Note: The default configuration is used if config.create=true and config.name=""
+config:
+  # -- set to true, to use the below default configurations
+  create: true
+  ## -- Provide the name of the external configmap containing the beyla configuration.
+  ## To create configmap from configuration file, user can use the below command. Note: The name 'beyla-config.yaml' is important.
+  ## `kubectl create cm --from-file=beyla-config.yaml=<name-of-config-file> -n <namespace>`
+  ## If empty, default configuration below is used.
+  name: ""
+  # -- default value of beyla configuration
+  data:
+    # open_port: 8443
+    # routes:
+    #   unmatched: heuristic
+    # log_level: info
+    # otel_traces_export:
+    #   endpoint: http://grafana-agent:4318
+    ## or alternatively use
+    # grafana:
+    #   otlp:
+    #     cloud_zone: prod-eu-west-0
+    #     cloud_instance_id: 123456  
+    #     cloud_api_key:  
+    discovery:
+      services:
+        - k8s_namespace: .
+    attributes:
+      kubernetes:
+        enable: true
+    ## internal metrics reporting. Refer: https://grafana.com/docs/beyla/latest/configure/options/#internal-metrics-reporter
+    ## If set, user can expose the metrics endpoint via k8s service by configuring .Values.service section
+    prometheus_export:
+      port: 9090
+      path: /metrics
+
+## Env variables that will override configmap values
+## For example:
+##   BEYLA_INTERNAL_METRICS_PROMETHEUS_PORT: 9090
+# -- extra environment variables
+env:
+  #BEYLA_INTERNAL_METRICS_PROMETHEUS_PORT: 9090
+  BEYLA_PRINT_TRACES: "true"
+
+# -- extra environment variables to be set from resources such as k8s configMaps/secrets
+envValueFrom: {}
+  #  ENV_NAME:
+  #    secretKeyRef:
+  #      name: secret-name
+  #      key: value_key

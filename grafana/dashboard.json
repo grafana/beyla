@@ -132,7 +132,7 @@
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "sort_desc(topk by(http_route, service_name) (5,  max by (http_route, service_name) (histogram_quantile(0.95,  (sum by(http_route, service_name, le) (rate(http_server_request_duration_seconds_bucket{instance=~\"$instance\",job=~\"$job\"}[$__rate_interval])))))))",
+          "expr": "sort_desc(topk by(http_route, service_name) (5,  max by (http_route, service_name) (histogram_quantile(0.95,  (sum by(http_route, service_name, le) (rate({__name__=~\"http_server_request_duration_seconds_bucket|http_server_request_duration_bucket\",instance=~\"$instance\",job=~\"$job\"}[$__rate_interval])))))))",
           "format": "table",
           "hide": false,
           "instant": true,
@@ -286,7 +286,7 @@
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "sort_desc(topk by(rpc_method, service_name) (5,  max by (rpc_method, service_name) (histogram_quantile(0.95,  (sum by(rpc_method, service_name, le) (rate(rpc_server_duration_seconds_bucket{instance=~\"$instance\",job=~\"$job\"}[$__rate_interval])))))))",
+          "expr": "sort_desc(topk by(rpc_method, service_name) (5,  max by (rpc_method, service_name) (histogram_quantile(0.95,  (sum by(rpc_method, service_name, le) (rate({__name__=~\"rpc_server_duration_seconds_bucket|rpc_server_duration_bucket\",instance=~\"$instance\",job=~\"$job\"}[$__rate_interval])))))))",
           "format": "table",
           "hide": false,
           "instant": true,
@@ -417,7 +417,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by(service_name, le) (rate(http_server_request_duration_seconds_bucket{service_name=\"$Service\",instance=~\"$instance\",job=~\"$job\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.99, sum by(service_name, le) (rate({__name__=~\"http_server_request_duration_seconds_bucket|http_server_request_duration_bucket\",service_name=\"$Service\",instance=~\"$instance\",job=~\"$job\"}[$__rate_interval])))",
           "legendFormat": "HTTP p99",
           "range": true,
           "refId": "A"
@@ -428,7 +428,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.95, sum(rate(http_server_request_duration_seconds_bucket{service_name=\"$Service\",instance=~\"$instance\",job=~\"$job\"}[$__rate_interval])) by (service_name, le))",
+          "expr": "histogram_quantile(0.95, sum(rate({__name__=~\"http_server_request_duration_seconds_bucket|http_server_request_duration_bucket\",service_name=\"$Service\",instance=~\"$instance\",job=~\"$job\"}[$__rate_interval])) by (service_name, le))",
           "hide": false,
           "legendFormat": "HTTP p95",
           "range": true,
@@ -440,7 +440,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum(rate(http_server_request_duration_seconds_sum{service_name=\"$Service\",instance=~\"$instance\",job=~\"$job\"} [$__rate_interval])) / sum(rate(http_server_request_duration_seconds_count{service_name=\"$Service\",instance=~\"$instance\",job=~\"$job\"} [$__rate_interval]))",
+          "expr": "sum(rate({__name__=~\"http_server_request_duration_seconds_sum|http_server_request_duration_sum\",service_name=\"$Service\",instance=~\"$instance\",job=~\"$job\"} [$__rate_interval])) / sum(rate({__name__=~\"http_server_request_duration_seconds_count|http_server_request_duration_count\",service_name=\"$Service\",instance=~\"$instance\",job=~\"$job\"} [$__rate_interval]))",
           "hide": false,
           "legendFormat": "HTTP Avg",
           "range": true,
@@ -452,7 +452,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by(service_name, le) (rate(rpc_server_duration_seconds_bucket{service_name=\"$Service\",instance=~\"$instance\",job=~\"$job\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.99, sum by(service_name, le) (rate({__name__=~\"rpc_server_duration_seconds_bucket|rpc_server_duration_bucket\",service_name=\"$Service\",instance=~\"$instance\",job=~\"$job\"}[$__rate_interval])))",
           "hide": false,
           "legendFormat": "RPC p99",
           "range": true,
@@ -464,7 +464,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.95, sum by(service_name, le) (rate(rpc_server_duration_seconds_bucket{service_name=\"$Service\",instance=~\"$instance\",job=~\"$job\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.95, sum by(service_name, le) (rate({__name__=~\"rpc_server_duration_seconds_bucket|rpc_server_duration_bucket\",service_name=\"$Service\",instance=~\"$instance\",job=~\"$job\"}[$__rate_interval])))",
           "hide": false,
           "legendFormat": "RPC p95",
           "range": true,
@@ -476,7 +476,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum(rate(rpc_server_duration_seconds_sum{service_name=\"$Service\",instance=~\"$instance\",job=~\"$job\"} [$__rate_interval])) / sum(rate(rpc_server_duration_seconds_count{service_name=\"$Service\",instance=~\"$instance\",job=~\"$job\"} [$__rate_interval]))",
+          "expr": "sum(rate({__name__=~\"rpc_server_duration_seconds_sum\",service_name=\"$Service\",instance=~\"$instance\",job=~\"$job\"} [$__rate_interval])) / sum(rate({__name__=~\"rpc_server_duration_seconds_count|rpc_server_duration_count\",service_name=\"$Service\",instance=~\"$instance\",job=~\"$job\"} [$__rate_interval]))",
           "hide": false,
           "legendFormat": "RPC Avg",
           "range": true,
@@ -571,7 +571,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum(rate(http_server_request_duration_seconds_count{service_name=\"$Service\",instance=~\"$instance\",job=~\"$job\"} [$__rate_interval])) by (http_response_status_code)",
+          "expr": "sum(rate({__name__=~\"http_server_request_duration_seconds_count|http_server_request_duration_count\",service_name=\"$Service\",instance=~\"$instance\",job=~\"$job\"} [$__rate_interval])) by (http_response_status_code)",
           "hide": false,
           "legendFormat": "HTTP server - {{http_response_status_code}}",
           "range": true,
@@ -583,7 +583,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum(rate(rpc_server_duration_seconds_count{service_name=\"$Service\",instance=~\"$instance\",job=~\"$job\"} [$__rate_interval])) by (service_name, rpc_grpc_status_code)",
+          "expr": "sum(rate({__name__=~\"rpc_server_duration_seconds_count|rpc_server_duration_count\",service_name=\"$Service\",instance=~\"$instance\",job=~\"$job\"} [$__rate_interval])) by (service_name, rpc_grpc_status_code)",
           "hide": false,
           "legendFormat": "RPC server (status {{rpc_grpc_status_code}})",
           "range": true,
@@ -704,7 +704,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum by (http_response_status_code) (rate(http_server_request_duration_seconds_count{service_name=\"${Service}\",http_response_status_code=~\"(4|5).*\",instance=~\"$instance\",job=~\"$job\"}[$__rate_interval])) / ignoring(http_response_status_code) group_left sum(rate(http_server_request_duration_seconds_count{service_name=\"${Service}\",instance=~\"$instance\",job=~\"$job\"}[$__rate_interval]))",
+          "expr": "sum by (http_response_status_code) (rate({__name__=~\"http_server_request_duration_seconds_count|http_server_request_duration_count\",service_name=\"${Service}\",http_response_status_code=~\"(4|5).*\",instance=~\"$instance\",job=~\"$job\"}[$__rate_interval])) / ignoring(http_response_status_code) group_left sum(rate({__name__=~\"http_server_request_duration_seconds_count|http_server_request_duration_count\",service_name=\"${Service}\",instance=~\"$instance\",job=~\"$job\"}[$__rate_interval]))",
           "hide": false,
           "legendFormat": "HTTP server - {{http_response_status_code}}",
           "range": true,
@@ -716,7 +716,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum by (rpc_grpc_status_code) (rate(rpc_server_duration_seconds_count{service_name=\"${Service}\",rpc_grpc_status_code!=\"0\",instance=~\"$instance\",job=~\"$job\"}[$__rate_interval])) / ignoring(rpc_grpc_status_code) group_left sum(rate(rpc_server_duration_seconds_count{service_name=\"${Service}\",instance=~\"$instance\",job=~\"$job\"}[$__rate_interval]))",
+          "expr": "sum by (rpc_grpc_status_code) (rate({__name__=~\"rpc_server_duration_seconds_count|rpc_server_duration_count\",service_name=\"${Service}\",rpc_grpc_status_code!=\"0\",instance=~\"$instance\",job=~\"$job\"}[$__rate_interval])) / ignoring(rpc_grpc_status_code) group_left sum(rate({__name__=~\"rpc_server_duration_seconds_count|rpc_server_duration_count\",service_name=\"${Service}\",instance=~\"$instance\",job=~\"$job\"}[$__rate_interval]))",
           "hide": false,
           "legendFormat": "RPC server (status {{rpc_grpc_status_code}})",
           "range": true,
@@ -826,7 +826,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by(service_name, le) (rate(http_client_request_duration_seconds_bucket{service_name=\"$Service\",instance=~\"$instance\",job=~\"$job\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.99, sum by(service_name, le) (rate({__name__=~\"http_client_request_duration_seconds_bucket|http_client_request_duration_bucket\",service_name=\"$Service\",instance=~\"$instance\",job=~\"$job\"}[$__rate_interval])))",
           "legendFormat": "HTTP p99",
           "range": true,
           "refId": "A"
@@ -837,7 +837,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.95, sum(rate(http_client_request_duration_seconds_bucket{service_name=\"$Service\",instance=~\"$instance\",job=~\"$job\"}[$__rate_interval])) by (service_name, le)) ",
+          "expr": "histogram_quantile(0.95, sum(rate({__name__=~\"http_client_request_duration_seconds_bucket|http_client_request_duration_bucket\",service_name=\"$Service\",instance=~\"$instance\",job=~\"$job\"}[$__rate_interval])) by (service_name, le)) ",
           "hide": false,
           "legendFormat": "HTTP p95",
           "range": true,
@@ -849,7 +849,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum(rate(http_client_request_duration_seconds_sum{service_name=\"$Service\",instance=~\"$instance\",job=~\"$job\"} [$__rate_interval])) / sum(rate(http_client_request_duration_count{service_name=\"$Service\",instance=~\"$instance\",job=~\"$job\"} [$__rate_interval]))",
+          "expr": "sum(rate({__name__=~\"http_client_request_duration_seconds_sum|http_client_request_duration_sum\",service_name=\"$Service\",instance=~\"$instance\",job=~\"$job\"} [$__rate_interval])) / sum(rate({__name__=~\"http_client_request_duration_count|http_client_request_duration_seconds_count\",service_name=\"$Service\",instance=~\"$instance\",job=~\"$job\"} [$__rate_interval]))",
           "hide": false,
           "legendFormat": "HTTP Avg",
           "range": true,
@@ -861,7 +861,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum(rate(rpc_client_duration_seconds_sum{service_name=\"$Service\",instance=~\"$instance\",job=~\"$job\"} [$__rate_interval])) / sum(rate(rpc_client_duration_count{service_name=\"$Service\",instance=~\"$instance\",job=~\"$job\"} [$__rate_interval]))",
+          "expr": "sum(rate({__name__=~\"rpc_client_duration_seconds_sum|rpc_client_duration_sum\",service_name=\"$Service\",instance=~\"$instance\",job=~\"$job\"} [$__rate_interval])) / sum(rate({__name__=~\"rpc_client_duration_count|rpc_client_duration_seconds_count\",service_name=\"$Service\",instance=~\"$instance\",job=~\"$job\"} [$__rate_interval]))",
           "hide": false,
           "legendFormat": "RPC Avg",
           "range": true,
@@ -873,7 +873,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by(service_name, le) (rate(rpc_client_duration_seconds_bucket{service_name=\"$Service\",instance=~\"$instance\",job=~\"$job\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.99, sum by(service_name, le) (rate({__name__=~\"rpc_client_duration_seconds_bucket|rpc_client_duration_bucket\",service_name=\"$Service\",instance=~\"$instance\",job=~\"$job\"}[$__rate_interval])))",
           "hide": false,
           "legendFormat": "RPC p99",
           "range": true,
@@ -885,7 +885,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.95, sum(rate(rpc_client_duration_seconds_bucket{service_name=\"$Service\",instance=~\"$instance\",job=~\"$job\"}[$__rate_interval])) by (service_name, le)) ",
+          "expr": "histogram_quantile(0.95, sum(rate({__name__=~\"rpc_client_duration_seconds_bucket|rpc_client_duration_bucket\",service_name=\"$Service\",instance=~\"$instance\",job=~\"$job\"}[$__rate_interval])) by (service_name, le)) ",
           "hide": false,
           "legendFormat": "RPC p95",
           "range": true,
@@ -980,7 +980,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum(rate(http_client_request_duration_count{service_name=\"$Service\",instance=~\"$instance\",job=~\"$job\"} [$__rate_interval])) by (service_name, http_response_status_code)",
+          "expr": "sum(rate({__name__=~\"http_client_request_duration_count|http_client_request_duration_seconds_count\",service_name=\"$Service\",instance=~\"$instance\",job=~\"$job\"} [$__rate_interval])) by (service_name, http_response_status_code)",
           "legendFormat": "HTTP client - {{http_response_status_code}}",
           "range": true,
           "refId": "A"
@@ -991,7 +991,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum(rate(rpc_client_duration_count{service_name=\"$Service\",instance=~\"$instance\",job=~\"$job\"} [$__rate_interval])) by (service_name, rpc_grpc_status_code)",
+          "expr": "sum(rate({__name__=~\"rpc_client_duration_count|rpc_client_duration_seconds_count\",service_name=\"$Service\",instance=~\"$instance\",job=~\"$job\"} [$__rate_interval])) by (service_name, rpc_grpc_status_code)",
           "hide": false,
           "legendFormat": "RPC client (status {{rpc_grpc_status_code}})",
           "range": true,
@@ -1112,7 +1112,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum by (http_response_status_code) (rate(http_client_request_duration_count{service_name=\"$Service\",http_response_status_code=~\"5.*\",instance=~\"$instance\",job=~\"$job\"}[$__rate_interval])) / ignoring(http_response_status_code) group_left sum(rate(http_client_request_duration_count{service_name=\"$Service\",instance=~\"$instance\",job=~\"$job\"}[$__rate_interval]))",
+          "expr": "sum by (http_response_status_code) (rate({__name__=~\"http_client_request_duration_count|http_client_request_duration_seconds_count\",service_name=\"$Service\",http_response_status_code=~\"5.*\",instance=~\"$instance\",job=~\"$job\"}[$__rate_interval])) / ignoring(http_response_status_code) group_left sum(rate({__name__=~\"http_client_request_duration_count|http_client_request_duration_seconds_count\",service_name=\"$Service\",instance=~\"$instance\",job=~\"$job\"}[$__rate_interval]))",
           "hide": false,
           "legendFormat": "HTTP client - {{http_response_status_code}}",
           "range": true,
@@ -1124,7 +1124,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum by (rpc_grpc_status_code) (rate(rpc_client_duration_count{service_name=\"$Service\",rpc_grpc_status_code!=\"0\",instance=~\"$instance\",job=~\"$job\"}[$__rate_interval])) / ignoring(rpc_grpc_status_code) group_left sum(rate(rpc_client_duration_count{service_name=\"$Service\",instance=~\"$instance\",job=~\"$job\"}[$__rate_interval]))",
+          "expr": "sum by (rpc_grpc_status_code) (rate({__name__=~\"rpc_client_duration_count|rpc_client_duration_seconds_count\",service_name=\"$Service\",rpc_grpc_status_code!=\"0\",instance=~\"$instance\",job=~\"$job\"}[$__rate_interval])) / ignoring(rpc_grpc_status_code) group_left sum(rate({__name__=~\"rpc_client_duration_count|rpc_client_duration_seconds_count\",service_name=\"$Service\",instance=~\"$instance\",job=~\"$job\"}[$__rate_interval]))",
           "hide": false,
           "legendFormat": "RPC client (status {{rpc_grpc_status_code}})",
           "range": true,
@@ -1272,6 +1272,6 @@
   "timezone": "",
   "title": "Beyla RED Metrics",
   "uid": "e0701985-a623-4e62-9fae-f5094244d065",
-  "version": 2,
+  "version": 3,
   "weekStart": ""
 }

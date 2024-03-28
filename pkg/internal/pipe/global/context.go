@@ -13,7 +13,7 @@ type ContextInfo struct {
 	// K8sEnabled specifies whether kubernetes decoration and discovery is enabled
 	K8sEnabled bool
 	// AppO11y stores context information that is only required for application observability.
-	// Its values must be set by the App O11y initializator and shouldn't be accessed from the
+	// Its values must be initialized by the App O11y code and shouldn't be accessed from the
 	// NetO11y part.
 	// TODO: unify appo11y and neto11y kubernetes informers
 	AppO11y AppO11y

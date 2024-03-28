@@ -43,17 +43,23 @@ func PrometheusEndpoint(ctx context.Context, cfg *PrometheusConfig, promMgr *con
 }
 
 func newReporter(ctx context.Context, cfg *PrometheusConfig, promMgr *connector.PrometheusManager) *metricsReporter {
+	attrs := export.BuildPromAttributeGetters(cfg.AllowedAttributes)
+	labelNames := make([]string, 0, len(attrs))
+	for _, label := range attrs {
+		labelNames = append(labelNames, label.Name)
+	}
+
 	// If service name is not explicitly set, we take the service name as set by the
 	// executable inspector
 	mr := &metricsReporter{
 		bgCtx:       ctx,
 		cfg:         cfg.Config,
 		promConnect: promMgr,
-		attrs:       export.BuildPromAttributeGetters(cfg.AllowedAttributes),
+		attrs:       attrs,
 		flowBytes: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "beyla_network_flow_bytes",
 			Help: "bytes submitted from a source network endpoint to a destination network endpoint",
-		}, cfg.AllowedAttributes),
+		}, labelNames),
 	}
 
 	mr.promConnect.Register(cfg.Config.Port, cfg.Config.Path, mr.flowBytes)

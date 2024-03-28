@@ -173,10 +173,11 @@ func (c *Config) Validate() error {
 		return ConfigError("BEYLA_BPF_BATCH_LENGTH must be at least 1")
 	}
 
-	if c.Enabled(FeatureNetO11y) && !c.Grafana.OTLP.MetricsEnabled() && !c.Metrics.Enabled() && !c.NetworkFlows.Print {
+	if c.Enabled(FeatureNetO11y) && !c.Grafana.OTLP.MetricsEnabled() && !c.Metrics.Enabled() &&
+		!c.Prometheus.Enabled() && !c.NetworkFlows.Print {
 		return ConfigError("enabling network metrics requires to enable at least the OpenTelemetry" +
-			" metrics exporter: grafana or otel_metrics_export sections in the YAML configuration file; or the" +
-			" OTEL_EXPORTER_OTLP_ENDPOINT or OTEL_EXPORTER_OTLP_METRICS_ENDPOINT environment variables. For debugging" +
+			" metrics exporter: grafana, otel_metrics_export or prometheus_export sections in the YAML configuration file; or the" +
+			" OTEL_EXPORTER_OTLP_ENDPOINT, OTEL_EXPORTER_OTLP_METRICS_ENDPOINT or BEYLA_PROMETHEUS_PORT environment variables. For debugging" +
 			" purposes, you can also set BEYLA_NETWORK_PRINT_FLOWS=true")
 	}
 

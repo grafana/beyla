@@ -1,9 +1,6 @@
 package global
 
 import (
-	"log/slog"
-
-	"github.com/grafana/beyla/pkg/beyla"
 	"github.com/grafana/beyla/pkg/internal/connector"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	kube2 "github.com/grafana/beyla/pkg/internal/kube"
@@ -34,27 +31,4 @@ type AppO11y struct {
 	K8sInformer *kube2.Metadata
 	// K8sDatabase provides access to shared kubernetes metadata
 	K8sDatabase *kube.Database
-}
-
-// BuildContextInfo populates some globally shared components and properties
-// from the user-provided configuration
-func BuildContextInfo(
-	config *beyla.Config,
-) *ContextInfo {
-	promMgr := &connector.PrometheusManager{}
-	ctxInfo := &ContextInfo{
-		Prometheus: promMgr,
-		K8sEnabled: config.Attributes.Kubernetes.Enabled(),
-	}
-	if config.InternalMetrics.Prometheus.Port != 0 {
-		slog.Debug("reporting internal metrics as Prometheus")
-		ctxInfo.Metrics = imetrics.NewPrometheusReporter(&config.InternalMetrics.Prometheus, promMgr)
-		// Prometheus manager also has its own internal metrics, so we need to pass the imetrics reporter
-		// TODO: remove this dependency cycle and let prommgr to create and return the PrometheusReporter
-		promMgr.InstrumentWith(ctxInfo.Metrics)
-	} else {
-		slog.Debug("not reporting internal metrics")
-		ctxInfo.Metrics = imetrics.NoopReporter{}
-	}
-	return ctxInfo
 }

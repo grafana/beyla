@@ -8,6 +8,8 @@ import (
 
 	"github.com/grafana/beyla/pkg/beyla"
 	"github.com/grafana/beyla/pkg/internal/appolly"
+	"github.com/grafana/beyla/pkg/internal/connector"
+	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/netolly/agent"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 )
@@ -15,7 +17,7 @@ import (
 // RunBeyla in the foreground process. This is a blocking function and won't exit
 // until both the AppO11y and NetO11y components end
 func RunBeyla(ctx context.Context, cfg *beyla.Config) {
-	ctxInfo := global.BuildContextInfo(cfg)
+	ctxInfo := buildCommonContextInfo(cfg)
 
 	wg := sync.WaitGroup{}
 	app := cfg.Enabled(beyla.FeatureAppO11y)
@@ -71,4 +73,27 @@ func setupNetO11y(ctx context.Context, ctxInfo *global.ContextInfo, cfg *beyla.C
 		slog.Error("can't start network metrics capture", "error", err)
 		os.Exit(-1)
 	}
+}
+
+// BuildContextInfo populates some globally shared components and properties
+// from the user-provided configuration
+func buildCommonContextInfo(
+	config *beyla.Config,
+) *global.ContextInfo {
+	promMgr := &connector.PrometheusManager{}
+	ctxInfo := &global.ContextInfo{
+		Prometheus: promMgr,
+		K8sEnabled: config.Attributes.Kubernetes.Enabled(),
+	}
+	if config.InternalMetrics.Prometheus.Port != 0 {
+		slog.Debug("reporting internal metrics as Prometheus")
+		ctxInfo.Metrics = imetrics.NewPrometheusReporter(&config.InternalMetrics.Prometheus, promMgr)
+		// Prometheus manager also has its own internal metrics, so we need to pass the imetrics reporter
+		// TODO: remove this dependency cycle and let prommgr to create and return the PrometheusReporter
+		promMgr.InstrumentWith(ctxInfo.Metrics)
+	} else {
+		slog.Debug("not reporting internal metrics")
+		ctxInfo.Metrics = imetrics.NoopReporter{}
+	}
+	return ctxInfo
 }

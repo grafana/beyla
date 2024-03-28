@@ -332,7 +332,7 @@ func labelNamesHTTPClient(cfg *PrometheusConfig, ctxInfo *global.ContextInfo) []
 	if ctxInfo.K8sEnabled {
 		names = appendK8sLabelNames(names)
 	}
-	if ctxInfo.ReportRoutes {
+	if ctxInfo.AppO11y.ReportRoutes {
 		names = append(names, httpRouteKey)
 	}
 	return names
@@ -350,7 +350,7 @@ func (r *metricsReporter) labelValuesHTTPClient(span *request.Span) []string {
 	if r.ctxInfo.K8sEnabled {
 		values = appendK8sLabelValues(values, span)
 	}
-	if r.ctxInfo.ReportRoutes {
+	if r.ctxInfo.AppO11y.ReportRoutes {
 		values = append(values, span.Route) // httpRouteKey
 	}
 	return values
@@ -366,7 +366,7 @@ func labelNamesHTTP(cfg *PrometheusConfig, ctxInfo *global.ContextInfo) []string
 	if cfg.ReportPeerInfo {
 		names = append(names, clientAddrKey)
 	}
-	if ctxInfo.ReportRoutes {
+	if ctxInfo.AppO11y.ReportRoutes {
 		names = append(names, httpRouteKey)
 	}
 	if ctxInfo.K8sEnabled {
@@ -386,7 +386,7 @@ func (r *metricsReporter) labelValuesHTTP(span *request.Span) []string {
 	if r.cfg.ReportPeerInfo {
 		values = append(values, span.Peer) // netSockPeerAddrKey
 	}
-	if r.ctxInfo.ReportRoutes {
+	if r.ctxInfo.AppO11y.ReportRoutes {
 		values = append(values, span.Route) // httpRouteKey
 	}
 	if r.ctxInfo.K8sEnabled {

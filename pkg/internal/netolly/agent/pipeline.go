@@ -8,6 +8,7 @@ import (
 
 	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
 	"github.com/grafana/beyla/pkg/internal/netolly/export"
+	"github.com/grafana/beyla/pkg/internal/netolly/export/otel"
 	"github.com/grafana/beyla/pkg/internal/netolly/flow"
 	"github.com/grafana/beyla/pkg/internal/netolly/transform/cidr"
 	"github.com/grafana/beyla/pkg/internal/netolly/transform/k8s"
@@ -26,7 +27,7 @@ type FlowsPipeline struct {
 	CIDRs      cidr.Definitions      `forwardTo:"Decorator"`
 	Decorator  `sendTo:"Exporter,Printer"`
 
-	Exporter export.MetricsConfig
+	Exporter otel.MetricsConfig
 	Printer  export.FlowPrinterEnabled
 }
 
@@ -75,7 +76,7 @@ func (f *Flows) buildAndStartPipeline(ctx context.Context) (graph.Graph, error) 
 	graph.RegisterMiddle(gb, flow.ReverseDNSProvider)
 
 	// Terminal nodes export the flow record information out of the pipeline: OTEL and printer
-	graph.RegisterTerminal(gb, export.MetricsExporterProvider)
+	graph.RegisterTerminal(gb, otel.MetricsExporterProvider)
 	graph.RegisterTerminal(gb, export.FlowPrinterProvider)
 
 	var deduperExpireTime = f.cfg.NetworkFlows.DeduperFCExpiry
@@ -91,7 +92,7 @@ func (f *Flows) buildAndStartPipeline(ctx context.Context) (graph.Graph, error) 
 		// TODO: allow prometheus exporting
 		ReverseDNS: f.cfg.NetworkFlows.ReverseDNS,
 		CIDRs:      f.cfg.NetworkFlows.CIDRs,
-		Exporter: export.MetricsConfig{
+		Exporter: otel.MetricsConfig{
 			Metrics:           &f.cfg.Metrics,
 			AllowedAttributes: f.cfg.NetworkFlows.AllowedAttributes,
 		},

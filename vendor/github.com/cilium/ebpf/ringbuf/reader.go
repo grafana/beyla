@@ -117,7 +117,6 @@ type Reader struct {
 	header      []byte
 	haveData    bool
 	deadline    time.Time
-	bufferSize  int
 }
 
 // NewReader creates a new BPF ringbuf reader.
@@ -152,7 +151,6 @@ func NewReader(ringbufMap *ebpf.Map) (*Reader, error) {
 		ring:        ring,
 		epollEvents: make([]unix.EpollEvent, 1),
 		header:      make([]byte, ringbufHeaderSize),
-		bufferSize:  ring.size(),
 	}, nil
 }
 
@@ -240,5 +238,5 @@ func (r *Reader) ReadInto(rec *Record) error {
 
 // BufferSize returns the size in bytes of the ring buffer
 func (r *Reader) BufferSize() int {
-	return r.bufferSize
+	return r.ring.size()
 }

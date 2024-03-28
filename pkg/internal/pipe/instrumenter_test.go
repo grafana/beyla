@@ -45,6 +45,7 @@ func TestBasicPipeline(t *testing.T) {
 
 	gb := newGraphBuilder(ctx, &beyla.Config{
 		Metrics: otel.MetricsConfig{
+			Features:        []string{otel.FeatureApplication},
 			MetricsEndpoint: tc.ServerEndpoint, ReportTarget: true,
 			ReportPeerInfo: true, Interval: 10 * time.Millisecond,
 			ReportersCacheLen: 16,
@@ -192,6 +193,7 @@ func TestRouteConsolidation(t *testing.T) {
 
 	gb := newGraphBuilder(ctx, &beyla.Config{
 		Metrics: otel.MetricsConfig{
+			Features:        []string{otel.FeatureApplication},
 			ReportPeerInfo:  false, // no peer info
 			MetricsEndpoint: tc.ServerEndpoint, Interval: 10 * time.Millisecond,
 			ReportersCacheLen: 16,
@@ -267,6 +269,7 @@ func TestGRPCPipeline(t *testing.T) {
 
 	gb := newGraphBuilder(ctx, &beyla.Config{
 		Metrics: otel.MetricsConfig{
+			Features:        []string{otel.FeatureApplication},
 			MetricsEndpoint: tc.ServerEndpoint, ReportTarget: true, ReportPeerInfo: true, Interval: time.Millisecond,
 			ReportersCacheLen: 16,
 		},
@@ -345,6 +348,7 @@ func TestBasicPipelineInfo(t *testing.T) {
 	tracesInput := make(chan []request.Span, 10)
 	gb := newGraphBuilder(ctx, &beyla.Config{
 		Metrics: otel.MetricsConfig{
+			Features:        []string{otel.FeatureApplication},
 			MetricsEndpoint: tc.ServerEndpoint, ReportTarget: true, ReportPeerInfo: true,
 			Interval: 10 * time.Millisecond, ReportersCacheLen: 16,
 		},

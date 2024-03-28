@@ -12,7 +12,6 @@ import (
 	"github.com/grafana/beyla/pkg/internal/export/prom"
 	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
 	"github.com/grafana/beyla/pkg/internal/netolly/export"
-	"github.com/grafana/beyla/pkg/internal/pipe/global"
 )
 
 // PrometheusConfig for network metrics just wrap the global prom.PrometheusConfig as provided by the user
@@ -35,23 +34,21 @@ type metricsReporter struct {
 
 	attrs []export.Attribute
 
-	bgCtx   context.Context
-	ctxInfo *global.ContextInfo
+	bgCtx context.Context
 }
 
-func PrometheusEndpoint(ctx context.Context, cfg *PrometheusConfig, ctxInfo *global.ContextInfo) (node.TerminalFunc[[]*ebpf.Record], error) {
-	reporter := newReporter(ctx, cfg, ctxInfo)
+func PrometheusEndpoint(ctx context.Context, cfg *PrometheusConfig, promMgr *connector.PrometheusManager) (node.TerminalFunc[[]*ebpf.Record], error) {
+	reporter := newReporter(ctx, cfg, promMgr)
 	return reporter.reportMetrics, nil
 }
 
-func newReporter(ctx context.Context, cfg *PrometheusConfig, ctxInfo *global.ContextInfo) *metricsReporter {
+func newReporter(ctx context.Context, cfg *PrometheusConfig, promMgr *connector.PrometheusManager) *metricsReporter {
 	// If service name is not explicitly set, we take the service name as set by the
 	// executable inspector
 	mr := &metricsReporter{
 		bgCtx:       ctx,
-		ctxInfo:     ctxInfo,
 		cfg:         cfg.Config,
-		promConnect: ctxInfo.Prometheus,
+		promConnect: promMgr,
 		attrs:       export.BuildPromAttributeGetters(cfg.AllowedAttributes),
 		flowBytes: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "beyla_network_flow_bytes",

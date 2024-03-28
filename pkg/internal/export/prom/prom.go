@@ -86,7 +86,7 @@ type PrometheusConfig struct {
 	DisableBuildInfo bool `yaml:"disable_build_info" env:"BEYLA_PROMETHEUS_DISABLE_BUILD_INFO"`
 
 	// Features of metrics that are can be exported. Accepted values are "application" and "network".
-	Features []string `yaml:"features" env:"BEYLA_PROEMETHEUS_FEATURES" envSeparator:","`
+	Features []string `yaml:"features" env:"BEYLA_PROMETHEUS_FEATURES" envSeparator:","`
 
 	Buckets otel.Buckets `yaml:"buckets"`
 
@@ -95,8 +95,7 @@ type PrometheusConfig struct {
 
 // nolint:gocritic
 func (p PrometheusConfig) Enabled() bool {
-	return (p.Port != 0 && slices.Contains(p.Features, otel.FeatureApplication)) ||
-		p.Registry != nil
+	return (p.Port != 0 || p.Registry != nil) && slices.Contains(p.Features, otel.FeatureApplication)
 }
 
 type metricsReporter struct {

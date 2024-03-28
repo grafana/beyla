@@ -17,7 +17,7 @@ import (
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/netolly/transform/cidr"
 	"github.com/grafana/beyla/pkg/internal/traces"
-	"github.com/grafana/beyla/pkg/internal/transform"
+	"github.com/grafana/beyla/pkg/transform"
 )
 
 func TestConfig_Overrides(t *testing.T) {

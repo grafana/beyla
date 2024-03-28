@@ -15,8 +15,8 @@ import (
 	"github.com/grafana/beyla/pkg/internal/export/prom"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/traces"
-	"github.com/grafana/beyla/pkg/internal/transform"
 	"github.com/grafana/beyla/pkg/services"
+	"github.com/grafana/beyla/pkg/transform"
 )
 
 const ReporterLRUSize = 256

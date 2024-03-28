@@ -15,7 +15,7 @@ import (
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/pkg/internal/request"
 	"github.com/grafana/beyla/pkg/internal/traces"
-	"github.com/grafana/beyla/pkg/internal/transform"
+	"github.com/grafana/beyla/pkg/transform"
 )
 
 // nodesMap provides the architecture of the whole processing pipeline:

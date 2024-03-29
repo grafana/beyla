@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use rand::Rng;
 use std::time::Duration;
 use std::thread;
+use std::fs;
 use reqwest;
 use tokio;
 
@@ -27,6 +28,11 @@ async fn smoke() -> HttpResponse {
 
 async fn trace() -> HttpResponse {
     HttpResponse::Ok().into()
+}
+
+async fn large() -> HttpResponse {
+    let data = fs::read_to_string("large_data.json").expect("Unable to read large_data.json file");
+    HttpResponse::Ok().body(data)
 }
 
 async fn dist() -> HttpResponse {
@@ -76,6 +82,7 @@ async fn main() -> std::io::Result<()> {
             .service(web::resource("/trace").route(web::get().to(trace)))
             .service(web::resource("/dist").route(web::get().to(dist)))
             .service(web::resource("/dist2").route(web::get().to(dist2)))
+            .service(web::resource("/large").route(web::get().to(large)))
     })
     .bind(("0.0.0.0", 8090))?
     .run()

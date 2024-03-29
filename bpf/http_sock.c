@@ -39,6 +39,18 @@ struct {
     __type(value, recv_args_t);
 } active_recv_args SEC(".maps");
 
+typedef struct send_args {
+    pid_connection_info_t p_conn;
+    u64 size;
+} send_args_t;
+
+struct {
+    __uint(type, BPF_MAP_TYPE_LRU_HASH);
+    __uint(max_entries, MAX_CONCURRENT_REQUESTS);
+    __type(key, u64); // pid_tid
+    __type(value, send_args_t); // size to be sent
+} active_send_args SEC(".maps");
+
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __type(key, partial_connection_info_t); // key: the connection info without the destination address, but with the tcp sequence
@@ -223,6 +235,14 @@ cleanup:
 }
 
 // Main HTTP read and write operations are handled with tcp_sendmsg and tcp_recvmsg 
+
+// The size argument here will be always the total response size.
+// However, the return value of tcp_sendmsg tells us how much it sent. When the
+// response is large it will get chunked, so we have to use a kretprobe to
+// finish the request event, otherwise we won't get accurate timings.
+// The problem is that kretprobes can be skipped, otherwise we could always just
+// finish the request on the return of tcp_sendmsg. Therefore for any request less
+// than 1MB we just finish the request on the kprobe path.
 SEC("kprobe/tcp_sendmsg")
 int BPF_KPROBE(kprobe_tcp_sendmsg, struct sock *sk, struct msghdr *msg, size_t size) {
     u64 id = bpf_get_current_pid_tgid();
@@ -233,17 +253,24 @@ int BPF_KPROBE(kprobe_tcp_sendmsg, struct sock *sk, struct msghdr *msg, size_t s
 
     bpf_dbg_printk("=== kprobe tcp_sendmsg=%d sock=%llx size %d===", id, sk, size);
 
-    pid_connection_info_t info = {};
+    send_args_t s_args = {
+        .size = size
+    };
 
-    if (parse_sock_info(sk, &info.conn)) {
+    if (parse_sock_info(sk, &s_args.p_conn.conn)) {
         //dbg_print_http_connection_info(&info.conn); // commented out since GitHub CI doesn't like this call
-        sort_connection_info(&info.conn);
-        info.pid = pid_from_pid_tgid(id);
+        sort_connection_info(&s_args.p_conn.conn);
+        s_args.p_conn.pid = pid_from_pid_tgid(id);
 
         if (size > 0) {
             void *iovec_ptr = find_msghdr_buf(msg);
             if (iovec_ptr) {
-                handle_buf_with_connection(&info, iovec_ptr, size, 0, TCP_SEND);
+                bpf_map_update_elem(&active_send_args, &id, &s_args, BPF_ANY);
+                handle_buf_with_connection(&s_args.p_conn, iovec_ptr, size, NO_SSL, TCP_SEND);
+                if (size < KPROBES_LARGE_RESPONSE_LEN) {
+                    bpf_dbg_printk("Maybe we need to finish the request");
+                    finish_possible_delayed_http_request(&s_args.p_conn);
+                }
             } else {
                 bpf_dbg_printk("can't find iovec ptr in msghdr, not tracking sendmsg");
             }
@@ -268,8 +295,34 @@ int BPF_KPROBE(kprobe_tcp_sendmsg, struct sock *sk, struct msghdr *msg, size_t s
             return 0;
         }
         bpf_dbg_printk("=== kprobe SSL tcp_sendmsg=%d sock=%llx ssl=%llx ===", id, sk, ssl);
-        bpf_map_update_elem(&ssl_to_conn, &ssl, &info, BPF_ANY);
+        bpf_map_update_elem(&ssl_to_conn, &ssl, &s_args.p_conn, BPF_ANY);
     }
+
+    return 0;
+}
+
+// This is really a fallback for the kprobe to ensure we send a large request if it was
+// delayed. The code under the `if (size < KPROBES_LARGE_RESPONSE_LEN) {` block should do it
+// but it's possible that the kernel sends the data in smaller chunks.
+SEC("kretprobe/tcp_sendmsg")
+int BPF_KRETPROBE(kretprobe_tcp_sendmsg, int sent_len) {
+    u64 id = bpf_get_current_pid_tgid();
+    
+    if (!valid_pid(id)) {
+        return 0;
+    }
+
+    bpf_dbg_printk("=== kretprobe tcp_sendmsg=%d sent %d===", id, sent_len);
+
+    send_args_t *s_args = bpf_map_lookup_elem(&active_send_args, &id);
+    if (s_args) {
+        if (sent_len >= s_args->size) {
+            bpf_dbg_printk("Checking if we need to finish the request");
+            finish_possible_delayed_http_request(&s_args->p_conn);
+        }
+    }
+
+    bpf_map_delete_elem(&active_send_args, &id);
 
     return 0;
 }
@@ -323,7 +376,7 @@ int BPF_KRETPROBE(kretprobe_tcp_recvmsg, int copied_len) {
         sort_connection_info(&info.conn);
         //dbg_print_http_connection_info(&info.conn);
         info.pid = pid_from_pid_tgid(id);
-        handle_buf_with_connection(&info, (void *)args->iovec_ptr, copied_len, 0, TCP_RECV);
+        handle_buf_with_connection(&info, (void *)args->iovec_ptr, copied_len, NO_SSL, TCP_RECV);
     }
 
 done:

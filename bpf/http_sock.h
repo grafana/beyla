@@ -142,7 +142,7 @@ static __always_inline void *find_msghdr_buf(struct msghdr *msg) {
         bpf_dbg_printk("msg iter type exists, read value %d", msg_iter_type);
     }
 
-    bpf_dbg_printk("msg type %x, iter type %d", m_flags, msg_iter_type);
+    bpf_dbg_printk("msg flags %x, iter type %d", m_flags, msg_iter_type);
 
     struct iovec *iov = NULL;
 
@@ -233,6 +233,13 @@ static __always_inline void finish_http(http_info_t *info) {
     }        
 }
 
+static __always_inline void finish_possible_delayed_http_request(pid_connection_info_t *pid_conn) {
+    http_info_t *info = bpf_map_lookup_elem(&ongoing_http, pid_conn);
+    if (info) {
+        finish_http(info);
+    }
+}
+
 static __always_inline http_info_t *get_or_set_http_info(http_info_t *info, pid_connection_info_t *pid_conn, u8 packet_type) {
     if (packet_type == PACKET_TYPE_REQUEST) {
         http_info_t *old_info = bpf_map_lookup_elem(&ongoing_http, pid_conn);
@@ -278,7 +285,7 @@ static __always_inline void process_http_response(http_info_t *info, unsigned ch
     info->status += (buf[RESPONSE_STATUS_POS + 2] - '0');
 }
 
-static __always_inline void handle_http_response(unsigned char *small_buf, pid_connection_info_t *pid_conn, http_info_t *info, int orig_len, u8 direction) {
+static __always_inline void handle_http_response(unsigned char *small_buf, pid_connection_info_t *pid_conn, http_info_t *info, int orig_len, u8 direction, u8 ssl) {
     http_connection_metadata_t *meta = bpf_map_lookup_elem(&filtered_connections, pid_conn);
     http_connection_metadata_t dummy_meta = {};
 
@@ -297,7 +304,12 @@ static __always_inline void handle_http_response(unsigned char *small_buf, pid_c
     }
 
     process_http_response(info, small_buf, meta, orig_len);
-    finish_http(info);
+
+    if (ssl || (direction != TCP_SEND) || (orig_len < KPROBES_LARGE_RESPONSE_LEN)) {
+        finish_http(info);
+    } else {
+        bpf_dbg_printk("Delaying finish http for large request, orig_len %d", orig_len);
+    }
 }
 
 static __always_inline void http2_grpc_start(http2_conn_stream_t *s_key, void *u_buf, int len, u8 direction) {
@@ -487,10 +499,10 @@ static __always_inline void handle_buf_with_connection(pid_connection_info_t *pi
             bpf_probe_read(info->buf, FULL_BUF_SIZE, u_buf);
             process_http_request(info, bytes_len);
         } else if (packet_type == PACKET_TYPE_RESPONSE) {
-            handle_http_response(small_buf, pid_conn, info, bytes_len, direction);
+            handle_http_response(small_buf, pid_conn, info, bytes_len, direction, ssl);
         } else if (still_reading(info)) {
             info->len += bytes_len;
-        }     
+        }   
 
         bpf_map_delete_elem(&ongoing_http_fallback, &pid_conn->conn);
     } else if (is_http2_or_grpc(small_buf, MIN_HTTP2_SIZE)) {
@@ -502,6 +514,12 @@ static __always_inline void handle_buf_with_connection(pid_connection_info_t *pi
         u8 *h2g = bpf_map_lookup_elem(&ongoing_http2_connections, pid_conn);
         if (h2g && *h2g == ssl) {
             process_http2_grpc_frames(pid_conn, u_buf, bytes_len, direction);
+        } else { // large request tracking
+            http_info_t *info = bpf_map_lookup_elem(&ongoing_http, pid_conn);
+
+            if (info && still_responding(info)) {
+                info->end_monotime_ns = bpf_ktime_get_ns();
+            } 
         }
     }
 }

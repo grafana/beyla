@@ -111,6 +111,11 @@ type bpfRecvArgsT struct {
 	IovecPtr uint64
 }
 
+type bpfSendArgsT struct {
+	P_conn bpfPidConnectionInfoT
+	Size   uint64
+}
+
 type bpfSockArgsT struct {
 	Addr       uint64
 	AcceptTime uint64
@@ -187,6 +192,7 @@ type bpfProgramSpecs struct {
 	KretprobeSysClone       *ebpf.ProgramSpec `ebpf:"kretprobe_sys_clone"`
 	KretprobeSysConnect     *ebpf.ProgramSpec `ebpf:"kretprobe_sys_connect"`
 	KretprobeTcpRecvmsg     *ebpf.ProgramSpec `ebpf:"kretprobe_tcp_recvmsg"`
+	KretprobeTcpSendmsg     *ebpf.ProgramSpec `ebpf:"kretprobe_tcp_sendmsg"`
 	SocketHttpFilter        *ebpf.ProgramSpec `ebpf:"socket__http_filter"`
 }
 
@@ -197,6 +203,7 @@ type bpfMapSpecs struct {
 	ActiveAcceptArgs        *ebpf.MapSpec `ebpf:"active_accept_args"`
 	ActiveConnectArgs       *ebpf.MapSpec `ebpf:"active_connect_args"`
 	ActiveRecvArgs          *ebpf.MapSpec `ebpf:"active_recv_args"`
+	ActiveSendArgs          *ebpf.MapSpec `ebpf:"active_send_args"`
 	ActiveSslHandshakes     *ebpf.MapSpec `ebpf:"active_ssl_handshakes"`
 	ActiveSslReadArgs       *ebpf.MapSpec `ebpf:"active_ssl_read_args"`
 	ActiveSslWriteArgs      *ebpf.MapSpec `ebpf:"active_ssl_write_args"`
@@ -243,6 +250,7 @@ type bpfMaps struct {
 	ActiveAcceptArgs        *ebpf.Map `ebpf:"active_accept_args"`
 	ActiveConnectArgs       *ebpf.Map `ebpf:"active_connect_args"`
 	ActiveRecvArgs          *ebpf.Map `ebpf:"active_recv_args"`
+	ActiveSendArgs          *ebpf.Map `ebpf:"active_send_args"`
 	ActiveSslHandshakes     *ebpf.Map `ebpf:"active_ssl_handshakes"`
 	ActiveSslReadArgs       *ebpf.Map `ebpf:"active_ssl_read_args"`
 	ActiveSslWriteArgs      *ebpf.Map `ebpf:"active_ssl_write_args"`
@@ -272,6 +280,7 @@ func (m *bpfMaps) Close() error {
 		m.ActiveAcceptArgs,
 		m.ActiveConnectArgs,
 		m.ActiveRecvArgs,
+		m.ActiveSendArgs,
 		m.ActiveSslHandshakes,
 		m.ActiveSslReadArgs,
 		m.ActiveSslWriteArgs,
@@ -311,6 +320,7 @@ type bpfPrograms struct {
 	KretprobeSysClone       *ebpf.Program `ebpf:"kretprobe_sys_clone"`
 	KretprobeSysConnect     *ebpf.Program `ebpf:"kretprobe_sys_connect"`
 	KretprobeTcpRecvmsg     *ebpf.Program `ebpf:"kretprobe_tcp_recvmsg"`
+	KretprobeTcpSendmsg     *ebpf.Program `ebpf:"kretprobe_tcp_sendmsg"`
 	SocketHttpFilter        *ebpf.Program `ebpf:"socket__http_filter"`
 }
 
@@ -326,6 +336,7 @@ func (p *bpfPrograms) Close() error {
 		p.KretprobeSysClone,
 		p.KretprobeSysConnect,
 		p.KretprobeTcpRecvmsg,
+		p.KretprobeTcpSendmsg,
 		p.SocketHttpFilter,
 	)
 }

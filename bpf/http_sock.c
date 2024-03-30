@@ -307,7 +307,7 @@ int BPF_KPROBE(kprobe_tcp_sendmsg, struct sock *sk, struct msghdr *msg, size_t s
 SEC("kretprobe/tcp_sendmsg")
 int BPF_KRETPROBE(kretprobe_tcp_sendmsg, int sent_len) {
     u64 id = bpf_get_current_pid_tgid();
-    
+
     if (!valid_pid(id)) {
         return 0;
     }
@@ -323,6 +323,28 @@ int BPF_KRETPROBE(kretprobe_tcp_sendmsg, int sent_len) {
     }
 
     bpf_map_delete_elem(&active_send_args, &id);
+
+    return 0;
+}
+
+SEC("kprobe/tcp_close")
+int BPF_KPROBE(kprobe_tcp_close, struct sock *sk, long timeout) {
+    u64 id = bpf_get_current_pid_tgid();
+
+    if (!valid_pid(id)) {
+        return 0;
+    }
+
+    bpf_dbg_printk("=== kprobe tcp_close %d===", id);
+
+    pid_connection_info_t info = {};
+
+    if (parse_sock_info(sk, &info.conn)) {
+        //dbg_print_http_connection_info(&info.conn); // commented out since GitHub CI doesn't like this call
+        sort_connection_info(&info.conn);
+        info.pid = pid_from_pid_tgid(id);
+        finish_possible_delayed_http_request(&info);
+    }
 
     return 0;
 }

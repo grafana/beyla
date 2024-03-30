@@ -235,7 +235,7 @@ static __always_inline void finish_http(http_info_t *info) {
 
 static __always_inline void finish_possible_delayed_http_request(pid_connection_info_t *pid_conn) {
     http_info_t *info = bpf_map_lookup_elem(&ongoing_http, pid_conn);
-    if (info) {
+    if (info) {        
         finish_http(info);
     }
 }
@@ -285,7 +285,7 @@ static __always_inline void process_http_response(http_info_t *info, unsigned ch
     info->status += (buf[RESPONSE_STATUS_POS + 2] - '0');
 }
 
-static __always_inline void handle_http_response(unsigned char *small_buf, pid_connection_info_t *pid_conn, http_info_t *info, int orig_len, u8 direction, u8 ssl) {
+static __always_inline void handle_http_response(unsigned char *small_buf, pid_connection_info_t *pid_conn, http_info_t *info, int orig_len, u8 direction) {
     http_connection_metadata_t *meta = bpf_map_lookup_elem(&filtered_connections, pid_conn);
     http_connection_metadata_t dummy_meta = {};
 
@@ -305,7 +305,7 @@ static __always_inline void handle_http_response(unsigned char *small_buf, pid_c
 
     process_http_response(info, small_buf, meta, orig_len);
 
-    if (ssl || (direction != TCP_SEND) || (orig_len < KPROBES_LARGE_RESPONSE_LEN)) {
+    if ((direction != TCP_SEND) || (orig_len < KPROBES_LARGE_RESPONSE_LEN)) {
         finish_http(info);
     } else {
         bpf_dbg_printk("Delaying finish http for large request, orig_len %d", orig_len);
@@ -499,7 +499,7 @@ static __always_inline void handle_buf_with_connection(pid_connection_info_t *pi
             bpf_probe_read(info->buf, FULL_BUF_SIZE, u_buf);
             process_http_request(info, bytes_len);
         } else if (packet_type == PACKET_TYPE_RESPONSE) {
-            handle_http_response(small_buf, pid_conn, info, bytes_len, direction, ssl);
+            handle_http_response(small_buf, pid_conn, info, bytes_len, direction);
         } else if (still_reading(info)) {
             info->len += bytes_len;
         }   

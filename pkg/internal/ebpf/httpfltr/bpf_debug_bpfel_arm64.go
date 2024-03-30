@@ -183,6 +183,7 @@ type bpf_debugSpecs struct {
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpf_debugProgramSpecs struct {
 	KprobeSysExit           *ebpf.ProgramSpec `ebpf:"kprobe_sys_exit"`
+	KprobeTcpClose          *ebpf.ProgramSpec `ebpf:"kprobe_tcp_close"`
 	KprobeTcpConnect        *ebpf.ProgramSpec `ebpf:"kprobe_tcp_connect"`
 	KprobeTcpRcvEstablished *ebpf.ProgramSpec `ebpf:"kprobe_tcp_rcv_established"`
 	KprobeTcpRecvmsg        *ebpf.ProgramSpec `ebpf:"kprobe_tcp_recvmsg"`
@@ -311,6 +312,7 @@ func (m *bpf_debugMaps) Close() error {
 // It can be passed to loadBpf_debugObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpf_debugPrograms struct {
 	KprobeSysExit           *ebpf.Program `ebpf:"kprobe_sys_exit"`
+	KprobeTcpClose          *ebpf.Program `ebpf:"kprobe_tcp_close"`
 	KprobeTcpConnect        *ebpf.Program `ebpf:"kprobe_tcp_connect"`
 	KprobeTcpRcvEstablished *ebpf.Program `ebpf:"kprobe_tcp_rcv_established"`
 	KprobeTcpRecvmsg        *ebpf.Program `ebpf:"kprobe_tcp_recvmsg"`
@@ -327,6 +329,7 @@ type bpf_debugPrograms struct {
 func (p *bpf_debugPrograms) Close() error {
 	return _Bpf_debugClose(
 		p.KprobeSysExit,
+		p.KprobeTcpClose,
 		p.KprobeTcpConnect,
 		p.KprobeTcpRcvEstablished,
 		p.KprobeTcpRecvmsg,

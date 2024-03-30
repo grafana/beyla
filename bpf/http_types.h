@@ -12,7 +12,7 @@
 #define KPROBES_HTTP2_BUF_SIZE 256
 #define KPROBES_HTTP2_RET_BUF_SIZE 64
 
-#define KPROBES_LARGE_RESPONSE_LEN 1000000 // 1MB and above we try to track the response actual time with kretprobes
+#define KPROBES_LARGE_RESPONSE_LEN 100000 // 100K and above we try to track the response actual time with kretprobes
 
 #define CONN_INFO_FLAG_TRACE 0x1
 

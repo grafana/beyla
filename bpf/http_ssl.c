@@ -225,6 +225,15 @@ int BPF_UPROBE(uprobe_ssl_shutdown, void *s) {
 
     bpf_dbg_printk("=== SSL_shutdown id=%d ssl=%llx ===", id, s);
 
+    connection_info_t *conn = bpf_map_lookup_elem(&ssl_to_conn, &s);
+    if (conn) {
+        pid_connection_info_t pid_conn = {
+            .conn = *conn,
+            .pid = pid_from_pid_tgid(id)
+        };
+        finish_possible_delayed_http_request(&pid_conn);
+    }
+
     bpf_map_delete_elem(&ssl_to_conn, &s);
     bpf_map_delete_elem(&pid_tid_to_conn, &id);
 

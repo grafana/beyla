@@ -318,6 +318,8 @@ int BPF_KRETPROBE(kretprobe_tcp_sendmsg, int sent_len) {
     if (s_args) {
         if (sent_len > 0) {
             update_http_sent_len(&s_args->p_conn, sent_len);
+        } else {
+            finish_possible_delayed_http_request(&s_args->p_conn);
         }
     }
 

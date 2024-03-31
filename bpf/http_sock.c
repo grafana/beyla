@@ -322,8 +322,6 @@ int BPF_KRETPROBE(kretprobe_tcp_sendmsg, int sent_len) {
         }
     }
 
-    bpf_map_delete_elem(&active_send_args, &id);
-
     return 0;
 }
 
@@ -337,14 +335,13 @@ int BPF_KPROBE(kprobe_tcp_close, struct sock *sk, long timeout) {
 
     bpf_dbg_printk("=== kprobe tcp_close %d===", id);
 
-    pid_connection_info_t info = {};
-
-    if (parse_sock_info(sk, &info.conn)) {
-        //dbg_print_http_connection_info(&info.conn); // commented out since GitHub CI doesn't like this call
-        sort_connection_info(&info.conn);
-        info.pid = pid_from_pid_tgid(id);
-        finish_possible_delayed_http_request(&info);
+    send_args_t *s_args = bpf_map_lookup_elem(&active_send_args, &id);
+    if (s_args) {
+        bpf_dbg_printk("Checking if we need to finish the request on close");
+        finish_possible_delayed_http_request(&s_args->p_conn);
     }
+
+    bpf_map_delete_elem(&active_send_args, &id);
 
     return 0;
 }

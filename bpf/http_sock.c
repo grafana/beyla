@@ -267,10 +267,10 @@ int BPF_KPROBE(kprobe_tcp_sendmsg, struct sock *sk, struct msghdr *msg, size_t s
             if (iovec_ptr) {
                 bpf_map_update_elem(&active_send_args, &id, &s_args, BPF_ANY);
                 handle_buf_with_connection(&s_args.p_conn, iovec_ptr, size, NO_SSL, TCP_SEND);
-                if (size < KPROBES_LARGE_RESPONSE_LEN) {
-                    bpf_dbg_printk("Maybe we need to finish the request");
-                    finish_possible_delayed_http_request(&s_args.p_conn);
-                }
+                // if (size < KPROBES_LARGE_RESPONSE_LEN) {
+                //     bpf_dbg_printk("Maybe we need to finish the request");
+                //     finish_possible_delayed_http_request(&s_args.p_conn);
+                // }
             } else {
                 bpf_dbg_printk("can't find iovec ptr in msghdr, not tracking sendmsg");
             }
@@ -316,9 +316,8 @@ int BPF_KRETPROBE(kretprobe_tcp_sendmsg, int sent_len) {
 
     send_args_t *s_args = bpf_map_lookup_elem(&active_send_args, &id);
     if (s_args) {
-        if (sent_len >= s_args->size) {
-            bpf_dbg_printk("Checking if we need to finish the request");
-            finish_possible_delayed_http_request(&s_args->p_conn);
+        if (sent_len > 0) {
+            update_http_sent_len(&s_args->p_conn, sent_len);
         }
     }
 
@@ -333,7 +332,7 @@ int BPF_KPROBE(kprobe_tcp_close, struct sock *sk, long timeout) {
         return 0;
     }
 
-    bpf_dbg_printk("=== kprobe tcp_close %d===", id);
+    bpf_printk("=== kprobe tcp_close %d sock %llx ===", id, sk);
 
     send_args_t *s_args = bpf_map_lookup_elem(&active_send_args, &id);
     if (s_args) {

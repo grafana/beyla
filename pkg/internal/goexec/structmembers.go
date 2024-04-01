@@ -131,7 +131,8 @@ var structMembers = map[string]structInfo{
 	"golang.org/x/net/http2.responseWriterState": {
 		lib: "golang.org/x/net",
 		fields: map[string]string{
-			"req": "rws_req_pos",
+			"req":    "rws_req_pos",
+			"status": "rws_status_pos",
 		},
 	},
 	"golang.org/x/net/http2.ClientConn": {

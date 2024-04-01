@@ -327,7 +327,8 @@ int BPF_KRETPROBE(kretprobe_tcp_sendmsg, int sent_len) {
     if (s_args) {
         if (sent_len > 0) {
             update_http_sent_len(&s_args->p_conn, sent_len);
-        } else {
+        } 
+        if (sent_len < MIN_HTTP_SIZE) { // Sometimes app servers don't send close, but small responses back
             finish_possible_delayed_http_request(&s_args->p_conn);
         }
     }
@@ -351,7 +352,7 @@ int BPF_KPROBE(kprobe_tcp_close, struct sock *sk, long timeout) {
     if (s_args) {
         bpf_dbg_printk("Checking if we need to finish the request on close");
         finish_possible_delayed_http_request(&s_args->p_conn);
-    } else {
+    } else { // see if we match on another thread, but same sock *
         s_args = bpf_map_lookup_elem(&active_send_sock_args, &sock_p);
         if (s_args) {
             bpf_dbg_printk("Checking if we need to finish the request on close");

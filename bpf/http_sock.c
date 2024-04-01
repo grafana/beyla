@@ -339,14 +339,13 @@ int BPF_KRETPROBE(kretprobe_tcp_sendmsg, int sent_len) {
 static __always_inline void ensure_sent_event(u64 id, u64 *sock_p) {
     send_args_t *s_args = bpf_map_lookup_elem(&active_send_args, &id);
     if (s_args) {
-        bpf_dbg_printk("Checking if we need to finish the request on close");
+        bpf_dbg_printk("Checking if we need to finish the request per thread id");
         finish_possible_delayed_http_request(&s_args->p_conn);
-    } else { // see if we match on another thread, but same sock *
-        s_args = bpf_map_lookup_elem(&active_send_sock_args, &sock_p);
-        if (s_args) {
-            bpf_dbg_printk("Checking if we need to finish the request on close");
-            finish_possible_delayed_http_request(&s_args->p_conn);
-        }
+    }  // see if we match on another thread, but same sock *
+    s_args = bpf_map_lookup_elem(&active_send_sock_args, sock_p);
+    if (s_args) {
+        bpf_dbg_printk("Checking if we need to finish the request per socket");
+        finish_possible_delayed_http_request(&s_args->p_conn);
     }
 }
 
@@ -562,6 +561,14 @@ int BPF_KPROBE(kprobe_sys_exit, int status) {
     task_tid(&task);
 
     bpf_dbg_printk("sys_exit %d, pid=%d, valid_pid(id)=%d", id, pid_from_pid_tgid(id), valid_pid(id));
+ 
+    // handle the case when the thread terminates without closing a socket
+    send_args_t *s_args = bpf_map_lookup_elem(&active_send_args, &id);
+    if (s_args) {
+        bpf_dbg_printk("Checking if we need to finish the request per thread id");
+        finish_possible_delayed_http_request(&s_args->p_conn);
+    }
+
     bpf_map_delete_elem(&clone_map, &task);
     bpf_map_delete_elem(&server_traces, &task);
     

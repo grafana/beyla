@@ -336,18 +336,7 @@ int BPF_KRETPROBE(kretprobe_tcp_sendmsg, int sent_len) {
     return 0;
 }
 
-SEC("kprobe/tcp_close")
-int BPF_KPROBE(kprobe_tcp_close, struct sock *sk, long timeout) {
-    u64 id = bpf_get_current_pid_tgid();
-
-    if (!valid_pid(id)) {
-        return 0;
-    }
-
-    bpf_printk("=== kprobe tcp_close %d sock %llx ===", id, sk);
-
-    u64 sock_p = (u64)sk;
-
+static __always_inline void ensure_sent_event(u64 id, u64 *sock_p) {
     send_args_t *s_args = bpf_map_lookup_elem(&active_send_args, &id);
     if (s_args) {
         bpf_dbg_printk("Checking if we need to finish the request on close");
@@ -359,6 +348,21 @@ int BPF_KPROBE(kprobe_tcp_close, struct sock *sk, long timeout) {
             finish_possible_delayed_http_request(&s_args->p_conn);
         }
     }
+}
+
+SEC("kprobe/tcp_close")
+int BPF_KPROBE(kprobe_tcp_close, struct sock *sk, long timeout) {
+    u64 id = bpf_get_current_pid_tgid();
+
+    if (!valid_pid(id)) {
+        return 0;
+    }
+
+    u64 sock_p = (u64)sk;
+
+    bpf_printk("=== kprobe tcp_close %d sock %llx ===", id, sk);
+
+    ensure_sent_event(id, &sock_p);
 
     bpf_map_delete_elem(&active_send_args, &id);
     bpf_map_delete_elem(&active_send_sock_args, &sock_p);
@@ -376,6 +380,12 @@ int BPF_KPROBE(kprobe_tcp_recvmsg, struct sock *sk, struct msghdr *msg, size_t l
     }
 
     bpf_dbg_printk("=== tcp_recvmsg id=%d sock=%llx ===", id, sk);
+
+    // Make sure we don't have stale event from earlier socket connection if they are
+    // sent through the same socket. This mainly happens if the server overlays virtual
+    // threads in the runtime.
+    u64 sock_p = (u64)sk;
+    ensure_sent_event(id, &sock_p);
 
     // Important: We must work here to remember the iovec pointer, since the msghdr structure
     // can get modified in non-reversible way if the incoming packet is large and broken down in parts. 

@@ -53,6 +53,13 @@ struct {
 
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
+    __uint(max_entries, MAX_CONCURRENT_REQUESTS);
+    __type(key, u64); // *sock
+    __type(value, send_args_t); // size to be sent
+} active_send_sock_args SEC(".maps");
+
+struct {
+    __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __type(key, partial_connection_info_t); // key: the connection info without the destination address, but with the tcp sequence
     __type(value, connection_info_t);  // value: traceparent info
     __uint(max_entries, 1024);
@@ -265,7 +272,9 @@ int BPF_KPROBE(kprobe_tcp_sendmsg, struct sock *sk, struct msghdr *msg, size_t s
         if (size > 0) {
             void *iovec_ptr = find_msghdr_buf(msg);
             if (iovec_ptr) {
+                u64 sock_p = (u64)sk;
                 bpf_map_update_elem(&active_send_args, &id, &s_args, BPF_ANY);
+                bpf_map_update_elem(&active_send_sock_args, &sock_p, &s_args, BPF_ANY);
                 handle_buf_with_connection(&s_args.p_conn, iovec_ptr, size, NO_SSL, TCP_SEND);
                 // if (size < KPROBES_LARGE_RESPONSE_LEN) {
                 //     bpf_dbg_printk("Maybe we need to finish the request");
@@ -336,13 +345,22 @@ int BPF_KPROBE(kprobe_tcp_close, struct sock *sk, long timeout) {
 
     bpf_printk("=== kprobe tcp_close %d sock %llx ===", id, sk);
 
+    u64 sock_p = (u64)sk;
+
     send_args_t *s_args = bpf_map_lookup_elem(&active_send_args, &id);
     if (s_args) {
         bpf_dbg_printk("Checking if we need to finish the request on close");
         finish_possible_delayed_http_request(&s_args->p_conn);
+    } else {
+        s_args = bpf_map_lookup_elem(&active_send_sock_args, &sock_p);
+        if (s_args) {
+            bpf_dbg_printk("Checking if we need to finish the request on close");
+            finish_possible_delayed_http_request(&s_args->p_conn);
+        }
     }
 
     bpf_map_delete_elem(&active_send_args, &id);
+    bpf_map_delete_elem(&active_send_sock_args, &sock_p);
 
     return 0;
 }

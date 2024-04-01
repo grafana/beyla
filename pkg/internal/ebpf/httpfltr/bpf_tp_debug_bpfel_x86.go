@@ -205,6 +205,7 @@ type bpf_tp_debugMapSpecs struct {
 	ActiveConnectArgs       *ebpf.MapSpec `ebpf:"active_connect_args"`
 	ActiveRecvArgs          *ebpf.MapSpec `ebpf:"active_recv_args"`
 	ActiveSendArgs          *ebpf.MapSpec `ebpf:"active_send_args"`
+	ActiveSendSockArgs      *ebpf.MapSpec `ebpf:"active_send_sock_args"`
 	ActiveSslHandshakes     *ebpf.MapSpec `ebpf:"active_ssl_handshakes"`
 	ActiveSslReadArgs       *ebpf.MapSpec `ebpf:"active_ssl_read_args"`
 	ActiveSslWriteArgs      *ebpf.MapSpec `ebpf:"active_ssl_write_args"`
@@ -252,6 +253,7 @@ type bpf_tp_debugMaps struct {
 	ActiveConnectArgs       *ebpf.Map `ebpf:"active_connect_args"`
 	ActiveRecvArgs          *ebpf.Map `ebpf:"active_recv_args"`
 	ActiveSendArgs          *ebpf.Map `ebpf:"active_send_args"`
+	ActiveSendSockArgs      *ebpf.Map `ebpf:"active_send_sock_args"`
 	ActiveSslHandshakes     *ebpf.Map `ebpf:"active_ssl_handshakes"`
 	ActiveSslReadArgs       *ebpf.Map `ebpf:"active_ssl_read_args"`
 	ActiveSslWriteArgs      *ebpf.Map `ebpf:"active_ssl_write_args"`
@@ -282,6 +284,7 @@ func (m *bpf_tp_debugMaps) Close() error {
 		m.ActiveConnectArgs,
 		m.ActiveRecvArgs,
 		m.ActiveSendArgs,
+		m.ActiveSendSockArgs,
 		m.ActiveSslHandshakes,
 		m.ActiveSslReadArgs,
 		m.ActiveSslWriteArgs,

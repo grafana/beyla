@@ -389,12 +389,11 @@ int socket__http_filter(struct __sk_buff *skb) {
             // This casting is done here to save allocating memory on a per CPU buffer, since
             // we don't need info anymore, we reuse it's space and it's much bigger than
             // partial_connection_info_t.
-            partial_connection_info_t *partial = empty_partial_conn_info();
-            if (partial) {
-                partial->d_port = info.conn_info.d_port;
-                partial->s_port = info.conn_info.s_port;
-                //partial->tcp_seq = tcp.seq;
-                //bpf_memcpy(partial->s_addr, info.conn_info.s_addr, sizeof(partial->s_addr));
+            partial_connection_info_t partial = {};
+                partial.d_port = info.conn_info.d_port;
+                partial.s_port = info.conn_info.s_port;
+                partial.tcp_seq = tcp.seq;
+                __bpf_memcpy(partial.s_addr, info.conn_info.s_addr, sizeof(partial.s_addr));
 
                 // tp_info_pid_t *trace_info = trace_info_for_connection(&info.conn_info);
                 // if (trace_info) {
@@ -416,7 +415,6 @@ int socket__http_filter(struct __sk_buff *skb) {
                 //         }
                 //     }
                 // }
-            }
         }
     }
 

@@ -395,12 +395,12 @@ int socket__http_filter(struct __sk_buff *skb) {
             partial.tcp_seq = tcp.seq;
             __bpf_memcpy(partial.s_addr, info.conn_info.s_addr, sizeof(partial.s_addr));
 
-            // tp_info_pid_t *trace_info = trace_info_for_connection(&info.conn_info);
-            // if (trace_info) {
-            //     //if (cookie) { // we have an actual socket associated
-            //         bpf_map_update_elem(&tcp_connection_map, &partial, &info.conn_info, BPF_ANY);
-            //     //}
-            // } else {//if (!cookie) { // no actual socket for this skb, relayed to another interface
+            tp_info_pid_t *trace_info = trace_info_for_connection(&info.conn_info);
+            if (trace_info) {
+                //if (cookie) { // we have an actual socket associated
+                    bpf_map_update_elem(&tcp_connection_map, &partial, &info.conn_info, BPF_ANY);
+                //}
+            } //else {//if (!cookie) { // no actual socket for this skb, relayed to another interface
             //     connection_info_t *prev_conn = bpf_map_lookup_elem(&tcp_connection_map, &partial);
 
             //     if (prev_conn) {

@@ -78,6 +78,13 @@ struct {
     __uint(max_entries, 1);
 } http2_info_mem SEC(".maps");
 
+struct {
+    __uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
+    __type(key, int);
+    __type(value, partial_connection_info_t);
+    __uint(max_entries, 1);
+} partial_conn_info_mem SEC(".maps");
+
 static __always_inline u8 is_http(unsigned char *p, u32 len, u8 *packet_type) {
     if (len < MIN_HTTP_SIZE) {
         return 0;
@@ -205,6 +212,11 @@ static __always_inline http2_grpc_request_t* empty_http2_info() {
         bpf_memset(value, 0, sizeof(http2_grpc_request_t));
     }
     return value;
+}
+
+static __always_inline partial_connection_info_t* empty_partial_conn_info() {
+    int zero = 0;
+    return  (partial_connection_info_t *)bpf_map_lookup_elem(&partial_conn_info_mem, &zero);
 }
 
 static __always_inline void finish_http(http_info_t *info) {

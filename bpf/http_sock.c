@@ -377,7 +377,7 @@ int socket__http_filter(struct __sk_buff *skb) {
             read_skb_bytes(skb, tcp.hdr_len, info.buf, full_len);
             u64 cookie = bpf_get_socket_cookie(skb);
             //bpf_dbg_printk("=== http_filter cookie = %llx, tcp_seq=%d len=%d %s ===", cookie, tcp.seq, len, buf);
-            dbg_print_http_connection_info(&conn);
+            //dbg_print_http_connection_info(&conn);
             set_fallback_http_info(&info, &conn, skb->len - tcp.hdr_len);
 
             // The code below is looking to see if we have recorded black-box trace info on 

@@ -35,7 +35,7 @@ const (
 
 // DefaultVerifierLogSize is the default number of bytes allocated for the
 // verifier log.
-const DefaultVerifierLogSize = 64 * 1024
+const DefaultVerifierLogSize = 640 * 1024
 
 // maxVerifierLogSize is the maximum size of verifier log buffer the kernel
 // will accept before returning EINVAL.

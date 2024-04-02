@@ -376,7 +376,7 @@ int socket__http_filter(struct __sk_buff *skb) {
                 full_len = FULL_BUF_SIZE;
             }
             read_skb_bytes(skb, tcp.hdr_len, info.buf, full_len);
-            //u64 cookie = bpf_get_socket_cookie(skb);
+            u64 cookie = bpf_get_socket_cookie(skb);
             //bpf_dbg_printk("=== http_filter cookie = %llx, tcp_seq=%d len=%d %s ===", cookie, tcp.seq, len, buf);
             //dbg_print_http_connection_info(&conn);
             set_fallback_http_info(&info, &info.conn_info, skb->len - tcp.hdr_len);
@@ -398,9 +398,9 @@ int socket__http_filter(struct __sk_buff *skb) {
             tp_info_pid_t *trace_info = trace_info_for_connection(&info.conn_info);
             if (trace_info) {
                 bpf_printk("AAA");
-                //if (cookie) { // we have an actual socket associated
-                   // bpf_map_update_elem(&tcp_connection_map, &partial, &info.conn_info, BPF_ANY);
-                //}
+                if (cookie) { // we have an actual socket associated
+                    bpf_map_update_elem(&tcp_connection_map, &partial, &info.conn_info, BPF_ANY);
+                }
             } //else {//if (!cookie) { // no actual socket for this skb, relayed to another interface
             //     connection_info_t *prev_conn = bpf_map_lookup_elem(&tcp_connection_map, &partial);
 

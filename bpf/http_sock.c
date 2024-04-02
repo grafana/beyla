@@ -336,13 +336,9 @@ done:
 SEC("socket/http_filter")
 int socket__http_filter(struct __sk_buff *skb) {
     protocol_info_t tcp = {};
-    http_info_t info = {
-        .status = 0,
-        .type = 0,
-        .ssl = 0,
-    };
+    connection_info_t conn = {};
 
-    if (!read_sk_buff(skb, &tcp, &info.conn_info)) {
+    if (!read_sk_buff(skb, &tcp, &conn)) {
         return 0;
     }
 
@@ -357,19 +353,22 @@ int socket__http_filter(struct __sk_buff *skb) {
     }
 
     // sorting must happen here, before we check or set dups
-    sort_connection_info(&info.conn_info);
+    sort_connection_info(&conn);
     
     // we don't want to read the whole buffer for every packed that passes our checks, we read only a bit and check if it's truly HTTP request/response.
     unsigned char buf[MIN_HTTP_SIZE] = {0};
     bpf_skb_load_bytes(skb, tcp.hdr_len, (void *)buf, sizeof(buf));
     // technically the read should be reversed, but eBPF verifier complains on read with variable length
-    s32 len = skb->len - tcp.hdr_len;
-    if (len < MIN_HTTP_SIZE) {
-        return 0;
+    u32 len = skb->len - tcp.hdr_len;
+    if (len > MIN_HTTP_SIZE) {
+        len = MIN_HTTP_SIZE;
     }
 
     u8 packet_type = 0;
-    if (is_http(buf, MIN_HTTP_SIZE, &packet_type)) { // we must check tcp_close second, a packet can be a close and a response
+    if (is_http(buf, len, &packet_type)) { // we must check tcp_close second, a packet can be a close and a response
+        http_info_t info = {0};
+        info.conn_info = conn;
+
         if (packet_type == PACKET_TYPE_REQUEST) {
             u32 full_len = skb->len - tcp.hdr_len;
             if (full_len > FULL_BUF_SIZE) {
@@ -377,9 +376,9 @@ int socket__http_filter(struct __sk_buff *skb) {
             }
             read_skb_bytes(skb, tcp.hdr_len, info.buf, full_len);
             u64 cookie = bpf_get_socket_cookie(skb);
-            //bpf_dbg_printk("=== http_filter cookie = %llx, tcp_seq=%d len=%d %s ===", cookie, tcp.seq, len, buf);
-            //dbg_print_http_connection_info(&conn);
-            set_fallback_http_info(&info, &info.conn_info, skb->len - tcp.hdr_len);
+            bpf_dbg_printk("=== http_filter cookie = %llx, tcp_seq=%d len=%d %s ===", cookie, tcp.seq, len, buf);
+            dbg_print_http_connection_info(&conn);
+            set_fallback_http_info(&info, &conn, skb->len - tcp.hdr_len);
 
             // The code below is looking to see if we have recorded black-box trace info on 
             // another interface. We do this for client calls, where essentially the original 
@@ -389,33 +388,32 @@ int socket__http_filter(struct __sk_buff *skb) {
             // This casting is done here to save allocating memory on a per CPU buffer, since
             // we don't need info anymore, we reuse it's space and it's much bigger than
             // partial_connection_info_t.
-            partial_connection_info_t partial = {};
-            partial.d_port = info.conn_info.d_port;
-            partial.s_port = info.conn_info.s_port;
-            partial.tcp_seq = tcp.seq;
-            __bpf_memcpy(partial.s_addr, info.conn_info.s_addr, sizeof(partial.s_addr));
+            partial_connection_info_t *partial = (partial_connection_info_t *)(&info);
+            partial->d_port = conn.d_port;
+            partial->s_port = conn.s_port;
+            partial->tcp_seq = tcp.seq;
+            bpf_memcpy(partial->s_addr, conn.s_addr, sizeof(partial->s_addr));
 
-            tp_info_pid_t *trace_info = trace_info_for_connection(&info.conn_info);
+            tp_info_pid_t *trace_info = trace_info_for_connection(&conn);
             if (trace_info) {
-                bpf_printk("AAA");
                 if (cookie) { // we have an actual socket associated
-                    bpf_map_update_elem(&tcp_connection_map, &partial, &info.conn_info, BPF_ANY);
+                    bpf_map_update_elem(&tcp_connection_map, partial, &conn, BPF_ANY);
                 }
-            } //else {//if (!cookie) { // no actual socket for this skb, relayed to another interface
-            //     connection_info_t *prev_conn = bpf_map_lookup_elem(&tcp_connection_map, &partial);
+            } else if (!cookie) { // no actual socket for this skb, relayed to another interface
+                connection_info_t *prev_conn = bpf_map_lookup_elem(&tcp_connection_map, partial);
 
-            //     if (prev_conn) {
-            //     //     tp_info_pid_t *trace_info = trace_info_for_connection(prev_conn);
-            //     //     if (trace_info) {
-            //     //         if (current_immediate_epoch(trace_info->tp.ts) == current_immediate_epoch(bpf_ktime_get_ns())) {
-            //     //             bpf_dbg_printk("Found trace info on another interface, setting it up for this connection");
-            //     //             tp_info_pid_t other_info = {0};
-            //     //             __bpf_memcpy(&other_info, trace_info, sizeof(tp_info_pid_t));
-            //     //             bpf_map_update_elem(&trace_map, &info.conn_info, &other_info, BPF_ANY);
-            //     //         }
-            //     //     }
-            //     }
-            // }
+                if (prev_conn) {
+                    tp_info_pid_t *trace_info = trace_info_for_connection(prev_conn);
+                    if (trace_info) {
+                        if (current_immediate_epoch(trace_info->tp.ts) == current_immediate_epoch(bpf_ktime_get_ns())) {
+                            bpf_dbg_printk("Found trace info on another interface, setting it up for this connection");
+                            tp_info_pid_t other_info = {0};
+                            bpf_memcpy(&other_info, trace_info, sizeof(tp_info_pid_t));
+                            bpf_map_update_elem(&trace_map, &conn, &other_info, BPF_ANY);
+                        }
+                    }
+                }
+            }
         }
     }
 

@@ -393,8 +393,8 @@ int socket__http_filter(struct __sk_buff *skb) {
             if (partial) {
                 partial->d_port = info.conn_info.d_port;
                 partial->s_port = info.conn_info.s_port;
-                partial->tcp_seq = tcp.seq;
-                bpf_memcpy(partial->s_addr, info.conn_info.s_addr, sizeof(partial->s_addr));
+                //partial->tcp_seq = tcp.seq;
+                //bpf_memcpy(partial->s_addr, info.conn_info.s_addr, sizeof(partial->s_addr));
 
                 // tp_info_pid_t *trace_info = trace_info_for_connection(&info.conn_info);
                 // if (trace_info) {

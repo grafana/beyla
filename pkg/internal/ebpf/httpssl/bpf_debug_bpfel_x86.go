@@ -89,13 +89,6 @@ type bpf_debugHttpInfoT struct {
 	}
 }
 
-type bpf_debugPartialConnectionInfoT struct {
-	S_addr [16]uint8
-	S_port uint16
-	D_port uint16
-	TcpSeq uint32
-}
-
 type bpf_debugPidConnectionInfoT struct {
 	Conn bpf_debugConnectionInfoT
 	Pid  uint32
@@ -196,7 +189,6 @@ type bpf_debugMapSpecs struct {
 	OngoingHttp2Connections *ebpf.MapSpec `ebpf:"ongoing_http2_connections"`
 	OngoingHttp2Grpc        *ebpf.MapSpec `ebpf:"ongoing_http2_grpc"`
 	OngoingHttpFallback     *ebpf.MapSpec `ebpf:"ongoing_http_fallback"`
-	PartialConnInfoMem      *ebpf.MapSpec `ebpf:"partial_conn_info_mem"`
 	PidCache                *ebpf.MapSpec `ebpf:"pid_cache"`
 	PidTidToConn            *ebpf.MapSpec `ebpf:"pid_tid_to_conn"`
 	ServerTraces            *ebpf.MapSpec `ebpf:"server_traces"`
@@ -239,7 +231,6 @@ type bpf_debugMaps struct {
 	OngoingHttp2Connections *ebpf.Map `ebpf:"ongoing_http2_connections"`
 	OngoingHttp2Grpc        *ebpf.Map `ebpf:"ongoing_http2_grpc"`
 	OngoingHttpFallback     *ebpf.Map `ebpf:"ongoing_http_fallback"`
-	PartialConnInfoMem      *ebpf.Map `ebpf:"partial_conn_info_mem"`
 	PidCache                *ebpf.Map `ebpf:"pid_cache"`
 	PidTidToConn            *ebpf.Map `ebpf:"pid_tid_to_conn"`
 	ServerTraces            *ebpf.Map `ebpf:"server_traces"`
@@ -265,7 +256,6 @@ func (m *bpf_debugMaps) Close() error {
 		m.OngoingHttp2Connections,
 		m.OngoingHttp2Grpc,
 		m.OngoingHttpFallback,
-		m.PartialConnInfoMem,
 		m.PidCache,
 		m.PidTidToConn,
 		m.ServerTraces,

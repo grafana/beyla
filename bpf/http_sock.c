@@ -366,7 +366,11 @@ int socket__http_filter(struct __sk_buff *skb) {
 
     u8 packet_type = 0;
     if (is_http(buf, len, &packet_type)) { // we must check tcp_close second, a packet can be a close and a response
-        http_info_t info = {0};
+        http_info_t info = {
+            .status = 0,
+            .type = 0,
+            .ssl = 0,
+        };
         info.conn_info = conn;
 
         if (packet_type == PACKET_TYPE_REQUEST) {
@@ -377,7 +381,7 @@ int socket__http_filter(struct __sk_buff *skb) {
             read_skb_bytes(skb, tcp.hdr_len, info.buf, full_len);
             u64 cookie = bpf_get_socket_cookie(skb);
             bpf_dbg_printk("=== http_filter cookie = %llx, tcp_seq=%d len=%d %s ===", cookie, tcp.seq, len, buf);
-            dbg_print_http_connection_info(&conn);
+            //dbg_print_http_connection_info(&conn);
             set_fallback_http_info(&info, &conn, skb->len - tcp.hdr_len);
 
             // The code below is looking to see if we have recorded black-box trace info on 

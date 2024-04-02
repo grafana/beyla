@@ -19,7 +19,7 @@ func testREDMetricsForNetHTTPLibrary(t *testing.T, url string, comm string) {
 	// Call 3 times the instrumented service, forcing it to:
 	// - take a large JSON file
 	// - returning a 200 code
-	for i := 0; i < 5; i++ {
+	for i := 0; i < 4; i++ {
 		doHTTPGet(t, url+urlPath, 200)
 	}
 

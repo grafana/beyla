@@ -372,7 +372,7 @@ static __always_inline void process_http2_grpc_frames(pid_connection_info_t *pid
     u8 found_data_frame = 0;
     http2_conn_stream_t stream = {0};
 
-    for (int i = 0; i < 8; i++) {
+    for (int i = 0; i < 6; i++) {
         unsigned char frame_buf[FRAME_HEADER_LEN];
         frame_header_t frame = {0};
         
@@ -397,13 +397,10 @@ static __always_inline void process_http2_grpc_frames(pid_connection_info_t *pid
                 saved_buf_pos = pos;
                 if (http_grpc_stream_ended(&frame)) {
                     found_end_frame = 1;
-                    http2_grpc_end(&stream, prev_info, (void *)((u8 *)u_buf + saved_buf_pos));
-
                     break;
                 } 
             } else {
                 found_start_frame = 1;
-                http2_grpc_start(&stream, (void *)((u8 *)u_buf + pos), bytes_len, direction);
                 break;
             }
         }
@@ -428,11 +425,11 @@ static __always_inline void process_http2_grpc_frames(pid_connection_info_t *pid
         }
     }
 
-    // if (found_end_frame) {
-    //     http2_grpc_end(&stream, prev_info, (void *)((u8 *)u_buf + saved_buf_pos));
-    // } else if (found_start_frame) {
-    //     http2_grpc_start(&stream, (void *)((u8 *)u_buf + pos), bytes_len, direction);
-    // }
+    if (found_end_frame) {
+        http2_grpc_end(&stream, prev_info, (void *)((u8 *)u_buf + saved_buf_pos));
+    } else if (found_start_frame) {
+        http2_grpc_start(&stream, (void *)((u8 *)u_buf + pos), bytes_len, direction);
+    }
 
     // We only loop 8 times looking for the stream termination. If the data packed is large we'll miss the
     // frame saying the stream closed. In that case we try this backup path.

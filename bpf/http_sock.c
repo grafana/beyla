@@ -368,18 +368,18 @@ int socket__http_filter(struct __sk_buff *skb) {
         return 0;
     }
 
-    // u8 packet_type = 0;
-    // if (is_http(buf, MIN_HTTP_SIZE, &packet_type)) { // we must check tcp_close second, a packet can be a close and a response
-    //     if (packet_type == PACKET_TYPE_REQUEST) {
-    //         u32 full_len = skb->len - tcp.hdr_len;
-    //         if (full_len > FULL_BUF_SIZE) {
-    //             full_len = FULL_BUF_SIZE;
-    //         }
-    //         read_skb_bytes(skb, tcp.hdr_len, info.buf, full_len);
-    //         u64 cookie = bpf_get_socket_cookie(skb);
-    //         bpf_dbg_printk("=== http_filter cookie = %llx, tcp_seq=%d len=%d %s ===", cookie, tcp.seq, len, buf);
-    //         //dbg_print_http_connection_info(&conn);
-    //         set_fallback_http_info(&info, &info.conn_info, skb->len - tcp.hdr_len);
+    u8 packet_type = 0;
+    if (is_http(buf, MIN_HTTP_SIZE, &packet_type)) { // we must check tcp_close second, a packet can be a close and a response
+        if (packet_type == PACKET_TYPE_REQUEST) {
+            u32 full_len = skb->len - tcp.hdr_len;
+            if (full_len > FULL_BUF_SIZE) {
+                full_len = FULL_BUF_SIZE;
+            }
+            read_skb_bytes(skb, tcp.hdr_len, info.buf, full_len);
+            //u64 cookie = bpf_get_socket_cookie(skb);
+            //bpf_dbg_printk("=== http_filter cookie = %llx, tcp_seq=%d len=%d %s ===", cookie, tcp.seq, len, buf);
+            //dbg_print_http_connection_info(&conn);
+            set_fallback_http_info(&info, &info.conn_info, skb->len - tcp.hdr_len);
 
     //         // The code below is looking to see if we have recorded black-box trace info on 
     //         // another interface. We do this for client calls, where essentially the original 
@@ -417,8 +417,8 @@ int socket__http_filter(struct __sk_buff *skb) {
     //                 }
     //             }
     //         }
-    //     }
-    // }
+        }
+    }
 
     return 0;
 }

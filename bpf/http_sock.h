@@ -86,9 +86,9 @@ struct {
 } partial_conn_info_mem SEC(".maps");
 
 static __always_inline u8 is_http(unsigned char *p, u32 len, u8 *packet_type) {
-    if (len < MIN_HTTP_SIZE) {
-        return 0;
-    }
+    // if (len < MIN_HTTP_SIZE) {
+    //     return 0;
+    // }
     //HTTP
     if ((p[0] == 'H') && (p[1] == 'T') && (p[2] == 'T') && (p[3] == 'P')) {
        *packet_type = PACKET_TYPE_RESPONSE;

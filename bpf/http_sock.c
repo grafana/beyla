@@ -368,10 +368,8 @@ int socket__http_filter(struct __sk_buff *skb) {
         return 0;
     }
 
-    bpf_clamp_umax(len, MIN_HTTP_SIZE);
-
     u8 packet_type = 0;
-    if (is_http(buf, len, &packet_type)) { // we must check tcp_close second, a packet can be a close and a response
+    if (is_http(buf, MIN_HTTP_SIZE, &packet_type)) { // we must check tcp_close second, a packet can be a close and a response
         if (packet_type == PACKET_TYPE_REQUEST) {
             u32 full_len = skb->len - tcp.hdr_len;
             if (full_len > FULL_BUF_SIZE) {

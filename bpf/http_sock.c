@@ -364,9 +364,7 @@ int socket__http_filter(struct __sk_buff *skb) {
     bpf_skb_load_bytes(skb, tcp.hdr_len, (void *)buf, sizeof(buf));
     // technically the read should be reversed, but eBPF verifier complains on read with variable length
     u32 len = skb->len - tcp.hdr_len;
-    if (len > MIN_HTTP_SIZE) {
-        len = MIN_HTTP_SIZE;
-    }
+    bpf_clamp_umax(len, MIN_HTTP_SIZE);
 
     u8 packet_type = 0;
     if (is_http(buf, len, &packet_type)) { // we must check tcp_close second, a packet can be a close and a response

@@ -38,7 +38,8 @@ otel_metrics_export:
 ```
 
 In addition to the `network` YAML section, Beyla configuration requires an endpoint to export the
-network metrics (in the previous example, `otel_metrics_export`).
+network metrics (in the previous example, `otel_metrics_export`, but it also accepts a
+[Prometheus endpoint]({{< relref "../configure/options.md" >}})).
 
 ## Network metrics configuration properties
 

@@ -68,6 +68,7 @@ func (pt *ProcessTracer) tracers() ([]Tracer, error) {
 			return nil, err
 		}
 		if err := spec.LoadAndAssign(p.BpfObjects(), &ebpf.CollectionOptions{
+			Programs: ebpf.ProgramOptions{LogSize: 640 * 1024},
 			Maps: ebpf.MapOptions{
 				PinPath: pt.PinPath,
 			}}); err != nil {
@@ -80,6 +81,7 @@ func (pt *ProcessTracer) tracers() ([]Tracer, error) {
 				spec, err = pt.loadSpec(p)
 				if err == nil {
 					err = spec.LoadAndAssign(p.BpfObjects(), &ebpf.CollectionOptions{
+						Programs: ebpf.ProgramOptions{LogSize: 640 * 1024},
 						Maps: ebpf.MapOptions{
 							PinPath: pt.PinPath,
 						}})

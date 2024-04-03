@@ -477,8 +477,8 @@ int socket__http_filter(struct __sk_buff *skb) {
             }
             read_skb_bytes(skb, tcp.hdr_len, info.buf, full_len);
             u64 cookie = bpf_get_socket_cookie(skb);
-            bpf_dbg_printk("=== http_filter cookie = %llx, tcp_seq=%d len=%d %s ===", cookie, tcp.seq, len, buf);
-            dbg_print_http_connection_info(&conn);
+            //bpf_dbg_printk("=== http_filter cookie = %llx, tcp_seq=%d len=%d %s ===", cookie, tcp.seq, len, buf);
+            //dbg_print_http_connection_info(&conn);
             set_fallback_http_info(&info, &conn, skb->len - tcp.hdr_len);
 
             // The code below is looking to see if we have recorded black-box trace info on 
@@ -507,7 +507,7 @@ int socket__http_filter(struct __sk_buff *skb) {
                     tp_info_pid_t *trace_info = trace_info_for_connection(prev_conn);
                     if (trace_info) {
                         if (current_immediate_epoch(trace_info->tp.ts) == current_immediate_epoch(bpf_ktime_get_ns())) {
-                            bpf_dbg_printk("Found trace info on another interface, setting it up for this connection");
+                            //bpf_dbg_printk("Found trace info on another interface, setting it up for this connection");
                             tp_info_pid_t other_info = {0};
                             bpf_memcpy(&other_info, trace_info, sizeof(tp_info_pid_t));
                             bpf_map_update_elem(&trace_map, &conn, &other_info, BPF_ANY);

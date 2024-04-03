@@ -60,9 +60,10 @@ var DefaultConfig = Config{
 		ReportersCacheLen:  ReporterLRUSize,
 	},
 	Prometheus: prom.PrometheusConfig{
-		Path:     "/metrics",
-		Buckets:  otel.DefaultBuckets,
-		Features: []string{otel.FeatureNetwork, otel.FeatureApplication},
+		Path:       "/metrics",
+		Buckets:    otel.DefaultBuckets,
+		Features:   []string{otel.FeatureNetwork, otel.FeatureApplication},
+		ExpireTime: 3 * time.Minute,
 	},
 	Printer: false,
 	Noop:    false,

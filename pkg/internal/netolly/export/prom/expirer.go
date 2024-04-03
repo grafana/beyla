@@ -1,6 +1,7 @@
 package prom
 
 import (
+	"log/slog"
 	"strings"
 	"sync"
 	"time"
@@ -8,9 +9,11 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-const DefaultExpireTime = 3 * time.Minute
-
 var timeNow = time.Now
+
+func plog() *slog.Logger {
+	return slog.With("component", "prom.Expirer")
+}
 
 // TODO: generify and move to a common section for using it also in AppO11y
 type Expirer struct {
@@ -50,6 +53,7 @@ func (ex *Expirer) WithLabelValues(lbls ...string) prometheus.Counter {
 	}
 	ex.mt.RUnlock()
 
+	plog().With("labelValues", lbls).Debug("storing new metric label set")
 	c := ex.wrapped.WithLabelValues(lbls...)
 	ex.mt.Lock()
 	ex.entries[h] = &entry{
@@ -70,6 +74,8 @@ func (ex *Expirer) Describe(descs chan<- *prometheus.Desc) {
 }
 
 func (ex *Expirer) Collect(metrics chan<- prometheus.Metric) {
+	log := plog()
+	log.Debug("invoking metrics collection")
 	now := timeNow()
 	var delKeys []string
 	var delLabels [][]string
@@ -86,5 +92,6 @@ func (ex *Expirer) Collect(metrics chan<- prometheus.Metric) {
 	}
 	for _, k := range delLabels {
 		ex.wrapped.DeleteLabelValues(k...)
+		log.With("labelValues", k).Debug("deleting old Prometheus metric")
 	}
 }

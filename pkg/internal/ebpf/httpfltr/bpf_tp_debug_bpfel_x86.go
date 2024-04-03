@@ -111,6 +111,11 @@ type bpf_tp_debugRecvArgsT struct {
 	IovecPtr uint64
 }
 
+type bpf_tp_debugSendArgsT struct {
+	P_conn bpf_tp_debugPidConnectionInfoT
+	Size   uint64
+}
+
 type bpf_tp_debugSockArgsT struct {
 	Addr       uint64
 	AcceptTime uint64
@@ -178,6 +183,7 @@ type bpf_tp_debugSpecs struct {
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpf_tp_debugProgramSpecs struct {
 	KprobeSysExit           *ebpf.ProgramSpec `ebpf:"kprobe_sys_exit"`
+	KprobeTcpClose          *ebpf.ProgramSpec `ebpf:"kprobe_tcp_close"`
 	KprobeTcpConnect        *ebpf.ProgramSpec `ebpf:"kprobe_tcp_connect"`
 	KprobeTcpRcvEstablished *ebpf.ProgramSpec `ebpf:"kprobe_tcp_rcv_established"`
 	KprobeTcpRecvmsg        *ebpf.ProgramSpec `ebpf:"kprobe_tcp_recvmsg"`
@@ -187,6 +193,7 @@ type bpf_tp_debugProgramSpecs struct {
 	KretprobeSysClone       *ebpf.ProgramSpec `ebpf:"kretprobe_sys_clone"`
 	KretprobeSysConnect     *ebpf.ProgramSpec `ebpf:"kretprobe_sys_connect"`
 	KretprobeTcpRecvmsg     *ebpf.ProgramSpec `ebpf:"kretprobe_tcp_recvmsg"`
+	KretprobeTcpSendmsg     *ebpf.ProgramSpec `ebpf:"kretprobe_tcp_sendmsg"`
 	SocketHttpFilter        *ebpf.ProgramSpec `ebpf:"socket__http_filter"`
 }
 
@@ -197,6 +204,8 @@ type bpf_tp_debugMapSpecs struct {
 	ActiveAcceptArgs        *ebpf.MapSpec `ebpf:"active_accept_args"`
 	ActiveConnectArgs       *ebpf.MapSpec `ebpf:"active_connect_args"`
 	ActiveRecvArgs          *ebpf.MapSpec `ebpf:"active_recv_args"`
+	ActiveSendArgs          *ebpf.MapSpec `ebpf:"active_send_args"`
+	ActiveSendSockArgs      *ebpf.MapSpec `ebpf:"active_send_sock_args"`
 	ActiveSslHandshakes     *ebpf.MapSpec `ebpf:"active_ssl_handshakes"`
 	ActiveSslReadArgs       *ebpf.MapSpec `ebpf:"active_ssl_read_args"`
 	ActiveSslWriteArgs      *ebpf.MapSpec `ebpf:"active_ssl_write_args"`
@@ -243,6 +252,8 @@ type bpf_tp_debugMaps struct {
 	ActiveAcceptArgs        *ebpf.Map `ebpf:"active_accept_args"`
 	ActiveConnectArgs       *ebpf.Map `ebpf:"active_connect_args"`
 	ActiveRecvArgs          *ebpf.Map `ebpf:"active_recv_args"`
+	ActiveSendArgs          *ebpf.Map `ebpf:"active_send_args"`
+	ActiveSendSockArgs      *ebpf.Map `ebpf:"active_send_sock_args"`
 	ActiveSslHandshakes     *ebpf.Map `ebpf:"active_ssl_handshakes"`
 	ActiveSslReadArgs       *ebpf.Map `ebpf:"active_ssl_read_args"`
 	ActiveSslWriteArgs      *ebpf.Map `ebpf:"active_ssl_write_args"`
@@ -272,6 +283,8 @@ func (m *bpf_tp_debugMaps) Close() error {
 		m.ActiveAcceptArgs,
 		m.ActiveConnectArgs,
 		m.ActiveRecvArgs,
+		m.ActiveSendArgs,
+		m.ActiveSendSockArgs,
 		m.ActiveSslHandshakes,
 		m.ActiveSslReadArgs,
 		m.ActiveSslWriteArgs,
@@ -302,6 +315,7 @@ func (m *bpf_tp_debugMaps) Close() error {
 // It can be passed to loadBpf_tp_debugObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpf_tp_debugPrograms struct {
 	KprobeSysExit           *ebpf.Program `ebpf:"kprobe_sys_exit"`
+	KprobeTcpClose          *ebpf.Program `ebpf:"kprobe_tcp_close"`
 	KprobeTcpConnect        *ebpf.Program `ebpf:"kprobe_tcp_connect"`
 	KprobeTcpRcvEstablished *ebpf.Program `ebpf:"kprobe_tcp_rcv_established"`
 	KprobeTcpRecvmsg        *ebpf.Program `ebpf:"kprobe_tcp_recvmsg"`
@@ -311,12 +325,14 @@ type bpf_tp_debugPrograms struct {
 	KretprobeSysClone       *ebpf.Program `ebpf:"kretprobe_sys_clone"`
 	KretprobeSysConnect     *ebpf.Program `ebpf:"kretprobe_sys_connect"`
 	KretprobeTcpRecvmsg     *ebpf.Program `ebpf:"kretprobe_tcp_recvmsg"`
+	KretprobeTcpSendmsg     *ebpf.Program `ebpf:"kretprobe_tcp_sendmsg"`
 	SocketHttpFilter        *ebpf.Program `ebpf:"socket__http_filter"`
 }
 
 func (p *bpf_tp_debugPrograms) Close() error {
 	return _Bpf_tp_debugClose(
 		p.KprobeSysExit,
+		p.KprobeTcpClose,
 		p.KprobeTcpConnect,
 		p.KprobeTcpRcvEstablished,
 		p.KprobeTcpRecvmsg,
@@ -326,6 +342,7 @@ func (p *bpf_tp_debugPrograms) Close() error {
 		p.KretprobeSysClone,
 		p.KretprobeSysConnect,
 		p.KretprobeTcpRecvmsg,
+		p.KretprobeTcpSendmsg,
 		p.SocketHttpFilter,
 	)
 }

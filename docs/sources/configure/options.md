@@ -1080,6 +1080,24 @@ It is disabled by default to avoid cardinality explosion.
 The `buckets` object allows overriding the bucket boundaries of diverse histograms. See
 [Overriding histogram buckets](#overriding-histogram-buckets) section for more details.
 
+| YAML       | Environment variable        | Type            | Default                      |
+|------------|-----------------------------|-----------------|------------------------------|
+| `features` | `BEYLA_PROMETHEUS_FEATURES` | list of strings | `["application", "network"]` |
+
+A list of metric groups that are allowed to be exported. Each group belongs to a different feature
+of Beyla: application-level metrics or network metrics.
+
+- If the list contains `application`, the Beyla Prometheus exporter exports application-level metrics;
+  but only if the Prometheus `port` property is defined, and Beyla was able to discover any
+  process matching the entries in the `discovery` section.
+- If the list contains `network`, the Beyla Prometheus exporter exports network-level
+  metrics; but only if the Prometheus `port` property is defined and the
+  [network metrics are enabled]({{< relref "../network" >}}).
+
+Usually you do not need to change this configuration option, unless, for example, a Beyla instance
+instruments both network and applications, and you want to disable application-level metrics because
+you only care about application traces, but still want Beyla to send network metrics.
+
 ## Internal metrics reporter
 
 YAML section `internal_metrics`.

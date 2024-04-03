@@ -100,6 +100,7 @@ func (p *Tracer) Constants(_ *exec.FileInfo, offsets *goexec.Offsets) map[string
 		"host_ptr_pos",
 		"content_length_ptr_pos",
 		"resp_req_pos",
+		"resp_conn_pos",
 		"req_header_ptr_pos",
 		"io_writer_buf_ptr_pos",
 		"io_writer_n_pos",
@@ -160,10 +161,6 @@ func (p *Tracer) GoProbes() map[string]ebpfcommon.FunctionPrograms {
 			Start: p.bpfObjects.UprobeHttp2ResponseWriterStateWriteHeader,
 		},
 		// tracking of tcp connections for black-box propagation
-		"net/http.(*conn).serve": { // http server
-			Start: p.bpfObjects.UprobeConnServe,
-			End:   p.bpfObjects.UprobeConnServeRet,
-		},
 		"net/http.(*persistConn).roundTrip": { // http client
 			Start: p.bpfObjects.UprobePersistConnRoundTrip,
 		},

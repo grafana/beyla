@@ -53,6 +53,7 @@ var structMembers = map[string]structInfo{
 		fields: map[string]string{
 			"status": "status_ptr_pos",
 			"req":    "resp_req_pos",
+			"conn":   "resp_conn_pos",
 		},
 	},
 	"net/http.Response": {

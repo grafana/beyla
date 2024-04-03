@@ -16,7 +16,8 @@
       ],
       "net/http.response": [
         "status",
-        "req"
+        "req",
+        "conn"
       ],
       "net/http.Response": [
         "StatusCode"

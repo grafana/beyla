@@ -92,12 +92,11 @@ type bpfProgramSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpfMapSpecs struct {
-	GoTraceMap                   *ebpf.MapSpec `ebpf:"go_trace_map"`
-	GolangMapbucketStorageMap    *ebpf.MapSpec `ebpf:"golang_mapbucket_storage_map"`
-	Newproc1                     *ebpf.MapSpec `ebpf:"newproc1"`
-	OngoingGoroutines            *ebpf.MapSpec `ebpf:"ongoing_goroutines"`
-	OngoingHttpServerConnections *ebpf.MapSpec `ebpf:"ongoing_http_server_connections"`
-	TraceMap                     *ebpf.MapSpec `ebpf:"trace_map"`
+	GoTraceMap                *ebpf.MapSpec `ebpf:"go_trace_map"`
+	GolangMapbucketStorageMap *ebpf.MapSpec `ebpf:"golang_mapbucket_storage_map"`
+	Newproc1                  *ebpf.MapSpec `ebpf:"newproc1"`
+	OngoingGoroutines         *ebpf.MapSpec `ebpf:"ongoing_goroutines"`
+	TraceMap                  *ebpf.MapSpec `ebpf:"trace_map"`
 }
 
 // bpfObjects contains all objects after they have been loaded into the kernel.
@@ -119,12 +118,11 @@ func (o *bpfObjects) Close() error {
 //
 // It can be passed to loadBpfObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpfMaps struct {
-	GoTraceMap                   *ebpf.Map `ebpf:"go_trace_map"`
-	GolangMapbucketStorageMap    *ebpf.Map `ebpf:"golang_mapbucket_storage_map"`
-	Newproc1                     *ebpf.Map `ebpf:"newproc1"`
-	OngoingGoroutines            *ebpf.Map `ebpf:"ongoing_goroutines"`
-	OngoingHttpServerConnections *ebpf.Map `ebpf:"ongoing_http_server_connections"`
-	TraceMap                     *ebpf.Map `ebpf:"trace_map"`
+	GoTraceMap                *ebpf.Map `ebpf:"go_trace_map"`
+	GolangMapbucketStorageMap *ebpf.Map `ebpf:"golang_mapbucket_storage_map"`
+	Newproc1                  *ebpf.Map `ebpf:"newproc1"`
+	OngoingGoroutines         *ebpf.Map `ebpf:"ongoing_goroutines"`
+	TraceMap                  *ebpf.Map `ebpf:"trace_map"`
 }
 
 func (m *bpfMaps) Close() error {
@@ -133,7 +131,6 @@ func (m *bpfMaps) Close() error {
 		m.GolangMapbucketStorageMap,
 		m.Newproc1,
 		m.OngoingGoroutines,
-		m.OngoingHttpServerConnections,
 		m.TraceMap,
 	)
 }

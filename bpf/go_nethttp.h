@@ -26,6 +26,7 @@ volatile const u64 remoteaddr_ptr_pos;
 volatile const u64 host_ptr_pos;
 volatile const u64 content_length_ptr_pos;
 volatile const u64 resp_req_pos;
+volatile const u64 resp_conn_pos;
 volatile const u64 req_header_ptr_pos;
 volatile const u64 io_writer_buf_ptr_pos;
 volatile const u64 io_writer_n_pos;

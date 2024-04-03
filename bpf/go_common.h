@@ -46,13 +46,6 @@ struct {
 
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, void *); // key: pointer to the request goroutine
-    __type(value, connection_info_t);
-    __uint(max_entries, MAX_CONCURRENT_REQUESTS);
-} ongoing_http_server_connections SEC(".maps");
-
-struct {
-    __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __type(key, void *); // key: pointer to the goroutine
     __type(value, tp_info_t);  // value: traceparent info
     __uint(max_entries, MAX_CONCURRENT_SHARED_REQUESTS);
@@ -109,7 +102,7 @@ static __always_inline void tp_clone(tp_info_t *dest, tp_info_t *src) {
     dest->flags = src->flags;
 }
 
-static __always_inline void server_trace_parent(void *goroutine_addr, tp_info_t *tp, void *req_header) {
+static __always_inline void server_trace_parent(void *goroutine_addr, tp_info_t *tp, void *req_header, connection_info_t *info) {
     // May get overriden when decoding existing traceparent, but otherwise we set sample ON
     tp->flags = 1;
     // Get traceparent from the Request.Header
@@ -126,11 +119,11 @@ static __always_inline void server_trace_parent(void *goroutine_addr, tp_info_t 
             decode_go_traceparent(buf, tp->trace_id, tp->parent_id, &tp->flags);
         }
     } else {
-        connection_info_t *info = bpf_map_lookup_elem(&ongoing_http_server_connections, &goroutine_addr);
         u8 found_info = 0;
 
         if (info) {
             bpf_dbg_printk("Looking up traceparent for connection info");
+            //dbg_print_http_connection_info(info);
             tp_info_pid_t *tp_p = trace_info_for_connection(info);
             if (tp_p) {                
                 if (correlated_request_with_current(tp_p)) {

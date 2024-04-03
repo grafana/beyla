@@ -68,6 +68,54 @@ struct {
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
 } ongoing_http_server_requests SEC(".maps");
 
+// HTTP black-box context propagation
+static __always_inline void read_ip_and_port(u8 *dst_ip, u16 *dst_port, void *src) {
+    s64 addr_len = 0;
+    void *addr_ip = 0;
+
+    bpf_probe_read(dst_port, sizeof(u16), (void *)(src + tcp_addr_port_ptr_pos));
+    bpf_probe_read(&addr_ip, sizeof(addr_ip), (void *)(src + tcp_addr_ip_ptr_pos));
+    if (addr_ip) {
+        bpf_probe_read(&addr_len, sizeof(addr_len), (void *)(src + tcp_addr_ip_ptr_pos + 8));
+        if (addr_len == 4) {
+            __builtin_memcpy(dst_ip, ip4ip6_prefix, sizeof(ip4ip6_prefix));
+            bpf_probe_read(dst_ip + sizeof(ip4ip6_prefix), 4, addr_ip);
+        } else if (addr_len == 16) {
+            bpf_probe_read(dst_ip, 16, addr_ip);
+        }
+    }
+}
+
+static __always_inline void get_conn_info(void *conn_ptr, connection_info_t *info) {
+    if (conn_ptr) {
+        void *fd_ptr = 0;
+        bpf_probe_read(&fd_ptr, sizeof(fd_ptr), (void *)(conn_ptr + conn_fd_pos)); // find fd
+
+        bpf_dbg_printk("Found fd ptr %llx", fd_ptr);
+
+        if (fd_ptr) {
+            void *laddr_ptr = 0;
+            void *raddr_ptr = 0;
+
+            bpf_probe_read(&laddr_ptr, sizeof(laddr_ptr), (void *)(fd_ptr + fd_laddr_pos + 8)); // find laddr
+            bpf_probe_read(&raddr_ptr, sizeof(raddr_ptr), (void *)(fd_ptr + fd_raddr_pos + 8)); // find raddr
+
+            if (laddr_ptr && raddr_ptr) {
+                bpf_dbg_printk("laddr %llx, raddr %llx", laddr_ptr, raddr_ptr);
+
+                // read local
+                read_ip_and_port(info->s_addr, &info->s_port, laddr_ptr);
+
+                // read remote
+                read_ip_and_port(info->d_addr, &info->d_port, raddr_ptr);
+
+                sort_connection_info(info);
+                //dbg_print_http_connection_info(info);
+            }
+        }
+    }
+}
+
 /* HTTP Server */
 
 // This instrumentation attaches uprobe to the following function:
@@ -89,8 +137,24 @@ int uprobe_ServeHTTP(struct pt_regs *ctx) {
         .http2 = 0,
     };
 
+    // Fetch the connection info so we can do black-box context propagation
+    void *c_ptr = 0;
+    connection_info_t conn = {0};
+    bpf_probe_read(&c_ptr, sizeof(c_ptr), (void *)(resp)); // load conn
+    if (c_ptr) {
+        void *rwc_ptr = c_ptr + 8 + c_rwc_pos; // load rwc, embedded struct
+        if (rwc_ptr) {
+            void *conn_ptr = 0;
+            bpf_probe_read(&conn_ptr, sizeof(conn_ptr), (void *)(rwc_ptr + rwc_conn_pos)); // find conn
+            if (conn_ptr) {
+                get_conn_info(conn_ptr, &conn);
+                //dbg_print_http_connection_info(&conn);
+            }
+        }
+    }
+
     if (req) {
-        server_trace_parent(goroutine_addr, &invocation.tp, (void*)(req + req_header_ptr_pos));
+        server_trace_parent(goroutine_addr, &invocation.tp, (void*)(req + req_header_ptr_pos), &conn);
         // TODO: if context propagation is supported, overwrite the header value in the map with the 
         // new span context and the same thread id.
     }
@@ -689,88 +753,6 @@ int uprobe_http2FramerWriteHeaders_returns(struct pt_regs *ctx) {
 }
 #endif 
 
-
-static __always_inline void read_ip_and_port(u8 *dst_ip, u16 *dst_port, void *src) {
-    s64 addr_len = 0;
-    void *addr_ip = 0;
-
-    bpf_probe_read(dst_port, sizeof(u16), (void *)(src + tcp_addr_port_ptr_pos));
-    bpf_probe_read(&addr_ip, sizeof(addr_ip), (void *)(src + tcp_addr_ip_ptr_pos));
-    if (addr_ip) {
-        bpf_probe_read(&addr_len, sizeof(addr_len), (void *)(src + tcp_addr_ip_ptr_pos + 8));
-        if (addr_len == 4) {
-            __builtin_memcpy(dst_ip, ip4ip6_prefix, sizeof(ip4ip6_prefix));
-            bpf_probe_read(dst_ip + sizeof(ip4ip6_prefix), 4, addr_ip);
-        } else if (addr_len == 16) {
-            bpf_probe_read(dst_ip, 16, addr_ip);
-        }
-    }
-}
-
-// HTTP black-box context propagation
-static __always_inline void get_conn_info(void *conn_ptr, connection_info_t *info) {
-    if (conn_ptr) {
-        void *fd_ptr = 0;
-        bpf_probe_read(&fd_ptr, sizeof(fd_ptr), (void *)(conn_ptr + conn_fd_pos)); // find fd
-
-        bpf_dbg_printk("Found fd ptr %llx", fd_ptr);
-
-        if (fd_ptr) {
-            void *laddr_ptr = 0;
-            void *raddr_ptr = 0;
-
-            bpf_probe_read(&laddr_ptr, sizeof(laddr_ptr), (void *)(fd_ptr + fd_laddr_pos + 8)); // find laddr
-            bpf_probe_read(&raddr_ptr, sizeof(raddr_ptr), (void *)(fd_ptr + fd_raddr_pos + 8)); // find raddr
-
-            if (laddr_ptr && raddr_ptr) {
-                bpf_dbg_printk("laddr %llx, raddr %llx", laddr_ptr, raddr_ptr);
-
-                // read local
-                read_ip_and_port(info->s_addr, &info->s_port, laddr_ptr);
-
-                // read remote
-                read_ip_and_port(info->d_addr, &info->d_port, raddr_ptr);
-
-                sort_connection_info(info);
-                //dbg_print_http_connection_info(info);
-            }
-        }
-    }
-}
-
-SEC("uprobe/connServe")
-int uprobe_connServe(struct pt_regs *ctx) {
-    bpf_dbg_printk("=== uprobe/proc http conn serve === ");
-
-    void *c_ptr = GO_PARAM1(ctx);
-    if (c_ptr) {
-        void *rwc_ptr = c_ptr + 8 + c_rwc_pos; // embedded struct
-        if (rwc_ptr) {
-            void *conn_ptr = 0;
-            bpf_probe_read(&conn_ptr, sizeof(conn_ptr), (void *)(rwc_ptr + rwc_conn_pos)); // find conn
-            if (conn_ptr) {
-                void *goroutine_addr = GOROUTINE_PTR(ctx);
-                connection_info_t conn = {0};
-                get_conn_info(conn_ptr, &conn);
-
-                bpf_map_update_elem(&ongoing_http_server_connections, &goroutine_addr, &conn, BPF_ANY);
-            }
-        }
-    }
-
-    return 0;
-}
-
-SEC("uprobe/connServeRet")
-int uprobe_connServeRet(struct pt_regs *ctx) {
-    bpf_dbg_printk("=== uprobe/proc http conn serve ret === ");
-    void *goroutine_addr = GOROUTINE_PTR(ctx);
-
-    bpf_map_delete_elem(&ongoing_http_server_connections, &goroutine_addr);
-
-    return 0;
-}
-
 SEC("uprobe/persistConnRoundTrip")
 int uprobe_persistConnRoundTrip(struct pt_regs *ctx) {
     bpf_dbg_printk("=== uprobe/proc http persistConn roundTrip === ");
@@ -802,6 +784,7 @@ int uprobe_persistConnRoundTrip(struct pt_regs *ctx) {
                 tp_clone(&tp_p.tp, &invocation->tp);
                 tp_p.tp.ts = bpf_ktime_get_ns();
                 bpf_dbg_printk("storing trace_map info for black-box tracing");
+                dbg_print_http_connection_info(&conn);
                 bpf_map_update_elem(&trace_map, &conn, &tp_p, BPF_ANY);
             }
         }

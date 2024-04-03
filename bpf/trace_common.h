@@ -245,6 +245,8 @@ static __always_inline void get_or_create_trace_info(http_connection_metadata_t 
 #endif
 
     bpf_map_update_elem(&trace_map, conn, tp_p, BPF_ANY);
+    bpf_dbg_printk("Setting trace on connection");
+    dbg_print_http_connection_info(conn);
     server_or_client_trace(meta, conn, tp_p);
 
     return;

@@ -118,18 +118,17 @@ type bpf_tpProgramSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpf_tpMapSpecs struct {
-	Events                       *ebpf.MapSpec `ebpf:"events"`
-	GoTraceMap                   *ebpf.MapSpec `ebpf:"go_trace_map"`
-	GolangMapbucketStorageMap    *ebpf.MapSpec `ebpf:"golang_mapbucket_storage_map"`
-	GrpcFramerInvocationMap      *ebpf.MapSpec `ebpf:"grpc_framer_invocation_map"`
-	OngoingGoroutines            *ebpf.MapSpec `ebpf:"ongoing_goroutines"`
-	OngoingGrpcClientRequests    *ebpf.MapSpec `ebpf:"ongoing_grpc_client_requests"`
-	OngoingGrpcHeaderWrites      *ebpf.MapSpec `ebpf:"ongoing_grpc_header_writes"`
-	OngoingGrpcRequestStatus     *ebpf.MapSpec `ebpf:"ongoing_grpc_request_status"`
-	OngoingGrpcServerRequests    *ebpf.MapSpec `ebpf:"ongoing_grpc_server_requests"`
-	OngoingHttpServerConnections *ebpf.MapSpec `ebpf:"ongoing_http_server_connections"`
-	OngoingStreams               *ebpf.MapSpec `ebpf:"ongoing_streams"`
-	TraceMap                     *ebpf.MapSpec `ebpf:"trace_map"`
+	Events                    *ebpf.MapSpec `ebpf:"events"`
+	GoTraceMap                *ebpf.MapSpec `ebpf:"go_trace_map"`
+	GolangMapbucketStorageMap *ebpf.MapSpec `ebpf:"golang_mapbucket_storage_map"`
+	GrpcFramerInvocationMap   *ebpf.MapSpec `ebpf:"grpc_framer_invocation_map"`
+	OngoingGoroutines         *ebpf.MapSpec `ebpf:"ongoing_goroutines"`
+	OngoingGrpcClientRequests *ebpf.MapSpec `ebpf:"ongoing_grpc_client_requests"`
+	OngoingGrpcHeaderWrites   *ebpf.MapSpec `ebpf:"ongoing_grpc_header_writes"`
+	OngoingGrpcRequestStatus  *ebpf.MapSpec `ebpf:"ongoing_grpc_request_status"`
+	OngoingGrpcServerRequests *ebpf.MapSpec `ebpf:"ongoing_grpc_server_requests"`
+	OngoingStreams            *ebpf.MapSpec `ebpf:"ongoing_streams"`
+	TraceMap                  *ebpf.MapSpec `ebpf:"trace_map"`
 }
 
 // bpf_tpObjects contains all objects after they have been loaded into the kernel.
@@ -151,18 +150,17 @@ func (o *bpf_tpObjects) Close() error {
 //
 // It can be passed to loadBpf_tpObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpf_tpMaps struct {
-	Events                       *ebpf.Map `ebpf:"events"`
-	GoTraceMap                   *ebpf.Map `ebpf:"go_trace_map"`
-	GolangMapbucketStorageMap    *ebpf.Map `ebpf:"golang_mapbucket_storage_map"`
-	GrpcFramerInvocationMap      *ebpf.Map `ebpf:"grpc_framer_invocation_map"`
-	OngoingGoroutines            *ebpf.Map `ebpf:"ongoing_goroutines"`
-	OngoingGrpcClientRequests    *ebpf.Map `ebpf:"ongoing_grpc_client_requests"`
-	OngoingGrpcHeaderWrites      *ebpf.Map `ebpf:"ongoing_grpc_header_writes"`
-	OngoingGrpcRequestStatus     *ebpf.Map `ebpf:"ongoing_grpc_request_status"`
-	OngoingGrpcServerRequests    *ebpf.Map `ebpf:"ongoing_grpc_server_requests"`
-	OngoingHttpServerConnections *ebpf.Map `ebpf:"ongoing_http_server_connections"`
-	OngoingStreams               *ebpf.Map `ebpf:"ongoing_streams"`
-	TraceMap                     *ebpf.Map `ebpf:"trace_map"`
+	Events                    *ebpf.Map `ebpf:"events"`
+	GoTraceMap                *ebpf.Map `ebpf:"go_trace_map"`
+	GolangMapbucketStorageMap *ebpf.Map `ebpf:"golang_mapbucket_storage_map"`
+	GrpcFramerInvocationMap   *ebpf.Map `ebpf:"grpc_framer_invocation_map"`
+	OngoingGoroutines         *ebpf.Map `ebpf:"ongoing_goroutines"`
+	OngoingGrpcClientRequests *ebpf.Map `ebpf:"ongoing_grpc_client_requests"`
+	OngoingGrpcHeaderWrites   *ebpf.Map `ebpf:"ongoing_grpc_header_writes"`
+	OngoingGrpcRequestStatus  *ebpf.Map `ebpf:"ongoing_grpc_request_status"`
+	OngoingGrpcServerRequests *ebpf.Map `ebpf:"ongoing_grpc_server_requests"`
+	OngoingStreams            *ebpf.Map `ebpf:"ongoing_streams"`
+	TraceMap                  *ebpf.Map `ebpf:"trace_map"`
 }
 
 func (m *bpf_tpMaps) Close() error {
@@ -176,7 +174,6 @@ func (m *bpf_tpMaps) Close() error {
 		m.OngoingGrpcHeaderWrites,
 		m.OngoingGrpcRequestStatus,
 		m.OngoingGrpcServerRequests,
-		m.OngoingHttpServerConnections,
 		m.OngoingStreams,
 		m.TraceMap,
 	)

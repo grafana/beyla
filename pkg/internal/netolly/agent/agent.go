@@ -32,6 +32,7 @@ import (
 	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
 	"github.com/grafana/beyla/pkg/internal/netolly/flow"
 	"github.com/grafana/beyla/pkg/internal/netolly/ifaces"
+	"github.com/grafana/beyla/pkg/internal/pipe/global"
 )
 
 const (
@@ -85,7 +86,8 @@ func (s Status) String() string {
 
 // Flows reporting agent
 type Flows struct {
-	cfg *beyla.Config
+	cfg     *beyla.Config
+	ctxInfo *global.ContextInfo
 
 	// input data providers
 	interfaces ifaces.Informer
@@ -114,7 +116,7 @@ type ebpfFlowFetcher interface {
 }
 
 // FlowsAgent instantiates a new agent, given a configuration.
-func FlowsAgent(cfg *beyla.Config) (*Flows, error) {
+func FlowsAgent(ctxInfo *global.ContextInfo, cfg *beyla.Config) (*Flows, error) {
 	alog := alog()
 	alog.Info("initializing Flows agent")
 
@@ -154,11 +156,13 @@ func FlowsAgent(cfg *beyla.Config) (*Flows, error) {
 		return nil, err
 	}
 
-	return flowsAgent(cfg, informer, fetcher, exportFunc, agentIP)
+	return flowsAgent(ctxInfo, cfg, informer, fetcher, exportFunc, agentIP)
 }
 
 // flowsAgent is a private constructor with injectable dependencies, usable for tests
-func flowsAgent(cfg *beyla.Config,
+func flowsAgent(
+	ctxInfo *global.ContextInfo,
+	cfg *beyla.Config,
 	informer ifaces.Informer,
 	fetcher ebpfFlowFetcher,
 	exporter node.TerminalFunc[[]*ebpf.Record],
@@ -183,6 +187,7 @@ func flowsAgent(cfg *beyla.Config,
 	mapTracer := flow.NewMapTracer(fetcher, cfg.NetworkFlows.CacheActiveTimeout)
 	rbTracer := flow.NewRingBufTracer(fetcher, mapTracer, cfg.NetworkFlows.CacheActiveTimeout)
 	return &Flows{
+		ctxInfo:        ctxInfo,
 		ebpf:           fetcher,
 		exporter:       exporter,
 		interfaces:     registerer,

@@ -46,8 +46,8 @@ func NewProcessFinder(ctx context.Context, cfg *beyla.Config, ctxInfo *global.Co
 		},
 	}
 	if ctxInfo.K8sEnabled {
-		processFinder.ContainerDBUpdater = &ContainerDBUpdater{DB: ctxInfo.K8sDatabase}
-		processFinder.WatcherKubeEnricher = &WatcherKubeEnricher{Informer: ctxInfo.K8sInformer}
+		processFinder.ContainerDBUpdater = &ContainerDBUpdater{DB: ctxInfo.AppO11y.K8sDatabase}
+		processFinder.WatcherKubeEnricher = &WatcherKubeEnricher{Informer: ctxInfo.AppO11y.K8sInformer}
 	}
 	return &processFinder
 }

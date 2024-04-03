@@ -49,6 +49,14 @@ type bpf_tpHttpFuncInvocationT struct {
 	Tp              bpf_tpTpInfoT
 }
 
+type bpf_tpServerHttpFuncInvocationT struct {
+	StartMonotimeNs uint64
+	Tp              bpf_tpTpInfoT
+	Response        uint64
+	Http2           uint8
+	_               [7]byte
+}
+
 type bpf_tpSqlFuncInvocationT struct {
 	StartMonotimeNs uint64
 	SqlParam        uint64
@@ -114,7 +122,7 @@ type bpf_tpSpecs struct {
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpf_tpProgramSpecs struct {
 	UprobeServeHTTP                           *ebpf.ProgramSpec `ebpf:"uprobe_ServeHTTP"`
-	UprobeWriteHeader                         *ebpf.ProgramSpec `ebpf:"uprobe_WriteHeader"`
+	UprobeServeHTTPReturns                    *ebpf.ProgramSpec `ebpf:"uprobe_ServeHTTPReturns"`
 	UprobeConnServe                           *ebpf.ProgramSpec `ebpf:"uprobe_connServe"`
 	UprobeConnServeRet                        *ebpf.ProgramSpec `ebpf:"uprobe_connServeRet"`
 	UprobeHttp2FramerWriteHeaders             *ebpf.ProgramSpec `ebpf:"uprobe_http2FramerWriteHeaders"`
@@ -206,7 +214,7 @@ func (m *bpf_tpMaps) Close() error {
 // It can be passed to loadBpf_tpObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpf_tpPrograms struct {
 	UprobeServeHTTP                           *ebpf.Program `ebpf:"uprobe_ServeHTTP"`
-	UprobeWriteHeader                         *ebpf.Program `ebpf:"uprobe_WriteHeader"`
+	UprobeServeHTTPReturns                    *ebpf.Program `ebpf:"uprobe_ServeHTTPReturns"`
 	UprobeConnServe                           *ebpf.Program `ebpf:"uprobe_connServe"`
 	UprobeConnServeRet                        *ebpf.Program `ebpf:"uprobe_connServeRet"`
 	UprobeHttp2FramerWriteHeaders             *ebpf.Program `ebpf:"uprobe_http2FramerWriteHeaders"`
@@ -225,7 +233,7 @@ type bpf_tpPrograms struct {
 func (p *bpf_tpPrograms) Close() error {
 	return _Bpf_tpClose(
 		p.UprobeServeHTTP,
-		p.UprobeWriteHeader,
+		p.UprobeServeHTTPReturns,
 		p.UprobeConnServe,
 		p.UprobeConnServeRet,
 		p.UprobeHttp2FramerWriteHeaders,

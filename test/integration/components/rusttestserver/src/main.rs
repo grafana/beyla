@@ -1,8 +1,14 @@
-use actix_web::{middleware, web, App, HttpResponse, HttpServer};
+use actix_files::NamedFile;
+use actix_web::{middleware, web, App, HttpResponse, HttpServer, Result, Responder};
+use actix_web::http::header::ContentDisposition;
+use actix_web::http::header::DispositionType;
+use mime::Mime;
 use serde::{Deserialize, Serialize};
 use rand::Rng;
 use std::time::Duration;
 use std::thread;
+use std::fs;
+use std::io::Read;
 use reqwest;
 use tokio;
 
@@ -27,6 +33,56 @@ async fn smoke() -> HttpResponse {
 
 async fn trace() -> HttpResponse {
     HttpResponse::Ok().into()
+}
+
+async fn large() -> HttpResponse {
+    let data = fs::read_to_string("large_data.json").expect("Unable to read large_data.json file");
+    HttpResponse::Ok().body(data)
+}
+
+async fn download1() -> Result<NamedFile> {
+    let file = NamedFile::open("large_data.json")?;
+
+    let content_disposition = ContentDisposition {
+        disposition: DispositionType::Attachment,
+        parameters: vec![],
+    };
+
+    let content_type: Mime = "application/json".parse().unwrap();
+
+    Ok(file
+        .set_content_disposition(content_disposition)
+        .set_content_type(content_type))
+}
+
+async fn download2() -> impl Responder {
+    if let Ok(mut file) = NamedFile::open("large_data.json") {
+        let my_data_stream = async_stream::stream! {
+        let mut chunk = vec![0u8; 10 * 1024 *1024]; // I decalare the chunk size here as 10 mb 
+   
+        loop {
+            match file.read(&mut chunk) {
+                Ok(n) => {
+                    if n == 0 {
+                        break;
+                    }
+                    yield Result::<web::Bytes, std::io::Error>::Ok(web::Bytes::from(chunk[..n].to_vec())); // Yielding the chunk here
+                }
+
+                Err(e) => {
+                    yield Result::<web::Bytes, std::io::Error>::Err(e);
+                    break;
+                }
+            }
+        }
+    };
+   
+    HttpResponse::Ok()
+        .content_type("application/octet-stream")
+        .streaming(my_data_stream)  // Streaming my response here
+    } else {
+        HttpResponse::NotFound().finish()
+    }
 }
 
 async fn dist() -> HttpResponse {
@@ -76,6 +132,9 @@ async fn main() -> std::io::Result<()> {
             .service(web::resource("/trace").route(web::get().to(trace)))
             .service(web::resource("/dist").route(web::get().to(dist)))
             .service(web::resource("/dist2").route(web::get().to(dist2)))
+            .service(web::resource("/large").route(web::get().to(large)))
+            .service(web::resource("/download1").route(web::get().to(download1)))
+            .service(web::resource("/download2").route(web::get().to(download2)))
     })
     .bind(("0.0.0.0", 8090))?
     .run()

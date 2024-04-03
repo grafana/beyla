@@ -20,7 +20,7 @@ import (
 )
 
 func testREDMetricsForRustHTTPLibrary(t *testing.T, url, comm, namespace string, port int, notraces bool) {
-	jsonBody, err := os.ReadFile(path.Join(pathRoot, "test", "integration", "components", "rusttestserver", "large_data.json"))
+	jsonBody, err := os.ReadFile(path.Join(pathRoot, "test", "integration", "components", "rusttestserver", "mid_data.json"))
 	assert.NoError(t, err)
 	assert.GreaterOrEqual(t, len(jsonBody), 100)
 
@@ -120,6 +120,50 @@ func testREDMetricsForRustHTTPLibrary(t *testing.T, url, comm, namespace string,
 	assert.Empty(t, sd, sd.String())
 }
 
+func validateLargeDownloadURLSeen(t *testing.T, comm, namespace, urlPath string) {
+	pq := prom.Client{HostPort: prometheusHostPort}
+	var results []prom.Result
+	test.Eventually(t, testTimeout, func(t require.TestingT) {
+		var err error
+		results, err = pq.Query(`http_server_request_duration_seconds_count{` +
+			`http_request_method="GET",` +
+			`http_response_status_code="200",` +
+			`service_namespace="` + namespace + `",` +
+			`service_name="` + comm + `",` +
+			`url_path="` + urlPath + `"}`)
+		require.NoError(t, err)
+		enoughPromResults(t, results)
+		val := totalPromCount(t, results)
+		assert.LessOrEqual(t, 3, val)
+		if len(results) > 0 {
+			res := results[0]
+			addr := net.ParseIP(res.Metric["client_address"])
+			assert.NotNil(t, addr)
+			assert.GreaterOrEqual(t, len(res.Value), 1)
+			elapsed := res.Value[0]
+			f, ok := elapsed.(float64)
+
+			if ok {
+				assert.GreaterOrEqual(t, f, 50000000.0) // must be 50ms or greater
+			} else {
+				t.FailNow()
+			}
+		}
+	})
+}
+
+func testREDMetricsForLargeRustDownloads(t *testing.T, comm, namespace string) {
+	for i := 0; i < 4; i++ {
+		doHTTPGetFullResponse(t, "http://localhost:8091/large", 200)
+		doHTTPGetFullResponse(t, "http://localhost:8091/download1", 200)
+		doHTTPGetFullResponse(t, "http://localhost:8091/download2", 200)
+	}
+
+	validateLargeDownloadURLSeen(t, comm, namespace, "/large")
+	validateLargeDownloadURLSeen(t, comm, namespace, "/download1")
+	validateLargeDownloadURLSeen(t, comm, namespace, "/download2")
+}
+
 func testREDMetricsRustHTTP(t *testing.T) {
 	for _, testCaseURL := range []string{
 		"http://localhost:8091",
@@ -127,6 +171,7 @@ func testREDMetricsRustHTTP(t *testing.T) {
 		t.Run(testCaseURL, func(t *testing.T) {
 			waitForTestComponents(t, testCaseURL)
 			testREDMetricsForRustHTTPLibrary(t, testCaseURL, "greetings", "integration-test", 8090, false)
+			testREDMetricsForLargeRustDownloads(t, "greetings", "integration-test")
 		})
 	}
 }
@@ -143,7 +188,7 @@ func testREDMetricsRustHTTPS(t *testing.T) {
 }
 
 func checkReportedRustEvents(t *testing.T, comm, namespace string, numEvents int) {
-	jsonBody, err := os.ReadFile(path.Join(pathRoot, "test", "integration", "components", "rusttestserver", "large_data.json"))
+	jsonBody, err := os.ReadFile(path.Join(pathRoot, "test", "integration", "components", "rusttestserver", "mid_data.json"))
 	assert.NoError(t, err)
 	assert.GreaterOrEqual(t, len(jsonBody), 100)
 
@@ -173,7 +218,7 @@ func checkReportedRustEvents(t *testing.T, comm, namespace string, numEvents int
 }
 
 func testREDMetricsForRustHTTP2Library(t *testing.T, url, comm, namespace string) {
-	jsonBody, err := os.ReadFile(path.Join(pathRoot, "test", "integration", "components", "rusttestserver", "large_data.json"))
+	jsonBody, err := os.ReadFile(path.Join(pathRoot, "test", "integration", "components", "rusttestserver", "mid_data.json"))
 	assert.NoError(t, err)
 	assert.GreaterOrEqual(t, len(jsonBody), 100)
 

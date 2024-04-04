@@ -72,3 +72,4 @@ test/oats/build/*
 test/cmd/grpc/client/grpclient
 test/integration/components/gohttp2/client/client
 test/integration/components/gohttp2/server/http2srv
+test/integration/components/testserver/testserver

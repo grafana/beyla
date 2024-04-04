@@ -65,7 +65,7 @@ func newReporter(ctx context.Context, cfg *PrometheusConfig, promMgr *connector.
 		flowBytes: NewExpirer(prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "beyla_network_flow_bytes_total",
 			Help: "bytes submitted from a source network endpoint to a destination network endpoint",
-		}, labelNames), cfg.Config.ExpireTime),
+		}, labelNames), cfg.Config.Expiry),
 	}
 
 	mr.promConnect.Register(cfg.Config.Port, cfg.Config.Path, mr.flowBytes)

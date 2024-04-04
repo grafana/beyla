@@ -29,6 +29,10 @@ const (
 	FeatureNetO11y
 )
 
+const (
+	defaultMetricsExpiry = 5 * time.Minute
+)
+
 var DefaultConfig = Config{
 	ChannelBufferLen: 10,
 	LogLevel:         "INFO",
@@ -51,6 +55,7 @@ var DefaultConfig = Config{
 		ReportersCacheLen:    ReporterLRUSize,
 		HistogramAggregation: otel.AggregationExplicit,
 		Features:             []string{otel.FeatureNetwork, otel.FeatureApplication},
+		Expiry:               defaultMetricsExpiry,
 	},
 	Traces: otel.TracesConfig{
 		Protocol:           otel.ProtocolUnset,
@@ -60,10 +65,10 @@ var DefaultConfig = Config{
 		ReportersCacheLen:  ReporterLRUSize,
 	},
 	Prometheus: prom.PrometheusConfig{
-		Path:       "/metrics",
-		Buckets:    otel.DefaultBuckets,
-		Features:   []string{otel.FeatureNetwork, otel.FeatureApplication},
-		ExpireTime: 5 * time.Minute,
+		Path:     "/metrics",
+		Buckets:  otel.DefaultBuckets,
+		Features: []string{otel.FeatureNetwork, otel.FeatureApplication},
+		Expiry:   defaultMetricsExpiry,
 	},
 	Printer: false,
 	Noop:    false,

@@ -1,4 +1,4 @@
-package prom
+package otel
 
 import (
 	"context"

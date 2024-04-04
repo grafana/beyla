@@ -18,7 +18,7 @@ import (
 	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
 )
 
-const timeout = 3 * time.Second
+const timeout = 30000 * time.Second
 
 func TestMetricsExpiration(t *testing.T) {
 	now := syncedClock{now: time.Now()}

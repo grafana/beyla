@@ -48,12 +48,10 @@ func newResource() *resource.Resource {
 	return resource.NewWithAttributes(semconv.SchemaURL, attrs...)
 }
 
-func newMeterProvider(res *resource.Resource, exporter *metric.Exporter) (*metric.MeterProvider, error) {
+func newMeterProvider(res *resource.Resource, exporter *metric.Exporter, interval time.Duration) (*metric.MeterProvider, error) {
 	meterProvider := metric.NewMeterProvider(
 		metric.WithResource(res),
-		metric.WithReader(metric.NewPeriodicReader(*exporter,
-			// Default is 1m. Set to 3s for demonstrative purposes.
-			metric.WithInterval(1*time.Second))),
+		metric.WithReader(metric.NewPeriodicReader(*exporter, metric.WithInterval(interval))),
 	)
 	return meterProvider, nil
 }
@@ -71,7 +69,7 @@ func MetricsExporterProvider(cfg MetricsConfig) (node.TerminalFunc[[]*ebpf.Recor
 		return nil, err
 	}
 
-	provider, err := newMeterProvider(newResource(), &exporter)
+	provider, err := newMeterProvider(newResource(), &exporter, cfg.Metrics.Interval)
 
 	if err != nil {
 		log.Error("", "error", err)
@@ -99,6 +97,7 @@ func MetricsExporterProvider(cfg MetricsConfig) (node.TerminalFunc[[]*ebpf.Recor
 
 func (me *metricsExporter) Do(in <-chan []*ebpf.Record) {
 	for i := range in {
+		me.metrics.UpdateTime()
 		for _, v := range i {
 			me.metrics.ForRecord(v).val.Add(int64(v.Metrics.Bytes))
 		}

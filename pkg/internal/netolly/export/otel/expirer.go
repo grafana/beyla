@@ -31,7 +31,7 @@ type Counter struct {
 	val        atomic.Int64
 }
 
-// NewExpirer creates a metric that wraps a given CounterVec. Its labeled instances are dropped
+// NewExpirer creates a metric that wraps a Counter. Its labeled instances are dropped
 // if they haven't been updated during the last timeout period
 func NewExpirer(attrs []export.Attribute, expireTime time.Duration) *Expirer {
 	return &Expirer{

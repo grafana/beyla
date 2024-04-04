@@ -63,7 +63,7 @@ var DefaultConfig = Config{
 		Path:       "/metrics",
 		Buckets:    otel.DefaultBuckets,
 		Features:   []string{otel.FeatureNetwork, otel.FeatureApplication},
-		ExpireTime: 3 * time.Minute,
+		ExpireTime: 5 * time.Minute,
 	},
 	Printer: false,
 	Noop:    false,

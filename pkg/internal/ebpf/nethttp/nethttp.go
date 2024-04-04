@@ -164,6 +164,9 @@ func (p *Tracer) GoProbes() map[string]ebpfcommon.FunctionPrograms {
 			Start: p.bpfObjects.UprobeConnServe,
 			End:   p.bpfObjects.UprobeConnServeRet,
 		},
+		"net.(*netFD).Read": {
+			Start: p.bpfObjects.UprobeNetFdRead,
+		},
 		"net/http.(*persistConn).roundTrip": { // http client
 			Start: p.bpfObjects.UprobePersistConnRoundTrip,
 		},

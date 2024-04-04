@@ -707,6 +707,29 @@ static __always_inline void read_ip_and_port(u8 *dst_ip, u16 *dst_port, void *sr
     }
 }
 
+static __always_inline void get_conn_info_from_fd(void *fd_ptr, connection_info_t *info) {
+    if (fd_ptr) {
+        void *laddr_ptr = 0;
+        void *raddr_ptr = 0;
+
+        bpf_probe_read(&laddr_ptr, sizeof(laddr_ptr), (void *)(fd_ptr + fd_laddr_pos + 8)); // find laddr
+        bpf_probe_read(&raddr_ptr, sizeof(raddr_ptr), (void *)(fd_ptr + fd_raddr_pos + 8)); // find raddr
+
+        if (laddr_ptr && raddr_ptr) {
+            bpf_dbg_printk("laddr %llx, raddr %llx", laddr_ptr, raddr_ptr);
+
+            // read local
+            read_ip_and_port(info->s_addr, &info->s_port, laddr_ptr);
+
+            // read remote
+            read_ip_and_port(info->d_addr, &info->d_port, raddr_ptr);
+
+            sort_connection_info(info);
+            //dbg_print_http_connection_info(info);
+        }
+    }
+}
+
 // HTTP black-box context propagation
 static __always_inline void get_conn_info(void *conn_ptr, connection_info_t *info) {
     if (conn_ptr) {
@@ -715,47 +738,34 @@ static __always_inline void get_conn_info(void *conn_ptr, connection_info_t *inf
 
         bpf_dbg_printk("Found fd ptr %llx", fd_ptr);
 
-        if (fd_ptr) {
-            void *laddr_ptr = 0;
-            void *raddr_ptr = 0;
-
-            bpf_probe_read(&laddr_ptr, sizeof(laddr_ptr), (void *)(fd_ptr + fd_laddr_pos + 8)); // find laddr
-            bpf_probe_read(&raddr_ptr, sizeof(raddr_ptr), (void *)(fd_ptr + fd_raddr_pos + 8)); // find raddr
-
-            if (laddr_ptr && raddr_ptr) {
-                bpf_dbg_printk("laddr %llx, raddr %llx", laddr_ptr, raddr_ptr);
-
-                // read local
-                read_ip_and_port(info->s_addr, &info->s_port, laddr_ptr);
-
-                // read remote
-                read_ip_and_port(info->d_addr, &info->d_port, raddr_ptr);
-
-                sort_connection_info(info);
-                //dbg_print_http_connection_info(info);
-            }
-        }
+        get_conn_info_from_fd(fd_ptr, info);
     }
 }
 
 SEC("uprobe/connServe")
 int uprobe_connServe(struct pt_regs *ctx) {
-    bpf_dbg_printk("=== uprobe/proc http conn serve === ");
+    void *goroutine_addr = GOROUTINE_PTR(ctx);
+    bpf_dbg_printk("=== uprobe/proc http conn serve goroutine %lx === ", goroutine_addr);
 
-    void *c_ptr = GO_PARAM1(ctx);
-    if (c_ptr) {
-        void *rwc_ptr = c_ptr + 8 + c_rwc_pos; // embedded struct
-        if (rwc_ptr) {
-            void *conn_ptr = 0;
-            bpf_probe_read(&conn_ptr, sizeof(conn_ptr), (void *)(rwc_ptr + rwc_conn_pos)); // find conn
-            if (conn_ptr) {
-                void *goroutine_addr = GOROUTINE_PTR(ctx);
-                connection_info_t conn = {0};
-                get_conn_info(conn_ptr, &conn);
+    connection_info_t conn = {0};
+    bpf_map_update_elem(&ongoing_http_server_connections, &goroutine_addr, &conn, BPF_ANY);
 
-                bpf_map_update_elem(&ongoing_http_server_connections, &goroutine_addr, &conn, BPF_ANY);
-            }
-        }
+    return 0;
+}
+
+SEC("uprobe/netFdRead")
+int uprobe_netFdRead(struct pt_regs *ctx) {
+    void *goroutine_addr = GOROUTINE_PTR(ctx);
+    bpf_dbg_printk("=== uprobe/proc netFD read goroutine %lx === ", goroutine_addr);
+
+    connection_info_t *conn = bpf_map_lookup_elem(&ongoing_http_server_connections, &goroutine_addr);
+
+    if (conn) {
+        bpf_dbg_printk("Found existing server connection, parsing FD information for socket tuples");
+
+        void *fd_ptr = GO_PARAM1(ctx);
+        get_conn_info_from_fd(fd_ptr, conn);
+        //dbg_print_http_connection_info(conn);
     }
 
     return 0;

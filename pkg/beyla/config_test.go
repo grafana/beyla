@@ -32,7 +32,7 @@ otel_metrics_export:
     duration_histogram: [0, 1, 2]
   histogram_aggregation: base2_exponential_bucket_histogram
 prometheus_export:
-  expiry: 1s
+  ttl: 1s
   buckets:
     request_size_histogram: [0, 10, 20, 22]
 attributes:
@@ -112,7 +112,7 @@ network:
 			},
 			Features:             []string{"network", "application"},
 			HistogramAggregation: "base2_exponential_bucket_histogram",
-			Expiry:               defaultMetricsExpiry,
+			TTL:                  defaultMetricsTTL,
 		},
 		Traces: otel.TracesConfig{
 			Protocol:           otel.ProtocolUnset,
@@ -125,7 +125,7 @@ network:
 		Prometheus: prom.PrometheusConfig{
 			Path:     "/metrics",
 			Features: []string{otel.FeatureNetwork, otel.FeatureApplication},
-			Expiry:   time.Second,
+			TTL:      time.Second,
 			Buckets: otel.Buckets{
 				DurationHistogram:    otel.DefaultBuckets.DurationHistogram,
 				RequestSizeHistogram: []float64{0, 10, 20, 22},

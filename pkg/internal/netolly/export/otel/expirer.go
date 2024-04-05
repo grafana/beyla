@@ -73,14 +73,6 @@ func (ex *Expirer) Collect(_ context.Context, observer metric.Int64Observer) err
 	return nil
 }
 
-func (ex *Expirer) attributeValues(m *ebpf.Record) []string {
-	keyVals := make([]string, 0, len(ex.attrs))
-	for _, attr := range ex.attrs {
-		keyVals = append(keyVals, attr.Get(m))
-	}
-	return keyVals
-}
-
 func (ex *Expirer) recordAttributes(m *ebpf.Record) (attribute.Set, []string) {
 	keyVals := make([]attribute.KeyValue, 0, len(ex.attrs))
 	vals := make([]string, 0, len(ex.attrs))

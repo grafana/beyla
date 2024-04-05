@@ -24,6 +24,7 @@ type entry[T any] struct {
 
 type ExpiryOption[T any] func(ex *ExpiryMap[T])
 
+// WithClock is only required for unit tests
 func WithClock[T any](clk func() time.Time) ExpiryOption[T] {
 	return func(ex *ExpiryMap[T]) {
 		ex.clock = clk

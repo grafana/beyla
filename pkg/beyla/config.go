@@ -30,7 +30,7 @@ const (
 )
 
 const (
-	defaultMetricsExpiry = 5 * time.Minute
+	defaultMetricsTTL = 5 * time.Minute
 )
 
 var DefaultConfig = Config{
@@ -55,7 +55,7 @@ var DefaultConfig = Config{
 		ReportersCacheLen:    ReporterLRUSize,
 		HistogramAggregation: otel.AggregationExplicit,
 		Features:             []string{otel.FeatureNetwork, otel.FeatureApplication},
-		Expiry:               defaultMetricsExpiry,
+		TTL:                  defaultMetricsTTL,
 	},
 	Traces: otel.TracesConfig{
 		Protocol:           otel.ProtocolUnset,
@@ -68,7 +68,7 @@ var DefaultConfig = Config{
 		Path:     "/metrics",
 		Buckets:  otel.DefaultBuckets,
 		Features: []string{otel.FeatureNetwork, otel.FeatureApplication},
-		Expiry:   defaultMetricsExpiry,
+		TTL:      defaultMetricsTTL,
 	},
 	Printer: false,
 	Noop:    false,

@@ -83,7 +83,7 @@ func (f *Flows) buildAndStartPipeline(ctx context.Context) (graph.Graph, error) 
 	})
 	graph.RegisterTerminal(gb, export.FlowPrinterProvider)
 
-	var deduperExpireTime = f.cfg.NetworkFlows.DeduperFCExpiry
+	var deduperExpireTime = f.cfg.NetworkFlows.DeduperFCTTL
 	if deduperExpireTime <= 0 {
 		deduperExpireTime = 2 * f.cfg.NetworkFlows.CacheActiveTimeout
 	}

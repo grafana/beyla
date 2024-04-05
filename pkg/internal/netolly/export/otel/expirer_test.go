@@ -32,7 +32,7 @@ func TestMetricsExpiration(t *testing.T) {
 		CommonEndpoint:  otlp.ServerEndpoint,
 		MetricsProtocol: otel.ProtocolHTTPProtobuf,
 		Features:        []string{otel.FeatureNetwork},
-		Expiry:          3 * time.Minute,
+		TTL:             3 * time.Minute,
 	}, AllowedAttributes: []string{"src.name", "dst.name"}})
 	require.NoError(t, err)
 

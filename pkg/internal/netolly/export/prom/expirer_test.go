@@ -35,9 +35,9 @@ func TestMetricsExpiration(t *testing.T) {
 	exporter, err := PrometheusEndpoint(
 		ctx,
 		&PrometheusConfig{Config: &prom.PrometheusConfig{
-			Port:   openPort,
-			Path:   "/metrics",
-			Expiry: 3 * time.Minute,
+			Port: openPort,
+			Path: "/metrics",
+			TTL:  3 * time.Minute,
 		}, AllowedAttributes: []string{"src_name", "dst_name"}},
 		&connector.PrometheusManager{},
 	)

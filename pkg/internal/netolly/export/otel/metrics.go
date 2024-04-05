@@ -76,7 +76,7 @@ func MetricsExporterProvider(cfg MetricsConfig) (node.TerminalFunc[[]*ebpf.Recor
 		return nil, err
 	}
 
-	expirer := NewExpirer(export.BuildOTELAttributeGetters(cfg.AllowedAttributes), cfg.Metrics.Expiry)
+	expirer := NewExpirer(export.BuildOTELAttributeGetters(cfg.AllowedAttributes), cfg.Metrics.TTL)
 	ebpfEvents := provider.Meter("network_ebpf_events")
 
 	_, err = ebpfEvents.Int64ObservableCounter(

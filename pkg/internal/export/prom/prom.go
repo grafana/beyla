@@ -90,9 +90,9 @@ type PrometheusConfig struct {
 
 	Buckets otel.Buckets `yaml:"buckets"`
 
-	// Expiry is the time since a metric was updated for the last time until it is
+	// TTL is the time since a metric was updated for the last time until it is
 	// removed from the metrics set.
-	Expiry time.Duration `yaml:"expiry" env:"BEYLA_PROMETHEUS_EXPIRY"`
+	TTL time.Duration `yaml:"ttl" env:"BEYLA_PROMETHEUS_TTL"`
 
 	// Registry is only used for embedding Beyla within the Grafana Agent.
 	// It must be nil when Beyla runs as standalone

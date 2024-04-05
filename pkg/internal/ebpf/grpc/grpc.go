@@ -65,7 +65,7 @@ func (p *Tracer) BlockPID(pid uint32) {
 }
 
 func (p *Tracer) supportsContextPropagation() bool {
-	return !ebpfcommon.IntegrityModeOverride && ebpfcommon.SupportsContextPropagation(p.log) && ebpfcommon.SupportsEBPFLoops()
+	return !ebpfcommon.IntegrityModeOverride && ebpfcommon.SupportsContextPropagation(p.log)
 }
 
 func (p *Tracer) Load() (*ebpf.CollectionSpec, error) {
@@ -104,10 +104,12 @@ func (p *Tracer) Constants(_ *exec.FileInfo, offsets *goexec.Offsets) map[string
 		"grpc_stream_ctx_ptr_pos",
 		"value_context_val_ptr_pos",
 		"http2_client_next_id_pos",
-		"hpack_encoder_w_pos",
+		"framer_w_pos",
 		"grpc_peer_localaddr_pos",
 		"grpc_peer_addr_pos",
 		"grpc_st_peer_ptr_pos",
+		"grpc_transport_buf_writer_buf_pos",
+		"grpc_transport_buf_writer_offset_pos",
 	} {
 		// Since gRPC 1.60 remoteaddr and localaddr were replaced by peer.
 		// We don't fail the store of unknown fields, we make them -1 so we detect
@@ -161,18 +163,13 @@ func (p *Tracer) GoProbes() map[string]ebpfcommon.FunctionPrograms {
 	}
 
 	if p.supportsContextPropagation() {
-		m["golang.org/x/net/http2/hpack.(*Encoder).WriteField"] = ebpfcommon.FunctionPrograms{
-			Required: true,
-			Start:    p.bpfObjects.UprobeHpackEncoderWriteField,
-		}
 		m["google.golang.org/grpc/internal/transport.(*http2Client).NewStream"] = ebpfcommon.FunctionPrograms{
 			Required: true,
 			Start:    p.bpfObjects.UprobeTransportHttp2ClientNewStream,
 		}
-		m["google.golang.org/grpc/internal/transport.(*loopyWriter).writeHeader"] = ebpfcommon.FunctionPrograms{
-			Required: true,
-			Start:    p.bpfObjects.UprobeTransportLoopyWriterWriteHeader,
-			End:      p.bpfObjects.UprobeTransportLoopyWriterWriteHeaderReturn,
+		m["golang.org/x/net/http2.(*Framer).WriteHeaders"] = ebpfcommon.FunctionPrograms{
+			Start: p.bpfObjects.UprobeGrpcFramerWriteHeaders,
+			End:   p.bpfObjects.UprobeGrpcFramerWriteHeadersReturns,
 		}
 	}
 

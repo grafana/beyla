@@ -128,22 +128,11 @@ var structMembers = map[string]structInfo{
 			"nextID": "http2_client_next_id_pos",
 		},
 	},
-	"golang.org/x/net/http2/hpack.Encoder": {
-		lib: "go",
-		fields: map[string]string{
-			"w": "hpack_encoder_w_pos",
-		},
-	},
-	"vendor/golang.org/x/net/http2/hpack.Encoder": {
-		lib: "go",
-		fields: map[string]string{
-			"w": "hpack_encoder_w_pos",
-		},
-	},
 	"golang.org/x/net/http2.responseWriterState": {
 		lib: "golang.org/x/net",
 		fields: map[string]string{
-			"req": "rws_req_pos",
+			"req":    "rws_req_pos",
+			"status": "rws_status_pos",
 		},
 	},
 	"golang.org/x/net/http2.ClientConn": {
@@ -187,6 +176,13 @@ var structMembers = map[string]structInfo{
 		lib: "go",
 		fields: map[string]string{
 			"conn": "pc_conn_pos",
+		},
+	},
+	"google.golang.org/grpc/internal/transport.bufWriter": {
+		lib: "google.golang.org/grpc",
+		fields: map[string]string{
+			"buf":    "grpc_transport_buf_writer_buf_pos",
+			"offset": "grpc_transport_buf_writer_offset_pos",
 		},
 	},
 }

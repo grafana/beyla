@@ -28,7 +28,7 @@ import (
 	"github.com/mariomac/pipes/pkg/node"
 
 	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
-	"github.com/grafana/beyla/pkg/internal/transform"
+	"github.com/grafana/beyla/pkg/transform"
 )
 
 const (
@@ -39,8 +39,8 @@ const (
 	attrSuffixType      = ".type"
 	attrSuffixOwnerName = ".owner.name"
 	attrSuffixOwnerType = ".owner.type"
-	attrSuffixHostIP    = ".host.ip"
-	attrSuffixHostName  = ".host.name"
+	attrSuffixHostIP    = ".node.ip"
+	attrSuffixHostName  = ".node.name"
 
 	AttrClusterName = "k8s.cluster.name"
 
@@ -163,15 +163,9 @@ func (n *decorator) decorate(flow *ebpf.Record, prefix, ip string) bool {
 		if flow.Attrs.DstName == "" {
 			flow.Attrs.DstName = kubeInfo.Name
 		}
-		if flow.Attrs.DstNamespace == "" {
-			flow.Attrs.DstNamespace = kubeInfo.Namespace
-		}
 	} else {
 		if flow.Attrs.SrcName == "" {
 			flow.Attrs.SrcName = kubeInfo.Name
-		}
-		if flow.Attrs.SrcNamespace == "" {
-			flow.Attrs.SrcNamespace = kubeInfo.Namespace
 		}
 	}
 	return true
@@ -218,7 +212,7 @@ func kubeClusterName(ctx context.Context, cfg *MetadataDecorator) string {
 		}
 	}
 	log.Warn("can't fetch Kubernetes Cluster Name." +
-		" Network metrics won't contain that field unless you explicitly set " +
+		" Network metrics won't contain k8s.cluster.name attribute unless you explicitly set " +
 		" the BEYLA_KUBE_CLUSTER_NAME environment variable")
 	return ""
 }

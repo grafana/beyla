@@ -6,17 +6,13 @@ import (
 	"log/slog"
 	"os"
 	"testing"
-	"time"
+
+	"sigs.k8s.io/e2e-framework/pkg/features"
 
 	"github.com/grafana/beyla/test/integration/components/docker"
 	"github.com/grafana/beyla/test/integration/components/kube"
 	k8s "github.com/grafana/beyla/test/integration/k8s/common"
 	"github.com/grafana/beyla/test/tools"
-)
-
-const (
-	testTimeout        = 3 * time.Minute
-	prometheusHostPort = "localhost:39090"
 )
 
 var cluster *kube.Kind
@@ -45,4 +41,21 @@ func TestMain(m *testing.M) {
 	)
 
 	cluster.Run(m)
+}
+
+func TestNetworkFlowBytes(t *testing.T) {
+	pinger := kube.Template[k8s.Pinger]{
+		TemplateFile: k8s.UninstrumentedPingerManifest,
+		Data: k8s.Pinger{
+			PodName:   "internal-pinger",
+			TargetURL: "http://testserver:8080/iping",
+		},
+	}
+	cluster.TestEnv().Test(t, features.New("network flow bytes").
+		Setup(pinger.Deploy()).
+		Teardown(pinger.Delete()).
+		Assess("catches network metrics between connected pods", DoTestNetFlowBytesForExistingConnections).
+		Assess("catches external traffic", testNetFlowBytesForExternalTraffic).
+		Feature(),
+	)
 }

@@ -10,15 +10,13 @@ import (
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/grafana/beyla/pkg/beyla"
-	"github.com/grafana/beyla/pkg/internal/connector"
 	"github.com/grafana/beyla/pkg/internal/discover"
-	"github.com/grafana/beyla/pkg/internal/imetrics"
 	kube2 "github.com/grafana/beyla/pkg/internal/kube"
 	"github.com/grafana/beyla/pkg/internal/pipe"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/pkg/internal/request"
-	"github.com/grafana/beyla/pkg/internal/transform"
 	"github.com/grafana/beyla/pkg/internal/transform/kube"
+	"github.com/grafana/beyla/pkg/transform"
 )
 
 func log() *slog.Logger {
@@ -39,10 +37,11 @@ type Instrumenter struct {
 }
 
 // New Instrumenter, given a Config
-func New(config *beyla.Config) *Instrumenter {
+func New(ctxInfo *global.ContextInfo, config *beyla.Config) *Instrumenter {
+	setupFeatureContextInfo(ctxInfo, config)
 	return &Instrumenter{
 		config:      config,
-		ctxInfo:     buildContextInfo(config),
+		ctxInfo:     ctxInfo,
 		tracesInput: make(chan []request.Span, config.ChannelBufferLen),
 	}
 }
@@ -114,36 +113,17 @@ func (i *Instrumenter) ReadAndForward(ctx context.Context) error {
 	return nil
 }
 
-// buildContextInfo populates some globally shared components and properties
-// from the user-provided configuration
-func buildContextInfo(config *beyla.Config) *global.ContextInfo {
-	promMgr := &connector.PrometheusManager{}
-	k8sCfg := &config.Attributes.Kubernetes
-	ctxInfo := &global.ContextInfo{
-		ReportRoutes: config.Routes != nil,
-		Prometheus:   promMgr,
-		K8sEnabled:   k8sCfg.Enabled(),
-	}
-	if ctxInfo.K8sEnabled {
-		setupKubernetes(k8sCfg, ctxInfo)
-	}
-	if config.InternalMetrics.Prometheus.Port != 0 {
-		slog.Debug("reporting internal metrics as Prometheus")
-		ctxInfo.Metrics = imetrics.NewPrometheusReporter(&config.InternalMetrics.Prometheus, promMgr)
-		// Prometheus manager also has its own internal metrics, so we need to pass the imetrics reporter
-		// TODO: remove this dependency cycle and let prommgr to create and return the PrometheusReporter
-		promMgr.InstrumentWith(ctxInfo.Metrics)
-	} else {
-		slog.Debug("not reporting internal metrics")
-		ctxInfo.Metrics = imetrics.NoopReporter{}
-	}
-	return ctxInfo
+func setupFeatureContextInfo(ctxInfo *global.ContextInfo, config *beyla.Config) {
+	ctxInfo.AppO11y.ReportRoutes = config.Routes != nil
+	setupKubernetes(ctxInfo, &config.Attributes.Kubernetes)
 }
 
 // setupKubernetes sets up common Kubernetes database and API clients that need to be accessed
 // from different stages in the Beyla pipeline
-func setupKubernetes(k8sCfg *transform.KubernetesDecorator, ctxInfo *global.ContextInfo) {
-
+func setupKubernetes(ctxInfo *global.ContextInfo, k8sCfg *transform.KubernetesDecorator) {
+	if !ctxInfo.K8sEnabled {
+		return
+	}
 	config, err := kube2.LoadConfig(k8sCfg.KubeconfigPath)
 	if err != nil {
 		slog.Error("can't read kubernetes config. You can't setup Kubernetes discovery and your"+
@@ -160,16 +140,16 @@ func setupKubernetes(k8sCfg *transform.KubernetesDecorator, ctxInfo *global.Cont
 		return
 	}
 
-	ctxInfo.K8sInformer = &kube2.Metadata{}
-	if err := ctxInfo.K8sInformer.InitFromClient(kubeClient, k8sCfg.InformersSyncTimeout); err != nil {
+	ctxInfo.AppO11y.K8sInformer = &kube2.Metadata{}
+	if err := ctxInfo.AppO11y.K8sInformer.InitFromClient(kubeClient, k8sCfg.InformersSyncTimeout); err != nil {
 		slog.Error("can't init Kubernetes informer. You can't setup Kubernetes discovery and your"+
 			" traces won't be decorated with Kubernetes metadata", "error", err)
-		ctxInfo.K8sInformer = nil
+		ctxInfo.AppO11y.K8sInformer = nil
 		ctxInfo.K8sEnabled = false
 		return
 	}
 
-	if ctxInfo.K8sDatabase, err = kube.StartDatabase(ctxInfo.K8sInformer); err != nil {
+	if ctxInfo.AppO11y.K8sDatabase, err = kube.StartDatabase(ctxInfo.AppO11y.K8sInformer); err != nil {
 		slog.Error("can't setup Kubernetes database. Your traces won't be decorated with Kubernetes metadata",
 			"error", err)
 		ctxInfo.K8sEnabled = false

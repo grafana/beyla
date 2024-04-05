@@ -54,10 +54,17 @@ struct {
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
 } ongoing_http_client_requests_data SEC(".maps");
 
+typedef struct server_http_func_invocation {
+    u64 start_monotime_ns;
+    tp_info_t tp;
+    u64 response;
+    u8 http2;
+} server_http_func_invocation_t;
+
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __type(key, void *); // key: pointer to the request goroutine
-    __type(value, http_func_invocation_t);
+    __type(value, server_http_func_invocation_t);
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
 } ongoing_http_server_requests SEC(".maps");
 
@@ -72,11 +79,14 @@ int uprobe_ServeHTTP(struct pt_regs *ctx) {
     void *goroutine_addr = GOROUTINE_PTR(ctx);
     bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
 
+    void *resp = GO_PARAM3(ctx);
     void *req = GO_PARAM4(ctx);
 
-    http_func_invocation_t invocation = {
+    server_http_func_invocation_t invocation = {
         .start_monotime_ns = bpf_ktime_get_ns(),
-        .tp = {0}
+        .tp = {0},
+        .response = (u64)resp,
+        .http2 = 0,
     };
 
     if (req) {
@@ -117,13 +127,16 @@ int uprobe_readRequestReturns(struct pt_regs *ctx) {
     return 0;
 }
 
-static __always_inline int writeHeaderHelper(struct pt_regs *ctx, u64 req_offset) {
-        bpf_dbg_printk("=== uprobe/WriteHeader === ");
+SEC("uprobe/ServeHTTP_ret")
+int uprobe_ServeHTTPReturns(struct pt_regs *ctx) {
+    bpf_dbg_printk("=== uprobe/ServeHTTP returns === ");
+
     void *goroutine_addr = GOROUTINE_PTR(ctx);
     bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);    
 
-    http_func_invocation_t *invocation =
+    server_http_func_invocation_t *invocation =
         bpf_map_lookup_elem(&ongoing_http_server_requests, &goroutine_addr);
+
     if (invocation == NULL) {
         void *parent_go = (void *)find_parent_goroutine(goroutine_addr);
         if (parent_go) {
@@ -136,6 +149,23 @@ static __always_inline int writeHeaderHelper(struct pt_regs *ctx, u64 req_offset
             return 0;
         }
     }    
+
+    void *resp_ptr = (void *)invocation->response;
+
+    if (!resp_ptr) {
+        bpf_dbg_printk("can't find response ptr");
+        goto done;
+    }
+
+    if (invocation->http2) {
+        void *deref_resp_ptr = 0;
+        bpf_probe_read(&deref_resp_ptr, sizeof(deref_resp_ptr), resp_ptr);
+        if (!deref_resp_ptr) {
+            bpf_dbg_printk("can't dereference response ptr for http2");
+            goto done;
+        }
+        resp_ptr = deref_resp_ptr;
+    }
 
     http_request_trace *trace = bpf_ringbuf_reserve(&events, sizeof(http_request_trace), 0);
     if (!trace) {
@@ -156,8 +186,13 @@ static __always_inline int writeHeaderHelper(struct pt_regs *ctx, u64 req_offset
         trace->go_start_monotime_ns = invocation->start_monotime_ns;
     }
 
-    // Read the response argument
-    void *resp_ptr = GO_PARAM1(ctx);
+    u64 req_offset = resp_req_pos;
+    if (invocation->http2) {
+        req_offset = rws_req_pos;
+        bpf_dbg_printk("http2 response, rws_req_pos %d", req_offset);
+    }        
+
+    bpf_dbg_printk("Resp ptr %llx", resp_ptr);
 
     // Get request struct
     void *req_ptr = 0;
@@ -204,7 +239,13 @@ static __always_inline int writeHeaderHelper(struct pt_regs *ctx, u64 req_offset
 
     trace->tp = invocation->tp;
 
-    trace->status = (u16)(((u64)GO_PARAM2(ctx)) & 0x0ffff);
+    u64 status_pos = status_ptr_pos;
+
+    if (invocation->http2) {
+        status_pos = rws_status_pos;
+    }
+
+    bpf_probe_read(&trace->status, sizeof(u16), (void *)(resp_ptr + status_pos));
 
     // submit the completed trace via ringbuffer
     bpf_ringbuf_submit(trace, get_flags());
@@ -213,11 +254,6 @@ done:
     bpf_map_delete_elem(&ongoing_http_server_requests, &goroutine_addr);
     bpf_map_delete_elem(&go_trace_map, &goroutine_addr);
     return 0;
-}
-
-SEC("uprobe/WriteHeader")
-int uprobe_WriteHeader(struct pt_regs *ctx) {
-    return writeHeaderHelper(ctx, resp_req_pos);
 }
 
 #ifndef NO_HEADER_PROPAGATION
@@ -333,6 +369,7 @@ int uprobe_roundTripReturn(struct pt_regs *ctx) {
     __builtin_memcpy(trace->method, data->method, sizeof(trace->method));
     __builtin_memcpy(trace->host, data->host, sizeof(trace->host));
     __builtin_memcpy(trace->path, data->path, sizeof(trace->path));
+    trace->remote_addr[0] = 0;
     trace->content_length = data->content_length;
 
     // Get request/response struct
@@ -426,7 +463,28 @@ SEC("uprobe/http2ResponseWriterStateWriteHeader")
 int uprobe_http2ResponseWriterStateWriteHeader(struct pt_regs *ctx) {
     bpf_dbg_printk("=== uprobe/proc http2 responseWriterState writeHeader === ");
 
-    return writeHeaderHelper(ctx, rws_req_pos);
+    void *goroutine_addr = GOROUTINE_PTR(ctx);
+    bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);    
+
+    server_http_func_invocation_t *invocation =
+        bpf_map_lookup_elem(&ongoing_http_server_requests, &goroutine_addr);
+
+    if (invocation == NULL) {
+        void *parent_go = (void *)find_parent_goroutine(goroutine_addr);
+        if (parent_go) {
+            bpf_dbg_printk("found parent goroutine for header [%llx]", parent_go);
+            invocation = bpf_map_lookup_elem(&ongoing_http_server_requests, &parent_go);
+            goroutine_addr = parent_go;
+        }
+        if (!invocation) {
+            bpf_dbg_printk("can't read http invocation metadata");
+            return 0;
+        }
+    }  
+
+    invocation->http2 = 1;
+
+    return 0;
 }
 
 // HTTP 2.0 client support
@@ -465,9 +523,12 @@ int uprobe_http2RoundTrip(struct pt_regs *ctx) {
 }
 
 #ifndef NO_HEADER_PROPAGATION
+#define MAX_W_PTR_N 1024
+
 typedef struct framer_func_invocation {
     u64 framer_ptr;
     tp_info_t tp;
+    s64 initial_n;
 } framer_func_invocation_t;
 
 struct {
@@ -500,12 +561,29 @@ int uprobe_http2FramerWriteHeaders(struct pt_regs *ctx) {
             bpf_dbg_printk("Found func info %llx", info);
             void *goroutine_addr = GOROUTINE_PTR(ctx);
 
-            framer_func_invocation_t f_info = {
-                .tp = info->tp,
-                .framer_ptr = (u64)framer,
-            };
+            void *w_ptr = 0;
+            bpf_probe_read(&w_ptr, sizeof(w_ptr), (void *)(framer + framer_w_pos + 8));
+            if (w_ptr) {
+                s64 n = 0;
+                bpf_probe_read(&n, sizeof(n), (void *)(w_ptr + io_writer_n_pos));
 
-            bpf_map_update_elem(&framer_invocation_map, &goroutine_addr, &f_info, BPF_ANY);
+                bpf_dbg_printk("Found initial n = %d", n);
+
+                // The offset is 0 on all connections we've tested with.
+                // If we read some very large offset, we don't do anything since it might be a situation
+                // we can't handle.
+                if (n < MAX_W_PTR_N) {
+                    framer_func_invocation_t f_info = {
+                        .tp = info->tp,
+                        .framer_ptr = (u64)framer,
+                        .initial_n = n,
+                    };
+
+                    bpf_map_update_elem(&framer_invocation_map, &goroutine_addr, &f_info, BPF_ANY);
+                } else {
+                   bpf_dbg_printk("N too large, ignoring...");
+                }
+            }
         }
     }
 
@@ -538,10 +616,13 @@ int uprobe_http2FramerWriteHeaders_returns(struct pt_regs *ctx) {
             void *buf_arr = 0;
             s64 n = 0;
             s64 cap = 0;
+            s64 initial_n = f_info->initial_n;
 
-            bpf_probe_read(&buf_arr, sizeof(buf_arr), (void *)(w_ptr + 16));
-            bpf_probe_read(&n, sizeof(n), (void *)(w_ptr + 40));
-            bpf_probe_read(&cap, sizeof(cap), (void *)(w_ptr + 24));
+            bpf_probe_read(&buf_arr, sizeof(buf_arr), (void *)(w_ptr + io_writer_buf_ptr_pos));
+            bpf_probe_read(&n, sizeof(n), (void *)(w_ptr + io_writer_n_pos));
+            bpf_probe_read(&cap, sizeof(cap), (void *)(w_ptr + io_writer_buf_ptr_pos + 16));
+
+            bpf_clamp_umax(initial_n, MAX_W_PTR_N);
 
             bpf_dbg_printk("Found f_info, this is the place to write to w = %llx, buf=%llx, n=%lld, size=%lld", w_ptr, buf_arr, n, cap);
             if (buf_arr && n < (cap - HTTP2_ENCODED_HEADER_LEN)) {
@@ -577,9 +658,9 @@ int uprobe_http2FramerWriteHeaders_returns(struct pt_regs *ctx) {
                 u8 size_2 = 0;
                 u8 size_3 = 0;
 
-                bpf_probe_read(&size_1, sizeof(size_1), (void *)(buf_arr));
-                bpf_probe_read(&size_2, sizeof(size_2), (void *)(buf_arr + 1));
-                bpf_probe_read(&size_3, sizeof(size_3), (void *)(buf_arr + 2));
+                bpf_probe_read(&size_1, sizeof(size_1), (void *)(buf_arr + initial_n));
+                bpf_probe_read(&size_2, sizeof(size_2), (void *)(buf_arr + initial_n + 1));
+                bpf_probe_read(&size_3, sizeof(size_3), (void *)(buf_arr + initial_n + 2));
 
                 bpf_dbg_printk("size 1:%x, 2:%x, 3:%x", size_1, size_2, size_3);
 
@@ -591,9 +672,9 @@ int uprobe_http2FramerWriteHeaders_returns(struct pt_regs *ctx) {
                 size_2 = (u8)(new_size >> 8);
                 size_3 = (u8)(new_size);
 
-                bpf_probe_write_user((void *)(buf_arr), &size_1, sizeof(size_1));
-                bpf_probe_write_user((void *)(buf_arr+1), &size_2, sizeof(size_2));
-                bpf_probe_write_user((void *)(buf_arr+2), &size_3, sizeof(size_3));
+                bpf_probe_write_user((void *)(buf_arr + initial_n), &size_1, sizeof(size_1));
+                bpf_probe_write_user((void *)(buf_arr + initial_n +1), &size_2, sizeof(size_2));
+                bpf_probe_write_user((void *)(buf_arr + initial_n + 2), &size_3, sizeof(size_3));
             }
         }
     }
@@ -626,6 +707,29 @@ static __always_inline void read_ip_and_port(u8 *dst_ip, u16 *dst_port, void *sr
     }
 }
 
+static __always_inline void get_conn_info_from_fd(void *fd_ptr, connection_info_t *info) {
+    if (fd_ptr) {
+        void *laddr_ptr = 0;
+        void *raddr_ptr = 0;
+
+        bpf_probe_read(&laddr_ptr, sizeof(laddr_ptr), (void *)(fd_ptr + fd_laddr_pos + 8)); // find laddr
+        bpf_probe_read(&raddr_ptr, sizeof(raddr_ptr), (void *)(fd_ptr + fd_raddr_pos + 8)); // find raddr
+
+        if (laddr_ptr && raddr_ptr) {
+            bpf_dbg_printk("laddr %llx, raddr %llx", laddr_ptr, raddr_ptr);
+
+            // read local
+            read_ip_and_port(info->s_addr, &info->s_port, laddr_ptr);
+
+            // read remote
+            read_ip_and_port(info->d_addr, &info->d_port, raddr_ptr);
+
+            sort_connection_info(info);
+            //dbg_print_http_connection_info(info);
+        }
+    }
+}
+
 // HTTP black-box context propagation
 static __always_inline void get_conn_info(void *conn_ptr, connection_info_t *info) {
     if (conn_ptr) {
@@ -634,47 +738,34 @@ static __always_inline void get_conn_info(void *conn_ptr, connection_info_t *inf
 
         bpf_dbg_printk("Found fd ptr %llx", fd_ptr);
 
-        if (fd_ptr) {
-            void *laddr_ptr = 0;
-            void *raddr_ptr = 0;
-
-            bpf_probe_read(&laddr_ptr, sizeof(laddr_ptr), (void *)(fd_ptr + fd_laddr_pos + 8)); // find laddr
-            bpf_probe_read(&raddr_ptr, sizeof(raddr_ptr), (void *)(fd_ptr + fd_raddr_pos + 8)); // find raddr
-
-            if (laddr_ptr && raddr_ptr) {
-                bpf_dbg_printk("laddr %llx, raddr %llx", laddr_ptr, raddr_ptr);
-
-                // read local
-                read_ip_and_port(info->s_addr, &info->s_port, laddr_ptr);
-
-                // read remote
-                read_ip_and_port(info->d_addr, &info->d_port, raddr_ptr);
-
-                sort_connection_info(info);
-                //dbg_print_http_connection_info(info);
-            }
-        }
+        get_conn_info_from_fd(fd_ptr, info);
     }
 }
 
 SEC("uprobe/connServe")
 int uprobe_connServe(struct pt_regs *ctx) {
-    bpf_dbg_printk("=== uprobe/proc http conn serve === ");
+    void *goroutine_addr = GOROUTINE_PTR(ctx);
+    bpf_dbg_printk("=== uprobe/proc http conn serve goroutine %lx === ", goroutine_addr);
 
-    void *c_ptr = GO_PARAM1(ctx);
-    if (c_ptr) {
-        void *rwc_ptr = c_ptr + 8 + c_rwc_pos; // embedded struct
-        if (rwc_ptr) {
-            void *conn_ptr = 0;
-            bpf_probe_read(&conn_ptr, sizeof(conn_ptr), (void *)(rwc_ptr + rwc_conn_pos)); // find conn
-            if (conn_ptr) {
-                void *goroutine_addr = GOROUTINE_PTR(ctx);
-                connection_info_t conn = {0};
-                get_conn_info(conn_ptr, &conn);
+    connection_info_t conn = {0};
+    bpf_map_update_elem(&ongoing_http_server_connections, &goroutine_addr, &conn, BPF_ANY);
 
-                bpf_map_update_elem(&ongoing_http_server_connections, &goroutine_addr, &conn, BPF_ANY);
-            }
-        }
+    return 0;
+}
+
+SEC("uprobe/netFdRead")
+int uprobe_netFdRead(struct pt_regs *ctx) {
+    void *goroutine_addr = GOROUTINE_PTR(ctx);
+    bpf_dbg_printk("=== uprobe/proc netFD read goroutine %lx === ", goroutine_addr);
+
+    connection_info_t *conn = bpf_map_lookup_elem(&ongoing_http_server_connections, &goroutine_addr);
+
+    if (conn) {
+        bpf_dbg_printk("Found existing server connection, parsing FD information for socket tuples");
+
+        void *fd_ptr = GO_PARAM1(ctx);
+        get_conn_info_from_fd(fd_ptr, conn);
+        //dbg_print_http_connection_info(conn);
     }
 
     return 0;

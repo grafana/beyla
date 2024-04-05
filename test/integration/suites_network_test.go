@@ -17,9 +17,12 @@ import (
 	"github.com/grafana/beyla/test/integration/components/prom"
 )
 
+const allowAllAttrs = "BEYLA_NETWORK_ALLOWED_ATTRIBUTES=beyla.ip,src.address,dst.address,src.name,dst.name," +
+	"src.namespace,dst.namespace,src.cidr,dst.cidr,iface,direction"
+
 func TestNetwork_Deduplication(t *testing.T) {
 	compose, err := docker.ComposeSuite("docker-compose-netolly.yml", path.Join(pathOutput, "test-suite-netolly-dedupe.log"))
-	compose.Env = append(compose.Env, "BEYLA_NETWORK_DEDUPER=first_come", "BEYLA_EXECUTABLE_NAME=")
+	compose.Env = append(compose.Env, "BEYLA_NETWORK_DEDUPER=first_come", "BEYLA_EXECUTABLE_NAME=", allowAllAttrs)
 	require.NoError(t, err)
 	require.NoError(t, compose.Up())
 
@@ -34,7 +37,7 @@ func TestNetwork_Deduplication(t *testing.T) {
 
 func TestNetwork_NoDeduplication(t *testing.T) {
 	compose, err := docker.ComposeSuite("docker-compose-netolly.yml", path.Join(pathOutput, "test-suite-netolly-nodedupe.log"))
-	compose.Env = append(compose.Env, "BEYLA_NETWORK_DEDUPER=none", "BEYLA_EXECUTABLE_NAME=")
+	compose.Env = append(compose.Env, "BEYLA_NETWORK_DEDUPER=none", "BEYLA_EXECUTABLE_NAME=", allowAllAttrs)
 	require.NoError(t, err)
 	require.NoError(t, compose.Up())
 
@@ -52,8 +55,7 @@ func TestNetwork_NoDeduplication(t *testing.T) {
 
 func TestNetwork_AllowedAttributes(t *testing.T) {
 	compose, err := docker.ComposeSuite("docker-compose-netolly.yml", path.Join(pathOutput, "test-suite-netolly-allowed-attrs.log"))
-	compose.Env = append(compose.Env, "BEYLA_EXECUTABLE_NAME=",
-		`BEYLA_NETWORK_ALLOWED_ATTRIBUTES=beyla.ip,src.name`)
+	compose.Env = append(compose.Env, "BEYLA_EXECUTABLE_NAME=", `BEYLA_NETWORK_ALLOWED_ATTRIBUTES=beyla.ip,src.name`)
 	require.NoError(t, err)
 	require.NoError(t, compose.Up())
 
@@ -66,9 +68,7 @@ func TestNetwork_AllowedAttributes(t *testing.T) {
 
 		assert.NotContains(t, f.Metric, "src_address")
 		assert.NotContains(t, f.Metric, "dst_address")
-		assert.NotContains(t, f.Metric, "src_namespace")
 		assert.NotContains(t, f.Metric, "dst_name")
-		assert.NotContains(t, f.Metric, "dst_namespace")
 	}
 
 	require.NoError(t, compose.Close())

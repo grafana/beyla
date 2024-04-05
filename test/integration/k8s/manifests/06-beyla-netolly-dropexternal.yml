@@ -12,6 +12,12 @@ data:
     log_level: debug
     otel_metrics_export:
       endpoint: http://otelcol.default:4317
+    network:
+      allowed_attributes:
+        - src.name
+        - dst.name
+        - k8s.src.owner.name
+        - k8s.dst.owner.name
 ---
 apiVersion: apps/v1
 kind: DaemonSet

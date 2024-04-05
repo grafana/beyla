@@ -15,8 +15,8 @@ import (
 	"github.com/grafana/beyla/pkg/internal/export/prom"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/traces"
-	"github.com/grafana/beyla/pkg/internal/transform"
 	"github.com/grafana/beyla/pkg/services"
+	"github.com/grafana/beyla/pkg/transform"
 )
 
 const ReporterLRUSize = 256
@@ -50,6 +50,7 @@ var DefaultConfig = Config{
 		Buckets:              otel.DefaultBuckets,
 		ReportersCacheLen:    ReporterLRUSize,
 		HistogramAggregation: otel.AggregationExplicit,
+		Features:             []string{otel.FeatureNetwork, otel.FeatureApplication},
 	},
 	Traces: otel.TracesConfig{
 		Protocol:           otel.ProtocolUnset,
@@ -59,8 +60,10 @@ var DefaultConfig = Config{
 		ReportersCacheLen:  ReporterLRUSize,
 	},
 	Prometheus: prom.PrometheusConfig{
-		Path:    "/metrics",
-		Buckets: otel.DefaultBuckets,
+		Path:       "/metrics",
+		Buckets:    otel.DefaultBuckets,
+		Features:   []string{otel.FeatureNetwork, otel.FeatureApplication},
+		ExpireTime: 5 * time.Minute,
 	},
 	Printer: false,
 	Noop:    false,
@@ -171,10 +174,11 @@ func (c *Config) Validate() error {
 		return ConfigError("BEYLA_BPF_BATCH_LENGTH must be at least 1")
 	}
 
-	if c.Enabled(FeatureNetO11y) && !c.Grafana.OTLP.MetricsEnabled() && !c.Metrics.Enabled() && !c.NetworkFlows.Print {
-		return ConfigError("enabling network observability requires to enable at least the OpenTelemetry" +
-			" metrics exporter: grafana or otel_metrics_export sections in the YAML configuration file; or the" +
-			" OTEL_EXPORTER_OTLP_ENDPOINT or OTEL_EXPORTER_OTLP_METRICS_ENDPOINT environment variables. For debugging" +
+	if c.Enabled(FeatureNetO11y) && !c.Grafana.OTLP.MetricsEnabled() && !c.Metrics.Enabled() &&
+		!c.Prometheus.Enabled() && !c.NetworkFlows.Print {
+		return ConfigError("enabling network metrics requires to enable at least the OpenTelemetry" +
+			" metrics exporter: grafana, otel_metrics_export or prometheus_export sections in the YAML configuration file; or the" +
+			" OTEL_EXPORTER_OTLP_ENDPOINT, OTEL_EXPORTER_OTLP_METRICS_ENDPOINT or BEYLA_PROMETHEUS_PORT environment variables. For debugging" +
 			" purposes, you can also set BEYLA_NETWORK_PRINT_FLOWS=true")
 	}
 
@@ -185,6 +189,11 @@ func (c *Config) Validate() error {
 		return ConfigError("you need to define at least one exporter: print_traces," +
 			" grafana, otel_metrics_export, otel_traces_export or prometheus_export")
 	}
+
+	if c.Enabled(FeatureNetO11y) {
+		return c.NetworkFlows.Validate(c.Attributes.Kubernetes.Enabled())
+	}
+
 	return nil
 }
 

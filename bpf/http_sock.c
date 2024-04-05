@@ -39,6 +39,33 @@ struct {
     __type(value, recv_args_t);
 } active_recv_args SEC(".maps");
 
+typedef struct send_args {
+    pid_connection_info_t p_conn;
+    u64 size;
+} send_args_t;
+
+struct {
+    __uint(type, BPF_MAP_TYPE_LRU_HASH);
+    __uint(max_entries, MAX_CONCURRENT_REQUESTS);
+    __type(key, u64); // pid_tid
+    __type(value, send_args_t); // size to be sent
+} active_send_args SEC(".maps");
+
+struct {
+    __uint(type, BPF_MAP_TYPE_LRU_HASH);
+    __uint(max_entries, MAX_CONCURRENT_REQUESTS);
+    __type(key, u64); // *sock
+    __type(value, send_args_t); // size to be sent
+} active_send_sock_args SEC(".maps");
+
+struct {
+    __uint(type, BPF_MAP_TYPE_LRU_HASH);
+    __type(key, partial_connection_info_t); // key: the connection info without the destination address, but with the tcp sequence
+    __type(value, connection_info_t);  // value: traceparent info
+    __uint(max_entries, 1024);
+    __uint(pinning, LIBBPF_PIN_BY_NAME);
+} tcp_connection_map SEC(".maps");
+
 // Used by accept to grab the sock details
 SEC("kretprobe/sock_alloc")
 int BPF_KRETPROBE(kretprobe_sock_alloc, struct socket *sock) {
@@ -215,6 +242,14 @@ cleanup:
 }
 
 // Main HTTP read and write operations are handled with tcp_sendmsg and tcp_recvmsg 
+
+// The size argument here will be always the total response size.
+// However, the return value of tcp_sendmsg tells us how much it sent. When the
+// response is large it will get chunked, so we have to use a kretprobe to
+// finish the request event, otherwise we won't get accurate timings.
+// The problem is that kretprobes can be skipped, otherwise we could always just
+// finish the request on the return of tcp_sendmsg. Therefore for any request less
+// than 1MB we just finish the request on the kprobe path.
 SEC("kprobe/tcp_sendmsg")
 int BPF_KPROBE(kprobe_tcp_sendmsg, struct sock *sk, struct msghdr *msg, size_t size) {
     u64 id = bpf_get_current_pid_tgid();
@@ -225,17 +260,26 @@ int BPF_KPROBE(kprobe_tcp_sendmsg, struct sock *sk, struct msghdr *msg, size_t s
 
     bpf_dbg_printk("=== kprobe tcp_sendmsg=%d sock=%llx size %d===", id, sk, size);
 
-    pid_connection_info_t info = {};
+    send_args_t s_args = {
+        .size = size
+    };
 
-    if (parse_sock_info(sk, &info.conn)) {
+    if (parse_sock_info(sk, &s_args.p_conn.conn)) {
         //dbg_print_http_connection_info(&info.conn); // commented out since GitHub CI doesn't like this call
-        sort_connection_info(&info.conn);
-        info.pid = pid_from_pid_tgid(id);
+        sort_connection_info(&s_args.p_conn.conn);
+        s_args.p_conn.pid = pid_from_pid_tgid(id);
 
         if (size > 0) {
             void *iovec_ptr = find_msghdr_buf(msg);
             if (iovec_ptr) {
-                handle_buf_with_connection(&info, iovec_ptr, size, 0);
+                u64 sock_p = (u64)sk;
+                bpf_map_update_elem(&active_send_args, &id, &s_args, BPF_ANY);
+                bpf_map_update_elem(&active_send_sock_args, &sock_p, &s_args, BPF_ANY);
+                handle_buf_with_connection(&s_args.p_conn, iovec_ptr, size, NO_SSL, TCP_SEND);
+                // if (size < KPROBES_LARGE_RESPONSE_LEN) {
+                //     bpf_dbg_printk("Maybe we need to finish the request");
+                //     finish_possible_delayed_http_request(&s_args.p_conn);
+                // }
             } else {
                 bpf_dbg_printk("can't find iovec ptr in msghdr, not tracking sendmsg");
             }
@@ -260,8 +304,67 @@ int BPF_KPROBE(kprobe_tcp_sendmsg, struct sock *sk, struct msghdr *msg, size_t s
             return 0;
         }
         bpf_dbg_printk("=== kprobe SSL tcp_sendmsg=%d sock=%llx ssl=%llx ===", id, sk, ssl);
-        bpf_map_update_elem(&ssl_to_conn, &ssl, &info, BPF_ANY);
+        bpf_map_update_elem(&ssl_to_conn, &ssl, &s_args.p_conn, BPF_ANY);
     }
+
+    return 0;
+}
+
+// This is really a fallback for the kprobe to ensure we send a large request if it was
+// delayed. The code under the `if (size < KPROBES_LARGE_RESPONSE_LEN) {` block should do it
+// but it's possible that the kernel sends the data in smaller chunks.
+SEC("kretprobe/tcp_sendmsg")
+int BPF_KRETPROBE(kretprobe_tcp_sendmsg, int sent_len) {
+    u64 id = bpf_get_current_pid_tgid();
+
+    if (!valid_pid(id)) {
+        return 0;
+    }
+
+    bpf_dbg_printk("=== kretprobe tcp_sendmsg=%d sent %d===", id, sent_len);
+
+    send_args_t *s_args = bpf_map_lookup_elem(&active_send_args, &id);
+    if (s_args) {
+        if (sent_len > 0) {
+            update_http_sent_len(&s_args->p_conn, sent_len);
+        } 
+        if (sent_len < MIN_HTTP_SIZE) { // Sometimes app servers don't send close, but small responses back
+            finish_possible_delayed_http_request(&s_args->p_conn);
+        }
+    }
+
+    return 0;
+}
+
+static __always_inline void ensure_sent_event(u64 id, u64 *sock_p) {
+    send_args_t *s_args = bpf_map_lookup_elem(&active_send_args, &id);
+    if (s_args) {
+        bpf_dbg_printk("Checking if we need to finish the request per thread id");
+        finish_possible_delayed_http_request(&s_args->p_conn);
+    }  // see if we match on another thread, but same sock *
+    s_args = bpf_map_lookup_elem(&active_send_sock_args, sock_p);
+    if (s_args) {
+        bpf_dbg_printk("Checking if we need to finish the request per socket");
+        finish_possible_delayed_http_request(&s_args->p_conn);
+    }
+}
+
+SEC("kprobe/tcp_close")
+int BPF_KPROBE(kprobe_tcp_close, struct sock *sk, long timeout) {
+    u64 id = bpf_get_current_pid_tgid();
+
+    if (!valid_pid(id)) {
+        return 0;
+    }
+
+    u64 sock_p = (u64)sk;
+
+    bpf_printk("=== kprobe tcp_close %d sock %llx ===", id, sk);
+
+    ensure_sent_event(id, &sock_p);
+
+    bpf_map_delete_elem(&active_send_args, &id);
+    bpf_map_delete_elem(&active_send_sock_args, &sock_p);
 
     return 0;
 }
@@ -276,6 +379,12 @@ int BPF_KPROBE(kprobe_tcp_recvmsg, struct sock *sk, struct msghdr *msg, size_t l
     }
 
     bpf_dbg_printk("=== tcp_recvmsg id=%d sock=%llx ===", id, sk);
+
+    // Make sure we don't have stale event from earlier socket connection if they are
+    // sent through the same socket. This mainly happens if the server overlays virtual
+    // threads in the runtime.
+    u64 sock_p = (u64)sk;
+    ensure_sent_event(id, &sock_p);
 
     // Important: We must work here to remember the iovec pointer, since the msghdr structure
     // can get modified in non-reversible way if the incoming packet is large and broken down in parts. 
@@ -315,7 +424,7 @@ int BPF_KRETPROBE(kretprobe_tcp_recvmsg, int copied_len) {
         sort_connection_info(&info.conn);
         //dbg_print_http_connection_info(&info.conn);
         info.pid = pid_from_pid_tgid(id);
-        handle_buf_with_connection(&info, (void *)args->iovec_ptr, copied_len, 0);
+        handle_buf_with_connection(&info, (void *)args->iovec_ptr, copied_len, NO_SSL, TCP_RECV);
     }
 
 done:
@@ -347,7 +456,7 @@ int socket__http_filter(struct __sk_buff *skb) {
     // sorting must happen here, before we check or set dups
     sort_connection_info(&conn);
     
-    // we don't want to read the whole buffer for every packed that passes our checks, we read only a bit and check if it's trully HTTP request/response.
+    // we don't want to read the whole buffer for every packed that passes our checks, we read only a bit and check if it's truly HTTP request/response.
     unsigned char buf[MIN_HTTP_SIZE] = {0};
     bpf_skb_load_bytes(skb, tcp.hdr_len, (void *)buf, sizeof(buf));
     // technically the read should be reversed, but eBPF verifier complains on read with variable length
@@ -367,9 +476,45 @@ int socket__http_filter(struct __sk_buff *skb) {
                 full_len = FULL_BUF_SIZE;
             }
             read_skb_bytes(skb, tcp.hdr_len, info.buf, full_len);
-            bpf_dbg_printk("=== http_filter len=%d %s ===", len, buf);
+            u64 cookie = bpf_get_socket_cookie(skb);
+            //bpf_dbg_printk("=== http_filter cookie = %llx, tcp_seq=%d len=%d %s ===", cookie, tcp.seq, len, buf);
             //dbg_print_http_connection_info(&conn);
             set_fallback_http_info(&info, &conn, skb->len - tcp.hdr_len);
+
+            // The code below is looking to see if we have recorded black-box trace info on 
+            // another interface. We do this for client calls, where essentially the original 
+            // request may go out on one interface, but then get re-routed to another, which is
+            // common with some k8s environments.
+            //
+            // This casting is done here to save allocating memory on a per CPU buffer, since
+            // we don't need info anymore, we reuse it's space and it's much bigger than
+            // partial_connection_info_t.
+            partial_connection_info_t *partial = (partial_connection_info_t *)(&info);
+            partial->d_port = conn.d_port;
+            partial->s_port = conn.s_port;
+            partial->tcp_seq = tcp.seq;
+            bpf_memcpy(partial->s_addr, conn.s_addr, sizeof(partial->s_addr));
+
+            tp_info_pid_t *trace_info = trace_info_for_connection(&conn);
+            if (trace_info) {
+                if (cookie) { // we have an actual socket associated
+                    bpf_map_update_elem(&tcp_connection_map, partial, &conn, BPF_ANY);
+                }
+            } else if (!cookie) { // no actual socket for this skb, relayed to another interface
+                connection_info_t *prev_conn = bpf_map_lookup_elem(&tcp_connection_map, partial);
+
+                if (prev_conn) {
+                    tp_info_pid_t *trace_info = trace_info_for_connection(prev_conn);
+                    if (trace_info) {
+                        if (current_immediate_epoch(trace_info->tp.ts) == current_immediate_epoch(bpf_ktime_get_ns())) {
+                            //bpf_dbg_printk("Found trace info on another interface, setting it up for this connection");
+                            tp_info_pid_t other_info = {0};
+                            bpf_memcpy(&other_info, trace_info, sizeof(tp_info_pid_t));
+                            bpf_map_update_elem(&trace_map, &conn, &other_info, BPF_ANY);
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -416,6 +561,14 @@ int BPF_KPROBE(kprobe_sys_exit, int status) {
     task_tid(&task);
 
     bpf_dbg_printk("sys_exit %d, pid=%d, valid_pid(id)=%d", id, pid_from_pid_tgid(id), valid_pid(id));
+ 
+    // handle the case when the thread terminates without closing a socket
+    send_args_t *s_args = bpf_map_lookup_elem(&active_send_args, &id);
+    if (s_args) {
+        bpf_dbg_printk("Checking if we need to finish the request per thread id");
+        finish_possible_delayed_http_request(&s_args->p_conn);
+    }
+
     bpf_map_delete_elem(&clone_map, &task);
     bpf_map_delete_elem(&server_traces, &task);
     

@@ -8,6 +8,8 @@ import (
 
 	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
 	"github.com/grafana/beyla/pkg/internal/netolly/export"
+	"github.com/grafana/beyla/pkg/internal/netolly/export/otel"
+	"github.com/grafana/beyla/pkg/internal/netolly/export/prom"
 	"github.com/grafana/beyla/pkg/internal/netolly/flow"
 	"github.com/grafana/beyla/pkg/internal/netolly/transform/cidr"
 	"github.com/grafana/beyla/pkg/internal/netolly/transform/k8s"
@@ -15,7 +17,6 @@ import (
 
 // FlowsPipeline defines the different nodes in the Beyla's NetO11y module,
 // as well as how they are interconnected
-// TODO: add flow_printer node
 type FlowsPipeline struct {
 	MapTracer     `sendTo:"Deduper"`
 	RingBufTracer `sendTo:"Deduper"`
@@ -24,10 +25,11 @@ type FlowsPipeline struct {
 	Kubernetes k8s.MetadataDecorator `forwardTo:"ReverseDNS"`
 	ReverseDNS flow.ReverseDNS       `forwardTo:"CIDRs"`
 	CIDRs      cidr.Definitions      `forwardTo:"Decorator"`
-	Decorator  `sendTo:"Exporter,Printer"`
+	Decorator  `sendTo:"OTEL,Prom,Printer"`
 
-	Exporter export.MetricsConfig
-	Printer  export.FlowPrinterEnabled
+	OTEL    otel.MetricsConfig
+	Prom    prom.PrometheusConfig
+	Printer export.FlowPrinterEnabled
 }
 
 type MapTracer struct{}
@@ -75,7 +77,10 @@ func (f *Flows) buildAndStartPipeline(ctx context.Context) (graph.Graph, error) 
 	graph.RegisterMiddle(gb, flow.ReverseDNSProvider)
 
 	// Terminal nodes export the flow record information out of the pipeline: OTEL and printer
-	graph.RegisterTerminal(gb, export.MetricsExporterProvider)
+	graph.RegisterTerminal(gb, otel.MetricsExporterProvider)
+	graph.RegisterTerminal(gb, func(cfg prom.PrometheusConfig) (node.TerminalFunc[[]*ebpf.Record], error) {
+		return prom.PrometheusEndpoint(ctx, &cfg, f.ctxInfo.Prometheus)
+	})
 	graph.RegisterTerminal(gb, export.FlowPrinterProvider)
 
 	var deduperExpireTime = f.cfg.NetworkFlows.DeduperFCExpiry
@@ -91,8 +96,12 @@ func (f *Flows) buildAndStartPipeline(ctx context.Context) (graph.Graph, error) 
 		// TODO: allow prometheus exporting
 		ReverseDNS: f.cfg.NetworkFlows.ReverseDNS,
 		CIDRs:      f.cfg.NetworkFlows.CIDRs,
-		Exporter: export.MetricsConfig{
+		OTEL: otel.MetricsConfig{
 			Metrics:           &f.cfg.Metrics,
+			AllowedAttributes: f.cfg.NetworkFlows.AllowedAttributes,
+		},
+		Prom: prom.PrometheusConfig{
+			Config:            &f.cfg.Prometheus,
 			AllowedAttributes: f.cfg.NetworkFlows.AllowedAttributes,
 		},
 		Printer: export.FlowPrinterEnabled(f.cfg.NetworkFlows.Print),

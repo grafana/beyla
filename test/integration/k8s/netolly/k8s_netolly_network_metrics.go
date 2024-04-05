@@ -7,40 +7,26 @@ import (
 	"net"
 	"regexp"
 	"testing"
+	"time"
 
 	"github.com/mariomac/guara/pkg/test"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"sigs.k8s.io/e2e-framework/pkg/envconf"
-	"sigs.k8s.io/e2e-framework/pkg/features"
 
-	"github.com/grafana/beyla/test/integration/components/kube"
 	"github.com/grafana/beyla/test/integration/components/prom"
-	k8s "github.com/grafana/beyla/test/integration/k8s/common"
+)
+
+const (
+	testTimeout        = 3 * time.Minute
+	prometheusHostPort = "localhost:39090"
 )
 
 // values according to official Kind documentation: https://kind.sigs.k8s.io/docs/user/configuration/#pod-subnet
 var podSubnets = []string{"10.244.0.0/16", "fd00:10:244::/56"}
 var svcSubnets = []string{"10.96.0.0/16", "fd00:10:96::/112"}
 
-func TestNetworkFlowBytes(t *testing.T) {
-	pinger := kube.Template[k8s.Pinger]{
-		TemplateFile: k8s.UninstrumentedPingerManifest,
-		Data: k8s.Pinger{
-			PodName:   "internal-pinger",
-			TargetURL: "http://testserver:8080/iping",
-		},
-	}
-	cluster.TestEnv().Test(t, features.New("network flow bytes").
-		Setup(pinger.Deploy()).
-		Teardown(pinger.Delete()).
-		Assess("catches network metrics between connected pods", testNetFlowBytesForExistingConnections).
-		Assess("catches external traffic", testNetFlowBytesForExternalTraffic).
-		Feature(),
-	)
-}
-
-func testNetFlowBytesForExistingConnections(ctx context.Context, t *testing.T, _ *envconf.Config) context.Context {
+func DoTestNetFlowBytesForExistingConnections(ctx context.Context, t *testing.T, _ *envconf.Config) context.Context {
 	pq := prom.Client{HostPort: prometheusHostPort}
 
 	// testing request flows (to testserver as Service)
@@ -54,8 +40,6 @@ func testNetFlowBytesForExistingConnections(ctx context.Context, t *testing.T, _
 		metric := results[0].Metric
 		assertIsIP(t, metric["src_address"])
 		assertIsIP(t, metric["dst_address"])
-		assert.Equal(t, "default", metric["src_namespace"])
-		assert.Equal(t, "default", metric["dst_namespace"])
 		assert.Equal(t, "beyla-network-flows", metric["job"])
 		assert.Equal(t, "my-kube", metric["k8s_cluster_name"])
 		assert.Equal(t, "default", metric["k8s_src_namespace"])
@@ -63,8 +47,8 @@ func testNetFlowBytesForExistingConnections(ctx context.Context, t *testing.T, _
 		assert.Equal(t, "Pod", metric["k8s_src_owner_type"])
 		assert.Equal(t, "Pod", metric["k8s_src_type"])
 		assert.Equal(t, "test-kind-cluster-netolly-control-plane",
-			metric["k8s_src_host_name"])
-		assertIsIP(t, metric["k8s_src_host_ip"])
+			metric["k8s_src_node_name"])
+		assertIsIP(t, metric["k8s_src_node_ip"])
 		assert.Equal(t, "default", metric["k8s_dst_namespace"])
 		assert.Equal(t, "testserver", metric["k8s_dst_name"])
 		assert.Equal(t, "Service", metric["k8s_dst_owner_type"])
@@ -84,24 +68,22 @@ func testNetFlowBytesForExistingConnections(ctx context.Context, t *testing.T, _
 		metric := results[0].Metric
 		assertIsIP(t, metric["src_address"])
 		assertIsIP(t, metric["dst_address"])
-		assert.Equal(t, "default", metric["src_namespace"])
-		assert.Equal(t, "default", metric["dst_namespace"])
 		assert.Equal(t, "beyla-network-flows", metric["job"])
 		assert.Equal(t, "default", metric["k8s_src_namespace"])
 		assert.Equal(t, "internal-pinger", metric["k8s_src_name"])
 		assert.Equal(t, "Pod", metric["k8s_src_owner_type"])
 		assert.Equal(t, "Pod", metric["k8s_src_type"])
 		assert.Equal(t, "test-kind-cluster-netolly-control-plane",
-			metric["k8s_src_host_name"])
-		assertIsIP(t, metric["k8s_src_host_ip"])
+			metric["k8s_src_node_name"])
+		assertIsIP(t, metric["k8s_src_node_ip"])
 		assert.Equal(t, "default", metric["k8s_dst_namespace"])
 		assert.Regexp(t, regexp.MustCompile("^testserver-"), metric["k8s_dst_name"])
 		assert.Equal(t, "Deployment", metric["k8s_dst_owner_type"])
 		assert.Equal(t, "testserver", metric["k8s_dst_owner_name"])
 		assert.Equal(t, "Pod", metric["k8s_dst_type"])
 		assert.Equal(t, "test-kind-cluster-netolly-control-plane",
-			metric["k8s_dst_host_name"])
-		assertIsIP(t, metric["k8s_dst_host_ip"])
+			metric["k8s_dst_node_name"])
+		assertIsIP(t, metric["k8s_dst_node_ip"])
 		assert.Contains(t, podSubnets, metric["src_cidr"], metric)
 		assert.Contains(t, podSubnets, metric["dst_cidr"], metric)
 	})
@@ -117,21 +99,19 @@ func testNetFlowBytesForExistingConnections(ctx context.Context, t *testing.T, _
 		metric := results[0].Metric
 		assertIsIP(t, metric["src_address"])
 		assertIsIP(t, metric["dst_address"])
-		assert.Equal(t, "default", metric["src_namespace"])
-		assert.Equal(t, "default", metric["dst_namespace"])
 		assert.Equal(t, "beyla-network-flows", metric["job"])
 		assert.Equal(t, "default", metric["k8s_src_namespace"])
 		assert.Regexp(t, regexp.MustCompile("^testserver-"), metric["k8s_src_name"])
 		assert.Equal(t, "Deployment", metric["k8s_src_owner_type"])
 		assert.Equal(t, "Pod", metric["k8s_src_type"])
-		assert.Equal(t, "test-kind-cluster-netolly-control-plane", metric["k8s_src_host_name"])
-		assertIsIP(t, metric["k8s_src_host_ip"])
+		assert.Equal(t, "test-kind-cluster-netolly-control-plane", metric["k8s_src_node_name"])
+		assertIsIP(t, metric["k8s_src_node_ip"])
 		assert.Equal(t, "default", metric["k8s_dst_namespace"])
 		assert.Equal(t, "internal-pinger", metric["k8s_dst_name"])
 		assert.Equal(t, "Pod", metric["k8s_dst_owner_type"])
 		assert.Equal(t, "Pod", metric["k8s_dst_type"])
-		assert.Equal(t, "test-kind-cluster-netolly-control-plane", metric["k8s_dst_host_name"])
-		assertIsIP(t, metric["k8s_dst_host_ip"])
+		assert.Equal(t, "test-kind-cluster-netolly-control-plane", metric["k8s_dst_node_name"])
+		assertIsIP(t, metric["k8s_dst_node_ip"])
 		assert.Contains(t, podSubnets, metric["src_cidr"], metric)
 		assert.Contains(t, podSubnets, metric["dst_cidr"], metric)
 	})
@@ -147,8 +127,6 @@ func testNetFlowBytesForExistingConnections(ctx context.Context, t *testing.T, _
 		metric := results[0].Metric
 		assertIsIP(t, metric["src_address"])
 		assertIsIP(t, metric["dst_address"])
-		assert.Equal(t, "default", metric["src_namespace"])
-		assert.Equal(t, "default", metric["dst_namespace"])
 		assert.Equal(t, "beyla-network-flows", metric["job"])
 		assert.Equal(t, "default", metric["k8s_src_namespace"])
 		assert.Equal(t, "testserver", metric["k8s_src_name"])
@@ -159,8 +137,8 @@ func testNetFlowBytesForExistingConnections(ctx context.Context, t *testing.T, _
 		assert.Equal(t, "internal-pinger", metric["k8s_dst_name"])
 		assert.Equal(t, "Pod", metric["k8s_dst_owner_type"])
 		assert.Equal(t, "Pod", metric["k8s_dst_type"])
-		assert.Equal(t, "test-kind-cluster-netolly-control-plane", metric["k8s_dst_host_name"])
-		assertIsIP(t, metric["k8s_dst_host_ip"])
+		assert.Equal(t, "test-kind-cluster-netolly-control-plane", metric["k8s_dst_node_name"])
+		assertIsIP(t, metric["k8s_dst_node_ip"])
 		assert.Contains(t, svcSubnets, metric["src_cidr"], metric)
 		assert.Contains(t, podSubnets, metric["dst_cidr"], metric)
 	})

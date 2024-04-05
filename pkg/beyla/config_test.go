@@ -17,7 +17,7 @@ import (
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/netolly/transform/cidr"
 	"github.com/grafana/beyla/pkg/internal/traces"
-	"github.com/grafana/beyla/pkg/internal/transform"
+	"github.com/grafana/beyla/pkg/transform"
 )
 
 func TestConfig_Overrides(t *testing.T) {
@@ -32,6 +32,7 @@ otel_metrics_export:
     duration_histogram: [0, 1, 2]
   histogram_aggregation: base2_exponential_bucket_histogram
 prometheus_export:
+  expire_time: 1s
   buckets:
     request_size_histogram: [0, 10, 20, 22]
 attributes:
@@ -109,6 +110,7 @@ network:
 				DurationHistogram:    []float64{0, 1, 2},
 				RequestSizeHistogram: otel.DefaultBuckets.RequestSizeHistogram,
 			},
+			Features:             []string{"network", "application"},
 			HistogramAggregation: "base2_exponential_bucket_histogram",
 		},
 		Traces: otel.TracesConfig{
@@ -120,7 +122,9 @@ network:
 			ReportersCacheLen:  ReporterLRUSize,
 		},
 		Prometheus: prom.PrometheusConfig{
-			Path: "/metrics",
+			Path:       "/metrics",
+			Features:   []string{otel.FeatureNetwork, otel.FeatureApplication},
+			ExpireTime: time.Second,
 			Buckets: otel.Buckets{
 				DurationHistogram:    otel.DefaultBuckets.DurationHistogram,
 				RequestSizeHistogram: []float64{0, 10, 20, 22},
@@ -216,6 +220,52 @@ discovery:
 			require.Error(t, cfg.Validate())
 		})
 	}
+}
+
+func TestConfigValidate_Network_Kube(t *testing.T) {
+	userConfig := bytes.NewBufferString(`
+otel_metrics_export:
+  endpoint: http://otelcol:4318
+attributes:
+  kubernetes:
+    enable: true
+network:
+  enable: true
+  allowed_attributes:
+    - k8s.src.name
+    - k8s.dst.name
+`)
+	cfg, err := LoadConfig(userConfig)
+	require.NoError(t, err)
+	require.NoError(t, cfg.Validate())
+}
+
+func TestConfigValidate_Network_Empty_Attrs(t *testing.T) {
+	userConfig := bytes.NewBufferString(`
+otel_metrics_export:
+  endpoint: http://otelcol:4318
+network:
+  enable: true
+  allowed_attributes: []
+`)
+	cfg, err := LoadConfig(userConfig)
+	require.NoError(t, err)
+	require.Error(t, cfg.Validate())
+}
+
+func TestConfigValidate_Network_NotKube(t *testing.T) {
+	userConfig := bytes.NewBufferString(`
+otel_metrics_export:
+  endpoint: http://otelcol:4318
+network:
+  enable: true
+allowed_attributes:
+    - k8s.src.name
+    - k8s.dst.name
+`)
+	cfg, err := LoadConfig(userConfig)
+	require.NoError(t, err)
+	require.Error(t, cfg.Validate())
 }
 
 func loadConfig(t *testing.T, env map[string]string) *Config {

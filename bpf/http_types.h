@@ -12,6 +12,8 @@
 #define KPROBES_HTTP2_BUF_SIZE 256
 #define KPROBES_HTTP2_RET_BUF_SIZE 64
 
+#define KPROBES_LARGE_RESPONSE_LEN 100000 // 100K and above we try to track the response actual time with kretprobes
+
 #define CONN_INFO_FLAG_TRACE 0x1
 
 #define TRACE_ID_SIZE_BYTES 16
@@ -23,6 +25,12 @@
 #define TP_MAX_VAL_LENGTH   55
 #define TP_MAX_KEY_LENGTH   11
 
+#define TCP_SEND 1
+#define TCP_RECV 0
+
+#define NO_SSL 0
+#define WITH_SSL 1
+
 // Struct to keep information on the connections in flight 
 // s = source, d = destination
 // h = high word, l = low word
@@ -33,6 +41,13 @@ typedef struct http_connection_info {
     u16 s_port;
     u16 d_port;
 } connection_info_t;
+
+typedef struct http_partial_connection_info {
+    u8  s_addr[IP_V6_ADDR_LEN];
+    u16 s_port;
+    u16 d_port;
+    u32 tcp_seq;
+} partial_connection_info_t;
 
 typedef struct http_pid_connection_info {
     connection_info_t conn;

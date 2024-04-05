@@ -19,23 +19,23 @@ entities:
       - query: |
           group by (asserts_env, asserts_site, k8s_dst_namespace, k8s_dst_owner_name) (beyla_network_flow_bytes_total{k8s_dst_owner_type=~"Pod|Deployment|Node|DaemonSet|ReplicaSet|StatefulSet"})
   - type: Node
-    name: k8s_src_host_name
+    name: k8s_src_node_name
     scope:
-      namespace: k8s_src_host_name
+      namespace: k8s_src_node_name
       env: asserts_env
       site: asserts_site
     definedBy:
       - query: |
-          group by (asserts_env, asserts_site, k8s_src_host_name) (beyla_network_flow_bytes_total{k8s_src_type=~"Pod|Node"})
+          group by (asserts_env, asserts_site, k8s_src_node_name) (beyla_network_flow_bytes_total{k8s_src_type=~"Pod|Node"})
   - type: Node
-    name: k8s_dst_host_name
+    name: k8s_dst_node_name
     scope:
-      namespace: k8s_dst_host_name
+      namespace: k8s_dst_node_name
       env: asserts_env
       site: asserts_site
     definedBy:
       - query: |
-          group by (asserts_env, asserts_site, k8s_dst_host_name) (beyla_network_flow_bytes_total{k8s_dst_type=~"Pod|Node"})
+          group by (asserts_env, asserts_site, k8s_dst_node_name) (beyla_network_flow_bytes_total{k8s_dst_type=~"Pod|Node"})
   - type: Namespace
     name: k8s_src_namespace
     scope:
@@ -132,17 +132,17 @@ relations:
     endEntityType: Node
     definedBy: !<METRICS>
       pattern: |
-        group by (asserts_env, asserts_site, k8s_src_host_name, k8s_dst_host_name) (
+        group by (asserts_env, asserts_site, k8s_src_node_name, k8s_dst_node_name) (
             rate(beyla_network_flow_bytes_total{k8s_src_type=~"Pod|Node",k8s_dst_type=~"Pod|Node"}[1m])
         )
       startEntityMatchers:
-        name: k8s_src_host_name
-        namespace: k8s_src_host_name
+        name: k8s_src_node_name
+        namespace: k8s_src_node_name
         env: asserts_env
         site: asserts_site
       endEntityMatchers:
-        name: k8s_dst_host_name
-        namespace: k8s_dst_host_name
+        name: k8s_dst_node_name
+        namespace: k8s_dst_node_name
         env: asserts_env
         site: asserts_site
   - type: ROUTES

@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/url"
 	"os"
+	"slices"
 	"strings"
 	"time"
 
@@ -42,6 +43,9 @@ const (
 
 	AggregationExplicit    = "explicit_bucket_histogram"
 	AggregationExponential = "base2_exponential_bucket_histogram"
+
+	FeatureNetwork     = "network"
+	FeatureApplication = "application"
 )
 
 type MetricsConfig struct {
@@ -70,6 +74,9 @@ type MetricsConfig struct {
 	// SDKLogLevel works independently from the global LogLevel because it prints GBs of logs in Debug mode
 	// and the Info messages leak internal details that are not usually valuable for the final user.
 	SDKLogLevel string `yaml:"otel_sdk_log_level" env:"BEYLA_OTEL_SDK_LOG_LEVEL"`
+
+	// Features of metrics that are can be exported. Accepted values are "application" and "network".
+	Features []string `yaml:"features" env:"BEYLA_OTEL_METRIC_FEATURES" envSeparator:","`
 
 	// Grafana configuration needs to be explicitly set up before building the graph
 	Grafana *GrafanaOTLP `yaml:"-"`
@@ -101,14 +108,18 @@ func (m *MetricsConfig) GuessProtocol() Protocol {
 	return ProtocolHTTPProtobuf
 }
 
-// Enabled specifies that the OTEL metrics node is enabled if and only if
+// EndpointEnabled specifies that the OTEL metrics node is enabled if and only if
 // either the OTEL endpoint and OTEL metrics endpoint is defined.
 // If not enabled, this node won't be instantiated
 // Reason to disable linting: it requires to be a value despite it is considered a "heavy struct".
 // This method is invoked only once during startup time so it doesn't have a noticeable performance impact.
 // nolint:gocritic
-func (m MetricsConfig) Enabled() bool {
+func (m MetricsConfig) EndpointEnabled() bool {
 	return m.CommonEndpoint != "" || m.MetricsEndpoint != "" || m.Grafana.MetricsEnabled()
+}
+
+func (m MetricsConfig) Enabled() bool {
+	return m.EndpointEnabled() && slices.Contains(m.Features, FeatureApplication)
 }
 
 // MetricsReporter implements the graph node that receives request.Span
@@ -177,7 +188,7 @@ func (mr *MetricsReporter) newMetricSet(service svc.ID) (*Metrics, error) {
 	mlog := mlog().With("service", service)
 	mlog.Debug("creating new Metrics reporter")
 	useExponentialHistograms := isExponentialAggregation(mr.cfg, mlog)
-	resources := otelResource(service)
+	resources := Resource(service)
 	m := Metrics{
 		ctx: mr.ctx,
 		provider: metric.NewMeterProvider(

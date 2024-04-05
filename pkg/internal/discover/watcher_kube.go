@@ -300,6 +300,7 @@ func withMetadata(pp processAttrs, info *kube.PodInfo) processAttrs {
 		services.AttrNamespace: info.Namespace,
 		services.AttrPodName:   info.Name,
 	}
+	ret.podLabels = info.Labels
 	owner := info.Owner
 	for owner != nil {
 		ret.metadata[services.AttrOwnerName] = owner.Name

@@ -49,6 +49,7 @@ type processAttrs struct {
 	pid       PID
 	openPorts []uint32
 	metadata  map[string]string
+	podLabels map[string]string
 }
 
 func wplog() *slog.Logger {

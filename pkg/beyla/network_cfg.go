@@ -19,6 +19,9 @@
 package beyla
 
 import (
+	"errors"
+	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/grafana/beyla/pkg/internal/netolly/flow"
@@ -26,7 +29,7 @@ import (
 )
 
 type NetworkConfig struct {
-	// Enable network observability.
+	// Enable network metrics.
 	// Default value is false (disabled)
 	Enable bool `yaml:"enable" env:"BEYLA_NETWORK_METRICS"`
 
@@ -109,7 +112,7 @@ type NetworkConfig struct {
 	// If an IP matches multiple CIDR definitions, the flow will be decorated with the
 	// narrowest CIDR. By this reason, you can safely add a 0.0.0.0/0 entry to group there
 	// all the traffic that does not match any of the other CIDRs.
-	CIDRs cidr.Definitions `yaml:"cidrs" env:"BEYLA_NETWORK_GROUP_CIDRS" envSeparator:","`
+	CIDRs cidr.Definitions `yaml:"cidrs" env:"BEYLA_NETWORK_CIDRS" envSeparator:","`
 }
 
 var defaultNetworkConfig = NetworkConfig{
@@ -122,9 +125,41 @@ var defaultNetworkConfig = NetworkConfig{
 	Direction:          "both",
 	ListenInterfaces:   "watch",
 	ListenPollPeriod:   10 * time.Second,
+	AllowedAttributes: []string{
+		"k8s.src.owner.name",
+		"k8s.src.namespace",
+		"k8s.dst.owner.name",
+		"k8s.dst.namespace",
+		"k8s.cluster.name",
+	},
 	ReverseDNS: flow.ReverseDNS{
 		Type:     flow.ReverseDNSNone,
 		CacheLen: 256,
 		CacheTTL: time.Hour,
 	},
+}
+
+func (nc *NetworkConfig) Validate(isKubeEnabled bool) error {
+	if len(nc.AllowedAttributes) == 0 {
+		return errors.New("you must define some attributes in the allowed_attributes section. Please ceck documentation")
+	}
+	if isKubeEnabled {
+		return nil
+	}
+
+	actualAllowed := 0
+	for _, attr := range nc.AllowedAttributes {
+		if !strings.HasPrefix(attr, "k8s.") {
+			actualAllowed++
+		}
+	}
+	if actualAllowed == 0 {
+		return errors.New("allowed_attributes section (or its default) is only allowing Kubernetes metric attributes. " +
+			" You must define non-Kubernetes attributes there, or set BEYLA_KUBE_METADATA_ENABLE to true. Please check documentation")
+	}
+	if actualAllowed < len(nc.AllowedAttributes) {
+		slog.Warn("Network configuration allowed_attributes section is defining some Kubernetes attributes but " +
+			" Kubernetes metadata is disabled. Maybe you forgot to set BEYLA_KUBE_METADATA_ENABLE to true?")
+	}
+	return nil
 }

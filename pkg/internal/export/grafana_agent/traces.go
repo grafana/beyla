@@ -3,7 +3,6 @@ package grafanaagent
 import (
 	"context"
 	"log/slog"
-	"time"
 
 	"github.com/mariomac/pipes/pkg/node"
 	"go.opentelemetry.io/collector/pdata/pcommon"
@@ -26,16 +25,9 @@ func TracesReceiver(ctx context.Context, cfg beyla.TracesReceiverConfig) (node.T
 					continue
 				}
 
-				t := span.Timings()
-				parentCtx := otel.HandleTraceparent(ctx, span)
-				realStart := otel.SpanStartTime(t)
-				hasSubSpans := t.Start.After(realStart)
-				if !hasSubSpans {
-					// We set the eBPF calculated trace_id and span_id to be the main span
-					parentCtx = otel.ContextWithTraceParent(parentCtx, span.TraceID, span.SpanID)
-				}
 				for _, tc := range cfg.Traces {
-					err := tc.ConsumeTraces(parentCtx, generateTraces(span, t, realStart, hasSubSpans))
+					traces := generateTraces(span)
+					err := tc.ConsumeTraces(ctx, traces)
 					if err != nil {
 						slog.Error("error sending trace to consumer", "error", err)
 					}
@@ -45,21 +37,42 @@ func TracesReceiver(ctx context.Context, cfg beyla.TracesReceiverConfig) (node.T
 	}, nil
 }
 
-// generateTraces creates a pdata.Traces from a request.Span
-func generateTraces(span *request.Span, t request.Timings, start time.Time, hasSubSpans bool) ptrace.Traces {
+// generateTraces creates a ptrace.Traces from a request.Span
+func generateTraces(span *request.Span) ptrace.Traces {
+	t := span.Timings()
+	start := otel.SpanStartTime(t)
+	hasSubSpans := t.Start.After(start)
 	traces := ptrace.NewTraces()
 	rs := traces.ResourceSpans().AppendEmpty()
 	ss := rs.ScopeSpans().AppendEmpty()
+	resourceAttrs := attrsToMap(otel.Resource(span.ServiceID).Attributes())
+	resourceAttrs.CopyTo(rs.Resource().Attributes())
 
-	if hasSubSpans {
-		createSubSpans(&ss, t)
+	traceID := pcommon.TraceID(span.TraceID)
+	spanID := pcommon.SpanID(otel.RandomSpanID())
+	if traceID.IsEmpty() {
+		traceID = pcommon.TraceID(otel.RandomTraceID())
 	}
 
+	if hasSubSpans {
+		createSubSpans(span, spanID, traceID, &ss, t)
+	} else {
+		if span.SpanID.IsValid() {
+			spanID = pcommon.SpanID(span.SpanID)
+		}
+	}
 	// Create a parent span for the whole request session
 	s := ss.Spans().AppendEmpty()
 	s.SetName(otel.TraceName(span))
 	s.SetKind(ptrace.SpanKind(otel.SpanKind(span)))
 	s.SetStartTimestamp(pcommon.NewTimestampFromTime(start))
+
+	// Set trace and span IDs
+	s.SetSpanID(spanID)
+	s.SetTraceID(traceID)
+	if span.ParentSpanID.IsValid() {
+		s.SetParentSpanID(pcommon.SpanID(span.ParentSpanID))
+	}
 
 	// Set span attributes
 	attrs := otel.TraceAttributes(span)
@@ -74,22 +87,30 @@ func generateTraces(span *request.Span, t request.Timings, start time.Time, hasS
 }
 
 // createSubSpans creates the internal spans for a request.Span
-func createSubSpans(ss *ptrace.ScopeSpans, t request.Timings) {
+func createSubSpans(span *request.Span, parentSpanID pcommon.SpanID, traceID pcommon.TraceID, ss *ptrace.ScopeSpans, t request.Timings) {
 	// Create a child span showing the queue time
 	spQ := ss.Spans().AppendEmpty()
 	spQ.SetName("in queue")
 	spQ.SetStartTimestamp(pcommon.NewTimestampFromTime(t.RequestStart))
 	spQ.SetKind(ptrace.SpanKindInternal)
 	spQ.SetEndTimestamp(pcommon.NewTimestampFromTime(t.Start))
+	spQ.SetTraceID(traceID)
+	spQ.SetSpanID(pcommon.SpanID(otel.RandomSpanID()))
+	spQ.SetParentSpanID(parentSpanID)
 
 	// Create a child span showing the processing time
-	// Override the active context for the span to be the processing span
-	// The trace_id and span_id from eBPF are attached here
 	spP := ss.Spans().AppendEmpty()
 	spP.SetName("processing")
 	spP.SetStartTimestamp(pcommon.NewTimestampFromTime(t.Start))
 	spP.SetKind(ptrace.SpanKindInternal)
 	spP.SetEndTimestamp(pcommon.NewTimestampFromTime(t.End))
+	spP.SetTraceID(traceID)
+	if span.SpanID.IsValid() {
+		spP.SetSpanID(pcommon.SpanID(span.SpanID))
+	} else {
+		spP.SetSpanID(pcommon.SpanID(otel.RandomSpanID()))
+	}
+	spP.SetParentSpanID(parentSpanID)
 }
 
 // attrsToMap converts a slice of attribute.KeyValue to a pcommon.Map

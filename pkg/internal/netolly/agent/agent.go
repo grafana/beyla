@@ -152,6 +152,7 @@ func FlowsAgent(ctxInfo *global.ContextInfo, cfg *beyla.Config) (*Flows, error) 
 	var fetcher ebpfFlowFetcher
 
 	if cfg.NetworkFlows.WithoutTC {
+		alog.Info("using socket filter instead of kernel Traffic Control for collecting network events")
 		fetcher, err = ebpf.NewSockFlowFetcher(cfg.NetworkFlows.Sampling, cfg.NetworkFlows.CacheMaxFlows)
 		if err != nil {
 			return nil, err

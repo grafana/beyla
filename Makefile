@@ -93,7 +93,7 @@ endef
 prereqs:
 	@echo "### Check if prerequisites are met, and installing missing dependencies"
 	mkdir -p $(TEST_OUTPUT)/run
-	$(call go-install-tool,$(GOLANGCI_LINT),github.com/golangci/golangci-lint/cmd/golangci-lint@v1.54.2)
+	$(call go-install-tool,$(GOLANGCI_LINT),github.com/golangci/golangci-lint/cmd/golangci-lint@v1.57.2)
 	$(call go-install-tool,$(BPF2GO),github.com/cilium/ebpf/cmd/bpf2go@$(call gomod-version,cilium/ebpf))
 	$(call go-install-tool,$(GO_OFFSETS_TRACKER),github.com/grafana/go-offsets-tracker/cmd/go-offsets-tracker@$(call gomod-version,grafana/go-offsets-tracker))
 	$(call go-install-tool,$(GOIMPORTS_REVISER),github.com/incu6us/goimports-reviser/v3@v3.4.5)

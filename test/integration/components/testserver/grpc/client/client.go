@@ -65,6 +65,7 @@ func printFeature(client pb.RouteGuideClient, point *pb.Point) {
 	feature, err := client.GetFeature(ctx, point)
 	if err != nil {
 		logs.Error("client.GetFeature failed", err)
+		// nolint:gocritic
 		os.Exit(-1)
 	}
 	if slog.Default().Enabled(context.TODO(), slog.LevelDebug) {
@@ -146,6 +147,7 @@ func printFeatures(client pb.RouteGuideClient, rect *pb.Rectangle) {
 	stream, err := client.ListFeatures(ctx, rect)
 	if err != nil {
 		slog.Error("client.ListFeatures failed", err)
+		// nolint:gocritic
 		os.Exit(-1)
 	}
 	for {

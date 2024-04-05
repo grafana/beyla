@@ -33,7 +33,7 @@ func TestTracesDecoration(t *testing.T) {
 		Setup(pinger.Deploy()).
 		Teardown(pinger.Delete()).
 		Assess("all the traces are properly decorated",
-			func(ctx context.Context, t *testing.T, config *envconf.Config) context.Context {
+			func(ctx context.Context, t *testing.T, _ *envconf.Config) context.Context {
 				var trace jaeger.Trace
 				var parent jaeger.Span
 				test.Eventually(t, testTimeout, func(t require.TestingT) {

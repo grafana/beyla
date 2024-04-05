@@ -24,7 +24,7 @@ import (
 func TestPythonBasicTracing(t *testing.T) {
 	feat := features.New("Beyla is able to instrument an arbitrary process").
 		Assess("it sends traces for that service",
-			func(ctx context.Context, t *testing.T, config *envconf.Config) context.Context {
+			func(ctx context.Context, t *testing.T, _ *envconf.Config) context.Context {
 				var trace jaeger.Trace
 				test.Eventually(t, testTimeout, func(t require.TestingT) {
 					resp, err := http.Get("http://localhost:38083/greeting")

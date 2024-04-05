@@ -56,11 +56,10 @@ func generateTraces(span *request.Span) ptrace.Traces {
 
 	if hasSubSpans {
 		createSubSpans(span, spanID, traceID, &ss, t)
-	} else {
-		if span.SpanID.IsValid() {
-			spanID = pcommon.SpanID(span.SpanID)
-		}
+	} else if span.SpanID.IsValid() {
+		spanID = pcommon.SpanID(span.SpanID)
 	}
+
 	// Create a parent span for the whole request session
 	s := ss.Spans().AppendEmpty()
 	s.SetName(otel.TraceName(span))

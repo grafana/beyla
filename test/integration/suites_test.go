@@ -510,14 +510,16 @@ func KernelLockdownMode() bool {
 		scanner := bufio.NewScanner(f)
 		if scanner.Scan() {
 			lockdown := scanner.Text()
-			if strings.Contains(lockdown, "[none]") {
+			switch {
+			case strings.Contains(lockdown, "[none]"):
 				return false
-			} else if strings.Contains(lockdown, "[integrity]") {
+			case strings.Contains(lockdown, "[integrity]"):
 				return true
-			} else if strings.Contains(lockdown, "[confidentiality]") {
+			case strings.Contains(lockdown, "[confidentiality]"):
+				return true
+			default:
 				return true
 			}
-			return true
 		}
 
 		return true

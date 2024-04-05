@@ -143,7 +143,7 @@ func FeatureGRPCMetricsDecoration() features.Feature {
 func testMetricsDecoration(
 	metricsSet []string, queryArgs string, expectedLabels map[string]string, expectedMissingLabels ...string,
 ) features.Func {
-	return func(ctx context.Context, t *testing.T, config *envconf.Config) context.Context {
+	return func(ctx context.Context, t *testing.T, _ *envconf.Config) context.Context {
 		// Testing the decoration of the server-side HTTP calls from the internal-pinger pod
 		pq := prom.Client{HostPort: prometheusHostPort}
 		for _, metric := range metricsSet {

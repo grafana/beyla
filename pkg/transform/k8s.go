@@ -69,7 +69,7 @@ func (d KubernetesDecorator) Enabled() bool {
 func KubeDecoratorProvider(
 	ctxInfo *global.ContextInfo,
 ) stage.MiddleProvider[KubernetesDecorator, []request.Span, []request.Span] {
-	return func(cfg KubernetesDecorator) (node.MiddleFunc[[]request.Span, []request.Span], error) {
+	return func(_ KubernetesDecorator) (node.MiddleFunc[[]request.Span, []request.Span], error) {
 		decorator := &metadataDecorator{db: ctxInfo.AppO11y.K8sDatabase}
 		return decorator.nodeLoop, nil
 	}

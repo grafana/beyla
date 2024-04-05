@@ -113,7 +113,7 @@ func printVerifierErrorInfo(err error) {
 }
 
 // Noop because socket filters don't require special registration for different network interfaces
-func (m *SockFlowFetcher) Register(iface ifaces.Interface) error {
+func (m *SockFlowFetcher) Register(_ ifaces.Interface) error {
 	return nil
 }
 

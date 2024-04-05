@@ -97,31 +97,31 @@ func (pt *ProcessTracer) tracers() ([]Tracer, error) {
 			offsets: pt.Goffsets,
 		}
 
-		//Go style Uprobes
+		// Go style Uprobes
 		if err := i.goprobes(p); err != nil {
 			printVerifierErrorInfo(err)
 			return nil, err
 		}
 
-		//Kprobes to be used for native instrumentation points
+		// Kprobes to be used for native instrumentation points
 		if err := i.kprobes(p); err != nil {
 			printVerifierErrorInfo(err)
 			return nil, err
 		}
 
-		//Uprobes to be used for native module instrumentation points
+		// Uprobes to be used for native module instrumentation points
 		if err := i.uprobes(pt.ELFInfo.Pid, p); err != nil {
 			printVerifierErrorInfo(err)
 			return nil, err
 		}
 
-		//Tracepoints support
+		// Tracepoints support
 		if err := i.tracepoints(p); err != nil {
 			printVerifierErrorInfo(err)
 			return nil, err
 		}
 
-		//Sock filters support
+		// Sock filters support
 		if err := i.sockfilters(p); err != nil {
 			printVerifierErrorInfo(err)
 			return nil, err

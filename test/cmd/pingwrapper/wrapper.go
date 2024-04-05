@@ -108,7 +108,6 @@ func pingHandler(rw http.ResponseWriter, req *http.Request) {
 	}
 }
 
-// nolint:gocritic
 func gpingHandler(rw http.ResponseWriter, _ *http.Request) {
 	opts := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
 	conn, err := grpc.Dial("localhost:5051", opts...)
@@ -127,6 +126,7 @@ func gpingHandler(rw http.ResponseWriter, _ *http.Request) {
 	feature, err := client.GetFeature(ctx, point)
 	if err != nil {
 		slog.Error("client.GetFeature failed", err)
+		// nolint:gocritic
 		os.Exit(-1)
 	}
 	if slog.Default().Enabled(context.TODO(), slog.LevelDebug) {

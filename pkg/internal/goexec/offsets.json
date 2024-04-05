@@ -44,7 +44,7 @@
       "nextStreamID": {
         "versions": {
           "oldest": "0.12.0",
-          "newest": "0.23.0"
+          "newest": "0.24.0"
         },
         "offsets": [
           {
@@ -66,7 +66,7 @@
       "w": {
         "versions": {
           "oldest": "0.12.0",
-          "newest": "0.23.0"
+          "newest": "0.24.0"
         },
         "offsets": [
           {
@@ -80,7 +80,7 @@
       "req": {
         "versions": {
           "oldest": "0.12.0",
-          "newest": "0.23.0"
+          "newest": "0.24.0"
         },
         "offsets": [
           {
@@ -92,7 +92,7 @@
       "status": {
         "versions": {
           "oldest": "0.12.0",
-          "newest": "0.23.0"
+          "newest": "0.24.0"
         },
         "offsets": [
           {
@@ -106,7 +106,7 @@
       "w": {
         "versions": {
           "oldest": "0.12.0",
-          "newest": "0.23.0"
+          "newest": "0.24.0"
         },
         "offsets": [
           {

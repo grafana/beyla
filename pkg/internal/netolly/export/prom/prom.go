@@ -25,10 +25,16 @@ func (p PrometheusConfig) Enabled() bool {
 	return p.Config != nil && p.Config.Port != 0 && slices.Contains(p.Config.Features, otel.FeatureNetwork)
 }
 
+type counterCollector interface {
+	prometheus.Collector
+	UpdateTime()
+	WithLabelValues(...string) prometheus.Counter
+}
+
 type metricsReporter struct {
 	cfg *prom.PrometheusConfig
 
-	flowBytes *prometheus.CounterVec
+	flowBytes counterCollector
 
 	promConnect *connector.PrometheusManager
 
@@ -56,10 +62,10 @@ func newReporter(ctx context.Context, cfg *PrometheusConfig, promMgr *connector.
 		cfg:         cfg.Config,
 		promConnect: promMgr,
 		attrs:       attrs,
-		flowBytes: prometheus.NewCounterVec(prometheus.CounterOpts{
+		flowBytes: NewExpirer(prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "beyla_network_flow_bytes_total",
 			Help: "bytes submitted from a source network endpoint to a destination network endpoint",
-		}, labelNames),
+		}, labelNames), cfg.Config.ExpireTime),
 	}
 
 	mr.promConnect.Register(cfg.Config.Port, cfg.Config.Path, mr.flowBytes)
@@ -70,6 +76,7 @@ func newReporter(ctx context.Context, cfg *PrometheusConfig, promMgr *connector.
 func (r *metricsReporter) reportMetrics(input <-chan []*ebpf.Record) {
 	go r.promConnect.StartHTTP(r.bgCtx)
 	for flows := range input {
+		r.flowBytes.UpdateTime()
 		for _, flow := range flows {
 			r.observe(flow)
 		}

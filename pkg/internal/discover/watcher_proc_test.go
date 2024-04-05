@@ -178,10 +178,10 @@ func TestPortsFetchRequired(t *testing.T) {
 		listProcesses: func(bool) (map[PID]processAttrs, error) {
 			return nil, nil
 		},
-		executableReady: func(pid PID) bool {
+		executableReady: func(_ PID) bool {
 			return true
 		},
-		loadBPFWatcher: func(cfg *beyla.Config, events chan<- watcher.Event) error {
+		loadBPFWatcher: func(_ *beyla.Config, events chan<- watcher.Event) error {
 			channelReturner <- events
 			return nil
 		},

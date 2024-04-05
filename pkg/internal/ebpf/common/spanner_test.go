@@ -15,11 +15,11 @@ func tocstr(s string) []byte {
 
 func makeHTTPRequestTrace(method, path, peerInfo string, status uint16, durationMs uint64) HTTPRequestTrace {
 	m := [7]uint8{}
-	copy(m[:], tocstr(method)[:])
+	copy(m[:], tocstr(method))
 	p := [100]uint8{}
-	copy(p[:], tocstr(path)[:])
+	copy(p[:], tocstr(path))
 	r := [50]uint8{}
-	copy(r[:], tocstr(peerInfo)[:])
+	copy(r[:], tocstr(peerInfo))
 
 	return HTTPRequestTrace{
 		Type:              1, // transform.EventTypeHTTP
@@ -35,9 +35,9 @@ func makeHTTPRequestTrace(method, path, peerInfo string, status uint16, duration
 
 func makeGRPCRequestTrace(path string, peerInfo []byte, status uint16, durationMs uint64) HTTPRequestTrace {
 	p := [100]uint8{}
-	copy(p[:], tocstr(path)[:])
+	copy(p[:], tocstr(path))
 	r := [50]uint8{}
-	copy(r[:], peerInfo[:])
+	copy(r[:], peerInfo)
 
 	return HTTPRequestTrace{
 		Type:              2, // transform.EventTypeGRPC

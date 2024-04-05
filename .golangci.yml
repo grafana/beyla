@@ -1,7 +1,9 @@
-run:
-  skip-dirs:
+issues:
+  exclude-dirs:
     - configs
     - docs
+run:
+  go: "1.22"
   build-tags:
     - integration
 linters:
@@ -18,21 +20,17 @@ linters:
     - ineffassign
     - revive
     - staticcheck
-#    - structcheck Disable until they properly support generics
     - stylecheck
     - typecheck
     - unused
   disable:
     - exhaustive
 linters-settings:
-  stylecheck:
-    go: "1.21"
   gocritic:
     enabled-checks:
       - rangeExprCopy
       - rangeValCopy
       - indexAlloc
-      - deprecatedComment
   cyclop:
     max-complexity: 12
 

@@ -136,7 +136,7 @@ func (k *Kind) Run(m *testing.M) {
 
 // export logs into the e2e-logs folder of the base directory.
 func (k *Kind) exportLogs() env.Func {
-	return func(ctx context.Context, config *envconf.Config) (context.Context, error) {
+	return func(ctx context.Context, _ *envconf.Config) (context.Context, error) {
 		if k.logsDir == "" {
 			return ctx, nil
 		}

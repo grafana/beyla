@@ -23,13 +23,9 @@ var activePids, _ = lru.New[uint32, svc.ID](1024)
 // injectable functions (can be replaced in tests). It reads the
 // current process namespace from the /proc filesystem. It is required to
 // choose to filter traces using whether the User-space or Host-space PIDs
-var readNamespace = func(pid int32) (uint32, error) {
-	return FindNamespace(pid)
-}
+var readNamespace = FindNamespace
 
-var readNamespacePIDs = func(pid int32) ([]uint32, error) {
-	return FindNamespacedPids(pid)
-}
+var readNamespacePIDs = FindNamespacedPids
 
 type PIDInfo struct {
 	service svc.ID

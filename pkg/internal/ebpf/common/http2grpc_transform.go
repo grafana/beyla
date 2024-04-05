@@ -75,7 +75,7 @@ func readMetaFrame(conn *BPFConnInfo, fr *http2.Framer, hf *http2.HeadersFrame) 
 		}
 	})
 	// Lose reference to MetaHeadersFrame:
-	defer hdec.SetEmitFunc(func(hf hpack.HeaderField) {})
+	defer hdec.SetEmitFunc(func(_ hpack.HeaderField) {})
 
 	for {
 		frag := hf.HeaderBlockFragment()
@@ -125,7 +125,7 @@ func readRetMetaFrame(conn *BPFConnInfo, fr *http2.Framer, hf *http2.HeadersFram
 		}
 	})
 	// Lose reference to MetaHeadersFrame:
-	defer hdec.SetEmitFunc(func(hf hpack.HeaderField) {})
+	defer hdec.SetEmitFunc(func(_ hpack.HeaderField) {})
 
 	for {
 		frag := hf.HeaderBlockFragment()
@@ -225,15 +225,13 @@ func ReadHTTP2InfoIntoSpan(record *ringbuf.Record) (request.Span, bool, error) {
 	status := 0
 	eventType := HTTP2
 
-	switch ff := retF.(type) {
-	case *http2.HeadersFrame:
+	if ff, ok := retF.(*http2.HeadersFrame); ok {
 		status, eventType = readRetMetaFrame((*BPFConnInfo)(&event.ConnInfo), retFramer, ff)
 	}
 
 	f, _ := framer.ReadFrame()
 
-	switch ff := f.(type) {
-	case *http2.HeadersFrame:
+	if ff, ok := f.(*http2.HeadersFrame); ok {
 		method, path, proto := readMetaFrame((*BPFConnInfo)(&event.ConnInfo), framer, ff)
 
 		if eventType != GRPC && proto == GRPC {

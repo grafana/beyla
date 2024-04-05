@@ -103,6 +103,7 @@ func printFeatureWrapper(client pb.RouteGuideClient, point *pb.Point) {
 	feature, err := client.GetFeatureWrapper(ctx, point)
 	if err != nil {
 		slog.Error("client.GetFeature failed", err)
+		// nolint:gocritic
 		os.Exit(-1)
 	}
 	if slog.Default().Enabled(context.TODO(), slog.LevelDebug) {
@@ -118,6 +119,7 @@ func printFeatures(client pb.RouteGuideClient, rect *pb.Rectangle) {
 	stream, err := client.ListFeatures(ctx, rect)
 	if err != nil {
 		slog.Error("client.ListFeatures failed", err)
+		// nolint:gocritic
 		os.Exit(-1)
 	}
 	for {
@@ -135,6 +137,7 @@ func printFeatures(client pb.RouteGuideClient, rect *pb.Rectangle) {
 }
 
 // runRecordRoute sends a sequence of points to server and expects to get a RouteSummary from server.
+// nolint:gocritic
 func runRecordRoute(client pb.RouteGuideClient) {
 	// Create a random number of random points
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
@@ -166,6 +169,7 @@ func runRecordRoute(client pb.RouteGuideClient) {
 }
 
 // runRouteChat receives a sequence of route notes, while sending notes for various locations.
+// nolint:gocritic
 func runRouteChat(client pb.RouteGuideClient) {
 	notes := []*pb.RouteNote{
 		{Location: &pb.Point{Latitude: 0, Longitude: 1}, Message: "First message"},
@@ -263,7 +267,7 @@ func main() {
 	counter := 1
 
 	// Looking for a valid feature
-	//printFeature(client, &pb.Point{Latitude: 409146138, Longitude: -746188906}, counter)
+	// printFeature(client, &pb.Point{Latitude: 409146138, Longitude: -746188906}, counter)
 
 	if !*ping {
 		fmt.Printf("Sleeping, press any key\n")

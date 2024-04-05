@@ -23,8 +23,8 @@ type Attribute struct {
 func BuildPromAttributeGetters(names []string) []Attribute {
 	attrs := make([]Attribute, 0, len(names))
 	for _, name := range names {
-		exposedName := strings.Replace(name, ".", "_", -1)
-		internalName := strings.Replace(name, "_", ".", -1)
+		exposedName := strings.ReplaceAll(name, ".", "_")
+		internalName := strings.ReplaceAll(name, "_", ".")
 		attrs = append(attrs, attributeFor(exposedName, internalName))
 	}
 	return attrs
@@ -37,7 +37,7 @@ func BuildPromAttributeGetters(names []string) []Attribute {
 func BuildOTELAttributeGetters(names []string) []Attribute {
 	attrs := make([]Attribute, 0, len(names))
 	for _, name := range names {
-		dotName := strings.Replace(name, "_", ".", -1)
+		dotName := strings.ReplaceAll(name, "_", ".")
 		attrs = append(attrs, attributeFor(dotName, dotName))
 	}
 	return attrs

@@ -47,7 +47,7 @@ func SQLParseOperationAndTable(query string) (string, string) {
 			break
 		}
 		if operation == "" && tokenIsDBOperation[tokenType] {
-			operation = strings.ToUpper(string(data[:]))
+			operation = strings.ToUpper(string(data))
 		}
 
 		if tokenType == 44 && addedTable { // a comma
@@ -58,7 +58,7 @@ func SQLParseOperationAndTable(query string) (string, string) {
 		if tokenType == 46 && addedTable { // a dot
 			tokenType, data = tokens.Scan()
 			if tokenType == sqlparser.ID {
-				tables[len(tables)-1] = tables[len(tables)-1] + "." + string(data[:])
+				tables[len(tables)-1] = tables[len(tables)-1] + "." + string(data)
 				continue
 			}
 		}
@@ -69,7 +69,7 @@ func SQLParseOperationAndTable(query string) (string, string) {
 				if tokenType == sqlparser.VALUE_ARG {
 					tables = append(tables, "?")
 				} else {
-					tables = append(tables, string(data[:]))
+					tables = append(tables, string(data))
 				}
 				addedTable = true
 				addMoreTables = false

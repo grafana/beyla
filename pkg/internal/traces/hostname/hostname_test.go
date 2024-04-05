@@ -150,7 +150,7 @@ func TestHostnameResolver_FullIsLocalhost(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			t.Parallel()
 			// Given a Hostname Resolver that resolves "localhost" as full hostname
-			fullResolver := func(dns string) (string, error) { return testCase.name, nil }
+			fullResolver := func(_ string) (string, error) { return testCase.name, nil }
 			resolver := fallbackResolver{full: fullResolver, short: workingShort, internal: internalFull}
 
 			// When the names are queried

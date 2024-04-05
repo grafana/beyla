@@ -142,7 +142,7 @@ static __always_inline void *find_msghdr_buf(struct msghdr *msg) {
         bpf_dbg_printk("msg iter type exists, read value %d", msg_iter_type);
     }
 
-    bpf_dbg_printk("msg type %x, iter type %d", m_flags, msg_iter_type);
+    bpf_dbg_printk("msg flags %x, iter type %d", m_flags, msg_iter_type);
 
     struct iovec *iov = NULL;
 
@@ -211,7 +211,7 @@ static __always_inline void finish_http(http_info_t *info) {
     if (info->start_monotime_ns != 0 && info->status != 0 && info->pid.host_pid != 0) {
         http_info_t *trace = bpf_ringbuf_reserve(&events, sizeof(http_info_t), 0);        
         if (trace) {
-            bpf_dbg_printk("Sending trace %lx", info);
+            bpf_dbg_printk("Sending trace %lx, response length %d", info, info->resp_len);
 
             bpf_memcpy(trace, info, sizeof(http_info_t));
             trace->flags = EVENT_K_HTTP_REQUEST;
@@ -231,6 +231,20 @@ static __always_inline void finish_http(http_info_t *info) {
 
         bpf_map_delete_elem(&ongoing_http, &pid_conn);
     }        
+}
+
+static __always_inline void finish_possible_delayed_http_request(pid_connection_info_t *pid_conn) {
+    http_info_t *info = bpf_map_lookup_elem(&ongoing_http, pid_conn);
+    if (info) {        
+        finish_http(info);
+    }
+}
+
+static __always_inline void update_http_sent_len(pid_connection_info_t *pid_conn, int sent_len) {
+    http_info_t *info = bpf_map_lookup_elem(&ongoing_http, pid_conn);
+    if (info) {        
+        info->resp_len += sent_len;
+    }
 }
 
 static __always_inline http_info_t *get_or_set_http_info(http_info_t *info, pid_connection_info_t *pid_conn, u8 packet_type) {
@@ -270,7 +284,7 @@ static __always_inline void process_http_request(http_info_t *info, int len) {
 static __always_inline void process_http_response(http_info_t *info, unsigned char *buf, http_connection_metadata_t *meta, int len) {
     info->pid = meta->pid;
     info->type = meta->type;
-    info->resp_len = len;
+    info->resp_len = 0;
     info->end_monotime_ns = bpf_ktime_get_ns();
     info->status = 0;
     info->status += (buf[RESPONSE_STATUS_POS]     - '0') * 100;
@@ -278,7 +292,7 @@ static __always_inline void process_http_response(http_info_t *info, unsigned ch
     info->status += (buf[RESPONSE_STATUS_POS + 2] - '0');
 }
 
-static __always_inline void handle_http_response(unsigned char *small_buf, pid_connection_info_t *pid_conn, http_info_t *info, int orig_len, u8 direction) {
+static __always_inline void handle_http_response(unsigned char *small_buf, pid_connection_info_t *pid_conn, http_info_t *info, int orig_len, u8 direction, u8 ssl) {
     http_connection_metadata_t *meta = bpf_map_lookup_elem(&filtered_connections, pid_conn);
     http_connection_metadata_t dummy_meta = {};
 
@@ -297,7 +311,12 @@ static __always_inline void handle_http_response(unsigned char *small_buf, pid_c
     }
 
     process_http_response(info, small_buf, meta, orig_len);
-    finish_http(info);
+
+    if ((direction != TCP_SEND) || (ssl != NO_SSL) /*|| (orig_len < KPROBES_LARGE_RESPONSE_LEN)*/) {
+        finish_http(info);
+    } else {
+        bpf_dbg_printk("Delaying finish http for large request, orig_len %d", orig_len);
+    }
 }
 
 static __always_inline void http2_grpc_start(http2_conn_stream_t *s_key, void *u_buf, int len, u8 direction) {
@@ -351,13 +370,16 @@ static __always_inline void http2_grpc_end(http2_conn_stream_t *stream, http2_gr
 
 static __always_inline void process_http2_grpc_frames(pid_connection_info_t *pid_conn, void *u_buf, int bytes_len, u8 direction) {
     int pos = 0;
-    u8 found_frame = 0;
+    u8 found_start_frame = 0;
+    u8 found_end_frame = 0;
+
     http2_grpc_request_t *prev_info = 0;
     u32 saved_stream_id = 0;
     int saved_buf_pos = 0;
     u8 found_data_frame = 0;
-    
-    for (int i = 0; i < 4; i++) {
+    http2_conn_stream_t stream = {0};
+
+    for (int i = 0; i < 8; i++) {
         unsigned char frame_buf[FRAME_HEADER_LEN];
         frame_header_t frame = {0};
         
@@ -371,7 +393,6 @@ static __always_inline void process_http2_grpc_frames(pid_connection_info_t *pid
         //bpf_dbg_printk("http2 frame type = %d, len = %d, stream_id = %d, flags = %d", frame.type, frame.length, frame.stream_id, frame.flags);
         
         if (is_headers_frame(&frame)) {
-            http2_conn_stream_t stream = {0};
             stream.pid_conn = *pid_conn;
             stream.stream_id = frame.stream_id;
             if (!prev_info) {
@@ -382,17 +403,13 @@ static __always_inline void process_http2_grpc_frames(pid_connection_info_t *pid
                 saved_stream_id = stream.stream_id;
                 saved_buf_pos = pos;
                 if (http_grpc_stream_ended(&frame)) {
-                    http2_grpc_end(&stream, prev_info, (void *)((u8 *)u_buf + saved_buf_pos));
-                    found_frame = 1;
+                    found_end_frame = 1;
+                    break;
                 } 
             } else {
-                http2_grpc_start(&stream, (void *)((u8 *)u_buf + pos), bytes_len, direction);
-                found_frame = 1;
+                found_start_frame = 1;
+                break;
             }
-        } 
-
-        if (found_frame) {
-            break;
         }
 
         if (is_data_frame(&frame)) {
@@ -415,14 +432,19 @@ static __always_inline void process_http2_grpc_frames(pid_connection_info_t *pid
         }
     }
 
-    // We only loop 8 times looking for the stream termination. If the data packed is large we'll miss the
-    // frame saying the stream closed. In that case we try this backup path.
-    if (!found_frame && prev_info && found_data_frame && saved_stream_id) {
-        http2_conn_stream_t stream = {0};
-        stream.pid_conn = *pid_conn;
-        stream.stream_id = saved_stream_id;
-
-        http2_grpc_end(&stream, prev_info, (void *)((u8 *)u_buf + saved_buf_pos));
+    if (found_start_frame) {
+        http2_grpc_start(&stream, (void *)((u8 *)u_buf + pos), bytes_len, direction);
+    } else {
+        // We only loop 6 times looking for the stream termination. If the data packed is large we'll miss the
+        // frame saying the stream closed. In that case we try this backup path.
+        if (!found_end_frame && prev_info && found_data_frame && saved_stream_id) {
+            stream.pid_conn = *pid_conn;
+            stream.stream_id = saved_stream_id;
+            found_end_frame = 1;
+        }
+        if (found_end_frame) {
+            http2_grpc_end(&stream, prev_info, (void *)((u8 *)u_buf + saved_buf_pos));
+        }
     }
 }
 
@@ -487,10 +509,10 @@ static __always_inline void handle_buf_with_connection(pid_connection_info_t *pi
             bpf_probe_read(info->buf, FULL_BUF_SIZE, u_buf);
             process_http_request(info, bytes_len);
         } else if (packet_type == PACKET_TYPE_RESPONSE) {
-            handle_http_response(small_buf, pid_conn, info, bytes_len, direction);
+            handle_http_response(small_buf, pid_conn, info, bytes_len, direction, ssl);
         } else if (still_reading(info)) {
             info->len += bytes_len;
-        }     
+        }   
 
         bpf_map_delete_elem(&ongoing_http_fallback, &pid_conn->conn);
     } else if (is_http2_or_grpc(small_buf, MIN_HTTP2_SIZE)) {
@@ -502,6 +524,12 @@ static __always_inline void handle_buf_with_connection(pid_connection_info_t *pi
         u8 *h2g = bpf_map_lookup_elem(&ongoing_http2_connections, pid_conn);
         if (h2g && *h2g == ssl) {
             process_http2_grpc_frames(pid_conn, u_buf, bytes_len, direction);
+        } else { // large request tracking
+            http_info_t *info = bpf_map_lookup_elem(&ongoing_http, pid_conn);
+
+            if (info && still_responding(info)) {
+                info->end_monotime_ns = bpf_ktime_get_ns();
+            } 
         }
     }
 }

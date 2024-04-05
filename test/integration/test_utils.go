@@ -7,6 +7,7 @@ import (
 	"crypto/rand"
 	"crypto/tls"
 	"encoding/hex"
+	"io"
 	"net/http"
 	"strconv"
 	"testing"
@@ -49,6 +50,22 @@ func doHTTPGet(t *testing.T, path string, status int) {
 	r, err := testHTTPClient.Do(req)
 	require.NoError(t, err)
 	require.Equal(t, status, r.StatusCode)
+}
+
+func doHTTPGetFullResponse(t *testing.T, path string, status int) {
+	// Random fake body to cause the request to have some size (38 bytes)
+	jsonBody := []byte(`{"productId": 123456, "quantity": 100}`)
+
+	req, err := http.NewRequest(http.MethodGet, path, bytes.NewReader(jsonBody))
+	require.NoError(t, err)
+	req.Header.Set("Content-Type", "application/json")
+
+	r, err := testHTTPClient.Do(req)
+	require.NoError(t, err)
+	require.Equal(t, status, r.StatusCode)
+	body, err := io.ReadAll(r.Body)
+	require.NoError(t, err)
+	require.Greater(t, len(body), 0)
 }
 
 func doHTTPGetWithTraceparent(t *testing.T, path string, status int, traceparent string) {

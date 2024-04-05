@@ -58,7 +58,8 @@
     "versions": ">= 0.12.0",
     "fields": {
       "golang.org/x/net/http2.responseWriterState": [
-        "req"
+        "req",
+        "status"
       ],
       "golang.org/x/net/http2/hpack.Encoder": [
         "w"

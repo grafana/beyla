@@ -43,6 +43,14 @@ type bpfHttpFuncInvocationT struct {
 	Tp              bpfTpInfoT
 }
 
+type bpfServerHttpFuncInvocationT struct {
+	StartMonotimeNs uint64
+	Tp              bpfTpInfoT
+	Response        uint64
+	Http2           uint8
+	_               [7]byte
+}
+
 type bpfSqlFuncInvocationT struct {
 	StartMonotimeNs uint64
 	SqlParam        uint64
@@ -108,13 +116,14 @@ type bpfSpecs struct {
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpfProgramSpecs struct {
 	UprobeServeHTTP                           *ebpf.ProgramSpec `ebpf:"uprobe_ServeHTTP"`
-	UprobeWriteHeader                         *ebpf.ProgramSpec `ebpf:"uprobe_WriteHeader"`
+	UprobeServeHTTPReturns                    *ebpf.ProgramSpec `ebpf:"uprobe_ServeHTTPReturns"`
 	UprobeConnServe                           *ebpf.ProgramSpec `ebpf:"uprobe_connServe"`
 	UprobeConnServeRet                        *ebpf.ProgramSpec `ebpf:"uprobe_connServeRet"`
 	UprobeHttp2FramerWriteHeaders             *ebpf.ProgramSpec `ebpf:"uprobe_http2FramerWriteHeaders"`
 	UprobeHttp2FramerWriteHeadersReturns      *ebpf.ProgramSpec `ebpf:"uprobe_http2FramerWriteHeaders_returns"`
 	UprobeHttp2ResponseWriterStateWriteHeader *ebpf.ProgramSpec `ebpf:"uprobe_http2ResponseWriterStateWriteHeader"`
 	UprobeHttp2RoundTrip                      *ebpf.ProgramSpec `ebpf:"uprobe_http2RoundTrip"`
+	UprobeNetFdRead                           *ebpf.ProgramSpec `ebpf:"uprobe_netFdRead"`
 	UprobePersistConnRoundTrip                *ebpf.ProgramSpec `ebpf:"uprobe_persistConnRoundTrip"`
 	UprobeQueryDC                             *ebpf.ProgramSpec `ebpf:"uprobe_queryDC"`
 	UprobeQueryDCReturn                       *ebpf.ProgramSpec `ebpf:"uprobe_queryDCReturn"`
@@ -191,13 +200,14 @@ func (m *bpfMaps) Close() error {
 // It can be passed to loadBpfObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpfPrograms struct {
 	UprobeServeHTTP                           *ebpf.Program `ebpf:"uprobe_ServeHTTP"`
-	UprobeWriteHeader                         *ebpf.Program `ebpf:"uprobe_WriteHeader"`
+	UprobeServeHTTPReturns                    *ebpf.Program `ebpf:"uprobe_ServeHTTPReturns"`
 	UprobeConnServe                           *ebpf.Program `ebpf:"uprobe_connServe"`
 	UprobeConnServeRet                        *ebpf.Program `ebpf:"uprobe_connServeRet"`
 	UprobeHttp2FramerWriteHeaders             *ebpf.Program `ebpf:"uprobe_http2FramerWriteHeaders"`
 	UprobeHttp2FramerWriteHeadersReturns      *ebpf.Program `ebpf:"uprobe_http2FramerWriteHeaders_returns"`
 	UprobeHttp2ResponseWriterStateWriteHeader *ebpf.Program `ebpf:"uprobe_http2ResponseWriterStateWriteHeader"`
 	UprobeHttp2RoundTrip                      *ebpf.Program `ebpf:"uprobe_http2RoundTrip"`
+	UprobeNetFdRead                           *ebpf.Program `ebpf:"uprobe_netFdRead"`
 	UprobePersistConnRoundTrip                *ebpf.Program `ebpf:"uprobe_persistConnRoundTrip"`
 	UprobeQueryDC                             *ebpf.Program `ebpf:"uprobe_queryDC"`
 	UprobeQueryDCReturn                       *ebpf.Program `ebpf:"uprobe_queryDCReturn"`
@@ -210,13 +220,14 @@ type bpfPrograms struct {
 func (p *bpfPrograms) Close() error {
 	return _BpfClose(
 		p.UprobeServeHTTP,
-		p.UprobeWriteHeader,
+		p.UprobeServeHTTPReturns,
 		p.UprobeConnServe,
 		p.UprobeConnServeRet,
 		p.UprobeHttp2FramerWriteHeaders,
 		p.UprobeHttp2FramerWriteHeadersReturns,
 		p.UprobeHttp2ResponseWriterStateWriteHeader,
 		p.UprobeHttp2RoundTrip,
+		p.UprobeNetFdRead,
 		p.UprobePersistConnRoundTrip,
 		p.UprobeQueryDC,
 		p.UprobeQueryDCReturn,

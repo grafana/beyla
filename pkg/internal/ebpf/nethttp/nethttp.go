@@ -118,6 +118,7 @@ func (p *Tracer) Constants(_ *exec.FileInfo, offsets *goexec.Offsets) map[string
 	// Optional list
 	for _, s := range []string{
 		"rws_req_pos",
+		"rws_status_pos",
 		"cc_next_stream_id_pos",
 		"framer_w_pos",
 	} {
@@ -142,12 +143,10 @@ func (p *Tracer) GoProbes() map[string]ebpfcommon.FunctionPrograms {
 	m := map[string]ebpfcommon.FunctionPrograms{
 		"net/http.serverHandler.ServeHTTP": {
 			Start: p.bpfObjects.UprobeServeHTTP,
+			End:   p.bpfObjects.UprobeServeHTTPReturns,
 		},
 		"net/http.(*conn).readRequest": {
 			End: p.bpfObjects.UprobeReadRequestReturns,
-		},
-		"net/http.(*response).WriteHeader": {
-			Start: p.bpfObjects.UprobeWriteHeader,
 		},
 		"net/http.(*Transport).roundTrip": { // HTTP client, works with Client.Do as well as using the RoundTripper directly
 			Start: p.bpfObjects.UprobeRoundTrip,
@@ -164,6 +163,9 @@ func (p *Tracer) GoProbes() map[string]ebpfcommon.FunctionPrograms {
 		"net/http.(*conn).serve": { // http server
 			Start: p.bpfObjects.UprobeConnServe,
 			End:   p.bpfObjects.UprobeConnServeRet,
+		},
+		"net.(*netFD).Read": {
+			Start: p.bpfObjects.UprobeNetFdRead,
 		},
 		"net/http.(*persistConn).roundTrip": { // http client
 			Start: p.bpfObjects.UprobePersistConnRoundTrip,
@@ -230,9 +232,7 @@ func (p *GinTracer) GoProbes() map[string]ebpfcommon.FunctionPrograms {
 		"github.com/gin-gonic/gin.(*Engine).ServeHTTP": {
 			Required: true,
 			Start:    p.bpfObjects.UprobeServeHTTP,
-		},
-		"net/http.(*response).WriteHeader": {
-			Start: p.bpfObjects.UprobeWriteHeader,
+			End:      p.bpfObjects.UprobeServeHTTPReturns,
 		},
 	}
 }

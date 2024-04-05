@@ -149,11 +149,19 @@ func FlowsAgent(ctxInfo *global.ContextInfo, cfg *beyla.Config) (*Flows, error) 
 		return nil, err
 	}
 
-	ingress, egress := flowDirections(&cfg.NetworkFlows)
+	var fetcher ebpfFlowFetcher
 
-	fetcher, err := ebpf.NewFlowFetcher(cfg.NetworkFlows.Sampling, cfg.NetworkFlows.CacheMaxFlows, ingress, egress)
-	if err != nil {
-		return nil, err
+	if cfg.NetworkFlows.WithoutTC {
+		fetcher, err = ebpf.NewSockFlowFetcher(cfg.NetworkFlows.Sampling, cfg.NetworkFlows.CacheMaxFlows)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		ingress, egress := flowDirections(&cfg.NetworkFlows)
+		fetcher, err = ebpf.NewFlowFetcher(cfg.NetworkFlows.Sampling, cfg.NetworkFlows.CacheMaxFlows, ingress, egress)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return flowsAgent(ctxInfo, cfg, informer, fetcher, exportFunc, agentIP)

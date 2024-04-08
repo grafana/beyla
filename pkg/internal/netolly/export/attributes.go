@@ -1,6 +1,7 @@
 package export
 
 import (
+	"strconv"
 	"strings"
 
 	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
@@ -52,6 +53,10 @@ func attributeFor(exposedName, internalName string) Attribute {
 		getter = func(r *ebpf.Record) string { return r.Id.SrcIP().IP().String() }
 	case "dst.address":
 		getter = func(r *ebpf.Record) string { return r.Id.DstIP().IP().String() }
+	case "src.port":
+		getter = func(r *ebpf.Record) string { return strconv.FormatUint(uint64(r.Id.SrcPort), 10) }
+	case "dst.port":
+		getter = func(r *ebpf.Record) string { return strconv.FormatUint(uint64(r.Id.DstPort), 10) }
 	case "src.name":
 		getter = func(r *ebpf.Record) string { return r.Attrs.SrcName }
 	case "dst.name":

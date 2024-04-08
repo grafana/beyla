@@ -2,6 +2,7 @@ package export
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/mariomac/pipes/pkg/node"
@@ -41,6 +42,10 @@ func printFlow(f *ebpf.Record) {
 	sb.WriteString(f.Attrs.SrcName)
 	sb.WriteString(" dst.name=")
 	sb.WriteString(f.Attrs.DstName)
+	sb.WriteString(" src.port=")
+	sb.WriteString(strconv.FormatUint(uint64(f.Id.SrcPort), 10))
+	sb.WriteString(" dst.port=")
+	sb.WriteString(strconv.FormatUint(uint64(f.Id.DstPort), 10))
 
 	for k, v := range f.Attrs.Metadata {
 		sb.WriteString(" ")

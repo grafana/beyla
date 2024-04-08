@@ -14,8 +14,8 @@ aliases:
 
 Beyla can export data in two modes:
 
-- **Alloy mode** (recommended mode): the auto-instrumentation tool will send the metrics and the traces to the
-  [Grafana Alloy](/docs/alloy/), which will process and send them
+- **Alloy mode** (recommended mode): the auto-instrumentation tool sends metrics and traces to the
+  [Grafana Alloy](/docs/alloy/), which processes and sends them
   to Mimir and Tempo. In this scenario, Alloy takes care of the authentication required by the Grafana Mimir/Tempo endpoints.
   This mode also integrates better with some Grafana exclusive features,
   such as the [span-to-metrics](/docs/tempo/latest/metrics-generator/span_metrics/) and
@@ -48,8 +48,8 @@ To run in Direct mode by using the Prometheus scrape endpoint, please refer to t
 > [running the Beyla as a Docker container]({{< relref "../setup/docker.md" >}})
 > or [running Beyla in Kubernetes]({{< relref "../setup/kubernetes.md" >}}).
 
-First, you will need to locally install and configure the [Grafana Alloy, according to the latest documentation](/docs/alloy/).
-Alloy will facilitate the ingestion of OpenTelemetry metrics and traces from the auto-instrumentation tool,
+First, locally install and configure [Grafana Alloy, according to the latest documentation](/docs/alloy/).
+Alloy facilitates the ingestion of OpenTelemetry metrics and traces from the auto-instrumentation tool,
 and process and forward to the different Grafana product endpoints (Mimir and/or Tempo).
 
 ### Configuring Alloy pipeline
@@ -61,7 +61,7 @@ Configure the [Alloy](/docs/alloy/) pipeline and specify the following nodes:
 Download the [example River configuration file](/docs/beyla/latest/configure/resources/alloy-config.river) used in this article.
 
 Alloy needs to expose an **OpenTelemetry receiver** endpoint, such that the auto-instrumentation tool can forward both metrics and traces.
-The Alloy configuration file will need to include the following entry:
+The Alloy configuration file needs to include the following entry:
 
 ```hcl
 otelcol.receiver.otlp "default" {
@@ -113,7 +113,7 @@ prometheus.remote_write "mimir" {
 }
 ```
 
-Assuming you have a configuration file as above, run Alloy with the following environment variables set:
+Run Alloy with the following environment variables set:
 
 ```sh
 export MIMIR_USER=734432
@@ -151,9 +151,7 @@ grafana-alloy run alloy-config.river
 ### Configuring and running the auto-instrumentation tool
 
 Configure the auto-instrumentation tool to forward data to Grafana Alloy.
-In this tutorial we are assuming that both the auto-instrumentation tool and Alloy are
-running on the same host, so there is no need to secure the traffic nor provide
-authentication in the Alloy OTLP receiver.
+This tutorial assumes Beyla and Alloy are running on the same host, so there is no need to secure the traffic nor provide authentication in the Alloy OTLP receiver.
 
 You can configure the auto-instrumentation tool both via environment variables or via
 a configuration YAML file, which is what we will use in this example.
@@ -174,8 +172,8 @@ open_port: 443
 The auto-instrumentation tool will automatically search and instrument the process
 listening on port 443.
 
-Next, you will need to specify where the traces and the metrics will be submitted. If
-Alloy is running on the local host, it will use the port `4318`:
+Next, specify where the traces and the metrics are submitted.
+If Alloy is running on the local host, it uses port `4318`:
 
 ```yaml
 otel_metrics_export:

@@ -177,7 +177,7 @@ collectors, or how to generate [Prometheus](https://prometheus.io) metrics, see 
 
 There are two ways to forward your OpenTelemetry traces to Grafana Cloud:
 
-- Using the [Grafana Agent](/docs/agent/latest/) and configuring Beyla to forward the traces to it via
+- Using [Grafana Alloy](/docs/alloy/) and configuring Beyla to forward the traces to it via
   the standard OpenTelemetry export.
 - Configuring Beyla to submit data directly to the
   [Grafana Cloud OpenTelemetry Protocol endpoint](/docs/grafana-cloud/send-data/otlp/send-data-otlp/),

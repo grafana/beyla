@@ -64,7 +64,7 @@ direct action mode. For example, the Cilium Kubernetes CNI uses the same approac
 if you have Cilium CNI installed in your Kubernetes cluster, configure Beyla to capture the
 network events with the `socket_filter` mode.
 
-When `socket_filter` is used as an event source, Beyla will install an eBPF Linux socket filter to
+When `socket_filter` is used as an event source, Beyla installs an eBPF Linux socket filter to
 capture the network events. This mode doesn't conflict with Cilium CNI or other eBPF programs, which
 use the Linux Traffic Control egress and ingress filters. 
 

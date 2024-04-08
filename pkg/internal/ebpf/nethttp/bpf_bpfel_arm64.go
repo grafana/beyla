@@ -27,7 +27,6 @@ type bpfGoroutineMetadata struct {
 type bpfHttpClientDataT struct {
 	Method        [7]uint8
 	Path          [100]uint8
-	Host          [64]uint8
 	_             [5]byte
 	ContentLength int64
 	Pid           struct {

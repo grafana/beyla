@@ -60,6 +60,18 @@
             "since": "0.23.0"
           }
         ]
+      },
+      "tconn": {
+        "versions": {
+          "oldest": "0.12.0",
+          "newest": "0.24.0"
+        },
+        "offsets": [
+          {
+            "offset": 8,
+            "since": "0.12.0"
+          }
+        ]
       }
     },
     "golang.org/x/net/http2.Framer": {
@@ -77,6 +89,18 @@
       }
     },
     "golang.org/x/net/http2.responseWriterState": {
+      "conn": {
+        "versions": {
+          "oldest": "0.12.0",
+          "newest": "0.24.0"
+        },
+        "offsets": [
+          {
+            "offset": 16,
+            "since": "0.12.0"
+          }
+        ]
+      },
       "req": {
         "versions": {
           "oldest": "0.12.0",
@@ -97,6 +121,20 @@
         "offsets": [
           {
             "offset": 72,
+            "since": "0.12.0"
+          }
+        ]
+      }
+    },
+    "golang.org/x/net/http2.serverConn": {
+      "conn": {
+        "versions": {
+          "oldest": "0.12.0",
+          "newest": "0.24.0"
+        },
+        "offsets": [
+          {
+            "offset": 16,
             "since": "0.12.0"
           }
         ]
@@ -126,20 +164,6 @@
           {
             "offset": 40,
             "since": "0.0.0"
-          }
-        ]
-      }
-    },
-    "google.golang.org/grpc.ClientConn": {
-      "target": {
-        "versions": {
-          "oldest": "1.40.0",
-          "newest": "1.63.0"
-        },
-        "offsets": [
-          {
-            "offset": 24,
-            "since": "1.40.0"
           }
         ]
       }
@@ -231,6 +255,26 @@
       }
     },
     "google.golang.org/grpc/internal/transport.http2Client": {
+      "conn": {
+        "versions": {
+          "oldest": "1.40.0",
+          "newest": "1.63.0"
+        },
+        "offsets": [
+          {
+            "offset": 64,
+            "since": "1.40.0"
+          },
+          {
+            "offset": 136,
+            "since": "1.52.0"
+          },
+          {
+            "offset": 128,
+            "since": "1.58.0"
+          }
+        ]
+      },
       "nextID": {
         "versions": {
           "oldest": "1.40.0",
@@ -261,62 +305,16 @@
       }
     },
     "google.golang.org/grpc/internal/transport.http2Server": {
-      "localAddr": {
+      "conn": {
         "versions": {
           "oldest": "1.40.0",
-          "newest": "1.59.0"
+          "newest": "1.63.0"
         },
         "offsets": [
           {
-            "offset": 88,
+            "offset": 32,
             "since": "1.40.0"
-          }
-        ]
-      },
-      "peer": {
-        "versions": {
-          "oldest": "1.60.0",
-          "newest": "1.63.0"
-        },
-        "offsets": [
-          {
-            "offset": 56,
-            "since": "1.60.0"
-          }
-        ]
-      },
-      "remoteAddr": {
-        "versions": {
-          "oldest": "1.40.0",
-          "newest": "1.59.0"
-        },
-        "offsets": [
-          {
-            "offset": 72,
-            "since": "1.40.0"
-          }
-        ]
-      }
-    },
-    "google.golang.org/grpc/peer.Peer": {
-      "Addr": {
-        "versions": {
-          "oldest": "1.60.0",
-          "newest": "1.63.0"
-        },
-        "offsets": [
-          {
-            "offset": 0,
-            "since": "1.60.0"
-          }
-        ]
-      },
-      "LocalAddr": {
-        "versions": {
-          "oldest": "1.60.0",
-          "newest": "1.63.0"
-        },
-        "offsets": [
+          },
           {
             "offset": 16,
             "since": "1.60.0"
@@ -429,18 +427,6 @@
           }
         ]
       },
-      "Host": {
-        "versions": {
-          "oldest": "1.17.0",
-          "newest": "1.22.2"
-        },
-        "offsets": [
-          {
-            "offset": 128,
-            "since": "1.17.0"
-          }
-        ]
-      },
       "Method": {
         "versions": {
           "oldest": "1.17.0",
@@ -449,18 +435,6 @@
         "offsets": [
           {
             "offset": 0,
-            "since": "1.17.0"
-          }
-        ]
-      },
-      "RemoteAddr": {
-        "versions": {
-          "oldest": "1.17.0",
-          "newest": "1.22.2"
-        },
-        "offsets": [
-          {
-            "offset": 176,
             "since": "1.17.0"
           }
         ]

@@ -6,8 +6,6 @@
       "net/http.Request": [
         "Method",
         "URL",
-        "RemoteAddr",
-        "Host",
         "ContentLength",
         "Header"
       ],
@@ -59,13 +57,18 @@
     "fields": {
       "golang.org/x/net/http2.responseWriterState": [
         "req",
-        "status"
+        "status",
+        "conn"
+      ],
+      "golang.org/x/net/http2.serverConn": [
+        "conn"
       ],
       "golang.org/x/net/http2/hpack.Encoder": [
         "w"
       ],
       "golang.org/x/net/http2.ClientConn": [
-        "nextStreamID"
+        "nextStreamID",
+        "tconn"
       ],
       "golang.org/x/net/http2.Framer": [
         "w"
@@ -83,20 +86,12 @@
       "google.golang.org/grpc/internal/status.Status": [
         "s"
       ],
-      "google.golang.org/grpc/peer.Peer": [
-        "[1.60.0]Addr",
-        "[1.60.0]LocalAddr"
-      ],
       "google.golang.org/grpc/internal/transport.http2Server": [
-        "[,1.59.99]localAddr",
-        "[,1.59.99]remoteAddr",
-        "[1.60.0]peer"
-      ],
-      "google.golang.org/grpc.ClientConn": [
-        "target"
+        "conn"
       ],
       "google.golang.org/grpc/internal/transport.http2Client": [
-        "nextID"
+        "nextID",
+        "conn"
       ],
       "google.golang.org/grpc/internal/transport.bufWriter": [
         "buf",

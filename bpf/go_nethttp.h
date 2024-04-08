@@ -37,10 +37,8 @@ volatile const u64 framer_w_pos;
 volatile const u64 c_rwc_pos;
 volatile const u64 pc_conn_pos;
 volatile const u64 rwc_conn_pos;
-volatile const u64 conn_fd_pos;
-volatile const u64 fd_laddr_pos;
-volatile const u64 fd_raddr_pos;
-volatile const u64 tcp_addr_port_ptr_pos;
-volatile const u64 tcp_addr_ip_ptr_pos;
+volatile const u64 rws_conn_pos;
+volatile const u64 http2_server_conn_pos;
+volatile const u64 cc_tconn_pos;
 
 #endif

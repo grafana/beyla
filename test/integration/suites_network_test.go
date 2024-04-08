@@ -35,9 +35,9 @@ func TestNetwork_Deduplication(t *testing.T) {
 	require.NoError(t, compose.Close())
 }
 
-func TestNetwork_Deduplication_No_TC(t *testing.T) {
+func TestNetwork_Deduplication_Use_Socket_Filter(t *testing.T) {
 	compose, err := docker.ComposeSuite("docker-compose-netolly.yml", path.Join(pathOutput, "test-suite-netolly-dedupe-no-tc.log"))
-	compose.Env = append(compose.Env, "BEYLA_NETWORK_DEDUPER=first_come", "BEYLA_EXECUTABLE_NAME=", "BEYLA_NETWORK_NO_TC=1", allowAllAttrs)
+	compose.Env = append(compose.Env, "BEYLA_NETWORK_DEDUPER=first_come", "BEYLA_EXECUTABLE_NAME=", "BEYLA_NETWORK_SOURCE=socket_filter", allowAllAttrs)
 	require.NoError(t, err)
 	require.NoError(t, compose.Up())
 

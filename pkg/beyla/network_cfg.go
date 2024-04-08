@@ -28,13 +28,19 @@ import (
 	"github.com/grafana/beyla/pkg/internal/netolly/transform/cidr"
 )
 
+const (
+	EbpfSourceTC   = "tc"
+	EbpfSourceSock = "socket_filter"
+)
+
 type NetworkConfig struct {
 	// Enable network metrics.
 	// Default value is false (disabled)
 	Enable bool `yaml:"enable" env:"BEYLA_NETWORK_METRICS"`
 
-	// Don't cleanup QDisc on start/stop. This helps ensure Beyla can work with Cilium CNI.
-	WithoutTC bool `yaml:"no_tc" env:"BEYLA_NETWORK_NO_TC"`
+	// Specify the source type for network events, e.g tc or socket_filter. The tc implementation
+	// cannot be used when there are other tc eBPF probes, e.g. Cilium CNI.
+	Source string `yaml:"source" env:"BEYLA_NETWORK_SOURCE"`
 
 	// AgentIP allows overriding the reported Agent IP address on each flow.
 	AgentIP string `yaml:"agent_ip" env:"BEYLA_NETWORK_AGENT_IP"`
@@ -119,6 +125,7 @@ type NetworkConfig struct {
 }
 
 var defaultNetworkConfig = NetworkConfig{
+	Source:             EbpfSourceTC,
 	AgentIPIface:       "external",
 	AgentIPType:        "any",
 	ExcludeInterfaces:  []string{"lo"},

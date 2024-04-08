@@ -107,8 +107,8 @@ spec:
               value: /config/beyla-config.yml
             - name: BEYLA_NETWORK_METRICS
               value: "true"
-            - name: BEYLA_NETWORK_NO_TC
-              value: "true"
+            - name: BEYLA_NETWORK_SOURCE
+              value: "socket_filter"
             - name: BEYLA_NETWORK_CACHE_ACTIVE_TIMEOUT
               value: "100ms"
             - name: BEYLA_NETWORK_CACHE_MAX_FLOWS

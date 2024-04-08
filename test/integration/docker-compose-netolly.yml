@@ -30,7 +30,7 @@ services:
     network_mode: service:testserver
     environment:
       GOCOVERDIR: "/coverage"
-      BEYLA_NETWORK_NO_TC: ${BEYLA_NETWORK_NO_TC}
+      BEYLA_NETWORK_SOURCE: ${BEYLA_NETWORK_SOURCE}
       BEYLA_NETWORK_METRICS: "true"
       BEYLA_NETWORK_PRINT_FLOWS: "true"
       BEYLA_NETWORK_DEDUPER: ${BEYLA_NETWORK_DEDUPER}

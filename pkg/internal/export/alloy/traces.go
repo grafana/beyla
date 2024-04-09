@@ -1,4 +1,4 @@
-package grafanaagent
+package alloy
 
 import (
 	"context"

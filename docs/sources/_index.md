@@ -36,7 +36,7 @@ Beyla offers the following features:
 - distributed traces for Go services
 - runs in any Linux environment
 - listen to the Kubernetes API to decorate metrics and traces with Pods and Services metadata
-- simple setup for Grafana customers already using Grafana Agent
+- simple setup for Grafana customers already using Grafana Alloy
 
 ## Requirements
 

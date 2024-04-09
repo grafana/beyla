@@ -938,7 +938,7 @@ otel_traces_export:
     arg: "0.1"
 ```
 
-If you are using the Grafana Agent as your OTEL collector, you can configure the sampling
+If you are using the Grafana Alloy as your OTEL collector, you can configure the sampling
 policy at that level instead.
 
 | YAML   | Environment variable               | Type   | Default                 |

@@ -14,9 +14,9 @@ aliases:
 
 Beyla can export data in two modes:
 
-- **Agent mode** (recommended mode): the auto-instrumentation tool will send the metrics and the traces to the
-  [Grafana Agent](https://github.com/grafana/agent), which will process and send them
-  to Mimir and Tempo. In this scenario, the Agent takes care of the authentication required by the Grafana Mimir/Tempo endpoints.
+- **Alloy mode** (recommended mode): the auto-instrumentation tool sends metrics and traces to the
+  [Grafana Alloy](/docs/alloy/), which processes and sends them
+  to Mimir and Tempo. In this scenario, Alloy takes care of the authentication required by the Grafana Mimir/Tempo endpoints.
   This mode also integrates better with some Grafana exclusive features,
   such as the [span-to-metrics](/docs/tempo/latest/metrics-generator/span_metrics/) and
   [span-to-service graph](/docs/tempo/latest/metrics-generator/service_graphs/) converters.
@@ -24,9 +24,9 @@ Beyla can export data in two modes:
   (using the OpenTelemetry/OTEL protocols) or expose a Prometheus HTTP endpoint ready to be scraped (i.e. **pull** mode).
   In the direct OTEL push mode, the auto-instrumentation tool needs to be configured with the authentication credentials.
 
-![Beyla architecture agent vs direct](https://grafana.com/media/docs/grafana-cloud/beyla/agent-vs-direct.png)
+![Beyla architecture alloy vs direct](https://grafana.com/media/docs/grafana-cloud/beyla/alloy-vs-direct.png)
 
-<center><i>Beyla running in Agent mode (left) vs. Direct mode (right)</i></center>
+<center><i>Beyla running in Alloy mode (left) vs. Direct mode (right)</i></center>
 
 ## Running in Direct mode
 
@@ -40,31 +40,28 @@ by using the following environment variables:
 To run in Direct mode by using the Prometheus scrape endpoint, please refer to the
 [configuration documentation]({{< relref "./options.md" >}}).
 
-## Running in Agent mode
+## Running in Alloy mode
 
-> ℹ️ This tutorial assumes that both the Agent and the auto-instrumentation tool are installed
+> ℹ️ This tutorial assumes that both Alloy and the auto-instrumentation tool are installed
 > as local Linux OS executables. For further examples on downloading and running the
 > auto-instrumentation tool as an OCI container, you can check the documentation sections on
 > [running the Beyla as a Docker container]({{< relref "../setup/docker.md" >}})
 > or [running Beyla in Kubernetes]({{< relref "../setup/kubernetes.md" >}}).
 
-First, you will need to locally install and configure the [Grafana Agent in **Flow** mode, according to the latest documentation](/docs/agent/latest/flow/).
-Running the Agent in Flow mode will facilitate the ingestion of OpenTelemetry
-metrics and traces from the auto-instrumentation tool, as well as process and forward
-to the different Grafana product endpoints (Mimir and/or Tempo).
+First, locally install and configure [Grafana Alloy, according to the latest documentation](/docs/alloy/).
+Alloy facilitates the ingestion of OpenTelemetry metrics and traces from the auto-instrumentation tool,
+and process and forward to the different Grafana product endpoints (Mimir and/or Tempo).
 
-### Configuring the Agent pipeline
+### Configuring Alloy pipeline
 
-Next, you'll need to specify the following nodes by using the
-[River configuration language](/docs/agent/latest/flow/):
+Configure the [Alloy](/docs/alloy/) pipeline and specify the following nodes:
 
-![Beyla nodes](https://grafana.com/media/docs/grafana-cloud/beyla/nodes.png)
+![Beyla nodes](https://grafana.com/media/docs/grafana-cloud/beyla/nodes-2.png)
 
-You can download the [example of the whole River configuration file](/docs/beyla/latest/configure/resources/agent-config.river), which will be explained in the rest of this section.
+Download the [example River configuration file](/docs/beyla/latest/configure/resources/alloy-config.river) used in this article.
 
-The Agent needs to expose an **OpenTelemetry receiver** endpoint, such that the
-auto-instrumentation tool can forward both metrics and traces. The Agent
-configuration file will need to include the following entry:
+Alloy needs to expose an **OpenTelemetry receiver** endpoint, such that the auto-instrumentation tool can forward both metrics and traces.
+The Alloy configuration file needs to include the following entry:
 
 ```hcl
 otelcol.receiver.otlp "default" {
@@ -116,8 +113,7 @@ prometheus.remote_write "mimir" {
 }
 ```
 
-Assuming you have a configuration file as above, you will need to run the Agent with the environment variables set.
-For example:
+Run Alloy with the following environment variables set:
 
 ```sh
 export MIMIR_USER=734432
@@ -146,19 +142,16 @@ otelcol.auth.basic "creds" {
 Please note that the `TEMPO_ENDPOINT` and `TEMPO_USER` values are different
 from `MIMIR_ENDPOINT` and `MIMIR_USER`.
 
-To run the agent with the previous configuration (for example, written in a file
-named `agent-config.river`), you need to run the following command:
+To run Alloy with the previous configuration (for example, written in a file named `alloy-config.river`):
 
 ```
-agent run agent-config.river
+grafana-alloy run alloy-config.river
 ```
 
 ### Configuring and running the auto-instrumentation tool
 
-Now we can configure the auto-instrumentation tool to forward data to the running Grafana Agent.
-In this tutorial we are assuming that both the auto-instrumentation tool and the Agent are
-running on the same host, so there is no need to secure the traffic nor provide
-authentication in the Agent OTLP receiver.
+Configure the auto-instrumentation tool to forward data to Grafana Alloy.
+This tutorial assumes Beyla and Alloy are running on the same host, so there is no need to secure the traffic nor provide authentication in the Alloy OTLP receiver.
 
 You can configure the auto-instrumentation tool both via environment variables or via
 a configuration YAML file, which is what we will use in this example.
@@ -179,8 +172,8 @@ open_port: 443
 The auto-instrumentation tool will automatically search and instrument the process
 listening on port 443.
 
-Next, you will need to specify where the traces and the metrics will be submitted. If
-the Agent is running on the local host, it will use the port `4318`:
+Next, specify where the traces and the metrics are submitted.
+If Alloy is running on the local host, it uses port `4318`:
 
 ```yaml
 otel_metrics_export:

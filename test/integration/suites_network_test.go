@@ -55,7 +55,7 @@ func TestNetwork_NoDeduplication(t *testing.T) {
 
 func TestNetwork_AllowedAttributes(t *testing.T) {
 	compose, err := docker.ComposeSuite("docker-compose-netolly.yml", path.Join(pathOutput, "test-suite-netolly-allowed-attrs.log"))
-	compose.Env = append(compose.Env, "BEYLA_EXECUTABLE_NAME=", `BEYLA_NETWORK_ALLOWED_ATTRIBUTES=beyla.ip,src.name`)
+	compose.Env = append(compose.Env, "BEYLA_EXECUTABLE_NAME=", `BEYLA_NETWORK_ALLOWED_ATTRIBUTES=beyla.ip,src.name,dst.port`)
 	require.NoError(t, err)
 	require.NoError(t, compose.Up())
 
@@ -63,12 +63,15 @@ func TestNetwork_AllowedAttributes(t *testing.T) {
 	for _, f := range getNetFlows(t) {
 		require.Contains(t, f.Metric, "beyla_ip")
 		require.Contains(t, f.Metric, "src_name")
+		require.Contains(t, f.Metric, "dst_port")
 		assert.NotEmpty(t, f.Metric["beyla_ip"])
 		assert.NotEmpty(t, f.Metric["src_name"])
+		assert.NotEmpty(t, f.Metric["dst_port"])
 
 		assert.NotContains(t, f.Metric, "src_address")
 		assert.NotContains(t, f.Metric, "dst_address")
 		assert.NotContains(t, f.Metric, "dst_name")
+		assert.NotContains(t, f.Metric, "src_port")
 	}
 
 	require.NoError(t, compose.Close())

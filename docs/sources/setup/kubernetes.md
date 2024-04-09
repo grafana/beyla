@@ -132,8 +132,8 @@ requirements:
 
 The following example instruments the `goblog` pod by attaching Beyla
 as a container (image available at `grafana/beyla:latest`). The
-auto-instrumentation tool is configured to forward metrics and traces to a Grafana Agent,
-which is accessible behind the `grafana-agent` service in the same namespace:
+auto-instrumentation tool is configured to forward metrics and traces to Grafana Alloy,
+which is accessible behind the `grafana-alloy` service in the same namespace:
 
 ```yaml
 apiVersion: apps/v1
@@ -177,7 +177,7 @@ spec:
             - name: BEYLA_OPEN_PORT
               value: "8443"
             - name: OTEL_EXPORTER_OTLP_ENDPOINT
-              value: "http://grafana-agent:4318"
+              value: "http://grafana-alloy:4318"
               # required if you want kubernetes metadata decoration
             - name: BEYLA_KUBE_METADATA_ENABLE
               value: "true"
@@ -233,7 +233,7 @@ spec:
             - name: BEYLA_EXECUTABLE_NAME
               value: "goblog"
             - name: OTEL_EXPORTER_OTLP_ENDPOINT
-              value: "http://grafana-agent:4318"
+              value: "http://grafana-alloy:4318"
               # required if you want kubernetes metadata decoration
             - name: BEYLA_KUBE_METADATA_ENABLE
               value: "true"

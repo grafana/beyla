@@ -24,7 +24,7 @@ Beyla can export data in two modes:
   (using the OpenTelemetry/OTEL protocols) or expose a Prometheus HTTP endpoint ready to be scraped (i.e. **pull** mode).
   In the direct OTEL push mode, the auto-instrumentation tool needs to be configured with the authentication credentials.
 
-![Beyla architecture alloy vs direct](https://grafana.com/media/docs/grafana-cloud/beyla/agent-vs-direct.png)
+![Beyla architecture alloy vs direct](https://grafana.com/media/docs/grafana-cloud/beyla/alloy-vs-direct.png)
 
 <center><i>Beyla running in Alloy mode (left) vs. Direct mode (right)</i></center>
 
@@ -56,7 +56,7 @@ and process and forward to the different Grafana product endpoints (Mimir and/or
 
 Configure the [Alloy](/docs/alloy/) pipeline and specify the following nodes:
 
-![Beyla nodes](https://grafana.com/media/docs/grafana-cloud/beyla/nodes.png)
+![Beyla nodes](https://grafana.com/media/docs/grafana-cloud/beyla/nodes-2.png)
 
 Download the [example River configuration file](/docs/beyla/latest/configure/resources/alloy-config.river) used in this article.
 

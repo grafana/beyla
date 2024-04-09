@@ -134,7 +134,7 @@
       "target": {
         "versions": {
           "oldest": "1.40.0",
-          "newest": "1.63.0"
+          "newest": "1.63.2"
         },
         "offsets": [
           {
@@ -148,7 +148,7 @@
       "s": {
         "versions": {
           "oldest": "1.40.0",
-          "newest": "1.63.0"
+          "newest": "1.63.2"
         },
         "offsets": [
           {
@@ -162,7 +162,7 @@
       "ctx": {
         "versions": {
           "oldest": "1.40.0",
-          "newest": "1.63.0"
+          "newest": "1.63.2"
         },
         "offsets": [
           {
@@ -174,7 +174,7 @@
       "method": {
         "versions": {
           "oldest": "1.40.0",
-          "newest": "1.63.0"
+          "newest": "1.63.2"
         },
         "offsets": [
           {
@@ -186,7 +186,7 @@
       "st": {
         "versions": {
           "oldest": "1.40.0",
-          "newest": "1.63.0"
+          "newest": "1.63.2"
         },
         "offsets": [
           {
@@ -200,7 +200,7 @@
       "buf": {
         "versions": {
           "oldest": "1.40.0",
-          "newest": "1.63.0"
+          "newest": "1.63.2"
         },
         "offsets": [
           {
@@ -216,7 +216,7 @@
       "offset": {
         "versions": {
           "oldest": "1.40.0",
-          "newest": "1.63.0"
+          "newest": "1.63.2"
         },
         "offsets": [
           {
@@ -234,7 +234,7 @@
       "nextID": {
         "versions": {
           "oldest": "1.40.0",
-          "newest": "1.63.0"
+          "newest": "1.63.2"
         },
         "offsets": [
           {
@@ -276,7 +276,7 @@
       "peer": {
         "versions": {
           "oldest": "1.60.0",
-          "newest": "1.63.0"
+          "newest": "1.63.2"
         },
         "offsets": [
           {
@@ -302,7 +302,7 @@
       "Addr": {
         "versions": {
           "oldest": "1.60.0",
-          "newest": "1.63.0"
+          "newest": "1.63.2"
         },
         "offsets": [
           {
@@ -314,7 +314,7 @@
       "LocalAddr": {
         "versions": {
           "oldest": "1.60.0",
-          "newest": "1.63.0"
+          "newest": "1.63.2"
         },
         "offsets": [
           {

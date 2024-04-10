@@ -3,6 +3,7 @@ package beyla
 import (
 	"fmt"
 	"io"
+	"os"
 	"time"
 
 	"github.com/caarlos0/env/v9"
@@ -36,6 +37,7 @@ var DefaultConfig = Config{
 		BatchLength:  100,
 		BatchTimeout: time.Second,
 		BpfBaseDir:   "/var/run/beyla",
+		BpfPath:      fmt.Sprintf("beyla-%d", os.Getpid()),
 	},
 	Grafana: otel.GrafanaConfig{
 		OTLP: otel.GrafanaOTLP{

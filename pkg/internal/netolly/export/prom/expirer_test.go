@@ -94,7 +94,11 @@ func TestMetricsExpiration(t *testing.T) {
 	assert.NotContains(t, exported, `beyla_network_flow_bytes_total{dst_name="bar",src_name="foo"}`)
 }
 
+var mmux = sync.Mutex{}
+
 func getMetrics(t require.TestingT, promURL string) string {
+	mmux.Lock()
+	defer mmux.Unlock()
 	resp, err := http.Get(promURL)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, resp.StatusCode)

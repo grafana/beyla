@@ -90,7 +90,7 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url, svcName, svcNs string) {
 	// Call 3 times the instrumented service, forcing it to:
 	// - take at least 30ms to respond
 	// - returning a 404 code
-	for i := 0; i < 3; i++ {
+	for i := 0; i < 4; i++ {
 		doHTTPGet(t, url+"/metrics", 200)
 		doHTTPGet(t, url+path+"?delay=30ms&status=404", 404)
 		if url == instrumentedServiceGorillaURL {
@@ -142,6 +142,52 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url, svcName, svcNs string) {
 			addr := net.ParseIP(res.Metric["client_address"])
 			assert.NotNil(t, addr)
 		}
+	})
+
+	// Test span metrics
+	test.Eventually(t, testTimeout, func(t require.TestingT) {
+		var err error
+		results, err = pq.Query(`traces_spanmetrics_latency_count{` +
+			`span_kind="SPAN_KIND_SERVER",` +
+			`status_code="0",` + // 404 is OK for server spans
+			`service_namespace="` + svcNs + `",` +
+			`service="` + svcName + `",` +
+			`span_name="GET /basic/:rnd"` +
+			`}`)
+		require.NoError(t, err)
+		// check span metric latency exists
+		enoughPromResults(t, results)
+		val := totalPromCount(t, results)
+		assert.LessOrEqual(t, 3, val)
+	})
+
+	test.Eventually(t, testTimeout, func(t require.TestingT) {
+		var err error
+		results, err = pq.Query(`traces_spanmetrics_calls_total{` +
+			`span_kind="SPAN_KIND_SERVER",` +
+			`status_code="0",` + // 404 is OK for server spans
+			`service_namespace="` + svcNs + `",` +
+			`service="` + svcName + `",` +
+			`span_name="GET /basic/:rnd"` +
+			`}`)
+		require.NoError(t, err)
+		// check calls total exists
+		enoughPromResults(t, results)
+		val := totalPromCount(t, results)
+		assert.LessOrEqual(t, 3, val)
+	})
+
+	test.Eventually(t, testTimeout, func(t require.TestingT) {
+		var err error
+		results, err = pq.Query(`traces_target_info{` +
+			`service_namespace="` + svcNs + `",` +
+			`service="` + svcName + `",` +
+			`telemetry_sdk_language="go"` +
+			`}`)
+		require.NoError(t, err)
+		enoughPromResults(t, results)
+		val := totalPromCount(t, results)
+		assert.LessOrEqual(t, 1, val) // we report this count for each service, doesn't matter how many calls
 	})
 
 	if url == instrumentedServiceGorillaURL {

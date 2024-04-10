@@ -536,7 +536,6 @@ func (mr *MetricsReporter) metricAttributes(span *request.Span) attribute.Set {
 func (mr *MetricsReporter) metricResourceAttributes(service svc.ID) attribute.Set {
 	attrs := []attribute.KeyValue{
 		ServiceMetric(service.Name),
-		ServiceInstanceMetric(service.Instance),
 		semconv.ServiceNamespace(service.Namespace),
 		semconv.TelemetrySDKLanguageKey.String(service.SDKLanguage.String()),
 		semconv.TelemetrySDKNameKey.String("beyla"),
@@ -552,7 +551,6 @@ func (mr *MetricsReporter) metricResourceAttributes(service svc.ID) attribute.Se
 func (mr *MetricsReporter) spanMetricAttributes(span *request.Span) attribute.Set {
 	attrs := []attribute.KeyValue{
 		ServiceMetric(span.ServiceID.Name),
-		ServiceInstanceMetric(span.ServiceID.Instance),
 		semconv.ServiceNamespace(span.ServiceID.Namespace),
 		SpanKindMetric(SpanKindString(span)),
 		SpanNameMetric(TraceName(span)),

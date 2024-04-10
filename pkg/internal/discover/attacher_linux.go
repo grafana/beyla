@@ -1,8 +1,10 @@
 package discover
 
 import (
+	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/cilium/ebpf/rlimit"
 	"golang.org/x/sys/unix"
@@ -24,7 +26,7 @@ func (ta *TraceAttacher) mountBpfPinPath() error {
 		}
 	}
 
-	return bpfMount(ta.pinPath)
+	return ta.bpfMount(ta.pinPath)
 }
 
 func (ta *TraceAttacher) unmountBpfPinPath() {
@@ -40,8 +42,51 @@ func (ta *TraceAttacher) unmountBpfPinPath() {
 	}
 }
 
-func bpfMount(pinPath string) error {
-	return unix.Mount(pinPath, pinPath, "bpf", 0, "")
+func (ta *TraceAttacher) bpfMount(pinPath string) error {
+	mounted, bpffsInstance, err := isBPFMountFS(pinPath)
+	if err != nil {
+		return err
+	}
+	if !mounted {
+		return unix.Mount(pinPath, pinPath, "bpf", 0, "")
+	}
+	if !bpffsInstance {
+		return fmt.Errorf("mount in the custom directory %s has a different filesystem than BPFFS", pinPath)
+	}
+	ta.log.Info(fmt.Sprintf("Detected mounted BPF filesystem at %v", pinPath))
+
+	return nil
+}
+
+func isBPFMountFS(pinPath string) (bool, bool, error) {
+	var st, pst unix.Stat_t
+
+	err := unix.Lstat(pinPath, &st)
+	if err != nil {
+		if errors.Is(err, unix.ENOENT) {
+			// path doesn't exist
+			return false, false, nil
+		}
+		return false, false, &os.PathError{Op: "lstat", Path: pinPath, Err: err}
+	}
+
+	parent := filepath.Dir(pinPath)
+	err = unix.Lstat(parent, &pst)
+	if err != nil {
+		return false, false, &os.PathError{Op: "lstat", Path: parent, Err: err}
+	}
+	if st.Dev == pst.Dev {
+		// parent has the same dev -- not a mount point
+		return false, false, nil
+	}
+
+	fst := unix.Statfs_t{}
+	err = unix.Statfs(pinPath, &fst)
+	if err != nil {
+		return true, false, &os.PathError{Op: "statfs", Path: pinPath, Err: err}
+	}
+
+	return true, int64(fst.Type) == unix.BPF_FS_MAGIC, nil
 }
 
 func (ta *TraceAttacher) init() error {

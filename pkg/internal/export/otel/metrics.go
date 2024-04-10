@@ -330,16 +330,19 @@ func (mr *MetricsReporter) newMetricSet(service svc.ID) (*Metrics, error) {
 	// https://github.com/open-telemetry/opentelemetry-specification/tree/main/specification/metrics/semantic_conventions
 	// TODO: set ExplicitBucketBoundaries here and in prometheus from the previous specification
 	meter := m.provider.Meter(reporterName)
-	err := mr.setupOtelMeters(&m, meter)
-	if err != nil {
-		return nil, err
-	}
-	err = mr.setupSpanMeters(&m, meter)
-	if err != nil {
-		return nil, err
+	var err error
+	if mr.cfg.OTelMetricsEnabled() {
+		err = mr.setupOtelMeters(&m, meter)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	if mr.cfg.SpanMetricsEnabled() {
+		err = mr.setupSpanMeters(&m, meter)
+		if err != nil {
+			return nil, err
+		}
 		attrOpt := instrument.WithAttributeSet(mr.metricResourceAttributes(service))
 		m.tracesTargetInfo.Add(mr.ctx, 1, attrOpt)
 	}

@@ -125,6 +125,7 @@ services:
     network_mode: "host"
     environment:
       GOCOVERDIR: "/coverage"
+      BEYLA_OTEL_METRIC_FEATURES: "application,span"
       BEYLA_PRINT_TRACES: "true"
       BEYLA_METRICS_INTERVAL: "10ms"
       BEYLA_BPF_BATCH_TIMEOUT: "10ms"

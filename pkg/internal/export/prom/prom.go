@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/hashicorp/golang-lru/v2/expirable"
 	"github.com/mariomac/pipes/pkg/node"
 	"github.com/prometheus/client_golang/prometheus"
 
@@ -16,6 +17,7 @@ import (
 	"github.com/grafana/beyla/pkg/internal/kube"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/pkg/internal/request"
+	"github.com/grafana/beyla/pkg/internal/svc"
 )
 
 // using labels and names that are equivalent names to the OTEL attributes
@@ -29,6 +31,11 @@ const (
 	HTTPServerRequestSize = "http_server_request_body_size_bytes"
 	HTTPClientRequestSize = "http_client_request_body_size_bytes"
 
+	SpanMetricsLatency = "traces_spanmetrics_latency"
+	SpanMetricsCalls   = "traces_spanmetrics_calls_total"
+	SpanMetricsSizes   = "traces_spanmetrics_size_total"
+	TracesTargetInfo   = "traces_target_info"
+
 	// target will expose the process hostname-pid (or K8s Pod).
 	// It is advised for users that to use relabeling rules to
 	// override the "instance" attribute with "target" in the
@@ -36,6 +43,7 @@ const (
 	// https://prometheus.io/docs/guides/multi-target-exporter/
 	targetInstanceKey    = "target_instance"
 	serviceNameKey       = "service_name"
+	serviceKey           = "service"
 	serviceNamespaceKey  = "service_namespace"
 	httpMethodKey        = "http_request_method"
 	httpRouteKey         = "http_route"
@@ -58,6 +66,15 @@ const (
 	k8sNodeName        = "k8s_node_name"
 	k8sPodUID          = "k8s_pod_uid"
 	k8sPodStartTime    = "k8s_pod_start_time"
+
+	spanNameKey          = "span_name"
+	statusCodeKey        = "status_code"
+	spanKindKey          = "span_kind"
+	serviceInstanceKey   = "instance"
+	serviceJobKey        = "job"
+	sourceKey            = "source"
+	telemetryLanguageKey = "telemetry_sdk_language"
+	telemetrySDKKey      = "telemetry_sdk_name"
 
 	// default values for the histogram configuration
 	// from https://grafana.com/docs/mimir/latest/send/native-histograms/#migrate-from-classic-histograms
@@ -92,16 +109,25 @@ type PrometheusConfig struct {
 
 	// ExpireTime is the time since a metric was updated for the last time until it is
 	// removed from the metrics set.
-	ExpireTime time.Duration `yaml:"expire_time" env:"BEYLA_PROMETHEUS_EXPIRE_TIME"`
+	ExpireTime                  time.Duration `yaml:"expire_time" env:"BEYLA_PROMETHEUS_EXPIRE_TIME"`
+	SpanMetricsServiceCacheSize int           `yaml:"service_cache_size"`
 
 	// Registry is only used for embedding Beyla within the Grafana Agent.
 	// It must be nil when Beyla runs as standalone
 	Registry *prometheus.Registry `yaml:"-"`
 }
 
+func (p PrometheusConfig) SpanMetricsEnabled() bool {
+	return slices.Contains(p.Features, otel.FeatureSpan)
+}
+
+func (p PrometheusConfig) OTelMetricsEnabled() bool {
+	return slices.Contains(p.Features, otel.FeatureApplication)
+}
+
 // nolint:gocritic
 func (p PrometheusConfig) Enabled() bool {
-	return (p.Port != 0 || p.Registry != nil) && slices.Contains(p.Features, otel.FeatureApplication)
+	return (p.Port != 0 || p.Registry != nil) && (p.OTelMetricsEnabled() || p.SpanMetricsEnabled())
 }
 
 type metricsReporter struct {
@@ -116,10 +142,18 @@ type metricsReporter struct {
 	httpRequestSize       *prometheus.HistogramVec
 	httpClientRequestSize *prometheus.HistogramVec
 
+	// trace span metrics
+	spanMetricsLatency    *prometheus.HistogramVec
+	spanMetricsCallsTotal *prometheus.CounterVec
+	spanMetricsSizeTotal  *prometheus.CounterVec
+	tracesTargetInfo      *prometheus.GaugeVec
+
 	promConnect *connector.PrometheusManager
 
 	bgCtx   context.Context
 	ctxInfo *global.ContextInfo
+
+	serviceCache *expirable.LRU[svc.UID, svc.ID]
 }
 
 func PrometheusEndpoint(ctx context.Context, cfg *PrometheusConfig, ctxInfo *global.ContextInfo) (node.TerminalFunc[[]request.Span], error) {
@@ -207,20 +241,59 @@ func newReporter(ctx context.Context, cfg *PrometheusConfig, ctxInfo *global.Con
 			NativeHistogramMaxBucketNumber:  defaultHistogramMaxBucketNumber,
 			NativeHistogramMinResetDuration: defaultHistogramMinResetDuration,
 		}, labelNamesHTTPClient(cfg, ctxInfo)),
+		spanMetricsLatency: prometheus.NewHistogramVec(prometheus.HistogramOpts{
+			Name:                            SpanMetricsLatency,
+			Help:                            "duration of service calls (client and server), in seconds, in trace span metrics format",
+			Buckets:                         cfg.Buckets.DurationHistogram,
+			NativeHistogramBucketFactor:     defaultHistogramBucketFactor,
+			NativeHistogramMaxBucketNumber:  defaultHistogramMaxBucketNumber,
+			NativeHistogramMinResetDuration: defaultHistogramMinResetDuration,
+		}, labelNamesSpans()),
+		spanMetricsCallsTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: SpanMetricsCalls,
+			Help: "number of service calls in trace span metrics format",
+		}, labelNamesSpans()),
+		spanMetricsSizeTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: SpanMetricsSizes,
+			Help: "size of service calls, in bytes, in trace span metrics format",
+		}, labelNamesSpans()),
+		tracesTargetInfo: prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Name: TracesTargetInfo,
+			Help: "target service information in trace span metric format",
+		}, labelNamesTargetInfo(ctxInfo)),
+	}
+
+	if cfg.SpanMetricsEnabled() {
+		mr.serviceCache = expirable.NewLRU(cfg.SpanMetricsServiceCacheSize, func(id svc.UID, v svc.ID) {
+			lv := mr.labelValuesTargetInfo(v)
+			mr.tracesTargetInfo.WithLabelValues(lv...).Sub(1)
+		}, cfg.ExpireTime)
 	}
 
 	var registeredMetrics []prometheus.Collector
 	if !mr.cfg.DisableBuildInfo {
 		registeredMetrics = append(registeredMetrics, mr.beylaInfo)
 	}
-	registeredMetrics = append(registeredMetrics,
-		mr.httpClientRequestSize,
-		mr.httpClientDuration,
-		mr.grpcClientDuration,
-		mr.sqlClientDuration,
-		mr.httpRequestSize,
-		mr.httpDuration,
-		mr.grpcDuration)
+
+	if cfg.OTelMetricsEnabled() {
+		registeredMetrics = append(registeredMetrics,
+			mr.httpClientRequestSize,
+			mr.httpClientDuration,
+			mr.grpcClientDuration,
+			mr.sqlClientDuration,
+			mr.httpRequestSize,
+			mr.httpDuration,
+			mr.grpcDuration)
+	}
+
+	if cfg.SpanMetricsEnabled() {
+		registeredMetrics = append(registeredMetrics,
+			mr.spanMetricsLatency,
+			mr.spanMetricsCallsTotal,
+			mr.spanMetricsSizeTotal,
+			mr.tracesTargetInfo,
+		)
+	}
 
 	if mr.cfg.Registry != nil {
 		mr.cfg.Registry.MustRegister(registeredMetrics...)
@@ -248,21 +321,36 @@ func (r *metricsReporter) observe(span *request.Span) {
 	t := span.Timings()
 	r.beylaInfo.WithLabelValues(span.ServiceID.SDKLanguage.String()).Set(1.0)
 	duration := t.End.Sub(t.RequestStart).Seconds()
-	switch span.Type {
-	case request.EventTypeHTTP:
-		lv := r.labelValuesHTTP(span)
-		r.httpDuration.WithLabelValues(lv...).Observe(duration)
-		r.httpRequestSize.WithLabelValues(lv...).Observe(float64(span.ContentLength))
-	case request.EventTypeHTTPClient:
-		lv := r.labelValuesHTTPClient(span)
-		r.httpClientDuration.WithLabelValues(lv...).Observe(duration)
-		r.httpClientRequestSize.WithLabelValues(lv...).Observe(float64(span.ContentLength))
-	case request.EventTypeGRPC:
-		r.grpcDuration.WithLabelValues(r.labelValuesGRPC(span)...).Observe(duration)
-	case request.EventTypeGRPCClient:
-		r.grpcClientDuration.WithLabelValues(r.labelValuesGRPC(span)...).Observe(duration)
-	case request.EventTypeSQLClient:
-		r.sqlClientDuration.WithLabelValues(r.labelValuesSQL(span)...).Observe(duration)
+	if r.cfg.OTelMetricsEnabled() {
+		switch span.Type {
+		case request.EventTypeHTTP:
+			lv := r.labelValuesHTTP(span)
+			r.httpDuration.WithLabelValues(lv...).Observe(duration)
+			r.httpRequestSize.WithLabelValues(lv...).Observe(float64(span.ContentLength))
+		case request.EventTypeHTTPClient:
+			lv := r.labelValuesHTTPClient(span)
+			r.httpClientDuration.WithLabelValues(lv...).Observe(duration)
+			r.httpClientRequestSize.WithLabelValues(lv...).Observe(float64(span.ContentLength))
+		case request.EventTypeGRPC:
+			r.grpcDuration.WithLabelValues(r.labelValuesGRPC(span)...).Observe(duration)
+		case request.EventTypeGRPCClient:
+			r.grpcClientDuration.WithLabelValues(r.labelValuesGRPC(span)...).Observe(duration)
+		case request.EventTypeSQLClient:
+			r.sqlClientDuration.WithLabelValues(r.labelValuesSQL(span)...).Observe(duration)
+		}
+	}
+	if r.cfg.SpanMetricsEnabled() {
+		lv := r.labelValuesSpans(span)
+		r.spanMetricsLatency.WithLabelValues(lv...).Observe(duration)
+		r.spanMetricsCallsTotal.WithLabelValues(lv...).Add(1)
+		r.spanMetricsSizeTotal.WithLabelValues(lv...).Add(float64(span.ContentLength))
+
+		_, ok := r.serviceCache.Get(span.ServiceID.UID)
+		if !ok {
+			r.serviceCache.Add(span.ServiceID.UID, span.ServiceID)
+			lv = r.labelValuesTargetInfo(span.ServiceID)
+			r.tracesTargetInfo.WithLabelValues(lv...).Add(1)
+		}
 	}
 }
 
@@ -408,17 +496,73 @@ func appendK8sLabelNames(names []string) []string {
 }
 
 func appendK8sLabelValues(values []string, span *request.Span) []string {
+	return appendK8sLabelValuesService(values, span.ServiceID)
+}
+
+func appendK8sLabelValuesService(values []string, service svc.ID) []string {
 	// must follow the order in appendK8sLabelNames
 	values = append(values,
-		span.ServiceID.Metadata[kube.NamespaceName],
-		span.ServiceID.Metadata[kube.PodName],
-		span.ServiceID.Metadata[kube.NodeName],
-		span.ServiceID.Metadata[kube.PodUID],
-		span.ServiceID.Metadata[kube.PodStartTime],
-		span.ServiceID.Metadata[kube.DeploymentName],
-		span.ServiceID.Metadata[kube.ReplicaSetName],
-		span.ServiceID.Metadata[kube.StatefulSetName],
-		span.ServiceID.Metadata[kube.DaemonSetName],
+		service.Metadata[kube.NamespaceName],
+		service.Metadata[kube.PodName],
+		service.Metadata[kube.NodeName],
+		service.Metadata[kube.PodUID],
+		service.Metadata[kube.PodStartTime],
+		service.Metadata[kube.DeploymentName],
+		service.Metadata[kube.ReplicaSetName],
+		service.Metadata[kube.StatefulSetName],
+		service.Metadata[kube.DaemonSetName],
 	)
+	return values
+}
+func labelNamesSpans() []string {
+	return []string{serviceKey, serviceNamespaceKey, spanNameKey, statusCodeKey, spanKindKey, serviceInstanceKey, serviceJobKey, sourceKey}
+}
+
+func (r *metricsReporter) labelValuesSpans(span *request.Span) []string {
+	job := span.ServiceID.Name
+	if span.ServiceID.Namespace != "" {
+		job = span.ServiceID.Namespace + "/" + job
+	}
+	return []string{
+		span.ServiceID.Name,
+		span.ServiceID.Namespace,
+		otel.TraceName(span),
+		strconv.Itoa(int(otel.SpanStatusCode(span))),
+		otel.SpanKindString(span),
+		span.ServiceID.Instance,
+		job,
+		"beyla",
+	}
+}
+
+func labelNamesTargetInfo(ctxInfo *global.ContextInfo) []string {
+	names := []string{serviceKey, serviceNamespaceKey, serviceInstanceKey, serviceJobKey, telemetryLanguageKey, telemetrySDKKey, sourceKey}
+
+	if ctxInfo.K8sEnabled {
+		names = appendK8sLabelNames(names)
+	}
+
+	return names
+}
+
+func (r *metricsReporter) labelValuesTargetInfo(service svc.ID) []string {
+	job := service.Name
+	if service.Namespace != "" {
+		job = service.Namespace + "/" + job
+	}
+	values := []string{
+		service.Name,
+		service.Namespace,
+		service.Instance,
+		job,
+		service.SDKLanguage.String(),
+		"beyla",
+		"beyla",
+	}
+
+	if r.ctxInfo.K8sEnabled {
+		values = appendK8sLabelValuesService(values, service)
+	}
+
 	return values
 }

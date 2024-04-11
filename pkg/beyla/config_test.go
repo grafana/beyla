@@ -122,9 +122,10 @@ network:
 			ReportersCacheLen:  ReporterLRUSize,
 		},
 		Prometheus: prom.PrometheusConfig{
-			Path:       "/metrics",
-			Features:   []string{otel.FeatureNetwork, otel.FeatureApplication},
-			ExpireTime: time.Second,
+			Path:                        "/metrics",
+			Features:                    []string{otel.FeatureNetwork, otel.FeatureApplication},
+			ExpireTime:                  time.Second,
+			SpanMetricsServiceCacheSize: 10000,
 			Buckets: otel.Buckets{
 				DurationHistogram:    otel.DefaultBuckets.DurationHistogram,
 				RequestSizeHistogram: []float64{0, 10, 20, 22},

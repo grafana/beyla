@@ -49,6 +49,26 @@ network metrics (in the previous example, `otel_metrics_export`, but it also acc
 
 Enables network metrics reporting in Beyla.
 
+| YAML                 | Environment variable               | Type     | Default  |
+| -------------------- | ---------------------------------- | -------- | -------- |
+| `source`             | `BEYLA_NETWORK_SOURCE`             | string   | `tc`     |
+
+Specifies the Linux Kernel feature used to source the network events Beyla reports.
+
+The available options are: `tc` and `socket_filter`.
+
+When `tc` is used as an event source, Beyla uses the Linux Traffic Control ingress and egress
+filters to capture the network events, in a direct action mode. This event source mode assumes
+that no other eBPF programs are attaching to the same Linux Traffic Control interface, in 
+direct action mode. For example, the Cilium Kubernetes CNI uses the same approach, therefore
+if you have Cilium CNI installed in your Kubernetes cluster, configure Beyla to capture the
+network events with the `socket_filter` mode.
+
+When `socket_filter` is used as an event source, Beyla installs an eBPF Linux socket filter to
+capture the network events. This mode doesn't conflict with Cilium CNI or other eBPF programs, which
+use the Linux Traffic Control egress and ingress filters. 
+
+
 | YAML                 | Environment variable               | Type     | Default                                                                                                  |
 | -------------------- | ---------------------------------- | -------- | -------------------------------------------------------------------------------------------------------- |
 | `allowed_attributes` | `BEYLA_NETWORK_ALLOWED_ATTRIBUTES` | []string | `k8s.src.owner.name`, `k8s.src.namespace`, `k8s.dst.owner.name`, `k8s.dst.namespace`, `k8s.cluster.name` |

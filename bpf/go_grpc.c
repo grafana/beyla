@@ -78,16 +78,12 @@ volatile const u64 grpc_stream_st_ptr_pos;
 volatile const u64 grpc_stream_method_ptr_pos;
 volatile const u64 grpc_status_s_pos;
 volatile const u64 grpc_status_code_ptr_pos;
-volatile const u64 grpc_st_remoteaddr_ptr_pos;
-volatile const u64 grpc_st_localaddr_ptr_pos;
-volatile const u64 grpc_st_peer_ptr_pos;
 volatile const u64 tcp_addr_port_ptr_pos;
 volatile const u64 tcp_addr_ip_ptr_pos;
-volatile const u64 grpc_client_target_ptr_pos;
 volatile const u64 grpc_stream_ctx_ptr_pos;
 volatile const u64 value_context_val_ptr_pos;
-volatile const u64 grpc_peer_addr_pos;
-volatile const u64 grpc_peer_localaddr_pos;
+volatile const u64 grpc_st_conn_pos;
+volatile const u64 grpc_t_conn_pos;
 
 // Context propagation
 volatile const u64 http2_client_next_id_pos;
@@ -177,65 +173,30 @@ int uprobe_server_handleStream_return(struct pt_regs *ctx) {
     }
 
     void *st_ptr = 0;
+    u8 found_conn = 0;
     // Read the embedded object ptr
     bpf_probe_read(&st_ptr, sizeof(st_ptr), (void *)(stream_ptr + grpc_stream_st_ptr_pos + sizeof(void *)));
 
-    trace->host_len = 0;
-    trace->remote_addr_len = 0;
-    trace->host_port = 0;
-    __builtin_memset(trace->host, 0, sizeof(trace->host));    
-    __builtin_memset(trace->remote_addr, 0, sizeof(trace->remote_addr));
-
+    bpf_dbg_printk("st_ptr %llx", st_ptr);
     if (st_ptr) {
-        void *remote_addr = 0;
-        void *local_addr = 0;
-
-        if (grpc_st_peer_ptr_pos != (u64)(-1)) {
-            bpf_dbg_printk("1.60 grpc or later peer info");
-            remote_addr = (void *)(st_ptr + grpc_st_peer_ptr_pos + grpc_peer_addr_pos + sizeof(void *));
-            local_addr = (void *)(st_ptr + grpc_st_peer_ptr_pos + grpc_peer_localaddr_pos + sizeof(void *));
-        } else if (grpc_st_remoteaddr_ptr_pos != (u64)(-1)) {
-            bpf_dbg_printk("pre 1.60 grpc peer info");
-            remote_addr = (void *)(st_ptr + grpc_st_remoteaddr_ptr_pos + sizeof(void *));
-            local_addr = (void *)(st_ptr + grpc_st_localaddr_ptr_pos + sizeof(void *));
-        }
-
-        if (remote_addr != 0 && local_addr != 0) {
-            void *peer_ptr = 0; 
-            bpf_probe_read(&peer_ptr, sizeof(peer_ptr), remote_addr);
-
-            if (peer_ptr) {
-                u64 remote_addr_len = 0;
-                if (!read_go_byte_arr("grpc peer ptr", peer_ptr, tcp_addr_ip_ptr_pos, &trace->remote_addr, &remote_addr_len, sizeof(trace->remote_addr))) {
-                    bpf_printk("can't read grpc peer ptr");
-                    bpf_ringbuf_discard(trace, 0);
-                    goto done;
-                }
-                trace->remote_addr_len = remote_addr_len;
+        void *conn_ptr = st_ptr + grpc_st_conn_pos;
+        bpf_dbg_printk("conn_ptr %llx", conn_ptr);
+        if (conn_ptr) {
+            void *conn_conn_ptr = 0;
+            bpf_probe_read(&conn_conn_ptr, sizeof(conn_conn_ptr), conn_ptr + 8);
+            bpf_dbg_printk("conn_conn_ptr %llx", conn_conn_ptr);
+            if (conn_conn_ptr) {                
+                get_conn_info(conn_conn_ptr, &trace->conn);
+                found_conn = 1;
             }
+        } 
+    }
 
-            void *host_ptr = 0;
-            bpf_probe_read(&host_ptr, sizeof(host_ptr), local_addr);
-
-            if (host_ptr) {
-                u64 host_len = 0;
-
-                if (!read_go_byte_arr("grpc host ptr", host_ptr, tcp_addr_ip_ptr_pos, &trace->host, &host_len, sizeof(trace->host))) {
-                    bpf_printk("can't read grpc host ptr");
-                    bpf_ringbuf_discard(trace, 0);
-                    goto done;
-                }
-                trace->host_len = host_len;
-
-                bpf_probe_read(&trace->host_port, sizeof(trace->host_port), (void *)(host_ptr + tcp_addr_port_ptr_pos));
-            }
-        } else {
-            bpf_dbg_printk("can't find peer grpc information");
-        }
+    if (!found_conn) {
+        __builtin_memset(&trace->conn, 0, sizeof(connection_info_t));
     }
 
     trace->tp = invocation->tp;
-
     trace->end_monotime_ns = bpf_ktime_get_ns();
     // submit the completed trace via ringbuffer
     bpf_ringbuf_submit(trace, get_flags());
@@ -380,7 +341,6 @@ int uprobe_ClientConn_Invoke_return(struct pt_regs *ctx) {
     // Read arguments from the original set of registers
 
     // Get client request value pointers
-    void *cc_ptr = (void *)invocation->cc;
     void *method_ptr = (void *)invocation->method;
     void *method_len = (void *)invocation->method_len;
     void *err = (void *)GO_PARAM1(ctx);
@@ -394,11 +354,12 @@ int uprobe_ClientConn_Invoke_return(struct pt_regs *ctx) {
         goto done;
     }
 
-    // Get the host information of the remote
-    if (!read_go_str("host", cc_ptr, grpc_client_target_ptr_pos, &trace->host, sizeof(trace->host))) {
-        bpf_printk("can't read http Request.Host");
-        bpf_ringbuf_discard(trace, 0);
-        goto done;
+    connection_info_t *info = bpf_map_lookup_elem(&ongoing_client_connections, &goroutine_addr);
+
+    if (info) {
+        __builtin_memcpy(&trace->conn, info, sizeof(connection_info_t));
+    } else {
+        __builtin_memset(&trace->conn, 0, sizeof(connection_info_t));
     }
 
     trace->tp = invocation->tp;
@@ -417,15 +378,28 @@ done:
 // We extract the stream ID when it's just created and make a mapping of it to our goroutine that's executing ClientConn.Invoke.
 SEC("uprobe/transport_http2Client_NewStream")
 int uprobe_transport_http2Client_NewStream(struct pt_regs *ctx) {
-#ifndef NO_HEADER_PROPAGATION
     bpf_dbg_printk("=== uprobe/proc transport.(*http2Client).NewStream === ");
 
     void *goroutine_addr = GOROUTINE_PTR(ctx);
     void *t_ptr = GO_PARAM1(ctx);
 
-    bpf_dbg_printk("goroutine_addr %lx, t_ptr %llx", goroutine_addr, t_ptr);
+    bpf_dbg_printk("goroutine_addr %lx, t_ptr %llx, t.conn_pos %x", goroutine_addr, t_ptr, grpc_t_conn_pos);
 
     if (t_ptr) {
+        void *conn_ptr = t_ptr + grpc_t_conn_pos;
+        bpf_dbg_printk("conn_ptr %llx", conn_ptr);
+        if (conn_ptr) {
+            void *conn_conn_ptr = 0;
+            bpf_probe_read(&conn_conn_ptr, sizeof(conn_conn_ptr), conn_ptr + 8);
+            bpf_dbg_printk("conn_conn_ptr %llx", conn_conn_ptr);
+            if (conn_conn_ptr) {                
+                connection_info_t conn = {0};
+                get_conn_info(conn_conn_ptr, &conn);
+                bpf_map_update_elem(&ongoing_client_connections, &goroutine_addr, &conn, BPF_ANY);
+            }
+        } 
+
+#ifndef NO_HEADER_PROPAGATION
         u32 next_id = 0;
         // Read the next stream id from the httpClient
         bpf_probe_read(&next_id, sizeof(next_id), (void *)(t_ptr + http2_client_next_id_pos));
@@ -440,11 +414,11 @@ int uprobe_transport_http2Client_NewStream(struct pt_regs *ctx) {
             // seen later by writeHeader to clean up this mapping.
             bpf_map_update_elem(&ongoing_streams, &next_id, &inv_save, BPF_ANY);
         } else {
-            bpf_dbg_printk("Couldn't find invocation metadata for goroutite %lx", goroutine_addr);
+            bpf_dbg_printk("Couldn't find invocation metadata for goroutine %lx", goroutine_addr);
         }
+#endif    
     }
     
-#endif    
     return 0;
 }
 

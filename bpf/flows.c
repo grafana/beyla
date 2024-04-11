@@ -22,48 +22,7 @@
 #include "bpf_helpers.h"
 #include "bpf_endian.h"
 
-#include "flow.h"
-
-#define DISCARD 1
-#define SUBMIT 0
-
-// according to field 61 in https://www.iana.org/assignments/ipfix/ipfix.xhtml
-#define INGRESS 0
-#define EGRESS 1
-
-// Flags according to RFC 9293 & https://www.iana.org/assignments/ipfix/ipfix.xhtml
-#define FIN_FLAG 0x01
-#define SYN_FLAG 0x02
-#define RST_FLAG 0x04
-#define PSH_FLAG 0x08
-#define ACK_FLAG 0x10
-#define URG_FLAG 0x20
-#define ECE_FLAG 0x40
-#define CWR_FLAG 0x80
-// Custom flags exported
-#define SYN_ACK_FLAG 0x100
-#define FIN_ACK_FLAG 0x200
-#define RST_ACK_FLAG 0x400
-
-// Common Ringbuffer as a conduit for ingress/egress flows to userspace
-struct {
-    __uint(type, BPF_MAP_TYPE_RINGBUF);
-    __uint(max_entries, 1 << 24);
-} direct_flows SEC(".maps");
-
-// Key: the flow identifier. Value: the flow metrics for that identifier.
-// The userspace will aggregate them into a single flow.
-struct {
-    __uint(type, BPF_MAP_TYPE_LRU_PERCPU_HASH);
-    __type(key, flow_id);
-    __type(value, flow_metrics);
-} aggregated_flows SEC(".maps");
-
-// Constant definitions, to be overridden by the invoker
-volatile const u32 sampling = 0;
-volatile const u8 trace_messages = 0;
-
-const u8 ip4in6[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff};
+#include "flows_common.h"
 
 // sets the TCP header flags for connection information
 static inline void set_flags(struct tcphdr *th, u16 *flags) {
@@ -107,7 +66,7 @@ static inline int fill_iphdr(struct iphdr *ip, void *data_end, flow_id *id, u16 
     id->dst_port = 0;
     switch (ip->protocol) {
     case IPPROTO_TCP: {
-        struct tcphdr *tcp = (void *)ip + sizeof(*ip);
+        struct tcphdr *tcp = (struct tcphdr *)((void *)ip + sizeof(*ip));
         if ((void *)tcp + sizeof(*tcp) <= data_end) {
             id->src_port = __bpf_ntohs(tcp->source);
             id->dst_port = __bpf_ntohs(tcp->dest);
@@ -115,7 +74,7 @@ static inline int fill_iphdr(struct iphdr *ip, void *data_end, flow_id *id, u16 
         }
     } break;
     case IPPROTO_UDP: {
-        struct udphdr *udp = (void *)ip + sizeof(*ip);
+        struct udphdr *udp = (struct udphdr *)((void *)ip + sizeof(*ip));
         if ((void *)udp + sizeof(*udp) <= data_end) {
             id->src_port = __bpf_ntohs(udp->source);
             id->dst_port = __bpf_ntohs(udp->dest);
@@ -140,7 +99,7 @@ static inline int fill_ip6hdr(struct ipv6hdr *ip, void *data_end, flow_id *id, u
     id->dst_port = 0;
     switch (ip->nexthdr) {
     case IPPROTO_TCP: {
-        struct tcphdr *tcp = (void *)ip + sizeof(*ip);
+        struct tcphdr *tcp = (struct tcphdr *)((void *)ip + sizeof(*ip));
         if ((void *)tcp + sizeof(*tcp) <= data_end) {
             id->src_port = __bpf_ntohs(tcp->source);
             id->dst_port = __bpf_ntohs(tcp->dest);
@@ -148,7 +107,7 @@ static inline int fill_ip6hdr(struct ipv6hdr *ip, void *data_end, flow_id *id, u
         }
     } break;
     case IPPROTO_UDP: {
-        struct udphdr *udp = (void *)ip + sizeof(*ip);
+        struct udphdr *udp = (struct udphdr *)((void *)ip + sizeof(*ip));
         if ((void *)udp + sizeof(*udp) <= data_end) {
             id->src_port = __bpf_ntohs(udp->source);
             id->dst_port = __bpf_ntohs(udp->dest);
@@ -168,10 +127,10 @@ static inline int fill_ethhdr(struct ethhdr *eth, void *data_end, flow_id *id, u
     id->eth_protocol = __bpf_ntohs(eth->h_proto);
 
     if (id->eth_protocol == ETH_P_IP) {
-        struct iphdr *ip = (void *)eth + sizeof(*eth);
+        struct iphdr *ip = (struct iphdr *)((void *)eth + sizeof(*eth));
         return fill_iphdr(ip, data_end, id, flags);
     } else if (id->eth_protocol == ETH_P_IPV6) {
-        struct ipv6hdr *ip6 = (void *)eth + sizeof(*eth);
+        struct ipv6hdr *ip6 = (struct ipv6hdr *)((void *)eth + sizeof(*eth));
         return fill_ip6hdr(ip6, data_end, id, flags);
     } else {
         // TODO : Need to implement other specific ethertypes if needed
@@ -195,15 +154,15 @@ static inline int flow_monitor(struct __sk_buff *skb, u8 direction) {
 
     flow_id id;
     __builtin_memset(&id, 0, sizeof(id));
-    u64 current_time = bpf_ktime_get_ns();
-    struct ethhdr *eth = data;
+    struct ethhdr *eth = (struct ethhdr *)data;
     u16 flags = 0;
     if (fill_ethhdr(eth, data_end, &id, &flags) == DISCARD) {
         return TC_ACT_OK;
     }
-
-    //Set extra fields
     id.if_index = skb->ifindex;
+
+    u64 current_time = bpf_ktime_get_ns();
+    //Set extra fields    
     id.direction = direction;
 
     // TODO: we need to add spinlock here when we deprecate versions prior to 5.1, or provide
@@ -265,6 +224,7 @@ static inline int flow_monitor(struct __sk_buff *skb, u8 direction) {
             bpf_ringbuf_submit(record, 0);
         }
     }
+
     return TC_ACT_OK;
 }
 

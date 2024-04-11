@@ -43,7 +43,8 @@ func main() {
 		Addr:    "0.0.0.0:8080",
 		Handler: handler,
 	}
-	http2.ConfigureServer(server, nil)
+	err := http2.ConfigureServer(server, nil)
+	checkErr(err, "configuring server")
 
 	roundTripExample()
 	fmt.Printf("Listening [0.0.0.0:8080]...\n")

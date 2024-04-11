@@ -838,15 +838,7 @@ struct {
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
 } ongoing_sql_queries SEC(".maps");
 
-SEC("uprobe/queryDC")
-int uprobe_queryDC(struct pt_regs *ctx) {
-    bpf_dbg_printk("=== uprobe/queryDC === ");
-    void *goroutine_addr = GOROUTINE_PTR(ctx);
-    bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
-
-    void *sql_param = GO_PARAM8(ctx);
-    void *query_len = GO_PARAM9(ctx);
-
+static __always_inline void set_sql_info(void *goroutine_addr, void *sql_param, void *query_len) {
     sql_func_invocation_t invocation = {
         .start_monotime_ns = bpf_ktime_get_ns(),
         .sql_param = (u64)sql_param,
@@ -861,14 +853,36 @@ int uprobe_queryDC(struct pt_regs *ctx) {
     if (bpf_map_update_elem(&ongoing_sql_queries, &goroutine_addr, &invocation, BPF_ANY)) {
         bpf_dbg_printk("can't update map element");
     }
+}
 
+SEC("uprobe/queryDC")
+int uprobe_queryDC(struct pt_regs *ctx) {
+    bpf_dbg_printk("=== uprobe/queryDC === ");
+    void *goroutine_addr = GOROUTINE_PTR(ctx);
+    bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
+
+    void *sql_param = GO_PARAM8(ctx);
+    void *query_len = GO_PARAM9(ctx);
+    set_sql_info(goroutine_addr, sql_param, query_len);
+    return 0;
+}
+
+SEC("uprobe/execDC")
+int uprobe_execDC(struct pt_regs *ctx) {
+    bpf_dbg_printk("=== uprobe/execDC === ");
+    void *goroutine_addr = GOROUTINE_PTR(ctx);
+    bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
+
+    void *sql_param = GO_PARAM6(ctx);
+    void *query_len = GO_PARAM7(ctx);
+    set_sql_info(goroutine_addr, sql_param, query_len);
     return 0;
 }
 
 SEC("uprobe/queryDC")
-int uprobe_queryDCReturn(struct pt_regs *ctx) {
+int uprobe_queryReturn(struct pt_regs *ctx) {
 
-    bpf_dbg_printk("=== uprobe/queryDC return === ");
+    bpf_dbg_printk("=== uprobe/query return === ");
     void *goroutine_addr = GOROUTINE_PTR(ctx);
     bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
 
@@ -896,6 +910,9 @@ int uprobe_queryDCReturn(struct pt_regs *ctx) {
         }
         bpf_probe_read(trace->sql, query_len, (void*)invocation->sql_param);
         bpf_dbg_printk("Found sql statement %s", trace->sql);
+        if (query_len < sizeof(trace->sql)) {
+            trace->sql[query_len] = 0;
+        }
         // submit the completed trace via ringbuffer
         bpf_ringbuf_submit(trace, get_flags());
     } else {

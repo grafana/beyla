@@ -39,7 +39,8 @@ func main() {
 		if len(urlQuery["query"]) > 0 {
 			queryString := urlQuery["query"][0]
 			fmt.Println("query arg in url query is:", queryString)
-			rows, e = db.Query(queryString)
+			//rows, e = db.Query(queryString)
+			_, e = db.Exec(queryString)
 		} else {
 			rows, e = db.Query("SELECT * FROM students")
 		}

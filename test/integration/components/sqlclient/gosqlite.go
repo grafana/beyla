@@ -35,23 +35,22 @@ func main() {
 
 	http.HandleFunc("/sqltest", func(w http.ResponseWriter, r *http.Request) {
 		urlQuery := r.URL.Query()
-		var rows *sql.Rows
 		if len(urlQuery["query"]) > 0 {
 			queryString := urlQuery["query"][0]
 			fmt.Println("query arg in url query is:", queryString)
 			//rows, e = db.Query(queryString)
 			_, e = db.Exec(queryString)
 		} else {
-			rows, e = db.Query("SELECT * FROM students")
-		}
-		if e == nil {
-			defer rows.Close()
-			for rows.Next() {
-				var name string
-				var id int
-				e = rows.Scan(&name, &id)
-				CheckError(e)
-				fmt.Println("name: ", name, " id: ", id)
+			rows, e := db.Query("SELECT * FROM students")
+			if e == nil {
+				defer rows.Close()
+				for rows.Next() {
+					var name string
+					var id int
+					e = rows.Scan(&name, &id)
+					CheckError(e)
+					fmt.Println("name: ", name, " id: ", id)
+				}
 			}
 		}
 	})

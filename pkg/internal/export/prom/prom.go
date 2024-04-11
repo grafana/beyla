@@ -264,7 +264,7 @@ func newReporter(ctx context.Context, cfg *PrometheusConfig, ctxInfo *global.Con
 	}
 
 	if cfg.SpanMetricsEnabled() {
-		mr.serviceCache = expirable.NewLRU(cfg.SpanMetricsServiceCacheSize, func(id svc.UID, v svc.ID) {
+		mr.serviceCache = expirable.NewLRU(cfg.SpanMetricsServiceCacheSize, func(_ svc.UID, v svc.ID) {
 			lv := mr.labelValuesTargetInfo(v)
 			mr.tracesTargetInfo.WithLabelValues(lv...).Sub(1)
 		}, cfg.ExpireTime)

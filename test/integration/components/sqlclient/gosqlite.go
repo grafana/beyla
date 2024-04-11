@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"net/http"
+	"strings"
 
 	_ "modernc.org/sqlite"
 )
@@ -35,10 +36,9 @@ func main() {
 
 	http.HandleFunc("/sqltest", func(w http.ResponseWriter, r *http.Request) {
 		urlQuery := r.URL.Query()
-		if len(urlQuery["query"]) > 0 {
+		if len(urlQuery["query"]) > 0 && !strings.Contains(strings.ToLower(urlQuery["query"][0]), "select") {
 			queryString := urlQuery["query"][0]
 			fmt.Println("query arg in url query is:", queryString)
-			//rows, e = db.Query(queryString)
 			_, e = db.Exec(queryString)
 		} else {
 			rows, e := db.Query("SELECT * FROM students")

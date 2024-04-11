@@ -68,7 +68,7 @@ func testREDMetricsHTTP(t *testing.T) {
 		t.Run(testCaseURL, func(t *testing.T) {
 			waitForTestComponents(t, testCaseURL)
 			testREDMetricsForHTTPLibrary(t, testCaseURL, "testserver", "integration-test")
-			testSpanMetricsForHTTPLibrary(t, testCaseURL, "testserver", "integration-test")
+			testSpanMetricsForHTTPLibrary(t, "testserver", "integration-test")
 		})
 	}
 }
@@ -84,7 +84,7 @@ func testREDMetricsOldHTTP(t *testing.T) {
 		t.Run(testCaseURL, func(t *testing.T) {
 			waitForTestComponents(t, testCaseURL)
 			testREDMetricsForHTTPLibrary(t, testCaseURL, "testserver", "integration-test")
-			testSpanMetricsForHTTPLibrary(t, testCaseURL, "testserver", "integration-test")
+			testSpanMetricsForHTTPLibrary(t, "testserver", "integration-test")
 		})
 	}
 }
@@ -97,13 +97,13 @@ func testREDMetricsShortHTTP(t *testing.T) {
 		t.Run(testCaseURL, func(t *testing.T) {
 			waitForTestComponents(t, testCaseURL)
 			testREDMetricsForHTTPLibrary(t, testCaseURL, "testserver", "integration-test")
-			testSpanMetricsForHTTPLibrary(t, testCaseURL, "testserver", "integration-test")
+			testSpanMetricsForHTTPLibrary(t, "testserver", "integration-test")
 		})
 	}
 }
 
 // **IMPORTANT** Tests must first call -> func testREDMetricsForHTTPLibrary(t *testing.T, url, svcName, svcNs string) {
-func testSpanMetricsForHTTPLibrary(t *testing.T, url, svcName, svcNs string) {
+func testSpanMetricsForHTTPLibrary(t *testing.T, svcName, svcNs string) {
 	pq := prom.Client{HostPort: prometheusHostPort}
 	var results []prom.Result
 

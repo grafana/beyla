@@ -50,7 +50,7 @@ const (
 
 	FeatureNetwork     = "network"
 	FeatureApplication = "application"
-	FeatureSpan        = "span"
+	FeatureSpan        = "application_span"
 )
 
 type MetricsConfig struct {

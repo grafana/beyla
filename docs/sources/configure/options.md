@@ -783,7 +783,7 @@ of Beyla: application-level metrics or network metrics.
 - If the list contains `application`, the Beyla OpenTelemetry exporter exports application-level metrics;
   but only if there is defined an OpenTelemetry endpoint, and Beyla was able to discover any
   process matching the entries in the `discovery` section.
-- If the list contains `span`, the Beyla OpenTelemetry exporter exports trace span metrics;
+- If the list contains `application_span`, the Beyla OpenTelemetry exporter exports application-level trace span metrics;
   but only if there is defined an OpenTelemetry endpoint, and Beyla was able to discover any
   process matching the entries in the `discovery` section.
 - If the list contains `network`, the Beyla OpenTelemetry exporter exports network-level

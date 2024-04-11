@@ -282,6 +282,16 @@ func SpanStatusCode(span *request.Span) codes.Code {
 	return codes.Unset
 }
 
+func SpanKindString(span *request.Span) string {
+	switch span.Type {
+	case request.EventTypeHTTP, request.EventTypeGRPC:
+		return "SPAN_KIND_SERVER"
+	case request.EventTypeHTTPClient, request.EventTypeGRPCClient, request.EventTypeSQLClient:
+		return "SPAN_KIND_CLIENT"
+	}
+	return "SPAN_KIND_INTERNAL"
+}
+
 func TraceAttributes(span *request.Span) []attribute.KeyValue {
 	var attrs []attribute.KeyValue
 

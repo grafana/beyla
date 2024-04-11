@@ -256,6 +256,12 @@ const (
 	ServerPortKey             = attribute.Key("server.port")
 	HTTPRequestBodySizeKey    = attribute.Key("http.request.body.size")
 	HTTPResponseBodySizeKey   = attribute.Key("http.response.body.size")
+	SpanKindKey               = attribute.Key("span.kind")
+	SpanNameKey               = attribute.Key("span.name")
+	StatusCodeKey             = attribute.Key("status.code")
+	SourceKey                 = attribute.Key("source")
+	ServiceKey                = attribute.Key("service")
+	InstanceKey               = attribute.Key("instance")
 )
 
 func HTTPRequestMethod(val string) attribute.KeyValue {
@@ -296,4 +302,28 @@ func HTTPRequestBodySize(val int) attribute.KeyValue {
 
 func HTTPResponseBodySize(val int) attribute.KeyValue {
 	return HTTPResponseBodySizeKey.Int(val)
+}
+
+func SpanKindMetric(val string) attribute.KeyValue {
+	return SpanKindKey.String(val)
+}
+
+func SpanNameMetric(val string) attribute.KeyValue {
+	return SpanNameKey.String(val)
+}
+
+func SourceMetric(val string) attribute.KeyValue {
+	return SourceKey.String(val)
+}
+
+func ServiceMetric(val string) attribute.KeyValue {
+	return ServiceKey.String(val)
+}
+
+func StatusCodeMetric(val int) attribute.KeyValue {
+	return StatusCodeKey.Int(val)
+}
+
+func ServiceInstanceMetric(val string) attribute.KeyValue {
+	return InstanceKey.String(val)
 }

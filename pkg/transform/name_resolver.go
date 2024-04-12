@@ -60,10 +60,6 @@ func trimPrefixIgnoreCase(s, prefix string) string {
 	return s
 }
 
-func hasPrefixIgnoreCase(s, prefix string) bool {
-	return len(s) >= len(prefix) && strings.EqualFold(s[0:len(prefix)], prefix)
-}
-
 func (nr *NameResolver) resolveNames(span *request.Span) {
 	if len(span.Peer) > 0 {
 		peer, ok := nr.fqnCache.Get(span.Peer)

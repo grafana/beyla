@@ -34,11 +34,11 @@ func TestMetricAttributes(t *testing.T) {
 	in.Id.SrcIp.In6U.U6Addr8 = [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 255, 12, 34, 56, 78}
 	in.Id.DstIp.In6U.U6Addr8 = [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 255, 33, 22, 11, 1}
 
-	me := &metricsExporter{attrs: export.BuildOTELAttributeGetters([]string{
+	me := &metricsExporter{metrics: &Expirer{attrs: export.BuildOTELAttributeGetters([]string{
 		"src.address", "dst.address", "src.port", "dst.port", "src.name", "dst_name",
 		"k8s.src.name", "k8s.src_namespace", "k8s.dst.name", "k8s.dst.namespace",
-	})}
-	reportedAttributes, _ := me.recordAttributes(in)
+	})}}
+	reportedAttributes, _ := me.metrics.recordAttributes(in)
 	for _, mustContain := range []attribute.KeyValue{
 		attribute.String("src.address", "12.34.56.78"),
 		attribute.String("dst.address", "33.22.11.1"),

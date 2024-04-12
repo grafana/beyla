@@ -145,8 +145,6 @@ github.com/mailru/easyjson v0.7.7 h1:UGYAvKxe3sBsEDzO8ZeWOSlIQfWFlxbzLZe7hwFURr0
 github.com/mailru/easyjson v0.7.7/go.mod h1:xzfreul335JAWq5oZzymOObrkdz5UnU4kGfJJLY9Nlc=
 github.com/mariomac/guara v0.0.0-20230621100729-42bd7716e524 h1:24nnoPrOI7cw2YZTWqDHqIchSJ07thcQDIUNnL6V+2o=
 github.com/mariomac/guara v0.0.0-20230621100729-42bd7716e524/go.mod h1:TMuTALUh4SPCDJdYOuOYIEwBgH2rzCDP1nNgj+lI8AE=
-github.com/mariomac/pipes v0.9.0 h1:spCbBgHQpCbFoI8yNZDiwsUFuKaeUSbWe1oqt0mnY8U=
-github.com/mariomac/pipes v0.9.0/go.mod h1:c4UsamVvniQ7+YX+X2mxDTTfyXOEU35pMFKZ8JD4ShE=
 github.com/mattn/go-isatty v0.0.19 h1:JITubQf0MOLdlGRuRq+jtsDlekdYPia9ZFsB8h/APPA=
 github.com/mattn/go-isatty v0.0.19/go.mod h1:W+V8PltTTMOvKvAeJH7IuucS94S2C6jfK/D7dTCTo3Y=
 github.com/moby/spdystream v0.2.0 h1:cjW1zVyyoiM0T7b6UoySUFqzXMoqRckQtXwGPiBhOM8=

@@ -2,6 +2,8 @@ module github.com/grafana/beyla
 
 go 1.22
 
+replace github.com/mariomac/pipes v0.9.0 => ../mystuff/pipes
+
 require (
 	github.com/AlessandroPomponio/go-gibberish v0.0.0-20191004143433-a2d4156f0396
 	github.com/aws/aws-sdk-go-v2 v1.25.2

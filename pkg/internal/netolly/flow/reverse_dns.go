@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/golang-lru/v2/expirable"
-	"github.com/mariomac/pipes/pkg/node"
+	"github.com/mariomac/pipes/pipe"
 
 	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
 )
@@ -40,7 +40,11 @@ func (r ReverseDNS) Enabled() bool {
 	return r.Type == ReverseDNSLocalLookup
 }
 
-func ReverseDNSProvider(cfg ReverseDNS) (node.MiddleFunc[[]*ebpf.Record, []*ebpf.Record], error) {
+func ReverseDNSProvider(cfg *ReverseDNS) (pipe.MiddleFunc[[]*ebpf.Record, []*ebpf.Record], error) {
+	if !cfg.Enabled() {
+		// This node is not going to be instantiated. Let the pipes library just bypassing it.
+		return pipe.Bypass[[]*ebpf.Record](), nil
+	}
 	// TODO: replace by a cache with fuzzy expiration time to avoid cache stampede
 	cache := expirable.NewLRU[ebpf.IPAddr, string](cfg.CacheLen, nil, cfg.CacheTTL)
 

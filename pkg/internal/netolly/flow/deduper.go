@@ -23,7 +23,7 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/mariomac/pipes/pkg/node"
+	"github.com/mariomac/pipes/pipe"
 
 	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
 )
@@ -70,7 +70,11 @@ type entry struct {
 // the flows from the first interface coming to it, until that flow expires in the cache
 // (no activity for it during the expiration time)
 // After passing by the deduper, the ebpf.Record instances loose their IfIndex and Direction fields.
-func DeduperProvider(dd Deduper) (node.MiddleFunc[[]*ebpf.Record, []*ebpf.Record], error) {
+func DeduperProvider(dd *Deduper) (pipe.MiddleFunc[[]*ebpf.Record, []*ebpf.Record], error) {
+	if !dd.Enabled() {
+		// This node is not going to be instantiated. Let the pipes library just bypassing it.
+		return pipe.Bypass[[]*ebpf.Record](), nil
+	}
 	cache := &deduperCache{
 		expire:  dd.ExpireTime,
 		entries: list.New(),

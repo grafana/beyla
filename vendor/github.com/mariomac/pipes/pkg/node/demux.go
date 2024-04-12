@@ -211,8 +211,8 @@ func AsMiddleDemux[IN any](fun MiddleDemuxFunc[IN], opts ...Option) *MiddleDemux
 }
 
 // nolint:unused
-func (m *MiddleDemux[IN]) joiner() *connect.Joiner[IN] {
-	return &m.inputs
+func (m *MiddleDemux[IN]) joiners() []*connect.Joiner[IN] {
+	return []*connect.Joiner[IN]{&m.inputs}
 }
 
 // nolint:unused

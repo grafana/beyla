@@ -14,6 +14,7 @@ var connectorType = reflect.TypeOf(Connector{})
 // as argument into the builder.Build method.
 //
 // Key: instance ID of the source node. Value: array of destination node instance IDs.
+// Deprecated. Please use the low-level API of this library as this will be removed in future versions.
 type Connector map[string][]string
 
 // Connections returns the connection map represented by the Connector
@@ -24,6 +25,7 @@ func (c Connector) Connections() map[string][]string {
 // ConnectedConfig describes the interface that any struct passed to the builder.Build
 // method must fullfill. Consider embedding the Connector type into your struct for
 // automatic implementation of the interface.
+// Deprecated. Please use the low-level API of this library as this will be removed in future versions.
 type ConnectedConfig interface {
 	// Connections returns a map representing the connection of the node graphs, where
 	// the key contains the instance ID of the source node, and the value contains an

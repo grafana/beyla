@@ -27,21 +27,30 @@ type TerminalFunc[IN any] func(in <-chan IN)
 
 // TODO: OutType and InType methods are candidates for deprecation
 
-// Sender is any node that can send data to another node: node.Start and node.Middle
+// Sender is any node that can send data to another node: node.Start, node.Middle and node.Bypass
 type Sender[OUT any] interface {
-	// SendsTo connect a sender with a group of receivers
+	// SendTo connect a sender with a group of receivers
 	SendTo(...Receiver[OUT])
 	// OutType returns the inner type of the Sender's output channel
 	OutType() reflect.Type
 }
 
-// Receiver is any node that can receive data from another node: node.Middle and node.Terminal
+// Receiver is any node that can receive data from another node: node.Bypass, node.Middle and node.Terminal
 type Receiver[IN any] interface {
 	isStarted() bool
 	start()
-	joiner() *connect.Joiner[IN]
+	// joiners will usually return only one joiner instance but in
+	// the case of a BypassNode, which might return the joiners of
+	// all their destination nodes
+	joiners() []*connect.Joiner[IN]
 	// InType returns the inner type of the Receiver's input channel
 	InType() reflect.Type
+}
+
+// SenderReceiver is any node that can both send and receive data: node.Bypass or node.Middle.
+type SenderReceiver[IN, OUT any] interface {
+	Receiver[IN]
+	Sender[OUT]
 }
 
 // Start nodes are the starting points of a graph. This is, all the nodes that bring information
@@ -66,8 +75,8 @@ type Middle[IN, OUT any] struct {
 	inType  reflect.Type
 }
 
-func (i *Middle[IN, OUT]) joiner() *connect.Joiner[IN] {
-	return &i.inputs
+func (i *Middle[IN, OUT]) joiners() []*connect.Joiner[IN] {
+	return []*connect.Joiner[IN]{&i.inputs}
 }
 
 func (i *Middle[IN, OUT]) isStarted() bool {
@@ -96,11 +105,17 @@ type Terminal[IN any] struct {
 	inType  reflect.Type
 }
 
-func (i *Terminal[IN]) joiner() *connect.Joiner[IN] {
-	return &i.inputs
+func (t *Terminal[IN]) joiners() []*connect.Joiner[IN] {
+	if t == nil {
+		return nil
+	}
+	return []*connect.Joiner[IN]{&t.inputs}
 }
 
 func (t *Terminal[IN]) isStarted() bool {
+	if t == nil {
+		return false
+	}
 	return t.started
 }
 
@@ -109,6 +124,11 @@ func (t *Terminal[IN]) isStarted() bool {
 // allows blocking the execution until all the data in the graph has been processed and all the
 // previous stages have ended
 func (t *Terminal[IN]) Done() <-chan struct{} {
+	if t == nil {
+		closed := make(chan struct{})
+		close(closed)
+		return closed
+	}
 	return t.done
 }
 
@@ -155,6 +175,12 @@ func AsTerminal[IN any](fun TerminalFunc[IN], opts ...Option) *Terminal[IN] {
 // Start starts the function wrapped in the Start node. This method should be invoked
 // for all the start nodes of the same graph, so the graph can properly start and finish.
 func (i *Start[OUT]) Start() {
+	// a nil start node can be started without no effect on the graph.
+	// this allows setting optional nillable start nodes and let start all of them
+	// as a group in a more convenient way
+	if i == nil {
+		return
+	}
 	forker, err := i.receiverGroup.StartReceivers()
 	if err != nil {
 		panic("Start: " + err.Error())
@@ -175,7 +201,7 @@ func (i *Middle[IN, OUT]) start() {
 	i.started = true
 	joiners := make([]*connect.Joiner[OUT], 0, len(i.outs))
 	for _, out := range i.outs {
-		joiners = append(joiners, out.joiner())
+		joiners = append(joiners, out.joiners()...)
 		if !out.isStarted() {
 			out.start()
 		}
@@ -188,6 +214,9 @@ func (i *Middle[IN, OUT]) start() {
 }
 
 func (t *Terminal[IN]) start() {
+	if t == nil {
+		return
+	}
 	t.started = true
 	go func() {
 		t.fun(t.inputs.Receiver())
@@ -211,6 +240,15 @@ type receiverGroup[OUT any] struct {
 }
 
 // SendTo connects a group of receivers to the current receiverGroup
+func (s *Start[OUT]) SendTo(outputs ...Receiver[OUT]) {
+	// a nil start node can be operated without no effect on the graph.
+	// this allows connecting optional nillable start nodes and let start all of them
+	// as a group in a more convenient way
+	if s != nil {
+		s.receiverGroup.SendTo(outputs...)
+	}
+}
+
 func (s *receiverGroup[OUT]) SendTo(outputs ...Receiver[OUT]) {
 	s.Outs = append(s.Outs, outputs...)
 }
@@ -229,7 +267,7 @@ func (i *receiverGroup[OUT]) StartReceivers() (*connect.Forker[OUT], error) {
 	}
 	joiners := make([]*connect.Joiner[OUT], 0, len(i.Outs))
 	for _, out := range i.Outs {
-		joiners = append(joiners, out.joiner())
+		joiners = append(joiners, out.joiners()...)
 		if !out.isStarted() {
 			out.start()
 		}

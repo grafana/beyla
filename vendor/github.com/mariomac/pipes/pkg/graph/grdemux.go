@@ -12,6 +12,7 @@ import (
 // result in the instantiation of a node.StartDemux with the provider's returned provider.
 // The passed configuration type must either implement the stage.Instancer interface or the
 // configuration struct containing it must define a `nodeId` tag with an identifier for that stage.
+// Deprecated. Please use the low-level API of this library as this will be removed in future versions.
 func RegisterStartDemux[CFG any](nb *Builder, b stage.StartDemuxProvider[CFG]) {
 	nb.startProviders[typeOf[CFG]()] = reflectedNode{
 		demuxed:   true,
@@ -25,6 +26,7 @@ func RegisterStartDemux[CFG any](nb *Builder, b stage.StartDemuxProvider[CFG]) {
 // result in the instantiation of a node.MiddleDemux with the provider's returned provider.
 // The passed configuration type must either implement the stage.Instancer interface or the
 // configuration struct containing it must define a `nodeId` tag with an identifier for that stage.
+// Deprecated. Please use the low-level API of this library as this will be removed in future versions.
 func RegisterMiddleDemux[CFG, I any](nb *Builder, b stage.MiddleDemuxProvider[CFG, I]) {
 	nb.middleProviders[typeOf[CFG]()] = reflectedNode{
 		demuxed:   true,

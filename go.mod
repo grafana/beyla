@@ -1,8 +1,6 @@
 module github.com/grafana/beyla
 
-go 1.21.0
-
-toolchain go1.22.1
+go 1.22
 
 require (
 	github.com/AlessandroPomponio/go-gibberish v0.0.0-20191004143433-a2d4156f0396

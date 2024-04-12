@@ -171,14 +171,16 @@ func KernelLockdownMode() KernelLockdown {
 		scanner := bufio.NewScanner(f)
 		if scanner.Scan() {
 			lockdown := scanner.Text()
-			if strings.Contains(lockdown, "[none]") {
+			switch {
+			case strings.Contains(lockdown, "[none]"):
 				return KernelLockdownNone
-			} else if strings.Contains(lockdown, "[integrity]") {
+			case strings.Contains(lockdown, "[integrity]"):
 				return KernelLockdownIntegrity
-			} else if strings.Contains(lockdown, "[confidentiality]") {
+			case strings.Contains(lockdown, "[confidentiality]"):
 				return KernelLockdownConfidentiality
+			default:
+				return KernelLockdownOther
 			}
-			return KernelLockdownOther
 		}
 
 		plog.Warn("file /sys/kernel/security/lockdown is empty, assuming lockdown [integrity]")
@@ -190,7 +192,7 @@ func KernelLockdownMode() KernelLockdown {
 }
 
 func cstr(chars []uint8) string {
-	addrLen := bytes.IndexByte(chars[:], 0)
+	addrLen := bytes.IndexByte(chars, 0)
 	if addrLen < 0 {
 		addrLen = len(chars)
 	}

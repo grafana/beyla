@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -20,6 +21,8 @@ import (
 )
 
 const timeout = 5 * time.Second
+
+var fakeMux = sync.Mutex{}
 
 func TestHTTPMetricsEndpointOptions(t *testing.T) {
 	defer restoreEnvAfterExecution()()
@@ -134,7 +137,7 @@ func TestMetrics_InternalInstrumentation(t *testing.T) {
 	})
 	internalMetrics := &fakeInternalMetrics{}
 	exporter, err := ReportMetrics(context.Background(),
-		&MetricsConfig{CommonEndpoint: coll.URL, Interval: 10 * time.Millisecond, ReportersCacheLen: 16},
+		&MetricsConfig{CommonEndpoint: coll.URL, Interval: 10 * time.Millisecond, ReportersCacheLen: 16, Features: []string{FeatureApplication}},
 		&global.ContextInfo{
 			Metrics: internalMetrics,
 		})
@@ -339,18 +342,26 @@ func TestMetricsConfig_Disabled(t *testing.T) {
 }
 
 func (f *fakeInternalMetrics) OTELMetricExport(len int) {
+	fakeMux.Lock()
+	defer fakeMux.Unlock()
 	f.cnt.Add(1)
 	f.sum.Add(int32(len))
 }
 
 func (f *fakeInternalMetrics) OTELMetricExportError(_ error) {
+	fakeMux.Lock()
+	defer fakeMux.Unlock()
 	f.errs.Add(1)
 }
 
 func (f *fakeInternalMetrics) Errors() int {
+	fakeMux.Lock()
+	defer fakeMux.Unlock()
 	return int(f.errs.Load())
 }
 
 func (f *fakeInternalMetrics) SumCount() (sum, count int) {
+	fakeMux.Lock()
+	defer fakeMux.Unlock()
 	return int(f.sum.Load()), int(f.cnt.Load())
 }

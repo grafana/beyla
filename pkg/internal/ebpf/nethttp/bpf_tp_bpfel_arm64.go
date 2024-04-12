@@ -33,7 +33,6 @@ type bpf_tpGoroutineMetadata struct {
 type bpf_tpHttpClientDataT struct {
 	Method        [7]uint8
 	Path          [100]uint8
-	Host          [64]uint8
 	_             [5]byte
 	ContentLength int64
 	Pid           struct {
@@ -149,11 +148,12 @@ type bpf_tpMapSpecs struct {
 	GolangMapbucketStorageMap     *ebpf.MapSpec `ebpf:"golang_mapbucket_storage_map"`
 	HeaderReqMap                  *ebpf.MapSpec `ebpf:"header_req_map"`
 	Http2ReqMap                   *ebpf.MapSpec `ebpf:"http2_req_map"`
+	OngoingClientConnections      *ebpf.MapSpec `ebpf:"ongoing_client_connections"`
 	OngoingGoroutines             *ebpf.MapSpec `ebpf:"ongoing_goroutines"`
 	OngoingHttpClientRequests     *ebpf.MapSpec `ebpf:"ongoing_http_client_requests"`
 	OngoingHttpClientRequestsData *ebpf.MapSpec `ebpf:"ongoing_http_client_requests_data"`
-	OngoingHttpServerConnections  *ebpf.MapSpec `ebpf:"ongoing_http_server_connections"`
 	OngoingHttpServerRequests     *ebpf.MapSpec `ebpf:"ongoing_http_server_requests"`
+	OngoingServerConnections      *ebpf.MapSpec `ebpf:"ongoing_server_connections"`
 	OngoingSqlQueries             *ebpf.MapSpec `ebpf:"ongoing_sql_queries"`
 	TraceMap                      *ebpf.MapSpec `ebpf:"trace_map"`
 }
@@ -183,11 +183,12 @@ type bpf_tpMaps struct {
 	GolangMapbucketStorageMap     *ebpf.Map `ebpf:"golang_mapbucket_storage_map"`
 	HeaderReqMap                  *ebpf.Map `ebpf:"header_req_map"`
 	Http2ReqMap                   *ebpf.Map `ebpf:"http2_req_map"`
+	OngoingClientConnections      *ebpf.Map `ebpf:"ongoing_client_connections"`
 	OngoingGoroutines             *ebpf.Map `ebpf:"ongoing_goroutines"`
 	OngoingHttpClientRequests     *ebpf.Map `ebpf:"ongoing_http_client_requests"`
 	OngoingHttpClientRequestsData *ebpf.Map `ebpf:"ongoing_http_client_requests_data"`
-	OngoingHttpServerConnections  *ebpf.Map `ebpf:"ongoing_http_server_connections"`
 	OngoingHttpServerRequests     *ebpf.Map `ebpf:"ongoing_http_server_requests"`
+	OngoingServerConnections      *ebpf.Map `ebpf:"ongoing_server_connections"`
 	OngoingSqlQueries             *ebpf.Map `ebpf:"ongoing_sql_queries"`
 	TraceMap                      *ebpf.Map `ebpf:"trace_map"`
 }
@@ -200,11 +201,12 @@ func (m *bpf_tpMaps) Close() error {
 		m.GolangMapbucketStorageMap,
 		m.HeaderReqMap,
 		m.Http2ReqMap,
+		m.OngoingClientConnections,
 		m.OngoingGoroutines,
 		m.OngoingHttpClientRequests,
 		m.OngoingHttpClientRequestsData,
-		m.OngoingHttpServerConnections,
 		m.OngoingHttpServerRequests,
+		m.OngoingServerConnections,
 		m.OngoingSqlQueries,
 		m.TraceMap,
 	)

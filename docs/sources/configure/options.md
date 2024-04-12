@@ -783,6 +783,9 @@ of Beyla: application-level metrics or network metrics.
 - If the list contains `application`, the Beyla OpenTelemetry exporter exports application-level metrics;
   but only if there is defined an OpenTelemetry endpoint, and Beyla was able to discover any
   process matching the entries in the `discovery` section.
+- If the list contains `application_span`, the Beyla OpenTelemetry exporter exports application-level trace span metrics;
+  but only if there is defined an OpenTelemetry endpoint, and Beyla was able to discover any
+  process matching the entries in the `discovery` section.
 - If the list contains `network`, the Beyla OpenTelemetry exporter exports network-level
   metrics; but only if there is defined an OpenTelemetry endpoint and the
   [network metrics are enabled]({{< relref "../network" >}}).
@@ -938,7 +941,7 @@ otel_traces_export:
     arg: "0.1"
 ```
 
-If you are using the Grafana Agent as your OTEL collector, you can configure the sampling
+If you are using the Grafana Alloy as your OTEL collector, you can configure the sampling
 policy at that level instead.
 
 | YAML   | Environment variable               | Type   | Default                 |

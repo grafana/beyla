@@ -79,7 +79,7 @@ func pingHandler(rw http.ResponseWriter, req *http.Request) {
 
 	requestURL := "http://localhost:8080/ping"
 	if delay > 0 {
-		requestURL = requestURL + fmt.Sprintf("?delay=%s", delay.String())
+		requestURL += fmt.Sprintf("?delay=%s", delay.String())
 	}
 
 	slog.Debug("calling", "url", requestURL)
@@ -126,6 +126,7 @@ func gpingHandler(rw http.ResponseWriter, _ *http.Request) {
 	feature, err := client.GetFeature(ctx, point)
 	if err != nil {
 		slog.Error("client.GetFeature failed", err)
+		// nolint:gocritic
 		os.Exit(-1)
 	}
 	if slog.Default().Enabled(context.TODO(), slog.LevelDebug) {

@@ -1,0 +1,76 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: {{ include "beyla.fullname" . }}
+  namespace: {{ include "beyla.namespace" .}}
+  labels:
+  {{- include "beyla.labels" . | nindent 4 }}
+  {{- with .Values.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  selector:
+    matchLabels:
+{{ include "beyla.selectorLabels" . | indent 6 }}
+  {{- with .Values.updateStrategy }}
+  updateStrategy:
+    {{- toYaml . | trim | nindent 4 }}
+  {{- end }}
+  template:
+    metadata:
+      labels:
+{{ include "beyla.selectorLabels" . | indent 8 }}
+    spec:
+     {{- if .Values.serviceAccount.create }}
+      serviceAccountName: {{ include "beyla.serviceAccountName" . }}
+     {{- end }}
+      hostPID: true  #important!
+      containers:
+        - name: beyla
+          image: {{ .Values.global.image.registry | default .Values.image.registry }}/{{ .Values.image.repository }}{{ include "beyla.imageId" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            privileged: true
+          ports:
+          - containerPort: {{ .Values.service.targetPort }}
+            protocol: TCP
+          env:
+            - name: BEYLA_CONFIG_PATH
+              value: "/etc/beyla/config/beyla-config.yml"
+          {{- range $key, $value := .Values.env }}
+            - name: {{ $key }}
+              value: "{{ $value }}"
+          {{- end }}
+          {{- range $key, $value := .Values.envValueFrom }}
+            - name: {{ $key | quote }}
+              valueFrom:
+          {{- tpl (toYaml $value) $ | nindent 16 }}
+          {{- end }}
+          {{- with .Values.nodeSelector }}          
+          nodeSelector:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.affinity }}
+          affinity:
+            {{- tpl (toYaml .) $ | nindent 12 }}
+          {{- end }}
+          {{- with .Values.tolerations }}
+          tolerations:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - mountPath: /etc/beyla/config
+              name: beyla-config
+        {{- if or .Values.global.image.pullSecrets .Values.image.pullSecrets }}
+        imagePullSecrets:
+          {{- if .Values.global.image.pullSecrets }}
+          {{- toYaml .Values.global.image.pullSecrets | nindent 4 }}
+          {{- else }}
+          {{- toYaml .Values.image.pullSecrets | nindent 4 }}
+          {{- end }}
+        {{- end }}
+      volumes:
+        - name: beyla-config
+          configMap:
+            name: {{ default (include "beyla.fullname" .) .Values.config.name }}

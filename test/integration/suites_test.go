@@ -216,7 +216,7 @@ func TestSuite_PrometheusScrape(t *testing.T) {
 
 	require.NoError(t, err)
 	require.NoError(t, compose.Up())
-	t.Run("RED metrics", testREDMetricsHTTP)
+	t.Run("RED metrics", testREDMetricsHTTPNoOTel)
 	t.Run("GRPC RED metrics", testREDMetricsGRPC)
 	t.Run("Internal Prometheus metrics", testInternalPrometheusExport)
 	t.Run("Testing Beyla Build Info metric", testPrometheusBeylaBuildInfo)
@@ -510,14 +510,16 @@ func KernelLockdownMode() bool {
 		scanner := bufio.NewScanner(f)
 		if scanner.Scan() {
 			lockdown := scanner.Text()
-			if strings.Contains(lockdown, "[none]") {
+			switch {
+			case strings.Contains(lockdown, "[none]"):
 				return false
-			} else if strings.Contains(lockdown, "[integrity]") {
+			case strings.Contains(lockdown, "[integrity]"):
 				return true
-			} else if strings.Contains(lockdown, "[confidentiality]") {
+			case strings.Contains(lockdown, "[confidentiality]"):
+				return true
+			default:
 				return true
 			}
-			return true
 		}
 
 		return true

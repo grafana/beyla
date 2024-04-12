@@ -54,14 +54,13 @@ typedef struct flow_metrics_t {
 // Attributes that uniquely identify a flow
 // TODO: remove attributes that won't be used in Beyla (e.g. MAC, maybe protocol...)
 typedef struct flow_id_t {
-    u16 eth_protocol;
-    u8 direction;
-
     // L3 network layer
     // IPv4 addresses are encoded as IPv6 addresses with prefix ::ffff/96
     // as described in https://datatracker.ietf.org/doc/html/rfc4038#section-4.2
-    struct in6_addr src_ip;
+    struct in6_addr src_ip; // keep these aligned
     struct in6_addr dst_ip;
+    u16 eth_protocol;
+    u8 direction;
     // L4 transport layer
     u16 src_port;
     u16 dst_port;

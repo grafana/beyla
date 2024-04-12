@@ -25,7 +25,7 @@ import (
 func TestDaemonSetMetadata(t *testing.T) {
 	feat := features.New("Beyla is able to decorate the metadata of a daemonset").
 		Assess("it sends decorated traces for the daemonset",
-			func(ctx context.Context, t *testing.T, config *envconf.Config) context.Context {
+			func(ctx context.Context, t *testing.T, _ *envconf.Config) context.Context {
 				test.Eventually(t, testTimeout, func(t require.TestingT) {
 					// Invoking both service instances, but we will expect that only one
 					// is instrumented, according to the discovery mechanisms

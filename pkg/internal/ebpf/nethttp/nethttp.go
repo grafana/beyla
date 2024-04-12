@@ -96,8 +96,6 @@ func (p *Tracer) Constants(_ *exec.FileInfo, offsets *goexec.Offsets) map[string
 		"method_ptr_pos",
 		"status_ptr_pos",
 		"status_code_ptr_pos",
-		"remoteaddr_ptr_pos",
-		"host_ptr_pos",
 		"content_length_ptr_pos",
 		"resp_req_pos",
 		"req_header_ptr_pos",
@@ -121,6 +119,9 @@ func (p *Tracer) Constants(_ *exec.FileInfo, offsets *goexec.Offsets) map[string
 		"rws_status_pos",
 		"cc_next_stream_id_pos",
 		"framer_w_pos",
+		"rws_conn_pos",
+		"http2_server_conn_pos",
+		"cc_tconn_pos",
 	} {
 		constants[s] = offsets.Field[s]
 		if constants[s] == nil {

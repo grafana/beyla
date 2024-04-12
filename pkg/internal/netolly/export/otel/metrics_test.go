@@ -17,6 +17,7 @@ func TestMetricAttributes(t *testing.T) {
 			Id: ebpf.NetFlowId{
 				Direction: 1,
 				DstPort:   3210,
+				SrcPort:   12345,
 			},
 		},
 		Attrs: ebpf.RecordAttrs{
@@ -33,8 +34,8 @@ func TestMetricAttributes(t *testing.T) {
 	in.Id.SrcIp.In6U.U6Addr8 = [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 255, 12, 34, 56, 78}
 	in.Id.DstIp.In6U.U6Addr8 = [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 255, 33, 22, 11, 1}
 
-	me := &Expirer{attrs: export.BuildOTELAttributeGetters([]string{
-		"src.address", "dst.address", "src.name", "dst_name",
+	me := &metricsExporter{attrs: export.BuildOTELAttributeGetters([]string{
+		"src.address", "dst.address", "src.port", "dst.port", "src.name", "dst_name",
 		"k8s.src.name", "k8s.src_namespace", "k8s.dst.name", "k8s.dst.namespace",
 	})}
 	reportedAttributes, _ := me.recordAttributes(in)
@@ -43,6 +44,8 @@ func TestMetricAttributes(t *testing.T) {
 		attribute.String("dst.address", "33.22.11.1"),
 		attribute.String("src.name", "srcname"),
 		attribute.String("dst.name", "dstname"),
+		attribute.String("src.port", "12345"),
+		attribute.String("dst.port", "3210"),
 
 		attribute.String("k8s.src.name", "srcname"),
 		attribute.String("k8s.src.namespace", "srcnamespace"),
@@ -62,6 +65,7 @@ func TestMetricAttributes_Filter(t *testing.T) {
 			Id: ebpf.NetFlowId{
 				Direction: 1,
 				DstPort:   3210,
+				SrcPort:   12345,
 			},
 		},
 		Attrs: ebpf.RecordAttrs{

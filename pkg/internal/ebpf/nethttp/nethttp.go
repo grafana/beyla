@@ -174,7 +174,11 @@ func (p *Tracer) GoProbes() map[string]ebpfcommon.FunctionPrograms {
 		// sql
 		"database/sql.(*DB).queryDC": {
 			Start: p.bpfObjects.UprobeQueryDC,
-			End:   p.bpfObjects.UprobeQueryDCReturn,
+			End:   p.bpfObjects.UprobeQueryReturn,
+		},
+		"database/sql.(*DB).execDC": {
+			Start: p.bpfObjects.UprobeExecDC,
+			End:   p.bpfObjects.UprobeQueryReturn,
 		},
 	}
 

@@ -42,21 +42,6 @@ func waitForTestComponentsHTTP2(t *testing.T, url string) {
 	waitForTestComponentsHTTP2Sub(t, url, "/smoke", 1)
 }
 
-func testREDMetricsHTTPNoOTel(t *testing.T) {
-	for _, testCaseURL := range []string{
-		instrumentedServiceStdURL,
-		instrumentedServiceGorillaURL,
-		instrumentedServiceGinURL,
-		instrumentedServiceGorillaMidURL,
-		instrumentedServiceGorillaMid2URL,
-	} {
-		t.Run(testCaseURL, func(t *testing.T) {
-			waitForTestComponents(t, testCaseURL)
-			testREDMetricsForHTTPLibrary(t, testCaseURL, "testserver", "integration-test")
-		})
-	}
-}
-
 func testREDMetricsHTTP(t *testing.T) {
 	for _, testCaseURL := range []string{
 		instrumentedServiceStdURL,

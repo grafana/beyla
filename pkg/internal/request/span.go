@@ -69,6 +69,8 @@ type Span struct {
 	ParentSpanID  trace2.SpanID
 	Flags         uint8
 	Pid           PidInfo
+	PeerName      string
+	HostName      string
 }
 
 func (s *Span) Inside(parent *Span) bool {
@@ -93,4 +95,17 @@ func (s *Span) Timings() Timings {
 		Start:        now.Add(-startDelta),
 		End:          now.Add(-endDelta),
 	}
+}
+
+func (s *Span) IsClientSpan() bool {
+	switch s.Type {
+	case EventTypeGRPCClient:
+		fallthrough
+	case EventTypeHTTPClient:
+		fallthrough
+	case EventTypeSQLClient:
+		return true
+	}
+
+	return false
 }

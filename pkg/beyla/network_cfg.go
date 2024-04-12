@@ -151,7 +151,7 @@ var defaultNetworkConfig = NetworkConfig{
 
 func (nc *NetworkConfig) Validate(isKubeEnabled bool) error {
 	if len(nc.AllowedAttributes) == 0 {
-		return errors.New("you must define some attributes in the allowed_attributes section. Please ceck documentation")
+		return errors.New("you must define some attributes in the allowed_attributes section. Please check documentation")
 	}
 	if isKubeEnabled {
 		return nil

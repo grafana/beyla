@@ -27,7 +27,9 @@ type nodesMap struct {
 	Routes *transform.RoutesConfig `forwardTo:"Kubernetes"`
 
 	// Kubernetes is an optional node. If not set, data will be bypassed to the exporters.
-	Kubernetes transform.KubernetesDecorator `forwardTo:"Metrics,Traces,Prometheus,Printer,Noop,AlloyTraces"`
+	Kubernetes transform.KubernetesDecorator `forwardTo:"NameResolver"`
+
+	NameResolver *transform.NameResolverConfig `forwardTo:"Metrics,Traces,Prometheus,Printer,Noop,AlloyTraces"`
 
 	AlloyTraces beyla.TracesReceiverConfig
 	Metrics     otel.MetricsConfig
@@ -41,6 +43,7 @@ func configToNodesMap(cfg *beyla.Config) *nodesMap {
 	return &nodesMap{
 		TracesReader: traces.ReadDecorator{InstanceID: cfg.Attributes.InstanceID},
 		Routes:       cfg.Routes,
+		NameResolver: cfg.NameResolver,
 		Kubernetes:   cfg.Attributes.Kubernetes,
 		Metrics:      cfg.Metrics,
 		Traces:       cfg.Traces,
@@ -91,6 +94,7 @@ func newGraphBuilder(ctx context.Context, config *beyla.Config, ctxInfo *global.
 	// each node. Each function will have input and/or output channels.
 	graph.RegisterStart(gnb, gb.readDecoratorProvider)
 	graph.RegisterMiddle(gnb, transform.RoutesProvider)
+	graph.RegisterMiddle(gnb, transform.NameResolutionProvider)
 	graph.RegisterMiddle(gnb, transform.KubeDecoratorProvider(ctxInfo))
 	graph.RegisterTerminal(gnb, gb.metricsReporterProvider)
 	graph.RegisterTerminal(gnb, gb.tracesReporterProvider)

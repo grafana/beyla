@@ -226,28 +226,3 @@ func (p *Tracer) Run(ctx context.Context, eventsChan chan<- []request.Span) {
 		append(p.closers, &p.bpfObjects)...,
 	)(ctx, eventsChan)
 }
-
-// GinTracer overrides Tracer to inspect the Gin ServeHTTP endpoint
-type GinTracer struct {
-	Tracer
-}
-
-func (p *GinTracer) GoProbes() map[string]ebpfcommon.FunctionPrograms {
-	return map[string]ebpfcommon.FunctionPrograms{
-		"github.com/gin-gonic/gin.(*Engine).ServeHTTP": {
-			Required: true,
-			Start:    p.bpfObjects.UprobeServeHTTP,
-			End:      p.bpfObjects.UprobeServeHTTPReturns,
-		},
-	}
-}
-
-func (p *GinTracer) Run(ctx context.Context, eventsChan chan<- []request.Span) {
-	ebpfcommon.SharedRingbuf(
-		p.cfg,
-		p.pidsFilter,
-		p.bpfObjects.Events,
-		p.metrics,
-		append(p.closers, &p.bpfObjects)...,
-	)(ctx, eventsChan)
-}

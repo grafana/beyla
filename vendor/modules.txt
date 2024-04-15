@@ -287,10 +287,6 @@ github.com/mariomac/guara/pkg/test
 ## explicit; go 1.18
 github.com/mariomac/pipes/pipe
 github.com/mariomac/pipes/pipe/internal/connect
-github.com/mariomac/pipes/pkg/graph
-github.com/mariomac/pipes/pkg/graph/stage
-github.com/mariomac/pipes/pkg/node
-github.com/mariomac/pipes/pkg/node/internal/connect
 # github.com/mattn/go-isatty v0.0.19
 ## explicit; go 1.15
 github.com/mattn/go-isatty

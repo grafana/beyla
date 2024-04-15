@@ -61,8 +61,10 @@ func trimPrefixIgnoreCase(s, prefix string) string {
 }
 
 func (nr *NameResolver) resolveNames(span *request.Span) {
+	var peer string
+	var ok bool
 	if len(span.Peer) > 0 {
-		peer, ok := nr.fqnCache.Get(span.Peer)
+		peer, ok = nr.fqnCache.Get(span.Peer)
 		if ok {
 			span.PeerName = peer
 		} else {
@@ -82,7 +84,7 @@ func (nr *NameResolver) resolveNames(span *request.Span) {
 		} else {
 			host = nr.resolve(&span.ServiceID, span.Host)
 			if len(host) > 0 {
-				if strings.EqualFold(host, "localhost") && span.ServiceID.AutoName {
+				if strings.EqualFold(host, peer) && span.ServiceID.AutoName {
 					span.HostName = span.ServiceID.Name
 				} else {
 					span.HostName = host

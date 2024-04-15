@@ -12,6 +12,7 @@ import (
 
 	"github.com/mariomac/pipes/pkg/node"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp"
 	instrument "go.opentelemetry.io/otel/metric"
@@ -41,6 +42,10 @@ const (
 	SpanMetricsCalls      = "traces_spanmetrics_calls_total"
 	SpanMetricsSizes      = "traces_spanmetrics_size_total"
 	TracesTargetInfo      = "traces_target_info"
+	ServiceGraphClient    = "traces_service_graph_request_client"
+	ServiceGraphServer    = "traces_service_graph_request_server"
+	ServiceGraphFailed    = "traces_service_graph_request_failed_total"
+	ServiceGraphTotal     = "traces_service_graph_request_total"
 
 	UsualPortGRPC = "4317"
 	UsualPortHTTP = "4318"
@@ -162,6 +167,10 @@ type Metrics struct {
 	spanMetricsCallsTotal instrument.Int64Counter
 	spanMetricsSizeTotal  instrument.Float64Counter
 	tracesTargetInfo      instrument.Int64UpDownCounter
+	serviceGraphClient    instrument.Float64Histogram
+	serviceGraphServer    instrument.Float64Histogram
+	serviceGraphFailed    instrument.Int64Counter
+	serviceGraphTotal     instrument.Int64Counter
 }
 
 func ReportMetrics(
@@ -235,6 +244,8 @@ func (mr *MetricsReporter) spanMetricOptions(mlog *slog.Logger) []metric.Option 
 
 	return []metric.Option{
 		metric.WithView(otelHistogramConfig(SpanMetricsLatency, mr.cfg.Buckets.DurationHistogram, useExponentialHistograms)),
+		metric.WithView(otelHistogramConfig(ServiceGraphClient, mr.cfg.Buckets.DurationHistogram, useExponentialHistograms)),
+		metric.WithView(otelHistogramConfig(ServiceGraphServer, mr.cfg.Buckets.DurationHistogram, useExponentialHistograms)),
 	}
 }
 
@@ -301,6 +312,26 @@ func (mr *MetricsReporter) setupSpanMeters(m *Metrics, meter instrument.Meter) e
 	m.tracesTargetInfo, err = meter.Int64UpDownCounter(TracesTargetInfo)
 	if err != nil {
 		return fmt.Errorf("creating span metric traces target info: %w", err)
+	}
+
+	m.serviceGraphClient, err = meter.Float64Histogram(ServiceGraphClient, instrument.WithUnit("s"))
+	if err != nil {
+		return fmt.Errorf("creating service graph client histogram: %w", err)
+	}
+
+	m.serviceGraphServer, err = meter.Float64Histogram(ServiceGraphServer, instrument.WithUnit("s"))
+	if err != nil {
+		return fmt.Errorf("creating service graph server histogram: %w", err)
+	}
+
+	m.serviceGraphFailed, err = meter.Int64Counter(ServiceGraphFailed)
+	if err != nil {
+		return fmt.Errorf("creating service graph failed total: %w", err)
+	}
+
+	m.serviceGraphTotal, err = meter.Int64Counter(ServiceGraphTotal)
+	if err != nil {
+		return fmt.Errorf("creating service graph total: %w", err)
 	}
 
 	return nil
@@ -564,6 +595,19 @@ func (mr *MetricsReporter) spanMetricAttributes(span *request.Span) attribute.Se
 	return attribute.NewSet(attrs...)
 }
 
+func (mr *MetricsReporter) serviceGraphAttributes(span *request.Span) attribute.Set {
+	attrs := []attribute.KeyValue{
+		ClientMetric(span.PeerName),
+		ClientNamespaceMetric(span.ServiceID.Namespace), // TODO: what do we do here?
+		ServerMetric(span.HostName),
+		ServerNamespaceMetric(span.ServiceID.Namespace),
+		ConnectionTypeMetric("virtual_node"),
+		SourceMetric("beyla"),
+	}
+
+	return attribute.NewSet(attrs...)
+}
+
 func (r *Metrics) record(span *request.Span, mr *MetricsReporter) {
 	t := span.Timings()
 	duration := t.End.Sub(t.RequestStart).Seconds()
@@ -592,6 +636,17 @@ func (r *Metrics) record(span *request.Span, mr *MetricsReporter) {
 		r.spanMetricsLatency.Record(r.ctx, duration, attrOpt)
 		r.spanMetricsCallsTotal.Add(r.ctx, 1, attrOpt)
 		r.spanMetricsSizeTotal.Add(r.ctx, float64(span.ContentLength), attrOpt)
+
+		attrOpt = instrument.WithAttributeSet(mr.serviceGraphAttributes(span))
+		if span.IsClientSpan() {
+			r.serviceGraphClient.Record(r.ctx, duration, attrOpt)
+		} else {
+			r.serviceGraphServer.Record(r.ctx, duration, attrOpt)
+		}
+		r.serviceGraphTotal.Add(r.ctx, 1, attrOpt)
+		if SpanStatusCode(span) == codes.Error {
+			r.serviceGraphFailed.Add(r.ctx, 1, attrOpt)
+		}
 	}
 }
 

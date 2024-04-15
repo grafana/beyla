@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/grafana/beyla/pkg/internal/kube"
 	"github.com/grafana/beyla/pkg/internal/request"
 	"github.com/grafana/beyla/pkg/internal/svc"
 	"github.com/hashicorp/golang-lru/v2/expirable"
@@ -84,7 +85,8 @@ func (nr *NameResolver) resolveNames(span *request.Span) {
 		} else {
 			host = nr.resolve(&span.ServiceID, span.Host)
 			if len(host) > 0 {
-				if strings.EqualFold(host, peer) && span.ServiceID.AutoName {
+				_, ok := span.ServiceID.Metadata[kube.PodName]
+				if ok && strings.EqualFold(host, peer) && span.ServiceID.AutoName {
 					span.HostName = span.ServiceID.Name
 				} else {
 					span.HostName = host
@@ -109,6 +111,12 @@ func (nr *NameResolver) resolve(svc *svc.ID, ip string) string {
 	n = strings.TrimSuffix(n, ".")
 	n = trimSuffixIgnoreCase(n, ".svc.cluster.local")
 	n = trimSuffixIgnoreCase(n, "."+svc.Namespace)
+
+	kubeNamespace, ok := svc.Metadata[kube.NamespaceName]
+	if ok && kubeNamespace != "" && kubeNamespace != svc.Namespace {
+		n = trimSuffixIgnoreCase(n, "."+kubeNamespace)
+	}
+
 	dashIP := strings.ReplaceAll(ip, ".", "-") + "."
 	n = trimPrefixIgnoreCase(n, dashIP)
 

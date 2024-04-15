@@ -216,7 +216,7 @@ func TestSuite_PrometheusScrape(t *testing.T) {
 
 	require.NoError(t, err)
 	require.NoError(t, compose.Up())
-	t.Run("RED metrics", testREDMetricsHTTPNoOTel)
+	t.Run("RED metrics", testREDMetricsHTTP)
 	t.Run("GRPC RED metrics", testREDMetricsGRPC)
 	t.Run("Internal Prometheus metrics", testInternalPrometheusExport)
 	t.Run("Testing Beyla Build Info metric", testPrometheusBeylaBuildInfo)

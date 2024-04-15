@@ -96,7 +96,6 @@ func newGoTracersGroup(cfg *beyla.Config, metrics imetrics.Reporter) []ebpf.Trac
 	// Each program is an eBPF source: net/http, grpc...
 	return []ebpf.Tracer{
 		nethttp.New(cfg, metrics),
-		&nethttp.GinTracer{Tracer: *nethttp.New(cfg, metrics)},
 		grpc.New(cfg, metrics),
 		goruntime.New(cfg, metrics),
 	}

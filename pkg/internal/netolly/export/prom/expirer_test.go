@@ -36,10 +36,11 @@ func TestMetricsExpiration(t *testing.T) {
 	exporter, err := PrometheusEndpoint(
 		ctx,
 		&PrometheusConfig{Config: &prom.PrometheusConfig{
-			Port:       openPort,
-			Path:       "/metrics",
-			ExpireTime: 3 * time.Minute,
-			Features:   []string{otel.FeatureNetwork},
+			Port:                        openPort,
+			Path:                        "/metrics",
+			ExpireTime:                  3 * time.Minute,
+			SpanMetricsServiceCacheSize: 10,
+			Features:                    []string{otel.FeatureNetwork},
 		}, AllowedAttributes: []string{"src_name", "dst_name"}},
 		&connector.PrometheusManager{},
 	)

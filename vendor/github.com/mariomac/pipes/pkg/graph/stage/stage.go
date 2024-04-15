@@ -6,6 +6,7 @@ import (
 
 // Instance can be embedded into any stage configuration to be instantiable
 // (convenience implementation for the required Instancer interface)
+// Deprecated package. Use github.com/mariomac/pipes/pipe package
 type Instance string
 
 func (f Instance) ID() string {
@@ -14,6 +15,7 @@ func (f Instance) ID() string {
 
 // Instancer is the interface required by any stage configuration type that is
 // instantiated from the builder.ApplyConfig method.
+// Deprecated package. Use github.com/mariomac/pipes/pipe package
 type Instancer interface {
 	ID() string
 }
@@ -23,6 +25,7 @@ type Instancer interface {
 // This is useful for non-nillable configurations that need to be disabled if e.g.
 // a property is missing.
 // IMPORTANT: The method needs to be implemented by using a value as receiver.
+// Deprecated package. Use github.com/mariomac/pipes/pipe package
 type Enabler interface {
 	Enabled() bool
 }
@@ -36,10 +39,12 @@ var _ Instancer = Instance("")
 // If it returns an error, the graph building process will be interrupted.
 // The configuration type must either implement the stage.Instancer interface or the
 // configuration struct containing it must define a `nodeId` tag with an identifier for that stage.
+// Deprecated package. Use github.com/mariomac/pipes/pipe package
 type StartProvider[CFG, O any] func(CFG) (node.StartFunc[O], error)
 
 // StartMultiProvider is similar to StarProvider, but it is able to associate a variadic
 // number of functions that will behave as a single node.
+// Deprecated package. Use github.com/mariomac/pipes/pipe package
 type StartMultiProvider[CFG, O any] func(CFG) ([]node.StartFunc[O], error)
 
 // MiddleProvider is a function that, given a configuration argument of a unique type,
@@ -48,6 +53,7 @@ type StartMultiProvider[CFG, O any] func(CFG) ([]node.StartFunc[O], error)
 // If it returns an error, the graph building process will be interrupted.
 // The configuration type must either implement the stage.Instancer interface or the
 // configuration struct containing it must define a `nodeId` tag with an identifier for that stage.
+// Deprecated package. Use github.com/mariomac/pipes/pipe package
 type MiddleProvider[CFG, I, O any] func(CFG) (node.MiddleFunc[I, O], error)
 
 // TerminalProvider is a function that, given a configuration argument of a unique type,
@@ -56,6 +62,7 @@ type MiddleProvider[CFG, I, O any] func(CFG) (node.MiddleFunc[I, O], error)
 // If it returns an error, the graph building process will be interrupted.
 // The configuration type must either implement the stage.Instancer interface or the
 // configuration struct containing it must define a `nodeId` tag with an identifier for that stage.
+// Deprecated package. Use github.com/mariomac/pipes/pipe package
 type TerminalProvider[CFG, I any] func(CFG) (node.TerminalFunc[I], error)
 
 // StartDemuxProvider is a function that, given a configuration argument of a unique type,
@@ -64,6 +71,7 @@ type TerminalProvider[CFG, I any] func(CFG) (node.TerminalFunc[I], error)
 // If it returns an error, the graph building process will be interrupted.
 // The configuration type must either implement the stage.Instancer interface or the
 // configuration struct containing it must define a `nodeId` tag with an identifier for that stage.
+// Deprecated package. Use github.com/mariomac/pipes/pipe package
 type StartDemuxProvider[CFG any] func(CFG) (node.StartDemuxFunc, error)
 
 // MiddleDemuxProvider is a function that, given a configuration argument of a unique type,
@@ -72,4 +80,5 @@ type StartDemuxProvider[CFG any] func(CFG) (node.StartDemuxFunc, error)
 // If it returns an error, the graph building process will be interrupted.
 // The configuration type must either implement the stage.Instancer interface or the
 // configuration struct containing it must define a `nodeId` tag with an identifier for that stage.
+// Deprecated package. Use github.com/mariomac/pipes/pipe package
 type MiddleDemuxProvider[CFG, I any] func(CFG) (node.MiddleDemuxFunc[I], error)

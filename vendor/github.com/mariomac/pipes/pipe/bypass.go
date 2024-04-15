@@ -3,19 +3,19 @@ package pipe
 import "github.com/mariomac/pipes/pipe/internal/connect"
 
 // IgnoreStart is a convenience function to explicitly specify that the returned StartFunc
-// is going to be ignored/bypassed by the pipes library
+// is going to be ignored/bypassed by the pipes library.
 func IgnoreStart[OUT any]() StartFunc[OUT] {
 	return nil
 }
 
 // Bypass is a convenience function to explicitly specify that the returned MiddleFunc
-// is going to be ignored/bypassed by the pipes library
+// is going to be ignored/bypassed by the pipes library.
 func Bypass[INOUT any]() MiddleFunc[INOUT, INOUT] {
 	return nil
 }
 
 // IgnoreFinal is a convenience function to explicitly specify that the returned FinalFunc
-// // is going to be ignored/bypassed by the pipes library
+// // is going to be ignored/bypassed by the pipes library.
 func IgnoreFinal[IN any]() FinalFunc[IN] {
 	return nil
 }
@@ -32,10 +32,10 @@ func IgnoreFinal[IN any]() FinalFunc[IN] {
 // forward data to the destination nodes.
 // TODO: merge with middle node?
 type bypass[INOUT any] struct {
-	outs []Final[INOUT]
+	outs []Receiver[INOUT]
 }
 
-func (b *bypass[INOUT]) SendTo(r ...Final[INOUT]) {
+func (b *bypass[INOUT]) SendTo(r ...Receiver[INOUT]) {
 	b.outs = append(b.outs, r...)
 }
 
@@ -50,8 +50,7 @@ func (b *bypass[INOUT]) isStarted() bool {
 	return started
 }
 
-// nolint:unused
-// golangci-lint bug: it's actually used through its interface
+//nolint:unused
 func (b *bypass[INOUT]) start() {
 	if len(b.outs) == 0 {
 		panic("bypass node should have outputs")

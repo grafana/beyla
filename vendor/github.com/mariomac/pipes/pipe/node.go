@@ -1,8 +1,6 @@
-// Package node provides functionalities to create nodes and interconnect them.
+// Package pipe provides functionalities to create nodes and interconnect them.
 // A Node is a function container that can be connected via channels to other nodes.
 // A node can send data to multiple nodes, and receive data from multiple nodes.
-//
-//nolint:unused
 package pipe
 
 import (
@@ -12,7 +10,7 @@ import (
 )
 
 // StartFunc is a function that receives a writable channel as unique argument, and sends
-// value to that channel during an indefinite amount of time.
+// values to that channel during an indefinite amount of time.
 type StartFunc[OUT any] func(out chan<- OUT)
 
 // MiddleFunc is a function that receives a readable channel as first argument,
@@ -24,14 +22,14 @@ type MiddleFunc[IN, OUT any] func(in <-chan IN, out chan<- OUT)
 // It must process the inputs from the input channel until it's closed.
 type FinalFunc[IN any] func(in <-chan IN)
 
-// Start is any node that can send data to another node: node.start, node.doubler and node.bypass
-type Start[OUT any] interface {
-	// SendTo connect a sender with a group of receivers
-	SendTo(r ...Final[OUT])
+// Sender is any node that can send data to another node: Start or Middle.
+type Sender[OUT any] interface {
+	// SendTo connects a Sender with a group of Receiver instances.
+	SendTo(r ...Receiver[OUT]) // TODO: fail if there is any middle or final node not being destination of any "SendTo"
 }
 
-// Final is any node that can receive data from another node: node.bypass, node.doubler and node.terminal
-type Final[IN any] interface {
+// Receiver is any node that can receive data from another node: Middle or Final nodes
+type Receiver[IN any] interface {
 	isStarted() bool
 	start()
 	// joiners will usually return only one joiner instance but in
@@ -40,10 +38,22 @@ type Final[IN any] interface {
 	joiners() []*connect.Joiner[IN]
 }
 
-// Middle is any node that can both send and receive data: node.bypass or node.doubler.
+// Start nodes insert data into the pipeline. They only can send data to the pipeline, despite they
+// could acquire data by other means out of the pipes library.
+type Start[OUT any] interface {
+	Sender[OUT]
+}
+
+// Middle nodes go in between Start, Final or other Middle nodes. They can send and receive data.
 type Middle[IN, OUT any] interface {
 	Final[IN]
 	Start[OUT]
+}
+
+// Final nodes go at the end of the pipeline. They only can receive data from the pipeline, despite
+// they could export that data by other means out of the pipes library.
+type Final[IN any] interface {
+	Receiver[IN]
 }
 
 // start nodes are the starting points of a pipeline. This is, all the nodes that bring information
@@ -60,7 +70,7 @@ type start[OUT any] struct {
 // and forwards the data to another node.
 // An middle node must have at least one output node.
 type middle[IN, OUT any] struct {
-	outs    []Final[OUT]
+	outs    []Receiver[OUT]
 	inputs  connect.Joiner[IN]
 	started bool
 	fun     MiddleFunc[IN, OUT]
@@ -74,7 +84,7 @@ func (m *middle[IN, OUT]) isStarted() bool {
 	return m.started
 }
 
-func (m *middle[IN, OUT]) SendTo(outputs ...Final[OUT]) {
+func (m *middle[IN, OUT]) SendTo(outputs ...Receiver[OUT]) {
 	m.outs = append(m.outs, outputs...)
 }
 
@@ -101,7 +111,7 @@ func (t *terminal[IN]) isStarted() bool {
 	return t.started
 }
 
-// Done returns a channel that is closed when the terminal node has ended its processing. This
+// Done returns a channel that is closed when all the terminal nodes have ended. This
 // is, when all its inputs have been also closed. Waiting for all the terminal nodes to finish
 // allows blocking the execution until all the data in the pipeline has been processed and all the
 // previous stages have ended
@@ -150,27 +160,27 @@ func asFinal[IN any](fun FinalFunc[IN], opts ...Option) *terminal[IN] {
 
 // Start the function wrapped in the start node. This method should be invoked
 // for all the start nodes of the same pipeline, so the pipeline can properly start and finish.
-func (i *start[OUT]) Start() {
+func (sn *start[OUT]) Start() {
 	// a nil start node can be started without no effect on the pipeline.
 	// this allows setting optional nillable start nodes and let start all of them
 	// as a group in a more convenient way
-	if i == nil {
+	if sn == nil {
 		return
 	}
-	forker, err := i.receiverGroup.StartReceivers()
+	forker, err := sn.receiverGroup.StartReceivers()
 	if err != nil {
 		panic("start: " + err.Error())
 	}
 
 	go func() {
-		i.fun(forker.AcquireSender())
+		sn.fun(forker.AcquireSender())
 		forker.ReleaseSender()
 	}()
 }
 
 func (m *middle[IN, OUT]) start() {
 	if len(m.outs) == 0 {
-		panic("doubler node should have outputs")
+		panic("middle node should have outputs")
 	}
 	m.started = true
 	joiners := make([]*connect.Joiner[OUT], 0, len(m.outs))
@@ -209,31 +219,31 @@ func getOptions(opts ...Option) creationOptions {
 // receiverGroup connects a sender node with a collection
 // of Final nodes through a common connect.Forker instance.
 type receiverGroup[OUT any] struct {
-	Outs []Final[OUT]
+	Outs []Receiver[OUT]
 }
 
 // SendTo connects a group of receivers to the current receiverGroup
-func (s *start[OUT]) SendTo(outputs ...Final[OUT]) {
+func (sn *start[OUT]) SendTo(outputs ...Receiver[OUT]) {
 	// a nil start node can be operated without no effect on the pipeline.
 	// this allows connecting optional nillable start nodes and let start all of them
 	// as a group in a more convenient way
-	if s != nil {
-		s.receiverGroup.SendTo(outputs...)
+	if sn != nil {
+		sn.receiverGroup.SendTo(outputs...)
 	}
 }
 
-func (s *receiverGroup[OUT]) SendTo(outputs ...Final[OUT]) {
-	s.Outs = append(s.Outs, outputs...)
+func (rg *receiverGroup[OUT]) SendTo(outputs ...Receiver[OUT]) {
+	rg.Outs = append(rg.Outs, outputs...)
 }
 
 // StartReceivers start the receivers and return a connection
 // forker to them
-func (i *receiverGroup[OUT]) StartReceivers() (*connect.Forker[OUT], error) {
-	if len(i.Outs) == 0 {
+func (rg *receiverGroup[OUT]) StartReceivers() (*connect.Forker[OUT], error) {
+	if len(rg.Outs) == 0 {
 		return nil, errors.New("node should have outputs")
 	}
-	joiners := make([]*connect.Joiner[OUT], 0, len(i.Outs))
-	for _, out := range i.Outs {
+	joiners := make([]*connect.Joiner[OUT], 0, len(rg.Outs))
+	for _, out := range rg.Outs {
 		joiners = append(joiners, out.joiners()...)
 		if !out.isStarted() {
 			out.start()

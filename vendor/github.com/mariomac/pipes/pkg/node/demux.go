@@ -10,6 +10,7 @@ import (
 // Demuxed node whose output is not a channel but a Demux.
 // Can be both StartDemux or MiddleDemux nodes
 // Experimental API. Some names could change in the following versions.
+// Deprecated package. Use github.com/mariomac/pipes/pipe package
 type Demuxed interface {
 	demuxBuilder() *demuxBuilder
 }
@@ -31,6 +32,7 @@ type Demux struct {
 // and sends, during an indefinite amount of time, values to the channels
 // contained in the Demux (previously accessed by the DemuxGet function).
 // Experimental API. Some names could change in the following versions.
+// Deprecated package. Use github.com/mariomac/pipes/pipe package
 type StartDemuxFunc func(out Demux)
 
 // MiddleDemuxFunc is a function that receives a readable channel as first argument,
@@ -211,22 +213,22 @@ func AsMiddleDemux[IN any](fun MiddleDemuxFunc[IN], opts ...Option) *MiddleDemux
 }
 
 // nolint:unused
-func (m *MiddleDemux[IN]) joiners() []*connect.Joiner[IN] {
-	return []*connect.Joiner[IN]{&m.inputs}
+func (md *MiddleDemux[IN]) joiners() []*connect.Joiner[IN] {
+	return []*connect.Joiner[IN]{&md.inputs}
 }
 
 // nolint:unused
-func (m *MiddleDemux[IN]) isStarted() bool {
-	return m.started
+func (md *MiddleDemux[IN]) isStarted() bool {
+	return md.started
 }
 
-func (m *MiddleDemux[IN]) InType() reflect.Type {
-	return m.inType
+func (md *MiddleDemux[IN]) InType() reflect.Type {
+	return md.inType
 }
 
 // nolint:unused
-func (m *MiddleDemux[IN]) start() {
-	releasers, demux := startAndCollectReleaseFuncs(m)
+func (md *MiddleDemux[IN]) start() {
+	releasers, demux := startAndCollectReleaseFuncs(md)
 
 	go func() {
 		defer func() {
@@ -234,13 +236,13 @@ func (m *MiddleDemux[IN]) start() {
 				release.Call(nil)
 			}
 		}()
-		m.fun(m.inputs.Receiver(), demux)
+		md.fun(md.inputs.Receiver(), demux)
 	}()
 }
 
-func (i *MiddleDemux[IN]) demuxBuilder() *demuxBuilder {
-	if i.demux.outNodes == nil {
-		i.demux.outNodes = map[any]reflect.Value{}
+func (md *MiddleDemux[IN]) demuxBuilder() *demuxBuilder {
+	if md.demux.outNodes == nil {
+		md.demux.outNodes = map[any]reflect.Value{}
 	}
-	return &i.demux
+	return &md.demux
 }

@@ -59,8 +59,7 @@ func TestReadDecorator(t *testing.T) {
 			cfg.TracesInput = rawInput
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
-			readLoop, err := ReadFromChannel(ctx, cfg)
-			require.NoError(t, err)
+			readLoop := ReadFromChannel(ctx, &cfg)
 			go readLoop(decoratedOutput)
 			rawInput <- []request.Span{
 				{Path: "/foo", Pid: request.PidInfo{HostPID: 1234}},

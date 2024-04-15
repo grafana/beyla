@@ -114,6 +114,7 @@ type Builder struct {
 // NewBuilder instantiates a Graph Builder with the default configuration, which can be overridden via the
 // arguments.
 // Deprecated. Please use the low-level API of this library as this will be removed in future versions.
+// Deprecated package. Use github.com/mariomac/pipes/pipe package
 func NewBuilder(options ...node.Option) *Builder {
 	optVals := make([]reflect.Value, 0, len(options))
 	for _, opt := range options {
@@ -142,6 +143,7 @@ func NewBuilder(options ...node.Option) *Builder {
 // output type is connected to a node with a different input type. When nodes with different
 // types are connected, a codec converting between both MUST have been registered previously.
 // Otherwise the graph Build method will fail.
+// Deprecated package. Use github.com/mariomac/pipes/pipe package
 func RegisterCodec[I, O any](nb *Builder, middleFunc node.MiddleFunc[I, O]) {
 	var in I
 	var out O
@@ -158,6 +160,7 @@ func RegisterCodec[I, O any](nb *Builder, middleFunc node.MiddleFunc[I, O]) {
 // The passed configuration type must either implement the stage.Instancer interface or the
 // configuration struct containing it must define a `nodeId` tag with an identifier for that stage.
 // Deprecated. Please use the low-level API of this library as this will be removed in future versions.
+// Deprecated package. Use github.com/mariomac/pipes/pipe package
 func RegisterStart[CFG, O any](nb *Builder, b stage.StartProvider[CFG, O]) {
 	nb.startProviders[typeOf[CFG]()] = reflectedNode{
 		instancer: reflect.ValueOf(node.AsStart[O]),
@@ -168,6 +171,7 @@ func RegisterStart[CFG, O any](nb *Builder, b stage.StartProvider[CFG, O]) {
 // RegisterMultiStart is similar to RegisterStart, but registers a stage.StartMultiProvider,
 // which allows associating multiple functions with a single node
 // Deprecated. Please use the low-level API of this library as this will be removed in future versions.
+// Deprecated package. Use github.com/mariomac/pipes/pipe package
 func RegisterMultiStart[CFG, O any](nb *Builder, b stage.StartMultiProvider[CFG, O]) {
 	nb.startProviders[typeOf[CFG]()] = reflectedNode{
 		instancer: reflect.ValueOf(node.AsStart[O]),
@@ -181,6 +185,7 @@ func RegisterMultiStart[CFG, O any](nb *Builder, b stage.StartMultiProvider[CFG,
 // The passed configuration type must either implement the stage.Instancer interface or the
 // configuration struct containing it must define a `nodeId` tag with an identifier for that stage.
 // Deprecated. Please use the low-level API of this library as this will be removed in future versions.
+// Deprecated package. Use github.com/mariomac/pipes/pipe package
 func RegisterMiddle[CFG, I, O any](nb *Builder, b stage.MiddleProvider[CFG, I, O]) {
 	nb.middleProviders[typeOf[CFG]()] = reflectedNode{
 		instancer: reflect.ValueOf(node.AsMiddle[I, O]),
@@ -213,34 +218,34 @@ func RegisterTerminal[CFG, I any](nb *Builder, b stage.TerminalProvider[CFG, I])
 //   - The sendTo annotations on each graph stage.
 //
 // Deprecated. Please use the low-level API of this library as this will be removed in future versions.
-func (b *Builder) Build(cfg any) (Graph, error) {
+func (nb *Builder) Build(cfg any) (Graph, error) {
 	g := Graph{}
-	if err := b.applyConfig(cfg); err != nil {
+	if err := nb.applyConfig(cfg); err != nil {
 		return g, err
 	}
 
-	for _, i := range b.startNodes {
+	for _, i := range nb.startNodes {
 		g.start = append(g.start, i.(startNode))
 	}
-	for _, i := range b.startDemuxedNodes {
+	for _, i := range nb.startDemuxedNodes {
 		g.start = append(g.start, i.(startNode))
 	}
-	for _, e := range b.termNodes {
+	for _, e := range nb.termNodes {
 		g.terms = append(g.terms, e.node.(terminalNode))
 	}
 
 	// validate that there aren't nodes without connection
-	if len(b.outNodeNames) > 0 {
-		names := make([]string, 0, len(b.outNodeNames))
-		for n := range b.outNodeNames {
+	if len(nb.outNodeNames) > 0 {
+		names := make([]string, 0, len(nb.outNodeNames))
+		for n := range nb.outNodeNames {
 			names = append(names, n)
 		}
 		return g, fmt.Errorf("the following nodes don't have any output: %s",
 			strings.Join(names, ", "))
 	}
-	if len(b.inNodeNames) > 0 {
-		names := make([]string, 0, len(b.inNodeNames))
-		for n := range b.inNodeNames {
+	if len(nb.inNodeNames) > 0 {
+		names := make([]string, 0, len(nb.inNodeNames))
+		for n := range nb.inNodeNames {
 			names = append(names, n)
 		}
 		return g, fmt.Errorf("the following nodes don't have any input: %s",
@@ -349,28 +354,28 @@ func (nb *Builder) instantiateTerminal(instanceID string, eb reflectedNode, rarg
 	return nil
 }
 
-func (b *Builder) connect(src string, dst dstConnector) error {
+func (nb *Builder) connect(src string, dst dstConnector) error {
 	if src == dst.dstNode {
 		return fmt.Errorf("node %q must not send data to itself", dst.dstNode)
 	}
 	// remove the src and dst from the inNodeNames and outNodeNames to mark that
 	// they have been already connected
-	delete(b.inNodeNames, dst.dstNode)
-	delete(b.outNodeNames, src)
+	delete(nb.inNodeNames, dst.dstNode)
+	delete(nb.outNodeNames, src)
 	// Ignore disabled nodes, as they are disabled by the user
 	// despite the connection is hardcoded in the nodeId, sendTo tags
-	if _, ok := b.disabledNodes[src]; ok {
+	if _, ok := nb.disabledNodes[src]; ok {
 		return nil
 	}
-	if _, ok := b.disabledNodes[dst.dstNode]; ok {
+	if _, ok := nb.disabledNodes[dst.dstNode]; ok {
 		// if the disabled destination is configured to forward data, it will recursively
 		// connect the source with its own destinations
-		if fwds, ok := b.forwarderNodes[dst.dstNode]; ok {
+		if fwds, ok := nb.forwarderNodes[dst.dstNode]; ok {
 			for _, fwdDst := range fwds {
 				// if the source is demuxed, we need to forward the source demux info
 				// instead of the destination demux
 				dstWithSrcDemux := dstConnector{demuxChan: dst.demuxChan, dstNode: fwdDst.dstNode}
-				if err := b.connect(src, dstWithSrcDemux); err != nil {
+				if err := nb.connect(src, dstWithSrcDemux); err != nil {
 					return err
 				}
 			}
@@ -380,25 +385,25 @@ func (b *Builder) connect(src string, dst dstConnector) error {
 
 	// find source and destination stages
 	var srcDemuxedNode node.Demuxed
-	srcNode, ok := b.getSrcNode(src)
+	srcNode, ok := nb.getSrcNode(src)
 	if !ok {
-		srcDemuxedNode, ok = b.getSrcDemuxedNode(src)
+		srcDemuxedNode, ok = nb.getSrcDemuxedNode(src)
 		if !ok {
 			return fmt.Errorf("invalid source node: %q", src)
 		}
 	}
-	dstNode, ok := b.getDstNode(dst.dstNode)
+	dstNode, ok := nb.getDstNode(dst.dstNode)
 	if !ok {
 		return fmt.Errorf("invalid destination node: %q", dst.dstNode)
 	}
 	if srcNode != nil {
-		return b.directConnection(src, dst, srcNode, dstNode)
+		return nb.directConnection(src, dst, srcNode, dstNode)
 	} else {
-		return b.demuxedConnection(src, dst, srcDemuxedNode, dstNode)
+		return nb.demuxedConnection(src, dst, srcDemuxedNode, dstNode)
 	}
 }
 
-func (b *Builder) directConnection(srcName string, dstName dstConnector, srcNode outTyper, dstNode reflectedDemuxedNode) error {
+func (nb *Builder) directConnection(srcName string, dstName dstConnector, srcNode outTyper, dstNode reflectedDemuxedNode) error {
 	if dstName.demuxChan != "" {
 		return fmt.Errorf("node %q has no demuxed output. Its destination node name can't have the '%s:' prefix (%s:%s)",
 			srcName, dstName.demuxChan, dstName.demuxChan, dstName.dstNode)
@@ -413,7 +418,7 @@ func (b *Builder) directConnection(srcName string, dstName dstConnector, srcNode
 		return nil
 	}
 	// otherwise, we will add in intermediate codec layer
-	codec, ok := b.newCodec(srcNode.OutType(), dstNode.node.InType())
+	codec, ok := nb.newCodec(srcNode.OutType(), dstNode.node.InType())
 	if !ok {
 		// TODO: this is not tested
 		return fmt.Errorf("can't connect %q and %q stages because there isn't registered"+
@@ -428,7 +433,7 @@ func (b *Builder) directConnection(srcName string, dstName dstConnector, srcNode
 	return nil
 }
 
-func (b *Builder) demuxedConnection(src string, dstName dstConnector, srcNode node.Demuxed, dstNode reflectedDemuxedNode) error {
+func (nb *Builder) demuxedConnection(src string, dstName dstConnector, srcNode node.Demuxed, dstNode reflectedDemuxedNode) error {
 	if dstName.demuxChan == "" {
 		return fmt.Errorf("node %q has demuxed output. Its destination node name must have a named output prefix (for example out1:%s)",
 			src, dstName.dstNode)
@@ -453,8 +458,8 @@ func (b *Builder) demuxedConnection(src string, dstName dstConnector, srcNode no
 }
 
 // returns a node.Midle[?, ?] as a value
-func (b *Builder) newCodec(inType, outType reflect.Type) (reflect.Value, bool) {
-	codec, ok := b.codecs[codecKey{In: inType, Out: outType}]
+func (nb *Builder) newCodec(inType, outType reflect.Type) (reflect.Value, bool) {
+	codec, ok := nb.codecs[codecKey{In: inType, Out: outType}]
 	if !ok {
 		return reflect.ValueOf(nil), false
 	}
@@ -468,40 +473,40 @@ func typeOf[T any]() reflect.Type {
 	return reflect.TypeOf(t)
 }
 
-func (b *Builder) getSrcNode(id string) (outTyper, bool) {
-	if srcNode, ok := b.startNodes[id]; ok {
+func (nb *Builder) getSrcNode(id string) (outTyper, bool) {
+	if srcNode, ok := nb.startNodes[id]; ok {
 		return srcNode, true
 	}
-	if srcNode, ok := b.middleNodes[id]; ok {
+	if srcNode, ok := nb.middleNodes[id]; ok {
 		return srcNode.node, true
 	}
 	return nil, false
 }
 
-func (b *Builder) getSrcDemuxedNode(id string) (node.Demuxed, bool) {
-	if srcNode, ok := b.startDemuxedNodes[id]; ok {
+func (nb *Builder) getSrcDemuxedNode(id string) (node.Demuxed, bool) {
+	if srcNode, ok := nb.startDemuxedNodes[id]; ok {
 		return srcNode, true
 	}
-	if srcNode, ok := b.middleDemuxedNodes[id]; ok {
+	if srcNode, ok := nb.middleDemuxedNodes[id]; ok {
 		return srcNode.demuxed, true
 	}
 	return nil, false
 }
 
-func (b *Builder) getDstNode(id string) (reflectedDemuxedNode, bool) {
-	if dstNode, ok := b.middleNodes[id]; ok {
+func (nb *Builder) getDstNode(id string) (reflectedDemuxedNode, bool) {
+	if dstNode, ok := nb.middleNodes[id]; ok {
 		return reflectedDemuxedNode{
 			node:          dstNode.node,
 			inputDemuxAdd: dstNode.inputDemuxAdd,
 		}, true
 	}
-	if dstNode, ok := b.middleDemuxedNodes[id]; ok {
+	if dstNode, ok := nb.middleDemuxedNodes[id]; ok {
 		return reflectedDemuxedNode{
 			node:          dstNode.node,
 			inputDemuxAdd: dstNode.inputDemuxAdd,
 		}, true
 	}
-	if dstNode, ok := b.termNodes[id]; ok {
+	if dstNode, ok := nb.termNodes[id]; ok {
 		return reflectedDemuxedNode{
 			node:          dstNode.node,
 			inputDemuxAdd: dstNode.inputDemuxAdd,

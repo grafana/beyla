@@ -16,6 +16,7 @@ import (
 // Bypass is useful for implementing constructors that might return an optional Middle[T, T] node
 // (according to e.g. the user configuration) or just a Bypass[T] node to transparently
 // forward data to the destination nodes.
+// Deprecated package. Use github.com/mariomac/pipes/pipe package
 type Bypass[INOUT any] struct {
 	outs []Receiver[INOUT]
 }

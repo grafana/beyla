@@ -34,15 +34,15 @@ type ConnectedConfig interface {
 }
 
 // applyConfig instantiates and configures the different pipeline stages according to the provided configuration
-func (b *Builder) applyConfig(cfg any) error {
+func (nb *Builder) applyConfig(cfg any) error {
 	annotatedConnections := map[string][]dstConnector{}
 	cv := reflect.ValueOf(cfg)
 	if cv.Kind() == reflect.Pointer {
-		if err := b.applyConfigReflect(cv.Elem(), annotatedConnections); err != nil {
+		if err := nb.applyConfigReflect(cv.Elem(), annotatedConnections); err != nil {
 			return err
 		}
 	} else {
-		if err := b.applyConfigReflect(cv, annotatedConnections); err != nil {
+		if err := nb.applyConfigReflect(cv, annotatedConnections); err != nil {
 			return err
 		}
 	}
@@ -50,7 +50,7 @@ func (b *Builder) applyConfig(cfg any) error {
 	// connect any node with the sendTo annotation
 	for src, dsts := range annotatedConnections {
 		for _, dst := range dsts {
-			if err := b.connect(src, dst); err != nil {
+			if err := nb.connect(src, dst); err != nil {
 				return err
 			}
 		}
@@ -64,7 +64,7 @@ func (b *Builder) applyConfig(cfg any) error {
 	for src, dsts := range ccfg.Connections() {
 		for _, dst := range dsts {
 			dstC := connectorFrom(dst)
-			if err := b.connect(src, dstC); err != nil {
+			if err := nb.connect(src, dstC); err != nil {
 				return err
 			}
 		}
@@ -72,7 +72,7 @@ func (b *Builder) applyConfig(cfg any) error {
 	return nil
 }
 
-func (b *Builder) applyConfigReflect(cfgValue reflect.Value, conns map[string][]dstConnector) error {
+func (nb *Builder) applyConfigReflect(cfgValue reflect.Value, conns map[string][]dstConnector) error {
 	if cfgValue.Kind() != reflect.Struct {
 		return fmt.Errorf("configuration should be a struct. Was: %s", cfgValue.Type())
 	}
@@ -82,7 +82,7 @@ func (b *Builder) applyConfigReflect(cfgValue reflect.Value, conns map[string][]
 		if field.Type == connectorType {
 			continue
 		}
-		if err := b.applyField(field, cfgValue.Field(f), conns); err != nil {
+		if err := nb.applyField(field, cfgValue.Field(f), conns); err != nil {
 			return err
 		}
 	}
@@ -94,8 +94,8 @@ func (b *Builder) applyConfigReflect(cfgValue reflect.Value, conns map[string][]
 // 2- The ID specified by the stage.Instance embedded type, if any
 // 3- The result of the `nodeId` embedded tag in the struct
 // otherwise it throws a runtime error
-func (b *Builder) applyField(fieldType reflect.StructField, fieldVal reflect.Value, conns map[string][]dstConnector) error {
-	instanceID, err := b.instanceID(fieldType, fieldVal)
+func (nb *Builder) applyField(fieldType reflect.StructField, fieldVal reflect.Value, conns map[string][]dstConnector) error {
+	instanceID, err := nb.instanceID(fieldType, fieldVal)
 	if err != nil {
 		return err
 	}
@@ -107,19 +107,19 @@ func (b *Builder) applyField(fieldType reflect.StructField, fieldVal reflect.Val
 	if sendsTo, ok := fieldType.Tag.Lookup(sendsToTag); ok {
 		conns[instanceID] = allConnectorsFrom(sendsTo)
 	} else {
-		b.checkForwarding(fieldType, conns, instanceID)
+		nb.checkForwarding(fieldType, conns, instanceID)
 	}
 
 	// Ignore the config field if it is not enabled
 	if !isEnabled(fieldVal) {
-		b.disabledNodes[instanceID] = struct{}{}
+		nb.disabledNodes[instanceID] = struct{}{}
 		return nil
 	}
 
-	return b.instantiate(instanceID, fieldVal)
+	return nb.instantiate(instanceID, fieldVal)
 }
 
-func (b *Builder) instanceID(fieldType reflect.StructField, fieldVal reflect.Value) (string, error) {
+func (nb *Builder) instanceID(fieldType reflect.StructField, fieldVal reflect.Value) (string, error) {
 	if instancer, ok := fieldVal.Interface().(stage.Instancer); ok {
 		return instancer.ID(), nil
 		//	// if it does not implement the instancer interface, let's check if it can be converted
@@ -144,11 +144,11 @@ func (b *Builder) instanceID(fieldType reflect.StructField, fieldVal reflect.Val
 }
 
 // updates the connections and forwarding connections in case the field is marked as forwardTo
-func (b *Builder) checkForwarding(fieldType reflect.StructField, conns map[string][]dstConnector, instanceID string) {
+func (nb *Builder) checkForwarding(fieldType reflect.StructField, conns map[string][]dstConnector, instanceID string) {
 	if fwdToContent, ok := fieldType.Tag.Lookup(fwdToTag); ok {
 		dsts := allConnectorsFrom(fwdToContent)
 		conns[instanceID] = dsts
-		b.forwarderNodes[instanceID] = dsts
+		nb.forwarderNodes[instanceID] = dsts
 	}
 }
 

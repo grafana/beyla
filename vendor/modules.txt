@@ -283,7 +283,7 @@ github.com/mailru/easyjson/jwriter
 # github.com/mariomac/guara v0.0.0-20230621100729-42bd7716e524
 ## explicit; go 1.18
 github.com/mariomac/guara/pkg/test
-# github.com/mariomac/pipes v0.9.0 => ../mystuff/pipes
+# github.com/mariomac/pipes v0.10.0
 ## explicit; go 1.18
 github.com/mariomac/pipes/pipe
 github.com/mariomac/pipes/pipe/internal/connect

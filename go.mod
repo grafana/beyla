@@ -2,8 +2,6 @@ module github.com/grafana/beyla
 
 go 1.22
 
-replace github.com/mariomac/pipes v0.9.0 => ../mystuff/pipes
-
 require (
 	github.com/AlessandroPomponio/go-gibberish v0.0.0-20191004143433-a2d4156f0396
 	github.com/aws/aws-sdk-go-v2 v1.25.2
@@ -20,7 +18,7 @@ require (
 	github.com/grafana/go-offsets-tracker v0.1.7
 	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/mariomac/guara v0.0.0-20230621100729-42bd7716e524
-	github.com/mariomac/pipes v0.9.0
+	github.com/mariomac/pipes v0.10.0
 	github.com/prometheus/client_golang v1.18.0
 	github.com/prometheus/client_model v0.5.0
 	github.com/prometheus/common v0.46.0

@@ -169,10 +169,7 @@ config:
     #   otlp:
     #     cloud_zone: prod-eu-west-0
     #     cloud_instance_id: 123456  
-    #     cloud_api_key:  
-    discovery:
-      services:
-        - k8s_namespace: .
+    #     cloud_api_key:
     attributes:
       kubernetes:
         enable: true
@@ -186,9 +183,9 @@ config:
 ## For example:
 ##   BEYLA_INTERNAL_METRICS_PROMETHEUS_PORT: 9090
 # -- extra environment variables
-env:
+env: {}
   #BEYLA_INTERNAL_METRICS_PROMETHEUS_PORT: 9090
-  BEYLA_PRINT_TRACES: "true"
+  #BEYLA_PRINT_TRACES: "true"
 
 # -- extra environment variables to be set from resources such as k8s configMaps/secrets
 envValueFrom: {}
@@ -196,3 +193,7 @@ envValueFrom: {}
   #    secretKeyRef:
   #      name: secret-name
   #      key: value_key
+
+# -- preconfigures defaults for network or application observability
+# accepted values are network or application
+preset: application

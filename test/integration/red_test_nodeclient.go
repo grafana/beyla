@@ -86,7 +86,7 @@ func testNodeClientWithMethodAndStatusCode(t *testing.T, method string, statusCo
 	if kprobeTraces {
 		require.True(t, span.TraceID != "")
 		// this is flaky, likely because of how the event loop works
-		//require.True(t, strings.HasSuffix(span.TraceID, traceIDLookup))
-		//require.True(t, strings.HasPrefix(span.SpanID, "00"))
+		// require.True(t, strings.HasSuffix(span.TraceID, traceIDLookup))
+		// require.True(t, strings.HasPrefix(span.SpanID, "00"))
 	}
 }

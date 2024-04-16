@@ -104,6 +104,22 @@ func (nr *NameResolver) resolve(svc *svc.ID, ip string) (string, string) {
 	return name, ns
 }
 
+func (nr *NameResolver) cleanName(svc *svc.ID, ip, n string) string {
+	n = strings.TrimSuffix(n, ".")
+	n = trimSuffixIgnoreCase(n, ".svc.cluster.local")
+	n = trimSuffixIgnoreCase(n, "."+svc.Namespace)
+
+	kubeNamespace, ok := svc.Metadata[kube.NamespaceName]
+	if ok && kubeNamespace != "" && kubeNamespace != svc.Namespace {
+		n = trimSuffixIgnoreCase(n, "."+kubeNamespace)
+	}
+
+	dashIP := strings.ReplaceAll(ip, ".", "-") + "."
+	n = trimPrefixIgnoreCase(n, dashIP)
+
+	return n
+}
+
 func (nr *NameResolver) dnsResolve(svc *svc.ID, ip string) (string, string) {
 	if ip == "" {
 		return "", ""
@@ -126,17 +142,7 @@ func (nr *NameResolver) dnsResolve(svc *svc.ID, ip string) (string, string) {
 		return n, svc.Namespace
 	}
 
-	n = strings.TrimSuffix(n, ".")
-	n = trimSuffixIgnoreCase(n, ".svc.cluster.local")
-	n = trimSuffixIgnoreCase(n, "."+svc.Namespace)
-
-	kubeNamespace, ok := svc.Metadata[kube.NamespaceName]
-	if ok && kubeNamespace != "" && kubeNamespace != svc.Namespace {
-		n = trimSuffixIgnoreCase(n, "."+kubeNamespace)
-	}
-
-	dashIP := strings.ReplaceAll(ip, ".", "-") + "."
-	n = trimPrefixIgnoreCase(n, dashIP)
+	n = nr.cleanName(svc, ip, n)
 
 	//fmt.Printf("%s -> %s\n", ip, n)
 

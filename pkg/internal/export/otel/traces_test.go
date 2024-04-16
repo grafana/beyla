@@ -470,6 +470,31 @@ func TestTracesIdGenerator(t *testing.T) {
 	})
 }
 
+func TestSpanHostPeer(t *testing.T) {
+	sp := request.Span{
+		HostName: "localhost",
+		Host:     "127.0.0.1",
+		PeerName: "peerhost",
+		Peer:     "127.0.0.2",
+	}
+
+	assert.Equal(t, "localhost", spanHost(&sp))
+	assert.Equal(t, "peerhost", spanPeer(&sp))
+
+	sp = request.Span{
+		Host: "127.0.0.1",
+		Peer: "127.0.0.2",
+	}
+
+	assert.Equal(t, "127.0.0.1", spanHost(&sp))
+	assert.Equal(t, "127.0.0.2", spanPeer(&sp))
+
+	sp = request.Span{}
+
+	assert.Equal(t, "", spanHost(&sp))
+	assert.Equal(t, "", spanPeer(&sp))
+}
+
 type fakeInternalTraces struct {
 	imetrics.NoopReporter
 	sum  atomic.Int32

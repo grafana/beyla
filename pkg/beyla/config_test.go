@@ -147,6 +147,10 @@ network:
 			},
 		},
 		Routes: &transform.RoutesConfig{},
+		NameResolver: &transform.NameResolverConfig{
+			CacheLen: 1024,
+			CacheTTL: 5 * time.Minute,
+		},
 	}, cfg)
 }
 

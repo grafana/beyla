@@ -4,13 +4,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hashicorp/golang-lru/v2/expirable"
+	"github.com/stretchr/testify/assert"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	kube2 "github.com/grafana/beyla/pkg/internal/kube"
 	"github.com/grafana/beyla/pkg/internal/request"
 	"github.com/grafana/beyla/pkg/internal/svc"
 	"github.com/grafana/beyla/pkg/internal/transform/kube"
-	"github.com/hashicorp/golang-lru/v2/expirable"
-	"github.com/stretchr/testify/assert"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func TestSuffixPrefix(t *testing.T) {

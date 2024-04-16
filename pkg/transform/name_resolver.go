@@ -7,8 +7,10 @@ import (
 	"time"
 
 	"github.com/grafana/beyla/pkg/internal/kube"
+	"github.com/grafana/beyla/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/pkg/internal/request"
 	"github.com/grafana/beyla/pkg/internal/svc"
+	kube2 "github.com/grafana/beyla/pkg/internal/transform/kube"
 	"github.com/hashicorp/golang-lru/v2/expirable"
 	"github.com/mariomac/pipes/pkg/node"
 )
@@ -24,16 +26,18 @@ type NameResolverConfig struct {
 }
 
 type NameResolver struct {
-	cache    *expirable.LRU[string, string]
-	fqnCache *expirable.LRU[string, string]
-	cfg      *NameResolverConfig
+	cache  *expirable.LRU[string, string]
+	sCache *expirable.LRU[string, svc.ID]
+	cfg    *NameResolverConfig
+	db     *kube2.Database
 }
 
-func NameResolutionProvider(cfg *NameResolverConfig) (node.MiddleFunc[[]request.Span, []request.Span], error) {
+func NameResolutionProvider(ctxInfo *global.ContextInfo, cfg *NameResolverConfig) (node.MiddleFunc[[]request.Span, []request.Span], error) {
 	nr := NameResolver{
-		cfg:      cfg,
-		cache:    expirable.NewLRU[string, string](cfg.CacheLen, nil, cfg.CacheTTL),
-		fqnCache: expirable.NewLRU[string, string](cfg.CacheLen, nil, cfg.CacheTTL),
+		cfg:    cfg,
+		db:     ctxInfo.AppO11y.K8sDatabase,
+		cache:  expirable.NewLRU[string, string](cfg.CacheLen, nil, cfg.CacheTTL),
+		sCache: expirable.NewLRU[string, svc.ID](cfg.CacheLen, nil, cfg.CacheTTL),
 	}
 
 	return func(in <-chan []request.Span, out chan<- []request.Span) {
@@ -62,31 +66,32 @@ func trimPrefixIgnoreCase(s, prefix string) string {
 }
 
 func (nr *NameResolver) resolveNames(span *request.Span) {
-	var peer string
-	var ok bool
 	if len(span.Peer) > 0 {
-		peer, ok = nr.fqnCache.Get(span.Peer)
+		peerSvc, ok := nr.sCache.Get(span.Peer)
 		if ok {
-			span.PeerName = peer
+			span.PeerName = peerSvc.Name
+			span.PeerNamespace = peerSvc.Namespace
 		} else {
-			peer = nr.resolve(&span.ServiceID, span.Peer)
+			peer, ns := nr.resolve(&span.ServiceID, span.Peer)
 			if len(peer) > 0 {
 				span.PeerName = peer
 			} else {
 				span.PeerName = span.Peer
 			}
+			span.PeerNamespace = ns
 		}
 	}
 
+	span.HostName = span.S
 	if len(span.Host) > 0 {
-		host, ok := nr.fqnCache.Get(span.Host)
+		hostSvc, ok := nr.sCache.Get(span.Host)
 		if ok {
-			span.HostName = host
+			span.HostName = hostSvc.Name
 		} else {
-			host = nr.resolve(&span.ServiceID, span.Host)
+			host, _ := nr.resolve(&span.ServiceID, span.Host)
 			if len(host) > 0 {
 				_, ok := span.ServiceID.Metadata[kube.PodName]
-				if ok && strings.EqualFold(host, peer) && span.ServiceID.AutoName {
+				if ok && strings.EqualFold(host, span.PeerName) && span.ServiceID.AutoName {
 					span.HostName = span.ServiceID.Name
 				} else {
 					span.HostName = host
@@ -94,18 +99,31 @@ func (nr *NameResolver) resolveNames(span *request.Span) {
 			} else {
 				span.HostName = span.Host
 			}
-			nr.fqnCache.Add(span.Host, span.HostName)
+			nr.sCache.Add(span.Host, span.ServiceID)
 		}
 	}
 }
 
-func (nr *NameResolver) resolve(svc *svc.ID, ip string) string {
+func (nr *NameResolver) resolve(svc *svc.ID, ip string) (string, string) {
 	if ip == "" {
-		return ""
+		return "", ""
 	}
+
+	if nr.db != nil {
+		ipAddr := net.ParseIP(ip)
+
+		if ipAddr != nil && !ipAddr.IsLoopback() {
+			n, ns := nr.resolveFromK8s(ip)
+
+			if n != "" {
+				return n, ns
+			}
+		}
+	}
+
 	n := nr.resolveIP(ip)
 	if n == ip {
-		return n
+		return n, svc.Namespace
 	}
 
 	n = strings.TrimSuffix(n, ".")
@@ -122,7 +140,16 @@ func (nr *NameResolver) resolve(svc *svc.ID, ip string) string {
 
 	//fmt.Printf("%s -> %s\n", ip, n)
 
-	return n
+	return n, svc.Namespace
+}
+
+func (nr *NameResolver) resolveFromK8s(ip string) (string, string) {
+	info := nr.db.PodInfoForIP(ip)
+	if info == nil {
+		return "", ""
+	}
+
+	return info.ServiceName(), info.Namespace
 }
 
 func (nr *NameResolver) resolveIP(ip string) string {

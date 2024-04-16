@@ -110,16 +110,7 @@ func appendMetadata(span *request.Span, info *kube.PodInfo) {
 	// service name and namespace, we will automatically set it from
 	// the kubernetes metadata
 	if span.ServiceID.AutoName {
-		if info.Owner != nil {
-			// we have two levels of ownership at most
-			if info.Owner.Owner != nil {
-				span.ServiceID.Name = info.Owner.Owner.Name
-			} else {
-				span.ServiceID.Name = info.Owner.Name
-			}
-		} else {
-			span.ServiceID.Name = info.Name
-		}
+		span.ServiceID.Name = info.ServiceName()
 	}
 	if span.ServiceID.Namespace == "" {
 		span.ServiceID.Namespace = info.Namespace

@@ -596,15 +596,26 @@ func (mr *MetricsReporter) spanMetricAttributes(span *request.Span) attribute.Se
 }
 
 func (mr *MetricsReporter) serviceGraphAttributes(span *request.Span) attribute.Set {
-	attrs := []attribute.KeyValue{
-		ClientMetric(span.PeerName),
-		ClientNamespaceMetric(span.ServiceID.Namespace), // TODO: what do we do here?
-		ServerMetric(span.HostName),
-		ServerNamespaceMetric(span.ServiceID.Namespace),
-		ConnectionTypeMetric("virtual_node"),
-		SourceMetric("beyla"),
+	var attrs []attribute.KeyValue
+	if span.IsClientSpan() {
+		attrs = []attribute.KeyValue{
+			ClientMetric(span.PeerName),
+			ClientNamespaceMetric(span.ServiceID.Namespace),
+			ServerMetric(span.HostName),
+			ServerNamespaceMetric(span.OtherNamespace),
+			ConnectionTypeMetric("virtual_node"),
+			SourceMetric("beyla"),
+		}
+	} else {
+		attrs = []attribute.KeyValue{
+			ClientMetric(span.PeerName),
+			ClientNamespaceMetric(span.OtherNamespace),
+			ServerMetric(span.HostName),
+			ServerNamespaceMetric(span.ServiceID.Namespace),
+			ConnectionTypeMetric("virtual_node"),
+			SourceMetric("beyla"),
+		}
 	}
-
 	return attribute.NewSet(attrs...)
 }
 

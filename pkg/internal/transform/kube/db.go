@@ -1,10 +1,12 @@
 package kube
 
 import (
+	"fmt"
 	"log/slog"
 
 	"github.com/grafana/beyla/pkg/internal/helpers/container"
 	"github.com/grafana/beyla/pkg/internal/kube"
+	"k8s.io/client-go/tools/cache"
 )
 
 func dblog() *slog.Logger {
@@ -25,6 +27,9 @@ type Database struct {
 
 	// key: pid namespace
 	fetchedPodsCache map[uint32]*kube.PodInfo
+
+	// ip to pod name matcher
+	podsByIp map[string]*kube.PodInfo
 }
 
 func StartDatabase(kubeMetadata *kube.Metadata) (*Database, error) {
@@ -32,9 +37,25 @@ func StartDatabase(kubeMetadata *kube.Metadata) (*Database, error) {
 		fetchedPodsCache: map[uint32]*kube.PodInfo{},
 		containerIDs:     map[string]*container.Info{},
 		namespaces:       map[uint32]*container.Info{},
+		podsByIp:         map[string]*kube.PodInfo{},
 		informer:         kubeMetadata,
 	}
 	db.informer.AddContainerEventHandler(&db)
+
+	if err := db.informer.AddPodEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc: func(obj interface{}) {
+			db.updateNewPodsByIpIndex(obj.(*kube.PodInfo))
+		},
+		UpdateFunc: func(oldObj, newObj interface{}) {
+			db.updateDeletedPodsByIpIndex(oldObj.(*kube.PodInfo))
+			db.updateNewPodsByIpIndex(newObj.(*kube.PodInfo))
+		},
+		DeleteFunc: func(obj interface{}) {
+			db.updateDeletedPodsByIpIndex(obj.(*kube.PodInfo))
+		},
+	}); err != nil {
+		return nil, fmt.Errorf("can't register Database as Pod event handler: %w", err)
+	}
 
 	return &db, nil
 }
@@ -79,4 +100,25 @@ func (id *Database) OwnerPodInfo(pidNamespace uint32) (*kube.PodInfo, bool) {
 	// received late by the replicaset informer
 	id.informer.FetchPodOwnerInfo(pod)
 	return pod, true
+}
+
+func (id *Database) updateNewPodsByIpIndex(pod *kube.PodInfo) {
+	if len(pod.IPs) > 0 {
+		for _, ip := range pod.IPs {
+			id.podsByIp[ip] = pod
+		}
+	}
+}
+
+func (id *Database) updateDeletedPodsByIpIndex(pod *kube.PodInfo) {
+	if len(pod.IPs) > 0 {
+		for _, ip := range pod.IPs {
+			delete(id.podsByIp, ip)
+		}
+	}
+}
+
+func (id *Database) PodInfoForIP(ip string) *kube.PodInfo {
+	info, _ := id.podsByIp[ip]
+	return info
 }

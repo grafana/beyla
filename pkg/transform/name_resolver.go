@@ -66,45 +66,44 @@ func trimPrefixIgnoreCase(s, prefix string) string {
 }
 
 func (nr *NameResolver) resolveNames(span *request.Span) {
-	if len(span.Peer) > 0 {
-		peerSvc, ok := nr.sCache.Get(span.Peer)
-		if ok {
-			span.PeerName = peerSvc.Name
-			span.PeerNamespace = peerSvc.Namespace
-		} else {
-			peer, ns := nr.resolve(&span.ServiceID, span.Peer)
-			if len(peer) > 0 {
-				span.PeerName = peer
-			} else {
-				span.PeerName = span.Peer
-			}
-			span.PeerNamespace = ns
+	if span.IsClientSpan() {
+		span.HostName, span.OtherNamespace = nr.resolve(&span.ServiceID, span.Host)
+		span.PeerName = span.ServiceID.Name
+		if len(span.Peer) > 0 {
+			nr.sCache.Add(span.Peer, span.ServiceID)
 		}
-	}
-
-	span.HostName = span.S
-	if len(span.Host) > 0 {
-		hostSvc, ok := nr.sCache.Get(span.Host)
-		if ok {
-			span.HostName = hostSvc.Name
-		} else {
-			host, _ := nr.resolve(&span.ServiceID, span.Host)
-			if len(host) > 0 {
-				_, ok := span.ServiceID.Metadata[kube.PodName]
-				if ok && strings.EqualFold(host, span.PeerName) && span.ServiceID.AutoName {
-					span.HostName = span.ServiceID.Name
-				} else {
-					span.HostName = host
-				}
-			} else {
-				span.HostName = span.Host
-			}
+	} else {
+		span.PeerName, span.OtherNamespace = nr.resolve(&span.ServiceID, span.Peer)
+		span.HostName = span.ServiceID.Name
+		if len(span.Host) > 0 {
 			nr.sCache.Add(span.Host, span.ServiceID)
 		}
 	}
 }
 
 func (nr *NameResolver) resolve(svc *svc.ID, ip string) (string, string) {
+	var name, ns string
+
+	if len(ip) > 0 {
+		peerSvc, ok := nr.sCache.Get(ip)
+		if ok {
+			name = peerSvc.Name
+			ns = peerSvc.Namespace
+		} else {
+			var peer string
+			peer, ns = nr.dnsResolve(svc, ip)
+			if len(peer) > 0 {
+				name = peer
+			} else {
+				name = ip
+			}
+		}
+	}
+
+	return name, ns
+}
+
+func (nr *NameResolver) dnsResolve(svc *svc.ID, ip string) (string, string) {
 	if ip == "" {
 		return "", ""
 	}

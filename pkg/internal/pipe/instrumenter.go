@@ -94,7 +94,7 @@ func newGraphBuilder(ctx context.Context, config *beyla.Config, ctxInfo *global.
 	// each node. Each function will have input and/or output channels.
 	graph.RegisterStart(gnb, gb.readDecoratorProvider)
 	graph.RegisterMiddle(gnb, transform.RoutesProvider)
-	graph.RegisterMiddle(gnb, transform.NameResolutionProvider)
+	graph.RegisterMiddle(gnb, gb.nameResolutionProvider)
 	graph.RegisterMiddle(gnb, transform.KubeDecoratorProvider(ctxInfo))
 	graph.RegisterTerminal(gnb, gb.metricsReporterProvider)
 	graph.RegisterTerminal(gnb, gb.tracesReporterProvider)
@@ -166,4 +166,9 @@ func (gb *graphFunctions) prometheusProvider(config prom.PrometheusConfig) (node
 //nolint:gocritic
 func (gb *graphFunctions) alloyTracesProvider(config beyla.TracesReceiverConfig) (node.TerminalFunc[[]request.Span], error) {
 	return alloy.TracesReceiver(gb.ctx, config)
+}
+
+//nolint:gocritic
+func (gb *graphFunctions) nameResolutionProvider(config *transform.NameResolverConfig) (node.MiddleFunc[[]request.Span, []request.Span], error) {
+	return transform.NameResolutionProvider(gb.ctxInfo, config)
 }

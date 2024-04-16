@@ -35,7 +35,10 @@ func TestIsMountFSbyMount(t *testing.T) {
 
 	err = unix.Mount("tmpfs", tmpDir, "tmpfs", 0, "")
 	assert.NoError(t, err)
-	defer unix.Unmount(tmpDir, unix.MNT_DETACH)
+	defer func() {
+		err := unix.Unmount(tmpDir, unix.MNT_DETACH)
+		assert.NoError(t, err)
+	}()
 
 	// deliberately check with wrong fstype
 	mounted, matched, err = IsMountFS(unix.PROC_SUPER_MAGIC, tmpDir)

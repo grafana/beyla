@@ -6,13 +6,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/hashicorp/golang-lru/v2/expirable"
+	"github.com/mariomac/pipes/pkg/node"
+
 	"github.com/grafana/beyla/pkg/internal/kube"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/pkg/internal/request"
 	"github.com/grafana/beyla/pkg/internal/svc"
 	kube2 "github.com/grafana/beyla/pkg/internal/transform/kube"
-	"github.com/hashicorp/golang-lru/v2/expirable"
-	"github.com/mariomac/pipes/pkg/node"
 )
 
 type NameResolverConfig struct {

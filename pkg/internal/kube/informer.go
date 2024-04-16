@@ -359,9 +359,9 @@ func (i *PodInfo) ServiceName() string {
 		// we have two levels of ownership at most
 		if i.Owner.Owner != nil {
 			return i.Owner.Owner.Name
-		} else {
-			return i.Owner.Name
 		}
+
+		return i.Owner.Name
 	}
 
 	return i.Name

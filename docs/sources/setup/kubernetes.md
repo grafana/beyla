@@ -250,6 +250,7 @@ To run Beyla unprivileged, you need to replace the `privileged:true` setting wit
 - `CAP_SYS_ADMIN` is required to install most of the eBPF probes, because Beyla tracks system calls
 - `CAP_SYS_PTRACE` is required so that Beyla is able to look into the processes namespaces and inspect the executables. Beyla doesn't use `ptrace`, but for some of the operations it does require this capability
 - `CAP_SYS_RESOURCE` is required only on kernels **< 5.11** so that Beyla can increase the amount of locked memory available
+- `CAP_NET_RAW` is required for using installing socket filters, which are used as a fallback for `kretprobes` for HTTP requests
 
 In addition to these Linux capabilities, many Kubernetes versions include [AppArmour](https://kubernetes.io/docs/tutorials/security/apparmor/), which tough policies adds additional restrictions to unprivileged containers. By [default](https://github.com/moby/moby/blob/master/profiles/apparmor/template.go), the AppArmour policy restricts the use of `mount` and the access to `/sys/fs/` directories. Beyla uses the BPF Linux file system to store pinned BPF maps, for communication among the different BPF programs. For this reason, Beyla either needs to `mount` a BPF file system, or write to `/sys/fs/bpf`, which are both restricted.
 
@@ -305,6 +306,7 @@ spec:
             add:
               - SYS_ADMIN     # <-- Important. Required for most eBPF probes to function correctly.
               - SYS_PTRACE    # <-- Important. Allows Beyla to access the container namespaces and inspect executables.
+              - NET_RAW       # <-- Important. Allows Beyla to use socket filters for http requests.
               #- SYS_RESOURCE # <-- pre 5.11 only. Allows Beyla to increase the amount of locked memory.
         volumeMounts:
         - name: var-run-beyla

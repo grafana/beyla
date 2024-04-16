@@ -2,9 +2,7 @@ package discover
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
-	"os"
 	"path"
 
 	"github.com/cilium/ebpf/link"
@@ -193,7 +191,7 @@ func monitorPIDs(tracer *ebpf.ProcessTracer, ie *Instrumentable) {
 // it will be:
 //   - current beyla PID
 func BuildPinPath(cfg *beyla.Config) string {
-	return path.Join(cfg.EBPF.BpfBaseDir, fmt.Sprintf("beyla-%d", os.Getpid()))
+	return path.Join(cfg.EBPF.BpfBaseDir, cfg.EBPF.BpfPath)
 }
 
 func (ta *TraceAttacher) notifyProcessDeletion(ie *Instrumentable) {

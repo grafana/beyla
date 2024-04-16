@@ -10,6 +10,7 @@ import (
 	"github.com/hashicorp/golang-lru/v2/expirable"
 	"github.com/mariomac/pipes/pkg/node"
 	"github.com/prometheus/client_golang/prometheus"
+	"go.opentelemetry.io/otel/codes"
 
 	"github.com/grafana/beyla/pkg/buildinfo"
 	"github.com/grafana/beyla/pkg/internal/connector"
@@ -35,6 +36,11 @@ const (
 	SpanMetricsCalls   = "traces_spanmetrics_calls_total"
 	SpanMetricsSizes   = "traces_spanmetrics_size_total"
 	TracesTargetInfo   = "traces_target_info"
+
+	ServiceGraphClient = "traces_service_graph_request_client_seconds"
+	ServiceGraphServer = "traces_service_graph_request_server_seconds"
+	ServiceGraphFailed = "traces_service_graph_request_failed_total"
+	ServiceGraphTotal  = "traces_service_graph_request_total"
 
 	// target will expose the process hostname-pid (or K8s Pod).
 	// It is advised for users that to use relabeling rules to
@@ -75,6 +81,12 @@ const (
 	sourceKey            = "source"
 	telemetryLanguageKey = "telemetry_sdk_language"
 	telemetrySDKKey      = "telemetry_sdk_name"
+
+	clientKey          = "client"
+	clientNamespaceKey = "client_service_namespace"
+	serverKey          = "server"
+	serverNamespaceKey = "server_service_namespace"
+	connectionTypeKey  = "connection_type"
 
 	// default values for the histogram configuration
 	// from https://grafana.com/docs/mimir/latest/send/native-histograms/#migrate-from-classic-histograms
@@ -147,6 +159,12 @@ type metricsReporter struct {
 	spanMetricsCallsTotal *prometheus.CounterVec
 	spanMetricsSizeTotal  *prometheus.CounterVec
 	tracesTargetInfo      *prometheus.GaugeVec
+
+	// trace service graph
+	serviceGraphClient *prometheus.HistogramVec
+	serviceGraphServer *prometheus.HistogramVec
+	serviceGraphFailed *prometheus.CounterVec
+	serviceGraphTotal  *prometheus.CounterVec
 
 	promConnect *connector.PrometheusManager
 
@@ -261,6 +279,30 @@ func newReporter(ctx context.Context, cfg *PrometheusConfig, ctxInfo *global.Con
 			Name: TracesTargetInfo,
 			Help: "target service information in trace span metric format",
 		}, labelNamesTargetInfo(ctxInfo)),
+		serviceGraphClient: prometheus.NewHistogramVec(prometheus.HistogramOpts{
+			Name:                            ServiceGraphClient,
+			Help:                            "duration of client service calls, in seconds, in trace service graph metrics format",
+			Buckets:                         cfg.Buckets.DurationHistogram,
+			NativeHistogramBucketFactor:     defaultHistogramBucketFactor,
+			NativeHistogramMaxBucketNumber:  defaultHistogramMaxBucketNumber,
+			NativeHistogramMinResetDuration: defaultHistogramMinResetDuration,
+		}, labelNamesServiceGraph()),
+		serviceGraphServer: prometheus.NewHistogramVec(prometheus.HistogramOpts{
+			Name:                            ServiceGraphServer,
+			Help:                            "duration of server service calls, in seconds, in trace service graph metrics format",
+			Buckets:                         cfg.Buckets.DurationHistogram,
+			NativeHistogramBucketFactor:     defaultHistogramBucketFactor,
+			NativeHistogramMaxBucketNumber:  defaultHistogramMaxBucketNumber,
+			NativeHistogramMinResetDuration: defaultHistogramMinResetDuration,
+		}, labelNamesServiceGraph()),
+		serviceGraphFailed: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: ServiceGraphFailed,
+			Help: "number of failed service calls in trace service graph metrics format",
+		}, labelNamesServiceGraph()),
+		serviceGraphTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: ServiceGraphTotal,
+			Help: "number of service calls in trace service graph metrics format",
+		}, labelNamesServiceGraph()),
 	}
 
 	if cfg.SpanMetricsEnabled() {
@@ -292,6 +334,10 @@ func newReporter(ctx context.Context, cfg *PrometheusConfig, ctxInfo *global.Con
 			mr.spanMetricsCallsTotal,
 			mr.spanMetricsSizeTotal,
 			mr.tracesTargetInfo,
+			mr.serviceGraphClient,
+			mr.serviceGraphServer,
+			mr.serviceGraphFailed,
+			mr.serviceGraphTotal,
 		)
 	}
 
@@ -344,6 +390,17 @@ func (r *metricsReporter) observe(span *request.Span) {
 		r.spanMetricsLatency.WithLabelValues(lv...).Observe(duration)
 		r.spanMetricsCallsTotal.WithLabelValues(lv...).Add(1)
 		r.spanMetricsSizeTotal.WithLabelValues(lv...).Add(float64(span.ContentLength))
+
+		lvg := r.labelValuesServiceGraph(span)
+		if span.IsClientSpan() {
+			r.serviceGraphClient.WithLabelValues(lvg...).Observe(duration)
+		} else {
+			r.serviceGraphServer.WithLabelValues(lvg...).Observe(duration)
+		}
+		r.serviceGraphTotal.WithLabelValues(lvg...).Add(1)
+		if otel.SpanStatusCode(span) == codes.Error {
+			r.serviceGraphFailed.WithLabelValues(lvg...).Add(1)
+		}
 
 		_, ok := r.serviceCache.Get(span.ServiceID.UID)
 		if !ok {
@@ -514,6 +571,7 @@ func appendK8sLabelValuesService(values []string, service svc.ID) []string {
 	)
 	return values
 }
+
 func labelNamesSpans() []string {
 	return []string{serviceKey, serviceNamespaceKey, spanNameKey, statusCodeKey, spanKindKey, serviceInstanceKey, serviceJobKey, sourceKey}
 }
@@ -565,4 +623,29 @@ func (r *metricsReporter) labelValuesTargetInfo(service svc.ID) []string {
 	}
 
 	return values
+}
+
+func labelNamesServiceGraph() []string {
+	return []string{clientKey, clientNamespaceKey, serverKey, serverNamespaceKey, connectionTypeKey, sourceKey}
+}
+
+func (r *metricsReporter) labelValuesServiceGraph(span *request.Span) []string {
+	if span.IsClientSpan() {
+		return []string{
+			span.PeerName,
+			span.ServiceID.Namespace,
+			span.Host,
+			span.OtherNamespace,
+			"virtual_node",
+			"beyla",
+		}
+	}
+	return []string{
+		span.PeerName,
+		span.OtherNamespace,
+		span.Host,
+		span.ServiceID.Namespace,
+		"virtual_node",
+		"beyla",
+	}
 }

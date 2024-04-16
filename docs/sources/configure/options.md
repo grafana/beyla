@@ -447,7 +447,7 @@ a 'Traceparent' header value, it will use the provided 'trace id' to create its 
 This option does not have an effect on Go applications, where the 'Traceparent' field is always
 processed, without additional tracking of the request headers.
 
-Enabling this option may increase Beyla's performance overhead in high request volume scenarios.
+Enabling this option may increase the performance overhead in high request volume scenarios.
 This option is only useful when generating Beyla traces, it does not affect
 generation of Beyla metrics.
 
@@ -787,7 +787,7 @@ of Beyla: application-level metrics or network metrics.
   but only if there is defined an OpenTelemetry endpoint, and Beyla was able to discover any
   process matching the entries in the `discovery` section. When this option is enabled, service graph metrics are also generated. 
   For best experience with generating service graph metrics, use a DNS for service discovery and make sure the DNS names match
-  the OpenTelemetry service names used in Beyla. In Kubernetes environments, the OpenTelemetry service name set by Beyla's service name
+  the OpenTelemetry service names used in Beyla. In Kubernetes environments, the OpenTelemetry service name set by the service name
   discovery is the best choice for service graph metrics.
 - If the list contains `network`, the Beyla OpenTelemetry exporter exports network-level
   metrics; but only if there is defined an OpenTelemetry endpoint and the
@@ -1100,7 +1100,7 @@ of Beyla: application-level metrics or network metrics.
   but only if the Prometheus `port` property is defined, and Beyla was able to discover any
   process matching the entries in the `discovery` section. When this option is enabled, service graph metrics are also generated. 
   For best experience with generating service graph metrics, use a DNS for service discovery and make sure the DNS names match
-  the OpenTelemetry service names used in Beyla. In Kubernetes environments, the OpenTelemetry service name set by Beyla's service name
+  the OpenTelemetry service names used in Beyla. In Kubernetes environments, the OpenTelemetry service name set by the service name
   discovery is the best choice for service graph metrics.
 - If the list contains `network`, the Beyla Prometheus exporter exports network-level
   metrics; but only if the Prometheus `port` property is defined and the

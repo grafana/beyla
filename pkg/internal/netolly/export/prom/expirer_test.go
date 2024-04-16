@@ -18,7 +18,7 @@ import (
 	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
 )
 
-const timeout = 30000 * time.Second
+const timeout = 3 * time.Second
 
 func TestMetricsExpiration(t *testing.T) {
 	now := syncedClock{now: time.Now()}
@@ -35,9 +35,10 @@ func TestMetricsExpiration(t *testing.T) {
 	exporter, err := PrometheusEndpoint(
 		ctx,
 		&PrometheusConfig{Config: &prom.PrometheusConfig{
-			Port: openPort,
-			Path: "/metrics",
-			TTL:  3 * time.Minute,
+			Port:                        openPort,
+			Path:                        "/metrics",
+			TTL:                         3 * time.Minute,
+			SpanMetricsServiceCacheSize: 10,
 		}, AllowedAttributes: []string{"src_name", "dst_name"}},
 		&connector.PrometheusManager{},
 	)

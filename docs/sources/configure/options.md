@@ -1093,6 +1093,9 @@ of Beyla: application-level metrics or network metrics.
 - If the list contains `application`, the Beyla Prometheus exporter exports application-level metrics;
   but only if the Prometheus `port` property is defined, and Beyla was able to discover any
   process matching the entries in the `discovery` section.
+- If the list contains `application_span`, the Beyla Prometheus exporter exports application-level metrics in traces span metrics format;
+  but only if the Prometheus `port` property is defined, and Beyla was able to discover any
+  process matching the entries in the `discovery` section.
 - If the list contains `network`, the Beyla Prometheus exporter exports network-level
   metrics; but only if the Prometheus `port` property is defined and the
   [network metrics are enabled]({{< relref "../network" >}}).

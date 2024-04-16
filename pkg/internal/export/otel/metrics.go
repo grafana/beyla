@@ -162,6 +162,7 @@ type Metrics struct {
 	sqlClientDuration     instrument.Float64Histogram
 	httpRequestSize       instrument.Float64Histogram
 	httpClientRequestSize instrument.Float64Histogram
+	// trace span metrics
 	spanMetricsLatency    instrument.Float64Histogram
 	spanMetricsCallsTotal instrument.Int64Counter
 	spanMetricsSizeTotal  instrument.Float64Counter
@@ -541,6 +542,7 @@ func (mr *MetricsReporter) metricAttributes(span *request.Span) attribute.Set {
 func (mr *MetricsReporter) metricResourceAttributes(service svc.ID) attribute.Set {
 	attrs := []attribute.KeyValue{
 		ServiceMetric(service.Name),
+		semconv.ServiceInstanceID(service.Instance),
 		semconv.ServiceNamespace(service.Namespace),
 		semconv.TelemetrySDKLanguageKey.String(service.SDKLanguage.String()),
 		semconv.TelemetrySDKNameKey.String("beyla"),
@@ -556,6 +558,7 @@ func (mr *MetricsReporter) metricResourceAttributes(service svc.ID) attribute.Se
 func (mr *MetricsReporter) spanMetricAttributes(span *request.Span) attribute.Set {
 	attrs := []attribute.KeyValue{
 		ServiceMetric(span.ServiceID.Name),
+		semconv.ServiceInstanceID(span.ServiceID.Instance),
 		semconv.ServiceNamespace(span.ServiceID.Namespace),
 		SpanKindMetric(SpanKindString(span)),
 		SpanNameMetric(TraceName(span)),

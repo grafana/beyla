@@ -149,11 +149,24 @@ func FlowsAgent(ctxInfo *global.ContextInfo, cfg *beyla.Config) (*Flows, error) 
 		return nil, err
 	}
 
-	ingress, egress := flowDirections(&cfg.NetworkFlows)
+	var fetcher ebpfFlowFetcher
 
-	fetcher, err := ebpf.NewFlowFetcher(cfg.NetworkFlows.Sampling, cfg.NetworkFlows.CacheMaxFlows, ingress, egress)
-	if err != nil {
-		return nil, err
+	switch cfg.NetworkFlows.Source {
+	case beyla.EbpfSourceSock:
+		alog.Info("using socket filter for collecting network events")
+		fetcher, err = ebpf.NewSockFlowFetcher(cfg.NetworkFlows.Sampling, cfg.NetworkFlows.CacheMaxFlows)
+		if err != nil {
+			return nil, err
+		}
+	case beyla.EbpfSourceTC:
+		alog.Info("using kernel Traffic Control for collecting network events")
+		ingress, egress := flowDirections(&cfg.NetworkFlows)
+		fetcher, err = ebpf.NewFlowFetcher(cfg.NetworkFlows.Sampling, cfg.NetworkFlows.CacheMaxFlows, ingress, egress)
+		if err != nil {
+			return nil, err
+		}
+	default:
+		return nil, fmt.Errorf("unknown network configuration eBPF source specified, allowed options are [tc, socket_filter]")
 	}
 
 	return flowsAgent(ctxInfo, cfg, informer, fetcher, exportFunc, agentIP)

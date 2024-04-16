@@ -27,6 +27,7 @@ services:
     environment:
       BEYLA_CONFIG_PATH: "/configs/instrumenter-config-java.yml"
       GOCOVERDIR: "/coverage"
+      BEYLA_OTEL_METRIC_FEATURES: "application,application_span"
       BEYLA_PRINT_TRACES: "true"
       BEYLA_OPEN_PORT: 8080
       BEYLA_DISCOVERY_POLL_INTERVAL: 500ms

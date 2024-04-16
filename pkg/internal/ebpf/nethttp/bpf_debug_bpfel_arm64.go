@@ -27,7 +27,6 @@ type bpf_debugGoroutineMetadata struct {
 type bpf_debugHttpClientDataT struct {
 	Method        [7]uint8
 	Path          [100]uint8
-	Host          [64]uint8
 	_             [5]byte
 	ContentLength int64
 	Pid           struct {
@@ -119,6 +118,7 @@ type bpf_debugProgramSpecs struct {
 	UprobeServeHTTPReturns                    *ebpf.ProgramSpec `ebpf:"uprobe_ServeHTTPReturns"`
 	UprobeConnServe                           *ebpf.ProgramSpec `ebpf:"uprobe_connServe"`
 	UprobeConnServeRet                        *ebpf.ProgramSpec `ebpf:"uprobe_connServeRet"`
+	UprobeExecDC                              *ebpf.ProgramSpec `ebpf:"uprobe_execDC"`
 	UprobeHttp2FramerWriteHeaders             *ebpf.ProgramSpec `ebpf:"uprobe_http2FramerWriteHeaders"`
 	UprobeHttp2FramerWriteHeadersReturns      *ebpf.ProgramSpec `ebpf:"uprobe_http2FramerWriteHeaders_returns"`
 	UprobeHttp2ResponseWriterStateWriteHeader *ebpf.ProgramSpec `ebpf:"uprobe_http2ResponseWriterStateWriteHeader"`
@@ -126,7 +126,7 @@ type bpf_debugProgramSpecs struct {
 	UprobeNetFdRead                           *ebpf.ProgramSpec `ebpf:"uprobe_netFdRead"`
 	UprobePersistConnRoundTrip                *ebpf.ProgramSpec `ebpf:"uprobe_persistConnRoundTrip"`
 	UprobeQueryDC                             *ebpf.ProgramSpec `ebpf:"uprobe_queryDC"`
-	UprobeQueryDCReturn                       *ebpf.ProgramSpec `ebpf:"uprobe_queryDCReturn"`
+	UprobeQueryReturn                         *ebpf.ProgramSpec `ebpf:"uprobe_queryReturn"`
 	UprobeReadRequestReturns                  *ebpf.ProgramSpec `ebpf:"uprobe_readRequestReturns"`
 	UprobeRoundTrip                           *ebpf.ProgramSpec `ebpf:"uprobe_roundTrip"`
 	UprobeRoundTripReturn                     *ebpf.ProgramSpec `ebpf:"uprobe_roundTripReturn"`
@@ -140,11 +140,12 @@ type bpf_debugMapSpecs struct {
 	Events                        *ebpf.MapSpec `ebpf:"events"`
 	GoTraceMap                    *ebpf.MapSpec `ebpf:"go_trace_map"`
 	GolangMapbucketStorageMap     *ebpf.MapSpec `ebpf:"golang_mapbucket_storage_map"`
+	OngoingClientConnections      *ebpf.MapSpec `ebpf:"ongoing_client_connections"`
 	OngoingGoroutines             *ebpf.MapSpec `ebpf:"ongoing_goroutines"`
 	OngoingHttpClientRequests     *ebpf.MapSpec `ebpf:"ongoing_http_client_requests"`
 	OngoingHttpClientRequestsData *ebpf.MapSpec `ebpf:"ongoing_http_client_requests_data"`
-	OngoingHttpServerConnections  *ebpf.MapSpec `ebpf:"ongoing_http_server_connections"`
 	OngoingHttpServerRequests     *ebpf.MapSpec `ebpf:"ongoing_http_server_requests"`
+	OngoingServerConnections      *ebpf.MapSpec `ebpf:"ongoing_server_connections"`
 	OngoingSqlQueries             *ebpf.MapSpec `ebpf:"ongoing_sql_queries"`
 	TraceMap                      *ebpf.MapSpec `ebpf:"trace_map"`
 }
@@ -171,11 +172,12 @@ type bpf_debugMaps struct {
 	Events                        *ebpf.Map `ebpf:"events"`
 	GoTraceMap                    *ebpf.Map `ebpf:"go_trace_map"`
 	GolangMapbucketStorageMap     *ebpf.Map `ebpf:"golang_mapbucket_storage_map"`
+	OngoingClientConnections      *ebpf.Map `ebpf:"ongoing_client_connections"`
 	OngoingGoroutines             *ebpf.Map `ebpf:"ongoing_goroutines"`
 	OngoingHttpClientRequests     *ebpf.Map `ebpf:"ongoing_http_client_requests"`
 	OngoingHttpClientRequestsData *ebpf.Map `ebpf:"ongoing_http_client_requests_data"`
-	OngoingHttpServerConnections  *ebpf.Map `ebpf:"ongoing_http_server_connections"`
 	OngoingHttpServerRequests     *ebpf.Map `ebpf:"ongoing_http_server_requests"`
+	OngoingServerConnections      *ebpf.Map `ebpf:"ongoing_server_connections"`
 	OngoingSqlQueries             *ebpf.Map `ebpf:"ongoing_sql_queries"`
 	TraceMap                      *ebpf.Map `ebpf:"trace_map"`
 }
@@ -185,11 +187,12 @@ func (m *bpf_debugMaps) Close() error {
 		m.Events,
 		m.GoTraceMap,
 		m.GolangMapbucketStorageMap,
+		m.OngoingClientConnections,
 		m.OngoingGoroutines,
 		m.OngoingHttpClientRequests,
 		m.OngoingHttpClientRequestsData,
-		m.OngoingHttpServerConnections,
 		m.OngoingHttpServerRequests,
+		m.OngoingServerConnections,
 		m.OngoingSqlQueries,
 		m.TraceMap,
 	)
@@ -203,6 +206,7 @@ type bpf_debugPrograms struct {
 	UprobeServeHTTPReturns                    *ebpf.Program `ebpf:"uprobe_ServeHTTPReturns"`
 	UprobeConnServe                           *ebpf.Program `ebpf:"uprobe_connServe"`
 	UprobeConnServeRet                        *ebpf.Program `ebpf:"uprobe_connServeRet"`
+	UprobeExecDC                              *ebpf.Program `ebpf:"uprobe_execDC"`
 	UprobeHttp2FramerWriteHeaders             *ebpf.Program `ebpf:"uprobe_http2FramerWriteHeaders"`
 	UprobeHttp2FramerWriteHeadersReturns      *ebpf.Program `ebpf:"uprobe_http2FramerWriteHeaders_returns"`
 	UprobeHttp2ResponseWriterStateWriteHeader *ebpf.Program `ebpf:"uprobe_http2ResponseWriterStateWriteHeader"`
@@ -210,7 +214,7 @@ type bpf_debugPrograms struct {
 	UprobeNetFdRead                           *ebpf.Program `ebpf:"uprobe_netFdRead"`
 	UprobePersistConnRoundTrip                *ebpf.Program `ebpf:"uprobe_persistConnRoundTrip"`
 	UprobeQueryDC                             *ebpf.Program `ebpf:"uprobe_queryDC"`
-	UprobeQueryDCReturn                       *ebpf.Program `ebpf:"uprobe_queryDCReturn"`
+	UprobeQueryReturn                         *ebpf.Program `ebpf:"uprobe_queryReturn"`
 	UprobeReadRequestReturns                  *ebpf.Program `ebpf:"uprobe_readRequestReturns"`
 	UprobeRoundTrip                           *ebpf.Program `ebpf:"uprobe_roundTrip"`
 	UprobeRoundTripReturn                     *ebpf.Program `ebpf:"uprobe_roundTripReturn"`
@@ -223,6 +227,7 @@ func (p *bpf_debugPrograms) Close() error {
 		p.UprobeServeHTTPReturns,
 		p.UprobeConnServe,
 		p.UprobeConnServeRet,
+		p.UprobeExecDC,
 		p.UprobeHttp2FramerWriteHeaders,
 		p.UprobeHttp2FramerWriteHeadersReturns,
 		p.UprobeHttp2ResponseWriterStateWriteHeader,
@@ -230,7 +235,7 @@ func (p *bpf_debugPrograms) Close() error {
 		p.UprobeNetFdRead,
 		p.UprobePersistConnRoundTrip,
 		p.UprobeQueryDC,
-		p.UprobeQueryDCReturn,
+		p.UprobeQueryReturn,
 		p.UprobeReadRequestReturns,
 		p.UprobeRoundTrip,
 		p.UprobeRoundTripReturn,

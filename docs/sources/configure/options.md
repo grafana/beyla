@@ -783,6 +783,9 @@ of Beyla: application-level metrics or network metrics.
 - If the list contains `application`, the Beyla OpenTelemetry exporter exports application-level metrics;
   but only if there is defined an OpenTelemetry endpoint, and Beyla was able to discover any
   process matching the entries in the `discovery` section.
+- If the list contains `application_span`, the Beyla OpenTelemetry exporter exports application-level trace span metrics;
+  but only if there is defined an OpenTelemetry endpoint, and Beyla was able to discover any
+  process matching the entries in the `discovery` section.
 - If the list contains `network`, the Beyla OpenTelemetry exporter exports network-level
   metrics; but only if there is defined an OpenTelemetry endpoint and the
   [network metrics are enabled]({{< relref "../network" >}}).
@@ -1088,6 +1091,9 @@ A list of metric groups that are allowed to be exported. Each group belongs to a
 of Beyla: application-level metrics or network metrics.
 
 - If the list contains `application`, the Beyla Prometheus exporter exports application-level metrics;
+  but only if the Prometheus `port` property is defined, and Beyla was able to discover any
+  process matching the entries in the `discovery` section.
+- If the list contains `application_span`, the Beyla Prometheus exporter exports application-level metrics in traces span metrics format;
   but only if the Prometheus `port` property is defined, and Beyla was able to discover any
   process matching the entries in the `discovery` section.
 - If the list contains `network`, the Beyla Prometheus exporter exports network-level

@@ -2,6 +2,7 @@ package main
 
 import (
 	"net/http"
+	"os"
 	"strconv"
 	"time"
 )
@@ -27,5 +28,8 @@ func handleRequest(rw http.ResponseWriter, req *http.Request) {
 }
 
 func main() {
-	http.ListenAndServe(":8080", http.HandlerFunc(handleRequest))
+	err := http.ListenAndServe(":8080", http.HandlerFunc(handleRequest))
+	if err != nil {
+		os.Exit(1)
+	}
 }

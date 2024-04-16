@@ -83,11 +83,8 @@ type bpfHttpRequestTrace struct {
 	Method            [7]uint8
 	Path              [100]uint8
 	Status            uint16
-	RemoteAddr        [50]uint8
-	RemoteAddrLen     uint64
-	Host              [64]uint8
-	HostLen           uint64
-	HostPort          uint32
+	_                 [2]byte
+	Conn              bpfConnectionInfoT
 	ContentLength     int64
 	Tp                struct {
 		TraceId  [16]uint8

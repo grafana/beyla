@@ -34,11 +34,7 @@ typedef struct http_request_trace_t {
     u8  method[METHOD_MAX_LEN];
     u8  path[PATH_MAX_LEN];
     u16 status;
-    u8  remote_addr[REMOTE_ADDR_MAX_LEN];
-    u64 remote_addr_len;
-    u8  host[HOST_LEN];
-    u64 host_len;
-    u32 host_port;
+    connection_info_t conn __attribute__ ((aligned (8)));
     s64 content_length;
     tp_info_t tp;
 
@@ -56,5 +52,4 @@ typedef struct sql_request_trace_t {
     pid_info pid;
 } __attribute__((packed)) sql_request_trace;
 
-
-#endif
+#endif //HTTP_TRACE_H

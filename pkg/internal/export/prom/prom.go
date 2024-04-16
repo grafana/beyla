@@ -634,7 +634,7 @@ func (r *metricsReporter) labelValuesServiceGraph(span *request.Span) []string {
 		return []string{
 			span.PeerName,
 			span.ServiceID.Namespace,
-			span.Host,
+			span.HostName,
 			span.OtherNamespace,
 			"virtual_node",
 			"beyla",
@@ -643,7 +643,7 @@ func (r *metricsReporter) labelValuesServiceGraph(span *request.Span) []string {
 	return []string{
 		span.PeerName,
 		span.OtherNamespace,
-		span.Host,
+		span.HostName,
 		span.ServiceID.Namespace,
 		"virtual_node",
 		"beyla",

@@ -115,6 +115,11 @@ func (k *Metadata) initPodInformer(informerFactory informers.SharedInformerFacto
 	if err := pods.SetTransform(func(i interface{}) (interface{}, error) {
 		pod, ok := i.(*v1.Pod)
 		if !ok {
+			// it's Ok. The K8s library just informed from an entity
+			// that has been previously transformed/stored
+			if pi, ok := i.(*PodInfo); ok {
+				return pi, nil
+			}
 			return nil, fmt.Errorf("was expecting a Pod. Got: %T", i)
 		}
 		containerIDs := make([]string, 0,
@@ -212,6 +217,11 @@ func (k *Metadata) initReplicaSetInformer(informerFactory informers.SharedInform
 	if err := rss.SetTransform(func(i interface{}) (interface{}, error) {
 		rs, ok := i.(*appsv1.ReplicaSet)
 		if !ok {
+			// it's Ok. The K8s library just informed from an entity
+			// that has been previously transformed/stored
+			if pi, ok := i.(*ReplicaSetInfo); ok {
+				return pi, nil
+			}
 			return nil, fmt.Errorf("was expecting a ReplicaSet. Got: %T", i)
 		}
 		var deployment string

@@ -174,6 +174,11 @@ func (k *NetworkInformers) initNodeInformer(informerFactory informers.SharedInfo
 	if err := nodes.SetTransform(func(i interface{}) (interface{}, error) {
 		node, ok := i.(*v1.Node)
 		if !ok {
+			// it's Ok. The K8s library just informed from an entity
+			// that has been previously transformed/stored
+			if pi, ok := i.(*Info); ok {
+				return pi, nil
+			}
 			return nil, fmt.Errorf("was expecting a Node. Got: %T", i)
 		}
 		ips := make([]string, 0, len(node.Status.Addresses))
@@ -212,6 +217,11 @@ func (k *NetworkInformers) initPodInformer(informerFactory informers.SharedInfor
 	if err := pods.SetTransform(func(i interface{}) (interface{}, error) {
 		pod, ok := i.(*v1.Pod)
 		if !ok {
+			// it's Ok. The K8s library just informed from an entity
+			// that has been previously transformed/stored
+			if pi, ok := i.(*Info); ok {
+				return pi, nil
+			}
 			return nil, fmt.Errorf("was expecting a Pod. Got: %T", i)
 		}
 		ips := make([]string, 0, len(pod.Status.PodIPs))
@@ -250,6 +260,11 @@ func (k *NetworkInformers) initServiceInformer(informerFactory informers.SharedI
 	if err := services.SetTransform(func(i interface{}) (interface{}, error) {
 		svc, ok := i.(*v1.Service)
 		if !ok {
+			// it's Ok. The K8s library just informed from an entity
+			// that has been previously transformed/stored
+			if pi, ok := i.(*Info); ok {
+				return pi, nil
+			}
 			return nil, fmt.Errorf("was expecting a Service. Got: %T", i)
 		}
 		if svc.Spec.ClusterIP == v1.ClusterIPNone {
@@ -283,6 +298,11 @@ func (k *NetworkInformers) initReplicaSetInformer(informerFactory informers.Shar
 	if err := k.replicaSets.SetTransform(func(i interface{}) (interface{}, error) {
 		rs, ok := i.(*appsv1.ReplicaSet)
 		if !ok {
+			// it's Ok. The K8s library just informed from an entity
+			// that has been previously transformed/stored
+			if pi, ok := i.(*metav1.ObjectMeta); ok {
+				return pi, nil
+			}
 			return nil, fmt.Errorf("was expecting a ReplicaSet. Got: %T", i)
 		}
 		return &metav1.ObjectMeta{

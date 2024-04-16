@@ -194,6 +194,6 @@ envValueFrom: {}
   #      name: secret-name
   #      key: value_key
 
-# -- preconfigures defaults for network or application observability
-# accepted values are network or application
+# -- Preconfigures some default properties for network or application observability.
+# Accepted values are "network" or "application".
 preset: application

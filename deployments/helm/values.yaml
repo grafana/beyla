@@ -142,6 +142,12 @@ tolerations: []
 # -- used for scheduling of pods based on affinity rules
 affinity: {}
 
+# -- Adds custom annotations to the Beyla Pods.
+podAnnotations: {}
+
+# -- Adds custom labels to the Beyla Pods.
+podLabels: {}
+
 ## More configuration options available at https://grafana.com/docs/beyla/latest/configure/options/
 ## The below default configuration
 ## 1. looks for ALL the services in the host

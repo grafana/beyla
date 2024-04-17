@@ -30,6 +30,8 @@ eBPF-based autoinstrumentation of HTTP and HTTPS services
 | nameOverride | string | `""` | Overrides the chart's name |
 | namespaceOverride | string | `""` | Override the deployment namespace |
 | nodeSelector | object | `{}` | The nodeSelector field allows user to constrain which nodes your DaemonSet pods are scheduled to based on labels on the node |
+| podAnnotations | object | `{}` | Adds custom annotations to the Beyla Pods. |
+| podLabels | object | `{}` | Adds custom labels to the Beyla Pods. |
 | podSecurityContext | object | `{}` |  |
 | preset | string | `"application"` | Preconfigures some default properties for network or application observability. Accepted values are "network" or "application". |
 | rbac.create | bool | `true` | Whether to create RBAC resources for Belya |

@@ -20,7 +20,8 @@ data:
     network:
       enable: true
     {{- end }}
-    {{- else }}
+    {{- end }}
+    {{- if eq .Values.preset "application" }}
     {{- if not .Values.config.data.discovery }}
     discovery:
       services:

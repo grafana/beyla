@@ -56,6 +56,7 @@ const (
 	FeatureNetwork     = "network"
 	FeatureApplication = "application"
 	FeatureSpan        = "application_span"
+	FeatureGraph       = "application_service_graph"
 )
 
 type MetricsConfig struct {
@@ -132,12 +133,16 @@ func (m MetricsConfig) SpanMetricsEnabled() bool {
 	return slices.Contains(m.Features, FeatureSpan)
 }
 
+func (m MetricsConfig) ServiceGraphMetricsEnabled() bool {
+	return slices.Contains(m.Features, FeatureGraph)
+}
+
 func (m MetricsConfig) OTelMetricsEnabled() bool {
 	return slices.Contains(m.Features, FeatureApplication)
 }
 
 func (m MetricsConfig) Enabled() bool {
-	return m.EndpointEnabled() && (m.OTelMetricsEnabled() || m.SpanMetricsEnabled())
+	return m.EndpointEnabled() && (m.OTelMetricsEnabled() || m.SpanMetricsEnabled() || m.ServiceGraphMetricsEnabled())
 }
 
 // MetricsReporter implements the graph node that receives request.Span
@@ -248,6 +253,17 @@ func (mr *MetricsReporter) spanMetricOptions(mlog *slog.Logger) []metric.Option 
 
 	return []metric.Option{
 		metric.WithView(otelHistogramConfig(SpanMetricsLatency, mr.cfg.Buckets.DurationHistogram, useExponentialHistograms)),
+	}
+}
+
+func (mr *MetricsReporter) graphMetricOptions(mlog *slog.Logger) []metric.Option {
+	if !mr.cfg.ServiceGraphMetricsEnabled() {
+		return []metric.Option{}
+	}
+
+	useExponentialHistograms := isExponentialAggregation(mr.cfg, mlog)
+
+	return []metric.Option{
 		metric.WithView(otelHistogramConfig(ServiceGraphClient, mr.cfg.Buckets.DurationHistogram, useExponentialHistograms)),
 		metric.WithView(otelHistogramConfig(ServiceGraphServer, mr.cfg.Buckets.DurationHistogram, useExponentialHistograms)),
 	}
@@ -318,6 +334,16 @@ func (mr *MetricsReporter) setupSpanMeters(m *Metrics, meter instrument.Meter) e
 		return fmt.Errorf("creating span metric traces target info: %w", err)
 	}
 
+	return nil
+}
+
+func (mr *MetricsReporter) setupGraphMeters(m *Metrics, meter instrument.Meter) error {
+	if !mr.cfg.ServiceGraphMetricsEnabled() {
+		return nil
+	}
+
+	var err error
+
 	m.serviceGraphClient, err = meter.Float64Histogram(ServiceGraphClient, instrument.WithUnit("s"))
 	if err != nil {
 		return fmt.Errorf("creating service graph client histogram: %w", err)
@@ -354,6 +380,7 @@ func (mr *MetricsReporter) newMetricSet(service svc.ID) (*Metrics, error) {
 
 	opts = append(opts, mr.otelMetricOptions(mlog)...)
 	opts = append(opts, mr.spanMetricOptions(mlog)...)
+	opts = append(opts, mr.graphMetricOptions(mlog)...)
 
 	m := Metrics{
 		ctx:     mr.ctx,
@@ -376,6 +403,15 @@ func (mr *MetricsReporter) newMetricSet(service svc.ID) (*Metrics, error) {
 
 	if mr.cfg.SpanMetricsEnabled() {
 		err = mr.setupSpanMeters(&m, meter)
+		if err != nil {
+			return nil, err
+		}
+		attrOpt := instrument.WithAttributeSet(mr.metricResourceAttributes(service))
+		m.tracesTargetInfo.Add(mr.ctx, 1, attrOpt)
+	}
+
+	if mr.cfg.ServiceGraphMetricsEnabled() {
+		err = mr.setupGraphMeters(&m, meter)
 		if err != nil {
 			return nil, err
 		}
@@ -651,8 +687,10 @@ func (r *Metrics) record(span *request.Span, mr *MetricsReporter) {
 		r.spanMetricsLatency.Record(r.ctx, duration, attrOpt)
 		r.spanMetricsCallsTotal.Add(r.ctx, 1, attrOpt)
 		r.spanMetricsSizeTotal.Add(r.ctx, float64(span.ContentLength), attrOpt)
+	}
 
-		attrOpt = instrument.WithAttributeSet(mr.serviceGraphAttributes(span))
+	if mr.cfg.ServiceGraphMetricsEnabled() {
+		attrOpt := instrument.WithAttributeSet(mr.serviceGraphAttributes(span))
 		if span.IsClientSpan() {
 			r.serviceGraphClient.Record(r.ctx, duration, attrOpt)
 		} else {

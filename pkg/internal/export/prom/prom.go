@@ -137,9 +137,13 @@ func (p PrometheusConfig) OTelMetricsEnabled() bool {
 	return slices.Contains(p.Features, otel.FeatureApplication)
 }
 
+func (p PrometheusConfig) ServiceGraphMetricsEnabled() bool {
+	return slices.Contains(p.Features, otel.FeatureGraph)
+}
+
 // nolint:gocritic
 func (p PrometheusConfig) Enabled() bool {
-	return (p.Port != 0 || p.Registry != nil) && (p.OTelMetricsEnabled() || p.SpanMetricsEnabled())
+	return (p.Port != 0 || p.Registry != nil) && (p.OTelMetricsEnabled() || p.SpanMetricsEnabled() || p.ServiceGraphMetricsEnabled())
 }
 
 type metricsReporter struct {
@@ -339,6 +343,11 @@ func newReporter(ctx context.Context, cfg *PrometheusConfig, ctxInfo *global.Con
 			mr.spanMetricsCallsTotal,
 			mr.spanMetricsSizeTotal,
 			mr.tracesTargetInfo,
+		)
+	}
+
+	if cfg.ServiceGraphMetricsEnabled() {
+		registeredMetrics = append(registeredMetrics,
 			mr.serviceGraphClient,
 			mr.serviceGraphServer,
 			mr.serviceGraphFailed,
@@ -396,6 +405,15 @@ func (r *metricsReporter) observe(span *request.Span) {
 		r.spanMetricsCallsTotal.WithLabelValues(lv...).Add(1)
 		r.spanMetricsSizeTotal.WithLabelValues(lv...).Add(float64(span.ContentLength))
 
+		_, ok := r.serviceCache.Get(span.ServiceID.UID)
+		if !ok {
+			r.serviceCache.Add(span.ServiceID.UID, span.ServiceID)
+			lv = r.labelValuesTargetInfo(span.ServiceID)
+			r.tracesTargetInfo.WithLabelValues(lv...).Add(1)
+		}
+	}
+
+	if r.cfg.ServiceGraphMetricsEnabled() {
 		lvg := r.labelValuesServiceGraph(span)
 		if span.IsClientSpan() {
 			r.serviceGraphClient.WithLabelValues(lvg...).Observe(duration)
@@ -405,13 +423,6 @@ func (r *metricsReporter) observe(span *request.Span) {
 		r.serviceGraphTotal.WithLabelValues(lvg...).Add(1)
 		if otel.SpanStatusCode(span) == codes.Error {
 			r.serviceGraphFailed.WithLabelValues(lvg...).Add(1)
-		}
-
-		_, ok := r.serviceCache.Get(span.ServiceID.UID)
-		if !ok {
-			r.serviceCache.Add(span.ServiceID.UID, span.ServiceID)
-			lv = r.labelValuesTargetInfo(span.ServiceID)
-			r.tracesTargetInfo.WithLabelValues(lv...).Add(1)
 		}
 	}
 }

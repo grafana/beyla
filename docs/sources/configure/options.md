@@ -785,7 +785,10 @@ of Beyla: application-level metrics or network metrics.
   process matching the entries in the `discovery` section.
 - If the list contains `application_span`, the Beyla OpenTelemetry exporter exports application-level trace span metrics;
   but only if there is defined an OpenTelemetry endpoint, and Beyla was able to discover any
-  process matching the entries in the `discovery` section. When this option is enabled, service graph metrics are also generated. 
+  process matching the entries in the `discovery` section. 
+- If the list contains `application_service_graph`, the Beyla OpenTelemetry exporter exports application-level service graph metrics;
+  but only if there is defined an OpenTelemetry endpoint, and Beyla was able to discover any
+  process matching the entries in the `discovery` section. 
   For best experience with generating service graph metrics, use a DNS for service discovery and make sure the DNS names match
   the OpenTelemetry service names used in Beyla. In Kubernetes environments, the OpenTelemetry service name set by the service name
   discovery is the best choice for service graph metrics.
@@ -1098,7 +1101,10 @@ of Beyla: application-level metrics or network metrics.
   process matching the entries in the `discovery` section.
 - If the list contains `application_span`, the Beyla Prometheus exporter exports application-level metrics in traces span metrics format;
   but only if the Prometheus `port` property is defined, and Beyla was able to discover any
-  process matching the entries in the `discovery` section. When this option is enabled, service graph metrics are also generated. 
+  process matching the entries in the `discovery` section.
+- If the list contains `application_service_graph`, the Beyla Prometheus exporter exports application-level service graph metrics;
+  but only if the Prometheus `port` property is defined, and Beyla was able to discover any
+  process matching the entries in the `discovery` section.
   For best experience with generating service graph metrics, use a DNS for service discovery and make sure the DNS names match
   the OpenTelemetry service names used in Beyla. In Kubernetes environments, the OpenTelemetry service name set by the service name
   discovery is the best choice for service graph metrics.

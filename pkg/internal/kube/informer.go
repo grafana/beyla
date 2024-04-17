@@ -42,7 +42,6 @@ type Metadata struct {
 	pods        cache.SharedIndexInformer
 	replicaSets cache.SharedIndexInformer
 
-	stopChan               chan struct{}
 	containerEventHandlers []ContainerEventHandler
 }
 
@@ -92,7 +91,7 @@ var replicaSetIndexer = cache.Indexers{
 	},
 }
 
-// GetContainerPod fetches metadata from a Pod given the name of one of its containera
+// GetContainerPod fetches metadata from a Pod given the name of one of its containers
 func (k *Metadata) GetContainerPod(containerID string) (*PodInfo, bool) {
 	objs, err := k.pods.GetIndexer().ByIndex(IndexPodByContainerIDs, containerID)
 	if err != nil {
@@ -264,11 +263,9 @@ func (k *Metadata) initReplicaSetInformer(informerFactory informers.SharedInform
 	return nil
 }
 
-func (k *Metadata) InitFromClient(client kubernetes.Interface, timeout time.Duration) error {
+func (k *Metadata) InitFromClient(ctx context.Context, client kubernetes.Interface, timeout time.Duration) error {
 	// Initialization variables
-	k.stopChan = make(chan struct{})
-
-	return k.initInformers(client, timeout)
+	return k.initInformers(ctx, client, timeout)
 }
 
 func LoadConfig(kubeConfigPath string) (*rest.Config, error) {
@@ -298,7 +295,7 @@ func LoadConfig(kubeConfigPath string) (*rest.Config, error) {
 	return config, nil
 }
 
-func (k *Metadata) initInformers(client kubernetes.Interface, timeout time.Duration) error {
+func (k *Metadata) initInformers(ctx context.Context, client kubernetes.Interface, timeout time.Duration) error {
 	informerFactory := informers.NewSharedInformerFactory(client, syncTime)
 	err := k.initPodInformer(informerFactory)
 	if err != nil {
@@ -311,10 +308,10 @@ func (k *Metadata) initInformers(client kubernetes.Interface, timeout time.Durat
 
 	log := klog()
 	log.Debug("starting kubernetes informers, waiting for syncronization")
-	informerFactory.Start(k.stopChan)
+	informerFactory.Start(ctx.Done())
 	finishedCacheSync := make(chan struct{})
 	go func() {
-		informerFactory.WaitForCacheSync(k.stopChan)
+		informerFactory.WaitForCacheSync(ctx.Done())
 		close(finishedCacheSync)
 	}()
 	select {

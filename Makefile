@@ -44,14 +44,20 @@ PROJECT_DIR := $(shell dirname $(abspath $(firstword $(MAKEFILE_LIST))))
 
 TOOLS_DIR ?= $(PROJECT_DIR)/bin
 
+# $(1) command name
+# $(2) repo URL
+# $(3) version
 define go-install-tool
-@[ -f $(1) ] || { \
+@[ -f "$(1)-$(3)" ] || { \
 set -e ;\
 TMP_DIR=$$(mktemp -d) ;\
 cd $$TMP_DIR ;\
 go mod init tmp ;\
-echo "Downloading $(2)" ;\
-GOBIN=$(TOOLS_DIR) GOFLAGS="-mod=mod" go install $(2) ;\
+echo "Removing any outdated version of $(1)";\
+rm -f $(1)*;\
+echo "Downloading $(2)@$(3)" ;\
+GOBIN=$(TOOLS_DIR) GOFLAGS="-mod=mod" go install "$(2)@$(3)" ;\
+touch "$(1)-$(3)";\
 rm -rf $$TMP_DIR ;\
 }
 endef
@@ -93,13 +99,13 @@ endef
 prereqs:
 	@echo "### Check if prerequisites are met, and installing missing dependencies"
 	mkdir -p $(TEST_OUTPUT)/run
-	$(call go-install-tool,$(GOLANGCI_LINT),github.com/golangci/golangci-lint/cmd/golangci-lint@v1.57.2)
-	$(call go-install-tool,$(BPF2GO),github.com/cilium/ebpf/cmd/bpf2go@$(call gomod-version,cilium/ebpf))
-	$(call go-install-tool,$(GO_OFFSETS_TRACKER),github.com/grafana/go-offsets-tracker/cmd/go-offsets-tracker@$(call gomod-version,grafana/go-offsets-tracker))
-	$(call go-install-tool,$(GOIMPORTS_REVISER),github.com/incu6us/goimports-reviser/v3@v3.4.5)
-	$(call go-install-tool,$(GO_LICENSES),github.com/google/go-licenses@v1.6.0)
-	$(call go-install-tool,$(KIND),sigs.k8s.io/kind@v0.20.0)
-	$(call go-install-tool,$(DASHBOARD_LINTER),github.com/grafana/dashboard-linter@latest)
+	$(call go-install-tool,$(GOLANGCI_LINT),github.com/golangci/golangci-lint/cmd/golangci-lint,v1.57.2)
+	$(call go-install-tool,$(BPF2GO),github.com/cilium/ebpf/cmd/bpf2go,$(call gomod-version,cilium/ebpf))
+	$(call go-install-tool,$(GO_OFFSETS_TRACKER),github.com/grafana/go-offsets-tracker/cmd/go-offsets-tracker,$(call gomod-version,grafana/go-offsets-tracker))
+	$(call go-install-tool,$(GOIMPORTS_REVISER),github.com/incu6us/goimports-reviser/v3,v3.4.5)
+	$(call go-install-tool,$(GO_LICENSES),github.com/google/go-licenses,v1.6.0)
+	$(call go-install-tool,$(KIND),sigs.k8s.io/kind,v0.20.0)
+	$(call go-install-tool,$(DASHBOARD_LINTER),github.com/grafana/dashboard-linter,latest)
 
 .PHONY: fmt
 fmt: prereqs

@@ -57,6 +57,10 @@ typedef struct server_http_func_invocation {
     u64 start_monotime_ns;
     tp_info_t tp;
     u64 response;
+    u8  method[METHOD_MAX_LEN];
+    u8  path[PATH_MAX_LEN];
+    u64 content_length;
+
     u8 http2;
 } server_http_func_invocation_t;
 
@@ -86,12 +90,39 @@ int uprobe_ServeHTTP(struct pt_regs *ctx) {
         .tp = {0},
         .response = (u64)resp,
         .http2 = 0,
+        .content_length = 0,
     };
+
+    invocation.method[0] = 0;
+    invocation.path[0] = 0;
 
     if (req) {
         server_trace_parent(goroutine_addr, &invocation.tp, (void*)(req + req_header_ptr_pos));
         // TODO: if context propagation is supported, overwrite the header value in the map with the 
         // new span context and the same thread id.
+
+        // Get method from Request.Method
+        if (!read_go_str("method", req, method_ptr_pos, &invocation.method, sizeof(invocation.method))) {
+            bpf_printk("can't read http Request.Method");
+            goto done;
+        }
+
+        // Get path from Request.URL
+        void *url_ptr = 0;
+        int res = bpf_probe_read(&url_ptr, sizeof(url_ptr), (void *)(req + url_ptr_pos));
+
+        if (res || !url_ptr || !read_go_str("path", url_ptr, path_ptr_pos, &invocation.path, sizeof(invocation.path))) {
+            bpf_printk("can't read http Request.URL.Path");
+            goto done;
+        }
+
+        res = bpf_probe_read(&invocation.content_length, sizeof(invocation.content_length), (void *)(req + content_length_ptr_pos));
+        if (res) {
+            bpf_printk("can't read http Request.ContentLength");
+            goto done;
+        }
+    } else {
+        goto done;
     }
     
     // Write event
@@ -99,6 +130,7 @@ int uprobe_ServeHTTP(struct pt_regs *ctx) {
         bpf_dbg_printk("can't update map element");
     }
 
+done:
     return 0;
 }
 
@@ -185,40 +217,7 @@ int uprobe_ServeHTTPReturns(struct pt_regs *ctx) {
         trace->go_start_monotime_ns = invocation->start_monotime_ns;
     }
 
-    u64 req_offset = resp_req_pos;
-    if (invocation->http2) {
-        req_offset = rws_req_pos;
-        bpf_dbg_printk("http2 response, rws_req_pos %d", req_offset);
-    }        
-
     bpf_dbg_printk("Resp ptr %llx", resp_ptr);
-
-    // Get request struct
-    void *req_ptr = 0;
-    bpf_probe_read(&req_ptr, sizeof(req_ptr), (void *)(resp_ptr + req_offset));
-
-    if (!req_ptr) {
-        bpf_printk("can't find req inside the response value");
-        bpf_ringbuf_discard(trace, 0);
-        goto done;
-    }
-
-    // Get method from Request.Method
-    if (!read_go_str("method", req_ptr, method_ptr_pos, &trace->method, sizeof(trace->method))) {
-        bpf_printk("can't read http Request.Method");
-        bpf_ringbuf_discard(trace, 0);
-        goto done;
-    }
-
-    // Get path from Request.URL
-    void *url_ptr = 0;
-    bpf_probe_read(&url_ptr, sizeof(url_ptr), (void *)(req_ptr + url_ptr_pos));
-
-    if (!url_ptr || !read_go_str("path", url_ptr, path_ptr_pos, &trace->path, sizeof(trace->path))) {
-        bpf_printk("can't read http Request.URL.Path");
-        bpf_ringbuf_discard(trace, 0);
-        goto done;
-    }
 
     if (invocation->http2) {
         void *conn_ptr = 0;
@@ -278,9 +277,11 @@ int uprobe_ServeHTTPReturns(struct pt_regs *ctx) {
         }
     }
 
-
-    bpf_probe_read(&trace->content_length, sizeof(trace->content_length), (void *)(req_ptr + content_length_ptr_pos));
     trace->tp = invocation->tp;
+    trace->content_length = invocation->content_length;
+    __builtin_memcpy(trace->method, invocation->method, sizeof(trace->method));
+    __builtin_memcpy(trace->path, invocation->path, sizeof(trace->path));
+
     u64 status_pos = status_ptr_pos;
 
     if (invocation->http2) {

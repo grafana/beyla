@@ -97,7 +97,6 @@ func (p *Tracer) Constants(_ *exec.FileInfo, offsets *goexec.Offsets) map[string
 		"status_ptr_pos",
 		"status_code_ptr_pos",
 		"content_length_ptr_pos",
-		"resp_req_pos",
 		"req_header_ptr_pos",
 		"io_writer_buf_ptr_pos",
 		"io_writer_n_pos",
@@ -115,7 +114,6 @@ func (p *Tracer) Constants(_ *exec.FileInfo, offsets *goexec.Offsets) map[string
 
 	// Optional list
 	for _, s := range []string{
-		"rws_req_pos",
 		"rws_status_pos",
 		"cc_next_stream_id_pos",
 		"framer_w_pos",

@@ -250,7 +250,7 @@ itest-coverage-data:
 	grep -vE $(EXCLUDE_COVERAGE_FILES) $(TEST_OUTPUT)/itest-covdata.all.txt > $(TEST_OUTPUT)/itest-covdata.txt
 
 bin/ginkgo:
-	$(call go-install-tool,$(GINKGO),github.com/onsi/ginkgo/v2/ginkgo@latest)
+	$(call go-install-tool,$(GINKGO),github.com/onsi/ginkgo/v2/ginkgo,latest)
 
 .PHONY: oats-prereq
 oats-prereq: bin/ginkgo

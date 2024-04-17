@@ -181,7 +181,7 @@ func newDecorator(ctx context.Context, cfg *transform.KubernetesDecorator) (*dec
 		}
 	}
 
-	if err := nt.kube.InitFromConfig(cfg.KubeconfigPath, cfg.InformersSyncTimeout); err != nil {
+	if err := nt.kube.InitFromConfig(ctx, cfg.KubeconfigPath, cfg.InformersSyncTimeout); err != nil {
 		return nil, err
 	}
 	return &nt, nil

@@ -156,6 +156,8 @@ int uprobe_server_handleStream_return(struct pt_regs *ctx) {
     trace->type = EVENT_GRPC_REQUEST;
     trace->start_monotime_ns = invocation->start_monotime_ns;
     trace->status = *status;
+    trace->content_length = 0;
+    trace->method[0] = 0;
 
     goroutine_metadata *g_metadata = bpf_map_lookup_elem(&ongoing_goroutines, &goroutine_addr);
     if (g_metadata) {
@@ -337,6 +339,8 @@ int uprobe_ClientConn_Invoke_return(struct pt_regs *ctx) {
     trace->start_monotime_ns = invocation->start_monotime_ns;
     trace->go_start_monotime_ns = invocation->start_monotime_ns;
     trace->end_monotime_ns = bpf_ktime_get_ns();
+    trace->content_length = 0;
+    trace->method[0] = 0;
 
     // Read arguments from the original set of registers
 

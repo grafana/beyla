@@ -50,7 +50,7 @@ func New(ctxInfo *global.ContextInfo, config *beyla.Config) *Instrumenter {
 // selection criteria.
 func (i *Instrumenter) FindAndInstrument(ctx context.Context) error {
 	finder := discover.NewProcessFinder(ctx, i.config, i.ctxInfo)
-	foundProcesses, deletedProcesses, err := finder.Start(i.config)
+	foundProcesses, deletedProcesses, err := finder.Start()
 	if err != nil {
 		return fmt.Errorf("couldn't start Process Finder: %w", err)
 	}

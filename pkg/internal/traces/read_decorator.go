@@ -6,7 +6,7 @@ import (
 	"strconv"
 
 	lru "github.com/hashicorp/golang-lru/v2"
-	"github.com/mariomac/pipes/pkg/node"
+	"github.com/mariomac/pipes/pipe"
 
 	"github.com/grafana/beyla/pkg/internal/request"
 	"github.com/grafana/beyla/pkg/internal/svc"
@@ -54,7 +54,7 @@ type ReadDecorator struct {
 // by the tracers (for example, the instance ID)
 type decorator func(spans []request.Span)
 
-func ReadFromChannel(ctx context.Context, r ReadDecorator) (node.StartFunc[[]request.Span], error) {
+func ReadFromChannel(ctx context.Context, r *ReadDecorator) pipe.StartFunc[[]request.Span] {
 	decorate := getDecorator(&r.InstanceID)
 	return func(out chan<- []request.Span) {
 		cancelChan := ctx.Done()
@@ -73,7 +73,7 @@ func ReadFromChannel(ctx context.Context, r ReadDecorator) (node.StartFunc[[]req
 				return
 			}
 		}
-	}, nil
+	}
 }
 
 func getDecorator(cfg *InstanceIDConfig) decorator {

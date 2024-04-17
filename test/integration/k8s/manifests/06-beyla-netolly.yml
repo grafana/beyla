@@ -20,6 +20,7 @@ data:
         - fd00:10:96::/112
       allowed_attributes:
         # assured cardinality explosion. Don't try in production!
+        - transport
         - beyla.ip
         - src.address
         - dst.address

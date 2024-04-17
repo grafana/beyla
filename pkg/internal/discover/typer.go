@@ -4,7 +4,7 @@ import (
 	"log/slog"
 	"strings"
 
-	"github.com/mariomac/pipes/pkg/node"
+	"github.com/mariomac/pipes/pipe"
 
 	"github.com/grafana/beyla/pkg/beyla"
 	"github.com/grafana/beyla/pkg/internal/exec"
@@ -12,14 +12,6 @@ import (
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/svc"
 )
-
-// ExecTyper classifies the discovered executables according to the
-// executable type (Go, generic...), and filters these executables
-// that are not instrumentable.
-type ExecTyper struct {
-	Cfg     *beyla.Config
-	Metrics imetrics.Reporter
-}
 
 type Instrumentable struct {
 	Type                 svc.InstrumentableType
@@ -33,22 +25,27 @@ type Instrumentable struct {
 	Offsets  *goexec.Offsets
 }
 
-func ExecTyperProvider(ecfg ExecTyper) (node.MiddleFunc[[]Event[ProcessMatch], []Event[Instrumentable]], error) {
+// ExecTyperProvider classifies the discovered executables according to the
+// executable type (Go, generic...), and filters these executables
+// that are not instrumentable.
+func ExecTyperProvider(cfg *beyla.Config, metrics imetrics.Reporter) pipe.MiddleProvider[[]Event[ProcessMatch], []Event[Instrumentable]] {
 	t := typer{
-		cfg:         ecfg.Cfg,
-		metrics:     ecfg.Metrics,
+		cfg:         cfg,
+		metrics:     metrics,
 		log:         slog.With("component", "discover.ExecTyper"),
 		currentPids: map[int32]*exec.FileInfo{},
 	}
-	// TODO: do it per executable
-	if !ecfg.Cfg.Discovery.SkipGoSpecificTracers {
-		t.loadAllGoFunctionNames()
-	}
-	return func(in <-chan []Event[ProcessMatch], out chan<- []Event[Instrumentable]) {
-		for i := range in {
-			out <- t.FilterClassify(i)
+	return func() (pipe.MiddleFunc[[]Event[ProcessMatch], []Event[Instrumentable]], error) {
+		// TODO: do it per executable
+		if !cfg.Discovery.SkipGoSpecificTracers {
+			t.loadAllGoFunctionNames()
 		}
-	}, nil
+		return func(in <-chan []Event[ProcessMatch], out chan<- []Event[Instrumentable]) {
+			for i := range in {
+				out <- t.FilterClassify(i)
+			}
+		}, nil
+	}
 }
 
 type typer struct {

@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/mariomac/pipes/pkg/node"
+	"github.com/mariomac/pipes/pipe"
 	"go.opentelemetry.io/otel/attribute"
 	metric2 "go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/sdk/metric"
@@ -74,7 +74,11 @@ func (me *metricsExporter) attributes(m *ebpf.Record) []attribute.KeyValue {
 	return keyVals
 }
 
-func MetricsExporterProvider(cfg MetricsConfig) (node.TerminalFunc[[]*ebpf.Record], error) {
+func MetricsExporterProvider(cfg *MetricsConfig) (pipe.FinalFunc[[]*ebpf.Record], error) {
+	if !cfg.Enabled() {
+		// This node is not going to be instantiated. Let the pipes library just ignore it.
+		return pipe.IgnoreFinal[[]*ebpf.Record](), nil
+	}
 	log := mlog()
 	log.Debug("instantiating network metrics exporter provider")
 	exporter, err := otel.InstantiateMetricsExporter(context.Background(), cfg.Metrics, log)

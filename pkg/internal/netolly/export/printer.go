@@ -5,18 +5,16 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/mariomac/pipes/pkg/node"
+	"github.com/mariomac/pipes/pipe"
 
 	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
 )
 
-type FlowPrinterEnabled bool
-
-func (fpe FlowPrinterEnabled) Enabled() bool {
-	return bool(fpe)
-}
-
-func FlowPrinterProvider(_ FlowPrinterEnabled) (node.TerminalFunc[[]*ebpf.Record], error) {
+func FlowPrinterProvider(enabled bool) (pipe.FinalFunc[[]*ebpf.Record], error) {
+	if !enabled {
+		// This node is not going to be instantiated. Let the pipes library just ignore it.
+		return pipe.IgnoreFinal[[]*ebpf.Record](), nil
+	}
 	return func(in <-chan []*ebpf.Record) {
 		for flows := range in {
 			for _, flow := range flows {
@@ -28,7 +26,9 @@ func FlowPrinterProvider(_ FlowPrinterEnabled) (node.TerminalFunc[[]*ebpf.Record
 
 func printFlow(f *ebpf.Record) {
 	sb := strings.Builder{}
-	sb.WriteString("beyla.ip=")
+	sb.WriteString("transport=")
+	sb.WriteString(strconv.Itoa(int(f.Id.TransportProtocol)))
+	sb.WriteString(" beyla.ip=")
 	sb.WriteString(f.Attrs.BeylaIP)
 	sb.WriteString(" iface=")
 	sb.WriteString(f.Attrs.Interface)

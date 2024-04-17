@@ -2,13 +2,11 @@ package discover
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
-	"os"
 	"path"
 
 	"github.com/cilium/ebpf/link"
-	"github.com/mariomac/pipes/pkg/node"
+	"github.com/mariomac/pipes/pipe"
 
 	"github.com/grafana/beyla/pkg/beyla"
 	"github.com/grafana/beyla/pkg/internal/ebpf"
@@ -40,8 +38,11 @@ type TraceAttacher struct {
 	reusableTracer  *ebpf.ProcessTracer
 }
 
-//nolint:gocritic
-func TraceAttacherProvider(ta TraceAttacher) (node.TerminalFunc[[]Event[Instrumentable]], error) {
+func TraceAttacherProvider(ta *TraceAttacher) pipe.FinalProvider[[]Event[Instrumentable]] {
+	return ta.attacherLoop
+}
+
+func (ta *TraceAttacher) attacherLoop() (pipe.FinalFunc[[]Event[Instrumentable]], error) {
 	ta.log = slog.With("component", "discover.TraceAttacher")
 	ta.existingTracers = map[uint64]*ebpf.ProcessTracer{}
 	ta.processInstances = helpers.MultiCounter[uint64]{}
@@ -193,7 +194,7 @@ func monitorPIDs(tracer *ebpf.ProcessTracer, ie *Instrumentable) {
 // it will be:
 //   - current beyla PID
 func BuildPinPath(cfg *beyla.Config) string {
-	return path.Join(cfg.EBPF.BpfBaseDir, fmt.Sprintf("beyla-%d", os.Getpid()))
+	return path.Join(cfg.EBPF.BpfBaseDir, cfg.EBPF.BpfPath)
 }
 
 func (ta *TraceAttacher) notifyProcessDeletion(ie *Instrumentable) {

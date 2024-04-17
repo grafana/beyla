@@ -4,7 +4,7 @@ package transform
 import (
 	"log/slog"
 
-	"github.com/mariomac/pipes/pkg/node"
+	"github.com/mariomac/pipes/pipe"
 
 	"github.com/grafana/beyla/pkg/internal/request"
 	"github.com/grafana/beyla/pkg/internal/transform/route"
@@ -51,7 +51,21 @@ type RoutesConfig struct {
 	IgnoredEvents  IgnoreMode `yaml:"ignore_mode"`
 }
 
-func RoutesProvider(rc *RoutesConfig) (node.MiddleFunc[[]request.Span, []request.Span], error) {
+func RoutesProvider(rc *RoutesConfig) pipe.MiddleProvider[[]request.Span, []request.Span] {
+	return (&routerNode{config: rc}).provideRoutes
+}
+
+type routerNode struct {
+	config *RoutesConfig
+}
+
+func (rn *routerNode) provideRoutes() (pipe.MiddleFunc[[]request.Span, []request.Span], error) {
+	rc := rn.config
+	if rc == nil {
+		// if no configuration is provided, we just bypass the node
+		return pipe.Bypass[[]request.Span](), nil
+	}
+
 	// set default value for Unmatch action
 	unmatchAction, err := chooseUnmatchPolicy(rc)
 	if err != nil {

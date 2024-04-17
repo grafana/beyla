@@ -93,6 +93,7 @@ network:
 			BatchLength:  100,
 			BatchTimeout: time.Second,
 			BpfBaseDir:   "/var/run/beyla",
+			BpfPath:      DefaultConfig.EBPF.BpfPath,
 		},
 		Grafana: otel.GrafanaConfig{
 			OTLP: otel.GrafanaOTLP{

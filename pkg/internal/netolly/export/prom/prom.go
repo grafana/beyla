@@ -4,7 +4,7 @@ import (
 	"context"
 	"slices"
 
-	"github.com/mariomac/pipes/pkg/node"
+	"github.com/mariomac/pipes/pipe"
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/grafana/beyla/pkg/internal/connector"
@@ -43,7 +43,11 @@ type metricsReporter struct {
 	bgCtx context.Context
 }
 
-func PrometheusEndpoint(ctx context.Context, cfg *PrometheusConfig, promMgr *connector.PrometheusManager) (node.TerminalFunc[[]*ebpf.Record], error) {
+func PrometheusEndpoint(ctx context.Context, cfg *PrometheusConfig, promMgr *connector.PrometheusManager) (pipe.FinalFunc[[]*ebpf.Record], error) {
+	if !cfg.Enabled() {
+		// This node is not going to be instantiated. Let the pipes library just ignore it.
+		return pipe.IgnoreFinal[[]*ebpf.Record](), nil
+	}
 	reporter := newReporter(ctx, cfg, promMgr)
 	return reporter.reportMetrics, nil
 }

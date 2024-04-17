@@ -26,7 +26,7 @@ func TestCriteriaMatcher(t *testing.T) {
     exe_path_regexp: "server"
 `), &pipeConfig))
 
-	matcherFunc, err := CriteriaMatcherProvider(CriteriaMatcher{Cfg: &pipeConfig})
+	matcherFunc, err := CriteriaMatcherProvider(&pipeConfig)()
 	require.NoError(t, err)
 	discoveredProcesses := make(chan []Event[processAttrs], 10)
 	filteredProcesses := make(chan []Event[ProcessMatch], 10)
@@ -87,7 +87,7 @@ func TestCriteriaMatcher_MustMatchAllAttributes(t *testing.T) {
     k8s_replicaset_name: thers
 `), &pipeConfig))
 
-	matcherFunc, err := CriteriaMatcherProvider(CriteriaMatcher{Cfg: &pipeConfig})
+	matcherFunc, err := CriteriaMatcherProvider(&pipeConfig)()
 	require.NoError(t, err)
 	discoveredProcesses := make(chan []Event[processAttrs], 10)
 	filteredProcesses := make(chan []Event[ProcessMatch], 10)
@@ -143,7 +143,7 @@ func TestCriteriaMatcherMissingPort(t *testing.T) {
     open_ports: 80
 `), &pipeConfig))
 
-	matcherFunc, err := CriteriaMatcherProvider(CriteriaMatcher{Cfg: &pipeConfig})
+	matcherFunc, err := CriteriaMatcherProvider(&pipeConfig)()
 	require.NoError(t, err)
 	discoveredProcesses := make(chan []Event[processAttrs], 10)
 	filteredProcesses := make(chan []Event[ProcessMatch], 10)

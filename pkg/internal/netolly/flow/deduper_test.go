@@ -64,7 +64,7 @@ func TestDedupe(t *testing.T) {
 	input := make(chan []*ebpf.Record, 100)
 	output := make(chan []*ebpf.Record, 100)
 
-	dedupe, err := DeduperProvider(Deduper{Type: DeduperFirstCome, ExpireTime: time.Minute})
+	dedupe, err := DeduperProvider(&Deduper{Type: DeduperFirstCome, ExpireTime: time.Minute})
 	require.NoError(t, err)
 	go dedupe(input, output)
 
@@ -92,7 +92,7 @@ func TestDedupe_EvictFlows(t *testing.T) {
 	input := make(chan []*ebpf.Record, 100)
 	output := make(chan []*ebpf.Record, 100)
 
-	dedupe, err := DeduperProvider(Deduper{Type: DeduperFirstCome, ExpireTime: 15 * time.Second})
+	dedupe, err := DeduperProvider(&Deduper{Type: DeduperFirstCome, ExpireTime: 15 * time.Second})
 	require.NoError(t, err)
 	go dedupe(input, output)
 

@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mariomac/pipes/pkg/node"
+	"github.com/mariomac/pipes/pipe"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
@@ -111,16 +111,20 @@ type Tracers struct {
 	tracer   trace2.Tracer
 }
 
-func ReportTraces(ctx context.Context, cfg *TracesConfig, ctxInfo *global.ContextInfo) (node.TerminalFunc[[]request.Span], error) {
+func ReportTraces(ctx context.Context, cfg *TracesConfig, ctxInfo *global.ContextInfo) pipe.FinalProvider[[]request.Span] {
+	return func() (pipe.FinalFunc[[]request.Span], error) {
+		if !cfg.Enabled() {
+			return pipe.IgnoreFinal[[]request.Span](), nil
+		}
+		SetupInternalOTELSDKLogger(cfg.SDKLogLevel)
 
-	SetupInternalOTELSDKLogger(cfg.SDKLogLevel)
-
-	tr, err := newTracesReporter(ctx, cfg, ctxInfo)
-	if err != nil {
-		slog.Error("can't instantiate OTEL traces reporter", err)
-		os.Exit(-1)
+		tr, err := newTracesReporter(ctx, cfg, ctxInfo)
+		if err != nil {
+			slog.Error("can't instantiate OTEL traces reporter", err)
+			os.Exit(-1)
+		}
+		return tr.reportTraces, nil
 	}
-	return tr.reportTraces, nil
 }
 
 func newTracesReporter(ctx context.Context, cfg *TracesConfig, ctxInfo *global.ContextInfo) (*TracesReporter, error) {

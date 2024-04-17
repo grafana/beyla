@@ -39,8 +39,8 @@ github.com/josharian/intern,https://github.com/grafana/beyla/blob/HEAD/vendor/gi
 github.com/json-iterator/go,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/json-iterator/go/LICENSE,MIT
 github.com/leodido/go-urn,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/leodido/go-urn/LICENSE,MIT
 github.com/mailru/easyjson,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/mailru/easyjson/LICENSE,MIT
-github.com/mariomac/guara/pkg/test,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/mariomac/guara/LICENSE,Apache-2.0
-github.com/mariomac/pipes/pkg,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/mariomac/pipes/LICENSE,Apache-2.0
+github.com/mariomac/guara,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/mariomac/guara/LICENSE,Apache-2.0
+github.com/mariomac/pipes,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/mariomac/pipes/LICENSE,Apache-2.0
 github.com/mattn/go-isatty,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/mattn/go-isatty/LICENSE,MIT
 github.com/moby/spdystream,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/moby/spdystream/LICENSE,Apache-2.0
 github.com/modern-go/concurrent,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/modern-go/concurrent/LICENSE,Apache-2.0

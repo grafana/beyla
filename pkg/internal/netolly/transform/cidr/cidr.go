@@ -5,7 +5,7 @@ import (
 	"log/slog"
 	"net"
 
-	"github.com/mariomac/pipes/pkg/node"
+	"github.com/mariomac/pipes/pipe"
 	"github.com/yl2chen/cidranger"
 
 	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
@@ -32,7 +32,11 @@ type ipGrouper struct {
 	ranger cidranger.Ranger
 }
 
-func DecoratorProvider(g Definitions) (node.MiddleFunc[[]*ebpf.Record, []*ebpf.Record], error) {
+func DecoratorProvider(g Definitions) (pipe.MiddleFunc[[]*ebpf.Record, []*ebpf.Record], error) {
+	if !g.Enabled() {
+		// This node is not going to be instantiated. Let the pipes library just bypassing it.
+		return pipe.Bypass[[]*ebpf.Record](), nil
+	}
 	grouper, err := newIPGrouper(g)
 	if err != nil {
 		return nil, fmt.Errorf("instantiating IP grouper: %w", err)

@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/golang-lru/v2/expirable"
-	"github.com/mariomac/pipes/pkg/node"
+	"github.com/mariomac/pipes/pipe"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.opentelemetry.io/otel/codes"
 
@@ -174,12 +174,17 @@ type metricsReporter struct {
 	serviceCache *expirable.LRU[svc.UID, svc.ID]
 }
 
-func PrometheusEndpoint(ctx context.Context, cfg *PrometheusConfig, ctxInfo *global.ContextInfo) (node.TerminalFunc[[]request.Span], error) {
-	reporter := newReporter(ctx, cfg, ctxInfo)
-	if cfg.Registry != nil {
-		return reporter.collectMetrics, nil
+func PrometheusEndpoint(ctx context.Context, cfg *PrometheusConfig, ctxInfo *global.ContextInfo) pipe.FinalProvider[[]request.Span] {
+	return func() (pipe.FinalFunc[[]request.Span], error) {
+		if !cfg.Enabled() {
+			return pipe.IgnoreFinal[[]request.Span](), nil
+		}
+		reporter := newReporter(ctx, cfg, ctxInfo)
+		if cfg.Registry != nil {
+			return reporter.collectMetrics, nil
+		}
+		return reporter.reportMetrics, nil
 	}
-	return reporter.reportMetrics, nil
 }
 
 func newReporter(ctx context.Context, cfg *PrometheusConfig, ctxInfo *global.ContextInfo) *metricsReporter {

@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/golang-lru/v2/expirable"
-	"github.com/mariomac/pipes/pkg/node"
+	"github.com/mariomac/pipes/pipe"
 
 	"github.com/grafana/beyla/pkg/internal/kube"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
@@ -33,7 +33,16 @@ type NameResolver struct {
 	db     *kube2.Database
 }
 
-func NameResolutionProvider(ctxInfo *global.ContextInfo, cfg *NameResolverConfig) (node.MiddleFunc[[]request.Span, []request.Span], error) {
+func NameResolutionProvider(ctxInfo *global.ContextInfo, cfg *NameResolverConfig) pipe.MiddleProvider[[]request.Span, []request.Span] {
+	return func() (pipe.MiddleFunc[[]request.Span, []request.Span], error) {
+		if cfg == nil {
+			return pipe.Bypass[[]request.Span](), nil
+		}
+		return nameResolver(ctxInfo, cfg)
+	}
+}
+
+func nameResolver(ctxInfo *global.ContextInfo, cfg *NameResolverConfig) (pipe.MiddleFunc[[]request.Span, []request.Span], error) {
 	nr := NameResolver{
 		cfg:    cfg,
 		db:     ctxInfo.AppO11y.K8sDatabase,

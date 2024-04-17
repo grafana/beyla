@@ -16,7 +16,7 @@ const testTimeout = 5 * time.Second
 func TestUnmatchedWildcard(t *testing.T) {
 	for _, tc := range []UnmatchType{"", UnmatchWildcard, "invalid_value"} {
 		t.Run(string(tc), func(t *testing.T) {
-			router, err := RoutesProvider(&RoutesConfig{Unmatch: tc, Patterns: []string{"/user/:id"}})
+			router, err := RoutesProvider(&RoutesConfig{Unmatch: tc, Patterns: []string{"/user/:id"}})()
 			require.NoError(t, err)
 			in, out := make(chan []request.Span, 10), make(chan []request.Span, 10)
 			defer close(in)
@@ -36,7 +36,7 @@ func TestUnmatchedWildcard(t *testing.T) {
 }
 
 func TestUnmatchedPath(t *testing.T) {
-	router, err := RoutesProvider(&RoutesConfig{Unmatch: UnmatchPath, Patterns: []string{"/user/:id"}})
+	router, err := RoutesProvider(&RoutesConfig{Unmatch: UnmatchPath, Patterns: []string{"/user/:id"}})()
 	require.NoError(t, err)
 	in, out := make(chan []request.Span, 10), make(chan []request.Span, 10)
 	defer close(in)
@@ -54,7 +54,7 @@ func TestUnmatchedPath(t *testing.T) {
 }
 
 func TestUnmatchedEmpty(t *testing.T) {
-	router, err := RoutesProvider(&RoutesConfig{Unmatch: UnmatchUnset, Patterns: []string{"/user/:id"}})
+	router, err := RoutesProvider(&RoutesConfig{Unmatch: UnmatchUnset, Patterns: []string{"/user/:id"}})()
 	require.NoError(t, err)
 	in, out := make(chan []request.Span, 10), make(chan []request.Span, 10)
 	defer close(in)
@@ -73,7 +73,7 @@ func TestUnmatchedEmpty(t *testing.T) {
 func TestUnmatchedAuto(t *testing.T) {
 	for _, tc := range []UnmatchType{UnmatchHeuristic} {
 		t.Run(string(tc), func(t *testing.T) {
-			router, err := RoutesProvider(&RoutesConfig{Unmatch: tc, Patterns: []string{"/user/:id"}})
+			router, err := RoutesProvider(&RoutesConfig{Unmatch: tc, Patterns: []string{"/user/:id"}})()
 			require.NoError(t, err)
 			in, out := make(chan []request.Span, 10), make(chan []request.Span, 10)
 			defer close(in)
@@ -106,7 +106,7 @@ func TestUnmatchedAuto(t *testing.T) {
 }
 
 func TestIgnoreRoutes(t *testing.T) {
-	router, err := RoutesProvider(&RoutesConfig{Unmatch: UnmatchPath, Patterns: []string{"/user/:id", "/v1/metrics"}, IgnorePatterns: []string{"/v1/metrics/*", "/v1/traces/*", "/exact"}})
+	router, err := RoutesProvider(&RoutesConfig{Unmatch: UnmatchPath, Patterns: []string{"/user/:id", "/v1/metrics"}, IgnorePatterns: []string{"/v1/metrics/*", "/v1/traces/*", "/exact"}})()
 	require.NoError(t, err)
 	in, out := make(chan []request.Span, 10), make(chan []request.Span, 10)
 	defer close(in)
@@ -148,7 +148,7 @@ func benchProvider(b *testing.B, unmatch UnmatchType) {
 	router, err := RoutesProvider(&RoutesConfig{Unmatch: unmatch, Patterns: []string{
 		"/users/{id}",
 		"/users/{id}/product/{pid}",
-	}})
+	}})()
 	if err != nil {
 		b.Fatal(err)
 	}

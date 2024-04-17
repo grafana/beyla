@@ -24,7 +24,7 @@ func (ta *TraceAttacher) mountBpfPinPath() error {
 		}
 	}
 
-	return bpfMount(ta.pinPath)
+	return ta.bpfMount(ta.pinPath)
 }
 
 func (ta *TraceAttacher) unmountBpfPinPath() {
@@ -40,8 +40,20 @@ func (ta *TraceAttacher) unmountBpfPinPath() {
 	}
 }
 
-func bpfMount(pinPath string) error {
-	return unix.Mount(pinPath, pinPath, "bpf", 0, "")
+func (ta *TraceAttacher) bpfMount(pinPath string) error {
+	mounted, bpffsInstance, err := IsMountFS(FilesystemTypeBPFFS, pinPath)
+	if err != nil {
+		return err
+	}
+	if !mounted {
+		return unix.Mount(pinPath, pinPath, "bpf", 0, "")
+	}
+	if !bpffsInstance {
+		return fmt.Errorf("mount in the custom directory %s has a different filesystem than BPFFS", pinPath)
+	}
+	ta.log.Info(fmt.Sprintf("Detected mounted BPF filesystem at %v", pinPath))
+
+	return nil
 }
 
 func (ta *TraceAttacher) init() error {

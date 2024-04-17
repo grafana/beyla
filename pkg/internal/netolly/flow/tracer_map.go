@@ -25,7 +25,7 @@ import (
 	"time"
 
 	"github.com/gavv/monotime"
-	"github.com/mariomac/pipes/pkg/node"
+	"github.com/mariomac/pipes/pipe"
 
 	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
 )
@@ -63,7 +63,7 @@ func (m *MapTracer) Flush() {
 	m.evictionCond.Broadcast()
 }
 
-func (m *MapTracer) TraceLoop(ctx context.Context) node.StartFunc[[]*ebpf.Record] {
+func (m *MapTracer) TraceLoop(ctx context.Context) pipe.StartFunc[[]*ebpf.Record] {
 	return func(out chan<- []*ebpf.Record) {
 		evictionTicker := time.NewTicker(m.evictionTimeout)
 		go m.evictionSynchronization(ctx, out)

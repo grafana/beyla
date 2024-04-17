@@ -8,25 +8,23 @@ import (
 	"regexp"
 	"slices"
 
-	"github.com/mariomac/pipes/pkg/node"
+	"github.com/mariomac/pipes/pipe"
 	"github.com/shirou/gopsutil/process"
 
 	"github.com/grafana/beyla/pkg/beyla"
 	"github.com/grafana/beyla/pkg/services"
 )
 
-// CriteriaMatcher filters the processes that match the discovery criteria.
-type CriteriaMatcher struct {
-	Cfg *beyla.Config
-}
-
-func CriteriaMatcherProvider(cm CriteriaMatcher) (node.MiddleFunc[[]Event[processAttrs], []Event[ProcessMatch]], error) {
-	m := &matcher{
-		log:            slog.With("component", "discover.CriteriaMatcher"),
-		criteria:       FindingCriteria(cm.Cfg),
-		processHistory: map[PID]*services.ProcessInfo{},
+// CriteriaMatcherProvider filters the processes that match the discovery criteria.
+func CriteriaMatcherProvider(cfg *beyla.Config) pipe.MiddleProvider[[]Event[processAttrs], []Event[ProcessMatch]] {
+	return func() (pipe.MiddleFunc[[]Event[processAttrs], []Event[ProcessMatch]], error) {
+		m := &matcher{
+			log:            slog.With("component", "discover.CriteriaMatcher"),
+			criteria:       FindingCriteria(cfg),
+			processHistory: map[PID]*services.ProcessInfo{},
+		}
+		return m.run, nil
 	}
-	return m.run, nil
 }
 
 type matcher struct {

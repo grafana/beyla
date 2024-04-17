@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mariomac/pipes/pkg/node"
+	"github.com/mariomac/pipes/pipe"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp"
@@ -166,15 +166,19 @@ type Metrics struct {
 
 func ReportMetrics(
 	ctx context.Context, cfg *MetricsConfig, ctxInfo *global.ContextInfo,
-) (node.TerminalFunc[[]request.Span], error) {
+) pipe.FinalProvider[[]request.Span] {
+	return func() (pipe.FinalFunc[[]request.Span], error) {
+		if !cfg.Enabled() {
+			return pipe.IgnoreFinal[[]request.Span](), nil
+		}
+		SetupInternalOTELSDKLogger(cfg.SDKLogLevel)
 
-	SetupInternalOTELSDKLogger(cfg.SDKLogLevel)
-
-	mr, err := newMetricsReporter(ctx, cfg, ctxInfo)
-	if err != nil {
-		return nil, fmt.Errorf("instantiating OTEL metrics reporter: %w", err)
+		mr, err := newMetricsReporter(ctx, cfg, ctxInfo)
+		if err != nil {
+			return nil, fmt.Errorf("instantiating OTEL metrics reporter: %w", err)
+		}
+		return mr.reportMetrics, nil
 	}
-	return mr.reportMetrics, nil
 }
 
 func newMetricsReporter(ctx context.Context, cfg *MetricsConfig, ctxInfo *global.ContextInfo) (*MetricsReporter, error) {

@@ -29,7 +29,7 @@ import (
 	"time"
 
 	"github.com/cilium/ebpf/ringbuf"
-	"github.com/mariomac/pipes/pkg/node"
+	"github.com/mariomac/pipes/pipe"
 
 	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
 )
@@ -73,7 +73,7 @@ func NewRingBufTracer(
 	}
 }
 
-func (m *RingBufTracer) TraceLoop(ctx context.Context) node.StartFunc[[]*ebpf.Record] {
+func (m *RingBufTracer) TraceLoop(ctx context.Context) pipe.StartFunc[[]*ebpf.Record] {
 	return func(out chan<- []*ebpf.Record) {
 		rtlog := rtlog()
 		debugging := rtlog.Enabled(ctx, slog.LevelDebug)

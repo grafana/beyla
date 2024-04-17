@@ -311,12 +311,12 @@ func decodeAndApply(
 // methods, which will selectively work depending on the container backend type
 func (k *Kind) loadLocalImage(tag string) env.Func {
 	return func(ctx context.Context, config *envconf.Config) (context.Context, error) {
-		log().Info("trying to load docker image from local registry")
+		log().Info("trying to load docker image from local registry", "tag", tag)
 		ctx, err := envfuncs.LoadDockerImageToCluster(
 			k.clusterName, tag)(ctx, config)
 		if err == nil {
 			return ctx, nil
 		}
-		return ctx, fmt.Errorf("couldn't load image from local registry: %w", err)
+		return ctx, fmt.Errorf("couldn't load image %q from local registry: %w", tag, err)
 	}
 }

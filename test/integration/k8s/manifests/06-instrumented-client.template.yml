@@ -63,7 +63,7 @@ spec:
         - name: BEYLA_PRINT_TRACES
           value: "true"
         - name: BEYLA_EXECUTABLE_NAME
-          value: "pinger-cmd"
+          value: "httppinger"
         - name: BEYLA_METRICS_INTERVAL
           value: "10ms"
         - name: BEYLA_BPF_BATCH_TIMEOUT

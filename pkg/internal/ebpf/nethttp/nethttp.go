@@ -153,6 +153,10 @@ func (p *Tracer) GoProbes() map[string]ebpfcommon.FunctionPrograms {
 			Start: p.bpfObjects.UprobeRoundTrip,
 			End:   p.bpfObjects.UprobeRoundTripReturn,
 		},
+		"golang.org/x/net/http2.(*ClientConn).roundTrip": { // http2 client after 0.22
+			Start: p.bpfObjects.UprobeHttp2RoundTrip,
+			End:   p.bpfObjects.UprobeRoundTripReturn, // return is the same as for http 1.1
+		},
 		"golang.org/x/net/http2.(*ClientConn).RoundTrip": { // http2 client
 			Start: p.bpfObjects.UprobeHttp2RoundTrip,
 			End:   p.bpfObjects.UprobeRoundTripReturn, // return is the same as for http 1.1

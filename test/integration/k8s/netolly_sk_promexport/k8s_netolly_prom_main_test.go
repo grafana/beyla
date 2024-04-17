@@ -30,7 +30,7 @@ func TestMain(m *testing.M) {
 		os.Exit(-1)
 	}
 
-	cluster = kube.NewKind("test-kind-cluster-netolly",
+	cluster = kube.NewKind("test-kind-cluster-netolly-sk-promexport",
 		kube.ExportLogs(k8s.PathKindLogs),
 		kube.KindConfig(k8s.PathManifests+"/00-kind.yml"),
 		kube.LocalImage("testserver:dev"),

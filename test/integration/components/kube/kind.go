@@ -179,7 +179,7 @@ func (k *Kind) deleteLabeled() env.Func {
 			}
 			// wait for the pod to be stopped
 			for p, err := pc.Get(ctx, pod.Name, metav1.GetOptions{}); err == nil && p != nil; {
-				plog.Info("waiting 1s for pod to be stopped " + string(p.Status.Phase))
+				plog.Info("waiting 1s for pod to be stopped", "status", string(p.Status.Phase))
 				time.Sleep(time.Second)
 				p, err = pc.Get(ctx, pod.Name, metav1.GetOptions{})
 			}

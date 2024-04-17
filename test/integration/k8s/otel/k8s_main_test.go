@@ -29,6 +29,7 @@ func TestMain(m *testing.M) {
 		docker.ImageBuild{Tag: "testserver:dev", Dockerfile: k8s.DockerfileTestServer},
 		docker.ImageBuild{Tag: "beyla:dev", Dockerfile: k8s.DockerfileBeyla},
 		docker.ImageBuild{Tag: "grpcpinger:dev", Dockerfile: k8s.DockerfilePinger},
+		docker.ImageBuild{Tag: "httppinger:dev", Dockerfile: k8s.DockerfileHTTPPinger},
 	); err != nil {
 		slog.Error("can't build docker images", err)
 		os.Exit(-1)
@@ -40,6 +41,7 @@ func TestMain(m *testing.M) {
 		kube.LocalImage("testserver:dev"),
 		kube.LocalImage("beyla:dev"),
 		kube.LocalImage("grpcpinger:dev"),
+		kube.LocalImage("httppinger:dev"),
 		kube.Deploy(k8s.PathManifests+"/01-volumes.yml"),
 		kube.Deploy(k8s.PathManifests+"/01-serviceaccount.yml"),
 		kube.Deploy(k8s.PathManifests+"/02-prometheus-otelscrape.yml"),

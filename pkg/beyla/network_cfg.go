@@ -64,6 +64,10 @@ type NetworkConfig struct {
 	// If an entry is enclosed by slashes (e.g. `/br-/`), it will match as regular expression,
 	// otherwise it will be matched as a case-sensitive string.
 	ExcludeInterfaces []string `yaml:"exclude_interfaces" env:"BEYLA_NETWORK_EXCLUDE_INTERFACES" envSeparator:","`
+
+	Protocols        []string `yaml:"protocols" env:"BEYLA_NETWORK_PROTOCOLS" envSeparator:","`
+	ExcludeProtocols []string `yaml:"exclude_protocols" env:"BEYLA_NETWORK_EXCLUDE_PROTOCOLS" envSeparator:","`
+
 	// CacheMaxFlows specifies how many flows can be accumulated in the accounting cache before
 	// being flushed for its later export. Default value is 5000.
 	// Decrease it if you see the "received message larger than max" error in Beyla logs.

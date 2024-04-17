@@ -8,6 +8,8 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+const privilegedEnv = "PRIVILEGED_TESTS"
+
 func setIntegrity(t *testing.T, path, text string) {
 	err := os.WriteFile(path, []byte(text), 0644)
 	assert.NoError(t, err)
@@ -54,6 +56,11 @@ func TestLockdownParsing(t *testing.T) {
 
 	setIntegrity(t, path, "")
 	assert.Equal(t, KernelLockdownIntegrity, KernelLockdownMode())
+
+	if os.Getenv(privilegedEnv) != "" {
+		// This test doesn't pass when run as sudo
+		t.Skipf("Skipping this test because %v is set", privilegedEnv)
+	}
 
 	setIntegrity(t, path, "[none] integrity confidentiality\n")
 	setNotReadable(t, path)

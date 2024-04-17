@@ -49,6 +49,8 @@ func attributeFor(exposedName, internalName string) Attribute {
 	switch internalName {
 	case "beyla.ip":
 		getter = func(r *ebpf.Record) string { return r.Attrs.BeylaIP }
+	case "transport":
+		getter = func(r *ebpf.Record) string { return l4TransportStr(r.Id.TransportProtocol) }
 	case "src.address":
 		getter = func(r *ebpf.Record) string { return r.Id.SrcIP().IP().String() }
 	case "dst.address":
@@ -80,4 +82,69 @@ func directionStr(direction uint8) string {
 	default:
 		return ""
 	}
+}
+
+// values taken from the list of "Standard well-defined IP protocols" from uapi/linux/in.h
+// nolint:cyclop
+func l4TransportStr(proto uint8) string {
+	switch proto {
+	case 0:
+		return "IP"
+	case 1:
+		return "ICMP"
+	case 2:
+		return "IGMP"
+	case 4:
+		return "IPIP"
+	case 6:
+		return "TCP"
+	case 8:
+		return "EGP"
+	case 12:
+		return "PUP"
+	case 17:
+		return "UDP"
+	case 22:
+		return "IDP"
+	case 29:
+		return "TP"
+	case 33:
+		return "DCCP"
+	case 41:
+		return "IPV6"
+	case 46:
+		return "RSVP"
+	case 47:
+		return "GRE"
+	case 50:
+		return "ESP"
+	case 51:
+		return "AH"
+	case 92:
+		return "MTP"
+	case 94:
+		return "BEETPH"
+	case 98:
+		return "ENCAP"
+	case 103:
+		return "PIM"
+	case 108:
+		return "COMP"
+	case 115:
+		return "L2TP"
+	case 132:
+		return "SCTP"
+	case 136:
+		return "UDPLITE"
+	case 137:
+		return "MPLS"
+	case 143:
+		return "ETHERNET"
+	case 255:
+		return "RAW"
+		// TODO: consider adding an extra byte to TransportProtocol to support this protocol
+		// case 262:
+		//   return "MPTCP"
+	}
+	return strconv.Itoa(int(proto))
 }

@@ -27,7 +27,7 @@ func TestMetricsExpiration(t *testing.T) {
 	now := syncedClock{now: time.Now()}
 	timeNow = now.Now
 
-	otelExporter, err := MetricsExporterProvider(MetricsConfig{Metrics: &otel.MetricsConfig{
+	otelExporter, err := MetricsExporterProvider(&MetricsConfig{Metrics: &otel.MetricsConfig{
 		Interval:        50 * time.Millisecond,
 		CommonEndpoint:  otlp.ServerEndpoint,
 		MetricsProtocol: otel.ProtocolHTTPProtobuf,

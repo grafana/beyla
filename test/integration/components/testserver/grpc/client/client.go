@@ -60,7 +60,7 @@ func WithSSL() PingOption {
 // printFeature gets the feature for the given point.
 func printFeature(ctx context.Context, client pb.RouteGuideClient, point *pb.Point) {
 	slog.Debug("Getting feature for point", "lat", point.Latitude, "long", point.Longitude)
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	feature, err := client.GetFeature(ctx, point)
 	if err != nil {

@@ -51,12 +51,12 @@ func setupAppO11y(ctx context.Context, ctxInfo *global.ContextInfo, config *beyl
 	// 1st process (privileged) - Invoke FindTarget, which also mounts the BPF maps
 	// 2nd executable (unprivileged) - Invoke ReadAndForward, receiving the BPF map mountpoint as argument
 
-	instr := appolly.New(ctxInfo, config)
-	if err := instr.FindAndInstrument(ctx); err != nil {
+	instr := appolly.New(ctx, ctxInfo, config)
+	if err := instr.FindAndInstrument(); err != nil {
 		slog.Error("Beyla couldn't find target process", "error", err)
 		os.Exit(-1)
 	}
-	if err := instr.ReadAndForward(ctx); err != nil {
+	if err := instr.ReadAndForward(); err != nil {
 		slog.Error("Beyla couldn't start read and forwarding", "error", err)
 		os.Exit(-1)
 	}

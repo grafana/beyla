@@ -12,6 +12,8 @@ data:
     otel_metrics_export:
       endpoint: http://otelcol.default:4317
     network:
+      protocols:
+        - TCP
       cidrs:
         # default subnets of Kind Pods and services
         - 10.244.0.0/16

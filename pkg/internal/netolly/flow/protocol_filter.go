@@ -9,29 +9,18 @@ import (
 	"github.com/grafana/beyla/pkg/internal/netolly/flow/transport"
 )
 
+// ProtocolFilterProvider allows selecting which protocols are going to be instrumented.
+// It drops any flow not appearing in the "allowed" list.
+// If the Allowed list is empty, it drops any flow appearing in the "excluded" list.
 func ProtocolFilterProvider(allowed, excluded []string) pipe.MiddleProvider[[]*ebpf.Record, []*ebpf.Record] {
 	return func() (pipe.MiddleFunc[[]*ebpf.Record, []*ebpf.Record], error) {
 		if len(allowed) == 0 && len(excluded) == 0 {
-			// user did not configured any filter. Ignore this node
+			// user did not configure any filter. Ignore this node
 			return pipe.Bypass[[]*ebpf.Record](), nil
 		}
-		pf := protocolFilter{
-			allowed:  map[transport.Protocol]struct{}{},
-			excluded: map[transport.Protocol]struct{}{},
-		}
-		for _, aStr := range allowed {
-			if atp, err := transport.ParseProtocol(aStr); err == nil {
-				pf.allowed[atp] = struct{}{}
-			} else {
-				return nil, fmt.Errorf("in network protocols: %w", err)
-			}
-		}
-		for _, eStr := range excluded {
-			if etp, err := transport.ParseProtocol(eStr); err == nil {
-				pf.excluded[etp] = struct{}{}
-			} else {
-				return nil, fmt.Errorf("in network excluded protocols: %w", err)
-			}
+		pf, err := newFilter(allowed, excluded)
+		if err != nil {
+			return nil, err
 		}
 		return pf.nodeLoop, nil
 	}
@@ -40,6 +29,28 @@ func ProtocolFilterProvider(allowed, excluded []string) pipe.MiddleProvider[[]*e
 type protocolFilter struct {
 	allowed  map[transport.Protocol]struct{}
 	excluded map[transport.Protocol]struct{}
+}
+
+func newFilter(allowed, excluded []string) (*protocolFilter, error) {
+	pf := protocolFilter{
+		allowed:  map[transport.Protocol]struct{}{},
+		excluded: map[transport.Protocol]struct{}{},
+	}
+	for _, aStr := range allowed {
+		if atp, err := transport.ParseProtocol(aStr); err == nil {
+			pf.allowed[atp] = struct{}{}
+		} else {
+			return nil, fmt.Errorf("in network protocols: %w", err)
+		}
+	}
+	for _, eStr := range excluded {
+		if etp, err := transport.ParseProtocol(eStr); err == nil {
+			pf.excluded[etp] = struct{}{}
+		} else {
+			return nil, fmt.Errorf("in network excluded protocols: %w", err)
+		}
+	}
+	return &pf, nil
 }
 
 func (pf *protocolFilter) nodeLoop(in <-chan []*ebpf.Record, out chan<- []*ebpf.Record) {

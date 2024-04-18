@@ -13,7 +13,7 @@ import (
 	"github.com/grafana/beyla/pkg/internal/testutil"
 )
 
-const timeout = 5000 * time.Second
+const timeout = 5 * time.Second
 
 func TestDecoration(t *testing.T) {
 	srcIP := [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 255, 1, 2, 3, 4}

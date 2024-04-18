@@ -55,8 +55,6 @@ func DoTestNetFlowBytesForExistingConnections(ctx context.Context, t *testing.T,
 		assert.Equal(t, "Service", metric["k8s_dst_type"])
 		assert.Contains(t, podSubnets, metric["src_cidr"], metric)
 		assert.Contains(t, svcSubnets, metric["dst_cidr"], metric)
-
-		assert.Equal(t, "TCP", metric["transport"])
 		// services don't have host IP or name
 	})
 	// testing request flows (to testserver as Pod)
@@ -88,7 +86,6 @@ func DoTestNetFlowBytesForExistingConnections(ctx context.Context, t *testing.T,
 		assertIsIP(t, metric["k8s_dst_node_ip"])
 		assert.Contains(t, podSubnets, metric["src_cidr"], metric)
 		assert.Contains(t, podSubnets, metric["dst_cidr"], metric)
-		assert.Equal(t, "TCP", metric["transport"])
 	})
 
 	// testing response flows (from testserver Pod)
@@ -145,13 +142,20 @@ func DoTestNetFlowBytesForExistingConnections(ctx context.Context, t *testing.T,
 		assertIsIP(t, metric["k8s_dst_node_ip"])
 		assert.Contains(t, svcSubnets, metric["src_cidr"], metric)
 		assert.Contains(t, podSubnets, metric["dst_cidr"], metric)
-		assert.Equal(t, "TCP", metric["transport"])
 	})
 
 	// check that there aren't captured flows if there is no communication
 	results, err := pq.Query(`beyla_network_flow_bytes_total{src_name="internal-pinger",dst_name="otherinstance"}`)
 	require.NoError(t, err)
 	require.Empty(t, results)
+
+	// check that only TCP traffic is captured, according to the Protocols configuration option
+	results, err = pq.Query(`beyla_network_flow_bytes_total`)
+	require.NoError(t, err)
+	require.NotEmpty(t, results)
+	for _, result := range results {
+		assert.Equal(t, "TCP", result.Metric["transport"])
+	}
 
 	return ctx
 }

@@ -12,6 +12,8 @@ data:
     prometheus_export:
       port: 8999
     network:
+      protocols:
+        - TCP
       cidrs:
         # default subnets of Kind Pods and services
         - 10.244.0.0/16

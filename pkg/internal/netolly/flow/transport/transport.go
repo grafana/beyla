@@ -105,6 +105,7 @@ func (p Protocol) String() string {
 	return strconv.Itoa(int(p))
 }
 
+// nolint:cyclop
 func ParseProtocol(str string) (Protocol, error) {
 	switch strings.ToUpper(str) {
 	case "IP":

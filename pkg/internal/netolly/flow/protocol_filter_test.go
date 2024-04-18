@@ -16,7 +16,6 @@ var tcp2 = &ebpf.Record{NetFlowRecordT: ebpf.NetFlowRecordT{Id: ebpf.NetFlowId{S
 var tcp3 = &ebpf.Record{NetFlowRecordT: ebpf.NetFlowRecordT{Id: ebpf.NetFlowId{SrcPort: 3, TransportProtocol: uint8(transport.TCP)}}}
 var udp1 = &ebpf.Record{NetFlowRecordT: ebpf.NetFlowRecordT{Id: ebpf.NetFlowId{SrcPort: 4, TransportProtocol: uint8(transport.UDP)}}}
 var udp2 = &ebpf.Record{NetFlowRecordT: ebpf.NetFlowRecordT{Id: ebpf.NetFlowId{SrcPort: 5, TransportProtocol: uint8(transport.UDP)}}}
-var udp3 = &ebpf.Record{NetFlowRecordT: ebpf.NetFlowRecordT{Id: ebpf.NetFlowId{SrcPort: 6, TransportProtocol: uint8(transport.UDP)}}}
 var icmp1 = &ebpf.Record{NetFlowRecordT: ebpf.NetFlowRecordT{Id: ebpf.NetFlowId{SrcPort: 7, TransportProtocol: uint8(transport.ICMP)}}}
 var icmp2 = &ebpf.Record{NetFlowRecordT: ebpf.NetFlowRecordT{Id: ebpf.NetFlowId{SrcPort: 8, TransportProtocol: uint8(transport.ICMP)}}}
 var icmp3 = &ebpf.Record{NetFlowRecordT: ebpf.NetFlowRecordT{Id: ebpf.NetFlowId{SrcPort: 9, TransportProtocol: uint8(transport.ICMP)}}}
@@ -28,6 +27,7 @@ func TestProtocolFilter_Allow(t *testing.T) {
 	defer close(input)
 	go protocolFilter(input, output)
 
+	input <- []*ebpf.Record{}
 	input <- []*ebpf.Record{tcp1, tcp2, tcp3}
 	input <- []*ebpf.Record{icmp2, udp1, icmp1, udp2, icmp3}
 	input <- []*ebpf.Record{icmp2, tcp1, udp1, icmp1, tcp2, udp2, tcp3, icmp3}
@@ -54,6 +54,7 @@ func TestProtocolFilter_Exclude(t *testing.T) {
 
 	input <- []*ebpf.Record{tcp1, tcp2, tcp3}
 	input <- []*ebpf.Record{icmp2, udp1, icmp1, udp2, icmp3}
+	input <- []*ebpf.Record{}
 	input <- []*ebpf.Record{icmp2, tcp1, udp1, icmp1, tcp2, udp2, tcp3, icmp3}
 
 	filtered := testutil.ReadChannel(t, output, timeout)

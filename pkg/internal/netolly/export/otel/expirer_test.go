@@ -1,10 +1,7 @@
-package prom
+package otel
 
 import (
 	"context"
-	"fmt"
-	"io"
-	"net/http"
 	"sync"
 	"testing"
 	"time"
@@ -13,41 +10,34 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/grafana/beyla/pkg/internal/connector"
 	"github.com/grafana/beyla/pkg/internal/export/otel"
-	"github.com/grafana/beyla/pkg/internal/export/prom"
 	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
+	"github.com/grafana/beyla/test/collector"
 )
 
 const timeout = 3 * time.Second
 
 func TestMetricsExpiration(t *testing.T) {
+	ctx, cancelCtx := context.WithCancel(context.Background())
+	defer cancelCtx()
+
+	otlp, err := collector.Start(ctx)
+	require.NoError(t, err)
+
 	now := syncedClock{now: time.Now()}
 	timeNow = now.Now
 
-	ctx, cancelCtx := context.WithCancel(context.Background())
-	defer cancelCtx()
-	openPort, err := test.FreeTCPPort()
-	require.NoError(t, err)
-	promURL := fmt.Sprintf("http://127.0.0.1:%d/metrics", openPort)
-	require.NoError(t, err)
-
-	// GIVEN a Prometheus Metrics Exporter with a metrics expire time of 3 minutes
-	exporter, err := PrometheusEndpoint(
-		ctx,
-		&PrometheusConfig{Config: &prom.PrometheusConfig{
-			Port:                        openPort,
-			Path:                        "/metrics",
-			TTL:                         3 * time.Minute,
-			SpanMetricsServiceCacheSize: 10,
-			Features:                    []string{otel.FeatureNetwork},
-		}, AllowedAttributes: []string{"src_name", "dst_name"}},
-		&connector.PrometheusManager{},
-	)
+	otelExporter, err := MetricsExporterProvider(&MetricsConfig{Metrics: &otel.MetricsConfig{
+		Interval:        50 * time.Millisecond,
+		CommonEndpoint:  otlp.ServerEndpoint,
+		MetricsProtocol: otel.ProtocolHTTPProtobuf,
+		Features:        []string{otel.FeatureNetwork},
+		TTL:             3 * time.Minute,
+	}, AllowedAttributes: []string{"src.name", "dst.name"}})
 	require.NoError(t, err)
 
 	metrics := make(chan []*ebpf.Record, 20)
-	go exporter(metrics)
+	go otelExporter(metrics)
 
 	// WHEN it receives metrics
 	metrics <- []*ebpf.Record{
@@ -59,11 +49,15 @@ func TestMetricsExpiration(t *testing.T) {
 
 	// THEN the metrics are exported
 	test.Eventually(t, timeout, func(t require.TestingT) {
-		exported := getMetrics(t, promURL)
-		assert.Contains(t, exported, `beyla_network_flow_bytes_total{dst_name="bar",src_name="foo"} 123`)
-		assert.Contains(t, exported, `beyla_network_flow_bytes_total{dst_name="bae",src_name="baz"} 456`)
+		metric := readChan(t, otlp.Records, timeout)
+		assert.Equal(t, map[string]string{"src.name": "foo", "dst.name": "bar"}, metric.Attributes)
+		assert.EqualValues(t, 123, metric.CountVal)
 	})
-
+	test.Eventually(t, timeout, func(t require.TestingT) {
+		metric := readChan(t, otlp.Records, timeout)
+		assert.Equal(t, map[string]string{"src.name": "baz", "dst.name": "bae"}, metric.Attributes)
+		assert.EqualValues(t, 456, metric.CountVal)
+	})
 	// AND WHEN it keeps receiving a subset of the initial metrics during the timeout
 	now.Advance(2 * time.Minute)
 	metrics <- []*ebpf.Record{
@@ -73,13 +67,18 @@ func TestMetricsExpiration(t *testing.T) {
 	now.Advance(2 * time.Minute)
 
 	// THEN THE metrics that have been received during the timeout period are still visible
-	var exported string
 	test.Eventually(t, timeout, func(t require.TestingT) {
-		exported = getMetrics(t, promURL)
-		assert.Contains(t, exported, `beyla_network_flow_bytes_total{dst_name="bar",src_name="foo"} 246`)
+		metric := readChan(t, otlp.Records, timeout)
+		assert.Equal(t, map[string]string{"src.name": "foo", "dst.name": "bar"}, metric.Attributes)
+		assert.EqualValues(t, 246, metric.CountVal)
 	})
+
 	// BUT not the metrics that haven't been received during that time
-	assert.NotContains(t, exported, `beyla_network_flow_bytes_total{dst_name="bae",src_name="baz"}`)
+	// (we just know it because OTEL just sends a metric with the same value)
+	metric := readChan(t, otlp.Records, timeout)
+	assert.Equal(t, map[string]string{"src.name": "foo", "dst.name": "bar"}, metric.Attributes)
+	assert.EqualValues(t, 246, metric.CountVal)
+
 	now.Advance(2 * time.Minute)
 
 	// AND WHEN the metrics labels that disappeared are received again
@@ -91,23 +90,10 @@ func TestMetricsExpiration(t *testing.T) {
 
 	// THEN they are reported again, starting from zero in the case of counters
 	test.Eventually(t, timeout, func(t require.TestingT) {
-		exported = getMetrics(t, promURL)
-		assert.Contains(t, exported, `beyla_network_flow_bytes_total{dst_name="bae",src_name="baz"} 456`)
+		metric := readChan(t, otlp.Records, timeout)
+		assert.Equal(t, map[string]string{"src.name": "baz", "dst.name": "bae"}, metric.Attributes)
+		assert.EqualValues(t, 456, metric.CountVal)
 	})
-	assert.NotContains(t, exported, `beyla_network_flow_bytes_total{dst_name="bar",src_name="foo"}`)
-}
-
-var mmux = sync.Mutex{}
-
-func getMetrics(t require.TestingT, promURL string) string {
-	mmux.Lock()
-	defer mmux.Unlock()
-	resp, err := http.Get(promURL)
-	require.NoError(t, err)
-	require.Equal(t, http.StatusOK, resp.StatusCode)
-	body, err := io.ReadAll(resp.Body)
-	require.NoError(t, err)
-	return string(body)
 }
 
 type syncedClock struct {
@@ -125,4 +111,14 @@ func (c *syncedClock) Advance(t time.Duration) {
 	c.mt.Lock()
 	defer c.mt.Unlock()
 	c.now = c.now.Add(t)
+}
+
+func readChan(t require.TestingT, inCh <-chan collector.MetricRecord, timeout time.Duration) collector.MetricRecord {
+	select {
+	case item := <-inCh:
+		return item
+	case <-time.After(timeout):
+		require.Failf(t, "timeout while waiting for event in input channel", "timeout: %s", timeout)
+	}
+	return collector.MetricRecord{}
 }

@@ -48,30 +48,16 @@ func newResource() *resource.Resource {
 	return resource.NewWithAttributes(semconv.SchemaURL, attrs...)
 }
 
-func newMeterProvider(res *resource.Resource, exporter *metric.Exporter) (*metric.MeterProvider, error) {
+func newMeterProvider(res *resource.Resource, exporter *metric.Exporter, interval time.Duration) (*metric.MeterProvider, error) {
 	meterProvider := metric.NewMeterProvider(
 		metric.WithResource(res),
-		metric.WithReader(metric.NewPeriodicReader(*exporter,
-			// Default is 1m. Set to 3s for demonstrative purposes.
-			metric.WithInterval(1*time.Second))),
+		metric.WithReader(metric.NewPeriodicReader(*exporter, metric.WithInterval(interval))),
 	)
 	return meterProvider, nil
 }
 
 type metricsExporter struct {
-	flowBytes metric2.Int64Counter
-	attrs     []export.Attribute
-}
-
-func (me *metricsExporter) attributes(m *ebpf.Record) []attribute.KeyValue {
-	keyVals := make([]attribute.KeyValue, 0, len(me.attrs))
-
-	for _, attr := range me.attrs {
-		keyVals = append(keyVals,
-			attribute.String(attr.Name, attr.Get(m)))
-	}
-
-	return keyVals
+	metrics *Expirer
 }
 
 func MetricsExporterProvider(cfg *MetricsConfig) (pipe.FinalFunc[[]*ebpf.Record], error) {
@@ -87,44 +73,37 @@ func MetricsExporterProvider(cfg *MetricsConfig) (pipe.FinalFunc[[]*ebpf.Record]
 		return nil, err
 	}
 
-	provider, err := newMeterProvider(newResource(), &exporter)
+	provider, err := newMeterProvider(newResource(), &exporter, cfg.Metrics.Interval)
 
 	if err != nil {
 		log.Error("", "error", err)
 		return nil, err
 	}
 
+	expirer := NewExpirer(export.BuildOTELAttributeGetters(cfg.AllowedAttributes), cfg.Metrics.TTL)
 	ebpfEvents := provider.Meter("network_ebpf_events")
 
-	flowBytes, err := ebpfEvents.Int64Counter(
+	_, err = ebpfEvents.Int64ObservableCounter(
 		"beyla.network.flow.bytes",
 		metric2.WithDescription("total bytes_sent value of network flows observed by probe since its launch"),
 		metric2.WithUnit("{bytes}"),
+		metric2.WithInt64Callback(expirer.Collect),
 	)
 	if err != nil {
-		log.Error("", "error", err)
-		return nil, err
-	}
-
-	if err != nil {
-		log.Error("", "error", err)
+		log.Error("creating observable counter", "error", err)
 		return nil, err
 	}
 	log.Debug("restricting attributes not in this list", "attributes", cfg.AllowedAttributes)
 	return (&metricsExporter{
-		flowBytes: flowBytes,
-		attrs:     export.BuildOTELAttributeGetters(cfg.AllowedAttributes),
+		metrics: expirer,
 	}).Do, nil
 }
 
 func (me *metricsExporter) Do(in <-chan []*ebpf.Record) {
 	for i := range in {
+		me.metrics.UpdateTime()
 		for _, v := range i {
-			me.flowBytes.Add(
-				context.Background(),
-				int64(v.Metrics.Bytes),
-				metric2.WithAttributes(me.attributes(v)...),
-			)
+			me.metrics.ForRecord(v).val.Add(int64(v.Metrics.Bytes))
 		}
 	}
 }

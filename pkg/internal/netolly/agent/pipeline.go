@@ -80,7 +80,7 @@ func (f *Flows) buildPipeline(ctx context.Context) (*pipe.Runner, error) {
 	// Many of the nodes here are not mandatory. It's decision of each Provider function to decide
 	// whether the node needs to be instantiated or just bypassed.
 	pipe.AddMiddleProvider(pb, deduper, func() (pipe.MiddleFunc[[]*ebpf.Record, []*ebpf.Record], error) {
-		var deduperExpireTime = f.cfg.NetworkFlows.DeduperFCExpiry
+		var deduperExpireTime = f.cfg.NetworkFlows.DeduperFCTTL
 		if deduperExpireTime <= 0 {
 			deduperExpireTime = 2 * f.cfg.NetworkFlows.CacheActiveTimeout
 		}

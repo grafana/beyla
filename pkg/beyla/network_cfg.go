@@ -77,12 +77,12 @@ type NetworkConfig struct {
 	// "first_come" will forward only flows from the first interface the flows are received from.
 	// Default value: first_come
 	Deduper string `yaml:"deduper" env:"BEYLA_NETWORK_DEDUPER"`
-	// DeduperFCExpiry specifies the expiry duration of the flows "first_come" deduplicator. After
+	// DeduperFCTTL specifies the expiry duration of the flows "first_come" deduplicator. After
 	// a flow hasn't been received for that expiry time, the deduplicator forgets it. That means
 	// that a flow from a connection that has been inactive during that period could be forwarded
 	// again from a different interface.
 	// If the value is not set, it will default to 2 * CacheActiveTimeout
-	DeduperFCExpiry time.Duration `yaml:"deduper_fc_expiry" env:"BEYLA_NETWORK_DEDUPER_FC_EXPIRY"`
+	DeduperFCTTL time.Duration `yaml:"deduper_fc_ttl" env:"BEYLA_NETWORK_DEDUPER_FC_TTL"`
 	// Direction allows selecting which flows to trace according to its direction. Accepted values
 	// are "ingress", "egress" or "both" (default).
 	Direction string `yaml:"direction" env:"BEYLA_NETWORK_DIRECTION"`

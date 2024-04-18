@@ -15,5 +15,18 @@ metadata:
   {{- end }}
 data:
   beyla-config.yml: |
+    {{- if eq .Values.preset "network" }}
+    {{- if not .Values.config.data.network }}
+    network:
+      enable: true
+    {{- end }}
+    {{- end }}
+    {{- if eq .Values.preset "application" }}
+    {{- if not .Values.config.data.discovery }}
+    discovery:
+      services:
+        - k8s_namespace: .
+    {{- end }}
+    {{- end }}
   {{- toYaml .Values.config.data | nindent 4}}
 {{- end }}

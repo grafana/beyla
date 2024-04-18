@@ -81,7 +81,12 @@ type MetricsConfig struct {
 	SDKLogLevel string `yaml:"otel_sdk_log_level" env:"BEYLA_OTEL_SDK_LOG_LEVEL"`
 
 	// Features of metrics that are can be exported. Accepted values are "application" and "network".
-	Features []string `yaml:"features" env:"BEYLA_OTEL_METRIC_FEATURES" envSeparator:","`
+	// envDefault is provided to avoid breaking changes
+	Features []string `yaml:"features" env:"BEYLA_OTEL_METRICS_FEATURES,expand" envDefault:"${BEYLA_OTEL_METRIC_FEATURES}"  envSeparator:","`
+
+	// TTL is the time since a metric was updated for the last time until it is
+	// removed from the metrics set.
+	TTL time.Duration `yaml:"ttl" env:"BEYLA_OTEL_METRICS_TTL"`
 
 	// Grafana configuration needs to be explicitly set up before building the graph
 	Grafana *GrafanaOTLP `yaml:"-"`

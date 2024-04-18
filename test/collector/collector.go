@@ -134,6 +134,21 @@ func (tc *TestCollector) metricEvent(writer http.ResponseWriter, body []byte) {
 		forEach[pmetric.ScopeMetrics](rm.ScopeMetrics(), func(sm pmetric.ScopeMetrics) {
 			forEach[pmetric.Metric](sm.Metrics(), func(m pmetric.Metric) {
 				switch m.Type() {
+				case pmetric.MetricTypeSum:
+					forEach[pmetric.NumberDataPoint](m.Sum().DataPoints(), func(ndp pmetric.NumberDataPoint) {
+						mr := MetricRecord{
+							Name:       m.Name(),
+							Unit:       m.Unit(),
+							Type:       m.Type(),
+							CountVal:   ndp.IntValue(),
+							Attributes: map[string]string{},
+						}
+						ndp.Attributes().Range(func(k string, v pcommon.Value) bool {
+							mr.Attributes[k] = v.AsString()
+							return true
+						})
+						tc.Records <- mr
+					})
 				case pmetric.MetricTypeHistogram:
 					forEach[pmetric.HistogramDataPoint](m.Histogram().DataPoints(), func(hdp pmetric.HistogramDataPoint) {
 						mr := MetricRecord{
@@ -162,6 +177,7 @@ type MetricRecord struct {
 	Name       string
 	Unit       string
 	Type       pmetric.MetricType
+	CountVal   int64
 }
 
 type TraceRecord struct {

@@ -142,6 +142,12 @@ tolerations: []
 # -- used for scheduling of pods based on affinity rules
 affinity: {}
 
+# -- Adds custom annotations to the Beyla Pods.
+podAnnotations: {}
+
+# -- Adds custom labels to the Beyla Pods.
+podLabels: {}
+
 ## More configuration options available at https://grafana.com/docs/beyla/latest/configure/options/
 ## The below default configuration
 ## 1. looks for ALL the services in the host
@@ -169,10 +175,7 @@ config:
     #   otlp:
     #     cloud_zone: prod-eu-west-0
     #     cloud_instance_id: 123456  
-    #     cloud_api_key:  
-    discovery:
-      services:
-        - k8s_namespace: .
+    #     cloud_api_key:
     attributes:
       kubernetes:
         enable: true
@@ -186,9 +189,9 @@ config:
 ## For example:
 ##   BEYLA_INTERNAL_METRICS_PROMETHEUS_PORT: 9090
 # -- extra environment variables
-env:
+env: {}
   #BEYLA_INTERNAL_METRICS_PROMETHEUS_PORT: 9090
-  BEYLA_PRINT_TRACES: "true"
+  #BEYLA_PRINT_TRACES: "true"
 
 # -- extra environment variables to be set from resources such as k8s configMaps/secrets
 envValueFrom: {}
@@ -196,3 +199,7 @@ envValueFrom: {}
   #    secretKeyRef:
   #      name: secret-name
   #      key: value_key
+
+# -- Preconfigures some default properties for network or application observability.
+# Accepted values are "network" or "application".
+preset: application

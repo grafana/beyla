@@ -2,6 +2,7 @@ package request
 
 import (
 	"time"
+	"unicode/utf8"
 
 	"github.com/gavv/monotime"
 	trace2 "go.opentelemetry.io/otel/trace"
@@ -93,4 +94,17 @@ func (s *Span) Timings() Timings {
 		Start:        now.Add(-startDelta),
 		End:          now.Add(-endDelta),
 	}
+}
+
+func (s *Span) IsValid() bool {
+	if (len(s.Method) > 0 && !utf8.ValidString(s.Method)) ||
+		(len(s.Path) > 0 && !utf8.ValidString(s.Path)) {
+		return false
+	}
+
+	if s.End < s.Start {
+		return false
+	}
+
+	return true
 }

@@ -52,6 +52,10 @@ type bpf_tp_debugServerHttpFuncInvocationT struct {
 	StartMonotimeNs uint64
 	Tp              bpf_tp_debugTpInfoT
 	Response        uint64
+	Method          [7]uint8
+	Path            [100]uint8
+	_               [5]byte
+	ContentLength   uint64
 	Http2           uint8
 	_               [7]byte
 }

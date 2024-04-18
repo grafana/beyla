@@ -46,6 +46,10 @@ type bpfServerHttpFuncInvocationT struct {
 	StartMonotimeNs uint64
 	Tp              bpfTpInfoT
 	Response        uint64
+	Method          [7]uint8
+	Path            [100]uint8
+	_               [5]byte
+	ContentLength   uint64
 	Http2           uint8
 	_               [7]byte
 }

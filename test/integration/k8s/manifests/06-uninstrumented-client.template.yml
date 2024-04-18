@@ -1,33 +1,6 @@
 # this file is actually a Go template that needs to be processed before deploying
 # Mandatory variables are PodName and TargetURL
 apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: maincode
-  labels:
-    component: pinger
-data:
-  main.go: |
-    package main
-    import (
-      "fmt"
-      "net/http"
-      "time"
-    )
-    func main() {
-      for {
-        r, err := http.Get("{{.TargetURL}}")
-        if err != nil {
-          fmt.Println("error!", err)
-        }
-        if r != nil {
-          fmt.Println("response:", r.Status)
-        }
-        time.Sleep(time.Second)
-      }
-    }
----
-apiVersion: v1
 kind: Service
 metadata:
   # this is the service name as expected by configs/prometheus-config-promscrape.yml
@@ -57,11 +30,7 @@ spec:
         name: maincode
   containers:
     - name: pinger
-      image: golang:1.22
-      command:
-        - sh
-        - -c
-        - 'go build -o pinger-cmd /code/main.go && ./pinger-cmd '
-      volumeMounts:
-        - mountPath: /code
-          name: maincode
+      image: httppinger:dev
+      env:
+        - name: TARGET_URL
+          value: "{{.TargetURL}}"

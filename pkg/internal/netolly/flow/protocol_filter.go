@@ -27,30 +27,24 @@ func ProtocolFilterProvider(allowed, excluded []string) pipe.MiddleProvider[[]*e
 }
 
 type protocolFilter struct {
-	allowed  map[transport.Protocol]struct{}
-	excluded map[transport.Protocol]struct{}
+	isAllowed func(r *ebpf.Record) bool
 }
 
 func newFilter(allowed, excluded []string) (*protocolFilter, error) {
-	pf := protocolFilter{
-		allowed:  map[transport.Protocol]struct{}{},
-		excluded: map[transport.Protocol]struct{}{},
-	}
-	for _, aStr := range allowed {
-		if atp, err := transport.ParseProtocol(aStr); err == nil {
-			pf.allowed[atp] = struct{}{}
-		} else {
-			return nil, fmt.Errorf("in network protocols: %w", err)
+	// if the allowed list has items, only interfaces in that list are allowed
+	if len(allowed) > 0 {
+		allow, err := allower(allowed)
+		if err != nil {
+			return nil, err
 		}
+		return &protocolFilter{isAllowed: allow}, nil
 	}
-	for _, eStr := range excluded {
-		if etp, err := transport.ParseProtocol(eStr); err == nil {
-			pf.excluded[etp] = struct{}{}
-		} else {
-			return nil, fmt.Errorf("in network excluded protocols: %w", err)
-		}
+	// if the allowed list is empty, any interface is allowed except if it matches the exclusion list
+	exclude, err := excluder(excluded)
+	if err != nil {
+		return nil, err
 	}
-	return &pf, nil
+	return &protocolFilter{isAllowed: exclude}, nil
 }
 
 func (pf *protocolFilter) nodeLoop(in <-chan []*ebpf.Record, out chan<- []*ebpf.Record) {
@@ -72,12 +66,36 @@ func (pf *protocolFilter) filter(input []*ebpf.Record) []*ebpf.Record {
 	return input[:writeIdx]
 }
 
-func (pf *protocolFilter) isAllowed(r *ebpf.Record) bool {
-	// if the allowed list is empty, any interface is allowed except if it matches the exclusion list
-	if len(pf.allowed) == 0 {
-		_, excluded := pf.excluded[transport.Protocol(r.Id.TransportProtocol)]
-		return !excluded
+func allower(allowed []string) (func(r *ebpf.Record) bool, error) {
+	allow, err := protocolsMap(allowed)
+	if err != nil {
+		return nil, fmt.Errorf("in network protocols: %w", err)
 	}
-	_, ok := pf.allowed[transport.Protocol(r.Id.TransportProtocol)]
-	return ok
+	return func(r *ebpf.Record) bool {
+		_, ok := allow[transport.Protocol(r.Id.TransportProtocol)]
+		return ok
+	}, nil
+}
+
+func excluder(excluded []string) (func(r *ebpf.Record) bool, error) {
+	exclude, err := protocolsMap(excluded)
+	if err != nil {
+		return nil, fmt.Errorf("in network excluded protocols: %w", err)
+	}
+	return func(r *ebpf.Record) bool {
+		_, excluded := exclude[transport.Protocol(r.Id.TransportProtocol)]
+		return !excluded
+	}, nil
+}
+
+func protocolsMap(entries []string) (map[transport.Protocol]struct{}, error) {
+	protoMap := map[transport.Protocol]struct{}{}
+	for _, aStr := range entries {
+		if atp, err := transport.ParseProtocol(aStr); err == nil {
+			protoMap[atp] = struct{}{}
+		} else {
+			return nil, err
+		}
+	}
+	return protoMap, nil
 }

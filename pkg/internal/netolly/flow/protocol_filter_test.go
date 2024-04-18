@@ -76,6 +76,4 @@ func TestProtocolFilter_ParsingErrors(t *testing.T) {
 	assert.Error(t, err)
 	_, err = ProtocolFilterProvider(nil, []string{"TCP", "tralara"})()
 	assert.Error(t, err)
-	_, err = ProtocolFilterProvider([]string{"TCP"}, []string{"tralara"})()
-	assert.Error(t, err)
 }

@@ -49,6 +49,10 @@ var DefaultConfig = Config{
 			Submit: []string{"traces"},
 		},
 	},
+	NameResolver: &transform.NameResolverConfig{
+		CacheLen: 1024,
+		CacheTTL: 5 * time.Minute,
+	},
 	Metrics: otel.MetricsConfig{
 		Protocol:             otel.ProtocolUnset,
 		MetricsProtocol:      otel.ProtocolUnset,
@@ -106,11 +110,12 @@ type Config struct {
 
 	Attributes Attributes `yaml:"attributes"`
 	// Routes is an optional node. If not set, data will be directly forwarded to exporters.
-	Routes     *transform.RoutesConfig `yaml:"routes"`
-	Metrics    otel.MetricsConfig      `yaml:"otel_metrics_export"`
-	Traces     otel.TracesConfig       `yaml:"otel_traces_export"`
-	Prometheus prom.PrometheusConfig   `yaml:"prometheus_export"`
-	Printer    debug.PrintEnabled      `yaml:"print_traces" env:"BEYLA_PRINT_TRACES"`
+	Routes       *transform.RoutesConfig       `yaml:"routes"`
+	NameResolver *transform.NameResolverConfig `yaml:"name_resolver"`
+	Metrics      otel.MetricsConfig            `yaml:"otel_metrics_export"`
+	Traces       otel.TracesConfig             `yaml:"otel_traces_export"`
+	Prometheus   prom.PrometheusConfig         `yaml:"prometheus_export"`
+	Printer      debug.PrintEnabled            `yaml:"print_traces" env:"BEYLA_PRINT_TRACES"`
 
 	// Exec allows selecting the instrumented executable whose complete path contains the Exec value.
 	Exec services.RegexpAttr `yaml:"executable_name" env:"BEYLA_EXECUTABLE_NAME"`

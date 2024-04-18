@@ -12,6 +12,7 @@ import (
 
 	"github.com/mariomac/pipes/pipe"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp"
 	instrument "go.opentelemetry.io/otel/metric"
@@ -41,6 +42,10 @@ const (
 	SpanMetricsCalls      = "traces_spanmetrics_calls_total"
 	SpanMetricsSizes      = "traces_spanmetrics_size_total"
 	TracesTargetInfo      = "traces_target_info"
+	ServiceGraphClient    = "traces_service_graph_request_client"
+	ServiceGraphServer    = "traces_service_graph_request_server"
+	ServiceGraphFailed    = "traces_service_graph_request_failed_total"
+	ServiceGraphTotal     = "traces_service_graph_request_total"
 
 	UsualPortGRPC = "4317"
 	UsualPortHTTP = "4318"
@@ -51,6 +56,7 @@ const (
 	FeatureNetwork     = "network"
 	FeatureApplication = "application"
 	FeatureSpan        = "application_span"
+	FeatureGraph       = "application_service_graph"
 )
 
 type MetricsConfig struct {
@@ -132,12 +138,16 @@ func (m MetricsConfig) SpanMetricsEnabled() bool {
 	return slices.Contains(m.Features, FeatureSpan)
 }
 
+func (m MetricsConfig) ServiceGraphMetricsEnabled() bool {
+	return slices.Contains(m.Features, FeatureGraph)
+}
+
 func (m MetricsConfig) OTelMetricsEnabled() bool {
 	return slices.Contains(m.Features, FeatureApplication)
 }
 
 func (m MetricsConfig) Enabled() bool {
-	return m.EndpointEnabled() && (m.OTelMetricsEnabled() || m.SpanMetricsEnabled())
+	return m.EndpointEnabled() && (m.OTelMetricsEnabled() || m.SpanMetricsEnabled() || m.ServiceGraphMetricsEnabled())
 }
 
 // MetricsReporter implements the graph node that receives request.Span
@@ -167,6 +177,10 @@ type Metrics struct {
 	spanMetricsCallsTotal instrument.Int64Counter
 	spanMetricsSizeTotal  instrument.Float64Counter
 	tracesTargetInfo      instrument.Int64UpDownCounter
+	serviceGraphClient    instrument.Float64Histogram
+	serviceGraphServer    instrument.Float64Histogram
+	serviceGraphFailed    instrument.Int64Counter
+	serviceGraphTotal     instrument.Int64Counter
 }
 
 func ReportMetrics(
@@ -247,6 +261,19 @@ func (mr *MetricsReporter) spanMetricOptions(mlog *slog.Logger) []metric.Option 
 	}
 }
 
+func (mr *MetricsReporter) graphMetricOptions(mlog *slog.Logger) []metric.Option {
+	if !mr.cfg.ServiceGraphMetricsEnabled() {
+		return []metric.Option{}
+	}
+
+	useExponentialHistograms := isExponentialAggregation(mr.cfg, mlog)
+
+	return []metric.Option{
+		metric.WithView(otelHistogramConfig(ServiceGraphClient, mr.cfg.Buckets.DurationHistogram, useExponentialHistograms)),
+		metric.WithView(otelHistogramConfig(ServiceGraphServer, mr.cfg.Buckets.DurationHistogram, useExponentialHistograms)),
+	}
+}
+
 func (mr *MetricsReporter) setupOtelMeters(m *Metrics, meter instrument.Meter) error {
 	if !mr.cfg.OTelMetricsEnabled() {
 		return nil
@@ -315,6 +342,36 @@ func (mr *MetricsReporter) setupSpanMeters(m *Metrics, meter instrument.Meter) e
 	return nil
 }
 
+func (mr *MetricsReporter) setupGraphMeters(m *Metrics, meter instrument.Meter) error {
+	if !mr.cfg.ServiceGraphMetricsEnabled() {
+		return nil
+	}
+
+	var err error
+
+	m.serviceGraphClient, err = meter.Float64Histogram(ServiceGraphClient, instrument.WithUnit("s"))
+	if err != nil {
+		return fmt.Errorf("creating service graph client histogram: %w", err)
+	}
+
+	m.serviceGraphServer, err = meter.Float64Histogram(ServiceGraphServer, instrument.WithUnit("s"))
+	if err != nil {
+		return fmt.Errorf("creating service graph server histogram: %w", err)
+	}
+
+	m.serviceGraphFailed, err = meter.Int64Counter(ServiceGraphFailed)
+	if err != nil {
+		return fmt.Errorf("creating service graph failed total: %w", err)
+	}
+
+	m.serviceGraphTotal, err = meter.Int64Counter(ServiceGraphTotal)
+	if err != nil {
+		return fmt.Errorf("creating service graph total: %w", err)
+	}
+
+	return nil
+}
+
 func (mr *MetricsReporter) newMetricSet(service svc.ID) (*Metrics, error) {
 	mlog := mlog().With("service", service)
 	mlog.Debug("creating new Metrics reporter")
@@ -328,6 +385,7 @@ func (mr *MetricsReporter) newMetricSet(service svc.ID) (*Metrics, error) {
 
 	opts = append(opts, mr.otelMetricOptions(mlog)...)
 	opts = append(opts, mr.spanMetricOptions(mlog)...)
+	opts = append(opts, mr.graphMetricOptions(mlog)...)
 
 	m := Metrics{
 		ctx:     mr.ctx,
@@ -350,6 +408,15 @@ func (mr *MetricsReporter) newMetricSet(service svc.ID) (*Metrics, error) {
 
 	if mr.cfg.SpanMetricsEnabled() {
 		err = mr.setupSpanMeters(&m, meter)
+		if err != nil {
+			return nil, err
+		}
+		attrOpt := instrument.WithAttributeSet(mr.metricResourceAttributes(service))
+		m.tracesTargetInfo.Add(mr.ctx, 1, attrOpt)
+	}
+
+	if mr.cfg.ServiceGraphMetricsEnabled() {
+		err = mr.setupGraphMeters(&m, meter)
 		if err != nil {
 			return nil, err
 		}
@@ -573,6 +640,30 @@ func (mr *MetricsReporter) spanMetricAttributes(span *request.Span) attribute.Se
 	return attribute.NewSet(attrs...)
 }
 
+func (mr *MetricsReporter) serviceGraphAttributes(span *request.Span) attribute.Set {
+	var attrs []attribute.KeyValue
+	if span.IsClientSpan() {
+		attrs = []attribute.KeyValue{
+			ClientMetric(span.PeerName),
+			ClientNamespaceMetric(span.ServiceID.Namespace),
+			ServerMetric(span.HostName),
+			ServerNamespaceMetric(span.OtherNamespace),
+			ConnectionTypeMetric("virtual_node"),
+			SourceMetric("beyla"),
+		}
+	} else {
+		attrs = []attribute.KeyValue{
+			ClientMetric(span.PeerName),
+			ClientNamespaceMetric(span.OtherNamespace),
+			ServerMetric(span.HostName),
+			ServerNamespaceMetric(span.ServiceID.Namespace),
+			ConnectionTypeMetric("virtual_node"),
+			SourceMetric("beyla"),
+		}
+	}
+	return attribute.NewSet(attrs...)
+}
+
 func (r *Metrics) record(span *request.Span, mr *MetricsReporter) {
 	t := span.Timings()
 	duration := t.End.Sub(t.RequestStart).Seconds()
@@ -601,6 +692,19 @@ func (r *Metrics) record(span *request.Span, mr *MetricsReporter) {
 		r.spanMetricsLatency.Record(r.ctx, duration, attrOpt)
 		r.spanMetricsCallsTotal.Add(r.ctx, 1, attrOpt)
 		r.spanMetricsSizeTotal.Add(r.ctx, float64(span.ContentLength), attrOpt)
+	}
+
+	if mr.cfg.ServiceGraphMetricsEnabled() {
+		attrOpt := instrument.WithAttributeSet(mr.serviceGraphAttributes(span))
+		if span.IsClientSpan() {
+			r.serviceGraphClient.Record(r.ctx, duration, attrOpt)
+		} else {
+			r.serviceGraphServer.Record(r.ctx, duration, attrOpt)
+		}
+		r.serviceGraphTotal.Add(r.ctx, 1, attrOpt)
+		if SpanStatusCode(span) == codes.Error {
+			r.serviceGraphFailed.Add(r.ctx, 1, attrOpt)
+		}
 	}
 }
 

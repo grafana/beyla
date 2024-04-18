@@ -60,6 +60,7 @@ type PodInfo struct {
 	// StartTimeStr caches value of ObjectMeta.StartTimestamp.String()
 	StartTimeStr string
 	ContainerIDs []string
+	IPs          []string
 }
 
 type ReplicaSetInfo struct {
@@ -138,6 +139,14 @@ func (k *Metadata) initPodInformer(informerFactory informers.SharedInformerFacto
 				rmContainerIDSchema(pod.Status.EphemeralContainerStatuses[i].ContainerID))
 		}
 
+		ips := make([]string, 0, len(pod.Status.PodIPs))
+		for _, ip := range pod.Status.PodIPs {
+			// ignoring host-networked Pod IPs
+			if ip.IP != pod.Status.HostIP {
+				ips = append(ips, ip.IP)
+			}
+		}
+
 		owner := OwnerFromPodInfo(pod)
 		startTime := pod.GetCreationTimestamp().String()
 		if log.Enabled(context.TODO(), slog.LevelDebug) {
@@ -157,6 +166,7 @@ func (k *Metadata) initPodInformer(informerFactory informers.SharedInformerFacto
 			NodeName:     pod.Spec.NodeName,
 			StartTimeStr: startTime,
 			ContainerIDs: containerIDs,
+			IPs:          ips,
 		}, nil
 	}); err != nil {
 		return fmt.Errorf("can't set pods transform: %w", err)
@@ -349,4 +359,17 @@ func (k *Metadata) AddReplicaSetEventHandler(h cache.ResourceEventHandler) error
 		}
 	}()
 	return err
+}
+
+func (i *PodInfo) ServiceName() string {
+	if i.Owner != nil {
+		// we have two levels of ownership at most
+		if i.Owner.Owner != nil {
+			return i.Owner.Owner.Name
+		}
+
+		return i.Owner.Name
+	}
+
+	return i.Name
 }

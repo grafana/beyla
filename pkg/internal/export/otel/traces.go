@@ -296,6 +296,22 @@ func SpanKindString(span *request.Span) string {
 	return "SPAN_KIND_INTERNAL"
 }
 
+func spanHost(span *request.Span) string {
+	if span.HostName != "" {
+		return span.HostName
+	}
+
+	return span.Host
+}
+
+func spanPeer(span *request.Span) string {
+	if span.PeerName != "" {
+		return span.PeerName
+	}
+
+	return span.Peer
+}
+
 func TraceAttributes(span *request.Span) []attribute.KeyValue {
 	var attrs []attribute.KeyValue
 
@@ -305,8 +321,8 @@ func TraceAttributes(span *request.Span) []attribute.KeyValue {
 			HTTPRequestMethod(span.Method),
 			HTTPResponseStatusCode(span.Status),
 			HTTPUrlPath(span.Path),
-			ClientAddr(span.Peer),
-			ServerAddr(span.Host),
+			ClientAddr(spanPeer(span)),
+			ServerAddr(spanHost(span)),
 			ServerPort(span.HostPort),
 			HTTPRequestBodySize(int(span.ContentLength)),
 		}
@@ -318,8 +334,8 @@ func TraceAttributes(span *request.Span) []attribute.KeyValue {
 			semconv.RPCMethod(span.Path),
 			semconv.RPCSystemGRPC,
 			semconv.RPCGRPCStatusCodeKey.Int(span.Status),
-			ClientAddr(span.Peer),
-			ServerAddr(span.Host),
+			ClientAddr(spanPeer(span)),
+			ServerAddr(spanHost(span)),
 			ServerPort(span.HostPort),
 		}
 	case request.EventTypeHTTPClient:
@@ -327,7 +343,7 @@ func TraceAttributes(span *request.Span) []attribute.KeyValue {
 			HTTPRequestMethod(span.Method),
 			HTTPResponseStatusCode(span.Status),
 			HTTPUrlFull(span.Path),
-			ServerAddr(span.Host),
+			ServerAddr(spanHost(span)),
 			ServerPort(span.HostPort),
 			HTTPRequestBodySize(int(span.ContentLength)),
 		}
@@ -336,7 +352,7 @@ func TraceAttributes(span *request.Span) []attribute.KeyValue {
 			semconv.RPCMethod(span.Path),
 			semconv.RPCSystemGRPC,
 			semconv.RPCGRPCStatusCodeKey.Int(span.Status),
-			ServerAddr(span.Host),
+			ServerAddr(spanHost(span)),
 			ServerPort(span.HostPort),
 		}
 	case request.EventTypeSQLClient:

@@ -262,6 +262,11 @@ const (
 	SourceKey                 = attribute.Key("source")
 	ServiceKey                = attribute.Key("service")
 	InstanceKey               = attribute.Key("instance")
+	ClientKey                 = attribute.Key("client")
+	ClientNamespaceKey        = attribute.Key("client_service_namespace")
+	ServerKey                 = attribute.Key("server")
+	ServerNamespaceKey        = attribute.Key("server_service_namespace")
+	ConnectionTypeKey         = attribute.Key("connection_type")
 )
 
 func HTTPRequestMethod(val string) attribute.KeyValue {
@@ -326,4 +331,24 @@ func StatusCodeMetric(val int) attribute.KeyValue {
 
 func ServiceInstanceMetric(val string) attribute.KeyValue {
 	return InstanceKey.String(val)
+}
+
+func ClientMetric(val string) attribute.KeyValue {
+	return ClientKey.String(val)
+}
+
+func ClientNamespaceMetric(val string) attribute.KeyValue {
+	return ClientNamespaceKey.String(val)
+}
+
+func ServerMetric(val string) attribute.KeyValue {
+	return ServerKey.String(val)
+}
+
+func ServerNamespaceMetric(val string) attribute.KeyValue {
+	return ServerNamespaceKey.String(val)
+}
+
+func ConnectionTypeMetric(val string) attribute.KeyValue {
+	return ConnectionTypeKey.String(val)
 }

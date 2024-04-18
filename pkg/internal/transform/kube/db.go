@@ -1,7 +1,10 @@
 package kube
 
 import (
+	"fmt"
 	"log/slog"
+
+	"k8s.io/client-go/tools/cache"
 
 	"github.com/grafana/beyla/pkg/internal/helpers/container"
 	"github.com/grafana/beyla/pkg/internal/kube"
@@ -25,16 +28,39 @@ type Database struct {
 
 	// key: pid namespace
 	fetchedPodsCache map[uint32]*kube.PodInfo
+
+	// ip to pod name matcher
+	podsByIP map[string]*kube.PodInfo
 }
 
-func StartDatabase(kubeMetadata *kube.Metadata) (*Database, error) {
-	db := Database{
+func CreateDatabase(kubeMetadata *kube.Metadata) Database {
+	return Database{
 		fetchedPodsCache: map[uint32]*kube.PodInfo{},
 		containerIDs:     map[string]*container.Info{},
 		namespaces:       map[uint32]*container.Info{},
+		podsByIP:         map[string]*kube.PodInfo{},
 		informer:         kubeMetadata,
 	}
+}
+
+func StartDatabase(kubeMetadata *kube.Metadata) (*Database, error) {
+	db := CreateDatabase(kubeMetadata)
 	db.informer.AddContainerEventHandler(&db)
+
+	if err := db.informer.AddPodEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc: func(obj interface{}) {
+			db.UpdateNewPodsByIPIndex(obj.(*kube.PodInfo))
+		},
+		UpdateFunc: func(oldObj, newObj interface{}) {
+			db.UpdateDeletedPodsByIPIndex(oldObj.(*kube.PodInfo))
+			db.UpdateNewPodsByIPIndex(newObj.(*kube.PodInfo))
+		},
+		DeleteFunc: func(obj interface{}) {
+			db.UpdateDeletedPodsByIPIndex(obj.(*kube.PodInfo))
+		},
+	}); err != nil {
+		return nil, fmt.Errorf("can't register Database as Pod event handler: %w", err)
+	}
 
 	return &db, nil
 }
@@ -79,4 +105,24 @@ func (id *Database) OwnerPodInfo(pidNamespace uint32) (*kube.PodInfo, bool) {
 	// received late by the replicaset informer
 	id.informer.FetchPodOwnerInfo(pod)
 	return pod, true
+}
+
+func (id *Database) UpdateNewPodsByIPIndex(pod *kube.PodInfo) {
+	if len(pod.IPs) > 0 {
+		for _, ip := range pod.IPs {
+			id.podsByIP[ip] = pod
+		}
+	}
+}
+
+func (id *Database) UpdateDeletedPodsByIPIndex(pod *kube.PodInfo) {
+	if len(pod.IPs) > 0 {
+		for _, ip := range pod.IPs {
+			delete(id.podsByIP, ip)
+		}
+	}
+}
+
+func (id *Database) PodInfoForIP(ip string) *kube.PodInfo {
+	return id.podsByIP[ip]
 }

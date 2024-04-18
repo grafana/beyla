@@ -22,11 +22,13 @@ import (
 type nodesMap struct {
 	TracesReader pipe.Start[[]request.Span]
 
-	// Routes is an optional pipe. If not set, data will be bypassed to the next stage in the pipeline.
+	// Routes is an optional pipe. If not enabled, data will be bypassed to the next stage in the pipeline.
 	Routes pipe.Middle[[]request.Span, []request.Span]
 
-	// Kubernetes is an optional pipe. If not set, data will be bypassed to the exporters.
+	// Kubernetes is an optional pipe. If not enabled, data will be bypassed to the exporters.
 	Kubernetes pipe.Middle[[]request.Span, []request.Span]
+
+	NameResolver pipe.Middle[[]request.Span, []request.Span]
 
 	AlloyTraces pipe.Final[[]request.Span]
 	Metrics     pipe.Final[[]request.Span]
@@ -42,19 +44,21 @@ type nodesMap struct {
 func (n *nodesMap) Connect() {
 	n.TracesReader.SendTo(n.Routes)
 	n.Routes.SendTo(n.Kubernetes)
-	n.Kubernetes.SendTo(n.AlloyTraces, n.Metrics, n.Traces, n.Prometheus, n.Printer, n.Noop)
+	n.Kubernetes.SendTo(n.NameResolver)
+	n.NameResolver.SendTo(n.AlloyTraces, n.Metrics, n.Traces, n.Prometheus, n.Printer, n.Noop)
 }
 
 // accessor functions to each field. Grouped here for code brevity during the pipeline build
-func tracesReader(n *nodesMap) *pipe.Start[[]request.Span]                { return &n.TracesReader }
-func router(n *nodesMap) *pipe.Middle[[]request.Span, []request.Span]     { return &n.Routes }
-func kubernetes(n *nodesMap) *pipe.Middle[[]request.Span, []request.Span] { return &n.Kubernetes }
-func alloyTraces(n *nodesMap) *pipe.Final[[]request.Span]                 { return &n.AlloyTraces }
-func otelMetrics(n *nodesMap) *pipe.Final[[]request.Span]                 { return &n.Metrics }
-func otelTraces(n *nodesMap) *pipe.Final[[]request.Span]                  { return &n.Traces }
-func printer(n *nodesMap) *pipe.Final[[]request.Span]                     { return &n.Printer }
-func prometheus(n *nodesMap) *pipe.Final[[]request.Span]                  { return &n.Prometheus }
-func noop(n *nodesMap) *pipe.Final[[]request.Span]                        { return &n.Noop }
+func tracesReader(n *nodesMap) *pipe.Start[[]request.Span]                  { return &n.TracesReader }
+func router(n *nodesMap) *pipe.Middle[[]request.Span, []request.Span]       { return &n.Routes }
+func kubernetes(n *nodesMap) *pipe.Middle[[]request.Span, []request.Span]   { return &n.Kubernetes }
+func nameResolver(n *nodesMap) *pipe.Middle[[]request.Span, []request.Span] { return &n.NameResolver }
+func alloyTraces(n *nodesMap) *pipe.Final[[]request.Span]                   { return &n.AlloyTraces }
+func otelMetrics(n *nodesMap) *pipe.Final[[]request.Span]                   { return &n.Metrics }
+func otelTraces(n *nodesMap) *pipe.Final[[]request.Span]                    { return &n.Traces }
+func printer(n *nodesMap) *pipe.Final[[]request.Span]                       { return &n.Printer }
+func prometheus(n *nodesMap) *pipe.Final[[]request.Span]                    { return &n.Prometheus }
+func noop(n *nodesMap) *pipe.Final[[]request.Span]                          { return &n.Noop }
 
 // builder with injectable instantiators for unit testing
 type graphFunctions struct {
@@ -96,7 +100,7 @@ func newGraphBuilder(ctx context.Context, config *beyla.Config, ctxInfo *global.
 
 	pipe.AddMiddleProvider(gnb, router, transform.RoutesProvider(config.Routes))
 	pipe.AddMiddleProvider(gnb, kubernetes, transform.KubeDecoratorProvider(ctxInfo, &config.Attributes.Kubernetes))
-
+	pipe.AddMiddleProvider(gnb, nameResolver, transform.NameResolutionProvider(gb.ctxInfo, config.NameResolver))
 	config.Metrics.Grafana = &gb.config.Grafana.OTLP
 	pipe.AddFinalProvider(gnb, otelMetrics, otel.ReportMetrics(ctx, &config.Metrics, gb.ctxInfo))
 	config.Traces.Grafana = &gb.config.Grafana.OTLP

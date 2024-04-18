@@ -18,7 +18,7 @@ import (
 	"github.com/grafana/beyla/test/integration/components/prom"
 )
 
-func testNodeClientWithMethodAndStatusCode(t *testing.T, method string, statusCode, port int, _ string /*traceIDLookup*/) {
+func testNodeClientWithMethodAndStatusCode(t *testing.T, method string, statusCode, port int, traceIDLookup string) {
 	// Eventually, Prometheus would make this query visible
 	pq := prom.Client{HostPort: prometheusHostPort}
 	var results []prom.Result

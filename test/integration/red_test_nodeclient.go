@@ -85,8 +85,10 @@ func testNodeClientWithMethodAndStatusCode(t *testing.T, method string, statusCo
 	 use the first 16 characters for looking up by Parent span.
 	*/
 	if kprobeTraces {
-		require.True(t, span.TraceID != "")
-		require.True(t, strings.HasSuffix(span.TraceID, traceIDLookup))
-		require.True(t, strings.HasPrefix(span.SpanID, "00"))
+		assert.NotEmpty(t, span.TraceID)
+		assert.Truef(t, strings.HasSuffix(span.TraceID, traceIDLookup),
+			"string %q should have suffix %q", span.TraceID, traceIDLookup)
+		assert.Truef(t, strings.HasPrefix(span.SpanID, "00"),
+			"string %q should have prefix '00'", span.SpanID)
 	}
 }

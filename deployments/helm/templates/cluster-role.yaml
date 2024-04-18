@@ -10,12 +10,16 @@ metadata:
     {{- toYaml . | nindent 4 }}
   {{- end }}
 rules:
-  - apiGroups: ["apps"]
-    resources: ["replicasets"]
-    verbs: ["list", "watch"]
-  - apiGroups: [""]
-    resources: ["pods"]
-    verbs: ["list", "watch"]
+  - apiGroups: [ "apps" ]
+    resources: [ "replicasets" ]
+    verbs: [ "list", "watch" ]
+  - apiGroups: [ "" ]
+    {{- if eq .Values.preset "network" }}
+    resources: [ "pods", "services", "nodes" ]
+    {{- else }}
+    resources: [ "pods" ]
+    {{- end }}
+    verbs: [ "list", "watch" ]
   {{- with .Values.rbac.extraClusterRoleRules }}
   {{- toYaml . | nindent 2 }}
   {{- end}}

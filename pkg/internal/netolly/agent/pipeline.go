@@ -20,11 +20,12 @@ type FlowsPipeline struct {
 	MapTracer     pipe.Start[[]*ebpf.Record]
 	RingBufTracer pipe.Start[[]*ebpf.Record]
 
-	Deduper    pipe.Middle[[]*ebpf.Record, []*ebpf.Record]
-	Kubernetes pipe.Middle[[]*ebpf.Record, []*ebpf.Record]
-	ReverseDNS pipe.Middle[[]*ebpf.Record, []*ebpf.Record]
-	CIDRs      pipe.Middle[[]*ebpf.Record, []*ebpf.Record]
-	Decorator  pipe.Middle[[]*ebpf.Record, []*ebpf.Record]
+	ProtoFilter pipe.Middle[[]*ebpf.Record, []*ebpf.Record]
+	Deduper     pipe.Middle[[]*ebpf.Record, []*ebpf.Record]
+	Kubernetes  pipe.Middle[[]*ebpf.Record, []*ebpf.Record]
+	ReverseDNS  pipe.Middle[[]*ebpf.Record, []*ebpf.Record]
+	CIDRs       pipe.Middle[[]*ebpf.Record, []*ebpf.Record]
+	Decorator   pipe.Middle[[]*ebpf.Record, []*ebpf.Record]
 
 	OTEL    pipe.Final[[]*ebpf.Record]
 	Prom    pipe.Final[[]*ebpf.Record]
@@ -33,9 +34,10 @@ type FlowsPipeline struct {
 
 // Connect specifies how the pipeline nodes are connected
 func (fp *FlowsPipeline) Connect() {
-	fp.MapTracer.SendTo(fp.Deduper)
-	fp.RingBufTracer.SendTo(fp.Deduper)
+	fp.MapTracer.SendTo(fp.ProtoFilter)
+	fp.RingBufTracer.SendTo(fp.ProtoFilter)
 
+	fp.ProtoFilter.SendTo(fp.Deduper)
 	fp.Deduper.SendTo(fp.Kubernetes)
 	fp.Kubernetes.SendTo(fp.ReverseDNS)
 	fp.ReverseDNS.SendTo(fp.CIDRs)
@@ -48,6 +50,7 @@ func (fp *FlowsPipeline) Connect() {
 func mapTracer(fp *FlowsPipeline) *pipe.Start[[]*ebpf.Record]     { return &fp.MapTracer }
 func ringBufTracer(fp *FlowsPipeline) *pipe.Start[[]*ebpf.Record] { return &fp.RingBufTracer }
 
+func prtFltr(fp *FlowsPipeline) *pipe.Middle[[]*ebpf.Record, []*ebpf.Record]   { return &fp.ProtoFilter }
 func deduper(fp *FlowsPipeline) *pipe.Middle[[]*ebpf.Record, []*ebpf.Record]   { return &fp.Deduper }
 func kube(fp *FlowsPipeline) *pipe.Middle[[]*ebpf.Record, []*ebpf.Record]      { return &fp.Kubernetes }
 func rdns(fp *FlowsPipeline) *pipe.Middle[[]*ebpf.Record, []*ebpf.Record]      { return &fp.ReverseDNS }
@@ -79,6 +82,9 @@ func (f *Flows) buildPipeline(ctx context.Context) (*pipe.Runner, error) {
 	// Middle nodes: transforming flow records and passing them to the next stage in the pipeline.
 	// Many of the nodes here are not mandatory. It's decision of each Provider function to decide
 	// whether the node needs to be instantiated or just bypassed.
+	pipe.AddMiddleProvider(pb, prtFltr,
+		flow.ProtocolFilterProvider(f.cfg.NetworkFlows.Protocols, f.cfg.NetworkFlows.ExcludeProtocols))
+
 	pipe.AddMiddleProvider(pb, deduper, func() (pipe.MiddleFunc[[]*ebpf.Record, []*ebpf.Record], error) {
 		var deduperExpireTime = f.cfg.NetworkFlows.DeduperFCTTL
 		if deduperExpireTime <= 0 {

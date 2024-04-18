@@ -3,23 +3,23 @@ package main
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
-
-	grpcclient "github.com/grafana/beyla/test/integration/components/testserver/grpc/client"
 )
 
 func main() {
-
 	// Adding shutdown hook for graceful stop.
 	ctx, _ := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 	for {
-		if err := grpcclient.PingCtx(ctx, grpcclient.WithServerAddr(os.Getenv("TARGET_URL"))); err != nil {
-			fmt.Println("error pinging:", err)
-		} else {
-			fmt.Println("ping succeed!")
+		r, err := http.Get(os.Getenv("TARGET_URL"))
+		if err != nil {
+			fmt.Println("error!", err)
+		}
+		if r != nil {
+			fmt.Println("response:", r.Status)
 		}
 		select {
 		case <-time.After(time.Second):

@@ -46,7 +46,8 @@ func DoTestNetFlowBytesForExistingConnections(ctx context.Context, t *testing.T,
 		assert.Equal(t, "internal-pinger", metric["k8s_src_name"])
 		assert.Equal(t, "Pod", metric["k8s_src_owner_type"])
 		assert.Equal(t, "Pod", metric["k8s_src_type"])
-		assert.Equal(t, "test-kind-cluster-netolly-control-plane",
+		assert.Regexp(t,
+			regexp.MustCompile("^test-kind-cluster-netolly-.*control-plane"),
 			metric["k8s_src_node_name"])
 		assertIsIP(t, metric["k8s_src_node_ip"])
 		assert.Equal(t, "default", metric["k8s_dst_namespace"])
@@ -75,7 +76,8 @@ func DoTestNetFlowBytesForExistingConnections(ctx context.Context, t *testing.T,
 		assert.Equal(t, "internal-pinger", metric["k8s_src_name"])
 		assert.Equal(t, "Pod", metric["k8s_src_owner_type"])
 		assert.Equal(t, "Pod", metric["k8s_src_type"])
-		assert.Equal(t, "test-kind-cluster-netolly-control-plane",
+		assert.Regexp(t,
+			regexp.MustCompile("^test-kind-cluster-netolly-.*control-plane"),
 			metric["k8s_src_node_name"])
 		assertIsIP(t, metric["k8s_src_node_ip"])
 		assert.Equal(t, "default", metric["k8s_dst_namespace"])
@@ -83,7 +85,8 @@ func DoTestNetFlowBytesForExistingConnections(ctx context.Context, t *testing.T,
 		assert.Equal(t, "Deployment", metric["k8s_dst_owner_type"])
 		assert.Equal(t, "testserver", metric["k8s_dst_owner_name"])
 		assert.Equal(t, "Pod", metric["k8s_dst_type"])
-		assert.Equal(t, "test-kind-cluster-netolly-control-plane",
+		assert.Regexp(t,
+			regexp.MustCompile("^test-kind-cluster-netolly-.*control-plane"),
 			metric["k8s_dst_node_name"])
 		assertIsIP(t, metric["k8s_dst_node_ip"])
 		assert.Contains(t, podSubnets, metric["src_cidr"], metric)
@@ -107,13 +110,17 @@ func DoTestNetFlowBytesForExistingConnections(ctx context.Context, t *testing.T,
 		assert.Regexp(t, regexp.MustCompile("^testserver-"), metric["k8s_src_name"])
 		assert.Equal(t, "Deployment", metric["k8s_src_owner_type"])
 		assert.Equal(t, "Pod", metric["k8s_src_type"])
-		assert.Equal(t, "test-kind-cluster-netolly-control-plane", metric["k8s_src_node_name"])
+		assert.Regexp(t,
+			regexp.MustCompile("^test-kind-cluster-netolly-.*control-plane"),
+			metric["k8s_src_node_name"])
 		assertIsIP(t, metric["k8s_src_node_ip"])
 		assert.Equal(t, "default", metric["k8s_dst_namespace"])
 		assert.Equal(t, "internal-pinger", metric["k8s_dst_name"])
 		assert.Equal(t, "Pod", metric["k8s_dst_owner_type"])
 		assert.Equal(t, "Pod", metric["k8s_dst_type"])
-		assert.Equal(t, "test-kind-cluster-netolly-control-plane", metric["k8s_dst_node_name"])
+		assert.Regexp(t,
+			regexp.MustCompile("^test-kind-cluster-netolly-.*control-plane"),
+			metric["k8s_dst_node_name"])
 		assertIsIP(t, metric["k8s_dst_node_ip"])
 		assert.Contains(t, podSubnets, metric["src_cidr"], metric)
 		assert.Contains(t, podSubnets, metric["dst_cidr"], metric)
@@ -141,7 +148,9 @@ func DoTestNetFlowBytesForExistingConnections(ctx context.Context, t *testing.T,
 		assert.Equal(t, "internal-pinger", metric["k8s_dst_name"])
 		assert.Equal(t, "Pod", metric["k8s_dst_owner_type"])
 		assert.Equal(t, "Pod", metric["k8s_dst_type"])
-		assert.Equal(t, "test-kind-cluster-netolly-control-plane", metric["k8s_dst_node_name"])
+		assert.Regexp(t,
+			regexp.MustCompile("^test-kind-cluster-netolly-.*control-plane"),
+			metric["k8s_dst_node_name"])
 		assertIsIP(t, metric["k8s_dst_node_ip"])
 		assert.Contains(t, svcSubnets, metric["src_cidr"], metric)
 		assert.Contains(t, podSubnets, metric["dst_cidr"], metric)

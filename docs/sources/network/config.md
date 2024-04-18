@@ -165,7 +165,7 @@ BEYLA_NETWORK_EXCLUDE_INTERFACES=lo,/^veth/
 |-------------|---------------------------| -------- | ------- |
 | `protocols` | `BEYLA_NETWORK_PROTOCOLS` | []string | (empty) |
 
-If set, Beyla will drop any network flow whose reported Internet Protocol is not in this list.
+If set, Beyla drops any network flow whose reported Internet Protocol is not in this list.
 
 The accepted values are defined in the Linux enumeration of
 [Standard well-defined IP protocols](https://elixir.bootlin.com/linux/v6.8.7/source/include/uapi/linux/in.h#L28),
@@ -177,7 +177,7 @@ and can be:
 |---------------------|-----------------------------------|----------|---------|
 | `exclude_protocols` | `BEYLA_NETWORK_EXCLUDE_PROTOCOLS` | []string | (empty) |
 
-If set, Beyla will drop any network flow whose reported Internet Protocol is in this list.
+If set, Beyla drops any network flow whose reported Internet Protocol is in this list.
 
 If the `protocols`/`BEYLA_NETWORK_PROTOCOLS` list is already set, this property is ignored.
 

@@ -55,11 +55,14 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- end }}
 
 {{/*
-Selector labels
+Selector (pod) labels
 */}}
 {{- define "beyla.selectorLabels" -}}
 app.kubernetes.io/name: {{ include "beyla.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
+{{- with .Values.podLabels }}
+{{ toYaml . }}
+{{- end }}
 {{- end }}
 
 {{/*

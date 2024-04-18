@@ -30,6 +30,10 @@ const (
 	FeatureNetO11y
 )
 
+const (
+	defaultMetricsTTL = 5 * time.Minute
+)
+
 var DefaultConfig = Config{
 	ChannelBufferLen: 10,
 	LogLevel:         "INFO",
@@ -57,6 +61,7 @@ var DefaultConfig = Config{
 		ReportersCacheLen:    ReporterLRUSize,
 		HistogramAggregation: otel.AggregationExplicit,
 		Features:             []string{otel.FeatureNetwork, otel.FeatureApplication},
+		TTL:                  defaultMetricsTTL,
 	},
 	Traces: otel.TracesConfig{
 		Protocol:           otel.ProtocolUnset,
@@ -69,7 +74,7 @@ var DefaultConfig = Config{
 		Path:                        "/metrics",
 		Buckets:                     otel.DefaultBuckets,
 		Features:                    []string{otel.FeatureNetwork, otel.FeatureApplication},
-		ExpireTime:                  5 * time.Minute,
+		TTL:                         defaultMetricsTTL,
 		SpanMetricsServiceCacheSize: 10000,
 	},
 	Printer: false,

@@ -19,13 +19,23 @@ spec:
   {{- end }}
   template:
     metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
       labels:
 {{ include "beyla.selectorLabels" . | indent 8 }}
     spec:
      {{- if .Values.serviceAccount.create }}
       serviceAccountName: {{ include "beyla.serviceAccountName" . }}
      {{- end }}
-      hostPID: true  #important!
+      {{- if eq .Values.preset "application" }}
+      hostPID: true
+      {{- end }}
+      {{- if eq .Values.preset "network" }}
+      hostNetwork: true
+      {{- end }}
       containers:
         - name: beyla
           image: {{ .Values.global.image.registry | default .Values.image.registry }}/{{ .Values.image.repository }}{{ include "beyla.imageId" . }}

@@ -38,7 +38,7 @@ func TestMetricsExpiration(t *testing.T) {
 		&PrometheusConfig{Config: &prom.PrometheusConfig{
 			Port:                        openPort,
 			Path:                        "/metrics",
-			ExpireTime:                  3 * time.Minute,
+			TTL:                         3 * time.Minute,
 			SpanMetricsServiceCacheSize: 10,
 			Features:                    []string{otel.FeatureNetwork},
 		}, AllowedAttributes: []string{"src_name", "dst_name"}},

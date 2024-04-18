@@ -773,9 +773,9 @@ Specifies whether the exporter must submit the caller peer address as a metric a
 
 It is disabled by default to avoid cardinality explosion.
 
-| YAML       | Environment variable         | Type            | Default                      |
-|------------|------------------------------|-----------------|------------------------------|
-| `features` | `BEYLA_OTEL_METRIC_FEATURES` | list of strings | `["application", "network"]` |
+| YAML       | Environment variable          | Type            | Default                      |
+|------------|-------------------------------|-----------------|------------------------------|
+| `features` | `BEYLA_OTEL_METRICS_FEATURES` | list of strings | `["application", "network"]` |
 
 A list of metric groups that are allowed to be exported. Each group belongs to a different feature
 of Beyla: application-level metrics or network metrics.

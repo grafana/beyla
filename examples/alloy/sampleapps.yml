@@ -1,0 +1,65 @@
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: docs
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: docs
+  template:
+    metadata:
+      labels:
+        app: docs
+    spec:
+      containers:
+        - name: docs-server
+          image: httpd:latest
+          ports:
+            - containerPort: 80
+              protocol: TCP
+              name: http
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: docs
+spec:
+  selector:
+    app: docs
+  ports:
+    - protocol: TCP
+      port: 80
+---
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: website
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: website
+  template:
+    metadata:
+      labels:
+        app: website
+    spec:
+      containers:
+        - name: website-server
+          image: httpd:latest
+          ports:
+            - containerPort: 80
+              protocol: TCP
+              name: http
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: website
+spec:
+  selector:
+    app: website
+  ports:
+    - protocol: TCP
+      port: 80

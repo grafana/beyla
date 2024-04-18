@@ -119,9 +119,9 @@ type PrometheusConfig struct {
 
 	Buckets otel.Buckets `yaml:"buckets"`
 
-	// ExpireTime is the time since a metric was updated for the last time until it is
+	// TTL is the time since a metric was updated for the last time until it is
 	// removed from the metrics set.
-	ExpireTime                  time.Duration `yaml:"expire_time" env:"BEYLA_PROMETHEUS_EXPIRE_TIME"`
+	TTL                         time.Duration `yaml:"ttl" env:"BEYLA_PROMETHEUS_TTL"`
 	SpanMetricsServiceCacheSize int           `yaml:"service_cache_size"`
 
 	// Registry is only used for embedding Beyla within the Grafana Agent.
@@ -318,7 +318,7 @@ func newReporter(ctx context.Context, cfg *PrometheusConfig, ctxInfo *global.Con
 		mr.serviceCache = expirable.NewLRU(cfg.SpanMetricsServiceCacheSize, func(_ svc.UID, v svc.ID) {
 			lv := mr.labelValuesTargetInfo(v)
 			mr.tracesTargetInfo.WithLabelValues(lv...).Sub(1)
-		}, cfg.ExpireTime)
+		}, cfg.TTL)
 	}
 
 	var registeredMetrics []prometheus.Collector

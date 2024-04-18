@@ -34,7 +34,7 @@ services:
       GOCOVERDIR: "/coverage"
       BEYLA_PRINT_TRACES: "true"
       BEYLA_OPEN_PORT: "${BEYLA_OPEN_PORT}"
-      BEYLA_OTEL_METRIC_FEATURES: "application,application_span"
+      BEYLA_OTEL_METRICS_FEATURES: "application,application_span"
       BEYLA_PROMETHEUS_FEATURES: "application,application_span"
       BEYLA_DISCOVERY_POLL_INTERVAL: 500ms
       BEYLA_EXECUTABLE_NAME: "${BEYLA_EXECUTABLE_NAME}"
@@ -53,7 +53,7 @@ services:
 
   # OpenTelemetry Collector for Metrics. For Traces, we use directly Jaeger
   otelcol:
-    image: otel/opentelemetry-collector-contrib:0.77.0
+    image: otel/opentelemetry-collector-contrib:0.85.0
     container_name: otel-col
     deploy:
       resources:
@@ -76,7 +76,7 @@ services:
 
   # Prometheus
   prometheus:
-    image: quay.io/prometheus/prometheus:v2.34.0
+    image: quay.io/prometheus/prometheus:v2.46.0
     container_name: prometheus
     command:
       - --storage.tsdb.retention.time=1m

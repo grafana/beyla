@@ -46,7 +46,8 @@ func DoTestNetFlowBytesForExistingConnections(ctx context.Context, t *testing.T,
 		assert.Equal(t, "internal-pinger", metric["k8s_src_name"])
 		assert.Equal(t, "Pod", metric["k8s_src_owner_type"])
 		assert.Equal(t, "Pod", metric["k8s_src_type"])
-		assert.Equal(t, "test-kind-cluster-netolly-control-plane",
+		assert.Regexp(t,
+			regexp.MustCompile("^test-kind-cluster-netolly-.*control-plane"),
 			metric["k8s_src_node_name"])
 		assertIsIP(t, metric["k8s_src_node_ip"])
 		assert.Equal(t, "default", metric["k8s_dst_namespace"])

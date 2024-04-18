@@ -8,6 +8,8 @@ The dashed boxes are optional stages that will run only under certain conditions
 
 Check the in-code documentation for more information about each symbol.
 
+## Application instrumentation pipeline
+
 ```mermaid
 flowchart TD
     classDef optional stroke-dasharray: 3 3;
@@ -31,9 +33,27 @@ flowchart TD
         KD:::optional --> OTELM(OTEL<br/> metrics<br/> exporter):::optional
         KD --> OTELT(OTEL<br/> traces<br/> exporter):::optional
         KD --> PROM(Prometheus<br/>HTTP<br/>endpoint):::optional
+        KD --> ALLOY(Alloy<br/>connector):::optional
     end
     CU -.-> |New PIDs| KDB
     KDB(KubeDatabase):::optional <-.- | Aggregated & indexed Pod info | KD
     IF("Informer<br/>(Kube API)"):::optional -.-> |Pods & ReplicaSets status| KDB
     IF -.-> |new Kube objects| KWE
+```
+
+## Network metrics pipeline
+
+```mermaid
+flowchart TD
+    classDef optional stroke-dasharray: 3 3;
+    MT(eBPF<br/>Map Tracer) --> PF
+    RT(eBPF<br/>Ringbuf Tracer) --> PF
+    PF(Internet<br/>protocol filter):::optional --> DD
+    DD(Flow Deduper):::optional --> K8S
+    KIN(Kube informer):::optional --> KDB
+    KDB(Kube Database):::optional --> K8S
+    K8S(Kubernetes<br/>decorator):::optional --> RDNS
+    RDNS(Reverse DNS):::optional --> CIDRS
+    CIDRS(CIDRs<br/>redecorator):::optional --> OTEL(OpenTelemetry<br/>metrics<br/>export):::optional
+    CIDRS --> PROM(Prometheus<br/>metrics<br/>export):::optional
 ```

@@ -118,7 +118,8 @@ type Config struct {
 	Printer      debug.PrintEnabled            `yaml:"print_traces" env:"BEYLA_PRINT_TRACES"`
 
 	// Exec allows selecting the instrumented executable whose complete path contains the Exec value.
-	Exec services.RegexpAttr `yaml:"executable_name" env:"BEYLA_EXECUTABLE_NAME"`
+	Exec       services.RegexpAttr `yaml:"executable_name" env:"BEYLA_EXECUTABLE_NAME"`
+	ExecOtelGo services.RegexpAttr `env:"OTEL_GO_AUTO_TARGET_EXE"`
 	// Port allows selecting the instrumented executable that owns the Port value. If this value is set (and
 	// different to zero), the value of the Exec property won't take effect.
 	// It's important to emphasize that if your process opens multiple HTTP/GRPC ports, the auto-instrumenter
@@ -239,5 +240,11 @@ func LoadConfig(file io.Reader) (*Config, error) {
 	if err := env.Parse(&cfg); err != nil {
 		return nil, fmt.Errorf("reading env vars: %w", err)
 	}
+
+	// We support OTEL_GO_AUTO_TARGET_EXE as an alias to BEYLA_EXECUTABLE_NAME
+	if !cfg.Exec.IsSet() && cfg.ExecOtelGo.IsSet() {
+		cfg.Exec = cfg.ExecOtelGo
+	}
+
 	return &cfg, nil
 }

@@ -33,7 +33,7 @@ spec:
       {{- if eq .Values.preset "application" }}
       hostPID: true
       {{- end }}
-      {{- if eq .Values.preset "network" }}
+      {{- if or (eq .Values.preset "network") .Values.config.data.network }}
       hostNetwork: true
       {{- end }}
       containers:

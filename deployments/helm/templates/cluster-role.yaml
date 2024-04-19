@@ -14,7 +14,7 @@ rules:
     resources: [ "replicasets" ]
     verbs: [ "list", "watch" ]
   - apiGroups: [ "" ]
-    {{- if eq .Values.preset "network" }}
+    {{- if or (eq .Values.preset "network") .Values.config.data.network }}
     resources: [ "pods", "services", "nodes" ]
     {{- else }}
     resources: [ "pods" ]

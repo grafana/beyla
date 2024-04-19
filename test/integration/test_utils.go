@@ -60,7 +60,8 @@ func doHTTPGetIgnoreStatus(t *testing.T, path string) {
 	require.NoError(t, err)
 	req.Header.Set("Content-Type", "application/json")
 
-	testHTTPClient.Do(req)
+	r, _ := testHTTPClient.Do(req)
+	require.NotNil(t, r)
 }
 
 func doHTTPGetFullResponse(t *testing.T, path string, status int) {

@@ -4,7 +4,6 @@ package integration
 
 import (
 	"encoding/json"
-	"net"
 	"net/http"
 	"os"
 	"path"
@@ -50,7 +49,7 @@ func testREDMetricsForRustHTTPLibrary(t *testing.T, url, comm, namespace string,
 		assert.LessOrEqual(t, 3, val)
 		if len(results) > 0 {
 			res := results[0]
-			addr := net.ParseIP(res.Metric["client_address"])
+			addr := res.Metric["client_address"]
 			assert.NotNil(t, addr)
 		}
 	})
@@ -137,7 +136,7 @@ func validateLargeDownloadURLSeen(t *testing.T, comm, namespace, urlPath string)
 		assert.LessOrEqual(t, 3, val)
 		if len(results) > 0 {
 			res := results[0]
-			addr := net.ParseIP(res.Metric["client_address"])
+			addr := res.Metric["client_address"]
 			assert.NotNil(t, addr)
 			assert.GreaterOrEqual(t, len(res.Value), 1)
 			elapsed := res.Value[0]
@@ -211,7 +210,7 @@ func checkReportedRustEvents(t *testing.T, comm, namespace string, numEvents int
 		assert.LessOrEqual(t, val, numEvents)
 		if len(results) > 0 {
 			res := results[0]
-			addr := net.ParseIP(res.Metric["client_address"])
+			addr := res.Metric["client_address"]
 			assert.NotNil(t, addr)
 		}
 	})
@@ -248,7 +247,7 @@ func testREDMetricsForRustHTTP2Library(t *testing.T, url, comm, namespace string
 		assert.LessOrEqual(t, 3, val)
 		if len(results) > 0 {
 			res := results[0]
-			addr := net.ParseIP(res.Metric["client_address"])
+			addr := res.Metric["client_address"]
 			assert.NotNil(t, addr)
 		}
 	})

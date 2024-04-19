@@ -3,7 +3,6 @@
 package integration
 
 import (
-	"net"
 	"os"
 	"path"
 	"testing"
@@ -44,7 +43,7 @@ func testREDMetricsForNodeHTTPLibrary(t *testing.T, url, urlPath, comm, namespac
 		assert.LessOrEqual(t, 3, val)
 		if len(results) > 0 {
 			res := results[0]
-			addr := net.ParseIP(res.Metric["client_address"])
+			addr := res.Metric["client_address"]
 			assert.NotNil(t, addr)
 		}
 	})
@@ -90,7 +89,7 @@ func checkReportedNodeJSEvents(t *testing.T, urlPath, comm, namespace string, nu
 		assert.LessOrEqual(t, val, numEvents)
 		if len(results) > 0 {
 			res := results[0]
-			addr := net.ParseIP(res.Metric["client_address"])
+			addr := res.Metric["client_address"]
 			assert.NotNil(t, addr)
 		}
 	})

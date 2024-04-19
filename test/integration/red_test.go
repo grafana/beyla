@@ -5,7 +5,6 @@ package integration
 import (
 	"fmt"
 	"math/rand"
-	"net"
 	"strconv"
 	"testing"
 	"time"
@@ -173,7 +172,7 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url, svcName, svcNs string) {
 		assert.LessOrEqual(t, 3, val)
 		if len(results) > 0 {
 			res := results[0]
-			addr := net.ParseIP(res.Metric["client_address"])
+			addr := res.Metric["client_address"]
 			assert.NotNil(t, addr)
 		}
 	})
@@ -194,7 +193,7 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url, svcName, svcNs string) {
 		assert.LessOrEqual(t, 3, val)
 		if len(results) > 0 {
 			res := results[0]
-			addr := net.ParseIP(res.Metric["client_address"])
+			addr := res.Metric["client_address"]
 			assert.NotNil(t, addr)
 		}
 	})
@@ -323,7 +322,7 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url, svcName, svcNs string) {
 	require.NoError(t, err)
 	assert.Less(t, sum, 1.0)
 	assert.Greater(t, sum, (90 * time.Millisecond).Seconds())
-	addr := net.ParseIP(res.Metric["client_address"])
+	addr := res.Metric["client_address"]
 	assert.NotNil(t, addr)
 
 	// check request_size_sum is at least 114B (3 * 38B)
@@ -341,7 +340,7 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url, svcName, svcNs string) {
 	sum, err = strconv.ParseFloat(fmt.Sprint(res.Value[1]), 64)
 	require.NoError(t, err)
 	assert.GreaterOrEqual(t, sum, 114.0)
-	addr = net.ParseIP(res.Metric["client_address"])
+	addr = res.Metric["client_address"]
 	assert.NotNil(t, addr)
 
 	// Check that we never recorded metrics for /metrics, in the basic test only traces are ignored
@@ -377,7 +376,7 @@ func testREDMetricsGRPC(t *testing.T) {
 		assert.LessOrEqual(t, 3, val)
 		if len(results) > 0 {
 			res := results[0]
-			addr := net.ParseIP(res.Metric["client_address"])
+			addr := res.Metric["client_address"]
 			assert.NotNil(t, addr)
 		}
 	})
@@ -415,7 +414,7 @@ func testREDMetricsForHTTPLibraryNoRoute(t *testing.T, url, svcName string) {
 		assert.LessOrEqual(t, 3, val)
 		if len(results) > 0 {
 			res := results[0]
-			addr := net.ParseIP(res.Metric["client_address"])
+			addr := res.Metric["client_address"]
 			assert.NotNil(t, addr)
 		}
 	})
@@ -436,7 +435,7 @@ func testREDMetricsForHTTPLibraryNoRoute(t *testing.T, url, svcName string) {
 		assert.LessOrEqual(t, 3, val)
 		if len(results) > 0 {
 			res := results[0]
-			addr := net.ParseIP(res.Metric["client_address"])
+			addr := res.Metric["client_address"]
 			assert.NotNil(t, addr)
 		}
 	})
@@ -563,7 +562,7 @@ func testREDMetricsForHTTPLibraryNoRoute(t *testing.T, url, svcName string) {
 	require.NoError(t, err)
 	assert.Less(t, sum, 1.0)
 	assert.Greater(t, sum, (90 * time.Millisecond).Seconds())
-	addr := net.ParseIP(res.Metric["client_address"])
+	addr := res.Metric["client_address"]
 	assert.NotNil(t, addr)
 
 	// check request_size_sum is at least 114B (3 * 38B)
@@ -581,7 +580,7 @@ func testREDMetricsForHTTPLibraryNoRoute(t *testing.T, url, svcName string) {
 	sum, err = strconv.ParseFloat(fmt.Sprint(res.Value[1]), 64)
 	require.NoError(t, err)
 	assert.GreaterOrEqual(t, sum, 114.0)
-	addr = net.ParseIP(res.Metric["client_address"])
+	addr = res.Metric["client_address"]
 	assert.NotNil(t, addr)
 
 	// Check that we never recorded any /metrics calls
@@ -648,7 +647,7 @@ func testREDMetricsForGoBasicOnly(t *testing.T, url string, comm string) {
 			assert.LessOrEqual(t, 3, val)
 
 			res := results[0]
-			addr := net.ParseIP(res.Metric["client_address"])
+			addr := res.Metric["client_address"]
 			assert.NotNil(t, addr)
 		}
 	})

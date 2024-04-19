@@ -160,6 +160,10 @@ func (rbf *ringBufForwarder) processAndForward(record ringbuf.Record, spansChan 
 	if ignore {
 		return
 	}
+	if !s.IsValid() {
+		rbf.logger.Debug("invalid span", "span", s)
+		return
+	}
 	rbf.spans[rbf.spansLen] = s
 	// we need to decorate each span with the tracer's service name
 	// if this information is not forwarded from eBPF

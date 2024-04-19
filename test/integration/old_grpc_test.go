@@ -121,4 +121,9 @@ func TestSuiteOldGRPCGo(t *testing.T) {
 	t.Run("Go RED metrics and traces: old grpc service", func(t *testing.T) {
 		testREDMetricsTracesForOldGRPCLibrary(t, "integration-test")
 	})
+
+	t.Run("BPF pinning folder mounted", testBPFPinningMounted)
+	require.NoError(t, compose.Close())
+	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
+
 }

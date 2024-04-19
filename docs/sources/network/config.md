@@ -66,7 +66,7 @@ network events with the `socket_filter` mode.
 
 When `socket_filter` is used as an event source, Beyla installs an eBPF Linux socket filter to
 capture the network events. This mode doesn't conflict with Cilium CNI or other eBPF programs, which
-use the Linux Traffic Control egress and ingress filters. 
+use the Linux Traffic Control egress and ingress filters.
 
 
 | YAML                 | Environment variable               | Type     | Default                                                                                                  |
@@ -160,6 +160,32 @@ If you set this property via environment variable each entry must be separated b
 ```sh
 BEYLA_NETWORK_EXCLUDE_INTERFACES=lo,/^veth/
 ```
+
+| YAML        | Environment variable      | Type     | Default |
+|-------------|---------------------------| -------- | ------- |
+| `protocols` | `BEYLA_NETWORK_PROTOCOLS` | []string | (empty) |
+
+If set, Beyla drops any network flow whose reported Internet Protocol is not in this list.
+
+The accepted values are defined in the Linux enumeration of
+[Standard well-defined IP protocols](https://elixir.bootlin.com/linux/v6.8.7/source/include/uapi/linux/in.h#L28),
+and can be:
+`TCP`, `UDP`, `IP`, `ICMP`, `IGMP`, `IPIP`, `EGP`, `PUP`, `IDP`, `TP`, `DCCP`, `IPV6`, `RSVP`, `GRE`, `ESP`, `AH`,
+`MTP`, `BEETPH`, `ENCAP`, `PIM`, `COMP`, `L2TP`, `SCTP`, `UDPLITE`, `MPLS`, `ETHERNET`, `RAW`
+
+| YAML                | Environment variable              | Type     | Default |
+|---------------------|-----------------------------------|----------|---------|
+| `exclude_protocols` | `BEYLA_NETWORK_EXCLUDE_PROTOCOLS` | []string | (empty) |
+
+If set, Beyla drops any network flow whose reported Internet Protocol is in this list.
+
+If the `protocols`/`BEYLA_NETWORK_PROTOCOLS` list is already set, this property is ignored.
+
+The accepted values are defined in the Linux enumeration of
+[Standard well-defined IP protocols](https://elixir.bootlin.com/linux/v6.8.7/source/include/uapi/linux/in.h#L28),
+and can be:
+`TCP`, `UDP`, `IP`, `ICMP`, `IGMP`, `IPIP`, `EGP`, `PUP`, `IDP`, `TP`, `DCCP`, `IPV6`, `RSVP`, `GRE`, `ESP`, `AH`,
+`MTP`, `BEETPH`, `ENCAP`, `PIM`, `COMP`, `L2TP`, `SCTP`, `UDPLITE`, `MPLS`, `ETHERNET`, `RAW`
 
 | YAML              | Environment variable            | Type    | Default |
 | ----------------- | ------------------------------- | ------- | ------- |

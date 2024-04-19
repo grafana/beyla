@@ -488,21 +488,21 @@ func TestSpanHostPeer(t *testing.T) {
 		Peer:     "127.0.0.2",
 	}
 
-	assert.Equal(t, "localhost", spanHost(&sp))
-	assert.Equal(t, "peerhost", spanPeer(&sp))
+	assert.Equal(t, "localhost", SpanHost(&sp))
+	assert.Equal(t, "peerhost", SpanPeer(&sp))
 
 	sp = request.Span{
 		Host: "127.0.0.1",
 		Peer: "127.0.0.2",
 	}
 
-	assert.Equal(t, "127.0.0.1", spanHost(&sp))
-	assert.Equal(t, "127.0.0.2", spanPeer(&sp))
+	assert.Equal(t, "127.0.0.1", SpanHost(&sp))
+	assert.Equal(t, "127.0.0.2", SpanPeer(&sp))
 
 	sp = request.Span{}
 
-	assert.Equal(t, "", spanHost(&sp))
-	assert.Equal(t, "", spanPeer(&sp))
+	assert.Equal(t, "", SpanHost(&sp))
+	assert.Equal(t, "", SpanPeer(&sp))
 }
 
 type fakeInternalTraces struct {

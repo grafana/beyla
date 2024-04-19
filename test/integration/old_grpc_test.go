@@ -4,7 +4,6 @@ package integration
 
 import (
 	"encoding/json"
-	"net"
 	"net/http"
 	"path"
 	"testing"
@@ -47,7 +46,7 @@ func testREDMetricsTracesForOldGRPCLibrary(t *testing.T, svcNs string) {
 		assert.LessOrEqual(t, 1, val)
 		if len(results) > 0 {
 			res := results[0]
-			addr := net.ParseIP(res.Metric["client_address"])
+			addr := res.Metric["client_address"]
 			assert.NotNil(t, addr)
 		}
 	})
@@ -66,7 +65,7 @@ func testREDMetricsTracesForOldGRPCLibrary(t *testing.T, svcNs string) {
 		assert.LessOrEqual(t, 3, val)
 		if len(results) > 0 {
 			res := results[0]
-			addr := net.ParseIP(res.Metric["client_address"])
+			addr := res.Metric["client_address"]
 			assert.NotNil(t, addr)
 		}
 	})

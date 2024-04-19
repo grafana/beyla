@@ -481,7 +481,7 @@ func (r *metricsReporter) labelValuesGRPC(span *request.Span) []string {
 	// serviceNameKey, rpcMethodKey, rpcSystemGRPC, rpcGRPCStatusCodeKey
 	values := []string{span.ServiceID.Instance, span.ServiceID.Name, span.ServiceID.Namespace, span.Path, "grpc", strconv.Itoa(span.Status)}
 	if r.cfg.ReportPeerInfo {
-		values = append(values, span.Peer) // netSockPeerAddrKey
+		values = append(values, otel.SpanPeer(span)) // netSockPeerAddrKey
 	}
 	if r.ctxInfo.K8sEnabled {
 		values = appendK8sLabelValues(values, span)
@@ -512,7 +512,7 @@ func (r *metricsReporter) labelValuesHTTPClient(span *request.Span) []string {
 	values := []string{span.ServiceID.Instance, span.ServiceID.Name, span.ServiceID.Namespace, span.Method, strconv.Itoa(span.Status)}
 	if r.cfg.ReportPeerInfo {
 		// netSockPeerAddrKey, netSockPeerPortKey
-		values = append(values, span.Host, strconv.Itoa(span.HostPort))
+		values = append(values, otel.SpanHost(span), strconv.Itoa(span.HostPort))
 	}
 	if r.ctxInfo.K8sEnabled {
 		values = appendK8sLabelValues(values, span)
@@ -551,7 +551,7 @@ func (r *metricsReporter) labelValuesHTTP(span *request.Span) []string {
 		values = append(values, span.Path) // httpTargetKey
 	}
 	if r.cfg.ReportPeerInfo {
-		values = append(values, span.Peer) // netSockPeerAddrKey
+		values = append(values, otel.SpanPeer(span)) // netSockPeerAddrKey
 	}
 	if r.ctxInfo.AppO11y.ReportRoutes {
 		values = append(values, span.Route) // httpRouteKey
@@ -648,18 +648,18 @@ func labelNamesServiceGraph() []string {
 func (r *metricsReporter) labelValuesServiceGraph(span *request.Span) []string {
 	if span.IsClientSpan() {
 		return []string{
-			span.PeerName,
+			otel.SpanPeer(span),
 			span.ServiceID.Namespace,
-			span.HostName,
+			otel.SpanHost(span),
 			span.OtherNamespace,
 			"virtual_node",
 			"beyla",
 		}
 	}
 	return []string{
-		span.PeerName,
+		otel.SpanPeer(span),
 		span.OtherNamespace,
-		span.HostName,
+		otel.SpanHost(span),
 		span.ServiceID.Namespace,
 		"virtual_node",
 		"beyla",

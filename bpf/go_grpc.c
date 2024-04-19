@@ -449,7 +449,7 @@ int uprobe_grpcFramerWriteHeaders(struct pt_regs *ctx) {
     void *framer = GO_PARAM1(ctx);
     u64 stream_id = (u64)GO_PARAM2(ctx);
 
-    bpf_printk("framer=%llx, stream_id=%lld", framer, ((u64)stream_id));
+    bpf_printk("framer=%llx, stream_id=%lld, framer_w_pos %llx", framer, ((u64)stream_id), framer_w_pos);
 
     u32 stream_lookup = (u32)stream_id;
 
@@ -549,7 +549,7 @@ int uprobe_grpcFramerWriteHeaders_returns(struct pt_regs *ctx) {
                 bpf_probe_write_user(buf_arr + (n & 0x0ffff), tp_str, sizeof(tp_str));
                 n += TP_MAX_VAL_LENGTH;
                 // Update the value of n in w to reflect the new size
-                bpf_probe_write_user((void *)(w_ptr + 32), &n, sizeof(n));
+                bpf_probe_write_user((void *)(w_ptr + grpc_transport_buf_writer_offset_pos), &n, sizeof(n));
 
                 // http2 encodes the length of the headers in the first 3 bytes of buf, we need to update those
                 u8 size_1 = 0;

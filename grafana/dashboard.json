@@ -598,7 +598,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "percentage of 5xx HTTP responses or non-zero gRPC responses over the total of the requests",
+      "description": "percentage of 4xx|5xx HTTP responses or non-zero gRPC responses over the total of the requests",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -651,32 +651,7 @@
           },
           "unit": "percentunit"
         },
-        "overrides": [
-          {
-            "__systemRef": "hideSeriesFrom",
-            "matcher": {
-              "id": "byNames",
-              "options": {
-                "mode": "exclude",
-                "names": [
-                  "HTTP server - 500"
-                ],
-                "prefix": "All except:",
-                "readOnly": true
-              }
-            },
-            "properties": [
-              {
-                "id": "custom.hideFrom",
-                "value": {
-                  "legend": false,
-                  "tooltip": false,
-                  "viz": true
-                }
-              }
-            ]
-          }
-        ]
+        "overrides": []
       },
       "gridPos": {
         "h": 8,

@@ -3,7 +3,6 @@
 package integration
 
 import (
-	"net"
 	"testing"
 
 	"github.com/mariomac/guara/pkg/test"
@@ -40,7 +39,7 @@ func testREDMetricsForPythonHTTPLibrary(t *testing.T, url, comm, namespace strin
 		assert.LessOrEqual(t, 3, val)
 		if len(results) > 0 {
 			res := results[0]
-			addr := net.ParseIP(res.Metric["client_address"])
+			addr := res.Metric["client_address"]
 			assert.NotNil(t, addr)
 		}
 	})
@@ -88,7 +87,7 @@ func checkReportedPythonEvents(t *testing.T, comm, namespace string, numEvents i
 		assert.LessOrEqual(t, val, numEvents)
 		if len(results) > 0 {
 			res := results[0]
-			addr := net.ParseIP(res.Metric["client_address"])
+			addr := res.Metric["client_address"]
 			assert.NotNil(t, addr)
 		}
 	})

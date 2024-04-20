@@ -544,9 +544,9 @@ func (mr *MetricsReporter) grpcAttributes(span *request.Span) []attribute.KeyVal
 	}
 	if mr.cfg.ReportPeerInfo {
 		if span.Type == request.EventTypeGRPC {
-			attrs = append(attrs, ClientAddr(span.Peer))
+			attrs = append(attrs, ClientAddr(SpanPeer(span)))
 		} else {
-			attrs = append(attrs, ServerAddr(span.Peer))
+			attrs = append(attrs, ServerAddr(SpanPeer(span)))
 		}
 	}
 
@@ -562,7 +562,7 @@ func (mr *MetricsReporter) httpServerAttributes(span *request.Span) []attribute.
 		attrs = append(attrs, HTTPUrlPath(span.Path))
 	}
 	if mr.cfg.ReportPeerInfo {
-		attrs = append(attrs, ClientAddr(span.Peer))
+		attrs = append(attrs, ClientAddr(SpanPeer(span)))
 	}
 	if span.Route != "" {
 		attrs = append(attrs, semconv.HTTPRoute(span.Route))
@@ -577,7 +577,7 @@ func (mr *MetricsReporter) httpClientAttributes(span *request.Span) []attribute.
 		HTTPResponseStatusCode(span.Status),
 	}
 	if mr.cfg.ReportPeerInfo {
-		attrs = append(attrs, ServerAddr(span.Host))
+		attrs = append(attrs, ServerAddr(SpanHost(span)))
 		attrs = append(attrs, ServerPort(span.HostPort))
 	}
 	if span.Route != "" {
@@ -644,18 +644,18 @@ func (mr *MetricsReporter) serviceGraphAttributes(span *request.Span) attribute.
 	var attrs []attribute.KeyValue
 	if span.IsClientSpan() {
 		attrs = []attribute.KeyValue{
-			ClientMetric(span.PeerName),
+			ClientMetric(SpanPeer(span)),
 			ClientNamespaceMetric(span.ServiceID.Namespace),
-			ServerMetric(span.HostName),
+			ServerMetric(SpanHost(span)),
 			ServerNamespaceMetric(span.OtherNamespace),
 			ConnectionTypeMetric("virtual_node"),
 			SourceMetric("beyla"),
 		}
 	} else {
 		attrs = []attribute.KeyValue{
-			ClientMetric(span.PeerName),
+			ClientMetric(SpanPeer(span)),
 			ClientNamespaceMetric(span.OtherNamespace),
-			ServerMetric(span.HostName),
+			ServerMetric(SpanHost(span)),
 			ServerNamespaceMetric(span.ServiceID.Namespace),
 			ConnectionTypeMetric("virtual_node"),
 			SourceMetric("beyla"),

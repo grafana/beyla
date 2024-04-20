@@ -275,6 +275,15 @@ allowed_attributes:
 	require.Error(t, cfg.Validate())
 }
 
+func TestConfig_OtelGoAutoEnv(t *testing.T) {
+	// OTEL_GO_AUTO_TARGET_EXE is an alias to BEYLA_EXECUTABLE_NAME
+	// (Compatibility with OpenTelemetry)
+	require.NoError(t, os.Setenv("OTEL_GO_AUTO_TARGET_EXE", "testserver"))
+	cfg, err := LoadConfig(bytes.NewReader(nil))
+	require.NoError(t, err)
+	assert.True(t, cfg.Exec.IsSet()) // Exec maps to BEYLA_EXECUTABLE_NAME
+}
+
 func loadConfig(t *testing.T, env map[string]string) *Config {
 	for k, v := range env {
 		require.NoError(t, os.Setenv(k, v))

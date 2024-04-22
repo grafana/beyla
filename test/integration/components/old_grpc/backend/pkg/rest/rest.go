@@ -8,10 +8,9 @@ import (
 	"net/http"
 	"time"
 
-	"google.golang.org/grpc/credentials/insecure"
-
 	"github.com/mariomac/distributed-service-example/worker/pkg/gprc"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 const (

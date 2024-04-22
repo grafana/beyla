@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/caarlos0/env/v7"
+
 	"github.com/mariomac/distributed-service-example/backend/pkg/rest"
 )
 

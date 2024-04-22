@@ -65,9 +65,11 @@ func normalizeToUnderscore(name string) string {
 // or underscore notation from the user
 func normalizeToDot(name string) string {
 	name = strings.ReplaceAll(name, "_", ".")
+	// TODO: add future edge cases here
+	// nolint:gocritic
 	switch name {
 	case "http.response.status.code":
-		name = "http_response_status_code"
+		name = "http.response.status_code"
 	}
 	return name
 }

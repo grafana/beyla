@@ -95,4 +95,3 @@ func (r *metricsReporter) observe(flow *ebpf.Record) {
 	}
 	r.flowBytes.WithLabelValues(labelValues...).Add(float64(flow.Metrics.Bytes))
 }
-

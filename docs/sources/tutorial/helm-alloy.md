@@ -142,35 +142,22 @@ Create a ConfigMap with the Alloy configuration. Copy the following contents int
 
 ```alloy
 beyla.ebpf "default" {
-    attributes {
-      kubernetes {
-        enable = "true"
-      }
-    }
-    discovery {
-      services {
-        exe_path   = "http"
-        open_ports = "80"
-      }
-    }
-    output {
-        traces = [otelcol.exporter.otlp.grafana_cloud_tempo.input]
-    }
-}
+	attributes {
+		kubernetes {
+			enable = "true"
+		}
+	}
 
-prometheus.scrape "beyla" {
-  targets = beyla.ebpf.default.targets
-  forward_to = [prometheus.remote_write.rw.receiver]
-}
+	discovery {
+		services {
+			exe_path   = "http"
+			open_ports = "80"
+		}
+	}
 
-prometheus.remote_write "rw" {
-  endpoint {
-    url = "https://prometheus-us-central1.grafana.net/api/prom/push"
-    basic_auth {
-      username = env("PROMETHEUS_REMOTE_WRITE_USERNAME")
-      password = env("PROMETHEUS_REMOTE_WRITE_PASSWORD")
-    }    
-  } 
+	output {
+		traces = [otelcol.exporter.otlp.grafana_cloud_tempo.input]
+	}
 }
 
 otelcol.exporter.otlp "grafana_cloud_tempo" {

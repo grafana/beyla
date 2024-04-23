@@ -36,15 +36,15 @@ spec:
       {{- if or (eq .Values.preset "network") .Values.config.data.network }}
       hostNetwork: true
       {{- end }}
+      {{- if .Values.priorityClassName }}
+      priorityClassName: {{ .Values.priorityClassName }}
+      {{- end }}
       containers:
         - name: beyla
           image: {{ .Values.global.image.registry | default .Values.image.registry }}/{{ .Values.image.repository }}{{ include "beyla.imageId" . }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           securityContext:
             privileged: true
-          {{- if .Values.priorityClassName }}
-          priorityClassName: {{ .Values.priorityClassName }}
-          {{- end }}
           ports:
           - containerPort: {{ .Values.service.targetPort }}
             protocol: TCP

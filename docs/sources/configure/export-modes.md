@@ -63,7 +63,7 @@ Download the [example River configuration file](/docs/beyla/latest/configure/res
 Alloy needs to expose an **OpenTelemetry receiver** endpoint, such that the auto-instrumentation tool can forward both metrics and traces.
 The Alloy configuration file needs to include the following entry:
 
-```hcl
+```alloy
 otelcol.receiver.otlp "default" {
   grpc {}
   http {}
@@ -79,7 +79,7 @@ This enables reception of OpenTelemetry events via GRPC and HTTP, which will be
 forwarded to the next stage in the pipeline, the **Batch processor**, which
 will then accumulate the messages and forward them to the exporters:
 
-```hcl
+```alloy
 otelcol.processor.batch "default" {
   output {
     metrics = [otelcol.exporter.prometheus.default.input]
@@ -97,7 +97,7 @@ The configuration entry will need to specify an endpoint with basic
 authentication. In the provided example, the endpoint and the credentials are
 provided via environment variables:
 
-```hcl
+```alloy
 otelcol.exporter.prometheus "default" {
     forward_to = [prometheus.remote_write.mimir.receiver]
 }
@@ -125,7 +125,7 @@ Finally, to **export the traces**, you will need to set up a
 [Grafana Tempo](/oss/tempo/) exporter
 and an endpoint, also configured via environment variables:
 
-```hcl
+```alloy
 otelcol.exporter.otlp "tempo" {
     client {
         endpoint = env("TEMPO_ENDPOINT")

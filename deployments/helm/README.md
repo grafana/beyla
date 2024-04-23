@@ -57,6 +57,8 @@ eBPF-based autoinstrumentation of HTTP and HTTPS services
 | serviceAccount.name | string | `""` | The name of the service account to use. If not set and create is true, a name is generated using the fullname template |
 | tolerations | list | `[]` | Tolerations allow pods to be scheduled on nodes with specific taints |
 | updateStrategy.type | string | `"RollingUpdate"` | update strategy type |
+| priorityClassName | string|`""` | priorityClassName for pods |
+| updateStrategy.type | string | `"RollingUpdate"` | update strategy type |
 | volumeMounts | list | `[]` | Additional volumeMounts on the output Deployment definition. |
 | volumes | list | `[]` | Additional volumes on the output daemonset definition. |
 

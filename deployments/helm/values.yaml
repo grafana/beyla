@@ -42,7 +42,7 @@ rbac:
   extraClusterRoleRules: []
   # - apiGroups: []
   #   resources: []
-  
+
 serviceAccount:
   # -- Specifies whether a service account should be created
   create: true
@@ -66,6 +66,8 @@ securityContext: {}
   # readOnlyRootFilesystem: true
   # runAsNonRoot: true
   # runAsUser: 1000
+
+priorityClassName: ""
 
 ## -- Expose the beyla internal metrics service to be accessed from outside the cluster (LoadBalancer service).
 ## or access it from within the cluster (ClusterIP service). Set the service type and the port to serve it.
@@ -174,7 +176,7 @@ config:
     # grafana:
     #   otlp:
     #     cloud_zone: prod-eu-west-0
-    #     cloud_instance_id: 123456  
+    #     cloud_instance_id: 123456
     #     cloud_api_key:
     attributes:
       kubernetes:

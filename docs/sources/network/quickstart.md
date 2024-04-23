@@ -220,7 +220,7 @@ Beyla only includes a subset of the available attributes to avoid leading to
 a [cardinality explosion](/blog/2022/02/15/what-are-cardinality-spikes-and-why-do-they-matter/) in
 the metrics storage, especially if some attributes like `src.address` or `dst.address` capture the IP addresses of the external traffic.
 
-The `attributes.allow` YAML subsection allows to select the attributes to report:
+The `attributes.allow` YAML subsection makes it possible to select the attributes to report:
 
 ```yaml
 network:

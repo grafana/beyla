@@ -55,11 +55,11 @@ func normalizeMetric(name metricname.Normal) metricname.Normal {
 }
 
 // For a given metric name, returns the allowed attributes from the following sources
-// - If the "global" section is provided, returns its defined list of attribute names.
-// - If the metric name section is provided, returns its defined list of attribute names.
-// - If both the "global" and metric name sections are provided, merges both and returns
-//   a deduplicated list of attributes.
-// - If none of the above exists, returns the value from the defaultAllowedAttributes, if any.
+//   - If the "global" section is provided, returns its defined list of attribute names.
+//   - If the metric name section is provided, returns its defined list of attribute names.
+//   - If both the "global" and metric name sections are provided, merges both and returns
+//     a deduplicated list of attributes.
+//   - If none of the above exists, returns the value from the defaultAllowedAttributes, if any.
 func (aad AllowedAttributesDefinition) For(metricName metricname.Normal) []string {
 	var deduped map[string]struct{}
 	if aad != nil {

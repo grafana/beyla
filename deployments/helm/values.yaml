@@ -68,6 +68,8 @@ securityContext: {}
   # runAsUser: 1000
 
 priorityClassName: ""
+  # system-node-critical
+  # system-cluster-critical
 
 ## -- Expose the beyla internal metrics service to be accessed from outside the cluster (LoadBalancer service).
 ## or access it from within the cluster (ClusterIP service). Set the service type and the port to serve it.

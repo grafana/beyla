@@ -58,7 +58,6 @@ eBPF-based autoinstrumentation of HTTP and HTTPS services
 | tolerations | list | `[]` | Tolerations allow pods to be scheduled on nodes with specific taints |
 | updateStrategy.type | string | `"RollingUpdate"` | update strategy type |
 | priorityClassName | string|`""` | priorityClassName for pods |
-| updateStrategy.type | string | `"RollingUpdate"` | update strategy type |
 | volumeMounts | list | `[]` | Additional volumeMounts on the output Deployment definition. |
 | volumes | list | `[]` | Additional volumes on the output daemonset definition. |
 

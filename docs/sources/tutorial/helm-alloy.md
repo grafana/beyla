@@ -11,7 +11,7 @@ keywords:
   - tutorial
 ---
 
-# Run Beyla in Kubernetes using Grafana Alloy Helm's chart
+# Run Beyla in Kubernetes using Grafana Alloy Helm's chart.
 
 Grafana Alloy is a vendor-neutral distribution of the OpenTelemetry Collector.
 Alloy offers native pipelines for OTel, Prometheus, and other telemetry signals.
@@ -19,7 +19,7 @@ Alloy offers native pipelines for OTel, Prometheus, and other telemetry signals.
 Grafana Alloy bundles Beyla allowing you to instrument your applications at the same time
 you instrument your infrastructure. It also provides a Helm chart to deploy Alloy in Kubernetes.
 
-In this tutorial, you learn how to deploy Beyla in Kubernetes using Grafana Alloy Helm's chart. It's based on the examples from the [Beyla and Kubernetes walkthrough]({{< relref "../k8s-walkthrough.md" >}}).
+In this tutorial, you learn how to deploy Beyla in Kubernetes using Grafana Alloy Helm's chart. It's based on the examples from the [Beyla and Kubernetes walkthrough]({{< relref "/k8s-walkthrough.md" >}}).
 
 ## Prerequisites
 
@@ -39,7 +39,7 @@ helm install --namespace alloy alloy grafana/alloy
 
 This command installs the Grafana Alloy Helm chart in the `alloy` namespace.
 
-### 2. Deploy instrumentable services
+### 2. Deploy services
 
 You can instrument any HTTP or HTTPS service in your Kubernetes cluster.
 
@@ -116,7 +116,7 @@ spec:
 
 ### 3. Configure credentials
 
-Alloy can export metrics and traces to any OpenTelemetry endpoint, as well as exposing metrics as a Prometheus endpoint. However, it's recommend using the Prometheus and Tempo remote write endpoints in Grafana Cloud. You can get a [Free Grafana Cloud Account at Grafana's website](/pricing/).
+Alloy can export metrics and traces to any OpenTelemetry endpoint, as well as exposing metrics as a Prometheus endpoint. However, it's recommend using the Prometheus and Tempo remote write endpoints in Grafana Cloud. You can get a [Free Grafana Cloud Account](/pricing/).
 
 From the Grafana Cloud Portal, look for the **Prometheus** box and click **Send Metrics**. For the **Tempo** box, click **Send Traces**.
 
@@ -180,9 +180,9 @@ The `attributes > kubernetes > enable` enables Kubernetes decoration for metrics
 
 The `prometheus.scrape` section configures the Prometheus scrape configuration to collect the metrics from Beyla. The `prometheus.remote_write` section configures the remote write to send the metrics to Grafana Cloud Prometheus.
 
-The `output` section configures that Beyla component sends traces to `otelcol.exporter.otlp` component. The `otelcol.exporter.otlp` section configures the [OTLP exporter](https://grafana.com/docs/alloy/latest/reference/components/otelcol.exporter.otlp/) to send the traces to Grafana Cloud Tempo.
+The `output` section configures that Beyla component sends traces to `otelcol.exporter.otlp` component. The `otelcol.exporter.otlp` section configures the [OTLP exporter]({{< relref "docs/alloy/latest/reference/components/otelcol.exporter.otlp/" >}}) to send the traces to Grafana Cloud Tempo.
 
-For further details on the configuration options, refer to the documentation of the [Grafana Alloy Beyla component](https://grafana.com/docs/alloy/latest/reference/components/beyla.ebpf/)
+For further details on the configuration options, refer to the documentation of the [Grafana Alloy Beyla component]({{< relref "docs/alloy/latest/reference/components/beyla.ebpf/" >}})
 
 ### 4. Deploy Alloy with Helm
 

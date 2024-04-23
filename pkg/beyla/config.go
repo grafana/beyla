@@ -11,6 +11,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
+	"github.com/grafana/beyla/pkg/internal/export/attr"
 	"github.com/grafana/beyla/pkg/internal/export/debug"
 	"github.com/grafana/beyla/pkg/internal/export/otel"
 	"github.com/grafana/beyla/pkg/internal/export/prom"
@@ -163,8 +164,9 @@ func (t TracesReceiverConfig) Enabled() bool {
 // Attributes configures the decoration of some extra attributes that will be
 // added to each span
 type Attributes struct {
-	Kubernetes transform.KubernetesDecorator `yaml:"kubernetes"`
-	InstanceID traces.InstanceIDConfig       `yaml:"instance_id"`
+	Kubernetes transform.KubernetesDecorator    `yaml:"kubernetes"`
+	InstanceID traces.InstanceIDConfig          `yaml:"instance_id"`
+	Allow      attr.AllowedAttributesDefinition `yaml:"allow"`
 }
 
 type ConfigError string
@@ -202,10 +204,6 @@ func (c *Config) Validate() error {
 		!c.Prometheus.Enabled() {
 		return ConfigError("you need to define at least one exporter: print_traces," +
 			" grafana, otel_metrics_export, otel_traces_export or prometheus_export")
-	}
-
-	if c.Enabled(FeatureNetO11y) {
-		return c.NetworkFlows.Validate(c.Attributes.Kubernetes.Enabled())
 	}
 
 	return nil

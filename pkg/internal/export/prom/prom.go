@@ -481,7 +481,7 @@ func (r *metricsReporter) labelValuesGRPC(span *request.Span) []string {
 	// serviceNameKey, rpcMethodKey, rpcSystemGRPC, rpcGRPCStatusCodeKey
 	values := []string{span.ServiceID.Instance, span.ServiceID.Name, span.ServiceID.Namespace, span.Path, "grpc", strconv.Itoa(span.Status)}
 	if r.cfg.ReportPeerInfo {
-		values = append(values, otel.SpanPeer(span)) // netSockPeerAddrKey
+		values = append(values, otel.SpanHost(span)) // netSockPeerAddrKey
 	}
 	if r.ctxInfo.K8sEnabled {
 		values = appendK8sLabelValues(values, span)

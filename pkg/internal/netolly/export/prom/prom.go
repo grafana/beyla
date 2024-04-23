@@ -8,6 +8,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/grafana/beyla/pkg/internal/connector"
+	"github.com/grafana/beyla/pkg/internal/export/attr"
 	"github.com/grafana/beyla/pkg/internal/export/otel"
 	"github.com/grafana/beyla/pkg/internal/export/prom"
 	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
@@ -38,7 +39,7 @@ type metricsReporter struct {
 
 	promConnect *connector.PrometheusManager
 
-	attrs []export.Attribute
+	attrs []attr.Getter[*ebpf.Record]
 
 	bgCtx context.Context
 }
@@ -53,10 +54,10 @@ func PrometheusEndpoint(ctx context.Context, cfg *PrometheusConfig, promMgr *con
 }
 
 func newReporter(ctx context.Context, cfg *PrometheusConfig, promMgr *connector.PrometheusManager) *metricsReporter {
-	attrs := export.BuildPromAttributeGetters(cfg.AllowedAttributes)
+	attrs := attr.PrometheusGetters(export.NamedGetters, cfg.AllowedAttributes)
 	labelNames := make([]string, 0, len(attrs))
 	for _, label := range attrs {
-		labelNames = append(labelNames, label.Name)
+		labelNames = append(labelNames, label.ExposedName)
 	}
 
 	// If service name is not explicitly set, we take the service name as set by the

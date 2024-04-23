@@ -33,7 +33,7 @@ CLANG ?= clang
 CFLAGS := -O2 -g -Wall -Werror $(CFLAGS)
 
 # regular expressions for excluded file patterns
-EXCLUDE_COVERAGE_FILES="(bpfel_)|(/pingserver/)|(/test/collector/)|(integration/components)|(test/cmd)"
+EXCLUDE_COVERAGE_FILES="(bpfel_)|(/pingserver/)|(/test/collector/)|(integration/components)|(test/cmd)|(/grafana/beyla/docs/)|(/grafana/beyla/configs/)|(/grafana/beyla/examples/)"
 
 .DEFAULT_GOAL := all
 
@@ -91,7 +91,7 @@ DASHBOARD_LINTER = $(TOOLS_DIR)/dashboard-linter
 GINKGO = $(TOOLS_DIR)/ginkgo
 
 define check_format
-	$(shell $(foreach FILE, $(shell find . -name "*.go" -not -path "./vendor/*"), \
+	$(shell $(foreach FILE, $(shell find . -name "*.go" -not -path "**/vendor/*"), \
 		$(GOIMPORTS_REVISER) -company-prefixes github.com/grafana -list-diff -output stdout $(FILE);))
 endef
 
@@ -102,7 +102,7 @@ prereqs:
 	$(call go-install-tool,$(GOLANGCI_LINT),github.com/golangci/golangci-lint/cmd/golangci-lint,v1.57.2)
 	$(call go-install-tool,$(BPF2GO),github.com/cilium/ebpf/cmd/bpf2go,$(call gomod-version,cilium/ebpf))
 	$(call go-install-tool,$(GO_OFFSETS_TRACKER),github.com/grafana/go-offsets-tracker/cmd/go-offsets-tracker,$(call gomod-version,grafana/go-offsets-tracker))
-	$(call go-install-tool,$(GOIMPORTS_REVISER),github.com/incu6us/goimports-reviser/v3,v3.4.5)
+	$(call go-install-tool,$(GOIMPORTS_REVISER),github.com/incu6us/goimports-reviser/v3,v3.6.4)
 	$(call go-install-tool,$(GO_LICENSES),github.com/google/go-licenses,v1.6.0)
 	$(call go-install-tool,$(KIND),sigs.k8s.io/kind,v0.20.0)
 	$(call go-install-tool,$(DASHBOARD_LINTER),github.com/grafana/dashboard-linter,latest)
@@ -110,7 +110,7 @@ prereqs:
 .PHONY: fmt
 fmt: prereqs
 	@echo "### Formatting code and fixing imports"
-	@$(foreach FILE, $(shell find . -name "*.go" -not -path "./vendor/*"), \
+	@$(foreach FILE, $(shell find . -name "*.go" -not -path "**/vendor/*"), \
 		$(GOIMPORTS_REVISER) -company-prefixes github.com/grafana $(FILE);)
 
 .PHONY: checkfmt

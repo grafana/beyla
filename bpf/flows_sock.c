@@ -115,11 +115,11 @@ static __always_inline bool read_sk_buff(struct __sk_buff *skb, flow_id *id, u16
             doff >>= 4; // move the upper 4 bits to low
             doff *= 4; // convert to bytes length
 
-            hdr_len += doff;
-
             u8 flags;
             bpf_skb_load_bytes(skb, hdr_len + offsetof(struct __tcphdr, ack_seq) + 4 + 1, &flags, sizeof(flags)); // read the second byte past __tcphdr->doff, again bit fields offsets
             *custom_flags = ((u16)flags & 0x00ff);
+
+            hdr_len += doff;
 
             if ((skb->len - hdr_len) < 0) { // less than 0 is a packet we can't parse
                 return false;

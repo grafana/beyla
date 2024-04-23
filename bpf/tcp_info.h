@@ -82,9 +82,9 @@ static __always_inline bool read_sk_buff(struct __sk_buff *skb, protocol_info_t 
     bpf_skb_load_bytes(skb, tcp->hdr_len + offsetof(struct __tcphdr, dest), &port, sizeof(port));
     conn->d_port = __bpf_htons(port);
 
-    u16 seq;
+    u32 seq;
     bpf_skb_load_bytes(skb, tcp->hdr_len + offsetof(struct __tcphdr, seq), &seq, sizeof(seq));
-    tcp->seq = __bpf_htons(seq);
+    tcp->seq = __bpf_htonl(seq);
 
     u8 doff;
     bpf_skb_load_bytes(skb, tcp->hdr_len + offsetof(struct __tcphdr, ack_seq) + 4, &doff, sizeof(doff)); // read the first byte past __tcphdr->ack_seq, we can't do offsetof bit fields
@@ -92,11 +92,11 @@ static __always_inline bool read_sk_buff(struct __sk_buff *skb, protocol_info_t 
     doff >>= 4; // move the upper 4 bits to low
     doff *= 4; // convert to bytes length
 
-    tcp->hdr_len += doff;
-
     u8 flags;
     bpf_skb_load_bytes(skb, tcp->hdr_len + offsetof(struct __tcphdr, ack_seq) + 4 + 1, &flags, sizeof(flags)); // read the second byte past __tcphdr->doff, again bit fields offsets
     tcp->flags = flags;
+
+    tcp->hdr_len += doff;
 
     if ((skb->len - tcp->hdr_len) < 0) { // less than 0 is a packet we can't parse
         return false;

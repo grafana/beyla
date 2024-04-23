@@ -14,6 +14,7 @@ import (
 	"go.opentelemetry.io/otel/sdk/resource"
 	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 
+	"github.com/grafana/beyla/pkg/internal/export/attr"
 	"github.com/grafana/beyla/pkg/internal/export/otel"
 	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
 	"github.com/grafana/beyla/pkg/internal/netolly/export"
@@ -80,11 +81,11 @@ func MetricsExporterProvider(cfg *MetricsConfig) (pipe.FinalFunc[[]*ebpf.Record]
 		return nil, err
 	}
 
-	expirer := NewExpirer(export.BuildOTELAttributeGetters(cfg.AllowedAttributes), cfg.Metrics.TTL)
+	expirer := NewExpirer(attr.OpenTelemetryGetters(export.NamedGetters, cfg.AllowedAttributes), cfg.Metrics.TTL)
 	ebpfEvents := provider.Meter("network_ebpf_events")
 
 	_, err = ebpfEvents.Int64ObservableCounter(
-		"beyla.network.flow.bytes",
+		"beyla.network.flow.bytes.total",
 		metric2.WithDescription("total bytes_sent value of network flows observed by probe since its launch"),
 		metric2.WithUnit("{bytes}"),
 		metric2.WithInt64Callback(expirer.Collect),

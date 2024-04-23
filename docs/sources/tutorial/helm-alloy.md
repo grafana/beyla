@@ -180,9 +180,9 @@ The `attributes > kubernetes > enable` enables Kubernetes decoration for metrics
 
 The `prometheus.scrape` section configures the Prometheus scrape configuration to collect the metrics from Beyla. The `prometheus.remote_write` section configures the remote write to send the metrics to Grafana Cloud Prometheus.
 
-The `output` section configures that Beyla component sends traces to `otelcol.exporter.otlp` component. The `otelcol.exporter.otlp` section configures the [OTLP exporter]({{< relref "/docs/alloy/latest/reference/components/otelcol.exporter.otlp" >}}) to send the traces to Grafana Cloud Tempo.
+The `output` section configures that Beyla component sends traces to `otelcol.exporter.otlp` component. The `otelcol.exporter.otlp` section configures the [OTLP exporter](/docs/alloy/latest/reference/components/otelcol.exporter.otlp) to send the traces to Grafana Cloud Tempo.
 
-For further details on the configuration options, refer to the documentation of the [Grafana Alloy Beyla component]({{< relref "/docs/alloy/latest/reference/components/beyla.ebpf" >}})
+For further details on the configuration options, refer to the documentation of the [Grafana Alloy Beyla component](/docs/alloy/latest/reference/components/beyla.ebpf)
 
 ### 4. Deploy Alloy with Helm
 

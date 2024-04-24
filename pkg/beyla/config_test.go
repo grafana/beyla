@@ -15,6 +15,7 @@ import (
 	"github.com/grafana/beyla/pkg/internal/export/otel"
 	"github.com/grafana/beyla/pkg/internal/export/prom"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
+	"github.com/grafana/beyla/pkg/internal/metricname"
 	"github.com/grafana/beyla/pkg/internal/netolly/transform/cidr"
 	"github.com/grafana/beyla/pkg/internal/traces"
 	"github.com/grafana/beyla/pkg/transform"
@@ -42,6 +43,8 @@ attributes:
     informers_sync_timeout: 30s
   instance_id:
     dns: true
+  allow:
+    global: ["foo", "bar"]
 network:
   enable: true
   cidrs:
@@ -147,6 +150,9 @@ network:
 				Enable:               transform.EnabledTrue,
 				InformersSyncTimeout: 30 * time.Second,
 			},
+			Allow: map[metricname.Normal][]string{
+				"global": {"foo", "bar"},
+			},
 		},
 		Routes: &transform.RoutesConfig{},
 		NameResolver: &transform.NameResolverConfig{
@@ -236,43 +242,16 @@ otel_metrics_export:
 attributes:
   kubernetes:
     enable: true
-network:
-  enable: true
-  allowed_attributes:
+  allow:
+    beyla_network_flow_bytes:
     - k8s.src.name
     - k8s.dst.name
+network:
+  enable: true
 `)
 	cfg, err := LoadConfig(userConfig)
 	require.NoError(t, err)
 	require.NoError(t, cfg.Validate())
-}
-
-func TestConfigValidate_Network_Empty_Attrs(t *testing.T) {
-	userConfig := bytes.NewBufferString(`
-otel_metrics_export:
-  endpoint: http://otelcol:4318
-network:
-  enable: true
-  allowed_attributes: []
-`)
-	cfg, err := LoadConfig(userConfig)
-	require.NoError(t, err)
-	require.Error(t, cfg.Validate())
-}
-
-func TestConfigValidate_Network_NotKube(t *testing.T) {
-	userConfig := bytes.NewBufferString(`
-otel_metrics_export:
-  endpoint: http://otelcol:4318
-network:
-  enable: true
-allowed_attributes:
-    - k8s.src.name
-    - k8s.dst.name
-`)
-	cfg, err := LoadConfig(userConfig)
-	require.NoError(t, err)
-	require.Error(t, cfg.Validate())
 }
 
 func TestConfig_OtelGoAutoEnv(t *testing.T) {

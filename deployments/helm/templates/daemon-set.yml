@@ -60,18 +60,6 @@ spec:
               valueFrom:
           {{- tpl (toYaml $value) $ | nindent 16 }}
           {{- end }}
-          {{- with .Values.nodeSelector }}
-          nodeSelector:
-            {{- toYaml . | nindent 12 }}
-          {{- end }}
-          {{- with .Values.affinity }}
-          affinity:
-            {{- tpl (toYaml .) $ | nindent 12 }}
-          {{- end }}
-          {{- with .Values.tolerations }}
-          tolerations:
-            {{- toYaml . | nindent 12 }}
-          {{- end }}
           volumeMounts:
             - mountPath: /etc/beyla/config
               name: beyla-config
@@ -83,6 +71,18 @@ spec:
           {{- toYaml .Values.image.pullSecrets | nindent 4 }}
           {{- end }}
         {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- tpl (toYaml .) $ | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       volumes:
         - name: beyla-config
           configMap:

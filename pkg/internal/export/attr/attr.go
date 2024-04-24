@@ -17,7 +17,8 @@ type Getter[T any] struct {
 }
 
 // NamedGetters returns the GetFunc for an attribute, given its internal name in dot.notation.
-type NamedGetters[T any] func(internalName string) GetFunc[T]
+// If the record does not provide any value for the given name, the second argument is false.
+type NamedGetters[T any] func(internalName string) (GetFunc[T], bool)
 
 // PrometheusGetters builds a list of GetFunc getters for the names provided by the
 // user configuration, ready to be passed to a Prometheus exporter.
@@ -31,10 +32,12 @@ func PrometheusGetters[T any](getter NamedGetters[T], names []string) []Getter[T
 	for _, name := range names {
 		exposedName := normalizeToUnderscore(name)
 		internalName := strings.ReplaceAll(name, "_", ".")
-		attrs = append(attrs, Getter[T]{
-			ExposedName: exposedName,
-			Get:         getter(internalName),
-		})
+		if get, ok := getter(internalName); ok {
+			attrs = append(attrs, Getter[T]{
+				ExposedName: exposedName,
+				Get:         get,
+			})
+		}
 	}
 	return attrs
 }
@@ -47,10 +50,12 @@ func OpenTelemetryGetters[T any](getter NamedGetters[T], names []string) []Gette
 	attrs := make([]Getter[T], 0, len(names))
 	for _, name := range names {
 		dotName := normalizeToDot(name)
-		attrs = append(attrs, Getter[T]{
-			ExposedName: dotName,
-			Get:         getter(dotName),
-		})
+		if get, ok := getter(dotName); ok {
+			attrs = append(attrs, Getter[T]{
+				ExposedName: dotName,
+				Get:         get,
+			})
+		}
 	}
 	return attrs
 }

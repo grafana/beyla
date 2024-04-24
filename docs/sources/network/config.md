@@ -68,30 +68,6 @@ When `socket_filter` is used as an event source, Beyla installs an eBPF Linux so
 capture the network events. This mode doesn't conflict with Cilium CNI or other eBPF programs, which
 use the Linux Traffic Control egress and ingress filters.
 
-
-| YAML                 | Environment variable               | Type     | Default                                                                                                  |
-| -------------------- | ---------------------------------- | -------- | -------------------------------------------------------------------------------------------------------- |
-| `allowed_attributes` | `BEYLA_NETWORK_ALLOWED_ATTRIBUTES` | []string | `k8s.src.owner.name`, `k8s.src.namespace`, `k8s.dst.owner.name`, `k8s.dst.namespace`, `k8s.cluster.name` |
-
-Specifies which attributes are visible in the metrics.
-Beyla aggregates the metrics by their common visible attributes.
-For example, hiding the `k8s.src.name` and allowing `k8s.src.owner.name` would aggregate the metrics of all the pods under the same owner.
-
-This property won't filter some meta-attributes such as `instance`, `job`, `service.instance.id`, `service_name`, `telemetry.sdk.*`, etc.
-
-See the [network metrics documentation]({{< relref "./_index.md" >}}) for a detailed list of all the available attributes.
-
-{{% admonition type="note" %}}
-Select carefully the reported attributes, as some attributes might greatly increase the cardinality of your metrics.
-Setting this value to list only the attributes you really need is highly recommended.
-{{% /admonition %}}
-
-If you set this property via environment variable each entry must be separated by a comma, for example:
-
-```sh
-BEYLA_NETWORK_ALLOWED_ATTRIBUTES=src.name,dst.name
-```
-
 | YAML    | Environment variable  | Type     | Default |
 | ------- | --------------------- | -------- | ------- |
 | `cidrs` | `BEYLA_NETWORK_CIDRS` | []string | (empty) |

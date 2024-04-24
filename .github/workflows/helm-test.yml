@@ -48,6 +48,13 @@ jobs:
           DEFAULT_BRANCH: main
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      # required for chart-testing action
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+          check-latest: true
+
       - name: Set up Linting with chart-testing
         uses: helm/chart-testing-action@v2.1.0
 

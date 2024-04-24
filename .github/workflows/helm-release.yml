@@ -1,6 +1,7 @@
 name: Release Helm chart
 on:
   workflow_dispatch:
+
 env:
   CR_CONFIGFILE: "${{ github.workspace }}/source/.github/configs/cr.yml"
   CT_CONFIGFILE: "${{ github.workspace }}/source/.github/configs/ct.yml"
@@ -8,6 +9,7 @@ env:
   CR_PACKAGE_PATH: "${{ github.workspace }}/.cr-release-packages"
   CR_TOOL_PATH: "${{ github.workspace }}/.cr-tool"
   CR_VERSION: "1.5.0"
+
 jobs:
   setup:
     runs-on: ubuntu-latest
@@ -20,6 +22,13 @@ jobs:
         with:
           fetch-depth: 0
           path: source
+
+      # required for chart-testing action
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+          check-latest: true
 
       - name: Install chart-testing
         uses: helm/chart-testing-action@v2

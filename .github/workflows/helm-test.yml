@@ -17,7 +17,7 @@ on:
   workflow_dispatch:
 
 env:
-  CT_CONFIGFILE: "${{ github.workspace }}/.github/configs/ct.yaml"
+  CT_CONFIGFILE: "${{ github.workspace }}/.github/configs/ct.yml"
 
 jobs:
   validate-chart:

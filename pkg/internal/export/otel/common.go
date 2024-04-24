@@ -19,6 +19,9 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 	"google.golang.org/grpc/credentials"
 
+	"github.com/grafana/beyla/pkg/internal/export/attr"
+	"github.com/grafana/beyla/pkg/internal/export/prom"
+	"github.com/grafana/beyla/pkg/internal/request"
 	"github.com/grafana/beyla/pkg/internal/svc"
 )
 
@@ -244,111 +247,170 @@ func (l *LogrAdaptor) WithName(name string) logr.LogSink {
 	return &LogrAdaptor{inner: l.inner.With("name", name)}
 }
 
-// OpenTelemetry 1.23 semantic convention
-const (
-	HTTPRequestMethodKey      = attribute.Key("http.request.method")
-	HTTPResponseStatusCodeKey = attribute.Key("http.response.status_code")
-	HTTPUrlPathKey            = attribute.Key("url.path")
-	HTTPUrlFullKey            = attribute.Key("url.full")
-	ClientAddrKey             = attribute.Key("client.address")
-	ClientPortKey             = attribute.Key("client.port")
-	ServerAddrKey             = attribute.Key("server.address")
-	ServerPortKey             = attribute.Key("server.port")
-	HTTPRequestBodySizeKey    = attribute.Key("http.request.body.size")
-	HTTPResponseBodySizeKey   = attribute.Key("http.response.body.size")
-	SpanKindKey               = attribute.Key("span.kind")
-	SpanNameKey               = attribute.Key("span.name")
-	StatusCodeKey             = attribute.Key("status.code")
-	SourceKey                 = attribute.Key("source")
-	ServiceKey                = attribute.Key("service")
-	InstanceKey               = attribute.Key("instance")
-	ClientKey                 = attribute.Key("client")
-	ClientNamespaceKey        = attribute.Key("client_service_namespace")
-	ServerKey                 = attribute.Key("server")
-	ServerNamespaceKey        = attribute.Key("server_service_namespace")
-	ConnectionTypeKey         = attribute.Key("connection_type")
-)
-
 func HTTPRequestMethod(val string) attribute.KeyValue {
-	return HTTPRequestMethodKey.String(val)
+	return attr.HTTPRequestMethodKey.String(val)
 }
 
 func HTTPResponseStatusCode(val int) attribute.KeyValue {
-	return HTTPResponseStatusCodeKey.Int(val)
+	return attr.HTTPResponseStatusCodeKey.Int(val)
 }
 
 func HTTPUrlPath(val string) attribute.KeyValue {
-	return HTTPUrlPathKey.String(val)
+	return attr.HTTPUrlPathKey.String(val)
 }
 
 func HTTPUrlFull(val string) attribute.KeyValue {
-	return HTTPUrlFullKey.String(val)
+	return attr.HTTPUrlFullKey.String(val)
 }
 
 func ClientAddr(val string) attribute.KeyValue {
-	return ClientAddrKey.String(val)
-}
-
-func ClientPort(val int) attribute.KeyValue {
-	return ClientPortKey.Int(val)
+	return attr.ClientAddrKey.String(val)
 }
 
 func ServerAddr(val string) attribute.KeyValue {
-	return ServerAddrKey.String(val)
+	return attr.ServerAddrKey.String(val)
 }
 
 func ServerPort(val int) attribute.KeyValue {
-	return ServerPortKey.Int(val)
+	return attr.ServerPortKey.Int(val)
 }
 
 func HTTPRequestBodySize(val int) attribute.KeyValue {
-	return HTTPRequestBodySizeKey.Int(val)
+	return attr.HTTPRequestBodySizeKey.Int(val)
 }
 
 func HTTPResponseBodySize(val int) attribute.KeyValue {
-	return HTTPResponseBodySizeKey.Int(val)
+	return attr.HTTPResponseBodySizeKey.Int(val)
 }
 
 func SpanKindMetric(val string) attribute.KeyValue {
-	return SpanKindKey.String(val)
+	return attr.SpanKindKey.String(val)
 }
 
 func SpanNameMetric(val string) attribute.KeyValue {
-	return SpanNameKey.String(val)
+	return attr.SpanNameKey.String(val)
 }
 
 func SourceMetric(val string) attribute.KeyValue {
-	return SourceKey.String(val)
+	return attr.SourceKey.String(val)
 }
 
 func ServiceMetric(val string) attribute.KeyValue {
-	return ServiceKey.String(val)
+	return attr.ServiceKey.String(val)
 }
 
 func StatusCodeMetric(val int) attribute.KeyValue {
-	return StatusCodeKey.Int(val)
-}
-
-func ServiceInstanceMetric(val string) attribute.KeyValue {
-	return InstanceKey.String(val)
+	return attr.StatusCodeKey.Int(val)
 }
 
 func ClientMetric(val string) attribute.KeyValue {
-	return ClientKey.String(val)
+	return attr.ClientKey.String(val)
 }
 
 func ClientNamespaceMetric(val string) attribute.KeyValue {
-	return ClientNamespaceKey.String(val)
+	return attr.ClientNamespaceKey.String(val)
 }
 
 func ServerMetric(val string) attribute.KeyValue {
-	return ServerKey.String(val)
+	return attr.ServerKey.String(val)
 }
 
 func ServerNamespaceMetric(val string) attribute.KeyValue {
-	return ServerNamespaceKey.String(val)
+	return attr.ServerNamespaceKey.String(val)
 }
 
 func ConnectionTypeMetric(val string) attribute.KeyValue {
-	return ConnectionTypeKey.String(val)
+	return attr.ConnectionTypeKey.String(val)
+}
+
+func HttpServerAttributes(attrName string) (attr.GetFunc[*request.Span, attribute.KeyValue], bool) {
+	var getter attr.GetFunc[*request.Span, attribute.KeyValue]
+	switch attribute.Key(attrName) {
+	case attr.HTTPRequestMethodKey:
+		getter = func(s *request.Span) attribute.KeyValue { return HTTPRequestMethod(s.Method) }
+	case attr.HTTPResponseStatusCodeKey:
+		getter = func(s *request.Span) attribute.KeyValue { return HTTPResponseStatusCode(s.Status) }
+	case semconv.HTTPRouteKey:
+		getter = func(s *request.Span) attribute.KeyValue { return semconv.HTTPRoute(s.Route) }
+	case attr.HTTPUrlPathKey:
+		getter = func(s *request.Span) attribute.KeyValue { return HTTPUrlPath(s.Path) }
+	case attr.ClientAddrKey:
+		getter = func(s *request.Span) attribute.KeyValue { return ClientAddr(SpanPeer(s)) }
+	default:
+		return commonAttributes(attrName)
+	}
+	return getter, getter != nil
+}
+
+func HttpClientAttributes(attrName string) (attr.GetFunc[*request.Span, attribute.KeyValue], bool) {
+	var getter attr.GetFunc[*request.Span, attribute.KeyValue]
+	switch attribute.Key(attrName) {
+	case attr.HTTPRequestMethodKey:
+		getter = func(s *request.Span) attribute.KeyValue { return HTTPRequestMethod(s.Method) }
+	case attr.HTTPResponseStatusCodeKey:
+		getter = func(s *request.Span) attribute.KeyValue { return HTTPResponseStatusCode(s.Status) }
+	case semconv.HTTPRouteKey:
+		getter = func(s *request.Span) attribute.KeyValue { return semconv.HTTPRoute(s.Route) }
+	case attr.ServerAddrKey:
+		getter = func(s *request.Span) attribute.KeyValue { return ServerAddr(SpanHost(s)) }
+	case attr.ServerPortKey:
+		getter = func(s *request.Span) attribute.KeyValue { return ServerPort(s.HostPort) }
+	default:
+		return commonAttributes(attrName)
+	}
+	return getter, getter != nil
+}
+
+func GRPCServerAttributes(attrName string) (attr.GetFunc[*request.Span, attribute.KeyValue], bool) {
+	var getter attr.GetFunc[*request.Span, attribute.KeyValue]
+	switch attribute.Key(attrName) {
+	case semconv.RPCMethodKey:
+		getter = func(s *request.Span) attribute.KeyValue { return semconv.RPCMethod(s.Path) }
+	case semconv.RPCSystemKey:
+		getter = func(s *request.Span) attribute.KeyValue { return semconv.RPCSystemGRPC }
+	case semconv.RPCGRPCStatusCodeKey:
+		getter = func(s *request.Span) attribute.KeyValue { return semconv.RPCGRPCStatusCodeKey.Int(s.Status) }
+	case attr.ClientAddrKey:
+		getter = func(s *request.Span) attribute.KeyValue { return ClientAddr(SpanPeer(s)) }
+	default:
+		return commonAttributes(attrName)
+	}
+	return getter, getter != nil
+}
+
+func GRPCClientAttributes(attrName string) (attr.GetFunc[*request.Span, attribute.KeyValue], bool) {
+	var getter attr.GetFunc[*request.Span, attribute.KeyValue]
+	switch attribute.Key(attrName) {
+	case semconv.RPCMethodKey:
+		getter = func(s *request.Span) attribute.KeyValue { return semconv.RPCMethod(s.Path) }
+	case semconv.RPCSystemKey:
+		getter = func(s *request.Span) attribute.KeyValue { return semconv.RPCSystemGRPC }
+	case semconv.RPCGRPCStatusCodeKey:
+		getter = func(s *request.Span) attribute.KeyValue { return semconv.RPCGRPCStatusCodeKey.Int(s.Status) }
+	case attr.ServerAddrKey:
+		getter = func(s *request.Span) attribute.KeyValue { return ServerAddr(SpanPeer(s)) }
+	default:
+		return commonAttributes(attrName)
+	}
+	return getter, getter != nil
+}
+
+func SQLAttributes(attrName string)  (attr.GetFunc[*request.Span, attribute.KeyValue], bool) {
+	if attribute.Key(attrName) == prom.DBOperationKey {
+		return func(span *request.Span) attribute.KeyValue {
+			return semconv.DBOperation(span.Method)
+		}, true
+	}
+	return commonAttributes(attrName)
+}
+
+func commonAttributes(attrName string) (attr.GetFunc[*request.Span, attribute.KeyValue], bool) {
+	if attribute.Key(attrName) == semconv.ServiceNameKey {
+		return func(s *request.Span) attribute.KeyValue {
+			return semconv.ServiceName(s.ServiceID.Name)
+		}, true
+	}
+	return func(s *request.Span) attribute.KeyValue {
+		return attribute.String(attrName, s.ServiceID.Metadata[attrName])
+	}, true
 }

@@ -753,26 +753,6 @@ attacks. This option should be used only for testing and development purposes.
 
 Configures the intervening time between exports.
 
-| YAML            | Environment variable                       | Type    | Default |
-| --------------- | ----------------------------- | ------- | ------- |
-| `report_target` | `BEYLA_METRICS_REPORT_TARGET` | boolean | `false` |
-
-Specifies whether the exporter must submit `http.target` as a metric attribute.
-
-According to the standard OpenTelemetry specification, `http.target` is the full HTTP request
-path and query arguments.
-
-It is disabled by default to avoid cardinality explosion in paths with IDs. As an alternative,
-it is recommended to group these requests in the [routes' node](#routes-decorator).
-
-| YAML          | Environment variable                     | Type    | Default |
-| ------------- | --------------------------- | ------- | ------- |
-| `report_peer` | `BEYLA_METRICS_REPORT_PEER` | boolean | `false` |
-
-Specifies whether the exporter must submit the caller peer address as a metric attribute.
-
-It is disabled by default to avoid cardinality explosion.
-
 | YAML       | Environment variable          | Type            | Default                      |
 |------------|-------------------------------|-----------------|------------------------------|
 | `features` | `BEYLA_OTEL_METRICS_FEATURES` | list of strings | `["application", "network"]` |
@@ -1061,26 +1041,6 @@ no Prometheus endpoint will be open.
 | `path` | `BEYLA_PROMETHEUS_PATH` | string | `/metrics` |
 
 Specifies the HTTP query path to fetch the list of Prometheus metrics.
-
-| YAML            | Environment variable                       | Type    | Default |
-| --------------- | ----------------------------- | ------- | ------- |
-| `report_target` | `BEYLA_METRICS_REPORT_TARGET` | boolean | `false` |
-
-Specifies whether the exporter must submit `http_target` as a metric attribute.
-
-To be consistent with the OpenTelemetry specification, `http_target` is the full HTTP request
-path and query arguments.
-
-It is disabled by default to avoid cardinality explosion in paths with IDs. As an alternative,
-it is recommended to group these requests in the [routes' node](#routes-decorator).
-
-| YAML          | Environment variable                     | Type    | Default |
-| ------------- | --------------------------- | ------- | ------- |
-| `report_peer` | `BEYLA_METRICS_REPORT_PEER` | boolean | `false` |
-
-Specifies whether the exporter must submit the caller peer address as a metric attribute.
-
-It is disabled by default to avoid cardinality explosion.
 
 | YAML      | Environment variable | Type   |
 | --------- | ------- | ------ |

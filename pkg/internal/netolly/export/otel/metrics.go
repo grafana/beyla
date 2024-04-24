@@ -17,9 +17,12 @@ import (
 
 	"github.com/grafana/beyla/pkg/internal/export/attr"
 	"github.com/grafana/beyla/pkg/internal/export/otel"
-	"github.com/grafana/beyla/pkg/internal/metricname"
 	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
 	"github.com/grafana/beyla/pkg/internal/netolly/export"
+)
+
+const (
+	BeylaNetworkFlows = string(attr.SectionBeylaNetworkFlow) + ".total"
 )
 
 type MetricsConfig struct {
@@ -86,13 +89,13 @@ func MetricsExporterProvider(cfg *MetricsConfig) (pipe.FinalFunc[[]*ebpf.Record]
 	attrs := attr.OpenTelemetryGetters(export.NamedGetters, cfg.AllowedAttributes)
 	if len(attrs) == 0 {
 		return nil, fmt.Errorf("network metrics OpenTelemetry exporter: no valid"+
-			" attributes.allow defined for metric %s", metricname.PromBeylaNetworkFlows)
+			" attributes.allow defined for metric %s", BeylaNetworkFlows)
 	}
 	expirer := NewExpirer(attrs, cfg.Metrics.TTL)
 	ebpfEvents := provider.Meter("network_ebpf_events")
 
 	_, err = ebpfEvents.Int64ObservableCounter(
-		metricname.OTELBeylaNetworkFlows,
+		BeylaNetworkFlows,
 		metric2.WithDescription("total bytes_sent value of network flows observed by probe since its launch"),
 		metric2.WithUnit("{bytes}"),
 		metric2.WithInt64Callback(expirer.Collect),

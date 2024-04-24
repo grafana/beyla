@@ -4,21 +4,22 @@ import (
 	"strings"
 )
 
-// GetFunc is a function that explains how to get a given metric attribute from a data record
+// GetFunc is a function that explains how to get a given metric attribute of the type
+// O (e.g. string or attribute.KeyValue) from a data record
 // of the generic type T (e.g. *ebpf.Record or *request.Span)
-type GetFunc[T any] func(T) string
+type GetFunc[T, O any] func(T) O
 
 // Getter stores how to expose a metric attribute: its exposed name and how to
-// get its value from the data record of type T
-type Getter[T any] struct {
+// get its O-typed value from the data record of type T
+type Getter[T, O any] struct {
 	// ExposedName of a metric will vary between OTEL and Prometheus: dot.notation or underscore_notation.
 	ExposedName string
-	Get         GetFunc[T]
+	Get         GetFunc[T, O]
 }
 
 // NamedGetters returns the GetFunc for an attribute, given its internal name in dot.notation.
 // If the record does not provide any value for the given name, the second argument is false.
-type NamedGetters[T any] func(internalName string) (GetFunc[T], bool)
+type NamedGetters[T, O any] func(internalName string) (GetFunc[T, O], bool)
 
 // PrometheusGetters builds a list of GetFunc getters for the names provided by the
 // user configuration, ready to be passed to a Prometheus exporter.
@@ -27,13 +28,13 @@ type NamedGetters[T any] func(internalName string) (GetFunc[T], bool)
 // stores the metadata).
 // Whatever is the format provided by the user (dot-based or underscore-based), it converts dots to underscores
 // and vice-versa to make sure that the correct format is used either internally or externally.
-func PrometheusGetters[T any](getter NamedGetters[T], names []string) []Getter[T] {
-	attrs := make([]Getter[T], 0, len(names))
+func PrometheusGetters[T, O any](getter NamedGetters[T, O], names []string) []Getter[T, O] {
+	attrs := make([]Getter[T, O], 0, len(names))
 	for _, name := range names {
 		exposedName := normalizeToUnderscore(name)
 		internalName := strings.ReplaceAll(name, "_", ".")
 		if get, ok := getter(internalName); ok {
-			attrs = append(attrs, Getter[T]{
+			attrs = append(attrs, Getter[T, O]{
 				ExposedName: exposedName,
 				Get:         get,
 			})
@@ -46,12 +47,12 @@ func PrometheusGetters[T any](getter NamedGetters[T], names []string) []Getter[T
 // user configuration, ready to be passed to an OpenTelemetry exporter.
 // Whatever is the format of the user-provided attribute names (dot-based or underscore-based),
 // it converts underscores to dots to make sure that the correct attribute name is exposed.
-func OpenTelemetryGetters[T any](getter NamedGetters[T], names []string) []Getter[T] {
-	attrs := make([]Getter[T], 0, len(names))
+func OpenTelemetryGetters[T, O any](getter NamedGetters[T, O], names []string) []Getter[T, O] {
+	attrs := make([]Getter[T, O], 0, len(names))
 	for _, name := range names {
 		dotName := normalizeToDot(name)
 		if get, ok := getter(dotName); ok {
-			attrs = append(attrs, Getter[T]{
+			attrs = append(attrs, Getter[T, O]{
 				ExposedName: dotName,
 				Get:         get,
 			})

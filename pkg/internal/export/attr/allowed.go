@@ -3,9 +3,8 @@ package attr
 import (
 	"strings"
 
+	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 	"golang.org/x/exp/maps"
-
-	"github.com/grafana/beyla/pkg/internal/metricname"
 )
 
 const globalKey = "global"
@@ -13,15 +12,57 @@ const globalKey = "global"
 // AllowedAttributesDefinition specifies which attributes are allowed for each metric.
 // The key is the name of the metric (either in Prometheus or OpenTelemetry format)
 // The value is the enumeration of allowed attributes
-type AllowedAttributesDefinition map[metricname.Normal][]string
+type AllowedAttributesDefinition map[Section][]string
 
 var defaultAllowedAttributes = AllowedAttributesDefinition{
-	metricname.NormalBeylaNetworkFlows: []string{
+	SectionBeylaNetworkFlow: []string{
 		"k8s.src.owner.name",
 		"k8s.src.namespace",
 		"k8s.dst.owner.name",
 		"k8s.dst.namespace",
 		"k8s.cluster.name",
+	},
+	SectionHTTPServerDuration: []string{
+		string(HTTPRequestMethodKey),
+		string(HTTPResponseStatusCodeKey),
+		string(semconv.HTTPRouteKey),
+		string(semconv.ServiceNameKey),
+		// Excluded from default
+		// string(HTTPUrlPathKey),
+		// string(ClientAddrKey),
+	},
+	SectionHTTPClientDuration: []string{
+		string(HTTPRequestMethodKey),
+		string(HTTPResponseStatusCodeKey),
+		string(semconv.HTTPRouteKey),
+		string(semconv.ServiceNameKey),
+		// Excluded from default
+		// string(HTTPUrlPathKey),
+		// string(ClientAddrKey),
+	},
+	SectionHTTPServerRequestSize: []string{
+		string(HTTPRequestMethodKey),
+		string(HTTPResponseStatusCodeKey),
+		string(semconv.HTTPRouteKey),
+		string(semconv.ServiceNameKey),
+		// Excluded from default
+		// string(HTTPUrlPathKey),
+		// string(ClientAddrKey),
+	},
+	SectionHTTPClientRequestSize: []string{
+		string(HTTPRequestMethodKey),
+		string(HTTPResponseStatusCodeKey),
+		string(semconv.HTTPRouteKey),
+		string(semconv.ServiceNameKey),
+		// Excluded from default
+		// string(HTTPUrlPathKey),
+		// string(ClientAddrKey),
+	},
+	SectionRPCClientDuration: []string{
+		string(),
+		string(),
+		string(),
+		string(),
 	},
 }
 
@@ -35,7 +76,7 @@ func (aad AllowedAttributesDefinition) Normalize() {
 	if aad == nil {
 		return
 	}
-	normalized := map[metricname.Normal][]string{}
+	normalized := map[Section][]string{}
 	for metricName, allowedAttrs := range aad {
 		normalized[normalizeMetric(metricName)] = allowedAttrs
 	}
@@ -43,7 +84,7 @@ func (aad AllowedAttributesDefinition) Normalize() {
 	maps.Copy(aad, normalized)
 }
 
-func normalizeMetric(name metricname.Normal) metricname.Normal {
+func normalizeMetric(name Section) Section {
 	nameStr := strings.ReplaceAll(string(name), "_", ".")
 	for _, suffix := range []string{".bucket", ".sum", ".count", ".total"} {
 		if strings.HasSuffix(nameStr, suffix) {
@@ -51,7 +92,7 @@ func normalizeMetric(name metricname.Normal) metricname.Normal {
 			break
 		}
 	}
-	return metricname.Normal(nameStr)
+	return Section(nameStr)
 }
 
 // For a given metric name, returns the allowed attributes from the following sources
@@ -60,7 +101,7 @@ func normalizeMetric(name metricname.Normal) metricname.Normal {
 //   - If both the "global" and metric name sections are provided, merges both and returns
 //     a deduplicated list of attributes.
 //   - If none of the above exists, returns the value from the defaultAllowedAttributes, if any.
-func (aad AllowedAttributesDefinition) For(metricName metricname.Normal) []string {
+func (aad AllowedAttributesDefinition) For(metricName Section) []string {
 	var deduped map[string]struct{}
 	if aad != nil {
 		deduped = map[string]struct{}{}

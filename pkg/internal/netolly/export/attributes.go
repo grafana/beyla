@@ -8,8 +8,8 @@ import (
 	"github.com/grafana/beyla/pkg/internal/netolly/flow/transport"
 )
 
-func NamedGetters(internalName string) (attr.GetFunc[*ebpf.Record], bool) {
-	var getter attr.GetFunc[*ebpf.Record]
+func NamedGetters(internalName string) (attr.GetFunc[*ebpf.Record, string], bool) {
+	var getter attr.GetFunc[*ebpf.Record, string]
 	switch internalName {
 	case "beyla.ip":
 		getter = func(r *ebpf.Record) string { return r.Attrs.BeylaIP }

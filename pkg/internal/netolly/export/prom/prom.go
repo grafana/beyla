@@ -12,9 +12,12 @@ import (
 	"github.com/grafana/beyla/pkg/internal/export/attr"
 	"github.com/grafana/beyla/pkg/internal/export/otel"
 	"github.com/grafana/beyla/pkg/internal/export/prom"
-	"github.com/grafana/beyla/pkg/internal/metricname"
 	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
 	"github.com/grafana/beyla/pkg/internal/netolly/export"
+)
+
+const (
+	BeylaNetworkFlows = "beyla_network_flow_bytes_total"
 )
 
 // PrometheusConfig for network metrics just wraps the global prom.PrometheusConfig as provided by the user
@@ -62,7 +65,7 @@ func newReporter(ctx context.Context, cfg *PrometheusConfig, promMgr *connector.
 	attrs := attr.PrometheusGetters(export.NamedGetters, cfg.AllowedAttributes)
 	if len(attrs) == 0 {
 		return nil, fmt.Errorf("network metrics Prometheus exporter: no valid"+
-			" attributes.allow defined for metric %s", metricname.PromBeylaNetworkFlows)
+			" attributes.allow defined for metric %s", BeylaNetworkFlows)
 	}
 	labelNames := make([]string, 0, len(attrs))
 	for _, label := range attrs {
@@ -77,7 +80,7 @@ func newReporter(ctx context.Context, cfg *PrometheusConfig, promMgr *connector.
 		promConnect: promMgr,
 		attrs:       attrs,
 		flowBytes: NewExpirer(prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: metricname.PromBeylaNetworkFlows,
+			Name: BeylaNetworkFlows,
 			Help: "bytes submitted from a source network endpoint to a destination network endpoint",
 		}, labelNames), cfg.Config.TTL),
 	}

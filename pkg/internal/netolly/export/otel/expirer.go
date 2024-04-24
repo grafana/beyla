@@ -23,7 +23,7 @@ func plog() *slog.Logger {
 // Expirer drops metrics from labels that haven't been updated during a given timeout
 // TODO: generify and move to a common section for using it also in AppO11y, supporting more OTEL metrics
 type Expirer struct {
-	attrs   []attr.Getter[*ebpf.Record]
+	attrs   []attr.Getter[*ebpf.Record, string]
 	entries *export.ExpiryMap[*Counter]
 }
 
@@ -34,7 +34,7 @@ type Counter struct {
 
 // NewExpirer creates a metric that wraps a Counter. Its labeled instances are dropped
 // if they haven't been updated during the last timeout period
-func NewExpirer(attrs []attr.Getter[*ebpf.Record], expireTime time.Duration) *Expirer {
+func NewExpirer(attrs []attr.Getter[*ebpf.Record, string], expireTime time.Duration) *Expirer {
 	return &Expirer{
 		attrs:   attrs,
 		entries: export.NewExpiryMap[*Counter](expireTime, export.WithClock[*Counter](timeNow)),

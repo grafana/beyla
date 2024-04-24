@@ -7,62 +7,94 @@ import (
 	"golang.org/x/exp/maps"
 )
 
-const globalKey = "global"
-
 // AllowedAttributesDefinition specifies which attributes are allowed for each metric.
 // The key is the name of the metric (either in Prometheus or OpenTelemetry format)
 // The value is the enumeration of allowed attributes
 type AllowedAttributesDefinition map[Section][]string
 
-var defaultAllowedAttributes = AllowedAttributesDefinition{
-	SectionBeylaNetworkFlow: []string{
-		"k8s.src.owner.name",
-		"k8s.src.namespace",
-		"k8s.dst.owner.name",
-		"k8s.dst.namespace",
-		"k8s.cluster.name",
+var networkKubeAttributes = Definition{
+	Attributes: map[string]Default{
+		"k8s.src.owner.name": true,
+		"k8s.src.namespace":  true,
+		"k8s.dst.owner.name": true,
+		"k8s.dst.namespace":  true,
+		"k8s.cluster.name":   true,
+		"k8s.src.name":       false,
+		"k8s.src.type":       false,
+		"k8s.src.owner.type": false,
+		"k8s.src.node.ip":    false,
+		"k8s.src.node.name":  false,
+		"k8s.dst.name":       false,
+		"k8s.dst.type":       false,
+		"k8s.dst.owner.type": false,
+		"k8s.dst.node.ip":    false,
+		"k8s.dst.node.name":  false,
 	},
-	SectionHTTPServerDuration: []string{
-		string(HTTPRequestMethodKey),
-		string(HTTPResponseStatusCodeKey),
-		string(semconv.HTTPRouteKey),
-		string(semconv.ServiceNameKey),
-		// Excluded from default
-		// string(HTTPUrlPathKey),
-		// string(ClientAddrKey),
+}
+
+var appKubeAttributes = Definition{
+	Attributes: map[string]Default{
+		"k8s.namespace.name":   false,
+		"k8s.pod.name":         false,
+		"k8s.deployment.name":  false,
+		"k8s.replicaset.name":  false,
+		"k8s.daemonset.name":   false,
+		"k8s.statefulset.name": false,
+		"k8s.node.name":        false,
+		"k8s.pod.uid":          false,
+		"k8s.pod.start_time":   false,
 	},
-	SectionHTTPClientDuration: []string{
-		string(HTTPRequestMethodKey),
-		string(HTTPResponseStatusCodeKey),
-		string(semconv.HTTPRouteKey),
-		string(semconv.ServiceNameKey),
-		// Excluded from default
-		// string(HTTPUrlPathKey),
-		// string(ClientAddrKey),
+}
+
+var appCommon = Definition{
+	Attributes: map[string]Default{
+		string(semconv.ServiceNameKey):    false,
+	}
+}
+
+var appHTTPDuration = Definition{
+	Attributes: map[string]Default{
+		string(HTTPRequestMethodKey):      true,
+		string(HTTPResponseStatusCodeKey): true,
+		string(semconv.HTTPRouteKey):      true,
+		string(HTTPUrlPathKey): false,
+		string(ClientAddrKey): false,
 	},
-	SectionHTTPServerRequestSize: []string{
-		string(HTTPRequestMethodKey),
-		string(HTTPResponseStatusCodeKey),
-		string(semconv.HTTPRouteKey),
-		string(semconv.ServiceNameKey),
-		// Excluded from default
-		// string(HTTPUrlPathKey),
-		// string(ClientAddrKey),
+}
+
+var defaultAllowedAttributes = map[Section]Definition{
+	SectionBeylaNetworkFlow: {
+		Parents: []*Definition{&networkKubeAttributes},
+		Attributes: map[string]Default{
+			"beyla.ip":    false,
+			"transport":   false,
+			"src.address": false,
+			"dst.address": false,
+			"src.port":    false,
+			"dst.port":    false,
+			"src.name":    false,
+			"dst.name":    false,
+			"direction":   false,
+			"iface":       false,
+		},
 	},
-	SectionHTTPClientRequestSize: []string{
-		string(HTTPRequestMethodKey),
-		string(HTTPResponseStatusCodeKey),
-		string(semconv.HTTPRouteKey),
-		string(semconv.ServiceNameKey),
-		// Excluded from default
-		// string(HTTPUrlPathKey),
-		// string(ClientAddrKey),
+	SectionHTTPServerDuration: {
+		Parents: []*Definition{&appKubeAttributes, &appHTTPDuration},
+	},
+	SectionHTTPClientDuration: {
+		Parents: []*Definition{&appKubeAttributes, &appHTTPDuration},
+	},
+	SectionHTTPServerRequestSize: {
+		Parents: []*Definition{&appKubeAttributes, &appHTTPDuration},
+	},
+	SectionHTTPClientRequestSize: {
+		Parents: []*Definition{&appKubeAttributes, &appHTTPDuration},
 	},
 	SectionRPCClientDuration: []string{
-		string(),
-		string(),
-		string(),
-		string(),
+		string(semconv.RPCMethodKey),
+		string(semconv.RPCSystemKey),
+		string(semconv.RPCGRPCStatusCodeKey),
+		string(ServerAddrKey),
 	},
 }
 

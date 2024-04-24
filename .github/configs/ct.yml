@@ -1,7 +1,12 @@
-# See https://github.com/helm/chart-testing#configuration
+## Reference: https://github.com/helm/chart-testing/blob/master/doc/ct_lint-and-install.md
 remote: origin
 target-branch: main
 chart-dirs:
   - charts
-helm-extra-args: --timeout 600s
-validate-maintainers: false
+chart-repos:
+  - grafana=https://grafana.github.io/helm-charts
+validate-chart-schema: true
+validate-maintainers: true
+validate-yaml: true
+exclude-deprecated: true
+excluded-charts: []

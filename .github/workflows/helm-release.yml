@@ -2,8 +2,8 @@ name: Release Helm chart
 on:
   workflow_dispatch:
 env:
-  CR_CONFIGFILE: "${{ github.workspace }}/source/.github/configs/cr.yaml"
-  CT_CONFIGFILE: "${{ github.workspace }}/source/.github/configs/ct.yaml"
+  CR_CONFIGFILE: "${{ github.workspace }}/source/.github/configs/cr.yml"
+  CT_CONFIGFILE: "${{ github.workspace }}/source/.github/configs/ct.yml"
   CR_INDEX_PATH: "${{ github.workspace }}/.cr-index"
   CR_PACKAGE_PATH: "${{ github.workspace }}/.cr-release-packages"
   CR_TOOL_PATH: "${{ github.workspace }}/.cr-tool"

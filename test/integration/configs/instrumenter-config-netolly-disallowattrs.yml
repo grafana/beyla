@@ -1,0 +1,6 @@
+attributes:
+  allow:
+    beyla_network_flow_bytes:
+      - beyla.ip
+      - src.name
+      - dst.port

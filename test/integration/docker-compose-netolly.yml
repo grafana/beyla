@@ -29,12 +29,12 @@ services:
     privileged: true
     network_mode: service:testserver
     environment:
+      BEYLA_CONFIG_PATH: /configs/instrumenter-config-netolly${BEYLA_CONFIG_SUFFIX}.yml
       GOCOVERDIR: "/coverage"
       BEYLA_NETWORK_SOURCE: ${BEYLA_NETWORK_SOURCE}
       BEYLA_NETWORK_METRICS: "true"
       BEYLA_NETWORK_PRINT_FLOWS: "true"
       BEYLA_NETWORK_DEDUPER: ${BEYLA_NETWORK_DEDUPER}
-      BEYLA_NETWORK_ALLOWED_ATTRIBUTES: ${BEYLA_NETWORK_ALLOWED_ATTRIBUTES}
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otelcol:4318
       BEYLA_LOG_LEVEL: "DEBUG"
       BEYLA_BPF_DEBUG: "TRUE"

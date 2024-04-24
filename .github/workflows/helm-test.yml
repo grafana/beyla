@@ -20,11 +20,13 @@ env:
   CT_CONFIGFILE: "${{ github.workspace }}/.github/configs/ct.yml"
 
 jobs:
-  validate-docs:
+  lint-helm-chart:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # required for chart-testing to work
 
       - name: Regenerate docs
         run: |
@@ -36,14 +38,6 @@ jobs:
             echo "Helm chart documentation is not up to date. Please run 'helm-docs' and commit changes!" >&2
             exit 1
           fi
-
-  lint-chart:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0 # required for chart-testing to work
 
       - name: Lint Code Base with super-linter
         uses: docker://github/super-linter:v3.12.0
@@ -68,4 +62,4 @@ jobs:
           fi
 
       - name: Linting with chart-testing
-        run: ct lint --config "${CT_CONFIGFILE}" --check-version-increment=${{ inputs.ct_check_version_increment }}
+        run: ct lint --config "${CT_CONFIGFILE}"

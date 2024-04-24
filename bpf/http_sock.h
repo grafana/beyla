@@ -539,8 +539,7 @@ static __always_inline void handle_buf_with_connection(pid_connection_info_t *pi
     } else if (is_http2_or_grpc(small_buf, MIN_HTTP2_SIZE)) {
         bpf_dbg_printk("Found HTTP2 or gRPC connection");
         u8 is_ssl = ssl;
-        bpf_map_update_elem(&ongoing_http2_connections, pid_conn, &is_ssl, BPF_ANY);
-        bpf_map_delete_elem(&ongoing_http2_grpc, pid_conn);
+        bpf_map_update_elem(&ongoing_http2_connections, pid_conn, &is_ssl, BPF_ANY);        
     } else {
         u8 *h2g = bpf_map_lookup_elem(&ongoing_http2_connections, pid_conn);
         if (h2g && *h2g == ssl) {

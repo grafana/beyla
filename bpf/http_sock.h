@@ -346,7 +346,12 @@ static __always_inline void handle_http_response(unsigned char *small_buf, pid_c
     if ((direction != TCP_SEND) /*|| (ssl != NO_SSL) || (orig_len < KPROBES_LARGE_RESPONSE_LEN)*/) {
         finish_http(info);
     } else {
-        bpf_dbg_printk("Delaying finish http for large request, orig_len %d", orig_len);
+        if (ssl && (pid_conn->conn.s_port == 0) && (pid_conn->conn.d_port == 0)) {
+            bpf_dbg_printk("Fake connection info, finishing request");
+            finish_http(info);
+        } else {
+            bpf_dbg_printk("Delaying finish http for large request, orig_len %d", orig_len);
+        }
     }
 }
 

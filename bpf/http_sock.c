@@ -304,6 +304,10 @@ int BPF_KPROBE(kprobe_tcp_sendmsg, struct sock *sk, struct msghdr *msg, size_t s
             return 0;
         }
         bpf_dbg_printk("=== kprobe SSL tcp_sendmsg=%d sock=%llx ssl=%llx ===", id, sk, ssl);
+        pid_connection_info_t *conn = bpf_map_lookup_elem(&ssl_to_conn, &ssl);
+        if (conn) {
+            finish_possible_delayed_http_request(conn);
+        }
         bpf_map_update_elem(&ssl_to_conn, &ssl, &s_args.p_conn, BPF_ANY);
     }
 

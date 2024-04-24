@@ -78,6 +78,13 @@ struct {
     __uint(max_entries, 1);
 } http2_info_mem SEC(".maps");
 
+struct {
+    __uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
+    __type(key, int);
+    __type(value, http_connection_metadata_t);
+    __uint(max_entries, 1);
+} connection_meta_mem SEC(".maps");
+
 static __always_inline u8 is_http(unsigned char *p, u32 len, u8 *packet_type) {
     if (len < MIN_HTTP_SIZE) {
         return 0;
@@ -207,6 +214,11 @@ static __always_inline http2_grpc_request_t* empty_http2_info() {
     return value;
 }
 
+static __always_inline http_connection_metadata_t* empty_connection_meta() {
+    int zero = 0;
+    return bpf_map_lookup_elem(&connection_meta_mem, &zero);
+}
+
 static __always_inline void finish_http(http_info_t *info) {
     if (info->start_monotime_ns != 0 && info->status != 0 && info->pid.host_pid != 0) {
         http_info_t *trace = bpf_ringbuf_reserve(&events, sizeof(http_info_t), 0);        
@@ -292,22 +304,41 @@ static __always_inline void process_http_response(http_info_t *info, unsigned ch
     info->status += (buf[RESPONSE_STATUS_POS + 2] - '0');
 }
 
-static __always_inline void handle_http_response(unsigned char *small_buf, pid_connection_info_t *pid_conn, http_info_t *info, int orig_len, u8 direction, u8 ssl) {
+static __always_inline http_connection_metadata_t *connection_meta(pid_connection_info_t *pid_conn, u8 direction, u8 packet_type) {
     http_connection_metadata_t *meta = bpf_map_lookup_elem(&filtered_connections, pid_conn);
-    http_connection_metadata_t dummy_meta = {};
+    if (meta) {
+        return meta;
+    }
 
+    meta = empty_connection_meta();
     if (!meta) {
-        // In case we can't find metadata stored by accept4 or sys_connect, we guess the
-        // HTTP type. If we are receiving a response, we should be a client, otherwise 
-        // guess a server.
-        if (direction == TCP_RECV) {
-            dummy_meta.type = EVENT_HTTP_CLIENT;
-        } else {
-            dummy_meta.type = EVENT_HTTP_REQUEST;
-        }
+        return 0;
+    }
 
-        task_pid(&dummy_meta.pid);
-        meta = &dummy_meta;
+    if (packet_type == PACKET_TYPE_RESPONSE) {
+        if (direction == TCP_RECV) {
+            meta->type = EVENT_HTTP_CLIENT;
+        } else {
+            meta->type = EVENT_HTTP_REQUEST;
+        }
+    } else {
+        if (direction == TCP_RECV) {
+            meta->type = EVENT_HTTP_REQUEST;
+        } else {
+            meta->type = EVENT_HTTP_CLIENT;
+        }
+    }
+
+    task_pid(&meta->pid);
+
+    return meta;
+}
+
+static __always_inline void handle_http_response(unsigned char *small_buf, pid_connection_info_t *pid_conn, http_info_t *info, int orig_len, u8 direction, u8 ssl) {
+    http_connection_metadata_t *meta = connection_meta(pid_conn, direction, PACKET_TYPE_RESPONSE);
+    if (!meta) {
+        bpf_dbg_printk("Can't get meta memory or connection not found");
+        return;
     }
 
     process_http_response(info, small_buf, meta, orig_len);
@@ -322,21 +353,10 @@ static __always_inline void handle_http_response(unsigned char *small_buf, pid_c
 static __always_inline void http2_grpc_start(http2_conn_stream_t *s_key, void *u_buf, int len, u8 direction) {
     http2_grpc_request_t *h2g_info = empty_http2_info();
     if (h2g_info) {
-        http_connection_metadata_t *meta = bpf_map_lookup_elem(&filtered_connections, &s_key->pid_conn);
-        http_connection_metadata_t dummy_meta = {};
-
+        http_connection_metadata_t *meta = connection_meta(&s_key->pid_conn, direction, PACKET_TYPE_REQUEST);
         if (!meta) {
-            // In case we can't find metadata stored by accept4 or sys_connect, we guess the
-            // HTTP type. If we are making a request, we should be a client, otherwise 
-            // guess a server.
-            if (direction == TCP_SEND) {
-                dummy_meta.type = EVENT_HTTP_CLIENT;
-            } else {
-                dummy_meta.type = EVENT_HTTP_REQUEST;
-            }
-
-            task_pid(&dummy_meta.pid);
-            meta = &dummy_meta;
+            bpf_dbg_printk("Can't get meta memory or connection not found");
+            return;
         }
 
         h2g_info->flags = EVENT_K_HTTP2_REQUEST;
@@ -478,7 +498,8 @@ static __always_inline void handle_buf_with_connection(pid_connection_info_t *pi
         bpf_dbg_printk("=== http_buffer_event len=%d pid=%d still_reading=%d ===", bytes_len, pid_from_pid_tgid(bpf_get_current_pid_tgid()), still_reading(info));
 
         if (packet_type == PACKET_TYPE_REQUEST && (info->status == 0)) {    
-            http_connection_metadata_t *meta = bpf_map_lookup_elem(&filtered_connections, pid_conn);
+            http_connection_metadata_t *meta = connection_meta(pid_conn, direction, PACKET_TYPE_REQUEST);
+
             get_or_create_trace_info(meta, pid_conn->pid, &pid_conn->conn, u_buf, bytes_len, capture_header_buffer);
 
             if (meta) {            

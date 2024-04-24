@@ -36,6 +36,9 @@ spec:
       {{- if or (eq .Values.preset "network") .Values.config.data.network }}
       hostNetwork: true
       {{- end }}
+      {{- if .Values.priorityClassName }}
+      priorityClassName: {{ .Values.priorityClassName }}
+      {{- end }}
       containers:
         - name: beyla
           image: {{ .Values.global.image.registry | default .Values.image.registry }}/{{ .Values.image.repository }}{{ include "beyla.imageId" . }}

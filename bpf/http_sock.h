@@ -312,7 +312,7 @@ static __always_inline void handle_http_response(unsigned char *small_buf, pid_c
 
     process_http_response(info, small_buf, meta, orig_len);
 
-    if ((direction != TCP_SEND) || (ssl != NO_SSL) /*|| (orig_len < KPROBES_LARGE_RESPONSE_LEN)*/) {
+    if ((direction != TCP_SEND) /*|| (ssl != NO_SSL) || (orig_len < KPROBES_LARGE_RESPONSE_LEN)*/) {
         finish_http(info);
     } else {
         bpf_dbg_printk("Delaying finish http for large request, orig_len %d", orig_len);

@@ -151,11 +151,11 @@ func validateLargeDownloadURLSeen(t *testing.T, comm, namespace, urlPath string)
 	})
 }
 
-func testREDMetricsForLargeRustDownloads(t *testing.T, comm, namespace string) {
+func testREDMetricsForLargeRustDownloads(t *testing.T, tURL, comm, namespace string) {
 	for i := 0; i < 4; i++ {
-		doHTTPGetFullResponse(t, "http://localhost:8091/large", 200)
-		doHTTPGetFullResponse(t, "http://localhost:8091/download1", 200)
-		doHTTPGetFullResponse(t, "http://localhost:8091/download2", 200)
+		doHTTPGetFullResponse(t, tURL+"/large", 200)
+		doHTTPGetFullResponse(t, tURL+"/download1", 200)
+		doHTTPGetFullResponse(t, tURL+"/download2", 200)
 	}
 
 	validateLargeDownloadURLSeen(t, comm, namespace, "/large")
@@ -170,7 +170,7 @@ func testREDMetricsRustHTTP(t *testing.T) {
 		t.Run(testCaseURL, func(t *testing.T) {
 			waitForTestComponents(t, testCaseURL)
 			testREDMetricsForRustHTTPLibrary(t, testCaseURL, "greetings", "integration-test", 8090, false)
-			testREDMetricsForLargeRustDownloads(t, "greetings", "integration-test")
+			testREDMetricsForLargeRustDownloads(t, testCaseURL, "greetings", "integration-test")
 		})
 	}
 }
@@ -182,6 +182,7 @@ func testREDMetricsRustHTTPS(t *testing.T) {
 		t.Run(testCaseURL, func(t *testing.T) {
 			waitForTestComponents(t, testCaseURL)
 			testREDMetricsForRustHTTPLibrary(t, testCaseURL, "greetings", "integration-test", 8490, false)
+			testREDMetricsForLargeRustDownloads(t, testCaseURL, "greetings", "integration-test")
 		})
 	}
 }

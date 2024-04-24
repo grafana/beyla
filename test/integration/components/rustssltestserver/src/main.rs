@@ -1,7 +1,12 @@
-use actix_web::{middleware, web, App, HttpResponse, HttpServer};
+use actix_files::NamedFile;
+use actix_web::{middleware, web, App, HttpResponse, HttpServer, Result, Responder};
 use openssl::ssl::{SslAcceptor, SslFiletype, SslMethod};
 use serde::{Deserialize, Serialize};
 use std::fs;
+use mime::Mime;
+use actix_web::http::header::ContentDisposition;
+use actix_web::http::header::DispositionType;
+use std::io::Read;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct MyObj {
@@ -24,8 +29,53 @@ async fn trace() -> HttpResponse {
 }
 
 async fn large() -> HttpResponse {
-    let data = fs::read_to_string("mid_data.json").expect("Unable to read mid_data.json file");
+    let data = fs::read_to_string("large_data.json").expect("Unable to read large_data.json file");
     HttpResponse::Ok().body(data)
+}
+
+async fn download1() -> Result<NamedFile> {
+    let file = NamedFile::open("large_data.json")?;
+
+    let content_disposition = ContentDisposition {
+        disposition: DispositionType::Attachment,
+        parameters: vec![],
+    };
+
+    let content_type: Mime = "application/json".parse().unwrap();
+
+    Ok(file
+        .set_content_disposition(content_disposition)
+        .set_content_type(content_type))
+}
+
+async fn download2() -> impl Responder {
+    if let Ok(mut file) = NamedFile::open("large_data.json") {
+        let my_data_stream = async_stream::stream! {
+        let mut chunk = vec![0u8; 10 * 1024 *1024]; // I decalare the chunk size here as 10 mb 
+   
+        loop {
+            match file.read(&mut chunk) {
+                Ok(n) => {
+                    if n == 0 {
+                        break;
+                    }
+                    yield Result::<web::Bytes, std::io::Error>::Ok(web::Bytes::from(chunk[..n].to_vec())); // Yielding the chunk here
+                }
+
+                Err(e) => {
+                    yield Result::<web::Bytes, std::io::Error>::Err(e);
+                    break;
+                }
+            }
+        }
+    };
+   
+    HttpResponse::Ok()
+        .content_type("application/octet-stream")
+        .streaming(my_data_stream)  // Streaming my response here
+    } else {
+        HttpResponse::NotFound().finish()
+    }
 }
 
 #[actix_web::main]
@@ -49,6 +99,8 @@ async fn main() -> std::io::Result<()> {
             .service(web::resource("/smoke").route(web::get().to(smoke)))
             .service(web::resource("/trace").route(web::get().to(trace)))
             .service(web::resource("/large").route(web::get().to(large)))
+            .service(web::resource("/download1").route(web::get().to(download1)))
+            .service(web::resource("/download2").route(web::get().to(download2)))
     })
     .bind_openssl(("0.0.0.0", 8490), builder)?
     .run()

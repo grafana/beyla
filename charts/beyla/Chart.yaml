@@ -12,3 +12,10 @@ keywords:
   - observability
   - autoinstrumentation
   - eBPF-based
+maintainers:
+  - name: mariomac
+    url: https://github.com/mariomac
+  - name: grcevski
+    url: https://github.com/grcevski
+  - name: marctc
+    url: https://github.com/marctc

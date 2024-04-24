@@ -23,13 +23,6 @@ jobs:
           fetch-depth: 0
           path: source
 
-      # required for chart-testing action
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.9'
-          check-latest: true
-
       - name: Install chart-testing
         uses: helm/chart-testing-action@v2
 

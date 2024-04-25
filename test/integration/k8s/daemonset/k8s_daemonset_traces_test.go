@@ -16,6 +16,7 @@ import (
 	"sigs.k8s.io/e2e-framework/pkg/features"
 
 	"github.com/grafana/beyla/test/integration/components/jaeger"
+	"github.com/grafana/beyla/test/integration/components/kube"
 	k8s "github.com/grafana/beyla/test/integration/k8s/common"
 )
 
@@ -25,7 +26,7 @@ import (
 func TestBasicTracing(t *testing.T) {
 	feat := features.New("Beyla is able to instrument an arbitrary process").
 		Assess("it sends traces for that service",
-			func(ctx context.Context, t *testing.T, _ *envconf.Config) context.Context {
+			func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
 				test.Eventually(t, testTimeout, func(t require.TestingT) {
 					// Invoking both service instances, but we will expect that only one
 					// is instrumented, according to the discovery mechanisms
@@ -82,6 +83,65 @@ func TestBasicTracing(t *testing.T) {
 				var tq jaeger.TracesQuery
 				require.NoError(t, json.NewDecoder(resp.Body).Decode(&tq))
 				assert.Empty(t, tq.Data)
+
+				// Let's take down our services, keeping Beyla alive and then redeploy them
+				err = kube.DeleteExistingManifestFile(cfg, k8s.PathManifests+"/05-uninstrumented-service.yml")
+				assert.NoError(t, err, "we should see no error when deleting the uninstrumented service manifest file")
+
+				err = kube.DeployManifestFile(cfg, k8s.PathManifests+"/05-uninstrumented-service.yml")
+				assert.NoError(t, err, "we should see no error when re-deploying the uninstrumented service manifest file")
+
+				// We now use a different API, this ensures that after undeploying and redeploying the application we
+				// can still monitor its data
+				test.Eventually(t, testTimeout, func(t require.TestingT) {
+					// Invoking both service instances, but we will expect that only one
+					// is instrumented, according to the discovery mechanisms
+					resp, err := http.Get("http://localhost:38080/pingpongtoo")
+					require.NoError(t, err)
+					require.Equal(t, http.StatusOK, resp.StatusCode)
+
+					resp, err = http.Get("http://localhost:38081/pingpongtoo")
+					require.NoError(t, err)
+					require.Equal(t, http.StatusOK, resp.StatusCode)
+
+					resp, err = http.Get(jaegerQueryURL + "?service=otherinstance")
+					require.NoError(t, err)
+					if resp == nil {
+						return
+					}
+					require.Equal(t, http.StatusOK, resp.StatusCode)
+					var tq jaeger.TracesQuery
+					require.NoError(t, json.NewDecoder(resp.Body).Decode(&tq))
+					traces := tq.FindBySpan(jaeger.Tag{Key: "url.path", Type: "string", Value: "/pingpongtoo"})
+					require.NotEmpty(t, traces)
+					trace := traces[0]
+					require.NotEmpty(t, trace.Spans)
+
+					// Check that the service.namespace is set from the K8s namespace
+					assert.Len(t, trace.Processes, 1)
+					for _, proc := range trace.Processes {
+						sd := jaeger.DiffAsRegexp([]jaeger.Tag{
+							{Key: "service.namespace", Type: "string", Value: "^default$"},
+						}, proc.Tags)
+						require.Empty(t, sd)
+					}
+
+					// Check the information of the parent span
+					res := trace.FindByOperationName("GET /pingpongtoo")
+					require.Len(t, res, 1)
+					parent := res[0]
+					sd := jaeger.DiffAsRegexp([]jaeger.Tag{
+						{Key: "k8s.pod.name", Type: "string", Value: "^otherinstance-.*"},
+						{Key: "k8s.node.name", Type: "string", Value: ".+-control-plane$"},
+						{Key: "k8s.pod.uid", Type: "string", Value: k8s.UUIDRegex},
+						{Key: "k8s.pod.start_time", Type: "string", Value: k8s.TimeRegex},
+						{Key: "k8s.deployment.name", Type: "string", Value: "^otherinstance"},
+						{Key: "k8s.namespace.name", Type: "string", Value: "^default$"},
+					}, trace.Processes[parent.ProcessID].Tags)
+					require.Empty(t, sd)
+
+				}, test.Interval(100*time.Millisecond))
+
 				return ctx
 			},
 		).Feature()

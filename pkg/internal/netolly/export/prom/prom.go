@@ -9,7 +9,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/grafana/beyla/pkg/internal/connector"
-	"github.com/grafana/beyla/pkg/internal/export/attr"
+	"github.com/grafana/beyla/pkg/internal/export/attributes"
 	"github.com/grafana/beyla/pkg/internal/export/otel"
 	"github.com/grafana/beyla/pkg/internal/export/prom"
 	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
@@ -44,7 +44,7 @@ type metricsReporter struct {
 
 	promConnect *connector.PrometheusManager
 
-	attrs []attr.Getter[*ebpf.Record]
+	attrs []attributes.Getter[*ebpf.Record, string]
 
 	bgCtx context.Context
 }
@@ -62,7 +62,7 @@ func PrometheusEndpoint(ctx context.Context, cfg *PrometheusConfig, promMgr *con
 }
 
 func newReporter(ctx context.Context, cfg *PrometheusConfig, promMgr *connector.PrometheusManager) (*metricsReporter, error) {
-	attrs := attr.PrometheusGetters(export.NamedGetters, cfg.AllowedAttributes)
+	attrs := attributes.PrometheusGetters(export.NamedGetters, cfg.AllowedAttributes)
 	if len(attrs) == 0 {
 		return nil, fmt.Errorf("network metrics Prometheus exporter: no valid"+
 			" attributes.allow defined for metric %s", BeylaNetworkFlows)

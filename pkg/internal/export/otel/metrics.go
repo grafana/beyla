@@ -20,7 +20,8 @@ import (
 	"go.opentelemetry.io/otel/sdk/metric"
 	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 
-	"github.com/grafana/beyla/pkg/internal/export/attr"
+	"github.com/grafana/beyla/pkg/internal/export/attributes"
+	"github.com/grafana/beyla/pkg/internal/export/attributes/attr"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/pkg/internal/request"
@@ -150,7 +151,7 @@ func (m MetricsConfig) Enabled() bool {
 type MetricsReporter struct {
 	ctx        context.Context
 	cfg        *MetricsConfig
-	attributes attr.Selectors
+	attributes *attributes.Provider
 	exporter   metric.Exporter
 	reporters  ReporterPool[*Metrics]
 }
@@ -162,13 +163,13 @@ type Metrics struct {
 	service  svc.ID
 	provider *metric.MeterProvider
 
-	attrHTTPDuration          []attr.Getter[*request.Span, attribute.KeyValue]
-	attrHTTPClientDuration    []attr.Getter[*request.Span, attribute.KeyValue]
-	attrGRPCServer            []attr.Getter[*request.Span, attribute.KeyValue]
-	attrGRPCClient            []attr.Getter[*request.Span, attribute.KeyValue]
-	attrSQLClient             []attr.Getter[*request.Span, attribute.KeyValue]
-	attrHTTPRequestSize       []attr.Getter[*request.Span, attribute.KeyValue]
-	attrHTTPClientRequestSize []attr.Getter[*request.Span, attribute.KeyValue]
+	attrHTTPDuration          []attributes.Getter[*request.Span, attribute.KeyValue]
+	attrHTTPClientDuration    []attributes.Getter[*request.Span, attribute.KeyValue]
+	attrGRPCServer            []attributes.Getter[*request.Span, attribute.KeyValue]
+	attrGRPCClient            []attributes.Getter[*request.Span, attribute.KeyValue]
+	attrSQLClient             []attributes.Getter[*request.Span, attribute.KeyValue]
+	attrHTTPRequestSize       []attributes.Getter[*request.Span, attribute.KeyValue]
+	attrHTTPClientRequestSize []attributes.Getter[*request.Span, attribute.KeyValue]
 
 	httpDuration          instrument.Float64Histogram
 	httpClientDuration    instrument.Float64Histogram
@@ -189,7 +190,10 @@ type Metrics struct {
 }
 
 func ReportMetrics(
-	ctx context.Context, cfg *MetricsConfig, ctxInfo *global.ContextInfo,
+	ctx context.Context,
+	ctxInfo *global.ContextInfo,
+	cfg *MetricsConfig,
+	attribSelector attributes.Selection,
 ) pipe.FinalProvider[[]request.Span] {
 	return func() (pipe.FinalFunc[[]request.Span], error) {
 		if !cfg.Enabled() {
@@ -197,7 +201,7 @@ func ReportMetrics(
 		}
 		SetupInternalOTELSDKLogger(cfg.SDKLogLevel)
 
-		mr, err := newMetricsReporter(ctx, cfg, ctxInfo)
+		mr, err := newMetricsReporter(ctx, ctxInfo, cfg, attribSelector)
 		if err != nil {
 			return nil, fmt.Errorf("instantiating OTEL metrics reporter: %w", err)
 		}
@@ -205,11 +209,22 @@ func ReportMetrics(
 	}
 }
 
-func newMetricsReporter(ctx context.Context, cfg *MetricsConfig, ctxInfo *global.ContextInfo) (*MetricsReporter, error) {
+func newMetricsReporter(
+	ctx context.Context,
+	ctxInfo *global.ContextInfo,
+	cfg *MetricsConfig,
+	attribSelector attributes.Selection,
+) (*MetricsReporter, error) {
 	log := mlog()
+
+	attribProvider, err := attributes.NewProvider(ctxInfo, attribSelector)
+	if err != nil {
+		return nil, fmt.Errorf("attributes select: %w", err)
+	}
 	mr := MetricsReporter{
-		ctx: ctx,
-		cfg: cfg,
+		ctx:        ctx,
+		cfg:        cfg,
+		attributes: attribProvider,
 	}
 	mr.reporters = NewReporterPool[*Metrics](cfg.ReportersCacheLen,
 		func(id svc.UID, v *Metrics) {
@@ -284,19 +299,19 @@ func (mr *MetricsReporter) setupOtelMeters(m *Metrics, meter instrument.Meter) e
 		return nil
 	}
 
-	m.attrHTTPDuration = attr.OpenTelemetryGetters(
+	m.attrHTTPDuration = attributes.OpenTelemetryGetters(
 		HTTPAttributes, mr.attributes.For(attr.SectionHTTPServerDuration))
-	m.attrHTTPClientDuration = attr.OpenTelemetryGetters(
+	m.attrHTTPClientDuration = attributes.OpenTelemetryGetters(
 		HTTPAttributes, mr.attributes.For(attr.SectionHTTPClientDuration))
-	m.attrHTTPRequestSize = attr.OpenTelemetryGetters(
+	m.attrHTTPRequestSize = attributes.OpenTelemetryGetters(
 		HTTPAttributes, mr.attributes.For(attr.SectionHTTPServerRequestSize))
-	m.attrHTTPClientRequestSize = attr.OpenTelemetryGetters(
+	m.attrHTTPClientRequestSize = attributes.OpenTelemetryGetters(
 		HTTPAttributes, mr.attributes.For(attr.SectionHTTPClientRequestSize))
-	m.attrGRPCServer = attr.OpenTelemetryGetters(
+	m.attrGRPCServer = attributes.OpenTelemetryGetters(
 		GRPCAttributes, mr.attributes.For(attr.SectionRPCServerDuration))
-	m.attrGRPCClient = attr.OpenTelemetryGetters(
+	m.attrGRPCClient = attributes.OpenTelemetryGetters(
 		GRPCAttributes, mr.attributes.For(attr.SectionRPCClientDuration))
-	m.attrSQLClient = attr.OpenTelemetryGetters(
+	m.attrSQLClient = attributes.OpenTelemetryGetters(
 		SQLAttributes, mr.attributes.For(attr.SectionSQLClientDuration))
 
 	var err error
@@ -610,7 +625,7 @@ func (mr *MetricsReporter) serviceGraphAttributes(span *request.Span) attribute.
 	return attribute.NewSet(attrs...)
 }
 
-func withAttributes(span *request.Span, getters []attr.Getter[*request.Span, attribute.KeyValue]) instrument.MeasurementOption {
+func withAttributes(span *request.Span, getters []attributes.Getter[*request.Span, attribute.KeyValue]) instrument.MeasurementOption {
 	attributes := make([]attribute.KeyValue, 0, len(getters))
 	for _, get := range getters {
 		attributes = append(attributes, get.Get(span))

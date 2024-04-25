@@ -15,7 +15,8 @@ import (
 	"go.opentelemetry.io/otel/sdk/resource"
 	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 
-	"github.com/grafana/beyla/pkg/internal/export/attr"
+	"github.com/grafana/beyla/pkg/internal/export/attributes"
+	"github.com/grafana/beyla/pkg/internal/export/attributes/attr"
 	"github.com/grafana/beyla/pkg/internal/export/otel"
 	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
 	"github.com/grafana/beyla/pkg/internal/netolly/export"
@@ -86,7 +87,7 @@ func MetricsExporterProvider(cfg *MetricsConfig) (pipe.FinalFunc[[]*ebpf.Record]
 		return nil, err
 	}
 
-	attrs := attr.OpenTelemetryGetters(export.NamedGetters, cfg.AllowedAttributes)
+	attrs := attributes.OpenTelemetryGetters(export.NamedGetters, cfg.AllowedAttributes)
 	if len(attrs) == 0 {
 		return nil, fmt.Errorf("network metrics OpenTelemetry exporter: no valid"+
 			" attributes.allow defined for metric %s", BeylaNetworkFlows)

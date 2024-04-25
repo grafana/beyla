@@ -19,7 +19,8 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 	"google.golang.org/grpc/credentials"
 
-	"github.com/grafana/beyla/pkg/internal/export/attr"
+	"github.com/grafana/beyla/pkg/internal/export/attributes"
+	"github.com/grafana/beyla/pkg/internal/export/attributes/attr"
 	"github.com/grafana/beyla/pkg/internal/export/prom"
 	"github.com/grafana/beyla/pkg/internal/request"
 	"github.com/grafana/beyla/pkg/internal/svc"
@@ -323,8 +324,8 @@ func ConnectionTypeMetric(val string) attribute.KeyValue {
 	return attr.ConnectionTypeKey.String(val)
 }
 
-func HTTPAttributes(attrName string) (attr.GetFunc[*request.Span, attribute.KeyValue], bool) {
-	var getter attr.GetFunc[*request.Span, attribute.KeyValue]
+func HTTPAttributes(attrName string) (attributes.GetFunc[*request.Span, attribute.KeyValue], bool) {
+	var getter attributes.GetFunc[*request.Span, attribute.KeyValue]
 	switch attribute.Key(attrName) {
 	case attr.HTTPRequestMethodKey:
 		getter = func(s *request.Span) attribute.KeyValue { return HTTPRequestMethod(s.Method) }
@@ -346,8 +347,8 @@ func HTTPAttributes(attrName string) (attr.GetFunc[*request.Span, attribute.KeyV
 	return getter, getter != nil
 }
 
-func GRPCAttributes(attrName string) (attr.GetFunc[*request.Span, attribute.KeyValue], bool) {
-	var getter attr.GetFunc[*request.Span, attribute.KeyValue]
+func GRPCAttributes(attrName string) (attributes.GetFunc[*request.Span, attribute.KeyValue], bool) {
+	var getter attributes.GetFunc[*request.Span, attribute.KeyValue]
 	switch attribute.Key(attrName) {
 	case semconv.RPCMethodKey:
 		getter = func(s *request.Span) attribute.KeyValue { return semconv.RPCMethod(s.Path) }
@@ -365,7 +366,7 @@ func GRPCAttributes(attrName string) (attr.GetFunc[*request.Span, attribute.KeyV
 	return getter, getter != nil
 }
 
-func SQLAttributes(attrName string) (attr.GetFunc[*request.Span, attribute.KeyValue], bool) {
+func SQLAttributes(attrName string) (attributes.GetFunc[*request.Span, attribute.KeyValue], bool) {
 	if attribute.Key(attrName) == prom.DBOperationKey {
 		return func(span *request.Span) attribute.KeyValue {
 			return semconv.DBOperation(span.Method)
@@ -374,7 +375,7 @@ func SQLAttributes(attrName string) (attr.GetFunc[*request.Span, attribute.KeyVa
 	return commonAttributes(attrName)
 }
 
-func commonAttributes(attrName string) (attr.GetFunc[*request.Span, attribute.KeyValue], bool) {
+func commonAttributes(attrName string) (attributes.GetFunc[*request.Span, attribute.KeyValue], bool) {
 	if attribute.Key(attrName) == semconv.ServiceNameKey {
 		return func(s *request.Span) attribute.KeyValue {
 			return semconv.ServiceName(s.ServiceID.Name)

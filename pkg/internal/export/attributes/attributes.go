@@ -1,7 +1,9 @@
-package attr
+package attributes
 
 import (
 	"strings"
+
+	"github.com/grafana/beyla/pkg/internal/export/attributes/attr"
 )
 
 // GetFunc is a function that explains how to get a given metric attribute of the type
@@ -73,9 +75,9 @@ func normalizeToDot(name string) string {
 	name = strings.ReplaceAll(name, "_", ".")
 	switch name {
 	case "http.response.status.code":
-		name = string(HTTPResponseStatusCodeKey)
+		name = string(attr.HTTPResponseStatusCodeKey)
 	case "k8s.pod.start.time":
-		name = K8sPodStartTime
+		name = attr.K8sPodStartTime
 	}
 	return name
 }

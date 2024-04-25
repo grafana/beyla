@@ -1,6 +1,8 @@
 package attr
 
-import "go.opentelemetry.io/otel/attribute"
+import (
+	"go.opentelemetry.io/otel/attribute"
+)
 
 // Section of the attributes.allow configuration. They are metric names
 // using the dot.notation and suppressing any .total .sum or .count suffix

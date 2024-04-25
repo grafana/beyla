@@ -98,8 +98,8 @@ service:
   annotations: {}
   # -- Service labels.
   labels: {}
-  # -- name of the port for internal metrics service.
-  portName: service
+  # -- name of the port for internal metrics.
+  portName: metrics
   # -- Adds the appProtocol field to the service. This allows to work with istio protocol selection. Ex: "http" or "tcp"
   appProtocol: ""
 

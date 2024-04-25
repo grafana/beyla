@@ -6,7 +6,6 @@ import (
 
 	"github.com/grafana/beyla/pkg/internal/export/attributes/attr"
 	"github.com/grafana/beyla/pkg/internal/helpers"
-	"github.com/grafana/beyla/pkg/internal/pipe/global"
 )
 
 type Provider struct {
@@ -14,12 +13,12 @@ type Provider struct {
 	selector   Selection
 }
 
-func NewProvider(ctxInfo *global.ContextInfo, selectorCfg Selection) (*Provider, error) {
+func NewProvider(groups EnabledGroups, selectorCfg Selection) (*Provider, error) {
 	selectorCfg.Normalize()
 	// TODO: validate
 	return &Provider{
 		selector:   selectorCfg,
-		definition: getDefinitions(ctxInfo),
+		definition: getDefinitions(groups),
 	}, nil
 }
 

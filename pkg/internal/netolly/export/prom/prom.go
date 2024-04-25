@@ -2,7 +2,6 @@ package prom
 
 import (
 	"context"
-	"fmt"
 	"slices"
 
 	"github.com/mariomac/pipes/pipe"
@@ -63,10 +62,6 @@ func PrometheusEndpoint(ctx context.Context, cfg *PrometheusConfig, promMgr *con
 
 func newReporter(ctx context.Context, cfg *PrometheusConfig, promMgr *connector.PrometheusManager) (*metricsReporter, error) {
 	attrs := attributes.PrometheusGetters(export.NamedGetters, cfg.AllowedAttributes)
-	if len(attrs) == 0 {
-		return nil, fmt.Errorf("network metrics Prometheus exporter: no valid"+
-			" attributes.allow defined for metric %s", BeylaNetworkFlows)
-	}
 	labelNames := make([]string, 0, len(attrs))
 	for _, label := range attrs {
 		labelNames = append(labelNames, label.ExposedName)

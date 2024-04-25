@@ -16,7 +16,6 @@ func plog() *slog.Logger {
 }
 
 // Expirer drops metrics from labels that haven't been updated during a given timeout
-// TODO: generify and move to a common section for using it also in AppO11y, supporting more prometheus metrics
 type Expirer struct {
 	entries *export.ExpiryMap[prometheus.Counter]
 	wrapped *prometheus.CounterVec

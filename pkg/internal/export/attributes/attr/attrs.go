@@ -40,6 +40,7 @@ const (
 	ServerKey                 = attribute.Key("server")
 	ServerNamespaceKey        = attribute.Key("server_service_namespace")
 	ConnectionTypeKey         = attribute.Key("connection_type")
+	DBOperationKey            = attribute.Key("db_operation")
 
 	K8sNamespaceName   = "k8s.namespace.name"
 	K8sPodName         = "k8s.pod.name"
@@ -52,7 +53,7 @@ const (
 	K8sPodStartTime    = "k8s.pod.start_time"
 )
 
-// Beyla-specific attributes
+// Beyla-specific network attributes
 const (
 	BeylaIP    = "beyla.ip"
 	Transport  = "transport"
@@ -80,4 +81,15 @@ const (
 	K8sDstOwnerType = "k8s.dst.owner.type"
 	K8sDstNodeIP    = "k8s.dst.node.ip"
 	K8sDstNodeName  = "k8s.dst.node.name"
+)
+
+// other beyla-specific attributes
+const (
+	// TargetInstanceKey is a Prometheus-only attribute.
+	// It will expose the process hostname-pid (or K8s Pod).
+	// It is advised for users that to use relabeling rules to
+	// override the "instance" attribute with "target" in the
+	// Prometheus server. This would be similar to the "multi target pattern":
+	// https://prometheus.io/docs/guides/multi-target-exporter/
+	TargetInstanceKey = "target_instance"
 )

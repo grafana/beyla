@@ -7,7 +7,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/grafana/beyla/pkg/internal/export/attributes/attr"
-	"github.com/grafana/beyla/pkg/internal/pipe/global"
 )
 
 func TestNormalize(t *testing.T) {
@@ -25,7 +24,7 @@ func TestNormalize(t *testing.T) {
 }
 
 func TestFor(t *testing.T) {
-	p, err := NewProvider(&global.ContextInfo{K8sEnabled: true}, Selection{
+	p, err := NewProvider(EnableKubernetes, Selection{
 		"beyla_network_flow_bytes_total": InclusionLists{
 			Include: []string{"beyla_ip", "src.*", "k8s.*"},
 			Exclude: []string{"k8s_*_name", "k8s.*.type"},
@@ -45,9 +44,9 @@ func TestFor(t *testing.T) {
 }
 
 func TestFor_KubeDisabled(t *testing.T) {
-	p, err := NewProvider(&global.ContextInfo{}, Selection{
+	p, err := NewProvider(0, Selection{
 		"beyla_network_flow_bytes_total": InclusionLists{
-			Include: []string{"beyla_ip", "src.*", "k8s.*"},
+			Include: []string{"target.instance", "beyla_ip", "src.*", "k8s.*"},
 			Exclude: []string{"src.port"},
 		},
 	})
@@ -61,14 +60,14 @@ func TestFor_KubeDisabled(t *testing.T) {
 
 func TestNilDoesNotCrash(t *testing.T) {
 	assert.NotPanics(t, func() {
-		p, err := NewProvider(&global.ContextInfo{K8sEnabled: true}, nil)
+		p, err := NewProvider(EnableKubernetes, nil)
 		require.NoError(t, err)
 		assert.NotEmpty(t, p.For(attr.SectionBeylaNetworkFlow))
 	})
 }
 
 func TestDefault(t *testing.T) {
-	p, err := NewProvider(&global.ContextInfo{K8sEnabled: true}, nil)
+	p, err := NewProvider(EnableKubernetes, nil)
 	require.NoError(t, err)
 	assert.Equal(t, []string{
 		"k8s.cluster.name",

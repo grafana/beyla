@@ -4,12 +4,34 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 
 	"github.com/grafana/beyla/pkg/internal/export/attributes/attr"
-	"github.com/grafana/beyla/pkg/internal/pipe/global"
 )
 
+type EnabledGroups int
+
+const (
+	EnableKubernetes = EnabledGroups(1)
+	EnablePrometheus = EnabledGroups(2)
+)
+
+func (e *EnabledGroups) Has(groups EnabledGroups) bool {
+	return *e&groups != 0
+}
+
+func (e *EnabledGroups) Set(groups EnabledGroups) {
+	*e |= groups
+}
+
 // Any new metric and attribute must be added here so the selectors will make their
-func getDefinitions(ctxInfo *global.ContextInfo) map[attr.Section]Definition {
-	kubeEnabled := ctxInfo.K8sEnabled
+func getDefinitions(groups EnabledGroups) map[attr.Section]Definition {
+	kubeEnabled := groups.Has(EnableKubernetes)
+	promEnabled := groups.Has(EnablePrometheus)
+
+	var prometheusAttributes = Definition{
+		Disabled: !promEnabled,
+		Attributes: map[string]Default{
+			attr.TargetInstanceKey: true,
+		},
+	}
 
 	var networkKubeAttributes = Definition{
 		Disabled: !kubeEnabled,
@@ -48,6 +70,7 @@ func getDefinitions(ctxInfo *global.ContextInfo) map[attr.Section]Definition {
 	}
 
 	var appCommon = Definition{
+		Parents: []*Definition{&prometheusAttributes},
 		Attributes: map[string]Default{
 			string(semconv.ServiceNameKey): true,
 		},

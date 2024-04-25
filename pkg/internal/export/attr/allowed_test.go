@@ -1,86 +1,61 @@
 package attr
 
 import (
-	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-
-	"github.com/grafana/beyla/pkg/internal/metricname"
 )
 
 func TestNormalize(t *testing.T) {
-	aad := AllowedAttributesDefinition{
-		"beyla_network_flow_bytes": []string{"foo", "bar"},
-		"some.other.metric_sum":    []string{"attr", "other"},
-		"tralari.tralara.total":    []string{"a1", "a2", "a3"},
+	incl := Inclusion{
+		"beyla_network_flow_bytes": InclusionLists{Include: []string{"foo", "bar"}},
+		"some.other.metric_sum":    InclusionLists{Include: []string{"attr", "other"}},
+		"tralari.tralara.total":    InclusionLists{Include: []string{"a1", "a2", "a3"}},
 	}
-	aad.Normalize()
-	assert.Equal(t, AllowedAttributesDefinition{
-		"beyla.network.flow.bytes": []string{"foo", "bar"},
-		"some.other.metric":        []string{"attr", "other"},
-		"tralari.tralara":          []string{"a1", "a2", "a3"},
-	}, aad)
+	incl.Normalize()
+	assert.Equal(t, Inclusion{
+		"beyla.network.flow.bytes": InclusionLists{Include: []string{"foo", "bar"}},
+		"some.other.metric":        InclusionLists{Include: []string{"attr", "other"}},
+		"tralari.tralara":          InclusionLists{Include: []string{"a1", "a2", "a3"}},
+	}, incl)
 }
 
 func TestFor(t *testing.T) {
-	aad := AllowedAttributesDefinition{
-		"beyla.network.flow.bytes": []string{"foo", "bar"},
-		"some.other.metric":        []string{"attr", "other"},
-		"tralari.tralara.total":    []string{"a1", "a2", "a3"},
+	incl := Inclusion{
+		"beyla_network_flow_bytes_total": InclusionLists{
+			Include: []string{"beyla_ip", "src.*", "k8s.*"},
+			Exclude: []string{"k8s_*_name", "k8s.*.type"},
+		},
 	}
-	aad.Normalize()
-	attrs := aad.For("beyla.network.flow.bytes")
-	slices.Sort(attrs)
-	assert.Equal(t, []string{"bar", "foo"}, attrs)
-	attrs = aad.For("some.other.metric")
-	slices.Sort(attrs)
-	assert.Equal(t, []string{"attr", "other"}, attrs)
-	attrs = aad.For("tralari.tralara")
-	slices.Sort(attrs)
-	assert.Equal(t, []string{"a1", "a2", "a3"}, attrs)
-	assert.Empty(t, aad.For("non.existing.metric"))
-}
-
-func TestFor_GlobalDefinition(t *testing.T) {
-	aad := AllowedAttributesDefinition{
-		"global":                   []string{"foo", "baz"},
-		"beyla.network.flow.bytes": []string{"foo", "bar"},
-		"some.other.metric":        []string{"attr", "other"},
-		"tralari.tralara.total":    []string{"a1", "a2", "a3"},
-	}
-	aad.Normalize()
-
-	attrs := aad.For("beyla.network.flow.bytes")
-	slices.Sort(attrs)
-	assert.Equal(t, []string{"bar", "baz", "foo"}, attrs)
-	attrs = aad.For("some.other.metric")
-	slices.Sort(attrs)
-	assert.Equal(t, []string{"attr", "baz", "foo", "other"}, attrs)
-	attrs = aad.For("tralari.tralara")
-	slices.Sort(attrs)
-	assert.Equal(t, []string{"a1", "a2", "a3", "baz", "foo"}, attrs)
-	attrs = aad.For("not.defined.metric")
-	slices.Sort(attrs)
-	assert.Equal(t, []string{"baz", "foo"}, attrs)
+	incl.Normalize()
+	assert.Equal(t, []string{
+		"beyla.ip",
+		"k8s.dst.namespace",
+		"k8s.dst.node.ip",
+		"k8s.src.namespace",
+		"k8s.src.node.ip",
+		"src.address",
+		"src.name",
+		"src.port",
+	}, incl.For(SectionBeylaNetworkFlow))
 }
 
 func TestNilDoesNotCrash(t *testing.T) {
-	var aad AllowedAttributesDefinition
+	var aad Inclusion
 	assert.NotPanics(t, func() {
 		aad.Normalize()
-		assert.Empty(t, aad.For("some.metric"))
+		assert.NotEmpty(t, aad.For(SectionBeylaNetworkFlow))
 	})
 }
 
 func TestDefault(t *testing.T) {
-	var aad AllowedAttributesDefinition
+	var aad Inclusion
 	aad.Normalize()
 	assert.Equal(t, []string{
-		"k8s.src.owner.name",
-		"k8s.src.namespace",
-		"k8s.dst.owner.name",
-		"k8s.dst.namespace",
 		"k8s.cluster.name",
-	}, aad.For(metricname.NormalBeylaNetworkFlows))
+		"k8s.dst.namespace",
+		"k8s.dst.owner.name",
+		"k8s.src.namespace",
+		"k8s.src.owner.name",
+	}, aad.For(SectionBeylaNetworkFlow))
 }

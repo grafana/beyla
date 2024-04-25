@@ -150,7 +150,7 @@ func (m MetricsConfig) Enabled() bool {
 type MetricsReporter struct {
 	ctx       context.Context
 	cfg       *MetricsConfig
-	allowed   attr.AllowedAttributesDefinition
+	allowed   attr.Included
 	exporter  metric.Exporter
 	reporters ReporterPool[*Metrics]
 }

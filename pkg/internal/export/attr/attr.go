@@ -1,11 +1,7 @@
 package attr
 
 import (
-	"maps"
-	"regexp"
 	"strings"
-
-	"github.com/grafana/beyla/pkg/beyla"
 )
 
 // GetFunc is a function that explains how to get a given metric attribute of the type
@@ -32,7 +28,7 @@ type NamedGetters[T, O any] func(internalName string) (GetFunc[T, O], bool)
 // stores the metadata).
 // Whatever is the format provided by the user (dot-based or underscore-based), it converts dots to underscores
 // and vice-versa to make sure that the correct format is used either internally or externally.
-func PrometheusGetters[T, O any](getter GetterProvider[T, O], names []string) []Getter[T, O] {
+func PrometheusGetters[T, O any](getter NamedGetters[T, O], names []string) []Getter[T, O] {
 	attrs := make([]Getter[T, O], 0, len(names))
 	for _, name := range names {
 		exposedName := normalizeToUnderscore(name)
@@ -75,11 +71,11 @@ func normalizeToUnderscore(name string) string {
 // or underscore notation from the user
 func normalizeToDot(name string) string {
 	name = strings.ReplaceAll(name, "_", ".")
-	// TODO: add future edge cases here
-	// nolint:gocritic
 	switch name {
 	case "http.response.status.code":
-		name = "http.response.status_code"
+		name = string(HTTPResponseStatusCodeKey)
+	case "k8s.pod.start.time":
+		name = K8sPodStartTime
 	}
 	return name
 }

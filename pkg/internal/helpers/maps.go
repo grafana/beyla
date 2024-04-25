@@ -65,3 +65,23 @@ func (m Map2[K1, K2, V]) Delete(key1 K1, key2 K2) {
 func (m Map2[K1, K2, V]) DeleteAll(key1 K1) {
 	delete(m, key1)
 }
+
+// SetToSlice returns a slice containing the keys of the provided Set/map
+func SetToSlice[V comparable](m map[V]struct{}) []V {
+	out := make([]V, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	return out
+}
+
+// SliceToSet returns a Set/map whose keys are formed by the values in the
+// slice argument.
+// It will deduplicate any repeated value in the slice
+func SliceToSet[V comparable](s []V) map[V]struct{} {
+	out := make(map[V]struct{}, len(s))
+	for i := range s {
+		out[s[i]] = struct{}{}
+	}
+	return out
+}

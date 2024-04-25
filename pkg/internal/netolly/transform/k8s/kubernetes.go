@@ -31,36 +31,6 @@ import (
 	"github.com/grafana/beyla/pkg/transform"
 )
 
-const (
-	attrPrefixSrc       = "k8s.src"
-	attrPrefixDst       = "k8s.dst"
-	attrSuffixNs        = ".namespace"
-	attrSuffixName      = ".name"
-	attrSuffixType      = ".type"
-	attrSuffixOwnerName = ".owner.name"
-	attrSuffixOwnerType = ".owner.type"
-	attrSuffixHostIP    = ".node.ip"
-	attrSuffixHostName  = ".node.name"
-
-	AttrClusterName = "k8s.cluster.name"
-
-	AttrDstNamespace = attrPrefixDst + attrSuffixNs
-	AttrDstName      = attrPrefixDst + attrSuffixName
-	AttrDstType      = attrPrefixDst + attrSuffixType
-	AttrDstOwnerName = attrPrefixDst + attrSuffixOwnerName
-	AttrDstOwnerType = attrPrefixDst + attrSuffixOwnerType
-	AttrDstHostIP    = attrPrefixDst + attrSuffixHostIP
-	AttrDstHostName  = attrPrefixDst + attrSuffixHostName
-
-	AttrSrcNamespace = attrPrefixSrc + attrSuffixNs
-	AttrSrcName      = attrPrefixSrc + attrSuffixName
-	AttrSrcType      = attrPrefixSrc + attrSuffixType
-	AttrSrcOwnerName = attrPrefixSrc + attrSuffixOwnerName
-	AttrSrcOwnerType = attrPrefixSrc + attrSuffixOwnerType
-	AttrSrcHostIP    = attrPrefixSrc + attrSuffixHostIP
-	AttrSrcHostName  = attrPrefixSrc + attrSuffixHostName
-)
-
 const alreadyLoggedIPsCacheLen = 256
 const (
 	clusterMetadataRetries       = 5

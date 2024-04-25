@@ -1,55 +1,82 @@
 package attr
 
 import (
+	"path"
+	"slices"
 	"strings"
 
 	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 	"golang.org/x/exp/maps"
+
+	"github.com/grafana/beyla/pkg/internal/helpers"
 )
 
-// AllowedAttributesDefinition specifies which attributes are allowed for each metric.
-// The key is the name of the metric (either in Prometheus or OpenTelemetry format)
-// The value is the enumeration of allowed attributes
-type AllowedAttributesDefinition map[Section][]string
+// Inclusion specifies which attributes are allowed for each metric.
+// The key is the metric name (either in Prometheus or OpenTelemetry format)
+// The value is the enumeration of included/excluded attribute globs
+type Inclusion map[Section]InclusionLists
+
+type InclusionLists struct {
+	Include []string `yaml:"include"`
+	Exclude []string `yaml:"exclude"`
+}
+
+func (i *InclusionLists) include(metricName string) bool {
+	for _, incl := range i.Include {
+		if ok, _ := path.Match(normalizeToDot(incl), metricName); ok {
+			return true
+		}
+	}
+	return false
+}
+
+func (i *InclusionLists) exclude(metricName string) bool {
+	for _, excl := range i.Exclude {
+		if ok, _ := path.Match(normalizeToDot(excl), metricName); ok {
+			return true
+		}
+	}
+	return false
+}
 
 var networkKubeAttributes = Definition{
 	Attributes: map[string]Default{
-		"k8s.src.owner.name": true,
-		"k8s.src.namespace":  true,
-		"k8s.dst.owner.name": true,
-		"k8s.dst.namespace":  true,
-		"k8s.cluster.name":   true,
-		"k8s.src.name":       false,
-		"k8s.src.type":       false,
-		"k8s.src.owner.type": false,
-		"k8s.src.node.ip":    false,
-		"k8s.src.node.name":  false,
-		"k8s.dst.name":       false,
-		"k8s.dst.type":       false,
-		"k8s.dst.owner.type": false,
-		"k8s.dst.node.ip":    false,
-		"k8s.dst.node.name":  false,
+		K8sSrcOwnerName: true,
+		K8sSrcNamespace: true,
+		K8sDstOwnerName: true,
+		K8sDstNamespace: true,
+		K8sClusterName:  true,
+		K8sSrcName:      false,
+		K8sSrcType:      false,
+		K8sSrcOwnerType: false,
+		K8sSrcNodeIP:    false,
+		K8sSrcNodeName:  false,
+		K8sDstName:      false,
+		K8sDstType:      false,
+		K8sDstOwnerType: false,
+		K8sDstNodeIP:    false,
+		K8sDstNodeName:  false,
 	},
 }
 
 var appKubeAttributes = Definition{
 	Attributes: map[string]Default{
-		"k8s.namespace.name":   false,
-		"k8s.pod.name":         false,
-		"k8s.deployment.name":  false,
-		"k8s.replicaset.name":  false,
-		"k8s.daemonset.name":   false,
-		"k8s.statefulset.name": false,
-		"k8s.node.name":        false,
-		"k8s.pod.uid":          false,
-		"k8s.pod.start_time":   false,
+		K8sNamespaceName:   false,
+		K8sPodName:         false,
+		K8sDeploymentName:  false,
+		K8sReplicaSetName:  false,
+		K8sDaemonSetName:   false,
+		K8sStatefulSetName: false,
+		K8sNodeName:        false,
+		K8sPodUID:          false,
+		K8sPodStartTime:    false,
 	},
 }
 
 var appCommon = Definition{
 	Attributes: map[string]Default{
-		string(semconv.ServiceNameKey):    false,
-	}
+		string(semconv.ServiceNameKey): false,
+	},
 }
 
 var appHTTPDuration = Definition{
@@ -57,44 +84,61 @@ var appHTTPDuration = Definition{
 		string(HTTPRequestMethodKey):      true,
 		string(HTTPResponseStatusCodeKey): true,
 		string(semconv.HTTPRouteKey):      true,
-		string(HTTPUrlPathKey): false,
-		string(ClientAddrKey): false,
+		string(HTTPUrlPathKey):            false,
+		string(ClientAddrKey):             false,
 	},
 }
 
-var defaultAllowedAttributes = map[Section]Definition{
+var allAttributesList = map[Section]Definition{
 	SectionBeylaNetworkFlow: {
 		Parents: []*Definition{&networkKubeAttributes},
 		Attributes: map[string]Default{
-			"beyla.ip":    false,
-			"transport":   false,
-			"src.address": false,
-			"dst.address": false,
-			"src.port":    false,
-			"dst.port":    false,
-			"src.name":    false,
-			"dst.name":    false,
-			"direction":   false,
-			"iface":       false,
+			BeylaIP:    false,
+			Transport:  false,
+			SrcAddress: false,
+			DstAddres:  false,
+			SrcPort:    false,
+			DstPort:    false,
+			SrcName:    false,
+			DstName:    false,
+			Direction:  false,
+			Iface:      false,
 		},
 	},
 	SectionHTTPServerDuration: {
-		Parents: []*Definition{&appKubeAttributes, &appHTTPDuration},
+		Parents: []*Definition{&appCommon, &appKubeAttributes, &appHTTPDuration},
 	},
 	SectionHTTPClientDuration: {
-		Parents: []*Definition{&appKubeAttributes, &appHTTPDuration},
+		Parents: []*Definition{&appCommon, &appKubeAttributes, &appHTTPDuration},
 	},
 	SectionHTTPServerRequestSize: {
-		Parents: []*Definition{&appKubeAttributes, &appHTTPDuration},
+		Parents: []*Definition{&appCommon, &appKubeAttributes, &appHTTPDuration},
 	},
 	SectionHTTPClientRequestSize: {
-		Parents: []*Definition{&appKubeAttributes, &appHTTPDuration},
+		Parents: []*Definition{&appCommon, &appKubeAttributes, &appHTTPDuration},
 	},
-	SectionRPCClientDuration: []string{
-		string(semconv.RPCMethodKey),
-		string(semconv.RPCSystemKey),
-		string(semconv.RPCGRPCStatusCodeKey),
-		string(ServerAddrKey),
+	SectionRPCClientDuration: {
+		Parents: []*Definition{&appCommon, &appKubeAttributes},
+		Attributes: map[string]Default{
+			string(semconv.RPCMethodKey):         true,
+			string(semconv.RPCSystemKey):         true,
+			string(semconv.RPCGRPCStatusCodeKey): true,
+			string(ServerAddrKey):                true,
+		},
+	},
+	SectionRPCServerDuration: {
+		Parents: []*Definition{&appCommon, &appKubeAttributes},
+		Attributes: map[string]Default{
+			string(semconv.RPCMethodKey):         true,
+			string(semconv.RPCSystemKey):         true,
+			string(semconv.RPCGRPCStatusCodeKey): true,
+			//	if span.Type == request.EventTypeGRPC {
+			//	attrs = append(attrs, ClientAddr(SpanPeer(span)))
+			//} else {
+			//	attrs = append(attrs, ServerAddr(SpanPeer(span)))
+			//}
+			string(ClientAddrKey): true,
+		},
 	},
 }
 
@@ -104,16 +148,17 @@ var defaultAllowedAttributes = map[Section]Definition{
 // - Remove metric suffixes such as .sum, .total, .bucket, etc...
 // Only normalize the metric names, as the attribute names are already normalized in the
 // PrometheusGetters and OpenTelemetryGetters function
-func (aad AllowedAttributesDefinition) Normalize() {
-	if aad == nil {
+// TODO: validate too
+func (incl Inclusion) Normalize() {
+	if incl == nil {
 		return
 	}
-	normalized := map[Section][]string{}
-	for metricName, allowedAttrs := range aad {
+	normalized := map[Section]InclusionLists{}
+	for metricName, allowedAttrs := range incl {
 		normalized[normalizeMetric(metricName)] = allowedAttrs
 	}
-	maps.Clear(aad)
-	maps.Copy(aad, normalized)
+	maps.Clear(incl)
+	maps.Copy(incl, normalized)
 }
 
 func normalizeMetric(name Section) Section {
@@ -127,30 +172,28 @@ func normalizeMetric(name Section) Section {
 	return Section(nameStr)
 }
 
-// For a given metric name, returns the allowed attributes from the following sources
-//   - If the "global" section is provided, returns its defined list of attribute names.
-//   - If the metric name section is provided, returns its defined list of attribute names.
-//   - If both the "global" and metric name sections are provided, merges both and returns
-//     a deduplicated list of attributes.
-//   - If none of the above exists, returns the value from the defaultAllowedAttributes, if any.
-func (aad AllowedAttributesDefinition) For(metricName Section) []string {
-	var deduped map[string]struct{}
-	if aad != nil {
-		deduped = map[string]struct{}{}
-		for _, attr := range aad[globalKey] {
-			deduped[attr] = struct{}{}
+func (incl Inclusion) For(metricName Section) []string {
+	metricAttributes, ok := allAttributesList[metricName]
+	if !ok {
+		panic("BUG! metric not found " + metricName)
+	}
+	inclusionLists, ok := incl[metricName]
+	if !ok {
+		attrs := helpers.SetToSlice(metricAttributes.Default())
+		slices.Sort(attrs)
+		return attrs
+	}
+	addAttributes := map[string]struct{}{}
+	for attr := range metricAttributes.All() {
+		attr = normalizeToDot(attr)
+		if inclusionLists.include(attr) {
+			addAttributes[attr] = struct{}{}
 		}
-		for _, attr := range aad[metricName] {
-			deduped[attr] = struct{}{}
-		}
 	}
-	// if no attributes are defined for a given metric, let's return the default attributes
-	if len(deduped) == 0 {
-		return defaultAllowedAttributes[metricName]
-	}
-	allowed := make([]string, 0, len(deduped))
-	for attr := range deduped {
-		allowed = append(allowed, attr)
-	}
-	return allowed
+	maps.DeleteFunc(addAttributes, func(attr string, _ struct{}) bool {
+		return inclusionLists.exclude(normalizeToDot(attr))
+	})
+	attrs := helpers.SetToSlice(addAttributes)
+	slices.Sort(attrs)
+	return attrs
 }

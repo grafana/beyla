@@ -165,8 +165,8 @@ func (t TracesReceiverConfig) Enabled() bool {
 // added to each span
 type Attributes struct {
 	Kubernetes transform.KubernetesDecorator    `yaml:"kubernetes"`
-	InstanceID traces.InstanceIDConfig          `yaml:"instance_id"`
-	Allow      attr.AllowedAttributesDefinition `yaml:"allow"`
+	InstanceID traces.InstanceIDConfig `yaml:"instance_id"`
+	Allow      attr.Included           `yaml:"allow"`
 }
 
 type ConfigError string

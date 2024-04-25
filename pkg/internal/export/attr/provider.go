@@ -1,6 +1,8 @@
 package attr
 
-import "maps"
+import (
+	"maps"
+)
 
 type Default bool
 

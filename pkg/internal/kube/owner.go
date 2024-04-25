@@ -6,18 +6,6 @@ import (
 	v1 "k8s.io/api/core/v1"
 )
 
-const (
-	NamespaceName   = "k8s.namespace.name"
-	PodName         = "k8s.pod.name"
-	DeploymentName  = "k8s.deployment.name"
-	ReplicaSetName  = "k8s.replicaset.name"
-	DaemonSetName   = "k8s.daemonset.name"
-	StatefulSetName = "k8s.statefulset.name"
-	NodeName        = "k8s.node.name"
-	PodUID          = "k8s.pod.uid"
-	PodStartTime    = "k8s.pod.start_time"
-)
-
 type OwnerType int
 
 const (

@@ -138,7 +138,7 @@ stringData:
 
 ### 3. Create a ConfigMap with Alloy configuration
 
-Create a ConfigMap with the Alloy configuration. Copy the following contents into a file (for example, `config.alloy`) and deploy it with the command `kubectl create configmap --namespace alloy alloy-config "--from-file=config.alloy=./config.alloy"`.
+Create a `ConfigMap` with the Alloy configuration. Copy the following contents into a file, for example `config.alloy`:
 
 ```alloy
 beyla.ebpf "default" {
@@ -172,7 +172,14 @@ otelcol.auth.basic "grafana_cloud_tempo" {
 	password = env("TEMPO_REMOTE_WRITE_PASSWORD")
 }
 ```
-With this configuration Beyla instruments the services running in the Kubernetes cluster and send traces to Grafana Cloud Tempo and metrics to Prometheus. 
+
+Deploy the configuration with the command:
+
+```sh
+kubectl create configmap --namespace alloy alloy-config "--from-file=config.alloy=./config.alloy"
+```
+
+With this configuration Beyla instruments the services running in the Kubernetes cluster and send traces to Grafana Cloud Tempo and metrics to Prometheus.
 
 The argument `discovery > services > exe_path` specifies the path to the executable of the services to instrument. The `discovery > services > open_ports` argument specifies the port where the services are listening.
 
@@ -186,7 +193,7 @@ For further details on the configuration options, refer to the documentation of 
 
 ### 4. Deploy Alloy with Helm
 
-Create a `values.yaml` with the configuration for the Alloy Helm chart. Copy the following contents into a file (for example, `values.yaml`) and deploy it with the command `helm upgrade --namespace alloy alloy grafana/alloy -f values.yaml`.
+Create a `values.yaml` with the configuration for the Alloy Helm chart. Copy the following contents into a file, for example `values.yaml`.
 
 ```yaml
 # -- Overrides the chart's name. Used to change the infix in the resource names.
@@ -265,7 +272,7 @@ alloy:
     valueFrom:
       secretKeyRef:
         name: grafana-credentials
-        key: prometheus-rw-pwd 
+        key: prometheus-rw-pwd
   - name: TEMPO_REMOTE_WRITE_USERNAME
     valueFrom:
       secretKeyRef:
@@ -275,7 +282,7 @@ alloy:
     valueFrom:
       secretKeyRef:
         name: grafana-credentials
-        key: tempo-rw-pwd                         
+        key: tempo-rw-pwd
 
   # -- Maps all the keys on a ConfigMap or Secret as environment variables. https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.24/#envfromsource-v1-core
   envFrom: []
@@ -541,6 +548,12 @@ ingress:
   #      - chart-example.local
 ```
 
+Deploy the configuration with the command:
+
+```sh
+helm upgrade --namespace alloy alloy grafana/alloy -f values.yaml
+```
+
 - To run in DaemonSet mode, Beyla requires to have access to all the
   processes in the node. Therefore set `hostPID: true` the `controller` section.
 - The Beyla container needs to run with privileges as it requires
@@ -563,7 +576,7 @@ curl http://localhost:8081
 curl http://localhost:8081/foo
 ```
 
-Now, go to the instance in Grafana Cloud, and from the **Explore** section in the left panel, select the data source for the traces (usually named `grafanacloud-<your user name>-traces`).
+Navigate to the instance in Grafana Cloud, and from the **Explore** section in the left panel, select the data source for the traces, named `grafanacloud-<your user name>-traces`.
 
 ![Select the traces data source](https://grafana.com/media/docs/grafana-cloud/beyla/tutorial/k8s/select-traces.png)
 

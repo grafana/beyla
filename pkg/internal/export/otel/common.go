@@ -323,7 +323,7 @@ func ConnectionTypeMetric(val string) attribute.KeyValue {
 	return attr.ConnectionTypeKey.String(val)
 }
 
-func HttpServerAttributes(attrName string) (attr.GetFunc[*request.Span, attribute.KeyValue], bool) {
+func HTTPAttributes(attrName string) (attr.GetFunc[*request.Span, attribute.KeyValue], bool) {
 	var getter attr.GetFunc[*request.Span, attribute.KeyValue]
 	switch attribute.Key(attrName) {
 	case attr.HTTPRequestMethodKey:
@@ -336,21 +336,6 @@ func HttpServerAttributes(attrName string) (attr.GetFunc[*request.Span, attribut
 		getter = func(s *request.Span) attribute.KeyValue { return HTTPUrlPath(s.Path) }
 	case attr.ClientAddrKey:
 		getter = func(s *request.Span) attribute.KeyValue { return ClientAddr(SpanPeer(s)) }
-	default:
-		return commonAttributes(attrName)
-	}
-	return getter, getter != nil
-}
-
-func HttpClientAttributes(attrName string) (attr.GetFunc[*request.Span, attribute.KeyValue], bool) {
-	var getter attr.GetFunc[*request.Span, attribute.KeyValue]
-	switch attribute.Key(attrName) {
-	case attr.HTTPRequestMethodKey:
-		getter = func(s *request.Span) attribute.KeyValue { return HTTPRequestMethod(s.Method) }
-	case attr.HTTPResponseStatusCodeKey:
-		getter = func(s *request.Span) attribute.KeyValue { return HTTPResponseStatusCode(s.Status) }
-	case semconv.HTTPRouteKey:
-		getter = func(s *request.Span) attribute.KeyValue { return semconv.HTTPRoute(s.Route) }
 	case attr.ServerAddrKey:
 		getter = func(s *request.Span) attribute.KeyValue { return ServerAddr(SpanHost(s)) }
 	case attr.ServerPortKey:
@@ -361,7 +346,7 @@ func HttpClientAttributes(attrName string) (attr.GetFunc[*request.Span, attribut
 	return getter, getter != nil
 }
 
-func GRPCServerAttributes(attrName string) (attr.GetFunc[*request.Span, attribute.KeyValue], bool) {
+func GRPCAttributes(attrName string) (attr.GetFunc[*request.Span, attribute.KeyValue], bool) {
 	var getter attr.GetFunc[*request.Span, attribute.KeyValue]
 	switch attribute.Key(attrName) {
 	case semconv.RPCMethodKey:
@@ -372,21 +357,6 @@ func GRPCServerAttributes(attrName string) (attr.GetFunc[*request.Span, attribut
 		getter = func(s *request.Span) attribute.KeyValue { return semconv.RPCGRPCStatusCodeKey.Int(s.Status) }
 	case attr.ClientAddrKey:
 		getter = func(s *request.Span) attribute.KeyValue { return ClientAddr(SpanPeer(s)) }
-	default:
-		return commonAttributes(attrName)
-	}
-	return getter, getter != nil
-}
-
-func GRPCClientAttributes(attrName string) (attr.GetFunc[*request.Span, attribute.KeyValue], bool) {
-	var getter attr.GetFunc[*request.Span, attribute.KeyValue]
-	switch attribute.Key(attrName) {
-	case semconv.RPCMethodKey:
-		getter = func(s *request.Span) attribute.KeyValue { return semconv.RPCMethod(s.Path) }
-	case semconv.RPCSystemKey:
-		getter = func(s *request.Span) attribute.KeyValue { return semconv.RPCSystemGRPC }
-	case semconv.RPCGRPCStatusCodeKey:
-		getter = func(s *request.Span) attribute.KeyValue { return semconv.RPCGRPCStatusCodeKey.Int(s.Status) }
 	case attr.ServerAddrKey:
 		getter = func(s *request.Span) attribute.KeyValue { return ServerAddr(SpanPeer(s)) }
 	default:
@@ -395,7 +365,7 @@ func GRPCClientAttributes(attrName string) (attr.GetFunc[*request.Span, attribut
 	return getter, getter != nil
 }
 
-func SQLAttributes(attrName string)  (attr.GetFunc[*request.Span, attribute.KeyValue], bool) {
+func SQLAttributes(attrName string) (attr.GetFunc[*request.Span, attribute.KeyValue], bool) {
 	if attribute.Key(attrName) == prom.DBOperationKey {
 		return func(span *request.Span) attribute.KeyValue {
 			return semconv.DBOperation(span.Method)

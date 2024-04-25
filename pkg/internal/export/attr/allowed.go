@@ -11,10 +11,10 @@ import (
 	"github.com/grafana/beyla/pkg/internal/helpers"
 )
 
-// Inclusion specifies which attributes are allowed for each metric.
+// Selectors specifies which attributes are allowed for each metric.
 // The key is the metric name (either in Prometheus or OpenTelemetry format)
 // The value is the enumeration of included/excluded attribute globs
-type Inclusion map[Section]InclusionLists
+type Selectors map[Section]InclusionLists
 
 type InclusionLists struct {
 	Include []string `yaml:"include"`
@@ -134,9 +134,9 @@ var allAttributesList = map[Section]Definition{
 			string(semconv.RPCGRPCStatusCodeKey): true,
 			//	if span.Type == request.EventTypeGRPC {
 			//	attrs = append(attrs, ClientAddr(SpanPeer(span)))
-			//} else {
+			// } else {
 			//	attrs = append(attrs, ServerAddr(SpanPeer(span)))
-			//}
+			// }
 			string(ClientAddrKey): true,
 		},
 	},
@@ -149,7 +149,7 @@ var allAttributesList = map[Section]Definition{
 // Only normalize the metric names, as the attribute names are already normalized in the
 // PrometheusGetters and OpenTelemetryGetters function
 // TODO: validate too
-func (incl Inclusion) Normalize() {
+func (incl Selectors) Normalize() {
 	if incl == nil {
 		return
 	}
@@ -172,7 +172,7 @@ func normalizeMetric(name Section) Section {
 	return Section(nameStr)
 }
 
-func (incl Inclusion) For(metricName Section) []string {
+func (incl Selectors) For(metricName Section) []string {
 	metricAttributes, ok := allAttributesList[metricName]
 	if !ok {
 		panic("BUG! metric not found " + metricName)

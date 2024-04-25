@@ -120,17 +120,17 @@ func (f *Flows) buildPipeline(ctx context.Context) (*pipe.Runner, error) {
 	// Terminal nodes export the flow record information out of the pipeline: OTEL, Prom and printer.
 	// Not all the nodes are mandatory here. Is the responsibility of each Provider function to decide
 	// whether each node is going to be instantiated or just ignored.
-	f.cfg.Attributes.Allow.Normalize()
+	f.cfg.Attributes.Select.Normalize()
 	pipe.AddFinalProvider(pb, otelExport, func() (pipe.FinalFunc[[]*ebpf.Record], error) {
 		return otel.MetricsExporterProvider(&otel.MetricsConfig{
 			Metrics:           &f.cfg.Metrics,
-			AllowedAttributes: f.cfg.Attributes.Allow.For(metricname.NormalBeylaNetworkFlows),
+			AllowedAttributes: f.cfg.Attributes.Select.For(metricname.NormalBeylaNetworkFlows),
 		})
 	})
 	pipe.AddFinalProvider(pb, promExport, func() (pipe.FinalFunc[[]*ebpf.Record], error) {
 		return prom.PrometheusEndpoint(ctx, &prom.PrometheusConfig{
 			Config:            &f.cfg.Prometheus,
-			AllowedAttributes: f.cfg.Attributes.Allow.For(metricname.NormalBeylaNetworkFlows),
+			AllowedAttributes: f.cfg.Attributes.Select.For(metricname.NormalBeylaNetworkFlows),
 		}, f.ctxInfo.Prometheus)
 	})
 	pipe.AddFinalProvider(pb, printer, func() (pipe.FinalFunc[[]*ebpf.Record], error) {

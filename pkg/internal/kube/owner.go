@@ -4,6 +4,8 @@ import (
 	"strings"
 
 	v1 "k8s.io/api/core/v1"
+
+	"github.com/grafana/beyla/pkg/internal/export/attr"
 )
 
 type OwnerType int
@@ -19,13 +21,13 @@ const (
 func (o OwnerType) LabelName() string {
 	switch o {
 	case OwnerReplicaSet:
-		return ReplicaSetName
+		return attr.K8sReplicaSetName
 	case OwnerDeployment:
-		return DeploymentName
+		return attr.K8sDeploymentName
 	case OwnerStatefulSet:
-		return StatefulSetName
+		return attr.K8sStatefulSetName
 	case OwnerDaemonSet:
-		return DaemonSetName
+		return attr.K8sDaemonSetName
 	default:
 		return "k8s.unknown.owner"
 	}

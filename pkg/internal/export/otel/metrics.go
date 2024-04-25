@@ -32,13 +32,13 @@ func mlog() *slog.Logger {
 }
 
 const (
-	HTTPServerDuration    = attr.SectionHTTPServerDuration
-	HTTPClientDuration    = attr.SectionHTTPClientDuration
-	RPCServerDuration     = attr.SectionRPCServerDuration
-	RPCClientDuration     = attr.SectionRPCClientDuration
-	SQLClientDuration     = attr.SectionSQLClientDuration
-	HTTPServerRequestSize = attr.SectionHTTPServerRequestSize
-	HTTPClientRequestSize = attr.SectionHTTPClientRequestSize
+	HTTPServerDuration    = string(attr.SectionHTTPServerDuration)
+	HTTPClientDuration    = string(attr.SectionHTTPClientDuration)
+	RPCServerDuration     = string(attr.SectionRPCServerDuration)
+	RPCClientDuration     = string(attr.SectionRPCClientDuration)
+	SQLClientDuration     = string(attr.SectionSQLClientDuration)
+	HTTPServerRequestSize = string(attr.SectionHTTPServerRequestSize)
+	HTTPClientRequestSize = string(attr.SectionHTTPClientRequestSize)
 	SpanMetricsLatency    = "traces_spanmetrics_latency"
 	SpanMetricsCalls      = "traces_spanmetrics_calls_total"
 	SpanMetricsSizes      = "traces_spanmetrics_size_total"
@@ -148,11 +148,11 @@ func (m MetricsConfig) Enabled() bool {
 // MetricsReporter implements the graph node that receives request.Span
 // instances and forwards them as OTEL metrics.
 type MetricsReporter struct {
-	ctx       context.Context
-	cfg       *MetricsConfig
-	allowed   attr.Included
-	exporter  metric.Exporter
-	reporters ReporterPool[*Metrics]
+	ctx        context.Context
+	cfg        *MetricsConfig
+	attributes attr.Selectors
+	exporter   metric.Exporter
+	reporters  ReporterPool[*Metrics]
 }
 
 // Metrics is a set of metrics associated to a given OTEL MeterProvider.
@@ -285,19 +285,19 @@ func (mr *MetricsReporter) setupOtelMeters(m *Metrics, meter instrument.Meter) e
 	}
 
 	m.attrHTTPDuration = attr.OpenTelemetryGetters(
-		HttpServerAttributes, mr.allowed.For(HTTPServerDuration))
+		HTTPAttributes, mr.attributes.For(attr.SectionHTTPServerDuration))
 	m.attrHTTPClientDuration = attr.OpenTelemetryGetters(
-		HttpClientAttributes, mr.allowed.For(HTTPClientDuration))
+		HTTPAttributes, mr.attributes.For(attr.SectionHTTPClientDuration))
 	m.attrHTTPRequestSize = attr.OpenTelemetryGetters(
-		HttpServerAttributes, mr.allowed.For(HTTPServerRequestSize))
+		HTTPAttributes, mr.attributes.For(attr.SectionHTTPServerRequestSize))
 	m.attrHTTPClientRequestSize = attr.OpenTelemetryGetters(
-		HttpClientAttributes, mr.allowed.For(HTTPClientRequestSize))
+		HTTPAttributes, mr.attributes.For(attr.SectionHTTPClientRequestSize))
 	m.attrGRPCServer = attr.OpenTelemetryGetters(
-		GRPCServerAttributes, mr.allowed.For(RPCServerDuration))
+		GRPCAttributes, mr.attributes.For(attr.SectionRPCServerDuration))
 	m.attrGRPCClient = attr.OpenTelemetryGetters(
-		GRPCClientAttributes, mr.allowed.For(RPCClientDuration))
+		GRPCAttributes, mr.attributes.For(attr.SectionRPCClientDuration))
 	m.attrSQLClient = attr.OpenTelemetryGetters(
-		SQLAttributes, mr.allowed.For(SQLClientDuration))
+		SQLAttributes, mr.attributes.For(attr.SectionSQLClientDuration))
 
 	var err error
 	m.httpDuration, err = meter.Float64Histogram(HTTPServerDuration, instrument.WithUnit("s"))

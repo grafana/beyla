@@ -7,13 +7,13 @@ import (
 )
 
 func TestNormalize(t *testing.T) {
-	incl := Inclusion{
+	incl := Selectors{
 		"beyla_network_flow_bytes": InclusionLists{Include: []string{"foo", "bar"}},
 		"some.other.metric_sum":    InclusionLists{Include: []string{"attr", "other"}},
 		"tralari.tralara.total":    InclusionLists{Include: []string{"a1", "a2", "a3"}},
 	}
 	incl.Normalize()
-	assert.Equal(t, Inclusion{
+	assert.Equal(t, Selectors{
 		"beyla.network.flow.bytes": InclusionLists{Include: []string{"foo", "bar"}},
 		"some.other.metric":        InclusionLists{Include: []string{"attr", "other"}},
 		"tralari.tralara":          InclusionLists{Include: []string{"a1", "a2", "a3"}},
@@ -21,7 +21,7 @@ func TestNormalize(t *testing.T) {
 }
 
 func TestFor(t *testing.T) {
-	incl := Inclusion{
+	incl := Selectors{
 		"beyla_network_flow_bytes_total": InclusionLists{
 			Include: []string{"beyla_ip", "src.*", "k8s.*"},
 			Exclude: []string{"k8s_*_name", "k8s.*.type"},
@@ -41,7 +41,7 @@ func TestFor(t *testing.T) {
 }
 
 func TestNilDoesNotCrash(t *testing.T) {
-	var aad Inclusion
+	var aad Selectors
 	assert.NotPanics(t, func() {
 		aad.Normalize()
 		assert.NotEmpty(t, aad.For(SectionBeylaNetworkFlow))
@@ -49,7 +49,7 @@ func TestNilDoesNotCrash(t *testing.T) {
 }
 
 func TestDefault(t *testing.T) {
-	var aad Inclusion
+	var aad Selectors
 	aad.Normalize()
 	assert.Equal(t, []string{
 		"k8s.cluster.name",

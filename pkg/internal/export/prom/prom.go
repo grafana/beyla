@@ -107,8 +107,8 @@ var beylaInfoLabelNames = []string{LanguageLabel}
 
 // TODO: TLS
 type PrometheusConfig struct {
-	Port           int    `yaml:"port" env:"BEYLA_PROMETHEUS_PORT"`
-	Path           string `yaml:"path" env:"BEYLA_PROMETHEUS_PATH"`
+	Port int    `yaml:"port" env:"BEYLA_PROMETHEUS_PORT"`
+	Path string `yaml:"path" env:"BEYLA_PROMETHEUS_PATH"`
 
 	DisableBuildInfo bool `yaml:"disable_build_info" env:"BEYLA_PROMETHEUS_DISABLE_BUILD_INFO"`
 

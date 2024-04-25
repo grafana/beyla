@@ -27,8 +27,21 @@ import (
 	"github.com/hashicorp/golang-lru/v2/simplelru"
 	"github.com/mariomac/pipes/pipe"
 
+	"github.com/grafana/beyla/pkg/internal/export/attr"
 	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
 	"github.com/grafana/beyla/pkg/transform"
+)
+
+const (
+	attrPrefixSrc       = "k8s.src"
+	attrPrefixDst       = "k8s.dst"
+	attrSuffixNs        = ".namespace"
+	attrSuffixName      = ".name"
+	attrSuffixType      = ".type"
+	attrSuffixOwnerName = ".owner.name"
+	attrSuffixOwnerType = ".owner.type"
+	attrSuffixHostIP    = ".node.ip"
+	attrSuffixHostName  = ".node.name"
 )
 
 const alreadyLoggedIPsCacheLen = 256
@@ -93,7 +106,7 @@ func (n *decorator) transform(flow *ebpf.Record) bool {
 		flow.Attrs.Metadata = map[string]string{}
 	}
 	if n.clusterName != "" {
-		flow.Attrs.Metadata[AttrClusterName] = n.clusterName
+		flow.Attrs.Metadata[attr.K8sClusterName] = n.clusterName
 	}
 	srcOk := n.decorate(flow, attrPrefixSrc, flow.Id.SrcIP().IP().String())
 	dstOk := n.decorate(flow, attrPrefixDst, flow.Id.DstIP().IP().String())

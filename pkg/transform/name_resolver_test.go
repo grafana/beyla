@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"github.com/grafana/beyla/pkg/internal/export/attr"
 	kube2 "github.com/grafana/beyla/pkg/internal/kube"
 	"github.com/grafana/beyla/pkg/internal/request"
 	"github.com/grafana/beyla/pkg/internal/svc"
@@ -118,7 +119,7 @@ func TestCleanName(t *testing.T) {
 		Name:      "service",
 		Namespace: "special.namespace",
 		Metadata: map[string]string{
-			kube2.NamespaceName: "k8snamespace",
+			attr.K8sNamespaceName: "k8snamespace",
 		},
 	}
 

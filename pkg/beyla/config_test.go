@@ -150,7 +150,7 @@ network:
 				Enable:               transform.EnabledTrue,
 				InformersSyncTimeout: 30 * time.Second,
 			},
-			Allow: map[metricname.Normal][]string{
+			Select: map[metricname.Normal][]string{
 				"global": {"foo", "bar"},
 			},
 		},

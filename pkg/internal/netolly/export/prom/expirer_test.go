@@ -14,9 +14,12 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/grafana/beyla/pkg/internal/connector"
+	"github.com/grafana/beyla/pkg/internal/export/attributes"
+	"github.com/grafana/beyla/pkg/internal/export/attributes/attr"
 	"github.com/grafana/beyla/pkg/internal/export/otel"
 	"github.com/grafana/beyla/pkg/internal/export/prom"
 	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
+	"github.com/grafana/beyla/pkg/internal/pipe/global"
 )
 
 const timeout = 3 * time.Second
@@ -34,16 +37,18 @@ func TestMetricsExpiration(t *testing.T) {
 
 	// GIVEN a Prometheus Metrics Exporter with a metrics expire time of 3 minutes
 	exporter, err := PrometheusEndpoint(
-		ctx,
-		&PrometheusConfig{Config: &prom.PrometheusConfig{
-			Port:                        openPort,
-			Path:                        "/metrics",
-			TTL:                         3 * time.Minute,
-			SpanMetricsServiceCacheSize: 10,
-			Features:                    []string{otel.FeatureNetwork},
-		}, AllowedAttributes: []string{"src_name", "dst_name"}},
-		&connector.PrometheusManager{},
-	)
+		ctx, &global.ContextInfo{}, &PrometheusConfig{
+			Config: &prom.PrometheusConfig{
+				Port:                        openPort,
+				Path:                        "/metrics",
+				TTL:                         3 * time.Minute,
+				SpanMetricsServiceCacheSize: 10,
+				Features:                    []string{otel.FeatureNetwork},
+			}, AllowedAttributes: attributes.Selection{
+				attr.SectionBeylaNetworkFlow: attributes.InclusionLists{
+					Include: []string{"src_name", "dst_name"},
+				},
+			}}, &connector.PrometheusManager{})
 	require.NoError(t, err)
 
 	metrics := make(chan []*ebpf.Record, 20)

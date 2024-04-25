@@ -132,5 +132,11 @@ func getDefinitions(groups EnabledGroups) map[attr.Section]Definition {
 				string(attr.ClientAddrKey):           true,
 			},
 		},
+		attr.SectionSQLClientDuration: {
+			Parents: []*Definition{&appCommon, &appKubeAttributes},
+			Attributes: map[string]Default{
+				string(semconv.DBOperationKey): true,
+			},
+		},
 	}
 }

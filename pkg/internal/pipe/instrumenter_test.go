@@ -15,6 +15,8 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 
 	"github.com/grafana/beyla/pkg/beyla"
+	"github.com/grafana/beyla/pkg/internal/export/attributes"
+	"github.com/grafana/beyla/pkg/internal/export/attributes/attr"
 	"github.com/grafana/beyla/pkg/internal/export/otel"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
@@ -34,6 +36,17 @@ func gctx() *global.ContextInfo {
 	}
 }
 
+var metricsSelection = attributes.Selection{
+	attr.SectionHTTPServerDuration: attributes.InclusionLists{Include: []string{"*"}},
+}
+
+var metricsSelectionNoPeer = attributes.Selection{
+	attr.SectionHTTPServerDuration: attributes.InclusionLists{
+		Include: []string{"*"},
+		Exclude: []string{"client.address"},
+	},
+}
+
 func TestBasicPipeline(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -44,10 +57,10 @@ func TestBasicPipeline(t *testing.T) {
 	gb := newGraphBuilder(ctx, &beyla.Config{
 		Metrics: otel.MetricsConfig{
 			Features:        []string{otel.FeatureApplication},
-			MetricsEndpoint: tc.ServerEndpoint, ReportTarget: true,
-			ReportPeerInfo: true, Interval: 10 * time.Millisecond,
+			MetricsEndpoint: tc.ServerEndpoint, Interval: 10 * time.Millisecond,
 			ReportersCacheLen: 16,
 		},
+		Attributes: beyla.Attributes{Select: metricsSelection},
 	}, gctx(), make(<-chan []request.Span))
 
 	// Override eBPF tracer to send some fake data
@@ -69,10 +82,10 @@ func TestBasicPipeline(t *testing.T) {
 		Name: "http.server.request.duration",
 		Unit: "s",
 		Attributes: map[string]string{
-			string(otel.HTTPRequestMethodKey):      "GET",
-			string(otel.HTTPResponseStatusCodeKey): "404",
-			string(otel.HTTPUrlPathKey):            "/foo/bar",
-			string(otel.ClientAddrKey):             "1.1.1.1",
+			string(attr.HTTPRequestMethodKey):      "GET",
+			string(attr.HTTPResponseStatusCodeKey): "404",
+			string(attr.HTTPUrlPathKey):            "/foo/bar",
+			string(attr.ClientAddrKey):             "1.1.1.1",
 			string(semconv.ServiceNameKey):         "foo-svc",
 		},
 		Type: pmetric.MetricTypeHistogram,
@@ -191,11 +204,11 @@ func TestRouteConsolidation(t *testing.T) {
 	gb := newGraphBuilder(ctx, &beyla.Config{
 		Metrics: otel.MetricsConfig{
 			Features:        []string{otel.FeatureApplication},
-			ReportPeerInfo:  false, // no peer info
 			MetricsEndpoint: tc.ServerEndpoint, Interval: 10 * time.Millisecond,
 			ReportersCacheLen: 16,
 		},
-		Routes: &transform.RoutesConfig{Patterns: []string{"/user/{id}", "/products/{id}/push"}},
+		Routes:     &transform.RoutesConfig{Patterns: []string{"/user/{id}", "/products/{id}/push"}},
+		Attributes: beyla.Attributes{Select: metricsSelectionNoPeer},
 	}, gctx(), make(<-chan []request.Span))
 	// Override eBPF tracer to send some fake data
 	pipe.AddStart(gb.builder, tracesReader,
@@ -224,8 +237,8 @@ func TestRouteConsolidation(t *testing.T) {
 		Unit: "s",
 		Attributes: map[string]string{
 			string(semconv.ServiceNameKey):         "svc-1",
-			string(otel.HTTPRequestMethodKey):      "GET",
-			string(otel.HTTPResponseStatusCodeKey): "200",
+			string(attr.HTTPRequestMethodKey):      "GET",
+			string(attr.HTTPResponseStatusCodeKey): "200",
 			string(semconv.HTTPRouteKey):           "/user/{id}",
 		},
 		Type: pmetric.MetricTypeHistogram,
@@ -236,8 +249,8 @@ func TestRouteConsolidation(t *testing.T) {
 		Unit: "s",
 		Attributes: map[string]string{
 			string(semconv.ServiceNameKey):         "svc-1",
-			string(otel.HTTPRequestMethodKey):      "GET",
-			string(otel.HTTPResponseStatusCodeKey): "200",
+			string(attr.HTTPRequestMethodKey):      "GET",
+			string(attr.HTTPResponseStatusCodeKey): "200",
 			string(semconv.HTTPRouteKey):           "/products/{id}/push",
 		},
 		Type: pmetric.MetricTypeHistogram,
@@ -248,8 +261,8 @@ func TestRouteConsolidation(t *testing.T) {
 		Unit: "s",
 		Attributes: map[string]string{
 			string(semconv.ServiceNameKey):         "svc-1",
-			string(otel.HTTPRequestMethodKey):      "GET",
-			string(otel.HTTPResponseStatusCodeKey): "200",
+			string(attr.HTTPRequestMethodKey):      "GET",
+			string(attr.HTTPResponseStatusCodeKey): "200",
 			string(semconv.HTTPRouteKey):           "/**",
 		},
 		Type: pmetric.MetricTypeHistogram,
@@ -266,9 +279,10 @@ func TestGRPCPipeline(t *testing.T) {
 	gb := newGraphBuilder(ctx, &beyla.Config{
 		Metrics: otel.MetricsConfig{
 			Features:        []string{otel.FeatureApplication},
-			MetricsEndpoint: tc.ServerEndpoint, ReportTarget: true, ReportPeerInfo: true, Interval: time.Millisecond,
+			MetricsEndpoint: tc.ServerEndpoint, Interval: time.Millisecond,
 			ReportersCacheLen: 16,
 		},
+		Attributes: beyla.Attributes{Select: metricsSelection},
 	}, gctx(), make(<-chan []request.Span))
 	// Override eBPF tracer to send some fake data
 	pipe.AddStart(gb.builder, tracesReader,
@@ -292,7 +306,7 @@ func TestGRPCPipeline(t *testing.T) {
 			string(semconv.RPCSystemKey):         "grpc",
 			string(semconv.RPCGRPCStatusCodeKey): "3",
 			string(semconv.RPCMethodKey):         "/foo/bar",
-			string(otel.ClientAddrKey):           "1.1.1.1",
+			string(attr.ClientAddrKey):           "1.1.1.1",
 		},
 		Type: pmetric.MetricTypeHistogram,
 	}, event)
@@ -343,9 +357,10 @@ func TestBasicPipelineInfo(t *testing.T) {
 	gb := newGraphBuilder(ctx, &beyla.Config{
 		Metrics: otel.MetricsConfig{
 			Features:        []string{otel.FeatureApplication},
-			MetricsEndpoint: tc.ServerEndpoint, ReportTarget: true, ReportPeerInfo: true,
-			Interval: 10 * time.Millisecond, ReportersCacheLen: 16,
+			MetricsEndpoint: tc.ServerEndpoint,
+			Interval:        10 * time.Millisecond, ReportersCacheLen: 16,
 		},
+		Attributes: beyla.Attributes{Select: metricsSelection},
 	}, gctx(), tracesInput)
 	// send some fake data through the traces' input
 	tracesInput <- newHTTPInfo("PATCH", "/aaa/bbb", "1.1.1.1", 204)
@@ -359,10 +374,10 @@ func TestBasicPipelineInfo(t *testing.T) {
 		Name: "http.server.request.duration",
 		Unit: "s",
 		Attributes: map[string]string{
-			string(otel.HTTPRequestMethodKey):      "PATCH",
-			string(otel.HTTPResponseStatusCodeKey): "204",
-			string(otel.HTTPUrlPathKey):            "/aaa/bbb",
-			string(otel.ClientAddrKey):             "1.1.1.1",
+			string(attr.HTTPRequestMethodKey):      "PATCH",
+			string(attr.HTTPResponseStatusCodeKey): "204",
+			string(attr.HTTPUrlPathKey):            "/aaa/bbb",
+			string(attr.ClientAddrKey):             "1.1.1.1",
 			string(semconv.ServiceNameKey):         "comm",
 		},
 		Type: pmetric.MetricTypeHistogram,
@@ -456,13 +471,13 @@ func matchTraceEvent(t require.TestingT, name string, event collector.TraceRecor
 	assert.Equal(t, collector.TraceRecord{
 		Name: name,
 		Attributes: map[string]string{
-			string(otel.HTTPRequestMethodKey):      "GET",
-			string(otel.HTTPResponseStatusCodeKey): "404",
-			string(otel.HTTPUrlPathKey):            "/foo/bar",
-			string(otel.ClientAddrKey):             "1.1.1.1",
-			string(otel.ServerAddrKey):             getHostname(),
-			string(otel.ServerPortKey):             "8080",
-			string(otel.HTTPRequestBodySizeKey):    "0",
+			string(attr.HTTPRequestMethodKey):      "GET",
+			string(attr.HTTPResponseStatusCodeKey): "404",
+			string(attr.HTTPUrlPathKey):            "/foo/bar",
+			string(attr.ClientAddrKey):             "1.1.1.1",
+			string(attr.ServerAddrKey):             getHostname(),
+			string(attr.ServerPortKey):             "8080",
+			string(attr.HTTPRequestBodySizeKey):    "0",
 			"span_id":                              event.Attributes["span_id"],
 			"parent_span_id":                       event.Attributes["parent_span_id"],
 		},
@@ -499,9 +514,9 @@ func matchGRPCTraceEvent(t *testing.T, name string, event collector.TraceRecord)
 			string(semconv.RPCSystemKey):         "grpc",
 			string(semconv.RPCGRPCStatusCodeKey): "3",
 			string(semconv.RPCMethodKey):         "foo.bar",
-			string(otel.ClientAddrKey):           "1.1.1.1",
-			string(otel.ServerAddrKey):           "127.0.0.1",
-			string(otel.ServerPortKey):           "8080",
+			string(attr.ClientAddrKey):           "1.1.1.1",
+			string(attr.ServerAddrKey):           "127.0.0.1",
+			string(attr.ServerPortKey):           "8080",
 			"span_id":                            event.Attributes["span_id"],
 			"parent_span_id":                     event.Attributes["parent_span_id"],
 		},
@@ -532,12 +547,12 @@ func matchInnerGRPCTraceEvent(t *testing.T, name string, event collector.TraceRe
 
 func matchNestedEvent(t *testing.T, name, method, target, status string, kind ptrace.SpanKind, event collector.TraceRecord) {
 	assert.Equal(t, name, event.Name)
-	assert.Equal(t, method, event.Attributes[string(otel.HTTPRequestMethodKey)])
-	assert.Equal(t, status, event.Attributes[string(otel.HTTPResponseStatusCodeKey)])
+	assert.Equal(t, method, event.Attributes[string(attr.HTTPRequestMethodKey)])
+	assert.Equal(t, status, event.Attributes[string(attr.HTTPResponseStatusCodeKey)])
 	if kind == ptrace.SpanKindClient {
-		assert.Equal(t, target, event.Attributes[string(otel.HTTPUrlFullKey)])
+		assert.Equal(t, target, event.Attributes[string(attr.HTTPUrlFullKey)])
 	} else {
-		assert.Equal(t, target, event.Attributes[string(otel.HTTPUrlPathKey)])
+		assert.Equal(t, target, event.Attributes[string(attr.HTTPUrlPathKey)])
 	}
 	assert.Equal(t, kind, event.Kind)
 }
@@ -562,13 +577,13 @@ func matchInfoEvent(t *testing.T, name string, event collector.TraceRecord) {
 	assert.Equal(t, collector.TraceRecord{
 		Name: name,
 		Attributes: map[string]string{
-			string(otel.HTTPRequestMethodKey):      "PATCH",
-			string(otel.HTTPResponseStatusCodeKey): "204",
-			string(otel.HTTPUrlPathKey):            "/aaa/bbb",
-			string(otel.ClientAddrKey):             "1.1.1.1",
-			string(otel.ServerAddrKey):             getHostname(),
-			string(otel.ServerPortKey):             "8080",
-			string(otel.HTTPRequestBodySizeKey):    "0",
+			string(attr.HTTPRequestMethodKey):      "PATCH",
+			string(attr.HTTPResponseStatusCodeKey): "204",
+			string(attr.HTTPUrlPathKey):            "/aaa/bbb",
+			string(attr.ClientAddrKey):             "1.1.1.1",
+			string(attr.ServerAddrKey):             getHostname(),
+			string(attr.ServerPortKey):             "8080",
+			string(attr.HTTPRequestBodySizeKey):    "0",
 			"span_id":                              event.Attributes["span_id"],
 			"parent_span_id":                       "",
 		},

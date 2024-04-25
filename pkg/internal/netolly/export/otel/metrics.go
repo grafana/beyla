@@ -20,6 +20,7 @@ import (
 	"github.com/grafana/beyla/pkg/internal/export/otel"
 	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
 	"github.com/grafana/beyla/pkg/internal/netolly/export"
+	"github.com/grafana/beyla/pkg/internal/pipe/global"
 )
 
 const (
@@ -28,7 +29,7 @@ const (
 
 type MetricsConfig struct {
 	Metrics           *otel.MetricsConfig
-	AllowedAttributes []string
+	AllowedAttributes attributes.Selection
 }
 
 func (mc MetricsConfig) Enabled() bool {
@@ -67,7 +68,7 @@ type metricsExporter struct {
 	metrics *Expirer
 }
 
-func MetricsExporterProvider(cfg *MetricsConfig) (pipe.FinalFunc[[]*ebpf.Record], error) {
+func MetricsExporterProvider(ctxInfo *global.ContextInfo, cfg *MetricsConfig) (pipe.FinalFunc[[]*ebpf.Record], error) {
 	if !cfg.Enabled() {
 		// This node is not going to be instantiated. Let the pipes library just ignore it.
 		return pipe.IgnoreFinal[[]*ebpf.Record](), nil
@@ -87,11 +88,18 @@ func MetricsExporterProvider(cfg *MetricsConfig) (pipe.FinalFunc[[]*ebpf.Record]
 		return nil, err
 	}
 
-	attrs := attributes.OpenTelemetryGetters(export.NamedGetters, cfg.AllowedAttributes)
-	if len(attrs) == 0 {
-		return nil, fmt.Errorf("network metrics OpenTelemetry exporter: no valid"+
-			" attributes.allow defined for metric %s", BeylaNetworkFlows)
+	var group attributes.EnabledGroups
+	if ctxInfo.K8sEnabled {
+		group.Set(attributes.EnableKubernetes)
 	}
+	attrProv, err := attributes.NewProvider(group, cfg.AllowedAttributes)
+	if err != nil {
+		return nil, fmt.Errorf("network OTEL exporter attributes enable: %w", err)
+	}
+	attrs := attributes.OpenTelemetryGetters(
+		export.NamedGetters,
+		attrProv.For(attr.SectionBeylaNetworkFlow))
+
 	expirer := NewExpirer(attrs, cfg.Metrics.TTL)
 	ebpfEvents := provider.Meter("network_ebpf_events")
 

@@ -490,7 +490,7 @@ func TestSpanHostPeer(t *testing.T) {
 	}
 
 	assert.Equal(t, "localhost", attributes.SpanHost(&sp))
-	assert.Equal(t, "peerhost", attributes.SpanHost(&sp))
+	assert.Equal(t, "peerhost", attributes.SpanPeer(&sp))
 
 	sp = request.Span{
 		Host: "127.0.0.1",

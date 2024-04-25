@@ -2,6 +2,7 @@ package prom
 
 import (
 	"context"
+	"fmt"
 	"slices"
 
 	"github.com/mariomac/pipes/pipe"
@@ -9,10 +10,12 @@ import (
 
 	"github.com/grafana/beyla/pkg/internal/connector"
 	"github.com/grafana/beyla/pkg/internal/export/attributes"
+	"github.com/grafana/beyla/pkg/internal/export/attributes/attr"
 	"github.com/grafana/beyla/pkg/internal/export/otel"
 	"github.com/grafana/beyla/pkg/internal/export/prom"
 	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
 	"github.com/grafana/beyla/pkg/internal/netolly/export"
+	"github.com/grafana/beyla/pkg/internal/pipe/global"
 )
 
 const (
@@ -22,7 +25,7 @@ const (
 // PrometheusConfig for network metrics just wraps the global prom.PrometheusConfig as provided by the user
 type PrometheusConfig struct {
 	Config            *prom.PrometheusConfig
-	AllowedAttributes []string
+	AllowedAttributes attributes.Selection
 }
 
 // nolint:gocritic
@@ -48,20 +51,42 @@ type metricsReporter struct {
 	bgCtx context.Context
 }
 
-func PrometheusEndpoint(ctx context.Context, cfg *PrometheusConfig, promMgr *connector.PrometheusManager) (pipe.FinalFunc[[]*ebpf.Record], error) {
+func PrometheusEndpoint(
+	ctx context.Context,
+	ctxInfo *global.ContextInfo,
+	cfg *PrometheusConfig,
+	promMgr *connector.PrometheusManager,
+) (pipe.FinalFunc[[]*ebpf.Record], error) {
 	if !cfg.Enabled() {
 		// This node is not going to be instantiated. Let the pipes library just ignore it.
 		return pipe.IgnoreFinal[[]*ebpf.Record](), nil
 	}
-	reporter, err := newReporter(ctx, cfg, promMgr)
+	reporter, err := newReporter(ctx, ctxInfo, cfg, promMgr)
 	if err != nil {
 		return nil, err
 	}
 	return reporter.reportMetrics, nil
 }
 
-func newReporter(ctx context.Context, cfg *PrometheusConfig, promMgr *connector.PrometheusManager) (*metricsReporter, error) {
-	attrs := attributes.PrometheusGetters(export.NamedGetters, cfg.AllowedAttributes)
+func newReporter(
+	ctx context.Context,
+	ctxInfo *global.ContextInfo,
+	cfg *PrometheusConfig,
+	promMgr *connector.PrometheusManager,
+) (*metricsReporter, error) {
+	var group attributes.EnabledGroups
+	if ctxInfo.K8sEnabled {
+		group.Set(attributes.EnableKubernetes)
+	}
+	provider, err := attributes.NewProvider(group, cfg.AllowedAttributes)
+	if err != nil {
+		return nil, fmt.Errorf("network Prometheus exporter attributes enable: %w", err)
+	}
+
+	attrs := attributes.PrometheusGetters(
+		export.NamedGetters,
+		provider.For(attr.SectionBeylaNetworkFlow))
+
 	labelNames := make([]string, 0, len(attrs))
 	for _, label := range attrs {
 		labelNames = append(labelNames, label.ExposedName)

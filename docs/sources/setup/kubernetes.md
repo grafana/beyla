@@ -243,16 +243,16 @@ spec:
 
 In all of the examples so far, `privileged:true` or the `SYS_ADMIN` Linux capability was used in the Beyla deployment's `securityContext` section. While this works in all circumstances, there are ways to deploy Beyla in Kubernetes with reduced privileges if your security configuration requires you to do so. Whether this is possible depends on the Kubernetes version you have and the underlying container runtime used (e.g. **Containerd**, **CRI-O** or **Docker**).
 
-The following guide is based on tests performed mainly by running `containerd` with `kubeadm`, `k3s`, `microk8s` and `kind`.
+The following guide is based on tests performed mainly by running `containerd` with `GKE`, `kubeadm`, `k3s`, `microk8s` and `kind`.
 
 To run Beyla unprivileged, you need to run a `privileged` init container which performs setup tasks which require elevated privileges. Then you need to replace the `privileged:true` setting with a set of Linux [capabilities](https://www.man7.org/linux/man-pages/man7/capabilities.7.html).
 
 - `CAP_BPF` is required to install most of the eBPF probes, because Beyla tracks system calls.
 - `CAP_SYS_PTRACE` is required so that Beyla is able to look into the processes namespaces and inspect the executables. Beyla doesn't use `ptrace`, but for some of the operations it does require this capability.
 - `CAP_NET_RAW` is required for using installing socket filters, which are used as a fallback for `kretprobes` for HTTP requests.
-- `CHECKPOINT_RESTORE` is required to open ELF files.
-- `DAC_READ_SEARCH` is required to open ELF files.
-- `PERFMON` is required to load BPF programs.
+- `CAP_CHECKPOINT_RESTORE` is required to open ELF files.
+- `CAP_DAC_READ_SEARCH` is required to open ELF files.
+- `CAP_PERFMON` is required to load BPF programs, i.e. be able to perform `perf_event_open()`.
 - `CAP_SYS_RESOURCE` is required only on kernels **< 5.11** so that Beyla can increase the amount of locked memory available.
 
 In addition to these Linux capabilities, many Kubernetes versions include [AppArmour](https://kubernetes.io/docs/tutorials/security/apparmor/), which tough policies adds additional restrictions to unprivileged containers. By [default](https://github.com/moby/moby/blob/master/profiles/apparmor/template.go), the AppArmour policy restricts the use of `mount` and the access to `/sys/fs/` directories. Beyla uses the BPF Linux file system to store pinned BPF maps, for communication among the different BPF programs. For this reason, Beyla either needs to `mount` a BPF file system, or write to `/sys/fs/bpf`, which are both restricted.
@@ -263,6 +263,15 @@ Because of the AppArmour restriction, to run Beyla as unprivileged container, yo
 - Set a modified AppArmour policy which allows Beyla to perform `mount`.
 
 **Note** Since the `beyla` container does not have the privileges required to mount or un-mount the BPF filesystem, this sample leaves the BPF filesystem mounted on the host, even after the sample is deleted. This samples uses a unique path for each namespace to ensure re-use the same mount if Beyla is re-deployed, but to avoid collisions if multiple instances of Beyla is run in different namespaces. 
+
+**Note** Loading BPF programs requires that Beyla is able to read the Linux performance events, or at least be able to execute the Linux Kernel API `perf_event_open()`. 
+This permission is granted by `CAP_PERFMON` or more liberally through `CAP_SYS_ADMIN`. Since both `CAP_PERFMON` and `CAP_SYS_ADMIN` grant Beyla the permission to read performance
+events, you should use `CAP_PERFMON` because it grants lesser permissions. However, at system level, the access to the performance 
+events is controlled through the setting `kernel.perf_event_paranoid`, which you can read or write by using `sysctl` or by modifying the file `/proc/sys/kernel/perf_event_paranoid`.
+The default setting for `kernel.perf_event_paranoid` is typically `2`, which is documented under the `perf_event_paranoid` section in the [kernel documentation](https://www.kernel.org/doc/Documentation/sysctl/kernel.txt).
+Some Linux distributions define higher levels for `kernel.perf_event_paranoid`, for example Debian based distributions [also use](https://lwn.net/Articles/696216/) `kernel.perf_event_paranoid=3`, 
+which disallows access to `perf_event_open()` without `CAP_SYS_ADMIN`. If you are running on a distribution with `kernel.perf_event_paranoid` setting higher than `2`,
+you can either modify your configuration to lower it to `2` or use `CAP_SYS_ADMIN` instead of `CAP_PERFMON`.
 
 An example of a Beyla unprivileged container configuration can be found below, or you can download the [full example deployment](https://github.com/grafana/beyla/tree/main/examples/k8s/unprivileged.yaml) file:
 
@@ -349,6 +358,7 @@ spec:
               - DAC_READ_SEARCH     # <-- Important. Allows Beyla to open ELF files.
               - PERFMON             # <-- Important. Allows Beyla to load BPF programs.
               #- SYS_RESOURCE       # <-- pre 5.11 only. Allows Beyla to increase the amount of locked memory.
+              #- SYS_ADMIN          # <-- Required for Go application trace context propagation, or if kernel.perf_event_paranoid >= 3 on Debian distributions.
             drop:
               - ALL
         volumeMounts:

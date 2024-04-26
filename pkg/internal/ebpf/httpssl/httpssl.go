@@ -149,27 +149,6 @@ func (p *Tracer) UProbes() map[string]map[string]ebpfcommon.FunctionPrograms {
 				Start:    p.bpfObjects.UprobeSslShutdown,
 			},
 		},
-		"libSystem.Security.Cryptography.Native.OpenSsl.so": {
-			"CryptoNative_SslRead": {
-				Required: false,
-				Start:    p.bpfObjects.UprobeSslRead,
-				End:      p.bpfObjects.UretprobeSslRead,
-			},
-			"CryptoNative_SslWrite": {
-				Required: false,
-				Start:    p.bpfObjects.UprobeSslWrite,
-				End:      p.bpfObjects.UretprobeSslWrite,
-			},
-			"CryptoNative_SslDoHandshake": {
-				Required: false,
-				Start:    p.bpfObjects.UprobeSslDoHandshake,
-				End:      p.bpfObjects.UretprobeSslDoHandshake,
-			},
-			"CryptoNative_SslShutdown": {
-				Required: false,
-				Start:    p.bpfObjects.UprobeSslShutdown,
-			},
-		},
 	}
 }
 
@@ -198,6 +177,5 @@ func (p *Tracer) Run(ctx context.Context, eventsChan chan<- []request.Span) {
 		p.pidsFilter,
 		p.bpfObjects.Events,
 		p.metrics,
-		append(p.closers, &p.bpfObjects)...,
-	)(ctx, eventsChan)
+	)(ctx, append(p.closers, &p.bpfObjects), eventsChan)
 }

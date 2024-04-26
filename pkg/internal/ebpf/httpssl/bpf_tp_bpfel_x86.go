@@ -181,6 +181,7 @@ type bpf_tpMapSpecs struct {
 	ActiveSslReadArgs       *ebpf.MapSpec `ebpf:"active_ssl_read_args"`
 	ActiveSslWriteArgs      *ebpf.MapSpec `ebpf:"active_ssl_write_args"`
 	CloneMap                *ebpf.MapSpec `ebpf:"clone_map"`
+	ConnectionMetaMem       *ebpf.MapSpec `ebpf:"connection_meta_mem"`
 	Events                  *ebpf.MapSpec `ebpf:"events"`
 	FilteredConnections     *ebpf.MapSpec `ebpf:"filtered_connections"`
 	Http2InfoMem            *ebpf.MapSpec `ebpf:"http2_info_mem"`
@@ -223,6 +224,7 @@ type bpf_tpMaps struct {
 	ActiveSslReadArgs       *ebpf.Map `ebpf:"active_ssl_read_args"`
 	ActiveSslWriteArgs      *ebpf.Map `ebpf:"active_ssl_write_args"`
 	CloneMap                *ebpf.Map `ebpf:"clone_map"`
+	ConnectionMetaMem       *ebpf.Map `ebpf:"connection_meta_mem"`
 	Events                  *ebpf.Map `ebpf:"events"`
 	FilteredConnections     *ebpf.Map `ebpf:"filtered_connections"`
 	Http2InfoMem            *ebpf.Map `ebpf:"http2_info_mem"`
@@ -248,6 +250,7 @@ func (m *bpf_tpMaps) Close() error {
 		m.ActiveSslReadArgs,
 		m.ActiveSslWriteArgs,
 		m.CloneMap,
+		m.ConnectionMetaMem,
 		m.Events,
 		m.FilteredConnections,
 		m.Http2InfoMem,

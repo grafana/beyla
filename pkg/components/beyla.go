@@ -9,7 +9,7 @@ import (
 	"github.com/grafana/beyla/pkg/beyla"
 	"github.com/grafana/beyla/pkg/internal/appolly"
 	"github.com/grafana/beyla/pkg/internal/connector"
-	"github.com/grafana/beyla/pkg/internal/export/attributes"
+	"github.com/grafana/beyla/pkg/internal/export/metric"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/netolly/agent"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
@@ -99,16 +99,16 @@ func buildCommonContextInfo(
 
 	// build enabled groups of attributes
 	if ctxInfo.K8sEnabled {
-		ctxInfo.MetricAttributeGroups.Add(attributes.EnableKubernetes)
+		ctxInfo.MetricAttributeGroups.Add(metric.EnableKubernetes)
 	}
 	if config.Routes != nil {
-		ctxInfo.MetricAttributeGroups.Add(attributes.EnableHTTPRoutes)
+		ctxInfo.MetricAttributeGroups.Add(metric.EnableHTTPRoutes)
 	}
 	if config.Metrics.ReportPeerInfo || config.Prometheus.ReportPeerInfo {
-		ctxInfo.MetricAttributeGroups.Add(attributes.EnablePeerInfo)
+		ctxInfo.MetricAttributeGroups.Add(metric.EnablePeerInfo)
 	}
 	if config.Metrics.ReportTarget || config.Prometheus.ReportTarget {
-		ctxInfo.MetricAttributeGroups.Add(attributes.EnableTarget)
+		ctxInfo.MetricAttributeGroups.Add(metric.EnableTarget)
 	}
 	return ctxInfo
 }

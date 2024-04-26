@@ -1,9 +1,9 @@
-package attributes
+package metric
 
 import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 
-	"github.com/grafana/beyla/pkg/internal/export/attributes/attr"
+	"github.com/grafana/beyla/pkg/internal/export/metric/attr"
 )
 
 type EnabledGroups int
@@ -25,7 +25,7 @@ func (e *EnabledGroups) Add(groups EnabledGroups) {
 }
 
 // Any new metric and attribute must be added here so the selectors will make their
-func getDefinitions(groups EnabledGroups) map[attr.Section]Definition {
+func getDefinitions(groups EnabledGroups) map[Section]Definition {
 	kubeEnabled := groups.Has(EnableKubernetes)
 	promEnabled := groups.Has(EnablePrometheus)
 
@@ -145,8 +145,8 @@ func getDefinitions(groups EnabledGroups) map[attr.Section]Definition {
 		},
 	}
 
-	return map[attr.Section]Definition{
-		attr.SectionBeylaNetworkFlow: {
+	return map[Section]Definition{
+		BeylaNetworkFlow.Section: {
 			Parents: []*Definition{&networkKubeAttributes},
 			Attributes: map[string]Default{
 				attr.BeylaIP:    false,
@@ -161,19 +161,19 @@ func getDefinitions(groups EnabledGroups) map[attr.Section]Definition {
 				attr.Iface:      false,
 			},
 		},
-		attr.SectionHTTPServerDuration: {
+		HTTPServerDuration.Section: {
 			Parents: []*Definition{&appCommon, &appKubeAttributes, &httpCommon, &serverInfo, &deprecatedServerPeerInfo},
 		},
-		attr.SectionHTTPServerRequestSize: {
+		HTTPServerRequestSize.Section: {
 			Parents: []*Definition{&appCommon, &appKubeAttributes, &httpCommon, &serverInfo, &deprecatedServerPeerInfo},
 		},
-		attr.SectionHTTPClientDuration: {
+		HTTPClientDuration.Section: {
 			Parents: []*Definition{&appCommon, &appKubeAttributes, &httpCommon, &httpClientInfo, &deprecatedHTTPClientPeerInfo},
 		},
-		attr.SectionHTTPClientRequestSize: {
+		HTTPClientRequestSize.Section: {
 			Parents: []*Definition{&appCommon, &appKubeAttributes, &httpCommon, &httpClientInfo, &deprecatedHTTPClientPeerInfo},
 		},
-		attr.SectionRPCClientDuration: {
+		RPCClientDuration.Section: {
 			Parents: []*Definition{&appCommon, &appKubeAttributes, &grpcClientInfo, &deprecatedGRPCClientPeerInfo},
 			Attributes: map[string]Default{
 				string(semconv.RPCMethodKey):         true,
@@ -182,7 +182,7 @@ func getDefinitions(groups EnabledGroups) map[attr.Section]Definition {
 				string(attr.ServerAddrKey):           true,
 			},
 		},
-		attr.SectionRPCServerDuration: {
+		RPCServerDuration.Section: {
 			Parents: []*Definition{&appCommon, &appKubeAttributes, &serverInfo, &deprecatedServerPeerInfo},
 			Attributes: map[string]Default{
 				string(semconv.RPCMethodKey):         true,
@@ -191,7 +191,7 @@ func getDefinitions(groups EnabledGroups) map[attr.Section]Definition {
 				string(attr.ClientAddrKey):           true,
 			},
 		},
-		attr.SectionSQLClientDuration: {
+		SQLClientDuration.Section: {
 			Parents: []*Definition{&appCommon, &appKubeAttributes},
 			Attributes: map[string]Default{
 				string(semconv.DBOperationKey): true,

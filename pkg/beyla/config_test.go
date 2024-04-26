@@ -12,8 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
-	"github.com/grafana/beyla/pkg/internal/export/attributes"
-	"github.com/grafana/beyla/pkg/internal/export/attributes/attr"
+	"github.com/grafana/beyla/pkg/internal/export/metric"
 	"github.com/grafana/beyla/pkg/internal/export/otel"
 	"github.com/grafana/beyla/pkg/internal/export/prom"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
@@ -45,7 +44,7 @@ attributes:
   instance_id:
     dns: true
   select:
-    beyla.network.flow.bytes:
+    beyla.network.flow:
       include: ["foo", "bar"]
       exclude: ["baz", "bae"]
 network:
@@ -153,8 +152,8 @@ network:
 				Enable:               transform.EnabledTrue,
 				InformersSyncTimeout: 30 * time.Second,
 			},
-			Select: attributes.Selection{
-				attr.SectionBeylaNetworkFlow: attributes.InclusionLists{
+			Select: metric.Selection{
+				metric.BeylaNetworkFlow.Section: metric.InclusionLists{
 					Include: []string{"foo", "bar"},
 					Exclude: []string{"baz", "bae"},
 				},

@@ -19,7 +19,7 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 	trace2 "go.opentelemetry.io/otel/trace"
 
-	"github.com/grafana/beyla/pkg/internal/export/attributes"
+	"github.com/grafana/beyla/pkg/internal/export/metric"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/pkg/internal/request"
@@ -303,13 +303,13 @@ func TraceAttributes(span *request.Span) []attribute.KeyValue {
 	switch span.Type {
 	case request.EventTypeHTTP:
 		attrs = []attribute.KeyValue{
-			attributes.HTTPRequestMethod(span.Method),
-			attributes.HTTPResponseStatusCode(span.Status),
-			attributes.HTTPUrlPath(span.Path),
-			attributes.ClientAddr(attributes.SpanPeer(span)),
-			attributes.ServerAddr(attributes.SpanHost(span)),
-			attributes.ServerPort(span.HostPort),
-			attributes.HTTPRequestBodySize(int(span.ContentLength)),
+			metric.HTTPRequestMethod(span.Method),
+			metric.HTTPResponseStatusCode(span.Status),
+			metric.HTTPUrlPath(span.Path),
+			metric.ClientAddr(metric.SpanPeer(span)),
+			metric.ServerAddr(metric.SpanHost(span)),
+			metric.ServerPort(span.HostPort),
+			metric.HTTPRequestBodySize(int(span.ContentLength)),
 		}
 		if span.Route != "" {
 			attrs = append(attrs, semconv.HTTPRoute(span.Route))
@@ -319,26 +319,26 @@ func TraceAttributes(span *request.Span) []attribute.KeyValue {
 			semconv.RPCMethod(span.Path),
 			semconv.RPCSystemGRPC,
 			semconv.RPCGRPCStatusCodeKey.Int(span.Status),
-			attributes.ClientAddr(attributes.SpanPeer(span)),
-			attributes.ServerAddr(attributes.SpanHost(span)),
-			attributes.ServerPort(span.HostPort),
+			metric.ClientAddr(metric.SpanPeer(span)),
+			metric.ServerAddr(metric.SpanHost(span)),
+			metric.ServerPort(span.HostPort),
 		}
 	case request.EventTypeHTTPClient:
 		attrs = []attribute.KeyValue{
-			attributes.HTTPRequestMethod(span.Method),
-			attributes.HTTPResponseStatusCode(span.Status),
-			attributes.HTTPUrlFull(span.Path),
-			attributes.ServerAddr(attributes.SpanHost(span)),
-			attributes.ServerPort(span.HostPort),
-			attributes.HTTPRequestBodySize(int(span.ContentLength)),
+			metric.HTTPRequestMethod(span.Method),
+			metric.HTTPResponseStatusCode(span.Status),
+			metric.HTTPUrlFull(span.Path),
+			metric.ServerAddr(metric.SpanHost(span)),
+			metric.ServerPort(span.HostPort),
+			metric.HTTPRequestBodySize(int(span.ContentLength)),
 		}
 	case request.EventTypeGRPCClient:
 		attrs = []attribute.KeyValue{
 			semconv.RPCMethod(span.Path),
 			semconv.RPCSystemGRPC,
 			semconv.RPCGRPCStatusCodeKey.Int(span.Status),
-			attributes.ServerAddr(attributes.SpanHost(span)),
-			attributes.ServerPort(span.HostPort),
+			metric.ServerAddr(metric.SpanHost(span)),
+			metric.ServerPort(span.HostPort),
 		}
 	case request.EventTypeSQLClient:
 		operation := span.Method

@@ -1,12 +1,10 @@
-package attributes
+package metric
 
 import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/grafana/beyla/pkg/internal/export/attributes/attr"
 )
 
 func TestNormalize(t *testing.T) {
@@ -17,9 +15,9 @@ func TestNormalize(t *testing.T) {
 	}
 	incl.Normalize()
 	assert.Equal(t, Selection{
-		"beyla.network.flow.bytes": InclusionLists{Include: []string{"foo", "bar"}},
-		"some.other.metric":        InclusionLists{Include: []string{"attr", "other"}},
-		"tralari.tralara":          InclusionLists{Include: []string{"a1", "a2", "a3"}},
+		"beyla.network.flow": InclusionLists{Include: []string{"foo", "bar"}},
+		"some.other.metric":  InclusionLists{Include: []string{"attr", "other"}},
+		"tralari.tralara":    InclusionLists{Include: []string{"a1", "a2", "a3"}},
 	}, incl)
 }
 
@@ -40,7 +38,7 @@ func TestFor(t *testing.T) {
 		"src.address",
 		"src.name",
 		"src.port",
-	}, p.For(attr.SectionBeylaNetworkFlow))
+	}, p.For(BeylaNetworkFlow))
 }
 
 func TestFor_KubeDisabled(t *testing.T) {
@@ -55,14 +53,14 @@ func TestFor_KubeDisabled(t *testing.T) {
 		"beyla.ip",
 		"src.address",
 		"src.name",
-	}, p.For(attr.SectionBeylaNetworkFlow))
+	}, p.For(BeylaNetworkFlow))
 }
 
 func TestNilDoesNotCrash(t *testing.T) {
 	assert.NotPanics(t, func() {
 		p, err := NewProvider(EnableKubernetes, nil)
 		require.NoError(t, err)
-		assert.NotEmpty(t, p.For(attr.SectionBeylaNetworkFlow))
+		assert.NotEmpty(t, p.For(BeylaNetworkFlow))
 	})
 }
 
@@ -75,5 +73,5 @@ func TestDefault(t *testing.T) {
 		"k8s.dst.owner.name",
 		"k8s.src.namespace",
 		"k8s.src.owner.name",
-	}, p.For(attr.SectionBeylaNetworkFlow))
+	}, p.For(BeylaNetworkFlow))
 }

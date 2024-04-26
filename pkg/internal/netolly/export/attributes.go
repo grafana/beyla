@@ -3,13 +3,13 @@ package export
 import (
 	"strconv"
 
-	"github.com/grafana/beyla/pkg/internal/export/attributes"
+	"github.com/grafana/beyla/pkg/internal/export/metric"
 	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
 	"github.com/grafana/beyla/pkg/internal/netolly/flow/transport"
 )
 
-func NamedGetters(internalName string) (attributes.GetFunc[*ebpf.Record, string], bool) {
-	var getter attributes.GetFunc[*ebpf.Record, string]
+func NamedGetters(internalName string) (metric.Getter[*ebpf.Record, string], bool) {
+	var getter metric.Getter[*ebpf.Record, string]
 	switch internalName {
 	case "beyla.ip":
 		getter = func(r *ebpf.Record) string { return r.Attrs.BeylaIP }

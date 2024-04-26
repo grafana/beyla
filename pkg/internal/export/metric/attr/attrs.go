@@ -4,23 +4,6 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 )
 
-// Section of the attributes.select configuration. They are metric names
-// using the dot.notation and suppressing any .total .sum or .count suffix.
-// They are used as a standardized key in the attributes.select map, whichever
-// metric format or name the user provides.
-type Section string
-
-const (
-	SectionBeylaNetworkFlow      = Section("beyla.network.flow.bytes")
-	SectionHTTPServerDuration    = Section("http.server.request.duration")
-	SectionHTTPClientDuration    = Section("http.client.request.duration")
-	SectionRPCServerDuration     = Section("rpc.server.duration")
-	SectionRPCClientDuration     = Section("rpc.client.duration")
-	SectionSQLClientDuration     = Section("sql.client.duration")
-	SectionHTTPServerRequestSize = Section("http.server.request.body.size")
-	SectionHTTPClientRequestSize = Section("http.client.request.body.size")
-)
-
 // OpenTelemetry 1.23 semantic convention
 const (
 	HTTPRequestMethodKey      = attribute.Key("http.request.method")

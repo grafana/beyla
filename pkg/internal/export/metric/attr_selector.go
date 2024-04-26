@@ -1,33 +1,33 @@
-package attributes
+package metric
 
 import (
+	"fmt"
 	"maps"
 	"slices"
 
-	"github.com/grafana/beyla/pkg/internal/export/attributes/attr"
 	"github.com/grafana/beyla/pkg/internal/helpers"
 )
 
-type Provider struct {
-	definition map[attr.Section]Definition
+type AttrSelector struct {
+	definition map[Section]Definition
 	selector   Selection
 }
 
-func NewProvider(groups EnabledGroups, selectorCfg Selection) (*Provider, error) {
+func NewProvider(groups EnabledGroups, selectorCfg Selection) (*AttrSelector, error) {
 	selectorCfg.Normalize()
 	// TODO: validate
-	return &Provider{
+	return &AttrSelector{
 		selector:   selectorCfg,
 		definition: getDefinitions(groups),
 	}, nil
 }
 
-func (p *Provider) For(metricName attr.Section) []string {
-	metricAttributes, ok := p.definition[metricName]
+func (p *AttrSelector) For(metricName Name) []string {
+	metricAttributes, ok := p.definition[metricName.Section]
 	if !ok {
-		panic("BUG! metric not found " + metricName)
+		panic(fmt.Sprintf("BUG! metric not found %+v", metricName))
 	}
-	inclusionLists, ok := p.selector[metricName]
+	inclusionLists, ok := p.selector[metricName.Section]
 	if !ok {
 		attrs := helpers.SetToSlice(metricAttributes.Default())
 		slices.Sort(attrs)

@@ -20,8 +20,8 @@ import (
 	"go.opentelemetry.io/otel/sdk/metric"
 	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 
-	"github.com/grafana/beyla/pkg/internal/export/attributes"
-	"github.com/grafana/beyla/pkg/internal/export/attributes/attr"
+	metric2 "github.com/grafana/beyla/pkg/internal/export/metric"
+	"github.com/grafana/beyla/pkg/internal/export/metric/attr"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/pkg/internal/request"
@@ -33,21 +33,14 @@ func mlog() *slog.Logger {
 }
 
 const (
-	HTTPServerDuration    = string(attr.SectionHTTPServerDuration)
-	HTTPClientDuration    = string(attr.SectionHTTPClientDuration)
-	RPCServerDuration     = string(attr.SectionRPCServerDuration)
-	RPCClientDuration     = string(attr.SectionRPCClientDuration)
-	SQLClientDuration     = string(attr.SectionSQLClientDuration)
-	HTTPServerRequestSize = string(attr.SectionHTTPServerRequestSize)
-	HTTPClientRequestSize = string(attr.SectionHTTPClientRequestSize)
-	SpanMetricsLatency    = "traces_spanmetrics_latency"
-	SpanMetricsCalls      = "traces_spanmetrics_calls_total"
-	SpanMetricsSizes      = "traces_spanmetrics_size_total"
-	TracesTargetInfo      = "traces_target_info"
-	ServiceGraphClient    = "traces_service_graph_request_client"
-	ServiceGraphServer    = "traces_service_graph_request_server"
-	ServiceGraphFailed    = "traces_service_graph_request_failed_total"
-	ServiceGraphTotal     = "traces_service_graph_request_total"
+	SpanMetricsLatency = "traces_spanmetrics_latency"
+	SpanMetricsCalls   = "traces_spanmetrics_calls_total"
+	SpanMetricsSizes   = "traces_spanmetrics_size_total"
+	TracesTargetInfo   = "traces_target_info"
+	ServiceGraphClient = "traces_service_graph_request_client"
+	ServiceGraphServer = "traces_service_graph_request_server"
+	ServiceGraphFailed = "traces_service_graph_request_failed_total"
+	ServiceGraphTotal  = "traces_service_graph_request_total"
 
 	UsualPortGRPC = "4317"
 	UsualPortHTTP = "4318"
@@ -159,7 +152,7 @@ func (m MetricsConfig) Enabled() bool {
 type MetricsReporter struct {
 	ctx        context.Context
 	cfg        *MetricsConfig
-	attributes *attributes.Provider
+	attributes *metric2.AttrSelector
 	exporter   metric.Exporter
 	reporters  ReporterPool[*Metrics]
 }
@@ -171,13 +164,13 @@ type Metrics struct {
 	service  svc.ID
 	provider *metric.MeterProvider
 
-	attrHTTPDuration          []attributes.Getter[*request.Span, attribute.KeyValue]
-	attrHTTPClientDuration    []attributes.Getter[*request.Span, attribute.KeyValue]
-	attrGRPCServer            []attributes.Getter[*request.Span, attribute.KeyValue]
-	attrGRPCClient            []attributes.Getter[*request.Span, attribute.KeyValue]
-	attrSQLClient             []attributes.Getter[*request.Span, attribute.KeyValue]
-	attrHTTPRequestSize       []attributes.Getter[*request.Span, attribute.KeyValue]
-	attrHTTPClientRequestSize []attributes.Getter[*request.Span, attribute.KeyValue]
+	attrHTTPDuration          []metric2.Field[*request.Span, attribute.KeyValue]
+	attrHTTPClientDuration    []metric2.Field[*request.Span, attribute.KeyValue]
+	attrGRPCServer            []metric2.Field[*request.Span, attribute.KeyValue]
+	attrGRPCClient            []metric2.Field[*request.Span, attribute.KeyValue]
+	attrSQLClient             []metric2.Field[*request.Span, attribute.KeyValue]
+	attrHTTPRequestSize       []metric2.Field[*request.Span, attribute.KeyValue]
+	attrHTTPClientRequestSize []metric2.Field[*request.Span, attribute.KeyValue]
 
 	httpDuration          instrument.Float64Histogram
 	httpClientDuration    instrument.Float64Histogram
@@ -201,7 +194,7 @@ func ReportMetrics(
 	ctx context.Context,
 	ctxInfo *global.ContextInfo,
 	cfg *MetricsConfig,
-	attribSelector attributes.Selection,
+	attribSelector metric2.Selection,
 ) pipe.FinalProvider[[]request.Span] {
 	return func() (pipe.FinalFunc[[]request.Span], error) {
 		if !cfg.Enabled() {
@@ -221,11 +214,11 @@ func newMetricsReporter(
 	ctx context.Context,
 	ctxInfo *global.ContextInfo,
 	cfg *MetricsConfig,
-	attribSelector attributes.Selection,
+	attribSelector metric2.Selection,
 ) (*MetricsReporter, error) {
 	log := mlog()
 
-	attribProvider, err := attributes.NewProvider(ctxInfo.MetricAttributeGroups, attribSelector)
+	attribProvider, err := metric2.NewProvider(ctxInfo.MetricAttributeGroups, attribSelector)
 	if err != nil {
 		return nil, fmt.Errorf("attributes select: %w", err)
 	}
@@ -267,13 +260,13 @@ func (mr *MetricsReporter) otelMetricOptions(mlog *slog.Logger) []metric.Option 
 	useExponentialHistograms := isExponentialAggregation(mr.cfg, mlog)
 
 	return []metric.Option{
-		metric.WithView(otelHistogramConfig(HTTPServerDuration, mr.cfg.Buckets.DurationHistogram, useExponentialHistograms)),
-		metric.WithView(otelHistogramConfig(HTTPClientDuration, mr.cfg.Buckets.DurationHistogram, useExponentialHistograms)),
-		metric.WithView(otelHistogramConfig(RPCServerDuration, mr.cfg.Buckets.DurationHistogram, useExponentialHistograms)),
-		metric.WithView(otelHistogramConfig(RPCClientDuration, mr.cfg.Buckets.DurationHistogram, useExponentialHistograms)),
-		metric.WithView(otelHistogramConfig(SQLClientDuration, mr.cfg.Buckets.DurationHistogram, useExponentialHistograms)),
-		metric.WithView(otelHistogramConfig(HTTPServerRequestSize, mr.cfg.Buckets.RequestSizeHistogram, useExponentialHistograms)),
-		metric.WithView(otelHistogramConfig(HTTPClientRequestSize, mr.cfg.Buckets.RequestSizeHistogram, useExponentialHistograms)),
+		metric.WithView(otelHistogramConfig(metric2.HTTPServerDuration.OTEL, mr.cfg.Buckets.DurationHistogram, useExponentialHistograms)),
+		metric.WithView(otelHistogramConfig(metric2.HTTPClientDuration.OTEL, mr.cfg.Buckets.DurationHistogram, useExponentialHistograms)),
+		metric.WithView(otelHistogramConfig(metric2.RPCServerDuration.OTEL, mr.cfg.Buckets.DurationHistogram, useExponentialHistograms)),
+		metric.WithView(otelHistogramConfig(metric2.RPCClientDuration.OTEL, mr.cfg.Buckets.DurationHistogram, useExponentialHistograms)),
+		metric.WithView(otelHistogramConfig(metric2.SQLClientDuration.OTEL, mr.cfg.Buckets.DurationHistogram, useExponentialHistograms)),
+		metric.WithView(otelHistogramConfig(metric2.HTTPServerRequestSize.OTEL, mr.cfg.Buckets.RequestSizeHistogram, useExponentialHistograms)),
+		metric.WithView(otelHistogramConfig(metric2.HTTPClientRequestSize.OTEL, mr.cfg.Buckets.RequestSizeHistogram, useExponentialHistograms)),
 	}
 }
 
@@ -307,47 +300,47 @@ func (mr *MetricsReporter) setupOtelMeters(m *Metrics, meter instrument.Meter) e
 		return nil
 	}
 
-	m.attrHTTPDuration = attributes.OpenTelemetryGetters(
-		HTTPGetters, mr.attributes.For(attr.SectionHTTPServerDuration))
-	m.attrHTTPClientDuration = attributes.OpenTelemetryGetters(
-		HTTPGetters, mr.attributes.For(attr.SectionHTTPClientDuration))
-	m.attrHTTPRequestSize = attributes.OpenTelemetryGetters(
-		HTTPGetters, mr.attributes.For(attr.SectionHTTPServerRequestSize))
-	m.attrHTTPClientRequestSize = attributes.OpenTelemetryGetters(
-		HTTPGetters, mr.attributes.For(attr.SectionHTTPClientRequestSize))
-	m.attrGRPCServer = attributes.OpenTelemetryGetters(
-		GRPCGetters, mr.attributes.For(attr.SectionRPCServerDuration))
-	m.attrGRPCClient = attributes.OpenTelemetryGetters(
-		GRPCGetters, mr.attributes.For(attr.SectionRPCClientDuration))
-	m.attrSQLClient = attributes.OpenTelemetryGetters(
-		SQLGetters, mr.attributes.For(attr.SectionSQLClientDuration))
+	m.attrHTTPDuration = metric2.OpenTelemetryGetters(
+		HTTPGetters, mr.attributes.For(metric2.HTTPServerDuration))
+	m.attrHTTPClientDuration = metric2.OpenTelemetryGetters(
+		HTTPGetters, mr.attributes.For(metric2.HTTPClientDuration))
+	m.attrHTTPRequestSize = metric2.OpenTelemetryGetters(
+		HTTPGetters, mr.attributes.For(metric2.HTTPServerRequestSize))
+	m.attrHTTPClientRequestSize = metric2.OpenTelemetryGetters(
+		HTTPGetters, mr.attributes.For(metric2.HTTPClientRequestSize))
+	m.attrGRPCServer = metric2.OpenTelemetryGetters(
+		GRPCGetters, mr.attributes.For(metric2.RPCServerDuration))
+	m.attrGRPCClient = metric2.OpenTelemetryGetters(
+		GRPCGetters, mr.attributes.For(metric2.RPCClientDuration))
+	m.attrSQLClient = metric2.OpenTelemetryGetters(
+		SQLGetters, mr.attributes.For(metric2.SQLClientDuration))
 
 	var err error
-	m.httpDuration, err = meter.Float64Histogram(HTTPServerDuration, instrument.WithUnit("s"))
+	m.httpDuration, err = meter.Float64Histogram(metric2.HTTPServerDuration.OTEL, instrument.WithUnit("s"))
 	if err != nil {
 		return fmt.Errorf("creating http duration histogram metric: %w", err)
 	}
-	m.httpClientDuration, err = meter.Float64Histogram(HTTPClientDuration, instrument.WithUnit("s"))
+	m.httpClientDuration, err = meter.Float64Histogram(metric2.HTTPClientDuration.OTEL, instrument.WithUnit("s"))
 	if err != nil {
 		return fmt.Errorf("creating http duration histogram metric: %w", err)
 	}
-	m.grpcDuration, err = meter.Float64Histogram(RPCServerDuration, instrument.WithUnit("s"))
+	m.grpcDuration, err = meter.Float64Histogram(metric2.RPCServerDuration.OTEL, instrument.WithUnit("s"))
 	if err != nil {
 		return fmt.Errorf("creating grpc duration histogram metric: %w", err)
 	}
-	m.grpcClientDuration, err = meter.Float64Histogram(RPCClientDuration, instrument.WithUnit("s"))
+	m.grpcClientDuration, err = meter.Float64Histogram(metric2.RPCClientDuration.OTEL, instrument.WithUnit("s"))
 	if err != nil {
 		return fmt.Errorf("creating grpc duration histogram metric: %w", err)
 	}
-	m.sqlClientDuration, err = meter.Float64Histogram(SQLClientDuration, instrument.WithUnit("s"))
+	m.sqlClientDuration, err = meter.Float64Histogram(metric2.SQLClientDuration.OTEL, instrument.WithUnit("s"))
 	if err != nil {
 		return fmt.Errorf("creating sql client duration histogram metric: %w", err)
 	}
-	m.httpRequestSize, err = meter.Float64Histogram(HTTPServerRequestSize, instrument.WithUnit("By"))
+	m.httpRequestSize, err = meter.Float64Histogram(metric2.HTTPServerRequestSize.OTEL, instrument.WithUnit("By"))
 	if err != nil {
 		return fmt.Errorf("creating http size histogram metric: %w", err)
 	}
-	m.httpClientRequestSize, err = meter.Float64Histogram(HTTPClientRequestSize, instrument.WithUnit("By"))
+	m.httpClientRequestSize, err = meter.Float64Histogram(metric2.HTTPClientRequestSize.OTEL, instrument.WithUnit("By"))
 	if err != nil {
 		return fmt.Errorf("creating http size histogram metric: %w", err)
 	}
@@ -581,12 +574,12 @@ func otelHistogramConfig(metricName string, buckets []float64, useExponentialHis
 
 func (mr *MetricsReporter) metricResourceAttributes(service svc.ID) attribute.Set {
 	attrs := []attribute.KeyValue{
-		attributes.ServiceMetric(service.Name),
+		metric2.ServiceMetric(service.Name),
 		semconv.ServiceInstanceID(service.Instance),
 		semconv.ServiceNamespace(service.Namespace),
 		semconv.TelemetrySDKLanguageKey.String(service.SDKLanguage.String()),
 		semconv.TelemetrySDKNameKey.String("beyla"),
-		attributes.SourceMetric("beyla"),
+		metric2.SourceMetric("beyla"),
 	}
 	for k, v := range service.Metadata {
 		attrs = append(attrs, attribute.String(k, v))
@@ -597,13 +590,13 @@ func (mr *MetricsReporter) metricResourceAttributes(service svc.ID) attribute.Se
 
 func (mr *MetricsReporter) spanMetricAttributes(span *request.Span) attribute.Set {
 	attrs := []attribute.KeyValue{
-		attributes.ServiceMetric(span.ServiceID.Name),
+		metric2.ServiceMetric(span.ServiceID.Name),
 		semconv.ServiceInstanceID(span.ServiceID.Instance),
 		semconv.ServiceNamespace(span.ServiceID.Namespace),
-		attributes.SpanKindMetric(SpanKindString(span)),
-		attributes.SpanNameMetric(TraceName(span)),
-		attributes.StatusCodeMetric(int(SpanStatusCode(span))),
-		attributes.SourceMetric("beyla"),
+		metric2.SpanKindMetric(SpanKindString(span)),
+		metric2.SpanNameMetric(TraceName(span)),
+		metric2.StatusCodeMetric(int(SpanStatusCode(span))),
+		metric2.SourceMetric("beyla"),
 	}
 
 	return attribute.NewSet(attrs...)
@@ -613,27 +606,27 @@ func (mr *MetricsReporter) serviceGraphAttributes(span *request.Span) attribute.
 	var attrs []attribute.KeyValue
 	if span.IsClientSpan() {
 		attrs = []attribute.KeyValue{
-			attributes.ClientMetric(attributes.SpanPeer(span)),
-			attributes.ClientNamespaceMetric(span.ServiceID.Namespace),
-			attributes.ServerMetric(attributes.SpanHost(span)),
-			attributes.ServerNamespaceMetric(span.OtherNamespace),
-			attributes.ConnectionTypeMetric("virtual_node"),
-			attributes.SourceMetric("beyla"),
+			metric2.ClientMetric(metric2.SpanPeer(span)),
+			metric2.ClientNamespaceMetric(span.ServiceID.Namespace),
+			metric2.ServerMetric(metric2.SpanHost(span)),
+			metric2.ServerNamespaceMetric(span.OtherNamespace),
+			metric2.ConnectionTypeMetric("virtual_node"),
+			metric2.SourceMetric("beyla"),
 		}
 	} else {
 		attrs = []attribute.KeyValue{
-			attributes.ClientMetric(attributes.SpanPeer(span)),
-			attributes.ClientNamespaceMetric(span.OtherNamespace),
-			attributes.ServerMetric(attributes.SpanHost(span)),
-			attributes.ServerNamespaceMetric(span.ServiceID.Namespace),
-			attributes.ConnectionTypeMetric("virtual_node"),
-			attributes.SourceMetric("beyla"),
+			metric2.ClientMetric(metric2.SpanPeer(span)),
+			metric2.ClientNamespaceMetric(span.OtherNamespace),
+			metric2.ServerMetric(metric2.SpanHost(span)),
+			metric2.ServerNamespaceMetric(span.ServiceID.Namespace),
+			metric2.ConnectionTypeMetric("virtual_node"),
+			metric2.SourceMetric("beyla"),
 		}
 	}
 	return attribute.NewSet(attrs...)
 }
 
-func withAttributes(span *request.Span, getters []attributes.Getter[*request.Span, attribute.KeyValue]) instrument.MeasurementOption {
+func withAttributes(span *request.Span, getters []metric2.Field[*request.Span, attribute.KeyValue]) instrument.MeasurementOption {
 	attributes := make([]attribute.KeyValue, 0, len(getters))
 	for _, get := range getters {
 		attributes = append(attributes, get.Get(span))
@@ -839,26 +832,26 @@ func setMetricsProtocol(cfg *MetricsConfig) {
 }
 
 // HTTPGetters provides get function for HTTP attributes.
-// REMINDER: any attribute here must be also added to pkg/internal/export/attributes/definitions.go getDefinitions
-func HTTPGetters(dotAttrName string) (attributes.GetFunc[*request.Span, attribute.KeyValue], bool) {
-	var getter attributes.GetFunc[*request.Span, attribute.KeyValue]
+// REMINDER: any attribute here must be also added to pkg/internal/export/metric/definitions.go getDefinitions
+func HTTPGetters(dotAttrName string) (metric2.Getter[*request.Span, attribute.KeyValue], bool) {
+	var getter metric2.Getter[*request.Span, attribute.KeyValue]
 	switch attribute.Key(dotAttrName) {
 	case attr.HTTPRequestMethodKey:
-		getter = func(s *request.Span) attribute.KeyValue { return attributes.HTTPRequestMethod(s.Method) }
+		getter = func(s *request.Span) attribute.KeyValue { return metric2.HTTPRequestMethod(s.Method) }
 
 	// dotAttrName is normalized as dot-only, so http.response.status_code needs to be transformed to http.response.status.code
-	case attribute.Key(attributes.NormalizeToDot(string(attr.HTTPResponseStatusCodeKey))):
-		getter = func(s *request.Span) attribute.KeyValue { return attributes.HTTPResponseStatusCode(s.Status) }
+	case attribute.Key(metric2.NormalizeToDot(string(attr.HTTPResponseStatusCodeKey))):
+		getter = func(s *request.Span) attribute.KeyValue { return metric2.HTTPResponseStatusCode(s.Status) }
 	case semconv.HTTPRouteKey:
 		getter = func(s *request.Span) attribute.KeyValue { return semconv.HTTPRoute(s.Route) }
 	case attr.HTTPUrlPathKey:
-		getter = func(s *request.Span) attribute.KeyValue { return attributes.HTTPUrlPath(s.Path) }
+		getter = func(s *request.Span) attribute.KeyValue { return metric2.HTTPUrlPath(s.Path) }
 	case attr.ClientAddrKey:
-		getter = func(s *request.Span) attribute.KeyValue { return attributes.ClientAddr(attributes.SpanPeer(s)) }
+		getter = func(s *request.Span) attribute.KeyValue { return metric2.ClientAddr(metric2.SpanPeer(s)) }
 	case attr.ServerAddrKey:
-		getter = func(s *request.Span) attribute.KeyValue { return attributes.ServerAddr(attributes.SpanHost(s)) }
+		getter = func(s *request.Span) attribute.KeyValue { return metric2.ServerAddr(metric2.SpanHost(s)) }
 	case attr.ServerPortKey:
-		getter = func(s *request.Span) attribute.KeyValue { return attributes.ServerPort(s.HostPort) }
+		getter = func(s *request.Span) attribute.KeyValue { return metric2.ServerPort(s.HostPort) }
 	default:
 		return commonAttributes(dotAttrName)
 	}
@@ -866,9 +859,9 @@ func HTTPGetters(dotAttrName string) (attributes.GetFunc[*request.Span, attribut
 }
 
 // GRPCGetters provides getter function for GRPC attributes.
-// REMINDER: any attribute here must be also added to pkg/internal/export/attributes/definitions.go getDefinitions
-func GRPCGetters(dotAttrName string) (attributes.GetFunc[*request.Span, attribute.KeyValue], bool) {
-	var getter attributes.GetFunc[*request.Span, attribute.KeyValue]
+// REMINDER: any attribute here must be also added to pkg/internal/export/metric/definitions.go getDefinitions
+func GRPCGetters(dotAttrName string) (metric2.Getter[*request.Span, attribute.KeyValue], bool) {
+	var getter metric2.Getter[*request.Span, attribute.KeyValue]
 	switch dotAttrName {
 	case string(semconv.RPCMethodKey):
 		getter = func(s *request.Span) attribute.KeyValue { return semconv.RPCMethod(s.Path) }
@@ -876,19 +869,19 @@ func GRPCGetters(dotAttrName string) (attributes.GetFunc[*request.Span, attribut
 		getter = func(_ *request.Span) attribute.KeyValue { return semconv.RPCSystemGRPC }
 
 	// dotAttrName is normalized as dot-only, so rpc.grpc.status_code needs to be transformed to rpc.grpc.status.code
-	case attributes.NormalizeToDot(string(semconv.RPCGRPCStatusCodeKey)):
+	case metric2.NormalizeToDot(string(semconv.RPCGRPCStatusCodeKey)):
 		getter = func(s *request.Span) attribute.KeyValue { return semconv.RPCGRPCStatusCodeKey.Int(s.Status) }
 	case string(attr.ClientAddrKey):
-		getter = func(s *request.Span) attribute.KeyValue { return attributes.ClientAddr(attributes.SpanPeer(s)) }
+		getter = func(s *request.Span) attribute.KeyValue { return metric2.ClientAddr(metric2.SpanPeer(s)) }
 	case string(attr.ServerAddrKey):
-		getter = func(s *request.Span) attribute.KeyValue { return attributes.ServerAddr(attributes.SpanPeer(s)) }
+		getter = func(s *request.Span) attribute.KeyValue { return metric2.ServerAddr(metric2.SpanPeer(s)) }
 	default:
 		return commonAttributes(dotAttrName)
 	}
 	return getter, getter != nil
 }
 
-func SQLGetters(attrName string) (attributes.GetFunc[*request.Span, attribute.KeyValue], bool) {
+func SQLGetters(attrName string) (metric2.Getter[*request.Span, attribute.KeyValue], bool) {
 	if attribute.Key(attrName) == attr.DBOperationKey {
 		return func(span *request.Span) attribute.KeyValue {
 			return semconv.DBOperation(span.Method)
@@ -897,7 +890,7 @@ func SQLGetters(attrName string) (attributes.GetFunc[*request.Span, attribute.Ke
 	return commonAttributes(attrName)
 }
 
-func commonAttributes(attrName string) (attributes.GetFunc[*request.Span, attribute.KeyValue], bool) {
+func commonAttributes(attrName string) (metric2.Getter[*request.Span, attribute.KeyValue], bool) {
 	if attribute.Key(attrName) == semconv.ServiceNameKey {
 		return func(s *request.Span) attribute.KeyValue {
 			return semconv.ServiceName(s.ServiceID.Name)

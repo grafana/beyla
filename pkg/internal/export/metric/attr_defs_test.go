@@ -1,4 +1,4 @@
-package attributes
+package metric
 
 import (
 	"testing"

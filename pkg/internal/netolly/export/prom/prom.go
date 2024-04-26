@@ -9,8 +9,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/grafana/beyla/pkg/internal/connector"
-	"github.com/grafana/beyla/pkg/internal/export/attributes"
-	"github.com/grafana/beyla/pkg/internal/export/attributes/attr"
+	"github.com/grafana/beyla/pkg/internal/export/metric"
 	"github.com/grafana/beyla/pkg/internal/export/otel"
 	"github.com/grafana/beyla/pkg/internal/export/prom"
 	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
@@ -18,14 +17,10 @@ import (
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 )
 
-const (
-	BeylaNetworkFlows = "beyla_network_flow_bytes_total"
-)
-
 // PrometheusConfig for network metrics just wraps the global prom.PrometheusConfig as provided by the user
 type PrometheusConfig struct {
 	Config             *prom.PrometheusConfig
-	AttributeSelectors attributes.Selection
+	AttributeSelectors metric.Selection
 }
 
 // nolint:gocritic
@@ -46,7 +41,7 @@ type metricsReporter struct {
 
 	promConnect *connector.PrometheusManager
 
-	attrs []attributes.Getter[*ebpf.Record, string]
+	attrs []metric.Field[*ebpf.Record, string]
 
 	bgCtx context.Context
 }
@@ -75,16 +70,16 @@ func newReporter(
 	group := ctxInfo.MetricAttributeGroups
 	// this property can't be set inside the ConfiguredGroups function, otherwise the
 	// OTEL exporter would report also some prometheus-exclusive attributes
-	group.Add(attributes.EnablePrometheus)
+	group.Add(metric.EnablePrometheus)
 
-	provider, err := attributes.NewProvider(group, cfg.AttributeSelectors)
+	provider, err := metric.NewProvider(group, cfg.AttributeSelectors)
 	if err != nil {
 		return nil, fmt.Errorf("network Prometheus exporter attributes enable: %w", err)
 	}
 
-	attrs := attributes.PrometheusGetters(
+	attrs := metric.PrometheusGetters(
 		export.NamedGetters,
-		provider.For(attr.SectionBeylaNetworkFlow))
+		provider.For(metric.BeylaNetworkFlow))
 
 	labelNames := make([]string, 0, len(attrs))
 	for _, label := range attrs {
@@ -99,7 +94,7 @@ func newReporter(
 		promConnect: ctxInfo.Prometheus,
 		attrs:       attrs,
 		flowBytes: NewExpirer(prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: BeylaNetworkFlows,
+			Name: metric.BeylaNetworkFlow.Prom,
 			Help: "bytes submitted from a source network endpoint to a destination network endpoint",
 		}, labelNames), cfg.Config.TTL),
 	}

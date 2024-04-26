@@ -1,9 +1,9 @@
-package attributes
+package metric
 
 import (
 	"go.opentelemetry.io/otel/attribute"
 
-	"github.com/grafana/beyla/pkg/internal/export/attributes/attr"
+	"github.com/grafana/beyla/pkg/internal/export/metric/attr"
 	"github.com/grafana/beyla/pkg/internal/request"
 )
 

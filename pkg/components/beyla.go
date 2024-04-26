@@ -104,5 +104,11 @@ func buildCommonContextInfo(
 	if config.Routes != nil {
 		ctxInfo.MetricAttributeGroups.Add(attributes.EnableHTTPRoutes)
 	}
+	if config.Metrics.ReportPeerInfo || config.Prometheus.ReportPeerInfo {
+		ctxInfo.MetricAttributeGroups.Add(attributes.EnablePeerInfo)
+	}
+	if config.Metrics.ReportTarget || config.Prometheus.ReportTarget {
+		ctxInfo.MetricAttributeGroups.Add(attributes.EnableTarget)
+	}
 	return ctxInfo
 }

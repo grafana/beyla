@@ -4,8 +4,10 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 )
 
-// Section of the attributes.allow configuration. They are metric names
-// using the dot.notation and suppressing any .total .sum or .count suffix
+// Section of the attributes.select configuration. They are metric names
+// using the dot.notation and suppressing any .total .sum or .count suffix.
+// They are used as a standardized key in the attributes.select map, whichever
+// metric format or name the user provides.
 type Section string
 
 const (

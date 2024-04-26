@@ -12,6 +12,8 @@ const (
 	EnableKubernetes = EnabledGroups(1 << iota)
 	EnablePrometheus
 	EnableHTTPRoutes
+	EnablePeerInfo // TODO Beyla 2.0: remove when we remove ReportPeerInfo configuration option
+	EnableTarget   // TODO Beyla 2.0: remove when we remove ReportTarget configuration option
 )
 
 func (e *EnabledGroups) Has(groups EnabledGroups) bool {
@@ -84,13 +86,62 @@ func getDefinitions(groups EnabledGroups) map[attr.Section]Definition {
 		},
 	}
 
-	var appHTTPDuration = Definition{
-		Parents: []*Definition{&httpRoutes},
+	var serverInfo = Definition{
+		Attributes: map[string]Default{
+			string(attr.ClientAddrKey): false,
+		},
+	}
+	var httpClientInfo = Definition{
+		Attributes: map[string]Default{
+			string(attr.ServerAddrKey): false,
+			string(attr.ServerPortKey): false,
+		},
+	}
+	var grpcClientInfo = Definition{
+		Attributes: map[string]Default{
+			string(attr.ServerAddrKey): false,
+		},
+	}
+
+	// the following definitions are duplicated as non-default httpServerInfo, httpClientInfo, etc...,
+	// because they can be enabled by two ways. From the legacy, deprecated report_peer or report_target
+	// config options, or from attributes.select
+	// TODO Beyla 2.0 remove
+	var deprecatedServerPeerInfo = Definition{
+		Disabled: !groups.Has(EnablePeerInfo),
+		Attributes: map[string]Default{
+			string(attr.ClientAddrKey): true,
+		},
+	}
+	// TODO Beyla 2.0 remove
+	var deprecatedHTTPClientPeerInfo = Definition{
+		Disabled: !groups.Has(EnablePeerInfo),
+		Attributes: map[string]Default{
+			string(attr.ServerAddrKey): true,
+			string(attr.ServerPortKey): true,
+		},
+	}
+	// TODO Beyla 2.0 remove
+	var deprecatedGRPCClientPeerInfo = Definition{
+		Disabled: !groups.Has(EnablePeerInfo),
+		Attributes: map[string]Default{
+			string(attr.ServerAddrKey): true,
+		},
+	}
+	// TODO Beyla 2.0 remove
+	var deprecatedHTTPPath = Definition{
+		Disabled: !groups.Has(EnableTarget),
+		Attributes: map[string]Default{
+			string(attr.HTTPUrlPathKey): true,
+		},
+	}
+
+	var httpCommon = Definition{
+		Parents: []*Definition{&httpRoutes, &deprecatedHTTPPath},
 		Attributes: map[string]Default{
 			string(attr.HTTPRequestMethodKey):      true,
 			string(attr.HTTPResponseStatusCodeKey): true,
 			string(attr.HTTPUrlPathKey):            false,
-			string(attr.ClientAddrKey):             false,
 		},
 	}
 
@@ -111,19 +162,19 @@ func getDefinitions(groups EnabledGroups) map[attr.Section]Definition {
 			},
 		},
 		attr.SectionHTTPServerDuration: {
-			Parents: []*Definition{&appCommon, &appKubeAttributes, &appHTTPDuration},
-		},
-		attr.SectionHTTPClientDuration: {
-			Parents: []*Definition{&appCommon, &appKubeAttributes, &appHTTPDuration},
+			Parents: []*Definition{&appCommon, &appKubeAttributes, &httpCommon, &serverInfo, &deprecatedServerPeerInfo},
 		},
 		attr.SectionHTTPServerRequestSize: {
-			Parents: []*Definition{&appCommon, &appKubeAttributes, &appHTTPDuration},
+			Parents: []*Definition{&appCommon, &appKubeAttributes, &httpCommon, &serverInfo, &deprecatedServerPeerInfo},
+		},
+		attr.SectionHTTPClientDuration: {
+			Parents: []*Definition{&appCommon, &appKubeAttributes, &httpCommon, &httpClientInfo, &deprecatedHTTPClientPeerInfo},
 		},
 		attr.SectionHTTPClientRequestSize: {
-			Parents: []*Definition{&appCommon, &appKubeAttributes, &appHTTPDuration},
+			Parents: []*Definition{&appCommon, &appKubeAttributes, &httpCommon, &httpClientInfo, &deprecatedHTTPClientPeerInfo},
 		},
 		attr.SectionRPCClientDuration: {
-			Parents: []*Definition{&appCommon, &appKubeAttributes},
+			Parents: []*Definition{&appCommon, &appKubeAttributes, &grpcClientInfo, &deprecatedGRPCClientPeerInfo},
 			Attributes: map[string]Default{
 				string(semconv.RPCMethodKey):         true,
 				string(semconv.RPCSystemKey):         true,
@@ -132,7 +183,7 @@ func getDefinitions(groups EnabledGroups) map[attr.Section]Definition {
 			},
 		},
 		attr.SectionRPCServerDuration: {
-			Parents: []*Definition{&appCommon, &appKubeAttributes},
+			Parents: []*Definition{&appCommon, &appKubeAttributes, &serverInfo, &deprecatedServerPeerInfo},
 			Attributes: map[string]Default{
 				string(semconv.RPCMethodKey):         true,
 				string(semconv.RPCSystemKey):         true,

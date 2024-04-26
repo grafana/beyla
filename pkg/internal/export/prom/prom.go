@@ -107,6 +107,11 @@ type PrometheusConfig struct {
 	Port int    `yaml:"port" env:"BEYLA_PROMETHEUS_PORT"`
 	Path string `yaml:"path" env:"BEYLA_PROMETHEUS_PATH"`
 
+	// Deprecated. Going to be removed in Beyla 2.0. Use attributes.select instead
+	ReportTarget bool `yaml:"report_target" env:"BEYLA_METRICS_REPORT_TARGET"`
+	// Deprecated. Going to be removed in Beyla 2.0. Use attributes.select instead
+	ReportPeerInfo bool `yaml:"report_peer" env:"BEYLA_METRICS_REPORT_PEER"`
+
 	DisableBuildInfo bool `yaml:"disable_build_info" env:"BEYLA_PROMETHEUS_DISABLE_BUILD_INFO"`
 
 	// Features of metrics that are can be exported. Accepted values are "application" and "network".
@@ -586,12 +591,15 @@ func (r *metricsReporter) labelValuesServiceGraph(span *request.Span) []string {
 	}
 }
 
+// HTTPGetters provides get function for HTTP attributes.
+// REMINDER: any attribute here must be also added to pkg/internal/export/attributes/definitions.go getDefinitions
 func HTTPGetters(attrName string) (attributes.GetFunc[*request.Span, string], bool) {
 	var getter attributes.GetFunc[*request.Span, string]
 	switch attribute.Key(attrName) {
 	case attr.HTTPRequestMethodKey:
 		getter = func(s *request.Span) string { return s.Method }
-	case attr.HTTPResponseStatusCodeKey:
+	// dotAttrName is normalized as dot-only, so http.response.status_code needs to be transformed to http.response.status.code
+	case attribute.Key(attributes.NormalizeToDot(string(attr.HTTPResponseStatusCodeKey))):
 		getter = func(s *request.Span) string { return strconv.Itoa(s.Status) }
 	case semconv.HTTPRouteKey:
 		getter = func(s *request.Span) string { return s.Route }
@@ -609,21 +617,24 @@ func HTTPGetters(attrName string) (attributes.GetFunc[*request.Span, string], bo
 	return getter, getter != nil
 }
 
-func GRPCGetters(attrName string) (attributes.GetFunc[*request.Span, string], bool) {
+// GRPCGetters provides getter function for GRPC attributes.
+// REMINDER: any attribute here must be also added to pkg/internal/export/attributes/definitions.go getDefinitions
+func GRPCGetters(dotAttrName string) (attributes.GetFunc[*request.Span, string], bool) {
 	var getter attributes.GetFunc[*request.Span, string]
-	switch attribute.Key(attrName) {
+	switch attribute.Key(dotAttrName) {
 	case semconv.RPCMethodKey:
 		getter = func(s *request.Span) string { return s.Path }
 	case semconv.RPCSystemKey:
 		getter = func(_ *request.Span) string { return "grpc" }
-	case semconv.RPCGRPCStatusCodeKey:
+	// dotAttrName is normalized as dot-only, so rpc.grpc.status_code needs to be transformed to rpc.grpc.status.code
+	case attribute.Key(attributes.NormalizeToDot(string(semconv.RPCGRPCStatusCodeKey))):
 		getter = func(s *request.Span) string { return strconv.Itoa(s.Status) }
 	case attr.ClientAddrKey:
 		getter = attributes.SpanPeer
 	case attr.ServerAddrKey:
 		getter = attributes.SpanPeer
 	default:
-		return commonAttributes(attrName)
+		return commonAttributes(dotAttrName)
 	}
 	return getter, getter != nil
 }

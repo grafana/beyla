@@ -4,7 +4,6 @@ global:
   image:
     # -- Global image registry to use if it needs to be overridden for some specific use cases (e.g local registries, custom images, ...)
     registry: ""
-
     # -- Optional set of global image pull secrets.
     pullSecrets: []
 
@@ -98,8 +97,8 @@ service:
   annotations: {}
   # -- Service labels.
   labels: {}
-  # -- name of the port for internal metrics service.
-  portName: service
+  # -- name of the port for internal metrics.
+  portName: metrics
   # -- Adds the appProtocol field to the service. This allows to work with istio protocol selection. Ex: "http" or "tcp"
   appProtocol: ""
 
@@ -115,14 +114,11 @@ resources: {}
   #   cpu: 100m
   #   memory: 128Mi
 
-
-
 ## -- See `kubectl explain daemonset.spec.updateStrategy` for more
 ## ref: https://kubernetes.io/docs/tasks/manage-daemon/update-daemon-set/#daemonset-update-strategy
 updateStrategy:
   # -- update strategy type
   type: RollingUpdate
-
 
 # -- Additional volumes on the output daemonset definition.
 volumes: []
@@ -194,8 +190,8 @@ config:
 ##   BEYLA_INTERNAL_METRICS_PROMETHEUS_PORT: 9090
 # -- extra environment variables
 env: {}
-  #BEYLA_INTERNAL_METRICS_PROMETHEUS_PORT: 9090
-  #BEYLA_PRINT_TRACES: "true"
+  # BEYLA_INTERNAL_METRICS_PROMETHEUS_PORT: 9090
+  # BEYLA_PRINT_TRACES: "true"
 
 # -- extra environment variables to be set from resources such as k8s configMaps/secrets
 envValueFrom: {}

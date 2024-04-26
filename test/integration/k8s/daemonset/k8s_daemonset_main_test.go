@@ -54,3 +54,5 @@ func TestMain(m *testing.M) {
 
 	cluster.Run(m)
 }
+
+type UninstrumentedApp struct{}

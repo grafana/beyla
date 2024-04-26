@@ -228,6 +228,29 @@ func deployManifest(cfg *envconf.Config, manifest string) error {
 	})
 }
 
+func deleteManifestFile(
+	manifestFile string,
+	cfg *envconf.Config,
+) error {
+	log := log()
+	log.With("file", manifestFile).Info("deleting manifest file")
+
+	b, err := os.ReadFile(manifestFile)
+	if err != nil {
+		return fmt.Errorf("reading manifest file %q: %w", manifestFile, err)
+	}
+
+	return deleteManifest(cfg, string(b))
+}
+
+func DeleteExistingManifestFile(cfg *envconf.Config, manifest string) error {
+	return deleteManifestFile(manifest, cfg)
+}
+
+func DeployManifestFile(cfg *envconf.Config, manifest string) error {
+	return deployManifestFile(manifest, cfg)
+}
+
 func deleteManifest(cfg *envconf.Config, manifest string) error {
 	return applyManifest(cfg, manifest, func(dri dynamic.ResourceInterface, obj *unstructured.Unstructured) error {
 		if err := dri.Delete(context.Background(), obj.GetName(), metav1.DeleteOptions{}); err != nil {

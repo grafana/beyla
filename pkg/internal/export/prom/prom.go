@@ -209,10 +209,8 @@ func newReporter(
 	cfg *PrometheusConfig,
 	selector attributes.Selection,
 ) (*metricsReporter, error) {
-	groups := attributes.EnablePrometheus
-	if ctxInfo.K8sEnabled {
-		groups.Set(attributes.EnableKubernetes)
-	}
+	groups := ctxInfo.MetricAttributeGroups
+	groups.Add(attributes.EnablePrometheus)
 
 	attrsProvider, err := attributes.NewProvider(groups, selector)
 	if err != nil {

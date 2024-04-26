@@ -217,11 +217,7 @@ func newMetricsReporter(
 ) (*MetricsReporter, error) {
 	log := mlog()
 
-	var groups attributes.EnabledGroups
-	if ctxInfo.K8sEnabled {
-		groups.Set(attributes.EnableKubernetes)
-	}
-	attribProvider, err := attributes.NewProvider(groups, attribSelector)
+	attribProvider, err := attributes.NewProvider(ctxInfo.MetricAttributeGroups, attribSelector)
 	if err != nil {
 		return nil, fmt.Errorf("attributes select: %w", err)
 	}

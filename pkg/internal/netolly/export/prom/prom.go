@@ -55,13 +55,12 @@ func PrometheusEndpoint(
 	ctx context.Context,
 	ctxInfo *global.ContextInfo,
 	cfg *PrometheusConfig,
-	promMgr *connector.PrometheusManager,
 ) (pipe.FinalFunc[[]*ebpf.Record], error) {
 	if !cfg.Enabled() {
 		// This node is not going to be instantiated. Let the pipes library just ignore it.
 		return pipe.IgnoreFinal[[]*ebpf.Record](), nil
 	}
-	reporter, err := newReporter(ctx, ctxInfo, cfg, promMgr)
+	reporter, err := newReporter(ctx, ctxInfo, cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -72,12 +71,12 @@ func newReporter(
 	ctx context.Context,
 	ctxInfo *global.ContextInfo,
 	cfg *PrometheusConfig,
-	promMgr *connector.PrometheusManager,
 ) (*metricsReporter, error) {
-	var group attributes.EnabledGroups
-	if ctxInfo.K8sEnabled {
-		group.Set(attributes.EnableKubernetes)
-	}
+	group := ctxInfo.MetricAttributeGroups
+	// this property can't be set inside the ConfiguredGroups function, otherwise the
+	// OTEL exporter would report also some prometheus-exclusive attributes
+	group.Add(attributes.EnablePrometheus)
+
 	provider, err := attributes.NewProvider(group, cfg.AllowedAttributes)
 	if err != nil {
 		return nil, fmt.Errorf("network Prometheus exporter attributes enable: %w", err)
@@ -97,7 +96,7 @@ func newReporter(
 	mr := &metricsReporter{
 		bgCtx:       ctx,
 		cfg:         cfg.Config,
-		promConnect: promMgr,
+		promConnect: ctxInfo.Prometheus,
 		attrs:       attrs,
 		flowBytes: NewExpirer(prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: BeylaNetworkFlows,

@@ -12,12 +12,12 @@ func TestEnabledGroups(t *testing.T) {
 	assert.False(t, group.Has(EnablePrometheus))
 	assert.False(t, group.Has(EnableKubernetes))
 
-	group.Set(EnablePrometheus)
+	group.Add(EnablePrometheus)
 
 	assert.True(t, group.Has(EnablePrometheus))
 	assert.False(t, group.Has(EnableKubernetes))
 
-	group.Set(EnableKubernetes)
+	group.Add(EnableKubernetes)
 
 	assert.True(t, group.Has(EnablePrometheus))
 	assert.True(t, group.Has(EnableKubernetes))

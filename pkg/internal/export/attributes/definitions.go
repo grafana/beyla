@@ -11,13 +11,14 @@ type EnabledGroups int
 const (
 	EnableKubernetes = EnabledGroups(1)
 	EnablePrometheus = EnabledGroups(2)
+	EnableHTTPRoutes = EnabledGroups(3)
 )
 
 func (e *EnabledGroups) Has(groups EnabledGroups) bool {
 	return *e&groups != 0
 }
 
-func (e *EnabledGroups) Set(groups EnabledGroups) {
+func (e *EnabledGroups) Add(groups EnabledGroups) {
 	*e |= groups
 }
 
@@ -76,11 +77,18 @@ func getDefinitions(groups EnabledGroups) map[attr.Section]Definition {
 		},
 	}
 
+	var httpRoutes = Definition{
+		Disabled: !groups.Has(EnableHTTPRoutes),
+		Attributes: map[string]Default{
+			string(semconv.HTTPRouteKey): true,
+		},
+	}
+
 	var appHTTPDuration = Definition{
+		Parents: []*Definition{&httpRoutes},
 		Attributes: map[string]Default{
 			string(attr.HTTPRequestMethodKey):      true,
 			string(attr.HTTPResponseStatusCodeKey): true,
-			string(semconv.HTTPRouteKey):           true,
 			string(attr.HTTPUrlPathKey):            false,
 			string(attr.ClientAddrKey):             false,
 		},

@@ -9,6 +9,7 @@ import (
 	"github.com/grafana/beyla/pkg/beyla"
 	"github.com/grafana/beyla/pkg/internal/appolly"
 	"github.com/grafana/beyla/pkg/internal/connector"
+	"github.com/grafana/beyla/pkg/internal/export/attributes"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/netolly/agent"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
@@ -94,6 +95,14 @@ func buildCommonContextInfo(
 	} else {
 		slog.Debug("not reporting internal metrics")
 		ctxInfo.Metrics = imetrics.NoopReporter{}
+	}
+
+	// build enabled groups of attributes
+	if ctxInfo.K8sEnabled {
+		ctxInfo.MetricAttributeGroups.Add(attributes.EnableKubernetes)
+	}
+	if config.Routes != nil {
+		ctxInfo.MetricAttributeGroups.Add(attributes.EnableHTTPRoutes)
 	}
 	return ctxInfo
 }

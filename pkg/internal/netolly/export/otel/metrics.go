@@ -28,8 +28,8 @@ const (
 )
 
 type MetricsConfig struct {
-	Metrics           *otel.MetricsConfig
-	AllowedAttributes attributes.Selection
+	Metrics            *otel.MetricsConfig
+	AttributeSelectors attributes.Selection
 }
 
 func (mc MetricsConfig) Enabled() bool {
@@ -88,11 +88,7 @@ func MetricsExporterProvider(ctxInfo *global.ContextInfo, cfg *MetricsConfig) (p
 		return nil, err
 	}
 
-	var group attributes.EnabledGroups
-	if ctxInfo.K8sEnabled {
-		group.Set(attributes.EnableKubernetes)
-	}
-	attrProv, err := attributes.NewProvider(group, cfg.AllowedAttributes)
+	attrProv, err := attributes.NewProvider(ctxInfo.MetricAttributeGroups, cfg.AttributeSelectors)
 	if err != nil {
 		return nil, fmt.Errorf("network OTEL exporter attributes enable: %w", err)
 	}
@@ -113,7 +109,7 @@ func MetricsExporterProvider(ctxInfo *global.ContextInfo, cfg *MetricsConfig) (p
 		log.Error("creating observable counter", "error", err)
 		return nil, err
 	}
-	log.Debug("restricting attributes not in this list", "attributes", cfg.AllowedAttributes)
+	log.Debug("restricting attributes not in this list", "attributes", cfg.AttributeSelectors)
 	return (&metricsExporter{
 		metrics: expirer,
 	}).Do, nil

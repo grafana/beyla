@@ -38,7 +38,7 @@ func TestMetricsExpiration(t *testing.T) {
 				MetricsProtocol: otel.ProtocolHTTPProtobuf,
 				Features:        []string{otel.FeatureNetwork},
 				TTL:             3 * time.Minute,
-			}, AllowedAttributes: attributes.Selection{
+			}, AttributeSelectors: attributes.Selection{
 				attr.SectionBeylaNetworkFlow: attributes.InclusionLists{
 					Include: []string{"src.name", "dst.name"},
 				},

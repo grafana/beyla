@@ -122,15 +122,12 @@ func (f *Flows) buildPipeline(ctx context.Context) (*pipe.Runner, error) {
 	f.cfg.Attributes.Select.Normalize()
 	pipe.AddFinalProvider(pb, otelExport, func() (pipe.FinalFunc[[]*ebpf.Record], error) {
 		return otel.MetricsExporterProvider(f.ctxInfo, &otel.MetricsConfig{
-			Metrics:           &f.cfg.Metrics,
-			AllowedAttributes: f.cfg.Attributes.Select,
+			Metrics:            &f.cfg.Metrics,
+			AttributeSelectors: f.cfg.Attributes.Select,
 		})
 	})
 	pipe.AddFinalProvider(pb, promExport, func() (pipe.FinalFunc[[]*ebpf.Record], error) {
-		return prom.PrometheusEndpoint(ctx, f.ctxInfo, &prom.PrometheusConfig{
-			Config:            &f.cfg.Prometheus,
-			AllowedAttributes: f.cfg.Attributes.Select,
-		}, f.ctxInfo.Prometheus)
+		return prom.PrometheusEndpoint(ctx, f.ctxInfo, f.cfg, f.ctxInfo.Prometheus)
 	})
 	pipe.AddFinalProvider(pb, printer, func() (pipe.FinalFunc[[]*ebpf.Record], error) {
 		return export.FlowPrinterProvider(f.cfg.NetworkFlows.Print)

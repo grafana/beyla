@@ -37,8 +37,8 @@ func TestMetricsExpiration(t *testing.T) {
 
 	// GIVEN a Prometheus Metrics Exporter with a metrics expire time of 3 minutes
 	exporter, err := PrometheusEndpoint(
-		ctx, &global.ContextInfo{}, &PrometheusConfig{
-			Config: &prom.PrometheusConfig{
+		ctx, &global.ContextInfo{}, &networkPromConfig{
+			BeylaConfig: &prom.PrometheusConfig{
 				Port:                        openPort,
 				Path:                        "/metrics",
 				TTL:                         3 * time.Minute,

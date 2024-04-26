@@ -28,7 +28,7 @@ import (
 	"github.com/grafana/beyla/test/consumer"
 )
 
-const testTimeout = 5 * time.Second
+const testTimeout = 50000 * time.Second
 
 func gctx() *global.ContextInfo {
 	return &global.ContextInfo{

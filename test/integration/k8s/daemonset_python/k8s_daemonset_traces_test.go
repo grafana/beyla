@@ -28,6 +28,7 @@ func TestPythonBasicTracing(t *testing.T) {
 		Assess("it sends traces for that service",
 			func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
 				var trace jaeger.Trace
+				var podID string
 				test.Eventually(t, testTimeout, func(t require.TestingT) {
 					resp, err := http.Get("http://localhost:38083/greeting")
 					require.NoError(t, err)
@@ -65,6 +66,13 @@ func TestPythonBasicTracing(t *testing.T) {
 						{Key: "k8s.namespace.name", Type: "string", Value: "^default$"},
 					}, trace.Processes[parent.ProcessID].Tags)
 					require.Empty(t, sd, sd.String())
+
+					// Extract the pod id, so we can later check on restart of the pod that we have a different id
+					tag, found := jaeger.FindIn(trace.Processes[parent.ProcessID].Tags, "k8s.pod.uid")
+					assert.True(t, found)
+
+					podID = tag.Value.(string)
+					assert.NotEqual(t, "", podID)
 				}, test.Interval(100*time.Millisecond))
 
 				// Let's take down our services, keeping Beyla alive and then redeploy them
@@ -112,6 +120,12 @@ func TestPythonBasicTracing(t *testing.T) {
 						{Key: "k8s.namespace.name", Type: "string", Value: "^default$"},
 					}, trace.Processes[parent.ProcessID].Tags)
 					require.Empty(t, sd, sd.String())
+
+					// ensure the pod really restarted
+					tag, found := jaeger.FindIn(trace.Processes[parent.ProcessID].Tags, "k8s.pod.uid")
+					assert.True(t, found)
+
+					assert.NotEqual(t, podID, tag.Value.(string))
 				}, test.Interval(100*time.Millisecond))
 
 				return ctx

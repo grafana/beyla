@@ -27,6 +27,7 @@ func TestBasicTracing(t *testing.T) {
 	feat := features.New("Beyla is able to instrument an arbitrary process").
 		Assess("it sends traces for that service",
 			func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
+				var podID string
 				test.Eventually(t, testTimeout, func(t require.TestingT) {
 					// Invoking both service instances, but we will expect that only one
 					// is instrumented, according to the discovery mechanisms
@@ -74,6 +75,12 @@ func TestBasicTracing(t *testing.T) {
 					}, trace.Processes[parent.ProcessID].Tags)
 					require.Empty(t, sd)
 
+					// Extract the pod id, so we can later check on restart of the pod that we have a different id
+					tag, found := jaeger.FindIn(trace.Processes[parent.ProcessID].Tags, "k8s.pod.uid")
+					assert.True(t, found)
+
+					podID = tag.Value.(string)
+					assert.NotEqual(t, "", podID)
 				}, test.Interval(100*time.Millisecond))
 
 				// Check that the "testserver" service is never instrumented
@@ -140,6 +147,11 @@ func TestBasicTracing(t *testing.T) {
 					}, trace.Processes[parent.ProcessID].Tags)
 					require.Empty(t, sd)
 
+					// ensure the pod really restarted
+					tag, found := jaeger.FindIn(trace.Processes[parent.ProcessID].Tags, "k8s.pod.uid")
+					assert.True(t, found)
+
+					assert.NotEqual(t, podID, tag.Value.(string))
 				}, test.Interval(100*time.Millisecond))
 
 				return ctx

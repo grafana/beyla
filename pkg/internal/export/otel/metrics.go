@@ -830,12 +830,14 @@ func setMetricsProtocol(cfg *MetricsConfig) {
 	os.Setenv(envMetricsProtocol, string(cfg.GuessProtocol()))
 }
 
-func HTTPGetters(attrName string) (attributes.GetFunc[*request.Span, attribute.KeyValue], bool) {
+func HTTPGetters(dotAttrName string) (attributes.GetFunc[*request.Span, attribute.KeyValue], bool) {
 	var getter attributes.GetFunc[*request.Span, attribute.KeyValue]
-	switch attribute.Key(attrName) {
+	switch attribute.Key(dotAttrName) {
 	case attr.HTTPRequestMethodKey:
 		getter = func(s *request.Span) attribute.KeyValue { return attributes.HTTPRequestMethod(s.Method) }
-	case attr.HTTPResponseStatusCodeKey:
+
+	// dotAttrName is normalized as dot-only, so http.response.status_code needs to be transformed to http.response.status.code
+	case attribute.Key(attributes.NormalizeToDot(string(attr.HTTPResponseStatusCodeKey))):
 		getter = func(s *request.Span) attribute.KeyValue { return attributes.HTTPResponseStatusCode(s.Status) }
 	case semconv.HTTPRouteKey:
 		getter = func(s *request.Span) attribute.KeyValue { return semconv.HTTPRoute(s.Route) }
@@ -848,28 +850,28 @@ func HTTPGetters(attrName string) (attributes.GetFunc[*request.Span, attribute.K
 	case attr.ServerPortKey:
 		getter = func(s *request.Span) attribute.KeyValue { return attributes.ServerPort(s.HostPort) }
 	default:
-		return commonAttributes(attrName)
+		return commonAttributes(dotAttrName)
 	}
 	return getter, getter != nil
 }
 
-func GRPCGetters(attrName string) (attributes.GetFunc[*request.Span, attribute.KeyValue], bool) {
+func GRPCGetters(dotAttrName string) (attributes.GetFunc[*request.Span, attribute.KeyValue], bool) {
 	var getter attributes.GetFunc[*request.Span, attribute.KeyValue]
-	switch attribute.Key(attrName) {
-	case semconv.RPCMethodKey:
+	switch dotAttrName {
+	case string(semconv.RPCMethodKey):
 		getter = func(s *request.Span) attribute.KeyValue { return semconv.RPCMethod(s.Path) }
-	case semconv.RPCSystemKey:
+	case string(semconv.RPCSystemKey):
 		getter = func(_ *request.Span) attribute.KeyValue { return semconv.RPCSystemGRPC }
-	case semconv.RPCGRPCStatusCodeKey:
-		getter = func(s *request.Span) attribute.KeyValue {
-			return semconv.RPCGRPCStatusCodeKey.Int(s.Status)
-		}
-	case attr.ClientAddrKey:
+
+	// dotAttrName is normalized as dot-only, so rpc.grpc.status_code needs to be transformed to rpc.grpc.status.code
+	case attributes.NormalizeToDot(string(semconv.RPCGRPCStatusCodeKey)):
+		getter = func(s *request.Span) attribute.KeyValue { return semconv.RPCGRPCStatusCodeKey.Int(s.Status) }
+	case string(attr.ClientAddrKey):
 		getter = func(s *request.Span) attribute.KeyValue { return attributes.ClientAddr(attributes.SpanPeer(s)) }
-	case attr.ServerAddrKey:
+	case string(attr.ServerAddrKey):
 		getter = func(s *request.Span) attribute.KeyValue { return attributes.ServerAddr(attributes.SpanPeer(s)) }
 	default:
-		return commonAttributes(attrName)
+		return commonAttributes(dotAttrName)
 	}
 	return getter, getter != nil
 }

@@ -2,10 +2,6 @@ package attributes
 
 import (
 	"strings"
-
-	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
-
-	"github.com/grafana/beyla/pkg/internal/export/attributes/attr"
 )
 
 // GetFunc is a function that explains how to get a given metric attribute of the type
@@ -54,7 +50,7 @@ func PrometheusGetters[T, O any](getter NamedGetters[T, O], names []string) []Ge
 func OpenTelemetryGetters[T, O any](getter NamedGetters[T, O], names []string) []Getter[T, O] {
 	attrs := make([]Getter[T, O], 0, len(names))
 	for _, name := range names {
-		dotName := normalizeToDot(name)
+		dotName := NormalizeToDot(name)
 		if get, ok := getter(dotName); ok {
 			attrs = append(attrs, Getter[T, O]{
 				ExposedName: dotName,
@@ -69,19 +65,10 @@ func normalizeToUnderscore(name string) string {
 	return strings.ReplaceAll(name, ".", "_")
 }
 
-// normalizeToDot will have into account that some dot metrics still have underscores,
+// NormalizeToDot will have into account that some dot metrics still have underscores,
 // such as: http.response.status_code
 // The name is provided by the user, so this function will handle mistakes in the dot
 // or underscore notation from the user
-func normalizeToDot(name string) string {
-	name = strings.ReplaceAll(name, "_", ".")
-	switch name {
-	case "http.response.status.code":
-		name = string(attr.HTTPResponseStatusCodeKey)
-	case "k8s.pod.start.time":
-		name = attr.K8sPodStartTime
-	case "rpc.grpc.status.code":
-		name = string(semconv.RPCGRPCStatusCodeKey)
-	}
-	return name
+func NormalizeToDot(name string) string {
+	return strings.ReplaceAll(name, "_", ".")
 }

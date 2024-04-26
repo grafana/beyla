@@ -41,14 +41,14 @@ func (p *Provider) For(metricName attr.Section) []string {
 	} else {
 		addAttributes = map[string]struct{}{}
 		for attr := range metricAttributes.All() {
-			attr = normalizeToDot(attr)
+			attr = NormalizeToDot(attr)
 			if inclusionLists.includes(attr) {
 				addAttributes[attr] = struct{}{}
 			}
 		}
 	}
 	maps.DeleteFunc(addAttributes, func(attr string, _ struct{}) bool {
-		return inclusionLists.excludes(normalizeToDot(attr))
+		return inclusionLists.excludes(NormalizeToDot(attr))
 	})
 	attrs := helpers.SetToSlice(addAttributes)
 	slices.Sort(attrs)

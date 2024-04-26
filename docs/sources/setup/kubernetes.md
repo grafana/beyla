@@ -183,7 +183,7 @@ spec:
               value: "true"
 ```
 
-For more information about the different configuration options, please check the
+For more information about the different configuration options, check the
 [Configuration]({{< relref "../configure/options.md" >}}) section of this documentation site.
 
 ### Deploy Beyla as a Daemonset
@@ -192,7 +192,7 @@ You can also deploy Beyla as a Daemonset. This is the preferred way if:
 
 - You want to instrument a Daemonset
 - You want to instrument multiple processes from a single Beyla instance, or even
-  all the instrumentable processes in your cluster.
+  all of the processes in your cluster.
 
 Using the previous example (the `goblog` pod), we cannot select the process
 to instrument by using its open port, because the port is internal to the Pod.

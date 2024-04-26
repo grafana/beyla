@@ -24,8 +24,8 @@ const (
 
 // PrometheusConfig for network metrics just wraps the global prom.PrometheusConfig as provided by the user
 type PrometheusConfig struct {
-	Config            *prom.PrometheusConfig
-	AllowedAttributes attributes.Selection
+	Config             *prom.PrometheusConfig
+	AttributeSelectors attributes.Selection
 }
 
 // nolint:gocritic
@@ -77,7 +77,7 @@ func newReporter(
 	// OTEL exporter would report also some prometheus-exclusive attributes
 	group.Add(attributes.EnablePrometheus)
 
-	provider, err := attributes.NewProvider(group, cfg.AllowedAttributes)
+	provider, err := attributes.NewProvider(group, cfg.AttributeSelectors)
 	if err != nil {
 		return nil, fmt.Errorf("network Prometheus exporter attributes enable: %w", err)
 	}

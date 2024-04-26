@@ -3,6 +3,8 @@ package attributes
 import (
 	"strings"
 
+	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
+
 	"github.com/grafana/beyla/pkg/internal/export/attributes/attr"
 )
 
@@ -78,6 +80,8 @@ func normalizeToDot(name string) string {
 		name = string(attr.HTTPResponseStatusCodeKey)
 	case "k8s.pod.start.time":
 		name = attr.K8sPodStartTime
+	case "rpc.grpc.status.code":
+		name = string(semconv.RPCGRPCStatusCodeKey)
 	}
 	return name
 }

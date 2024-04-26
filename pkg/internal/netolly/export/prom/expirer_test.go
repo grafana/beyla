@@ -37,18 +37,19 @@ func TestMetricsExpiration(t *testing.T) {
 
 	// GIVEN a Prometheus Metrics Exporter with a metrics expire time of 3 minutes
 	exporter, err := PrometheusEndpoint(
-		ctx, &global.ContextInfo{}, &networkPromConfig{
-			BeylaConfig: &prom.PrometheusConfig{
-				Port:                        openPort,
-				Path:                        "/metrics",
-				TTL:                         3 * time.Minute,
-				SpanMetricsServiceCacheSize: 10,
-				Features:                    []string{otel.FeatureNetwork},
-			}, AllowedAttributes: attributes.Selection{
-				attr.SectionBeylaNetworkFlow: attributes.InclusionLists{
-					Include: []string{"src_name", "dst_name"},
-				},
-			}}, &connector.PrometheusManager{})
+		ctx, &global.ContextInfo{Prometheus: &connector.PrometheusManager{}},
+		&PrometheusConfig{Config: &prom.PrometheusConfig{
+			Port:                        openPort,
+			Path:                        "/metrics",
+			TTL:                         3 * time.Minute,
+			SpanMetricsServiceCacheSize: 10,
+			Features:                    []string{otel.FeatureNetwork},
+		}, AttributeSelectors: attributes.Selection{
+			attr.SectionBeylaNetworkFlow: attributes.InclusionLists{
+				Include: []string{"src_name", "dst_name"},
+			},
+		}},
+	)
 	require.NoError(t, err)
 
 	metrics := make(chan []*ebpf.Record, 20)

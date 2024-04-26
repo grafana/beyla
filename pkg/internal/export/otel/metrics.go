@@ -861,7 +861,9 @@ func GRPCGetters(attrName string) (attributes.GetFunc[*request.Span, attribute.K
 	case semconv.RPCSystemKey:
 		getter = func(_ *request.Span) attribute.KeyValue { return semconv.RPCSystemGRPC }
 	case semconv.RPCGRPCStatusCodeKey:
-		getter = func(s *request.Span) attribute.KeyValue { return semconv.RPCGRPCStatusCodeKey.Int(s.Status) }
+		getter = func(s *request.Span) attribute.KeyValue {
+			return semconv.RPCGRPCStatusCodeKey.Int(s.Status)
+		}
 	case attr.ClientAddrKey:
 		getter = func(s *request.Span) attribute.KeyValue { return attributes.ClientAddr(attributes.SpanPeer(s)) }
 	case attr.ServerAddrKey:

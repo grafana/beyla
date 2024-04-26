@@ -9,9 +9,9 @@ import (
 type EnabledGroups int
 
 const (
-	EnableKubernetes = EnabledGroups(1)
-	EnablePrometheus = EnabledGroups(2)
-	EnableHTTPRoutes = EnabledGroups(3)
+	EnableKubernetes = EnabledGroups(1 << iota)
+	EnablePrometheus
+	EnableHTTPRoutes
 )
 
 func (e *EnabledGroups) Has(groups EnabledGroups) bool {

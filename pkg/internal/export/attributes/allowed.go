@@ -19,7 +19,7 @@ type InclusionLists struct {
 	Exclude []string `yaml:"exclude"`
 }
 
-func (i *InclusionLists) include(metricName string) bool {
+func (i *InclusionLists) includes(metricName string) bool {
 	for _, incl := range i.Include {
 		if ok, _ := path.Match(normalizeToDot(incl), metricName); ok {
 			return true
@@ -28,7 +28,7 @@ func (i *InclusionLists) include(metricName string) bool {
 	return false
 }
 
-func (i *InclusionLists) exclude(metricName string) bool {
+func (i *InclusionLists) excludes(metricName string) bool {
 	for _, excl := range i.Exclude {
 		if ok, _ := path.Match(normalizeToDot(excl), metricName); ok {
 			return true

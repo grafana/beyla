@@ -127,7 +127,10 @@ func (f *Flows) buildPipeline(ctx context.Context) (*pipe.Runner, error) {
 		})
 	})
 	pipe.AddFinalProvider(pb, promExport, func() (pipe.FinalFunc[[]*ebpf.Record], error) {
-		return prom.PrometheusEndpoint(ctx, f.ctxInfo, f.cfg, f.ctxInfo.Prometheus)
+		return prom.PrometheusEndpoint(ctx, f.ctxInfo, &prom.PrometheusConfig{
+			Config:             &f.cfg.Prometheus,
+			AttributeSelectors: f.cfg.Attributes.Select,
+		})
 	})
 	pipe.AddFinalProvider(pb, printer, func() (pipe.FinalFunc[[]*ebpf.Record], error) {
 		return export.FlowPrinterProvider(f.cfg.NetworkFlows.Print)

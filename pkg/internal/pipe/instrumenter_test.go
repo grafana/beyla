@@ -30,21 +30,24 @@ import (
 
 const testTimeout = 50000 * time.Second
 
-func gctx() *global.ContextInfo {
+func gctx(groups attributes.EnabledGroups) *global.ContextInfo {
 	return &global.ContextInfo{
-		Metrics: imetrics.NoopReporter{},
+		Metrics:               imetrics.NoopReporter{},
+		MetricAttributeGroups: groups,
 	}
 }
 
-var metricsSelection = attributes.Selection{
+var allMetrics = attributes.Selection{
 	attr.SectionHTTPServerDuration: attributes.InclusionLists{Include: []string{"*"}},
 }
 
-var metricsSelectionNoPeer = attributes.Selection{
-	attr.SectionHTTPServerDuration: attributes.InclusionLists{
-		Include: []string{"*"},
-		Exclude: []string{"client.address"},
-	},
+func allMetricsBut(patterns ...string) attributes.Selection {
+	return attributes.Selection{
+		attr.SectionHTTPServerDuration: attributes.InclusionLists{
+			Include: []string{"*"},
+			Exclude: patterns,
+		},
+	}
 }
 
 func TestBasicPipeline(t *testing.T) {
@@ -60,8 +63,8 @@ func TestBasicPipeline(t *testing.T) {
 			MetricsEndpoint: tc.ServerEndpoint, Interval: 10 * time.Millisecond,
 			ReportersCacheLen: 16,
 		},
-		Attributes: beyla.Attributes{Select: metricsSelection},
-	}, gctx(), make(<-chan []request.Span))
+		Attributes: beyla.Attributes{Select: allMetrics},
+	}, gctx(0), make(<-chan []request.Span))
 
 	// Override eBPF tracer to send some fake data
 	pipe.AddStart(gb.builder, tracesReader,
@@ -106,7 +109,7 @@ func TestTracerPipeline(t *testing.T) {
 			TracesEndpoint:    tc.ServerEndpoint,
 			ReportersCacheLen: 16,
 		},
-	}, gctx(), make(<-chan []request.Span))
+	}, gctx(0), make(<-chan []request.Span))
 	// Override eBPF tracer to send some fake data
 	pipe.AddStart(gb.builder, tracesReader,
 		func(out chan<- []request.Span) {
@@ -141,7 +144,7 @@ func TestTracerReceiverPipeline(t *testing.T) {
 		TracesReceiver: beyla.TracesReceiverConfig{
 			Traces: []beyla.Consumer{&consumer},
 		},
-	}, gctx(), make(<-chan []request.Span))
+	}, gctx(0), make(<-chan []request.Span))
 	// Override eBPF tracer to send some fake data
 	pipe.AddStart(gb.builder, tracesReader,
 		func(out chan<- []request.Span) {
@@ -176,7 +179,7 @@ func TestTracerPipelineBadTimestamps(t *testing.T) {
 			TracesEndpoint:    tc.ServerEndpoint,
 			ReportersCacheLen: 16,
 		},
-	}, gctx(), make(<-chan []request.Span))
+	}, gctx(0), make(<-chan []request.Span))
 	// Override eBPF tracer to send some fake data
 	pipe.AddStart(gb.builder, tracesReader,
 		func(out chan<- []request.Span) {
@@ -208,8 +211,8 @@ func TestRouteConsolidation(t *testing.T) {
 			ReportersCacheLen: 16,
 		},
 		Routes:     &transform.RoutesConfig{Patterns: []string{"/user/{id}", "/products/{id}/push"}},
-		Attributes: beyla.Attributes{Select: metricsSelectionNoPeer},
-	}, gctx(), make(<-chan []request.Span))
+		Attributes: beyla.Attributes{Select: allMetricsBut("client.address", "url.path")},
+	}, gctx(attributes.EnableHTTPRoutes), make(<-chan []request.Span))
 	// Override eBPF tracer to send some fake data
 	pipe.AddStart(gb.builder, tracesReader,
 		func(out chan<- []request.Span) {
@@ -282,8 +285,8 @@ func TestGRPCPipeline(t *testing.T) {
 			MetricsEndpoint: tc.ServerEndpoint, Interval: time.Millisecond,
 			ReportersCacheLen: 16,
 		},
-		Attributes: beyla.Attributes{Select: metricsSelection},
-	}, gctx(), make(<-chan []request.Span))
+		Attributes: beyla.Attributes{Select: allMetrics},
+	}, gctx(0), make(<-chan []request.Span))
 	// Override eBPF tracer to send some fake data
 	pipe.AddStart(gb.builder, tracesReader,
 		func(out chan<- []request.Span) {
@@ -324,7 +327,7 @@ func TestTraceGRPCPipeline(t *testing.T) {
 			TracesEndpoint: tc.ServerEndpoint,
 			BatchTimeout:   time.Millisecond, ReportersCacheLen: 16,
 		},
-	}, gctx(), make(<-chan []request.Span))
+	}, gctx(0), make(<-chan []request.Span))
 	// Override eBPF tracer to send some fake data
 	pipe.AddStart(gb.builder, tracesReader,
 		func(out chan<- []request.Span) {
@@ -360,8 +363,8 @@ func TestBasicPipelineInfo(t *testing.T) {
 			MetricsEndpoint: tc.ServerEndpoint,
 			Interval:        10 * time.Millisecond, ReportersCacheLen: 16,
 		},
-		Attributes: beyla.Attributes{Select: metricsSelection},
-	}, gctx(), tracesInput)
+		Attributes: beyla.Attributes{Select: allMetrics},
+	}, gctx(0), tracesInput)
 	// send some fake data through the traces' input
 	tracesInput <- newHTTPInfo("PATCH", "/aaa/bbb", "1.1.1.1", 204)
 	pipe, err := gb.buildGraph()
@@ -393,7 +396,7 @@ func TestTracerPipelineInfo(t *testing.T) {
 
 	gb := newGraphBuilder(ctx, &beyla.Config{
 		Traces: otel.TracesConfig{TracesEndpoint: tc.ServerEndpoint, ReportersCacheLen: 16},
-	}, gctx(), make(<-chan []request.Span))
+	}, gctx(0), make(<-chan []request.Span))
 	// Override eBPF tracer to send some fake data
 	pipe.AddStart(gb.builder, tracesReader,
 		func(out chan<- []request.Span) {

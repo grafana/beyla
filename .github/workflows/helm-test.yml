@@ -39,6 +39,17 @@ jobs:
             exit 1
           fi
 
+      - name: Lint Code Base with super-linter
+        uses: docker://github/super-linter:v3.12.0
+        env:
+          FILTER_REGEX_EXCLUDE: .*(README\.md|Chart\.yaml|NOTES.txt).*
+          FILTER_REGEX_INCLUDE: ${{ inputs.filter_regex_include }}
+          VALIDATE_ALL_CODEBASE: false
+          VALIDATE_KUBERNETES_KUBEVAL: false
+          VALIDATE_YAML: false
+          DEFAULT_BRANCH: main
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Set up Linting with chart-testing
         uses: helm/chart-testing-action@v2.1.0
 

@@ -28,7 +28,7 @@ import (
 	"github.com/grafana/beyla/test/consumer"
 )
 
-const testTimeout = 50000 * time.Second
+const testTimeout = 5 * time.Second
 
 func gctx(groups metric.EnabledGroups) *global.ContextInfo {
 	return &global.ContextInfo{
@@ -81,6 +81,8 @@ func TestBasicPipeline(t *testing.T) {
 	go pipe.Run(ctx)
 
 	event := testutil.ReadChannel(t, tc.Records, testTimeout)
+	assert.NotEmpty(t, event.ResourceAttributes, string(semconv.ServiceInstanceIDKey))
+	delete(event.ResourceAttributes, string(semconv.ServiceInstanceIDKey))
 	assert.Equal(t, collector.MetricRecord{
 		Name: "http.server.request.duration",
 		Unit: "s",
@@ -89,7 +91,11 @@ func TestBasicPipeline(t *testing.T) {
 			string(attr.HTTPResponseStatusCodeKey): "404",
 			string(attr.HTTPUrlPathKey):            "/foo/bar",
 			string(attr.ClientAddrKey):             "1.1.1.1",
-			string(semconv.ServiceNameKey):         "foo-svc",
+		},
+		ResourceAttributes: map[string]string{
+			string(semconv.ServiceNameKey):          "foo-svc",
+			string(semconv.TelemetrySDKLanguageKey): "go",
+			string(semconv.TelemetrySDKNameKey):     "beyla",
 		},
 		Type: pmetric.MetricTypeHistogram,
 	}, event)
@@ -234,15 +240,22 @@ func TestRouteConsolidation(t *testing.T) {
 		ev := testutil.ReadChannel(t, tc.Records, testTimeout)
 		events[ev.Attributes[string(semconv.HTTPRouteKey)]] = ev
 	}
-
+	for _, event := range events {
+		assert.NotEmpty(t, event.ResourceAttributes, string(semconv.ServiceInstanceIDKey))
+		delete(event.ResourceAttributes, string(semconv.ServiceInstanceIDKey))
+	}
 	assert.Equal(t, collector.MetricRecord{
 		Name: "http.server.request.duration",
 		Unit: "s",
 		Attributes: map[string]string{
-			string(semconv.ServiceNameKey):         "svc-1",
 			string(attr.HTTPRequestMethodKey):      "GET",
 			string(attr.HTTPResponseStatusCodeKey): "200",
 			string(semconv.HTTPRouteKey):           "/user/{id}",
+		},
+		ResourceAttributes: map[string]string{
+			string(semconv.ServiceNameKey):          "svc-1",
+			string(semconv.TelemetrySDKLanguageKey): "go",
+			string(semconv.TelemetrySDKNameKey):     "beyla",
 		},
 		Type: pmetric.MetricTypeHistogram,
 	}, events["/user/{id}"])
@@ -251,10 +264,14 @@ func TestRouteConsolidation(t *testing.T) {
 		Name: "http.server.request.duration",
 		Unit: "s",
 		Attributes: map[string]string{
-			string(semconv.ServiceNameKey):         "svc-1",
 			string(attr.HTTPRequestMethodKey):      "GET",
 			string(attr.HTTPResponseStatusCodeKey): "200",
 			string(semconv.HTTPRouteKey):           "/products/{id}/push",
+		},
+		ResourceAttributes: map[string]string{
+			string(semconv.ServiceNameKey):          "svc-1",
+			string(semconv.TelemetrySDKLanguageKey): "go",
+			string(semconv.TelemetrySDKNameKey):     "beyla",
 		},
 		Type: pmetric.MetricTypeHistogram,
 	}, events["/products/{id}/push"])
@@ -263,10 +280,14 @@ func TestRouteConsolidation(t *testing.T) {
 		Name: "http.server.request.duration",
 		Unit: "s",
 		Attributes: map[string]string{
-			string(semconv.ServiceNameKey):         "svc-1",
 			string(attr.HTTPRequestMethodKey):      "GET",
 			string(attr.HTTPResponseStatusCodeKey): "200",
 			string(semconv.HTTPRouteKey):           "/**",
+		},
+		ResourceAttributes: map[string]string{
+			string(semconv.ServiceNameKey):          "svc-1",
+			string(semconv.TelemetrySDKLanguageKey): "go",
+			string(semconv.TelemetrySDKNameKey):     "beyla",
 		},
 		Type: pmetric.MetricTypeHistogram,
 	}, events["/**"])
@@ -301,15 +322,21 @@ func TestGRPCPipeline(t *testing.T) {
 	go pipe.Run(ctx)
 
 	event := testutil.ReadChannel(t, tc.Records, testTimeout)
+	assert.NotEmpty(t, event.ResourceAttributes, string(semconv.ServiceInstanceIDKey))
+	delete(event.ResourceAttributes, string(semconv.ServiceInstanceIDKey))
 	assert.Equal(t, collector.MetricRecord{
 		Name: "rpc.server.duration",
 		Unit: "s",
 		Attributes: map[string]string{
-			string(semconv.ServiceNameKey):       "grpc-svc",
 			string(semconv.RPCSystemKey):         "grpc",
 			string(semconv.RPCGRPCStatusCodeKey): "3",
 			string(semconv.RPCMethodKey):         "/foo/bar",
 			string(attr.ClientAddrKey):           "1.1.1.1",
+		},
+		ResourceAttributes: map[string]string{
+			string(semconv.ServiceNameKey):          "grpc-svc",
+			string(semconv.TelemetrySDKLanguageKey): "go",
+			string(semconv.TelemetrySDKNameKey):     "beyla",
 		},
 		Type: pmetric.MetricTypeHistogram,
 	}, event)
@@ -373,6 +400,8 @@ func TestBasicPipelineInfo(t *testing.T) {
 	go pipe.Run(ctx)
 
 	event := testutil.ReadChannel(t, tc.Records, testTimeout)
+	assert.NotEmpty(t, event.ResourceAttributes, string(semconv.ServiceInstanceIDKey))
+	delete(event.ResourceAttributes, string(semconv.ServiceInstanceIDKey))
 	assert.Equal(t, collector.MetricRecord{
 		Name: "http.server.request.duration",
 		Unit: "s",
@@ -381,7 +410,11 @@ func TestBasicPipelineInfo(t *testing.T) {
 			string(attr.HTTPResponseStatusCodeKey): "204",
 			string(attr.HTTPUrlPathKey):            "/aaa/bbb",
 			string(attr.ClientAddrKey):             "1.1.1.1",
-			string(semconv.ServiceNameKey):         "comm",
+		},
+		ResourceAttributes: map[string]string{
+			string(semconv.ServiceNameKey):          "comm",
+			string(semconv.TelemetrySDKLanguageKey): "go",
+			string(semconv.TelemetrySDKNameKey):     "beyla",
 		},
 		Type: pmetric.MetricTypeHistogram,
 	}, event)

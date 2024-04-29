@@ -852,8 +852,6 @@ func HTTPGetters(dotAttrName string) (metric2.Getter[*request.Span, attribute.Ke
 		getter = func(s *request.Span) attribute.KeyValue { return metric2.ServerAddr(metric2.SpanHost(s)) }
 	case attr.ServerPortKey:
 		getter = func(s *request.Span) attribute.KeyValue { return metric2.ServerPort(s.HostPort) }
-	default:
-		return commonAttributes(dotAttrName)
 	}
 	return getter, getter != nil
 }
@@ -875,8 +873,6 @@ func GRPCGetters(dotAttrName string) (metric2.Getter[*request.Span, attribute.Ke
 		getter = func(s *request.Span) attribute.KeyValue { return metric2.ClientAddr(metric2.SpanPeer(s)) }
 	case string(attr.ServerAddrKey):
 		getter = func(s *request.Span) attribute.KeyValue { return metric2.ServerAddr(metric2.SpanPeer(s)) }
-	default:
-		return commonAttributes(dotAttrName)
 	}
 	return getter, getter != nil
 }
@@ -887,16 +883,5 @@ func SQLGetters(attrName string) (metric2.Getter[*request.Span, attribute.KeyVal
 			return semconv.DBOperation(span.Method)
 		}, true
 	}
-	return commonAttributes(attrName)
-}
-
-func commonAttributes(attrName string) (metric2.Getter[*request.Span, attribute.KeyValue], bool) {
-	if attribute.Key(attrName) == semconv.ServiceNameKey {
-		return func(s *request.Span) attribute.KeyValue {
-			return semconv.ServiceName(s.ServiceID.Name)
-		}, true
-	}
-	return func(s *request.Span) attribute.KeyValue {
-		return attribute.String(attrName, s.ServiceID.Metadata[attrName])
-	}, true
+	return nil, false
 }

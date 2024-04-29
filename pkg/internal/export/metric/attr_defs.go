@@ -60,28 +60,6 @@ func getDefinitions(groups EnabledGroups) map[Section]Definition {
 		},
 	}
 
-	var appKubeAttributes = Definition{
-		Disabled: !kubeEnabled,
-		Attributes: map[string]Default{
-			attr.K8sNamespaceName:   true,
-			attr.K8sPodName:         true,
-			attr.K8sDeploymentName:  true,
-			attr.K8sReplicaSetName:  true,
-			attr.K8sDaemonSetName:   true,
-			attr.K8sStatefulSetName: true,
-			attr.K8sNodeName:        true,
-			attr.K8sPodUID:          true,
-			attr.K8sPodStartTime:    true,
-		},
-	}
-
-	var appCommon = Definition{
-		Parents: []*Definition{&prometheusAttributes},
-		Attributes: map[string]Default{
-			string(semconv.ServiceNameKey): true,
-		},
-	}
-
 	var httpRoutes = Definition{
 		Disabled: !groups.Has(EnableHTTPRoutes),
 		Attributes: map[string]Default{
@@ -140,19 +118,19 @@ func getDefinitions(groups EnabledGroups) map[Section]Definition {
 			},
 		},
 		HTTPServerDuration.Section: {
-			Parents: []*Definition{&appCommon, &appKubeAttributes, &httpCommon, &serverInfo},
+			Parents: []*Definition{&prometheusAttributes, &httpCommon, &serverInfo},
 		},
 		HTTPServerRequestSize.Section: {
-			Parents: []*Definition{&appCommon, &appKubeAttributes, &httpCommon, &serverInfo},
+			Parents: []*Definition{&prometheusAttributes, &httpCommon, &serverInfo},
 		},
 		HTTPClientDuration.Section: {
-			Parents: []*Definition{&appCommon, &appKubeAttributes, &httpCommon, &httpClientInfo},
+			Parents: []*Definition{&prometheusAttributes, &httpCommon, &httpClientInfo},
 		},
 		HTTPClientRequestSize.Section: {
-			Parents: []*Definition{&appCommon, &appKubeAttributes, &httpCommon, &httpClientInfo},
+			Parents: []*Definition{&prometheusAttributes, &httpCommon, &httpClientInfo},
 		},
 		RPCClientDuration.Section: {
-			Parents: []*Definition{&appCommon, &appKubeAttributes, &grpcClientInfo},
+			Parents: []*Definition{&prometheusAttributes, &grpcClientInfo},
 			Attributes: map[string]Default{
 				string(semconv.RPCMethodKey):         true,
 				string(semconv.RPCSystemKey):         true,
@@ -160,7 +138,7 @@ func getDefinitions(groups EnabledGroups) map[Section]Definition {
 			},
 		},
 		RPCServerDuration.Section: {
-			Parents: []*Definition{&appCommon, &appKubeAttributes, &serverInfo},
+			Parents: []*Definition{&prometheusAttributes, &serverInfo},
 			Attributes: map[string]Default{
 				string(semconv.RPCMethodKey):         true,
 				string(semconv.RPCSystemKey):         true,
@@ -171,7 +149,7 @@ func getDefinitions(groups EnabledGroups) map[Section]Definition {
 			},
 		},
 		SQLClientDuration.Section: {
-			Parents: []*Definition{&appCommon, &appKubeAttributes},
+			Parents: []*Definition{&prometheusAttributes},
 			Attributes: map[string]Default{
 				string(semconv.DBOperationKey): true,
 			},

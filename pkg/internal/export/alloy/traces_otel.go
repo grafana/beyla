@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/mariomac/pipes/pkg/node"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/config/configgrpc"
 	"go.opentelemetry.io/collector/config/confighttp"
@@ -20,22 +19,33 @@ import (
 	"github.com/grafana/beyla/pkg/internal/export/otel"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/pkg/internal/request"
+	"github.com/mariomac/pipes/pipe"
 )
 
 // TracesOTELReceiver creates a terminal node that consumes request.Spans and sends OpenTelemetry metrics to the configured consumers.
-func TracesOTELReceiver(ctx context.Context, cfg otel.TracesConfig, ctxInfo *global.ContextInfo) (node.TerminalFunc[[]request.Span], error) {
+func TracesOTELReceiver(ctx context.Context, cfg otel.TracesConfig, ctxInfo *global.ContextInfo) pipe.FinalProvider[[]request.Span] {
+	return (&tracesOTELReceiver{ctx: ctx, cfg: cfg, ctxInfo: ctxInfo}).provideLoop
+}
+
+type tracesOTELReceiver struct {
+	ctx     context.Context
+	cfg     otel.TracesConfig
+	ctxInfo *global.ContextInfo
+}
+
+func (tr *tracesOTELReceiver) provideLoop() (pipe.FinalFunc[[]request.Span], error) {
 	return func(in <-chan []request.Span) {
-		exp, err := getTracesExporter(ctx, cfg, ctxInfo)
+		exp, err := getTracesExporter(tr.ctx, tr.cfg, tr.ctxInfo)
 		if err != nil {
 			slog.Error("error creating traces exporter", "error", err)
 			return
 		}
 		defer func() {
-			exp.Shutdown(ctx)
+			exp.Shutdown(tr.ctx)
 			// provider.Shutdown(ctx)
 			// tracer.Shutdown(ctx)
 		}()
-		exp.Start(ctx, nil)
+		exp.Start(tr.ctx, nil)
 		for spans := range in {
 			for i := range spans {
 				span := &spans[i]
@@ -43,7 +53,7 @@ func TracesOTELReceiver(ctx context.Context, cfg otel.TracesConfig, ctxInfo *glo
 					continue
 				}
 				traces := generateTraces(span)
-				err := exp.ConsumeTraces(ctx, traces)
+				err := exp.ConsumeTraces(tr.ctx, traces)
 				if err != nil {
 					slog.Error("error sending trace to consumer", "error", err)
 				}

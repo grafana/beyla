@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/mariomac/pipes/pkg/node"
+	"github.com/mariomac/pipes/pipe"
 	"github.com/shirou/gopsutil/net"
 	"github.com/shirou/gopsutil/process"
 
@@ -23,13 +23,6 @@ import (
 const (
 	defaultPollInterval = 5 * time.Second
 )
-
-// ProcessWatcher polls every PollInterval for new processes and forwards either new or deleted process PIDs
-// as well as PIDs from processes that setup a new connection
-type ProcessWatcher struct {
-	Ctx context.Context
-	Cfg *beyla.Config
-}
 
 type WatchEventType int
 
@@ -56,11 +49,13 @@ func wplog() *slog.Logger {
 	return slog.With("component", "discover.ProcessWatcher")
 }
 
-func ProcessWatcherProvider(w ProcessWatcher) (node.StartFunc[[]Event[processAttrs]], error) {
+// ProcessWatcherFunc polls every PollInterval for new processes and forwards either new or deleted process PIDs
+// as well as PIDs from processes that setup a new connection
+func ProcessWatcherFunc(ctx context.Context, cfg *beyla.Config) pipe.StartFunc[[]Event[processAttrs]] {
 	acc := pollAccounter{
-		ctx:               w.Ctx,
-		cfg:               w.Cfg,
-		interval:          w.Cfg.Discovery.PollInterval,
+		ctx:               ctx,
+		cfg:               cfg,
+		interval:          cfg.Discovery.PollInterval,
 		pids:              map[PID]processAttrs{},
 		pidPorts:          map[pidPort]processAttrs{},
 		listProcesses:     fetchProcessPorts,
@@ -69,12 +64,12 @@ func ProcessWatcherProvider(w ProcessWatcher) (node.StartFunc[[]Event[processAtt
 		fetchPorts:        true,  // must be true until we've activated the bpf watcher component
 		bpfWatcherEnabled: false, // async set by listening on the bpfWatchEvents channel
 		stateMux:          sync.Mutex{},
-		findingCriteria:   FindingCriteria(w.Cfg),
+		findingCriteria:   FindingCriteria(cfg),
 	}
 	if acc.interval == 0 {
 		acc.interval = defaultPollInterval
 	}
-	return acc.Run, nil
+	return acc.Run
 }
 
 // pidPort associates a PID with its open port

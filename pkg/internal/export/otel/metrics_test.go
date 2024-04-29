@@ -5,12 +5,13 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/mariomac/guara/pkg/test"
-	"github.com/mariomac/pipes/pkg/node"
+	"github.com/mariomac/pipes/pipe"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -20,6 +21,8 @@ import (
 )
 
 const timeout = 5 * time.Second
+
+var fakeMux = sync.Mutex{}
 
 func TestHTTPMetricsEndpointOptions(t *testing.T) {
 	defer restoreEnvAfterExecution()()
@@ -109,6 +112,13 @@ func TestMissingSchemeInMetricsEndpoint(t *testing.T) {
 	require.Error(t, err)
 }
 
+type testPipeline struct {
+	inputNode pipe.Start[[]request.Span]
+	exporter  pipe.Final[[]request.Span]
+}
+
+func (i *testPipeline) Connect() { i.inputNode.SendTo(i.exporter) }
+
 func TestMetrics_InternalInstrumentation(t *testing.T) {
 	defer restoreEnvAfterExecution()()
 	// fake OTEL collector server
@@ -125,23 +135,30 @@ func TestMetrics_InternalInstrumentation(t *testing.T) {
 
 	// create a simple dummy graph to send data to the Metrics reporter, which will send
 	// metrics to the fake collector
+	builder := pipe.NewBuilder(&testPipeline{})
 	sendData := make(chan struct{})
-	inputNode := node.AsStart(func(out chan<- []request.Span) {
+	pipe.AddStart(builder, func(impl *testPipeline) *pipe.Start[[]request.Span] {
+		return &impl.inputNode
+	}, func(out chan<- []request.Span) {
 		// on every send data signal, the traces generator sends a dummy trace
 		for range sendData {
 			out <- []request.Span{{Type: request.EventTypeHTTP}}
 		}
 	})
+
 	internalMetrics := &fakeInternalMetrics{}
-	exporter, err := ReportMetrics(context.Background(),
-		&MetricsConfig{CommonEndpoint: coll.URL, Interval: 10 * time.Millisecond, ReportersCacheLen: 16},
+	pipe.AddFinalProvider(builder, func(impl *testPipeline) *pipe.Final[[]request.Span] {
+		return &impl.exporter
+	}, ReportMetrics(context.Background(),
+		&MetricsConfig{CommonEndpoint: coll.URL, Interval: 10 * time.Millisecond, ReportersCacheLen: 16, Features: []string{FeatureApplication}},
 		&global.ContextInfo{
 			Metrics: internalMetrics,
-		})
+		}),
+	)
+	graph, err := builder.Build()
 	require.NoError(t, err)
-	inputNode.SendTo(node.AsTerminal(exporter))
 
-	go inputNode.Start()
+	graph.Start()
 
 	sendData <- struct{}{}
 	var previousSum, previousCount int
@@ -339,18 +356,26 @@ func TestMetricsConfig_Disabled(t *testing.T) {
 }
 
 func (f *fakeInternalMetrics) OTELMetricExport(len int) {
+	fakeMux.Lock()
+	defer fakeMux.Unlock()
 	f.cnt.Add(1)
 	f.sum.Add(int32(len))
 }
 
 func (f *fakeInternalMetrics) OTELMetricExportError(_ error) {
+	fakeMux.Lock()
+	defer fakeMux.Unlock()
 	f.errs.Add(1)
 }
 
 func (f *fakeInternalMetrics) Errors() int {
+	fakeMux.Lock()
+	defer fakeMux.Unlock()
 	return int(f.errs.Load())
 }
 
 func (f *fakeInternalMetrics) SumCount() (sum, count int) {
+	fakeMux.Lock()
+	defer fakeMux.Unlock()
 	return int(f.sum.Load()), int(f.cnt.Load())
 }

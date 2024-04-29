@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/grafana/beyla/pkg/internal/connector"
+	"github.com/grafana/beyla/pkg/internal/export/otel"
 	"github.com/grafana/beyla/pkg/internal/export/prom"
 	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
 )
@@ -35,9 +36,11 @@ func TestMetricsExpiration(t *testing.T) {
 	exporter, err := PrometheusEndpoint(
 		ctx,
 		&PrometheusConfig{Config: &prom.PrometheusConfig{
-			Port:       openPort,
-			Path:       "/metrics",
-			ExpireTime: 3 * time.Minute,
+			Port:                        openPort,
+			Path:                        "/metrics",
+			TTL:                         3 * time.Minute,
+			SpanMetricsServiceCacheSize: 10,
+			Features:                    []string{otel.FeatureNetwork},
 		}, AllowedAttributes: []string{"src_name", "dst_name"}},
 		&connector.PrometheusManager{},
 	)
@@ -94,7 +97,11 @@ func TestMetricsExpiration(t *testing.T) {
 	assert.NotContains(t, exported, `beyla_network_flow_bytes_total{dst_name="bar",src_name="foo"}`)
 }
 
+var mmux = sync.Mutex{}
+
 func getMetrics(t require.TestingT, promURL string) string {
+	mmux.Lock()
+	defer mmux.Unlock()
 	resp, err := http.Get(promURL)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, resp.StatusCode)

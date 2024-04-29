@@ -3,9 +3,9 @@ package agent
 import (
 	"context"
 
-	"github.com/mariomac/pipes/pkg/graph"
-	"github.com/mariomac/pipes/pkg/node"
+	"github.com/mariomac/pipes/pipe"
 
+	"github.com/grafana/beyla/pkg/internal/metricname"
 	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
 	"github.com/grafana/beyla/pkg/internal/netolly/export"
 	"github.com/grafana/beyla/pkg/internal/netolly/export/otel"
@@ -16,50 +16,87 @@ import (
 )
 
 // FlowsPipeline defines the different nodes in the Beyla's NetO11y module,
-// as well as how they are interconnected
+// as well as how they are interconnected (in its Connect() method)
 type FlowsPipeline struct {
-	MapTracer     `sendTo:"Deduper"`
-	RingBufTracer `sendTo:"Deduper"`
+	MapTracer     pipe.Start[[]*ebpf.Record]
+	RingBufTracer pipe.Start[[]*ebpf.Record]
 
-	Deduper    flow.Deduper          `forwardTo:"Kubernetes"`
-	Kubernetes k8s.MetadataDecorator `forwardTo:"ReverseDNS"`
-	ReverseDNS flow.ReverseDNS       `forwardTo:"CIDRs"`
-	CIDRs      cidr.Definitions      `forwardTo:"Decorator"`
-	Decorator  `sendTo:"OTEL,Prom,Printer"`
+	ProtoFilter pipe.Middle[[]*ebpf.Record, []*ebpf.Record]
+	Deduper     pipe.Middle[[]*ebpf.Record, []*ebpf.Record]
+	Kubernetes  pipe.Middle[[]*ebpf.Record, []*ebpf.Record]
+	ReverseDNS  pipe.Middle[[]*ebpf.Record, []*ebpf.Record]
+	CIDRs       pipe.Middle[[]*ebpf.Record, []*ebpf.Record]
+	Decorator   pipe.Middle[[]*ebpf.Record, []*ebpf.Record]
 
-	OTEL    otel.MetricsConfig
-	Prom    prom.PrometheusConfig
-	Printer export.FlowPrinterEnabled
+	OTEL    pipe.Final[[]*ebpf.Record]
+	Prom    pipe.Final[[]*ebpf.Record]
+	Printer pipe.Final[[]*ebpf.Record]
 }
 
-type MapTracer struct{}
-type RingBufTracer struct{}
-type Decorator struct{}
+// Connect specifies how the pipeline nodes are connected
+func (fp *FlowsPipeline) Connect() {
+	fp.MapTracer.SendTo(fp.ProtoFilter)
+	fp.RingBufTracer.SendTo(fp.ProtoFilter)
 
-// buildAndStartPipeline creates the ETL flow processing graph.
+	fp.ProtoFilter.SendTo(fp.Deduper)
+	fp.Deduper.SendTo(fp.Kubernetes)
+	fp.Kubernetes.SendTo(fp.ReverseDNS)
+	fp.ReverseDNS.SendTo(fp.CIDRs)
+	fp.CIDRs.SendTo(fp.Decorator)
+
+	fp.Decorator.SendTo(fp.OTEL, fp.Prom, fp.Printer)
+}
+
+// Accessory field pointer getters to later tell to the node providers where to store each pipeline Node
+func mapTracer(fp *FlowsPipeline) *pipe.Start[[]*ebpf.Record]     { return &fp.MapTracer }
+func ringBufTracer(fp *FlowsPipeline) *pipe.Start[[]*ebpf.Record] { return &fp.RingBufTracer }
+
+func prtFltr(fp *FlowsPipeline) *pipe.Middle[[]*ebpf.Record, []*ebpf.Record]   { return &fp.ProtoFilter }
+func deduper(fp *FlowsPipeline) *pipe.Middle[[]*ebpf.Record, []*ebpf.Record]   { return &fp.Deduper }
+func kube(fp *FlowsPipeline) *pipe.Middle[[]*ebpf.Record, []*ebpf.Record]      { return &fp.Kubernetes }
+func rdns(fp *FlowsPipeline) *pipe.Middle[[]*ebpf.Record, []*ebpf.Record]      { return &fp.ReverseDNS }
+func cidrs(fp *FlowsPipeline) *pipe.Middle[[]*ebpf.Record, []*ebpf.Record]     { return &fp.CIDRs }
+func decorator(fp *FlowsPipeline) *pipe.Middle[[]*ebpf.Record, []*ebpf.Record] { return &fp.Decorator }
+
+func otelExport(fp *FlowsPipeline) *pipe.Final[[]*ebpf.Record] { return &fp.OTEL }
+func promExport(fp *FlowsPipeline) *pipe.Final[[]*ebpf.Record] { return &fp.Prom }
+func printer(fp *FlowsPipeline) *pipe.Final[[]*ebpf.Record]    { return &fp.Printer }
+
+// buildPipeline creates the ETL flow processing graph.
 // For a more visual view, check the docs/architecture.md document.
-func (f *Flows) buildAndStartPipeline(ctx context.Context) (graph.Graph, error) {
+func (f *Flows) buildPipeline(ctx context.Context) (*pipe.Runner, error) {
 
 	alog := alog()
 	alog.Debug("registering interfaces' listener in background")
 	err := f.interfacesManager(ctx)
 	if err != nil {
-		return graph.Graph{}, err
+		return nil, err
 	}
 
 	alog.Debug("creating flows' processing graph")
-	gb := graph.NewBuilder(node.ChannelBufferLen(f.cfg.ChannelBufferLen))
+	pb := pipe.NewBuilder(&FlowsPipeline{}, pipe.ChannelBufferLen(f.cfg.ChannelBufferLen))
 
 	// Start nodes: those generating flow records (reading them from eBPF)
-	graph.RegisterStart(gb, func(_ MapTracer) (node.StartFunc[[]*ebpf.Record], error) {
-		return f.mapTracer.TraceLoop(ctx), nil
-	})
-	graph.RegisterStart(gb, func(_ RingBufTracer) (node.StartFunc[[]*ebpf.Record], error) {
-		return f.rbTracer.TraceLoop(ctx), nil
-	})
+	pipe.AddStart(pb, mapTracer, f.mapTracer.TraceLoop(ctx))
+	pipe.AddStart(pb, ringBufTracer, f.rbTracer.TraceLoop(ctx))
 
-	graph.RegisterMiddle(gb, flow.DeduperProvider)
-	graph.RegisterMiddle(gb, func(_ Decorator) (node.MiddleFunc[[]*ebpf.Record, []*ebpf.Record], error) {
+	// Middle nodes: transforming flow records and passing them to the next stage in the pipeline.
+	// Many of the nodes here are not mandatory. It's decision of each Provider function to decide
+	// whether the node needs to be instantiated or just bypassed.
+	pipe.AddMiddleProvider(pb, prtFltr,
+		flow.ProtocolFilterProvider(f.cfg.NetworkFlows.Protocols, f.cfg.NetworkFlows.ExcludeProtocols))
+
+	pipe.AddMiddleProvider(pb, deduper, func() (pipe.MiddleFunc[[]*ebpf.Record, []*ebpf.Record], error) {
+		var deduperExpireTime = f.cfg.NetworkFlows.DeduperFCTTL
+		if deduperExpireTime <= 0 {
+			deduperExpireTime = 2 * f.cfg.NetworkFlows.CacheActiveTimeout
+		}
+		return flow.DeduperProvider(&flow.Deduper{
+			Type:       f.cfg.NetworkFlows.Deduper,
+			ExpireTime: deduperExpireTime,
+		})
+	})
+	pipe.AddMiddleProvider(pb, decorator, func() (pipe.MiddleFunc[[]*ebpf.Record, []*ebpf.Record], error) {
 		// If deduper is enabled, we know that interfaces are unset.
 		// As an optimization, we just pass here an empty-string interface namer
 		ifaceNamer := f.interfaceNamer
@@ -70,40 +107,35 @@ func (f *Flows) buildAndStartPipeline(ctx context.Context) (graph.Graph, error) 
 		}
 		return flow.Decorate(f.agentIP, ifaceNamer), nil
 	})
-	graph.RegisterMiddle(gb, cidr.DecoratorProvider)
-	graph.RegisterMiddle(gb, func(cfg k8s.MetadataDecorator) (node.MiddleFunc[[]*ebpf.Record, []*ebpf.Record], error) {
-		return k8s.MetadataDecoratorProvider(ctx, cfg)
+	pipe.AddMiddleProvider(pb, cidrs, func() (pipe.MiddleFunc[[]*ebpf.Record, []*ebpf.Record], error) {
+		return cidr.DecoratorProvider(f.cfg.NetworkFlows.CIDRs)
 	})
-	graph.RegisterMiddle(gb, flow.ReverseDNSProvider)
-
-	// Terminal nodes export the flow record information out of the pipeline: OTEL and printer
-	graph.RegisterTerminal(gb, otel.MetricsExporterProvider)
-	graph.RegisterTerminal(gb, func(cfg prom.PrometheusConfig) (node.TerminalFunc[[]*ebpf.Record], error) {
-		return prom.PrometheusEndpoint(ctx, &cfg, f.ctxInfo.Prometheus)
+	pipe.AddMiddleProvider(pb, kube, func() (pipe.MiddleFunc[[]*ebpf.Record, []*ebpf.Record], error) {
+		return k8s.MetadataDecoratorProvider(ctx, &f.cfg.Attributes.Kubernetes)
 	})
-	graph.RegisterTerminal(gb, export.FlowPrinterProvider)
+	pipe.AddMiddleProvider(pb, rdns, func() (pipe.MiddleFunc[[]*ebpf.Record, []*ebpf.Record], error) {
+		return flow.ReverseDNSProvider(&f.cfg.NetworkFlows.ReverseDNS)
+	})
 
-	var deduperExpireTime = f.cfg.NetworkFlows.DeduperFCExpiry
-	if deduperExpireTime <= 0 {
-		deduperExpireTime = 2 * f.cfg.NetworkFlows.CacheActiveTimeout
-	}
-	return gb.Build(&FlowsPipeline{
-		Deduper: flow.Deduper{
-			Type:       f.cfg.NetworkFlows.Deduper,
-			ExpireTime: deduperExpireTime,
-		},
-		Kubernetes: k8s.MetadataDecorator{Kubernetes: &f.cfg.Attributes.Kubernetes},
-		// TODO: allow prometheus exporting
-		ReverseDNS: f.cfg.NetworkFlows.ReverseDNS,
-		CIDRs:      f.cfg.NetworkFlows.CIDRs,
-		OTEL: otel.MetricsConfig{
+	// Terminal nodes export the flow record information out of the pipeline: OTEL, Prom and printer.
+	// Not all the nodes are mandatory here. Is the responsibility of each Provider function to decide
+	// whether each node is going to be instantiated or just ignored.
+	f.cfg.Attributes.Allow.Normalize()
+	pipe.AddFinalProvider(pb, otelExport, func() (pipe.FinalFunc[[]*ebpf.Record], error) {
+		return otel.MetricsExporterProvider(&otel.MetricsConfig{
 			Metrics:           &f.cfg.Metrics,
-			AllowedAttributes: f.cfg.NetworkFlows.AllowedAttributes,
-		},
-		Prom: prom.PrometheusConfig{
-			Config:            &f.cfg.Prometheus,
-			AllowedAttributes: f.cfg.NetworkFlows.AllowedAttributes,
-		},
-		Printer: export.FlowPrinterEnabled(f.cfg.NetworkFlows.Print),
+			AllowedAttributes: f.cfg.Attributes.Allow.For(metricname.NormalBeylaNetworkFlows),
+		})
 	})
+	pipe.AddFinalProvider(pb, promExport, func() (pipe.FinalFunc[[]*ebpf.Record], error) {
+		return prom.PrometheusEndpoint(ctx, &prom.PrometheusConfig{
+			Config:            &f.cfg.Prometheus,
+			AllowedAttributes: f.cfg.Attributes.Allow.For(metricname.NormalBeylaNetworkFlows),
+		}, f.ctxInfo.Prometheus)
+	})
+	pipe.AddFinalProvider(pb, printer, func() (pipe.FinalFunc[[]*ebpf.Record], error) {
+		return export.FlowPrinterProvider(f.cfg.NetworkFlows.Print)
+	})
+
+	return pb.Build()
 }

@@ -71,13 +71,12 @@ func TestGoOffsetsFromDwarf(t *testing.T) {
 	mustMatch(t, FieldOffsets{
 		"url_ptr_pos":           uint64(16),
 		"path_ptr_pos":          uint64(56),
-		"remoteaddr_ptr_pos":    uint64(176),
-		"host_ptr_pos":          uint64(128),
+		"conn_fd_pos":           uint64(0),
+		"fd_laddr_pos":          uint64(96),
 		"method_ptr_pos":        uint64(0),
 		"status_ptr_pos":        uint64(120),
 		"tcp_addr_ip_ptr_pos":   uint64(0),
 		"tcp_addr_port_ptr_pos": uint64(24),
-		"resp_req_pos":          uint64(8),
 	}, offsets)
 }
 
@@ -88,11 +87,9 @@ func TestGrpcOffsetsFromDwarf(t *testing.T) {
 		"grpc_stream_st_ptr_pos":     uint64(8),
 		"grpc_stream_method_ptr_pos": uint64(80),
 		"grpc_status_s_pos":          uint64(0),
+		"conn_fd_pos":                uint64(0),
+		"fd_laddr_pos":               uint64(96),
 		"grpc_status_code_ptr_pos":   uint64(40),
-		"grpc_st_peer_ptr_pos":       uint64(56),
-		"grpc_peer_addr_pos":         uint64(0),
-		"grpc_peer_localaddr_pos":    uint64(16),
-		"grpc_client_target_ptr_pos": uint64(24),
 	}, offsets)
 }
 
@@ -101,12 +98,12 @@ func TestGoOffsetsWithoutDwarf(t *testing.T) {
 	require.NoError(t, err)
 	// this test might fail if a future Go version updates the internal structure of the used structs.
 	mustMatch(t, FieldOffsets{
-		"url_ptr_pos":        uint64(16),
-		"path_ptr_pos":       uint64(56),
-		"remoteaddr_ptr_pos": uint64(176),
-		"host_ptr_pos":       uint64(128),
-		"method_ptr_pos":     uint64(0),
-		"status_ptr_pos":     uint64(120),
+		"url_ptr_pos":    uint64(16),
+		"path_ptr_pos":   uint64(56),
+		"conn_fd_pos":    uint64(0),
+		"fd_laddr_pos":   uint64(96),
+		"method_ptr_pos": uint64(0),
+		"status_ptr_pos": uint64(120),
 	}, offsets)
 }
 
@@ -118,10 +115,8 @@ func TestGrpcOffsetsWithoutDwarf(t *testing.T) {
 		"grpc_stream_method_ptr_pos": uint64(80),
 		"grpc_status_s_pos":          uint64(0),
 		"grpc_status_code_ptr_pos":   uint64(40),
-		"grpc_st_peer_ptr_pos":       uint64(56),
-		"grpc_peer_addr_pos":         uint64(0),
-		"grpc_peer_localaddr_pos":    uint64(16),
-		"grpc_client_target_ptr_pos": uint64(24),
+		"conn_fd_pos":                uint64(0),
+		"fd_laddr_pos":               uint64(96),
 	}, offsets)
 }
 

@@ -2,53 +2,19 @@ package export
 
 import (
 	"strconv"
-	"strings"
 
+	"github.com/grafana/beyla/pkg/internal/export/attr"
 	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
+	"github.com/grafana/beyla/pkg/internal/netolly/flow/transport"
 )
 
-// Attribute stores how to expose a metric attribute: its exposed name and how to
-// get its value from the ebpf.Record.
-type Attribute struct {
-	Name string
-	Get  func(r *ebpf.Record) string
-}
-
-// BuildPromAttributeGetters builds a list of Attribute getters for the names provided by the
-// user configuration, ready to be passed to a Prometheus exporter.
-// It differentiates two name formats: the exposed name for the attribute (uses _ for word separation, as
-// required by Prometheus); and the internal name of the attribute (uses . for word separation, as internally Beyla
-// stores the metadata).
-// Whatever is the format provided by the user (dot-based or underscore-based), it converts dots to underscores
-// and vice-versa to make sure that the correct format is used either internally or externally.
-func BuildPromAttributeGetters(names []string) []Attribute {
-	attrs := make([]Attribute, 0, len(names))
-	for _, name := range names {
-		exposedName := strings.ReplaceAll(name, ".", "_")
-		internalName := strings.ReplaceAll(name, "_", ".")
-		attrs = append(attrs, attributeFor(exposedName, internalName))
-	}
-	return attrs
-}
-
-// BuildOTELAttributeGetters builds a list of Attribute getters for the names provided by the
-// user configuration, ready to be passed to an OpenTelemetry exporter.
-// Whatever is the format of the user-provided attribute names (dot-based or underscore-based),
-// it converts underscores to dots to make sure that the correct attribute name is exposed.
-func BuildOTELAttributeGetters(names []string) []Attribute {
-	attrs := make([]Attribute, 0, len(names))
-	for _, name := range names {
-		dotName := strings.ReplaceAll(name, "_", ".")
-		attrs = append(attrs, attributeFor(dotName, dotName))
-	}
-	return attrs
-}
-
-func attributeFor(exposedName, internalName string) Attribute {
-	var getter func(r *ebpf.Record) string
+func NamedGetters(internalName string) (attr.GetFunc[*ebpf.Record], bool) {
+	var getter attr.GetFunc[*ebpf.Record]
 	switch internalName {
 	case "beyla.ip":
 		getter = func(r *ebpf.Record) string { return r.Attrs.BeylaIP }
+	case "transport":
+		getter = func(r *ebpf.Record) string { return transport.Protocol(r.Id.TransportProtocol).String() }
 	case "src.address":
 		getter = func(r *ebpf.Record) string { return r.Id.SrcIP().IP().String() }
 	case "dst.address":
@@ -68,7 +34,7 @@ func attributeFor(exposedName, internalName string) Attribute {
 	default:
 		getter = func(r *ebpf.Record) string { return r.Attrs.Metadata[internalName] }
 	}
-	return Attribute{Name: exposedName, Get: getter}
+	return getter, getter != nil
 }
 
 func directionStr(direction uint8) string {

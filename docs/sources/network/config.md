@@ -49,28 +49,24 @@ network metrics (in the previous example, `otel_metrics_export`, but it also acc
 
 Enables network metrics reporting in Beyla.
 
-| YAML                 | Environment variable               | Type     | Default                                                                                                  |
-| -------------------- | ---------------------------------- | -------- | -------------------------------------------------------------------------------------------------------- |
-| `allowed_attributes` | `BEYLA_NETWORK_ALLOWED_ATTRIBUTES` | []string | `k8s.src.owner.name`, `k8s.src.namespace`, `k8s.dst.owner.name`, `k8s.dst.namespace`, `k8s.cluster.name` |
+| YAML                 | Environment variable               | Type     | Default  |
+| -------------------- | ---------------------------------- | -------- | -------- |
+| `source`             | `BEYLA_NETWORK_SOURCE`             | string   | `tc`     |
 
-Specifies which attributes are visible in the metrics.
-Beyla aggregates the metrics by their common visible attributes.
-For example, hiding the `k8s.src.name` and allowing `k8s.src.owner.name` would aggregate the metrics of all the pods under the same owner.
+Specifies the Linux Kernel feature used to source the network events Beyla reports.
 
-This property won't filter some meta-attributes such as `instance`, `job`, `service.instance.id`, `service_name`, `telemetry.sdk.*`, etc.
+The available options are: `tc` and `socket_filter`.
 
-See the [network metrics documentation]({{< relref "./_index.md" >}}) for a detailed list of all the available attributes.
+When `tc` is used as an event source, Beyla uses the Linux Traffic Control ingress and egress
+filters to capture the network events, in a direct action mode. This event source mode assumes
+that no other eBPF programs are attaching to the same Linux Traffic Control interface, in 
+direct action mode. For example, the Cilium Kubernetes CNI uses the same approach, therefore
+if you have Cilium CNI installed in your Kubernetes cluster, configure Beyla to capture the
+network events with the `socket_filter` mode.
 
-{{% admonition type="note" %}}
-Select carefully the reported attributes, as some attributes might greatly increase the cardinality of your metrics.
-Setting this value to list only the attributes you really need is highly recommended.
-{{% /admonition %}}
-
-If you set this property via environment variable each entry must be separated by a comma, for example:
-
-```sh
-BEYLA_NETWORK_ALLOWED_ATTRIBUTES=src.name,dst.name
-```
+When `socket_filter` is used as an event source, Beyla installs an eBPF Linux socket filter to
+capture the network events. This mode doesn't conflict with Cilium CNI or other eBPF programs, which
+use the Linux Traffic Control egress and ingress filters.
 
 | YAML    | Environment variable  | Type     | Default |
 | ------- | --------------------- | -------- | ------- |
@@ -140,6 +136,32 @@ If you set this property via environment variable each entry must be separated b
 ```sh
 BEYLA_NETWORK_EXCLUDE_INTERFACES=lo,/^veth/
 ```
+
+| YAML        | Environment variable      | Type     | Default |
+|-------------|---------------------------| -------- | ------- |
+| `protocols` | `BEYLA_NETWORK_PROTOCOLS` | []string | (empty) |
+
+If set, Beyla drops any network flow whose reported Internet Protocol is not in this list.
+
+The accepted values are defined in the Linux enumeration of
+[Standard well-defined IP protocols](https://elixir.bootlin.com/linux/v6.8.7/source/include/uapi/linux/in.h#L28),
+and can be:
+`TCP`, `UDP`, `IP`, `ICMP`, `IGMP`, `IPIP`, `EGP`, `PUP`, `IDP`, `TP`, `DCCP`, `IPV6`, `RSVP`, `GRE`, `ESP`, `AH`,
+`MTP`, `BEETPH`, `ENCAP`, `PIM`, `COMP`, `L2TP`, `SCTP`, `UDPLITE`, `MPLS`, `ETHERNET`, `RAW`
+
+| YAML                | Environment variable              | Type     | Default |
+|---------------------|-----------------------------------|----------|---------|
+| `exclude_protocols` | `BEYLA_NETWORK_EXCLUDE_PROTOCOLS` | []string | (empty) |
+
+If set, Beyla drops any network flow whose reported Internet Protocol is in this list.
+
+If the `protocols`/`BEYLA_NETWORK_PROTOCOLS` list is already set, this property is ignored.
+
+The accepted values are defined in the Linux enumeration of
+[Standard well-defined IP protocols](https://elixir.bootlin.com/linux/v6.8.7/source/include/uapi/linux/in.h#L28),
+and can be:
+`TCP`, `UDP`, `IP`, `ICMP`, `IGMP`, `IPIP`, `EGP`, `PUP`, `IDP`, `TP`, `DCCP`, `IPV6`, `RSVP`, `GRE`, `ESP`, `AH`,
+`MTP`, `BEETPH`, `ENCAP`, `PIM`, `COMP`, `L2TP`, `SCTP`, `UDPLITE`, `MPLS`, `ETHERNET`, `RAW`
 
 | YAML              | Environment variable            | Type    | Default |
 | ----------------- | ------------------------------- | ------- | ------- |

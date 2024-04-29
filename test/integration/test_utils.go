@@ -52,6 +52,18 @@ func doHTTPGet(t *testing.T, path string, status int) {
 	require.Equal(t, status, r.StatusCode)
 }
 
+func doHTTPGetIgnoreStatus(t *testing.T, path string) {
+	// Random fake body to cause the request to have some size (38 bytes)
+	jsonBody := []byte(`{"productId": 123456, "quantity": 100}`)
+
+	req, err := http.NewRequest(http.MethodGet, path, bytes.NewReader(jsonBody))
+	require.NoError(t, err)
+	req.Header.Set("Content-Type", "application/json")
+
+	r, _ := testHTTPClient.Do(req)
+	require.NotNil(t, r)
+}
+
 func doHTTPGetFullResponse(t *testing.T, path string, status int) {
 	// Random fake body to cause the request to have some size (38 bytes)
 	jsonBody := []byte(`{"productId": 123456, "quantity": 100}`)

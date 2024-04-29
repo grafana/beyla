@@ -26,7 +26,6 @@ import (
 	"net"
 
 	"github.com/cilium/ebpf/ringbuf"
-	"github.com/mariomac/pipes/pkg/node"
 
 	"github.com/grafana/beyla/pkg/beyla"
 	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
@@ -94,10 +93,9 @@ type Flows struct {
 	filter     interfaceFilter
 	ebpf       ebpfFlowFetcher
 
-	// processing nodes to be wired in the buildAndStartPipeline method
+	// processing nodes to be wired in the buildPipeline method
 	mapTracer *flow.MapTracer
 	rbTracer  *flow.RingBufTracer
-	exporter  node.TerminalFunc[[]*ebpf.Record]
 
 	// elements used to decorate flows with extra information
 	interfaceNamer flow.InterfaceNamer
@@ -143,20 +141,27 @@ func FlowsAgent(ctxInfo *global.ContextInfo, cfg *beyla.Config) (*Flows, error) 
 	}
 	alog.Debug("agent IP: " + agentIP.String())
 
-	// configure selected exporter
-	exportFunc, err := buildFlowExporter(cfg)
-	if err != nil {
-		return nil, err
+	var fetcher ebpfFlowFetcher
+
+	switch cfg.NetworkFlows.Source {
+	case beyla.EbpfSourceSock:
+		alog.Info("using socket filter for collecting network events")
+		fetcher, err = ebpf.NewSockFlowFetcher(cfg.NetworkFlows.Sampling, cfg.NetworkFlows.CacheMaxFlows)
+		if err != nil {
+			return nil, err
+		}
+	case beyla.EbpfSourceTC:
+		alog.Info("using kernel Traffic Control for collecting network events")
+		ingress, egress := flowDirections(&cfg.NetworkFlows)
+		fetcher, err = ebpf.NewFlowFetcher(cfg.NetworkFlows.Sampling, cfg.NetworkFlows.CacheMaxFlows, ingress, egress)
+		if err != nil {
+			return nil, err
+		}
+	default:
+		return nil, fmt.Errorf("unknown network configuration eBPF source specified, allowed options are [tc, socket_filter]")
 	}
 
-	ingress, egress := flowDirections(&cfg.NetworkFlows)
-
-	fetcher, err := ebpf.NewFlowFetcher(cfg.NetworkFlows.Sampling, cfg.NetworkFlows.CacheMaxFlows, ingress, egress)
-	if err != nil {
-		return nil, err
-	}
-
-	return flowsAgent(ctxInfo, cfg, informer, fetcher, exportFunc, agentIP)
+	return flowsAgent(ctxInfo, cfg, informer, fetcher, agentIP)
 }
 
 // flowsAgent is a private constructor with injectable dependencies, usable for tests
@@ -165,7 +170,6 @@ func flowsAgent(
 	cfg *beyla.Config,
 	informer ifaces.Informer,
 	fetcher ebpfFlowFetcher,
-	exporter node.TerminalFunc[[]*ebpf.Record],
 	agentIP net.IP,
 ) (*Flows, error) {
 	// configure allow/deny interfaces filter
@@ -189,7 +193,6 @@ func flowsAgent(
 	return &Flows{
 		ctxInfo:        ctxInfo,
 		ebpf:           fetcher,
-		exporter:       exporter,
 		interfaces:     registerer,
 		filter:         filter,
 		cfg:            cfg,
@@ -221,16 +224,12 @@ func (f *Flows) Run(ctx context.Context) error {
 	alog := alog()
 	f.status = StatusStarting
 	alog.Info("starting Flows agent")
-	graph, err := f.buildAndStartPipeline(ctx)
+	graph, err := f.buildPipeline(ctx)
 	if err != nil {
 		return fmt.Errorf("starting processing graph: %w", err)
 	}
 
-	graphDone := make(chan struct{})
-	go func() {
-		graph.Run()
-		close(graphDone)
-	}()
+	graph.Start()
 
 	f.status = StatusStarted
 	alog.Info("Flows agent successfully started")
@@ -243,7 +242,7 @@ func (f *Flows) Run(ctx context.Context) error {
 	}
 
 	alog.Debug("waiting for all nodes to finish their pending work")
-	<-graphDone
+	<-graph.Done()
 
 	f.status = StatusStopped
 	alog.Info("Flows agent stopped")
@@ -302,16 +301,4 @@ func (f *Flows) onInterfaceAdded(iface ifaces.Interface) {
 		alog.Warn("can't register flow ebpfFetcher. Ignoring", "error", err)
 		return
 	}
-}
-
-func buildFlowExporter(_ *beyla.Config) (node.TerminalFunc[[]*ebpf.Record], error) {
-	// TODO: remove
-	return func(in <-chan []*ebpf.Record) {
-		for flows := range in {
-			fmt.Printf("received %d flows\n", len(flows))
-			for _, f := range flows {
-				fmt.Printf("%#v\n", *f)
-			}
-		}
-	}, nil
 }

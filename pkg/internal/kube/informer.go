@@ -42,7 +42,6 @@ type Metadata struct {
 	pods        cache.SharedIndexInformer
 	replicaSets cache.SharedIndexInformer
 
-	stopChan               chan struct{}
 	containerEventHandlers []ContainerEventHandler
 }
 
@@ -61,6 +60,7 @@ type PodInfo struct {
 	// StartTimeStr caches value of ObjectMeta.StartTimestamp.String()
 	StartTimeStr string
 	ContainerIDs []string
+	IPs          []string
 }
 
 type ReplicaSetInfo struct {
@@ -91,7 +91,7 @@ var replicaSetIndexer = cache.Indexers{
 	},
 }
 
-// GetContainerPod fetches metadata from a Pod given the name of one of its containera
+// GetContainerPod fetches metadata from a Pod given the name of one of its containers
 func (k *Metadata) GetContainerPod(containerID string) (*PodInfo, bool) {
 	objs, err := k.pods.GetIndexer().ByIndex(IndexPodByContainerIDs, containerID)
 	if err != nil {
@@ -115,6 +115,11 @@ func (k *Metadata) initPodInformer(informerFactory informers.SharedInformerFacto
 	if err := pods.SetTransform(func(i interface{}) (interface{}, error) {
 		pod, ok := i.(*v1.Pod)
 		if !ok {
+			// it's Ok. The K8s library just informed from an entity
+			// that has been previously transformed/stored
+			if pi, ok := i.(*PodInfo); ok {
+				return pi, nil
+			}
 			return nil, fmt.Errorf("was expecting a Pod. Got: %T", i)
 		}
 		containerIDs := make([]string, 0,
@@ -132,6 +137,14 @@ func (k *Metadata) initPodInformer(informerFactory informers.SharedInformerFacto
 		for i := range pod.Status.EphemeralContainerStatuses {
 			containerIDs = append(containerIDs,
 				rmContainerIDSchema(pod.Status.EphemeralContainerStatuses[i].ContainerID))
+		}
+
+		ips := make([]string, 0, len(pod.Status.PodIPs))
+		for _, ip := range pod.Status.PodIPs {
+			// ignoring host-networked Pod IPs
+			if ip.IP != pod.Status.HostIP {
+				ips = append(ips, ip.IP)
+			}
 		}
 
 		owner := OwnerFromPodInfo(pod)
@@ -153,6 +166,7 @@ func (k *Metadata) initPodInformer(informerFactory informers.SharedInformerFacto
 			NodeName:     pod.Spec.NodeName,
 			StartTimeStr: startTime,
 			ContainerIDs: containerIDs,
+			IPs:          ips,
 		}, nil
 	}); err != nil {
 		return fmt.Errorf("can't set pods transform: %w", err)
@@ -212,6 +226,11 @@ func (k *Metadata) initReplicaSetInformer(informerFactory informers.SharedInform
 	if err := rss.SetTransform(func(i interface{}) (interface{}, error) {
 		rs, ok := i.(*appsv1.ReplicaSet)
 		if !ok {
+			// it's Ok. The K8s library just informed from an entity
+			// that has been previously transformed/stored
+			if pi, ok := i.(*ReplicaSetInfo); ok {
+				return pi, nil
+			}
 			return nil, fmt.Errorf("was expecting a ReplicaSet. Got: %T", i)
 		}
 		var deployment string
@@ -244,11 +263,9 @@ func (k *Metadata) initReplicaSetInformer(informerFactory informers.SharedInform
 	return nil
 }
 
-func (k *Metadata) InitFromClient(client kubernetes.Interface, timeout time.Duration) error {
+func (k *Metadata) InitFromClient(ctx context.Context, client kubernetes.Interface, timeout time.Duration) error {
 	// Initialization variables
-	k.stopChan = make(chan struct{})
-
-	return k.initInformers(client, timeout)
+	return k.initInformers(ctx, client, timeout)
 }
 
 func LoadConfig(kubeConfigPath string) (*rest.Config, error) {
@@ -278,7 +295,7 @@ func LoadConfig(kubeConfigPath string) (*rest.Config, error) {
 	return config, nil
 }
 
-func (k *Metadata) initInformers(client kubernetes.Interface, timeout time.Duration) error {
+func (k *Metadata) initInformers(ctx context.Context, client kubernetes.Interface, timeout time.Duration) error {
 	informerFactory := informers.NewSharedInformerFactory(client, syncTime)
 	err := k.initPodInformer(informerFactory)
 	if err != nil {
@@ -291,10 +308,10 @@ func (k *Metadata) initInformers(client kubernetes.Interface, timeout time.Durat
 
 	log := klog()
 	log.Debug("starting kubernetes informers, waiting for syncronization")
-	informerFactory.Start(k.stopChan)
+	informerFactory.Start(ctx.Done())
 	finishedCacheSync := make(chan struct{})
 	go func() {
-		informerFactory.WaitForCacheSync(k.stopChan)
+		informerFactory.WaitForCacheSync(ctx.Done())
 		close(finishedCacheSync)
 	}()
 	select {
@@ -342,4 +359,17 @@ func (k *Metadata) AddReplicaSetEventHandler(h cache.ResourceEventHandler) error
 		}
 	}()
 	return err
+}
+
+func (i *PodInfo) ServiceName() string {
+	if i.Owner != nil {
+		// we have two levels of ownership at most
+		if i.Owner.Owner != nil {
+			return i.Owner.Owner.Name
+		}
+
+		return i.Owner.Name
+	}
+
+	return i.Name
 }

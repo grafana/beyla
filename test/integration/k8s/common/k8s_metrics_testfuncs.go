@@ -55,6 +55,12 @@ var (
 		"rpc_client_duration_seconds_sum",
 		"rpc_client_duration_seconds_bucket",
 	}
+	spanGraphMetrics = []string{
+		"traces_service_graph_request_server_seconds_count",
+		"traces_service_graph_request_server_seconds_bucket",
+		"traces_service_graph_request_server_seconds_sum",
+		"traces_service_graph_request_total",
+	}
 )
 
 func DoWaitForComponentsAvailable(t *testing.T) {
@@ -106,6 +112,11 @@ func FeatureHTTPMetricsDecoration() features.Feature {
 				"k8s_pod_start_time":  TimeRegex,
 				"k8s_deployment_name": "^testserver$",
 				"k8s_replicaset_name": "^testserver-",
+			})).
+		Assess("all the span graph metrics exist",
+			testMetricsDecoration(spanGraphMetrics, `{connection_type="virtual_node",server="testserver"}`, map[string]string{
+				"server_service_namespace": "integration-test",
+				"source":                   "beyla",
 			}),
 		).Feature()
 }

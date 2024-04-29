@@ -96,10 +96,7 @@ func (p *Tracer) Constants(_ *exec.FileInfo, offsets *goexec.Offsets) map[string
 		"method_ptr_pos",
 		"status_ptr_pos",
 		"status_code_ptr_pos",
-		"remoteaddr_ptr_pos",
-		"host_ptr_pos",
 		"content_length_ptr_pos",
-		"resp_req_pos",
 		"req_header_ptr_pos",
 		"io_writer_buf_ptr_pos",
 		"io_writer_n_pos",
@@ -117,10 +114,12 @@ func (p *Tracer) Constants(_ *exec.FileInfo, offsets *goexec.Offsets) map[string
 
 	// Optional list
 	for _, s := range []string{
-		"rws_req_pos",
 		"rws_status_pos",
 		"cc_next_stream_id_pos",
 		"framer_w_pos",
+		"rws_conn_pos",
+		"http2_server_conn_pos",
+		"cc_tconn_pos",
 	} {
 		constants[s] = offsets.Field[s]
 		if constants[s] == nil {
@@ -152,6 +151,10 @@ func (p *Tracer) GoProbes() map[string]ebpfcommon.FunctionPrograms {
 			Start: p.bpfObjects.UprobeRoundTrip,
 			End:   p.bpfObjects.UprobeRoundTripReturn,
 		},
+		"golang.org/x/net/http2.(*ClientConn).roundTrip": { // http2 client after 0.22
+			Start: p.bpfObjects.UprobeHttp2RoundTrip,
+			End:   p.bpfObjects.UprobeRoundTripReturn, // return is the same as for http 1.1
+		},
 		"golang.org/x/net/http2.(*ClientConn).RoundTrip": { // http2 client
 			Start: p.bpfObjects.UprobeHttp2RoundTrip,
 			End:   p.bpfObjects.UprobeRoundTripReturn, // return is the same as for http 1.1
@@ -173,7 +176,11 @@ func (p *Tracer) GoProbes() map[string]ebpfcommon.FunctionPrograms {
 		// sql
 		"database/sql.(*DB).queryDC": {
 			Start: p.bpfObjects.UprobeQueryDC,
-			End:   p.bpfObjects.UprobeQueryDCReturn,
+			End:   p.bpfObjects.UprobeQueryReturn,
+		},
+		"database/sql.(*DB).execDC": {
+			Start: p.bpfObjects.UprobeExecDC,
+			End:   p.bpfObjects.UprobeQueryReturn,
 		},
 	}
 
@@ -218,31 +225,5 @@ func (p *Tracer) Run(ctx context.Context, eventsChan chan<- []request.Span) {
 		p.pidsFilter,
 		p.bpfObjects.Events,
 		p.metrics,
-		append(p.closers, &p.bpfObjects)...,
-	)(ctx, eventsChan)
-}
-
-// GinTracer overrides Tracer to inspect the Gin ServeHTTP endpoint
-type GinTracer struct {
-	Tracer
-}
-
-func (p *GinTracer) GoProbes() map[string]ebpfcommon.FunctionPrograms {
-	return map[string]ebpfcommon.FunctionPrograms{
-		"github.com/gin-gonic/gin.(*Engine).ServeHTTP": {
-			Required: true,
-			Start:    p.bpfObjects.UprobeServeHTTP,
-			End:      p.bpfObjects.UprobeServeHTTPReturns,
-		},
-	}
-}
-
-func (p *GinTracer) Run(ctx context.Context, eventsChan chan<- []request.Span) {
-	ebpfcommon.SharedRingbuf(
-		p.cfg,
-		p.pidsFilter,
-		p.bpfObjects.Events,
-		p.metrics,
-		append(p.closers, &p.bpfObjects)...,
-	)(ctx, eventsChan)
+	)(ctx, append(p.closers, &p.bpfObjects), eventsChan)
 }

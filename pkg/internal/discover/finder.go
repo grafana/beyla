@@ -4,8 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/mariomac/pipes/pkg/graph"
-	"github.com/mariomac/pipes/pkg/node"
+	"github.com/mariomac/pipes/pipe"
 
 	"github.com/grafana/beyla/pkg/beyla"
 	"github.com/grafana/beyla/pkg/internal/ebpf"
@@ -18,56 +17,76 @@ import (
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 )
 
-// ProcessFinder pipeline architecture. It uses the Pipes library to instantiate and connect all the nodes.
-// Nodes tagged as "forwardTo" are optional nodes that might not be instantiated. In that case, any
-// information directed to them will be automatically forwarded to the next pipeline stage.
-// For example WatcherKubeEnricher and ContainerDBUpdater will be only enabled
-// (non-nil values) if Kubernetes decoration is enabled
 type ProcessFinder struct {
-	ProcessWatcher       `sendTo:"WatcherKubeEnricher"`
-	*WatcherKubeEnricher `forwardTo:"CriteriaMatcher"`
-	CriteriaMatcher      `sendTo:"ExecTyper"`
-	ExecTyper            `sendTo:"ContainerDBUpdater"`
-	*ContainerDBUpdater  `forwardTo:"TraceAttacher"`
-	TraceAttacher
+	ctx     context.Context
+	cfg     *beyla.Config
+	ctxInfo *global.ContextInfo
 }
 
+// nodesMap stores ProcessFinder pipeline architecture
+type nodesMap struct {
+	ProcessWatcher      pipe.Start[[]Event[processAttrs]]
+	WatcherKubeEnricher pipe.Middle[[]Event[processAttrs], []Event[processAttrs]]
+	CriteriaMatcher     pipe.Middle[[]Event[processAttrs], []Event[ProcessMatch]]
+	ExecTyper           pipe.Middle[[]Event[ProcessMatch], []Event[Instrumentable]]
+	ContainerDBUpdater  pipe.Middle[[]Event[Instrumentable], []Event[Instrumentable]]
+	TraceAttacher       pipe.Final[[]Event[Instrumentable]]
+}
+
+func (pf *nodesMap) Connect() {
+	pf.ProcessWatcher.SendTo(pf.WatcherKubeEnricher)
+	pf.WatcherKubeEnricher.SendTo(pf.CriteriaMatcher)
+	pf.CriteriaMatcher.SendTo(pf.ExecTyper)
+	pf.ExecTyper.SendTo(pf.ContainerDBUpdater)
+	pf.ContainerDBUpdater.SendTo(pf.TraceAttacher)
+}
+
+func processWatcher(pf *nodesMap) *pipe.Start[[]Event[processAttrs]] { return &pf.ProcessWatcher }
+func ptrWatcherKubeEnricher(pf *nodesMap) *pipe.Middle[[]Event[processAttrs], []Event[processAttrs]] {
+	return &pf.WatcherKubeEnricher
+}
+func criteriaMatcher(pf *nodesMap) *pipe.Middle[[]Event[processAttrs], []Event[ProcessMatch]] {
+	return &pf.CriteriaMatcher
+}
+func execTyper(pf *nodesMap) *pipe.Middle[[]Event[ProcessMatch], []Event[Instrumentable]] {
+	return &pf.ExecTyper
+}
+func containerDBUpdater(pf *nodesMap) *pipe.Middle[[]Event[Instrumentable], []Event[Instrumentable]] {
+	return &pf.ContainerDBUpdater
+}
+func traceAttacher(pf *nodesMap) *pipe.Final[[]Event[Instrumentable]] { return &pf.TraceAttacher }
+
 func NewProcessFinder(ctx context.Context, cfg *beyla.Config, ctxInfo *global.ContextInfo) *ProcessFinder {
-	processFinder := ProcessFinder{
-		ProcessWatcher:  ProcessWatcher{Ctx: ctx, Cfg: cfg},
-		CriteriaMatcher: CriteriaMatcher{Cfg: cfg},
-		ExecTyper:       ExecTyper{Cfg: cfg, Metrics: ctxInfo.Metrics},
-		TraceAttacher: TraceAttacher{
-			Cfg:               cfg,
-			Ctx:               ctx,
-			DiscoveredTracers: make(chan *ebpf.ProcessTracer),
-			DeleteTracers:     make(chan *Instrumentable),
-			Metrics:           ctxInfo.Metrics,
-		},
-	}
-	if ctxInfo.K8sEnabled {
-		processFinder.ContainerDBUpdater = &ContainerDBUpdater{DB: ctxInfo.AppO11y.K8sDatabase}
-		processFinder.WatcherKubeEnricher = &WatcherKubeEnricher{Informer: ctxInfo.AppO11y.K8sInformer}
-	}
-	return &processFinder
+	return &ProcessFinder{ctx: ctx, cfg: cfg, ctxInfo: ctxInfo}
 }
 
 // Start the ProcessFinder pipeline in background. It returns a channel where each new discovered
 // ebpf.ProcessTracer will be notified.
-func (pf *ProcessFinder) Start(cfg *beyla.Config) (<-chan *ebpf.ProcessTracer, <-chan *Instrumentable, error) {
-	gb := graph.NewBuilder(node.ChannelBufferLen(cfg.ChannelBufferLen))
-	graph.RegisterStart(gb, ProcessWatcherProvider)
-	graph.RegisterMiddle(gb, WatcherKubeEnricherProvider)
-	graph.RegisterMiddle(gb, CriteriaMatcherProvider)
-	graph.RegisterMiddle(gb, ExecTyperProvider)
-	graph.RegisterMiddle(gb, ContainerDBUpdaterProvider)
-	graph.RegisterTerminal(gb, TraceAttacherProvider)
-	pipeline, err := gb.Build(pf)
+func (pf *ProcessFinder) Start() (<-chan *ebpf.ProcessTracer, <-chan *Instrumentable, error) {
+
+	discoveredTracers, deleteTracers := make(chan *ebpf.ProcessTracer), make(chan *Instrumentable)
+
+	gb := pipe.NewBuilder(&nodesMap{}, pipe.ChannelBufferLen(pf.cfg.ChannelBufferLen))
+	pipe.AddStart(gb, processWatcher, ProcessWatcherFunc(pf.ctx, pf.cfg))
+	pipe.AddMiddleProvider(gb, ptrWatcherKubeEnricher,
+		WatcherKubeEnricherProvider(pf.ctxInfo.K8sEnabled, pf.ctxInfo.AppO11y.K8sInformer))
+	pipe.AddMiddleProvider(gb, criteriaMatcher, CriteriaMatcherProvider(pf.cfg))
+	pipe.AddMiddleProvider(gb, execTyper, ExecTyperProvider(pf.cfg, pf.ctxInfo.Metrics))
+	pipe.AddMiddleProvider(gb, containerDBUpdater,
+		ContainerDBUpdaterProvider(pf.ctxInfo.K8sEnabled, pf.ctxInfo.AppO11y.K8sDatabase))
+	pipe.AddFinalProvider(gb, traceAttacher, TraceAttacherProvider(&TraceAttacher{
+		Cfg:               pf.cfg,
+		Ctx:               pf.ctx,
+		DiscoveredTracers: discoveredTracers,
+		DeleteTracers:     deleteTracers,
+		Metrics:           pf.ctxInfo.Metrics,
+	}))
+	pipeline, err := gb.Build()
 	if err != nil {
 		return nil, nil, fmt.Errorf("can't instantiate discovery.ProcessFinder pipeline: %w", err)
 	}
-	go pipeline.Run()
-	return pf.DiscoveredTracers, pf.DeleteTracers, nil
+	pipeline.Start()
+	return discoveredTracers, deleteTracers, nil
 }
 
 // auxiliary functions to instantiate the go and non-go tracers on diverse steps of the
@@ -77,7 +96,6 @@ func newGoTracersGroup(cfg *beyla.Config, metrics imetrics.Reporter) []ebpf.Trac
 	// Each program is an eBPF source: net/http, grpc...
 	return []ebpf.Tracer{
 		nethttp.New(cfg, metrics),
-		&nethttp.GinTracer{Tracer: *nethttp.New(cfg, metrics)},
 		grpc.New(cfg, metrics),
 		goruntime.New(cfg, metrics),
 	}

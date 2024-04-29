@@ -3,7 +3,6 @@
 package integration
 
 import (
-	"net"
 	"testing"
 
 	"github.com/mariomac/guara/pkg/test"
@@ -40,7 +39,7 @@ func testREDMetricsForNetHTTPLibrary(t *testing.T, url string, comm string) {
 		assert.LessOrEqual(t, 3, val)
 		if len(results) > 0 {
 			res := results[0]
-			addr := net.ParseIP(res.Metric["client_address"])
+			addr := res.Metric["client_address"]
 			assert.NotNil(t, addr)
 		}
 	})

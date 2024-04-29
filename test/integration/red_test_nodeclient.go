@@ -58,7 +58,19 @@ func testNodeClientWithMethodAndStatusCode(t *testing.T, method string, statusCo
 		require.Equal(t, http.StatusOK, resp.StatusCode)
 		var tq jaeger.TracesQuery
 		require.NoError(t, json.NewDecoder(resp.Body).Decode(&tq))
-		traces := tq.FindBySpan(jaeger.Tag{Key: "http.response.status_code", Type: "int64", Value: float64(statusCode)})
+		tracesAll := tq.FindBySpan(jaeger.Tag{Key: "http.response.status_code", Type: "int64", Value: float64(statusCode)})
+
+		var traces []jaeger.Trace
+
+		// Sometimes we can instrument between the connect and the data being sent
+		// In that case we won't have enough info and we won't look in the parsed
+		// traceID. We filter for that.
+		for _, t := range tracesAll {
+			if strings.HasPrefix(t.TraceID, "0000") {
+				traces = append(traces, t)
+			}
+		}
+
 		require.GreaterOrEqual(t, len(traces), 1)
 		trace = traces[0]
 	}, test.Interval(100*time.Millisecond))
@@ -85,8 +97,10 @@ func testNodeClientWithMethodAndStatusCode(t *testing.T, method string, statusCo
 	 use the first 16 characters for looking up by Parent span.
 	*/
 	if kprobeTraces {
-		require.True(t, span.TraceID != "")
-		require.True(t, strings.HasSuffix(span.TraceID, traceIDLookup))
-		require.True(t, strings.HasPrefix(span.SpanID, "00"))
+		assert.NotEmpty(t, span.TraceID)
+		assert.Truef(t, strings.HasSuffix(span.TraceID, traceIDLookup),
+			"string %q should have suffix %q", span.TraceID, traceIDLookup)
+		assert.Truef(t, strings.HasPrefix(span.SpanID, "00"),
+			"string %q should have prefix '00'", span.SpanID)
 	}
 }

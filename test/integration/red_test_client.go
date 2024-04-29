@@ -64,7 +64,7 @@ func testClientWithMethodAndStatusCode(t *testing.T, method string, statusCode i
 		require.Equal(t, http.StatusOK, resp.StatusCode)
 		var tq jaeger.TracesQuery
 		require.NoError(t, json.NewDecoder(resp.Body).Decode(&tq))
-		traces := tq.FindBySpan(jaeger.Tag{Key: "server.address", Type: "string", Value: "grafana.com"})
+		traces := tq.FindBySpan(jaeger.Tag{Key: "http.response.status_code", Type: "int64", Value: float64(statusCode)})
 		require.GreaterOrEqual(t, len(traces), 1)
 		trace = traces[0]
 	}, test.Interval(100*time.Millisecond))

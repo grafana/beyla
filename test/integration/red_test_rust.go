@@ -4,7 +4,6 @@ package integration
 
 import (
 	"encoding/json"
-	"net"
 	"net/http"
 	"os"
 	"path"
@@ -50,7 +49,7 @@ func testREDMetricsForRustHTTPLibrary(t *testing.T, url, comm, namespace string,
 		assert.LessOrEqual(t, 3, val)
 		if len(results) > 0 {
 			res := results[0]
-			addr := net.ParseIP(res.Metric["client_address"])
+			addr := res.Metric["client_address"]
 			assert.NotNil(t, addr)
 		}
 	})
@@ -137,7 +136,7 @@ func validateLargeDownloadURLSeen(t *testing.T, comm, namespace, urlPath string)
 		assert.LessOrEqual(t, 3, val)
 		if len(results) > 0 {
 			res := results[0]
-			addr := net.ParseIP(res.Metric["client_address"])
+			addr := res.Metric["client_address"]
 			assert.NotNil(t, addr)
 			assert.GreaterOrEqual(t, len(res.Value), 1)
 			elapsed := res.Value[0]
@@ -152,11 +151,11 @@ func validateLargeDownloadURLSeen(t *testing.T, comm, namespace, urlPath string)
 	})
 }
 
-func testREDMetricsForLargeRustDownloads(t *testing.T, comm, namespace string) {
+func testREDMetricsForLargeRustDownloads(t *testing.T, tURL, comm, namespace string) {
 	for i := 0; i < 4; i++ {
-		doHTTPGetFullResponse(t, "http://localhost:8091/large", 200)
-		doHTTPGetFullResponse(t, "http://localhost:8091/download1", 200)
-		doHTTPGetFullResponse(t, "http://localhost:8091/download2", 200)
+		doHTTPGetFullResponse(t, tURL+"/large", 200)
+		doHTTPGetFullResponse(t, tURL+"/download1", 200)
+		doHTTPGetFullResponse(t, tURL+"/download2", 200)
 	}
 
 	validateLargeDownloadURLSeen(t, comm, namespace, "/large")
@@ -171,7 +170,7 @@ func testREDMetricsRustHTTP(t *testing.T) {
 		t.Run(testCaseURL, func(t *testing.T) {
 			waitForTestComponents(t, testCaseURL)
 			testREDMetricsForRustHTTPLibrary(t, testCaseURL, "greetings", "integration-test", 8090, false)
-			testREDMetricsForLargeRustDownloads(t, "greetings", "integration-test")
+			testREDMetricsForLargeRustDownloads(t, testCaseURL, "greetings", "integration-test")
 		})
 	}
 }
@@ -183,6 +182,7 @@ func testREDMetricsRustHTTPS(t *testing.T) {
 		t.Run(testCaseURL, func(t *testing.T) {
 			waitForTestComponents(t, testCaseURL)
 			testREDMetricsForRustHTTPLibrary(t, testCaseURL, "greetings", "integration-test", 8490, false)
+			testREDMetricsForLargeRustDownloads(t, testCaseURL, "greetings", "integration-test")
 		})
 	}
 }
@@ -211,7 +211,7 @@ func checkReportedRustEvents(t *testing.T, comm, namespace string, numEvents int
 		assert.LessOrEqual(t, val, numEvents)
 		if len(results) > 0 {
 			res := results[0]
-			addr := net.ParseIP(res.Metric["client_address"])
+			addr := res.Metric["client_address"]
 			assert.NotNil(t, addr)
 		}
 	})
@@ -248,7 +248,7 @@ func testREDMetricsForRustHTTP2Library(t *testing.T, url, comm, namespace string
 		assert.LessOrEqual(t, 3, val)
 		if len(results) > 0 {
 			res := results[0]
-			addr := net.ParseIP(res.Metric["client_address"])
+			addr := res.Metric["client_address"]
 			assert.NotNil(t, addr)
 		}
 	})

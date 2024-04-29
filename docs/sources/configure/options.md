@@ -199,7 +199,7 @@ This section allows specifying different selection criteria for different servic
 as well as overriding some of their metadata, such as their reported name or
 namespace.
 
-For more details about this section, please go to the [discovery services section](#discovery-services-section)
+For more details about this section, go to the [discovery services section](#discovery-services-section)
 of this document.
 
 | YAML                       | Environment variable                          | Type    | Default |
@@ -447,8 +447,8 @@ a 'Traceparent' header value, it will use the provided 'trace id' to create its 
 This option does not have an effect on Go applications, where the 'Traceparent' field is always
 processed, without additional tracking of the request headers.
 
-Enabling this option may increase Beyla's performance overhead in high request volume scenarios.
-Please note that this option is only useful when generating Beyla traces, it does not affect
+Enabling this option may increase the performance overhead in high request volume scenarios.
+This option is only useful when generating Beyla traces, it does not affect
 generation of Beyla metrics.
 
 ## Configuration of metrics and traces attributes
@@ -522,7 +522,7 @@ attributes:
 ```
 
 It is IMPORTANT to consider that enabling this feature requires a previous step of
-providing some extra permissions to the Beyla Pod. Please check the
+providing some extra permissions to the Beyla Pod. Consult the
 ["Configuring Kubernetes metadata decoration section" in the "Running Beyla in Kubernetes"]({{< relref "../setup/kubernetes.md" >}}) page.
 
 | YAML     | Environment variable                      | Type    | Default |
@@ -643,7 +643,7 @@ Possible values for the `ignore_mode` property are:
 
 Selectively ignoring only certain type of events might be useful in certain scenarios. For example, you may want to
 know the performance metrics of your health check API, but you wouldn't want the overhead of those trace records in
-your target traces database. In this this example scenario, you would set the `ignore_mode` property to `traces`, such
+your target traces database. In this example scenario, you would set the `ignore_mode` property to `traces`, such
 that only traces matching the `ignored_patterns` will be discarded, while metrics will still be recorded.
 
 | YAML        | Environment variable | Type   | Default    |
@@ -688,7 +688,7 @@ document/d/*/edit
 ## OTEL metrics exporter
 
 > ℹ️ If you plan to use Beyla to send metrics to Grafana Cloud,
-> please check the [Grafana Cloud OTEL exporter for metrics and traces](#using-the-grafana-cloud-otel-endpoint-to-ingest-metrics-and-traces)
+> consult the [Grafana Cloud OTEL exporter for metrics and traces](#using-the-grafana-cloud-otel-endpoint-to-ingest-metrics-and-traces)
 > section for easier configuration.
 
 YAML section `otel_metrics_export`.
@@ -773,9 +773,9 @@ Specifies whether the exporter must submit the caller peer address as a metric a
 
 It is disabled by default to avoid cardinality explosion.
 
-| YAML       | Environment variable         | Type            | Default                      |
-|------------|------------------------------|-----------------|------------------------------|
-| `features` | `BEYLA_OTEL_METRIC_FEATURES` | list of strings | `["application", "network"]` |
+| YAML       | Environment variable          | Type            | Default                      |
+|------------|-------------------------------|-----------------|------------------------------|
+| `features` | `BEYLA_OTEL_METRICS_FEATURES` | list of strings | `["application", "network"]` |
 
 A list of metric groups that are allowed to be exported. Each group belongs to a different feature
 of Beyla: application-level metrics or network metrics.
@@ -783,6 +783,15 @@ of Beyla: application-level metrics or network metrics.
 - If the list contains `application`, the Beyla OpenTelemetry exporter exports application-level metrics;
   but only if there is defined an OpenTelemetry endpoint, and Beyla was able to discover any
   process matching the entries in the `discovery` section.
+- If the list contains `application_span`, the Beyla OpenTelemetry exporter exports application-level trace span metrics;
+  but only if there is defined an OpenTelemetry endpoint, and Beyla was able to discover any
+  process matching the entries in the `discovery` section. 
+- If the list contains `application_service_graph`, the Beyla OpenTelemetry exporter exports application-level service graph metrics;
+  but only if there is defined an OpenTelemetry endpoint, and Beyla was able to discover any
+  process matching the entries in the `discovery` section. 
+  For best experience with generating service graph metrics, use a DNS for service discovery and make sure the DNS names match
+  the OpenTelemetry service names used in Beyla. In Kubernetes environments, the OpenTelemetry service name set by the service name
+  discovery is the best choice for service graph metrics.
 - If the list contains `network`, the Beyla OpenTelemetry exporter exports network-level
   metrics; but only if there is defined an OpenTelemetry endpoint and the
   [network metrics are enabled]({{< relref "../network" >}}).
@@ -864,7 +873,7 @@ for more information.
 ## OTEL traces exporter
 
 > ℹ️ If you plan to use Beyla to send metrics to Grafana Cloud,
-> please check the [Grafana Cloud OTEL exporter for metrics and traces](#using-the-grafana-cloud-otel-endpoint-to-ingest-metrics-and-traces)
+> consult the [Grafana Cloud OTEL exporter for metrics and traces](#using-the-grafana-cloud-otel-endpoint-to-ingest-metrics-and-traces)
 > section for easier configuration.
 
 YAML section `otel_traces_export`.
@@ -1090,6 +1099,15 @@ of Beyla: application-level metrics or network metrics.
 - If the list contains `application`, the Beyla Prometheus exporter exports application-level metrics;
   but only if the Prometheus `port` property is defined, and Beyla was able to discover any
   process matching the entries in the `discovery` section.
+- If the list contains `application_span`, the Beyla Prometheus exporter exports application-level metrics in traces span metrics format;
+  but only if the Prometheus `port` property is defined, and Beyla was able to discover any
+  process matching the entries in the `discovery` section.
+- If the list contains `application_service_graph`, the Beyla Prometheus exporter exports application-level service graph metrics;
+  but only if the Prometheus `port` property is defined, and Beyla was able to discover any
+  process matching the entries in the `discovery` section.
+  For best experience with generating service graph metrics, use a DNS for service discovery and make sure the DNS names match
+  the OpenTelemetry service names used in Beyla. In Kubernetes environments, the OpenTelemetry service name set by the service name
+  discovery is the best choice for service graph metrics.
 - If the list contains `network`, the Beyla Prometheus exporter exports network-level
   metrics; but only if the Prometheus `port` property is defined and the
   [network metrics are enabled]({{< relref "../network" >}}).

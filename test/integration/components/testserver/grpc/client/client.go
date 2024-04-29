@@ -58,9 +58,9 @@ func WithSSL() PingOption {
 }
 
 // printFeature gets the feature for the given point.
-func printFeature(client pb.RouteGuideClient, point *pb.Point) {
+func printFeature(ctx context.Context, client pb.RouteGuideClient, point *pb.Point) {
 	slog.Debug("Getting feature for point", "lat", point.Latitude, "long", point.Longitude)
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	feature, err := client.GetFeature(ctx, point)
 	if err != nil {
@@ -68,7 +68,7 @@ func printFeature(client pb.RouteGuideClient, point *pb.Point) {
 		// nolint:gocritic
 		os.Exit(-1)
 	}
-	if slog.Default().Enabled(context.TODO(), slog.LevelDebug) {
+	if slog.Default().Enabled(ctx, slog.LevelDebug) {
 		log.Println(feature)
 	}
 }
@@ -94,13 +94,17 @@ func newClient(po *pingOpts) (pb.RouteGuideClient, io.Closer, error) {
 }
 
 func Ping(opts ...PingOption) error {
+	return PingCtx(context.Background(), opts...)
+}
+
+func PingCtx(ctx context.Context, opts ...PingOption) error {
 	client, closer, err := newClient(pingConfig(opts))
 	defer closer.Close()
 	if err != nil {
 		return err
 	}
 	// Looking for a valid feature
-	printFeature(client, &pb.Point{Latitude: 409146138, Longitude: -746188906})
+	printFeature(ctx, client, &pb.Point{Latitude: 409146138, Longitude: -746188906})
 	return nil
 }
 

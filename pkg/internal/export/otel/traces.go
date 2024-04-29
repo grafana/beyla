@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mariomac/pipes/pkg/node"
+	"github.com/mariomac/pipes/pipe"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
@@ -111,16 +111,20 @@ type Tracers struct {
 	tracer   trace2.Tracer
 }
 
-func ReportTraces(ctx context.Context, cfg *TracesConfig, ctxInfo *global.ContextInfo) (node.TerminalFunc[[]request.Span], error) {
+func ReportTraces(ctx context.Context, cfg *TracesConfig, ctxInfo *global.ContextInfo) pipe.FinalProvider[[]request.Span] {
+	return func() (pipe.FinalFunc[[]request.Span], error) {
+		if !cfg.Enabled() {
+			return pipe.IgnoreFinal[[]request.Span](), nil
+		}
+		SetupInternalOTELSDKLogger(cfg.SDKLogLevel)
 
-	SetupInternalOTELSDKLogger(cfg.SDKLogLevel)
-
-	tr, err := newTracesReporter(ctx, cfg, ctxInfo)
-	if err != nil {
-		slog.Error("can't instantiate OTEL traces reporter", err)
-		os.Exit(-1)
+		tr, err := newTracesReporter(ctx, cfg, ctxInfo)
+		if err != nil {
+			slog.Error("can't instantiate OTEL traces reporter", err)
+			os.Exit(-1)
+		}
+		return tr.reportTraces, nil
 	}
-	return tr.reportTraces, nil
 }
 
 func newTracesReporter(ctx context.Context, cfg *TracesConfig, ctxInfo *global.ContextInfo) (*TracesReporter, error) {
@@ -282,6 +286,32 @@ func SpanStatusCode(span *request.Span) codes.Code {
 	return codes.Unset
 }
 
+func SpanKindString(span *request.Span) string {
+	switch span.Type {
+	case request.EventTypeHTTP, request.EventTypeGRPC:
+		return "SPAN_KIND_SERVER"
+	case request.EventTypeHTTPClient, request.EventTypeGRPCClient, request.EventTypeSQLClient:
+		return "SPAN_KIND_CLIENT"
+	}
+	return "SPAN_KIND_INTERNAL"
+}
+
+func SpanHost(span *request.Span) string {
+	if span.HostName != "" {
+		return span.HostName
+	}
+
+	return span.Host
+}
+
+func SpanPeer(span *request.Span) string {
+	if span.PeerName != "" {
+		return span.PeerName
+	}
+
+	return span.Peer
+}
+
 func TraceAttributes(span *request.Span) []attribute.KeyValue {
 	var attrs []attribute.KeyValue
 
@@ -291,8 +321,8 @@ func TraceAttributes(span *request.Span) []attribute.KeyValue {
 			HTTPRequestMethod(span.Method),
 			HTTPResponseStatusCode(span.Status),
 			HTTPUrlPath(span.Path),
-			ClientAddr(span.Peer),
-			ServerAddr(span.Host),
+			ClientAddr(SpanPeer(span)),
+			ServerAddr(SpanHost(span)),
 			ServerPort(span.HostPort),
 			HTTPRequestBodySize(int(span.ContentLength)),
 		}
@@ -304,8 +334,8 @@ func TraceAttributes(span *request.Span) []attribute.KeyValue {
 			semconv.RPCMethod(span.Path),
 			semconv.RPCSystemGRPC,
 			semconv.RPCGRPCStatusCodeKey.Int(span.Status),
-			ClientAddr(span.Peer),
-			ServerAddr(span.Host),
+			ClientAddr(SpanPeer(span)),
+			ServerAddr(SpanHost(span)),
 			ServerPort(span.HostPort),
 		}
 	case request.EventTypeHTTPClient:
@@ -313,7 +343,7 @@ func TraceAttributes(span *request.Span) []attribute.KeyValue {
 			HTTPRequestMethod(span.Method),
 			HTTPResponseStatusCode(span.Status),
 			HTTPUrlFull(span.Path),
-			ServerAddr(span.Host),
+			ServerAddr(SpanHost(span)),
 			ServerPort(span.HostPort),
 			HTTPRequestBodySize(int(span.ContentLength)),
 		}
@@ -322,7 +352,7 @@ func TraceAttributes(span *request.Span) []attribute.KeyValue {
 			semconv.RPCMethod(span.Path),
 			semconv.RPCSystemGRPC,
 			semconv.RPCGRPCStatusCodeKey.Int(span.Status),
-			ServerAddr(span.Host),
+			ServerAddr(SpanHost(span)),
 			ServerPort(span.HostPort),
 		}
 	case request.EventTypeSQLClient:

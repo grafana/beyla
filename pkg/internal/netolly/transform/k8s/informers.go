@@ -19,6 +19,7 @@
 package k8s
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"net"
@@ -56,7 +57,6 @@ type NetworkInformers struct {
 	services cache.SharedIndexInformer
 	// replicaSets caches the ReplicaSets as partially-filled *ObjectMeta pointers
 	replicaSets cache.SharedIndexInformer
-	stopChan    chan struct{}
 }
 
 type Owner struct {
@@ -174,6 +174,11 @@ func (k *NetworkInformers) initNodeInformer(informerFactory informers.SharedInfo
 	if err := nodes.SetTransform(func(i interface{}) (interface{}, error) {
 		node, ok := i.(*v1.Node)
 		if !ok {
+			// it's Ok. The K8s library just informed from an entity
+			// that has been previously transformed/stored
+			if pi, ok := i.(*Info); ok {
+				return pi, nil
+			}
 			return nil, fmt.Errorf("was expecting a Node. Got: %T", i)
 		}
 		ips := make([]string, 0, len(node.Status.Addresses))
@@ -212,6 +217,11 @@ func (k *NetworkInformers) initPodInformer(informerFactory informers.SharedInfor
 	if err := pods.SetTransform(func(i interface{}) (interface{}, error) {
 		pod, ok := i.(*v1.Pod)
 		if !ok {
+			// it's Ok. The K8s library just informed from an entity
+			// that has been previously transformed/stored
+			if pi, ok := i.(*Info); ok {
+				return pi, nil
+			}
 			return nil, fmt.Errorf("was expecting a Pod. Got: %T", i)
 		}
 		ips := make([]string, 0, len(pod.Status.PodIPs))
@@ -250,6 +260,11 @@ func (k *NetworkInformers) initServiceInformer(informerFactory informers.SharedI
 	if err := services.SetTransform(func(i interface{}) (interface{}, error) {
 		svc, ok := i.(*v1.Service)
 		if !ok {
+			// it's Ok. The K8s library just informed from an entity
+			// that has been previously transformed/stored
+			if pi, ok := i.(*Info); ok {
+				return pi, nil
+			}
 			return nil, fmt.Errorf("was expecting a Service. Got: %T", i)
 		}
 		if svc.Spec.ClusterIP == v1.ClusterIPNone {
@@ -283,6 +298,11 @@ func (k *NetworkInformers) initReplicaSetInformer(informerFactory informers.Shar
 	if err := k.replicaSets.SetTransform(func(i interface{}) (interface{}, error) {
 		rs, ok := i.(*appsv1.ReplicaSet)
 		if !ok {
+			// it's Ok. The K8s library just informed from an entity
+			// that has been previously transformed/stored
+			if pi, ok := i.(*metav1.ObjectMeta); ok {
+				return pi, nil
+			}
 			return nil, fmt.Errorf("was expecting a ReplicaSet. Got: %T", i)
 		}
 		return &metav1.ObjectMeta{
@@ -296,11 +316,9 @@ func (k *NetworkInformers) initReplicaSetInformer(informerFactory informers.Shar
 	return nil
 }
 
-func (k *NetworkInformers) InitFromConfig(kubeConfigPath string, syncTimeout time.Duration) error {
+func (k *NetworkInformers) InitFromConfig(ctx context.Context, kubeConfigPath string, syncTimeout time.Duration) error {
 	k.log = slog.With("component", "kubernetes.NetworkInformers")
 	// Initialization variables
-	k.stopChan = make(chan struct{})
-
 	config, err := LoadConfig(kubeConfigPath)
 	if err != nil {
 		return err
@@ -311,7 +329,7 @@ func (k *NetworkInformers) InitFromConfig(kubeConfigPath string, syncTimeout tim
 		return err
 	}
 
-	err = k.initInformers(kubeClient, syncTimeout)
+	err = k.initInformers(ctx, kubeClient, syncTimeout)
 	if err != nil {
 		return err
 	}
@@ -346,7 +364,7 @@ func LoadConfig(kubeConfigPath string) (*rest.Config, error) {
 	return config, nil
 }
 
-func (k *NetworkInformers) initInformers(client kubernetes.Interface, syncTimeout time.Duration) error {
+func (k *NetworkInformers) initInformers(ctx context.Context, client kubernetes.Interface, syncTimeout time.Duration) error {
 	if syncTimeout <= 0 {
 		syncTimeout = defaultSyncTimeout
 	}
@@ -369,8 +387,8 @@ func (k *NetworkInformers) initInformers(client kubernetes.Interface, syncTimeou
 	}
 
 	slog.Debug("starting kubernetes informers, waiting for syncronization")
-	informerFactory.Start(k.stopChan)
-	informerFactory.WaitForCacheSync(k.stopChan)
+	informerFactory.Start(ctx.Done())
+	informerFactory.WaitForCacheSync(ctx.Done())
 	slog.Debug("kubernetes informers started")
 
 	return nil

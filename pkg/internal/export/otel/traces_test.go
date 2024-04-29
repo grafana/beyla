@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/mariomac/guara/pkg/test"
-	"github.com/mariomac/pipes/pkg/node"
+	"github.com/mariomac/pipes/pipe"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel/attribute"
@@ -252,15 +252,20 @@ func TestTraces_InternalInstrumentation(t *testing.T) {
 
 	// create a simple dummy graph to send data to the Metrics reporter, which will send
 	// metrics to the fake collector
+	builder := pipe.NewBuilder(&testPipeline{})
 	sendData := make(chan struct{})
-	inputNode := node.AsStart(func(out chan<- []request.Span) {
+	pipe.AddStart(builder, func(impl *testPipeline) *pipe.Start[[]request.Span] {
+		return &impl.inputNode
+	}, func(out chan<- []request.Span) {
 		// on every send data signal, the traces generator sends a dummy trace
 		for range sendData {
 			out <- []request.Span{{Type: request.EventTypeHTTP}}
 		}
 	})
 	internalTraces := &fakeInternalTraces{}
-	exporter, err := ReportTraces(context.Background(),
+	pipe.AddFinalProvider(builder, func(impl *testPipeline) *pipe.Final[[]request.Span] {
+		return &impl.exporter
+	}, ReportTraces(context.Background(),
 		&TracesConfig{
 			CommonEndpoint:    coll.URL,
 			BatchTimeout:      10 * time.Millisecond,
@@ -269,11 +274,11 @@ func TestTraces_InternalInstrumentation(t *testing.T) {
 		},
 		&global.ContextInfo{
 			Metrics: internalTraces,
-		})
+		}))
+	graph, err := builder.Build()
 	require.NoError(t, err)
-	inputNode.SendTo(node.AsTerminal(exporter))
 
-	go inputNode.Start()
+	graph.Start()
 
 	sendData <- struct{}{}
 	var previousSum, previousCount int
@@ -341,17 +346,21 @@ func TestTraces_InternalInstrumentationSampling(t *testing.T) {
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 	})
 
+	builder := pipe.NewBuilder(&testPipeline{})
 	// create a simple dummy graph to send data to the Metrics reporter, which will send
 	// metrics to the fake collector
 	sendData := make(chan struct{})
-	inputNode := node.AsStart(func(out chan<- []request.Span) {
-		// on every send data signal, the traces generator sends a dummy trace
+	pipe.AddStart(builder, func(impl *testPipeline) *pipe.Start[[]request.Span] {
+		return &impl.inputNode
+	}, func(out chan<- []request.Span) { // on every send data signal, the traces generator sends a dummy trace
 		for range sendData {
 			out <- []request.Span{{Type: request.EventTypeHTTP}}
 		}
 	})
 	internalTraces := &fakeInternalTraces{}
-	exporter, err := ReportTraces(context.Background(),
+	pipe.AddFinalProvider(builder, func(impl *testPipeline) *pipe.Final[[]request.Span] {
+		return &impl.exporter
+	}, ReportTraces(context.Background(),
 		&TracesConfig{
 			CommonEndpoint:    coll.URL,
 			BatchTimeout:      10 * time.Millisecond,
@@ -361,11 +370,12 @@ func TestTraces_InternalInstrumentationSampling(t *testing.T) {
 		},
 		&global.ContextInfo{
 			Metrics: internalTraces,
-		})
-	require.NoError(t, err)
-	inputNode.SendTo(node.AsTerminal(exporter))
+		}))
 
-	go inputNode.Start()
+	graph, err := builder.Build()
+	require.NoError(t, err)
+
+	graph.Start()
 
 	// Let's make 10 traces, none should be seen
 	for i := 0; i < 10; i++ {
@@ -468,6 +478,31 @@ func TestTracesIdGenerator(t *testing.T) {
 		assert.Equal(t, tID3, sp.SpanContext().TraceID())
 		assert.Equal(t, spID3, sp.SpanContext().SpanID())
 	})
+}
+
+func TestSpanHostPeer(t *testing.T) {
+	sp := request.Span{
+		HostName: "localhost",
+		Host:     "127.0.0.1",
+		PeerName: "peerhost",
+		Peer:     "127.0.0.2",
+	}
+
+	assert.Equal(t, "localhost", SpanHost(&sp))
+	assert.Equal(t, "peerhost", SpanPeer(&sp))
+
+	sp = request.Span{
+		Host: "127.0.0.1",
+		Peer: "127.0.0.2",
+	}
+
+	assert.Equal(t, "127.0.0.1", SpanHost(&sp))
+	assert.Equal(t, "127.0.0.2", SpanPeer(&sp))
+
+	sp = request.Span{}
+
+	assert.Equal(t, "", SpanHost(&sp))
+	assert.Equal(t, "", SpanPeer(&sp))
 }
 
 type fakeInternalTraces struct {

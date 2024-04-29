@@ -22,14 +22,10 @@ volatile const u64 path_ptr_pos;
 volatile const u64 method_ptr_pos;
 volatile const u64 status_ptr_pos;
 volatile const u64 status_code_ptr_pos;
-volatile const u64 remoteaddr_ptr_pos;
-volatile const u64 host_ptr_pos;
 volatile const u64 content_length_ptr_pos;
-volatile const u64 resp_req_pos;
 volatile const u64 req_header_ptr_pos;
 volatile const u64 io_writer_buf_ptr_pos;
 volatile const u64 io_writer_n_pos;
-volatile const u64 rws_req_pos;
 volatile const u64 rws_status_pos;
 volatile const u64 cc_next_stream_id_pos;
 volatile const u64 framer_w_pos;
@@ -37,10 +33,8 @@ volatile const u64 framer_w_pos;
 volatile const u64 c_rwc_pos;
 volatile const u64 pc_conn_pos;
 volatile const u64 rwc_conn_pos;
-volatile const u64 conn_fd_pos;
-volatile const u64 fd_laddr_pos;
-volatile const u64 fd_raddr_pos;
-volatile const u64 tcp_addr_port_ptr_pos;
-volatile const u64 tcp_addr_ip_ptr_pos;
+volatile const u64 rws_conn_pos;
+volatile const u64 http2_server_conn_pos;
+volatile const u64 cc_tconn_pos;
 
 #endif

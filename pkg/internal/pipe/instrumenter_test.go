@@ -7,8 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mariomac/pipes/pkg/graph"
-	"github.com/mariomac/pipes/pkg/node"
+	"github.com/mariomac/pipes/pipe"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/pdata/pmetric"
@@ -22,7 +21,6 @@ import (
 	"github.com/grafana/beyla/pkg/internal/request"
 	"github.com/grafana/beyla/pkg/internal/svc"
 	"github.com/grafana/beyla/pkg/internal/testutil"
-	"github.com/grafana/beyla/pkg/internal/traces"
 	"github.com/grafana/beyla/pkg/transform"
 	"github.com/grafana/beyla/test/collector"
 	"github.com/grafana/beyla/test/consumer"
@@ -51,15 +49,16 @@ func TestBasicPipeline(t *testing.T) {
 			ReportersCacheLen: 16,
 		},
 	}, gctx(), make(<-chan []request.Span))
+
 	// Override eBPF tracer to send some fake data
-	graph.RegisterStart(gb.builder, func(_ traces.ReadDecorator) (node.StartFunc[[]request.Span], error) {
-		return func(out chan<- []request.Span) {
+	pipe.AddStart(gb.builder, tracesReader,
+		func(out chan<- []request.Span) {
 			out <- newRequest("foo-svc", 1, "GET", "/foo/bar", "1.1.1.1:3456", 404)
 			// closing prematurely the input node would finish the whole graph processing
 			// and OTEL exporters could be closed, so we wait.
 			time.Sleep(testTimeout)
-		}, nil
-	})
+		},
+	)
 	pipe, err := gb.buildGraph()
 	require.NoError(t, err)
 
@@ -96,14 +95,14 @@ func TestTracerPipeline(t *testing.T) {
 		},
 	}, gctx(), make(<-chan []request.Span))
 	// Override eBPF tracer to send some fake data
-	graph.RegisterStart(gb.builder, func(_ traces.ReadDecorator) (node.StartFunc[[]request.Span], error) {
-		return func(out chan<- []request.Span) {
+	pipe.AddStart(gb.builder, tracesReader,
+		func(out chan<- []request.Span) {
 			out <- newRequest("bar-svc", 1, "GET", "/foo/bar", "1.1.1.1:3456", 404)
 			// closing prematurely the input node would finish the whole graph processing
 			// and OTEL exporters could be closed, so we wait.
 			time.Sleep(testTimeout)
-		}, nil
-	})
+		})
+
 	pipe, err := gb.buildGraph()
 	require.NoError(t, err)
 
@@ -131,14 +130,13 @@ func TestTracerReceiverPipeline(t *testing.T) {
 		},
 	}, gctx(), make(<-chan []request.Span))
 	// Override eBPF tracer to send some fake data
-	graph.RegisterStart(gb.builder, func(_ traces.ReadDecorator) (node.StartFunc[[]request.Span], error) {
-		return func(out chan<- []request.Span) {
+	pipe.AddStart(gb.builder, tracesReader,
+		func(out chan<- []request.Span) {
 			out <- newRequest("bar-svc", 1, "GET", "/foo/bar", "1.1.1.1:3456", 404)
 			// closing prematurely the input node would finish the whole graph processing
 			// and OTEL exporters could be closed, so we wait.
 			time.Sleep(testTimeout)
-		}, nil
-	})
+		})
 	pipe, err := gb.buildGraph()
 	require.NoError(t, err)
 
@@ -167,14 +165,13 @@ func TestTracerPipelineBadTimestamps(t *testing.T) {
 		},
 	}, gctx(), make(<-chan []request.Span))
 	// Override eBPF tracer to send some fake data
-	graph.RegisterStart(gb.builder, func(_ traces.ReadDecorator) (node.StartFunc[[]request.Span], error) {
-		return func(out chan<- []request.Span) {
+	pipe.AddStart(gb.builder, tracesReader,
+		func(out chan<- []request.Span) {
 			out <- newRequestWithTiming("svc1", 1, request.EventTypeHTTP, "GET", "/attach", "2.2.2.2:1234", 200, 60000, 59999, 70000)
 			// closing prematurely the input node would finish the whole graph processing
 			// and OTEL exporters could be closed, so we wait.
 			time.Sleep(testTimeout)
-		}, nil
-	})
+		})
 	pipe, err := gb.buildGraph()
 	require.NoError(t, err)
 
@@ -201,16 +198,15 @@ func TestRouteConsolidation(t *testing.T) {
 		Routes: &transform.RoutesConfig{Patterns: []string{"/user/{id}", "/products/{id}/push"}},
 	}, gctx(), make(<-chan []request.Span))
 	// Override eBPF tracer to send some fake data
-	graph.RegisterStart(gb.builder, func(_ traces.ReadDecorator) (node.StartFunc[[]request.Span], error) {
-		return func(out chan<- []request.Span) {
+	pipe.AddStart(gb.builder, tracesReader,
+		func(out chan<- []request.Span) {
 			out <- newRequest("svc-1", 1, "GET", "/user/1234", "1.1.1.1:3456", 200)
 			out <- newRequest("svc-1", 2, "GET", "/products/3210/push", "1.1.1.1:3456", 200)
 			out <- newRequest("svc-1", 3, "GET", "/attach", "1.1.1.1:3456", 200)
 			// closing prematurely the input node would finish the whole graph processing
 			// and OTEL exporters could be closed, so we wait.
 			time.Sleep(testTimeout)
-		}, nil
-	})
+		})
 	pipe, err := gb.buildGraph()
 	require.NoError(t, err)
 
@@ -275,14 +271,13 @@ func TestGRPCPipeline(t *testing.T) {
 		},
 	}, gctx(), make(<-chan []request.Span))
 	// Override eBPF tracer to send some fake data
-	graph.RegisterStart(gb.builder, func(_ traces.ReadDecorator) (node.StartFunc[[]request.Span], error) {
-		return func(out chan<- []request.Span) {
+	pipe.AddStart(gb.builder, tracesReader,
+		func(out chan<- []request.Span) {
 			out <- newGRPCRequest("grpc-svc", 1, "/foo/bar", 3)
 			// closing prematurely the input node would finish the whole graph processing
 			// and OTEL exporters could be closed, so we wait.
 			time.Sleep(testTimeout)
-		}, nil
-	})
+		})
 	pipe, err := gb.buildGraph()
 	require.NoError(t, err)
 
@@ -317,14 +312,13 @@ func TestTraceGRPCPipeline(t *testing.T) {
 		},
 	}, gctx(), make(<-chan []request.Span))
 	// Override eBPF tracer to send some fake data
-	graph.RegisterStart(gb.builder, func(_ traces.ReadDecorator) (node.StartFunc[[]request.Span], error) {
-		return func(out chan<- []request.Span) {
+	pipe.AddStart(gb.builder, tracesReader,
+		func(out chan<- []request.Span) {
 			out <- newGRPCRequest("svc", 1, "foo.bar", 3)
 			// closing prematurely the input node would finish the whole graph processing
 			// and OTEL exporters could be closed, so we wait.
 			time.Sleep(testTimeout)
-		}, nil
-	})
+		})
 	pipe, err := gb.buildGraph()
 	require.NoError(t, err)
 
@@ -386,11 +380,10 @@ func TestTracerPipelineInfo(t *testing.T) {
 		Traces: otel.TracesConfig{TracesEndpoint: tc.ServerEndpoint, ReportersCacheLen: 16},
 	}, gctx(), make(<-chan []request.Span))
 	// Override eBPF tracer to send some fake data
-	graph.RegisterStart(gb.builder, func(_ traces.ReadDecorator) (node.StartFunc[[]request.Span], error) {
-		return func(out chan<- []request.Span) {
+	pipe.AddStart(gb.builder, tracesReader,
+		func(out chan<- []request.Span) {
 			out <- newHTTPInfo("PATCH", "/aaa/bbb", "1.1.1.1", 204)
-		}, nil
-	})
+		})
 	pipe, err := gb.buildGraph()
 	require.NoError(t, err)
 

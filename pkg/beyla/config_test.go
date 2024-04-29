@@ -15,6 +15,7 @@ import (
 	"github.com/grafana/beyla/pkg/internal/export/otel"
 	"github.com/grafana/beyla/pkg/internal/export/prom"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
+	"github.com/grafana/beyla/pkg/internal/metricname"
 	"github.com/grafana/beyla/pkg/internal/netolly/transform/cidr"
 	"github.com/grafana/beyla/pkg/internal/traces"
 	"github.com/grafana/beyla/pkg/transform"
@@ -32,7 +33,7 @@ otel_metrics_export:
     duration_histogram: [0, 1, 2]
   histogram_aggregation: base2_exponential_bucket_histogram
 prometheus_export:
-  expire_time: 1s
+  ttl: 1s
   buckets:
     request_size_histogram: [0, 10, 20, 22]
 attributes:
@@ -42,6 +43,8 @@ attributes:
     informers_sync_timeout: 30s
   instance_id:
     dns: true
+  allow:
+    global: ["foo", "bar"]
 network:
   enable: true
   cidrs:
@@ -93,6 +96,7 @@ network:
 			BatchLength:  100,
 			BatchTimeout: time.Second,
 			BpfBaseDir:   "/var/run/beyla",
+			BpfPath:      DefaultConfig.EBPF.BpfPath,
 		},
 		Grafana: otel.GrafanaConfig{
 			OTLP: otel.GrafanaOTLP{
@@ -112,6 +116,7 @@ network:
 			},
 			Features:             []string{"network", "application"},
 			HistogramAggregation: "base2_exponential_bucket_histogram",
+			TTL:                  defaultMetricsTTL,
 		},
 		Traces: otel.TracesConfig{
 			Protocol:           otel.ProtocolUnset,
@@ -122,9 +127,10 @@ network:
 			ReportersCacheLen:  ReporterLRUSize,
 		},
 		Prometheus: prom.PrometheusConfig{
-			Path:       "/metrics",
-			Features:   []string{otel.FeatureNetwork, otel.FeatureApplication},
-			ExpireTime: time.Second,
+			Path:                        "/metrics",
+			Features:                    []string{otel.FeatureNetwork, otel.FeatureApplication},
+			TTL:                         time.Second,
+			SpanMetricsServiceCacheSize: 10000,
 			Buckets: otel.Buckets{
 				DurationHistogram:    otel.DefaultBuckets.DurationHistogram,
 				RequestSizeHistogram: []float64{0, 10, 20, 22},
@@ -144,8 +150,15 @@ network:
 				Enable:               transform.EnabledTrue,
 				InformersSyncTimeout: 30 * time.Second,
 			},
+			Allow: map[metricname.Normal][]string{
+				"global": {"foo", "bar"},
+			},
 		},
 		Routes: &transform.RoutesConfig{},
+		NameResolver: &transform.NameResolverConfig{
+			CacheLen: 1024,
+			CacheTTL: 5 * time.Minute,
+		},
 	}, cfg)
 }
 
@@ -229,43 +242,25 @@ otel_metrics_export:
 attributes:
   kubernetes:
     enable: true
-network:
-  enable: true
-  allowed_attributes:
+  allow:
+    beyla_network_flow_bytes:
     - k8s.src.name
     - k8s.dst.name
+network:
+  enable: true
 `)
 	cfg, err := LoadConfig(userConfig)
 	require.NoError(t, err)
 	require.NoError(t, cfg.Validate())
 }
 
-func TestConfigValidate_Network_Empty_Attrs(t *testing.T) {
-	userConfig := bytes.NewBufferString(`
-otel_metrics_export:
-  endpoint: http://otelcol:4318
-network:
-  enable: true
-  allowed_attributes: []
-`)
-	cfg, err := LoadConfig(userConfig)
+func TestConfig_OtelGoAutoEnv(t *testing.T) {
+	// OTEL_GO_AUTO_TARGET_EXE is an alias to BEYLA_EXECUTABLE_NAME
+	// (Compatibility with OpenTelemetry)
+	require.NoError(t, os.Setenv("OTEL_GO_AUTO_TARGET_EXE", "testserver"))
+	cfg, err := LoadConfig(bytes.NewReader(nil))
 	require.NoError(t, err)
-	require.Error(t, cfg.Validate())
-}
-
-func TestConfigValidate_Network_NotKube(t *testing.T) {
-	userConfig := bytes.NewBufferString(`
-otel_metrics_export:
-  endpoint: http://otelcol:4318
-network:
-  enable: true
-allowed_attributes:
-    - k8s.src.name
-    - k8s.dst.name
-`)
-	cfg, err := LoadConfig(userConfig)
-	require.NoError(t, err)
-	require.Error(t, cfg.Validate())
+	assert.True(t, cfg.Exec.IsSet()) // Exec maps to BEYLA_EXECUTABLE_NAME
 }
 
 func loadConfig(t *testing.T, env map[string]string) *Config {

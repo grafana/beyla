@@ -1,0 +1,14 @@
+attributes:
+  allow:
+    beyla_network_flow_bytes:
+      - beyla.ip
+      - src.address
+      - dst.address
+      - src.name
+      - dst.name
+      - src.namespace
+      - dst.namespace
+      - src.cidr
+      - dst.cidr
+      - iface
+      - direction

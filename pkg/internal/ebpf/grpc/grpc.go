@@ -96,29 +96,21 @@ func (p *Tracer) Constants(_ *exec.FileInfo, offsets *goexec.Offsets) map[string
 		"grpc_stream_method_ptr_pos",
 		"grpc_status_s_pos",
 		"grpc_status_code_ptr_pos",
-		"grpc_st_remoteaddr_ptr_pos",
-		"grpc_st_localaddr_ptr_pos",
+		"grpc_st_conn_pos",
 		"tcp_addr_port_ptr_pos",
 		"tcp_addr_ip_ptr_pos",
-		"grpc_client_target_ptr_pos",
 		"grpc_stream_ctx_ptr_pos",
+		"grpc_t_conn_pos",
 		"value_context_val_ptr_pos",
 		"http2_client_next_id_pos",
 		"framer_w_pos",
-		"grpc_peer_localaddr_pos",
-		"grpc_peer_addr_pos",
-		"grpc_st_peer_ptr_pos",
 		"grpc_transport_buf_writer_buf_pos",
 		"grpc_transport_buf_writer_offset_pos",
+		"conn_fd_pos",
+		"fd_laddr_pos",
+		"fd_raddr_pos",
 	} {
-		// Since gRPC 1.60 remoteaddr and localaddr were replaced by peer.
-		// We don't fail the store of unknown fields, we make them -1 so we detect
-		// what to read from the Go structures.
-		if off, ok := offsets.Field[s]; ok {
-			constants[s] = off
-		} else {
-			constants[s] = uint64(0xffffffffffffffff)
-		}
+		constants[s] = offsets.Field[s]
 	}
 	return constants
 }
@@ -160,13 +152,12 @@ func (p *Tracer) GoProbes() map[string]ebpfcommon.FunctionPrograms {
 		"google.golang.org/grpc.(*clientStream).CloseSend": {
 			End: p.bpfObjects.UprobeClientConnInvokeReturn,
 		},
+		"google.golang.org/grpc/internal/transport.(*http2Client).NewStream": {
+			Start: p.bpfObjects.UprobeTransportHttp2ClientNewStream,
+		},
 	}
 
 	if p.supportsContextPropagation() {
-		m["google.golang.org/grpc/internal/transport.(*http2Client).NewStream"] = ebpfcommon.FunctionPrograms{
-			Required: true,
-			Start:    p.bpfObjects.UprobeTransportHttp2ClientNewStream,
-		}
 		m["golang.org/x/net/http2.(*Framer).WriteHeaders"] = ebpfcommon.FunctionPrograms{
 			Start: p.bpfObjects.UprobeGrpcFramerWriteHeaders,
 			End:   p.bpfObjects.UprobeGrpcFramerWriteHeadersReturns,
@@ -204,6 +195,5 @@ func (p *Tracer) Run(ctx context.Context, eventsChan chan<- []request.Span) {
 		p.pidsFilter,
 		p.bpfObjects.Events,
 		p.metrics,
-		append(p.closers, &p.bpfObjects)...,
-	)(ctx, eventsChan)
+	)(ctx, append(p.closers, &p.bpfObjects), eventsChan)
 }

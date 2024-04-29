@@ -19,19 +19,25 @@
 package beyla
 
 import (
-	"errors"
-	"log/slog"
-	"strings"
 	"time"
 
 	"github.com/grafana/beyla/pkg/internal/netolly/flow"
 	"github.com/grafana/beyla/pkg/internal/netolly/transform/cidr"
 )
 
+const (
+	EbpfSourceTC   = "tc"
+	EbpfSourceSock = "socket_filter"
+)
+
 type NetworkConfig struct {
 	// Enable network metrics.
 	// Default value is false (disabled)
 	Enable bool `yaml:"enable" env:"BEYLA_NETWORK_METRICS"`
+
+	// Specify the source type for network events, e.g tc or socket_filter. The tc implementation
+	// cannot be used when there are other tc eBPF probes, e.g. Cilium CNI.
+	Source string `yaml:"source" env:"BEYLA_NETWORK_SOURCE"`
 
 	// AgentIP allows overriding the reported Agent IP address on each flow.
 	AgentIP string `yaml:"agent_ip" env:"BEYLA_NETWORK_AGENT_IP"`
@@ -55,6 +61,11 @@ type NetworkConfig struct {
 	// If an entry is enclosed by slashes (e.g. `/br-/`), it will match as regular expression,
 	// otherwise it will be matched as a case-sensitive string.
 	ExcludeInterfaces []string `yaml:"exclude_interfaces" env:"BEYLA_NETWORK_EXCLUDE_INTERFACES" envSeparator:","`
+	// Protocols causes Beyla to drop flows whose transport protocol is not in this list.
+	Protocols []string `yaml:"protocols" env:"BEYLA_NETWORK_PROTOCOLS" envSeparator:","`
+	// ExcludeProtocols causes Beyla to drop flows whose transport protocol is in this list.
+	// If the Protocols list is already defined, ExcludeProtocols has no effect.
+	ExcludeProtocols []string `yaml:"exclude_protocols" env:"BEYLA_NETWORK_EXCLUDE_PROTOCOLS" envSeparator:","`
 	// CacheMaxFlows specifies how many flows can be accumulated in the accounting cache before
 	// being flushed for its later export. Default value is 5000.
 	// Decrease it if you see the "received message larger than max" error in Beyla logs.
@@ -68,12 +79,12 @@ type NetworkConfig struct {
 	// "first_come" will forward only flows from the first interface the flows are received from.
 	// Default value: first_come
 	Deduper string `yaml:"deduper" env:"BEYLA_NETWORK_DEDUPER"`
-	// DeduperFCExpiry specifies the expiry duration of the flows "first_come" deduplicator. After
+	// DeduperFCTTL specifies the expiry duration of the flows "first_come" deduplicator. After
 	// a flow hasn't been received for that expiry time, the deduplicator forgets it. That means
 	// that a flow from a connection that has been inactive during that period could be forwarded
 	// again from a different interface.
 	// If the value is not set, it will default to 2 * CacheActiveTimeout
-	DeduperFCExpiry time.Duration `yaml:"deduper_fc_expiry" env:"BEYLA_NETWORK_DEDUPER_FC_EXPIRY"`
+	DeduperFCTTL time.Duration `yaml:"deduper_fc_ttl" env:"BEYLA_NETWORK_DEDUPER_FC_TTL"`
 	// Direction allows selecting which flows to trace according to its direction. Accepted values
 	// are "ingress", "egress" or "both" (default).
 	Direction string `yaml:"direction" env:"BEYLA_NETWORK_DIRECTION"`
@@ -99,13 +110,6 @@ type NetworkConfig struct {
 	// Print the network flows in the Standard Output, if true
 	Print bool `yaml:"print_flows" env:"BEYLA_NETWORK_PRINT_FLOWS"`
 
-	// AllowedAttributes is a hidden/unstable/incomplete/epxerimental feature. This configuration API
-	// could change and be moved to other part, if we decide to extend this functionality also
-	// to AppO11y and Prometheus exporter.
-	// This won't filter some meta-attributes such as
-	// instance, job, service_instance_id, service_name, telemetry_sdk_*, etc...
-	AllowedAttributes []string `yaml:"allowed_attributes" env:"BEYLA_NETWORK_ALLOWED_ATTRIBUTES" envSeparator:","`
-
 	// CIDRs list, to be set as the "src.cidr" and "dst.cidr"
 	// attribute as a function of the source and destination IP addresses.
 	// If an IP does not match any address here, the attributes won't be set.
@@ -116,6 +120,7 @@ type NetworkConfig struct {
 }
 
 var defaultNetworkConfig = NetworkConfig{
+	Source:             EbpfSourceTC,
 	AgentIPIface:       "external",
 	AgentIPType:        "any",
 	ExcludeInterfaces:  []string{"lo"},
@@ -125,41 +130,9 @@ var defaultNetworkConfig = NetworkConfig{
 	Direction:          "both",
 	ListenInterfaces:   "watch",
 	ListenPollPeriod:   10 * time.Second,
-	AllowedAttributes: []string{
-		"k8s.src.owner.name",
-		"k8s.src.namespace",
-		"k8s.dst.owner.name",
-		"k8s.dst.namespace",
-		"k8s.cluster.name",
-	},
 	ReverseDNS: flow.ReverseDNS{
 		Type:     flow.ReverseDNSNone,
 		CacheLen: 256,
 		CacheTTL: time.Hour,
 	},
-}
-
-func (nc *NetworkConfig) Validate(isKubeEnabled bool) error {
-	if len(nc.AllowedAttributes) == 0 {
-		return errors.New("you must define some attributes in the allowed_attributes section. Please ceck documentation")
-	}
-	if isKubeEnabled {
-		return nil
-	}
-
-	actualAllowed := 0
-	for _, attr := range nc.AllowedAttributes {
-		if !strings.HasPrefix(attr, "k8s.") {
-			actualAllowed++
-		}
-	}
-	if actualAllowed == 0 {
-		return errors.New("allowed_attributes section (or its default) is only allowing Kubernetes metric attributes. " +
-			" You must define non-Kubernetes attributes there, or set BEYLA_KUBE_METADATA_ENABLE to true. Please check documentation")
-	}
-	if actualAllowed < len(nc.AllowedAttributes) {
-		slog.Warn("Network configuration allowed_attributes section is defining some Kubernetes attributes but " +
-			" Kubernetes metadata is disabled. Maybe you forgot to set BEYLA_KUBE_METADATA_ENABLE to true?")
-	}
-	return nil
 }

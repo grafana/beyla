@@ -3,6 +3,7 @@ package beyla
 import (
 	"fmt"
 	"io"
+	"os"
 	"time"
 
 	"github.com/caarlos0/env/v9"
@@ -10,6 +11,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
+	"github.com/grafana/beyla/pkg/internal/export/attr"
 	"github.com/grafana/beyla/pkg/internal/export/debug"
 	"github.com/grafana/beyla/pkg/internal/export/otel"
 	"github.com/grafana/beyla/pkg/internal/export/prom"
@@ -29,6 +31,10 @@ const (
 	FeatureNetO11y
 )
 
+const (
+	defaultMetricsTTL = 5 * time.Minute
+)
+
 var DefaultConfig = Config{
 	ChannelBufferLen: 10,
 	LogLevel:         "INFO",
@@ -36,12 +42,17 @@ var DefaultConfig = Config{
 		BatchLength:  100,
 		BatchTimeout: time.Second,
 		BpfBaseDir:   "/var/run/beyla",
+		BpfPath:      fmt.Sprintf("beyla-%d", os.Getpid()),
 	},
 	Grafana: otel.GrafanaConfig{
 		OTLP: otel.GrafanaOTLP{
 			// by default we will only submit traces, assuming span2metrics will do the metrics conversion
 			Submit: []string{"traces"},
 		},
+	},
+	NameResolver: &transform.NameResolverConfig{
+		CacheLen: 1024,
+		CacheTTL: 5 * time.Minute,
 	},
 	Metrics: otel.MetricsConfig{
 		Protocol:             otel.ProtocolUnset,
@@ -51,6 +62,7 @@ var DefaultConfig = Config{
 		ReportersCacheLen:    ReporterLRUSize,
 		HistogramAggregation: otel.AggregationExplicit,
 		Features:             []string{otel.FeatureNetwork, otel.FeatureApplication},
+		TTL:                  defaultMetricsTTL,
 	},
 	Traces: otel.TracesConfig{
 		Protocol:           otel.ProtocolUnset,
@@ -60,10 +72,11 @@ var DefaultConfig = Config{
 		ReportersCacheLen:  ReporterLRUSize,
 	},
 	Prometheus: prom.PrometheusConfig{
-		Path:       "/metrics",
-		Buckets:    otel.DefaultBuckets,
-		Features:   []string{otel.FeatureNetwork, otel.FeatureApplication},
-		ExpireTime: 5 * time.Minute,
+		Path:                        "/metrics",
+		Buckets:                     otel.DefaultBuckets,
+		Features:                    []string{otel.FeatureNetwork, otel.FeatureApplication},
+		TTL:                         defaultMetricsTTL,
+		SpanMetricsServiceCacheSize: 10000,
 	},
 	Printer: false,
 	Noop:    false,
@@ -98,14 +111,16 @@ type Config struct {
 
 	Attributes Attributes `yaml:"attributes"`
 	// Routes is an optional node. If not set, data will be directly forwarded to exporters.
-	Routes     *transform.RoutesConfig `yaml:"routes"`
-	Metrics    otel.MetricsConfig      `yaml:"otel_metrics_export"`
-	Traces     otel.TracesConfig       `yaml:"otel_traces_export"`
-	Prometheus prom.PrometheusConfig   `yaml:"prometheus_export"`
-	Printer    debug.PrintEnabled      `yaml:"print_traces" env:"BEYLA_PRINT_TRACES"`
+	Routes       *transform.RoutesConfig       `yaml:"routes"`
+	NameResolver *transform.NameResolverConfig `yaml:"name_resolver"`
+	Metrics      otel.MetricsConfig            `yaml:"otel_metrics_export"`
+	Traces       otel.TracesConfig             `yaml:"otel_traces_export"`
+	Prometheus   prom.PrometheusConfig         `yaml:"prometheus_export"`
+	Printer      debug.PrintEnabled            `yaml:"print_traces" env:"BEYLA_PRINT_TRACES"`
 
 	// Exec allows selecting the instrumented executable whose complete path contains the Exec value.
-	Exec services.RegexpAttr `yaml:"executable_name" env:"BEYLA_EXECUTABLE_NAME"`
+	Exec       services.RegexpAttr `yaml:"executable_name" env:"BEYLA_EXECUTABLE_NAME"`
+	ExecOtelGo services.RegexpAttr `env:"OTEL_GO_AUTO_TARGET_EXE"`
 	// Port allows selecting the instrumented executable that owns the Port value. If this value is set (and
 	// different to zero), the value of the Exec property won't take effect.
 	// It's important to emphasize that if your process opens multiple HTTP/GRPC ports, the auto-instrumenter
@@ -149,8 +164,9 @@ func (t TracesReceiverConfig) Enabled() bool {
 // Attributes configures the decoration of some extra attributes that will be
 // added to each span
 type Attributes struct {
-	Kubernetes transform.KubernetesDecorator `yaml:"kubernetes"`
-	InstanceID traces.InstanceIDConfig       `yaml:"instance_id"`
+	Kubernetes transform.KubernetesDecorator    `yaml:"kubernetes"`
+	InstanceID traces.InstanceIDConfig          `yaml:"instance_id"`
+	Allow      attr.AllowedAttributesDefinition `yaml:"allow"`
 }
 
 type ConfigError string
@@ -190,10 +206,6 @@ func (c *Config) Validate() error {
 			" grafana, otel_metrics_export, otel_traces_export or prometheus_export")
 	}
 
-	if c.Enabled(FeatureNetO11y) {
-		return c.NetworkFlows.Validate(c.Attributes.Kubernetes.Enabled())
-	}
-
 	return nil
 }
 
@@ -226,5 +238,11 @@ func LoadConfig(file io.Reader) (*Config, error) {
 	if err := env.Parse(&cfg); err != nil {
 		return nil, fmt.Errorf("reading env vars: %w", err)
 	}
+
+	// We support OTEL_GO_AUTO_TARGET_EXE as an alias to BEYLA_EXECUTABLE_NAME
+	if !cfg.Exec.IsSet() && cfg.ExecOtelGo.IsSet() {
+		cfg.Exec = cfg.ExecOtelGo
+	}
+
 	return &cfg, nil
 }

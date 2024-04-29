@@ -2,6 +2,7 @@ package request
 
 import (
 	"time"
+	"unicode/utf8"
 
 	"github.com/gavv/monotime"
 	trace2 "go.opentelemetry.io/otel/trace"
@@ -49,26 +50,29 @@ type PidInfo struct {
 // Span contains the information being submitted by the following nodes in the graph.
 // It enables comfortable handling of data from Go.
 type Span struct {
-	Type          EventType
-	IgnoreSpan    IgnoreMode
-	ID            uint64
-	Method        string
-	Path          string
-	Route         string
-	Peer          string
-	Host          string
-	HostPort      int
-	Status        int
-	ContentLength int64
-	RequestStart  int64
-	Start         int64
-	End           int64
-	ServiceID     svc.ID // TODO: rename to Service or ResourceAttrs
-	TraceID       trace2.TraceID
-	SpanID        trace2.SpanID
-	ParentSpanID  trace2.SpanID
-	Flags         uint8
-	Pid           PidInfo
+	Type           EventType
+	IgnoreSpan     IgnoreMode
+	ID             uint64
+	Method         string
+	Path           string
+	Route          string
+	Peer           string
+	Host           string
+	HostPort       int
+	Status         int
+	ContentLength  int64
+	RequestStart   int64
+	Start          int64
+	End            int64
+	ServiceID      svc.ID // TODO: rename to Service or ResourceAttrs
+	TraceID        trace2.TraceID
+	SpanID         trace2.SpanID
+	ParentSpanID   trace2.SpanID
+	Flags          uint8
+	Pid            PidInfo
+	PeerName       string
+	HostName       string
+	OtherNamespace string
 }
 
 func (s *Span) Inside(parent *Span) bool {
@@ -93,4 +97,30 @@ func (s *Span) Timings() Timings {
 		Start:        now.Add(-startDelta),
 		End:          now.Add(-endDelta),
 	}
+}
+
+func (s *Span) IsValid() bool {
+	if (len(s.Method) > 0 && !utf8.ValidString(s.Method)) ||
+		(len(s.Path) > 0 && !utf8.ValidString(s.Path)) {
+		return false
+	}
+
+	if s.End < s.Start {
+		return false
+	}
+
+	return true
+}
+
+func (s *Span) IsClientSpan() bool {
+	switch s.Type {
+	case EventTypeGRPCClient:
+		fallthrough
+	case EventTypeHTTPClient:
+		fallthrough
+	case EventTypeSQLClient:
+		return true
+	}
+
+	return false
 }

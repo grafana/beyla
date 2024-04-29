@@ -25,7 +25,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/golang-lru/v2/simplelru"
-	"github.com/mariomac/pipes/pkg/node"
+	"github.com/mariomac/pipes/pipe"
 
 	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
 	"github.com/grafana/beyla/pkg/transform"
@@ -69,21 +69,17 @@ const (
 
 func log() *slog.Logger { return slog.With("component", "k8s.MetadataDecorator") }
 
-type MetadataDecorator struct {
-	Kubernetes *transform.KubernetesDecorator
-}
-
-func (ntc MetadataDecorator) Enabled() bool {
-	return ntc.Kubernetes != nil && ntc.Kubernetes.Enabled()
-}
-
-func MetadataDecoratorProvider(ctx context.Context, cfg MetadataDecorator) (node.MiddleFunc[[]*ebpf.Record, []*ebpf.Record], error) {
-	nt, err := newDecorator(ctx, &cfg)
+func MetadataDecoratorProvider(ctx context.Context, cfg *transform.KubernetesDecorator) (pipe.MiddleFunc[[]*ebpf.Record, []*ebpf.Record], error) {
+	if !cfg.Enabled() {
+		// This node is not going to be instantiated. Let the pipes library just bypassing it.
+		return pipe.Bypass[[]*ebpf.Record](), nil
+	}
+	nt, err := newDecorator(ctx, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("instantiating network transformer: %w", err)
 	}
 	var decorate func([]*ebpf.Record) []*ebpf.Record
-	if cfg.Kubernetes.DropExternal {
+	if cfg.DropExternal {
 		log().Debug("will drop external flows")
 		decorate = nt.decorateMightDrop
 	} else {
@@ -172,7 +168,7 @@ func (n *decorator) decorate(flow *ebpf.Record, prefix, ip string) bool {
 }
 
 // newDecorator create a new transform
-func newDecorator(ctx context.Context, cfg *MetadataDecorator) (*decorator, error) {
+func newDecorator(ctx context.Context, cfg *transform.KubernetesDecorator) (*decorator, error) {
 	nt := decorator{
 		log:         log(),
 		clusterName: kubeClusterName(ctx, cfg),
@@ -185,16 +181,16 @@ func newDecorator(ctx context.Context, cfg *MetadataDecorator) (*decorator, erro
 		}
 	}
 
-	if err := nt.kube.InitFromConfig(cfg.Kubernetes.KubeconfigPath, cfg.Kubernetes.InformersSyncTimeout); err != nil {
+	if err := nt.kube.InitFromConfig(ctx, cfg.KubeconfigPath, cfg.InformersSyncTimeout); err != nil {
 		return nil, err
 	}
 	return &nt, nil
 }
 
-func kubeClusterName(ctx context.Context, cfg *MetadataDecorator) string {
+func kubeClusterName(ctx context.Context, cfg *transform.KubernetesDecorator) string {
 	log := log().With("func", "kubeClusterName")
-	if cfg.Kubernetes.ClusterName != "" {
-		return cfg.Kubernetes.ClusterName
+	if cfg.ClusterName != "" {
+		return cfg.ClusterName
 	}
 	retries := 0
 	for retries < clusterMetadataRetries {

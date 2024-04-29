@@ -2,19 +2,22 @@ package otel
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"slices"
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/mariomac/pipes/pkg/node"
+	"github.com/mariomac/pipes/pipe"
 	"go.opentelemetry.io/otel/attribute"
 	metric2 "go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/resource"
 	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 
+	"github.com/grafana/beyla/pkg/internal/export/attr"
 	"github.com/grafana/beyla/pkg/internal/export/otel"
+	"github.com/grafana/beyla/pkg/internal/metricname"
 	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
 	"github.com/grafana/beyla/pkg/internal/netolly/export"
 )
@@ -48,33 +51,23 @@ func newResource() *resource.Resource {
 	return resource.NewWithAttributes(semconv.SchemaURL, attrs...)
 }
 
-func newMeterProvider(res *resource.Resource, exporter *metric.Exporter) (*metric.MeterProvider, error) {
+func newMeterProvider(res *resource.Resource, exporter *metric.Exporter, interval time.Duration) (*metric.MeterProvider, error) {
 	meterProvider := metric.NewMeterProvider(
 		metric.WithResource(res),
-		metric.WithReader(metric.NewPeriodicReader(*exporter,
-			// Default is 1m. Set to 3s for demonstrative purposes.
-			metric.WithInterval(1*time.Second))),
+		metric.WithReader(metric.NewPeriodicReader(*exporter, metric.WithInterval(interval))),
 	)
 	return meterProvider, nil
 }
 
 type metricsExporter struct {
-	flowBytes metric2.Int64Counter
-	attrs     []export.Attribute
+	metrics *Expirer
 }
 
-func (me *metricsExporter) attributes(m *ebpf.Record) []attribute.KeyValue {
-	keyVals := make([]attribute.KeyValue, 0, len(me.attrs))
-
-	for _, attr := range me.attrs {
-		keyVals = append(keyVals,
-			attribute.String(attr.Name, attr.Get(m)))
+func MetricsExporterProvider(cfg *MetricsConfig) (pipe.FinalFunc[[]*ebpf.Record], error) {
+	if !cfg.Enabled() {
+		// This node is not going to be instantiated. Let the pipes library just ignore it.
+		return pipe.IgnoreFinal[[]*ebpf.Record](), nil
 	}
-
-	return keyVals
-}
-
-func MetricsExporterProvider(cfg MetricsConfig) (node.TerminalFunc[[]*ebpf.Record], error) {
 	log := mlog()
 	log.Debug("instantiating network metrics exporter provider")
 	exporter, err := otel.InstantiateMetricsExporter(context.Background(), cfg.Metrics, log)
@@ -83,44 +76,42 @@ func MetricsExporterProvider(cfg MetricsConfig) (node.TerminalFunc[[]*ebpf.Recor
 		return nil, err
 	}
 
-	provider, err := newMeterProvider(newResource(), &exporter)
+	provider, err := newMeterProvider(newResource(), &exporter, cfg.Metrics.Interval)
 
 	if err != nil {
 		log.Error("", "error", err)
 		return nil, err
 	}
 
+	attrs := attr.OpenTelemetryGetters(export.NamedGetters, cfg.AllowedAttributes)
+	if len(attrs) == 0 {
+		return nil, fmt.Errorf("network metrics OpenTelemetry exporter: no valid"+
+			" attributes.allow defined for metric %s", metricname.PromBeylaNetworkFlows)
+	}
+	expirer := NewExpirer(attrs, cfg.Metrics.TTL)
 	ebpfEvents := provider.Meter("network_ebpf_events")
 
-	flowBytes, err := ebpfEvents.Int64Counter(
-		"beyla.network.flow.bytes",
+	_, err = ebpfEvents.Int64ObservableCounter(
+		metricname.OTELBeylaNetworkFlows,
 		metric2.WithDescription("total bytes_sent value of network flows observed by probe since its launch"),
 		metric2.WithUnit("{bytes}"),
+		metric2.WithInt64Callback(expirer.Collect),
 	)
 	if err != nil {
-		log.Error("", "error", err)
-		return nil, err
-	}
-
-	if err != nil {
-		log.Error("", "error", err)
+		log.Error("creating observable counter", "error", err)
 		return nil, err
 	}
 	log.Debug("restricting attributes not in this list", "attributes", cfg.AllowedAttributes)
 	return (&metricsExporter{
-		flowBytes: flowBytes,
-		attrs:     export.BuildOTELAttributeGetters(cfg.AllowedAttributes),
+		metrics: expirer,
 	}).Do, nil
 }
 
 func (me *metricsExporter) Do(in <-chan []*ebpf.Record) {
 	for i := range in {
+		me.metrics.UpdateTime()
 		for _, v := range i {
-			me.flowBytes.Add(
-				context.Background(),
-				int64(v.Metrics.Bytes),
-				metric2.WithAttributes(me.attributes(v)...),
-			)
+			me.metrics.ForRecord(v).val.Add(int64(v.Metrics.Bytes))
 		}
 	}
 }

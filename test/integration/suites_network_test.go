@@ -17,12 +17,24 @@ import (
 	"github.com/grafana/beyla/test/integration/components/prom"
 )
 
-const allowAllAttrs = "BEYLA_NETWORK_ALLOWED_ATTRIBUTES=beyla.ip,src.address,dst.address,src.name,dst.name," +
-	"src.namespace,dst.namespace,src.cidr,dst.cidr,iface,direction"
-
 func TestNetwork_Deduplication(t *testing.T) {
 	compose, err := docker.ComposeSuite("docker-compose-netolly.yml", path.Join(pathOutput, "test-suite-netolly-dedupe.log"))
-	compose.Env = append(compose.Env, "BEYLA_NETWORK_DEDUPER=first_come", "BEYLA_EXECUTABLE_NAME=", allowAllAttrs)
+	compose.Env = append(compose.Env, "BEYLA_NETWORK_DEDUPER=first_come", "BEYLA_EXECUTABLE_NAME=")
+	require.NoError(t, err)
+	require.NoError(t, compose.Up())
+
+	// When there flow deduplication, results must neither include "iface" nor "direction" fields.
+	for _, f := range getNetFlows(t) {
+		require.NotContains(t, f.Metric, "iface")
+		require.NotContains(t, f.Metric, "direction")
+	}
+
+	require.NoError(t, compose.Close())
+}
+
+func TestNetwork_Deduplication_Use_Socket_Filter(t *testing.T) {
+	compose, err := docker.ComposeSuite("docker-compose-netolly.yml", path.Join(pathOutput, "test-suite-netolly-dedupe-no-tc.log"))
+	compose.Env = append(compose.Env, "BEYLA_NETWORK_DEDUPER=first_come", "BEYLA_EXECUTABLE_NAME=", "BEYLA_NETWORK_SOURCE=socket_filter")
 	require.NoError(t, err)
 	require.NoError(t, compose.Up())
 
@@ -37,7 +49,7 @@ func TestNetwork_Deduplication(t *testing.T) {
 
 func TestNetwork_NoDeduplication(t *testing.T) {
 	compose, err := docker.ComposeSuite("docker-compose-netolly.yml", path.Join(pathOutput, "test-suite-netolly-nodedupe.log"))
-	compose.Env = append(compose.Env, "BEYLA_NETWORK_DEDUPER=none", "BEYLA_EXECUTABLE_NAME=", allowAllAttrs)
+	compose.Env = append(compose.Env, "BEYLA_NETWORK_DEDUPER=none", "BEYLA_EXECUTABLE_NAME=")
 	require.NoError(t, err)
 	require.NoError(t, compose.Up())
 
@@ -55,11 +67,12 @@ func TestNetwork_NoDeduplication(t *testing.T) {
 
 func TestNetwork_AllowedAttributes(t *testing.T) {
 	compose, err := docker.ComposeSuite("docker-compose-netolly.yml", path.Join(pathOutput, "test-suite-netolly-allowed-attrs.log"))
-	compose.Env = append(compose.Env, "BEYLA_EXECUTABLE_NAME=", `BEYLA_NETWORK_ALLOWED_ATTRIBUTES=beyla.ip,src.name,dst.port`)
+	compose.Env = append(compose.Env, "BEYLA_EXECUTABLE_NAME=", `BEYLA_CONFIG_SUFFIX=-disallowattrs`)
 	require.NoError(t, err)
 	require.NoError(t, compose.Up())
 
-	// When there flow deduplication, results must only include the BEYLA_NETWORK_ALLOWED_ATTRIBUTES
+	// When there flow deduplication, results must only include
+	// the attributes under the attributes.allow section
 	for _, f := range getNetFlows(t) {
 		require.Contains(t, f.Metric, "beyla_ip")
 		require.Contains(t, f.Metric, "src_name")

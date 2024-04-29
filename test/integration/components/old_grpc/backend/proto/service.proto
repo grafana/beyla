@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+option go_package = "./pkg/gprc";
+
+package fib;
+
+// Each bytes type is a big-endian bigInteger representation
+
+message LoopRequest {
+  bytes from = 1;
+  bytes to = 2;
+}
+
+message LoopResponse {
+  bytes result = 1;
+}
+
+service Multiplier {
+  rpc Loop(LoopRequest) returns (LoopResponse) {}
+}

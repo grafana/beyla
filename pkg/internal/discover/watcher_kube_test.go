@@ -54,7 +54,7 @@ func TestWatcherKubeEnricher(t *testing.T) {
 		deployReplicaSet(t, k8sClient, namespace, replicaSetName, deploymentName)
 	}
 
-	// The WatcherKubeEnricher has to listen and relate information from multiple asynchronous sources.
+	// The watcherKubeEnricher has to listen and relate information from multiple asynchronous sources.
 	// Each test case verifies that whatever the order of the events is,
 	testCases := []testCase{
 		{name: "process-pod-rs", steps: []fn{process, ownedPod, replicaSet}},
@@ -69,13 +69,11 @@ func TestWatcherKubeEnricher(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			containerInfoForPID = fakeContainerInfo
-			// Setup a fake K8s API connected to the WatcherKubeEnricher
+			// Setup a fake K8s API connected to the watcherKubeEnricher
 			k8sClient := fakek8sclientset.NewSimpleClientset()
 			informer := kube.Metadata{}
-			require.NoError(t, informer.InitFromClient(k8sClient, 30*time.Minute))
-			wkeNodeFunc, err := WatcherKubeEnricherProvider(&WatcherKubeEnricher{
-				Informer: &informer,
-			})
+			require.NoError(t, informer.InitFromClient(context.TODO(), k8sClient, 30*time.Minute))
+			wkeNodeFunc, err := WatcherKubeEnricherProvider(true, &informer)()
 			require.NoError(t, err)
 			inputCh, outputCh := make(chan []Event[processAttrs], 10), make(chan []Event[processAttrs], 10)
 			defer close(inputCh)
@@ -92,7 +90,7 @@ func TestWatcherKubeEnricher(t *testing.T) {
 				step(t, inputCh, k8sClient)
 			}
 
-			// check that the WatcherKubeEnricher eventually submits an event with the expected metadata
+			// check that the watcherKubeEnricher eventually submits an event with the expected metadata
 			test.Eventually(t, timeout, func(t require.TestingT) {
 				events := <-outputCh
 				require.Len(t, events, 1)
@@ -117,13 +115,11 @@ func TestWatcherKubeEnricher(t *testing.T) {
 func TestWatcherKubeEnricherWithMatcher(t *testing.T) {
 	containerInfoForPID = fakeContainerInfo
 	processInfo = fakeProcessInfo
-	// Setup a fake K8s API connected to the WatcherKubeEnricher
+	// Setup a fake K8s API connected to the watcherKubeEnricher
 	k8sClient := fakek8sclientset.NewSimpleClientset()
 	informer := kube.Metadata{}
-	require.NoError(t, informer.InitFromClient(k8sClient, 30*time.Minute))
-	wkeNodeFunc, err := WatcherKubeEnricherProvider(&WatcherKubeEnricher{
-		Informer: &informer,
-	})
+	require.NoError(t, informer.InitFromClient(context.TODO(), k8sClient, 30*time.Minute))
+	wkeNodeFunc, err := WatcherKubeEnricherProvider(true, &informer)()
 	require.NoError(t, err)
 	pipeConfig := beyla.Config{}
 	require.NoError(t, yaml.Unmarshal([]byte(`discovery:
@@ -144,7 +140,7 @@ func TestWatcherKubeEnricherWithMatcher(t *testing.T) {
       instrument: "ebpf"
       lang: "go.*"
 `), &pipeConfig))
-	mtchNodeFunc, err := CriteriaMatcherProvider(CriteriaMatcher{Cfg: &pipeConfig})
+	mtchNodeFunc, err := CriteriaMatcherProvider(&pipeConfig)()
 	require.NoError(t, err)
 	inputCh, connectCh := make(chan []Event[processAttrs], 10), make(chan []Event[processAttrs], 10)
 	outputCh := make(chan []Event[ProcessMatch], 10)

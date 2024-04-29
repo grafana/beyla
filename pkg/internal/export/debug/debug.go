@@ -4,7 +4,7 @@ package debug
 import (
 	"fmt"
 
-	"github.com/mariomac/pipes/pkg/node"
+	"github.com/mariomac/pipes/pipe"
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/grafana/beyla/pkg/internal/request"
@@ -16,7 +16,16 @@ func (p PrintEnabled) Enabled() bool {
 	return bool(p)
 }
 
-func PrinterNode(_ PrintEnabled) (node.TerminalFunc[[]request.Span], error) {
+func PrinterNode(e PrintEnabled) pipe.FinalProvider[[]request.Span] {
+	return func() (pipe.FinalFunc[[]request.Span], error) {
+		if !e {
+			return pipe.IgnoreFinal[[]request.Span](), nil
+		}
+		return printFunc()
+	}
+}
+
+func printFunc() (pipe.FinalFunc[[]request.Span], error) {
 	return func(input <-chan []request.Span) {
 		for spans := range input {
 			for i := range spans {
@@ -29,8 +38,8 @@ func PrinterNode(_ PrintEnabled) (node.TerminalFunc[[]request.Span], error) {
 					spans[i].Status,
 					spans[i].Method,
 					spans[i].Path,
-					spans[i].Peer,
-					spans[i].Host,
+					spans[i].Peer+" as "+spans[i].PeerName,
+					spans[i].Host+" as "+spans[i].HostName,
 					spans[i].HostPort,
 					spans[i].ContentLength,
 					&spans[i].ServiceID,
@@ -71,12 +80,17 @@ type NoopEnabled bool
 func (n NoopEnabled) Enabled() bool {
 	return bool(n)
 }
-func NoopNode(_ NoopEnabled) (node.TerminalFunc[[]request.Span], error) {
-	counter := 0
-	return func(spans <-chan []request.Span) {
-		for range spans {
-			counter += len(spans)
+func NoopNode(n NoopEnabled) pipe.FinalProvider[[]request.Span] {
+	return func() (pipe.FinalFunc[[]request.Span], error) {
+		if !n {
+			return pipe.IgnoreFinal[[]request.Span](), nil
 		}
-		fmt.Printf("Processed %d requests\n", counter)
-	}, nil
+		counter := 0
+		return func(spans <-chan []request.Span) {
+			for range spans {
+				counter += len(spans)
+			}
+			fmt.Printf("Processed %d requests\n", counter)
+		}, nil
+	}
 }

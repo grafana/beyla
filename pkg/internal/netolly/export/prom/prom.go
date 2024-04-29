@@ -2,14 +2,17 @@ package prom
 
 import (
 	"context"
+	"fmt"
 	"slices"
 
-	"github.com/mariomac/pipes/pkg/node"
+	"github.com/mariomac/pipes/pipe"
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/grafana/beyla/pkg/internal/connector"
+	"github.com/grafana/beyla/pkg/internal/export/attr"
 	"github.com/grafana/beyla/pkg/internal/export/otel"
 	"github.com/grafana/beyla/pkg/internal/export/prom"
+	"github.com/grafana/beyla/pkg/internal/metricname"
 	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
 	"github.com/grafana/beyla/pkg/internal/netolly/export"
 )
@@ -38,21 +41,32 @@ type metricsReporter struct {
 
 	promConnect *connector.PrometheusManager
 
-	attrs []export.Attribute
+	attrs []attr.Getter[*ebpf.Record]
 
 	bgCtx context.Context
 }
 
-func PrometheusEndpoint(ctx context.Context, cfg *PrometheusConfig, promMgr *connector.PrometheusManager) (node.TerminalFunc[[]*ebpf.Record], error) {
-	reporter := newReporter(ctx, cfg, promMgr)
+func PrometheusEndpoint(ctx context.Context, cfg *PrometheusConfig, promMgr *connector.PrometheusManager) (pipe.FinalFunc[[]*ebpf.Record], error) {
+	if !cfg.Enabled() {
+		// This node is not going to be instantiated. Let the pipes library just ignore it.
+		return pipe.IgnoreFinal[[]*ebpf.Record](), nil
+	}
+	reporter, err := newReporter(ctx, cfg, promMgr)
+	if err != nil {
+		return nil, err
+	}
 	return reporter.reportMetrics, nil
 }
 
-func newReporter(ctx context.Context, cfg *PrometheusConfig, promMgr *connector.PrometheusManager) *metricsReporter {
-	attrs := export.BuildPromAttributeGetters(cfg.AllowedAttributes)
+func newReporter(ctx context.Context, cfg *PrometheusConfig, promMgr *connector.PrometheusManager) (*metricsReporter, error) {
+	attrs := attr.PrometheusGetters(export.NamedGetters, cfg.AllowedAttributes)
+	if len(attrs) == 0 {
+		return nil, fmt.Errorf("network metrics Prometheus exporter: no valid"+
+			" attributes.allow defined for metric %s", metricname.PromBeylaNetworkFlows)
+	}
 	labelNames := make([]string, 0, len(attrs))
 	for _, label := range attrs {
-		labelNames = append(labelNames, label.Name)
+		labelNames = append(labelNames, label.ExposedName)
 	}
 
 	// If service name is not explicitly set, we take the service name as set by the
@@ -63,14 +77,14 @@ func newReporter(ctx context.Context, cfg *PrometheusConfig, promMgr *connector.
 		promConnect: promMgr,
 		attrs:       attrs,
 		flowBytes: NewExpirer(prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: "beyla_network_flow_bytes_total",
+			Name: metricname.PromBeylaNetworkFlows,
 			Help: "bytes submitted from a source network endpoint to a destination network endpoint",
-		}, labelNames), cfg.Config.ExpireTime),
+		}, labelNames), cfg.Config.TTL),
 	}
 
 	mr.promConnect.Register(cfg.Config.Port, cfg.Config.Path, mr.flowBytes)
 
-	return mr
+	return mr, nil
 }
 
 func (r *metricsReporter) reportMetrics(input <-chan []*ebpf.Record) {

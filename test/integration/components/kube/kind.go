@@ -179,7 +179,7 @@ func (k *Kind) deleteLabeled() env.Func {
 			}
 			// wait for the pod to be stopped
 			for p, err := pc.Get(ctx, pod.Name, metav1.GetOptions{}); err == nil && p != nil; {
-				plog.Info("waiting 1s for pod to be stopped " + string(p.Status.Phase))
+				plog.Info("waiting 1s for pod to be stopped", "status", string(p.Status.Phase))
 				time.Sleep(time.Second)
 				p, err = pc.Get(ctx, pod.Name, metav1.GetOptions{})
 			}
@@ -226,6 +226,29 @@ func deployManifest(cfg *envconf.Config, manifest string) error {
 		}
 		return nil
 	})
+}
+
+func deleteManifestFile(
+	manifestFile string,
+	cfg *envconf.Config,
+) error {
+	log := log()
+	log.With("file", manifestFile).Info("deleting manifest file")
+
+	b, err := os.ReadFile(manifestFile)
+	if err != nil {
+		return fmt.Errorf("reading manifest file %q: %w", manifestFile, err)
+	}
+
+	return deleteManifest(cfg, string(b))
+}
+
+func DeleteExistingManifestFile(cfg *envconf.Config, manifest string) error {
+	return deleteManifestFile(manifest, cfg)
+}
+
+func DeployManifestFile(cfg *envconf.Config, manifest string) error {
+	return deployManifestFile(manifest, cfg)
 }
 
 func deleteManifest(cfg *envconf.Config, manifest string) error {
@@ -311,12 +334,12 @@ func decodeAndApply(
 // methods, which will selectively work depending on the container backend type
 func (k *Kind) loadLocalImage(tag string) env.Func {
 	return func(ctx context.Context, config *envconf.Config) (context.Context, error) {
-		log().Info("trying to load docker image from local registry")
+		log().Info("trying to load docker image from local registry", "tag", tag)
 		ctx, err := envfuncs.LoadDockerImageToCluster(
 			k.clusterName, tag)(ctx, config)
 		if err == nil {
 			return ctx, nil
 		}
-		return ctx, fmt.Errorf("couldn't load image from local registry: %w", err)
+		return ctx, fmt.Errorf("couldn't load image %q from local registry: %w", tag, err)
 	}
 }

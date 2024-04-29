@@ -5,8 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mariomac/pipes/pkg/graph/stage"
-	"github.com/mariomac/pipes/pkg/node"
+	"github.com/mariomac/pipes/pipe"
 
 	"github.com/grafana/beyla/pkg/internal/kube"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
@@ -67,9 +66,13 @@ func (d KubernetesDecorator) Enabled() bool {
 }
 
 func KubeDecoratorProvider(
-	ctxInfo *global.ContextInfo,
-) stage.MiddleProvider[KubernetesDecorator, []request.Span, []request.Span] {
-	return func(_ KubernetesDecorator) (node.MiddleFunc[[]request.Span, []request.Span], error) {
+	ctxInfo *global.ContextInfo, kubeDecorator *KubernetesDecorator,
+) pipe.MiddleProvider[[]request.Span, []request.Span] {
+	return func() (pipe.MiddleFunc[[]request.Span, []request.Span], error) {
+		if !kubeDecorator.Enabled() {
+			// if kubernetes decoration is disabled, we just bypass the node
+			return pipe.Bypass[[]request.Span](), nil
+		}
 		decorator := &metadataDecorator{db: ctxInfo.AppO11y.K8sDatabase}
 		return decorator.nodeLoop, nil
 	}
@@ -110,16 +113,7 @@ func appendMetadata(span *request.Span, info *kube.PodInfo) {
 	// service name and namespace, we will automatically set it from
 	// the kubernetes metadata
 	if span.ServiceID.AutoName {
-		if info.Owner != nil {
-			// we have two levels of ownership at most
-			if info.Owner.Owner != nil {
-				span.ServiceID.Name = info.Owner.Owner.Name
-			} else {
-				span.ServiceID.Name = info.Owner.Name
-			}
-		} else {
-			span.ServiceID.Name = info.Name
-		}
+		span.ServiceID.Name = info.ServiceName()
 	}
 	if span.ServiceID.Namespace == "" {
 		span.ServiceID.Namespace = info.Namespace

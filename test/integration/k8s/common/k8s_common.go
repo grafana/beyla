@@ -14,10 +14,12 @@ var (
 	DockerfileBeyla            = path.Join(PathComponents, "beyla", "Dockerfile")
 	DockerfilePinger           = path.Join(PathComponents, "grpcpinger", "Dockerfile")
 	DockerfilePythonTestServer = path.Join(PathComponents, "pythonserver", "Dockerfile_8083")
+	DockerfileHTTPPinger       = path.Join(PathComponents, "httppinger", "Dockerfile")
 
 	PingerManifest               = path.Join(PathManifests, "/06-instrumented-client.template.yml")
 	GrpcPingerManifest           = path.Join(PathManifests, "/06-instrumented-grpc-client.template.yml")
 	UninstrumentedPingerManifest = path.Join(PathManifests, "/06-uninstrumented-client.template.yml")
+	UninstrumentedAppManifest    = path.Join(PathManifests, "/05-uninstrumented-service.yml")
 )
 
 // Pinger stores the configuration data of a local pod that will be used to

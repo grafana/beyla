@@ -9,7 +9,7 @@ on:
     inputs:
       filter_regex_include:
         description: this sets the scope of the super linter
-        default: ".*"
+        default: "charts/beyla/"
         required: false
         type: string
 

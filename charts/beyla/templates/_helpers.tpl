@@ -34,7 +34,6 @@ Allow the release namespace to be overridden for multi-namespace deployments in 
 {{- end }}
 {{- end }}
 
-
 {{/*
 Create chart name and version as used by the chart label.
 */}}
@@ -75,7 +74,6 @@ Create the name of the service account to use
 {{- default "default" .Values.serviceAccount.name }}
 {{- end }}
 {{- end }}
-
 
 {{/*
 Calculate name of image ID to use for "beyla".

@@ -1,8 +1,18 @@
 # beyla
 
-![Version: 0.3.0](https://img.shields.io/badge/Version-0.3.0-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 1.5.2](https://img.shields.io/badge/AppVersion-1.5.2-informational?style=flat-square)
+![Version: 1.0.0](https://img.shields.io/badge/Version-1.0.0-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 1.5.2](https://img.shields.io/badge/AppVersion-1.5.2-informational?style=flat-square)
 
-eBPF-based autoinstrumentation of HTTP and HTTPS services
+eBPF-based autoinstrumentation HTTP, HTTP2 and gRPC services, as well as network metrics.
+
+**Homepage:** <https://grafana.com/oss/beyla-ebpf/>
+
+## Maintainers
+
+| Name | Email | Url |
+| ---- | ------ | --- |
+| mariomac |  | <https://github.com/mariomac> |
+| grcevski |  | <https://github.com/grcevski> |
+| marctc |  | <https://github.com/marctc> |
 
 ## Source Code
 

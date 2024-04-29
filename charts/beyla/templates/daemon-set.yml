@@ -68,14 +68,14 @@ spec:
           volumeMounts:
             - mountPath: /etc/beyla/config
               name: beyla-config
-        {{- if or .Values.global.image.pullSecrets .Values.image.pullSecrets }}
-        imagePullSecrets:
-          {{- if .Values.global.image.pullSecrets }}
-          {{- toYaml .Values.global.image.pullSecrets | nindent 4 }}
-          {{- else }}
-          {{- toYaml .Values.image.pullSecrets | nindent 4 }}
-          {{- end }}
+      {{- if or .Values.global.image.pullSecrets .Values.image.pullSecrets }}
+      imagePullSecrets:
+        {{- if .Values.global.image.pullSecrets }}
+        {{- toYaml .Values.global.image.pullSecrets | nindent 4 }}
+        {{- else }}
+        {{- toYaml .Values.image.pullSecrets | nindent 4 }}
         {{- end }}
+      {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

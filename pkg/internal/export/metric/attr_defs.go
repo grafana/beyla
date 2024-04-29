@@ -12,6 +12,7 @@ const (
 	EnableKubernetes = EnabledGroups(1 << iota)
 	EnablePrometheus
 	EnableHTTPRoutes
+	EnableIfaceDirection
 	EnablePeerInfo // TODO Beyla 2.0: remove when we remove ReportPeerInfo configuration option
 	EnableTarget   // TODO Beyla 2.0: remove when we remove ReportTarget configuration option
 )
@@ -28,6 +29,8 @@ func (e *EnabledGroups) Add(groups EnabledGroups) {
 func getDefinitions(groups EnabledGroups) map[Section]Definition {
 	kubeEnabled := groups.Has(EnableKubernetes)
 	promEnabled := groups.Has(EnablePrometheus)
+	ifaceDirEnabled := groups.Has(EnableIfaceDirection)
+	peerInfoEnabled := groups.Has(EnablePeerInfo)
 
 	var prometheusAttributes = Definition{
 		Disabled: !promEnabled,
@@ -88,46 +91,21 @@ func getDefinitions(groups EnabledGroups) map[Section]Definition {
 
 	var serverInfo = Definition{
 		Attributes: map[string]Default{
-			string(attr.ClientAddrKey): false,
+			string(attr.ClientAddrKey): Default(peerInfoEnabled),
 		},
 	}
 	var httpClientInfo = Definition{
 		Attributes: map[string]Default{
-			string(attr.ServerAddrKey): false,
-			string(attr.ServerPortKey): false,
+			string(attr.ServerAddrKey): Default(peerInfoEnabled),
+			string(attr.ServerPortKey): Default(peerInfoEnabled),
 		},
 	}
 	var grpcClientInfo = Definition{
 		Attributes: map[string]Default{
-			string(attr.ServerAddrKey): false,
+			string(attr.ServerAddrKey): Default(peerInfoEnabled),
 		},
 	}
 
-	// the following definitions are duplicated as non-default httpServerInfo, httpClientInfo, etc...,
-	// because they can be enabled by two ways. From the legacy, deprecated report_peer or report_target
-	// config options, or from attributes.select
-	// TODO Beyla 2.0 remove
-	var deprecatedServerPeerInfo = Definition{
-		Disabled: !groups.Has(EnablePeerInfo),
-		Attributes: map[string]Default{
-			string(attr.ClientAddrKey): true,
-		},
-	}
-	// TODO Beyla 2.0 remove
-	var deprecatedHTTPClientPeerInfo = Definition{
-		Disabled: !groups.Has(EnablePeerInfo),
-		Attributes: map[string]Default{
-			string(attr.ServerAddrKey): true,
-			string(attr.ServerPortKey): true,
-		},
-	}
-	// TODO Beyla 2.0 remove
-	var deprecatedGRPCClientPeerInfo = Definition{
-		Disabled: !groups.Has(EnablePeerInfo),
-		Attributes: map[string]Default{
-			string(attr.ServerAddrKey): true,
-		},
-	}
 	// TODO Beyla 2.0 remove
 	var deprecatedHTTPPath = Definition{
 		Disabled: !groups.Has(EnableTarget),
@@ -157,38 +135,39 @@ func getDefinitions(groups EnabledGroups) map[Section]Definition {
 				attr.DstPort:    false,
 				attr.SrcName:    false,
 				attr.DstName:    false,
-				attr.Direction:  false,
-				attr.Iface:      false,
+				attr.Direction:  Default(ifaceDirEnabled),
+				attr.Iface:      Default(ifaceDirEnabled),
 			},
 		},
 		HTTPServerDuration.Section: {
-			Parents: []*Definition{&appCommon, &appKubeAttributes, &httpCommon, &serverInfo, &deprecatedServerPeerInfo},
+			Parents: []*Definition{&appCommon, &appKubeAttributes, &httpCommon, &serverInfo},
 		},
 		HTTPServerRequestSize.Section: {
-			Parents: []*Definition{&appCommon, &appKubeAttributes, &httpCommon, &serverInfo, &deprecatedServerPeerInfo},
+			Parents: []*Definition{&appCommon, &appKubeAttributes, &httpCommon, &serverInfo},
 		},
 		HTTPClientDuration.Section: {
-			Parents: []*Definition{&appCommon, &appKubeAttributes, &httpCommon, &httpClientInfo, &deprecatedHTTPClientPeerInfo},
+			Parents: []*Definition{&appCommon, &appKubeAttributes, &httpCommon, &httpClientInfo},
 		},
 		HTTPClientRequestSize.Section: {
-			Parents: []*Definition{&appCommon, &appKubeAttributes, &httpCommon, &httpClientInfo, &deprecatedHTTPClientPeerInfo},
+			Parents: []*Definition{&appCommon, &appKubeAttributes, &httpCommon, &httpClientInfo},
 		},
 		RPCClientDuration.Section: {
-			Parents: []*Definition{&appCommon, &appKubeAttributes, &grpcClientInfo, &deprecatedGRPCClientPeerInfo},
+			Parents: []*Definition{&appCommon, &appKubeAttributes, &grpcClientInfo},
 			Attributes: map[string]Default{
 				string(semconv.RPCMethodKey):         true,
 				string(semconv.RPCSystemKey):         true,
 				string(semconv.RPCGRPCStatusCodeKey): true,
-				string(attr.ServerAddrKey):           true,
 			},
 		},
 		RPCServerDuration.Section: {
-			Parents: []*Definition{&appCommon, &appKubeAttributes, &serverInfo, &deprecatedServerPeerInfo},
+			Parents: []*Definition{&appCommon, &appKubeAttributes, &serverInfo},
 			Attributes: map[string]Default{
 				string(semconv.RPCMethodKey):         true,
 				string(semconv.RPCSystemKey):         true,
 				string(semconv.RPCGRPCStatusCodeKey): true,
-				string(attr.ClientAddrKey):           true,
+				// Overriding default serverInfo configuration because we want
+				// to report it by default
+				string(attr.ClientAddrKey): true,
 			},
 		},
 		SQLClientDuration.Section: {

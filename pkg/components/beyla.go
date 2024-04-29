@@ -12,6 +12,7 @@ import (
 	"github.com/grafana/beyla/pkg/internal/export/metric"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/netolly/agent"
+	"github.com/grafana/beyla/pkg/internal/netolly/flow"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 )
 
@@ -97,7 +98,14 @@ func buildCommonContextInfo(
 		ctxInfo.Metrics = imetrics.NoopReporter{}
 	}
 
-	// build enabled groups of attributes
+	attributeGroups(config, ctxInfo)
+
+	return ctxInfo
+}
+
+// attributeGroups specifies, based in the provided configuration, which groups of attributes
+// need to be enabled by default for the diverse metrics
+func attributeGroups(config *beyla.Config, ctxInfo *global.ContextInfo) {
 	if ctxInfo.K8sEnabled {
 		ctxInfo.MetricAttributeGroups.Add(metric.EnableKubernetes)
 	}
@@ -110,5 +118,7 @@ func buildCommonContextInfo(
 	if config.Metrics.ReportTarget || config.Prometheus.ReportTarget {
 		ctxInfo.MetricAttributeGroups.Add(metric.EnableTarget)
 	}
-	return ctxInfo
+	if config.NetworkFlows.Deduper == flow.DeduperNone {
+		ctxInfo.MetricAttributeGroups.Add(metric.EnableIfaceDirection)
+	}
 }

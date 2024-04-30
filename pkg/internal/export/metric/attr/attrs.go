@@ -1,3 +1,5 @@
+// Package attr contains definition of the attribute names of for the metrics, especially
+// for the metrics whose reported attributes are selected in the attributes.select YAML option
 package attr
 
 import (
@@ -7,6 +9,8 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 )
 
+// Name of an attribute. This is the common internal representation of a metric attribute name,
+// which can be converted to OTEL or Prometheus format right before exporting them.
 type Name attribute.Key
 
 func (an Name) OTEL() attribute.Key {
@@ -19,31 +23,31 @@ func (an Name) Prom() string {
 
 // OpenTelemetry 1.23 semantic convention
 const (
-	ServiceName               = Name(semconv.ServiceNameKey)
-	HTTPRequestMethodKey      = Name("http.request.method")
-	HTTPResponseStatusCodeKey = Name("http.response.status_code")
-	HTTPUrlPathKey            = Name("url.path")
-	HTTPUrlFullKey            = Name("url.full")
-	ClientAddrKey             = Name("client.address")
-	ServerAddrKey             = Name("server.address")
-	ServerPortKey             = Name("server.port")
-	HTTPRequestBodySizeKey    = Name("http.request.body.size")
-	HTTPResponseBodySizeKey   = Name("http.response.body.size")
-	SpanKindKey               = Name("span.kind")
-	SpanNameKey               = Name("span.name")
-	StatusCodeKey             = Name("status.code")
-	SourceKey                 = Name("source")
-	ServiceKey                = Name("service")
-	ClientKey                 = Name("client")
-	ClientNamespaceKey        = Name("client_service_namespace")
-	ServerKey                 = Name("server")
-	ServerNamespaceKey        = Name("server_service_namespace")
-	ConnectionTypeKey         = Name("connection_type")
-	DBOperationKey            = Name("db_operation")
-	RPCMethod                 = Name(semconv.RPCMethodKey)
-	RPCSystem                 = Name(semconv.RPCSystemKey)
-	RPCGRPCStatusCode         = Name(semconv.RPCGRPCStatusCodeKey)
-	HTTPRoute                 = Name(semconv.HTTPRouteKey)
+	ServiceName            = Name(semconv.ServiceNameKey)
+	HTTPRequestMethod      = Name("http.request.method")
+	HTTPResponseStatusCode = Name("http.response.status_code")
+	HTTPUrlPath            = Name("url.path")
+	HTTPUrlFull            = Name("url.full")
+	ClientAddr             = Name("client.address")
+	ServerAddr             = Name("server.address")
+	ServerPort             = Name("server.port")
+	HTTPRequestBodySize    = Name("http.request.body.size")
+	HTTPResponseBodySize   = Name("http.response.body.size")
+	SpanKind               = Name("span.kind")
+	SpanName               = Name("span.name")
+	StatusCode             = Name("status.code")
+	Source                 = Name("source")
+	Service                = Name("service")
+	Client                 = Name("client")
+	ClientNamespace        = Name("client_service_namespace")
+	Server                 = Name("server")
+	ServerNamespace        = Name("server_service_namespace")
+	ConnectionType         = Name("connection_type")
+	DBOperation            = Name("db.operation")
+	RPCMethod              = Name(semconv.RPCMethodKey)
+	RPCSystem              = Name(semconv.RPCSystemKey)
+	RPCGRPCStatusCode      = Name(semconv.RPCGRPCStatusCodeKey)
+	HTTPRoute              = Name(semconv.HTTPRouteKey)
 
 	K8sNamespaceName   = Name("k8s.namespace.name")
 	K8sPodName         = Name("k8s.pod.name")
@@ -68,6 +72,8 @@ var (
 	DstName    = Name("dst.name")
 	Direction  = Name("direction")
 	Iface      = Name("iface")
+	SrcCIDR    = Name("src.cidr")
+	DstCIDR    = Name("dst.cidr")
 
 	K8sSrcOwnerName = Name("k8s.src.owner.name")
 	K8sSrcNamespace = Name("k8s.src.namespace")
@@ -88,11 +94,11 @@ var (
 
 // other beyla-specific attributes
 var (
-	// TargetInstanceKey is a Prometheus-only attribute.
+	// TargetInstance is a Prometheus-only attribute.
 	// It will expose the process hostname-pid (or K8s Pod).
 	// It is advised for users that to use relabeling rules to
 	// override the "instance" attribute with "target" in the
 	// Prometheus server. This would be similar to the "multi target pattern":
 	// https://prometheus.io/docs/guides/multi-target-exporter/
-	TargetInstanceKey = Name("target_instance")
+	TargetInstance = Name("target.instance")
 )

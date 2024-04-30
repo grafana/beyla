@@ -12,11 +12,6 @@ import (
 	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
 )
 
-const (
-	attrSrcCIDR = "src.cidr"
-	attrDstCIDR = "dst.cidr"
-)
-
 func glog() *slog.Logger {
 	return slog.With("component", "cidr.Decorator")
 }
@@ -91,9 +86,9 @@ func (g *ipGrouper) decorate(flow *ebpf.Record) {
 		flow.Attrs.Metadata = map[attr.Name]string{}
 	}
 	if srcCIDR := g.CIDR(flow.Id.SrcIP().IP()); srcCIDR != "" {
-		flow.Attrs.Metadata[attrSrcCIDR] = srcCIDR
+		flow.Attrs.Metadata[attr.SrcCIDR] = srcCIDR
 	}
 	if dstCIDR := g.CIDR(flow.Id.DstIP().IP()); dstCIDR != "" {
-		flow.Attrs.Metadata[attrDstCIDR] = dstCIDR
+		flow.Attrs.Metadata[attr.DstCIDR] = dstCIDR
 	}
 }

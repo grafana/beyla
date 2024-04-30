@@ -575,19 +575,19 @@ func (r *metricsReporter) labelValuesServiceGraph(span *request.Span) []string {
 func HTTPGetters(attrName attr.Name) (metric.Getter[*request.Span, string], bool) {
 	var getter metric.Getter[*request.Span, string]
 	switch attrName {
-	case attr.HTTPRequestMethodKey:
+	case attr.HTTPRequestMethod:
 		getter = func(s *request.Span) string { return s.Method }
-	case attr.HTTPResponseStatusCodeKey:
+	case attr.HTTPResponseStatusCode:
 		getter = func(s *request.Span) string { return strconv.Itoa(s.Status) }
 	case attr.HTTPRoute:
 		getter = func(s *request.Span) string { return s.Route }
-	case attr.HTTPUrlPathKey:
+	case attr.HTTPUrlPath:
 		getter = func(s *request.Span) string { return s.Path }
-	case attr.ClientAddrKey:
+	case attr.ClientAddr:
 		getter = metric.SpanPeer
-	case attr.ServerAddrKey:
+	case attr.ServerAddr:
 		getter = metric.SpanHost
-	case attr.ServerPortKey:
+	case attr.ServerPort:
 		getter = func(s *request.Span) string { return strconv.Itoa(s.HostPort) }
 	default:
 		return commonAttributes(attrName)
@@ -606,9 +606,9 @@ func GRPCGetters(attrName attr.Name) (metric.Getter[*request.Span, string], bool
 		getter = func(_ *request.Span) string { return "grpc" }
 	case attr.RPCGRPCStatusCode:
 		getter = func(s *request.Span) string { return strconv.Itoa(s.Status) }
-	case attr.ClientAddrKey:
+	case attr.ClientAddr:
 		getter = metric.SpanPeer
-	case attr.ServerAddrKey:
+	case attr.ServerAddr:
 		getter = metric.SpanPeer
 	default:
 		return commonAttributes(attrName)
@@ -617,7 +617,7 @@ func GRPCGetters(attrName attr.Name) (metric.Getter[*request.Span, string], bool
 }
 
 func SQLGetters(attrName attr.Name) (metric.Getter[*request.Span, string], bool) {
-	if attrName == attr.DBOperationKey {
+	if attrName == attr.DBOperation {
 		return func(span *request.Span) string {
 			return span.Method
 		}, true

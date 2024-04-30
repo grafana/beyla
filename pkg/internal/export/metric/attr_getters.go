@@ -4,8 +4,8 @@ import (
 	"github.com/grafana/beyla/pkg/internal/export/metric/attr"
 )
 
-// Getter is a function that defines how to get a given metric attribute of the type
-// O (e.g. string or attribute.KeyValue) from a data record
+// Getter is a function that defines how to get a given metric attribute of the type O
+// (e.g. string or attribute.KeyValue) from a data record
 // of the generic type T (e.g. *ebpf.Record or *request.Span)
 type Getter[T, O any] func(T) O
 
@@ -26,16 +26,12 @@ type NamedGetters[T, O any] func(name attr.Name) (Getter[T, O], bool)
 // It differentiates two name formats: the exposed name for the attribute (uses _ for word separation, as
 // required by Prometheus); and the internal name of the attribute (uses . for word separation, as internally Beyla
 // stores the metadata).
-// Whatever is the format provided by the user (dot-based or underscore-based), it converts dots to underscores
-// and vice-versa to make sure that the correct format is used either internally or externally.
 func PrometheusGetters[T, O any](getter NamedGetters[T, O], names []attr.Name) []Field[T, O] {
 	return buildGetterList(getter, names, attr.Name.Prom)
 }
 
 // OpenTelemetryGetters builds a list of Getter getters for the names provided by the
 // user configuration, ready to be passed to an OpenTelemetry exporter.
-// Whatever is the format of the user-provided attribute names (dot-based or underscore-based),
-// it converts underscores to dots to make sure that the correct attribute name is exposed.
 func OpenTelemetryGetters[T, O any](getter NamedGetters[T, O], names []attr.Name) []Field[T, O] {
 	return buildGetterList(getter, names, func(name attr.Name) string {
 		return string(name.OTEL())

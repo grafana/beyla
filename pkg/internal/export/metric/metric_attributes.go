@@ -8,79 +8,79 @@ import (
 )
 
 func HTTPRequestMethod(val string) attribute.KeyValue {
-	return attribute.Key(attr.HTTPRequestMethodKey).String(val)
+	return attribute.Key(attr.HTTPRequestMethod).String(val)
 }
 
 func HTTPResponseStatusCode(val int) attribute.KeyValue {
-	return attribute.Key(attr.HTTPResponseStatusCodeKey).Int(val)
+	return attribute.Key(attr.HTTPResponseStatusCode).Int(val)
 }
 
 func HTTPUrlPath(val string) attribute.KeyValue {
-	return attribute.Key(attr.HTTPUrlPathKey).String(val)
+	return attribute.Key(attr.HTTPUrlPath).String(val)
 }
 
 func HTTPUrlFull(val string) attribute.KeyValue {
-	return attribute.Key(attr.HTTPUrlFullKey).String(val)
+	return attribute.Key(attr.HTTPUrlFull).String(val)
 }
 
 func ClientAddr(val string) attribute.KeyValue {
-	return attribute.Key(attr.ClientAddrKey).String(val)
+	return attribute.Key(attr.ClientAddr).String(val)
 }
 
 func ServerAddr(val string) attribute.KeyValue {
-	return attribute.Key(attr.ServerAddrKey).String(val)
+	return attribute.Key(attr.ServerAddr).String(val)
 }
 
 func ServerPort(val int) attribute.KeyValue {
-	return attribute.Key(attr.ServerPortKey).Int(val)
+	return attribute.Key(attr.ServerPort).Int(val)
 }
 
 func HTTPRequestBodySize(val int) attribute.KeyValue {
-	return attribute.Key(attr.HTTPRequestBodySizeKey).Int(val)
+	return attribute.Key(attr.HTTPRequestBodySize).Int(val)
 }
 
 func HTTPResponseBodySize(val int) attribute.KeyValue {
-	return attribute.Key(attr.HTTPResponseBodySizeKey).Int(val)
+	return attribute.Key(attr.HTTPResponseBodySize).Int(val)
 }
 
 func SpanKindMetric(val string) attribute.KeyValue {
-	return attribute.Key(attr.SpanKindKey).String(val)
+	return attribute.Key(attr.SpanKind).String(val)
 }
 
 func SpanNameMetric(val string) attribute.KeyValue {
-	return attribute.Key(attr.SpanNameKey).String(val)
+	return attribute.Key(attr.SpanName).String(val)
 }
 
 func SourceMetric(val string) attribute.KeyValue {
-	return attribute.Key(attr.SourceKey).String(val)
+	return attribute.Key(attr.Source).String(val)
 }
 
 func ServiceMetric(val string) attribute.KeyValue {
-	return attribute.Key(attr.ServiceKey).String(val)
+	return attribute.Key(attr.Service).String(val)
 }
 
 func StatusCodeMetric(val int) attribute.KeyValue {
-	return attribute.Key(attr.StatusCodeKey).Int(val)
+	return attribute.Key(attr.StatusCode).Int(val)
 }
 
 func ClientMetric(val string) attribute.KeyValue {
-	return attribute.Key(attr.ClientKey).String(val)
+	return attribute.Key(attr.Client).String(val)
 }
 
 func ClientNamespaceMetric(val string) attribute.KeyValue {
-	return attribute.Key(attr.ClientNamespaceKey).String(val)
+	return attribute.Key(attr.ClientNamespace).String(val)
 }
 
 func ServerMetric(val string) attribute.KeyValue {
-	return attribute.Key(attr.ServerKey).String(val)
+	return attribute.Key(attr.Server).String(val)
 }
 
 func ServerNamespaceMetric(val string) attribute.KeyValue {
-	return attribute.Key(attr.ServerNamespaceKey).String(val)
+	return attribute.Key(attr.ServerNamespace).String(val)
 }
 
 func ConnectionTypeMetric(val string) attribute.KeyValue {
-	return attribute.Key(attr.ConnectionTypeKey).String(val)
+	return attribute.Key(attr.ConnectionType).String(val)
 }
 
 func SpanHost(span *request.Span) string {

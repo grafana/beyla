@@ -87,10 +87,10 @@ func TestBasicPipeline(t *testing.T) {
 		Name: "http.server.request.duration",
 		Unit: "s",
 		Attributes: map[string]string{
-			string(attr.HTTPRequestMethodKey):      "GET",
-			string(attr.HTTPResponseStatusCodeKey): "404",
-			string(attr.HTTPUrlPathKey):            "/foo/bar",
-			string(attr.ClientAddrKey):             "1.1.1.1",
+			string(attr.HTTPRequestMethod):      "GET",
+			string(attr.HTTPResponseStatusCode): "404",
+			string(attr.HTTPUrlPath):            "/foo/bar",
+			string(attr.ClientAddr):             "1.1.1.1",
 		},
 		ResourceAttributes: map[string]string{
 			string(semconv.ServiceNameKey):          "foo-svc",
@@ -248,9 +248,9 @@ func TestRouteConsolidation(t *testing.T) {
 		Name: "http.server.request.duration",
 		Unit: "s",
 		Attributes: map[string]string{
-			string(attr.HTTPRequestMethodKey):      "GET",
-			string(attr.HTTPResponseStatusCodeKey): "200",
-			string(semconv.HTTPRouteKey):           "/user/{id}",
+			string(attr.HTTPRequestMethod):      "GET",
+			string(attr.HTTPResponseStatusCode): "200",
+			string(semconv.HTTPRouteKey):        "/user/{id}",
 		},
 		ResourceAttributes: map[string]string{
 			string(semconv.ServiceNameKey):          "svc-1",
@@ -264,9 +264,9 @@ func TestRouteConsolidation(t *testing.T) {
 		Name: "http.server.request.duration",
 		Unit: "s",
 		Attributes: map[string]string{
-			string(attr.HTTPRequestMethodKey):      "GET",
-			string(attr.HTTPResponseStatusCodeKey): "200",
-			string(semconv.HTTPRouteKey):           "/products/{id}/push",
+			string(attr.HTTPRequestMethod):      "GET",
+			string(attr.HTTPResponseStatusCode): "200",
+			string(semconv.HTTPRouteKey):        "/products/{id}/push",
 		},
 		ResourceAttributes: map[string]string{
 			string(semconv.ServiceNameKey):          "svc-1",
@@ -280,9 +280,9 @@ func TestRouteConsolidation(t *testing.T) {
 		Name: "http.server.request.duration",
 		Unit: "s",
 		Attributes: map[string]string{
-			string(attr.HTTPRequestMethodKey):      "GET",
-			string(attr.HTTPResponseStatusCodeKey): "200",
-			string(semconv.HTTPRouteKey):           "/**",
+			string(attr.HTTPRequestMethod):      "GET",
+			string(attr.HTTPResponseStatusCode): "200",
+			string(semconv.HTTPRouteKey):        "/**",
 		},
 		ResourceAttributes: map[string]string{
 			string(semconv.ServiceNameKey):          "svc-1",
@@ -331,7 +331,7 @@ func TestGRPCPipeline(t *testing.T) {
 			string(semconv.RPCSystemKey):         "grpc",
 			string(semconv.RPCGRPCStatusCodeKey): "3",
 			string(semconv.RPCMethodKey):         "/foo/bar",
-			string(attr.ClientAddrKey):           "1.1.1.1",
+			string(attr.ClientAddr):              "1.1.1.1",
 		},
 		ResourceAttributes: map[string]string{
 			string(semconv.ServiceNameKey):          "grpc-svc",
@@ -406,10 +406,10 @@ func TestBasicPipelineInfo(t *testing.T) {
 		Name: "http.server.request.duration",
 		Unit: "s",
 		Attributes: map[string]string{
-			string(attr.HTTPRequestMethodKey):      "PATCH",
-			string(attr.HTTPResponseStatusCodeKey): "204",
-			string(attr.HTTPUrlPathKey):            "/aaa/bbb",
-			string(attr.ClientAddrKey):             "1.1.1.1",
+			string(attr.HTTPRequestMethod):      "PATCH",
+			string(attr.HTTPResponseStatusCode): "204",
+			string(attr.HTTPUrlPath):            "/aaa/bbb",
+			string(attr.ClientAddr):             "1.1.1.1",
 		},
 		ResourceAttributes: map[string]string{
 			string(semconv.ServiceNameKey):          "comm",
@@ -507,15 +507,15 @@ func matchTraceEvent(t require.TestingT, name string, event collector.TraceRecor
 	assert.Equal(t, collector.TraceRecord{
 		Name: name,
 		Attributes: map[string]string{
-			string(attr.HTTPRequestMethodKey):      "GET",
-			string(attr.HTTPResponseStatusCodeKey): "404",
-			string(attr.HTTPUrlPathKey):            "/foo/bar",
-			string(attr.ClientAddrKey):             "1.1.1.1",
-			string(attr.ServerAddrKey):             getHostname(),
-			string(attr.ServerPortKey):             "8080",
-			string(attr.HTTPRequestBodySizeKey):    "0",
-			"span_id":                              event.Attributes["span_id"],
-			"parent_span_id":                       event.Attributes["parent_span_id"],
+			string(attr.HTTPRequestMethod):      "GET",
+			string(attr.HTTPResponseStatusCode): "404",
+			string(attr.HTTPUrlPath):            "/foo/bar",
+			string(attr.ClientAddr):             "1.1.1.1",
+			string(attr.ServerAddr):             getHostname(),
+			string(attr.ServerPort):             "8080",
+			string(attr.HTTPRequestBodySize):    "0",
+			"span_id":                           event.Attributes["span_id"],
+			"parent_span_id":                    event.Attributes["parent_span_id"],
 		},
 		ResourceAttributes: map[string]string{
 			string(semconv.ServiceNameKey):          "bar-svc",
@@ -550,9 +550,9 @@ func matchGRPCTraceEvent(t *testing.T, name string, event collector.TraceRecord)
 			string(semconv.RPCSystemKey):         "grpc",
 			string(semconv.RPCGRPCStatusCodeKey): "3",
 			string(semconv.RPCMethodKey):         "foo.bar",
-			string(attr.ClientAddrKey):           "1.1.1.1",
-			string(attr.ServerAddrKey):           "127.0.0.1",
-			string(attr.ServerPortKey):           "8080",
+			string(attr.ClientAddr):              "1.1.1.1",
+			string(attr.ServerAddr):              "127.0.0.1",
+			string(attr.ServerPort):              "8080",
 			"span_id":                            event.Attributes["span_id"],
 			"parent_span_id":                     event.Attributes["parent_span_id"],
 		},
@@ -583,12 +583,12 @@ func matchInnerGRPCTraceEvent(t *testing.T, name string, event collector.TraceRe
 
 func matchNestedEvent(t *testing.T, name, method, target, status string, kind ptrace.SpanKind, event collector.TraceRecord) {
 	assert.Equal(t, name, event.Name)
-	assert.Equal(t, method, event.Attributes[string(attr.HTTPRequestMethodKey)])
-	assert.Equal(t, status, event.Attributes[string(attr.HTTPResponseStatusCodeKey)])
+	assert.Equal(t, method, event.Attributes[string(attr.HTTPRequestMethod)])
+	assert.Equal(t, status, event.Attributes[string(attr.HTTPResponseStatusCode)])
 	if kind == ptrace.SpanKindClient {
-		assert.Equal(t, target, event.Attributes[string(attr.HTTPUrlFullKey)])
+		assert.Equal(t, target, event.Attributes[string(attr.HTTPUrlFull)])
 	} else {
-		assert.Equal(t, target, event.Attributes[string(attr.HTTPUrlPathKey)])
+		assert.Equal(t, target, event.Attributes[string(attr.HTTPUrlPath)])
 	}
 	assert.Equal(t, kind, event.Kind)
 }
@@ -613,15 +613,15 @@ func matchInfoEvent(t *testing.T, name string, event collector.TraceRecord) {
 	assert.Equal(t, collector.TraceRecord{
 		Name: name,
 		Attributes: map[string]string{
-			string(attr.HTTPRequestMethodKey):      "PATCH",
-			string(attr.HTTPResponseStatusCodeKey): "204",
-			string(attr.HTTPUrlPathKey):            "/aaa/bbb",
-			string(attr.ClientAddrKey):             "1.1.1.1",
-			string(attr.ServerAddrKey):             getHostname(),
-			string(attr.ServerPortKey):             "8080",
-			string(attr.HTTPRequestBodySizeKey):    "0",
-			"span_id":                              event.Attributes["span_id"],
-			"parent_span_id":                       "",
+			string(attr.HTTPRequestMethod):      "PATCH",
+			string(attr.HTTPResponseStatusCode): "204",
+			string(attr.HTTPUrlPath):            "/aaa/bbb",
+			string(attr.ClientAddr):             "1.1.1.1",
+			string(attr.ServerAddr):             getHostname(),
+			string(attr.ServerPort):             "8080",
+			string(attr.HTTPRequestBodySize):    "0",
+			"span_id":                           event.Attributes["span_id"],
+			"parent_span_id":                    "",
 		},
 		ResourceAttributes: map[string]string{
 			string(semconv.ServiceNameKey):          "comm",

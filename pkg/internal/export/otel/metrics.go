@@ -836,21 +836,21 @@ func setMetricsProtocol(cfg *MetricsConfig) {
 func HTTPGetters(name attr.Name) (metric2.Getter[*request.Span, attribute.KeyValue], bool) {
 	var getter metric2.Getter[*request.Span, attribute.KeyValue]
 	switch name {
-	case attr.HTTPRequestMethodKey:
+	case attr.HTTPRequestMethod:
 		getter = func(s *request.Span) attribute.KeyValue { return metric2.HTTPRequestMethod(s.Method) }
 
 	// name is normalized as dot-only, so http.response.status_code needs to be transformed to http.response.status.code
-	case attr.HTTPResponseStatusCodeKey:
+	case attr.HTTPResponseStatusCode:
 		getter = func(s *request.Span) attribute.KeyValue { return metric2.HTTPResponseStatusCode(s.Status) }
 	case attr.HTTPRoute:
 		getter = func(s *request.Span) attribute.KeyValue { return semconv.HTTPRoute(s.Route) }
-	case attr.HTTPUrlPathKey:
+	case attr.HTTPUrlPath:
 		getter = func(s *request.Span) attribute.KeyValue { return metric2.HTTPUrlPath(s.Path) }
-	case attr.ClientAddrKey:
+	case attr.ClientAddr:
 		getter = func(s *request.Span) attribute.KeyValue { return metric2.ClientAddr(metric2.SpanPeer(s)) }
-	case attr.ServerAddrKey:
+	case attr.ServerAddr:
 		getter = func(s *request.Span) attribute.KeyValue { return metric2.ServerAddr(metric2.SpanHost(s)) }
-	case attr.ServerPortKey:
+	case attr.ServerPort:
 		getter = func(s *request.Span) attribute.KeyValue { return metric2.ServerPort(s.HostPort) }
 	}
 	// default: unlike the prom.go getters, we don't check here for service name nor k8s metadata
@@ -871,9 +871,9 @@ func GRPCGetters(name attr.Name) (metric2.Getter[*request.Span, attribute.KeyVal
 	// name is normalized as dot-only, so rpc.grpc.status_code needs to be transformed to rpc.grpc.status.code
 	case attr.RPCGRPCStatusCode:
 		getter = func(s *request.Span) attribute.KeyValue { return semconv.RPCGRPCStatusCodeKey.Int(s.Status) }
-	case attr.ClientAddrKey:
+	case attr.ClientAddr:
 		getter = func(s *request.Span) attribute.KeyValue { return metric2.ClientAddr(metric2.SpanPeer(s)) }
-	case attr.ServerAddrKey:
+	case attr.ServerAddr:
 		getter = func(s *request.Span) attribute.KeyValue { return metric2.ServerAddr(metric2.SpanPeer(s)) }
 	}
 	// default: unlike the prom.go getters, we don't check here for service name nor k8s metadata
@@ -882,7 +882,7 @@ func GRPCGetters(name attr.Name) (metric2.Getter[*request.Span, attribute.KeyVal
 }
 
 func SQLGetters(attrName attr.Name) (metric2.Getter[*request.Span, attribute.KeyValue], bool) {
-	if attrName == attr.DBOperationKey {
+	if attrName == attr.DBOperation {
 		return func(span *request.Span) attribute.KeyValue {
 			return semconv.DBOperation(span.Method)
 		}, true

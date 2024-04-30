@@ -11,14 +11,17 @@ func TestEnabledGroups(t *testing.T) {
 
 	assert.False(t, group.Has(EnablePrometheus))
 	assert.False(t, group.Has(EnableKubernetes))
+	assert.False(t, group.Has(EnableNetCIDR))
 
 	group.Add(EnablePrometheus)
 
 	assert.True(t, group.Has(EnablePrometheus))
 	assert.False(t, group.Has(EnableKubernetes))
+	assert.False(t, group.Has(EnableNetCIDR))
 
 	group.Add(EnableKubernetes)
 
 	assert.True(t, group.Has(EnablePrometheus))
 	assert.True(t, group.Has(EnableKubernetes))
+	assert.False(t, group.Has(EnableNetCIDR))
 }

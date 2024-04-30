@@ -119,6 +119,9 @@ func attributeGroups(config *beyla.Config, ctxInfo *global.ContextInfo) {
 		ctxInfo.MetricAttributeGroups.Add(metric.EnableTarget)
 	}
 	if config.NetworkFlows.Deduper == flow.DeduperNone {
-		ctxInfo.MetricAttributeGroups.Add(metric.EnableIfaceDirection)
+		ctxInfo.MetricAttributeGroups.Add(metric.EnableNetIfaceDirection)
+	}
+	if config.NetworkFlows.CIDRs.Enabled() {
+		ctxInfo.MetricAttributeGroups.Add(metric.EnableNetCIDR)
 	}
 }

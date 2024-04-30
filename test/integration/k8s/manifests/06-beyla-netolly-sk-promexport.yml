@@ -22,9 +22,8 @@ data:
         cluster_name: my-kube
       select:
         beyla.network.flow.bytes:
-          include:
-            # assured cardinality explosion. Don't try in production!
-            - *
+          # assured cardinality explosion. Don't try in production!
+          include: ["*"]
 ---
 kind: Service
 apiVersion: v1

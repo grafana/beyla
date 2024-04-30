@@ -1,18 +1,20 @@
 package metric
 
 import (
-	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
-
 	"github.com/grafana/beyla/pkg/internal/export/metric/attr"
 )
 
+// EnabledGroups will let enabling by default some groups of attributes under
+// given circumstances. For example, will let enabling kubernetes metadata attributes
+// only if Beyla is running under Kubernetes and kube metadata is enabled.
 type EnabledGroups int
 
 const (
 	EnableKubernetes = EnabledGroups(1 << iota)
 	EnablePrometheus
 	EnableHTTPRoutes
-	EnableIfaceDirection
+	EnableNetIfaceDirection
+	EnableNetCIDR
 	EnablePeerInfo // TODO Beyla 2.0: remove when we remove ReportPeerInfo configuration option
 	EnableTarget   // TODO Beyla 2.0: remove when we remove ReportTarget configuration option
 )
@@ -25,20 +27,26 @@ func (e *EnabledGroups) Add(groups EnabledGroups) {
 	*e |= groups
 }
 
-// Any new metric and attribute must be added here so the selectors will make their
+// Any new metric and attribute must be added here to be matched from the user-provided wildcard
+// selectors of the attributes.select section
 func getDefinitions(groups EnabledGroups) map[Section]Definition {
 	kubeEnabled := groups.Has(EnableKubernetes)
 	promEnabled := groups.Has(EnablePrometheus)
-	ifaceDirEnabled := groups.Has(EnableIfaceDirection)
+	ifaceDirEnabled := groups.Has(EnableNetIfaceDirection)
 	peerInfoEnabled := groups.Has(EnablePeerInfo)
+	cidrEnabled := groups.Has(EnableNetCIDR)
 
+	// attributes to be reported exclusively for prometheus exporters
 	var prometheusAttributes = Definition{
 		Disabled: !promEnabled,
 		Attributes: map[attr.Name]Default{
-			attr.TargetInstanceKey: true,
+			attr.TargetInstance: true,
+			attr.ServiceName:    true,
 		},
 	}
 
+	// attributes to be reported exclusively for network metrics when
+	// kubernetes metadata is enabled
 	var networkKubeAttributes = Definition{
 		Disabled: !kubeEnabled,
 		Attributes: map[attr.Name]Default{
@@ -60,6 +68,18 @@ func getDefinitions(groups EnabledGroups) map[Section]Definition {
 		},
 	}
 
+	// network CIDR attributes are only enabled if the CIDRs configuration
+	// is defined
+	var networkCIDR = Definition{
+		Disabled: !cidrEnabled,
+		Attributes: map[attr.Name]Default{
+			attr.DstCIDR: true,
+			attr.SrcCIDR: true,
+		},
+	}
+
+	// attributes to be reported exclusively for application metrics when
+	// kubernetes metadata is enabled
 	var appKubeAttributes = Definition{
 		Disabled: !kubeEnabled,
 		Attributes: map[attr.Name]Default{
@@ -75,57 +95,52 @@ func getDefinitions(groups EnabledGroups) map[Section]Definition {
 		},
 	}
 
-	var appCommon = Definition{
-		Parents: []*Definition{&prometheusAttributes},
-		Attributes: map[attr.Name]Default{
-			attr.Name(semconv.ServiceNameKey): true,
-		},
-	}
-
 	var httpRoutes = Definition{
 		Disabled: !groups.Has(EnableHTTPRoutes),
 		Attributes: map[attr.Name]Default{
-			attr.Name(semconv.HTTPRouteKey): true,
+			attr.HTTPRoute: true,
 		},
 	}
 
 	var serverInfo = Definition{
 		Attributes: map[attr.Name]Default{
-			attr.ClientAddrKey: Default(peerInfoEnabled),
+			attr.ClientAddr: Default(peerInfoEnabled),
 		},
 	}
 	var httpClientInfo = Definition{
 		Attributes: map[attr.Name]Default{
-			attr.ServerAddrKey: Default(peerInfoEnabled),
-			attr.ServerPortKey: Default(peerInfoEnabled),
+			attr.ServerAddr: Default(peerInfoEnabled),
+			attr.ServerPort: Default(peerInfoEnabled),
 		},
 	}
 	var grpcClientInfo = Definition{
 		Attributes: map[attr.Name]Default{
-			attr.ServerAddrKey: Default(peerInfoEnabled),
+			attr.ServerAddr: Default(peerInfoEnabled),
 		},
 	}
 
 	// TODO Beyla 2.0 remove
+	// this just defaults the path as default when the target report is enabled
+	// via the deprecated BEYLA_METRICS_REPORT_PEER config option
 	var deprecatedHTTPPath = Definition{
 		Disabled: !groups.Has(EnableTarget),
 		Attributes: map[attr.Name]Default{
-			attr.HTTPUrlPathKey: true,
+			attr.HTTPUrlPath: true,
 		},
 	}
 
 	var httpCommon = Definition{
 		Parents: []*Definition{&httpRoutes, &deprecatedHTTPPath},
 		Attributes: map[attr.Name]Default{
-			attr.HTTPRequestMethodKey:      true,
-			attr.HTTPResponseStatusCodeKey: true,
-			attr.HTTPUrlPathKey:            false,
+			attr.HTTPRequestMethod:      true,
+			attr.HTTPResponseStatusCode: true,
+			attr.HTTPUrlPath:            false,
 		},
 	}
 
 	return map[Section]Definition{
 		BeylaNetworkFlow.Section: {
-			Parents: []*Definition{&networkKubeAttributes},
+			Parents: []*Definition{&networkCIDR, &networkKubeAttributes},
 			Attributes: map[attr.Name]Default{
 				attr.BeylaIP:    false,
 				attr.Transport:  false,
@@ -140,40 +155,40 @@ func getDefinitions(groups EnabledGroups) map[Section]Definition {
 			},
 		},
 		HTTPServerDuration.Section: {
-			Parents: []*Definition{&appCommon, &appKubeAttributes, &httpCommon, &serverInfo},
+			Parents: []*Definition{&prometheusAttributes, &appKubeAttributes, &httpCommon, &serverInfo},
 		},
 		HTTPServerRequestSize.Section: {
-			Parents: []*Definition{&appCommon, &appKubeAttributes, &httpCommon, &serverInfo},
+			Parents: []*Definition{&prometheusAttributes, &appKubeAttributes, &httpCommon, &serverInfo},
 		},
 		HTTPClientDuration.Section: {
-			Parents: []*Definition{&appCommon, &appKubeAttributes, &httpCommon, &httpClientInfo},
+			Parents: []*Definition{&prometheusAttributes, &appKubeAttributes, &httpCommon, &httpClientInfo},
 		},
 		HTTPClientRequestSize.Section: {
-			Parents: []*Definition{&appCommon, &appKubeAttributes, &httpCommon, &httpClientInfo},
+			Parents: []*Definition{&prometheusAttributes, &appKubeAttributes, &httpCommon, &httpClientInfo},
 		},
 		RPCClientDuration.Section: {
-			Parents: []*Definition{&appCommon, &appKubeAttributes, &grpcClientInfo},
+			Parents: []*Definition{&prometheusAttributes, &appKubeAttributes, &grpcClientInfo},
 			Attributes: map[attr.Name]Default{
-				attr.Name(semconv.RPCMethodKey):         true,
-				attr.Name(semconv.RPCSystemKey):         true,
-				attr.Name(semconv.RPCGRPCStatusCodeKey): true,
+				attr.RPCMethod:         true,
+				attr.RPCSystem:         true,
+				attr.RPCGRPCStatusCode: true,
 			},
 		},
 		RPCServerDuration.Section: {
-			Parents: []*Definition{&appCommon, &appKubeAttributes, &serverInfo},
+			Parents: []*Definition{&prometheusAttributes, &appKubeAttributes, &serverInfo},
 			Attributes: map[attr.Name]Default{
-				attr.Name(semconv.RPCMethodKey):         true,
-				attr.Name(semconv.RPCSystemKey):         true,
-				attr.Name(semconv.RPCGRPCStatusCodeKey): true,
+				attr.RPCMethod:         true,
+				attr.RPCSystem:         true,
+				attr.RPCGRPCStatusCode: true,
 				// Overriding default serverInfo configuration because we want
 				// to report it by default
-				attr.ClientAddrKey: true,
+				attr.ClientAddr: true,
 			},
 		},
 		SQLClientDuration.Section: {
-			Parents: []*Definition{&appCommon, &appKubeAttributes},
+			Parents: []*Definition{&prometheusAttributes, &appKubeAttributes},
 			Attributes: map[attr.Name]Default{
-				attr.Name(semconv.DBOperationKey): true,
+				attr.DBOperation: true,
 			},
 		},
 	}

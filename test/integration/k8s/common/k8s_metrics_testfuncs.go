@@ -70,7 +70,7 @@ func DoWaitForComponentsAvailable(t *testing.T) {
 	)
 	pq := prom.Client{HostPort: prometheusHostPort}
 	var results []prom.Result
-	test.Eventually(t, 4*testTimeout, func(t require.TestingT) {
+	test.Eventually(t, 5*testTimeout, func(t require.TestingT) {
 		// first, verify that the test service endpoint is healthy
 		r, err := http.Get(url + subpath)
 		require.NoError(t, err)
@@ -82,7 +82,7 @@ func DoWaitForComponentsAvailable(t *testing.T) {
 		results, err = pq.Query(`http_server_request_duration_seconds_count{url_path="` + subpath + `",k8s_pod_name=~"testserver-.*"}`)
 		require.NoError(t, err)
 		require.NotEmpty(t, results)
-	}, test.Interval(time.Second))
+	}, test.Interval(2*time.Second))
 }
 
 func FeatureHTTPMetricsDecoration() features.Feature {

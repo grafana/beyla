@@ -18,7 +18,7 @@ const (
 	OwnerDaemonSet
 )
 
-func (o OwnerType) LabelName() string {
+func (o OwnerType) LabelName() attr.Name {
 	switch o {
 	case OwnerReplicaSet:
 		return attr.K8sReplicaSetName
@@ -73,7 +73,7 @@ func (o *Owner) string(sb *strings.Builder) {
 		o.Owner.string(sb)
 		sb.WriteString("->")
 	}
-	sb.WriteString(o.Type.LabelName())
+	sb.WriteString(string(o.Type.LabelName()))
 	sb.WriteByte(':')
 	sb.WriteString(o.Name)
 }

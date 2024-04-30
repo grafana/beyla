@@ -106,7 +106,7 @@ func (n *decorator) transform(flow *ebpf.Record) bool {
 		flow.Attrs.Metadata = map[string]string{}
 	}
 	if n.clusterName != "" {
-		flow.Attrs.Metadata[attr.K8sClusterName] = n.clusterName
+		flow.Attrs.Metadata[string(attr.K8sClusterName)] = n.clusterName
 	}
 	srcOk := n.decorate(flow, attrPrefixSrc, flow.Id.SrcIP().IP().String())
 	dstOk := n.decorate(flow, attrPrefixDst, flow.Id.DstIP().IP().String())

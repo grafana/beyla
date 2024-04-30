@@ -2,6 +2,8 @@ package metric
 
 import (
 	"strings"
+
+	"github.com/grafana/beyla/pkg/internal/export/metric/attr"
 )
 
 // Getter is a function that defines how to get a given metric attribute of the type
@@ -28,11 +30,11 @@ type NamedGetters[T, O any] func(internalName string) (Getter[T, O], bool)
 // stores the metadata).
 // Whatever is the format provided by the user (dot-based or underscore-based), it converts dots to underscores
 // and vice-versa to make sure that the correct format is used either internally or externally.
-func PrometheusGetters[T, O any](getter NamedGetters[T, O], names []string) []Field[T, O] {
+func PrometheusGetters[T, O any](getter NamedGetters[T, O], names []attr.Name) []Field[T, O] {
 	attrs := make([]Field[T, O], 0, len(names))
 	for _, name := range names {
-		exposedName := normalizeToUnderscore(name)
-		internalName := strings.ReplaceAll(name, "_", ".")
+		exposedName := normalizeToUnderscore(string(name))
+		internalName := string(name)
 		if get, ok := getter(internalName); ok {
 			attrs = append(attrs, Field[T, O]{
 				ExposedName: exposedName,
@@ -47,10 +49,10 @@ func PrometheusGetters[T, O any](getter NamedGetters[T, O], names []string) []Fi
 // user configuration, ready to be passed to an OpenTelemetry exporter.
 // Whatever is the format of the user-provided attribute names (dot-based or underscore-based),
 // it converts underscores to dots to make sure that the correct attribute name is exposed.
-func OpenTelemetryGetters[T, O any](getter NamedGetters[T, O], names []string) []Field[T, O] {
+func OpenTelemetryGetters[T, O any](getter NamedGetters[T, O], names []attr.Name) []Field[T, O] {
 	attrs := make([]Field[T, O], 0, len(names))
 	for _, name := range names {
-		dotName := NormalizeToDot(name)
+		dotName := NormalizeToDot(string(name))
 		if get, ok := getter(dotName); ok {
 			attrs = append(attrs, Field[T, O]{
 				ExposedName: dotName,
@@ -61,6 +63,8 @@ func OpenTelemetryGetters[T, O any](getter NamedGetters[T, O], names []string) [
 	return attrs
 }
 
+// Deprecated
+// TODO remove
 func normalizeToUnderscore(name string) string {
 	return strings.ReplaceAll(name, ".", "_")
 }
@@ -69,6 +73,8 @@ func normalizeToUnderscore(name string) string {
 // such as: http.response.status_code
 // The name is provided by the user, so this function will handle mistakes in the dot
 // or underscore notation from the user
+// Deprecated
+// TODO remove
 func NormalizeToDot(name string) string {
 	return strings.ReplaceAll(name, "_", ".")
 }

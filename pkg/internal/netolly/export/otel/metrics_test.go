@@ -7,6 +7,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 
 	"github.com/grafana/beyla/pkg/internal/export/metric"
+	"github.com/grafana/beyla/pkg/internal/export/metric/attr"
 	"github.com/grafana/beyla/pkg/internal/export/otel"
 	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
 	"github.com/grafana/beyla/pkg/internal/netolly/export"
@@ -36,7 +37,7 @@ func TestMetricAttributes(t *testing.T) {
 	in.Id.DstIp.In6U.U6Addr8 = [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 255, 33, 22, 11, 1}
 
 	me := &metricsExporter{metrics: &Expirer{attrs: metric.OpenTelemetryGetters(
-		export.NamedGetters, []string{
+		export.NamedGetters, []attr.Name{
 			"src.address", "dst.address", "src.port", "dst.port", "src.name", "dst_name",
 			"k8s.src.name", "k8s.src_namespace", "k8s.dst.name", "k8s.dst.namespace",
 		})}}
@@ -84,7 +85,7 @@ func TestMetricAttributes_Filter(t *testing.T) {
 	in.Id.SrcIp.In6U.U6Addr8 = [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 255, 12, 34, 56, 78}
 	in.Id.DstIp.In6U.U6Addr8 = [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 255, 33, 22, 11, 1}
 
-	me := &Expirer{attrs: metric.OpenTelemetryGetters(export.NamedGetters, []string{
+	me := &Expirer{attrs: metric.OpenTelemetryGetters(export.NamedGetters, []attr.Name{
 		"src.address",
 		"k8s.src.name",
 		"k8s.dst.name",

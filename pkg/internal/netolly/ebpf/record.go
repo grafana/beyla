@@ -50,7 +50,7 @@ type RecordAttrs struct {
 	Interface string
 	// BeylaIP provides information about the source of the flow (the Agent that traced it)
 	BeylaIP  string
-	Metadata map[string]string
+	Metadata map[string]string // TODO: map key time is attr.Name
 }
 
 func NewRecord(

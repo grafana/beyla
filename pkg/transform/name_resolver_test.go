@@ -119,7 +119,7 @@ func TestCleanName(t *testing.T) {
 		Name:      "service",
 		Namespace: "special.namespace",
 		Metadata: map[string]string{
-			attr.K8sNamespaceName: "k8snamespace",
+			string(attr.K8sNamespaceName): "k8snamespace",
 		},
 	}
 

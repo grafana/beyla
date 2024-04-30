@@ -5,6 +5,7 @@ import (
 	"maps"
 	"slices"
 
+	"github.com/grafana/beyla/pkg/internal/export/metric/attr"
 	"github.com/grafana/beyla/pkg/internal/helpers"
 )
 
@@ -22,7 +23,7 @@ func NewProvider(groups EnabledGroups, selectorCfg Selection) (*AttrSelector, er
 	}, nil
 }
 
-func (p *AttrSelector) For(metricName Name) []string {
+func (p *AttrSelector) For(metricName Name) []attr.Name {
 	metricAttributes, ok := p.definition[metricName.Section]
 	if !ok {
 		panic(fmt.Sprintf("BUG! metric not found %+v", metricName))
@@ -33,22 +34,22 @@ func (p *AttrSelector) For(metricName Name) []string {
 		slices.Sort(attrs)
 		return attrs
 	}
-	var addAttributes map[string]struct{}
+	var addAttributes map[attr.Name]struct{}
 	// if the "include" list is empty, we use the default attributes
 	// as included
 	if len(inclusionLists.Include) == 0 {
 		addAttributes = metricAttributes.Default()
 	} else {
-		addAttributes = map[string]struct{}{}
-		for attr := range metricAttributes.All() {
-			attr = NormalizeToDot(attr)
-			if inclusionLists.includes(attr) {
-				addAttributes[attr] = struct{}{}
+		addAttributes = map[attr.Name]struct{}{}
+		for attrName := range metricAttributes.All() {
+			attrName = attr.Name(NormalizeToDot(string(attrName)))
+			if inclusionLists.includes(string(attrName)) {
+				addAttributes[attrName] = struct{}{}
 			}
 		}
 	}
-	maps.DeleteFunc(addAttributes, func(attr string, _ struct{}) bool {
-		return inclusionLists.excludes(NormalizeToDot(attr))
+	maps.DeleteFunc(addAttributes, func(attr attr.Name, _ struct{}) bool {
+		return inclusionLists.excludes(NormalizeToDot(string(attr)))
 	})
 	attrs := helpers.SetToSlice(addAttributes)
 	slices.Sort(attrs)
@@ -60,14 +61,14 @@ type Default bool
 type Definition struct {
 	Disabled   bool
 	Parents    []*Definition
-	Attributes map[string]Default
+	Attributes map[attr.Name]Default
 }
 
-func (p *Definition) All() map[string]struct{} {
+func (p *Definition) All() map[attr.Name]struct{} {
 	if p.Disabled {
-		return map[string]struct{}{}
+		return map[attr.Name]struct{}{}
 	}
-	attrs := map[string]struct{}{}
+	attrs := map[attr.Name]struct{}{}
 	for _, parent := range p.Parents {
 		maps.Copy(attrs, parent.All())
 	}
@@ -77,11 +78,11 @@ func (p *Definition) All() map[string]struct{} {
 	return attrs
 }
 
-func (p *Definition) Default() map[string]struct{} {
+func (p *Definition) Default() map[attr.Name]struct{} {
 	if p.Disabled {
-		return map[string]struct{}{}
+		return map[attr.Name]struct{}{}
 	}
-	attrs := map[string]struct{}{}
+	attrs := map[attr.Name]struct{}{}
 	for _, parent := range p.Parents {
 		maps.Copy(attrs, parent.Default())
 	}

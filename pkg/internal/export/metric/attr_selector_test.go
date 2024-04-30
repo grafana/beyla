@@ -5,6 +5,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/grafana/beyla/pkg/internal/export/metric/attr"
 )
 
 func TestNormalize(t *testing.T) {
@@ -29,7 +31,7 @@ func TestFor(t *testing.T) {
 		},
 	})
 	require.NoError(t, err)
-	assert.Equal(t, []string{
+	assert.Equal(t, []attr.Name{
 		"beyla.ip",
 		"k8s.dst.namespace",
 		"k8s.dst.node.ip",
@@ -49,7 +51,7 @@ func TestFor_KubeDisabled(t *testing.T) {
 		},
 	})
 	require.NoError(t, err)
-	assert.Equal(t, []string{
+	assert.Equal(t, []attr.Name{
 		"beyla.ip",
 		"src.address",
 		"src.name",
@@ -67,7 +69,7 @@ func TestNilDoesNotCrash(t *testing.T) {
 func TestDefault(t *testing.T) {
 	p, err := NewProvider(EnableKubernetes, nil)
 	require.NoError(t, err)
-	assert.Equal(t, []string{
+	assert.Equal(t, []attr.Name{
 		"k8s.cluster.name",
 		"k8s.dst.namespace",
 		"k8s.dst.owner.name",

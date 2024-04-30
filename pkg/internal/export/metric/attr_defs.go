@@ -1,7 +1,7 @@
 package metric
 
 import (
-	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
+	semconv "go.opentelemetry.io/otel/semconv/v1.23.1"
 
 	"github.com/grafana/beyla/pkg/internal/export/metric/attr"
 )
@@ -34,14 +34,14 @@ func getDefinitions(groups EnabledGroups) map[Section]Definition {
 
 	var prometheusAttributes = Definition{
 		Disabled: !promEnabled,
-		Attributes: map[string]Default{
+		Attributes: map[attr.Name]Default{
 			attr.TargetInstanceKey: true,
 		},
 	}
 
 	var networkKubeAttributes = Definition{
 		Disabled: !kubeEnabled,
-		Attributes: map[string]Default{
+		Attributes: map[attr.Name]Default{
 			attr.K8sSrcOwnerName: true,
 			attr.K8sSrcNamespace: true,
 			attr.K8sDstOwnerName: true,
@@ -60,51 +60,73 @@ func getDefinitions(groups EnabledGroups) map[Section]Definition {
 		},
 	}
 
+	var appKubeAttributes = Definition{
+		Disabled: !kubeEnabled,
+		Attributes: map[attr.Name]Default{
+			attr.K8sNamespaceName:   true,
+			attr.K8sPodName:         true,
+			attr.K8sDeploymentName:  true,
+			attr.K8sReplicaSetName:  true,
+			attr.K8sDaemonSetName:   true,
+			attr.K8sStatefulSetName: true,
+			attr.K8sNodeName:        true,
+			attr.K8sPodUID:          true,
+			attr.K8sPodStartTime:    true,
+		},
+	}
+
+	var appCommon = Definition{
+		Parents: []*Definition{&prometheusAttributes},
+		Attributes: map[attr.Name]Default{
+			attr.Name(semconv.ServiceNameKey): true,
+		},
+	}
+
 	var httpRoutes = Definition{
 		Disabled: !groups.Has(EnableHTTPRoutes),
-		Attributes: map[string]Default{
-			string(semconv.HTTPRouteKey): true,
+		Attributes: map[attr.Name]Default{
+			attr.Name(semconv.HTTPRouteKey): true,
 		},
 	}
 
 	var serverInfo = Definition{
-		Attributes: map[string]Default{
-			string(attr.ClientAddrKey): Default(peerInfoEnabled),
+		Attributes: map[attr.Name]Default{
+			attr.ClientAddrKey: Default(peerInfoEnabled),
 		},
 	}
 	var httpClientInfo = Definition{
-		Attributes: map[string]Default{
-			string(attr.ServerAddrKey): Default(peerInfoEnabled),
-			string(attr.ServerPortKey): Default(peerInfoEnabled),
+		Attributes: map[attr.Name]Default{
+			attr.ServerAddrKey: Default(peerInfoEnabled),
+			attr.ServerPortKey: Default(peerInfoEnabled),
 		},
 	}
 	var grpcClientInfo = Definition{
-		Attributes: map[string]Default{
-			string(attr.ServerAddrKey): Default(peerInfoEnabled),
+		Attributes: map[attr.Name]Default{
+			attr.ServerAddrKey: Default(peerInfoEnabled),
 		},
 	}
 
 	// TODO Beyla 2.0 remove
 	var deprecatedHTTPPath = Definition{
 		Disabled: !groups.Has(EnableTarget),
-		Attributes: map[string]Default{
-			string(attr.HTTPUrlPathKey): true,
+		Attributes: map[attr.Name]Default{
+			attr.HTTPUrlPathKey: true,
 		},
 	}
 
 	var httpCommon = Definition{
 		Parents: []*Definition{&httpRoutes, &deprecatedHTTPPath},
-		Attributes: map[string]Default{
-			string(attr.HTTPRequestMethodKey):      true,
-			string(attr.HTTPResponseStatusCodeKey): true,
-			string(attr.HTTPUrlPathKey):            false,
+		Attributes: map[attr.Name]Default{
+			attr.HTTPRequestMethodKey:      true,
+			attr.HTTPResponseStatusCodeKey: true,
+			attr.HTTPUrlPathKey:            false,
 		},
 	}
 
 	return map[Section]Definition{
 		BeylaNetworkFlow.Section: {
 			Parents: []*Definition{&networkKubeAttributes},
-			Attributes: map[string]Default{
+			Attributes: map[attr.Name]Default{
 				attr.BeylaIP:    false,
 				attr.Transport:  false,
 				attr.SrcAddress: false,
@@ -118,40 +140,40 @@ func getDefinitions(groups EnabledGroups) map[Section]Definition {
 			},
 		},
 		HTTPServerDuration.Section: {
-			Parents: []*Definition{&prometheusAttributes, &httpCommon, &serverInfo},
+			Parents: []*Definition{&appCommon, &appKubeAttributes, &httpCommon, &serverInfo},
 		},
 		HTTPServerRequestSize.Section: {
-			Parents: []*Definition{&prometheusAttributes, &httpCommon, &serverInfo},
+			Parents: []*Definition{&appCommon, &appKubeAttributes, &httpCommon, &serverInfo},
 		},
 		HTTPClientDuration.Section: {
-			Parents: []*Definition{&prometheusAttributes, &httpCommon, &httpClientInfo},
+			Parents: []*Definition{&appCommon, &appKubeAttributes, &httpCommon, &httpClientInfo},
 		},
 		HTTPClientRequestSize.Section: {
-			Parents: []*Definition{&prometheusAttributes, &httpCommon, &httpClientInfo},
+			Parents: []*Definition{&appCommon, &appKubeAttributes, &httpCommon, &httpClientInfo},
 		},
 		RPCClientDuration.Section: {
-			Parents: []*Definition{&prometheusAttributes, &grpcClientInfo},
-			Attributes: map[string]Default{
-				string(semconv.RPCMethodKey):         true,
-				string(semconv.RPCSystemKey):         true,
-				string(semconv.RPCGRPCStatusCodeKey): true,
+			Parents: []*Definition{&appCommon, &appKubeAttributes, &grpcClientInfo},
+			Attributes: map[attr.Name]Default{
+				attr.Name(semconv.RPCMethodKey):         true,
+				attr.Name(semconv.RPCSystemKey):         true,
+				attr.Name(semconv.RPCGRPCStatusCodeKey): true,
 			},
 		},
 		RPCServerDuration.Section: {
-			Parents: []*Definition{&prometheusAttributes, &serverInfo},
-			Attributes: map[string]Default{
-				string(semconv.RPCMethodKey):         true,
-				string(semconv.RPCSystemKey):         true,
-				string(semconv.RPCGRPCStatusCodeKey): true,
+			Parents: []*Definition{&appCommon, &appKubeAttributes, &serverInfo},
+			Attributes: map[attr.Name]Default{
+				attr.Name(semconv.RPCMethodKey):         true,
+				attr.Name(semconv.RPCSystemKey):         true,
+				attr.Name(semconv.RPCGRPCStatusCodeKey): true,
 				// Overriding default serverInfo configuration because we want
 				// to report it by default
-				string(attr.ClientAddrKey): true,
+				attr.ClientAddrKey: true,
 			},
 		},
 		SQLClientDuration.Section: {
-			Parents: []*Definition{&prometheusAttributes},
-			Attributes: map[string]Default{
-				string(semconv.DBOperationKey): true,
+			Parents: []*Definition{&appCommon, &appKubeAttributes},
+			Attributes: map[attr.Name]Default{
+				attr.Name(semconv.DBOperationKey): true,
 			},
 		},
 	}

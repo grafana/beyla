@@ -124,15 +124,15 @@ func appendMetadata(span *request.Span, info *kube.PodInfo) {
 	// if, in the future, other pipeline steps modify the service metadata, we should
 	// replace the map literal by individual entry insertions
 	span.ServiceID.Metadata = map[string]string{
-		attr.K8sNamespaceName: info.Namespace,
-		attr.K8sPodName:       info.Name,
-		attr.K8sNodeName:      info.NodeName,
-		attr.K8sPodUID:        string(info.UID),
-		attr.K8sPodStartTime:  info.StartTimeStr,
+		string(attr.K8sNamespaceName): info.Namespace,
+		string(attr.K8sPodName):       info.Name,
+		string(attr.K8sNodeName):      info.NodeName,
+		string(attr.K8sPodUID):        string(info.UID),
+		string(attr.K8sPodStartTime):  info.StartTimeStr,
 	}
 	owner := info.Owner
 	for owner != nil {
-		span.ServiceID.Metadata[owner.Type.LabelName()] = owner.Name
+		span.ServiceID.Metadata[string(owner.Type.LabelName())] = owner.Name
 		owner = owner.Owner
 	}
 }

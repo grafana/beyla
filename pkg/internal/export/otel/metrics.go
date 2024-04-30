@@ -33,6 +33,10 @@ func mlog() *slog.Logger {
 }
 
 const (
+	// SpanMetricsLatency and rest of metrics below haven't been yet moved to the
+	// pkg/internal/export/metric package as we are disabling user-provided attribute
+	// selection for them. They are very specific metrics with an opinionated format
+	// for Span Metrics and Service Graph Metrics functionalities
 	SpanMetricsLatency = "traces_spanmetrics_latency"
 	SpanMetricsCalls   = "traces_spanmetrics_calls_total"
 	SpanMetricsSizes   = "traces_spanmetrics_size_total"
@@ -155,6 +159,15 @@ type MetricsReporter struct {
 	attributes *metric2.AttrSelector
 	exporter   metric.Exporter
 	reporters  ReporterPool[*Metrics]
+
+	// user-selected fields for each of the reported metrics
+	attrHTTPDuration          []metric2.Field[*request.Span, attribute.KeyValue]
+	attrHTTPClientDuration    []metric2.Field[*request.Span, attribute.KeyValue]
+	attrGRPCServer            []metric2.Field[*request.Span, attribute.KeyValue]
+	attrGRPCClient            []metric2.Field[*request.Span, attribute.KeyValue]
+	attrSQLClient             []metric2.Field[*request.Span, attribute.KeyValue]
+	attrHTTPRequestSize       []metric2.Field[*request.Span, attribute.KeyValue]
+	attrHTTPClientRequestSize []metric2.Field[*request.Span, attribute.KeyValue]
 }
 
 // Metrics is a set of metrics associated to a given OTEL MeterProvider.
@@ -163,14 +176,6 @@ type Metrics struct {
 	ctx      context.Context
 	service  svc.ID
 	provider *metric.MeterProvider
-
-	attrHTTPDuration          []metric2.Field[*request.Span, attribute.KeyValue]
-	attrHTTPClientDuration    []metric2.Field[*request.Span, attribute.KeyValue]
-	attrGRPCServer            []metric2.Field[*request.Span, attribute.KeyValue]
-	attrGRPCClient            []metric2.Field[*request.Span, attribute.KeyValue]
-	attrSQLClient             []metric2.Field[*request.Span, attribute.KeyValue]
-	attrHTTPRequestSize       []metric2.Field[*request.Span, attribute.KeyValue]
-	attrHTTPClientRequestSize []metric2.Field[*request.Span, attribute.KeyValue]
 
 	httpDuration          instrument.Float64Histogram
 	httpClientDuration    instrument.Float64Histogram
@@ -194,7 +199,7 @@ func ReportMetrics(
 	ctx context.Context,
 	ctxInfo *global.ContextInfo,
 	cfg *MetricsConfig,
-	attribSelector metric2.Selection,
+	userAttribSelection metric2.Selection,
 ) pipe.FinalProvider[[]request.Span] {
 	return func() (pipe.FinalFunc[[]request.Span], error) {
 		if !cfg.Enabled() {
@@ -202,7 +207,7 @@ func ReportMetrics(
 		}
 		SetupInternalOTELSDKLogger(cfg.SDKLogLevel)
 
-		mr, err := newMetricsReporter(ctx, ctxInfo, cfg, attribSelector)
+		mr, err := newMetricsReporter(ctx, ctxInfo, cfg, userAttribSelection)
 		if err != nil {
 			return nil, fmt.Errorf("instantiating OTEL metrics reporter: %w", err)
 		}
@@ -214,11 +219,11 @@ func newMetricsReporter(
 	ctx context.Context,
 	ctxInfo *global.ContextInfo,
 	cfg *MetricsConfig,
-	attribSelector metric2.Selection,
+	userAttribSelection metric2.Selection,
 ) (*MetricsReporter, error) {
 	log := mlog()
 
-	attribProvider, err := metric2.NewAttrSelector(ctxInfo.MetricAttributeGroups, attribSelector)
+	attribProvider, err := metric2.NewAttrSelector(ctxInfo.MetricAttributeGroups, userAttribSelection)
 	if err != nil {
 		return nil, fmt.Errorf("attributes select: %w", err)
 	}
@@ -227,6 +232,22 @@ func newMetricsReporter(
 		cfg:        cfg,
 		attributes: attribProvider,
 	}
+	// initialize attribute getters
+	mr.attrHTTPDuration = metric2.OpenTelemetryGetters(
+		HTTPGetters, mr.attributes.For(metric2.HTTPServerDuration))
+	mr.attrHTTPClientDuration = metric2.OpenTelemetryGetters(
+		HTTPGetters, mr.attributes.For(metric2.HTTPClientDuration))
+	mr.attrHTTPRequestSize = metric2.OpenTelemetryGetters(
+		HTTPGetters, mr.attributes.For(metric2.HTTPServerRequestSize))
+	mr.attrHTTPClientRequestSize = metric2.OpenTelemetryGetters(
+		HTTPGetters, mr.attributes.For(metric2.HTTPClientRequestSize))
+	mr.attrGRPCServer = metric2.OpenTelemetryGetters(
+		GRPCGetters, mr.attributes.For(metric2.RPCServerDuration))
+	mr.attrGRPCClient = metric2.OpenTelemetryGetters(
+		GRPCGetters, mr.attributes.For(metric2.RPCClientDuration))
+	mr.attrSQLClient = metric2.OpenTelemetryGetters(
+		SQLGetters, mr.attributes.For(metric2.SQLClientDuration))
+
 	mr.reporters = NewReporterPool[*Metrics](cfg.ReportersCacheLen,
 		func(id svc.UID, v *Metrics) {
 			if mr.cfg.SpanMetricsEnabled() {
@@ -299,21 +320,6 @@ func (mr *MetricsReporter) setupOtelMeters(m *Metrics, meter instrument.Meter) e
 	if !mr.cfg.OTelMetricsEnabled() {
 		return nil
 	}
-
-	m.attrHTTPDuration = metric2.OpenTelemetryGetters(
-		HTTPGetters, mr.attributes.For(metric2.HTTPServerDuration))
-	m.attrHTTPClientDuration = metric2.OpenTelemetryGetters(
-		HTTPGetters, mr.attributes.For(metric2.HTTPClientDuration))
-	m.attrHTTPRequestSize = metric2.OpenTelemetryGetters(
-		HTTPGetters, mr.attributes.For(metric2.HTTPServerRequestSize))
-	m.attrHTTPClientRequestSize = metric2.OpenTelemetryGetters(
-		HTTPGetters, mr.attributes.For(metric2.HTTPClientRequestSize))
-	m.attrGRPCServer = metric2.OpenTelemetryGetters(
-		GRPCGetters, mr.attributes.For(metric2.RPCServerDuration))
-	m.attrGRPCClient = metric2.OpenTelemetryGetters(
-		GRPCGetters, mr.attributes.For(metric2.RPCClientDuration))
-	m.attrSQLClient = metric2.OpenTelemetryGetters(
-		SQLGetters, mr.attributes.For(metric2.SQLClientDuration))
 
 	var err error
 	m.httpDuration, err = meter.Float64Histogram(metric2.HTTPServerDuration.OTEL, instrument.WithUnit("s"))
@@ -643,23 +649,23 @@ func (r *Metrics) record(span *request.Span, mr *MetricsReporter) {
 		case request.EventTypeHTTP:
 			// TODO: for more accuracy, there must be a way to set the metric time from the actual span end time
 			r.httpDuration.Record(r.ctx, duration,
-				withAttributes(span, r.attrHTTPDuration))
+				withAttributes(span, mr.attrHTTPDuration))
 			r.httpRequestSize.Record(r.ctx, float64(span.ContentLength),
-				withAttributes(span, r.attrHTTPRequestSize))
+				withAttributes(span, mr.attrHTTPRequestSize))
 		case request.EventTypeGRPC:
 			r.grpcDuration.Record(r.ctx, duration,
-				withAttributes(span, r.attrGRPCServer))
+				withAttributes(span, mr.attrGRPCServer))
 		case request.EventTypeGRPCClient:
 			r.grpcClientDuration.Record(r.ctx, duration,
-				withAttributes(span, r.attrGRPCClient))
+				withAttributes(span, mr.attrGRPCClient))
 		case request.EventTypeHTTPClient:
 			r.httpClientDuration.Record(r.ctx, duration,
-				withAttributes(span, r.attrHTTPClientDuration))
+				withAttributes(span, mr.attrHTTPClientDuration))
 			r.httpClientRequestSize.Record(r.ctx, float64(span.ContentLength),
-				withAttributes(span, r.attrHTTPClientRequestSize))
+				withAttributes(span, mr.attrHTTPClientRequestSize))
 		case request.EventTypeSQLClient:
 			r.sqlClientDuration.Record(r.ctx, duration,
-				withAttributes(span, r.attrSQLClient))
+				withAttributes(span, mr.attrSQLClient))
 		}
 	}
 

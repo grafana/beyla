@@ -40,8 +40,9 @@ func getDefinitions(groups AttrGroups) map[Section]AttrReportGroup {
 	var prometheusAttributes = AttrReportGroup{
 		Disabled: !promEnabled,
 		Attributes: map[attr.Name]Default{
-			attr.TargetInstance: true,
-			attr.ServiceName:    true,
+			attr.TargetInstance:   true,
+			attr.ServiceName:      true,
+			attr.ServiceNamespace: true,
 		},
 	}
 

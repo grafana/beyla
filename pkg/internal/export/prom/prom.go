@@ -626,14 +626,14 @@ func SQLGetters(attrName attr.Name) (metric.Getter[*request.Span, string], bool)
 }
 
 func commonAttributes(attrName attr.Name) (metric.Getter[*request.Span, string], bool) {
-	if attrName == attr.ServiceName {
-		return func(s *request.Span) string {
-			return s.ServiceID.Name
-		}, true
+	switch attrName {
+	case attr.ServiceName:
+		return func(s *request.Span) string { return s.ServiceID.Name }, true
+	case attr.ServiceNamespace:
+		return func(s *request.Span) string { return s.ServiceID.Namespace }, true
+	default:
+		return func(s *request.Span) string { return s.ServiceID.Metadata[attrName] }, true
 	}
-	return func(s *request.Span) string {
-		return s.ServiceID.Metadata[attrName]
-	}, true
 }
 
 func labelNames(getters []metric.Field[*request.Span, string]) []string {

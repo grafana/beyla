@@ -23,7 +23,6 @@ func (an Name) Prom() string {
 
 // OpenTelemetry 1.23 semantic convention
 const (
-	ServiceName            = Name(semconv.ServiceNameKey)
 	HTTPRequestMethod      = Name("http.request.method")
 	HTTPResponseStatusCode = Name("http.response.status_code")
 	HTTPUrlPath            = Name("url.path")
@@ -100,4 +99,10 @@ var (
 	// Prometheus server. This would be similar to the "multi target pattern":
 	// https://prometheus.io/docs/guides/multi-target-exporter/
 	TargetInstance = Name("target.instance")
+
+	// ServiceName and ServiceNamespace are going to be used only on Prometheus
+	// as metric attributes. The OTEL exporter already uses them as Resource
+	// attributes, which can't be enabled/disabled by the users
+	ServiceName      = Name(semconv.ServiceNameKey)
+	ServiceNamespace = Name(semconv.ServiceNamespaceKey)
 )

@@ -2,8 +2,11 @@ package metric
 
 import (
 	"path"
+	"strings"
 
 	"golang.org/x/exp/maps"
+
+	"github.com/grafana/beyla/pkg/internal/export/metric/attr"
 )
 
 // Selection specifies which attributes are allowed for each metric.
@@ -16,18 +19,26 @@ type InclusionLists struct {
 	Exclude []string `yaml:"exclude"`
 }
 
-func (i *InclusionLists) includes(metricName string) bool {
+func asProm(str string) string {
+	return strings.ReplaceAll(str, ".", "_")
+}
+
+func (i *InclusionLists) includes(name attr.Name) bool {
 	for _, incl := range i.Include {
-		if ok, _ := path.Match(NormalizeToDot(incl), metricName); ok {
+		// to ignore user-input format (dots or underscores) we transform the patterns
+		// and the metric names to underscores
+		if ok, _ := path.Match(asProm(incl), name.Prom()); ok {
 			return true
 		}
 	}
 	return false
 }
 
-func (i *InclusionLists) excludes(metricName string) bool {
+func (i *InclusionLists) excludes(name attr.Name) bool {
 	for _, excl := range i.Exclude {
-		if ok, _ := path.Match(NormalizeToDot(excl), metricName); ok {
+		// to ignore user-input format (dots or underscores) we transform the patterns
+		// and the metric names to underscores
+		if ok, _ := path.Match(asProm(excl), name.Prom()); ok {
 			return true
 		}
 	}

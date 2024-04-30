@@ -4,35 +4,36 @@ import (
 	"strconv"
 
 	"github.com/grafana/beyla/pkg/internal/export/metric"
+	"github.com/grafana/beyla/pkg/internal/export/metric/attr"
 	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
 	"github.com/grafana/beyla/pkg/internal/netolly/flow/transport"
 )
 
-func NamedGetters(internalName string) (metric.Getter[*ebpf.Record, string], bool) {
+func NamedGetters(name attr.Name) (metric.Getter[*ebpf.Record, string], bool) {
 	var getter metric.Getter[*ebpf.Record, string]
-	switch internalName {
-	case "beyla.ip":
+	switch name {
+	case attr.BeylaIP:
 		getter = func(r *ebpf.Record) string { return r.Attrs.BeylaIP }
-	case "transport":
+	case attr.Transport:
 		getter = func(r *ebpf.Record) string { return transport.Protocol(r.Id.TransportProtocol).String() }
-	case "src.address":
+	case attr.SrcAddress:
 		getter = func(r *ebpf.Record) string { return r.Id.SrcIP().IP().String() }
-	case "dst.address":
+	case attr.DstAddres:
 		getter = func(r *ebpf.Record) string { return r.Id.DstIP().IP().String() }
-	case "src.port":
+	case attr.SrcPort:
 		getter = func(r *ebpf.Record) string { return strconv.FormatUint(uint64(r.Id.SrcPort), 10) }
-	case "dst.port":
+	case attr.DstPort:
 		getter = func(r *ebpf.Record) string { return strconv.FormatUint(uint64(r.Id.DstPort), 10) }
-	case "src.name":
+	case attr.SrcName:
 		getter = func(r *ebpf.Record) string { return r.Attrs.SrcName }
-	case "dst.name":
+	case attr.DstName:
 		getter = func(r *ebpf.Record) string { return r.Attrs.DstName }
-	case "direction":
+	case attr.Direction:
 		getter = func(r *ebpf.Record) string { return directionStr(r.Id.Direction) }
-	case "iface":
+	case attr.Iface:
 		getter = func(r *ebpf.Record) string { return r.Attrs.Interface }
 	default:
-		getter = func(r *ebpf.Record) string { return r.Attrs.Metadata[internalName] }
+		getter = func(r *ebpf.Record) string { return r.Attrs.Metadata[name] }
 	}
 	return getter, getter != nil
 }

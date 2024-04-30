@@ -22,6 +22,8 @@ import (
 	"encoding/binary"
 	"io"
 	"net"
+
+	"github.com/grafana/beyla/pkg/internal/export/metric/attr"
 )
 
 // IPAddr encodes v4 and v6 IPs with a fixed length.
@@ -50,7 +52,7 @@ type RecordAttrs struct {
 	Interface string
 	// BeylaIP provides information about the source of the flow (the Agent that traced it)
 	BeylaIP  string
-	Metadata map[string]string // TODO: map key time is attr.Name
+	Metadata map[attr.Name]string
 }
 
 func NewRecord(

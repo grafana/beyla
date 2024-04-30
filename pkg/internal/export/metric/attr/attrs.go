@@ -1,34 +1,49 @@
 package attr
 
 import (
+	"strings"
+
 	"go.opentelemetry.io/otel/attribute"
-	semconv "go.opentelemetry.io/otel/semconv/v1.23.1"
+	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 )
 
 type Name attribute.Key
 
+func (an Name) OTEL() attribute.Key {
+	return attribute.Key(an)
+}
+
+func (an Name) Prom() string {
+	return strings.ReplaceAll(string(an), ".", "_")
+}
+
 // OpenTelemetry 1.23 semantic convention
 const (
-	HTTPRequestMethodKey      = Name(semconv.HTTPRequestMethodKey)
-	HTTPResponseStatusCodeKey = Name(semconv.HTTPResponseStatusCodeKey)
-	HTTPUrlPathKey            = Name(attribute.Key("url.path"))
-	HTTPUrlFullKey            = Name(attribute.Key("url.full"))
-	ClientAddrKey             = Name(attribute.Key("client.address"))
-	ServerAddrKey             = Name(attribute.Key("server.address"))
-	ServerPortKey             = Name(attribute.Key("server.port"))
-	HTTPRequestBodySizeKey    = Name(attribute.Key("http.request.body.size"))
-	HTTPResponseBodySizeKey   = Name(attribute.Key("http.response.body.size"))
-	SpanKindKey               = Name(attribute.Key("span.kind"))
-	SpanNameKey               = Name(attribute.Key("span.name"))
-	StatusCodeKey             = Name(attribute.Key("status.code"))
-	SourceKey                 = Name(attribute.Key("source"))
-	ServiceKey                = Name(attribute.Key("service"))
-	ClientKey                 = Name(attribute.Key("client"))
-	ClientNamespaceKey        = Name(attribute.Key("client_service_namespace"))
-	ServerKey                 = Name(attribute.Key("server"))
-	ServerNamespaceKey        = Name(attribute.Key("server_service_namespace"))
-	ConnectionTypeKey         = Name(attribute.Key("connection_type"))
-	DBOperationKey            = Name(attribute.Key("db_operation"))
+	ServiceName               = Name(semconv.ServiceNameKey)
+	HTTPRequestMethodKey      = Name("http.request.method")
+	HTTPResponseStatusCodeKey = Name("http.response.status_code")
+	HTTPUrlPathKey            = Name("url.path")
+	HTTPUrlFullKey            = Name("url.full")
+	ClientAddrKey             = Name("client.address")
+	ServerAddrKey             = Name("server.address")
+	ServerPortKey             = Name("server.port")
+	HTTPRequestBodySizeKey    = Name("http.request.body.size")
+	HTTPResponseBodySizeKey   = Name("http.response.body.size")
+	SpanKindKey               = Name("span.kind")
+	SpanNameKey               = Name("span.name")
+	StatusCodeKey             = Name("status.code")
+	SourceKey                 = Name("source")
+	ServiceKey                = Name("service")
+	ClientKey                 = Name("client")
+	ClientNamespaceKey        = Name("client_service_namespace")
+	ServerKey                 = Name("server")
+	ServerNamespaceKey        = Name("server_service_namespace")
+	ConnectionTypeKey         = Name("connection_type")
+	DBOperationKey            = Name("db_operation")
+	RPCMethod                 = Name(semconv.RPCMethodKey)
+	RPCSystem                 = Name(semconv.RPCSystemKey)
+	RPCGRPCStatusCode         = Name(semconv.RPCGRPCStatusCodeKey)
+	HTTPRoute                 = Name(semconv.HTTPRouteKey)
 
 	K8sNamespaceName   = Name("k8s.namespace.name")
 	K8sPodName         = Name("k8s.pod.name")

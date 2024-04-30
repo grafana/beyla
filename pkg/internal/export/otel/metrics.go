@@ -18,7 +18,7 @@ import (
 	instrument "go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/sdk/instrumentation"
 	"go.opentelemetry.io/otel/sdk/metric"
-	semconv "go.opentelemetry.io/otel/semconv/v1.23.1"
+	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 
 	metric2 "github.com/grafana/beyla/pkg/internal/export/metric"
 	"github.com/grafana/beyla/pkg/internal/export/metric/attr"
@@ -582,7 +582,7 @@ func (mr *MetricsReporter) metricResourceAttributes(service svc.ID) attribute.Se
 		metric2.SourceMetric("beyla"),
 	}
 	for k, v := range service.Metadata {
-		attrs = append(attrs, attribute.String(k, v))
+		attrs = append(attrs, k.OTEL().String(v))
 	}
 
 	return attribute.NewSet(attrs...)
@@ -833,16 +833,16 @@ func setMetricsProtocol(cfg *MetricsConfig) {
 
 // HTTPGetters provides get function for HTTP attributes.
 // REMINDER: any attribute here must be also added to pkg/internal/export/metric/definitions.go getDefinitions
-func HTTPGetters(dotAttrName string) (metric2.Getter[*request.Span, attribute.KeyValue], bool) {
+func HTTPGetters(name attr.Name) (metric2.Getter[*request.Span, attribute.KeyValue], bool) {
 	var getter metric2.Getter[*request.Span, attribute.KeyValue]
-	switch attr.Name(dotAttrName) {
+	switch name {
 	case attr.HTTPRequestMethodKey:
 		getter = func(s *request.Span) attribute.KeyValue { return metric2.HTTPRequestMethod(s.Method) }
 
-	// dotAttrName is normalized as dot-only, so http.response.status_code needs to be transformed to http.response.status.code
-	case attr.Name(metric2.NormalizeToDot(string(attr.HTTPResponseStatusCodeKey))):
+	// name is normalized as dot-only, so http.response.status_code needs to be transformed to http.response.status.code
+	case attr.HTTPResponseStatusCodeKey:
 		getter = func(s *request.Span) attribute.KeyValue { return metric2.HTTPResponseStatusCode(s.Status) }
-	case attr.Name(semconv.HTTPRouteKey):
+	case attr.HTTPRoute:
 		getter = func(s *request.Span) attribute.KeyValue { return semconv.HTTPRoute(s.Route) }
 	case attr.HTTPUrlPathKey:
 		getter = func(s *request.Span) attribute.KeyValue { return metric2.HTTPUrlPath(s.Path) }
@@ -860,20 +860,20 @@ func HTTPGetters(dotAttrName string) (metric2.Getter[*request.Span, attribute.Ke
 
 // GRPCGetters provides getter function for GRPC attributes.
 // REMINDER: any attribute here must be also added to pkg/internal/export/metric/definitions.go getDefinitions
-func GRPCGetters(dotAttrName string) (metric2.Getter[*request.Span, attribute.KeyValue], bool) {
+func GRPCGetters(name attr.Name) (metric2.Getter[*request.Span, attribute.KeyValue], bool) {
 	var getter metric2.Getter[*request.Span, attribute.KeyValue]
-	switch dotAttrName {
-	case string(semconv.RPCMethodKey):
+	switch name {
+	case attr.RPCMethod:
 		getter = func(s *request.Span) attribute.KeyValue { return semconv.RPCMethod(s.Path) }
-	case string(semconv.RPCSystemKey):
+	case attr.RPCSystem:
 		getter = func(_ *request.Span) attribute.KeyValue { return semconv.RPCSystemGRPC }
 
-	// dotAttrName is normalized as dot-only, so rpc.grpc.status_code needs to be transformed to rpc.grpc.status.code
-	case metric2.NormalizeToDot(string(semconv.RPCGRPCStatusCodeKey)):
+	// name is normalized as dot-only, so rpc.grpc.status_code needs to be transformed to rpc.grpc.status.code
+	case attr.RPCGRPCStatusCode:
 		getter = func(s *request.Span) attribute.KeyValue { return semconv.RPCGRPCStatusCodeKey.Int(s.Status) }
-	case string(attr.ClientAddrKey):
+	case attr.ClientAddrKey:
 		getter = func(s *request.Span) attribute.KeyValue { return metric2.ClientAddr(metric2.SpanPeer(s)) }
-	case string(attr.ServerAddrKey):
+	case attr.ServerAddrKey:
 		getter = func(s *request.Span) attribute.KeyValue { return metric2.ServerAddr(metric2.SpanPeer(s)) }
 	}
 	// default: unlike the prom.go getters, we don't check here for service name nor k8s metadata
@@ -881,8 +881,8 @@ func GRPCGetters(dotAttrName string) (metric2.Getter[*request.Span, attribute.Ke
 	return getter, getter != nil
 }
 
-func SQLGetters(attrName string) (metric2.Getter[*request.Span, attribute.KeyValue], bool) {
-	if attr.Name(attrName) == attr.DBOperationKey {
+func SQLGetters(attrName attr.Name) (metric2.Getter[*request.Span, attribute.KeyValue], bool) {
+	if attrName == attr.DBOperationKey {
 		return func(span *request.Span) attribute.KeyValue {
 			return semconv.DBOperation(span.Method)
 		}, true

@@ -1,7 +1,7 @@
 package metric
 
 import (
-	semconv "go.opentelemetry.io/otel/semconv/v1.23.1"
+	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 
 	"github.com/grafana/beyla/pkg/internal/export/metric/attr"
 )

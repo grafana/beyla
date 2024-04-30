@@ -13,7 +13,7 @@ import (
 	metric2 "go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/resource"
-	semconv "go.opentelemetry.io/otel/semconv/v1.23.1"
+	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 
 	bmetric "github.com/grafana/beyla/pkg/internal/export/metric"
 	"github.com/grafana/beyla/pkg/internal/export/otel"

@@ -49,7 +49,7 @@ func printFlow(f *ebpf.Record) {
 
 	for k, v := range f.Attrs.Metadata {
 		sb.WriteString(" ")
-		sb.WriteString(k)
+		sb.WriteString(string(k))
 		sb.WriteString("=")
 		sb.WriteString(v)
 	}

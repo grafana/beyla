@@ -42,14 +42,13 @@ func (p *AttrSelector) For(metricName Name) []attr.Name {
 	} else {
 		addAttributes = map[attr.Name]struct{}{}
 		for attrName := range metricAttributes.All() {
-			attrName = attr.Name(NormalizeToDot(string(attrName)))
-			if inclusionLists.includes(string(attrName)) {
+			if inclusionLists.includes(attrName) {
 				addAttributes[attrName] = struct{}{}
 			}
 		}
 	}
 	maps.DeleteFunc(addAttributes, func(attr attr.Name, _ struct{}) bool {
-		return inclusionLists.excludes(NormalizeToDot(string(attr)))
+		return inclusionLists.excludes(attr)
 	})
 	attrs := helpers.SetToSlice(addAttributes)
 	slices.Sort(attrs)

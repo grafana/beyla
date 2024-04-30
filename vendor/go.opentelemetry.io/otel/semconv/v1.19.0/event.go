@@ -14,64 +14,9 @@
 
 // Code generated from semantic convention specification. DO NOT EDIT.
 
-package semconv // import "go.opentelemetry.io/otel/semconv/v1.23.1"
+package semconv // import "go.opentelemetry.io/otel/semconv/v1.19.0"
 
 import "go.opentelemetry.io/otel/attribute"
-
-// This event represents an occurrence of a lifecycle transition on the iOS
-// platform. `event.domain` MUST be `device`.
-const (
-	// IosStateKey is the attribute Key conforming to the "ios.state" semantic
-	// conventions. It represents the this attribute represents the state the
-	// application has transitioned into at the occurrence of the event.
-	//
-	// Type: Enum
-	// RequirementLevel: Required
-	// Stability: experimental
-	// Note: The iOS lifecycle states are defined in the [UIApplicationDelegate
-	// documentation](https://developer.apple.com/documentation/uikit/uiapplicationdelegate#1656902),
-	// and from which the `OS terminology` column values are derived.
-	IosStateKey = attribute.Key("ios.state")
-)
-
-var (
-	// The app has become `active`. Associated with UIKit notification `applicationDidBecomeActive`
-	IosStateActive = IosStateKey.String("active")
-	// The app is now `inactive`. Associated with UIKit notification `applicationWillResignActive`
-	IosStateInactive = IosStateKey.String("inactive")
-	// The app is now in the background. This value is associated with UIKit notification `applicationDidEnterBackground`
-	IosStateBackground = IosStateKey.String("background")
-	// The app is now in the foreground. This value is associated with UIKit notification `applicationWillEnterForeground`
-	IosStateForeground = IosStateKey.String("foreground")
-	// The app is about to terminate. Associated with UIKit notification `applicationWillTerminate`
-	IosStateTerminate = IosStateKey.String("terminate")
-)
-
-// This event represents an occurrence of a lifecycle transition on the Android
-// platform. `event.domain` MUST be `device`.
-const (
-	// AndroidStateKey is the attribute Key conforming to the "android.state"
-	// semantic conventions. It represents the this attribute represents the
-	// state the application has transitioned into at the occurrence of the
-	// event.
-	//
-	// Type: Enum
-	// RequirementLevel: Required
-	// Stability: experimental
-	// Note: The Android lifecycle states are defined in [Activity lifecycle
-	// callbacks](https://developer.android.com/guide/components/activities/activity-lifecycle#lc),
-	// and from which the `OS identifiers` are derived.
-	AndroidStateKey = attribute.Key("android.state")
-)
-
-var (
-	// Any time before Activity.onResume() or, if the app has no Activity, Context.startService() has been called in the app for the first time
-	AndroidStateCreated = AndroidStateKey.String("created")
-	// Any time after Activity.onPause() or, if the app has no Activity, Context.stopService() has been called when the app was in the foreground state
-	AndroidStateBackground = AndroidStateKey.String("background")
-	// Any time after Activity.onResume() or, if the app has no Activity, Context.startService() has been called when the app was in either the created or background states
-	AndroidStateForeground = AndroidStateKey.String("foreground")
-)
 
 // This semantic convention defines the attributes used to represent a feature
 // flag evaluation as an event.
@@ -82,7 +27,7 @@ const (
 	//
 	// Type: string
 	// RequirementLevel: Required
-	// Stability: experimental
+	// Stability: stable
 	// Examples: 'logo-color'
 	FeatureFlagKeyKey = attribute.Key("feature_flag.key")
 
@@ -92,7 +37,7 @@ const (
 	//
 	// Type: string
 	// RequirementLevel: Recommended
-	// Stability: experimental
+	// Stability: stable
 	// Examples: 'Flag Manager'
 	FeatureFlagProviderNameKey = attribute.Key("feature_flag.provider_name")
 
@@ -103,7 +48,7 @@ const (
 	//
 	// Type: string
 	// RequirementLevel: Recommended
-	// Stability: experimental
+	// Stability: stable
 	// Examples: 'red', 'true', 'on'
 	// Note: A semantic identifier, commonly referred to as a variant, provides
 	// a means
@@ -141,14 +86,14 @@ func FeatureFlagVariant(val string) attribute.KeyValue {
 
 // RPC received/sent message.
 const (
-	// MessageCompressedSizeKey is the attribute Key conforming to the
-	// "message.compressed_size" semantic conventions. It represents the
-	// compressed size of the message in bytes.
+	// MessageTypeKey is the attribute Key conforming to the "message.type"
+	// semantic conventions. It represents the whether this is a received or
+	// sent message.
 	//
-	// Type: int
+	// Type: Enum
 	// RequirementLevel: Optional
-	// Stability: experimental
-	MessageCompressedSizeKey = attribute.Key("message.compressed_size")
+	// Stability: stable
+	MessageTypeKey = attribute.Key("message.type")
 
 	// MessageIDKey is the attribute Key conforming to the "message.id"
 	// semantic conventions. It represents the mUST be calculated as two
@@ -157,19 +102,19 @@ const (
 	//
 	// Type: int
 	// RequirementLevel: Optional
-	// Stability: experimental
+	// Stability: stable
 	// Note: This way we guarantee that the values will be consistent between
 	// different implementations.
 	MessageIDKey = attribute.Key("message.id")
 
-	// MessageTypeKey is the attribute Key conforming to the "message.type"
-	// semantic conventions. It represents the whether this is a received or
-	// sent message.
+	// MessageCompressedSizeKey is the attribute Key conforming to the
+	// "message.compressed_size" semantic conventions. It represents the
+	// compressed size of the message in bytes.
 	//
-	// Type: Enum
+	// Type: int
 	// RequirementLevel: Optional
-	// Stability: experimental
-	MessageTypeKey = attribute.Key("message.type")
+	// Stability: stable
+	MessageCompressedSizeKey = attribute.Key("message.compressed_size")
 
 	// MessageUncompressedSizeKey is the attribute Key conforming to the
 	// "message.uncompressed_size" semantic conventions. It represents the
@@ -177,7 +122,7 @@ const (
 	//
 	// Type: int
 	// RequirementLevel: Optional
-	// Stability: experimental
+	// Stability: stable
 	MessageUncompressedSizeKey = attribute.Key("message.uncompressed_size")
 )
 
@@ -188,19 +133,19 @@ var (
 	MessageTypeReceived = MessageTypeKey.String("RECEIVED")
 )
 
-// MessageCompressedSize returns an attribute KeyValue conforming to the
-// "message.compressed_size" semantic conventions. It represents the compressed
-// size of the message in bytes.
-func MessageCompressedSize(val int) attribute.KeyValue {
-	return MessageCompressedSizeKey.Int(val)
-}
-
 // MessageID returns an attribute KeyValue conforming to the "message.id"
 // semantic conventions. It represents the mUST be calculated as two different
 // counters starting from `1` one for sent messages and one for received
 // message.
 func MessageID(val int) attribute.KeyValue {
 	return MessageIDKey.Int(val)
+}
+
+// MessageCompressedSize returns an attribute KeyValue conforming to the
+// "message.compressed_size" semantic conventions. It represents the compressed
+// size of the message in bytes.
+func MessageCompressedSize(val int) attribute.KeyValue {
+	return MessageCompressedSizeKey.Int(val)
 }
 
 // MessageUncompressedSize returns an attribute KeyValue conforming to the
@@ -219,7 +164,7 @@ const (
 	//
 	// Type: boolean
 	// RequirementLevel: Optional
-	// Stability: experimental
+	// Stability: stable
 	// Note: An exception is considered to have escaped (or left) the scope of
 	// a span,
 	// if that span is ended while the exception is still logically "in

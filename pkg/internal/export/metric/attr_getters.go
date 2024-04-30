@@ -1,8 +1,6 @@
 package metric
 
 import (
-	"strings"
-
 	"github.com/grafana/beyla/pkg/internal/export/metric/attr"
 )
 
@@ -19,9 +17,9 @@ type Field[T, O any] struct {
 	Get         Getter[T, O]
 }
 
-// NamedGetters returns the Getter for an attribute, given its internal name in dot.notation.
+// NamedGetters returns the Getter for an attribute, given its internal name representation.
 // If the record does not provide any value for the given name, the second argument is false.
-type NamedGetters[T, O any] func(internalName string) (Getter[T, O], bool)
+type NamedGetters[T, O any] func(name attr.Name) (Getter[T, O], bool)
 
 // PrometheusGetters builds a list of Getter getters for the names provided by the
 // user configuration, ready to be passed to a Prometheus exporter.
@@ -31,18 +29,7 @@ type NamedGetters[T, O any] func(internalName string) (Getter[T, O], bool)
 // Whatever is the format provided by the user (dot-based or underscore-based), it converts dots to underscores
 // and vice-versa to make sure that the correct format is used either internally or externally.
 func PrometheusGetters[T, O any](getter NamedGetters[T, O], names []attr.Name) []Field[T, O] {
-	attrs := make([]Field[T, O], 0, len(names))
-	for _, name := range names {
-		exposedName := normalizeToUnderscore(string(name))
-		internalName := string(name)
-		if get, ok := getter(internalName); ok {
-			attrs = append(attrs, Field[T, O]{
-				ExposedName: exposedName,
-				Get:         get,
-			})
-		}
-	}
-	return attrs
+	return buildGetterList(getter, names, attr.Name.Prom)
 }
 
 // OpenTelemetryGetters builds a list of Getter getters for the names provided by the
@@ -50,31 +37,24 @@ func PrometheusGetters[T, O any](getter NamedGetters[T, O], names []attr.Name) [
 // Whatever is the format of the user-provided attribute names (dot-based or underscore-based),
 // it converts underscores to dots to make sure that the correct attribute name is exposed.
 func OpenTelemetryGetters[T, O any](getter NamedGetters[T, O], names []attr.Name) []Field[T, O] {
+	return buildGetterList(getter, names, func(name attr.Name) string {
+		return string(name.OTEL())
+	})
+}
+
+func buildGetterList[T, O any](
+	getter NamedGetters[T, O],
+	names []attr.Name,
+	exposedNamer func(attr.Name) string,
+) []Field[T, O] {
 	attrs := make([]Field[T, O], 0, len(names))
 	for _, name := range names {
-		dotName := NormalizeToDot(string(name))
-		if get, ok := getter(dotName); ok {
+		if get, ok := getter(name); ok {
 			attrs = append(attrs, Field[T, O]{
-				ExposedName: dotName,
+				ExposedName: exposedNamer(name),
 				Get:         get,
 			})
 		}
 	}
 	return attrs
-}
-
-// Deprecated
-// TODO remove
-func normalizeToUnderscore(name string) string {
-	return strings.ReplaceAll(name, ".", "_")
-}
-
-// NormalizeToDot will have into account that some dot metrics still have underscores,
-// such as: http.response.status_code
-// The name is provided by the user, so this function will handle mistakes in the dot
-// or underscore notation from the user
-// Deprecated
-// TODO remove
-func NormalizeToDot(name string) string {
-	return strings.ReplaceAll(name, "_", ".")
 }

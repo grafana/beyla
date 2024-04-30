@@ -25,7 +25,7 @@ func TestMetricAttributes(t *testing.T) {
 		Attrs: ebpf.RecordAttrs{
 			SrcName: "srcname",
 			DstName: "dstname",
-			Metadata: map[string]string{
+			Metadata: map[attr.Name]string{
 				"k8s.src.name":      "srcname",
 				"k8s.src.namespace": "srcnamespace",
 				"k8s.dst.name":      "dstname",
@@ -74,7 +74,7 @@ func TestMetricAttributes_Filter(t *testing.T) {
 		Attrs: ebpf.RecordAttrs{
 			SrcName: "srcname",
 			DstName: "dstname",
-			Metadata: map[string]string{
+			Metadata: map[attr.Name]string{
 				"k8s.src.name":      "srcname",
 				"k8s.src.namespace": "srcnamespace",
 				"k8s.dst.name":      "dstname",

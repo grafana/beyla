@@ -118,8 +118,8 @@ func TestCleanName(t *testing.T) {
 	s := svc.ID{
 		Name:      "service",
 		Namespace: "special.namespace",
-		Metadata: map[string]string{
-			string(attr.K8sNamespaceName): "k8snamespace",
+		Metadata: map[attr.Name]string{
+			attr.K8sNamespaceName: "k8snamespace",
 		},
 	}
 

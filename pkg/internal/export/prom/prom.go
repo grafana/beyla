@@ -11,9 +11,7 @@ import (
 	"github.com/hashicorp/golang-lru/v2/expirable"
 	"github.com/mariomac/pipes/pipe"
 	"github.com/prometheus/client_golang/prometheus"
-	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
-	semconv "go.opentelemetry.io/otel/semconv/v1.23.1"
 
 	"github.com/grafana/beyla/pkg/buildinfo"
 	"github.com/grafana/beyla/pkg/internal/connector"
@@ -481,15 +479,15 @@ func appendK8sLabelNames(names []string) []string {
 func appendK8sLabelValuesService(values []string, service svc.ID) []string {
 	// must follow the order in appendK8sLabelNames
 	values = append(values,
-		service.Metadata[string(attr.K8sNamespaceName)],
-		service.Metadata[string(attr.K8sPodName)],
-		service.Metadata[string(attr.K8sNodeName)],
-		service.Metadata[string(attr.K8sPodUID)],
-		service.Metadata[string(attr.K8sPodStartTime)],
-		service.Metadata[string(attr.K8sDeploymentName)],
-		service.Metadata[string(attr.K8sReplicaSetName)],
-		service.Metadata[string(attr.K8sStatefulSetName)],
-		service.Metadata[string(attr.K8sDaemonSetName)],
+		service.Metadata[(attr.K8sNamespaceName)],
+		service.Metadata[(attr.K8sPodName)],
+		service.Metadata[(attr.K8sNodeName)],
+		service.Metadata[(attr.K8sPodUID)],
+		service.Metadata[(attr.K8sPodStartTime)],
+		service.Metadata[(attr.K8sDeploymentName)],
+		service.Metadata[(attr.K8sReplicaSetName)],
+		service.Metadata[(attr.K8sStatefulSetName)],
+		service.Metadata[(attr.K8sDaemonSetName)],
 	)
 	return values
 }
@@ -574,15 +572,14 @@ func (r *metricsReporter) labelValuesServiceGraph(span *request.Span) []string {
 
 // HTTPGetters provides get function for HTTP attributes.
 // REMINDER: any attribute here must be also added to pkg/internal/export/metric/definitions.go getDefinitions
-func HTTPGetters(attrName string) (metric.Getter[*request.Span, string], bool) {
+func HTTPGetters(attrName attr.Name) (metric.Getter[*request.Span, string], bool) {
 	var getter metric.Getter[*request.Span, string]
-	switch attr.Name(attrName) {
+	switch attrName {
 	case attr.HTTPRequestMethodKey:
 		getter = func(s *request.Span) string { return s.Method }
-	// dotAttrName is normalized as dot-only, so http.response.status_code needs to be transformed to http.response.status.code
-	case attr.Name(metric.NormalizeToDot(string(attr.HTTPResponseStatusCodeKey))):
+	case attr.HTTPResponseStatusCodeKey:
 		getter = func(s *request.Span) string { return strconv.Itoa(s.Status) }
-	case attr.Name(semconv.HTTPRouteKey):
+	case attr.HTTPRoute:
 		getter = func(s *request.Span) string { return s.Route }
 	case attr.HTTPUrlPathKey:
 		getter = func(s *request.Span) string { return s.Path }
@@ -600,28 +597,27 @@ func HTTPGetters(attrName string) (metric.Getter[*request.Span, string], bool) {
 
 // GRPCGetters provides getter function for GRPC attributes.
 // REMINDER: any attribute here must be also added to pkg/internal/export/metric/definitions.go getDefinitions
-func GRPCGetters(dotAttrName string) (metric.Getter[*request.Span, string], bool) {
+func GRPCGetters(attrName attr.Name) (metric.Getter[*request.Span, string], bool) {
 	var getter metric.Getter[*request.Span, string]
-	switch attr.Name(dotAttrName) {
-	case attr.Name(semconv.RPCMethodKey):
+	switch attrName {
+	case attr.RPCMethod:
 		getter = func(s *request.Span) string { return s.Path }
-	case attr.Name(semconv.RPCSystemKey):
+	case attr.RPCSystem:
 		getter = func(_ *request.Span) string { return "grpc" }
-	// dotAttrName is normalized as dot-only, so rpc.grpc.status_code needs to be transformed to rpc.grpc.status.code
-	case attr.Name(metric.NormalizeToDot(string(semconv.RPCGRPCStatusCodeKey))):
+	case attr.RPCGRPCStatusCode:
 		getter = func(s *request.Span) string { return strconv.Itoa(s.Status) }
 	case attr.ClientAddrKey:
 		getter = metric.SpanPeer
 	case attr.ServerAddrKey:
 		getter = metric.SpanPeer
 	default:
-		return commonAttributes(dotAttrName)
+		return commonAttributes(attrName)
 	}
 	return getter, getter != nil
 }
 
-func SQLGetters(attrName string) (metric.Getter[*request.Span, string], bool) {
-	if attr.Name(attrName) == attr.DBOperationKey {
+func SQLGetters(attrName attr.Name) (metric.Getter[*request.Span, string], bool) {
+	if attrName == attr.DBOperationKey {
 		return func(span *request.Span) string {
 			return span.Method
 		}, true
@@ -629,8 +625,8 @@ func SQLGetters(attrName string) (metric.Getter[*request.Span, string], bool) {
 	return commonAttributes(attrName)
 }
 
-func commonAttributes(attrName string) (metric.Getter[*request.Span, string], bool) {
-	if attribute.Key(attrName) == semconv.ServiceNameKey {
+func commonAttributes(attrName attr.Name) (metric.Getter[*request.Span, string], bool) {
+	if attrName == attr.ServiceName {
 		return func(s *request.Span) string {
 			return s.ServiceID.Name
 		}, true

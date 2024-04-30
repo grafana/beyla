@@ -16,7 +16,7 @@ import (
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	"go.opentelemetry.io/otel/sdk/resource"
-	semconv "go.opentelemetry.io/otel/semconv/v1.23.1"
+	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 	"google.golang.org/grpc/credentials"
 
 	"github.com/grafana/beyla/pkg/internal/svc"
@@ -73,7 +73,7 @@ func Resource(service svc.ID) *resource.Resource {
 	}
 
 	for k, v := range service.Metadata {
-		attrs = append(attrs, attribute.String(k, v))
+		attrs = append(attrs, k.OTEL().String(v))
 	}
 
 	return resource.NewWithAttributes(semconv.SchemaURL, attrs...)

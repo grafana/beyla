@@ -118,7 +118,7 @@ func (nr *NameResolver) cleanName(svc *svc.ID, ip, n string) string {
 	n = trimSuffixIgnoreCase(n, ".svc.cluster.local")
 	n = trimSuffixIgnoreCase(n, "."+svc.Namespace)
 
-	kubeNamespace, ok := svc.Metadata[string(attr.K8sNamespaceName)]
+	kubeNamespace, ok := svc.Metadata[attr.K8sNamespaceName]
 	if ok && kubeNamespace != "" && kubeNamespace != svc.Namespace {
 		n = trimSuffixIgnoreCase(n, "."+kubeNamespace)
 	}

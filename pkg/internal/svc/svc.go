@@ -1,6 +1,10 @@
 package svc
 
-import semconv "go.opentelemetry.io/otel/semconv/v1.23.1"
+import (
+	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
+
+	"github.com/grafana/beyla/pkg/internal/export/metric/attr"
+)
 
 type InstrumentableType int
 
@@ -59,7 +63,7 @@ type ID struct {
 	SDKLanguage InstrumentableType
 	Instance    string
 
-	Metadata map[string]string
+	Metadata map[attr.Name]string
 }
 
 func (i *ID) String() string {

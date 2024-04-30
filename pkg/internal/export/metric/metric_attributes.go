@@ -39,10 +39,6 @@ func HTTPRequestBodySize(val int) attribute.KeyValue {
 	return attribute.Key(attr.HTTPRequestBodySize).Int(val)
 }
 
-func HTTPResponseBodySize(val int) attribute.KeyValue {
-	return attribute.Key(attr.HTTPResponseBodySize).Int(val)
-}
-
 func SpanKindMetric(val string) attribute.KeyValue {
 	return attribute.Key(attr.SpanKind).String(val)
 }

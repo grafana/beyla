@@ -8,13 +8,16 @@ import "strings"
 // metric format or name the user provides.
 type Section string
 
+// Name of a metric in three forms
 type Name struct {
 	// Section name in the attributes.select configuration option. It is
 	// a normalized form accorting to the normalizeMetric function below.
 	// It makes sure that it does not have metric nor aggregation suffix.
 	Section Section
-	Prom    string
-	OTEL    string
+	// Prom name of a metric for the Prometheus exporter
+	Prom string
+	// OTEL name of a metric for the OTEL exporter
+	OTEL string
 }
 
 var (
@@ -60,6 +63,10 @@ var (
 	}
 )
 
+// normalizeMetric will facilitate the user-input in the attributes.enable section.
+// The user can specify the Prometheus or OTEL notation, and can include or not
+// the units and aggregations for the metrics. Beyla will accept all the inputs
+// as long as the metric name is recorgnisable.
 func normalizeMetric(name Section) Section {
 	nameStr := strings.ReplaceAll(string(name), "_", ".")
 	for _, suffix := range []string{".bucket", ".sum", ".count", ".total"} {

@@ -70,9 +70,9 @@ func newReporter(
 	group := ctxInfo.MetricAttributeGroups
 	// this property can't be set inside the ConfiguredGroups function, otherwise the
 	// OTEL exporter would report also some prometheus-exclusive attributes
-	group.Add(metric.EnablePrometheus)
+	group.Add(metric.GroupPrometheus)
 
-	provider, err := metric.NewProvider(group, cfg.AttributeSelectors)
+	provider, err := metric.NewAttrSelector(group, cfg.AttributeSelectors)
 	if err != nil {
 		return nil, fmt.Errorf("network Prometheus exporter attributes enable: %w", err)
 	}

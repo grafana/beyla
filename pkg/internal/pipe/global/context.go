@@ -24,7 +24,7 @@ type ContextInfo struct {
 	Prometheus *connector.PrometheusManager
 	// MetricAttributeGroups will selectively enable or disable diverse groups of attributes
 	// in the metric exporters
-	MetricAttributeGroups metric.EnabledGroups
+	MetricAttributeGroups metric.AttrGroups
 }
 
 // AppO11y stores context information that is only required for application observability.

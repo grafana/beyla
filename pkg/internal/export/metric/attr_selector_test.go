@@ -24,7 +24,7 @@ func TestNormalize(t *testing.T) {
 }
 
 func TestFor(t *testing.T) {
-	p, err := NewProvider(EnableKubernetes, Selection{
+	p, err := NewAttrSelector(GroupKubernetes, Selection{
 		"beyla_network_flow_bytes_total": InclusionLists{
 			Include: []string{"beyla_ip", "src.*", "k8s.*"},
 			Exclude: []string{"k8s_*_name", "k8s.*.type"},
@@ -44,7 +44,7 @@ func TestFor(t *testing.T) {
 }
 
 func TestFor_KubeDisabled(t *testing.T) {
-	p, err := NewProvider(0, Selection{
+	p, err := NewAttrSelector(0, Selection{
 		"beyla_network_flow_bytes_total": InclusionLists{
 			Include: []string{"target.instance", "beyla_ip", "src.*", "k8s.*"},
 			Exclude: []string{"src.port"},
@@ -60,14 +60,14 @@ func TestFor_KubeDisabled(t *testing.T) {
 
 func TestNilDoesNotCrash(t *testing.T) {
 	assert.NotPanics(t, func() {
-		p, err := NewProvider(EnableKubernetes, nil)
+		p, err := NewAttrSelector(GroupKubernetes, nil)
 		require.NoError(t, err)
 		assert.NotEmpty(t, p.For(BeylaNetworkFlow))
 	})
 }
 
 func TestDefault(t *testing.T) {
-	p, err := NewProvider(EnableKubernetes, nil)
+	p, err := NewAttrSelector(GroupKubernetes, nil)
 	require.NoError(t, err)
 	assert.Equal(t, []attr.Name{
 		"k8s.cluster.name",

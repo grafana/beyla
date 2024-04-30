@@ -30,7 +30,7 @@ import (
 
 const testTimeout = 5 * time.Second
 
-func gctx(groups metric.EnabledGroups) *global.ContextInfo {
+func gctx(groups metric.AttrGroups) *global.ContextInfo {
 	return &global.ContextInfo{
 		Metrics:               imetrics.NoopReporter{},
 		MetricAttributeGroups: groups,
@@ -218,7 +218,7 @@ func TestRouteConsolidation(t *testing.T) {
 		},
 		Routes:     &transform.RoutesConfig{Patterns: []string{"/user/{id}", "/products/{id}/push"}},
 		Attributes: beyla.Attributes{Select: allMetricsBut("client.address", "url.path")},
-	}, gctx(metric.EnableHTTPRoutes), make(<-chan []request.Span))
+	}, gctx(metric.GroupHTTPRoutes), make(<-chan []request.Span))
 	// Override eBPF tracer to send some fake data
 	pipe.AddStart(gb.builder, tracesReader,
 		func(out chan<- []request.Span) {

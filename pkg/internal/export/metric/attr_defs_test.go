@@ -7,21 +7,21 @@ import (
 )
 
 func TestEnabledGroups(t *testing.T) {
-	var group EnabledGroups
+	var group AttrGroups
 
-	assert.False(t, group.Has(EnablePrometheus))
-	assert.False(t, group.Has(EnableKubernetes))
-	assert.False(t, group.Has(EnableNetCIDR))
+	assert.False(t, group.Has(GroupPrometheus))
+	assert.False(t, group.Has(GroupKubernetes))
+	assert.False(t, group.Has(GroupNetCIDR))
 
-	group.Add(EnablePrometheus)
+	group.Add(GroupPrometheus)
 
-	assert.True(t, group.Has(EnablePrometheus))
-	assert.False(t, group.Has(EnableKubernetes))
-	assert.False(t, group.Has(EnableNetCIDR))
+	assert.True(t, group.Has(GroupPrometheus))
+	assert.False(t, group.Has(GroupKubernetes))
+	assert.False(t, group.Has(GroupNetCIDR))
 
-	group.Add(EnableKubernetes)
+	group.Add(GroupKubernetes)
 
-	assert.True(t, group.Has(EnablePrometheus))
-	assert.True(t, group.Has(EnableKubernetes))
-	assert.False(t, group.Has(EnableNetCIDR))
+	assert.True(t, group.Has(GroupPrometheus))
+	assert.True(t, group.Has(GroupKubernetes))
+	assert.False(t, group.Has(GroupNetCIDR))
 }

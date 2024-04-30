@@ -107,21 +107,21 @@ func buildCommonContextInfo(
 // need to be enabled by default for the diverse metrics
 func attributeGroups(config *beyla.Config, ctxInfo *global.ContextInfo) {
 	if ctxInfo.K8sEnabled {
-		ctxInfo.MetricAttributeGroups.Add(metric.EnableKubernetes)
+		ctxInfo.MetricAttributeGroups.Add(metric.GroupKubernetes)
 	}
 	if config.Routes != nil {
-		ctxInfo.MetricAttributeGroups.Add(metric.EnableHTTPRoutes)
+		ctxInfo.MetricAttributeGroups.Add(metric.GroupHTTPRoutes)
 	}
 	if config.Metrics.ReportPeerInfo || config.Prometheus.ReportPeerInfo {
-		ctxInfo.MetricAttributeGroups.Add(metric.EnablePeerInfo)
+		ctxInfo.MetricAttributeGroups.Add(metric.GroupPeerInfo)
 	}
 	if config.Metrics.ReportTarget || config.Prometheus.ReportTarget {
-		ctxInfo.MetricAttributeGroups.Add(metric.EnableTarget)
+		ctxInfo.MetricAttributeGroups.Add(metric.GroupTarget)
 	}
 	if config.NetworkFlows.Deduper == flow.DeduperNone {
-		ctxInfo.MetricAttributeGroups.Add(metric.EnableNetIfaceDirection)
+		ctxInfo.MetricAttributeGroups.Add(metric.GroupNetIfaceDirection)
 	}
 	if config.NetworkFlows.CIDRs.Enabled() {
-		ctxInfo.MetricAttributeGroups.Add(metric.EnableNetCIDR)
+		ctxInfo.MetricAttributeGroups.Add(metric.GroupNetCIDR)
 	}
 }

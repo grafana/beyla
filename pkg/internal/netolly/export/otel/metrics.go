@@ -83,7 +83,7 @@ func MetricsExporterProvider(ctxInfo *global.ContextInfo, cfg *MetricsConfig) (p
 		return nil, err
 	}
 
-	attrProv, err := bmetric.NewProvider(ctxInfo.MetricAttributeGroups, cfg.AttributeSelectors)
+	attrProv, err := bmetric.NewAttrSelector(ctxInfo.MetricAttributeGroups, cfg.AttributeSelectors)
 	if err != nil {
 		return nil, fmt.Errorf("network OTEL exporter attributes enable: %w", err)
 	}

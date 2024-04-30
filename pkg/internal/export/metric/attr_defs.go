@@ -4,40 +4,40 @@ import (
 	"github.com/grafana/beyla/pkg/internal/export/metric/attr"
 )
 
-// EnabledGroups will let enabling by default some groups of attributes under
+// AttrGroups will let enabling by default some groups of attributes under
 // given circumstances. For example, will let enabling kubernetes metadata attributes
 // only if Beyla is running under Kubernetes and kube metadata is enabled.
-type EnabledGroups int
+type AttrGroups int
 
 const (
-	EnableKubernetes = EnabledGroups(1 << iota)
-	EnablePrometheus
-	EnableHTTPRoutes
-	EnableNetIfaceDirection
-	EnableNetCIDR
-	EnablePeerInfo // TODO Beyla 2.0: remove when we remove ReportPeerInfo configuration option
-	EnableTarget   // TODO Beyla 2.0: remove when we remove ReportTarget configuration option
+	GroupKubernetes = AttrGroups(1 << iota)
+	GroupPrometheus
+	GroupHTTPRoutes
+	GroupNetIfaceDirection
+	GroupNetCIDR
+	GroupPeerInfo // TODO Beyla 2.0: remove when we remove ReportPeerInfo configuration option
+	GroupTarget   // TODO Beyla 2.0: remove when we remove ReportTarget configuration option
 )
 
-func (e *EnabledGroups) Has(groups EnabledGroups) bool {
+func (e *AttrGroups) Has(groups AttrGroups) bool {
 	return *e&groups != 0
 }
 
-func (e *EnabledGroups) Add(groups EnabledGroups) {
+func (e *AttrGroups) Add(groups AttrGroups) {
 	*e |= groups
 }
 
 // Any new metric and attribute must be added here to be matched from the user-provided wildcard
 // selectors of the attributes.select section
-func getDefinitions(groups EnabledGroups) map[Section]Definition {
-	kubeEnabled := groups.Has(EnableKubernetes)
-	promEnabled := groups.Has(EnablePrometheus)
-	ifaceDirEnabled := groups.Has(EnableNetIfaceDirection)
-	peerInfoEnabled := groups.Has(EnablePeerInfo)
-	cidrEnabled := groups.Has(EnableNetCIDR)
+func getDefinitions(groups AttrGroups) map[Section]AttrReportGroup {
+	kubeEnabled := groups.Has(GroupKubernetes)
+	promEnabled := groups.Has(GroupPrometheus)
+	ifaceDirEnabled := groups.Has(GroupNetIfaceDirection)
+	peerInfoEnabled := groups.Has(GroupPeerInfo)
+	cidrEnabled := groups.Has(GroupNetCIDR)
 
 	// attributes to be reported exclusively for prometheus exporters
-	var prometheusAttributes = Definition{
+	var prometheusAttributes = AttrReportGroup{
 		Disabled: !promEnabled,
 		Attributes: map[attr.Name]Default{
 			attr.TargetInstance: true,
@@ -47,7 +47,7 @@ func getDefinitions(groups EnabledGroups) map[Section]Definition {
 
 	// attributes to be reported exclusively for network metrics when
 	// kubernetes metadata is enabled
-	var networkKubeAttributes = Definition{
+	var networkKubeAttributes = AttrReportGroup{
 		Disabled: !kubeEnabled,
 		Attributes: map[attr.Name]Default{
 			attr.K8sSrcOwnerName: true,
@@ -70,7 +70,7 @@ func getDefinitions(groups EnabledGroups) map[Section]Definition {
 
 	// network CIDR attributes are only enabled if the CIDRs configuration
 	// is defined
-	var networkCIDR = Definition{
+	var networkCIDR = AttrReportGroup{
 		Disabled: !cidrEnabled,
 		Attributes: map[attr.Name]Default{
 			attr.DstCIDR: true,
@@ -80,7 +80,7 @@ func getDefinitions(groups EnabledGroups) map[Section]Definition {
 
 	// attributes to be reported exclusively for application metrics when
 	// kubernetes metadata is enabled
-	var appKubeAttributes = Definition{
+	var appKubeAttributes = AttrReportGroup{
 		Disabled: !kubeEnabled,
 		Attributes: map[attr.Name]Default{
 			attr.K8sNamespaceName:   true,
@@ -95,25 +95,25 @@ func getDefinitions(groups EnabledGroups) map[Section]Definition {
 		},
 	}
 
-	var httpRoutes = Definition{
-		Disabled: !groups.Has(EnableHTTPRoutes),
+	var httpRoutes = AttrReportGroup{
+		Disabled: !groups.Has(GroupHTTPRoutes),
 		Attributes: map[attr.Name]Default{
 			attr.HTTPRoute: true,
 		},
 	}
 
-	var serverInfo = Definition{
+	var serverInfo = AttrReportGroup{
 		Attributes: map[attr.Name]Default{
 			attr.ClientAddr: Default(peerInfoEnabled),
 		},
 	}
-	var httpClientInfo = Definition{
+	var httpClientInfo = AttrReportGroup{
 		Attributes: map[attr.Name]Default{
 			attr.ServerAddr: Default(peerInfoEnabled),
 			attr.ServerPort: Default(peerInfoEnabled),
 		},
 	}
-	var grpcClientInfo = Definition{
+	var grpcClientInfo = AttrReportGroup{
 		Attributes: map[attr.Name]Default{
 			attr.ServerAddr: Default(peerInfoEnabled),
 		},
@@ -122,15 +122,15 @@ func getDefinitions(groups EnabledGroups) map[Section]Definition {
 	// TODO Beyla 2.0 remove
 	// this just defaults the path as default when the target report is enabled
 	// via the deprecated BEYLA_METRICS_REPORT_PEER config option
-	var deprecatedHTTPPath = Definition{
-		Disabled: !groups.Has(EnableTarget),
+	var deprecatedHTTPPath = AttrReportGroup{
+		Disabled: !groups.Has(GroupTarget),
 		Attributes: map[attr.Name]Default{
 			attr.HTTPUrlPath: true,
 		},
 	}
 
-	var httpCommon = Definition{
-		Parents: []*Definition{&httpRoutes, &deprecatedHTTPPath},
+	var httpCommon = AttrReportGroup{
+		SubGroups: []*AttrReportGroup{&httpRoutes, &deprecatedHTTPPath},
 		Attributes: map[attr.Name]Default{
 			attr.HTTPRequestMethod:      true,
 			attr.HTTPResponseStatusCode: true,
@@ -138,9 +138,9 @@ func getDefinitions(groups EnabledGroups) map[Section]Definition {
 		},
 	}
 
-	return map[Section]Definition{
+	return map[Section]AttrReportGroup{
 		BeylaNetworkFlow.Section: {
-			Parents: []*Definition{&networkCIDR, &networkKubeAttributes},
+			SubGroups: []*AttrReportGroup{&networkCIDR, &networkKubeAttributes},
 			Attributes: map[attr.Name]Default{
 				attr.BeylaIP:    false,
 				attr.Transport:  false,
@@ -155,19 +155,19 @@ func getDefinitions(groups EnabledGroups) map[Section]Definition {
 			},
 		},
 		HTTPServerDuration.Section: {
-			Parents: []*Definition{&prometheusAttributes, &appKubeAttributes, &httpCommon, &serverInfo},
+			SubGroups: []*AttrReportGroup{&prometheusAttributes, &appKubeAttributes, &httpCommon, &serverInfo},
 		},
 		HTTPServerRequestSize.Section: {
-			Parents: []*Definition{&prometheusAttributes, &appKubeAttributes, &httpCommon, &serverInfo},
+			SubGroups: []*AttrReportGroup{&prometheusAttributes, &appKubeAttributes, &httpCommon, &serverInfo},
 		},
 		HTTPClientDuration.Section: {
-			Parents: []*Definition{&prometheusAttributes, &appKubeAttributes, &httpCommon, &httpClientInfo},
+			SubGroups: []*AttrReportGroup{&prometheusAttributes, &appKubeAttributes, &httpCommon, &httpClientInfo},
 		},
 		HTTPClientRequestSize.Section: {
-			Parents: []*Definition{&prometheusAttributes, &appKubeAttributes, &httpCommon, &httpClientInfo},
+			SubGroups: []*AttrReportGroup{&prometheusAttributes, &appKubeAttributes, &httpCommon, &httpClientInfo},
 		},
 		RPCClientDuration.Section: {
-			Parents: []*Definition{&prometheusAttributes, &appKubeAttributes, &grpcClientInfo},
+			SubGroups: []*AttrReportGroup{&prometheusAttributes, &appKubeAttributes, &grpcClientInfo},
 			Attributes: map[attr.Name]Default{
 				attr.RPCMethod:         true,
 				attr.RPCSystem:         true,
@@ -175,7 +175,7 @@ func getDefinitions(groups EnabledGroups) map[Section]Definition {
 			},
 		},
 		RPCServerDuration.Section: {
-			Parents: []*Definition{&prometheusAttributes, &appKubeAttributes, &serverInfo},
+			SubGroups: []*AttrReportGroup{&prometheusAttributes, &appKubeAttributes, &serverInfo},
 			Attributes: map[attr.Name]Default{
 				attr.RPCMethod:         true,
 				attr.RPCSystem:         true,
@@ -186,7 +186,7 @@ func getDefinitions(groups EnabledGroups) map[Section]Definition {
 			},
 		},
 		SQLClientDuration.Section: {
-			Parents: []*Definition{&prometheusAttributes, &appKubeAttributes},
+			SubGroups: []*AttrReportGroup{&prometheusAttributes, &appKubeAttributes},
 			Attributes: map[attr.Name]Default{
 				attr.DBOperation: true,
 			},

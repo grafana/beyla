@@ -218,7 +218,7 @@ func newMetricsReporter(
 ) (*MetricsReporter, error) {
 	log := mlog()
 
-	attribProvider, err := metric2.NewProvider(ctxInfo.MetricAttributeGroups, attribSelector)
+	attribProvider, err := metric2.NewAttrSelector(ctxInfo.MetricAttributeGroups, attribSelector)
 	if err != nil {
 		return nil, fmt.Errorf("attributes select: %w", err)
 	}

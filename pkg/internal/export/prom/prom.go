@@ -194,9 +194,9 @@ func newReporter(
 	selector metric.Selection,
 ) (*metricsReporter, error) {
 	groups := ctxInfo.MetricAttributeGroups
-	groups.Add(metric.EnablePrometheus)
+	groups.Add(metric.GroupPrometheus)
 
-	attrsProvider, err := metric.NewProvider(groups, selector)
+	attrsProvider, err := metric.NewAttrSelector(groups, selector)
 	if err != nil {
 		return nil, fmt.Errorf("selecting metrics attributes: %w", err)
 	}

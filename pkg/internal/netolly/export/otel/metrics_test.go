@@ -38,8 +38,8 @@ func TestMetricAttributes(t *testing.T) {
 
 	me := &metricsExporter{metrics: &Expirer{attrs: metric.OpenTelemetryGetters(
 		export.NamedGetters, []attr.Name{
-			"src.address", "dst.address", "src.port", "dst.port", "src.name", "dst_name",
-			"k8s.src.name", "k8s.src_namespace", "k8s.dst.name", "k8s.dst.namespace",
+			attr.SrcAddress, attr.DstAddres, attr.SrcPort, attr.DstPort, attr.SrcName, attr.DstName,
+			attr.K8sSrcName, attr.K8sSrcNamespace, attr.K8sDstName, attr.K8sDstNamespace,
 		})}}
 	reportedAttributes, _ := me.metrics.recordAttributes(in)
 	for _, mustContain := range []attribute.KeyValue{
@@ -56,7 +56,7 @@ func TestMetricAttributes(t *testing.T) {
 		attribute.String("k8s.dst.namespace", "dstnamespace"),
 	} {
 		val, ok := reportedAttributes.Value(mustContain.Key)
-		assert.True(t, ok)
+		assert.Truef(t, ok, "expected %+v in %v", mustContain.Key, reportedAttributes)
 		assert.Equal(t, mustContain.Value, val)
 	}
 

@@ -10,3 +10,5 @@ validate-maintainers: true
 validate-yaml: true
 exclude-deprecated: true
 excluded-charts: []
+# TODO: disable after publicly releasing 1.0.0
+check-version-increment: false

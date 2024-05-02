@@ -1,6 +1,8 @@
 package metric
 
 import (
+	"maps"
+
 	"github.com/grafana/beyla/pkg/internal/export/metric/attr"
 )
 
@@ -193,4 +195,15 @@ func getDefinitions(groups AttrGroups) map[Section]AttrReportGroup {
 			},
 		},
 	}
+}
+
+// AllAttributeNames returns a set with all the names in the attributes database
+// as returned by the getDefinitions function
+func AllAttributeNames() map[attr.Name]struct{} {
+	names := map[attr.Name]struct{}{}
+	// -1 to enable all the metric group flags
+	for _, section := range getDefinitions(-1) {
+		maps.Copy(names, section.All())
+	}
+	return names
 }

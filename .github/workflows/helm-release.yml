@@ -9,7 +9,7 @@ env:
   CR_PACKAGE_PATH: "${{ github.workspace }}/.cr-release-packages"
   CR_TOOL_PATH: "${{ github.workspace }}/.cr-tool"
   CR_VERSION: "1.5.0"
-  CHART_DIR: "${{ github.workspace }}/charts/beyla"
+  CHART_DIR: "${{ github.workspace }}/source/charts/beyla"
 
 jobs:
   setup:

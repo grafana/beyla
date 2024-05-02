@@ -93,7 +93,7 @@ jobs:
           name: ${{ steps.parse-chart.outputs.packagename }}
           repository: grafana/helm-charts
           tag_name: ${{ steps.parse-chart.outputs.packagename }}
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.GH_BOT_ACCESS_TOKEN }}
           body: |
             ${{ steps.parse-chart.outputs.desc }}
             
@@ -106,4 +106,4 @@ jobs:
       - name: Update helm-charts index.yaml
         run: |
           cd helm-charts
-          "${CR_TOOL_PATH}/cr" index --config "${CR_CONFIGFILE}" --token "${{ secrets.GITHUB_TOKEN }}" --index-path "${CR_INDEX_PATH}" --package-path "${CR_PACKAGE_PATH}" --push
+          "${CR_TOOL_PATH}/cr" index --config "${CR_CONFIGFILE}" --token "${{ secrets.GH_BOT_ACCESS_TOKEN }}" --index-path "${CR_INDEX_PATH}" --package-path "${CR_PACKAGE_PATH}" --push

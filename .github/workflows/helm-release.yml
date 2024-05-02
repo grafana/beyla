@@ -9,13 +9,11 @@ env:
   CR_PACKAGE_PATH: "${{ github.workspace }}/.cr-release-packages"
   CR_TOOL_PATH: "${{ github.workspace }}/.cr-tool"
   CR_VERSION: "1.5.0"
+  CHART_DIR: "${{ github.workspace }}/source/charts/beyla"
 
 jobs:
   setup:
     runs-on: ubuntu-latest
-    outputs:
-      changed: ${{ steps.list-changed.outputs.changed }}
-      chartpath: ${{ steps.list-changed.outputs.chartpath }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -23,47 +21,9 @@ jobs:
           fetch-depth: 0
           path: source
 
-      - name: Install chart-testing
-        uses: helm/chart-testing-action@v2
-
-      - name: List changed charts
-        id: list-changed
-        run: |
-          cd source
-          
-          latest_tag=$( if ! git describe --tags --abbrev=0 --match='helm-chart/*' 2> /dev/null ; then git rev-list --max-parents=0 --first-parent HEAD; fi )
-          
-          echo "Running: ct list-changed --config ${CT_CONFIGFILE} --since ${latest_tag} --target-branch ${{ github.ref_name }}"
-          changed=$(ct list-changed --config "${CT_CONFIGFILE}" --since "${latest_tag}" --target-branch "${{ github.ref_name }}")
-          echo "${changed}"
-          
-          num_changed=$(wc -l <<< ${changed})
-          if [[ "${num_changed}" -gt "1" ]] ; then
-            echo "More than one chart changed, exiting"
-            exit 1
-          fi
-          if [[ -n "${changed}" ]]; then
-            name=$(yq ".name" < ${changed}/Chart.yaml)
-            version=$(yq ".version" < ${changed}/Chart.yaml)
-            tagname="v${version}"
-          
-            if [ $(git tag -l "${tagname}") ]; then
-              echo "Tag ${tagname} already exists, skipping release"
-              echo "changed=false" >> $GITHUB_OUTPUT
-            else
-              echo "Releasing ${changed}"
-              echo "changed=true" >> $GITHUB_OUTPUT
-              echo "chartpath=${changed}" >> $GITHUB_OUTPUT
-            fi
-          else
-            echo "No charts have changed, skipping release"
-            echo "changed=false" >> $GITHUB_OUTPUT
-          fi
-
   release:
     needs: [setup]
     runs-on: ubuntu-latest
-    if: needs.setup.outputs.changed == 'true'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -83,7 +43,7 @@ jobs:
           fetch-depth: 0
           repository: grafana/helm-charts
           path: helm-charts
-          token: "${{ secrets.GH_BOT_ACCESS_TOKEN }}"
+          token: "${{ secrets.GITHUB_TOKEN }}"
 
       - name: Configure Git for helm-charts
         run: |
@@ -100,12 +60,12 @@ jobs:
         id: parse-chart
         run: |
           cd source
-          changed="${{ needs.setup.outputs.chartpath }}"
-          description=$(yq ".description" < ${changed}/Chart.yaml)
-          name=$(yq ".name" < ${changed}/Chart.yaml)
-          version=$(yq ".version" < ${changed}/Chart.yaml)
+          charpath="${{ env.CHART_DIR }}"
+          description=$(yq ".description" < ${{ env.CHART_DIR }}/Chart.yaml)
+          name=$(yq ".name" < ${{ env.CHART_DIR }}/Chart.yaml)
+          version=$(yq ".version" < ${{ env.CHART_DIR }}/Chart.yaml)
           
-          echo "chartpath=${changed}" >> $GITHUB_OUTPUT
+          echo "chartpath=${charpath}" >> $GITHUB_OUTPUT
           echo "desc=${description}" >> $GITHUB_OUTPUT
           echo "tagname=v${version}" >> $GITHUB_OUTPUT
           echo "packagename=${name}-${version}" >> $GITHUB_OUTPUT
@@ -133,7 +93,7 @@ jobs:
           name: ${{ steps.parse-chart.outputs.packagename }}
           repository: grafana/helm-charts
           tag_name: ${{ steps.parse-chart.outputs.packagename }}
-          token: ${{ secrets.GH_BOT_ACCESS_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           body: |
             ${{ steps.parse-chart.outputs.desc }}
             
@@ -146,4 +106,4 @@ jobs:
       - name: Update helm-charts index.yaml
         run: |
           cd helm-charts
-          "${CR_TOOL_PATH}/cr" index --config "${CR_CONFIGFILE}" --token "${{ secrets.GH_BOT_ACCESS_TOKEN }}" --index-path "${CR_INDEX_PATH}" --package-path "${CR_PACKAGE_PATH}" --push
+          "${CR_TOOL_PATH}/cr" index --config "${CR_CONFIGFILE}" --token "${{ secrets.GITHUB_TOKEN }}" --index-path "${CR_INDEX_PATH}" --package-path "${CR_PACKAGE_PATH}" --push

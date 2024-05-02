@@ -6,8 +6,6 @@ Open source zero-code automatic instrumentation with eBPF and OpenTelemetry.
 
 [![Build Status](https://drone.grafana.net/api/badges/grafana/beyla/status.svg?ref=refs/heads/main)](https://drone.grafana.net/grafana/beyla)
 
-:green_circle: **We are hiring!** :green_circle: If you want to become a Beyla engineer, find our job post [here](https://boards.greenhouse.io/grafanalabs/jobs/5019971004).
-
 ## Introduction
 
 Beyla is a vendor agnostic, eBPF-based, OpenTelemetry/Prometheus application auto-instrumentation tool, which lets you easily get started with Application Observability. 

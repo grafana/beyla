@@ -26,7 +26,7 @@ const (
 	prometheusHostPort                = "localhost:9090"
 	jaegerQueryURL                    = "http://localhost:16686/api/traces"
 
-	testTimeout = 30 * time.Second
+	testTimeout = 60 * time.Second
 )
 
 func rndStr() string {

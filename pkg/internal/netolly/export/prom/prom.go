@@ -13,7 +13,6 @@ import (
 	"github.com/grafana/beyla/pkg/internal/export/otel"
 	"github.com/grafana/beyla/pkg/internal/export/prom"
 	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
-	"github.com/grafana/beyla/pkg/internal/netolly/export"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 )
 
@@ -78,7 +77,7 @@ func newReporter(
 	}
 
 	attrs := metric.PrometheusGetters(
-		export.NamedGetters,
+		ebpf.RecordGetters,
 		provider.For(metric.BeylaNetworkFlow))
 
 	labelNames := make([]string, 0, len(attrs))

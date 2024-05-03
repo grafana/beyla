@@ -18,7 +18,6 @@ import (
 	bmetric "github.com/grafana/beyla/pkg/internal/export/metric"
 	"github.com/grafana/beyla/pkg/internal/export/otel"
 	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
-	"github.com/grafana/beyla/pkg/internal/netolly/export"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 )
 
@@ -88,7 +87,7 @@ func MetricsExporterProvider(ctxInfo *global.ContextInfo, cfg *MetricsConfig) (p
 		return nil, fmt.Errorf("network OTEL exporter attributes enable: %w", err)
 	}
 	attrs := bmetric.OpenTelemetryGetters(
-		export.NamedGetters,
+		ebpf.RecordGetters,
 		attrProv.For(bmetric.BeylaNetworkFlow))
 
 	expirer := NewExpirer(attrs, cfg.Metrics.TTL)

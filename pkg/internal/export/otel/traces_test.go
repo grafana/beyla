@@ -20,7 +20,6 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 	"go.opentelemetry.io/otel/trace"
 
-	"github.com/grafana/beyla/pkg/internal/export/metric"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/pkg/internal/request"
@@ -489,21 +488,21 @@ func TestSpanHostPeer(t *testing.T) {
 		Peer:     "127.0.0.2",
 	}
 
-	assert.Equal(t, "localhost", metric.SpanHost(&sp))
-	assert.Equal(t, "peerhost", metric.SpanPeer(&sp))
+	assert.Equal(t, "localhost", request.SpanHost(&sp))
+	assert.Equal(t, "peerhost", request.SpanPeer(&sp))
 
 	sp = request.Span{
 		Host: "127.0.0.1",
 		Peer: "127.0.0.2",
 	}
 
-	assert.Equal(t, "127.0.0.1", metric.SpanHost(&sp))
-	assert.Equal(t, "127.0.0.2", metric.SpanPeer(&sp))
+	assert.Equal(t, "127.0.0.1", request.SpanHost(&sp))
+	assert.Equal(t, "127.0.0.2", request.SpanPeer(&sp))
 
 	sp = request.Span{}
 
-	assert.Equal(t, "", metric.SpanHost(&sp))
-	assert.Equal(t, "", metric.SpanPeer(&sp))
+	assert.Equal(t, "", request.SpanHost(&sp))
+	assert.Equal(t, "", request.SpanPeer(&sp))
 }
 
 type fakeInternalTraces struct {

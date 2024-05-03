@@ -34,6 +34,8 @@ type IPAddr [net.IPv6len]uint8
 
 // Record contains accumulated metrics from a flow, with extra metadata
 // that is added from the user space
+// REMINDER: any attribute here must be also added to the functions RecordGetters
+// and getDefinitions in pkg/internal/export/metric/definitions.go
 type Record struct {
 	NetFlowRecordT
 

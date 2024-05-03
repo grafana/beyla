@@ -1,10 +1,9 @@
 package metric
 
 import (
+	"maps"
 	"path"
 	"strings"
-
-	"golang.org/x/exp/maps"
 
 	"github.com/grafana/beyla/pkg/internal/export/metric/attr"
 )
@@ -66,6 +65,7 @@ func (incl Selection) Normalize() {
 	for metricName, allowedAttrs := range incl {
 		normalized[normalizeMetric(metricName)] = allowedAttrs
 	}
-	maps.Clear(incl)
+	// clear the current map before copying again normalized values
+	maps.DeleteFunc(incl, func(_ Section, _ InclusionLists) bool { return true })
 	maps.Copy(incl, normalized)
 }

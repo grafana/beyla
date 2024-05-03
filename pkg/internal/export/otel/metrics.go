@@ -21,7 +21,6 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 
 	metric2 "github.com/grafana/beyla/pkg/internal/export/metric"
-	"github.com/grafana/beyla/pkg/internal/export/metric/attr"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/pkg/internal/request"
@@ -234,19 +233,19 @@ func newMetricsReporter(
 	}
 	// initialize attribute getters
 	mr.attrHTTPDuration = metric2.OpenTelemetryGetters(
-		HTTPGetters, mr.attributes.For(metric2.HTTPServerDuration))
+		request.SpanOTELGetters, mr.attributes.For(metric2.HTTPServerDuration))
 	mr.attrHTTPClientDuration = metric2.OpenTelemetryGetters(
-		HTTPGetters, mr.attributes.For(metric2.HTTPClientDuration))
+		request.SpanOTELGetters, mr.attributes.For(metric2.HTTPClientDuration))
 	mr.attrHTTPRequestSize = metric2.OpenTelemetryGetters(
-		HTTPGetters, mr.attributes.For(metric2.HTTPServerRequestSize))
+		request.SpanOTELGetters, mr.attributes.For(metric2.HTTPServerRequestSize))
 	mr.attrHTTPClientRequestSize = metric2.OpenTelemetryGetters(
-		HTTPGetters, mr.attributes.For(metric2.HTTPClientRequestSize))
+		request.SpanOTELGetters, mr.attributes.For(metric2.HTTPClientRequestSize))
 	mr.attrGRPCServer = metric2.OpenTelemetryGetters(
-		GRPCGetters, mr.attributes.For(metric2.RPCServerDuration))
+		request.SpanOTELGetters, mr.attributes.For(metric2.RPCServerDuration))
 	mr.attrGRPCClient = metric2.OpenTelemetryGetters(
-		GRPCGetters, mr.attributes.For(metric2.RPCClientDuration))
+		request.SpanOTELGetters, mr.attributes.For(metric2.RPCClientDuration))
 	mr.attrSQLClient = metric2.OpenTelemetryGetters(
-		SQLGetters, mr.attributes.For(metric2.SQLClientDuration))
+		request.SpanOTELGetters, mr.attributes.For(metric2.SQLClientDuration))
 
 	mr.reporters = NewReporterPool[*Metrics](cfg.ReportersCacheLen,
 		func(id svc.UID, v *Metrics) {
@@ -580,12 +579,12 @@ func otelHistogramConfig(metricName string, buckets []float64, useExponentialHis
 
 func (mr *MetricsReporter) metricResourceAttributes(service svc.ID) attribute.Set {
 	attrs := []attribute.KeyValue{
-		metric2.ServiceMetric(service.Name),
+		request.ServiceMetric(service.Name),
 		semconv.ServiceInstanceID(service.Instance),
 		semconv.ServiceNamespace(service.Namespace),
 		semconv.TelemetrySDKLanguageKey.String(service.SDKLanguage.String()),
 		semconv.TelemetrySDKNameKey.String("beyla"),
-		metric2.SourceMetric("beyla"),
+		request.SourceMetric("beyla"),
 	}
 	for k, v := range service.Metadata {
 		attrs = append(attrs, k.OTEL().String(v))
@@ -596,13 +595,13 @@ func (mr *MetricsReporter) metricResourceAttributes(service svc.ID) attribute.Se
 
 func (mr *MetricsReporter) spanMetricAttributes(span *request.Span) attribute.Set {
 	attrs := []attribute.KeyValue{
-		metric2.ServiceMetric(span.ServiceID.Name),
+		request.ServiceMetric(span.ServiceID.Name),
 		semconv.ServiceInstanceID(span.ServiceID.Instance),
 		semconv.ServiceNamespace(span.ServiceID.Namespace),
-		metric2.SpanKindMetric(SpanKindString(span)),
-		metric2.SpanNameMetric(TraceName(span)),
-		metric2.StatusCodeMetric(int(SpanStatusCode(span))),
-		metric2.SourceMetric("beyla"),
+		request.SpanKindMetric(SpanKindString(span)),
+		request.SpanNameMetric(TraceName(span)),
+		request.StatusCodeMetric(int(SpanStatusCode(span))),
+		request.SourceMetric("beyla"),
 	}
 
 	return attribute.NewSet(attrs...)
@@ -612,21 +611,21 @@ func (mr *MetricsReporter) serviceGraphAttributes(span *request.Span) attribute.
 	var attrs []attribute.KeyValue
 	if span.IsClientSpan() {
 		attrs = []attribute.KeyValue{
-			metric2.ClientMetric(metric2.SpanPeer(span)),
-			metric2.ClientNamespaceMetric(span.ServiceID.Namespace),
-			metric2.ServerMetric(metric2.SpanHost(span)),
-			metric2.ServerNamespaceMetric(span.OtherNamespace),
-			metric2.ConnectionTypeMetric("virtual_node"),
-			metric2.SourceMetric("beyla"),
+			request.ClientMetric(request.SpanPeer(span)),
+			request.ClientNamespaceMetric(span.ServiceID.Namespace),
+			request.ServerMetric(request.SpanHost(span)),
+			request.ServerNamespaceMetric(span.OtherNamespace),
+			request.ConnectionTypeMetric("virtual_node"),
+			request.SourceMetric("beyla"),
 		}
 	} else {
 		attrs = []attribute.KeyValue{
-			metric2.ClientMetric(metric2.SpanPeer(span)),
-			metric2.ClientNamespaceMetric(span.OtherNamespace),
-			metric2.ServerMetric(metric2.SpanHost(span)),
-			metric2.ServerNamespaceMetric(span.ServiceID.Namespace),
-			metric2.ConnectionTypeMetric("virtual_node"),
-			metric2.SourceMetric("beyla"),
+			request.ClientMetric(request.SpanPeer(span)),
+			request.ClientNamespaceMetric(span.OtherNamespace),
+			request.ServerMetric(request.SpanHost(span)),
+			request.ServerNamespaceMetric(span.ServiceID.Namespace),
+			request.ConnectionTypeMetric("virtual_node"),
+			request.SourceMetric("beyla"),
 		}
 	}
 	return attribute.NewSet(attrs...)
@@ -835,65 +834,4 @@ func setMetricsProtocol(cfg *MetricsConfig) {
 	}
 	// unset. Guessing it
 	os.Setenv(envMetricsProtocol, string(cfg.GuessProtocol()))
-}
-
-// HTTPGetters provides get function for HTTP attributes.
-// REMINDER: any attribute here must be also added to pkg/internal/export/metric/definitions.go getDefinitions
-func HTTPGetters(name attr.Name) (metric2.Getter[*request.Span, attribute.KeyValue], bool) {
-	var getter metric2.Getter[*request.Span, attribute.KeyValue]
-	switch name {
-	case attr.HTTPRequestMethod:
-		getter = func(s *request.Span) attribute.KeyValue { return metric2.HTTPRequestMethod(s.Method) }
-
-	// name is normalized as dot-only, so http.response.status_code needs to be transformed to http.response.status.code
-	case attr.HTTPResponseStatusCode:
-		getter = func(s *request.Span) attribute.KeyValue { return metric2.HTTPResponseStatusCode(s.Status) }
-	case attr.HTTPRoute:
-		getter = func(s *request.Span) attribute.KeyValue { return semconv.HTTPRoute(s.Route) }
-	case attr.HTTPUrlPath:
-		getter = func(s *request.Span) attribute.KeyValue { return metric2.HTTPUrlPath(s.Path) }
-	case attr.ClientAddr:
-		getter = func(s *request.Span) attribute.KeyValue { return metric2.ClientAddr(metric2.SpanPeer(s)) }
-	case attr.ServerAddr:
-		getter = func(s *request.Span) attribute.KeyValue { return metric2.ServerAddr(metric2.SpanHost(s)) }
-	case attr.ServerPort:
-		getter = func(s *request.Span) attribute.KeyValue { return metric2.ServerPort(s.HostPort) }
-	}
-	// default: unlike the prom.go getters, we don't check here for service name nor k8s metadata
-	// because they are already attributes of the Resource instead of the metric
-	return getter, getter != nil
-}
-
-// GRPCGetters provides getter function for GRPC attributes.
-// REMINDER: any attribute here must be also added to pkg/internal/export/metric/definitions.go getDefinitions
-func GRPCGetters(name attr.Name) (metric2.Getter[*request.Span, attribute.KeyValue], bool) {
-	var getter metric2.Getter[*request.Span, attribute.KeyValue]
-	switch name {
-	case attr.RPCMethod:
-		getter = func(s *request.Span) attribute.KeyValue { return semconv.RPCMethod(s.Path) }
-	case attr.RPCSystem:
-		getter = func(_ *request.Span) attribute.KeyValue { return semconv.RPCSystemGRPC }
-
-	// name is normalized as dot-only, so rpc.grpc.status_code needs to be transformed to rpc.grpc.status.code
-	case attr.RPCGRPCStatusCode:
-		getter = func(s *request.Span) attribute.KeyValue { return semconv.RPCGRPCStatusCodeKey.Int(s.Status) }
-	case attr.ClientAddr:
-		getter = func(s *request.Span) attribute.KeyValue { return metric2.ClientAddr(metric2.SpanPeer(s)) }
-	case attr.ServerAddr:
-		getter = func(s *request.Span) attribute.KeyValue { return metric2.ServerAddr(metric2.SpanPeer(s)) }
-	}
-	// default: unlike the prom.go getters, we don't check here for service name nor k8s metadata
-	// because they are already attributes of the Resource instead of the metric
-	return getter, getter != nil
-}
-
-func SQLGetters(attrName attr.Name) (metric2.Getter[*request.Span, attribute.KeyValue], bool) {
-	if attrName == attr.DBOperation {
-		return func(span *request.Span) attribute.KeyValue {
-			return semconv.DBOperation(span.Method)
-		}, true
-	}
-	// default: unlike the prom.go getters, we don't check here for service name nor k8s metadata
-	// because they are already attributes of the Resource instead of the metric
-	return nil, false
 }

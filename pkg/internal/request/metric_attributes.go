@@ -1,10 +1,9 @@
-package metric
+package request
 
 import (
 	"go.opentelemetry.io/otel/attribute"
 
 	"github.com/grafana/beyla/pkg/internal/export/metric/attr"
-	"github.com/grafana/beyla/pkg/internal/request"
 )
 
 func HTTPRequestMethod(val string) attribute.KeyValue {
@@ -79,7 +78,7 @@ func ConnectionTypeMetric(val string) attribute.KeyValue {
 	return attribute.Key(attr.ConnectionType).String(val)
 }
 
-func SpanHost(span *request.Span) string {
+func SpanHost(span *Span) string {
 	if span.HostName != "" {
 		return span.HostName
 	}
@@ -87,7 +86,7 @@ func SpanHost(span *request.Span) string {
 	return span.Host
 }
 
-func SpanPeer(span *request.Span) string {
+func SpanPeer(span *Span) string {
 	if span.PeerName != "" {
 		return span.PeerName
 	}

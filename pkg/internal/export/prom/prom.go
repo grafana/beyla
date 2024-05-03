@@ -201,19 +201,19 @@ func newReporter(
 		return nil, fmt.Errorf("selecting metrics attributes: %w", err)
 	}
 
-	attrHTTPDuration := metric.PrometheusGetters(HTTPGetters,
+	attrHTTPDuration := metric.PrometheusGetters(request.SpanPromGetters,
 		attrsProvider.For(metric.HTTPServerDuration))
-	attrHTTPClientDuration := metric.PrometheusGetters(HTTPGetters,
+	attrHTTPClientDuration := metric.PrometheusGetters(request.SpanPromGetters,
 		attrsProvider.For(metric.HTTPClientDuration))
-	attrHTTPRequestSize := metric.PrometheusGetters(HTTPGetters,
+	attrHTTPRequestSize := metric.PrometheusGetters(request.SpanPromGetters,
 		attrsProvider.For(metric.HTTPServerRequestSize))
-	attrHTTPClientRequestSize := metric.PrometheusGetters(HTTPGetters,
+	attrHTTPClientRequestSize := metric.PrometheusGetters(request.SpanPromGetters,
 		attrsProvider.For(metric.HTTPClientRequestSize))
-	attrGRPCDuration := metric.PrometheusGetters(GRPCGetters,
+	attrGRPCDuration := metric.PrometheusGetters(request.SpanPromGetters,
 		attrsProvider.For(metric.RPCServerDuration))
-	attrGRPCClientDuration := metric.PrometheusGetters(GRPCGetters,
+	attrGRPCClientDuration := metric.PrometheusGetters(request.SpanPromGetters,
 		attrsProvider.For(metric.RPCClientDuration))
-	attrSQLClientDuration := metric.PrometheusGetters(SQLGetters,
+	attrSQLClientDuration := metric.PrometheusGetters(request.SpanPromGetters,
 		attrsProvider.For(metric.HTTPServerDuration))
 
 	// If service name is not explicitly set, we take the service name as set by the
@@ -552,87 +552,21 @@ func labelNamesServiceGraph() []string {
 func (r *metricsReporter) labelValuesServiceGraph(span *request.Span) []string {
 	if span.IsClientSpan() {
 		return []string{
-			metric.SpanPeer(span),
+			request.SpanPeer(span),
 			span.ServiceID.Namespace,
-			metric.SpanHost(span),
+			request.SpanHost(span),
 			span.OtherNamespace,
 			"virtual_node",
 			"beyla",
 		}
 	}
 	return []string{
-		metric.SpanPeer(span),
+		request.SpanPeer(span),
 		span.OtherNamespace,
-		metric.SpanHost(span),
+		request.SpanHost(span),
 		span.ServiceID.Namespace,
 		"virtual_node",
 		"beyla",
-	}
-}
-
-// HTTPGetters provides get function for HTTP attributes.
-// REMINDER: any attribute here must be also added to pkg/internal/export/metric/definitions.go getDefinitions
-func HTTPGetters(attrName attr.Name) (metric.Getter[*request.Span, string], bool) {
-	var getter metric.Getter[*request.Span, string]
-	switch attrName {
-	case attr.HTTPRequestMethod:
-		getter = func(s *request.Span) string { return s.Method }
-	case attr.HTTPResponseStatusCode:
-		getter = func(s *request.Span) string { return strconv.Itoa(s.Status) }
-	case attr.HTTPRoute:
-		getter = func(s *request.Span) string { return s.Route }
-	case attr.HTTPUrlPath:
-		getter = func(s *request.Span) string { return s.Path }
-	case attr.ClientAddr:
-		getter = metric.SpanPeer
-	case attr.ServerAddr:
-		getter = metric.SpanHost
-	case attr.ServerPort:
-		getter = func(s *request.Span) string { return strconv.Itoa(s.HostPort) }
-	default:
-		return commonAttributes(attrName)
-	}
-	return getter, getter != nil
-}
-
-// GRPCGetters provides getter function for GRPC attributes.
-// REMINDER: any attribute here must be also added to pkg/internal/export/metric/definitions.go getDefinitions
-func GRPCGetters(attrName attr.Name) (metric.Getter[*request.Span, string], bool) {
-	var getter metric.Getter[*request.Span, string]
-	switch attrName {
-	case attr.RPCMethod:
-		getter = func(s *request.Span) string { return s.Path }
-	case attr.RPCSystem:
-		getter = func(_ *request.Span) string { return "grpc" }
-	case attr.RPCGRPCStatusCode:
-		getter = func(s *request.Span) string { return strconv.Itoa(s.Status) }
-	case attr.ClientAddr:
-		getter = metric.SpanPeer
-	case attr.ServerAddr:
-		getter = metric.SpanPeer
-	default:
-		return commonAttributes(attrName)
-	}
-	return getter, getter != nil
-}
-
-func SQLGetters(attrName attr.Name) (metric.Getter[*request.Span, string], bool) {
-	if attrName == attr.DBOperation {
-		return func(span *request.Span) string {
-			return span.Method
-		}, true
-	}
-	return commonAttributes(attrName)
-}
-
-func commonAttributes(attrName attr.Name) (metric.Getter[*request.Span, string], bool) {
-	switch attrName {
-	case attr.ServiceName:
-		return func(s *request.Span) string { return s.ServiceID.Name }, true
-	case attr.ServiceNamespace:
-		return func(s *request.Span) string { return s.ServiceID.Namespace }, true
-	default:
-		return func(s *request.Span) string { return s.ServiceID.Metadata[attrName] }, true
 	}
 }
 

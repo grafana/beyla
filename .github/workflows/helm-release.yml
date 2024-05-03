@@ -9,22 +9,17 @@ env:
   CR_PACKAGE_PATH: "${{ github.workspace }}/.cr-release-packages"
   CR_TOOL_PATH: "${{ github.workspace }}/.cr-tool"
   CR_VERSION: "1.5.0"
+  CHART_DIR: "${{ github.workspace }}/source/charts/beyla"
 
 jobs:
   setup:
     runs-on: ubuntu-latest
-    outputs:
-      changed: ${{ steps.list-changed.outputs.changed }}
-      chartpath: ${{ steps.list-changed.outputs.chartpath }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
           path: source
-
-      - name: Install chart-testing
-        uses: helm/chart-testing-action@v2
 
   release:
     needs: [setup]
@@ -48,7 +43,7 @@ jobs:
           fetch-depth: 0
           repository: grafana/helm-charts
           path: helm-charts
-          token: "${{ secrets.GH_BOT_ACCESS_TOKEN }}"
+          token: "${{ secrets.GITHUB_TOKEN }}"
 
       - name: Configure Git for helm-charts
         run: |
@@ -65,12 +60,12 @@ jobs:
         id: parse-chart
         run: |
           cd source
-          changed="${{ needs.setup.outputs.chartpath }}"
-          description=$(yq ".description" < ${changed}/Chart.yaml)
-          name=$(yq ".name" < ${changed}/Chart.yaml)
-          version=$(yq ".version" < ${changed}/Chart.yaml)
+          charpath="${{ env.CHART_DIR }}"
+          description=$(yq ".description" < ${{ env.CHART_DIR }}/Chart.yaml)
+          name=$(yq ".name" < ${{ env.CHART_DIR }}/Chart.yaml)
+          version=$(yq ".version" < ${{ env.CHART_DIR }}/Chart.yaml)
           
-          echo "chartpath=${changed}" >> $GITHUB_OUTPUT
+          echo "chartpath=${charpath}" >> $GITHUB_OUTPUT
           echo "desc=${description}" >> $GITHUB_OUTPUT
           echo "tagname=v${version}" >> $GITHUB_OUTPUT
           echo "packagename=${name}-${version}" >> $GITHUB_OUTPUT

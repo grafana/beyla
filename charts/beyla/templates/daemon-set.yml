@@ -71,9 +71,9 @@ spec:
       {{- if or .Values.global.image.pullSecrets .Values.image.pullSecrets }}
       imagePullSecrets:
         {{- if .Values.global.image.pullSecrets }}
-        {{- toYaml .Values.global.image.pullSecrets | nindent 4 }}
+        {{- toYaml .Values.global.image.pullSecrets | nindent 8 }}
         {{- else }}
-        {{- toYaml .Values.image.pullSecrets | nindent 4 }}
+        {{- toYaml .Values.image.pullSecrets | nindent 8 }}
         {{- end }}
       {{- end }}
       {{- with .Values.nodeSelector }}

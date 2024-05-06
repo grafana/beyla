@@ -13,6 +13,7 @@ import (
 	"github.com/grafana/beyla/pkg/beyla"
 	"github.com/grafana/beyla/pkg/internal/export/otel"
 	"github.com/grafana/beyla/pkg/internal/request"
+	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 )
 
 // TracesReceiver creates a terminal node that consumes request.Spans and sends OpenTelemetry traces to the configured consumers.
@@ -58,6 +59,7 @@ func generateTraces(span *request.Span) ptrace.Traces {
 	rs := traces.ResourceSpans().AppendEmpty()
 	ss := rs.ScopeSpans().AppendEmpty()
 	resourceAttrs := attrsToMap(otel.Resource(span.ServiceID).Attributes())
+	resourceAttrs.PutStr(string(semconv.OTelLibraryNameKey), otel.ReporterName)
 	resourceAttrs.CopyTo(rs.Resource().Attributes())
 
 	traceID := pcommon.TraceID(span.TraceID)

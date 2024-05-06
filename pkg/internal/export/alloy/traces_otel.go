@@ -9,6 +9,7 @@ import (
 	"go.opentelemetry.io/collector/config/configgrpc"
 	"go.opentelemetry.io/collector/config/confighttp"
 	"go.opentelemetry.io/collector/config/configtelemetry"
+	"go.opentelemetry.io/collector/config/configtls"
 	"go.opentelemetry.io/collector/exporter"
 	"go.opentelemetry.io/collector/exporter/otlpexporter"
 	"go.opentelemetry.io/collector/exporter/otlphttpexporter"
@@ -107,6 +108,10 @@ func getTracesExporter(ctx context.Context, cfg otel.TracesConfig, ctxInfo *glob
 		}
 		config.ClientConfig = configgrpc.ClientConfig{
 			Endpoint: endpoint,
+			TLSSetting: configtls.ClientConfig{
+				Insecure:           true, // TODO: make this configurable
+				InsecureSkipVerify: cfg.InsecureSkipVerify,
+			},
 		}
 		set := getTraceSettings(ctxInfo, cfg, t)
 		return factory.CreateTracesExporter(ctx, set, config)

@@ -49,9 +49,15 @@ func (tr *tracesOTELReceiver) provideLoop() (pipe.FinalFunc[[]request.Span], err
 			return
 		}
 		defer func() {
-			exp.Shutdown(tr.ctx)
+			err := exp.Shutdown(tr.ctx)
+			if err != nil {
+				slog.Error("error shutting down traces exporter", "error", err)
+			}
 		}()
-		exp.Start(tr.ctx, nil)
+		err = exp.Start(tr.ctx, nil)
+		if err != nil {
+			slog.Error("error starting traces exporter", "error", err)
+		}
 		for spans := range in {
 			for i := range spans {
 				span := &spans[i]
@@ -75,7 +81,7 @@ func getTracesExporter(ctx context.Context, cfg TracesConfig, ctxInfo *global.Co
 		var t trace.SpanExporter
 		var err error
 
-		if t, err = HttpTracer(ctx, &cfg); err != nil {
+		if t, err = httpTracer(ctx, &cfg); err != nil {
 			slog.Error("can't instantiate OTEL HTTP traces exporter", err)
 			return nil, err
 		}
@@ -138,7 +144,7 @@ func getTraceSettings(ctxInfo *global.ContextInfo, cfg TracesConfig, in trace.Sp
 	if cfg.ExportTimeout > 0 {
 		opts = append(opts, trace.WithExportTimeout(cfg.ExportTimeout))
 	}
-	tracer := InstrumentTraceExporter(in, ctxInfo.Metrics)
+	tracer := instrumentTraceExporter(in, ctxInfo.Metrics)
 	bsp := trace.NewBatchSpanProcessor(tracer, opts...)
 	provider := trace.NewTracerProvider(
 		trace.WithSpanProcessor(bsp),
@@ -164,7 +170,7 @@ func getTraceSettings(ctxInfo *global.ContextInfo, cfg TracesConfig, in trace.Sp
 // GenerateTraces creates a ptrace.Traces from a request.Span
 func GenerateTraces(span *request.Span) ptrace.Traces {
 	t := span.Timings()
-	start := SpanStartTime(t)
+	start := spanStartTime(t)
 	hasSubSpans := t.Start.After(start)
 	traces := ptrace.NewTraces()
 	rs := traces.ResourceSpans().AppendEmpty()
@@ -174,9 +180,9 @@ func GenerateTraces(span *request.Span) ptrace.Traces {
 	resourceAttrs.CopyTo(rs.Resource().Attributes())
 
 	traceID := pcommon.TraceID(span.TraceID)
-	spanID := pcommon.SpanID(RandomSpanID())
+	spanID := pcommon.SpanID(randomSpanID())
 	if traceID.IsEmpty() {
-		traceID = pcommon.TraceID(RandomTraceID())
+		traceID = pcommon.TraceID(randomTraceID())
 	}
 
 	if hasSubSpans {
@@ -188,7 +194,7 @@ func GenerateTraces(span *request.Span) ptrace.Traces {
 	// Create a parent span for the whole request session
 	s := ss.Spans().AppendEmpty()
 	s.SetName(TraceName(span))
-	s.SetKind(ptrace.SpanKind(SpanKind(span)))
+	s.SetKind(ptrace.SpanKind(spanKind(span)))
 	s.SetStartTimestamp(pcommon.NewTimestampFromTime(start))
 
 	// Set trace and span IDs
@@ -199,7 +205,7 @@ func GenerateTraces(span *request.Span) ptrace.Traces {
 	}
 
 	// Set span attributes
-	attrs := TraceAttributes(span)
+	attrs := traceAttributes(span)
 	m := attrsToMap(attrs)
 	m.CopyTo(s.Attributes())
 
@@ -219,7 +225,7 @@ func createSubSpans(span *request.Span, parentSpanID pcommon.SpanID, traceID pco
 	spQ.SetKind(ptrace.SpanKindInternal)
 	spQ.SetEndTimestamp(pcommon.NewTimestampFromTime(t.Start))
 	spQ.SetTraceID(traceID)
-	spQ.SetSpanID(pcommon.SpanID(RandomSpanID()))
+	spQ.SetSpanID(pcommon.SpanID(randomSpanID()))
 	spQ.SetParentSpanID(parentSpanID)
 
 	// Create a child span showing the processing time
@@ -232,7 +238,7 @@ func createSubSpans(span *request.Span, parentSpanID pcommon.SpanID, traceID pco
 	if span.SpanID.IsValid() {
 		spP.SetSpanID(pcommon.SpanID(span.SpanID))
 	} else {
-		spP.SetSpanID(pcommon.SpanID(RandomSpanID()))
+		spP.SetSpanID(pcommon.SpanID(randomSpanID()))
 	}
 	spP.SetParentSpanID(parentSpanID)
 }

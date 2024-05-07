@@ -71,7 +71,7 @@ func currentTrace(ctx context.Context) *trace.TraceID {
 	return &holder
 }
 
-func RandomTraceID() trace.TraceID {
+func randomTraceID() trace.TraceID {
 	t := trace.TraceID{}
 
 	for i := 0; i < len(t); i += 4 {
@@ -81,7 +81,7 @@ func RandomTraceID() trace.TraceID {
 	return t
 }
 
-func RandomSpanID() trace.SpanID {
+func randomSpanID() trace.SpanID {
 	t := trace.SpanID{}
 
 	for i := 0; i < len(t); i += 4 {
@@ -96,9 +96,9 @@ func (e *BeylaIDGenerator) NewIDs(ctx context.Context) (trace.TraceID, trace.Spa
 	if pair == nil || !trace.TraceID(pair.traceID).IsValid() || !trace.SpanID(pair.spanID).IsValid() {
 		traceID := currentTrace(ctx)
 		if traceID != nil {
-			return *traceID, RandomSpanID()
+			return *traceID, randomSpanID()
 		}
-		return RandomTraceID(), RandomSpanID()
+		return randomTraceID(), randomSpanID()
 	}
 
 	return trace.TraceID(pair.traceID), trace.SpanID(pair.spanID)
@@ -107,7 +107,7 @@ func (e *BeylaIDGenerator) NewIDs(ctx context.Context) (trace.TraceID, trace.Spa
 func (e *BeylaIDGenerator) NewSpanID(ctx context.Context, _ trace.TraceID) trace.SpanID {
 	pair := currentTraceAndSpan(ctx)
 	if pair == nil || !trace.SpanID(pair.spanID).IsValid() {
-		return RandomSpanID()
+		return randomSpanID()
 	}
 
 	return trace.SpanID(pair.spanID)

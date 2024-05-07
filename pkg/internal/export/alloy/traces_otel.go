@@ -24,7 +24,6 @@ import (
 )
 
 // TracesOTELReceiver creates a terminal node that consumes request.Spans and sends OpenTelemetry metrics to the configured consumers.
-
 func TracesOTELReceiver(ctx context.Context, cfg otel.TracesConfig, ctxInfo *global.ContextInfo) pipe.FinalProvider[[]request.Span] {
 	return (&tracesOTELReceiver{ctx: ctx, cfg: cfg, ctxInfo: ctxInfo}).provideLoop
 }
@@ -47,8 +46,6 @@ func (tr *tracesOTELReceiver) provideLoop() (pipe.FinalFunc[[]request.Span], err
 		}
 		defer func() {
 			exp.Shutdown(tr.ctx)
-			// provider.Shutdown(ctx)
-			// tracer.Shutdown(ctx)
 		}()
 		exp.Start(tr.ctx, nil)
 		for spans := range in {

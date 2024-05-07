@@ -369,6 +369,13 @@ func (mr *MetricsReporter) setupGraphMeters(m *Metrics, meter instrument.Meter) 
 		return fmt.Errorf("creating service graph total: %w", err)
 	}
 
+	if m.tracesTargetInfo == nil {
+		m.tracesTargetInfo, err = meter.Int64UpDownCounter(TracesTargetInfo)
+		if err != nil {
+			return fmt.Errorf("creating service graph traces target info: %w", err)
+		}
+	}
+
 	return nil
 }
 

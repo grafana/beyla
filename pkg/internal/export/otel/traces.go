@@ -58,6 +58,10 @@ type TracesConfig struct {
 
 	// Grafana configuration needs to be explicitly set up before building the graph
 	Grafana *GrafanaOTLP `yaml:"-"`
+
+	// Include SQL statement in traces
+	IncludeDBStatement       bool `yaml:"include_db_statement" env:"BEYLA_INCLUDE_DB_STATEMENT"`
+	OtelGoIncludeDBStatement bool `yaml:"-" env:"OTEL_GO_AUTO_INCLUDE_DB_STATEMENT"`
 }
 
 // Enabled specifies that the OTEL traces node is enabled if and only if
@@ -91,6 +95,10 @@ func (m *TracesConfig) GuessProtocol() Protocol {
 	// Otherwise we return default protocol according to the latest specification:
 	// https://github.com/open-telemetry/opentelemetry-specification/blob/main/specification/protocol/exporter.md?plain=1#L53
 	return ProtocolHTTPProtobuf
+}
+
+func (m *TracesConfig) ShouldIncludeDBStatement() bool {
+	return m.IncludeDBStatement || m.OtelGoIncludeDBStatement
 }
 
 // TracesReporter implement the graph node that receives request.Span
@@ -312,7 +320,7 @@ func SpanPeer(span *request.Span) string {
 	return span.Peer
 }
 
-func TraceAttributes(span *request.Span) []attribute.KeyValue {
+func TraceAttributes(span *request.Span, cfg *TracesConfig) []attribute.KeyValue {
 	var attrs []attribute.KeyValue
 
 	switch span.Type {
@@ -356,11 +364,12 @@ func TraceAttributes(span *request.Span) []attribute.KeyValue {
 			ServerPort(span.HostPort),
 		}
 	case request.EventTypeSQLClient:
+		if cfg.ShouldIncludeDBStatement() {
+			attrs = append(attrs, semconv.DBStatementKey.String(span.Statement))
+		}
 		operation := span.Method
 		if operation != "" {
-			attrs = []attribute.KeyValue{
-				semconv.DBOperation(operation),
-			}
+			attrs = append(attrs, semconv.DBOperation(operation))
 			table := span.Path
 			if table != "" {
 				attrs = append(attrs, semconv.DBSQLTable(table))
@@ -443,7 +452,7 @@ func (r *TracesReporter) makeSpan(parentCtx context.Context, tracer trace2.Trace
 	ctx, sp := tracer.Start(parentCtx, TraceName(span),
 		trace2.WithTimestamp(realStart),
 		trace2.WithSpanKind(SpanKind(span)),
-		trace2.WithAttributes(TraceAttributes(span)...),
+		trace2.WithAttributes(TraceAttributes(span, r.cfg)...),
 	)
 
 	sp.SetStatus(SpanStatusCode(span), "")

@@ -23,6 +23,7 @@ import (
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/pkg/internal/request"
+	"github.com/grafana/beyla/pkg/internal/sqlprune"
 	"github.com/grafana/beyla/pkg/internal/svc"
 )
 
@@ -505,6 +506,34 @@ func TestSpanHostPeer(t *testing.T) {
 	assert.Equal(t, "", SpanPeer(&sp))
 }
 
+func TestTraces_DBSpans(t *testing.T) {
+	noStatementCfg := &TracesConfig{}
+	withStatementCfg := &TracesConfig{IncludeDBStatement: true}
+	withGoStatementCfg := &TracesConfig{OtelGoIncludeDBStatement: true}
+
+	s := makeSQLRequestSpan("SELECT password FROM credentials WHERE username=\"bill\"")
+
+	attrs := TraceAttributes(&s, noStatementCfg)
+	assert.Equal(t, attrs, []attribute.KeyValue{
+		semconv.DBOperation("SELECT"),
+		semconv.DBSQLTable("credentials"),
+	})
+
+	attrs = TraceAttributes(&s, withStatementCfg)
+	assert.Equal(t, attrs, []attribute.KeyValue{
+		semconv.DBStatementKey.String("SELECT password FROM credentials WHERE username=\"bill\""),
+		semconv.DBOperation("SELECT"),
+		semconv.DBSQLTable("credentials"),
+	})
+
+	attrs = TraceAttributes(&s, withGoStatementCfg)
+	assert.Equal(t, attrs, []attribute.KeyValue{
+		semconv.DBStatementKey.String("SELECT password FROM credentials WHERE username=\"bill\""),
+		semconv.DBOperation("SELECT"),
+		semconv.DBSQLTable("credentials"),
+	})
+}
+
 type fakeInternalTraces struct {
 	imetrics.NoopReporter
 	sum  atomic.Int32
@@ -669,4 +698,9 @@ func NewIDs(counter int) (trace.TraceID, trace.SpanID) {
 	binary.BigEndian.PutUint64(spanID[:], uint64(counter))
 
 	return trace.TraceID(traceID), trace.SpanID(spanID)
+}
+
+func makeSQLRequestSpan(sql string) request.Span {
+	method, path := sqlprune.SQLParseOperationAndTable(sql)
+	return request.Span{Type: request.EventTypeSQLClient, Method: method, Path: path, Statement: sql}
 }

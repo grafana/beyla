@@ -106,7 +106,7 @@ func newGraphBuilder(ctx context.Context, config *beyla.Config, ctxInfo *global.
 	config.Traces.Grafana = &gb.config.Grafana.OTLP
 	pipe.AddFinalProvider(gnb, otelTraces, otel.ReportTraces(ctx, &config.Traces, gb.ctxInfo))
 	pipe.AddFinalProvider(gnb, prometheus, prom.PrometheusEndpoint(ctx, &config.Prometheus, gb.ctxInfo))
-	pipe.AddFinalProvider(gnb, alloyTraces, alloy.TracesReceiver(ctx, &config.TracesReceiver))
+	pipe.AddFinalProvider(gnb, alloyTraces, alloy.TracesReceiver(ctx, &config.Traces, &config.TracesReceiver))
 
 	pipe.AddFinalProvider(gnb, noop, debug.NoopNode(config.Noop))
 	pipe.AddFinalProvider(gnb, printer, debug.PrinterNode(config.Printer))

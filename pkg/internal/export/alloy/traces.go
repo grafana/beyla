@@ -16,13 +16,14 @@ import (
 )
 
 // TracesReceiver creates a terminal node that consumes request.Spans and sends OpenTelemetry traces to the configured consumers.
-func TracesReceiver(ctx context.Context, cfg *beyla.TracesReceiverConfig) pipe.FinalProvider[[]request.Span] {
-	return (&tracesReceiver{ctx: ctx, cfg: cfg}).provideLoop
+func TracesReceiver(ctx context.Context, otelCfg *otel.TracesConfig, cfg *beyla.TracesReceiverConfig) pipe.FinalProvider[[]request.Span] {
+	return (&tracesReceiver{ctx: ctx, cfg: cfg, otelCfg: otelCfg}).provideLoop
 }
 
 type tracesReceiver struct {
-	ctx context.Context
-	cfg *beyla.TracesReceiverConfig
+	ctx     context.Context
+	cfg     *beyla.TracesReceiverConfig
+	otelCfg *otel.TracesConfig
 }
 
 func (tr *tracesReceiver) provideLoop() (pipe.FinalFunc[[]request.Span], error) {
@@ -38,7 +39,7 @@ func (tr *tracesReceiver) provideLoop() (pipe.FinalFunc[[]request.Span], error) 
 				}
 
 				for _, tc := range tr.cfg.Traces {
-					traces := generateTraces(span)
+					traces := generateTraces(span, tr.otelCfg)
 					err := tc.ConsumeTraces(tr.ctx, traces)
 					if err != nil {
 						slog.Error("error sending trace to consumer", "error", err)
@@ -50,7 +51,7 @@ func (tr *tracesReceiver) provideLoop() (pipe.FinalFunc[[]request.Span], error) 
 }
 
 // generateTraces creates a ptrace.Traces from a request.Span
-func generateTraces(span *request.Span) ptrace.Traces {
+func generateTraces(span *request.Span, cfg *otel.TracesConfig) ptrace.Traces {
 	t := span.Timings()
 	start := otel.SpanStartTime(t)
 	hasSubSpans := t.Start.After(start)
@@ -86,7 +87,7 @@ func generateTraces(span *request.Span) ptrace.Traces {
 	}
 
 	// Set span attributes
-	attrs := otel.TraceAttributes(span)
+	attrs := otel.TraceAttributes(span, cfg)
 	m := attrsToMap(attrs)
 	m.CopyTo(s.Attributes())
 

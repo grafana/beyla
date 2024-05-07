@@ -102,7 +102,7 @@ podAnnotations:
   prometheus.io/port: '9090'
 ```
 
-Analogously, the Helm chart allows overriding names, labels and annotations for
+Analogously, the Helm chart allows overriding names, labels, and annotations for
 multiple resources that are involved in the deployment of Beyla, such as service
 accounts, cluster roles, security contexts, etc. The 
 [Beyla Helm chart documentation](https://github.com/grafana/beyla/blob/main/charts/beyla/README.md)
@@ -117,7 +117,7 @@ OpenTelemetry Endpoint, you need to provide the credentials via the
 The recommended way is to store such value in a Kubernetes Secret and then
 specify the environment variable referring to it from the Helm configuration.
 
-For example, create and deploy the following secret: 
+For example, deploy the following secret: 
 
 ```
 apiVersion: v1

@@ -1,4 +1,4 @@
-name: Pull request checks
+name: Check eBPF code integrity
 
 on:
   push:
@@ -11,29 +11,5 @@ jobs:
   test:
     name: test
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        go: [ '1.22' ]
-    steps:
-      - uses: actions/checkout@v3
-# TODO:
-#      - name: Check Drone.yml is up-to-date
-#        uses: chrislennon/action-drone@v1
-#        with:
-#          version: 1.7.0
-#      - run:  make check-drone-drift
-#        env:
-#          DRONE_SERVER: ${{ secrets.DRONE_SERVER }}
-#          DRONE_TOKEN: ${{ secrets.DRONE_TOKEN }}
-      - name: Set up Go
-        uses: actions/setup-go@v3
-        with:
-          go-version: ${{ matrix.go }}
-      - name: Run verification and unit tests
-        run: make verify cov-exclude-generated
-      - name: Report coverage
-        uses: codecov/codecov-action@v3
-        with:
-          files: ./testoutput/cover.txt
-          flags: unittests
-          token: ${{ secrets.CODECOV_TOKEN }}
+      - name: Check eBPF code integrity
+        run: make check-ebpf-integrity

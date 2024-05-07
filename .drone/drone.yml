@@ -2,6 +2,10 @@
 kind: pipeline
 name: beyla
 steps:
+- commands:
+  - make check-ebpf-integrity
+  image: ubuntu:latest
+  name: beyla-make-check-ebpf-integrity
 - image: thegeeklab/drone-docker-buildx:24
   name: beyla-dryrun-docker-buildx
   privileged: true
@@ -104,6 +108,6 @@ kind: secret
 name: docker_password
 ---
 kind: signature
-hmac: 80d28c3b23c53bdd6b5c90e2881d39901c0b01d4cdcc435de61d34112a267965
+hmac: dff177ef0acc6bc1fe18399a976da5332de3d7b844e968cdf6b45a5222baff77
 
 ...

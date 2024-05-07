@@ -294,5 +294,5 @@ clean-testoutput:
 	rm -rf ${TEST_OUTPUT}/*
 
 .PHONY: check-ebpf-integrity
-check-ebpf-integrity:
+check-ebpf-integrity: docker-generate
 	git diff --name-status --exit-code || (echo "Run make docker-generate locally and commit the code changes" && false)

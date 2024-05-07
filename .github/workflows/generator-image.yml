@@ -30,6 +30,9 @@ jobs:
         uses: docker/metadata-action@v5.5.1
         with:
           images: "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
+          tags: |
+            type=schedule,pattern={{date 'YYYYMMDD-hhmm'}}
+            type=ref,event=branch
 
       - name: Build and push Docker image
         id: push
@@ -40,10 +43,3 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-
-      - name: Generate artifact attestation
-        uses: actions/attest-build-provenance@v1
-        with:
-          subject-name: "${{ env.REGISTRY }}/${{ env.IMAGE_NAME}}"
-          subject-digest: ${{ steps.push.outputs.digest }}
-          push-to-registry: true

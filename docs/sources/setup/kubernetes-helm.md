@@ -14,22 +14,23 @@ aliases:
 
 # Deploy Beyla in Kubernetes with Helm
 
+{{% admonition type="note" %}}
+For more details about the diverse Helm configuration options, check out the
+[Beyla Helm chart options](https://github.com/grafana/beyla/blob/main/charts/beyla/README.md)
+document.
+{{% /admonition %}}
+
 For a step-by-step walkthrough by the basics for Beyla and Kubernetes, you can also
 follow the [Beyla and Kubernetes walkthrough tutorial]({{< relref "../tutorial/k8s-walkthrough.md" >}}).
 
 Contents:
 
 <!-- TOC -->
-
-- [Deploy Beyla in Kubernetes](#deploy-beyla-in-kubernetes)
-  - [Configuring Kubernetes metadata decoration](#configuring-kubernetes-metadata-decoration)
-  - [Deploying Beyla](#deploying-beyla)
-    - [Deploy Beyla as a sidecar container](#deploy-beyla-as-a-sidecar-container)
-    - [Deploy Beyla as a Daemonset](#deploy-beyla-as-a-daemonset)
-    - [Deploy Beyla unprivileged](#deploy-beyla-unprivileged)
-  - [Providing an external configuration file](#providing-an-external-configuration-file)
-  - [Providing secret configuration](#providing-secret-configuration)
-  <!-- TOC -->
+  * [Deploying Beyla from helm](#deploying-beyla-from-helm)
+  * [Configuring Beyla](#configuring-beyla)
+  * [Configuring Beyla metadata](#configuring-beyla-metadata)
+  * [Providing secrets to the Helm configuration](#providing-secrets-to-the-helm-configuration)
+<!-- TOC -->
 
 ## Deploying Beyla from helm
 
@@ -52,56 +53,90 @@ The default Beyla configuration is provided so:
 * It will provide only application-level metrics. [Network-level metrics]({{< relref "../network" >}}) are excluded by default.
 * Configures Beyla to decorate the metrics with Kubernetes metadata labels (`k8s.namespace.name`, `k8s.pod.name`, etc.).
 
-## Configuring Beyla 
+## Configuring Beyla
 
 You might want to override the default configuration of Beyla. For example, to export the metrics and/or spans
 as OpenTelemetry instead of Prometheus, or to restrict the number of services to instrument.
 
-You can override te default [Beyla configuration options]({{< relref "../configure" >}}) with your own values:
+You can override the default [Beyla configuration options]({{< relref "../configure" >}}) with your own values.
 
-
-## Configuring Beyla labels
-
-## Providing secret configuration
-
-The previous example is valid for regular configuration but should not be
-used to pass secret information like passwords or API keys.
-
-To provide secret information, the recommended way is to deploy a Kubernetes
-Secret. For example, this secret contains some fictional Grafana Cloud
-credentials:
+For example, create a `helm-beyla.yml` file with a custom configuration:
 
 ```yaml
+config:
+  data:
+    # Contents of the actual Beyla configuration file
+    discovery:
+      services:
+        - k8s_namespace: demo
+        - k8s_namespace: blog
+    routes:
+      unmatched: heuristic
+```
+
+The `config.data` section contains a Beyla configuration file whose options are documented in the
+[Beyla configuration options document]({{< relref "../configure/options.md" >}}).
+
+Then pass the overridden configuration to the `helm` command with the `-f` flag. For example:
+
+```
+helm install beyla grafana/beyla -f helm-beyla.yml
+```
+
+or, if the Beyla chart was previously deployed:
+
+```
+helm upgrade beyla grafana/beyla -f helm-beyla.yml
+```
+
+## Configuring Beyla metadata
+
+If Beyla exports the data using the Prometheus exporter, you might need to override the Beyla pod
+annotations to let it be discoverable by your Prometheus scraper. You can add the following
+section to the example `helm-beyla.yml` file:
+
+```
+podAnnotations:
+  prometheus.io/scrape: 'true'
+  prometheus.io/path: '/metrics'
+  prometheus.io/port: '9090'
+```
+
+Analogously, the Helm chart allows overriding names, labels and annotations for
+multiple resources that are involved in the deployment of Beyla, such as service
+accounts, cluster roles, security contexts, etc. The 
+[Beyla Helm chart documentation](https://github.com/grafana/beyla/blob/main/charts/beyla/README.md)
+describes the diverse configuration options.
+
+## Providing secrets to the Helm configuration
+
+If you are submitting directly the metrics and traces to Grafana Cloud via the
+OpenTelemetry Endpoint, you need to provide the credentials via the 
+`OTEL_EXPORTER_OTLP_HEADERS` environment variable.
+
+The recommended way is to store such value in a Kubernetes Secret and then
+specify the environment variable referring to it from the Helm configuration.
+
+For example, create and deploy the following secret: 
+
+```
 apiVersion: v1
 kind: Secret
 metadata:
   name: grafana-secret
 type: Opaque
 stringData:
-  grafana-user: "123456"
-  grafana-api-key: "xxxxxxxxxxxxxxx"
+  otlp-headers: "Authorization=Basic ...."
 ```
 
-Then you can access the secret values as environment variables. Following the
-previous DaemonSet example, this would be achieved by adding the following
-`env` section to the Beyla container:
+Then refer to it from the `helm-config.yml` file via the `envValueFrom` section:
 
 ```yaml
 env:
-  - name: GRAFANA_CLOUD_ZONE
-    value: prod-eu-west-0
-  - name: GRAFANA_CLOUD_INSTANCE_ID
-    valueFrom:
-      secretKeyRef:
-        key: grafana-user
-        name: grafana-secret
-  - name: GRAFANA_CLOUD_API_KEY
-    valueFrom:
-      secretKeyRef:
-        key: grafana-api-key
-        name: grafana-secret
+  OTEL_EXPORTER_OTLP_ENDPOINT: "https://otlp-gateway-prod-eu-west-0.grafana.net/otlp"
+envValueFrom:
+  OTEL_EXPORTER_OTLP_HEADERS:
+    secretKeyRef:
+      key: otlp-headers
+      name: grafana-secret
 ```
-
-## More configuration options
-
-https://github.com/grafana/beyla/blob/main/charts/beyla/README.md

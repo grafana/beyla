@@ -16,7 +16,7 @@ aliases:
 {{% admonition type="note" %}}
 This document explains how to manually deploy Beyla in Kubernetes, setting up all the required entities by yourself.
 
-You might prefer to follow the [Deploy Beyla in Kubernetes with Helm]({{< relref "kubernetes-helm.md" >}}) documentation instead.
+You might prefer to follow the [Deploy Beyla in Kubernetes with Helm]({{< relref "./kubernetes-helm.md" >}}) documentation instead.
 {{% /admonition %}}
 
 Contents:

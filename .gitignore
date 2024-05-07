@@ -12,6 +12,7 @@
 **/bpf_*_x86.go
 **/net*_arm64.go
 **/net*_x86.go
+**/*.o
 
 # Test binary, built with `go test -c`
 *.test

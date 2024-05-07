@@ -31,8 +31,7 @@ jobs:
         with:
           images: "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
           tags: |
-            type=schedule,pattern={{date 'YYYYMMDD-hhmm'}}
-            type=ref,event=branch
+            type=schedule,pattern={{date 'YYYYMMDDhhmm'}}
 
       - name: Build and push Docker image
         id: push

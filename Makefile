@@ -18,10 +18,9 @@ IMG_NAME ?= beyla
 VERSION ?= dev
 IMG = $(IMG_REGISTRY)/$(IMG_ORG)/$(IMG_NAME):$(VERSION)
 
-# The generator is a local container image that provides a reproducible environment for
+# The generator is a container image that provides a reproducible environment for
 # building eBPF binaries
-GEN_IMG_NAME ?= ebpf-generator
-GEN_IMG ?= $(GEN_IMG_NAME):$(VERSION)
+GEN_IMG ?= ghcr.io/grafana/beyla-generator:main
 
 COMPOSE_ARGS ?= -f test/integration/docker-compose.yml
 
@@ -289,7 +288,11 @@ artifact: compile
 	cp third_party_licenses.csv ./bin
 	tar -C ./bin -cvzf bin/beyla.tar.gz beyla LICENSE NOTICE third_party_licenses.csv
 
-.PHONE: clean-testoutput
+.PHONY: clean-testoutput
 clean-testoutput:
 	@echo "### Cleaning ${TEST_OUTPUT} folder"
 	rm -rf ${TEST_OUTPUT}/*
+
+.PHONY: check-ebpf-integrity
+check-ebpf-integrity: docker-generate
+	git diff --name-status --exit-code || (echo "Run make docker-generate locally and commit the code changes" && false)

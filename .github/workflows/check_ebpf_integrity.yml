@@ -1,0 +1,15 @@
+name: Check eBPF code integrity
+
+on:
+  push:
+    branches: [ 'main', 'release-*' ]
+  pull_request:
+    branches: [ 'main', 'release-*' ]
+
+
+jobs:
+  test:
+    name: test
+    runs-on: ubuntu-latest
+      - name: Check eBPF code integrity
+        run: make check-ebpf-integrity

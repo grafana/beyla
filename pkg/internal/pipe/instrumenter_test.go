@@ -2,7 +2,6 @@ package pipe
 
 import (
 	"context"
-	"log/slog"
 	"os"
 	"strings"
 	"testing"
@@ -152,11 +151,6 @@ func TestTracerReceiverPipeline(t *testing.T) {
 }
 
 func BenchmarkTestTracerPipeline(b *testing.B) {
-	l := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
-		Level: slog.LevelInfo,
-	}))
-
-	slog.SetDefault(l)
 	for i := 0; i < b.N; i++ {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
@@ -171,51 +165,15 @@ func BenchmarkTestTracerPipeline(b *testing.B) {
 			},
 		}, gctx(), make(<-chan []request.Span))
 		// Override eBPF tracer to send some fake data
-		graph.RegisterStart(gb.builder, func(_ traces.ReadDecorator) (node.StartFunc[[]request.Span], error) {
-			return func(out chan<- []request.Span) {
+		pipe.AddStart(gb.builder, tracesReader,
+			func(out chan<- []request.Span) {
 				out <- newRequest("bar-svc", 1, "GET", "/foo/bar", "1.1.1.1:3456", 404)
 				// closing prematurely the input node would finish the whole graph processing
 				// and OTEL exporters could be closed, so we wait.
 				time.Sleep(testTimeout)
-			}, nil
-		})
+			})
 		pipe, _ := gb.buildGraph()
 
-		go pipe.Run(ctx)
-		t := &testing.T{}
-		testutil.ReadChannel(t, tc.TraceRecords, testTimeout)
-		testutil.ReadChannel(t, tc.TraceRecords, testTimeout)
-		testutil.ReadChannel(t, tc.TraceRecords, testTimeout)
-	}
-}
-
-func BenchmarkTestTracerReceiverPipeline(b *testing.B) {
-	l := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
-		Level: slog.LevelInfo,
-	}))
-
-	slog.SetDefault(l)
-	for i := 0; i < b.N; i++ {
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
-
-		tc, _ := collector.Start(ctx)
-		consumer := consumer.MockTraceConsumer{Endpoint: tc.ServerEndpoint}
-		gb := newGraphBuilder(ctx, &beyla.Config{
-			TracesReceiver: beyla.TracesReceiverConfig{
-				Traces: []beyla.Consumer{&consumer},
-			},
-		}, gctx(), make(<-chan []request.Span))
-		// Override eBPF tracer to send some fake data
-		graph.RegisterStart(gb.builder, func(_ traces.ReadDecorator) (node.StartFunc[[]request.Span], error) {
-			return func(out chan<- []request.Span) {
-				out <- newRequest("bar-svc", 1, "GET", "/foo/bar", "1.1.1.1:3456", 404)
-				// closing prematurely the input node would finish the whole graph processing
-				// and OTEL exporters could be closed, so we wait.
-				time.Sleep(testTimeout)
-			}, nil
-		})
-		pipe, _ := gb.buildGraph()
 		go pipe.Run(ctx)
 		t := &testing.T{}
 		testutil.ReadChannel(t, tc.TraceRecords, testTimeout)
@@ -544,6 +502,7 @@ func matchTraceEvent(t require.TestingT, name string, event collector.TraceRecor
 			string(semconv.ServiceNameKey):          "bar-svc",
 			string(semconv.TelemetrySDKLanguageKey): "go",
 			string(semconv.TelemetrySDKNameKey):     "beyla",
+			string(semconv.OTelLibraryNameKey):      "github.com/grafana/beyla",
 		},
 		Kind: ptrace.SpanKindServer,
 	}, event)
@@ -561,6 +520,7 @@ func matchInnerTraceEvent(t require.TestingT, name string, event collector.Trace
 			string(semconv.ServiceNameKey):          "bar-svc",
 			string(semconv.TelemetrySDKLanguageKey): "go",
 			string(semconv.TelemetrySDKNameKey):     "beyla",
+			string(semconv.OTelLibraryNameKey):      "github.com/grafana/beyla",
 		},
 		Kind: ptrace.SpanKindInternal,
 	}, event)
@@ -583,6 +543,7 @@ func matchGRPCTraceEvent(t *testing.T, name string, event collector.TraceRecord)
 			string(semconv.ServiceNameKey):          "svc",
 			string(semconv.TelemetrySDKLanguageKey): "go",
 			string(semconv.TelemetrySDKNameKey):     "beyla",
+			string(semconv.OTelLibraryNameKey):      "github.com/grafana/beyla",
 		},
 		Kind: ptrace.SpanKindServer,
 	}, event)
@@ -599,6 +560,7 @@ func matchInnerGRPCTraceEvent(t *testing.T, name string, event collector.TraceRe
 			string(semconv.ServiceNameKey):          "svc",
 			string(semconv.TelemetrySDKLanguageKey): "go",
 			string(semconv.TelemetrySDKNameKey):     "beyla",
+			string(semconv.OTelLibraryNameKey):      "github.com/grafana/beyla",
 		},
 		Kind: ptrace.SpanKindInternal,
 	}, event)
@@ -650,6 +612,7 @@ func matchInfoEvent(t *testing.T, name string, event collector.TraceRecord) {
 			string(semconv.ServiceNameKey):          "comm",
 			string(semconv.TelemetrySDKLanguageKey): "go",
 			string(semconv.TelemetrySDKNameKey):     "beyla",
+			string(semconv.OTelLibraryNameKey):      "github.com/grafana/beyla",
 		},
 		Kind: ptrace.SpanKindServer,
 	}, event)

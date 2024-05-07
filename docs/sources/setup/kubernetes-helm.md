@@ -50,7 +50,7 @@ The default Beyla configuration is provided so:
 
 * Exports the metrics as Prometheus metrics in the Pod HTTP port `9090`, `/metrics` path.
 * It tries to instrument all the applications in your cluster.
-* It will provide only application-level metrics. [Network-level metrics]({{< relref "../network" >}}) are excluded by default.
+* It only provides application-level metrics. [Network-level metrics]({{< relref "../network" >}}) are excluded by default.
 * Configures Beyla to decorate the metrics with Kubernetes metadata labels (`k8s.namespace.name`, `k8s.pod.name`, etc.).
 
 ## Configuring Beyla
@@ -91,7 +91,7 @@ helm upgrade beyla grafana/beyla -f helm-beyla.yml
 
 ## Configuring Beyla metadata
 
-If Beyla exports the data using the Prometheus exporter, you might need to override the Beyla pod
+If Beyla exports the data using the Prometheus exporter, you might need to override the Beyla Pod
 annotations to let it be discoverable by your Prometheus scraper. You can add the following
 section to the example `helm-beyla.yml` file:
 

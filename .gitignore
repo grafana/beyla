@@ -7,6 +7,12 @@
 
 .DS_Store
 
+# Ignore generated files
+**/bpf_*_arm64.go
+**/bpf_*_x86.go
+**/net*_arm64.go
+**/net*_x86.go
+
 # Test binary, built with `go test -c`
 *.test
 

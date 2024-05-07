@@ -18,10 +18,9 @@ IMG_NAME ?= beyla
 VERSION ?= dev
 IMG = $(IMG_REGISTRY)/$(IMG_ORG)/$(IMG_NAME):$(VERSION)
 
-# The generator is a local container image that provides a reproducible environment for
+# The generator is a container image that provides a reproducible environment for
 # building eBPF binaries
-GEN_IMG_NAME ?= ebpf-generator
-GEN_IMG ?= $(GEN_IMG_NAME):$(VERSION)
+GEN_IMG ?= ghcr.io/grafana/beyla-generator:main
 
 COMPOSE_ARGS ?= -f test/integration/docker-compose.yml
 
@@ -153,7 +152,7 @@ docker-generate:
 	$(OCI_BIN) run --rm -v $(shell pwd):/src $(GEN_IMG)
 
 .PHONY: verify
-verify: prereqs lint-dashboard lint test
+verify: prereqs lint-dashboard docker-generate lint test
 
 .PHONY: build
 build: verify compile
@@ -211,7 +210,7 @@ generator-image-build:
 	$(OCI_BIN) build . -f generator.Dockerfile -t $(GEN_IMG)
 
 .PHONY: prepare-integration-test
-prepare-integration-test:
+prepare-integration-test: docker-generate
 	@echo "### Removing resources from previous integration tests, if any"
 	rm -rf $(TEST_OUTPUT)/* || true
 	$(MAKE) cleanup-integration-test
@@ -257,7 +256,7 @@ oats-prereq: bin/ginkgo
 	cd test/oats && go mod vendor
 
 .PHONY: oats-test
-oats-test: oats-prereq
+oats-test: oats-prereq docker-generate
 	cd test/oats && TESTCASE_BASE_PATH=./yaml $(GINKGO) -v -r
 
 .PHONY: oats-test-debug

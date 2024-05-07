@@ -85,6 +85,10 @@ func getTracesExporter(ctx context.Context, cfg TracesConfig, ctxInfo *global.Co
 			slog.Error("can't instantiate OTEL HTTP traces exporter", err)
 			return nil, err
 		}
+		topts, err := getHTTPTracesEndpointOptions(&cfg)
+		if err != nil {
+			return nil, err
+		}
 		factory := otlphttpexporter.NewFactory()
 		config := factory.CreateDefaultConfig().(*otlphttpexporter.Config)
 		config.QueueConfig.Enabled = false
@@ -94,6 +98,10 @@ func getTracesExporter(ctx context.Context, cfg TracesConfig, ctxInfo *global.Co
 		}
 		config.ClientConfig = confighttp.ClientConfig{
 			Endpoint: endpoint,
+			TLSSetting: configtls.ClientConfig{
+				Insecure:           topts.Insecure,
+				InsecureSkipVerify: cfg.InsecureSkipVerify,
+			},
 		}
 		set := getTraceSettings(ctxInfo, cfg, t)
 		return factory.CreateTracesExporter(ctx, set, config)
@@ -102,8 +110,12 @@ func getTracesExporter(ctx context.Context, cfg TracesConfig, ctxInfo *global.Co
 		var err error
 
 		slog.Debug("instantiating GRPC TracesReporter", "protocol", proto)
-		if t, err = GRPCTracer(ctx, &cfg); err != nil {
+		if t, err = grpcTracer(ctx, &cfg); err != nil {
 			slog.Error("can't instantiate OTEL GRPC traces exporter: %w", err)
+			return nil, err
+		}
+		topts, err := getGRPCTracesEndpointOptions(&cfg)
+		if err != nil {
 			return nil, err
 		}
 		factory := otlpexporter.NewFactory()
@@ -116,7 +128,7 @@ func getTracesExporter(ctx context.Context, cfg TracesConfig, ctxInfo *global.Co
 		config.ClientConfig = configgrpc.ClientConfig{
 			Endpoint: endpoint,
 			TLSSetting: configtls.ClientConfig{
-				Insecure:           true, // TODO: make this configurable
+				Insecure:           topts.Insecure,
 				InsecureSkipVerify: cfg.InsecureSkipVerify,
 			},
 		}

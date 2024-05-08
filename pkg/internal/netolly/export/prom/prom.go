@@ -9,6 +9,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/grafana/beyla/pkg/internal/connector"
+	"github.com/grafana/beyla/pkg/internal/export/expire"
 	"github.com/grafana/beyla/pkg/internal/export/metric"
 	"github.com/grafana/beyla/pkg/internal/export/otel"
 	"github.com/grafana/beyla/pkg/internal/export/prom"
@@ -30,7 +31,7 @@ func (p PrometheusConfig) Enabled() bool {
 type counterCollector interface {
 	prometheus.Collector
 	UpdateTime()
-	WithLabelValues(...string) prometheus.Metric
+	WithLabelValues(...string) prometheus.Counter
 }
 
 type metricsReporter struct {
@@ -92,7 +93,7 @@ func newReporter(
 		cfg:         cfg.Config,
 		promConnect: ctxInfo.Prometheus,
 		attrs:       attrs,
-		flowBytes: NewExpirer(prometheus.NewCounterVec(prometheus.CounterOpts{
+		flowBytes: expire.NewExpirer[prometheus.Counter](prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: metric.BeylaNetworkFlow.Prom,
 			Help: "bytes submitted from a source network endpoint to a destination network endpoint",
 		}, labelNames).MetricVec, cfg.Config.TTL),
@@ -118,5 +119,5 @@ func (r *metricsReporter) observe(flow *ebpf.Record) {
 	for _, attr := range r.attrs {
 		labelValues = append(labelValues, attr.Get(flow))
 	}
-	r.flowBytes.WithLabelValues(labelValues...).(prometheus.Counter).Add(float64(flow.Metrics.Bytes))
+	r.flowBytes.WithLabelValues(labelValues...).Add(float64(flow.Metrics.Bytes))
 }

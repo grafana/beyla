@@ -9,9 +9,9 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 
+	"github.com/grafana/beyla/pkg/internal/export/expire"
 	metric2 "github.com/grafana/beyla/pkg/internal/export/metric"
 	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
-	"github.com/grafana/beyla/pkg/internal/netolly/export"
 )
 
 var timeNow = time.Now
@@ -24,7 +24,7 @@ func plog() *slog.Logger {
 // TODO: generify and move to a common section for using it also in AppO11y, supporting more OTEL metrics
 type Expirer struct {
 	attrs   []metric2.Field[*ebpf.Record, string]
-	entries *export.ExpiryMap[*Counter]
+	entries *expire.ExpiryMap[*Counter]
 }
 
 type Counter struct {
@@ -37,7 +37,7 @@ type Counter struct {
 func NewExpirer(attrs []metric2.Field[*ebpf.Record, string], expireTime time.Duration) *Expirer {
 	return &Expirer{
 		attrs:   attrs,
-		entries: export.NewExpiryMap[*Counter](expireTime, export.WithClock[*Counter](timeNow)),
+		entries: expire.NewExpiryMap[*Counter](expireTime, expire.WithClock[*Counter](timeNow)),
 	}
 }
 

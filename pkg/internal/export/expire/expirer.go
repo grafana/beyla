@@ -1,39 +1,37 @@
-package prom
+package expire
 
 import (
 	"log/slog"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
-
-	"github.com/grafana/beyla/pkg/internal/netolly/export"
 )
 
-var timeNow = time.Now
+var TimeNow = time.Now
 
 func plog() *slog.Logger {
 	return slog.With("component", "prom.Expirer")
 }
 
 // Expirer drops metrics from labels that haven't been updated during a given timeout
-type Expirer struct {
-	entries *export.ExpiryMap[prometheus.Metric]
+type Expirer[T prometheus.Metric] struct {
+	entries *ExpiryMap[prometheus.Metric]
 	wrapped *prometheus.MetricVec
 }
 
 // NewExpirer creates a metric that wraps a given CounterVec. Its labeled instances are dropped
 // if they haven't been updated during the last timeout period
-func NewExpirer(wrapped *prometheus.MetricVec, expireTime time.Duration) *Expirer {
-	return &Expirer{
+func NewExpirer[T prometheus.Metric](wrapped *prometheus.MetricVec, expireTime time.Duration) *Expirer[T] {
+	return &Expirer[T]{
 		wrapped: wrapped,
-		entries: export.NewExpiryMap[prometheus.Metric](expireTime, export.WithClock[prometheus.Metric](timeNow)),
+		entries: NewExpiryMap[prometheus.Metric](expireTime, WithClock[prometheus.Metric](TimeNow)),
 	}
 }
 
 // UpdateTime updates the last access time to be annotated to any new or existing metric.
 // It is a required operation before processing a given
 // batch of metrics (invoking the WithLabelValues).
-func (ex *Expirer) UpdateTime() {
+func (ex *Expirer[T]) UpdateTime() {
 	ex.entries.UpdateTime()
 }
 
@@ -41,7 +39,7 @@ func (ex *Expirer) UpdateTime() {
 // values (same order as the variable labels in Desc). If that combination of
 // label values is accessed for the first time, a new Counter is created.
 // If not, a cached copy is returned and the "last access" cache time is updated.
-func (ex *Expirer) WithLabelValues(lbls ...string) prometheus.Metric {
+func (ex *Expirer[T]) WithLabelValues(lbls ...string) T {
 	return ex.entries.GetOrCreate(lbls, func() prometheus.Metric {
 		plog().With("labelValues", lbls).Debug("storing new metric label set")
 		c, err := ex.wrapped.GetMetricWithLabelValues(lbls...)
@@ -51,16 +49,16 @@ func (ex *Expirer) WithLabelValues(lbls ...string) prometheus.Metric {
 			panic(err)
 		}
 		return c
-	})
+	}).(T)
 }
 
 // Describe wraps prometheus.Collector Describe method
-func (ex *Expirer) Describe(descs chan<- *prometheus.Desc) {
+func (ex *Expirer[T]) Describe(descs chan<- *prometheus.Desc) {
 	ex.wrapped.Describe(descs)
 }
 
 // Collect wraps prometheus.Collector Wrap method
-func (ex *Expirer) Collect(metrics chan<- prometheus.Metric) {
+func (ex *Expirer[T]) Collect(metrics chan<- prometheus.Metric) {
 	log := plog()
 	log.Debug("invoking metrics collection")
 	for _, old := range ex.entries.DeleteExpired() {

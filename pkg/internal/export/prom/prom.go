@@ -15,6 +15,7 @@ import (
 
 	"github.com/grafana/beyla/pkg/buildinfo"
 	"github.com/grafana/beyla/pkg/internal/connector"
+	"github.com/grafana/beyla/pkg/internal/export/expire"
 	"github.com/grafana/beyla/pkg/internal/export/metric"
 	"github.com/grafana/beyla/pkg/internal/export/metric/attr"
 	"github.com/grafana/beyla/pkg/internal/export/otel"
@@ -128,7 +129,7 @@ func (p PrometheusConfig) Enabled() bool {
 type metricsReporter struct {
 	cfg *PrometheusConfig
 
-	beylaInfo             *prometheus.GaugeVec
+	beylaInfo             *expire.Expirer[prometheus.Gauge]
 	httpDuration          *prometheus.HistogramVec
 	httpClientDuration    *prometheus.HistogramVec
 	grpcDuration          *prometheus.HistogramVec
@@ -230,7 +231,7 @@ func newReporter(
 		attrSQLClientDuration:     attrSQLClientDuration,
 		attrHTTPRequestSize:       attrHTTPRequestSize,
 		attrHTTPClientRequestSize: attrHTTPClientRequestSize,
-		beylaInfo: prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		beylaInfo: expire.NewExpirer[prometheus.Gauge](prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Name: BeylaBuildInfo,
 			Help: "A metric with a constant '1' value labeled by version, revision, branch, " +
 				"goversion from which Beyla was built, the goos and goarch for the build, and the" +
@@ -242,7 +243,7 @@ func newReporter(
 				"version":   buildinfo.Version,
 				"revision":  buildinfo.Revision,
 			},
-		}, beylaInfoLabelNames),
+		}, beylaInfoLabelNames).MetricVec, cfg.TTL),
 		httpDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Name:                            metric.HTTPServerDuration.Prom,
 			Help:                            "duration of HTTP service calls from the server side, in seconds",

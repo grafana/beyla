@@ -19,6 +19,8 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 	trace2 "go.opentelemetry.io/otel/trace"
 
+	metric2 "github.com/grafana/beyla/pkg/internal/export/metric"
+	"github.com/grafana/beyla/pkg/internal/export/metric/attr"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/pkg/internal/request"
@@ -101,6 +103,7 @@ type TracesReporter struct {
 	traceExporter trace.SpanExporter
 	bsp           trace.SpanProcessor
 	reporters     ReporterPool[*Tracers]
+	userAttrs     map[attr.Name]struct{}
 }
 
 // Tracers handles the OTEL traces providers and exporters.
@@ -111,14 +114,14 @@ type Tracers struct {
 	tracer   trace2.Tracer
 }
 
-func ReportTraces(ctx context.Context, cfg *TracesConfig, ctxInfo *global.ContextInfo) pipe.FinalProvider[[]request.Span] {
+func ReportTraces(ctx context.Context, cfg *TracesConfig, ctxInfo *global.ContextInfo, userAttribSelection metric2.Selection) pipe.FinalProvider[[]request.Span] {
 	return func() (pipe.FinalFunc[[]request.Span], error) {
 		if !cfg.Enabled() {
 			return pipe.IgnoreFinal[[]request.Span](), nil
 		}
 		SetupInternalOTELSDKLogger(cfg.SDKLogLevel)
 
-		tr, err := newTracesReporter(ctx, cfg, ctxInfo)
+		tr, err := newTracesReporter(ctx, cfg, ctxInfo, userAttribSelection)
 		if err != nil {
 			slog.Error("can't instantiate OTEL traces reporter", err)
 			os.Exit(-1)
@@ -127,9 +130,15 @@ func ReportTraces(ctx context.Context, cfg *TracesConfig, ctxInfo *global.Contex
 	}
 }
 
-func newTracesReporter(ctx context.Context, cfg *TracesConfig, ctxInfo *global.ContextInfo) (*TracesReporter, error) {
+func newTracesReporter(ctx context.Context, cfg *TracesConfig, ctxInfo *global.ContextInfo, userAttribSelection metric2.Selection) (*TracesReporter, error) {
 	log := tlog()
-	r := TracesReporter{ctx: ctx, cfg: cfg}
+	var err error
+	traceAttrs, err := GetUserSelectedAttributes(userAttribSelection)
+	if err != nil {
+		return nil, err
+	}
+
+	r := TracesReporter{ctx: ctx, cfg: cfg, userAttrs: traceAttrs}
 	r.reporters = NewReporterPool[*Tracers](cfg.ReportersCacheLen,
 		func(k svc.UID, v *Tracers) {
 			llog := log.With("service", k)
@@ -141,7 +150,6 @@ func newTracesReporter(ctx context.Context, cfg *TracesConfig, ctxInfo *global.C
 			}()
 		}, r.newTracers)
 	// Instantiate the OTLP HTTP or GRPC traceExporter
-	var err error
 	var exporter trace.SpanExporter
 	switch proto := cfg.GetProtocol(); proto {
 	case ProtocolHTTPJSON, ProtocolHTTPProtobuf, "": // zero value defaults to HTTP for backwards-compatibility
@@ -312,7 +320,7 @@ func SpanPeer(span *request.Span) string {
 	return span.Peer
 }
 
-func traceAttributes(span *request.Span) []attribute.KeyValue {
+func traceAttributes(span *request.Span, userAttrs map[attr.Name]struct{}) []attribute.KeyValue {
 	var attrs []attribute.KeyValue
 
 	switch span.Type {
@@ -356,11 +364,12 @@ func traceAttributes(span *request.Span) []attribute.KeyValue {
 			request.ServerPort(span.HostPort),
 		}
 	case request.EventTypeSQLClient:
+		if _, ok := userAttrs[attr.IncludeDBStatement]; ok {
+			attrs = append(attrs, semconv.DBStatement(span.Statement))
+		}
 		operation := span.Method
 		if operation != "" {
-			attrs = []attribute.KeyValue{
-				semconv.DBOperation(operation),
-			}
+			attrs = append(attrs, semconv.DBOperation(operation))
 			table := span.Path
 			if table != "" {
 				attrs = append(attrs, semconv.DBSQLTable(table))
@@ -443,7 +452,7 @@ func (r *TracesReporter) makeSpan(parentCtx context.Context, tracer trace2.Trace
 	ctx, sp := tracer.Start(parentCtx, TraceName(span),
 		trace2.WithTimestamp(realStart),
 		trace2.WithSpanKind(spanKind(span)),
-		trace2.WithAttributes(traceAttributes(span)...),
+		trace2.WithAttributes(traceAttributes(span, r.userAttrs)...),
 	)
 
 	sp.SetStatus(SpanStatusCode(span), "")

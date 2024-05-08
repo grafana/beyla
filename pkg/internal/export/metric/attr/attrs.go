@@ -106,3 +106,9 @@ var (
 	ServiceName      = Name(semconv.ServiceNameKey)
 	ServiceNamespace = Name(semconv.ServiceNamespaceKey)
 )
+
+// traces related attributes
+var (
+	// SQL
+	IncludeDBStatement = Name("db.statement")
+)

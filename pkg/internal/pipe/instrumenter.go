@@ -112,9 +112,9 @@ func newGraphBuilder(ctx context.Context, config *beyla.Config, ctxInfo *global.
 	config.Metrics.Grafana = &gb.config.Grafana.OTLP
 	pipe.AddFinalProvider(gnb, otelMetrics, otel.ReportMetrics(ctx, gb.ctxInfo, &config.Metrics, config.Attributes.Select))
 	config.Traces.Grafana = &gb.config.Grafana.OTLP
-	pipe.AddFinalProvider(gnb, otelTraces, otel.TracesReceiver(ctx, config.Traces, gb.ctxInfo))
+	pipe.AddFinalProvider(gnb, otelTraces, otel.TracesReceiver(ctx, config.Traces, gb.ctxInfo, config.Attributes.Select))
 	pipe.AddFinalProvider(gnb, prometheus, prom.PrometheusEndpoint(ctx, gb.ctxInfo, &config.Prometheus, config.Attributes.Select))
-	pipe.AddFinalProvider(gnb, alloyTraces, alloy.TracesReceiver(ctx, &config.TracesReceiver))
+	pipe.AddFinalProvider(gnb, alloyTraces, alloy.TracesReceiver(ctx, &config.TracesReceiver, config.Attributes.Select))
 
 	pipe.AddFinalProvider(gnb, noop, debug.NoopNode(config.Noop))
 	pipe.AddFinalProvider(gnb, printer, debug.PrinterNode(config.Printer))

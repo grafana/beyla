@@ -23,19 +23,37 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 	"go.uber.org/zap"
 
+	metric2 "github.com/grafana/beyla/pkg/internal/export/metric"
+	"github.com/grafana/beyla/pkg/internal/export/metric/attr"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/pkg/internal/request"
 )
 
 // TracesReceiver creates a terminal node that consumes request.Spans and sends OpenTelemetry metrics to the configured consumers.
-func TracesReceiver(ctx context.Context, cfg TracesConfig, ctxInfo *global.ContextInfo) pipe.FinalProvider[[]request.Span] {
-	return (&tracesOTELReceiver{ctx: ctx, cfg: cfg, ctxInfo: ctxInfo}).provideLoop
+func TracesReceiver(ctx context.Context, cfg TracesConfig, ctxInfo *global.ContextInfo, userAttribSelection metric2.Selection) pipe.FinalProvider[[]request.Span] {
+	return (&tracesOTELReceiver{ctx: ctx, cfg: cfg, ctxInfo: ctxInfo, attributes: userAttribSelection}).provideLoop
 }
 
 type tracesOTELReceiver struct {
-	ctx     context.Context
-	cfg     TracesConfig
-	ctxInfo *global.ContextInfo
+	ctx        context.Context
+	cfg        TracesConfig
+	ctxInfo    *global.ContextInfo
+	attributes metric2.Selection
+}
+
+func GetUserSelectedAttributes(attributes metric2.Selection) (map[attr.Name]struct{}, error) {
+	// Get user attributes
+	attribProvider, err := metric2.NewAttrSelector(metric2.GroupTraces, attributes)
+	if err != nil {
+		return nil, err
+	}
+	traceAttrsArr := attribProvider.For(metric2.Traces)
+	traceAttrs := make(map[attr.Name]struct{})
+	for _, a := range traceAttrsArr {
+		traceAttrs[a] = struct{}{}
+	}
+
+	return traceAttrs, err
 }
 
 func (tr *tracesOTELReceiver) provideLoop() (pipe.FinalFunc[[]request.Span], error) {
@@ -58,13 +76,20 @@ func (tr *tracesOTELReceiver) provideLoop() (pipe.FinalFunc[[]request.Span], err
 		if err != nil {
 			slog.Error("error starting traces exporter", "error", err)
 		}
+
+		// Get user attributes
+		traceAttrs, err := GetUserSelectedAttributes(tr.attributes)
+		if err != nil {
+			slog.Error("error fetching user defined attributes", "error", err)
+		}
+
 		for spans := range in {
 			for i := range spans {
 				span := &spans[i]
 				if span.IgnoreSpan == request.IgnoreTraces {
 					continue
 				}
-				traces := GenerateTraces(span)
+				traces := GenerateTraces(span, traceAttrs)
 				err := exp.ConsumeTraces(tr.ctx, traces)
 				if err != nil {
 					slog.Error("error sending trace to consumer", "error", err)
@@ -180,7 +205,7 @@ func getTraceSettings(ctxInfo *global.ContextInfo, cfg TracesConfig, in trace.Sp
 }
 
 // GenerateTraces creates a ptrace.Traces from a request.Span
-func GenerateTraces(span *request.Span) ptrace.Traces {
+func GenerateTraces(span *request.Span, userAttrs map[attr.Name]struct{}) ptrace.Traces {
 	t := span.Timings()
 	start := spanStartTime(t)
 	hasSubSpans := t.Start.After(start)
@@ -217,7 +242,7 @@ func GenerateTraces(span *request.Span) ptrace.Traces {
 	}
 
 	// Set span attributes
-	attrs := traceAttributes(span)
+	attrs := traceAttributes(span, userAttrs)
 	m := attrsToMap(attrs)
 	m.CopyTo(s.Attributes())
 

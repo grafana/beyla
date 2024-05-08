@@ -511,7 +511,7 @@ func SpanPeer(span *request.Span) string {
 	return span.Peer
 }
 
-func traceAttributes(span *request.Span, userAttrs map[attr.Name]struct{}) []attribute.KeyValue {
+func traceAttributes(span *request.Span, optionalAttrs map[attr.Name]struct{}) []attribute.KeyValue {
 	var attrs []attribute.KeyValue
 
 	switch span.Type {
@@ -555,7 +555,7 @@ func traceAttributes(span *request.Span, userAttrs map[attr.Name]struct{}) []att
 			request.ServerPort(span.HostPort),
 		}
 	case request.EventTypeSQLClient:
-		if _, ok := userAttrs[attr.IncludeDBStatement]; ok {
+		if _, ok := optionalAttrs[attr.IncludeDBStatement]; ok {
 			attrs = append(attrs, semconv.DBStatement(span.Statement))
 		}
 		operation := span.Method

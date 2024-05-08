@@ -18,6 +18,7 @@ import (
 	"github.com/grafana/beyla/pkg/internal/export/metric"
 	"github.com/grafana/beyla/pkg/internal/export/metric/attr"
 	"github.com/grafana/beyla/pkg/internal/export/otel"
+	"github.com/grafana/beyla/pkg/internal/filter"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/pkg/internal/request"
@@ -474,6 +475,66 @@ func TestTracerPipelineInfo(t *testing.T) {
 
 	event := testutil.ReadChannel(t, tc.TraceRecords, testTimeout)
 	matchInfoEvent(t, "PATCH", event)
+}
+
+func TestSpanAttributeFilterNode(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	tc, err := collector.Start(ctx)
+	require.NoError(t, err)
+
+	// Application pipeline that will let only pass spans whose url.path matches /user/*
+	gb := newGraphBuilder(ctx, &beyla.Config{
+		Metrics: otel.MetricsConfig{
+			Features:        []string{otel.FeatureApplication},
+			MetricsEndpoint: tc.ServerEndpoint, Interval: 10 * time.Millisecond,
+			ReportersCacheLen: 16,
+		},
+		Filters: filter.AttributesConfig{
+			Application: map[string]filter.MatchDefinition{"url.path": {Match: "/user/*"}},
+		},
+		Attributes: beyla.Attributes{Select: allMetrics},
+	}, gctx(0), make(<-chan []request.Span))
+	// Override eBPF tracer to send some fake data
+	pipe.AddStart(gb.builder, tracesReader,
+		func(out chan<- []request.Span) {
+			out <- newRequest("svc-0", 0, "GET", "/products/3210/push", "1.1.1.1:3456", 200)
+			out <- newRequest("svc-1", 1, "GET", "/user/1234", "1.1.1.1:3456", 201)
+			out <- newRequest("svc-2", 2, "GET", "/products/3210/push", "1.1.1.1:3456", 202)
+			out <- newRequest("svc-3", 3, "GET", "/user/4321", "1.1.1.1:3456", 203)
+			// closing prematurely the input node would finish the whole graph processing
+			// and OTEL exporters could be closed, so we wait.
+			time.Sleep(testTimeout)
+		})
+	pipe, err := gb.buildGraph()
+	require.NoError(t, err)
+
+	go pipe.Run(ctx)
+
+	// expect to receive only the records matching the Filters criteria
+	events := map[string]map[string]string{}
+	event := testutil.ReadChannel(t, tc.Records, testTimeout)
+	assert.Equal(t, "http.server.request.duration", event.Name)
+	events[event.Attributes["url.path"]] = event.Attributes
+	event = testutil.ReadChannel(t, tc.Records, testTimeout)
+	assert.Equal(t, "http.server.request.duration", event.Name)
+	events[event.Attributes["url.path"]] = event.Attributes
+
+	assert.Equal(t, map[string]map[string]string{
+		"/user/1234": {
+			string(attr.ClientAddr):             "1.1.1.1",
+			string(attr.HTTPRequestMethod):      "GET",
+			string(attr.HTTPResponseStatusCode): "201",
+			string(attr.HTTPUrlPath):            "/user/1234",
+		},
+		"/user/4321": {
+			string(attr.ClientAddr):             "1.1.1.1",
+			string(attr.HTTPRequestMethod):      "GET",
+			string(attr.HTTPResponseStatusCode): "203",
+			string(attr.HTTPUrlPath):            "/user/4321",
+		},
+	}, events)
 }
 
 func newRequest(serviceName string, id uint64, method, path, peer string, status int) []request.Span {

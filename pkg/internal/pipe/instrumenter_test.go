@@ -185,7 +185,7 @@ func BenchmarkTestTracerPipeline(b *testing.B) {
 				TracesEndpoint:    tc.ServerEndpoint,
 				ReportersCacheLen: 16,
 			},
-		}, gctx(), make(<-chan []request.Span))
+		}, gctx(0), make(<-chan []request.Span))
 		// Override eBPF tracer to send some fake data
 		pipe.AddStart(gb.builder, tracesReader,
 			func(out chan<- []request.Span) {

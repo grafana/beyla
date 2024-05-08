@@ -296,35 +296,19 @@ func SpanKindString(span *request.Span) string {
 	return "SPAN_KIND_INTERNAL"
 }
 
-func SpanHost(span *request.Span) string {
-	if span.HostName != "" {
-		return span.HostName
-	}
-
-	return span.Host
-}
-
-func SpanPeer(span *request.Span) string {
-	if span.PeerName != "" {
-		return span.PeerName
-	}
-
-	return span.Peer
-}
-
 func TraceAttributes(span *request.Span) []attribute.KeyValue {
 	var attrs []attribute.KeyValue
 
 	switch span.Type {
 	case request.EventTypeHTTP:
 		attrs = []attribute.KeyValue{
-			HTTPRequestMethod(span.Method),
-			HTTPResponseStatusCode(span.Status),
-			HTTPUrlPath(span.Path),
-			ClientAddr(SpanPeer(span)),
-			ServerAddr(SpanHost(span)),
-			ServerPort(span.HostPort),
-			HTTPRequestBodySize(int(span.ContentLength)),
+			request.HTTPRequestMethod(span.Method),
+			request.HTTPResponseStatusCode(span.Status),
+			request.HTTPUrlPath(span.Path),
+			request.ClientAddr(request.SpanPeer(span)),
+			request.ServerAddr(request.SpanHost(span)),
+			request.ServerPort(span.HostPort),
+			request.HTTPRequestBodySize(int(span.ContentLength)),
 		}
 		if span.Route != "" {
 			attrs = append(attrs, semconv.HTTPRoute(span.Route))
@@ -334,26 +318,26 @@ func TraceAttributes(span *request.Span) []attribute.KeyValue {
 			semconv.RPCMethod(span.Path),
 			semconv.RPCSystemGRPC,
 			semconv.RPCGRPCStatusCodeKey.Int(span.Status),
-			ClientAddr(SpanPeer(span)),
-			ServerAddr(SpanHost(span)),
-			ServerPort(span.HostPort),
+			request.ClientAddr(request.SpanPeer(span)),
+			request.ServerAddr(request.SpanHost(span)),
+			request.ServerPort(span.HostPort),
 		}
 	case request.EventTypeHTTPClient:
 		attrs = []attribute.KeyValue{
-			HTTPRequestMethod(span.Method),
-			HTTPResponseStatusCode(span.Status),
-			HTTPUrlFull(span.Path),
-			ServerAddr(SpanHost(span)),
-			ServerPort(span.HostPort),
-			HTTPRequestBodySize(int(span.ContentLength)),
+			request.HTTPRequestMethod(span.Method),
+			request.HTTPResponseStatusCode(span.Status),
+			request.HTTPUrlFull(span.Path),
+			request.ServerAddr(request.SpanHost(span)),
+			request.ServerPort(span.HostPort),
+			request.HTTPRequestBodySize(int(span.ContentLength)),
 		}
 	case request.EventTypeGRPCClient:
 		attrs = []attribute.KeyValue{
 			semconv.RPCMethod(span.Path),
 			semconv.RPCSystemGRPC,
 			semconv.RPCGRPCStatusCodeKey.Int(span.Status),
-			ServerAddr(SpanHost(span)),
-			ServerPort(span.HostPort),
+			request.ServerAddr(request.SpanHost(span)),
+			request.ServerPort(span.HostPort),
 		}
 	case request.EventTypeSQLClient:
 		operation := span.Method

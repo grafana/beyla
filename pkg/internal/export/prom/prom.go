@@ -2,6 +2,7 @@ package prom
 
 import (
 	"context"
+	"fmt"
 	"runtime"
 	"slices"
 	"strconv"
@@ -14,8 +15,9 @@ import (
 
 	"github.com/grafana/beyla/pkg/buildinfo"
 	"github.com/grafana/beyla/pkg/internal/connector"
+	"github.com/grafana/beyla/pkg/internal/export/metric"
+	"github.com/grafana/beyla/pkg/internal/export/metric/attr"
 	"github.com/grafana/beyla/pkg/internal/export/otel"
-	"github.com/grafana/beyla/pkg/internal/kube"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/pkg/internal/request"
 	"github.com/grafana/beyla/pkg/internal/svc"
@@ -24,14 +26,6 @@ import (
 // using labels and names that are equivalent names to the OTEL attributes
 // but following the different naming conventions
 const (
-	HTTPServerDuration    = "http_server_request_duration_seconds"
-	HTTPClientDuration    = "http_client_request_duration_seconds"
-	RPCServerDuration     = "rpc_server_duration_seconds"
-	RPCClientDuration     = "rpc_client_duration_seconds"
-	SQLClientDuration     = "sql_client_duration_seconds"
-	HTTPServerRequestSize = "http_server_request_body_size_bytes"
-	HTTPClientRequestSize = "http_client_request_body_size_bytes"
-
 	SpanMetricsLatency = "traces_spanmetrics_latency"
 	SpanMetricsCalls   = "traces_spanmetrics_calls_total"
 	SpanMetricsSizes   = "traces_spanmetrics_size_total"
@@ -42,26 +36,8 @@ const (
 	ServiceGraphFailed = "traces_service_graph_request_failed_total"
 	ServiceGraphTotal  = "traces_service_graph_request_total"
 
-	// target will expose the process hostname-pid (or K8s Pod).
-	// It is advised for users that to use relabeling rules to
-	// override the "instance" attribute with "target" in the
-	// Prometheus server. This would be similar to the "multi target pattern":
-	// https://prometheus.io/docs/guides/multi-target-exporter/
-	targetInstanceKey    = "target_instance"
-	serviceNameKey       = "service_name"
-	serviceKey           = "service"
-	serviceNamespaceKey  = "service_namespace"
-	httpMethodKey        = "http_request_method"
-	httpRouteKey         = "http_route"
-	httpStatusCodeKey    = "http_response_status_code"
-	httpTargetKey        = "url_path"
-	clientAddrKey        = "client_address"
-	serverAddrKey        = "server_address"
-	serverPortKey        = "server_port"
-	rpcGRPCStatusCodeKey = "rpc_grpc_status_code"
-	rpcMethodKey         = "rpc_method"
-	rpcSystemGRPC        = "rpc_system"
-	DBOperationKey       = "db_operation"
+	serviceKey          = "service"
+	serviceNamespaceKey = "service_namespace"
 
 	k8sNamespaceName   = "k8s_namespace_name"
 	k8sPodName         = "k8s_pod_name"
@@ -107,10 +83,13 @@ var beylaInfoLabelNames = []string{LanguageLabel}
 
 // TODO: TLS
 type PrometheusConfig struct {
-	Port           int    `yaml:"port" env:"BEYLA_PROMETHEUS_PORT"`
-	Path           string `yaml:"path" env:"BEYLA_PROMETHEUS_PATH"`
-	ReportTarget   bool   `yaml:"report_target" env:"BEYLA_METRICS_REPORT_TARGET"`
-	ReportPeerInfo bool   `yaml:"report_peer" env:"BEYLA_METRICS_REPORT_PEER"`
+	Port int    `yaml:"port" env:"BEYLA_PROMETHEUS_PORT"`
+	Path string `yaml:"path" env:"BEYLA_PROMETHEUS_PATH"`
+
+	// Deprecated. Going to be removed in Beyla 2.0. Use attributes.select instead
+	ReportTarget bool `yaml:"report_target" env:"BEYLA_METRICS_REPORT_TARGET"`
+	// Deprecated. Going to be removed in Beyla 2.0. Use attributes.select instead
+	ReportPeerInfo bool `yaml:"report_peer" env:"BEYLA_METRICS_REPORT_PEER"`
 
 	DisableBuildInfo bool `yaml:"disable_build_info" env:"BEYLA_PROMETHEUS_DISABLE_BUILD_INFO"`
 
@@ -158,6 +137,15 @@ type metricsReporter struct {
 	httpRequestSize       *prometheus.HistogramVec
 	httpClientRequestSize *prometheus.HistogramVec
 
+	// user-selected attributes for the application-level metrics
+	attrHTTPDuration          []metric.Field[*request.Span, string]
+	attrHTTPClientDuration    []metric.Field[*request.Span, string]
+	attrGRPCDuration          []metric.Field[*request.Span, string]
+	attrGRPCClientDuration    []metric.Field[*request.Span, string]
+	attrSQLClientDuration     []metric.Field[*request.Span, string]
+	attrHTTPRequestSize       []metric.Field[*request.Span, string]
+	attrHTTPClientRequestSize []metric.Field[*request.Span, string]
+
 	// trace span metrics
 	spanMetricsLatency    *prometheus.HistogramVec
 	spanMetricsCallsTotal *prometheus.CounterVec
@@ -178,12 +166,20 @@ type metricsReporter struct {
 	serviceCache *expirable.LRU[svc.UID, svc.ID]
 }
 
-func PrometheusEndpoint(ctx context.Context, cfg *PrometheusConfig, ctxInfo *global.ContextInfo) pipe.FinalProvider[[]request.Span] {
+func PrometheusEndpoint(
+	ctx context.Context,
+	ctxInfo *global.ContextInfo,
+	cfg *PrometheusConfig,
+	attrSelect metric.Selection,
+) pipe.FinalProvider[[]request.Span] {
 	return func() (pipe.FinalFunc[[]request.Span], error) {
 		if !cfg.Enabled() {
 			return pipe.IgnoreFinal[[]request.Span](), nil
 		}
-		reporter := newReporter(ctx, cfg, ctxInfo)
+		reporter, err := newReporter(ctx, ctxInfo, cfg, attrSelect)
+		if err != nil {
+			return nil, fmt.Errorf("instantiating Prometheus endpoint: %w", err)
+		}
 		if cfg.Registry != nil {
 			return reporter.collectMetrics, nil
 		}
@@ -191,14 +187,49 @@ func PrometheusEndpoint(ctx context.Context, cfg *PrometheusConfig, ctxInfo *glo
 	}
 }
 
-func newReporter(ctx context.Context, cfg *PrometheusConfig, ctxInfo *global.ContextInfo) *metricsReporter {
+func newReporter(
+	ctx context.Context,
+	ctxInfo *global.ContextInfo,
+	cfg *PrometheusConfig,
+	selector metric.Selection,
+) (*metricsReporter, error) {
+	groups := ctxInfo.MetricAttributeGroups
+	groups.Add(metric.GroupPrometheus)
+
+	attrsProvider, err := metric.NewAttrSelector(groups, selector)
+	if err != nil {
+		return nil, fmt.Errorf("selecting metrics attributes: %w", err)
+	}
+
+	attrHTTPDuration := metric.PrometheusGetters(request.SpanPromGetters,
+		attrsProvider.For(metric.HTTPServerDuration))
+	attrHTTPClientDuration := metric.PrometheusGetters(request.SpanPromGetters,
+		attrsProvider.For(metric.HTTPClientDuration))
+	attrHTTPRequestSize := metric.PrometheusGetters(request.SpanPromGetters,
+		attrsProvider.For(metric.HTTPServerRequestSize))
+	attrHTTPClientRequestSize := metric.PrometheusGetters(request.SpanPromGetters,
+		attrsProvider.For(metric.HTTPClientRequestSize))
+	attrGRPCDuration := metric.PrometheusGetters(request.SpanPromGetters,
+		attrsProvider.For(metric.RPCServerDuration))
+	attrGRPCClientDuration := metric.PrometheusGetters(request.SpanPromGetters,
+		attrsProvider.For(metric.RPCClientDuration))
+	attrSQLClientDuration := metric.PrometheusGetters(request.SpanPromGetters,
+		attrsProvider.For(metric.HTTPServerDuration))
+
 	// If service name is not explicitly set, we take the service name as set by the
 	// executable inspector
 	mr := &metricsReporter{
-		bgCtx:       ctx,
-		ctxInfo:     ctxInfo,
-		cfg:         cfg,
-		promConnect: ctxInfo.Prometheus,
+		bgCtx:                     ctx,
+		ctxInfo:                   ctxInfo,
+		cfg:                       cfg,
+		promConnect:               ctxInfo.Prometheus,
+		attrHTTPDuration:          attrHTTPDuration,
+		attrHTTPClientDuration:    attrHTTPClientDuration,
+		attrGRPCDuration:          attrGRPCDuration,
+		attrGRPCClientDuration:    attrGRPCClientDuration,
+		attrSQLClientDuration:     attrSQLClientDuration,
+		attrHTTPRequestSize:       attrHTTPRequestSize,
+		attrHTTPClientRequestSize: attrHTTPClientRequestSize,
 		beylaInfo: prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Name: BeylaBuildInfo,
 			Help: "A metric with a constant '1' value labeled by version, revision, branch, " +
@@ -213,61 +244,61 @@ func newReporter(ctx context.Context, cfg *PrometheusConfig, ctxInfo *global.Con
 			},
 		}, beylaInfoLabelNames),
 		httpDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
-			Name:                            HTTPServerDuration,
+			Name:                            metric.HTTPServerDuration.Prom,
 			Help:                            "duration of HTTP service calls from the server side, in seconds",
 			Buckets:                         cfg.Buckets.DurationHistogram,
 			NativeHistogramBucketFactor:     defaultHistogramBucketFactor,
 			NativeHistogramMaxBucketNumber:  defaultHistogramMaxBucketNumber,
 			NativeHistogramMinResetDuration: defaultHistogramMinResetDuration,
-		}, labelNamesHTTP(cfg, ctxInfo)),
+		}, labelNames(attrHTTPDuration)),
 		httpClientDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
-			Name:                            HTTPClientDuration,
+			Name:                            metric.HTTPClientDuration.Prom,
 			Help:                            "duration of HTTP service calls from the client side, in seconds",
 			Buckets:                         cfg.Buckets.DurationHistogram,
 			NativeHistogramBucketFactor:     defaultHistogramBucketFactor,
 			NativeHistogramMaxBucketNumber:  defaultHistogramMaxBucketNumber,
 			NativeHistogramMinResetDuration: defaultHistogramMinResetDuration,
-		}, labelNamesHTTPClient(cfg, ctxInfo)),
+		}, labelNames(attrHTTPClientDuration)),
 		grpcDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
-			Name:                            RPCServerDuration,
+			Name:                            metric.RPCServerDuration.Prom,
 			Help:                            "duration of RCP service calls from the server side, in seconds",
 			Buckets:                         cfg.Buckets.DurationHistogram,
 			NativeHistogramBucketFactor:     defaultHistogramBucketFactor,
 			NativeHistogramMaxBucketNumber:  defaultHistogramMaxBucketNumber,
 			NativeHistogramMinResetDuration: defaultHistogramMinResetDuration,
-		}, labelNamesGRPC(cfg, ctxInfo)),
+		}, labelNames(attrGRPCDuration)),
 		grpcClientDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
-			Name:                            RPCClientDuration,
+			Name:                            metric.RPCClientDuration.Prom,
 			Help:                            "duration of GRPC service calls from the client side, in seconds",
 			Buckets:                         cfg.Buckets.DurationHistogram,
 			NativeHistogramBucketFactor:     defaultHistogramBucketFactor,
 			NativeHistogramMaxBucketNumber:  defaultHistogramMaxBucketNumber,
 			NativeHistogramMinResetDuration: defaultHistogramMinResetDuration,
-		}, labelNamesGRPCClient(cfg, ctxInfo)),
+		}, labelNames(attrGRPCClientDuration)),
 		sqlClientDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
-			Name:                            SQLClientDuration,
+			Name:                            metric.SQLClientDuration.Prom,
 			Help:                            "duration of SQL client operations, in seconds",
 			Buckets:                         cfg.Buckets.DurationHistogram,
 			NativeHistogramBucketFactor:     defaultHistogramBucketFactor,
 			NativeHistogramMaxBucketNumber:  defaultHistogramMaxBucketNumber,
 			NativeHistogramMinResetDuration: defaultHistogramMinResetDuration,
-		}, labelNamesSQL(ctxInfo)),
+		}, labelNames(attrSQLClientDuration)),
 		httpRequestSize: prometheus.NewHistogramVec(prometheus.HistogramOpts{
-			Name:                            HTTPServerRequestSize,
+			Name:                            metric.HTTPServerRequestSize.Prom,
 			Help:                            "size, in bytes, of the HTTP request body as received at the server side",
 			Buckets:                         cfg.Buckets.RequestSizeHistogram,
 			NativeHistogramBucketFactor:     defaultHistogramBucketFactor,
 			NativeHistogramMaxBucketNumber:  defaultHistogramMaxBucketNumber,
 			NativeHistogramMinResetDuration: defaultHistogramMinResetDuration,
-		}, labelNamesHTTP(cfg, ctxInfo)),
+		}, labelNames(attrHTTPRequestSize)),
 		httpClientRequestSize: prometheus.NewHistogramVec(prometheus.HistogramOpts{
-			Name:                            HTTPClientRequestSize,
+			Name:                            metric.HTTPClientRequestSize.Prom,
 			Help:                            "size, in bytes, of the HTTP request body as sent from the client side",
 			Buckets:                         cfg.Buckets.RequestSizeHistogram,
 			NativeHistogramBucketFactor:     defaultHistogramBucketFactor,
 			NativeHistogramMaxBucketNumber:  defaultHistogramMaxBucketNumber,
 			NativeHistogramMinResetDuration: defaultHistogramMinResetDuration,
-		}, labelNamesHTTPClient(cfg, ctxInfo)),
+		}, labelNames(attrHTTPClientRequestSize)),
 		spanMetricsLatency: prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Name:                            SpanMetricsLatency,
 			Help:                            "duration of service calls (client and server), in seconds, in trace span metrics format",
@@ -361,7 +392,7 @@ func newReporter(ctx context.Context, cfg *PrometheusConfig, ctxInfo *global.Con
 		mr.promConnect.Register(cfg.Port, cfg.Path, registeredMetrics...)
 	}
 
-	return mr
+	return mr, nil
 }
 
 func (r *metricsReporter) reportMetrics(input <-chan []request.Span) {
@@ -384,19 +415,31 @@ func (r *metricsReporter) observe(span *request.Span) {
 	if r.cfg.OTelMetricsEnabled() {
 		switch span.Type {
 		case request.EventTypeHTTP:
-			lv := r.labelValuesHTTP(span)
-			r.httpDuration.WithLabelValues(lv...).Observe(duration)
-			r.httpRequestSize.WithLabelValues(lv...).Observe(float64(span.ContentLength))
+			r.httpDuration.WithLabelValues(
+				labelValues(span, r.attrHTTPDuration)...,
+			).Observe(duration)
+			r.httpRequestSize.WithLabelValues(
+				labelValues(span, r.attrHTTPRequestSize)...,
+			).Observe(float64(span.ContentLength))
 		case request.EventTypeHTTPClient:
-			lv := r.labelValuesHTTPClient(span)
-			r.httpClientDuration.WithLabelValues(lv...).Observe(duration)
-			r.httpClientRequestSize.WithLabelValues(lv...).Observe(float64(span.ContentLength))
+			r.httpClientDuration.WithLabelValues(
+				labelValues(span, r.attrHTTPClientDuration)...,
+			).Observe(duration)
+			r.httpClientRequestSize.WithLabelValues(
+				labelValues(span, r.attrHTTPClientRequestSize)...,
+			).Observe(float64(span.ContentLength))
 		case request.EventTypeGRPC:
-			r.grpcDuration.WithLabelValues(r.labelValuesGRPC(span)...).Observe(duration)
+			r.grpcDuration.WithLabelValues(
+				labelValues(span, r.attrGRPCDuration)...,
+			).Observe(duration)
 		case request.EventTypeGRPCClient:
-			r.grpcClientDuration.WithLabelValues(r.labelValuesGRPC(span)...).Observe(duration)
+			r.grpcClientDuration.WithLabelValues(
+				labelValues(span, r.attrGRPCClientDuration)...,
+			).Observe(duration)
 		case request.EventTypeSQLClient:
-			r.sqlClientDuration.WithLabelValues(r.labelValuesSQL(span)...).Observe(duration)
+			r.sqlClientDuration.WithLabelValues(
+				labelValues(span, r.attrSQLClientDuration)...,
+			).Observe(duration)
 		}
 	}
 	if r.cfg.SpanMetricsEnabled() {
@@ -427,167 +470,24 @@ func (r *metricsReporter) observe(span *request.Span) {
 	}
 }
 
-// labelNamesSQL must return the label names in the same order as would be returned
-// by labelValuesSQL
-func labelNamesSQL(ctxInfo *global.ContextInfo) []string {
-	names := []string{targetInstanceKey, serviceNameKey, serviceNamespaceKey, DBOperationKey}
-	if ctxInfo.K8sEnabled {
-		names = appendK8sLabelNames(names)
-	}
-	return names
-}
-
-// labelValuesSQL must return the label names in the same order as would be returned
-// by labelNamesSQL
-func (r *metricsReporter) labelValuesSQL(span *request.Span) []string {
-	values := []string{span.ServiceID.Instance, span.ServiceID.Name, span.ServiceID.Namespace, span.Method}
-	if r.ctxInfo.K8sEnabled {
-		values = appendK8sLabelValues(values, span)
-	}
-	return values
-}
-
-// labelNamesGRPC must return the label names in the same order as would be returned
-// by labelValuesGRPC
-func labelNamesGRPC(cfg *PrometheusConfig, ctxInfo *global.ContextInfo) []string {
-	// TODO: let user configure which keys are going to be added
-	names := []string{targetInstanceKey, serviceNameKey, serviceNamespaceKey, rpcMethodKey, rpcSystemGRPC, rpcGRPCStatusCodeKey}
-	if cfg.ReportPeerInfo {
-		names = append(names, clientAddrKey)
-	}
-	if ctxInfo.K8sEnabled {
-		names = appendK8sLabelNames(names)
-	}
-	return names
-}
-
-// labelNamesGRPCClient must return the label names in the same order as would be returned
-// by labelValuesGRPC
-func labelNamesGRPCClient(cfg *PrometheusConfig, ctxInfo *global.ContextInfo) []string {
-	// TODO: let user configure which keys are going to be added
-	names := []string{targetInstanceKey, serviceNameKey, serviceNamespaceKey, rpcMethodKey, rpcSystemGRPC, rpcGRPCStatusCodeKey}
-	if cfg.ReportPeerInfo {
-		names = append(names, serverAddrKey)
-	}
-	if ctxInfo.K8sEnabled {
-		names = appendK8sLabelNames(names)
-	}
-	return names
-}
-
-// labelValuesGRPC must return the label names in the same order as would be returned
-// by labelNamesGRPC
-func (r *metricsReporter) labelValuesGRPC(span *request.Span) []string {
-	// serviceNameKey, rpcMethodKey, rpcSystemGRPC, rpcGRPCStatusCodeKey
-	values := []string{span.ServiceID.Instance, span.ServiceID.Name, span.ServiceID.Namespace, span.Path, "grpc", strconv.Itoa(span.Status)}
-	if r.cfg.ReportPeerInfo {
-		if span.IsClientSpan() {
-			values = append(values, otel.SpanHost(span)) // netSockPeerAddrKey
-		} else {
-			values = append(values, otel.SpanPeer(span))
-		}
-	}
-	if r.ctxInfo.K8sEnabled {
-		values = appendK8sLabelValues(values, span)
-	}
-	return values
-}
-
-// labelNamesHTTPClient must return the label names in the same order as would be returned
-// by labelValuesHTTPClient
-func labelNamesHTTPClient(cfg *PrometheusConfig, ctxInfo *global.ContextInfo) []string {
-	names := []string{targetInstanceKey, serviceNameKey, serviceNamespaceKey, httpMethodKey, httpStatusCodeKey}
-	if cfg.ReportPeerInfo {
-		names = append(names, serverAddrKey, serverPortKey)
-	}
-	if ctxInfo.K8sEnabled {
-		names = appendK8sLabelNames(names)
-	}
-	if ctxInfo.AppO11y.ReportRoutes {
-		names = append(names, httpRouteKey)
-	}
-	return names
-}
-
-// labelValuesHTTPClient must return the label names in the same order as would be returned
-// by labelNamesHTTPClient
-func (r *metricsReporter) labelValuesHTTPClient(span *request.Span) []string {
-	// httpMethodKey, httpStatusCodeKey
-	values := []string{span.ServiceID.Instance, span.ServiceID.Name, span.ServiceID.Namespace, span.Method, strconv.Itoa(span.Status)}
-	if r.cfg.ReportPeerInfo {
-		// netSockPeerAddrKey, netSockPeerPortKey
-		values = append(values, otel.SpanHost(span), strconv.Itoa(span.HostPort))
-	}
-	if r.ctxInfo.K8sEnabled {
-		values = appendK8sLabelValues(values, span)
-	}
-	if r.ctxInfo.AppO11y.ReportRoutes {
-		values = append(values, span.Route) // httpRouteKey
-	}
-	return values
-}
-
-// labelNamesHTTP must return the label names in the same order as would be returned
-// by labelValuesHTTP
-func labelNamesHTTP(cfg *PrometheusConfig, ctxInfo *global.ContextInfo) []string {
-	names := []string{targetInstanceKey, serviceNameKey, serviceNamespaceKey, httpMethodKey, httpStatusCodeKey}
-	if cfg.ReportTarget {
-		names = append(names, httpTargetKey)
-	}
-	if cfg.ReportPeerInfo {
-		names = append(names, clientAddrKey)
-	}
-	if ctxInfo.AppO11y.ReportRoutes {
-		names = append(names, httpRouteKey)
-	}
-	if ctxInfo.K8sEnabled {
-		names = appendK8sLabelNames(names)
-	}
-	return names
-}
-
-// labelValuesGRPC must return the label names in the same order as would be returned
-// by labelNamesHTTP
-func (r *metricsReporter) labelValuesHTTP(span *request.Span) []string {
-	// httpMethodKey, httpStatusCodeKey
-	values := []string{span.ServiceID.Instance, span.ServiceID.Name, span.ServiceID.Namespace, span.Method, strconv.Itoa(span.Status)}
-	if r.cfg.ReportTarget {
-		values = append(values, span.Path) // httpTargetKey
-	}
-	if r.cfg.ReportPeerInfo {
-		values = append(values, otel.SpanPeer(span)) // netSockPeerAddrKey
-	}
-	if r.ctxInfo.AppO11y.ReportRoutes {
-		values = append(values, span.Route) // httpRouteKey
-	}
-	if r.ctxInfo.K8sEnabled {
-		values = appendK8sLabelValues(values, span)
-	}
-	return values
-}
-
 func appendK8sLabelNames(names []string) []string {
 	names = append(names, k8sNamespaceName, k8sPodName, k8sNodeName, k8sPodUID, k8sPodStartTime,
 		k8sDeploymentName, k8sReplicaSetName, k8sStatefulSetName, k8sDaemonSetName)
 	return names
 }
 
-func appendK8sLabelValues(values []string, span *request.Span) []string {
-	return appendK8sLabelValuesService(values, span.ServiceID)
-}
-
 func appendK8sLabelValuesService(values []string, service svc.ID) []string {
 	// must follow the order in appendK8sLabelNames
 	values = append(values,
-		service.Metadata[kube.NamespaceName],
-		service.Metadata[kube.PodName],
-		service.Metadata[kube.NodeName],
-		service.Metadata[kube.PodUID],
-		service.Metadata[kube.PodStartTime],
-		service.Metadata[kube.DeploymentName],
-		service.Metadata[kube.ReplicaSetName],
-		service.Metadata[kube.StatefulSetName],
-		service.Metadata[kube.DaemonSetName],
+		service.Metadata[(attr.K8sNamespaceName)],
+		service.Metadata[(attr.K8sPodName)],
+		service.Metadata[(attr.K8sNodeName)],
+		service.Metadata[(attr.K8sPodUID)],
+		service.Metadata[(attr.K8sPodStartTime)],
+		service.Metadata[(attr.K8sDeploymentName)],
+		service.Metadata[(attr.K8sReplicaSetName)],
+		service.Metadata[(attr.K8sStatefulSetName)],
+		service.Metadata[(attr.K8sDaemonSetName)],
 	)
 	return values
 }
@@ -652,20 +552,36 @@ func labelNamesServiceGraph() []string {
 func (r *metricsReporter) labelValuesServiceGraph(span *request.Span) []string {
 	if span.IsClientSpan() {
 		return []string{
-			otel.SpanPeer(span),
+			request.SpanPeer(span),
 			span.ServiceID.Namespace,
-			otel.SpanHost(span),
+			request.SpanHost(span),
 			span.OtherNamespace,
 			"virtual_node",
 			"beyla",
 		}
 	}
 	return []string{
-		otel.SpanPeer(span),
+		request.SpanPeer(span),
 		span.OtherNamespace,
-		otel.SpanHost(span),
+		request.SpanHost(span),
 		span.ServiceID.Namespace,
 		"virtual_node",
 		"beyla",
 	}
+}
+
+func labelNames(getters []metric.Field[*request.Span, string]) []string {
+	labels := make([]string, 0, len(getters))
+	for _, label := range getters {
+		labels = append(labels, label.ExposedName)
+	}
+	return labels
+}
+
+func labelValues(s *request.Span, getters []metric.Field[*request.Span, string]) []string {
+	values := make([]string, 0, len(getters))
+	for _, getter := range getters {
+		values = append(values, getter.Get(s))
+	}
+	return values
 }

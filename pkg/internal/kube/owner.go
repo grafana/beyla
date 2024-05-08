@@ -4,18 +4,8 @@ import (
 	"strings"
 
 	v1 "k8s.io/api/core/v1"
-)
 
-const (
-	NamespaceName   = "k8s.namespace.name"
-	PodName         = "k8s.pod.name"
-	DeploymentName  = "k8s.deployment.name"
-	ReplicaSetName  = "k8s.replicaset.name"
-	DaemonSetName   = "k8s.daemonset.name"
-	StatefulSetName = "k8s.statefulset.name"
-	NodeName        = "k8s.node.name"
-	PodUID          = "k8s.pod.uid"
-	PodStartTime    = "k8s.pod.start_time"
+	"github.com/grafana/beyla/pkg/internal/export/metric/attr"
 )
 
 type OwnerType int
@@ -28,16 +18,16 @@ const (
 	OwnerDaemonSet
 )
 
-func (o OwnerType) LabelName() string {
+func (o OwnerType) LabelName() attr.Name {
 	switch o {
 	case OwnerReplicaSet:
-		return ReplicaSetName
+		return attr.K8sReplicaSetName
 	case OwnerDeployment:
-		return DeploymentName
+		return attr.K8sDeploymentName
 	case OwnerStatefulSet:
-		return StatefulSetName
+		return attr.K8sStatefulSetName
 	case OwnerDaemonSet:
-		return DaemonSetName
+		return attr.K8sDaemonSetName
 	default:
 		return "k8s.unknown.owner"
 	}
@@ -83,7 +73,7 @@ func (o *Owner) string(sb *strings.Builder) {
 		o.Owner.string(sb)
 		sb.WriteString("->")
 	}
-	sb.WriteString(o.Type.LabelName())
+	sb.WriteString(string(o.Type.LabelName()))
 	sb.WriteByte(':')
 	sb.WriteString(o.Name)
 }

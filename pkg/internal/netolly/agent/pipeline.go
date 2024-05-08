@@ -5,7 +5,6 @@ import (
 
 	"github.com/mariomac/pipes/pipe"
 
-	"github.com/grafana/beyla/pkg/internal/metricname"
 	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
 	"github.com/grafana/beyla/pkg/internal/netolly/export"
 	"github.com/grafana/beyla/pkg/internal/netolly/export/otel"
@@ -120,18 +119,18 @@ func (f *Flows) buildPipeline(ctx context.Context) (*pipe.Runner, error) {
 	// Terminal nodes export the flow record information out of the pipeline: OTEL, Prom and printer.
 	// Not all the nodes are mandatory here. Is the responsibility of each Provider function to decide
 	// whether each node is going to be instantiated or just ignored.
-	f.cfg.Attributes.Allow.Normalize()
+	f.cfg.Attributes.Select.Normalize()
 	pipe.AddFinalProvider(pb, otelExport, func() (pipe.FinalFunc[[]*ebpf.Record], error) {
-		return otel.MetricsExporterProvider(&otel.MetricsConfig{
-			Metrics:           &f.cfg.Metrics,
-			AllowedAttributes: f.cfg.Attributes.Allow.For(metricname.NormalBeylaNetworkFlows),
+		return otel.MetricsExporterProvider(f.ctxInfo, &otel.MetricsConfig{
+			Metrics:            &f.cfg.Metrics,
+			AttributeSelectors: f.cfg.Attributes.Select,
 		})
 	})
 	pipe.AddFinalProvider(pb, promExport, func() (pipe.FinalFunc[[]*ebpf.Record], error) {
-		return prom.PrometheusEndpoint(ctx, &prom.PrometheusConfig{
-			Config:            &f.cfg.Prometheus,
-			AllowedAttributes: f.cfg.Attributes.Allow.For(metricname.NormalBeylaNetworkFlows),
-		}, f.ctxInfo.Prometheus)
+		return prom.PrometheusEndpoint(ctx, f.ctxInfo, &prom.PrometheusConfig{
+			Config:             &f.cfg.Prometheus,
+			AttributeSelectors: f.cfg.Attributes.Select,
+		})
 	})
 	pipe.AddFinalProvider(pb, printer, func() (pipe.FinalFunc[[]*ebpf.Record], error) {
 		return export.FlowPrinterProvider(f.cfg.NetworkFlows.Print)

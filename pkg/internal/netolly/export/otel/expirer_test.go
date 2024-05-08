@@ -10,8 +10,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/grafana/beyla/pkg/internal/export/metric"
 	"github.com/grafana/beyla/pkg/internal/export/otel"
 	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
+	"github.com/grafana/beyla/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/test/collector"
 )
 
@@ -27,13 +29,20 @@ func TestMetricsExpiration(t *testing.T) {
 	now := syncedClock{now: time.Now()}
 	timeNow = now.Now
 
-	otelExporter, err := MetricsExporterProvider(&MetricsConfig{Metrics: &otel.MetricsConfig{
-		Interval:        50 * time.Millisecond,
-		CommonEndpoint:  otlp.ServerEndpoint,
-		MetricsProtocol: otel.ProtocolHTTPProtobuf,
-		Features:        []string{otel.FeatureNetwork},
-		TTL:             3 * time.Minute,
-	}, AllowedAttributes: []string{"src.name", "dst.name"}})
+	otelExporter, err := MetricsExporterProvider(
+		&global.ContextInfo{}, &MetricsConfig{
+			Metrics: &otel.MetricsConfig{
+				Interval:        50 * time.Millisecond,
+				CommonEndpoint:  otlp.ServerEndpoint,
+				MetricsProtocol: otel.ProtocolHTTPProtobuf,
+				Features:        []string{otel.FeatureNetwork},
+				TTL:             3 * time.Minute,
+			}, AttributeSelectors: metric.Selection{
+				metric.BeylaNetworkFlow.Section: metric.InclusionLists{
+					Include: []string{"src.name", "dst.name"},
+				},
+			},
+		})
 	require.NoError(t, err)
 
 	metrics := make(chan []*ebpf.Record, 20)

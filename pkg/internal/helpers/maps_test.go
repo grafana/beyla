@@ -1,6 +1,7 @@
 package helpers
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -92,4 +93,15 @@ func TestMap2_DeleteAll(t *testing.T) {
 	v, ok = m.Get(2, 2)
 	assert.True(t, ok)
 	assert.Equal(t, 22, v)
+}
+
+func TestSliceToSet(t *testing.T) {
+	assert.Equal(t, map[int]struct{}{1: {}, 2: {}, 3: {}},
+		SliceToSet([]int{2, 3, 1, 1, 1, 2, 3}))
+}
+
+func TestSetToSlice(t *testing.T) {
+	slice := SetToSlice(map[int]struct{}{1: {}, 2: {}, 3: {}})
+	slices.Sort(slice)
+	assert.Equal(t, []int{1, 2, 3}, slice)
 }

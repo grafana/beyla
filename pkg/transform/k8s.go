@@ -7,6 +7,7 @@ import (
 
 	"github.com/mariomac/pipes/pipe"
 
+	"github.com/grafana/beyla/pkg/internal/export/metric/attr"
 	"github.com/grafana/beyla/pkg/internal/kube"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/pkg/internal/request"
@@ -104,7 +105,7 @@ func (md *metadataDecorator) do(span *request.Span) {
 		appendMetadata(span, podInfo)
 	} else {
 		// do not leave the service attributes map as nil
-		span.ServiceID.Metadata = map[string]string{}
+		span.ServiceID.Metadata = map[attr.Name]string{}
 	}
 }
 
@@ -122,12 +123,12 @@ func appendMetadata(span *request.Span, info *kube.PodInfo) {
 
 	// if, in the future, other pipeline steps modify the service metadata, we should
 	// replace the map literal by individual entry insertions
-	span.ServiceID.Metadata = map[string]string{
-		kube.NamespaceName: info.Namespace,
-		kube.PodName:       info.Name,
-		kube.NodeName:      info.NodeName,
-		kube.PodUID:        string(info.UID),
-		kube.PodStartTime:  info.StartTimeStr,
+	span.ServiceID.Metadata = map[attr.Name]string{
+		attr.K8sNamespaceName: info.Namespace,
+		attr.K8sPodName:       info.Name,
+		attr.K8sNodeName:      info.NodeName,
+		attr.K8sPodUID:        string(info.UID),
+		attr.K8sPodStartTime:  info.StartTimeStr,
 	}
 	owner := info.Owner
 	for owner != nil {

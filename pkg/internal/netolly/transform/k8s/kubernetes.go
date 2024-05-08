@@ -27,6 +27,7 @@ import (
 	"github.com/hashicorp/golang-lru/v2/simplelru"
 	"github.com/mariomac/pipes/pipe"
 
+	"github.com/grafana/beyla/pkg/internal/export/metric/attr"
 	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
 	"github.com/grafana/beyla/pkg/transform"
 )
@@ -41,24 +42,6 @@ const (
 	attrSuffixOwnerType = ".owner.type"
 	attrSuffixHostIP    = ".node.ip"
 	attrSuffixHostName  = ".node.name"
-
-	AttrClusterName = "k8s.cluster.name"
-
-	AttrDstNamespace = attrPrefixDst + attrSuffixNs
-	AttrDstName      = attrPrefixDst + attrSuffixName
-	AttrDstType      = attrPrefixDst + attrSuffixType
-	AttrDstOwnerName = attrPrefixDst + attrSuffixOwnerName
-	AttrDstOwnerType = attrPrefixDst + attrSuffixOwnerType
-	AttrDstHostIP    = attrPrefixDst + attrSuffixHostIP
-	AttrDstHostName  = attrPrefixDst + attrSuffixHostName
-
-	AttrSrcNamespace = attrPrefixSrc + attrSuffixNs
-	AttrSrcName      = attrPrefixSrc + attrSuffixName
-	AttrSrcType      = attrPrefixSrc + attrSuffixType
-	AttrSrcOwnerName = attrPrefixSrc + attrSuffixOwnerName
-	AttrSrcOwnerType = attrPrefixSrc + attrSuffixOwnerType
-	AttrSrcHostIP    = attrPrefixSrc + attrSuffixHostIP
-	AttrSrcHostName  = attrPrefixSrc + attrSuffixHostName
 )
 
 const alreadyLoggedIPsCacheLen = 256
@@ -120,10 +103,10 @@ func (n *decorator) decorateMightDrop(flows []*ebpf.Record) []*ebpf.Record {
 
 func (n *decorator) transform(flow *ebpf.Record) bool {
 	if flow.Attrs.Metadata == nil {
-		flow.Attrs.Metadata = map[string]string{}
+		flow.Attrs.Metadata = map[attr.Name]string{}
 	}
 	if n.clusterName != "" {
-		flow.Attrs.Metadata[AttrClusterName] = n.clusterName
+		flow.Attrs.Metadata[(attr.K8sClusterName)] = n.clusterName
 	}
 	srcOk := n.decorate(flow, attrPrefixSrc, flow.Id.SrcIP().IP().String())
 	dstOk := n.decorate(flow, attrPrefixDst, flow.Id.DstIP().IP().String())
@@ -143,15 +126,15 @@ func (n *decorator) decorate(flow *ebpf.Record, prefix, ip string) bool {
 		}
 		return false
 	}
-	flow.Attrs.Metadata[prefix+attrSuffixNs] = kubeInfo.Namespace
-	flow.Attrs.Metadata[prefix+attrSuffixName] = kubeInfo.Name
-	flow.Attrs.Metadata[prefix+attrSuffixType] = kubeInfo.Type
-	flow.Attrs.Metadata[prefix+attrSuffixOwnerName] = kubeInfo.Owner.Name
-	flow.Attrs.Metadata[prefix+attrSuffixOwnerType] = kubeInfo.Owner.Type
+	flow.Attrs.Metadata[attr.Name(prefix+attrSuffixNs)] = kubeInfo.Namespace
+	flow.Attrs.Metadata[attr.Name(prefix+attrSuffixName)] = kubeInfo.Name
+	flow.Attrs.Metadata[attr.Name(prefix+attrSuffixType)] = kubeInfo.Type
+	flow.Attrs.Metadata[attr.Name(prefix+attrSuffixOwnerName)] = kubeInfo.Owner.Name
+	flow.Attrs.Metadata[attr.Name(prefix+attrSuffixOwnerType)] = kubeInfo.Owner.Type
 	if kubeInfo.HostIP != "" {
-		flow.Attrs.Metadata[prefix+attrSuffixHostIP] = kubeInfo.HostIP
+		flow.Attrs.Metadata[attr.Name(prefix+attrSuffixHostIP)] = kubeInfo.HostIP
 		if kubeInfo.HostName != "" {
-			flow.Attrs.Metadata[prefix+attrSuffixHostName] = kubeInfo.HostName
+			flow.Attrs.Metadata[attr.Name(prefix+attrSuffixHostName)] = kubeInfo.HostName
 		}
 	}
 	// decorate other names from metadata, if required

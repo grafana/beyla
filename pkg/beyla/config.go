@@ -11,8 +11,8 @@ import (
 	"gopkg.in/yaml.v3"
 
 	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
-	"github.com/grafana/beyla/pkg/internal/export/attr"
 	"github.com/grafana/beyla/pkg/internal/export/debug"
+	"github.com/grafana/beyla/pkg/internal/export/metric"
 	"github.com/grafana/beyla/pkg/internal/export/otel"
 	"github.com/grafana/beyla/pkg/internal/export/prom"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
@@ -164,9 +164,9 @@ func (t TracesReceiverConfig) Enabled() bool {
 // Attributes configures the decoration of some extra attributes that will be
 // added to each span
 type Attributes struct {
-	Kubernetes transform.KubernetesDecorator    `yaml:"kubernetes"`
-	InstanceID traces.InstanceIDConfig          `yaml:"instance_id"`
-	Allow      attr.AllowedAttributesDefinition `yaml:"allow"`
+	Kubernetes transform.KubernetesDecorator `yaml:"kubernetes"`
+	InstanceID traces.InstanceIDConfig       `yaml:"instance_id"`
+	Select     metric.Selection              `yaml:"select"`
 }
 
 type ConfigError string

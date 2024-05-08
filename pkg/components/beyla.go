@@ -9,8 +9,10 @@ import (
 	"github.com/grafana/beyla/pkg/beyla"
 	"github.com/grafana/beyla/pkg/internal/appolly"
 	"github.com/grafana/beyla/pkg/internal/connector"
+	"github.com/grafana/beyla/pkg/internal/export/metric"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/netolly/agent"
+	"github.com/grafana/beyla/pkg/internal/netolly/flow"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 )
 
@@ -95,5 +97,31 @@ func buildCommonContextInfo(
 		slog.Debug("not reporting internal metrics")
 		ctxInfo.Metrics = imetrics.NoopReporter{}
 	}
+
+	attributeGroups(config, ctxInfo)
+
 	return ctxInfo
+}
+
+// attributeGroups specifies, based in the provided configuration, which groups of attributes
+// need to be enabled by default for the diverse metrics
+func attributeGroups(config *beyla.Config, ctxInfo *global.ContextInfo) {
+	if ctxInfo.K8sEnabled {
+		ctxInfo.MetricAttributeGroups.Add(metric.GroupKubernetes)
+	}
+	if config.Routes != nil {
+		ctxInfo.MetricAttributeGroups.Add(metric.GroupHTTPRoutes)
+	}
+	if config.Metrics.ReportPeerInfo || config.Prometheus.ReportPeerInfo {
+		ctxInfo.MetricAttributeGroups.Add(metric.GroupPeerInfo)
+	}
+	if config.Metrics.ReportTarget || config.Prometheus.ReportTarget {
+		ctxInfo.MetricAttributeGroups.Add(metric.GroupTarget)
+	}
+	if config.NetworkFlows.Deduper == flow.DeduperNone {
+		ctxInfo.MetricAttributeGroups.Add(metric.GroupNetIfaceDirection)
+	}
+	if config.NetworkFlows.CIDRs.Enabled() {
+		ctxInfo.MetricAttributeGroups.Add(metric.GroupNetCIDR)
+	}
 }

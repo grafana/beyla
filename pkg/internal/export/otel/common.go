@@ -73,7 +73,7 @@ func Resource(service svc.ID) *resource.Resource {
 	}
 
 	for k, v := range service.Metadata {
-		attrs = append(attrs, attribute.String(k, v))
+		attrs = append(attrs, k.OTEL().String(v))
 	}
 
 	return resource.NewWithAttributes(semconv.SchemaURL, attrs...)
@@ -242,113 +242,4 @@ func (l *LogrAdaptor) WithValues(keysAndValues ...interface{}) logr.LogSink {
 
 func (l *LogrAdaptor) WithName(name string) logr.LogSink {
 	return &LogrAdaptor{inner: l.inner.With("name", name)}
-}
-
-// OpenTelemetry 1.23 semantic convention
-const (
-	HTTPRequestMethodKey      = attribute.Key("http.request.method")
-	HTTPResponseStatusCodeKey = attribute.Key("http.response.status_code")
-	HTTPUrlPathKey            = attribute.Key("url.path")
-	HTTPUrlFullKey            = attribute.Key("url.full")
-	ClientAddrKey             = attribute.Key("client.address")
-	ClientPortKey             = attribute.Key("client.port")
-	ServerAddrKey             = attribute.Key("server.address")
-	ServerPortKey             = attribute.Key("server.port")
-	HTTPRequestBodySizeKey    = attribute.Key("http.request.body.size")
-	HTTPResponseBodySizeKey   = attribute.Key("http.response.body.size")
-	SpanKindKey               = attribute.Key("span.kind")
-	SpanNameKey               = attribute.Key("span.name")
-	StatusCodeKey             = attribute.Key("status.code")
-	SourceKey                 = attribute.Key("source")
-	ServiceKey                = attribute.Key("service")
-	InstanceKey               = attribute.Key("instance")
-	ClientKey                 = attribute.Key("client")
-	ClientNamespaceKey        = attribute.Key("client_service_namespace")
-	ServerKey                 = attribute.Key("server")
-	ServerNamespaceKey        = attribute.Key("server_service_namespace")
-	ConnectionTypeKey         = attribute.Key("connection_type")
-)
-
-func HTTPRequestMethod(val string) attribute.KeyValue {
-	return HTTPRequestMethodKey.String(val)
-}
-
-func HTTPResponseStatusCode(val int) attribute.KeyValue {
-	return HTTPResponseStatusCodeKey.Int(val)
-}
-
-func HTTPUrlPath(val string) attribute.KeyValue {
-	return HTTPUrlPathKey.String(val)
-}
-
-func HTTPUrlFull(val string) attribute.KeyValue {
-	return HTTPUrlFullKey.String(val)
-}
-
-func ClientAddr(val string) attribute.KeyValue {
-	return ClientAddrKey.String(val)
-}
-
-func ClientPort(val int) attribute.KeyValue {
-	return ClientPortKey.Int(val)
-}
-
-func ServerAddr(val string) attribute.KeyValue {
-	return ServerAddrKey.String(val)
-}
-
-func ServerPort(val int) attribute.KeyValue {
-	return ServerPortKey.Int(val)
-}
-
-func HTTPRequestBodySize(val int) attribute.KeyValue {
-	return HTTPRequestBodySizeKey.Int(val)
-}
-
-func HTTPResponseBodySize(val int) attribute.KeyValue {
-	return HTTPResponseBodySizeKey.Int(val)
-}
-
-func SpanKindMetric(val string) attribute.KeyValue {
-	return SpanKindKey.String(val)
-}
-
-func SpanNameMetric(val string) attribute.KeyValue {
-	return SpanNameKey.String(val)
-}
-
-func SourceMetric(val string) attribute.KeyValue {
-	return SourceKey.String(val)
-}
-
-func ServiceMetric(val string) attribute.KeyValue {
-	return ServiceKey.String(val)
-}
-
-func StatusCodeMetric(val int) attribute.KeyValue {
-	return StatusCodeKey.Int(val)
-}
-
-func ServiceInstanceMetric(val string) attribute.KeyValue {
-	return InstanceKey.String(val)
-}
-
-func ClientMetric(val string) attribute.KeyValue {
-	return ClientKey.String(val)
-}
-
-func ClientNamespaceMetric(val string) attribute.KeyValue {
-	return ClientNamespaceKey.String(val)
-}
-
-func ServerMetric(val string) attribute.KeyValue {
-	return ServerKey.String(val)
-}
-
-func ServerNamespaceMetric(val string) attribute.KeyValue {
-	return ServerNamespaceKey.String(val)
-}
-
-func ConnectionTypeMetric(val string) attribute.KeyValue {
-	return ConnectionTypeKey.String(val)
 }

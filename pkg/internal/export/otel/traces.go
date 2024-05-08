@@ -29,7 +29,7 @@ func tlog() *slog.Logger {
 	return slog.With("component", "otel.TracesReporter")
 }
 
-const reporterName = "github.com/grafana/beyla"
+const ReporterName = "github.com/grafana/beyla"
 
 type TracesConfig struct {
 	CommonEndpoint string `yaml:"-" env:"OTEL_EXPORTER_OTLP_ENDPOINT"`
@@ -296,7 +296,23 @@ func SpanKindString(span *request.Span) string {
 	return "SPAN_KIND_INTERNAL"
 }
 
-func TraceAttributes(span *request.Span) []attribute.KeyValue {
+func SpanHost(span *request.Span) string {
+	if span.HostName != "" {
+		return span.HostName
+	}
+
+	return span.Host
+}
+
+func SpanPeer(span *request.Span) string {
+	if span.PeerName != "" {
+		return span.PeerName
+	}
+
+	return span.Peer
+}
+
+func traceAttributes(span *request.Span) []attribute.KeyValue {
 	var attrs []attribute.KeyValue
 
 	switch span.Type {
@@ -383,7 +399,7 @@ func TraceName(span *request.Span) string {
 	return ""
 }
 
-func SpanKind(span *request.Span) trace2.SpanKind {
+func spanKind(span *request.Span) trace2.SpanKind {
 	switch span.Type {
 	case request.EventTypeHTTP, request.EventTypeGRPC:
 		return trace2.SpanKindServer
@@ -403,7 +419,7 @@ func HandleTraceparent(parentCtx context.Context, span *request.Span) context.Co
 	return parentCtx
 }
 
-func SpanStartTime(t request.Timings) time.Time {
+func spanStartTime(t request.Timings) time.Time {
 	realStart := t.RequestStart
 	if t.Start.Before(realStart) {
 		realStart = t.Start
@@ -415,7 +431,7 @@ func (r *TracesReporter) makeSpan(parentCtx context.Context, tracer trace2.Trace
 	t := span.Timings()
 
 	parentCtx = HandleTraceparent(parentCtx, span)
-	realStart := SpanStartTime(t)
+	realStart := spanStartTime(t)
 	hasSubspans := t.Start.After(realStart)
 
 	if !hasSubspans {
@@ -426,8 +442,8 @@ func (r *TracesReporter) makeSpan(parentCtx context.Context, tracer trace2.Trace
 	// Create a parent span for the whole request session
 	ctx, sp := tracer.Start(parentCtx, TraceName(span),
 		trace2.WithTimestamp(realStart),
-		trace2.WithSpanKind(SpanKind(span)),
-		trace2.WithAttributes(TraceAttributes(span)...),
+		trace2.WithSpanKind(spanKind(span)),
+		trace2.WithAttributes(traceAttributes(span)...),
 	)
 
 	sp.SetStatus(SpanStatusCode(span), "")
@@ -497,7 +513,7 @@ func (r *TracesReporter) newTracers(service svc.ID) (*Tracers, error) {
 			trace.WithIDGenerator(&BeylaIDGenerator{}),
 		),
 	}
-	tracers.tracer = tracers.provider.Tracer(reporterName)
+	tracers.tracer = tracers.provider.Tracer(ReporterName)
 	return &tracers, nil
 }
 

@@ -721,7 +721,7 @@ func testNestedHTTPTracesKProbes(t *testing.T) {
 		traces := tq.FindBySpan(jaeger.Tag{Key: "url.path", Type: "string", Value: "/dist"})
 		require.Len(t, traces, 1)
 		trace = traces[0]
-	}, test.Interval(100*time.Millisecond))
+	}, test.Interval(500*time.Millisecond))
 
 	// Check the information of the rust parent span
 	res := trace.FindByOperationName("GET /dist")

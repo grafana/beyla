@@ -445,7 +445,7 @@ func (mr *MetricsReporter) newMetricSet(service svc.ID) (*Metrics, error) {
 	// time units for HTTP and GRPC durations are in seconds, according to the OTEL specification:
 	// https://github.com/open-telemetry/opentelemetry-specification/tree/main/specification/metrics/semantic_conventions
 	// TODO: set ExplicitBucketBoundaries here and in prometheus from the previous specification
-	meter := m.provider.Meter(reporterName)
+	meter := m.provider.Meter(ReporterName)
 	var err error
 	if mr.cfg.OTelMetricsEnabled() {
 		err = mr.setupOtelMeters(&m, meter)
@@ -560,7 +560,7 @@ func otelHistogramConfig(metricName string, buckets []float64, useExponentialHis
 		return metric.NewView(
 			metric.Instrument{
 				Name:  metricName,
-				Scope: instrumentation.Scope{Name: reporterName},
+				Scope: instrumentation.Scope{Name: ReporterName},
 			},
 			metric.Stream{
 				Name: metricName,
@@ -573,7 +573,7 @@ func otelHistogramConfig(metricName string, buckets []float64, useExponentialHis
 	return metric.NewView(
 		metric.Instrument{
 			Name:  metricName,
-			Scope: instrumentation.Scope{Name: reporterName},
+			Scope: instrumentation.Scope{Name: ReporterName},
 		},
 		metric.Stream{
 			Name: metricName,

@@ -30,10 +30,10 @@ jobs:
         uses: docker/metadata-action@v5.5.1
         with:
           images: "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
-          tags: |
-            type=schedule,pattern={{date 'YYYYMMDD-hhmm'}}
-            type=ref,event=branch
 
+      - name: Get current timestamp
+        id: timestamp
+        run: echo "::set-output name=ts::$(date +'%Y%m%d%H%M')"
       - name: Build and push Docker image
         id: push
         uses: docker/build-push-action@v5.3.0
@@ -41,5 +41,8 @@ jobs:
           context: .
           file: ./generator.Dockerfile
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
+          platforms: linux/amd64,linux/arm64
           labels: ${{ steps.meta.outputs.labels }}
+          tags: |
+            "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.timestamp.outputs.ts }}"
+            "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:main"

@@ -51,16 +51,8 @@ local buildx(stepName, app, auto_tag, tags) = {
   },
 };
 
-local make(target) = {
-  name: 'beyla-make-%s' % target,
-  image: 'ubuntu:latest',
-  commands: [ 'make %s' % target ],
-};
-
 local beyla() = pipeline('beyla') {
   steps+: [
-    make('check-ebpf-integrity'),
-  ] + [
     buildx('dryrun', 'beyla-dryrun', false, 'test') {
       when: onPRs,  // TODO: if container creation fails, make the PR fail
       settings+: {

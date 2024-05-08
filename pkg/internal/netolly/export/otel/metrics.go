@@ -15,16 +15,15 @@ import (
 	"go.opentelemetry.io/otel/sdk/resource"
 	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 
-	"github.com/grafana/beyla/pkg/internal/export/attr"
+	bmetric "github.com/grafana/beyla/pkg/internal/export/metric"
 	"github.com/grafana/beyla/pkg/internal/export/otel"
-	"github.com/grafana/beyla/pkg/internal/metricname"
 	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
-	"github.com/grafana/beyla/pkg/internal/netolly/export"
+	"github.com/grafana/beyla/pkg/internal/pipe/global"
 )
 
 type MetricsConfig struct {
-	Metrics           *otel.MetricsConfig
-	AllowedAttributes []string
+	Metrics            *otel.MetricsConfig
+	AttributeSelectors bmetric.Selection
 }
 
 func (mc MetricsConfig) Enabled() bool {
@@ -63,7 +62,7 @@ type metricsExporter struct {
 	metrics *Expirer
 }
 
-func MetricsExporterProvider(cfg *MetricsConfig) (pipe.FinalFunc[[]*ebpf.Record], error) {
+func MetricsExporterProvider(ctxInfo *global.ContextInfo, cfg *MetricsConfig) (pipe.FinalFunc[[]*ebpf.Record], error) {
 	if !cfg.Enabled() {
 		// This node is not going to be instantiated. Let the pipes library just ignore it.
 		return pipe.IgnoreFinal[[]*ebpf.Record](), nil
@@ -83,16 +82,19 @@ func MetricsExporterProvider(cfg *MetricsConfig) (pipe.FinalFunc[[]*ebpf.Record]
 		return nil, err
 	}
 
-	attrs := attr.OpenTelemetryGetters(export.NamedGetters, cfg.AllowedAttributes)
-	if len(attrs) == 0 {
-		return nil, fmt.Errorf("network metrics OpenTelemetry exporter: no valid"+
-			" attributes.allow defined for metric %s", metricname.PromBeylaNetworkFlows)
+	attrProv, err := bmetric.NewAttrSelector(ctxInfo.MetricAttributeGroups, cfg.AttributeSelectors)
+	if err != nil {
+		return nil, fmt.Errorf("network OTEL exporter attributes enable: %w", err)
 	}
+	attrs := bmetric.OpenTelemetryGetters(
+		ebpf.RecordGetters,
+		attrProv.For(bmetric.BeylaNetworkFlow))
+
 	expirer := NewExpirer(attrs, cfg.Metrics.TTL)
 	ebpfEvents := provider.Meter("network_ebpf_events")
 
 	_, err = ebpfEvents.Int64ObservableCounter(
-		metricname.OTELBeylaNetworkFlows,
+		bmetric.BeylaNetworkFlow.OTEL,
 		metric2.WithDescription("total bytes_sent value of network flows observed by probe since its launch"),
 		metric2.WithUnit("{bytes}"),
 		metric2.WithInt64Callback(expirer.Collect),
@@ -101,7 +103,7 @@ func MetricsExporterProvider(cfg *MetricsConfig) (pipe.FinalFunc[[]*ebpf.Record]
 		log.Error("creating observable counter", "error", err)
 		return nil, err
 	}
-	log.Debug("restricting attributes not in this list", "attributes", cfg.AllowedAttributes)
+	log.Debug("restricting attributes not in this list", "attributes", cfg.AttributeSelectors)
 	return (&metricsExporter{
 		metrics: expirer,
 	}).Do, nil

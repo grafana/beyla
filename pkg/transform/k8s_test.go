@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"github.com/grafana/beyla/pkg/internal/export/metric/attr"
 	"github.com/grafana/beyla/pkg/internal/kube"
 	"github.com/grafana/beyla/pkg/internal/request"
 	"github.com/grafana/beyla/pkg/internal/svc"
@@ -55,7 +56,7 @@ func TestDecoration(t *testing.T) {
 		require.Len(t, deco, 1)
 		assert.Equal(t, "the-ns", deco[0].ServiceID.Namespace)
 		assert.Equal(t, "deployment-12", deco[0].ServiceID.Name)
-		assert.Equal(t, map[string]string{
+		assert.Equal(t, map[attr.Name]string{
 			"k8s.node.name":       "the-node",
 			"k8s.namespace.name":  "the-ns",
 			"k8s.pod.name":        "pod-12",
@@ -72,7 +73,7 @@ func TestDecoration(t *testing.T) {
 		require.Len(t, deco, 1)
 		assert.Equal(t, "the-ns", deco[0].ServiceID.Namespace)
 		assert.Equal(t, "rs-34", deco[0].ServiceID.Name)
-		assert.Equal(t, map[string]string{
+		assert.Equal(t, map[attr.Name]string{
 			"k8s.node.name":       "the-node",
 			"k8s.namespace.name":  "the-ns",
 			"k8s.replicaset.name": "rs-34",
@@ -89,7 +90,7 @@ func TestDecoration(t *testing.T) {
 		require.Len(t, deco, 1)
 		assert.Equal(t, "the-ns", deco[0].ServiceID.Namespace)
 		assert.Equal(t, "the-pod", deco[0].ServiceID.Name)
-		assert.Equal(t, map[string]string{
+		assert.Equal(t, map[attr.Name]string{
 			"k8s.node.name":      "the-node",
 			"k8s.namespace.name": "the-ns",
 			"k8s.pod.name":       "the-pod",
@@ -115,7 +116,7 @@ func TestDecoration(t *testing.T) {
 		require.Len(t, deco, 1)
 		assert.Equal(t, "tralara", deco[0].ServiceID.Namespace)
 		assert.Equal(t, "tralari", deco[0].ServiceID.Name)
-		assert.Equal(t, map[string]string{
+		assert.Equal(t, map[attr.Name]string{
 			"k8s.node.name":       "the-node",
 			"k8s.namespace.name":  "the-ns",
 			"k8s.pod.name":        "pod-12",

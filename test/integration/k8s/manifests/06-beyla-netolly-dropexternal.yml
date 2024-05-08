@@ -9,8 +9,9 @@ data:
         enable: true
         cluster_name: my-kube
         drop_external: true
-      allow:
+      select:
         beyla.network.flow.bytes:
+          include:
           - src.name
           - dst.name
           - k8s.src.owner.name

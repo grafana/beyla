@@ -12,10 +12,10 @@ import (
 	"github.com/stretchr/testify/require"
 
 	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
+	"github.com/grafana/beyla/pkg/internal/export/metric"
 	"github.com/grafana/beyla/pkg/internal/export/otel"
 	"github.com/grafana/beyla/pkg/internal/export/prom"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
-	"github.com/grafana/beyla/pkg/internal/metricname"
 	"github.com/grafana/beyla/pkg/internal/netolly/transform/cidr"
 	"github.com/grafana/beyla/pkg/internal/traces"
 	"github.com/grafana/beyla/pkg/transform"
@@ -43,8 +43,10 @@ attributes:
     informers_sync_timeout: 30s
   instance_id:
     dns: true
-  allow:
-    global: ["foo", "bar"]
+  select:
+    beyla.network.flow:
+      include: ["foo", "bar"]
+      exclude: ["baz", "bae"]
 network:
   enable: true
   cidrs:
@@ -150,8 +152,11 @@ network:
 				Enable:               transform.EnabledTrue,
 				InformersSyncTimeout: 30 * time.Second,
 			},
-			Allow: map[metricname.Normal][]string{
-				"global": {"foo", "bar"},
+			Select: metric.Selection{
+				metric.BeylaNetworkFlow.Section: metric.InclusionLists{
+					Include: []string{"foo", "bar"},
+					Exclude: []string{"baz", "bae"},
+				},
 			},
 		},
 		Routes: &transform.RoutesConfig{},

@@ -2,6 +2,7 @@ package global
 
 import (
 	"github.com/grafana/beyla/pkg/internal/connector"
+	"github.com/grafana/beyla/pkg/internal/export/metric"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	kube2 "github.com/grafana/beyla/pkg/internal/kube"
 	"github.com/grafana/beyla/pkg/internal/transform/kube"
@@ -21,6 +22,9 @@ type ContextInfo struct {
 	Metrics imetrics.Reporter
 	// Prometheus connection manager to coordinate metrics exposition from diverse nodes
 	Prometheus *connector.PrometheusManager
+	// MetricAttributeGroups will selectively enable or disable diverse groups of attributes
+	// in the metric exporters
+	MetricAttributeGroups metric.AttrGroups
 }
 
 // AppO11y stores context information that is only required for application observability.

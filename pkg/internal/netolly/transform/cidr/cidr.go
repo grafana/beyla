@@ -8,12 +8,8 @@ import (
 	"github.com/mariomac/pipes/pipe"
 	"github.com/yl2chen/cidranger"
 
+	"github.com/grafana/beyla/pkg/internal/export/metric/attr"
 	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
-)
-
-const (
-	attrSrcCIDR = "src.cidr"
-	attrDstCIDR = "dst.cidr"
 )
 
 func glog() *slog.Logger {
@@ -87,12 +83,12 @@ func (g *ipGrouper) CIDR(ip net.IP) string {
 
 func (g *ipGrouper) decorate(flow *ebpf.Record) {
 	if flow.Attrs.Metadata == nil {
-		flow.Attrs.Metadata = map[string]string{}
+		flow.Attrs.Metadata = map[attr.Name]string{}
 	}
 	if srcCIDR := g.CIDR(flow.Id.SrcIP().IP()); srcCIDR != "" {
-		flow.Attrs.Metadata[attrSrcCIDR] = srcCIDR
+		flow.Attrs.Metadata[attr.SrcCIDR] = srcCIDR
 	}
 	if dstCIDR := g.CIDR(flow.Id.DstIP().IP()); dstCIDR != "" {
-		flow.Attrs.Metadata[attrDstCIDR] = dstCIDR
+		flow.Attrs.Metadata[attr.DstCIDR] = dstCIDR
 	}
 }

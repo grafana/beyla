@@ -30,7 +30,7 @@ func (p PrometheusConfig) Enabled() bool {
 type counterCollector interface {
 	prometheus.Collector
 	UpdateTime()
-	WithLabelValues(...string) prometheus.Counter
+	WithLabelValues(...string) prometheus.Metric
 }
 
 type metricsReporter struct {
@@ -95,7 +95,7 @@ func newReporter(
 		flowBytes: NewExpirer(prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: metric.BeylaNetworkFlow.Prom,
 			Help: "bytes submitted from a source network endpoint to a destination network endpoint",
-		}, labelNames), cfg.Config.TTL),
+		}, labelNames).MetricVec, cfg.Config.TTL),
 	}
 
 	mr.promConnect.Register(cfg.Config.Port, cfg.Config.Path, mr.flowBytes)
@@ -118,5 +118,5 @@ func (r *metricsReporter) observe(flow *ebpf.Record) {
 	for _, attr := range r.attrs {
 		labelValues = append(labelValues, attr.Get(flow))
 	}
-	r.flowBytes.WithLabelValues(labelValues...).Add(float64(flow.Metrics.Bytes))
+	r.flowBytes.WithLabelValues(labelValues...).(prometheus.Counter).Add(float64(flow.Metrics.Bytes))
 }

@@ -176,7 +176,7 @@ func getTracesExporter(ctx context.Context, cfg TracesConfig, ctxInfo *global.Co
 		config := factory.CreateDefaultConfig().(*otlphttpexporter.Config)
 		config.QueueConfig.Enabled = false
 		config.ClientConfig = confighttp.ClientConfig{
-			Endpoint: endpoint.Host,
+			Endpoint: endpoint.String(),
 			TLSSetting: configtls.ClientConfig{
 				Insecure:           opts.Insecure,
 				InsecureSkipVerify: cfg.InsecureSkipVerify,
@@ -207,7 +207,7 @@ func getTracesExporter(ctx context.Context, cfg TracesConfig, ctxInfo *global.Co
 		config := factory.CreateDefaultConfig().(*otlpexporter.Config)
 		config.QueueConfig.Enabled = false
 		config.ClientConfig = configgrpc.ClientConfig{
-			Endpoint: endpoint.Host,
+			Endpoint: endpoint.String(),
 			TLSSetting: configtls.ClientConfig{
 				Insecure:           opts.Insecure,
 				InsecureSkipVerify: cfg.InsecureSkipVerify,

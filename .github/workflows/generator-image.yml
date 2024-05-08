@@ -45,4 +45,4 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           tags: |
             "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.timestamp.outputs.ts }}"
-            "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
+            "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:main"

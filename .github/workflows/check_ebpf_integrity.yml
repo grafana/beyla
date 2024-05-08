@@ -9,8 +9,9 @@ on:
 
 jobs:
   test:
-    name: test
+    name: "Check eBPF code integrity"
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v3
       - name: "Check eBPF code integrity"
         run: make check-ebpf-integrity

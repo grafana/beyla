@@ -1,12 +1,17 @@
 package otel
 
 import (
+	"context"
 	"encoding/binary"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/mariomac/guara/pkg/test"
+	"github.com/mariomac/pipes/pipe"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/pdata/pcommon"
@@ -17,6 +22,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/grafana/beyla/pkg/internal/imetrics"
+	"github.com/grafana/beyla/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/pkg/internal/request"
 )
 
@@ -502,161 +508,160 @@ func TestCodeToStatusCode(t *testing.T) {
 	})
 }
 
-// func TestTraces_InternalInstrumentation(t *testing.T) {
-// 	defer restoreEnvAfterExecution()()
-// 	// fake OTEL collector server
-// 	coll := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, _ *http.Request) {
-// 		rw.WriteHeader(http.StatusOK)
-// 	}))
-// 	defer coll.Close()
-// 	// Wait for the HTTP server to be alive
-// 	test.Eventually(t, timeout, func(t require.TestingT) {
-// 		resp, err := coll.Client().Get(coll.URL + "/foo")
-// 		require.NoError(t, err)
-// 		assert.Equal(t, http.StatusOK, resp.StatusCode)
-// 	})
+func TestTraces_InternalInstrumentation(t *testing.T) {
+	defer restoreEnvAfterExecution()()
+	// fake OTEL collector server
+	coll := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, _ *http.Request) {
+		rw.WriteHeader(http.StatusOK)
+	}))
+	defer coll.Close()
+	// Wait for the HTTP server to be alive
+	test.Eventually(t, timeout, func(t require.TestingT) {
+		resp, err := coll.Client().Get(coll.URL + "/foo")
+		require.NoError(t, err)
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+	})
+	builder := pipe.NewBuilder(&testPipeline{})
+	// create a simple dummy graph to send data to the Metrics reporter, which will send
+	// metrics to the fake collector
+	sendData := make(chan struct{})
+	pipe.AddStart(builder, func(impl *testPipeline) *pipe.Start[[]request.Span] {
+		return &impl.inputNode
+	}, func(out chan<- []request.Span) {
+		// on every send data signal, the traces generator sends a dummy trace
+		for range sendData {
+			out <- []request.Span{{Type: request.EventTypeHTTP}}
+		}
+	})
+	internalTraces := &fakeInternalTraces{}
+	pipe.AddFinalProvider(builder, func(impl *testPipeline) *pipe.Final[[]request.Span] {
+		return &impl.exporter
+	}, TracesReceiver(context.Background(),
+		TracesConfig{
+			CommonEndpoint:    coll.URL,
+			BatchTimeout:      10 * time.Millisecond,
+			ExportTimeout:     5 * time.Second,
+			ReportersCacheLen: 16,
+		},
+		&global.ContextInfo{
+			Metrics: internalTraces,
+		}))
+	graph, err := builder.Build()
+	require.NoError(t, err)
 
-// 	// create a simple dummy graph to send data to the Metrics reporter, which will send
-// 	// metrics to the fake collector
-// 	builder := pipe.NewBuilder(&testPipeline{})
-// 	sendData := make(chan struct{})
-// 	pipe.AddStart(builder, func(impl *testPipeline) *pipe.Start[[]request.Span] {
-// 		return &impl.inputNode
-// 	}, func(out chan<- []request.Span) {
-// 		// on every send data signal, the traces generator sends a dummy trace
-// 		for range sendData {
-// 			out <- []request.Span{{Type: request.EventTypeHTTP}}
-// 		}
-// 	})
-// 	internalTraces := &fakeInternalTraces{}
-// 	pipe.AddFinalProvider(builder, func(impl *testPipeline) *pipe.Final[[]request.Span] {
-// 		return &impl.exporter
-// 	}, ReportTraces(context.Background(),
-// 		&TracesConfig{
-// 			CommonEndpoint:    coll.URL,
-// 			BatchTimeout:      10 * time.Millisecond,
-// 			ExportTimeout:     5 * time.Second,
-// 			ReportersCacheLen: 16,
-// 		},
-// 		&global.ContextInfo{
-// 			Metrics: internalTraces,
-// 		}))
-// 	graph, err := builder.Build()
-// 	require.NoError(t, err)
+	graph.Start()
 
-// 	graph.Start()
+	sendData <- struct{}{}
+	var previousSum, previousCount int
+	test.Eventually(t, timeout, func(t require.TestingT) {
+		// we can't guarantee the number of calls at test time, but they must be at least 1
+		previousSum, previousCount = internalTraces.SumCount()
+		assert.LessOrEqual(t, 1, previousSum)
+		assert.LessOrEqual(t, 1, previousCount)
+		// the sum of metrics should be larger or equal than the number of calls (1 call : n metrics)
+		assert.LessOrEqual(t, previousCount, previousSum)
+		// no call should return error
+		assert.Empty(t, internalTraces.Errors())
+	})
 
-// 	sendData <- struct{}{}
-// 	var previousSum, previousCount int
-// 	test.Eventually(t, timeout, func(t require.TestingT) {
-// 		// we can't guarantee the number of calls at test time, but they must be at least 1
-// 		previousSum, previousCount = internalTraces.SumCount()
-// 		assert.LessOrEqual(t, 1, previousSum)
-// 		assert.LessOrEqual(t, 1, previousCount)
-// 		// the sum of metrics should be larger or equal than the number of calls (1 call : n metrics)
-// 		assert.LessOrEqual(t, previousCount, previousSum)
-// 		// no call should return error
-// 		assert.Empty(t, internalTraces.Errors())
-// 	})
+	sendData <- struct{}{}
+	// after some time, the number of calls should be higher than before
+	test.Eventually(t, timeout, func(t require.TestingT) {
+		sum, count := internalTraces.SumCount()
+		assert.LessOrEqual(t, previousSum, sum)
+		assert.LessOrEqual(t, previousCount, count)
+		assert.LessOrEqual(t, count, sum)
+		// no call should return error
+		assert.Zero(t, internalTraces.Errors())
+	})
 
-// 	sendData <- struct{}{}
-// 	// after some time, the number of calls should be higher than before
-// 	test.Eventually(t, timeout, func(t require.TestingT) {
-// 		sum, count := internalTraces.SumCount()
-// 		assert.LessOrEqual(t, previousSum, sum)
-// 		assert.LessOrEqual(t, previousCount, count)
-// 		assert.LessOrEqual(t, count, sum)
-// 		// no call should return error
-// 		assert.Zero(t, internalTraces.Errors())
-// 	})
+	// collector starts failing, so errors should be received
+	coll.CloseClientConnections()
+	coll.Close()
+	// Wait for the HTTP server to be stopped
+	test.Eventually(t, timeout, func(t require.TestingT) {
+		_, err := coll.Client().Get(coll.URL + "/foo")
+		require.Error(t, err)
+	})
 
-// 	// collector starts failing, so errors should be received
-// 	coll.CloseClientConnections()
-// 	coll.Close()
-// 	// Wait for the HTTP server to be stopped
-// 	test.Eventually(t, timeout, func(t require.TestingT) {
-// 		_, err := coll.Client().Get(coll.URL + "/foo")
-// 		require.Error(t, err)
-// 	})
+	var previousErrCount int
+	sendData <- struct{}{}
+	test.Eventually(t, timeout, func(t require.TestingT) {
+		previousSum, previousCount = internalTraces.SumCount()
+		// calls should start returning errors
+		previousErrCount = internalTraces.Errors()
+		assert.NotZero(t, previousErrCount)
+	})
 
-// 	var previousErrCount int
-// 	sendData <- struct{}{}
-// 	test.Eventually(t, timeout, func(t require.TestingT) {
-// 		previousSum, previousCount = internalTraces.SumCount()
-// 		// calls should start returning errors
-// 		previousErrCount = internalTraces.Errors()
-// 		assert.NotZero(t, previousErrCount)
-// 	})
+	// after a while, metrics sum should not increase but errors do
+	sendData <- struct{}{}
+	test.Eventually(t, timeout, func(t require.TestingT) {
+		sum, count := internalTraces.SumCount()
+		assert.Equal(t, previousSum, sum)
+		assert.Equal(t, previousCount, count)
+		assert.Less(t, previousErrCount, internalTraces.Errors())
+	})
+}
 
-// 	// after a while, metrics sum should not increase but errors do
-// 	sendData <- struct{}{}
-// 	test.Eventually(t, timeout, func(t require.TestingT) {
-// 		sum, count := internalTraces.SumCount()
-// 		assert.Equal(t, previousSum, sum)
-// 		assert.Equal(t, previousCount, count)
-// 		assert.Less(t, previousErrCount, internalTraces.Errors())
-// 	})
-// }
+func TestTraces_InternalInstrumentationSampling(t *testing.T) {
+	defer restoreEnvAfterExecution()()
+	// fake OTEL collector server
+	coll := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, _ *http.Request) {
+		rw.WriteHeader(http.StatusOK)
+	}))
+	defer coll.Close()
+	// Wait for the HTTP server to be alive
+	test.Eventually(t, timeout, func(t require.TestingT) {
+		resp, err := coll.Client().Get(coll.URL + "/foo")
+		require.NoError(t, err)
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+	})
 
-// func TestTraces_InternalInstrumentationSampling(t *testing.T) {
-// 	defer restoreEnvAfterExecution()()
-// 	// fake OTEL collector server
-// 	coll := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, _ *http.Request) {
-// 		rw.WriteHeader(http.StatusOK)
-// 	}))
-// 	defer coll.Close()
-// 	// Wait for the HTTP server to be alive
-// 	test.Eventually(t, timeout, func(t require.TestingT) {
-// 		resp, err := coll.Client().Get(coll.URL + "/foo")
-// 		require.NoError(t, err)
-// 		assert.Equal(t, http.StatusOK, resp.StatusCode)
-// 	})
+	builder := pipe.NewBuilder(&testPipeline{})
+	// create a simple dummy graph to send data to the Metrics reporter, which will send
+	// metrics to the fake collector
+	sendData := make(chan struct{})
+	pipe.AddStart(builder, func(impl *testPipeline) *pipe.Start[[]request.Span] {
+		return &impl.inputNode
+	}, func(out chan<- []request.Span) { // on every send data signal, the traces generator sends a dummy trace
+		for range sendData {
+			out <- []request.Span{{Type: request.EventTypeHTTP}}
+		}
+	})
+	internalTraces := &fakeInternalTraces{}
+	pipe.AddFinalProvider(builder, func(impl *testPipeline) *pipe.Final[[]request.Span] {
+		return &impl.exporter
+	}, TracesReceiver(context.Background(),
+		TracesConfig{
+			CommonEndpoint:    coll.URL,
+			BatchTimeout:      10 * time.Millisecond,
+			ExportTimeout:     5 * time.Second,
+			Sampler:           Sampler{Name: "always_off"}, // we won't send any trace
+			ReportersCacheLen: 16,
+		},
+		&global.ContextInfo{
+			Metrics: internalTraces,
+		}))
 
-// 	builder := pipe.NewBuilder(&testPipeline{})
-// 	// create a simple dummy graph to send data to the Metrics reporter, which will send
-// 	// metrics to the fake collector
-// 	sendData := make(chan struct{})
-// 	pipe.AddStart(builder, func(impl *testPipeline) *pipe.Start[[]request.Span] {
-// 		return &impl.inputNode
-// 	}, func(out chan<- []request.Span) { // on every send data signal, the traces generator sends a dummy trace
-// 		for range sendData {
-// 			out <- []request.Span{{Type: request.EventTypeHTTP}}
-// 		}
-// 	})
-// 	internalTraces := &fakeInternalTraces{}
-// 	pipe.AddFinalProvider(builder, func(impl *testPipeline) *pipe.Final[[]request.Span] {
-// 		return &impl.exporter
-// 	}, ReportTraces(context.Background(),
-// 		&TracesConfig{
-// 			CommonEndpoint:    coll.URL,
-// 			BatchTimeout:      10 * time.Millisecond,
-// 			ExportTimeout:     5 * time.Second,
-// 			Sampler:           Sampler{Name: "always_off"}, // we won't send any trace
-// 			ReportersCacheLen: 16,
-// 		},
-// 		&global.ContextInfo{
-// 			Metrics: internalTraces,
-// 		}))
+	graph, err := builder.Build()
+	require.NoError(t, err)
 
-// 	graph, err := builder.Build()
-// 	require.NoError(t, err)
+	graph.Start()
 
-// 	graph.Start()
-
-// 	// Let's make 10 traces, none should be seen
-// 	for i := 0; i < 10; i++ {
-// 		sendData <- struct{}{}
-// 	}
-// 	var previousSum, previousCount int
-// 	test.Eventually(t, timeout, func(t require.TestingT) {
-// 		// we shouldn't see any data
-// 		previousSum, previousCount = internalTraces.SumCount()
-// 		assert.Equal(t, 0, previousSum)
-// 		assert.Equal(t, 0, previousCount)
-// 		// no call should return error
-// 		assert.Empty(t, internalTraces.Errors())
-// 	})
-// }
+	// Let's make 10 traces, none should be seen
+	for i := 0; i < 10; i++ {
+		sendData <- struct{}{}
+	}
+	var previousSum, previousCount int
+	test.Eventually(t, timeout, func(t require.TestingT) {
+		// we shouldn't see any data
+		previousSum, previousCount = internalTraces.SumCount()
+		assert.Equal(t, 0, previousSum)
+		assert.Equal(t, 0, previousCount)
+		// no call should return error
+		assert.Empty(t, internalTraces.Errors())
+	})
+}
 
 func TestTracesConfig_Enabled(t *testing.T) {
 	assert.True(t, TracesConfig{CommonEndpoint: "foo"}.Enabled())

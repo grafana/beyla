@@ -12,6 +12,7 @@ import (
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/config/configgrpc"
 	"go.opentelemetry.io/collector/config/confighttp"
+	"go.opentelemetry.io/collector/config/configopaque"
 	"go.opentelemetry.io/collector/config/configtelemetry"
 	"go.opentelemetry.io/collector/config/configtls"
 	"go.opentelemetry.io/collector/exporter"
@@ -158,13 +159,13 @@ func getTracesExporter(ctx context.Context, cfg TracesConfig, ctxInfo *global.Co
 		var t trace.SpanExporter
 		var err error
 
-		// if t, err = httpTracer(ctx, &cfg); err != nil {
-		// 	slog.Error("can't instantiate OTEL HTTP traces exporter", err)
-		// 	return nil, err
-		// }
 		opts, err := getHTTPTracesEndpointOptions(&cfg)
 		if err != nil {
 			slog.Error("can't get HTTP traces endpoint options", "error", err)
+			return nil, err
+		}
+		if t, err = httpTracer(ctx, opts); err != nil {
+			slog.Error("can't instantiate OTEL HTTP traces exporter", err)
 			return nil, err
 		}
 		endpoint, _, err := parseTracesEndpoint(&cfg)
@@ -181,21 +182,21 @@ func getTracesExporter(ctx context.Context, cfg TracesConfig, ctxInfo *global.Co
 				Insecure:           opts.Insecure,
 				InsecureSkipVerify: cfg.InsecureSkipVerify,
 			},
+			Headers: convertHeaders(opts.HTTPHeaders),
 		}
 		set := getTraceSettings(ctxInfo, cfg, t)
 		return factory.CreateTracesExporter(ctx, set, config)
 	case ProtocolGRPC:
+		slog.Debug("instantiating GRPC TracesReporter", "protocol", proto)
 		var t trace.SpanExporter
 		var err error
-
-		// slog.Debug("instantiating GRPC TracesReporter", "protocol", proto)
-		// if t, err = grpcTracer(ctx, &cfg); err != nil {
-		// 	slog.Error("can't instantiate OTEL GRPC traces exporter: %w", err)
-		// 	return nil, err
-		// }
 		opts, err := getGRPCTracesEndpointOptions(&cfg)
 		if err != nil {
 			slog.Error("can't get GRPC traces endpoint options", "error", err)
+			return nil, err
+		}
+		if t, err = grpcTracer(ctx, opts); err != nil {
+			slog.Error("can't instantiate OTEL GRPC traces exporter: %w", err)
 			return nil, err
 		}
 		endpoint, _, err := parseTracesEndpoint(&cfg)
@@ -367,24 +368,24 @@ func codeToStatusCode(code codes.Code) ptrace.StatusCode {
 	return ptrace.StatusCodeUnset
 }
 
-func httpTracer(ctx context.Context, cfg *TracesConfig) (*otlptrace.Exporter, error) {
-	topts, err := getHTTPTracesEndpointOptions(cfg)
-	if err != nil {
-		return nil, err
+func convertHeaders(headers map[string]string) map[string]configopaque.String {
+	opaqueHeaders := make(map[string]configopaque.String)
+	for key, value := range headers {
+		opaqueHeaders[key] = configopaque.String(value)
 	}
-	texp, err := otlptracehttp.New(ctx, topts.AsTraceHTTP()...)
+	return opaqueHeaders
+}
+
+func httpTracer(ctx context.Context, opts otlpOptions) (*otlptrace.Exporter, error) {
+	texp, err := otlptracehttp.New(ctx, opts.AsTraceHTTP()...)
 	if err != nil {
 		return nil, fmt.Errorf("creating HTTP trace exporter: %w", err)
 	}
 	return texp, nil
 }
 
-func grpcTracer(ctx context.Context, cfg *TracesConfig) (*otlptrace.Exporter, error) {
-	topts, err := getGRPCTracesEndpointOptions(cfg)
-	if err != nil {
-		return nil, err
-	}
-	texp, err := otlptracegrpc.New(ctx, topts.AsTraceGRPC()...)
+func grpcTracer(ctx context.Context, opts otlpOptions) (*otlptrace.Exporter, error) {
+	texp, err := otlptracegrpc.New(ctx, opts.AsTraceGRPC()...)
 	if err != nil {
 		return nil, fmt.Errorf("creating GRPC trace exporter: %w", err)
 	}
@@ -617,7 +618,7 @@ func getHTTPTracesEndpointOptions(cfg *TracesConfig) (otlpOptions, error) {
 		log.Debug("Specifying insecure connection", "scheme", murl.Scheme)
 		opts.Insecure = true
 	}
-	// If the value is set from the OTEL_EXPORTER_OTLP_ENDPOINT common property, we need to add /v1/metrics to the path
+	// If the value is set from the OTEL_EXPORTER_OTLP_ENDPOINT common property, we need to add /v1/traces to the path
 	// otherwise, we leave the path that is explicitly set by the user
 	opts.URLPath = murl.Path
 	if isCommon {

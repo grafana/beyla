@@ -20,6 +20,7 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 	"go.opentelemetry.io/otel/trace"
 
+	"github.com/grafana/beyla/pkg/internal/export/attributes"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/pkg/internal/request"
@@ -274,7 +275,9 @@ func TestTraces_InternalInstrumentation(t *testing.T) {
 		},
 		&global.ContextInfo{
 			Metrics: internalTraces,
-		}))
+		},
+		attributes.Selection{},
+	))
 	graph, err := builder.Build()
 	require.NoError(t, err)
 
@@ -370,7 +373,9 @@ func TestTraces_InternalInstrumentationSampling(t *testing.T) {
 		},
 		&global.ContextInfo{
 			Metrics: internalTraces,
-		}))
+		},
+		attributes.Selection{},
+	))
 
 	graph, err := builder.Build()
 	require.NoError(t, err)

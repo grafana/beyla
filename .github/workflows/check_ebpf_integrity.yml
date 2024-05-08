@@ -11,5 +11,6 @@ jobs:
   test:
     name: test
     runs-on: ubuntu-latest
-      - name: Check eBPF code integrity
+    steps:
+      - name: "Check eBPF code integrity"
         run: make check-ebpf-integrity

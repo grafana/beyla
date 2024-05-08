@@ -15,6 +15,7 @@ import (
 	"github.com/grafana/beyla/pkg/internal/export/metric"
 	"github.com/grafana/beyla/pkg/internal/export/otel"
 	"github.com/grafana/beyla/pkg/internal/export/prom"
+	"github.com/grafana/beyla/pkg/internal/filter"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/traces"
 	"github.com/grafana/beyla/pkg/services"
@@ -108,6 +109,8 @@ type Config struct {
 	// Grafana overrides some values of the otel.MetricsConfig and otel.TracesConfig below
 	// for a simpler submission of OTEL metrics to Grafana Cloud
 	Grafana otel.GrafanaConfig `yaml:"grafana"`
+
+	Filters filter.AttributesConfig `yaml:"filter"`
 
 	Attributes Attributes `yaml:"attributes"`
 	// Routes is an optional node. If not set, data will be directly forwarded to exporters.

@@ -2,12 +2,15 @@
 package prom
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
 	"net/url"
+	"strconv"
+	"strings"
 )
 
 var log = slog.With("component", "prom.Client")
@@ -55,4 +58,54 @@ func (c *Client) Query(promQL string) ([]Result, error) {
 		"status", qr.Status,
 		"resultType", qr.Data.ResultType)
 	return qr.Data.Result, nil
+}
+
+type ScrapedMetric struct {
+	Name   string
+	Value  float64
+	Labels map[string]string
+}
+
+// Scrape implements a simple, synchronous, validation-oriented (non-error-prone)
+// scrape of Prometheus metrics towards a /metrics HTTP endpoint
+func Scrape(metricsURL string) ([]ScrapedMetric, error) {
+	resp, err := http.Get(metricsURL)
+	if err != nil {
+		return nil, fmt.Errorf("scraping %s: %w", metricsURL, err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("%s returned %s", metricsURL, resp.Status)
+	}
+	var metrics []ScrapedMetric
+	scanner := bufio.NewScanner(resp.Body)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.HasPrefix(line, "#") || strings.TrimSpace(line) == "" {
+			continue
+		}
+		metrics = append(metrics, parseMetric(line))
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("reading response of %s: %w", metricsURL, err)
+	}
+	return metrics, nil
+}
+
+// parse metric assumes no escaped values for ",{} inside the label values
+func parseMetric(text string) ScrapedMetric {
+	split := strings.Split(text, "{")
+	name := split[0]
+	split = strings.Split(split[1], "} ")
+	labelsStr, valueStr := split[0], split[1]
+	value, _ := strconv.ParseFloat(valueStr, 64)
+	labels := map[string]string{}
+	for _, keyValStr := range strings.Split(labelsStr, ",") {
+		split := strings.Split(keyValStr, "=")
+		labels[split[0]] = strings.Trim(split[1], `"`)
+	}
+	return ScrapedMetric{
+		Name:   name,
+		Value:  value,
+		Labels: labels,
+	}
 }

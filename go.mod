@@ -12,6 +12,7 @@ require (
 	github.com/gavv/monotime v0.0.0-20190418164738-30dba4353424
 	github.com/gin-gonic/gin v1.9.1
 	github.com/go-logr/logr v1.4.1
+	github.com/gobwas/glob v0.2.3
 	github.com/goccy/go-json v0.10.2
 	github.com/google/uuid v1.4.0
 	github.com/gorilla/mux v1.8.1

@@ -9,7 +9,7 @@ import (
 	"github.com/hashicorp/golang-lru/v2/expirable"
 	"github.com/mariomac/pipes/pipe"
 
-	"github.com/grafana/beyla/pkg/internal/kube"
+	"github.com/grafana/beyla/pkg/internal/export/metric/attr"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/pkg/internal/request"
 	"github.com/grafana/beyla/pkg/internal/svc"
@@ -118,7 +118,7 @@ func (nr *NameResolver) cleanName(svc *svc.ID, ip, n string) string {
 	n = trimSuffixIgnoreCase(n, ".svc.cluster.local")
 	n = trimSuffixIgnoreCase(n, "."+svc.Namespace)
 
-	kubeNamespace, ok := svc.Metadata[kube.NamespaceName]
+	kubeNamespace, ok := svc.Metadata[attr.K8sNamespaceName]
 	if ok && kubeNamespace != "" && kubeNamespace != svc.Namespace {
 		n = trimSuffixIgnoreCase(n, "."+kubeNamespace)
 	}

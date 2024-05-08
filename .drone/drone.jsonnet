@@ -77,7 +77,6 @@ local beyla() = pipeline('beyla') {
   ],
 };
 
-// TODO: don't create images if unit tests nor integration tests pass
 [
   beyla(),
 ] + [

@@ -8,8 +8,11 @@ import (
 	"github.com/grafana/beyla/pkg/beyla"
 	"github.com/grafana/beyla/pkg/internal/export/alloy"
 	"github.com/grafana/beyla/pkg/internal/export/debug"
+	"github.com/grafana/beyla/pkg/internal/export/metric"
+	"github.com/grafana/beyla/pkg/internal/export/metric/attr"
 	"github.com/grafana/beyla/pkg/internal/export/otel"
 	"github.com/grafana/beyla/pkg/internal/export/prom"
+	"github.com/grafana/beyla/pkg/internal/filter"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/pkg/internal/request"
@@ -30,6 +33,8 @@ type nodesMap struct {
 
 	NameResolver pipe.Middle[[]request.Span, []request.Span]
 
+	AttributeFilter pipe.Middle[[]request.Span, []request.Span]
+
 	AlloyTraces pipe.Final[[]request.Span]
 	Metrics     pipe.Final[[]request.Span]
 	Traces      pipe.Final[[]request.Span]
@@ -45,7 +50,8 @@ func (n *nodesMap) Connect() {
 	n.TracesReader.SendTo(n.Routes)
 	n.Routes.SendTo(n.Kubernetes)
 	n.Kubernetes.SendTo(n.NameResolver)
-	n.NameResolver.SendTo(n.AlloyTraces, n.Metrics, n.Traces, n.Prometheus, n.Printer, n.Noop)
+	n.NameResolver.SendTo(n.AttributeFilter)
+	n.AttributeFilter.SendTo(n.AlloyTraces, n.Metrics, n.Traces, n.Prometheus, n.Printer, n.Noop)
 }
 
 // accessor functions to each field. Grouped here for code brevity during the pipeline build
@@ -53,6 +59,7 @@ func tracesReader(n *nodesMap) *pipe.Start[[]request.Span]                  { re
 func router(n *nodesMap) *pipe.Middle[[]request.Span, []request.Span]       { return &n.Routes }
 func kubernetes(n *nodesMap) *pipe.Middle[[]request.Span, []request.Span]   { return &n.Kubernetes }
 func nameResolver(n *nodesMap) *pipe.Middle[[]request.Span, []request.Span] { return &n.NameResolver }
+func attrFilter(n *nodesMap) *pipe.Middle[[]request.Span, []request.Span]   { return &n.AttributeFilter }
 func alloyTraces(n *nodesMap) *pipe.Final[[]request.Span]                   { return &n.AlloyTraces }
 func otelMetrics(n *nodesMap) *pipe.Final[[]request.Span]                   { return &n.Metrics }
 func otelTraces(n *nodesMap) *pipe.Final[[]request.Span]                    { return &n.Traces }
@@ -101,11 +108,12 @@ func newGraphBuilder(ctx context.Context, config *beyla.Config, ctxInfo *global.
 	pipe.AddMiddleProvider(gnb, router, transform.RoutesProvider(config.Routes))
 	pipe.AddMiddleProvider(gnb, kubernetes, transform.KubeDecoratorProvider(ctxInfo, &config.Attributes.Kubernetes))
 	pipe.AddMiddleProvider(gnb, nameResolver, transform.NameResolutionProvider(gb.ctxInfo, config.NameResolver))
+	pipe.AddMiddleProvider(gnb, attrFilter, filter.ByAttribute(config.Filters.Application, spanPtrPromGetters))
 	config.Metrics.Grafana = &gb.config.Grafana.OTLP
-	pipe.AddFinalProvider(gnb, otelMetrics, otel.ReportMetrics(ctx, &config.Metrics, gb.ctxInfo))
+	pipe.AddFinalProvider(gnb, otelMetrics, otel.ReportMetrics(ctx, gb.ctxInfo, &config.Metrics, config.Attributes.Select))
 	config.Traces.Grafana = &gb.config.Grafana.OTLP
-	pipe.AddFinalProvider(gnb, otelTraces, otel.ReportTraces(ctx, &config.Traces, gb.ctxInfo))
-	pipe.AddFinalProvider(gnb, prometheus, prom.PrometheusEndpoint(ctx, &config.Prometheus, gb.ctxInfo))
+	pipe.AddFinalProvider(gnb, otelTraces, otel.TracesReceiver(ctx, config.Traces, gb.ctxInfo))
+	pipe.AddFinalProvider(gnb, prometheus, prom.PrometheusEndpoint(ctx, gb.ctxInfo, &config.Prometheus, config.Attributes.Select))
 	pipe.AddFinalProvider(gnb, alloyTraces, alloy.TracesReceiver(ctx, &config.TracesReceiver))
 
 	pipe.AddFinalProvider(gnb, noop, debug.NoopNode(config.Noop))
@@ -141,4 +149,14 @@ func (i *Instrumenter) Run(ctx context.Context) {
 	go i.internalMetrics.Start(ctx)
 	i.graph.Start()
 	<-i.graph.Done()
+}
+
+// spanPtrPromGetters adapts the invocation of SpanPromGetters to work with a request.Span value
+// instead of a *request.Span pointer. This is a convenience method created to avoid having to
+// rewrite the pipeline types from []request.Span types to []*request.Span
+func spanPtrPromGetters(name attr.Name) (metric.Getter[request.Span, string], bool) {
+	if ptrGetter, ok := request.SpanPromGetters(name); ok {
+		return func(span request.Span) string { return ptrGetter(&span) }, true
+	}
+	return nil, false
 }

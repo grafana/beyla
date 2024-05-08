@@ -1,0 +1,14 @@
+## Reference: https://github.com/helm/chart-testing/blob/master/doc/ct_lint-and-install.md
+remote: origin
+target-branch: main
+chart-dirs:
+  - charts
+chart-repos:
+  - grafana=https://grafana.github.io/helm-charts
+validate-chart-schema: true
+validate-maintainers: true
+validate-yaml: true
+exclude-deprecated: true
+excluded-charts: []
+# TODO: disable after publicly releasing 1.0.0
+check-version-increment: false

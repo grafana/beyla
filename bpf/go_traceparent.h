@@ -136,7 +136,16 @@ static __always_inline void *extract_traceparent_from_req_headers(void *headers_
         }
         for (u64 i = 0; i < 8; i++)
         {
+            // break the bucket iteration when tophash is zero
+            // since "there are no more non-empty cells at higher indexes or overflows"
+            // ref: https://github.com/golang/go/blob/9050ce9b334419066c364e747499a2faf4425dad/src/runtime/map.go#L86
             if (map_value->tophash[i] == 0)
+            {
+                break;
+            }
+            // skip the cell if tophash is empty
+            // ref: https://github.com/golang/go/blob/9050ce9b334419066c364e747499a2faf4425dad/src/runtime/map.go#L87
+            if (map_value->tophash[i] == 1)
             {
                 continue;
             }

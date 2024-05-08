@@ -6,10 +6,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"go.opentelemetry.io/otel/attribute"
 
-	"github.com/grafana/beyla/pkg/internal/export/attr"
+	"github.com/grafana/beyla/pkg/internal/export/metric"
+	"github.com/grafana/beyla/pkg/internal/export/metric/attr"
 	"github.com/grafana/beyla/pkg/internal/export/otel"
 	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
-	"github.com/grafana/beyla/pkg/internal/netolly/export"
 )
 
 func TestMetricAttributes(t *testing.T) {
@@ -24,7 +24,7 @@ func TestMetricAttributes(t *testing.T) {
 		Attrs: ebpf.RecordAttrs{
 			SrcName: "srcname",
 			DstName: "dstname",
-			Metadata: map[string]string{
+			Metadata: map[attr.Name]string{
 				"k8s.src.name":      "srcname",
 				"k8s.src.namespace": "srcnamespace",
 				"k8s.dst.name":      "dstname",
@@ -35,10 +35,10 @@ func TestMetricAttributes(t *testing.T) {
 	in.Id.SrcIp.In6U.U6Addr8 = [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 255, 12, 34, 56, 78}
 	in.Id.DstIp.In6U.U6Addr8 = [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 255, 33, 22, 11, 1}
 
-	me := &metricsExporter{metrics: &Expirer{attrs: attr.OpenTelemetryGetters(
-		export.NamedGetters, []string{
-			"src.address", "dst.address", "src.port", "dst.port", "src.name", "dst_name",
-			"k8s.src.name", "k8s.src_namespace", "k8s.dst.name", "k8s.dst.namespace",
+	me := &metricsExporter{metrics: &Expirer{attrs: metric.OpenTelemetryGetters(
+		ebpf.RecordGetters, []attr.Name{
+			attr.SrcAddress, attr.DstAddres, attr.SrcPort, attr.DstPort, attr.SrcName, attr.DstName,
+			attr.K8sSrcName, attr.K8sSrcNamespace, attr.K8sDstName, attr.K8sDstNamespace,
 		})}}
 	reportedAttributes, _ := me.metrics.recordAttributes(in)
 	for _, mustContain := range []attribute.KeyValue{
@@ -55,7 +55,7 @@ func TestMetricAttributes(t *testing.T) {
 		attribute.String("k8s.dst.namespace", "dstnamespace"),
 	} {
 		val, ok := reportedAttributes.Value(mustContain.Key)
-		assert.True(t, ok)
+		assert.Truef(t, ok, "expected %+v in %v", mustContain.Key, reportedAttributes)
 		assert.Equal(t, mustContain.Value, val)
 	}
 
@@ -73,7 +73,7 @@ func TestMetricAttributes_Filter(t *testing.T) {
 		Attrs: ebpf.RecordAttrs{
 			SrcName: "srcname",
 			DstName: "dstname",
-			Metadata: map[string]string{
+			Metadata: map[attr.Name]string{
 				"k8s.src.name":      "srcname",
 				"k8s.src.namespace": "srcnamespace",
 				"k8s.dst.name":      "dstname",
@@ -84,7 +84,7 @@ func TestMetricAttributes_Filter(t *testing.T) {
 	in.Id.SrcIp.In6U.U6Addr8 = [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 255, 12, 34, 56, 78}
 	in.Id.DstIp.In6U.U6Addr8 = [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 255, 33, 22, 11, 1}
 
-	me := &Expirer{attrs: attr.OpenTelemetryGetters(export.NamedGetters, []string{
+	me := &Expirer{attrs: metric.OpenTelemetryGetters(ebpf.RecordGetters, []attr.Name{
 		"src.address",
 		"k8s.src.name",
 		"k8s.dst.name",

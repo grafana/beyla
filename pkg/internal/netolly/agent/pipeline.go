@@ -5,6 +5,7 @@ import (
 
 	"github.com/mariomac/pipes/pipe"
 
+	"github.com/grafana/beyla/pkg/internal/filter"
 	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
 	"github.com/grafana/beyla/pkg/internal/netolly/export"
 	"github.com/grafana/beyla/pkg/internal/netolly/export/otel"
@@ -20,12 +21,13 @@ type FlowsPipeline struct {
 	MapTracer     pipe.Start[[]*ebpf.Record]
 	RingBufTracer pipe.Start[[]*ebpf.Record]
 
-	ProtoFilter pipe.Middle[[]*ebpf.Record, []*ebpf.Record]
-	Deduper     pipe.Middle[[]*ebpf.Record, []*ebpf.Record]
-	Kubernetes  pipe.Middle[[]*ebpf.Record, []*ebpf.Record]
-	ReverseDNS  pipe.Middle[[]*ebpf.Record, []*ebpf.Record]
-	CIDRs       pipe.Middle[[]*ebpf.Record, []*ebpf.Record]
-	Decorator   pipe.Middle[[]*ebpf.Record, []*ebpf.Record]
+	ProtoFilter     pipe.Middle[[]*ebpf.Record, []*ebpf.Record]
+	Deduper         pipe.Middle[[]*ebpf.Record, []*ebpf.Record]
+	Kubernetes      pipe.Middle[[]*ebpf.Record, []*ebpf.Record]
+	ReverseDNS      pipe.Middle[[]*ebpf.Record, []*ebpf.Record]
+	CIDRs           pipe.Middle[[]*ebpf.Record, []*ebpf.Record]
+	Decorator       pipe.Middle[[]*ebpf.Record, []*ebpf.Record]
+	AttributeFilter pipe.Middle[[]*ebpf.Record, []*ebpf.Record]
 
 	OTEL    pipe.Final[[]*ebpf.Record]
 	Prom    pipe.Final[[]*ebpf.Record]
@@ -42,8 +44,9 @@ func (fp *FlowsPipeline) Connect() {
 	fp.Kubernetes.SendTo(fp.ReverseDNS)
 	fp.ReverseDNS.SendTo(fp.CIDRs)
 	fp.CIDRs.SendTo(fp.Decorator)
+	fp.Decorator.SendTo(fp.AttributeFilter)
 
-	fp.Decorator.SendTo(fp.OTEL, fp.Prom, fp.Printer)
+	fp.AttributeFilter.SendTo(fp.OTEL, fp.Prom, fp.Printer)
 }
 
 // Accessory field pointer getters to later tell to the node providers where to store each pipeline Node
@@ -56,6 +59,7 @@ func kube(fp *FlowsPipeline) *pipe.Middle[[]*ebpf.Record, []*ebpf.Record]      {
 func rdns(fp *FlowsPipeline) *pipe.Middle[[]*ebpf.Record, []*ebpf.Record]      { return &fp.ReverseDNS }
 func cidrs(fp *FlowsPipeline) *pipe.Middle[[]*ebpf.Record, []*ebpf.Record]     { return &fp.CIDRs }
 func decorator(fp *FlowsPipeline) *pipe.Middle[[]*ebpf.Record, []*ebpf.Record] { return &fp.Decorator }
+func fltr(fp *FlowsPipeline) *pipe.Middle[[]*ebpf.Record, []*ebpf.Record]      { return &fp.AttributeFilter }
 
 func otelExport(fp *FlowsPipeline) *pipe.Final[[]*ebpf.Record] { return &fp.OTEL }
 func promExport(fp *FlowsPipeline) *pipe.Final[[]*ebpf.Record] { return &fp.Prom }
@@ -64,7 +68,14 @@ func printer(fp *FlowsPipeline) *pipe.Final[[]*ebpf.Record]    { return &fp.Prin
 // buildPipeline creates the ETL flow processing graph.
 // For a more visual view, check the docs/architecture.md document.
 func (f *Flows) buildPipeline(ctx context.Context) (*pipe.Runner, error) {
+	builder, err := f.pipelineBuilder(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return builder.Build()
+}
 
+func (f *Flows) pipelineBuilder(ctx context.Context) (*pipe.Builder[*FlowsPipeline], error) {
 	alog := alog()
 	alog.Debug("registering interfaces' listener in background")
 	err := f.interfacesManager(ctx)
@@ -115,25 +126,27 @@ func (f *Flows) buildPipeline(ctx context.Context) (*pipe.Runner, error) {
 	pipe.AddMiddleProvider(pb, rdns, func() (pipe.MiddleFunc[[]*ebpf.Record, []*ebpf.Record], error) {
 		return flow.ReverseDNSProvider(&f.cfg.NetworkFlows.ReverseDNS)
 	})
+	pipe.AddMiddleProvider(pb, fltr, filter.ByAttribute(f.cfg.Filters.Network, ebpf.RecordGetters))
 
 	// Terminal nodes export the flow record information out of the pipeline: OTEL, Prom and printer.
 	// Not all the nodes are mandatory here. Is the responsibility of each Provider function to decide
 	// whether each node is going to be instantiated or just ignored.
+	f.cfg.Attributes.Select.Normalize()
 	pipe.AddFinalProvider(pb, otelExport, func() (pipe.FinalFunc[[]*ebpf.Record], error) {
-		return otel.MetricsExporterProvider(&otel.MetricsConfig{
-			Metrics:           &f.cfg.Metrics,
-			AllowedAttributes: f.cfg.NetworkFlows.AllowedAttributes,
+		return otel.MetricsExporterProvider(f.ctxInfo, &otel.MetricsConfig{
+			Metrics:            &f.cfg.Metrics,
+			AttributeSelectors: f.cfg.Attributes.Select,
 		})
 	})
 	pipe.AddFinalProvider(pb, promExport, func() (pipe.FinalFunc[[]*ebpf.Record], error) {
-		return prom.PrometheusEndpoint(ctx, &prom.PrometheusConfig{
-			Config:            &f.cfg.Prometheus,
-			AllowedAttributes: f.cfg.NetworkFlows.AllowedAttributes,
-		}, f.ctxInfo.Prometheus)
+		return prom.PrometheusEndpoint(ctx, f.ctxInfo, &prom.PrometheusConfig{
+			Config:             &f.cfg.Prometheus,
+			AttributeSelectors: f.cfg.Attributes.Select,
+		})
 	})
 	pipe.AddFinalProvider(pb, printer, func() (pipe.FinalFunc[[]*ebpf.Record], error) {
 		return export.FlowPrinterProvider(f.cfg.NetworkFlows.Print)
 	})
 
-	return pb.Build()
+	return pb, nil
 }

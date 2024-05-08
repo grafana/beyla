@@ -131,17 +131,24 @@ func (tc *TestCollector) metricEvent(writer http.ResponseWriter, body []byte) {
 	slog.Debug("received metric", "json", string(json))
 
 	forEach[pmetric.ResourceMetrics](req.Metrics().ResourceMetrics(), func(rm pmetric.ResourceMetrics) {
+		resourceAttrs := map[string]string{}
+		rm.Resource().Attributes().Range(func(k string, v pcommon.Value) bool {
+			resourceAttrs[k] = v.AsString()
+			return true
+		})
+
 		forEach[pmetric.ScopeMetrics](rm.ScopeMetrics(), func(sm pmetric.ScopeMetrics) {
 			forEach[pmetric.Metric](sm.Metrics(), func(m pmetric.Metric) {
 				switch m.Type() {
 				case pmetric.MetricTypeSum:
 					forEach[pmetric.NumberDataPoint](m.Sum().DataPoints(), func(ndp pmetric.NumberDataPoint) {
 						mr := MetricRecord{
-							Name:       m.Name(),
-							Unit:       m.Unit(),
-							Type:       m.Type(),
-							CountVal:   ndp.IntValue(),
-							Attributes: map[string]string{},
+							Name:               m.Name(),
+							Unit:               m.Unit(),
+							Type:               m.Type(),
+							CountVal:           ndp.IntValue(),
+							Attributes:         map[string]string{},
+							ResourceAttributes: resourceAttrs,
 						}
 						ndp.Attributes().Range(func(k string, v pcommon.Value) bool {
 							mr.Attributes[k] = v.AsString()
@@ -152,10 +159,11 @@ func (tc *TestCollector) metricEvent(writer http.ResponseWriter, body []byte) {
 				case pmetric.MetricTypeHistogram:
 					forEach[pmetric.HistogramDataPoint](m.Histogram().DataPoints(), func(hdp pmetric.HistogramDataPoint) {
 						mr := MetricRecord{
-							Name:       m.Name(),
-							Unit:       m.Unit(),
-							Type:       m.Type(),
-							Attributes: map[string]string{},
+							Name:               m.Name(),
+							Unit:               m.Unit(),
+							Type:               m.Type(),
+							Attributes:         map[string]string{},
+							ResourceAttributes: resourceAttrs,
 						}
 						hdp.Attributes().Range(func(k string, v pcommon.Value) bool {
 							mr.Attributes[k] = v.AsString()
@@ -173,11 +181,12 @@ func (tc *TestCollector) metricEvent(writer http.ResponseWriter, body []byte) {
 
 // MetricRecord stores some metadata from the received metrics
 type MetricRecord struct {
-	Attributes map[string]string
-	Name       string
-	Unit       string
-	Type       pmetric.MetricType
-	CountVal   int64
+	ResourceAttributes map[string]string
+	Attributes         map[string]string
+	Name               string
+	Unit               string
+	Type               pmetric.MetricType
+	CountVal           int64
 }
 
 type TraceRecord struct {

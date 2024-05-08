@@ -183,7 +183,7 @@ spec:
               value: "true"
 ```
 
-For more information about the different configuration options, please check the
+For more information about the different configuration options, check the
 [Configuration]({{< relref "../configure/options.md" >}}) section of this documentation site.
 
 ### Deploy Beyla as a Daemonset
@@ -192,7 +192,7 @@ You can also deploy Beyla as a Daemonset. This is the preferred way if:
 
 - You want to instrument a Daemonset
 - You want to instrument multiple processes from a single Beyla instance, or even
-  all the instrumentable processes in your cluster.
+  all of the processes in your cluster.
 
 Using the previous example (the `goblog` pod), we cannot select the process
 to instrument by using its open port, because the port is internal to the Pod.
@@ -241,16 +241,19 @@ spec:
 
 ### Deploy Beyla unprivileged
 
-In all of the examples so far, `privileged:true` was used in the Beyla deployment `securityContext` section. While this works in all circumstances, there are ways to deploy Beyla in Kubernetes with reduced privileges, if your security configuration requires you to do so. Whether it is possible to run Beyla without `privileged:true`, depends a lot on the Kubernetes version you have and the underlying container runtime used (e.g. **Containerd**, **CRI-O** or **Docker**).
+In all of the examples so far, `privileged:true` or the `SYS_ADMIN` Linux capability was used in the Beyla deployment's `securityContext` section. While this works in all circumstances, there are ways to deploy Beyla in Kubernetes with reduced privileges if your security configuration requires you to do so. Whether this is possible depends on the Kubernetes version you have and the underlying container runtime used (e.g. **Containerd**, **CRI-O** or **Docker**).
 
-The following guide is based on tests performed mainly by running `containerd` with `kubeadm`, `k3s`, `microk8s` and `kind`.
+The following guide is based on tests performed mainly by running `containerd` with `GKE`, `kubeadm`, `k3s`, `microk8s` and `kind`.
 
-To run Beyla unprivileged, you need to replace the `privileged:true` setting with a set of Linux [capabilities](https://www.man7.org/linux/man-pages/man7/capabilities.7.html). The two main capabilities which Beyla needs are `CAP_SYS_ADMIN` and `CAP_SYS_PTRACE`. On kernel versions before **5.11**, `CAP_SYS_RESOURCE` is also required.
+To run Beyla unprivileged, you need to run a `privileged` init container which performs setup tasks which require elevated privileges. Then you need to replace the `privileged:true` setting with a set of Linux [capabilities](https://www.man7.org/linux/man-pages/man7/capabilities.7.html).
 
-- `CAP_SYS_ADMIN` is required to install most of the eBPF probes, because Beyla tracks system calls
-- `CAP_SYS_PTRACE` is required so that Beyla is able to look into the processes namespaces and inspect the executables. Beyla doesn't use `ptrace`, but for some of the operations it does require this capability
-- `CAP_SYS_RESOURCE` is required only on kernels **< 5.11** so that Beyla can increase the amount of locked memory available
-- `CAP_NET_RAW` is required for using installing socket filters, which are used as a fallback for `kretprobes` for HTTP requests
+- `CAP_BPF` is required to install most of the eBPF probes, because Beyla tracks system calls.
+- `CAP_SYS_PTRACE` is required so that Beyla is able to look into the processes namespaces and inspect the executables. Beyla doesn't use `ptrace`, but for some of the operations it does require this capability.
+- `CAP_NET_RAW` is required for using installing socket filters, which are used as a fallback for `kretprobes` for HTTP requests.
+- `CAP_CHECKPOINT_RESTORE` is required to open ELF files.
+- `CAP_DAC_READ_SEARCH` is required to open ELF files.
+- `CAP_PERFMON` is required to load BPF programs, i.e. be able to perform `perf_event_open()`.
+- `CAP_SYS_RESOURCE` is required only on kernels **< 5.11** so that Beyla can increase the amount of locked memory available.
 
 In addition to these Linux capabilities, many Kubernetes versions include [AppArmour](https://kubernetes.io/docs/tutorials/security/apparmor/), which tough policies adds additional restrictions to unprivileged containers. By [default](https://github.com/moby/moby/blob/master/profiles/apparmor/template.go), the AppArmour policy restricts the use of `mount` and the access to `/sys/fs/` directories. Beyla uses the BPF Linux file system to store pinned BPF maps, for communication among the different BPF programs. For this reason, Beyla either needs to `mount` a BPF file system, or write to `/sys/fs/bpf`, which are both restricted.
 
@@ -258,6 +261,17 @@ Because of the AppArmour restriction, to run Beyla as unprivileged container, yo
 
 - Set `container.apparmor.security.beta.kubernetes.io/beyla: "unconfined"` in your Kubernetes deployment files.
 - Set a modified AppArmour policy which allows Beyla to perform `mount`.
+
+**Note** Since the `beyla` container does not have the privileges required to mount or un-mount the BPF filesystem, this sample leaves the BPF filesystem mounted on the host, even after the sample is deleted. This samples uses a unique path for each namespace to ensure re-use the same mount if Beyla is re-deployed, but to avoid collisions if multiple instances of Beyla is run in different namespaces. 
+
+**Note** Loading BPF programs requires that Beyla is able to read the Linux performance events, or at least be able to execute the Linux Kernel API `perf_event_open()`. 
+This permission is granted by `CAP_PERFMON` or more liberally through `CAP_SYS_ADMIN`. Since both `CAP_PERFMON` and `CAP_SYS_ADMIN` grant Beyla the permission to read performance
+events, you should use `CAP_PERFMON` because it grants lesser permissions. However, at system level, the access to the performance 
+events is controlled through the setting `kernel.perf_event_paranoid`, which you can read or write by using `sysctl` or by modifying the file `/proc/sys/kernel/perf_event_paranoid`.
+The default setting for `kernel.perf_event_paranoid` is typically `2`, which is documented under the `perf_event_paranoid` section in the [kernel documentation](https://www.kernel.org/doc/Documentation/sysctl/kernel.txt).
+Some Linux distributions define higher levels for `kernel.perf_event_paranoid`, for example Debian based distributions [also use](https://lwn.net/Articles/696216/) `kernel.perf_event_paranoid=3`, 
+which disallows access to `perf_event_open()` without `CAP_SYS_ADMIN`. If you are running on a distribution with `kernel.perf_event_paranoid` setting higher than `2`,
+you can either modify your configuration to lower it to `2` or use `CAP_SYS_ADMIN` instead of `CAP_PERFMON`.
 
 An example of a Beyla unprivileged container configuration can be found below, or you can download the [full example deployment](https://github.com/grafana/beyla/tree/main/examples/k8s/unprivileged.yaml) file:
 
@@ -287,32 +301,74 @@ spec:
     spec:
       serviceAccount: beyla
       hostPID: true           # <-- Important. Required in Daemonset mode so Beyla can discover all monitored processes
+      initContainers:
+        - name: mount-bpf-fs
+          image: grafana/beyla:latest
+          args:
+          # Create the directory and mount the BPF filesystem.
+          - 'mkdir -p /sys/fs/bpf/$BEYLA_BPF_FS_PATH && mount -t bpf bpf /sys/fs/bpf/$BEYLA_BPF_FS_PATH'
+          command:
+          - /bin/bash
+          - -c
+          - --
+          securityContext:
+            # The init container is privileged so that it can use bidirectional mount propagation
+            privileged: true
+          volumeMounts:
+          - name: bpffs
+            mountPath: /sys/fs/bpf
+            # Make sure the mount is propagated back to the host so it can be used by the Beyla container
+            mountPropagation: Bidirectional
+          env:
+            - name: KUBE_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+              # Use a unique path for each namespace to prevent collisions with other namespaces.
+            - name: BEYLA_BPF_FS_PATH
+              value: beyla-$(KUBE_NAMESPACE)
       containers:
       - name: beyla
         terminationMessagePolicy: FallbackToLogsOnError
-        image: "docker.io/grafana/beyla:main"
-        imagePullPolicy: "Always"
-        command: [ "/beyla" ]
+        image: grafana/beyla:latest
         env:
           - name: BEYLA_PRINT_TRACES
             value: "true"
           - name: BEYLA_KUBE_METADATA_ENABLE
             value: "autodetect"
+          - name: KUBE_NAMESPACE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
+            # Use a unique path for each namespace to prevent collisions with other namespaces.
+          - name: BEYLA_BPF_FS_PATH
+            value: beyla-$(KUBE_NAMESPACE)
+          - name: BEYLA_BPF_FS_BASE_DIR
+            value: /sys/fs/bpf
           ...
         securityContext:
           runAsUser: 0
           readOnlyRootFilesystem: true
           capabilities:
             add:
-              - SYS_ADMIN     # <-- Important. Required for most eBPF probes to function correctly.
-              - SYS_PTRACE    # <-- Important. Allows Beyla to access the container namespaces and inspect executables.
-              - NET_RAW       # <-- Important. Allows Beyla to use socket filters for http requests.
-              #- SYS_RESOURCE # <-- pre 5.11 only. Allows Beyla to increase the amount of locked memory.
+              - BPF                 # <-- Important. Required for most eBPF probes to function correctly.
+              - SYS_PTRACE          # <-- Important. Allows Beyla to access the container namespaces and inspect executables.
+              - NET_RAW             # <-- Important. Allows Beyla to use socket filters for http requests.
+              - CHECKPOINT_RESTORE  # <-- Important. Allows Beyla to open ELF files.
+              - DAC_READ_SEARCH     # <-- Important. Allows Beyla to open ELF files.
+              - PERFMON             # <-- Important. Allows Beyla to load BPF programs.
+              #- SYS_RESOURCE       # <-- pre 5.11 only. Allows Beyla to increase the amount of locked memory.
+              #- SYS_ADMIN          # <-- Required for Go application trace context propagation, or if kernel.perf_event_paranoid >= 3 on Debian distributions.
+            drop:
+              - ALL
         volumeMounts:
         - name: var-run-beyla
           mountPath: /var/run/beyla
         - name: cgroup
           mountPath: /sys/fs/cgroup
+        - name: bpffs
+          mountPath: /sys/fs/bpf
+          mountPropagation: HostToContainer # <-- Important. Allows Beyla to see the BPF mount from the init container
       tolerations:
       - effect: NoSchedule
         operator: Exists
@@ -324,6 +380,9 @@ spec:
       - name: cgroup
         hostPath:
           path: /sys/fs/cgroup
+      - name: bpffs
+        hostPath:
+          path: /sys/fs/bpf
 ---
 apiVersion: apps/v1
 kind: Deployment

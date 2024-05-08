@@ -150,10 +150,11 @@ func TestMetrics_InternalInstrumentation(t *testing.T) {
 	pipe.AddFinalProvider(builder, func(impl *testPipeline) *pipe.Final[[]request.Span] {
 		return &impl.exporter
 	}, ReportMetrics(context.Background(),
-		&MetricsConfig{CommonEndpoint: coll.URL, Interval: 10 * time.Millisecond, ReportersCacheLen: 16, Features: []string{FeatureApplication}},
 		&global.ContextInfo{
 			Metrics: internalMetrics,
-		}),
+		},
+		&MetricsConfig{CommonEndpoint: coll.URL, Interval: 10 * time.Millisecond, ReportersCacheLen: 16, Features: []string{FeatureApplication}},
+		nil),
 	)
 	graph, err := builder.Build()
 	require.NoError(t, err)

@@ -220,17 +220,19 @@ Beyla only includes a subset of the available attributes to avoid leading to
 a [cardinality explosion](/blog/2022/02/15/what-are-cardinality-spikes-and-why-do-they-matter/) in
 the metrics storage, especially if some attributes like `src.address` or `dst.address` capture the IP addresses of the external traffic.
 
-The `allowed_attributes` YAML subsection under `network` (or the `BEYLA_NETWORK_ALLOWED_ATTRIBUTES` environment variable)
-lets to select the attributes to report:
+The `attributes.select.<metric-name>.include` YAML subsection makes it possible to select the attributes to report:
 
 ```yaml
 network:
   enable: true
-  allowed_attributes:
-    - k8s.src.owner.name
-    - k8s.src.namespace
-    - k8s.dst.owner.name
-    - k8s.dst.namespace
+attributes:
+  allow:
+    beyla.network.flow.bytes:
+      include:
+      - k8s.src.owner.name
+      - k8s.src.namespace
+      - k8s.dst.owner.name
+      - k8s.dst.namespace
 ```
 
 The previous example would aggregate the `beyla.network.flow.bytes` value by source and destination Kubernetes owner
@@ -245,7 +247,7 @@ The `cidrs` YAML subsection in `network` (or the `BEYLA_NETWORK_CIDRS` environme
 subnets in [CIDR notation](https://en.wikipedia.org/wiki/Classless_Inter-Domain_Routing), in both IPv4 and IPv6 format.
 
 The existence of the `cidrs` section leaves the `src.address` and `dst.address` fields untouched,
-and adds the `src.cidr` and `dst.cidr` attributes. Don't forget to add them to the `allowed_attributes`
+and adds the `src.cidr` and `dst.cidr` attributes. Don't forget to add them to the `attributes.allow`
 section:
 
 ```yaml

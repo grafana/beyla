@@ -19,6 +19,7 @@ var (
 	PingerManifest               = path.Join(PathManifests, "/06-instrumented-client.template.yml")
 	GrpcPingerManifest           = path.Join(PathManifests, "/06-instrumented-grpc-client.template.yml")
 	UninstrumentedPingerManifest = path.Join(PathManifests, "/06-uninstrumented-client.template.yml")
+	UninstrumentedAppManifest    = path.Join(PathManifests, "/05-uninstrumented-service.yml")
 )
 
 // Pinger stores the configuration data of a local pod that will be used to

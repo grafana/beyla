@@ -12,8 +12,10 @@ import (
 
 	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
 	"github.com/grafana/beyla/pkg/internal/export/debug"
+	"github.com/grafana/beyla/pkg/internal/export/metric"
 	"github.com/grafana/beyla/pkg/internal/export/otel"
 	"github.com/grafana/beyla/pkg/internal/export/prom"
+	"github.com/grafana/beyla/pkg/internal/filter"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/traces"
 	"github.com/grafana/beyla/pkg/services"
@@ -108,6 +110,8 @@ type Config struct {
 	// for a simpler submission of OTEL metrics to Grafana Cloud
 	Grafana otel.GrafanaConfig `yaml:"grafana"`
 
+	Filters filter.AttributesConfig `yaml:"filter"`
+
 	Attributes Attributes `yaml:"attributes"`
 	// Routes is an optional node. If not set, data will be directly forwarded to exporters.
 	Routes       *transform.RoutesConfig       `yaml:"routes"`
@@ -165,6 +169,7 @@ func (t TracesReceiverConfig) Enabled() bool {
 type Attributes struct {
 	Kubernetes transform.KubernetesDecorator `yaml:"kubernetes"`
 	InstanceID traces.InstanceIDConfig       `yaml:"instance_id"`
+	Select     metric.Selection              `yaml:"select"`
 }
 
 type ConfigError string
@@ -202,10 +207,6 @@ func (c *Config) Validate() error {
 		!c.Prometheus.Enabled() {
 		return ConfigError("you need to define at least one exporter: print_traces," +
 			" grafana, otel_metrics_export, otel_traces_export or prometheus_export")
-	}
-
-	if c.Enabled(FeatureNetO11y) {
-		return c.NetworkFlows.Validate(c.Attributes.Kubernetes.Enabled())
 	}
 
 	return nil

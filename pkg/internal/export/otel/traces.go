@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mariomac/pipes/pipe"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/config/configgrpc"
 	"go.opentelemetry.io/collector/config/confighttp"
@@ -34,7 +35,6 @@ import (
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/pkg/internal/request"
-	"github.com/mariomac/pipes/pipe"
 )
 
 func tlog() *slog.Logger {

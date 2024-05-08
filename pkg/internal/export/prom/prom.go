@@ -15,8 +15,8 @@ import (
 
 	"github.com/grafana/beyla/pkg/buildinfo"
 	"github.com/grafana/beyla/pkg/internal/connector"
-	"github.com/grafana/beyla/pkg/internal/export/metric"
-	"github.com/grafana/beyla/pkg/internal/export/metric/attr"
+	"github.com/grafana/beyla/pkg/internal/export/attributes"
+	attr "github.com/grafana/beyla/pkg/internal/export/attributes/names"
 	"github.com/grafana/beyla/pkg/internal/export/otel"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/pkg/internal/request"
@@ -138,13 +138,13 @@ type metricsReporter struct {
 	httpClientRequestSize *prometheus.HistogramVec
 
 	// user-selected attributes for the application-level metrics
-	attrHTTPDuration          []metric.Field[*request.Span, string]
-	attrHTTPClientDuration    []metric.Field[*request.Span, string]
-	attrGRPCDuration          []metric.Field[*request.Span, string]
-	attrGRPCClientDuration    []metric.Field[*request.Span, string]
-	attrSQLClientDuration     []metric.Field[*request.Span, string]
-	attrHTTPRequestSize       []metric.Field[*request.Span, string]
-	attrHTTPClientRequestSize []metric.Field[*request.Span, string]
+	attrHTTPDuration          []attributes.Field[*request.Span, string]
+	attrHTTPClientDuration    []attributes.Field[*request.Span, string]
+	attrGRPCDuration          []attributes.Field[*request.Span, string]
+	attrGRPCClientDuration    []attributes.Field[*request.Span, string]
+	attrSQLClientDuration     []attributes.Field[*request.Span, string]
+	attrHTTPRequestSize       []attributes.Field[*request.Span, string]
+	attrHTTPClientRequestSize []attributes.Field[*request.Span, string]
 
 	// trace span metrics
 	spanMetricsLatency    *prometheus.HistogramVec
@@ -170,7 +170,7 @@ func PrometheusEndpoint(
 	ctx context.Context,
 	ctxInfo *global.ContextInfo,
 	cfg *PrometheusConfig,
-	attrSelect metric.Selection,
+	attrSelect attributes.Selection,
 ) pipe.FinalProvider[[]request.Span] {
 	return func() (pipe.FinalFunc[[]request.Span], error) {
 		if !cfg.Enabled() {
@@ -191,30 +191,30 @@ func newReporter(
 	ctx context.Context,
 	ctxInfo *global.ContextInfo,
 	cfg *PrometheusConfig,
-	selector metric.Selection,
+	selector attributes.Selection,
 ) (*metricsReporter, error) {
 	groups := ctxInfo.MetricAttributeGroups
-	groups.Add(metric.GroupPrometheus)
+	groups.Add(attributes.GroupPrometheus)
 
-	attrsProvider, err := metric.NewAttrSelector(groups, selector)
+	attrsProvider, err := attributes.NewAttrSelector(groups, selector)
 	if err != nil {
 		return nil, fmt.Errorf("selecting metrics attributes: %w", err)
 	}
 
-	attrHTTPDuration := metric.PrometheusGetters(request.SpanPromGetters,
-		attrsProvider.For(metric.HTTPServerDuration))
-	attrHTTPClientDuration := metric.PrometheusGetters(request.SpanPromGetters,
-		attrsProvider.For(metric.HTTPClientDuration))
-	attrHTTPRequestSize := metric.PrometheusGetters(request.SpanPromGetters,
-		attrsProvider.For(metric.HTTPServerRequestSize))
-	attrHTTPClientRequestSize := metric.PrometheusGetters(request.SpanPromGetters,
-		attrsProvider.For(metric.HTTPClientRequestSize))
-	attrGRPCDuration := metric.PrometheusGetters(request.SpanPromGetters,
-		attrsProvider.For(metric.RPCServerDuration))
-	attrGRPCClientDuration := metric.PrometheusGetters(request.SpanPromGetters,
-		attrsProvider.For(metric.RPCClientDuration))
-	attrSQLClientDuration := metric.PrometheusGetters(request.SpanPromGetters,
-		attrsProvider.For(metric.HTTPServerDuration))
+	attrHTTPDuration := attributes.PrometheusGetters(request.SpanPromGetters,
+		attrsProvider.For(attributes.HTTPServerDuration))
+	attrHTTPClientDuration := attributes.PrometheusGetters(request.SpanPromGetters,
+		attrsProvider.For(attributes.HTTPClientDuration))
+	attrHTTPRequestSize := attributes.PrometheusGetters(request.SpanPromGetters,
+		attrsProvider.For(attributes.HTTPServerRequestSize))
+	attrHTTPClientRequestSize := attributes.PrometheusGetters(request.SpanPromGetters,
+		attrsProvider.For(attributes.HTTPClientRequestSize))
+	attrGRPCDuration := attributes.PrometheusGetters(request.SpanPromGetters,
+		attrsProvider.For(attributes.RPCServerDuration))
+	attrGRPCClientDuration := attributes.PrometheusGetters(request.SpanPromGetters,
+		attrsProvider.For(attributes.RPCClientDuration))
+	attrSQLClientDuration := attributes.PrometheusGetters(request.SpanPromGetters,
+		attrsProvider.For(attributes.HTTPServerDuration))
 
 	// If service name is not explicitly set, we take the service name as set by the
 	// executable inspector
@@ -244,7 +244,7 @@ func newReporter(
 			},
 		}, beylaInfoLabelNames),
 		httpDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
-			Name:                            metric.HTTPServerDuration.Prom,
+			Name:                            attributes.HTTPServerDuration.Prom,
 			Help:                            "duration of HTTP service calls from the server side, in seconds",
 			Buckets:                         cfg.Buckets.DurationHistogram,
 			NativeHistogramBucketFactor:     defaultHistogramBucketFactor,
@@ -252,7 +252,7 @@ func newReporter(
 			NativeHistogramMinResetDuration: defaultHistogramMinResetDuration,
 		}, labelNames(attrHTTPDuration)),
 		httpClientDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
-			Name:                            metric.HTTPClientDuration.Prom,
+			Name:                            attributes.HTTPClientDuration.Prom,
 			Help:                            "duration of HTTP service calls from the client side, in seconds",
 			Buckets:                         cfg.Buckets.DurationHistogram,
 			NativeHistogramBucketFactor:     defaultHistogramBucketFactor,
@@ -260,7 +260,7 @@ func newReporter(
 			NativeHistogramMinResetDuration: defaultHistogramMinResetDuration,
 		}, labelNames(attrHTTPClientDuration)),
 		grpcDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
-			Name:                            metric.RPCServerDuration.Prom,
+			Name:                            attributes.RPCServerDuration.Prom,
 			Help:                            "duration of RCP service calls from the server side, in seconds",
 			Buckets:                         cfg.Buckets.DurationHistogram,
 			NativeHistogramBucketFactor:     defaultHistogramBucketFactor,
@@ -268,7 +268,7 @@ func newReporter(
 			NativeHistogramMinResetDuration: defaultHistogramMinResetDuration,
 		}, labelNames(attrGRPCDuration)),
 		grpcClientDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
-			Name:                            metric.RPCClientDuration.Prom,
+			Name:                            attributes.RPCClientDuration.Prom,
 			Help:                            "duration of GRPC service calls from the client side, in seconds",
 			Buckets:                         cfg.Buckets.DurationHistogram,
 			NativeHistogramBucketFactor:     defaultHistogramBucketFactor,
@@ -276,7 +276,7 @@ func newReporter(
 			NativeHistogramMinResetDuration: defaultHistogramMinResetDuration,
 		}, labelNames(attrGRPCClientDuration)),
 		sqlClientDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
-			Name:                            metric.SQLClientDuration.Prom,
+			Name:                            attributes.SQLClientDuration.Prom,
 			Help:                            "duration of SQL client operations, in seconds",
 			Buckets:                         cfg.Buckets.DurationHistogram,
 			NativeHistogramBucketFactor:     defaultHistogramBucketFactor,
@@ -284,7 +284,7 @@ func newReporter(
 			NativeHistogramMinResetDuration: defaultHistogramMinResetDuration,
 		}, labelNames(attrSQLClientDuration)),
 		httpRequestSize: prometheus.NewHistogramVec(prometheus.HistogramOpts{
-			Name:                            metric.HTTPServerRequestSize.Prom,
+			Name:                            attributes.HTTPServerRequestSize.Prom,
 			Help:                            "size, in bytes, of the HTTP request body as received at the server side",
 			Buckets:                         cfg.Buckets.RequestSizeHistogram,
 			NativeHistogramBucketFactor:     defaultHistogramBucketFactor,
@@ -292,7 +292,7 @@ func newReporter(
 			NativeHistogramMinResetDuration: defaultHistogramMinResetDuration,
 		}, labelNames(attrHTTPRequestSize)),
 		httpClientRequestSize: prometheus.NewHistogramVec(prometheus.HistogramOpts{
-			Name:                            metric.HTTPClientRequestSize.Prom,
+			Name:                            attributes.HTTPClientRequestSize.Prom,
 			Help:                            "size, in bytes, of the HTTP request body as sent from the client side",
 			Buckets:                         cfg.Buckets.RequestSizeHistogram,
 			NativeHistogramBucketFactor:     defaultHistogramBucketFactor,
@@ -570,7 +570,7 @@ func (r *metricsReporter) labelValuesServiceGraph(span *request.Span) []string {
 	}
 }
 
-func labelNames(getters []metric.Field[*request.Span, string]) []string {
+func labelNames(getters []attributes.Field[*request.Span, string]) []string {
 	labels := make([]string, 0, len(getters))
 	for _, label := range getters {
 		labels = append(labels, label.ExposedName)
@@ -578,7 +578,7 @@ func labelNames(getters []metric.Field[*request.Span, string]) []string {
 	return labels
 }
 
-func labelValues(s *request.Span, getters []metric.Field[*request.Span, string]) []string {
+func labelValues(s *request.Span, getters []attributes.Field[*request.Span, string]) []string {
 	values := make([]string, 0, len(getters))
 	for _, getter := range getters {
 		values = append(values, getter.Get(s))

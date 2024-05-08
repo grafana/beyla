@@ -8,7 +8,7 @@ import (
 	"github.com/mariomac/pipes/pipe"
 	"github.com/yl2chen/cidranger"
 
-	"github.com/grafana/beyla/pkg/internal/export/metric/attr"
+	attr "github.com/grafana/beyla/pkg/internal/export/attributes/names"
 	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
 )
 

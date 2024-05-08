@@ -23,14 +23,14 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 	"go.uber.org/zap"
 
-	metric2 "github.com/grafana/beyla/pkg/internal/export/metric"
-	"github.com/grafana/beyla/pkg/internal/export/metric/attr"
+	"github.com/grafana/beyla/pkg/internal/export/attributes"
+	attr "github.com/grafana/beyla/pkg/internal/export/attributes/names"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/pkg/internal/request"
 )
 
 // TracesReceiver creates a terminal node that consumes request.Spans and sends OpenTelemetry metrics to the configured consumers.
-func TracesReceiver(ctx context.Context, cfg TracesConfig, ctxInfo *global.ContextInfo, userAttribSelection metric2.Selection) pipe.FinalProvider[[]request.Span] {
+func TracesReceiver(ctx context.Context, cfg TracesConfig, ctxInfo *global.ContextInfo, userAttribSelection attributes.Selection) pipe.FinalProvider[[]request.Span] {
 	return (&tracesOTELReceiver{ctx: ctx, cfg: cfg, ctxInfo: ctxInfo, attributes: userAttribSelection}).provideLoop
 }
 
@@ -38,16 +38,16 @@ type tracesOTELReceiver struct {
 	ctx        context.Context
 	cfg        TracesConfig
 	ctxInfo    *global.ContextInfo
-	attributes metric2.Selection
+	attributes attributes.Selection
 }
 
-func GetUserSelectedAttributes(attributes metric2.Selection) (map[attr.Name]struct{}, error) {
+func GetUserSelectedAttributes(attrs attributes.Selection) (map[attr.Name]struct{}, error) {
 	// Get user attributes
-	attribProvider, err := metric2.NewAttrSelector(metric2.GroupTraces, attributes)
+	attribProvider, err := attributes.NewAttrSelector(attributes.GroupTraces, attrs)
 	if err != nil {
 		return nil, err
 	}
-	traceAttrsArr := attribProvider.For(metric2.Traces)
+	traceAttrsArr := attribProvider.For(attributes.Traces)
 	traceAttrs := make(map[attr.Name]struct{})
 	for _, a := range traceAttrsArr {
 		traceAttrs[a] = struct{}{}

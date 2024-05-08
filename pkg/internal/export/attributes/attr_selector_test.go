@@ -1,12 +1,11 @@
-package metric
+package attributes
 
 import (
 	"testing"
 
+	attr "github.com/grafana/beyla/pkg/internal/export/attributes/names"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/grafana/beyla/pkg/internal/export/metric/attr"
 )
 
 func TestNormalize(t *testing.T) {

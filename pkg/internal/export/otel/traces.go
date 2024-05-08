@@ -19,8 +19,8 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 	trace2 "go.opentelemetry.io/otel/trace"
 
-	metric2 "github.com/grafana/beyla/pkg/internal/export/metric"
-	"github.com/grafana/beyla/pkg/internal/export/metric/attr"
+	"github.com/grafana/beyla/pkg/internal/export/attributes"
+	attr "github.com/grafana/beyla/pkg/internal/export/attributes/names"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/pkg/internal/request"
@@ -114,7 +114,7 @@ type Tracers struct {
 	tracer   trace2.Tracer
 }
 
-func ReportTraces(ctx context.Context, cfg *TracesConfig, ctxInfo *global.ContextInfo, userAttribSelection metric2.Selection) pipe.FinalProvider[[]request.Span] {
+func ReportTraces(ctx context.Context, cfg *TracesConfig, ctxInfo *global.ContextInfo, userAttribSelection attributes.Selection) pipe.FinalProvider[[]request.Span] {
 	return func() (pipe.FinalFunc[[]request.Span], error) {
 		if !cfg.Enabled() {
 			return pipe.IgnoreFinal[[]request.Span](), nil
@@ -130,7 +130,7 @@ func ReportTraces(ctx context.Context, cfg *TracesConfig, ctxInfo *global.Contex
 	}
 }
 
-func newTracesReporter(ctx context.Context, cfg *TracesConfig, ctxInfo *global.ContextInfo, userAttribSelection metric2.Selection) (*TracesReporter, error) {
+func newTracesReporter(ctx context.Context, cfg *TracesConfig, ctxInfo *global.ContextInfo, userAttribSelection attributes.Selection) (*TracesReporter, error) {
 	log := tlog()
 	var err error
 	traceAttrs, err := GetUserSelectedAttributes(userAttribSelection)

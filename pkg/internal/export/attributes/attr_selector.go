@@ -1,11 +1,11 @@
-package metric
+package attributes
 
 import (
 	"fmt"
 	"maps"
 	"slices"
 
-	"github.com/grafana/beyla/pkg/internal/export/metric/attr"
+	attr "github.com/grafana/beyla/pkg/internal/export/attributes/names"
 	"github.com/grafana/beyla/pkg/internal/helpers"
 )
 

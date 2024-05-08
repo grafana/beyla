@@ -11,8 +11,8 @@ import (
 	"gopkg.in/yaml.v3"
 
 	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
+	"github.com/grafana/beyla/pkg/internal/export/attributes"
 	"github.com/grafana/beyla/pkg/internal/export/debug"
-	"github.com/grafana/beyla/pkg/internal/export/metric"
 	"github.com/grafana/beyla/pkg/internal/export/otel"
 	"github.com/grafana/beyla/pkg/internal/export/prom"
 	"github.com/grafana/beyla/pkg/internal/filter"
@@ -169,7 +169,7 @@ func (t TracesReceiverConfig) Enabled() bool {
 type Attributes struct {
 	Kubernetes transform.KubernetesDecorator `yaml:"kubernetes"`
 	InstanceID traces.InstanceIDConfig       `yaml:"instance_id"`
-	Select     metric.Selection              `yaml:"select"`
+	Select     attributes.Selection          `yaml:"select"`
 }
 
 type ConfigError string

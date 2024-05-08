@@ -6,14 +6,14 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 
-	"github.com/grafana/beyla/pkg/internal/export/metric"
-	"github.com/grafana/beyla/pkg/internal/export/metric/attr"
+	"github.com/grafana/beyla/pkg/internal/export/attributes"
+	attr "github.com/grafana/beyla/pkg/internal/export/attributes/names"
 )
 
-// SpanOTELGetters returns the metric.Getter function that returns the
+// SpanOTELGetters returns the attributes.Getter function that returns the
 // OTEL attribute.KeyValue of a given attribute name.
-func SpanOTELGetters(name attr.Name) (metric.Getter[*Span, attribute.KeyValue], bool) {
-	var getter metric.Getter[*Span, attribute.KeyValue]
+func SpanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValue], bool) {
+	var getter attributes.Getter[*Span, attribute.KeyValue]
 	switch name {
 	case attr.HTTPRequestMethod:
 		getter = func(s *Span) attribute.KeyValue { return HTTPRequestMethod(s.Method) }
@@ -39,15 +39,15 @@ func SpanOTELGetters(name attr.Name) (metric.Getter[*Span, attribute.KeyValue], 
 		getter = func(span *Span) attribute.KeyValue { return semconv.DBOperation(span.Method) }
 	}
 	// default: unlike the Prometheus getters, we don't check here for service name nor k8s metadata
-	// because they are already attributes of the Resource instead of the metric.
+	// because they are already attributes of the Resource instead of the attributes.
 	return getter, getter != nil
 }
 
-// SpanPromGetters returns the metric.Getter function that returns the
+// SpanPromGetters returns the attributes.Getter function that returns the
 // Prometheus string value of a given attribute name.
 // nolint:cyclop
-func SpanPromGetters(attrName attr.Name) (metric.Getter[*Span, string], bool) {
-	var getter metric.Getter[*Span, string]
+func SpanPromGetters(attrName attr.Name) (attributes.Getter[*Span, string], bool) {
+	var getter attributes.Getter[*Span, string]
 	switch attrName {
 	case attr.HTTPRequestMethod:
 		getter = func(s *Span) string { return s.Method }

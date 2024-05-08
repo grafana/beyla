@@ -1,4 +1,4 @@
-package metric
+package attributes
 
 var (
 	Traces = Name{

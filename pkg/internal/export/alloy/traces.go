@@ -7,20 +7,20 @@ import (
 	"github.com/mariomac/pipes/pipe"
 
 	"github.com/grafana/beyla/pkg/beyla"
-	"github.com/grafana/beyla/pkg/internal/export/metric"
+	"github.com/grafana/beyla/pkg/internal/export/attributes"
 	"github.com/grafana/beyla/pkg/internal/export/otel"
 	"github.com/grafana/beyla/pkg/internal/request"
 )
 
 // TracesReceiver creates a terminal node that consumes request.Spans and sends OpenTelemetry traces to the configured consumers.
-func TracesReceiver(ctx context.Context, cfg *beyla.TracesReceiverConfig, userAttribSelection metric.Selection) pipe.FinalProvider[[]request.Span] {
+func TracesReceiver(ctx context.Context, cfg *beyla.TracesReceiverConfig, userAttribSelection attributes.Selection) pipe.FinalProvider[[]request.Span] {
 	return (&tracesReceiver{ctx: ctx, cfg: cfg, attributes: userAttribSelection}).provideLoop
 }
 
 type tracesReceiver struct {
 	ctx        context.Context
 	cfg        *beyla.TracesReceiverConfig
-	attributes metric.Selection
+	attributes attributes.Selection
 }
 
 func (tr *tracesReceiver) provideLoop() (pipe.FinalFunc[[]request.Span], error) {

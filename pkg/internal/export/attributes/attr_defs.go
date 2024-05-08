@@ -1,9 +1,9 @@
-package metric
+package attributes
 
 import (
 	"maps"
 
-	"github.com/grafana/beyla/pkg/internal/export/metric/attr"
+	attr "github.com/grafana/beyla/pkg/internal/export/attributes/names"
 )
 
 // AttrGroups will let enabling by default some groups of attributes under

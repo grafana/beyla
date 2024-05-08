@@ -1,8 +1,6 @@
-package metric
+package attributes
 
-import (
-	"github.com/grafana/beyla/pkg/internal/export/metric/attr"
-)
+import attr "github.com/grafana/beyla/pkg/internal/export/attributes/names"
 
 // Getter is a function that defines how to get a given metric attribute of the type O
 // (e.g. string or attribute.KeyValue) from a data record

@@ -133,7 +133,7 @@ Then refer to it from the `helm-config.yml` file via the `envValueFrom` section:
 
 ```yaml
 env:
-  OTEL_EXPORTER_OTLP_ENDPOINT: "https://otlp-gateway-prod-eu-west-0.grafana.net/otlp"
+  OTEL_EXPORTER_OTLP_ENDPOINT: "<...your Grafana Cloud OTLP endpoint URL...>"
 envValueFrom:
   OTEL_EXPORTER_OTLP_HEADERS:
     secretKeyRef:

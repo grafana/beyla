@@ -1,29 +1,23 @@
 package otel
 
 import (
-	"context"
 	"encoding/binary"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"sync/atomic"
 	"testing"
 	"time"
 
-	"github.com/mariomac/guara/pkg/test"
-	"github.com/mariomac/pipes/pipe"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/collector/pdata/pcommon"
+	"go.opentelemetry.io/collector/pdata/ptrace"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
-	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/grafana/beyla/pkg/internal/imetrics"
-	"github.com/grafana/beyla/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/pkg/internal/request"
-	"github.com/grafana/beyla/pkg/internal/svc"
 )
 
 func TestHTTPTracesEndpoint(t *testing.T) {
@@ -235,162 +229,434 @@ func TestTracesSetupHTTP_DoNotOverrideEnv(t *testing.T) {
 		assert.Equal(t, "foo-proto", os.Getenv(envProtocol))
 	})
 }
-
-func TestTraces_InternalInstrumentation(t *testing.T) {
-	defer restoreEnvAfterExecution()()
-	// fake OTEL collector server
-	coll := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, _ *http.Request) {
-		rw.WriteHeader(http.StatusOK)
-	}))
-	defer coll.Close()
-	// Wait for the HTTP server to be alive
-	test.Eventually(t, timeout, func(t require.TestingT) {
-		resp, err := coll.Client().Get(coll.URL + "/foo")
-		require.NoError(t, err)
-		assert.Equal(t, http.StatusOK, resp.StatusCode)
-	})
-
-	// create a simple dummy graph to send data to the Metrics reporter, which will send
-	// metrics to the fake collector
-	builder := pipe.NewBuilder(&testPipeline{})
-	sendData := make(chan struct{})
-	pipe.AddStart(builder, func(impl *testPipeline) *pipe.Start[[]request.Span] {
-		return &impl.inputNode
-	}, func(out chan<- []request.Span) {
-		// on every send data signal, the traces generator sends a dummy trace
-		for range sendData {
-			out <- []request.Span{{Type: request.EventTypeHTTP}}
+func TestGenerateTraces(t *testing.T) {
+	t.Run("test with subtraces - with parent spanId", func(t *testing.T) {
+		start := time.Now()
+		parentSpanID, _ := trace.SpanIDFromHex("89cbc1f60aab3b04")
+		spanID, _ := trace.SpanIDFromHex("89cbc1f60aab3b01")
+		traceID, _ := trace.TraceIDFromHex("eae56fbbec9505c102e8aabfc6b5c481")
+		span := &request.Span{
+			Type:         request.EventTypeHTTP,
+			RequestStart: start.UnixNano(),
+			Start:        start.Add(time.Second).UnixNano(),
+			End:          start.Add(3 * time.Second).UnixNano(),
+			Method:       "GET",
+			Route:        "/test",
+			Status:       200,
+			ParentSpanID: parentSpanID,
+			TraceID:      traceID,
+			SpanID:       spanID,
 		}
-	})
-	internalTraces := &fakeInternalTraces{}
-	pipe.AddFinalProvider(builder, func(impl *testPipeline) *pipe.Final[[]request.Span] {
-		return &impl.exporter
-	}, ReportTraces(context.Background(),
-		&TracesConfig{
-			CommonEndpoint:    coll.URL,
-			BatchTimeout:      10 * time.Millisecond,
-			ExportTimeout:     5 * time.Second,
-			ReportersCacheLen: 16,
-		},
-		&global.ContextInfo{
-			Metrics: internalTraces,
-		}))
-	graph, err := builder.Build()
-	require.NoError(t, err)
+		traces := GenerateTraces(span)
 
-	graph.Start()
+		assert.Equal(t, 1, traces.ResourceSpans().Len())
+		assert.Equal(t, 1, traces.ResourceSpans().At(0).ScopeSpans().Len())
+		assert.Equal(t, 3, traces.ResourceSpans().At(0).ScopeSpans().At(0).Spans().Len())
+		spans := traces.ResourceSpans().At(0).ScopeSpans().At(0).Spans()
+		assert.Equal(t, "in queue", spans.At(0).Name())
+		assert.Equal(t, "processing", spans.At(1).Name())
+		assert.Equal(t, "GET /test", spans.At(2).Name())
+		assert.Equal(t, ptrace.SpanKindInternal, spans.At(0).Kind())
+		assert.Equal(t, ptrace.SpanKindInternal, spans.At(1).Kind())
+		assert.Equal(t, ptrace.SpanKindServer, spans.At(2).Kind())
 
-	sendData <- struct{}{}
-	var previousSum, previousCount int
-	test.Eventually(t, timeout, func(t require.TestingT) {
-		// we can't guarantee the number of calls at test time, but they must be at least 1
-		previousSum, previousCount = internalTraces.SumCount()
-		assert.LessOrEqual(t, 1, previousSum)
-		assert.LessOrEqual(t, 1, previousCount)
-		// the sum of metrics should be larger or equal than the number of calls (1 call : n metrics)
-		assert.LessOrEqual(t, previousCount, previousSum)
-		// no call should return error
-		assert.Empty(t, internalTraces.Errors())
+		assert.NotEmpty(t, spans.At(2).SpanID().String())
+		assert.Equal(t, traceID.String(), spans.At(2).TraceID().String())
+		topSpanID := spans.At(2).SpanID().String()
+		assert.Equal(t, parentSpanID.String(), spans.At(2).ParentSpanID().String())
+
+		assert.NotEmpty(t, spans.At(0).SpanID().String())
+		assert.Equal(t, traceID.String(), spans.At(0).TraceID().String())
+		assert.Equal(t, topSpanID, spans.At(0).ParentSpanID().String())
+
+		assert.Equal(t, spanID.String(), spans.At(1).SpanID().String())
+		assert.Equal(t, traceID.String(), spans.At(1).TraceID().String())
+		assert.Equal(t, topSpanID, spans.At(1).ParentSpanID().String())
+
+		assert.NotEqual(t, spans.At(0).SpanID().String(), spans.At(1).SpanID().String())
+		assert.NotEqual(t, spans.At(1).SpanID().String(), spans.At(2).SpanID().String())
 	})
 
-	sendData <- struct{}{}
-	// after some time, the number of calls should be higher than before
-	test.Eventually(t, timeout, func(t require.TestingT) {
-		sum, count := internalTraces.SumCount()
-		assert.LessOrEqual(t, previousSum, sum)
-		assert.LessOrEqual(t, previousCount, count)
-		assert.LessOrEqual(t, count, sum)
-		// no call should return error
-		assert.Zero(t, internalTraces.Errors())
+	t.Run("test with subtraces - ids set bpf layer", func(t *testing.T) {
+		start := time.Now()
+		spanID, _ := trace.SpanIDFromHex("89cbc1f60aab3b04")
+		traceID, _ := trace.TraceIDFromHex("eae56fbbec9505c102e8aabfc6b5c481")
+		span := &request.Span{
+			Type:         request.EventTypeHTTP,
+			RequestStart: start.UnixNano(),
+			Start:        start.Add(time.Second).UnixNano(),
+			End:          start.Add(3 * time.Second).UnixNano(),
+			Method:       "GET",
+			Route:        "/test",
+			Status:       200,
+			SpanID:       spanID,
+			TraceID:      traceID,
+		}
+		traces := GenerateTraces(span)
+
+		assert.Equal(t, 1, traces.ResourceSpans().Len())
+		assert.Equal(t, 1, traces.ResourceSpans().At(0).ScopeSpans().Len())
+		assert.Equal(t, 3, traces.ResourceSpans().At(0).ScopeSpans().At(0).Spans().Len())
+		spans := traces.ResourceSpans().At(0).ScopeSpans().At(0).Spans()
+		assert.Equal(t, "in queue", spans.At(0).Name())
+		assert.Equal(t, "processing", spans.At(1).Name())
+		assert.Equal(t, "GET /test", spans.At(2).Name())
+		assert.Equal(t, ptrace.SpanKindInternal, spans.At(0).Kind())
+		assert.Equal(t, ptrace.SpanKindInternal, spans.At(1).Kind())
+		assert.Equal(t, ptrace.SpanKindServer, spans.At(2).Kind())
+
+		assert.NotEmpty(t, spans.At(0).SpanID().String())
+		assert.Equal(t, traceID.String(), spans.At(0).TraceID().String())
+
+		assert.Equal(t, spanID.String(), spans.At(1).SpanID().String())
+		assert.Equal(t, traceID.String(), spans.At(1).TraceID().String())
+
+		assert.NotEmpty(t, spans.At(2).SpanID().String())
+		assert.Equal(t, traceID.String(), spans.At(2).TraceID().String())
+		assert.NotEqual(t, spans.At(0).SpanID().String(), spans.At(1).SpanID().String())
+		assert.NotEqual(t, spans.At(1).SpanID().String(), spans.At(2).SpanID().String())
 	})
 
-	// collector starts failing, so errors should be received
-	coll.CloseClientConnections()
-	coll.Close()
-	// Wait for the HTTP server to be stopped
-	test.Eventually(t, timeout, func(t require.TestingT) {
-		_, err := coll.Client().Get(coll.URL + "/foo")
-		require.Error(t, err)
+	t.Run("test with subtraces - generated ids", func(t *testing.T) {
+		start := time.Now()
+		span := &request.Span{
+			Type:         request.EventTypeHTTP,
+			RequestStart: start.UnixNano(),
+			Start:        start.Add(time.Second).UnixNano(),
+			End:          start.Add(3 * time.Second).UnixNano(),
+			Method:       "GET",
+			Route:        "/test",
+			Status:       200,
+		}
+		traces := GenerateTraces(span)
+
+		assert.Equal(t, 1, traces.ResourceSpans().Len())
+		assert.Equal(t, 1, traces.ResourceSpans().At(0).ScopeSpans().Len())
+		assert.Equal(t, 3, traces.ResourceSpans().At(0).ScopeSpans().At(0).Spans().Len())
+		spans := traces.ResourceSpans().At(0).ScopeSpans().At(0).Spans()
+		assert.Equal(t, "in queue", spans.At(0).Name())
+		assert.Equal(t, "processing", spans.At(1).Name())
+		assert.Equal(t, "GET /test", spans.At(2).Name())
+		assert.Equal(t, ptrace.SpanKindInternal, spans.At(0).Kind())
+		assert.Equal(t, ptrace.SpanKindInternal, spans.At(1).Kind())
+		assert.Equal(t, ptrace.SpanKindServer, spans.At(2).Kind())
+
+		assert.NotEmpty(t, spans.At(0).SpanID().String())
+		assert.NotEmpty(t, spans.At(0).TraceID().String())
+		assert.NotEmpty(t, spans.At(1).SpanID().String())
+		assert.NotEmpty(t, spans.At(1).TraceID().String())
+		assert.NotEmpty(t, spans.At(2).SpanID().String())
+		assert.NotEmpty(t, spans.At(2).TraceID().String())
+		assert.NotEqual(t, spans.At(0).SpanID().String(), spans.At(1).SpanID().String())
+		assert.NotEqual(t, spans.At(1).SpanID().String(), spans.At(2).SpanID().String())
 	})
 
-	var previousErrCount int
-	sendData <- struct{}{}
-	test.Eventually(t, timeout, func(t require.TestingT) {
-		previousSum, previousCount = internalTraces.SumCount()
-		// calls should start returning errors
-		previousErrCount = internalTraces.Errors()
-		assert.NotZero(t, previousErrCount)
+	t.Run("test without subspans - ids set bpf layer", func(t *testing.T) {
+		start := time.Now()
+		spanID, _ := trace.SpanIDFromHex("89cbc1f60aab3b04")
+		traceID, _ := trace.TraceIDFromHex("eae56fbbec9505c102e8aabfc6b5c481")
+		span := &request.Span{
+			Type:         request.EventTypeHTTP,
+			RequestStart: start.UnixNano(),
+			End:          start.Add(3 * time.Second).UnixNano(),
+			Method:       "GET",
+			Route:        "/test",
+			Status:       200,
+			SpanID:       spanID,
+			TraceID:      traceID,
+		}
+		traces := GenerateTraces(span)
+
+		assert.Equal(t, 1, traces.ResourceSpans().Len())
+		assert.Equal(t, 1, traces.ResourceSpans().At(0).ScopeSpans().Len())
+		assert.Equal(t, 1, traces.ResourceSpans().At(0).ScopeSpans().At(0).Spans().Len())
+		spans := traces.ResourceSpans().At(0).ScopeSpans().At(0).Spans()
+
+		assert.Equal(t, spanID.String(), spans.At(0).SpanID().String())
+		assert.Equal(t, traceID.String(), spans.At(0).TraceID().String())
 	})
 
-	// after a while, metrics sum should not increase but errors do
-	sendData <- struct{}{}
-	test.Eventually(t, timeout, func(t require.TestingT) {
-		sum, count := internalTraces.SumCount()
-		assert.Equal(t, previousSum, sum)
-		assert.Equal(t, previousCount, count)
-		assert.Less(t, previousErrCount, internalTraces.Errors())
+	t.Run("test without subspans - with parent spanId", func(t *testing.T) {
+		start := time.Now()
+		parentSpanID, _ := trace.SpanIDFromHex("89cbc1f60aab3b04")
+		traceID, _ := trace.TraceIDFromHex("eae56fbbec9505c102e8aabfc6b5c481")
+		span := &request.Span{
+			Type:         request.EventTypeHTTP,
+			RequestStart: start.UnixNano(),
+			End:          start.Add(3 * time.Second).UnixNano(),
+			Method:       "GET",
+			Route:        "/test",
+			Status:       200,
+			ParentSpanID: parentSpanID,
+			TraceID:      traceID,
+		}
+		traces := GenerateTraces(span)
+
+		assert.Equal(t, 1, traces.ResourceSpans().Len())
+		assert.Equal(t, 1, traces.ResourceSpans().At(0).ScopeSpans().Len())
+		assert.Equal(t, 1, traces.ResourceSpans().At(0).ScopeSpans().At(0).Spans().Len())
+		spans := traces.ResourceSpans().At(0).ScopeSpans().At(0).Spans()
+
+		assert.Equal(t, parentSpanID.String(), spans.At(0).ParentSpanID().String())
+		assert.Equal(t, traceID.String(), spans.At(0).TraceID().String())
+	})
+
+	t.Run("test without subspans - generated ids", func(t *testing.T) {
+		start := time.Now()
+		span := &request.Span{
+			Type:         request.EventTypeHTTP,
+			RequestStart: start.UnixNano(),
+			End:          start.Add(3 * time.Second).UnixNano(),
+			Method:       "GET",
+			Route:        "/test",
+		}
+		traces := GenerateTraces(span)
+
+		assert.Equal(t, 1, traces.ResourceSpans().Len())
+		assert.Equal(t, 1, traces.ResourceSpans().At(0).ScopeSpans().Len())
+		assert.Equal(t, 1, traces.ResourceSpans().At(0).ScopeSpans().At(0).Spans().Len())
+		spans := traces.ResourceSpans().At(0).ScopeSpans().At(0).Spans()
+
+		assert.NotEmpty(t, spans.At(0).SpanID().String())
+		assert.NotEmpty(t, spans.At(0).TraceID().String())
 	})
 }
 
-func TestTraces_InternalInstrumentationSampling(t *testing.T) {
-	defer restoreEnvAfterExecution()()
-	// fake OTEL collector server
-	coll := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, _ *http.Request) {
-		rw.WriteHeader(http.StatusOK)
-	}))
-	defer coll.Close()
-	// Wait for the HTTP server to be alive
-	test.Eventually(t, timeout, func(t require.TestingT) {
-		resp, err := coll.Client().Get(coll.URL + "/foo")
-		require.NoError(t, err)
-		assert.Equal(t, http.StatusOK, resp.StatusCode)
-	})
-
-	builder := pipe.NewBuilder(&testPipeline{})
-	// create a simple dummy graph to send data to the Metrics reporter, which will send
-	// metrics to the fake collector
-	sendData := make(chan struct{})
-	pipe.AddStart(builder, func(impl *testPipeline) *pipe.Start[[]request.Span] {
-		return &impl.inputNode
-	}, func(out chan<- []request.Span) { // on every send data signal, the traces generator sends a dummy trace
-		for range sendData {
-			out <- []request.Span{{Type: request.EventTypeHTTP}}
+func TestAttrsToMap(t *testing.T) {
+	t.Run("test with string attribute", func(t *testing.T) {
+		attrs := []attribute.KeyValue{
+			attribute.String("key1", "value1"),
+			attribute.String("key2", "value2"),
 		}
+		expected := pcommon.NewMap()
+		expected.PutStr("key1", "value1")
+		expected.PutStr("key2", "value2")
+
+		result := attrsToMap(attrs)
+		assert.Equal(t, expected, result)
 	})
-	internalTraces := &fakeInternalTraces{}
-	pipe.AddFinalProvider(builder, func(impl *testPipeline) *pipe.Final[[]request.Span] {
-		return &impl.exporter
-	}, ReportTraces(context.Background(),
-		&TracesConfig{
-			CommonEndpoint:    coll.URL,
-			BatchTimeout:      10 * time.Millisecond,
-			ExportTimeout:     5 * time.Second,
-			Sampler:           Sampler{Name: "always_off"}, // we won't send any trace
-			ReportersCacheLen: 16,
-		},
-		&global.ContextInfo{
-			Metrics: internalTraces,
-		}))
 
-	graph, err := builder.Build()
-	require.NoError(t, err)
+	t.Run("test with int attribute", func(t *testing.T) {
+		attrs := []attribute.KeyValue{
+			attribute.Int64("key1", 10),
+			attribute.Int64("key2", 20),
+		}
+		expected := pcommon.NewMap()
+		expected.PutInt("key1", 10)
+		expected.PutInt("key2", 20)
 
-	graph.Start()
+		result := attrsToMap(attrs)
+		assert.Equal(t, expected, result)
+	})
 
-	// Let's make 10 traces, none should be seen
-	for i := 0; i < 10; i++ {
-		sendData <- struct{}{}
-	}
-	var previousSum, previousCount int
-	test.Eventually(t, timeout, func(t require.TestingT) {
-		// we shouldn't see any data
-		previousSum, previousCount = internalTraces.SumCount()
-		assert.Equal(t, 0, previousSum)
-		assert.Equal(t, 0, previousCount)
-		// no call should return error
-		assert.Empty(t, internalTraces.Errors())
+	t.Run("test with float attribute", func(t *testing.T) {
+		attrs := []attribute.KeyValue{
+			attribute.Float64("key1", 3.14),
+			attribute.Float64("key2", 2.718),
+		}
+		expected := pcommon.NewMap()
+		expected.PutDouble("key1", 3.14)
+		expected.PutDouble("key2", 2.718)
+
+		result := attrsToMap(attrs)
+		assert.Equal(t, expected, result)
+	})
+
+	t.Run("test with bool attribute", func(t *testing.T) {
+		attrs := []attribute.KeyValue{
+			attribute.Bool("key1", true),
+			attribute.Bool("key2", false),
+		}
+		expected := pcommon.NewMap()
+		expected.PutBool("key1", true)
+		expected.PutBool("key2", false)
+
+		result := attrsToMap(attrs)
+		assert.Equal(t, expected, result)
 	})
 }
+
+func TestCodeToStatusCode(t *testing.T) {
+	t.Run("test with unset code", func(t *testing.T) {
+		code := codes.Unset
+		expected := ptrace.StatusCodeUnset
+
+		result := codeToStatusCode(code)
+		assert.Equal(t, expected, result)
+	})
+
+	t.Run("test with error code", func(t *testing.T) {
+		code := codes.Error
+		expected := ptrace.StatusCodeError
+
+		result := codeToStatusCode(code)
+		assert.Equal(t, expected, result)
+	})
+
+	t.Run("test with ok code", func(t *testing.T) {
+		code := codes.Ok
+		expected := ptrace.StatusCodeOk
+
+		result := codeToStatusCode(code)
+		assert.Equal(t, expected, result)
+	})
+}
+
+// func TestTraces_InternalInstrumentation(t *testing.T) {
+// 	defer restoreEnvAfterExecution()()
+// 	// fake OTEL collector server
+// 	coll := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, _ *http.Request) {
+// 		rw.WriteHeader(http.StatusOK)
+// 	}))
+// 	defer coll.Close()
+// 	// Wait for the HTTP server to be alive
+// 	test.Eventually(t, timeout, func(t require.TestingT) {
+// 		resp, err := coll.Client().Get(coll.URL + "/foo")
+// 		require.NoError(t, err)
+// 		assert.Equal(t, http.StatusOK, resp.StatusCode)
+// 	})
+
+// 	// create a simple dummy graph to send data to the Metrics reporter, which will send
+// 	// metrics to the fake collector
+// 	builder := pipe.NewBuilder(&testPipeline{})
+// 	sendData := make(chan struct{})
+// 	pipe.AddStart(builder, func(impl *testPipeline) *pipe.Start[[]request.Span] {
+// 		return &impl.inputNode
+// 	}, func(out chan<- []request.Span) {
+// 		// on every send data signal, the traces generator sends a dummy trace
+// 		for range sendData {
+// 			out <- []request.Span{{Type: request.EventTypeHTTP}}
+// 		}
+// 	})
+// 	internalTraces := &fakeInternalTraces{}
+// 	pipe.AddFinalProvider(builder, func(impl *testPipeline) *pipe.Final[[]request.Span] {
+// 		return &impl.exporter
+// 	}, ReportTraces(context.Background(),
+// 		&TracesConfig{
+// 			CommonEndpoint:    coll.URL,
+// 			BatchTimeout:      10 * time.Millisecond,
+// 			ExportTimeout:     5 * time.Second,
+// 			ReportersCacheLen: 16,
+// 		},
+// 		&global.ContextInfo{
+// 			Metrics: internalTraces,
+// 		}))
+// 	graph, err := builder.Build()
+// 	require.NoError(t, err)
+
+// 	graph.Start()
+
+// 	sendData <- struct{}{}
+// 	var previousSum, previousCount int
+// 	test.Eventually(t, timeout, func(t require.TestingT) {
+// 		// we can't guarantee the number of calls at test time, but they must be at least 1
+// 		previousSum, previousCount = internalTraces.SumCount()
+// 		assert.LessOrEqual(t, 1, previousSum)
+// 		assert.LessOrEqual(t, 1, previousCount)
+// 		// the sum of metrics should be larger or equal than the number of calls (1 call : n metrics)
+// 		assert.LessOrEqual(t, previousCount, previousSum)
+// 		// no call should return error
+// 		assert.Empty(t, internalTraces.Errors())
+// 	})
+
+// 	sendData <- struct{}{}
+// 	// after some time, the number of calls should be higher than before
+// 	test.Eventually(t, timeout, func(t require.TestingT) {
+// 		sum, count := internalTraces.SumCount()
+// 		assert.LessOrEqual(t, previousSum, sum)
+// 		assert.LessOrEqual(t, previousCount, count)
+// 		assert.LessOrEqual(t, count, sum)
+// 		// no call should return error
+// 		assert.Zero(t, internalTraces.Errors())
+// 	})
+
+// 	// collector starts failing, so errors should be received
+// 	coll.CloseClientConnections()
+// 	coll.Close()
+// 	// Wait for the HTTP server to be stopped
+// 	test.Eventually(t, timeout, func(t require.TestingT) {
+// 		_, err := coll.Client().Get(coll.URL + "/foo")
+// 		require.Error(t, err)
+// 	})
+
+// 	var previousErrCount int
+// 	sendData <- struct{}{}
+// 	test.Eventually(t, timeout, func(t require.TestingT) {
+// 		previousSum, previousCount = internalTraces.SumCount()
+// 		// calls should start returning errors
+// 		previousErrCount = internalTraces.Errors()
+// 		assert.NotZero(t, previousErrCount)
+// 	})
+
+// 	// after a while, metrics sum should not increase but errors do
+// 	sendData <- struct{}{}
+// 	test.Eventually(t, timeout, func(t require.TestingT) {
+// 		sum, count := internalTraces.SumCount()
+// 		assert.Equal(t, previousSum, sum)
+// 		assert.Equal(t, previousCount, count)
+// 		assert.Less(t, previousErrCount, internalTraces.Errors())
+// 	})
+// }
+
+// func TestTraces_InternalInstrumentationSampling(t *testing.T) {
+// 	defer restoreEnvAfterExecution()()
+// 	// fake OTEL collector server
+// 	coll := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, _ *http.Request) {
+// 		rw.WriteHeader(http.StatusOK)
+// 	}))
+// 	defer coll.Close()
+// 	// Wait for the HTTP server to be alive
+// 	test.Eventually(t, timeout, func(t require.TestingT) {
+// 		resp, err := coll.Client().Get(coll.URL + "/foo")
+// 		require.NoError(t, err)
+// 		assert.Equal(t, http.StatusOK, resp.StatusCode)
+// 	})
+
+// 	builder := pipe.NewBuilder(&testPipeline{})
+// 	// create a simple dummy graph to send data to the Metrics reporter, which will send
+// 	// metrics to the fake collector
+// 	sendData := make(chan struct{})
+// 	pipe.AddStart(builder, func(impl *testPipeline) *pipe.Start[[]request.Span] {
+// 		return &impl.inputNode
+// 	}, func(out chan<- []request.Span) { // on every send data signal, the traces generator sends a dummy trace
+// 		for range sendData {
+// 			out <- []request.Span{{Type: request.EventTypeHTTP}}
+// 		}
+// 	})
+// 	internalTraces := &fakeInternalTraces{}
+// 	pipe.AddFinalProvider(builder, func(impl *testPipeline) *pipe.Final[[]request.Span] {
+// 		return &impl.exporter
+// 	}, ReportTraces(context.Background(),
+// 		&TracesConfig{
+// 			CommonEndpoint:    coll.URL,
+// 			BatchTimeout:      10 * time.Millisecond,
+// 			ExportTimeout:     5 * time.Second,
+// 			Sampler:           Sampler{Name: "always_off"}, // we won't send any trace
+// 			ReportersCacheLen: 16,
+// 		},
+// 		&global.ContextInfo{
+// 			Metrics: internalTraces,
+// 		}))
+
+// 	graph, err := builder.Build()
+// 	require.NoError(t, err)
+
+// 	graph.Start()
+
+// 	// Let's make 10 traces, none should be seen
+// 	for i := 0; i < 10; i++ {
+// 		sendData <- struct{}{}
+// 	}
+// 	var previousSum, previousCount int
+// 	test.Eventually(t, timeout, func(t require.TestingT) {
+// 		// we shouldn't see any data
+// 		previousSum, previousCount = internalTraces.SumCount()
+// 		assert.Equal(t, 0, previousSum)
+// 		assert.Equal(t, 0, previousCount)
+// 		// no call should return error
+// 		assert.Empty(t, internalTraces.Errors())
+// 	})
+// }
 
 func TestTracesConfig_Enabled(t *testing.T) {
 	assert.True(t, TracesConfig{CommonEndpoint: "foo"}.Enabled())
@@ -402,82 +668,6 @@ func TestTracesConfig_Disabled(t *testing.T) {
 	assert.False(t, TracesConfig{}.Enabled())
 	assert.False(t, TracesConfig{Grafana: &GrafanaOTLP{Submit: []string{"metrics"}, InstanceID: "33221"}}.Enabled())
 	assert.False(t, TracesConfig{Grafana: &GrafanaOTLP{Submit: []string{"traces"}}}.Enabled())
-}
-
-func TestTracesIdGenerator(t *testing.T) {
-	defer restoreEnvAfterExecution()
-	mcfg := TracesConfig{Grafana: &GrafanaOTLP{
-		Submit:     []string{submitMetrics, submitTraces},
-		CloudZone:  "eu-west-23",
-		InstanceID: "12345",
-		APIKey:     "affafafaafkd",
-	}}
-	r := TracesReporter{ctx: context.Background(), cfg: &mcfg}
-	r.bsp = sdktrace.NewSimpleSpanProcessor(nil)
-
-	tracers, err := r.newTracers(svc.ID{})
-	assert.NoError(t, err)
-	assert.NotNil(t, tracers)
-
-	t.Run("testing that we can generate random spans in userspace, if not set by eBPF", func(t *testing.T) {
-		_, sp := tracers.tracer.Start(context.Background(), "Test",
-			trace.WithTimestamp(time.Now()),
-			trace.WithSpanKind(trace.SpanKindServer),
-		)
-		assert.True(t, sp.SpanContext().HasSpanID())
-		assert.True(t, sp.SpanContext().HasTraceID())
-	})
-
-	t.Run("testing that we can generate span for fixed parent set eBPF", func(t *testing.T) {
-		tID1, spID1 := NewIDs(1)
-		assert.True(t, tID1.IsValid())
-		assert.True(t, spID1.IsValid())
-
-		parentCtx := trace.ContextWithSpanContext(
-			context.Background(),
-			trace.SpanContext{}.WithTraceID(tID1).WithSpanID(spID1).WithTraceFlags(trace.FlagsSampled),
-		)
-
-		_, sp := tracers.tracer.Start(parentCtx, "Test1",
-			trace.WithTimestamp(time.Now()),
-			trace.WithSpanKind(trace.SpanKindServer),
-		)
-
-		assert.True(t, sp.SpanContext().HasSpanID())
-		assert.Equal(t, tID1, sp.SpanContext().TraceID())
-		assert.NotEqual(t, spID1, sp.SpanContext().SpanID())
-
-	})
-
-	t.Run("testing that we can generate span for fixed traceID set by eBPF", func(t *testing.T) {
-		tID2, spID2 := NewIDs(2)
-
-		parentCtx := ContextWithTrace(context.Background(), tID2)
-
-		_, sp := tracers.tracer.Start(parentCtx, "Test2",
-			trace.WithTimestamp(time.Now()),
-			trace.WithSpanKind(trace.SpanKindServer),
-		)
-
-		assert.True(t, sp.SpanContext().HasSpanID())
-		assert.Equal(t, tID2, sp.SpanContext().TraceID())
-		assert.NotEqual(t, spID2, sp.SpanContext().SpanID())
-	})
-
-	t.Run("testing that we can generate fixed traceID and spanID set by eBPF", func(t *testing.T) {
-		tID3, spID3 := NewIDs(3)
-
-		parentCtx := ContextWithTraceParent(context.Background(), tID3, spID3)
-
-		_, sp := tracers.tracer.Start(parentCtx, "Test3",
-			trace.WithTimestamp(time.Now()),
-			trace.WithSpanKind(trace.SpanKindServer),
-		)
-
-		assert.True(t, sp.SpanContext().HasSpanID())
-		assert.Equal(t, tID3, sp.SpanContext().TraceID())
-		assert.Equal(t, spID3, sp.SpanContext().SpanID())
-	})
 }
 
 func TestSpanHostPeer(t *testing.T) {

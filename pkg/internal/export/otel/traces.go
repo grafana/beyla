@@ -10,26 +10,38 @@ import (
 	"time"
 
 	"github.com/mariomac/pipes/pipe"
+	"go.opentelemetry.io/collector/component"
+	"go.opentelemetry.io/collector/config/configgrpc"
+	"go.opentelemetry.io/collector/config/confighttp"
+	"go.opentelemetry.io/collector/config/configopaque"
+	"go.opentelemetry.io/collector/config/configtelemetry"
+	"go.opentelemetry.io/collector/config/configtls"
+	"go.opentelemetry.io/collector/exporter"
+	"go.opentelemetry.io/collector/exporter/otlpexporter"
+	"go.opentelemetry.io/collector/exporter/otlphttpexporter"
+	"go.opentelemetry.io/collector/pdata/pcommon"
+	"go.opentelemetry.io/collector/pdata/ptrace"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
+	"go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 	trace2 "go.opentelemetry.io/otel/trace"
+	"go.uber.org/zap"
 
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/pkg/internal/request"
-	"github.com/grafana/beyla/pkg/internal/svc"
 )
 
 func tlog() *slog.Logger {
 	return slog.With("component", "otel.TracesReporter")
 }
 
-const ReporterName = "github.com/grafana/beyla"
+const reporterName = "github.com/grafana/beyla"
 
 type TracesConfig struct {
 	CommonEndpoint string `yaml:"-" env:"OTEL_EXPORTER_OTLP_ENDPOINT"`
@@ -67,17 +79,17 @@ func (m TracesConfig) Enabled() bool { //nolint:gocritic
 	return m.CommonEndpoint != "" || m.TracesEndpoint != "" || m.Grafana.TracesEnabled()
 }
 
-func (m *TracesConfig) GetProtocol() Protocol {
+func (m *TracesConfig) getProtocol() Protocol {
 	if m.TracesProtocol != "" {
 		return m.TracesProtocol
 	}
 	if m.Protocol != "" {
 		return m.Protocol
 	}
-	return m.GuessProtocol()
+	return m.guessProtocol()
 }
 
-func (m *TracesConfig) GuessProtocol() Protocol {
+func (m *TracesConfig) guessProtocol() Protocol {
 	// If no explicit protocol is set, we guess it it from the metrics enpdoint port
 	// (assuming it uses a standard port or a development-like form like 14317, 24317, 14318...)
 	ep, _, err := parseTracesEndpoint(m)
@@ -93,74 +105,126 @@ func (m *TracesConfig) GuessProtocol() Protocol {
 	return ProtocolHTTPProtobuf
 }
 
-// TracesReporter implement the graph node that receives request.Span
-// instances and forwards them as OTEL traces.
-type TracesReporter struct {
-	ctx           context.Context
-	cfg           *TracesConfig
-	traceExporter trace.SpanExporter
-	bsp           trace.SpanProcessor
-	reporters     ReporterPool[*Tracers]
+// TracesReceiver creates a terminal node that consumes request.Spans and sends OpenTelemetry metrics to the configured consumers.
+func TracesReceiver(ctx context.Context, cfg TracesConfig, ctxInfo *global.ContextInfo) pipe.FinalProvider[[]request.Span] {
+	return (&tracesOTELReceiver{ctx: ctx, cfg: cfg, ctxInfo: ctxInfo}).provideLoop
 }
 
-// Tracers handles the OTEL traces providers and exporters.
-// There is a Tracers instance for each instrumented service/process.
-type Tracers struct {
-	ctx      context.Context
-	provider *trace.TracerProvider
-	tracer   trace2.Tracer
+type tracesOTELReceiver struct {
+	ctx     context.Context
+	cfg     TracesConfig
+	ctxInfo *global.ContextInfo
 }
 
-func ReportTraces(ctx context.Context, cfg *TracesConfig, ctxInfo *global.ContextInfo) pipe.FinalProvider[[]request.Span] {
-	return func() (pipe.FinalFunc[[]request.Span], error) {
-		if !cfg.Enabled() {
-			return pipe.IgnoreFinal[[]request.Span](), nil
-		}
-		SetupInternalOTELSDKLogger(cfg.SDKLogLevel)
-
-		tr, err := newTracesReporter(ctx, cfg, ctxInfo)
+func (tr *tracesOTELReceiver) provideLoop() (pipe.FinalFunc[[]request.Span], error) {
+	if !tr.cfg.Enabled() {
+		return pipe.IgnoreFinal[[]request.Span](), nil
+	}
+	return func(in <-chan []request.Span) {
+		exp, err := getTracesExporter(tr.ctx, tr.cfg, tr.ctxInfo)
 		if err != nil {
-			slog.Error("can't instantiate OTEL traces reporter", err)
-			os.Exit(-1)
+			slog.Error("error creating traces exporter", "error", err)
+			return
 		}
-		return tr.reportTraces, nil
-	}
+		defer func() {
+			err := exp.Shutdown(tr.ctx)
+			if err != nil {
+				slog.Error("error shutting down traces exporter", "error", err)
+			}
+		}()
+		err = exp.Start(tr.ctx, nil)
+		if err != nil {
+			slog.Error("error starting traces exporter", "error", err)
+		}
+		for spans := range in {
+			for i := range spans {
+				span := &spans[i]
+				if span.IgnoreSpan == request.IgnoreTraces {
+					continue
+				}
+				traces := GenerateTraces(span)
+				err := exp.ConsumeTraces(tr.ctx, traces)
+				if err != nil {
+					slog.Error("error sending trace to consumer", "error", err)
+				}
+			}
+		}
+	}, nil
 }
 
-func newTracesReporter(ctx context.Context, cfg *TracesConfig, ctxInfo *global.ContextInfo) (*TracesReporter, error) {
-	log := tlog()
-	r := TracesReporter{ctx: ctx, cfg: cfg}
-	r.reporters = NewReporterPool[*Tracers](cfg.ReportersCacheLen,
-		func(k svc.UID, v *Tracers) {
-			llog := log.With("service", k)
-			llog.Debug("evicting traces reporter from cache")
-			go func() {
-				if err := v.provider.ForceFlush(v.ctx); err != nil {
-					llog.Warn("error flushing evicted traces provider", "error", err)
-				}
-			}()
-		}, r.newTracers)
-	// Instantiate the OTLP HTTP or GRPC traceExporter
-	var err error
-	var exporter trace.SpanExporter
-	switch proto := cfg.GetProtocol(); proto {
+func getTracesExporter(ctx context.Context, cfg TracesConfig, ctxInfo *global.ContextInfo) (exporter.Traces, error) {
+	switch proto := cfg.getProtocol(); proto {
 	case ProtocolHTTPJSON, ProtocolHTTPProtobuf, "": // zero value defaults to HTTP for backwards-compatibility
-		log.Debug("instantiating HTTP TracesReporter", "protocol", proto)
-		if exporter, err = httpTracer(ctx, cfg); err != nil {
-			return nil, fmt.Errorf("can't instantiate OTEL HTTP traces exporter: %w", err)
+		slog.Debug("instantiating HTTP TracesReporter", "protocol", proto)
+		var t trace.SpanExporter
+		var err error
+
+		opts, err := getHTTPTracesEndpointOptions(&cfg)
+		if err != nil {
+			slog.Error("can't get HTTP traces endpoint options", "error", err)
+			return nil, err
 		}
+		if t, err = httpTracer(ctx, opts); err != nil {
+			slog.Error("can't instantiate OTEL HTTP traces exporter", err)
+			return nil, err
+		}
+		endpoint, _, err := parseTracesEndpoint(&cfg)
+		if err != nil {
+			slog.Error("can't parse traces endpoint", "error", err)
+			return nil, err
+		}
+		factory := otlphttpexporter.NewFactory()
+		config := factory.CreateDefaultConfig().(*otlphttpexporter.Config)
+		config.QueueConfig.Enabled = false
+		config.ClientConfig = confighttp.ClientConfig{
+			Endpoint: endpoint.String(),
+			TLSSetting: configtls.ClientConfig{
+				Insecure:           opts.Insecure,
+				InsecureSkipVerify: cfg.InsecureSkipVerify,
+			},
+			Headers: convertHeaders(opts.HTTPHeaders),
+		}
+		set := getTraceSettings(ctxInfo, cfg, t)
+		return factory.CreateTracesExporter(ctx, set, config)
 	case ProtocolGRPC:
-		log.Debug("instantiating GRPC TracesReporter", "protocol", proto)
-		if exporter, err = grpcTracer(ctx, cfg); err != nil {
-			return nil, fmt.Errorf("can't instantiate OTEL GRPC traces exporter: %w", err)
+		slog.Debug("instantiating GRPC TracesReporter", "protocol", proto)
+		var t trace.SpanExporter
+		var err error
+		opts, err := getGRPCTracesEndpointOptions(&cfg)
+		if err != nil {
+			slog.Error("can't get GRPC traces endpoint options", "error", err)
+			return nil, err
 		}
+		if t, err = grpcTracer(ctx, opts); err != nil {
+			slog.Error("can't instantiate OTEL GRPC traces exporter: %w", err)
+			return nil, err
+		}
+		endpoint, _, err := parseTracesEndpoint(&cfg)
+		if err != nil {
+			slog.Error("can't parse GRPC traces endpoint", "error", err)
+			return nil, err
+		}
+		factory := otlpexporter.NewFactory()
+		config := factory.CreateDefaultConfig().(*otlpexporter.Config)
+		config.QueueConfig.Enabled = false
+		config.ClientConfig = configgrpc.ClientConfig{
+			Endpoint: endpoint.String(),
+			TLSSetting: configtls.ClientConfig{
+				Insecure:           opts.Insecure,
+				InsecureSkipVerify: cfg.InsecureSkipVerify,
+			},
+		}
+		set := getTraceSettings(ctxInfo, cfg, t)
+		return factory.CreateTracesExporter(ctx, set, config)
 	default:
-		return nil, fmt.Errorf("invalid protocol value: %q. Accepted values are: %s, %s, %s",
-			proto, ProtocolGRPC, ProtocolHTTPJSON, ProtocolHTTPProtobuf)
+		slog.Error(fmt.Sprintf("invalid protocol value: %q. Accepted values are: %s, %s, %s",
+			proto, ProtocolGRPC, ProtocolHTTPJSON, ProtocolHTTPProtobuf))
+		return nil, fmt.Errorf("invalid protocol value: %q", proto)
 	}
 
-	r.traceExporter = instrumentTraceExporter(exporter, ctxInfo.Metrics)
+}
 
+func getTraceSettings(ctxInfo *global.ContextInfo, cfg TracesConfig, in trace.SpanExporter) exporter.CreateSettings {
 	var opts []trace.BatchSpanProcessorOption
 	if cfg.MaxExportBatchSize > 0 {
 		opts = append(opts, trace.WithMaxExportBatchSize(cfg.MaxExportBatchSize))
@@ -174,29 +238,154 @@ func newTracesReporter(ctx context.Context, cfg *TracesConfig, ctxInfo *global.C
 	if cfg.ExportTimeout > 0 {
 		opts = append(opts, trace.WithExportTimeout(cfg.ExportTimeout))
 	}
-
-	r.bsp = trace.NewBatchSpanProcessor(r.traceExporter, opts...)
-	return &r, nil
+	tracer := instrumentTraceExporter(in, ctxInfo.Metrics)
+	bsp := trace.NewBatchSpanProcessor(tracer, opts...)
+	provider := trace.NewTracerProvider(
+		trace.WithSpanProcessor(bsp),
+		trace.WithSampler(cfg.Sampler.Implementation()),
+	)
+	telemetrySettings := component.TelemetrySettings{
+		Logger:         zap.NewNop(),
+		MeterProvider:  metric.NewMeterProvider(),
+		TracerProvider: provider,
+		MetricsLevel:   configtelemetry.LevelBasic,
+		ReportStatus: func(event *component.StatusEvent) {
+			if err := event.Err(); err != nil {
+				slog.Error("error reported by component", "error", err)
+			}
+		},
+	}
+	return exporter.CreateSettings{
+		ID:                component.NewIDWithName(component.DataTypeMetrics, "beyla"),
+		TelemetrySettings: telemetrySettings,
+	}
 }
 
-func httpTracer(ctx context.Context, cfg *TracesConfig) (*otlptrace.Exporter, error) {
-	topts, err := getHTTPTracesEndpointOptions(cfg)
-	if err != nil {
-		return nil, err
+// GenerateTraces creates a ptrace.Traces from a request.Span
+func GenerateTraces(span *request.Span) ptrace.Traces {
+	t := span.Timings()
+	start := spanStartTime(t)
+	hasSubSpans := t.Start.After(start)
+	traces := ptrace.NewTraces()
+	rs := traces.ResourceSpans().AppendEmpty()
+	ss := rs.ScopeSpans().AppendEmpty()
+	resourceAttrs := attrsToMap(getResourceAttrs(span.ServiceID).Attributes())
+	resourceAttrs.PutStr(string(semconv.OTelLibraryNameKey), reporterName)
+	resourceAttrs.CopyTo(rs.Resource().Attributes())
+
+	traceID := pcommon.TraceID(span.TraceID)
+	spanID := pcommon.SpanID(randomSpanID())
+	if traceID.IsEmpty() {
+		traceID = pcommon.TraceID(randomTraceID())
 	}
-	texp, err := otlptracehttp.New(ctx, topts.AsTraceHTTP()...)
+
+	if hasSubSpans {
+		createSubSpans(span, spanID, traceID, &ss, t)
+	} else if span.SpanID.IsValid() {
+		spanID = pcommon.SpanID(span.SpanID)
+	}
+
+	// Create a parent span for the whole request session
+	s := ss.Spans().AppendEmpty()
+	s.SetName(TraceName(span))
+	s.SetKind(ptrace.SpanKind(spanKind(span)))
+	s.SetStartTimestamp(pcommon.NewTimestampFromTime(start))
+
+	// Set trace and span IDs
+	s.SetSpanID(spanID)
+	s.SetTraceID(traceID)
+	if span.ParentSpanID.IsValid() {
+		s.SetParentSpanID(pcommon.SpanID(span.ParentSpanID))
+	}
+
+	// Set span attributes
+	attrs := traceAttributes(span)
+	m := attrsToMap(attrs)
+	m.CopyTo(s.Attributes())
+
+	// Set status code
+	statusCode := codeToStatusCode(SpanStatusCode(span))
+	s.Status().SetCode(statusCode)
+	s.SetEndTimestamp(pcommon.NewTimestampFromTime(t.End))
+	return traces
+}
+
+// createSubSpans creates the internal spans for a request.Span
+func createSubSpans(span *request.Span, parentSpanID pcommon.SpanID, traceID pcommon.TraceID, ss *ptrace.ScopeSpans, t request.Timings) {
+	// Create a child span showing the queue time
+	spQ := ss.Spans().AppendEmpty()
+	spQ.SetName("in queue")
+	spQ.SetStartTimestamp(pcommon.NewTimestampFromTime(t.RequestStart))
+	spQ.SetKind(ptrace.SpanKindInternal)
+	spQ.SetEndTimestamp(pcommon.NewTimestampFromTime(t.Start))
+	spQ.SetTraceID(traceID)
+	spQ.SetSpanID(pcommon.SpanID(randomSpanID()))
+	spQ.SetParentSpanID(parentSpanID)
+
+	// Create a child span showing the processing time
+	spP := ss.Spans().AppendEmpty()
+	spP.SetName("processing")
+	spP.SetStartTimestamp(pcommon.NewTimestampFromTime(t.Start))
+	spP.SetKind(ptrace.SpanKindInternal)
+	spP.SetEndTimestamp(pcommon.NewTimestampFromTime(t.End))
+	spP.SetTraceID(traceID)
+	if span.SpanID.IsValid() {
+		spP.SetSpanID(pcommon.SpanID(span.SpanID))
+	} else {
+		spP.SetSpanID(pcommon.SpanID(randomSpanID()))
+	}
+	spP.SetParentSpanID(parentSpanID)
+}
+
+// attrsToMap converts a slice of attribute.KeyValue to a pcommon.Map
+func attrsToMap(attrs []attribute.KeyValue) pcommon.Map {
+	m := pcommon.NewMap()
+	for _, attr := range attrs {
+		switch v := attr.Value.AsInterface().(type) {
+		case string:
+			m.PutStr(string(attr.Key), v)
+		case int64:
+			m.PutInt(string(attr.Key), v)
+		case float64:
+			m.PutDouble(string(attr.Key), v)
+		case bool:
+			m.PutBool(string(attr.Key), v)
+		}
+	}
+	return m
+}
+
+// codeToStatusCode converts a codes.Code to a ptrace.StatusCode
+func codeToStatusCode(code codes.Code) ptrace.StatusCode {
+	switch code {
+	case codes.Unset:
+		return ptrace.StatusCodeUnset
+	case codes.Error:
+		return ptrace.StatusCodeError
+	case codes.Ok:
+		return ptrace.StatusCodeOk
+	}
+	return ptrace.StatusCodeUnset
+}
+
+func convertHeaders(headers map[string]string) map[string]configopaque.String {
+	opaqueHeaders := make(map[string]configopaque.String)
+	for key, value := range headers {
+		opaqueHeaders[key] = configopaque.String(value)
+	}
+	return opaqueHeaders
+}
+
+func httpTracer(ctx context.Context, opts otlpOptions) (*otlptrace.Exporter, error) {
+	texp, err := otlptracehttp.New(ctx, opts.AsTraceHTTP()...)
 	if err != nil {
 		return nil, fmt.Errorf("creating HTTP trace exporter: %w", err)
 	}
 	return texp, nil
 }
 
-func grpcTracer(ctx context.Context, cfg *TracesConfig) (*otlptrace.Exporter, error) {
-	topts, err := getGRPCTracesEndpointOptions(cfg)
-	if err != nil {
-		return nil, err
-	}
-	texp, err := otlptracegrpc.New(ctx, topts.AsTraceGRPC()...)
+func grpcTracer(ctx context.Context, opts otlpOptions) (*otlptrace.Exporter, error) {
+	texp, err := otlptracegrpc.New(ctx, opts.AsTraceGRPC()...)
 	if err != nil {
 		return nil, fmt.Errorf("creating GRPC trace exporter: %w", err)
 	}
@@ -214,22 +403,6 @@ func instrumentTraceExporter(in trace.SpanExporter, internalMetrics imetrics.Rep
 	return &instrumentedTracesExporter{
 		SpanExporter: in,
 		internal:     internalMetrics,
-	}
-}
-
-func (r *TracesReporter) close() {
-	log := tlog()
-	log.Debug("closing all the traces reporters")
-	for _, key := range r.reporters.pool.Keys() {
-		v, _ := r.reporters.pool.Get(key)
-		plog := log.With("serviceName", key)
-		plog.Debug("shutting down traces provider")
-		if err := v.provider.Shutdown(r.ctx); err != nil {
-			log.Error("closing traces provider", err)
-		}
-	}
-	if err := r.traceExporter.Shutdown(r.ctx); err != nil {
-		log.Error("closing traces exporter", "error", err)
 	}
 }
 
@@ -294,22 +467,6 @@ func SpanKindString(span *request.Span) string {
 		return "SPAN_KIND_CLIENT"
 	}
 	return "SPAN_KIND_INTERNAL"
-}
-
-func SpanHost(span *request.Span) string {
-	if span.HostName != "" {
-		return span.HostName
-	}
-
-	return span.Host
-}
-
-func SpanPeer(span *request.Span) string {
-	if span.PeerName != "" {
-		return span.PeerName
-	}
-
-	return span.Peer
 }
 
 func traceAttributes(span *request.Span) []attribute.KeyValue {
@@ -409,112 +566,12 @@ func spanKind(span *request.Span) trace2.SpanKind {
 	return trace2.SpanKindInternal
 }
 
-func HandleTraceparent(parentCtx context.Context, span *request.Span) context.Context {
-	if span.ParentSpanID.IsValid() {
-		parentCtx = trace2.ContextWithSpanContext(parentCtx, trace2.SpanContext{}.WithTraceID(span.TraceID).WithSpanID(span.ParentSpanID).WithTraceFlags(trace2.TraceFlags(span.Flags)))
-	} else if span.TraceID.IsValid() {
-		parentCtx = ContextWithTrace(parentCtx, span.TraceID)
-	}
-
-	return parentCtx
-}
-
 func spanStartTime(t request.Timings) time.Time {
 	realStart := t.RequestStart
 	if t.Start.Before(realStart) {
 		realStart = t.Start
 	}
 	return realStart
-}
-
-func (r *TracesReporter) makeSpan(parentCtx context.Context, tracer trace2.Tracer, span *request.Span) {
-	t := span.Timings()
-
-	parentCtx = HandleTraceparent(parentCtx, span)
-	realStart := spanStartTime(t)
-	hasSubspans := t.Start.After(realStart)
-
-	if !hasSubspans {
-		// We set the eBPF calculated trace_id and span_id to be the main span
-		parentCtx = ContextWithTraceParent(parentCtx, span.TraceID, span.SpanID)
-	}
-
-	// Create a parent span for the whole request session
-	ctx, sp := tracer.Start(parentCtx, TraceName(span),
-		trace2.WithTimestamp(realStart),
-		trace2.WithSpanKind(spanKind(span)),
-		trace2.WithAttributes(traceAttributes(span)...),
-	)
-
-	sp.SetStatus(SpanStatusCode(span), "")
-
-	if hasSubspans {
-		var spP trace2.Span
-
-		// Create a child span showing the queue time
-		_, spQ := tracer.Start(ctx, "in queue",
-			trace2.WithTimestamp(t.RequestStart),
-			trace2.WithSpanKind(trace2.SpanKindInternal),
-		)
-		spQ.End(trace2.WithTimestamp(t.Start))
-
-		// Create a child span showing the processing time
-		// Override the active context for the span to be the processing span
-		// The trace_id and span_id from eBPF are attached here
-		ctx = ContextWithTraceParent(ctx, span.TraceID, span.SpanID)
-		_, spP = tracer.Start(ctx, "processing",
-			trace2.WithTimestamp(t.Start),
-			trace2.WithSpanKind(trace2.SpanKindInternal),
-		)
-		spP.End(trace2.WithTimestamp(t.End))
-	}
-
-	sp.End(trace2.WithTimestamp(t.End))
-}
-
-func (r *TracesReporter) reportTraces(input <-chan []request.Span) {
-	var lastSvcUID svc.UID
-	var reporter trace2.Tracer
-	for spans := range input {
-		for i := range spans {
-			span := &spans[i]
-
-			// If we are ignoring this span because of route patterns, don't do anything
-			if span.IgnoreSpan == request.IgnoreTraces {
-				continue
-			}
-
-			// small optimization: read explanation in MetricsReporter.reportMetrics
-			if span.ServiceID.UID != lastSvcUID || reporter == nil {
-				lm, err := r.reporters.For(span.ServiceID)
-				if err != nil {
-					tlog().Error("unexpected error creating OTEL resource. Ignoring trace",
-						err, "service", span.ServiceID)
-					continue
-				}
-				lastSvcUID = span.ServiceID.UID
-				reporter = lm.tracer
-			}
-
-			r.makeSpan(r.ctx, reporter, span)
-		}
-	}
-	r.close()
-}
-
-func (r *TracesReporter) newTracers(service svc.ID) (*Tracers, error) {
-	tlog().Debug("creating new Tracers reporter", "service", service)
-	tracers := Tracers{
-		ctx: r.ctx,
-		provider: trace.NewTracerProvider(
-			trace.WithResource(Resource(service)),
-			trace.WithSpanProcessor(r.bsp),
-			trace.WithSampler(r.cfg.Sampler.Implementation()),
-			trace.WithIDGenerator(&BeylaIDGenerator{}),
-		),
-	}
-	tracers.tracer = tracers.provider.Tracer(ReporterName)
-	return &tracers, nil
 }
 
 // the HTTP path will be defined from one of the following sources, from highest to lowest priority
@@ -561,7 +618,7 @@ func getHTTPTracesEndpointOptions(cfg *TracesConfig) (otlpOptions, error) {
 		log.Debug("Specifying insecure connection", "scheme", murl.Scheme)
 		opts.Insecure = true
 	}
-	// If the value is set from the OTEL_EXPORTER_OTLP_ENDPOINT common property, we need to add /v1/metrics to the path
+	// If the value is set from the OTEL_EXPORTER_OTLP_ENDPOINT common property, we need to add /v1/traces to the path
 	// otherwise, we leave the path that is explicitly set by the user
 	opts.URLPath = murl.Path
 	if isCommon {
@@ -628,5 +685,5 @@ func setTracesProtocol(cfg *TracesConfig) {
 		return
 	}
 	// unset. Guessing it
-	os.Setenv(envTracesProtocol, string(cfg.GuessProtocol()))
+	os.Setenv(envTracesProtocol, string(cfg.guessProtocol()))
 }

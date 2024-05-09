@@ -5,7 +5,7 @@ import (
 
 	v1 "k8s.io/api/core/v1"
 
-	"github.com/grafana/beyla/pkg/internal/export/metric/attr"
+	attr "github.com/grafana/beyla/pkg/internal/export/attributes/names"
 )
 
 type OwnerType int

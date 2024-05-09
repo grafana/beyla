@@ -1,4 +1,4 @@
-package metric
+package attributes
 
 import (
 	"testing"
@@ -6,7 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/grafana/beyla/pkg/internal/export/metric/attr"
+	attr "github.com/grafana/beyla/pkg/internal/export/attributes/names"
 )
 
 func TestNormalize(t *testing.T) {
@@ -76,4 +76,16 @@ func TestDefault(t *testing.T) {
 		"k8s.src.namespace",
 		"k8s.src.owner.name",
 	}, p.For(BeylaNetworkFlow))
+}
+
+func TestTraces(t *testing.T) {
+	p, err := NewAttrSelector(GroupTraces, Selection{
+		"traces": InclusionLists{
+			Include: []string{"db.statement", "beyla_ip", "src.*", "k8s.*"},
+		},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, []attr.Name{
+		"db.statement",
+	}, p.For(Traces))
 }

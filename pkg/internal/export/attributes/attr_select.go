@@ -1,11 +1,11 @@
-package metric
+package attributes
 
 import (
 	"maps"
 	"path"
 	"strings"
 
-	"github.com/grafana/beyla/pkg/internal/export/metric/attr"
+	attr "github.com/grafana/beyla/pkg/internal/export/attributes/names"
 )
 
 // Selection specifies which attributes are allowed for each metric.

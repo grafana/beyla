@@ -14,7 +14,7 @@ import (
 
 	"github.com/grafana/beyla/pkg/beyla"
 	"github.com/grafana/beyla/pkg/internal/connector"
-	"github.com/grafana/beyla/pkg/internal/export/metric"
+	"github.com/grafana/beyla/pkg/internal/export/attributes"
 	"github.com/grafana/beyla/pkg/internal/export/otel"
 	"github.com/grafana/beyla/pkg/internal/export/prom"
 	"github.com/grafana/beyla/pkg/internal/filter"
@@ -50,8 +50,8 @@ func TestFilter(t *testing.T) {
 			Filters: filter.AttributesConfig{
 				Network: map[string]filter.MatchDefinition{"transport": {Match: "TCP"}},
 			},
-			Attributes: beyla.Attributes{Select: metric.Selection{
-				metric.BeylaNetworkFlow.Section: metric.InclusionLists{
+			Attributes: beyla.Attributes{Select: attributes.Selection{
+				attributes.BeylaNetworkFlow.Section: attributes.InclusionLists{
 					Include: []string{"beyla_ip", "direction", "dst_port", "iface", "src_port", "transport"},
 				},
 			}},

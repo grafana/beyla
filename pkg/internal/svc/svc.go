@@ -3,7 +3,7 @@ package svc
 import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 
-	"github.com/grafana/beyla/pkg/internal/export/metric/attr"
+	attr "github.com/grafana/beyla/pkg/internal/export/attributes/names"
 )
 
 type InstrumentableType int

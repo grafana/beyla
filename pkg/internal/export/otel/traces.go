@@ -32,6 +32,8 @@ import (
 	trace2 "go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 
+	"github.com/grafana/beyla/pkg/internal/export/attributes"
+	attr "github.com/grafana/beyla/pkg/internal/export/attributes/names"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/pkg/internal/request"
@@ -106,14 +108,30 @@ func (m *TracesConfig) guessProtocol() Protocol {
 }
 
 // TracesReceiver creates a terminal node that consumes request.Spans and sends OpenTelemetry metrics to the configured consumers.
-func TracesReceiver(ctx context.Context, cfg TracesConfig, ctxInfo *global.ContextInfo) pipe.FinalProvider[[]request.Span] {
-	return (&tracesOTELReceiver{ctx: ctx, cfg: cfg, ctxInfo: ctxInfo}).provideLoop
+func TracesReceiver(ctx context.Context, cfg TracesConfig, ctxInfo *global.ContextInfo, userAttribSelection attributes.Selection) pipe.FinalProvider[[]request.Span] {
+	return (&tracesOTELReceiver{ctx: ctx, cfg: cfg, ctxInfo: ctxInfo, attributes: userAttribSelection}).provideLoop
 }
 
 type tracesOTELReceiver struct {
-	ctx     context.Context
-	cfg     TracesConfig
-	ctxInfo *global.ContextInfo
+	ctx        context.Context
+	cfg        TracesConfig
+	ctxInfo    *global.ContextInfo
+	attributes attributes.Selection
+}
+
+func GetUserSelectedAttributes(attrs attributes.Selection) (map[attr.Name]struct{}, error) {
+	// Get user attributes
+	attribProvider, err := attributes.NewAttrSelector(attributes.GroupTraces, attrs)
+	if err != nil {
+		return nil, err
+	}
+	traceAttrsArr := attribProvider.For(attributes.Traces)
+	traceAttrs := make(map[attr.Name]struct{})
+	for _, a := range traceAttrsArr {
+		traceAttrs[a] = struct{}{}
+	}
+
+	return traceAttrs, err
 }
 
 func (tr *tracesOTELReceiver) provideLoop() (pipe.FinalFunc[[]request.Span], error) {
@@ -135,14 +153,22 @@ func (tr *tracesOTELReceiver) provideLoop() (pipe.FinalFunc[[]request.Span], err
 		err = exp.Start(tr.ctx, nil)
 		if err != nil {
 			slog.Error("error starting traces exporter", "error", err)
+			return
 		}
+
+		traceAttrs, err := GetUserSelectedAttributes(tr.attributes)
+		if err != nil {
+			slog.Error("error selecting user trace attributes", "error", err)
+			return
+		}
+
 		for spans := range in {
 			for i := range spans {
 				span := &spans[i]
 				if span.IgnoreSpan == request.IgnoreTraces {
 					continue
 				}
-				traces := GenerateTraces(span)
+				traces := GenerateTraces(span, traceAttrs)
 				err := exp.ConsumeTraces(tr.ctx, traces)
 				if err != nil {
 					slog.Error("error sending trace to consumer", "error", err)
@@ -262,7 +288,7 @@ func getTraceSettings(ctxInfo *global.ContextInfo, cfg TracesConfig, in trace.Sp
 }
 
 // GenerateTraces creates a ptrace.Traces from a request.Span
-func GenerateTraces(span *request.Span) ptrace.Traces {
+func GenerateTraces(span *request.Span, userAttrs map[attr.Name]struct{}) ptrace.Traces {
 	t := span.Timings()
 	start := spanStartTime(t)
 	hasSubSpans := t.Start.After(start)
@@ -299,7 +325,7 @@ func GenerateTraces(span *request.Span) ptrace.Traces {
 	}
 
 	// Set span attributes
-	attrs := traceAttributes(span)
+	attrs := traceAttributes(span, userAttrs)
 	m := attrsToMap(attrs)
 	m.CopyTo(s.Attributes())
 
@@ -469,7 +495,23 @@ func SpanKindString(span *request.Span) string {
 	return "SPAN_KIND_INTERNAL"
 }
 
-func traceAttributes(span *request.Span) []attribute.KeyValue {
+func SpanHost(span *request.Span) string {
+	if span.HostName != "" {
+		return span.HostName
+	}
+
+	return span.Host
+}
+
+func SpanPeer(span *request.Span) string {
+	if span.PeerName != "" {
+		return span.PeerName
+	}
+
+	return span.Peer
+}
+
+func traceAttributes(span *request.Span, optionalAttrs map[attr.Name]struct{}) []attribute.KeyValue {
 	var attrs []attribute.KeyValue
 
 	switch span.Type {
@@ -513,11 +555,12 @@ func traceAttributes(span *request.Span) []attribute.KeyValue {
 			request.ServerPort(span.HostPort),
 		}
 	case request.EventTypeSQLClient:
+		if _, ok := optionalAttrs[attr.IncludeDBStatement]; ok {
+			attrs = append(attrs, semconv.DBStatement(span.Statement))
+		}
 		operation := span.Method
 		if operation != "" {
-			attrs = []attribute.KeyValue{
-				semconv.DBOperation(operation),
-			}
+			attrs = append(attrs, semconv.DBOperation(operation))
 			table := span.Path
 			if table != "" {
 				attrs = append(attrs, semconv.DBSQLTable(table))

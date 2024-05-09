@@ -75,6 +75,7 @@ type Span struct {
 	PeerName       string
 	HostName       string
 	OtherNamespace string
+	Statement      string
 }
 
 func (s *Span) Inside(parent *Span) bool {

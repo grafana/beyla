@@ -2,7 +2,7 @@ version: "3.9"
 services:
   testserver:
     build:
-      context: ../integration/components/sqlclient
+      context: ../../integration/components/sqlclient
       dockerfile: Dockerfile
     image: gosqlclient
     ports:
@@ -10,7 +10,7 @@ services:
   # eBPF auto instrumenter
   autoinstrumenter:
     build:
-      context: ../..
+      context: ../../..
       dockerfile: ./test/integration/components/beyla/Dockerfile
     command:
       - --config=/configs/instrumenter-config-traces.yml

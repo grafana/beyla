@@ -21,9 +21,12 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 	"go.opentelemetry.io/otel/trace"
 
+	"github.com/grafana/beyla/pkg/internal/export/attributes"
+	attr "github.com/grafana/beyla/pkg/internal/export/attributes/names"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/pkg/internal/request"
+	"github.com/grafana/beyla/pkg/internal/sqlprune"
 )
 
 func TestHTTPTracesEndpoint(t *testing.T) {
@@ -235,6 +238,7 @@ func TestTracesSetupHTTP_DoNotOverrideEnv(t *testing.T) {
 		assert.Equal(t, "foo-proto", os.Getenv(envProtocol))
 	})
 }
+
 func TestGenerateTraces(t *testing.T) {
 	t.Run("test with subtraces - with parent spanId", func(t *testing.T) {
 		start := time.Now()
@@ -253,7 +257,7 @@ func TestGenerateTraces(t *testing.T) {
 			TraceID:      traceID,
 			SpanID:       spanID,
 		}
-		traces := GenerateTraces(span)
+		traces := GenerateTraces(span, map[attr.Name]struct{}{})
 
 		assert.Equal(t, 1, traces.ResourceSpans().Len())
 		assert.Equal(t, 1, traces.ResourceSpans().At(0).ScopeSpans().Len())
@@ -298,7 +302,7 @@ func TestGenerateTraces(t *testing.T) {
 			SpanID:       spanID,
 			TraceID:      traceID,
 		}
-		traces := GenerateTraces(span)
+		traces := GenerateTraces(span, map[attr.Name]struct{}{})
 
 		assert.Equal(t, 1, traces.ResourceSpans().Len())
 		assert.Equal(t, 1, traces.ResourceSpans().At(0).ScopeSpans().Len())
@@ -334,7 +338,7 @@ func TestGenerateTraces(t *testing.T) {
 			Route:        "/test",
 			Status:       200,
 		}
-		traces := GenerateTraces(span)
+		traces := GenerateTraces(span, map[attr.Name]struct{}{})
 
 		assert.Equal(t, 1, traces.ResourceSpans().Len())
 		assert.Equal(t, 1, traces.ResourceSpans().At(0).ScopeSpans().Len())
@@ -371,7 +375,7 @@ func TestGenerateTraces(t *testing.T) {
 			SpanID:       spanID,
 			TraceID:      traceID,
 		}
-		traces := GenerateTraces(span)
+		traces := GenerateTraces(span, map[attr.Name]struct{}{})
 
 		assert.Equal(t, 1, traces.ResourceSpans().Len())
 		assert.Equal(t, 1, traces.ResourceSpans().At(0).ScopeSpans().Len())
@@ -396,7 +400,7 @@ func TestGenerateTraces(t *testing.T) {
 			ParentSpanID: parentSpanID,
 			TraceID:      traceID,
 		}
-		traces := GenerateTraces(span)
+		traces := GenerateTraces(span, map[attr.Name]struct{}{})
 
 		assert.Equal(t, 1, traces.ResourceSpans().Len())
 		assert.Equal(t, 1, traces.ResourceSpans().At(0).ScopeSpans().Len())
@@ -416,7 +420,7 @@ func TestGenerateTraces(t *testing.T) {
 			Method:       "GET",
 			Route:        "/test",
 		}
-		traces := GenerateTraces(span)
+		traces := GenerateTraces(span, map[attr.Name]struct{}{})
 
 		assert.Equal(t, 1, traces.ResourceSpans().Len())
 		assert.Equal(t, 1, traces.ResourceSpans().At(0).ScopeSpans().Len())
@@ -425,6 +429,69 @@ func TestGenerateTraces(t *testing.T) {
 
 		assert.NotEmpty(t, spans.At(0).SpanID().String())
 		assert.NotEmpty(t, spans.At(0).TraceID().String())
+	})
+
+}
+
+func TestGenerateTracesAttributes(t *testing.T) {
+	t.Run("test SQL trace generation, no statement", func(t *testing.T) {
+		span := makeSQLRequestSpan("SELECT password FROM credentials WHERE username=\"bill\"")
+		traces := GenerateTraces(&span, map[attr.Name]struct{}{})
+
+		assert.Equal(t, 1, traces.ResourceSpans().Len())
+		assert.Equal(t, 1, traces.ResourceSpans().At(0).ScopeSpans().Len())
+		assert.Equal(t, 1, traces.ResourceSpans().At(0).ScopeSpans().At(0).Spans().Len())
+		spans := traces.ResourceSpans().At(0).ScopeSpans().At(0).Spans()
+
+		assert.NotEmpty(t, spans.At(0).SpanID().String())
+		assert.NotEmpty(t, spans.At(0).TraceID().String())
+
+		attrs := spans.At(0).Attributes()
+
+		assert.Equal(t, 2, attrs.Len())
+		ensureTraceStrAttr(t, attrs, semconv.DBOperationKey, "SELECT")
+		ensureTraceStrAttr(t, attrs, semconv.DBSQLTableKey, "credentials")
+		ensureTraceAttrNotExists(t, attrs, semconv.DBStatementKey)
+	})
+
+	t.Run("test SQL trace generation, unknown attribute", func(t *testing.T) {
+		span := makeSQLRequestSpan("SELECT password FROM credentials WHERE username=\"bill\"")
+		traces := GenerateTraces(&span, map[attr.Name]struct{}{"db.operation": {}})
+
+		assert.Equal(t, 1, traces.ResourceSpans().Len())
+		assert.Equal(t, 1, traces.ResourceSpans().At(0).ScopeSpans().Len())
+		assert.Equal(t, 1, traces.ResourceSpans().At(0).ScopeSpans().At(0).Spans().Len())
+		spans := traces.ResourceSpans().At(0).ScopeSpans().At(0).Spans()
+
+		assert.NotEmpty(t, spans.At(0).SpanID().String())
+		assert.NotEmpty(t, spans.At(0).TraceID().String())
+
+		attrs := spans.At(0).Attributes()
+
+		assert.Equal(t, 2, attrs.Len())
+		ensureTraceStrAttr(t, attrs, semconv.DBOperationKey, "SELECT")
+		ensureTraceStrAttr(t, attrs, semconv.DBSQLTableKey, "credentials")
+		ensureTraceAttrNotExists(t, attrs, semconv.DBStatementKey)
+	})
+
+	t.Run("test SQL trace generation, unknown attribute", func(t *testing.T) {
+		span := makeSQLRequestSpan("SELECT password FROM credentials WHERE username=\"bill\"")
+		traces := GenerateTraces(&span, map[attr.Name]struct{}{attr.IncludeDBStatement: {}})
+
+		assert.Equal(t, 1, traces.ResourceSpans().Len())
+		assert.Equal(t, 1, traces.ResourceSpans().At(0).ScopeSpans().Len())
+		assert.Equal(t, 1, traces.ResourceSpans().At(0).ScopeSpans().At(0).Spans().Len())
+		spans := traces.ResourceSpans().At(0).ScopeSpans().At(0).Spans()
+
+		assert.NotEmpty(t, spans.At(0).SpanID().String())
+		assert.NotEmpty(t, spans.At(0).TraceID().String())
+
+		attrs := spans.At(0).Attributes()
+
+		assert.Equal(t, 3, attrs.Len())
+		ensureTraceStrAttr(t, attrs, semconv.DBOperationKey, "SELECT")
+		ensureTraceStrAttr(t, attrs, semconv.DBSQLTableKey, "credentials")
+		ensureTraceStrAttr(t, attrs, semconv.DBStatementKey, "SELECT password FROM credentials WHERE username=\"bill\"")
 	})
 }
 
@@ -545,7 +612,9 @@ func TestTraces_InternalInstrumentation(t *testing.T) {
 		},
 		&global.ContextInfo{
 			Metrics: internalTraces,
-		}))
+		},
+		attributes.Selection{},
+	))
 	graph, err := builder.Build()
 	require.NoError(t, err)
 
@@ -641,7 +710,9 @@ func TestTraces_InternalInstrumentationSampling(t *testing.T) {
 		},
 		&global.ContextInfo{
 			Metrics: internalTraces,
-		}))
+		},
+		attributes.Selection{},
+	))
 
 	graph, err := builder.Build()
 	require.NoError(t, err)
@@ -864,4 +935,20 @@ func NewIDs(counter int) (trace.TraceID, trace.SpanID) {
 	binary.BigEndian.PutUint64(spanID[:], uint64(counter))
 
 	return trace.TraceID(traceID), trace.SpanID(spanID)
+}
+
+func makeSQLRequestSpan(sql string) request.Span {
+	method, path := sqlprune.SQLParseOperationAndTable(sql)
+	return request.Span{Type: request.EventTypeSQLClient, Method: method, Path: path, Statement: sql}
+}
+
+func ensureTraceStrAttr(t *testing.T, attrs pcommon.Map, key attribute.Key, val string) {
+	v, ok := attrs.Get(string(key))
+	assert.True(t, ok)
+	assert.Equal(t, val, v.AsString())
+}
+
+func ensureTraceAttrNotExists(t *testing.T, attrs pcommon.Map, key attribute.Key) {
+	_, ok := attrs.Get(string(key))
+	assert.False(t, ok)
 }

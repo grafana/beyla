@@ -1,9 +1,9 @@
-package metric
+package attributes
 
 import (
 	"maps"
 
-	"github.com/grafana/beyla/pkg/internal/export/metric/attr"
+	attr "github.com/grafana/beyla/pkg/internal/export/attributes/names"
 )
 
 // AttrGroups will let enabling by default some groups of attributes under
@@ -19,6 +19,7 @@ const (
 	GroupNetCIDR
 	GroupPeerInfo // TODO Beyla 2.0: remove when we remove ReportPeerInfo configuration option
 	GroupTarget   // TODO Beyla 2.0: remove when we remove ReportTarget configuration option
+	GroupTraces
 )
 
 func (e *AttrGroups) Has(groups AttrGroups) bool {
@@ -192,6 +193,11 @@ func getDefinitions(groups AttrGroups) map[Section]AttrReportGroup {
 			SubGroups: []*AttrReportGroup{&prometheusAttributes, &appKubeAttributes},
 			Attributes: map[attr.Name]Default{
 				attr.DBOperation: true,
+			},
+		},
+		Traces.Section: {
+			Attributes: map[attr.Name]Default{
+				attr.IncludeDBStatement: false,
 			},
 		},
 	}

@@ -9,7 +9,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/grafana/beyla/pkg/internal/connector"
-	"github.com/grafana/beyla/pkg/internal/export/metric"
+	"github.com/grafana/beyla/pkg/internal/export/attributes"
 	"github.com/grafana/beyla/pkg/internal/export/otel"
 	"github.com/grafana/beyla/pkg/internal/export/prom"
 	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
@@ -19,7 +19,7 @@ import (
 // PrometheusConfig for network metrics just wraps the global prom.PrometheusConfig as provided by the user
 type PrometheusConfig struct {
 	Config             *prom.PrometheusConfig
-	AttributeSelectors metric.Selection
+	AttributeSelectors attributes.Selection
 }
 
 // nolint:gocritic
@@ -40,7 +40,7 @@ type metricsReporter struct {
 
 	promConnect *connector.PrometheusManager
 
-	attrs []metric.Field[*ebpf.Record, string]
+	attrs []attributes.Field[*ebpf.Record, string]
 
 	bgCtx context.Context
 }
@@ -69,16 +69,16 @@ func newReporter(
 	group := ctxInfo.MetricAttributeGroups
 	// this property can't be set inside the ConfiguredGroups function, otherwise the
 	// OTEL exporter would report also some prometheus-exclusive attributes
-	group.Add(metric.GroupPrometheus)
+	group.Add(attributes.GroupPrometheus)
 
-	provider, err := metric.NewAttrSelector(group, cfg.AttributeSelectors)
+	provider, err := attributes.NewAttrSelector(group, cfg.AttributeSelectors)
 	if err != nil {
 		return nil, fmt.Errorf("network Prometheus exporter attributes enable: %w", err)
 	}
 
-	attrs := metric.PrometheusGetters(
+	attrs := attributes.PrometheusGetters(
 		ebpf.RecordGetters,
-		provider.For(metric.BeylaNetworkFlow))
+		provider.For(attributes.BeylaNetworkFlow))
 
 	labelNames := make([]string, 0, len(attrs))
 	for _, label := range attrs {
@@ -93,7 +93,7 @@ func newReporter(
 		promConnect: ctxInfo.Prometheus,
 		attrs:       attrs,
 		flowBytes: NewExpirer(prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: metric.BeylaNetworkFlow.Prom,
+			Name: attributes.BeylaNetworkFlow.Prom,
 			Help: "bytes submitted from a source network endpoint to a destination network endpoint",
 		}, labelNames), cfg.Config.TTL),
 	}

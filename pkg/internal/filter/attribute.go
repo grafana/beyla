@@ -6,8 +6,8 @@ import (
 	"github.com/gobwas/glob"
 	"github.com/mariomac/pipes/pipe"
 
-	"github.com/grafana/beyla/pkg/internal/export/metric"
-	"github.com/grafana/beyla/pkg/internal/export/metric/attr"
+	"github.com/grafana/beyla/pkg/internal/export/attributes"
+	attr "github.com/grafana/beyla/pkg/internal/export/attributes/names"
 )
 
 // AttributesConfig stores the user-provided section for filtering either Application or Network
@@ -22,7 +22,7 @@ type AttributeFamilyConfig map[string]MatchDefinition
 
 // ByAttribute provides a pipeline node that drops all the records of type T (*ebpf.Record, or *request.Span)
 // that do not match the provided AttributeFamilyConfig.
-func ByAttribute[T any](config AttributeFamilyConfig, getters metric.NamedGetters[T, string]) pipe.MiddleProvider[[]T, []T] {
+func ByAttribute[T any](config AttributeFamilyConfig, getters attributes.NamedGetters[T, string]) pipe.MiddleProvider[[]T, []T] {
 	return func() (pipe.MiddleFunc[[]T, []T], error) {
 		if len(config) == 0 {
 			// No filter configuration provided. The node will be ignored
@@ -41,7 +41,7 @@ type filter[T any] struct {
 	matchers []Matcher[T]
 }
 
-func newFilter[T any](config AttributeFamilyConfig, getters metric.NamedGetters[T, string]) (*filter[T], error) {
+func newFilter[T any](config AttributeFamilyConfig, getters attributes.NamedGetters[T, string]) (*filter[T], error) {
 	// Internally, from code, we use the OTEL-like naming (attr.Name) for the attributes,
 	// which usually uses dot-separation but sometimes also use underscore.
 	// Since we allow users to specify metrics in both formats, we convert any user-provided
@@ -49,7 +49,7 @@ func newFilter[T any](config AttributeFamilyConfig, getters metric.NamedGetters[
 	// Then, to validate the user-provided input, we map the prom-like attributes to
 	// our internal representation.
 	attrProm2Normal := map[string]attr.Name{}
-	for normalizedName := range metric.AllAttributeNames() {
+	for normalizedName := range attributes.AllAttributeNames() {
 		attrProm2Normal[normalizedName.Prom()] = normalizedName
 	}
 	// Validate and build Matcher implementations for the user-provided attributes.
@@ -70,7 +70,7 @@ func newFilter[T any](config AttributeFamilyConfig, getters metric.NamedGetters[
 
 // buildMatcher returns a Matcher given an attribute name, the user-provided MatchDefinition, and the provided
 // list of getters for a given record type T.
-func buildMatcher[T any](getters metric.NamedGetters[T, string], attribute attr.Name, def *MatchDefinition) (Matcher[T], error) {
+func buildMatcher[T any](getters attributes.NamedGetters[T, string], attribute attr.Name, def *MatchDefinition) (Matcher[T], error) {
 	m := Matcher[T]{}
 	if err := def.Validate(); err != nil {
 		return m, err

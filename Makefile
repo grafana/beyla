@@ -251,17 +251,21 @@ itest-coverage-data:
 bin/ginkgo:
 	$(call go-install-tool,$(GINKGO),github.com/onsi/ginkgo/v2/ginkgo,latest)
 
+OATS_TESTS = sql
+
 .PHONY: oats-prereq
 oats-prereq: bin/ginkgo
-	cd test/oats && go mod vendor
+	$(foreach test,$(OATS_TESTS),\
+	cd test/oats/$(test) && mkdir -p $(TEST_OUTPUT)/run;)
 
 .PHONY: oats-test
 oats-test: oats-prereq
-	cd test/oats && TESTCASE_BASE_PATH=./yaml $(GINKGO) -v -r
+	$(foreach test,$(OATS_TESTS),\
+	cd test/oats/$(test) && TESTCASE_BASE_PATH=./yaml $(GINKGO) -v -r;)
 
 .PHONY: oats-test-debug
 oats-test-debug: oats-prereq
-	cd test/oats && TESTCASE_BASE_PATH=./yaml TESTCASE_MANUAL_DEBUG=true TESTCASE_TIMEOUT=1h $(GINKGO) -v -r
+	cd test/oats/sql && TESTCASE_BASE_PATH=./yaml TESTCASE_MANUAL_DEBUG=true TESTCASE_TIMEOUT=1h $(GINKGO) -v -r
 
 .PHONY: drone
 drone:

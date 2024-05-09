@@ -7,8 +7,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-var TimeNow = time.Now
-
 func plog() *slog.Logger {
 	return slog.With("component", "prom.Expirer")
 }
@@ -21,18 +19,11 @@ type Expirer[T prometheus.Metric] struct {
 
 // NewExpirer creates a metric that wraps a given CounterVec. Its labeled instances are dropped
 // if they haven't been updated during the last timeout period
-func NewExpirer[T prometheus.Metric](wrapped *prometheus.MetricVec, expireTime time.Duration) *Expirer[T] {
+func NewExpirer[T prometheus.Metric](wrapped *prometheus.MetricVec, clock func() time.Time, expireTime time.Duration) *Expirer[T] {
 	return &Expirer[T]{
 		wrapped: wrapped,
-		entries: NewExpiryMap[prometheus.Metric](expireTime, WithClock[prometheus.Metric](TimeNow)),
+		entries: NewExpiryMap[prometheus.Metric](clock, expireTime),
 	}
-}
-
-// UpdateTime updates the last access time to be annotated to any new or existing metric.
-// It is a required operation before processing a given
-// batch of metrics (invoking the WithLabelValues).
-func (ex *Expirer[T]) UpdateTime() {
-	ex.entries.UpdateTime()
 }
 
 // WithLabelValues returns the Counter for the given slice of label

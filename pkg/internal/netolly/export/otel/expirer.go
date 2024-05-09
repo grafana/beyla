@@ -34,18 +34,11 @@ type Counter struct {
 
 // NewExpirer creates a metric that wraps a Counter. Its labeled instances are dropped
 // if they haven't been updated during the last timeout period
-func NewExpirer(attrs []metric2.Field[*ebpf.Record, string], expireTime time.Duration) *Expirer {
+func NewExpirer(attrs []metric2.Field[*ebpf.Record, string], clock expire.Clock, expireTime time.Duration) *Expirer {
 	return &Expirer{
 		attrs:   attrs,
-		entries: expire.NewExpiryMap[*Counter](expireTime, expire.WithClock[*Counter](timeNow)),
+		entries: expire.NewExpiryMap[*Counter](clock, expireTime),
 	}
-}
-
-// UpdateTime updates the last access time to be annotated to any new or existing metric.
-// It is a required operation before processing a given
-// batch of metrics (invoking the WithLabelValues).
-func (ex *Expirer) UpdateTime() {
-	ex.entries.UpdateTime()
 }
 
 // ForRecord returns the Counter for the given eBPF record. If that record

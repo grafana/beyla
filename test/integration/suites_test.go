@@ -222,7 +222,7 @@ func TestSuite_PrometheusScrape(t *testing.T) {
 	t.Run("Testing Beyla Build Info metric", testPrometheusBeylaBuildInfo)
 
 	t.Run("BPF pinning folder mounted", testBPFPinningMounted)
-	//require.NoError(t, compose.Close())
+	require.NoError(t, compose.Close())
 	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
 }
 

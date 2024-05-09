@@ -24,6 +24,8 @@ import (
 	"github.com/grafana/beyla/pkg/internal/svc"
 )
 
+var timeNow = time.Now
+
 // using labels and names that are equivalent names to the OTEL attributes
 // but following the different naming conventions
 const (
@@ -161,6 +163,7 @@ type metricsReporter struct {
 
 	promConnect *connector.PrometheusManager
 
+	clock   *expire.CachedClock
 	bgCtx   context.Context
 	ctxInfo *global.ContextInfo
 
@@ -217,12 +220,14 @@ func newReporter(
 	attrSQLClientDuration := metric.PrometheusGetters(request.SpanPromGetters,
 		attrsProvider.For(metric.HTTPServerDuration))
 
+	clock := expire.NewCachedClock(timeNow)
 	// If service name is not explicitly set, we take the service name as set by the
 	// executable inspector
 	mr := &metricsReporter{
 		bgCtx:                     ctx,
 		ctxInfo:                   ctxInfo,
 		cfg:                       cfg,
+		clock:                     clock,
 		promConnect:               ctxInfo.Prometheus,
 		attrHTTPDuration:          attrHTTPDuration,
 		attrHTTPClientDuration:    attrHTTPClientDuration,
@@ -243,7 +248,7 @@ func newReporter(
 				"version":   buildinfo.Version,
 				"revision":  buildinfo.Revision,
 			},
-		}, beylaInfoLabelNames).MetricVec, cfg.TTL),
+		}, beylaInfoLabelNames).MetricVec, clock.Time, cfg.TTL),
 		httpDuration: expire.NewExpirer[prometheus.Histogram](prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Name:                            metric.HTTPServerDuration.Prom,
 			Help:                            "duration of HTTP service calls from the server side, in seconds",
@@ -251,7 +256,7 @@ func newReporter(
 			NativeHistogramBucketFactor:     defaultHistogramBucketFactor,
 			NativeHistogramMaxBucketNumber:  defaultHistogramMaxBucketNumber,
 			NativeHistogramMinResetDuration: defaultHistogramMinResetDuration,
-		}, labelNames(attrHTTPDuration)).MetricVec, cfg.TTL),
+		}, labelNames(attrHTTPDuration)).MetricVec, clock.Time, cfg.TTL),
 		httpClientDuration: expire.NewExpirer[prometheus.Histogram](prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Name:                            metric.HTTPClientDuration.Prom,
 			Help:                            "duration of HTTP service calls from the client side, in seconds",
@@ -259,7 +264,7 @@ func newReporter(
 			NativeHistogramBucketFactor:     defaultHistogramBucketFactor,
 			NativeHistogramMaxBucketNumber:  defaultHistogramMaxBucketNumber,
 			NativeHistogramMinResetDuration: defaultHistogramMinResetDuration,
-		}, labelNames(attrHTTPClientDuration)).MetricVec, cfg.TTL),
+		}, labelNames(attrHTTPClientDuration)).MetricVec, clock.Time, cfg.TTL),
 		grpcDuration: expire.NewExpirer[prometheus.Histogram](prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Name:                            metric.RPCServerDuration.Prom,
 			Help:                            "duration of RCP service calls from the server side, in seconds",
@@ -267,7 +272,7 @@ func newReporter(
 			NativeHistogramBucketFactor:     defaultHistogramBucketFactor,
 			NativeHistogramMaxBucketNumber:  defaultHistogramMaxBucketNumber,
 			NativeHistogramMinResetDuration: defaultHistogramMinResetDuration,
-		}, labelNames(attrGRPCDuration)).MetricVec, cfg.TTL),
+		}, labelNames(attrGRPCDuration)).MetricVec, clock.Time, cfg.TTL),
 		grpcClientDuration: expire.NewExpirer[prometheus.Histogram](prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Name:                            metric.RPCClientDuration.Prom,
 			Help:                            "duration of GRPC service calls from the client side, in seconds",
@@ -275,7 +280,7 @@ func newReporter(
 			NativeHistogramBucketFactor:     defaultHistogramBucketFactor,
 			NativeHistogramMaxBucketNumber:  defaultHistogramMaxBucketNumber,
 			NativeHistogramMinResetDuration: defaultHistogramMinResetDuration,
-		}, labelNames(attrGRPCClientDuration)).MetricVec, cfg.TTL),
+		}, labelNames(attrGRPCClientDuration)).MetricVec, clock.Time, cfg.TTL),
 		sqlClientDuration: expire.NewExpirer[prometheus.Histogram](prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Name:                            metric.SQLClientDuration.Prom,
 			Help:                            "duration of SQL client operations, in seconds",
@@ -283,7 +288,7 @@ func newReporter(
 			NativeHistogramBucketFactor:     defaultHistogramBucketFactor,
 			NativeHistogramMaxBucketNumber:  defaultHistogramMaxBucketNumber,
 			NativeHistogramMinResetDuration: defaultHistogramMinResetDuration,
-		}, labelNames(attrSQLClientDuration)).MetricVec, cfg.TTL),
+		}, labelNames(attrSQLClientDuration)).MetricVec, clock.Time, cfg.TTL),
 		httpRequestSize: expire.NewExpirer[prometheus.Histogram](prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Name:                            metric.HTTPServerRequestSize.Prom,
 			Help:                            "size, in bytes, of the HTTP request body as received at the server side",
@@ -291,7 +296,7 @@ func newReporter(
 			NativeHistogramBucketFactor:     defaultHistogramBucketFactor,
 			NativeHistogramMaxBucketNumber:  defaultHistogramMaxBucketNumber,
 			NativeHistogramMinResetDuration: defaultHistogramMinResetDuration,
-		}, labelNames(attrHTTPRequestSize)).MetricVec, cfg.TTL),
+		}, labelNames(attrHTTPRequestSize)).MetricVec, clock.Time, cfg.TTL),
 		httpClientRequestSize: expire.NewExpirer[prometheus.Histogram](prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Name:                            metric.HTTPClientRequestSize.Prom,
 			Help:                            "size, in bytes, of the HTTP request body as sent from the client side",
@@ -299,7 +304,7 @@ func newReporter(
 			NativeHistogramBucketFactor:     defaultHistogramBucketFactor,
 			NativeHistogramMaxBucketNumber:  defaultHistogramMaxBucketNumber,
 			NativeHistogramMinResetDuration: defaultHistogramMinResetDuration,
-		}, labelNames(attrHTTPClientRequestSize)).MetricVec, cfg.TTL),
+		}, labelNames(attrHTTPClientRequestSize)).MetricVec, clock.Time, cfg.TTL),
 		spanMetricsLatency: expire.NewExpirer[prometheus.Histogram](prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Name:                            SpanMetricsLatency,
 			Help:                            "duration of service calls (client and server), in seconds, in trace span metrics format",
@@ -307,19 +312,19 @@ func newReporter(
 			NativeHistogramBucketFactor:     defaultHistogramBucketFactor,
 			NativeHistogramMaxBucketNumber:  defaultHistogramMaxBucketNumber,
 			NativeHistogramMinResetDuration: defaultHistogramMinResetDuration,
-		}, labelNamesSpans()).MetricVec, cfg.TTL),
+		}, labelNamesSpans()).MetricVec, clock.Time, cfg.TTL),
 		spanMetricsCallsTotal: expire.NewExpirer[prometheus.Counter](prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: SpanMetricsCalls,
 			Help: "number of service calls in trace span metrics format",
-		}, labelNamesSpans()).MetricVec, cfg.TTL),
+		}, labelNamesSpans()).MetricVec, clock.Time, cfg.TTL),
 		spanMetricsSizeTotal: expire.NewExpirer[prometheus.Counter](prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: SpanMetricsSizes,
 			Help: "size of service calls, in bytes, in trace span metrics format",
-		}, labelNamesSpans()).MetricVec, cfg.TTL),
+		}, labelNamesSpans()).MetricVec, clock.Time, cfg.TTL),
 		tracesTargetInfo: expire.NewExpirer[prometheus.Gauge](prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Name: TracesTargetInfo,
 			Help: "target service information in trace span metric format",
-		}, labelNamesTargetInfo(ctxInfo)).MetricVec, cfg.TTL),
+		}, labelNamesTargetInfo(ctxInfo)).MetricVec, clock.Time, cfg.TTL),
 		serviceGraphClient: expire.NewExpirer[prometheus.Histogram](prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Name:                            ServiceGraphClient,
 			Help:                            "duration of client service calls, in seconds, in trace service graph metrics format",
@@ -327,7 +332,7 @@ func newReporter(
 			NativeHistogramBucketFactor:     defaultHistogramBucketFactor,
 			NativeHistogramMaxBucketNumber:  defaultHistogramMaxBucketNumber,
 			NativeHistogramMinResetDuration: defaultHistogramMinResetDuration,
-		}, labelNamesServiceGraph()).MetricVec, cfg.TTL),
+		}, labelNamesServiceGraph()).MetricVec, clock.Time, cfg.TTL),
 		serviceGraphServer: expire.NewExpirer[prometheus.Histogram](prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Name:                            ServiceGraphServer,
 			Help:                            "duration of server service calls, in seconds, in trace service graph metrics format",
@@ -335,15 +340,15 @@ func newReporter(
 			NativeHistogramBucketFactor:     defaultHistogramBucketFactor,
 			NativeHistogramMaxBucketNumber:  defaultHistogramMaxBucketNumber,
 			NativeHistogramMinResetDuration: defaultHistogramMinResetDuration,
-		}, labelNamesServiceGraph()).MetricVec, cfg.TTL),
+		}, labelNamesServiceGraph()).MetricVec, clock.Time, cfg.TTL),
 		serviceGraphFailed: expire.NewExpirer[prometheus.Counter](prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: ServiceGraphFailed,
 			Help: "number of failed service calls in trace service graph metrics format",
-		}, labelNamesServiceGraph()).MetricVec, cfg.TTL),
+		}, labelNamesServiceGraph()).MetricVec, clock.Time, cfg.TTL),
 		serviceGraphTotal: expire.NewExpirer[prometheus.Counter](prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: ServiceGraphTotal,
 			Help: "number of service calls in trace service graph metrics format",
-		}, labelNamesServiceGraph()).MetricVec, cfg.TTL),
+		}, labelNamesServiceGraph()).MetricVec, clock.Time, cfg.TTL),
 	}
 
 	if cfg.SpanMetricsEnabled() {
@@ -403,6 +408,7 @@ func (r *metricsReporter) reportMetrics(input <-chan []request.Span) {
 
 func (r *metricsReporter) collectMetrics(input <-chan []request.Span) {
 	for spans := range input {
+		r.clock.Update()
 		for i := range spans {
 			r.observe(&spans[i])
 		}
@@ -416,7 +422,6 @@ func (r *metricsReporter) observe(span *request.Span) {
 	if r.cfg.OTelMetricsEnabled() {
 		switch span.Type {
 		case request.EventTypeHTTP:
-			r.httpDuration.UpdateTime()
 			r.httpDuration.WithLabelValues(
 				labelValues(span, r.attrHTTPDuration)...,
 			).Observe(duration)

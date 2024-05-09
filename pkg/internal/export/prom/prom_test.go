@@ -14,7 +14,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/grafana/beyla/pkg/internal/connector"
-	"github.com/grafana/beyla/pkg/internal/export/expire"
 	"github.com/grafana/beyla/pkg/internal/export/metric"
 	"github.com/grafana/beyla/pkg/internal/export/otel"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
@@ -25,7 +24,7 @@ const timeout = 30000 * time.Second
 
 func TestMetricsExpiration(t *testing.T) {
 	now := syncedClock{now: time.Now()}
-	expire.TimeNow = now.Now
+	timeNow = now.Now
 
 	ctx, cancelCtx := context.WithCancel(context.Background())
 	defer cancelCtx()

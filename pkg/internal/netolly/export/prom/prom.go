@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"time"
 
 	"github.com/mariomac/pipes/pipe"
 	"github.com/prometheus/client_golang/prometheus"
@@ -16,6 +17,8 @@ import (
 	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 )
+
+var timeNow = time.Now
 
 // PrometheusConfig for network metrics just wraps the global prom.PrometheusConfig as provided by the user
 type PrometheusConfig struct {
@@ -30,7 +33,6 @@ func (p PrometheusConfig) Enabled() bool {
 
 type counterCollector interface {
 	prometheus.Collector
-	UpdateTime()
 	WithLabelValues(...string) prometheus.Counter
 }
 
@@ -43,6 +45,7 @@ type metricsReporter struct {
 
 	attrs []metric.Field[*ebpf.Record, string]
 
+	clock *expire.CachedClock
 	bgCtx context.Context
 }
 
@@ -86,6 +89,7 @@ func newReporter(
 		labelNames = append(labelNames, label.ExposedName)
 	}
 
+	clock := expire.NewCachedClock(timeNow)
 	// If service name is not explicitly set, we take the service name as set by the
 	// executable inspector
 	mr := &metricsReporter{
@@ -93,10 +97,11 @@ func newReporter(
 		cfg:         cfg.Config,
 		promConnect: ctxInfo.Prometheus,
 		attrs:       attrs,
+		clock:       clock,
 		flowBytes: expire.NewExpirer[prometheus.Counter](prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: metric.BeylaNetworkFlow.Prom,
 			Help: "bytes submitted from a source network endpoint to a destination network endpoint",
-		}, labelNames).MetricVec, cfg.Config.TTL),
+		}, labelNames).MetricVec, clock.Time, cfg.Config.TTL),
 	}
 
 	mr.promConnect.Register(cfg.Config.Port, cfg.Config.Path, mr.flowBytes)
@@ -107,7 +112,7 @@ func newReporter(
 func (r *metricsReporter) reportMetrics(input <-chan []*ebpf.Record) {
 	go r.promConnect.StartHTTP(r.bgCtx)
 	for flows := range input {
-		r.flowBytes.UpdateTime()
+		r.clock.Update()
 		for _, flow := range flows {
 			r.observe(flow)
 		}

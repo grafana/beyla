@@ -1,0 +1,29 @@
+{{- if and .Values.service.enabled .Values.serviceMonitor.enabled .Values.config.data.prometheus_export }}
+{{- $root := . }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "beyla.fullname" . }}
+  namespace: {{ include "beyla.namespace" .}}
+  labels:
+    {{- include "beyla.labels" . | nindent 4 }}
+  {{- with .Values.serviceMonitor.annotations }}
+  annotations:
+    {{- tpl (toYaml . | nindent 4) $root }}
+  {{- end }}
+spec:
+  endpoints:
+    - port: {{ .Values.service.portName }}
+      path: {{ .Values.config.data.prometheus_export.path }}
+      scheme: http 
+      {{- with .Values.serviceMonitor.endpoint }}
+      {{- toYaml . | nindent 6 }}
+      {{- end }}
+  jobLabel: {{ .Values.serviceMonitor.jobLabel | default (include "beyla.fullname" .) }}
+  selector:
+    matchLabels:
+      {{- include "beyla.labels" . | nindent 6 }}
+      {{- with .Values.service.labels }}
+      {{- toYaml . | nindent 6 }}
+      {{- end }}
+{{- end }}

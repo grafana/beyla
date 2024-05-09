@@ -24,6 +24,7 @@ import (
 	"github.com/grafana/beyla/pkg/internal/svc"
 )
 
+// injectable function reference for testing
 var timeNow = time.Now
 
 // using labels and names that are equivalent names to the OTEL attributes
@@ -408,6 +409,8 @@ func (r *metricsReporter) reportMetrics(input <-chan []request.Span) {
 
 func (r *metricsReporter) collectMetrics(input <-chan []request.Span) {
 	for spans := range input {
+		// clock needs to be updated to let the expirer
+		// remove the old metrics
 		r.clock.Update()
 		for i := range spans {
 			r.observe(&spans[i])

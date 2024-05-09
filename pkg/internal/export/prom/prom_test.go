@@ -20,9 +20,9 @@ import (
 	"github.com/grafana/beyla/pkg/internal/request"
 )
 
-const timeout = 30000 * time.Second
+const timeout = 3 * time.Second
 
-func TestMetricsExpiration(t *testing.T) {
+func TestAppMetricsExpiration(t *testing.T) {
 	now := syncedClock{now: time.Now()}
 	timeNow = now.Now
 

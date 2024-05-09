@@ -11,10 +11,10 @@ type Clock func() time.Time
 // ExpiryMap stores elements in a synchronized map, and removes them if they haven't been
 // accessed/updated for a given time period
 type ExpiryMap[T any] struct {
-	clock      Clock
-	mt         sync.RWMutex
-	expireTime time.Duration
-	entries    map[string]*entry[T]
+	clock   Clock
+	mt      sync.RWMutex
+	ttl     time.Duration
+	entries map[string]*entry[T]
 }
 
 type entry[T any] struct {
@@ -23,13 +23,14 @@ type entry[T any] struct {
 	val         T
 }
 
-// NewExpiryMap creates an expiry map. Its labeled instances are dropped
-// if they haven't been updated during the last timeout period
-func NewExpiryMap[T any](clock Clock, expireTime time.Duration) *ExpiryMap[T] {
+// NewExpiryMap creates an expiry map given a Clock implementation and a TTL.
+// Its labeled instances are dropped if they haven't been updated during the
+// last timeout period
+func NewExpiryMap[T any](clock Clock, ttl time.Duration) *ExpiryMap[T] {
 	em := &ExpiryMap[T]{
-		expireTime: expireTime,
-		entries:    map[string]*entry[T]{},
-		clock:      clock,
+		ttl:     ttl,
+		entries: map[string]*entry[T]{},
+		clock:   clock,
 	}
 	return em
 }
@@ -69,7 +70,7 @@ func (ex *ExpiryMap[T]) DeleteExpired() [][]string {
 	ex.mt.RLock()
 	now := ex.clock()
 	for k, e := range ex.entries {
-		if now.Sub(e.lastAccess) > ex.expireTime {
+		if now.Sub(e.lastAccess) > ex.ttl {
 			delKeys = append(delKeys, k)
 			delLabels = append(delLabels, e.labelValues)
 		}

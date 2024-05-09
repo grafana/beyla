@@ -13,7 +13,7 @@ func plog() *slog.Logger {
 
 // Expirer drops metrics from labels that haven't been updated during a given timeout
 type Expirer[T prometheus.Metric] struct {
-	entries *ExpiryMap[prometheus.Metric]
+	entries *ExpiryMap[T]
 	wrapped *prometheus.MetricVec
 }
 
@@ -22,7 +22,7 @@ type Expirer[T prometheus.Metric] struct {
 func NewExpirer[T prometheus.Metric](wrapped *prometheus.MetricVec, clock func() time.Time, expireTime time.Duration) *Expirer[T] {
 	return &Expirer[T]{
 		wrapped: wrapped,
-		entries: NewExpiryMap[prometheus.Metric](clock, expireTime),
+		entries: NewExpiryMap[T](clock, expireTime),
 	}
 }
 
@@ -31,16 +31,16 @@ func NewExpirer[T prometheus.Metric](wrapped *prometheus.MetricVec, clock func()
 // label values is accessed for the first time, a new Counter is created.
 // If not, a cached copy is returned and the "last access" cache time is updated.
 func (ex *Expirer[T]) WithLabelValues(lbls ...string) T {
-	return ex.entries.GetOrCreate(lbls, func() prometheus.Metric {
+	return ex.entries.GetOrCreate(lbls, func() T {
 		plog().With("labelValues", lbls).Debug("storing new metric label set")
 		c, err := ex.wrapped.GetMetricWithLabelValues(lbls...)
-		// same behavior as concrete WithLabelValues implementations
+		// same behavior as specific WithLabelValues implementations
 		// no need to return the error
 		if err != nil {
 			panic(err)
 		}
-		return c
-	}).(T)
+		return c.(T)
+	})
 }
 
 // Describe wraps prometheus.Collector Describe method

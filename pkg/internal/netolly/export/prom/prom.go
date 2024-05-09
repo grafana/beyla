@@ -18,6 +18,7 @@ import (
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 )
 
+// injectable function reference for testing
 var timeNow = time.Now
 
 // PrometheusConfig for network metrics just wraps the global prom.PrometheusConfig as provided by the user
@@ -112,6 +113,8 @@ func newReporter(
 func (r *metricsReporter) reportMetrics(input <-chan []*ebpf.Record) {
 	go r.promConnect.StartHTTP(r.bgCtx)
 	for flows := range input {
+		// clock needs to be updated to let the expirer
+		// remove the old metrics
 		r.clock.Update()
 		for _, flow := range flows {
 			r.observe(flow)

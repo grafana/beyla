@@ -8,7 +8,7 @@ import (
 )
 
 func TestClock(t *testing.T) {
-	// GIVEN an explicit clock
+	// GIVEN a cached clock
 	fakeTime := time.Date(2023, 12, 1, 12, 34, 56, 0, time.UTC)
 	clock := NewCachedClock(func() time.Time {
 		return fakeTime

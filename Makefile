@@ -251,13 +251,16 @@ itest-coverage-data:
 bin/ginkgo:
 	$(call go-install-tool,$(GINKGO),github.com/onsi/ginkgo/v2/ginkgo,latest)
 
+.PHONY: oats-prereq
+oats-prereq: bin/ginkgo
+
 .PHONY: oats-test-sql
-oats-test-sql: 
+oats-test-sql: oats-prereq
 	mkdir -p test/oats/sql/$(TEST_OUTPUT)/run
 	cd test/oats/sql && TESTCASE_BASE_PATH=./yaml $(GINKGO) -v -r
 
 .PHONY: oats-test-sql-statement
-oats-test-sql-statement: 
+oats-test-sql-statement: oats-prereq
 	mkdir -p test/oats/sql_statement/$(TEST_OUTPUT)/run
 	cd test/oats/sql_statement && TESTCASE_BASE_PATH=./yaml $(GINKGO) -v -r
 

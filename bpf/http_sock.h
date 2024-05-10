@@ -61,6 +61,15 @@ struct {
     __uint(pinning, LIBBPF_PIN_BY_NAME);
 } ongoing_http2_grpc SEC(".maps");
 
+// Keeps track of tcp buffers for unknown protocols
+struct {
+    __uint(type, BPF_MAP_TYPE_LRU_HASH);
+    __type(key, pid_connection_info_t);
+    __type(value, tcp_req_t);
+    __uint(max_entries, MAX_CONCURRENT_SHARED_REQUESTS);
+    __uint(pinning, LIBBPF_PIN_BY_NAME);
+} ongoing_tcp_req SEC(".maps");
+
 // http_info_t became too big to be declared as a variable in the stack.
 // We use a percpu array to keep a reusable copy of it
 struct {
@@ -84,6 +93,13 @@ struct {
     __type(value, http_connection_metadata_t);
     __uint(max_entries, 1);
 } connection_meta_mem SEC(".maps");
+
+struct {
+    __uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
+    __type(key, int);
+    __type(value, tcp_req_t);
+    __uint(max_entries, 1);
+} tcp_req_mem SEC(".maps");
 
 static __always_inline u8 is_http(unsigned char *p, u32 len, u8 *packet_type) {
     if (len < MIN_HTTP_SIZE) {
@@ -210,6 +226,15 @@ static __always_inline http2_grpc_request_t* empty_http2_info() {
     http2_grpc_request_t *value = bpf_map_lookup_elem(&http2_info_mem, &zero);
     if (value) {
         bpf_memset(value, 0, sizeof(http2_grpc_request_t));
+    }
+    return value;
+}
+
+static __always_inline tcp_req_t* empty_tcp_req() {
+    int zero = 0;
+    tcp_req_t *value = bpf_map_lookup_elem(&tcp_req_mem, &zero);
+    if (value) {
+        bpf_memset(value, 0, sizeof(tcp_req_t));
     }
     return value;
 }
@@ -473,6 +498,36 @@ static __always_inline void process_http2_grpc_frames(pid_connection_info_t *pid
     }
 }
 
+static __always_inline void handle_unknown_tcp_connection(pid_connection_info_t *pid_conn, void *u_buf, int bytes_len, u8 direction, u8 ssl) {
+    tcp_req_t *existing = bpf_map_lookup_elem(&ongoing_tcp_req, pid_conn);
+    if (!existing) {
+        tcp_req_t *req = empty_tcp_req();
+        if (req) {
+            req->flags = EVENT_TCP_REQUEST;
+            req->conn_info = pid_conn->conn;
+            req->ssl = ssl;
+            req->direction = direction;
+            req->start_monotime_ns = bpf_ktime_get_ns();
+            req->len = bytes_len;
+            task_pid(&req->pid);
+            bpf_probe_read(req->buf, K_TCP_MAX_LEN, u_buf);
+
+            bpf_map_update_elem(&ongoing_tcp_req, pid_conn, req, BPF_ANY);
+        }
+    } else if (existing->direction != direction) {
+        existing->end_monotime_ns = bpf_ktime_get_ns();
+        existing->resp_len = bytes_len;
+        tcp_req_t *trace = bpf_ringbuf_reserve(&events, sizeof(tcp_req_t), 0);
+        if (trace) {
+            bpf_dbg_printk("Sending TCP trace %lx, response length %d", existing, existing->resp_len);
+
+            bpf_memcpy(trace, existing, sizeof(tcp_req_t));
+            bpf_ringbuf_submit(trace, get_flags());
+        }
+        bpf_map_delete_elem(&ongoing_tcp_req, pid_conn);
+    }
+}
+
 static __always_inline void handle_buf_with_connection(pid_connection_info_t *pid_conn, void *u_buf, int bytes_len, u8 ssl, u8 direction) {
     unsigned char small_buf[MIN_HTTP2_SIZE] = {0};   // MIN_HTTP2_SIZE > MIN_HTTP_SIZE
     bpf_probe_read(small_buf, MIN_HTTP2_SIZE, u_buf);
@@ -554,7 +609,9 @@ static __always_inline void handle_buf_with_connection(pid_connection_info_t *pi
 
             if (info && still_responding(info)) {
                 info->end_monotime_ns = bpf_ktime_get_ns();
-            } 
+            } else if (!info) {
+                handle_unknown_tcp_connection(pid_conn, u_buf, bytes_len, direction, ssl);
+            }
         }
     }
 }

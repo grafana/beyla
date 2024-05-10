@@ -122,6 +122,34 @@ type bpfSqlRequestTrace struct {
 	}
 }
 
+type bpfTcpReqT struct {
+	Flags           uint8
+	_               [1]byte
+	ConnInfo        bpfConnectionInfoT
+	_               [2]byte
+	StartMonotimeNs uint64
+	EndMonotimeNs   uint64
+	Buf             [256]uint8
+	Len             uint32
+	RespLen         uint32
+	Ssl             uint8
+	Direction       uint8
+	Pid             struct {
+		HostPid uint32
+		UserPid uint32
+		Ns      uint32
+	}
+	_  [2]byte
+	Tp struct {
+		TraceId  [16]uint8
+		SpanId   [8]uint8
+		ParentId [8]uint8
+		Ts       uint64
+		Flags    uint8
+		_        [7]byte
+	}
+}
+
 // loadBpf returns the embedded CollectionSpec for bpf.
 func loadBpf() (*ebpf.CollectionSpec, error) {
 	reader := bytes.NewReader(_BpfBytes)

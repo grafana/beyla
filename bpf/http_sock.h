@@ -512,6 +512,15 @@ static __always_inline void handle_unknown_tcp_connection(pid_connection_info_t 
             task_pid(&req->pid);
             bpf_probe_read(req->buf, K_TCP_MAX_LEN, u_buf);
 
+            tp_info_pid_t *server_tp = find_parent_trace();
+
+            if (server_tp && server_tp->valid) {
+                bpf_dbg_printk("Found existing server tp for client call");
+                bpf_memcpy(req->tp.trace_id, server_tp->tp.trace_id, sizeof(req->tp.trace_id));
+                bpf_memcpy(req->tp.parent_id, server_tp->tp.span_id, sizeof(req->tp.parent_id));
+                urand_bytes(req->tp.span_id, SPAN_ID_SIZE_BYTES);
+            }
+
             bpf_map_update_elem(&ongoing_tcp_req, pid_conn, req, BPF_ANY);
         }
     } else if (existing->direction != direction) {

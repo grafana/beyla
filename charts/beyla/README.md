@@ -66,6 +66,10 @@ eBPF-based autoinstrumentation HTTP, HTTP2 and gRPC services, as well as network
 | serviceAccount.create | bool | `true` | Specifies whether a service account should be created |
 | serviceAccount.labels | object | `{}` | ServiceAccount labels. |
 | serviceAccount.name | string | `""` | The name of the service account to use. If not set and create is true, a name is generated using the fullname template |
+| serviceMonitor | object | `{"annotations":{},"enabled":false,"endpoint":{"interval":"15s"},"jobLabel":""}` | Enable creation of ServiceMonitor for scraping of prometheus HTTP endpoint |
+| serviceMonitor.annotations | object | `{}` | ServiceMonitor annotations |
+| serviceMonitor.endpoint | object | `{"interval":"15s"}` | ServiceMonitor scraping endpoint. Target port and path is set based on service and prometheus_export values. For additional values, see the ServiceMonitor spec |
+| serviceMonitor.jobLabel | string | `""` | Prometheus job label. If empty, chart release name is used |
 | tolerations | list | `[]` | Tolerations allow pods to be scheduled on nodes with specific taints |
 | updateStrategy.type | string | `"RollingUpdate"` | update strategy type |
 | volumeMounts | list | `[]` | Additional volumeMounts on the output Deployment definition. |

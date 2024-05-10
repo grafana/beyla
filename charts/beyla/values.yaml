@@ -209,11 +209,11 @@ serviceMonitor:
   enabled: false
   # -- ServiceMonitor annotations
   annotations: {}
-  # -- ServiceMonitor scraping endpoint
-  # Target port and path is set based on service and prometheus_export values
+  # -- ServiceMonitor scraping endpoint.
+  # Target port and path is set based on service and prometheus_export values.
   # For additional values, see the ServiceMonitor spec
   endpoint:
     interval: 15s
-  # -- Prometheus job label
+  # -- Prometheus job label.
   # If empty, chart release name is used
   jobLabel: ""

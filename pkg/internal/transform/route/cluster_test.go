@@ -10,6 +10,7 @@ func TestURLClustering(t *testing.T) {
 	err := InitAutoClassifier()
 	assert.NoError(t, err)
 	assert.Equal(t, "", ClusterPath(""))
+	assert.Equal(t, "/", ClusterPath("/"))
 	assert.Equal(t, "/users/*/j4elk/*/job/*", ClusterPath("/users/fdklsd/j4elk/23993/job/2"))
 	assert.Equal(t, "*", ClusterPath("123"))
 	assert.Equal(t, "/*", ClusterPath("/123"))

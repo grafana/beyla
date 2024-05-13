@@ -4,17 +4,22 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"time"
 
 	"github.com/mariomac/pipes/pipe"
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/grafana/beyla/pkg/internal/connector"
 	"github.com/grafana/beyla/pkg/internal/export/attributes"
+	"github.com/grafana/beyla/pkg/internal/export/expire"
 	"github.com/grafana/beyla/pkg/internal/export/otel"
 	"github.com/grafana/beyla/pkg/internal/export/prom"
 	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 )
+
+// injectable function reference for testing
+var timeNow = time.Now
 
 // PrometheusConfig for network metrics just wraps the global prom.PrometheusConfig as provided by the user
 type PrometheusConfig struct {
@@ -29,7 +34,6 @@ func (p PrometheusConfig) Enabled() bool {
 
 type counterCollector interface {
 	prometheus.Collector
-	UpdateTime()
 	WithLabelValues(...string) prometheus.Counter
 }
 
@@ -42,6 +46,7 @@ type metricsReporter struct {
 
 	attrs []attributes.Field[*ebpf.Record, string]
 
+	clock *expire.CachedClock
 	bgCtx context.Context
 }
 
@@ -85,6 +90,7 @@ func newReporter(
 		labelNames = append(labelNames, label.ExposedName)
 	}
 
+	clock := expire.NewCachedClock(timeNow)
 	// If service name is not explicitly set, we take the service name as set by the
 	// executable inspector
 	mr := &metricsReporter{
@@ -92,10 +98,11 @@ func newReporter(
 		cfg:         cfg.Config,
 		promConnect: ctxInfo.Prometheus,
 		attrs:       attrs,
-		flowBytes: NewExpirer(prometheus.NewCounterVec(prometheus.CounterOpts{
+		clock:       clock,
+		flowBytes: expire.NewExpirer[prometheus.Counter](prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: attributes.BeylaNetworkFlow.Prom,
 			Help: "bytes submitted from a source network endpoint to a destination network endpoint",
-		}, labelNames), cfg.Config.TTL),
+		}, labelNames).MetricVec, clock.Time, cfg.Config.TTL),
 	}
 
 	mr.promConnect.Register(cfg.Config.Port, cfg.Config.Path, mr.flowBytes)
@@ -106,7 +113,9 @@ func newReporter(
 func (r *metricsReporter) reportMetrics(input <-chan []*ebpf.Record) {
 	go r.promConnect.StartHTTP(r.bgCtx)
 	for flows := range input {
-		r.flowBytes.UpdateTime()
+		// clock needs to be updated to let the expirer
+		// remove the old metrics
+		r.clock.Update()
 		for _, flow := range flows {
 			r.observe(flow)
 		}

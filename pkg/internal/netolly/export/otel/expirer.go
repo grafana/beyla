@@ -10,8 +10,8 @@ import (
 	"go.opentelemetry.io/otel/metric"
 
 	"github.com/grafana/beyla/pkg/internal/export/attributes"
+	"github.com/grafana/beyla/pkg/internal/export/expire"
 	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
-	"github.com/grafana/beyla/pkg/internal/netolly/export"
 )
 
 var timeNow = time.Now
@@ -24,7 +24,7 @@ func plog() *slog.Logger {
 // TODO: generify and move to a common section for using it also in AppO11y, supporting more OTEL metrics
 type Expirer struct {
 	attrs   []attributes.Field[*ebpf.Record, string]
-	entries *export.ExpiryMap[*Counter]
+	entries *expire.ExpiryMap[*Counter]
 }
 
 type Counter struct {
@@ -34,18 +34,11 @@ type Counter struct {
 
 // NewExpirer creates a metric that wraps a Counter. Its labeled instances are dropped
 // if they haven't been updated during the last timeout period
-func NewExpirer(attrs []attributes.Field[*ebpf.Record, string], expireTime time.Duration) *Expirer {
+func NewExpirer(attrs []attributes.Field[*ebpf.Record, string], clock expire.Clock, expireTime time.Duration) *Expirer {
 	return &Expirer{
 		attrs:   attrs,
-		entries: export.NewExpiryMap[*Counter](expireTime, export.WithClock[*Counter](timeNow)),
+		entries: expire.NewExpiryMap[*Counter](clock, expireTime),
 	}
-}
-
-// UpdateTime updates the last access time to be annotated to any new or existing metric.
-// It is a required operation before processing a given
-// batch of metrics (invoking the WithLabelValues).
-func (ex *Expirer) UpdateTime() {
-	ex.entries.UpdateTime()
 }
 
 // ForRecord returns the Counter for the given eBPF record. If that record

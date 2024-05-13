@@ -713,7 +713,7 @@ int uprobe_http2FramerWriteHeaders_returns(struct pt_regs *ctx) {
                 bpf_probe_write_user(buf_arr + (n & 0x0ffff), tp_str, sizeof(tp_str));
                 n += TP_MAX_VAL_LENGTH;
                 // Update the value of n in w to reflect the new size
-                bpf_probe_write_user((void *)(w_ptr + 40), &n, sizeof(n));
+                bpf_probe_write_user((void *)(w_ptr + io_writer_n_pos), &n, sizeof(n));
 
                 // http2 encodes the length of the headers in the first 3 bytes of buf, we need to update those
                 u8 size_1 = 0;

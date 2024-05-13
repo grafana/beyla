@@ -217,3 +217,4 @@ serviceMonitor:
   # -- Prometheus job label.
   # If empty, chart release name is used
   jobLabel: ""
+  

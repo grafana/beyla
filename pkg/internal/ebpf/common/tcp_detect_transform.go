@@ -62,7 +62,9 @@ func (trace *TCPRequestInfo) reqHostInfo() (source, target string) {
 	return src.String(), dst.String()
 }
 
-func TCPToSQLToSpan(trace *TCPRequestInfo, sql string) request.Span {
+func TCPToSQLToSpan(trace *TCPRequestInfo, s string) request.Span {
+	sql := cstr([]uint8(s))
+
 	method, path := sqlprune.SQLParseOperationAndTable(sql)
 
 	peer := ""

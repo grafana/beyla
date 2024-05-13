@@ -10,7 +10,7 @@ expected:
   traces:
     - traceql: '{ .db.operation = "UPDATE" }'
       spans:
-        - name: 'UPDATE .students'
+        - name: 'UPDATE students'
           attributes:
             db.operation: UPDATE
             db.sql.table: students            

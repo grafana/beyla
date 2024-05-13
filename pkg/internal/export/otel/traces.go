@@ -584,15 +584,13 @@ func TraceName(span *request.Span) string {
 	case request.EventTypeHTTPClient:
 		return span.Method
 	case request.EventTypeSQLClient:
-		// We don't have db.name, but follow "<db.operation> <db.name>.<db.sql.table_name>"
-		// or just "<db.operation>" if table is not known, otherwise just a fixed string.
 		operation := span.Method
 		if operation == "" {
 			return "SQL"
 		}
 		table := span.Path
 		if table != "" {
-			operation += " ." + table
+			operation += " " + table
 		}
 		return operation
 	}

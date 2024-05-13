@@ -5,16 +5,20 @@ import psycopg2
 
 app = FastAPI()
 
-conn = psycopg2.connect(
-    dbname="sqltest",
-    user="postgres",
-    password="postgres",
-    host="localhost",
-    port="5432"
-)
+conn = None
 
 @app.get("/query")
 async def root():
+    global conn
+    if conn is None:
+        conn = psycopg2.connect(
+            dbname="sqltest",
+            user="postgres",
+            password="postgres",
+            host="sqlserver",
+            port="5432"
+        )
+
     cur = conn.cursor()
     cur.execute("SELECT * from accounting.contacts WHERE id=1")
 

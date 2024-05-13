@@ -12,13 +12,13 @@ import (
 )
 
 const (
-	TCP_SEND = 1
-	TCP_RECV = 0
+	tcpSend = 1
+	tcpRecv = 0
 )
 
 func TestTCPReqSQLParsing(t *testing.T) {
 	sql := randomStringWithSub("SELECT * FROM accounts ")
-	r := makeTCPReq(sql, TCP_SEND, 343534, 8080, 2000)
+	r := makeTCPReq(sql, tcpSend, 343534, 8080, 2000)
 	sqlIndex := isSQL(sql)
 	assert.GreaterOrEqual(t, sqlIndex, 0)
 	s := TCPToSQLToSpan(&r, sql[sqlIndex:])

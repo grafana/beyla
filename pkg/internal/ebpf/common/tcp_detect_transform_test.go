@@ -6,8 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/grafana/beyla/pkg/internal/request"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/grafana/beyla/pkg/internal/request"
 )
 
 const (

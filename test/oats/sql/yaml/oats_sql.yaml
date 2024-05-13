@@ -20,7 +20,7 @@ expected:
         - name: 'UPDATE .students'
           attributes:
             db.operation: UPDATE
-            db.sql.table: students            
+            db.sql.table: students  
   metrics:
     - promql: 'sql_client_duration_sum'
       value: "> 0"

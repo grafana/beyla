@@ -7,9 +7,9 @@ import (
 
 	"github.com/grafana/beyla/pkg/beyla"
 	"github.com/grafana/beyla/pkg/internal/export/alloy"
+	"github.com/grafana/beyla/pkg/internal/export/attributes"
+	attr "github.com/grafana/beyla/pkg/internal/export/attributes/names"
 	"github.com/grafana/beyla/pkg/internal/export/debug"
-	"github.com/grafana/beyla/pkg/internal/export/metric"
-	"github.com/grafana/beyla/pkg/internal/export/metric/attr"
 	"github.com/grafana/beyla/pkg/internal/export/otel"
 	"github.com/grafana/beyla/pkg/internal/export/prom"
 	"github.com/grafana/beyla/pkg/internal/filter"
@@ -112,9 +112,9 @@ func newGraphBuilder(ctx context.Context, config *beyla.Config, ctxInfo *global.
 	config.Metrics.Grafana = &gb.config.Grafana.OTLP
 	pipe.AddFinalProvider(gnb, otelMetrics, otel.ReportMetrics(ctx, gb.ctxInfo, &config.Metrics, config.Attributes.Select))
 	config.Traces.Grafana = &gb.config.Grafana.OTLP
-	pipe.AddFinalProvider(gnb, otelTraces, otel.TracesReceiver(ctx, config.Traces, gb.ctxInfo))
+	pipe.AddFinalProvider(gnb, otelTraces, otel.TracesReceiver(ctx, config.Traces, gb.ctxInfo, config.Attributes.Select))
 	pipe.AddFinalProvider(gnb, prometheus, prom.PrometheusEndpoint(ctx, gb.ctxInfo, &config.Prometheus, config.Attributes.Select))
-	pipe.AddFinalProvider(gnb, alloyTraces, alloy.TracesReceiver(ctx, &config.TracesReceiver))
+	pipe.AddFinalProvider(gnb, alloyTraces, alloy.TracesReceiver(ctx, &config.TracesReceiver, config.Attributes.Select))
 
 	pipe.AddFinalProvider(gnb, noop, debug.NoopNode(config.Noop))
 	pipe.AddFinalProvider(gnb, printer, debug.PrinterNode(config.Printer))
@@ -154,7 +154,7 @@ func (i *Instrumenter) Run(ctx context.Context) {
 // spanPtrPromGetters adapts the invocation of SpanPromGetters to work with a request.Span value
 // instead of a *request.Span pointer. This is a convenience method created to avoid having to
 // rewrite the pipeline types from []request.Span types to []*request.Span
-func spanPtrPromGetters(name attr.Name) (metric.Getter[request.Span, string], bool) {
+func spanPtrPromGetters(name attr.Name) (attributes.Getter[request.Span, string], bool) {
 	if ptrGetter, ok := request.SpanPromGetters(name); ok {
 		return func(span request.Span) string { return ptrGetter(&span) }, true
 	}

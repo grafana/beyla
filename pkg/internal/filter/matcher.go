@@ -5,7 +5,7 @@ import (
 
 	"github.com/gobwas/glob"
 
-	"github.com/grafana/beyla/pkg/internal/export/metric"
+	"github.com/grafana/beyla/pkg/internal/export/attributes"
 )
 
 // Matcher condition for a given field of the record type T.
@@ -15,7 +15,7 @@ type Matcher[T any] struct {
 	// Negate the condition value
 	Negate bool
 	// Getter for the field to be compared with the Glob
-	Getter metric.Getter[T, string]
+	Getter attributes.Getter[T, string]
 }
 
 func (m *Matcher[T]) Matches(record T) bool {

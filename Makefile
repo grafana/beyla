@@ -253,15 +253,23 @@ bin/ginkgo:
 
 .PHONY: oats-prereq
 oats-prereq: bin/ginkgo
-	cd test/oats && go mod vendor
+
+.PHONY: oats-test-sql
+oats-test-sql: oats-prereq
+	mkdir -p test/oats/sql/$(TEST_OUTPUT)/run
+	cd test/oats/sql && TESTCASE_BASE_PATH=./yaml $(GINKGO) -v -r
+
+.PHONY: oats-test-sql-statement
+oats-test-sql-statement: oats-prereq
+	mkdir -p test/oats/sql_statement/$(TEST_OUTPUT)/run
+	cd test/oats/sql_statement && TESTCASE_BASE_PATH=./yaml $(GINKGO) -v -r
 
 .PHONY: oats-test
-oats-test: oats-prereq
-	cd test/oats && TESTCASE_BASE_PATH=./yaml $(GINKGO) -v -r
+oats-test: oats-test-sql oats-test-sql-statement
 
 .PHONY: oats-test-debug
 oats-test-debug: oats-prereq
-	cd test/oats && TESTCASE_BASE_PATH=./yaml TESTCASE_MANUAL_DEBUG=true TESTCASE_TIMEOUT=1h $(GINKGO) -v -r
+	cd test/oats/sql && TESTCASE_BASE_PATH=./yaml TESTCASE_MANUAL_DEBUG=true TESTCASE_TIMEOUT=1h $(GINKGO) -v -r
 
 .PHONY: drone
 drone:

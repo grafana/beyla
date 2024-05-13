@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/grafana/beyla/pkg/internal/export/metric"
+	"github.com/grafana/beyla/pkg/internal/export/attributes"
 	"github.com/grafana/beyla/pkg/internal/export/otel"
 	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
@@ -37,8 +37,8 @@ func TestMetricsExpiration(t *testing.T) {
 				MetricsProtocol: otel.ProtocolHTTPProtobuf,
 				Features:        []string{otel.FeatureNetwork},
 				TTL:             3 * time.Minute,
-			}, AttributeSelectors: metric.Selection{
-				metric.BeylaNetworkFlow.Section: metric.InclusionLists{
+			}, AttributeSelectors: attributes.Selection{
+				attributes.BeylaNetworkFlow.Section: attributes.InclusionLists{
 					Include: []string{"src.name", "dst.name"},
 				},
 			},

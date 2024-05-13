@@ -14,7 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/grafana/beyla/pkg/internal/connector"
-	"github.com/grafana/beyla/pkg/internal/export/metric"
+	"github.com/grafana/beyla/pkg/internal/export/attributes"
 	"github.com/grafana/beyla/pkg/internal/export/otel"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/pkg/internal/request"
@@ -42,8 +42,8 @@ func TestAppMetricsExpiration(t *testing.T) {
 			SpanMetricsServiceCacheSize: 10,
 			Features:                    []string{otel.FeatureApplication},
 		},
-		metric.Selection{
-			metric.HTTPServerDuration.Section: metric.InclusionLists{
+		attributes.Selection{
+			attributes.HTTPServerDuration.Section: attributes.InclusionLists{
 				Include: []string{"url_path"},
 			},
 		},

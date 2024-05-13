@@ -20,7 +20,7 @@ import (
 	"go.opentelemetry.io/otel/sdk/metric"
 	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 
-	metric2 "github.com/grafana/beyla/pkg/internal/export/metric"
+	"github.com/grafana/beyla/pkg/internal/export/attributes"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/pkg/internal/request"
@@ -155,18 +155,18 @@ func (m MetricsConfig) Enabled() bool {
 type MetricsReporter struct {
 	ctx        context.Context
 	cfg        *MetricsConfig
-	attributes *metric2.AttrSelector
+	attributes *attributes.AttrSelector
 	exporter   metric.Exporter
 	reporters  ReporterPool[*Metrics]
 
 	// user-selected fields for each of the reported metrics
-	attrHTTPDuration          []metric2.Field[*request.Span, attribute.KeyValue]
-	attrHTTPClientDuration    []metric2.Field[*request.Span, attribute.KeyValue]
-	attrGRPCServer            []metric2.Field[*request.Span, attribute.KeyValue]
-	attrGRPCClient            []metric2.Field[*request.Span, attribute.KeyValue]
-	attrSQLClient             []metric2.Field[*request.Span, attribute.KeyValue]
-	attrHTTPRequestSize       []metric2.Field[*request.Span, attribute.KeyValue]
-	attrHTTPClientRequestSize []metric2.Field[*request.Span, attribute.KeyValue]
+	attrHTTPDuration          []attributes.Field[*request.Span, attribute.KeyValue]
+	attrHTTPClientDuration    []attributes.Field[*request.Span, attribute.KeyValue]
+	attrGRPCServer            []attributes.Field[*request.Span, attribute.KeyValue]
+	attrGRPCClient            []attributes.Field[*request.Span, attribute.KeyValue]
+	attrSQLClient             []attributes.Field[*request.Span, attribute.KeyValue]
+	attrHTTPRequestSize       []attributes.Field[*request.Span, attribute.KeyValue]
+	attrHTTPClientRequestSize []attributes.Field[*request.Span, attribute.KeyValue]
 }
 
 // Metrics is a set of metrics associated to a given OTEL MeterProvider.
@@ -198,7 +198,7 @@ func ReportMetrics(
 	ctx context.Context,
 	ctxInfo *global.ContextInfo,
 	cfg *MetricsConfig,
-	userAttribSelection metric2.Selection,
+	userAttribSelection attributes.Selection,
 ) pipe.FinalProvider[[]request.Span] {
 	return func() (pipe.FinalFunc[[]request.Span], error) {
 		if !cfg.Enabled() {
@@ -218,11 +218,11 @@ func newMetricsReporter(
 	ctx context.Context,
 	ctxInfo *global.ContextInfo,
 	cfg *MetricsConfig,
-	userAttribSelection metric2.Selection,
+	userAttribSelection attributes.Selection,
 ) (*MetricsReporter, error) {
 	log := mlog()
 
-	attribProvider, err := metric2.NewAttrSelector(ctxInfo.MetricAttributeGroups, userAttribSelection)
+	attribProvider, err := attributes.NewAttrSelector(ctxInfo.MetricAttributeGroups, userAttribSelection)
 	if err != nil {
 		return nil, fmt.Errorf("attributes select: %w", err)
 	}
@@ -232,20 +232,20 @@ func newMetricsReporter(
 		attributes: attribProvider,
 	}
 	// initialize attribute getters
-	mr.attrHTTPDuration = metric2.OpenTelemetryGetters(
-		request.SpanOTELGetters, mr.attributes.For(metric2.HTTPServerDuration))
-	mr.attrHTTPClientDuration = metric2.OpenTelemetryGetters(
-		request.SpanOTELGetters, mr.attributes.For(metric2.HTTPClientDuration))
-	mr.attrHTTPRequestSize = metric2.OpenTelemetryGetters(
-		request.SpanOTELGetters, mr.attributes.For(metric2.HTTPServerRequestSize))
-	mr.attrHTTPClientRequestSize = metric2.OpenTelemetryGetters(
-		request.SpanOTELGetters, mr.attributes.For(metric2.HTTPClientRequestSize))
-	mr.attrGRPCServer = metric2.OpenTelemetryGetters(
-		request.SpanOTELGetters, mr.attributes.For(metric2.RPCServerDuration))
-	mr.attrGRPCClient = metric2.OpenTelemetryGetters(
-		request.SpanOTELGetters, mr.attributes.For(metric2.RPCClientDuration))
-	mr.attrSQLClient = metric2.OpenTelemetryGetters(
-		request.SpanOTELGetters, mr.attributes.For(metric2.SQLClientDuration))
+	mr.attrHTTPDuration = attributes.OpenTelemetryGetters(
+		request.SpanOTELGetters, mr.attributes.For(attributes.HTTPServerDuration))
+	mr.attrHTTPClientDuration = attributes.OpenTelemetryGetters(
+		request.SpanOTELGetters, mr.attributes.For(attributes.HTTPClientDuration))
+	mr.attrHTTPRequestSize = attributes.OpenTelemetryGetters(
+		request.SpanOTELGetters, mr.attributes.For(attributes.HTTPServerRequestSize))
+	mr.attrHTTPClientRequestSize = attributes.OpenTelemetryGetters(
+		request.SpanOTELGetters, mr.attributes.For(attributes.HTTPClientRequestSize))
+	mr.attrGRPCServer = attributes.OpenTelemetryGetters(
+		request.SpanOTELGetters, mr.attributes.For(attributes.RPCServerDuration))
+	mr.attrGRPCClient = attributes.OpenTelemetryGetters(
+		request.SpanOTELGetters, mr.attributes.For(attributes.RPCClientDuration))
+	mr.attrSQLClient = attributes.OpenTelemetryGetters(
+		request.SpanOTELGetters, mr.attributes.For(attributes.SQLClientDuration))
 
 	mr.reporters = NewReporterPool[*Metrics](cfg.ReportersCacheLen,
 		func(id svc.UID, v *Metrics) {
@@ -280,13 +280,13 @@ func (mr *MetricsReporter) otelMetricOptions(mlog *slog.Logger) []metric.Option 
 	useExponentialHistograms := isExponentialAggregation(mr.cfg, mlog)
 
 	return []metric.Option{
-		metric.WithView(otelHistogramConfig(metric2.HTTPServerDuration.OTEL, mr.cfg.Buckets.DurationHistogram, useExponentialHistograms)),
-		metric.WithView(otelHistogramConfig(metric2.HTTPClientDuration.OTEL, mr.cfg.Buckets.DurationHistogram, useExponentialHistograms)),
-		metric.WithView(otelHistogramConfig(metric2.RPCServerDuration.OTEL, mr.cfg.Buckets.DurationHistogram, useExponentialHistograms)),
-		metric.WithView(otelHistogramConfig(metric2.RPCClientDuration.OTEL, mr.cfg.Buckets.DurationHistogram, useExponentialHistograms)),
-		metric.WithView(otelHistogramConfig(metric2.SQLClientDuration.OTEL, mr.cfg.Buckets.DurationHistogram, useExponentialHistograms)),
-		metric.WithView(otelHistogramConfig(metric2.HTTPServerRequestSize.OTEL, mr.cfg.Buckets.RequestSizeHistogram, useExponentialHistograms)),
-		metric.WithView(otelHistogramConfig(metric2.HTTPClientRequestSize.OTEL, mr.cfg.Buckets.RequestSizeHistogram, useExponentialHistograms)),
+		metric.WithView(otelHistogramConfig(attributes.HTTPServerDuration.OTEL, mr.cfg.Buckets.DurationHistogram, useExponentialHistograms)),
+		metric.WithView(otelHistogramConfig(attributes.HTTPClientDuration.OTEL, mr.cfg.Buckets.DurationHistogram, useExponentialHistograms)),
+		metric.WithView(otelHistogramConfig(attributes.RPCServerDuration.OTEL, mr.cfg.Buckets.DurationHistogram, useExponentialHistograms)),
+		metric.WithView(otelHistogramConfig(attributes.RPCClientDuration.OTEL, mr.cfg.Buckets.DurationHistogram, useExponentialHistograms)),
+		metric.WithView(otelHistogramConfig(attributes.SQLClientDuration.OTEL, mr.cfg.Buckets.DurationHistogram, useExponentialHistograms)),
+		metric.WithView(otelHistogramConfig(attributes.HTTPServerRequestSize.OTEL, mr.cfg.Buckets.RequestSizeHistogram, useExponentialHistograms)),
+		metric.WithView(otelHistogramConfig(attributes.HTTPClientRequestSize.OTEL, mr.cfg.Buckets.RequestSizeHistogram, useExponentialHistograms)),
 	}
 }
 
@@ -321,31 +321,31 @@ func (mr *MetricsReporter) setupOtelMeters(m *Metrics, meter instrument.Meter) e
 	}
 
 	var err error
-	m.httpDuration, err = meter.Float64Histogram(metric2.HTTPServerDuration.OTEL, instrument.WithUnit("s"))
+	m.httpDuration, err = meter.Float64Histogram(attributes.HTTPServerDuration.OTEL, instrument.WithUnit("s"))
 	if err != nil {
 		return fmt.Errorf("creating http duration histogram metric: %w", err)
 	}
-	m.httpClientDuration, err = meter.Float64Histogram(metric2.HTTPClientDuration.OTEL, instrument.WithUnit("s"))
+	m.httpClientDuration, err = meter.Float64Histogram(attributes.HTTPClientDuration.OTEL, instrument.WithUnit("s"))
 	if err != nil {
 		return fmt.Errorf("creating http duration histogram metric: %w", err)
 	}
-	m.grpcDuration, err = meter.Float64Histogram(metric2.RPCServerDuration.OTEL, instrument.WithUnit("s"))
+	m.grpcDuration, err = meter.Float64Histogram(attributes.RPCServerDuration.OTEL, instrument.WithUnit("s"))
 	if err != nil {
 		return fmt.Errorf("creating grpc duration histogram metric: %w", err)
 	}
-	m.grpcClientDuration, err = meter.Float64Histogram(metric2.RPCClientDuration.OTEL, instrument.WithUnit("s"))
+	m.grpcClientDuration, err = meter.Float64Histogram(attributes.RPCClientDuration.OTEL, instrument.WithUnit("s"))
 	if err != nil {
 		return fmt.Errorf("creating grpc duration histogram metric: %w", err)
 	}
-	m.sqlClientDuration, err = meter.Float64Histogram(metric2.SQLClientDuration.OTEL, instrument.WithUnit("s"))
+	m.sqlClientDuration, err = meter.Float64Histogram(attributes.SQLClientDuration.OTEL, instrument.WithUnit("s"))
 	if err != nil {
 		return fmt.Errorf("creating sql client duration histogram metric: %w", err)
 	}
-	m.httpRequestSize, err = meter.Float64Histogram(metric2.HTTPServerRequestSize.OTEL, instrument.WithUnit("By"))
+	m.httpRequestSize, err = meter.Float64Histogram(attributes.HTTPServerRequestSize.OTEL, instrument.WithUnit("By"))
 	if err != nil {
 		return fmt.Errorf("creating http size histogram metric: %w", err)
 	}
-	m.httpClientRequestSize, err = meter.Float64Histogram(metric2.HTTPClientRequestSize.OTEL, instrument.WithUnit("By"))
+	m.httpClientRequestSize, err = meter.Float64Histogram(attributes.HTTPClientRequestSize.OTEL, instrument.WithUnit("By"))
 	if err != nil {
 		return fmt.Errorf("creating http size histogram metric: %w", err)
 	}
@@ -423,7 +423,7 @@ func (mr *MetricsReporter) setupGraphMeters(m *Metrics, meter instrument.Meter) 
 func (mr *MetricsReporter) newMetricSet(service svc.ID) (*Metrics, error) {
 	mlog := mlog().With("service", service)
 	mlog.Debug("creating new Metrics reporter")
-	resources := Resource(service)
+	resources := getResourceAttrs(service)
 
 	opts := []metric.Option{
 		metric.WithResource(resources),
@@ -445,7 +445,7 @@ func (mr *MetricsReporter) newMetricSet(service svc.ID) (*Metrics, error) {
 	// time units for HTTP and GRPC durations are in seconds, according to the OTEL specification:
 	// https://github.com/open-telemetry/opentelemetry-specification/tree/main/specification/metrics/semantic_conventions
 	// TODO: set ExplicitBucketBoundaries here and in prometheus from the previous specification
-	meter := m.provider.Meter(ReporterName)
+	meter := m.provider.Meter(reporterName)
 	var err error
 	if mr.cfg.OTelMetricsEnabled() {
 		err = mr.setupOtelMeters(&m, meter)
@@ -560,7 +560,7 @@ func otelHistogramConfig(metricName string, buckets []float64, useExponentialHis
 		return metric.NewView(
 			metric.Instrument{
 				Name:  metricName,
-				Scope: instrumentation.Scope{Name: ReporterName},
+				Scope: instrumentation.Scope{Name: reporterName},
 			},
 			metric.Stream{
 				Name: metricName,
@@ -573,7 +573,7 @@ func otelHistogramConfig(metricName string, buckets []float64, useExponentialHis
 	return metric.NewView(
 		metric.Instrument{
 			Name:  metricName,
-			Scope: instrumentation.Scope{Name: ReporterName},
+			Scope: instrumentation.Scope{Name: reporterName},
 		},
 		metric.Stream{
 			Name: metricName,
@@ -638,7 +638,7 @@ func (mr *MetricsReporter) serviceGraphAttributes(span *request.Span) attribute.
 	return attribute.NewSet(attrs...)
 }
 
-func withAttributes(span *request.Span, getters []metric2.Field[*request.Span, attribute.KeyValue]) instrument.MeasurementOption {
+func withAttributes(span *request.Span, getters []attributes.Field[*request.Span, attribute.KeyValue]) instrument.MeasurementOption {
 	attributes := make([]attribute.KeyValue, 0, len(getters))
 	for _, get := range getters {
 		attributes = append(attributes, get.Get(span))

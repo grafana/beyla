@@ -15,8 +15,8 @@ import (
 	"go.opentelemetry.io/otel/sdk/resource"
 	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 
+	"github.com/grafana/beyla/pkg/internal/export/attributes"
 	"github.com/grafana/beyla/pkg/internal/export/expire"
-	bmetric "github.com/grafana/beyla/pkg/internal/export/metric"
 	"github.com/grafana/beyla/pkg/internal/export/otel"
 	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
@@ -24,7 +24,7 @@ import (
 
 type MetricsConfig struct {
 	Metrics            *otel.MetricsConfig
-	AttributeSelectors bmetric.Selection
+	AttributeSelectors attributes.Selection
 }
 
 func (mc MetricsConfig) Enabled() bool {
@@ -84,20 +84,20 @@ func MetricsExporterProvider(ctxInfo *global.ContextInfo, cfg *MetricsConfig) (p
 		return nil, err
 	}
 
-	attrProv, err := bmetric.NewAttrSelector(ctxInfo.MetricAttributeGroups, cfg.AttributeSelectors)
+	attrProv, err := attributes.NewAttrSelector(ctxInfo.MetricAttributeGroups, cfg.AttributeSelectors)
 	if err != nil {
 		return nil, fmt.Errorf("network OTEL exporter attributes enable: %w", err)
 	}
-	attrs := bmetric.OpenTelemetryGetters(
+	attrs := attributes.OpenTelemetryGetters(
 		ebpf.RecordGetters,
-		attrProv.For(bmetric.BeylaNetworkFlow))
+		attrProv.For(attributes.BeylaNetworkFlow))
 
 	clock := expire.NewCachedClock(timeNow)
 	expirer := NewExpirer(attrs, clock.Time, cfg.Metrics.TTL)
 	ebpfEvents := provider.Meter("network_ebpf_events")
 
 	_, err = ebpfEvents.Int64ObservableCounter(
-		bmetric.BeylaNetworkFlow.OTEL,
+		attributes.BeylaNetworkFlow.OTEL,
 		metric2.WithDescription("total bytes_sent value of network flows observed by probe since its launch"),
 		metric2.WithUnit("{bytes}"),
 		metric2.WithInt64Callback(expirer.Collect),

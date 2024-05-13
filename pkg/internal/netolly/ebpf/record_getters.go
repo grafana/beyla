@@ -3,15 +3,15 @@ package ebpf
 import (
 	"strconv"
 
-	"github.com/grafana/beyla/pkg/internal/export/metric"
-	"github.com/grafana/beyla/pkg/internal/export/metric/attr"
+	"github.com/grafana/beyla/pkg/internal/export/attributes"
+	attr "github.com/grafana/beyla/pkg/internal/export/attributes/names"
 	"github.com/grafana/beyla/pkg/internal/netolly/flow/transport"
 )
 
-// RecordGetters returns the metric.Getter function that returns the string value of a given
+// RecordGetters returns the attributes.Getter function that returns the string value of a given
 // attribute name.
-func RecordGetters(name attr.Name) (metric.Getter[*Record, string], bool) {
-	var getter metric.Getter[*Record, string]
+func RecordGetters(name attr.Name) (attributes.Getter[*Record, string], bool) {
+	var getter attributes.Getter[*Record, string]
 	switch name {
 	case attr.BeylaIP:
 		getter = func(r *Record) string { return r.Attrs.BeylaIP }

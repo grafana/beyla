@@ -15,8 +15,8 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 
 	"github.com/grafana/beyla/pkg/beyla"
-	"github.com/grafana/beyla/pkg/internal/export/metric"
-	"github.com/grafana/beyla/pkg/internal/export/metric/attr"
+	"github.com/grafana/beyla/pkg/internal/export/attributes"
+	attr "github.com/grafana/beyla/pkg/internal/export/attributes/names"
 	"github.com/grafana/beyla/pkg/internal/export/otel"
 	"github.com/grafana/beyla/pkg/internal/filter"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
@@ -31,20 +31,20 @@ import (
 
 const testTimeout = 5 * time.Second
 
-func gctx(groups metric.AttrGroups) *global.ContextInfo {
+func gctx(groups attributes.AttrGroups) *global.ContextInfo {
 	return &global.ContextInfo{
 		Metrics:               imetrics.NoopReporter{},
 		MetricAttributeGroups: groups,
 	}
 }
 
-var allMetrics = metric.Selection{
-	metric.HTTPServerDuration.Section: metric.InclusionLists{Include: []string{"*"}},
+var allMetrics = attributes.Selection{
+	attributes.HTTPServerDuration.Section: attributes.InclusionLists{Include: []string{"*"}},
 }
 
-func allMetricsBut(patterns ...string) metric.Selection {
-	return metric.Selection{
-		metric.HTTPServerDuration.Section: metric.InclusionLists{
+func allMetricsBut(patterns ...string) attributes.Selection {
+	return attributes.Selection{
+		attributes.HTTPServerDuration.Section: attributes.InclusionLists{
 			Include: []string{"*"},
 			Exclude: patterns,
 		},
@@ -251,7 +251,7 @@ func TestRouteConsolidation(t *testing.T) {
 		},
 		Routes:     &transform.RoutesConfig{Patterns: []string{"/user/{id}", "/products/{id}/push"}},
 		Attributes: beyla.Attributes{Select: allMetricsBut("client.address", "url.path")},
-	}, gctx(metric.GroupHTTPRoutes), make(<-chan []request.Span))
+	}, gctx(attributes.GroupHTTPRoutes), make(<-chan []request.Span))
 	// Override eBPF tracer to send some fake data
 	pipe.AddStart(gb.builder, tracesReader,
 		func(out chan<- []request.Span) {

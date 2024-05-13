@@ -14,16 +14,19 @@ import (
 	"github.com/mariomac/pipes/pipe"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/collector/pdata/pcommon"
+	"go.opentelemetry.io/collector/pdata/ptrace"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
-	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 	"go.opentelemetry.io/otel/trace"
 
+	"github.com/grafana/beyla/pkg/internal/export/attributes"
+	attr "github.com/grafana/beyla/pkg/internal/export/attributes/names"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/pkg/internal/request"
-	"github.com/grafana/beyla/pkg/internal/svc"
+	"github.com/grafana/beyla/pkg/internal/sqlprune"
 )
 
 func TestHTTPTracesEndpoint(t *testing.T) {
@@ -236,6 +239,342 @@ func TestTracesSetupHTTP_DoNotOverrideEnv(t *testing.T) {
 	})
 }
 
+func TestGenerateTraces(t *testing.T) {
+	t.Run("test with subtraces - with parent spanId", func(t *testing.T) {
+		start := time.Now()
+		parentSpanID, _ := trace.SpanIDFromHex("89cbc1f60aab3b04")
+		spanID, _ := trace.SpanIDFromHex("89cbc1f60aab3b01")
+		traceID, _ := trace.TraceIDFromHex("eae56fbbec9505c102e8aabfc6b5c481")
+		span := &request.Span{
+			Type:         request.EventTypeHTTP,
+			RequestStart: start.UnixNano(),
+			Start:        start.Add(time.Second).UnixNano(),
+			End:          start.Add(3 * time.Second).UnixNano(),
+			Method:       "GET",
+			Route:        "/test",
+			Status:       200,
+			ParentSpanID: parentSpanID,
+			TraceID:      traceID,
+			SpanID:       spanID,
+		}
+		traces := GenerateTraces(span, map[attr.Name]struct{}{})
+
+		assert.Equal(t, 1, traces.ResourceSpans().Len())
+		assert.Equal(t, 1, traces.ResourceSpans().At(0).ScopeSpans().Len())
+		assert.Equal(t, 3, traces.ResourceSpans().At(0).ScopeSpans().At(0).Spans().Len())
+		spans := traces.ResourceSpans().At(0).ScopeSpans().At(0).Spans()
+		assert.Equal(t, "in queue", spans.At(0).Name())
+		assert.Equal(t, "processing", spans.At(1).Name())
+		assert.Equal(t, "GET /test", spans.At(2).Name())
+		assert.Equal(t, ptrace.SpanKindInternal, spans.At(0).Kind())
+		assert.Equal(t, ptrace.SpanKindInternal, spans.At(1).Kind())
+		assert.Equal(t, ptrace.SpanKindServer, spans.At(2).Kind())
+
+		assert.NotEmpty(t, spans.At(2).SpanID().String())
+		assert.Equal(t, traceID.String(), spans.At(2).TraceID().String())
+		topSpanID := spans.At(2).SpanID().String()
+		assert.Equal(t, parentSpanID.String(), spans.At(2).ParentSpanID().String())
+
+		assert.NotEmpty(t, spans.At(0).SpanID().String())
+		assert.Equal(t, traceID.String(), spans.At(0).TraceID().String())
+		assert.Equal(t, topSpanID, spans.At(0).ParentSpanID().String())
+
+		assert.Equal(t, spanID.String(), spans.At(1).SpanID().String())
+		assert.Equal(t, traceID.String(), spans.At(1).TraceID().String())
+		assert.Equal(t, topSpanID, spans.At(1).ParentSpanID().String())
+
+		assert.NotEqual(t, spans.At(0).SpanID().String(), spans.At(1).SpanID().String())
+		assert.NotEqual(t, spans.At(1).SpanID().String(), spans.At(2).SpanID().String())
+	})
+
+	t.Run("test with subtraces - ids set bpf layer", func(t *testing.T) {
+		start := time.Now()
+		spanID, _ := trace.SpanIDFromHex("89cbc1f60aab3b04")
+		traceID, _ := trace.TraceIDFromHex("eae56fbbec9505c102e8aabfc6b5c481")
+		span := &request.Span{
+			Type:         request.EventTypeHTTP,
+			RequestStart: start.UnixNano(),
+			Start:        start.Add(time.Second).UnixNano(),
+			End:          start.Add(3 * time.Second).UnixNano(),
+			Method:       "GET",
+			Route:        "/test",
+			Status:       200,
+			SpanID:       spanID,
+			TraceID:      traceID,
+		}
+		traces := GenerateTraces(span, map[attr.Name]struct{}{})
+
+		assert.Equal(t, 1, traces.ResourceSpans().Len())
+		assert.Equal(t, 1, traces.ResourceSpans().At(0).ScopeSpans().Len())
+		assert.Equal(t, 3, traces.ResourceSpans().At(0).ScopeSpans().At(0).Spans().Len())
+		spans := traces.ResourceSpans().At(0).ScopeSpans().At(0).Spans()
+		assert.Equal(t, "in queue", spans.At(0).Name())
+		assert.Equal(t, "processing", spans.At(1).Name())
+		assert.Equal(t, "GET /test", spans.At(2).Name())
+		assert.Equal(t, ptrace.SpanKindInternal, spans.At(0).Kind())
+		assert.Equal(t, ptrace.SpanKindInternal, spans.At(1).Kind())
+		assert.Equal(t, ptrace.SpanKindServer, spans.At(2).Kind())
+
+		assert.NotEmpty(t, spans.At(0).SpanID().String())
+		assert.Equal(t, traceID.String(), spans.At(0).TraceID().String())
+
+		assert.Equal(t, spanID.String(), spans.At(1).SpanID().String())
+		assert.Equal(t, traceID.String(), spans.At(1).TraceID().String())
+
+		assert.NotEmpty(t, spans.At(2).SpanID().String())
+		assert.Equal(t, traceID.String(), spans.At(2).TraceID().String())
+		assert.NotEqual(t, spans.At(0).SpanID().String(), spans.At(1).SpanID().String())
+		assert.NotEqual(t, spans.At(1).SpanID().String(), spans.At(2).SpanID().String())
+	})
+
+	t.Run("test with subtraces - generated ids", func(t *testing.T) {
+		start := time.Now()
+		span := &request.Span{
+			Type:         request.EventTypeHTTP,
+			RequestStart: start.UnixNano(),
+			Start:        start.Add(time.Second).UnixNano(),
+			End:          start.Add(3 * time.Second).UnixNano(),
+			Method:       "GET",
+			Route:        "/test",
+			Status:       200,
+		}
+		traces := GenerateTraces(span, map[attr.Name]struct{}{})
+
+		assert.Equal(t, 1, traces.ResourceSpans().Len())
+		assert.Equal(t, 1, traces.ResourceSpans().At(0).ScopeSpans().Len())
+		assert.Equal(t, 3, traces.ResourceSpans().At(0).ScopeSpans().At(0).Spans().Len())
+		spans := traces.ResourceSpans().At(0).ScopeSpans().At(0).Spans()
+		assert.Equal(t, "in queue", spans.At(0).Name())
+		assert.Equal(t, "processing", spans.At(1).Name())
+		assert.Equal(t, "GET /test", spans.At(2).Name())
+		assert.Equal(t, ptrace.SpanKindInternal, spans.At(0).Kind())
+		assert.Equal(t, ptrace.SpanKindInternal, spans.At(1).Kind())
+		assert.Equal(t, ptrace.SpanKindServer, spans.At(2).Kind())
+
+		assert.NotEmpty(t, spans.At(0).SpanID().String())
+		assert.NotEmpty(t, spans.At(0).TraceID().String())
+		assert.NotEmpty(t, spans.At(1).SpanID().String())
+		assert.NotEmpty(t, spans.At(1).TraceID().String())
+		assert.NotEmpty(t, spans.At(2).SpanID().String())
+		assert.NotEmpty(t, spans.At(2).TraceID().String())
+		assert.NotEqual(t, spans.At(0).SpanID().String(), spans.At(1).SpanID().String())
+		assert.NotEqual(t, spans.At(1).SpanID().String(), spans.At(2).SpanID().String())
+	})
+
+	t.Run("test without subspans - ids set bpf layer", func(t *testing.T) {
+		start := time.Now()
+		spanID, _ := trace.SpanIDFromHex("89cbc1f60aab3b04")
+		traceID, _ := trace.TraceIDFromHex("eae56fbbec9505c102e8aabfc6b5c481")
+		span := &request.Span{
+			Type:         request.EventTypeHTTP,
+			RequestStart: start.UnixNano(),
+			End:          start.Add(3 * time.Second).UnixNano(),
+			Method:       "GET",
+			Route:        "/test",
+			Status:       200,
+			SpanID:       spanID,
+			TraceID:      traceID,
+		}
+		traces := GenerateTraces(span, map[attr.Name]struct{}{})
+
+		assert.Equal(t, 1, traces.ResourceSpans().Len())
+		assert.Equal(t, 1, traces.ResourceSpans().At(0).ScopeSpans().Len())
+		assert.Equal(t, 1, traces.ResourceSpans().At(0).ScopeSpans().At(0).Spans().Len())
+		spans := traces.ResourceSpans().At(0).ScopeSpans().At(0).Spans()
+
+		assert.Equal(t, spanID.String(), spans.At(0).SpanID().String())
+		assert.Equal(t, traceID.String(), spans.At(0).TraceID().String())
+	})
+
+	t.Run("test without subspans - with parent spanId", func(t *testing.T) {
+		start := time.Now()
+		parentSpanID, _ := trace.SpanIDFromHex("89cbc1f60aab3b04")
+		traceID, _ := trace.TraceIDFromHex("eae56fbbec9505c102e8aabfc6b5c481")
+		span := &request.Span{
+			Type:         request.EventTypeHTTP,
+			RequestStart: start.UnixNano(),
+			End:          start.Add(3 * time.Second).UnixNano(),
+			Method:       "GET",
+			Route:        "/test",
+			Status:       200,
+			ParentSpanID: parentSpanID,
+			TraceID:      traceID,
+		}
+		traces := GenerateTraces(span, map[attr.Name]struct{}{})
+
+		assert.Equal(t, 1, traces.ResourceSpans().Len())
+		assert.Equal(t, 1, traces.ResourceSpans().At(0).ScopeSpans().Len())
+		assert.Equal(t, 1, traces.ResourceSpans().At(0).ScopeSpans().At(0).Spans().Len())
+		spans := traces.ResourceSpans().At(0).ScopeSpans().At(0).Spans()
+
+		assert.Equal(t, parentSpanID.String(), spans.At(0).ParentSpanID().String())
+		assert.Equal(t, traceID.String(), spans.At(0).TraceID().String())
+	})
+
+	t.Run("test without subspans - generated ids", func(t *testing.T) {
+		start := time.Now()
+		span := &request.Span{
+			Type:         request.EventTypeHTTP,
+			RequestStart: start.UnixNano(),
+			End:          start.Add(3 * time.Second).UnixNano(),
+			Method:       "GET",
+			Route:        "/test",
+		}
+		traces := GenerateTraces(span, map[attr.Name]struct{}{})
+
+		assert.Equal(t, 1, traces.ResourceSpans().Len())
+		assert.Equal(t, 1, traces.ResourceSpans().At(0).ScopeSpans().Len())
+		assert.Equal(t, 1, traces.ResourceSpans().At(0).ScopeSpans().At(0).Spans().Len())
+		spans := traces.ResourceSpans().At(0).ScopeSpans().At(0).Spans()
+
+		assert.NotEmpty(t, spans.At(0).SpanID().String())
+		assert.NotEmpty(t, spans.At(0).TraceID().String())
+	})
+
+}
+
+func TestGenerateTracesAttributes(t *testing.T) {
+	t.Run("test SQL trace generation, no statement", func(t *testing.T) {
+		span := makeSQLRequestSpan("SELECT password FROM credentials WHERE username=\"bill\"")
+		traces := GenerateTraces(&span, map[attr.Name]struct{}{})
+
+		assert.Equal(t, 1, traces.ResourceSpans().Len())
+		assert.Equal(t, 1, traces.ResourceSpans().At(0).ScopeSpans().Len())
+		assert.Equal(t, 1, traces.ResourceSpans().At(0).ScopeSpans().At(0).Spans().Len())
+		spans := traces.ResourceSpans().At(0).ScopeSpans().At(0).Spans()
+
+		assert.NotEmpty(t, spans.At(0).SpanID().String())
+		assert.NotEmpty(t, spans.At(0).TraceID().String())
+
+		attrs := spans.At(0).Attributes()
+
+		assert.Equal(t, 2, attrs.Len())
+		ensureTraceStrAttr(t, attrs, semconv.DBOperationKey, "SELECT")
+		ensureTraceStrAttr(t, attrs, semconv.DBSQLTableKey, "credentials")
+		ensureTraceAttrNotExists(t, attrs, semconv.DBStatementKey)
+	})
+
+	t.Run("test SQL trace generation, unknown attribute", func(t *testing.T) {
+		span := makeSQLRequestSpan("SELECT password FROM credentials WHERE username=\"bill\"")
+		traces := GenerateTraces(&span, map[attr.Name]struct{}{"db.operation": {}})
+
+		assert.Equal(t, 1, traces.ResourceSpans().Len())
+		assert.Equal(t, 1, traces.ResourceSpans().At(0).ScopeSpans().Len())
+		assert.Equal(t, 1, traces.ResourceSpans().At(0).ScopeSpans().At(0).Spans().Len())
+		spans := traces.ResourceSpans().At(0).ScopeSpans().At(0).Spans()
+
+		assert.NotEmpty(t, spans.At(0).SpanID().String())
+		assert.NotEmpty(t, spans.At(0).TraceID().String())
+
+		attrs := spans.At(0).Attributes()
+
+		assert.Equal(t, 2, attrs.Len())
+		ensureTraceStrAttr(t, attrs, semconv.DBOperationKey, "SELECT")
+		ensureTraceStrAttr(t, attrs, semconv.DBSQLTableKey, "credentials")
+		ensureTraceAttrNotExists(t, attrs, semconv.DBStatementKey)
+	})
+
+	t.Run("test SQL trace generation, unknown attribute", func(t *testing.T) {
+		span := makeSQLRequestSpan("SELECT password FROM credentials WHERE username=\"bill\"")
+		traces := GenerateTraces(&span, map[attr.Name]struct{}{attr.IncludeDBStatement: {}})
+
+		assert.Equal(t, 1, traces.ResourceSpans().Len())
+		assert.Equal(t, 1, traces.ResourceSpans().At(0).ScopeSpans().Len())
+		assert.Equal(t, 1, traces.ResourceSpans().At(0).ScopeSpans().At(0).Spans().Len())
+		spans := traces.ResourceSpans().At(0).ScopeSpans().At(0).Spans()
+
+		assert.NotEmpty(t, spans.At(0).SpanID().String())
+		assert.NotEmpty(t, spans.At(0).TraceID().String())
+
+		attrs := spans.At(0).Attributes()
+
+		assert.Equal(t, 3, attrs.Len())
+		ensureTraceStrAttr(t, attrs, semconv.DBOperationKey, "SELECT")
+		ensureTraceStrAttr(t, attrs, semconv.DBSQLTableKey, "credentials")
+		ensureTraceStrAttr(t, attrs, semconv.DBStatementKey, "SELECT password FROM credentials WHERE username=\"bill\"")
+	})
+}
+
+func TestAttrsToMap(t *testing.T) {
+	t.Run("test with string attribute", func(t *testing.T) {
+		attrs := []attribute.KeyValue{
+			attribute.String("key1", "value1"),
+			attribute.String("key2", "value2"),
+		}
+		expected := pcommon.NewMap()
+		expected.PutStr("key1", "value1")
+		expected.PutStr("key2", "value2")
+
+		result := attrsToMap(attrs)
+		assert.Equal(t, expected, result)
+	})
+
+	t.Run("test with int attribute", func(t *testing.T) {
+		attrs := []attribute.KeyValue{
+			attribute.Int64("key1", 10),
+			attribute.Int64("key2", 20),
+		}
+		expected := pcommon.NewMap()
+		expected.PutInt("key1", 10)
+		expected.PutInt("key2", 20)
+
+		result := attrsToMap(attrs)
+		assert.Equal(t, expected, result)
+	})
+
+	t.Run("test with float attribute", func(t *testing.T) {
+		attrs := []attribute.KeyValue{
+			attribute.Float64("key1", 3.14),
+			attribute.Float64("key2", 2.718),
+		}
+		expected := pcommon.NewMap()
+		expected.PutDouble("key1", 3.14)
+		expected.PutDouble("key2", 2.718)
+
+		result := attrsToMap(attrs)
+		assert.Equal(t, expected, result)
+	})
+
+	t.Run("test with bool attribute", func(t *testing.T) {
+		attrs := []attribute.KeyValue{
+			attribute.Bool("key1", true),
+			attribute.Bool("key2", false),
+		}
+		expected := pcommon.NewMap()
+		expected.PutBool("key1", true)
+		expected.PutBool("key2", false)
+
+		result := attrsToMap(attrs)
+		assert.Equal(t, expected, result)
+	})
+}
+
+func TestCodeToStatusCode(t *testing.T) {
+	t.Run("test with unset code", func(t *testing.T) {
+		code := codes.Unset
+		expected := ptrace.StatusCodeUnset
+
+		result := codeToStatusCode(code)
+		assert.Equal(t, expected, result)
+	})
+
+	t.Run("test with error code", func(t *testing.T) {
+		code := codes.Error
+		expected := ptrace.StatusCodeError
+
+		result := codeToStatusCode(code)
+		assert.Equal(t, expected, result)
+	})
+
+	t.Run("test with ok code", func(t *testing.T) {
+		code := codes.Ok
+		expected := ptrace.StatusCodeOk
+
+		result := codeToStatusCode(code)
+		assert.Equal(t, expected, result)
+	})
+}
+
 func TestTraces_InternalInstrumentation(t *testing.T) {
 	defer restoreEnvAfterExecution()()
 	// fake OTEL collector server
@@ -249,10 +588,9 @@ func TestTraces_InternalInstrumentation(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 	})
-
+	builder := pipe.NewBuilder(&testPipeline{})
 	// create a simple dummy graph to send data to the Metrics reporter, which will send
 	// metrics to the fake collector
-	builder := pipe.NewBuilder(&testPipeline{})
 	sendData := make(chan struct{})
 	pipe.AddStart(builder, func(impl *testPipeline) *pipe.Start[[]request.Span] {
 		return &impl.inputNode
@@ -265,8 +603,8 @@ func TestTraces_InternalInstrumentation(t *testing.T) {
 	internalTraces := &fakeInternalTraces{}
 	pipe.AddFinalProvider(builder, func(impl *testPipeline) *pipe.Final[[]request.Span] {
 		return &impl.exporter
-	}, ReportTraces(context.Background(),
-		&TracesConfig{
+	}, TracesReceiver(context.Background(),
+		TracesConfig{
 			CommonEndpoint:    coll.URL,
 			BatchTimeout:      10 * time.Millisecond,
 			ExportTimeout:     5 * time.Second,
@@ -274,7 +612,9 @@ func TestTraces_InternalInstrumentation(t *testing.T) {
 		},
 		&global.ContextInfo{
 			Metrics: internalTraces,
-		}))
+		},
+		attributes.Selection{},
+	))
 	graph, err := builder.Build()
 	require.NoError(t, err)
 
@@ -360,8 +700,8 @@ func TestTraces_InternalInstrumentationSampling(t *testing.T) {
 	internalTraces := &fakeInternalTraces{}
 	pipe.AddFinalProvider(builder, func(impl *testPipeline) *pipe.Final[[]request.Span] {
 		return &impl.exporter
-	}, ReportTraces(context.Background(),
-		&TracesConfig{
+	}, TracesReceiver(context.Background(),
+		TracesConfig{
 			CommonEndpoint:    coll.URL,
 			BatchTimeout:      10 * time.Millisecond,
 			ExportTimeout:     5 * time.Second,
@@ -370,7 +710,9 @@ func TestTraces_InternalInstrumentationSampling(t *testing.T) {
 		},
 		&global.ContextInfo{
 			Metrics: internalTraces,
-		}))
+		},
+		attributes.Selection{},
+	))
 
 	graph, err := builder.Build()
 	require.NoError(t, err)
@@ -402,82 +744,6 @@ func TestTracesConfig_Disabled(t *testing.T) {
 	assert.False(t, TracesConfig{}.Enabled())
 	assert.False(t, TracesConfig{Grafana: &GrafanaOTLP{Submit: []string{"metrics"}, InstanceID: "33221"}}.Enabled())
 	assert.False(t, TracesConfig{Grafana: &GrafanaOTLP{Submit: []string{"traces"}}}.Enabled())
-}
-
-func TestTracesIdGenerator(t *testing.T) {
-	defer restoreEnvAfterExecution()
-	mcfg := TracesConfig{Grafana: &GrafanaOTLP{
-		Submit:     []string{submitMetrics, submitTraces},
-		CloudZone:  "eu-west-23",
-		InstanceID: "12345",
-		APIKey:     "affafafaafkd",
-	}}
-	r := TracesReporter{ctx: context.Background(), cfg: &mcfg}
-	r.bsp = sdktrace.NewSimpleSpanProcessor(nil)
-
-	tracers, err := r.newTracers(svc.ID{})
-	assert.NoError(t, err)
-	assert.NotNil(t, tracers)
-
-	t.Run("testing that we can generate random spans in userspace, if not set by eBPF", func(t *testing.T) {
-		_, sp := tracers.tracer.Start(context.Background(), "Test",
-			trace.WithTimestamp(time.Now()),
-			trace.WithSpanKind(trace.SpanKindServer),
-		)
-		assert.True(t, sp.SpanContext().HasSpanID())
-		assert.True(t, sp.SpanContext().HasTraceID())
-	})
-
-	t.Run("testing that we can generate span for fixed parent set eBPF", func(t *testing.T) {
-		tID1, spID1 := NewIDs(1)
-		assert.True(t, tID1.IsValid())
-		assert.True(t, spID1.IsValid())
-
-		parentCtx := trace.ContextWithSpanContext(
-			context.Background(),
-			trace.SpanContext{}.WithTraceID(tID1).WithSpanID(spID1).WithTraceFlags(trace.FlagsSampled),
-		)
-
-		_, sp := tracers.tracer.Start(parentCtx, "Test1",
-			trace.WithTimestamp(time.Now()),
-			trace.WithSpanKind(trace.SpanKindServer),
-		)
-
-		assert.True(t, sp.SpanContext().HasSpanID())
-		assert.Equal(t, tID1, sp.SpanContext().TraceID())
-		assert.NotEqual(t, spID1, sp.SpanContext().SpanID())
-
-	})
-
-	t.Run("testing that we can generate span for fixed traceID set by eBPF", func(t *testing.T) {
-		tID2, spID2 := NewIDs(2)
-
-		parentCtx := ContextWithTrace(context.Background(), tID2)
-
-		_, sp := tracers.tracer.Start(parentCtx, "Test2",
-			trace.WithTimestamp(time.Now()),
-			trace.WithSpanKind(trace.SpanKindServer),
-		)
-
-		assert.True(t, sp.SpanContext().HasSpanID())
-		assert.Equal(t, tID2, sp.SpanContext().TraceID())
-		assert.NotEqual(t, spID2, sp.SpanContext().SpanID())
-	})
-
-	t.Run("testing that we can generate fixed traceID and spanID set by eBPF", func(t *testing.T) {
-		tID3, spID3 := NewIDs(3)
-
-		parentCtx := ContextWithTraceParent(context.Background(), tID3, spID3)
-
-		_, sp := tracers.tracer.Start(parentCtx, "Test3",
-			trace.WithTimestamp(time.Now()),
-			trace.WithSpanKind(trace.SpanKindServer),
-		)
-
-		assert.True(t, sp.SpanContext().HasSpanID())
-		assert.Equal(t, tID3, sp.SpanContext().TraceID())
-		assert.Equal(t, spID3, sp.SpanContext().SpanID())
-	})
 }
 
 func TestSpanHostPeer(t *testing.T) {
@@ -669,4 +935,20 @@ func NewIDs(counter int) (trace.TraceID, trace.SpanID) {
 	binary.BigEndian.PutUint64(spanID[:], uint64(counter))
 
 	return trace.TraceID(traceID), trace.SpanID(spanID)
+}
+
+func makeSQLRequestSpan(sql string) request.Span {
+	method, path := sqlprune.SQLParseOperationAndTable(sql)
+	return request.Span{Type: request.EventTypeSQLClient, Method: method, Path: path, Statement: sql}
+}
+
+func ensureTraceStrAttr(t *testing.T, attrs pcommon.Map, key attribute.Key, val string) {
+	v, ok := attrs.Get(string(key))
+	assert.True(t, ok)
+	assert.Equal(t, val, v.AsString())
+}
+
+func ensureTraceAttrNotExists(t *testing.T, attrs pcommon.Map, key attribute.Key) {
+	_, ok := attrs.Get(string(key))
+	assert.False(t, ok)
 }

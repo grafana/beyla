@@ -703,7 +703,11 @@ func testNestedHTTPTracesKProbes(t *testing.T) {
 	waitForTestComponents(t, "http://localhost:8091")                 // rust
 
 	// Add and check for specific trace ID
-	doHTTPGet(t, "http://localhost:8091/dist", 200)
+	// Run couple of requests to make sure we flush out any transactions that might be
+	// stuck because of our tracking of full request times
+	for i := 0; i < 5; i++ {
+		doHTTPGet(t, "http://localhost:8091/dist", 200)
+	}
 
 	// rust   -> java     -> nodejs   -> go            -> python      -> rails
 	// /dist2 -> /jtrace2 -> /traceme -> /gotracemetoo -> /tracemetoo -> /users
@@ -719,7 +723,7 @@ func testNestedHTTPTracesKProbes(t *testing.T) {
 		var tq jaeger.TracesQuery
 		require.NoError(t, json.NewDecoder(resp.Body).Decode(&tq))
 		traces := tq.FindBySpan(jaeger.Tag{Key: "url.path", Type: "string", Value: "/dist"})
-		require.Len(t, traces, 1)
+		require.LessOrEqual(t, 2, len(traces))
 		trace = traces[0]
 	}, test.Interval(500*time.Millisecond))
 

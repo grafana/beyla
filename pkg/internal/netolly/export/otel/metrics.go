@@ -16,6 +16,7 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 
 	"github.com/grafana/beyla/pkg/internal/export/attributes"
+	"github.com/grafana/beyla/pkg/internal/export/expire"
 	"github.com/grafana/beyla/pkg/internal/export/otel"
 	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
@@ -60,6 +61,7 @@ func newMeterProvider(res *resource.Resource, exporter *metric.Exporter, interva
 
 type metricsExporter struct {
 	metrics *Expirer
+	clock   *expire.CachedClock
 }
 
 func MetricsExporterProvider(ctxInfo *global.ContextInfo, cfg *MetricsConfig) (pipe.FinalFunc[[]*ebpf.Record], error) {
@@ -90,7 +92,8 @@ func MetricsExporterProvider(ctxInfo *global.ContextInfo, cfg *MetricsConfig) (p
 		ebpf.RecordGetters,
 		attrProv.For(attributes.BeylaNetworkFlow))
 
-	expirer := NewExpirer(attrs, cfg.Metrics.TTL)
+	clock := expire.NewCachedClock(timeNow)
+	expirer := NewExpirer(attrs, clock.Time, cfg.Metrics.TTL)
 	ebpfEvents := provider.Meter("network_ebpf_events")
 
 	_, err = ebpfEvents.Int64ObservableCounter(
@@ -106,12 +109,13 @@ func MetricsExporterProvider(ctxInfo *global.ContextInfo, cfg *MetricsConfig) (p
 	log.Debug("restricting attributes not in this list", "attributes", cfg.AttributeSelectors)
 	return (&metricsExporter{
 		metrics: expirer,
+		clock:   clock,
 	}).Do, nil
 }
 
 func (me *metricsExporter) Do(in <-chan []*ebpf.Record) {
 	for i := range in {
-		me.metrics.UpdateTime()
+		me.clock.Update()
 		for _, v := range i {
 			me.metrics.ForRecord(v).val.Add(int64(v.Metrics.Bytes))
 		}

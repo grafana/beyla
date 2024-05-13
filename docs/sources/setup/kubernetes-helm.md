@@ -26,32 +26,33 @@ follow the [Beyla and Kubernetes walkthrough tutorial]({{< relref "../tutorial/k
 Contents:
 
 <!-- TOC -->
-  * [Deploying Beyla from helm](#deploying-beyla-from-helm)
-  * [Configuring Beyla](#configuring-beyla)
-  * [Configuring Beyla metadata](#configuring-beyla-metadata)
-  * [Providing secrets to the Helm configuration](#providing-secrets-to-the-helm-configuration)
+
+- [Deploying Beyla from helm](#deploying-beyla-from-helm)
+- [Configuring Beyla](#configuring-beyla)
+- [Configuring Beyla metadata](#configuring-beyla-metadata)
+- [Providing secrets to the Helm configuration](#providing-secrets-to-the-helm-configuration)
 <!-- TOC -->
 
 ## Deploying Beyla from helm
 
 First, you need to add the Grafana helm repository to Helm:
 
-```
+```sh
 helm repo add grafana https://grafana.github.io/helm-charts
 ```
 
 The following command deploys a Beyla DaemonSet with a default configuration in the `beyla` namespace:
 
-```
+```sh
 helm install beyla -n beyla --create-namespace  grafana/beyla
 ```
 
-The default Beyla configuration is provided so:
+The default Beyla configuration:
 
-* Exports the metrics as Prometheus metrics in the Pod HTTP port `9090`, `/metrics` path.
-* It tries to instrument all the applications in your cluster.
-* It only provides application-level metrics. [Network-level metrics]({{< relref "../network" >}}) are excluded by default.
-* Configures Beyla to decorate the metrics with Kubernetes metadata labels (`k8s.namespace.name`, `k8s.pod.name`, etc.).
+- exports the metrics as Prometheus metrics in the Pod HTTP port `9090`, `/metrics` path.
+- tries to instrument all the applications in your cluster.
+- only provides application-level metrics and excludes [network-level metrics]({{< relref "../network" >}}) by default
+- configures Beyla to decorate the metrics with Kubernetes metadata labels, for example `k8s.namespace.name` or `k8s.pod.name`
 
 ## Configuring Beyla
 
@@ -74,18 +75,18 @@ config:
       unmatched: heuristic
 ```
 
-The `config.data` section contains a Beyla configuration file whose options are documented in the
-[Beyla configuration options document]({{< relref "../configure/options.md" >}}).
+The `config.data` section contains a Beyla configuration file, documented in the
+[Beyla configuration options documentation]({{< relref "../configure/options.md" >}}).
 
 Then pass the overridden configuration to the `helm` command with the `-f` flag. For example:
 
-```
+```sh
 helm install beyla grafana/beyla -f helm-beyla.yml
 ```
 
 or, if the Beyla chart was previously deployed:
 
-```
+```sh
 helm upgrade beyla grafana/beyla -f helm-beyla.yml
 ```
 
@@ -95,31 +96,31 @@ If Beyla exports the data using the Prometheus exporter, you might need to overr
 annotations to let it be discoverable by your Prometheus scraper. You can add the following
 section to the example `helm-beyla.yml` file:
 
-```
+```yaml
 podAnnotations:
-  prometheus.io/scrape: 'true'
-  prometheus.io/path: '/metrics'
-  prometheus.io/port: '9090'
+  prometheus.io/scrape: "true"
+  prometheus.io/path: "/metrics"
+  prometheus.io/port: "9090"
 ```
 
 Analogously, the Helm chart allows overriding names, labels, and annotations for
-multiple resources that are involved in the deployment of Beyla, such as service
-accounts, cluster roles, security contexts, etc. The 
+multiple resources involved in the deployment of Beyla, such as service
+accounts, cluster roles, security contexts, etc. The
 [Beyla Helm chart documentation](https://github.com/grafana/beyla/blob/main/charts/beyla/README.md)
 describes the diverse configuration options.
 
 ## Providing secrets to the Helm configuration
 
 If you are submitting directly the metrics and traces to Grafana Cloud via the
-OpenTelemetry Endpoint, you need to provide the credentials via the 
+OpenTelemetry Endpoint, you need to provide the credentials via the
 `OTEL_EXPORTER_OTLP_HEADERS` environment variable.
 
 The recommended way is to store such value in a Kubernetes Secret and then
 specify the environment variable referring to it from the Helm configuration.
 
-For example, deploy the following secret: 
+For example, deploy the following secret:
 
-```
+```yaml
 apiVersion: v1
 kind: Secret
 metadata:

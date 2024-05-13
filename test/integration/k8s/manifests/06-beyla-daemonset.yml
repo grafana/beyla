@@ -80,3 +80,5 @@ spec:
               value: "true"
             - name: BEYLA_METRICS_REPORT_PEER
               value: "true"
+            - name: BEYLA_OTEL_METRICS_TTL
+              value: "30m0s"

@@ -126,6 +126,8 @@ spec:
               value: "autodetect"
             - name: BEYLA_PROMETHEUS_FEATURES
               value: "application,application_span,application_service_graph"
+            - name: BEYLA_OTEL_METRICS_TTL
+              value: "30m0s"
           ports:
             - containerPort: 8999
               hostPort: 8999

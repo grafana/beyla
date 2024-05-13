@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"strings"
 
 	"github.com/go-logr/logr"
 	"github.com/hashicorp/golang-lru/v2/simplelru"
@@ -38,6 +39,8 @@ const (
 	envTracesProtocol  = "OTEL_EXPORTER_OTLP_TRACES_PROTOCOL"
 	envMetricsProtocol = "OTEL_EXPORTER_OTLP_METRICS_PROTOCOL"
 	envProtocol        = "OTEL_EXPORTER_OTLP_PROTOCOL"
+	envHeaders         = "OTEL_EXPORTER_OTLP_HEADERS"
+	envTracesHeaders   = "OTEL_EXPORTER_OTLP_TRACES_HEADERS"
 )
 
 // Buckets defines the histograms bucket boundaries, and allows users to
@@ -242,4 +245,19 @@ func (l *LogrAdaptor) WithValues(keysAndValues ...interface{}) logr.LogSink {
 
 func (l *LogrAdaptor) WithName(name string) logr.LogSink {
 	return &LogrAdaptor{inner: l.inner.With("name", name)}
+}
+
+func headersFromEnv(varName string) map[string]string {
+	headersStr, ok := os.LookupEnv(varName)
+	if !ok {
+		return nil
+	}
+	headers := map[string]string{}
+	for _, entry := range strings.Split(headersStr, ",") {
+		parts := strings.SplitN(entry, "=", 2)
+		if len(parts) > 1 {
+			headers[strings.TrimSpace(parts[0])] = strings.TrimSpace(parts[1])
+		}
+	}
+	return headers
 }

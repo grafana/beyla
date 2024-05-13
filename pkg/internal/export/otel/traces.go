@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"maps"
 	"net/url"
 	"os"
 	"strings"
@@ -645,7 +646,7 @@ func parseTracesEndpoint(cfg *TracesConfig) (*url.URL, bool, error) {
 }
 
 func getHTTPTracesEndpointOptions(cfg *TracesConfig) (otlpOptions, error) {
-	opts := otlpOptions{}
+	opts := otlpOptions{HTTPHeaders: map[string]string{}}
 	log := tlog().With("transport", "http")
 
 	murl, isCommon, err := parseTracesEndpoint(cfg)
@@ -679,6 +680,8 @@ func getHTTPTracesEndpointOptions(cfg *TracesConfig) (otlpOptions, error) {
 	}
 
 	cfg.Grafana.setupOptions(&opts)
+	maps.Copy(opts.HTTPHeaders, headersFromEnv(envHeaders))
+	maps.Copy(opts.HTTPHeaders, headersFromEnv(envTracesHeaders))
 
 	return opts, nil
 }

@@ -15,12 +15,6 @@ import (
 
 type TCPRequestInfo bpfTcpReqT
 
-type TCPProtocol uint8
-
-const (
-	SQL Protocol = iota + 1
-)
-
 func ReadTCPRequestIntoSpan(record *ringbuf.Record) (request.Span, bool, error) {
 	var event TCPRequestInfo
 
@@ -49,7 +43,7 @@ func ReadTCPRequestIntoSpan(record *ringbuf.Record) (request.Span, bool, error) 
 
 func isSQL(buf string) int {
 	b := strings.ToUpper(buf)
-	for _, q := range []string{"SELECT", "UPDATE", "DELETE", "INSERT"} {
+	for _, q := range []string{"SELECT", "UPDATE", "DELETE", "INSERT", "ALTER", "CREATE", "DROP"} {
 		i := strings.Index(b, q)
 		if i >= 0 {
 			return i
@@ -59,7 +53,7 @@ func isSQL(buf string) int {
 	return -1
 }
 
-func (trace *TCPRequestInfo) hostInfo() (source, target string) {
+func (trace *TCPRequestInfo) reqHostInfo() (source, target string) {
 	src := make(net.IP, net.IPv6len)
 	dst := make(net.IP, net.IPv6len)
 	copy(src, trace.ConnInfo.S_addr[:])
@@ -76,7 +70,7 @@ func TCPToSQLToSpan(trace *TCPRequestInfo, sql string) request.Span {
 	hostPort := 0
 
 	if trace.ConnInfo.S_port != 0 || trace.ConnInfo.D_port != 0 {
-		peer, hostname = trace.hostInfo()
+		peer, hostname = trace.reqHostInfo()
 		hostPort = int(trace.ConnInfo.D_port)
 	}
 

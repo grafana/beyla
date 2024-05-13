@@ -43,8 +43,10 @@ spec:
         - name: beyla
           image: {{ .Values.global.image.registry | default .Values.image.registry }}/{{ .Values.image.repository }}{{ include "beyla.imageId" . }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- with .Values.securityContext }}
           securityContext:
-            privileged: true
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           ports:
           - name: {{ .Values.service.portName }}
             containerPort: {{ .Values.service.targetPort }}

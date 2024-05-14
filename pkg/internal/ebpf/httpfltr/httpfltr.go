@@ -260,6 +260,7 @@ func kernelTime(ktime uint64) time.Time {
 	return now.Add(-delta)
 }
 
+//nolint:cyclop
 func (p *Tracer) lookForTimeouts(ticker *time.Ticker, eventsChan chan<- []request.Span) {
 	for t := range ticker.C {
 		if p.bpfObjects.OngoingHttp != nil {
@@ -278,7 +279,9 @@ func (p *Tracer) lookForTimeouts(ticker *time.Ticker, eventsChan chan<- []reques
 					if !ignore && err == nil {
 						eventsChan <- p.pidsFilter.Filter([]request.Span{s})
 					}
-					p.bpfObjects.OngoingHttp.Delete(k)
+					if err := p.bpfObjects.OngoingHttp.Delete(k); err != nil {
+						p.log.Debug("Error deleting ongoing request", "error", err)
+					}
 				} else if v.EndMonotimeNs == 0 && t.After(kernelTime(v.StartMonotimeNs).Add(p.cfg.EBPF.RequestTimeout)) {
 					// If we don't have a request finish with endTime by the configured request timeout, terminate the
 					// waiting request with a timeout 408
@@ -287,7 +290,9 @@ func (p *Tracer) lookForTimeouts(ticker *time.Ticker, eventsChan chan<- []reques
 						s.Status = 408 // timeout
 						eventsChan <- p.pidsFilter.Filter([]request.Span{s})
 					}
-					p.bpfObjects.OngoingHttp.Delete(k)
+					if err := p.bpfObjects.OngoingHttp.Delete(k); err != nil {
+						p.log.Debug("Error deleting ongoing request", "error", err)
+					}
 				}
 			}
 		}

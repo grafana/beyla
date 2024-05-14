@@ -2,6 +2,7 @@ package ebpfcommon
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -42,10 +43,19 @@ func TestMethodURLParsing(t *testing.T) {
 		i := makeBPFInfoWithBuf([]uint8(s))
 		assert.NotEmpty(t, i.url(), fmt.Sprintf("-%s-", s))
 		assert.NotEmpty(t, i.method(), fmt.Sprintf("-%s-", s))
+		assert.True(t, strings.HasPrefix(i.url(), "/test"))
 	}
 
 	i := makeBPFInfoWithBuf([]uint8("GET "))
 	assert.NotEmpty(t, i.method())
+	assert.Empty(t, i.url())
+
+	i = makeBPFInfoWithBuf([]uint8(""))
+	assert.Empty(t, i.method())
+	assert.Empty(t, i.url())
+
+	i = makeBPFInfoWithBuf([]uint8("POST"))
+	assert.Empty(t, i.method())
 	assert.Empty(t, i.url())
 }
 

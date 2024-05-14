@@ -204,3 +204,17 @@ envValueFrom: {}
 # -- Preconfigures some default properties for network or application observability.
 # Accepted values are "network" or "application".
 preset: application
+
+# -- Enable creation of ServiceMonitor for scraping of prometheus HTTP endpoint
+serviceMonitor:
+  enabled: false
+  # -- ServiceMonitor annotations
+  annotations: {}
+  # -- ServiceMonitor scraping endpoint.
+  # Target port and path is set based on service and prometheus_export values.
+  # For additional values, see the ServiceMonitor spec
+  endpoint:
+    interval: 15s
+  # -- Prometheus job label.
+  # If empty, chart release name is used
+  jobLabel: ""

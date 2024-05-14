@@ -14,6 +14,8 @@
 
 #define KPROBES_LARGE_RESPONSE_LEN 100000 // 100K and above we try to track the response actual time with kretprobes
 
+#define K_TCP_MAX_LEN 256
+
 #define CONN_INFO_FLAG_TRACE 0x1
 
 #define TRACE_ID_SIZE_BYTES 16
@@ -86,6 +88,25 @@ typedef struct http_info {
     pid_info pid;
     tp_info_t tp;
 } http_info_t;
+
+// Here we track unknown TCP requests that are not HTTP, HTTP2 or gRPC
+typedef struct tcp_req {
+    u8 flags; // Must be fist we use it to tell what kind of packet we have on the ring buffer
+    connection_info_t conn_info;
+    u64 start_monotime_ns;
+    u64 end_monotime_ns;
+    unsigned char buf[K_TCP_MAX_LEN] __attribute__ ((aligned (8))); // ringbuffer memcpy complains unless this is 8 byte aligned
+    u32 len;
+    u32 resp_len;
+    u8  ssl;
+    u8  direction;
+    // we need this for system wide tracking so we can find the service name
+    // also to filter traces from unsolicited processes that share the executable
+    // with other instrumented processes
+    pid_info pid;
+    tp_info_t tp;
+} tcp_req_t;
+
 
 // Here we keep information on the packets passing through the socket filter
 typedef struct protocol_info {

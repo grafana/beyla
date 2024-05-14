@@ -33,6 +33,14 @@ func TestTCPReqSQLParsing(t *testing.T) {
 	assert.Equal(t, request.EventTypeSQLClient, s.Type)
 }
 
+func TestTCPReqParsing(t *testing.T) {
+	sql := "Not a sql or any known protocol"
+	r := makeTCPReq(sql, tcpSend, 343534, 8080, 2000)
+	sqlIndex := isSQL(sql)
+	assert.LessOrEqual(t, sqlIndex, 0)
+	assert.NotNil(t, r)
+}
+
 func TestSQLDetection(t *testing.T) {
 	for _, s := range []string{"SELECT", "UPDATE", "DELETE", "INSERT", "CREATE", "DROP", "ALTER"} {
 		surrounded := randomStringWithSub(s)

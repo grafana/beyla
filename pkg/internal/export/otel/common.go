@@ -247,16 +247,23 @@ func (l *LogrAdaptor) WithName(name string) logr.LogSink {
 	return &LogrAdaptor{inner: l.inner.With("name", name)}
 }
 
+// headersFromEnv returns a map of the headers as specified by the
+// OTEL_EXPORTER_OTLP_*HEADERS group of variables. This is,
+// a comma-separated list of key=values. For example:
+// api-key=key,other-config-value=value
 func headersFromEnv(varName string) map[string]string {
 	headersStr, ok := os.LookupEnv(varName)
 	if !ok {
 		return nil
 	}
 	headers := map[string]string{}
+	// split all the comma-separated key=value entries
 	for _, entry := range strings.Split(headersStr, ",") {
-		parts := strings.SplitN(entry, "=", 2)
-		if len(parts) > 1 {
-			headers[strings.TrimSpace(parts[0])] = strings.TrimSpace(parts[1])
+		// split only by the first '=' appearance, as values might
+		// have base64 '=' padding symbols
+		keyVal := strings.SplitN(entry, "=", 2)
+		if len(keyVal) > 1 {
+			headers[strings.TrimSpace(keyVal[0])] = strings.TrimSpace(keyVal[1])
 		}
 	}
 	return headers

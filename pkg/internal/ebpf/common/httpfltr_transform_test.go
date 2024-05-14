@@ -43,6 +43,10 @@ func TestMethodURLParsing(t *testing.T) {
 		assert.NotEmpty(t, i.url(), fmt.Sprintf("-%s-", s))
 		assert.NotEmpty(t, i.method(), fmt.Sprintf("-%s-", s))
 	}
+
+	i := makeBPFInfoWithBuf([]uint8("GET "))
+	assert.NotEmpty(t, i.method())
+	assert.Empty(t, i.url())
 }
 
 func makeHTTPInfo(method, path, peer, host, comm string, peerPort, hostPort uint32, status uint16, durationMs uint64) HTTPInfo {
@@ -82,7 +86,7 @@ func assertMatchesInfo(t *testing.T, span *request.Span, method, path, peer, hos
 
 func makeBPFInfoWithBuf(buf []uint8) BPFHTTPInfo {
 	bpfInfo := BPFHTTPInfo{}
-	copy(bpfInfo.Buf[:], buf[:])
+	copy(bpfInfo.Buf[:], buf)
 
 	return bpfInfo
 }

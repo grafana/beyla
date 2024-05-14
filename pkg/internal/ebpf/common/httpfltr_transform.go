@@ -99,14 +99,24 @@ func (event *BPFHTTPInfo) url() string {
 	if space < 0 {
 		return ""
 	}
-	nextSpace := strings.IndexAny(buf[space+1:], " \r\n")
+
+	bufEnd := bytes.IndexByte(event.Buf[:], 0) // We assume the buffer was zero initialized in eBPF
+	if bufEnd < 0 {
+		bufEnd = len(buf)
+	}
+
+	if space+1 > bufEnd {
+		return ""
+	}
+
+	nextSpace := strings.IndexAny(buf[space+1:bufEnd], " \r\n")
 	if nextSpace < 0 {
-		return buf[space+1:]
+		return buf[space+1 : bufEnd]
 	}
 
 	end := nextSpace + space + 1
-	if end >= len(buf) {
-		end = len(buf)
+	if end > bufEnd {
+		end = bufEnd
 	}
 
 	return buf[space+1 : end]

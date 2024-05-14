@@ -1,6 +1,6 @@
 ---
 title: Run Beyla in Kubernetes using Grafana Alloy Helm's chart
-menuTitle: Run Beyla in Kubernetes using Grafana Alloy Helm's chart
+menuTitle: Kubernetes and Grafana Alloy tutorial
 description: Learn how to instrument an application export data with Prometheus to Grafana Cloud
 weight: 4
 keywords:
@@ -14,7 +14,7 @@ keywords:
 # Run Beyla in Kubernetes using Grafana Alloy Helm's chart
 
 Grafana Alloy is a vendor-neutral distribution of the OpenTelemetry Collector.
-Alloy offers native pipelines for OTel, Prometheus, and other telemetry signals.
+Alloy offers native pipelines for OpenTelemetry, Prometheus, and other telemetry signals.
 
 Grafana Alloy bundles Beyla allowing you to instrument your applications at the same time
 you instrument your infrastructure. It also provides a Helm chart to deploy Alloy in Kubernetes.
@@ -23,11 +23,10 @@ In this tutorial, you learn how to deploy Beyla in Kubernetes using Grafana Allo
 
 ## Prerequisites
 
-- A Kubernetes cluster. You can use [kind](https://kind.sigs.k8s.io/) to create a local cluster.
-- `kubectl` installed and configured to use your cluster
+- A Kubernetes cluster, you can use [kind](https://kind.sigs.k8s.io/) to create a local cluster
+- `kubectl` installed and configured for your cluster
 - [Helm](https://helm.sh/) installed
-- A Grafana Cloud account or a compatible Prometheus and/or OpenTelemetry backend to receive the data.
-
+- A Grafana Cloud account or a compatible Prometheus and/or OpenTelemetry backend to receive the data
 
 ### 1. Prepare the Alloy environment in Kubernetes
 
@@ -43,7 +42,7 @@ This command installs the Grafana Alloy Helm chart in the `alloy` namespace.
 
 You can instrument any HTTP or HTTPS service in your Kubernetes cluster.
 
-Copy the following contents into a file (for example, `sampleapps.yml`) and deploy it with
+Copy the following contents into a file, for example `sampleapps.yml`, and deploy it with
 the command `kubectl apply -f sampleapps.yml`.
 
 ```yaml
@@ -116,7 +115,7 @@ spec:
 
 ### 3. Configure credentials
 
-Alloy can export metrics and traces to any OpenTelemetry endpoint, as well as exposing metrics as a Prometheus endpoint. However, it's recommend using the Prometheus and Tempo remote write endpoints in Grafana Cloud. You can get a [Free Grafana Cloud Account](/pricing/).
+Alloy can export metrics and traces to any OpenTelemetry endpoint, as well as exposing metrics as a Prometheus endpoint. However, it's recommend using the Prometheus and Tempo remote write endpoints in Grafana Cloud. You can get a [free Grafana Cloud Account](/pricing/).
 
 From the Grafana Cloud Portal, look for the **Prometheus** box and click **Send Metrics**. For the **Tempo** box, click **Send Traces**.
 
@@ -175,7 +174,7 @@ otelcol.auth.basic "grafana_cloud_tempo" {
 
 Deploy the configuration with the command:
 
-```sh
+```bash
 kubectl create configmap --namespace alloy alloy-config "--from-file=config.alloy=./config.alloy"
 ```
 
@@ -566,10 +565,10 @@ helm upgrade --namespace alloy alloy grafana/alloy -f values.yaml
 
 ### 5. Test the setup
 
-With the `kubectl port-forward` commands from the firs step still running,
+With the `kubectl port-forward` commands from the first step still running,
 test both web server instances. For example:
 
-```
+```sh
 curl http://localhost:8080
 curl http://localhost:8080/foo
 curl http://localhost:8081
@@ -584,7 +583,7 @@ To search for all the traces, select the **Search** box in the Query bar, leave 
 
 ![Searching for all the traces in the system](https://grafana.com/media/docs/grafana-cloud/beyla/tutorial/k8s/run-query.png)
 
-This shows the traces for the `docs` instance (port 8081). You might see traces from your own services, but you shouldn't see traces from the `website` service, as it Beyla isn't instrumenting it.
+This shows the traces for the `docs` instance on port 8081. You might see traces from your own services, but you shouldn't see traces from the `website` service, as it Beyla isn't instrumenting it.
 
 ![Grafana Cloud list of traces](https://grafana.com/media/docs/grafana-cloud/beyla/tutorial/k8s/tut-traces-list.png)
 

@@ -99,9 +99,9 @@ func (event *BPFHTTPInfo) url() string {
 	if space < 0 {
 		return ""
 	}
-	nextSpace := strings.Index(buf[space+1:], " ")
+	nextSpace := strings.IndexAny(buf[space+1:], " \r\n")
 	if nextSpace < 0 {
-		return ""
+		return buf[space+1:]
 	}
 
 	return buf[space+1 : nextSpace+space+1]

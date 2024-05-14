@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"maps"
 	"net/url"
 	"os"
 	"strings"
@@ -138,6 +139,7 @@ func (tr *tracesOTELReceiver) provideLoop() (pipe.FinalFunc[[]request.Span], err
 	if !tr.cfg.Enabled() {
 		return pipe.IgnoreFinal[[]request.Span](), nil
 	}
+	SetupInternalOTELSDKLogger(tr.cfg.SDKLogLevel)
 	return func(in <-chan []request.Span) {
 		exp, err := getTracesExporter(tr.ctx, tr.cfg, tr.ctxInfo)
 		if err != nil {
@@ -495,22 +497,6 @@ func SpanKindString(span *request.Span) string {
 	return "SPAN_KIND_INTERNAL"
 }
 
-func SpanHost(span *request.Span) string {
-	if span.HostName != "" {
-		return span.HostName
-	}
-
-	return span.Host
-}
-
-func SpanPeer(span *request.Span) string {
-	if span.PeerName != "" {
-		return span.PeerName
-	}
-
-	return span.Peer
-}
-
 func traceAttributes(span *request.Span, optionalAttrs map[attr.Name]struct{}) []attribute.KeyValue {
 	var attrs []attribute.KeyValue
 
@@ -645,7 +631,7 @@ func parseTracesEndpoint(cfg *TracesConfig) (*url.URL, bool, error) {
 }
 
 func getHTTPTracesEndpointOptions(cfg *TracesConfig) (otlpOptions, error) {
-	opts := otlpOptions{}
+	opts := otlpOptions{HTTPHeaders: map[string]string{}}
 	log := tlog().With("transport", "http")
 
 	murl, isCommon, err := parseTracesEndpoint(cfg)
@@ -679,6 +665,8 @@ func getHTTPTracesEndpointOptions(cfg *TracesConfig) (otlpOptions, error) {
 	}
 
 	cfg.Grafana.setupOptions(&opts)
+	maps.Copy(opts.HTTPHeaders, headersFromEnv(envHeaders))
+	maps.Copy(opts.HTTPHeaders, headersFromEnv(envTracesHeaders))
 
 	return opts, nil
 }

@@ -1,6 +1,6 @@
 # beyla
 
-![Version: 1.0.0](https://img.shields.io/badge/Version-1.0.0-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 1.5.2](https://img.shields.io/badge/AppVersion-1.5.2-informational?style=flat-square)
+![Version: 1.0.1](https://img.shields.io/badge/Version-1.0.1-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 1.5.2](https://img.shields.io/badge/AppVersion-1.5.2-informational?style=flat-square)
 
 eBPF-based autoinstrumentation HTTP, HTTP2 and gRPC services, as well as network metrics.
 
@@ -48,7 +48,7 @@ eBPF-based autoinstrumentation HTTP, HTTP2 and gRPC services, as well as network
 | rbac.create | bool | `true` | Whether to create RBAC resources for Belya |
 | rbac.extraClusterRoleRules | list | `[]` | Extra custer roles to be created for Belya |
 | resources | object | `{}` |  |
-| securityContext | object | `{}` |  |
+| securityContext.privileged | bool | `true` |  |
 | service.annotations | object | `{}` | Service annotations. |
 | service.appProtocol | string | `""` | Adds the appProtocol field to the service. This allows to work with istio protocol selection. Ex: "http" or "tcp" |
 | service.clusterIP | string | `""` | cluster IP |

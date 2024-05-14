@@ -13,8 +13,11 @@ aliases:
 
 # Deploy Beyla in Kubernetes
 
-For a step-by-step walkthrough by the basics for Beyla and Kubernetes, you can also
-follow the [Beyla and Kubernetes walkthrough tutorial]({{< relref "../tutorial/k8s-walkthrough.md" >}}).
+{{% admonition type="note" %}}
+This document explains how to manually deploy Beyla in Kubernetes, setting up all the required entities by yourself.
+
+You might prefer to follow the [Deploy Beyla in Kubernetes with Helm]({{< relref "./kubernetes-helm.md" >}}) documentation instead.
+{{% /admonition %}}
 
 Contents:
 

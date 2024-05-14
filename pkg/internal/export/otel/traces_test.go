@@ -2,10 +2,11 @@ package otel
 
 import (
 	"context"
-	"encoding/binary"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -37,7 +38,7 @@ func TestHTTPTracesEndpoint(t *testing.T) {
 	}
 
 	t.Run("testing with two endpoints", func(t *testing.T) {
-		testHTTPTracesOptions(t, otlpOptions{Endpoint: "localhost:3232", URLPath: "/v1/traces"}, &tcfg)
+		testHTTPTracesOptions(t, otlpOptions{Endpoint: "localhost:3232", URLPath: "/v1/traces", HTTPHeaders: map[string]string{}}, &tcfg)
 	})
 
 	tcfg = TracesConfig{
@@ -45,7 +46,7 @@ func TestHTTPTracesEndpoint(t *testing.T) {
 	}
 
 	t.Run("testing with only common endpoint", func(t *testing.T) {
-		testHTTPTracesOptions(t, otlpOptions{Endpoint: "localhost:3131", URLPath: "/otlp/v1/traces"}, &tcfg)
+		testHTTPTracesOptions(t, otlpOptions{Endpoint: "localhost:3131", URLPath: "/otlp/v1/traces", HTTPHeaders: map[string]string{}}, &tcfg)
 	})
 
 	tcfg = TracesConfig{
@@ -53,7 +54,7 @@ func TestHTTPTracesEndpoint(t *testing.T) {
 		TracesEndpoint: "http://localhost:3232",
 	}
 	t.Run("testing with insecure endpoint", func(t *testing.T) {
-		testHTTPTracesOptions(t, otlpOptions{Endpoint: "localhost:3232", Insecure: true}, &tcfg)
+		testHTTPTracesOptions(t, otlpOptions{Endpoint: "localhost:3232", Insecure: true, HTTPHeaders: map[string]string{}}, &tcfg)
 	})
 
 	tcfg = TracesConfig{
@@ -62,7 +63,7 @@ func TestHTTPTracesEndpoint(t *testing.T) {
 	}
 
 	t.Run("testing with skip TLS verification", func(t *testing.T) {
-		testHTTPTracesOptions(t, otlpOptions{Endpoint: "localhost:3232", URLPath: "/v1/traces", SkipTLSVerify: true}, &tcfg)
+		testHTTPTracesOptions(t, otlpOptions{Endpoint: "localhost:3232", URLPath: "/v1/traces", SkipTLSVerify: true, HTTPHeaders: map[string]string{}}, &tcfg)
 	})
 }
 
@@ -115,6 +116,60 @@ func TestMissingSchemeInHTTPTracesEndpoint(t *testing.T) {
 
 	_, err = getHTTPTracesEndpointOptions(&TracesConfig{CommonEndpoint: "foo"})
 	require.Error(t, err)
+}
+
+func TestHTTPTracesEndpointHeaders(t *testing.T) {
+	type testCase struct {
+		Description     string
+		Env             map[string]string
+		ExpectedHeaders map[string]string
+		Grafana         GrafanaOTLP
+	}
+	for _, tc := range []testCase{
+		{Description: "No headers",
+			ExpectedHeaders: map[string]string{}},
+		{Description: "defining common OTLP_HEADERS",
+			Env:             map[string]string{"OTEL_EXPORTER_OTLP_HEADERS": "Foo=Bar ==,Authorization=Base 2222=="},
+			ExpectedHeaders: map[string]string{"Foo": "Bar ==", "Authorization": "Base 2222=="}},
+		{Description: "defining common OTLP_TRACES_HEADERS",
+			Env:             map[string]string{"OTEL_EXPORTER_OTLP_TRACES_HEADERS": "Foo=Bar ==,Authorization=Base 1234=="},
+			ExpectedHeaders: map[string]string{"Foo": "Bar ==", "Authorization": "Base 1234=="}},
+		{Description: "OTLP_TRACES_HEADERS takes precedence over OTLP_HEADERS",
+			Env: map[string]string{
+				"OTEL_EXPORTER_OTLP_HEADERS":        "Foo=Bar ==,Authorization=Base 3210==",
+				"OTEL_EXPORTER_OTLP_TRACES_HEADERS": "Authorization=Base 1111==",
+			},
+			ExpectedHeaders: map[string]string{"Foo": "Bar ==", "Authorization": "Base 1111=="}},
+		{Description: "Legacy Grafana Cloud vars",
+			Grafana:         GrafanaOTLP{InstanceID: "123", APIKey: "456"},
+			ExpectedHeaders: map[string]string{"Authorization": "Basic MTIzOjQ1Ng=="}},
+		{Description: "OTLP en vars take precedence over legacy Grafana Cloud vars",
+			Grafana:         GrafanaOTLP{InstanceID: "123", APIKey: "456"},
+			Env:             map[string]string{"OTEL_EXPORTER_OTLP_HEADERS": "Foo=Bar ==,Authorization=Base 4321=="},
+			ExpectedHeaders: map[string]string{"Foo": "Bar ==", "Authorization": "Base 4321=="},
+		},
+	} {
+		// mutex to avoid running testcases in parallel so we don't mess up with env vars
+		mt := sync.Mutex{}
+		t.Run(fmt.Sprint(tc.Description), func(t *testing.T) {
+			mt.Lock()
+			restore := restoreEnvAfterExecution()
+			defer func() {
+				restore()
+				mt.Unlock()
+			}()
+			for k, v := range tc.Env {
+				require.NoError(t, os.Setenv(k, v))
+			}
+
+			opts, err := getHTTPTracesEndpointOptions(&TracesConfig{
+				TracesEndpoint: "https://localhost:1234/v1/traces",
+				Grafana:        &tc.Grafana,
+			})
+			require.NoError(t, err)
+			assert.Equal(t, tc.ExpectedHeaders, opts.HTTPHeaders)
+		})
+	}
 }
 
 func TestGRPCTracesEndpointOptions(t *testing.T) {
@@ -588,10 +643,10 @@ func TestTraces_InternalInstrumentation(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 	})
-	builder := pipe.NewBuilder(&testPipeline{})
+	builder := pipe.NewBuilder(&testPipeline{}, pipe.ChannelBufferLen(10))
 	// create a simple dummy graph to send data to the Metrics reporter, which will send
 	// metrics to the fake collector
-	sendData := make(chan struct{})
+	sendData := make(chan struct{}, 10)
 	pipe.AddStart(builder, func(impl *testPipeline) *pipe.Start[[]request.Span] {
 		return &impl.inputNode
 	}, func(out chan<- []request.Span) {
@@ -605,9 +660,10 @@ func TestTraces_InternalInstrumentation(t *testing.T) {
 		return &impl.exporter
 	}, TracesReceiver(context.Background(),
 		TracesConfig{
+			SDKLogLevel:       "debug",
 			CommonEndpoint:    coll.URL,
 			BatchTimeout:      10 * time.Millisecond,
-			ExportTimeout:     5 * time.Second,
+			ExportTimeout:     10 * time.Millisecond,
 			ReportersCacheLen: 16,
 		},
 		&global.ContextInfo{
@@ -805,6 +861,7 @@ func restoreEnvAfterExecution() func() {
 		exists bool
 	}{
 		{name: envTracesProtocol}, {name: envMetricsProtocol}, {name: envProtocol},
+		{name: envHeaders}, {name: envTracesHeaders},
 	}
 	for _, v := range vals {
 		v.val, v.exists = os.LookupEnv(v.name)
@@ -926,15 +983,6 @@ func TestTraces_GRPCStatus(t *testing.T) {
 			assert.Equal(t, p.statusCode, SpanStatusCode(&request.Span{Status: int(p.grpcCode.Value.AsInt64()), Type: request.EventTypeGRPCClient}))
 		}
 	})
-}
-
-func NewIDs(counter int) (trace.TraceID, trace.SpanID) {
-	var traceID [16]byte
-	var spanID [8]byte
-	binary.BigEndian.PutUint64(traceID[:8], uint64(counter))
-	binary.BigEndian.PutUint64(spanID[:], uint64(counter))
-
-	return trace.TraceID(traceID), trace.SpanID(spanID)
 }
 
 func makeSQLRequestSpan(sql string) request.Span {

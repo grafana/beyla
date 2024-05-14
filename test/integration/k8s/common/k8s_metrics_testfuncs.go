@@ -85,9 +85,9 @@ func DoWaitForComponentsAvailable(t *testing.T) {
 	}, test.Interval(time.Second))
 }
 
-func FeatureHTTPMetricsDecoration() features.Feature {
+func FeatureHTTPMetricsDecoration(manifest string) features.Feature {
 	pinger := kube.Template[Pinger]{
-		TemplateFile: PingerManifest,
+		TemplateFile: manifest,
 		Data: Pinger{
 			PodName:   "internal-pinger",
 			TargetURL: "http://testserver:8080/iping",
@@ -121,9 +121,9 @@ func FeatureHTTPMetricsDecoration() features.Feature {
 		).Feature()
 }
 
-func FeatureGRPCMetricsDecoration() features.Feature {
+func FeatureGRPCMetricsDecoration(manifest string) features.Feature {
 	pinger := kube.Template[Pinger]{
-		TemplateFile: GrpcPingerManifest,
+		TemplateFile: manifest,
 		Data: Pinger{
 			PodName:   "internal-grpc-pinger",
 			TargetURL: "testserver:5051",

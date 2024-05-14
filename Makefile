@@ -264,8 +264,13 @@ oats-test-sql-statement: oats-prereq
 	mkdir -p test/oats/sql_statement/$(TEST_OUTPUT)/run
 	cd test/oats/sql_statement && TESTCASE_BASE_PATH=./yaml $(GINKGO) -v -r
 
+.PHONY: oats-test-sql-other-langs
+oats-test-sql-other-langs: oats-prereq
+	mkdir -p test/oats/sql_other_langs/$(TEST_OUTPUT)/run
+	cd test/oats/sql_other_langs && TESTCASE_BASE_PATH=./yaml $(GINKGO) -v -r
+
 .PHONY: oats-test
-oats-test: oats-test-sql oats-test-sql-statement
+oats-test: oats-test-sql oats-test-sql-statement oats-test-sql-other-langs
 
 .PHONY: oats-test-debug
 oats-test-debug: oats-prereq

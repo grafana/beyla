@@ -11,13 +11,13 @@ expected:
   traces:
     - traceql: '{ .db.operation = "SELECT" }'
       spans:
-        - name: 'SELECT .students'
+        - name: 'SELECT students'
           attributes:
             db.operation: SELECT
             db.sql.table: students
     - traceql: '{ .db.operation = "UPDATE" }'
       spans:
-        - name: 'UPDATE .students'
+        - name: 'UPDATE students'
           attributes:
             db.operation: UPDATE
             db.sql.table: students  

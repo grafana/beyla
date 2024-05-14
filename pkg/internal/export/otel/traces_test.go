@@ -643,10 +643,10 @@ func TestTraces_InternalInstrumentation(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 	})
-	builder := pipe.NewBuilder(&testPipeline{})
+	builder := pipe.NewBuilder(&testPipeline{}, pipe.ChannelBufferLen(10))
 	// create a simple dummy graph to send data to the Metrics reporter, which will send
 	// metrics to the fake collector
-	sendData := make(chan struct{})
+	sendData := make(chan struct{}, 10)
 	pipe.AddStart(builder, func(impl *testPipeline) *pipe.Start[[]request.Span] {
 		return &impl.inputNode
 	}, func(out chan<- []request.Span) {
@@ -660,9 +660,10 @@ func TestTraces_InternalInstrumentation(t *testing.T) {
 		return &impl.exporter
 	}, TracesReceiver(context.Background(),
 		TracesConfig{
+			SDKLogLevel:       "debug",
 			CommonEndpoint:    coll.URL,
 			BatchTimeout:      10 * time.Millisecond,
-			ExportTimeout:     5 * time.Second,
+			ExportTimeout:     10 * time.Millisecond,
 			ReportersCacheLen: 16,
 		},
 		&global.ContextInfo{

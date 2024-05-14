@@ -20,7 +20,7 @@ import (
 	"github.com/grafana/beyla/pkg/internal/request"
 )
 
-const timeout = 5 * time.Second
+const timeout = 10 * time.Second
 
 var fakeMux = sync.Mutex{}
 

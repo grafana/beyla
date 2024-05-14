@@ -139,6 +139,7 @@ func (tr *tracesOTELReceiver) provideLoop() (pipe.FinalFunc[[]request.Span], err
 	if !tr.cfg.Enabled() {
 		return pipe.IgnoreFinal[[]request.Span](), nil
 	}
+	SetupInternalOTELSDKLogger(tr.cfg.SDKLogLevel)
 	return func(in <-chan []request.Span) {
 		exp, err := getTracesExporter(tr.ctx, tr.cfg, tr.ctxInfo)
 		if err != nil {
@@ -494,22 +495,6 @@ func SpanKindString(span *request.Span) string {
 		return "SPAN_KIND_CLIENT"
 	}
 	return "SPAN_KIND_INTERNAL"
-}
-
-func SpanHost(span *request.Span) string {
-	if span.HostName != "" {
-		return span.HostName
-	}
-
-	return span.Host
-}
-
-func SpanPeer(span *request.Span) string {
-	if span.PeerName != "" {
-		return span.PeerName
-	}
-
-	return span.Peer
 }
 
 func traceAttributes(span *request.Span, optionalAttrs map[attr.Name]struct{}) []attribute.KeyValue {

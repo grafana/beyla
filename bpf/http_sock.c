@@ -363,7 +363,7 @@ int BPF_KPROBE(kprobe_tcp_close, struct sock *sk, long timeout) {
 
     u64 sock_p = (u64)sk;
 
-    bpf_printk("=== kprobe tcp_close %d sock %llx ===", id, sk);
+    bpf_dbg_printk("=== kprobe tcp_close %d sock %llx ===", id, sk);
 
     ensure_sent_event(id, &sock_p);
 

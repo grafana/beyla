@@ -104,6 +104,10 @@ func (event *BPFHTTPInfo) url() string {
 		return buf[space+1:]
 	}
 
+	if nextSpace+space+1 >= len(buf) {
+		return buf[space+1:]
+	}
+
 	return buf[space+1 : nextSpace+space+1]
 }
 

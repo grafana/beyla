@@ -105,6 +105,34 @@ type bpf_tpSslArgsT struct {
 	LenPtr uint64
 }
 
+type bpf_tpTcpReqT struct {
+	Flags           uint8
+	_               [1]byte
+	ConnInfo        bpf_tpConnectionInfoT
+	_               [2]byte
+	StartMonotimeNs uint64
+	EndMonotimeNs   uint64
+	Buf             [256]uint8
+	Len             uint32
+	RespLen         uint32
+	Ssl             uint8
+	Direction       uint8
+	Pid             struct {
+		HostPid uint32
+		UserPid uint32
+		Ns      uint32
+	}
+	_  [2]byte
+	Tp struct {
+		TraceId  [16]uint8
+		SpanId   [8]uint8
+		ParentId [8]uint8
+		Ts       uint64
+		Flags    uint8
+		_        [7]byte
+	}
+}
+
 type bpf_tpTpInfoPidT struct {
 	Tp struct {
 		TraceId  [16]uint8
@@ -190,11 +218,13 @@ type bpf_tpMapSpecs struct {
 	OngoingHttp2Connections *ebpf.MapSpec `ebpf:"ongoing_http2_connections"`
 	OngoingHttp2Grpc        *ebpf.MapSpec `ebpf:"ongoing_http2_grpc"`
 	OngoingHttpFallback     *ebpf.MapSpec `ebpf:"ongoing_http_fallback"`
+	OngoingTcpReq           *ebpf.MapSpec `ebpf:"ongoing_tcp_req"`
 	PidCache                *ebpf.MapSpec `ebpf:"pid_cache"`
 	PidTidToConn            *ebpf.MapSpec `ebpf:"pid_tid_to_conn"`
 	ServerTraces            *ebpf.MapSpec `ebpf:"server_traces"`
 	SslToConn               *ebpf.MapSpec `ebpf:"ssl_to_conn"`
 	SslToPidTid             *ebpf.MapSpec `ebpf:"ssl_to_pid_tid"`
+	TcpReqMem               *ebpf.MapSpec `ebpf:"tcp_req_mem"`
 	TpCharBufMem            *ebpf.MapSpec `ebpf:"tp_char_buf_mem"`
 	TpInfoMem               *ebpf.MapSpec `ebpf:"tp_info_mem"`
 	TraceMap                *ebpf.MapSpec `ebpf:"trace_map"`
@@ -233,11 +263,13 @@ type bpf_tpMaps struct {
 	OngoingHttp2Connections *ebpf.Map `ebpf:"ongoing_http2_connections"`
 	OngoingHttp2Grpc        *ebpf.Map `ebpf:"ongoing_http2_grpc"`
 	OngoingHttpFallback     *ebpf.Map `ebpf:"ongoing_http_fallback"`
+	OngoingTcpReq           *ebpf.Map `ebpf:"ongoing_tcp_req"`
 	PidCache                *ebpf.Map `ebpf:"pid_cache"`
 	PidTidToConn            *ebpf.Map `ebpf:"pid_tid_to_conn"`
 	ServerTraces            *ebpf.Map `ebpf:"server_traces"`
 	SslToConn               *ebpf.Map `ebpf:"ssl_to_conn"`
 	SslToPidTid             *ebpf.Map `ebpf:"ssl_to_pid_tid"`
+	TcpReqMem               *ebpf.Map `ebpf:"tcp_req_mem"`
 	TpCharBufMem            *ebpf.Map `ebpf:"tp_char_buf_mem"`
 	TpInfoMem               *ebpf.Map `ebpf:"tp_info_mem"`
 	TraceMap                *ebpf.Map `ebpf:"trace_map"`
@@ -259,11 +291,13 @@ func (m *bpf_tpMaps) Close() error {
 		m.OngoingHttp2Connections,
 		m.OngoingHttp2Grpc,
 		m.OngoingHttpFallback,
+		m.OngoingTcpReq,
 		m.PidCache,
 		m.PidTidToConn,
 		m.ServerTraces,
 		m.SslToConn,
 		m.SslToPidTid,
+		m.TcpReqMem,
 		m.TpCharBufMem,
 		m.TpInfoMem,
 		m.TraceMap,

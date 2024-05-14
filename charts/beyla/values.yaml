@@ -204,3 +204,28 @@ envValueFrom: {}
 # -- Preconfigures some default properties for network or application observability.
 # Accepted values are "network" or "application".
 preset: application
+
+serviceMonitor:
+  # -- Enable this if you're using https://github.com/coreos/prometheus-operator
+  enabled: false
+  # -- Additional labels for the service monitor.
+  additionalLabels: {}
+  # -- Scrape interval. If not set, the Prometheus default scrape interval is used.
+  interval: ""
+  # -- MetricRelabelConfigs to apply to samples after scraping, but before ingestion.
+  # ref: https://github.com/prometheus-operator/prometheus-operator/blob/main/Documentation/api.md#relabelconfig
+  metricRelabelings: []
+  # - action: keep
+  #   regex: 'kube_(daemonset|deployment|pod|namespace|node|statefulset).+'
+  #   sourceLabels: [__name__]
+  # -- Customize tls parameters for the service monitor
+  tlsConfig: {}
+  # -- RelabelConfigs to apply to samples before scraping
+  # ref: https://github.com/prometheus-operator/prometheus-operator/blob/main/Documentation/api.md#relabelconfig
+  relabelings: []
+  # - sourceLabels: [__meta_kubernetes_pod_node_name]
+  #   separator: ;
+  #   regex: ^(.*)$
+  #   targetLabel: nodename
+  #   replacement: $1
+  #   action: replace

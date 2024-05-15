@@ -15,15 +15,76 @@ aliases:
 
 The following table describes the exported metrics in both OpenTelemetry and Prometheus format.
 
-| Name (OTEL)                     | Name (Prometheus)                      | Type      | Unit    | Description                                                  |
-| ------------------------------- | -------------------------------------- | --------- | ------- | ------------------------------------------------------------ |
-| `http.client.request.duration`  | `http_client_request_duration_seconds` | Histogram | seconds | Duration of HTTP service calls from the client side          |
-| `http.client.request.body.size` | `http_client_request_body_size_bytes`  | Histogram | bytes   | Size of the HTTP request body as sent by the client          |
-| `http.server.request.duration`  | `http_server_request_duration_seconds` | Histogram | seconds | Duration of HTTP service calls from the server side          |
-| `http.server.request.body.size` | `http_server_request_body_size_bytes`  | Histogram | bytes   | Size of the HTTP request body as received at the server side |
-| `rpc.client.duration`           | `rpc_client_duration_seconds`          | Histogram | seconds | Duration of GRPC service calls from the client side          |
-| `rpc.server.duration`           | `rpc_server_duration_seconds`          | Histogram | seconds | Duration of RPC service calls from the server side           |
-| `sql.client.duration`           | `sql_client_duration_seconds`          | Histogram | seconds | Duration of SQL client operations (Experimental)             |
+| Family      | Name (OTEL)                     | Name (Prometheus)                      | Type      | Unit    | Description                                                                      |
+|-------------|---------------------------------|----------------------------------------|-----------|---------|----------------------------------------------------------------------------------|
+| Application | `http.client.request.duration`  | `http_client_request_duration_seconds` | Histogram | seconds | Duration of HTTP service calls from the client side                              |
+| Application | `http.client.request.body.size` | `http_client_request_body_size_bytes`  | Histogram | bytes   | Size of the HTTP request body as sent by the client                              |
+| Application | `http.server.request.duration`  | `http_server_request_duration_seconds` | Histogram | seconds | Duration of HTTP service calls from the server side                              |
+| Application | `http.server.request.body.size` | `http_server_request_body_size_bytes`  | Histogram | bytes   | Size of the HTTP request body as received at the server side                     |
+| Application | `rpc.client.duration`           | `rpc_client_duration_seconds`          | Histogram | seconds | Duration of GRPC service calls from the client side                              |
+| Application | `rpc.server.duration`           | `rpc_server_duration_seconds`          | Histogram | seconds | Duration of RPC service calls from the server side                               |
+| Application | `sql.client.duration`           | `sql_client_duration_seconds`          | Histogram | seconds | Duration of SQL client operations (Experimental)                                 |
+| Network     | `beyla.network.flow.bytes`      | `beyla_network_flow_bytes`             | Counter   | bytes   | Bytes submitted from a source network endpoint to a destination network endpoint |
+
+## Attributes of Beyla metrics
+
+For the sake of brevity, only the OTEL `dot.notation` of the metrics and attributes is listed, but
+the metrics and attributes are exposed `underscore_notation` when a Prometheus exporter is used.
+
+In order to hide attributes that are shown by default, or show attributes that are hidden by
+default, check the `attributes`->`select` section in the [configuration documentation]({{< relref "./configure/options.md" >}}).
+
+| Metrics                    | Name                        | Default                                       |
+|----------------------------|-----------------------------|-----------------------------------------------|
+| Application (all)          | `http.request.method`       | shown                                         |
+| Application (all)          | `http.response.status_code` | shown                                         |
+| Application (all)          | `http.route`                | shown if `routes` configuration is defined    |
+| Application (all)          | `k8s.daemonset.name`        | shown if Kubernetes configuration is defined  |
+| Application (all)          | `k8s.deployment.name`       | shown if Kubernetes configuration is defined  |
+| Application (all)          | `k8s.namespace.name`        | shown if Kubernetes configuration is defined  |
+| Application (all)          | `k8s.node.name`             | shown if Kubernetes configuration is defined  |
+| Application (all)          | `k8s.pod.name`              | shown if Kubernetes configuration is defined  |
+| Application (all)          | `k8s.pod.start_time`        | shown if Kubernetes configuration is defined  |
+| Application (all)          | `k8s.pod.uid`               | shown if Kubernetes configuration is defined  |
+| Application (all)          | `k8s.replicaset.name`       | shown if Kubernetes configuration is defined  |
+| Application (all)          | `k8s.statefulset.name`      | shown if Kubernetes configuration is defined  |
+| Application (all)          | `service.name`              | shown                                         | 
+| Application (all)          | `service.namespace`         | shown                                         | 
+| Application (all)          | `target.instance`           | shown                                         |
+| Application (all)          | `url.path`                  | hidden                                        |
+| Application (client)       | `server.address`            | hidden                                        |
+| Application (client)       | `server.port`               | hidden                                        |
+| Application `rpc.*`        | `rpc.grpc.status_code`      | shown                                         |
+| Application `rpc.*`        | `rpc.method`                | shown                                         |
+| Application `rpc.*`        | `rpc.system`                | shown                                         |
+| Application (server)       | `client.address`            | hidden                                        |
+| `beyla.network.flow.bytes` | `beyla.ip`                  | hidden                                        |
+| `sql.client.duration`      | `db.operation`              | shown                                         |
+| `beyla.network.flow.bytes` | `direction`                 | hidden                                        |
+| `beyla.network.flow.bytes` | `dst.address`               | hidden                                        |
+| `beyla.network.flow.bytes` | `dst.cidr`                  | shown if the `cidrs` configuration is defined |
+| `beyla.network.flow.bytes` | `dst.name`                  | hidden                                        |
+| `beyla.network.flow.bytes` | `dst.port`                  | hidden                                        |
+| `beyla.network.flow.bytes` | `iface`                     | hidden                                        |
+| `beyla.network.flow.bytes` | `k8s.cluster.name`          | shown if Kubernetes configuration is defined  |
+| `beyla.network.flow.bytes` | `k8s.dst.name`              | hidden                                        | 
+| `beyla.network.flow.bytes` | `k8s.dst.namespace`         | shown if Kubernetes configuration is defined  | 
+| `beyla.network.flow.bytes` | `k8s.dst.node.ip`           | hidden                                        |
+| `beyla.network.flow.bytes` | `k8s.dst.node.name`         | hidden                                        |
+| `beyla.network.flow.bytes` | `k8s.dst.owner.type`        | hidden                                        | 
+| `beyla.network.flow.bytes` | `k8s.dst.type`              | hidden                                        |
+| `beyla.network.flow.bytes` | `k8s.dst.owner.name`        | shown if Kubernetes configuration is defined  | 
+| `beyla.network.flow.bytes` | `k8s.src.name`              | hidden                                        | 
+| `beyla.network.flow.bytes` | `k8s.src.namespace`         | shown if Kubernetes configuration is defined  | 
+| `beyla.network.flow.bytes` | `k8s.src.node.ip`           | hidden                                        |
+| `beyla.network.flow.bytes` | `k8s.src.owner.name`        | shown if Kubernetes configuration is defined  |
+| `beyla.network.flow.bytes` | `k8s.src.owner.type`        | hidden                                        |
+| `beyla.network.flow.bytes` | `k8s.src.type`              | hidden                                        | 
+| `beyla.network.flow.bytes` | `src.address`               | hidden                                        |
+| `beyla.network.flow.bytes` | `src.cidr`                  | shown if the `cidrs` configuration is defined |
+| `beyla.network.flow.bytes` | `src.name`                  | hidden                                        |
+| `beyla.network.flow.bytes` | `src.port`                  | hidden                                        |
+| `beyla.network.flow.bytes` | `transport`                 | hidden                                        |
 
 ## Internal metrics
 

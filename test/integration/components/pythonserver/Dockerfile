@@ -10,5 +10,6 @@ WORKDIR /
 # Copy the source code into the image for building
 COPY test/integration/components/pythonserver .
 
-CMD ["gunicorn", "-w", "4", "-b", "0.0.0.0:8380", "main:app"]
+CMD ["gunicorn", "-w", "4", "-b", "0.0.0.0:8380", "main:app", "--timeout", "90"]
+# setting largish timeout for the workers so we can test Beyla timeouts
 # CMD uwsgi --http 0.0.0.0:8080 --master -p 4 -w main:app

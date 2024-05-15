@@ -423,7 +423,7 @@ The preceding example discovers all Pods in the `frontend` namespace that have a
 
 YAML section `ebpf`.
 
-| YAML         | Environment variable                | Type   | Default |
+| YAML         | Environment variable   | Type   | Default |
 | ------------ | ---------------------- | ------ | ------- |
 | `wakeup_len` | `BEYLA_BPF_WAKEUP_LEN` | string | (unset) |
 
@@ -436,7 +436,7 @@ can help with reducing the CPU overhead of Beyla.
 In low-load services (in terms of requests/second), high values of `wakeup_len` could
 add a noticeable delay in the time the metrics are submitted and become externally visible.
 
-| YAML                    | Environment variable                           | Type    | Default |
+| YAML                    | Environment variable              | Type    | Default |
 | ----------------------- | --------------------------------- | ------- | ------- |
 | `track_request_headers` | `BEYLA_BPF_TRACK_REQUEST_HEADERS` | boolean | (false) |
 
@@ -450,6 +450,14 @@ processed, without additional tracking of the request headers.
 Enabling this option may increase the performance overhead in high request volume scenarios.
 This option is only useful when generating Beyla traces, it does not affect
 generation of Beyla metrics.
+
+| YAML                    | Environment variable               | Type    | Default |
+| ----------------------- | ---------------------------------- | ------- | ------- |
+| `http_request_timeout`  | `BEYLA_BPF_HTTP_REQUEST_TIMEOUT`   | string  | (30s)   |
+
+Configures the time interval after which an HTTP request is considered as a timeout.
+This option allows Beyla to report HTTP transactions which timeout and never return.
+To disable the automatic HTTP request timeout feature, set this option to zero, i.e. "0ms".
 
 ## Configuration of metrics and traces attributes
 

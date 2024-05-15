@@ -40,11 +40,11 @@ var DefaultConfig = Config{
 	ChannelBufferLen: 10,
 	LogLevel:         "INFO",
 	EBPF: ebpfcommon.TracerConfig{
-		BatchLength:    100,
-		BatchTimeout:   time.Second,
-		BpfBaseDir:     "/var/run/beyla",
-		BpfPath:        fmt.Sprintf("beyla-%d", os.Getpid()),
-		RequestTimeout: 30 * time.Second,
+		BatchLength:        100,
+		BatchTimeout:       time.Second,
+		BpfBaseDir:         "/var/run/beyla",
+		BpfPath:            fmt.Sprintf("beyla-%d", os.Getpid()),
+		HTTPRequestTimeout: 30 * time.Second,
 	},
 	Grafana: otel.GrafanaConfig{
 		OTLP: otel.GrafanaOTLP{

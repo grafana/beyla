@@ -2,6 +2,7 @@ from flask import Flask, request, Response
 import os
 import click
 import requests
+import time
 
 app = Flask(__name__)
 
@@ -30,6 +31,12 @@ def traceme():
     if response.status_code == 200:
         return response.json()
     return "PONG!"
+
+@app.route("/black_hole")
+def black_hole():
+    time.sleep(200000)
+
+    return "LIGHT!"
 
 @app.route("/users", methods=['POST'])
 def users():

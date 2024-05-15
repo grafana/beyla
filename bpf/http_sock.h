@@ -312,15 +312,25 @@ static __always_inline bool still_reading(http_info_t *info) {
     return info->status == 0 && info->start_monotime_ns != 0;
 }
 
-static __always_inline void process_http_request(http_info_t *info, int len) {
+static __always_inline void process_http_request(http_info_t *info, int len, http_connection_metadata_t *meta, int direction) {
+    // Set pid and type early as best effort in case the request times out or dies.
+    if (meta) {
+        info->pid = meta->pid;
+        info->type = meta->type;
+    } else {
+        if (direction == TCP_RECV) {
+            info->type = EVENT_HTTP_REQUEST;
+        } else {
+            info->type = EVENT_HTTP_CLIENT;
+        }
+        task_pid(&info->pid);
+    }
     info->start_monotime_ns = bpf_ktime_get_ns();
     info->status = 0;
     info->len = len;
 }
 
-static __always_inline void process_http_response(http_info_t *info, unsigned char *buf, http_connection_metadata_t *meta, int len) {
-    info->pid = meta->pid;
-    info->type = meta->type;
+static __always_inline void process_http_response(http_info_t *info, unsigned char *buf, int len) {
     info->resp_len = 0;
     info->end_monotime_ns = bpf_ktime_get_ns();
     info->status = 0;
@@ -360,13 +370,7 @@ static __always_inline http_connection_metadata_t *connection_meta(pid_connectio
 }
 
 static __always_inline void handle_http_response(unsigned char *small_buf, pid_connection_info_t *pid_conn, http_info_t *info, int orig_len, u8 direction, u8 ssl) {
-    http_connection_metadata_t *meta = connection_meta(pid_conn, direction, PACKET_TYPE_RESPONSE);
-    if (!meta) {
-        bpf_dbg_printk("Can't get meta memory or connection not found");
-        return;
-    }
-
-    process_http_response(info, small_buf, meta, orig_len);
+    process_http_response(info, small_buf, orig_len);
 
     if ((direction != TCP_SEND) /*|| (ssl != NO_SSL) || (orig_len < KPROBES_LARGE_RESPONSE_LEN)*/) {
         finish_http(info);
@@ -597,7 +601,7 @@ static __always_inline void handle_buf_with_connection(pid_connection_info_t *pi
             // we copy some small part of the buffer to the info trace event, so that we can process an event even with
             // incomplete trace info in user space.
             bpf_probe_read(info->buf, FULL_BUF_SIZE, u_buf);
-            process_http_request(info, bytes_len);
+            process_http_request(info, bytes_len, meta, direction);
         } else if (packet_type == PACKET_TYPE_RESPONSE) {
             handle_http_response(small_buf, pid_conn, info, bytes_len, direction, ssl);
         } else if (still_reading(info)) {

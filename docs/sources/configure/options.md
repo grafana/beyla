@@ -32,13 +32,11 @@ $ BEYLA_OPEN_PORT=8080 BEYLA_CONFIG_PATH=/path/to/config.yaml beyla
 At the end of this document, there is an [example of YAML configuration file](#yaml-file-example).
 
 Currently, Beyla consist of a pipeline of components which
-generate, transform, and export traces from HTTP and GRPC services. In the
+generate, transform, and export traces from HTTP and GRPC applications. In the
 YAML configuration, each component has its own first-level section.
 
-The architecture below shows the different components of Beyla.
-The dashed boxes in the diagram below can be enabled and disabled according to the configuration.
-
-![Grafana Beyla architecture](https://grafana.com/media/docs/grafana-cloud/beyla/architecture-1.1.png)
+Optionally, Beyla also provides network-level metrics, which are documented in the
+[Network metrics section of the Beyla documentation]({{< relref "../network" >}}).
 
 A quick description of the components:
 
@@ -46,6 +44,8 @@ A quick description of the components:
   a given criteria.
 - [EBPF tracer](#ebpf-tracer) instruments the HTTP and GRPC services of an external process,
   creates service traces and forwards them to the next stage of the pipeline.
+- [Configuration of metrics and traces attributes](#configuration-of-metrics-and-traces-attributes) to control
+  which attributes are reported.
 - [Routes decorator](#routes-decorator) will match HTTP paths (e.g. `/user/1234/info`)
   into user-provided HTTP routes (e.g. `/user/{id}/info`). If no routes are defined,
   the incoming data will be directly forwarded to the next stage.
@@ -753,25 +753,19 @@ attacks. This option should be used only for testing and development purposes.
 
 Configures the intervening time between exports.
 
-| YAML            | Environment variable                       | Type    | Default |
-| --------------- | ----------------------------- | ------- | ------- |
-| `report_target` | `BEYLA_METRICS_REPORT_TARGET` | boolean | `false` |
 
-Specifies whether the exporter must submit `http.target` as a metric attribute.
+| YAML  | Environment variable     | Type     | Default |
+|-------|--------------------------|----------|---------|
+| `ttl` | `BEYLA_OTEL_METRICS_TTL` | Duration | `5m`    |
 
-According to the standard OpenTelemetry specification, `http.target` is the full HTTP request
-path and query arguments.
+The group of attributes for a metric instance is not reported anymore if the time since
+the last update is greater than this Time-To-Leave (TTL) value.
 
-It is disabled by default to avoid cardinality explosion in paths with IDs. As an alternative,
-it is recommended to group these requests in the [routes' node](#routes-decorator).
+The purpose of this value is to avoid reporting indefinitely finished application instances.
 
-| YAML          | Environment variable                     | Type    | Default |
-| ------------- | --------------------------- | ------- | ------- |
-| `report_peer` | `BEYLA_METRICS_REPORT_PEER` | boolean | `false` |
-
-Specifies whether the exporter must submit the caller peer address as a metric attribute.
-
-It is disabled by default to avoid cardinality explosion.
+Due to the current limitations of the OpenTelemetry SDK, this value is not effective for
+histogram metrics. If expiring old histogram metric instances is mandatory, consider using
+the Prometheus exporter, or an intermediate OpenTelemetry collector such as [Grafana Alloy](/docs/alloy/latest/).
 
 | YAML       | Environment variable          | Type            | Default                      |
 |------------|-------------------------------|-----------------|------------------------------|
@@ -1062,25 +1056,14 @@ no Prometheus endpoint will be open.
 
 Specifies the HTTP query path to fetch the list of Prometheus metrics.
 
-| YAML            | Environment variable                       | Type    | Default |
-| --------------- | ----------------------------- | ------- | ------- |
-| `report_target` | `BEYLA_METRICS_REPORT_TARGET` | boolean | `false` |
+| YAML  | Environment variable   | Type     | Default |
+|-------|------------------------|----------|---------|
+| `ttl` | `BEYLA_PROMETHEUS_TTL` | Duration | `5m`    |
 
-Specifies whether the exporter must submit `http_target` as a metric attribute.
+The group of attributes for a metric instance is not reported anymore if the time since
+the last update is greater than this Time-To-Leave (TTL) value.
 
-To be consistent with the OpenTelemetry specification, `http_target` is the full HTTP request
-path and query arguments.
-
-It is disabled by default to avoid cardinality explosion in paths with IDs. As an alternative,
-it is recommended to group these requests in the [routes' node](#routes-decorator).
-
-| YAML          | Environment variable                     | Type    | Default |
-| ------------- | --------------------------- | ------- | ------- |
-| `report_peer` | `BEYLA_METRICS_REPORT_PEER` | boolean | `false` |
-
-Specifies whether the exporter must submit the caller peer address as a metric attribute.
-
-It is disabled by default to avoid cardinality explosion.
+The purpose of this value is to avoid reporting indefinitely finished application instances.
 
 | YAML      | Environment variable | Type   |
 | --------- | ------- | ------ |

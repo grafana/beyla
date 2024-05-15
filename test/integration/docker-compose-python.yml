@@ -40,6 +40,7 @@ services:
       BEYLA_METRICS_REPORT_TARGET: "true"
       BEYLA_METRICS_REPORT_PEER: "true"
       BEYLA_HOSTNAME: "beyla"
+      BEYLA_BPF_HTTP_REQUEST_TIMEOUT: "5s"
     depends_on:
       testserver:
         condition: service_started

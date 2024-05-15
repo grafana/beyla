@@ -62,14 +62,16 @@ type HTTPInfo struct {
 
 func ReadHTTPInfoIntoSpan(record *ringbuf.Record) (request.Span, bool, error) {
 	var event BPFHTTPInfo
-	var result HTTPInfo
-
 	err := binary.Read(bytes.NewBuffer(record.RawSample), binary.LittleEndian, &event)
 	if err != nil {
 		return request.Span{}, true, err
 	}
 
-	result = HTTPInfo{BPFHTTPInfo: event}
+	return HTTPInfoEventToSpan(event)
+}
+
+func HTTPInfoEventToSpan(event BPFHTTPInfo) (request.Span, bool, error) {
+	result := HTTPInfo{BPFHTTPInfo: event}
 
 	// When we can't find the connection info, we signal that through making the
 	// source and destination ports equal to max short. E.g. async SSL

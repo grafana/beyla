@@ -1,6 +1,8 @@
 package ebpfcommon
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -27,6 +29,34 @@ func TestHTTPInfoParsing(t *testing.T) {
 		s := httpInfoToSpan(&tr)
 		assertMatchesInfo(t, &s, "POST", "/users", "127.0.0.1", "127.0.0.2", "curl", 8080, 200, 5)
 	})
+}
+
+func TestMethodURLParsing(t *testing.T) {
+	for _, s := range []string{
+		"GET /test ",
+		"GET /test\r\n",
+		"GET /test\r",
+		"GET /test\n",
+		"GET /test",
+		"GET /test/test/test/test/test/test/test//test/test/test/test/test/test/test//test/test/test/test/test/test/test//test/test/test/test/test/test/test//test/test/test/test/test/test/test//test/test/test/test/test/test/test/",
+	} {
+		i := makeBPFInfoWithBuf([]uint8(s))
+		assert.NotEmpty(t, i.url(), fmt.Sprintf("-%s-", s))
+		assert.NotEmpty(t, i.method(), fmt.Sprintf("-%s-", s))
+		assert.True(t, strings.HasPrefix(i.url(), "/test"))
+	}
+
+	i := makeBPFInfoWithBuf([]uint8("GET "))
+	assert.NotEmpty(t, i.method())
+	assert.Empty(t, i.url())
+
+	i = makeBPFInfoWithBuf([]uint8(""))
+	assert.Empty(t, i.method())
+	assert.Empty(t, i.url())
+
+	i = makeBPFInfoWithBuf([]uint8("POST"))
+	assert.Empty(t, i.method())
+	assert.Empty(t, i.url())
 }
 
 func makeHTTPInfo(method, path, peer, host, comm string, peerPort, hostPort uint32, status uint16, durationMs uint64) HTTPInfo {
@@ -62,4 +92,11 @@ func assertMatchesInfo(t *testing.T, span *request.Span, method, path, peer, hos
 	assert.Equal(t, svc.InstrumentableRuby, span.ServiceID.SDKLanguage)
 	assert.Equal(t, int64(durationMs*1000000), int64(span.End-span.Start))
 	assert.Equal(t, int64(durationMs*1000000), int64(span.End-span.RequestStart))
+}
+
+func makeBPFInfoWithBuf(buf []uint8) BPFHTTPInfo {
+	bpfInfo := BPFHTTPInfo{}
+	copy(bpfInfo.Buf[:], buf)
+
+	return bpfInfo
 }

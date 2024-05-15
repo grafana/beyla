@@ -29,11 +29,13 @@ flowchart TD
         EBPF3 -.-> TR
         TR(traces.ReadDecorator) --> ROUT(Routes<br/>decorator)
         ROUT:::optional --> KD(Kubernetes<br/>decorator)
-
-        KD:::optional --> OTELM(OTEL<br/> metrics<br/> exporter):::optional
-        KD --> OTELT(OTEL<br/> traces<br/> exporter):::optional
-        KD --> PROM(Prometheus<br/>HTTP<br/>endpoint):::optional
-        KD --> ALLOY(Alloy<br/>connector):::optional
+        KD:::optional --> NR
+        NR(Name resolver):::optional --> AF
+        
+        AF(Attributes filter):::optional --> OTELM(OTEL<br/> metrics<br/> exporter):::optional
+        AF --> OTELT(OTEL<br/> traces<br/> exporter):::optional
+        AF --> PROM(Prometheus<br/>HTTP<br/>endpoint):::optional
+        AF --> ALLOY(Alloy<br/>connector):::optional
     end
     CU -.-> |New PIDs| KDB
     KDB(KubeDatabase):::optional <-.- | Aggregated & indexed Pod info | KD
@@ -54,6 +56,7 @@ flowchart TD
     KDB(Kube Database):::optional --> K8S
     K8S(Kubernetes<br/>decorator):::optional --> RDNS
     RDNS(Reverse DNS):::optional --> CIDRS
-    CIDRS(CIDRs<br/>redecorator):::optional --> OTEL(OpenTelemetry<br/>metrics<br/>export):::optional
-    CIDRS --> PROM(Prometheus<br/>metrics<br/>export):::optional
+    CIDRS(CIDRs<br/>redecorator):::optional --> FLTR
+    FLTR(Attributes<br/>filter):::optional --> OTEL(OpenTelemetry<br/>metrics<br/>export):::optional
+    FLTR --> PROM(Prometheus<br/>metrics<br/>export):::optional
 ```

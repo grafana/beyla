@@ -457,6 +457,12 @@ Grafana Beyla allows configuring how some attributes for metrics and traces
 are decorated. Under the `attributes` top YAML sections, you can enable
 other subsections configure how some attributes are set.
 
+### Selection of metric attributes
+
+
+
+
+
 ### Instance ID decoration
 
 The metrics and the traces are decorated with a unique instance ID string, identifying

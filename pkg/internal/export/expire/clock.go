@@ -1,6 +1,9 @@
 package expire
 
-import "time"
+import (
+	"sync"
+	"time"
+)
 
 // CachedClock is a clock that is only updated on demand. Until the
 // Update method is not invoked, the Time method will return always
@@ -10,6 +13,7 @@ import "time"
 type CachedClock struct {
 	now       time.Time
 	baseClock func() time.Time
+	mu        sync.Mutex
 }
 
 func NewCachedClock(baseClock func() time.Time) *CachedClock {
@@ -21,11 +25,15 @@ func NewCachedClock(baseClock func() time.Time) *CachedClock {
 
 // Update the CachedClock time according to its base clock.
 func (ex *CachedClock) Update() {
+	ex.mu.Lock()
+	defer ex.mu.Unlock()
 	ex.now = ex.baseClock()
 }
 
 // Time returns the time returned by the base clock the last time
 // that the Update method was invoked.
 func (ex *CachedClock) Time() time.Time {
+	ex.mu.Lock()
+	defer ex.mu.Unlock()
 	return ex.now
 }

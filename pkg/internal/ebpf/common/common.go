@@ -63,6 +63,8 @@ type TracerConfig struct {
 	// If enabled, the kprobes based HTTP request tracking will start tracking the request
 	// headers to process any 'Traceparent' fields.
 	TrackRequestHeaders bool `yaml:"track_request_headers" env:"BEYLA_BPF_TRACK_REQUEST_HEADERS"`
+
+	HTTPRequestTimeout time.Duration `yaml:"http_request_timeout" env:"BEYLA_BPF_HTTP_REQUEST_TIMEOUT"`
 }
 
 // Probe holds the information of the instrumentation points of a given function: its start and end offsets and

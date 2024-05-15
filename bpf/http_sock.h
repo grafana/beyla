@@ -503,6 +503,13 @@ static __always_inline void process_http2_grpc_frames(pid_connection_info_t *pid
 }
 
 static __always_inline void handle_unknown_tcp_connection(pid_connection_info_t *pid_conn, void *u_buf, int bytes_len, u8 direction, u8 ssl) {
+    // SSL requests will see both TCP traffic and text traffic, ignore the TCP if
+    // we are processing SSL request. HTTP2 is already checked in handle_buf_with_connection.
+    http_info_t *http_info = bpf_map_lookup_elem(&ongoing_http, pid_conn);
+    if (http_info) {
+        return;
+    }
+
     tcp_req_t *existing = bpf_map_lookup_elem(&ongoing_tcp_req, pid_conn);
     if (!existing) {
         tcp_req_t *req = empty_tcp_req();

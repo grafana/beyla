@@ -95,10 +95,11 @@ network:
 		Printer:          false,
 		Noop:             true,
 		EBPF: ebpfcommon.TracerConfig{
-			BatchLength:  100,
-			BatchTimeout: time.Second,
-			BpfBaseDir:   "/var/run/beyla",
-			BpfPath:      DefaultConfig.EBPF.BpfPath,
+			BatchLength:    100,
+			BatchTimeout:   time.Second,
+			BpfBaseDir:     "/var/run/beyla",
+			BpfPath:        DefaultConfig.EBPF.BpfPath,
+			RequestTimeout: 30 * time.Second,
 		},
 		Grafana: otel.GrafanaConfig{
 			OTLP: otel.GrafanaOTLP{

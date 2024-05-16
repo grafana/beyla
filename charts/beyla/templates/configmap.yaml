@@ -9,6 +9,7 @@ metadata:
   namespace: {{ include "beyla.namespace" . }}
   labels:
     {{- include "beyla.labels" . | nindent 4 }}
+    app.kubernetes.io/component: config
   {{- with .Values.annotations }}
   annotations:
     {{- toYaml . | nindent 4 }}

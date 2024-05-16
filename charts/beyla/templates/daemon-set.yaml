@@ -4,7 +4,8 @@ metadata:
   name: {{ include "beyla.fullname" . }}
   namespace: {{ include "beyla.namespace" .}}
   labels:
-  {{- include "beyla.labels" . | nindent 4 }}
+    {{- include "beyla.labels" . | nindent 4 }}
+    app.kubernetes.io/component: workload
   {{- with .Values.annotations }}
   annotations:
     {{- toYaml . | nindent 4 }}
@@ -12,7 +13,7 @@ metadata:
 spec:
   selector:
     matchLabels:
-{{ include "beyla.selectorLabels" . | indent 6 }}
+      {{- include "beyla.selectorLabels" . | nindent 6 }}
   {{- with .Values.updateStrategy }}
   updateStrategy:
     {{- toYaml . | trim | nindent 4 }}
@@ -25,7 +26,8 @@ spec:
         {{- toYaml . | nindent 8 }}
         {{- end }}
       labels:
-{{ include "beyla.selectorLabels" . | indent 8 }}
+        {{- include "beyla.labels" . | nindent 8 }}
+        app.kubernetes.io/component: workload
     spec:
      {{- if .Values.serviceAccount.create }}
       serviceAccountName: {{ include "beyla.serviceAccountName" . }}

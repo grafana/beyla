@@ -31,8 +31,8 @@ jobs:
       - name: Run verification and unit tests
         run: make verify cov-exclude-generated
       - name: Report coverage
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v4
         with:
-          files: ./testoutput/cover.txt
+          file: ./testoutput/cover.txt
           flags: unittests
           token: ${{ secrets.CODECOV_TOKEN }}

@@ -35,8 +35,8 @@ jobs:
             testoutput/*.log
             testoutput/kind
       - name: Report coverage
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v4
         with:
-          files: ./testoutput/itest-covdata.txt
+          file: ./testoutput/itest-covdata.txt
           flags: integration-test
           token: ${{ secrets.CODECOV_TOKEN }}

@@ -32,8 +32,8 @@ jobs:
           name: Oats test logs
           path: test/oats/*/build/*
       - name: Report coverage
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v4
         with:
-          files: ./testoutput/itest-covdata.txt
+          file: ./testoutput/itest-covdata.txt
           flags: oats-test
           token: ${{ secrets.CODECOV_TOKEN }}

@@ -51,6 +51,7 @@ A quick description of the components:
   the incoming data will be directly forwarded to the next stage.
 - [Kubernetes decorator](#kubernetes-decorator) will decorate the metrics and traces
   with Kubernetes metadata of the instrumented Pods.
+- [Filter metrics and traces by attribute values](#filter-metrics-and-traces-by-attribute-values).
 - [Grafana Cloud OTEL exporter for metrics and traces](#using-the-grafana-cloud-otel-endpoint-to-ingest-metrics-and-traces)
   simplifies the submission of OpenTelemetry metrics and traces to Grafana cloud.
 - [OTEL metrics exporter](#otel-metrics-exporter) exports metrics data to an external
@@ -1018,6 +1019,44 @@ and `parentbased_traceidratio` require an argument.
 In YAML, this value MUST be provided as a string, so even if the value
 is numeric, make sure that it is enclosed between quotes in the YAML file,
 (for example, `arg: "0.25"`).
+
+## Filter metrics and traces by attribute values
+
+You might want to restrict the reported metrics and traces to very concrete
+event types based on the values of the attributes (for example, filter network
+metrics to report only TCP traffic).
+
+The `filter` YAML section allows filtering both application and network metrics
+by attribute values. It has the following structure:
+
+```yaml
+filter:
+  application:
+    # map of attribute matches to restrict application metrics
+  network:
+    # map of attribute matches to restrict network metrics
+```
+
+For a list of metrics under the application and network family, as well as their
+attributes, check the [Beyla exported metrics]({{< relref "../metrics.md" >}} document.
+
+Each `application` and `network` filter section is a map where each key is an attribute
+name (either in Prometheus or OpenTelemetry format), with either the `match` or the `not_match` property. Both properties accept a 
+[glob-like](https://github.com/gobwas/glob) string (it can be a full value or include
+wildcards). If the `match` property is set, Beyla will only report the metrics and traces
+matching the provided value for that given attribute. The `not_match` property is the
+negation of `match`.
+
+The following example reports network metrics for connections targeting the destination port 53, excluding the UDP protocol:
+
+```yaml
+filter:
+  network:
+    transport:
+      not_match: UDP
+    dst_port:
+      match: "53"
+```
 
 ## Using the Grafana Cloud OTEL endpoint to ingest metrics and traces
 

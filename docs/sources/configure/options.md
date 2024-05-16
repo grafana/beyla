@@ -466,11 +466,11 @@ others are hidden to control the cardinality.
 
 For each metric, you can control which attributes to see with the `select` subsection, which
 is a map where each key is the name of a metric (either in its OpenTelemetry or Prometheus port),
-and each metric has two more subproperties: `include` and `exclude`.
+and each metric has two more sub-properties: `include` and `exclude`.
 
 * `include` is a list of attributes that need to be reported. Each attribute can be an attribute
   name or a wildcard (for example, `k8s.dst.*` to include all the attributes starting with `k8s.dst`).
-  If no `include` list is provided, the default attribute set will be reported (check [Beyla exported metrics]({{< relref "../metrics.md" >}})
+  If no `include` list is provided, the default attribute set is reported (check [Beyla exported metrics]({{< relref "../metrics.md" >}})
   for more information about the default attributes for a given metric).
 * `exclude` is a list to of attribute names/wildcards containing the attributes to remove from the
   `include` list (or the default attribute set).
@@ -1043,7 +1043,7 @@ attributes, check the [Beyla exported metrics]({{< relref "../metrics.md" >}} do
 Each `application` and `network` filter section is a map where each key is an attribute
 name (either in Prometheus or OpenTelemetry format), with either the `match` or the `not_match` property. Both properties accept a 
 [glob-like](https://github.com/gobwas/glob) string (it can be a full value or include
-wildcards). If the `match` property is set, Beyla will only report the metrics and traces
+wildcards). If the `match` property is set, Beyla only reports the metrics and traces
 matching the provided value for that given attribute. The `not_match` property is the
 negation of `match`.
 
@@ -1116,14 +1116,14 @@ YAML section `prometheus_export`.
 
 This component opens an HTTP endpoint in the auto-instrumentation tool
 that allows any external scraper to pull metrics in [Prometheus](https://prometheus.io/)
-format. It will be enabled if the `port` property is set.
+format. It is enabled if the `port` property is set.
 
 | YAML   | Environment variable                 | Type | Default |
 | ------ | ----------------------- | ---- | ------- |
 | `port` | `BEYLA_PROMETHEUS_PORT` | int  | (unset) |
 
 Specifies the HTTP port for the Prometheus scrape endpoint. If unset or 0,
-no Prometheus endpoint will be open.
+no Prometheus endpoint is open.
 
 | YAML   | Environment variable                 | Type   | Default    |
 | ------ | ----------------------- | ------ | ---------- |

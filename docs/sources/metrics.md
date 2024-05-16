@@ -26,6 +26,10 @@ The following table describes the exported metrics in both OpenTelemetry and Pro
 | Application | `sql.client.duration`           | `sql_client_duration_seconds`          | Histogram | seconds | Duration of SQL client operations (Experimental)                                 |
 | Network     | `beyla.network.flow.bytes`      | `beyla_network_flow_bytes`             | Counter   | bytes   | Bytes submitted from a source network endpoint to a destination network endpoint |
 
+Beyla can also export [Span metrics](/docs/tempo/latest/metrics-generator/span_metrics/) and
+[Service graph metrics](/docs/tempo/latest/metrics-generator/service-graph-view/), which can be enabled via the
+[features]({{< relref "./configure/options.md" >}}) configuration option.
+
 ## Attributes of Beyla metrics
 
 For the sake of brevity, only the OTEL `dot.notation` of the metrics and attributes is listed, but
@@ -39,15 +43,15 @@ default, check the `attributes`->`select` section in the [configuration document
 | Application (all)          | `http.request.method`       | shown                                         |
 | Application (all)          | `http.response.status_code` | shown                                         |
 | Application (all)          | `http.route`                | shown if `routes` configuration is defined    |
-| Application (all)          | `k8s.daemonset.name`        | shown if Kubernetes configuration is defined  |
-| Application (all)          | `k8s.deployment.name`       | shown if Kubernetes configuration is defined  |
-| Application (all)          | `k8s.namespace.name`        | shown if Kubernetes configuration is defined  |
-| Application (all)          | `k8s.node.name`             | shown if Kubernetes configuration is defined  |
-| Application (all)          | `k8s.pod.name`              | shown if Kubernetes configuration is defined  |
-| Application (all)          | `k8s.pod.start_time`        | shown if Kubernetes configuration is defined  |
-| Application (all)          | `k8s.pod.uid`               | shown if Kubernetes configuration is defined  |
-| Application (all)          | `k8s.replicaset.name`       | shown if Kubernetes configuration is defined  |
-| Application (all)          | `k8s.statefulset.name`      | shown if Kubernetes configuration is defined  |
+| Application (all)          | `k8s.daemonset.name`        | shown if `attributes.kubernetes.enable`       |
+| Application (all)          | `k8s.deployment.name`       | shown if `attributes.kubernetes.enable`       |
+| Application (all)          | `k8s.namespace.name`        | shown if `attributes.kubernetes.enable`       |
+| Application (all)          | `k8s.node.name`             | shown if `attributes.kubernetes.enable`       |
+| Application (all)          | `k8s.pod.name`              | shown if `attributes.kubernetes.enable`       |
+| Application (all)          | `k8s.pod.start_time`        | shown if `attributes.kubernetes.enable`       |
+| Application (all)          | `k8s.pod.uid`               | shown if `attributes.kubernetes.enable`       |
+| Application (all)          | `k8s.replicaset.name`       | shown if `attributes.kubernetes.enable`       |
+| Application (all)          | `k8s.statefulset.name`      | shown if `attributes.kubernetes.enable`       |
 | Application (all)          | `service.name`              | shown                                         | 
 | Application (all)          | `service.namespace`         | shown                                         | 
 | Application (all)          | `target.instance`           | shown                                         |
@@ -60,24 +64,25 @@ default, check the `attributes`->`select` section in the [configuration document
 | Application (server)       | `client.address`            | hidden                                        |
 | `beyla.network.flow.bytes` | `beyla.ip`                  | hidden                                        |
 | `sql.client.duration`      | `db.operation`              | shown                                         |
+| `sql.client.duration`      | `db.statement`              | shown                                         |
 | `beyla.network.flow.bytes` | `direction`                 | hidden                                        |
 | `beyla.network.flow.bytes` | `dst.address`               | hidden                                        |
 | `beyla.network.flow.bytes` | `dst.cidr`                  | shown if the `cidrs` configuration is defined |
 | `beyla.network.flow.bytes` | `dst.name`                  | hidden                                        |
 | `beyla.network.flow.bytes` | `dst.port`                  | hidden                                        |
 | `beyla.network.flow.bytes` | `iface`                     | hidden                                        |
-| `beyla.network.flow.bytes` | `k8s.cluster.name`          | shown if Kubernetes configuration is defined  |
+| `beyla.network.flow.bytes` | `k8s.cluster.name`          | shown if `attributes.kubernetes.enable`       |
 | `beyla.network.flow.bytes` | `k8s.dst.name`              | hidden                                        | 
-| `beyla.network.flow.bytes` | `k8s.dst.namespace`         | shown if Kubernetes configuration is defined  | 
+| `beyla.network.flow.bytes` | `k8s.dst.namespace`         | shown if `attributes.kubernetes.enable`       | 
 | `beyla.network.flow.bytes` | `k8s.dst.node.ip`           | hidden                                        |
 | `beyla.network.flow.bytes` | `k8s.dst.node.name`         | hidden                                        |
 | `beyla.network.flow.bytes` | `k8s.dst.owner.type`        | hidden                                        | 
 | `beyla.network.flow.bytes` | `k8s.dst.type`              | hidden                                        |
-| `beyla.network.flow.bytes` | `k8s.dst.owner.name`        | shown if Kubernetes configuration is defined  | 
+| `beyla.network.flow.bytes` | `k8s.dst.owner.name`        | shown if `attributes.kubernetes.enable`       | 
 | `beyla.network.flow.bytes` | `k8s.src.name`              | hidden                                        | 
-| `beyla.network.flow.bytes` | `k8s.src.namespace`         | shown if Kubernetes configuration is defined  | 
+| `beyla.network.flow.bytes` | `k8s.src.namespace`         | shown if `attributes.kubernetes.enable`       | 
 | `beyla.network.flow.bytes` | `k8s.src.node.ip`           | hidden                                        |
-| `beyla.network.flow.bytes` | `k8s.src.owner.name`        | shown if Kubernetes configuration is defined  |
+| `beyla.network.flow.bytes` | `k8s.src.owner.name`        | shown if `attributes.kubernetes.enable`       |
 | `beyla.network.flow.bytes` | `k8s.src.owner.type`        | hidden                                        |
 | `beyla.network.flow.bytes` | `k8s.src.type`              | hidden                                        | 
 | `beyla.network.flow.bytes` | `src.address`               | hidden                                        |

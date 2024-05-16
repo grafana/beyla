@@ -19,8 +19,10 @@ jobs:
         uses: actions/setup-go@v3
         with:
           go-version: ${{ matrix.go }}
-      - name: build beyla
-        run: make compile
+      - name: Clean up disk space
+        run: |
+          docker system prune -af
+          docker volume prune -f
       - name: Run oats tests
         run: make oats-test
       - name: Upload oats test logs
@@ -28,4 +30,10 @@ jobs:
         if: always()
         with:
           name: Oats test logs
-          path: test/oats/build/output.log
+          path: test/oats/*/build/*
+      - name: Report coverage
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./testoutput/itest-covdata.txt
+          flags: oats-test
+          token: ${{ secrets.CODECOV_TOKEN }}

@@ -253,6 +253,7 @@ bin/ginkgo:
 
 .PHONY: oats-prereq
 oats-prereq: bin/ginkgo
+	mkdir -p $(TEST_OUTPUT)/run
 
 .PHONY: oats-test-sql
 oats-test-sql: oats-prereq
@@ -271,6 +272,7 @@ oats-test-sql-other-langs: oats-prereq
 
 .PHONY: oats-test
 oats-test: oats-test-sql oats-test-sql-statement oats-test-sql-other-langs
+	$(MAKE) itest-coverage-data
 
 .PHONY: oats-test-debug
 oats-test-debug: oats-prereq

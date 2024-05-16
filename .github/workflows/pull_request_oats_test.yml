@@ -24,8 +24,7 @@ jobs:
           docker system prune -af
           docker volume prune -f
       - name: Run oats tests
-        # sudo avoids ./testoutput/merge creation permission error
-        run: sudo make oats-test
+        run: make oats-test
       - name: Upload oats test logs
         uses: actions/upload-artifact@v3
         if: always()

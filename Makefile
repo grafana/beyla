@@ -253,6 +253,7 @@ bin/ginkgo:
 
 .PHONY: oats-prereq
 oats-prereq: bin/ginkgo
+	mkdir -p $(TEST_OUTPUT)/run
 
 .PHONY: oats-test-sql
 oats-test-sql: oats-prereq

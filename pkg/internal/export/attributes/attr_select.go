@@ -14,11 +14,11 @@ import (
 type Selection map[Section]InclusionLists
 
 type InclusionLists struct {
-	// Include is a list of metrics that need to be reported. It can be an attribute
+	// Include is a list of metric attributes that have to be reported. It can be an attribute
 	// name or a wildcard (e.g. k8s.dst.* to include all the attributes starting with k8s.dst).
 	// If no include list is provided, the default attribute set will be reported.
 	Include []string `yaml:"include"`
-	// Exclude will remove metrics from the include list (or the default attribute set).
+	// Exclude will remove attributes from the include list (or the default attribute set).
 	// It can be an attribute name or a wildcard.
 	Exclude []string `yaml:"exclude"`
 }

@@ -30,7 +30,7 @@ jobs:
         uses: actions/upload-artifact@v3
         if: always()
         with:
-          name: Test Logs
+          name: K8s test Logs
           path: |
             testoutput/*.log
             testoutput/kind

@@ -132,7 +132,7 @@ func appendMetadata(span *request.Span, info *kube.PodInfo) {
 	}
 	owner := info.Owner
 	for owner != nil {
-		span.ServiceID.Metadata[owner.Type.LabelName()] = owner.Name
+		span.ServiceID.Metadata[attr.Name(owner.LabelName)] = owner.Name
 		owner = owner.Owner
 	}
 }

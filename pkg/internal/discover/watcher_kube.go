@@ -148,7 +148,7 @@ func (wk *watcherKubeEnricher) enrichReplicaSetEvent(rsEvent Event[*kube.Replica
 	switch rsEvent.Type {
 	case EventCreated:
 		wk.log.Debug("ReplicaSet added", "namespace",
-			rsEvent.Obj.Namespace, "name", rsEvent.Obj.Name, "deployment", rsEvent.Obj.DeploymentName)
+			rsEvent.Obj.Namespace, "name", rsEvent.Obj.Name, "owner", rsEvent.Obj.Owner)
 		out <- wk.onNewReplicaSet(rsEvent.Obj)
 	case EventDeleted:
 		wk.log.Debug("ReplicaSet deleted", "namespace", rsEvent.Obj.Namespace, "name", rsEvent.Obj.Name)
@@ -238,9 +238,10 @@ func (wk *watcherKubeEnricher) onNewReplicaSet(rsInfo *kube.ReplicaSetInfo) []Ev
 	for _, pod := range podInfos {
 		for _, containerID := range pod.ContainerIDs {
 			if procInfo, ok := wk.processByContainer[containerID]; ok {
-				pod.Owner = &kube.Owner{Type: kube.OwnerReplicaSet, Name: rsInfo.Name}
-				if rsInfo.DeploymentName != "" {
-					pod.Owner.Owner = &kube.Owner{Type: kube.OwnerDeployment, Name: rsInfo.DeploymentName}
+				pod.Owner = &kube.Owner{
+					LabelName: kube.OwnerReplicaSet,
+					Name:      rsInfo.Name,
+					Owner:     rsInfo.Owner,
 				}
 				allProcesses = append(allProcesses, Event[processAttrs]{
 					Type: EventCreated,
@@ -310,7 +311,7 @@ func withMetadata(pp processAttrs, info *kube.PodInfo) processAttrs {
 	owner := info.Owner
 	for owner != nil {
 		ret.metadata[services.AttrOwnerName] = owner.Name
-		switch owner.Type {
+		switch owner.LabelName {
 		case kube.OwnerDaemonSet:
 			ret.metadata[services.AttrDaemonSetName] = owner.Name
 		case kube.OwnerReplicaSet:

@@ -244,7 +244,7 @@ integration-test: prereqs prepare-integration-test
 	$(MAKE) cleanup-integration-test
 
 .PHONY: integration-test-k8s
-integration-test: prereqs prepare-integration-test
+integration-test-k8s: prereqs prepare-integration-test
 	$(MAKE) run-integration-test-k8s || (ret=$$?; $(MAKE) cleanup-integration-test && exit $$ret)
 	$(MAKE) itest-coverage-data
 	$(MAKE) cleanup-integration-test

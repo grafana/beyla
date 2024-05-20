@@ -231,9 +231,21 @@ run-integration-test:
 	go clean -testcache
 	go test -p 1 -failfast -v -timeout 60m -mod vendor -a ./test/integration/... --tags=integration
 
+.PHONY: run-integration-test-k8s
+run-integration-test-k8s:
+	@echo "### Running integration tests"
+	go clean -testcache
+	go test -p 1 -failfast -v -timeout 60m -mod vendor -a ./test/integration/... --tags=integration_k8s
+
 .PHONY: integration-test
 integration-test: prereqs prepare-integration-test
 	$(MAKE) run-integration-test || (ret=$$?; $(MAKE) cleanup-integration-test && exit $$ret)
+	$(MAKE) itest-coverage-data
+	$(MAKE) cleanup-integration-test
+
+.PHONY: integration-test-k8s
+integration-test: prereqs prepare-integration-test
+	$(MAKE) run-integration-test-k8s || (ret=$$?; $(MAKE) cleanup-integration-test && exit $$ret)
 	$(MAKE) itest-coverage-data
 	$(MAKE) cleanup-integration-test
 

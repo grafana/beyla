@@ -1,0 +1,42 @@
+name: Pull request K8s integration tests
+
+on:
+  push:
+    branches: [ 'main', 'release-*' ]
+  pull_request:
+    branches: [ 'main', 'release-*' ]
+
+jobs:
+  test:
+    name: test
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        go: [ '1.22' ]
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: ${{ matrix.go }}
+      - name: Clean up disk space
+        run: |
+          docker system prune -af
+          docker volume prune -f
+      - name: Run integration tests
+        run: make integration-test-k8s
+        timeout-minutes: 60
+      - name: Upload integration test logs
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: Test Logs
+          path: |
+            testoutput/*.log
+            testoutput/kind
+      - name: Report coverage
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./testoutput/itest-covdata.txt
+          flags: k8s-integration-test
+          token: ${{ secrets.CODECOV_TOKEN }}

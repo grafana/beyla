@@ -33,7 +33,8 @@ jobs:
           path: test/oats/*/build/*
       - name: Report coverage
         uses: codecov/codecov-action@v4
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
         with:
           file: ./testoutput/itest-covdata.txt
           flags: oats-test
-          token: ${{ secrets.CODECOV_TOKEN }}

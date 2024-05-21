@@ -65,7 +65,7 @@ func (p *Tracer) buildPidFilter() []uint64 {
 			bit := h & 63
 
 			v := result[segment]
-			v = v | (1 << bit)
+			v |= (1 << bit)
 			result[segment] = v
 		}
 	}

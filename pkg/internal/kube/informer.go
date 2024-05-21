@@ -65,7 +65,7 @@ type PodInfo struct {
 
 type ReplicaSetInfo struct {
 	metav1.ObjectMeta
-	DeploymentName string
+	Owner *Owner
 }
 
 func qName(namespace, name string) string {
@@ -147,7 +147,7 @@ func (k *Metadata) initPodInformer(informerFactory informers.SharedInformerFacto
 			}
 		}
 
-		owner := OwnerFromPodInfo(pod)
+		owner := OwnerFrom(pod.OwnerReferences)
 		startTime := pod.GetCreationTimestamp().String()
 		if log.Enabled(context.TODO(), slog.LevelDebug) {
 			log.Debug("inserting pod", "name", pod.Name, "namespace", pod.Namespace,
@@ -233,24 +233,17 @@ func (k *Metadata) initReplicaSetInformer(informerFactory informers.SharedInform
 			}
 			return nil, fmt.Errorf("was expecting a ReplicaSet. Got: %T", i)
 		}
-		var deployment string
-		for i := range rs.OwnerReferences {
-			or := &rs.OwnerReferences[i]
-			if or.APIVersion == "apps/v1" && or.Kind == "Deployment" {
-				deployment = or.Name
-				break
-			}
-		}
+		owner := OwnerFrom(rs.OwnerReferences)
 		if log.Enabled(context.TODO(), slog.LevelDebug) {
 			log.Debug("inserting ReplicaSet", "name", rs.Name, "namespace", rs.Namespace,
-				"deployment", deployment)
+				"owner", owner)
 		}
 		return &ReplicaSetInfo{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      rs.Name,
 				Namespace: rs.Namespace,
 			},
-			DeploymentName: deployment,
+			Owner: owner,
 		}, nil
 	}); err != nil {
 		return fmt.Errorf("can't set pods transform: %w", err)
@@ -328,9 +321,9 @@ func (k *Metadata) initInformers(ctx context.Context, client kubernetes.Interfac
 // usually has a Deployment as owner reference, which is the one that we'd really like
 // to report as owner.
 func (k *Metadata) FetchPodOwnerInfo(pod *PodInfo) {
-	if pod.Owner != nil && pod.Owner.Type == OwnerReplicaSet {
+	if pod.Owner != nil && pod.Owner.LabelName == OwnerReplicaSet {
 		if rsi, ok := k.GetReplicaSetInfo(pod.Namespace, pod.Owner.Name); ok {
-			pod.Owner.Owner = &Owner{Type: OwnerDeployment, Name: rsi.DeploymentName}
+			pod.Owner.Owner = rsi.Owner
 		}
 	}
 }

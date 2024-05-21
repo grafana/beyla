@@ -26,7 +26,7 @@ func TestDecoration(t *testing.T) {
 			},
 			NodeName:     "the-node",
 			StartTimeStr: "2020-01-02 12:12:56",
-			Owner:        &kube.Owner{Type: kube.OwnerDeployment, Name: "deployment-12"},
+			Owner:        &kube.Owner{LabelName: kube.OwnerDeployment, Name: "deployment-12"},
 		},
 		34: &kube.PodInfo{
 			ObjectMeta: v1.ObjectMeta{
@@ -34,7 +34,7 @@ func TestDecoration(t *testing.T) {
 			},
 			NodeName:     "the-node",
 			StartTimeStr: "2020-01-02 12:34:56",
-			Owner:        &kube.Owner{Type: kube.OwnerReplicaSet, Name: "rs-34"},
+			Owner:        &kube.Owner{LabelName: kube.OwnerReplicaSet, Name: "rs-34"},
 		},
 		56: &kube.PodInfo{
 			ObjectMeta: v1.ObjectMeta{

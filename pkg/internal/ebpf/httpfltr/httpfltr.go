@@ -44,50 +44,58 @@ func New(cfg *beyla.Config, metrics imetrics.Reporter) *Tracer {
 	}
 }
 
-func (p *Tracer) AllowPID(pid uint32, svc svc.ID) {
-	if p.bpfObjects.ValidPids != nil {
-		nsid, err := ebpfcommon.FindNamespace(int32(pid))
-		ebpfcommon.ActiveNamespaces[pid] = nsid
-		if err == nil {
-			err = p.bpfObjects.ValidPids.Put(bpfPidKeyT{Pid: pid, Ns: nsid}, uint8(1))
-			if err != nil {
-				p.log.Error("Error setting up pid in BPF space", "error", err)
-			}
-			// This is requied to ensure everything works when Beyla is running in pid=host mode.
-			// In host mode, Beyla will find the host pid, while the bpf code matches the user pid.
-			// Therefore we find all namespaced pids for the current pid we discovered and allow those too.
-			otherPids, err := ebpfcommon.FindNamespacedPids(int32(pid))
-			if err != nil {
-				p.log.Error("Error finding namespaced pids", "error", err)
-			}
-			p.log.Debug("Found namespaced pids (will contain the existing pid too)", "pids", otherPids)
-			for _, op := range otherPids {
-				err = p.bpfObjects.ValidPids.Put(bpfPidKeyT{Pid: op, Ns: nsid}, uint8(1))
-				if err != nil {
-					p.log.Error("Error setting up pid in BPF space", "error", err)
-				}
-			}
-		} else {
-			p.log.Error("Error looking up namespace", "error", err)
+// Updating these requires updating the constants below in pid.h
+// #define MAX_CONCURRENT_PIDS 3001 // estimate: 1000 concurrent processes (including children) * 3 namespaces per pid
+// #define PRIME_HASH 192053 // closest prime to 3001 * 64
+const (
+	maxConcurrentPids = 3001
+	primeHash         = 192053
+)
+
+func (p *Tracer) buildPidFilter() []uint64 {
+	result := make([]uint64, maxConcurrentPids)
+	for nsid, pids := range p.pidsFilter.CurrentPIDs(ebpfcommon.PIDTypeKProbes) {
+		for pid := range pids {
+			// skip any pids that might've been added, but are not tracked by the kprobes
+			p.log.Debug("Reallowing pid", "pid", pid, "namespace", nsid)
+
+			k := uint64((uint64(nsid) << 32) | uint64(pid))
+			h := uint32(k % primeHash)
+			segment := h / 64
+			bit := h & 63
+
+			v := result[segment]
+			v = v | (1 << bit)
+			result[segment] = v
 		}
 	}
+
+	return result
+}
+
+func (p *Tracer) rebuildValidPids() {
+	if p.bpfObjects.ValidPids != nil {
+		v := p.buildPidFilter()
+
+		p.log.Debug("number of segments in pid filter cache", "len", len(v))
+
+		for i, segment := range v {
+			err := p.bpfObjects.ValidPids.Put(uint32(i), uint64(segment))
+			if err != nil {
+				p.log.Error("Error setting up pid in BPF space, sizes of Go and BPF maps don't match", "error", err, "i", i)
+			}
+		}
+	}
+}
+
+func (p *Tracer) AllowPID(pid uint32, svc svc.ID) {
 	p.pidsFilter.AllowPID(pid, svc, ebpfcommon.PIDTypeKProbes)
+	p.rebuildValidPids()
 }
 
 func (p *Tracer) BlockPID(pid uint32) {
-	if p.bpfObjects.ValidPids != nil {
-		ns, ok := ebpfcommon.ActiveNamespaces[pid]
-		if ok {
-			err := p.bpfObjects.ValidPids.Delete(bpfPidKeyT{Pid: pid, Ns: ns})
-			if err != nil {
-				p.log.Error("Error removing pid in BPF space", "error", err)
-			}
-		} else {
-			p.log.Warn("Couldn't find active namespace", "pid", pid)
-		}
-	}
-	delete(ebpfcommon.ActiveNamespaces, pid)
 	p.pidsFilter.BlockPID(pid)
+	p.rebuildValidPids()
 }
 
 func (p *Tracer) Load() (*ebpf.CollectionSpec, error) {
@@ -225,17 +233,7 @@ func (p *Tracer) Run(ctx context.Context, eventsChan chan<- []request.Span) {
 	// At this point we now have loaded the bpf objects, which means we should insert any
 	// pids that are allowed into the bpf map
 	if p.bpfObjects.ValidPids != nil {
-		p.log.Debug("Reallowing pids")
-		for nsid, pids := range p.pidsFilter.CurrentPIDs(ebpfcommon.PIDTypeKProbes) {
-			for pid := range pids {
-				// skip any pids that might've been added, but are not tracked by the kprobes
-				p.log.Debug("Reallowing pid", "pid", pid, "namespace", nsid)
-				err := p.bpfObjects.ValidPids.Put(bpfPidKeyT{Pid: pid, Ns: nsid}, uint8(1))
-				if err != nil {
-					p.log.Error("Error setting up pid in BPF space", "pid", pid, "namespace", nsid, "error", err)
-				}
-			}
-		}
+		p.rebuildValidPids()
 	} else {
 		p.log.Error("BPF Pids map is not created yet, this is a bug.")
 	}

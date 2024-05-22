@@ -52,6 +52,14 @@ const (
 	primeHash         = 192053
 )
 
+func pidSegmentBit(k uint64) (uint32, uint32) {
+	h := uint32(k % primeHash)
+	segment := h / 64
+	bit := h & 63
+
+	return segment, bit
+}
+
 func (p *Tracer) buildPidFilter() []uint64 {
 	result := make([]uint64, maxConcurrentPids)
 	for nsid, pids := range p.pidsFilter.CurrentPIDs(ebpfcommon.PIDTypeKProbes) {
@@ -60,9 +68,8 @@ func (p *Tracer) buildPidFilter() []uint64 {
 			p.log.Debug("Reallowing pid", "pid", pid, "namespace", nsid)
 
 			k := uint64((uint64(nsid) << 32) | uint64(pid))
-			h := uint32(k % primeHash)
-			segment := h / 64
-			bit := h & 63
+
+			segment, bit := pidSegmentBit(k)
 
 			v := result[segment]
 			v |= (1 << bit)

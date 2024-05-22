@@ -42,7 +42,7 @@ func ReadTCPRequestIntoSpan(record *ringbuf.Record) (request.Span, bool, error) 
 }
 
 func isSQL(buf string) int {
-	b := strings.ToUpper(buf)
+	b := asciiToUpper(buf)
 	for _, q := range []string{"SELECT", "UPDATE", "DELETE", "INSERT", "ALTER", "CREATE", "DROP"} {
 		i := strings.Index(b, q)
 		if i >= 0 {
@@ -51,6 +51,21 @@ func isSQL(buf string) int {
 	}
 
 	return -1
+}
+
+// when the input string is invalid unicode (might happen with the ringbuffer
+// data), strings.ToUpper might return a string larger than the input string,
+// and might cause some later out of bound errors.
+func asciiToUpper(input string) string {
+	out := make([]byte, len(input))
+	for i := range input {
+		if input[i] >= 'a' && input[i] <= 'z' {
+			out[i] = input[i] - byte('a') + byte('A')
+		} else {
+			out[i] = input[i]
+		}
+	}
+	return string(out)
 }
 
 func (trace *TCPRequestInfo) reqHostInfo() (source, target string) {

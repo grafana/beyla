@@ -22,7 +22,7 @@ var one = big.NewInt(1)
 func FactorialService(workers []string, timeout time.Duration) http.HandlerFunc {
 	var clients []gprc.MultiplierClient
 	for _, workerAddr := range workers {
-		conn, err := grpc.NewClient(workerAddr,
+		conn, err := grpc.Dial(workerAddr,
 			grpc.WithTransportCredentials(insecure.NewCredentials()))
 		if err != nil {
 			log.Fatalf("can't connect to worker: %s", err)

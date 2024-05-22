@@ -101,7 +101,7 @@ func echo(rw http.ResponseWriter, port int) {
 
 func echoCall(rw http.ResponseWriter) {
 	opts := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
-	conn, err := grpc.NewClient("localhost:5051", opts...)
+	conn, err := grpc.Dial("localhost:5051", opts...)
 	if err != nil {
 		fmt.Printf("fail to dial %w\n", err)
 		rw.WriteHeader(500)

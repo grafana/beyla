@@ -58,7 +58,7 @@ func TestReadTCPRequestIntoSpan_Overflow(t *testing.T) {
 	tri := TCPRequestInfo{
 		Len: 340,
 		// this byte array contains select * from foo
-		// rest of the array ia invalid UTF-8 and would cause that strings.ToUpper
+		// rest of the array is invalid UTF-8 and would cause that strings.ToUpper
 		// returns a string longer than 256. That's why we are providing
 		// our own asciiToUpper implementation in isSQL function
 		Buf: [256]byte{

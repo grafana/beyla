@@ -4,6 +4,8 @@ discovery:
       namespace: integration-test
     - exe_path: worker
       namespace: integration-test
+    - exe_path: grpcpinger
+      namespace: integration-test
 routes:
   patterns:
     - /factorial/:rnd

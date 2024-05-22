@@ -301,22 +301,7 @@ int uprobe_ClientConn_NewStream(struct pt_regs *ctx) {
     return 0;
 }
 
-SEC("uprobe/ClientConn_Close")
-int uprobe_ClientConn_Close(struct pt_regs *ctx) {
-    bpf_dbg_printk("=== uprobe/proc grpc ClientConn.Close === ");
-
-    void *goroutine_addr = GOROUTINE_PTR(ctx);
-    bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
-
-    bpf_map_delete_elem(&ongoing_grpc_client_requests, &goroutine_addr);
-
-    return 0;
-}
-
-SEC("uprobe/ClientConn_Invoke")
-int uprobe_ClientConn_Invoke_return(struct pt_regs *ctx) {
-    bpf_dbg_printk("=== uprobe/proc grpc ClientConn.Invoke/ClientConn.NewStream return === ");
-
+static __always_inline int grpc_connect_done(struct pt_regs *ctx, void *err) {
     void *goroutine_addr = GOROUTINE_PTR(ctx);
     bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
 
@@ -347,7 +332,6 @@ int uprobe_ClientConn_Invoke_return(struct pt_regs *ctx) {
     // Get client request value pointers
     void *method_ptr = (void *)invocation->method;
     void *method_len = (void *)invocation->method_len;
-    void *err = (void *)GO_PARAM1(ctx);
 
     bpf_dbg_printk("method ptr = %lx, method_len = %d", method_ptr, method_len);
 
@@ -376,6 +360,53 @@ int uprobe_ClientConn_Invoke_return(struct pt_regs *ctx) {
 done:
     bpf_map_delete_elem(&ongoing_grpc_client_requests, &goroutine_addr);
     return 0;
+}
+
+// Same as ClientConn_Invoke, registers for the method are offset by one
+SEC("uprobe/ClientConn_NewStream")
+int uprobe_ClientConn_NewStream_return(struct pt_regs *ctx) {
+    bpf_dbg_printk("=== uprobe/proc grpc ClientConn.NewStream return === ");
+    
+    void *stream = GO_PARAM1(ctx);
+
+    if (!stream) {
+        return grpc_connect_done(ctx, (void *)1);
+    }
+
+    return 0;
+}
+
+SEC("uprobe/ClientConn_Close")
+int uprobe_ClientConn_Close(struct pt_regs *ctx) {
+    bpf_dbg_printk("=== uprobe/proc grpc ClientConn.Close === ");
+
+    void *goroutine_addr = GOROUTINE_PTR(ctx);
+    bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
+
+    bpf_map_delete_elem(&ongoing_grpc_client_requests, &goroutine_addr);
+
+    return 0;
+}
+
+SEC("uprobe/ClientConn_Invoke")
+int uprobe_ClientConn_Invoke_return(struct pt_regs *ctx) {
+    bpf_dbg_printk("=== uprobe/proc grpc ClientConn.Invoke return === ");
+    
+    void *err = GO_PARAM1(ctx);
+
+    if (err) {
+        return grpc_connect_done(ctx, err);
+    }
+
+    return 0;
+}
+
+// google.golang.org/grpc.(*clientStream).RecvMsg
+SEC("uprobe/clientStream_RecvMsg")
+int uprobe_clientStream_RecvMsg_return(struct pt_regs *ctx) {
+    bpf_dbg_printk("=== uprobe/proc grpc clientStream.RecvMsg return === ");
+    void *err = (void *)GO_PARAM1(ctx);
+    return grpc_connect_done(ctx, err);
 }
 
 // The gRPC client stream is written on another goroutine in transport loopyWriter (controlbuf.go).

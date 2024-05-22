@@ -100,6 +100,8 @@ type bpf_debugProgramSpecs struct {
 	UprobeClientConnInvoke              *ebpf.ProgramSpec `ebpf:"uprobe_ClientConn_Invoke"`
 	UprobeClientConnInvokeReturn        *ebpf.ProgramSpec `ebpf:"uprobe_ClientConn_Invoke_return"`
 	UprobeClientConnNewStream           *ebpf.ProgramSpec `ebpf:"uprobe_ClientConn_NewStream"`
+	UprobeClientConnNewStreamReturn     *ebpf.ProgramSpec `ebpf:"uprobe_ClientConn_NewStream_return"`
+	UprobeClientStreamRecvMsgReturn     *ebpf.ProgramSpec `ebpf:"uprobe_clientStream_RecvMsg_return"`
 	UprobeGrpcFramerWriteHeaders        *ebpf.ProgramSpec `ebpf:"uprobe_grpcFramerWriteHeaders"`
 	UprobeGrpcFramerWriteHeadersReturns *ebpf.ProgramSpec `ebpf:"uprobe_grpcFramerWriteHeaders_returns"`
 	UprobeServerHandleStream            *ebpf.ProgramSpec `ebpf:"uprobe_server_handleStream"`
@@ -184,6 +186,8 @@ type bpf_debugPrograms struct {
 	UprobeClientConnInvoke              *ebpf.Program `ebpf:"uprobe_ClientConn_Invoke"`
 	UprobeClientConnInvokeReturn        *ebpf.Program `ebpf:"uprobe_ClientConn_Invoke_return"`
 	UprobeClientConnNewStream           *ebpf.Program `ebpf:"uprobe_ClientConn_NewStream"`
+	UprobeClientConnNewStreamReturn     *ebpf.Program `ebpf:"uprobe_ClientConn_NewStream_return"`
+	UprobeClientStreamRecvMsgReturn     *ebpf.Program `ebpf:"uprobe_clientStream_RecvMsg_return"`
 	UprobeGrpcFramerWriteHeaders        *ebpf.Program `ebpf:"uprobe_grpcFramerWriteHeaders"`
 	UprobeGrpcFramerWriteHeadersReturns *ebpf.Program `ebpf:"uprobe_grpcFramerWriteHeaders_returns"`
 	UprobeServerHandleStream            *ebpf.Program `ebpf:"uprobe_server_handleStream"`
@@ -198,6 +202,8 @@ func (p *bpf_debugPrograms) Close() error {
 		p.UprobeClientConnInvoke,
 		p.UprobeClientConnInvokeReturn,
 		p.UprobeClientConnNewStream,
+		p.UprobeClientConnNewStreamReturn,
+		p.UprobeClientStreamRecvMsgReturn,
 		p.UprobeGrpcFramerWriteHeaders,
 		p.UprobeGrpcFramerWriteHeadersReturns,
 		p.UprobeServerHandleStream,

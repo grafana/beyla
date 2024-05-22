@@ -104,8 +104,28 @@ func testREDMetricsTracesForOldGRPCLibrary(t *testing.T, svcNs string) {
 	assert.Empty(t, sd, sd.String())
 }
 
-func TestSuiteOldGRPCGo(t *testing.T) {
-	compose, err := docker.ComposeSuite("docker-compose-old-grpc.yml", path.Join(pathOutput, "test-suite-old-grpc.log"))
+func testGRPCGoClientFailsToConnect(t *testing.T) {
+	// Eventually, Prometheus would make this query visible
+	pq := prom.Client{HostPort: prometheusHostPort}
+	var results []prom.Result
+
+	// Eventually, Prometheus would make this query visible
+	test.Eventually(t, testTimeout, func(t require.TestingT) {
+		var err error
+		results, err = pq.Query(`rpc_client_duration_seconds_count{` +
+			`service_namespace="integration-test",` +
+			`service_name="grpcpinger",` +
+			`rpc_grpc_status_code="2",` +
+			`rpc_method="/routeguide.RouteGuide/GetFeature"}`)
+		require.NoError(t, err)
+		enoughPromResults(t, results)
+		val := totalPromCount(t, results)
+		assert.LessOrEqual(t, 1, val)
+	})
+}
+
+func TestSuiteOtherGRPCGo(t *testing.T) {
+	compose, err := docker.ComposeSuite("docker-compose-other-grpc.yml", path.Join(pathOutput, "test-suite-other-grpc.log"))
 	// we are going to setup discovery directly in the configuration file
 	compose.Env = append(compose.Env, `BEYLA_EXECUTABLE_NAME=`, `BEYLA_OPEN_PORT=`)
 	lockdown := KernelLockdownMode()
@@ -119,6 +139,10 @@ func TestSuiteOldGRPCGo(t *testing.T) {
 
 	t.Run("Go RED metrics and traces: old grpc service", func(t *testing.T) {
 		testREDMetricsTracesForOldGRPCLibrary(t, "integration-test")
+	})
+
+	t.Run("Go RED metrics and traces: grpc client fails to connect", func(t *testing.T) {
+		testGRPCGoClientFailsToConnect(t)
 	})
 
 	t.Run("BPF pinning folder mounted", testBPFPinningMounted)

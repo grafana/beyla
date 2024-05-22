@@ -137,17 +137,19 @@ func (p *Tracer) GoProbes() map[string]ebpfcommon.FunctionPrograms {
 		"google.golang.org/grpc.(*ClientConn).Invoke": {
 			Required: true,
 			Start:    p.bpfObjects.UprobeClientConnInvoke,
+			End:      p.bpfObjects.UprobeClientConnInvokeReturn,
 		},
 		"google.golang.org/grpc.(*ClientConn).NewStream": {
 			Required: true,
 			Start:    p.bpfObjects.UprobeClientConnNewStream,
+			End:      p.bpfObjects.UprobeServerHandleStreamReturn,
 		},
 		"google.golang.org/grpc.(*ClientConn).Close": {
 			Required: true,
 			Start:    p.bpfObjects.UprobeClientConnClose,
 		},
 		"google.golang.org/grpc.(*clientStream).RecvMsg": {
-			End: p.bpfObjects.UprobeClientConnInvokeReturn,
+			End: p.bpfObjects.UprobeClientStreamRecvMsgReturn,
 		},
 		"google.golang.org/grpc.(*clientStream).CloseSend": {
 			End: p.bpfObjects.UprobeClientConnInvokeReturn,

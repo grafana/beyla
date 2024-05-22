@@ -408,6 +408,7 @@ static __always_inline void http2_grpc_start(http2_conn_stream_t *s_key, void *u
 }
 
 static __always_inline void http2_grpc_end(http2_conn_stream_t *stream, http2_grpc_request_t *prev_info, void *u_buf) {
+    //bpf_dbg_printk("http2/grpc end prev_info=%llx", prev_info);
     if (prev_info) {
         prev_info->end_monotime_ns = bpf_ktime_get_ns();
 
@@ -491,10 +492,14 @@ static __always_inline void process_http2_grpc_frames(pid_connection_info_t *pid
     } else {
         // We only loop 6 times looking for the stream termination. If the data packed is large we'll miss the
         // frame saying the stream closed. In that case we try this backup path.
-        if (!found_end_frame && prev_info && found_data_frame && saved_stream_id) {
-            stream.pid_conn = *pid_conn;
-            stream.stream_id = saved_stream_id;
-            found_end_frame = 1;
+        if (!found_end_frame && prev_info && saved_stream_id) {
+            if (found_data_frame ||
+                ((prev_info->type == EVENT_HTTP_REQUEST) && (direction == TCP_SEND)) ||
+                ((prev_info->type == EVENT_HTTP_CLIENT) && (direction == TCP_RECV))) {
+                stream.pid_conn = *pid_conn;
+                stream.stream_id = saved_stream_id;
+                found_end_frame = 1;
+            }
         }
         if (found_end_frame) {
             http2_grpc_end(&stream, prev_info, (void *)((u8 *)u_buf + saved_buf_pos));

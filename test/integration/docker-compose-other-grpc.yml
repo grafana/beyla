@@ -1,6 +1,7 @@
 version: '3.8'
 
 services:
+  # old gRPC
   backend:
     build:
       context: ../..
@@ -11,6 +12,7 @@ services:
     environment:
       WORKERS: "worker:5000"
 
+  # old gRPC
   worker:
     build:
       context: ../..
@@ -19,12 +21,21 @@ services:
     ports:
       - "5000:5000"
 
+  # gRPC client going nowhere
+  grpcpinger:
+    build: 
+      context: ../../
+      dockerfile: test/integration/components/grpcpinger/Dockerfile
+    image: hatest-grpcpinger
+    environment:
+      TARGET_URL: "localhost:12345"
+
   autoinstrumenter:
     build:
       context: ../..
       dockerfile: ./test/integration/components/beyla/Dockerfile
     command:
-      - --config=/configs/instrumenter-config-old-grpc.yml
+      - --config=/configs/instrumenter-config-other-grpc.yml
     volumes:
       - ./configs/:/configs
       - ./system/sys/kernel/security${SECURITY_CONFIG_SUFFIX}:/sys/kernel/security

@@ -86,7 +86,7 @@ func newClient(po *pingOpts) (pb.RouteGuideClient, io.Closer, error) {
 		opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	}
 
-	conn, err := grpc.Dial(po.serverAddr, opts...)
+	conn, err := grpc.NewClient(po.serverAddr, opts...)
 	if err != nil {
 		logs.Error("fail to dial", err)
 		return nil, conn, err

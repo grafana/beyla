@@ -53,7 +53,7 @@ func printFeatureWithClient(point *pb.Point, counter int) {
 		opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	}
 
-	conn, err := grpc.Dial(*serverAddr, opts...)
+	conn, err := grpc.NewClient(*serverAddr, opts...)
 	if err != nil {
 		slog.Error("fail to dial", err)
 		os.Exit(-1)
@@ -255,7 +255,7 @@ func main() {
 		opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	}
 
-	conn, err := grpc.Dial(*serverAddr, opts...)
+	conn, err := grpc.NewClient(*serverAddr, opts...)
 	if err != nil {
 		slog.Error("fail to dial", err)
 		os.Exit(-1)

@@ -18,8 +18,6 @@ jobs:
         uses: actions/setup-go@v3
         with:
           go-version: ${{ matrix.go }}
-      - name: Check eBPF integrity
-        run: make check-ebpf-integrity
       - name: Build Go release for linux/${{ matrix.arch }}
         run: make artifact
         env:

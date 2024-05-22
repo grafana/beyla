@@ -110,7 +110,7 @@ func pingHandler(rw http.ResponseWriter, req *http.Request) {
 
 func gpingHandler(rw http.ResponseWriter, _ *http.Request) {
 	opts := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
-	conn, err := grpc.Dial("localhost:5051", opts...)
+	conn, err := grpc.NewClient("localhost:5051", opts...)
 	if err != nil {
 		slog.Error("fail to dial", err)
 		os.Exit(-1)

@@ -296,7 +296,7 @@ spec:
       hostPID: true # mandatory!
       containers:
         - name: beyla
-          image: grafana/beyla:1.2
+          image: grafana/beyla:latest
           imagePullPolicy: IfNotPresent
           securityContext:
             privileged: true # mandatory!

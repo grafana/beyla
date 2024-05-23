@@ -15,7 +15,7 @@ Network metrics is an [experimental](/docs/release-life-cycle/) under developmen
 
 {{% admonition type="note" %}}
 This tutorial describes how to deploy Beyla in Kubernetes from scratch.
-If you are interested on using Helm, read [Deploy Beyla in Kubernetes with Helm]({{< relref "../setup/kubernetes-helm" >}}).
+To use Helm, consult the [Deploy Beyla in Kubernetes with Helm]({{< relref "../setup/kubernetes-helm" >}}) documentation.
 {{% /admonition %}}
 
 # Beyla network metrics quickstart

@@ -13,6 +13,11 @@ keywords:
 Network metrics is an [experimental](/docs/release-life-cycle/) under development feature, expect breaking changes.
 {{% /admonition %}}
 
+{{% admonition type="note" %}}
+This tutorial describes how to deploy Beyla in Kubernetes from scratch.
+To use Helm, consult the [Deploy Beyla in Kubernetes with Helm]({{< relref "../setup/kubernetes-helm" >}}) documentation.
+{{% /admonition %}}
+
 # Beyla network metrics quickstart
 
 Beyla can generate network metrics in any environment (physical host, virtual host, or container). While the feature is in experimental development, it is recommended to use a Kubernetes environment, as Beyla is able to decorate each metric with the metadata of the source and destination Kubernetes entities.
@@ -226,7 +231,9 @@ The `attributes.select.<metric-name>.include` YAML subsection makes it possible 
 network:
   enable: true
 attributes:
-  allow:
+  kubernetes:
+    enable: true
+  select:
     beyla.network.flow.bytes:
       include:
       - k8s.src.owner.name
@@ -247,21 +254,26 @@ The `cidrs` YAML subsection in `network` (or the `BEYLA_NETWORK_CIDRS` environme
 subnets in [CIDR notation](https://en.wikipedia.org/wiki/Classless_Inter-Domain_Routing), in both IPv4 and IPv6 format.
 
 The existence of the `cidrs` section leaves the `src.address` and `dst.address` fields untouched,
-and adds the `src.cidr` and `dst.cidr` attributes. Don't forget to add them to the `attributes.allow`
+and adds the `src.cidr` and `dst.cidr` attributes. Don't forget to add them to the `attributes.select`
 section:
 
 ```yaml
 network:
   enable: true
-  allowed_attributes:
-    - k8s.src.owner.name
-    - k8s.src.namespace
-    - k8s.dst.owner.name
-    - k8s.dst.namespace
-    - src.cidr
-    - dst.cidr
   cidrs:
     - 10.10.0.0/24
     - 10.0.0.0/8
     - 10.30.0.0/16
+attributes:
+  kubernetes:
+    enable: true
+  select:
+    beyla_network_flow_bytes:
+      include:
+          - k8s.src.owner.name
+          - k8s.src.namespace
+          - k8s.dst.owner.name
+          - k8s.dst.namespace
+          - src.cidr
+          - dst.cidr
 ```

@@ -71,13 +71,20 @@ For example:
 ```yaml
 network:
   enable: true
-  allowed_attributes:
-    - k8s.src.owner.name
-    - k8s.src.namespace
-    - k8s.dst.owner.name
-    - k8s.dst.namespace
-    - k8s.cluster.name
+attributes:
+  kubernetes:
+    enable: true
+  select:
+    beyla_network_flow_bytes:
+      include:  
+        - k8s.src.owner.name
+        - k8s.src.namespace
+        - k8s.dst.owner.name
+        - k8s.dst.namespace
+        - k8s.cluster.name
 ```
 
 In this example, the bytes metric is the aggregated by the source and destination owners. This is, all the
 pods from a given Deployment/StatefulSet/ReplicaSet/DaemonSet.
+
+For more information about the `attributes.select` section, check the [Configuration options]({{< relref "../configure/options" >}}).

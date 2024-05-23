@@ -44,8 +44,16 @@ func getDefinitions(groups AttrGroups) map[Section]AttrReportGroup {
 		Disabled: !promEnabled,
 		Attributes: map[attr.Name]Default{
 			attr.TargetInstance:   true,
-			attr.ServiceName:      true,
 			attr.ServiceNamespace: true,
+		},
+	}
+	// ServiceName is reported both as resource and metrics attribute, as
+	// the OTEL definition requires that it is reported as resource attribute
+	// but Grafana Cloud takes int from the metric
+	var appAttributes = AttrReportGroup{
+		SubGroups: []*AttrReportGroup{&prometheusAttributes},
+		Attributes: map[attr.Name]Default{
+			attr.ServiceName: true,
 		},
 	}
 
@@ -159,19 +167,19 @@ func getDefinitions(groups AttrGroups) map[Section]AttrReportGroup {
 			},
 		},
 		HTTPServerDuration.Section: {
-			SubGroups: []*AttrReportGroup{&prometheusAttributes, &appKubeAttributes, &httpCommon, &serverInfo},
+			SubGroups: []*AttrReportGroup{&appAttributes, &appKubeAttributes, &httpCommon, &serverInfo},
 		},
 		HTTPServerRequestSize.Section: {
-			SubGroups: []*AttrReportGroup{&prometheusAttributes, &appKubeAttributes, &httpCommon, &serverInfo},
+			SubGroups: []*AttrReportGroup{&appAttributes, &appKubeAttributes, &httpCommon, &serverInfo},
 		},
 		HTTPClientDuration.Section: {
-			SubGroups: []*AttrReportGroup{&prometheusAttributes, &appKubeAttributes, &httpCommon, &httpClientInfo},
+			SubGroups: []*AttrReportGroup{&appAttributes, &appKubeAttributes, &httpCommon, &httpClientInfo},
 		},
 		HTTPClientRequestSize.Section: {
-			SubGroups: []*AttrReportGroup{&prometheusAttributes, &appKubeAttributes, &httpCommon, &httpClientInfo},
+			SubGroups: []*AttrReportGroup{&appAttributes, &appKubeAttributes, &httpCommon, &httpClientInfo},
 		},
 		RPCClientDuration.Section: {
-			SubGroups: []*AttrReportGroup{&prometheusAttributes, &appKubeAttributes, &grpcClientInfo},
+			SubGroups: []*AttrReportGroup{&appAttributes, &appKubeAttributes, &grpcClientInfo},
 			Attributes: map[attr.Name]Default{
 				attr.RPCMethod:         true,
 				attr.RPCSystem:         true,
@@ -179,7 +187,7 @@ func getDefinitions(groups AttrGroups) map[Section]AttrReportGroup {
 			},
 		},
 		RPCServerDuration.Section: {
-			SubGroups: []*AttrReportGroup{&prometheusAttributes, &appKubeAttributes, &serverInfo},
+			SubGroups: []*AttrReportGroup{&appAttributes, &appKubeAttributes, &serverInfo},
 			Attributes: map[attr.Name]Default{
 				attr.RPCMethod:         true,
 				attr.RPCSystem:         true,
@@ -190,7 +198,7 @@ func getDefinitions(groups AttrGroups) map[Section]AttrReportGroup {
 			},
 		},
 		SQLClientDuration.Section: {
-			SubGroups: []*AttrReportGroup{&prometheusAttributes, &appKubeAttributes},
+			SubGroups: []*AttrReportGroup{&appAttributes, &appKubeAttributes},
 			Attributes: map[attr.Name]Default{
 				attr.DBOperation: true,
 			},

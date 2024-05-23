@@ -12,6 +12,7 @@ import (
 
 // SpanOTELGetters returns the attributes.Getter function that returns the
 // OTEL attribute.KeyValue of a given attribute name.
+// nolint:cyclop
 func SpanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValue], bool) {
 	var getter attributes.Getter[*Span, attribute.KeyValue]
 	switch name {
@@ -35,6 +36,8 @@ func SpanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValu
 		getter = func(_ *Span) attribute.KeyValue { return semconv.RPCSystemGRPC }
 	case attr.RPCGRPCStatusCode:
 		getter = func(s *Span) attribute.KeyValue { return semconv.RPCGRPCStatusCodeKey.Int(s.Status) }
+	case attr.ServiceName:
+		getter = func(s *Span) attribute.KeyValue { return semconv.ServiceName(s.ServiceID.Name) }
 	case attr.DBOperation:
 		getter = func(span *Span) attribute.KeyValue { return semconv.DBOperation(span.Method) }
 	}

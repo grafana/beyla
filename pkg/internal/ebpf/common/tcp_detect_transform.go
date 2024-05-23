@@ -36,7 +36,7 @@ func ReadTCPRequestIntoSpan(record *ringbuf.Record) (request.Span, bool, error) 
 	if sqlIndex >= 0 {
 		return TCPToSQLToSpan(&event, buf[sqlIndex:]), false, nil
 	} else if isHTTP2(b, &event) {
-		MisclassifiedEvents <- MisclassifiedEvent{EventType: EventTypeKHTTP2, TcpInfo: &event}
+		MisclassifiedEvents <- MisclassifiedEvent{EventType: EventTypeKHTTP2, TCPInfo: &event}
 	}
 
 	return request.Span{}, true, nil // ignore if we couldn't parse it

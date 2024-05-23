@@ -313,13 +313,15 @@ func (p *Tracer) lookForTimeouts(ticker *time.Ticker, eventsChan chan<- []reques
 
 func (p *Tracer) watchForMisclassifedEvents() {
 	for e := range ebpfcommon.MisclassifiedEvents {
-		switch e.EventType {
-		case ebpfcommon.EventTypeKHTTP2:
+		if e.EventType == ebpfcommon.EventTypeKHTTP2 {
 			if p.bpfObjects.OngoingHttp2Connections != nil {
-				p.bpfObjects.OngoingHttp2Connections.Put(
-					&bpfPidConnectionInfoT{Conn: bpfConnectionInfoT(e.TcpInfo.ConnInfo), Pid: e.TcpInfo.Pid.HostPid},
-					uint8(e.TcpInfo.Ssl),
+				err := p.bpfObjects.OngoingHttp2Connections.Put(
+					&bpfPidConnectionInfoT{Conn: bpfConnectionInfoT(e.TCPInfo.ConnInfo), Pid: e.TCPInfo.Pid.HostPid},
+					uint8(e.TCPInfo.Ssl),
 				)
+				if err != nil {
+					p.log.Debug("error writing HTTP2/gRPC connection info", "error", err)
+				}
 			}
 		}
 	}

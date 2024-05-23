@@ -90,7 +90,7 @@ type Filter struct {
 
 type MisclassifiedEvent struct {
 	EventType int
-	TcpInfo   *TCPRequestInfo
+	TCPInfo   *TCPRequestInfo
 }
 
 var MisclassifiedEvents = make(chan MisclassifiedEvent)

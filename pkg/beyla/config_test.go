@@ -248,10 +248,11 @@ otel_metrics_export:
 attributes:
   kubernetes:
     enable: true
-  allow:
+  select:
     beyla_network_flow_bytes:
-    - k8s.src.name
-    - k8s.dst.name
+      include:
+        - k8s.src.name
+        - k8s.dst.name
 network:
   enable: true
 `)

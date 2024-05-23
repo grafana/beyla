@@ -22,17 +22,22 @@ Example YAML:
 ```yaml
 network:
   enable: true
-  allowed_attributes:
-    - k8s.src.owner.name
-    - k8s.src.namespace
-    - k8s.dst.owner.name
-    - k8s.dst.namespace
-    - src.cidr
-    - dst.cidr
   cidrs:
     - 10.10.0.0/24
     - 10.0.0.0/8
     - 10.30.0.0/16
+attributes:
+  kubernetes:
+    enable: true
+  select:
+    beyla_network_flow_bytes:
+      include:
+      - k8s.src.owner.name
+      - k8s.src.namespace
+      - k8s.dst.owner.name
+      - k8s.dst.namespace
+      - src.cidr
+      - dst.cidr
 otel_metrics_export:
   endpoint: http://localhost:4318
 ```

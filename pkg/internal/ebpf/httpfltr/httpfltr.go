@@ -247,6 +247,7 @@ func (p *Tracer) Run(ctx context.Context, eventsChan chan<- []request.Span) {
 
 	timeoutTicker := time.NewTicker(2 * time.Second)
 
+	go p.watchForMisclassifedEvents()
 	go p.lookForTimeouts(timeoutTicker, eventsChan)
 	defer timeoutTicker.Stop()
 
@@ -305,6 +306,20 @@ func (p *Tracer) lookForTimeouts(ticker *time.Ticker, eventsChan chan<- []reques
 						p.log.Debug("Error deleting ongoing request", "error", err)
 					}
 				}
+			}
+		}
+	}
+}
+
+func (p *Tracer) watchForMisclassifedEvents() {
+	for e := range ebpfcommon.MisclassifiedEvents {
+		switch e.EventType {
+		case ebpfcommon.EventTypeKHTTP2:
+			if p.bpfObjects.OngoingHttp2Connections != nil {
+				p.bpfObjects.OngoingHttp2Connections.Put(
+					&bpfPidConnectionInfoT{Conn: bpfConnectionInfoT(e.TcpInfo.ConnInfo), Pid: e.TcpInfo.Pid.HostPid},
+					uint8(e.TcpInfo.Ssl),
+				)
 			}
 		}
 	}

@@ -29,6 +29,7 @@ const (
 )
 
 var hdec = hpack.NewDecoder(0, nil)
+var hdecRet = hpack.NewDecoder(0, nil)
 
 // not all requests for a given stream specify the protocol, but one must
 // we remember if we see grpc mentioned and tag the rest of the streams for
@@ -109,7 +110,7 @@ func readRetMetaFrame(conn *BPFConnInfo, fr *http2.Framer, hf *http2.HeadersFram
 	status := 0
 	proto := defaultProtocol(conn)
 
-	hdec.SetEmitFunc(func(hf hpack.HeaderField) {
+	hdecRet.SetEmitFunc(func(hf hpack.HeaderField) {
 		hfKey := strings.ToLower(hf.Name)
 		// grpc requests may have :status and grpc-status. :status will be HTTP code.
 		// we prefer the grpc one if it exists, it's always later since : tagged headers
@@ -125,11 +126,11 @@ func readRetMetaFrame(conn *BPFConnInfo, fr *http2.Framer, hf *http2.HeadersFram
 		}
 	})
 	// Lose reference to MetaHeadersFrame:
-	defer hdec.SetEmitFunc(func(_ hpack.HeaderField) {})
+	defer hdecRet.SetEmitFunc(func(_ hpack.HeaderField) {})
 
 	for {
 		frag := hf.HeaderBlockFragment()
-		if _, err := hdec.Write(frag); err != nil {
+		if _, err := hdecRet.Write(frag); err != nil {
 			return status, proto
 		}
 
@@ -220,22 +221,23 @@ func ReadHTTP2InfoIntoSpan(record *ringbuf.Record) (request.Span, bool, error) {
 	// we can and terminate without an error when things fail to decode because of
 	// partial buffers.
 
-	retF, _ := retFramer.ReadFrame()
-
 	status := 0
 	eventType := HTTP2
-
-	if ff, ok := retF.(*http2.HeadersFrame); ok {
-		status, eventType = readRetMetaFrame((*BPFConnInfo)(&event.ConnInfo), retFramer, ff)
-	}
 
 	f, _ := framer.ReadFrame()
 
 	if ff, ok := f.(*http2.HeadersFrame); ok {
 		method, path, proto := readMetaFrame((*BPFConnInfo)(&event.ConnInfo), framer, ff)
 
-		if eventType != GRPC && proto == GRPC {
-			eventType = proto
+		retF, _ := retFramer.ReadFrame()
+
+		if ff, ok := retF.(*http2.HeadersFrame); ok {
+			status, eventType = readRetMetaFrame((*BPFConnInfo)(&event.ConnInfo), retFramer, ff)
+		}
+
+		// if we don't have a path or much else, assume gRPC if it's not ssl. HTTP2 is almost always SSL.
+		if eventType != GRPC && (proto == GRPC || (path == "" && event.Ssl == 0)) {
+			eventType = GRPC
 			status = http2grpcStatus(status)
 		}
 

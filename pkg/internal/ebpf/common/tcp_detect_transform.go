@@ -8,12 +8,11 @@ import (
 
 	"github.com/cilium/ebpf/ringbuf"
 	trace2 "go.opentelemetry.io/otel/trace"
+	"golang.org/x/net/http2"
 
 	"github.com/grafana/beyla/pkg/internal/request"
 	"github.com/grafana/beyla/pkg/internal/sqlprune"
 )
-
-type TCPRequestInfo bpfTcpReqT
 
 func ReadTCPRequestIntoSpan(record *ringbuf.Record) (request.Span, bool, error) {
 	var event TCPRequestInfo
@@ -36,6 +35,8 @@ func ReadTCPRequestIntoSpan(record *ringbuf.Record) (request.Span, bool, error) 
 	sqlIndex := isSQL(buf)
 	if sqlIndex >= 0 {
 		return TCPToSQLToSpan(&event, buf[sqlIndex:]), false, nil
+	} else if isHTTP2(b, &event) {
+		MisclassifiedEvents <- MisclassifiedEvent{EventType: EventTypeKHTTP2, TcpInfo: &event}
 	}
 
 	return request.Span{}, true, nil // ignore if we couldn't parse it
@@ -114,4 +115,17 @@ func TCPToSQLToSpan(trace *TCPRequestInfo, s string) request.Span {
 		},
 		Statement: sql,
 	}
+}
+
+func isHTTP2(data []uint8, event *TCPRequestInfo) bool {
+	framer := byteFramer(data)
+
+	f, _ := framer.ReadFrame()
+
+	if ff, ok := f.(*http2.HeadersFrame); ok {
+		method, path, _ := readMetaFrame((*BPFConnInfo)(&event.ConnInfo), framer, ff)
+		return method != "" || path != ""
+	}
+
+	return false
 }

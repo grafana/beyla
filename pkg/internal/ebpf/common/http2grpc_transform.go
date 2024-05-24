@@ -11,8 +11,8 @@ import (
 	lru "github.com/hashicorp/golang-lru/v2"
 	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/net/http2"
-	"golang.org/x/net/http2/hpack"
 
+	"github.com/grafana/beyla/pkg/internal/ebpf/bhpack"
 	"github.com/grafana/beyla/pkg/internal/request"
 	"github.com/grafana/beyla/pkg/internal/svc"
 )
@@ -28,13 +28,16 @@ const (
 	GRPC
 )
 
-var hdec = hpack.NewDecoder(0, nil)
-var hdecRet = hpack.NewDecoder(0, nil)
+type h2Connection struct {
+	hdec     *bhpack.Decoder
+	hdecRet  *bhpack.Decoder
+	protocol Protocol
+}
 
 // not all requests for a given stream specify the protocol, but one must
 // we remember if we see grpc mentioned and tag the rest of the streams for
 // a given connection as grpc. default assumes plain HTTP2
-var activeGRPCConnections, _ = lru.New[BPFConnInfo, Protocol](1024)
+var activeGRPCConnections, _ = lru.New[BPFConnInfo, h2Connection](1024 * 10)
 
 func byteFramer(data []uint8) *http2.Framer {
 	buf := bytes.NewBuffer(data)
@@ -43,25 +46,44 @@ func byteFramer(data []uint8) *http2.Framer {
 	return fr
 }
 
-func defaultProtocol(conn *BPFConnInfo) Protocol {
-	proto, ok := activeGRPCConnections.Get(*conn)
+func getOrInitH2Conn(conn *BPFConnInfo) *h2Connection {
+	v, ok := activeGRPCConnections.Get(*conn)
+
 	if !ok {
-		proto = HTTP2
+		h := h2Connection{
+			hdec:     bhpack.NewDecoder(0, nil),
+			hdecRet:  bhpack.NewDecoder(0, nil),
+			protocol: HTTP2,
+		}
+		activeGRPCConnections.Add(*conn, h)
+		v, ok = activeGRPCConnections.Get(*conn)
+		if !ok {
+			return nil
+		}
 	}
 
-	return proto
+	return &v
 }
 
 func protocolIsGRPC(conn *BPFConnInfo) {
-	activeGRPCConnections.Add(*conn, GRPC)
+	h2c := getOrInitH2Conn(conn)
+	if h2c != nil {
+		h2c.protocol = GRPC
+	}
 }
 
-func readMetaFrame(conn *BPFConnInfo, fr *http2.Framer, hf *http2.HeadersFrame) (string, string, Protocol) {
+func readMetaFrame(conn *BPFConnInfo, fr *http2.Framer, hf *http2.HeadersFrame) (string, string, string) {
+	h2c := getOrInitH2Conn(conn)
+
 	method := ""
 	path := ""
-	proto := defaultProtocol(conn)
+	contentType := ""
 
-	hdec.SetEmitFunc(func(hf hpack.HeaderField) {
+	if h2c == nil {
+		return method, path, contentType
+	}
+
+	h2c.hdec.SetEmitFunc(func(hf bhpack.HeaderField) {
 		hfKey := strings.ToLower(hf.Name)
 		switch hfKey {
 		case ":method":
@@ -69,30 +91,30 @@ func readMetaFrame(conn *BPFConnInfo, fr *http2.Framer, hf *http2.HeadersFrame) 
 		case ":path":
 			path = hf.Value
 		case "content-type":
-			if strings.ToLower(hf.Value) == "application/grpc" {
+			contentType = strings.ToLower(hf.Value)
+			if contentType == "application/grpc" {
 				protocolIsGRPC(conn)
-				proto = GRPC
 			}
 		}
 	})
 	// Lose reference to MetaHeadersFrame:
-	defer hdec.SetEmitFunc(func(_ hpack.HeaderField) {})
+	defer h2c.hdec.SetEmitFunc(func(_ bhpack.HeaderField) {})
 
 	for {
 		frag := hf.HeaderBlockFragment()
-		if _, err := hdec.Write(frag); err != nil {
-			return method, path, proto
+		if _, err := h2c.hdec.Write(frag); err != nil {
+			return method, path, contentType
 		}
 
 		if hf.HeadersEnded() {
 			break
 		}
 		if _, err := fr.ReadFrame(); err != nil {
-			return method, path, proto
+			return method, path, contentType
 		}
 	}
 
-	return method, path, proto
+	return method, path, contentType
 }
 
 func http2grpcStatus(status int) int {
@@ -106,11 +128,17 @@ func http2grpcStatus(status int) int {
 	return 2 // Unknown
 }
 
-func readRetMetaFrame(conn *BPFConnInfo, fr *http2.Framer, hf *http2.HeadersFrame) (int, Protocol) {
-	status := 0
-	proto := defaultProtocol(conn)
+func readRetMetaFrame(conn *BPFConnInfo, fr *http2.Framer, hf *http2.HeadersFrame) (int, bool) {
+	h2c := getOrInitH2Conn(conn)
 
-	hdecRet.SetEmitFunc(func(hf hpack.HeaderField) {
+	status := 0
+	grpc := false
+
+	if h2c == nil {
+		return status, grpc
+	}
+
+	h2c.hdecRet.SetEmitFunc(func(hf bhpack.HeaderField) {
 		hfKey := strings.ToLower(hf.Name)
 		// grpc requests may have :status and grpc-status. :status will be HTTP code.
 		// we prefer the grpc one if it exists, it's always later since : tagged headers
@@ -118,31 +146,30 @@ func readRetMetaFrame(conn *BPFConnInfo, fr *http2.Framer, hf *http2.HeadersFram
 		switch hfKey {
 		case ":status":
 			status, _ = strconv.Atoi(hf.Value)
-			proto = HTTP2
 		case "grpc-status":
 			status, _ = strconv.Atoi(hf.Value)
 			protocolIsGRPC(conn)
-			proto = GRPC
+			grpc = true
 		}
 	})
 	// Lose reference to MetaHeadersFrame:
-	defer hdecRet.SetEmitFunc(func(_ hpack.HeaderField) {})
+	defer h2c.hdecRet.SetEmitFunc(func(_ bhpack.HeaderField) {})
 
 	for {
 		frag := hf.HeaderBlockFragment()
-		if _, err := hdecRet.Write(frag); err != nil {
-			return status, proto
+		if _, err := h2c.hdecRet.Write(frag); err != nil {
+			return status, grpc
 		}
 
 		if hf.HeadersEnded() {
 			break
 		}
 		if _, err := fr.ReadFrame(); err != nil {
-			return status, proto
+			return status, grpc
 		}
 	}
 
-	return status, proto
+	return status, grpc
 }
 
 var genericServiceID = svc.ID{SDKLanguage: svc.InstrumentableGeneric}
@@ -204,6 +231,7 @@ func (event *BPFHTTP2Info) hostInfo() (source, target string) {
 	return src.String(), dst.String()
 }
 
+// nolint:cyclop
 func ReadHTTP2InfoIntoSpan(record *ringbuf.Record) (request.Span, bool, error) {
 	var event BPFHTTP2Info
 
@@ -224,32 +252,47 @@ func ReadHTTP2InfoIntoSpan(record *ringbuf.Record) (request.Span, bool, error) {
 	status := 0
 	eventType := HTTP2
 
-	f, _ := framer.ReadFrame()
+	for {
+		f, err := framer.ReadFrame()
 
-	if ff, ok := f.(*http2.HeadersFrame); ok {
-		method, path, proto := readMetaFrame((*BPFConnInfo)(&event.ConnInfo), framer, ff)
-
-		retF, _ := retFramer.ReadFrame()
-
-		if ff, ok := retF.(*http2.HeadersFrame); ok {
-			status, eventType = readRetMetaFrame((*BPFConnInfo)(&event.ConnInfo), retFramer, ff)
+		if err != nil {
+			break
 		}
 
-		// if we don't have a path or much else, assume gRPC if it's not ssl. HTTP2 is almost always SSL.
-		if eventType != GRPC && (proto == GRPC || (path == "" && event.Ssl == 0)) {
-			eventType = GRPC
-			status = http2grpcStatus(status)
-		}
+		if ff, ok := f.(*http2.HeadersFrame); ok {
+			method, path, contentType := readMetaFrame((*BPFConnInfo)(&event.ConnInfo), framer, ff)
 
-		peer := ""
-		host := ""
-		if event.ConnInfo.S_port != 0 || event.ConnInfo.D_port != 0 {
-			source, target := event.hostInfo()
-			host = target
-			peer = source
-		}
+			grpcInStatus := false
 
-		return http2InfoToSpan(&event, method, path, peer, host, status, eventType), false, nil
+			for {
+				retF, err := retFramer.ReadFrame()
+
+				if err != nil {
+					break
+				}
+
+				if ff, ok := retF.(*http2.HeadersFrame); ok {
+					status, grpcInStatus = readRetMetaFrame((*BPFConnInfo)(&event.ConnInfo), retFramer, ff)
+					break
+				}
+			}
+
+			// if we don't have protocol, assume gRPC if it's not ssl. HTTP2 is almost always SSL.
+			if eventType != GRPC && (grpcInStatus || contentType == "application/grpc" || (contentType == "" && event.Ssl == 0)) {
+				eventType = GRPC
+				status = http2grpcStatus(status)
+			}
+
+			peer := ""
+			host := ""
+			if event.ConnInfo.S_port != 0 || event.ConnInfo.D_port != 0 {
+				source, target := event.hostInfo()
+				host = target
+				peer = source
+			}
+
+			return http2InfoToSpan(&event, method, path, peer, host, status, eventType), false, nil
+		}
 	}
 
 	return request.Span{}, true, nil // ignore if we couldn't parse it

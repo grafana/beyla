@@ -120,11 +120,17 @@ func TCPToSQLToSpan(trace *TCPRequestInfo, s string) request.Span {
 func isHTTP2(data []uint8, event *TCPRequestInfo) bool {
 	framer := byteFramer(data)
 
-	f, _ := framer.ReadFrame()
+	for {
+		f, err := framer.ReadFrame()
 
-	if ff, ok := f.(*http2.HeadersFrame); ok {
-		method, path, _ := readMetaFrame((*BPFConnInfo)(&event.ConnInfo), framer, ff)
-		return method != "" || path != ""
+		if err != nil {
+			break
+		}
+
+		if ff, ok := f.(*http2.HeadersFrame); ok {
+			method, path, _ := readMetaFrame((*BPFConnInfo)(&event.ConnInfo), framer, ff)
+			return method != "" || path != ""
+		}
 	}
 
 	return false

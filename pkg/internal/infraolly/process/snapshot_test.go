@@ -1,25 +1,26 @@
 // Copyright 2020 New Relic Corporation. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0
-//
-//nolint:goerr113
+//go:build linux
+
 package process
 
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/grafana/beyla/pkg/internal/helpers"
 )
 
 func TestLinuxProcess_CmdLine(t *testing.T) {
 	hostProc := os.Getenv("HOST_PROC")
 	defer os.Setenv("HOST_PROC", hostProc)
-	tmpDir, err := ioutil.TempDir("", "proc")
+	tmpDir, err := os.MkdirTemp("", "proc")
 	require.NoError(t, err)
 	processDir := path.Join(tmpDir, "12345")
 	require.NoError(t, os.MkdirAll(processDir, 0o755))
@@ -40,7 +41,7 @@ func TestLinuxProcess_CmdLine(t *testing.T) {
 		},
 	}
 	for _, tc := range testCases {
-		require.NoError(t, ioutil.WriteFile(path.Join(processDir, "cmdline"), tc.rawProcCmdline, 0o600))
+		require.NoError(t, os.WriteFile(path.Join(processDir, "cmdline"), tc.rawProcCmdline, 0o600))
 		lp := linuxProcess{pid: 12345}
 		actual, err := lp.CmdLine(true)
 		assert.NoError(t, err)
@@ -51,7 +52,7 @@ func TestLinuxProcess_CmdLine(t *testing.T) {
 func TestLinuxProcess_CmdLine_NoArgs(t *testing.T) {
 	hostProc := os.Getenv("HOST_PROC")
 	defer os.Setenv("HOST_PROC", hostProc)
-	tmpDir, err := ioutil.TempDir("", "proc")
+	tmpDir, err := os.MkdirTemp("", "proc")
 	require.NoError(t, err)
 	processDir := path.Join(tmpDir, "12345")
 	require.NoError(t, os.MkdirAll(processDir, 0o755))
@@ -72,7 +73,7 @@ func TestLinuxProcess_CmdLine_NoArgs(t *testing.T) {
 		},
 	}
 	for _, tc := range testCases {
-		require.NoError(t, ioutil.WriteFile(path.Join(processDir, "cmdline"), tc.rawProcCmdline, 0o600))
+		require.NoError(t, os.WriteFile(path.Join(processDir, "cmdline"), tc.rawProcCmdline, 0o600))
 		lp := linuxProcess{pid: 12345}
 		actual, err := lp.CmdLine(false)
 		assert.NoError(t, err)
@@ -85,7 +86,7 @@ func TestLinuxProcess_CmdLine_NoArgs(t *testing.T) {
 func TestLinuxProcess_CmdLine_NotStandard(t *testing.T) {
 	hostProc := os.Getenv("HOST_PROC")
 	defer os.Setenv("HOST_PROC", hostProc)
-	tmpDir, err := ioutil.TempDir("", "proc")
+	tmpDir, err := os.MkdirTemp("", "proc")
 	require.NoError(t, err)
 	processDir := path.Join(tmpDir, "12345")
 	require.NoError(t, os.MkdirAll(processDir, 0o755))
@@ -103,7 +104,7 @@ func TestLinuxProcess_CmdLine_NotStandard(t *testing.T) {
 		},
 	}
 	for _, tc := range testCases {
-		require.NoError(t, ioutil.WriteFile(path.Join(processDir, "cmdline"), tc.rawProcCmdline, 0o600))
+		require.NoError(t, os.WriteFile(path.Join(processDir, "cmdline"), tc.rawProcCmdline, 0o600))
 		lp := linuxProcess{pid: 12345}
 
 		// Testing both the cases with and without command line stripping
@@ -227,11 +228,10 @@ func Test_usernameFromGetent(t *testing.T) { //nolint:paralleltest
 		},
 	}
 
-	//nolint:paralleltest
 	for i := range testCases {
 		testCase := testCases[i]
 		t.Run(testCase.name, func(t *testing.T) {
-			getEntCommand = func(command string, stdin string, args ...string) (string, error) {
+			getEntCommand = func(_, _ string, _ ...string) (string, error) {
 				return testCase.getEntResult, testCase.getEntError
 			}
 			defer func() {

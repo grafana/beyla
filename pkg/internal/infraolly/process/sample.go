@@ -1,4 +1,12 @@
+//go:build linux
+
 package process
+
+import "log/slog"
+
+func pslog() *slog.Logger {
+	return slog.With("component", "process.Sampler")
+}
 
 type Sample struct {
 	ProcessID        int32

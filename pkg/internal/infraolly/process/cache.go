@@ -11,7 +11,7 @@ import (
 
 type cacheEntry struct {
 	process    *linuxProcess
-	lastSample *Sample // The last event we generated for this process, so we can re-use metadata which doesn't change
+	lastSample *Sample // The last event we generated for this process, so we can re-use metadata that doesn't change
 }
 
 // removeUntilLen removes the oldest entries until the cache reaches the given length.

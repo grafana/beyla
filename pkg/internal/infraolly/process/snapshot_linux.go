@@ -11,7 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/newrelic/infrastructure-agent/pkg/helpers"
 	"github.com/pkg/errors"
 	"github.com/shirou/gopsutil/v3/cpu"
 	"github.com/shirou/gopsutil/v3/process"
@@ -76,7 +75,7 @@ func getLinuxProcess(pid int32, previous *linuxProcess, privileged bool) (*linux
 	// Reusing information from the last snapshot for the same process
 	// If the name or the PPID changed from the previous, we'll consider this sample is just
 	// a new process that shares the PID with an old one.
-	// if a process with the same CommandName but different CmdLine or User name
+	// if a process with the same Command but different CmdLine or User name
 	// occupies the same PID, the cache won't refresh the CmdLine and Username.
 	if previous == nil || procStats.command != previous.Command() || procStats.ppid != previous.Ppid() {
 		gops, err = process.NewProcess(pid)

@@ -6,7 +6,6 @@
 package process
 
 import (
-	"github.com/newrelic/infrastructure-agent/pkg/metrics/types"
 	"github.com/stretchr/testify/mock"
 )
 

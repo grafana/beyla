@@ -10,7 +10,6 @@ import (
 
 	"github.com/shirou/gopsutil/v3/process"
 
-	"github.com/newrelic/infrastructure-agent/pkg/helpers"
 )
 
 // darwinProcess is an implementation of the process.Snapshot interface for darwin hosts.

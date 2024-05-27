@@ -12,18 +12,6 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
-	"github.com/newrelic/infrastructure-agent/internal/agent"
-	"github.com/newrelic/infrastructure-agent/internal/agent/mocks"
-	agentTypes "github.com/newrelic/infrastructure-agent/internal/agent/types"
-	"github.com/newrelic/infrastructure-agent/pkg/config"
-	"github.com/newrelic/infrastructure-agent/pkg/entity"
-	"github.com/newrelic/infrastructure-agent/pkg/entity/host"
-	"github.com/newrelic/infrastructure-agent/pkg/metrics"
-	"github.com/newrelic/infrastructure-agent/pkg/metrics/types"
-	"github.com/newrelic/infrastructure-agent/pkg/plugins/ids"
-	"github.com/newrelic/infrastructure-agent/pkg/sample"
-	"github.com/newrelic/infrastructure-agent/pkg/sysinfo"
-	"github.com/newrelic/infrastructure-agent/pkg/sysinfo/hostname"
 )
 
 func TestProcessSampler_DockerDecorator(t *testing.T) {

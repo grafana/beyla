@@ -12,8 +12,6 @@ import (
 	"path"
 	"testing"
 
-	"github.com/newrelic/infrastructure-agent/pkg/helpers"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

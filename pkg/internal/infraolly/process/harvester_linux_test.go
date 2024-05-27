@@ -13,9 +13,6 @@ import (
 	"time"
 
 	"github.com/hashicorp/golang-lru/v2/simplelru"
-	"github.com/newrelic/infrastructure-agent/internal/agent/mocks"
-	"github.com/newrelic/infrastructure-agent/internal/testhelpers"
-	"github.com/newrelic/infrastructure-agent/pkg/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -87,7 +84,7 @@ func TestLinuxHarvester_Do(t *testing.T) {
 	require.NotNil(t, sample)
 
 	assert.Equal(t, int32(os.Getpid()), sample.ProcessID)
-	assert.Equal(t, "process.test", sample.CommandName)
+	assert.Equal(t, "process.test", sample.Command)
 	assert.Contains(t, sample.CmdLine, os.Args[0])
 	assert.NotEmpty(t, sample.User)
 	assert.Contains(t, "RSD", sample.Status,
@@ -206,8 +203,8 @@ func TestLinuxHarvester_Do_InvalidateCache_DifferentCmd(t *testing.T) {
 	require.NoError(t, err)
 
 	// The sample is updated
-	assert.NotEmpty(t, sample.CommandName)
-	assert.NotEqual(t, "something old", sample.CommandName)
+	assert.NotEmpty(t, sample.Command)
+	assert.NotEqual(t, "something old", sample.Command)
 }
 
 func TestLinuxHarvester_Do_InvalidateCache_DifferentPid(t *testing.T) {
@@ -247,7 +244,7 @@ func TestLinuxHarvester_GetServiceForPid(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, sample)
 	assert.Equal(t, "MyServiceIdentifier", sample.ProcessDisplayName)
-	assert.Equal(t, "process.test", sample.CommandName)
+	assert.Equal(t, "process.test", sample.Command)
 	assert.Contains(t, sample.CmdLine, os.Args[0])
 }
 
@@ -267,7 +264,7 @@ func TestLinuxHarvester_GetServiceForPid_OnEmptyUseCommandName(t *testing.T) {
 	// It returns the corresponding process names
 	require.NoError(t, err)
 	require.NotNil(t, sample)
-	assert.Equal(t, sample.CommandName, sample.ProcessDisplayName)
-	assert.Equal(t, "process.test", sample.CommandName)
+	assert.Equal(t, sample.Command, sample.ProcessDisplayName)
+	assert.Equal(t, "process.test", sample.Command)
 	assert.Contains(t, sample.CmdLine, os.Args[0])
 }

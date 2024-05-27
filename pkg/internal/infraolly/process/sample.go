@@ -1,36 +1,27 @@
 package process
 
-import "github.com/shirou/gopsutil/process"
-
 type Sample struct {
-	ProcessDisplayName    string   `json:"processDisplayName"`
-	ProcessID             int32    `json:"processId"`
-	CommandName           string   `json:"commandName"`
-	User                  string   `json:"userName,omitempty"`
-	MemoryRSSBytes        int64    `json:"memoryResidentSizeBytes"`
-	MemoryVMSBytes        int64    `json:"memoryVirtualSizeBytes"`
-	CPUPercent            float64  `json:"cpuPercent"`
-	CPUUserPercent        float64  `json:"cpuUserPercent"`
-	CPUSystemPercent      float64  `json:"cpuSystemPercent"`
-	ContainerImage        string   `json:"containerImage,omitempty"`
-	ContainerImageName    string   `json:"containerImageName,omitempty"`
-	ContainerName         string   `json:"containerName,omitempty"`
-	ContainerID           string   `json:"containerId,omitempty"`
-	Contained             string   `json:"contained,omitempty"`
-	CmdLine               string   `json:"commandLine,omitempty"`
-	Status                string   `json:"state,omitempty"`
-	ParentProcessID       int32    `json:"parentProcessId,omitempty"`
-	ThreadCount           int32    `json:"threadCount,omitempty"`
-	FdCount               *int32   `json:"fileDescriptorCount,omitempty"`
-	IOReadCountPerSecond  *float64 `json:"ioReadCountPerSecond,omitempty"`
-	IOWriteCountPerSecond *float64 `json:"ioWriteCountPerSecond,omitempty"`
-	IOReadBytesPerSecond  *float64 `json:"ioReadBytesPerSecond,omitempty"`
-	IOWriteBytesPerSecond *float64 `json:"ioWriteBytesPerSecond,omitempty"`
-	IOTotalReadCount      *uint64  `json:"ioTotalReadCount,omitempty"`
-	IOTotalWriteCount     *uint64  `json:"ioTotalWriteCount,omitempty"`
-	IOTotalReadBytes      *uint64  `json:"ioTotalReadBytes,omitempty"`
-	IOTotalWriteBytes     *uint64  `json:"ioTotalWriteBytes,omitempty"`
-	// Auxiliary values, not to be reported
-	LastIOCounters  *process.IOCountersStat `json:"-"`
-	ContainerLabels map[string]string       `json:"-"`
+	ProcessID int32
+	Command   string
+	User      string
+	MemoryRSSBytes        int64
+	MemoryVMSBytes        int64
+	CPUPercent            float64
+	CPUUserPercent        float64
+	CPUSystemPercent      float64
+	CmdLine               string
+	Status                string
+	ParentProcessID       int32
+	ThreadCount           int32
+	FdCount               int32
+	IOReadCount  uint64
+	IOWriteCount uint64
+	IOReadBytes  uint64
+	IOWriteBytes uint64
+}
+
+func NewSample(pid int32) *Sample {
+	return &Sample{
+		ProcessID: pid,
+	}
 }

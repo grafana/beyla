@@ -8,30 +8,25 @@
 package process
 
 import (
+	"log/slog"
+
 	"github.com/hashicorp/golang-lru/v2/simplelru"
-	"github.com/newrelic/infrastructure-agent/internal/agent"
-	"github.com/newrelic/infrastructure-agent/pkg/config"
-	"github.com/newrelic/infrastructure-agent/pkg/metrics"
-	"github.com/newrelic/infrastructure-agent/pkg/metrics/acquire"
-	"github.com/newrelic/infrastructure-agent/pkg/metrics/types"
 	"github.com/pkg/errors"
 	"github.com/shirou/gopsutil/v3/process"
-	"github.com/sirupsen/logrus"
 )
 
-func newHarvester(ctx agent.AgentContext, cache *simplelru.LRU[int32, *cacheEntry]) *linuxHarvester {
-	cfg := ctx.Config()
+func newHarvester(cfg *Config, cache *simplelru.LRU[int32, *cacheEntry]) *linuxHarvester {
 	// If not config, assuming root mode as default
-	privileged := cfg == nil || cfg.RunMode == config.ModeRoot || cfg.RunMode == config.ModePrivileged
+	privileged := cfg == nil || cfg.RunMode == RunModeRoot || cfg.RunMode == RunModePrivileged
 	disableZeroRSSFilter := cfg != nil && cfg.DisableZeroRSSFilter
-	stripCommandLine := (cfg != nil && cfg.StripCommandLine) || (cfg == nil && config.DefaultStripCommandLine)
+	stripCommandLine := cfg != nil && cfg.StripCommandLine
 
 	return &linuxHarvester{
 		privileged:           privileged,
 		disableZeroRSSFilter: disableZeroRSSFilter,
 		stripCommandLine:     stripCommandLine,
-		serviceForPid:        ctx.GetServiceForPid,
 		cache:                cache,
+		log:                  mplog(),
 	}
 }
 
@@ -40,8 +35,8 @@ type linuxHarvester struct {
 	privileged           bool
 	disableZeroRSSFilter bool
 	stripCommandLine     bool
-	cache                *cache
-	serviceForPid        func(int) (string, bool)
+	cache                *simplelru.LRU[int32, *cacheEntry]
+	log                  *slog.Logger
 }
 
 var _ Harvester = (*linuxHarvester)(nil) // static interface assertion
@@ -51,10 +46,10 @@ func (*linuxHarvester) Pids() ([]int32, error) {
 	return process.Pids()
 }
 
-// Returns a sample of a process whose PID is passed as argument. The 'elapsedSeconds' argument represents the
+// Do returns a sample of a process whose PID is passed as argument. The 'elapsedSeconds' argument represents the
 // time since this process was sampled for the last time. If the process has been sampled for the first time, this value
 // will be ignored
-func (ps *linuxHarvester) Do(pid int32, elapsedSeconds float64) (*Sample, error) {
+func (ps *linuxHarvester) Do(pid int32) (*Sample, error) {
 	// Reuses process information that does not vary
 	cached, hasCachedSample := ps.cache.Get(pid)
 
@@ -74,7 +69,7 @@ func (ps *linuxHarvester) Do(pid int32, elapsedSeconds float64) (*Sample, error)
 	}
 
 	// Creates a fresh process sample and populates it with the metrics data
-	sample := metrics.NewProcessSample(pid)
+	sample := NewSample(pid)
 
 	if err := ps.populateStaticData(sample, cached.process); err != nil {
 		return nil, errors.Wrap(err, "can't populate static attributes")
@@ -89,16 +84,10 @@ func (ps *linuxHarvester) Do(pid int32, elapsedSeconds float64) (*Sample, error)
 		return nil, errors.Wrap(err, "can't fetch gauge data")
 	}
 
-	if err := ps.populateIOCounters(sample, cached.lastSample, cached.process, elapsedSeconds); err != nil {
+	if err := ps.populateIOCounters(sample, cached.process); err != nil {
 		return nil, errors.Wrap(err, "can't fetch deltas")
 	}
 
-	// This must happen every time, even if we already had a cached sample for the process, because
-	// the available process name metadata may have changed underneath us (if we pick up a new
-	// service/PID association, etc)
-	sample.ProcessDisplayName = ps.determineProcessDisplayName(sample)
-
-	sample.Type("ProcessSample")
 	cached.lastSample = sample
 
 	return sample, nil
@@ -116,10 +105,10 @@ func (ps *linuxHarvester) populateStaticData(sample *Sample, process Snapshot) e
 
 	sample.User, err = process.Username()
 	if err != nil {
-		mplog.WithError(err).WithField("processID", sample.ProcessID).Debug("Can't get Username for process.")
+		ps.log.Debug("can't get username for process", "pid", sample.ProcessID, "error", err)
 	}
 
-	sample.CommandName = process.Command()
+	sample.Command = process.Command()
 	sample.ParentProcessID = process.Ppid()
 
 	return nil
@@ -146,12 +135,9 @@ func (ps *linuxHarvester) populateGauges(sample *Sample, process Snapshot) error
 	}
 
 	if ps.privileged {
-		fds, err := process.NumFDs()
+		sample.FdCount, err = process.NumFDs()
 		if err != nil {
 			return err
-		}
-		if fds >= 0 {
-			sample.FdCount = &fds
 		}
 	}
 
@@ -166,49 +152,14 @@ func (ps *linuxHarvester) populateGauges(sample *Sample, process Snapshot) error
 
 // populateIOCounters fills the sample with the IO counters data. For the "X per second" metrics, it requires the
 // last process sample for comparative purposes
-func (ps *linuxHarvester) populateIOCounters(sample, lastSample *Sample, source Snapshot, elapsedSeconds float64) error {
+func (ps *linuxHarvester) populateIOCounters(sample *Sample, source Snapshot) error {
 	ioCounters, err := source.IOCounters()
 	if err != nil {
 		return err
 	}
-	if ioCounters != nil {
-		// Delta
-		if lastSample != nil && lastSample.LastIOCounters != nil {
-			lastCounters := lastSample.LastIOCounters
-
-			mplog.WithField(config.TracesFieldName, config.FeatureTrace).Tracef("ReadCount: %d, WriteCount: %d, ReadBytes: %d, WriteBytes: %d", ioCounters.ReadCount, ioCounters.WriteCount, ioCounters.ReadBytes, ioCounters.WriteBytes)
-			ioReadCountPerSecond := acquire.CalculateSafeDelta(ioCounters.ReadCount, lastCounters.ReadCount, elapsedSeconds)
-			ioWriteCountPerSecond := acquire.CalculateSafeDelta(ioCounters.WriteCount, lastCounters.WriteCount, elapsedSeconds)
-			ioReadBytesPerSecond := acquire.CalculateSafeDelta(ioCounters.ReadBytes, lastCounters.ReadBytes, elapsedSeconds)
-			ioWriteBytesPerSecond := acquire.CalculateSafeDelta(ioCounters.WriteBytes, lastCounters.WriteBytes, elapsedSeconds)
-
-			sample.IOReadCountPerSecond = &ioReadCountPerSecond
-			sample.IOWriteCountPerSecond = &ioWriteCountPerSecond
-			sample.IOReadBytesPerSecond = &ioReadBytesPerSecond
-			sample.IOWriteBytesPerSecond = &ioWriteBytesPerSecond
-		}
-
-		// Cumulative
-		sample.IOTotalReadCount = &ioCounters.ReadCount
-		sample.IOTotalWriteCount = &ioCounters.WriteCount
-		sample.IOTotalReadBytes = &ioCounters.ReadBytes
-		sample.IOTotalWriteBytes = &ioCounters.WriteBytes
-
-		sample.LastIOCounters = ioCounters
-	}
+	sample.IOReadCount = ioCounters.ReadCount
+	sample.IOWriteCount = ioCounters.WriteCount
+	sample.IOReadBytes = ioCounters.ReadBytes
+	sample.IOWriteBytes = ioCounters.WriteBytes
 	return nil
-}
-
-// determineProcessDisplayName generates a human-friendly name for this process. By default, we use the command name.
-// If we know of a service for this pid, that'll be the name.
-func (ps *linuxHarvester) determineProcessDisplayName(sample *Sample) string {
-	displayName := sample.CommandName
-	if serviceName, ok := ps.serviceForPid(int(sample.ProcessID)); ok && len(serviceName) > 0 {
-		mplog.WithFieldsF(func() logrus.Fields {
-			return logrus.Fields{"serviceName": serviceName, "displayName": displayName, "ProcessID": sample.ProcessID}
-		}).Debug("Using service name as display name.")
-		displayName = serviceName
-	}
-
-	return displayName
 }

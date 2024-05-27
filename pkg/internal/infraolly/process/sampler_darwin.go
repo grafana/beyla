@@ -9,12 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/newrelic/infrastructure-agent/internal/agent"
-	"github.com/newrelic/infrastructure-agent/pkg/config"
-	"github.com/newrelic/infrastructure-agent/pkg/metrics"
-	"github.com/newrelic/infrastructure-agent/pkg/metrics/sampler"
-	"github.com/newrelic/infrastructure-agent/pkg/metrics/types"
-	"github.com/newrelic/infrastructure-agent/pkg/sample"
+
 )
 
 // processSampler is an implementation of the metrics_sender.Sampler interface, which returns runtime information about

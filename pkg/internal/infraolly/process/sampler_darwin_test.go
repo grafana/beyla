@@ -6,11 +6,6 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/newrelic/infrastructure-agent/pkg/metrics"
-
-	"github.com/newrelic/infrastructure-agent/internal/agent/mocks"
-	"github.com/newrelic/infrastructure-agent/pkg/config"
-	"github.com/newrelic/infrastructure-agent/pkg/metrics/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )

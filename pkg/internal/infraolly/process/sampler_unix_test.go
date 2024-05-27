@@ -6,10 +6,6 @@
 
 package process
 
-import (
-	"github.com/newrelic/infrastructure-agent/pkg/metrics"
-	"github.com/newrelic/infrastructure-agent/pkg/metrics/types"
-)
 
 type fakeContainerSampler struct{}
 

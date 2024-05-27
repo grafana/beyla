@@ -1,7 +1,5 @@
 // Copyright 2020 New Relic Corporation. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0
-//go:build linux || darwin
-// +build linux darwin
 
 // Package process provides all the tools and functionality for sampling processes. It is divided in three main
 // components:
@@ -12,12 +10,12 @@ package process
 
 import (
 	"fmt"
-
-	"github.com/newrelic/infrastructure-agent/pkg/log"
-	"github.com/newrelic/infrastructure-agent/pkg/metrics/types"
+	"log/slog"
 )
 
-var mplog = log.WithComponent("ProcessSampler")
+func mplog() *slog.Logger {
+	return slog.With("component", "process.Sampler")
+}
 
 var errProcessWithoutRSS = fmt.Errorf("process with zero rss")
 
@@ -27,6 +25,18 @@ type Harvester interface {
 	// Pids return the IDs of all the processes that are currently running
 	Pids() ([]int32, error)
 	// Do performs the actual harvesting operation, returning a process sample containing all the metrics data
-	// for the last elapsedSeconds
-	Do(pid int32, elapsedSeconds float64) (*Sample, error)
+	Do(pid int32) (*Sample, error)
+}
+
+type RunMode string
+
+const (
+	RunModeRoot = "root"
+	RunModePrivileged = "privileged"
+)
+
+type Config struct {
+	RunMode RunMode
+	DisableZeroRSSFilter bool
+	StripCommandLine bool
 }

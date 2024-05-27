@@ -367,6 +367,16 @@ int BPF_KPROBE(kprobe_tcp_close, struct sock *sk, long timeout) {
 
     ensure_sent_event(id, &sock_p);
 
+
+    pid_connection_info_t info = {};
+
+    if (parse_sock_info(sk, &info.conn)) {
+        sort_connection_info(&info.conn);
+        //dbg_print_http_connection_info(&info.conn);
+        info.pid = pid_from_pid_tgid(id);
+        bpf_map_delete_elem(&ongoing_tcp_req, &info);
+    }
+
     bpf_map_delete_elem(&active_send_args, &id);
     bpf_map_delete_elem(&active_send_sock_args, &sock_p);
 

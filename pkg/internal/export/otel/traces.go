@@ -15,6 +15,7 @@ import (
 	"go.opentelemetry.io/collector/config/configgrpc"
 	"go.opentelemetry.io/collector/config/confighttp"
 	"go.opentelemetry.io/collector/config/configopaque"
+	"go.opentelemetry.io/collector/config/configretry"
 	"go.opentelemetry.io/collector/config/configtelemetry"
 	"go.opentelemetry.io/collector/config/configtls"
 	"go.opentelemetry.io/collector/exporter"
@@ -64,6 +65,15 @@ type TracesConfig struct {
 	MaxQueueSize       int           `yaml:"max_queue_size" env:"BEYLA_OTLP_TRACES_MAX_QUEUE_SIZE"`
 	BatchTimeout       time.Duration `yaml:"batch_timeout" env:"BEYLA_OTLP_TRACES_BATCH_TIMEOUT"`
 	ExportTimeout      time.Duration `yaml:"export_timeout" env:"BEYLA_OTLP_TRACES_EXPORT_TIMEOUT"`
+
+	// Configuration optiosn for BackOffConfig of the traces exporter.
+	// See https://github.com/open-telemetry/opentelemetry-collector/blob/main/config/configretry/backoff.go
+	// BackOffInitialInterval the time to wait after the first failure before retrying.
+	BackOffInitialInterval time.Duration `yaml:"backoff_initial_interval" env:"BEYLA_BACKOFF_INITIAL_INTERVAL"`
+	// BackOffMaxInterval is the upper bound on backoff interval.
+	BackOffMaxInterval time.Duration `yaml:"backoff_max_interval" env:"BEYLA_BACKOFF_MAX_INTERVAL"`
+	// BackOffMaxElapsedTime is the maximum amount of time (including retries) spent trying to send a request/batch.
+	BackOffMaxElapsedTime time.Duration `yaml:"backoff_max_elapsed_time" env:"BEYLA_BACKOFF_MAX_ELAPSED_TIME"`
 
 	ReportersCacheLen int `yaml:"reporters_cache_len" env:"BEYLA_TRACES_REPORT_CACHE_LEN"`
 
@@ -204,6 +214,7 @@ func getTracesExporter(ctx context.Context, cfg TracesConfig, ctxInfo *global.Co
 		factory := otlphttpexporter.NewFactory()
 		config := factory.CreateDefaultConfig().(*otlphttpexporter.Config)
 		config.QueueConfig.Enabled = false
+		config.RetryConfig = getRetrySettings(cfg)
 		config.ClientConfig = confighttp.ClientConfig{
 			Endpoint: endpoint.String(),
 			TLSSetting: configtls.ClientConfig{
@@ -235,6 +246,7 @@ func getTracesExporter(ctx context.Context, cfg TracesConfig, ctxInfo *global.Co
 		factory := otlpexporter.NewFactory()
 		config := factory.CreateDefaultConfig().(*otlpexporter.Config)
 		config.QueueConfig.Enabled = false
+		config.RetryConfig = getRetrySettings(cfg)
 		config.ClientConfig = configgrpc.ClientConfig{
 			Endpoint: endpoint.String(),
 			TLSSetting: configtls.ClientConfig{
@@ -287,6 +299,20 @@ func getTraceSettings(ctxInfo *global.ContextInfo, cfg TracesConfig, in trace.Sp
 		ID:                component.NewIDWithName(component.DataTypeMetrics, "beyla"),
 		TelemetrySettings: telemetrySettings,
 	}
+}
+
+func getRetrySettings(cfg TracesConfig) configretry.BackOffConfig {
+	backOffCfg := configretry.NewDefaultBackOffConfig()
+	if cfg.BackOffInitialInterval > 0 {
+		backOffCfg.InitialInterval = cfg.BackOffInitialInterval
+	}
+	if cfg.BackOffMaxInterval > 0 {
+		backOffCfg.MaxInterval = cfg.BackOffMaxInterval
+	}
+	if cfg.BackOffMaxElapsedTime > 0 {
+		backOffCfg.MaxElapsedTime = cfg.BackOffMaxElapsedTime
+	}
+	return backOffCfg
 }
 
 // GenerateTraces creates a ptrace.Traces from a request.Span

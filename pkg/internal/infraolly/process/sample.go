@@ -1,23 +1,23 @@
 package process
 
 type Sample struct {
-	ProcessID int32
-	Command   string
-	User      string
-	MemoryRSSBytes        int64
-	MemoryVMSBytes        int64
-	CPUPercent            float64
-	CPUUserPercent        float64
-	CPUSystemPercent      float64
-	CmdLine               string
-	Status                string
-	ParentProcessID       int32
-	ThreadCount           int32
-	FdCount               int32
-	IOReadCount  uint64
-	IOWriteCount uint64
-	IOReadBytes  uint64
-	IOWriteBytes uint64
+	ProcessID        int32
+	Command          string
+	User             string
+	MemoryRSSBytes   int64
+	MemoryVMSBytes   int64
+	CPUPercent       float64
+	CPUUserPercent   float64
+	CPUSystemPercent float64
+	CmdLine          string
+	Status           string
+	ParentProcessID  int32
+	ThreadCount      int32
+	FdCount          int32
+	IOReadCount      uint64
+	IOWriteCount     uint64
+	IOReadBytes      uint64
+	IOWriteBytes     uint64
 }
 
 func NewSample(pid int32) *Sample {

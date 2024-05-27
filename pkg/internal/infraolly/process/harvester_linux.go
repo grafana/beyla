@@ -1,5 +1,6 @@
 // Copyright 2020 New Relic Corporation. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0
+
 // Package process provides all the tools and functionality for sampling processes. It is divided in three main
 // components:
 // - Snapshot: provides OS-level information of a process at a given spot
@@ -15,11 +16,11 @@ import (
 	"github.com/shirou/gopsutil/v3/process"
 )
 
-func newHarvester(cfg *Config, cache *simplelru.LRU[int32, *cacheEntry]) *linuxHarvester {
+func newHarvester(cfg Config, cache *simplelru.LRU[int32, *cacheEntry]) *linuxHarvester {
 	// If not config, assuming root mode as default
-	privileged := cfg == nil || cfg.RunMode == RunModeRoot || cfg.RunMode == RunModePrivileged
-	disableZeroRSSFilter := cfg != nil && cfg.DisableZeroRSSFilter
-	stripCommandLine := cfg != nil && cfg.StripCommandLine
+	privileged := cfg.RunMode == RunModeRoot || cfg.RunMode == RunModePrivileged
+	disableZeroRSSFilter := cfg.DisableZeroRSSFilter
+	stripCommandLine := !cfg.FullCommandLine
 
 	return &linuxHarvester{
 		privileged:           privileged,

@@ -31,12 +31,13 @@ type Harvester interface {
 type RunMode string
 
 const (
-	RunModeRoot = "root"
-	RunModePrivileged = "privileged"
+	RunModeRoot         = "root"
+	RunModePrivileged   = "privileged"
+	RunModeUnprivileged = "unprivileged"
 )
 
 type Config struct {
-	RunMode RunMode
+	RunMode              RunMode
 	DisableZeroRSSFilter bool
-	StripCommandLine bool
+	FullCommandLine     bool
 }

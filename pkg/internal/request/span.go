@@ -21,6 +21,7 @@ const (
 	EventTypeGRPCClient
 	EventTypeSQLClient
 	EventTypeRedisClient
+	EventTypeKafkaClient
 )
 
 type IgnoreMode uint8

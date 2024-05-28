@@ -127,7 +127,7 @@
     }
   },
   "github.com/Shopify/sarama": {
-    "inspect": "./configs/offsets/sarama/shopify/inspect.go",
+    "inspect": "./configs/offsets/shopify/inspect.go",
     "versions": ">= 1.37, < 1.40",
     "fields": {
       "github.com/Shopify/sarama.Broker": [

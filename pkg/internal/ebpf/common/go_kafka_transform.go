@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 
 	"github.com/cilium/ebpf/ringbuf"
+
 	"github.com/grafana/beyla/pkg/internal/request"
 )
 

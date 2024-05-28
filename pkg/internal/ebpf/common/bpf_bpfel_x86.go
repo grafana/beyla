@@ -102,6 +102,13 @@ type bpfHttpRequestTrace struct {
 	}
 }
 
+type bpfKafkaClientReqT struct {
+	Type            uint8
+	StartMonotimeNs uint64
+	EndMonotimeNs   uint64
+	Buf             [256]uint8
+}
+
 type bpfSqlRequestTrace struct {
 	Type            uint8
 	StartMonotimeNs uint64

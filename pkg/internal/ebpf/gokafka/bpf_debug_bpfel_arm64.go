@@ -26,7 +26,6 @@ type bpf_debugGoroutineMetadata struct {
 
 type bpf_debugKafkaClientReqT struct {
 	Type            uint8
-	_               [7]byte
 	StartMonotimeNs uint64
 	EndMonotimeNs   uint64
 	Buf             [256]uint8

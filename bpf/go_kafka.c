@@ -15,14 +15,8 @@
 #include "go_common.h"
 #include "ringbuf.h"
 
-#define BUF_MAX_LEN 256
-
-typedef struct kafka_client_req {
-    u8  type;                           // Must be first
-    u64 start_monotime_ns;
-    u64 end_monotime_ns;
-    u8  buf[BUF_MAX_LEN];
-} kafka_client_req_t;
+#define KAFKA_API_FETCH   0
+#define KAFKA_API_PRODUCE 1
 
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
@@ -48,7 +42,7 @@ int uprobe_sarama_sendInternal(struct pt_regs *ctx) {
     
     void *b_ptr = GO_PARAM1(ctx);
     if (b_ptr) {
-        bpf_probe_read(&correlation_id, sizeof(u32), b_ptr + 0x2c);
+        bpf_probe_read(&correlation_id, sizeof(u32), b_ptr + 0x2c); // TODO: Offsets
     }
 
     if (correlation_id) {
@@ -66,16 +60,27 @@ int uprobe_sarama_broker_write(struct pt_regs *ctx) {
     void *goroutine_addr = GOROUTINE_PTR(ctx);
     bpf_printk("goroutine_addr %lx", goroutine_addr);
 
-    u64 *invocation = bpf_map_lookup_elem(&ongoing_kafka_requests, &goroutine_addr);
+    u32 *invocation = bpf_map_lookup_elem(&ongoing_kafka_requests, &goroutine_addr);
     if (invocation) {
-        u64 correlation_id = *invocation;
-        kafka_client_req_t req = {
-            .type = EVENT_GO_KAFKA,
-            .start_monotime_ns = bpf_ktime_get_ns(),
-        };
+        u8 small_buf[8];
+        bpf_probe_read(small_buf, 8, GO_PARAM2(ctx));
+        // the api key is 2 bytes, but num APIs at the moment is max 50.
+        // instead of reading 2 bytes and then doing ntohs, we just read
+        // the second byte of the api key, assuming the first is 0.
+        u8 api_key = small_buf[5];
 
-        bpf_probe_read(req.buf, BUF_MAX_LEN, GO_PARAM2(ctx));
-        bpf_map_update_elem(&kafka_requests, &correlation_id, &req, BPF_ANY);
+        // We only care about fetch and produce
+        if (api_key == KAFKA_API_FETCH || api_key == KAFKA_API_PRODUCE) {
+            u32 correlation_id = *invocation;
+            kafka_client_req_t req = {
+                .type = EVENT_GO_KAFKA,
+                .start_monotime_ns = bpf_ktime_get_ns(),
+            };
+
+            bpf_probe_read(req.buf, KAFKA_MAX_LEN, GO_PARAM2(ctx));
+            bpf_map_update_elem(&kafka_requests, &correlation_id, &req, BPF_ANY);
+        }
+
     }
 
     bpf_map_delete_elem(&ongoing_kafka_requests, &goroutine_addr);
@@ -94,7 +99,7 @@ int uprobe_sarama_response_promise_handle(struct pt_regs *ctx) {
     if (p) {
         u32 correlation_id = 0;
 
-        bpf_probe_read(&correlation_id, sizeof(u32), p + 0x18);
+        bpf_probe_read(&correlation_id, sizeof(u32), p + 0x18); // TODO: Offsets
         if (correlation_id) {
             kafka_client_req_t *req = bpf_map_lookup_elem(&kafka_requests, &correlation_id);
 
@@ -105,11 +110,11 @@ int uprobe_sarama_response_promise_handle(struct pt_regs *ctx) {
                 if (trace) {
                     bpf_dbg_printk("Sending trace");
 
-                    bpf_memcpy(trace, req, sizeof(kafka_client_req_t));
+                    __builtin_memcpy(trace, req, sizeof(kafka_client_req_t));
                     bpf_ringbuf_submit(trace, get_flags());
                 }
             }
-            
+
             bpf_map_delete_elem(&kafka_requests, &correlation_id);
         }
     }

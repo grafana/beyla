@@ -593,7 +593,7 @@ static __always_inline void handle_buf_with_connection(pid_connection_info_t *pi
 
         bpf_dbg_printk("=== http_buffer_event len=%d pid=%d still_reading=%d ===", bytes_len, pid_from_pid_tgid(bpf_get_current_pid_tgid()), still_reading(info));
 
-        if (packet_type == PACKET_TYPE_REQUEST && (info->status == 0)) {    
+        if (packet_type == PACKET_TYPE_REQUEST && (info->status == 0)) {
             http_connection_metadata_t *meta = connection_meta(pid_conn, direction, PACKET_TYPE_REQUEST);
 
             get_or_create_trace_info(meta, pid_conn->pid, &pid_conn->conn, u_buf, bytes_len, capture_header_buffer);

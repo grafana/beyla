@@ -9,7 +9,7 @@ import (
 	"slices"
 
 	"github.com/mariomac/pipes/pipe"
-	"github.com/shirou/gopsutil/process"
+	"github.com/shirou/gopsutil/v3/process"
 
 	"github.com/grafana/beyla/pkg/beyla"
 	"github.com/grafana/beyla/pkg/services"

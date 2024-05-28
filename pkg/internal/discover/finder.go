@@ -100,6 +100,7 @@ func newGoTracersGroup(cfg *beyla.Config, metrics imetrics.Reporter) []ebpf.Trac
 		grpc.New(cfg, metrics),
 		goruntime.New(cfg, metrics),
 		gokafka.New(cfg, metrics),
+		&gokafka.ShopifyKafkaTracer{Tracer: *gokafka.New(cfg, metrics)},
 	}
 }
 

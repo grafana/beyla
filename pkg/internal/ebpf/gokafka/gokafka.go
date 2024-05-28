@@ -98,22 +98,16 @@ func (p *Tracer) AddCloser(c ...io.Closer) {
 func (p *Tracer) GoProbes() map[string]ebpfcommon.FunctionPrograms {
 	return map[string]ebpfcommon.FunctionPrograms{
 		"github.com/IBM/sarama.(*Broker).write": {
-			Start: p.bpfObjects.UprobeSaramaBrokerWrite,
+			Start:    p.bpfObjects.UprobeSaramaBrokerWrite,
+			Required: true,
 		},
 		"github.com/IBM/sarama.(*responsePromise).handle": {
-			Start: p.bpfObjects.UprobeSaramaResponsePromiseHandle,
+			Start:    p.bpfObjects.UprobeSaramaResponsePromiseHandle,
+			Required: true,
 		},
 		"github.com/IBM/sarama.(*Broker).sendInternal": {
-			Start: p.bpfObjects.UprobeSaramaSendInternal,
-		},
-		"github.com/Shopify/sarama.(*Broker).write": {
-			Start: p.bpfObjects.UprobeSaramaBrokerWrite,
-		},
-		"github.com/Shopify/sarama.(*responsePromise).handle": {
-			Start: p.bpfObjects.UprobeSaramaResponsePromiseHandle,
-		},
-		"github.com/Shopify/sarama.(*Broker).sendInternal": {
-			Start: p.bpfObjects.UprobeSaramaSendInternal,
+			Start:    p.bpfObjects.UprobeSaramaSendInternal,
+			Required: true,
 		},
 	}
 }
@@ -141,6 +135,37 @@ func (p *Tracer) AlreadyInstrumentedLib(_ uint64) bool {
 }
 
 func (p *Tracer) Run(ctx context.Context, eventsChan chan<- []request.Span) {
+	ebpfcommon.SharedRingbuf(
+		p.cfg,
+		p.pidsFilter,
+		p.bpfObjects.Events,
+		p.metrics,
+	)(ctx, append(p.closers, &p.bpfObjects), eventsChan)
+}
+
+// GinTracer overrides Tracer to inspect the Gin ServeHTTP endpoint
+type ShopifyKafkaTracer struct {
+	Tracer
+}
+
+func (p *ShopifyKafkaTracer) GoProbes() map[string]ebpfcommon.FunctionPrograms {
+	return map[string]ebpfcommon.FunctionPrograms{
+		"github.com/Shopify/sarama.(*Broker).write": {
+			Start:    p.bpfObjects.UprobeSaramaBrokerWrite,
+			Required: true,
+		},
+		"github.com/Shopify/sarama.(*responsePromise).handle": {
+			Start:    p.bpfObjects.UprobeSaramaResponsePromiseHandle,
+			Required: true,
+		},
+		"github.com/Shopify/sarama.(*Broker).sendInternal": {
+			Start:    p.bpfObjects.UprobeSaramaSendInternal,
+			Required: true,
+		},
+	}
+}
+
+func (p *ShopifyKafkaTracer) Run(ctx context.Context, eventsChan chan<- []request.Span) {
 	ebpfcommon.SharedRingbuf(
 		p.cfg,
 		p.pidsFilter,

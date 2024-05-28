@@ -107,6 +107,9 @@ type bpfKafkaClientReqT struct {
 	StartMonotimeNs uint64
 	EndMonotimeNs   uint64
 	Buf             [256]uint8
+	_               [7]byte
+	Conn            bpfConnectionInfoT
+	_               [4]byte
 }
 
 type bpfSqlRequestTrace struct {

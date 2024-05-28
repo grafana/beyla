@@ -29,6 +29,9 @@ type bpf_debugKafkaClientReqT struct {
 	StartMonotimeNs uint64
 	EndMonotimeNs   uint64
 	Buf             [256]uint8
+	_               [7]byte
+	Conn            bpf_debugConnectionInfoT
+	_               [4]byte
 }
 
 type bpf_debugTpInfoPidT struct {

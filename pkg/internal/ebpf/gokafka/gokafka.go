@@ -16,6 +16,7 @@ import (
 	"context"
 	"io"
 	"log/slog"
+	"unsafe"
 
 	"github.com/cilium/ebpf"
 
@@ -66,8 +67,24 @@ func (p *Tracer) Load() (*ebpf.CollectionSpec, error) {
 	return loader()
 }
 
-func (p *Tracer) Constants(_ *exec.FileInfo, _ *goexec.Offsets) map[string]any {
-	return make(map[string]any)
+func (p *Tracer) Constants(_ *exec.FileInfo, offsets *goexec.Offsets) map[string]any {
+	// Set the field offsets and the logLevel for grpc BPF program,
+	// as well as some other configuration constants
+	constants := map[string]any{
+		"wakeup_data_bytes": uint32(p.cfg.WakeupLen) * uint32(unsafe.Sizeof(ebpfcommon.HTTPRequestTrace{})),
+	}
+	for _, s := range []string{
+		"sarama_broker_corr_id_pos",
+		"sarama_response_corr_id_pos",
+		"sarama_broker_conn_pos",
+		"sarama_bufconn_conn_pos",
+		"conn_fd_pos",
+		"fd_laddr_pos",
+		"fd_raddr_pos",
+	} {
+		constants[s] = offsets.Field[s]
+	}
+	return constants
 }
 
 func (p *Tracer) BpfObjects() any {
@@ -114,9 +131,11 @@ func (p *Tracer) AlreadyInstrumentedLib(_ uint64) bool {
 	return false
 }
 
-func (p *Tracer) Run(ctx context.Context, _ chan<- []request.Span) {
-	<-ctx.Done()
-	for _, c := range p.closers {
-		_ = c.Close()
-	}
+func (p *Tracer) Run(ctx context.Context, eventsChan chan<- []request.Span) {
+	ebpfcommon.SharedRingbuf(
+		p.cfg,
+		p.pidsFilter,
+		p.bpfObjects.Events,
+		p.metrics,
+	)(ctx, append(p.closers, &p.bpfObjects), eventsChan)
 }

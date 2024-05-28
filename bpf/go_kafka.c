@@ -17,6 +17,12 @@
 
 #define KAFKA_API_FETCH   0
 #define KAFKA_API_PRODUCE 1
+#define KAFKA_API_KEY_POS 5
+
+volatile const u64 sarama_broker_corr_id_pos;
+volatile const u64 sarama_response_corr_id_pos;
+volatile const u64 sarama_broker_conn_pos;
+volatile const u64 sarama_bufconn_conn_pos;
 
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
@@ -34,20 +40,19 @@ struct {
 
 SEC("uprobe/sarama_sendInternal")
 int uprobe_sarama_sendInternal(struct pt_regs *ctx) {
-    bpf_printk("=== uprobe/sarama_sendInternal === ");
+    bpf_dbg_printk("=== uprobe/sarama_sendInternal === ");
     void *goroutine_addr = GOROUTINE_PTR(ctx);
-    bpf_printk("goroutine_addr %lx", goroutine_addr);
+    bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
 
     u32 correlation_id = 0;
     
     void *b_ptr = GO_PARAM1(ctx);
-    bpf_printk("**** b_ptr = %llx *****", b_ptr);
     if (b_ptr) {
-        bpf_probe_read(&correlation_id, sizeof(u32), b_ptr + 0x28); // TODO: Offsets
+        bpf_probe_read(&correlation_id, sizeof(u32), b_ptr + sarama_broker_corr_id_pos);
     }
 
     if (correlation_id) {
-        bpf_printk("**** correlation_id = %d *****", correlation_id);
+        bpf_dbg_printk("correlation_id = %d", correlation_id);
 
         if (bpf_map_update_elem(&ongoing_kafka_requests, &goroutine_addr, &correlation_id, BPF_ANY)) {
             bpf_dbg_printk("can't update kafka requests element");
@@ -59,14 +64,13 @@ int uprobe_sarama_sendInternal(struct pt_regs *ctx) {
 
 SEC("uprobe/sarama_broker_write")
 int uprobe_sarama_broker_write(struct pt_regs *ctx) {
-    bpf_printk("=== uprobe/sarama_broker write === ");
+    bpf_dbg_printk("=== uprobe/sarama_broker write === ");
     void *goroutine_addr = GOROUTINE_PTR(ctx);
-    bpf_printk("goroutine_addr %lx", goroutine_addr);
+    bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
 
     u32 *invocation = bpf_map_lookup_elem(&ongoing_kafka_requests, &goroutine_addr);
+    void *b_ptr = GO_PARAM1(ctx);
     void *buf_ptr = GO_PARAM2(ctx);
-
-    bpf_printk("**** invocation = %llx, ptr %llx *****", invocation, buf_ptr);
 
     if (invocation) {
         u8 small_buf[8];
@@ -74,9 +78,9 @@ int uprobe_sarama_broker_write(struct pt_regs *ctx) {
         // the api key is 2 bytes, but num APIs at the moment is max 50.
         // instead of reading 2 bytes and then doing ntohs, we just read
         // the second byte of the api key, assuming the first is 0.
-        u8 api_key = small_buf[5];
+        u8 api_key = small_buf[KAFKA_API_KEY_POS];
 
-        bpf_printk("**** api_key = %d *****", api_key);
+        bpf_dbg_printk("api_key = %d", api_key);
 
         // We only care about fetch and produce
         if (api_key == KAFKA_API_FETCH || api_key == KAFKA_API_PRODUCE) {
@@ -86,7 +90,23 @@ int uprobe_sarama_broker_write(struct pt_regs *ctx) {
                 .start_monotime_ns = bpf_ktime_get_ns(),
             };
 
-            bpf_printk("**** correlation_id = %d *****", correlation_id);
+            void *conn_conn_ptr = (void *)(b_ptr + sarama_broker_conn_pos);
+            bpf_dbg_printk("conn conn ptr %llx", conn_conn_ptr);
+            if (conn_conn_ptr) {
+                void *tcp_conn_ptr = 0;
+                bpf_probe_read(&tcp_conn_ptr, sizeof(tcp_conn_ptr), (void *)(conn_conn_ptr + sarama_bufconn_conn_pos + 8)); // find conn
+                bpf_dbg_printk("tcp conn ptr %llx", tcp_conn_ptr);
+                if (tcp_conn_ptr) {
+                    void *conn_ptr = 0;
+                    bpf_probe_read(&conn_ptr, sizeof(conn_ptr), (void *)(tcp_conn_ptr + 8)); // find conn
+                    bpf_dbg_printk("conn ptr %llx", conn_ptr);
+                    if (conn_ptr) {
+                        get_conn_info(conn_ptr, &req.conn);
+                    }
+                }
+            }
+
+            bpf_dbg_printk("correlation_id = %d", correlation_id);
 
             bpf_probe_read(req.buf, KAFKA_MAX_LEN, buf_ptr);
             bpf_map_update_elem(&kafka_requests, &correlation_id, &req, BPF_ANY);
@@ -101,30 +121,26 @@ int uprobe_sarama_broker_write(struct pt_regs *ctx) {
 
 SEC("uprobe/sarama_response_promise_handle")
 int uprobe_sarama_response_promise_handle(struct pt_regs *ctx) {
-    bpf_printk("=== uprobe/sarama_reponse_promise_handle === ");
-    void *goroutine_addr = GOROUTINE_PTR(ctx);
-    bpf_printk("goroutine_addr %lx", goroutine_addr);
+    bpf_dbg_printk("=== uprobe/sarama_response_promise_handle === ");
 
     void *p = GO_PARAM1(ctx);
 
     if (p) {
         u32 correlation_id = 0;
 
-        bpf_probe_read(&correlation_id, sizeof(u32), p + 0x18); // TODO: Offsets
+        bpf_probe_read(&correlation_id, sizeof(u32), p + sarama_response_corr_id_pos);
 
-        bpf_printk("**** correlation_id = %d *****", correlation_id);
+        bpf_dbg_printk("correlation_id = %d", correlation_id);
 
         if (correlation_id) {
             kafka_client_req_t *req = bpf_map_lookup_elem(&kafka_requests, &correlation_id);
-
-            bpf_printk("**** req = %lld *****", req);
 
             if (req) {
                 req->end_monotime_ns = bpf_ktime_get_ns();
 
                 kafka_client_req_t *trace = bpf_ringbuf_reserve(&events, sizeof(kafka_client_req_t), 0);        
                 if (trace) {
-                    bpf_dbg_printk("Sending trace");
+                    bpf_dbg_printk("Sending kafka client go trace");
 
                     __builtin_memcpy(trace, req, sizeof(kafka_client_req_t));
                     bpf_ringbuf_submit(trace, get_flags());

@@ -24,6 +24,14 @@ type bpfGoroutineMetadata struct {
 	Timestamp uint64
 }
 
+type bpfKafkaClientReqT struct {
+	Type            uint8
+	_               [7]byte
+	StartMonotimeNs uint64
+	EndMonotimeNs   uint64
+	Buf             [256]uint8
+}
+
 type bpfTpInfoPidT struct {
 	Tp    bpfTpInfoT
 	Pid   uint32
@@ -81,8 +89,7 @@ type bpfSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpfProgramSpecs struct {
-	UprobeSaramaEncode                *ebpf.ProgramSpec `ebpf:"uprobe_sarama_encode"`
-	UprobeSaramaEncodeRet             *ebpf.ProgramSpec `ebpf:"uprobe_sarama_encode_ret"`
+	UprobeSaramaBrokerWrite           *ebpf.ProgramSpec `ebpf:"uprobe_sarama_broker_write"`
 	UprobeSaramaResponsePromiseHandle *ebpf.ProgramSpec `ebpf:"uprobe_sarama_response_promise_handle"`
 	UprobeSaramaSendInternal          *ebpf.ProgramSpec `ebpf:"uprobe_sarama_sendInternal"`
 }
@@ -94,8 +101,10 @@ type bpfMapSpecs struct {
 	Events                    *ebpf.MapSpec `ebpf:"events"`
 	GoTraceMap                *ebpf.MapSpec `ebpf:"go_trace_map"`
 	GolangMapbucketStorageMap *ebpf.MapSpec `ebpf:"golang_mapbucket_storage_map"`
+	KafkaRequests             *ebpf.MapSpec `ebpf:"kafka_requests"`
 	OngoingClientConnections  *ebpf.MapSpec `ebpf:"ongoing_client_connections"`
 	OngoingGoroutines         *ebpf.MapSpec `ebpf:"ongoing_goroutines"`
+	OngoingKafkaRequests      *ebpf.MapSpec `ebpf:"ongoing_kafka_requests"`
 	OngoingServerConnections  *ebpf.MapSpec `ebpf:"ongoing_server_connections"`
 	TraceMap                  *ebpf.MapSpec `ebpf:"trace_map"`
 }
@@ -122,8 +131,10 @@ type bpfMaps struct {
 	Events                    *ebpf.Map `ebpf:"events"`
 	GoTraceMap                *ebpf.Map `ebpf:"go_trace_map"`
 	GolangMapbucketStorageMap *ebpf.Map `ebpf:"golang_mapbucket_storage_map"`
+	KafkaRequests             *ebpf.Map `ebpf:"kafka_requests"`
 	OngoingClientConnections  *ebpf.Map `ebpf:"ongoing_client_connections"`
 	OngoingGoroutines         *ebpf.Map `ebpf:"ongoing_goroutines"`
+	OngoingKafkaRequests      *ebpf.Map `ebpf:"ongoing_kafka_requests"`
 	OngoingServerConnections  *ebpf.Map `ebpf:"ongoing_server_connections"`
 	TraceMap                  *ebpf.Map `ebpf:"trace_map"`
 }
@@ -133,8 +144,10 @@ func (m *bpfMaps) Close() error {
 		m.Events,
 		m.GoTraceMap,
 		m.GolangMapbucketStorageMap,
+		m.KafkaRequests,
 		m.OngoingClientConnections,
 		m.OngoingGoroutines,
+		m.OngoingKafkaRequests,
 		m.OngoingServerConnections,
 		m.TraceMap,
 	)
@@ -144,16 +157,14 @@ func (m *bpfMaps) Close() error {
 //
 // It can be passed to loadBpfObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpfPrograms struct {
-	UprobeSaramaEncode                *ebpf.Program `ebpf:"uprobe_sarama_encode"`
-	UprobeSaramaEncodeRet             *ebpf.Program `ebpf:"uprobe_sarama_encode_ret"`
+	UprobeSaramaBrokerWrite           *ebpf.Program `ebpf:"uprobe_sarama_broker_write"`
 	UprobeSaramaResponsePromiseHandle *ebpf.Program `ebpf:"uprobe_sarama_response_promise_handle"`
 	UprobeSaramaSendInternal          *ebpf.Program `ebpf:"uprobe_sarama_sendInternal"`
 }
 
 func (p *bpfPrograms) Close() error {
 	return _BpfClose(
-		p.UprobeSaramaEncode,
-		p.UprobeSaramaEncodeRet,
+		p.UprobeSaramaBrokerWrite,
 		p.UprobeSaramaResponsePromiseHandle,
 		p.UprobeSaramaSendInternal,
 	)

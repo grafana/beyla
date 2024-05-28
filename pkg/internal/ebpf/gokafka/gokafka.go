@@ -81,8 +81,7 @@ func (p *Tracer) AddCloser(c ...io.Closer) {
 func (p *Tracer) GoProbes() map[string]ebpfcommon.FunctionPrograms {
 	return map[string]ebpfcommon.FunctionPrograms{
 		"github.com/IBM/sarama.(*Broker).write": {
-			Start: p.bpfObjects.UprobeSaramaEncode,
-			End:   p.bpfObjects.UprobeSaramaEncodeRet,
+			Start: p.bpfObjects.UprobeSaramaBrokerWrite,
 		},
 		"github.com/IBM/sarama.(*responsePromise).handle": {
 			Start: p.bpfObjects.UprobeSaramaResponsePromiseHandle,

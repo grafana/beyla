@@ -139,6 +139,7 @@ typedef struct http2_grpc_request {
     // also to filter traces from unsolicited processes that share the executable
     // with other instrumented processes
     pid_info pid;
+    u8 ssl;
     tp_info_t tp;
 } http2_grpc_request_t;
 

@@ -397,14 +397,7 @@ github.com/prometheus/procfs/internal/util
 # github.com/rs/cors v1.10.1
 ## explicit; go 1.13
 github.com/rs/cors
-# github.com/shirou/gopsutil v3.21.11+incompatible
-## explicit
-github.com/shirou/gopsutil/cpu
-github.com/shirou/gopsutil/internal/common
-github.com/shirou/gopsutil/mem
-github.com/shirou/gopsutil/net
-github.com/shirou/gopsutil/process
-# github.com/shirou/gopsutil/v3 v3.24.2
+# github.com/shirou/gopsutil/v3 v3.24.4
 ## explicit; go 1.15
 github.com/shirou/gopsutil/v3/common
 github.com/shirou/gopsutil/v3/cpu
@@ -418,13 +411,9 @@ github.com/shoenig/go-m1cpu
 # github.com/spf13/pflag v1.0.5
 ## explicit; go 1.12
 github.com/spf13/pflag
-# github.com/stretchr/objx v0.5.2
-## explicit; go 1.20
-github.com/stretchr/objx
 # github.com/stretchr/testify v1.9.0
 ## explicit; go 1.17
 github.com/stretchr/testify/assert
-github.com/stretchr/testify/mock
 github.com/stretchr/testify/require
 # github.com/tklauser/go-sysconf v0.3.13
 ## explicit; go 1.18

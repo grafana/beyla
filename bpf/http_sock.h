@@ -384,7 +384,7 @@ static __always_inline void handle_http_response(unsigned char *small_buf, pid_c
     }
 }
 
-static __always_inline void http2_grpc_start(http2_conn_stream_t *s_key, void *u_buf, int len, u8 direction) {
+static __always_inline void http2_grpc_start(http2_conn_stream_t *s_key, void *u_buf, int len, u8 direction, u8 ssl) {
     http2_grpc_request_t *h2g_info = empty_http2_info();
     if (h2g_info) {
         http_connection_metadata_t *meta = connection_meta(&s_key->pid_conn, direction, PACKET_TYPE_REQUEST);
@@ -396,6 +396,7 @@ static __always_inline void http2_grpc_start(http2_conn_stream_t *s_key, void *u
         h2g_info->flags = EVENT_K_HTTP2_REQUEST;
         h2g_info->start_monotime_ns = bpf_ktime_get_ns();
         h2g_info->len = len;
+        h2g_info->ssl = ssl;
         h2g_info->conn_info = s_key->pid_conn.conn;
         if (meta) { // keep verifier happy
             h2g_info->pid = meta->pid;
@@ -423,7 +424,7 @@ static __always_inline void http2_grpc_end(http2_conn_stream_t *stream, http2_gr
     bpf_map_delete_elem(&ongoing_http2_grpc, stream);
 }
 
-static __always_inline void process_http2_grpc_frames(pid_connection_info_t *pid_conn, void *u_buf, int bytes_len, u8 direction) {
+static __always_inline void process_http2_grpc_frames(pid_connection_info_t *pid_conn, void *u_buf, int bytes_len, u8 direction, u8 ssl) {
     int pos = 0;
     u8 found_start_frame = 0;
     u8 found_end_frame = 0;
@@ -488,7 +489,7 @@ static __always_inline void process_http2_grpc_frames(pid_connection_info_t *pid
     }
 
     if (found_start_frame) {
-        http2_grpc_start(&stream, (void *)((u8 *)u_buf + pos), bytes_len, direction);
+        http2_grpc_start(&stream, (void *)((u8 *)u_buf + pos), bytes_len, direction, ssl);
     } else {
         // We only loop 6 times looking for the stream termination. If the data packed is large we'll miss the
         // frame saying the stream closed. In that case we try this backup path.
@@ -550,6 +551,16 @@ static __always_inline void handle_unknown_tcp_connection(pid_connection_info_t 
             bpf_ringbuf_submit(trace, get_flags());
         }
         bpf_map_delete_elem(&ongoing_tcp_req, pid_conn);
+    } else if (existing->len > 0 && existing->len < (K_TCP_MAX_LEN/2)) {
+        // Attempt to append one more packet. I couldn't convince the verifier
+        // to use a variable (K_TCP_MAX_LEN-existing->len). If needed we may need
+        // to try harder. Mainly needed for userspace detection of missed gRPC, where
+        // the protocol may sent a RST frame after we've done creating the event, so
+        // the next event has an RST frame prepended.
+        u32 off = existing->len;
+        bpf_clamp_umax(off, (K_TCP_MAX_LEN/2));
+        bpf_probe_read(existing->buf + off, (K_TCP_MAX_LEN/2), u_buf);
+        existing->len += bytes_len;
     }
 }
 
@@ -628,7 +639,7 @@ static __always_inline void handle_buf_with_connection(pid_connection_info_t *pi
     } else {
         u8 *h2g = bpf_map_lookup_elem(&ongoing_http2_connections, pid_conn);
         if (h2g && *h2g == ssl) {
-            process_http2_grpc_frames(pid_conn, u_buf, bytes_len, direction);
+            process_http2_grpc_frames(pid_conn, u_buf, bytes_len, direction, ssl);
         } else { // large request tracking
             http_info_t *info = bpf_map_lookup_elem(&ongoing_http, pid_conn);
 

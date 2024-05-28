@@ -106,6 +106,15 @@ func (p *Tracer) GoProbes() map[string]ebpfcommon.FunctionPrograms {
 		"github.com/IBM/sarama.(*Broker).sendInternal": {
 			Start: p.bpfObjects.UprobeSaramaSendInternal,
 		},
+		"github.com/Shopify/sarama.(*Broker).write": {
+			Start: p.bpfObjects.UprobeSaramaBrokerWrite,
+		},
+		"github.com/Shopify/sarama.(*responsePromise).handle": {
+			Start: p.bpfObjects.UprobeSaramaResponsePromiseHandle,
+		},
+		"github.com/Shopify/sarama.(*Broker).sendInternal": {
+			Start: p.bpfObjects.UprobeSaramaSendInternal,
+		},
 	}
 }
 

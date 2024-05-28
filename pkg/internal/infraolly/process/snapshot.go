@@ -43,7 +43,7 @@ type linuxProcess struct {
 
 	procFSRoot string
 
-	// data that will be reused between samples of the same process.
+	// data that will be reused between harvests of the same process.
 	pid     int32
 	user    string
 	cmdLine string

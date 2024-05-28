@@ -5,10 +5,10 @@ package process
 import "log/slog"
 
 func pslog() *slog.Logger {
-	return slog.With("component", "process.Sampler")
+	return slog.With("component", "process.Collector")
 }
 
-type Sample struct {
+type Status struct {
 	ProcessID        int32
 	Command          string
 	User             string
@@ -28,8 +28,8 @@ type Sample struct {
 	IOWriteBytes     uint64
 }
 
-func NewSample(pid int32) *Sample {
-	return &Sample{
+func NewStatus(pid int32) *Status {
+	return &Status{
 		ProcessID: pid,
 	}
 }

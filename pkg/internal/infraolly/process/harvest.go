@@ -5,9 +5,10 @@
 
 // Package process provides all the tools and functionality for sampling processes. It is divided in three main
 // components:
-// - *linuxProcess: provides OS-level information of a process at a given spot
-// - Harvester: manages process *linuxProcesss to create actual Process Samples with the actual metrics.
-// - Sampler: uses the harvester to coordinate the creation of the Process Samples dataset, as being reported to NR
+// - Status: provides OS-level information of a process at a given spot
+// - Harvester: fetches and creates actual Process Status from system
+// - Collector: uses input from the application pipeline to fetch information for all the processes from
+//   the instrumented applications, and forwards it to the next stage of the Process' pipeline.
 package process
 
 import (
@@ -26,13 +27,13 @@ func hlog() *slog.Logger {
 
 var errProcessWithoutRSS = fmt.Errorf("process with zero rss")
 
-// Harvester manages sampling for individual processes. It is used by the Process Sampler to get information about the
+// Harvester manages sampling for individual processes. It is used by the Process Collector to get information about the
 // existing processes.
 type Harvester interface {
 	// Pids return the IDs of all the processes that are currently running
 	Pids() ([]int32, error)
-	// Do performs the actual harvesting operation, returning a process sample containing all the metrics data
-	Do(pid int32) (*Sample, error)
+	// Do performs the actual harvesting operation, returning a process status containing all the metrics data
+	Do(pid int32) (*Status, error)
 }
 
 type RunMode string
@@ -85,15 +86,15 @@ func (*linuxHarvester) Pids() ([]int32, error) {
 	return process.Pids()
 }
 
-// Do returns a sample of a process whose PID is passed as argument. The 'elapsedSeconds' argument represents the
-// time since this process was sampled for the last time. If the process has been sampled for the first time, this value
+// Do returns a status of a process whose PID is passed as argument. The 'elapsedSeconds' argument represents the
+// time since this process was statusd for the last time. If the process has been statusd for the first time, this value
 // will be ignored
-func (ps *linuxHarvester) Do(pid int32) (*Sample, error) {
+func (ps *linuxHarvester) Do(pid int32) (*Status, error) {
 	// Reuses process information that does not vary
-	cached, hasCachedSample := ps.cache.Get(pid)
+	cached, hasCachedEntry := ps.cache.Get(pid)
 
 	// If cached is nil, the linux process will be created from fresh data
-	if !hasCachedSample {
+	if !hasCachedEntry {
 		cached = &cacheEntry{}
 	}
 	var err error
@@ -107,98 +108,98 @@ func (ps *linuxHarvester) Do(pid int32) (*Sample, error) {
 		return nil, errProcessWithoutRSS
 	}
 
-	// Creates a fresh process sample and populates it with the metrics data
-	sample := NewSample(pid)
+	// Creates a fresh process status and populates it with the metrics data
+	status := NewStatus(pid)
 
-	if err := ps.populateStaticData(sample, cached.process); err != nil {
+	if err := ps.populateStaticData(status, cached.process); err != nil {
 		return nil, errors.Wrap(err, "can't populate static attributes")
 	}
 
 	// As soon as we have successfully stored the static (reusable) values, we can cache the entry
-	if !hasCachedSample {
+	if !hasCachedEntry {
 		ps.cache.Add(pid, cached)
 	}
 
-	if err := ps.populateGauges(sample, cached.process); err != nil {
+	if err := ps.populateGauges(status, cached.process); err != nil {
 		return nil, errors.Wrap(err, "can't fetch gauge data")
 	}
 
-	if err := ps.populateIOCounters(sample, cached.process); err != nil {
+	if err := ps.populateIOCounters(status, cached.process); err != nil {
 		return nil, errors.Wrap(err, "can't fetch deltas")
 	}
 
-	cached.lastSample = sample
+	cached.last = status
 
-	return sample, nil
+	return status, nil
 }
 
-// populateStaticData populates the sample with the process data won't vary during the process life cycle
-func (ps *linuxHarvester) populateStaticData(sample *Sample, process *linuxProcess) error {
+// populateStaticData populates the status with the process data won't vary during the process life cycle
+func (ps *linuxHarvester) populateStaticData(status *Status, process *linuxProcess) error {
 	var err error
-	sample.CmdLine, err = process.CmdLine(!ps.stripCommandLine)
+	status.CmdLine, err = process.CmdLine(!ps.stripCommandLine)
 	if err != nil {
 		return errors.Wrap(err, "acquiring command line")
 	}
 
-	sample.ProcessID = process.Pid()
+	status.ProcessID = process.Pid()
 
-	sample.User, err = process.Username()
+	status.User, err = process.Username()
 	if err != nil {
-		ps.log.Debug("can't get username for process", "pid", sample.ProcessID, "error", err)
+		ps.log.Debug("can't get username for process", "pid", status.ProcessID, "error", err)
 	}
 
-	sample.Command = process.Command()
-	sample.ParentProcessID = process.Ppid()
+	status.Command = process.Command()
+	status.ParentProcessID = process.Ppid()
 
 	return nil
 }
 
-// populateGauges populates the sample with gauge data that represents the process state at a given point
-func (ps *linuxHarvester) populateGauges(sample *Sample, process *linuxProcess) error {
+// populateGauges populates the status with gauge data that represents the process state at a given point
+func (ps *linuxHarvester) populateGauges(status *Status, process *linuxProcess) error {
 	var err error
 
 	cpuTimes, err := process.CPUTimes()
 	if err != nil {
 		return err
 	}
-	sample.CPUPercent = cpuTimes.Percent
+	status.CPUPercent = cpuTimes.Percent
 
 	totalCPU := cpuTimes.User + cpuTimes.System
 
 	if totalCPU > 0 {
-		sample.CPUUserPercent = (cpuTimes.User / totalCPU) * sample.CPUPercent
-		sample.CPUSystemPercent = (cpuTimes.System / totalCPU) * sample.CPUPercent
+		status.CPUUserPercent = (cpuTimes.User / totalCPU) * status.CPUPercent
+		status.CPUSystemPercent = (cpuTimes.System / totalCPU) * status.CPUPercent
 	} else {
-		sample.CPUUserPercent = 0
-		sample.CPUSystemPercent = 0
+		status.CPUUserPercent = 0
+		status.CPUSystemPercent = 0
 	}
 
 	if ps.privileged {
-		sample.FdCount, err = process.NumFDs()
+		status.FdCount, err = process.NumFDs()
 		if err != nil {
 			return err
 		}
 	}
 
 	// Extra status data
-	sample.Status = process.Status()
-	sample.ThreadCount = process.NumThreads()
-	sample.MemoryVMSBytes = process.VMSize()
-	sample.MemoryRSSBytes = process.VMRSS()
+	status.Status = process.Status()
+	status.ThreadCount = process.NumThreads()
+	status.MemoryVMSBytes = process.VMSize()
+	status.MemoryRSSBytes = process.VMRSS()
 
 	return nil
 }
 
-// populateIOCounters fills the sample with the IO counters data. For the "X per second" metrics, it requires the
-// last process sample for comparative purposes
-func (ps *linuxHarvester) populateIOCounters(sample *Sample, source *linuxProcess) error {
+// populateIOCounters fills the status with the IO counters data. For the "X per second" metrics, it requires the
+// last process status for comparative purposes
+func (ps *linuxHarvester) populateIOCounters(status *Status, source *linuxProcess) error {
 	ioCounters, err := source.IOCounters()
 	if err != nil {
 		return err
 	}
-	sample.IOReadCount = ioCounters.ReadCount
-	sample.IOWriteCount = ioCounters.WriteCount
-	sample.IOReadBytes = ioCounters.ReadBytes
-	sample.IOWriteBytes = ioCounters.WriteBytes
+	status.IOReadCount = ioCounters.ReadCount
+	status.IOWriteCount = ioCounters.WriteCount
+	status.IOReadBytes = ioCounters.ReadBytes
+	status.IOWriteBytes = ioCounters.WriteBytes
 	return nil
 }

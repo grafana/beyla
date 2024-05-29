@@ -287,8 +287,13 @@ oats-test-redis-other-langs: oats-prereq
 	mkdir -p test/oats/redis_other_langs/$(TEST_OUTPUT)/run
 	cd test/oats/redis_other_langs && TESTCASE_BASE_PATH=./yaml $(GINKGO) -v -r
 
+.PHONY: oats-test-kafka-other-langs
+oats-test-kafka-other-langs: oats-prereq
+	mkdir -p test/oats/kafka_other_langs/$(TEST_OUTPUT)/run
+	cd test/oats/kafka_other_langs && TESTCASE_BASE_PATH=./yaml $(GINKGO) -v -r
+
 .PHONY: oats-test
-oats-test: oats-test-sql oats-test-sql-statement oats-test-sql-other-langs oats-test-redis-other-langs
+oats-test: oats-test-sql oats-test-sql-statement oats-test-sql-other-langs oats-test-redis-other-langs oats-test-kafka-other-langs
 	$(MAKE) itest-coverage-data
 
 .PHONY: oats-test-debug

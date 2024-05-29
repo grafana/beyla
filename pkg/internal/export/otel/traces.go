@@ -641,6 +641,8 @@ func TraceName(span *request.Span) string {
 			return "REDIS"
 		}
 		return span.Method
+	case request.EventTypeKafkaClient:
+		return fmt.Sprintf("%s %s", span.Path, span.Method)
 	}
 	return ""
 }

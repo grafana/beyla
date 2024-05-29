@@ -1,0 +1,25 @@
+docker-compose:
+  generator: generic
+  files:
+    - ../docker-compose-beyla-kafka.yml
+input:
+  - path: '/message'
+
+interval: 500ms
+expected:
+  traces:
+    - traceql: '{ .message.kafka.operation = "receive" }'
+      spans:
+        - name: 'example_topic receive'
+          attributes:
+            messaging.destination.name: example_topic
+            message.kafka.operation: receive
+  # metrics:
+  #   - promql: 'sql_client_duration_sum'
+  #     value: "> 0"
+  #   - promql: 'sql_client_duration_bucket{le="0"}'
+  #     value: "== 0"
+  #   - promql: 'sql_client_duration_bucket{le="10"}'
+  #     value: "> 0"
+  #   - promql: 'sql_client_duration_count'
+  #     value: "> 0"

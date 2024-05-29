@@ -25,6 +25,5 @@ func TestCRLFMatching(t *testing.T) {
 			return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '.' || c == ' ' || c == '-' || c == '_'
 		})
 		assert.Equal(t, res, ts.result)
-
 	}
 }

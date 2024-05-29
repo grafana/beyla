@@ -14,7 +14,7 @@ async def root():
     global redis_cli
     if conn is None:
         redis_cli = redis.Redis(
-            host='localhost',
+            host='redis',
             port=6379,
             charset="utf-8",
             decode_responses=True

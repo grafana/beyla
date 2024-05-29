@@ -503,7 +503,7 @@ func TestGenerateTracesAttributes(t *testing.T) {
 
 		attrs := spans.At(0).Attributes()
 
-		assert.Equal(t, 2, attrs.Len())
+		assert.Equal(t, 4, attrs.Len())
 		ensureTraceStrAttr(t, attrs, semconv.DBOperationKey, "SELECT")
 		ensureTraceStrAttr(t, attrs, semconv.DBSQLTableKey, "credentials")
 		ensureTraceAttrNotExists(t, attrs, semconv.DBStatementKey)
@@ -523,7 +523,7 @@ func TestGenerateTracesAttributes(t *testing.T) {
 
 		attrs := spans.At(0).Attributes()
 
-		assert.Equal(t, 2, attrs.Len())
+		assert.Equal(t, 4, attrs.Len())
 		ensureTraceStrAttr(t, attrs, semconv.DBOperationKey, "SELECT")
 		ensureTraceStrAttr(t, attrs, semconv.DBSQLTableKey, "credentials")
 		ensureTraceAttrNotExists(t, attrs, semconv.DBStatementKey)
@@ -543,7 +543,7 @@ func TestGenerateTracesAttributes(t *testing.T) {
 
 		attrs := spans.At(0).Attributes()
 
-		assert.Equal(t, 3, attrs.Len())
+		assert.Equal(t, 5, attrs.Len())
 		ensureTraceStrAttr(t, attrs, semconv.DBOperationKey, "SELECT")
 		ensureTraceStrAttr(t, attrs, semconv.DBSQLTableKey, "credentials")
 		ensureTraceStrAttr(t, attrs, semconv.DBStatementKey, "SELECT password FROM credentials WHERE username=\"bill\"")

@@ -12,6 +12,7 @@
 
 #define MIN_HTTP_SIZE  12 // HTTP/1.1 CCC is the smallest valid request we can have
 #define RESPONSE_STATUS_POS 9 // HTTP/1.1 <--
+#define MAX_HTTP_STATUS 599
 
 #define PACKET_TYPE_REQUEST 1
 #define PACKET_TYPE_RESPONSE 2
@@ -105,8 +106,8 @@ static __always_inline u8 is_http(unsigned char *p, u32 len, u8 *packet_type) {
     if (len < MIN_HTTP_SIZE) {
         return 0;
     }
-    //HTTP
-    if ((p[0] == 'H') && (p[1] == 'T') && (p[2] == 'T') && (p[3] == 'P')) {
+    //HTTP/1.x
+    if ((p[0] == 'H') && (p[1] == 'T') && (p[2] == 'T') && (p[3] == 'P') && (p[4] == '/') && (p[5] == '1') && (p[6] == '.')) {
        *packet_type = PACKET_TYPE_RESPONSE;
        return 1;
     } else if (
@@ -337,6 +338,9 @@ static __always_inline void process_http_response(http_info_t *info, unsigned ch
     info->status += (buf[RESPONSE_STATUS_POS]     - '0') * 100;
     info->status += (buf[RESPONSE_STATUS_POS + 1] - '0') * 10;
     info->status += (buf[RESPONSE_STATUS_POS + 2] - '0');
+    if (info->status > MAX_HTTP_STATUS) { // we read something invalid
+        info->status = 0;
+    }
 }
 
 static __always_inline http_connection_metadata_t *connection_meta(pid_connection_info_t *pid_conn, u8 direction, u8 packet_type) {
@@ -577,7 +581,7 @@ static __always_inline void handle_buf_with_connection(pid_connection_info_t *pi
 
         bpf_dbg_printk("=== http_buffer_event len=%d pid=%d still_reading=%d ===", bytes_len, pid_from_pid_tgid(bpf_get_current_pid_tgid()), still_reading(info));
 
-        if (packet_type == PACKET_TYPE_REQUEST && (info->status == 0)) {    
+        if (packet_type == PACKET_TYPE_REQUEST && (info->status == 0) && (info->start_monotime_ns == 0)) {
             http_connection_metadata_t *meta = connection_meta(pid_conn, direction, PACKET_TYPE_REQUEST);
 
             get_or_create_trace_info(meta, pid_conn->pid, &pid_conn->conn, u_buf, bytes_len, capture_header_buffer);
@@ -609,7 +613,7 @@ static __always_inline void handle_buf_with_connection(pid_connection_info_t *pi
             // incomplete trace info in user space.
             bpf_probe_read(info->buf, FULL_BUF_SIZE, u_buf);
             process_http_request(info, bytes_len, meta, direction);
-        } else if (packet_type == PACKET_TYPE_RESPONSE) {
+        } else if ((packet_type == PACKET_TYPE_RESPONSE) && (info->status == 0)) {
             handle_http_response(small_buf, pid_conn, info, bytes_len, direction, ssl);
         } else if (still_reading(info)) {
             info->len += bytes_len;

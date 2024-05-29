@@ -19,6 +19,9 @@ func isRedis(buf []uint8) bool {
 }
 
 func isRedisOp(buf []uint8) bool {
+	if len(buf) == 0 {
+		return false
+	}
 	c := buf[0]
 
 	switch c {
@@ -38,7 +41,13 @@ func isRedisOp(buf []uint8) bool {
 }
 
 func isRedisError(buf []uint8) bool {
-	return bytes.HasPrefix(buf, []byte("ERR")) || bytes.HasPrefix(buf, []byte("WRONGTYPE"))
+	return bytes.HasPrefix(buf, []byte("ERR ")) ||
+		bytes.HasPrefix(buf, []byte("WRONGTYPE ")) ||
+		bytes.HasPrefix(buf, []byte("MOVED ")) ||
+		bytes.HasPrefix(buf, []byte("ASK ")) ||
+		bytes.HasPrefix(buf, []byte("BUSY ")) ||
+		bytes.HasPrefix(buf, []byte("NOSCRIPT ")) ||
+		bytes.HasPrefix(buf, []byte("CLUSTERDOWN "))
 }
 
 func crlfTerminatedMatch(buf []uint8, matches func(c uint8) bool) bool {
@@ -67,7 +76,7 @@ func crlfTerminatedMatch(buf []uint8, matches func(c uint8) bool) bool {
 func parseRedisRequest(buf string) (string, string, bool) {
 	lines := strings.Split(buf, "\r\n")
 
-	if len(lines) < 1 {
+	if len(lines) < 2 {
 		return "", "", false
 	}
 

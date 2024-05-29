@@ -37,6 +37,17 @@ func ReadTCPRequestIntoSpan(record *ringbuf.Record) (request.Span, bool, error) 
 		return TCPToSQLToSpan(&event, buf[sqlIndex:]), false, nil
 	} else if isHTTP2(b, &event) {
 		MisclassifiedEvents <- MisclassifiedEvent{EventType: EventTypeKHTTP2, TCPInfo: &event}
+	} else if isRedis(event.Buf[:l]) && isRedis(event.Rbuf[:]) {
+		op, text, ok := parseRedisRequest(buf)
+
+		if ok {
+			status := 0
+			if isErr := isRedisError(event.Rbuf[:]); isErr {
+				status = 1
+			}
+
+			return TCPToRedisToSpan(&event, op, text, status), false, nil
+		}
 	}
 
 	return request.Span{}, true, nil // ignore if we couldn't parse it

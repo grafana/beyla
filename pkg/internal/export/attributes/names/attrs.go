@@ -42,6 +42,7 @@ const (
 	ServerNamespace        = Name("server_service_namespace")
 	ConnectionType         = Name("connection_type")
 	DBOperation            = Name("db.operation")
+	DBQueryText            = Name("db.query.text")
 	RPCMethod              = Name(semconv.RPCMethodKey)
 	RPCSystem              = Name(semconv.RPCSystemKey)
 	RPCGRPCStatusCode      = Name(semconv.RPCGRPCStatusCodeKey)

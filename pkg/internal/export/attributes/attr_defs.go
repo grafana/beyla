@@ -203,6 +203,12 @@ func getDefinitions(groups AttrGroups) map[Section]AttrReportGroup {
 				attr.DBOperation: true,
 			},
 		},
+		RedisClientDuration.Section: {
+			SubGroups: []*AttrReportGroup{&appAttributes, &appKubeAttributes},
+			Attributes: map[attr.Name]Default{
+				attr.DBOperation: true,
+			},
+		},
 		Traces.Section: {
 			Attributes: map[attr.Name]Default{
 				attr.IncludeDBStatement: false,

@@ -504,7 +504,7 @@ func SpanStatusCode(span *request.Span) codes.Code {
 		return httpSpanStatusCode(span)
 	case request.EventTypeGRPC, request.EventTypeGRPCClient:
 		return grpcSpanStatusCode(span)
-	case request.EventTypeSQLClient:
+	case request.EventTypeSQLClient, request.EventTypeRedisClient:
 		if span.Status != 0 {
 			return codes.Error
 		}
@@ -517,7 +517,7 @@ func SpanKindString(span *request.Span) string {
 	switch span.Type {
 	case request.EventTypeHTTP, request.EventTypeGRPC:
 		return "SPAN_KIND_SERVER"
-	case request.EventTypeHTTPClient, request.EventTypeGRPCClient, request.EventTypeSQLClient:
+	case request.EventTypeHTTPClient, request.EventTypeGRPCClient, request.EventTypeSQLClient, request.EventTypeRedisClient:
 		return "SPAN_KIND_CLIENT"
 	}
 	return "SPAN_KIND_INTERNAL"
@@ -578,6 +578,16 @@ func traceAttributes(span *request.Span, optionalAttrs map[attr.Name]struct{}) [
 				attrs = append(attrs, semconv.DBSQLTable(table))
 			}
 		}
+	case request.EventTypeRedisClient:
+		operation := span.Method
+		attrs = append(attrs, semconv.DBSystemRedis)
+		if operation != "" {
+			attrs = append(attrs, semconv.DBOperation(operation))
+			query := span.Path
+			if query != "" {
+				attrs = append(attrs, request.DBQueryText(query))
+			}
+		}
 	}
 
 	return attrs
@@ -605,6 +615,8 @@ func TraceName(span *request.Span) string {
 			operation += " " + table
 		}
 		return operation
+	case request.EventTypeRedisClient:
+		return fmt.Sprintf("REDIS %s", span.Method)
 	}
 	return ""
 }
@@ -613,7 +625,7 @@ func spanKind(span *request.Span) trace2.SpanKind {
 	switch span.Type {
 	case request.EventTypeHTTP, request.EventTypeGRPC:
 		return trace2.SpanKindServer
-	case request.EventTypeHTTPClient, request.EventTypeGRPCClient, request.EventTypeSQLClient:
+	case request.EventTypeHTTPClient, request.EventTypeGRPCClient, request.EventTypeSQLClient, request.EventTypeRedisClient:
 		return trace2.SpanKindClient
 	}
 	return trace2.SpanKindInternal

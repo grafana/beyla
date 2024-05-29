@@ -167,6 +167,7 @@ type MetricsReporter struct {
 	attrSQLClient             []attributes.Field[*request.Span, attribute.KeyValue]
 	attrHTTPRequestSize       []attributes.Field[*request.Span, attribute.KeyValue]
 	attrHTTPClientRequestSize []attributes.Field[*request.Span, attribute.KeyValue]
+	attrRedisClient           []attributes.Field[*request.Span, attribute.KeyValue]
 }
 
 // Metrics is a set of metrics associated to a given OTEL MeterProvider.
@@ -183,6 +184,7 @@ type Metrics struct {
 	sqlClientDuration     instrument.Float64Histogram
 	httpRequestSize       instrument.Float64Histogram
 	httpClientRequestSize instrument.Float64Histogram
+	redisClientDuration   instrument.Float64Histogram
 	// trace span metrics
 	spanMetricsLatency    instrument.Float64Histogram
 	spanMetricsCallsTotal instrument.Int64Counter
@@ -246,8 +248,10 @@ func newMetricsReporter(
 		request.SpanOTELGetters, mr.attributes.For(attributes.RPCClientDuration))
 	mr.attrSQLClient = attributes.OpenTelemetryGetters(
 		request.SpanOTELGetters, mr.attributes.For(attributes.SQLClientDuration))
+	mr.attrRedisClient = attributes.OpenTelemetryGetters(
+		request.SpanOTELGetters, mr.attributes.For(attributes.RedisClientDuration))
 
-	mr.reporters = NewReporterPool[*Metrics](cfg.ReportersCacheLen,
+	mr.reporters = NewReporterPool(cfg.ReportersCacheLen,
 		func(id svc.UID, v *Metrics) {
 			if mr.cfg.SpanMetricsEnabled() {
 				attrOpt := instrument.WithAttributeSet(mr.metricResourceAttributes(v.service))
@@ -287,6 +291,7 @@ func (mr *MetricsReporter) otelMetricOptions(mlog *slog.Logger) []metric.Option 
 		metric.WithView(otelHistogramConfig(attributes.SQLClientDuration.OTEL, mr.cfg.Buckets.DurationHistogram, useExponentialHistograms)),
 		metric.WithView(otelHistogramConfig(attributes.HTTPServerRequestSize.OTEL, mr.cfg.Buckets.RequestSizeHistogram, useExponentialHistograms)),
 		metric.WithView(otelHistogramConfig(attributes.HTTPClientRequestSize.OTEL, mr.cfg.Buckets.RequestSizeHistogram, useExponentialHistograms)),
+		metric.WithView(otelHistogramConfig(attributes.RedisClientDuration.OTEL, mr.cfg.Buckets.DurationHistogram, useExponentialHistograms)),
 	}
 }
 
@@ -348,6 +353,10 @@ func (mr *MetricsReporter) setupOtelMeters(m *Metrics, meter instrument.Meter) e
 	m.httpClientRequestSize, err = meter.Float64Histogram(attributes.HTTPClientRequestSize.OTEL, instrument.WithUnit("By"))
 	if err != nil {
 		return fmt.Errorf("creating http size histogram metric: %w", err)
+	}
+	m.redisClientDuration, err = meter.Float64Histogram(attributes.RedisClientDuration.OTEL, instrument.WithUnit("s"))
+	if err != nil {
+		return fmt.Errorf("creating redis client duration histogram metric: %w", err)
 	}
 
 	return nil
@@ -672,6 +681,9 @@ func (r *Metrics) record(span *request.Span, mr *MetricsReporter) {
 		case request.EventTypeSQLClient:
 			r.sqlClientDuration.Record(r.ctx, duration,
 				withAttributes(span, mr.attrSQLClient))
+		case request.EventTypeRedisClient:
+			r.redisClientDuration.Record(r.ctx, duration,
+				withAttributes(span, mr.attrRedisClient))
 		}
 	}
 

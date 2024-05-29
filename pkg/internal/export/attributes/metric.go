@@ -61,6 +61,11 @@ var (
 		Prom:    "sql_client_duration_seconds",
 		OTEL:    "sql.client.duration",
 	}
+	RedisClientDuration = Name{
+		Section: "redis.client.duration",
+		Prom:    "redis_client_duration_seconds",
+		OTEL:    "redis.client.duration",
+	}
 )
 
 // normalizeMetric will facilitate the user-input in the attributes.enable section.

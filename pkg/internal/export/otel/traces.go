@@ -568,6 +568,10 @@ func traceAttributes(span *request.Span, optionalAttrs map[attr.Name]struct{}) [
 			request.ServerPort(span.HostPort),
 		}
 	case request.EventTypeSQLClient:
+		attrs = []attribute.KeyValue{
+			request.ServerAddr(request.SpanHost(span)),
+			request.ServerPort(span.HostPort),
+		}
 		if _, ok := optionalAttrs[attr.IncludeDBStatement]; ok {
 			attrs = append(attrs, semconv.DBStatement(span.Statement))
 		}
@@ -580,8 +584,12 @@ func traceAttributes(span *request.Span, optionalAttrs map[attr.Name]struct{}) [
 			}
 		}
 	case request.EventTypeRedisClient:
+		attrs = []attribute.KeyValue{
+			request.ServerAddr(request.SpanHost(span)),
+			request.ServerPort(span.HostPort),
+			semconv.DBSystemRedis,
+		}
 		operation := span.Method
-		attrs = append(attrs, semconv.DBSystemRedis)
 		if operation != "" {
 			attrs = append(attrs, semconv.DBOperation(operation))
 			if _, ok := optionalAttrs[attr.IncludeDBStatement]; ok {

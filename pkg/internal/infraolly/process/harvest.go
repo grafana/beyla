@@ -53,7 +53,7 @@ type Config struct {
 	Rate       time.Duration
 }
 
-func newHarvester(cfg Config, cache *simplelru.LRU[int32, *cacheEntry]) *linuxHarvester {
+func newHarvester(cfg *Config, cache *simplelru.LRU[int32, *cacheEntry]) *linuxHarvester {
 	// If not config, assuming root mode as default
 	privileged := cfg.RunMode == RunModeRoot || cfg.RunMode == RunModePrivileged
 	disableZeroRSSFilter := cfg.DisableZeroRSSFilter

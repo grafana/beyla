@@ -583,9 +583,11 @@ func traceAttributes(span *request.Span, optionalAttrs map[attr.Name]struct{}) [
 		attrs = append(attrs, semconv.DBSystemRedis)
 		if operation != "" {
 			attrs = append(attrs, semconv.DBOperation(operation))
-			query := span.Path
-			if query != "" {
-				attrs = append(attrs, request.DBQueryText(query))
+			if _, ok := optionalAttrs[attr.IncludeDBStatement]; ok {
+				query := span.Path
+				if query != "" {
+					attrs = append(attrs, request.DBQueryText(query))
+				}
 			}
 		}
 	}

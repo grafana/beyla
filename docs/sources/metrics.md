@@ -24,6 +24,7 @@ The following table describes the exported metrics in both OpenTelemetry and Pro
 | Application | `rpc.client.duration`           | `rpc_client_duration_seconds`          | Histogram | seconds | Duration of GRPC service calls from the client side                              |
 | Application | `rpc.server.duration`           | `rpc_server_duration_seconds`          | Histogram | seconds | Duration of RPC service calls from the server side                               |
 | Application | `sql.client.duration`           | `sql_client_duration_seconds`          | Histogram | seconds | Duration of SQL client operations (Experimental)                                 |
+| Application | `redis.client.duration`         | `redis_client_duration_seconds`        | Histogram | seconds | Duration of Redis client operations (Experimental)                               |
 | Network     | `beyla.network.flow.bytes`      | `beyla_network_flow_bytes`             | Counter   | bytes   | Bytes submitted from a source network endpoint to a destination network endpoint |
 
 Beyla can also export [Span metrics](/docs/tempo/latest/metrics-generator/span_metrics/) and
@@ -64,7 +65,9 @@ default, check the `attributes`->`select` section in the [configuration document
 | Application (server)       | `client.address`            | hidden                                        |
 | `beyla.network.flow.bytes` | `beyla.ip`                  | hidden                                        |
 | `sql.client.duration`      | `db.operation`              | shown                                         |
-| `sql.client.duration`      | `db.statement`              | shown                                         |
+| `sql.client.duration`      | `db.statement`              | hidden                                        |
+| `redis.client.duration`    | `db.operation`              | shown                                         |
+| `redis.client.duration`    | `db.statement`              | hidden                                        |
 | `beyla.network.flow.bytes` | `direction`                 | hidden                                        |
 | `beyla.network.flow.bytes` | `dst.address`               | hidden                                        |
 | `beyla.network.flow.bytes` | `dst.cidr`                  | shown if the `cidrs` configuration is defined |

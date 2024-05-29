@@ -40,6 +40,114 @@
         ]
       }
     },
+    "github.com/IBM/sarama.Broker": {
+      "conn": {
+        "versions": {
+          "oldest": "1.40.0",
+          "newest": "1.43.2"
+        },
+        "offsets": [
+          {
+            "offset": 48,
+            "since": "1.40.0"
+          }
+        ]
+      },
+      "correlationID": {
+        "versions": {
+          "oldest": "1.40.0",
+          "newest": "1.43.2"
+        },
+        "offsets": [
+          {
+            "offset": 40,
+            "since": "1.40.0"
+          }
+        ]
+      }
+    },
+    "github.com/IBM/sarama.bufConn": {
+      "Conn": {
+        "versions": {
+          "oldest": "1.40.0",
+          "newest": "1.43.2"
+        },
+        "offsets": [
+          {
+            "offset": 0,
+            "since": "1.40.0"
+          }
+        ]
+      }
+    },
+    "github.com/IBM/sarama.responsePromise": {
+      "correlationID": {
+        "versions": {
+          "oldest": "1.40.0",
+          "newest": "1.43.2"
+        },
+        "offsets": [
+          {
+            "offset": 24,
+            "since": "1.40.0"
+          }
+        ]
+      }
+    },
+    "github.com/Shopify/sarama.Broker": {
+      "conn": {
+        "versions": {
+          "oldest": "1.37.0",
+          "newest": "1.38.1"
+        },
+        "offsets": [
+          {
+            "offset": 48,
+            "since": "1.37.0"
+          }
+        ]
+      },
+      "correlationID": {
+        "versions": {
+          "oldest": "1.37.0",
+          "newest": "1.38.1"
+        },
+        "offsets": [
+          {
+            "offset": 40,
+            "since": "1.37.0"
+          }
+        ]
+      }
+    },
+    "github.com/Shopify/sarama.bufConn": {
+      "Conn": {
+        "versions": {
+          "oldest": "1.37.0",
+          "newest": "1.38.1"
+        },
+        "offsets": [
+          {
+            "offset": 0,
+            "since": "1.37.0"
+          }
+        ]
+      }
+    },
+    "github.com/Shopify/sarama.responsePromise": {
+      "correlationID": {
+        "versions": {
+          "oldest": "1.37.0",
+          "newest": "1.38.1"
+        },
+        "offsets": [
+          {
+            "offset": 24,
+            "since": "1.37.0"
+          }
+        ]
+      }
+    },
     "golang.org/x/net/http2.ClientConn": {
       "nextStreamID": {
         "versions": {

@@ -73,3 +73,6 @@ test/oats/*/build/*
 test/cmd/grpc/client/grpclient
 test/integration/components/gohttp2/client/client
 test/integration/components/gohttp2/server/http2srv
+beyla.sln
+test/integration/components/gokafka/gokafka
+test/integration/components/gokafka/vendor

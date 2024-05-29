@@ -175,6 +175,46 @@ var structMembers = map[string]structInfo{
 			"offset": "grpc_transport_buf_writer_offset_pos",
 		},
 	},
+	"github.com/IBM/sarama.Broker": {
+		lib: "github.com/IBM/sarama",
+		fields: map[string]string{
+			"correlationID": "sarama_broker_corr_id_pos",
+			"conn":          "sarama_broker_conn_pos",
+		},
+	},
+	"github.com/IBM/sarama.responsePromise": {
+		lib: "github.com/IBM/sarama",
+		fields: map[string]string{
+			"correlationID": "sarama_response_corr_id_pos",
+		},
+	},
+	"github.com/IBM/sarama.bufConn": {
+		lib: "github.com/IBM/sarama",
+		fields: map[string]string{
+			"Conn": "sarama_bufconn_conn_pos",
+		},
+	},
+	// These are duplicate because the Sarama library changed orgs,
+	// from Shopify to IBM at version 1.40
+	"github.com/Shopify/sarama.Broker": {
+		lib: "github.com/IBM/sarama",
+		fields: map[string]string{
+			"correlationID": "sarama_broker_corr_id_pos",
+			"conn":          "sarama_broker_conn_pos",
+		},
+	},
+	"github.com/Shopify/sarama.responsePromise": {
+		lib: "github.com/IBM/sarama",
+		fields: map[string]string{
+			"correlationID": "sarama_response_corr_id_pos",
+		},
+	},
+	"github.com/Shopify/sarama.bufConn": {
+		lib: "github.com/IBM/sarama",
+		fields: map[string]string{
+			"Conn": "sarama_bufconn_conn_pos",
+		},
+	},
 }
 
 func structMemberOffsets(elfFile *elf.File) (FieldOffsets, error) {

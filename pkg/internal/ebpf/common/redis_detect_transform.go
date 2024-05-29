@@ -15,6 +15,10 @@ func isRedis(buf []uint8) bool {
 		return false
 	}
 
+	return isRedisOp(buf)
+}
+
+func isRedisOp(buf []uint8) bool {
 	c := buf[0]
 
 	switch c {
@@ -26,7 +30,7 @@ func isRedis(buf []uint8) bool {
 		return isRedisError(buf[1:])
 	case ':', '$', '*':
 		return crlfTerminatedMatch(buf[1:], func(c uint8) bool {
-			return (c >= '0' && c <= '1')
+			return (c >= '0' && c <= '9')
 		})
 	}
 
@@ -34,7 +38,7 @@ func isRedis(buf []uint8) bool {
 }
 
 func isRedisError(buf []uint8) bool {
-	return bytes.HasPrefix(buf, []byte("ERR ")) || bytes.HasPrefix(buf, []byte("WRONGTYPE "))
+	return bytes.HasPrefix(buf, []byte("ERR")) || bytes.HasPrefix(buf, []byte("WRONGTYPE"))
 }
 
 func crlfTerminatedMatch(buf []uint8, matches func(c uint8) bool) bool {
@@ -78,8 +82,11 @@ func parseRedisRequest(buf string) (string, string, bool) {
 	read := false
 	// Skip the first line
 	for _, l := range lines[1:] {
+		if len(l) == 0 {
+			continue
+		}
 		if !read {
-			if isRedis([]uint8(l)) {
+			if isRedisOp([]uint8(l + "\r\n")) {
 				read = true
 			} else {
 				break

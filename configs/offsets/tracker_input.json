@@ -109,5 +109,37 @@
         "Code"
       ]
     }
-  }
+  },
+  "github.com/IBM/sarama": {
+    "inspect": "./configs/offsets/sarama/inspect.go",
+    "versions": ">= 1.40",
+    "fields": {
+      "github.com/IBM/sarama.Broker": [
+        "correlationID",
+        "conn"
+      ],
+      "github.com/IBM/sarama.responsePromise": [
+        "correlationID"
+      ],
+      "github.com/IBM/sarama.bufConn": [
+        "Conn"
+      ]
+    }
+  },
+  "github.com/Shopify/sarama": {
+    "inspect": "./configs/offsets/shopify/inspect.go",
+    "versions": ">= 1.37, < 1.40",
+    "fields": {
+      "github.com/Shopify/sarama.Broker": [
+        "correlationID",
+        "conn"
+      ],
+      "github.com/Shopify/sarama.responsePromise": [
+        "correlationID"
+      ],
+      "github.com/Shopify/sarama.bufConn": [
+        "Conn"
+      ]
+    }
+  }  
 }

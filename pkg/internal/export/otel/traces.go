@@ -619,7 +619,10 @@ func TraceName(span *request.Span) string {
 		}
 		return operation
 	case request.EventTypeRedisClient:
-		return fmt.Sprintf("REDIS %s", span.Method)
+		if span.Method == "" {
+			return "REDIS"
+		}
+		return span.Method
 	}
 	return ""
 }

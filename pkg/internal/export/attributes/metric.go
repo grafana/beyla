@@ -61,6 +61,11 @@ var (
 		Prom:    "db_client_operation_duration_seconds",
 		OTEL:    "db.client.operation.duration",
 	}
+	KafkaClientDuration = Name{
+		Section: "kafka.client.duration",
+		Prom:    "kafka_client_duration_seconds",
+		OTEL:    "kafka.client.duration",
+	}
 )
 
 // normalizeMetric will facilitate the user-input in the attributes.enable section.

@@ -30,7 +30,7 @@ import (
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	"go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/trace"
-	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
+	semconv "go.opentelemetry.io/otel/semconv/v1.25.0"
 	trace2 "go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 
@@ -599,6 +599,15 @@ func traceAttributes(span *request.Span, optionalAttrs map[attr.Name]struct{}) [
 					attrs = append(attrs, request.DBQueryText(query))
 				}
 			}
+		}
+	case request.EventTypeKafkaClient:
+		operation := attribute.Key(semconv.MessagingOperationKey).String(span.Method)
+		attrs = []attribute.KeyValue{
+			semconv.MessagingSystemKafka,
+			//semconv.MessagingMessageBodySize(int(span.ContentLength)),
+			semconv.MessagingDestinationName(span.Path),
+			semconv.MessagingClientID(span.OtherNamespace),
+			operation,
 		}
 	}
 

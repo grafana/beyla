@@ -204,6 +204,10 @@ func getDefinitions(groups AttrGroups) map[Section]AttrReportGroup {
 				attr.DBSystem:    true,
 			},
 		},
+		KafkaClientDuration.Section: {
+			SubGroups:  []*AttrReportGroup{&appAttributes, &appKubeAttributes},
+			Attributes: map[attr.Name]Default{}, //TODO: add attributes
+		},
 		Traces.Section: {
 			Attributes: map[attr.Name]Default{
 				attr.DBQueryText: false,

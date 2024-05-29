@@ -19,7 +19,7 @@ import (
 	"go.opentelemetry.io/collector/pdata/ptrace"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
-	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
+	semconv "go.opentelemetry.io/otel/semconv/v1.25.0"
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/grafana/beyla/pkg/internal/export/attributes"
@@ -550,6 +550,24 @@ func TestGenerateTracesAttributes(t *testing.T) {
 		ensureTraceStrAttr(t, attrs, attribute.Key(attr.DBCollectionName), "credentials")
 		ensureTraceStrAttr(t, attrs, semconv.DBSystemKey, "other_sql")
 		ensureTraceStrAttr(t, attrs, attribute.Key(attr.DBQueryText), "SELECT password FROM credentials WHERE username=\"bill\"")
+	})
+	t.Run("test Kafka trace generation", func(t *testing.T) {
+		span := request.Span{Type: request.EventTypeKafkaClient, Method: "receive", Path: "important-topic", OtherNamespace: "test"}
+		traces := GenerateTraces(&span, map[attr.Name]struct{}{})
+
+		assert.Equal(t, 1, traces.ResourceSpans().Len())
+		assert.Equal(t, 1, traces.ResourceSpans().At(0).ScopeSpans().Len())
+		assert.Equal(t, 1, traces.ResourceSpans().At(0).ScopeSpans().At(0).Spans().Len())
+		spans := traces.ResourceSpans().At(0).ScopeSpans().At(0).Spans()
+
+		assert.NotEmpty(t, spans.At(0).SpanID().String())
+		assert.NotEmpty(t, spans.At(0).TraceID().String())
+
+		attrs := spans.At(0).Attributes()
+		ensureTraceStrAttr(t, attrs, semconv.MessagingOperationKey, "receive")
+		ensureTraceStrAttr(t, attrs, semconv.MessagingDestinationNameKey, "important-topic")
+		ensureTraceStrAttr(t, attrs, semconv.MessagingClientIDKey, "test")
+
 	})
 }
 

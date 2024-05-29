@@ -72,6 +72,8 @@ func spanType(span *request.Span) string {
 		return "SQL"
 	case request.EventTypeRedisClient:
 		return "REDIS"
+	case request.EventTypeKafkaClient:
+		return "KAFKA"
 	}
 
 	return ""

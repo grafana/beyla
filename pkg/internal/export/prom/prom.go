@@ -432,6 +432,7 @@ func (r *metricsReporter) collectMetrics(input <-chan []request.Span) {
 	}
 }
 
+// nolint:cyclop
 func (r *metricsReporter) observe(span *request.Span) {
 	t := span.Timings()
 	r.beylaInfo.WithLabelValues(span.ServiceID.SDKLanguage.String()).Set(1.0)

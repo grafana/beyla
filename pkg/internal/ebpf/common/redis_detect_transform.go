@@ -4,8 +4,9 @@ import (
 	"bytes"
 	"strings"
 
-	"github.com/grafana/beyla/pkg/internal/request"
 	trace2 "go.opentelemetry.io/otel/trace"
+
+	"github.com/grafana/beyla/pkg/internal/request"
 )
 
 const minRedisFrameLen = 3
@@ -18,6 +19,7 @@ func isRedis(buf []uint8) bool {
 	return isRedisOp(buf)
 }
 
+// nolint:cyclop
 func isRedisOp(buf []uint8) bool {
 	if len(buf) == 0 {
 		return false

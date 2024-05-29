@@ -523,6 +523,7 @@ func SpanKindString(span *request.Span) string {
 	return "SPAN_KIND_INTERNAL"
 }
 
+// nolint:cyclop
 func traceAttributes(span *request.Span, optionalAttrs map[attr.Name]struct{}) []attribute.KeyValue {
 	var attrs []attribute.KeyValue
 

@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"github.com/hashicorp/golang-lru/v2/simplelru"
-	"github.com/pkg/errors"
 	"github.com/shirou/gopsutil/v3/process"
 )
 
@@ -25,21 +24,19 @@ func hlog() *slog.Logger {
 
 var errProcessWithoutRSS = fmt.Errorf("process with zero rss")
 
-// Harvester manages sampling for individual processes. It is used by the Process Collector to get information about the
-// existing processes.
-type Harvester interface {
-	// Pids return the IDs of all the processes that are currently running
-	Pids() ([]int32, error)
-	// Do performs the actual harvesting operation, returning a process status containing all the metrics data
-	Do(pid int32) (*Status, error)
-}
-
 type RunMode string
 
 const (
 	RunModeRoot         = "root"
 	RunModePrivileged   = "privileged"
 	RunModeUnprivileged = "unprivileged"
+)
+
+type PidMode string
+
+const (
+	PidModeHost = "host"
+	PidModeUser = "user"
 )
 
 type Config struct {
@@ -50,15 +47,17 @@ type Config struct {
 
 	ProcFSRoot string
 	Rate       time.Duration
+
+	PidMode PidMode
 }
 
-func newHarvester(cfg *Config, cache *simplelru.LRU[int32, *cacheEntry]) *linuxHarvester {
+func newHarvester(cfg *Config, cache *simplelru.LRU[int32, *cacheEntry]) *Harvester {
 	// If not config, assuming root mode as default
 	privileged := cfg.RunMode == RunModeRoot || cfg.RunMode == RunModePrivileged
 	disableZeroRSSFilter := cfg.DisableZeroRSSFilter
 	stripCommandLine := !cfg.FullCommandLine
 
-	return &linuxHarvester{
+	return &Harvester{
 		procFSRoot:           cfg.ProcFSRoot,
 		privileged:           privileged,
 		disableZeroRSSFilter: disableZeroRSSFilter,
@@ -68,8 +67,8 @@ func newHarvester(cfg *Config, cache *simplelru.LRU[int32, *cacheEntry]) *linuxH
 	}
 }
 
-// linuxHarvester is a Harvester implementation that uses various linux sources and manages process caches
-type linuxHarvester struct {
+// Harvester is a Harvester implementation that uses various linux sources and manages process caches
+type Harvester struct {
 	procFSRoot           string
 	privileged           bool
 	disableZeroRSSFilter bool
@@ -78,17 +77,16 @@ type linuxHarvester struct {
 	log                  *slog.Logger
 }
 
-var _ Harvester = (*linuxHarvester)(nil) // static interface assertion
-
 // Pids returns a slice of process IDs that are running now
-func (*linuxHarvester) Pids() ([]int32, error) {
+func (*Harvester) Pids() ([]int32, error) {
 	return process.Pids()
 }
 
 // Do returns a status of a process whose PID is passed as argument. The 'elapsedSeconds' argument represents the
 // time since this process was statusd for the last time. If the process has been statusd for the first time, this value
 // will be ignored
-func (ps *linuxHarvester) Do(pid int32) (*Status, error) {
+func (ps *Harvester) Do(pid int32) (*Status, error) {
+	ps.log.Debug("harvesting pid", "pid", pid)
 	// Reuses process information that does not vary
 	cached, hasCachedEntry := ps.cache.Get(pid)
 
@@ -99,7 +97,7 @@ func (ps *linuxHarvester) Do(pid int32) (*Status, error) {
 	var err error
 	cached.process, err = getLinuxProcess(ps.procFSRoot, pid, cached.process, ps.privileged)
 	if err != nil {
-		return nil, errors.Wrap(err, "can't create process")
+		return nil, fmt.Errorf("can't create process: %w", err)
 	}
 
 	// We don't need to report processes which are not using memory. This filters out certain kernel processes.
@@ -111,7 +109,7 @@ func (ps *linuxHarvester) Do(pid int32) (*Status, error) {
 	status := NewStatus(pid)
 
 	if err := ps.populateStaticData(status, cached.process); err != nil {
-		return nil, errors.Wrap(err, "can't populate static attributes")
+		return nil, fmt.Errorf("can't populate static attributes: %w", err)
 	}
 
 	// As soon as we have successfully stored the static (reusable) values, we can cache the entry
@@ -120,11 +118,11 @@ func (ps *linuxHarvester) Do(pid int32) (*Status, error) {
 	}
 
 	if err := ps.populateGauges(status, cached.process); err != nil {
-		return nil, errors.Wrap(err, "can't fetch gauge data")
+		return nil, fmt.Errorf("can't fetch gauge data: %w", err)
 	}
 
 	if err := ps.populateIOCounters(status, cached.process); err != nil {
-		return nil, errors.Wrap(err, "can't fetch deltas")
+		return nil, fmt.Errorf("can't fetch deltas: %w", err)
 	}
 
 	cached.last = status
@@ -133,11 +131,11 @@ func (ps *linuxHarvester) Do(pid int32) (*Status, error) {
 }
 
 // populateStaticData populates the status with the process data won't vary during the process life cycle
-func (ps *linuxHarvester) populateStaticData(status *Status, process *linuxProcess) error {
+func (ps *Harvester) populateStaticData(status *Status, process *linuxProcess) error {
 	var err error
 	status.CommandLine, err = process.CmdLine(!ps.stripCommandLine)
 	if err != nil {
-		return errors.Wrap(err, "acquiring command line")
+		return fmt.Errorf("acquiring command line: %w", err)
 	}
 
 	status.ProcessID = process.Pid()
@@ -154,7 +152,7 @@ func (ps *linuxHarvester) populateStaticData(status *Status, process *linuxProce
 }
 
 // populateGauges populates the status with gauge data that represents the process state at a given point
-func (ps *linuxHarvester) populateGauges(status *Status, process *linuxProcess) error {
+func (ps *Harvester) populateGauges(status *Status, process *linuxProcess) error {
 	var err error
 
 	cpuTimes, err := process.CPUTimes()
@@ -191,7 +189,7 @@ func (ps *linuxHarvester) populateGauges(status *Status, process *linuxProcess) 
 
 // populateIOCounters fills the status with the IO counters data. For the "X per second" metrics, it requires the
 // last process status for comparative purposes
-func (ps *linuxHarvester) populateIOCounters(status *Status, source *linuxProcess) error {
+func (ps *Harvester) populateIOCounters(status *Status, source *linuxProcess) error {
 	ioCounters, err := source.IOCounters()
 	if err != nil {
 		return err

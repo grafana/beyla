@@ -50,8 +50,9 @@ func SubPipelineProvider(ctx context.Context, cfg *beyla.Config) pipe.FinalProvi
 		var connector <-chan []request.Span = connectorChan
 		nb := pipe.NewBuilder(&subPipeline{}, pipe.ChannelBufferLen(cfg.ChannelBufferLen))
 		pipe.AddStartProvider(nb, collector, process.NewCollectorProvider(ctx, &connector, &cfg.Processes))
-		pipe.AddFinal(nb, otelExport, func(_ <-chan []*process.Status) {
-
+		pipe.AddFinal(nb, otelExport, func(in <-chan []*process.Status) {
+			for  range in {
+			}
 		})
 		pipe.AddFinal(nb, promExport, func(in <-chan []*process.Status) {
 			for ps := range in {

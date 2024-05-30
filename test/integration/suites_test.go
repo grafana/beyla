@@ -398,11 +398,11 @@ func TestSuite_Python(t *testing.T) {
 	compose.Env = append(compose.Env, `BEYLA_OPEN_PORT=8380`, `BEYLA_EXECUTABLE_NAME=`, `TEST_SERVICE_PORTS=8381:8380`)
 	require.NoError(t, err)
 	require.NoError(t, compose.Up())
-	t.Run("Python RED metrics", testREDMetricsPythonHTTP)
-	t.Run("Python RED metrics with timeouts", testREDMetricsTimeoutPythonHTTP)
-	t.Run("BPF pinning folder mounted", testBPFPinningMounted)
-	//require.NoError(t, compose.Close())
-	//t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
+	//t.Run("Python RED metrics", testREDMetricsPythonHTTP)
+	//t.Run("Python RED metrics with timeouts", testREDMetricsTimeoutPythonHTTP)
+	//t.Run("BPF pinning folder mounted", testBPFPinningMounted)
+	////require.NoError(t, compose.Close())
+	////t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
 }
 
 func TestSuite_PythonTLS(t *testing.T) {

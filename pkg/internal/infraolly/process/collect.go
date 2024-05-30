@@ -17,12 +17,13 @@ import (
 
 // Collector returns runtime information about the currently running processes
 type Collector struct {
-	ctx     context.Context
-	cfg     *Config
-	harvest Harvester
-	cache   *simplelru.LRU[int32, *cacheEntry]
-	log     *slog.Logger
-	newPids *<-chan []request.Span
+	userPids bool
+	ctx      context.Context
+	cfg      *Config
+	harvest  *Harvester
+	cache    *simplelru.LRU[int32, *cacheEntry]
+	log      *slog.Logger
+	newPids  *<-chan []request.Span
 }
 
 // NewCollectorProvider creates and returns a new process Collector, given an agent context.
@@ -33,12 +34,13 @@ func NewCollectorProvider(ctx context.Context, input *<-chan []request.Span, cfg
 		harvest := newHarvester(cfg, cache)
 
 		return (&Collector{
-			ctx:     ctx,
-			cfg:     cfg,
-			harvest: harvest,
-			cache:   cache,
-			log:     pslog(),
-			newPids: input,
+			ctx:      ctx,
+			cfg:      cfg,
+			harvest:  harvest,
+			cache:    cache,
+			log:      pslog(),
+			newPids:  input,
+			userPids: cfg.PidMode == PidModeUser,
 		}).Run, nil
 	}
 }
@@ -47,6 +49,7 @@ func (ps *Collector) Run(out chan<- []*Status) {
 	// TODO: set app metadata as key for later decoration? (e.g. K8s metadata, svc.ID)
 	pids := map[int32]struct{}{}
 	collectTicker := time.NewTicker(ps.cfg.Rate)
+	defer collectTicker.Stop()
 	newPids := *ps.newPids
 	for {
 		select {
@@ -54,14 +57,20 @@ func (ps *Collector) Run(out chan<- []*Status) {
 			ps.log.Debug("exiting")
 		case spans := <-newPids:
 			// updating PIDs map with spans information
-			for i := range spans {
-				pids[int32(spans[i].Pid.UserPID)] = struct{}{}
+			if ps.userPids {
+				for i := range spans {
+					pids[int32(spans[i].Pid.UserPID)] = struct{}{}
+				}
+			} else {
+				for i := range spans {
+					pids[int32(spans[i].Pid.HostPID)] = struct{}{}
+				}
 			}
 		case <-collectTicker.C:
 			ps.log.Debug("start process collection")
 			procs, removed := ps.Collect(pids)
 			for _, rp := range removed {
-				pids[rp] = struct{}{}
+				delete(pids, rp)
 			}
 			out <- procs
 		}
@@ -78,6 +87,7 @@ func (ps *Collector) Collect(pids map[int32]struct{}) ([]*Status, []int32) {
 		status, err := ps.harvest.Do(pid)
 		if err != nil {
 			ps.log.Debug("skipping process", "pid", pid, "error", err)
+			ps.harvest.cache.Remove(pid)
 			removed = append(removed, pid)
 			continue
 		}
@@ -85,7 +95,7 @@ func (ps *Collector) Collect(pids map[int32]struct{}) ([]*Status, []int32) {
 		results = append(results, status)
 	}
 
-	removeUntilLen(ps.cache, len(pids))
+	removeUntilLen(ps.cache, len(results))
 
 	return results, removed
 }

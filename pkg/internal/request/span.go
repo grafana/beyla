@@ -20,6 +20,7 @@ const (
 	EventTypeHTTPClient
 	EventTypeGRPCClient
 	EventTypeSQLClient
+	EventTypeRedisClient
 )
 
 type IgnoreMode uint8

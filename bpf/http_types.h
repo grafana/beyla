@@ -15,6 +15,7 @@
 #define KPROBES_LARGE_RESPONSE_LEN 100000 // 100K and above we try to track the response actual time with kretprobes
 
 #define K_TCP_MAX_LEN 256
+#define K_TCP_RES_LEN 24
 
 #define CONN_INFO_FLAG_TRACE 0x1
 
@@ -96,6 +97,7 @@ typedef struct tcp_req {
     u64 start_monotime_ns;
     u64 end_monotime_ns;
     unsigned char buf[K_TCP_MAX_LEN] __attribute__ ((aligned (8))); // ringbuffer memcpy complains unless this is 8 byte aligned
+    unsigned char rbuf[K_TCP_RES_LEN] __attribute__ ((aligned (8))); // ringbuffer memcpy complains unless this is 8 byte aligned
     u32 len;
     u32 resp_len;
     u8  ssl;

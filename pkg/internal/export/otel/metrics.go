@@ -164,7 +164,7 @@ type MetricsReporter struct {
 	attrHTTPClientDuration    []attributes.Field[*request.Span, attribute.KeyValue]
 	attrGRPCServer            []attributes.Field[*request.Span, attribute.KeyValue]
 	attrGRPCClient            []attributes.Field[*request.Span, attribute.KeyValue]
-	attrSQLClient             []attributes.Field[*request.Span, attribute.KeyValue]
+	attrDBClient              []attributes.Field[*request.Span, attribute.KeyValue]
 	attrHTTPRequestSize       []attributes.Field[*request.Span, attribute.KeyValue]
 	attrHTTPClientRequestSize []attributes.Field[*request.Span, attribute.KeyValue]
 }
@@ -180,7 +180,7 @@ type Metrics struct {
 	httpClientDuration    instrument.Float64Histogram
 	grpcDuration          instrument.Float64Histogram
 	grpcClientDuration    instrument.Float64Histogram
-	sqlClientDuration     instrument.Float64Histogram
+	dbClientDuration      instrument.Float64Histogram
 	httpRequestSize       instrument.Float64Histogram
 	httpClientRequestSize instrument.Float64Histogram
 	// trace span metrics
@@ -244,10 +244,10 @@ func newMetricsReporter(
 		request.SpanOTELGetters, mr.attributes.For(attributes.RPCServerDuration))
 	mr.attrGRPCClient = attributes.OpenTelemetryGetters(
 		request.SpanOTELGetters, mr.attributes.For(attributes.RPCClientDuration))
-	mr.attrSQLClient = attributes.OpenTelemetryGetters(
-		request.SpanOTELGetters, mr.attributes.For(attributes.SQLClientDuration))
+	mr.attrDBClient = attributes.OpenTelemetryGetters(
+		request.SpanOTELGetters, mr.attributes.For(attributes.DBClientDuration))
 
-	mr.reporters = NewReporterPool[*Metrics](cfg.ReportersCacheLen,
+	mr.reporters = NewReporterPool(cfg.ReportersCacheLen,
 		func(id svc.UID, v *Metrics) {
 			if mr.cfg.SpanMetricsEnabled() {
 				attrOpt := instrument.WithAttributeSet(mr.metricResourceAttributes(v.service))
@@ -284,7 +284,7 @@ func (mr *MetricsReporter) otelMetricOptions(mlog *slog.Logger) []metric.Option 
 		metric.WithView(otelHistogramConfig(attributes.HTTPClientDuration.OTEL, mr.cfg.Buckets.DurationHistogram, useExponentialHistograms)),
 		metric.WithView(otelHistogramConfig(attributes.RPCServerDuration.OTEL, mr.cfg.Buckets.DurationHistogram, useExponentialHistograms)),
 		metric.WithView(otelHistogramConfig(attributes.RPCClientDuration.OTEL, mr.cfg.Buckets.DurationHistogram, useExponentialHistograms)),
-		metric.WithView(otelHistogramConfig(attributes.SQLClientDuration.OTEL, mr.cfg.Buckets.DurationHistogram, useExponentialHistograms)),
+		metric.WithView(otelHistogramConfig(attributes.DBClientDuration.OTEL, mr.cfg.Buckets.DurationHistogram, useExponentialHistograms)),
 		metric.WithView(otelHistogramConfig(attributes.HTTPServerRequestSize.OTEL, mr.cfg.Buckets.RequestSizeHistogram, useExponentialHistograms)),
 		metric.WithView(otelHistogramConfig(attributes.HTTPClientRequestSize.OTEL, mr.cfg.Buckets.RequestSizeHistogram, useExponentialHistograms)),
 	}
@@ -337,9 +337,9 @@ func (mr *MetricsReporter) setupOtelMeters(m *Metrics, meter instrument.Meter) e
 	if err != nil {
 		return fmt.Errorf("creating grpc duration histogram metric: %w", err)
 	}
-	m.sqlClientDuration, err = meter.Float64Histogram(attributes.SQLClientDuration.OTEL, instrument.WithUnit("s"))
+	m.dbClientDuration, err = meter.Float64Histogram(attributes.DBClientDuration.OTEL, instrument.WithUnit("s"))
 	if err != nil {
-		return fmt.Errorf("creating sql client duration histogram metric: %w", err)
+		return fmt.Errorf("creating db client duration histogram metric: %w", err)
 	}
 	m.httpRequestSize, err = meter.Float64Histogram(attributes.HTTPServerRequestSize.OTEL, instrument.WithUnit("By"))
 	if err != nil {
@@ -669,9 +669,9 @@ func (r *Metrics) record(span *request.Span, mr *MetricsReporter) {
 				withAttributes(span, mr.attrHTTPClientDuration))
 			r.httpClientRequestSize.Record(r.ctx, float64(span.ContentLength),
 				withAttributes(span, mr.attrHTTPClientRequestSize))
-		case request.EventTypeSQLClient:
-			r.sqlClientDuration.Record(r.ctx, duration,
-				withAttributes(span, mr.attrSQLClient))
+		case request.EventTypeRedisClient, request.EventTypeSQLClient:
+			r.dbClientDuration.Record(r.ctx, duration,
+				withAttributes(span, mr.attrDBClient))
 		}
 	}
 

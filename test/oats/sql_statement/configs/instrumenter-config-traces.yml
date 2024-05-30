@@ -9,4 +9,4 @@ attributes:
   select:
     traces:
       include:
-      - db.statement
+      - db.query.text

@@ -41,7 +41,9 @@ const (
 	Server                 = Name("server")
 	ServerNamespace        = Name("server_service_namespace")
 	ConnectionType         = Name("connection_type")
-	DBOperation            = Name("db.operation")
+	DBOperation            = Name("db.operation.name")
+	DBCollectionName       = Name("db.collection.name")
+	DBSystem               = Name(semconv.DBSystemKey)
 	RPCMethod              = Name(semconv.RPCMethodKey)
 	RPCSystem              = Name(semconv.RPCSystemKey)
 	RPCGRPCStatusCode      = Name(semconv.RPCGRPCStatusCodeKey)
@@ -111,5 +113,5 @@ var (
 // traces related attributes
 var (
 	// SQL
-	IncludeDBStatement = Name("db.statement")
+	DBQueryText = Name("db.query.text")
 )

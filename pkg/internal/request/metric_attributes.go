@@ -78,6 +78,18 @@ func ConnectionTypeMetric(val string) attribute.KeyValue {
 	return attribute.Key(attr.ConnectionType).String(val)
 }
 
+func DBQueryText(val string) attribute.KeyValue {
+	return attribute.Key(attr.DBQueryText).String(val)
+}
+
+func DBCollectionName(val string) attribute.KeyValue {
+	return attribute.Key(attr.DBCollectionName).String(val)
+}
+
+func DBOperationName(val string) attribute.KeyValue {
+	return attribute.Key(attr.DBOperation).String(val)
+}
+
 func SpanHost(span *Span) string {
 	if span.HostName != "" {
 		return span.HostName

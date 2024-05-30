@@ -56,10 +56,10 @@ var (
 		Prom:    "rpc_client_duration_seconds",
 		OTEL:    "rpc.client.duration",
 	}
-	SQLClientDuration = Name{
-		Section: "sql.client.duration",
-		Prom:    "sql_client_duration_seconds",
-		OTEL:    "sql.client.duration",
+	DBClientDuration = Name{
+		Section: "db.client.operation.duration",
+		Prom:    "db_client_operation_duration_seconds",
+		OTEL:    "db.client.operation.duration",
 	}
 )
 

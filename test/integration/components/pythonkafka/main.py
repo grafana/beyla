@@ -2,20 +2,22 @@ from confluent_kafka import Producer, Consumer, KafkaException
 import json
 import json
 from http.server import BaseHTTPRequestHandler, HTTPServer
+import logging
 
 topic = 'example_topic'
+logger = logging.getLogger(__name__)
 
 
 def delivery_report(err, msg):
     if err is not None:
-        print(f"Message delivery failed: {err}")
+        logger.error(f"Message delivery failed: {err}")
     else:
-        print(f"Message delivered to {msg.topic()} [{msg.partition()}]")
+        logger.info(f"Message delivered to {msg.topic()} [{msg.partition()}]")
 
 def produce_messages():
     # Kafka producer configuration
     producer_config = {
-        'bootstrap.servers': 'localhost:9093'  # Kafka broker address
+        'bootstrap.servers': 'kafka:9093'  # Kafka broker address
     }
 
     producer = Producer(producer_config)
@@ -32,7 +34,7 @@ def produce_messages():
 
 # Configuration for the Kafka consumer
 consumer_config = {
-    'bootstrap.servers': 'localhost:9093',
+    'bootstrap.servers': 'kafka:9093',
     'group.id': 'example_group',
     'auto.offset.reset': 'earliest'
 }
@@ -49,7 +51,7 @@ class KafkaConsumerService:
                 return {'error': 'No message received'}
             if msg.error():
                 if msg.error().code() == KafkaException._PARTITION_EOF:
-                    print(f"Reached end of partition: {msg.topic()} [{msg.partition()}]")
+                    logger.error(f"Reached end of partition: {msg.topic()} [{msg.partition()}]")
                     return {'error': 'Reached end of partition'}
                 else:
                     raise KafkaException(msg.error())
@@ -57,7 +59,7 @@ class KafkaConsumerService:
                 message = json.loads(msg.value().decode('utf-8'))
                 return message
         except Exception as e:
-            print(f"Error consuming message: {e}")
+            logger.error(f"Error consuming message: {e}")
             return {'error': str(e)}
 
 # Create an instance of the Kafka consumer service
@@ -66,6 +68,7 @@ kafka_service = KafkaConsumerService()
 class RequestHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path == '/message':
+            logger.info('Received GET request for /message')
             self.send_response(200)
             self.send_header('Content-type', 'application/json')
             self.end_headers()
@@ -78,7 +81,7 @@ class RequestHandler(BaseHTTPRequestHandler):
 def run_server(server_class=HTTPServer, handler_class=RequestHandler, port=8080):
     server_address = ('', port)
     httpd = server_class(server_address, handler_class)
-    print(f'Starting httpd server on port {port}')
+    logger.info(f'Starting httpd server on port {port}')
     httpd.serve_forever()
 
 

@@ -24,6 +24,7 @@
 #define TRACEPARENT_LEN 55
 #define SQL_MAX_LEN 500
 #define KAFKA_MAX_LEN 256
+#define REDIS_MAX_LEN 256
 
 // Trace of an HTTP call invocation. It is instantiated by the return uprobe and forwarded to the
 // user space through the events ringbuffer.
@@ -60,5 +61,15 @@ typedef struct kafka_client_req {
     u8  buf[KAFKA_MAX_LEN];
     connection_info_t conn __attribute__ ((aligned (8)));
 } __attribute__((packed)) kafka_client_req_t;
+
+typedef struct redis_client_req {
+    u8  type;                           // Must be first
+    u64 start_monotime_ns;
+    u64 end_monotime_ns;
+    u8  buf[REDIS_MAX_LEN];
+    connection_info_t conn __attribute__ ((aligned (8)));
+    tp_info_t tp __attribute__ ((aligned (8)));
+    u8 err;
+} __attribute__((packed)) redis_client_req_t;
 
 #endif //HTTP_TRACE_H

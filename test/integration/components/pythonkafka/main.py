@@ -1,12 +1,12 @@
+import logging
 from confluent_kafka import Producer, Consumer, KafkaException
 import json
-import json
 from http.server import BaseHTTPRequestHandler, HTTPServer
-import logging
 
-topic = 'example_topic'
+logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s: %(message)s')
 logger = logging.getLogger(__name__)
 
+topic = 'example_topic'
 
 def delivery_report(err, msg):
     if err is not None:
@@ -17,9 +17,9 @@ def delivery_report(err, msg):
 def produce_messages():
     # Kafka producer configuration
     producer_config = {
-        'bootstrap.servers': 'kafka:9093'  # Kafka broker address
+        'bootstrap.servers': 'kafka:9092'  # Kafka broker address
     }
-
+    logger.info("Creating Kafka producer")
     producer = Producer(producer_config)
 
     # Produce messages
@@ -31,16 +31,16 @@ def produce_messages():
     # Wait for any outstanding messages to be delivered and delivery reports to be received
     producer.flush()
 
-
 # Configuration for the Kafka consumer
 consumer_config = {
-    'bootstrap.servers': 'kafka:9093',
+    'bootstrap.servers': 'kafka:9092',
     'group.id': 'example_group',
     'auto.offset.reset': 'earliest'
 }
 
 class KafkaConsumerService:
     def __init__(self):
+        logger.info("Creating Kafka consumer")
         self.consumer = Consumer(consumer_config)
         self.consumer.subscribe([topic])
     
@@ -51,7 +51,7 @@ class KafkaConsumerService:
                 return {'error': 'No message received'}
             if msg.error():
                 if msg.error().code() == KafkaException._PARTITION_EOF:
-                    logger.error(f"Reached end of partition: {msg.topic()} [{msg.partition()}]")
+                    logger.info(f"Reached end of partition: {msg.topic()} [{msg.partition()}]")
                     return {'error': 'Reached end of partition'}
                 else:
                     raise KafkaException(msg.error())
@@ -68,7 +68,6 @@ kafka_service = KafkaConsumerService()
 class RequestHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path == '/message':
-            logger.info('Received GET request for /message')
             self.send_response(200)
             self.send_header('Content-type', 'application/json')
             self.end_headers()

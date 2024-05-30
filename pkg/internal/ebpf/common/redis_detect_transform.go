@@ -2,10 +2,13 @@ package ebpfcommon
 
 import (
 	"bytes"
+	"encoding/binary"
+	"net"
 	"strings"
 
 	trace2 "go.opentelemetry.io/otel/trace"
 
+	"github.com/cilium/ebpf/ringbuf"
 	"github.com/grafana/beyla/pkg/internal/request"
 )
 
@@ -146,4 +149,55 @@ func TCPToRedisToSpan(trace *TCPRequestInfo, op, text string, status int) reques
 			Namespace: trace.Pid.Ns,
 		},
 	}
+}
+
+func (event *GoRedisClientInfo) reqHostInfo() (source, target string) {
+	src := make(net.IP, net.IPv6len)
+	dst := make(net.IP, net.IPv6len)
+	copy(src, event.Conn.S_addr[:])
+	copy(dst, event.Conn.D_addr[:])
+
+	return src.String(), dst.String()
+}
+
+func ReadGoRedisRequestIntoSpan(record *ringbuf.Record) (request.Span, bool, error) {
+	var event GoRedisClientInfo
+
+	err := binary.Read(bytes.NewBuffer(record.RawSample), binary.LittleEndian, &event)
+	if err != nil {
+		return request.Span{}, true, err
+	}
+
+	peer := ""
+	hostname := ""
+	hostPort := 0
+
+	if event.Conn.S_port != 0 || event.Conn.D_port != 0 {
+		peer, hostname = event.reqHostInfo()
+		hostPort = int(event.Conn.D_port)
+	}
+
+	op, text, ok := parseRedisRequest(string(event.Buf[:]))
+
+	if !ok {
+		return request.Span{}, true, nil
+	}
+
+	return request.Span{
+		Type:          request.EventTypeRedisClient,
+		Method:        op,
+		Path:          text,
+		Peer:          peer,
+		Host:          hostname,
+		HostPort:      hostPort,
+		ContentLength: 0,
+		RequestStart:  int64(event.StartMonotimeNs),
+		Start:         int64(event.StartMonotimeNs),
+		End:           int64(event.EndMonotimeNs),
+		Status:        int(event.Err),
+		TraceID:       trace2.TraceID(event.Tp.TraceId),
+		SpanID:        trace2.SpanID(event.Tp.SpanId),
+		ParentSpanID:  trace2.SpanID(event.Tp.ParentId),
+		Flags:         event.Tp.Flags,
+	}, false, nil
 }

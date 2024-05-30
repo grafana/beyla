@@ -107,6 +107,16 @@ func (p *Tracer) GoProbes() map[string]ebpfcommon.FunctionPrograms {
 			End:      p.bpfObjects.UprobeRedisProcessRet,
 			Required: true,
 		},
+		"github.com/redis/go-redis/v9.(*baseClient).pipelineProcessCmds": {
+			Start:    p.bpfObjects.UprobeRedisProcess,
+			End:      p.bpfObjects.UprobeRedisProcessRet,
+			Required: true,
+		},
+		"github.com/redis/go-redis/v9.(*baseClient).txPipelineProcessCmds": {
+			Start:    p.bpfObjects.UprobeRedisProcess,
+			End:      p.bpfObjects.UprobeRedisProcessRet,
+			Required: true,
+		},
 	}
 }
 

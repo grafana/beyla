@@ -64,8 +64,8 @@ int uprobe_redis_process_ret(struct pt_regs *ctx) {
         redis_client_req_t *trace = bpf_ringbuf_reserve(&events, sizeof(redis_client_req_t), 0);        
         if (trace) {
             bpf_dbg_printk("Sending redis client go trace");
-
             __builtin_memcpy(trace, req, sizeof(redis_client_req_t));
+            trace->end_monotime_ns = bpf_ktime_get_ns();
             bpf_ringbuf_submit(trace, get_flags());
         }
     }
@@ -136,7 +136,7 @@ int uprobe_redis_with_writer_ret(struct pt_regs *ctx) {
 
                 bpf_probe_read(&len, sizeof(u64), bw + 0x18);
 
-                bpf_printk("buf %llx, len=%ld", buf, len);
+                bpf_printk("buf %llx[%s], len=%ld", buf, buf, len);
 
                 if (len > 0) {
                     bpf_probe_read(&req->buf, REDIS_MAX_LEN, buf);

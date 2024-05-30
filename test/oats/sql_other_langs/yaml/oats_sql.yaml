@@ -15,7 +15,7 @@ expected:
             db.operation.name: SELECT
             db.collection.name: accounting.contacts
             db.system: other_sql
-            db.db.query.text: "SELECT * from accounting.contacts WHERE id=1"
+            db.query.text: "SELECT * from accounting.contacts WHERE id=1"
   metrics:
     - promql: 'sql_client_duration_sum'
       value: "> 0"

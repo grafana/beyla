@@ -13,7 +13,7 @@ expected:
         - name: 'UPDATE students'
           attributes:
             db.operation.name: UPDATE
-            db.db.collection.name: students            
+            db.collection.name: students            
             db.query.text: "Update students SET name = 'Bob' WHERE id = '1'"
   metrics:
     - promql: 'sql_client_duration_sum'

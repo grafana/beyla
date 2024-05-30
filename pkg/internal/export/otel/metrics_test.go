@@ -341,19 +341,19 @@ func TestMetricSetupHTTP_DoNotOverrideEnv(t *testing.T) {
 }
 
 func TestMetricsConfig_Enabled(t *testing.T) {
-	assert.True(t, MetricsConfig{Features: []string{FeatureApplication, FeatureNetwork}, CommonEndpoint: "foo"}.Enabled())
-	assert.True(t, MetricsConfig{Features: []string{FeatureApplication}, MetricsEndpoint: "foo"}.Enabled())
-	assert.True(t, MetricsConfig{Features: []string{FeatureNetwork, FeatureApplication}, Grafana: &GrafanaOTLP{Submit: []string{"traces", "metrics"}, InstanceID: "33221"}}.Enabled())
+	assert.True(t, (&MetricsConfig{Features: []string{FeatureApplication, FeatureNetwork}, CommonEndpoint: "foo"}).Enabled())
+	assert.True(t, (&MetricsConfig{Features: []string{FeatureApplication}, MetricsEndpoint: "foo"}).Enabled())
+	assert.True(t, (&MetricsConfig{Features: []string{FeatureNetwork, FeatureApplication}, Grafana: &GrafanaOTLP{Submit: []string{"traces", "metrics"}, InstanceID: "33221"}}).Enabled())
 }
 
 func TestMetricsConfig_Disabled(t *testing.T) {
-	assert.False(t, MetricsConfig{Features: []string{FeatureApplication}}.Enabled())
-	assert.False(t, MetricsConfig{Features: []string{FeatureApplication}, Grafana: &GrafanaOTLP{Submit: []string{"traces"}, InstanceID: "33221"}}.Enabled())
-	assert.False(t, MetricsConfig{Features: []string{FeatureApplication}, Grafana: &GrafanaOTLP{Submit: []string{"metrics"}}}.Enabled())
+	assert.False(t, (&MetricsConfig{Features: []string{FeatureApplication}}).Enabled())
+	assert.False(t, (&MetricsConfig{Features: []string{FeatureApplication}, Grafana: &GrafanaOTLP{Submit: []string{"traces"}, InstanceID: "33221"}}).Enabled())
+	assert.False(t, (&MetricsConfig{Features: []string{FeatureApplication}, Grafana: &GrafanaOTLP{Submit: []string{"metrics"}}}).Enabled())
 	// application feature is not enabled
-	assert.False(t, MetricsConfig{CommonEndpoint: "foo"}.Enabled())
-	assert.False(t, MetricsConfig{MetricsEndpoint: "foo", Features: []string{FeatureNetwork}}.Enabled())
-	assert.False(t, MetricsConfig{Grafana: &GrafanaOTLP{Submit: []string{"traces", "metrics"}, InstanceID: "33221"}}.Enabled())
+	assert.False(t, (&MetricsConfig{CommonEndpoint: "foo"}).Enabled())
+	assert.False(t, (&MetricsConfig{MetricsEndpoint: "foo", Features: []string{FeatureNetwork}}).Enabled())
+	assert.False(t, (&MetricsConfig{Grafana: &GrafanaOTLP{Submit: []string{"traces", "metrics"}, InstanceID: "33221"}}).Enabled())
 }
 
 func (f *fakeInternalMetrics) OTELMetricExport(len int) {

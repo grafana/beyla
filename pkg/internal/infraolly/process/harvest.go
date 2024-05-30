@@ -1,14 +1,12 @@
 // Copyright 2020 New Relic Corporation. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-//go:build linux
-
 // Package process provides all the tools and functionality for sampling processes. It is divided in three main
 // components:
-// - Status: provides OS-level information of a process at a given spot
-// - Harvester: fetches and creates actual Process Status from system
-// - Collector: uses input from the application pipeline to fetch information for all the processes from
-//   the instrumented applications, and forwards it to the next stage of the Process' pipeline.
+//   - Status: provides OS-level information of a process at a given spot
+//   - Harvester: fetches and creates actual Process Status from system
+//   - Collector: uses input from the application pipeline to fetch information for all the processes from
+//     the instrumented applications, and forwards it to the next stage of the Process' pipeline.
 package process
 
 import (
@@ -48,7 +46,7 @@ type Config struct {
 	RunMode              RunMode
 	DisableZeroRSSFilter bool
 	// TODO: replace configuration option by attributes-aware set
-	FullCommandLine      bool
+	FullCommandLine bool
 
 	ProcFSRoot string
 	Rate       time.Duration

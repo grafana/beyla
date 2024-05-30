@@ -14,6 +14,7 @@ import (
 	"github.com/grafana/beyla/pkg/internal/export/prom"
 	"github.com/grafana/beyla/pkg/internal/filter"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
+	"github.com/grafana/beyla/pkg/internal/infraolly"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/pkg/internal/request"
 	"github.com/grafana/beyla/pkg/internal/traces"
@@ -41,6 +42,8 @@ type nodesMap struct {
 	Prometheus  pipe.Final[[]request.Span]
 	Printer     pipe.Final[[]request.Span]
 	Noop        pipe.Final[[]request.Span]
+
+	ProcessReport pipe.Final[[]request.Span]
 }
 
 // Connect must specify how the above nodes are connected. Nodes that are disabled
@@ -51,7 +54,7 @@ func (n *nodesMap) Connect() {
 	n.Routes.SendTo(n.Kubernetes)
 	n.Kubernetes.SendTo(n.NameResolver)
 	n.NameResolver.SendTo(n.AttributeFilter)
-	n.AttributeFilter.SendTo(n.AlloyTraces, n.Metrics, n.Traces, n.Prometheus, n.Printer, n.Noop)
+	n.AttributeFilter.SendTo(n.AlloyTraces, n.Metrics, n.Traces, n.Prometheus, n.Printer, n.Noop, n.ProcessReport)
 }
 
 // accessor functions to each field. Grouped here for code brevity during the pipeline build
@@ -66,6 +69,7 @@ func otelTraces(n *nodesMap) *pipe.Final[[]request.Span]                    { re
 func printer(n *nodesMap) *pipe.Final[[]request.Span]                       { return &n.Printer }
 func prometheus(n *nodesMap) *pipe.Final[[]request.Span]                    { return &n.Prometheus }
 func noop(n *nodesMap) *pipe.Final[[]request.Span]                          { return &n.Noop }
+func process(n *nodesMap) *pipe.Final[[]request.Span]                       { return &n.ProcessReport }
 
 // builder with injectable instantiators for unit testing
 type graphFunctions struct {
@@ -118,6 +122,8 @@ func newGraphBuilder(ctx context.Context, config *beyla.Config, ctxInfo *global.
 
 	pipe.AddFinalProvider(gnb, noop, debug.NoopNode(config.Noop))
 	pipe.AddFinalProvider(gnb, printer, debug.PrinterNode(config.Printer))
+
+	pipe.AddFinalProvider(gnb, process, infraolly.SubPipelineProvider(ctx, config))
 
 	// The returned builder later invokes its "Build" function that, given
 	// the contents of the nodesMap struct, will instantiate

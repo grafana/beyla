@@ -137,20 +137,18 @@ type metricsReporter struct {
 	httpClientDuration    *expire.Expirer[prometheus.Histogram]
 	grpcDuration          *expire.Expirer[prometheus.Histogram]
 	grpcClientDuration    *expire.Expirer[prometheus.Histogram]
-	sqlClientDuration     *expire.Expirer[prometheus.Histogram]
+	dbClientDuration      *expire.Expirer[prometheus.Histogram]
 	httpRequestSize       *expire.Expirer[prometheus.Histogram]
 	httpClientRequestSize *expire.Expirer[prometheus.Histogram]
-	redisClientDuration   *expire.Expirer[prometheus.Histogram]
 
 	// user-selected attributes for the application-level metrics
 	attrHTTPDuration          []attributes.Field[*request.Span, string]
 	attrHTTPClientDuration    []attributes.Field[*request.Span, string]
 	attrGRPCDuration          []attributes.Field[*request.Span, string]
 	attrGRPCClientDuration    []attributes.Field[*request.Span, string]
-	attrSQLClientDuration     []attributes.Field[*request.Span, string]
+	attrDBClientDuration      []attributes.Field[*request.Span, string]
 	attrHTTPRequestSize       []attributes.Field[*request.Span, string]
 	attrHTTPClientRequestSize []attributes.Field[*request.Span, string]
-	attrRedisClientDuration   []attributes.Field[*request.Span, string]
 
 	// trace span metrics
 	spanMetricsLatency    *expire.Expirer[prometheus.Histogram]
@@ -220,10 +218,8 @@ func newReporter(
 		attrsProvider.For(attributes.RPCServerDuration))
 	attrGRPCClientDuration := attributes.PrometheusGetters(request.SpanPromGetters,
 		attrsProvider.For(attributes.RPCClientDuration))
-	attrSQLClientDuration := attributes.PrometheusGetters(request.SpanPromGetters,
-		attrsProvider.For(attributes.SQLClientDuration))
-	attrRedisClientDuration := attributes.PrometheusGetters(request.SpanPromGetters,
-		attrsProvider.For(attributes.RedisClientDuration))
+	attrDBClientDuration := attributes.PrometheusGetters(request.SpanPromGetters,
+		attrsProvider.For(attributes.DBClientDuration))
 
 	clock := expire.NewCachedClock(timeNow)
 	// If service name is not explicitly set, we take the service name as set by the
@@ -238,8 +234,7 @@ func newReporter(
 		attrHTTPClientDuration:    attrHTTPClientDuration,
 		attrGRPCDuration:          attrGRPCDuration,
 		attrGRPCClientDuration:    attrGRPCClientDuration,
-		attrSQLClientDuration:     attrSQLClientDuration,
-		attrRedisClientDuration:   attrRedisClientDuration,
+		attrDBClientDuration:      attrDBClientDuration,
 		attrHTTPRequestSize:       attrHTTPRequestSize,
 		attrHTTPClientRequestSize: attrHTTPClientRequestSize,
 		beylaInfo: expire.NewExpirer[prometheus.Gauge](prometheus.NewGaugeVec(prometheus.GaugeOpts{
@@ -287,14 +282,14 @@ func newReporter(
 			NativeHistogramMaxBucketNumber:  defaultHistogramMaxBucketNumber,
 			NativeHistogramMinResetDuration: defaultHistogramMinResetDuration,
 		}, labelNames(attrGRPCClientDuration)).MetricVec, clock.Time, cfg.TTL),
-		sqlClientDuration: expire.NewExpirer[prometheus.Histogram](prometheus.NewHistogramVec(prometheus.HistogramOpts{
-			Name:                            attributes.SQLClientDuration.Prom,
-			Help:                            "duration of SQL client operations, in seconds",
+		dbClientDuration: expire.NewExpirer[prometheus.Histogram](prometheus.NewHistogramVec(prometheus.HistogramOpts{
+			Name:                            attributes.DBClientDuration.Prom,
+			Help:                            "duration of db client operations, in seconds",
 			Buckets:                         cfg.Buckets.DurationHistogram,
 			NativeHistogramBucketFactor:     defaultHistogramBucketFactor,
 			NativeHistogramMaxBucketNumber:  defaultHistogramMaxBucketNumber,
 			NativeHistogramMinResetDuration: defaultHistogramMinResetDuration,
-		}, labelNames(attrSQLClientDuration)).MetricVec, clock.Time, cfg.TTL),
+		}, labelNames(attrDBClientDuration)).MetricVec, clock.Time, cfg.TTL),
 		httpRequestSize: expire.NewExpirer[prometheus.Histogram](prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Name:                            attributes.HTTPServerRequestSize.Prom,
 			Help:                            "size, in bytes, of the HTTP request body as received at the server side",
@@ -311,14 +306,6 @@ func newReporter(
 			NativeHistogramMaxBucketNumber:  defaultHistogramMaxBucketNumber,
 			NativeHistogramMinResetDuration: defaultHistogramMinResetDuration,
 		}, labelNames(attrHTTPClientRequestSize)).MetricVec, clock.Time, cfg.TTL),
-		redisClientDuration: expire.NewExpirer[prometheus.Histogram](prometheus.NewHistogramVec(prometheus.HistogramOpts{
-			Name:                            attributes.RedisClientDuration.Prom,
-			Help:                            "duration of Redis client operations, in seconds",
-			Buckets:                         cfg.Buckets.DurationHistogram,
-			NativeHistogramBucketFactor:     defaultHistogramBucketFactor,
-			NativeHistogramMaxBucketNumber:  defaultHistogramMaxBucketNumber,
-			NativeHistogramMinResetDuration: defaultHistogramMinResetDuration,
-		}, labelNames(attrRedisClientDuration)).MetricVec, clock.Time, cfg.TTL),
 		spanMetricsLatency: expire.NewExpirer[prometheus.Histogram](prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Name:                            SpanMetricsLatency,
 			Help:                            "duration of service calls (client and server), in seconds, in trace span metrics format",
@@ -382,8 +369,7 @@ func newReporter(
 			mr.httpClientRequestSize,
 			mr.httpClientDuration,
 			mr.grpcClientDuration,
-			mr.sqlClientDuration,
-			mr.redisClientDuration,
+			mr.dbClientDuration,
 			mr.httpRequestSize,
 			mr.httpDuration,
 			mr.grpcDuration)
@@ -461,13 +447,9 @@ func (r *metricsReporter) observe(span *request.Span) {
 			r.grpcClientDuration.WithLabelValues(
 				labelValues(span, r.attrGRPCClientDuration)...,
 			).Observe(duration)
-		case request.EventTypeSQLClient:
-			r.sqlClientDuration.WithLabelValues(
-				labelValues(span, r.attrSQLClientDuration)...,
-			).Observe(duration)
-		case request.EventTypeRedisClient:
-			r.redisClientDuration.WithLabelValues(
-				labelValues(span, r.attrRedisClientDuration)...,
+		case request.EventTypeRedisClient, request.EventTypeSQLClient:
+			r.dbClientDuration.WithLabelValues(
+				labelValues(span, r.attrDBClientDuration)...,
 			).Observe(duration)
 		}
 	}

@@ -571,16 +571,17 @@ func traceAttributes(span *request.Span, optionalAttrs map[attr.Name]struct{}) [
 		attrs = []attribute.KeyValue{
 			request.ServerAddr(request.SpanHost(span)),
 			request.ServerPort(span.HostPort),
+			semconv.DBSystemOtherSQL, // We can distinguish in the future for MySQL, Postgres etc
 		}
-		if _, ok := optionalAttrs[attr.IncludeDBStatement]; ok {
-			attrs = append(attrs, semconv.DBStatement(span.Statement))
+		if _, ok := optionalAttrs[attr.DBQueryText]; ok {
+			attrs = append(attrs, request.DBQueryText(span.Statement))
 		}
 		operation := span.Method
 		if operation != "" {
-			attrs = append(attrs, semconv.DBOperation(operation))
+			attrs = append(attrs, request.DBOperationName(operation))
 			table := span.Path
 			if table != "" {
-				attrs = append(attrs, semconv.DBSQLTable(table))
+				attrs = append(attrs, request.DBCollectionName(table))
 			}
 		}
 	case request.EventTypeRedisClient:
@@ -591,8 +592,8 @@ func traceAttributes(span *request.Span, optionalAttrs map[attr.Name]struct{}) [
 		}
 		operation := span.Method
 		if operation != "" {
-			attrs = append(attrs, semconv.DBOperation(operation))
-			if _, ok := optionalAttrs[attr.IncludeDBStatement]; ok {
+			attrs = append(attrs, request.DBOperationName(operation))
+			if _, ok := optionalAttrs[attr.DBQueryText]; ok {
 				query := span.Path
 				if query != "" {
 					attrs = append(attrs, request.DBQueryText(query))

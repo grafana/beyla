@@ -39,60 +39,59 @@ the metrics and attributes are exposed `underscore_notation` when a Prometheus e
 In order to hide attributes that are shown by default, or show attributes that are hidden by
 default, check the `attributes`->`select` section in the [configuration documentation]({{< relref "./configure/options.md" >}}).
 
-| Metrics                    | Name                        | Default                                       |
-|----------------------------|-----------------------------|-----------------------------------------------|
-| Application (all)          | `http.request.method`       | shown                                         |
-| Application (all)          | `http.response.status_code` | shown                                         |
-| Application (all)          | `http.route`                | shown if `routes` configuration is defined    |
-| Application (all)          | `k8s.daemonset.name`        | shown if `attributes.kubernetes.enable`       |
-| Application (all)          | `k8s.deployment.name`       | shown if `attributes.kubernetes.enable`       |
-| Application (all)          | `k8s.namespace.name`        | shown if `attributes.kubernetes.enable`       |
-| Application (all)          | `k8s.node.name`             | shown if `attributes.kubernetes.enable`       |
-| Application (all)          | `k8s.pod.name`              | shown if `attributes.kubernetes.enable`       |
-| Application (all)          | `k8s.pod.start_time`        | shown if `attributes.kubernetes.enable`       |
-| Application (all)          | `k8s.pod.uid`               | shown if `attributes.kubernetes.enable`       |
-| Application (all)          | `k8s.replicaset.name`       | shown if `attributes.kubernetes.enable`       |
-| Application (all)          | `k8s.statefulset.name`      | shown if `attributes.kubernetes.enable`       |
-| Application (all)          | `service.name`              | shown                                         | 
-| Application (all)          | `service.namespace`         | shown                                         | 
-| Application (all)          | `target.instance`           | shown                                         |
-| Application (all)          | `url.path`                  | hidden                                        |
-| Application (client)       | `server.address`            | hidden                                        |
-| Application (client)       | `server.port`               | hidden                                        |
-| Application `rpc.*`        | `rpc.grpc.status_code`      | shown                                         |
-| Application `rpc.*`        | `rpc.method`                | shown                                         |
-| Application `rpc.*`        | `rpc.system`                | shown                                         |
-| Application (server)       | `client.address`            | hidden                                        |
-| `beyla.network.flow.bytes` | `beyla.ip`                  | hidden                                        |
-| `sql.client.duration`      | `db.operation`              | shown                                         |
-| `sql.client.duration`      | `db.statement`              | hidden                                        |
-| `redis.client.duration`    | `db.operation`              | shown                                         |
-| `redis.client.duration`    | `db.statement`              | hidden                                        |
-| `beyla.network.flow.bytes` | `direction`                 | hidden                                        |
-| `beyla.network.flow.bytes` | `dst.address`               | hidden                                        |
-| `beyla.network.flow.bytes` | `dst.cidr`                  | shown if the `cidrs` configuration is defined |
-| `beyla.network.flow.bytes` | `dst.name`                  | hidden                                        |
-| `beyla.network.flow.bytes` | `dst.port`                  | hidden                                        |
-| `beyla.network.flow.bytes` | `iface`                     | hidden                                        |
-| `beyla.network.flow.bytes` | `k8s.cluster.name`          | shown if `attributes.kubernetes.enable`       |
-| `beyla.network.flow.bytes` | `k8s.dst.name`              | hidden                                        | 
-| `beyla.network.flow.bytes` | `k8s.dst.namespace`         | shown if `attributes.kubernetes.enable`       | 
-| `beyla.network.flow.bytes` | `k8s.dst.node.ip`           | hidden                                        |
-| `beyla.network.flow.bytes` | `k8s.dst.node.name`         | hidden                                        |
-| `beyla.network.flow.bytes` | `k8s.dst.owner.type`        | hidden                                        | 
-| `beyla.network.flow.bytes` | `k8s.dst.type`              | hidden                                        |
-| `beyla.network.flow.bytes` | `k8s.dst.owner.name`        | shown if `attributes.kubernetes.enable`       | 
-| `beyla.network.flow.bytes` | `k8s.src.name`              | hidden                                        | 
-| `beyla.network.flow.bytes` | `k8s.src.namespace`         | shown if `attributes.kubernetes.enable`       | 
-| `beyla.network.flow.bytes` | `k8s.src.node.ip`           | hidden                                        |
-| `beyla.network.flow.bytes` | `k8s.src.owner.name`        | shown if `attributes.kubernetes.enable`       |
-| `beyla.network.flow.bytes` | `k8s.src.owner.type`        | hidden                                        |
-| `beyla.network.flow.bytes` | `k8s.src.type`              | hidden                                        | 
-| `beyla.network.flow.bytes` | `src.address`               | hidden                                        |
-| `beyla.network.flow.bytes` | `src.cidr`                  | shown if the `cidrs` configuration is defined |
-| `beyla.network.flow.bytes` | `src.name`                  | hidden                                        |
-| `beyla.network.flow.bytes` | `src.port`                  | hidden                                        |
-| `beyla.network.flow.bytes` | `transport`                 | hidden                                        |
+| Metrics                        | Name                        | Default                                       |
+|--------------------------------|-----------------------------|-----------------------------------------------|
+| Application (all)              | `http.request.method`       | shown                                         |
+| Application (all)              | `http.response.status_code` | shown                                         |
+| Application (all)              | `http.route`                | shown if `routes` configuration is defined    |
+| Application (all)              | `k8s.daemonset.name`        | shown if `attributes.kubernetes.enable`       |
+| Application (all)              | `k8s.deployment.name`       | shown if `attributes.kubernetes.enable`       |
+| Application (all)              | `k8s.namespace.name`        | shown if `attributes.kubernetes.enable`       |
+| Application (all)              | `k8s.node.name`             | shown if `attributes.kubernetes.enable`       |
+| Application (all)              | `k8s.pod.name`              | shown if `attributes.kubernetes.enable`       |
+| Application (all)              | `k8s.pod.start_time`        | shown if `attributes.kubernetes.enable`       |
+| Application (all)              | `k8s.pod.uid`               | shown if `attributes.kubernetes.enable`       |
+| Application (all)              | `k8s.replicaset.name`       | shown if `attributes.kubernetes.enable`       |
+| Application (all)              | `k8s.statefulset.name`      | shown if `attributes.kubernetes.enable`       |
+| Application (all)              | `service.name`              | shown                                         | 
+| Application (all)              | `service.namespace`         | shown                                         | 
+| Application (all)              | `target.instance`           | shown                                         |
+| Application (all)              | `url.path`                  | hidden                                        |
+| Application (client)           | `server.address`            | hidden                                        |
+| Application (client)           | `server.port`               | hidden                                        |
+| Application `rpc.*`            | `rpc.grpc.status_code`      | shown                                         |
+| Application `rpc.*`            | `rpc.method`                | shown                                         |
+| Application `rpc.*`            | `rpc.system`                | shown                                         |
+| Application (server)           | `client.address`            | hidden                                        |
+| `beyla.network.flow.bytes`     | `beyla.ip`                  | hidden                                        |
+| `db.client.operation.duration` | `db.operation.name`         | shown                                         |
+| `db.client.operation.duration` | `db.collection.name`        | hidden                                        |
+| `beyla.network.flow.bytes`     | `direction`                 | hidden                                        |
+| `beyla.network.flow.bytes`     | `dst.address`               | hidden                                        |
+| `beyla.network.flow.bytes`     | `dst.cidr`                  | shown if the `cidrs` configuration is defined |
+| `beyla.network.flow.bytes`     | `dst.name`                  | hidden                                        |
+| `beyla.network.flow.bytes`     | `dst.port`                  | hidden                                        |
+| `beyla.network.flow.bytes`     | `iface`                     | hidden                                        |
+| `beyla.network.flow.bytes`     | `k8s.cluster.name`          | shown if `attributes.kubernetes.enable`       |
+| `beyla.network.flow.bytes`     | `k8s.dst.name`              | hidden                                        | 
+| `beyla.network.flow.bytes`     | `k8s.dst.namespace`         | shown if `attributes.kubernetes.enable`       | 
+| `beyla.network.flow.bytes`     | `k8s.dst.node.ip`           | hidden                                        |
+| `beyla.network.flow.bytes`     | `k8s.dst.node.name`         | hidden                                        |
+| `beyla.network.flow.bytes`     | `k8s.dst.owner.type`        | hidden                                        | 
+| `beyla.network.flow.bytes`     | `k8s.dst.type`              | hidden                                        |
+| `beyla.network.flow.bytes`     | `k8s.dst.owner.name`        | shown if `attributes.kubernetes.enable`       | 
+| `beyla.network.flow.bytes`     | `k8s.src.name`              | hidden                                        | 
+| `beyla.network.flow.bytes`     | `k8s.src.namespace`         | shown if `attributes.kubernetes.enable`       | 
+| `beyla.network.flow.bytes`     | `k8s.src.node.ip`           | hidden                                        |
+| `beyla.network.flow.bytes`     | `k8s.src.owner.name`        | shown if `attributes.kubernetes.enable`       |
+| `beyla.network.flow.bytes`     | `k8s.src.owner.type`        | hidden                                        |
+| `beyla.network.flow.bytes`     | `k8s.src.type`              | hidden                                        | 
+| `beyla.network.flow.bytes`     | `src.address`               | hidden                                        |
+| `beyla.network.flow.bytes`     | `src.cidr`                  | shown if the `cidrs` configuration is defined |
+| `beyla.network.flow.bytes`     | `src.name`                  | hidden                                        |
+| `beyla.network.flow.bytes`     | `src.port`                  | hidden                                        |
+| `beyla.network.flow.bytes`     | `transport`                 | hidden                                        |
+| Traces (SQL, Redis)            | `db.query.text`             | hidden                                        |
 
 ## Internal metrics
 

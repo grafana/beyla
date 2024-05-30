@@ -8,18 +8,45 @@ input:
 interval: 500ms
 expected:
   traces:
-    - traceql: '{ .db.operation = "SET" }'
+    - traceql: '{ .db.operation.name = "SET" && .db.system = "redis" }'
       spans:
         - name: 'SET'
           attributes:
-            db.operation: SET
+            db.operation.name: SET
+            db.system: redis
             db.query.text: "SET beyla rocks "
   metrics:
-    - promql: 'redis_client_duration_sum'
+    - promql: 'db_client_operation_duration_sum{db_operation_name="GET"}'
       value: "> 0"
-    - promql: 'redis_client_duration_bucket{le="0"}'
+    - promql: 'db_client_operation_duration_bucket{le="0",db_operation_name="GET"}'
       value: "== 0"
-    - promql: 'redis_client_duration_bucket{le="10"}'
+    - promql: 'db_client_operation_duration_bucket{le="10",db_operation_name="GET"}'
       value: "> 0"
-    - promql: 'redis_client_duration_count'
+    - promql: 'db_client_operation_duration_count{db_operation_name="GET"}'
       value: "> 0"
+    - promql: 'db_client_operation_duration_sum{db_operation_name="SET"}'
+      value: "> 0"
+    - promql: 'db_client_operation_duration_bucket{le="0",db_operation_name="SET"}'
+      value: "== 0"
+    - promql: 'db_client_operation_duration_bucket{le="10",db_operation_name="SET"}'
+      value: "> 0"
+    - promql: 'db_client_operation_duration_count{db_operation_name="SET"}'
+      value: "> 0"
+    - promql: 'db_client_operation_duration_sum{db_operation_name="HSET"}'
+      value: "> 0"
+    - promql: 'db_client_operation_duration_bucket{le="0",db_operation_name="HSET"}'
+      value: "== 0"
+    - promql: 'db_client_operation_duration_bucket{le="10",db_operation_name="HSET"}'
+      value: "> 0"
+    - promql: 'db_client_operation_duration_count{db_operation_name="HSET"}'
+      value: "> 0"
+    - promql: 'db_client_operation_duration_sum{db_operation_name="HGETALL"}'
+      value: "> 0"
+    - promql: 'db_client_operation_duration_bucket{le="0",db_operation_name="HGETALL"}'
+      value: "== 0"
+    - promql: 'db_client_operation_duration_bucket{le="10",db_operation_name="HGETALL"}'
+      value: "> 0"
+    - promql: 'db_client_operation_duration_count{db_operation_name="HGETALL"}'
+      value: "> 0"
+
+

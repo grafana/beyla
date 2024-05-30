@@ -61,7 +61,7 @@ func TestLinuxHarvester_Do(t *testing.T) {
 
 	assert.Equal(t, int32(os.Getpid()), status.ProcessID)
 	assert.Equal(t, "process.test", status.Command)
-	assert.Contains(t, status.CmdLine, os.Args[0])
+	assert.Contains(t, status.CommandLine, os.Args[0])
 	assert.NotEmpty(t, status.User)
 	assert.Contains(t, "RSD", status.Status,
 		"process status must be R (running), S (interruptible sleep) or D (uninterruptible sleep)")
@@ -95,8 +95,8 @@ func TestLinuxHarvester_Do_FullCommandLine(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, status)
 
-		assert.False(t, strings.HasSuffix(status.CmdLine, "sleep"), "%q should have arguments", status.CmdLine)
-		assert.Contains(t, status.CmdLine, "sleep")
+		assert.False(t, strings.HasSuffix(status.CommandLine, "sleep"), "%q should have arguments", status.CommandLine)
+		assert.Contains(t, status.CommandLine, "sleep")
 	})
 }
 
@@ -119,7 +119,7 @@ func TestLinuxHarvester_Do_StripCommandLine(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, status)
 
-		assert.True(t, strings.HasSuffix(status.CmdLine, "sleep"), "%q should not have arguments", status.CmdLine)
+		assert.True(t, strings.HasSuffix(status.CommandLine, "sleep"), "%q should not have arguments", status.CommandLine)
 	})
 }
 

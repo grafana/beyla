@@ -17,7 +17,7 @@ type Status struct {
 	CPUPercent       float64
 	CPUUserPercent   float64
 	CPUSystemPercent float64
-	CmdLine          string
+	CommandLine      string
 	Status           string
 	ParentProcessID  int32
 	ThreadCount      int32

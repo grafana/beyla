@@ -112,21 +112,25 @@ type PrometheusConfig struct {
 	Registry *prometheus.Registry `yaml:"-"`
 }
 
-func (p PrometheusConfig) SpanMetricsEnabled() bool {
+func (p *PrometheusConfig) SpanMetricsEnabled() bool {
 	return slices.Contains(p.Features, otel.FeatureSpan)
 }
 
-func (p PrometheusConfig) OTelMetricsEnabled() bool {
+func (p *PrometheusConfig) AppMetricsEnabled() bool {
 	return slices.Contains(p.Features, otel.FeatureApplication)
 }
 
-func (p PrometheusConfig) ServiceGraphMetricsEnabled() bool {
+func (p *PrometheusConfig) ServiceGraphMetricsEnabled() bool {
 	return slices.Contains(p.Features, otel.FeatureGraph)
 }
 
+func (p *PrometheusConfig) EndpointEnabled() bool {
+	return p.Port != 0 || p.Registry != nil
+}
+
 // nolint:gocritic
-func (p PrometheusConfig) Enabled() bool {
-	return (p.Port != 0 || p.Registry != nil) && (p.OTelMetricsEnabled() || p.SpanMetricsEnabled() || p.ServiceGraphMetricsEnabled())
+func (p *PrometheusConfig) Enabled() bool {
+	return p.EndpointEnabled() && (p.AppMetricsEnabled() || p.SpanMetricsEnabled() || p.ServiceGraphMetricsEnabled())
 }
 
 type metricsReporter struct {
@@ -364,7 +368,7 @@ func newReporter(
 		registeredMetrics = append(registeredMetrics, mr.beylaInfo)
 	}
 
-	if cfg.OTelMetricsEnabled() {
+	if cfg.AppMetricsEnabled() {
 		registeredMetrics = append(registeredMetrics,
 			mr.httpClientRequestSize,
 			mr.httpClientDuration,
@@ -422,7 +426,7 @@ func (r *metricsReporter) observe(span *request.Span) {
 	t := span.Timings()
 	r.beylaInfo.WithLabelValues(span.ServiceID.SDKLanguage.String()).Set(1.0)
 	duration := t.End.Sub(t.RequestStart).Seconds()
-	if r.cfg.OTelMetricsEnabled() {
+	if r.cfg.AppMetricsEnabled() {
 		switch span.Type {
 		case request.EventTypeHTTP:
 			r.httpDuration.WithLabelValues(

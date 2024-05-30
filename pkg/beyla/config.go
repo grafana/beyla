@@ -17,6 +17,7 @@ import (
 	"github.com/grafana/beyla/pkg/internal/export/prom"
 	"github.com/grafana/beyla/pkg/internal/filter"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
+	"github.com/grafana/beyla/pkg/internal/infraolly/process"
 	"github.com/grafana/beyla/pkg/internal/traces"
 	"github.com/grafana/beyla/pkg/services"
 	"github.com/grafana/beyla/pkg/transform"
@@ -99,6 +100,11 @@ var DefaultConfig = Config{
 	},
 	Routes:       &transform.RoutesConfig{},
 	NetworkFlows: defaultNetworkConfig,
+	Processes: process.Config{
+		RunMode:    process.RunModeRoot,
+		ProcFSRoot: "/proc",
+		Rate:       5 * time.Second,
+	},
 }
 
 type Config struct {
@@ -148,6 +154,10 @@ type Config struct {
 	Noop             debug.NoopEnabled `yaml:"noop" env:"BEYLA_NOOP_TRACES"`
 	ProfilePort      int               `yaml:"profile_port" env:"BEYLA_PROFILE_PORT"`
 	InternalMetrics  imetrics.Config   `yaml:"internal_metrics"`
+
+	// Processes metrics for application. They will be only enabled if there is a metrics exporter enabled,
+	// and both the "application" and "application_process" features are enabled
+	Processes process.Config `yaml:"processes"`
 
 	// Grafana Agent specific configuration
 	TracesReceiver TracesReceiverConfig `yaml:"-"`

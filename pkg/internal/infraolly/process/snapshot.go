@@ -89,8 +89,8 @@ func getLinuxProcess(procFSRoot string, pid int32, previous *linuxProcess, privi
 	// Reusing information from the last snapshot for the same process
 	// If the name or the PPID changed from the previous, we'll consider this sample is just
 	// a new process that shares the PID with an old one.
-	// if a process with the same Command but different CmdLine or User name
-	// occupies the same PID, the cache won't refresh the CmdLine and Username.
+	// if a process with the same Command but different CommandLine or User name
+	// occupies the same PID, the cache won't refresh the CommandLine and Username.
 	if previous == nil || procStats.command != previous.Command() || procStats.ppid != previous.Ppid() {
 		gops, err = process.NewProcess(pid)
 		if err != nil {

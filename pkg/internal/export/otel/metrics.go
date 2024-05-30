@@ -55,6 +55,7 @@ const (
 	FeatureApplication = "application"
 	FeatureSpan        = "application_span"
 	FeatureGraph       = "application_service_graph"
+	FeatureProcess     = "application_processes"
 )
 
 type MetricsConfig struct {
@@ -130,24 +131,24 @@ func (m *MetricsConfig) GuessProtocol() Protocol {
 // Reason to disable linting: it requires to be a value despite it is considered a "heavy struct".
 // This method is invoked only once during startup time so it doesn't have a noticeable performance impact.
 // nolint:gocritic
-func (m MetricsConfig) EndpointEnabled() bool {
+func (m *MetricsConfig) EndpointEnabled() bool {
 	return m.CommonEndpoint != "" || m.MetricsEndpoint != "" || m.Grafana.MetricsEnabled()
 }
 
-func (m MetricsConfig) SpanMetricsEnabled() bool {
+func (m *MetricsConfig) SpanMetricsEnabled() bool {
 	return slices.Contains(m.Features, FeatureSpan)
 }
 
-func (m MetricsConfig) ServiceGraphMetricsEnabled() bool {
+func (m *MetricsConfig) ServiceGraphMetricsEnabled() bool {
 	return slices.Contains(m.Features, FeatureGraph)
 }
 
-func (m MetricsConfig) OTelMetricsEnabled() bool {
+func (m *MetricsConfig) AppMetricsEnabled() bool {
 	return slices.Contains(m.Features, FeatureApplication)
 }
 
-func (m MetricsConfig) Enabled() bool {
-	return m.EndpointEnabled() && (m.OTelMetricsEnabled() || m.SpanMetricsEnabled() || m.ServiceGraphMetricsEnabled())
+func (m *MetricsConfig) Enabled() bool {
+	return m.EndpointEnabled() && (m.AppMetricsEnabled() || m.SpanMetricsEnabled() || m.ServiceGraphMetricsEnabled())
 }
 
 // MetricsReporter implements the graph node that receives request.Span
@@ -273,7 +274,7 @@ func newMetricsReporter(
 }
 
 func (mr *MetricsReporter) otelMetricOptions(mlog *slog.Logger) []metric.Option {
-	if !mr.cfg.OTelMetricsEnabled() {
+	if !mr.cfg.AppMetricsEnabled() {
 		return []metric.Option{}
 	}
 
@@ -316,7 +317,7 @@ func (mr *MetricsReporter) graphMetricOptions(mlog *slog.Logger) []metric.Option
 }
 
 func (mr *MetricsReporter) setupOtelMeters(m *Metrics, meter instrument.Meter) error {
-	if !mr.cfg.OTelMetricsEnabled() {
+	if !mr.cfg.AppMetricsEnabled() {
 		return nil
 	}
 
@@ -447,7 +448,7 @@ func (mr *MetricsReporter) newMetricSet(service svc.ID) (*Metrics, error) {
 	// TODO: set ExplicitBucketBoundaries here and in prometheus from the previous specification
 	meter := m.provider.Meter(reporterName)
 	var err error
-	if mr.cfg.OTelMetricsEnabled() {
+	if mr.cfg.AppMetricsEnabled() {
 		err = mr.setupOtelMeters(&m, meter)
 		if err != nil {
 			return nil, err
@@ -650,7 +651,7 @@ func (r *Metrics) record(span *request.Span, mr *MetricsReporter) {
 	t := span.Timings()
 	duration := t.End.Sub(t.RequestStart).Seconds()
 
-	if mr.cfg.OTelMetricsEnabled() {
+	if mr.cfg.AppMetricsEnabled() {
 		switch span.Type {
 		case request.EventTypeHTTP:
 			// TODO: for more accuracy, there must be a way to set the metric time from the actual span end time

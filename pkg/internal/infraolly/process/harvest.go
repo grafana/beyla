@@ -47,6 +47,7 @@ const (
 type Config struct {
 	RunMode              RunMode
 	DisableZeroRSSFilter bool
+	// TODO: replace configuration option by attributes-aware set
 	FullCommandLine      bool
 
 	ProcFSRoot string
@@ -136,7 +137,7 @@ func (ps *linuxHarvester) Do(pid int32) (*Status, error) {
 // populateStaticData populates the status with the process data won't vary during the process life cycle
 func (ps *linuxHarvester) populateStaticData(status *Status, process *linuxProcess) error {
 	var err error
-	status.CmdLine, err = process.CmdLine(!ps.stripCommandLine)
+	status.CommandLine, err = process.CmdLine(!ps.stripCommandLine)
 	if err != nil {
 		return errors.Wrap(err, "acquiring command line")
 	}

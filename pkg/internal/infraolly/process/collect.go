@@ -23,11 +23,12 @@ type Collector struct {
 	harvest Harvester
 	cache   *simplelru.LRU[int32, *cacheEntry]
 	log     *slog.Logger
+	newPids *<-chan []request.Span
 }
 
 // NewCollectorProvider creates and returns a new process Collector, given an agent context.
-func NewCollectorProvider(ctx context.Context, cfg *Config) pipe.MiddleProvider[[]request.Span, []*Status] {
-	return func() (pipe.MiddleFunc[[]request.Span, []*Status], error) {
+func NewCollectorProvider(ctx context.Context, input *<-chan []request.Span, cfg *Config) pipe.StartProvider[[]*Status] {
+	return func() (pipe.StartFunc[[]*Status], error) {
 		// we purge entries explicitly so size is unbounded
 		cache, _ := simplelru.NewLRU[int32, *cacheEntry](math.MaxInt, nil)
 		harvest := newHarvester(cfg, cache)
@@ -38,19 +39,21 @@ func NewCollectorProvider(ctx context.Context, cfg *Config) pipe.MiddleProvider[
 			harvest: harvest,
 			cache:   cache,
 			log:     pslog(),
+			newPids: input,
 		}).Run, nil
 	}
 }
 
-func (ps *Collector) Run(in <-chan []request.Span, out chan<- []*Status) {
+func (ps *Collector) Run(out chan<- []*Status) {
 	// TODO: set app metadata as key for later decoration? (e.g. K8s metadata, svc.ID)
 	pids := map[int32]struct{}{}
 	collectTicker := time.NewTicker(ps.cfg.Rate)
+	newPids := *ps.newPids
 	for {
 		select {
 		case <-ps.ctx.Done():
 			ps.log.Debug("exiting")
-		case spans := <-in:
+		case spans := <-newPids:
 			// updating PIDs map with spans information
 			for i := range spans {
 				pids[int32(spans[i].Pid.UserPID)] = struct{}{}

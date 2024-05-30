@@ -86,8 +86,7 @@ func SpanPromGetters(attrName attr.Name) (attributes.Getter[*Span, string], bool
 		}
 	case attr.DBCollectionName:
 		getter = func(span *Span) string {
-			switch span.Type {
-			case EventTypeSQLClient:
+			if span.Type == EventTypeSQLClient {
 				return semconv.DBSystemOtherSQL.Value.AsString()
 			}
 			return ""

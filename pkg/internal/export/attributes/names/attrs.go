@@ -44,7 +44,6 @@ const (
 	DBOperation            = Name("db.operation.name")
 	DBCollectionName       = Name("db.collection.name")
 	DBSystem               = Name(semconv.DBSystemKey)
-	DBQueryText            = Name("db.query.text")
 	RPCMethod              = Name(semconv.RPCMethodKey)
 	RPCSystem              = Name(semconv.RPCSystemKey)
 	RPCGRPCStatusCode      = Name(semconv.RPCGRPCStatusCodeKey)

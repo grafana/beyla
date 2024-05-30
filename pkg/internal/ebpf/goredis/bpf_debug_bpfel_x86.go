@@ -33,8 +33,13 @@ type bpf_debugRedisClientReqT struct {
 	Conn            bpf_debugConnectionInfoT
 	_               [4]byte
 	Tp              bpf_debugTpInfoT
-	Err             uint8
-	_               [7]byte
+	Pid             struct {
+		HostPid uint32
+		UserPid uint32
+		Ns      uint32
+	}
+	Err uint8
+	_   [3]byte
 }
 
 type bpf_debugTpInfoPidT struct {

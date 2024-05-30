@@ -33,8 +33,13 @@ type bpfRedisClientReqT struct {
 	Conn            bpfConnectionInfoT
 	_               [4]byte
 	Tp              bpfTpInfoT
-	Err             uint8
-	_               [7]byte
+	Pid             struct {
+		HostPid uint32
+		UserPid uint32
+		Ns      uint32
+	}
+	Err uint8
+	_   [3]byte
 }
 
 type bpfTpInfoPidT struct {

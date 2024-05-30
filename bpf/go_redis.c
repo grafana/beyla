@@ -32,15 +32,8 @@ struct {
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
 } redis_writes SEC(".maps");
 
-// github.com/redis/go-redis/v9.(*baseClient)._process
-// func (c *baseClient) _process(ctx context.Context, cmd Cmder, attempt int) (bool, error) {
-SEC("uprobe/redis_process")
-int uprobe_redis_process(struct pt_regs *ctx) {
-    bpf_printk("=== uprobe/redis _process === ");
-    void *goroutine_addr = GOROUTINE_PTR(ctx);
-    bpf_printk("goroutine_addr %lx", goroutine_addr);
-
-    redis_client_req_t req = {
+static __always_inline void setup_request(void *goroutine_addr) {
+        redis_client_req_t req = {
         .type = EVENT_GO_REDIS,
         .start_monotime_ns = bpf_ktime_get_ns(),
     };
@@ -49,6 +42,17 @@ int uprobe_redis_process(struct pt_regs *ctx) {
     client_trace_parent(goroutine_addr, &req.tp, 0);
 
     bpf_map_update_elem(&ongoing_redis_requests, &goroutine_addr, &req, BPF_ANY);
+}
+
+// github.com/redis/go-redis/v9.(*baseClient)._process
+// func (c *baseClient) _process(ctx context.Context, cmd Cmder, attempt int) (bool, error) {
+SEC("uprobe/redis_process")
+int uprobe_redis_process(struct pt_regs *ctx) {
+    bpf_printk("=== uprobe/redis _process === ");
+    void *goroutine_addr = GOROUTINE_PTR(ctx);
+    bpf_printk("goroutine_addr %lx", goroutine_addr);
+
+    setup_request(goroutine_addr);
 
     return 0;
 }
@@ -66,6 +70,7 @@ int uprobe_redis_process_ret(struct pt_regs *ctx) {
             bpf_dbg_printk("Sending redis client go trace");
             __builtin_memcpy(trace, req, sizeof(redis_client_req_t));
             trace->end_monotime_ns = bpf_ktime_get_ns();
+            task_pid(&trace->pid);
             bpf_ringbuf_submit(trace, get_flags());
         }
     }
@@ -87,6 +92,11 @@ int uprobe_redis_with_writer(struct pt_regs *ctx) {
 
     redis_client_req_t *req = bpf_map_lookup_elem(&ongoing_redis_requests, &goroutine_addr);
 
+    if (!req) {
+        setup_request(goroutine_addr);
+        req = bpf_map_lookup_elem(&ongoing_redis_requests, &goroutine_addr);
+    }
+
     if (req) {
         void *cn_ptr = GO_PARAM1(ctx);
 
@@ -105,7 +115,7 @@ int uprobe_redis_with_writer(struct pt_regs *ctx) {
                 bpf_probe_read(&conn_ptr, sizeof(conn_ptr), (void *)(tcp_conn_ptr + 8)); // find conn
                 bpf_dbg_printk("conn ptr %llx", conn_ptr);
                 if (conn_ptr) {
-                    get_conn_info_from_fd(conn_ptr, &req->conn);
+                    get_conn_info(conn_ptr, &req->conn);
                 }
             }
         }

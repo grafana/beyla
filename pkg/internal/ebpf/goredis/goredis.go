@@ -73,17 +73,17 @@ func (p *Tracer) Constants(_ *exec.FileInfo, offsets *goexec.Offsets) map[string
 	constants := map[string]any{
 		"wakeup_data_bytes": uint32(p.cfg.WakeupLen) * uint32(unsafe.Sizeof(ebpfcommon.HTTPRequestTrace{})),
 	}
-	// for _, s := range []string{
-	// 	"sarama_broker_corr_id_pos",
-	// 	"sarama_response_corr_id_pos",
-	// 	"sarama_broker_conn_pos",
-	// 	"sarama_bufconn_conn_pos",
-	// 	"conn_fd_pos",
-	// 	"fd_laddr_pos",
-	// 	"fd_raddr_pos",
-	// } {
-	// 	constants[s] = offsets.Field[s]
-	// }
+	for _, s := range []string{
+		// 	"sarama_broker_corr_id_pos",
+		// 	"sarama_response_corr_id_pos",
+		// 	"sarama_broker_conn_pos",
+		// 	"sarama_bufconn_conn_pos",
+		"conn_fd_pos",
+		"fd_laddr_pos",
+		"fd_raddr_pos",
+	} {
+		constants[s] = offsets.Field[s]
+	}
 	return constants
 }
 

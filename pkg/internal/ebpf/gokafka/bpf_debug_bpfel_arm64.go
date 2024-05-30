@@ -31,7 +31,12 @@ type bpf_debugKafkaClientReqT struct {
 	Buf             [256]uint8
 	_               [7]byte
 	Conn            bpf_debugConnectionInfoT
-	_               [4]byte
+	Tp              bpf_debugTpInfoT
+	Pid             struct {
+		HostPid uint32
+		UserPid uint32
+		Ns      uint32
+	}
 }
 
 type bpf_debugTpInfoPidT struct {

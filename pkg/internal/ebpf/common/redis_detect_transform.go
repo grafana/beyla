@@ -106,6 +106,10 @@ func parseRedisRequest(buf string) (string, string, bool) {
 				break
 			}
 		} else {
+			if isRedisOp([]uint8(l + "\r\n")) {
+				text += ", "
+				continue
+			}
 			if op == "" {
 				op = l
 			}
@@ -199,5 +203,10 @@ func ReadGoRedisRequestIntoSpan(record *ringbuf.Record) (request.Span, bool, err
 		SpanID:        trace2.SpanID(event.Tp.SpanId),
 		ParentSpanID:  trace2.SpanID(event.Tp.ParentId),
 		Flags:         event.Tp.Flags,
+		Pid: request.PidInfo{
+			HostPID:   event.Pid.HostPid,
+			UserPID:   event.Pid.UserPid,
+			Namespace: event.Pid.Ns,
+		},
 	}, false, nil
 }

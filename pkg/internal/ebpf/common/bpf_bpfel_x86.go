@@ -109,7 +109,19 @@ type bpfKafkaClientReqT struct {
 	Buf             [256]uint8
 	_               [7]byte
 	Conn            bpfConnectionInfoT
-	_               [4]byte
+	Tp              struct {
+		TraceId  [16]uint8
+		SpanId   [8]uint8
+		ParentId [8]uint8
+		Ts       uint64
+		Flags    uint8
+		_        [7]byte
+	}
+	Pid struct {
+		HostPid uint32
+		UserPid uint32
+		Ns      uint32
+	}
 }
 
 type bpfRedisClientReqT struct {
@@ -128,8 +140,13 @@ type bpfRedisClientReqT struct {
 		Flags    uint8
 		_        [7]byte
 	}
+	Pid struct {
+		HostPid uint32
+		UserPid uint32
+		Ns      uint32
+	}
 	Err uint8
-	_   [7]byte
+	_   [3]byte
 }
 
 type bpfSqlRequestTrace struct {

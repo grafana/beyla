@@ -18,7 +18,7 @@ func HTTPHandler(log *slog.Logger, echoPort int) http.HandlerFunc {
 		ctx := context.Background()
 
 		client := redis.NewClient(&redis.Options{
-			Addr:     "redis:6379",
+			Addr:     "localhost:6379",
 			Password: "", // no password set
 			DB:       0,  // use default DB
 		})

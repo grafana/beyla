@@ -141,5 +141,14 @@
         "Conn"
       ]
     }
-  }  
+  },
+  "github.com/redis/go-redis/v9": {
+    "inspect": "./configs/offsets/redis/inspect.go",
+    "versions": ">= v9.0.0",
+    "fields": {
+      "github.com/redis/go-redis/v9/internal/pool.Conn": [
+        "bw"
+      ]
+    }
+  }    
 }

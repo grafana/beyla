@@ -48,9 +48,9 @@ static __always_inline void setup_request(void *goroutine_addr) {
 // func (c *baseClient) _process(ctx context.Context, cmd Cmder, attempt int) (bool, error) {
 SEC("uprobe/redis_process")
 int uprobe_redis_process(struct pt_regs *ctx) {
-    bpf_printk("=== uprobe/redis _process === ");
+    bpf_dbg_printk("=== uprobe/redis _process === ");
     void *goroutine_addr = GOROUTINE_PTR(ctx);
-    bpf_printk("goroutine_addr %lx", goroutine_addr);
+    bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
 
     setup_request(goroutine_addr);
 
@@ -59,9 +59,9 @@ int uprobe_redis_process(struct pt_regs *ctx) {
 
 SEC("uprobe/redis_process")
 int uprobe_redis_process_ret(struct pt_regs *ctx) {
-    bpf_printk("=== uprobe/redis _process returns === ");
+    bpf_dbg_printk("=== uprobe/redis _process returns === ");
     void *goroutine_addr = GOROUTINE_PTR(ctx);
-    bpf_printk("goroutine_addr %lx", goroutine_addr);
+    bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
 
     redis_client_req_t *req = bpf_map_lookup_elem(&ongoing_redis_requests, &goroutine_addr);
     if (req) {
@@ -86,9 +86,9 @@ int uprobe_redis_process_ret(struct pt_regs *ctx) {
 // ) error
 SEC("uprobe/redis_with_writer")
 int uprobe_redis_with_writer(struct pt_regs *ctx) {
-    bpf_printk("=== uprobe/redis WithWriter === ");
+    bpf_dbg_printk("=== uprobe/redis WithWriter === ");
     void *goroutine_addr = GOROUTINE_PTR(ctx);
-    bpf_printk("goroutine_addr %lx", goroutine_addr);
+    bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
 
     redis_client_req_t *req = bpf_map_lookup_elem(&ongoing_redis_requests, &goroutine_addr);
 
@@ -103,7 +103,7 @@ int uprobe_redis_with_writer(struct pt_regs *ctx) {
         void *bw_ptr = 0;
 
         bpf_probe_read(&bw_ptr, sizeof(void *), cn_ptr + redis_conn_bw_pos);
-        bpf_printk("bw_ptr %llx", bw_ptr);
+        bpf_dbg_printk("bw_ptr %llx", bw_ptr);
 
         bpf_map_update_elem(&redis_writes, &goroutine_addr, &bw_ptr, BPF_ANY);
 
@@ -126,9 +126,9 @@ int uprobe_redis_with_writer(struct pt_regs *ctx) {
 
 SEC("uprobe/redis_with_writer")
 int uprobe_redis_with_writer_ret(struct pt_regs *ctx) {
-    bpf_printk("=== uprobe/redis WithWriter returns === ");
+    bpf_dbg_printk("=== uprobe/redis WithWriter returns === ");
     void *goroutine_addr = GOROUTINE_PTR(ctx);
-    bpf_printk("goroutine_addr %lx", goroutine_addr);
+    bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
 
     redis_client_req_t *req = bpf_map_lookup_elem(&ongoing_redis_requests, &goroutine_addr);
 
@@ -138,14 +138,14 @@ int uprobe_redis_with_writer_ret(struct pt_regs *ctx) {
         if (bw_ptr) {
             void *bw = *bw_ptr;
             if (bw) {
-                bpf_printk("Found bw %llx", bw);
+                bpf_dbg_printk("Found bw %llx", bw);
 
                 void *buf = 0;
                 bpf_probe_read(&buf, sizeof(void *), bw + io_writer_buf_ptr_pos);
                 u64 len = 0;
                 bpf_probe_read(&len, sizeof(u64), bw + io_writer_buf_ptr_pos + 8);
 
-                bpf_printk("buf %llx[%s], len=%ld", buf, buf, len);
+                bpf_dbg_printk("buf %llx[%s], len=%ld", buf, buf, len);
 
                 if (len > 0) {
                     bpf_probe_read(&req->buf, REDIS_MAX_LEN, buf);

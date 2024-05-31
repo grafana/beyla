@@ -6,9 +6,9 @@ import (
 	"net"
 	"strings"
 
+	"github.com/cilium/ebpf/ringbuf"
 	trace2 "go.opentelemetry.io/otel/trace"
 
-	"github.com/cilium/ebpf/ringbuf"
 	"github.com/grafana/beyla/pkg/internal/request"
 )
 

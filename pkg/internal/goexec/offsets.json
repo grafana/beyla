@@ -148,6 +148,20 @@
         ]
       }
     },
+    "github.com/redis/go-redis/v9/internal/pool.Conn": {
+      "bw": {
+        "versions": {
+          "oldest": "9.0.0",
+          "newest": "9.5.1"
+        },
+        "offsets": [
+          {
+            "offset": 32,
+            "since": "9.0.0"
+          }
+        ]
+      }
+    },
     "golang.org/x/net/http2.ClientConn": {
       "nextStreamID": {
         "versions": {

@@ -143,7 +143,7 @@ func (p *Tracer) Run(ctx context.Context, eventsChan chan<- []request.Span) {
 	)(ctx, append(p.closers, &p.bpfObjects), eventsChan)
 }
 
-// GinTracer overrides Tracer to inspect the Gin ServeHTTP endpoint
+// ShopifyKafkaTracer overrides Tracer to inspect the Shopify version of the library
 type ShopifyKafkaTracer struct {
 	Tracer
 }

@@ -76,3 +76,5 @@ test/integration/components/gohttp2/server/http2srv
 beyla.sln
 test/integration/components/gokafka/gokafka
 test/integration/components/gokafka/vendor
+test/integration/components/goredis/vendor
+test/integration/components/goredis/goredis

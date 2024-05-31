@@ -215,6 +215,12 @@ var structMembers = map[string]structInfo{
 			"Conn": "sarama_bufconn_conn_pos",
 		},
 	},
+	"github.com/redis/go-redis/v9/internal/pool.Conn": {
+		lib: "github.com/redis/go-redis/v9",
+		fields: map[string]string{
+			"bw": "redis_conn_bw_pos",
+		},
+	},
 }
 
 func structMemberOffsets(elfFile *elf.File) (FieldOffsets, error) {

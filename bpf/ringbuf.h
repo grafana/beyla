@@ -14,6 +14,7 @@
 #define EVENT_K_HTTP2_REQUEST  7
 #define EVENT_TCP_REQUEST      8
 #define EVENT_GO_KAFKA         9
+#define EVENT_GO_REDIS         10
 
 // setting here the following map definitions without pinning them to a global namespace
 // would lead that services running both HTTP and GRPC server would duplicate 

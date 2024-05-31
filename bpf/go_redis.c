@@ -15,8 +15,8 @@
 #include "go_common.h"
 #include "ringbuf.h"
 
-volatile const u64 redis_broker_corr_id_pos;
-volatile const u64 redis_response_corr_id_pos;
+volatile const u64 redis_conn_bw_pos;
+volatile const u64 io_writer_buf_ptr_pos;
 
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
@@ -102,7 +102,7 @@ int uprobe_redis_with_writer(struct pt_regs *ctx) {
 
         void *bw_ptr = 0;
 
-        bpf_probe_read(&bw_ptr, sizeof(void *), cn_ptr + 0x20);
+        bpf_probe_read(&bw_ptr, sizeof(void *), cn_ptr + redis_conn_bw_pos);
         bpf_printk("bw_ptr %llx", bw_ptr);
 
         bpf_map_update_elem(&redis_writes, &goroutine_addr, &bw_ptr, BPF_ANY);
@@ -141,10 +141,9 @@ int uprobe_redis_with_writer_ret(struct pt_regs *ctx) {
                 bpf_printk("Found bw %llx", bw);
 
                 void *buf = 0;
-                bpf_probe_read(&buf, sizeof(void *), bw + 0x10);
+                bpf_probe_read(&buf, sizeof(void *), bw + io_writer_buf_ptr_pos);
                 u64 len = 0;
-
-                bpf_probe_read(&len, sizeof(u64), bw + 0x18);
+                bpf_probe_read(&len, sizeof(u64), bw + io_writer_buf_ptr_pos + 8);
 
                 bpf_printk("buf %llx[%s], len=%ld", buf, buf, len);
 

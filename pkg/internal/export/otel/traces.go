@@ -604,7 +604,6 @@ func traceAttributes(span *request.Span, optionalAttrs map[attr.Name]struct{}) [
 		operation := attribute.Key(semconv.MessagingOperationKey).String(span.Method)
 		attrs = []attribute.KeyValue{
 			semconv.MessagingSystemKafka,
-			//semconv.MessagingMessageBodySize(int(span.ContentLength)),
 			semconv.MessagingDestinationName(span.Path),
 			semconv.MessagingClientID(span.OtherNamespace),
 			operation,

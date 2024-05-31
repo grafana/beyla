@@ -10,32 +10,32 @@ func TestIsKafkaRequest(t *testing.T) {
 	tests := []struct {
 		name     string
 		input    []byte
-		expected *KafkaData
+		expected *Info
 	}{
 		{
 			name:  "Fetch request",
 			input: []byte{0, 0, 0, 94, 0, 1, 0, 11, 0, 0, 0, 224, 0, 6, 115, 97, 114, 97, 109, 97, 255, 255, 255, 255, 0, 0, 1, 244, 0, 0, 0, 1, 6, 64, 0, 0, 0, 0, 0, 0, 0, 255, 255, 255, 255, 0, 0, 0, 1, 0, 9, 105, 109, 112, 111, 114, 116, 97, 110, 116, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 19, 0, 0, 0, 0, 0, 0, 0, 0, 0, 16, 0, 0, 0, 0, 0, 0, 0, 0},
-			expected: &KafkaData{
-				ClientID:       "sarama",
-				KafkaOperation: KAFKA_FETCH,
-				Topic:          "important",
-				TopicOffset:    45,
+			expected: &Info{
+				ClientID:    "sarama",
+				Operation:   Fetch,
+				Topic:       "important",
+				TopicOffset: 45,
 			},
 		},
 		{
 			name:  "Produce request",
 			input: []byte{0, 0, 0, 123, 0, 0, 0, 7, 0, 0, 0, 2, 0, 6, 115, 97, 114, 97, 109, 97, 255, 255, 255, 255, 0, 0, 39, 16, 0, 0, 0, 1, 0, 9, 105, 109, 112, 111, 114, 116, 97, 110, 116, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 72, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 60, 0, 0, 0, 0, 2, 249, 236, 167, 144, 0, 0, 0, 0, 0, 0, 0, 0, 1, 143, 191, 130, 165, 117, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 0, 0, 0, 0, 0, 0, 0, 1, 20, 0, 0, 0, 1, 8, 100, 97, 116, 97, 0},
-			expected: &KafkaData{
-				ClientID:       "sarama",
-				KafkaOperation: KAFKA_PRODUCE,
-				Topic:          "important",
-				TopicOffset:    28,
+			expected: &Info{
+				ClientID:    "sarama",
+				Operation:   Produce,
+				Topic:       "important",
+				TopicOffset: 28,
 			},
 		},
 		{
 			name:     "Invalid request",
 			input:    []byte{0, 0, 0, 1, 0, 0, 0, 7, 0, 0, 0, 2, 0, 6, 115, 97, 114, 97, 109, 97, 255, 255, 255, 255, 0, 0, 39, 16, 0, 0, 0, 1, 0, 9, 105, 109, 112, 111, 114, 116, 97, 110, 116, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 72},
-			expected: &KafkaData{},
+			expected: &Info{},
 		},
 	}
 
@@ -48,8 +48,8 @@ func TestIsKafkaRequest(t *testing.T) {
 }
 
 func TestGetTopicOffsetFromProduceOperation(t *testing.T) {
-	header := &KafkaHeader{
-		ApiVersion: 3,
+	header := &Header{
+		APIVersion: 3,
 	}
 	pkt := []byte{0x00, 0x02, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00}
 	offset := 0
@@ -60,7 +60,7 @@ func TestGetTopicOffsetFromProduceOperation(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, 10, offset)
 
-	header.ApiVersion = 2
+	header.APIVersion = 2
 	pkt = []byte{0x00, 0x02, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00}
 	offset = 0
 
@@ -81,35 +81,35 @@ func TestGetTopicOffsetFromProduceOperation(t *testing.T) {
 }
 
 func TestGetTopicOffsetFromFetchOperation(t *testing.T) {
-	header := &KafkaHeader{
-		ApiVersion: 3,
+	header := &Header{
+		APIVersion: 3,
 	}
 
 	offset := getTopicOffsetFromFetchOperation(header)
 	expectedOffset := 3*4 + 4
 	assert.Equal(t, expectedOffset, offset)
 
-	header.ApiVersion = 4
+	header.APIVersion = 4
 	offset = getTopicOffsetFromFetchOperation(header)
 	expectedOffset = 3*4 + 5
 	assert.Equal(t, expectedOffset, offset)
 
-	header.ApiVersion = 7
+	header.APIVersion = 7
 	offset = getTopicOffsetFromFetchOperation(header)
 	expectedOffset = 3*4 + 4 + 1 + 2*4
 	assert.Equal(t, expectedOffset, offset)
 
-	header.ApiVersion = 2
+	header.APIVersion = 2
 	offset = getTopicOffsetFromFetchOperation(header)
 	expectedOffset = 3 * 4
 	assert.Equal(t, expectedOffset, offset)
 }
 
 func TestIsValidKafkaHeader(t *testing.T) {
-	header := &KafkaHeader{
+	header := &Header{
 		MessageSize:   100,
-		ApiVersion:    3,
-		ApiKey:        1,
+		APIVersion:    3,
+		APIKey:        1,
 		CorrelationID: 123,
 		ClientIDSize:  0,
 	}
@@ -122,16 +122,16 @@ func TestIsValidKafkaHeader(t *testing.T) {
 	assert.False(t, result)
 
 	header.MessageSize = 100
-	header.ApiVersion = -1
+	header.APIVersion = -1
 	result = isValidKafkaHeader(header)
 	assert.False(t, result)
 
-	header.ApiVersion = 3
-	header.ApiKey = 2
+	header.APIVersion = 3
+	header.APIKey = 2
 	result = isValidKafkaHeader(header)
 	assert.False(t, result)
 
-	header.ApiKey = 1
+	header.APIKey = 1
 	header.CorrelationID = -1
 	result = isValidKafkaHeader(header)
 	assert.False(t, result)

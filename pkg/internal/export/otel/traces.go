@@ -519,6 +519,13 @@ func SpanKindString(span *request.Span) string {
 		return "SPAN_KIND_SERVER"
 	case request.EventTypeHTTPClient, request.EventTypeGRPCClient, request.EventTypeSQLClient, request.EventTypeRedisClient:
 		return "SPAN_KIND_CLIENT"
+	case request.EventTypeKafkaClient:
+		switch span.Method {
+		case request.MessagingPublish:
+			return "SPAN_KIND_PRODUCER"
+		case request.MessagingProcess:
+			return "SPAN_KIND_CONSUMER"
+		}
 	}
 	return "SPAN_KIND_INTERNAL"
 }

@@ -195,9 +195,11 @@ func (ps *Harvester) populateIOCounters(status *Status, source *linuxProcess) er
 	if err != nil {
 		return err
 	}
-	status.IOReadCount = ioCounters.ReadCount
-	status.IOWriteCount = ioCounters.WriteCount
-	status.IOReadBytes = ioCounters.ReadBytes
-	status.IOWriteBytes = ioCounters.WriteBytes
+	if ioCounters != nil {
+		status.IOReadCount = ioCounters.ReadCount
+		status.IOWriteCount = ioCounters.WriteCount
+		status.IOReadBytes = ioCounters.ReadBytes
+		status.IOWriteBytes = ioCounters.WriteBytes
+	}
 	return nil
 }

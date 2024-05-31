@@ -117,7 +117,7 @@ func (me *metricsExporter) Do(in <-chan []*ebpf.Record) {
 	for i := range in {
 		me.clock.Update()
 		for _, v := range i {
-			me.metrics.ForRecord(v).val.Add(int64(v.Metrics.Bytes))
+			me.metrics.ForRecord(v).Add(int64(v.Metrics.Bytes))
 		}
 	}
 }

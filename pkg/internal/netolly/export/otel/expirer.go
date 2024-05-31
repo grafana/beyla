@@ -53,6 +53,10 @@ func (g *Counter) Load() int64 {
 	return g.val.Load()
 }
 
+func (g *Counter) Add(v int64) {
+	g.val.Add(v)
+}
+
 func (g *Counter) Attributes() attribute.Set {
 	return g.attributes
 }

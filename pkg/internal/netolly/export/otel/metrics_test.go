@@ -36,12 +36,12 @@ func TestMetricAttributes(t *testing.T) {
 	in.Id.SrcIp.In6U.U6Addr8 = [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 255, 12, 34, 56, 78}
 	in.Id.DstIp.In6U.U6Addr8 = [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 255, 33, 22, 11, 1}
 
-	me := &metricsExporter{metrics: &Expirer[*ebpf.Record, metric.Int64Observer, *Counter, int64]{attrs: attributes.OpenTelemetryGetters(
-		ebpf.RecordGetters, []attr.Name{
-			attr.SrcAddress, attr.DstAddres, attr.SrcPort, attr.DstPort, attr.SrcName, attr.DstName,
-			attr.K8sSrcName, attr.K8sSrcNamespace, attr.K8sDstName, attr.K8sDstNamespace,
-		})}}
-	reportedAttributes, _ := me.metrics.recordAttributes(in)
+	me := NewExpirer[*ebpf.Record, metric.Int64Observer, *Counter, int64](NewCounter, attributes.OpenTelemetryGetters(ebpf.RecordGetters, []attr.Name{
+		attr.SrcAddress, attr.DstAddres, attr.SrcPort, attr.DstPort, attr.SrcName, attr.DstName,
+		attr.K8sSrcName, attr.K8sSrcNamespace, attr.K8sDstName, attr.K8sDstNamespace,
+	}), timeNow, timeout)
+	record := me.ForRecord(in)
+	reportedAttributes := record.Attributes()
 	for _, mustContain := range []attribute.KeyValue{
 		attribute.String("src.address", "12.34.56.78"),
 		attribute.String("dst.address", "33.22.11.1"),
@@ -85,12 +85,13 @@ func TestMetricAttributes_Filter(t *testing.T) {
 	in.Id.SrcIp.In6U.U6Addr8 = [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 255, 12, 34, 56, 78}
 	in.Id.DstIp.In6U.U6Addr8 = [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 255, 33, 22, 11, 1}
 
-	me := &Expirer[*ebpf.Record, metric.Int64Observer, *Counter, int64]{attrs: attributes.OpenTelemetryGetters(ebpf.RecordGetters, []attr.Name{
+	me := NewExpirer[*ebpf.Record, metric.Int64Observer, *Counter, int64](NewCounter, attributes.OpenTelemetryGetters(ebpf.RecordGetters, []attr.Name{
 		"src.address",
 		"k8s.src.name",
 		"k8s.dst.name",
-	})}
-	reportedAttributes, _ := me.recordAttributes(in)
+	}), timeNow, timeout)
+	record := me.ForRecord(in)
+	reportedAttributes := record.Attributes()
 	for _, mustContain := range []attribute.KeyValue{
 		attribute.String("src.address", "12.34.56.78"),
 		attribute.String("k8s.src.name", "srcname"),

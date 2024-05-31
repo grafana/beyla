@@ -16,6 +16,7 @@ import (
 	"github.com/grafana/beyla/pkg/internal/export/otel"
 	"github.com/grafana/beyla/pkg/internal/export/prom"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
+	"github.com/grafana/beyla/pkg/internal/infraolly/process"
 	"github.com/grafana/beyla/pkg/internal/netolly/transform/cidr"
 	"github.com/grafana/beyla/pkg/internal/traces"
 	"github.com/grafana/beyla/pkg/transform"
@@ -164,6 +165,10 @@ network:
 		NameResolver: &transform.NameResolverConfig{
 			CacheLen: 1024,
 			CacheTTL: 5 * time.Minute,
+		},
+		Processes: process.Config{
+			RunMode: process.RunModeRoot,
+			Rate:    5 * time.Second,
 		},
 	}, cfg)
 }

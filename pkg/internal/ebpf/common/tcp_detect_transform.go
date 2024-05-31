@@ -154,7 +154,7 @@ func isHTTP2(data []uint8, event *TCPRequestInfo) bool {
 	return false
 }
 
-func TCPToKafkaToSpan(trace *TCPRequestInfo, data *kafka.KafkaData) request.Span {
+func TCPToKafkaToSpan(trace *TCPRequestInfo, data *kafka.Info) request.Span {
 	peer := ""
 	hostname := ""
 	hostPort := 0
@@ -165,7 +165,7 @@ func TCPToKafkaToSpan(trace *TCPRequestInfo, data *kafka.KafkaData) request.Span
 	}
 	return request.Span{
 		Type:           request.EventTypeKafkaClient,
-		Method:         data.KafkaOperation.String(),
+		Method:         data.Operation.String(),
 		OtherNamespace: data.ClientID,
 		Path:           data.Topic,
 		Peer:           peer,

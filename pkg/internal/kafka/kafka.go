@@ -5,53 +5,53 @@ import (
 	"errors"
 )
 
-type KafkaOperation int8
+type Operation int8
 
 const (
-	KAFKA_PRODUCE KafkaOperation = 0
-	KAFKA_FETCH   KafkaOperation = 1
+	Produce Operation = 0
+	Fetch   Operation = 1
 )
 
-type KafkaHeader struct {
+type Header struct {
 	MessageSize   int32
-	ApiKey        int16
-	ApiVersion    int16
+	APIKey        int16
+	APIVersion    int16
 	CorrelationID int32
 	ClientIDSize  int16
 }
 
-type KafkaData struct {
-	KafkaOperation KafkaOperation
-	Topic          string
-	ClientID       string
-	TopicOffset    int
+type Info struct {
+	Operation   Operation
+	Topic       string
+	ClientID    string
+	TopicOffset int
 }
 
-func (k KafkaOperation) String() string {
+func (k Operation) String() string {
 	switch k {
-	case KAFKA_PRODUCE:
+	case Produce:
 		return "process"
-	case KAFKA_FETCH:
+	case Fetch:
 		return "receive"
 	default:
 		return "unknown"
 	}
 }
 
-const KAFKA_MIN_LENGTH = 14
+const KafaMinLength = 14
 
 // ProcessKafkaData processes a TCP packet and returns error if the packet is not a valid Kafka request.
 // Otherwise, return KafkaData with the processed data.
-func ProcessKafkaData(pkt []byte) (*KafkaData, error) {
-	k := &KafkaData{}
-	if len(pkt) < KAFKA_MIN_LENGTH {
+func ProcessKafkaData(pkt []byte) (*Info, error) {
+	k := &Info{}
+	if len(pkt) < KafaMinLength {
 		return k, errors.New("packet too short")
 	}
 
-	header := &KafkaHeader{
+	header := &Header{
 		MessageSize:   int32(binary.BigEndian.Uint32(pkt[0:4])),
-		ApiKey:        int16(binary.BigEndian.Uint16(pkt[4:6])),
-		ApiVersion:    int16(binary.BigEndian.Uint16(pkt[6:8])),
+		APIKey:        int16(binary.BigEndian.Uint16(pkt[4:6])),
+		APIVersion:    int16(binary.BigEndian.Uint16(pkt[6:8])),
 		CorrelationID: int32(binary.BigEndian.Uint32(pkt[8:12])),
 		ClientIDSize:  int16(binary.BigEndian.Uint16(pkt[12:14])),
 	}
@@ -60,7 +60,7 @@ func ProcessKafkaData(pkt []byte) (*KafkaData, error) {
 		return k, errors.New("invalid Kafka request header")
 	}
 
-	offset := KAFKA_MIN_LENGTH
+	offset := KafaMinLength
 	if header.ClientIDSize > 0 {
 		clientID := pkt[offset : offset+int(header.ClientIDSize)]
 		if !isValidClientID(clientID, int(header.ClientIDSize)) {
@@ -72,17 +72,17 @@ func ProcessKafkaData(pkt []byte) (*KafkaData, error) {
 		return k, errors.New("invalid client ID size")
 	}
 
-	switch KafkaOperation(header.ApiKey) {
-	case KAFKA_PRODUCE:
+	switch Operation(header.APIKey) {
+	case Produce:
 		ok, err := getTopicOffsetFromProduceOperation(header, pkt, &offset)
 		if !ok || err != nil {
 			return k, err
 		}
-		k.KafkaOperation = KAFKA_PRODUCE
+		k.Operation = Produce
 		k.TopicOffset = offset
-	case KAFKA_FETCH:
+	case Fetch:
 		offset += getTopicOffsetFromFetchOperation(header)
-		k.KafkaOperation = KAFKA_FETCH
+		k.Operation = Fetch
 		k.TopicOffset = offset
 	default:
 		return k, errors.New("invalid Kafka operation")
@@ -95,17 +95,17 @@ func ProcessKafkaData(pkt []byte) (*KafkaData, error) {
 	return k, nil
 }
 
-func isValidKafkaHeader(header *KafkaHeader) bool {
-	if header.MessageSize < int32(KAFKA_MIN_LENGTH) || header.ApiVersion < 0 {
+func isValidKafkaHeader(header *Header) bool {
+	if header.MessageSize < int32(KafaMinLength) || header.APIVersion < 0 {
 		return false
 	}
-	switch KafkaOperation(header.ApiKey) {
-	case KAFKA_FETCH:
-		if header.ApiVersion > 11 {
+	switch Operation(header.APIKey) {
+	case Fetch:
+		if header.APIVersion > 11 {
 			return false
 		}
-	case KAFKA_PRODUCE:
-		if header.ApiVersion == 0 || header.ApiVersion > 8 {
+	case Produce:
+		if header.APIVersion == 0 || header.APIVersion > 8 {
 			return false
 		}
 	default:
@@ -117,6 +117,7 @@ func isValidKafkaHeader(header *KafkaHeader) bool {
 	return header.ClientIDSize >= -1
 }
 
+// nolint:cyclop
 func isValidString(buffer []byte, maxBufferSize, realSize int, printableOk bool) bool {
 	for j := 0; j < maxBufferSize; j++ {
 		if j >= realSize {
@@ -156,8 +157,8 @@ func getTopicName(pkt []byte, offset int) (string, error) {
 	return "", errors.New("invalid topic name")
 }
 
-func getTopicOffsetFromProduceOperation(header *KafkaHeader, pkt []byte, offset *int) (bool, error) {
-	if header.ApiVersion >= 3 {
+func getTopicOffsetFromProduceOperation(header *Header, pkt []byte, offset *int) (bool, error) {
+	if header.APIVersion >= 3 {
 		if len(pkt) < *offset+2 {
 			return false, errors.New("packet too short")
 		}
@@ -189,14 +190,14 @@ func getTopicOffsetFromProduceOperation(header *KafkaHeader, pkt []byte, offset 
 	return true, nil
 }
 
-func getTopicOffsetFromFetchOperation(header *KafkaHeader) int {
+func getTopicOffsetFromFetchOperation(header *Header) int {
 	offset := 3 * 4 // 3 * sizeof(int32)
 
-	if header.ApiVersion >= 3 {
+	if header.APIVersion >= 3 {
 		offset += 4 // max_bytes
-		if header.ApiVersion >= 4 {
-			offset += 1 // isolation_level
-			if header.ApiVersion >= 7 {
+		if header.APIVersion >= 4 {
+			offset++ // isolation_level
+			if header.APIVersion >= 7 {
 				offset += 2 * 4 // session_id + session_epoch
 			}
 		}

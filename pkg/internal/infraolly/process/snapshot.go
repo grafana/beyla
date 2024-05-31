@@ -354,10 +354,11 @@ func (pw *linuxProcess) Command() string {
 // Data to be derived from /proc/<pid>/cmdline: command line, and command line without arguments
 //////////////////////////
 
-func (pw *linuxProcess) CmdLine(withArgs bool) (string, error) {
+func (pw *linuxProcess) CmdLine() (string, error) {
 	if pw.cmdLine != "" {
 		return pw.cmdLine, nil
 	}
+	pw.process.Cmdline()
 
 	cmdPath := path.Join(pw.procFSRoot, strconv.Itoa(int(pw.pid)), "cmdline")
 	procCmdline, err := os.ReadFile(cmdPath)
@@ -379,7 +380,7 @@ func (pw *linuxProcess) CmdLine(withArgs bool) (string, error) {
 		if procCmdline[i] == 0 {
 			// ignoring the trailing zero that ends /proc/<pid>/cmdline, but adding the last character if the file
 			// does not end in zero
-			if withArgs && i < len(procCmdline)-1 {
+			if i < len(procCmdline)-1 {
 				cmdLineBytes = append(cmdLineBytes, ' ')
 			} else {
 				break

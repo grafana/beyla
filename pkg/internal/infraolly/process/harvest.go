@@ -12,6 +12,7 @@ package process
 import (
 	"fmt"
 	"log/slog"
+	"os"
 	"time"
 
 	"github.com/hashicorp/golang-lru/v2/simplelru"
@@ -42,11 +43,8 @@ const (
 type Config struct {
 	RunMode              RunMode
 	DisableZeroRSSFilter bool
-	// TODO: replace configuration option by attributes-aware set
-	FullCommandLine bool
 
-	ProcFSRoot string
-	Rate       time.Duration
+	Rate time.Duration
 
 	PidMode PidMode
 }
@@ -55,13 +53,17 @@ func newHarvester(cfg *Config, cache *simplelru.LRU[int32, *cacheEntry]) *Harves
 	// If not config, assuming root mode as default
 	privileged := cfg.RunMode == RunModeRoot || cfg.RunMode == RunModePrivileged
 	disableZeroRSSFilter := cfg.DisableZeroRSSFilter
-	stripCommandLine := !cfg.FullCommandLine
+
+	// we need to use the same method to override HOST_PROC that is used by gopsutil library
+	hostProc, ok := os.LookupEnv("HOST_PROC")
+	if !ok {
+		hostProc = "/proc"
+	}
 
 	return &Harvester{
-		procFSRoot:           cfg.ProcFSRoot,
+		procFSRoot:           hostProc,
 		privileged:           privileged,
 		disableZeroRSSFilter: disableZeroRSSFilter,
-		stripCommandLine:     stripCommandLine,
 		cache:                cache,
 		log:                  hlog(),
 	}
@@ -72,7 +74,6 @@ type Harvester struct {
 	procFSRoot           string
 	privileged           bool
 	disableZeroRSSFilter bool
-	stripCommandLine     bool
 	cache                *simplelru.LRU[int32, *cacheEntry]
 	log                  *slog.Logger
 }
@@ -133,7 +134,7 @@ func (ps *Harvester) Do(pid int32) (*Status, error) {
 // populateStaticData populates the status with the process data won't vary during the process life cycle
 func (ps *Harvester) populateStaticData(status *Status, process *linuxProcess) error {
 	var err error
-	status.CommandLine, err = process.CmdLine(!ps.stripCommandLine)
+	status.CommandLine, err = process.CmdLine()
 	if err != nil {
 		return fmt.Errorf("acquiring command line: %w", err)
 	}

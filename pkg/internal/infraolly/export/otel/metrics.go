@@ -19,8 +19,12 @@ import (
 	"github.com/grafana/beyla/pkg/internal/export/expire"
 	"github.com/grafana/beyla/pkg/internal/export/otel"
 	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
+	otel2 "github.com/grafana/beyla/pkg/internal/netolly/export/otel"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
+	"github.com/grafana/beyla/pkg/internal/svc"
 )
+
+var timeNow = time.Now
 
 type MetricsConfig struct {
 	Metrics            *otel.MetricsConfig
@@ -28,27 +32,11 @@ type MetricsConfig struct {
 }
 
 func (mc MetricsConfig) Enabled() bool {
-	return mc.Metrics != nil && mc.Metrics.EndpointEnabled() && slices.Contains(mc.Metrics.Features, otel.FeatureNetwork)
+	return mc.Metrics != nil && mc.Metrics.EndpointEnabled() && slices.Contains(mc.Metrics.Features, otel.FeatureProcess)
 }
 
 func mlog() *slog.Logger {
-	return slog.With("component", "flows.MetricsReporter")
-}
-
-func newResource() *resource.Resource {
-	attrs := []attribute.KeyValue{
-		semconv.ServiceName("beyla-network-flows"),
-		semconv.ServiceInstanceID(uuid.New().String()),
-		// SpanMetrics requires an extra attribute besides service name
-		// to generate the traces_target_info metric,
-		// so the service is visible in the ServicesList
-		// This attribute also allows that App O11y plugin shows this app as a Go application.
-		semconv.TelemetrySDKLanguageKey.String(semconv.TelemetrySDKLanguageGo.Value.AsString()),
-		// We set the SDK name as Beyla, so we can distinguish beyla generated metrics from other SDKs
-		semconv.TelemetrySDKNameKey.String("beyla"),
-	}
-
-	return resource.NewWithAttributes(semconv.SchemaURL, attrs...)
+	return slog.With("component", "otel.ProcessMetricsExporter")
 }
 
 func newMeterProvider(res *resource.Resource, exporter *metric.Exporter, interval time.Duration) (*metric.MeterProvider, error) {
@@ -60,11 +48,11 @@ func newMeterProvider(res *resource.Resource, exporter *metric.Exporter, interva
 }
 
 type metricsExporter struct {
-	metrics *Expirer
+	metrics *otel2.Expirer
 	clock   *expire.CachedClock
 }
 
-func MetricsExporterProvider(ctxInfo *global.ContextInfo, cfg *MetricsConfig) (pipe.FinalFunc[[]*ebpf.Record], error) {
+func ProcessMetricsExporterProvider(ctxInfo *global.ContextInfo, cfg *MetricsConfig) (pipe.FinalFunc[[]*ebpf.Record], error) {
 	if !cfg.Enabled() {
 		// This node is not going to be instantiated. Let the pipes library just ignore it.
 		return pipe.IgnoreFinal[[]*ebpf.Record](), nil
@@ -77,7 +65,7 @@ func MetricsExporterProvider(ctxInfo *global.ContextInfo, cfg *MetricsConfig) (p
 		return nil, err
 	}
 
-	provider, err := newMeterProvider(newResource(), &exporter, cfg.Metrics.Interval)
+	provider, err := newMeterProvider(otel.ResourceAttrs(), &exporter, cfg.Metrics.Interval)
 
 	if err != nil {
 		log.Error("", "error", err)
@@ -93,7 +81,7 @@ func MetricsExporterProvider(ctxInfo *global.ContextInfo, cfg *MetricsConfig) (p
 		attrProv.For(attributes.BeylaNetworkFlow))
 
 	clock := expire.NewCachedClock(timeNow)
-	expirer := NewExpirer(attrs, clock.Time, cfg.Metrics.TTL)
+	expirer := otel2.NewExpirer(attrs, clock.Time, cfg.Metrics.TTL)
 	ebpfEvents := provider.Meter("network_ebpf_events")
 
 	_, err = ebpfEvents.Int64ObservableCounter(

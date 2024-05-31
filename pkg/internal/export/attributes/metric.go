@@ -61,6 +61,11 @@ var (
 		Prom:    "sql_client_duration_seconds",
 		OTEL:    "sql.client.duration",
 	}
+	ProcessCPUUtilization = Name{
+		Section: "process.cpu.utilization",
+		Prom:    "process_cpu_utilization_ratio",
+		OTEL:    "process.cpu.utilization",
+	}
 )
 
 // normalizeMetric will facilitate the user-input in the attributes.enable section.

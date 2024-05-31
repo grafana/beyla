@@ -150,6 +150,21 @@ func getDefinitions(groups AttrGroups) map[Section]AttrReportGroup {
 		},
 	}
 
+	var processAttributes = AttrReportGroup{
+		Attributes: map[attr.Name]Default{
+			attr.ProcCommand:     true,
+			attr.ProcCPUState:    true,
+			attr.ProcOwner:       true,
+			attr.ProcParentPid:   true,
+			attr.ProcPid:         true,
+			attr.ProcCommandLine: false,
+			// TODO: not yet supported attributes
+			//attr.ProcCommandArgs: true,
+			//attr.ProcExecName: true,
+			//attr.ProcExecPath: true,
+		},
+	}
+
 	return map[Section]AttrReportGroup{
 		BeylaNetworkFlow.Section: {
 			SubGroups: []*AttrReportGroup{&networkCIDR, &networkKubeAttributes},
@@ -207,6 +222,9 @@ func getDefinitions(groups AttrGroups) map[Section]AttrReportGroup {
 			Attributes: map[attr.Name]Default{
 				attr.IncludeDBStatement: false,
 			},
+		},
+		ProcessCPUUtilization.Section: {
+			SubGroups: []*AttrReportGroup{&processAttributes},
 		},
 	}
 }

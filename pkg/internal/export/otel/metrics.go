@@ -424,7 +424,7 @@ func (mr *MetricsReporter) setupGraphMeters(m *Metrics, meter instrument.Meter) 
 func (mr *MetricsReporter) newMetricSet(service svc.ID) (*Metrics, error) {
 	mlog := mlog().With("service", service)
 	mlog.Debug("creating new Metrics reporter")
-	resources := getResourceAttrs(service)
+	resources := ResourceAttrs(service)
 
 	opts := []metric.Option{
 		metric.WithResource(resources),

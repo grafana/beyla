@@ -51,7 +51,7 @@ func ReadTCPRequestIntoSpan(record *ringbuf.Record) (request.Span, bool, error) 
 			return TCPToRedisToSpan(&event, op, text, status), false, nil
 		}
 	default:
-		k, err := kafka.ProcessKafkaData(b)
+		k, err := kafka.ProcessKafkaRequest(b)
 		if err == nil {
 			return TCPToKafkaToSpan(&event, k), false, nil
 		}

@@ -3,6 +3,7 @@ package kafka
 import (
 	"encoding/binary"
 	"errors"
+	"fmt"
 )
 
 type Operation int8
@@ -40,11 +41,12 @@ func (k Operation) String() string {
 
 const KafaMinLength = 14
 
-// ProcessKafkaData processes a TCP packet and returns error if the packet is not a valid Kafka request.
-// Otherwise, return KafkaData with the processed data.
-func ProcessKafkaData(pkt []byte) (*Info, error) {
+// ProcessKafkaRequest processes a TCP packet and returns error if the packet is not a valid Kafka request.
+// Otherwise, return kafka.Info with the processed data.
+func ProcessKafkaRequest(pkt []byte) (*Info, error) {
 	k := &Info{}
 	if len(pkt) < KafaMinLength {
+		fmt.Printf("Buffer too short %v\n", pkt)
 		return k, errors.New("packet too short")
 	}
 
@@ -55,22 +57,23 @@ func ProcessKafkaData(pkt []byte) (*Info, error) {
 		CorrelationID: int32(binary.BigEndian.Uint32(pkt[8:12])),
 		ClientIDSize:  int16(binary.BigEndian.Uint16(pkt[12:14])),
 	}
+	fmt.Printf("Header: %v\n", header)
 
-	if !isValidKafkaHeader(header) {
-		return k, errors.New("invalid Kafka request header")
-	}
+	// if !isValidKafkaHeader(header) {
+	// 	return k, errors.New("invalid Kafka request header")
+	// }
 
 	offset := KafaMinLength
-	if header.ClientIDSize > 0 {
-		clientID := pkt[offset : offset+int(header.ClientIDSize)]
-		if !isValidClientID(clientID, int(header.ClientIDSize)) {
-			return k, errors.New("invalid client ID")
-		}
-		offset += int(header.ClientIDSize)
-		k.ClientID = string(clientID)
-	} else if header.ClientIDSize < -1 {
-		return k, errors.New("invalid client ID size")
-	}
+	// if header.ClientIDSize > 0 {
+	// 	clientID := pkt[offset : offset+int(header.ClientIDSize)]
+	// 	if !isValidClientID(clientID, int(header.ClientIDSize)) {
+	// 		return k, errors.New("invalid client ID")
+	// 	}
+	// 	offset += int(header.ClientIDSize)
+	// 	k.ClientID = string(clientID)
+	// } else if header.ClientIDSize < -1 {
+	// 	return k, errors.New("invalid client ID size")
+	// }
 
 	switch Operation(header.APIKey) {
 	case Produce:
@@ -80,11 +83,14 @@ func ProcessKafkaData(pkt []byte) (*Info, error) {
 		}
 		k.Operation = Produce
 		k.TopicOffset = offset
+		fmt.Printf("**********Produce: %v\n", k)
 	case Fetch:
 		offset += getTopicOffsetFromFetchOperation(header)
 		k.Operation = Fetch
 		k.TopicOffset = offset
+		fmt.Printf("*********Fetch: %v\n", k)
 	default:
+		fmt.Printf("Invalid Kafka operation: %d\n", header.APIKey)
 		return k, errors.New("invalid Kafka operation")
 	}
 	topic, err := getTopicName(pkt, offset)

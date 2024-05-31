@@ -6,7 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestIsKafkaRequest(t *testing.T) {
+func TestProcessKafkaRequest(t *testing.T) {
 	tests := []struct {
 		name     string
 		input    []byte
@@ -41,7 +41,7 @@ func TestIsKafkaRequest(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			res, _ := ProcessKafkaData(tt.input)
+			res, _ := ProcessKafkaRequest(tt.input)
 			assert.Equal(t, tt.expected, res)
 		})
 	}

@@ -664,6 +664,7 @@ func withAttributes(span *request.Span, getters []attributes.Field[*request.Span
 	return instrument.WithAttributeSet(attribute.NewSet(attributes...))
 }
 
+// nolint:cyclop
 func (r *Metrics) record(span *request.Span, mr *MetricsReporter) {
 	t := span.Timings()
 	duration := t.End.Sub(t.RequestStart).Seconds()

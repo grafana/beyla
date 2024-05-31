@@ -552,7 +552,7 @@ func TestGenerateTracesAttributes(t *testing.T) {
 		ensureTraceStrAttr(t, attrs, attribute.Key(attr.DBQueryText), "SELECT password FROM credentials WHERE username=\"bill\"")
 	})
 	t.Run("test Kafka trace generation", func(t *testing.T) {
-		span := request.Span{Type: request.EventTypeKafkaClient, Method: "receive", Path: "important-topic", OtherNamespace: "test"}
+		span := request.Span{Type: request.EventTypeKafkaClient, Method: "process", Path: "important-topic", OtherNamespace: "test"}
 		traces := GenerateTraces(&span, map[attr.Name]struct{}{})
 
 		assert.Equal(t, 1, traces.ResourceSpans().Len())
@@ -564,7 +564,7 @@ func TestGenerateTracesAttributes(t *testing.T) {
 		assert.NotEmpty(t, spans.At(0).TraceID().String())
 
 		attrs := spans.At(0).Attributes()
-		ensureTraceStrAttr(t, attrs, semconv.MessagingOperationKey, "receive")
+		ensureTraceStrAttr(t, attrs, attribute.Key(attr.MessagingOpType), "process")
 		ensureTraceStrAttr(t, attrs, semconv.MessagingDestinationNameKey, "important-topic")
 		ensureTraceStrAttr(t, attrs, semconv.MessagingClientIDKey, "test")
 

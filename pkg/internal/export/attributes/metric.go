@@ -61,10 +61,15 @@ var (
 		Prom:    "db_client_operation_duration_seconds",
 		OTEL:    "db.client.operation.duration",
 	}
-	KafkaClientDuration = Name{
-		Section: "kafka.client.duration",
-		Prom:    "kafka_client_duration_seconds",
-		OTEL:    "kafka.client.duration",
+	MessagingPublishDuration = Name{
+		Section: "messaging.publish.duration",
+		Prom:    "messaging_publish_duration_seconds",
+		OTEL:    "messaging.publish.duration",
+	}
+	MessagingProcessDuration = Name{
+		Section: "messaging.process.duration",
+		Prom:    "messaging_process_duration_seconds",
+		OTEL:    "messaging.process.duration",
 	}
 )
 

@@ -1,4 +1,4 @@
-package kafka
+package ebpfcommon
 
 import (
 	"testing"
@@ -10,12 +10,12 @@ func TestProcessKafkaRequest(t *testing.T) {
 	tests := []struct {
 		name     string
 		input    []byte
-		expected *Info
+		expected *KafkaInfo
 	}{
 		{
 			name:  "Fetch request",
 			input: []byte{0, 0, 0, 94, 0, 1, 0, 11, 0, 0, 0, 224, 0, 6, 115, 97, 114, 97, 109, 97, 255, 255, 255, 255, 0, 0, 1, 244, 0, 0, 0, 1, 6, 64, 0, 0, 0, 0, 0, 0, 0, 255, 255, 255, 255, 0, 0, 0, 1, 0, 9, 105, 109, 112, 111, 114, 116, 97, 110, 116, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 19, 0, 0, 0, 0, 0, 0, 0, 0, 0, 16, 0, 0, 0, 0, 0, 0, 0, 0},
-			expected: &Info{
+			expected: &KafkaInfo{
 				ClientID:    "sarama",
 				Operation:   Fetch,
 				Topic:       "important",
@@ -25,7 +25,7 @@ func TestProcessKafkaRequest(t *testing.T) {
 		{
 			name:  "Produce request",
 			input: []byte{0, 0, 0, 123, 0, 0, 0, 7, 0, 0, 0, 2, 0, 6, 115, 97, 114, 97, 109, 97, 255, 255, 255, 255, 0, 0, 39, 16, 0, 0, 0, 1, 0, 9, 105, 109, 112, 111, 114, 116, 97, 110, 116, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 72, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 60, 0, 0, 0, 0, 2, 249, 236, 167, 144, 0, 0, 0, 0, 0, 0, 0, 0, 1, 143, 191, 130, 165, 117, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 0, 0, 0, 0, 0, 0, 0, 1, 20, 0, 0, 0, 1, 8, 100, 97, 116, 97, 0},
-			expected: &Info{
+			expected: &KafkaInfo{
 				ClientID:    "sarama",
 				Operation:   Produce,
 				Topic:       "important",
@@ -35,7 +35,7 @@ func TestProcessKafkaRequest(t *testing.T) {
 		{
 			name:     "Invalid request",
 			input:    []byte{0, 0, 0, 1, 0, 0, 0, 7, 0, 0, 0, 2, 0, 6, 115, 97, 114, 97, 109, 97, 255, 255, 255, 255, 0, 0, 39, 16, 0, 0, 0, 1, 0, 9, 105, 109, 112, 111, 114, 116, 97, 110, 116, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 72},
-			expected: &Info{},
+			expected: &KafkaInfo{},
 		},
 	}
 

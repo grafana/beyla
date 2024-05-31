@@ -17,7 +17,7 @@ def delivery_report(err, msg):
 def produce_messages():
     # Kafka producer configuration
     producer_config = {
-        'bootstrap.servers': 'kafka:9092'  # Kafka broker address
+        'bootstrap.servers': 'localhost:9093'  # Kafka broker address
     }
     logger.info("Creating Kafka producer")
     producer = Producer(producer_config)
@@ -33,7 +33,7 @@ def produce_messages():
 
 # Configuration for the Kafka consumer
 consumer_config = {
-    'bootstrap.servers': 'kafka:9092',
+    'bootstrap.servers': 'localhost:9093',
     'group.id': 'example_group',
     'auto.offset.reset': 'earliest'
 }
@@ -74,6 +74,11 @@ class RequestHandler(BaseHTTPRequestHandler):
             message = kafka_service.fetch_message()
             logger.info(f"Sending message: {message}")
             self.wfile.write(json.dumps(message).encode('utf-8'))
+        elif self.path == '/produce': 
+            produce_messages()
+            message = kafka_service.fetch_message()
+            self.send_response(204)
+            self.end_headers()
         else:
             self.send_response(404)
             self.end_headers()
@@ -86,5 +91,4 @@ def run_server(server_class=HTTPServer, handler_class=RequestHandler, port=8080)
 
 
 if __name__ == '__main__':
-    produce_messages()
     run_server()

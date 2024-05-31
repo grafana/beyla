@@ -1,9 +1,10 @@
-package kafka
+package ebpfcommon
 
 import (
 	"encoding/binary"
 	"errors"
-	"fmt"
+
+	"github.com/grafana/beyla/pkg/internal/request"
 )
 
 type Operation int8
@@ -21,7 +22,7 @@ type Header struct {
 	ClientIDSize  int16
 }
 
-type Info struct {
+type KafkaInfo struct {
 	Operation   Operation
 	Topic       string
 	ClientID    string
@@ -31,9 +32,9 @@ type Info struct {
 func (k Operation) String() string {
 	switch k {
 	case Produce:
-		return "process"
+		return request.MessagingPublish
 	case Fetch:
-		return "receive"
+		return request.MessagingProcess
 	default:
 		return "unknown"
 	}
@@ -43,10 +44,18 @@ const KafaMinLength = 14
 
 // ProcessKafkaRequest processes a TCP packet and returns error if the packet is not a valid Kafka request.
 // Otherwise, return kafka.Info with the processed data.
-func ProcessKafkaRequest(pkt []byte) (*Info, error) {
-	k := &Info{}
+func ProcessPossibleKafkaEvent(pkt []byte, rpkt []byte) (*KafkaInfo, error) {
+	k, err := ProcessKafkaRequest(pkt)
+	if err != nil {
+		k, err = ProcessKafkaRequest(rpkt)
+	}
+
+	return k, err
+}
+
+func ProcessKafkaRequest(pkt []byte) (*KafkaInfo, error) {
+	k := &KafkaInfo{}
 	if len(pkt) < KafaMinLength {
-		fmt.Printf("Buffer too short %v\n", pkt)
 		return k, errors.New("packet too short")
 	}
 
@@ -57,23 +66,22 @@ func ProcessKafkaRequest(pkt []byte) (*Info, error) {
 		CorrelationID: int32(binary.BigEndian.Uint32(pkt[8:12])),
 		ClientIDSize:  int16(binary.BigEndian.Uint16(pkt[12:14])),
 	}
-	fmt.Printf("Header: %v\n", header)
 
-	// if !isValidKafkaHeader(header) {
-	// 	return k, errors.New("invalid Kafka request header")
-	// }
+	if !isValidKafkaHeader(header) {
+		return k, errors.New("invalid Kafka request header")
+	}
 
 	offset := KafaMinLength
-	// if header.ClientIDSize > 0 {
-	// 	clientID := pkt[offset : offset+int(header.ClientIDSize)]
-	// 	if !isValidClientID(clientID, int(header.ClientIDSize)) {
-	// 		return k, errors.New("invalid client ID")
-	// 	}
-	// 	offset += int(header.ClientIDSize)
-	// 	k.ClientID = string(clientID)
-	// } else if header.ClientIDSize < -1 {
-	// 	return k, errors.New("invalid client ID size")
-	// }
+	if header.ClientIDSize > 0 {
+		clientID := pkt[offset : offset+int(header.ClientIDSize)]
+		if !isValidClientID(clientID, int(header.ClientIDSize)) {
+			return k, errors.New("invalid client ID")
+		}
+		offset += int(header.ClientIDSize)
+		k.ClientID = string(clientID)
+	} else if header.ClientIDSize < -1 {
+		return k, errors.New("invalid client ID size")
+	}
 
 	switch Operation(header.APIKey) {
 	case Produce:
@@ -83,14 +91,11 @@ func ProcessKafkaRequest(pkt []byte) (*Info, error) {
 		}
 		k.Operation = Produce
 		k.TopicOffset = offset
-		fmt.Printf("**********Produce: %v\n", k)
 	case Fetch:
 		offset += getTopicOffsetFromFetchOperation(header)
 		k.Operation = Fetch
 		k.TopicOffset = offset
-		fmt.Printf("*********Fetch: %v\n", k)
 	default:
-		fmt.Printf("Invalid Kafka operation: %d\n", header.APIKey)
 		return k, errors.New("invalid Kafka operation")
 	}
 	topic, err := getTopicName(pkt, offset)
@@ -124,7 +129,7 @@ func isValidKafkaHeader(header *Header) bool {
 }
 
 // nolint:cyclop
-func isValidString(buffer []byte, maxBufferSize, realSize int, printableOk bool) bool {
+func isValidKafkaString(buffer []byte, maxBufferSize, realSize int, printableOk bool) bool {
 	for j := 0; j < maxBufferSize; j++ {
 		if j >= realSize {
 			break
@@ -142,22 +147,29 @@ func isValidString(buffer []byte, maxBufferSize, realSize int, printableOk bool)
 }
 
 func isValidClientID(buffer []byte, realClientIDSize int) bool {
-	return isValidString(buffer, len(buffer), realClientIDSize, true)
+	return isValidKafkaString(buffer, len(buffer), realClientIDSize, true)
 }
 
 func getTopicName(pkt []byte, offset int) (string, error) {
 	offset += 4
+	if offset > len(pkt) {
+		return "", errors.New("invalid buffer length")
+	}
 	topicNameSize := int16(binary.BigEndian.Uint16(pkt[offset:]))
 	if topicNameSize <= 0 || topicNameSize > 255 {
 		return "", errors.New("invalid topic name size")
 	}
 	offset += 2
 
-	if len(pkt) < offset+int(topicNameSize) {
-		return "", errors.New("packet too short")
+	if offset > len(pkt) {
+		return "", nil
 	}
-	topicName := pkt[offset : offset+int(topicNameSize)]
-	if isValidString(topicName, len(topicName), int(topicNameSize), false) {
+	maxLen := offset + int(topicNameSize)
+	if len(pkt) < maxLen {
+		maxLen = len(pkt)
+	}
+	topicName := pkt[offset:maxLen]
+	if isValidKafkaString(topicName, len(topicName), int(topicNameSize), false) {
 		return string(topicName), nil
 	}
 	return "", errors.New("invalid topic name")

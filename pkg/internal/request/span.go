@@ -31,6 +31,11 @@ const (
 	IgnoreTraces
 )
 
+const (
+	MessagingPublish = "publish"
+	MessagingProcess = "process"
+)
+
 type converter struct {
 	clock     func() time.Time
 	monoClock func() time.Duration

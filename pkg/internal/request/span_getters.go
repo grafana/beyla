@@ -91,6 +91,20 @@ func SpanPromGetters(attrName attr.Name) (attributes.Getter[*Span, string], bool
 			}
 			return ""
 		}
+	case attr.MessagingSystem:
+		getter = func(span *Span) string {
+			if span.Type == EventTypeKafkaClient {
+				return "kafka"
+			}
+			return "unknown"
+		}
+	case attr.MessagingDestination:
+		getter = func(span *Span) string {
+			if span.Type == EventTypeKafkaClient {
+				return span.Path
+			}
+			return ""
+		}
 	// resource metadata values below. Unlike OTEL, they are included here because they
 	// belong to the metric, instead of the Resource
 	case attr.ServiceName:

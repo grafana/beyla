@@ -165,7 +165,8 @@ type MetricsReporter struct {
 	attrGRPCServer            []attributes.Field[*request.Span, attribute.KeyValue]
 	attrGRPCClient            []attributes.Field[*request.Span, attribute.KeyValue]
 	attrDBClient              []attributes.Field[*request.Span, attribute.KeyValue]
-	attrKafkaClient           []attributes.Field[*request.Span, attribute.KeyValue]
+	attrMessagingPublish      []attributes.Field[*request.Span, attribute.KeyValue]
+	attrMessagingProcess      []attributes.Field[*request.Span, attribute.KeyValue]
 	attrHTTPRequestSize       []attributes.Field[*request.Span, attribute.KeyValue]
 	attrHTTPClientRequestSize []attributes.Field[*request.Span, attribute.KeyValue]
 }
@@ -182,7 +183,8 @@ type Metrics struct {
 	grpcDuration          instrument.Float64Histogram
 	grpcClientDuration    instrument.Float64Histogram
 	dbClientDuration      instrument.Float64Histogram
-	kafkaClientDuration   instrument.Float64Histogram
+	msgPublishDuration    instrument.Float64Histogram
+	msgProcessDuration    instrument.Float64Histogram
 	httpRequestSize       instrument.Float64Histogram
 	httpClientRequestSize instrument.Float64Histogram
 	// trace span metrics
@@ -248,8 +250,10 @@ func newMetricsReporter(
 		request.SpanOTELGetters, mr.attributes.For(attributes.RPCClientDuration))
 	mr.attrDBClient = attributes.OpenTelemetryGetters(
 		request.SpanOTELGetters, mr.attributes.For(attributes.DBClientDuration))
-	mr.attrKafkaClient = attributes.OpenTelemetryGetters(
-		request.SpanOTELGetters, mr.attributes.For(attributes.KafkaClientDuration))
+	mr.attrMessagingPublish = attributes.OpenTelemetryGetters(
+		request.SpanOTELGetters, mr.attributes.For(attributes.MessagingPublishDuration))
+	mr.attrMessagingProcess = attributes.OpenTelemetryGetters(
+		request.SpanOTELGetters, mr.attributes.For(attributes.MessagingProcessDuration))
 
 	mr.reporters = NewReporterPool(cfg.ReportersCacheLen,
 		func(id svc.UID, v *Metrics) {
@@ -289,7 +293,8 @@ func (mr *MetricsReporter) otelMetricOptions(mlog *slog.Logger) []metric.Option 
 		metric.WithView(otelHistogramConfig(attributes.RPCServerDuration.OTEL, mr.cfg.Buckets.DurationHistogram, useExponentialHistograms)),
 		metric.WithView(otelHistogramConfig(attributes.RPCClientDuration.OTEL, mr.cfg.Buckets.DurationHistogram, useExponentialHistograms)),
 		metric.WithView(otelHistogramConfig(attributes.DBClientDuration.OTEL, mr.cfg.Buckets.DurationHistogram, useExponentialHistograms)),
-		metric.WithView(otelHistogramConfig(attributes.KafkaClientDuration.OTEL, mr.cfg.Buckets.DurationHistogram, useExponentialHistograms)),
+		metric.WithView(otelHistogramConfig(attributes.MessagingPublishDuration.OTEL, mr.cfg.Buckets.DurationHistogram, useExponentialHistograms)),
+		metric.WithView(otelHistogramConfig(attributes.MessagingProcessDuration.OTEL, mr.cfg.Buckets.DurationHistogram, useExponentialHistograms)),
 		metric.WithView(otelHistogramConfig(attributes.HTTPServerRequestSize.OTEL, mr.cfg.Buckets.RequestSizeHistogram, useExponentialHistograms)),
 		metric.WithView(otelHistogramConfig(attributes.HTTPClientRequestSize.OTEL, mr.cfg.Buckets.RequestSizeHistogram, useExponentialHistograms)),
 	}
@@ -346,9 +351,13 @@ func (mr *MetricsReporter) setupOtelMeters(m *Metrics, meter instrument.Meter) e
 	if err != nil {
 		return fmt.Errorf("creating db client duration histogram metric: %w", err)
 	}
-	m.kafkaClientDuration, err = meter.Float64Histogram(attributes.KafkaClientDuration.OTEL, instrument.WithUnit("s"))
+	m.msgPublishDuration, err = meter.Float64Histogram(attributes.MessagingPublishDuration.OTEL, instrument.WithUnit("s"))
 	if err != nil {
-		return fmt.Errorf("creating kafka client duration histogram metric: %w", err)
+		return fmt.Errorf("creating messaging client publish duration histogram metric: %w", err)
+	}
+	m.msgProcessDuration, err = meter.Float64Histogram(attributes.MessagingProcessDuration.OTEL, instrument.WithUnit("s"))
+	if err != nil {
+		return fmt.Errorf("creating messaging client process duration histogram metric: %w", err)
 	}
 	m.httpRequestSize, err = meter.Float64Histogram(attributes.HTTPServerRequestSize.OTEL, instrument.WithUnit("By"))
 	if err != nil {
@@ -682,8 +691,14 @@ func (r *Metrics) record(span *request.Span, mr *MetricsReporter) {
 			r.dbClientDuration.Record(r.ctx, duration,
 				withAttributes(span, mr.attrDBClient))
 		case request.EventTypeKafkaClient:
-			r.kafkaClientDuration.Record(r.ctx, duration,
-				withAttributes(span, mr.attrKafkaClient))
+			switch span.Method {
+			case request.MessagingPublish:
+				r.msgPublishDuration.Record(r.ctx, duration,
+					withAttributes(span, mr.attrMessagingPublish))
+			case request.MessagingProcess:
+				r.msgProcessDuration.Record(r.ctx, duration,
+					withAttributes(span, mr.attrMessagingProcess))
+			}
 		}
 	}
 

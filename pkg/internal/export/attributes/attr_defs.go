@@ -204,9 +204,19 @@ func getDefinitions(groups AttrGroups) map[Section]AttrReportGroup {
 				attr.DBSystem:    true,
 			},
 		},
-		KafkaClientDuration.Section: {
-			SubGroups:  []*AttrReportGroup{&appAttributes, &appKubeAttributes},
-			Attributes: map[attr.Name]Default{}, //TODO: add attributes
+		MessagingPublishDuration.Section: {
+			SubGroups: []*AttrReportGroup{&appAttributes, &appKubeAttributes},
+			Attributes: map[attr.Name]Default{
+				attr.MessagingSystem:      true,
+				attr.MessagingDestination: true,
+			},
+		},
+		MessagingProcessDuration.Section: {
+			SubGroups: []*AttrReportGroup{&appAttributes, &appKubeAttributes},
+			Attributes: map[attr.Name]Default{
+				attr.MessagingSystem:      true,
+				attr.MessagingDestination: true,
+			},
 		},
 		Traces.Section: {
 			Attributes: map[attr.Name]Default{

@@ -138,7 +138,8 @@ type metricsReporter struct {
 	grpcDuration          *expire.Expirer[prometheus.Histogram]
 	grpcClientDuration    *expire.Expirer[prometheus.Histogram]
 	dbClientDuration      *expire.Expirer[prometheus.Histogram]
-	kafkaClientDuration   *expire.Expirer[prometheus.Histogram]
+	msgPublishDuration    *expire.Expirer[prometheus.Histogram]
+	msgProcessDuration    *expire.Expirer[prometheus.Histogram]
 	httpRequestSize       *expire.Expirer[prometheus.Histogram]
 	httpClientRequestSize *expire.Expirer[prometheus.Histogram]
 
@@ -148,7 +149,8 @@ type metricsReporter struct {
 	attrGRPCDuration          []attributes.Field[*request.Span, string]
 	attrGRPCClientDuration    []attributes.Field[*request.Span, string]
 	attrDBClientDuration      []attributes.Field[*request.Span, string]
-	attrKafkaClientDuration   []attributes.Field[*request.Span, string]
+	attrMsgPublishDuration    []attributes.Field[*request.Span, string]
+	attrMsgProcessDuration    []attributes.Field[*request.Span, string]
 	attrHTTPRequestSize       []attributes.Field[*request.Span, string]
 	attrHTTPClientRequestSize []attributes.Field[*request.Span, string]
 
@@ -222,8 +224,10 @@ func newReporter(
 		attrsProvider.For(attributes.RPCClientDuration))
 	attrDBClientDuration := attributes.PrometheusGetters(request.SpanPromGetters,
 		attrsProvider.For(attributes.DBClientDuration))
-	attrKafkaClientDuration := attributes.PrometheusGetters(request.SpanPromGetters,
-		attrsProvider.For(attributes.HTTPServerDuration))
+	attrMessagingPublishDuration := attributes.PrometheusGetters(request.SpanPromGetters,
+		attrsProvider.For(attributes.MessagingPublishDuration))
+	attrMessagingProcessDuration := attributes.PrometheusGetters(request.SpanPromGetters,
+		attrsProvider.For(attributes.MessagingProcessDuration))
 
 	clock := expire.NewCachedClock(timeNow)
 	// If service name is not explicitly set, we take the service name as set by the
@@ -239,7 +243,8 @@ func newReporter(
 		attrGRPCDuration:          attrGRPCDuration,
 		attrGRPCClientDuration:    attrGRPCClientDuration,
 		attrDBClientDuration:      attrDBClientDuration,
-		attrKafkaClientDuration:   attrKafkaClientDuration,
+		attrMsgPublishDuration:    attrMessagingPublishDuration,
+		attrMsgProcessDuration:    attrMessagingProcessDuration,
 		attrHTTPRequestSize:       attrHTTPRequestSize,
 		attrHTTPClientRequestSize: attrHTTPClientRequestSize,
 		beylaInfo: expire.NewExpirer[prometheus.Gauge](prometheus.NewGaugeVec(prometheus.GaugeOpts{
@@ -295,14 +300,22 @@ func newReporter(
 			NativeHistogramMaxBucketNumber:  defaultHistogramMaxBucketNumber,
 			NativeHistogramMinResetDuration: defaultHistogramMinResetDuration,
 		}, labelNames(attrDBClientDuration)).MetricVec, clock.Time, cfg.TTL),
-		kafkaClientDuration: expire.NewExpirer[prometheus.Histogram](prometheus.NewHistogramVec(prometheus.HistogramOpts{
-			Name:                            attributes.KafkaClientDuration.Prom,
-			Help:                            "duration of Kafka client operations, in seconds",
+		msgPublishDuration: expire.NewExpirer[prometheus.Histogram](prometheus.NewHistogramVec(prometheus.HistogramOpts{
+			Name:                            attributes.MessagingPublishDuration.Prom,
+			Help:                            "duration of messaging client publish operations, in seconds",
 			Buckets:                         cfg.Buckets.DurationHistogram,
 			NativeHistogramBucketFactor:     defaultHistogramBucketFactor,
 			NativeHistogramMaxBucketNumber:  defaultHistogramMaxBucketNumber,
 			NativeHistogramMinResetDuration: defaultHistogramMinResetDuration,
-		}, labelNames(attrKafkaClientDuration)).MetricVec, clock.Time, cfg.TTL),
+		}, labelNames(attrMessagingPublishDuration)).MetricVec, clock.Time, cfg.TTL),
+		msgProcessDuration: expire.NewExpirer[prometheus.Histogram](prometheus.NewHistogramVec(prometheus.HistogramOpts{
+			Name:                            attributes.MessagingProcessDuration.Prom,
+			Help:                            "duration of messaging client process operations, in seconds",
+			Buckets:                         cfg.Buckets.DurationHistogram,
+			NativeHistogramBucketFactor:     defaultHistogramBucketFactor,
+			NativeHistogramMaxBucketNumber:  defaultHistogramMaxBucketNumber,
+			NativeHistogramMinResetDuration: defaultHistogramMinResetDuration,
+		}, labelNames(attrMessagingProcessDuration)).MetricVec, clock.Time, cfg.TTL),
 		httpRequestSize: expire.NewExpirer[prometheus.Histogram](prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Name:                            attributes.HTTPServerRequestSize.Prom,
 			Help:                            "size, in bytes, of the HTTP request body as received at the server side",
@@ -383,7 +396,8 @@ func newReporter(
 			mr.httpClientDuration,
 			mr.grpcClientDuration,
 			mr.dbClientDuration,
-			mr.kafkaClientDuration,
+			mr.msgProcessDuration,
+			mr.msgPublishDuration,
 			mr.httpRequestSize,
 			mr.httpDuration,
 			mr.grpcDuration)
@@ -466,9 +480,16 @@ func (r *metricsReporter) observe(span *request.Span) {
 				labelValues(span, r.attrDBClientDuration)...,
 			).Observe(duration)
 		case request.EventTypeKafkaClient:
-			r.kafkaClientDuration.WithLabelValues(
-				labelValues(span, r.attrKafkaClientDuration)...,
-			).Observe(duration)
+			switch span.Method {
+			case request.MessagingPublish:
+				r.msgPublishDuration.WithLabelValues(
+					labelValues(span, r.attrMsgPublishDuration)...,
+				).Observe(duration)
+			case request.MessagingProcess:
+				r.msgProcessDuration.WithLabelValues(
+					labelValues(span, r.attrMsgProcessDuration)...,
+				).Observe(duration)
+			}
 		}
 	}
 	if r.cfg.SpanMetricsEnabled() {

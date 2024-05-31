@@ -10,7 +10,6 @@ import (
 	trace2 "go.opentelemetry.io/otel/trace"
 	"golang.org/x/net/http2"
 
-	"github.com/grafana/beyla/pkg/internal/kafka"
 	"github.com/grafana/beyla/pkg/internal/request"
 	"github.com/grafana/beyla/pkg/internal/sqlprune"
 )
@@ -51,7 +50,7 @@ func ReadTCPRequestIntoSpan(record *ringbuf.Record) (request.Span, bool, error) 
 			return TCPToRedisToSpan(&event, op, text, status), false, nil
 		}
 	default:
-		k, err := kafka.ProcessKafkaRequest(b)
+		k, err := ProcessPossibleKafkaEvent(b, event.Rbuf[:])
 		if err == nil {
 			return TCPToKafkaToSpan(&event, k), false, nil
 		}
@@ -154,7 +153,7 @@ func isHTTP2(data []uint8, event *TCPRequestInfo) bool {
 	return false
 }
 
-func TCPToKafkaToSpan(trace *TCPRequestInfo, data *kafka.Info) request.Span {
+func TCPToKafkaToSpan(trace *TCPRequestInfo, data *KafkaInfo) request.Span {
 	peer := ""
 	hostname := ""
 	hostPort := 0

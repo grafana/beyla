@@ -107,7 +107,7 @@ func parseRedisRequest(buf string) (string, string, bool) {
 			}
 		} else {
 			if isRedisOp([]uint8(l + "\r\n")) {
-				text += ", "
+				text += "; "
 				continue
 			}
 			if op == "" {

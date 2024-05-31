@@ -145,6 +145,13 @@ func TestRedisParsing(t *testing.T) {
 	assert.False(t, ok)
 	assert.Equal(t, "", op)
 	assert.Equal(t, "", text)
+
+	multi := fmt.Sprintf("*4\r\n$6\r\nclient\r\n$7\r\nsetinfo\r\n$8\r\nLIB-NAME\r\n$19\r\n%s(,go1.22.2)\r\n*4\r\n$6\r\nclient\r\n$7\r\nsetinfo\r\n$7\r\nLIB-VER\r\n$5\r\n9.5.1\r\n", "go-redis")
+	op, text, ok = parseRedisRequest(multi)
+	assert.True(t, ok)
+	assert.Equal(t, "client", op)
+	assert.Equal(t, "client setinfo LIB-NAME go-redis(,go1.22.2) ; client setinfo LIB-VER 9.5.1 ", text)
+
 }
 
 const charset = "\\0\\1\\2abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"

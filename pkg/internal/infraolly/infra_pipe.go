@@ -51,7 +51,8 @@ func SubPipelineProvider(ctx context.Context, cfg *beyla.Config) pipe.FinalProvi
 		nb := pipe.NewBuilder(&subPipeline{}, pipe.ChannelBufferLen(cfg.ChannelBufferLen))
 		pipe.AddStartProvider(nb, collector, process.NewCollectorProvider(ctx, &connector, &cfg.Processes))
 		pipe.AddFinal(nb, otelExport, func(in <-chan []*process.Status) {
-			for  range in {
+			for i := range in {
+				fmt.Printf("otel %#v\n", i)
 			}
 		})
 		pipe.AddFinal(nb, promExport, func(in <-chan []*process.Status) {

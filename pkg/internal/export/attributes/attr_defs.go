@@ -159,9 +159,9 @@ func getDefinitions(groups AttrGroups) map[Section]AttrReportGroup {
 			attr.ProcPid:         true,
 			attr.ProcCommandLine: false,
 			// TODO: not yet supported attributes
-			//attr.ProcCommandArgs: true,
-			//attr.ProcExecName: true,
-			//attr.ProcExecPath: true,
+			// attr.ProcCommandArgs: true,
+			// attr.ProcExecName: true,
+			// attr.ProcExecPath: true,
 		},
 	}
 

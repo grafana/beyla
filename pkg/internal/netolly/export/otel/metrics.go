@@ -60,7 +60,7 @@ func newMeterProvider(res *resource.Resource, exporter *metric.Exporter, interva
 }
 
 type metricsExporter struct {
-	metrics *Expirer
+	metrics *Expirer[*ebpf.Record, metric2.Int64Observer, *Counter, int64]
 	clock   *expire.CachedClock
 }
 
@@ -93,7 +93,7 @@ func MetricsExporterProvider(ctxInfo *global.ContextInfo, cfg *MetricsConfig) (p
 		attrProv.For(attributes.BeylaNetworkFlow))
 
 	clock := expire.NewCachedClock(timeNow)
-	expirer := NewExpirer(attrs, clock.Time, cfg.Metrics.TTL)
+	expirer := NewExpirer[*ebpf.Record, metric2.Int64Observer](NewCounter, attrs, clock.Time, cfg.Metrics.TTL)
 	ebpfEvents := provider.Meter("network_ebpf_events")
 
 	_, err = ebpfEvents.Int64ObservableCounter(
@@ -117,7 +117,7 @@ func (me *metricsExporter) Do(in <-chan []*ebpf.Record) {
 	for i := range in {
 		me.clock.Update()
 		for _, v := range i {
-			me.metrics.CounterForRecord(v).val.Add(int64(v.Metrics.Bytes))
+			me.metrics.ForRecord(v).val.Add(int64(v.Metrics.Bytes))
 		}
 	}
 }

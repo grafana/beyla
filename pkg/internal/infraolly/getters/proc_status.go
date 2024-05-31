@@ -8,7 +8,8 @@ import (
 	"github.com/grafana/beyla/pkg/internal/infraolly/process"
 )
 
-func procStatusOTELGettersUser(name attr.Name) (attributes.Getter[*process.Status, attribute.KeyValue], bool) {
+//nolint:unused
+func ProcStatusOTELGettersUser(name attr.Name) (attributes.Getter[*process.Status, attribute.KeyValue], bool) {
 	if name == attr.ProcCPUState {
 		return func(_ *process.Status) attribute.KeyValue {
 			return attribute.Key(attr.ProcCPUState).String("user")
@@ -16,7 +17,9 @@ func procStatusOTELGettersUser(name attr.Name) (attributes.Getter[*process.Statu
 	}
 	return procStatusOTELGetters(name)
 }
-func procStatusOTELGettersSystem(name attr.Name) (attributes.Getter[*process.Status, attribute.KeyValue], bool) {
+
+//nolint:unused
+func ProcStatusOTELGettersSystem(name attr.Name) (attributes.Getter[*process.Status, attribute.KeyValue], bool) {
 	if name == attr.ProcCPUState {
 		return func(_ *process.Status) attribute.KeyValue {
 			return attribute.Key(attr.ProcCPUState).String("system")
@@ -24,7 +27,9 @@ func procStatusOTELGettersSystem(name attr.Name) (attributes.Getter[*process.Sta
 	}
 	return procStatusOTELGetters(name)
 }
-func procStatusOTELGettersWait(name attr.Name) (attributes.Getter[*process.Status, attribute.KeyValue], bool) {
+
+//nolint:unused
+func ProcStatusOTELGettersWait(name attr.Name) (attributes.Getter[*process.Status, attribute.KeyValue], bool) {
 	if name == attr.ProcCPUState {
 		return func(_ *process.Status) attribute.KeyValue {
 			return attribute.Key(attr.ProcCPUState).String("wait")

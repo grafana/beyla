@@ -30,7 +30,7 @@ func TestLinuxHarvester_IsPrivileged(t *testing.T) {
 	for _, c := range cases {
 		t.Run(fmt.Sprint("mode ", c.mode), func(t *testing.T) {
 			cache, _ := simplelru.NewLRU[int32, *cacheEntry](math.MaxInt, nil)
-			h := newHarvester(&Config{ProcFSRoot: "/proc", RunMode: c.mode}, cache)
+			h := newHarvester(&Config{RunMode: c.mode}, cache)
 
 			// If not privileged, it is expected to not report neither FDs nor IO counters
 			status, err := h.Do(int32(os.Getpid()))
@@ -49,7 +49,7 @@ func TestLinuxHarvester_IsPrivileged(t *testing.T) {
 func TestLinuxHarvester_Do(t *testing.T) {
 	// Given a process harvester
 	cache, _ := simplelru.NewLRU[int32, *cacheEntry](math.MaxInt, nil)
-	h := newHarvester(&Config{ProcFSRoot: "/proc"}, cache)
+	h := newHarvester(&Config{}, cache)
 
 	// When retrieving for a given process status (e.g. the current testing executable)
 	status, err := h.Do(int32(os.Getpid()))
@@ -84,7 +84,7 @@ func TestLinuxHarvester_Do_FullCommandLine(t *testing.T) {
 
 	// Given a process harvester configured to showw the full command line
 	cache, _ := simplelru.NewLRU[int32, *cacheEntry](math.MaxInt, nil)
-	h := newHarvester(&Config{ProcFSRoot: "/proc", FullCommandLine: true}, cache)
+	h := newHarvester(&Config{}, cache)
 
 	test.Eventually(t, 5*time.Second, func(t require.TestingT) {
 		// When retrieving for a given process status (e.g. the current testing executable)
@@ -108,7 +108,7 @@ func TestLinuxHarvester_Do_StripCommandLine(t *testing.T) {
 
 	// Given a process harvester
 	cache, _ := simplelru.NewLRU[int32, *cacheEntry](math.MaxInt, nil)
-	h := newHarvester(&Config{ProcFSRoot: "/proc", FullCommandLine: true}, cache)
+	h := newHarvester(&Config{}, cache)
 
 	test.Eventually(t, 5*time.Second, func(t require.TestingT) {
 		// When retrieving for a given process status (e.g. the current testing executable)
@@ -129,7 +129,7 @@ func TestLinuxHarvester_Do_InvalidateCache_DifferentCmd(t *testing.T) {
 	// That has cached an old process sharing the PID with a new process
 	cache, _ := simplelru.NewLRU[int32, *cacheEntry](math.MaxInt, nil)
 	cache.Add(currentPid, &cacheEntry{process: &linuxProcess{cmdLine: "something old"}})
-	h := newHarvester(&Config{ProcFSRoot: "/proc"}, cache)
+	h := newHarvester(&Config{}, cache)
 
 	// When the process is harvested
 	status, err := h.Do(currentPid)
@@ -147,7 +147,7 @@ func TestLinuxHarvester_Do_InvalidateCache_DifferentPid(t *testing.T) {
 	// That has cached an old process sharing the PID with a new process
 	cache, _ := simplelru.NewLRU[int32, *cacheEntry](math.MaxInt, nil)
 	cache.Add(currentPid, &cacheEntry{process: &linuxProcess{stats: procStats{ppid: -1}}})
-	h := newHarvester(&Config{ProcFSRoot: "/proc"}, cache)
+	h := newHarvester(&Config{}, cache)
 
 	// When the process is harvested
 	status, err := h.Do(currentPid)

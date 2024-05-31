@@ -23,8 +23,8 @@ services:
       - ../../testoutput/run:/var/run/beyla
     image: hatest-autoinstrumenter
     privileged: true # in some environments (not GH Pull Requests) you can set it to false and then cap_add: [ SYS_ADMIN ]
-    network_mode: "host"
-    pid: "host"
+    network_mode: "service:testserver"
+    pid: "service:testserver"
     environment:
       BEYLA_CONFIG_PATH: "/configs/instrumenter-config-java.yml"
       GOCOVERDIR: "/coverage"
@@ -41,13 +41,9 @@ services:
       BEYLA_METRICS_REPORT_PEER: "true"
       BEYLA_HOSTNAME: "beyla"
       BEYLA_BPF_HTTP_REQUEST_TIMEOUT: "5s"
-      BEYLA_PROMETHEUS_FEATURES: "application,application_process,application_span,application_service_graph"
-      BEYLA_PROMETHEUS_PORT: "6060"
     depends_on:
       testserver:
         condition: service_started
-    ports:
-      - "6060:6060"
 
   # OpenTelemetry Collector
   otelcol:

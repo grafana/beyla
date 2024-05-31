@@ -101,9 +101,8 @@ var DefaultConfig = Config{
 	Routes:       &transform.RoutesConfig{},
 	NetworkFlows: defaultNetworkConfig,
 	Processes: process.Config{
-		RunMode:    process.RunModeRoot,
-		ProcFSRoot: "/proc",
-		Rate:       5 * time.Second,
+		RunMode: process.RunModeRoot,
+		Rate:    5 * time.Second,
 	},
 }
 

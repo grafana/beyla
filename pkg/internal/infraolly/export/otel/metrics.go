@@ -1,5 +1,6 @@
 package otel
 
+/*
 import (
 	"context"
 	"fmt"
@@ -109,3 +110,4 @@ func (me *metricsExporter) Do(in <-chan []*ebpf.Record) {
 		}
 	}
 }
+*/

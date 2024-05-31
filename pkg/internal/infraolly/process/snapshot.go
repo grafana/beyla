@@ -358,7 +358,6 @@ func (pw *linuxProcess) CmdLine() (string, error) {
 	if pw.cmdLine != "" {
 		return pw.cmdLine, nil
 	}
-	pw.process.Cmdline()
 
 	cmdPath := path.Join(pw.procFSRoot, strconv.Itoa(int(pw.pid)), "cmdline")
 	procCmdline, err := os.ReadFile(cmdPath)

@@ -1,6 +1,8 @@
 // Copyright 2020 New Relic Corporation. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0
 
+//go:build linux
+
 package process
 
 import (
@@ -42,7 +44,7 @@ func TestLinuxProcess_CmdLine(t *testing.T) {
 	for _, tc := range testCases {
 		require.NoError(t, os.WriteFile(path.Join(processDir, "cmdline"), tc.rawProcCmdline, 0o600))
 		lp := linuxProcess{pid: 12345}
-		actual, err := lp.CmdLine(true)
+		actual, err := lp.CmdLine()
 		assert.NoError(t, err)
 		assert.Equal(t, tc.expected, actual)
 	}
@@ -74,7 +76,7 @@ func TestLinuxProcess_CmdLine_NoArgs(t *testing.T) {
 	for _, tc := range testCases {
 		require.NoError(t, os.WriteFile(path.Join(processDir, "cmdline"), tc.rawProcCmdline, 0o600))
 		lp := linuxProcess{pid: 12345}
-		actual, err := lp.CmdLine(false)
+		actual, err := lp.CmdLine()
 		assert.NoError(t, err)
 		assert.Equal(t, tc.expected, actual)
 	}
@@ -107,11 +109,11 @@ func TestLinuxProcess_CmdLine_NotStandard(t *testing.T) {
 		lp := linuxProcess{pid: 12345}
 
 		// Testing both the cases with and without command line stripping
-		actual, err := lp.CmdLine(true)
+		actual, err := lp.CmdLine()
 		assert.NoError(t, err)
 		assert.Equal(t, tc.expected, actual)
 
-		actual, err = lp.CmdLine(false)
+		actual, err = lp.CmdLine()
 		assert.NoError(t, err)
 		assert.Equal(t, tc.expected, actual)
 	}
@@ -119,14 +121,14 @@ func TestLinuxProcess_CmdLine_NotStandard(t *testing.T) {
 
 func TestLinuxProcess_CmdLine_ProcessNotExist(t *testing.T) {
 	lp := linuxProcess{pid: 999999999}
-	actual, err := lp.CmdLine(true)
+	actual, err := lp.CmdLine()
 	assert.NoError(t, err)
 	assert.Equal(t, "", actual)
 }
 
 func TestLinuxProcess_CmdLine_ProcessNotExist_NoStrip(t *testing.T) {
 	lp := linuxProcess{pid: 999999999}
-	actual, err := lp.CmdLine(false)
+	actual, err := lp.CmdLine()
 	assert.NoError(t, err)
 	assert.Equal(t, "", actual)
 }

@@ -5,6 +5,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
 
 	"github.com/grafana/beyla/pkg/internal/export/attributes"
 	attr "github.com/grafana/beyla/pkg/internal/export/attributes/names"
@@ -35,7 +36,7 @@ func TestMetricAttributes(t *testing.T) {
 	in.Id.SrcIp.In6U.U6Addr8 = [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 255, 12, 34, 56, 78}
 	in.Id.DstIp.In6U.U6Addr8 = [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 255, 33, 22, 11, 1}
 
-	me := &metricsExporter{metrics: &Expirer{attrs: attributes.OpenTelemetryGetters(
+	me := &metricsExporter{metrics: &Expirer[*ebpf.Record, metric.Int64Observer, *Counter, int64]{attrs: attributes.OpenTelemetryGetters(
 		ebpf.RecordGetters, []attr.Name{
 			attr.SrcAddress, attr.DstAddres, attr.SrcPort, attr.DstPort, attr.SrcName, attr.DstName,
 			attr.K8sSrcName, attr.K8sSrcNamespace, attr.K8sDstName, attr.K8sDstNamespace,
@@ -84,7 +85,7 @@ func TestMetricAttributes_Filter(t *testing.T) {
 	in.Id.SrcIp.In6U.U6Addr8 = [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 255, 12, 34, 56, 78}
 	in.Id.DstIp.In6U.U6Addr8 = [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 255, 33, 22, 11, 1}
 
-	me := &Expirer{attrs: attributes.OpenTelemetryGetters(ebpf.RecordGetters, []attr.Name{
+	me := &Expirer[*ebpf.Record, metric.Int64Observer, *Counter, int64]{attrs: attributes.OpenTelemetryGetters(ebpf.RecordGetters, []attr.Name{
 		"src.address",
 		"k8s.src.name",
 		"k8s.dst.name",

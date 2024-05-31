@@ -9,6 +9,7 @@ import (
 	"github.com/grafana/beyla/pkg/beyla"
 	"github.com/grafana/beyla/pkg/internal/ebpf"
 	"github.com/grafana/beyla/pkg/internal/ebpf/gokafka"
+	"github.com/grafana/beyla/pkg/internal/ebpf/goredis"
 	"github.com/grafana/beyla/pkg/internal/ebpf/goruntime"
 	"github.com/grafana/beyla/pkg/internal/ebpf/grpc"
 	"github.com/grafana/beyla/pkg/internal/ebpf/httpfltr"
@@ -101,6 +102,7 @@ func newGoTracersGroup(cfg *beyla.Config, metrics imetrics.Reporter) []ebpf.Trac
 		goruntime.New(cfg, metrics),
 		gokafka.New(cfg, metrics),
 		&gokafka.ShopifyKafkaTracer{Tracer: *gokafka.New(cfg, metrics)},
+		goredis.New(cfg, metrics),
 	}
 }
 

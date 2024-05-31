@@ -31,7 +31,12 @@ type bpfKafkaClientReqT struct {
 	Buf             [256]uint8
 	_               [7]byte
 	Conn            bpfConnectionInfoT
-	_               [4]byte
+	Tp              bpfTpInfoT
+	Pid             struct {
+		HostPid uint32
+		UserPid uint32
+		Ns      uint32
+	}
 }
 
 type bpfTpInfoPidT struct {

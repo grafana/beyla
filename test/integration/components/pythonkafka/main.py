@@ -72,6 +72,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             self.send_header('Content-type', 'application/json')
             self.end_headers()
             message = kafka_service.fetch_message()
+            logger.info(f"Sending message: {message}")
             self.wfile.write(json.dumps(message).encode('utf-8'))
         else:
             self.send_response(404)

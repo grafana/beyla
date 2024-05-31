@@ -5,15 +5,16 @@ docker-compose:
 input:
   - path: '/message'
 
-interval: 500ms
+interval: 2s
 expected:
   traces:
-    - traceql: '{ .message.kafka.operation = "receive" }'
+    - traceql: '{ .messaging.operation = "receive" }'
       spans:
         - name: 'example_topic receive'
           attributes:
             messaging.destination.name: example_topic
-            message.kafka.operation: receive
+            messaging.operation: receive
+            messaging.system: kafka
   # metrics:
   #   - promql: 'sql_client_duration_sum'
   #     value: "> 0"

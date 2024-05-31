@@ -293,7 +293,7 @@ oats-test-kafka: oats-prereq
 	cd test/oats/kafka && TESTCASE_TIMEOUT=120s TESTCASE_BASE_PATH=./yaml $(GINKGO) -v -r
 
 .PHONY: oats-test
-oats-test: oats-test-sql oats-test-sql-statement oats-test-sql-other-langs oats-test-redis-other-langs oats-test-kafka-other-langs
+oats-test: oats-test-sql oats-test-sql-statement oats-test-sql-other-langs oats-test-redis-other-langs oats-test-kafka
 	$(MAKE) itest-coverage-data
 
 .PHONY: oats-test-debug

@@ -33,6 +33,7 @@ type PIDInfo struct {
 type ServiceFilter interface {
 	AllowPID(uint32, uint32, svc.ID, PIDType)
 	BlockPID(uint32, uint32)
+	ValidPID(uint32, uint32, PIDType) bool
 	Filter(inputSpans []request.Span) []request.Span
 	CurrentPIDs(PIDType) map[uint32]map[uint32]svc.ID
 }
@@ -82,6 +83,20 @@ func (pf *PIDsFilter) BlockPID(pid, ns uint32) {
 	pf.mux.Lock()
 	defer pf.mux.Unlock()
 	pf.removePID(pid, ns)
+}
+
+func (pf *PIDsFilter) ValidPID(userPID, ns uint32, pidType PIDType) bool {
+	pf.mux.RLock()
+	defer pf.mux.RUnlock()
+
+	if ns, nsExists := pf.current[ns]; nsExists {
+		if info, pidExists := ns[userPID]; pidExists {
+			return info.pidType == pidType
+		}
+	}
+
+	return false
+
 }
 
 func (pf *PIDsFilter) CurrentPIDs(t PIDType) map[uint32]map[uint32]svc.ID {
@@ -174,6 +189,10 @@ type IdentityPidsFilter struct{}
 func (pf *IdentityPidsFilter) AllowPID(_ uint32, _ uint32, _ svc.ID, _ PIDType) {}
 
 func (pf *IdentityPidsFilter) BlockPID(_ uint32, _ uint32) {}
+
+func (pf *IdentityPidsFilter) ValidPID(_ uint32, _ uint32, _ PIDType) bool {
+	return false
+}
 
 func (pf *IdentityPidsFilter) CurrentPIDs(_ PIDType) map[uint32]map[uint32]svc.ID {
 	return nil

@@ -14,12 +14,16 @@ import (
 	"github.com/grafana/beyla/pkg/internal/sqlprune"
 )
 
-func ReadTCPRequestIntoSpan(record *ringbuf.Record) (request.Span, bool, error) {
+func ReadTCPRequestIntoSpan(record *ringbuf.Record, filter ServiceFilter) (request.Span, bool, error) {
 	var event TCPRequestInfo
 
 	err := binary.Read(bytes.NewBuffer(record.RawSample), binary.LittleEndian, &event)
 	if err != nil {
 		return request.Span{}, true, err
+	}
+
+	if !filter.ValidPID(event.Pid.UserPid, event.Pid.Ns, PIDTypeKProbes) {
+		return request.Span{}, true, nil
 	}
 
 	b := event.Buf[:]

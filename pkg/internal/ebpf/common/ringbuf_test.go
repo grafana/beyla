@@ -227,6 +227,10 @@ func (pf *TestPidsFilter) BlockPID(p uint32, _ uint32) {
 	delete(pf.services, p)
 }
 
+func (pf *TestPidsFilter) ValidPID(_ uint32, _ uint32, _ PIDType) bool {
+	return true
+}
+
 func (pf *TestPidsFilter) CurrentPIDs(_ PIDType) map[uint32]map[uint32]svc.ID {
 	return nil
 }

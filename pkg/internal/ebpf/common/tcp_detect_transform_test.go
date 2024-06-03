@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/grafana/beyla/pkg/internal/request"
+	"github.com/grafana/beyla/pkg/internal/svc"
 )
 
 const (
@@ -71,6 +72,8 @@ func TestSQLDetectionFails(t *testing.T) {
 
 // Test making sure that issue https://github.com/grafana/beyla/issues/854 is fixed
 func TestReadTCPRequestIntoSpan_Overflow(t *testing.T) {
+	fltr := TestPidsFilter{services: map[uint32]svc.ID{}}
+
 	tri := TCPRequestInfo{
 		Len: 340,
 		// this byte array contains select * from foo
@@ -96,7 +99,7 @@ func TestReadTCPRequestIntoSpan_Overflow(t *testing.T) {
 	}
 	binaryRecord := bytes.Buffer{}
 	require.NoError(t, binary.Write(&binaryRecord, binary.LittleEndian, tri))
-	span, ignore, err := ReadTCPRequestIntoSpan(&ringbuf.Record{RawSample: binaryRecord.Bytes()})
+	span, ignore, err := ReadTCPRequestIntoSpan(&ringbuf.Record{RawSample: binaryRecord.Bytes()}, &fltr)
 	require.NoError(t, err)
 	require.False(t, ignore)
 

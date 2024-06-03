@@ -301,3 +301,22 @@ func ReadHTTP2InfoIntoSpan(record *ringbuf.Record, filter ServiceFilter) (reques
 
 	return request.Span{}, true, nil // ignore if we couldn't parse it
 }
+
+func isHTTP2(data []uint8, event *TCPRequestInfo) bool {
+	framer := byteFramer(data)
+
+	for {
+		f, err := framer.ReadFrame()
+
+		if err != nil {
+			break
+		}
+
+		if ff, ok := f.(*http2.HeadersFrame); ok {
+			method, path, _ := readMetaFrame((*BPFConnInfo)(&event.ConnInfo), framer, ff)
+			return method != "" || path != ""
+		}
+	}
+
+	return false
+}

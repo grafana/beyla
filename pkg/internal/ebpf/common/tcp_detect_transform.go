@@ -32,10 +32,10 @@ func ReadTCPRequestIntoSpan(record *ringbuf.Record) (request.Span, bool, error) 
 	buf := string(event.Buf[:l])
 
 	// Check if we have a SQL statement
-	sqlIndex := isSQL(buf)
+	op, table, sql := detectSQL(buf)
 	switch {
-	case sqlIndex >= 0:
-		return TCPToSQLToSpan(&event, buf[sqlIndex:]), false, nil
+	case validSQL(op, table):
+		return TCPToSQLToSpan(&event, op, table, sql), false, nil
 	case isHTTP2(b, &event):
 		MisclassifiedEvents <- MisclassifiedEvent{EventType: EventTypeKHTTP2, TCPInfo: &event}
 	case isRedis(event.Buf[:l]) && isRedis(event.Rbuf[:]):
@@ -59,16 +59,23 @@ func ReadTCPRequestIntoSpan(record *ringbuf.Record) (request.Span, bool, error) 
 	return request.Span{}, true, nil // ignore if we couldn't parse it
 }
 
-func isSQL(buf string) int {
+func validSQL(op, table string) bool {
+	return op != "" && table != ""
+}
+
+func detectSQL(buf string) (string, string, string) {
 	b := asciiToUpper(buf)
 	for _, q := range []string{"SELECT", "UPDATE", "DELETE", "INSERT", "ALTER", "CREATE", "DROP"} {
 		i := strings.Index(b, q)
 		if i >= 0 {
-			return i
+			sql := cstr([]uint8(b[i:]))
+
+			op, table := sqlprune.SQLParseOperationAndTable(sql)
+			return op, table, sql
 		}
 	}
 
-	return -1
+	return "", "", ""
 }
 
 // when the input string is invalid unicode (might happen with the ringbuffer
@@ -95,11 +102,7 @@ func (trace *TCPRequestInfo) reqHostInfo() (source, target string) {
 	return src.String(), dst.String()
 }
 
-func TCPToSQLToSpan(trace *TCPRequestInfo, s string) request.Span {
-	sql := cstr([]uint8(s))
-
-	method, path := sqlprune.SQLParseOperationAndTable(sql)
-
+func TCPToSQLToSpan(trace *TCPRequestInfo, op, table, sql string) request.Span {
 	peer := ""
 	hostname := ""
 	hostPort := 0
@@ -111,8 +114,8 @@ func TCPToSQLToSpan(trace *TCPRequestInfo, s string) request.Span {
 
 	return request.Span{
 		Type:          request.EventTypeSQLClient,
-		Method:        method,
-		Path:          path,
+		Method:        op,
+		Path:          table,
 		Peer:          peer,
 		Host:          hostname,
 		HostPort:      hostPort,

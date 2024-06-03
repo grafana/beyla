@@ -23,33 +23,49 @@ const (
 func TestTCPReqSQLParsing(t *testing.T) {
 	sql := randomStringWithSub("SELECT * FROM accounts ")
 	r := makeTCPReq(sql, tcpSend, 343534, 8080, 2000)
-	sqlIndex := isSQL(sql)
-	assert.GreaterOrEqual(t, sqlIndex, 0)
-	s := TCPToSQLToSpan(&r, sql[sqlIndex:])
+	op, table, sql := detectSQL(sql)
+	assert.Equal(t, op, "SELECT")
+	assert.Equal(t, table, "ACCOUNTS")
+	s := TCPToSQLToSpan(&r, op, table, sql)
 	assert.NotNil(t, s)
 	assert.NotEmpty(t, s.Host)
 	assert.NotEmpty(t, s.Peer)
 	assert.Equal(t, s.HostPort, 8080)
 	assert.Greater(t, s.End, s.Start)
-	assert.True(t, strings.Contains(s.Statement, "SELECT * FROM accounts "))
+	assert.True(t, strings.Contains(s.Statement, "SELECT * FROM ACCOUNTS "))
 	assert.Equal(t, "SELECT", s.Method)
-	assert.Equal(t, "accounts", s.Path)
+	assert.Equal(t, "ACCOUNTS", s.Path)
 	assert.Equal(t, request.EventTypeSQLClient, s.Type)
 }
 
 func TestTCPReqParsing(t *testing.T) {
 	sql := "Not a sql or any known protocol"
 	r := makeTCPReq(sql, tcpSend, 343534, 8080, 2000)
-	sqlIndex := isSQL(sql)
-	assert.LessOrEqual(t, sqlIndex, 0)
+	op, table, _ := detectSQL(sql)
+	assert.Empty(t, op)
+	assert.Empty(t, table)
 	assert.NotNil(t, r)
 }
 
 func TestSQLDetection(t *testing.T) {
-	for _, s := range []string{"SELECT", "UPDATE", "DELETE", "INSERT", "CREATE", "DROP", "ALTER"} {
+	for _, s := range []string{"SELECT * from accounts", "SELECT/*My comment*/ * from accounts", "--UPDATE accounts SET", "DELETE++ from accounts ", "INSERT into accounts ", "CREATE table accounts ", "DROP table accounts ", "ALTER table accounts"} {
 		surrounded := randomStringWithSub(s)
-		assert.GreaterOrEqual(t, isSQL(surrounded), 0)
-		assert.GreaterOrEqual(t, isSQL(s), 0)
+		op, table, _ := detectSQL(s)
+		assert.NotEmpty(t, op)
+		assert.NotEmpty(t, table)
+		op, table, _ = detectSQL(surrounded)
+		assert.NotEmpty(t, op)
+		assert.NotEmpty(t, table)
+	}
+}
+
+func TestSQLDetectionFails(t *testing.T) {
+	for _, s := range []string{"SELECT", "UPDATES{}", "DELETE {} ", "INSERT// into accounts "} {
+		op, table, _ := detectSQL(s)
+		assert.False(t, validSQL(op, table))
+		surrounded := randomStringWithSub(s)
+		op, table, _ = detectSQL(surrounded)
+		assert.False(t, validSQL(op, table))
 	}
 }
 
@@ -60,7 +76,7 @@ func TestReadTCPRequestIntoSpan_Overflow(t *testing.T) {
 		// this byte array contains select * from foo
 		// rest of the array is invalid UTF-8 and would cause that strings.ToUpper
 		// returns a string longer than 256. That's why we are providing
-		// our own asciiToUpper implementation in isSQL function
+		// our own asciiToUpper implementation in detectSQL function
 		Buf: [256]byte{
 			74, 39, 133, 207, 240, 83, 124, 225, 227, 163, 3, 23, 253, 254, 18, 12, 77, 143, 198, 122,
 			123, 67, 221, 225, 10, 233, 220, 36, 65, 35, 25, 251, 88, 197, 107, 99, 25, 247, 195, 216,
@@ -86,7 +102,7 @@ func TestReadTCPRequestIntoSpan_Overflow(t *testing.T) {
 
 	assert.Equal(t, request.EventTypeSQLClient, span.Type)
 	assert.Equal(t, "SELECT", span.Method)
-	assert.Equal(t, "foo", span.Path)
+	assert.Equal(t, "FOO", span.Path)
 }
 
 func TestRedisDetection(t *testing.T) {

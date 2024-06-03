@@ -1,4 +1,4 @@
-package ebpfcommon
+package exec
 
 func FindNamespace(_ int32) (uint32, error) {
 	// convenience method to allow unit tests compiling in Darwin

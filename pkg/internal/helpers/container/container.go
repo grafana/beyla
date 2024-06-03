@@ -8,12 +8,12 @@ import (
 	"regexp"
 	"strconv"
 
-	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
+	"github.com/grafana/beyla/pkg/internal/exec"
 )
 
 // injectable values for testing
 var procRoot = "/proc/"
-var namespaceFinder = ebpfcommon.FindNamespace
+var namespaceFinder = exec.FindNamespace
 
 // Info that we need to keep from a container: its ContainerID in Kubernetes and
 // the PIDNamespace of its processes.

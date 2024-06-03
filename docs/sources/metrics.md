@@ -25,25 +25,25 @@ The following table describes the exported metrics in both OpenTelemetry and Pro
 | Application | `rpc.server.duration`           | `rpc_server_duration_seconds`          | Histogram | seconds | Duration of RPC service calls from the server side                               |
 | Application | `sql.client.duration`           | `sql_client_duration_seconds`          | Histogram | seconds | Duration of SQL client operations (Experimental)                                 |
 | Application | `redis.client.duration`         | `redis_client_duration_seconds`        | Histogram | seconds | Duration of Redis client operations (Experimental)                               |
+| Application | `messaging.publish.duration`    | `messaging_publish_duration`        | Histogram | seconds | Duration of Messaging (Kafka) publish operations (Experimental)                               |
+| Application | `messaging.process.duration`    | `messaging_process_duration`        | Histogram | seconds | Duration of Messaging (Kafka) process operations (Experimental)                               |
 | Network     | `beyla.network.flow.bytes`      | `beyla_network_flow_bytes`             | Counter   | bytes   | Bytes submitted from a source network endpoint to a destination network endpoint |
 
 Beyla can also export [Span metrics](/docs/tempo/latest/metrics-generator/span_metrics/) and
-[Service graph metrics](/docs/tempo/latest/metrics-generator/service-graph-view/), which can be enabled via the
+[Service graph metrics](/docs/tempo/latest/metrics-generator/service-graph-view/), which you can enable via the
 [features]({{< relref "./configure/options.md" >}}) configuration option.
 
 ## Attributes of Beyla metrics
 
-For the sake of brevity, only the OTEL `dot.notation` of the metrics and attributes is listed, but
-the metrics and attributes are exposed `underscore_notation` when a Prometheus exporter is used.
+For the sake of brevity, the metrics and attributes in this list use the OTEL `dot.notation`. When using the Prometheus exporter, the metrics use `underscore_notation`.
 
-In order to hide attributes that are shown by default, or show attributes that are hidden by
-default, check the `attributes`->`select` section in the [configuration documentation]({{< relref "./configure/options.md" >}}).
+In order to configure which attributes to show or which attributes to hide, check the `attributes`->`select` section in the [configuration documentation]({{< relref "./configure/options.md" >}}).
 
 | Metrics                        | Name                        | Default                                       |
 |--------------------------------|-----------------------------|-----------------------------------------------|
 | Application (all)              | `http.request.method`       | shown                                         |
 | Application (all)              | `http.response.status_code` | shown                                         |
-| Application (all)              | `http.route`                | shown if `routes` configuration is defined    |
+| Application (all)              | `http.route`                | shown if `routes` configuration section exists  |
 | Application (all)              | `k8s.daemonset.name`        | shown if `attributes.kubernetes.enable`       |
 | Application (all)              | `k8s.deployment.name`       | shown if `attributes.kubernetes.enable`       |
 | Application (all)              | `k8s.namespace.name`        | shown if `attributes.kubernetes.enable`       |
@@ -66,9 +66,11 @@ default, check the `attributes`->`select` section in the [configuration document
 | `beyla.network.flow.bytes`     | `beyla.ip`                  | hidden                                        |
 | `db.client.operation.duration` | `db.operation.name`         | shown                                         |
 | `db.client.operation.duration` | `db.collection.name`        | hidden                                        |
+| `message.publish.duration`     | `messaging.system`          | shown                                         |
+| `message.publish.duration`     | `messaging.destination.name`| shown                                         |
 | `beyla.network.flow.bytes`     | `direction`                 | hidden                                        |
 | `beyla.network.flow.bytes`     | `dst.address`               | hidden                                        |
-| `beyla.network.flow.bytes`     | `dst.cidr`                  | shown if the `cidrs` configuration is defined |
+| `beyla.network.flow.bytes`     | `dst.cidr`                  | shown if the `cidrs` configuration section exists |
 | `beyla.network.flow.bytes`     | `dst.name`                  | hidden                                        |
 | `beyla.network.flow.bytes`     | `dst.port`                  | hidden                                        |
 | `beyla.network.flow.bytes`     | `iface`                     | hidden                                        |
@@ -87,7 +89,7 @@ default, check the `attributes`->`select` section in the [configuration document
 | `beyla.network.flow.bytes`     | `k8s.src.owner.type`        | hidden                                        |
 | `beyla.network.flow.bytes`     | `k8s.src.type`              | hidden                                        | 
 | `beyla.network.flow.bytes`     | `src.address`               | hidden                                        |
-| `beyla.network.flow.bytes`     | `src.cidr`                  | shown if the `cidrs` configuration is defined |
+| `beyla.network.flow.bytes`     | `src.cidr`                  | shown if the `cidrs` configuration section exists |
 | `beyla.network.flow.bytes`     | `src.name`                  | hidden                                        |
 | `beyla.network.flow.bytes`     | `src.port`                  | hidden                                        |
 | `beyla.network.flow.bytes`     | `transport`                 | hidden                                        |

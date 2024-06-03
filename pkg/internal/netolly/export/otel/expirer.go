@@ -36,18 +36,30 @@ type observer[T any] interface {
 // VT: type of the metric value: int, float...
 type Expirer[Record any, OT observer[VT], Metric loader[VT], VT any] struct {
 	instancer func(set attribute.Set) Metric
-	attrs     []attributes.Field[Record, string]
+	attrs     []attributes.Field[Record, attribute.KeyValue]
 	entries   *expire.ExpiryMap[Metric]
 	log       *slog.Logger
 }
 
-type Counter struct {
+type metricAttributes struct {
 	attributes attribute.Set
-	val        atomic.Int64
+}
+
+func (g *metricAttributes) Attributes() attribute.Set {
+	return g.attributes
+}
+
+func (g *metricAttributes) SetAttributes(a attribute.Set) {
+	g.attributes = a
+}
+
+type Counter struct {
+	metricAttributes
+	val atomic.Int64
 }
 
 func NewCounter(attributes attribute.Set) *Counter {
-	return &Counter{attributes: attributes}
+	return &Counter{metricAttributes: metricAttributes{attributes: attributes}}
 }
 func (g *Counter) Load() int64 {
 	return g.val.Load()
@@ -57,23 +69,15 @@ func (g *Counter) Add(v int64) {
 	g.val.Add(v)
 }
 
-func (g *Counter) Attributes() attribute.Set {
-	return g.attributes
-}
-
-func (g *Counter) SetAttributes(a attribute.Set) {
-	g.attributes = a
-}
-
 type Gauge struct {
-	attributes attribute.Set
-	val        atomic.Value
+	metricAttributes
+	val atomic.Value
 }
 
-func NewGauge(attributes attribute.Set, initVal float64) *Gauge {
+func NewGauge(attributes attribute.Set) *Gauge {
 	val := atomic.Value{}
-	val.Store(initVal)
-	return &Gauge{attributes: attributes, val: val}
+	val.Store(float64(0))
+	return &Gauge{metricAttributes: metricAttributes{attributes: attributes}, val: val}
 }
 
 func (g Gauge) Load() float64 {
@@ -88,7 +92,7 @@ func (g Gauge) Set(val float64) {
 // if they haven't been updated during the last timeout period
 func NewExpirer[Record any, OT observer[VT], Metric loader[VT], VT any](
 	instancer func(set attribute.Set) Metric,
-	attrs []attributes.Field[Record, string],
+	attrs []attributes.Field[Record, attribute.KeyValue],
 	clock expire.Clock,
 	expireTime time.Duration,
 ) *Expirer[Record, OT, Metric, VT] {
@@ -129,9 +133,9 @@ func (ex *Expirer[Record, OT, Metric, VT]) recordAttributes(m Record) (attribute
 	vals := make([]string, 0, len(ex.attrs))
 
 	for _, attr := range ex.attrs {
-		val := attr.Get(m)
-		keyVals = append(keyVals, attribute.String(attr.ExposedName, val))
-		vals = append(vals, val)
+		kv := attr.Get(m)
+		keyVals = append(keyVals, kv)
+		vals = append(vals, kv.Value.Emit())
 	}
 
 	return attribute.NewSet(keyVals...), vals

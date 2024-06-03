@@ -45,7 +45,7 @@ func tlog() *slog.Logger {
 	return slog.With("component", "otel.TracesReporter")
 }
 
-const reporterName = "github.com/grafana/beyla"
+const ReporterName = "github.com/grafana/beyla"
 
 type TracesConfig struct {
 	CommonEndpoint string `yaml:"-" env:"OTEL_EXPORTER_OTLP_ENDPOINT"`
@@ -324,7 +324,7 @@ func GenerateTraces(span *request.Span, userAttrs map[attr.Name]struct{}) ptrace
 	rs := traces.ResourceSpans().AppendEmpty()
 	ss := rs.ScopeSpans().AppendEmpty()
 	resourceAttrs := attrsToMap(ResourceAttrs(span.ServiceID).Attributes())
-	resourceAttrs.PutStr(string(semconv.OTelLibraryNameKey), reporterName)
+	resourceAttrs.PutStr(string(semconv.OTelLibraryNameKey), ReporterName)
 	resourceAttrs.CopyTo(rs.Resource().Attributes())
 
 	traceID := pcommon.TraceID(span.TraceID)

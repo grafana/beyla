@@ -23,19 +23,15 @@ expected:
             messaging.operation.type: publish
             messaging.system: kafka
   metrics:
-    - promql: 'messaging_publish_duration_count'
+    - promql: 'messaging_publish_duration_count{messaging_system="kafka", messaging_destination_name="my-topic"}'
       value: "> 0"
     - promql: 'messaging_publish_duration_bucket{le="0"}'
       value: "== 0"
     - promql: 'messaging_publish_duration_bucket{le="10"}'
       value: "> 0"
-    - promql: 'messaging_publish_duration_count'
-      value: "> 0"
-    - promql: 'messaging_process_duration_count'
+    - promql: 'messaging_process_duration_count{messaging_system="kafka", messaging_destination_name="my-topic"}'
       value: "> 0"
     - promql: 'messaging_process_duration_bucket{le="0"}'
       value: "== 0"
     - promql: 'messaging_process_duration_bucket{le="10"}'
-      value: "> 0"
-    - promql: 'messaging_process_duration_count'
       value: "> 0"

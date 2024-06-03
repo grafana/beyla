@@ -5,8 +5,3 @@ routes:
     - /greeting
     - /sqltest
   unmatched: path
-attributes:
-  select:
-    traces:
-      include:
-      - db.statement

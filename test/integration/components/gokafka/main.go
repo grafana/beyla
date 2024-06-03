@@ -57,9 +57,16 @@ func main() {
 	config.Version = version
 
 	ctx, _ := context.WithCancel(context.Background())
-	client, err := sarama.NewConsumerGroup(strings.Split(*brokers, ","), "1", config)
-	if err != nil {
-		log.Panicf("Error creating consumer group client: %v", err)
+	var client sarama.ConsumerGroup
+
+	for {
+		client, err = sarama.NewConsumerGroup(strings.Split(*brokers, ","), "1", config)
+		if err != nil {
+			log.Printf("Error creating consumer group client: %v", err)
+			time.Sleep(2 * time.Second)
+			continue
+		}
+		break
 	}
 
 	wg := &sync.WaitGroup{}

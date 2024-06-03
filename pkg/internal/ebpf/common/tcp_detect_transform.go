@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"net"
 	"strings"
+	"unsafe"
 
 	"github.com/cilium/ebpf/ringbuf"
 	trace2 "go.opentelemetry.io/otel/trace"
@@ -86,11 +87,11 @@ func asciiToUpper(input string) string {
 	return string(out)
 }
 
-func (trace *TCPRequestInfo) reqHostInfo() (source, target string) {
+func (connInfo *BPFConnInfo) reqHostInfo() (source, target string) {
 	src := make(net.IP, net.IPv6len)
 	dst := make(net.IP, net.IPv6len)
-	copy(src, trace.ConnInfo.S_addr[:])
-	copy(dst, trace.ConnInfo.D_addr[:])
+	copy(src, connInfo.S_addr[:])
+	copy(dst, connInfo.D_addr[:])
 
 	return src.String(), dst.String()
 }
@@ -105,7 +106,7 @@ func TCPToSQLToSpan(trace *TCPRequestInfo, s string) request.Span {
 	hostPort := 0
 
 	if trace.ConnInfo.S_port != 0 || trace.ConnInfo.D_port != 0 {
-		peer, hostname = trace.reqHostInfo()
+		peer, hostname = (*BPFConnInfo)(unsafe.Pointer(&trace.ConnInfo)).reqHostInfo()
 		hostPort = int(trace.ConnInfo.D_port)
 	}
 
@@ -159,7 +160,7 @@ func TCPToKafkaToSpan(trace *TCPRequestInfo, data *KafkaInfo) request.Span {
 	hostPort := 0
 
 	if trace.ConnInfo.S_port != 0 || trace.ConnInfo.D_port != 0 {
-		peer, hostname = trace.reqHostInfo()
+		peer, hostname = (*BPFConnInfo)(unsafe.Pointer(&trace.ConnInfo)).reqHostInfo()
 		hostPort = int(trace.ConnInfo.D_port)
 	}
 	return request.Span{

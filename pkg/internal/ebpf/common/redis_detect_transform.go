@@ -3,8 +3,8 @@ package ebpfcommon
 import (
 	"bytes"
 	"encoding/binary"
-	"net"
 	"strings"
+	"unsafe"
 
 	"github.com/cilium/ebpf/ringbuf"
 	trace2 "go.opentelemetry.io/otel/trace"
@@ -127,7 +127,7 @@ func TCPToRedisToSpan(trace *TCPRequestInfo, op, text string, status int) reques
 	hostPort := 0
 
 	if trace.ConnInfo.S_port != 0 || trace.ConnInfo.D_port != 0 {
-		peer, hostname = trace.reqHostInfo()
+		peer, hostname = (*BPFConnInfo)(unsafe.Pointer(&trace.ConnInfo)).reqHostInfo()
 		hostPort = int(trace.ConnInfo.D_port)
 	}
 
@@ -155,15 +155,6 @@ func TCPToRedisToSpan(trace *TCPRequestInfo, op, text string, status int) reques
 	}
 }
 
-func (event *GoRedisClientInfo) reqHostInfo() (source, target string) {
-	src := make(net.IP, net.IPv6len)
-	dst := make(net.IP, net.IPv6len)
-	copy(src, event.Conn.S_addr[:])
-	copy(dst, event.Conn.D_addr[:])
-
-	return src.String(), dst.String()
-}
-
 func ReadGoRedisRequestIntoSpan(record *ringbuf.Record) (request.Span, bool, error) {
 	var event GoRedisClientInfo
 
@@ -177,7 +168,7 @@ func ReadGoRedisRequestIntoSpan(record *ringbuf.Record) (request.Span, bool, err
 	hostPort := 0
 
 	if event.Conn.S_port != 0 || event.Conn.D_port != 0 {
-		peer, hostname = event.reqHostInfo()
+		peer, hostname = (*BPFConnInfo)(unsafe.Pointer(&event.Conn)).reqHostInfo()
 		hostPort = int(event.Conn.D_port)
 	}
 

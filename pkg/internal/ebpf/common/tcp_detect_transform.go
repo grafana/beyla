@@ -49,6 +49,11 @@ func ReadTCPRequestIntoSpan(record *ringbuf.Record) (request.Span, bool, error) 
 
 			return TCPToRedisToSpan(&event, op, text, status), false, nil
 		}
+	default:
+		k, err := ProcessPossibleKafkaEvent(b, event.Rbuf[:])
+		if err == nil {
+			return TCPToKafkaToSpan(&event, k), false, nil
+		}
 	}
 
 	return request.Span{}, true, nil // ignore if we couldn't parse it
@@ -146,4 +151,38 @@ func isHTTP2(data []uint8, event *TCPRequestInfo) bool {
 	}
 
 	return false
+}
+
+func TCPToKafkaToSpan(trace *TCPRequestInfo, data *KafkaInfo) request.Span {
+	peer := ""
+	hostname := ""
+	hostPort := 0
+
+	if trace.ConnInfo.S_port != 0 || trace.ConnInfo.D_port != 0 {
+		peer, hostname = trace.reqHostInfo()
+		hostPort = int(trace.ConnInfo.D_port)
+	}
+	return request.Span{
+		Type:           request.EventTypeKafkaClient,
+		Method:         data.Operation.String(),
+		OtherNamespace: data.ClientID,
+		Path:           data.Topic,
+		Peer:           peer,
+		Host:           hostname,
+		HostPort:       hostPort,
+		ContentLength:  0,
+		RequestStart:   int64(trace.StartMonotimeNs),
+		Start:          int64(trace.StartMonotimeNs),
+		End:            int64(trace.EndMonotimeNs),
+		Status:         0,
+		TraceID:        trace2.TraceID(trace.Tp.TraceId),
+		SpanID:         trace2.SpanID(trace.Tp.SpanId),
+		ParentSpanID:   trace2.SpanID(trace.Tp.ParentId),
+		Flags:          trace.Tp.Flags,
+		Pid: request.PidInfo{
+			HostPID:   trace.Pid.HostPid,
+			UserPID:   trace.Pid.UserPid,
+			Namespace: trace.Pid.Ns,
+		},
+	}
 }

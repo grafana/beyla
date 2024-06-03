@@ -136,7 +136,7 @@ type bpf_tp_debugTcpReqT struct {
 	StartMonotimeNs uint64
 	EndMonotimeNs   uint64
 	Buf             [256]uint8
-	Rbuf            [24]uint8
+	Rbuf            [128]uint8
 	Len             uint32
 	RespLen         uint32
 	Ssl             uint8

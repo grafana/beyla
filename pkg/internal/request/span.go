@@ -21,6 +21,7 @@ const (
 	EventTypeGRPCClient
 	EventTypeSQLClient
 	EventTypeRedisClient
+	EventTypeKafkaClient
 )
 
 type IgnoreMode uint8
@@ -28,6 +29,11 @@ type IgnoreMode uint8
 const (
 	IgnoreMetrics IgnoreMode = iota + 1
 	IgnoreTraces
+)
+
+const (
+	MessagingPublish = "publish"
+	MessagingProcess = "process"
 )
 
 type converter struct {

@@ -30,7 +30,7 @@ import (
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	"go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/trace"
-	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
+	semconv "go.opentelemetry.io/otel/semconv/v1.25.0"
 	trace2 "go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 
@@ -519,6 +519,13 @@ func SpanKindString(span *request.Span) string {
 		return "SPAN_KIND_SERVER"
 	case request.EventTypeHTTPClient, request.EventTypeGRPCClient, request.EventTypeSQLClient, request.EventTypeRedisClient:
 		return "SPAN_KIND_CLIENT"
+	case request.EventTypeKafkaClient:
+		switch span.Method {
+		case request.MessagingPublish:
+			return "SPAN_KIND_PRODUCER"
+		case request.MessagingProcess:
+			return "SPAN_KIND_CONSUMER"
+		}
 	}
 	return "SPAN_KIND_INTERNAL"
 }
@@ -600,6 +607,14 @@ func traceAttributes(span *request.Span, optionalAttrs map[attr.Name]struct{}) [
 				}
 			}
 		}
+	case request.EventTypeKafkaClient:
+		operation := request.MessagingOperationType(span.Method)
+		attrs = []attribute.KeyValue{
+			semconv.MessagingSystemKafka,
+			semconv.MessagingDestinationName(span.Path),
+			semconv.MessagingClientID(span.OtherNamespace),
+			operation,
+		}
 	}
 
 	return attrs
@@ -632,6 +647,8 @@ func TraceName(span *request.Span) string {
 			return "REDIS"
 		}
 		return span.Method
+	case request.EventTypeKafkaClient:
+		return fmt.Sprintf("%s %s", span.Path, span.Method)
 	}
 	return ""
 }

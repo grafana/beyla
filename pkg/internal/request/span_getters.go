@@ -40,6 +40,20 @@ func SpanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValu
 		getter = func(s *Span) attribute.KeyValue { return semconv.ServiceName(s.ServiceID.Name) }
 	case attr.DBOperation:
 		getter = func(span *Span) attribute.KeyValue { return DBOperationName(span.Method) }
+	case attr.MessagingSystem:
+		getter = func(span *Span) attribute.KeyValue {
+			if span.Type == EventTypeKafkaClient {
+				return semconv.MessagingSystem("kafka")
+			}
+			return semconv.MessagingSystem("unknown")
+		}
+	case attr.MessagingDestination:
+		getter = func(span *Span) attribute.KeyValue {
+			if span.Type == EventTypeKafkaClient {
+				return semconv.MessagingDestinationName(span.Path)
+			}
+			return semconv.MessagingDestinationName("")
+		}
 	}
 	// default: unlike the Prometheus getters, we don't check here for service name nor k8s metadata
 	// because they are already attributes of the Resource instead of the attributes.
@@ -88,6 +102,20 @@ func SpanPromGetters(attrName attr.Name) (attributes.Getter[*Span, string], bool
 		getter = func(span *Span) string {
 			if span.Type == EventTypeSQLClient {
 				return semconv.DBSystemOtherSQL.Value.AsString()
+			}
+			return ""
+		}
+	case attr.MessagingSystem:
+		getter = func(span *Span) string {
+			if span.Type == EventTypeKafkaClient {
+				return "kafka"
+			}
+			return "unknown"
+		}
+	case attr.MessagingDestination:
+		getter = func(span *Span) string {
+			if span.Type == EventTypeKafkaClient {
+				return span.Path
 			}
 			return ""
 		}

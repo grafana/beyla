@@ -70,6 +70,8 @@ func spanType(span *request.Span) string {
 		return "GRPC_CLNT"
 	case request.EventTypeSQLClient:
 		return "SQL"
+	case request.EventTypeRedisClient:
+		return "REDIS"
 	}
 
 	return ""

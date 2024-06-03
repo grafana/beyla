@@ -503,15 +503,16 @@ func TestGenerateTracesAttributes(t *testing.T) {
 
 		attrs := spans.At(0).Attributes()
 
-		assert.Equal(t, 2, attrs.Len())
-		ensureTraceStrAttr(t, attrs, semconv.DBOperationKey, "SELECT")
-		ensureTraceStrAttr(t, attrs, semconv.DBSQLTableKey, "credentials")
-		ensureTraceAttrNotExists(t, attrs, semconv.DBStatementKey)
+		assert.Equal(t, 5, attrs.Len())
+		ensureTraceStrAttr(t, attrs, attribute.Key(attr.DBOperation), "SELECT")
+		ensureTraceStrAttr(t, attrs, attribute.Key(attr.DBCollectionName), "credentials")
+		ensureTraceStrAttr(t, attrs, semconv.DBSystemKey, "other_sql")
+		ensureTraceAttrNotExists(t, attrs, attribute.Key(attr.DBQueryText))
 	})
 
 	t.Run("test SQL trace generation, unknown attribute", func(t *testing.T) {
 		span := makeSQLRequestSpan("SELECT password FROM credentials WHERE username=\"bill\"")
-		traces := GenerateTraces(&span, map[attr.Name]struct{}{"db.operation": {}})
+		traces := GenerateTraces(&span, map[attr.Name]struct{}{"db.operation.name": {}})
 
 		assert.Equal(t, 1, traces.ResourceSpans().Len())
 		assert.Equal(t, 1, traces.ResourceSpans().At(0).ScopeSpans().Len())
@@ -523,15 +524,16 @@ func TestGenerateTracesAttributes(t *testing.T) {
 
 		attrs := spans.At(0).Attributes()
 
-		assert.Equal(t, 2, attrs.Len())
-		ensureTraceStrAttr(t, attrs, semconv.DBOperationKey, "SELECT")
-		ensureTraceStrAttr(t, attrs, semconv.DBSQLTableKey, "credentials")
-		ensureTraceAttrNotExists(t, attrs, semconv.DBStatementKey)
+		assert.Equal(t, 5, attrs.Len())
+		ensureTraceStrAttr(t, attrs, attribute.Key(attr.DBOperation), "SELECT")
+		ensureTraceStrAttr(t, attrs, attribute.Key(attr.DBCollectionName), "credentials")
+		ensureTraceStrAttr(t, attrs, semconv.DBSystemKey, "other_sql")
+		ensureTraceAttrNotExists(t, attrs, attribute.Key(attr.DBQueryText))
 	})
 
 	t.Run("test SQL trace generation, unknown attribute", func(t *testing.T) {
 		span := makeSQLRequestSpan("SELECT password FROM credentials WHERE username=\"bill\"")
-		traces := GenerateTraces(&span, map[attr.Name]struct{}{attr.IncludeDBStatement: {}})
+		traces := GenerateTraces(&span, map[attr.Name]struct{}{attr.DBQueryText: {}})
 
 		assert.Equal(t, 1, traces.ResourceSpans().Len())
 		assert.Equal(t, 1, traces.ResourceSpans().At(0).ScopeSpans().Len())
@@ -543,10 +545,11 @@ func TestGenerateTracesAttributes(t *testing.T) {
 
 		attrs := spans.At(0).Attributes()
 
-		assert.Equal(t, 3, attrs.Len())
-		ensureTraceStrAttr(t, attrs, semconv.DBOperationKey, "SELECT")
-		ensureTraceStrAttr(t, attrs, semconv.DBSQLTableKey, "credentials")
-		ensureTraceStrAttr(t, attrs, semconv.DBStatementKey, "SELECT password FROM credentials WHERE username=\"bill\"")
+		assert.Equal(t, 6, attrs.Len())
+		ensureTraceStrAttr(t, attrs, attribute.Key(attr.DBOperation), "SELECT")
+		ensureTraceStrAttr(t, attrs, attribute.Key(attr.DBCollectionName), "credentials")
+		ensureTraceStrAttr(t, attrs, semconv.DBSystemKey, "other_sql")
+		ensureTraceStrAttr(t, attrs, attribute.Key(attr.DBQueryText), "SELECT password FROM credentials WHERE username=\"bill\"")
 	})
 }
 

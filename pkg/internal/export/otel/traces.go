@@ -504,7 +504,7 @@ func SpanStatusCode(span *request.Span) codes.Code {
 		return httpSpanStatusCode(span)
 	case request.EventTypeGRPC, request.EventTypeGRPCClient:
 		return grpcSpanStatusCode(span)
-	case request.EventTypeSQLClient:
+	case request.EventTypeSQLClient, request.EventTypeRedisClient:
 		if span.Status != 0 {
 			return codes.Error
 		}
@@ -517,12 +517,13 @@ func SpanKindString(span *request.Span) string {
 	switch span.Type {
 	case request.EventTypeHTTP, request.EventTypeGRPC:
 		return "SPAN_KIND_SERVER"
-	case request.EventTypeHTTPClient, request.EventTypeGRPCClient, request.EventTypeSQLClient:
+	case request.EventTypeHTTPClient, request.EventTypeGRPCClient, request.EventTypeSQLClient, request.EventTypeRedisClient:
 		return "SPAN_KIND_CLIENT"
 	}
 	return "SPAN_KIND_INTERNAL"
 }
 
+// nolint:cyclop
 func traceAttributes(span *request.Span, optionalAttrs map[attr.Name]struct{}) []attribute.KeyValue {
 	var attrs []attribute.KeyValue
 
@@ -567,15 +568,36 @@ func traceAttributes(span *request.Span, optionalAttrs map[attr.Name]struct{}) [
 			request.ServerPort(span.HostPort),
 		}
 	case request.EventTypeSQLClient:
-		if _, ok := optionalAttrs[attr.IncludeDBStatement]; ok {
-			attrs = append(attrs, semconv.DBStatement(span.Statement))
+		attrs = []attribute.KeyValue{
+			request.ServerAddr(request.SpanHost(span)),
+			request.ServerPort(span.HostPort),
+			semconv.DBSystemOtherSQL, // We can distinguish in the future for MySQL, Postgres etc
+		}
+		if _, ok := optionalAttrs[attr.DBQueryText]; ok {
+			attrs = append(attrs, request.DBQueryText(span.Statement))
 		}
 		operation := span.Method
 		if operation != "" {
-			attrs = append(attrs, semconv.DBOperation(operation))
+			attrs = append(attrs, request.DBOperationName(operation))
 			table := span.Path
 			if table != "" {
-				attrs = append(attrs, semconv.DBSQLTable(table))
+				attrs = append(attrs, request.DBCollectionName(table))
+			}
+		}
+	case request.EventTypeRedisClient:
+		attrs = []attribute.KeyValue{
+			request.ServerAddr(request.SpanHost(span)),
+			request.ServerPort(span.HostPort),
+			semconv.DBSystemRedis,
+		}
+		operation := span.Method
+		if operation != "" {
+			attrs = append(attrs, request.DBOperationName(operation))
+			if _, ok := optionalAttrs[attr.DBQueryText]; ok {
+				query := span.Path
+				if query != "" {
+					attrs = append(attrs, request.DBQueryText(query))
+				}
 			}
 		}
 	}
@@ -605,6 +627,11 @@ func TraceName(span *request.Span) string {
 			operation += " " + table
 		}
 		return operation
+	case request.EventTypeRedisClient:
+		if span.Method == "" {
+			return "REDIS"
+		}
+		return span.Method
 	}
 	return ""
 }
@@ -613,7 +640,7 @@ func spanKind(span *request.Span) trace2.SpanKind {
 	switch span.Type {
 	case request.EventTypeHTTP, request.EventTypeGRPC:
 		return trace2.SpanKindServer
-	case request.EventTypeHTTPClient, request.EventTypeGRPCClient, request.EventTypeSQLClient:
+	case request.EventTypeHTTPClient, request.EventTypeGRPCClient, request.EventTypeSQLClient, request.EventTypeRedisClient:
 		return trace2.SpanKindClient
 	}
 	return trace2.SpanKindInternal

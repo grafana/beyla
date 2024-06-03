@@ -143,6 +143,7 @@ int uprobe_sarama_response_promise_handle(struct pt_regs *ctx) {
                     bpf_dbg_printk("Sending kafka client go trace");
 
                     __builtin_memcpy(trace, req, sizeof(kafka_client_req_t));
+                    task_pid(&trace->pid);
                     bpf_ringbuf_submit(trace, get_flags());
                 }
             }

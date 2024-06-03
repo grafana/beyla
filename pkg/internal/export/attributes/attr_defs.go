@@ -212,15 +212,16 @@ func getDefinitions(groups AttrGroups) map[Section]AttrReportGroup {
 				attr.ClientAddr: true,
 			},
 		},
-		SQLClientDuration.Section: {
+		DBClientDuration.Section: {
 			SubGroups: []*AttrReportGroup{&appAttributes, &appKubeAttributes},
 			Attributes: map[attr.Name]Default{
 				attr.DBOperation: true,
+				attr.DBSystem:    true,
 			},
 		},
 		Traces.Section: {
 			Attributes: map[attr.Name]Default{
-				attr.IncludeDBStatement: false,
+				attr.DBQueryText: false,
 			},
 		},
 		ProcessCPUUtilization.Section: {

@@ -552,6 +552,7 @@ static __always_inline void handle_unknown_tcp_connection(pid_connection_info_t 
             bpf_dbg_printk("Sending TCP trace %lx, response length %d", existing, existing->resp_len);
 
             bpf_memcpy(trace, existing, sizeof(tcp_req_t));
+            bpf_probe_read(trace->rbuf, K_TCP_RES_LEN, u_buf);
             bpf_ringbuf_submit(trace, get_flags());
         }
         bpf_map_delete_elem(&ongoing_tcp_req, pid_conn);

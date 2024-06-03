@@ -89,6 +89,71 @@ func TestReadTCPRequestIntoSpan_Overflow(t *testing.T) {
 	assert.Equal(t, "foo", span.Path)
 }
 
+func TestRedisDetection(t *testing.T) {
+	for _, s := range []string{
+		`*2|$3|GET|$5|beyla|`,
+		`*2|$7|HGETALL|$16|users_sessions`,
+		`*8|$4|name|$4|John|`,
+		`+OK|`,
+		"-ERR ",
+		":123|",
+		"-WRONGTYPE ",
+		"-MOVED ",
+	} {
+		lines := strings.Split(s, "|")
+		test := strings.Join(lines, "\r\n")
+		assert.True(t, isRedis([]uint8(test)))
+		assert.True(t, isRedisOp([]uint8(test)))
+	}
+
+	for _, s := range []string{
+		"",
+		`*2`,
+		`*$7`,
+		`+OK`,
+		"-ERR",
+		"-WRONGTYPE",
+	} {
+		lines := strings.Split(s, "|")
+		test := strings.Join(lines, "\r\n")
+		assert.False(t, isRedis([]uint8(test)))
+		assert.False(t, isRedisOp([]uint8(test)))
+	}
+}
+
+func TestRedisParsing(t *testing.T) {
+	proper := fmt.Sprintf("*2\r\n$3\r\nGET\r\n$5\r\n%s", "beyla")
+
+	op, text, ok := parseRedisRequest(proper)
+	assert.True(t, ok)
+	assert.Equal(t, "GET", op)
+	assert.Equal(t, "GET beyla ", text)
+
+	weird := fmt.Sprintf("*2\r\nGET\r\n%s", "beyla")
+	op, text, ok = parseRedisRequest(weird)
+	assert.True(t, ok)
+	assert.Equal(t, "", op)
+	assert.Equal(t, "", text)
+
+	unknown := fmt.Sprintf("2\r\nGET\r\n%s", "beyla")
+	op, text, ok = parseRedisRequest(unknown)
+	assert.True(t, ok)
+	assert.Equal(t, "", op)
+	assert.Equal(t, "", text)
+
+	op, text, ok = parseRedisRequest("2")
+	assert.False(t, ok)
+	assert.Equal(t, "", op)
+	assert.Equal(t, "", text)
+
+	multi := fmt.Sprintf("*4\r\n$6\r\nclient\r\n$7\r\nsetinfo\r\n$8\r\nLIB-NAME\r\n$19\r\n%s(,go1.22.2)\r\n*4\r\n$6\r\nclient\r\n$7\r\nsetinfo\r\n$7\r\nLIB-VER\r\n$5\r\n9.5.1\r\n", "go-redis")
+	op, text, ok = parseRedisRequest(multi)
+	assert.True(t, ok)
+	assert.Equal(t, "client", op)
+	assert.Equal(t, "client setinfo LIB-NAME go-redis(,go1.22.2) ; client setinfo LIB-VER 9.5.1 ", text)
+
+}
+
 const charset = "\\0\\1\\2abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 
 func randomString(length int) string {

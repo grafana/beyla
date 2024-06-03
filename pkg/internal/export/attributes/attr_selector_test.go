@@ -81,11 +81,11 @@ func TestDefault(t *testing.T) {
 func TestTraces(t *testing.T) {
 	p, err := NewAttrSelector(GroupTraces, Selection{
 		"traces": InclusionLists{
-			Include: []string{"db.statement", "beyla_ip", "src.*", "k8s.*"},
+			Include: []string{"db.query.text", "beyla_ip", "src.*", "k8s.*"},
 		},
 	})
 	require.NoError(t, err)
 	assert.Equal(t, []attr.Name{
-		"db.statement",
+		"db.query.text",
 	}, p.For(Traces))
 }

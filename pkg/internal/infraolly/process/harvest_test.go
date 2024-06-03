@@ -35,7 +35,7 @@ func TestLinuxHarvester_IsPrivileged(t *testing.T) {
 			h := newHarvester(&Config{RunMode: c.mode}, cache)
 
 			// If not privileged, it is expected to not report neither FDs nor IO counters
-			status, err := h.Do(int32(os.Getpid()))
+			status, err := h.Do(int32(os.Getpid()), nil)
 			require.NoError(t, err)
 			if c.privileged {
 				assert.NotZero(t, status.FdCount)
@@ -54,7 +54,7 @@ func TestLinuxHarvester_Do(t *testing.T) {
 	h := newHarvester(&Config{}, cache)
 
 	// When retrieving for a given process status (e.g. the current testing executable)
-	status, err := h.Do(int32(os.Getpid()))
+	status, err := h.Do(int32(os.Getpid()), nil)
 
 	// It returns the corresponding process status with valid data
 	require.NoError(t, err)
@@ -90,7 +90,7 @@ func TestLinuxHarvester_Do_FullCommandLine(t *testing.T) {
 
 	test.Eventually(t, 5*time.Second, func(t require.TestingT) {
 		// When retrieving for a given process status (e.g. the current testing executable)
-		status, err := h.Do(int32(cmd.Process.Pid))
+		status, err := h.Do(int32(cmd.Process.Pid), nil)
 
 		// It returns the corresponding Command line without stripping arguments
 		require.NoError(t, err)
@@ -114,7 +114,7 @@ func TestLinuxHarvester_Do_StripCommandLine(t *testing.T) {
 
 	test.Eventually(t, 5*time.Second, func(t require.TestingT) {
 		// When retrieving for a given process status (e.g. the current testing executable)
-		status, err := h.Do(int32(cmd.Process.Pid))
+		status, err := h.Do(int32(cmd.Process.Pid), nil)
 
 		// It returns the corresponding Command line without stripping arguments
 		require.NoError(t, err)
@@ -134,7 +134,7 @@ func TestLinuxHarvester_Do_InvalidateCache_DifferentCmd(t *testing.T) {
 	h := newHarvester(&Config{}, cache)
 
 	// When the process is harvested
-	status, err := h.Do(currentPid)
+	status, err := h.Do(currentPid, nil)
 	require.NoError(t, err)
 
 	// The status is updated
@@ -152,7 +152,7 @@ func TestLinuxHarvester_Do_InvalidateCache_DifferentPid(t *testing.T) {
 	h := newHarvester(&Config{}, cache)
 
 	// When the process is harvested
-	status, err := h.Do(currentPid)
+	status, err := h.Do(currentPid, nil)
 	require.NoError(t, err)
 
 	// The status is updated

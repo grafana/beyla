@@ -19,7 +19,7 @@ func TestAttributeFilter(t *testing.T) {
 	filterFunc, err := ByAttribute[*ebpf.Record](AttributeFamilyConfig{
 		"beyla.ip":          MatchDefinition{Match: "148.*"},
 		"k8s.src.namespace": MatchDefinition{NotMatch: "debug"},
-	}, ebpf.RecordGetters)()
+	}, ebpf.RecordStringGetters)()
 	require.NoError(t, err)
 
 	in := make(chan []*ebpf.Record, 10)
@@ -93,7 +93,7 @@ func TestAttributeFilter_VerificationError(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(fmt.Sprintf("%v", tc), func(t *testing.T) {
-			_, err := ByAttribute[*ebpf.Record](tc, ebpf.RecordGetters)()
+			_, err := ByAttribute[*ebpf.Record](tc, ebpf.RecordStringGetters)()
 			assert.Error(t, err)
 		})
 	}

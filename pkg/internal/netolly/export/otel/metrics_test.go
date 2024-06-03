@@ -47,8 +47,8 @@ func TestMetricAttributes(t *testing.T) {
 		attribute.String("dst.address", "33.22.11.1"),
 		attribute.String("src.name", "srcname"),
 		attribute.String("dst.name", "dstname"),
-		attribute.String("src.port", "12345"),
-		attribute.String("dst.port", "3210"),
+		attribute.Int("src.port", 12345),
+		attribute.Int("dst.port", 3210),
 
 		attribute.String("k8s.src.name", "srcname"),
 		attribute.String("k8s.src.namespace", "srcnamespace"),

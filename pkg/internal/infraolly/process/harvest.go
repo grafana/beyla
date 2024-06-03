@@ -17,6 +17,8 @@ import (
 
 	"github.com/hashicorp/golang-lru/v2/simplelru"
 	"github.com/shirou/gopsutil/v3/process"
+
+	"github.com/grafana/beyla/pkg/internal/svc"
 )
 
 func hlog() *slog.Logger {
@@ -86,7 +88,7 @@ func (*Harvester) Pids() ([]int32, error) {
 // Do returns a status of a process whose PID is passed as argument. The 'elapsedSeconds' argument represents the
 // time since this process was statusd for the last time. If the process has been statusd for the first time, this value
 // will be ignored
-func (ps *Harvester) Do(pid int32) (*Status, error) {
+func (ps *Harvester) Do(pid int32, svcID *svc.ID) (*Status, error) {
 	ps.log.Debug("harvesting pid", "pid", pid)
 	// Reuses process information that does not vary
 	cached, hasCachedEntry := ps.cache.Get(pid)
@@ -107,7 +109,7 @@ func (ps *Harvester) Do(pid int32) (*Status, error) {
 	}
 
 	// Creates a fresh process status and populates it with the metrics data
-	status := NewStatus(pid)
+	status := NewStatus(pid, svcID)
 
 	if err := ps.populateStaticData(status, cached.process); err != nil {
 		return nil, fmt.Errorf("can't populate static attributes: %w", err)

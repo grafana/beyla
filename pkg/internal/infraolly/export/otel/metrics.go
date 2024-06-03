@@ -11,7 +11,6 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	metric2 "go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/sdk/metric"
-	"go.opentelemetry.io/otel/sdk/resource"
 
 	"github.com/grafana/beyla/pkg/internal/export/attributes"
 	"github.com/grafana/beyla/pkg/internal/export/expire"
@@ -19,7 +18,6 @@ import (
 	"github.com/grafana/beyla/pkg/internal/infraolly/process"
 	otel2 "github.com/grafana/beyla/pkg/internal/netolly/export/otel"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
-	"github.com/grafana/beyla/pkg/internal/request"
 	"github.com/grafana/beyla/pkg/internal/svc"
 )
 
@@ -36,14 +34,6 @@ func (mc MetricsConfig) Enabled() bool {
 
 func mlog() *slog.Logger {
 	return slog.With("component", "otel.ProcessMetricsExporter")
-}
-
-func newMeterProvider(res *resource.Resource, exporter *metric.Exporter, interval time.Duration) (*metric.MeterProvider, error) {
-	meterProvider := metric.NewMeterProvider(
-		metric.WithResource(res),
-		metric.WithReader(metric.NewPeriodicReader(*exporter, metric.WithInterval(interval))),
-	)
-	return meterProvider, nil
 }
 
 type metricsExporter struct {
@@ -114,29 +104,29 @@ func ProcessMetricsExporterProvider(
 	return mr.Do, nil
 }
 
-func (mr *metricsExporter) newMetricSet(service svc.ID) (*Metrics, error) {
+func (me *metricsExporter) newMetricSet(service svc.ID) (*Metrics, error) {
 	log := mlog().With("service", service)
 	log.Debug("creating new Metrics exporter")
 	resources := otel.ResourceAttrs(service)
 	opts := []metric.Option{
 		metric.WithResource(resources),
-		metric.WithReader(metric.NewPeriodicReader(mr.exporter,
-			metric.WithInterval(mr.cfg.Metrics.Interval))),
+		metric.WithReader(metric.NewPeriodicReader(me.exporter,
+			metric.WithInterval(me.cfg.Metrics.Interval))),
 	}
 
 	m := Metrics{
-		ctx:      mr.ctx,
+		ctx:      me.ctx,
 		service:  service,
 		provider: metric.NewMeterProvider(opts...),
 	}
 
 	// TODO: reporterName must go somewhere
-	//meter := m.provider.Meter(otel.ReporterName)
+	// meter := m.provider.Meter(otel.ReporterName)
 	m.cpuTime = otel2.NewExpirer[*process.Status, metric2.Float64Observer](
 		otel2.NewGauge,
-		mr.attrCPUTime,
+		me.attrCPUTime,
 		timeNow,
-		mr.cfg.Metrics.TTL,
+		me.cfg.Metrics.TTL,
 	)
 	return &m, nil
 }
@@ -154,21 +144,19 @@ func (me *metricsExporter) Do(in <-chan []*process.Status) {
 			// only a single instrumented process.
 			// In multi-process tracing, this is likely to happen as most
 			// tracers group traces belonging to the same service in the same slice.
-			if s.ServiceID.UID != lastSvcUID || reporter == nil {
-				lm, err := me.reporters.For(s.ServiceID)
+			if s.Service.UID != lastSvcUID || reporter == nil {
+				// TODO: precalculate For UUID
+				lm, err := me.reporters.For(*s.Service)
 				if err != nil {
 					mlog().Error("unexpected error creating OTEL resource. Ignoring metric",
-						err, "service", s.ServiceID)
+						err, "service", s.Service)
 					continue
 				}
-				lastSvcUID = s.ServiceID.UID
+				lastSvcUID = s.Service.UID
 				reporter = lm
 			}
 			// TODO: support user/system/other
-			// TODO: precalculate For UUID
-			lm.cpuTime.ForRecord(s).Set(s.CPUSystemPercent)
-			lm.cpuTime.ForRecord(s).Set(s.CPUUserPercent)
-			lm.cpuTime.ForRecord(s).Set(s.CPUPercent)
+			reporter.cpuTime.ForRecord(s).Set(s.CPUSystemPercent)
 		}
 	}
 }

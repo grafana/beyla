@@ -82,7 +82,7 @@ func newReporter(
 	}
 
 	attrs := attributes.PrometheusGetters(
-		ebpf.RecordGetters,
+		ebpf.RecordStringGetters,
 		provider.For(attributes.BeylaNetworkFlow))
 
 	labelNames := make([]string, 0, len(attrs))

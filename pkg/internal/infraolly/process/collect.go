@@ -13,6 +13,7 @@ import (
 	"github.com/mariomac/pipes/pipe"
 
 	"github.com/grafana/beyla/pkg/internal/request"
+	"github.com/grafana/beyla/pkg/internal/svc"
 )
 
 // Collector returns runtime information about the currently running processes
@@ -47,7 +48,7 @@ func NewCollectorProvider(ctx context.Context, input *<-chan []request.Span, cfg
 
 func (ps *Collector) Run(out chan<- []*Status) {
 	// TODO: set app metadata as key for later decoration? (e.g. K8s metadata, svc.ID)
-	pids := map[int32]struct{}{}
+	pids := map[int32]*svc.ID{}
 	collectTicker := time.NewTicker(ps.cfg.Rate)
 	defer collectTicker.Stop()
 	newPids := *ps.newPids
@@ -59,11 +60,11 @@ func (ps *Collector) Run(out chan<- []*Status) {
 			// updating PIDs map with spans information
 			if ps.userPids {
 				for i := range spans {
-					pids[int32(spans[i].Pid.UserPID)] = struct{}{}
+					pids[int32(spans[i].Pid.UserPID)] = &spans[i].ServiceID
 				}
 			} else {
 				for i := range spans {
-					pids[int32(spans[i].Pid.HostPID)] = struct{}{}
+					pids[int32(spans[i].Pid.HostPID)] = &spans[i].ServiceID
 				}
 			}
 		case <-collectTicker.C:
@@ -79,12 +80,12 @@ func (ps *Collector) Run(out chan<- []*Status) {
 
 // Collect returns the status for all the running processes, decorated with Docker runtime information, if applies.
 // It also returns the PIDs that have to be removed from the map, as they do not exist anymore
-func (ps *Collector) Collect(pids map[int32]struct{}) ([]*Status, []int32) {
+func (ps *Collector) Collect(pids map[int32]*svc.ID) ([]*Status, []int32) {
 	results := make([]*Status, 0, len(pids))
 
 	var removed []int32
-	for pid := range pids {
-		status, err := ps.harvest.Do(pid)
+	for pid, svcID := range pids {
+		status, err := ps.harvest.Do(pid, svcID)
 		if err != nil {
 			ps.log.Debug("skipping process", "pid", pid, "error", err)
 			ps.harvest.cache.Remove(pid)

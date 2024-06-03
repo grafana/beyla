@@ -26,7 +26,7 @@ eBPF-based autoinstrumentation HTTP, HTTP2 and gRPC services, as well as network
 | config.create | bool | `true` | set to true, to use the below default configurations |
 | config.data | object | `{"attributes":{"kubernetes":{"enable":true}},"prometheus_export":{"path":"/metrics","port":9090}}` | default value of beyla configuration |
 | config.name | string | `""` |  |
-| dnsPolicy | string | `"ClusterFirstWithHostNet"` | determines how DNS resolution is handled for that pod. # If `.Values.preset` is set to `network` or `.Values.config.data.network` is enabled, eBPF requires `hostNetwork` access, causing cluster service DNS resolution to fail. # It is recommended not to change this if eBPF sends traces and metrics to Grafana components via k8s service. # https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/ |
+| dnsPolicy | string | `"ClusterFirstWithHostNet"` | Determines how DNS resolution is handled for that pod. If `.Values.preset` is set to `network` or `.Values.config.data.network` is enabled, Beyla requires `hostNetwork` access, causing cluster service DNS resolution to fail. It is recommended not to change this if Beyla sends traces and metrics to Grafana components via k8s service. |
 | env | object | `{}` | extra environment variables |
 | envValueFrom | object | `{}` | extra environment variables to be set from resources such as k8s configMaps/secrets |
 | fullnameOverride | string | `""` | Overrides the chart's computed fullname. |

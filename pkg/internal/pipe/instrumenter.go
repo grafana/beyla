@@ -123,7 +123,7 @@ func newGraphBuilder(ctx context.Context, config *beyla.Config, ctxInfo *global.
 	pipe.AddFinalProvider(gnb, noop, debug.NoopNode(config.Noop))
 	pipe.AddFinalProvider(gnb, printer, debug.PrinterNode(config.Printer))
 
-	pipe.AddFinalProvider(gnb, process, infraolly.SubPipelineProvider(ctx, config))
+	pipe.AddFinalProvider(gnb, process, infraolly.SubPipelineProvider(ctx, ctxInfo, config))
 
 	// The returned builder later invokes its "Build" function that, given
 	// the contents of the nodesMap struct, will instantiate

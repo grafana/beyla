@@ -60,11 +60,21 @@ func ProcessMetricsExporterProvider(
 	ctx context.Context,
 	ctxInfo *global.ContextInfo,
 	cfg *MetricsConfig,
-) (pipe.FinalFunc[[]*process.Status], error) {
-	if !cfg.Enabled() {
-		// This node is not going to be instantiated. Let the pipes library just ignore it.
-		return pipe.IgnoreFinal[[]*process.Status](), nil
+) pipe.FinalProvider[[]*process.Status] {
+	return func() (pipe.FinalFunc[[]*process.Status], error) {
+		if !cfg.Enabled() {
+			// This node is not going to be instantiated. Let the pipes library just ignore it.
+			return pipe.IgnoreFinal[[]*process.Status](), nil
+		}
+		return newProcessMetricsExporter(ctx, ctxInfo, cfg)
 	}
+}
+
+func newProcessMetricsExporter(
+	ctx context.Context,
+	ctxInfo *global.ContextInfo,
+	cfg *MetricsConfig,
+) (pipe.FinalFunc[[]*process.Status], error) {
 	otel.SetupInternalOTELSDKLogger(cfg.Metrics.SDKLogLevel)
 
 	log := mlog()
@@ -76,6 +86,7 @@ func ProcessMetricsExporterProvider(
 	}
 
 	mr := &metricsExporter{
+		clock:      expire.NewCachedClock(timeNow),
 		ctx:        ctx,
 		cfg:        cfg,
 		attributes: attrProv,
@@ -95,7 +106,7 @@ func ProcessMetricsExporterProvider(
 			}()
 		}, mr.newMetricSet)
 
-	mr.exporter, err = otel.InstantiateMetricsExporter(context.Background(), cfg.Metrics, log)
+	mr.exporter, err = otel.InstantiateMetricsExporter(ctx, cfg.Metrics, log)
 	if err != nil {
 		log.Error("instantiating metrics exporter", "error", err)
 		return nil, err
@@ -120,14 +131,23 @@ func (me *metricsExporter) newMetricSet(service svc.ID) (*Metrics, error) {
 		provider: metric.NewMeterProvider(opts...),
 	}
 
-	// TODO: reporterName must go somewhere
-	// meter := m.provider.Meter(otel.ReporterName)
+	meter := m.provider.Meter(otel.ReporterName)
 	m.cpuTime = otel2.NewExpirer[*process.Status, metric2.Float64Observer](
 		otel2.NewGauge,
 		me.attrCPUTime,
 		timeNow,
-		me.cfg.Metrics.TTL,
+		5*time.Minute, //me.cfg.Metrics.TTL, TODO restore
 	)
+	if _, err := meter.Float64ObservableGauge(
+		attributes.ProcessCPUUtilization.OTEL,
+		metric2.WithDescription("TODO"),
+		metric2.WithUnit("1"),
+		metric2.WithFloat64Callback(m.cpuTime.Collect),
+	); err != nil {
+		log.Error("creating observable gauge for "+attributes.ProcessCPUUtilization.OTEL, "error", err)
+		return nil, err
+	}
+
 	return &m, nil
 }
 
@@ -155,6 +175,7 @@ func (me *metricsExporter) Do(in <-chan []*process.Status) {
 				lastSvcUID = s.Service.UID
 				reporter = lm
 			}
+			mlog().Debug("reporting data for record", "record", s)
 			// TODO: support user/system/other
 			reporter.cpuTime.ForRecord(s).Set(s.CPUSystemPercent)
 		}

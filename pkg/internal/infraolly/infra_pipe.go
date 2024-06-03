@@ -9,7 +9,9 @@ import (
 
 	"github.com/grafana/beyla/pkg/beyla"
 	"github.com/grafana/beyla/pkg/internal/export/otel"
+	otel2 "github.com/grafana/beyla/pkg/internal/infraolly/export/otel"
 	"github.com/grafana/beyla/pkg/internal/infraolly/process"
+	"github.com/grafana/beyla/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/pkg/internal/request"
 )
 
@@ -41,7 +43,7 @@ func isSubPipeEnabled(cfg *beyla.Config) bool {
 
 // SubPipelineProvider returns a Final node that actually has a pipeline inside.
 // It is manually connected through a channel
-func SubPipelineProvider(ctx context.Context, cfg *beyla.Config) pipe.FinalProvider[[]request.Span] {
+func SubPipelineProvider(ctx context.Context, ctxInfo *global.ContextInfo, cfg *beyla.Config) pipe.FinalProvider[[]request.Span] {
 	return func() (pipe.FinalFunc[[]request.Span], error) {
 		if !isSubPipeEnabled(cfg) {
 			return pipe.IgnoreFinal[[]request.Span](), nil
@@ -50,15 +52,18 @@ func SubPipelineProvider(ctx context.Context, cfg *beyla.Config) pipe.FinalProvi
 		var connector <-chan []request.Span = connectorChan
 		nb := pipe.NewBuilder(&subPipeline{}, pipe.ChannelBufferLen(cfg.ChannelBufferLen))
 		pipe.AddStartProvider(nb, collector, process.NewCollectorProvider(ctx, &connector, &cfg.Processes))
-		pipe.AddFinal(nb, otelExport, func(in <-chan []*process.Status) {
-			for i := range in {
-				fmt.Printf("otel %#v\n", i)
-			}
-		})
+		pipe.AddFinalProvider(nb, otelExport, otel2.ProcessMetricsExporterProvider(ctx, ctxInfo,
+			&otel2.MetricsConfig{
+				Metrics:            &cfg.Metrics,
+				AttributeSelectors: cfg.Attributes.Select,
+			}))
 		pipe.AddFinal(nb, promExport, func(in <-chan []*process.Status) {
 			for ps := range in {
 				for _, p := range ps {
-					fmt.Printf("%#v\n", *p)
+					_ = p
+
+
+					//fmt.Printf("%#v\n", *p)
 				}
 			}
 		})

@@ -5,10 +5,10 @@ docker-compose:
 input:
   - path: '/?data'
 
-interval: 500s
+interval: 500ms
 expected:
   traces:
-    - traceql: '{ .messaging.operation.type = "process" }'
+    - traceql: '{ .messaging.operation.type = "process" && .messaging.destination.name="important"}'
       spans:
         - name: 'important process'
           attributes:

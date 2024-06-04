@@ -79,13 +79,15 @@ func main() {
 			// recreated to get the new claims
 			if err := client.Consume(ctx, strings.Split("important", ","), &consumer); err != nil {
 				if errors.Is(err, sarama.ErrClosedConsumerGroup) {
-					return
+					time.Sleep(1 * time.Second)
+					continue
 				}
-				log.Panicf("Error from consumer: %v", err)
+				log.Printf("Error from consumer: %v", err)
 			}
 			// check if context was cancelled, signaling that the consumer should stop
 			if ctx.Err() != nil {
-				return
+				time.Sleep(1 * time.Second)
+				continue
 			}
 			consumer.ready = make(chan bool)
 		}

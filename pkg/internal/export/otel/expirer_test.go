@@ -12,15 +12,15 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 
 	"github.com/grafana/beyla/pkg/internal/export/attributes"
-	"github.com/grafana/beyla/pkg/internal/export/otel"
 	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/test/collector"
 )
 
-const timeout = 3 * time.Second
+const timeout = 10 * time.Second
 
 func TestMetricsExpiration(t *testing.T) {
+	defer restoreEnvAfterExecution()()
 	ctx, cancelCtx := context.WithCancel(context.Background())
 	defer cancelCtx()
 
@@ -30,13 +30,13 @@ func TestMetricsExpiration(t *testing.T) {
 	now := syncedClock{now: time.Now()}
 	timeNow = now.Now
 
-	otelExporter, err := MetricsExporterProvider(
-		&global.ContextInfo{}, &MetricsConfig{
-			Metrics: &otel.MetricsConfig{
+	otelExporter, err := NetMetricsExporterProvider(
+		&global.ContextInfo{}, &NetMetricsConfig{
+			Metrics: &MetricsConfig{
 				Interval:        50 * time.Millisecond,
 				CommonEndpoint:  otlp.ServerEndpoint,
-				MetricsProtocol: otel.ProtocolHTTPProtobuf,
-				Features:        []string{otel.FeatureNetwork},
+				MetricsProtocol: ProtocolHTTPProtobuf,
+				Features:        []string{FeatureNetwork},
 				TTL:             3 * time.Minute,
 			}, AttributeSelectors: attributes.Selection{
 				attributes.BeylaNetworkFlow.Section: attributes.InclusionLists{

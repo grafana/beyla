@@ -9,7 +9,6 @@ import (
 
 	"github.com/grafana/beyla/pkg/beyla"
 	"github.com/grafana/beyla/pkg/internal/export/otel"
-	otel2 "github.com/grafana/beyla/pkg/internal/infraolly/export/otel"
 	"github.com/grafana/beyla/pkg/internal/infraolly/process"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/pkg/internal/request"
@@ -34,7 +33,7 @@ func (sp *subPipeline) Connect() {
 // the sub-pipe is enabled only if there is a metrics exporter enabled,
 // and both the "application" and "application_process" features are enabled
 func isSubPipeEnabled(cfg *beyla.Config) bool {
-	return (cfg.Metrics.EndpointEnabled() && cfg.Metrics.AppMetricsEnabled() &&
+	return (cfg.Metrics.EndpointEnabled() && cfg.Metrics.OTelMetricsEnabled() &&
 		slices.Contains(cfg.Metrics.Features, otel.FeatureProcess)) ||
 		(cfg.Prometheus.EndpointEnabled() && cfg.Prometheus.AppMetricsEnabled() &&
 			slices.Contains(cfg.Prometheus.Features, otel.FeatureProcess))
@@ -51,8 +50,8 @@ func SubPipelineProvider(ctx context.Context, ctxInfo *global.ContextInfo, cfg *
 		var connector <-chan []request.Span = connectorChan
 		nb := pipe.NewBuilder(&subPipeline{}, pipe.ChannelBufferLen(cfg.ChannelBufferLen))
 		pipe.AddStartProvider(nb, collector, process.NewCollectorProvider(ctx, &connector, &cfg.Processes))
-		pipe.AddFinalProvider(nb, otelExport, otel2.ProcessMetricsExporterProvider(ctx, ctxInfo,
-			&otel2.MetricsConfig{
+		pipe.AddFinalProvider(nb, otelExport, otel.ProcessMetricsExporterProvider(ctx, ctxInfo,
+			&otel.ProcMetricsConfig{
 				Metrics:            &cfg.Metrics,
 				AttributeSelectors: cfg.Attributes.Select,
 			}))

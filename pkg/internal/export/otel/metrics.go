@@ -143,12 +143,12 @@ func (m *MetricsConfig) ServiceGraphMetricsEnabled() bool {
 	return slices.Contains(m.Features, FeatureGraph)
 }
 
-func (m *MetricsConfig) AppMetricsEnabled() bool {
+func (m *MetricsConfig) OTelMetricsEnabled() bool {
 	return slices.Contains(m.Features, FeatureApplication)
 }
 
 func (m *MetricsConfig) Enabled() bool {
-	return m.EndpointEnabled() && (m.AppMetricsEnabled() || m.SpanMetricsEnabled() || m.ServiceGraphMetricsEnabled())
+	return m.EndpointEnabled() && (m.OTelMetricsEnabled() || m.SpanMetricsEnabled() || m.ServiceGraphMetricsEnabled())
 }
 
 // MetricsReporter implements the graph node that receives request.Span
@@ -282,7 +282,7 @@ func newMetricsReporter(
 }
 
 func (mr *MetricsReporter) otelMetricOptions(mlog *slog.Logger) []metric.Option {
-	if !mr.cfg.AppMetricsEnabled() {
+	if !mr.cfg.OTelMetricsEnabled() {
 		return []metric.Option{}
 	}
 
@@ -327,7 +327,7 @@ func (mr *MetricsReporter) graphMetricOptions(mlog *slog.Logger) []metric.Option
 }
 
 func (mr *MetricsReporter) setupOtelMeters(m *Metrics, meter instrument.Meter) error {
-	if !mr.cfg.AppMetricsEnabled() {
+	if !mr.cfg.OTelMetricsEnabled() {
 		return nil
 	}
 
@@ -442,7 +442,7 @@ func (mr *MetricsReporter) setupGraphMeters(m *Metrics, meter instrument.Meter) 
 func (mr *MetricsReporter) newMetricSet(service svc.ID) (*Metrics, error) {
 	mlog := mlog().With("service", service)
 	mlog.Debug("creating new Metrics reporter")
-	resources := ResourceAttrs(service)
+	resources := getResourceAttrs(service)
 
 	opts := []metric.Option{
 		metric.WithResource(resources),
@@ -464,9 +464,9 @@ func (mr *MetricsReporter) newMetricSet(service svc.ID) (*Metrics, error) {
 	// time units for HTTP and GRPC durations are in seconds, according to the OTEL specification:
 	// https://github.com/open-telemetry/opentelemetry-specification/tree/main/specification/metrics/semantic_conventions
 	// TODO: set ExplicitBucketBoundaries here and in prometheus from the previous specification
-	meter := m.provider.Meter(ReporterName)
+	meter := m.provider.Meter(reporterName)
 	var err error
-	if mr.cfg.AppMetricsEnabled() {
+	if mr.cfg.OTelMetricsEnabled() {
 		err = mr.setupOtelMeters(&m, meter)
 		if err != nil {
 			return nil, err
@@ -579,7 +579,7 @@ func otelHistogramConfig(metricName string, buckets []float64, useExponentialHis
 		return metric.NewView(
 			metric.Instrument{
 				Name:  metricName,
-				Scope: instrumentation.Scope{Name: ReporterName},
+				Scope: instrumentation.Scope{Name: reporterName},
 			},
 			metric.Stream{
 				Name: metricName,
@@ -592,7 +592,7 @@ func otelHistogramConfig(metricName string, buckets []float64, useExponentialHis
 	return metric.NewView(
 		metric.Instrument{
 			Name:  metricName,
-			Scope: instrumentation.Scope{Name: ReporterName},
+			Scope: instrumentation.Scope{Name: reporterName},
 		},
 		metric.Stream{
 			Name: metricName,
@@ -670,7 +670,7 @@ func (r *Metrics) record(span *request.Span, mr *MetricsReporter) {
 	t := span.Timings()
 	duration := t.End.Sub(t.RequestStart).Seconds()
 
-	if mr.cfg.AppMetricsEnabled() {
+	if mr.cfg.OTelMetricsEnabled() {
 		switch span.Type {
 		case request.EventTypeHTTP:
 			// TODO: for more accuracy, there must be a way to set the metric time from the actual span end time

@@ -9,11 +9,11 @@ import (
 
 	"github.com/grafana/beyla/pkg/internal/export/attributes"
 	attr "github.com/grafana/beyla/pkg/internal/export/attributes/names"
-	"github.com/grafana/beyla/pkg/internal/export/otel"
 	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
 )
 
 func TestMetricAttributes(t *testing.T) {
+	defer restoreEnvAfterExecution()()
 	in := &ebpf.Record{
 		NetFlowRecordT: ebpf.NetFlowRecordT{
 			Id: ebpf.NetFlowId{
@@ -63,6 +63,7 @@ func TestMetricAttributes(t *testing.T) {
 }
 
 func TestMetricAttributes_Filter(t *testing.T) {
+	defer restoreEnvAfterExecution()()
 	in := &ebpf.Record{
 		NetFlowRecordT: ebpf.NetFlowRecordT{
 			Id: ebpf.NetFlowId{
@@ -112,23 +113,23 @@ func TestMetricAttributes_Filter(t *testing.T) {
 	}
 }
 
-func TestMetricsConfig_Enabled(t *testing.T) {
-	assert.True(t, MetricsConfig{Metrics: &otel.MetricsConfig{
-		Features: []string{otel.FeatureApplication, otel.FeatureNetwork}, CommonEndpoint: "foo"}}.Enabled())
-	assert.True(t, MetricsConfig{Metrics: &otel.MetricsConfig{
-		Features: []string{otel.FeatureNetwork, otel.FeatureApplication}, MetricsEndpoint: "foo"}}.Enabled())
-	assert.True(t, MetricsConfig{Metrics: &otel.MetricsConfig{
-		Features: []string{otel.FeatureNetwork}, Grafana: &otel.GrafanaOTLP{Submit: []string{"traces", "metrics"}, InstanceID: "33221"}}}.Enabled())
+func TestNetMetricsConfig_Enabled(t *testing.T) {
+	assert.True(t, NetMetricsConfig{Metrics: &MetricsConfig{
+		Features: []string{FeatureApplication, FeatureNetwork}, CommonEndpoint: "foo"}}.Enabled())
+	assert.True(t, NetMetricsConfig{Metrics: &MetricsConfig{
+		Features: []string{FeatureNetwork, FeatureApplication}, MetricsEndpoint: "foo"}}.Enabled())
+	assert.True(t, NetMetricsConfig{Metrics: &MetricsConfig{
+		Features: []string{FeatureNetwork}, Grafana: &GrafanaOTLP{Submit: []string{"traces", "metrics"}, InstanceID: "33221"}}}.Enabled())
 }
 
-func TestMetricsConfig_Disabled(t *testing.T) {
-	var fa = []string{otel.FeatureApplication}
-	var fn = []string{otel.FeatureNetwork}
-	assert.False(t, MetricsConfig{Metrics: &otel.MetricsConfig{Features: fn}}.Enabled())
-	assert.False(t, MetricsConfig{Metrics: &otel.MetricsConfig{Features: fn, Grafana: &otel.GrafanaOTLP{Submit: []string{"traces"}, InstanceID: "33221"}}}.Enabled())
-	assert.False(t, MetricsConfig{Metrics: &otel.MetricsConfig{Features: fn, Grafana: &otel.GrafanaOTLP{Submit: []string{"metrics"}}}}.Enabled())
+func TestNetMetricsConfig_Disabled(t *testing.T) {
+	var fa = []string{FeatureApplication}
+	var fn = []string{FeatureNetwork}
+	assert.False(t, NetMetricsConfig{Metrics: &MetricsConfig{Features: fn}}.Enabled())
+	assert.False(t, NetMetricsConfig{Metrics: &MetricsConfig{Features: fn, Grafana: &GrafanaOTLP{Submit: []string{"traces"}, InstanceID: "33221"}}}.Enabled())
+	assert.False(t, NetMetricsConfig{Metrics: &MetricsConfig{Features: fn, Grafana: &GrafanaOTLP{Submit: []string{"metrics"}}}}.Enabled())
 	// network feature is not enabled
-	assert.False(t, MetricsConfig{Metrics: &otel.MetricsConfig{CommonEndpoint: "foo"}}.Enabled())
-	assert.False(t, MetricsConfig{Metrics: &otel.MetricsConfig{MetricsEndpoint: "foo", Features: fa}}.Enabled())
-	assert.False(t, MetricsConfig{Metrics: &otel.MetricsConfig{Grafana: &otel.GrafanaOTLP{Submit: []string{"traces", "metrics"}, InstanceID: "33221"}}}.Enabled())
+	assert.False(t, NetMetricsConfig{Metrics: &MetricsConfig{CommonEndpoint: "foo"}}.Enabled())
+	assert.False(t, NetMetricsConfig{Metrics: &MetricsConfig{MetricsEndpoint: "foo", Features: fa}}.Enabled())
+	assert.False(t, NetMetricsConfig{Metrics: &MetricsConfig{Grafana: &GrafanaOTLP{Submit: []string{"traces", "metrics"}, InstanceID: "33221"}}}.Enabled())
 }

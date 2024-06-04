@@ -17,22 +17,21 @@ import (
 
 	"github.com/grafana/beyla/pkg/internal/export/attributes"
 	"github.com/grafana/beyla/pkg/internal/export/expire"
-	"github.com/grafana/beyla/pkg/internal/export/otel"
 	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 )
 
-type MetricsConfig struct {
-	Metrics            *otel.MetricsConfig
+type NetMetricsConfig struct {
+	Metrics            *MetricsConfig
 	AttributeSelectors attributes.Selection
 }
 
-func (mc MetricsConfig) Enabled() bool {
-	return mc.Metrics != nil && mc.Metrics.EndpointEnabled() && slices.Contains(mc.Metrics.Features, otel.FeatureNetwork)
+func (mc NetMetricsConfig) Enabled() bool {
+	return mc.Metrics != nil && mc.Metrics.EndpointEnabled() && slices.Contains(mc.Metrics.Features, FeatureNetwork)
 }
 
-func mlog() *slog.Logger {
-	return slog.With("component", "flows.MetricsReporter")
+func nmlog() *slog.Logger {
+	return slog.With("component", "otel.NetworkMetricsExporter")
 }
 
 func newResource() *resource.Resource {
@@ -59,19 +58,19 @@ func newMeterProvider(res *resource.Resource, exporter *metric.Exporter, interva
 	return meterProvider, nil
 }
 
-type metricsExporter struct {
+type netMetricsExporter struct {
 	metrics *Expirer[*ebpf.Record, metric2.Int64Observer, *Counter, int64]
 	clock   *expire.CachedClock
 }
 
-func MetricsExporterProvider(ctxInfo *global.ContextInfo, cfg *MetricsConfig) (pipe.FinalFunc[[]*ebpf.Record], error) {
+func NetMetricsExporterProvider(ctxInfo *global.ContextInfo, cfg *NetMetricsConfig) (pipe.FinalFunc[[]*ebpf.Record], error) {
 	if !cfg.Enabled() {
 		// This node is not going to be instantiated. Let the pipes library just ignore it.
 		return pipe.IgnoreFinal[[]*ebpf.Record](), nil
 	}
-	log := mlog()
+	log := nmlog()
 	log.Debug("instantiating network metrics exporter provider")
-	exporter, err := otel.InstantiateMetricsExporter(context.Background(), cfg.Metrics, log)
+	exporter, err := InstantiateMetricsExporter(context.Background(), cfg.Metrics, log)
 	if err != nil {
 		log.Error("", "error", err)
 		return nil, err
@@ -107,13 +106,13 @@ func MetricsExporterProvider(ctxInfo *global.ContextInfo, cfg *MetricsConfig) (p
 		return nil, err
 	}
 	log.Debug("restricting attributes not in this list", "attributes", cfg.AttributeSelectors)
-	return (&metricsExporter{
+	return (&netMetricsExporter{
 		metrics: expirer,
 		clock:   clock,
 	}).Do, nil
 }
 
-func (me *metricsExporter) Do(in <-chan []*ebpf.Record) {
+func (me *netMetricsExporter) Do(in <-chan []*ebpf.Record) {
 	for i := range in {
 		me.clock.Update()
 		for _, v := range i {

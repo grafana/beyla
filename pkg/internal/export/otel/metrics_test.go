@@ -20,8 +20,6 @@ import (
 	"github.com/grafana/beyla/pkg/internal/request"
 )
 
-const timeout = 10 * time.Second
-
 var fakeMux = sync.Mutex{}
 
 func TestHTTPMetricsEndpointOptions(t *testing.T) {

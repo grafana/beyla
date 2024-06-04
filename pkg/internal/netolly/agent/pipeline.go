@@ -5,10 +5,10 @@ import (
 
 	"github.com/mariomac/pipes/pipe"
 
+	"github.com/grafana/beyla/pkg/internal/export/otel"
 	"github.com/grafana/beyla/pkg/internal/filter"
 	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
 	"github.com/grafana/beyla/pkg/internal/netolly/export"
-	"github.com/grafana/beyla/pkg/internal/netolly/export/otel"
 	"github.com/grafana/beyla/pkg/internal/netolly/export/prom"
 	"github.com/grafana/beyla/pkg/internal/netolly/flow"
 	"github.com/grafana/beyla/pkg/internal/netolly/transform/cidr"
@@ -133,7 +133,7 @@ func (f *Flows) pipelineBuilder(ctx context.Context) (*pipe.Builder[*FlowsPipeli
 	// whether each node is going to be instantiated or just ignored.
 	f.cfg.Attributes.Select.Normalize()
 	pipe.AddFinalProvider(pb, otelExport, func() (pipe.FinalFunc[[]*ebpf.Record], error) {
-		return otel.MetricsExporterProvider(f.ctxInfo, &otel.MetricsConfig{
+		return otel.NetMetricsExporterProvider(f.ctxInfo, &otel.NetMetricsConfig{
 			Metrics:            &f.cfg.Metrics,
 			AttributeSelectors: f.cfg.Attributes.Select,
 		})

@@ -53,6 +53,7 @@ func ProcessPossibleKafkaEvent(pkt []byte, rpkt []byte) (*KafkaInfo, error) {
 	return k, err
 }
 
+// https://kafka.apache.org/protocol.html
 func ProcessKafkaRequest(pkt []byte) (*KafkaInfo, error) {
 	k := &KafkaInfo{}
 	if len(pkt) < KafaMinLength {
@@ -95,6 +96,10 @@ func ProcessKafkaRequest(pkt []byte) (*KafkaInfo, error) {
 		offset += getTopicOffsetFromFetchOperation(header)
 		k.Operation = Fetch
 		k.TopicOffset = offset
+		if header.APIVersion >= 13 { // they started using UUIDs for version 13 of fetch and above
+			k.Topic = "[UUID]"
+			return k, nil
+		}
 	default:
 		return k, errors.New("invalid Kafka operation")
 	}
@@ -112,7 +117,7 @@ func isValidKafkaHeader(header *Header) bool {
 	}
 	switch Operation(header.APIKey) {
 	case Fetch:
-		if header.APIVersion > 11 {
+		if header.APIVersion > 16 { // latest protocol is 16
 			return false
 		}
 	case Produce:
@@ -210,6 +215,10 @@ func getTopicOffsetFromProduceOperation(header *Header, pkt []byte, offset *int)
 
 func getTopicOffsetFromFetchOperation(header *Header) int {
 	offset := 3 * 4 // 3 * sizeof(int32)
+
+	if header.APIVersion >= 15 {
+		offset -= 4 // no replica id
+	}
 
 	if header.APIVersion >= 3 {
 		offset += 4 // max_bytes

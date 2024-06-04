@@ -5,7 +5,7 @@ docker-compose:
 input:
   - path: '/?data'
 
-interval: 2s
+interval: 500s
 expected:
   traces:
     - traceql: '{ .messaging.operation.type = "process" }'

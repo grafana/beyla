@@ -18,8 +18,6 @@ func ReadGoKafkaRequestIntoSpan(record *ringbuf.Record) (request.Span, bool, err
 		return request.Span{}, true, err
 	}
 
-	// Do nothing for now
-	// fmt.Printf("Received go kafka event\n")
 	info, err := ProcessKafkaRequest(event.Buf[:])
 
 	if err == nil {

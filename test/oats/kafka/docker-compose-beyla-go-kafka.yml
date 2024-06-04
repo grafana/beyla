@@ -28,7 +28,7 @@ services:
       - KAFKA_CFG_INTER_BROKER_LISTENER_NAME=CLIENT
     depends_on:
       - zookeeper
-  # Simple python HTTP server, which exposes one endpoint /message that does Kafka query
+  # Go HTTP server based on the Sarama Kafka examples
   testserver:
     build:
       context: ../../..

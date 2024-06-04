@@ -66,8 +66,10 @@ In order to configure which attributes to show or which attributes to hide, chec
 | `beyla.network.flow.bytes`     | `beyla.ip`                  | hidden                                        |
 | `db.client.operation.duration` | `db.operation.name`         | shown                                         |
 | `db.client.operation.duration` | `db.collection.name`        | hidden                                        |
-| `message.publish.duration`     | `messaging.system`          | shown                                         |
-| `message.publish.duration`     | `messaging.destination.name`| shown                                         |
+| `messaging.publish.duration`   | `messaging.system`          | shown                                         |
+| `messaging.publish.duration`   | `messaging.destination.name`| shown                                         |
+| `messaging.process.duration`   | `messaging.system`          | shown                                         |
+| `messaging.process.duration`   | `messaging.destination.name`| shown                                         |
 | `beyla.network.flow.bytes`     | `direction`                 | hidden                                        |
 | `beyla.network.flow.bytes`     | `dst.address`               | hidden                                        |
 | `beyla.network.flow.bytes`     | `dst.cidr`                  | shown if the `cidrs` configuration section exists |

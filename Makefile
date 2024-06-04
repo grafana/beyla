@@ -287,13 +287,18 @@ oats-test-redis-other-langs: oats-prereq
 	mkdir -p test/oats/redis_other_langs/$(TEST_OUTPUT)/run
 	cd test/oats/redis_other_langs && TESTCASE_BASE_PATH=./yaml $(GINKGO) -v -r
 
+.PHONY: oats-test-kafka
+oats-test-kafka: oats-prereq
+	mkdir -p test/oats/kafka/$(TEST_OUTPUT)/run
+	cd test/oats/kafka && TESTCASE_TIMEOUT=120s TESTCASE_BASE_PATH=./yaml $(GINKGO) -v -r
+
 .PHONY: oats-test
-oats-test: oats-test-sql oats-test-sql-statement oats-test-sql-other-langs oats-test-redis-other-langs
+oats-test: oats-test-sql oats-test-sql-statement oats-test-sql-other-langs oats-test-redis-other-langs oats-test-kafka
 	$(MAKE) itest-coverage-data
 
 .PHONY: oats-test-debug
 oats-test-debug: oats-prereq
-	cd test/oats/sql_statement && TESTCASE_BASE_PATH=./yaml TESTCASE_MANUAL_DEBUG=true TESTCASE_TIMEOUT=1h $(GINKGO) -v -r
+	cd test/oats/kafka && TESTCASE_BASE_PATH=./yaml TESTCASE_MANUAL_DEBUG=true TESTCASE_TIMEOUT=1h $(GINKGO) -v -r
 
 .PHONY: drone
 drone:

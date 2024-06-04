@@ -66,6 +66,16 @@ var (
 		Prom:    "process_cpu_utilization_ratio",
 		OTEL:    "process.cpu.utilization",
 	}
+	MessagingPublishDuration = Name{
+		Section: "messaging.publish.duration",
+		Prom:    "messaging_publish_duration_seconds",
+		OTEL:    "messaging.publish.duration",
+	}
+	MessagingProcessDuration = Name{
+		Section: "messaging.process.duration",
+		Prom:    "messaging_process_duration_seconds",
+		OTEL:    "messaging.process.duration",
+	}
 )
 
 // normalizeMetric will facilitate the user-input in the attributes.enable section.

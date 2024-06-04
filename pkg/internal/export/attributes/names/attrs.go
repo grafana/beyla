@@ -48,6 +48,9 @@ const (
 	RPCSystem              = Name(semconv.RPCSystemKey)
 	RPCGRPCStatusCode      = Name(semconv.RPCGRPCStatusCodeKey)
 	HTTPRoute              = Name(semconv.HTTPRouteKey)
+	MessagingOpType        = Name("messaging.operation.type")
+	MessagingSystem        = Name(semconv.MessagingSystemKey)
+	MessagingDestination   = Name(semconv.MessagingDestinationNameKey)
 
 	K8sNamespaceName    = Name("k8s.namespace.name")
 	K8sPodName          = Name("k8s.pod.name")

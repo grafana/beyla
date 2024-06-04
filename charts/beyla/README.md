@@ -1,6 +1,6 @@
 # beyla
 
-![Version: 1.0.1](https://img.shields.io/badge/Version-1.0.1-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 1.5.2](https://img.shields.io/badge/AppVersion-1.5.2-informational?style=flat-square)
+![Version: 1.2.1](https://img.shields.io/badge/Version-1.2.1-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 1.6.2](https://img.shields.io/badge/AppVersion-1.6.2-informational?style=flat-square)
 
 eBPF-based autoinstrumentation HTTP, HTTP2 and gRPC services, as well as network metrics.
 
@@ -26,6 +26,7 @@ eBPF-based autoinstrumentation HTTP, HTTP2 and gRPC services, as well as network
 | config.create | bool | `true` | set to true, to use the below default configurations |
 | config.data | object | `{"attributes":{"kubernetes":{"enable":true}},"prometheus_export":{"path":"/metrics","port":9090}}` | default value of beyla configuration |
 | config.name | string | `""` |  |
+| dnsPolicy | string | `"ClusterFirstWithHostNet"` | Determines how DNS resolution is handled for that pod. If `.Values.preset` is set to `network` or `.Values.config.data.network` is enabled, Beyla requires `hostNetwork` access, causing cluster service DNS resolution to fail. It is recommended not to change this if Beyla sends traces and metrics to Grafana components via k8s service. |
 | env | object | `{}` | extra environment variables |
 | envValueFrom | object | `{}` | extra environment variables to be set from resources such as k8s configMaps/secrets |
 | fullnameOverride | string | `""` | Overrides the chart's computed fullname. |

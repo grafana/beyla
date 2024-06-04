@@ -37,6 +37,7 @@ spec:
       {{- end }}
       {{- if or (eq .Values.preset "network") .Values.config.data.network }}
       hostNetwork: true
+      dnsPolicy: {{ .Values.dnsPolicy }}
       {{- end }}
       {{- if .Values.priorityClassName }}
       priorityClassName: {{ .Values.priorityClassName }}

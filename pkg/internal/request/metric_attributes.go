@@ -90,6 +90,10 @@ func DBOperationName(val string) attribute.KeyValue {
 	return attribute.Key(attr.DBOperation).String(val)
 }
 
+func MessagingOperationType(val string) attribute.KeyValue {
+	return attribute.Key(attr.MessagingOpType).String(val)
+}
+
 func SpanHost(span *Span) string {
 	if span.HostName != "" {
 		return span.HostName

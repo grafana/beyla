@@ -1,0 +1,7 @@
+routes:
+  patterns:
+    - /create-trace
+    - /smoke
+    - /greeting
+    - /sqltest
+  unmatched: path

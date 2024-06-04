@@ -15,7 +15,7 @@
 #define KPROBES_LARGE_RESPONSE_LEN 100000 // 100K and above we try to track the response actual time with kretprobes
 
 #define K_TCP_MAX_LEN 256
-#define K_TCP_RES_LEN 24
+#define K_TCP_RES_LEN 128
 
 #define CONN_INFO_FLAG_TRACE 0x1
 

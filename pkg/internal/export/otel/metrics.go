@@ -166,6 +166,8 @@ type MetricsReporter struct {
 	attrGRPCServer            []attributes.Field[*request.Span, attribute.KeyValue]
 	attrGRPCClient            []attributes.Field[*request.Span, attribute.KeyValue]
 	attrDBClient              []attributes.Field[*request.Span, attribute.KeyValue]
+	attrMessagingPublish      []attributes.Field[*request.Span, attribute.KeyValue]
+	attrMessagingProcess      []attributes.Field[*request.Span, attribute.KeyValue]
 	attrHTTPRequestSize       []attributes.Field[*request.Span, attribute.KeyValue]
 	attrHTTPClientRequestSize []attributes.Field[*request.Span, attribute.KeyValue]
 }
@@ -182,6 +184,8 @@ type Metrics struct {
 	grpcDuration          instrument.Float64Histogram
 	grpcClientDuration    instrument.Float64Histogram
 	dbClientDuration      instrument.Float64Histogram
+	msgPublishDuration    instrument.Float64Histogram
+	msgProcessDuration    instrument.Float64Histogram
 	httpRequestSize       instrument.Float64Histogram
 	httpClientRequestSize instrument.Float64Histogram
 	// trace span metrics
@@ -247,6 +251,10 @@ func newMetricsReporter(
 		request.SpanOTELGetters, mr.attributes.For(attributes.RPCClientDuration))
 	mr.attrDBClient = attributes.OpenTelemetryGetters(
 		request.SpanOTELGetters, mr.attributes.For(attributes.DBClientDuration))
+	mr.attrMessagingPublish = attributes.OpenTelemetryGetters(
+		request.SpanOTELGetters, mr.attributes.For(attributes.MessagingPublishDuration))
+	mr.attrMessagingProcess = attributes.OpenTelemetryGetters(
+		request.SpanOTELGetters, mr.attributes.For(attributes.MessagingProcessDuration))
 
 	mr.reporters = NewReporterPool(cfg.ReportersCacheLen,
 		func(id svc.UID, v *Metrics) {
@@ -286,6 +294,8 @@ func (mr *MetricsReporter) otelMetricOptions(mlog *slog.Logger) []metric.Option 
 		metric.WithView(otelHistogramConfig(attributes.RPCServerDuration.OTEL, mr.cfg.Buckets.DurationHistogram, useExponentialHistograms)),
 		metric.WithView(otelHistogramConfig(attributes.RPCClientDuration.OTEL, mr.cfg.Buckets.DurationHistogram, useExponentialHistograms)),
 		metric.WithView(otelHistogramConfig(attributes.DBClientDuration.OTEL, mr.cfg.Buckets.DurationHistogram, useExponentialHistograms)),
+		metric.WithView(otelHistogramConfig(attributes.MessagingPublishDuration.OTEL, mr.cfg.Buckets.DurationHistogram, useExponentialHistograms)),
+		metric.WithView(otelHistogramConfig(attributes.MessagingProcessDuration.OTEL, mr.cfg.Buckets.DurationHistogram, useExponentialHistograms)),
 		metric.WithView(otelHistogramConfig(attributes.HTTPServerRequestSize.OTEL, mr.cfg.Buckets.RequestSizeHistogram, useExponentialHistograms)),
 		metric.WithView(otelHistogramConfig(attributes.HTTPClientRequestSize.OTEL, mr.cfg.Buckets.RequestSizeHistogram, useExponentialHistograms)),
 	}
@@ -341,6 +351,14 @@ func (mr *MetricsReporter) setupOtelMeters(m *Metrics, meter instrument.Meter) e
 	m.dbClientDuration, err = meter.Float64Histogram(attributes.DBClientDuration.OTEL, instrument.WithUnit("s"))
 	if err != nil {
 		return fmt.Errorf("creating db client duration histogram metric: %w", err)
+	}
+	m.msgPublishDuration, err = meter.Float64Histogram(attributes.MessagingPublishDuration.OTEL, instrument.WithUnit("s"))
+	if err != nil {
+		return fmt.Errorf("creating messaging client publish duration histogram metric: %w", err)
+	}
+	m.msgProcessDuration, err = meter.Float64Histogram(attributes.MessagingProcessDuration.OTEL, instrument.WithUnit("s"))
+	if err != nil {
+		return fmt.Errorf("creating messaging client process duration histogram metric: %w", err)
 	}
 	m.httpRequestSize, err = meter.Float64Histogram(attributes.HTTPServerRequestSize.OTEL, instrument.WithUnit("By"))
 	if err != nil {
@@ -647,6 +665,7 @@ func withAttributes(span *request.Span, getters []attributes.Field[*request.Span
 	return instrument.WithAttributeSet(attribute.NewSet(attributes...))
 }
 
+// nolint:cyclop
 func (r *Metrics) record(span *request.Span, mr *MetricsReporter) {
 	t := span.Timings()
 	duration := t.End.Sub(t.RequestStart).Seconds()
@@ -673,6 +692,15 @@ func (r *Metrics) record(span *request.Span, mr *MetricsReporter) {
 		case request.EventTypeRedisClient, request.EventTypeSQLClient:
 			r.dbClientDuration.Record(r.ctx, duration,
 				withAttributes(span, mr.attrDBClient))
+		case request.EventTypeKafkaClient:
+			switch span.Method {
+			case request.MessagingPublish:
+				r.msgPublishDuration.Record(r.ctx, duration,
+					withAttributes(span, mr.attrMessagingPublish))
+			case request.MessagingProcess:
+				r.msgProcessDuration.Record(r.ctx, duration,
+					withAttributes(span, mr.attrMessagingProcess))
+			}
 		}
 	}
 

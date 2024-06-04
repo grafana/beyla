@@ -154,6 +154,24 @@ func TestRedisParsing(t *testing.T) {
 
 }
 
+func TestTCPReqKafkaParsing(t *testing.T) {
+	// kafka message
+	b := []byte{0, 0, 0, 94, 0, 1, 0, 11, 0, 0, 0, 224, 0, 6, 115, 97, 114, 97, 109, 97, 255, 255, 255, 255, 0, 0, 1, 244, 0, 0, 0, 1, 6, 64, 0, 0, 0, 0, 0, 0, 0, 255, 255, 255, 255, 0, 0, 0, 1, 0, 9, 105, 109, 112, 111, 114, 116, 97, 110, 116, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 19, 0, 0, 0, 0, 0, 0, 0, 0, 0, 16, 0, 0, 0, 0, 0, 0, 0, 0}
+	r := makeTCPReq(string(b), tcpSend, 343534, 8080, 2000)
+	k, err := ProcessKafkaRequest(b)
+	assert.NoError(t, err)
+	s := TCPToKafkaToSpan(&r, k)
+	assert.NotNil(t, s)
+	assert.NotEmpty(t, s.Host)
+	assert.NotEmpty(t, s.Peer)
+	assert.Equal(t, s.HostPort, 8080)
+	assert.Greater(t, s.End, s.Start)
+	assert.Equal(t, "process", s.Method)
+	assert.Equal(t, "important", s.Path)
+	assert.Equal(t, "sarama", s.OtherNamespace)
+	assert.Equal(t, request.EventTypeKafkaClient, s.Type)
+}
+
 const charset = "\\0\\1\\2abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 
 func randomString(length int) string {

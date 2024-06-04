@@ -26,16 +26,16 @@ func TestTCPReqSQLParsing(t *testing.T) {
 	r := makeTCPReq(sql, tcpSend, 343534, 8080, 2000)
 	op, table, sql := detectSQL(sql)
 	assert.Equal(t, op, "SELECT")
-	assert.Equal(t, table, "ACCOUNTS")
+	assert.Equal(t, table, "accounts")
 	s := TCPToSQLToSpan(&r, op, table, sql)
 	assert.NotNil(t, s)
 	assert.NotEmpty(t, s.Host)
 	assert.NotEmpty(t, s.Peer)
 	assert.Equal(t, s.HostPort, 8080)
 	assert.Greater(t, s.End, s.Start)
-	assert.True(t, strings.Contains(s.Statement, "SELECT * FROM ACCOUNTS "))
+	assert.True(t, strings.Contains(s.Statement, "SELECT * FROM accounts "))
 	assert.Equal(t, "SELECT", s.Method)
-	assert.Equal(t, "ACCOUNTS", s.Path)
+	assert.Equal(t, "accounts", s.Path)
 	assert.Equal(t, request.EventTypeSQLClient, s.Type)
 }
 
@@ -105,7 +105,7 @@ func TestReadTCPRequestIntoSpan_Overflow(t *testing.T) {
 
 	assert.Equal(t, request.EventTypeSQLClient, span.Type)
 	assert.Equal(t, "SELECT", span.Method)
-	assert.Equal(t, "FOO", span.Path)
+	assert.Equal(t, "foo", span.Path)
 }
 
 func TestRedisDetection(t *testing.T) {

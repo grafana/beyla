@@ -33,7 +33,7 @@ func detectSQL(buf string) (string, string, string) {
 	for _, q := range []string{"SELECT", "UPDATE", "DELETE", "INSERT", "ALTER", "CREATE", "DROP"} {
 		i := strings.Index(b, q)
 		if i >= 0 {
-			sql := cstr([]uint8(b[i:]))
+			sql := cstr([]uint8(buf[i:]))
 
 			op, table := sqlprune.SQLParseOperationAndTable(sql)
 			return op, table, sql

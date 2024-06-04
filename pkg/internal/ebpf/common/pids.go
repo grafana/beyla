@@ -191,7 +191,7 @@ func (pf *IdentityPidsFilter) AllowPID(_ uint32, _ uint32, _ svc.ID, _ PIDType) 
 func (pf *IdentityPidsFilter) BlockPID(_ uint32, _ uint32) {}
 
 func (pf *IdentityPidsFilter) ValidPID(_ uint32, _ uint32, _ PIDType) bool {
-	return false
+	return true
 }
 
 func (pf *IdentityPidsFilter) CurrentPIDs(_ PIDType) map[uint32]map[uint32]svc.ID {

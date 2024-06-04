@@ -54,6 +54,7 @@ func ProcessPossibleKafkaEvent(pkt []byte, rpkt []byte) (*KafkaInfo, error) {
 }
 
 // https://kafka.apache.org/protocol.html
+// nolint:cyclop
 func ProcessKafkaRequest(pkt []byte) (*KafkaInfo, error) {
 	k := &KafkaInfo{}
 	if len(pkt) < KafaMinLength {

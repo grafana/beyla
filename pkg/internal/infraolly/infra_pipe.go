@@ -21,15 +21,14 @@ import (
 type subPipeline struct {
 	Collector  pipe.Start[[]*process.Status]
 	OtelExport pipe.Final[[]*process.Status]
-	PromExport pipe.Final[[]*process.Status]
+	// TODO: add prometheus exporter
 }
 
 func collector(sp *subPipeline) *pipe.Start[[]*process.Status]  { return &sp.Collector }
 func otelExport(sp *subPipeline) *pipe.Final[[]*process.Status] { return &sp.OtelExport }
-func promExport(sp *subPipeline) *pipe.Final[[]*process.Status] { return &sp.PromExport }
 
 func (sp *subPipeline) Connect() {
-	sp.Collector.SendTo(sp.OtelExport, sp.PromExport)
+	sp.Collector.SendTo(sp.OtelExport)
 }
 
 // the sub-pipe is enabled only if there is a metrics exporter enabled,
@@ -57,16 +56,6 @@ func SubPipelineProvider(ctx context.Context, ctxInfo *global.ContextInfo, cfg *
 				Metrics:            &cfg.Metrics,
 				AttributeSelectors: cfg.Attributes.Select,
 			}))
-		pipe.AddFinal(nb, promExport, func(in <-chan []*process.Status) {
-			for ps := range in {
-				for _, p := range ps {
-					_ = p
-
-
-					//fmt.Printf("%#v\n", *p)
-				}
-			}
-		})
 
 		runner, err := nb.Build()
 		if err != nil {

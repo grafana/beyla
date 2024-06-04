@@ -118,7 +118,6 @@ func (ex *Expirer[Record, OT, Metric, VT]) ForRecord(r Record) Metric {
 }
 
 func (ex *Expirer[Record, OT, Metric, VT]) Collect(_ context.Context, observer OT) error {
-	//ex.log.Debug("invoking metrics collection")
 	if old := ex.entries.DeleteExpired(); len(old) > 0 {
 		ex.log.With("labelValues", old).Debug("deleting old OTEL metric")
 	}

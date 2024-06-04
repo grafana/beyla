@@ -136,7 +136,7 @@ func (me *metricsExporter) newMetricSet(service svc.ID) (*Metrics, error) {
 		otel2.NewGauge,
 		me.attrCPUTime,
 		timeNow,
-		5*time.Minute, //me.cfg.Metrics.TTL, TODO restore
+		me.cfg.Metrics.TTL,
 	)
 	if _, err := meter.Float64ObservableGauge(
 		attributes.ProcessCPUUtilization.OTEL,

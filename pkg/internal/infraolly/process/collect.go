@@ -18,12 +18,12 @@ import (
 
 // Collector returns runtime information about the currently running processes
 type Collector struct {
-	ctx      context.Context
-	cfg      *Config
-	harvest  *Harvester
-	cache    *simplelru.LRU[int32, *cacheEntry]
-	log      *slog.Logger
-	newPids  *<-chan []request.Span
+	ctx     context.Context
+	cfg     *Config
+	harvest *Harvester
+	cache   *simplelru.LRU[int32, *cacheEntry]
+	log     *slog.Logger
+	newPids *<-chan []request.Span
 }
 
 // NewCollectorProvider creates and returns a new process Collector, given an agent context.
@@ -34,12 +34,12 @@ func NewCollectorProvider(ctx context.Context, input *<-chan []request.Span, cfg
 		harvest := newHarvester(cfg, cache)
 
 		return (&Collector{
-			ctx:      ctx,
-			cfg:      cfg,
-			harvest:  harvest,
-			cache:    cache,
-			log:      pslog(),
-			newPids:  input,
+			ctx:     ctx,
+			cfg:     cfg,
+			harvest: harvest,
+			cache:   cache,
+			log:     pslog(),
+			newPids: input,
 		}).Run, nil
 	}
 }

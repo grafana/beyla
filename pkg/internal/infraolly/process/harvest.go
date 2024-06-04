@@ -34,20 +34,11 @@ const (
 	RunModeUnprivileged = "unprivileged"
 )
 
-type PidMode string
-
-const (
-	PidModeHost = "host"
-	PidModeUser = "user"
-)
-
 type Config struct {
 	RunMode              RunMode
 	DisableZeroRSSFilter bool
 
 	Rate time.Duration
-
-	PidMode PidMode `env:"BEYLA_PID_MODE" envDefault:"root"`
 }
 
 func newHarvester(cfg *Config, cache *simplelru.LRU[int32, *cacheEntry]) *Harvester {

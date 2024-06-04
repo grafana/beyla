@@ -21,16 +21,13 @@ var spanSet = []request.Span{
 }
 
 func TestFilter_SameNS(t *testing.T) {
-	readNamespace = func(_ int32) (uint32, error) {
-		return 33, nil
-	}
 	readNamespacePIDs = func(pid int32) ([]uint32, error) {
 		return []uint32{uint32(pid)}, nil
 	}
 	pf := NewPIDsFilter(slog.With("env", "testing"))
-	pf.AllowPID(123, svc.ID{}, PIDTypeGo)
-	pf.AllowPID(456, svc.ID{}, PIDTypeGo)
-	pf.AllowPID(789, svc.ID{}, PIDTypeGo)
+	pf.AllowPID(123, 33, svc.ID{}, PIDTypeGo)
+	pf.AllowPID(456, 33, svc.ID{}, PIDTypeGo)
+	pf.AllowPID(789, 33, svc.ID{}, PIDTypeGo)
 
 	// with the same namespace, it filters by user PID, as it is the PID
 	// that is seen by Beyla's process discovery
@@ -42,16 +39,13 @@ func TestFilter_SameNS(t *testing.T) {
 }
 
 func TestFilter_DifferentNS(t *testing.T) {
-	readNamespace = func(_ int32) (uint32, error) {
-		return 22, nil
-	}
 	readNamespacePIDs = func(pid int32) ([]uint32, error) {
 		return []uint32{uint32(pid)}, nil
 	}
 	pf := NewPIDsFilter(slog.With("env", "testing"))
-	pf.AllowPID(123, svc.ID{}, PIDTypeGo)
-	pf.AllowPID(456, svc.ID{}, PIDTypeGo)
-	pf.AllowPID(666, svc.ID{}, PIDTypeGo)
+	pf.AllowPID(123, 22, svc.ID{}, PIDTypeGo)
+	pf.AllowPID(456, 22, svc.ID{}, PIDTypeGo)
+	pf.AllowPID(666, 22, svc.ID{}, PIDTypeGo)
 
 	// with the same namespace, it filters by user PID, as it is the PID
 	// that is seen by Beyla's process discovery
@@ -59,16 +53,13 @@ func TestFilter_DifferentNS(t *testing.T) {
 }
 
 func TestFilter_Block(t *testing.T) {
-	readNamespace = func(_ int32) (uint32, error) {
-		return 33, nil
-	}
 	readNamespacePIDs = func(pid int32) ([]uint32, error) {
 		return []uint32{uint32(pid)}, nil
 	}
 	pf := NewPIDsFilter(slog.With("env", "testing"))
-	pf.AllowPID(123, svc.ID{}, PIDTypeGo)
-	pf.AllowPID(456, svc.ID{}, PIDTypeGo)
-	pf.BlockPID(123)
+	pf.AllowPID(123, 33, svc.ID{}, PIDTypeGo)
+	pf.AllowPID(456, 33, svc.ID{}, PIDTypeGo)
+	pf.BlockPID(123, 33)
 
 	// with the same namespace, it filters by user PID, as it is the PID
 	// that is seen by Beyla's process discovery
@@ -80,19 +71,13 @@ func TestFilter_Block(t *testing.T) {
 }
 
 func TestFilter_NewNSLater(t *testing.T) {
-	readNamespace = func(pid int32) (uint32, error) {
-		if pid == 1000 {
-			return 44, nil
-		}
-		return 33, nil
-	}
 	readNamespacePIDs = func(pid int32) ([]uint32, error) {
 		return []uint32{uint32(pid)}, nil
 	}
 	pf := NewPIDsFilter(slog.With("env", "testing"))
-	pf.AllowPID(123, svc.ID{}, PIDTypeGo)
-	pf.AllowPID(456, svc.ID{}, PIDTypeGo)
-	pf.AllowPID(789, svc.ID{}, PIDTypeGo)
+	pf.AllowPID(123, 33, svc.ID{}, PIDTypeGo)
+	pf.AllowPID(456, 33, svc.ID{}, PIDTypeGo)
+	pf.AllowPID(789, 33, svc.ID{}, PIDTypeGo)
 
 	// with the same namespace, it filters by user PID, as it is the PID
 	// that is seen by Beyla's process discovery
@@ -102,7 +87,7 @@ func TestFilter_NewNSLater(t *testing.T) {
 		{Pid: request.PidInfo{UserPID: 789, HostPID: 234, Namespace: 33}},
 	}, pf.Filter(spanSet))
 
-	pf.AllowPID(1000, svc.ID{}, PIDTypeGo)
+	pf.AllowPID(1000, 44, svc.ID{}, PIDTypeGo)
 
 	assert.Equal(t, []request.Span{
 		{Pid: request.PidInfo{UserPID: 123, HostPID: 333, Namespace: 33}},
@@ -111,7 +96,7 @@ func TestFilter_NewNSLater(t *testing.T) {
 		{Pid: request.PidInfo{UserPID: 1000, HostPID: 1234, Namespace: 44}},
 	}, pf.Filter(spanSet))
 
-	pf.BlockPID(456)
+	pf.BlockPID(456, 33)
 
 	assert.Equal(t, []request.Span{
 		{Pid: request.PidInfo{UserPID: 123, HostPID: 333, Namespace: 33}},
@@ -119,7 +104,7 @@ func TestFilter_NewNSLater(t *testing.T) {
 		{Pid: request.PidInfo{UserPID: 1000, HostPID: 1234, Namespace: 44}},
 	}, pf.Filter(spanSet))
 
-	pf.BlockPID(1000)
+	pf.BlockPID(1000, 44)
 
 	assert.Equal(t, []request.Span{
 		{Pid: request.PidInfo{UserPID: 123, HostPID: 333, Namespace: 33}},

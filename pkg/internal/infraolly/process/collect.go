@@ -16,21 +16,29 @@ import (
 	"github.com/grafana/beyla/pkg/internal/svc"
 )
 
+type CollectConfig struct {
+	// RunMode defaults to "privileged". A non-privileged harvester will omit some information like open FDs.
+	RunMode RunMode
+
+	// Interval between harvests
+	Interval time.Duration
+}
+
 // Collector returns runtime information about the currently running processes
 type Collector struct {
 	ctx     context.Context
-	cfg     *Config
+	cfg     *CollectConfig
 	harvest *Harvester
-	cache   *simplelru.LRU[int32, *cacheEntry]
+	cache   *simplelru.LRU[int32, *linuxProcess]
 	log     *slog.Logger
 	newPids *<-chan []request.Span
 }
 
 // NewCollectorProvider creates and returns a new process Collector, given an agent context.
-func NewCollectorProvider(ctx context.Context, input *<-chan []request.Span, cfg *Config) pipe.StartProvider[[]*Status] {
+func NewCollectorProvider(ctx context.Context, input *<-chan []request.Span, cfg *CollectConfig) pipe.StartProvider[[]*Status] {
 	return func() (pipe.StartFunc[[]*Status], error) {
 		// we purge entries explicitly so size is unbounded
-		cache, _ := simplelru.NewLRU[int32, *cacheEntry](math.MaxInt, nil)
+		cache, _ := simplelru.NewLRU[int32, *linuxProcess](math.MaxInt, nil)
 		harvest := newHarvester(cfg, cache)
 
 		return (&Collector{
@@ -47,7 +55,7 @@ func NewCollectorProvider(ctx context.Context, input *<-chan []request.Span, cfg
 func (ps *Collector) Run(out chan<- []*Status) {
 	// TODO: set app metadata as key for later decoration? (e.g. K8s metadata, svc.ID)
 	pids := map[int32]*svc.ID{}
-	collectTicker := time.NewTicker(ps.cfg.Rate)
+	collectTicker := time.NewTicker(ps.cfg.Interval)
 	defer collectTicker.Stop()
 	newPids := *ps.newPids
 	for {
@@ -77,7 +85,7 @@ func (ps *Collector) Collect(pids map[int32]*svc.ID) ([]*Status, []int32) {
 
 	var removed []int32
 	for pid, svcID := range pids {
-		status, err := ps.harvest.Do(svcID)
+		status, err := ps.harvest.Harvest(svcID)
 		if err != nil {
 			ps.log.Debug("skipping process", "pid", pid, "error", err)
 			ps.harvest.cache.Remove(pid)
@@ -88,7 +96,11 @@ func (ps *Collector) Collect(pids map[int32]*svc.ID) ([]*Status, []int32) {
 		results = append(results, status)
 	}
 
-	removeUntilLen(ps.cache, len(results))
+	// remove processes from cache that haven't been collected in this iteration
+	// (this means they already disappeared so there is no need for caching)
+	for ps.cache.Len() > len(results) {
+		ps.cache.RemoveOldest()
+	}
 
 	return results, removed
 }

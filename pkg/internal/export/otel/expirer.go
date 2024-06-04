@@ -21,93 +21,58 @@ func plog() *slog.Logger {
 	return slog.With("component", "otel.Expirer")
 }
 
-type loader[T any] interface {
+// dataPoint implements a metric value of a given type,
+// for a set of attributes
+// Example of implementers: Gauge and Counter
+type dataPoint[T any] interface {
+	// Load the current value for a given set of attributes
 	Load() T
+	// Attributes return the attributes of the current dataPoint
 	Attributes() attribute.Set
-	SetAttributes(attribute.Set)
 }
 
+// observer records measurements for a given metric type
 type observer[T any] interface {
 	Observe(T, ...metric.ObserveOption)
 }
 
-// Expirer drops metrics from labels that haven't been updated during a given timeout
+// Expirer drops metrics from labels that haven't been updated during a given timeout.
+// It has multiple generic types to allow it working with different dataPoints (Gauge, Counter...)
+// and different types of data (int, float...).
 // Record: type of the record that holds the metric data request.Span, ebpf.Record, process.Status...
-// Metric: type of the metric kind: Counter, Gauge...
-// VT: type of the metric value: int, float...
-type Expirer[Record any, OT observer[VT], Metric loader[VT], VT any] struct {
+// Metric: type of the dataPoint kind: Counter, Gauge...
+// VT: type of the value inside the datapoint: int, float64...
+type Expirer[Record any, OT observer[VT], Metric dataPoint[VT], VT any] struct {
 	instancer func(set attribute.Set) Metric
 	attrs     []attributes.Field[Record, attribute.KeyValue]
 	entries   *expire.ExpiryMap[Metric]
 	log       *slog.Logger
 }
 
-type metricAttributes struct {
-	attributes attribute.Set
-}
-
-func (g *metricAttributes) Attributes() attribute.Set {
-	return g.attributes
-}
-
-func (g *metricAttributes) SetAttributes(a attribute.Set) {
-	g.attributes = a
-}
-
-type Counter struct {
-	metricAttributes
-	val atomic.Int64
-}
-
-func NewCounter(attributes attribute.Set) *Counter {
-	return &Counter{metricAttributes: metricAttributes{attributes: attributes}}
-}
-func (g *Counter) Load() int64 {
-	return g.val.Load()
-}
-
-func (g *Counter) Add(v int64) {
-	g.val.Add(v)
-}
-
-type Gauge struct {
-	metricAttributes
-	// Go standard library does not provide atomic packages so we need to
-	// store the float as bytes and then convert it with the math package
-	floatBits uint64
-}
-
-func NewGauge(attributes attribute.Set) *Gauge {
-	return &Gauge{metricAttributes: metricAttributes{attributes: attributes}}
-}
-
-func (g *Gauge) Load() float64 {
-	return math.Float64frombits(atomic.LoadUint64(&g.floatBits))
-}
-
-func (g *Gauge) Set(val float64) {
-	atomic.StoreUint64(&g.floatBits, math.Float64bits(val))
-}
-
-// NewExpirer creates a metric that wraps a Counter. Its labeled instances are dropped
-// if they haven't been updated during the last timeout period
-func NewExpirer[Record any, OT observer[VT], Metric loader[VT], VT any](
+// NewExpirer creates an expirer that wraps data points of a given type. Its labeled instances are dropped
+// if they haven't been updated during the last timeout period.
+// Arguments:
+// - instancer: the constructor of each datapoint object (e.g. NewCounter, NewGauge...)
+// - attrs: attributes for that given data point
+// - clock: function that provides the current time
+// - ttl: time to live of the datapoints whose attribute sets haven't been updated
+func NewExpirer[Record any, OT observer[VT], Metric dataPoint[VT], VT any](
 	instancer func(set attribute.Set) Metric,
 	attrs []attributes.Field[Record, attribute.KeyValue],
 	clock expire.Clock,
-	expireTime time.Duration,
+	ttl time.Duration,
 ) *Expirer[Record, OT, Metric, VT] {
 	exp := Expirer[Record, OT, Metric, VT]{
 		instancer: instancer,
 		attrs:     attrs,
-		entries:   expire.NewExpiryMap[Metric](clock, expireTime),
+		entries:   expire.NewExpiryMap[Metric](clock, ttl),
 	}
 	exp.log = plog().With("type", fmt.Sprintf("%T", exp))
 	return &exp
 }
 
-// ForRecord returns the Counter for the given eBPF record. If that record
-// s accessed for the first time, a new Counter is created.
+// ForRecord returns the data point for the given eBPF record. If that record
+// s accessed for the first time, a new data point is created.
 // If not, a cached copy is returned and the "last access" cache time is updated.
 func (ex *Expirer[Record, OT, Metric, VT]) ForRecord(r Record) Metric {
 	recordAttrs, attrValues := ex.recordAttributes(r)
@@ -140,4 +105,49 @@ func (ex *Expirer[Record, OT, Metric, VT]) recordAttributes(m Record) (attribute
 	}
 
 	return attribute.NewSet(keyVals...), vals
+}
+
+type metricAttributes struct {
+	attributes attribute.Set
+}
+
+func (g *metricAttributes) Attributes() attribute.Set {
+	return g.attributes
+}
+
+// Counter data point type
+type Counter struct {
+	metricAttributes
+	val atomic.Int64
+}
+
+func NewCounter(attributes attribute.Set) *Counter {
+	return &Counter{metricAttributes: metricAttributes{attributes: attributes}}
+}
+func (g *Counter) Load() int64 {
+	return g.val.Load()
+}
+
+func (g *Counter) Add(v int64) {
+	g.val.Add(v)
+}
+
+// Gauge data point type
+type Gauge struct {
+	metricAttributes
+	// Go standard library does not provide atomic packages so we need to
+	// store the float as bytes and then convert it with the math package
+	floatBits uint64
+}
+
+func NewGauge(attributes attribute.Set) *Gauge {
+	return &Gauge{metricAttributes: metricAttributes{attributes: attributes}}
+}
+
+func (g *Gauge) Load() float64 {
+	return math.Float64frombits(atomic.LoadUint64(&g.floatBits))
+}
+
+func (g *Gauge) Set(val float64) {
+	atomic.StoreUint64(&g.floatBits, math.Float64bits(val))
 }

@@ -166,9 +166,9 @@ network:
 			CacheLen: 1024,
 			CacheTTL: 5 * time.Minute,
 		},
-		Processes: process.Config{
-			RunMode: process.RunModeRoot,
-			Rate:    5 * time.Second,
+		Processes: process.CollectConfig{
+			RunMode:  process.RunModePrivileged,
+			Interval: 5 * time.Second,
 		},
 	}, cfg)
 }

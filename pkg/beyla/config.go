@@ -100,9 +100,9 @@ var DefaultConfig = Config{
 	},
 	Routes:       &transform.RoutesConfig{},
 	NetworkFlows: defaultNetworkConfig,
-	Processes: process.Config{
-		RunMode: process.RunModeRoot,
-		Rate:    5 * time.Second,
+	Processes: process.CollectConfig{
+		RunMode:  process.RunModePrivileged,
+		Interval: 5 * time.Second,
 	},
 }
 
@@ -156,7 +156,7 @@ type Config struct {
 
 	// Processes metrics for application. They will be only enabled if there is a metrics exporter enabled,
 	// and both the "application" and "application_process" features are enabled
-	Processes process.Config `yaml:"processes"`
+	Processes process.CollectConfig `yaml:"processes"`
 
 	// Grafana Agent specific configuration
 	TracesReceiver TracesReceiverConfig `yaml:"-"`

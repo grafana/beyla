@@ -13,7 +13,6 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"time"
 
 	"github.com/hashicorp/golang-lru/v2/simplelru"
 
@@ -24,28 +23,23 @@ func hlog() *slog.Logger {
 	return slog.With("component", "process.Harvester")
 }
 
-var errProcessWithoutRSS = fmt.Errorf("process with zero rss")
-
 type RunMode string
 
 const (
-	RunModeRoot         = "root"
 	RunModePrivileged   = "privileged"
 	RunModeUnprivileged = "unprivileged"
 )
 
-type Config struct {
-	RunMode              RunMode
-	DisableZeroRSSFilter bool
-
-	Rate time.Duration
+// Harvester fetches processes' information from Linux
+type Harvester struct {
+	// allows overriding the /proc filesystem location via HOST_PROC env var
+	procFSRoot string
+	privileged bool
+	cache      *simplelru.LRU[int32, *linuxProcess]
+	log        *slog.Logger
 }
 
-func newHarvester(cfg *Config, cache *simplelru.LRU[int32, *cacheEntry]) *Harvester {
-	// If not config, assuming root mode as default
-	privileged := cfg.RunMode == RunModeRoot || cfg.RunMode == RunModePrivileged
-	disableZeroRSSFilter := cfg.DisableZeroRSSFilter
-
+func newHarvester(cfg *CollectConfig, cache *simplelru.LRU[int32, *linuxProcess]) *Harvester {
 	// we need to use the same method to override HOST_PROC that is used by gopsutil library
 	hostProc, ok := os.LookupEnv("HOST_PROC")
 	if !ok {
@@ -53,51 +47,33 @@ func newHarvester(cfg *Config, cache *simplelru.LRU[int32, *cacheEntry]) *Harves
 	}
 
 	return &Harvester{
-		procFSRoot:           hostProc,
-		privileged:           privileged,
-		disableZeroRSSFilter: disableZeroRSSFilter,
-		cache:                cache,
-		log:                  hlog(),
+		procFSRoot: hostProc,
+		privileged: cfg.RunMode == RunModePrivileged,
+		cache:      cache,
+		log:        hlog(),
 	}
 }
 
-// Harvester is a Harvester implementation that uses various linux sources and manages process caches
-type Harvester struct {
-	procFSRoot           string
-	privileged           bool
-	disableZeroRSSFilter bool
-	cache                *simplelru.LRU[int32, *cacheEntry]
-	log                  *slog.Logger
-}
-
-// Do returns a status of a process whose PID is passed as argument. The 'elapsedSeconds' argument represents the
+// Harvest returns a status of a process whose PID is passed as argument. The 'elapsedSeconds' argument represents the
 // time since this process was statusd for the last time. If the process has been statusd for the first time, this value
 // will be ignored
-func (ps *Harvester) Do(svcID *svc.ID) (*Status, error) {
+func (ps *Harvester) Harvest(svcID *svc.ID) (*Status, error) {
 	pid := svcID.ProcPID
 	ps.log.Debug("harvesting pid", "pid", pid)
 	// Reuses process information that does not vary
 	cached, hasCachedEntry := ps.cache.Get(pid)
 
-	// If cached is nil, the linux process will be created from fresh data
-	if !hasCachedEntry {
-		cached = &cacheEntry{}
-	}
 	var err error
-	cached.process, err = getLinuxProcess(ps.procFSRoot, pid, cached.process, ps.privileged)
+	// If cached is nil, the linux process will be created from fresh data
+	cached, err = getLinuxProcess(cached, ps.procFSRoot, pid, ps.privileged)
 	if err != nil {
 		return nil, fmt.Errorf("can't create process: %w", err)
-	}
-
-	// We don't need to report processes which are not using memory. This filters out certain kernel processes.
-	if !ps.disableZeroRSSFilter && cached.process.VMRSS() == 0 {
-		return nil, errProcessWithoutRSS
 	}
 
 	// Creates a fresh process status and populates it with the metrics data
 	status := NewStatus(pid, svcID)
 
-	if err := ps.populateStaticData(status, cached.process); err != nil {
+	if err := ps.populateStaticData(status, cached); err != nil {
 		return nil, fmt.Errorf("can't populate static attributes: %w", err)
 	}
 
@@ -106,15 +82,13 @@ func (ps *Harvester) Do(svcID *svc.ID) (*Status, error) {
 		ps.cache.Add(pid, cached)
 	}
 
-	if err := ps.populateGauges(status, cached.process); err != nil {
+	if err := ps.populateGauges(status, cached); err != nil {
 		return nil, fmt.Errorf("can't fetch gauge data: %w", err)
 	}
 
-	if err := ps.populateIOCounters(status, cached.process); err != nil {
+	if err := ps.populateIOCounters(status, cached); err != nil {
 		return nil, fmt.Errorf("can't fetch deltas: %w", err)
 	}
-
-	cached.last = status
 
 	return status, nil
 }

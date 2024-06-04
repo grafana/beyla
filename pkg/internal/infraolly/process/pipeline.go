@@ -1,4 +1,4 @@
-package infraolly
+package process
 
 import (
 	"context"
@@ -9,24 +9,23 @@ import (
 
 	"github.com/grafana/beyla/pkg/beyla"
 	"github.com/grafana/beyla/pkg/internal/export/otel"
-	"github.com/grafana/beyla/pkg/internal/infraolly/process"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/pkg/internal/request"
 )
 
-// SubPipeline is actually a part of the Application Observability pipeline.
+// processSubPipeline is actually a part of the Application Observability pipeline.
 // Its management is moved here because it's only activated if the process
 // metrics are activated.
-type subPipeline struct {
-	Collector  pipe.Start[[]*process.Status]
-	OtelExport pipe.Final[[]*process.Status]
+type processSubPipeline struct {
+	Collector  pipe.Start[[]*Status]
+	OtelExport pipe.Final[[]*Status]
 	// TODO: add prometheus exporter
 }
 
-func collector(sp *subPipeline) *pipe.Start[[]*process.Status]  { return &sp.Collector }
-func otelExport(sp *subPipeline) *pipe.Final[[]*process.Status] { return &sp.OtelExport }
+func collector(sp *processSubPipeline) *pipe.Start[[]*Status]  { return &sp.Collector }
+func otelExport(sp *processSubPipeline) *pipe.Final[[]*Status] { return &sp.OtelExport }
 
-func (sp *subPipeline) Connect() {
+func (sp *processSubPipeline) Connect() {
 	sp.Collector.SendTo(sp.OtelExport)
 }
 
@@ -35,7 +34,7 @@ func (sp *subPipeline) Connect() {
 func isSubPipeEnabled(cfg *beyla.Config) bool {
 	return (cfg.Metrics.EndpointEnabled() && cfg.Metrics.OTelMetricsEnabled() &&
 		slices.Contains(cfg.Metrics.Features, otel.FeatureProcess)) ||
-		(cfg.Prometheus.EndpointEnabled() && cfg.Prometheus.AppMetricsEnabled() &&
+		(cfg.Prometheus.EndpointEnabled() && cfg.Prometheus.OTelMetricsEnabled() &&
 			slices.Contains(cfg.Prometheus.Features, otel.FeatureProcess))
 }
 
@@ -48,9 +47,9 @@ func SubPipelineProvider(ctx context.Context, ctxInfo *global.ContextInfo, cfg *
 		}
 		connectorChan := make(chan []request.Span, cfg.ChannelBufferLen)
 		var connector <-chan []request.Span = connectorChan
-		nb := pipe.NewBuilder(&subPipeline{}, pipe.ChannelBufferLen(cfg.ChannelBufferLen))
-		pipe.AddStartProvider(nb, collector, process.NewCollectorProvider(ctx, &connector, &cfg.Processes))
-		pipe.AddFinalProvider(nb, otelExport, otel.ProcessMetricsExporterProvider(ctx, ctxInfo,
+		nb := pipe.NewBuilder(&processSubPipeline{}, pipe.ChannelBufferLen(cfg.ChannelBufferLen))
+		pipe.AddStartProvider(nb, collector, NewCollectorProvider(ctx, &connector, &cfg.Processes))
+		pipe.AddFinalProvider(nb, otelExport, otel.ProcMetricsExporterProvider(ctx, ctxInfo,
 			&otel.ProcMetricsConfig{
 				Metrics:            &cfg.Metrics,
 				AttributeSelectors: cfg.Attributes.Select,

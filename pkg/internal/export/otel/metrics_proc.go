@@ -18,40 +18,41 @@ import (
 	"github.com/grafana/beyla/pkg/internal/svc"
 )
 
+// ProcMetricsConfig extends MetricsConfig for process metrics
 type ProcMetricsConfig struct {
 	Metrics            *MetricsConfig
 	AttributeSelectors attributes.Selection
 }
 
 func (mc *ProcMetricsConfig) Enabled() bool {
-	return mc.Metrics != nil && mc.Metrics.EndpointEnabled() && slices.Contains(mc.Metrics.Features, FeatureProcess)
+	return mc.Metrics != nil && mc.Metrics.EndpointEnabled() && mc.Metrics.OTelMetricsEnabled() &&
+		slices.Contains(mc.Metrics.Features, FeatureProcess)
 }
 
 func pmlog() *slog.Logger {
-	return slog.With("component", "otel.ProcessMetricsExporter")
+	return slog.With("component", "otel.ProcMetricsExporter")
 }
 
-type metricsExporter struct {
+type procMetricsExporter struct {
 	ctx   context.Context
 	cfg   *ProcMetricsConfig
 	clock *expire.CachedClock
 
-	attributes *attributes.AttrSelector
-	exporter   metric.Exporter
-	reporters  ReporterPool[*procMetrics]
+	exporter  metric.Exporter
+	reporters ReporterPool[*procMetrics]
 
 	attrCPUTime []attributes.Field[*process.Status, attribute.KeyValue]
 }
 
 type procMetrics struct {
 	ctx      context.Context
-	service  svc.ID
+	service  *svc.ID
 	provider *metric.MeterProvider
 
 	cpuTime *Expirer[*process.Status, metric2.Float64Observer, *Gauge, float64]
 }
 
-func ProcessMetricsExporterProvider(
+func ProcMetricsExporterProvider(
 	ctx context.Context,
 	ctxInfo *global.ContextInfo,
 	cfg *ProcMetricsConfig,
@@ -61,11 +62,11 @@ func ProcessMetricsExporterProvider(
 			// This node is not going to be instantiated. Let the pipes library just ignore it.
 			return pipe.IgnoreFinal[[]*process.Status](), nil
 		}
-		return newProcessMetricsExporter(ctx, ctxInfo, cfg)
+		return newProcMetricsExporter(ctx, ctxInfo, cfg)
 	}
 }
 
-func newProcessMetricsExporter(
+func newProcMetricsExporter(
 	ctx context.Context,
 	ctxInfo *global.ContextInfo,
 	cfg *ProcMetricsConfig,
@@ -75,20 +76,19 @@ func newProcessMetricsExporter(
 	log := pmlog()
 	log.Debug("instantiating process metrics exporter provider")
 
+	// only user-provided attributes (or default set) will decorate the metrics
 	attrProv, err := attributes.NewAttrSelector(ctxInfo.MetricAttributeGroups, cfg.AttributeSelectors)
 	if err != nil {
-		return nil, fmt.Errorf("process OTEL exporter attributes enable: %w", err)
+		return nil, fmt.Errorf("process OTEL exporter attributes: %w", err)
 	}
 
-	mr := &metricsExporter{
-		clock:      expire.NewCachedClock(timeNow),
-		ctx:        ctx,
-		cfg:        cfg,
-		attributes: attrProv,
+	mr := &procMetricsExporter{
+		ctx:   ctx,
+		cfg:   cfg,
+		clock: expire.NewCachedClock(timeNow),
+		attrCPUTime: attributes.OpenTelemetryGetters(
+			process.OTELGetters, attrProv.For(attributes.ProcessCPUUtilization)),
 	}
-
-	mr.attrCPUTime = attributes.OpenTelemetryGetters(
-		process.OTELGetters, mr.attributes.For(attributes.ProcessCPUUtilization))
 
 	mr.reporters = NewReporterPool[*procMetrics](cfg.Metrics.ReportersCacheLen,
 		func(id svc.UID, v *procMetrics) {
@@ -110,7 +110,7 @@ func newProcessMetricsExporter(
 	return mr.Do, nil
 }
 
-func (me *metricsExporter) newMetricSet(service svc.ID) (*procMetrics, error) {
+func (me *procMetricsExporter) newMetricSet(service *svc.ID) (*procMetrics, error) {
 	log := pmlog().With("service", service)
 	log.Debug("creating new Metrics exporter")
 	resources := getResourceAttrs(service)
@@ -146,29 +146,16 @@ func (me *metricsExporter) newMetricSet(service svc.ID) (*procMetrics, error) {
 	return &m, nil
 }
 
-func (me *metricsExporter) Do(in <-chan []*process.Status) {
-	var lastSvcUID svc.UID
-	var reporter *procMetrics
+// Do reads all the process status data points and create the metrics accordingly
+func (me *procMetricsExporter) Do(in <-chan []*process.Status) {
 	for i := range in {
 		me.clock.Update()
 		for _, s := range i {
-			// optimization: do not query the resources' cache if the
-			// previously processed span belongs to the same service name
-			// as the current.
-			// This will save querying OTEL resource reporters when there is
-			// only a single instrumented process.
-			// In multi-process tracing, this is likely to happen as most
-			// tracers group traces belonging to the same service in the same slice.
-			if s.Service.UID != lastSvcUID || reporter == nil {
-				// TODO: precalculate For UUID
-				lm, err := me.reporters.For(*s.Service)
-				if err != nil {
-					pmlog().Error("unexpected error creating OTEL resource. Ignoring metric",
-						err, "service", s.Service)
-					continue
-				}
-				lastSvcUID = s.Service.UID
-				reporter = lm
+			reporter, err := me.reporters.For(s.Service)
+			if err != nil {
+				pmlog().Error("unexpected error creating OTEL resource. Ignoring metric",
+					err, "service", s.Service)
+				continue
 			}
 			pmlog().Debug("reporting data for record", "record", s)
 			// TODO: support user/system/other

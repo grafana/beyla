@@ -76,7 +76,7 @@ func init() {
 
 // getLinuxProcess returns a linux process snapshot, trying to reuse the data from a previous snapshot of the same
 // process.
-func getLinuxProcess(procFSRoot string, pid int32, previous *linuxProcess, privileged bool) (*linuxProcess, error) {
+func getLinuxProcess(cachedCopy *linuxProcess, procFSRoot string, pid int32, privileged bool) (*linuxProcess, error) {
 	var gops *process.Process
 	var err error
 
@@ -86,11 +86,11 @@ func getLinuxProcess(procFSRoot string, pid int32, previous *linuxProcess, privi
 	}
 
 	// Reusing information from the last snapshot for the same process
-	// If the name or the PPID changed from the previous, we'll consider this sample is just
+	// If the name or the PPID changed from the cachedCopy, we'll consider this sample is just
 	// a new process that shares the PID with an old one.
 	// if a process with the same Command but different CommandLine or User name
 	// occupies the same PID, the cache won't refresh the CommandLine and Username.
-	if previous == nil || procStats.command != previous.Command() || procStats.ppid != previous.Ppid() {
+	if cachedCopy == nil || procStats.command != cachedCopy.Command() || procStats.ppid != cachedCopy.Ppid() {
 		gops, err = process.NewProcess(pid)
 		if err != nil {
 			return nil, err
@@ -104,10 +104,10 @@ func getLinuxProcess(procFSRoot string, pid int32, previous *linuxProcess, privi
 		}, nil
 	}
 
-	// Otherwise, instead of creating a new process snapshot, we just reuse the previous one, with updated data
-	previous.stats = procStats
+	// Otherwise, instead of creating a new process snapshot, we just reuse the cachedCopy one, with updated data
+	cachedCopy.stats = procStats
 
-	return previous, nil
+	return cachedCopy, nil
 }
 
 func (pw *linuxProcess) Pid() int32 {
@@ -256,41 +256,41 @@ func parseProcStat(content string) (procStats, error) {
 	// Parent PID
 	ppid, err := strconv.ParseInt(fields[statPPID], 10, 32)
 	if err != nil {
-		return stats, errors.Wrapf(err, "for stats: %s", string(content))
+		return stats, errors.Wrapf(err, "for stats: %s", content)
 	}
 	stats.ppid = int32(ppid)
 
 	// User time
 	utime, err := strconv.ParseInt(fields[statUtime], 10, 64)
 	if err != nil {
-		return stats, errors.Wrapf(err, "for stats: %s", string(content))
+		return stats, errors.Wrapf(err, "for stats: %s", content)
 	}
 	stats.cpu.User = float64(utime) / float64(clockTicks)
 
 	// System time
 	stime, err := strconv.ParseInt(fields[statStime], 10, 64)
 	if err != nil {
-		return stats, errors.Wrapf(err, "for stats: %s", string(content))
+		return stats, errors.Wrapf(err, "for stats: %s", content)
 	}
 	stats.cpu.System = float64(stime) / float64(clockTicks)
 
 	// Number of threads
 	nthreads, err := strconv.ParseInt(fields[statNumThreads], 10, 32)
 	if err != nil {
-		return stats, errors.Wrapf(err, "for stats: %s", string(content))
+		return stats, errors.Wrapf(err, "for stats: %s", content)
 	}
 	stats.numThreads = int32(nthreads)
 
 	// VM Memory size
 	stats.vmSize, err = strconv.ParseInt(fields[statVsize], 10, 64)
 	if err != nil {
-		return stats, errors.Wrapf(err, "for stats: %s", string(content))
+		return stats, errors.Wrapf(err, "for stats: %s", content)
 	}
 
 	// VM RSS size
 	stats.vmRSS, err = strconv.ParseInt(fields[statRss], 10, 64)
 	if err != nil {
-		return stats, errors.Wrapf(err, "for stats: %s", string(content))
+		return stats, errors.Wrapf(err, "for stats: %s", content)
 	}
 	stats.vmRSS *= pageSize
 

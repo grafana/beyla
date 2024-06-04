@@ -22,8 +22,6 @@ flowchart TD
         TA(TraceAttacher) -.-> EBPF1(ebpf.Tracer)
         TA -.-> |creates one per executable| EBPF2(ebpf.Tracer)
         TA -.-> EBPF3(ebpf.Tracer)
-        ET --> PN
-        PN(ProcessNotifier)
     end
     subgraph Decoration and forwarding pipeline
         EBPF1 -.-> TR
@@ -43,10 +41,6 @@ flowchart TD
     KDB(KubeDatabase):::optional <-.- | Aggregated & indexed Pod info | KD
     IF("Informer<br/>(Kube API)"):::optional -.-> |Pods & ReplicaSets status| KDB
     IF -.-> |new Kube objects| KWE
-    subgraph Process pipeline
-        PN -.-> |PIDs map| PS
-        PS(ProcessSampler)
-    end
 ```
 
 ## Network metrics pipeline

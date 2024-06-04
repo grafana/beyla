@@ -14,7 +14,7 @@ import (
 	"github.com/grafana/beyla/pkg/internal/export/prom"
 	"github.com/grafana/beyla/pkg/internal/filter"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
-	"github.com/grafana/beyla/pkg/internal/infraolly"
+	"github.com/grafana/beyla/pkg/internal/infraolly/process"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/pkg/internal/request"
 	"github.com/grafana/beyla/pkg/internal/traces"
@@ -69,7 +69,7 @@ func otelTraces(n *nodesMap) *pipe.Final[[]request.Span]                    { re
 func printer(n *nodesMap) *pipe.Final[[]request.Span]                       { return &n.Printer }
 func prometheus(n *nodesMap) *pipe.Final[[]request.Span]                    { return &n.Prometheus }
 func noop(n *nodesMap) *pipe.Final[[]request.Span]                          { return &n.Noop }
-func process(n *nodesMap) *pipe.Final[[]request.Span]                       { return &n.ProcessReport }
+func processReport(n *nodesMap) *pipe.Final[[]request.Span]                 { return &n.ProcessReport }
 
 // builder with injectable instantiators for unit testing
 type graphFunctions struct {
@@ -123,7 +123,9 @@ func newGraphBuilder(ctx context.Context, config *beyla.Config, ctxInfo *global.
 	pipe.AddFinalProvider(gnb, noop, debug.NoopNode(config.Noop))
 	pipe.AddFinalProvider(gnb, printer, debug.PrinterNode(config.Printer))
 
-	pipe.AddFinalProvider(gnb, process, infraolly.SubPipelineProvider(ctx, ctxInfo, config))
+	// process subpipeline will start another pipeline only to collect and export data
+	// about the processes of an instrumented application
+	pipe.AddFinalProvider(gnb, processReport, process.SubPipelineProvider(ctx, ctxInfo, config))
 
 	// The returned builder later invokes its "Build" function that, given
 	// the contents of the nodesMap struct, will instantiate

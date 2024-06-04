@@ -21,6 +21,7 @@ import (
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 )
 
+// NetMetricsConfig extends MetricsConfig for Network Metrics
 type NetMetricsConfig struct {
 	Metrics            *MetricsConfig
 	AttributeSelectors attributes.Selection

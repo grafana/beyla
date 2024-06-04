@@ -27,17 +27,16 @@ func TestLinuxHarvester_IsPrivileged(t *testing.T) {
 		mode       RunMode
 		privileged bool
 	}{
-		{mode: RunModeRoot, privileged: true},
 		{mode: RunModePrivileged, privileged: true},
 		{mode: RunModeUnprivileged, privileged: false},
 	}
 	for _, c := range cases {
 		t.Run(fmt.Sprint("mode ", c.mode), func(t *testing.T) {
-			cache, _ := simplelru.NewLRU[int32, *cacheEntry](math.MaxInt, nil)
-			h := newHarvester(&Config{RunMode: c.mode}, cache)
+			cache, _ := simplelru.NewLRU[int32, *linuxProcess](math.MaxInt, nil)
+			h := newHarvester(&CollectConfig{RunMode: c.mode}, cache)
 
 			// If not privileged, it is expected to not report neither FDs nor IO counters
-			status, err := h.Do(&svc.ID{ProcPID: int32(os.Getpid())})
+			status, err := h.Harvest(&svc.ID{ProcPID: int32(os.Getpid())})
 			require.NoError(t, err)
 			if c.privileged {
 				assert.NotZero(t, status.FdCount)
@@ -52,11 +51,11 @@ func TestLinuxHarvester_IsPrivileged(t *testing.T) {
 
 func TestLinuxHarvester_Do(t *testing.T) {
 	// Given a process harvester
-	cache, _ := simplelru.NewLRU[int32, *cacheEntry](math.MaxInt, nil)
-	h := newHarvester(&Config{}, cache)
+	cache, _ := simplelru.NewLRU[int32, *linuxProcess](math.MaxInt, nil)
+	h := newHarvester(&CollectConfig{}, cache)
 
 	// When retrieving for a given process status (e.g. the current testing executable)
-	status, err := h.Do(&svc.ID{ProcPID: int32(os.Getpid())})
+	status, err := h.Harvest(&svc.ID{ProcPID: int32(os.Getpid())})
 
 	// It returns the corresponding process status with valid data
 	require.NoError(t, err)
@@ -87,12 +86,12 @@ func TestLinuxHarvester_Do_FullCommandLine(t *testing.T) {
 	}()
 
 	// Given a process harvester configured to showw the full command line
-	cache, _ := simplelru.NewLRU[int32, *cacheEntry](math.MaxInt, nil)
-	h := newHarvester(&Config{}, cache)
+	cache, _ := simplelru.NewLRU[int32, *linuxProcess](math.MaxInt, nil)
+	h := newHarvester(&CollectConfig{}, cache)
 
 	test.Eventually(t, 5*time.Second, func(t require.TestingT) {
 		// When retrieving for a given process status (e.g. the current testing executable)
-		status, err := h.Do(&svc.ID{ProcPID: int32(cmd.Process.Pid)})
+		status, err := h.Harvest(&svc.ID{ProcPID: int32(cmd.Process.Pid)})
 
 		// It returns the corresponding Command line without stripping arguments
 		require.NoError(t, err)
@@ -111,12 +110,12 @@ func TestLinuxHarvester_Do_StripCommandLine(t *testing.T) {
 	}()
 
 	// Given a process harvester
-	cache, _ := simplelru.NewLRU[int32, *cacheEntry](math.MaxInt, nil)
-	h := newHarvester(&Config{}, cache)
+	cache, _ := simplelru.NewLRU[int32, *linuxProcess](math.MaxInt, nil)
+	h := newHarvester(&CollectConfig{}, cache)
 
 	test.Eventually(t, 5*time.Second, func(t require.TestingT) {
 		// When retrieving for a given process status (e.g. the current testing executable)
-		status, err := h.Do(&svc.ID{ProcPID: int32(cmd.Process.Pid)})
+		status, err := h.Harvest(&svc.ID{ProcPID: int32(cmd.Process.Pid)})
 
 		// It returns the corresponding Command line without stripping arguments
 		require.NoError(t, err)
@@ -131,12 +130,12 @@ func TestLinuxHarvester_Do_InvalidateCache_DifferentCmd(t *testing.T) {
 
 	// Given a process harvester
 	// That has cached an old process sharing the PID with a new process
-	cache, _ := simplelru.NewLRU[int32, *cacheEntry](math.MaxInt, nil)
-	cache.Add(currentPid, &cacheEntry{process: &linuxProcess{cmdLine: "something old"}})
-	h := newHarvester(&Config{}, cache)
+	cache, _ := simplelru.NewLRU[int32, *linuxProcess](math.MaxInt, nil)
+	cache.Add(currentPid, &linuxProcess{cmdLine: "something old"})
+	h := newHarvester(&CollectConfig{}, cache)
 
 	// When the process is harvested
-	status, err := h.Do(&svc.ID{ProcPID: currentPid})
+	status, err := h.Harvest(&svc.ID{ProcPID: currentPid})
 	require.NoError(t, err)
 
 	// The status is updated
@@ -149,12 +148,12 @@ func TestLinuxHarvester_Do_InvalidateCache_DifferentPid(t *testing.T) {
 
 	// Given a process harvester
 	// That has cached an old process sharing the PID with a new process
-	cache, _ := simplelru.NewLRU[int32, *cacheEntry](math.MaxInt, nil)
-	cache.Add(currentPid, &cacheEntry{process: &linuxProcess{stats: procStats{ppid: -1}}})
-	h := newHarvester(&Config{}, cache)
+	cache, _ := simplelru.NewLRU[int32, *linuxProcess](math.MaxInt, nil)
+	cache.Add(currentPid, &linuxProcess{stats: procStats{ppid: -1}})
+	h := newHarvester(&CollectConfig{}, cache)
 
 	// When the process is harvested
-	status, err := h.Do(&svc.ID{ProcPID: currentPid})
+	status, err := h.Harvest(&svc.ID{ProcPID: currentPid})
 	require.NoError(t, err)
 
 	// The status is updated

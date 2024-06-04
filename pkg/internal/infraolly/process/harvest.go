@@ -16,7 +16,6 @@ import (
 	"time"
 
 	"github.com/hashicorp/golang-lru/v2/simplelru"
-	"github.com/shirou/gopsutil/v3/process"
 
 	"github.com/grafana/beyla/pkg/internal/svc"
 )
@@ -48,7 +47,7 @@ type Config struct {
 
 	Rate time.Duration
 
-	PidMode PidMode
+	PidMode PidMode `env:"BEYLA_PID_MODE" envDefault:"root"`
 }
 
 func newHarvester(cfg *Config, cache *simplelru.LRU[int32, *cacheEntry]) *Harvester {
@@ -80,15 +79,11 @@ type Harvester struct {
 	log                  *slog.Logger
 }
 
-// Pids returns a slice of process IDs that are running now
-func (*Harvester) Pids() ([]int32, error) {
-	return process.Pids()
-}
-
 // Do returns a status of a process whose PID is passed as argument. The 'elapsedSeconds' argument represents the
 // time since this process was statusd for the last time. If the process has been statusd for the first time, this value
 // will be ignored
-func (ps *Harvester) Do(pid int32, svcID *svc.ID) (*Status, error) {
+func (ps *Harvester) Do(svcID *svc.ID) (*Status, error) {
+	pid := svcID.ProcPID
 	ps.log.Debug("harvesting pid", "pid", pid)
 	// Reuses process information that does not vary
 	cached, hasCachedEntry := ps.cache.Get(pid)

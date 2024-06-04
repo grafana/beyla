@@ -177,7 +177,7 @@ func (me *metricsExporter) Do(in <-chan []*process.Status) {
 			}
 			mlog().Debug("reporting data for record", "record", s)
 			// TODO: support user/system/other
-			reporter.cpuTime.ForRecord(s).Set(s.CPUSystemPercent)
+			reporter.cpuTime.ForRecord(s).Set(s.CPUPercent)
 		}
 	}
 }

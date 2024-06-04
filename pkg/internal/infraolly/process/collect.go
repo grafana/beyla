@@ -18,7 +18,6 @@ import (
 
 // Collector returns runtime information about the currently running processes
 type Collector struct {
-	userPids bool
 	ctx      context.Context
 	cfg      *Config
 	harvest  *Harvester
@@ -41,7 +40,6 @@ func NewCollectorProvider(ctx context.Context, input *<-chan []request.Span, cfg
 			cache:    cache,
 			log:      pslog(),
 			newPids:  input,
-			userPids: cfg.PidMode == PidModeUser,
 		}).Run, nil
 	}
 }
@@ -58,14 +56,8 @@ func (ps *Collector) Run(out chan<- []*Status) {
 			ps.log.Debug("exiting")
 		case spans := <-newPids:
 			// updating PIDs map with spans information
-			if ps.userPids {
-				for i := range spans {
-					pids[int32(spans[i].Pid.UserPID)] = &spans[i].ServiceID
-				}
-			} else {
-				for i := range spans {
-					pids[int32(spans[i].Pid.HostPID)] = &spans[i].ServiceID
-				}
+			for i := range spans {
+				pids[spans[i].ServiceID.ProcPID] = &spans[i].ServiceID
 			}
 		case <-collectTicker.C:
 			ps.log.Debug("start process collection")
@@ -85,7 +77,7 @@ func (ps *Collector) Collect(pids map[int32]*svc.ID) ([]*Status, []int32) {
 
 	var removed []int32
 	for pid, svcID := range pids {
-		status, err := ps.harvest.Do(pid, svcID)
+		status, err := ps.harvest.Do(svcID)
 		if err != nil {
 			ps.log.Debug("skipping process", "pid", pid, "error", err)
 			ps.harvest.cache.Remove(pid)

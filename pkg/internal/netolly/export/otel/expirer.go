@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"math"
 	"sync/atomic"
 	"time"
 
@@ -71,21 +72,21 @@ func (g *Counter) Add(v int64) {
 
 type Gauge struct {
 	metricAttributes
-	val atomic.Value
+	// Go standard library does not provide atomic packages so we need to
+	// store the float as bytes and then convert it with the math package
+	floatBits uint64
 }
 
 func NewGauge(attributes attribute.Set) *Gauge {
-	val := atomic.Value{}
-	val.Store(float64(0))
-	return &Gauge{metricAttributes: metricAttributes{attributes: attributes}, val: val}
+	return &Gauge{metricAttributes: metricAttributes{attributes: attributes}}
 }
 
-func (g Gauge) Load() float64 {
-	return g.val.Load().(float64)
+func (g *Gauge) Load() float64 {
+	return math.Float64frombits(atomic.LoadUint64(&g.floatBits))
 }
 
-func (g Gauge) Set(val float64) {
-	g.val.Store(val)
+func (g *Gauge) Set(val float64) {
+	atomic.StoreUint64(&g.floatBits, math.Float64bits(val))
 }
 
 // NewExpirer creates a metric that wraps a Counter. Its labeled instances are dropped

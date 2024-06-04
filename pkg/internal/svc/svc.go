@@ -64,6 +64,8 @@ type ID struct {
 	Instance    string
 
 	Metadata map[attr.Name]string
+
+	ProcPID int32
 }
 
 func (i *ID) String() string {

@@ -232,12 +232,16 @@ func (event *BPFHTTP2Info) hostInfo() (source, target string) {
 }
 
 // nolint:cyclop
-func ReadHTTP2InfoIntoSpan(record *ringbuf.Record) (request.Span, bool, error) {
+func ReadHTTP2InfoIntoSpan(record *ringbuf.Record, filter ServiceFilter) (request.Span, bool, error) {
 	var event BPFHTTP2Info
 
 	err := binary.Read(bytes.NewBuffer(record.RawSample), binary.LittleEndian, &event)
 	if err != nil {
 		return request.Span{}, true, err
+	}
+
+	if !filter.ValidPID(event.Pid.UserPid, event.Pid.Ns, PIDTypeKProbes) {
+		return request.Span{}, true, nil
 	}
 
 	framer := byteFramer(event.Data[:])
@@ -296,4 +300,23 @@ func ReadHTTP2InfoIntoSpan(record *ringbuf.Record) (request.Span, bool, error) {
 	}
 
 	return request.Span{}, true, nil // ignore if we couldn't parse it
+}
+
+func isHTTP2(data []uint8, event *TCPRequestInfo) bool {
+	framer := byteFramer(data)
+
+	for {
+		f, err := framer.ReadFrame()
+
+		if err != nil {
+			break
+		}
+
+		if ff, ok := f.(*http2.HeadersFrame); ok {
+			method, path, _ := readMetaFrame((*BPFConnInfo)(&event.ConnInfo), framer, ff)
+			return method != "" || path != ""
+		}
+	}
+
+	return false
 }

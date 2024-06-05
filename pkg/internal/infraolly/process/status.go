@@ -56,7 +56,7 @@ func OTELGetters(name attr.Name) (attributes.Getter[*Status, attribute.KeyValue]
 		g = func(s *Status) attribute.KeyValue { return attribute.Key(attr.ProcCommand).String(s.Command) }
 	case attr.ProcCommandLine:
 		g = func(s *Status) attribute.KeyValue {
-			return attribute.Key(attr.ProcCommand).String(s.CommandLine)
+			return attribute.Key(attr.ProcCommandLine).String(s.CommandLine)
 		}
 	case attr.ProcExecName:
 		g = func(status *Status) attribute.KeyValue {
@@ -68,7 +68,7 @@ func OTELGetters(name attr.Name) (attributes.Getter[*Status, attribute.KeyValue]
 		}
 	case attr.ProcCommandArgs:
 		g = func(status *Status) attribute.KeyValue {
-			return attribute.Key(attr.ProcCommand).StringSlice(status.CommandArgs)
+			return attribute.Key(attr.ProcCommandArgs).StringSlice(status.CommandArgs)
 		}
 	case attr.ProcOwner:
 		g = func(s *Status) attribute.KeyValue { return attribute.Key(attr.ProcOwner).String(s.User) }
@@ -78,7 +78,7 @@ func OTELGetters(name attr.Name) (attributes.Getter[*Status, attribute.KeyValue]
 		}
 	case attr.ProcPid:
 		g = func(s *Status) attribute.KeyValue {
-			return attribute.Key(attr.ProcParentPid).Int(int(s.ProcessID))
+			return attribute.Key(attr.ProcPid).Int(int(s.ProcessID))
 		}
 	}
 	return g, g != nil

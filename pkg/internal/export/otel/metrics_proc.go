@@ -41,6 +41,8 @@ type procMetricsExporter struct {
 	exporter  metric.Exporter
 	reporters ReporterPool[*procMetrics]
 
+	log *slog.Logger
+
 	attrCPUTime []attributes.Field[*process.Status, attribute.KeyValue]
 }
 
@@ -88,6 +90,7 @@ func newProcMetricsExporter(
 		clock: expire.NewCachedClock(timeNow),
 		attrCPUTime: attributes.OpenTelemetryGetters(
 			process.OTELGetters, attrProv.For(attributes.ProcessCPUUtilization)),
+		log: log,
 	}
 
 	mr.reporters = NewReporterPool[*procMetrics](cfg.Metrics.ReportersCacheLen,
@@ -111,7 +114,7 @@ func newProcMetricsExporter(
 }
 
 func (me *procMetricsExporter) newMetricSet(service *svc.ID) (*procMetrics, error) {
-	log := pmlog().With("service", service)
+	log := me.log.With("service", service)
 	log.Debug("creating new Metrics exporter")
 	resources := getResourceAttrs(service)
 	opts := []metric.Option{
@@ -153,13 +156,14 @@ func (me *procMetricsExporter) Do(in <-chan []*process.Status) {
 		for _, s := range i {
 			reporter, err := me.reporters.For(s.Service)
 			if err != nil {
-				pmlog().Error("unexpected error creating OTEL resource. Ignoring metric",
+				me.log.Error("unexpected error creating OTEL resource. Ignoring metric",
 					err, "service", s.Service)
 				continue
 			}
-			pmlog().Debug("reporting data for record", "record", s)
-			// TODO: support user/system/other
-			reporter.cpuTime.ForRecord(s).Set(s.CPUPercent)
+			me.log.Debug("reporting data for record", "record", s)
+			// TODO: support process.cpu.state=user/system/total
+			// TODO: add more process metrics https://opentelemetry.io/docs/specs/semconv/system/process-metrics/
+			reporter.cpuTime.ForRecord(s).Set(s.CPUPercent / 100)
 		}
 	}
 }

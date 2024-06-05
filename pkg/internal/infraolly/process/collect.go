@@ -18,10 +18,11 @@ import (
 
 type CollectConfig struct {
 	// RunMode defaults to "privileged". A non-privileged harvester will omit some information like open FDs.
+	// TODO: move to an upper layer
 	RunMode RunMode
 
 	// Interval between harvests
-	Interval time.Duration
+	Interval time.Duration `yaml:"interval" env:"BEYLA_PROCESSES_INTERVAL"`
 }
 
 // Collector returns runtime information about the currently running processes.

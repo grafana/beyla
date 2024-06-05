@@ -84,7 +84,7 @@ var (
 // as long as the metric name is recorgnisable.
 func normalizeMetric(name Section) Section {
 	nameStr := strings.ReplaceAll(string(name), "_", ".")
-	for _, suffix := range []string{".bucket", ".sum", ".count", ".total"} {
+	for _, suffix := range []string{".ratio", ".bucket", ".sum", ".count", ".total"} {
 		if strings.HasSuffix(nameStr, suffix) {
 			nameStr = nameStr[:len(nameStr)-len(suffix)]
 			break

@@ -107,8 +107,6 @@ const (
 	ProcOwner       = Name(semconv.ProcessOwnerKey)
 	ProcParentPid   = Name(semconv.ProcessParentPIDKey)
 	ProcPid         = Name(semconv.ProcessPIDKey)
-
-	// TODO: not yet supported attributes
 	ProcCommandArgs = Name(semconv.ProcessCommandArgsKey)
 	ProcExecName    = Name(semconv.ProcessExecutableNameKey)
 	ProcExecPath    = Name(semconv.ProcessExecutablePathKey)

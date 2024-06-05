@@ -101,7 +101,7 @@ var MisclassifiedEvents = make(chan MisclassifiedEvent)
 
 func ptlog() *slog.Logger { return slog.With("component", "ebpf.ProcessTracer") }
 
-func ReadHTTPRequestTraceAsSpan(record *ringbuf.Record) (request.Span, bool, error) {
+func ReadHTTPRequestTraceAsSpan(record *ringbuf.Record, filter ServiceFilter) (request.Span, bool, error) {
 	var eventType uint8
 
 	// we read the type first, depending on the type we decide what kind of record we have
@@ -114,11 +114,11 @@ func ReadHTTPRequestTraceAsSpan(record *ringbuf.Record) (request.Span, bool, err
 	case EventTypeSQL:
 		return ReadSQLRequestTraceAsSpan(record)
 	case EventTypeKHTTP:
-		return ReadHTTPInfoIntoSpan(record)
+		return ReadHTTPInfoIntoSpan(record, filter)
 	case EventTypeKHTTP2:
-		return ReadHTTP2InfoIntoSpan(record)
+		return ReadHTTP2InfoIntoSpan(record, filter)
 	case EventTypeTCP:
-		return ReadTCPRequestIntoSpan(record)
+		return ReadTCPRequestIntoSpan(record, filter)
 	case EventTypeGoKafka:
 		return ReadGoKafkaRequestIntoSpan(record)
 	case EventTypeGoRedis:

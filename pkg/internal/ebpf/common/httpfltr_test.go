@@ -86,6 +86,8 @@ func TestCstr(t *testing.T) {
 }
 
 func TestToRequestTrace(t *testing.T) {
+	fltr := TestPidsFilter{services: map[uint32]svc.ID{}}
+
 	var record BPFHTTPInfo
 	record.Type = 1
 	record.StartMonotimeNs = 123456
@@ -100,7 +102,7 @@ func TestToRequestTrace(t *testing.T) {
 	err := binary.Write(buf, binary.LittleEndian, &record)
 	assert.NoError(t, err)
 
-	result, _, err := ReadHTTPInfoIntoSpan(&ringbuf.Record{RawSample: buf.Bytes()})
+	result, _, err := ReadHTTPInfoIntoSpan(&ringbuf.Record{RawSample: buf.Bytes()}, &fltr)
 	assert.NoError(t, err)
 
 	expected := request.Span{
@@ -120,6 +122,8 @@ func TestToRequestTrace(t *testing.T) {
 }
 
 func TestToRequestTraceNoConnection(t *testing.T) {
+	fltr := TestPidsFilter{services: map[uint32]svc.ID{}}
+
 	var record BPFHTTPInfo
 	record.Type = 1
 	record.StartMonotimeNs = 123456
@@ -133,7 +137,7 @@ func TestToRequestTraceNoConnection(t *testing.T) {
 	err := binary.Write(buf, binary.LittleEndian, &record)
 	assert.NoError(t, err)
 
-	result, _, err := ReadHTTPInfoIntoSpan(&ringbuf.Record{RawSample: buf.Bytes()})
+	result, _, err := ReadHTTPInfoIntoSpan(&ringbuf.Record{RawSample: buf.Bytes()}, &fltr)
 	assert.NoError(t, err)
 
 	// change the expected port just before testing
@@ -154,6 +158,8 @@ func TestToRequestTraceNoConnection(t *testing.T) {
 }
 
 func TestToRequestTrace_BadHost(t *testing.T) {
+	fltr := TestPidsFilter{services: map[uint32]svc.ID{}}
+
 	var record BPFHTTPInfo
 	record.Type = 1
 	record.StartMonotimeNs = 123456
@@ -169,7 +175,7 @@ func TestToRequestTrace_BadHost(t *testing.T) {
 	err := binary.Write(buf, binary.LittleEndian, &record)
 	assert.NoError(t, err)
 
-	result, _, err := ReadHTTPInfoIntoSpan(&ringbuf.Record{RawSample: buf.Bytes()})
+	result, _, err := ReadHTTPInfoIntoSpan(&ringbuf.Record{RawSample: buf.Bytes()}, &fltr)
 	assert.NoError(t, err)
 
 	expected := request.Span{

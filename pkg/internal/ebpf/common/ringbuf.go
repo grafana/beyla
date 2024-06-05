@@ -37,10 +37,10 @@ type ringBufForwarder struct {
 	spansLen   int
 	access     sync.Mutex
 	ticker     *time.Ticker
-	reader     func(*ringbuf.Record) (request.Span, bool, error)
+	reader     func(*ringbuf.Record, ServiceFilter) (request.Span, bool, error)
 	// filter the input spans, eliminating these from processes whose PID
 	// belong to a process that does not match the discovery policies
-	filter  func([]request.Span) []request.Span
+	filter  ServiceFilter
 	metrics imetrics.Reporter
 }
 
@@ -67,7 +67,7 @@ func SharedRingbuf(
 	rbf := ringBufForwarder{
 		cfg: cfg, logger: log, ringbuffer: ringbuffer,
 		closers: nil, reader: ReadHTTPRequestTraceAsSpan,
-		filter: filter.Filter, metrics: metrics,
+		filter: filter, metrics: metrics,
 	}
 	singleRbf = &rbf
 	return singleRbf.sharedReadAndForward
@@ -77,7 +77,7 @@ func ForwardRingbuf(
 	cfg *TracerConfig,
 	ringbuffer *ebpf.Map,
 	filter ServiceFilter,
-	reader func(*ringbuf.Record) (request.Span, bool, error),
+	reader func(*ringbuf.Record, ServiceFilter) (request.Span, bool, error),
 	logger *slog.Logger,
 	metrics imetrics.Reporter,
 	closers ...io.Closer,
@@ -85,7 +85,7 @@ func ForwardRingbuf(
 	rbf := ringBufForwarder{
 		cfg: cfg, logger: logger, ringbuffer: ringbuffer,
 		closers: closers, reader: reader,
-		filter: filter.Filter, metrics: metrics,
+		filter: filter, metrics: metrics,
 	}
 	return rbf.readAndForward
 }
@@ -170,7 +170,7 @@ func (rbf *ringBufForwarder) alreadyForwarded(ctx context.Context, _ []io.Closer
 func (rbf *ringBufForwarder) processAndForward(record ringbuf.Record, spansChan chan<- []request.Span) {
 	rbf.access.Lock()
 	defer rbf.access.Unlock()
-	s, ignore, err := rbf.reader(&record)
+	s, ignore, err := rbf.reader(&record, rbf.filter)
 	if err != nil {
 		rbf.logger.Error("error parsing perf event", err)
 		return
@@ -197,7 +197,7 @@ func (rbf *ringBufForwarder) processAndForward(record ringbuf.Record, spansChan 
 
 func (rbf *ringBufForwarder) flushEvents(spansChan chan<- []request.Span) {
 	rbf.metrics.TracerFlush(rbf.spansLen)
-	spansChan <- rbf.filter(rbf.spans[:rbf.spansLen])
+	spansChan <- rbf.filter.Filter(rbf.spans[:rbf.spansLen])
 	rbf.spans = make([]request.Span, rbf.cfg.BatchLength)
 	rbf.spansLen = 0
 }

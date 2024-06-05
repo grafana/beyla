@@ -1,4 +1,4 @@
-package ebpfcommon
+package exec
 
 import (
 	"bufio"

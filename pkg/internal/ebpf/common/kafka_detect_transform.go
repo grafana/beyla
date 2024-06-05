@@ -3,6 +3,7 @@ package ebpfcommon
 import (
 	"encoding/binary"
 	"errors"
+	"unsafe"
 
 	trace2 "go.opentelemetry.io/otel/trace"
 
@@ -232,7 +233,7 @@ func TCPToKafkaToSpan(trace *TCPRequestInfo, data *KafkaInfo) request.Span {
 	hostPort := 0
 
 	if trace.ConnInfo.S_port != 0 || trace.ConnInfo.D_port != 0 {
-		peer, hostname = trace.reqHostInfo()
+		peer, hostname = (*BPFConnInfo)(unsafe.Pointer(&trace.ConnInfo)).reqHostInfo()
 		hostPort = int(trace.ConnInfo.D_port)
 	}
 	return request.Span{

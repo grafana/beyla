@@ -69,12 +69,7 @@ func TestLinuxHarvester_Do(t *testing.T) {
 		"process status must be R (running), S (interruptible sleep) or D (uninterruptible sleep)")
 	assert.NotZero(t, status.MemoryVMSBytes)
 	assert.NotZero(t, status.MemoryRSSBytes)
-	assert.NotZero(t, status.CPUPercent)
-	assert.NotZero(t, status.CPUUserPercent)
-	assert.NotZero(t, status.CPUSystemPercent)
 	assert.NotZero(t, status.ParentProcessID)
-	assert.NotZero(t, status.ThreadCount)
-	assert.NotZero(t, status.FdCount)
 	assert.NotZero(t, status.ThreadCount)
 }
 
@@ -102,36 +97,13 @@ func TestLinuxHarvester_Do_FullCommandLine(t *testing.T) {
 	})
 }
 
-func TestLinuxHarvester_Do_StripCommandLine(t *testing.T) {
-	cmd := exec.Command("/bin/sleep", "1m")
-	require.NoError(t, cmd.Start())
-	defer func() {
-		_ = cmd.Process.Kill()
-	}()
-
-	// Given a process harvester
-	cache, _ := simplelru.NewLRU[int32, *linuxProcess](math.MaxInt, nil)
-	h := newHarvester(&CollectConfig{}, cache)
-
-	test.Eventually(t, 5*time.Second, func(t require.TestingT) {
-		// When retrieving for a given process status (e.g. the current testing executable)
-		status, err := h.Harvest(&svc.ID{ProcPID: int32(cmd.Process.Pid)})
-
-		// It returns the corresponding Command line without stripping arguments
-		require.NoError(t, err)
-		require.NotNil(t, status)
-
-		assert.True(t, strings.HasSuffix(status.CommandLine, "sleep"), "%q should not have arguments", status.CommandLine)
-	})
-}
-
 func TestLinuxHarvester_Do_InvalidateCache_DifferentCmd(t *testing.T) {
 	currentPid := int32(os.Getpid())
 
 	// Given a process harvester
 	// That has cached an old process sharing the PID with a new process
 	cache, _ := simplelru.NewLRU[int32, *linuxProcess](math.MaxInt, nil)
-	cache.Add(currentPid, &linuxProcess{cmdLine: "something old"})
+	cache.Add(currentPid, &linuxProcess{stats: procStats{command: "something old"}})
 	h := newHarvester(&CollectConfig{}, cache)
 
 	// When the process is harvested

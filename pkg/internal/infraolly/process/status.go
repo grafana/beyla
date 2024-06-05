@@ -16,15 +16,19 @@ func pslog() *slog.Logger {
 
 // Status of a process after being harvested
 type Status struct {
-	ProcessID        int32
-	Command          string
+	ProcessID   int32
+	Command     string
+	CommandArgs []string
+	CommandLine string
+	ExecName    string
+	ExecPath    string
+
 	User             string
 	MemoryRSSBytes   int64
 	MemoryVMSBytes   int64
 	CPUPercent       float64
 	CPUUserPercent   float64
 	CPUSystemPercent float64
-	CommandLine      string
 	Status           string
 	ParentProcessID  int32
 	ThreadCount      int32
@@ -53,6 +57,18 @@ func OTELGetters(name attr.Name) (attributes.Getter[*Status, attribute.KeyValue]
 	case attr.ProcCommandLine:
 		g = func(s *Status) attribute.KeyValue {
 			return attribute.Key(attr.ProcCommand).String(s.CommandLine)
+		}
+	case attr.ProcExecName:
+		g = func(status *Status) attribute.KeyValue {
+			return attribute.Key(attr.ProcExecName).String(status.ExecName)
+		}
+	case attr.ProcExecPath:
+		g = func(status *Status) attribute.KeyValue {
+			return attribute.Key(attr.ProcExecPath).String(status.ExecPath)
+		}
+	case attr.ProcCommandArgs:
+		g = func(status *Status) attribute.KeyValue {
+			return attribute.Key(attr.ProcCommand).StringSlice(status.CommandArgs)
 		}
 	case attr.ProcOwner:
 		g = func(s *Status) attribute.KeyValue { return attribute.Key(attr.ProcOwner).String(s.User) }

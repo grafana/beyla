@@ -28,57 +28,29 @@ func TestLinuxProcess_CmdLine(t *testing.T) {
 	_ = os.Setenv("HOST_PROC", tmpDir)
 
 	testCases := []struct {
-		rawProcCmdline []byte
-		expected       string
+		rawProcCmdline   []byte
+		expectedExec     string
+		expectedExecPath string
+		expectedArgs     []string
+		expectedCmdLine  string
 	}{
-		{[]byte{0}, ""},
-		{[]byte{'b', 'a', 's', 'h', 0}, "bash"},
-		{[]byte{'/', 'b', 'i', 'n', '/', 'b', 'a', 's', 'h', 0}, "/bin/bash"},
-		{[]byte{'/', 'b', 'i', 'n', '/', 'b', 'a', 's', 'h', 0, 'a', 'r', 'g', 0}, "/bin/bash arg"},
-		{[]byte{'-', '/', 'b', 'i', 'n', '/', 'b', 'a', 's', 'h', 0, 'a', 'r', 'g', 0}, "/bin/bash arg"},
+		{[]byte{0}, "", "", nil, ""},
+		{[]byte{'b', 'a', 's', 'h', 0}, "bash", "bash", nil, "bash"},
+		{[]byte{'/', 'b', 'i', 'n', '/', 'b', 'a', 's', 'h', 0}, "bash", "/bin/bash", nil, "/bin/bash"},
+		{[]byte{'/', 'b', 'i', 'n', '/', 'b', 'a', 's', 'h', 0, 'a', 'r', 'g', 0}, "bash", "/bin/bash", []string{"arg"}, "/bin/bash arg"},
+		{[]byte{'-', '/', 'b', 'i', 'n', '/', 'b', 'a', 's', 'h', 0, 'a', 'r', 'g', 0}, "bash", "/bin/bash", []string{"arg"}, "/bin/bash arg"},
 		{
 			[]byte{'/', 'a', ' ', 'f', 'o', 'l', 'd', 'e', 'r', '/', 'c', 'm', 'd', 0, '-', 'a', 'g', 0, 'x', 'x', 0},
-			"/a folder/cmd -ag xx",
+			"cmd", "/a folder/cmd", []string{"-ag", "xx"}, "/a folder/cmd -ag xx",
 		},
 	}
 	for _, tc := range testCases {
 		require.NoError(t, os.WriteFile(path.Join(processDir, "cmdline"), tc.rawProcCmdline, 0o600))
-		lp := linuxProcess{pid: 12345}
-		actual, err := lp.CmdLine()
-		assert.NoError(t, err)
-		assert.Equal(t, tc.expected, actual)
-	}
-}
-
-func TestLinuxProcess_CmdLine_NoArgs(t *testing.T) {
-	hostProc := os.Getenv("HOST_PROC")
-	defer os.Setenv("HOST_PROC", hostProc)
-	tmpDir, err := os.MkdirTemp("", "proc")
-	require.NoError(t, err)
-	processDir := path.Join(tmpDir, "12345")
-	require.NoError(t, os.MkdirAll(processDir, 0o755))
-	_ = os.Setenv("HOST_PROC", tmpDir)
-
-	testCases := []struct {
-		rawProcCmdline []byte
-		expected       string
-	}{
-		{[]byte{0}, ""},
-		{[]byte{'b', 'a', 's', 'h', 0}, "bash"},
-		{[]byte{'-', 'b', 'a', 's', 'h', 0}, "bash"},
-		{[]byte{'/', 'b', 'i', 'n', '/', 'b', 'a', 's', 'h', 0}, "/bin/bash"},
-		{[]byte{'/', 'b', 'i', 'n', '/', 'b', 'a', 's', 'h', 0, 'a', 'r', 'g', 0}, "/bin/bash"},
-		{
-			[]byte{'/', 'a', ' ', 'f', 'o', 'l', 'd', 'e', 'r', '/', 'c', 'm', 'd', 0, '-', 'a', 'g', 0, 'x', 'x', 0},
-			"/a folder/cmd",
-		},
-	}
-	for _, tc := range testCases {
-		require.NoError(t, os.WriteFile(path.Join(processDir, "cmdline"), tc.rawProcCmdline, 0o600))
-		lp := linuxProcess{pid: 12345}
-		actual, err := lp.CmdLine()
-		assert.NoError(t, err)
-		assert.Equal(t, tc.expected, actual)
+		lp := linuxProcess{pid: 12345, procFSRoot: tmpDir}
+		lp.FetchCommandInfo()
+		assert.Equal(t, tc.expectedExecPath, lp.execPath)
+		assert.Equal(t, tc.expectedArgs, lp.commandArgs)
+		assert.Equal(t, tc.expectedCmdLine, lp.commandLine)
 	}
 }
 
@@ -106,31 +78,19 @@ func TestLinuxProcess_CmdLine_NotStandard(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		require.NoError(t, os.WriteFile(path.Join(processDir, "cmdline"), tc.rawProcCmdline, 0o600))
-		lp := linuxProcess{pid: 12345}
+		lp := linuxProcess{pid: 12345, procFSRoot: tmpDir}
 
-		// Testing both the cases with and without command line stripping
-		actual, err := lp.CmdLine()
-		assert.NoError(t, err)
-		assert.Equal(t, tc.expected, actual)
-
-		actual, err = lp.CmdLine()
-		assert.NoError(t, err)
-		assert.Equal(t, tc.expected, actual)
+		lp.FetchCommandInfo()
+		assert.Equal(t, tc.expected, lp.commandLine)
 	}
 }
 
 func TestLinuxProcess_CmdLine_ProcessNotExist(t *testing.T) {
 	lp := linuxProcess{pid: 999999999}
-	actual, err := lp.CmdLine()
-	assert.NoError(t, err)
-	assert.Equal(t, "", actual)
-}
-
-func TestLinuxProcess_CmdLine_ProcessNotExist_NoStrip(t *testing.T) {
-	lp := linuxProcess{pid: 999999999}
-	actual, err := lp.CmdLine()
-	assert.NoError(t, err)
-	assert.Equal(t, "", actual)
+	lp.FetchCommandInfo()
+	assert.Empty(t, lp.execPath)
+	assert.Empty(t, lp.commandArgs)
+	assert.Empty(t, lp.commandLine)
 }
 
 func TestParseProcStatMultipleWordsProcess(t *testing.T) {
@@ -156,10 +116,10 @@ func TestParseProcStatMultipleWordsProcess(t *testing.T) {
 }
 
 func TestParseProcStatSingleWordProcess(t *testing.T) {
-	content := `1232 (newrelic-infra) S 1 1232 1232 0 -1 1077960960 4799 282681 88 142 24 15 193 94 20 0 12 0 1071 464912384 4490 18446744073709551615 1 1 0 0 0 0 0 0 2143420159 0 0 0 17 0 0 0 14 0 0 0 0 0 0 0 0 0 0`
+	content := `1232 (foo-bar) S 1 1232 1232 0 -1 1077960960 4799 282681 88 142 24 15 193 94 20 0 12 0 1071 464912384 4490 18446744073709551615 1 1 0 0 0 0 0 0 2143420159 0 0 0 17 0 0 0 14 0 0 0 0 0 0 0 0 0 0`
 
 	expected := procStats{
-		command:    "newrelic-infra",
+		command:    "foo-bar",
 		ppid:       1,
 		numThreads: 12,
 		state:      "S",

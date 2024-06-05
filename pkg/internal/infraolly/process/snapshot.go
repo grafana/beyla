@@ -4,6 +4,7 @@
 package process
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"path"
@@ -43,9 +44,13 @@ type linuxProcess struct {
 	procFSRoot string
 
 	// data that will be reused between harvests of the same process.
-	pid     int32
-	user    string
-	cmdLine string
+	pid                int32
+	user               string
+	commandInfoFetched bool
+	commandArgs        []string
+	commandLine        string
+	execPath           string
+	execName           string
 }
 
 // needed to calculate RSS.
@@ -351,13 +356,14 @@ func (pw *linuxProcess) Command() string {
 }
 
 //////////////////////////
-// Data to be derived from /proc/<pid>/cmdline: command line, and command line without arguments
+// Data to be derived from /proc/<pid>/cmdline: command line and arguments
 //////////////////////////
 
-func (pw *linuxProcess) CmdLine() (string, error) {
-	if pw.cmdLine != "" {
-		return pw.cmdLine, nil
+func (pw *linuxProcess) FetchCommandInfo() {
+	if pw.commandInfoFetched {
+		return
 	}
+	pw.commandInfoFetched = true
 
 	cmdPath := path.Join(pw.procFSRoot, strconv.Itoa(int(pw.pid)), "cmdline")
 	procCmdline, err := os.ReadFile(cmdPath)
@@ -366,7 +372,7 @@ func (pw *linuxProcess) CmdLine() (string, error) {
 	}
 
 	if len(procCmdline) == 0 {
-		return "", nil // zombie process
+		return // zombie process
 	}
 
 	// Ignoring dash on session commands
@@ -374,25 +380,48 @@ func (pw *linuxProcess) CmdLine() (string, error) {
 		procCmdline = procCmdline[1:]
 	}
 
-	cmdLineBytes := make([]byte, 0, len(procCmdline))
-	for i := 0; i < len(procCmdline); i++ {
-		if procCmdline[i] == 0 {
-			// ignoring the trailing zero that ends /proc/<pid>/cmdline, but adding the last character if the file
-			// does not end in zero
-			if i < len(procCmdline)-1 {
-				cmdLineBytes = append(cmdLineBytes, ' ')
-			} else {
-				break
-			}
-		} else {
-			cmdLineBytes = append(cmdLineBytes, procCmdline[i])
+	fullCommandLine := strings.Builder{}
+	// get command
+	procCmdline = sanitizeCommandLine(procCmdline)
+
+	// get command args
+	procCmdline, pw.execPath, _ = getNextArg(procCmdline)
+	pw.execName = path.Base(pw.execPath)
+
+	fullCommandLine.WriteString(pw.execPath)
+	for {
+		var arg string
+		var ok bool
+		procCmdline, arg, ok = getNextArg(procCmdline)
+		if !ok {
+			break
 		}
+		fullCommandLine.WriteByte(' ')
+		fullCommandLine.WriteString(arg)
+		pw.commandArgs = append(pw.commandArgs, arg)
 	}
-	pw.cmdLine = sanitizeCommandLine(string(cmdLineBytes))
-	return pw.cmdLine, nil
+	pw.commandLine = fullCommandLine.String()
+}
+
+// getNextArg consumes the next found argument from a /proc/*/cmdline string
+// (where arguments are separated by the zero byte)
+func getNextArg(procCmdline []byte) ([]byte, string, bool) {
+	if len(procCmdline) == 0 {
+		return nil, "", false
+	}
+	var arg []byte
+	for len(procCmdline) > 0 && procCmdline[0] != 0 {
+		arg = append(arg, procCmdline[0])
+		procCmdline = procCmdline[1:]
+	}
+	// ignore the zero when it's an argument separator
+	if len(procCmdline) > 0 {
+		procCmdline = procCmdline[1:]
+	}
+	return procCmdline, string(arg), true
 }
 
 // sanitizeCommandLine cleans the command line to remove wrappers like quotation marks.
-func sanitizeCommandLine(cmd string) string {
-	return strings.Trim(cmd, " \t\n\v\f\r\"'`")
+func sanitizeCommandLine(cmd []byte) []byte {
+	return bytes.Trim(cmd, " \t\n\v\f\r\"'`")
 }

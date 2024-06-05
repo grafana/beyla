@@ -1,4 +1,4 @@
-package process
+package pipe
 
 import (
 	"context"
@@ -9,6 +9,7 @@ import (
 
 	"github.com/grafana/beyla/pkg/beyla"
 	"github.com/grafana/beyla/pkg/internal/export/otel"
+	"github.com/grafana/beyla/pkg/internal/infraolly/process"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/pkg/internal/request"
 )
@@ -17,13 +18,13 @@ import (
 // Its management is moved here because it's only activated if the process
 // metrics are activated.
 type processSubPipeline struct {
-	Collector  pipe.Start[[]*Status]
-	OtelExport pipe.Final[[]*Status]
+	Collector  pipe.Start[[]*process.Status]
+	OtelExport pipe.Final[[]*process.Status]
 	// TODO: add prometheus exporter
 }
 
-func collector(sp *processSubPipeline) *pipe.Start[[]*Status]  { return &sp.Collector }
-func otelExport(sp *processSubPipeline) *pipe.Final[[]*Status] { return &sp.OtelExport }
+func procCollect(sp *processSubPipeline) *pipe.Start[[]*process.Status] { return &sp.Collector }
+func otelExport(sp *processSubPipeline) *pipe.Final[[]*process.Status]  { return &sp.OtelExport }
 
 func (sp *processSubPipeline) Connect() {
 	sp.Collector.SendTo(sp.OtelExport)
@@ -48,7 +49,7 @@ func SubPipelineProvider(ctx context.Context, ctxInfo *global.ContextInfo, cfg *
 		connectorChan := make(chan []request.Span, cfg.ChannelBufferLen)
 		var connector <-chan []request.Span = connectorChan
 		nb := pipe.NewBuilder(&processSubPipeline{}, pipe.ChannelBufferLen(cfg.ChannelBufferLen))
-		pipe.AddStartProvider(nb, collector, NewCollectorProvider(ctx, &connector, &cfg.Processes))
+		pipe.AddStartProvider(nb, procCollect, process.NewCollectorProvider(ctx, &connector, &cfg.Processes))
 		pipe.AddFinalProvider(nb, otelExport, otel.ProcMetricsExporterProvider(ctx, ctxInfo,
 			&otel.ProcMetricsConfig{
 				Metrics:            &cfg.Metrics,
@@ -60,6 +61,8 @@ func SubPipelineProvider(ctx context.Context, ctxInfo *global.ContextInfo, cfg *
 			return nil, fmt.Errorf("creating process subpipeline: %w", err)
 		}
 		return func(in <-chan []request.Span) {
+			// connect the input channel of this final node to the input of the
+			// process collector
 			connector = in
 			runner.Start()
 			<-ctx.Done()

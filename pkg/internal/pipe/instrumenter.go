@@ -14,7 +14,6 @@ import (
 	"github.com/grafana/beyla/pkg/internal/export/prom"
 	"github.com/grafana/beyla/pkg/internal/filter"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
-	"github.com/grafana/beyla/pkg/internal/infraolly/process"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/pkg/internal/request"
 	"github.com/grafana/beyla/pkg/internal/traces"
@@ -125,7 +124,7 @@ func newGraphBuilder(ctx context.Context, config *beyla.Config, ctxInfo *global.
 
 	// process subpipeline will start another pipeline only to collect and export data
 	// about the processes of an instrumented application
-	pipe.AddFinalProvider(gnb, processReport, process.SubPipelineProvider(ctx, ctxInfo, config))
+	pipe.AddFinalProvider(gnb, processReport, SubPipelineProvider(ctx, ctxInfo, config))
 
 	// The returned builder later invokes its "Build" function that, given
 	// the contents of the nodesMap struct, will instantiate

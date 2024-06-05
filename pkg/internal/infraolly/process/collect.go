@@ -24,14 +24,16 @@ type CollectConfig struct {
 	Interval time.Duration
 }
 
-// Collector returns runtime information about the currently running processes
+// Collector returns runtime information about the currently running processes.
+// The collector receives each application trace from the newPids internal channel,
+// to know which PIDs are active.
 type Collector struct {
+	newPids *<-chan []request.Span
 	ctx     context.Context
 	cfg     *CollectConfig
 	harvest *Harvester
 	cache   *simplelru.LRU[int32, *linuxProcess]
 	log     *slog.Logger
-	newPids *<-chan []request.Span
 }
 
 // NewCollectorProvider creates and returns a new process Collector, given an agent context.

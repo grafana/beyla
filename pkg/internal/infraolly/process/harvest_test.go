@@ -10,7 +10,6 @@ import (
 	"math"
 	"os"
 	"os/exec"
-	"strings"
 	"testing"
 	"time"
 
@@ -49,7 +48,7 @@ func TestLinuxHarvester_IsPrivileged(t *testing.T) {
 	}
 }
 
-func TestLinuxHarvester_Do(t *testing.T) {
+func TestLinuxHarvester_Harvest(t *testing.T) {
 	// Given a process harvester
 	cache, _ := simplelru.NewLRU[int32, *linuxProcess](math.MaxInt, nil)
 	h := newHarvester(&CollectConfig{}, cache)
@@ -73,7 +72,7 @@ func TestLinuxHarvester_Do(t *testing.T) {
 	assert.NotZero(t, status.ThreadCount)
 }
 
-func TestLinuxHarvester_Do_FullCommandLine(t *testing.T) {
+func TestLinuxHarvester_Harvest_FullCommandLine(t *testing.T) {
 	cmd := exec.Command("/bin/sleep", "1m")
 	require.NoError(t, cmd.Start())
 	defer func() {
@@ -92,8 +91,11 @@ func TestLinuxHarvester_Do_FullCommandLine(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, status)
 
-		assert.False(t, strings.HasSuffix(status.CommandLine, "sleep"), "%q should have arguments", status.CommandLine)
-		assert.Contains(t, status.CommandLine, "sleep")
+		assert.Equal(t, "sleep", status.ExecName)
+		assert.Equal(t, "/bin/sleep", status.ExecPath)
+		assert.Equal(t, "/bin/sleep 1m", status.CommandLine)
+		assert.Equal(t, "sleep", status.Command)
+		assert.Equal(t, []string{"1m"}, status.CommandArgs)
 	})
 }
 

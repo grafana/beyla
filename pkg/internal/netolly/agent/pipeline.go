@@ -6,10 +6,10 @@ import (
 	"github.com/mariomac/pipes/pipe"
 
 	"github.com/grafana/beyla/pkg/internal/export/otel"
+	"github.com/grafana/beyla/pkg/internal/export/prom"
 	"github.com/grafana/beyla/pkg/internal/filter"
 	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
 	"github.com/grafana/beyla/pkg/internal/netolly/export"
-	"github.com/grafana/beyla/pkg/internal/netolly/export/prom"
 	"github.com/grafana/beyla/pkg/internal/netolly/flow"
 	"github.com/grafana/beyla/pkg/internal/netolly/transform/cidr"
 	"github.com/grafana/beyla/pkg/internal/netolly/transform/k8s"
@@ -139,7 +139,7 @@ func (f *Flows) pipelineBuilder(ctx context.Context) (*pipe.Builder[*FlowsPipeli
 		})
 	})
 	pipe.AddFinalProvider(pb, promExport, func() (pipe.FinalFunc[[]*ebpf.Record], error) {
-		return prom.PrometheusEndpoint(ctx, f.ctxInfo, &prom.PrometheusConfig{
+		return prom.NetPrometheusEndpoint(ctx, f.ctxInfo, &prom.NetPrometheusConfig{
 			Config:             &f.cfg.Prometheus,
 			AttributeSelectors: f.cfg.Attributes.Select,
 		})

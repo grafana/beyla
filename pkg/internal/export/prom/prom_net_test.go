@@ -3,9 +3,6 @@ package prom
 import (
 	"context"
 	"fmt"
-	"io"
-	"net/http"
-	"sync"
 	"testing"
 	"time"
 
@@ -16,12 +13,9 @@ import (
 	"github.com/grafana/beyla/pkg/internal/connector"
 	"github.com/grafana/beyla/pkg/internal/export/attributes"
 	"github.com/grafana/beyla/pkg/internal/export/otel"
-	"github.com/grafana/beyla/pkg/internal/export/prom"
 	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 )
-
-const timeout = 3 * time.Second
 
 func TestMetricsExpiration(t *testing.T) {
 	now := syncedClock{now: time.Now()}
@@ -34,9 +28,9 @@ func TestMetricsExpiration(t *testing.T) {
 	promURL := fmt.Sprintf("http://127.0.0.1:%d/metrics", openPort)
 
 	// GIVEN a Prometheus Metrics Exporter with a metrics expire time of 3 minutes
-	exporter, err := PrometheusEndpoint(
+	exporter, err := NetPrometheusEndpoint(
 		ctx, &global.ContextInfo{Prometheus: &connector.PrometheusManager{}},
-		&PrometheusConfig{Config: &prom.PrometheusConfig{
+		&NetPrometheusConfig{Config: &PrometheusConfig{
 			Port:                        openPort,
 			Path:                        "/metrics",
 			TTL:                         3 * time.Minute,
@@ -99,34 +93,4 @@ func TestMetricsExpiration(t *testing.T) {
 		assert.Contains(t, exported, `beyla_network_flow_bytes_total{dst_name="bae",src_name="baz"} 456`)
 	})
 	assert.NotContains(t, exported, `beyla_network_flow_bytes_total{dst_name="bar",src_name="foo"}`)
-}
-
-var mmux = sync.Mutex{}
-
-func getMetrics(t require.TestingT, promURL string) string {
-	mmux.Lock()
-	defer mmux.Unlock()
-	resp, err := http.Get(promURL)
-	require.NoError(t, err)
-	require.Equal(t, http.StatusOK, resp.StatusCode)
-	body, err := io.ReadAll(resp.Body)
-	require.NoError(t, err)
-	return string(body)
-}
-
-type syncedClock struct {
-	mt  sync.Mutex
-	now time.Time
-}
-
-func (c *syncedClock) Now() time.Time {
-	c.mt.Lock()
-	defer c.mt.Unlock()
-	return c.now
-}
-
-func (c *syncedClock) Advance(t time.Duration) {
-	c.mt.Lock()
-	defer c.mt.Unlock()
-	c.now = c.now.Add(t)
 }

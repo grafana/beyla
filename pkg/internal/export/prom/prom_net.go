@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"slices"
-	"time"
 
 	"github.com/mariomac/pipes/pipe"
 	"github.com/prometheus/client_golang/prometheus"
@@ -13,22 +12,20 @@ import (
 	"github.com/grafana/beyla/pkg/internal/export/attributes"
 	"github.com/grafana/beyla/pkg/internal/export/expire"
 	"github.com/grafana/beyla/pkg/internal/export/otel"
-	"github.com/grafana/beyla/pkg/internal/export/prom"
 	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 )
 
 // injectable function reference for testing
-var timeNow = time.Now
 
-// PrometheusConfig for network metrics just wraps the global prom.PrometheusConfig as provided by the user
-type PrometheusConfig struct {
-	Config             *prom.PrometheusConfig
+// NetPrometheusConfig for network metrics just wraps the global prom.NetPrometheusConfig as provided by the user
+type NetPrometheusConfig struct {
+	Config             *PrometheusConfig
 	AttributeSelectors attributes.Selection
 }
 
 // nolint:gocritic
-func (p PrometheusConfig) Enabled() bool {
+func (p NetPrometheusConfig) Enabled() bool {
 	return p.Config != nil && p.Config.Port != 0 && slices.Contains(p.Config.Features, otel.FeatureNetwork)
 }
 
@@ -37,8 +34,8 @@ type counterCollector interface {
 	WithLabelValues(...string) prometheus.Counter
 }
 
-type metricsReporter struct {
-	cfg *prom.PrometheusConfig
+type netMetricsReporter struct {
+	cfg *PrometheusConfig
 
 	flowBytes counterCollector
 
@@ -50,27 +47,27 @@ type metricsReporter struct {
 	bgCtx context.Context
 }
 
-func PrometheusEndpoint(
+func NetPrometheusEndpoint(
 	ctx context.Context,
 	ctxInfo *global.ContextInfo,
-	cfg *PrometheusConfig,
+	cfg *NetPrometheusConfig,
 ) (pipe.FinalFunc[[]*ebpf.Record], error) {
 	if !cfg.Enabled() {
 		// This node is not going to be instantiated. Let the pipes library just ignore it.
 		return pipe.IgnoreFinal[[]*ebpf.Record](), nil
 	}
-	reporter, err := newReporter(ctx, ctxInfo, cfg)
+	reporter, err := newNetReporter(ctx, ctxInfo, cfg)
 	if err != nil {
 		return nil, err
 	}
 	return reporter.reportMetrics, nil
 }
 
-func newReporter(
+func newNetReporter(
 	ctx context.Context,
 	ctxInfo *global.ContextInfo,
-	cfg *PrometheusConfig,
-) (*metricsReporter, error) {
+	cfg *NetPrometheusConfig,
+) (*netMetricsReporter, error) {
 	group := ctxInfo.MetricAttributeGroups
 	// this property can't be set inside the ConfiguredGroups function, otherwise the
 	// OTEL exporter would report also some prometheus-exclusive attributes
@@ -93,7 +90,7 @@ func newReporter(
 	clock := expire.NewCachedClock(timeNow)
 	// If service name is not explicitly set, we take the service name as set by the
 	// executable inspector
-	mr := &metricsReporter{
+	mr := &netMetricsReporter{
 		bgCtx:       ctx,
 		cfg:         cfg.Config,
 		promConnect: ctxInfo.Prometheus,
@@ -110,7 +107,7 @@ func newReporter(
 	return mr, nil
 }
 
-func (r *metricsReporter) reportMetrics(input <-chan []*ebpf.Record) {
+func (r *netMetricsReporter) reportMetrics(input <-chan []*ebpf.Record) {
 	go r.promConnect.StartHTTP(r.bgCtx)
 	for flows := range input {
 		// clock needs to be updated to let the expirer
@@ -122,7 +119,7 @@ func (r *metricsReporter) reportMetrics(input <-chan []*ebpf.Record) {
 	}
 }
 
-func (r *metricsReporter) observe(flow *ebpf.Record) {
+func (r *netMetricsReporter) observe(flow *ebpf.Record) {
 	labelValues := make([]string, 0, len(r.attrs))
 	for _, attr := range r.attrs {
 		labelValues = append(labelValues, attr.Get(flow))

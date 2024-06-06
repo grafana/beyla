@@ -124,5 +124,6 @@ func (r *procMetricsReporter) observe(flow *process.Status) {
 	for _, attr := range r.attrs {
 		labelValues = append(labelValues, attr.Get(flow))
 	}
-	r.cpuUtilization.WithLabelValues(labelValues...).Set(flow.CPUPercent / 100)
+	r.cpuUtilization.WithLabelValues(labelValues...).Set(flow.CPUUtilisationUser)
+	TODO here
 }

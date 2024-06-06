@@ -11,3 +11,5 @@ attributes:
   select:
     process_cpu_utilization:
       include: ["*"]
+    process_cpu_time:
+      include: ["*"]

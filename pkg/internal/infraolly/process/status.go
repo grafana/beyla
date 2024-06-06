@@ -19,26 +19,31 @@ func pslog() *slog.Logger {
 // Status of a process after being harvested
 type Status struct {
 	ProcessID   int32
+	User        string
 	Command     string
 	CommandArgs []string
 	CommandLine string
 	ExecName    string
 	ExecPath    string
 
-	User             string
-	MemoryRSSBytes   int64
-	MemoryVMSBytes   int64
-	CPUPercent       float64
-	CPUUserPercent   float64
-	CPUSystemPercent float64
-	Status           string
-	ParentProcessID  int32
-	ThreadCount      int32
-	FdCount          int32
-	IOReadCount      uint64
-	IOWriteCount     uint64
-	IOReadBytes      uint64
-	IOWriteBytes     uint64
+	CPUTimeSystem float64
+	CPUTimeUser   float64
+	CPUTimeWait   float64
+
+	CPUUtilisationSystem float64
+	CPUUtilisationUser   float64
+	CPUUtilisationWait   float64
+
+	MemoryRSSBytes  int64
+	MemoryVMSBytes  int64
+	Status          string
+	ParentProcessID int32
+	ThreadCount     int32
+	FdCount         int32
+	IOReadCount     uint64
+	IOWriteCount    uint64
+	IOReadBytes     uint64
+	IOWriteBytes    uint64
 
 	Service *svc.ID
 }

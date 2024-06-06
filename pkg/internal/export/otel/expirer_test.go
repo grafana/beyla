@@ -107,7 +107,7 @@ func TestMetricsExpiration(t *testing.T) {
 }
 
 func TestGauge(t *testing.T) {
-	g := NewGauge(attribute.Set{})
+	g := NewFloatVal(attribute.Set{})
 	g.Set(123.456)
 	assert.Equal(t, 123.456, g.Load())
 	g.Set(456.123)

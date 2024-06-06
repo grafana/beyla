@@ -12,6 +12,7 @@ import (
 	"github.com/grafana/beyla/test/integration/components/prom"
 )
 
+todo ALL THE METRICS
 func testProcesses(attribMatcher map[string]string) func(t *testing.T) {
 	return func(t *testing.T) {
 		pq := prom.Client{HostPort: prometheusHostPort}

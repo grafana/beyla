@@ -44,6 +44,7 @@ type procMetricsExporter struct {
 	log *slog.Logger
 
 	attrCPUTime []attributes.Field[*process.Status, attribute.KeyValue]
+	attrCPUUtil []attributes.Field[*process.Status, attribute.KeyValue]
 }
 
 type procMetrics struct {
@@ -51,7 +52,8 @@ type procMetrics struct {
 	service  *svc.ID
 	provider *metric.MeterProvider
 
-	cpuTime *Expirer[*process.Status, metric2.Float64Observer, *Gauge, float64]
+	cpuTime        *Expirer[*process.Status, metric2.Float64Observer, *FloatVal, float64]
+	cpuUtilisation *Expirer[*process.Status, metric2.Float64Observer, *FloatVal, float64]
 }
 
 func ProcMetricsExporterProvider(
@@ -89,6 +91,8 @@ func newProcMetricsExporter(
 		cfg:   cfg,
 		clock: expire.NewCachedClock(timeNow),
 		attrCPUTime: attributes.OpenTelemetryGetters(
+			process.OTELGetters, attrProv.For(attributes.ProcessCPUTime)),
+		attrCPUUtil: attributes.OpenTelemetryGetters(
 			process.OTELGetters, attrProv.For(attributes.ProcessCPUUtilization)),
 		log: log,
 	}
@@ -130,17 +134,25 @@ func (me *procMetricsExporter) newMetricSet(service *svc.ID) (*procMetrics, erro
 	}
 
 	meter := m.provider.Meter(reporterName)
+
 	m.cpuTime = NewExpirer[*process.Status, metric2.Float64Observer](
-		NewGauge,
-		me.attrCPUTime,
-		timeNow,
-		me.cfg.Metrics.TTL,
-	)
+		NewFloatVal, me.attrCPUTime, timeNow, me.cfg.Metrics.TTL)
+	if _, err := meter.Float64ObservableCounter(
+		attributes.ProcessCPUTime.OTEL, metric2.WithUnit("s"),
+		metric2.WithDescription("Total CPU seconds broken down by different states"),
+		metric2.WithFloat64Callback(m.cpuTime.Collect),
+	); err != nil {
+		log.Error("creating observable gauge for "+attributes.ProcessCPUUtilization.OTEL, "error", err)
+		return nil, err
+	}
+
+	m.cpuUtilisation = NewExpirer[*process.Status, metric2.Float64Observer](
+		NewFloatVal, me.attrCPUUtil, timeNow, me.cfg.Metrics.TTL)
 	if _, err := meter.Float64ObservableGauge(
 		attributes.ProcessCPUUtilization.OTEL,
 		metric2.WithDescription("Difference in process.cpu.time since the last measurement, divided by the elapsed time and number of CPUs available to the process"),
 		metric2.WithUnit("1"),
-		metric2.WithFloat64Callback(m.cpuTime.Collect),
+		metric2.WithFloat64Callback(m.cpuUtilisation.Collect),
 	); err != nil {
 		log.Error("creating observable gauge for "+attributes.ProcessCPUUtilization.OTEL, "error", err)
 		return nil, err
@@ -163,7 +175,10 @@ func (me *procMetricsExporter) Do(in <-chan []*process.Status) {
 			me.log.Debug("reporting data for record", "record", s)
 			// TODO: support process.cpu.state=user/system/total
 			// TODO: add more process metrics https://opentelemetry.io/docs/specs/semconv/system/process-metrics/
-			reporter.cpuTime.ForRecord(s).Set(s.CPUPercent / 100)
+
+			TODO user/system/wait
+			reporter.cpuTime.ForRecord(s).Set(s.CPUTimeUser)
+			reporter.cpuUtilisation.ForRecord(s).Set(s.CPUUtilisationUser)
 		}
 	}
 }

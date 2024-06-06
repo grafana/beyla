@@ -60,11 +60,11 @@ func ReadTCPRequestIntoSpan(record *ringbuf.Record, filter ServiceFilter) (reque
 	return request.Span{}, true, nil // ignore if we couldn't parse it
 }
 
-func (trace *TCPRequestInfo) reqHostInfo() (source, target string) {
+func (connInfo *BPFConnInfo) reqHostInfo() (source, target string) {
 	src := make(net.IP, net.IPv6len)
 	dst := make(net.IP, net.IPv6len)
-	copy(src, trace.ConnInfo.S_addr[:])
-	copy(dst, trace.ConnInfo.D_addr[:])
+	copy(src, connInfo.S_addr[:])
+	copy(dst, connInfo.D_addr[:])
 
 	return src.String(), dst.String()
 }

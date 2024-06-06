@@ -41,6 +41,23 @@ func SpanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValu
 		getter = func(s *Span) attribute.KeyValue { return semconv.ServiceName(s.ServiceID.Name) }
 	case attr.DBOperation:
 		getter = func(span *Span) attribute.KeyValue { return DBOperationName(span.Method) }
+	case attr.DBSystem:
+		getter = func(span *Span) attribute.KeyValue {
+			switch span.Type {
+			case EventTypeSQLClient:
+				return DBSystem(semconv.DBSystemOtherSQL.Value.AsString())
+			case EventTypeRedisClient:
+				return DBSystem(semconv.DBSystemRedis.Value.AsString())
+			}
+			return DBSystem("unknown")
+		}
+	case attr.ErrorType:
+		getter = func(span *Span) attribute.KeyValue {
+			if SpanStatusCode(span) == codes.Error {
+				return ErrorType("error")
+			}
+			return ErrorType("")
+		}
 	case attr.MessagingSystem:
 		getter = func(span *Span) attribute.KeyValue {
 			if span.Type == EventTypeKafkaClient {

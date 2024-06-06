@@ -2,6 +2,7 @@ package request
 
 import (
 	"go.opentelemetry.io/otel/attribute"
+	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 
 	attr "github.com/grafana/beyla/pkg/internal/export/attributes/names"
 )
@@ -88,6 +89,14 @@ func DBCollectionName(val string) attribute.KeyValue {
 
 func DBOperationName(val string) attribute.KeyValue {
 	return attribute.Key(attr.DBOperation).String(val)
+}
+
+func DBSystem(val string) attribute.KeyValue {
+	return attribute.Key(semconv.DBSystemKey).String(val)
+}
+
+func ErrorType(val string) attribute.KeyValue {
+	return attribute.Key(attr.ErrorType).String(val)
 }
 
 func MessagingOperationType(val string) attribute.KeyValue {

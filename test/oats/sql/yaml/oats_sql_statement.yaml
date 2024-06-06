@@ -1,7 +1,7 @@
 docker-compose:
   generator: generic
   files:
-    - ../docker-compose-beyla-gosqlclient.yml
+    - ../docker-compose-beyla-gosqlclient-statement.yml
 input:
   - path: '/sqltest?query=Update%20students%20SET%20name%20=%20%27Bob%27%20WHERE%20id%20=%20%271%27'
 

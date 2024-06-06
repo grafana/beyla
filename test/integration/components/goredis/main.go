@@ -25,12 +25,14 @@ func HTTPHandler(log *slog.Logger, echoPort int) http.HandlerFunc {
 
 		err := client.Set(ctx, "beyla", "rocks", 0).Err()
 		if err != nil {
-			panic(err)
+			rw.WriteHeader(500)
+			return
 		}
 
 		val, err := client.Get(ctx, "beyla").Result()
 		if err != nil {
-			panic(err)
+			rw.WriteHeader(500)
+			return
 		}
 
 		status := 200

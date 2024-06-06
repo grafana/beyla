@@ -43,7 +43,7 @@ func (k Operation) String() string {
 	}
 }
 
-const KafaMinLength = 14
+const KafkaMinLength = 14
 
 // ProcessKafkaRequest processes a TCP packet and returns error if the packet is not a valid Kafka request.
 // Otherwise, return kafka.Info with the processed data.
@@ -58,10 +58,38 @@ func ProcessPossibleKafkaEvent(pkt []byte, rpkt []byte) (*KafkaInfo, error) {
 
 func ProcessKafkaRequest(pkt []byte) (*KafkaInfo, error) {
 	k := &KafkaInfo{}
-	if len(pkt) < KafaMinLength {
+	if len(pkt) < KafkaMinLength {
 		return k, errors.New("packet too short")
 	}
 
+	header, err := parseKafkaHeader(pkt)
+	if err != nil {
+		return k, err
+	}
+
+	if len(pkt) < KafkaMinLength+int(header.ClientIDSize) {
+		return k, errors.New("packet too short")
+	}
+
+	offset, err := processClientID(header, pkt, k)
+	if err != nil {
+		return k, err
+	}
+
+	err = processKafkaOperation(header, pkt, k, &offset)
+	if err != nil {
+		return k, err
+	}
+
+	topic, err := getTopicName(pkt, offset)
+	if err != nil {
+		return k, err
+	}
+	k.Topic = topic
+	return k, nil
+}
+
+func parseKafkaHeader(pkt []byte) (*Header, error) {
 	header := &Header{
 		MessageSize:   int32(binary.BigEndian.Uint32(pkt[0:4])),
 		APIKey:        int16(binary.BigEndian.Uint16(pkt[4:6])),
@@ -71,46 +99,13 @@ func ProcessKafkaRequest(pkt []byte) (*KafkaInfo, error) {
 	}
 
 	if !isValidKafkaHeader(header) {
-		return k, errors.New("invalid Kafka request header")
+		return nil, errors.New("invalid Kafka request header")
 	}
-
-	offset := KafaMinLength
-	if header.ClientIDSize > 0 {
-		clientID := pkt[offset : offset+int(header.ClientIDSize)]
-		if !isValidClientID(clientID, int(header.ClientIDSize)) {
-			return k, errors.New("invalid client ID")
-		}
-		offset += int(header.ClientIDSize)
-		k.ClientID = string(clientID)
-	} else if header.ClientIDSize < -1 {
-		return k, errors.New("invalid client ID size")
-	}
-
-	switch Operation(header.APIKey) {
-	case Produce:
-		ok, err := getTopicOffsetFromProduceOperation(header, pkt, &offset)
-		if !ok || err != nil {
-			return k, err
-		}
-		k.Operation = Produce
-		k.TopicOffset = offset
-	case Fetch:
-		offset += getTopicOffsetFromFetchOperation(header)
-		k.Operation = Fetch
-		k.TopicOffset = offset
-	default:
-		return k, errors.New("invalid Kafka operation")
-	}
-	topic, err := getTopicName(pkt, offset)
-	if err != nil {
-		return k, err
-	}
-	k.Topic = topic
-	return k, nil
+	return header, nil
 }
 
 func isValidKafkaHeader(header *Header) bool {
-	if header.MessageSize < int32(KafaMinLength) || header.APIVersion < 0 {
+	if header.MessageSize < int32(KafkaMinLength) || header.APIVersion < 0 {
 		return false
 	}
 	switch Operation(header.APIKey) {
@@ -129,6 +124,40 @@ func isValidKafkaHeader(header *Header) bool {
 		return false
 	}
 	return header.ClientIDSize >= -1
+}
+
+func processClientID(header *Header, pkt []byte, k *KafkaInfo) (int, error) {
+	offset := KafkaMinLength
+	if header.ClientIDSize > 0 {
+		clientID := pkt[offset : offset+int(header.ClientIDSize)]
+		if !isValidClientID(clientID, int(header.ClientIDSize)) {
+			return 0, errors.New("invalid client ID")
+		}
+		offset += int(header.ClientIDSize)
+		k.ClientID = string(clientID)
+	} else if header.ClientIDSize < -1 {
+		return 0, errors.New("invalid client ID size")
+	}
+	return offset, nil
+}
+
+func processKafkaOperation(header *Header, pkt []byte, k *KafkaInfo, offset *int) error {
+	switch Operation(header.APIKey) {
+	case Produce:
+		ok, err := getTopicOffsetFromProduceOperation(header, pkt, offset)
+		if !ok || err != nil {
+			return err
+		}
+		k.Operation = Produce
+		k.TopicOffset = *offset
+	case Fetch:
+		*offset += getTopicOffsetFromFetchOperation(header)
+		k.Operation = Fetch
+		k.TopicOffset = *offset
+	default:
+		return errors.New("invalid Kafka operation")
+	}
+	return nil
 }
 
 // nolint:cyclop

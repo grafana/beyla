@@ -61,6 +61,11 @@ var (
 		Prom:    "db_client_operation_duration_seconds",
 		OTEL:    "db.client.operation.duration",
 	}
+	ProcessCPUUtilization = Name{
+		Section: "process.cpu.utilization",
+		Prom:    "process_cpu_utilization_ratio",
+		OTEL:    "process.cpu.utilization",
+	}
 	MessagingPublishDuration = Name{
 		Section: "messaging.publish.duration",
 		Prom:    "messaging_publish_duration_seconds",
@@ -79,7 +84,7 @@ var (
 // as long as the metric name is recorgnisable.
 func normalizeMetric(name Section) Section {
 	nameStr := strings.ReplaceAll(string(name), "_", ".")
-	for _, suffix := range []string{".bucket", ".sum", ".count", ".total"} {
+	for _, suffix := range []string{".ratio", ".bucket", ".sum", ".count", ".total"} {
 		if strings.HasSuffix(nameStr, suffix) {
 			nameStr = nameStr[:len(nameStr)-len(suffix)]
 			break

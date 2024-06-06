@@ -323,7 +323,7 @@ func GenerateTraces(span *request.Span, userAttrs map[attr.Name]struct{}) ptrace
 	traces := ptrace.NewTraces()
 	rs := traces.ResourceSpans().AppendEmpty()
 	ss := rs.ScopeSpans().AppendEmpty()
-	resourceAttrs := attrsToMap(getResourceAttrs(span.ServiceID).Attributes())
+	resourceAttrs := attrsToMap(getResourceAttrs(&span.ServiceID).Attributes())
 	resourceAttrs.PutStr(string(semconv.OTelLibraryNameKey), reporterName)
 	resourceAttrs.CopyTo(rs.Resource().Attributes())
 

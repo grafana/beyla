@@ -58,7 +58,7 @@ var DefaultBuckets = Buckets{
 	RequestSizeHistogram: []float64{0, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192},
 }
 
-func getResourceAttrs(service svc.ID) *resource.Resource {
+func getResourceAttrs(service *svc.ID) *resource.Resource {
 	attrs := []attribute.KeyValue{
 		semconv.ServiceName(service.Name),
 		semconv.ServiceInstanceID(service.Instance),
@@ -87,7 +87,10 @@ func getResourceAttrs(service svc.ID) *resource.Resource {
 type ReporterPool[T any] struct {
 	pool *simplelru.LRU[svc.UID, T]
 
-	itemConstructor func(svc.ID) (T, error)
+	itemConstructor func(*svc.ID) (T, error)
+
+	lastReporter T
+	lastService  *svc.ID
 }
 
 // NewReporterPool creates a ReporterPool instance given a cache length,
@@ -97,7 +100,7 @@ type ReporterPool[T any] struct {
 func NewReporterPool[T any](
 	cacheLen int,
 	callback simplelru.EvictCallback[svc.UID, T],
-	itemConstructor func(id svc.ID) (T, error),
+	itemConstructor func(id *svc.ID) (T, error),
 ) ReporterPool[T] {
 	pool, _ := simplelru.NewLRU[svc.UID, T](cacheLen, callback)
 	return ReporterPool[T]{pool: pool, itemConstructor: itemConstructor}
@@ -105,14 +108,34 @@ func NewReporterPool[T any](
 
 // For retrieves the associated item for the given service name, or
 // creates a new one if it does not exist
-func (rp *ReporterPool[T]) For(service svc.ID) (T, error) {
+func (rp *ReporterPool[T]) For(service *svc.ID) (T, error) {
+	// optimization: do not query the resources' cache if the
+	// previously processed span belongs to the same service name
+	// as the current.
+	// This will save querying OTEL resource reporters when there is
+	// only a single instrumented process.
+	// In multi-process tracing, this is likely to happen as most
+	// tracers group traces belonging to the same service in the same slice.
+	if rp.lastService == nil || service.UID != rp.lastService.UID {
+		lm, err := rp.get(service)
+		if err != nil {
+			var t T
+			return t, err
+		}
+		rp.lastService = service
+		rp.lastReporter = lm
+	}
+	return rp.lastReporter, nil
+}
+
+func (rp *ReporterPool[T]) get(service *svc.ID) (T, error) {
 	if m, ok := rp.pool.Get(service.UID); ok {
 		return m, nil
 	}
 	m, err := rp.itemConstructor(service)
 	if err != nil {
 		var t T
-		return t, fmt.Errorf("creating resource for service %q: %w", &service, err)
+		return t, fmt.Errorf("creating resource for service %q: %w", service, err)
 	}
 	rp.pool.Add(service.UID, m)
 	return m, nil

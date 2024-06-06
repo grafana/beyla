@@ -9,17 +9,18 @@ import (
 	"github.com/mariomac/guara/pkg/test"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel/attribute"
 
 	"github.com/grafana/beyla/pkg/internal/export/attributes"
-	"github.com/grafana/beyla/pkg/internal/export/otel"
 	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/test/collector"
 )
 
-const timeout = 3 * time.Second
+const timeout = 10 * time.Second
 
 func TestMetricsExpiration(t *testing.T) {
+	defer restoreEnvAfterExecution()()
 	ctx, cancelCtx := context.WithCancel(context.Background())
 	defer cancelCtx()
 
@@ -29,13 +30,13 @@ func TestMetricsExpiration(t *testing.T) {
 	now := syncedClock{now: time.Now()}
 	timeNow = now.Now
 
-	otelExporter, err := MetricsExporterProvider(
-		&global.ContextInfo{}, &MetricsConfig{
-			Metrics: &otel.MetricsConfig{
+	otelExporter, err := NetMetricsExporterProvider(
+		&global.ContextInfo{}, &NetMetricsConfig{
+			Metrics: &MetricsConfig{
 				Interval:        50 * time.Millisecond,
 				CommonEndpoint:  otlp.ServerEndpoint,
-				MetricsProtocol: otel.ProtocolHTTPProtobuf,
-				Features:        []string{otel.FeatureNetwork},
+				MetricsProtocol: ProtocolHTTPProtobuf,
+				Features:        []string{FeatureNetwork},
 				TTL:             3 * time.Minute,
 			}, AttributeSelectors: attributes.Selection{
 				attributes.BeylaNetworkFlow.Section: attributes.InclusionLists{
@@ -103,6 +104,22 @@ func TestMetricsExpiration(t *testing.T) {
 		assert.Equal(t, map[string]string{"src.name": "baz", "dst.name": "bae"}, metric.Attributes)
 		assert.EqualValues(t, 456, metric.CountVal)
 	})
+}
+
+func TestGauge(t *testing.T) {
+	g := NewGauge(attribute.Set{})
+	g.Set(123.456)
+	assert.Equal(t, 123.456, g.Load())
+	g.Set(456.123)
+	assert.Equal(t, 456.123, g.Load())
+}
+
+func TestCounter(t *testing.T) {
+	g := NewCounter(attribute.Set{})
+	g.Add(123)
+	assert.EqualValues(t, 123, g.Load())
+	g.Add(123)
+	assert.EqualValues(t, 246, g.Load())
 }
 
 type syncedClock struct {

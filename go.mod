@@ -20,6 +20,7 @@ require (
 	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/mariomac/guara v0.0.0-20230621100729-42bd7716e524
 	github.com/mariomac/pipes v0.10.0
+	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.19.0
 	github.com/prometheus/client_model v0.6.0
 	github.com/prometheus/common v0.48.0
@@ -34,6 +35,7 @@ require (
 	go.opentelemetry.io/collector/config/configgrpc v0.97.0
 	go.opentelemetry.io/collector/config/confighttp v0.97.0
 	go.opentelemetry.io/collector/config/configopaque v1.4.0
+	go.opentelemetry.io/collector/config/configretry v0.97.0
 	go.opentelemetry.io/collector/config/configtelemetry v0.97.0
 	go.opentelemetry.io/collector/config/configtls v0.97.0
 	go.opentelemetry.io/collector/consumer v0.97.0
@@ -124,7 +126,6 @@ require (
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/mxk/go-flowrate v0.0.0-20140419014527-cca7078d478f // indirect
 	github.com/pelletier/go-toml/v2 v2.0.8 // indirect
-	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/power-devops/perfstat v0.0.0-20210106213030-5aafc221ea8c // indirect
 	github.com/rs/cors v1.10.1 // indirect
@@ -140,7 +141,6 @@ require (
 	go.opentelemetry.io/collector/config/configauth v0.97.0 // indirect
 	go.opentelemetry.io/collector/config/configcompression v1.4.0 // indirect
 	go.opentelemetry.io/collector/config/confignet v0.97.0 // indirect
-	go.opentelemetry.io/collector/config/configretry v0.97.0 // indirect
 	go.opentelemetry.io/collector/config/internal v0.97.0 // indirect
 	go.opentelemetry.io/collector/confmap v0.97.0 // indirect
 	go.opentelemetry.io/collector/extension v0.97.0 // indirect

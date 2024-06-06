@@ -64,6 +64,11 @@ type ID struct {
 	Instance    string
 
 	Metadata map[attr.Name]string
+
+	// ProcPID is the PID of the instrumented process as seen by Beyla's /proc filesystem.
+	// It is stored here at process discovery time, because it might differ form the
+	// UserPID and HostPID fields of the request.PidInfo struct.
+	ProcPID int32
 }
 
 func (i *ID) String() string {

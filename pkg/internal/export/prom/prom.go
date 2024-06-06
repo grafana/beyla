@@ -124,9 +124,13 @@ func (p PrometheusConfig) ServiceGraphMetricsEnabled() bool {
 	return slices.Contains(p.Features, otel.FeatureGraph)
 }
 
+func (p PrometheusConfig) EndpointEnabled() bool {
+	return p.Port != 0 || p.Registry != nil
+}
+
 // nolint:gocritic
 func (p PrometheusConfig) Enabled() bool {
-	return (p.Port != 0 || p.Registry != nil) && (p.OTelMetricsEnabled() || p.SpanMetricsEnabled() || p.ServiceGraphMetricsEnabled())
+	return p.EndpointEnabled() && (p.OTelMetricsEnabled() || p.SpanMetricsEnabled() || p.ServiceGraphMetricsEnabled())
 }
 
 type metricsReporter struct {

@@ -96,6 +96,22 @@ var (
 	K8sDstNodeName  = Name("k8s.dst.node.name")
 )
 
+// Process Metrics following OTEL 1.26 experimental conventions
+// https://opentelemetry.io/docs/specs/semconv/resource/process/
+// https://opentelemetry.io/docs/specs/semconv/system/process-metrics/
+
+const (
+	ProcCommand     = Name(semconv.ProcessCommandKey)
+	ProcCommandLine = Name(semconv.ProcessCommandLineKey)
+	ProcCPUState    = Name("process.cpu.state")
+	ProcOwner       = Name(semconv.ProcessOwnerKey)
+	ProcParentPid   = Name(semconv.ProcessParentPIDKey)
+	ProcPid         = Name(semconv.ProcessPIDKey)
+	ProcCommandArgs = Name(semconv.ProcessCommandArgsKey)
+	ProcExecName    = Name(semconv.ProcessExecutableNameKey)
+	ProcExecPath    = Name(semconv.ProcessExecutablePathKey)
+)
+
 // other beyla-specific attributes
 var (
 	// TargetInstance is a Prometheus-only attribute.

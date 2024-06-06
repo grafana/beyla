@@ -9,6 +9,7 @@ import (
 
 	"github.com/grafana/beyla/pkg/beyla"
 	"github.com/grafana/beyla/pkg/internal/export/otel"
+	"github.com/grafana/beyla/pkg/internal/export/prom"
 	"github.com/grafana/beyla/pkg/internal/infraolly/process"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/pkg/internal/request"
@@ -20,14 +21,15 @@ import (
 type processSubPipeline struct {
 	Collector  pipe.Start[[]*process.Status]
 	OtelExport pipe.Final[[]*process.Status]
-	// TODO: add prometheus exporter
+	PromExport pipe.Final[[]*process.Status]
 }
 
 func procCollect(sp *processSubPipeline) *pipe.Start[[]*process.Status] { return &sp.Collector }
 func otelExport(sp *processSubPipeline) *pipe.Final[[]*process.Status]  { return &sp.OtelExport }
+func promExport(sp *processSubPipeline) *pipe.Final[[]*process.Status]  { return &sp.PromExport }
 
 func (sp *processSubPipeline) Connect() {
-	sp.Collector.SendTo(sp.OtelExport)
+	sp.Collector.SendTo(sp.OtelExport, sp.PromExport)
 }
 
 // the sub-pipe is enabled only if there is a metrics exporter enabled,
@@ -53,6 +55,11 @@ func SubPipelineProvider(ctx context.Context, ctxInfo *global.ContextInfo, cfg *
 		pipe.AddFinalProvider(nb, otelExport, otel.ProcMetricsExporterProvider(ctx, ctxInfo,
 			&otel.ProcMetricsConfig{
 				Metrics:            &cfg.Metrics,
+				AttributeSelectors: cfg.Attributes.Select,
+			}))
+		pipe.AddFinalProvider(nb, promExport, prom.ProcPrometheusEndpoint(ctx, ctxInfo,
+			&prom.ProcPrometheusConfig{
+				Metrics:            &cfg.Prometheus,
 				AttributeSelectors: cfg.Attributes.Select,
 			}))
 

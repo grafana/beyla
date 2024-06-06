@@ -29,15 +29,10 @@ func (p NetPrometheusConfig) Enabled() bool {
 	return p.Config != nil && p.Config.Port != 0 && slices.Contains(p.Config.Features, otel.FeatureNetwork)
 }
 
-type counterCollector interface {
-	prometheus.Collector
-	WithLabelValues(...string) prometheus.Counter
-}
-
 type netMetricsReporter struct {
 	cfg *PrometheusConfig
 
-	flowBytes counterCollector
+	flowBytes *Expirer[prometheus.Counter]
 
 	promConnect *connector.PrometheusManager
 
@@ -96,7 +91,7 @@ func newNetReporter(
 		promConnect: ctxInfo.Prometheus,
 		attrs:       attrs,
 		clock:       clock,
-		flowBytes: expire.NewExpirer[prometheus.Counter](prometheus.NewCounterVec(prometheus.CounterOpts{
+		flowBytes: NewExpirer[prometheus.Counter](prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: attributes.BeylaNetworkFlow.Prom,
 			Help: "bytes submitted from a source network endpoint to a destination network endpoint",
 		}, labelNames).MetricVec, clock.Time, cfg.Config.TTL),

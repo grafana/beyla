@@ -1,10 +1,12 @@
-package expire
+package prom
 
 import (
 	"log/slog"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
+
+	"github.com/grafana/beyla/pkg/internal/export/expire"
 )
 
 func plog() *slog.Logger {
@@ -13,7 +15,7 @@ func plog() *slog.Logger {
 
 // Expirer drops metrics from labels that haven't been updated during a given timeout
 type Expirer[T prometheus.Metric] struct {
-	entries *ExpiryMap[T]
+	entries *expire.ExpiryMap[T]
 	wrapped *prometheus.MetricVec
 }
 
@@ -22,7 +24,7 @@ type Expirer[T prometheus.Metric] struct {
 func NewExpirer[T prometheus.Metric](wrapped *prometheus.MetricVec, clock func() time.Time, expireTime time.Duration) *Expirer[T] {
 	return &Expirer[T]{
 		wrapped: wrapped,
-		entries: NewExpiryMap[T](clock, expireTime),
+		entries: expire.NewExpiryMap[T](clock, expireTime),
 	}
 }
 

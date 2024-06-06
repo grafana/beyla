@@ -4,3 +4,10 @@ routes:
   unmatched: path
 prometheus_export:
   port: 8999
+  features:
+    - application
+    - application_process
+attributes:
+  select:
+    process_cpu_utilization:
+      include: ["*"]

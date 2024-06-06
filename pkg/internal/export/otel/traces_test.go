@@ -921,7 +921,7 @@ func TestTraces_HTTPStatus(t *testing.T) {
 			{500, codes.Error},
 			{5999, codes.Error},
 		} {
-			assert.Equal(t, p.statusCode, request.HttpSpanStatusCode(&request.Span{Status: p.httpCode, Type: request.EventTypeHTTP}))
+			assert.Equal(t, p.statusCode, request.HTTPSpanStatusCode(&request.Span{Status: p.httpCode, Type: request.EventTypeHTTP}))
 			assert.Equal(t, p.statusCode, request.SpanStatusCode(&request.Span{Status: p.httpCode, Type: request.EventTypeHTTP}))
 		}
 	})
@@ -943,7 +943,7 @@ func TestTraces_HTTPStatus(t *testing.T) {
 			{500, codes.Error},
 			{5999, codes.Error},
 		} {
-			assert.Equal(t, p.statusCode, request.HttpSpanStatusCode(&request.Span{Status: p.httpCode, Type: request.EventTypeHTTPClient}))
+			assert.Equal(t, p.statusCode, request.HTTPSpanStatusCode(&request.Span{Status: p.httpCode, Type: request.EventTypeHTTPClient}))
 			assert.Equal(t, p.statusCode, request.SpanStatusCode(&request.Span{Status: p.httpCode, Type: request.EventTypeHTTPClient}))
 		}
 	})

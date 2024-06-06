@@ -140,7 +140,7 @@ func (s *Span) IsClientSpan() bool {
 func SpanStatusCode(span *Span) codes.Code {
 	switch span.Type {
 	case EventTypeHTTP, EventTypeHTTPClient:
-		return HttpSpanStatusCode(span)
+		return HTTPSpanStatusCode(span)
 	case EventTypeGRPC, EventTypeGRPCClient:
 		return GrpcSpanStatusCode(span)
 	case EventTypeSQLClient, EventTypeRedisClient:
@@ -153,7 +153,7 @@ func SpanStatusCode(span *Span) codes.Code {
 }
 
 // https://opentelemetry.io/docs/specs/otel/trace/semantic_conventions/http/#status
-func HttpSpanStatusCode(span *Span) codes.Code {
+func HTTPSpanStatusCode(span *Span) codes.Code {
 	if span.Status < 400 {
 		return codes.Unset
 	}

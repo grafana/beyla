@@ -1,0 +1,12 @@
+routes:
+  patterns:
+    - /create-trace
+    - /smoke
+    - /greeting
+    - /sqltest
+  unmatched: path
+attributes:
+  select:
+    traces:
+      include:
+      - db.query.text

@@ -216,6 +216,7 @@ func getDefinitions(groups AttrGroups) map[Section]AttrReportGroup {
 			Attributes: map[attr.Name]Default{
 				attr.DBOperation: true,
 				attr.DBSystem:    true,
+				attr.ErrorType:   true,
 			},
 		},
 		MessagingPublishDuration.Section: {

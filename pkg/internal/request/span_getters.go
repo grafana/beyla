@@ -4,6 +4,7 @@ import (
 	"strconv"
 
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 
 	"github.com/grafana/beyla/pkg/internal/export/attributes"
@@ -88,6 +89,13 @@ func SpanPromGetters(attrName attr.Name) (attributes.Getter[*Span, string], bool
 		getter = func(s *Span) string { return strconv.Itoa(s.Status) }
 	case attr.DBOperation:
 		getter = func(span *Span) string { return span.Method }
+	case attr.ErrorType:
+		getter = func(span *Span) string {
+			if SpanStatusCode(span) == codes.Error {
+				return "error"
+			}
+			return ""
+		}
 	case attr.DBSystem:
 		getter = func(span *Span) string {
 			switch span.Type {

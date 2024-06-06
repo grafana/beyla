@@ -358,7 +358,7 @@ func GenerateTraces(span *request.Span, userAttrs map[attr.Name]struct{}) ptrace
 	m.CopyTo(s.Attributes())
 
 	// Set status code
-	statusCode := codeToStatusCode(SpanStatusCode(span))
+	statusCode := codeToStatusCode(request.SpanStatusCode(span))
 	s.Status().SetCode(statusCode)
 	s.SetEndTimestamp(pcommon.NewTimestampFromTime(t.End))
 	return traces
@@ -458,59 +458,6 @@ func instrumentTraceExporter(in trace.SpanExporter, internalMetrics imetrics.Rep
 		SpanExporter: in,
 		internal:     internalMetrics,
 	}
-}
-
-// https://opentelemetry.io/docs/specs/otel/trace/semantic_conventions/http/#status
-func httpSpanStatusCode(span *request.Span) codes.Code {
-	if span.Status < 400 {
-		return codes.Unset
-	}
-
-	if span.Status < 500 {
-		if span.Type == request.EventTypeHTTPClient {
-			return codes.Error
-		}
-		return codes.Unset
-	}
-
-	return codes.Error
-}
-
-// https://opentelemetry.io/docs/specs/otel/trace/semantic_conventions/rpc/#grpc-status
-func grpcSpanStatusCode(span *request.Span) codes.Code {
-	if span.Type == request.EventTypeGRPCClient {
-		if span.Status == int(semconv.RPCGRPCStatusCodeOk.Value.AsInt64()) {
-			return codes.Unset
-		}
-		return codes.Error
-	}
-
-	switch int64(span.Status) {
-	case semconv.RPCGRPCStatusCodeUnknown.Value.AsInt64(),
-		semconv.RPCGRPCStatusCodeDeadlineExceeded.Value.AsInt64(),
-		semconv.RPCGRPCStatusCodeUnimplemented.Value.AsInt64(),
-		semconv.RPCGRPCStatusCodeInternal.Value.AsInt64(),
-		semconv.RPCGRPCStatusCodeUnavailable.Value.AsInt64(),
-		semconv.RPCGRPCStatusCodeDataLoss.Value.AsInt64():
-		return codes.Error
-	}
-
-	return codes.Unset
-}
-
-func SpanStatusCode(span *request.Span) codes.Code {
-	switch span.Type {
-	case request.EventTypeHTTP, request.EventTypeHTTPClient:
-		return httpSpanStatusCode(span)
-	case request.EventTypeGRPC, request.EventTypeGRPCClient:
-		return grpcSpanStatusCode(span)
-	case request.EventTypeSQLClient, request.EventTypeRedisClient:
-		if span.Status != 0 {
-			return codes.Error
-		}
-		return codes.Unset
-	}
-	return codes.Unset
 }
 
 func SpanKindString(span *request.Span) string {

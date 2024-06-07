@@ -63,7 +63,7 @@ var (
 	}
 	ProcessCPUTime = Name{
 		Section: "process.cpu.time",
-		Prom:    "process_cpu_time_seconds",
+		Prom:    "process_cpu_time_seconds_total",
 		OTEL:    "process.cpu.time",
 	}
 	ProcessCPUUtilization = Name{

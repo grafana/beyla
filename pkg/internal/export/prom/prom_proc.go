@@ -97,13 +97,17 @@ func newProcReporter(
 		promConnect: ctxInfo.Prometheus,
 		attrs:       attrs,
 		clock:       clock,
+		cpuTime: NewExpirer[prometheus.Counter](prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: attributes.ProcessCPUTime.Prom,
+			Help: "Total CPU seconds broken down by different states",
+		}, labelNames).MetricVec, clock.Time, cfg.Metrics.TTL),
 		cpuUtilization: NewExpirer[prometheus.Gauge](prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Name: attributes.ProcessCPUUtilization.Prom,
 			Help: "Difference in process.cpu.time since the last measurement, divided by the elapsed time and number of CPUs available to the process",
 		}, labelNames).MetricVec, clock.Time, cfg.Metrics.TTL),
 	}
 
-	mr.promConnect.Register(cfg.Metrics.Port, cfg.Metrics.Path, mr.cpuUtilization)
+	mr.promConnect.Register(cfg.Metrics.Port, cfg.Metrics.Path, mr.cpuUtilization, mr.cpuTime)
 
 	return mr, nil
 }

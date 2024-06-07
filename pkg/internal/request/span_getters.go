@@ -4,6 +4,7 @@ import (
 	"strconv"
 
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 
 	"github.com/grafana/beyla/pkg/internal/export/attributes"
@@ -40,6 +41,23 @@ func SpanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValu
 		getter = func(s *Span) attribute.KeyValue { return semconv.ServiceName(s.ServiceID.Name) }
 	case attr.DBOperation:
 		getter = func(span *Span) attribute.KeyValue { return DBOperationName(span.Method) }
+	case attr.DBSystem:
+		getter = func(span *Span) attribute.KeyValue {
+			switch span.Type {
+			case EventTypeSQLClient:
+				return DBSystem(semconv.DBSystemOtherSQL.Value.AsString())
+			case EventTypeRedisClient:
+				return DBSystem(semconv.DBSystemRedis.Value.AsString())
+			}
+			return DBSystem("unknown")
+		}
+	case attr.ErrorType:
+		getter = func(span *Span) attribute.KeyValue {
+			if SpanStatusCode(span) == codes.Error {
+				return ErrorType("error")
+			}
+			return ErrorType("")
+		}
 	case attr.MessagingSystem:
 		getter = func(span *Span) attribute.KeyValue {
 			if span.Type == EventTypeKafkaClient {
@@ -88,6 +106,13 @@ func SpanPromGetters(attrName attr.Name) (attributes.Getter[*Span, string], bool
 		getter = func(s *Span) string { return strconv.Itoa(s.Status) }
 	case attr.DBOperation:
 		getter = func(span *Span) string { return span.Method }
+	case attr.ErrorType:
+		getter = func(span *Span) string {
+			if SpanStatusCode(span) == codes.Error {
+				return "error"
+			}
+			return ""
+		}
 	case attr.DBSystem:
 		getter = func(span *Span) string {
 			switch span.Type {

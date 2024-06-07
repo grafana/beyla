@@ -175,7 +175,8 @@ func ReadGoRedisRequestIntoSpan(record *ringbuf.Record) (request.Span, bool, err
 	op, text, ok := parseRedisRequest(string(event.Buf[:]))
 
 	if !ok {
-		return request.Span{}, true, nil
+		// We know it's redis request here, it just didn't complete correctly
+		event.Err = 1
 	}
 
 	return request.Span{

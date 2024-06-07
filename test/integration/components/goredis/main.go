@@ -16,21 +16,28 @@ func HTTPHandler(log *slog.Logger, echoPort int) http.HandlerFunc {
 		log.Debug("received request", "url", req.RequestURI)
 
 		ctx := context.Background()
+		host := "redis:6379"
+
+		if req.RequestURI == "/fail" {
+			host = "whatever:6378"
+		}
 
 		client := redis.NewClient(&redis.Options{
-			Addr:     "redis:6379",
+			Addr:     host,
 			Password: "", // no password set
 			DB:       0,  // use default DB
 		})
 
 		err := client.Set(ctx, "beyla", "rocks", 0).Err()
 		if err != nil {
-			panic(err)
+			rw.WriteHeader(200) // force a 200 to make oats yaml tests happy
+			return
 		}
 
 		val, err := client.Get(ctx, "beyla").Result()
 		if err != nil {
-			panic(err)
+			rw.WriteHeader(200) // force a 200 to make oats yaml tests happy
+			return
 		}
 
 		status := 200

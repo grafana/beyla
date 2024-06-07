@@ -25,11 +25,7 @@ import (
 	"go.opentelemetry.io/collector/pdata/ptrace"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
-	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
-	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
-	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	metricnoop "go.opentelemetry.io/otel/metric/noop"
-	"go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.25.0"
 	trace2 "go.opentelemetry.io/otel/trace"
 	tracenoop "go.opentelemetry.io/otel/trace/noop"
@@ -37,7 +33,6 @@ import (
 
 	"github.com/grafana/beyla/pkg/internal/export/attributes"
 	attr "github.com/grafana/beyla/pkg/internal/export/attributes/names"
-	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/pkg/internal/request"
 )
@@ -152,7 +147,7 @@ func (tr *tracesOTELReceiver) provideLoop() (pipe.FinalFunc[[]request.Span], err
 	}
 	SetupInternalOTELSDKLogger(tr.cfg.SDKLogLevel)
 	return func(in <-chan []request.Span) {
-		exp, err := getTracesExporter(tr.ctx, tr.cfg, tr.ctxInfo)
+		exp, err := getTracesExporter(tr.ctx, tr.cfg)
 		if err != nil {
 			slog.Error("error creating traces exporter", "error", err)
 			return
@@ -191,7 +186,7 @@ func (tr *tracesOTELReceiver) provideLoop() (pipe.FinalFunc[[]request.Span], err
 	}, nil
 }
 
-func getTracesExporter(ctx context.Context, cfg TracesConfig, ctxInfo *global.ContextInfo) (exporter.Traces, error) {
+func getTracesExporter(ctx context.Context, cfg TracesConfig) (exporter.Traces, error) {
 	switch proto := cfg.getProtocol(); proto {
 	case ProtocolHTTPJSON, ProtocolHTTPProtobuf, "": // zero value defaults to HTTP for backwards-compatibility
 		slog.Debug("instantiating HTTP TracesReporter", "protocol", proto)
@@ -400,36 +395,6 @@ func convertHeaders(headers map[string]string) map[string]configopaque.String {
 		opaqueHeaders[key] = configopaque.String(value)
 	}
 	return opaqueHeaders
-}
-
-func httpTracer(ctx context.Context, opts otlpOptions) (*otlptrace.Exporter, error) {
-	texp, err := otlptracehttp.New(ctx, opts.AsTraceHTTP()...)
-	if err != nil {
-		return nil, fmt.Errorf("creating HTTP trace exporter: %w", err)
-	}
-	return texp, nil
-}
-
-func grpcTracer(ctx context.Context, opts otlpOptions) (*otlptrace.Exporter, error) {
-	texp, err := otlptracegrpc.New(ctx, opts.AsTraceGRPC()...)
-	if err != nil {
-		return nil, fmt.Errorf("creating GRPC trace exporter: %w", err)
-	}
-	return texp, nil
-}
-
-// instrumentTraceExporter checks whether the context is configured to report internal metrics and,
-// in this case, wraps the passed traces exporter inside an instrumented exporter
-func instrumentTraceExporter(in trace.SpanExporter, internalMetrics imetrics.Reporter) trace.SpanExporter {
-	// avoid wrapping the instrumented exporter if we don't have
-	// internal instrumentation (NoopReporter)
-	if _, ok := internalMetrics.(imetrics.NoopReporter); ok || internalMetrics == nil {
-		return in
-	}
-	return &instrumentedTracesExporter{
-		SpanExporter: in,
-		internal:     internalMetrics,
-	}
 }
 
 func SpanKindString(span *request.Span) string {

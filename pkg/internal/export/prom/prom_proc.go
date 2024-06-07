@@ -60,6 +60,7 @@ type procMetricsReporter struct {
 	bgCtx context.Context
 
 	// metrics
+	cpuTime        *Expirer[prometheus.Counter]
 	cpuUtilization *Expirer[prometheus.Gauge]
 }
 
@@ -124,6 +125,7 @@ func (r *procMetricsReporter) observe(flow *process.Status) {
 	for _, attr := range r.attrs {
 		labelValues = append(labelValues, attr.Get(flow))
 	}
+	r.cpuTime.WithLabelValues(labelValues...).Add(flow.CPUTimeUserDelta)
 	r.cpuUtilization.WithLabelValues(labelValues...).Set(flow.CPUUtilisationUser)
-	TODO here
+	// TODO here user/system/wait
 }

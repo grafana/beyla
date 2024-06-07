@@ -60,7 +60,7 @@ func newMeterProvider(res *resource.Resource, exporter *metric.Exporter, interva
 }
 
 type netMetricsExporter struct {
-	metrics *Expirer[*ebpf.Record, metric2.Int64Observer, *Counter, int64]
+	metrics *Expirer[*ebpf.Record, metric2.Int64Observer, *IntCounter, int64]
 	clock   *expire.CachedClock
 }
 
@@ -93,7 +93,7 @@ func NetMetricsExporterProvider(ctxInfo *global.ContextInfo, cfg *NetMetricsConf
 		attrProv.For(attributes.BeylaNetworkFlow))
 
 	clock := expire.NewCachedClock(timeNow)
-	expirer := NewExpirer[*ebpf.Record, metric2.Int64Observer](NewCounter, attrs, clock.Time, cfg.Metrics.TTL)
+	expirer := NewExpirer[*ebpf.Record, metric2.Int64Observer](NewIntCounter, attrs, clock.Time, cfg.Metrics.TTL)
 	ebpfEvents := provider.Meter("network_ebpf_events")
 
 	_, err = ebpfEvents.Int64ObservableCounter(

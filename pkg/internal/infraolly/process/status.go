@@ -26,9 +26,12 @@ type Status struct {
 	ExecName    string
 	ExecPath    string
 
-	CPUTimeSystem float64
-	CPUTimeUser   float64
-	CPUTimeWait   float64
+	// Despite values below are absolute counters, the OTEL and Prometheus APIs require that
+	// they are specified as deltas
+
+	CPUTimeSystemDelta float64
+	CPUTimeUserDelta   float64
+	CPUTimeWaitDelta   float64
 
 	CPUUtilisationSystem float64
 	CPUUtilisationUser   float64

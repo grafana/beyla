@@ -134,9 +134,10 @@ func (ps *Harvester) populateGauges(status *Status, process *linuxProcess) error
 	var err error
 
 	// Calculate CPU metrics from current and previous user/system/wait time
-	status.CPUTimeSystem = process.stats.cpu.SystemTime
-	status.CPUTimeUser = process.stats.cpu.UserTime
-	status.CPUTimeWait = process.stats.cpu.WaitTime
+	status.CPUTimeSystemDelta = process.stats.cpu.SystemTime - process.previousCPUStats.SystemTime
+	status.CPUTimeUserDelta = process.stats.cpu.UserTime - process.previousCPUStats.UserTime
+	status.CPUTimeWaitDelta = process.stats.cpu.WaitTime - process.previousCPUStats.WaitTime
+
 	delta := process.measureTime.Sub(process.previousMeasureTime).Seconds() * float64(runtime.NumCPU())
 	status.CPUUtilisationSystem = (process.stats.cpu.SystemTime - process.previousCPUStats.SystemTime) / delta
 	status.CPUUtilisationUser = (process.stats.cpu.UserTime - process.previousCPUStats.UserTime) / delta

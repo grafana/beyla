@@ -107,19 +107,27 @@ func TestMetricsExpiration(t *testing.T) {
 }
 
 func TestGauge(t *testing.T) {
-	g := NewFloatVal(attribute.Set{})
+	g := NewGauge(attribute.Set{})
 	g.Set(123.456)
 	assert.Equal(t, 123.456, g.Load())
 	g.Set(456.123)
 	assert.Equal(t, 456.123, g.Load())
 }
 
-func TestCounter(t *testing.T) {
-	g := NewCounter(attribute.Set{})
+func TestIntCounter(t *testing.T) {
+	g := NewIntCounter(attribute.Set{})
 	g.Add(123)
 	assert.EqualValues(t, 123, g.Load())
 	g.Add(123)
 	assert.EqualValues(t, 246, g.Load())
+}
+
+func TestFloatCounter(t *testing.T) {
+	g := NewFloatCounter(attribute.Set{})
+	g.Add(123.4)
+	assert.EqualValues(t, 123.4, g.Load())
+	g.Add(123.3)
+	assert.EqualValues(t, 246.7, g.Load())
 }
 
 type syncedClock struct {

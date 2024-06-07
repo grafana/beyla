@@ -75,8 +75,8 @@ func NewExpirer[Record any, OT observer[VT], Metric dataPoint[VT], VT any](
 // ForRecord returns the data point for the given eBPF record. If that record
 // s accessed for the first time, a new data point is created.
 // If not, a cached copy is returned and the "last access" cache time is updated.
-func (ex *Expirer[Record, OT, Metric, VT]) ForRecord(r Record) Metric {
-	recordAttrs, attrValues := ex.recordAttributes(r)
+func (ex *Expirer[Record, OT, Metric, VT]) ForRecord(r Record, extraAttrs ...attribute.KeyValue) Metric {
+	recordAttrs, attrValues := ex.recordAttributes(r, extraAttrs...)
 	return ex.entries.GetOrCreate(attrValues, func() Metric {
 		ex.log.With("labelValues", attrValues).Debug("storing new metric label set")
 		return ex.instancer(recordAttrs)
@@ -95,14 +95,18 @@ func (ex *Expirer[Record, OT, Metric, VT]) Collect(_ context.Context, observer O
 	return nil
 }
 
-func (ex *Expirer[Record, OT, Metric, VT]) recordAttributes(m Record) (attribute.Set, []string) {
-	keyVals := make([]attribute.KeyValue, 0, len(ex.attrs))
-	vals := make([]string, 0, len(ex.attrs))
+func (ex *Expirer[Record, OT, Metric, VT]) recordAttributes(m Record, extraAttrs ...attribute.KeyValue) (attribute.Set, []string) {
+	keyVals := make([]attribute.KeyValue, 0, len(ex.attrs)+len(extraAttrs))
+	vals := make([]string, 0, len(ex.attrs)+len(extraAttrs))
 
 	for _, attr := range ex.attrs {
 		kv := attr.Get(m)
 		keyVals = append(keyVals, kv)
 		vals = append(vals, kv.Value.Emit())
+	}
+	keyVals = append(keyVals, extraAttrs...)
+	for i := range extraAttrs {
+		vals = append(vals, extraAttrs[i].Value.Emit())
 	}
 
 	return attribute.NewSet(keyVals...), vals

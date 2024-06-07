@@ -12,10 +12,17 @@ import (
 	"go.opentelemetry.io/otel/sdk/metric"
 
 	"github.com/grafana/beyla/pkg/internal/export/attributes"
+	attr2 "github.com/grafana/beyla/pkg/internal/export/attributes/names"
 	"github.com/grafana/beyla/pkg/internal/export/expire"
 	"github.com/grafana/beyla/pkg/internal/infraolly/process"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/pkg/internal/svc"
+)
+
+var (
+	stateWaitAttr   = attr2.ProcCPUState.OTEL().String("wait")
+	stateUserAttr   = attr2.ProcCPUState.OTEL().String("user")
+	stateSystemAttr = attr2.ProcCPUState.OTEL().String("system")
 )
 
 // ProcMetricsConfig extends MetricsConfig for process metrics
@@ -45,6 +52,9 @@ type procMetricsExporter struct {
 
 	attrCPUTime []attributes.Field[*process.Status, attribute.KeyValue]
 	attrCPUUtil []attributes.Field[*process.Status, attribute.KeyValue]
+
+	cpuTimeObserver        func(*procMetrics, *process.Status)
+	cpuUtilisationObserver func(*procMetrics, *process.Status)
 }
 
 type procMetrics struct {
@@ -86,15 +96,26 @@ func newProcMetricsExporter(
 		return nil, fmt.Errorf("process OTEL exporter attributes: %w", err)
 	}
 
+	attrCPUTime, cpuTimeHasState := cpuAttributes(attrProv, attributes.ProcessCPUTime)
+	attrCPUUtil, cpuUtilHasState := cpuAttributes(attrProv, attributes.ProcessCPUUtilization)
+
 	mr := &procMetricsExporter{
-		ctx:   ctx,
-		cfg:   cfg,
-		clock: expire.NewCachedClock(timeNow),
-		attrCPUTime: attributes.OpenTelemetryGetters(
-			process.OTELGetters, attrProv.For(attributes.ProcessCPUTime)),
-		attrCPUUtil: attributes.OpenTelemetryGetters(
-			process.OTELGetters, attrProv.For(attributes.ProcessCPUUtilization)),
-		log: log,
+		ctx:         ctx,
+		cfg:         cfg,
+		clock:       expire.NewCachedClock(timeNow),
+		attrCPUTime: attrCPUTime,
+		attrCPUUtil: attrCPUUtil,
+		log:         log,
+	}
+	if cpuTimeHasState {
+		mr.cpuTimeObserver = cpuTimeDisaggregatedObserver
+	} else {
+		mr.cpuTimeObserver = cpuTimeAggregatedObserver
+	}
+	if cpuUtilHasState {
+		mr.cpuUtilisationObserver = cpuUtilisationDisaggregatedObserver
+	} else {
+		mr.cpuUtilisationObserver = cpuUtilisationAggregatedObserver
 	}
 
 	mr.reporters = NewReporterPool[*procMetrics](cfg.Metrics.ReportersCacheLen,
@@ -173,11 +194,55 @@ func (me *procMetricsExporter) Do(in <-chan []*process.Status) {
 				continue
 			}
 			me.log.Debug("reporting data for record", "record", s)
-			// TODO: support process.cpu.state=user/system/total
-			// TODO: add more process metrics https://opentelemetry.io/docs/specs/semconv/system/process-metrics/
 
-			reporter.cpuTime.ForRecord(s).Add(s.CPUTimeUserDelta)
-			reporter.cpuUtilisation.ForRecord(s).Set(s.CPUUtilisationUser)
+			// TODO: add more process metrics https://opentelemetry.io/docs/specs/semconv/system/process-metrics/
+			me.cpuTimeObserver(reporter, s)
+			me.cpuUtilisationObserver(reporter, s)
 		}
 	}
+}
+
+// aggregated observers report all the CPU metrics in a single data point
+// to be triggered when the user disables the "process_cpu_state" metric
+func cpuTimeAggregatedObserver(reporter *procMetrics, record *process.Status) {
+	reporter.cpuTime.ForRecord(record).
+		Add(record.CPUTimeUserDelta + record.CPUTimeSystemDelta + record.CPUTimeWaitDelta)
+}
+
+func cpuUtilisationAggregatedObserver(reporter *procMetrics, record *process.Status) {
+	reporter.cpuUtilisation.ForRecord(record).
+		Set(record.CPUUtilisationUser + record.CPUUtilisationSystem + record.CPUUtilisationWait)
+}
+
+// disaggregated observers report three CPU metrics: system, user and wait time
+// to be triggered when the user enables the "process_cpu_state" metric
+func cpuTimeDisaggregatedObserver(reporter *procMetrics, record *process.Status) {
+	reporter.cpuTime.ForRecord(record, stateWaitAttr).Add(record.CPUTimeWaitDelta)
+	reporter.cpuTime.ForRecord(record, stateUserAttr).Add(record.CPUTimeUserDelta)
+	reporter.cpuTime.ForRecord(record, stateSystemAttr).Add(record.CPUTimeSystemDelta)
+}
+
+func cpuUtilisationDisaggregatedObserver(reporter *procMetrics, record *process.Status) {
+	reporter.cpuUtilisation.ForRecord(record, stateWaitAttr).Set(record.CPUUtilisationWait)
+	reporter.cpuUtilisation.ForRecord(record, stateUserAttr).Set(record.CPUUtilisationUser)
+	reporter.cpuUtilisation.ForRecord(record, stateSystemAttr).Set(record.CPUUtilisationSystem)
+}
+
+// cpuAttributes returns, for a metric name definition, the getters for
+// them. It also returns if the invoker must explicitly add the "process.cpu.state" name and value
+func cpuAttributes(
+	provider *attributes.AttrSelector, metricName attributes.Name,
+) (
+	getters []attributes.Field[*process.Status, attribute.KeyValue], containsState bool,
+) {
+	attrNames := provider.For(metricName)
+	// "process_cpu_state" won't be added by PrometheusGetters, as it's not defined in the *process.Status
+	// we need to be aware of the user willing to add it to explicitly choose between
+	// observeAggregatedCPU and observeDisaggregatedCPU
+	for _, attr := range attrNames {
+		containsState = containsState || attr.OTEL() == attr2.ProcCPUState.OTEL()
+	}
+	getters = attributes.OpenTelemetryGetters(process.OTELGetters, attrNames)
+
+	return
 }

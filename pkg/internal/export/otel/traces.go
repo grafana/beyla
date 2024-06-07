@@ -28,10 +28,11 @@ import (
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
-	"go.opentelemetry.io/otel/sdk/metric"
+	metricnoop "go.opentelemetry.io/otel/metric/noop"
 	"go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.25.0"
 	trace2 "go.opentelemetry.io/otel/trace"
+	tracenoop "go.opentelemetry.io/otel/trace/noop"
 	"go.uber.org/zap"
 
 	"github.com/grafana/beyla/pkg/internal/export/attributes"
@@ -194,16 +195,11 @@ func getTracesExporter(ctx context.Context, cfg TracesConfig, ctxInfo *global.Co
 	switch proto := cfg.getProtocol(); proto {
 	case ProtocolHTTPJSON, ProtocolHTTPProtobuf, "": // zero value defaults to HTTP for backwards-compatibility
 		slog.Debug("instantiating HTTP TracesReporter", "protocol", proto)
-		var t trace.SpanExporter
 		var err error
 
 		opts, err := getHTTPTracesEndpointOptions(&cfg)
 		if err != nil {
 			slog.Error("can't get HTTP traces endpoint options", "error", err)
-			return nil, err
-		}
-		if t, err = httpTracer(ctx, opts); err != nil {
-			slog.Error("can't instantiate OTEL HTTP traces exporter", err)
 			return nil, err
 		}
 		endpoint, _, err := parseTracesEndpoint(&cfg)
@@ -223,19 +219,14 @@ func getTracesExporter(ctx context.Context, cfg TracesConfig, ctxInfo *global.Co
 			},
 			Headers: convertHeaders(opts.HTTPHeaders),
 		}
-		set := getTraceSettings(ctxInfo, cfg, t)
+		set := getTraceSettings()
 		return factory.CreateTracesExporter(ctx, set, config)
 	case ProtocolGRPC:
 		slog.Debug("instantiating GRPC TracesReporter", "protocol", proto)
-		var t trace.SpanExporter
 		var err error
 		opts, err := getGRPCTracesEndpointOptions(&cfg)
 		if err != nil {
 			slog.Error("can't get GRPC traces endpoint options", "error", err)
-			return nil, err
-		}
-		if t, err = grpcTracer(ctx, opts); err != nil {
-			slog.Error("can't instantiate OTEL GRPC traces exporter: %w", err)
 			return nil, err
 		}
 		endpoint, _, err := parseTracesEndpoint(&cfg)
@@ -254,7 +245,7 @@ func getTracesExporter(ctx context.Context, cfg TracesConfig, ctxInfo *global.Co
 				InsecureSkipVerify: cfg.InsecureSkipVerify,
 			},
 		}
-		set := getTraceSettings(ctxInfo, cfg, t)
+		set := getTraceSettings()
 		return factory.CreateTracesExporter(ctx, set, config)
 	default:
 		slog.Error(fmt.Sprintf("invalid protocol value: %q. Accepted values are: %s, %s, %s",
@@ -264,31 +255,12 @@ func getTracesExporter(ctx context.Context, cfg TracesConfig, ctxInfo *global.Co
 
 }
 
-func getTraceSettings(ctxInfo *global.ContextInfo, cfg TracesConfig, in trace.SpanExporter) exporter.CreateSettings {
-	var opts []trace.BatchSpanProcessorOption
-	if cfg.MaxExportBatchSize > 0 {
-		opts = append(opts, trace.WithMaxExportBatchSize(cfg.MaxExportBatchSize))
-	}
-	if cfg.MaxQueueSize > 0 {
-		opts = append(opts, trace.WithMaxQueueSize(cfg.MaxQueueSize))
-	}
-	if cfg.BatchTimeout > 0 {
-		opts = append(opts, trace.WithBatchTimeout(cfg.BatchTimeout))
-	}
-	if cfg.ExportTimeout > 0 {
-		opts = append(opts, trace.WithExportTimeout(cfg.ExportTimeout))
-	}
-	tracer := instrumentTraceExporter(in, ctxInfo.Metrics)
-	bsp := trace.NewBatchSpanProcessor(tracer, opts...)
-	provider := trace.NewTracerProvider(
-		trace.WithSpanProcessor(bsp),
-		trace.WithSampler(cfg.Sampler.Implementation()),
-	)
+func getTraceSettings() exporter.CreateSettings {
 	telemetrySettings := component.TelemetrySettings{
 		Logger:         zap.NewNop(),
-		MeterProvider:  metric.NewMeterProvider(),
-		TracerProvider: provider,
-		MetricsLevel:   configtelemetry.LevelBasic,
+		MeterProvider:  metricnoop.NewMeterProvider(),
+		TracerProvider: tracenoop.NewTracerProvider(),
+		MetricsLevel:   configtelemetry.LevelNone,
 		ReportStatus: func(event *component.StatusEvent) {
 			if err := event.Err(); err != nil {
 				slog.Error("error reported by component", "error", err)

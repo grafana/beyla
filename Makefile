@@ -32,7 +32,7 @@ CLANG ?= clang
 CFLAGS := -O2 -g -Wall -Werror $(CFLAGS)
 
 # regular expressions for excluded file patterns
-EXCLUDE_COVERAGE_FILES="(bpfel_)|(/pingserver/)|(/test/collector/)|(integration/components)|(test/cmd)|(/grafana/beyla/docs/)|(/grafana/beyla/configs/)|(/grafana/beyla/examples/)"
+EXCLUDE_COVERAGE_FILES="(bpfel_)|(/pingserver/)|(/grafana/beyla/test/)|(integration/components)|(/grafana/beyla/docs/)|(/grafana/beyla/configs/)|(/grafana/beyla/examples/)"
 
 .DEFAULT_GOAL := all
 

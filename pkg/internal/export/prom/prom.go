@@ -518,7 +518,7 @@ func (r *metricsReporter) observe(span *request.Span) {
 			r.serviceGraphServer.WithLabelValues(lvg...).Observe(duration)
 		}
 		r.serviceGraphTotal.WithLabelValues(lvg...).Add(1)
-		if otel.SpanStatusCode(span) == codes.Error {
+		if request.SpanStatusCode(span) == codes.Error {
 			r.serviceGraphFailed.WithLabelValues(lvg...).Add(1)
 		}
 	}
@@ -559,7 +559,7 @@ func (r *metricsReporter) labelValuesSpans(span *request.Span) []string {
 		span.ServiceID.Name,
 		span.ServiceID.Namespace,
 		otel.TraceName(span),
-		strconv.Itoa(int(otel.SpanStatusCode(span))),
+		strconv.Itoa(int(request.SpanStatusCode(span))),
 		otel.SpanKindString(span),
 		span.ServiceID.Instance,
 		job,

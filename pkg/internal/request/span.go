@@ -5,6 +5,8 @@ import (
 	"unicode/utf8"
 
 	"github.com/gavv/monotime"
+	"go.opentelemetry.io/otel/codes"
+	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
 	trace2 "go.opentelemetry.io/otel/trace"
 
 	"github.com/grafana/beyla/pkg/internal/svc"
@@ -133,4 +135,57 @@ func (s *Span) IsClientSpan() bool {
 	}
 
 	return false
+}
+
+func SpanStatusCode(span *Span) codes.Code {
+	switch span.Type {
+	case EventTypeHTTP, EventTypeHTTPClient:
+		return HTTPSpanStatusCode(span)
+	case EventTypeGRPC, EventTypeGRPCClient:
+		return GrpcSpanStatusCode(span)
+	case EventTypeSQLClient, EventTypeRedisClient:
+		if span.Status != 0 {
+			return codes.Error
+		}
+		return codes.Unset
+	}
+	return codes.Unset
+}
+
+// https://opentelemetry.io/docs/specs/otel/trace/semantic_conventions/http/#status
+func HTTPSpanStatusCode(span *Span) codes.Code {
+	if span.Status < 400 {
+		return codes.Unset
+	}
+
+	if span.Status < 500 {
+		if span.Type == EventTypeHTTPClient {
+			return codes.Error
+		}
+		return codes.Unset
+	}
+
+	return codes.Error
+}
+
+// https://opentelemetry.io/docs/specs/otel/trace/semantic_conventions/rpc/#grpc-status
+func GrpcSpanStatusCode(span *Span) codes.Code {
+	if span.Type == EventTypeGRPCClient {
+		if span.Status == int(semconv.RPCGRPCStatusCodeOk.Value.AsInt64()) {
+			return codes.Unset
+		}
+		return codes.Error
+	}
+
+	switch int64(span.Status) {
+	case semconv.RPCGRPCStatusCodeUnknown.Value.AsInt64(),
+		semconv.RPCGRPCStatusCodeDeadlineExceeded.Value.AsInt64(),
+		semconv.RPCGRPCStatusCodeUnimplemented.Value.AsInt64(),
+		semconv.RPCGRPCStatusCodeInternal.Value.AsInt64(),
+		semconv.RPCGRPCStatusCodeUnavailable.Value.AsInt64(),
+		semconv.RPCGRPCStatusCodeDataLoss.Value.AsInt64():
+		return codes.Error
+	}
+
+	return codes.Unset
 }

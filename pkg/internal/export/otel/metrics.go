@@ -626,7 +626,7 @@ func (mr *MetricsReporter) spanMetricAttributes(span *request.Span) attribute.Se
 		semconv.ServiceNamespace(span.ServiceID.Namespace),
 		request.SpanKindMetric(SpanKindString(span)),
 		request.SpanNameMetric(TraceName(span)),
-		request.StatusCodeMetric(int(SpanStatusCode(span))),
+		request.StatusCodeMetric(int(request.SpanStatusCode(span))),
 		request.SourceMetric("beyla"),
 	}
 
@@ -719,7 +719,7 @@ func (r *Metrics) record(span *request.Span, mr *MetricsReporter) {
 			r.serviceGraphServer.Record(r.ctx, duration, attrOpt)
 		}
 		r.serviceGraphTotal.Add(r.ctx, 1, attrOpt)
-		if SpanStatusCode(span) == codes.Error {
+		if request.SpanStatusCode(span) == codes.Error {
 			r.serviceGraphFailed.Add(r.ctx, 1, attrOpt)
 		}
 	}

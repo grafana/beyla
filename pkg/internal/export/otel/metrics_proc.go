@@ -138,7 +138,7 @@ func (me *procMetricsExporter) newMetricSet(service *svc.ID) (*procMetrics, erro
 	)
 	if _, err := meter.Float64ObservableGauge(
 		attributes.ProcessCPUUtilization.OTEL,
-		metric2.WithDescription("TODO"),
+		metric2.WithDescription("Difference in process.cpu.time since the last measurement, divided by the elapsed time and number of CPUs available to the process"),
 		metric2.WithUnit("1"),
 		metric2.WithFloat64Callback(m.cpuTime.Collect),
 	); err != nil {

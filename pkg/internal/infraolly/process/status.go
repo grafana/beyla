@@ -2,6 +2,8 @@ package process
 
 import (
 	"log/slog"
+	"strconv"
+	"strings"
 
 	"go.opentelemetry.io/otel/attribute"
 
@@ -80,6 +82,30 @@ func OTELGetters(name attr.Name) (attributes.Getter[*Status, attribute.KeyValue]
 		g = func(s *Status) attribute.KeyValue {
 			return attribute.Key(attr.ProcPid).Int(int(s.ProcessID))
 		}
+	}
+	return g, g != nil
+}
+
+// nolint:cyclop
+func PromGetters(name attr.Name) (attributes.Getter[*Status, string], bool) {
+	var g attributes.Getter[*Status, string]
+	switch name {
+	case attr.ProcCommand:
+		g = func(s *Status) string { return s.Command }
+	case attr.ProcCommandLine:
+		g = func(s *Status) string { return s.CommandLine }
+	case attr.ProcExecName:
+		g = func(status *Status) string { return status.ExecName }
+	case attr.ProcExecPath:
+		g = func(status *Status) string { return status.ExecPath }
+	case attr.ProcCommandArgs:
+		g = func(status *Status) string { return strings.Join(status.CommandArgs, ",") }
+	case attr.ProcOwner:
+		g = func(s *Status) string { return s.User }
+	case attr.ProcParentPid:
+		g = func(s *Status) string { return strconv.Itoa(int(s.ParentProcessID)) }
+	case attr.ProcPid:
+		g = func(s *Status) string { return strconv.Itoa(int(s.ProcessID)) }
 	}
 	return g, g != nil
 }

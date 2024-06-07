@@ -147,6 +147,8 @@ func (r *procMetricsReporter) reportMetrics(input <-chan []*process.Status) {
 	}
 }
 
+// aggregated observers report all the CPU metrics in a single data point
+// to be triggered when the user disables the "process_cpu_state" metric
 func (r *procMetricsReporter) observeAggregatedCPUTime(commonLabelValues []string, flow *process.Status) {
 	r.cpuTime.WithLabelValues(commonLabelValues...).
 		Add(flow.CPUTimeUserDelta + flow.CPUTimeSystemDelta + flow.CPUTimeWaitDelta)
@@ -157,6 +159,8 @@ func (r *procMetricsReporter) observeAggregatedCPUUtilization(commonLabelValues 
 		Set(flow.CPUUtilisationUser + flow.CPUUtilisationSystem + flow.CPUUtilisationWait)
 }
 
+// disaggregated observers report three CPU metrics: system, user and wait time
+// to be triggered when the user enables the "process_cpu_state" metric
 func (r *procMetricsReporter) observeDisaggregatedCPUTime(commonLabelValues []string, flow *process.Status) {
 	userLabels := append([]string{"user"}, commonLabelValues...)
 	r.cpuTime.WithLabelValues(userLabels...).Add(flow.CPUTimeUserDelta)

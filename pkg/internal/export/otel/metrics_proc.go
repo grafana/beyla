@@ -53,6 +53,8 @@ type procMetricsExporter struct {
 	attrCPUTime []attributes.Field[*process.Status, attribute.KeyValue]
 	attrCPUUtil []attributes.Field[*process.Status, attribute.KeyValue]
 
+	// the observation code for CPU metrics will be different depending on
+	// the "process.cpu.state" attribute being selected or not
 	cpuTimeObserver        func(*procMetrics, *process.Status)
 	cpuUtilisationObserver func(*procMetrics, *process.Status)
 }
@@ -238,7 +240,7 @@ func cpuAttributes(
 	attrNames := provider.For(metricName)
 	// "process_cpu_state" won't be added by PrometheusGetters, as it's not defined in the *process.Status
 	// we need to be aware of the user willing to add it to explicitly choose between
-	// observeAggregatedCPU and observeDisaggregatedCPU
+	// cpuTimeAggregatedObserver and cpuTimeDisggregatedObserver
 	for _, attr := range attrNames {
 		containsState = containsState || attr.OTEL() == attr2.ProcCPUState.OTEL()
 	}

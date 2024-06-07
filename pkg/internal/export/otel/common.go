@@ -102,7 +102,11 @@ func NewReporterPool[T any](
 	callback simplelru.EvictCallback[svc.UID, T],
 	itemConstructor func(id *svc.ID) (T, error),
 ) ReporterPool[T] {
-	pool, _ := simplelru.NewLRU[svc.UID, T](cacheLen, callback)
+	pool, err := simplelru.NewLRU[svc.UID, T](cacheLen, callback)
+	if err != nil {
+		// should never happen: bug!
+		panic(err)
+	}
 	return ReporterPool[T]{pool: pool, itemConstructor: itemConstructor}
 }
 

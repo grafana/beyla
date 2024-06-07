@@ -62,7 +62,7 @@ func TestProcPrometheusEndpoint_AggregatedMetrics(t *testing.T) {
 		},
 	}
 
-	// THEN the metrics are exported aggregated by system/user/wait times
+	// THEN the metrics are exported adding system/user/wait times into a single datapoint
 	test.Eventually(t, timeout, func(t require.TestingT) {
 		exported := getMetrics(t, promURL)
 		assert.Contains(t, exported, `process_cpu_utilization_ratio{process_command="foo"} 6`)
@@ -99,7 +99,7 @@ func TestProcPrometheusEndpoint_DisaggregatedMetrics(t *testing.T) {
 	require.NoError(t, err)
 	promURL := fmt.Sprintf("http://127.0.0.1:%d/metrics", openPort)
 
-	// GIVEN a Prometheus Metrics Exporter whose process CPU consider the process_cpu_state
+	// GIVEN a Prometheus Metrics Exporter whose process CPU metrics consider the process_cpu_state
 	exporter, err := ProcPrometheusEndpoint(
 		ctx, &global.ContextInfo{Prometheus: &connector.PrometheusManager{}},
 		&ProcPrometheusConfig{Metrics: &PrometheusConfig{

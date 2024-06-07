@@ -238,7 +238,7 @@ func cpuAttributes(
 	getters []attributes.Field[*process.Status, attribute.KeyValue], containsState bool,
 ) {
 	attrNames := provider.For(metricName)
-	// "process_cpu_state" won't be added by PrometheusGetters, as it's not defined in the *process.Status
+	// "process_cpu_state" won't be added by OpenTelemetryGetters, as it's not defined in the *process.Status
 	// we need to be aware of the user willing to add it to explicitly choose between
 	// cpuTimeAggregatedObserver and cpuTimeDisggregatedObserver
 	for _, attr := range attrNames {

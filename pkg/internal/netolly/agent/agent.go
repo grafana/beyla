@@ -157,6 +157,12 @@ func FlowsAgent(ctxInfo *global.ContextInfo, cfg *beyla.Config) (*Flows, error) 
 		if err != nil {
 			return nil, err
 		}
+	case beyla.EbpfSourceInet:
+		alog.Info("using inet_sock_set_state tracepoint for collecting network events")
+		fetcher, err = ebpf.NewInetFlowFetcher(cfg.NetworkFlows.Sampling, cfg.NetworkFlows.CacheMaxFlows)
+		if err != nil {
+			return nil, err
+		}
 	default:
 		return nil, fmt.Errorf("unknown network configuration eBPF source specified, allowed options are [tc, socket_filter]")
 	}

@@ -28,6 +28,7 @@ import (
 const (
 	EbpfSourceTC   = "tc"
 	EbpfSourceSock = "socket_filter"
+	EbpfSourceInet = "inet_tracepoint"
 )
 
 type NetworkConfig struct {
@@ -35,8 +36,11 @@ type NetworkConfig struct {
 	// Default value is false (disabled)
 	Enable bool `yaml:"enable" env:"BEYLA_NETWORK_METRICS"`
 
-	// Specify the source type for network events, e.g tc or socket_filter. The tc implementation
-	// cannot be used when there are other tc eBPF probes, e.g. Cilium CNI.
+	// Specify the source type for network events:
+	// tc - use Traffic Control with queueing discipline
+	// socket_filter - capture packet on raw socket
+	// inet_tracepoint - uses inet_sock_set_state tracepoint to collect metrics
+	// The tc implementation cannot be used when there are other tc eBPF probes, e.g. Cilium CNI.
 	Source string `yaml:"source" env:"BEYLA_NETWORK_SOURCE"`
 
 	// AgentIP allows overriding the reported Agent IP address on each flow.

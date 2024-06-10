@@ -61,6 +61,10 @@ var (
 		"traces_service_graph_request_server_seconds_sum",
 		"traces_service_graph_request_total",
 	}
+	processMetrics = []string{
+		"process_cpu_time_seconds_total",
+		"process_cpu_utilization_ratio",
+	}
 )
 
 func DoWaitForComponentsAvailable(t *testing.T) {
@@ -149,6 +153,19 @@ func FeatureGRPCMetricsDecoration(manifest string) features.Feature {
 				"k8s_replicaset_name": "^testserver-",
 			}),
 		).Feature()
+}
+
+func FeatureProcessMetricsDecoration() features.Feature {
+	return features.New("Decoration of process metrics").
+		Assess("all the process metrics from currently instrumented services are properly decorated",
+			testMetricsDecoration(processMetrics, `{k8s_pod_name=~"testserver-.*"}`, map[string]string{
+				"k8s_namespace_name":  "^default$",
+				"k8s_node_name":       ".+-control-plane$",
+				"k8s_pod_uid":         UUIDRegex,
+				"k8s_pod_start_time":  TimeRegex,
+				"k8s_deployment_name": "^testserver$",
+				"k8s_replicaset_name": "^testserver-",
+			})).Feature()
 }
 
 func testMetricsDecoration(

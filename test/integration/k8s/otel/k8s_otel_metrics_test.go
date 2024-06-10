@@ -21,3 +21,7 @@ func TestOTEL_MetricsDecoration_HTTP(t *testing.T) {
 func TestOTEL_MetricsDecoration_GRPC(t *testing.T) {
 	cluster.TestEnv().Test(t, k8s.FeatureGRPCMetricsDecoration(k8s.GrpcPingerManifest))
 }
+
+func TestOTEL_ProcessMetrics(t *testing.T) {
+	cluster.TestEnv().Test(t, k8s.FeatureProcessMetricsDecoration())
+}

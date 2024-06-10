@@ -93,11 +93,11 @@ func TestLinuxHarvester_Harvest_FullCommandLine(t *testing.T) {
 		_ = cmd.Process.Kill()
 	}()
 
-	// Given a process harvester configured to showw the full command line
-	cache, _ := simplelru.NewLRU[int32, *linuxProcess](math.MaxInt, nil)
-	h := newHarvester(&CollectConfig{}, cache)
-
 	test.Eventually(t, 5*time.Second, func(t require.TestingT) {
+		// Given a process harvester configured to showw the full command line
+		cache, _ := simplelru.NewLRU[int32, *linuxProcess](math.MaxInt, nil)
+		h := newHarvester(&CollectConfig{}, cache)
+
 		// When retrieving for a given process status (e.g. the current testing executable)
 		status, err := h.Harvest(&svc.ID{ProcPID: int32(cmd.Process.Pid)})
 

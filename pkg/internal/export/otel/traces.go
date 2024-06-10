@@ -32,6 +32,7 @@ import (
 	"go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.25.0"
 	trace2 "go.opentelemetry.io/otel/trace"
+	tracenoop "go.opentelemetry.io/otel/trace/noop"
 	"go.uber.org/zap"
 
 	"github.com/grafana/beyla/pkg/internal/export/attributes"
@@ -264,7 +265,29 @@ func getTracesExporter(ctx context.Context, cfg TracesConfig, ctxInfo *global.Co
 
 }
 
-func getTraceSettings(ctxInfo *global.ContextInfo, cfg TracesConfig, in trace.SpanExporter) exporter.CreateSettings {
+func internalMetricsEnabled(ctxInfo *global.ContextInfo) bool {
+	internalMetrics := ctxInfo.Metrics
+	if internalMetrics == nil {
+		return false
+	}
+	_, ok := internalMetrics.(imetrics.NoopReporter)
+
+	return !ok
+}
+
+func instrumentTraceExporter(in trace.SpanExporter, internalMetrics imetrics.Reporter) trace.SpanExporter {
+	// avoid wrapping the instrumented exporter if we don't have
+	// internal instrumentation (NoopReporter)
+	if _, ok := internalMetrics.(imetrics.NoopReporter); ok || internalMetrics == nil {
+		return in
+	}
+	return &instrumentedTracesExporter{
+		SpanExporter: in,
+		internal:     internalMetrics,
+	}
+}
+
+func traceProviderWithInternalMetrics(ctxInfo *global.ContextInfo, cfg TracesConfig, in trace.SpanExporter) trace2.TracerProvider {
 	var opts []trace.BatchSpanProcessorOption
 	if cfg.MaxExportBatchSize > 0 {
 		opts = append(opts, trace.WithMaxExportBatchSize(cfg.MaxExportBatchSize))
@@ -280,15 +303,28 @@ func getTraceSettings(ctxInfo *global.ContextInfo, cfg TracesConfig, in trace.Sp
 	}
 	tracer := instrumentTraceExporter(in, ctxInfo.Metrics)
 	bsp := trace.NewBatchSpanProcessor(tracer, opts...)
-	provider := trace.NewTracerProvider(
+	return trace.NewTracerProvider(
 		trace.WithSpanProcessor(bsp),
 		trace.WithSampler(cfg.Sampler.Implementation()),
 	)
+}
+
+func getTraceSettings(ctxInfo *global.ContextInfo, cfg TracesConfig, in trace.SpanExporter) exporter.CreateSettings {
+	var traceProvider trace2.TracerProvider
+
+	telemetryLevel := configtelemetry.LevelNone
+	traceProvider = tracenoop.NewTracerProvider()
+
+	if internalMetricsEnabled(ctxInfo) {
+		telemetryLevel = configtelemetry.LevelBasic
+		traceProvider = traceProviderWithInternalMetrics(ctxInfo, cfg, in)
+	}
+
 	telemetrySettings := component.TelemetrySettings{
 		Logger:         zap.NewNop(),
 		MeterProvider:  metric.NewMeterProvider(),
-		TracerProvider: provider,
-		MetricsLevel:   configtelemetry.LevelBasic,
+		TracerProvider: traceProvider,
+		MetricsLevel:   telemetryLevel,
 		ReportStatus: func(event *component.StatusEvent) {
 			if err := event.Err(); err != nil {
 				slog.Error("error reported by component", "error", err)
@@ -444,20 +480,6 @@ func grpcTracer(ctx context.Context, opts otlpOptions) (*otlptrace.Exporter, err
 		return nil, fmt.Errorf("creating GRPC trace exporter: %w", err)
 	}
 	return texp, nil
-}
-
-// instrumentTraceExporter checks whether the context is configured to report internal metrics and,
-// in this case, wraps the passed traces exporter inside an instrumented exporter
-func instrumentTraceExporter(in trace.SpanExporter, internalMetrics imetrics.Reporter) trace.SpanExporter {
-	// avoid wrapping the instrumented exporter if we don't have
-	// internal instrumentation (NoopReporter)
-	if _, ok := internalMetrics.(imetrics.NoopReporter); ok || internalMetrics == nil {
-		return in
-	}
-	return &instrumentedTracesExporter{
-		SpanExporter: in,
-		internal:     internalMetrics,
-	}
 }
 
 func SpanKindString(span *request.Span) string {

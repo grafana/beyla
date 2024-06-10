@@ -31,12 +31,17 @@ func testProcesses(attribMatcher map[string]string) func(t *testing.T) {
 			require.NoError(t, err)
 			matchAttributes(t, results, attribMatcher)
 			assert.Len(t, results, utilizationLen)
+			// in multi-process services (e.g. Python gunicorn) we don't
+			// generate so much load to make all the processes to have
+			// CPU time > 0, so we evaluate the sum of all the values
+			cpuSum := float64(0)
 			for _, result := range results {
 				require.Len(t, result.Value, 2) // timestamp and value
 				val, err := strconv.ParseFloat(result.Value[1].(string), 64)
 				require.NoError(t, err)
-				assert.Greater(t, val, 0.0)
+				cpuSum += val
 			}
+			assert.Greater(t, cpuSum, 0.0)
 		})
 	}
 }

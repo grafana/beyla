@@ -38,7 +38,7 @@ func instrumentationPoints(elfF *elf.File, funcNames []string) (map[string]FuncO
 	// no go symbols in the executable, maybe it's statically linked
 	// find regular elf symbols
 	if gosyms == nil {
-		allSyms, err = exec.FindExeSymbols(elfF)
+		allSyms, err = exec.FindExeSymbols(elfF, functions)
 		if err != nil {
 			return nil, err
 		}

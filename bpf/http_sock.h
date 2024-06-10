@@ -486,7 +486,7 @@ static __always_inline void process_http2_grpc_frames(pid_connection_info_t *pid
             break;
         }
 
-        if (pos < (bytes_len - frame.length + FRAME_HEADER_LEN)) {
+        if (pos < (bytes_len - (frame.length + FRAME_HEADER_LEN))) {
             pos += (frame.length + FRAME_HEADER_LEN);
             //bpf_dbg_printk("New buf read pos = %d", pos);
         }

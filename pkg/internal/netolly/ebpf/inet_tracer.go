@@ -20,13 +20,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
+	"strings"
+
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
 	"github.com/cilium/ebpf/ringbuf"
 	"github.com/cilium/ebpf/rlimit"
+
 	"github.com/grafana/beyla/pkg/internal/netolly/ifaces"
-	"log/slog"
-	"strings"
 )
 
 // $BPF_CLANG and $BPF_CFLAGS are set by the Makefile.

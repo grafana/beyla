@@ -81,7 +81,7 @@ func crlfTerminatedMatch(buf []uint8, matches func(c uint8) bool) bool {
 func parseRedisRequest(buf string) (string, string, bool) {
 	lines := strings.Split(buf, "\r\n")
 
-	if len(lines) < 2 {
+	if len(lines) < 2 || len(lines[0]) == 0 {
 		return "", "", false
 	}
 

@@ -241,6 +241,9 @@ func getDefinitions(groups AttrGroups) map[Section]AttrReportGroup {
 		ProcessCPUUtilization.Section: {
 			SubGroups: []*AttrReportGroup{&processAttributes},
 		},
+		ProcessCPUTime.Section: {
+			SubGroups: []*AttrReportGroup{&processAttributes},
+		},
 	}
 }
 

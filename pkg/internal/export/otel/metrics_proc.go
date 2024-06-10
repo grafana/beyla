@@ -12,10 +12,17 @@ import (
 	"go.opentelemetry.io/otel/sdk/metric"
 
 	"github.com/grafana/beyla/pkg/internal/export/attributes"
+	attr2 "github.com/grafana/beyla/pkg/internal/export/attributes/names"
 	"github.com/grafana/beyla/pkg/internal/export/expire"
 	"github.com/grafana/beyla/pkg/internal/infraolly/process"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/pkg/internal/svc"
+)
+
+var (
+	stateWaitAttr   = attr2.ProcCPUState.OTEL().String("wait")
+	stateUserAttr   = attr2.ProcCPUState.OTEL().String("user")
+	stateSystemAttr = attr2.ProcCPUState.OTEL().String("system")
 )
 
 // ProcMetricsConfig extends MetricsConfig for process metrics
@@ -44,6 +51,12 @@ type procMetricsExporter struct {
 	log *slog.Logger
 
 	attrCPUTime []attributes.Field[*process.Status, attribute.KeyValue]
+	attrCPUUtil []attributes.Field[*process.Status, attribute.KeyValue]
+
+	// the observation code for CPU metrics will be different depending on
+	// the "process.cpu.state" attribute being selected or not
+	cpuTimeObserver        func(*procMetrics, *process.Status)
+	cpuUtilisationObserver func(*procMetrics, *process.Status)
 }
 
 type procMetrics struct {
@@ -51,7 +64,8 @@ type procMetrics struct {
 	service  *svc.ID
 	provider *metric.MeterProvider
 
-	cpuTime *Expirer[*process.Status, metric2.Float64Observer, *Gauge, float64]
+	cpuTime        *Expirer[*process.Status, metric2.Float64Observer, *FloatCounter, float64]
+	cpuUtilisation *Expirer[*process.Status, metric2.Float64Observer, *Gauge, float64]
 }
 
 func ProcMetricsExporterProvider(
@@ -84,13 +98,26 @@ func newProcMetricsExporter(
 		return nil, fmt.Errorf("process OTEL exporter attributes: %w", err)
 	}
 
+	attrCPUTime, cpuTimeHasState := cpuAttributes(attrProv, attributes.ProcessCPUTime)
+	attrCPUUtil, cpuUtilHasState := cpuAttributes(attrProv, attributes.ProcessCPUUtilization)
+
 	mr := &procMetricsExporter{
-		ctx:   ctx,
-		cfg:   cfg,
-		clock: expire.NewCachedClock(timeNow),
-		attrCPUTime: attributes.OpenTelemetryGetters(
-			process.OTELGetters, attrProv.For(attributes.ProcessCPUUtilization)),
-		log: log,
+		ctx:         ctx,
+		cfg:         cfg,
+		clock:       expire.NewCachedClock(timeNow),
+		attrCPUTime: attrCPUTime,
+		attrCPUUtil: attrCPUUtil,
+		log:         log,
+	}
+	if cpuTimeHasState {
+		mr.cpuTimeObserver = cpuTimeDisaggregatedObserver
+	} else {
+		mr.cpuTimeObserver = cpuTimeAggregatedObserver
+	}
+	if cpuUtilHasState {
+		mr.cpuUtilisationObserver = cpuUtilisationDisaggregatedObserver
+	} else {
+		mr.cpuUtilisationObserver = cpuUtilisationAggregatedObserver
 	}
 
 	mr.reporters = NewReporterPool[*procMetrics](cfg.Metrics.ReportersCacheLen,
@@ -130,17 +157,25 @@ func (me *procMetricsExporter) newMetricSet(service *svc.ID) (*procMetrics, erro
 	}
 
 	meter := m.provider.Meter(reporterName)
+
 	m.cpuTime = NewExpirer[*process.Status, metric2.Float64Observer](
-		NewGauge,
-		me.attrCPUTime,
-		timeNow,
-		me.cfg.Metrics.TTL,
-	)
+		NewFloatCounter, me.attrCPUTime, timeNow, me.cfg.Metrics.TTL)
+	if _, err := meter.Float64ObservableCounter(
+		attributes.ProcessCPUTime.OTEL, metric2.WithUnit("s"),
+		metric2.WithDescription("Total CPU seconds broken down by different states"),
+		metric2.WithFloat64Callback(m.cpuTime.Collect),
+	); err != nil {
+		log.Error("creating observable gauge for "+attributes.ProcessCPUUtilization.OTEL, "error", err)
+		return nil, err
+	}
+
+	m.cpuUtilisation = NewExpirer[*process.Status, metric2.Float64Observer](
+		NewGauge, me.attrCPUUtil, timeNow, me.cfg.Metrics.TTL)
 	if _, err := meter.Float64ObservableGauge(
 		attributes.ProcessCPUUtilization.OTEL,
 		metric2.WithDescription("Difference in process.cpu.time since the last measurement, divided by the elapsed time and number of CPUs available to the process"),
 		metric2.WithUnit("1"),
-		metric2.WithFloat64Callback(m.cpuTime.Collect),
+		metric2.WithFloat64Callback(m.cpuUtilisation.Collect),
 	); err != nil {
 		log.Error("creating observable gauge for "+attributes.ProcessCPUUtilization.OTEL, "error", err)
 		return nil, err
@@ -161,9 +196,55 @@ func (me *procMetricsExporter) Do(in <-chan []*process.Status) {
 				continue
 			}
 			me.log.Debug("reporting data for record", "record", s)
-			// TODO: support process.cpu.state=user/system/total
+
 			// TODO: add more process metrics https://opentelemetry.io/docs/specs/semconv/system/process-metrics/
-			reporter.cpuTime.ForRecord(s).Set(s.CPUPercent / 100)
+			me.cpuTimeObserver(reporter, s)
+			me.cpuUtilisationObserver(reporter, s)
 		}
 	}
+}
+
+// aggregated observers report all the CPU metrics in a single data point
+// to be triggered when the user disables the "process_cpu_state" metric
+func cpuTimeAggregatedObserver(reporter *procMetrics, record *process.Status) {
+	reporter.cpuTime.ForRecord(record).
+		Add(record.CPUTimeUserDelta + record.CPUTimeSystemDelta + record.CPUTimeWaitDelta)
+}
+
+func cpuUtilisationAggregatedObserver(reporter *procMetrics, record *process.Status) {
+	reporter.cpuUtilisation.ForRecord(record).
+		Set(record.CPUUtilisationUser + record.CPUUtilisationSystem + record.CPUUtilisationWait)
+}
+
+// disaggregated observers report three CPU metrics: system, user and wait time
+// to be triggered when the user enables the "process_cpu_state" metric
+func cpuTimeDisaggregatedObserver(reporter *procMetrics, record *process.Status) {
+	reporter.cpuTime.ForRecord(record, stateWaitAttr).Add(record.CPUTimeWaitDelta)
+	reporter.cpuTime.ForRecord(record, stateUserAttr).Add(record.CPUTimeUserDelta)
+	reporter.cpuTime.ForRecord(record, stateSystemAttr).Add(record.CPUTimeSystemDelta)
+}
+
+func cpuUtilisationDisaggregatedObserver(reporter *procMetrics, record *process.Status) {
+	reporter.cpuUtilisation.ForRecord(record, stateWaitAttr).Set(record.CPUUtilisationWait)
+	reporter.cpuUtilisation.ForRecord(record, stateUserAttr).Set(record.CPUUtilisationUser)
+	reporter.cpuUtilisation.ForRecord(record, stateSystemAttr).Set(record.CPUUtilisationSystem)
+}
+
+// cpuAttributes returns, for a metric name definition, the getters for
+// them. It also returns if the invoker must explicitly add the "process.cpu.state" name and value
+func cpuAttributes(
+	provider *attributes.AttrSelector, metricName attributes.Name,
+) (
+	getters []attributes.Field[*process.Status, attribute.KeyValue], containsState bool,
+) {
+	attrNames := provider.For(metricName)
+	// "process_cpu_state" won't be added by OpenTelemetryGetters, as it's not defined in the *process.Status
+	// we need to be aware of the user willing to add it to explicitly choose between
+	// cpuTimeAggregatedObserver and cpuTimeDisggregatedObserver
+	for _, attr := range attrNames {
+		containsState = containsState || attr.OTEL() == attr2.ProcCPUState.OTEL()
+	}
+	getters = attributes.OpenTelemetryGetters(process.OTELGetters, attrNames)
+
+	return
 }

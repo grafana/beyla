@@ -1,5 +1,19 @@
-// Copyright 2020 New Relic Corporation. All rights reserved.
-// SPDX-License-Identifier: Apache-2.0
+// Copyright 2020 New Relic Corporation
+// Copyright 2024 Grafana Labs
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// This implementation was inspired by the code in https://github.com/newrelic/infrastructure-agent
 
 //go:build linux
 
@@ -47,7 +61,7 @@ func TestLinuxProcess_CmdLine(t *testing.T) {
 	for _, tc := range testCases {
 		require.NoError(t, os.WriteFile(path.Join(processDir, "cmdline"), tc.rawProcCmdline, 0o600))
 		lp := linuxProcess{pid: 12345, procFSRoot: tmpDir}
-		lp.FetchCommandInfo()
+		lp.fetchCommandInfo()
 		assert.Equal(t, tc.expectedExecPath, lp.execPath)
 		assert.Equal(t, tc.expectedArgs, lp.commandArgs)
 		assert.Equal(t, tc.expectedCmdLine, lp.commandLine)
@@ -80,14 +94,14 @@ func TestLinuxProcess_CmdLine_NotStandard(t *testing.T) {
 		require.NoError(t, os.WriteFile(path.Join(processDir, "cmdline"), tc.rawProcCmdline, 0o600))
 		lp := linuxProcess{pid: 12345, procFSRoot: tmpDir}
 
-		lp.FetchCommandInfo()
+		lp.fetchCommandInfo()
 		assert.Equal(t, tc.expected, lp.commandLine)
 	}
 }
 
 func TestLinuxProcess_CmdLine_ProcessNotExist(t *testing.T) {
 	lp := linuxProcess{pid: 999999999}
-	lp.FetchCommandInfo()
+	lp.fetchCommandInfo()
 	assert.Empty(t, lp.execPath)
 	assert.Empty(t, lp.commandArgs)
 	assert.Empty(t, lp.commandLine)
@@ -104,9 +118,9 @@ func TestParseProcStatMultipleWordsProcess(t *testing.T) {
 		vmRSS:      87003136,
 		vmSize:     1005015040,
 		cpu: CPUInfo{
-			Percent: 0,
-			User:    3.78,
-			System:  0.6,
+			UserTime:   3.78,
+			SystemTime: 0.6,
+			WaitTime:   0.11,
 		},
 	}
 	actual, err := parseProcStat(content)
@@ -126,10 +140,9 @@ func TestParseProcStatSingleWordProcess(t *testing.T) {
 		vmRSS:      18391040,
 		vmSize:     464912384,
 		cpu: CPUInfo{
-			Percent: 0,
-
-			User:   0.24,
-			System: 0.15,
+			UserTime:   0.24,
+			SystemTime: 0.15,
+			WaitTime:   2.87,
 		},
 	}
 	actual, err := parseProcStat(content)
@@ -144,13 +157,13 @@ func TestParseProcStatUntrimmedCommand(t *testing.T) {
 		expected procStats
 	}{{
 		input:    "11155 (/usr/bin/spamd ) S 1 11155 11155 0 -1 1077944640 19696 1028 0 0 250 32 0 0 20 0 1 0 6285571 300249088 18439 18446744073709551615 4194304 4198572 140721992060048 140721992059288 139789215727443 0 0 4224 92163 18446744072271262725 0 0 17 1 0 0 0 0 0 6298944 6299796 18743296 140721992060730 140721992060807 140721992060807 140721992060905 0\n",
-		expected: procStats{command: "/usr/bin/spamd ", state: "S", ppid: 1, cpu: CPUInfo{User: 2.50, System: 0.32}, numThreads: 1, vmSize: 300249088, vmRSS: 18439 * pageSize},
+		expected: procStats{command: "/usr/bin/spamd ", state: "S", ppid: 1, cpu: CPUInfo{UserTime: 2.50, SystemTime: 0.32}, numThreads: 1, vmSize: 300249088, vmRSS: 18439 * pageSize},
 	}, {
 		input:    "11159 (spamd child) S 11155 11155 11155 0 -1 1077944384 459 0 0 0 1 0 0 0 20 0 1 0 6285738 300249088 17599 18446744073709551615 4194304 4198572 140721992060048 140721992059288 139789215727443 0 0 4224 2048 18446744072271262725 0 0 17 0 0 0 0 0 0 6298944 6299796 18743296 140721992060730 140721992060807 140721992060807 140721992060905 0\n",
-		expected: procStats{command: "spamd child", state: "S", ppid: 11155, cpu: CPUInfo{User: 0.01, System: 0}, numThreads: 1, vmSize: 300249088, vmRSS: 17599 * pageSize},
+		expected: procStats{command: "spamd child", state: "S", ppid: 11155, cpu: CPUInfo{UserTime: 0.01, SystemTime: 0}, numThreads: 1, vmSize: 300249088, vmRSS: 17599 * pageSize},
 	}, {
 		input:    "11160 ( spamd child) S 11155 11155 11155 0 -1 1077944384 459 0 0 0 0 0 0 0 20 0 1 0 6285738 300249088 17599 18446744073709551615 4194304 4198572 140721992060048 140721992059288 139789215727443 0 0 4224 2048 18446744072271262725 0 0 17 0 0 0 0 0 0 6298944 6299796 18743296 140721992060730 140721992060807 140721992060807 140721992060905 0\n",
-		expected: procStats{command: " spamd child", state: "S", ppid: 11155, cpu: CPUInfo{User: 0, System: 0}, numThreads: 1, vmSize: 300249088, vmRSS: 17599 * pageSize},
+		expected: procStats{command: " spamd child", state: "S", ppid: 11155, cpu: CPUInfo{UserTime: 0, SystemTime: 0}, numThreads: 1, vmSize: 300249088, vmRSS: 17599 * pageSize},
 	}}
 
 	for n, c := range cases {

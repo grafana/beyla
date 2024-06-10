@@ -1,5 +1,19 @@
-// Copyright 2020 New Relic Corporation. All rights reserved.
-// SPDX-License-Identifier: Apache-2.0
+// Copyright 2020 New Relic Corporation
+// Copyright 2024 Grafana Labs
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// This implementation was inspired by the code in https://github.com/newrelic/infrastructure-agent
 
 // Package process provides all the tools and functionality for sampling processes. It is divided in three main
 // components:
@@ -13,6 +27,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"runtime"
 
 	"github.com/hashicorp/golang-lru/v2/simplelru"
 
@@ -95,8 +110,8 @@ func (ps *Harvester) Harvest(svcID *svc.ID) (*Status, error) {
 
 // populateStaticData populates the status with the process data won't vary during the process life cycle
 func (ps *Harvester) populateStaticData(status *Status, process *linuxProcess) error {
-	process.FetchCommandInfo()
-	status.Command = process.Command()
+	process.fetchCommandInfo()
+	status.Command = process.stats.command
 	status.CommandArgs = process.commandArgs
 	status.CommandLine = process.commandLine
 	status.ExecPath = process.execPath
@@ -109,7 +124,7 @@ func (ps *Harvester) populateStaticData(status *Status, process *linuxProcess) e
 		ps.log.Debug("can't get username for process", "pid", status.ProcessID, "error", err)
 	}
 
-	status.ParentProcessID = process.Ppid()
+	status.ParentProcessID = process.stats.ppid
 
 	return nil
 }
@@ -118,21 +133,15 @@ func (ps *Harvester) populateStaticData(status *Status, process *linuxProcess) e
 func (ps *Harvester) populateGauges(status *Status, process *linuxProcess) error {
 	var err error
 
-	cpuTimes, err := process.CPUTimes()
-	if err != nil {
-		return err
-	}
-	status.CPUPercent = cpuTimes.Percent
+	// Calculate CPU metrics from current and previous user/system/wait time
+	status.CPUTimeSystemDelta = process.stats.cpu.SystemTime - process.previousCPUStats.SystemTime
+	status.CPUTimeUserDelta = process.stats.cpu.UserTime - process.previousCPUStats.UserTime
+	status.CPUTimeWaitDelta = process.stats.cpu.WaitTime - process.previousCPUStats.WaitTime
 
-	totalCPU := cpuTimes.User + cpuTimes.System
-
-	if totalCPU > 0 {
-		status.CPUUserPercent = (cpuTimes.User / totalCPU) * status.CPUPercent
-		status.CPUSystemPercent = (cpuTimes.System / totalCPU) * status.CPUPercent
-	} else {
-		status.CPUUserPercent = 0
-		status.CPUSystemPercent = 0
-	}
+	delta := process.measureTime.Sub(process.previousMeasureTime).Seconds() * float64(runtime.NumCPU())
+	status.CPUUtilisationSystem = (process.stats.cpu.SystemTime - process.previousCPUStats.SystemTime) / delta
+	status.CPUUtilisationUser = (process.stats.cpu.UserTime - process.previousCPUStats.UserTime) / delta
+	status.CPUUtilisationWait = (process.stats.cpu.WaitTime - process.previousCPUStats.WaitTime) / delta
 
 	if ps.privileged {
 		status.FdCount, err = process.NumFDs()
@@ -142,10 +151,10 @@ func (ps *Harvester) populateGauges(status *Status, process *linuxProcess) error
 	}
 
 	// Extra status data
-	status.Status = process.Status()
-	status.ThreadCount = process.NumThreads()
-	status.MemoryVMSBytes = process.VMSize()
-	status.MemoryRSSBytes = process.VMRSS()
+	status.Status = process.stats.state
+	status.ThreadCount = process.stats.numThreads
+	status.MemoryVMSBytes = process.stats.vmSize
+	status.MemoryRSSBytes = process.stats.vmRSS
 
 	return nil
 }

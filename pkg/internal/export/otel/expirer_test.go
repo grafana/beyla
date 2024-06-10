@@ -61,12 +61,12 @@ func TestMetricsExpiration(t *testing.T) {
 	test.Eventually(t, timeout, func(t require.TestingT) {
 		metric := readChan(t, otlp.Records, timeout)
 		assert.Equal(t, map[string]string{"src.name": "foo", "dst.name": "bar"}, metric.Attributes)
-		assert.EqualValues(t, 123, metric.CountVal)
+		assert.EqualValues(t, 123, metric.IntVal)
 	})
 	test.Eventually(t, timeout, func(t require.TestingT) {
 		metric := readChan(t, otlp.Records, timeout)
 		assert.Equal(t, map[string]string{"src.name": "baz", "dst.name": "bae"}, metric.Attributes)
-		assert.EqualValues(t, 456, metric.CountVal)
+		assert.EqualValues(t, 456, metric.IntVal)
 	})
 	// AND WHEN it keeps receiving a subset of the initial metrics during the timeout
 	now.Advance(2 * time.Minute)
@@ -80,14 +80,14 @@ func TestMetricsExpiration(t *testing.T) {
 	test.Eventually(t, timeout, func(t require.TestingT) {
 		metric := readChan(t, otlp.Records, timeout)
 		assert.Equal(t, map[string]string{"src.name": "foo", "dst.name": "bar"}, metric.Attributes)
-		assert.EqualValues(t, 246, metric.CountVal)
+		assert.EqualValues(t, 246, metric.IntVal)
 	})
 
 	// BUT not the metrics that haven't been received during that time
 	// (we just know it because OTEL just sends a metric with the same value)
 	metric := readChan(t, otlp.Records, timeout)
 	assert.Equal(t, map[string]string{"src.name": "foo", "dst.name": "bar"}, metric.Attributes)
-	assert.EqualValues(t, 246, metric.CountVal)
+	assert.EqualValues(t, 246, metric.IntVal)
 
 	now.Advance(2 * time.Minute)
 
@@ -102,7 +102,7 @@ func TestMetricsExpiration(t *testing.T) {
 	test.Eventually(t, timeout, func(t require.TestingT) {
 		metric := readChan(t, otlp.Records, timeout)
 		assert.Equal(t, map[string]string{"src.name": "baz", "dst.name": "bae"}, metric.Attributes)
-		assert.EqualValues(t, 456, metric.CountVal)
+		assert.EqualValues(t, 456, metric.IntVal)
 	})
 }
 
@@ -114,12 +114,20 @@ func TestGauge(t *testing.T) {
 	assert.Equal(t, 456.123, g.Load())
 }
 
-func TestCounter(t *testing.T) {
-	g := NewCounter(attribute.Set{})
+func TestIntCounter(t *testing.T) {
+	g := NewIntCounter(attribute.Set{})
 	g.Add(123)
 	assert.EqualValues(t, 123, g.Load())
 	g.Add(123)
 	assert.EqualValues(t, 246, g.Load())
+}
+
+func TestFloatCounter(t *testing.T) {
+	g := NewFloatCounter(attribute.Set{})
+	g.Add(123.4)
+	assert.EqualValues(t, 123.4, g.Load())
+	g.Add(123.3)
+	assert.EqualValues(t, 246.7, g.Load())
 }
 
 type syncedClock struct {

@@ -61,6 +61,11 @@ var (
 		Prom:    "db_client_operation_duration_seconds",
 		OTEL:    "db.client.operation.duration",
 	}
+	ProcessCPUTime = Name{
+		Section: "process.cpu.time",
+		Prom:    "process_cpu_time_seconds_total",
+		OTEL:    "process.cpu.time",
+	}
 	ProcessCPUUtilization = Name{
 		Section: "process.cpu.utilization",
 		Prom:    "process_cpu_utilization_ratio",

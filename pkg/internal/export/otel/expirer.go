@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"math"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -23,7 +24,7 @@ func plog() *slog.Logger {
 
 // dataPoint implements a metric value of a given type,
 // for a set of attributes
-// Example of implementers: Gauge and Counter
+// Example of implementers: FloatVal and IntCounter
 type dataPoint[T any] interface {
 	// Load the current value for a given set of attributes
 	Load() T
@@ -37,10 +38,10 @@ type observer[T any] interface {
 }
 
 // Expirer drops metrics from labels that haven't been updated during a given timeout.
-// It has multiple generic types to allow it working with different dataPoints (Gauge, Counter...)
+// It has multiple generic types to allow it working with different dataPoints (FloatVal, IntCounter...)
 // and different types of data (int, float...).
 // Record: type of the record that holds the metric data request.Span, ebpf.Record, process.Status...
-// Metric: type of the dataPoint kind: Counter, Gauge...
+// Metric: type of the dataPoint kind: IntCounter, FloatVal...
 // VT: type of the value inside the datapoint: int, float64...
 type Expirer[Record any, OT observer[VT], Metric dataPoint[VT], VT any] struct {
 	instancer func(set attribute.Set) Metric
@@ -52,7 +53,7 @@ type Expirer[Record any, OT observer[VT], Metric dataPoint[VT], VT any] struct {
 // NewExpirer creates an expirer that wraps data points of a given type. Its labeled instances are dropped
 // if they haven't been updated during the last timeout period.
 // Arguments:
-// - instancer: the constructor of each datapoint object (e.g. NewCounter, NewGauge...)
+// - instancer: the constructor of each datapoint object (e.g. NewIntCounter, NewFloatVal...)
 // - attrs: attributes for that given data point
 // - clock: function that provides the current time
 // - ttl: time to live of the datapoints whose attribute sets haven't been updated
@@ -74,8 +75,9 @@ func NewExpirer[Record any, OT observer[VT], Metric dataPoint[VT], VT any](
 // ForRecord returns the data point for the given eBPF record. If that record
 // s accessed for the first time, a new data point is created.
 // If not, a cached copy is returned and the "last access" cache time is updated.
-func (ex *Expirer[Record, OT, Metric, VT]) ForRecord(r Record) Metric {
-	recordAttrs, attrValues := ex.recordAttributes(r)
+// Extra attributes can be explicitly added (e.g. process_cpu_state="wait")
+func (ex *Expirer[Record, OT, Metric, VT]) ForRecord(r Record, extraAttrs ...attribute.KeyValue) Metric {
+	recordAttrs, attrValues := ex.recordAttributes(r, extraAttrs...)
 	return ex.entries.GetOrCreate(attrValues, func() Metric {
 		ex.log.With("labelValues", attrValues).Debug("storing new metric label set")
 		return ex.instancer(recordAttrs)
@@ -94,14 +96,18 @@ func (ex *Expirer[Record, OT, Metric, VT]) Collect(_ context.Context, observer O
 	return nil
 }
 
-func (ex *Expirer[Record, OT, Metric, VT]) recordAttributes(m Record) (attribute.Set, []string) {
-	keyVals := make([]attribute.KeyValue, 0, len(ex.attrs))
-	vals := make([]string, 0, len(ex.attrs))
+func (ex *Expirer[Record, OT, Metric, VT]) recordAttributes(m Record, extraAttrs ...attribute.KeyValue) (attribute.Set, []string) {
+	keyVals := make([]attribute.KeyValue, 0, len(ex.attrs)+len(extraAttrs))
+	vals := make([]string, 0, len(ex.attrs)+len(extraAttrs))
 
 	for _, attr := range ex.attrs {
 		kv := attr.Get(m)
 		keyVals = append(keyVals, kv)
 		vals = append(vals, kv.Value.Emit())
+	}
+	keyVals = append(keyVals, extraAttrs...)
+	for i := range extraAttrs {
+		vals = append(vals, extraAttrs[i].Value.Emit())
 	}
 
 	return attribute.NewSet(keyVals...), vals
@@ -115,21 +121,44 @@ func (g *metricAttributes) Attributes() attribute.Set {
 	return g.attributes
 }
 
-// Counter data point type
-type Counter struct {
+// IntCounter data point type
+type IntCounter struct {
 	metricAttributes
 	val atomic.Int64
 }
 
-func NewCounter(attributes attribute.Set) *Counter {
-	return &Counter{metricAttributes: metricAttributes{attributes: attributes}}
+func NewIntCounter(attributes attribute.Set) *IntCounter {
+	return &IntCounter{metricAttributes: metricAttributes{attributes: attributes}}
 }
-func (g *Counter) Load() int64 {
+func (g *IntCounter) Load() int64 {
 	return g.val.Load()
 }
 
-func (g *Counter) Add(v int64) {
+func (g *IntCounter) Add(v int64) {
 	g.val.Add(v)
+}
+
+// FloatCounter is a Counter metric for float64 values
+type FloatCounter struct {
+	metricAttributes
+	mt  sync.RWMutex
+	val float64
+}
+
+func NewFloatCounter(attributes attribute.Set) *FloatCounter {
+	return &FloatCounter{metricAttributes: metricAttributes{attributes: attributes}}
+}
+
+func (g *FloatCounter) Load() float64 {
+	g.mt.RLock()
+	defer g.mt.RUnlock()
+	return g.val
+}
+
+func (g *FloatCounter) Add(v float64) {
+	g.mt.Lock()
+	defer g.mt.Unlock()
+	g.val += v
 }
 
 // Gauge data point type

@@ -6,5 +6,9 @@ otel_metrics_export:
   endpoint: http://otelcol:4318
 attributes:
   select:
+    process_cpu_time:
+      include: ["*"]
+      exclude: ["process_cpu_state"]
     process_cpu_utilization:
       include: ["*"]
+      exclude: ["process_cpu_state"]

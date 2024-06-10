@@ -1,5 +1,19 @@
-// Copyright 2020 New Relic Corporation. All rights reserved.
-// SPDX-License-Identifier: Apache-2.0
+// Copyright 2020 New Relic Corporation
+// Copyright 2024 Grafana Labs
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// This implementation was inspired by the code in https://github.com/newrelic/infrastructure-agent
 
 package process
 
@@ -8,7 +22,6 @@ import (
 	"fmt"
 	"os"
 	"path"
-	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -22,24 +35,27 @@ import (
 
 // CPUInfo represents CPU usage statistics at a given point
 type CPUInfo struct {
-	// Percent is the total CPU usage percent
-	Percent float64
-	// User is the CPU user time
-	User float64
-	// System is the CPU system time
-	System float64
+	// User time of CPU, in seconds
+	UserTime float64
+	// System time of CPU, in seconds
+	SystemTime float64
+	// Wait time of CPU, in seconds
+	WaitTime float64
 }
 
-// linuxProcess is an implementation of the process.Snapshot interface for linux hosts. It is designed to be highly
-// optimized and avoid unnecessary/duplicated system calls.
+// linuxProcess provides basic function to acquire process information from Linux hosts.
+// It is designed to be highly optimized and avoid unnecessary/duplicated system calls.
 type linuxProcess struct {
 	// if privileged == false, some operations will be avoided: FD and IO count.
 	privileged bool
 
-	stats    procStats
-	process  *process.Process
-	lastCPU  CPUInfo
-	lastTime time.Time
+	measureTime time.Time
+	stats       procStats
+	process     *process.Process
+
+	// used to calculate CPU utilization ratios
+	previousCPUStats    CPUInfo
+	previousMeasureTime time.Time
 
 	procFSRoot string
 
@@ -57,7 +73,7 @@ type linuxProcess struct {
 var pageSize int64
 
 // needed to calculate CPU times.
-var clockTicks int64
+var clocksPerSec int64
 
 // for testing getting username from getent.
 var getEntCommand = helpers.RunCommand //nolint:gochecknoglobals
@@ -73,9 +89,9 @@ func init() {
 		pageSize = 4096 // default value
 	}
 
-	clockTicks = int64(cpu.ClocksPerSec)
-	if clockTicks <= 0 {
-		clockTicks = 100 // default value
+	clocksPerSec = int64(cpu.ClocksPerSec)
+	if clocksPerSec <= 0 {
+		clocksPerSec = 100 // default value
 	}
 }
 
@@ -85,7 +101,8 @@ func getLinuxProcess(cachedCopy *linuxProcess, procFSRoot string, pid int32, pri
 	var gops *process.Process
 	var err error
 
-	procStats, err := readProcStat(procFSRoot, pid)
+	measureTime := time.Now()
+	currentStats, err := readProcStat(procFSRoot, pid)
 	if err != nil {
 		return nil, err
 	}
@@ -95,22 +112,31 @@ func getLinuxProcess(cachedCopy *linuxProcess, procFSRoot string, pid int32, pri
 	// a new process that shares the PID with an old one.
 	// if a process with the same Command but different CommandLine or User name
 	// occupies the same PID, the cache won't refresh the CommandLine and Username.
-	if cachedCopy == nil || procStats.command != cachedCopy.Command() || procStats.ppid != cachedCopy.Ppid() {
+	if cachedCopy == nil ||
+		currentStats.command != cachedCopy.stats.command ||
+		currentStats.ppid != cachedCopy.stats.ppid {
+
 		gops, err = process.NewProcess(pid)
 		if err != nil {
 			return nil, err
 		}
 		return &linuxProcess{
-			privileged: privileged,
-			pid:        pid,
-			process:    gops,
-			stats:      procStats,
-			procFSRoot: procFSRoot,
+			privileged:          privileged,
+			pid:                 pid,
+			process:             gops,
+			stats:               currentStats,
+			measureTime:         measureTime,
+			previousMeasureTime: measureTime,
+			previousCPUStats:    currentStats.cpu,
+			procFSRoot:          procFSRoot,
 		}, nil
 	}
 
 	// Otherwise, instead of creating a new process snapshot, we just reuse the cachedCopy one, with updated data
-	cachedCopy.stats = procStats
+	cachedCopy.previousCPUStats = cachedCopy.stats.cpu
+	cachedCopy.previousMeasureTime = cachedCopy.measureTime
+	cachedCopy.stats = currentStats
+	cachedCopy.measureTime = measureTime
 
 	return cachedCopy, nil
 }
@@ -196,10 +222,7 @@ func (pw *linuxProcess) NumFDs() (int32, error) {
 	return int32(len(fnames)), err
 }
 
-/////////////////////////////
-// Data to be derived from /proc/<pid>/stat
-/////////////////////////////
-
+// procStats contains data to be parsed from /proc/<pid>/stat
 type procStats struct {
 	command    string
 	ppid       int32
@@ -217,6 +240,8 @@ const (
 	statPPID       = 1
 	statUtime      = 11
 	statStime      = 12
+	statCUtime     = 13
+	statCStime     = 14
 	statNumThreads = 17
 	statVsize      = 20
 	statRss        = 21
@@ -270,14 +295,25 @@ func parseProcStat(content string) (procStats, error) {
 	if err != nil {
 		return stats, errors.Wrapf(err, "for stats: %s", content)
 	}
-	stats.cpu.User = float64(utime) / float64(clockTicks)
+	stats.cpu.UserTime = float64(utime) / float64(clocksPerSec)
 
 	// System time
 	stime, err := strconv.ParseInt(fields[statStime], 10, 64)
 	if err != nil {
 		return stats, errors.Wrapf(err, "for stats: %s", content)
 	}
-	stats.cpu.System = float64(stime) / float64(clockTicks)
+	stats.cpu.SystemTime = float64(stime) / float64(clocksPerSec)
+
+	// wait time, both in kernel and user modes
+	cutime, err := strconv.ParseInt(fields[statCUtime], 10, 64)
+	if err != nil {
+		return stats, errors.Wrapf(err, "for stats: %s", content)
+	}
+	cstime, err := strconv.ParseInt(fields[statCStime], 10, 64)
+	if err != nil {
+		return stats, errors.Wrapf(err, "for stats: %s", content)
+	}
+	stats.cpu.WaitTime = float64(cutime+cstime) / float64(clocksPerSec)
 
 	// Number of threads
 	nthreads, err := strconv.ParseInt(fields[statNumThreads], 10, 32)
@@ -302,64 +338,8 @@ func parseProcStat(content string) (procStats, error) {
 	return stats, nil
 }
 
-func (pw *linuxProcess) CPUTimes() (CPUInfo, error) {
-	now := time.Now()
-
-	if pw.lastTime.IsZero() {
-		// invoked first time
-		pw.lastCPU = pw.stats.cpu
-		pw.lastTime = now
-		return pw.stats.cpu, nil
-	}
-
-	// Calculate CPU percent from user time, system time, and last harvested cpu counters
-	numcpu := runtime.NumCPU()
-	delta := (now.Sub(pw.lastTime).Seconds()) * float64(numcpu)
-	pw.stats.cpu.Percent = calculatePercent(pw.lastCPU, pw.stats.cpu, delta, numcpu)
-	pw.lastCPU = pw.stats.cpu
-	pw.lastTime = now
-
-	return pw.stats.cpu, nil
-}
-
-func calculatePercent(t1, t2 CPUInfo, delta float64, numcpu int) float64 {
-	if delta == 0 {
-		return 0
-	}
-	deltaProc := t2.User + t2.System - t1.User - t1.System
-	overallPercent := ((deltaProc / delta) * 100) * float64(numcpu)
-	return overallPercent
-}
-
-func (pw *linuxProcess) Ppid() int32 {
-	return pw.stats.ppid
-}
-
-func (pw *linuxProcess) NumThreads() int32 {
-	return pw.stats.numThreads
-}
-
-func (pw *linuxProcess) Status() string {
-	return pw.stats.state
-}
-
-func (pw *linuxProcess) VMRSS() int64 {
-	return pw.stats.vmRSS
-}
-
-func (pw *linuxProcess) VMSize() int64 {
-	return pw.stats.vmSize
-}
-
-func (pw *linuxProcess) Command() string {
-	return pw.stats.command
-}
-
-//////////////////////////
-// Data to be derived from /proc/<pid>/cmdline: command line and arguments
-//////////////////////////
-
-func (pw *linuxProcess) FetchCommandInfo() {
+// fetchCommandInfo derives command information from /proc/<pid>/cmdline file
+func (pw *linuxProcess) fetchCommandInfo() {
 	if pw.commandInfoFetched {
 		return
 	}

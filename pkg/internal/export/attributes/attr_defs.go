@@ -151,6 +151,7 @@ func getDefinitions(groups AttrGroups) map[Section]AttrReportGroup {
 	}
 
 	var processAttributes = AttrReportGroup{
+		SubGroups: []*AttrReportGroup{&appKubeAttributes},
 		Attributes: map[attr.Name]Default{
 			attr.ProcCommand:     true,
 			attr.ProcCPUState:    true,

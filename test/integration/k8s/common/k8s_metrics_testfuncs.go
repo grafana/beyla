@@ -64,6 +64,8 @@ var (
 	processMetrics = []string{
 		"process_cpu_time_seconds_total",
 		"process_cpu_utilization_ratio",
+		"process_memory_usage_bytes",
+		"process_memory_virtual_bytes",
 	}
 )
 

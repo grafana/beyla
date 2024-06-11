@@ -55,6 +55,7 @@ const (
 	FeatureApplication = "application"
 	FeatureSpan        = "application_span"
 	FeatureGraph       = "application_service_graph"
+	FeatureProcess     = "application_process"
 )
 
 type MetricsConfig struct {
@@ -130,23 +131,23 @@ func (m *MetricsConfig) GuessProtocol() Protocol {
 // Reason to disable linting: it requires to be a value despite it is considered a "heavy struct".
 // This method is invoked only once during startup time so it doesn't have a noticeable performance impact.
 // nolint:gocritic
-func (m MetricsConfig) EndpointEnabled() bool {
+func (m *MetricsConfig) EndpointEnabled() bool {
 	return m.CommonEndpoint != "" || m.MetricsEndpoint != "" || m.Grafana.MetricsEnabled()
 }
 
-func (m MetricsConfig) SpanMetricsEnabled() bool {
+func (m *MetricsConfig) SpanMetricsEnabled() bool {
 	return slices.Contains(m.Features, FeatureSpan)
 }
 
-func (m MetricsConfig) ServiceGraphMetricsEnabled() bool {
+func (m *MetricsConfig) ServiceGraphMetricsEnabled() bool {
 	return slices.Contains(m.Features, FeatureGraph)
 }
 
-func (m MetricsConfig) OTelMetricsEnabled() bool {
+func (m *MetricsConfig) OTelMetricsEnabled() bool {
 	return slices.Contains(m.Features, FeatureApplication)
 }
 
-func (m MetricsConfig) Enabled() bool {
+func (m *MetricsConfig) Enabled() bool {
 	return m.EndpointEnabled() && (m.OTelMetricsEnabled() || m.SpanMetricsEnabled() || m.ServiceGraphMetricsEnabled())
 }
 
@@ -175,7 +176,7 @@ type MetricsReporter struct {
 // There is a Metrics instance for each service/process instrumented by Beyla.
 type Metrics struct {
 	ctx      context.Context
-	service  svc.ID
+	service  *svc.ID
 	provider *metric.MeterProvider
 
 	httpDuration          instrument.Float64Histogram
@@ -438,7 +439,7 @@ func (mr *MetricsReporter) setupGraphMeters(m *Metrics, meter instrument.Meter) 
 	return nil
 }
 
-func (mr *MetricsReporter) newMetricSet(service svc.ID) (*Metrics, error) {
+func (mr *MetricsReporter) newMetricSet(service *svc.ID) (*Metrics, error) {
 	mlog := mlog().With("service", service)
 	mlog.Debug("creating new Metrics reporter")
 	resources := getResourceAttrs(service)
@@ -602,7 +603,7 @@ func otelHistogramConfig(metricName string, buckets []float64, useExponentialHis
 
 }
 
-func (mr *MetricsReporter) metricResourceAttributes(service svc.ID) attribute.Set {
+func (mr *MetricsReporter) metricResourceAttributes(service *svc.ID) attribute.Set {
 	attrs := []attribute.KeyValue{
 		request.ServiceMetric(service.Name),
 		semconv.ServiceInstanceID(service.Instance),
@@ -625,7 +626,7 @@ func (mr *MetricsReporter) spanMetricAttributes(span *request.Span) attribute.Se
 		semconv.ServiceNamespace(span.ServiceID.Namespace),
 		request.SpanKindMetric(SpanKindString(span)),
 		request.SpanNameMetric(TraceName(span)),
-		request.StatusCodeMetric(int(SpanStatusCode(span))),
+		request.StatusCodeMetric(int(request.SpanStatusCode(span))),
 		request.SourceMetric("beyla"),
 	}
 
@@ -718,15 +719,13 @@ func (r *Metrics) record(span *request.Span, mr *MetricsReporter) {
 			r.serviceGraphServer.Record(r.ctx, duration, attrOpt)
 		}
 		r.serviceGraphTotal.Add(r.ctx, 1, attrOpt)
-		if SpanStatusCode(span) == codes.Error {
+		if request.SpanStatusCode(span) == codes.Error {
 			r.serviceGraphFailed.Add(r.ctx, 1, attrOpt)
 		}
 	}
 }
 
 func (mr *MetricsReporter) reportMetrics(input <-chan []request.Span) {
-	var lastSvcUID svc.UID
-	var reporter *Metrics
 	for spans := range input {
 		for i := range spans {
 			s := &spans[i]
@@ -735,23 +734,11 @@ func (mr *MetricsReporter) reportMetrics(input <-chan []request.Span) {
 			if s.IgnoreSpan == request.IgnoreMetrics {
 				continue
 			}
-
-			// optimization: do not query the resources' cache if the
-			// previously processed span belongs to the same service name
-			// as the current.
-			// This will save querying OTEL resource reporters when there is
-			// only a single instrumented process.
-			// In multi-process tracing, this is likely to happen as most
-			// tracers group traces belonging to the same service in the same slice.
-			if s.ServiceID.UID != lastSvcUID || reporter == nil {
-				lm, err := mr.reporters.For(s.ServiceID)
-				if err != nil {
-					mlog().Error("unexpected error creating OTEL resource. Ignoring metric",
-						err, "service", s.ServiceID)
-					continue
-				}
-				lastSvcUID = s.ServiceID.UID
-				reporter = lm
+			reporter, err := mr.reporters.For(&s.ServiceID)
+			if err != nil {
+				mlog().Error("unexpected error creating OTEL resource. Ignoring metric",
+					err, "service", s.ServiceID)
+				continue
 			}
 			reporter.record(s, mr)
 		}

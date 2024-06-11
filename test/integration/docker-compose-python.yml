@@ -41,6 +41,8 @@ services:
       BEYLA_METRICS_REPORT_PEER: "true"
       BEYLA_HOSTNAME: "beyla"
       BEYLA_BPF_HTTP_REQUEST_TIMEOUT: "5s"
+      BEYLA_PROCESSES_INTERVAL: "100ms"
+      BEYLA_OTEL_METRICS_FEATURES: "application,application_process"
     depends_on:
       testserver:
         condition: service_started

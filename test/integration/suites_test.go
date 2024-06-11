@@ -79,6 +79,12 @@ func TestSuiteClientPromScrape(t *testing.T) {
 	require.NoError(t, compose.Up())
 	t.Run("Client RED metrics", testREDMetricsForClientHTTPLibraryNoTraces)
 	t.Run("Testing Beyla Build Info metric", testPrometheusBeylaBuildInfo)
+	t.Run("Testing process-level metrics", testProcesses(map[string]string{
+		"process_executable_name": "pingclient",
+		"process_executable_path": "/pingclient",
+		"process_command":         "pingclient",
+		"process_command_line":    "/pingclient",
+	}))
 
 	t.Run("BPF pinning folder mounted", testBPFPinningMounted)
 	require.NoError(t, compose.Close())
@@ -220,6 +226,12 @@ func TestSuite_PrometheusScrape(t *testing.T) {
 	t.Run("GRPC RED metrics", testREDMetricsGRPC)
 	t.Run("Internal Prometheus metrics", testInternalPrometheusExport)
 	t.Run("Testing Beyla Build Info metric", testPrometheusBeylaBuildInfo)
+	t.Run("Testing process-level metrics", testProcesses(map[string]string{
+		"process_executable_name": "testserver",
+		"process_executable_path": "/testserver",
+		"process_command":         "testserver",
+		"process_command_line":    "/testserver",
+	}))
 
 	t.Run("BPF pinning folder mounted", testBPFPinningMounted)
 	require.NoError(t, compose.Close())
@@ -400,6 +412,12 @@ func TestSuite_Python(t *testing.T) {
 	require.NoError(t, compose.Up())
 	t.Run("Python RED metrics", testREDMetricsPythonHTTP)
 	t.Run("Python RED metrics with timeouts", testREDMetricsTimeoutPythonHTTP)
+	t.Run("Checking process metrics", testProcesses(map[string]string{
+		"process_executable_name": "python",
+		"process_executable_path": "/usr/local/bin/python",
+		"process_command":         "gunicorn",
+		"process_command_line":    "/usr/local/bin/python /usr/local/bin/gunicorn -w 4 -b 0.0.0.0:8380 main:app --timeout 90",
+	}))
 	t.Run("BPF pinning folder mounted", testBPFPinningMounted)
 	require.NoError(t, compose.Close())
 	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)

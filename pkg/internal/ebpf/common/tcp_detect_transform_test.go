@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/grafana/beyla/pkg/internal/request"
+	"github.com/grafana/beyla/pkg/internal/svc"
 )
 
 const (
@@ -23,9 +24,10 @@ const (
 func TestTCPReqSQLParsing(t *testing.T) {
 	sql := randomStringWithSub("SELECT * FROM accounts ")
 	r := makeTCPReq(sql, tcpSend, 343534, 8080, 2000)
-	sqlIndex := isSQL(sql)
-	assert.GreaterOrEqual(t, sqlIndex, 0)
-	s := TCPToSQLToSpan(&r, sql[sqlIndex:])
+	op, table, sql := detectSQL(sql)
+	assert.Equal(t, op, "SELECT")
+	assert.Equal(t, table, "accounts")
+	s := TCPToSQLToSpan(&r, op, table, sql)
 	assert.NotNil(t, s)
 	assert.NotEmpty(t, s.Host)
 	assert.NotEmpty(t, s.Peer)
@@ -40,27 +42,44 @@ func TestTCPReqSQLParsing(t *testing.T) {
 func TestTCPReqParsing(t *testing.T) {
 	sql := "Not a sql or any known protocol"
 	r := makeTCPReq(sql, tcpSend, 343534, 8080, 2000)
-	sqlIndex := isSQL(sql)
-	assert.LessOrEqual(t, sqlIndex, 0)
+	op, table, _ := detectSQL(sql)
+	assert.Empty(t, op)
+	assert.Empty(t, table)
 	assert.NotNil(t, r)
 }
 
 func TestSQLDetection(t *testing.T) {
-	for _, s := range []string{"SELECT", "UPDATE", "DELETE", "INSERT", "CREATE", "DROP", "ALTER"} {
+	for _, s := range []string{"SELECT * from accounts", "SELECT/*My comment*/ * from accounts", "--UPDATE accounts SET", "DELETE++ from accounts ", "INSERT into accounts ", "CREATE table accounts ", "DROP table accounts ", "ALTER table accounts"} {
 		surrounded := randomStringWithSub(s)
-		assert.GreaterOrEqual(t, isSQL(surrounded), 0)
-		assert.GreaterOrEqual(t, isSQL(s), 0)
+		op, table, _ := detectSQL(s)
+		assert.NotEmpty(t, op)
+		assert.NotEmpty(t, table)
+		op, table, _ = detectSQL(surrounded)
+		assert.NotEmpty(t, op)
+		assert.NotEmpty(t, table)
+	}
+}
+
+func TestSQLDetectionFails(t *testing.T) {
+	for _, s := range []string{"SELECT", "UPDATES{}", "DELETE {} ", "INSERT// into accounts "} {
+		op, table, _ := detectSQL(s)
+		assert.False(t, validSQL(op, table))
+		surrounded := randomStringWithSub(s)
+		op, table, _ = detectSQL(surrounded)
+		assert.False(t, validSQL(op, table))
 	}
 }
 
 // Test making sure that issue https://github.com/grafana/beyla/issues/854 is fixed
 func TestReadTCPRequestIntoSpan_Overflow(t *testing.T) {
+	fltr := TestPidsFilter{services: map[uint32]svc.ID{}}
+
 	tri := TCPRequestInfo{
 		Len: 340,
 		// this byte array contains select * from foo
 		// rest of the array is invalid UTF-8 and would cause that strings.ToUpper
 		// returns a string longer than 256. That's why we are providing
-		// our own asciiToUpper implementation in isSQL function
+		// our own asciiToUpper implementation in detectSQL function
 		Buf: [256]byte{
 			74, 39, 133, 207, 240, 83, 124, 225, 227, 163, 3, 23, 253, 254, 18, 12, 77, 143, 198, 122,
 			123, 67, 221, 225, 10, 233, 220, 36, 65, 35, 25, 251, 88, 197, 107, 99, 25, 247, 195, 216,
@@ -80,7 +99,7 @@ func TestReadTCPRequestIntoSpan_Overflow(t *testing.T) {
 	}
 	binaryRecord := bytes.Buffer{}
 	require.NoError(t, binary.Write(&binaryRecord, binary.LittleEndian, tri))
-	span, ignore, err := ReadTCPRequestIntoSpan(&ringbuf.Record{RawSample: binaryRecord.Bytes()})
+	span, ignore, err := ReadTCPRequestIntoSpan(&ringbuf.Record{RawSample: binaryRecord.Bytes()}, &fltr)
 	require.NoError(t, err)
 	require.False(t, ignore)
 

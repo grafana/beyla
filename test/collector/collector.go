@@ -146,7 +146,8 @@ func (tc *TestCollector) metricEvent(writer http.ResponseWriter, body []byte) {
 							Name:               m.Name(),
 							Unit:               m.Unit(),
 							Type:               m.Type(),
-							CountVal:           ndp.IntValue(),
+							FloatVal:           ndp.DoubleValue(),
+							IntVal:             ndp.IntValue(),
 							Attributes:         map[string]string{},
 							ResourceAttributes: resourceAttrs,
 						}
@@ -171,6 +172,23 @@ func (tc *TestCollector) metricEvent(writer http.ResponseWriter, body []byte) {
 						})
 						tc.Records <- mr
 					})
+				case pmetric.MetricTypeGauge:
+					forEach[pmetric.NumberDataPoint](m.Gauge().DataPoints(), func(ndp pmetric.NumberDataPoint) {
+						mr := MetricRecord{
+							Name:               m.Name(),
+							Unit:               m.Unit(),
+							Type:               m.Type(),
+							Attributes:         map[string]string{},
+							ResourceAttributes: resourceAttrs,
+							FloatVal:           ndp.DoubleValue(),
+							IntVal:             ndp.IntValue(),
+						}
+						ndp.Attributes().Range(func(k string, v pcommon.Value) bool {
+							mr.Attributes[k] = v.AsString()
+							return true
+						})
+						tc.Records <- mr
+					})
 				default:
 					slog.Warn("unsupported metric type", "type", m.Type().String())
 				}
@@ -186,7 +204,8 @@ type MetricRecord struct {
 	Name               string
 	Unit               string
 	Type               pmetric.MetricType
-	CountVal           int64
+	IntVal             int64
+	FloatVal           float64
 }
 
 type TraceRecord struct {

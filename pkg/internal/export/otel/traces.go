@@ -32,6 +32,7 @@ import (
 	"go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.25.0"
 	trace2 "go.opentelemetry.io/otel/trace"
+	tracenoop "go.opentelemetry.io/otel/trace/noop"
 	"go.uber.org/zap"
 
 	"github.com/grafana/beyla/pkg/internal/export/attributes"
@@ -264,7 +265,29 @@ func getTracesExporter(ctx context.Context, cfg TracesConfig, ctxInfo *global.Co
 
 }
 
-func getTraceSettings(ctxInfo *global.ContextInfo, cfg TracesConfig, in trace.SpanExporter) exporter.CreateSettings {
+func internalMetricsEnabled(ctxInfo *global.ContextInfo) bool {
+	internalMetrics := ctxInfo.Metrics
+	if internalMetrics == nil {
+		return false
+	}
+	_, ok := internalMetrics.(imetrics.NoopReporter)
+
+	return !ok
+}
+
+func instrumentTraceExporter(in trace.SpanExporter, internalMetrics imetrics.Reporter) trace.SpanExporter {
+	// avoid wrapping the instrumented exporter if we don't have
+	// internal instrumentation (NoopReporter)
+	if _, ok := internalMetrics.(imetrics.NoopReporter); ok || internalMetrics == nil {
+		return in
+	}
+	return &instrumentedTracesExporter{
+		SpanExporter: in,
+		internal:     internalMetrics,
+	}
+}
+
+func traceProviderWithInternalMetrics(ctxInfo *global.ContextInfo, cfg TracesConfig, in trace.SpanExporter) trace2.TracerProvider {
 	var opts []trace.BatchSpanProcessorOption
 	if cfg.MaxExportBatchSize > 0 {
 		opts = append(opts, trace.WithMaxExportBatchSize(cfg.MaxExportBatchSize))
@@ -280,15 +303,28 @@ func getTraceSettings(ctxInfo *global.ContextInfo, cfg TracesConfig, in trace.Sp
 	}
 	tracer := instrumentTraceExporter(in, ctxInfo.Metrics)
 	bsp := trace.NewBatchSpanProcessor(tracer, opts...)
-	provider := trace.NewTracerProvider(
+	return trace.NewTracerProvider(
 		trace.WithSpanProcessor(bsp),
 		trace.WithSampler(cfg.Sampler.Implementation()),
 	)
+}
+
+func getTraceSettings(ctxInfo *global.ContextInfo, cfg TracesConfig, in trace.SpanExporter) exporter.CreateSettings {
+	var traceProvider trace2.TracerProvider
+
+	telemetryLevel := configtelemetry.LevelNone
+	traceProvider = tracenoop.NewTracerProvider()
+
+	if internalMetricsEnabled(ctxInfo) {
+		telemetryLevel = configtelemetry.LevelBasic
+		traceProvider = traceProviderWithInternalMetrics(ctxInfo, cfg, in)
+	}
+
 	telemetrySettings := component.TelemetrySettings{
 		Logger:         zap.NewNop(),
 		MeterProvider:  metric.NewMeterProvider(),
-		TracerProvider: provider,
-		MetricsLevel:   configtelemetry.LevelBasic,
+		TracerProvider: traceProvider,
+		MetricsLevel:   telemetryLevel,
 		ReportStatus: func(event *component.StatusEvent) {
 			if err := event.Err(); err != nil {
 				slog.Error("error reported by component", "error", err)
@@ -323,7 +359,7 @@ func GenerateTraces(span *request.Span, userAttrs map[attr.Name]struct{}) ptrace
 	traces := ptrace.NewTraces()
 	rs := traces.ResourceSpans().AppendEmpty()
 	ss := rs.ScopeSpans().AppendEmpty()
-	resourceAttrs := attrsToMap(getResourceAttrs(span.ServiceID).Attributes())
+	resourceAttrs := attrsToMap(getResourceAttrs(&span.ServiceID).Attributes())
 	resourceAttrs.PutStr(string(semconv.OTelLibraryNameKey), reporterName)
 	resourceAttrs.CopyTo(rs.Resource().Attributes())
 
@@ -358,7 +394,7 @@ func GenerateTraces(span *request.Span, userAttrs map[attr.Name]struct{}) ptrace
 	m.CopyTo(s.Attributes())
 
 	// Set status code
-	statusCode := codeToStatusCode(SpanStatusCode(span))
+	statusCode := codeToStatusCode(request.SpanStatusCode(span))
 	s.Status().SetCode(statusCode)
 	s.SetEndTimestamp(pcommon.NewTimestampFromTime(t.End))
 	return traces
@@ -444,73 +480,6 @@ func grpcTracer(ctx context.Context, opts otlpOptions) (*otlptrace.Exporter, err
 		return nil, fmt.Errorf("creating GRPC trace exporter: %w", err)
 	}
 	return texp, nil
-}
-
-// instrumentTraceExporter checks whether the context is configured to report internal metrics and,
-// in this case, wraps the passed traces exporter inside an instrumented exporter
-func instrumentTraceExporter(in trace.SpanExporter, internalMetrics imetrics.Reporter) trace.SpanExporter {
-	// avoid wrapping the instrumented exporter if we don't have
-	// internal instrumentation (NoopReporter)
-	if _, ok := internalMetrics.(imetrics.NoopReporter); ok || internalMetrics == nil {
-		return in
-	}
-	return &instrumentedTracesExporter{
-		SpanExporter: in,
-		internal:     internalMetrics,
-	}
-}
-
-// https://opentelemetry.io/docs/specs/otel/trace/semantic_conventions/http/#status
-func httpSpanStatusCode(span *request.Span) codes.Code {
-	if span.Status < 400 {
-		return codes.Unset
-	}
-
-	if span.Status < 500 {
-		if span.Type == request.EventTypeHTTPClient {
-			return codes.Error
-		}
-		return codes.Unset
-	}
-
-	return codes.Error
-}
-
-// https://opentelemetry.io/docs/specs/otel/trace/semantic_conventions/rpc/#grpc-status
-func grpcSpanStatusCode(span *request.Span) codes.Code {
-	if span.Type == request.EventTypeGRPCClient {
-		if span.Status == int(semconv.RPCGRPCStatusCodeOk.Value.AsInt64()) {
-			return codes.Unset
-		}
-		return codes.Error
-	}
-
-	switch int64(span.Status) {
-	case semconv.RPCGRPCStatusCodeUnknown.Value.AsInt64(),
-		semconv.RPCGRPCStatusCodeDeadlineExceeded.Value.AsInt64(),
-		semconv.RPCGRPCStatusCodeUnimplemented.Value.AsInt64(),
-		semconv.RPCGRPCStatusCodeInternal.Value.AsInt64(),
-		semconv.RPCGRPCStatusCodeUnavailable.Value.AsInt64(),
-		semconv.RPCGRPCStatusCodeDataLoss.Value.AsInt64():
-		return codes.Error
-	}
-
-	return codes.Unset
-}
-
-func SpanStatusCode(span *request.Span) codes.Code {
-	switch span.Type {
-	case request.EventTypeHTTP, request.EventTypeHTTPClient:
-		return httpSpanStatusCode(span)
-	case request.EventTypeGRPC, request.EventTypeGRPCClient:
-		return grpcSpanStatusCode(span)
-	case request.EventTypeSQLClient, request.EventTypeRedisClient:
-		if span.Status != 0 {
-			return codes.Error
-		}
-		return codes.Unset
-	}
-	return codes.Unset
 }
 
 func SpanKindString(span *request.Span) string {
@@ -659,6 +628,13 @@ func spanKind(span *request.Span) trace2.SpanKind {
 		return trace2.SpanKindServer
 	case request.EventTypeHTTPClient, request.EventTypeGRPCClient, request.EventTypeSQLClient, request.EventTypeRedisClient:
 		return trace2.SpanKindClient
+	case request.EventTypeKafkaClient:
+		switch span.Method {
+		case request.MessagingPublish:
+			return trace2.SpanKindProducer
+		case request.MessagingProcess:
+			return trace2.SpanKindConsumer
+		}
 	}
 	return trace2.SpanKindInternal
 }

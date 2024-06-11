@@ -44,6 +44,7 @@ const (
 	DBOperation            = Name("db.operation.name")
 	DBCollectionName       = Name("db.collection.name")
 	DBSystem               = Name(semconv.DBSystemKey)
+	ErrorType              = Name("error.type")
 	RPCMethod              = Name(semconv.RPCMethodKey)
 	RPCSystem              = Name(semconv.RPCSystemKey)
 	RPCGRPCStatusCode      = Name(semconv.RPCGRPCStatusCodeKey)
@@ -94,6 +95,22 @@ var (
 	K8sDstOwnerType = Name("k8s.dst.owner.type")
 	K8sDstNodeIP    = Name("k8s.dst.node.ip")
 	K8sDstNodeName  = Name("k8s.dst.node.name")
+)
+
+// Process Metrics following OTEL 1.26 experimental conventions
+// https://opentelemetry.io/docs/specs/semconv/resource/process/
+// https://opentelemetry.io/docs/specs/semconv/system/process-metrics/
+
+const (
+	ProcCommand     = Name(semconv.ProcessCommandKey)
+	ProcCommandLine = Name(semconv.ProcessCommandLineKey)
+	ProcCPUState    = Name("process.cpu.state")
+	ProcOwner       = Name(semconv.ProcessOwnerKey)
+	ProcParentPid   = Name(semconv.ProcessParentPIDKey)
+	ProcPid         = Name(semconv.ProcessPIDKey)
+	ProcCommandArgs = Name(semconv.ProcessCommandArgsKey)
+	ProcExecName    = Name(semconv.ProcessExecutableNameKey)
+	ProcExecPath    = Name(semconv.ProcessExecutablePathKey)
 )
 
 // other beyla-specific attributes

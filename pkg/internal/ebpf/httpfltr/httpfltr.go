@@ -95,13 +95,13 @@ func (p *Tracer) rebuildValidPids() {
 	}
 }
 
-func (p *Tracer) AllowPID(pid uint32, svc svc.ID) {
-	p.pidsFilter.AllowPID(pid, svc, ebpfcommon.PIDTypeKProbes)
+func (p *Tracer) AllowPID(pid, ns uint32, svc svc.ID) {
+	p.pidsFilter.AllowPID(pid, ns, svc, ebpfcommon.PIDTypeKProbes)
 	p.rebuildValidPids()
 }
 
-func (p *Tracer) BlockPID(pid uint32) {
-	p.pidsFilter.BlockPID(pid)
+func (p *Tracer) BlockPID(pid, ns uint32) {
+	p.pidsFilter.BlockPID(pid, ns)
 	p.rebuildValidPids()
 }
 

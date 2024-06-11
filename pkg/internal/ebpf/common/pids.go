@@ -23,9 +23,7 @@ var activePids, _ = lru.New[uint32, svc.ID](1024)
 // injectable functions (can be replaced in tests). It reads the
 // current process namespace from the /proc filesystem. It is required to
 // choose to filter traces using whether the User-space or Host-space PIDs
-var readNamespace = FindNamespace
-
-var readNamespacePIDs = FindNamespacedPids
+var readNamespacePIDs = exec.FindNamespacedPids
 
 type PIDInfo struct {
 	service svc.ID
@@ -33,8 +31,9 @@ type PIDInfo struct {
 }
 
 type ServiceFilter interface {
-	AllowPID(uint32, svc.ID, PIDType)
-	BlockPID(uint32)
+	AllowPID(uint32, uint32, svc.ID, PIDType)
+	BlockPID(uint32, uint32)
+	ValidPID(uint32, uint32, PIDType) bool
 	Filter(inputSpans []request.Span) []request.Span
 	CurrentPIDs(PIDType) map[uint32]map[uint32]svc.ID
 }
@@ -74,16 +73,30 @@ func CommonPIDsFilter(systemWide bool) ServiceFilter {
 	return commonPIDsFilter
 }
 
-func (pf *PIDsFilter) AllowPID(pid uint32, svc svc.ID, pidType PIDType) {
+func (pf *PIDsFilter) AllowPID(pid, ns uint32, svc svc.ID, pidType PIDType) {
 	pf.mux.Lock()
 	defer pf.mux.Unlock()
-	pf.addPID(pid, svc, pidType)
+	pf.addPID(pid, ns, svc, pidType)
 }
 
-func (pf *PIDsFilter) BlockPID(pid uint32) {
+func (pf *PIDsFilter) BlockPID(pid, ns uint32) {
 	pf.mux.Lock()
 	defer pf.mux.Unlock()
-	pf.removePID(pid)
+	pf.removePID(pid, ns)
+}
+
+func (pf *PIDsFilter) ValidPID(userPID, ns uint32, pidType PIDType) bool {
+	pf.mux.RLock()
+	defer pf.mux.RUnlock()
+
+	if ns, nsExists := pf.current[ns]; nsExists {
+		if info, pidExists := ns[userPID]; pidExists {
+			return info.pidType == pidType
+		}
+	}
+
+	return false
+
 }
 
 func (pf *PIDsFilter) CurrentPIDs(t PIDType) map[uint32]map[uint32]svc.ID {
@@ -138,14 +151,7 @@ func (pf *PIDsFilter) Filter(inputSpans []request.Span) []request.Span {
 	return outputSpans
 }
 
-func (pf *PIDsFilter) addPID(pid uint32, s svc.ID, t PIDType) {
-	nsid, err := readNamespace(int32(pid))
-
-	if err != nil {
-		pf.log.Error("Error looking up namespace for tracking PID", "pid", pid, "error", err)
-		return
-	}
-
+func (pf *PIDsFilter) addPID(pid, nsid uint32, s svc.ID, t PIDType) {
 	ns, nsExists := pf.current[nsid]
 	if !nsExists {
 		ns = make(map[uint32]PIDInfo)
@@ -164,18 +170,7 @@ func (pf *PIDsFilter) addPID(pid uint32, s svc.ID, t PIDType) {
 	}
 }
 
-func (pf *PIDsFilter) removePID(pid uint32) {
-	nsid, err := readNamespace(int32(pid))
-
-	if err != nil {
-		// this will always happen on process removal, as /proc/<pid>/ns/pid won't be found
-		// the code is kept here as a placeholder for a future fix (e.g. using eBPF notifications
-		// to get both the PID and the nsid)
-		// TODO: fix
-		pf.log.Debug("Error looking up namespace for removing PID", "pid", pid, "error", err)
-		return
-	}
-
+func (pf *PIDsFilter) removePID(pid, nsid uint32) {
 	ns, nsExists := pf.current[nsid]
 	if !nsExists {
 		return
@@ -191,9 +186,13 @@ func (pf *PIDsFilter) removePID(pid uint32) {
 // for system-wide instrumenation
 type IdentityPidsFilter struct{}
 
-func (pf *IdentityPidsFilter) AllowPID(_ uint32, _ svc.ID, _ PIDType) {}
+func (pf *IdentityPidsFilter) AllowPID(_ uint32, _ uint32, _ svc.ID, _ PIDType) {}
 
-func (pf *IdentityPidsFilter) BlockPID(_ uint32) {}
+func (pf *IdentityPidsFilter) BlockPID(_ uint32, _ uint32) {}
+
+func (pf *IdentityPidsFilter) ValidPID(_ uint32, _ uint32, _ PIDType) bool {
+	return true
+}
 
 func (pf *IdentityPidsFilter) CurrentPIDs(_ PIDType) map[uint32]map[uint32]svc.ID {
 	return nil
@@ -215,7 +214,7 @@ func serviceInfo(pid uint32) svc.ID {
 
 	name := commName(pid)
 	lang := exec.FindProcLanguage(int32(pid), nil)
-	result := svc.ID{Name: name, SDKLanguage: lang}
+	result := svc.ID{Name: name, SDKLanguage: lang, ProcPID: int32(pid)}
 
 	activePids.Add(pid, result)
 

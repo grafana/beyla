@@ -5,7 +5,11 @@ from kafka import KafkaAdminClient, KafkaConsumer, KafkaProducer
 from kafka import errors as Errors
 from kafka.admin import NewTopic
 from http.server import BaseHTTPRequestHandler, HTTPServer
+import logging
 
+
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
 
 class Producer(threading.Thread):
     def __init__(self):
@@ -85,6 +89,7 @@ def main():
             topic = NewTopic(name='my-topic',
                             num_partitions=1,
                             replication_factor=1)
+            logger.info(f"Creating topic: {topic}")
             admin.create_topics([topic])
             break
         except Errors.TopicAlreadyExistsError:

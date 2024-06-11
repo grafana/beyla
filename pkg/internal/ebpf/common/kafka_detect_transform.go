@@ -192,26 +192,16 @@ func getTopicName(pkt []byte, offset int, op Operation, apiVersion int16) (strin
 	if offset > len(pkt) {
 		return "", errors.New("invalid buffer length")
 	}
-	topicNameSize := 0
-	if (op == Produce && apiVersion > 7) || (op == Fetch && apiVersion > 11) { // topic is a compact string
-		var err error
-		topicNameSize, err = readUnsignedVarint(pkt[offset+1:])
-		topicNameSize--
-		if err != nil {
-			return "", err
-		}
-	} else {
-		topicNameSize = int(binary.BigEndian.Uint16(pkt[offset:]))
-	}
-	if topicNameSize <= 0 || topicNameSize > 255 {
-		return "", errors.New("invalid topic name size")
+	topicNameSize, err := getTopicNameSize(pkt, offset, op, apiVersion)
+	if err != nil {
+		return "", err
 	}
 	offset += 2
 
 	if offset > len(pkt) {
 		return "", nil
 	}
-	maxLen := offset + int(topicNameSize)
+	maxLen := offset + topicNameSize
 	if len(pkt) < maxLen {
 		maxLen = len(pkt)
 	}
@@ -231,6 +221,24 @@ func getTopicName(pkt []byte, offset int, op Operation, apiVersion int16) (strin
 		return string(topicName), nil
 	}
 	return "", errors.New("invalid topic name")
+}
+
+func getTopicNameSize(pkt []byte, offset int, op Operation, apiVersion int16) (int, error) {
+	topicNameSize := 0
+	if (op == Produce && apiVersion > 7) || (op == Fetch && apiVersion > 11) { // topic is a compact string
+		var err error
+		topicNameSize, err = readUnsignedVarint(pkt[offset+1:])
+		topicNameSize--
+		if err != nil {
+			return 0, err
+		}
+	} else {
+		topicNameSize = int(binary.BigEndian.Uint16(pkt[offset:]))
+	}
+	if topicNameSize <= 0 || topicNameSize > 255 {
+		return 0, errors.New("invalid topic name size")
+	}
+	return topicNameSize, nil
 }
 
 func getTopicOffsetFromProduceOperation(header *Header, pkt []byte, offset *int) (bool, error) {

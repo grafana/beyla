@@ -1,7 +1,7 @@
 docker-compose:
   generator: generic
   files:
-    - ../docker-compose-beyla-javakafka.yml
+    - ../docker-compose-beyla-java-kafka.yml
 input:
   - path: '/message'
 

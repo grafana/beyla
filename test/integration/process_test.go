@@ -43,6 +43,35 @@ func testProcesses(attribMatcher map[string]string) func(t *testing.T) {
 			}
 			assert.Greater(t, cpuSum, 0.0)
 		})
+		// checking that the memory is present and has a reasonable values
+		memory := map[string]int{}
+		test.Eventually(t, testTimeout, func(t require.TestingT) {
+			results, err := pq.Query(`process_memory_usage_bytes`)
+			require.NoError(t, err)
+			matchAttributes(t, results, attribMatcher)
+			// any of the processes used in the integration tests
+			// should take more than 1MB of memory
+			for _, result := range results {
+				physicalMem, err := strconv.Atoi(result.Value[1].(string))
+				require.NoError(t, err)
+				require.Greater(t, physicalMem, 1_000_000)
+				memory[result.Metric["service_instance_id"]] = physicalMem
+			}
+		})
+		// checking that virtual memory has larger value than physical memory
+		test.Eventually(t, testTimeout, func(t require.TestingT) {
+			results, err := pq.Query(`process_memory_virtual_bytes`)
+			require.NoError(t, err)
+			matchAttributes(t, results, attribMatcher)
+			for _, result := range results {
+				virtualMem, err := strconv.Atoi(result.Value[1].(string))
+				require.NoError(t, err)
+				physicalMem, ok := memory[result.Metric["service_instance_id"]]
+				require.Truef(t, ok, "did not find physical memory for process %s",
+					result.Metric["service_instance_id"])
+				require.Greater(t, virtualMem, physicalMem)
+			}
+		})
 	}
 }
 

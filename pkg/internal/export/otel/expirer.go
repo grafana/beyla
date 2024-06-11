@@ -180,3 +180,21 @@ func (g *Gauge) Load() float64 {
 func (g *Gauge) Set(val float64) {
 	atomic.StoreUint64(&g.floatBits, math.Float64bits(val))
 }
+
+// IntGauge is a gauge whose values are integers
+type IntGauge struct {
+	metricAttributes
+	val atomic.Int64
+}
+
+func NewIntGauge(attributes attribute.Set) *IntGauge {
+	return &IntGauge{metricAttributes: metricAttributes{attributes: attributes}}
+}
+
+func (g *IntGauge) Load() int64 {
+	return g.val.Load()
+}
+
+func (g *IntGauge) Set(v int64) {
+	g.val.Store(v)
+}

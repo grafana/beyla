@@ -50,8 +50,10 @@ type procMetricsExporter struct {
 
 	log *slog.Logger
 
-	attrCPUTime []attributes.Field[*process.Status, attribute.KeyValue]
-	attrCPUUtil []attributes.Field[*process.Status, attribute.KeyValue]
+	attrCPUTime       []attributes.Field[*process.Status, attribute.KeyValue]
+	attrCPUUtil       []attributes.Field[*process.Status, attribute.KeyValue]
+	attrMemory        []attributes.Field[*process.Status, attribute.KeyValue]
+	attrMemoryVirtual []attributes.Field[*process.Status, attribute.KeyValue]
 
 	// the observation code for CPU metrics will be different depending on
 	// the "process.cpu.state" attribute being selected or not
@@ -66,6 +68,8 @@ type procMetrics struct {
 
 	cpuTime        *Expirer[*process.Status, metric2.Float64Observer, *FloatCounter, float64]
 	cpuUtilisation *Expirer[*process.Status, metric2.Float64Observer, *Gauge, float64]
+	memory         *Expirer[*process.Status, metric2.Int64Observer, *IntGauge, int64]
+	memoryVirtual  *Expirer[*process.Status, metric2.Int64Observer, *IntGauge, int64]
 }
 
 func ProcMetricsExporterProvider(
@@ -107,7 +111,11 @@ func newProcMetricsExporter(
 		clock:       expire.NewCachedClock(timeNow),
 		attrCPUTime: attrCPUTime,
 		attrCPUUtil: attrCPUUtil,
-		log:         log,
+		attrMemory: attributes.OpenTelemetryGetters(process.OTELGetters,
+			attrProv.For(attributes.ProcessMemoryUsage)),
+		attrMemoryVirtual: attributes.OpenTelemetryGetters(process.OTELGetters,
+			attrProv.For(attributes.ProcessMemoryVirtual)),
+		log: log,
 	}
 	if cpuTimeHasState {
 		mr.cpuTimeObserver = cpuTimeDisaggregatedObserver
@@ -181,6 +189,33 @@ func (me *procMetricsExporter) newMetricSet(service *svc.ID) (*procMetrics, erro
 		return nil, err
 	}
 
+	// memory metrics are defined as UpDownCounters in the Otel specification, but we
+	// internally treat them as gauges, as it's aligned to what we get from the /proc filesystem
+	m.memory = NewExpirer[*process.Status, metric2.Int64Observer](
+		NewIntGauge, me.attrMemory, timeNow, me.cfg.Metrics.TTL)
+	if _, err := meter.Int64ObservableUpDownCounter(
+		attributes.ProcessMemoryUsage.OTEL,
+		metric2.WithDescription("The amount of physical memory in use"),
+		metric2.WithUnit("By"),
+		metric2.WithInt64Callback(m.memory.Collect),
+	); err != nil {
+		log.Error("creating observable gauge for "+attributes.ProcessMemoryUsage.OTEL, "error", err)
+		return nil, err
+	}
+	// memory metrics are defined as UpDownCounters in the Otel specification, but we
+	// internally treat them as gauges, as it's aligned to what we get from the /proc filesystem
+	m.memoryVirtual = NewExpirer[*process.Status, metric2.Int64Observer](
+		NewIntGauge, me.attrMemory, timeNow, me.cfg.Metrics.TTL)
+	if _, err := meter.Int64ObservableUpDownCounter(
+		attributes.ProcessMemoryVirtual.OTEL,
+		metric2.WithDescription("The amount of committed virtual memory"),
+		metric2.WithUnit("By"),
+		metric2.WithInt64Callback(m.memoryVirtual.Collect),
+	); err != nil {
+		log.Error("creating observable gauge for "+attributes.ProcessMemoryVirtual.OTEL, "error", err)
+		return nil, err
+	}
+
 	return &m, nil
 }
 
@@ -195,13 +230,18 @@ func (me *procMetricsExporter) Do(in <-chan []*process.Status) {
 					err, "service", s.Service)
 				continue
 			}
-			me.log.Debug("reporting data for record", "record", s)
-
-			// TODO: add more process metrics https://opentelemetry.io/docs/specs/semconv/system/process-metrics/
-			me.cpuTimeObserver(reporter, s)
-			me.cpuUtilisationObserver(reporter, s)
+			me.observeMetric(reporter, s)
 		}
 	}
+}
+
+func (me *procMetricsExporter) observeMetric(reporter *procMetrics, s *process.Status) {
+	me.log.Debug("reporting data for record", "record", s)
+
+	me.cpuTimeObserver(reporter, s)
+	me.cpuUtilisationObserver(reporter, s)
+	reporter.memory.ForRecord(s).Set(s.MemoryRSSBytes)
+	reporter.memoryVirtual.ForRecord(s).Set(s.MemoryVMSBytes)
 }
 
 // aggregated observers report all the CPU metrics in a single data point

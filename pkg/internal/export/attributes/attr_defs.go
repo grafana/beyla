@@ -239,12 +239,10 @@ func getDefinitions(groups AttrGroups) map[Section]AttrReportGroup {
 				attr.DBQueryText: false,
 			},
 		},
-		ProcessCPUUtilization.Section: {
-			SubGroups: []*AttrReportGroup{&processAttributes},
-		},
-		ProcessCPUTime.Section: {
-			SubGroups: []*AttrReportGroup{&processAttributes},
-		},
+		ProcessCPUUtilization.Section: {SubGroups: []*AttrReportGroup{&processAttributes}},
+		ProcessCPUTime.Section:        {SubGroups: []*AttrReportGroup{&processAttributes}},
+		ProcessMemoryUsage.Section:    {SubGroups: []*AttrReportGroup{&processAttributes}},
+		ProcessMemoryVirtual.Section:  {SubGroups: []*AttrReportGroup{&processAttributes}},
 	}
 }
 

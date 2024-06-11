@@ -26,6 +26,9 @@ func TestProcMetrics_Aggregated(t *testing.T) {
 	require.NoError(t, err)
 
 	// GIVEN an OTEL Metrics Exporter whose process CPU metrics do not consider the process.cpu.state
+	includedAttributes := attributes.InclusionLists{
+		Include: []string{"process_command"},
+	}
 	otelExporter, err := ProcMetricsExporterProvider(
 		ctx, &global.ContextInfo{}, &ProcMetricsConfig{
 			Metrics: &MetricsConfig{
@@ -35,12 +38,9 @@ func TestProcMetrics_Aggregated(t *testing.T) {
 				Features:          []string{FeatureApplication, FeatureProcess},
 				TTL:               3 * time.Minute,
 			}, AttributeSelectors: attributes.Selection{
-				attributes.ProcessCPUTime.Section: attributes.InclusionLists{
-					Include: []string{"process_command"},
-				},
-				attributes.ProcessCPUUtilization.Section: attributes.InclusionLists{
-					Include: []string{"process_command"},
-				},
+				attributes.ProcessCPUTime.Section:        includedAttributes,
+				attributes.ProcessCPUUtilization.Section: includedAttributes,
+				attributes.ProcessDiskIO.Section:         includedAttributes,
 			},
 		})()
 	require.NoError(t, err)
@@ -53,10 +53,12 @@ func TestProcMetrics_Aggregated(t *testing.T) {
 		{Command: "foo", Service: &svc.ID{UID: "foo"},
 			CPUUtilisationWait: 3, CPUUtilisationSystem: 2, CPUUtilisationUser: 1,
 			CPUTimeUserDelta: 30, CPUTimeWaitDelta: 20, CPUTimeSystemDelta: 10,
+			IOReadBytes: 123, IOWriteBytes: 456,
 		},
 		{Command: "bar", Service: &svc.ID{UID: "bar"},
 			CPUUtilisationWait: 31, CPUUtilisationSystem: 21, CPUUtilisationUser: 11,
 			CPUTimeUserDelta: 301, CPUTimeWaitDelta: 201, CPUTimeSystemDelta: 101,
+			IOReadBytes: 321, IOWriteBytes: 654,
 		},
 	}
 
@@ -84,6 +86,18 @@ func TestProcMetrics_Aggregated(t *testing.T) {
 		require.Equal(t, "process.cpu.utilization", metric.Name)
 		require.Equal(t, map[string]string{"process.command": "bar"}, metric.Attributes)
 		require.EqualValues(t, 63, metric.FloatVal)
+	})
+	test.Eventually(t, timeout, func(t require.TestingT) {
+		metric := readChan(t, otlp.Records, timeout)
+		require.Equal(t, "process.disk.io", metric.Name)
+		require.Equal(t, map[string]string{"process.command": "foo"}, metric.Attributes)
+		require.EqualValues(t, 123+456, metric.IntVal)
+	})
+	test.Eventually(t, timeout, func(t require.TestingT) {
+		metric := readChan(t, otlp.Records, timeout)
+		require.Equal(t, "process.disk.io", metric.Name)
+		require.Equal(t, map[string]string{"process.command": "bar"}, metric.Attributes)
+		require.EqualValues(t, 321+654, metric.IntVal)
 	})
 
 	// AND WHEN new metrics are received
@@ -131,6 +145,9 @@ func TestProcMetrics_Disaggregated(t *testing.T) {
 	require.NoError(t, err)
 
 	// GIVEN an OTEL Metrics Exporter whose process CPU metrics consider the process.cpu.state
+	includedAttributes := attributes.InclusionLists{
+		Include: []string{"process_command", "process_cpu_state", "disk_io_direction"},
+	}
 	otelExporter, err := ProcMetricsExporterProvider(
 		ctx, &global.ContextInfo{}, &ProcMetricsConfig{
 			Metrics: &MetricsConfig{
@@ -140,12 +157,9 @@ func TestProcMetrics_Disaggregated(t *testing.T) {
 				Features:          []string{FeatureApplication, FeatureProcess},
 				TTL:               3 * time.Minute,
 			}, AttributeSelectors: attributes.Selection{
-				attributes.ProcessCPUTime.Section: attributes.InclusionLists{
-					Include: []string{"process_cpu_state", "process_command"},
-				},
-				attributes.ProcessCPUUtilization.Section: attributes.InclusionLists{
-					Include: []string{"process_cpu_state", "process_command"},
-				},
+				attributes.ProcessCPUTime.Section:        includedAttributes,
+				attributes.ProcessCPUUtilization.Section: includedAttributes,
+				attributes.ProcessDiskIO.Section:         includedAttributes,
 			},
 		})()
 	require.NoError(t, err)
@@ -158,6 +172,7 @@ func TestProcMetrics_Disaggregated(t *testing.T) {
 		{Command: "foo", Service: &svc.ID{UID: "foo"},
 			CPUUtilisationWait: 3, CPUUtilisationSystem: 2, CPUUtilisationUser: 1,
 			CPUTimeUserDelta: 30, CPUTimeWaitDelta: 20, CPUTimeSystemDelta: 10,
+			IOReadBytes: 123, IOWriteBytes: 456,
 		},
 	}
 
@@ -203,5 +218,17 @@ func TestProcMetrics_Disaggregated(t *testing.T) {
 		require.Equal(t, map[string]string{
 			"process.command": "foo", "process.cpu.state": "wait"}, metric.Attributes)
 		require.EqualValues(t, 3, metric.FloatVal)
+	})
+	test.Eventually(t, timeout, func(t require.TestingT) {
+		metric := readChan(t, otlp.Records, timeout)
+		require.Equal(t, "process.disk.io", metric.Name)
+		require.Equal(t, map[string]string{"process.command": "foo", "disk.io.direction": "write"}, metric.Attributes)
+		require.EqualValues(t, 456, metric.IntVal)
+	})
+	test.Eventually(t, timeout, func(t require.TestingT) {
+		metric := readChan(t, otlp.Records, timeout)
+		require.Equal(t, "process.disk.io", metric.Name)
+		require.Equal(t, map[string]string{"process.command": "foo", "disk.io.direction": "read"}, metric.Attributes)
+		require.EqualValues(t, 123, metric.IntVal)
 	})
 }

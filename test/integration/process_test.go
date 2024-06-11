@@ -60,6 +60,12 @@ func testProcesses(attribMatcher map[string]string) func(t *testing.T) {
 				require.Greater(t, virtualMem, physicalMem)
 			}
 		})
+		test.Eventually(t, testTimeout, func(t require.TestingT) {
+			results, err := pq.Query(`process_disk_io_bytes_total`)
+			require.NoError(t, err)
+			matchAttributes(t, results, attribMatcher)
+			assert.Len(t, results, utilizationLen)
+		})
 	}
 }
 

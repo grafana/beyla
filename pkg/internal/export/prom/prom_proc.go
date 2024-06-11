@@ -65,6 +65,14 @@ type procMetricsReporter struct {
 	cpuUtilizationAttrs []attributes.Field[*process.Status, string]
 	cpuUtilization      *Expirer[prometheus.Gauge]
 
+	// the OTEL spec for process memory says that this type is an UpDownCounter.
+	// Using Gauge as the nearest type in Prometheus.
+	memoryAttrs []attributes.Field[*process.Status, string]
+	memory      *Expirer[prometheus.Gauge]
+
+	memoryVirtualAttrs []attributes.Field[*process.Status, string]
+	memoryVirtual      *Expirer[prometheus.Gauge]
+
 	// the observation code for CPU metrics will be different depending on
 	// the "process.cpu.state" attribute being selected or not
 	cpuTimeObserver        func([]string, *process.Status)
@@ -89,6 +97,9 @@ func newProcReporter(
 	cpuTimeLblNames, cpuTimeGetters, cpuTimeHasState := cpuAttributes(provider, attributes.ProcessCPUTime)
 	cpuUtilLblNames, cpuUtilGetters, cpuUtilHasState := cpuAttributes(provider, attributes.ProcessCPUUtilization)
 
+	attrMemory := attributes.PrometheusGetters(process.PromGetters, provider.For(attributes.ProcessMemoryUsage))
+	attrMemoryVirtual := attributes.PrometheusGetters(process.PromGetters, provider.For(attributes.ProcessMemoryVirtual))
+
 	clock := expire.NewCachedClock(timeNow)
 	// If service name is not explicitly set, we take the service name as set by the
 	// executable inspector
@@ -107,6 +118,16 @@ func newProcReporter(
 			Name: attributes.ProcessCPUUtilization.Prom,
 			Help: "Difference in process.cpu.time since the last measurement, divided by the elapsed time and number of CPUs available to the process",
 		}, cpuUtilLblNames).MetricVec, clock.Time, cfg.Metrics.TTL),
+		memoryAttrs: attrMemory,
+		memory: NewExpirer[prometheus.Gauge](prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Name: attributes.ProcessMemoryUsage.Prom,
+			Help: "The amount of physical memory in use",
+		}, labelNames(attrMemory)).MetricVec, clock.Time, cfg.Metrics.TTL),
+		memoryVirtualAttrs: attrMemoryVirtual,
+		memoryVirtual: NewExpirer[prometheus.Gauge](prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Name: attributes.ProcessMemoryVirtual.Prom,
+			Help: "The amount of committed virtual memory",
+		}, labelNames(attrMemoryVirtual)).MetricVec, clock.Time, cfg.Metrics.TTL),
 	}
 
 	if cpuTimeHasState {
@@ -120,31 +141,32 @@ func newProcReporter(
 		mr.cpuUtilizationObserver = mr.observeAggregatedCPUUtilization
 	}
 
-	mr.promConnect.Register(cfg.Metrics.Port, cfg.Metrics.Path, mr.cpuUtilization, mr.cpuTime)
+	mr.promConnect.Register(cfg.Metrics.Port, cfg.Metrics.Path,
+		mr.cpuUtilization, mr.cpuTime,
+		mr.memory, mr.memoryVirtual)
 
 	return mr, nil
 }
 
 func (r *procMetricsReporter) reportMetrics(input <-chan []*process.Status) {
 	go r.promConnect.StartHTTP(r.bgCtx)
-	for flows := range input {
+	for processes := range input {
 		// clock needs to be updated to let the expirer
 		// remove the old metrics
 		r.clock.Update()
-		for _, flow := range flows {
-			timeLabelValues := make([]string, 0, len(r.cpuTimeAttrs))
-			for _, attr := range r.cpuTimeAttrs {
-				timeLabelValues = append(timeLabelValues, attr.Get(flow))
-			}
-			r.cpuTimeObserver(timeLabelValues, flow)
-
-			utilLabelValues := make([]string, 0, len(r.cpuUtilizationAttrs))
-			for _, attr := range r.cpuUtilizationAttrs {
-				utilLabelValues = append(utilLabelValues, attr.Get(flow))
-			}
-			r.cpuUtilizationObserver(utilLabelValues, flow)
+		for _, proc := range processes {
+			r.observeMetric(proc)
 		}
 	}
+}
+
+func (r *procMetricsReporter) observeMetric(proc *process.Status) {
+	r.cpuTimeObserver(labelValues(proc, r.cpuTimeAttrs), proc)
+	r.cpuUtilizationObserver(labelValues(proc, r.cpuUtilizationAttrs), proc)
+	r.memory.WithLabelValues(labelValues(proc, r.memoryAttrs)...).
+		Set(float64(proc.MemoryRSSBytes))
+	r.memoryVirtual.WithLabelValues(labelValues(proc, r.memoryVirtualAttrs)...).
+		Set(float64(proc.MemoryVMSBytes))
 }
 
 // aggregated observers report all the CPU metrics in a single data point

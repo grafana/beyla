@@ -73,12 +73,12 @@ var (
 	}
 	ProcessMemoryUsage = Name{
 		Section: "process.memory.usage",
-		Prom:    "process_memory_usage_bytes_total",
+		Prom:    "process_memory_usage_bytes",
 		OTEL:    "process.memory.usage",
 	}
 	ProcessMemoryVirtual = Name{
 		Section: "process.memory.virtual",
-		Prom:    "process_memory_virtual_bytes_total",
+		Prom:    "process_memory_virtual_bytes",
 		OTEL:    "process.memory.virtual",
 	}
 	MessagingPublishDuration = Name{

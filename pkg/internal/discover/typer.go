@@ -4,6 +4,7 @@ import (
 	"log/slog"
 	"strings"
 
+	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/mariomac/pipes/pipe"
 
 	"github.com/grafana/beyla/pkg/beyla"
@@ -12,6 +13,8 @@ import (
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/svc"
 )
+
+var instrumentableCache, _ = lru.New[uint64, InstrumentedExecutable](100)
 
 type Instrumentable struct {
 	Type                 svc.InstrumentableType
@@ -23,6 +26,12 @@ type Instrumentable struct {
 
 	FileInfo *exec.FileInfo
 	Offsets  *goexec.Offsets
+}
+
+type InstrumentedExecutable struct {
+	Type                 svc.InstrumentableType
+	Offsets              *goexec.Offsets
+	InstrumentationError error
 }
 
 // ExecTyperProvider classifies the discovered executables according to the
@@ -106,6 +115,11 @@ func (t *typer) FilterClassify(evs []Event[ProcessMatch]) []Event[Instrumentable
 // in case of belonging to a forked process, returns its parent.
 func (t *typer) asInstrumentable(execElf *exec.FileInfo) Instrumentable {
 	log := t.log.With("pid", execElf.Pid, "comm", execElf.CmdExePath)
+	if ic, ok := instrumentableCache.Get(execElf.Ino); ok {
+		log.Debug("new instance of existing executable", "type", ic.Type)
+		return Instrumentable{Type: ic.Type, FileInfo: execElf, Offsets: ic.Offsets, InstrumentationError: ic.InstrumentationError}
+	}
+
 	log.Debug("getting instrumentable information")
 	// look for suitable Go application first
 	offsets, ok, err := t.inspectOffsets(execElf)
@@ -113,6 +127,7 @@ func (t *typer) asInstrumentable(execElf *exec.FileInfo) Instrumentable {
 		// we found go offsets, let's see if this application is not a proxy
 		if !isGoProxy(offsets) {
 			log.Debug("identified as a Go service or client")
+			instrumentableCache.Add(execElf.Ino, InstrumentedExecutable{Type: svc.InstrumentableGolang, Offsets: offsets})
 			return Instrumentable{Type: svc.InstrumentableGolang, FileInfo: execElf, Offsets: offsets}
 		}
 		log.Debug("identified as a Go proxy")
@@ -141,6 +156,7 @@ func (t *typer) asInstrumentable(execElf *exec.FileInfo) Instrumentable {
 		"child", child, "language", detectedType.String())
 	// Return the instrumentable without offsets, as it is identified as a generic
 	// (or non-instrumentable Go proxy) executable
+	instrumentableCache.Add(execElf.Ino, InstrumentedExecutable{Type: detectedType, Offsets: offsets, InstrumentationError: err})
 	return Instrumentable{Type: detectedType, FileInfo: execElf, ChildPids: child, InstrumentationError: err}
 }
 

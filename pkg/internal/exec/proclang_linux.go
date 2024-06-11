@@ -41,38 +41,18 @@ func findLanguageFromElf(elfF *elf.File) svc.InstrumentableType {
 		return svc.InstrumentableGolang
 	}
 
-	if allSyms, err := FindExeSymbols(elfF); err == nil {
-		for name := range allSyms {
-			t := instrumentableFromSymbolName(name)
-			if t != svc.InstrumentableGeneric {
-				return t
-			}
-		}
-	}
-
-	return svc.InstrumentableGeneric
+	return matchExeSymbols(elfF)
 }
 
-func FindExeSymbols(f *elf.File) (map[string]Sym, error) {
-	addresses := map[string]Sym{}
-	syms, err := f.Symbols()
-	if err != nil && !errors.Is(err, elf.ErrNoSymbols) {
-		return nil, err
-	}
-
-	dynsyms, err := f.DynamicSymbols()
-	if err != nil && !errors.Is(err, elf.ErrNoSymbols) {
-		return nil, err
-	}
-
-	syms = append(syms, dynsyms...)
-
+func collectSymbols(f *elf.File, syms []elf.Symbol, addresses map[string]Sym, lookup map[string]struct{}) {
 	for _, s := range syms {
 		if elf.ST_TYPE(s.Info) != elf.STT_FUNC {
 			// Symbol not associated with a function or other executable code.
 			continue
 		}
-
+		if _, ok := lookup[s.Name]; !ok {
+			continue
+		}
 		address := s.Value
 		var p *elf.Prog
 
@@ -91,6 +71,57 @@ func FindExeSymbols(f *elf.File) (map[string]Sym, error) {
 		}
 		addresses[s.Name] = Sym{Off: address, Len: s.Size, Prog: p}
 	}
+}
+
+func FindExeSymbols(f *elf.File, lookup map[string]struct{}) (map[string]Sym, error) {
+	addresses := map[string]Sym{}
+	syms, err := f.Symbols()
+	if err != nil && !errors.Is(err, elf.ErrNoSymbols) {
+		return nil, err
+	}
+
+	collectSymbols(f, syms, addresses, lookup)
+
+	dynsyms, err := f.DynamicSymbols()
+	if err != nil && !errors.Is(err, elf.ErrNoSymbols) {
+		return nil, err
+	}
+
+	collectSymbols(f, dynsyms, addresses, lookup)
 
 	return addresses, nil
+}
+
+func matchSymbols(syms []elf.Symbol) svc.InstrumentableType {
+	for _, s := range syms {
+		if elf.ST_TYPE(s.Info) != elf.STT_FUNC {
+			// Symbol not associated with a function or other executable code.
+			continue
+		}
+		t := instrumentableFromSymbolName(s.Name)
+		if t != svc.InstrumentableGeneric {
+			return t
+		}
+	}
+
+	return svc.InstrumentableGeneric
+}
+
+func matchExeSymbols(f *elf.File) svc.InstrumentableType {
+	syms, err := f.Symbols()
+	if err != nil && !errors.Is(err, elf.ErrNoSymbols) {
+		return svc.InstrumentableGeneric
+	}
+
+	t := matchSymbols(syms)
+	if t != svc.InstrumentableGeneric {
+		return t
+	}
+
+	dynsyms, err := f.DynamicSymbols()
+	if err != nil && !errors.Is(err, elf.ErrNoSymbols) {
+		return svc.InstrumentableGeneric
+	}
+
+	return matchSymbols(dynsyms)
 }

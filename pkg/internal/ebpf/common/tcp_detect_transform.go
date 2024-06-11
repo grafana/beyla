@@ -3,7 +3,9 @@ package ebpfcommon
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"net"
+	"strings"
 
 	"github.com/cilium/ebpf/ringbuf"
 
@@ -23,24 +25,29 @@ func ReadTCPRequestIntoSpan(record *ringbuf.Record, filter ServiceFilter) (reque
 		return request.Span{}, true, nil
 	}
 
-	b := event.Buf[:]
-
 	l := int(event.Len)
-	if l < 0 || len(b) < l {
-		l = len(b)
+	if l < 0 || len(event.Buf) < l {
+		l = len(event.Buf)
 	}
 
-	buf := string(event.Buf[:l])
+	b := event.Buf[:l]
+
+	buf := string(b)
 
 	// Check if we have a SQL statement
 	op, table, sql := detectSQL(buf)
 	switch {
 	case validSQL(op, table):
 		return TCPToSQLToSpan(&event, op, table, sql), false, nil
-	case isRedis(event.Buf[:l]) && isRedis(event.Rbuf[:]):
+	case isRedis(b) && isRedis(event.Rbuf[:]):
 		op, text, ok := parseRedisRequest(buf)
 
 		if ok {
+
+			if strings.Contains(text, "$") {
+				fmt.Printf("** BAD ** %s %v\n", text, event.Buf[:])
+			}
+
 			status := 0
 			if isErr := isRedisError(event.Rbuf[:]); isErr {
 				status = 1

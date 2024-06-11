@@ -3,6 +3,7 @@ package ebpfcommon
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"net"
 	"strconv"
 	"strings"
@@ -231,6 +232,15 @@ func (event *BPFHTTP2Info) hostInfo() (source, target string) {
 	return src.String(), dst.String()
 }
 
+func isValidPath(s string) bool {
+	for _, c := range s {
+		if !(c == '/' || c == '.' || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')) {
+			return false
+		}
+	}
+	return true
+}
+
 // nolint:cyclop
 func ReadHTTP2InfoIntoSpan(record *ringbuf.Record, filter ServiceFilter) (request.Span, bool, error) {
 	var event BPFHTTP2Info
@@ -244,7 +254,12 @@ func ReadHTTP2InfoIntoSpan(record *ringbuf.Record, filter ServiceFilter) (reques
 		return request.Span{}, true, nil
 	}
 
-	framer := byteFramer(event.Data[:])
+	bLen := len(event.Data)
+	if event.Len < int32(bLen) {
+		bLen = int(event.Len)
+	}
+
+	framer := byteFramer(event.Data[:bLen])
 	retFramer := byteFramer(event.RetData[:])
 	// We don't set the framer.ReadMetaHeaders function to hpack.NewDecoder because
 	// the http2.MetaHeadersFrame code wants a full grpc buffer with all the fields,
@@ -265,6 +280,10 @@ func ReadHTTP2InfoIntoSpan(record *ringbuf.Record, filter ServiceFilter) (reques
 
 		if ff, ok := f.(*http2.HeadersFrame); ok {
 			method, path, contentType := readMetaFrame((*BPFConnInfo)(&event.ConnInfo), framer, ff)
+
+			if !isValidPath(path) || path == "" {
+				fmt.Printf("** INV %d ** len=%d %s %v\n", event.Pid.HostPid, event.Len, path, event.Data[:])
+			}
 
 			grpcInStatus := false
 

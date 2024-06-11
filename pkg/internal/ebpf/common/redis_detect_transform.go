@@ -3,6 +3,7 @@ package ebpfcommon
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"strings"
 	"unsafe"
 
@@ -78,6 +79,13 @@ func crlfTerminatedMatch(buf []uint8, matches func(c uint8) bool) bool {
 	return buf[i+1] == '\n'
 }
 
+func isValidRedisChar(c byte) bool {
+	return (c >= 'a' && c <= 'z') ||
+		(c >= 'A' && c <= 'Z') ||
+		(c >= '0' && c <= '9') ||
+		c == '.' || c == ' ' || c == '-' || c == '_'
+}
+
 func parseRedisRequest(buf string) (string, string, bool) {
 	lines := strings.Split(buf, "\r\n")
 
@@ -109,6 +117,9 @@ func parseRedisRequest(buf string) (string, string, bool) {
 			if isRedisOp([]uint8(l + "\r\n")) {
 				text += "; "
 				continue
+			}
+			if !isValidRedisChar(l[0]) {
+				break
 			}
 			if op == "" {
 				op = l
@@ -177,6 +188,10 @@ func ReadGoRedisRequestIntoSpan(record *ringbuf.Record) (request.Span, bool, err
 	if !ok {
 		// We know it's redis request here, it just didn't complete correctly
 		event.Err = 1
+	}
+
+	if strings.Contains(text, "$") {
+		fmt.Printf("** BAD ** %s %v\n", text, event.Buf[:])
 	}
 
 	return request.Span{

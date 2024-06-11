@@ -354,9 +354,9 @@ func isInvalidFrame(frame *frameHeader) bool {
 	return frame.Length == 0 && frame.Type == FrameData
 }
 
-func isLikelyHTTP2(data []uint8, event *TCPRequestInfo) bool {
+func isLikelyHTTP2(data []uint8, eventLen int) bool {
 	pos := 0
-	l := int(event.Len)
+	l := eventLen
 	if l > len(data) {
 		l = len(data)
 	}
@@ -394,7 +394,7 @@ func isHTTP2(data []uint8, event *TCPRequestInfo) bool {
 	// Therefore, we replicate some of our HTTP2 frame reader from eBPF here to
 	// check if this payload even remotely looks like HTTP2/gRPC, e.g. we must
 	// find a resonably looking HTTP "headers" frame.
-	if !isLikelyHTTP2(data, event) {
+	if !isLikelyHTTP2(data, int(event.Len)) {
 		return false
 	}
 

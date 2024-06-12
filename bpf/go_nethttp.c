@@ -277,6 +277,8 @@ int uprobe_ServeHTTPReturns(struct pt_regs *ctx) {
         }
     }
 
+    // Server connections have opposite order, source port is the server port
+    swap_connection_info_order(&trace->conn);
     trace->tp = invocation->tp;
     trace->content_length = invocation->content_length;
     __builtin_memcpy(trace->method, invocation->method, sizeof(trace->method));
@@ -822,8 +824,10 @@ int uprobe_persistConnRoundTrip(struct pt_regs *ctx) {
                 tp_clone(&tp_p.tp, &invocation->tp);
                 tp_p.tp.ts = bpf_ktime_get_ns();
                 bpf_dbg_printk("storing trace_map info for black-box tracing");
-                bpf_map_update_elem(&trace_map, &conn, &tp_p, BPF_ANY);
                 bpf_map_update_elem(&ongoing_client_connections, &goroutine_addr, &conn, BPF_ANY);
+
+                sort_connection_info(&conn);
+                bpf_map_update_elem(&trace_map, &conn, &tp_p, BPF_ANY);
             }
         }
     }

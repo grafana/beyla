@@ -198,6 +198,8 @@ int uprobe_server_handleStream_return(struct pt_regs *ctx) {
         __builtin_memset(&trace->conn, 0, sizeof(connection_info_t));
     }
 
+    // Server connections have port order reversed from what we want
+    swap_connection_info_order(&trace->conn);
     trace->tp = invocation->tp;
     trace->end_monotime_ns = bpf_ktime_get_ns();
     // submit the completed trace via ringbuffer

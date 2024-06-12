@@ -106,6 +106,12 @@ type bpf_tp_debugSslArgsT struct {
 	LenPtr uint64
 }
 
+type bpf_tp_debugSslPidConnectionInfoT struct {
+	Conn      bpf_tp_debugPidConnectionInfoT
+	OrigDport uint16
+	_         [2]byte
+}
+
 type bpf_tp_debugTcpReqT struct {
 	Flags           uint8
 	_               [1]byte

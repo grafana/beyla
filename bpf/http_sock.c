@@ -109,6 +109,7 @@ int BPF_KPROBE(kprobe_tcp_rcv_established, struct sock *sk, struct sk_buff *skb)
     pid_connection_info_t info = {};
 
     if (parse_sock_info(sk, &info.conn)) {
+        u16 orig_dport = info.conn.d_port;
         sort_connection_info(&info.conn);
         info.pid = pid_from_pid_tgid(id);        
         //dbg_print_http_connection_info(&info.conn);
@@ -117,7 +118,11 @@ int BPF_KPROBE(kprobe_tcp_rcv_established, struct sock *sk, struct sk_buff *skb)
         task_pid(&meta.pid);
         meta.type = EVENT_HTTP_REQUEST;
         bpf_map_update_elem(&filtered_connections, &info, &meta, BPF_NOEXIST); // On purpose BPF_NOEXIST, we don't want to overwrite data by accept or connect
-        bpf_map_update_elem(&pid_tid_to_conn, &id, &info, BPF_ANY); // to support SSL on missing handshake
+        ssl_pid_connection_info_t pid_info = {
+            .conn = info,
+            .orig_dport = orig_dport,
+        };
+        bpf_map_update_elem(&pid_tid_to_conn, &id, &pid_info, BPF_ANY); // to support SSL on missing handshake
     }
 
     return 0;
@@ -157,6 +162,7 @@ int BPF_KRETPROBE(kretprobe_sys_accept4, uint fd)
     pid_connection_info_t info = {};
 
     if (parse_accept_socket_info(args, &info.conn)) {
+        u16 orig_dport = info.conn.d_port;
         sort_connection_info(&info.conn);
         //dbg_print_http_connection_info(&info.conn);
         info.pid = pid_from_pid_tgid(id);
@@ -165,7 +171,11 @@ int BPF_KRETPROBE(kretprobe_sys_accept4, uint fd)
         task_pid(&meta.pid);
         meta.type = EVENT_HTTP_REQUEST;
         bpf_map_update_elem(&filtered_connections, &info, &meta, BPF_ANY); // On purpose BPF_ANY, we want to overwrite stale
-        bpf_map_update_elem(&pid_tid_to_conn, &id, &info, BPF_ANY); // to support SSL on missing handshake
+        ssl_pid_connection_info_t pid_info = {
+            .conn = info,
+            .orig_dport = orig_dport,
+        };
+        bpf_map_update_elem(&pid_tid_to_conn, &id, &pid_info, BPF_ANY); // to support SSL on missing handshake
     }
 
 cleanup:
@@ -225,6 +235,7 @@ int BPF_KRETPROBE(kretprobe_sys_connect, int fd)
 
     if (parse_connect_sock_info(args, &info.conn)) {
         bpf_dbg_printk("=== connect ret id=%d, pid=%d ===", id, pid_from_pid_tgid(id));
+        u16 orig_dport = info.conn.d_port;
         sort_connection_info(&info.conn);
         //dbg_print_http_connection_info(&info.conn);
         info.pid = pid_from_pid_tgid(id);
@@ -233,7 +244,11 @@ int BPF_KRETPROBE(kretprobe_sys_connect, int fd)
         task_pid(&meta.pid);
         meta.type = EVENT_HTTP_CLIENT;
         bpf_map_update_elem(&filtered_connections, &info, &meta, BPF_ANY); // On purpose BPF_ANY, we want to overwrite stale
-        bpf_map_update_elem(&pid_tid_to_conn, &id, &info, BPF_ANY); // to support SSL 
+        ssl_pid_connection_info_t pid_info = {
+            .conn = info,
+            .orig_dport = orig_dport,
+        };
+        bpf_map_update_elem(&pid_tid_to_conn, &id, &pid_info, BPF_ANY); // to support SSL 
     }
 
 cleanup:
@@ -265,7 +280,8 @@ int BPF_KPROBE(kprobe_tcp_sendmsg, struct sock *sk, struct msghdr *msg, size_t s
     };
 
     if (parse_sock_info(sk, &s_args.p_conn.conn)) {
-        //dbg_print_http_connection_info(&info.conn); // commented out since GitHub CI doesn't like this call
+        u16 orig_dport = s_args.p_conn.conn.d_port;
+        dbg_print_http_connection_info(&s_args.p_conn.conn); // commented out since GitHub CI doesn't like this call
         sort_connection_info(&s_args.p_conn.conn);
         s_args.p_conn.pid = pid_from_pid_tgid(id);
 
@@ -275,7 +291,7 @@ int BPF_KPROBE(kprobe_tcp_sendmsg, struct sock *sk, struct msghdr *msg, size_t s
                 u64 sock_p = (u64)sk;
                 bpf_map_update_elem(&active_send_args, &id, &s_args, BPF_ANY);
                 bpf_map_update_elem(&active_send_sock_args, &sock_p, &s_args, BPF_ANY);
-                handle_buf_with_connection(&s_args.p_conn, iovec_ptr, size, NO_SSL, TCP_SEND);
+                handle_buf_with_connection(&s_args.p_conn, iovec_ptr, size, NO_SSL, TCP_SEND, orig_dport);
                 // if (size < KPROBES_LARGE_RESPONSE_LEN) {
                 //     bpf_dbg_printk("Maybe we need to finish the request");
                 //     finish_possible_delayed_http_request(&s_args.p_conn);
@@ -304,11 +320,15 @@ int BPF_KPROBE(kprobe_tcp_sendmsg, struct sock *sk, struct msghdr *msg, size_t s
             return 0;
         }
         bpf_dbg_printk("=== kprobe SSL tcp_sendmsg=%d sock=%llx ssl=%llx ===", id, sk, ssl);
-        pid_connection_info_t *conn = bpf_map_lookup_elem(&ssl_to_conn, &ssl);
+        ssl_pid_connection_info_t *conn = bpf_map_lookup_elem(&ssl_to_conn, &ssl);
         if (conn) {
-            finish_possible_delayed_http_request(conn);
+            finish_possible_delayed_http_request(&conn->conn);
         }
-        bpf_map_update_elem(&ssl_to_conn, &ssl, &s_args.p_conn, BPF_ANY);
+        ssl_pid_connection_info_t ssl_conn = {
+            .conn = s_args.p_conn,
+            .orig_dport = orig_dport,
+        };
+        bpf_map_update_elem(&ssl_to_conn, &ssl, &ssl_conn, BPF_ANY);
     }
 
     return 0;
@@ -435,10 +455,11 @@ int BPF_KRETPROBE(kretprobe_tcp_recvmsg, int copied_len) {
     pid_connection_info_t info = {};
 
     if (parse_sock_info((struct sock *)args->sock_ptr, &info.conn)) {
+        u16 orig_dport = info.conn.d_port;
+        dbg_print_http_connection_info(&info.conn);
         sort_connection_info(&info.conn);
-        //dbg_print_http_connection_info(&info.conn);
         info.pid = pid_from_pid_tgid(id);
-        handle_buf_with_connection(&info, (void *)args->iovec_ptr, copied_len, NO_SSL, TCP_RECV);
+        handle_buf_with_connection(&info, (void *)args->iovec_ptr, copied_len, NO_SSL, TCP_RECV, orig_dport);
     }
 
 done:

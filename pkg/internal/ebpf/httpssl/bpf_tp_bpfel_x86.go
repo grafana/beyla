@@ -106,6 +106,12 @@ type bpf_tpSslArgsT struct {
 	LenPtr uint64
 }
 
+type bpf_tpSslPidConnectionInfoT struct {
+	Conn      bpf_tpPidConnectionInfoT
+	OrigDport uint16
+	_         [2]byte
+}
+
 type bpf_tpTcpReqT struct {
 	Flags           uint8
 	_               [1]byte

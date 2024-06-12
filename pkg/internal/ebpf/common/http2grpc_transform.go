@@ -3,7 +3,6 @@ package ebpfcommon
 import (
 	"bytes"
 	"encoding/binary"
-	"fmt"
 	"net"
 	"strconv"
 	"strings"
@@ -178,7 +177,7 @@ var genericServiceID = svc.ID{SDKLanguage: svc.InstrumentableGeneric}
 func http2InfoToSpan(info *BPFHTTP2Info, method, path, peer, host string, status int, protocol Protocol) request.Span {
 	return request.Span{
 		Type:          info.eventType(protocol),
-		ID:            0,
+		ID:            uint64(info.ConnInfo.S_port),
 		Method:        method,
 		Path:          removeQuery(path),
 		Peer:          peer,
@@ -232,15 +231,6 @@ func (event *BPFHTTP2Info) hostInfo() (source, target string) {
 	return src.String(), dst.String()
 }
 
-func isValidPath(s string) bool {
-	for _, c := range s {
-		if !(c == '/' || c == '.' || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')) {
-			return false
-		}
-	}
-	return true
-}
-
 // nolint:cyclop
 func ReadHTTP2InfoIntoSpan(record *ringbuf.Record, filter ServiceFilter) (request.Span, bool, error) {
 	var event BPFHTTP2Info
@@ -281,8 +271,8 @@ func ReadHTTP2InfoIntoSpan(record *ringbuf.Record, filter ServiceFilter) (reques
 		if ff, ok := f.(*http2.HeadersFrame); ok {
 			method, path, contentType := readMetaFrame((*BPFConnInfo)(&event.ConnInfo), framer, ff)
 
-			if !isValidPath(path) || path == "" {
-				fmt.Printf("** INV %d ** len=%d %s %v\n", event.Pid.HostPid, event.Len, path, event.Data[:])
+			if path == "" {
+				path = "*"
 			}
 
 			grpcInStatus := false

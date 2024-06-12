@@ -23,7 +23,7 @@ struct {
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __type(key, u64);   // the SSL struct pointer
-    __type(value, pid_connection_info_t); // the pointer to the file descriptor matching ssl
+    __type(value, ssl_pid_connection_info_t); // the pointer to the file descriptor matching ssl
     __uint(max_entries, MAX_CONCURRENT_SHARED_REQUESTS);
     __uint(pinning, LIBBPF_PIN_BY_NAME);
 } ssl_to_conn SEC(".maps");
@@ -34,7 +34,7 @@ struct {
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __type(key, u64);   // the pid-tid pair
-    __type(value, pid_connection_info_t); // the pointer to the file descriptor matching ssl
+    __type(value, ssl_pid_connection_info_t); // the pointer to the file descriptor matching ssl
     __uint(max_entries, MAX_CONCURRENT_SHARED_REQUESTS);
     __uint(pinning, LIBBPF_PIN_BY_NAME);
 } pid_tid_to_conn SEC(".maps");
@@ -80,7 +80,7 @@ static __always_inline void handle_ssl_buf(u64 id, ssl_args_t *args, int bytes_l
         void *ssl = ((void *)args->ssl);
         u64 ssl_ptr = (u64)ssl;
         bpf_dbg_printk("SSL_buf id=%d ssl=%llx", id, ssl);
-        pid_connection_info_t *conn = bpf_map_lookup_elem(&ssl_to_conn, &ssl);
+        ssl_pid_connection_info_t *conn = bpf_map_lookup_elem(&ssl_to_conn, &ssl);
 
         if (!conn) {
             conn = bpf_map_lookup_elem(&pid_tid_to_conn, &id);
@@ -110,8 +110,8 @@ static __always_inline void handle_ssl_buf(u64 id, ssl_args_t *args, int bytes_l
             // being on the same thread as the SSL_read. 
             if (conn) {
                 bpf_map_delete_elem(&pid_tid_to_conn, &id);
-                pid_connection_info_t c;
-                bpf_probe_read(&c, sizeof(pid_connection_info_t), conn);
+                ssl_pid_connection_info_t c;
+                bpf_probe_read(&c, sizeof(ssl_pid_connection_info_t), conn);
                 bpf_map_update_elem(&ssl_to_conn, &ssl, &c, BPF_ANY);
             }
         }
@@ -122,11 +122,11 @@ static __always_inline void handle_ssl_buf(u64 id, ssl_args_t *args, int bytes_l
             // At this point the threading in the language doesn't allow us to properly match the SSL* with
             // the connection info. We send partial event, at least we can find the path, timing and response.
             // even though we won't have peer information.
-            pid_connection_info_t p_c = {};
+            ssl_pid_connection_info_t p_c = {};
             bpf_dbg_printk("setting fake connection info ssl=%llx", ssl);
-            bpf_memcpy(&p_c.conn.s_addr, &ssl, sizeof(void *));
-            p_c.conn.d_port = p_c.conn.s_port = 0;
-            p_c.pid = pid_from_pid_tgid(id);
+            bpf_memcpy(&p_c.conn.conn.s_addr, &ssl, sizeof(void *));
+            p_c.conn.conn.d_port = p_c.conn.conn.s_port = p_c.orig_dport = 0;
+            p_c.conn.pid = pid_from_pid_tgid(id);
 
             bpf_map_update_elem(&ssl_to_conn, &ssl, &p_c, BPF_ANY);
             conn = bpf_map_lookup_elem(&ssl_to_conn, &ssl);
@@ -142,7 +142,7 @@ static __always_inline void handle_ssl_buf(u64 id, ssl_args_t *args, int bytes_l
             //     bpf_dbg_printk("%x ", buf[i]);
             // }
 
-            handle_buf_with_connection(conn, (void *)args->buf, bytes_len, WITH_SSL, direction);
+            handle_buf_with_connection(&conn->conn, (void *)args->buf, bytes_len, WITH_SSL, direction, conn->orig_dport);
         } else {
             bpf_dbg_printk("No connection info! This is a bug.");
         }

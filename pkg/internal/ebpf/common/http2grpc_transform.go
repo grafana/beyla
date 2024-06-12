@@ -302,7 +302,102 @@ func ReadHTTP2InfoIntoSpan(record *ringbuf.Record, filter ServiceFilter) (reques
 	return request.Span{}, true, nil // ignore if we couldn't parse it
 }
 
+type http2FrameType uint8
+
+type frameHeader struct {
+	Length   uint32
+	Type     http2FrameType
+	Flags    uint8
+	Ignore   uint8
+	StreamID uint32
+}
+
+const (
+	FrameData         http2FrameType = 0x0
+	FrameHeaders      http2FrameType = 0x1
+	FramePriority     http2FrameType = 0x2
+	FrameRSTStream    http2FrameType = 0x3
+	FrameSettings     http2FrameType = 0x4
+	FramePushPromise  http2FrameType = 0x5
+	FramePing         http2FrameType = 0x6
+	FrameGoAway       http2FrameType = 0x7
+	FrameWindowUpdate http2FrameType = 0x8
+	FrameContinuation http2FrameType = 0x9
+)
+
+const frameHeaderLen = 9
+
+func readHTTP2Frame(buf []uint8, len int) (*frameHeader, bool) {
+	if len < frameHeaderLen {
+		return nil, false
+	}
+
+	frame := frameHeader{
+		Length:   (uint32(buf[0])<<16 | uint32(buf[1])<<8 | uint32(buf[2])),
+		Type:     http2FrameType(buf[3]),
+		Flags:    buf[4],
+		StreamID: binary.BigEndian.Uint32(buf[5:]) & (1<<31 - 1),
+	}
+
+	if frame.Length == 0 || frame.Type > FrameContinuation {
+		return nil, false
+	}
+
+	return &frame, true
+}
+
+func isHeadersFrame(frame *frameHeader) bool {
+	return frame.Type == FrameHeaders && frame.StreamID != 0
+}
+
+func isInvalidFrame(frame *frameHeader) bool {
+	return frame.Length == 0 && frame.Type == FrameData
+}
+
+func isLikelyHTTP2(data []uint8, eventLen int) bool {
+	pos := 0
+	l := eventLen
+	if l > len(data) {
+		l = len(data)
+	}
+	for i := 0; i < 8; i++ {
+		if pos > l-frameHeaderLen {
+			break
+		}
+
+		fr, ok := readHTTP2Frame(data[pos:], l)
+		if !ok {
+			break
+		}
+
+		if isHeadersFrame(fr) {
+			return true
+		}
+
+		if isInvalidFrame(fr) {
+			break
+		}
+
+		if pos < (l - int(fr.Length+frameHeaderLen)) {
+			pos += int(fr.Length + frameHeaderLen)
+			continue
+		}
+
+		break
+	}
+
+	return false
+}
+
 func isHTTP2(data []uint8, event *TCPRequestInfo) bool {
+	// Parsing HTTP2 frames with the Go HTTP2/gRPC parser is very expensive.
+	// Therefore, we replicate some of our HTTP2 frame reader from eBPF here to
+	// check if this payload even remotely looks like HTTP2/gRPC, e.g. we must
+	// find a resonably looking HTTP "headers" frame.
+	if !isLikelyHTTP2(data, int(event.Len)) {
+		return false
+	}
+
 	framer := byteFramer(data)
 
 	for {

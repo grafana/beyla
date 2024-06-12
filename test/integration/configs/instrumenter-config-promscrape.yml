@@ -19,3 +19,5 @@ attributes:
       include: ["*"]
     process_memory_virtual:
       include: ["*"]
+    process_disk_io:
+      include: ["*"]

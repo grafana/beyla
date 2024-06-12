@@ -59,7 +59,7 @@ func ReadTCPRequestIntoSpan(record *ringbuf.Record, filter ServiceFilter) (reque
 		k, err := ProcessPossibleKafkaEvent(b, event.Rbuf[:])
 		if err == nil {
 			return TCPToKafkaToSpan(&event, k), false, nil
-		} else if isHTTP2(b, &event) {
+		} else if isHTTP2(b, &event) || isHTTP2(event.Rbuf[:], &event) {
 			MisclassifiedEvents <- MisclassifiedEvent{EventType: EventTypeKHTTP2, TCPInfo: &event}
 		}
 	}

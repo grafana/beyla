@@ -153,11 +153,11 @@ struct _iov_iter {
 };
 
 static __always_inline void *find_msghdr_buf(struct msghdr *msg) {
-    unsigned int m_flags;
-    struct iov_iter msg_iter;
+    unsigned int m_flags = BPF_CORE_READ(msg, msg_flags);
+    struct iov_iter msg_iter = BPF_CORE_READ(msg, msg_iter);
 
-    bpf_probe_read_kernel(&m_flags, sizeof(unsigned int), &(msg->msg_flags));
-    bpf_probe_read_kernel(&msg_iter, sizeof(struct iov_iter), &(msg->msg_iter));
+    //bpf_probe_read_kernel(&m_flags, sizeof(unsigned int), &(msg->msg_flags));
+    //bpf_probe_read_kernel(&msg_iter, sizeof(struct iov_iter), &(msg->msg_iter));
 
     u8 msg_iter_type = 0;
 
@@ -166,9 +166,10 @@ static __always_inline void *find_msghdr_buf(struct msghdr *msg) {
         bpf_dbg_printk("msg iter type exists, read value %d", msg_iter_type);
     }
 
-    bpf_dbg_printk("msg flags %x, iter type %d", m_flags, msg_iter_type);
+    bpf_printk("msg flags %x, iter type %d", m_flags, msg_iter_type);
 
     struct iovec *iov = NULL;
+    u32 offset = 0;
 
     if (bpf_core_field_exists(msg_iter.iov)) {
         bpf_probe_read(&iov, sizeof(struct iovec *), &(msg_iter.iov));
@@ -179,8 +180,9 @@ static __always_inline void *find_msghdr_buf(struct msghdr *msg) {
         // here assumes the kernel iov_iter structure is the format with __iov and __ubuf_iovec.
         struct _iov_iter _msg_iter;
         bpf_probe_read_kernel(&_msg_iter, sizeof(struct _iov_iter), &(msg->msg_iter));
+        offset = _msg_iter.iov_offset;
         
-        bpf_dbg_printk("new kernel, iov doesn't exist");
+        bpf_dbg_printk("new kernel, iov doesn't exist, offset %d", offset);
 
         if (msg_iter_type == 5) {
             struct iovec vec;
@@ -205,7 +207,28 @@ static __always_inline void *find_msghdr_buf(struct msghdr *msg) {
     struct iovec vec;
     bpf_probe_read(&vec, sizeof(struct iovec), iov);
 
-    bpf_dbg_printk("standard iov %llx base %llx", iov, vec.iov_base);
+    bpf_printk("standard iov %llx base %llx offset %d", iov, vec.iov_base, offset);
+
+    if (!vec.iov_base) {
+        struct _iov_iter _msg_iter;
+        bpf_probe_read_kernel(&_msg_iter, sizeof(struct _iov_iter), &(msg->msg_iter));
+        
+        struct iovec vec1;
+        bpf_probe_read(&vec1, sizeof(struct iovec), &(_msg_iter.__ubuf_iovec));
+        bpf_printk("vec1 %llx %d xarr_off = %d", vec1.iov_base, vec1.iov_len, offsetof(struct xarray, xa_head));
+        if (vec1.iov_base) {
+            u64 dummy, dummy1, dummy2 = 0;
+            bpf_probe_read(&dummy, sizeof(u64), vec1.iov_base);
+            bpf_probe_read(&dummy1, sizeof(u64), vec1.iov_base+8);
+            bpf_probe_read(&dummy2, sizeof(u64), vec1.iov_base+16);
+            bpf_printk("vec1[0] %llx", dummy);
+            bpf_printk("vec1[1] %llx", dummy1);
+            bpf_printk("vec1[2] %llx", dummy2);
+
+            return (void*)dummy2;
+        }
+        bpf_printk("vec %llx %d", vec.iov_base, vec.iov_len);
+    }
 
     return vec.iov_base;    
 }
@@ -319,8 +342,14 @@ static __always_inline bool still_reading(http_info_t *info) {
 // and we undo the swap in the data collections we send to user space.
 static __always_inline void fixup_connection_info(connection_info_t *conn_info, u8 client, u16 orig_dport) {
     // The destination port is the server port
-    if (client && conn_info->d_port != orig_dport) {
+    bpf_printk("Using connection info");
+    dbg_print_http_connection_info(conn_info); // commented out since GitHub CI doesn't like this call
+
+    if ((client && conn_info->d_port != orig_dport) || 
+        (!client && conn_info->d_port == orig_dport)) {
+        bpf_printk("Swapped it, client = %d, orig_dport = %d", client, orig_dport);
         swap_connection_info_order(conn_info);
+        dbg_print_http_connection_info(conn_info); // commented out since GitHub CI doesn't like this call
     }
 }
 

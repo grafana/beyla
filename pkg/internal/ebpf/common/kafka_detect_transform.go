@@ -46,6 +46,8 @@ func (k Operation) String() string {
 
 const KafkaMinLength = 14
 
+var topicRegex = regexp.MustCompile("\x02\t(.*)\x02")
+
 // ProcessKafkaRequest processes a TCP packet and returns error if the packet is not a valid Kafka request.
 // Otherwise, return kafka.Info with the processed data.
 func ProcessPossibleKafkaEvent(pkt []byte, rpkt []byte) (*KafkaInfo, error) {
@@ -217,8 +219,7 @@ func getTopicName(pkt []byte, offset int, op Operation, apiVersion int16) (strin
 }
 
 func extractTopic(input string) string {
-	re := regexp.MustCompile("\x02\t(.*)\x02")
-	matches := re.FindStringSubmatch(input)
+	matches := topicRegex.FindStringSubmatch(input)
 	if len(matches) > 1 {
 		return matches[1]
 	}

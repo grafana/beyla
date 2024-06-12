@@ -218,3 +218,17 @@ func Test_usernameFromGetent(t *testing.T) { //nolint:paralleltest
 		})
 	}
 }
+
+func TestNetworkBytes(t *testing.T) {
+	netDev := []byte(`Inter-|   Receive                                                |  Transmit
+ face |bytes    packets errs drop fifo frame compressed multicast|bytes    packets errs drop fifo colls carrier compressed
+    lo:   41292     444    0    0    0     0          0         0    33111     444    0    0    0     0       0          0
+  eth0:  233606    1024    0    0    0     0          0         0   44123     775    0    0    0     0       0          0
+br-26b494c37194:       0       0    0    0    0     0          0         0        0       0    0    0    0     0       0          0
+docker0:       0       0    0    0    0     0          0         0        0       0    0    0    0     0       0          0
+br-a3d66a1fd7b9:       0       0    0    0    0     0          0         0        0       0    0    0    0     0       0          0
+`)
+	rx, tx := parseProcNetDev(netDev)
+	assert.EqualValues(t, 41292+233606, rx)
+	assert.EqualValues(t, 33111+44123, tx)
+}

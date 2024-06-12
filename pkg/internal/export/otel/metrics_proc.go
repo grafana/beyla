@@ -26,6 +26,9 @@ var (
 
 	diskIODirRead  = attr2.ProcDiskIODir.OTEL().String("read")
 	diskIODirWrite = attr2.ProcDiskIODir.OTEL().String("write")
+
+	netIODirTx  = attr2.ProcNetIODir.OTEL().String("transmit")
+	netIODirRcv = attr2.ProcNetIODir.OTEL().String("receive")
 )
 
 // ProcMetricsConfig extends MetricsConfig for process metrics
@@ -58,15 +61,17 @@ type procMetricsExporter struct {
 	attrMemory        []attributes.Field[*process.Status, attribute.KeyValue]
 	attrMemoryVirtual []attributes.Field[*process.Status, attribute.KeyValue]
 	attrDisk          []attributes.Field[*process.Status, attribute.KeyValue]
+	attrNet           []attributes.Field[*process.Status, attribute.KeyValue]
 
 	// the observation code for CPU metrics will be different depending on
 	// the "process.cpu.state" attribute being selected or not
 	cpuTimeObserver        func(*procMetrics, *process.Status)
 	cpuUtilisationObserver func(*procMetrics, *process.Status)
 
-	// the observation code for disk metrics will be different depending on
-	// the disk.io.direction attribute being selected or not
+	// the observation code for disk and network metrics will be different depending on
+	// the *.io.direction attributes being selected or not
 	diskObserver func(*procMetrics, *process.Status)
+	netObserver  func(*procMetrics, *process.Status)
 }
 
 type procMetrics struct {
@@ -79,6 +84,7 @@ type procMetrics struct {
 	memory         *Expirer[*process.Status, metric2.Int64Observer, *IntGauge, int64]
 	memoryVirtual  *Expirer[*process.Status, metric2.Int64Observer, *IntGauge, int64]
 	disk           *Expirer[*process.Status, metric2.Int64Observer, *IntCounter, int64]
+	net            *Expirer[*process.Status, metric2.Int64Observer, *IntCounter, int64]
 }
 
 func ProcMetricsExporterProvider(
@@ -120,6 +126,9 @@ func newProcMetricsExporter(
 	diskNames := attrProv.For(attributes.ProcessDiskIO)
 	attrDisk := attributes.OpenTelemetryGetters(process.OTELGetters, diskNames)
 
+	netNames := attrProv.For(attributes.ProcessNetIO)
+	attrNet := attributes.OpenTelemetryGetters(process.OTELGetters, netNames)
+
 	mr := &procMetricsExporter{
 		log:         log,
 		ctx:         ctx,
@@ -132,6 +141,7 @@ func newProcMetricsExporter(
 		attrMemoryVirtual: attributes.OpenTelemetryGetters(process.OTELGetters,
 			attrProv.For(attributes.ProcessMemoryVirtual)),
 		attrDisk: attrDisk,
+		attrNet:  attrNet,
 	}
 	if slices.Contains(cpuTimeNames, attr2.ProcCPUState) {
 		mr.cpuTimeObserver = cpuTimeDisaggregatedObserver
@@ -147,6 +157,11 @@ func newProcMetricsExporter(
 		mr.diskObserver = diskDisaggregatedObserver
 	} else {
 		mr.diskObserver = diskAggregatedObserver
+	}
+	if slices.Contains(netNames, attr2.ProcNetIODir) {
+		mr.netObserver = netDisaggregatedObserver
+	} else {
+		mr.netObserver = netAggregatedObserver
 	}
 
 	mr.reporters = NewReporterPool[*procMetrics](cfg.Metrics.ReportersCacheLen,
@@ -236,8 +251,6 @@ func (me *procMetricsExporter) newMetricSet(service *svc.ID) (*procMetrics, erro
 		log.Error("creating observable gauge for "+attributes.ProcessMemoryVirtual.OTEL, "error", err)
 		return nil, err
 	}
-	// disk metrics are defined as Counter in the Otel specification, but we
-	// internally treat them as gauges, as it's aligned to what we get from the /proc filesystem
 	m.disk = NewExpirer[*process.Status, metric2.Int64Observer](
 		NewIntCounter, me.attrDisk, timeNow, me.cfg.Metrics.TTL)
 	if _, err := meter.Int64ObservableCounter(
@@ -245,6 +258,17 @@ func (me *procMetricsExporter) newMetricSet(service *svc.ID) (*procMetrics, erro
 		metric2.WithDescription("Disk bytes transferred"),
 		metric2.WithUnit("By"),
 		metric2.WithInt64Callback(m.disk.Collect),
+	); err != nil {
+		log.Error("creating observable gauge for "+attributes.ProcessMemoryVirtual.OTEL, "error", err)
+		return nil, err
+	}
+	m.net = NewExpirer[*process.Status, metric2.Int64Observer](
+		NewIntCounter, me.attrNet, timeNow, me.cfg.Metrics.TTL)
+	if _, err := meter.Int64ObservableCounter(
+		attributes.ProcessNetIO.OTEL,
+		metric2.WithDescription("Network bytes transferred"),
+		metric2.WithUnit("By"),
+		metric2.WithInt64Callback(m.net.Collect),
 	); err != nil {
 		log.Error("creating observable gauge for "+attributes.ProcessMemoryVirtual.OTEL, "error", err)
 		return nil, err
@@ -277,6 +301,7 @@ func (me *procMetricsExporter) observeMetric(reporter *procMetrics, s *process.S
 	reporter.memoryVirtual.ForRecord(s).Set(s.MemoryVMSBytes)
 
 	me.diskObserver(reporter, s)
+	me.netObserver(reporter, s)
 }
 
 // aggregated observers report all the CPU metrics in a single data point
@@ -312,4 +337,13 @@ func diskAggregatedObserver(reporter *procMetrics, record *process.Status) {
 func diskDisaggregatedObserver(reporter *procMetrics, record *process.Status) {
 	reporter.disk.ForRecord(record, diskIODirRead).Add(int64(record.IOReadBytesDelta))
 	reporter.disk.ForRecord(record, diskIODirWrite).Add(int64(record.IOWriteBytesDelta))
+}
+
+func netAggregatedObserver(reporter *procMetrics, record *process.Status) {
+	reporter.net.ForRecord(record).Add(record.NetTxBytesDelta + record.NetRcvBytesDelta)
+}
+
+func netDisaggregatedObserver(reporter *procMetrics, record *process.Status) {
+	reporter.net.ForRecord(record, netIODirTx).Add(record.NetTxBytesDelta)
+	reporter.net.ForRecord(record, netIODirRcv).Add(record.NetRcvBytesDelta)
 }

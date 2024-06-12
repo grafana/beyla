@@ -67,6 +67,7 @@ var (
 		"process_memory_usage_bytes",
 		"process_memory_virtual_bytes",
 		"process_disk_io_bytes_total",
+		"process_network_io_bytes_total",
 	}
 )
 

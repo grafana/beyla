@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -57,6 +58,8 @@ type linuxProcess struct {
 	previousCPUStats    CPUInfo
 	previousMeasureTime time.Time
 	previousIOCounters  *process.IOCountersStat
+	previousNetRx       int64
+	previousNetTx       int64
 
 	procFSRoot string
 
@@ -337,6 +340,28 @@ func parseProcStat(content string) (procStats, error) {
 	stats.vmRSS *= pageSize
 
 	return stats, nil
+}
+
+var netLineRegexp = regexp.MustCompile(`\n\s*[^\n:]*:\s*(\d+)\s+\d+\s+\d+\s+\d+\s+\d+\s+\d+\s+\d+\s+\d+\s+(\d+).*`)
+
+// /proc/<pid>/net/dev is assumed to have a structure like this
+// Inter-|   Receive                                                |  Transmit
+//
+//	face |bytes    packets errs drop fifo frame compressed multicast|bytes    packets errs drop fifo colls carrier compressed
+//	   lo:   15074     172    0    0    0     0          0         0    15074     172    0    0    0     0       0          0
+//	 eth0:  181770     628    0    0    0     0          0         0    54903     402    0    0    0     0       0          0
+func parseProcNetDev(content []byte) (rx int64, tx int64) {
+	entries := netLineRegexp.FindAllSubmatch(content, -1)
+	for _, parsedData := range entries {
+		if len(parsedData) < 3 {
+			continue
+		}
+		r, _ := strconv.Atoi(string(parsedData[1]))
+		rx += int64(r)
+		t, _ := strconv.Atoi(string(parsedData[2]))
+		tx += int64(t)
+	}
+	return rx, tx
 }
 
 // fetchCommandInfo derives command information from /proc/<pid>/cmdline file

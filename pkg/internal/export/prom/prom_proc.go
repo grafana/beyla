@@ -76,14 +76,18 @@ type procMetricsReporter struct {
 	diskAttrs []attributes.Field[*process.Status, string]
 	disk      *Expirer[prometheus.Counter]
 
+	netAttrs []attributes.Field[*process.Status, string]
+	net      *Expirer[prometheus.Counter]
+
 	// the observation code for CPU metrics will be different depending on
 	// the "process.cpu.state" attribute being selected or not
 	cpuTimeObserver        func(*process.Status)
 	cpuUtilizationObserver func(*process.Status)
 
 	// the observation code for IO metrics will be different depending on
-	// the "disk.io.direction" attributes
+	// the "*.io.direction" attributes
 	diskObserver func(*process.Status)
+	netObserver  func(*process.Status)
 }
 
 func newProcReporter(
@@ -107,6 +111,8 @@ func newProcReporter(
 		attributesWithExplicit(provider, attributes.ProcessCPUUtilization, attr2.ProcCPUState)
 	diskLblNames, diskGetters, diskHasDirection :=
 		attributesWithExplicit(provider, attributes.ProcessDiskIO, attr2.ProcDiskIODir)
+	netLblNames, netGetters, netHasDirection :=
+		attributesWithExplicit(provider, attributes.ProcessDiskIO, attr2.ProcNetIODir)
 
 	attrMemory := attributes.PrometheusGetters(process.PromGetters, provider.For(attributes.ProcessMemoryUsage))
 	attrMemoryVirtual := attributes.PrometheusGetters(process.PromGetters, provider.For(attributes.ProcessMemoryVirtual))
@@ -144,6 +150,11 @@ func newProcReporter(
 			Name: attributes.ProcessDiskIO.Prom,
 			Help: "Disk bytes transferred",
 		}, diskLblNames).MetricVec, clock.Time, cfg.Metrics.TTL),
+		netAttrs: netGetters,
+		net: NewExpirer[prometheus.Counter](prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: attributes.ProcessNetIO.Prom,
+			Help: "Network bytes transferred",
+		}, netLblNames).MetricVec, clock.Time, cfg.Metrics.TTL),
 	}
 
 	if cpuTimeHasState {
@@ -161,11 +172,17 @@ func newProcReporter(
 	} else {
 		mr.diskObserver = mr.observeAggregatedDisk
 	}
+	if netHasDirection {
+		mr.netObserver = mr.observeDisaggregatedNet
+	} else {
+		mr.netObserver = mr.observeAggregatedNet
+	}
 
 	mr.promConnect.Register(cfg.Metrics.Port, cfg.Metrics.Path,
 		mr.cpuUtilization, mr.cpuTime,
 		mr.memory, mr.memoryVirtual,
-		mr.disk)
+		mr.disk,
+		mr.net)
 
 	return mr, nil
 }
@@ -190,6 +207,7 @@ func (r *procMetricsReporter) observeMetric(proc *process.Status) {
 	r.memoryVirtual.WithLabelValues(labelValues(proc, r.memoryVirtualAttrs)...).
 		Set(float64(proc.MemoryVMSBytes))
 	r.diskObserver(proc)
+	r.netObserver(proc)
 }
 
 // aggregated observers report all the CPU metrics in a single data point
@@ -243,6 +261,19 @@ func (r *procMetricsReporter) observeDisaggregatedDisk(proc *process.Status) {
 	r.disk.WithLabelValues(readLabels...).Add(float64(proc.IOReadBytesDelta))
 	writeLabels := append([]string{"write"}, commonLabels...)
 	r.disk.WithLabelValues(writeLabels...).Add(float64(proc.IOWriteBytesDelta))
+}
+
+func (r *procMetricsReporter) observeAggregatedNet(proc *process.Status) {
+	r.net.WithLabelValues(labelValues(proc, r.netAttrs)...).
+		Add(float64(proc.NetTxBytesDelta + proc.NetRcvBytesDelta))
+}
+
+func (r *procMetricsReporter) observeDisaggregatedNet(proc *process.Status) {
+	commonLabels := labelValues(proc, r.netAttrs)
+	readLabels := append([]string{"transmit"}, commonLabels...)
+	r.net.WithLabelValues(readLabels...).Add(float64(proc.NetTxBytesDelta))
+	writeLabels := append([]string{"receive"}, commonLabels...)
+	r.net.WithLabelValues(writeLabels...).Add(float64(proc.NetRcvBytesDelta))
 }
 
 // attributesWithExplicit returns, for a metric name definition,

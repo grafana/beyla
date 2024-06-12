@@ -617,6 +617,9 @@ func TraceName(span *request.Span) string {
 		}
 		return span.Method
 	case request.EventTypeKafkaClient:
+		if span.Path == "" {
+			return span.Method
+		}
 		return fmt.Sprintf("%s %s", span.Path, span.Method)
 	}
 	return ""

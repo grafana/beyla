@@ -3,7 +3,7 @@ package ebpfcommon
 import (
 	"encoding/binary"
 	"errors"
-	"strings"
+	"regexp"
 	"unsafe"
 
 	trace2 "go.opentelemetry.io/otel/trace"
@@ -185,7 +185,7 @@ func isValidClientID(buffer []byte, realClientIDSize int) bool {
 
 func getTopicName(pkt []byte, offset int, op Operation, apiVersion int16) (string, error) {
 	if apiVersion >= 13 { // topic name is only a UUID, no need to parse it
-		return "", nil
+		return "*", nil
 	}
 
 	offset += 4
@@ -206,21 +206,23 @@ func getTopicName(pkt []byte, offset int, op Operation, apiVersion int16) (strin
 		maxLen = len(pkt)
 	}
 	topicName := pkt[offset:maxLen]
-	if op == Fetch && apiVersion > 11 { // topic name has the following format: uuid\x00\x02\tTOPIC\x02\x00
-		topicNames := strings.Split(string(topicName), "\t")
-		if len(topicNames) >= 2 {
-			topicNames := strings.Split(string(topicNames[1]), "\x02\x00")
-			if len(topicNames) > 0 {
-				topicName = []byte(topicNames[0])
-			}
-		} else {
-			topicName = []byte(topicNames[0])
-		}
+	if op == Fetch && apiVersion > 11 {
+		// topic name has the following format: uuid\x00\x02\tTOPIC\x02\x00
+		topicName = []byte(extractTopic(string(topicName)))
 	}
 	if isValidKafkaString(topicName, len(topicName), int(topicNameSize), false) {
 		return string(topicName), nil
 	}
 	return "", errors.New("invalid topic name")
+}
+
+func extractTopic(input string) string {
+	re := regexp.MustCompile("\x02\t(.*)\x02")
+	matches := re.FindStringSubmatch(input)
+	if len(matches) > 1 {
+		return matches[1]
+	}
+	return ""
 }
 
 func getTopicNameSize(pkt []byte, offset int, op Operation, apiVersion int16) (int, error) {
@@ -235,7 +237,7 @@ func getTopicNameSize(pkt []byte, offset int, op Operation, apiVersion int16) (i
 	} else {
 		topicNameSize = int(binary.BigEndian.Uint16(pkt[offset:]))
 	}
-	if topicNameSize <= 0 || topicNameSize > 255 {
+	if topicNameSize <= 0 {
 		return 0, errors.New("invalid topic name size")
 	}
 	return topicNameSize, nil

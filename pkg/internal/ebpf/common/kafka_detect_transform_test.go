@@ -1,6 +1,7 @@
 package ebpfcommon
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -38,7 +39,7 @@ func TestProcessKafkaRequest(t *testing.T) {
 			expected: &KafkaInfo{
 				ClientID:    "consumer-frauddetectionservice-1",
 				Operation:   Fetch,
-				Topic:       "",
+				Topic:       "*",
 				TopicOffset: 67,
 			},
 		},
@@ -170,4 +171,92 @@ func TestIsValidKafkaHeader(t *testing.T) {
 	header.ClientIDSize = -2
 	result = isValidKafkaHeader(header)
 	assert.False(t, result)
+}
+
+func TestReadUnsignedVarint(t *testing.T) {
+	tests := []struct {
+		name     string
+		data     []byte
+		expected int
+		err      error
+	}{
+		{
+			name:     "Valid varint",
+			data:     []byte{0x8E, 0x02},
+			expected: 270,
+			err:      nil,
+		},
+		{
+			name:     "Valid varint with multiple bytes",
+			data:     []byte{0x8E, 0x8E, 0x02},
+			expected: 34574,
+			err:      nil,
+		},
+		{
+			name:     "Illegal varint",
+			data:     []byte{0x8E, 0x8E, 0x8E, 0x8E, 0x8E, 0x8E, 0x8E, 0x8E},
+			expected: 0,
+			err:      errors.New("illegal varint"),
+		},
+		{
+			name:     "Incomplete varint",
+			data:     []byte{0x8E},
+			expected: 0,
+			err:      errors.New("data ended before varint was complete"),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := readUnsignedVarint(tt.data)
+			assert.Equal(t, tt.expected, result)
+			assert.Equal(t, tt.err, err)
+		})
+	}
+}
+
+func TestExtractTopic(t *testing.T) {
+	tests := []struct {
+		name   string
+		input  string
+		output string
+	}{
+		{
+			name:   "Valid topic",
+			input:  "c09-4400-b6ee-86fafef94feb\x00\x02\tmy-topic\x02\x00\x00\x00\x00\x00\x00",
+			output: "my-topic",
+		},
+		{
+			name:   "Valid topic (without uuid)",
+			input:  "\x00\x02\tmy_topic\x02\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00d\x00\x00",
+			output: "my_topic",
+		},
+		{
+			name:   "Invalid format (without \t)",
+			input:  "\x00\x02my_topic\x02\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00d\x00\x00",
+			output: "",
+		},
+		{
+			name:   "Invalid format (without \x02)",
+			input:  "\x00\tmy_topic\x00\x00\x00\x00\x00\x00\x00\x00",
+			output: "",
+		},
+		{
+			name:   "No topic",
+			input:  "\x02\t\x02",
+			output: "",
+		},
+		{
+			name:   "Invalid input",
+			input:  "invalid",
+			output: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := extractTopic(tt.input)
+			assert.Equal(t, tt.output, result)
+		})
+	}
 }

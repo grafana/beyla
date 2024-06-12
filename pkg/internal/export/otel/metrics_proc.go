@@ -78,9 +78,7 @@ type procMetrics struct {
 	cpuUtilisation *Expirer[*process.Status, metric2.Float64Observer, *Gauge, float64]
 	memory         *Expirer[*process.Status, metric2.Int64Observer, *IntGauge, int64]
 	memoryVirtual  *Expirer[*process.Status, metric2.Int64Observer, *IntGauge, int64]
-	// disk values are reported as counte type, but we internally will maintain a Gauge
-	// as it is more convenient according to the way we parse the information in the /proc filesystem
-	disk *Expirer[*process.Status, metric2.Int64Observer, *IntGauge, int64]
+	disk           *Expirer[*process.Status, metric2.Int64Observer, *IntCounter, int64]
 }
 
 func ProcMetricsExporterProvider(
@@ -241,7 +239,7 @@ func (me *procMetricsExporter) newMetricSet(service *svc.ID) (*procMetrics, erro
 	// disk metrics are defined as Counter in the Otel specification, but we
 	// internally treat them as gauges, as it's aligned to what we get from the /proc filesystem
 	m.disk = NewExpirer[*process.Status, metric2.Int64Observer](
-		NewIntGauge, me.attrDisk, timeNow, me.cfg.Metrics.TTL)
+		NewIntCounter, me.attrDisk, timeNow, me.cfg.Metrics.TTL)
 	if _, err := meter.Int64ObservableCounter(
 		attributes.ProcessDiskIO.OTEL,
 		metric2.WithDescription("Disk bytes transferred"),
@@ -308,10 +306,10 @@ func cpuUtilisationDisaggregatedObserver(reporter *procMetrics, record *process.
 }
 
 func diskAggregatedObserver(reporter *procMetrics, record *process.Status) {
-	reporter.disk.ForRecord(record).Set(int64(record.IOReadBytes + record.IOWriteBytes))
+	reporter.disk.ForRecord(record).Add(int64(record.IOReadBytesDelta + record.IOWriteBytesDelta))
 }
 
 func diskDisaggregatedObserver(reporter *procMetrics, record *process.Status) {
-	reporter.disk.ForRecord(record, diskIODirRead).Set(int64(record.IOReadBytes))
-	reporter.disk.ForRecord(record, diskIODirWrite).Set(int64(record.IOWriteBytes))
+	reporter.disk.ForRecord(record, diskIODirRead).Add(int64(record.IOReadBytesDelta))
+	reporter.disk.ForRecord(record, diskIODirWrite).Add(int64(record.IOWriteBytesDelta))
 }

@@ -43,10 +43,11 @@ type Status struct {
 	ParentProcessID int32
 	ThreadCount     int32
 	FdCount         int32
-	IOReadCount     uint64
-	IOWriteCount    uint64
-	IOReadBytes     uint64
-	IOWriteBytes    uint64
+
+	IOReadCount       uint64
+	IOWriteCount      uint64
+	IOReadBytesDelta  uint64
+	IOWriteBytesDelta uint64
 
 	Service *svc.ID
 }

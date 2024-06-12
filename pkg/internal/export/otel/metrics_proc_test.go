@@ -53,12 +53,12 @@ func TestProcMetrics_Aggregated(t *testing.T) {
 		{Command: "foo", Service: &svc.ID{UID: "foo"},
 			CPUUtilisationWait: 3, CPUUtilisationSystem: 2, CPUUtilisationUser: 1,
 			CPUTimeUserDelta: 30, CPUTimeWaitDelta: 20, CPUTimeSystemDelta: 10,
-			IOReadBytes: 123, IOWriteBytes: 456,
+			IOReadBytesDelta: 123, IOWriteBytesDelta: 456,
 		},
 		{Command: "bar", Service: &svc.ID{UID: "bar"},
 			CPUUtilisationWait: 31, CPUUtilisationSystem: 21, CPUUtilisationUser: 11,
 			CPUTimeUserDelta: 301, CPUTimeWaitDelta: 201, CPUTimeSystemDelta: 101,
-			IOReadBytes: 321, IOWriteBytes: 654,
+			IOReadBytesDelta: 321, IOWriteBytesDelta: 654,
 		},
 	}
 
@@ -105,6 +105,7 @@ func TestProcMetrics_Aggregated(t *testing.T) {
 		{Command: "foo", Service: &svc.ID{UID: "foo"},
 			CPUUtilisationWait: 4, CPUUtilisationSystem: 1, CPUUtilisationUser: 2,
 			CPUTimeUserDelta: 3, CPUTimeWaitDelta: 2, CPUTimeSystemDelta: 1,
+			IOReadBytesDelta: 1, IOWriteBytesDelta: 2,
 		},
 	}
 
@@ -133,6 +134,13 @@ func TestProcMetrics_Aggregated(t *testing.T) {
 		require.Equal(t, map[string]string{"process.command": "bar"}, metric.Attributes)
 		require.EqualValues(t, 63, metric.FloatVal)
 	})
+	test.Eventually(t, timeout, func(t require.TestingT) {
+		metric := readChan(t, otlp.Records, timeout)
+		require.Equal(t, "process.disk.io", metric.Name)
+		require.Equal(t, map[string]string{"process.command": "foo"}, metric.Attributes)
+		require.EqualValues(t, 123+456+1+2, metric.IntVal)
+	})
+
 }
 
 func TestProcMetrics_Disaggregated(t *testing.T) {
@@ -172,7 +180,7 @@ func TestProcMetrics_Disaggregated(t *testing.T) {
 		{Command: "foo", Service: &svc.ID{UID: "foo"},
 			CPUUtilisationWait: 3, CPUUtilisationSystem: 2, CPUUtilisationUser: 1,
 			CPUTimeUserDelta: 30, CPUTimeWaitDelta: 20, CPUTimeSystemDelta: 10,
-			IOReadBytes: 123, IOWriteBytes: 456,
+			IOReadBytesDelta: 123, IOWriteBytesDelta: 456,
 		},
 	}
 

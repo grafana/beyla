@@ -65,7 +65,7 @@ func TestProcPrometheusEndpoint_AggregatedMetrics(t *testing.T) {
 	}
 
 	// THEN the metrics are exported adding system/user/wait times into a single datapoint
-	test.Eventually(t, 50000*timeout, func(t require.TestingT) {
+	test.Eventually(t, timeout, func(t require.TestingT) {
 		exported := getMetrics(t, promURL)
 		assert.Contains(t, exported, `process_cpu_utilization_ratio{process_command="foo"} 6`)
 		assert.Contains(t, exported, `process_cpu_time_seconds_total{process_command="foo"} 60`)

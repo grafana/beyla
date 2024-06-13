@@ -487,9 +487,6 @@ int socket__http_filter(struct __sk_buff *skb) {
     if (!tcp_close(&tcp) && tcp_empty(&tcp, skb)) {
         return 0;
     }
-
-    // sorting must happen here, before we check or set dups
-    sort_connection_info(&conn);
     
     // we don't want to read the whole buffer for every packed that passes our checks, we read only a bit and check if it's truly HTTP request/response.
     unsigned char buf[MIN_HTTP_SIZE] = {0};
@@ -501,7 +498,10 @@ int socket__http_filter(struct __sk_buff *skb) {
     }
 
     u8 packet_type = 0;
-    if (is_http(buf, len, &packet_type)) { // we must check tcp_close second, a packet can be a close and a response
+    if (is_http(buf, len, &packet_type)) { // we must check tcp_close second, a packet can be a close and a response      
+        //dbg_print_http_connection_info(&conn); // commented out since GitHub CI doesn't like this call
+        sort_connection_info(&conn);
+
         http_info_t info = {0};
         info.conn_info = conn;
 

@@ -328,15 +328,12 @@ static __always_inline bool still_reading(http_info_t *info) {
 // info in user space, effectively reversing the flow of the operation. We keep track of the original destination port
 // and we undo the swap in the data collections we send to user space.
 static __always_inline void fixup_connection_info(connection_info_t *conn_info, u8 client, u16 orig_dport) {
-    // The destination port is the server port
-    bpf_printk("Using connection info");
-    dbg_print_http_connection_info(conn_info); // commented out since GitHub CI doesn't like this call
-
+    // The destination port is the server port in userspace
     if ((client && conn_info->d_port != orig_dport) || 
         (!client && conn_info->d_port == orig_dport)) {
-        bpf_printk("Swapped it, client = %d, orig_dport = %d", client, orig_dport);
+        bpf_dbg_printk("Swapped connection info for userspace, client = %d, orig_dport = %d", client, orig_dport);
         swap_connection_info_order(conn_info);
-        dbg_print_http_connection_info(conn_info); // commented out since GitHub CI doesn't like this call
+        //dbg_print_http_connection_info(conn_info); // commented out since GitHub CI doesn't like this call
     }
 }
 

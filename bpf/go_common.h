@@ -144,6 +144,7 @@ static __always_inline void server_trace_parent(void *goroutine_addr, tp_info_t 
 
         if (info) {
             connection_info_t conn = *info;
+            // Must sort here, Go connection info retains the original ordering.
             sort_connection_info(&conn);
             bpf_dbg_printk("Looking up traceparent for connection info");
             tp_info_pid_t *tp_p = trace_info_for_connection(&conn);
@@ -245,6 +246,11 @@ static __always_inline void get_conn_info_from_fd(void *fd_ptr, connection_info_
             read_ip_and_port(info->d_addr, &info->d_port, raddr_ptr);
 
             //dbg_print_http_connection_info(info);
+
+            // IMPORTANT: Unlike kprobes, where we track the sorted connection info
+            // in Go we keep the original connection info order, since we only need it
+            // sorted when we make server requests or when we populate the trace_map for
+            // black box context propagation.
         }
     }
 }

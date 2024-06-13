@@ -281,7 +281,7 @@ int BPF_KPROBE(kprobe_tcp_sendmsg, struct sock *sk, struct msghdr *msg, size_t s
 
     if (parse_sock_info(sk, &s_args.p_conn.conn)) {
         u16 orig_dport = s_args.p_conn.conn.d_port;
-        dbg_print_http_connection_info(&s_args.p_conn.conn); // commented out since GitHub CI doesn't like this call
+        //dbg_print_http_connection_info(&s_args.p_conn.conn); // commented out since GitHub CI doesn't like this call
         sort_connection_info(&s_args.p_conn.conn);
         s_args.p_conn.pid = pid_from_pid_tgid(id);
 
@@ -456,7 +456,7 @@ int BPF_KRETPROBE(kretprobe_tcp_recvmsg, int copied_len) {
 
     if (parse_sock_info((struct sock *)args->sock_ptr, &info.conn)) {
         u16 orig_dport = info.conn.d_port;
-        dbg_print_http_connection_info(&info.conn);
+        //dbg_print_http_connection_info(&info.conn);
         sort_connection_info(&info.conn);
         info.pid = pid_from_pid_tgid(id);
         handle_buf_with_connection(&info, (void *)args->iovec_ptr, copied_len, NO_SSL, TCP_RECV, orig_dport);

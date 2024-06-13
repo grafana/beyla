@@ -482,7 +482,7 @@ int uprobe_grpcFramerWriteHeaders(struct pt_regs *ctx) {
     void *framer = GO_PARAM1(ctx);
     u64 stream_id = (u64)GO_PARAM2(ctx);
 
-    bpf_printk("framer=%llx, stream_id=%lld, framer_w_pos %llx", framer, ((u64)stream_id), framer_w_pos);
+    bpf_dbg_printk("framer=%llx, stream_id=%lld, framer_w_pos %llx", framer, ((u64)stream_id), framer_w_pos);
 
     u32 stream_lookup = (u32)stream_id;
 

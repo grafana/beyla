@@ -39,7 +39,7 @@ func printFunc() (pipe.FinalFunc[[]request.Span], error) {
 					spans[i].Method,
 					spans[i].Path,
 					spans[i].Peer+" as "+spans[i].PeerName,
-					spans[i].ID,
+					spans[i].PeerPort,
 					spans[i].Host+" as "+spans[i].HostName,
 					spans[i].HostPort,
 					spans[i].ContentLength,

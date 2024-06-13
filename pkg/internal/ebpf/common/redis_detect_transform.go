@@ -3,7 +3,6 @@ package ebpfcommon
 import (
 	"bytes"
 	"encoding/binary"
-	"fmt"
 	"strings"
 	"unsafe"
 
@@ -147,6 +146,7 @@ func TCPToRedisToSpan(trace *TCPRequestInfo, op, text string, status int) reques
 		Method:        op,
 		Path:          text,
 		Peer:          peer,
+		PeerPort:      int(trace.ConnInfo.S_port),
 		Host:          hostname,
 		HostPort:      hostPort,
 		ContentLength: 0,
@@ -188,10 +188,6 @@ func ReadGoRedisRequestIntoSpan(record *ringbuf.Record) (request.Span, bool, err
 	if !ok {
 		// We know it's redis request here, it just didn't complete correctly
 		event.Err = 1
-	}
-
-	if strings.Contains(text, "$") {
-		fmt.Printf("** BAD ** %s %v\n", text, event.Buf[:])
 	}
 
 	return request.Span{

@@ -177,10 +177,10 @@ var genericServiceID = svc.ID{SDKLanguage: svc.InstrumentableGeneric}
 func http2InfoToSpan(info *BPFHTTP2Info, method, path, peer, host string, status int, protocol Protocol) request.Span {
 	return request.Span{
 		Type:          info.eventType(protocol),
-		ID:            uint64(info.ConnInfo.S_port),
 		Method:        method,
 		Path:          removeQuery(path),
 		Peer:          peer,
+		PeerPort:      int(info.ConnInfo.S_port),
 		Host:          host,
 		HostPort:      int(info.ConnInfo.D_port),
 		ContentLength: int64(info.Len),

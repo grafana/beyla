@@ -64,7 +64,7 @@ func NewPrometheusReporter(cfg *PrometheusConfig, manager *connector.PrometheusM
 		}, []string{"port", "path"}),
 		discoveredServices: prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Name: "beyla_discovered_services",
-			Help: "discovered services by the eBPF tracer",
+			Help: "discovered services by Beyla",
 		}, []string{"service"}),
 	}
 	manager.Register(cfg.Port, cfg.Path,

@@ -28,6 +28,7 @@ type PrometheusReporter struct {
 	otelTraceExports     prometheus.Counter
 	otelTraceExportErrs  *prometheus.CounterVec
 	prometheusRequests   *prometheus.CounterVec
+	discoveredServices   *prometheus.GaugeVec
 }
 
 func NewPrometheusReporter(cfg *PrometheusConfig, manager *connector.PrometheusManager) *PrometheusReporter {
@@ -61,6 +62,10 @@ func NewPrometheusReporter(cfg *PrometheusConfig, manager *connector.PrometheusM
 			Name: "prometheus_http_requests",
 			Help: "requests towards the Prometheus Scrape endpoint",
 		}, []string{"port", "path"}),
+		discoveredServices: prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Name: "beyla_discovered_services",
+			Help: "discovered services by the eBPF tracer",
+		}, []string{"service"}),
 	}
 	manager.Register(cfg.Port, cfg.Path,
 		pr.tracerFlushes,
@@ -68,7 +73,8 @@ func NewPrometheusReporter(cfg *PrometheusConfig, manager *connector.PrometheusM
 		pr.otelMetricExportErrs,
 		pr.otelTraceExports,
 		pr.otelTraceExportErrs,
-		pr.prometheusRequests)
+		pr.prometheusRequests,
+		pr.discoveredServices)
 
 	return pr
 }
@@ -99,4 +105,12 @@ func (p *PrometheusReporter) OTELTraceExportError(err error) {
 
 func (p *PrometheusReporter) PrometheusRequest(port, path string) {
 	p.prometheusRequests.WithLabelValues(port, path).Inc()
+}
+
+func (p *PrometheusReporter) DiscoverService(service string) {
+	p.discoveredServices.WithLabelValues(service).Set(1)
+}
+
+func (p *PrometheusReporter) UndiscoverService(service string) {
+	p.discoveredServices.WithLabelValues(service).Set(0)
 }

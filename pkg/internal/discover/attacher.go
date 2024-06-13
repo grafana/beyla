@@ -95,6 +95,7 @@ func (ta *TraceAttacher) getTracer(ie *Instrumentable) (*ebpf.ProcessTracer, boo
 		ta.log.Debug(".done")
 		return nil, false
 	}
+	ta.Metrics.DiscoverService(ie.FileInfo.ExecutableName())
 	ta.log.Info("instrumenting process", "cmd", ie.FileInfo.CmdExePath, "pid", ie.FileInfo.Pid)
 
 	// builds a tracer for that executable
@@ -205,6 +206,7 @@ func (ta *TraceAttacher) notifyProcessDeletion(ie *Instrumentable) {
 		// notifying the tracer to block any trace from that PID
 		// to avoid that a new process reusing this PID could send traces
 		// unless explicitly allowed
+		ta.Metrics.UndiscoverService(ie.FileInfo.ExecutableName())
 		tracer.BlockPID(uint32(ie.FileInfo.Pid), ie.FileInfo.Ns)
 
 		// if there are no more trace instances for a Go program, we need to notify that

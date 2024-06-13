@@ -1,7 +1,7 @@
 docker-compose:
   generator: generic
   files:
-    - ../docker-compose-beyla-kafka.yml
+    - ../docker-compose-beyla-java-kafka.yml
 input:
   - path: '/message'
 
@@ -35,3 +35,4 @@ expected:
       value: "== 0"
     - promql: 'messaging_process_duration_bucket{le="10"}'
       value: "> 0"
+

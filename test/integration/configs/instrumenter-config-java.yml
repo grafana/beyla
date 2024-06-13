@@ -12,3 +12,9 @@ attributes:
     process_cpu_utilization:
       include: ["*"]
       exclude: ["process_cpu_state"]
+    process_memory_usage:
+      include: ["*"]
+    process_memory_virtual:
+      include: ["*"]
+    process_disk_io:
+      include: ["*"]

@@ -114,6 +114,14 @@ func TestGauge(t *testing.T) {
 	assert.Equal(t, 456.123, g.Load())
 }
 
+func TestIntGauge(t *testing.T) {
+	g := NewIntGauge(attribute.Set{})
+	g.Set(123)
+	assert.EqualValues(t, 123, g.Load())
+	g.Set(456)
+	assert.EqualValues(t, 456, g.Load())
+}
+
 func TestIntCounter(t *testing.T) {
 	g := NewIntCounter(attribute.Set{})
 	g.Add(123)

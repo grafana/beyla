@@ -3,6 +3,7 @@ package ebpfcommon
 import (
 	"encoding/binary"
 	"errors"
+	"regexp"
 	"unsafe"
 
 	trace2 "go.opentelemetry.io/otel/trace"
@@ -45,6 +46,8 @@ func (k Operation) String() string {
 
 const KafkaMinLength = 14
 
+var topicRegex = regexp.MustCompile("\x02\t(.*)\x02")
+
 // ProcessKafkaRequest processes a TCP packet and returns error if the packet is not a valid Kafka request.
 // Otherwise, return kafka.Info with the processed data.
 func ProcessPossibleKafkaEvent(pkt []byte, rpkt []byte) (*KafkaInfo, error) {
@@ -52,10 +55,10 @@ func ProcessPossibleKafkaEvent(pkt []byte, rpkt []byte) (*KafkaInfo, error) {
 	if err != nil {
 		k, err = ProcessKafkaRequest(rpkt)
 	}
-
 	return k, err
 }
 
+// https://kafka.apache.org/protocol.html
 func ProcessKafkaRequest(pkt []byte) (*KafkaInfo, error) {
 	k := &KafkaInfo{}
 	if len(pkt) < KafkaMinLength {
@@ -81,7 +84,7 @@ func ProcessKafkaRequest(pkt []byte) (*KafkaInfo, error) {
 		return k, err
 	}
 
-	topic, err := getTopicName(pkt, offset)
+	topic, err := getTopicName(pkt, offset, k.Operation, header.APIVersion)
 	if err != nil {
 		return k, err
 	}
@@ -110,11 +113,11 @@ func isValidKafkaHeader(header *Header) bool {
 	}
 	switch Operation(header.APIKey) {
 	case Fetch:
-		if header.APIVersion > 11 {
+		if header.APIVersion > 16 { // latest: Fetch Request (Version: 16)
 			return false
 		}
 	case Produce:
-		if header.APIVersion == 0 || header.APIVersion > 8 {
+		if header.APIVersion == 0 || header.APIVersion > 10 { // latest: Produce Request (Version: 10)
 			return false
 		}
 	default:
@@ -182,29 +185,63 @@ func isValidClientID(buffer []byte, realClientIDSize int) bool {
 	return isValidKafkaString(buffer, len(buffer), realClientIDSize, true)
 }
 
-func getTopicName(pkt []byte, offset int) (string, error) {
+func getTopicName(pkt []byte, offset int, op Operation, apiVersion int16) (string, error) {
+	if apiVersion >= 13 { // topic name is only a UUID, no need to parse it
+		return "*", nil
+	}
+
 	offset += 4
 	if offset > len(pkt) {
 		return "", errors.New("invalid buffer length")
 	}
-	topicNameSize := int16(binary.BigEndian.Uint16(pkt[offset:]))
-	if topicNameSize <= 0 || topicNameSize > 255 {
-		return "", errors.New("invalid topic name size")
+	topicNameSize, err := getTopicNameSize(pkt, offset, op, apiVersion)
+	if err != nil {
+		return "", err
 	}
 	offset += 2
 
 	if offset > len(pkt) {
 		return "", nil
 	}
-	maxLen := offset + int(topicNameSize)
+	maxLen := offset + topicNameSize
 	if len(pkt) < maxLen {
 		maxLen = len(pkt)
 	}
 	topicName := pkt[offset:maxLen]
+	if op == Fetch && apiVersion > 11 {
+		// topic name has the following format: uuid\x00\x02\tTOPIC\x02\x00
+		topicName = []byte(extractTopic(string(topicName)))
+	}
 	if isValidKafkaString(topicName, len(topicName), int(topicNameSize), false) {
 		return string(topicName), nil
 	}
 	return "", errors.New("invalid topic name")
+}
+
+func extractTopic(input string) string {
+	matches := topicRegex.FindStringSubmatch(input)
+	if len(matches) > 1 {
+		return matches[1]
+	}
+	return ""
+}
+
+func getTopicNameSize(pkt []byte, offset int, op Operation, apiVersion int16) (int, error) {
+	topicNameSize := 0
+	if (op == Produce && apiVersion > 7) || (op == Fetch && apiVersion > 11) { // topic is a compact string
+		var err error
+		topicNameSize, err = readUnsignedVarint(pkt[offset+1:])
+		topicNameSize--
+		if err != nil {
+			return 0, err
+		}
+	} else {
+		topicNameSize = int(binary.BigEndian.Uint16(pkt[offset:]))
+	}
+	if topicNameSize <= 0 {
+		return 0, errors.New("invalid topic name size")
+	}
+	return topicNameSize, nil
 }
 
 func getTopicOffsetFromProduceOperation(header *Header, pkt []byte, offset *int) (bool, error) {
@@ -235,13 +272,19 @@ func getTopicOffsetFromProduceOperation(header *Header, pkt []byte, offset *int)
 	if timeoutMS < 0 {
 		return false, nil
 	}
-	*offset += 4
+	if header.APIVersion <= 7 {
+		*offset += 4
+	}
 
 	return true, nil
 }
 
 func getTopicOffsetFromFetchOperation(header *Header) int {
 	offset := 3 * 4 // 3 * sizeof(int32)
+
+	if header.APIVersion >= 15 {
+		offset -= 4 // no replica id
+	}
 
 	if header.APIVersion >= 3 {
 		offset += 4 // max_bytes
@@ -254,6 +297,24 @@ func getTopicOffsetFromFetchOperation(header *Header) int {
 	}
 
 	return offset
+}
+
+func readUnsignedVarint(data []byte) (int, error) {
+	value := 0
+	i := 0
+	for idx := 0; idx < len(data); idx++ {
+		b := data[idx]
+		if (b & 0x80) == 0 {
+			value |= int(b) << i
+			return value, nil
+		}
+		value |= int(b&0x7F) << i
+		i += 7
+		if i > 28 {
+			return 0, errors.New("illegal varint")
+		}
+	}
+	return 0, errors.New("data ended before varint was complete")
 }
 
 func TCPToKafkaToSpan(trace *TCPRequestInfo, data *KafkaInfo) request.Span {

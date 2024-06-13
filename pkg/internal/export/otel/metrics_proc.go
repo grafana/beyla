@@ -23,6 +23,9 @@ var (
 	stateWaitAttr   = attr2.ProcCPUState.OTEL().String("wait")
 	stateUserAttr   = attr2.ProcCPUState.OTEL().String("user")
 	stateSystemAttr = attr2.ProcCPUState.OTEL().String("system")
+
+	diskIODirRead  = attr2.ProcDiskIODir.OTEL().String("read")
+	diskIODirWrite = attr2.ProcDiskIODir.OTEL().String("write")
 )
 
 // ProcMetricsConfig extends MetricsConfig for process metrics
@@ -50,13 +53,20 @@ type procMetricsExporter struct {
 
 	log *slog.Logger
 
-	attrCPUTime []attributes.Field[*process.Status, attribute.KeyValue]
-	attrCPUUtil []attributes.Field[*process.Status, attribute.KeyValue]
+	attrCPUTime       []attributes.Field[*process.Status, attribute.KeyValue]
+	attrCPUUtil       []attributes.Field[*process.Status, attribute.KeyValue]
+	attrMemory        []attributes.Field[*process.Status, attribute.KeyValue]
+	attrMemoryVirtual []attributes.Field[*process.Status, attribute.KeyValue]
+	attrDisk          []attributes.Field[*process.Status, attribute.KeyValue]
 
 	// the observation code for CPU metrics will be different depending on
 	// the "process.cpu.state" attribute being selected or not
 	cpuTimeObserver        func(*procMetrics, *process.Status)
 	cpuUtilisationObserver func(*procMetrics, *process.Status)
+
+	// the observation code for disk metrics will be different depending on
+	// the disk.io.direction attribute being selected or not
+	diskObserver func(*procMetrics, *process.Status)
 }
 
 type procMetrics struct {
@@ -66,6 +76,9 @@ type procMetrics struct {
 
 	cpuTime        *Expirer[*process.Status, metric2.Float64Observer, *FloatCounter, float64]
 	cpuUtilisation *Expirer[*process.Status, metric2.Float64Observer, *Gauge, float64]
+	memory         *Expirer[*process.Status, metric2.Int64Observer, *IntGauge, int64]
+	memoryVirtual  *Expirer[*process.Status, metric2.Int64Observer, *IntGauge, int64]
+	disk           *Expirer[*process.Status, metric2.Int64Observer, *IntCounter, int64]
 }
 
 func ProcMetricsExporterProvider(
@@ -98,26 +111,42 @@ func newProcMetricsExporter(
 		return nil, fmt.Errorf("process OTEL exporter attributes: %w", err)
 	}
 
-	attrCPUTime, cpuTimeHasState := cpuAttributes(attrProv, attributes.ProcessCPUTime)
-	attrCPUUtil, cpuUtilHasState := cpuAttributes(attrProv, attributes.ProcessCPUUtilization)
+	cpuTimeNames := attrProv.For(attributes.ProcessCPUTime)
+	attrCPUTime := attributes.OpenTelemetryGetters(process.OTELGetters, cpuTimeNames)
+
+	cpuUtilNames := attrProv.For(attributes.ProcessCPUUtilization)
+	attrCPUUtil := attributes.OpenTelemetryGetters(process.OTELGetters, cpuUtilNames)
+
+	diskNames := attrProv.For(attributes.ProcessDiskIO)
+	attrDisk := attributes.OpenTelemetryGetters(process.OTELGetters, diskNames)
 
 	mr := &procMetricsExporter{
+		log:         log,
 		ctx:         ctx,
 		cfg:         cfg,
 		clock:       expire.NewCachedClock(timeNow),
 		attrCPUTime: attrCPUTime,
 		attrCPUUtil: attrCPUUtil,
-		log:         log,
+		attrMemory: attributes.OpenTelemetryGetters(process.OTELGetters,
+			attrProv.For(attributes.ProcessMemoryUsage)),
+		attrMemoryVirtual: attributes.OpenTelemetryGetters(process.OTELGetters,
+			attrProv.For(attributes.ProcessMemoryVirtual)),
+		attrDisk: attrDisk,
 	}
-	if cpuTimeHasState {
+	if slices.Contains(cpuTimeNames, attr2.ProcCPUState) {
 		mr.cpuTimeObserver = cpuTimeDisaggregatedObserver
 	} else {
 		mr.cpuTimeObserver = cpuTimeAggregatedObserver
 	}
-	if cpuUtilHasState {
+	if slices.Contains(cpuUtilNames, attr2.ProcCPUState) {
 		mr.cpuUtilisationObserver = cpuUtilisationDisaggregatedObserver
 	} else {
 		mr.cpuUtilisationObserver = cpuUtilisationAggregatedObserver
+	}
+	if slices.Contains(diskNames, attr2.ProcDiskIODir) {
+		mr.diskObserver = diskDisaggregatedObserver
+	} else {
+		mr.diskObserver = diskAggregatedObserver
 	}
 
 	mr.reporters = NewReporterPool[*procMetrics](cfg.Metrics.ReportersCacheLen,
@@ -181,6 +210,45 @@ func (me *procMetricsExporter) newMetricSet(service *svc.ID) (*procMetrics, erro
 		return nil, err
 	}
 
+	// memory metrics are defined as UpDownCounters in the Otel specification, but we
+	// internally treat them as gauges, as it's aligned to what we get from the /proc filesystem
+	m.memory = NewExpirer[*process.Status, metric2.Int64Observer](
+		NewIntGauge, me.attrMemory, timeNow, me.cfg.Metrics.TTL)
+	if _, err := meter.Int64ObservableUpDownCounter(
+		attributes.ProcessMemoryUsage.OTEL,
+		metric2.WithDescription("The amount of physical memory in use"),
+		metric2.WithUnit("By"),
+		metric2.WithInt64Callback(m.memory.Collect),
+	); err != nil {
+		log.Error("creating observable gauge for "+attributes.ProcessMemoryUsage.OTEL, "error", err)
+		return nil, err
+	}
+	// memory metrics are defined as UpDownCounters in the Otel specification, but we
+	// internally treat them as gauges, as it's aligned to what we get from the /proc filesystem
+	m.memoryVirtual = NewExpirer[*process.Status, metric2.Int64Observer](
+		NewIntGauge, me.attrMemory, timeNow, me.cfg.Metrics.TTL)
+	if _, err := meter.Int64ObservableUpDownCounter(
+		attributes.ProcessMemoryVirtual.OTEL,
+		metric2.WithDescription("The amount of committed virtual memory"),
+		metric2.WithUnit("By"),
+		metric2.WithInt64Callback(m.memoryVirtual.Collect),
+	); err != nil {
+		log.Error("creating observable gauge for "+attributes.ProcessMemoryVirtual.OTEL, "error", err)
+		return nil, err
+	}
+	// disk metrics are defined as Counter in the Otel specification, but we
+	// internally treat them as gauges, as it's aligned to what we get from the /proc filesystem
+	m.disk = NewExpirer[*process.Status, metric2.Int64Observer](
+		NewIntCounter, me.attrDisk, timeNow, me.cfg.Metrics.TTL)
+	if _, err := meter.Int64ObservableCounter(
+		attributes.ProcessDiskIO.OTEL,
+		metric2.WithDescription("Disk bytes transferred"),
+		metric2.WithUnit("By"),
+		metric2.WithInt64Callback(m.disk.Collect),
+	); err != nil {
+		log.Error("creating observable gauge for "+attributes.ProcessMemoryVirtual.OTEL, "error", err)
+		return nil, err
+	}
 	return &m, nil
 }
 
@@ -195,13 +263,20 @@ func (me *procMetricsExporter) Do(in <-chan []*process.Status) {
 					err, "service", s.Service)
 				continue
 			}
-			me.log.Debug("reporting data for record", "record", s)
-
-			// TODO: add more process metrics https://opentelemetry.io/docs/specs/semconv/system/process-metrics/
-			me.cpuTimeObserver(reporter, s)
-			me.cpuUtilisationObserver(reporter, s)
+			me.observeMetric(reporter, s)
 		}
 	}
+}
+
+func (me *procMetricsExporter) observeMetric(reporter *procMetrics, s *process.Status) {
+	me.log.Debug("reporting data for record", "record", s)
+
+	me.cpuTimeObserver(reporter, s)
+	me.cpuUtilisationObserver(reporter, s)
+	reporter.memory.ForRecord(s).Set(s.MemoryRSSBytes)
+	reporter.memoryVirtual.ForRecord(s).Set(s.MemoryVMSBytes)
+
+	me.diskObserver(reporter, s)
 }
 
 // aggregated observers report all the CPU metrics in a single data point
@@ -230,21 +305,11 @@ func cpuUtilisationDisaggregatedObserver(reporter *procMetrics, record *process.
 	reporter.cpuUtilisation.ForRecord(record, stateSystemAttr).Set(record.CPUUtilisationSystem)
 }
 
-// cpuAttributes returns, for a metric name definition, the getters for
-// them. It also returns if the invoker must explicitly add the "process.cpu.state" name and value
-func cpuAttributes(
-	provider *attributes.AttrSelector, metricName attributes.Name,
-) (
-	getters []attributes.Field[*process.Status, attribute.KeyValue], containsState bool,
-) {
-	attrNames := provider.For(metricName)
-	// "process_cpu_state" won't be added by OpenTelemetryGetters, as it's not defined in the *process.Status
-	// we need to be aware of the user willing to add it to explicitly choose between
-	// cpuTimeAggregatedObserver and cpuTimeDisggregatedObserver
-	for _, attr := range attrNames {
-		containsState = containsState || attr.OTEL() == attr2.ProcCPUState.OTEL()
-	}
-	getters = attributes.OpenTelemetryGetters(process.OTELGetters, attrNames)
+func diskAggregatedObserver(reporter *procMetrics, record *process.Status) {
+	reporter.disk.ForRecord(record).Add(int64(record.IOReadBytesDelta + record.IOWriteBytesDelta))
+}
 
-	return
+func diskDisaggregatedObserver(reporter *procMetrics, record *process.Status) {
+	reporter.disk.ForRecord(record, diskIODirRead).Add(int64(record.IOReadBytesDelta))
+	reporter.disk.ForRecord(record, diskIODirWrite).Add(int64(record.IOWriteBytesDelta))
 }

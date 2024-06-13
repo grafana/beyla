@@ -56,6 +56,7 @@ type linuxProcess struct {
 	// used to calculate CPU utilization ratios
 	previousCPUStats    CPUInfo
 	previousMeasureTime time.Time
+	previousIOCounters  *process.IOCountersStat
 
 	procFSRoot string
 

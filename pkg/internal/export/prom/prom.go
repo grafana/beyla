@@ -624,7 +624,7 @@ func (r *metricsReporter) labelValuesServiceGraph(span *request.Span) []string {
 	}
 }
 
-func labelNames(getters []attributes.Field[*request.Span, string]) []string {
+func labelNames[T any](getters []attributes.Field[T, string]) []string {
 	labels := make([]string, 0, len(getters))
 	for _, label := range getters {
 		labels = append(labels, label.ExposedName)
@@ -632,7 +632,7 @@ func labelNames(getters []attributes.Field[*request.Span, string]) []string {
 	return labels
 }
 
-func labelValues(s *request.Span, getters []attributes.Field[*request.Span, string]) []string {
+func labelValues[T any](s T, getters []attributes.Field[T, string]) []string {
 	values := make([]string, 0, len(getters))
 	for _, getter := range getters {
 		values = append(values, getter.Get(s))

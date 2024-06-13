@@ -30,6 +30,7 @@ import (
 	"runtime"
 
 	"github.com/hashicorp/golang-lru/v2/simplelru"
+	"github.com/shirou/gopsutil/v3/process"
 
 	"github.com/grafana/beyla/pkg/internal/svc"
 )
@@ -162,15 +163,20 @@ func (ps *Harvester) populateGauges(status *Status, process *linuxProcess) error
 // populateIOCounters fills the status with the IO counters data. For the "X per second" metrics, it requires the
 // last process status for comparative purposes
 func (ps *Harvester) populateIOCounters(status *Status, source *linuxProcess) error {
+	previous := source.previousIOCounters
+	if previous == nil {
+		previous = &process.IOCountersStat{}
+	}
 	ioCounters, err := source.IOCounters()
 	if err != nil {
 		return err
 	}
+	source.previousIOCounters = ioCounters
 	if ioCounters != nil {
 		status.IOReadCount = ioCounters.ReadCount
 		status.IOWriteCount = ioCounters.WriteCount
-		status.IOReadBytes = ioCounters.ReadBytes
-		status.IOWriteBytes = ioCounters.WriteBytes
+		status.IOReadBytesDelta = ioCounters.ReadBytes - previous.ReadBytes
+		status.IOWriteBytesDelta = ioCounters.WriteBytes - previous.WriteBytes
 	}
 	return nil
 }

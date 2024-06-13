@@ -65,10 +65,25 @@ type procMetricsReporter struct {
 	cpuUtilizationAttrs []attributes.Field[*process.Status, string]
 	cpuUtilization      *Expirer[prometheus.Gauge]
 
+	// the OTEL spec for process memory says that this type is an UpDownCounter.
+	// Using Gauge as the nearest type in Prometheus.
+	memoryAttrs []attributes.Field[*process.Status, string]
+	memory      *Expirer[prometheus.Gauge]
+
+	memoryVirtualAttrs []attributes.Field[*process.Status, string]
+	memoryVirtual      *Expirer[prometheus.Gauge]
+
+	diskAttrs []attributes.Field[*process.Status, string]
+	disk      *Expirer[prometheus.Counter]
+
 	// the observation code for CPU metrics will be different depending on
 	// the "process.cpu.state" attribute being selected or not
-	cpuTimeObserver        func([]string, *process.Status)
-	cpuUtilizationObserver func([]string, *process.Status)
+	cpuTimeObserver        func(*process.Status)
+	cpuUtilizationObserver func(*process.Status)
+
+	// the observation code for IO metrics will be different depending on
+	// the "disk.io.direction" attributes
+	diskObserver func(*process.Status)
 }
 
 func newProcReporter(
@@ -86,8 +101,15 @@ func newProcReporter(
 		return nil, fmt.Errorf("network Prometheus exporter attributes enable: %w", err)
 	}
 
-	cpuTimeLblNames, cpuTimeGetters, cpuTimeHasState := cpuAttributes(provider, attributes.ProcessCPUTime)
-	cpuUtilLblNames, cpuUtilGetters, cpuUtilHasState := cpuAttributes(provider, attributes.ProcessCPUUtilization)
+	cpuTimeLblNames, cpuTimeGetters, cpuTimeHasState :=
+		attributesWithExplicit(provider, attributes.ProcessCPUTime, attr2.ProcCPUState)
+	cpuUtilLblNames, cpuUtilGetters, cpuUtilHasState :=
+		attributesWithExplicit(provider, attributes.ProcessCPUUtilization, attr2.ProcCPUState)
+	diskLblNames, diskGetters, diskHasDirection :=
+		attributesWithExplicit(provider, attributes.ProcessDiskIO, attr2.ProcDiskIODir)
+
+	attrMemory := attributes.PrometheusGetters(process.PromGetters, provider.For(attributes.ProcessMemoryUsage))
+	attrMemoryVirtual := attributes.PrometheusGetters(process.PromGetters, provider.For(attributes.ProcessMemoryVirtual))
 
 	clock := expire.NewCachedClock(timeNow)
 	// If service name is not explicitly set, we take the service name as set by the
@@ -107,6 +129,21 @@ func newProcReporter(
 			Name: attributes.ProcessCPUUtilization.Prom,
 			Help: "Difference in process.cpu.time since the last measurement, divided by the elapsed time and number of CPUs available to the process",
 		}, cpuUtilLblNames).MetricVec, clock.Time, cfg.Metrics.TTL),
+		memoryAttrs: attrMemory,
+		memory: NewExpirer[prometheus.Gauge](prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Name: attributes.ProcessMemoryUsage.Prom,
+			Help: "The amount of physical memory in use",
+		}, labelNames(attrMemory)).MetricVec, clock.Time, cfg.Metrics.TTL),
+		memoryVirtualAttrs: attrMemoryVirtual,
+		memoryVirtual: NewExpirer[prometheus.Gauge](prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Name: attributes.ProcessMemoryVirtual.Prom,
+			Help: "The amount of committed virtual memory",
+		}, labelNames(attrMemoryVirtual)).MetricVec, clock.Time, cfg.Metrics.TTL),
+		diskAttrs: diskGetters,
+		disk: NewExpirer[prometheus.Counter](prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: attributes.ProcessDiskIO.Prom,
+			Help: "Disk bytes transferred",
+		}, diskLblNames).MetricVec, clock.Time, cfg.Metrics.TTL),
 	}
 
 	if cpuTimeHasState {
@@ -119,90 +156,119 @@ func newProcReporter(
 	} else {
 		mr.cpuUtilizationObserver = mr.observeAggregatedCPUUtilization
 	}
+	if diskHasDirection {
+		mr.diskObserver = mr.observeDisaggregatedDisk
+	} else {
+		mr.diskObserver = mr.observeAggregatedDisk
+	}
 
-	mr.promConnect.Register(cfg.Metrics.Port, cfg.Metrics.Path, mr.cpuUtilization, mr.cpuTime)
+	mr.promConnect.Register(cfg.Metrics.Port, cfg.Metrics.Path,
+		mr.cpuUtilization, mr.cpuTime,
+		mr.memory, mr.memoryVirtual,
+		mr.disk)
 
 	return mr, nil
 }
 
 func (r *procMetricsReporter) reportMetrics(input <-chan []*process.Status) {
 	go r.promConnect.StartHTTP(r.bgCtx)
-	for flows := range input {
+	for processes := range input {
 		// clock needs to be updated to let the expirer
 		// remove the old metrics
 		r.clock.Update()
-		for _, flow := range flows {
-			timeLabelValues := make([]string, 0, len(r.cpuTimeAttrs))
-			for _, attr := range r.cpuTimeAttrs {
-				timeLabelValues = append(timeLabelValues, attr.Get(flow))
-			}
-			r.cpuTimeObserver(timeLabelValues, flow)
-
-			utilLabelValues := make([]string, 0, len(r.cpuUtilizationAttrs))
-			for _, attr := range r.cpuUtilizationAttrs {
-				utilLabelValues = append(utilLabelValues, attr.Get(flow))
-			}
-			r.cpuUtilizationObserver(utilLabelValues, flow)
+		for _, proc := range processes {
+			r.observeMetric(proc)
 		}
 	}
 }
 
-// aggregated observers report all the CPU metrics in a single data point
-// to be triggered when the user disables the "process_cpu_state" metric
-func (r *procMetricsReporter) observeAggregatedCPUTime(commonLabelValues []string, flow *process.Status) {
-	r.cpuTime.WithLabelValues(commonLabelValues...).
-		Add(flow.CPUTimeUserDelta + flow.CPUTimeSystemDelta + flow.CPUTimeWaitDelta)
+func (r *procMetricsReporter) observeMetric(proc *process.Status) {
+	r.cpuTimeObserver(proc)
+	r.cpuUtilizationObserver(proc)
+	r.memory.WithLabelValues(labelValues(proc, r.memoryAttrs)...).
+		Set(float64(proc.MemoryRSSBytes))
+	r.memoryVirtual.WithLabelValues(labelValues(proc, r.memoryVirtualAttrs)...).
+		Set(float64(proc.MemoryVMSBytes))
+	r.diskObserver(proc)
 }
 
-func (r *procMetricsReporter) observeAggregatedCPUUtilization(commonLabelValues []string, flow *process.Status) {
-	r.cpuUtilization.WithLabelValues(commonLabelValues...).
-		Set(flow.CPUUtilisationUser + flow.CPUUtilisationSystem + flow.CPUUtilisationWait)
+// aggregated observers report all the CPU metrics in a single data point
+// to be triggered when the user disables the "process_cpu_state" metric
+func (r *procMetricsReporter) observeAggregatedCPUTime(proc *process.Status) {
+	r.cpuTime.WithLabelValues(labelValues(proc, r.cpuTimeAttrs)...).
+		Add(proc.CPUTimeUserDelta + proc.CPUTimeSystemDelta + proc.CPUTimeWaitDelta)
+}
+
+func (r *procMetricsReporter) observeAggregatedCPUUtilization(proc *process.Status) {
+	r.cpuUtilization.WithLabelValues(labelValues(proc, r.cpuUtilizationAttrs)...).
+		Set(proc.CPUUtilisationUser + proc.CPUUtilisationSystem + proc.CPUUtilisationWait)
 }
 
 // disaggregated observers report three CPU metrics: system, user and wait time
 // to be triggered when the user enables the "process_cpu_state" metric
-func (r *procMetricsReporter) observeDisaggregatedCPUTime(commonLabelValues []string, flow *process.Status) {
+func (r *procMetricsReporter) observeDisaggregatedCPUTime(proc *process.Status) {
+	commonLabelValues := labelValues(proc, r.cpuTimeAttrs)
+
 	userLabels := append([]string{"user"}, commonLabelValues...)
-	r.cpuTime.WithLabelValues(userLabels...).Add(flow.CPUTimeUserDelta)
+	r.cpuTime.WithLabelValues(userLabels...).Add(proc.CPUTimeUserDelta)
 
 	systemLabels := append([]string{"system"}, commonLabelValues...)
-	r.cpuTime.WithLabelValues(systemLabels...).Add(flow.CPUTimeSystemDelta)
+	r.cpuTime.WithLabelValues(systemLabels...).Add(proc.CPUTimeSystemDelta)
 
 	waitLabels := append([]string{"wait"}, commonLabelValues...)
-	r.cpuTime.WithLabelValues(waitLabels...).Add(flow.CPUTimeWaitDelta)
+	r.cpuTime.WithLabelValues(waitLabels...).Add(proc.CPUTimeWaitDelta)
 }
 
-func (r *procMetricsReporter) observeDisaggregatedCPUUtilization(commonLabelValues []string, flow *process.Status) {
+func (r *procMetricsReporter) observeDisaggregatedCPUUtilization(proc *process.Status) {
+	commonLabelValues := labelValues(proc, r.cpuUtilizationAttrs)
+
 	userLabels := append([]string{"user"}, commonLabelValues...)
-	r.cpuUtilization.WithLabelValues(userLabels...).Set(flow.CPUUtilisationUser)
+	r.cpuUtilization.WithLabelValues(userLabels...).Set(proc.CPUUtilisationUser)
 
 	systemLabels := append([]string{"system"}, commonLabelValues...)
-	r.cpuUtilization.WithLabelValues(systemLabels...).Set(flow.CPUUtilisationSystem)
+	r.cpuUtilization.WithLabelValues(systemLabels...).Set(proc.CPUUtilisationSystem)
 
 	waitLabels := append([]string{"wait"}, commonLabelValues...)
-	r.cpuUtilization.WithLabelValues(waitLabels...).Set(flow.CPUUtilisationWait)
+	r.cpuUtilization.WithLabelValues(waitLabels...).Set(proc.CPUUtilisationWait)
 }
 
-// cpuAttributes returns, for a metric name definition, which attribute names are defined as well as the getters for
-// them. It also returns if the invoker must explicitly add the "process.cpu.state" name and value
-func cpuAttributes(
-	provider *attributes.AttrSelector, metricName attributes.Name,
+func (r *procMetricsReporter) observeAggregatedDisk(proc *process.Status) {
+	r.disk.WithLabelValues(labelValues(proc, r.diskAttrs)...).
+		Add(float64(proc.IOReadBytesDelta + proc.IOWriteBytesDelta))
+}
+
+func (r *procMetricsReporter) observeDisaggregatedDisk(proc *process.Status) {
+	commonLabels := labelValues(proc, r.diskAttrs)
+	readLabels := append([]string{"read"}, commonLabels...)
+	r.disk.WithLabelValues(readLabels...).Add(float64(proc.IOReadBytesDelta))
+	writeLabels := append([]string{"write"}, commonLabels...)
+	r.disk.WithLabelValues(writeLabels...).Add(float64(proc.IOWriteBytesDelta))
+}
+
+// attributesWithExplicit returns, for a metric name definition,
+// which attribute names are defined as well as the getters for
+// them. It also returns if the invoker must explicitly add the
+// provided explicit attribute name and value (e.g. "process.cpu.state"
+// or "disk.io.direction")
+func attributesWithExplicit(
+	provider *attributes.AttrSelector, metricName attributes.Name, explicitAttribute attr2.Name,
 ) (
-	names []string, getters []attributes.Field[*process.Status, string], containsState bool,
+	names []string, getters []attributes.Field[*process.Status, string], containsExplicit bool,
 ) {
 	attrNames := provider.For(metricName)
-	// "process_cpu_state" won't be added by PrometheusGetters, as it's not defined in the *process.Status
+	// For example, "process_cpu_state" won't be added by PrometheusGetters, as it's not defined in the *process.Status
 	// we need to be aware of the user willing to add it to explicitly choose between
 	// observeAggregatedCPU and observeDisaggregatedCPU
-	for _, attr := range attrNames {
-		containsState = containsState || attr.Prom() == attr2.ProcCPUState.Prom()
-	}
+	// Similar for "process_disk_io" or "process_network_io"
+	containsExplicit = slices.Contains(attrNames, explicitAttribute)
 	getters = attributes.PrometheusGetters(process.PromGetters, attrNames)
 
-	if containsState {
-		// the names and the getters arrays will have different length. The metric value setter
-		// observer function, will have to prepend wait/system/user as first value of the attributes list
-		names = []string{attr2.ProcCPUState.Prom()}
+	if containsExplicit {
+		// the names and the getters arrays will have different length.
+		// For example, the metric value setter function of the will have to prepend
+		// the attribute value as first value in their attributes list
+		// (e.g. wait/system/user in CPU metrics or write/read in IO metrics)
+		names = []string{explicitAttribute.Prom()}
 	}
 	for _, label := range getters {
 		names = append(names, label.ExposedName)

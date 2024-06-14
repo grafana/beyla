@@ -65,6 +65,11 @@ func testProcesses(attribMatcher map[string]string) func(t *testing.T) {
 			require.NoError(t, err)
 			matchAttributes(t, results, attribMatcher)
 		})
+		test.Eventually(t, testTimeout, func(t require.TestingT) {
+			results, err := pq.Query(`process_network_io_bytes_total`)
+			require.NoError(t, err)
+			matchAttributes(t, results, attribMatcher)
+		})
 	}
 }
 

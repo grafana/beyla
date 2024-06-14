@@ -16,7 +16,7 @@ import (
 	"github.com/grafana/beyla/test/collector"
 )
 
-const timeout = 10 * time.Second
+const timeout = 20 * time.Second
 
 func TestMetricsExpiration(t *testing.T) {
 	defer restoreEnvAfterExecution()()

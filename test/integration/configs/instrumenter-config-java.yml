@@ -18,3 +18,5 @@ attributes:
       include: ["*"]
     process_disk_io:
       include: ["*"]
+    process_network_io:
+      include: ["*"]

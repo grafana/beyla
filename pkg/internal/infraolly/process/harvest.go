@@ -27,7 +27,9 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"path"
 	"runtime"
+	"strconv"
 
 	"github.com/hashicorp/golang-lru/v2/simplelru"
 	"github.com/shirou/gopsutil/v3/process"
@@ -106,6 +108,8 @@ func (ps *Harvester) Harvest(svcID *svc.ID) (*Status, error) {
 		return nil, fmt.Errorf("can't fetch deltas: %w", err)
 	}
 
+	ps.populateNetworkInfo(status, cached)
+
 	return status, nil
 }
 
@@ -160,7 +164,7 @@ func (ps *Harvester) populateGauges(status *Status, process *linuxProcess) error
 	return nil
 }
 
-// populateIOCounters fills the status with the IO counters data. For the "X per second" metrics, it requires the
+// populateIOCounters fills the status with the IO counters data. For the delta metrics, it requires the
 // last process status for comparative purposes
 func (ps *Harvester) populateIOCounters(status *Status, source *linuxProcess) error {
 	previous := source.previousIOCounters
@@ -179,4 +183,18 @@ func (ps *Harvester) populateIOCounters(status *Status, source *linuxProcess) er
 		status.IOWriteBytesDelta = ioCounters.WriteBytes - previous.WriteBytes
 	}
 	return nil
+}
+
+func (ps *Harvester) populateNetworkInfo(status *Status, source *linuxProcess) {
+	statPath := path.Join(ps.procFSRoot, strconv.Itoa(int(source.pid)), "net", "dev")
+	content, err := os.ReadFile(statPath)
+	if err != nil {
+		ps.log.Debug("can't read net dev file", "path", statPath, "error", err)
+		return
+	}
+	rx, tx := parseProcNetDev(content)
+	status.NetRcvBytesDelta = rx - source.previousNetRx
+	status.NetTxBytesDelta = tx - source.previousNetTx
+	source.previousNetRx = rx
+	source.previousNetTx = tx
 }

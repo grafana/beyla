@@ -179,15 +179,15 @@ type Metrics struct {
 	service  *svc.ID
 	provider *metric.MeterProvider
 
-	httpDuration          instrument.Float64Histogram
-	httpClientDuration    instrument.Float64Histogram
-	grpcDuration          instrument.Float64Histogram
-	grpcClientDuration    instrument.Float64Histogram
-	dbClientDuration      instrument.Float64Histogram
-	msgPublishDuration    instrument.Float64Histogram
-	msgProcessDuration    instrument.Float64Histogram
-	httpRequestSize       instrument.Float64Histogram
-	httpClientRequestSize instrument.Float64Histogram
+	httpDuration          *Expirer[*request.Span, instrument.Float64Histogram, float64]
+	httpClientDuration    *Expirer[*request.Span, instrument.Float64Histogram, float64]
+	grpcDuration          *Expirer[*request.Span, instrument.Float64Histogram, float64]
+	grpcClientDuration    *Expirer[*request.Span, instrument.Float64Histogram, float64]
+	dbClientDuration      *Expirer[*request.Span, instrument.Float64Histogram, float64]
+	msgPublishDuration    *Expirer[*request.Span, instrument.Float64Histogram, float64]
+	msgProcessDuration    *Expirer[*request.Span, instrument.Float64Histogram, float64]
+	httpRequestSize       *Expirer[*request.Span, instrument.Float64Histogram, float64]
+	httpClientRequestSize *Expirer[*request.Span, instrument.Float64Histogram, float64]
 	// trace span metrics
 	spanMetricsLatency    instrument.Float64Histogram
 	spanMetricsCallsTotal instrument.Int64Counter
@@ -331,43 +331,68 @@ func (mr *MetricsReporter) setupOtelMeters(m *Metrics, meter instrument.Meter) e
 		return nil
 	}
 
-	var err error
-	m.httpDuration, err = meter.Float64Histogram(attributes.HTTPServerDuration.OTEL, instrument.WithUnit("s"))
+	httpDuration, err := meter.Float64Histogram(attributes.HTTPServerDuration.OTEL, instrument.WithUnit("s"))
 	if err != nil {
 		return fmt.Errorf("creating http duration histogram metric: %w", err)
 	}
-	m.httpClientDuration, err = meter.Float64Histogram(attributes.HTTPClientDuration.OTEL, instrument.WithUnit("s"))
+	m.httpDuration = NewExpirer[*request.Span, instrument.Float64Histogram, float64](
+		httpDuration, mr.attrHTTPDuration, timeNow, mr.cfg.TTL)
+
+	httpClientDuration, err := meter.Float64Histogram(attributes.HTTPClientDuration.OTEL, instrument.WithUnit("s"))
 	if err != nil {
 		return fmt.Errorf("creating http duration histogram metric: %w", err)
 	}
-	m.grpcDuration, err = meter.Float64Histogram(attributes.RPCServerDuration.OTEL, instrument.WithUnit("s"))
+	m.httpClientDuration = NewExpirer[*request.Span, instrument.Float64Histogram, float64](
+		httpClientDuration, mr.attrHTTPClientDuration, timeNow, mr.cfg.TTL)
+
+	grpcDuration, err := meter.Float64Histogram(attributes.RPCServerDuration.OTEL, instrument.WithUnit("s"))
 	if err != nil {
 		return fmt.Errorf("creating grpc duration histogram metric: %w", err)
 	}
-	m.grpcClientDuration, err = meter.Float64Histogram(attributes.RPCClientDuration.OTEL, instrument.WithUnit("s"))
+	m.grpcDuration = NewExpirer[*request.Span, instrument.Float64Histogram, float64](
+		grpcDuration, mr.attrGRPCServer, timeNow, mr.cfg.TTL)
+
+	grpcClientDuration, err := meter.Float64Histogram(attributes.RPCClientDuration.OTEL, instrument.WithUnit("s"))
 	if err != nil {
 		return fmt.Errorf("creating grpc duration histogram metric: %w", err)
 	}
-	m.dbClientDuration, err = meter.Float64Histogram(attributes.DBClientDuration.OTEL, instrument.WithUnit("s"))
+	m.grpcClientDuration = NewExpirer[*request.Span, instrument.Float64Histogram, float64](
+		grpcClientDuration, mr.attrGRPCClient, timeNow, mr.cfg.TTL)
+
+	dbClientDuration, err := meter.Float64Histogram(attributes.DBClientDuration.OTEL, instrument.WithUnit("s"))
 	if err != nil {
 		return fmt.Errorf("creating db client duration histogram metric: %w", err)
 	}
-	m.msgPublishDuration, err = meter.Float64Histogram(attributes.MessagingPublishDuration.OTEL, instrument.WithUnit("s"))
+	m.dbClientDuration = NewExpirer[*request.Span, instrument.Float64Histogram, float64](
+		dbClientDuration, mr.attrDBClient, timeNow, mr.cfg.TTL)
+
+	msgPublishDuration, err := meter.Float64Histogram(attributes.MessagingPublishDuration.OTEL, instrument.WithUnit("s"))
 	if err != nil {
 		return fmt.Errorf("creating messaging client publish duration histogram metric: %w", err)
 	}
-	m.msgProcessDuration, err = meter.Float64Histogram(attributes.MessagingProcessDuration.OTEL, instrument.WithUnit("s"))
+	m.msgPublishDuration = NewExpirer[*request.Span, instrument.Float64Histogram, float64](
+		msgPublishDuration, mr.attrMessagingPublish, timeNow, mr.cfg.TTL)
+
+	msgProcessDuration, err := meter.Float64Histogram(attributes.MessagingProcessDuration.OTEL, instrument.WithUnit("s"))
 	if err != nil {
 		return fmt.Errorf("creating messaging client process duration histogram metric: %w", err)
 	}
-	m.httpRequestSize, err = meter.Float64Histogram(attributes.HTTPServerRequestSize.OTEL, instrument.WithUnit("By"))
+	m.msgProcessDuration = NewExpirer[*request.Span, instrument.Float64Histogram, float64](
+		msgProcessDuration, mr.attrMessagingProcess, timeNow, mr.cfg.TTL)
+
+	httpRequestSize, err := meter.Float64Histogram(attributes.HTTPServerRequestSize.OTEL, instrument.WithUnit("By"))
 	if err != nil {
 		return fmt.Errorf("creating http size histogram metric: %w", err)
 	}
-	m.httpClientRequestSize, err = meter.Float64Histogram(attributes.HTTPClientRequestSize.OTEL, instrument.WithUnit("By"))
+	m.httpRequestSize = NewExpirer[*request.Span, instrument.Float64Histogram, float64](
+		httpRequestSize, mr.attrHTTPRequestSize, timeNow, mr.cfg.TTL)
+
+	httpClientRequestSize, err := meter.Float64Histogram(attributes.HTTPClientRequestSize.OTEL, instrument.WithUnit("By"))
 	if err != nil {
 		return fmt.Errorf("creating http size histogram metric: %w", err)
 	}
+	m.httpClientRequestSize = NewExpirer[*request.Span, instrument.Float64Histogram, float64](
+		httpClientRequestSize, mr.attrHTTPClientRequestSize, timeNow, mr.cfg.TTL)
 
 	return nil
 }
@@ -657,12 +682,12 @@ func (mr *MetricsReporter) serviceGraphAttributes(span *request.Span) attribute.
 	return attribute.NewSet(attrs...)
 }
 
-func withAttributes(span *request.Span, getters []attributes.Field[*request.Span, attribute.KeyValue]) instrument.MeasurementOption {
+func getAttributes(span *request.Span, getters []attributes.Field[*request.Span, attribute.KeyValue]) []attribute.KeyValue {
 	attributes := make([]attribute.KeyValue, 0, len(getters))
 	for _, get := range getters {
 		attributes = append(attributes, get.Get(span))
 	}
-	return instrument.WithAttributeSet(attribute.NewSet(attributes...))
+	return attributes
 }
 
 // nolint:cyclop
@@ -674,32 +699,33 @@ func (r *Metrics) record(span *request.Span, mr *MetricsReporter) {
 		switch span.Type {
 		case request.EventTypeHTTP:
 			// TODO: for more accuracy, there must be a way to set the metric time from the actual span end time
-			r.httpDuration.Record(r.ctx, duration,
-				withAttributes(span, mr.attrHTTPDuration))
-			r.httpRequestSize.Record(r.ctx, float64(span.ContentLength),
-				withAttributes(span, mr.attrHTTPRequestSize))
+			httpDuration, attrs := r.httpDuration.ForRecord(span)
+			httpDuration.Record(r.ctx, duration, instrument.WithAttributeSet(attrs))
+
+			httpRequestSize, attrs := r.httpRequestSize.ForRecord(span)
+			httpRequestSize.Record(r.ctx, float64(span.ContentLength), instrument.WithAttributeSet(attrs))
 		case request.EventTypeGRPC:
-			r.grpcDuration.Record(r.ctx, duration,
-				withAttributes(span, mr.attrGRPCServer))
+			grpcDuration, attrs := r.grpcDuration.ForRecord(span)
+			grpcDuration.Record(r.ctx, duration, instrument.WithAttributeSet(attrs))
 		case request.EventTypeGRPCClient:
-			r.grpcClientDuration.Record(r.ctx, duration,
-				withAttributes(span, mr.attrGRPCClient))
+			grpcClientDuration, attrs := r.grpcClientDuration.ForRecord(span)
+			grpcClientDuration.Record(r.ctx, duration, instrument.WithAttributeSet(attrs))
 		case request.EventTypeHTTPClient:
-			r.httpClientDuration.Record(r.ctx, duration,
-				withAttributes(span, mr.attrHTTPClientDuration))
-			r.httpClientRequestSize.Record(r.ctx, float64(span.ContentLength),
-				withAttributes(span, mr.attrHTTPClientRequestSize))
+			httpClientDuration, attrs := r.httpClientDuration.ForRecord(span)
+			httpClientDuration.Record(r.ctx, duration, instrument.WithAttributeSet(attrs))
+			httpClientRequestSize, attrs := r.httpClientRequestSize.ForRecord(span)
+			httpClientRequestSize.Record(r.ctx, float64(span.ContentLength), instrument.WithAttributeSet(attrs))
 		case request.EventTypeRedisClient, request.EventTypeSQLClient:
-			r.dbClientDuration.Record(r.ctx, duration,
-				withAttributes(span, mr.attrDBClient))
+			dbClientDuration, attrs := r.dbClientDuration.ForRecord(span)
+			dbClientDuration.Record(r.ctx, duration, instrument.WithAttributeSet(attrs))
 		case request.EventTypeKafkaClient:
 			switch span.Method {
 			case request.MessagingPublish:
-				r.msgPublishDuration.Record(r.ctx, duration,
-					withAttributes(span, mr.attrMessagingPublish))
+				msgPublishDuration, attrs := r.msgPublishDuration.ForRecord(span)
+				msgPublishDuration.Record(r.ctx, duration, instrument.WithAttributeSet(attrs))
 			case request.MessagingProcess:
-				r.msgProcessDuration.Record(r.ctx, duration,
-					withAttributes(span, mr.attrMessagingProcess))
+				msgProcessDuration, attrs := r.msgProcessDuration.ForRecord(span)
+				msgProcessDuration.Record(r.ctx, duration, instrument.WithAttributeSet(attrs))
 			}
 		}
 	}

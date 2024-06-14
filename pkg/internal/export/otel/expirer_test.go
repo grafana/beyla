@@ -9,7 +9,6 @@ import (
 	"github.com/mariomac/guara/pkg/test"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.opentelemetry.io/otel/attribute"
 
 	"github.com/grafana/beyla/pkg/internal/export/attributes"
 	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
@@ -31,6 +30,7 @@ func TestMetricsExpiration(t *testing.T) {
 	timeNow = now.Now
 
 	otelExporter, err := NetMetricsExporterProvider(
+		ctx,
 		&global.ContextInfo{}, &NetMetricsConfig{
 			Metrics: &MetricsConfig{
 				Interval:        50 * time.Millisecond,
@@ -104,38 +104,6 @@ func TestMetricsExpiration(t *testing.T) {
 		assert.Equal(t, map[string]string{"src.name": "baz", "dst.name": "bae"}, metric.Attributes)
 		assert.EqualValues(t, 456, metric.IntVal)
 	})
-}
-
-func TestGauge(t *testing.T) {
-	g := NewGauge(attribute.Set{})
-	g.Set(123.456)
-	assert.Equal(t, 123.456, g.Load())
-	g.Set(456.123)
-	assert.Equal(t, 456.123, g.Load())
-}
-
-func TestIntGauge(t *testing.T) {
-	g := NewIntGauge(attribute.Set{})
-	g.Set(123)
-	assert.EqualValues(t, 123, g.Load())
-	g.Set(456)
-	assert.EqualValues(t, 456, g.Load())
-}
-
-func TestIntCounter(t *testing.T) {
-	g := NewIntCounter(attribute.Set{})
-	g.Add(123)
-	assert.EqualValues(t, 123, g.Load())
-	g.Add(123)
-	assert.EqualValues(t, 246, g.Load())
-}
-
-func TestFloatCounter(t *testing.T) {
-	g := NewFloatCounter(attribute.Set{})
-	g.Add(123.4)
-	assert.EqualValues(t, 123.4, g.Load())
-	g.Add(123.3)
-	assert.EqualValues(t, 246.7, g.Load())
 }
 
 type syncedClock struct {

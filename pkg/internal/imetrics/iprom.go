@@ -21,14 +21,14 @@ type PrometheusConfig struct {
 
 // PrometheusReporter is an internal metrics Reporter that exports to Prometheus
 type PrometheusReporter struct {
-	connector            *connector.PrometheusManager
-	tracerFlushes        prometheus.Histogram
-	otelMetricExports    prometheus.Counter
-	otelMetricExportErrs *prometheus.CounterVec
-	otelTraceExports     prometheus.Counter
-	otelTraceExportErrs  *prometheus.CounterVec
-	prometheusRequests   *prometheus.CounterVec
-	discoveredServices   *prometheus.GaugeVec
+	connector             *connector.PrometheusManager
+	tracerFlushes         prometheus.Histogram
+	otelMetricExports     prometheus.Counter
+	otelMetricExportErrs  *prometheus.CounterVec
+	otelTraceExports      prometheus.Counter
+	otelTraceExportErrs   *prometheus.CounterVec
+	prometheusRequests    *prometheus.CounterVec
+	instrumentedProcesses *prometheus.GaugeVec
 }
 
 func NewPrometheusReporter(cfg *PrometheusConfig, manager *connector.PrometheusManager) *PrometheusReporter {
@@ -62,10 +62,10 @@ func NewPrometheusReporter(cfg *PrometheusConfig, manager *connector.PrometheusM
 			Name: "prometheus_http_requests",
 			Help: "requests towards the Prometheus Scrape endpoint",
 		}, []string{"port", "path"}),
-		discoveredServices: prometheus.NewGaugeVec(prometheus.GaugeOpts{
-			Name: "beyla_discovered_services",
-			Help: "discovered services by Beyla",
-		}, []string{"service"}),
+		instrumentedProcesses: prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Name: "beyla_instrumented_processes",
+			Help: "instrumented processes by Beyla",
+		}, []string{"process_name"}),
 	}
 	manager.Register(cfg.Port, cfg.Path,
 		pr.tracerFlushes,
@@ -74,7 +74,7 @@ func NewPrometheusReporter(cfg *PrometheusConfig, manager *connector.PrometheusM
 		pr.otelTraceExports,
 		pr.otelTraceExportErrs,
 		pr.prometheusRequests,
-		pr.discoveredServices)
+		pr.instrumentedProcesses)
 
 	return pr
 }
@@ -107,10 +107,10 @@ func (p *PrometheusReporter) PrometheusRequest(port, path string) {
 	p.prometheusRequests.WithLabelValues(port, path).Inc()
 }
 
-func (p *PrometheusReporter) DiscoverService(service string) {
-	p.discoveredServices.WithLabelValues(service).Set(1)
+func (p *PrometheusReporter) InstrumentProcess(process_name string) {
+	p.instrumentedProcesses.WithLabelValues(process_name).Inc()
 }
 
-func (p *PrometheusReporter) UndiscoverService(service string) {
-	p.discoveredServices.WithLabelValues(service).Set(0)
+func (p *PrometheusReporter) UninstrumentProcess(process_name string) {
+	p.instrumentedProcesses.WithLabelValues(process_name).Dec()
 }

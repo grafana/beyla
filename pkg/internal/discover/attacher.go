@@ -89,14 +89,15 @@ func (ta *TraceAttacher) getTracer(ie *Instrumentable) (*ebpf.ProcessTracer, boo
 		ie.FileInfo.Service.SDKLanguage = ie.Type
 		// allowing the tracer to forward traces from the new PID and its children processes
 		monitorPIDs(tracer, ie)
+		ta.Metrics.InstrumentProcess(ie.FileInfo.ExecutableName())
 		if tracer.Type == ebpf.Generic {
 			monitorPIDs(ta.reusableTracer, ie)
 		}
 		ta.log.Debug(".done")
 		return nil, false
 	}
-	ta.Metrics.DiscoverService(ie.FileInfo.ExecutableName())
 	ta.log.Info("instrumenting process", "cmd", ie.FileInfo.CmdExePath, "pid", ie.FileInfo.Pid)
+	ta.Metrics.InstrumentProcess(ie.FileInfo.ExecutableName())
 
 	// builds a tracer for that executable
 	var programs []ebpf.Tracer
@@ -206,7 +207,7 @@ func (ta *TraceAttacher) notifyProcessDeletion(ie *Instrumentable) {
 		// notifying the tracer to block any trace from that PID
 		// to avoid that a new process reusing this PID could send traces
 		// unless explicitly allowed
-		ta.Metrics.UndiscoverService(ie.FileInfo.ExecutableName())
+		ta.Metrics.UninstrumentProcess(ie.FileInfo.ExecutableName())
 		tracer.BlockPID(uint32(ie.FileInfo.Pid), ie.FileInfo.Ns)
 
 		// if there are no more trace instances for a Go program, we need to notify that

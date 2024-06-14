@@ -681,7 +681,6 @@ func TestTraces_InternalInstrumentation(t *testing.T) {
 		return &impl.exporter
 	}, TracesReceiver(context.Background(),
 		TracesConfig{
-			SDKLogLevel:       "debug",
 			CommonEndpoint:    coll.URL,
 			BatchTimeout:      10 * time.Millisecond,
 			ExportTimeout:     10 * time.Millisecond,

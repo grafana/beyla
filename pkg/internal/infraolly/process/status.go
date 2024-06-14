@@ -49,6 +49,9 @@ type Status struct {
 	IOReadBytesDelta  uint64
 	IOWriteBytesDelta uint64
 
+	NetTxBytesDelta  int64
+	NetRcvBytesDelta int64
+
 	Service *svc.ID
 }
 
@@ -91,7 +94,7 @@ func OTELGetters(name attr.Name) (attributes.Getter[*Status, attribute.KeyValue]
 		g = func(s *Status) attribute.KeyValue {
 			return attribute.Key(attr.ProcPid).Int(int(s.ProcessID))
 		}
-	case attr.ProcCPUState, attr.ProcDiskIODir:
+	case attr.ProcCPUState, attr.ProcDiskIODir, attr.ProcNetIODir:
 		// the attributes are handled explicitly by the OTEL exporter, but we need to
 		// ignore them to avoid that the default case tries to report them from service metadata
 	default:
@@ -120,7 +123,7 @@ func PromGetters(name attr.Name) (attributes.Getter[*Status, string], bool) {
 		g = func(s *Status) string { return strconv.Itoa(int(s.ParentProcessID)) }
 	case attr.ProcPid:
 		g = func(s *Status) string { return strconv.Itoa(int(s.ProcessID)) }
-	case attr.ProcCPUState, attr.ProcDiskIODir:
+	case attr.ProcCPUState, attr.ProcDiskIODir, attr.ProcNetIODir:
 		// the attributes are handled explicitly by the prometheus exporter, but we need to
 		// ignore them to avoid that the default case tries to report them from service metadata
 	default:

@@ -159,6 +159,7 @@ func getDefinitions(groups AttrGroups) map[Section]AttrReportGroup {
 			attr.ProcParentPid:   true,
 			attr.ProcPid:         true,
 			attr.ProcDiskIODir:   true,
+			attr.ProcNetIODir:    true,
 			attr.ProcCommandLine: false,
 			attr.ProcCommandArgs: false,
 			attr.ProcExecName:    false,
@@ -245,6 +246,7 @@ func getDefinitions(groups AttrGroups) map[Section]AttrReportGroup {
 		ProcessMemoryUsage.Section:    {SubGroups: []*AttrReportGroup{&processAttributes}},
 		ProcessMemoryVirtual.Section:  {SubGroups: []*AttrReportGroup{&processAttributes}},
 		ProcessDiskIO.Section:         {SubGroups: []*AttrReportGroup{&processAttributes}},
+		ProcessNetIO.Section:          {SubGroups: []*AttrReportGroup{&processAttributes}},
 	}
 }
 

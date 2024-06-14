@@ -255,7 +255,7 @@ static __always_inline http_connection_metadata_t* empty_connection_meta() {
     return bpf_map_lookup_elem(&connection_meta_mem, &zero);
 }
 
-static __always_inline void finish_http(http_info_t *info) {
+static __always_inline void finish_http(http_info_t *info, pid_connection_info_t *pid_conn) {
     if (info->start_monotime_ns != 0 && info->status != 0 && info->pid.host_pid != 0) {
         http_info_t *trace = bpf_ringbuf_reserve(&events, sizeof(http_info_t), 0);        
         if (trace) {
@@ -268,23 +268,16 @@ static __always_inline void finish_http(http_info_t *info) {
 
         delete_server_trace();
 
-        u64 pid_tid = bpf_get_current_pid_tgid();
-
         // bpf_dbg_printk("Terminating trace for pid=%d", pid_from_pid_tgid(pid_tid));
         // dbg_print_http_connection_info(&info->conn_info); // commented out since GitHub CI doesn't like this call
-        pid_connection_info_t pid_conn = {
-            .conn = info->conn_info,
-            .pid = pid_from_pid_tgid(pid_tid)
-        };
-
-        bpf_map_delete_elem(&ongoing_http, &pid_conn);
+        bpf_map_delete_elem(&ongoing_http, pid_conn);
     }        
 }
 
 static __always_inline void finish_possible_delayed_http_request(pid_connection_info_t *pid_conn) {
     http_info_t *info = bpf_map_lookup_elem(&ongoing_http, pid_conn);
     if (info) {        
-        finish_http(info);
+        finish_http(info, pid_conn);
     }
 }
 
@@ -299,7 +292,7 @@ static __always_inline http_info_t *get_or_set_http_info(http_info_t *info, pid_
     if (packet_type == PACKET_TYPE_REQUEST) {
         http_info_t *old_info = bpf_map_lookup_elem(&ongoing_http, pid_conn);
         if (old_info) {
-            finish_http(old_info); // this will delete ongoing_http for this connection info if there's full stale request
+            finish_http(old_info, pid_conn); // this will delete ongoing_http for this connection info if there's full stale request
         }
 
         bpf_map_update_elem(&ongoing_http, pid_conn, info, BPF_ANY);
@@ -408,11 +401,11 @@ static __always_inline void handle_http_response(unsigned char *small_buf, pid_c
     process_http_response(info, small_buf, orig_len);
 
     if ((direction != TCP_SEND) /*|| (ssl != NO_SSL) || (orig_len < KPROBES_LARGE_RESPONSE_LEN)*/) {
-        finish_http(info);
+        finish_http(info, pid_conn);
     } else {
         if (ssl && (pid_conn->conn.s_port == 0) && (pid_conn->conn.d_port == 0)) {
             bpf_dbg_printk("Fake connection info, finishing request");
-            finish_http(info);
+            finish_http(info, pid_conn);
         } else {
             bpf_dbg_printk("Delaying finish http for large request, orig_len %d", orig_len);
         }

@@ -104,6 +104,10 @@ func TestMetricAttributes_Filter(t *testing.T) {
 				"k8s.src.name",
 				"k8s.dst.name",
 			}},
+		}, Metrics: &MetricsConfig{
+			MetricsEndpoint:   "http://foo",
+			Interval:          10 * time.Millisecond,
+			ReportersCacheLen: 100,
 		}})
 	require.NoError(t, err)
 

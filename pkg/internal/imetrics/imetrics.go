@@ -29,9 +29,9 @@ type Reporter interface {
 	// PrometheusRequest is invoked every time the Prometheus exporter is invoked, for a given port and path
 	PrometheusRequest(port, path string)
 	// InstrumentProcess is invoked every time a new process is instrumented
-	InstrumentProcess(process_name string)
+	InstrumentProcess(processName string)
 	// UninstrumentProcess is invoked every time a process is removed from the instrumented processed
-	UninstrumentProcess(process_name string)
+	UninstrumentProcess(processName string)
 }
 
 // NoopReporter is a metrics Reporter that just does nothing

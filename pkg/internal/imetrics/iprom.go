@@ -107,10 +107,10 @@ func (p *PrometheusReporter) PrometheusRequest(port, path string) {
 	p.prometheusRequests.WithLabelValues(port, path).Inc()
 }
 
-func (p *PrometheusReporter) InstrumentProcess(process_name string) {
-	p.instrumentedProcesses.WithLabelValues(process_name).Inc()
+func (p *PrometheusReporter) InstrumentProcess(processName string) {
+	p.instrumentedProcesses.WithLabelValues(processName).Inc()
 }
 
-func (p *PrometheusReporter) UninstrumentProcess(process_name string) {
-	p.instrumentedProcesses.WithLabelValues(process_name).Dec()
+func (p *PrometheusReporter) UninstrumentProcess(processName string) {
+	p.instrumentedProcesses.WithLabelValues(processName).Dec()
 }

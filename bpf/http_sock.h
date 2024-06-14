@@ -218,10 +218,11 @@ static __always_inline void *find_msghdr_buf(struct msghdr *msg) {
         for (int i = 1; i < 4; i++) {
             void *p = &iov[i];
             bpf_probe_read(&vec, sizeof(struct iovec), p);
-            bpf_dbg_printk("iov[%d]=%llx base %llx", i, p, vec.iov_base);
-            if (vec.iov_base) {
-                return vec.iov_base;
+            bpf_dbg_printk("iov[%d]=%llx base %llx, len %d", i, p, vec.iov_base, vec.iov_len);
+            if (!vec.iov_base || !vec.iov_len) {
+                continue;
             }
+            return vec.iov_base;
         }
     }
 

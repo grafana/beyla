@@ -122,19 +122,20 @@ int BPF_KPROBE(kprobe_tcp_rcv_established, struct sock *sk, struct sk_buff *skb)
 
         // tcp_rcv_established may fire multiple times and it may flip the port order. Stick with the initial ordering determined by accept/connect or the first 
         // rcv_established
+        ssl_pid_connection_info_t pid_info = {
+            .conn = info,
+            .orig_dport = orig_dport,
+        };
         ssl_pid_connection_info_t *existing = bpf_map_lookup_elem(&pid_tid_to_conn, &id);
         if (existing) {
             // Only update here if the connection info is new for the PID->connection info map.
             // We can't do an update with BPF_NOEXIST because it's possible the connection info is stale for the
             // PID/TID pair.
             if (bpf_memcmp(&existing->conn, &info, sizeof(pid_connection_info_t))) {
-                ssl_pid_connection_info_t pid_info = {
-                    .conn = info,
-                    .orig_dport = orig_dport,
-                };
-
                 bpf_map_update_elem(&pid_tid_to_conn, &id, &pid_info, BPF_ANY); // to support SSL on missing handshake
             }
+        } else {
+            bpf_map_update_elem(&pid_tid_to_conn, &id, &pid_info, BPF_ANY); // to support SSL on missing handshake
         }
     }
 
@@ -271,6 +272,35 @@ cleanup:
 
 // Main HTTP read and write operations are handled with tcp_sendmsg and tcp_recvmsg 
 
+static __always_inline u8 is_ssl_connection(u64 id, pid_connection_info_t *conn) {
+    void *ssl = 0;
+    // Checks if it's sandwitched between active SSL handshake, read or write uprobe/uretprobe
+    void **s = bpf_map_lookup_elem(&active_ssl_handshakes, &id);
+    if (s) {
+        ssl = *s;
+    } else {
+        ssl_args_t *ssl_args = bpf_map_lookup_elem(&active_ssl_read_args, &id);
+        if (!ssl_args) {
+            ssl_args = bpf_map_lookup_elem(&active_ssl_write_args, &id);
+        }
+        if (ssl_args) {
+            ssl = (void *)ssl_args->ssl;
+        }
+    }            
+
+    if (ssl) {
+        return 1;
+    }
+
+    u8 *direction = bpf_map_lookup_elem(&active_ssl_connections, conn);
+
+    if (direction) {
+        return 1;
+    }
+
+    return 0;
+}
+
 // The size argument here will be always the total response size.
 // However, the return value of tcp_sendmsg tells us how much it sent. When the
 // response is large it will get chunked, so we have to use a kretprobe to
@@ -298,9 +328,9 @@ int BPF_KPROBE(kprobe_tcp_sendmsg, struct sock *sk, struct msghdr *msg, size_t s
         sort_connection_info(&s_args.p_conn.conn);
         s_args.p_conn.pid = pid_from_pid_tgid(id);
 
+        u8 ssl = is_ssl_connection(id, &s_args.p_conn);
         if (size > 0) {
-            u8 *direction = bpf_map_lookup_elem(&active_ssl_connections, &s_args.p_conn);
-            if (!direction) {
+            if (!ssl) {
                 void *iovec_ptr = find_msghdr_buf(msg);
                 if (iovec_ptr) {
                     u64 sock_p = (u64)sk;
@@ -319,24 +349,10 @@ int BPF_KPROBE(kprobe_tcp_sendmsg, struct sock *sk, struct msghdr *msg, size_t s
             }
         }
 
-        void *ssl = 0;
-        // Checks if it's sandwitched between active SSL handshake, read or write uprobe/uretprobe
-        void **s = bpf_map_lookup_elem(&active_ssl_handshakes, &id);
-        if (s) {
-            ssl = *s;
-        } else {
-            ssl_args_t *ssl_args = bpf_map_lookup_elem(&active_ssl_read_args, &id);
-            if (!ssl_args) {
-                ssl_args = bpf_map_lookup_elem(&active_ssl_write_args, &id);
-            }
-            if (ssl_args) {
-                ssl = (void *)ssl_args->ssl;
-            }
-        }
-
         if (!ssl) {
             return 0;
         }
+
         bpf_dbg_printk("=== kprobe SSL tcp_sendmsg=%d sock=%llx ssl=%llx ===", id, sk, ssl);
         ssl_pid_connection_info_t *conn = bpf_map_lookup_elem(&ssl_to_conn, &ssl);
         if (conn) {
@@ -404,7 +420,6 @@ int BPF_KPROBE(kprobe_tcp_close, struct sock *sk, long timeout) {
     bpf_dbg_printk("=== kprobe tcp_close %d sock %llx ===", id, sk);
 
     ensure_sent_event(id, &sock_p);
-
 
     pid_connection_info_t info = {};
 
@@ -478,8 +493,9 @@ int BPF_KRETPROBE(kretprobe_tcp_recvmsg, int copied_len) {
         sort_connection_info(&info.conn);
         info.pid = pid_from_pid_tgid(id);
 
-        u8 *direction = bpf_map_lookup_elem(&active_ssl_connections, &info);
-        if (!direction) {
+        u8 ssl = is_ssl_connection(id, &info);
+
+        if (!ssl) {
             handle_buf_with_connection(&info, (void *)args->iovec_ptr, copied_len, NO_SSL, TCP_RECV, orig_dport);
         } else {
             bpf_dbg_printk("tcp_recvmsg for an identified SSL connection, ignoring...");

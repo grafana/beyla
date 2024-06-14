@@ -682,14 +682,6 @@ func (mr *MetricsReporter) serviceGraphAttributes(span *request.Span) attribute.
 	return attribute.NewSet(attrs...)
 }
 
-func getAttributes(span *request.Span, getters []attributes.Field[*request.Span, attribute.KeyValue]) []attribute.KeyValue {
-	attributes := make([]attribute.KeyValue, 0, len(getters))
-	for _, get := range getters {
-		attributes = append(attributes, get.Get(span))
-	}
-	return attributes
-}
-
 // nolint:cyclop
 func (r *Metrics) record(span *request.Span, mr *MetricsReporter) {
 	t := span.Timings()

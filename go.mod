@@ -73,6 +73,10 @@ replace go.opentelemetry.io/otel/metric => github.com/grafana/opentelemetry-go/m
 
 replace go.opentelemetry.io/otel/trace => github.com/grafana/opentelemetry-go/trace v1.27.0-grafana.1
 
+replace go.opentelemetry.io/otel/sdk => github.com/grafana/opentelemetry-go/sdk v1.27.0-grafana.1
+
+replace go.opentelemetry.io/otel/sdk/metric => github.com/grafana/opentelemetry-go/sdk/metric v1.27.0-grafana.1
+
 require (
 	github.com/aws/aws-sdk-go-v2/internal/configsources v1.3.2 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.6.2 // indirect

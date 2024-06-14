@@ -140,7 +140,7 @@ func (m *meter) int64ObservableInstrument(id Instrument, callbacks []metric.Int6
 		for _, insert := range m.int64Resolver.inserters {
 			// Connect the measure functions for instruments in this pipeline with the
 			// callbacks for this pipeline.
-			in, err := insert.Instrument(id, insert.readerDefaultAggregation(id.Kind))
+			in, rem, err := insert.Instrument(id, insert.readerDefaultAggregation(id.Kind))
 			if err != nil {
 				return inst, err
 			}
@@ -151,7 +151,7 @@ func (m *meter) int64ObservableInstrument(id Instrument, callbacks []metric.Int6
 			}
 			inst.appendMeasures(in)
 			for _, cback := range callbacks {
-				inst := int64Observer{measures: in}
+				inst := int64Observer{measures: in, removers: rem}
 				fn := cback
 				insert.addCallback(func(ctx context.Context) error { return fn(ctx, inst) })
 			}
@@ -289,7 +289,7 @@ func (m *meter) float64ObservableInstrument(id Instrument, callbacks []metric.Fl
 		for _, insert := range m.float64Resolver.inserters {
 			// Connect the measure functions for instruments in this pipeline with the
 			// callbacks for this pipeline.
-			in, err := insert.Instrument(id, insert.readerDefaultAggregation(id.Kind))
+			in, rem, err := insert.Instrument(id, insert.readerDefaultAggregation(id.Kind))
 			if err != nil {
 				return inst, err
 			}
@@ -300,7 +300,7 @@ func (m *meter) float64ObservableInstrument(id Instrument, callbacks []metric.Fl
 			}
 			inst.appendMeasures(in)
 			for _, cback := range callbacks {
-				inst := float64Observer{measures: in}
+				inst := float64Observer{measures: in, removers: rem}
 				fn := cback
 				insert.addCallback(func(ctx context.Context) error { return fn(ctx, inst) })
 			}
@@ -575,7 +575,7 @@ func (noopRegister) Unregister() error {
 // int64InstProvider provides int64 OpenTelemetry instruments.
 type int64InstProvider struct{ *meter }
 
-func (p int64InstProvider) aggs(kind InstrumentKind, name, desc, u string) ([]aggregate.Measure[int64], error) {
+func (p int64InstProvider) aggs(kind InstrumentKind, name, desc, u string) ([]aggregate.Measure[int64], []aggregate.Remove, error) {
 	inst := Instrument{
 		Name:        name,
 		Description: desc,
@@ -586,7 +586,7 @@ func (p int64InstProvider) aggs(kind InstrumentKind, name, desc, u string) ([]ag
 	return p.int64Resolver.Aggregators(inst)
 }
 
-func (p int64InstProvider) histogramAggs(name string, cfg metric.Int64HistogramConfig) ([]aggregate.Measure[int64], error) {
+func (p int64InstProvider) histogramAggs(name string, cfg metric.Int64HistogramConfig) ([]aggregate.Measure[int64], []aggregate.Remove, error) {
 	boundaries := cfg.ExplicitBucketBoundaries()
 	aggError := AggregationExplicitBucketHistogram{Boundaries: boundaries}.err()
 	if aggError != nil {
@@ -600,8 +600,8 @@ func (p int64InstProvider) histogramAggs(name string, cfg metric.Int64HistogramC
 		Kind:        InstrumentKindHistogram,
 		Scope:       p.scope,
 	}
-	measures, err := p.int64Resolver.HistogramAggregators(inst, boundaries)
-	return measures, errors.Join(aggError, err)
+	measures, removers, err := p.int64Resolver.HistogramAggregators(inst, boundaries)
+	return measures, removers, errors.Join(aggError, err)
 }
 
 // lookup returns the resolved instrumentImpl.
@@ -612,8 +612,8 @@ func (p int64InstProvider) lookup(kind InstrumentKind, name, desc, u string) (*i
 		Unit:        u,
 		Kind:        kind,
 	}, func() (*int64Inst, error) {
-		aggs, err := p.aggs(kind, name, desc, u)
-		return &int64Inst{measures: aggs}, err
+		aggs, rems, err := p.aggs(kind, name, desc, u)
+		return &int64Inst{measures: aggs, removers: rems}, err
 	})
 }
 
@@ -625,15 +625,15 @@ func (p int64InstProvider) lookupHistogram(name string, cfg metric.Int64Histogra
 		Unit:        cfg.Unit(),
 		Kind:        InstrumentKindHistogram,
 	}, func() (*int64Inst, error) {
-		aggs, err := p.histogramAggs(name, cfg)
-		return &int64Inst{measures: aggs}, err
+		aggs, rems, err := p.histogramAggs(name, cfg)
+		return &int64Inst{measures: aggs, removers: rems}, err
 	})
 }
 
 // float64InstProvider provides float64 OpenTelemetry instruments.
 type float64InstProvider struct{ *meter }
 
-func (p float64InstProvider) aggs(kind InstrumentKind, name, desc, u string) ([]aggregate.Measure[float64], error) {
+func (p float64InstProvider) aggs(kind InstrumentKind, name, desc, u string) ([]aggregate.Measure[float64], []aggregate.Remove, error) {
 	inst := Instrument{
 		Name:        name,
 		Description: desc,
@@ -644,7 +644,7 @@ func (p float64InstProvider) aggs(kind InstrumentKind, name, desc, u string) ([]
 	return p.float64Resolver.Aggregators(inst)
 }
 
-func (p float64InstProvider) histogramAggs(name string, cfg metric.Float64HistogramConfig) ([]aggregate.Measure[float64], error) {
+func (p float64InstProvider) histogramAggs(name string, cfg metric.Float64HistogramConfig) ([]aggregate.Measure[float64], []aggregate.Remove, error) {
 	boundaries := cfg.ExplicitBucketBoundaries()
 	aggError := AggregationExplicitBucketHistogram{Boundaries: boundaries}.err()
 	if aggError != nil {
@@ -658,8 +658,8 @@ func (p float64InstProvider) histogramAggs(name string, cfg metric.Float64Histog
 		Kind:        InstrumentKindHistogram,
 		Scope:       p.scope,
 	}
-	measures, err := p.float64Resolver.HistogramAggregators(inst, boundaries)
-	return measures, errors.Join(aggError, err)
+	measures, removers, err := p.float64Resolver.HistogramAggregators(inst, boundaries)
+	return measures, removers, errors.Join(aggError, err)
 }
 
 // lookup returns the resolved instrumentImpl.
@@ -670,8 +670,8 @@ func (p float64InstProvider) lookup(kind InstrumentKind, name, desc, u string) (
 		Unit:        u,
 		Kind:        kind,
 	}, func() (*float64Inst, error) {
-		aggs, err := p.aggs(kind, name, desc, u)
-		return &float64Inst{measures: aggs}, err
+		aggs, rems, err := p.aggs(kind, name, desc, u)
+		return &float64Inst{measures: aggs, removers: rems}, err
 	})
 }
 
@@ -683,14 +683,15 @@ func (p float64InstProvider) lookupHistogram(name string, cfg metric.Float64Hist
 		Unit:        cfg.Unit(),
 		Kind:        InstrumentKindHistogram,
 	}, func() (*float64Inst, error) {
-		aggs, err := p.histogramAggs(name, cfg)
-		return &float64Inst{measures: aggs}, err
+		aggs, rems, err := p.histogramAggs(name, cfg)
+		return &float64Inst{measures: aggs, removers: rems}, err
 	})
 }
 
 type int64Observer struct {
 	embedded.Int64Observer
 	measures[int64]
+	removers
 }
 
 func (o int64Observer) Observe(val int64, opts ...metric.ObserveOption) {
@@ -701,6 +702,7 @@ func (o int64Observer) Observe(val int64, opts ...metric.ObserveOption) {
 type float64Observer struct {
 	embedded.Float64Observer
 	measures[float64]
+	removers
 }
 
 func (o float64Observer) Observe(val float64, opts ...metric.ObserveOption) {

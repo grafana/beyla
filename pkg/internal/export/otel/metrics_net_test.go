@@ -3,6 +3,7 @@ package otel
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -42,6 +43,11 @@ func TestMetricAttributes(t *testing.T) {
 		&global.ContextInfo{},
 		&NetMetricsConfig{AttributeSelectors: map[attributes.Section]attributes.InclusionLists{
 			attributes.BeylaNetworkFlow.Section: {Include: []string{"*"}},
+		}, Metrics: &MetricsConfig{
+			MetricsEndpoint:   "http://foo",
+			Interval:          10 * time.Millisecond,
+			ReportersCacheLen: 100,
+			TTL:               5 * time.Minute,
 		}})
 	require.NoError(t, err)
 

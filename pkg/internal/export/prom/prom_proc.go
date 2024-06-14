@@ -203,9 +203,9 @@ func (r *procMetricsReporter) observeMetric(proc *process.Status) {
 	r.cpuTimeObserver(proc)
 	r.cpuUtilizationObserver(proc)
 	r.memory.WithLabelValues(labelValues(proc, r.memoryAttrs)...).
-		Set(float64(proc.MemoryRSSBytes))
+		metric.Set(float64(proc.MemoryRSSBytes))
 	r.memoryVirtual.WithLabelValues(labelValues(proc, r.memoryVirtualAttrs)...).
-		Set(float64(proc.MemoryVMSBytes))
+		metric.Set(float64(proc.MemoryVMSBytes))
 	r.diskObserver(proc)
 	r.netObserver(proc)
 }
@@ -214,12 +214,12 @@ func (r *procMetricsReporter) observeMetric(proc *process.Status) {
 // to be triggered when the user disables the "process_cpu_state" metric
 func (r *procMetricsReporter) observeAggregatedCPUTime(proc *process.Status) {
 	r.cpuTime.WithLabelValues(labelValues(proc, r.cpuTimeAttrs)...).
-		Add(proc.CPUTimeUserDelta + proc.CPUTimeSystemDelta + proc.CPUTimeWaitDelta)
+		metric.Add(proc.CPUTimeUserDelta + proc.CPUTimeSystemDelta + proc.CPUTimeWaitDelta)
 }
 
 func (r *procMetricsReporter) observeAggregatedCPUUtilization(proc *process.Status) {
 	r.cpuUtilization.WithLabelValues(labelValues(proc, r.cpuUtilizationAttrs)...).
-		Set(proc.CPUUtilisationUser + proc.CPUUtilisationSystem + proc.CPUUtilisationWait)
+		metric.Set(proc.CPUUtilisationUser + proc.CPUUtilisationSystem + proc.CPUUtilisationWait)
 }
 
 // disaggregated observers report three CPU metrics: system, user and wait time
@@ -228,52 +228,52 @@ func (r *procMetricsReporter) observeDisaggregatedCPUTime(proc *process.Status) 
 	commonLabelValues := labelValues(proc, r.cpuTimeAttrs)
 
 	userLabels := append([]string{"user"}, commonLabelValues...)
-	r.cpuTime.WithLabelValues(userLabels...).Add(proc.CPUTimeUserDelta)
+	r.cpuTime.WithLabelValues(userLabels...).metric.Add(proc.CPUTimeUserDelta)
 
 	systemLabels := append([]string{"system"}, commonLabelValues...)
-	r.cpuTime.WithLabelValues(systemLabels...).Add(proc.CPUTimeSystemDelta)
+	r.cpuTime.WithLabelValues(systemLabels...).metric.Add(proc.CPUTimeSystemDelta)
 
 	waitLabels := append([]string{"wait"}, commonLabelValues...)
-	r.cpuTime.WithLabelValues(waitLabels...).Add(proc.CPUTimeWaitDelta)
+	r.cpuTime.WithLabelValues(waitLabels...).metric.Add(proc.CPUTimeWaitDelta)
 }
 
 func (r *procMetricsReporter) observeDisaggregatedCPUUtilization(proc *process.Status) {
 	commonLabelValues := labelValues(proc, r.cpuUtilizationAttrs)
 
 	userLabels := append([]string{"user"}, commonLabelValues...)
-	r.cpuUtilization.WithLabelValues(userLabels...).Set(proc.CPUUtilisationUser)
+	r.cpuUtilization.WithLabelValues(userLabels...).metric.Set(proc.CPUUtilisationUser)
 
 	systemLabels := append([]string{"system"}, commonLabelValues...)
-	r.cpuUtilization.WithLabelValues(systemLabels...).Set(proc.CPUUtilisationSystem)
+	r.cpuUtilization.WithLabelValues(systemLabels...).metric.Set(proc.CPUUtilisationSystem)
 
 	waitLabels := append([]string{"wait"}, commonLabelValues...)
-	r.cpuUtilization.WithLabelValues(waitLabels...).Set(proc.CPUUtilisationWait)
+	r.cpuUtilization.WithLabelValues(waitLabels...).metric.Set(proc.CPUUtilisationWait)
 }
 
 func (r *procMetricsReporter) observeAggregatedDisk(proc *process.Status) {
 	r.disk.WithLabelValues(labelValues(proc, r.diskAttrs)...).
-		Add(float64(proc.IOReadBytesDelta + proc.IOWriteBytesDelta))
+		metric.Add(float64(proc.IOReadBytesDelta + proc.IOWriteBytesDelta))
 }
 
 func (r *procMetricsReporter) observeDisaggregatedDisk(proc *process.Status) {
 	commonLabels := labelValues(proc, r.diskAttrs)
 	readLabels := append([]string{"read"}, commonLabels...)
-	r.disk.WithLabelValues(readLabels...).Add(float64(proc.IOReadBytesDelta))
+	r.disk.WithLabelValues(readLabels...).metric.Add(float64(proc.IOReadBytesDelta))
 	writeLabels := append([]string{"write"}, commonLabels...)
-	r.disk.WithLabelValues(writeLabels...).Add(float64(proc.IOWriteBytesDelta))
+	r.disk.WithLabelValues(writeLabels...).metric.Add(float64(proc.IOWriteBytesDelta))
 }
 
 func (r *procMetricsReporter) observeAggregatedNet(proc *process.Status) {
 	r.net.WithLabelValues(labelValues(proc, r.netAttrs)...).
-		Add(float64(proc.NetTxBytesDelta + proc.NetRcvBytesDelta))
+		metric.Add(float64(proc.NetTxBytesDelta + proc.NetRcvBytesDelta))
 }
 
 func (r *procMetricsReporter) observeDisaggregatedNet(proc *process.Status) {
 	commonLabels := labelValues(proc, r.netAttrs)
 	readLabels := append([]string{"transmit"}, commonLabels...)
-	r.net.WithLabelValues(readLabels...).Add(float64(proc.NetTxBytesDelta))
+	r.net.WithLabelValues(readLabels...).metric.Add(float64(proc.NetTxBytesDelta))
 	writeLabels := append([]string{"receive"}, commonLabels...)
-	r.net.WithLabelValues(writeLabels...).Add(float64(proc.NetRcvBytesDelta))
+	r.net.WithLabelValues(writeLabels...).metric.Add(float64(proc.NetRcvBytesDelta))
 }
 
 // attributesWithExplicit returns, for a metric name definition,

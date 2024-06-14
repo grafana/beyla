@@ -141,7 +141,7 @@ static __always_inline void handle_ssl_buf(u64 id, ssl_args_t *args, int bytes_l
             // for (int i=0; i < 48; i++) {
             //     bpf_dbg_printk("%x ", buf[i]);
             // }
-
+            bpf_map_update_elem(&active_ssl_connections, &conn->conn, &direction, BPF_ANY);
             handle_buf_with_connection(&conn->conn, (void *)args->buf, bytes_len, WITH_SSL, direction, conn->orig_dport);
         } else {
             bpf_dbg_printk("No connection info! This is a bug.");

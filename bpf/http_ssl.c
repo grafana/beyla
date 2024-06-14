@@ -238,6 +238,7 @@ int BPF_UPROBE(uprobe_ssl_shutdown, void *s) {
     ssl_pid_connection_info_t *conn = bpf_map_lookup_elem(&ssl_to_conn, &s);
     if (conn) {
         finish_possible_delayed_http_request(&conn->conn);
+        bpf_map_delete_elem(&active_ssl_connections, &conn->conn);
     }
 
     bpf_map_delete_elem(&ssl_to_conn, &s);

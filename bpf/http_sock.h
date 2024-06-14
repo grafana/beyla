@@ -71,6 +71,14 @@ struct {
     __uint(pinning, LIBBPF_PIN_BY_NAME);
 } ongoing_tcp_req SEC(".maps");
 
+struct {
+    __uint(type, BPF_MAP_TYPE_LRU_HASH);
+    __type(key, pid_connection_info_t);   // connection that's SSL
+    __type(value, u8); // direction
+    __uint(max_entries, MAX_CONCURRENT_SHARED_REQUESTS);
+    __uint(pinning, LIBBPF_PIN_BY_NAME);
+} active_ssl_connections SEC(".maps");
+
 // http_info_t became too big to be declared as a variable in the stack.
 // We use a percpu array to keep a reusable copy of it
 struct {
@@ -271,6 +279,7 @@ static __always_inline void finish_http(http_info_t *info, pid_connection_info_t
         // bpf_dbg_printk("Terminating trace for pid=%d", pid_from_pid_tgid(pid_tid));
         // dbg_print_http_connection_info(&info->conn_info); // commented out since GitHub CI doesn't like this call
         bpf_map_delete_elem(&ongoing_http, pid_conn);
+        bpf_map_delete_elem(&active_ssl_connections, pid_conn);
     }        
 }
 
@@ -539,6 +548,7 @@ static __always_inline void process_http2_grpc_frames(pid_connection_info_t *pid
         }
         if (found_end_frame) {
             http2_grpc_end(&stream, prev_info, (void *)((u8 *)u_buf + saved_buf_pos));
+            bpf_map_delete_elem(&active_ssl_connections, pid_conn);
         }
     }
 }

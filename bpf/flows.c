@@ -162,8 +162,6 @@ static inline int flow_monitor(struct __sk_buff *skb, u8 direction) {
     id.if_index = skb->ifindex;
 
     u64 current_time = bpf_ktime_get_ns();
-    //Set extra fields    
-    id.direction = direction;
 
     // TODO: we need to add spinlock here when we deprecate versions prior to 5.1, or provide
     // a spinlocked alternative version and use it selectively https://lwn.net/Articles/779120/
@@ -195,7 +193,8 @@ static inline int flow_monitor(struct __sk_buff *skb, u8 direction) {
             .bytes = skb->len,
             .start_mono_time_ns = current_time,
             .end_mono_time_ns = current_time,
-            .flags = flags, 
+            .flags = flags,
+            .direction = direction,
         };
 
         // even if we know that the entry is new, another CPU might be concurrently inserting a flow

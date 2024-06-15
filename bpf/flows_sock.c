@@ -43,6 +43,13 @@ struct __udphdr {
 	__sum16 check;
 };
 
+struct {
+	__uint(type, BPF_MAP_TYPE_HASH);
+	__uint(max_entries, 1 << 24);
+	__type(key, flow_id);
+	__type(value, u8);
+} flow_directions SEC(".maps");
+
 static __always_inline bool read_sk_buff(struct __sk_buff *skb, flow_id *id, u16 *custom_flags) {
     // we read the protocol just like here linux/samples/bpf/parse_ldabs.c
     u16 h_proto;
@@ -126,7 +133,7 @@ static __always_inline bool read_sk_buff(struct __sk_buff *skb, flow_id *id, u16
             }
 
             break;
-        } 
+        }
         case IPPROTO_UDP: {
             u16 port;
             bpf_skb_load_bytes(skb, hdr_len + offsetof(struct __udphdr, source), &port, sizeof(port));
@@ -154,7 +161,7 @@ static __always_inline bool same_ip(u8 *ip1, u8 *ip2) {
             return false;
         }
     }
-    
+
     return true;
 }
 
@@ -178,11 +185,6 @@ int socket__http_filter(struct __sk_buff *skb) {
     }
 
     u64 current_time = bpf_ktime_get_ns();
-    //Set extra fields    
-    id.direction = INGRESS;
-    if (id.src_port > id.dst_port) {
-        id.direction = EGRESS;
-    }
 
     // TODO: we need to add spinlock here when we deprecate versions prior to 5.1, or provide
     // a spinlocked alternative version and use it selectively https://lwn.net/Articles/779120/
@@ -214,8 +216,31 @@ int socket__http_filter(struct __sk_buff *skb) {
             .bytes = skb->len,
             .start_mono_time_ns = current_time,
             .end_mono_time_ns = current_time,
-            .flags = flags, 
+            .flags = flags,
         };
+
+        u8 *direction = (u8 *)bpf_map_lookup_elem(&flow_directions, &id);
+        if(direction == NULL) {
+            // Calculate direction based on first flag received
+            // SYN and ACK mean someone else initiated the connection and this is the INGRESS direction
+            if((flags & (SYN_FLAG | ACK_FLAG)) == (SYN_FLAG | ACK_FLAG)) {
+                new_flow.direction = INGRESS;
+            }
+            // SYN only means we initiated the connection and this is the EGRESS direction
+            else if((flags & SYN_FLAG) == SYN_FLAG) {
+                new_flow.direction = EGRESS;
+            // fallback for lost or already started connections and UDP
+            } else {
+                new_flow.direction = INGRESS;
+                if (id.src_port > id.dst_port) {
+                    new_flow.direction = EGRESS;
+                }
+            }
+            bpf_map_update_elem(&flow_directions, &id, &new_flow.direction, BPF_ANY);
+        } else {
+            // get direction from saved flow
+            new_flow.direction = *direction;
+        }
 
         // even if we know that the entry is new, another CPU might be concurrently inserting a flow
         // so we need to specify BPF_ANY

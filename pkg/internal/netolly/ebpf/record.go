@@ -80,6 +80,7 @@ func (fm *NetFlowMetrics) Accumulate(src *NetFlowMetrics) {
 	fm.Bytes += src.Bytes
 	fm.Packets += src.Packets
 	fm.Flags |= src.Flags
+	fm.Direction = src.Direction
 }
 
 // SrcIP is never null. Returned as pointer for efficiency.

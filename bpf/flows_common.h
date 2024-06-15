@@ -15,6 +15,7 @@
 // according to field 61 in https://www.iana.org/assignments/ipfix/ipfix.xhtml
 #define INGRESS 0
 #define EGRESS 1
+#define UNKNOWN 255
 
 // Flags according to RFC 9293 & https://www.iana.org/assignments/ipfix/ipfix.xhtml
 #define FIN_FLAG 0x01

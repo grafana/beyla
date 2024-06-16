@@ -74,7 +74,7 @@ struct {
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __type(key, pid_connection_info_t);   // connection that's SSL
-    __type(value, u8); // direction
+    __type(value, u64); // ssl
     __uint(max_entries, MAX_CONCURRENT_SHARED_REQUESTS);
     __uint(pinning, LIBBPF_PIN_BY_NAME);
 } active_ssl_connections SEC(".maps");
@@ -264,8 +264,12 @@ static __always_inline http_connection_metadata_t* empty_connection_meta() {
     return bpf_map_lookup_elem(&connection_meta_mem, &zero);
 }
 
+static __always_inline u8 http_info_complete(http_info_t *info) {
+    return (info->start_monotime_ns != 0 && info->status != 0 && info->pid.host_pid != 0);
+}
+
 static __always_inline void finish_http(http_info_t *info, pid_connection_info_t *pid_conn) {
-    if (info->start_monotime_ns != 0 && info->status != 0 && info->pid.host_pid != 0) {
+    if (http_info_complete(info)) {
         http_info_t *trace = bpf_ringbuf_reserve(&events, sizeof(http_info_t), 0);        
         if (trace) {
             bpf_dbg_printk("Sending trace %lx, response length %d", info, info->resp_len);

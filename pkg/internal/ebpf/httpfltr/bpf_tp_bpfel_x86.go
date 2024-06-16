@@ -134,6 +134,11 @@ type bpf_tpSslPidConnectionInfoT struct {
 	_         [2]byte
 }
 
+type bpf_tpSslPidInfoT struct {
+	Id    uint64
+	C_tid bpf_tpPidKeyT
+}
+
 type bpf_tpTcpReqT struct {
 	Flags           uint8
 	_               [1]byte

@@ -272,7 +272,7 @@ cleanup:
 
 // Main HTTP read and write operations are handled with tcp_sendmsg and tcp_recvmsg 
 
-static __always_inline u8 is_ssl_connection(u64 id, pid_connection_info_t *conn) {
+static __always_inline void *is_ssl_connection(u64 id, pid_connection_info_t *conn) {
     void *ssl = 0;
     // Checks if it's sandwitched between active SSL handshake, read or write uprobe/uretprobe
     void **s = bpf_map_lookup_elem(&active_ssl_handshakes, &id);
@@ -289,16 +289,10 @@ static __always_inline u8 is_ssl_connection(u64 id, pid_connection_info_t *conn)
     }            
 
     if (ssl) {
-        return 1;
+        return ssl;
     }
 
-    u8 *direction = bpf_map_lookup_elem(&active_ssl_connections, conn);
-
-    if (direction) {
-        return 1;
-    }
-
-    return 0;
+    return bpf_map_lookup_elem(&active_ssl_connections, conn);
 }
 
 // The size argument here will be always the total response size.
@@ -328,7 +322,7 @@ int BPF_KPROBE(kprobe_tcp_sendmsg, struct sock *sk, struct msghdr *msg, size_t s
         sort_connection_info(&s_args.p_conn.conn);
         s_args.p_conn.pid = pid_from_pid_tgid(id);
 
-        u8 ssl = is_ssl_connection(id, &s_args.p_conn);
+        void *ssl = is_ssl_connection(id, &s_args.p_conn);
         if (size > 0) {
             if (!ssl) {
                 void *iovec_ptr = find_msghdr_buf(msg);
@@ -356,7 +350,7 @@ int BPF_KPROBE(kprobe_tcp_sendmsg, struct sock *sk, struct msghdr *msg, size_t s
         bpf_dbg_printk("=== kprobe SSL tcp_sendmsg=%d sock=%llx ssl=%llx ===", id, sk, ssl);
         ssl_pid_connection_info_t *conn = bpf_map_lookup_elem(&ssl_to_conn, &ssl);
         if (conn) {
-            finish_possible_delayed_http_request(&conn->conn);
+            finish_possible_delayed_tls_http_request(&conn->conn, ssl);
         }
         ssl_pid_connection_info_t ssl_conn = {
             .conn = s_args.p_conn,
@@ -493,7 +487,7 @@ int BPF_KRETPROBE(kretprobe_tcp_recvmsg, int copied_len) {
         sort_connection_info(&info.conn);
         info.pid = pid_from_pid_tgid(id);
 
-        u8 ssl = is_ssl_connection(id, &info);
+        void *ssl = is_ssl_connection(id, &info);
 
         if (!ssl) {
             handle_buf_with_connection(&info, (void *)args->iovec_ptr, copied_len, NO_SSL, TCP_RECV, orig_dport);

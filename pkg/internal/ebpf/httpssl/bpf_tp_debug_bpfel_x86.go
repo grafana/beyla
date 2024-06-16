@@ -112,6 +112,11 @@ type bpf_tp_debugSslPidConnectionInfoT struct {
 	_         [2]byte
 }
 
+type bpf_tp_debugSslPidInfoT struct {
+	Id    uint64
+	C_tid bpf_tp_debugPidKeyT
+}
+
 type bpf_tp_debugTcpReqT struct {
 	Flags           uint8
 	_               [1]byte

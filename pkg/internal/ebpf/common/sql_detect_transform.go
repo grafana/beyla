@@ -117,6 +117,7 @@ func isPostgresCommand(lookup byte, b []byte) bool {
 	return false
 }
 
+// nolint:cyclop
 func parsePostgresBindCommand(buf []byte) (string, string, []string, error) {
 	statement := []byte{}
 	portal := []byte{}

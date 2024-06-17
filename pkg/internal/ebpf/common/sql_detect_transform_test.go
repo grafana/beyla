@@ -11,7 +11,7 @@ type bindParseResult struct {
 	portal       string
 	args         []string
 	hasErr       bool
-	hasAsciiArgs bool
+	hasASCIIArgs bool
 }
 
 type bindTest struct {
@@ -32,7 +32,7 @@ func TestPostgresBindParsing(t *testing.T) {
 				portal:       "ecto_1158",
 				args:         []string{"recommendationCache"},
 				hasErr:       false,
-				hasAsciiArgs: true,
+				hasASCIIArgs: true,
 			},
 		},
 		{
@@ -44,7 +44,7 @@ func TestPostgresBindParsing(t *testing.T) {
 				portal:       "ecto_1",
 				args:         []string{},
 				hasErr:       true,
-				hasAsciiArgs: true,
+				hasASCIIArgs: true,
 			},
 		},
 		{
@@ -80,7 +80,7 @@ func TestPostgresBindParsing(t *testing.T) {
 				portal:       "",
 				args:         []string{},
 				hasErr:       true,
-				hasAsciiArgs: true,
+				hasASCIIArgs: true,
 			},
 		},
 		{
@@ -92,7 +92,7 @@ func TestPostgresBindParsing(t *testing.T) {
 				portal:       "ecto_1158",
 				args:         []string{"recommendationCache"},
 				hasErr:       false,
-				hasAsciiArgs: false,
+				hasASCIIArgs: false,
 			},
 		},
 	} {
@@ -108,7 +108,7 @@ func TestPostgresBindParsing(t *testing.T) {
 				}
 				assert.Equal(t, ts.result.statement, statement)
 				assert.Equal(t, ts.result.portal, portal)
-				if ts.result.hasAsciiArgs {
+				if ts.result.hasASCIIArgs {
 					assert.Equal(t, ts.result.args, args)
 				} else {
 					for _, arg := range args {

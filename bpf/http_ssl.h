@@ -75,22 +75,29 @@ struct {
     __uint(pinning, LIBBPF_PIN_BY_NAME);
 } active_ssl_write_args SEC(".maps");
 
-static __always_inline void cleanup_ssl_trace(void *ssl) {
-    ssl_pid_connection_info_t *ssl_info = bpf_map_lookup_elem(&ssl_to_conn, &ssl);
+static __always_inline void cleanup_ssl_server_trace(http_info_t *info, void *ssl) {
+    if (info && http_info_complete(info) && (info->type == EVENT_HTTP_REQUEST)) {
+        ssl_pid_connection_info_t *ssl_info = bpf_map_lookup_elem(&ssl_to_conn, &ssl);
 
-    if (ssl_info) {
-        delete_server_trace_tid(&ssl_info->c_tid);
+        if (ssl_info) {
+            bpf_dbg_printk("Looking to delete server trace for ssl = %llx, info->type = %d", ssl, info->type);
+            //dbg_print_http_connection_info(&ssl_info->conn.conn); // commented out since GitHub CI doesn't like this call
+            delete_server_trace_tid(&ssl_info->c_tid);
+        }
     }
 }
 
 static __always_inline void finish_possible_delayed_tls_http_request(pid_connection_info_t *pid_conn, void *ssl) {
     http_info_t *info = bpf_map_lookup_elem(&ongoing_http, pid_conn);
     if (info) {        
-        if (http_info_complete(info)) {
-            cleanup_ssl_trace(ssl);
-        }
+        cleanup_ssl_server_trace(info, ssl);
         finish_http(info, pid_conn);        
     }
+}
+
+static __always_inline void cleanup_trace_info_for_delayed_trace(pid_connection_info_t *pid_conn, void *ssl) {
+    http_info_t *info = bpf_map_lookup_elem(&ongoing_http, pid_conn);
+    cleanup_ssl_server_trace(info, ssl);
 }
 
 static __always_inline void handle_ssl_buf(u64 id, ssl_args_t *args, int bytes_len, u8 direction) {
@@ -161,6 +168,10 @@ static __always_inline void handle_ssl_buf(u64 id, ssl_args_t *args, int bytes_l
             // }
             bpf_map_update_elem(&active_ssl_connections, &conn->conn, &ssl_ptr, BPF_ANY);
             handle_buf_with_connection(&conn->conn, (void *)args->buf, bytes_len, WITH_SSL, direction, conn->orig_dport);
+            // We should attempt to clean up the server trace immediately. The cleanup information
+            // is keyed of the *ssl, so when it's delayed we might have different *ssl on the same
+            // connection.
+            cleanup_trace_info_for_delayed_trace(&conn->conn, ssl);
         } else {
             bpf_dbg_printk("No connection info! This is a bug.");
         }

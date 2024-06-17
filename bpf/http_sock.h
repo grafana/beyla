@@ -279,7 +279,9 @@ static __always_inline void finish_http(http_info_t *info, pid_connection_info_t
             bpf_ringbuf_submit(trace, get_flags());
         }
 
-        delete_server_trace();
+        if (info->type == EVENT_HTTP_REQUEST) {
+            delete_server_trace();
+        }
 
         // bpf_dbg_printk("Terminating trace for pid=%d", pid_from_pid_tgid(pid_tid));
         // dbg_print_http_connection_info(&info->conn_info); // commented out since GitHub CI doesn't like this call

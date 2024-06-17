@@ -175,10 +175,15 @@ func (tc *TestCollector) metricEvent(writer http.ResponseWriter, body []byte) {
 					})
 				case pmetric.MetricTypeHistogram:
 					forEach[pmetric.HistogramDataPoint](m.Histogram().DataPoints(), func(hdp pmetric.HistogramDataPoint) {
+						// for simplicity, reporting only sum histogram data
+						if !hdp.HasSum() {
+							return
+						}
 						mr := MetricRecord{
 							Name:               m.Name(),
 							Unit:               m.Unit(),
 							Type:               m.Type(),
+							FloatVal:           hdp.Sum(),
 							Attributes:         map[string]string{},
 							ResourceAttributes: resourceAttrs,
 						}

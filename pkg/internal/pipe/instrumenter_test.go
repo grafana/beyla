@@ -99,7 +99,8 @@ func TestBasicPipeline(t *testing.T) {
 			string(semconv.TelemetrySDKLanguageKey): "go",
 			string(semconv.TelemetrySDKNameKey):     "beyla",
 		},
-		Type: pmetric.MetricTypeHistogram,
+		Type:     pmetric.MetricTypeHistogram,
+		FloatVal: 2 / float64(time.Second),
 	}, event)
 
 }
@@ -326,7 +327,8 @@ func TestRouteConsolidation(t *testing.T) {
 			string(semconv.TelemetrySDKLanguageKey): "go",
 			string(semconv.TelemetrySDKNameKey):     "beyla",
 		},
-		Type: pmetric.MetricTypeHistogram,
+		Type:     pmetric.MetricTypeHistogram,
+		FloatVal: 2 / float64(time.Second),
 	}, events["/**"])
 }
 
@@ -376,7 +378,8 @@ func TestGRPCPipeline(t *testing.T) {
 			string(semconv.TelemetrySDKLanguageKey): "go",
 			string(semconv.TelemetrySDKNameKey):     "beyla",
 		},
-		Type: pmetric.MetricTypeHistogram,
+		Type:     pmetric.MetricTypeHistogram,
+		FloatVal: 2 / float64(time.Second),
 	}, event)
 }
 
@@ -455,7 +458,8 @@ func TestBasicPipelineInfo(t *testing.T) {
 			string(semconv.TelemetrySDKLanguageKey): "go",
 			string(semconv.TelemetrySDKNameKey):     "beyla",
 		},
-		Type: pmetric.MetricTypeHistogram,
+		Type:     pmetric.MetricTypeHistogram,
+		FloatVal: 1 / float64(time.Second),
 	}, event)
 }
 

@@ -88,15 +88,20 @@ func TestMetricsExpiration(t *testing.T) {
 			NetFlowRecordT: ebpf.NetFlowRecordT{Metrics: ebpf.NetFlowMetrics{Bytes: 123}}},
 	}
 
+	// makes sure that the records channel is emptied and any remaining
+	// old metric is sent and then the channel is re-emptied
+	otlp.ResetRecords()
+	readChan(t, otlp.Records(), timeout)
+	otlp.ResetRecords()
+
 	// BUT not the metrics that haven't been received during that time.
 	// We just know it because OTEL will only sends foo/bar metric.
 	// If this test is flaky: it means it is actually failing
-	otlp.ResetRecords()
-	// repeating 5 times to make sure that only this metric is forwarded
-	for i := 0; i < 5; i++ {
+	// repeating 10 times to make sure that only this metric is forwarded
+	for i := 0; i < 10; i++ {
 		metric := readChan(t, otlp.Records(), timeout)
-		assert.Equal(t, map[string]string{"src.name": "foo", "dst.name": "bar"}, metric.Attributes)
-		assert.EqualValues(t, 369, metric.IntVal)
+		require.Equal(t, map[string]string{"src.name": "foo", "dst.name": "bar"}, metric.Attributes)
+		require.EqualValues(t, 369, metric.IntVal)
 	}
 
 	// AND WHEN the metrics labels that disappeared are received again

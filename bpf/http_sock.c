@@ -129,6 +129,7 @@ int BPF_KPROBE(kprobe_tcp_rcv_established, struct sock *sk, struct sk_buff *skb)
             .conn = info,
             .orig_dport = info.conn.s_port,
         };
+        task_tid(&pid_info.c_tid);
         bpf_map_update_elem(&pid_tid_to_conn, &id, &pid_info, BPF_ANY); // to support SSL on missing handshake, respect the original info if there
     }
 
@@ -182,6 +183,7 @@ int BPF_KRETPROBE(kretprobe_sys_accept4, uint fd)
             .conn = info,
             .orig_dport = orig_dport,
         };
+        task_tid(&pid_info.c_tid);
         bpf_map_update_elem(&pid_tid_to_conn, &id, &pid_info, BPF_ANY); // to support SSL on missing handshake
     }
 
@@ -255,6 +257,7 @@ int BPF_KRETPROBE(kretprobe_sys_connect, int fd)
             .conn = info,
             .orig_dport = orig_dport,
         };
+        task_tid(&pid_info.c_tid);
         bpf_map_update_elem(&pid_tid_to_conn, &id, &pid_info, BPF_ANY); // to support SSL 
     }
 
@@ -349,6 +352,7 @@ int BPF_KPROBE(kprobe_tcp_sendmsg, struct sock *sk, struct msghdr *msg, size_t s
             .conn = s_args.p_conn,
             .orig_dport = orig_dport,
         };
+        task_tid(&ssl_conn.c_tid);
         bpf_map_update_elem(&ssl_to_conn, &ssl, &ssl_conn, BPF_ANY);
     }
 

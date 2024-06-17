@@ -67,12 +67,7 @@ int BPF_UPROBE(uprobe_ssl_read, void *ssl, const void *buf, int num) {
     args.len_ptr = 0;
 
     bpf_map_update_elem(&active_ssl_read_args, &id, &args, BPF_ANY);
-
-    ssl_pid_info_t pid_info = {
-        .id = id,
-    };    
-    task_tid(&pid_info.c_tid);
-    bpf_map_update_elem(&ssl_to_pid_tid, &args.ssl, &pid_info, BPF_NOEXIST); // we must not overwrite here, remember the original thread
+    bpf_map_update_elem(&ssl_to_pid_tid, &args.ssl, &id, BPF_NOEXIST); // we must not overwrite here, remember the original thread
 
     return 0;
 }
@@ -115,12 +110,7 @@ int BPF_UPROBE(uprobe_ssl_read_ex, void *ssl, const void *buf, int num, size_t *
     args.len_ptr = (u64)readbytes;
 
     bpf_map_update_elem(&active_ssl_read_args, &id, &args, BPF_ANY);
-
-    ssl_pid_info_t pid_info = {
-        .id = id,
-    };    
-    task_tid(&pid_info.c_tid);
-    bpf_map_update_elem(&ssl_to_pid_tid, &args.ssl, &pid_info, BPF_NOEXIST); // we must not overwrite here, remember the original thread
+    bpf_map_update_elem(&ssl_to_pid_tid, &args.ssl, &id, BPF_NOEXIST); // we must not overwrite here, remember the original thread
 
     return 0;
 }

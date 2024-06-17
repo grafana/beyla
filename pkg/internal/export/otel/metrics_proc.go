@@ -303,6 +303,9 @@ func (me *procMetricsExporter) observeMetric(reporter *procMetrics, s *process.S
 	mem, attrs := reporter.memory.ForRecord(s)
 	mem.Add(me.ctx, s.MemoryRSSBytes, metric2.WithAttributeSet(attrs))
 
+	vmem, attrs := reporter.memoryVirtual.ForRecord(s)
+	vmem.Add(me.ctx, s.MemoryVMSBytes, metric2.WithAttributeSet(attrs))
+
 	me.diskObserver(me.ctx, reporter, s)
 	me.netObserver(me.ctx, reporter, s)
 }

@@ -3,7 +3,6 @@ package ebpfcommon
 import (
 	"bytes"
 	"encoding/binary"
-	"fmt"
 	"net"
 	"strconv"
 	"strings"
@@ -207,8 +206,6 @@ func http2InfoToSpan(info *BPFHTTP2Info, method, path, peer, host string, status
 // or :status. Then we know what the protocol actually is.
 func (event *BPFHTTP2Info) eventType(protocol Protocol) request.EventType {
 	eventType := request.EventType(event.Type)
-
-	fmt.Printf("Event type %d, request %v\n", eventType, event)
 
 	switch protocol {
 	case HTTP2:

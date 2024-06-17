@@ -119,5 +119,5 @@ func (r *netMetricsReporter) observe(flow *ebpf.Record) {
 	for _, attr := range r.attrs {
 		labelValues = append(labelValues, attr.Get(flow))
 	}
-	r.flowBytes.WithLabelValues(labelValues...).Add(float64(flow.Metrics.Bytes))
+	r.flowBytes.WithLabelValues(labelValues...).metric.Add(float64(flow.Metrics.Bytes))
 }

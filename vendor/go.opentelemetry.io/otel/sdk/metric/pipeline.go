@@ -213,10 +213,11 @@ func newInserter[N int64 | float64](p *pipeline, vc *cache[string, instID]) *ins
 //
 // If an instrument is determined to use a Drop aggregation, that instrument is
 // not inserted nor returned.
-func (i *inserter[N]) Instrument(inst Instrument, readerAggregation Aggregation) ([]aggregate.Measure[N], error) {
+func (i *inserter[N]) Instrument(inst Instrument, readerAggregation Aggregation) ([]aggregate.Measure[N], []aggregate.Remove, error) {
 	var (
 		matched  bool
 		measures []aggregate.Measure[N]
+		removers []aggregate.Remove
 	)
 
 	errs := &multierror{wrapped: errCreatingAggregators}
@@ -227,7 +228,7 @@ func (i *inserter[N]) Instrument(inst Instrument, readerAggregation Aggregation)
 			continue
 		}
 		matched = true
-		in, id, err := i.cachedAggregator(inst.Scope, inst.Kind, stream, readerAggregation)
+		in, rem, id, err := i.cachedAggregator(inst.Scope, inst.Kind, stream, readerAggregation)
 		if err != nil {
 			errs.append(err)
 		}
@@ -240,10 +241,11 @@ func (i *inserter[N]) Instrument(inst Instrument, readerAggregation Aggregation)
 		}
 		seen[id] = struct{}{}
 		measures = append(measures, in)
+		removers = append(removers, rem)
 	}
 
 	if matched {
-		return measures, errs.errorOrNil()
+		return measures, removers, errs.errorOrNil()
 	}
 
 	// Apply implicit default view if no explicit matched.
@@ -252,7 +254,7 @@ func (i *inserter[N]) Instrument(inst Instrument, readerAggregation Aggregation)
 		Description: inst.Description,
 		Unit:        inst.Unit,
 	}
-	in, _, err := i.cachedAggregator(inst.Scope, inst.Kind, stream, readerAggregation)
+	in, rem, _, err := i.cachedAggregator(inst.Scope, inst.Kind, stream, readerAggregation)
 	if err != nil {
 		errs.append(err)
 	}
@@ -260,7 +262,11 @@ func (i *inserter[N]) Instrument(inst Instrument, readerAggregation Aggregation)
 		// Ensured to have not seen given matched was false.
 		measures = append(measures, in)
 	}
-	return measures, errs.errorOrNil()
+	if rem != nil {
+		// Ensured to have not seen given matched was false.
+		removers = append(removers, rem)
+	}
+	return measures, removers, errs.errorOrNil()
 }
 
 // addCallback registers a single instrument callback to be run when
@@ -277,6 +283,7 @@ var aggIDCount uint64
 type aggVal[N int64 | float64] struct {
 	ID      uint64
 	Measure aggregate.Measure[N]
+	Remove  aggregate.Remove
 	Err     error
 }
 
@@ -319,7 +326,7 @@ func (i *inserter[N]) readerDefaultAggregation(kind InstrumentKind) Aggregation 
 //
 // If the instrument defines an unknown or incompatible aggregation, an error
 // is returned.
-func (i *inserter[N]) cachedAggregator(scope instrumentation.Scope, kind InstrumentKind, stream Stream, readerAggregation Aggregation) (meas aggregate.Measure[N], aggID uint64, err error) {
+func (i *inserter[N]) cachedAggregator(scope instrumentation.Scope, kind InstrumentKind, stream Stream, readerAggregation Aggregation) (meas aggregate.Measure[N], remove aggregate.Remove, aggID uint64, err error) {
 	switch stream.Aggregation.(type) {
 	case nil:
 		// The aggregation was not overridden with a view. Use the aggregation
@@ -331,7 +338,7 @@ func (i *inserter[N]) cachedAggregator(scope instrumentation.Scope, kind Instrum
 	}
 
 	if err := isAggregatorCompatible(kind, stream.Aggregation); err != nil {
-		return nil, 0, fmt.Errorf(
+		return nil, nil, 0, fmt.Errorf(
 			"creating aggregator with instrumentKind: %d, aggregation %v: %w",
 			kind, stream.Aggregation, err,
 		)
@@ -358,12 +365,12 @@ func (i *inserter[N]) cachedAggregator(scope instrumentation.Scope, kind Instrum
 		// unrecognized input). Use that value directly.
 		b.AggregationLimit, _ = x.CardinalityLimit.Lookup()
 
-		in, out, err := i.aggregateFunc(b, stream.Aggregation, kind)
+		in, remove, out, err := i.aggregateFunc(b, stream.Aggregation, kind)
 		if err != nil {
-			return aggVal[N]{0, nil, err}
+			return aggVal[N]{0, nil, nil, err}
 		}
 		if in == nil { // Drop aggregator.
-			return aggVal[N]{0, nil, nil}
+			return aggVal[N]{0, nil, nil, nil}
 		}
 		i.pipeline.addSync(scope, instrumentSync{
 			// Use the first-seen name casing for this and all subsequent
@@ -374,9 +381,9 @@ func (i *inserter[N]) cachedAggregator(scope instrumentation.Scope, kind Instrum
 			compAgg:     out,
 		})
 		id := atomic.AddUint64(&aggIDCount, 1)
-		return aggVal[N]{id, in, err}
+		return aggVal[N]{id, in, remove, err}
 	})
-	return cv.Measure, cv.ID, cv.Err
+	return cv.Measure, cv.Remove, cv.ID, cv.Err
 }
 
 // logConflict validates if an instrument with the same case-insensitive name
@@ -440,7 +447,7 @@ func (i *inserter[N]) instID(kind InstrumentKind, stream Stream) instID {
 // aggregateFunc returns new aggregate functions matching agg, kind, and
 // monotonic. If the agg is unknown or temporality is invalid, an error is
 // returned.
-func (i *inserter[N]) aggregateFunc(b aggregate.Builder[N], agg Aggregation, kind InstrumentKind) (meas aggregate.Measure[N], comp aggregate.ComputeAggregation, err error) {
+func (i *inserter[N]) aggregateFunc(b aggregate.Builder[N], agg Aggregation, kind InstrumentKind) (meas aggregate.Measure[N], remove aggregate.Remove, comp aggregate.ComputeAggregation, err error) {
 	switch a := agg.(type) {
 	case AggregationDefault:
 		return i.aggregateFunc(b, DefaultAggregationSelector(kind), kind)
@@ -449,22 +456,22 @@ func (i *inserter[N]) aggregateFunc(b aggregate.Builder[N], agg Aggregation, kin
 	case AggregationLastValue:
 		switch kind {
 		case InstrumentKindGauge:
-			meas, comp = b.LastValue()
+			meas, remove, comp = b.LastValue()
 		case InstrumentKindObservableGauge:
-			meas, comp = b.PrecomputedLastValue()
+			meas, remove, comp = b.PrecomputedLastValue()
 		}
 	case AggregationSum:
 		switch kind {
 		case InstrumentKindObservableCounter:
-			meas, comp = b.PrecomputedSum(true)
+			meas, remove, comp = b.PrecomputedSum(true)
 		case InstrumentKindObservableUpDownCounter:
-			meas, comp = b.PrecomputedSum(false)
+			meas, remove, comp = b.PrecomputedSum(false)
 		case InstrumentKindCounter, InstrumentKindHistogram:
-			meas, comp = b.Sum(true)
+			meas, remove, comp = b.Sum(true)
 		default:
 			// InstrumentKindUpDownCounter, InstrumentKindObservableGauge, and
 			// instrumentKindUndefined or other invalid instrument kinds.
-			meas, comp = b.Sum(false)
+			meas, remove, comp = b.Sum(false)
 		}
 	case AggregationExplicitBucketHistogram:
 		var noSum bool
@@ -475,7 +482,7 @@ func (i *inserter[N]) aggregateFunc(b aggregate.Builder[N], agg Aggregation, kin
 			// https://github.com/open-telemetry/opentelemetry-specification/blob/v1.21.0/specification/metrics/sdk.md#histogram-aggregations
 			noSum = true
 		}
-		meas, comp = b.ExplicitBucketHistogram(a.Boundaries, a.NoMinMax, noSum)
+		meas, remove, comp = b.ExplicitBucketHistogram(a.Boundaries, a.NoMinMax, noSum)
 	case AggregationBase2ExponentialHistogram:
 		var noSum bool
 		switch kind {
@@ -485,13 +492,13 @@ func (i *inserter[N]) aggregateFunc(b aggregate.Builder[N], agg Aggregation, kin
 			// https://github.com/open-telemetry/opentelemetry-specification/blob/v1.21.0/specification/metrics/sdk.md#histogram-aggregations
 			noSum = true
 		}
-		meas, comp = b.ExponentialBucketHistogram(a.MaxSize, a.MaxScale, a.NoMinMax, noSum)
+		meas, remove, comp = b.ExponentialBucketHistogram(a.MaxSize, a.MaxScale, a.NoMinMax, noSum)
 
 	default:
 		err = errUnknownAggregation
 	}
 
-	return meas, comp, err
+	return meas, remove, comp, err
 }
 
 // isAggregatorCompatible checks if the aggregation can be used by the instrument.
@@ -599,25 +606,28 @@ func newResolver[N int64 | float64](p pipelines, vc *cache[string, instID]) reso
 
 // Aggregators returns the Aggregators that must be updated by the instrument
 // defined by key.
-func (r resolver[N]) Aggregators(id Instrument) ([]aggregate.Measure[N], error) {
+func (r resolver[N]) Aggregators(id Instrument) ([]aggregate.Measure[N], []aggregate.Remove, error) {
 	var measures []aggregate.Measure[N]
+	var removers []aggregate.Remove
 
 	errs := &multierror{}
 	for _, i := range r.inserters {
-		in, err := i.Instrument(id, i.readerDefaultAggregation(id.Kind))
+		in, rem, err := i.Instrument(id, i.readerDefaultAggregation(id.Kind))
 		if err != nil {
 			errs.append(err)
 		}
 		measures = append(measures, in...)
+		removers = append(removers, rem...)
 	}
-	return measures, errs.errorOrNil()
+	return measures, removers, errs.errorOrNil()
 }
 
 // HistogramAggregators returns the histogram Aggregators that must be updated by the instrument
 // defined by key. If boundaries were provided on instrument instantiation, those take precedence
 // over boundaries provided by the reader.
-func (r resolver[N]) HistogramAggregators(id Instrument, boundaries []float64) ([]aggregate.Measure[N], error) {
+func (r resolver[N]) HistogramAggregators(id Instrument, boundaries []float64) ([]aggregate.Measure[N], []aggregate.Remove, error) {
 	var measures []aggregate.Measure[N]
+	var removers []aggregate.Remove
 
 	errs := &multierror{}
 	for _, i := range r.inserters {
@@ -626,13 +636,14 @@ func (r resolver[N]) HistogramAggregators(id Instrument, boundaries []float64) (
 			histAgg.Boundaries = boundaries
 			agg = histAgg
 		}
-		in, err := i.Instrument(id, agg)
+		in, rem, err := i.Instrument(id, agg)
 		if err != nil {
 			errs.append(err)
 		}
 		measures = append(measures, in...)
+		removers = append(removers, rem...)
 	}
-	return measures, errs.errorOrNil()
+	return measures, removers, errs.errorOrNil()
 }
 
 type multierror struct {

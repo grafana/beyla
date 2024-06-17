@@ -109,3 +109,4 @@ Beyla can be [configured to report internal metrics]({{< relref "./configure/opt
 | `otel_trace_exports`        | Counter    | Length of the trace batches submitted to the remote OTEL collector                       |
 | `otel_trace_export_errors`  | CounterVec | Error count on each failed OTEL trace export, by error type                              |
 | `prometheus_http_requests`  | CounterVec | Number of requests towards the Prometheus Scrape endpoint, faceted by HTTP port and path |
+| `beyla_instrumented_processes` | GaugeVec   | Instrumented processes by Beyla, with process name                                    |

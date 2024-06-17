@@ -808,10 +808,6 @@ the last update is greater than this Time-To-Leave (TTL) value.
 
 The purpose of this value is to avoid reporting indefinitely finished application instances.
 
-Due to the current limitations of the OpenTelemetry SDK, this value is not effective for
-histogram metrics. If expiring old histogram metric instances is mandatory, consider using
-the Prometheus exporter, or an intermediate OpenTelemetry collector such as [Grafana Alloy](/docs/alloy/latest/).
-
 | YAML       | Environment variable          | Type            | Default                      |
 |------------|-------------------------------|-----------------|------------------------------|
 | `features` | `BEYLA_OTEL_METRICS_FEATURES` | list of strings | `["application", "network"]` |

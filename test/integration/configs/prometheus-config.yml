@@ -11,3 +11,8 @@ scrape_configs:
     static_configs:
       - targets:
           - 'otelcol:8888'
+  - job_name: autoinstrumenter-collector
+    honor_labels: true
+    static_configs:
+      - targets:
+          - '172.17.0.1:8999'

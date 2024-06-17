@@ -51,6 +51,7 @@ type histValues[N int64 | float64] struct {
 	newRes   func() exemplar.Reservoir
 	limit    limiter[*buckets[N]]
 	values   map[attribute.Distinct]*buckets[N]
+	stale    map[attribute.Distinct]*buckets[N]
 	valuesMu sync.Mutex
 }
 
@@ -67,6 +68,7 @@ func newHistValues[N int64 | float64](bounds []float64, noSum bool, limit int, r
 		newRes: r,
 		limit:  newLimiter[*buckets[N]](limit),
 		values: make(map[attribute.Distinct]*buckets[N]),
+		stale:  make(map[attribute.Distinct]*buckets[N]),
 	}
 }
 
@@ -107,6 +109,18 @@ func (s *histValues[N]) measure(ctx context.Context, value N, fltrAttr attribute
 		b.sum(value)
 	}
 	b.res.Offer(ctx, t, exemplar.NewValue(value), droppedAttr)
+}
+
+func (s *histValues[N]) remove(ctx context.Context, fltrAttr attribute.Set) {
+	s.valuesMu.Lock()
+	defer s.valuesMu.Unlock()
+
+	key := fltrAttr.Equivalent()
+
+	if val, ok := s.values[key]; ok {
+		s.stale[key] = val
+		delete(s.values, key)
+	}
 }
 
 // newHistogram returns an Aggregator that summarizes a set of measurements as
@@ -169,6 +183,7 @@ func (s *histogram[N]) delta(dest *metricdata.Aggregation) int {
 	}
 	// Unused attribute sets do not report.
 	clear(s.values)
+	clear(s.stale)
 	// The delta collection cycle resets.
 	s.start = t
 
@@ -192,7 +207,7 @@ func (s *histogram[N]) cumulative(dest *metricdata.Aggregation) int {
 	// Do not allow modification of our copy of bounds.
 	bounds := slices.Clone(s.bounds)
 
-	n := len(s.values)
+	n := len(s.values) + len(s.stale)
 	hDPts := reset(h.DataPoints, n, n)
 
 	var i int
@@ -227,6 +242,17 @@ func (s *histogram[N]) cumulative(dest *metricdata.Aggregation) int {
 		// sets that become "stale" need to be forgotten so this will not
 		// overload the system.
 	}
+	for _, val := range s.stale {
+		hDPts[i].Attributes = val.attrs
+		hDPts[i].StartTime = s.start
+		hDPts[i].Time = t
+		hDPts[i].NoRecordedValue = true
+		i++
+	}
+
+	// Stale attribute sets for which a no-record marker was emitted are not
+	// reported anymore.
+	clear(s.stale)
 
 	h.DataPoints = hDPts
 	*dest = h

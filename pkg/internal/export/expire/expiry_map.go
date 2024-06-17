@@ -10,6 +10,7 @@ type Clock func() time.Time
 
 // ExpiryMap stores elements in a synchronized map, and removes them if they haven't been
 // accessed/updated for a given time period
+// TODO: optimize to minimize memory generation
 type ExpiryMap[T any] struct {
 	clock   Clock
 	mt      sync.RWMutex
@@ -64,15 +65,15 @@ func (ex *ExpiryMap[T]) GetOrCreate(lbls []string, instancer func() T) T {
 }
 
 // DeleteExpired entries and return their label set
-func (ex *ExpiryMap[T]) DeleteExpired() [][]string {
+func (ex *ExpiryMap[T]) DeleteExpired() []T {
 	var delKeys []string
-	var delLabels [][]string
+	var delEntries []T
 	ex.mt.RLock()
 	now := ex.clock()
 	for k, e := range ex.entries {
 		if now.Sub(e.lastAccess) > ex.ttl {
 			delKeys = append(delKeys, k)
-			delLabels = append(delLabels, e.labelValues)
+			delEntries = append(delEntries, e.val)
 		}
 	}
 	ex.mt.RUnlock()
@@ -81,7 +82,7 @@ func (ex *ExpiryMap[T]) DeleteExpired() [][]string {
 		delete(ex.entries, k)
 	}
 	ex.mt.Unlock()
-	return delLabels
+	return delEntries
 }
 
 // All returns an array with all the stored entries. It might contain expired entries

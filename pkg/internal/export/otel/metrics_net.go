@@ -60,15 +60,25 @@ func newMeterProvider(res *resource.Resource, exporter *metric.Exporter, interva
 }
 
 type netMetricsExporter struct {
-	metrics *Expirer[*ebpf.Record, metric2.Int64Observer, *IntCounter, int64]
-	clock   *expire.CachedClock
+	ctx       context.Context
+	metrics   *Expirer[*ebpf.Record, metric2.Int64Counter, float64]
+	clock     *expire.CachedClock
+	expireTTL time.Duration
 }
 
-func NetMetricsExporterProvider(ctxInfo *global.ContextInfo, cfg *NetMetricsConfig) (pipe.FinalFunc[[]*ebpf.Record], error) {
+func NetMetricsExporterProvider(ctx context.Context, ctxInfo *global.ContextInfo, cfg *NetMetricsConfig) (pipe.FinalFunc[[]*ebpf.Record], error) {
 	if !cfg.Enabled() {
 		// This node is not going to be instantiated. Let the pipes library just ignore it.
 		return pipe.IgnoreFinal[[]*ebpf.Record](), nil
 	}
+	exporter, err := newMetricsExporter(ctx, ctxInfo, cfg)
+	if err != nil {
+		return nil, err
+	}
+	return exporter.Do, nil
+}
+
+func newMetricsExporter(ctx context.Context, ctxInfo *global.ContextInfo, cfg *NetMetricsConfig) (*netMetricsExporter, error) {
 	log := nmlog()
 	log.Debug("instantiating network metrics exporter provider")
 	exporter, err := InstantiateMetricsExporter(context.Background(), cfg.Metrics, log)
@@ -93,31 +103,32 @@ func NetMetricsExporterProvider(ctxInfo *global.ContextInfo, cfg *NetMetricsConf
 		attrProv.For(attributes.BeylaNetworkFlow))
 
 	clock := expire.NewCachedClock(timeNow)
-	expirer := NewExpirer[*ebpf.Record, metric2.Int64Observer](NewIntCounter, attrs, clock.Time, cfg.Metrics.TTL)
-	ebpfEvents := provider.Meter("network_ebpf_events")
 
-	_, err = ebpfEvents.Int64ObservableCounter(
-		attributes.BeylaNetworkFlow.OTEL,
+	ebpfEvents := provider.Meter("network_ebpf_events")
+	bytesMetric, err := ebpfEvents.Int64Counter(attributes.BeylaNetworkFlow.OTEL,
 		metric2.WithDescription("total bytes_sent value of network flows observed by probe since its launch"),
-		metric2.WithUnit("{bytes}"),
-		metric2.WithInt64Callback(expirer.Collect),
+		metric2.WithUnit("{bytes}"), // TODO: By?
 	)
 	if err != nil {
 		log.Error("creating observable counter", "error", err)
 		return nil, err
 	}
+	expirer := NewExpirer[*ebpf.Record, metric2.Int64Counter, float64](ctx, bytesMetric, attrs, clock.Time, cfg.Metrics.TTL)
 	log.Debug("restricting attributes not in this list", "attributes", cfg.AttributeSelectors)
-	return (&netMetricsExporter{
-		metrics: expirer,
-		clock:   clock,
-	}).Do, nil
+	return &netMetricsExporter{
+		ctx:       ctx,
+		metrics:   expirer,
+		clock:     clock,
+		expireTTL: cfg.Metrics.TTL,
+	}, nil
 }
 
 func (me *netMetricsExporter) Do(in <-chan []*ebpf.Record) {
 	for i := range in {
 		me.clock.Update()
 		for _, v := range i {
-			me.metrics.ForRecord(v).Add(int64(v.Metrics.Bytes))
+			flowBytes, attrs := me.metrics.ForRecord(v)
+			flowBytes.Add(me.ctx, int64(v.Metrics.Bytes), metric2.WithAttributeSet(attrs))
 		}
 	}
 }

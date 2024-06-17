@@ -683,7 +683,6 @@ func TestTraces_InternalInstrumentation(t *testing.T) {
 		TracesConfig{
 			CommonEndpoint:    coll.URL,
 			BatchTimeout:      10 * time.Millisecond,
-			ExportTimeout:     10 * time.Millisecond,
 			ReportersCacheLen: 16,
 		},
 		&global.ContextInfo{

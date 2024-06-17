@@ -109,12 +109,8 @@ type bpf_tpSslArgsT struct {
 type bpf_tpSslPidConnectionInfoT struct {
 	Conn      bpf_tpPidConnectionInfoT
 	OrigDport uint16
+	C_tid     bpf_tpPidKeyT
 	_         [2]byte
-}
-
-type bpf_tpSslPidInfoT struct {
-	Id    uint64
-	C_tid bpf_tpPidKeyT
 }
 
 type bpf_tpTcpReqT struct {

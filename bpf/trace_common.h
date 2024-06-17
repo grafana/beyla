@@ -132,11 +132,16 @@ static __always_inline unsigned char *extract_flags(unsigned char *tp_start) {
     return tp_start + 13 + 2 + 1 + 32 + 1 + 16 + 1; // strlen("Traceparent: ") + strlen(ver) + strlen("-") + strlen(trace_id) + strlen("-") + strlen(span_id) + strlen("-")
 }
 
+static __always_inline void delete_server_trace_tid(pid_key_t *c_tid) {
+    bpf_map_delete_elem(&server_traces, c_tid);
+    //bpf_printk("Deleting server span for id=%llx, pid=%d, ns=%d, res = %d", bpf_get_current_pid_tgid(), c_tid->pid, c_tid->ns, res);
+}
+
 static __always_inline void delete_server_trace() {
     pid_key_t c_tid = {0};
     task_tid(&c_tid);
 
-    bpf_map_delete_elem(&server_traces, &c_tid);
+    delete_server_trace_tid(&c_tid);
 }
 
 static __always_inline void server_or_client_trace(http_connection_metadata_t *meta, connection_info_t *conn, tp_info_pid_t *tp_p) {
@@ -155,7 +160,7 @@ static __always_inline void server_or_client_trace(http_connection_metadata_t *m
             return;
         }
 
-        bpf_dbg_printk("Saving server span for id=%llx", bpf_get_current_pid_tgid());
+        bpf_dbg_printk("Saving server span for id=%llx, pid=%d, ns=%d", bpf_get_current_pid_tgid(), c_tid.pid, c_tid.ns);
         bpf_map_update_elem(&server_traces, &c_tid, tp_p, BPF_ANY);
     }
 }

@@ -70,7 +70,7 @@ func TestBasicPipeline(t *testing.T) {
 	// Override eBPF tracer to send some fake data
 	pipe.AddStart(gb.builder, tracesReader,
 		func(out chan<- []request.Span) {
-			out <- newRequest("foo-svc", 1, "GET", "/foo/bar", "1.1.1.1:3456", 404)
+			out <- newRequest("foo-svc", "GET", "/foo/bar", "1.1.1.1:3456", 404)
 			// closing prematurely the input node would finish the whole graph processing
 			// and OTEL exporters could be closed, so we wait.
 			time.Sleep(testTimeout)
@@ -121,7 +121,7 @@ func TestTracerPipeline(t *testing.T) {
 	// Override eBPF tracer to send some fake data
 	pipe.AddStart(gb.builder, tracesReader,
 		func(out chan<- []request.Span) {
-			out <- newRequest("bar-svc", 1, "GET", "/foo/bar", "1.1.1.1:3456", 404)
+			out <- newRequest("bar-svc", "GET", "/foo/bar", "1.1.1.1:3456", 404)
 			// closing prematurely the input node would finish the whole graph processing
 			// and OTEL exporters could be closed, so we wait.
 			time.Sleep(testTimeout)
@@ -156,7 +156,7 @@ func TestTracerReceiverPipeline(t *testing.T) {
 	// Override eBPF tracer to send some fake data
 	pipe.AddStart(gb.builder, tracesReader,
 		func(out chan<- []request.Span) {
-			out <- newRequest("bar-svc", 1, "GET", "/foo/bar", "1.1.1.1:3456", 404)
+			out <- newRequest("bar-svc", "GET", "/foo/bar", "1.1.1.1:3456", 404)
 			// closing prematurely the input node would finish the whole graph processing
 			// and OTEL exporters could be closed, so we wait.
 			time.Sleep(testTimeout)
@@ -191,7 +191,7 @@ func BenchmarkTestTracerPipeline(b *testing.B) {
 		// Override eBPF tracer to send some fake data
 		pipe.AddStart(gb.builder, tracesReader,
 			func(out chan<- []request.Span) {
-				out <- newRequest("bar-svc", 1, "GET", "/foo/bar", "1.1.1.1:3456", 404)
+				out <- newRequest("bar-svc", "GET", "/foo/bar", "1.1.1.1:3456", 404)
 				// closing prematurely the input node would finish the whole graph processing
 				// and OTEL exporters could be closed, so we wait.
 				time.Sleep(testTimeout)
@@ -223,7 +223,7 @@ func TestTracerPipelineBadTimestamps(t *testing.T) {
 	// Override eBPF tracer to send some fake data
 	pipe.AddStart(gb.builder, tracesReader,
 		func(out chan<- []request.Span) {
-			out <- newRequestWithTiming("svc1", 1, request.EventTypeHTTP, "GET", "/attach", "2.2.2.2:1234", 200, 60000, 59999, 70000)
+			out <- newRequestWithTiming("svc1", request.EventTypeHTTP, "GET", "/attach", "2.2.2.2:1234", 200, 60000, 59999, 70000)
 			// closing prematurely the input node would finish the whole graph processing
 			// and OTEL exporters could be closed, so we wait.
 			time.Sleep(testTimeout)
@@ -256,9 +256,9 @@ func TestRouteConsolidation(t *testing.T) {
 	// Override eBPF tracer to send some fake data
 	pipe.AddStart(gb.builder, tracesReader,
 		func(out chan<- []request.Span) {
-			out <- newRequest("svc-1", 1, "GET", "/user/1234", "1.1.1.1:3456", 200)
-			out <- newRequest("svc-1", 2, "GET", "/products/3210/push", "1.1.1.1:3456", 200)
-			out <- newRequest("svc-1", 3, "GET", "/attach", "1.1.1.1:3456", 200)
+			out <- newRequest("svc-1", "GET", "/user/1234", "1.1.1.1:3456", 200)
+			out <- newRequest("svc-1", "GET", "/products/3210/push", "1.1.1.1:3456", 200)
+			out <- newRequest("svc-1", "GET", "/attach", "1.1.1.1:3456", 200)
 			// closing prematurely the input node would finish the whole graph processing
 			// and OTEL exporters could be closed, so we wait.
 			time.Sleep(testTimeout)
@@ -348,7 +348,7 @@ func TestGRPCPipeline(t *testing.T) {
 	// Override eBPF tracer to send some fake data
 	pipe.AddStart(gb.builder, tracesReader,
 		func(out chan<- []request.Span) {
-			out <- newGRPCRequest("grpc-svc", 1, "/foo/bar", 3)
+			out <- newGRPCRequest("grpc-svc", "/foo/bar", 3)
 			// closing prematurely the input node would finish the whole graph processing
 			// and OTEL exporters could be closed, so we wait.
 			time.Sleep(testTimeout)
@@ -396,7 +396,7 @@ func TestTraceGRPCPipeline(t *testing.T) {
 	// Override eBPF tracer to send some fake data
 	pipe.AddStart(gb.builder, tracesReader,
 		func(out chan<- []request.Span) {
-			out <- newGRPCRequest("svc", 1, "foo.bar", 3)
+			out <- newGRPCRequest("svc", "foo.bar", 3)
 			// closing prematurely the input node would finish the whole graph processing
 			// and OTEL exporters could be closed, so we wait.
 			time.Sleep(testTimeout)
@@ -505,10 +505,10 @@ func TestSpanAttributeFilterNode(t *testing.T) {
 	// Override eBPF tracer to send some fake data
 	pipe.AddStart(gb.builder, tracesReader,
 		func(out chan<- []request.Span) {
-			out <- newRequest("svc-0", 0, "GET", "/products/3210/push", "1.1.1.1:3456", 200)
-			out <- newRequest("svc-1", 1, "GET", "/user/1234", "1.1.1.1:3456", 201)
-			out <- newRequest("svc-2", 2, "GET", "/products/3210/push", "1.1.1.1:3456", 202)
-			out <- newRequest("svc-3", 3, "GET", "/user/4321", "1.1.1.1:3456", 203)
+			out <- newRequest("svc-0", "GET", "/products/3210/push", "1.1.1.1:3456", 200)
+			out <- newRequest("svc-1", "GET", "/user/1234", "1.1.1.1:3456", 201)
+			out <- newRequest("svc-2", "GET", "/products/3210/push", "1.1.1.1:3456", 202)
+			out <- newRequest("svc-3", "GET", "/user/4321", "1.1.1.1:3456", 203)
 			// closing prematurely the input node would finish the whole graph processing
 			// and OTEL exporters could be closed, so we wait.
 			time.Sleep(testTimeout)
@@ -545,7 +545,7 @@ func TestSpanAttributeFilterNode(t *testing.T) {
 	}, events)
 }
 
-func newRequest(serviceName string, id uint64, method, path, peer string, status int) []request.Span {
+func newRequest(serviceName string, method, path, peer string, status int) []request.Span {
 	return []request.Span{{
 		Path:         path,
 		Method:       method,
@@ -554,7 +554,6 @@ func newRequest(serviceName string, id uint64, method, path, peer string, status
 		HostPort:     8080,
 		Status:       status,
 		Type:         request.EventTypeHTTP,
-		ID:           id,
 		Start:        2,
 		RequestStart: 1,
 		End:          3,
@@ -562,7 +561,7 @@ func newRequest(serviceName string, id uint64, method, path, peer string, status
 	}}
 }
 
-func newRequestWithTiming(svcName string, id uint64, kind request.EventType, method, path, peer string, status int, goStart, start, end uint64) []request.Span {
+func newRequestWithTiming(svcName string, kind request.EventType, method, path, peer string, status int, goStart, start, end uint64) []request.Span {
 	return []request.Span{{
 		Path:         path,
 		Method:       method,
@@ -571,7 +570,6 @@ func newRequestWithTiming(svcName string, id uint64, kind request.EventType, met
 		HostPort:     8080,
 		Type:         kind,
 		Status:       status,
-		ID:           id,
 		RequestStart: int64(goStart),
 		Start:        int64(start),
 		End:          int64(end),
@@ -579,7 +577,7 @@ func newRequestWithTiming(svcName string, id uint64, kind request.EventType, met
 	}}
 }
 
-func newGRPCRequest(svcName string, id uint64, path string, status int) []request.Span {
+func newGRPCRequest(svcName string, path string, status int) []request.Span {
 	return []request.Span{{
 		Path:         path,
 		Peer:         "1.1.1.1",
@@ -587,7 +585,6 @@ func newGRPCRequest(svcName string, id uint64, path string, status int) []reques
 		HostPort:     8080,
 		Status:       status,
 		Type:         request.EventTypeGRPC,
-		ID:           id,
 		Start:        2,
 		RequestStart: 1,
 		End:          3,

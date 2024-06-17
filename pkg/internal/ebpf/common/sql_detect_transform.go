@@ -59,6 +59,7 @@ func TCPToSQLToSpan(trace *TCPRequestInfo, op, table, sql string) request.Span {
 		Method:        op,
 		Path:          table,
 		Peer:          peer,
+		PeerPort:      int(trace.ConnInfo.S_port),
 		Host:          hostname,
 		HostPort:      hostPort,
 		ContentLength: 0,

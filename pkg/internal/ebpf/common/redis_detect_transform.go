@@ -78,6 +78,13 @@ func crlfTerminatedMatch(buf []uint8, matches func(c uint8) bool) bool {
 	return buf[i+1] == '\n'
 }
 
+func isValidRedisChar(c byte) bool {
+	return (c >= 'a' && c <= 'z') ||
+		(c >= 'A' && c <= 'Z') ||
+		(c >= '0' && c <= '9') ||
+		c == '.' || c == ' ' || c == '-' || c == '_'
+}
+
 func parseRedisRequest(buf string) (string, string, bool) {
 	lines := strings.Split(buf, "\r\n")
 
@@ -110,6 +117,9 @@ func parseRedisRequest(buf string) (string, string, bool) {
 				text += "; "
 				continue
 			}
+			if !isValidRedisChar(l[0]) {
+				break
+			}
 			if op == "" {
 				op = l
 			}
@@ -136,6 +146,7 @@ func TCPToRedisToSpan(trace *TCPRequestInfo, op, text string, status int) reques
 		Method:        op,
 		Path:          text,
 		Peer:          peer,
+		PeerPort:      int(trace.ConnInfo.S_port),
 		Host:          hostname,
 		HostPort:      hostPort,
 		ContentLength: 0,

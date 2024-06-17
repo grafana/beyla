@@ -56,9 +56,9 @@ int BPF_UPROBE(uprobe_ssl_read, void *ssl, const void *buf, int num) {
 
     bpf_dbg_printk("=== uprobe SSL_read id=%d ssl=%llx ===", id, ssl);
 
-    pid_connection_info_t *conn = bpf_map_lookup_elem(&ssl_to_conn, &ssl);
+    ssl_pid_connection_info_t *conn = bpf_map_lookup_elem(&ssl_to_conn, &ssl);
     if (conn) {
-        finish_possible_delayed_http_request(conn);
+        finish_possible_delayed_tls_http_request(&conn->conn, ssl);
     }
 
     ssl_args_t args = {};
@@ -67,7 +67,12 @@ int BPF_UPROBE(uprobe_ssl_read, void *ssl, const void *buf, int num) {
     args.len_ptr = 0;
 
     bpf_map_update_elem(&active_ssl_read_args, &id, &args, BPF_ANY);
-    bpf_map_update_elem(&ssl_to_pid_tid, &args.ssl, &id, BPF_NOEXIST); // we must not overwrite here, remember the original thread
+
+    ssl_pid_info_t pid_info = {
+        .id = id,
+    };    
+    task_tid(&pid_info.c_tid);
+    bpf_map_update_elem(&ssl_to_pid_tid, &args.ssl, &pid_info, BPF_NOEXIST); // we must not overwrite here, remember the original thread
 
     return 0;
 }
@@ -99,9 +104,9 @@ int BPF_UPROBE(uprobe_ssl_read_ex, void *ssl, const void *buf, int num, size_t *
 
     bpf_dbg_printk("=== SSL_read_ex id=%d ===", id);
 
-    pid_connection_info_t *conn = bpf_map_lookup_elem(&ssl_to_conn, &ssl);
+    ssl_pid_connection_info_t *conn = bpf_map_lookup_elem(&ssl_to_conn, &ssl);
     if (conn) {
-        finish_possible_delayed_http_request(conn);
+        finish_possible_delayed_tls_http_request(&conn->conn, ssl);
     }
 
     ssl_args_t args = {};
@@ -110,8 +115,13 @@ int BPF_UPROBE(uprobe_ssl_read_ex, void *ssl, const void *buf, int num, size_t *
     args.len_ptr = (u64)readbytes;
 
     bpf_map_update_elem(&active_ssl_read_args, &id, &args, BPF_ANY);
-    bpf_map_update_elem(&ssl_to_pid_tid, &args.ssl, &id, BPF_NOEXIST); // we must not overwrite here, remember the original thread
-    
+
+    ssl_pid_info_t pid_info = {
+        .id = id,
+    };    
+    task_tid(&pid_info.c_tid);
+    bpf_map_update_elem(&ssl_to_pid_tid, &args.ssl, &pid_info, BPF_NOEXIST); // we must not overwrite here, remember the original thread
+
     return 0;
 }
 
@@ -235,12 +245,15 @@ int BPF_UPROBE(uprobe_ssl_shutdown, void *s) {
 
     bpf_dbg_printk("=== SSL_shutdown id=%d ssl=%llx ===", id, s);
 
-    pid_connection_info_t *conn = bpf_map_lookup_elem(&ssl_to_conn, &s);
+    ssl_pid_connection_info_t *conn = bpf_map_lookup_elem(&ssl_to_conn, &s);
     if (conn) {
-        finish_possible_delayed_http_request(conn);
+        finish_possible_delayed_tls_http_request(&conn->conn, s);
+        bpf_map_delete_elem(&active_ssl_connections, &conn->conn);
     }
 
     bpf_map_delete_elem(&ssl_to_conn, &s);
+    bpf_map_delete_elem(&ssl_to_pid_tid, &s);
+
     bpf_map_delete_elem(&pid_tid_to_conn, &id);
 
     return 0;

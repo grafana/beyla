@@ -332,6 +332,7 @@ func TCPToKafkaToSpan(trace *TCPRequestInfo, data *KafkaInfo) request.Span {
 		OtherNamespace: data.ClientID,
 		Path:           data.Topic,
 		Peer:           peer,
+		PeerPort:       int(trace.ConnInfo.S_port),
 		Host:           hostname,
 		HostPort:       hostPort,
 		ContentLength:  0,

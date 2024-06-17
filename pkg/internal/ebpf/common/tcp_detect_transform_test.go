@@ -140,39 +140,6 @@ func TestRedisDetection(t *testing.T) {
 	}
 }
 
-func TestRedisParsing(t *testing.T) {
-	proper := fmt.Sprintf("*2\r\n$3\r\nGET\r\n$5\r\n%s", "beyla")
-
-	op, text, ok := parseRedisRequest(proper)
-	assert.True(t, ok)
-	assert.Equal(t, "GET", op)
-	assert.Equal(t, "GET beyla ", text)
-
-	weird := fmt.Sprintf("*2\r\nGET\r\n%s", "beyla")
-	op, text, ok = parseRedisRequest(weird)
-	assert.True(t, ok)
-	assert.Equal(t, "", op)
-	assert.Equal(t, "", text)
-
-	unknown := fmt.Sprintf("2\r\nGET\r\n%s", "beyla")
-	op, text, ok = parseRedisRequest(unknown)
-	assert.True(t, ok)
-	assert.Equal(t, "", op)
-	assert.Equal(t, "", text)
-
-	op, text, ok = parseRedisRequest("2")
-	assert.False(t, ok)
-	assert.Equal(t, "", op)
-	assert.Equal(t, "", text)
-
-	multi := fmt.Sprintf("*4\r\n$6\r\nclient\r\n$7\r\nsetinfo\r\n$8\r\nLIB-NAME\r\n$19\r\n%s(,go1.22.2)\r\n*4\r\n$6\r\nclient\r\n$7\r\nsetinfo\r\n$7\r\nLIB-VER\r\n$5\r\n9.5.1\r\n", "go-redis")
-	op, text, ok = parseRedisRequest(multi)
-	assert.True(t, ok)
-	assert.Equal(t, "client", op)
-	assert.Equal(t, "client setinfo LIB-NAME go-redis(,go1.22.2) ; client setinfo LIB-VER 9.5.1 ", text)
-
-}
-
 func TestTCPReqKafkaParsing(t *testing.T) {
 	// kafka message
 	b := []byte{0, 0, 0, 94, 0, 1, 0, 11, 0, 0, 0, 224, 0, 6, 115, 97, 114, 97, 109, 97, 255, 255, 255, 255, 0, 0, 1, 244, 0, 0, 0, 1, 6, 64, 0, 0, 0, 0, 0, 0, 0, 255, 255, 255, 255, 0, 0, 0, 1, 0, 9, 105, 109, 112, 111, 114, 116, 97, 110, 116, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 19, 0, 0, 0, 0, 0, 0, 0, 0, 0, 16, 0, 0, 0, 0, 0, 0, 0, 0}

@@ -23,7 +23,7 @@ struct {
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __type(key, u64);   // the SSL struct pointer
-    __type(value, pid_connection_info_t); // the pointer to the file descriptor matching ssl
+    __type(value, ssl_pid_connection_info_t); // the pointer to the file descriptor matching ssl
     __uint(max_entries, MAX_CONCURRENT_SHARED_REQUESTS);
     __uint(pinning, LIBBPF_PIN_BY_NAME);
 } ssl_to_conn SEC(".maps");
@@ -34,10 +34,15 @@ struct {
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __type(key, u64);   // the pid-tid pair
-    __type(value, pid_connection_info_t); // the pointer to the file descriptor matching ssl
+    __type(value, ssl_pid_connection_info_t); // the pointer to the file descriptor matching ssl
     __uint(max_entries, MAX_CONCURRENT_SHARED_REQUESTS);
     __uint(pinning, LIBBPF_PIN_BY_NAME);
 } pid_tid_to_conn SEC(".maps");
+
+typedef struct ssl_pid_info {
+    u64 id;        
+    pid_key_t c_tid;
+} __attribute__((packed)) ssl_pid_info_t;
 
 // LRU map which holds onto the mapping of an ssl pointer to pid-tid,
 // we clean-it up when we lookup by ssl. It's setup by SSL_read for cases where frameworks 
@@ -45,7 +50,7 @@ struct {
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __type(key, u64);   // the ssl pointer
-    __type(value, u64); // the pid tid of the thread in ssl read
+    __type(value, ssl_pid_info_t); // the pid tid of the thread in ssl read
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
 } ssl_to_pid_tid SEC(".maps");
 
@@ -75,12 +80,30 @@ struct {
     __uint(pinning, LIBBPF_PIN_BY_NAME);
 } active_ssl_write_args SEC(".maps");
 
+static __always_inline void cleanup_ssl_trace(void *ssl) {
+    ssl_pid_info_t *ssl_info = bpf_map_lookup_elem(&ssl_to_pid_tid, &ssl);
+
+    if (ssl_info) {
+        delete_server_trace_tid(&ssl_info->c_tid);
+    }
+}
+
+static __always_inline void finish_possible_delayed_tls_http_request(pid_connection_info_t *pid_conn, void *ssl) {
+    http_info_t *info = bpf_map_lookup_elem(&ongoing_http, pid_conn);
+    if (info) {        
+        if (http_info_complete(info)) {
+            cleanup_ssl_trace(ssl);
+        }
+        finish_http(info, pid_conn);        
+    }
+}
+
 static __always_inline void handle_ssl_buf(u64 id, ssl_args_t *args, int bytes_len, u8 direction) {
     if (args && bytes_len > 0) {
         void *ssl = ((void *)args->ssl);
         u64 ssl_ptr = (u64)ssl;
         bpf_dbg_printk("SSL_buf id=%d ssl=%llx", id, ssl);
-        pid_connection_info_t *conn = bpf_map_lookup_elem(&ssl_to_conn, &ssl);
+        ssl_pid_connection_info_t *conn = bpf_map_lookup_elem(&ssl_to_conn, &ssl);
 
         if (!conn) {
             conn = bpf_map_lookup_elem(&pid_tid_to_conn, &id);
@@ -91,11 +114,10 @@ static __always_inline void handle_ssl_buf(u64 id, ssl_args_t *args, int bytes_l
                 // First we look up a pid_tid by the ssl pointer, which might've been established
                 // by a prior SSL_read on another thread, then we look up in the same map.
                 // Clean-up here we are done trying if we don't succeed
-                void *pid_tid_ptr = bpf_map_lookup_elem(&ssl_to_pid_tid, &ssl_ptr);
+                ssl_pid_info_t *pid_tid_ptr = bpf_map_lookup_elem(&ssl_to_pid_tid, &ssl_ptr);
 
                 if (pid_tid_ptr) {
-                    u64 pid_tid;
-                    bpf_probe_read(&pid_tid, sizeof(pid_tid), pid_tid_ptr);
+                    u64 pid_tid = pid_tid_ptr->id;
 
                     conn = bpf_map_lookup_elem(&pid_tid_to_conn, &pid_tid);
                     bpf_dbg_printk("Separate pool lookup ssl=%llx, pid=%d, conn=%llx", ssl_ptr, pid_tid, conn);
@@ -110,23 +132,21 @@ static __always_inline void handle_ssl_buf(u64 id, ssl_args_t *args, int bytes_l
             // being on the same thread as the SSL_read. 
             if (conn) {
                 bpf_map_delete_elem(&pid_tid_to_conn, &id);
-                pid_connection_info_t c;
-                bpf_probe_read(&c, sizeof(pid_connection_info_t), conn);
+                ssl_pid_connection_info_t c;
+                bpf_probe_read(&c, sizeof(ssl_pid_connection_info_t), conn);
                 bpf_map_update_elem(&ssl_to_conn, &ssl, &c, BPF_ANY);
             }
         }
-
-        bpf_map_delete_elem(&ssl_to_pid_tid, &ssl_ptr);
 
         if (!conn) {
             // At this point the threading in the language doesn't allow us to properly match the SSL* with
             // the connection info. We send partial event, at least we can find the path, timing and response.
             // even though we won't have peer information.
-            pid_connection_info_t p_c = {};
+            ssl_pid_connection_info_t p_c = {};
             bpf_dbg_printk("setting fake connection info ssl=%llx", ssl);
-            bpf_memcpy(&p_c.conn.s_addr, &ssl, sizeof(void *));
-            p_c.conn.d_port = p_c.conn.s_port = 0;
-            p_c.pid = pid_from_pid_tgid(id);
+            bpf_memcpy(&p_c.conn.conn.s_addr, &ssl, sizeof(void *));
+            p_c.conn.conn.d_port = p_c.conn.conn.s_port = p_c.orig_dport = 0;
+            p_c.conn.pid = pid_from_pid_tgid(id);
 
             bpf_map_update_elem(&ssl_to_conn, &ssl, &p_c, BPF_ANY);
             conn = bpf_map_lookup_elem(&ssl_to_conn, &ssl);
@@ -141,13 +161,12 @@ static __always_inline void handle_ssl_buf(u64 id, ssl_args_t *args, int bytes_l
             // for (int i=0; i < 48; i++) {
             //     bpf_dbg_printk("%x ", buf[i]);
             // }
-
-            handle_buf_with_connection(conn, (void *)args->buf, bytes_len, WITH_SSL, direction);
+            bpf_map_update_elem(&active_ssl_connections, &conn->conn, &ssl_ptr, BPF_ANY);
+            handle_buf_with_connection(&conn->conn, (void *)args->buf, bytes_len, WITH_SSL, direction, conn->orig_dport);
         } else {
             bpf_dbg_printk("No connection info! This is a bug.");
         }
     }
 }
-
 
 #endif

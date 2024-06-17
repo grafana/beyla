@@ -57,6 +57,11 @@ typedef struct http_pid_connection_info {
     u32 pid;
 } pid_connection_info_t;
 
+typedef struct ssl_pid_connection_info {
+    pid_connection_info_t conn;
+    u16 orig_dport;
+} ssl_pid_connection_info_t;
+
 typedef struct tp_info {
     unsigned char trace_id[TRACE_ID_SIZE_BYTES];
     unsigned char span_id[SPAN_ID_SIZE_BYTES];
@@ -177,6 +182,14 @@ static __always_inline bool likely_ephemeral_port(u16 port) {
         y = TMP;                                                                                   \
     }
 
+static __always_inline void swap_connection_info_order(connection_info_t *info) {
+    __SWAP(u16, info->s_port, info->d_port);
+    u8 tmp_addr[IP_V6_ADDR_LEN];
+    __builtin_memcpy(tmp_addr, info->s_addr, sizeof(tmp_addr));
+    __builtin_memcpy(info->s_addr, info->d_addr, sizeof(info->s_addr));
+    __builtin_memcpy(info->d_addr, tmp_addr, sizeof(info->d_addr));
+}
+
 // Since we track both send and receive connections, we need to sort the source and destination
 // pairs in a standardized way, we choose the server way of sorting, such that the ephemeral port
 // on the client is first.
@@ -189,11 +202,7 @@ static __always_inline void sort_connection_info(connection_info_t *info) {
         (info->d_port > info->s_port)) {
         // Only sort if they are explicitly reversed, otherwise always sort source to be the larger
         // of the two ports
-        __SWAP(u16, info->s_port, info->d_port);
-        u8 tmp_addr[IP_V6_ADDR_LEN];
-        __builtin_memcpy(tmp_addr, info->s_addr, sizeof(tmp_addr));
-        __builtin_memcpy(info->s_addr, info->d_addr, sizeof(info->s_addr));
-        __builtin_memcpy(info->d_addr, tmp_addr, sizeof(info->d_addr));
+        swap_connection_info_order(info);
     }
 }
 

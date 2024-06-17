@@ -30,10 +30,15 @@ type removableMetric[VT any] interface {
 // Metric: type of the dataPoint kind: IntCounter, FloatVal...
 // VT: type of the value inside the datapoint: int, float64...
 type Expirer[Record any, Metric removableMetric[ValType], ValType any] struct {
+	ctx     context.Context
 	attrs   []attributes.Field[Record, attribute.KeyValue]
 	metric  Metric
 	entries *expire.ExpiryMap[*expiryMapEntry[Metric, ValType]]
 	log     *slog.Logger
+
+	clock          expire.Clock
+	lastExpiration time.Time
+	ttl            time.Duration
 }
 
 type expiryMapEntry[Metric removableMetric[ValType], ValType any] struct {
@@ -49,16 +54,21 @@ type expiryMapEntry[Metric removableMetric[ValType], ValType any] struct {
 // - clock: function that provides the current time
 // - ttl: time to live of the datapoints whose attribute sets haven't been updated
 func NewExpirer[Record any, Metric removableMetric[ValType], ValType any](
+	ctx context.Context,
 	metric Metric,
 	attrs []attributes.Field[Record, attribute.KeyValue],
 	clock expire.Clock,
 	ttl time.Duration,
 ) *Expirer[Record, Metric, ValType] {
 	exp := Expirer[Record, Metric, ValType]{
-		metric:  metric,
-		attrs:   attrs,
-		entries: expire.NewExpiryMap[*expiryMapEntry[Metric, ValType]](clock, ttl),
-		log:     plog().With("type", fmt.Sprintf("%T", metric)),
+		ctx:            ctx,
+		metric:         metric,
+		attrs:          attrs,
+		entries:        expire.NewExpiryMap[*expiryMapEntry[Metric, ValType]](clock, ttl),
+		log:            plog().With("type", fmt.Sprintf("%T", metric)),
+		clock:          clock,
+		lastExpiration: clock(),
+		ttl:            ttl,
 	}
 	return &exp
 }
@@ -68,6 +78,13 @@ func NewExpirer[Record any, Metric removableMetric[ValType], ValType any](
 // If not, a cached copy is returned and the "last access" cache time is updated.
 // Extra attributes can be explicitly added (e.g. process_cpu_state="wait")
 func (ex *Expirer[Record, Metric, ValType]) ForRecord(r Record, extraAttrs ...attribute.KeyValue) (Metric, attribute.Set) {
+	// to save resources, metrics expiration is triggered each TTL. This means that an expired
+	// metric might stay visible after 2*TTL time after not being updated
+	now := ex.clock()
+	if now.Sub(ex.lastExpiration) >= ex.ttl {
+		ex.removeOutdated(ex.ctx)
+		ex.lastExpiration = now
+	}
 	recordAttrs, attrValues := ex.recordAttributes(r, extraAttrs...)
 	return ex.entries.GetOrCreate(attrValues, func() *expiryMapEntry[Metric, ValType] {
 		ex.log.With("labelValues", attrValues).Debug("storing new metric label set")
@@ -95,7 +112,7 @@ func (ex *Expirer[Record, Metric, ValType]) recordAttributes(m Record, extraAttr
 	return attribute.NewSet(keyVals...), vals
 }
 
-func (ex *Expirer[Record, Metric, ValType]) RemoveOutdated(ctx context.Context) {
+func (ex *Expirer[Record, Metric, ValType]) removeOutdated(ctx context.Context) {
 	if old := ex.entries.DeleteExpired(); len(old) > 0 {
 		for _, om := range old {
 			ex.log.Debug("deleting old OTEL metric", "labelValues", om)

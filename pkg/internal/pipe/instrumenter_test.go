@@ -81,7 +81,7 @@ func TestBasicPipeline(t *testing.T) {
 
 	go pipe.Run(ctx)
 
-	event := testutil.ReadChannel(t, tc.Records, testTimeout)
+	event := testutil.ReadChannel(t, tc.Records(), testTimeout)
 	assert.NotEmpty(t, event.ResourceAttributes, string(semconv.ServiceInstanceIDKey))
 	delete(event.ResourceAttributes, string(semconv.ServiceInstanceIDKey))
 	assert.Equal(t, collector.MetricRecord{
@@ -132,11 +132,11 @@ func TestTracerPipeline(t *testing.T) {
 
 	go pipe.Run(ctx)
 
-	event := testutil.ReadChannel(t, tc.TraceRecords, testTimeout)
+	event := testutil.ReadChannel(t, tc.TraceRecords(), testTimeout)
 	matchInnerTraceEvent(t, "in queue", event)
-	event = testutil.ReadChannel(t, tc.TraceRecords, testTimeout)
+	event = testutil.ReadChannel(t, tc.TraceRecords(), testTimeout)
 	matchInnerTraceEvent(t, "processing", event)
-	event = testutil.ReadChannel(t, tc.TraceRecords, testTimeout)
+	event = testutil.ReadChannel(t, tc.TraceRecords(), testTimeout)
 	matchTraceEvent(t, "GET", event)
 }
 
@@ -166,11 +166,11 @@ func TestTracerReceiverPipeline(t *testing.T) {
 
 	go pipe.Run(ctx)
 
-	event := testutil.ReadChannel(t, tc.TraceRecords, testTimeout)
+	event := testutil.ReadChannel(t, tc.TraceRecords(), testTimeout)
 	matchInnerTraceEvent(t, "in queue", event)
-	event = testutil.ReadChannel(t, tc.TraceRecords, testTimeout)
+	event = testutil.ReadChannel(t, tc.TraceRecords(), testTimeout)
 	matchInnerTraceEvent(t, "processing", event)
-	event = testutil.ReadChannel(t, tc.TraceRecords, testTimeout)
+	event = testutil.ReadChannel(t, tc.TraceRecords(), testTimeout)
 	matchTraceEvent(t, "GET", event)
 }
 
@@ -200,9 +200,9 @@ func BenchmarkTestTracerPipeline(b *testing.B) {
 
 		go pipe.Run(ctx)
 		t := &testing.T{}
-		testutil.ReadChannel(t, tc.TraceRecords, testTimeout)
-		testutil.ReadChannel(t, tc.TraceRecords, testTimeout)
-		testutil.ReadChannel(t, tc.TraceRecords, testTimeout)
+		testutil.ReadChannel(t, tc.TraceRecords(), testTimeout)
+		testutil.ReadChannel(t, tc.TraceRecords(), testTimeout)
+		testutil.ReadChannel(t, tc.TraceRecords(), testTimeout)
 	}
 }
 
@@ -233,7 +233,7 @@ func TestTracerPipelineBadTimestamps(t *testing.T) {
 
 	go pipe.Run(ctx)
 
-	event := testutil.ReadChannel(t, tc.TraceRecords, testTimeout)
+	event := testutil.ReadChannel(t, tc.TraceRecords(), testTimeout)
 	matchNestedEvent(t, "GET", "GET", "/attach", "200", ptrace.SpanKindServer, event)
 }
 
@@ -271,7 +271,7 @@ func TestRouteConsolidation(t *testing.T) {
 	// expect to receive 3 events without any guaranteed order
 	events := map[string]collector.MetricRecord{}
 	for i := 0; i < 3; i++ {
-		ev := testutil.ReadChannel(t, tc.Records, testTimeout)
+		ev := testutil.ReadChannel(t, tc.Records(), testTimeout)
 		events[ev.Attributes[string(semconv.HTTPRouteKey)]] = ev
 	}
 	for _, event := range events {
@@ -358,7 +358,7 @@ func TestGRPCPipeline(t *testing.T) {
 
 	go pipe.Run(ctx)
 
-	event := testutil.ReadChannel(t, tc.Records, testTimeout)
+	event := testutil.ReadChannel(t, tc.Records(), testTimeout)
 	assert.NotEmpty(t, event.ResourceAttributes, string(semconv.ServiceInstanceIDKey))
 	delete(event.ResourceAttributes, string(semconv.ServiceInstanceIDKey))
 	assert.Equal(t, collector.MetricRecord{
@@ -406,11 +406,11 @@ func TestTraceGRPCPipeline(t *testing.T) {
 
 	go pipe.Run(ctx)
 
-	event := testutil.ReadChannel(t, tc.TraceRecords, testTimeout)
+	event := testutil.ReadChannel(t, tc.TraceRecords(), testTimeout)
 	matchInnerGRPCTraceEvent(t, "in queue", event)
-	event = testutil.ReadChannel(t, tc.TraceRecords, testTimeout)
+	event = testutil.ReadChannel(t, tc.TraceRecords(), testTimeout)
 	matchInnerGRPCTraceEvent(t, "processing", event)
-	event = testutil.ReadChannel(t, tc.TraceRecords, testTimeout)
+	event = testutil.ReadChannel(t, tc.TraceRecords(), testTimeout)
 	matchGRPCTraceEvent(t, "foo.bar", event)
 }
 
@@ -437,7 +437,7 @@ func TestBasicPipelineInfo(t *testing.T) {
 
 	go pipe.Run(ctx)
 
-	event := testutil.ReadChannel(t, tc.Records, testTimeout)
+	event := testutil.ReadChannel(t, tc.Records(), testTimeout)
 	assert.NotEmpty(t, event.ResourceAttributes, string(semconv.ServiceInstanceIDKey))
 	delete(event.ResourceAttributes, string(semconv.ServiceInstanceIDKey))
 	assert.Equal(t, collector.MetricRecord{
@@ -479,7 +479,7 @@ func TestTracerPipelineInfo(t *testing.T) {
 
 	go pipe.Run(ctx)
 
-	event := testutil.ReadChannel(t, tc.TraceRecords, testTimeout)
+	event := testutil.ReadChannel(t, tc.TraceRecords(), testTimeout)
 	matchInfoEvent(t, "PATCH", event)
 }
 
@@ -520,10 +520,10 @@ func TestSpanAttributeFilterNode(t *testing.T) {
 
 	// expect to receive only the records matching the Filters criteria
 	events := map[string]map[string]string{}
-	event := testutil.ReadChannel(t, tc.Records, testTimeout)
+	event := testutil.ReadChannel(t, tc.Records(), testTimeout)
 	assert.Equal(t, "http.server.request.duration", event.Name)
 	events[event.Attributes["url.path"]] = event.Attributes
-	event = testutil.ReadChannel(t, tc.Records, testTimeout)
+	event = testutil.ReadChannel(t, tc.Records(), testTimeout)
 	assert.Equal(t, "http.server.request.duration", event.Name)
 	events[event.Attributes["url.path"]] = event.Attributes
 

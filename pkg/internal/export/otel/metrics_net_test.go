@@ -40,7 +40,7 @@ func TestMetricAttributes(t *testing.T) {
 	in.Id.DstIp.In6U.U6Addr8 = [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 255, 33, 22, 11, 1}
 
 	me, err := newMetricsExporter(context.Background(),
-		&global.ContextInfo{},
+		&global.ContextInfo{MetricAttributeGroups: attributes.GroupKubernetes},
 		&NetMetricsConfig{AttributeSelectors: map[attributes.Section]attributes.InclusionLists{
 			attributes.BeylaNetworkFlow.Section: {Include: []string{"*"}},
 		}, Metrics: &MetricsConfig{
@@ -97,7 +97,7 @@ func TestMetricAttributes_Filter(t *testing.T) {
 	in.Id.DstIp.In6U.U6Addr8 = [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 255, 33, 22, 11, 1}
 
 	me, err := newMetricsExporter(context.Background(),
-		&global.ContextInfo{},
+		&global.ContextInfo{MetricAttributeGroups: attributes.GroupKubernetes},
 		&NetMetricsConfig{AttributeSelectors: map[attributes.Section]attributes.InclusionLists{
 			attributes.BeylaNetworkFlow.Section: {Include: []string{
 				"src.address",

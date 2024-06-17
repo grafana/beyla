@@ -59,12 +59,12 @@ func TestMetricsExpiration(t *testing.T) {
 
 	// THEN the metrics are exported
 	test.Eventually(t, timeout, func(t require.TestingT) {
-		metric := readChan(t, otlp.Records, timeout)
+		metric := readChan(t, otlp.Records(), timeout)
 		assert.Equal(t, map[string]string{"src.name": "foo", "dst.name": "bar"}, metric.Attributes)
 		assert.EqualValues(t, 123, metric.IntVal)
 	})
 	test.Eventually(t, timeout, func(t require.TestingT) {
-		metric := readChan(t, otlp.Records, timeout)
+		metric := readChan(t, otlp.Records(), timeout)
 		assert.Equal(t, map[string]string{"src.name": "baz", "dst.name": "bae"}, metric.Attributes)
 		assert.EqualValues(t, 456, metric.IntVal)
 	})
@@ -74,33 +74,41 @@ func TestMetricsExpiration(t *testing.T) {
 		{Attrs: ebpf.RecordAttrs{SrcName: "foo", DstName: "bar"},
 			NetFlowRecordT: ebpf.NetFlowRecordT{Metrics: ebpf.NetFlowMetrics{Bytes: 123}}},
 	}
-	now.Advance(2 * time.Minute)
 
 	// THEN THE metrics that have been received during the timeout period are still visible
 	test.Eventually(t, timeout, func(t require.TestingT) {
-		metric := readChan(t, otlp.Records, timeout)
+		metric := readChan(t, otlp.Records(), timeout)
 		assert.Equal(t, map[string]string{"src.name": "foo", "dst.name": "bar"}, metric.Attributes)
 		assert.EqualValues(t, 246, metric.IntVal)
 	})
 
-	// BUT not the metrics that haven't been received during that time
-	// (we just know it because OTEL just sends a metric with the same value)
-	metric := readChan(t, otlp.Records, timeout)
-	assert.Equal(t, map[string]string{"src.name": "foo", "dst.name": "bar"}, metric.Attributes)
-	assert.EqualValues(t, 246, metric.IntVal)
-
 	now.Advance(2 * time.Minute)
+	metrics <- []*ebpf.Record{
+		{Attrs: ebpf.RecordAttrs{SrcName: "foo", DstName: "bar"},
+			NetFlowRecordT: ebpf.NetFlowRecordT{Metrics: ebpf.NetFlowMetrics{Bytes: 123}}},
+	}
+
+	// BUT not the metrics that haven't been received during that time.
+	// We just know it because OTEL will only sends foo/bar metric.
+	// If this test is flaky: it means it is actually failing
+	otlp.ResetRecords()
+	// repeating 5 times to make sure that only this metric is forwarded
+	for i := 0; i < 5; i++ {
+		metric := readChan(t, otlp.Records(), timeout)
+		assert.Equal(t, map[string]string{"src.name": "foo", "dst.name": "bar"}, metric.Attributes)
+		assert.EqualValues(t, 369, metric.IntVal)
+	}
 
 	// AND WHEN the metrics labels that disappeared are received again
+	now.Advance(2 * time.Minute)
 	metrics <- []*ebpf.Record{
 		{Attrs: ebpf.RecordAttrs{SrcName: "baz", DstName: "bae"},
 			NetFlowRecordT: ebpf.NetFlowRecordT{Metrics: ebpf.NetFlowMetrics{Bytes: 456}}},
 	}
-	now.Advance(2 * time.Minute)
 
 	// THEN they are reported again, starting from zero in the case of counters
 	test.Eventually(t, timeout, func(t require.TestingT) {
-		metric := readChan(t, otlp.Records, timeout)
+		metric := readChan(t, otlp.Records(), timeout)
 		assert.Equal(t, map[string]string{"src.name": "baz", "dst.name": "bae"}, metric.Attributes)
 		assert.EqualValues(t, 456, metric.IntVal)
 	})

@@ -336,63 +336,63 @@ func (mr *MetricsReporter) setupOtelMeters(m *Metrics, meter instrument.Meter) e
 		return fmt.Errorf("creating http duration histogram metric: %w", err)
 	}
 	m.httpDuration = NewExpirer[*request.Span, instrument.Float64Histogram, float64](
-		httpDuration, mr.attrHTTPDuration, timeNow, mr.cfg.TTL)
+		m.ctx, httpDuration, mr.attrHTTPDuration, timeNow, mr.cfg.TTL)
 
 	httpClientDuration, err := meter.Float64Histogram(attributes.HTTPClientDuration.OTEL, instrument.WithUnit("s"))
 	if err != nil {
 		return fmt.Errorf("creating http duration histogram metric: %w", err)
 	}
 	m.httpClientDuration = NewExpirer[*request.Span, instrument.Float64Histogram, float64](
-		httpClientDuration, mr.attrHTTPClientDuration, timeNow, mr.cfg.TTL)
+		m.ctx, httpClientDuration, mr.attrHTTPClientDuration, timeNow, mr.cfg.TTL)
 
 	grpcDuration, err := meter.Float64Histogram(attributes.RPCServerDuration.OTEL, instrument.WithUnit("s"))
 	if err != nil {
 		return fmt.Errorf("creating grpc duration histogram metric: %w", err)
 	}
 	m.grpcDuration = NewExpirer[*request.Span, instrument.Float64Histogram, float64](
-		grpcDuration, mr.attrGRPCServer, timeNow, mr.cfg.TTL)
+		m.ctx, grpcDuration, mr.attrGRPCServer, timeNow, mr.cfg.TTL)
 
 	grpcClientDuration, err := meter.Float64Histogram(attributes.RPCClientDuration.OTEL, instrument.WithUnit("s"))
 	if err != nil {
 		return fmt.Errorf("creating grpc duration histogram metric: %w", err)
 	}
 	m.grpcClientDuration = NewExpirer[*request.Span, instrument.Float64Histogram, float64](
-		grpcClientDuration, mr.attrGRPCClient, timeNow, mr.cfg.TTL)
+		m.ctx, grpcClientDuration, mr.attrGRPCClient, timeNow, mr.cfg.TTL)
 
 	dbClientDuration, err := meter.Float64Histogram(attributes.DBClientDuration.OTEL, instrument.WithUnit("s"))
 	if err != nil {
 		return fmt.Errorf("creating db client duration histogram metric: %w", err)
 	}
 	m.dbClientDuration = NewExpirer[*request.Span, instrument.Float64Histogram, float64](
-		dbClientDuration, mr.attrDBClient, timeNow, mr.cfg.TTL)
+		m.ctx, dbClientDuration, mr.attrDBClient, timeNow, mr.cfg.TTL)
 
 	msgPublishDuration, err := meter.Float64Histogram(attributes.MessagingPublishDuration.OTEL, instrument.WithUnit("s"))
 	if err != nil {
 		return fmt.Errorf("creating messaging client publish duration histogram metric: %w", err)
 	}
 	m.msgPublishDuration = NewExpirer[*request.Span, instrument.Float64Histogram, float64](
-		msgPublishDuration, mr.attrMessagingPublish, timeNow, mr.cfg.TTL)
+		m.ctx, msgPublishDuration, mr.attrMessagingPublish, timeNow, mr.cfg.TTL)
 
 	msgProcessDuration, err := meter.Float64Histogram(attributes.MessagingProcessDuration.OTEL, instrument.WithUnit("s"))
 	if err != nil {
 		return fmt.Errorf("creating messaging client process duration histogram metric: %w", err)
 	}
 	m.msgProcessDuration = NewExpirer[*request.Span, instrument.Float64Histogram, float64](
-		msgProcessDuration, mr.attrMessagingProcess, timeNow, mr.cfg.TTL)
+		m.ctx, msgProcessDuration, mr.attrMessagingProcess, timeNow, mr.cfg.TTL)
 
 	httpRequestSize, err := meter.Float64Histogram(attributes.HTTPServerRequestSize.OTEL, instrument.WithUnit("By"))
 	if err != nil {
 		return fmt.Errorf("creating http size histogram metric: %w", err)
 	}
 	m.httpRequestSize = NewExpirer[*request.Span, instrument.Float64Histogram, float64](
-		httpRequestSize, mr.attrHTTPRequestSize, timeNow, mr.cfg.TTL)
+		m.ctx, httpRequestSize, mr.attrHTTPRequestSize, timeNow, mr.cfg.TTL)
 
 	httpClientRequestSize, err := meter.Float64Histogram(attributes.HTTPClientRequestSize.OTEL, instrument.WithUnit("By"))
 	if err != nil {
 		return fmt.Errorf("creating http size histogram metric: %w", err)
 	}
 	m.httpClientRequestSize = NewExpirer[*request.Span, instrument.Float64Histogram, float64](
-		httpClientRequestSize, mr.attrHTTPClientRequestSize, timeNow, mr.cfg.TTL)
+		m.ctx, httpClientRequestSize, mr.attrHTTPClientRequestSize, timeNow, mr.cfg.TTL)
 
 	return nil
 }

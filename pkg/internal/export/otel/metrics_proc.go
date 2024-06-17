@@ -210,7 +210,7 @@ func (me *procMetricsExporter) newMetricSet(service *svc.ID) (*procMetrics, erro
 		return nil, err
 	} else {
 		m.cpuTime = NewExpirer[*process.Status, metric2.Float64Counter, float64](
-			cpuTime, me.attrCPUTime, timeNow, me.cfg.Metrics.TTL)
+			me.ctx, cpuTime, me.attrCPUTime, timeNow, me.cfg.Metrics.TTL)
 	}
 
 	if cpuUtilisation, err := meter.Float64Gauge(
@@ -222,7 +222,7 @@ func (me *procMetricsExporter) newMetricSet(service *svc.ID) (*procMetrics, erro
 		return nil, err
 	} else {
 		m.cpuUtilisation = NewExpirer[*process.Status, metric2.Float64Gauge, float64](
-			cpuUtilisation, me.attrCPUUtil, timeNow, me.cfg.Metrics.TTL)
+			me.ctx, cpuUtilisation, me.attrCPUUtil, timeNow, me.cfg.Metrics.TTL)
 	}
 
 	// memory metrics are defined as UpDownCounters in the Otel specification, but we
@@ -237,7 +237,7 @@ func (me *procMetricsExporter) newMetricSet(service *svc.ID) (*procMetrics, erro
 		return nil, err
 	} else {
 		m.memory = NewExpirer[*process.Status, metric2.Int64UpDownCounter, int64](
-			memory, me.attrMemory, timeNow, me.cfg.Metrics.TTL)
+			me.ctx, memory, me.attrMemory, timeNow, me.cfg.Metrics.TTL)
 	}
 
 	if memoryVirtual, err := meter.Int64UpDownCounter(
@@ -249,7 +249,7 @@ func (me *procMetricsExporter) newMetricSet(service *svc.ID) (*procMetrics, erro
 		return nil, err
 	} else {
 		m.memoryVirtual = NewExpirer[*process.Status, metric2.Int64UpDownCounter, int64](
-			memoryVirtual, me.attrMemoryVirtual, timeNow, me.cfg.Metrics.TTL)
+			me.ctx, memoryVirtual, me.attrMemoryVirtual, timeNow, me.cfg.Metrics.TTL)
 	}
 
 	if disk, err := meter.Int64Counter(
@@ -261,7 +261,7 @@ func (me *procMetricsExporter) newMetricSet(service *svc.ID) (*procMetrics, erro
 		return nil, err
 	} else {
 		m.disk = NewExpirer[*process.Status, metric2.Int64Counter, int64](
-			disk, me.attrDisk, timeNow, me.cfg.Metrics.TTL)
+			me.ctx, disk, me.attrDisk, timeNow, me.cfg.Metrics.TTL)
 	}
 
 	if net, err := meter.Int64Counter(
@@ -273,7 +273,7 @@ func (me *procMetricsExporter) newMetricSet(service *svc.ID) (*procMetrics, erro
 		return nil, err
 	} else {
 		m.net = NewExpirer[*process.Status, metric2.Int64Counter, int64](
-			net, me.attrNet, timeNow, me.cfg.Metrics.TTL)
+			me.ctx, net, me.attrNet, timeNow, me.cfg.Metrics.TTL)
 	}
 	return &m, nil
 }

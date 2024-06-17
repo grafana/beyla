@@ -106,37 +106,30 @@ int BPF_KPROBE(kprobe_tcp_rcv_established, struct sock *sk, struct sk_buff *skb)
         return 0;
     }
 
+    bpf_dbg_printk("=== tcp_rcv_established id=%d ===", id);
+
     pid_connection_info_t info = {};
 
     if (parse_sock_info(sk, &info.conn)) {
-        u16 orig_dport = info.conn.d_port;
+        //u16 orig_dport = info.conn.d_port;
         //dbg_print_http_connection_info(&info.conn);
         sort_connection_info(&info.conn);
         info.pid = pid_from_pid_tgid(id);        
-        bpf_dbg_printk("rcv established, orig dport %d", orig_dport);
 
         http_connection_metadata_t meta = {};
         task_pid(&meta.pid);
         meta.type = EVENT_HTTP_REQUEST;
         bpf_map_update_elem(&filtered_connections, &info, &meta, BPF_NOEXIST); // On purpose BPF_NOEXIST, we don't want to overwrite data by accept or connect
 
-        // tcp_rcv_established may fire multiple times and it may flip the port order. Stick with the initial ordering determined by accept/connect or the first 
-        // rcv_established
+        // This is a current limitation for port ordering detection for SSL.
+        // tcp_rcv_established flip flops the ports and we can't tell if it's client or server call.
+        // If the source port for a client call is lower, we'll get this wrong.
+        // TODO: Need to fix this. 
         ssl_pid_connection_info_t pid_info = {
             .conn = info,
-            .orig_dport = orig_dport,
+            .orig_dport = info.conn.s_port,
         };
-        ssl_pid_connection_info_t *existing = bpf_map_lookup_elem(&pid_tid_to_conn, &id);
-        if (existing) {
-            // Only update here if the connection info is new for the PID->connection info map.
-            // We can't do an update with BPF_NOEXIST because it's possible the connection info is stale for the
-            // PID/TID pair.
-            if (bpf_memcmp(&existing->conn, &info, sizeof(pid_connection_info_t))) {
-                bpf_map_update_elem(&pid_tid_to_conn, &id, &pid_info, BPF_ANY); // to support SSL on missing handshake
-            }
-        } else {
-            bpf_map_update_elem(&pid_tid_to_conn, &id, &pid_info, BPF_ANY); // to support SSL on missing handshake
-        }
+        bpf_map_update_elem(&pid_tid_to_conn, &id, &pid_info, BPF_ANY); // to support SSL on missing handshake, respect the original info if there
     }
 
     return 0;

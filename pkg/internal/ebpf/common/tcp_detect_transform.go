@@ -61,7 +61,7 @@ func ReadTCPRequestIntoSpan(record *ringbuf.Record, filter ServiceFilter) (reque
 			return TCPToRedisToSpan(&event, op, text, status), false, nil
 		}
 	default:
-		k, err := ProcessPossibleKafkaEvent(&event, b, event.Rbuf[:rl])
+		k, err := ProcessPossibleKafkaEvent(&event, b, event.Rbuf[:])
 		if err == nil {
 			return TCPToKafkaToSpan(&event, k), false, nil
 		} else if isHTTP2(b, &event) || isHTTP2(event.Rbuf[:], &event) {

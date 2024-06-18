@@ -379,26 +379,31 @@ static __always_inline void process_http_response(http_info_t *info, unsigned ch
     }
 }
 
+static __always_inline u8 request_type_by_direction(u8 direction, u8 packet_type) {
+    if (packet_type == PACKET_TYPE_RESPONSE) {
+        if (direction == TCP_RECV) {
+            return EVENT_HTTP_CLIENT;
+        } else {
+            return EVENT_HTTP_REQUEST;
+        }
+    } else {
+        if (direction == TCP_RECV) {
+            return EVENT_HTTP_REQUEST;
+        } else {
+            return EVENT_HTTP_CLIENT;
+        }
+    }
+
+    return 0;
+}
+
 static __always_inline http_connection_metadata_t *connection_meta_by_direction(pid_connection_info_t *pid_conn, u8 direction, u8 packet_type) {
     http_connection_metadata_t *meta = empty_connection_meta();
     if (!meta) {
         return 0;
     }
 
-    if (packet_type == PACKET_TYPE_RESPONSE) {
-        if (direction == TCP_RECV) {
-            meta->type = EVENT_HTTP_CLIENT;
-        } else {
-            meta->type = EVENT_HTTP_REQUEST;
-        }
-    } else {
-        if (direction == TCP_RECV) {
-            meta->type = EVENT_HTTP_REQUEST;
-        } else {
-            meta->type = EVENT_HTTP_CLIENT;
-        }
-    }
-
+    meta->type = request_type_by_direction(direction, packet_type);
     task_pid(&meta->pid);
 
     return meta;
@@ -554,8 +559,15 @@ static __always_inline void process_http2_grpc_frames(pid_connection_info_t *pid
             }
         }
         if (found_end_frame) {
-            http2_grpc_end(&stream, prev_info, (void *)((u8 *)u_buf + saved_buf_pos));
-            bpf_map_delete_elem(&active_ssl_connections, pid_conn);
+            u8 req_type = request_type_by_direction(direction, PACKET_TYPE_RESPONSE);
+            if (prev_info) {
+                if (req_type == prev_info->type) {
+                    http2_grpc_end(&stream, prev_info, (void *)((u8 *)u_buf + saved_buf_pos));
+                    bpf_map_delete_elem(&active_ssl_connections, pid_conn);
+                } else {
+                    bpf_dbg_printk("grpc request/response mismatch, req_type %d, prev_info->type %d", req_type, prev_info->type);
+                }
+            }
         }
     }
 }

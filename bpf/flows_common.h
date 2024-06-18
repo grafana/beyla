@@ -45,6 +45,14 @@ struct {
     __type(value, flow_metrics);
 } aggregated_flows SEC(".maps");
 
+// Key: the flow identifier. Value: the flow direction.
+struct {
+	__uint(type, BPF_MAP_TYPE_HASH);
+	__uint(max_entries, 1 << 24);
+	__type(key, flow_id);
+	__type(value, u8);
+} flow_directions SEC(".maps");
+
 const u8 ip4in6[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff};
 
 // Constant definitions, to be overridden by the invoker

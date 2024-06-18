@@ -17,9 +17,8 @@ func TestMetricAttributes(t *testing.T) {
 	in := &ebpf.Record{
 		NetFlowRecordT: ebpf.NetFlowRecordT{
 			Id: ebpf.NetFlowId{
-				Direction: 1,
-				DstPort:   3210,
-				SrcPort:   12345,
+				DstPort: 3210,
+				SrcPort: 12345,
 			},
 		},
 		Attrs: ebpf.RecordAttrs{
@@ -67,9 +66,8 @@ func TestMetricAttributes_Filter(t *testing.T) {
 	in := &ebpf.Record{
 		NetFlowRecordT: ebpf.NetFlowRecordT{
 			Id: ebpf.NetFlowId{
-				Direction: 1,
-				DstPort:   3210,
-				SrcPort:   12345,
+				DstPort: 3210,
+				SrcPort: 12345,
 			},
 		},
 		Attrs: ebpf.RecordAttrs{

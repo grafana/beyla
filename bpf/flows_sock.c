@@ -43,13 +43,6 @@ struct __udphdr {
 	__sum16 check;
 };
 
-struct {
-	__uint(type, BPF_MAP_TYPE_HASH);
-	__uint(max_entries, 1 << 24);
-	__type(key, flow_id);
-	__type(value, u8);
-} flow_directions SEC(".maps");
-
 static __always_inline bool read_sk_buff(struct __sk_buff *skb, flow_id *id, u16 *custom_flags) {
     // we read the protocol just like here linux/samples/bpf/parse_ldabs.c
     u16 h_proto;
@@ -229,14 +222,16 @@ int socket__http_filter(struct __sk_buff *skb) {
             // SYN only means we initiated the connection and this is the EGRESS direction
             else if((flags & SYN_FLAG) == SYN_FLAG) {
                 new_flow.direction = EGRESS;
+            }
             // fallback for lost or already started connections and UDP
-            } else {
+            else {
                 new_flow.direction = INGRESS;
                 if (id.src_port > id.dst_port) {
                     new_flow.direction = EGRESS;
                 }
             }
-            bpf_map_update_elem(&flow_directions, &id, &new_flow.direction, BPF_ANY);
+            // errors are intentionally omitted
+            bpf_map_update_elem(&flow_directions, &id, &new_flow.direction, BPF_NOEXIST);
         } else {
             // get direction from saved flow
             new_flow.direction = *direction;
@@ -267,6 +262,10 @@ int socket__http_filter(struct __sk_buff *skb) {
             record->metrics = new_flow;
             bpf_ringbuf_submit(record, 0);
         }
+    }
+    // finally, when flow receives FIN or RST, clean flow_directions
+    if(flags & FIN_FLAG || flags & RST_FLAG) {
+        bpf_map_delete_elem(&flow_directions, &id);
     }
     return TC_ACT_OK;
 }

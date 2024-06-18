@@ -73,6 +73,8 @@ func (fm *NetFlowMetrics) Accumulate(src *NetFlowMetrics) {
 	// time == 0 if the value has not been yet set
 	if fm.StartMonoTimeNs == 0 || fm.StartMonoTimeNs > src.StartMonoTimeNs {
 		fm.StartMonoTimeNs = src.StartMonoTimeNs
+		// set Direction here, because the correct value is in the first packet only (socket_filter case)
+		fm.Direction = src.Direction
 	}
 	if fm.EndMonoTimeNs == 0 || fm.EndMonoTimeNs < src.EndMonoTimeNs {
 		fm.EndMonoTimeNs = src.EndMonoTimeNs
@@ -80,7 +82,6 @@ func (fm *NetFlowMetrics) Accumulate(src *NetFlowMetrics) {
 	fm.Bytes += src.Bytes
 	fm.Packets += src.Packets
 	fm.Flags |= src.Flags
-	fm.Direction = src.Direction
 }
 
 // SrcIP is never null. Returned as pointer for efficiency.

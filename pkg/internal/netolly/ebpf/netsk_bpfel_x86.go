@@ -18,7 +18,6 @@ type NetSkFlowIdT struct {
 	SrcIp             struct{ In6U struct{ U6Addr8 [16]uint8 } }
 	DstIp             struct{ In6U struct{ U6Addr8 [16]uint8 } }
 	EthProtocol       uint16
-	Direction         uint8
 	SrcPort           uint16
 	DstPort           uint16
 	TransportProtocol uint8
@@ -33,6 +32,7 @@ type NetSkFlowMetricsT struct {
 	StartMonoTimeNs uint64
 	EndMonoTimeNs   uint64
 	Flags           uint16
+	Direction       uint8
 	Errno           uint8
 }
 
@@ -91,6 +91,7 @@ type NetSkProgramSpecs struct {
 type NetSkMapSpecs struct {
 	AggregatedFlows *ebpf.MapSpec `ebpf:"aggregated_flows"`
 	DirectFlows     *ebpf.MapSpec `ebpf:"direct_flows"`
+	FlowDirections  *ebpf.MapSpec `ebpf:"flow_directions"`
 }
 
 // NetSkObjects contains all objects after they have been loaded into the kernel.
@@ -114,12 +115,14 @@ func (o *NetSkObjects) Close() error {
 type NetSkMaps struct {
 	AggregatedFlows *ebpf.Map `ebpf:"aggregated_flows"`
 	DirectFlows     *ebpf.Map `ebpf:"direct_flows"`
+	FlowDirections  *ebpf.Map `ebpf:"flow_directions"`
 }
 
 func (m *NetSkMaps) Close() error {
 	return _NetSkClose(
 		m.AggregatedFlows,
 		m.DirectFlows,
+		m.FlowDirections,
 	)
 }
 

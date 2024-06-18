@@ -16,7 +16,7 @@ import (
 const (
 	flushesMetricName            = "beyla_ebpf_tracer_flushes"
 	promRequestsMetricName       = "prometheus_http_requests"
-	internalPrometheusMetricsURL = "http://localhost:8999/internal/metrics"
+	internalPrometheusMetricsURL = "http://localhost:8999/metrics"
 )
 
 func testInternalPrometheusExport(t *testing.T) {
@@ -40,7 +40,7 @@ func testInternalPrometheusExport(t *testing.T) {
 	// prometheus metrics endpoint must have been invoked once at the beginning of the test,
 	// plus once each eventually try
 	assert.Equal(t, 1+eventuallyIterations,
-		metricValue(t, promRequestsMetricName, map[string]string{"port": "8999", "path": "/internal/metrics"}),
+		metricValue(t, promRequestsMetricName, map[string]string{"port": "8999", "path": "/metrics"}),
 	)
 }
 

@@ -11,6 +11,7 @@ import (
 	"github.com/grafana/beyla/pkg/internal/ebpf/gokafka"
 	"github.com/grafana/beyla/pkg/internal/ebpf/goredis"
 	"github.com/grafana/beyla/pkg/internal/ebpf/goruntime"
+	"github.com/grafana/beyla/pkg/internal/ebpf/gpuevent"
 	"github.com/grafana/beyla/pkg/internal/ebpf/grpc"
 	"github.com/grafana/beyla/pkg/internal/ebpf/httpfltr"
 	"github.com/grafana/beyla/pkg/internal/ebpf/httpssl"
@@ -107,9 +108,9 @@ func newGoTracersGroup(cfg *beyla.Config, metrics imetrics.Reporter) []ebpf.Trac
 }
 
 func newNonGoTracersGroup(cfg *beyla.Config, metrics imetrics.Reporter) []ebpf.Tracer {
-	return []ebpf.Tracer{httpfltr.New(cfg, metrics), httpssl.New(cfg, metrics)}
+	return []ebpf.Tracer{httpfltr.New(cfg, metrics), httpssl.New(cfg, metrics), gpuevent.New(cfg, metrics)}
 }
 
 func newNonGoTracersGroupUProbes(cfg *beyla.Config, metrics imetrics.Reporter) []ebpf.Tracer {
-	return []ebpf.Tracer{httpssl.New(cfg, metrics)}
+	return []ebpf.Tracer{httpssl.New(cfg, metrics), gpuevent.New(cfg, metrics)}
 }

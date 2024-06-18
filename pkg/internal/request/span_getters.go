@@ -46,7 +46,7 @@ func SpanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValu
 			switch span.Type {
 			case EventTypeSQLClient:
 				return DBSystem(semconv.DBSystemOtherSQL.Value.AsString())
-			case EventTypeRedisClient:
+			case EventTypeRedisClient, EventTypeRedisServer:
 				return DBSystem(semconv.DBSystemRedis.Value.AsString())
 			}
 			return DBSystem("unknown")
@@ -60,14 +60,14 @@ func SpanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValu
 		}
 	case attr.MessagingSystem:
 		getter = func(span *Span) attribute.KeyValue {
-			if span.Type == EventTypeKafkaClient {
+			if span.Type == EventTypeKafkaClient || span.Type == EventTypeKafkaServer {
 				return semconv.MessagingSystem("kafka")
 			}
 			return semconv.MessagingSystem("unknown")
 		}
 	case attr.MessagingDestination:
 		getter = func(span *Span) attribute.KeyValue {
-			if span.Type == EventTypeKafkaClient {
+			if span.Type == EventTypeKafkaClient || span.Type == EventTypeKafkaServer {
 				return semconv.MessagingDestinationName(span.Path)
 			}
 			return semconv.MessagingDestinationName("")
@@ -118,7 +118,7 @@ func SpanPromGetters(attrName attr.Name) (attributes.Getter[*Span, string], bool
 			switch span.Type {
 			case EventTypeSQLClient:
 				return semconv.DBSystemOtherSQL.Value.AsString()
-			case EventTypeRedisClient:
+			case EventTypeRedisClient, EventTypeRedisServer:
 				return semconv.DBSystemRedis.Value.AsString()
 			}
 			return "unknown"
@@ -132,14 +132,14 @@ func SpanPromGetters(attrName attr.Name) (attributes.Getter[*Span, string], bool
 		}
 	case attr.MessagingSystem:
 		getter = func(span *Span) string {
-			if span.Type == EventTypeKafkaClient {
+			if span.Type == EventTypeKafkaClient || span.Type == EventTypeKafkaServer {
 				return "kafka"
 			}
 			return "unknown"
 		}
 	case attr.MessagingDestination:
 		getter = func(span *Span) string {
-			if span.Type == EventTypeKafkaClient {
+			if span.Type == EventTypeKafkaClient || span.Type == EventTypeKafkaServer {
 				return span.Path
 			}
 			return ""

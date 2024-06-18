@@ -24,6 +24,8 @@ const (
 	EventTypeSQLClient
 	EventTypeRedisClient
 	EventTypeKafkaClient
+	EventTypeRedisServer
+	EventTypeKafkaServer
 )
 
 type IgnoreMode uint8
@@ -139,7 +141,7 @@ func SpanStatusCode(span *Span) codes.Code {
 		return HTTPSpanStatusCode(span)
 	case EventTypeGRPC, EventTypeGRPCClient:
 		return GrpcSpanStatusCode(span)
-	case EventTypeSQLClient, EventTypeRedisClient:
+	case EventTypeSQLClient, EventTypeRedisClient, EventTypeRedisServer:
 		if span.Status != 0 {
 			return codes.Error
 		}

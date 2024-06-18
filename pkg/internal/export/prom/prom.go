@@ -479,11 +479,11 @@ func (r *metricsReporter) observe(span *request.Span) {
 			r.grpcClientDuration.WithLabelValues(
 				labelValues(span, r.attrGRPCClientDuration)...,
 			).metric.Observe(duration)
-		case request.EventTypeRedisClient, request.EventTypeSQLClient:
+		case request.EventTypeRedisClient, request.EventTypeSQLClient, request.EventTypeRedisServer:
 			r.dbClientDuration.WithLabelValues(
 				labelValues(span, r.attrDBClientDuration)...,
 			).metric.Observe(duration)
-		case request.EventTypeKafkaClient:
+		case request.EventTypeKafkaClient, request.EventTypeKafkaServer:
 			switch span.Method {
 			case request.MessagingPublish:
 				r.msgPublishDuration.WithLabelValues(

@@ -101,12 +101,12 @@ In order to configure which attributes to show or which attributes to hide, chec
 
 Beyla can be [configured to report internal metrics]({{< relref "./configure/options.md#internal-metrics-reporter" >}}) in Prometheus Format.
 
-| Name                        | Type       | Description                                                                              |
-| --------------------------- | ---------- | ---------------------------------------------------------------------------------------- |
-| `ebpf_tracer_flushes`       | Histogram  | Length of the groups of traces flushed from the eBPF tracer to the next pipeline stage   |
-| `otel_metric_exports`       | Counter    | Length of the metric batches submitted to the remote OTEL collector                      |
-| `otel_metric_export_errors` | CounterVec | Error count on each failed OTEL metric export, by error type                             |
-| `otel_trace_exports`        | Counter    | Length of the trace batches submitted to the remote OTEL collector                       |
-| `otel_trace_export_errors`  | CounterVec | Error count on each failed OTEL trace export, by error type                              |
-| `prometheus_http_requests`  | CounterVec | Number of requests towards the Prometheus Scrape endpoint, faceted by HTTP port and path |
-| `beyla_instrumented_processes` | GaugeVec   | Instrumented processes by Beyla, with process name                                    |
+| Name                                  | Type        | Description                                                                              |
+| ------------------------------------- | ----------- | ---------------------------------------------------------------------------------------- |
+| `beyla_ebpf_tracer_flushes`           | Histogram   | Length of the groups of traces flushed from the eBPF tracer to the next pipeline stage   |
+| `beyla_otel_metric_exports_total`     | Counter     | Length of the metric batches submitted to the remote OTEL collector                      |
+| `beyla_otel_metric_export_errors_total` | CounterVec | Error count on each failed OTEL metric export, by error type                             |
+| `beyla_otel_trace_exports_total`      | Counter     | Length of the trace batches submitted to the remote OTEL collector                       |
+| `beyla_otel_trace_export_errors_total` | CounterVec | Error count on each failed OTEL trace export, by error type                              |
+| `beyla_prometheus_http_requests_total` | CounterVec | Number of requests towards the Prometheus Scrape endpoint, faceted by HTTP port and path |
+| `beyla_instrumented_processes`        | GaugeVec    | Instrumented processes by Beyla, with process name                                       |

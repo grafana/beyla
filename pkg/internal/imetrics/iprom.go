@@ -59,7 +59,7 @@ func NewPrometheusReporter(cfg *PrometheusConfig, manager *connector.PrometheusM
 			Help: "Error count on each failed OTEL trace export",
 		}, []string{"error"}),
 		prometheusRequests: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: "prometheus_http_requests_total",
+			Name: "beyla_prometheus_http_requests_total",
 			Help: "Requests towards the Prometheus Scrape endpoint",
 		}, []string{"port", "path"}),
 		instrumentedProcesses: prometheus.NewGaugeVec(prometheus.GaugeOpts{

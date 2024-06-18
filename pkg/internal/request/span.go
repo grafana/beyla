@@ -126,11 +126,7 @@ func (s *Span) IsValid() bool {
 
 func (s *Span) IsClientSpan() bool {
 	switch s.Type {
-	case EventTypeGRPCClient:
-		fallthrough
-	case EventTypeHTTPClient:
-		fallthrough
-	case EventTypeSQLClient:
+	case EventTypeGRPCClient, EventTypeHTTPClient, EventTypeRedisClient, EventTypeKafkaClient, EventTypeSQLClient:
 		return true
 	}
 

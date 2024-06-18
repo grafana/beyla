@@ -67,49 +67,49 @@ func TestProcMetrics_Aggregated(t *testing.T) {
 
 	// THEN the metrics are exported adding system/user/wait times into a single datapoint
 	test.Eventually(t, timeout, func(t require.TestingT) {
-		metric := readChan(t, otlp.Records, timeout)
+		metric := readChan(t, otlp.Records(), timeout)
 		require.Equal(t, "process.cpu.time", metric.Name)
 		require.Equal(t, map[string]string{"process.command": "foo"}, metric.Attributes)
 		require.EqualValues(t, 60, metric.FloatVal)
 	})
 	test.Eventually(t, timeout, func(t require.TestingT) {
-		metric := readChan(t, otlp.Records, timeout)
+		metric := readChan(t, otlp.Records(), timeout)
 		require.Equal(t, "process.cpu.time", metric.Name)
 		require.Equal(t, map[string]string{"process.command": "bar"}, metric.Attributes)
 		require.EqualValues(t, 603, metric.FloatVal)
 	})
 	test.Eventually(t, timeout, func(t require.TestingT) {
-		metric := readChan(t, otlp.Records, timeout)
+		metric := readChan(t, otlp.Records(), timeout)
 		require.Equal(t, "process.cpu.utilization", metric.Name)
 		require.Equal(t, map[string]string{"process.command": "foo"}, metric.Attributes)
 		require.EqualValues(t, 6, metric.FloatVal)
 	})
 	test.Eventually(t, timeout, func(t require.TestingT) {
-		metric := readChan(t, otlp.Records, timeout)
+		metric := readChan(t, otlp.Records(), timeout)
 		require.Equal(t, "process.cpu.utilization", metric.Name)
 		require.Equal(t, map[string]string{"process.command": "bar"}, metric.Attributes)
 		require.EqualValues(t, 63, metric.FloatVal)
 	})
 	test.Eventually(t, timeout, func(t require.TestingT) {
-		metric := readChan(t, otlp.Records, timeout)
+		metric := readChan(t, otlp.Records(), timeout)
 		require.Equal(t, "process.disk.io", metric.Name)
 		require.Equal(t, map[string]string{"process.command": "foo"}, metric.Attributes)
 		require.EqualValues(t, 123+456, metric.IntVal)
 	})
 	test.Eventually(t, timeout, func(t require.TestingT) {
-		metric := readChan(t, otlp.Records, timeout)
+		metric := readChan(t, otlp.Records(), timeout)
 		require.Equal(t, "process.disk.io", metric.Name)
 		require.Equal(t, map[string]string{"process.command": "bar"}, metric.Attributes)
 		require.EqualValues(t, 321+654, metric.IntVal)
 	})
 	test.Eventually(t, timeout, func(t require.TestingT) {
-		metric := readChan(t, otlp.Records, timeout)
+		metric := readChan(t, otlp.Records(), timeout)
 		require.Equal(t, "process.network.io", metric.Name)
 		require.Equal(t, map[string]string{"process.command": "foo"}, metric.Attributes)
 		require.EqualValues(t, 33, metric.IntVal)
 	})
 	test.Eventually(t, timeout, func(t require.TestingT) {
-		metric := readChan(t, otlp.Records, timeout)
+		metric := readChan(t, otlp.Records(), timeout)
 		require.Equal(t, "process.network.io", metric.Name)
 		require.Equal(t, map[string]string{"process.command": "bar"}, metric.Attributes)
 		require.EqualValues(t, 3, metric.IntVal)
@@ -127,37 +127,37 @@ func TestProcMetrics_Aggregated(t *testing.T) {
 
 	// THEN the counter is updated by adding values and the gauges change their values
 	test.Eventually(t, timeout, func(t require.TestingT) {
-		metric := readChan(t, otlp.Records, timeout)
+		metric := readChan(t, otlp.Records(), timeout)
 		require.Equal(t, "process.cpu.time", metric.Name)
 		require.Equal(t, map[string]string{"process.command": "foo"}, metric.Attributes)
 		require.EqualValues(t, 66, metric.FloatVal)
 	})
 	test.Eventually(t, timeout, func(t require.TestingT) {
-		metric := readChan(t, otlp.Records, timeout)
+		metric := readChan(t, otlp.Records(), timeout)
 		require.Equal(t, "process.cpu.time", metric.Name)
 		require.Equal(t, map[string]string{"process.command": "bar"}, metric.Attributes)
 		require.EqualValues(t, 603, metric.FloatVal)
 	})
 	test.Eventually(t, timeout, func(t require.TestingT) {
-		metric := readChan(t, otlp.Records, timeout)
+		metric := readChan(t, otlp.Records(), timeout)
 		require.Equal(t, "process.cpu.utilization", metric.Name)
 		require.Equal(t, map[string]string{"process.command": "foo"}, metric.Attributes)
 		require.EqualValues(t, 7, metric.FloatVal)
 	})
 	test.Eventually(t, timeout, func(t require.TestingT) {
-		metric := readChan(t, otlp.Records, timeout)
+		metric := readChan(t, otlp.Records(), timeout)
 		require.Equal(t, "process.cpu.utilization", metric.Name)
 		require.Equal(t, map[string]string{"process.command": "bar"}, metric.Attributes)
 		require.EqualValues(t, 63, metric.FloatVal)
 	})
 	test.Eventually(t, timeout, func(t require.TestingT) {
-		metric := readChan(t, otlp.Records, timeout)
+		metric := readChan(t, otlp.Records(), timeout)
 		require.Equal(t, "process.disk.io", metric.Name)
 		require.Equal(t, map[string]string{"process.command": "foo"}, metric.Attributes)
 		require.EqualValues(t, 123+456+1+2, metric.IntVal)
 	})
 	test.Eventually(t, timeout, func(t require.TestingT) {
-		metric := readChan(t, otlp.Records, timeout)
+		metric := readChan(t, otlp.Records(), timeout)
 		require.Equal(t, "process.network.io", metric.Name)
 		require.Equal(t, map[string]string{"process.command": "foo"}, metric.Attributes)
 		require.EqualValues(t, 63, metric.IntVal)
@@ -209,67 +209,67 @@ func TestProcMetrics_Disaggregated(t *testing.T) {
 
 	// THEN the metrics are exported aggregated by system/user/wait times
 	test.Eventually(t, timeout, func(t require.TestingT) {
-		metric := readChan(t, otlp.Records, timeout)
+		metric := readChan(t, otlp.Records(), timeout)
 		require.Equal(t, "process.cpu.time", metric.Name)
 		require.Equal(t, map[string]string{
 			"process.command": "foo", "process.cpu.state": "user"}, metric.Attributes)
 		require.EqualValues(t, 30, metric.FloatVal)
 	})
 	test.Eventually(t, timeout, func(t require.TestingT) {
-		metric := readChan(t, otlp.Records, timeout)
+		metric := readChan(t, otlp.Records(), timeout)
 		require.Equal(t, "process.cpu.time", metric.Name)
 		require.Equal(t, map[string]string{
 			"process.command": "foo", "process.cpu.state": "system"}, metric.Attributes)
 		require.EqualValues(t, 10, metric.FloatVal)
 	})
 	test.Eventually(t, timeout, func(t require.TestingT) {
-		metric := readChan(t, otlp.Records, timeout)
+		metric := readChan(t, otlp.Records(), timeout)
 		require.Equal(t, "process.cpu.time", metric.Name)
 		require.Equal(t, map[string]string{
 			"process.command": "foo", "process.cpu.state": "wait"}, metric.Attributes)
 		require.EqualValues(t, 20, metric.FloatVal)
 	})
 	test.Eventually(t, timeout, func(t require.TestingT) {
-		metric := readChan(t, otlp.Records, timeout)
+		metric := readChan(t, otlp.Records(), timeout)
 		require.Equal(t, "process.cpu.utilization", metric.Name)
 		require.Equal(t, map[string]string{
 			"process.command": "foo", "process.cpu.state": "user"}, metric.Attributes)
 		require.EqualValues(t, 1, metric.FloatVal)
 	})
 	test.Eventually(t, timeout, func(t require.TestingT) {
-		metric := readChan(t, otlp.Records, timeout)
+		metric := readChan(t, otlp.Records(), timeout)
 		require.Equal(t, "process.cpu.utilization", metric.Name)
 		require.Equal(t, map[string]string{
 			"process.command": "foo", "process.cpu.state": "system"}, metric.Attributes)
 		require.EqualValues(t, 2, metric.FloatVal)
 	})
 	test.Eventually(t, timeout, func(t require.TestingT) {
-		metric := readChan(t, otlp.Records, timeout)
+		metric := readChan(t, otlp.Records(), timeout)
 		require.Equal(t, "process.cpu.utilization", metric.Name)
 		require.Equal(t, map[string]string{
 			"process.command": "foo", "process.cpu.state": "wait"}, metric.Attributes)
 		require.EqualValues(t, 3, metric.FloatVal)
 	})
 	test.Eventually(t, timeout, func(t require.TestingT) {
-		metric := readChan(t, otlp.Records, timeout)
+		metric := readChan(t, otlp.Records(), timeout)
 		require.Equal(t, "process.disk.io", metric.Name)
 		require.Equal(t, map[string]string{"process.command": "foo", "disk.io.direction": "write"}, metric.Attributes)
 		require.EqualValues(t, 456, metric.IntVal)
 	})
 	test.Eventually(t, timeout, func(t require.TestingT) {
-		metric := readChan(t, otlp.Records, timeout)
+		metric := readChan(t, otlp.Records(), timeout)
 		require.Equal(t, "process.disk.io", metric.Name)
 		require.Equal(t, map[string]string{"process.command": "foo", "disk.io.direction": "read"}, metric.Attributes)
 		require.EqualValues(t, 123, metric.IntVal)
 	})
 	test.Eventually(t, timeout, func(t require.TestingT) {
-		metric := readChan(t, otlp.Records, timeout)
+		metric := readChan(t, otlp.Records(), timeout)
 		require.Equal(t, "process.network.io", metric.Name)
 		require.Equal(t, map[string]string{"process.command": "foo", "network.io.direction": "receive"}, metric.Attributes)
 		require.EqualValues(t, 10, metric.IntVal)
 	})
 	test.Eventually(t, timeout, func(t require.TestingT) {
-		metric := readChan(t, otlp.Records, timeout)
+		metric := readChan(t, otlp.Records(), timeout)
 		require.Equal(t, "process.network.io", metric.Name)
 		require.Equal(t, map[string]string{"process.command": "foo", "network.io.direction": "transmit"}, metric.Attributes)
 		require.EqualValues(t, 20, metric.IntVal)

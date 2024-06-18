@@ -1,15 +1,18 @@
 package otel
 
 import (
+	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/metric"
 
 	"github.com/grafana/beyla/pkg/internal/export/attributes"
 	attr "github.com/grafana/beyla/pkg/internal/export/attributes/names"
 	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
+	"github.com/grafana/beyla/pkg/internal/pipe/global"
 )
 
 func TestMetricAttributes(t *testing.T) {
@@ -35,12 +38,19 @@ func TestMetricAttributes(t *testing.T) {
 	in.Id.SrcIp.In6U.U6Addr8 = [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 255, 12, 34, 56, 78}
 	in.Id.DstIp.In6U.U6Addr8 = [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 255, 33, 22, 11, 1}
 
-	me := NewExpirer[*ebpf.Record, metric.Int64Observer, *IntCounter, int64](NewIntCounter, attributes.OpenTelemetryGetters(ebpf.RecordGetters, []attr.Name{
-		attr.SrcAddress, attr.DstAddres, attr.SrcPort, attr.DstPort, attr.SrcName, attr.DstName,
-		attr.K8sSrcName, attr.K8sSrcNamespace, attr.K8sDstName, attr.K8sDstNamespace,
-	}), timeNow, timeout)
-	record := me.ForRecord(in)
-	reportedAttributes := record.Attributes()
+	me, err := newMetricsExporter(context.Background(),
+		&global.ContextInfo{MetricAttributeGroups: attributes.GroupKubernetes},
+		&NetMetricsConfig{AttributeSelectors: map[attributes.Section]attributes.InclusionLists{
+			attributes.BeylaNetworkFlow.Section: {Include: []string{"*"}},
+		}, Metrics: &MetricsConfig{
+			MetricsEndpoint:   "http://foo",
+			Interval:          10 * time.Millisecond,
+			ReportersCacheLen: 100,
+			TTL:               5 * time.Minute,
+		}})
+	require.NoError(t, err)
+
+	_, reportedAttributes := me.metrics.ForRecord(in)
 	for _, mustContain := range []attribute.KeyValue{
 		attribute.String("src.address", "12.34.56.78"),
 		attribute.String("dst.address", "33.22.11.1"),
@@ -84,13 +94,22 @@ func TestMetricAttributes_Filter(t *testing.T) {
 	in.Id.SrcIp.In6U.U6Addr8 = [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 255, 12, 34, 56, 78}
 	in.Id.DstIp.In6U.U6Addr8 = [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 255, 33, 22, 11, 1}
 
-	me := NewExpirer[*ebpf.Record, metric.Int64Observer, *IntCounter, int64](NewIntCounter, attributes.OpenTelemetryGetters(ebpf.RecordGetters, []attr.Name{
-		"src.address",
-		"k8s.src.name",
-		"k8s.dst.name",
-	}), timeNow, timeout)
-	record := me.ForRecord(in)
-	reportedAttributes := record.Attributes()
+	me, err := newMetricsExporter(context.Background(),
+		&global.ContextInfo{MetricAttributeGroups: attributes.GroupKubernetes},
+		&NetMetricsConfig{AttributeSelectors: map[attributes.Section]attributes.InclusionLists{
+			attributes.BeylaNetworkFlow.Section: {Include: []string{
+				"src.address",
+				"k8s.src.name",
+				"k8s.dst.name",
+			}},
+		}, Metrics: &MetricsConfig{
+			MetricsEndpoint:   "http://foo",
+			Interval:          10 * time.Millisecond,
+			ReportersCacheLen: 100,
+		}})
+	require.NoError(t, err)
+
+	_, reportedAttributes := me.metrics.ForRecord(in)
 	for _, mustContain := range []attribute.KeyValue{
 		attribute.String("src.address", "12.34.56.78"),
 		attribute.String("k8s.src.name", "srcname"),

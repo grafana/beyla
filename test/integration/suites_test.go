@@ -512,6 +512,16 @@ func TestSuiteNoRoutes(t *testing.T) {
 	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
 }
 
+func TestSuite_Elixir(t *testing.T) {
+	compose, err := docker.ComposeSuite("docker-compose-elixir.yml", path.Join(pathOutput, "test-suite-elixir.log"))
+	require.NoError(t, err)
+	require.NoError(t, compose.Up())
+	t.Run("Elixir RED metrics", testREDMetricsElixirHTTP)
+	t.Run("BPF pinning folder mounted", testBPFPinningMounted)
+	require.NoError(t, compose.Close())
+	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
+}
+
 // Helpers
 
 var lockdownPath = "/sys/kernel/security/lockdown"

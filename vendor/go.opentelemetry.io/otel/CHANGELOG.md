@@ -8,6 +8,8 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+- Add a `Remove` method to metric instruments.
+
 ## [1.27.0/0.49.0/0.3.0] 2024-05-21
 
 ### Added

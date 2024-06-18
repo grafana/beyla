@@ -19,10 +19,10 @@ import (
 func httpInfoToSpan(info *HTTPInfo) request.Span {
 	return request.Span{
 		Type:          request.EventType(info.Type),
-		ID:            0,
 		Method:        info.Method,
 		Path:          removeQuery(info.URL),
 		Peer:          info.Peer,
+		PeerPort:      int(info.ConnInfo.S_port),
 		Host:          info.Host,
 		HostPort:      int(info.ConnInfo.D_port),
 		ContentLength: int64(info.Len),

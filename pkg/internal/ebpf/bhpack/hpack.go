@@ -365,9 +365,10 @@ func (d *Decoder) parseFieldLiteral(n uint8, it indexType) error {
 	if nameIdx > 0 {
 		ihf, ok := d.at(nameIdx)
 		if !ok {
-			return DecodingError{InvalidIndexError(nameIdx)}
+			hf.Name = "<BAD INDEX>"
+		} else {
+			hf.Name = ihf.Name
 		}
-		hf.Name = ihf.Name
 	} else {
 		undecodedName, buf, err = d.readString(buf)
 		if err != nil {

@@ -63,11 +63,11 @@ type PidInfo struct {
 type Span struct {
 	Type           EventType
 	IgnoreSpan     IgnoreMode
-	ID             uint64
 	Method         string
 	Path           string
 	Route          string
 	Peer           string
+	PeerPort       int
 	Host           string
 	HostPort       int
 	Status         int

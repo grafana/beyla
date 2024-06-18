@@ -177,10 +177,10 @@ var genericServiceID = svc.ID{SDKLanguage: svc.InstrumentableGeneric}
 func http2InfoToSpan(info *BPFHTTP2Info, method, path, peer, host string, status int, protocol Protocol) request.Span {
 	return request.Span{
 		Type:          info.eventType(protocol),
-		ID:            0,
 		Method:        method,
 		Path:          removeQuery(path),
 		Peer:          peer,
+		PeerPort:      int(info.ConnInfo.S_port),
 		Host:          host,
 		HostPort:      int(info.ConnInfo.D_port),
 		ContentLength: int64(info.Len),
@@ -244,7 +244,12 @@ func ReadHTTP2InfoIntoSpan(record *ringbuf.Record, filter ServiceFilter) (reques
 		return request.Span{}, true, nil
 	}
 
-	framer := byteFramer(event.Data[:])
+	bLen := len(event.Data)
+	if event.Len < int32(bLen) {
+		bLen = int(event.Len)
+	}
+
+	framer := byteFramer(event.Data[:bLen])
 	retFramer := byteFramer(event.RetData[:])
 	// We don't set the framer.ReadMetaHeaders function to hpack.NewDecoder because
 	// the http2.MetaHeadersFrame code wants a full grpc buffer with all the fields,
@@ -265,6 +270,10 @@ func ReadHTTP2InfoIntoSpan(record *ringbuf.Record, filter ServiceFilter) (reques
 
 		if ff, ok := f.(*http2.HeadersFrame); ok {
 			method, path, contentType := readMetaFrame((*BPFConnInfo)(&event.ConnInfo), framer, ff)
+
+			if path == "" {
+				path = "*"
+			}
 
 			grpcInStatus := false
 

@@ -3,8 +3,10 @@
 package integration
 
 import (
+	"fmt"
 	"net/http"
 	"path"
+	"strconv"
 	"testing"
 	"time"
 
@@ -96,6 +98,10 @@ func TestMultiProcess(t *testing.T) {
 		})
 	}
 
+	t.Run("Instrumented processes metric", func(t *testing.T) {
+		checkInstrumentedProcessesMetric(t)
+	})
+
 	t.Run("BPF pinning folders mounted", func(t *testing.T) {
 		// 1 beyla pinned map folder for all processes
 		testBPFPinningMounted(t)
@@ -127,6 +133,33 @@ func checkReportedOnlyOnce(t *testing.T, baseURL, serviceName string) {
 		// check duration_count has 3 calls and all the arguments
 		require.Len(t, results, 1)
 		assert.Equal(t, 3, totalPromCount(t, results))
+	}, test.Interval(1000*time.Millisecond))
+
+}
+
+func checkInstrumentedProcessesMetric(t *testing.T) {
+	pq := prom.Client{HostPort: prometheusHostPort}
+	test.Eventually(t, testTimeout, func(t require.TestingT) {
+		// we expected to have this in Prometheus at this point
+		processes := map[string]int{
+			"python3.11":    10,
+			"greetings":     2,
+			"java":          1,
+			"node":          2,
+			"ruby":          2,
+			"duped_service": 1,
+			"testserver":    2,
+			"rename1":       1,
+		}
+
+		for processName, expectedCount := range processes {
+			results, err := pq.Query(fmt.Sprintf(`beyla_instrumented_processes{process_name="%s"}`, processName))
+			require.NoError(t, err)
+			value, err := strconv.Atoi(results[0].Value[1].(string))
+			require.NoError(t, err)
+			assert.Equal(t, expectedCount, value)
+		}
+
 	}, test.Interval(1000*time.Millisecond))
 
 }

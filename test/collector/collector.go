@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"sync/atomic"
 
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/pmetric"
@@ -23,8 +24,8 @@ import (
 type TestCollector struct {
 	ServerEndpoint string
 	// TODO: add also traces history
-	Records      chan MetricRecord
-	TraceRecords chan TraceRecord
+	records      atomic.Value // chan MetricRecord
+	traceRecords atomic.Value // chan TraceRecord
 }
 
 var log *slog.Logger
@@ -38,10 +39,9 @@ func init() {
 
 func Start(ctx context.Context) (*TestCollector, error) {
 
-	tc := TestCollector{
-		Records:      make(chan MetricRecord, 100),
-		TraceRecords: make(chan TraceRecord, 100),
-	}
+	tc := TestCollector{}
+	tc.ResetRecords()
+	tc.ResetTraceRecords()
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		body, err := io.ReadAll(request.Body)
 		if err != nil {
@@ -110,13 +110,29 @@ func (tc *TestCollector) traceEvent(writer http.ResponseWriter, body []byte) {
 					})
 					// remove ServiceInstanceIDKey to avoid flakiness
 					delete(tr.ResourceAttributes, string(semconv.ServiceInstanceIDKey))
-					tc.TraceRecords <- tr
+					tc.TraceRecords() <- tr
 				default:
 					slog.Warn("unsupported trace kind", "kind", s.Kind().String())
 				}
 			})
 		})
 	})
+}
+
+func (tc *TestCollector) ResetRecords() {
+	tc.records.Store(make(chan MetricRecord, 100))
+}
+
+func (tc *TestCollector) ResetTraceRecords() {
+	tc.traceRecords.Store(make(chan TraceRecord, 100))
+}
+
+func (tc *TestCollector) Records() chan MetricRecord {
+	return tc.records.Load().(chan MetricRecord)
+}
+
+func (tc *TestCollector) TraceRecords() chan TraceRecord {
+	return tc.traceRecords.Load().(chan TraceRecord)
 }
 
 func (tc *TestCollector) metricEvent(writer http.ResponseWriter, body []byte) {
@@ -155,14 +171,19 @@ func (tc *TestCollector) metricEvent(writer http.ResponseWriter, body []byte) {
 							mr.Attributes[k] = v.AsString()
 							return true
 						})
-						tc.Records <- mr
+						tc.Records() <- mr
 					})
 				case pmetric.MetricTypeHistogram:
 					forEach[pmetric.HistogramDataPoint](m.Histogram().DataPoints(), func(hdp pmetric.HistogramDataPoint) {
+						// for simplicity, reporting only sum histogram data
+						if !hdp.HasSum() {
+							return
+						}
 						mr := MetricRecord{
 							Name:               m.Name(),
 							Unit:               m.Unit(),
 							Type:               m.Type(),
+							FloatVal:           hdp.Sum(),
 							Attributes:         map[string]string{},
 							ResourceAttributes: resourceAttrs,
 						}
@@ -170,7 +191,7 @@ func (tc *TestCollector) metricEvent(writer http.ResponseWriter, body []byte) {
 							mr.Attributes[k] = v.AsString()
 							return true
 						})
-						tc.Records <- mr
+						tc.Records() <- mr
 					})
 				case pmetric.MetricTypeGauge:
 					forEach[pmetric.NumberDataPoint](m.Gauge().DataPoints(), func(ndp pmetric.NumberDataPoint) {
@@ -187,7 +208,7 @@ func (tc *TestCollector) metricEvent(writer http.ResponseWriter, body []byte) {
 							mr.Attributes[k] = v.AsString()
 							return true
 						})
-						tc.Records <- mr
+						tc.Records() <- mr
 					})
 				default:
 					slog.Warn("unsupported metric type", "type", m.Type().String())

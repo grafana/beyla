@@ -198,6 +198,8 @@ int uprobe_server_handleStream_return(struct pt_regs *ctx) {
         __builtin_memset(&trace->conn, 0, sizeof(connection_info_t));
     }
 
+    // Server connections have port order reversed from what we want
+    swap_connection_info_order(&trace->conn);
     trace->tp = invocation->tp;
     trace->end_monotime_ns = bpf_ktime_get_ns();
     // submit the completed trace via ringbuffer
@@ -480,7 +482,7 @@ int uprobe_grpcFramerWriteHeaders(struct pt_regs *ctx) {
     void *framer = GO_PARAM1(ctx);
     u64 stream_id = (u64)GO_PARAM2(ctx);
 
-    bpf_printk("framer=%llx, stream_id=%lld, framer_w_pos %llx", framer, ((u64)stream_id), framer_w_pos);
+    bpf_dbg_printk("framer=%llx, stream_id=%lld, framer_w_pos %llx", framer, ((u64)stream_id), framer_w_pos);
 
     u32 stream_lookup = (u32)stream_id;
 

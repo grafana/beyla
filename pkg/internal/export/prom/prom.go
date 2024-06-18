@@ -385,7 +385,7 @@ func newReporter(
 	if cfg.SpanMetricsEnabled() {
 		mr.serviceCache = expirable.NewLRU(cfg.SpanMetricsServiceCacheSize, func(_ svc.UID, v svc.ID) {
 			lv := mr.labelValuesTargetInfo(v)
-			mr.tracesTargetInfo.WithLabelValues(lv...).Sub(1)
+			mr.tracesTargetInfo.WithLabelValues(lv...).metric.Sub(1)
 		}, cfg.TTL)
 	}
 
@@ -453,73 +453,73 @@ func (r *metricsReporter) collectMetrics(input <-chan []request.Span) {
 // nolint:cyclop
 func (r *metricsReporter) observe(span *request.Span) {
 	t := span.Timings()
-	r.beylaInfo.WithLabelValues(span.ServiceID.SDKLanguage.String()).Set(1.0)
+	r.beylaInfo.WithLabelValues(span.ServiceID.SDKLanguage.String()).metric.Set(1.0)
 	duration := t.End.Sub(t.RequestStart).Seconds()
 	if r.cfg.OTelMetricsEnabled() {
 		switch span.Type {
 		case request.EventTypeHTTP:
 			r.httpDuration.WithLabelValues(
 				labelValues(span, r.attrHTTPDuration)...,
-			).Observe(duration)
+			).metric.Observe(duration)
 			r.httpRequestSize.WithLabelValues(
 				labelValues(span, r.attrHTTPRequestSize)...,
-			).Observe(float64(span.ContentLength))
+			).metric.Observe(float64(span.ContentLength))
 		case request.EventTypeHTTPClient:
 			r.httpClientDuration.WithLabelValues(
 				labelValues(span, r.attrHTTPClientDuration)...,
-			).Observe(duration)
+			).metric.Observe(duration)
 			r.httpClientRequestSize.WithLabelValues(
 				labelValues(span, r.attrHTTPClientRequestSize)...,
-			).Observe(float64(span.ContentLength))
+			).metric.Observe(float64(span.ContentLength))
 		case request.EventTypeGRPC:
 			r.grpcDuration.WithLabelValues(
 				labelValues(span, r.attrGRPCDuration)...,
-			).Observe(duration)
+			).metric.Observe(duration)
 		case request.EventTypeGRPCClient:
 			r.grpcClientDuration.WithLabelValues(
 				labelValues(span, r.attrGRPCClientDuration)...,
-			).Observe(duration)
+			).metric.Observe(duration)
 		case request.EventTypeRedisClient, request.EventTypeSQLClient:
 			r.dbClientDuration.WithLabelValues(
 				labelValues(span, r.attrDBClientDuration)...,
-			).Observe(duration)
+			).metric.Observe(duration)
 		case request.EventTypeKafkaClient:
 			switch span.Method {
 			case request.MessagingPublish:
 				r.msgPublishDuration.WithLabelValues(
 					labelValues(span, r.attrMsgPublishDuration)...,
-				).Observe(duration)
+				).metric.Observe(duration)
 			case request.MessagingProcess:
 				r.msgProcessDuration.WithLabelValues(
 					labelValues(span, r.attrMsgProcessDuration)...,
-				).Observe(duration)
+				).metric.Observe(duration)
 			}
 		}
 	}
 	if r.cfg.SpanMetricsEnabled() {
 		lv := r.labelValuesSpans(span)
-		r.spanMetricsLatency.WithLabelValues(lv...).Observe(duration)
-		r.spanMetricsCallsTotal.WithLabelValues(lv...).Add(1)
-		r.spanMetricsSizeTotal.WithLabelValues(lv...).Add(float64(span.ContentLength))
+		r.spanMetricsLatency.WithLabelValues(lv...).metric.Observe(duration)
+		r.spanMetricsCallsTotal.WithLabelValues(lv...).metric.Add(1)
+		r.spanMetricsSizeTotal.WithLabelValues(lv...).metric.Add(float64(span.ContentLength))
 
 		_, ok := r.serviceCache.Get(span.ServiceID.UID)
 		if !ok {
 			r.serviceCache.Add(span.ServiceID.UID, span.ServiceID)
 			lv = r.labelValuesTargetInfo(span.ServiceID)
-			r.tracesTargetInfo.WithLabelValues(lv...).Add(1)
+			r.tracesTargetInfo.WithLabelValues(lv...).metric.Add(1)
 		}
 	}
 
 	if r.cfg.ServiceGraphMetricsEnabled() {
 		lvg := r.labelValuesServiceGraph(span)
 		if span.IsClientSpan() {
-			r.serviceGraphClient.WithLabelValues(lvg...).Observe(duration)
+			r.serviceGraphClient.WithLabelValues(lvg...).metric.Observe(duration)
 		} else {
-			r.serviceGraphServer.WithLabelValues(lvg...).Observe(duration)
+			r.serviceGraphServer.WithLabelValues(lvg...).metric.Observe(duration)
 		}
-		r.serviceGraphTotal.WithLabelValues(lvg...).Add(1)
+		r.serviceGraphTotal.WithLabelValues(lvg...).metric.Add(1)
 		if request.SpanStatusCode(span) == codes.Error {
-			r.serviceGraphFailed.WithLabelValues(lvg...).Add(1)
+			r.serviceGraphFailed.WithLabelValues(lvg...).metric.Add(1)
 		}
 	}
 }

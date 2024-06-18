@@ -23,22 +23,20 @@ func ReadTCPRequestIntoSpan(record *ringbuf.Record, filter ServiceFilter) (reque
 		return request.Span{}, true, nil
 	}
 
-	b := event.Buf[:]
-
 	l := int(event.Len)
-	if l < 0 || len(b) < l {
-		l = len(b)
+	if l < 0 || len(event.Buf) < l {
+		l = len(event.Buf)
 	}
 
-	buf := string(event.Buf[:l])
+	b := event.Buf[:l]
 
 	// Check if we have a SQL statement
-	op, table, sql := detectSQL(buf)
+	op, table, sql := detectSQLBytes(b)
 	switch {
 	case validSQL(op, table):
 		return TCPToSQLToSpan(&event, op, table, sql), false, nil
-	case isRedis(event.Buf[:l]) && isRedis(event.Rbuf[:]):
-		op, text, ok := parseRedisRequest(buf)
+	case isRedis(b) && isRedis(event.Rbuf[:]):
+		op, text, ok := parseRedisRequest(string(b))
 
 		if ok {
 			status := 0
@@ -52,7 +50,7 @@ func ReadTCPRequestIntoSpan(record *ringbuf.Record, filter ServiceFilter) (reque
 		k, err := ProcessPossibleKafkaEvent(b, event.Rbuf[:])
 		if err == nil {
 			return TCPToKafkaToSpan(&event, k), false, nil
-		} else if isHTTP2(b, &event) {
+		} else if isHTTP2(b, &event) || isHTTP2(event.Rbuf[:], &event) {
 			MisclassifiedEvents <- MisclassifiedEvent{EventType: EventTypeKHTTP2, TCPInfo: &event}
 		}
 	}

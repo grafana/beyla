@@ -128,6 +128,13 @@ type bpf_tpSslArgsT struct {
 	LenPtr uint64
 }
 
+type bpf_tpSslPidConnectionInfoT struct {
+	Conn      bpf_tpPidConnectionInfoT
+	OrigDport uint16
+	C_tid     bpf_tpPidKeyT
+	_         [2]byte
+}
+
 type bpf_tpTcpReqT struct {
 	Flags           uint8
 	_               [1]byte
@@ -236,6 +243,7 @@ type bpf_tpMapSpecs struct {
 	ActiveRecvArgs          *ebpf.MapSpec `ebpf:"active_recv_args"`
 	ActiveSendArgs          *ebpf.MapSpec `ebpf:"active_send_args"`
 	ActiveSendSockArgs      *ebpf.MapSpec `ebpf:"active_send_sock_args"`
+	ActiveSslConnections    *ebpf.MapSpec `ebpf:"active_ssl_connections"`
 	ActiveSslHandshakes     *ebpf.MapSpec `ebpf:"active_ssl_handshakes"`
 	ActiveSslReadArgs       *ebpf.MapSpec `ebpf:"active_ssl_read_args"`
 	ActiveSslWriteArgs      *ebpf.MapSpec `ebpf:"active_ssl_write_args"`
@@ -287,6 +295,7 @@ type bpf_tpMaps struct {
 	ActiveRecvArgs          *ebpf.Map `ebpf:"active_recv_args"`
 	ActiveSendArgs          *ebpf.Map `ebpf:"active_send_args"`
 	ActiveSendSockArgs      *ebpf.Map `ebpf:"active_send_sock_args"`
+	ActiveSslConnections    *ebpf.Map `ebpf:"active_ssl_connections"`
 	ActiveSslHandshakes     *ebpf.Map `ebpf:"active_ssl_handshakes"`
 	ActiveSslReadArgs       *ebpf.Map `ebpf:"active_ssl_read_args"`
 	ActiveSslWriteArgs      *ebpf.Map `ebpf:"active_ssl_write_args"`
@@ -321,6 +330,7 @@ func (m *bpf_tpMaps) Close() error {
 		m.ActiveRecvArgs,
 		m.ActiveSendArgs,
 		m.ActiveSendSockArgs,
+		m.ActiveSslConnections,
 		m.ActiveSslHandshakes,
 		m.ActiveSslReadArgs,
 		m.ActiveSslWriteArgs,

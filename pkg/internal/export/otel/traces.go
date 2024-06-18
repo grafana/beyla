@@ -579,6 +579,8 @@ func traceAttributes(span *request.Span, optionalAttrs map[attr.Name]struct{}) [
 	case request.EventTypeKafkaServer, request.EventTypeKafkaClient:
 		operation := request.MessagingOperationType(span.Method)
 		attrs = []attribute.KeyValue{
+			request.ServerAddr(request.SpanHost(span)),
+			request.ServerPort(span.HostPort),
 			semconv.MessagingSystemKafka,
 			semconv.MessagingDestinationName(span.Path),
 			semconv.MessagingClientID(span.OtherNamespace),

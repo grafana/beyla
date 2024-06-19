@@ -28,6 +28,11 @@ func ReadTCPRequestIntoSpan(record *ringbuf.Record, filter ServiceFilter) (reque
 		l = len(event.Buf)
 	}
 
+	rl := int(event.RespLen)
+	if rl < 0 || len(event.Rbuf) < rl {
+		rl = len(event.Rbuf)
+	}
+
 	b := event.Buf[:l]
 
 	// Check if we have a SQL statement
@@ -39,15 +44,24 @@ func ReadTCPRequestIntoSpan(record *ringbuf.Record, filter ServiceFilter) (reque
 		op, text, ok := parseRedisRequest(string(b))
 
 		if ok {
-			status := 0
-			if isErr := isRedisError(event.Rbuf[:]); isErr {
-				status = 1
+			var status int
+			if op == "" {
+				op, text, ok = parseRedisRequest(string(event.Rbuf[:rl]))
+				if !ok || op == "" {
+					return request.Span{}, true, nil // ignore if we couldn't parse it
+				}
+				// We've caught the event reversed in the middle of communication, let's
+				// reverse the event
+				reverseTCPEvent(&event)
+				status = redisStatus(b)
+			} else {
+				status = redisStatus(event.Rbuf[:rl])
 			}
 
 			return TCPToRedisToSpan(&event, op, text, status), false, nil
 		}
 	default:
-		k, err := ProcessPossibleKafkaEvent(b, event.Rbuf[:])
+		k, err := ProcessPossibleKafkaEvent(&event, b, event.Rbuf[:])
 		if err == nil {
 			return TCPToKafkaToSpan(&event, k), false, nil
 		} else if isHTTP2(b, &event) || isHTTP2(event.Rbuf[:], &event) {
@@ -65,4 +79,19 @@ func (connInfo *BPFConnInfo) reqHostInfo() (source, target string) {
 	copy(dst, connInfo.D_addr[:])
 
 	return src.String(), dst.String()
+}
+
+func reverseTCPEvent(trace *TCPRequestInfo) {
+	if trace.Direction == 0 {
+		trace.Direction = 1
+	} else {
+		trace.Direction = 0
+	}
+
+	port := trace.ConnInfo.S_port
+	addr := trace.ConnInfo.S_addr
+	trace.ConnInfo.S_addr = trace.ConnInfo.D_addr
+	trace.ConnInfo.S_port = trace.ConnInfo.D_port
+	trace.ConnInfo.D_addr = addr
+	trace.ConnInfo.D_port = port
 }

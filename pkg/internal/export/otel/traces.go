@@ -484,7 +484,7 @@ func grpcTracer(ctx context.Context, opts otlpOptions) (*otlptrace.Exporter, err
 
 func SpanKindString(span *request.Span) string {
 	switch span.Type {
-	case request.EventTypeHTTP, request.EventTypeGRPC:
+	case request.EventTypeHTTP, request.EventTypeGRPC, request.EventTypeKafkaServer, request.EventTypeRedisServer:
 		return "SPAN_KIND_SERVER"
 	case request.EventTypeHTTPClient, request.EventTypeGRPCClient, request.EventTypeSQLClient, request.EventTypeRedisClient:
 		return "SPAN_KIND_CLIENT"
@@ -560,7 +560,7 @@ func traceAttributes(span *request.Span, optionalAttrs map[attr.Name]struct{}) [
 				attrs = append(attrs, request.DBCollectionName(table))
 			}
 		}
-	case request.EventTypeRedisClient:
+	case request.EventTypeRedisServer, request.EventTypeRedisClient:
 		attrs = []attribute.KeyValue{
 			request.ServerAddr(request.SpanHost(span)),
 			request.ServerPort(span.HostPort),
@@ -576,9 +576,11 @@ func traceAttributes(span *request.Span, optionalAttrs map[attr.Name]struct{}) [
 				}
 			}
 		}
-	case request.EventTypeKafkaClient:
+	case request.EventTypeKafkaServer, request.EventTypeKafkaClient:
 		operation := request.MessagingOperationType(span.Method)
 		attrs = []attribute.KeyValue{
+			request.ServerAddr(request.SpanHost(span)),
+			request.ServerPort(span.HostPort),
 			semconv.MessagingSystemKafka,
 			semconv.MessagingDestinationName(span.Path),
 			semconv.MessagingClientID(span.OtherNamespace),
@@ -611,12 +613,12 @@ func TraceName(span *request.Span) string {
 			operation += " " + table
 		}
 		return operation
-	case request.EventTypeRedisClient:
+	case request.EventTypeRedisClient, request.EventTypeRedisServer:
 		if span.Method == "" {
 			return "REDIS"
 		}
 		return span.Method
-	case request.EventTypeKafkaClient:
+	case request.EventTypeKafkaClient, request.EventTypeKafkaServer:
 		if span.Path == "" {
 			return span.Method
 		}
@@ -627,11 +629,11 @@ func TraceName(span *request.Span) string {
 
 func spanKind(span *request.Span) trace2.SpanKind {
 	switch span.Type {
-	case request.EventTypeHTTP, request.EventTypeGRPC:
+	case request.EventTypeHTTP, request.EventTypeGRPC, request.EventTypeRedisServer:
 		return trace2.SpanKindServer
 	case request.EventTypeHTTPClient, request.EventTypeGRPCClient, request.EventTypeSQLClient, request.EventTypeRedisClient:
 		return trace2.SpanKindClient
-	case request.EventTypeKafkaClient:
+	case request.EventTypeKafkaClient, request.EventTypeKafkaServer:
 		switch span.Method {
 		case request.MessagingPublish:
 			return trace2.SpanKindProducer

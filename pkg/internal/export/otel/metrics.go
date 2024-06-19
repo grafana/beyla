@@ -707,10 +707,10 @@ func (r *Metrics) record(span *request.Span, mr *MetricsReporter) {
 			httpClientDuration.Record(r.ctx, duration, instrument.WithAttributeSet(attrs))
 			httpClientRequestSize, attrs := r.httpClientRequestSize.ForRecord(span)
 			httpClientRequestSize.Record(r.ctx, float64(span.ContentLength), instrument.WithAttributeSet(attrs))
-		case request.EventTypeRedisClient, request.EventTypeSQLClient:
+		case request.EventTypeRedisServer, request.EventTypeRedisClient, request.EventTypeSQLClient:
 			dbClientDuration, attrs := r.dbClientDuration.ForRecord(span)
 			dbClientDuration.Record(r.ctx, duration, instrument.WithAttributeSet(attrs))
-		case request.EventTypeKafkaClient:
+		case request.EventTypeKafkaClient, request.EventTypeKafkaServer:
 			switch span.Method {
 			case request.MessagingPublish:
 				msgPublishDuration, attrs := r.msgPublishDuration.ForRecord(span)

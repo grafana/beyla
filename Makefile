@@ -288,7 +288,7 @@ oats-test: oats-test-sql oats-test-redis oats-test-kafka
 
 .PHONY: oats-test-debug
 oats-test-debug: oats-prereq
-	cd test/oats/redis && TESTCASE_BASE_PATH=./yaml TESTCASE_MANUAL_DEBUG=true TESTCASE_TIMEOUT=1h $(GINKGO) -v -r
+	cd test/oats/kafka && TESTCASE_BASE_PATH=./yaml TESTCASE_MANUAL_DEBUG=true TESTCASE_TIMEOUT=1h $(GINKGO) -v -r
 
 .PHONY: drone
 drone:

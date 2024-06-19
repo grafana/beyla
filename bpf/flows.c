@@ -248,7 +248,7 @@ static inline int flow_monitor(struct __sk_buff *skb) {
         }
     }
     // finally, when flow receives FIN or RST, clean flow_directions
-    if(flags & FIN_FLAG || flags & RST_FLAG) {
+    if(flags & FIN_FLAG || flags & RST_FLAG || flags & FIN_ACK_FLAG || flags & RST_ACK_FLAG) {
         bpf_map_delete_elem(&flow_directions, &id);
     }
     return TC_ACT_OK;

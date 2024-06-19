@@ -63,6 +63,7 @@ func TestBasicPipeline(t *testing.T) {
 			Features:        []string{otel.FeatureApplication},
 			MetricsEndpoint: tc.ServerEndpoint, Interval: 10 * time.Millisecond,
 			ReportersCacheLen: 16,
+			TTL:               5 * time.Minute,
 		},
 		Attributes: beyla.Attributes{Select: allMetrics},
 	}, gctx(0), make(<-chan []request.Span))
@@ -250,6 +251,7 @@ func TestRouteConsolidation(t *testing.T) {
 			Features:        []string{otel.FeatureApplication},
 			MetricsEndpoint: tc.ServerEndpoint, Interval: 10 * time.Millisecond,
 			ReportersCacheLen: 16,
+			TTL:               5 * time.Minute,
 		},
 		Routes:     &transform.RoutesConfig{Patterns: []string{"/user/{id}", "/products/{id}/push"}},
 		Attributes: beyla.Attributes{Select: allMetricsBut("client.address", "url.path")},
@@ -293,7 +295,8 @@ func TestRouteConsolidation(t *testing.T) {
 			string(semconv.TelemetrySDKLanguageKey): "go",
 			string(semconv.TelemetrySDKNameKey):     "beyla",
 		},
-		Type: pmetric.MetricTypeHistogram,
+		Type:     pmetric.MetricTypeHistogram,
+		FloatVal: 2 / float64(time.Second),
 	}, events["/user/{id}"])
 
 	assert.Equal(t, collector.MetricRecord{
@@ -310,7 +313,8 @@ func TestRouteConsolidation(t *testing.T) {
 			string(semconv.TelemetrySDKLanguageKey): "go",
 			string(semconv.TelemetrySDKNameKey):     "beyla",
 		},
-		Type: pmetric.MetricTypeHistogram,
+		Type:     pmetric.MetricTypeHistogram,
+		FloatVal: 2 / float64(time.Second),
 	}, events["/products/{id}/push"])
 
 	assert.Equal(t, collector.MetricRecord{
@@ -344,6 +348,7 @@ func TestGRPCPipeline(t *testing.T) {
 			Features:        []string{otel.FeatureApplication},
 			MetricsEndpoint: tc.ServerEndpoint, Interval: time.Millisecond,
 			ReportersCacheLen: 16,
+			TTL:               5 * time.Minute,
 		},
 		Attributes: beyla.Attributes{Select: allMetrics},
 	}, gctx(0), make(<-chan []request.Span))
@@ -430,6 +435,7 @@ func TestBasicPipelineInfo(t *testing.T) {
 			Features:        []string{otel.FeatureApplication},
 			MetricsEndpoint: tc.ServerEndpoint,
 			Interval:        10 * time.Millisecond, ReportersCacheLen: 16,
+			TTL: 5 * time.Minute,
 		},
 		Attributes: beyla.Attributes{Select: allMetrics},
 	}, gctx(0), tracesInput)
@@ -500,6 +506,7 @@ func TestSpanAttributeFilterNode(t *testing.T) {
 			Features:        []string{otel.FeatureApplication},
 			MetricsEndpoint: tc.ServerEndpoint, Interval: 10 * time.Millisecond,
 			ReportersCacheLen: 16,
+			TTL:               5 * time.Minute,
 		},
 		Filters: filter.AttributesConfig{
 			Application: map[string]filter.MatchDefinition{"url.path": {Match: "/user/*"}},

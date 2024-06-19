@@ -105,14 +105,16 @@ func (ex *Expirer[Record, Metric, ValType]) recordAttributes(m Record, extraAttr
 }
 
 func (ex *Expirer[Record, Metric, ValType]) removeOutdated(ctx context.Context) {
-	if old := ex.entries.DeleteExpired(); len(old) > 0 {
-		for _, attrs := range old {
-			if ex.log.Enabled(ex.ctx, slog.LevelDebug) {
-				ex.logger(attrs).Debug("deleting old OTEL metric")
-			}
-			ex.metric.Remove(ctx, metric.WithAttributeSet(attrs))
-		}
+	for _, attrs := range ex.entries.DeleteExpired() {
+		ex.deleteMetricInstance(ctx, attrs)
 	}
+}
+
+func (ex *Expirer[Record, Metric, ValType]) deleteMetricInstance(ctx context.Context, attrs attribute.Set) {
+	if ex.log.Enabled(ex.ctx, slog.LevelDebug) {
+		ex.logger(attrs).Debug("deleting old OTEL metric")
+	}
+	ex.metric.Remove(ctx, metric.WithAttributeSet(attrs))
 }
 
 func (ex *Expirer[Record, Metric, ValType]) logger(attrs attribute.Set) *slog.Logger {
@@ -122,4 +124,12 @@ func (ex *Expirer[Record, Metric, ValType]) logger(attrs attribute.Set) *slog.Lo
 		fmtAttrs = append(fmtAttrs, string(a.Key), a.Value.Emit())
 	}
 	return ex.log.With(fmtAttrs...)
+}
+
+// RemoveAllMetrics is explicitly invoked when the metrics reporter of a given service
+// instance needs to be shut down
+func (ex *Expirer[Record, Metric, ValType]) RemoveAllMetrics(ctx context.Context) {
+	for _, attrs := range ex.entries.DeleteAll() {
+		ex.deleteMetricInstance(ctx, attrs)
+	}
 }

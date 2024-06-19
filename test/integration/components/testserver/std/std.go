@@ -127,7 +127,7 @@ func echoLowPort(rw http.ResponseWriter) {
 	requestURL := os.Getenv("TARGET_URL")
 
 	slog.Debug("calling", "url", requestURL)
-    
+
 	res, err := httpClient.Get(requestURL)
 	if err != nil {
 		slog.Error("error making http request", err)

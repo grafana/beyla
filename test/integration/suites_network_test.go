@@ -122,7 +122,7 @@ func TestNetwork_Direction_Use_Socket_Filter(t *testing.T) {
 	for _, f := range results {
 		require.Contains(t, f.Metric, "direction")
 	}
-	
+
 	// test correct direction labels
 	client := results[slices.IndexFunc(results, func(result prom.Result) bool { return result.Metric["dst_port"] == "8080" })]
 	require.Equal(t, client.Metric["direction"], "egress")
@@ -150,7 +150,6 @@ func getNetFlows(t *testing.T) []prom.Result {
 	}, test.Interval(time.Second))
 	return results
 }
-
 
 func getDirectionNetFlows(t *testing.T) []prom.Result {
 	var results []prom.Result

@@ -89,8 +89,8 @@ func (ex *ExpiryMap[T]) DeleteExpired() []T {
 // if DeleteExpired is not invoked before it.
 // TODO: use https://tip.golang.org/wiki/RangefuncExperiment when available
 func (ex *ExpiryMap[T]) All() []T {
-	items := make([]T, 0, len(ex.entries))
 	ex.mt.RLock()
+	items := make([]T, 0, len(ex.entries))
 	for _, e := range ex.entries {
 		items = append(items, e.val)
 	}

@@ -47,7 +47,7 @@ struct {
 
 // Key: the flow identifier. Value: the flow direction.
 struct {
-	__uint(type, BPF_MAP_TYPE_HASH);
+	__uint(type, BPF_MAP_TYPE_LRU_HASH);
 	__uint(max_entries, 1 << 24);
 	__type(key, flow_id);
 	__type(value, u8);

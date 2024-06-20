@@ -194,6 +194,7 @@ static inline int flow_monitor(struct __sk_buff *skb) {
             .start_mono_time_ns = current_time,
             .end_mono_time_ns = current_time,
             .flags = flags,
+            .direction = UNKNOWN,
         };
 
         u8 *direction = (u8 *)bpf_map_lookup_elem(&flow_directions, &id);
@@ -207,6 +208,11 @@ static inline int flow_monitor(struct __sk_buff *skb) {
             else if((flags & SYN_FLAG) == SYN_FLAG) {
                 new_flow.direction = EGRESS;
             }
+            // save, when direction was calculated based on TCP flag
+            if(new_flow.direction != UNKNOWN) {
+                // errors are intentionally omitted
+                bpf_map_update_elem(&flow_directions, &id, &new_flow.direction, BPF_NOEXIST);
+            }
             // fallback for lost or already started connections and UDP
             else {
                 new_flow.direction = INGRESS;
@@ -214,8 +220,6 @@ static inline int flow_monitor(struct __sk_buff *skb) {
                     new_flow.direction = EGRESS;
                 }
             }
-            // errors are intentionally omitted
-            bpf_map_update_elem(&flow_directions, &id, &new_flow.direction, BPF_NOEXIST);
         } else {
             // get direction from saved flow
             new_flow.direction = *direction;
@@ -228,7 +232,7 @@ static inline int flow_monitor(struct __sk_buff *skb) {
             // usually error -16 (-EBUSY) or -7 (E2BIG) is printed here.
             // In this case, we send the single-packet flow via ringbuffer as in the worst case we can have
             // a repeated INTERSECTION of flows (different flows aggregating different packets),
-            // which can be re-aggregated at userpace.
+            // which can be re-aggregated at userspace.
             // other possible values https://chromium.googlesource.com/chromiumos/docs/+/master/constants/errnos.md
             if (trace_messages) {
                 bpf_printk("error adding flow %d\n", ret);
@@ -240,13 +244,15 @@ static inline int flow_monitor(struct __sk_buff *skb) {
                 if (trace_messages) {
                     bpf_printk("couldn't reserve space in the ringbuf. Dropping flow");
                 }
-                return TC_ACT_OK;
+                goto cleanup;
             }
             record->id = id;
             record->metrics = new_flow;
             bpf_ringbuf_submit(record, 0);
         }
     }
+
+cleanup:
     // finally, when flow receives FIN or RST, clean flow_directions
     if(flags & FIN_FLAG || flags & RST_FLAG || flags & FIN_ACK_FLAG || flags & RST_ACK_FLAG) {
         bpf_map_delete_elem(&flow_directions, &id);

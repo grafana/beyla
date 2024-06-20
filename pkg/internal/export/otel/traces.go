@@ -196,22 +196,18 @@ func getTracesExporter(ctx context.Context, cfg TracesConfig, ctxInfo *global.Co
 			slog.Error("can't instantiate OTEL HTTP traces exporter", err)
 			return nil, err
 		}
-		endpoint, _, err := parseTracesEndpoint(&cfg)
-		if err != nil {
-			slog.Error("can't parse traces endpoint", "error", err)
-			return nil, err
-		}
 		factory := otlphttpexporter.NewFactory()
 		config := factory.CreateDefaultConfig().(*otlphttpexporter.Config)
 		config.QueueConfig.Enabled = false
 		config.ClientConfig = confighttp.ClientConfig{
-			Endpoint: endpoint.String(),
+			Endpoint: opts.Scheme + "://" + opts.Endpoint + opts.BaseURLPath,
 			TLSSetting: configtls.ClientConfig{
 				Insecure:           opts.Insecure,
 				InsecureSkipVerify: cfg.InsecureSkipVerify,
 			},
 			Headers: convertHeaders(opts.HTTPHeaders),
 		}
+		slog.Debug("getTracesExporter: confighttp.ClientConfig created", "endpoint", config.ClientConfig.Endpoint)
 		set := getTraceSettings(ctxInfo, cfg, t)
 		return factory.CreateTracesExporter(ctx, set, config)
 	case ProtocolGRPC:
@@ -640,6 +636,7 @@ func getHTTPTracesEndpointOptions(cfg *TracesConfig) (otlpOptions, error) {
 	log.Debug("Configuring exporter", "protocol",
 		cfg.Protocol, "tracesProtocol", cfg.TracesProtocol, "endpoint", murl.Host)
 	setTracesProtocol(cfg)
+	opts.Scheme = murl.Scheme
 	opts.Endpoint = murl.Host
 	if murl.Scheme == "http" || murl.Scheme == "unix" {
 		log.Debug("Specifying insecure connection", "scheme", murl.Scheme)
@@ -647,13 +644,10 @@ func getHTTPTracesEndpointOptions(cfg *TracesConfig) (otlpOptions, error) {
 	}
 	// If the value is set from the OTEL_EXPORTER_OTLP_ENDPOINT common property, we need to add /v1/traces to the path
 	// otherwise, we leave the path that is explicitly set by the user
-	opts.URLPath = murl.Path
+	opts.URLPath = strings.TrimSuffix(murl.Path, "/")
+	opts.BaseURLPath = strings.TrimSuffix(opts.URLPath, "/v1/traces")
 	if isCommon {
-		if strings.HasSuffix(opts.URLPath, "/") {
-			opts.URLPath += "v1/traces"
-		} else {
-			opts.URLPath += "/v1/traces"
-		}
+		opts.URLPath += "/v1/traces"
 		log.Debug("Specifying path", "path", opts.URLPath)
 	}
 

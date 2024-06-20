@@ -37,8 +37,12 @@ type Status struct {
 	CPUUtilisationUser   float64
 	CPUUtilisationWait   float64
 
-	MemoryRSSBytes  int64
-	MemoryVMSBytes  int64
+	// delta values are used in OTEL UpDownCounters while absolute values are used in Prometheus gauges
+	MemoryRSSBytes      int64
+	MemoryVMSBytes      int64
+	MemoryRSSBytesDelta int64
+	MemoryVMSBytesDelta int64
+
 	Status          string
 	ParentProcessID int32
 	ThreadCount     int32

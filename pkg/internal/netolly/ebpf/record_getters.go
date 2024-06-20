@@ -37,7 +37,7 @@ func RecordGetters(name attr.Name) (attributes.Getter[*Record, attribute.KeyValu
 		getter = func(r *Record) attribute.KeyValue { return attribute.String(string(attr.DstName), r.Attrs.DstName) }
 	case attr.Direction:
 		getter = func(r *Record) attribute.KeyValue {
-			return attribute.String(string(attr.Direction), directionStr(r.Id.Direction))
+			return attribute.String(string(attr.Direction), directionStr(r.Metrics.Direction))
 		}
 	case attr.Iface:
 		getter = func(r *Record) attribute.KeyValue { return attribute.String(string(attr.Iface), r.Attrs.Interface) }

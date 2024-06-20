@@ -126,7 +126,7 @@ static __always_inline bool read_sk_buff(struct __sk_buff *skb, flow_id *id, u16
             }
 
             break;
-        } 
+        }
         case IPPROTO_UDP: {
             u16 port;
             bpf_skb_load_bytes(skb, hdr_len + offsetof(struct __udphdr, source), &port, sizeof(port));
@@ -154,7 +154,7 @@ static __always_inline bool same_ip(u8 *ip1, u8 *ip2) {
             return false;
         }
     }
-    
+
     return true;
 }
 
@@ -178,11 +178,6 @@ int socket__http_filter(struct __sk_buff *skb) {
     }
 
     u64 current_time = bpf_ktime_get_ns();
-    //Set extra fields    
-    id.direction = INGRESS;
-    if (id.src_port > id.dst_port) {
-        id.direction = EGRESS;
-    }
 
     // TODO: we need to add spinlock here when we deprecate versions prior to 5.1, or provide
     // a spinlocked alternative version and use it selectively https://lwn.net/Articles/779120/
@@ -214,8 +209,37 @@ int socket__http_filter(struct __sk_buff *skb) {
             .bytes = skb->len,
             .start_mono_time_ns = current_time,
             .end_mono_time_ns = current_time,
-            .flags = flags, 
+            .flags = flags,
+            .direction = UNKNOWN,
         };
+
+        u8 *direction = (u8 *)bpf_map_lookup_elem(&flow_directions, &id);
+        if(direction == NULL) {
+            // Calculate direction based on first flag received
+            // SYN and ACK mean someone else initiated the connection and this is the INGRESS direction
+            if((flags & (SYN_FLAG | ACK_FLAG)) == (SYN_FLAG | ACK_FLAG)) {
+                new_flow.direction = INGRESS;
+            }
+            // SYN only means we initiated the connection and this is the EGRESS direction
+            else if((flags & SYN_FLAG) == SYN_FLAG) {
+                new_flow.direction = EGRESS;
+            }
+            // save, when direction was calculated based on TCP flag
+            if(new_flow.direction != UNKNOWN) {
+                // errors are intentionally omitted
+                bpf_map_update_elem(&flow_directions, &id, &new_flow.direction, BPF_NOEXIST);
+            } 
+            // fallback for lost or already started connections and UDP
+            else {
+                new_flow.direction = INGRESS;
+                if (id.src_port > id.dst_port) {
+                    new_flow.direction = EGRESS;
+                }
+            }
+        } else {
+            // get direction from saved flow
+            new_flow.direction = *direction;
+        }
 
         // even if we know that the entry is new, another CPU might be concurrently inserting a flow
         // so we need to specify BPF_ANY
@@ -224,7 +248,7 @@ int socket__http_filter(struct __sk_buff *skb) {
             // usually error -16 (-EBUSY) or -7 (E2BIG) is printed here.
             // In this case, we send the single-packet flow via ringbuffer as in the worst case we can have
             // a repeated INTERSECTION of flows (different flows aggregating different packets),
-            // which can be re-aggregated at userpace.
+            // which can be re-aggregated at userspace.
             // other possible values https://chromium.googlesource.com/chromiumos/docs/+/master/constants/errnos.md
             if (trace_messages) {
                 bpf_printk("error adding flow %d\n", ret);
@@ -236,12 +260,18 @@ int socket__http_filter(struct __sk_buff *skb) {
                 if (trace_messages) {
                     bpf_printk("couldn't reserve space in the ringbuf. Dropping flow");
                 }
-                return TC_ACT_OK;
+                goto cleanup;
             }
             record->id = id;
             record->metrics = new_flow;
             bpf_ringbuf_submit(record, 0);
         }
+    }
+
+cleanup:
+    // finally, when flow receives FIN or RST, clean flow_directions
+    if(flags & FIN_FLAG || flags & RST_FLAG) {
+        bpf_map_delete_elem(&flow_directions, &id);
     }
     return TC_ACT_OK;
 }

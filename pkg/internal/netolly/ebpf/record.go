@@ -73,6 +73,8 @@ func (fm *NetFlowMetrics) Accumulate(src *NetFlowMetrics) {
 	// time == 0 if the value has not been yet set
 	if fm.StartMonoTimeNs == 0 || fm.StartMonoTimeNs > src.StartMonoTimeNs {
 		fm.StartMonoTimeNs = src.StartMonoTimeNs
+		// set Direction here, because the correct value is in the first packet only
+		fm.Direction = src.Direction
 	}
 	if fm.EndMonoTimeNs == 0 || fm.EndMonoTimeNs < src.EndMonoTimeNs {
 		fm.EndMonoTimeNs = src.EndMonoTimeNs

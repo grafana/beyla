@@ -134,7 +134,8 @@ static __always_inline unsigned char *extract_flags(unsigned char *tp_start) {
 
 static __always_inline void delete_server_trace_tid(pid_key_t *c_tid) {
     int __attribute__((unused)) res = bpf_map_delete_elem(&server_traces, c_tid);
-    bpf_dbg_printk("Deleting server span for id=%llx, pid=%d, ns=%d, res = %d", bpf_get_current_pid_tgid(), c_tid->pid, c_tid->ns, res);
+    // Fails on 5.10 with unknown function
+    // bpf_dbg_printk("Deleting server span for id=%llx, pid=%d, ns=%d, res = %d", bpf_get_current_pid_tgid(), c_tid->pid, c_tid->ns, res);
 }
 
 static __always_inline void delete_server_trace() {

@@ -58,7 +58,7 @@ typedef struct http_pid_connection_info {
 } pid_connection_info_t;
 
 typedef struct ssl_pid_connection_info {
-    pid_connection_info_t conn;
+    pid_connection_info_t p_conn;
     u16 orig_dport;
     pid_key_t c_tid;
 } ssl_pid_connection_info_t;

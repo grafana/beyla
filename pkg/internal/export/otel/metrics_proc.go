@@ -303,10 +303,10 @@ func (me *procMetricsExporter) observeMetric(reporter *procMetrics, s *process.S
 	me.cpuUtilisationObserver(me.ctx, reporter, s)
 
 	mem, attrs := reporter.memory.ForRecord(s)
-	mem.Add(me.ctx, s.MemoryRSSBytes, metric2.WithAttributeSet(attrs))
+	mem.Add(me.ctx, s.MemoryRSSBytesDelta, metric2.WithAttributeSet(attrs))
 
 	vmem, attrs := reporter.memoryVirtual.ForRecord(s)
-	vmem.Add(me.ctx, s.MemoryVMSBytes, metric2.WithAttributeSet(attrs))
+	vmem.Add(me.ctx, s.MemoryVMSBytesDelta, metric2.WithAttributeSet(attrs))
 
 	me.diskObserver(me.ctx, reporter, s)
 	me.netObserver(me.ctx, reporter, s)

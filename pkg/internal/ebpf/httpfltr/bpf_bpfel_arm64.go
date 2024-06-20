@@ -129,7 +129,7 @@ type bpfSslArgsT struct {
 }
 
 type bpfSslPidConnectionInfoT struct {
-	Conn      bpfPidConnectionInfoT
+	P_conn    bpfPidConnectionInfoT
 	OrigDport uint16
 	C_tid     bpfPidKeyT
 	_         [2]byte

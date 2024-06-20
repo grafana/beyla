@@ -148,9 +148,9 @@ static __always_inline void handle_ssl_buf(u64 id, ssl_args_t *args, int bytes_l
             // even though we won't have peer information.
             ssl_pid_connection_info_t p_c = {};
             bpf_dbg_printk("setting fake connection info ssl=%llx", ssl);
-            bpf_memcpy(&p_c.conn.conn.s_addr, &ssl, sizeof(void *));
-            p_c.conn.conn.d_port = p_c.conn.conn.s_port = p_c.orig_dport = 0;
-            p_c.conn.pid = pid_from_pid_tgid(id);
+            bpf_memcpy(&p_c.p_conn.conn.s_addr, &ssl, sizeof(void *));
+            p_c.p_conn.conn.d_port = p_c.p_conn.conn.s_port = p_c.orig_dport = 0;
+            p_c.p_conn.pid = pid_from_pid_tgid(id);
             task_tid(&p_c.c_tid);
 
             bpf_map_update_elem(&ssl_to_conn, &ssl, &p_c, BPF_ANY);
@@ -166,12 +166,12 @@ static __always_inline void handle_ssl_buf(u64 id, ssl_args_t *args, int bytes_l
             // for (int i=0; i < 48; i++) {
             //     bpf_dbg_printk("%x ", buf[i]);
             // }
-            bpf_map_update_elem(&active_ssl_connections, &conn->conn, &ssl_ptr, BPF_ANY);
-            handle_buf_with_connection(&conn->conn, (void *)args->buf, bytes_len, WITH_SSL, direction, conn->orig_dport);
+            bpf_map_update_elem(&active_ssl_connections, &conn->p_conn, &ssl_ptr, BPF_ANY);
+            handle_buf_with_connection(&conn->p_conn, (void *)args->buf, bytes_len, WITH_SSL, direction, conn->orig_dport);
             // We should attempt to clean up the server trace immediately. The cleanup information
             // is keyed of the *ssl, so when it's delayed we might have different *ssl on the same
             // connection.
-            cleanup_trace_info_for_delayed_trace(&conn->conn, ssl);
+            cleanup_trace_info_for_delayed_trace(&conn->p_conn, ssl);
         } else {
             bpf_dbg_printk("No connection info! This is a bug.");
         }

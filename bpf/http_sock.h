@@ -218,7 +218,8 @@ static __always_inline void *find_msghdr_buf(struct msghdr *msg) {
         for (int i = 1; i < 4; i++) {
             void *p = &iov[i];
             bpf_probe_read(&vec, sizeof(struct iovec), p);
-            bpf_dbg_printk("iov[%d]=%llx base %llx, len %d", i, p, vec.iov_base, vec.iov_len);
+            // No prints in loops on 5.10
+            // bpf_dbg_printk("iov[%d]=%llx base %llx, len %d", i, p, vec.iov_base, vec.iov_len);
             if (!vec.iov_base || !vec.iov_len) {
                 continue;
             }
@@ -502,7 +503,7 @@ static __always_inline void process_http2_grpc_frames(pid_connection_info_t *pid
         bpf_probe_read(&frame_buf, FRAME_HEADER_LEN, (void *)((u8 *)u_buf + pos));
         read_http2_grpc_frame_header(&frame, frame_buf, FRAME_HEADER_LEN);
         
-        bpf_dbg_printk("http2 frame type = %d, len = %d, stream_id = %d, flags = %d", frame.type, frame.length, frame.stream_id, frame.flags);
+        //bpf_dbg_printk("http2 frame type = %d, len = %d, stream_id = %d, flags = %d", frame.type, frame.length, frame.stream_id, frame.flags);
         
         if (is_headers_frame(&frame)) {
             stream.pid_conn = *pid_conn;

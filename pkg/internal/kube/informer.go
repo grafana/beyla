@@ -21,9 +21,14 @@ import (
 
 const (
 	kubeConfigEnvVariable  = "KUBECONFIG"
-	syncTime               = 10 * time.Minute
+	resyncTime             = 10 * time.Minute
+	defaultSyncTimeout     = 10 * time.Minute
 	IndexPodByContainerIDs = "idx_pod_by_container"
 	IndexReplicaSetNames   = "idx_rs"
+	IndexIP                = "idx_ip"
+	typeNode               = "Node"
+	typePod                = "Pod"
+	typeService            = "Service"
 )
 
 func klog() *slog.Logger {
@@ -38,9 +43,13 @@ type ContainerEventHandler interface {
 
 // Metadata stores an in-memory copy of the different Kubernetes objects whose metadata is relevant to us.
 type Metadata struct {
+	log *slog.Logger
 	// pods and replicaSets cache the different K8s types to custom, smaller object types
 	pods        cache.SharedIndexInformer
 	replicaSets cache.SharedIndexInformer
+	podsIP      cache.SharedIndexInformer
+	nodesIP     cache.SharedIndexInformer
+	servicesIP  cache.SharedIndexInformer
 
 	containerEventHandlers []ContainerEventHandler
 }
@@ -79,6 +88,12 @@ var podIndexer = cache.Indexers{
 	},
 }
 
+var ipIndexer = map[string]cache.IndexFunc{
+	IndexIP: func(obj interface{}) ([]string, error) {
+		return obj.(*IPInfo).ips, nil
+	},
+}
+
 // usually all the data required by the discovery and enrichement is inside
 // te v1.Pod object. However, when the Pod object has a ReplicaSet as owner,
 // if the ReplicaSet is owned by a Deployment, the reported Pod Owner should
@@ -95,7 +110,7 @@ var replicaSetIndexer = cache.Indexers{
 func (k *Metadata) GetContainerPod(containerID string) (*PodInfo, bool) {
 	objs, err := k.pods.GetIndexer().ByIndex(IndexPodByContainerIDs, containerID)
 	if err != nil {
-		klog().Debug("error accessing index by container ID. Ignoring", "error", err, "containerID", containerID)
+		k.log.Debug("error accessing index by container ID. Ignoring", "error", err, "containerID", containerID)
 		return nil, false
 	}
 	if len(objs) == 0 {
@@ -105,10 +120,9 @@ func (k *Metadata) GetContainerPod(containerID string) (*PodInfo, bool) {
 }
 
 func (k *Metadata) initPodInformer(informerFactory informers.SharedInformerFactory) error {
-	log := klog().With("informer", "Pod")
 	pods := informerFactory.Core().V1().Pods().Informer()
 
-	k.initContainerListeners(log, pods)
+	k.initContainerListeners(pods)
 
 	// Transform any *v1.Pod instance into a *PodInfo instance to save space
 	// in the informer's cache
@@ -149,8 +163,8 @@ func (k *Metadata) initPodInformer(informerFactory informers.SharedInformerFacto
 
 		owner := OwnerFrom(pod.OwnerReferences)
 		startTime := pod.GetCreationTimestamp().String()
-		if log.Enabled(context.TODO(), slog.LevelDebug) {
-			log.Debug("inserting pod", "name", pod.Name, "namespace", pod.Namespace,
+		if k.log.Enabled(context.TODO(), slog.LevelDebug) {
+			k.log.Debug("inserting pod", "name", pod.Name, "namespace", pod.Namespace,
 				"uid", pod.UID, "owner", owner,
 				"node", pod.Spec.NodeName, "startTime", startTime,
 				"containerIDs", containerIDs)
@@ -180,17 +194,17 @@ func (k *Metadata) initPodInformer(informerFactory informers.SharedInformerFacto
 }
 
 // initContainerListeners listens for deletions of pods, to forward them to the ContainerEventHandler subscribers.
-func (k *Metadata) initContainerListeners(log *slog.Logger, pods cache.SharedIndexInformer) {
+func (k *Metadata) initContainerListeners(pods cache.SharedIndexInformer) {
 	if _, err := pods.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		DeleteFunc: func(obj interface{}) {
 			pod := obj.(*PodInfo)
-			log.Debug("deleting containers for pod", "pod", pod.Name, "containers", pod.ContainerIDs)
+			k.log.Debug("deleting containers for pod", "pod", pod.Name, "containers", pod.ContainerIDs)
 			for _, listener := range k.containerEventHandlers {
 				listener.OnDeletion(pod.ContainerIDs)
 			}
 		},
 	}); err != nil {
-		log.Warn("can't attach container listener to the Kubernetes informer."+
+		k.log.Warn("can't attach container listener to the Kubernetes informer."+
 			" Your kubernetes metadata might be outdated in the long term", "error", err)
 	}
 }
@@ -240,8 +254,9 @@ func (k *Metadata) initReplicaSetInformer(informerFactory informers.SharedInform
 		}
 		return &ReplicaSetInfo{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      rs.Name,
-				Namespace: rs.Namespace,
+				Name:            rs.Name,
+				Namespace:       rs.Namespace,
+				OwnerReferences: rs.OwnerReferences,
 			},
 			Owner: owner,
 		}, nil
@@ -258,6 +273,7 @@ func (k *Metadata) initReplicaSetInformer(informerFactory informers.SharedInform
 
 func (k *Metadata) InitFromClient(ctx context.Context, client kubernetes.Interface, timeout time.Duration) error {
 	// Initialization variables
+	k.log = klog()
 	return k.initInformers(ctx, client, timeout)
 }
 
@@ -288,14 +304,24 @@ func LoadConfig(kubeConfigPath string) (*rest.Config, error) {
 	return config, nil
 }
 
-func (k *Metadata) initInformers(ctx context.Context, client kubernetes.Interface, timeout time.Duration) error {
-	informerFactory := informers.NewSharedInformerFactory(client, syncTime)
-	err := k.initPodInformer(informerFactory)
-	if err != nil {
+func (k *Metadata) initInformers(ctx context.Context, client kubernetes.Interface, syncTimeout time.Duration) error {
+	if syncTimeout <= 0 {
+		syncTimeout = defaultSyncTimeout
+	}
+	informerFactory := informers.NewSharedInformerFactory(client, resyncTime)
+	if err := k.initPodInformer(informerFactory); err != nil {
 		return err
 	}
-	err = k.initReplicaSetInformer(informerFactory)
-	if err != nil {
+	if err := k.initNodeIPInformer(informerFactory); err != nil {
+		return err
+	}
+	if err := k.initPodIPInformer(informerFactory); err != nil {
+		return err
+	}
+	if err := k.initServiceIPInformer(informerFactory); err != nil {
+		return err
+	}
+	if err := k.initReplicaSetInformer(informerFactory); err != nil {
 		return err
 	}
 
@@ -311,8 +337,8 @@ func (k *Metadata) initInformers(ctx context.Context, client kubernetes.Interfac
 	case <-finishedCacheSync:
 		log.Debug("kubernetes informers started")
 		return nil
-	case <-time.After(timeout):
-		return fmt.Errorf("kubernetes cache has not been synced after %s timeout", timeout)
+	case <-time.After(syncTimeout):
+		return fmt.Errorf("kubernetes cache has not been synced after %s timeout", syncTimeout)
 	}
 }
 

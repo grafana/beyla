@@ -28,6 +28,7 @@ import (
 	"github.com/mariomac/pipes/pipe"
 
 	attr "github.com/grafana/beyla/pkg/internal/export/attributes/names"
+	"github.com/grafana/beyla/pkg/internal/kube"
 	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
 	"github.com/grafana/beyla/pkg/transform"
 )
@@ -52,12 +53,16 @@ const (
 
 func log() *slog.Logger { return slog.With("component", "k8s.MetadataDecorator") }
 
-func MetadataDecoratorProvider(ctx context.Context, cfg *transform.KubernetesDecorator) (pipe.MiddleFunc[[]*ebpf.Record, []*ebpf.Record], error) {
+func MetadataDecoratorProvider(
+	ctx context.Context,
+	cfg *transform.KubernetesDecorator,
+	metadata *kube.Metadata,
+) (pipe.MiddleFunc[[]*ebpf.Record, []*ebpf.Record], error) {
 	if !cfg.Enabled() {
 		// This node is not going to be instantiated. Let the pipes library just bypassing it.
 		return pipe.Bypass[[]*ebpf.Record](), nil
 	}
-	nt, err := newDecorator(ctx, cfg)
+	nt, err := newDecorator(ctx, cfg, metadata)
 	if err != nil {
 		return nil, fmt.Errorf("instantiating network transformer: %w", err)
 	}
@@ -80,7 +85,7 @@ func MetadataDecoratorProvider(ctx context.Context, cfg *transform.KubernetesDec
 type decorator struct {
 	log              *slog.Logger
 	alreadyLoggedIPs *simplelru.LRU[string, struct{}]
-	kube             NetworkInformers
+	kube             *kube.Metadata
 	clusterName      string
 }
 
@@ -151,10 +156,11 @@ func (n *decorator) decorate(flow *ebpf.Record, prefix, ip string) bool {
 }
 
 // newDecorator create a new transform
-func newDecorator(ctx context.Context, cfg *transform.KubernetesDecorator) (*decorator, error) {
+func newDecorator(ctx context.Context, cfg *transform.KubernetesDecorator, meta *kube.Metadata) (*decorator, error) {
 	nt := decorator{
 		log:         log(),
 		clusterName: kubeClusterName(ctx, cfg),
+		kube:        meta,
 	}
 	if nt.log.Enabled(ctx, slog.LevelDebug) {
 		var err error
@@ -162,10 +168,6 @@ func newDecorator(ctx context.Context, cfg *transform.KubernetesDecorator) (*dec
 		if err != nil {
 			return nil, fmt.Errorf("instantiating debug notified error cache: %w", err)
 		}
-	}
-
-	if err := nt.kube.InitFromConfig(ctx, cfg.KubeconfigPath, cfg.InformersSyncTimeout); err != nil {
-		return nil, err
 	}
 	return &nt, nil
 }

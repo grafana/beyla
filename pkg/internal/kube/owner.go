@@ -19,6 +19,7 @@ const (
 )
 
 type Owner struct {
+	Type string
 	LabelName OwnerLabel
 	Name      string
 	// Owner of the owner. For example, a ReplicaSet might be owned by a Deployment

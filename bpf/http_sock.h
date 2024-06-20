@@ -523,11 +523,11 @@ static __always_inline void process_http2_grpc_frames(pid_connection_info_t *pid
                     break;
                 } 
             } else {
-                found_start_frame = 1;
-                if (http_grpc_stream_ended(&frame)) {
-                    found_end_frame = 1;
+                // Not starting new grpc request, found end frame in a start, likely just terminating prev connection
+                if (!(is_flags_only_frame(&frame) && http_grpc_stream_ended(&frame))) {
+                    found_start_frame = 1;
+                    break;
                 }
-                break;
             }
         }
 
@@ -552,11 +552,7 @@ static __always_inline void process_http2_grpc_frames(pid_connection_info_t *pid
     }
 
     if (found_start_frame) {
-        if (!found_end_frame) {
-            http2_grpc_start(&stream, (void *)((u8 *)u_buf + pos), bytes_len, direction, ssl, orig_dport);
-        } else {
-            bpf_dbg_printk("Not starting new grpc request, found end frame in a start, likely just terminating prev connection");
-        }
+        http2_grpc_start(&stream, (void *)((u8 *)u_buf + pos), bytes_len, direction, ssl, orig_dport);        
     } else {
         // We only loop 6 times looking for the stream termination. If the data packed is large we'll miss the
         // frame saying the stream closed. In that case we try this backup path.

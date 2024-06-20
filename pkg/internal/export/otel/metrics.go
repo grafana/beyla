@@ -179,6 +179,7 @@ type Metrics struct {
 	service  *svc.ID
 	provider *metric.MeterProvider
 
+	// IMPORTANT! Don't forget to clean each Expirer in cleanupAllMetricsInstances method
 	httpDuration          *Expirer[*request.Span, instrument.Float64Histogram, float64]
 	httpClientDuration    *Expirer[*request.Span, instrument.Float64Histogram, float64]
 	grpcDuration          *Expirer[*request.Span, instrument.Float64Histogram, float64]
@@ -256,17 +257,18 @@ func newMetricsReporter(
 	mr.attrMessagingProcess = attributes.OpenTelemetryGetters(
 		request.SpanOTELGetters, mr.attributes.For(attributes.MessagingProcessDuration))
 
-	mr.reporters = NewReporterPool(cfg.ReportersCacheLen,
-		func(id svc.UID, v *Metrics) {
+	mr.reporters = NewReporterPool(cfg.ReportersCacheLen, cfg.TTL, timeNow,
+		func(id svc.UID, v *expirable[*Metrics]) {
 			if mr.cfg.SpanMetricsEnabled() {
-				attrOpt := instrument.WithAttributeSet(mr.metricResourceAttributes(v.service))
-				v.tracesTargetInfo.Add(mr.ctx, 1, attrOpt)
+				attrOpt := instrument.WithAttributeSet(mr.metricResourceAttributes(v.value.service))
+				v.value.tracesTargetInfo.Add(mr.ctx, 1, attrOpt)
 			}
 
 			llog := log.With("service", id)
 			llog.Debug("evicting metrics reporter from cache")
+			v.value.cleanupAllMetricsInstances()
 			go func() {
-				if err := v.provider.ForceFlush(ctx); err != nil {
+				if err := v.value.provider.ForceFlush(ctx); err != nil {
 					llog.Warn("error flushing evicted metrics provider", "error", err)
 				}
 			}()
@@ -874,4 +876,16 @@ func setMetricsProtocol(cfg *MetricsConfig) {
 	}
 	// unset. Guessing it
 	os.Setenv(envMetricsProtocol, string(cfg.GuessProtocol()))
+}
+
+func (r *Metrics) cleanupAllMetricsInstances() {
+	r.httpDuration.RemoveAllMetrics(r.ctx)
+	r.httpClientDuration.RemoveAllMetrics(r.ctx)
+	r.grpcDuration.RemoveAllMetrics(r.ctx)
+	r.grpcClientDuration.RemoveAllMetrics(r.ctx)
+	r.dbClientDuration.RemoveAllMetrics(r.ctx)
+	r.msgPublishDuration.RemoveAllMetrics(r.ctx)
+	r.msgProcessDuration.RemoveAllMetrics(r.ctx)
+	r.httpRequestSize.RemoveAllMetrics(r.ctx)
+	r.httpClientRequestSize.RemoveAllMetrics(r.ctx)
 }

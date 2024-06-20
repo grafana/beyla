@@ -85,6 +85,18 @@ func (ex *ExpiryMap[T]) DeleteExpired() []T {
 	return delEntries
 }
 
+// DeleteAll cleans the map and returns a slice with its deleted elements
+func (ex *ExpiryMap[T]) DeleteAll() []T {
+	ex.mt.Lock()
+	defer ex.mt.Unlock()
+	entries := make([]T, 0, len(ex.entries))
+	for k, e := range ex.entries {
+		entries = append(entries, e.val)
+		delete(ex.entries, k)
+	}
+	return entries
+}
+
 // All returns an array with all the stored entries. It might contain expired entries
 // if DeleteExpired is not invoked before it.
 // TODO: use https://tip.golang.org/wiki/RangefuncExperiment when available

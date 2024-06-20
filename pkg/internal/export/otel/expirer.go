@@ -33,17 +33,12 @@ type Expirer[Record any, Metric removableMetric[ValType], ValType any] struct {
 	ctx     context.Context
 	attrs   []attributes.Field[Record, attribute.KeyValue]
 	metric  Metric
-	entries *expire.ExpiryMap[*expiryMapEntry[Metric, ValType]]
+	entries *expire.ExpiryMap[attribute.Set]
 	log     *slog.Logger
 
 	clock          expire.Clock
 	lastExpiration time.Time
 	ttl            time.Duration
-}
-
-type expiryMapEntry[Metric removableMetric[ValType], ValType any] struct {
-	metric     Metric
-	attributes attribute.Set
 }
 
 // NewExpirer creates an expirer that wraps data points of a given type. Its labeled instances are dropped
@@ -64,7 +59,7 @@ func NewExpirer[Record any, Metric removableMetric[ValType], ValType any](
 		ctx:            ctx,
 		metric:         metric,
 		attrs:          attrs,
-		entries:        expire.NewExpiryMap[*expiryMapEntry[Metric, ValType]](clock, ttl),
+		entries:        expire.NewExpiryMap[attribute.Set](clock, ttl),
 		log:            plog().With("type", fmt.Sprintf("%T", metric)),
 		clock:          clock,
 		lastExpiration: clock(),
@@ -86,13 +81,10 @@ func (ex *Expirer[Record, Metric, ValType]) ForRecord(r Record, extraAttrs ...at
 		ex.lastExpiration = now
 	}
 	recordAttrs, attrValues := ex.recordAttributes(r, extraAttrs...)
-	return ex.entries.GetOrCreate(attrValues, func() *expiryMapEntry[Metric, ValType] {
+	return ex.metric, ex.entries.GetOrCreate(attrValues, func() attribute.Set {
 		ex.log.With("labelValues", attrValues).Debug("storing new metric label set")
-		return &expiryMapEntry[Metric, ValType]{
-			metric:     ex.metric,
-			attributes: recordAttrs,
-		}
-	}).metric, recordAttrs
+		return recordAttrs
+	})
 }
 
 func (ex *Expirer[Record, Metric, ValType]) recordAttributes(m Record, extraAttrs ...attribute.KeyValue) (attribute.Set, []string) {
@@ -113,10 +105,31 @@ func (ex *Expirer[Record, Metric, ValType]) recordAttributes(m Record, extraAttr
 }
 
 func (ex *Expirer[Record, Metric, ValType]) removeOutdated(ctx context.Context) {
-	if old := ex.entries.DeleteExpired(); len(old) > 0 {
-		for _, om := range old {
-			ex.log.Debug("deleting old OTEL metric", "labelValues", om)
-			om.metric.Remove(ctx, metric.WithAttributeSet(om.attributes))
-		}
+	for _, attrs := range ex.entries.DeleteExpired() {
+		ex.deleteMetricInstance(ctx, attrs)
+	}
+}
+
+func (ex *Expirer[Record, Metric, ValType]) deleteMetricInstance(ctx context.Context, attrs attribute.Set) {
+	if ex.log.Enabled(ex.ctx, slog.LevelDebug) {
+		ex.logger(attrs).Debug("deleting old OTEL metric")
+	}
+	ex.metric.Remove(ctx, metric.WithAttributeSet(attrs))
+}
+
+func (ex *Expirer[Record, Metric, ValType]) logger(attrs attribute.Set) *slog.Logger {
+	fmtAttrs := make([]any, 0, attrs.Len()*2)
+	for it := attrs.Iter(); it.Next(); {
+		a := it.Attribute()
+		fmtAttrs = append(fmtAttrs, string(a.Key), a.Value.Emit())
+	}
+	return ex.log.With(fmtAttrs...)
+}
+
+// RemoveAllMetrics is explicitly invoked when the metrics reporter of a given service
+// instance needs to be shut down
+func (ex *Expirer[Record, Metric, ValType]) RemoveAllMetrics(ctx context.Context) {
+	for _, attrs := range ex.entries.DeleteAll() {
+		ex.deleteMetricInstance(ctx, attrs)
 	}
 }

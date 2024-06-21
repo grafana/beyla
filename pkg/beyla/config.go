@@ -67,11 +67,7 @@ var DefaultConfig = Config{
 		HistogramAggregation: otel.AggregationExplicit,
 		Features:             []string{otel.FeatureNetwork, otel.FeatureApplication},
 		Instrumentations: []string{
-			instrumentations.InstrumentationHTTP,
-			instrumentations.InstrumentationGRPC,
-			instrumentations.InstrumentationSQL,
-			instrumentations.InstrumentationRedis,
-			instrumentations.InstrumentationKafka,
+			instrumentations.InstrumentationALL,
 		},
 		TTL: defaultMetricsTTL,
 	},
@@ -82,11 +78,7 @@ var DefaultConfig = Config{
 		MaxExportBatchSize: 4096,
 		ReportersCacheLen:  ReporterLRUSize,
 		Instrumentations: []string{
-			instrumentations.InstrumentationHTTP,
-			instrumentations.InstrumentationGRPC,
-			instrumentations.InstrumentationSQL,
-			instrumentations.InstrumentationRedis,
-			instrumentations.InstrumentationKafka,
+			instrumentations.InstrumentationALL,
 		},
 	},
 	Prometheus: prom.PrometheusConfig{
@@ -94,11 +86,7 @@ var DefaultConfig = Config{
 		Buckets:  otel.DefaultBuckets,
 		Features: []string{otel.FeatureNetwork, otel.FeatureApplication},
 		Instrumentations: []string{
-			instrumentations.InstrumentationHTTP,
-			instrumentations.InstrumentationGRPC,
-			instrumentations.InstrumentationSQL,
-			instrumentations.InstrumentationRedis,
-			instrumentations.InstrumentationKafka,
+			instrumentations.InstrumentationALL,
 		},
 		TTL:                         defaultMetricsTTL,
 		SpanMetricsServiceCacheSize: 10000,

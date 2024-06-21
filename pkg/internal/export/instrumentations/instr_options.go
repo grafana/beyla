@@ -5,6 +5,7 @@ type Instrumentation string
 type InstrumentationSelection map[Instrumentation]bool
 
 const (
+	InstrumentationALL   = "*"
 	InstrumentationHTTP  = "http"
 	InstrumentationGRPC  = "grpc"
 	InstrumentationSQL   = "sql"
@@ -23,6 +24,9 @@ func NewInstrumentationSelection(instrumentations []string) InstrumentationSelec
 
 func (s InstrumentationSelection) instrumentationEnabled(i Instrumentation) bool {
 	_, ok := s[i]
+	if !ok {
+		_, ok = s[InstrumentationALL]
+	}
 	return ok
 }
 

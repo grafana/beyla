@@ -15,6 +15,7 @@ import (
 
 	"github.com/grafana/beyla/pkg/internal/connector"
 	"github.com/grafana/beyla/pkg/internal/export/attributes"
+	"github.com/grafana/beyla/pkg/internal/export/instrumentations"
 	"github.com/grafana/beyla/pkg/internal/export/otel"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/pkg/internal/request"
@@ -41,6 +42,7 @@ func TestAppMetricsExpiration(t *testing.T) {
 			TTL:                         3 * time.Minute,
 			SpanMetricsServiceCacheSize: 10,
 			Features:                    []string{otel.FeatureApplication},
+			Instrumentations:            []string{instrumentations.InstrumentationALL},
 		},
 		attributes.Selection{
 			attributes.HTTPServerDuration.Section: attributes.InclusionLists{

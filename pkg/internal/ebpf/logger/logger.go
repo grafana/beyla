@@ -89,7 +89,7 @@ func (p *BPFLogger) processLogEvent(record *ringbuf.Record, _ ebpfcommon.Service
 			bytes[i] = byte(v)
 		}
 		str := string(bytes)
-		p.log.Debug(str)
+		p.log.Info(str)
 	}
 
 	return request.Span{}, true, nil

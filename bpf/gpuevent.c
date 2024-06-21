@@ -8,6 +8,7 @@
 #include "bpf_core_read.h"
 #include "bpf_helpers.h"
 #include "bpf_tracing.h"
+#include "ringbuf.h"
 
 #include "gpuevent.h"
 
@@ -40,7 +41,7 @@ const volatile struct {
 
 SEC("uprobe")
 int BPF_KPROBE(handle_cuda_launch, u64 func_off, u64 grid_xy, u64 grid_z, u64 block_xy, u64 block_z, uintptr_t argv) {
-  struct gpukern_sample* e = bpf_ringbuf_reserve(&rb, sizeof(*e), 0);
+  gpu_kernel_launch_t* e = bpf_ringbuf_reserve(&rb, sizeof(*e), 0);
   if (!e) {
     bpf_printk_debug("Failed to allocate ringbuf entry");
     return 0;
@@ -48,6 +49,7 @@ int BPF_KPROBE(handle_cuda_launch, u64 func_off, u64 grid_xy, u64 grid_z, u64 bl
 
   struct task_struct* task = (struct task_struct*)bpf_get_current_task();
 
+  e->flags = EVENT_GPU_KERNEL_LAUNCH;
   e->pid = bpf_get_current_pid_tgid() >> 32;
   e->ppid = BPF_CORE_READ(task, real_parent, tgid);
   bpf_get_current_comm(&e->comm, sizeof(e->comm));

@@ -14,7 +14,9 @@
 
 typedef uint64_t stack_trace_t[MAX_STACK_DEPTH];
 
-struct gpukern_sample {
+// This is the struct that will be serialized on the ring buffer and sent to user space
+typedef struct gpu_kernel_launch {
+  u8 flags; // Must be first, we use it to tell what kind of packet we have on the ring buffer
   int pid, ppid;
   char comm[TASK_COMM_LEN];
   uint64_t kern_func_off;
@@ -24,4 +26,4 @@ struct gpukern_sample {
   uint64_t args[MAX_GPUKERN_ARGS];
   size_t ustack_sz;
   stack_trace_t ustack;
-};
+} __attribute__((packed)) gpu_kernel_launch_t;

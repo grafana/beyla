@@ -73,12 +73,6 @@ func (p *Tracer) Constants(_ *exec.FileInfo, _ *goexec.Offsets) map[string]any {
 		m["filter_pids"] = int32(0)
 	}
 
-	if p.cfg.EBPF.TrackRequestHeaders {
-		m["capture_header_buffer"] = int32(1)
-	} else {
-		m["capture_header_buffer"] = int32(0)
-	}
-
 	return m
 }
 
@@ -105,7 +99,7 @@ func (p *Tracer) Tracepoints() map[string]ebpfcommon.FunctionPrograms {
 func (p *Tracer) UProbes() map[string]map[string]ebpfcommon.FunctionPrograms {
 	return map[string]map[string]ebpfcommon.FunctionPrograms{
 		"libcuda.so": {
-			"cuda_kernel_launch": {
+			"cudaLaunchKernel": {
 				Required: true,
 				Start:    p.bpfObjects.HandleCudaLaunch,
 			},

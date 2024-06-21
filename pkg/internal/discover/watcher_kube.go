@@ -27,11 +27,6 @@ type kubeMetadata interface {
 	AddReplicaSetEventHandler(handler cache.ResourceEventHandler) error
 }
 
-type kubeMetadataProvider interface {
-	IsKubeEnabled() bool
-	Get(context.Context) (*kube.Metadata, error)
-}
-
 // watcherKubeEnricher keeps an update relational snapshot of the in-host process-pods-deployments,
 // which is continuously updated from two sources: the input from the ProcessWatcher and the kube.Metadata informers.
 type watcherKubeEnricher struct {
@@ -55,6 +50,13 @@ type watcherKubeEnricher struct {
 type nsName struct {
 	namespace string
 	name      string
+}
+
+// kubeMetadataProvider abstracts kube.MetadataProvider for easier dependency
+// injection in tests
+type kubeMetadataProvider interface {
+	IsKubeEnabled() bool
+	Get(context.Context) (*kube.Metadata, error)
 }
 
 func WatcherKubeEnricherProvider(

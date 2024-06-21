@@ -124,7 +124,7 @@ func (k *Metadata) GetInfo(ip string) (*IPInfo, *metav1.ObjectMeta, bool) {
 }
 
 func (k *Metadata) fetchInformersByIP(ip string) (*IPInfo, *metav1.ObjectMeta, bool) {
-	if info, ok := k.infoForIP(k.podsIP.GetIndexer(), ip); ok {
+	if info, ok := k.infoForIP(k.pods.GetIndexer(), ip); ok {
 		info := info.(*PodInfo)
 		// it might happen that the Host is discovered after the Pod
 		if info.IPInfo.HostName == "" {

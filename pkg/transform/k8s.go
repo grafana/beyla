@@ -13,8 +13,6 @@ import (
 	"github.com/grafana/beyla/pkg/internal/svc"
 )
 
-// TODO: let the user decide which attributes to add, as in https://opentelemetry.io/docs/kubernetes/collector/components/#kubernetes-attributes-processor
-
 func klog() *slog.Logger {
 	return slog.With("component", "transform.KubernetesDecorator")
 }

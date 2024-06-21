@@ -47,18 +47,13 @@ type Metadata struct {
 	// pods and replicaSets cache the different K8s types to custom, smaller object types
 	pods        cache.SharedIndexInformer
 	replicaSets cache.SharedIndexInformer
-	podsIP      cache.SharedIndexInformer
 	nodesIP     cache.SharedIndexInformer
 	servicesIP  cache.SharedIndexInformer
 
 	containerEventHandlers []ContainerEventHandler
 }
 
-// PodInfo contains precollected metadata for Pods, Nodes and Services.
-// Not all the fields are populated for all the above types. To save
-// memory, we just keep in memory the necessary data for each Type.
-// For more information about which fields are set for each type, please
-// refer to the instantiation function of the respective informers.
+// PodInfo contains precollected metadata for Pods.
 type PodInfo struct {
 	// Informers need that internal object is an ObjectMeta instance
 	metav1.ObjectMeta
@@ -72,16 +67,19 @@ type PodInfo struct {
 	IPInfo       IPInfo
 }
 
+// ServiceInfo contains precollected metadata for services.
 type ServiceInfo struct {
 	metav1.ObjectMeta
 	IPInfo IPInfo
 }
 
+// ReplicaSetInfo contains precollected metadata for ReplicaSets
 type ReplicaSetInfo struct {
 	metav1.ObjectMeta
 	Owner *Owner
 }
 
+// NodeInfo contains precollected metadata for nodes
 type NodeInfo struct {
 	metav1.ObjectMeta
 	IPInfo IPInfo

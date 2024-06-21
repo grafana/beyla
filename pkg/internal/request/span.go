@@ -24,6 +24,7 @@ const (
 	EventTypeSQLClient
 	EventTypeRedisClient
 	EventTypeKafkaClient
+	EventTypeGPUKernelLaunch
 )
 
 type IgnoreMode uint8

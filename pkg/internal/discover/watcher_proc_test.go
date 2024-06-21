@@ -55,6 +55,9 @@ func TestWatcher_Poll(t *testing.T) {
 		loadBPFWatcher: func(*beyla.Config, chan<- watcher.Event) error {
 			return nil
 		},
+		loadBPFLogger: func(*beyla.Config) error {
+			return nil
+		},
 	}
 	accounterOutput := make(chan []Event[processAttrs], 1)
 	accounterExited := make(chan struct{})
@@ -135,6 +138,9 @@ func TestProcessNotReady(t *testing.T) {
 		loadBPFWatcher: func(*beyla.Config, chan<- watcher.Event) error {
 			return nil
 		},
+		loadBPFLogger: func(*beyla.Config) error {
+			return nil
+		},
 	}
 
 	procs, err := acc.listProcesses(true)
@@ -183,6 +189,9 @@ func TestPortsFetchRequired(t *testing.T) {
 		},
 		loadBPFWatcher: func(_ *beyla.Config, events chan<- watcher.Event) error {
 			channelReturner <- events
+			return nil
+		},
+		loadBPFLogger: func(*beyla.Config) error {
 			return nil
 		},
 		stateMux:          sync.Mutex{},

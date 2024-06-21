@@ -18,8 +18,6 @@ import (
 // For more information about which fields are set for each type, please
 // refer to the instantiation function of the respective informers.
 type IPInfo struct {
-	// Informers need that internal object is an ObjectMeta instance
-	metav1.ObjectMeta
 	Type     string
 	Owner    Owner
 	HostName string

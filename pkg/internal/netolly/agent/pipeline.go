@@ -121,7 +121,7 @@ func (f *Flows) pipelineBuilder(ctx context.Context) (*pipe.Builder[*FlowsPipeli
 		return cidr.DecoratorProvider(f.cfg.NetworkFlows.CIDRs)
 	})
 	pipe.AddMiddleProvider(pb, kube, func() (pipe.MiddleFunc[[]*ebpf.Record, []*ebpf.Record], error) {
-		return k8s.MetadataDecoratorProvider(ctx, &f.cfg.Attributes.Kubernetes)
+		return k8s.MetadataDecoratorProvider(ctx, &f.cfg.Attributes.Kubernetes, f.ctxInfo.K8sInformer)
 	})
 	pipe.AddMiddleProvider(pb, rdns, func() (pipe.MiddleFunc[[]*ebpf.Record, []*ebpf.Record], error) {
 		return flow.ReverseDNSProvider(&f.cfg.NetworkFlows.ReverseDNS)

@@ -69,7 +69,7 @@ type PodInfo struct {
 	// StartTimeStr caches value of ObjectMeta.StartTimestamp.String()
 	StartTimeStr string
 	ContainerIDs []string
-	IPs          []string
+	IPInfo IPInfo
 }
 
 type ReplicaSetInfo struct {
@@ -83,14 +83,19 @@ func qName(namespace, name string) string {
 
 var podIndexer = cache.Indexers{
 	IndexPodByContainerIDs: func(obj interface{}) ([]string, error) {
-		pi := obj.(*PodInfo)
-		return pi.ContainerIDs, nil
+		if pi, ok := obj.(*PodInfo); ok {
+			return pi.ContainerIDs, nil
+		}
+		return nil, nil
 	},
 }
 
 var ipIndexer = map[string]cache.IndexFunc{
 	IndexIP: func(obj interface{}) ([]string, error) {
-		return obj.(*IPInfo).ips, nil
+		if ip, ok := obj.(*IPInfo); ok {
+			return ip.ips, nil
+		}
+		return nil, nil
 	},
 }
 
@@ -180,7 +185,9 @@ func (k *Metadata) initPodInformer(informerFactory informers.SharedInformerFacto
 			NodeName:     pod.Spec.NodeName,
 			StartTimeStr: startTime,
 			ContainerIDs: containerIDs,
-			IPs:          ips,
+			IPInfo: IPInfo{
+
+			},
 		}, nil
 	}); err != nil {
 		return fmt.Errorf("can't set pods transform: %w", err)

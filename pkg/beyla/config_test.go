@@ -17,6 +17,7 @@ import (
 	"github.com/grafana/beyla/pkg/internal/export/prom"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/infraolly/process"
+	"github.com/grafana/beyla/pkg/internal/kube"
 	"github.com/grafana/beyla/pkg/internal/netolly/transform/cidr"
 	"github.com/grafana/beyla/pkg/internal/traces"
 	"github.com/grafana/beyla/pkg/transform"
@@ -151,7 +152,7 @@ network:
 			},
 			Kubernetes: transform.KubernetesDecorator{
 				KubeconfigPath:       "/foo/bar",
-				Enable:               transform.EnabledTrue,
+				Enable:               kube.EnabledTrue,
 				InformersSyncTimeout: 30 * time.Second,
 			},
 			Select: attributes.Selection{

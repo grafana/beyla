@@ -56,15 +56,19 @@ func log() *slog.Logger { return slog.With("component", "k8s.MetadataDecorator")
 func MetadataDecoratorProvider(
 	ctx context.Context,
 	cfg *transform.KubernetesDecorator,
-	metadata *kube.Metadata,
+	k8sInformer *kube.MetadataProvider,
 ) (pipe.MiddleFunc[[]*ebpf.Record, []*ebpf.Record], error) {
-	if !cfg.Enabled() {
+	if !k8sInformer.IsKubeEnabled() {
 		// This node is not going to be instantiated. Let the pipes library just bypassing it.
 		return pipe.Bypass[[]*ebpf.Record](), nil
 	}
+	metadata, err := k8sInformer.Get(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("instantiating k8s.MetadataDecorator: %w", err)
+	}
 	nt, err := newDecorator(ctx, cfg, metadata)
 	if err != nil {
-		return nil, fmt.Errorf("instantiating network transformer: %w", err)
+		return nil, fmt.Errorf("instantiating k8s.MetadataDecorator: %w", err)
 	}
 	var decorate func([]*ebpf.Record) []*ebpf.Record
 	if cfg.DropExternal {

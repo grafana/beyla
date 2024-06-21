@@ -1,6 +1,7 @@
 package discover
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 
@@ -24,6 +25,11 @@ type kubeMetadata interface {
 	GetContainerPod(containerID string) (*kube.PodInfo, bool)
 	AddPodEventHandler(handler cache.ResourceEventHandler) error
 	AddReplicaSetEventHandler(handler cache.ResourceEventHandler) error
+}
+
+type kubeMetadataProvider interface {
+	IsKubeEnabled() bool
+	Get(context.Context) (*kube.Metadata, error)
 }
 
 // watcherKubeEnricher keeps an update relational snapshot of the in-host process-pods-deployments,
@@ -51,10 +57,17 @@ type nsName struct {
 	name      string
 }
 
-func WatcherKubeEnricherProvider(enabled bool, informer kubeMetadata) pipe.MiddleProvider[[]Event[processAttrs], []Event[processAttrs]] {
+func WatcherKubeEnricherProvider(
+	ctx context.Context,
+	informerProvider kubeMetadataProvider,
+) pipe.MiddleProvider[[]Event[processAttrs], []Event[processAttrs]] {
 	return func() (pipe.MiddleFunc[[]Event[processAttrs], []Event[processAttrs]], error) {
-		if !enabled {
+		if !informerProvider.IsKubeEnabled() {
 			return pipe.Bypass[[]Event[processAttrs]](), nil
+		}
+		informer, err := informerProvider.Get(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("instantiating WatcherKubeEnricher: %w", err)
 		}
 		wk := watcherKubeEnricher{informer: informer}
 		if err := wk.init(); err != nil {

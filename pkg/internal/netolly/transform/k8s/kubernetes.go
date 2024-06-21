@@ -124,7 +124,7 @@ func (n *decorator) transform(flow *ebpf.Record) bool {
 
 // decorate the flow with Kube metadata. Returns false if there is no metadata found for such IP
 func (n *decorator) decorate(flow *ebpf.Record, prefix, ip string) bool {
-	kubeInfo, ok := n.kube.GetInfo(ip)
+	ipinfo, meta, ok := n.kube.GetInfo(ip)
 	if !ok {
 		if n.log.Enabled(context.TODO(), slog.LevelDebug) {
 			// avoid spoofing the debug logs with the same message for each flow whose IP can't be decorated
@@ -135,25 +135,25 @@ func (n *decorator) decorate(flow *ebpf.Record, prefix, ip string) bool {
 		}
 		return false
 	}
-	flow.Attrs.Metadata[attr.Name(prefix+attrSuffixNs)] = kubeInfo.Namespace
-	flow.Attrs.Metadata[attr.Name(prefix+attrSuffixName)] = kubeInfo.Name
-	flow.Attrs.Metadata[attr.Name(prefix+attrSuffixType)] = kubeInfo.Type
-	flow.Attrs.Metadata[attr.Name(prefix+attrSuffixOwnerName)] = kubeInfo.Owner.Name
-	flow.Attrs.Metadata[attr.Name(prefix+attrSuffixOwnerType)] = kubeInfo.Owner.Type
-	if kubeInfo.HostIP != "" {
-		flow.Attrs.Metadata[attr.Name(prefix+attrSuffixHostIP)] = kubeInfo.HostIP
-		if kubeInfo.HostName != "" {
-			flow.Attrs.Metadata[attr.Name(prefix+attrSuffixHostName)] = kubeInfo.HostName
+	flow.Attrs.Metadata[attr.Name(prefix+attrSuffixNs)] = meta.Namespace
+	flow.Attrs.Metadata[attr.Name(prefix+attrSuffixName)] = meta.Name
+	flow.Attrs.Metadata[attr.Name(prefix+attrSuffixType)] = ipinfo.Type
+	flow.Attrs.Metadata[attr.Name(prefix+attrSuffixOwnerName)] = ipinfo.Owner.Name
+	flow.Attrs.Metadata[attr.Name(prefix+attrSuffixOwnerType)] = ipinfo.Owner.Type
+	if ipinfo.HostIP != "" {
+		flow.Attrs.Metadata[attr.Name(prefix+attrSuffixHostIP)] = ipinfo.HostIP
+		if ipinfo.HostName != "" {
+			flow.Attrs.Metadata[attr.Name(prefix+attrSuffixHostName)] = ipinfo.HostName
 		}
 	}
 	// decorate other names from metadata, if required
 	if prefix == attrPrefixDst {
 		if flow.Attrs.DstName == "" {
-			flow.Attrs.DstName = kubeInfo.Name
+			flow.Attrs.DstName = meta.Name
 		}
 	} else {
 		if flow.Attrs.SrcName == "" {
-			flow.Attrs.SrcName = kubeInfo.Name
+			flow.Attrs.SrcName = meta.Name
 		}
 	}
 	return true

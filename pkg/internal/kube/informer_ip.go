@@ -22,7 +22,7 @@ type IPInfo struct {
 	Owner    Owner
 	HostName string
 	HostIP   string
-	ips      []string
+	IPs      []string
 }
 
 func (k *Metadata) initServiceIPInformer(informerFactory informers.SharedInformerFactory) error {
@@ -51,7 +51,7 @@ func (k *Metadata) initServiceIPInformer(informerFactory informers.SharedInforme
 			},
 			IPInfo: IPInfo{
 				Type: typeService,
-				ips:  svc.Spec.ClusterIPs,
+				IPs:  svc.Spec.ClusterIPs,
 			},
 		}, nil
 	}); err != nil {
@@ -96,7 +96,7 @@ func (k *Metadata) initNodeIPInformer(informerFactory informers.SharedInformerFa
 				Labels:    node.Labels,
 			},
 			IPInfo: IPInfo{
-				ips:  ips,
+				IPs:  ips,
 				Type: typeNode,
 			},
 		}, nil
@@ -110,17 +110,17 @@ func (k *Metadata) initNodeIPInformer(informerFactory informers.SharedInformerFa
 	return nil
 }
 
-func (k *Metadata) GetInfo(ip string) (*IPInfo, bool) {
+func (k *Metadata) GetInfo(ip string) (*IPInfo, *metav1.ObjectMeta, bool) {
 	if info, meta, ok := k.fetchInformersByIP(ip); ok {
 		// Owner data might be discovered after the owned, so we fetch it
 		// at the last moment
 		if info.Owner.Name == "" {
 			info.Owner = k.getOwner(meta, info)
 		}
-		return info, true
+		return info, meta, true
 	}
 
-	return nil, false
+	return nil, nil, false
 }
 
 func (k *Metadata) fetchInformersByIP(ip string) (*IPInfo, *metav1.ObjectMeta, bool) {

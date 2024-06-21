@@ -131,20 +131,20 @@ func (id *Database) OwnerPodInfo(pidNamespace uint32) (*kube.PodInfo, bool) {
 }
 
 func (id *Database) UpdateNewPodsByIPIndex(pod *kube.PodInfo) {
-	if len(pod.IPs) > 0 {
+	if len(pod.IPInfo.IPs) > 0 {
 		id.podsMut.Lock()
 		defer id.podsMut.Unlock()
-		for _, ip := range pod.IPs {
+		for _, ip := range pod.IPInfo.IPs {
 			id.podsByIP[ip] = pod
 		}
 	}
 }
 
 func (id *Database) UpdateDeletedPodsByIPIndex(pod *kube.PodInfo) {
-	if len(pod.IPs) > 0 {
+	if len(pod.IPInfo.IPs) > 0 {
 		id.podsMut.Lock()
 		defer id.podsMut.Unlock()
-		for _, ip := range pod.IPs {
+		for _, ip := range pod.IPInfo.IPs {
 			delete(id.podsByIP, ip)
 		}
 	}

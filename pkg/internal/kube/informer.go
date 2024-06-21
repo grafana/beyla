@@ -98,21 +98,21 @@ var podIndexers = cache.Indexers{
 	},
 	IndexIP: func(obj interface{}) ([]string, error) {
 		pi := obj.(*PodInfo)
-		return pi.IPInfo.ips, nil
+		return pi.IPInfo.IPs, nil
 	},
 }
 
 var serviceIndexers = cache.Indexers{
 	IndexIP: func(obj interface{}) ([]string, error) {
 		pi := obj.(*PodInfo)
-		return pi.IPInfo.ips, nil
+		return pi.IPInfo.IPs, nil
 	},
 }
 
 var nodeIndexers = cache.Indexers{
 	IndexIP: func(obj interface{}) ([]string, error) {
 		pi := obj.(*NodeInfo)
-		return pi.IPInfo.ips, nil
+		return pi.IPInfo.IPs, nil
 	},
 }
 
@@ -205,7 +205,7 @@ func (k *Metadata) initPodInformer(informerFactory informers.SharedInformerFacto
 			IPInfo: IPInfo{
 				Type:   typePod,
 				HostIP: pod.Status.HostIP,
-				ips:    ips,
+				IPs:    ips,
 			},
 		}, nil
 	}); err != nil {

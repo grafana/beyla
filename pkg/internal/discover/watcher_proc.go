@@ -97,7 +97,7 @@ type pollAccounter struct {
 	executableReady func(PID) bool
 	// injectable function to load the bpf program
 	loadBPFWatcher func(cfg *beyla.Config, events chan<- watcher.Event) error
-	loadBPFLogger  func(cfg *beyla.Config, events chan<- logger.Event) error
+	loadBPFLogger  func(cfg *beyla.Config) error
 	// we use these to ensure we poll for the open ports effectively
 	stateMux          sync.Mutex
 	bpfWatcherEnabled bool
@@ -113,7 +113,7 @@ func (pa *pollAccounter) Run(out chan<- []Event[processAttrs]) {
 		log.Error("Unable to load eBPF watcher for process events", "error", err)
 	}
 
-	if err := pa.loadBPFLogger(pa.cfg, nil); err != nil {
+	if err := pa.loadBPFLogger(pa.cfg); err != nil {
 		log.Error("Unable to load eBPF logger for process events", "error", err)
 	}
 
@@ -328,7 +328,7 @@ func loadBPFWatcher(cfg *beyla.Config, events chan<- watcher.Event) error {
 	return ebpf.RunUtilityTracer(wt, BuildPinPath(cfg))
 }
 
-func loadBPFLogger(cfg *beyla.Config, events chan<- logger.Event) error {
+func loadBPFLogger(cfg *beyla.Config) error {
 	wt := logger.New(cfg)
 	return ebpf.RunUtilityTracer(wt, BuildPinPath(cfg))
 }

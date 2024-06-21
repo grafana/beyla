@@ -12,7 +12,7 @@ import (
 	"github.com/cilium/ebpf"
 )
 
-type bpf_debugLogInfoT struct{ Log [50]int8 }
+type bpf_debugLogInfoT struct{ Log [80]int8 }
 
 // loadBpf_debug returns the embedded CollectionSpec for bpf_debug.
 func loadBpf_debug() (*ebpf.CollectionSpec, error) {

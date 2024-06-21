@@ -15,7 +15,7 @@
 #ifdef BPF_DEBUG
 
 typedef struct log_info {
-    char log[50];
+    char log[80];
 } log_info_t;
 
 struct {

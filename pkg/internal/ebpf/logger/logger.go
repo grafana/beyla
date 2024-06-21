@@ -82,6 +82,10 @@ func (p *BPFLogger) processLogEvent(record *ringbuf.Record, _ ebpfcommon.Service
 	if err == nil {
 		bytes := make([]byte, len(event.Log))
 		for i, v := range event.Log {
+			if v == 0 { // null-terminated string
+				bytes = bytes[:i]
+				break
+			}
 			bytes[i] = byte(v)
 		}
 		str := string(bytes)

@@ -113,8 +113,10 @@ func (pa *pollAccounter) Run(out chan<- []Event[processAttrs]) {
 		log.Error("Unable to load eBPF watcher for process events", "error", err)
 	}
 
-	if err := pa.loadBPFLogger(pa.cfg); err != nil {
-		log.Error("Unable to load eBPF logger for process events", "error", err)
+	if pa.cfg.EBPF.BpfDebug {
+		if err := pa.loadBPFLogger(pa.cfg); err != nil {
+			log.Error("Unable to load eBPF logger for process events", "error", err)
+		}
 	}
 
 	go pa.watchForProcessEvents(log, bpfWatchEvents)

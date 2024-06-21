@@ -668,7 +668,6 @@ func (mr *MetricsReporter) serviceGraphAttributes(span *request.Span) attribute.
 			request.ClientNamespaceMetric(span.ServiceID.Namespace),
 			request.ServerMetric(request.SpanHost(span)),
 			request.ServerNamespaceMetric(span.OtherNamespace),
-			request.ConnectionTypeMetric("virtual_node"),
 			request.SourceMetric("beyla"),
 		}
 	} else {
@@ -677,7 +676,6 @@ func (mr *MetricsReporter) serviceGraphAttributes(span *request.Span) attribute.
 			request.ClientNamespaceMetric(span.OtherNamespace),
 			request.ServerMetric(request.SpanHost(span)),
 			request.ServerNamespaceMetric(span.ServiceID.Namespace),
-			request.ConnectionTypeMetric("virtual_node"),
 			request.SourceMetric("beyla"),
 		}
 	}

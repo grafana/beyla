@@ -89,4 +89,8 @@ static __always_inline u8 is_data_frame(frame_header_t *frame) {
     return frame->length && frame->type == FrameData;
 }
 
+static __always_inline u8 is_flags_only_frame(frame_header_t *frame) {
+    return frame->length <= 2;
+}
+
 #endif // HTTP2_GRPC_HELPERS

@@ -33,7 +33,7 @@ func printFlow(f *ebpf.Record) {
 	sb.WriteString(" iface=")
 	sb.WriteString(f.Attrs.Interface)
 	sb.WriteString(" direction=")
-	sb.WriteString(fmt.Sprint(f.Id.Direction))
+	sb.WriteString(fmt.Sprint(f.Metrics.Direction))
 	sb.WriteString(" src.address=")
 	sb.WriteString(f.Id.SrcIP().IP().String())
 	sb.WriteString(" dst.address=")

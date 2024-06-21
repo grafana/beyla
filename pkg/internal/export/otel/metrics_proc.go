@@ -79,6 +79,7 @@ type procMetrics struct {
 	service  *svc.ID
 	provider *metric.MeterProvider
 
+	// don't forget to add the cleanup code in cleanupAllMetricsInstances function
 	cpuTime        *Expirer[*process.Status, metric2.Float64Counter, float64]
 	cpuUtilisation *Expirer[*process.Status, metric2.Float64Gauge, float64]
 	memory         *Expirer[*process.Status, metric2.Int64UpDownCounter, int64]
@@ -164,12 +165,13 @@ func newProcMetricsExporter(
 		mr.netObserver = netAggregatedObserver
 	}
 
-	mr.reporters = NewReporterPool[*procMetrics](cfg.Metrics.ReportersCacheLen,
-		func(id svc.UID, v *procMetrics) {
+	mr.reporters = NewReporterPool[*procMetrics](cfg.Metrics.ReportersCacheLen, cfg.Metrics.TTL, timeNow,
+		func(id svc.UID, v *expirable[*procMetrics]) {
 			llog := log.With("service", id)
 			llog.Debug("evicting metrics reporter from cache")
+			v.value.cleanupAllMetricsInstances()
 			go func() {
-				if err := v.provider.ForceFlush(ctx); err != nil {
+				if err := v.value.provider.ForceFlush(ctx); err != nil {
 					llog.Warn("error flushing evicted metrics provider", "error", err)
 				}
 			}()
@@ -301,10 +303,10 @@ func (me *procMetricsExporter) observeMetric(reporter *procMetrics, s *process.S
 	me.cpuUtilisationObserver(me.ctx, reporter, s)
 
 	mem, attrs := reporter.memory.ForRecord(s)
-	mem.Add(me.ctx, s.MemoryRSSBytes, metric2.WithAttributeSet(attrs))
+	mem.Add(me.ctx, s.MemoryRSSBytesDelta, metric2.WithAttributeSet(attrs))
 
 	vmem, attrs := reporter.memoryVirtual.ForRecord(s)
-	vmem.Add(me.ctx, s.MemoryVMSBytes, metric2.WithAttributeSet(attrs))
+	vmem.Add(me.ctx, s.MemoryVMSBytesDelta, metric2.WithAttributeSet(attrs))
 
 	me.diskObserver(me.ctx, reporter, s)
 	me.netObserver(me.ctx, reporter, s)
@@ -366,4 +368,13 @@ func netDisaggregatedObserver(ctx context.Context, reporter *procMetrics, record
 	net.Add(ctx, record.NetTxBytesDelta, metric2.WithAttributeSet(attrs))
 	net, attrs = reporter.net.ForRecord(record, netIODirRcv)
 	net.Add(ctx, record.NetRcvBytesDelta, metric2.WithAttributeSet(attrs))
+}
+
+func (r *procMetrics) cleanupAllMetricsInstances() {
+	r.cpuTime.RemoveAllMetrics(r.ctx)
+	r.cpuUtilisation.RemoveAllMetrics(r.ctx)
+	r.memory.RemoveAllMetrics(r.ctx)
+	r.memoryVirtual.RemoveAllMetrics(r.ctx)
+	r.disk.RemoveAllMetrics(r.ctx)
+	r.net.RemoveAllMetrics(r.ctx)
 }

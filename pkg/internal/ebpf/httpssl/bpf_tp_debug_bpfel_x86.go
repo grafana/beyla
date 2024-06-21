@@ -107,7 +107,7 @@ type bpf_tp_debugSslArgsT struct {
 }
 
 type bpf_tp_debugSslPidConnectionInfoT struct {
-	Conn      bpf_tp_debugPidConnectionInfoT
+	P_conn    bpf_tp_debugPidConnectionInfoT
 	OrigDport uint16
 	C_tid     bpf_tp_debugPidKeyT
 	_         [2]byte

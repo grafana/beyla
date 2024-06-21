@@ -110,6 +110,9 @@ func (ps *Harvester) Harvest(svcID *svc.ID) (*Status, error) {
 
 	ps.populateNetworkInfo(status, cached)
 
+	// current stats will be used in the next iteration to calculate some delta values
+	cached.prevStats = cached.stats
+
 	return status, nil
 }
 
@@ -139,14 +142,18 @@ func (ps *Harvester) populateGauges(status *Status, process *linuxProcess) error
 	var err error
 
 	// Calculate CPU metrics from current and previous user/system/wait time
-	status.CPUTimeSystemDelta = process.stats.cpu.SystemTime - process.previousCPUStats.SystemTime
-	status.CPUTimeUserDelta = process.stats.cpu.UserTime - process.previousCPUStats.UserTime
-	status.CPUTimeWaitDelta = process.stats.cpu.WaitTime - process.previousCPUStats.WaitTime
+	var zero CPUInfo
+	// we only calculate CPU deltas and utilization time from the second sample onwards
+	if process.prevStats.cpu != zero {
+		status.CPUTimeSystemDelta = process.stats.cpu.SystemTime - process.prevStats.cpu.SystemTime
+		status.CPUTimeUserDelta = process.stats.cpu.UserTime - process.prevStats.cpu.UserTime
+		status.CPUTimeWaitDelta = process.stats.cpu.WaitTime - process.prevStats.cpu.WaitTime
 
-	delta := process.measureTime.Sub(process.previousMeasureTime).Seconds() * float64(runtime.NumCPU())
-	status.CPUUtilisationSystem = (process.stats.cpu.SystemTime - process.previousCPUStats.SystemTime) / delta
-	status.CPUUtilisationUser = (process.stats.cpu.UserTime - process.previousCPUStats.UserTime) / delta
-	status.CPUUtilisationWait = (process.stats.cpu.WaitTime - process.previousCPUStats.WaitTime) / delta
+		delta := process.measureTime.Sub(process.previousMeasureTime).Seconds() * float64(runtime.NumCPU())
+		status.CPUUtilisationSystem = (process.stats.cpu.SystemTime - process.prevStats.cpu.SystemTime) / delta
+		status.CPUUtilisationUser = (process.stats.cpu.UserTime - process.prevStats.cpu.UserTime) / delta
+		status.CPUUtilisationWait = (process.stats.cpu.WaitTime - process.prevStats.cpu.WaitTime) / delta
+	}
 
 	if ps.privileged {
 		status.FdCount, err = process.NumFDs()
@@ -159,7 +166,9 @@ func (ps *Harvester) populateGauges(status *Status, process *linuxProcess) error
 	status.Status = process.stats.state
 	status.ThreadCount = process.stats.numThreads
 	status.MemoryVMSBytes = process.stats.vmSize
+	status.MemoryVMSBytesDelta = process.stats.vmSize - process.prevStats.vmSize
 	status.MemoryRSSBytes = process.stats.vmRSS
+	status.MemoryRSSBytesDelta = process.stats.vmRSS - process.prevStats.vmRSS
 
 	return nil
 }

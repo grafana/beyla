@@ -52,10 +52,10 @@ type linuxProcess struct {
 
 	measureTime time.Time
 	stats       procStats
+	prevStats   procStats
 	process     *process.Process
 
 	// used to calculate CPU utilization ratios
-	previousCPUStats    CPUInfo
 	previousMeasureTime time.Time
 	previousIOCounters  *process.IOCountersStat
 	previousNetRx       int64
@@ -131,13 +131,11 @@ func getLinuxProcess(cachedCopy *linuxProcess, procFSRoot string, pid int32, pri
 			stats:               currentStats,
 			measureTime:         measureTime,
 			previousMeasureTime: measureTime,
-			previousCPUStats:    currentStats.cpu,
 			procFSRoot:          procFSRoot,
 		}, nil
 	}
 
 	// Otherwise, instead of creating a new process snapshot, we just reuse the cachedCopy one, with updated data
-	cachedCopy.previousCPUStats = cachedCopy.stats.cpu
 	cachedCopy.previousMeasureTime = cachedCopy.measureTime
 	cachedCopy.stats = currentStats
 	cachedCopy.measureTime = measureTime

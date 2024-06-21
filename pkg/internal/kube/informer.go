@@ -69,6 +69,11 @@ type PodInfo struct {
 	// StartTimeStr caches value of ObjectMeta.StartTimestamp.String()
 	StartTimeStr string
 	ContainerIDs []string
+	IPInfo       IPInfo
+}
+
+type ServiceInfo struct {
+	metav1.ObjectMeta
 	IPInfo IPInfo
 }
 
@@ -77,25 +82,37 @@ type ReplicaSetInfo struct {
 	Owner *Owner
 }
 
+type NodeInfo struct {
+	metav1.ObjectMeta
+	IPInfo IPInfo
+}
+
 func qName(namespace, name string) string {
 	return namespace + "/" + name
 }
 
-var podIndexer = cache.Indexers{
+var podIndexers = cache.Indexers{
 	IndexPodByContainerIDs: func(obj interface{}) ([]string, error) {
-		if pi, ok := obj.(*PodInfo); ok {
-			return pi.ContainerIDs, nil
-		}
-		return nil, nil
+		pi := obj.(*PodInfo)
+		return pi.ContainerIDs, nil
+	},
+	IndexIP: func(obj interface{}) ([]string, error) {
+		pi := obj.(*PodInfo)
+		return pi.IPInfo.ips, nil
 	},
 }
 
-var ipIndexer = map[string]cache.IndexFunc{
+var serviceIndexers = cache.Indexers{
 	IndexIP: func(obj interface{}) ([]string, error) {
-		if ip, ok := obj.(*IPInfo); ok {
-			return ip.ips, nil
-		}
-		return nil, nil
+		pi := obj.(*PodInfo)
+		return pi.IPInfo.ips, nil
+	},
+}
+
+var nodeIndexers = cache.Indexers{
+	IndexIP: func(obj interface{}) ([]string, error) {
+		pi := obj.(*NodeInfo)
+		return pi.IPInfo.ips, nil
 	},
 }
 
@@ -104,7 +121,7 @@ var ipIndexer = map[string]cache.IndexFunc{
 // if the ReplicaSet is owned by a Deployment, the reported Pod Owner should
 // be the Deployment, as the Replicaset is just an intermediate entity
 // used by the Deployment that it's actually defined by the user
-var replicaSetIndexer = cache.Indexers{
+var replicaSetIndexers = cache.Indexers{
 	IndexReplicaSetNames: func(obj interface{}) ([]string, error) {
 		rs := obj.(*ReplicaSetInfo)
 		return []string{qName(rs.Namespace, rs.Name)}, nil
@@ -186,13 +203,15 @@ func (k *Metadata) initPodInformer(informerFactory informers.SharedInformerFacto
 			StartTimeStr: startTime,
 			ContainerIDs: containerIDs,
 			IPInfo: IPInfo{
-
+				Type:   typePod,
+				HostIP: pod.Status.HostIP,
+				ips:    ips,
 			},
 		}, nil
 	}); err != nil {
 		return fmt.Errorf("can't set pods transform: %w", err)
 	}
-	if err := pods.AddIndexers(podIndexer); err != nil {
+	if err := pods.AddIndexers(podIndexers); err != nil {
 		return fmt.Errorf("can't add indexers to Pods informer: %w", err)
 	}
 
@@ -270,7 +289,7 @@ func (k *Metadata) initReplicaSetInformer(informerFactory informers.SharedInform
 	}); err != nil {
 		return fmt.Errorf("can't set pods transform: %w", err)
 	}
-	if err := rss.AddIndexers(replicaSetIndexer); err != nil {
+	if err := rss.AddIndexers(replicaSetIndexers); err != nil {
 		return fmt.Errorf("can't add %s indexer to ReplicaSets informer: %w", IndexReplicaSetNames, err)
 	}
 
@@ -320,9 +339,6 @@ func (k *Metadata) initInformers(ctx context.Context, client kubernetes.Interfac
 		return err
 	}
 	if err := k.initNodeIPInformer(informerFactory); err != nil {
-		return err
-	}
-	if err := k.initPodIPInformer(informerFactory); err != nil {
 		return err
 	}
 	if err := k.initServiceIPInformer(informerFactory); err != nil {

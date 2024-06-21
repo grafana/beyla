@@ -25,49 +25,6 @@ type IPInfo struct {
 	ips      []string
 }
 
-func (k *Metadata) initPodIPInformer(informerFactory informers.SharedInformerFactory) error {
-	pods := informerFactory.Core().V1().Pods().Informer()
-	// Transform any *v1.Pod instance into a *IPInfo instance to save space
-	// in the informer's cache
-	if err := pods.SetTransform(func(i interface{}) (interface{}, error) {
-		pod, ok := i.(*corev1.Pod)
-		if !ok {
-			// it's Ok. The K8s library just informed from an entity
-			// that has been previously transformed/stored
-			if pi, ok := i.(*IPInfo); ok {
-				return pi, nil
-			}
-			return nil, fmt.Errorf("was expecting a Pod. Got: %T", i)
-		}
-		ips := make([]string, 0, len(pod.Status.PodIPs))
-		for _, ip := range pod.Status.PodIPs {
-			// ignoring host-networked Pod IPs
-			if ip.IP != pod.Status.HostIP {
-				ips = append(ips, ip.IP)
-			}
-		}
-		return &IPInfo{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:            pod.Name,
-				Namespace:       pod.Namespace,
-				Labels:          pod.Labels,
-				OwnerReferences: pod.OwnerReferences,
-			},
-			Type:   typePod,
-			HostIP: pod.Status.HostIP,
-			ips:    ips,
-		}, nil
-	}); err != nil {
-		return fmt.Errorf("can't set pods transform: %w", err)
-	}
-	if err := pods.AddIndexers(ipIndexer); err != nil {
-		return fmt.Errorf("can't add %s indexer to Pods informer: %w", IndexIP, err)
-	}
-
-	k.podsIP = pods
-	return nil
-}
-
 func (k *Metadata) initServiceIPInformer(informerFactory informers.SharedInformerFactory) error {
 	services := informerFactory.Core().V1().Services().Informer()
 	// Transform any *v1.Service instance into a *IPInfo instance to save space
@@ -77,7 +34,7 @@ func (k *Metadata) initServiceIPInformer(informerFactory informers.SharedInforme
 		if !ok {
 			// it's Ok. The K8s library just informed from an entity
 			// that has been previously transformed/stored
-			if pi, ok := i.(*IPInfo); ok {
+			if pi, ok := i.(*ServiceInfo); ok {
 				return pi, nil
 			}
 			return nil, fmt.Errorf("was expecting a Service. Got: %T", i)
@@ -86,19 +43,21 @@ func (k *Metadata) initServiceIPInformer(informerFactory informers.SharedInforme
 			k.log.Warn("Service doesn't have any ClusterIP. Beyla won't decorate their flows",
 				"namespace", svc.Namespace, "name", svc.Name)
 		}
-		return &IPInfo{
+		return &ServiceInfo{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      svc.Name,
 				Namespace: svc.Namespace,
 				Labels:    svc.Labels,
 			},
-			Type: typeService,
-			ips:  svc.Spec.ClusterIPs,
+			IPInfo: IPInfo{
+				Type: typeService,
+				ips:  svc.Spec.ClusterIPs,
+			},
 		}, nil
 	}); err != nil {
 		return fmt.Errorf("can't set servicesIP transform: %w", err)
 	}
-	if err := services.AddIndexers(ipIndexer); err != nil {
+	if err := services.AddIndexers(serviceIndexers); err != nil {
 		return fmt.Errorf("can't add %s indexer to Pods informer: %w", IndexIP, err)
 	}
 
@@ -115,7 +74,7 @@ func (k *Metadata) initNodeIPInformer(informerFactory informers.SharedInformerFa
 		if !ok {
 			// it's Ok. The K8s library just informed from an entity
 			// that has been previously transformed/stored
-			if pi, ok := i.(*IPInfo); ok {
+			if pi, ok := i.(*NodeInfo); ok {
 				return pi, nil
 			}
 			return nil, fmt.Errorf("was expecting a Node. Got: %T", i)
@@ -130,19 +89,21 @@ func (k *Metadata) initNodeIPInformer(informerFactory informers.SharedInformerFa
 		// CNI-dependent logic (must work regardless of whether the CNI is installed)
 		ips = cni.AddOvnIPs(ips, node)
 
-		return &IPInfo{
+		return &NodeInfo{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      node.Name,
 				Namespace: node.Namespace,
 				Labels:    node.Labels,
 			},
-			ips:  ips,
-			Type: typeNode,
+			IPInfo: IPInfo{
+				ips:  ips,
+				Type: typeNode,
+			},
 		}, nil
 	}); err != nil {
 		return fmt.Errorf("can't set nodesIP transform: %w", err)
 	}
-	if err := nodes.AddIndexers(ipIndexer); err != nil {
+	if err := nodes.AddIndexers(nodeIndexers); err != nil {
 		return fmt.Errorf("can't add %s indexer to Nodes informer: %w", IndexIP, err)
 	}
 	k.nodesIP = nodes
@@ -150,11 +111,11 @@ func (k *Metadata) initNodeIPInformer(informerFactory informers.SharedInformerFa
 }
 
 func (k *Metadata) GetInfo(ip string) (*IPInfo, bool) {
-	if info, ok := k.fetchInformers(ip); ok {
+	if info, meta, ok := k.fetchInformersByIP(ip); ok {
 		// Owner data might be discovered after the owned, so we fetch it
 		// at the last moment
 		if info.Owner.Name == "" {
-			info.Owner = k.getOwner(info)
+			info.Owner = k.getOwner(meta, info)
 		}
 		return info, true
 	}
@@ -162,24 +123,25 @@ func (k *Metadata) GetInfo(ip string) (*IPInfo, bool) {
 	return nil, false
 }
 
-func (k *Metadata) fetchInformers(ip string) (*IPInfo, bool) {
+func (k *Metadata) fetchInformersByIP(ip string) (*IPInfo, *metav1.ObjectMeta, bool) {
 	if info, ok := k.infoForIP(k.podsIP.GetIndexer(), ip); ok {
+		info := info.(*PodInfo)
 		// it might happen that the Host is discovered after the Pod
-		if info.HostName == "" {
-			info.HostName = k.getHostName(info.HostIP)
+		if info.IPInfo.HostName == "" {
+			info.IPInfo.HostName = k.getHostName(info.IPInfo.HostIP)
 		}
-		return info, true
+		return &info.IPInfo, &info.ObjectMeta, true
 	}
 	if info, ok := k.infoForIP(k.nodesIP.GetIndexer(), ip); ok {
-		return info, true
+		return &info.(*NodeInfo).IPInfo, &info.(*NodeInfo).ObjectMeta, true
 	}
 	if info, ok := k.infoForIP(k.servicesIP.GetIndexer(), ip); ok {
-		return info, true
+		return &info.(*ServiceInfo).IPInfo, &info.(*ServiceInfo).ObjectMeta, true
 	}
-	return nil, false
+	return nil, nil, false
 }
 
-func (k *Metadata) infoForIP(idx cache.Indexer, ip string) (*IPInfo, bool) {
+func (k *Metadata) infoForIP(idx cache.Indexer, ip string) (any, bool) {
 	objs, err := idx.ByIndex(IndexIP, ip)
 	if err != nil {
 		k.log.Debug("error accessing index. Ignoring", "ip", ip, "error", err)
@@ -188,12 +150,12 @@ func (k *Metadata) infoForIP(idx cache.Indexer, ip string) (*IPInfo, bool) {
 	if len(objs) == 0 {
 		return nil, false
 	}
-	return objs[0].(*IPInfo), true
+	return objs[0], true
 }
 
-func (k *Metadata) getOwner(info *IPInfo) Owner {
-	if len(info.OwnerReferences) != 0 {
-		ownerReference := info.OwnerReferences[0]
+func (k *Metadata) getOwner(meta *metav1.ObjectMeta, info *IPInfo) Owner {
+	if len(meta.OwnerReferences) != 0 {
+		ownerReference := meta.OwnerReferences[0]
 		if ownerReference.Kind != "ReplicaSet" {
 			return Owner{
 				Name: ownerReference.Name,
@@ -201,10 +163,10 @@ func (k *Metadata) getOwner(info *IPInfo) Owner {
 			}
 		}
 
-		item, ok, err := k.replicaSets.GetIndexer().GetByKey(info.Namespace + "/" + ownerReference.Name)
+		item, ok, err := k.replicaSets.GetIndexer().GetByKey(meta.Namespace + "/" + ownerReference.Name)
 		if err != nil {
 			k.log.Debug("can't get ReplicaSet info from informer. Ignoring",
-				"key", info.Namespace+"/"+ownerReference.Name, "error", err)
+				"key", meta.Namespace+"/"+ownerReference.Name, "error", err)
 		} else if ok {
 			rsInfo := item.(*metav1.ObjectMeta)
 			if len(rsInfo.OwnerReferences) > 0 {
@@ -217,7 +179,7 @@ func (k *Metadata) getOwner(info *IPInfo) Owner {
 	}
 	// If no owner references found, return itself as owner
 	return Owner{
-		Name: info.Name,
+		Name: meta.Name,
 		Type: info.Type,
 	}
 }
@@ -225,7 +187,7 @@ func (k *Metadata) getOwner(info *IPInfo) Owner {
 func (k *Metadata) getHostName(hostIP string) string {
 	if hostIP != "" {
 		if info, ok := k.infoForIP(k.nodesIP.GetIndexer(), hostIP); ok {
-			return info.Name
+			return info.(*NodeInfo).Name
 		}
 	}
 	return ""

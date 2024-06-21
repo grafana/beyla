@@ -120,8 +120,12 @@ func (rp *ReporterPool[T]) For(service svc.ID) (T, error) {
 
 // Intermediate representation of option functions suitable for testing
 type otlpOptions struct {
-	Endpoint      string
-	Insecure      bool
+	Scheme   string
+	Endpoint string
+	Insecure bool
+	// BaseURLPath, only for traces export, excludes the /v1/traces suffix.
+	// E.g. for a URLPath == "/otlp/v1/traces", BaseURLPath will be = "/otlp"
+	BaseURLPath   string
 	URLPath       string
 	SkipTLSVerify bool
 	HTTPHeaders   map[string]string

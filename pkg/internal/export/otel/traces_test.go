@@ -38,7 +38,7 @@ func TestHTTPTracesEndpoint(t *testing.T) {
 	}
 
 	t.Run("testing with two endpoints", func(t *testing.T) {
-		testHTTPTracesOptions(t, otlpOptions{Endpoint: "localhost:3232", URLPath: "/v1/traces", HTTPHeaders: map[string]string{}}, &tcfg)
+		testHTTPTracesOptions(t, otlpOptions{Scheme: "https", Endpoint: "localhost:3232", URLPath: "/v1/traces", HTTPHeaders: map[string]string{}}, &tcfg)
 	})
 
 	tcfg = TracesConfig{
@@ -46,7 +46,7 @@ func TestHTTPTracesEndpoint(t *testing.T) {
 	}
 
 	t.Run("testing with only common endpoint", func(t *testing.T) {
-		testHTTPTracesOptions(t, otlpOptions{Endpoint: "localhost:3131", URLPath: "/otlp/v1/traces", HTTPHeaders: map[string]string{}}, &tcfg)
+		testHTTPTracesOptions(t, otlpOptions{Scheme: "https", Endpoint: "localhost:3131", BaseURLPath: "/otlp", URLPath: "/otlp/v1/traces", HTTPHeaders: map[string]string{}}, &tcfg)
 	})
 
 	tcfg = TracesConfig{
@@ -54,7 +54,7 @@ func TestHTTPTracesEndpoint(t *testing.T) {
 		TracesEndpoint: "http://localhost:3232",
 	}
 	t.Run("testing with insecure endpoint", func(t *testing.T) {
-		testHTTPTracesOptions(t, otlpOptions{Endpoint: "localhost:3232", Insecure: true, HTTPHeaders: map[string]string{}}, &tcfg)
+		testHTTPTracesOptions(t, otlpOptions{Scheme: "http", Endpoint: "localhost:3232", Insecure: true, HTTPHeaders: map[string]string{}}, &tcfg)
 	})
 
 	tcfg = TracesConfig{
@@ -63,7 +63,7 @@ func TestHTTPTracesEndpoint(t *testing.T) {
 	}
 
 	t.Run("testing with skip TLS verification", func(t *testing.T) {
-		testHTTPTracesOptions(t, otlpOptions{Endpoint: "localhost:3232", URLPath: "/v1/traces", SkipTLSVerify: true, HTTPHeaders: map[string]string{}}, &tcfg)
+		testHTTPTracesOptions(t, otlpOptions{Scheme: "https", Endpoint: "localhost:3232", URLPath: "/v1/traces", SkipTLSVerify: true, HTTPHeaders: map[string]string{}}, &tcfg)
 	})
 }
 
@@ -77,8 +77,10 @@ func TestHTTPTracesWithGrafanaOptions(t *testing.T) {
 	}}
 	t.Run("testing basic Grafana Cloud options", func(t *testing.T) {
 		testHTTPTracesOptions(t, otlpOptions{
-			Endpoint: "otlp-gateway-eu-west-23.grafana.net",
-			URLPath:  "/otlp/v1/traces",
+			Scheme:      "https",
+			Endpoint:    "otlp-gateway-eu-west-23.grafana.net",
+			BaseURLPath: "/otlp",
+			URLPath:     "/otlp/v1/traces",
 			HTTPHeaders: map[string]string{
 				// Basic + output of: echo -n 12345:affafafaafkd | gbase64 -w 0
 				"Authorization": "Basic MTIzNDU6YWZmYWZhZmFhZmtk",
@@ -88,6 +90,7 @@ func TestHTTPTracesWithGrafanaOptions(t *testing.T) {
 	mcfg.CommonEndpoint = "https://localhost:3939"
 	t.Run("Overriding endpoint URL", func(t *testing.T) {
 		testHTTPTracesOptions(t, otlpOptions{
+			Scheme:   "https",
 			Endpoint: "localhost:3939",
 			URLPath:  "/v1/traces",
 			HTTPHeaders: map[string]string{

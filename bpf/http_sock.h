@@ -441,7 +441,8 @@ static __always_inline void http2_grpc_start(http2_conn_stream_t *s_key, void *u
         return;
     }
     http2_grpc_request_t *h2g_info = empty_http2_info();
-    bpf_dbg_printk("http2/grpc start direction=%d", direction);
+    bpf_dbg_printk("http2/grpc start direction=%d stream=%d", direction, s_key->stream_id);
+    //dbg_print_http_connection_info(&s_key->pid_conn.conn); // commented out since GitHub CI doesn't like this call
     if (h2g_info) {
         http_connection_metadata_t *meta = connection_meta_by_direction(&s_key->pid_conn, direction, PACKET_TYPE_REQUEST);
         if (!meta) {
@@ -469,6 +470,8 @@ static __always_inline void http2_grpc_end(http2_conn_stream_t *stream, http2_gr
     bpf_dbg_printk("http2/grpc end prev_info=%llx", prev_info);
     if (prev_info) {
         prev_info->end_monotime_ns = bpf_ktime_get_ns();
+        bpf_dbg_printk("stream_id = %d", stream->stream_id);
+        //dbg_print_http_connection_info(&stream->pid_conn.conn); // commented out since GitHub CI doesn't like this call
 
         http2_grpc_request_t *trace = bpf_ringbuf_reserve(&events, sizeof(http2_grpc_request_t), 0);        
         if (trace) {
@@ -520,8 +523,11 @@ static __always_inline void process_http2_grpc_frames(pid_connection_info_t *pid
                     break;
                 } 
             } else {
-                found_start_frame = 1;
-                break;
+                // Not starting new grpc request, found end frame in a start, likely just terminating prev connection
+                if (!(is_flags_only_frame(&frame) && http_grpc_stream_ended(&frame))) {
+                    found_start_frame = 1;
+                    break;
+                }
             }
         }
 
@@ -546,7 +552,7 @@ static __always_inline void process_http2_grpc_frames(pid_connection_info_t *pid
     }
 
     if (found_start_frame) {
-        http2_grpc_start(&stream, (void *)((u8 *)u_buf + pos), bytes_len, direction, ssl, orig_dport);
+        http2_grpc_start(&stream, (void *)((u8 *)u_buf + pos), bytes_len, direction, ssl, orig_dport);        
     } else {
         // We only loop 6 times looking for the stream termination. If the data packed is large we'll miss the
         // frame saying the stream closed. In that case we try this backup path.
@@ -567,6 +573,7 @@ static __always_inline void process_http2_grpc_frames(pid_connection_info_t *pid
                     bpf_map_delete_elem(&active_ssl_connections, pid_conn);
                 } else {
                     bpf_dbg_printk("grpc request/response mismatch, req_type %d, prev_info->type %d", req_type, prev_info->type);
+                    bpf_map_delete_elem(&ongoing_http2_grpc, &stream);
                 }
             }
         }

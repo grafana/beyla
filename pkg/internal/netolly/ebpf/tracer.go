@@ -45,7 +45,7 @@ const (
 	constSampling      = "sampling"
 	constTraceMessages = "trace_messages"
 	aggregatedFlowsMap = "aggregated_flows"
-	flowDirectionsMap = "flow_directions"
+	flowDirectionsMap  = "flow_directions"
 )
 
 func tlog() *slog.Logger {

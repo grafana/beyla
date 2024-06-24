@@ -472,7 +472,7 @@ func TestAppMetrics_ByInstrumentation(t *testing.T) {
 			now := syncedClock{now: time.Now()}
 			timeNow = now.Now
 
-			otelExporter := makeExporter(t, tt.instr, ctx, otlp)
+			otelExporter := makeExporter(ctx, t, tt.instr, otlp)
 
 			require.NoError(t, err)
 
@@ -579,7 +579,7 @@ func readNChan(t require.TestingT, inCh <-chan collector.MetricRecord, numRecord
 	return records
 }
 
-func makeExporter(t *testing.T, instrumentations []string, ctx context.Context, otlp *collector.TestCollector) pipe.FinalFunc[[]request.Span] {
+func makeExporter(ctx context.Context, t *testing.T, instrumentations []string, otlp *collector.TestCollector) pipe.FinalFunc[[]request.Span] {
 	otelExporter, err := ReportMetrics(
 		ctx,
 		&global.ContextInfo{}, &MetricsConfig{

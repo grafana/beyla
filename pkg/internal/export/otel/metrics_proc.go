@@ -297,7 +297,7 @@ func (me *procMetricsExporter) Do(in <-chan []*process.Status) {
 }
 
 func (me *procMetricsExporter) observeMetric(reporter *procMetrics, s *process.Status) {
-	me.log.Debug("reporting data for record", "record", s)
+	// me.log.Debug("reporting data for record", "record", s)
 
 	me.cpuTimeObserver(me.ctx, reporter, s)
 	me.cpuUtilisationObserver(me.ctx, reporter, s)

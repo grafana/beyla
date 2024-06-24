@@ -260,7 +260,7 @@ func TestAppMetrics_ByInstrumentation(t *testing.T) {
 			require.NoError(t, err)
 			promURL := fmt.Sprintf("http://127.0.0.1:%d/metrics", openPort)
 
-			exporter := makePromExporter(t, tt.instr, ctx, openPort)
+			exporter := makePromExporter(ctx, t, tt.instr, openPort)
 
 			metrics := make(chan []request.Span, 20)
 			go exporter(metrics)
@@ -322,7 +322,7 @@ func (c *syncedClock) Advance(t time.Duration) {
 	c.now = c.now.Add(t)
 }
 
-func makePromExporter(t *testing.T, instrumentations []string, ctx context.Context, openPort int) pipe.FinalFunc[[]request.Span] {
+func makePromExporter(ctx context.Context, t *testing.T, instrumentations []string, openPort int) pipe.FinalFunc[[]request.Span] {
 	exporter, err := PrometheusEndpoint(
 		ctx, &global.ContextInfo{Prometheus: &connector.PrometheusManager{}},
 		&PrometheusConfig{

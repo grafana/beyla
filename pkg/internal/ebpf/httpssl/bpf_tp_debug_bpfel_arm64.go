@@ -222,7 +222,6 @@ type bpf_tp_debugMapSpecs struct {
 	ConnectionMetaMem       *ebpf.MapSpec `ebpf:"connection_meta_mem"`
 	DebugEvents             *ebpf.MapSpec `ebpf:"debug_events"`
 	Events                  *ebpf.MapSpec `ebpf:"events"`
-	FilteredConnections     *ebpf.MapSpec `ebpf:"filtered_connections"`
 	Http2InfoMem            *ebpf.MapSpec `ebpf:"http2_info_mem"`
 	HttpInfoMem             *ebpf.MapSpec `ebpf:"http_info_mem"`
 	OngoingHttp             *ebpf.MapSpec `ebpf:"ongoing_http"`
@@ -269,7 +268,6 @@ type bpf_tp_debugMaps struct {
 	ConnectionMetaMem       *ebpf.Map `ebpf:"connection_meta_mem"`
 	DebugEvents             *ebpf.Map `ebpf:"debug_events"`
 	Events                  *ebpf.Map `ebpf:"events"`
-	FilteredConnections     *ebpf.Map `ebpf:"filtered_connections"`
 	Http2InfoMem            *ebpf.Map `ebpf:"http2_info_mem"`
 	HttpInfoMem             *ebpf.Map `ebpf:"http_info_mem"`
 	OngoingHttp             *ebpf.Map `ebpf:"ongoing_http"`
@@ -299,7 +297,6 @@ func (m *bpf_tp_debugMaps) Close() error {
 		m.ConnectionMetaMem,
 		m.DebugEvents,
 		m.Events,
-		m.FilteredConnections,
 		m.Http2InfoMem,
 		m.HttpInfoMem,
 		m.OngoingHttp,

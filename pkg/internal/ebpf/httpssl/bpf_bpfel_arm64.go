@@ -221,7 +221,6 @@ type bpfMapSpecs struct {
 	CloneMap                *ebpf.MapSpec `ebpf:"clone_map"`
 	ConnectionMetaMem       *ebpf.MapSpec `ebpf:"connection_meta_mem"`
 	Events                  *ebpf.MapSpec `ebpf:"events"`
-	FilteredConnections     *ebpf.MapSpec `ebpf:"filtered_connections"`
 	Http2InfoMem            *ebpf.MapSpec `ebpf:"http2_info_mem"`
 	HttpInfoMem             *ebpf.MapSpec `ebpf:"http_info_mem"`
 	OngoingHttp             *ebpf.MapSpec `ebpf:"ongoing_http"`
@@ -267,7 +266,6 @@ type bpfMaps struct {
 	CloneMap                *ebpf.Map `ebpf:"clone_map"`
 	ConnectionMetaMem       *ebpf.Map `ebpf:"connection_meta_mem"`
 	Events                  *ebpf.Map `ebpf:"events"`
-	FilteredConnections     *ebpf.Map `ebpf:"filtered_connections"`
 	Http2InfoMem            *ebpf.Map `ebpf:"http2_info_mem"`
 	HttpInfoMem             *ebpf.Map `ebpf:"http_info_mem"`
 	OngoingHttp             *ebpf.Map `ebpf:"ongoing_http"`
@@ -296,7 +294,6 @@ func (m *bpfMaps) Close() error {
 		m.CloneMap,
 		m.ConnectionMetaMem,
 		m.Events,
-		m.FilteredConnections,
 		m.Http2InfoMem,
 		m.HttpInfoMem,
 		m.OngoingHttp,

@@ -120,6 +120,7 @@ type bpf_tp_debugProgramSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpf_tp_debugMapSpecs struct {
+	DebugEvents               *ebpf.MapSpec `ebpf:"debug_events"`
 	Events                    *ebpf.MapSpec `ebpf:"events"`
 	GoTraceMap                *ebpf.MapSpec `ebpf:"go_trace_map"`
 	GolangMapbucketStorageMap *ebpf.MapSpec `ebpf:"golang_mapbucket_storage_map"`
@@ -154,6 +155,7 @@ func (o *bpf_tp_debugObjects) Close() error {
 //
 // It can be passed to loadBpf_tp_debugObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpf_tp_debugMaps struct {
+	DebugEvents               *ebpf.Map `ebpf:"debug_events"`
 	Events                    *ebpf.Map `ebpf:"events"`
 	GoTraceMap                *ebpf.Map `ebpf:"go_trace_map"`
 	GolangMapbucketStorageMap *ebpf.Map `ebpf:"golang_mapbucket_storage_map"`
@@ -171,6 +173,7 @@ type bpf_tp_debugMaps struct {
 
 func (m *bpf_tp_debugMaps) Close() error {
 	return _Bpf_tp_debugClose(
+		m.DebugEvents,
 		m.Events,
 		m.GoTraceMap,
 		m.GolangMapbucketStorageMap,

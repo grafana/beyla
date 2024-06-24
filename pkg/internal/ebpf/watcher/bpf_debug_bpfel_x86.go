@@ -65,6 +65,7 @@ type bpf_debugProgramSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpf_debugMapSpecs struct {
+	DebugEvents *ebpf.MapSpec `ebpf:"debug_events"`
 	WatchEvents *ebpf.MapSpec `ebpf:"watch_events"`
 }
 
@@ -87,11 +88,13 @@ func (o *bpf_debugObjects) Close() error {
 //
 // It can be passed to loadBpf_debugObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpf_debugMaps struct {
+	DebugEvents *ebpf.Map `ebpf:"debug_events"`
 	WatchEvents *ebpf.Map `ebpf:"watch_events"`
 }
 
 func (m *bpf_debugMaps) Close() error {
 	return _Bpf_debugClose(
+		m.DebugEvents,
 		m.WatchEvents,
 	)
 }

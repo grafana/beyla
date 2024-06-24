@@ -504,7 +504,7 @@ func TestAppMetrics_ByInstrumentation(t *testing.T) {
 			}
 
 			// Read the exported metrics, add +extraColl for HTTP size metrics
-			res := readNChan(t, otlp.Records(), len(tt.expected)+tt.extraColl, 100*timeout)
+			res := readNChan(t, otlp.Records(), len(tt.expected)+tt.extraColl, timeout)
 			m := []collector.MetricRecord{}
 			// skip over the byte size metrics
 			for _, r := range res {

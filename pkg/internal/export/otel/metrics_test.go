@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -15,10 +16,13 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/grafana/beyla/pkg/internal/export/attributes"
 	"github.com/grafana/beyla/pkg/internal/export/instrumentations"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/pkg/internal/request"
+	"github.com/grafana/beyla/pkg/internal/svc"
+	"github.com/grafana/beyla/test/collector"
 )
 
 var fakeMux = sync.Mutex{}
@@ -357,6 +361,169 @@ func TestMetricSetupHTTP_DoNotOverrideEnv(t *testing.T) {
 	})
 }
 
+type InstrTest struct {
+	name      string
+	instr     []string
+	expected  []string
+	extraColl int
+}
+
+func TestAppMetrics_ByInstrumentation(t *testing.T) {
+	defer restoreEnvAfterExecution()()
+
+	tests := []InstrTest{
+		{
+			name:      "all instrumentations",
+			instr:     []string{instrumentations.InstrumentationALL},
+			extraColl: 2,
+			expected: []string{
+				"http.server.request.duration",
+				"http.client.request.duration",
+				"rpc.server.duration",
+				"rpc.client.duration",
+				"db.client.operation.duration",
+				"db.client.operation.duration",
+				"db.client.operation.duration",
+				"messaging.publish.duration",
+				"messaging.process.duration",
+			},
+		},
+		{
+			name:      "http only",
+			instr:     []string{instrumentations.InstrumentationHTTP},
+			extraColl: 2,
+			expected: []string{
+				"http.server.request.duration",
+				"http.client.request.duration",
+			},
+		},
+		{
+			name:      "grpc only",
+			instr:     []string{instrumentations.InstrumentationGRPC},
+			extraColl: 0,
+			expected: []string{
+				"rpc.server.duration",
+				"rpc.client.duration",
+			},
+		},
+		{
+			name:      "redis only",
+			instr:     []string{instrumentations.InstrumentationRedis},
+			extraColl: 0,
+			expected: []string{
+				"db.client.operation.duration",
+				"db.client.operation.duration",
+			},
+		},
+		{
+			name:      "sql only",
+			instr:     []string{instrumentations.InstrumentationSQL},
+			extraColl: 0,
+			expected: []string{
+				"db.client.operation.duration",
+			},
+		},
+		{
+			name:      "kafka only",
+			instr:     []string{instrumentations.InstrumentationKafka},
+			extraColl: 0,
+			expected: []string{
+				"messaging.publish.duration",
+				"messaging.process.duration",
+			},
+		},
+		{
+			name:      "none",
+			instr:     nil,
+			extraColl: 0,
+			expected:  []string{},
+		},
+		{
+			name:      "sql and redis",
+			instr:     []string{instrumentations.InstrumentationSQL, instrumentations.InstrumentationRedis},
+			extraColl: 0,
+			expected: []string{
+				"db.client.operation.duration",
+				"db.client.operation.duration",
+				"db.client.operation.duration",
+			},
+		},
+		{
+			name:      "kafka and grpc",
+			instr:     []string{instrumentations.InstrumentationGRPC, instrumentations.InstrumentationKafka},
+			extraColl: 0,
+			expected: []string{
+				"rpc.server.duration",
+				"rpc.client.duration",
+				"messaging.publish.duration",
+				"messaging.process.duration",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx, cancelCtx := context.WithCancel(context.Background())
+			defer cancelCtx()
+
+			otlp, err := collector.Start(ctx)
+			require.NoError(t, err)
+
+			now := syncedClock{now: time.Now()}
+			timeNow = now.Now
+
+			otelExporter := makeExporter(t, tt.instr, ctx, otlp)
+
+			require.NoError(t, err)
+
+			metrics := make(chan []request.Span, 20)
+			go otelExporter(metrics)
+
+			/* Available event types (defined in span.go):
+			EventTypeHTTP
+			EventTypeGRPC
+			EventTypeHTTPClient
+			EventTypeGRPCClient
+			EventTypeSQLClient
+			EventTypeRedisClient
+			EventTypeKafkaClient
+			EventTypeRedisServer
+			EventTypeKafkaServer
+			*/
+			// WHEN it receives metrics
+			metrics <- []request.Span{
+				{ServiceID: svc.ID{UID: "foo"}, Type: request.EventTypeHTTP, Path: "/foo", RequestStart: 100, End: 200},
+				{ServiceID: svc.ID{UID: "foo"}, Type: request.EventTypeHTTPClient, Path: "/bar", RequestStart: 150, End: 175},
+				{ServiceID: svc.ID{UID: "foo"}, Type: request.EventTypeGRPC, Path: "/foo", RequestStart: 100, End: 200},
+				{ServiceID: svc.ID{UID: "foo"}, Type: request.EventTypeGRPCClient, Path: "/bar", RequestStart: 150, End: 175},
+				{ServiceID: svc.ID{UID: "foo"}, Type: request.EventTypeSQLClient, Path: "SELECT", RequestStart: 150, End: 175},
+				{ServiceID: svc.ID{UID: "foo"}, Type: request.EventTypeRedisClient, Method: "SET", RequestStart: 150, End: 175},
+				{ServiceID: svc.ID{UID: "foo"}, Type: request.EventTypeRedisServer, Method: "GET", RequestStart: 150, End: 175},
+				{ServiceID: svc.ID{UID: "foo"}, Type: request.EventTypeKafkaClient, Method: "publish", RequestStart: 150, End: 175},
+				{ServiceID: svc.ID{UID: "foo"}, Type: request.EventTypeKafkaServer, Method: "process", RequestStart: 150, End: 175},
+			}
+
+			// Read the exported metrics, add +extraColl for HTTP size metrics
+			res := readNChan(t, otlp.Records(), len(tt.expected)+tt.extraColl, 100*timeout)
+			m := []collector.MetricRecord{}
+			// skip over the byte size metrics
+			for _, r := range res {
+				if strings.HasSuffix(r.Name, ".duration") {
+					m = append(m, r)
+				}
+			}
+			assert.Equal(t, len(tt.expected), len(m))
+
+			for i := 0; i < len(tt.expected); i++ {
+				assert.Equal(t, tt.expected[i], m[i].Name)
+			}
+
+			restoreEnvAfterExecution()
+		})
+	}
+
+}
+
 func TestMetricsConfig_Enabled(t *testing.T) {
 	assert.True(t, (&MetricsConfig{Features: []string{FeatureApplication, FeatureNetwork}, CommonEndpoint: "foo"}).Enabled())
 	assert.True(t, (&MetricsConfig{Features: []string{FeatureApplication}, MetricsEndpoint: "foo"}).Enabled())
@@ -396,4 +563,40 @@ func (f *fakeInternalMetrics) SumCount() (sum, count int) {
 	fakeMux.Lock()
 	defer fakeMux.Unlock()
 	return int(f.sum.Load()), int(f.cnt.Load())
+}
+
+func readNChan(t require.TestingT, inCh <-chan collector.MetricRecord, numRecords int, timeout time.Duration) []collector.MetricRecord {
+	records := []collector.MetricRecord{}
+	for i := 0; i < numRecords; i++ {
+		select {
+		case item := <-inCh:
+			records = append(records, item)
+		case <-time.After(timeout):
+			require.Failf(t, "timeout while waiting for event in input channel", "timeout: %s", timeout)
+			return records
+		}
+	}
+	return records
+}
+
+func makeExporter(t *testing.T, instrumentations []string, ctx context.Context, otlp *collector.TestCollector) pipe.FinalFunc[[]request.Span] {
+	otelExporter, err := ReportMetrics(
+		ctx,
+		&global.ContextInfo{}, &MetricsConfig{
+			Interval:          50 * time.Millisecond,
+			CommonEndpoint:    otlp.ServerEndpoint,
+			MetricsProtocol:   ProtocolHTTPProtobuf,
+			Features:          []string{FeatureApplication},
+			TTL:               30 * time.Minute,
+			ReportersCacheLen: 100,
+			Instrumentations:  instrumentations,
+		}, attributes.Selection{
+			attributes.HTTPServerDuration.Section: attributes.InclusionLists{
+				Include: []string{"url.path"},
+			},
+		})()
+
+	require.NoError(t, err)
+
+	return otelExporter
 }

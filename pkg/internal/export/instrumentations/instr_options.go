@@ -35,15 +35,15 @@ func (s InstrumentationSelection) HTTPEnabled() bool {
 }
 
 func (s InstrumentationSelection) GRPCEnabled() bool {
-	return s.instrumentationEnabled(InstrumentationHTTP)
+	return s.instrumentationEnabled(InstrumentationGRPC)
 }
 
 func (s InstrumentationSelection) SQLEnabled() bool {
-	return s.instrumentationEnabled(InstrumentationHTTP)
+	return s.instrumentationEnabled(InstrumentationSQL)
 }
 
 func (s InstrumentationSelection) RedisEnabled() bool {
-	return s.instrumentationEnabled(InstrumentationHTTP)
+	return s.instrumentationEnabled(InstrumentationRedis)
 }
 
 func (s InstrumentationSelection) DBEnabled() bool {

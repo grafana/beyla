@@ -216,7 +216,7 @@ func KernelLockdownMode() KernelLockdown {
 	return KernelLockdownNone
 }
 
-func CSTR(chars []uint8) string {
+func cstr(chars []uint8) string {
 	addrLen := bytes.IndexByte(chars, 0)
 	if addrLen < 0 {
 		addrLen = len(chars)

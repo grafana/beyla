@@ -850,7 +850,7 @@ The available **instrumentations** are as follows:
 - `redis` enables the collection of Redis client/server database metrics.
 - `kafka` enables the collection of Kafka client/server message queue metrics.
 
-For example, setting the `instrumentations` option to: `http,grpc`, will only enable the collection of HTTP/HTTPS/HTTP2 and
+For example, setting the `instrumentations` option to: `http,grpc` enables the collection of HTTP/HTTPS/HTTP2 and
 gRPC application metrics. The rest of the **instrumentations** will be disabled.
 
 | YAML      | Environment variable | Type   |
@@ -972,7 +972,7 @@ The available **instrumentations** are as follows:
 - `redis` enables the collection of Redis client/server database traces.
 - `kafka` enables the collection of Kafka client/server message queue traces.
 
-For example, setting the `instrumentations` option to: `http,grpc`, will only enable the collection of HTTP/HTTPS/HTTP2 and
+For example, setting the `instrumentations` option to: `http,grpc` enables the collection of HTTP/HTTPS/HTTP2 and
 gRPC application traces. The rest of the **instrumentations** will be disabled.
 
 | YAML       | Environment variable                                                                   | Type   | Default   |
@@ -1229,7 +1229,7 @@ The available **instrumentations** are as follows:
 - `redis` enables the collection of Redis client/server database metrics.
 - `kafka` enables the collection of Kafka client/server message queue metrics.
 
-For example, setting the `instrumentations` option to: `http,grpc`, will only enable the collection of HTTP/HTTPS/HTTP2 and
+For example, setting the `instrumentations` option to: `http,grpc` enables the collection of HTTP/HTTPS/HTTP2 and
 gRPC application metrics. The rest of the **instrumentations** will be disabled.
 
 ## Internal metrics reporter

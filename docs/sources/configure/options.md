@@ -851,7 +851,7 @@ The available **instrumentations** are as follows:
 - `kafka` enables the collection of Kafka client/server message queue metrics.
 
 For example, setting the `instrumentations` option to: `http,grpc` enables the collection of HTTP/HTTPS/HTTP2 and
-gRPC application metrics. The rest of the **instrumentations** will be disabled.
+gRPC application metrics, while the rest of the **instrumentations** are be disabled.
 
 | YAML      | Environment variable | Type   |
 | --------- | ------- | ------ |
@@ -973,7 +973,7 @@ The available **instrumentations** are as follows:
 - `kafka` enables the collection of Kafka client/server message queue traces.
 
 For example, setting the `instrumentations` option to: `http,grpc` enables the collection of HTTP/HTTPS/HTTP2 and
-gRPC application traces. The rest of the **instrumentations** will be disabled.
+gRPC application traces, while the rest of the **instrumentations** are be disabled.
 
 | YAML       | Environment variable                                                                   | Type   | Default   |
 | ---------- | ------------------------------------------------------------------------- | ------ | --------- |
@@ -1230,7 +1230,7 @@ The available **instrumentations** are as follows:
 - `kafka` enables the collection of Kafka client/server message queue metrics.
 
 For example, setting the `instrumentations` option to: `http,grpc` enables the collection of HTTP/HTTPS/HTTP2 and
-gRPC application metrics. The rest of the **instrumentations** will be disabled.
+gRPC application metrics, while the rest of the **instrumentations** are be disabled.
 
 ## Internal metrics reporter
 

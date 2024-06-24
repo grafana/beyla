@@ -16,6 +16,7 @@
 
 typedef struct log_info {
     char log[80];
+    char comm[20];
     u64 pid;
 } log_info_t;
 
@@ -30,6 +31,7 @@ struct {
     if (__trace__) { \
         BPF_SNPRINTF(__trace__->log, sizeof(__trace__->log), fmt, ##args); \
         u64 id = bpf_get_current_pid_tgid(); \
+        bpf_get_current_comm(&__trace__->comm, sizeof(__trace__->comm)); \
         __trace__->pid = id >> 32; \
         bpf_ringbuf_submit(__trace__, 0); \
     }} \

@@ -81,7 +81,7 @@ func TestCstr(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		assert.Equal(t, tc.expected, cstr(tc.input))
+		assert.Equal(t, tc.expected, CSTR(tc.input))
 	}
 }
 

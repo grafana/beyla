@@ -33,6 +33,7 @@ func TestWatcher_Poll(t *testing.T) {
 	acc := pollAccounter{
 		interval: time.Microsecond,
 		ctx:      ctx,
+		cfg:      &beyla.Config{},
 		pidPorts: map[pidPort]processAttrs{},
 		listProcesses: func(bool) (map[PID]processAttrs, error) {
 			invocation++
@@ -128,6 +129,7 @@ func TestProcessNotReady(t *testing.T) {
 	acc := pollAccounter{
 		interval: time.Microsecond,
 		ctx:      context.Background(),
+		cfg:      &beyla.Config{},
 		pidPorts: map[pidPort]processAttrs{},
 		listProcesses: func(bool) (map[PID]processAttrs, error) {
 			return map[PID]processAttrs{p1.pid: p1, p5.pid: p5, p2.pid: p2, p3.pid: p3, p4.pid: p4}, nil

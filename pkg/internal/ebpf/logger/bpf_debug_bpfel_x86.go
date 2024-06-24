@@ -13,8 +13,10 @@ import (
 )
 
 type bpf_debugLogInfoT struct {
-	Log [80]int8
-	Pid uint64
+	Log  [80]int8
+	Comm [20]int8
+	_    [4]byte
+	Pid  uint64
 }
 
 // loadBpf_debug returns the embedded CollectionSpec for bpf_debug.

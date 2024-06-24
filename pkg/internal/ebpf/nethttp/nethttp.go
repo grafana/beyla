@@ -225,5 +225,6 @@ func (p *Tracer) Run(ctx context.Context, eventsChan chan<- []request.Span) {
 		p.pidsFilter,
 		p.bpfObjects.Events,
 		p.metrics,
+		nil,
 	)(ctx, append(p.closers, &p.bpfObjects), eventsChan)
 }

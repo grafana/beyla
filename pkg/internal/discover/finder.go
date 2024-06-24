@@ -16,6 +16,7 @@ import (
 	"github.com/grafana/beyla/pkg/internal/ebpf/httpfltr"
 	"github.com/grafana/beyla/pkg/internal/ebpf/httpssl"
 	"github.com/grafana/beyla/pkg/internal/ebpf/nethttp"
+	"github.com/grafana/beyla/pkg/internal/exec"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 )
@@ -107,10 +108,10 @@ func newGoTracersGroup(cfg *beyla.Config, metrics imetrics.Reporter) []ebpf.Trac
 	}
 }
 
-func newNonGoTracersGroup(cfg *beyla.Config, metrics imetrics.Reporter) []ebpf.Tracer {
-	return []ebpf.Tracer{httpfltr.New(cfg, metrics), httpssl.New(cfg, metrics), gpuevent.New(cfg, metrics)}
+func newNonGoTracersGroup(cfg *beyla.Config, metrics imetrics.Reporter, fileInfo *exec.FileInfo) []ebpf.Tracer {
+	return []ebpf.Tracer{httpfltr.New(cfg, metrics), httpssl.New(cfg, metrics), gpuevent.New(cfg, metrics, fileInfo)}
 }
 
-func newNonGoTracersGroupUProbes(cfg *beyla.Config, metrics imetrics.Reporter) []ebpf.Tracer {
-	return []ebpf.Tracer{httpssl.New(cfg, metrics), gpuevent.New(cfg, metrics)}
+func newNonGoTracersGroupUProbes(cfg *beyla.Config, metrics imetrics.Reporter, fileInfo *exec.FileInfo) []ebpf.Tracer {
+	return []ebpf.Tracer{httpssl.New(cfg, metrics), gpuevent.New(cfg, metrics, fileInfo)}
 }

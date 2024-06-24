@@ -111,9 +111,9 @@ func (ta *TraceAttacher) getTracer(ie *Instrumentable) (*ebpf.ProcessTracer, boo
 				ta.log.Warn("Unsupported Go program detected, using generic instrumentation", "error", ie.InstrumentationError)
 			}
 			if ta.reusableTracer != nil {
-				programs = newNonGoTracersGroupUProbes(ta.Cfg, ta.Metrics)
+				programs = newNonGoTracersGroupUProbes(ta.Cfg, ta.Metrics, ie.FileInfo)
 			} else {
-				programs = newNonGoTracersGroup(ta.Cfg, ta.Metrics)
+				programs = newNonGoTracersGroup(ta.Cfg, ta.Metrics, ie.FileInfo)
 			}
 		} else {
 			tracerType = ebpf.Go
@@ -123,9 +123,9 @@ func (ta *TraceAttacher) getTracer(ie *Instrumentable) (*ebpf.ProcessTracer, boo
 		// We are not instrumenting a Go application, we override the programs
 		// list with the generic kernel/socket space filters
 		if ta.reusableTracer != nil {
-			programs = newNonGoTracersGroupUProbes(ta.Cfg, ta.Metrics)
+			programs = newNonGoTracersGroupUProbes(ta.Cfg, ta.Metrics, ie.FileInfo)
 		} else {
-			programs = newNonGoTracersGroup(ta.Cfg, ta.Metrics)
+			programs = newNonGoTracersGroup(ta.Cfg, ta.Metrics, ie.FileInfo)
 		}
 	default:
 		ta.log.Warn("unexpected instrumentable type. This is basically a bug", "type", ie.Type)

@@ -24,6 +24,10 @@ import (
 var instrumentedLibs = make(map[uint64]bool)
 var libsMux sync.Mutex
 
+// TODO: We have a way to bring ELF file information to this Tracer struct
+// via the newNonGoTracersGroup / newNonGoTracersGroupUProbes functions. Now,
+// we need to figure out how to pass it to the SharedRingbuf.. not sure if thats
+// possible
 type Tracer struct {
 	pidsFilter ebpfcommon.ServiceFilter
 	cfg        *beyla.Config
@@ -32,15 +36,17 @@ type Tracer struct {
 	closers    []io.Closer
 	log        *slog.Logger
 	Service    *svc.ID
+	FileInfo   *exec.FileInfo
 }
 
-func New(cfg *beyla.Config, metrics imetrics.Reporter) *Tracer {
+func New(cfg *beyla.Config, metrics imetrics.Reporter, fileInfo *exec.FileInfo) *Tracer {
 	log := slog.With("component", "gpuevent.Tracer")
 	return &Tracer{
 		log:        log,
 		cfg:        cfg,
 		metrics:    metrics,
 		pidsFilter: ebpfcommon.CommonPIDsFilter(cfg.Discovery.SystemWide),
+		FileInfo:   fileInfo,
 	}
 }
 
@@ -132,5 +138,6 @@ func (p *Tracer) Run(ctx context.Context, eventsChan chan<- []request.Span) {
 		p.pidsFilter,
 		p.bpfObjects.Rb,
 		p.metrics,
+		p.FileInfo,
 	)(ctx, append(p.closers, &p.bpfObjects), eventsChan)
 }

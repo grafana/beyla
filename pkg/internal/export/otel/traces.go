@@ -123,15 +123,19 @@ func (m *TracesConfig) guessProtocol() Protocol {
 	return ProtocolHTTPProtobuf
 }
 
-// TracesReceiver creates a terminal node that consumes request.Spans and sends OpenTelemetry metrics to the configured consumers.
-func TracesReceiver(ctx context.Context, cfg TracesConfig, ctxInfo *global.ContextInfo, userAttribSelection attributes.Selection) pipe.FinalProvider[[]request.Span] {
-	return (&tracesOTELReceiver{
+func makeTracesReceiver(ctx context.Context, cfg TracesConfig, ctxInfo *global.ContextInfo, userAttribSelection attributes.Selection) *tracesOTELReceiver {
+	return &tracesOTELReceiver{
 		ctx:        ctx,
 		cfg:        cfg,
 		ctxInfo:    ctxInfo,
 		attributes: userAttribSelection,
 		is:         instrumentations.NewInstrumentationSelection(cfg.Instrumentations),
-	}).provideLoop
+	}
+}
+
+// TracesReceiver creates a terminal node that consumes request.Spans and sends OpenTelemetry metrics to the configured consumers.
+func TracesReceiver(ctx context.Context, cfg TracesConfig, ctxInfo *global.ContextInfo, userAttribSelection attributes.Selection) pipe.FinalProvider[[]request.Span] {
+	return makeTracesReceiver(ctx, cfg, ctxInfo, userAttribSelection).provideLoop
 }
 
 type tracesOTELReceiver struct {
@@ -512,10 +516,12 @@ func (tr *tracesOTELReceiver) acceptSpan(span *request.Span) bool {
 		return tr.is.HTTPEnabled()
 	case request.EventTypeGRPC, request.EventTypeGRPCClient:
 		return tr.is.GRPCEnabled()
-	case request.EventTypeRedisClient, request.EventTypeSQLClient, request.EventTypeRedisServer:
-		return tr.is.DBEnabled()
+	case request.EventTypeSQLClient:
+		return tr.is.SQLEnabled()
+	case request.EventTypeRedisClient, request.EventTypeRedisServer:
+		return tr.is.RedisEnabled()
 	case request.EventTypeKafkaClient, request.EventTypeKafkaServer:
-		return tr.is.MQEnabled()
+		return tr.is.KafkaEnabled()
 	}
 
 	return false

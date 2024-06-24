@@ -29,6 +29,7 @@ import (
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/pkg/internal/request"
 	"github.com/grafana/beyla/pkg/internal/sqlprune"
+	"github.com/grafana/beyla/pkg/internal/svc"
 )
 
 func TestHTTPTracesEndpoint(t *testing.T) {
@@ -864,6 +865,88 @@ func TestSpanHostPeer(t *testing.T) {
 	assert.Equal(t, "", request.SpanPeer(&sp))
 }
 
+func TestTracesInstrumentations(t *testing.T) {
+
+	tests := []InstrTest{
+		{
+			name:     "all instrumentations",
+			instr:    []string{instrumentations.InstrumentationALL},
+			expected: []string{"GET /foo", "PUT", "/grpcFoo", "/grpcGoo", "SELECT credentials", "SET", "GET", "important-topic publish", "important-topic process"},
+		},
+		{
+			name:     "http only",
+			instr:    []string{instrumentations.InstrumentationHTTP},
+			expected: []string{"GET /foo", "PUT"},
+		},
+		{
+			name:     "grpc only",
+			instr:    []string{instrumentations.InstrumentationGRPC},
+			expected: []string{"/grpcFoo", "/grpcGoo"},
+		},
+		{
+			name:     "redis only",
+			instr:    []string{instrumentations.InstrumentationRedis},
+			expected: []string{"SET", "GET"},
+		},
+		{
+			name:     "sql only",
+			instr:    []string{instrumentations.InstrumentationSQL},
+			expected: []string{"SELECT credentials"},
+		},
+		{
+			name:     "kafka only",
+			instr:    []string{instrumentations.InstrumentationKafka},
+			expected: []string{"important-topic publish", "important-topic process"},
+		},
+		{
+			name:     "none",
+			instr:    nil,
+			expected: []string{},
+		},
+		{
+			name:     "sql and redis",
+			instr:    []string{instrumentations.InstrumentationSQL, instrumentations.InstrumentationRedis},
+			expected: []string{"SELECT credentials", "SET", "GET"},
+		},
+		{
+			name:     "kafka and grpc",
+			instr:    []string{instrumentations.InstrumentationGRPC, instrumentations.InstrumentationKafka},
+			expected: []string{"/grpcFoo", "/grpcGoo", "important-topic publish", "important-topic process"},
+		},
+	}
+
+	spans := []request.Span{
+		{ServiceID: svc.ID{UID: "foo"}, Type: request.EventTypeHTTP, Method: "GET", Route: "/foo", RequestStart: 100, End: 200},
+		{ServiceID: svc.ID{UID: "foo"}, Type: request.EventTypeHTTPClient, Method: "PUT", Route: "/bar", RequestStart: 150, End: 175},
+		{ServiceID: svc.ID{UID: "foo"}, Type: request.EventTypeGRPC, Path: "/grpcFoo", RequestStart: 100, End: 200},
+		{ServiceID: svc.ID{UID: "foo"}, Type: request.EventTypeGRPCClient, Path: "/grpcGoo", RequestStart: 150, End: 175},
+		makeSQLRequestSpan("SELECT password FROM credentials WHERE username=\"bill\""),
+		{ServiceID: svc.ID{UID: "foo"}, Type: request.EventTypeRedisClient, Method: "SET", Path: "redis_db", RequestStart: 150, End: 175},
+		{ServiceID: svc.ID{UID: "foo"}, Type: request.EventTypeRedisServer, Method: "GET", Path: "redis_db", RequestStart: 150, End: 175},
+		{Type: request.EventTypeKafkaClient, Method: "process", Path: "important-topic", OtherNamespace: "test"},
+		{Type: request.EventTypeKafkaServer, Method: "publish", Path: "important-topic", OtherNamespace: "test"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tr := makeTracesTestReceiver(tt.instr)
+			traces := generateTracesForSpans(t, tr, spans)
+			assert.Equal(t, len(traces), len(tt.expected), tt.name)
+			for i := 0; i < len(tt.expected); i++ {
+				found := false
+				for j := 0; j < len(traces); j++ {
+					assert.Equal(t, traces[j].ResourceSpans().Len(), 1, tt.name+":"+tt.expected[i])
+					if traces[j].ResourceSpans().At(0).ScopeSpans().At(0).Spans().At(0).Name() == tt.expected[i] {
+						found = true
+						break
+					}
+				}
+				assert.True(t, found, tt.name+":"+tt.expected[i])
+			}
+		})
+	}
+}
+
 type fakeInternalTraces struct {
 	imetrics.NoopReporter
 	sum  atomic.Int32
@@ -1036,4 +1119,32 @@ func ensureTraceStrAttr(t *testing.T, attrs pcommon.Map, key attribute.Key, val 
 func ensureTraceAttrNotExists(t *testing.T, attrs pcommon.Map, key attribute.Key) {
 	_, ok := attrs.Get(string(key))
 	assert.False(t, ok)
+}
+
+func makeTracesTestReceiver(instr []string) *tracesOTELReceiver {
+	return makeTracesReceiver(context.Background(),
+		TracesConfig{
+			CommonEndpoint:    "http://something",
+			BatchTimeout:      10 * time.Millisecond,
+			ReportersCacheLen: 16,
+			Instrumentations:  instr,
+		},
+		&global.ContextInfo{},
+		attributes.Selection{},
+	)
+}
+
+func generateTracesForSpans(t *testing.T, tr *tracesOTELReceiver, spans []request.Span) []ptrace.Traces {
+	res := []ptrace.Traces{}
+	traceAttrs, err := GetUserSelectedAttributes(tr.attributes)
+	assert.NoError(t, err)
+	for i := range spans {
+		span := &spans[i]
+		if span.IgnoreSpan == request.IgnoreTraces || !tr.acceptSpan(span) {
+			continue
+		}
+		res = append(res, GenerateTraces(span, traceAttrs))
+	}
+
+	return res
 }

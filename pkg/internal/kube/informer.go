@@ -191,17 +191,18 @@ func (k *Metadata) initPodInformer(informerFactory informers.SharedInformerFacto
 		}
 		return &PodInfo{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      pod.Name,
-				Namespace: pod.Namespace,
-				UID:       pod.UID,
-				Labels:    pod.Labels,
+				Name:            pod.Name,
+				Namespace:       pod.Namespace,
+				UID:             pod.UID,
+				Labels:          pod.Labels,
+				OwnerReferences: pod.OwnerReferences,
 			},
 			Owner:        owner,
 			NodeName:     pod.Spec.NodeName,
 			StartTimeStr: startTime,
 			ContainerIDs: containerIDs,
 			IPInfo: IPInfo{
-				Type:   typePod,
+				Kind:   typePod,
 				HostIP: pod.Status.HostIP,
 				IPs:    ips,
 			},

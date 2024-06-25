@@ -27,6 +27,7 @@ func TestOwnerFrom(t *testing.T) {
 			})
 			require.NotNil(t, owner)
 			assert.Equal(t, &Owner{
+				Kind:      kind,
 				LabelName: OwnerLabel(fmt.Sprintf("k8s.%s.name", strings.ToLower(kind))),
 				Name:      "theowner",
 			}, owner)

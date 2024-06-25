@@ -137,9 +137,9 @@ func (n *decorator) decorate(flow *ebpf.Record, prefix, ip string) bool {
 	}
 	flow.Attrs.Metadata[attr.Name(prefix+attrSuffixNs)] = meta.Namespace
 	flow.Attrs.Metadata[attr.Name(prefix+attrSuffixName)] = meta.Name
-	flow.Attrs.Metadata[attr.Name(prefix+attrSuffixType)] = ipinfo.Type
+	flow.Attrs.Metadata[attr.Name(prefix+attrSuffixType)] = ipinfo.Kind
 	flow.Attrs.Metadata[attr.Name(prefix+attrSuffixOwnerName)] = ipinfo.Owner.Name
-	flow.Attrs.Metadata[attr.Name(prefix+attrSuffixOwnerType)] = ipinfo.Owner.Type
+	flow.Attrs.Metadata[attr.Name(prefix+attrSuffixOwnerType)] = ipinfo.Owner.Kind
 	if ipinfo.HostIP != "" {
 		flow.Attrs.Metadata[attr.Name(prefix+attrSuffixHostIP)] = ipinfo.HostIP
 		if ipinfo.HostName != "" {

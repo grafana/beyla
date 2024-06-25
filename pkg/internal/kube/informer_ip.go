@@ -18,7 +18,7 @@ import (
 // For more information about which fields are set for each type, please
 // refer to the instantiation function of the respective informers.
 type IPInfo struct {
-	Type     string
+	Kind     string
 	Owner    Owner
 	HostName string
 	HostIP   string
@@ -45,12 +45,13 @@ func (k *Metadata) initServiceIPInformer(informerFactory informers.SharedInforme
 		}
 		return &ServiceInfo{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      svc.Name,
-				Namespace: svc.Namespace,
-				Labels:    svc.Labels,
+				Name:            svc.Name,
+				Namespace:       svc.Namespace,
+				Labels:          svc.Labels,
+				OwnerReferences: svc.OwnerReferences,
 			},
 			IPInfo: IPInfo{
-				Type: typeService,
+				Kind: typeService,
 				IPs:  svc.Spec.ClusterIPs,
 			},
 		}, nil
@@ -97,7 +98,7 @@ func (k *Metadata) initNodeIPInformer(informerFactory informers.SharedInformerFa
 			},
 			IPInfo: IPInfo{
 				IPs:  ips,
-				Type: typeNode,
+				Kind: typeNode,
 			},
 		}, nil
 	}); err != nil {
@@ -154,33 +155,31 @@ func (k *Metadata) infoForIP(idx cache.Indexer, ip string) (any, bool) {
 }
 
 func (k *Metadata) getOwner(meta *metav1.ObjectMeta, info *IPInfo) Owner {
-	if len(meta.OwnerReferences) != 0 {
+	if len(meta.OwnerReferences) > 0 {
 		ownerReference := meta.OwnerReferences[0]
 		if ownerReference.Kind != "ReplicaSet" {
-			return Owner{
-				Name: ownerReference.Name,
-				Type: ownerReference.Kind,
-			}
+			return *OwnerFrom(meta.OwnerReferences)
 		}
 
 		item, ok, err := k.replicaSets.GetIndexer().GetByKey(meta.Namespace + "/" + ownerReference.Name)
-		if err != nil {
+		switch {
+		case err != nil:
 			k.log.Debug("can't get ReplicaSet info from informer. Ignoring",
 				"key", meta.Namespace+"/"+ownerReference.Name, "error", err)
-		} else if ok {
-			rsInfo := item.(*metav1.ObjectMeta)
+		case !ok:
+			k.log.Debug("ReplicaSet info still not in the informer. Ignoring",
+				"key", meta.Namespace+"/"+ownerReference.Name)
+		default:
+			rsInfo := item.(*ReplicaSetInfo).ObjectMeta
 			if len(rsInfo.OwnerReferences) > 0 {
-				return Owner{
-					Name: rsInfo.OwnerReferences[0].Name,
-					Type: rsInfo.OwnerReferences[0].Kind,
-				}
+				return *OwnerFrom(rsInfo.OwnerReferences)
 			}
 		}
 	}
 	// If no owner references found, return itself as owner
 	return Owner{
 		Name: meta.Name,
-		Type: info.Type,
+		Kind: info.Kind,
 	}
 }
 

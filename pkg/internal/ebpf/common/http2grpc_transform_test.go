@@ -119,7 +119,7 @@ func TestHTTP2Parsing(t *testing.T) {
 
 				if ff, ok := f.(*http2.HeadersFrame); ok {
 					connInfo := BPFConnInfo{}
-					method, path, contentType := readMetaFrame(&connInfo, framer, ff)
+					method, path, contentType, _ := readMetaFrame(&connInfo, framer, ff)
 					assert.Equal(t, method, tt.method)
 					assert.Equal(t, path, tt.path)
 					assert.Equal(t, contentType, tt.contentType)
@@ -127,4 +127,46 @@ func TestHTTP2Parsing(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestHTTP2EventsParsing(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    []byte
+		rinput   []byte
+		inputLen int
+		ignored  bool
+	}{
+		{
+			name:     "Ignored, buffers reversed, nothing in there",
+			input:    []byte{0, 0, 6, 1, 4, 0, 0, 0, 11, 136, 196, 195, 194, 193, 190, 150, 223, 105, 126, 148, 19, 106, 101, 182, 165, 4, 1, 52, 160, 94, 184, 39, 46, 52, 242, 152, 180, 111, 255, 18, 98, 11, 14, 113, 12, 241, 116, 150, 98, 206, 79, 75, 83, 98, 0, 4, 0, 0, 255, 255, 211, 196, 47, 145},
+			rinput:   []byte{0, 0, 138, 1, 36, 0, 0, 0, 11, 0, 0, 0, 0, 15, 0, 0, 0, 0, 45, 0, 0, 0, 0, 0, 11, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+			inputLen: 201,
+			ignored:  true,
+		},
+		{
+			name:     "Not reversed",
+			rinput:   []byte{0, 0, 6, 1, 4, 0, 0, 0, 11, 136, 196, 195, 194, 193, 190, 150, 223, 105, 126, 148, 19, 106, 101, 182, 165, 4, 1, 52, 160, 94, 184, 39, 46, 52, 242, 152, 180, 111, 255, 18, 98, 11, 14, 113, 12, 241, 116, 150, 98, 206, 79, 75, 83, 98, 0, 4, 0, 0, 255, 255, 211, 196, 47, 145},
+			input:    []byte{0, 0, 138, 1, 36, 0, 0, 0, 11, 0, 0, 0, 0, 15, 0, 0, 0, 0, 45, 0, 0, 0, 0, 0, 11, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+			inputLen: 201,
+			ignored:  false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			info := makeBPFHTTP2Info(tt.input, tt.rinput, tt.inputLen)
+			_, ignore, _ := http2FromBuffers(&info)
+			assert.Equal(t, tt.ignored, ignore)
+		})
+	}
+}
+
+func makeBPFHTTP2Info(buf, rbuf []byte, len int) BPFHTTP2Info {
+	var info BPFHTTP2Info
+	copy(info.Data[:], buf)
+	copy(info.RetData[:], rbuf)
+	info.Len = int32(len)
+
+	return info
 }

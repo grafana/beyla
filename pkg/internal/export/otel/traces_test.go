@@ -24,17 +24,20 @@ import (
 
 	"github.com/grafana/beyla/pkg/internal/export/attributes"
 	attr "github.com/grafana/beyla/pkg/internal/export/attributes/names"
+	"github.com/grafana/beyla/pkg/internal/export/instrumentations"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/pkg/internal/request"
 	"github.com/grafana/beyla/pkg/internal/sqlprune"
+	"github.com/grafana/beyla/pkg/internal/svc"
 )
 
 func TestHTTPTracesEndpoint(t *testing.T) {
 	defer restoreEnvAfterExecution()()
 	tcfg := TracesConfig{
-		CommonEndpoint: "https://localhost:3131",
-		TracesEndpoint: "https://localhost:3232/v1/traces",
+		CommonEndpoint:   "https://localhost:3131",
+		TracesEndpoint:   "https://localhost:3232/v1/traces",
+		Instrumentations: []string{instrumentations.InstrumentationALL},
 	}
 
 	t.Run("testing with two endpoints", func(t *testing.T) {
@@ -42,7 +45,8 @@ func TestHTTPTracesEndpoint(t *testing.T) {
 	})
 
 	tcfg = TracesConfig{
-		CommonEndpoint: "https://localhost:3131/otlp",
+		CommonEndpoint:   "https://localhost:3131/otlp",
+		Instrumentations: []string{instrumentations.InstrumentationALL},
 	}
 
 	t.Run("testing with only common endpoint", func(t *testing.T) {
@@ -50,8 +54,9 @@ func TestHTTPTracesEndpoint(t *testing.T) {
 	})
 
 	tcfg = TracesConfig{
-		CommonEndpoint: "https://localhost:3131",
-		TracesEndpoint: "http://localhost:3232",
+		CommonEndpoint:   "https://localhost:3131",
+		TracesEndpoint:   "http://localhost:3232",
+		Instrumentations: []string{instrumentations.InstrumentationALL},
 	}
 	t.Run("testing with insecure endpoint", func(t *testing.T) {
 		testHTTPTracesOptions(t, otlpOptions{Scheme: "http", Endpoint: "localhost:3232", Insecure: true, HTTPHeaders: map[string]string{}}, &tcfg)
@@ -60,6 +65,7 @@ func TestHTTPTracesEndpoint(t *testing.T) {
 	tcfg = TracesConfig{
 		CommonEndpoint:     "https://localhost:3232",
 		InsecureSkipVerify: true,
+		Instrumentations:   []string{instrumentations.InstrumentationALL},
 	}
 
 	t.Run("testing with skip TLS verification", func(t *testing.T) {
@@ -74,7 +80,7 @@ func TestHTTPTracesWithGrafanaOptions(t *testing.T) {
 		CloudZone:  "eu-west-23",
 		InstanceID: "12345",
 		APIKey:     "affafafaafkd",
-	}}
+	}, Instrumentations: []string{instrumentations.InstrumentationALL}}
 	t.Run("testing basic Grafana Cloud options", func(t *testing.T) {
 		testHTTPTracesOptions(t, otlpOptions{
 			Scheme:      "https",
@@ -110,14 +116,14 @@ func testHTTPTracesOptions(t *testing.T, expected otlpOptions, tcfg *TracesConfi
 
 func TestMissingSchemeInHTTPTracesEndpoint(t *testing.T) {
 	defer restoreEnvAfterExecution()()
-	opts, err := getHTTPTracesEndpointOptions(&TracesConfig{CommonEndpoint: "http://foo:3030"})
+	opts, err := getHTTPTracesEndpointOptions(&TracesConfig{CommonEndpoint: "http://foo:3030", Instrumentations: []string{instrumentations.InstrumentationALL}})
 	require.NoError(t, err)
 	require.NotEmpty(t, opts)
 
-	_, err = getHTTPTracesEndpointOptions(&TracesConfig{CommonEndpoint: "foo:3030"})
+	_, err = getHTTPTracesEndpointOptions(&TracesConfig{CommonEndpoint: "foo:3030", Instrumentations: []string{instrumentations.InstrumentationALL}})
 	require.Error(t, err)
 
-	_, err = getHTTPTracesEndpointOptions(&TracesConfig{CommonEndpoint: "foo"})
+	_, err = getHTTPTracesEndpointOptions(&TracesConfig{CommonEndpoint: "foo", Instrumentations: []string{instrumentations.InstrumentationALL}})
 	require.Error(t, err)
 }
 
@@ -166,8 +172,9 @@ func TestHTTPTracesEndpointHeaders(t *testing.T) {
 			}
 
 			opts, err := getHTTPTracesEndpointOptions(&TracesConfig{
-				TracesEndpoint: "https://localhost:1234/v1/traces",
-				Grafana:        &tc.Grafana,
+				TracesEndpoint:   "https://localhost:1234/v1/traces",
+				Grafana:          &tc.Grafana,
+				Instrumentations: []string{instrumentations.InstrumentationALL},
 			})
 			require.NoError(t, err)
 			assert.Equal(t, tc.ExpectedHeaders, opts.HTTPHeaders)
@@ -178,12 +185,13 @@ func TestHTTPTracesEndpointHeaders(t *testing.T) {
 func TestGRPCTracesEndpointOptions(t *testing.T) {
 	defer restoreEnvAfterExecution()()
 	t.Run("do not accept URLs without a scheme", func(t *testing.T) {
-		_, err := getGRPCTracesEndpointOptions(&TracesConfig{CommonEndpoint: "foo:3939"})
+		_, err := getGRPCTracesEndpointOptions(&TracesConfig{CommonEndpoint: "foo:3939", Instrumentations: []string{instrumentations.InstrumentationALL}})
 		assert.Error(t, err)
 	})
 	tcfg := TracesConfig{
-		CommonEndpoint: "https://localhost:3131",
-		TracesEndpoint: "https://localhost:3232",
+		CommonEndpoint:   "https://localhost:3131",
+		TracesEndpoint:   "https://localhost:3232",
+		Instrumentations: []string{instrumentations.InstrumentationALL},
 	}
 
 	t.Run("testing with two endpoints", func(t *testing.T) {
@@ -191,7 +199,8 @@ func TestGRPCTracesEndpointOptions(t *testing.T) {
 	})
 
 	tcfg = TracesConfig{
-		CommonEndpoint: "https://localhost:3131",
+		CommonEndpoint:   "https://localhost:3131",
+		Instrumentations: []string{instrumentations.InstrumentationALL},
 	}
 
 	t.Run("testing with only common endpoint", func(t *testing.T) {
@@ -199,8 +208,9 @@ func TestGRPCTracesEndpointOptions(t *testing.T) {
 	})
 
 	tcfg = TracesConfig{
-		CommonEndpoint: "https://localhost:3131",
-		TracesEndpoint: "http://localhost:3232",
+		CommonEndpoint:   "https://localhost:3131",
+		TracesEndpoint:   "http://localhost:3232",
+		Instrumentations: []string{instrumentations.InstrumentationALL},
 	}
 	t.Run("testing with insecure endpoint", func(t *testing.T) {
 		testTracesGRPOptions(t, otlpOptions{Endpoint: "localhost:3232", Insecure: true}, &tcfg)
@@ -209,6 +219,7 @@ func TestGRPCTracesEndpointOptions(t *testing.T) {
 	tcfg = TracesConfig{
 		CommonEndpoint:     "https://localhost:3232",
 		InsecureSkipVerify: true,
+		Instrumentations:   []string{instrumentations.InstrumentationALL},
 	}
 
 	t.Run("testing with skip TLS verification", func(t *testing.T) {
@@ -256,10 +267,11 @@ func TestTracesSetupHTTP_Protocol(t *testing.T) {
 		t.Run(tc.Endpoint+"/"+string(tc.ProtoVal)+"/"+string(tc.TraceProtoVal), func(t *testing.T) {
 			defer restoreEnvAfterExecution()()
 			_, err := getHTTPTracesEndpointOptions(&TracesConfig{
-				CommonEndpoint: "http://host:3333",
-				TracesEndpoint: tc.Endpoint,
-				Protocol:       tc.ProtoVal,
-				TracesProtocol: tc.TraceProtoVal,
+				CommonEndpoint:   "http://host:3333",
+				TracesEndpoint:   tc.Endpoint,
+				Protocol:         tc.ProtoVal,
+				TracesProtocol:   tc.TraceProtoVal,
+				Instrumentations: []string{instrumentations.InstrumentationALL},
 			})
 			require.NoError(t, err)
 			assert.Equal(t, tc.ExpectedProtoEnv, os.Getenv(envProtocol))
@@ -275,9 +287,10 @@ func TestTracesSetupHTTP_DoNotOverrideEnv(t *testing.T) {
 		require.NoError(t, os.Setenv(envProtocol, "foo-proto"))
 		require.NoError(t, os.Setenv(envTracesProtocol, "bar-proto"))
 		_, err := getHTTPTracesEndpointOptions(&TracesConfig{
-			CommonEndpoint: "http://host:3333",
-			Protocol:       "foo",
-			TracesProtocol: "bar",
+			CommonEndpoint:   "http://host:3333",
+			Protocol:         "foo",
+			TracesProtocol:   "bar",
+			Instrumentations: []string{instrumentations.InstrumentationALL},
 		})
 		require.NoError(t, err)
 		assert.Equal(t, "foo-proto", os.Getenv(envProtocol))
@@ -287,8 +300,9 @@ func TestTracesSetupHTTP_DoNotOverrideEnv(t *testing.T) {
 		defer restoreEnvAfterExecution()()
 		require.NoError(t, os.Setenv(envProtocol, "foo-proto"))
 		_, err := getHTTPTracesEndpointOptions(&TracesConfig{
-			CommonEndpoint: "http://host:3333",
-			Protocol:       "foo",
+			CommonEndpoint:   "http://host:3333",
+			Protocol:         "foo",
+			Instrumentations: []string{instrumentations.InstrumentationALL},
 		})
 		require.NoError(t, err)
 		_, ok := os.LookupEnv(envTracesProtocol)
@@ -687,6 +701,7 @@ func TestTraces_InternalInstrumentation(t *testing.T) {
 			CommonEndpoint:    coll.URL,
 			BatchTimeout:      10 * time.Millisecond,
 			ReportersCacheLen: 16,
+			Instrumentations:  []string{instrumentations.InstrumentationALL},
 		},
 		&global.ContextInfo{
 			Metrics: internalTraces,
@@ -785,6 +800,7 @@ func TestTraces_InternalInstrumentationSampling(t *testing.T) {
 			ExportTimeout:     5 * time.Second,
 			Sampler:           Sampler{Name: "always_off"}, // we won't send any trace
 			ReportersCacheLen: 16,
+			Instrumentations:  []string{instrumentations.InstrumentationALL},
 		},
 		&global.ContextInfo{
 			Metrics: internalTraces,
@@ -813,15 +829,15 @@ func TestTraces_InternalInstrumentationSampling(t *testing.T) {
 }
 
 func TestTracesConfig_Enabled(t *testing.T) {
-	assert.True(t, TracesConfig{CommonEndpoint: "foo"}.Enabled())
-	assert.True(t, TracesConfig{TracesEndpoint: "foo"}.Enabled())
-	assert.True(t, TracesConfig{Grafana: &GrafanaOTLP{Submit: []string{"traces", "metrics"}, InstanceID: "33221"}}.Enabled())
+	assert.True(t, (&TracesConfig{CommonEndpoint: "foo"}).Enabled())
+	assert.True(t, (&TracesConfig{TracesEndpoint: "foo"}).Enabled())
+	assert.True(t, (&TracesConfig{Grafana: &GrafanaOTLP{Submit: []string{"traces", "metrics"}, InstanceID: "33221"}}).Enabled())
 }
 
 func TestTracesConfig_Disabled(t *testing.T) {
-	assert.False(t, TracesConfig{}.Enabled())
-	assert.False(t, TracesConfig{Grafana: &GrafanaOTLP{Submit: []string{"metrics"}, InstanceID: "33221"}}.Enabled())
-	assert.False(t, TracesConfig{Grafana: &GrafanaOTLP{Submit: []string{"traces"}}}.Enabled())
+	assert.False(t, (&TracesConfig{}).Enabled())
+	assert.False(t, (&TracesConfig{Grafana: &GrafanaOTLP{Submit: []string{"metrics"}, InstanceID: "33221"}}).Enabled())
+	assert.False(t, (&TracesConfig{Grafana: &GrafanaOTLP{Submit: []string{"traces"}}}).Enabled())
 }
 
 func TestSpanHostPeer(t *testing.T) {
@@ -847,6 +863,88 @@ func TestSpanHostPeer(t *testing.T) {
 
 	assert.Equal(t, "", request.SpanHost(&sp))
 	assert.Equal(t, "", request.SpanPeer(&sp))
+}
+
+func TestTracesInstrumentations(t *testing.T) {
+
+	tests := []InstrTest{
+		{
+			name:     "all instrumentations",
+			instr:    []string{instrumentations.InstrumentationALL},
+			expected: []string{"GET /foo", "PUT", "/grpcFoo", "/grpcGoo", "SELECT credentials", "SET", "GET", "important-topic publish", "important-topic process"},
+		},
+		{
+			name:     "http only",
+			instr:    []string{instrumentations.InstrumentationHTTP},
+			expected: []string{"GET /foo", "PUT"},
+		},
+		{
+			name:     "grpc only",
+			instr:    []string{instrumentations.InstrumentationGRPC},
+			expected: []string{"/grpcFoo", "/grpcGoo"},
+		},
+		{
+			name:     "redis only",
+			instr:    []string{instrumentations.InstrumentationRedis},
+			expected: []string{"SET", "GET"},
+		},
+		{
+			name:     "sql only",
+			instr:    []string{instrumentations.InstrumentationSQL},
+			expected: []string{"SELECT credentials"},
+		},
+		{
+			name:     "kafka only",
+			instr:    []string{instrumentations.InstrumentationKafka},
+			expected: []string{"important-topic publish", "important-topic process"},
+		},
+		{
+			name:     "none",
+			instr:    nil,
+			expected: []string{},
+		},
+		{
+			name:     "sql and redis",
+			instr:    []string{instrumentations.InstrumentationSQL, instrumentations.InstrumentationRedis},
+			expected: []string{"SELECT credentials", "SET", "GET"},
+		},
+		{
+			name:     "kafka and grpc",
+			instr:    []string{instrumentations.InstrumentationGRPC, instrumentations.InstrumentationKafka},
+			expected: []string{"/grpcFoo", "/grpcGoo", "important-topic publish", "important-topic process"},
+		},
+	}
+
+	spans := []request.Span{
+		{ServiceID: svc.ID{UID: "foo"}, Type: request.EventTypeHTTP, Method: "GET", Route: "/foo", RequestStart: 100, End: 200},
+		{ServiceID: svc.ID{UID: "foo"}, Type: request.EventTypeHTTPClient, Method: "PUT", Route: "/bar", RequestStart: 150, End: 175},
+		{ServiceID: svc.ID{UID: "foo"}, Type: request.EventTypeGRPC, Path: "/grpcFoo", RequestStart: 100, End: 200},
+		{ServiceID: svc.ID{UID: "foo"}, Type: request.EventTypeGRPCClient, Path: "/grpcGoo", RequestStart: 150, End: 175},
+		makeSQLRequestSpan("SELECT password FROM credentials WHERE username=\"bill\""),
+		{ServiceID: svc.ID{UID: "foo"}, Type: request.EventTypeRedisClient, Method: "SET", Path: "redis_db", RequestStart: 150, End: 175},
+		{ServiceID: svc.ID{UID: "foo"}, Type: request.EventTypeRedisServer, Method: "GET", Path: "redis_db", RequestStart: 150, End: 175},
+		{Type: request.EventTypeKafkaClient, Method: "process", Path: "important-topic", OtherNamespace: "test"},
+		{Type: request.EventTypeKafkaServer, Method: "publish", Path: "important-topic", OtherNamespace: "test"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tr := makeTracesTestReceiver(tt.instr)
+			traces := generateTracesForSpans(t, tr, spans)
+			assert.Equal(t, len(traces), len(tt.expected), tt.name)
+			for i := 0; i < len(tt.expected); i++ {
+				found := false
+				for j := 0; j < len(traces); j++ {
+					assert.Equal(t, traces[j].ResourceSpans().Len(), 1, tt.name+":"+tt.expected[i])
+					if traces[j].ResourceSpans().At(0).ScopeSpans().At(0).Spans().At(0).Name() == tt.expected[i] {
+						found = true
+						break
+					}
+				}
+				assert.True(t, found, tt.name+":"+tt.expected[i])
+			}
+		})
+	}
 }
 
 type fakeInternalTraces struct {
@@ -1021,4 +1119,32 @@ func ensureTraceStrAttr(t *testing.T, attrs pcommon.Map, key attribute.Key, val 
 func ensureTraceAttrNotExists(t *testing.T, attrs pcommon.Map, key attribute.Key) {
 	_, ok := attrs.Get(string(key))
 	assert.False(t, ok)
+}
+
+func makeTracesTestReceiver(instr []string) *tracesOTELReceiver {
+	return makeTracesReceiver(context.Background(),
+		TracesConfig{
+			CommonEndpoint:    "http://something",
+			BatchTimeout:      10 * time.Millisecond,
+			ReportersCacheLen: 16,
+			Instrumentations:  instr,
+		},
+		&global.ContextInfo{},
+		attributes.Selection{},
+	)
+}
+
+func generateTracesForSpans(t *testing.T, tr *tracesOTELReceiver, spans []request.Span) []ptrace.Traces {
+	res := []ptrace.Traces{}
+	traceAttrs, err := GetUserSelectedAttributes(tr.attributes)
+	assert.NoError(t, err)
+	for i := range spans {
+		span := &spans[i]
+		if span.IgnoreSpan == request.IgnoreTraces || !tr.acceptSpan(span) {
+			continue
+		}
+		res = append(res, GenerateTraces(span, traceAttrs))
+	}
+
+	return res
 }

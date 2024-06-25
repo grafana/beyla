@@ -13,6 +13,7 @@ import (
 	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
 	"github.com/grafana/beyla/pkg/internal/export/attributes"
 	"github.com/grafana/beyla/pkg/internal/export/debug"
+	"github.com/grafana/beyla/pkg/internal/export/instrumentations"
 	"github.com/grafana/beyla/pkg/internal/export/otel"
 	"github.com/grafana/beyla/pkg/internal/export/prom"
 	"github.com/grafana/beyla/pkg/internal/filter"
@@ -65,7 +66,10 @@ var DefaultConfig = Config{
 		ReportersCacheLen:    ReporterLRUSize,
 		HistogramAggregation: otel.AggregationExplicit,
 		Features:             []string{otel.FeatureNetwork, otel.FeatureApplication},
-		TTL:                  defaultMetricsTTL,
+		Instrumentations: []string{
+			instrumentations.InstrumentationALL,
+		},
+		TTL: defaultMetricsTTL,
 	},
 	Traces: otel.TracesConfig{
 		Protocol:           otel.ProtocolUnset,
@@ -73,11 +77,17 @@ var DefaultConfig = Config{
 		MaxQueueSize:       4096,
 		MaxExportBatchSize: 4096,
 		ReportersCacheLen:  ReporterLRUSize,
+		Instrumentations: []string{
+			instrumentations.InstrumentationALL,
+		},
 	},
 	Prometheus: prom.PrometheusConfig{
-		Path:                        "/metrics",
-		Buckets:                     otel.DefaultBuckets,
-		Features:                    []string{otel.FeatureNetwork, otel.FeatureApplication},
+		Path:     "/metrics",
+		Buckets:  otel.DefaultBuckets,
+		Features: []string{otel.FeatureNetwork, otel.FeatureApplication},
+		Instrumentations: []string{
+			instrumentations.InstrumentationALL,
+		},
 		TTL:                         defaultMetricsTTL,
 		SpanMetricsServiceCacheSize: 10000,
 	},

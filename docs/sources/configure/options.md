@@ -812,7 +812,7 @@ The purpose of this value is to avoid reporting indefinitely finished applicatio
 |------------|-------------------------------|-----------------|------------------------------|
 | `features` | `BEYLA_OTEL_METRICS_FEATURES` | list of strings | `["application", "network"]` |
 
-A list of metric groups that are allowed to be exported. Each group belongs to a different feature
+A list of metric groups which are allowed to be exported. Each group belongs to a different feature
 of Beyla: application-level metrics or network metrics.
 
 - If the list contains `application`, the Beyla OpenTelemetry exporter exports application-level metrics;
@@ -834,6 +834,24 @@ of Beyla: application-level metrics or network metrics.
 Usually you do not need to change this configuration option, unless, for example, a Beyla instance
 instruments both network and applications, and you want to disable application-level metrics because
 you only care about application traces, but still want Beyla to send network metrics.
+
+| YAML               | Environment variable                  | Type            | Default                      |
+|--------------------|---------------------------------------|-----------------|------------------------------|
+| `instrumentations` | `BEYLA_OTEL_METRICS_INSTRUMENTATIONS` | list of strings | `["*"]` |
+
+A list of available **instrumentations** which are enabled, defined a comma separated list of strings. 
+By default all available **instrumentations** are enabled, and you can choose to enable only some. 
+The available **instrumentations** are as follows:
+
+- `*` enables all **instrumentations**. If `*` is present in the list, the other values are simply ignored.
+- `http` enables the collection of HTTP/HTTPS/HTTP2 application metrics.
+- `grpc` enables the collection of gRPC application metrics.
+- `sql` enables the collection of SQL database client call metrics.
+- `redis` enables the collection of Redis client/server database metrics.
+- `kafka` enables the collection of Kafka client/server message queue metrics.
+
+For example, setting the `instrumentations` option to: `http,grpc` enables the collection of HTTP/HTTPS/HTTP2 and
+gRPC application metrics, while the rest of the **instrumentations** are be disabled.
 
 | YAML      | Environment variable | Type   |
 | --------- | ------- | ------ |
@@ -938,6 +956,24 @@ According to the OpenTelemetry standard, if you set the endpoint via the `OTEL_E
 the OpenTelemetry exporter will automatically add the `/v1/traces` path to the URL. If you want to avoid this
 addition, you can use either the `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` environment variable or the `environment` YAML
 property to use exactly the provided URL without any addition.
+
+| YAML               | Environment variable                  | Type            | Default                      |
+|--------------------|---------------------------------------|-----------------|------------------------------|
+| `instrumentations` | `BEYLA_PROMETHEUS_INSTRUMENTATIONS`   | list of strings | `["*"]` |
+
+A list of available **instrumentations** which are enabled, defined a comma separated list of strings. 
+By default all available **instrumentations** are enabled, and you can choose to enable only some. 
+The available **instrumentations** are as follows:
+
+- `*` enables all **instrumentations**. If `*` is present in the list, the other values are simply ignored.
+- `http` enables the collection of HTTP/HTTPS/HTTP2 application traces.
+- `grpc` enables the collection of gRPC application traces.
+- `sql` enables the collection of SQL database client call traces.
+- `redis` enables the collection of Redis client/server database traces.
+- `kafka` enables the collection of Kafka client/server message queue traces.
+
+For example, setting the `instrumentations` option to: `http,grpc` enables the collection of HTTP/HTTPS/HTTP2 and
+gRPC application traces, while the rest of the **instrumentations** are be disabled.
 
 | YAML       | Environment variable                                                                   | Type   | Default   |
 | ---------- | ------------------------------------------------------------------------- | ------ | --------- |
@@ -1177,6 +1213,24 @@ of Beyla: application-level metrics or network metrics.
 Usually you do not need to change this configuration option, unless, for example, a Beyla instance
 instruments both network and applications, and you want to disable application-level metrics because
 you only care about application traces, but still want Beyla to send network metrics.
+
+| YAML               | Environment variable                  | Type            | Default                      |
+|--------------------|---------------------------------------|-----------------|------------------------------|
+| `instrumentations` | `BEYLA_PROMETHEUS_INSTRUMENTATIONS`   | list of strings | `["*"]` |
+
+A list of available **instrumentations** which are enabled, defined a comma separated list of strings. 
+By default all available **instrumentations** are enabled, and you can choose to enable only some. 
+The available **instrumentations** are as follows:
+
+- `*` enables all **instrumentations**. If `*` is present in the list, the other values are simply ignored.
+- `http` enables the collection of HTTP/HTTPS/HTTP2 application metrics.
+- `grpc` enables the collection of gRPC application metrics.
+- `sql` enables the collection of SQL database client call metrics.
+- `redis` enables the collection of Redis client/server database metrics.
+- `kafka` enables the collection of Kafka client/server message queue metrics.
+
+For example, setting the `instrumentations` option to: `http,grpc` enables the collection of HTTP/HTTPS/HTTP2 and
+gRPC application metrics, while the rest of the **instrumentations** are be disabled.
 
 ## Internal metrics reporter
 

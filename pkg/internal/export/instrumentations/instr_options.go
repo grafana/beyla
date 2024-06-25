@@ -1,8 +1,6 @@
 package instrumentations
 
-type Instrumentation string
-
-type InstrumentationSelection map[Instrumentation]bool
+type InstrumentationSelection uint64
 
 const (
 	InstrumentationALL   = "*"
@@ -13,37 +11,56 @@ const (
 	InstrumentationKafka = "kafka"
 )
 
+const (
+	flagAll  = 0xFFFFFFFF_FFFFFFFF
+	flagHTTP = InstrumentationSelection(1 << iota)
+	flagGRPC
+	flagSQL
+	flagRedis
+	flagKafka
+)
+
+func strToFlag(str string) InstrumentationSelection {
+	switch str {
+	case InstrumentationALL:
+		return flagAll
+	case InstrumentationHTTP:
+		return flagHTTP
+	case InstrumentationGRPC:
+		return flagGRPC
+	case InstrumentationSQL:
+		return flagSQL
+	case InstrumentationRedis:
+		return flagRedis
+	case InstrumentationKafka:
+		return flagKafka
+	}
+	return 0
+}
+
 func NewInstrumentationSelection(instrumentations []string) InstrumentationSelection {
-	selection := InstrumentationSelection{}
+	selection := InstrumentationSelection(0)
 	for _, i := range instrumentations {
-		selection[Instrumentation(i)] = true
+		selection |= strToFlag(i)
 	}
 
 	return selection
 }
 
-func (s InstrumentationSelection) instrumentationEnabled(i Instrumentation) bool {
-	_, ok := s[i]
-	if !ok {
-		_, ok = s[InstrumentationALL]
-	}
-	return ok
-}
-
 func (s InstrumentationSelection) HTTPEnabled() bool {
-	return s.instrumentationEnabled(InstrumentationHTTP)
+	return s&flagHTTP != 0
 }
 
 func (s InstrumentationSelection) GRPCEnabled() bool {
-	return s.instrumentationEnabled(InstrumentationGRPC)
+	return s&flagGRPC != 0
 }
 
 func (s InstrumentationSelection) SQLEnabled() bool {
-	return s.instrumentationEnabled(InstrumentationSQL)
+	return s&flagSQL != 0
 }
 
 func (s InstrumentationSelection) RedisEnabled() bool {
-	return s.instrumentationEnabled(InstrumentationRedis)
+	return s&flagRedis != 0
 }
 
 func (s InstrumentationSelection) DBEnabled() bool {
@@ -51,7 +68,7 @@ func (s InstrumentationSelection) DBEnabled() bool {
 }
 
 func (s InstrumentationSelection) KafkaEnabled() bool {
-	return s.instrumentationEnabled(InstrumentationKafka)
+	return s&flagKafka != 0
 }
 
 func (s InstrumentationSelection) MQEnabled() bool {

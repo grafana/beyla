@@ -4,9 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"math"
-	"sync"
-	"sync/atomic"
 	"time"
 
 	"go.opentelemetry.io/otel/attribute"
@@ -22,19 +19,8 @@ func plog() *slog.Logger {
 	return slog.With("component", "otel.Expirer")
 }
 
-// dataPoint implements a metric value of a given type,
-// for a set of attributes
-// Example of implementers: FloatVal and IntCounter
-type dataPoint[T any] interface {
-	// Load the current value for a given set of attributes
-	Load() T
-	// Attributes return the attributes of the current dataPoint
-	Attributes() attribute.Set
-}
-
-// observer records measurements for a given metric type
-type observer[T any] interface {
-	Observe(T, ...metric.ObserveOption)
+type removableMetric[VT any] interface {
+	Remove(context.Context, ...metric.RemoveOption)
 }
 
 // Expirer drops metrics from labels that haven't been updated during a given timeout.
@@ -43,11 +29,16 @@ type observer[T any] interface {
 // Record: type of the record that holds the metric data request.Span, ebpf.Record, process.Status...
 // Metric: type of the dataPoint kind: IntCounter, FloatVal...
 // VT: type of the value inside the datapoint: int, float64...
-type Expirer[Record any, OT observer[VT], Metric dataPoint[VT], VT any] struct {
-	instancer func(set attribute.Set) Metric
-	attrs     []attributes.Field[Record, attribute.KeyValue]
-	entries   *expire.ExpiryMap[Metric]
-	log       *slog.Logger
+type Expirer[Record any, Metric removableMetric[ValType], ValType any] struct {
+	ctx     context.Context
+	attrs   []attributes.Field[Record, attribute.KeyValue]
+	metric  Metric
+	entries *expire.ExpiryMap[attribute.Set]
+	log     *slog.Logger
+
+	clock          expire.Clock
+	lastExpiration time.Time
+	ttl            time.Duration
 }
 
 // NewExpirer creates an expirer that wraps data points of a given type. Its labeled instances are dropped
@@ -57,18 +48,23 @@ type Expirer[Record any, OT observer[VT], Metric dataPoint[VT], VT any] struct {
 // - attrs: attributes for that given data point
 // - clock: function that provides the current time
 // - ttl: time to live of the datapoints whose attribute sets haven't been updated
-func NewExpirer[Record any, OT observer[VT], Metric dataPoint[VT], VT any](
-	instancer func(set attribute.Set) Metric,
+func NewExpirer[Record any, Metric removableMetric[ValType], ValType any](
+	ctx context.Context,
+	metric Metric,
 	attrs []attributes.Field[Record, attribute.KeyValue],
 	clock expire.Clock,
 	ttl time.Duration,
-) *Expirer[Record, OT, Metric, VT] {
-	exp := Expirer[Record, OT, Metric, VT]{
-		instancer: instancer,
-		attrs:     attrs,
-		entries:   expire.NewExpiryMap[Metric](clock, ttl),
+) *Expirer[Record, Metric, ValType] {
+	exp := Expirer[Record, Metric, ValType]{
+		ctx:            ctx,
+		metric:         metric,
+		attrs:          attrs,
+		entries:        expire.NewExpiryMap[attribute.Set](clock, ttl),
+		log:            plog().With("type", fmt.Sprintf("%T", metric)),
+		clock:          clock,
+		lastExpiration: clock(),
+		ttl:            ttl,
 	}
-	exp.log = plog().With("type", fmt.Sprintf("%T", exp))
 	return &exp
 }
 
@@ -76,27 +72,22 @@ func NewExpirer[Record any, OT observer[VT], Metric dataPoint[VT], VT any](
 // s accessed for the first time, a new data point is created.
 // If not, a cached copy is returned and the "last access" cache time is updated.
 // Extra attributes can be explicitly added (e.g. process_cpu_state="wait")
-func (ex *Expirer[Record, OT, Metric, VT]) ForRecord(r Record, extraAttrs ...attribute.KeyValue) Metric {
+func (ex *Expirer[Record, Metric, ValType]) ForRecord(r Record, extraAttrs ...attribute.KeyValue) (Metric, attribute.Set) {
+	// to save resources, metrics expiration is triggered each TTL. This means that an expired
+	// metric might stay visible after 2*TTL time after not being updated
+	now := ex.clock()
+	if now.Sub(ex.lastExpiration) >= ex.ttl {
+		ex.removeOutdated(ex.ctx)
+		ex.lastExpiration = now
+	}
 	recordAttrs, attrValues := ex.recordAttributes(r, extraAttrs...)
-	return ex.entries.GetOrCreate(attrValues, func() Metric {
+	return ex.metric, ex.entries.GetOrCreate(attrValues, func() attribute.Set {
 		ex.log.With("labelValues", attrValues).Debug("storing new metric label set")
-		return ex.instancer(recordAttrs)
+		return recordAttrs
 	})
 }
 
-func (ex *Expirer[Record, OT, Metric, VT]) Collect(_ context.Context, observer OT) error {
-	if old := ex.entries.DeleteExpired(); len(old) > 0 {
-		ex.log.With("labelValues", old).Debug("deleting old OTEL metric")
-	}
-
-	for _, v := range ex.entries.All() {
-		observer.Observe(v.Load(), metric.WithAttributeSet(v.Attributes()))
-	}
-
-	return nil
-}
-
-func (ex *Expirer[Record, OT, Metric, VT]) recordAttributes(m Record, extraAttrs ...attribute.KeyValue) (attribute.Set, []string) {
+func (ex *Expirer[Record, Metric, ValType]) recordAttributes(m Record, extraAttrs ...attribute.KeyValue) (attribute.Set, []string) {
 	keyVals := make([]attribute.KeyValue, 0, len(ex.attrs)+len(extraAttrs))
 	vals := make([]string, 0, len(ex.attrs)+len(extraAttrs))
 
@@ -113,88 +104,32 @@ func (ex *Expirer[Record, OT, Metric, VT]) recordAttributes(m Record, extraAttrs
 	return attribute.NewSet(keyVals...), vals
 }
 
-type metricAttributes struct {
-	attributes attribute.Set
+func (ex *Expirer[Record, Metric, ValType]) removeOutdated(ctx context.Context) {
+	for _, attrs := range ex.entries.DeleteExpired() {
+		ex.deleteMetricInstance(ctx, attrs)
+	}
 }
 
-func (g *metricAttributes) Attributes() attribute.Set {
-	return g.attributes
+func (ex *Expirer[Record, Metric, ValType]) deleteMetricInstance(ctx context.Context, attrs attribute.Set) {
+	if ex.log.Enabled(ex.ctx, slog.LevelDebug) {
+		ex.logger(attrs).Debug("deleting old OTEL metric")
+	}
+	ex.metric.Remove(ctx, metric.WithAttributeSet(attrs))
 }
 
-// IntCounter data point type
-type IntCounter struct {
-	metricAttributes
-	val atomic.Int64
+func (ex *Expirer[Record, Metric, ValType]) logger(attrs attribute.Set) *slog.Logger {
+	fmtAttrs := make([]any, 0, attrs.Len()*2)
+	for it := attrs.Iter(); it.Next(); {
+		a := it.Attribute()
+		fmtAttrs = append(fmtAttrs, string(a.Key), a.Value.Emit())
+	}
+	return ex.log.With(fmtAttrs...)
 }
 
-func NewIntCounter(attributes attribute.Set) *IntCounter {
-	return &IntCounter{metricAttributes: metricAttributes{attributes: attributes}}
-}
-func (g *IntCounter) Load() int64 {
-	return g.val.Load()
-}
-
-func (g *IntCounter) Add(v int64) {
-	g.val.Add(v)
-}
-
-// FloatCounter is a Counter metric for float64 values
-type FloatCounter struct {
-	metricAttributes
-	mt  sync.RWMutex
-	val float64
-}
-
-func NewFloatCounter(attributes attribute.Set) *FloatCounter {
-	return &FloatCounter{metricAttributes: metricAttributes{attributes: attributes}}
-}
-
-func (g *FloatCounter) Load() float64 {
-	g.mt.RLock()
-	defer g.mt.RUnlock()
-	return g.val
-}
-
-func (g *FloatCounter) Add(v float64) {
-	g.mt.Lock()
-	defer g.mt.Unlock()
-	g.val += v
-}
-
-// Gauge data point type
-type Gauge struct {
-	metricAttributes
-	// Go standard library does not provide atomic packages so we need to
-	// store the float as bytes and then convert it with the math package
-	floatBits uint64
-}
-
-func NewGauge(attributes attribute.Set) *Gauge {
-	return &Gauge{metricAttributes: metricAttributes{attributes: attributes}}
-}
-
-func (g *Gauge) Load() float64 {
-	return math.Float64frombits(atomic.LoadUint64(&g.floatBits))
-}
-
-func (g *Gauge) Set(val float64) {
-	atomic.StoreUint64(&g.floatBits, math.Float64bits(val))
-}
-
-// IntGauge is a gauge whose values are integers
-type IntGauge struct {
-	metricAttributes
-	val atomic.Int64
-}
-
-func NewIntGauge(attributes attribute.Set) *IntGauge {
-	return &IntGauge{metricAttributes: metricAttributes{attributes: attributes}}
-}
-
-func (g *IntGauge) Load() int64 {
-	return g.val.Load()
-}
-
-func (g *IntGauge) Set(v int64) {
-	g.val.Store(v)
+// RemoveAllMetrics is explicitly invoked when the metrics reporter of a given service
+// instance needs to be shut down
+func (ex *Expirer[Record, Metric, ValType]) RemoveAllMetrics(ctx context.Context) {
+	for _, attrs := range ex.entries.DeleteAll() {
+		ex.deleteMetricInstance(ctx, attrs)
+	}
 }

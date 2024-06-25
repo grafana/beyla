@@ -13,10 +13,12 @@ import (
 
 	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
 	"github.com/grafana/beyla/pkg/internal/export/attributes"
+	"github.com/grafana/beyla/pkg/internal/export/instrumentations"
 	"github.com/grafana/beyla/pkg/internal/export/otel"
 	"github.com/grafana/beyla/pkg/internal/export/prom"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/infraolly/process"
+	"github.com/grafana/beyla/pkg/internal/kube"
 	"github.com/grafana/beyla/pkg/internal/netolly/transform/cidr"
 	"github.com/grafana/beyla/pkg/internal/traces"
 	"github.com/grafana/beyla/pkg/transform"
@@ -118,7 +120,10 @@ network:
 				DurationHistogram:    []float64{0, 1, 2},
 				RequestSizeHistogram: otel.DefaultBuckets.RequestSizeHistogram,
 			},
-			Features:             []string{"network", "application"},
+			Features: []string{"network", "application"},
+			Instrumentations: []string{
+				instrumentations.InstrumentationALL,
+			},
 			HistogramAggregation: "base2_exponential_bucket_histogram",
 			TTL:                  defaultMetricsTTL,
 		},
@@ -129,10 +134,16 @@ network:
 			MaxQueueSize:       4096,
 			MaxExportBatchSize: 4096,
 			ReportersCacheLen:  ReporterLRUSize,
+			Instrumentations: []string{
+				instrumentations.InstrumentationALL,
+			},
 		},
 		Prometheus: prom.PrometheusConfig{
-			Path:                        "/metrics",
-			Features:                    []string{otel.FeatureNetwork, otel.FeatureApplication},
+			Path:     "/metrics",
+			Features: []string{otel.FeatureNetwork, otel.FeatureApplication},
+			Instrumentations: []string{
+				instrumentations.InstrumentationALL,
+			},
 			TTL:                         time.Second,
 			SpanMetricsServiceCacheSize: 10000,
 			Buckets: otel.Buckets{
@@ -151,7 +162,7 @@ network:
 			},
 			Kubernetes: transform.KubernetesDecorator{
 				KubeconfigPath:       "/foo/bar",
-				Enable:               transform.EnabledTrue,
+				Enable:               kube.EnabledTrue,
 				InformersSyncTimeout: 30 * time.Second,
 			},
 			Select: attributes.Selection{

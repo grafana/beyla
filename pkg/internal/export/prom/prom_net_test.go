@@ -73,8 +73,9 @@ func TestMetricsExpiration(t *testing.T) {
 	// THEN THE metrics that have been received during the timeout period are still visible
 	var exported string
 	test.Eventually(t, timeout, func(t require.TestingT) {
-		exported = getMetrics(t, promURL)
+		m := getMetrics(t, promURL)
 		assert.Contains(t, exported, `beyla_network_flow_bytes_total{dst_name="bar",src_name="foo"} 246`)
+		exported = m
 	})
 	// BUT not the metrics that haven't been received during that time
 	assert.NotContains(t, exported, `beyla_network_flow_bytes_total{dst_name="bae",src_name="baz"}`)
@@ -89,8 +90,9 @@ func TestMetricsExpiration(t *testing.T) {
 
 	// THEN they are reported again, starting from zero in the case of counters
 	test.Eventually(t, timeout, func(t require.TestingT) {
-		exported = getMetrics(t, promURL)
+		m := getMetrics(t, promURL)
 		assert.Contains(t, exported, `beyla_network_flow_bytes_total{dst_name="bae",src_name="baz"} 456`)
+		exported = m
 	})
 	assert.NotContains(t, exported, `beyla_network_flow_bytes_total{dst_name="bar",src_name="foo"}`)
 }

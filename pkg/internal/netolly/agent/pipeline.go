@@ -121,7 +121,7 @@ func (f *Flows) pipelineBuilder(ctx context.Context) (*pipe.Builder[*FlowsPipeli
 		return cidr.DecoratorProvider(f.cfg.NetworkFlows.CIDRs)
 	})
 	pipe.AddMiddleProvider(pb, kube, func() (pipe.MiddleFunc[[]*ebpf.Record, []*ebpf.Record], error) {
-		return k8s.MetadataDecoratorProvider(ctx, &f.cfg.Attributes.Kubernetes)
+		return k8s.MetadataDecoratorProvider(ctx, &f.cfg.Attributes.Kubernetes, f.ctxInfo.K8sInformer)
 	})
 	pipe.AddMiddleProvider(pb, rdns, func() (pipe.MiddleFunc[[]*ebpf.Record, []*ebpf.Record], error) {
 		return flow.ReverseDNSProvider(&f.cfg.NetworkFlows.ReverseDNS)
@@ -133,7 +133,7 @@ func (f *Flows) pipelineBuilder(ctx context.Context) (*pipe.Builder[*FlowsPipeli
 	// whether each node is going to be instantiated or just ignored.
 	f.cfg.Attributes.Select.Normalize()
 	pipe.AddFinalProvider(pb, otelExport, func() (pipe.FinalFunc[[]*ebpf.Record], error) {
-		return otel.NetMetricsExporterProvider(f.ctxInfo, &otel.NetMetricsConfig{
+		return otel.NetMetricsExporterProvider(ctx, f.ctxInfo, &otel.NetMetricsConfig{
 			Metrics:            &f.cfg.Metrics,
 			AttributeSelectors: f.cfg.Attributes.Select,
 		})

@@ -79,6 +79,8 @@ func (p *Tracer) Constants(_ *exec.FileInfo, offsets *goexec.Offsets) map[string
 		"conn_fd_pos",
 		"fd_laddr_pos",
 		"fd_raddr_pos",
+		"tcp_addr_port_ptr_pos",
+		"tcp_addr_ip_ptr_pos",
 	} {
 		constants[s] = offsets.Field[s]
 	}

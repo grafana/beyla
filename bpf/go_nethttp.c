@@ -277,6 +277,8 @@ int uprobe_ServeHTTPReturns(struct pt_regs *ctx) {
         }
     }
 
+    // Server connections have opposite order, source port is the server port
+    swap_connection_info_order(&trace->conn);
     trace->tp = invocation->tp;
     trace->content_length = invocation->content_length;
     __builtin_memcpy(trace->method, invocation->method, sizeof(trace->method));
@@ -607,7 +609,7 @@ int uprobe_http2FramerWriteHeaders(struct pt_regs *ctx) {
     void *framer = GO_PARAM1(ctx);
     u64 stream_id = (u64)GO_PARAM2(ctx);
 
-    bpf_printk("framer=%llx, stream_id=%lld", framer, ((u64)stream_id));
+    bpf_dbg_printk("framer=%llx, stream_id=%lld", framer, ((u64)stream_id));
 
     u32 stream_lookup = (u32)stream_id;
 
@@ -822,8 +824,12 @@ int uprobe_persistConnRoundTrip(struct pt_regs *ctx) {
                 tp_clone(&tp_p.tp, &invocation->tp);
                 tp_p.tp.ts = bpf_ktime_get_ns();
                 bpf_dbg_printk("storing trace_map info for black-box tracing");
-                bpf_map_update_elem(&trace_map, &conn, &tp_p, BPF_ANY);
                 bpf_map_update_elem(&ongoing_client_connections, &goroutine_addr, &conn, BPF_ANY);
+
+                // Must sort the connection info, this map is shared with kprobes which use sorted connection
+                // info always.
+                sort_connection_info(&conn);
+                bpf_map_update_elem(&trace_map, &conn, &tp_p, BPF_ANY);
             }
         }
     }

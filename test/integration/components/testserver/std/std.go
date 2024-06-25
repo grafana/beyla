@@ -2,9 +2,12 @@ package std
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
+	"os"
 	"strconv"
 	"time"
 
@@ -31,6 +34,11 @@ func HTTPHandler(log *slog.Logger, echoPort int) http.HandlerFunc {
 
 		if req.RequestURI == "/echoCall" {
 			echoCall(rw)
+			return
+		}
+
+		if req.RequestURI == "/echoLowPort" {
+			echoLowPort(rw)
 			return
 		}
 
@@ -95,6 +103,32 @@ func echo(rw http.ResponseWriter, port int) {
 	slog.Debug("calling", "url", requestURL)
 
 	res, err := http.Get(requestURL)
+	if err != nil {
+		slog.Error("error making http request", err)
+		rw.WriteHeader(500)
+		return
+	}
+
+	defer res.Body.Close()
+	rw.WriteHeader(res.StatusCode)
+}
+
+var addrLowPort = net.TCPAddr{Port: 7000}
+var transport = &http.Transport{
+	TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	DialContext: (&net.Dialer{
+		LocalAddr: &addrLowPort,
+	}).DialContext,
+}
+var httpClient = &http.Client{Transport: transport}
+
+func echoLowPort(rw http.ResponseWriter) {
+
+	requestURL := os.Getenv("TARGET_URL")
+
+	slog.Debug("calling", "url", requestURL)
+
+	res, err := httpClient.Get(requestURL)
 	if err != nil {
 		slog.Error("error making http request", err)
 		rw.WriteHeader(500)

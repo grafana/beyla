@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/go-logr/logr"
 	"github.com/hashicorp/golang-lru/v2/simplelru"
@@ -20,6 +21,7 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 	"google.golang.org/grpc/credentials"
 
+	"github.com/grafana/beyla/pkg/internal/export/expire"
 	"github.com/grafana/beyla/pkg/internal/svc"
 )
 
@@ -83,14 +85,25 @@ func getResourceAttrs(service *svc.ID) *resource.Resource {
 }
 
 // ReporterPool keeps an LRU cache of different OTEL reporters given a service name.
-// TODO: evict reporters after a time without being accessed
 type ReporterPool[T any] struct {
-	pool *simplelru.LRU[svc.UID, T]
+	pool *simplelru.LRU[svc.UID, *expirable[T]]
 
 	itemConstructor func(*svc.ID) (T, error)
 
-	lastReporter T
+	lastReporter *expirable[T]
 	lastService  *svc.ID
+
+	// TODO: use cacheable clock for efficiency
+	clock          expire.Clock
+	ttl            time.Duration
+	lastExpiration time.Time
+}
+
+// expirable.NewLRU implementation is pretty undeterministic, so
+// we implement our own expiration mechanism on top of simplelru.LRU
+type expirable[T any] struct {
+	lastAccess time.Time
+	value      T
 }
 
 // NewReporterPool creates a ReporterPool instance given a cache length,
@@ -99,20 +112,29 @@ type ReporterPool[T any] struct {
 // instantiate the generic OTEL metrics/traces reporter.
 func NewReporterPool[T any](
 	cacheLen int,
-	callback simplelru.EvictCallback[svc.UID, T],
+	ttl time.Duration,
+	clock expire.Clock,
+	callback simplelru.EvictCallback[svc.UID, *expirable[T]],
 	itemConstructor func(id *svc.ID) (T, error),
 ) ReporterPool[T] {
-	pool, err := simplelru.NewLRU[svc.UID, T](cacheLen, callback)
+	pool, err := simplelru.NewLRU[svc.UID, *expirable[T]](cacheLen, callback)
 	if err != nil {
 		// should never happen: bug!
 		panic(err)
 	}
-	return ReporterPool[T]{pool: pool, itemConstructor: itemConstructor}
+	return ReporterPool[T]{
+		pool:            pool,
+		itemConstructor: itemConstructor,
+		ttl:             ttl,
+		clock:           clock,
+		lastExpiration:  clock(),
+	}
 }
 
 // For retrieves the associated item for the given service name, or
 // creates a new one if it does not exist
 func (rp *ReporterPool[T]) For(service *svc.ID) (T, error) {
+	rp.expireOldReporters()
 	// optimization: do not query the resources' cache if the
 	// previously processed span belongs to the same service name
 	// as the current.
@@ -129,26 +151,50 @@ func (rp *ReporterPool[T]) For(service *svc.ID) (T, error) {
 		rp.lastService = service
 		rp.lastReporter = lm
 	}
-	return rp.lastReporter, nil
+	// we need to update the last access for that reporter, to avoid it
+	// being expired after the TTL
+	rp.lastReporter.lastAccess = rp.clock()
+	return rp.lastReporter.value, nil
 }
 
-func (rp *ReporterPool[T]) get(service *svc.ID) (T, error) {
-	if m, ok := rp.pool.Get(service.UID); ok {
-		return m, nil
+// expireOldReporters will remove the metrics reporters that haven't been accessed
+// during the last TTL period
+func (rp *ReporterPool[T]) expireOldReporters() {
+	now := rp.clock()
+	if now.Sub(rp.lastExpiration) < rp.ttl {
+		return
+	}
+	rp.lastExpiration = now
+	for {
+		_, v, ok := rp.pool.GetOldest()
+		if !ok || now.Sub(v.lastAccess) < rp.ttl {
+			return
+		}
+		rp.pool.RemoveOldest()
+	}
+}
+
+func (rp *ReporterPool[T]) get(service *svc.ID) (*expirable[T], error) {
+	if e, ok := rp.pool.Get(service.UID); ok {
+		return e, nil
 	}
 	m, err := rp.itemConstructor(service)
 	if err != nil {
-		var t T
-		return t, fmt.Errorf("creating resource for service %q: %w", service, err)
+		return nil, fmt.Errorf("creating resource for service %q: %w", service, err)
 	}
-	rp.pool.Add(service.UID, m)
-	return m, nil
+	e := &expirable[T]{value: m}
+	rp.pool.Add(service.UID, e)
+	return e, nil
 }
 
 // Intermediate representation of option functions suitable for testing
 type otlpOptions struct {
-	Endpoint      string
-	Insecure      bool
+	Scheme   string
+	Endpoint string
+	Insecure bool
+	// BaseURLPath, only for traces export, excludes the /v1/traces suffix.
+	// E.g. for a URLPath == "/otlp/v1/traces", BaseURLPath will be = "/otlp"
+	BaseURLPath   string
 	URLPath       string
 	SkipTLSVerify bool
 	HTTPHeaders   map[string]string

@@ -17,9 +17,11 @@ import (
 	"github.com/grafana/beyla/pkg/beyla"
 	"github.com/grafana/beyla/pkg/internal/export/attributes"
 	attr "github.com/grafana/beyla/pkg/internal/export/attributes/names"
+	"github.com/grafana/beyla/pkg/internal/export/instrumentations"
 	"github.com/grafana/beyla/pkg/internal/export/otel"
 	"github.com/grafana/beyla/pkg/internal/filter"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
+	"github.com/grafana/beyla/pkg/internal/kube"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/pkg/internal/request"
 	"github.com/grafana/beyla/pkg/internal/svc"
@@ -35,6 +37,7 @@ func gctx(groups attributes.AttrGroups) *global.ContextInfo {
 	return &global.ContextInfo{
 		Metrics:               imetrics.NoopReporter{},
 		MetricAttributeGroups: groups,
+		K8sInformer:           kube.NewMetadataProvider(kube.EnabledFalse, "", 0),
 	}
 }
 
@@ -63,6 +66,10 @@ func TestBasicPipeline(t *testing.T) {
 			Features:        []string{otel.FeatureApplication},
 			MetricsEndpoint: tc.ServerEndpoint, Interval: 10 * time.Millisecond,
 			ReportersCacheLen: 16,
+			TTL:               5 * time.Minute,
+			Instrumentations: []string{
+				instrumentations.InstrumentationALL,
+			},
 		},
 		Attributes: beyla.Attributes{Select: allMetrics},
 	}, gctx(0), make(<-chan []request.Span))
@@ -70,7 +77,7 @@ func TestBasicPipeline(t *testing.T) {
 	// Override eBPF tracer to send some fake data
 	pipe.AddStart(gb.builder, tracesReader,
 		func(out chan<- []request.Span) {
-			out <- newRequest("foo-svc", 1, "GET", "/foo/bar", "1.1.1.1:3456", 404)
+			out <- newRequest("foo-svc", "GET", "/foo/bar", "1.1.1.1:3456", 404)
 			// closing prematurely the input node would finish the whole graph processing
 			// and OTEL exporters could be closed, so we wait.
 			time.Sleep(testTimeout)
@@ -81,7 +88,7 @@ func TestBasicPipeline(t *testing.T) {
 
 	go pipe.Run(ctx)
 
-	event := testutil.ReadChannel(t, tc.Records, testTimeout)
+	event := testutil.ReadChannel(t, tc.Records(), testTimeout)
 	assert.NotEmpty(t, event.ResourceAttributes, string(semconv.ServiceInstanceIDKey))
 	delete(event.ResourceAttributes, string(semconv.ServiceInstanceIDKey))
 	assert.Equal(t, collector.MetricRecord{
@@ -99,7 +106,8 @@ func TestBasicPipeline(t *testing.T) {
 			string(semconv.TelemetrySDKLanguageKey): "go",
 			string(semconv.TelemetrySDKNameKey):     "beyla",
 		},
-		Type: pmetric.MetricTypeHistogram,
+		Type:     pmetric.MetricTypeHistogram,
+		FloatVal: 2 / float64(time.Second),
 	}, event)
 
 }
@@ -116,12 +124,13 @@ func TestTracerPipeline(t *testing.T) {
 			BatchTimeout:      10 * time.Millisecond,
 			TracesEndpoint:    tc.ServerEndpoint,
 			ReportersCacheLen: 16,
+			Instrumentations:  []string{instrumentations.InstrumentationALL},
 		},
 	}, gctx(0), make(<-chan []request.Span))
 	// Override eBPF tracer to send some fake data
 	pipe.AddStart(gb.builder, tracesReader,
 		func(out chan<- []request.Span) {
-			out <- newRequest("bar-svc", 1, "GET", "/foo/bar", "1.1.1.1:3456", 404)
+			out <- newRequest("bar-svc", "GET", "/foo/bar", "1.1.1.1:3456", 404)
 			// closing prematurely the input node would finish the whole graph processing
 			// and OTEL exporters could be closed, so we wait.
 			time.Sleep(testTimeout)
@@ -132,11 +141,11 @@ func TestTracerPipeline(t *testing.T) {
 
 	go pipe.Run(ctx)
 
-	event := testutil.ReadChannel(t, tc.TraceRecords, testTimeout)
+	event := testutil.ReadChannel(t, tc.TraceRecords(), testTimeout)
 	matchInnerTraceEvent(t, "in queue", event)
-	event = testutil.ReadChannel(t, tc.TraceRecords, testTimeout)
+	event = testutil.ReadChannel(t, tc.TraceRecords(), testTimeout)
 	matchInnerTraceEvent(t, "processing", event)
-	event = testutil.ReadChannel(t, tc.TraceRecords, testTimeout)
+	event = testutil.ReadChannel(t, tc.TraceRecords(), testTimeout)
 	matchTraceEvent(t, "GET", event)
 }
 
@@ -156,7 +165,7 @@ func TestTracerReceiverPipeline(t *testing.T) {
 	// Override eBPF tracer to send some fake data
 	pipe.AddStart(gb.builder, tracesReader,
 		func(out chan<- []request.Span) {
-			out <- newRequest("bar-svc", 1, "GET", "/foo/bar", "1.1.1.1:3456", 404)
+			out <- newRequest("bar-svc", "GET", "/foo/bar", "1.1.1.1:3456", 404)
 			// closing prematurely the input node would finish the whole graph processing
 			// and OTEL exporters could be closed, so we wait.
 			time.Sleep(testTimeout)
@@ -166,11 +175,11 @@ func TestTracerReceiverPipeline(t *testing.T) {
 
 	go pipe.Run(ctx)
 
-	event := testutil.ReadChannel(t, tc.TraceRecords, testTimeout)
+	event := testutil.ReadChannel(t, tc.TraceRecords(), testTimeout)
 	matchInnerTraceEvent(t, "in queue", event)
-	event = testutil.ReadChannel(t, tc.TraceRecords, testTimeout)
+	event = testutil.ReadChannel(t, tc.TraceRecords(), testTimeout)
 	matchInnerTraceEvent(t, "processing", event)
-	event = testutil.ReadChannel(t, tc.TraceRecords, testTimeout)
+	event = testutil.ReadChannel(t, tc.TraceRecords(), testTimeout)
 	matchTraceEvent(t, "GET", event)
 }
 
@@ -186,12 +195,13 @@ func BenchmarkTestTracerPipeline(b *testing.B) {
 				BatchTimeout:      10 * time.Millisecond,
 				TracesEndpoint:    tc.ServerEndpoint,
 				ReportersCacheLen: 16,
+				Instrumentations:  []string{instrumentations.InstrumentationALL},
 			},
 		}, gctx(0), make(<-chan []request.Span))
 		// Override eBPF tracer to send some fake data
 		pipe.AddStart(gb.builder, tracesReader,
 			func(out chan<- []request.Span) {
-				out <- newRequest("bar-svc", 1, "GET", "/foo/bar", "1.1.1.1:3456", 404)
+				out <- newRequest("bar-svc", "GET", "/foo/bar", "1.1.1.1:3456", 404)
 				// closing prematurely the input node would finish the whole graph processing
 				// and OTEL exporters could be closed, so we wait.
 				time.Sleep(testTimeout)
@@ -200,9 +210,9 @@ func BenchmarkTestTracerPipeline(b *testing.B) {
 
 		go pipe.Run(ctx)
 		t := &testing.T{}
-		testutil.ReadChannel(t, tc.TraceRecords, testTimeout)
-		testutil.ReadChannel(t, tc.TraceRecords, testTimeout)
-		testutil.ReadChannel(t, tc.TraceRecords, testTimeout)
+		testutil.ReadChannel(t, tc.TraceRecords(), testTimeout)
+		testutil.ReadChannel(t, tc.TraceRecords(), testTimeout)
+		testutil.ReadChannel(t, tc.TraceRecords(), testTimeout)
 	}
 }
 
@@ -218,12 +228,13 @@ func TestTracerPipelineBadTimestamps(t *testing.T) {
 			BatchTimeout:      10 * time.Millisecond,
 			TracesEndpoint:    tc.ServerEndpoint,
 			ReportersCacheLen: 16,
+			Instrumentations:  []string{instrumentations.InstrumentationALL},
 		},
 	}, gctx(0), make(<-chan []request.Span))
 	// Override eBPF tracer to send some fake data
 	pipe.AddStart(gb.builder, tracesReader,
 		func(out chan<- []request.Span) {
-			out <- newRequestWithTiming("svc1", 1, request.EventTypeHTTP, "GET", "/attach", "2.2.2.2:1234", 200, 60000, 59999, 70000)
+			out <- newRequestWithTiming("svc1", request.EventTypeHTTP, "GET", "/attach", "2.2.2.2:1234", 200, 60000, 59999, 70000)
 			// closing prematurely the input node would finish the whole graph processing
 			// and OTEL exporters could be closed, so we wait.
 			time.Sleep(testTimeout)
@@ -233,7 +244,7 @@ func TestTracerPipelineBadTimestamps(t *testing.T) {
 
 	go pipe.Run(ctx)
 
-	event := testutil.ReadChannel(t, tc.TraceRecords, testTimeout)
+	event := testutil.ReadChannel(t, tc.TraceRecords(), testTimeout)
 	matchNestedEvent(t, "GET", "GET", "/attach", "200", ptrace.SpanKindServer, event)
 }
 
@@ -249,6 +260,10 @@ func TestRouteConsolidation(t *testing.T) {
 			Features:        []string{otel.FeatureApplication},
 			MetricsEndpoint: tc.ServerEndpoint, Interval: 10 * time.Millisecond,
 			ReportersCacheLen: 16,
+			TTL:               5 * time.Minute,
+			Instrumentations: []string{
+				instrumentations.InstrumentationALL,
+			},
 		},
 		Routes:     &transform.RoutesConfig{Patterns: []string{"/user/{id}", "/products/{id}/push"}},
 		Attributes: beyla.Attributes{Select: allMetricsBut("client.address", "url.path")},
@@ -256,9 +271,9 @@ func TestRouteConsolidation(t *testing.T) {
 	// Override eBPF tracer to send some fake data
 	pipe.AddStart(gb.builder, tracesReader,
 		func(out chan<- []request.Span) {
-			out <- newRequest("svc-1", 1, "GET", "/user/1234", "1.1.1.1:3456", 200)
-			out <- newRequest("svc-1", 2, "GET", "/products/3210/push", "1.1.1.1:3456", 200)
-			out <- newRequest("svc-1", 3, "GET", "/attach", "1.1.1.1:3456", 200)
+			out <- newRequest("svc-1", "GET", "/user/1234", "1.1.1.1:3456", 200)
+			out <- newRequest("svc-1", "GET", "/products/3210/push", "1.1.1.1:3456", 200)
+			out <- newRequest("svc-1", "GET", "/attach", "1.1.1.1:3456", 200)
 			// closing prematurely the input node would finish the whole graph processing
 			// and OTEL exporters could be closed, so we wait.
 			time.Sleep(testTimeout)
@@ -271,7 +286,7 @@ func TestRouteConsolidation(t *testing.T) {
 	// expect to receive 3 events without any guaranteed order
 	events := map[string]collector.MetricRecord{}
 	for i := 0; i < 3; i++ {
-		ev := testutil.ReadChannel(t, tc.Records, testTimeout)
+		ev := testutil.ReadChannel(t, tc.Records(), testTimeout)
 		events[ev.Attributes[string(semconv.HTTPRouteKey)]] = ev
 	}
 	for _, event := range events {
@@ -292,7 +307,8 @@ func TestRouteConsolidation(t *testing.T) {
 			string(semconv.TelemetrySDKLanguageKey): "go",
 			string(semconv.TelemetrySDKNameKey):     "beyla",
 		},
-		Type: pmetric.MetricTypeHistogram,
+		Type:     pmetric.MetricTypeHistogram,
+		FloatVal: 2 / float64(time.Second),
 	}, events["/user/{id}"])
 
 	assert.Equal(t, collector.MetricRecord{
@@ -309,7 +325,8 @@ func TestRouteConsolidation(t *testing.T) {
 			string(semconv.TelemetrySDKLanguageKey): "go",
 			string(semconv.TelemetrySDKNameKey):     "beyla",
 		},
-		Type: pmetric.MetricTypeHistogram,
+		Type:     pmetric.MetricTypeHistogram,
+		FloatVal: 2 / float64(time.Second),
 	}, events["/products/{id}/push"])
 
 	assert.Equal(t, collector.MetricRecord{
@@ -326,7 +343,8 @@ func TestRouteConsolidation(t *testing.T) {
 			string(semconv.TelemetrySDKLanguageKey): "go",
 			string(semconv.TelemetrySDKNameKey):     "beyla",
 		},
-		Type: pmetric.MetricTypeHistogram,
+		Type:     pmetric.MetricTypeHistogram,
+		FloatVal: 2 / float64(time.Second),
 	}, events["/**"])
 }
 
@@ -342,13 +360,17 @@ func TestGRPCPipeline(t *testing.T) {
 			Features:        []string{otel.FeatureApplication},
 			MetricsEndpoint: tc.ServerEndpoint, Interval: time.Millisecond,
 			ReportersCacheLen: 16,
+			TTL:               5 * time.Minute,
+			Instrumentations: []string{
+				instrumentations.InstrumentationALL,
+			},
 		},
 		Attributes: beyla.Attributes{Select: allMetrics},
 	}, gctx(0), make(<-chan []request.Span))
 	// Override eBPF tracer to send some fake data
 	pipe.AddStart(gb.builder, tracesReader,
 		func(out chan<- []request.Span) {
-			out <- newGRPCRequest("grpc-svc", 1, "/foo/bar", 3)
+			out <- newGRPCRequest("grpc-svc", "/foo/bar", 3)
 			// closing prematurely the input node would finish the whole graph processing
 			// and OTEL exporters could be closed, so we wait.
 			time.Sleep(testTimeout)
@@ -358,7 +380,7 @@ func TestGRPCPipeline(t *testing.T) {
 
 	go pipe.Run(ctx)
 
-	event := testutil.ReadChannel(t, tc.Records, testTimeout)
+	event := testutil.ReadChannel(t, tc.Records(), testTimeout)
 	assert.NotEmpty(t, event.ResourceAttributes, string(semconv.ServiceInstanceIDKey))
 	delete(event.ResourceAttributes, string(semconv.ServiceInstanceIDKey))
 	assert.Equal(t, collector.MetricRecord{
@@ -376,7 +398,8 @@ func TestGRPCPipeline(t *testing.T) {
 			string(semconv.TelemetrySDKLanguageKey): "go",
 			string(semconv.TelemetrySDKNameKey):     "beyla",
 		},
-		Type: pmetric.MetricTypeHistogram,
+		Type:     pmetric.MetricTypeHistogram,
+		FloatVal: 2 / float64(time.Second),
 	}, event)
 }
 
@@ -391,12 +414,13 @@ func TestTraceGRPCPipeline(t *testing.T) {
 		Traces: otel.TracesConfig{
 			TracesEndpoint: tc.ServerEndpoint,
 			BatchTimeout:   time.Millisecond, ReportersCacheLen: 16,
+			Instrumentations: []string{instrumentations.InstrumentationALL},
 		},
 	}, gctx(0), make(<-chan []request.Span))
 	// Override eBPF tracer to send some fake data
 	pipe.AddStart(gb.builder, tracesReader,
 		func(out chan<- []request.Span) {
-			out <- newGRPCRequest("svc", 1, "foo.bar", 3)
+			out <- newGRPCRequest("svc", "foo.bar", 3)
 			// closing prematurely the input node would finish the whole graph processing
 			// and OTEL exporters could be closed, so we wait.
 			time.Sleep(testTimeout)
@@ -406,11 +430,11 @@ func TestTraceGRPCPipeline(t *testing.T) {
 
 	go pipe.Run(ctx)
 
-	event := testutil.ReadChannel(t, tc.TraceRecords, testTimeout)
+	event := testutil.ReadChannel(t, tc.TraceRecords(), testTimeout)
 	matchInnerGRPCTraceEvent(t, "in queue", event)
-	event = testutil.ReadChannel(t, tc.TraceRecords, testTimeout)
+	event = testutil.ReadChannel(t, tc.TraceRecords(), testTimeout)
 	matchInnerGRPCTraceEvent(t, "processing", event)
-	event = testutil.ReadChannel(t, tc.TraceRecords, testTimeout)
+	event = testutil.ReadChannel(t, tc.TraceRecords(), testTimeout)
 	matchGRPCTraceEvent(t, "foo.bar", event)
 }
 
@@ -427,6 +451,10 @@ func TestBasicPipelineInfo(t *testing.T) {
 			Features:        []string{otel.FeatureApplication},
 			MetricsEndpoint: tc.ServerEndpoint,
 			Interval:        10 * time.Millisecond, ReportersCacheLen: 16,
+			TTL: 5 * time.Minute,
+			Instrumentations: []string{
+				instrumentations.InstrumentationALL,
+			},
 		},
 		Attributes: beyla.Attributes{Select: allMetrics},
 	}, gctx(0), tracesInput)
@@ -437,7 +465,7 @@ func TestBasicPipelineInfo(t *testing.T) {
 
 	go pipe.Run(ctx)
 
-	event := testutil.ReadChannel(t, tc.Records, testTimeout)
+	event := testutil.ReadChannel(t, tc.Records(), testTimeout)
 	assert.NotEmpty(t, event.ResourceAttributes, string(semconv.ServiceInstanceIDKey))
 	delete(event.ResourceAttributes, string(semconv.ServiceInstanceIDKey))
 	assert.Equal(t, collector.MetricRecord{
@@ -455,7 +483,8 @@ func TestBasicPipelineInfo(t *testing.T) {
 			string(semconv.TelemetrySDKLanguageKey): "go",
 			string(semconv.TelemetrySDKNameKey):     "beyla",
 		},
-		Type: pmetric.MetricTypeHistogram,
+		Type:     pmetric.MetricTypeHistogram,
+		FloatVal: 1 / float64(time.Second),
 	}, event)
 }
 
@@ -467,7 +496,7 @@ func TestTracerPipelineInfo(t *testing.T) {
 	require.NoError(t, err)
 
 	gb := newGraphBuilder(ctx, &beyla.Config{
-		Traces: otel.TracesConfig{TracesEndpoint: tc.ServerEndpoint, ReportersCacheLen: 16},
+		Traces: otel.TracesConfig{TracesEndpoint: tc.ServerEndpoint, ReportersCacheLen: 16, Instrumentations: []string{instrumentations.InstrumentationALL}},
 	}, gctx(0), make(<-chan []request.Span))
 	// Override eBPF tracer to send some fake data
 	pipe.AddStart(gb.builder, tracesReader,
@@ -479,7 +508,7 @@ func TestTracerPipelineInfo(t *testing.T) {
 
 	go pipe.Run(ctx)
 
-	event := testutil.ReadChannel(t, tc.TraceRecords, testTimeout)
+	event := testutil.ReadChannel(t, tc.TraceRecords(), testTimeout)
 	matchInfoEvent(t, "PATCH", event)
 }
 
@@ -496,6 +525,8 @@ func TestSpanAttributeFilterNode(t *testing.T) {
 			Features:        []string{otel.FeatureApplication},
 			MetricsEndpoint: tc.ServerEndpoint, Interval: 10 * time.Millisecond,
 			ReportersCacheLen: 16,
+			TTL:               5 * time.Minute,
+			Instrumentations:  []string{instrumentations.InstrumentationALL},
 		},
 		Filters: filter.AttributesConfig{
 			Application: map[string]filter.MatchDefinition{"url.path": {Match: "/user/*"}},
@@ -505,10 +536,10 @@ func TestSpanAttributeFilterNode(t *testing.T) {
 	// Override eBPF tracer to send some fake data
 	pipe.AddStart(gb.builder, tracesReader,
 		func(out chan<- []request.Span) {
-			out <- newRequest("svc-0", 0, "GET", "/products/3210/push", "1.1.1.1:3456", 200)
-			out <- newRequest("svc-1", 1, "GET", "/user/1234", "1.1.1.1:3456", 201)
-			out <- newRequest("svc-2", 2, "GET", "/products/3210/push", "1.1.1.1:3456", 202)
-			out <- newRequest("svc-3", 3, "GET", "/user/4321", "1.1.1.1:3456", 203)
+			out <- newRequest("svc-0", "GET", "/products/3210/push", "1.1.1.1:3456", 200)
+			out <- newRequest("svc-1", "GET", "/user/1234", "1.1.1.1:3456", 201)
+			out <- newRequest("svc-2", "GET", "/products/3210/push", "1.1.1.1:3456", 202)
+			out <- newRequest("svc-3", "GET", "/user/4321", "1.1.1.1:3456", 203)
 			// closing prematurely the input node would finish the whole graph processing
 			// and OTEL exporters could be closed, so we wait.
 			time.Sleep(testTimeout)
@@ -520,10 +551,10 @@ func TestSpanAttributeFilterNode(t *testing.T) {
 
 	// expect to receive only the records matching the Filters criteria
 	events := map[string]map[string]string{}
-	event := testutil.ReadChannel(t, tc.Records, testTimeout)
+	event := testutil.ReadChannel(t, tc.Records(), testTimeout)
 	assert.Equal(t, "http.server.request.duration", event.Name)
 	events[event.Attributes["url.path"]] = event.Attributes
-	event = testutil.ReadChannel(t, tc.Records, testTimeout)
+	event = testutil.ReadChannel(t, tc.Records(), testTimeout)
 	assert.Equal(t, "http.server.request.duration", event.Name)
 	events[event.Attributes["url.path"]] = event.Attributes
 
@@ -545,7 +576,7 @@ func TestSpanAttributeFilterNode(t *testing.T) {
 	}, events)
 }
 
-func newRequest(serviceName string, id uint64, method, path, peer string, status int) []request.Span {
+func newRequest(serviceName string, method, path, peer string, status int) []request.Span {
 	return []request.Span{{
 		Path:         path,
 		Method:       method,
@@ -554,7 +585,6 @@ func newRequest(serviceName string, id uint64, method, path, peer string, status
 		HostPort:     8080,
 		Status:       status,
 		Type:         request.EventTypeHTTP,
-		ID:           id,
 		Start:        2,
 		RequestStart: 1,
 		End:          3,
@@ -562,7 +592,7 @@ func newRequest(serviceName string, id uint64, method, path, peer string, status
 	}}
 }
 
-func newRequestWithTiming(svcName string, id uint64, kind request.EventType, method, path, peer string, status int, goStart, start, end uint64) []request.Span {
+func newRequestWithTiming(svcName string, kind request.EventType, method, path, peer string, status int, goStart, start, end uint64) []request.Span {
 	return []request.Span{{
 		Path:         path,
 		Method:       method,
@@ -571,7 +601,6 @@ func newRequestWithTiming(svcName string, id uint64, kind request.EventType, met
 		HostPort:     8080,
 		Type:         kind,
 		Status:       status,
-		ID:           id,
 		RequestStart: int64(goStart),
 		Start:        int64(start),
 		End:          int64(end),
@@ -579,7 +608,7 @@ func newRequestWithTiming(svcName string, id uint64, kind request.EventType, met
 	}}
 }
 
-func newGRPCRequest(svcName string, id uint64, path string, status int) []request.Span {
+func newGRPCRequest(svcName string, path string, status int) []request.Span {
 	return []request.Span{{
 		Path:         path,
 		Peer:         "1.1.1.1",
@@ -587,7 +616,6 @@ func newGRPCRequest(svcName string, id uint64, path string, status int) []reques
 		HostPort:     8080,
 		Status:       status,
 		Type:         request.EventTypeGRPC,
-		ID:           id,
 		Start:        2,
 		RequestStart: 1,
 		End:          3,

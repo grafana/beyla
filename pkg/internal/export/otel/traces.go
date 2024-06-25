@@ -37,6 +37,7 @@ import (
 
 	"github.com/grafana/beyla/pkg/internal/export/attributes"
 	attr "github.com/grafana/beyla/pkg/internal/export/attributes/names"
+	"github.com/grafana/beyla/pkg/internal/export/instrumentations"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/pkg/internal/request"
@@ -54,6 +55,9 @@ type TracesConfig struct {
 
 	Protocol       Protocol `yaml:"protocol" env:"OTEL_EXPORTER_OTLP_PROTOCOL"`
 	TracesProtocol Protocol `yaml:"-" env:"OTEL_EXPORTER_OTLP_TRACES_PROTOCOL"`
+
+	// Allows configuration of which instrumentations should be enabled, e.g. http, grpc, sql...
+	Instrumentations []string `yaml:"instrumentations" env:"BEYLA_OTEL_TRACES_INSTRUMENTATIONS" envSeparator:","`
 
 	// InsecureSkipVerify is not standard, so we don't follow the same naming convention
 	InsecureSkipVerify bool `yaml:"insecure_skip_verify" env:"BEYLA_OTEL_INSECURE_SKIP_VERIFY"`
@@ -89,7 +93,7 @@ type TracesConfig struct {
 // Enabled specifies that the OTEL traces node is enabled if and only if
 // either the OTEL endpoint and OTEL traces endpoint is defined.
 // If not enabled, this node won't be instantiated
-func (m TracesConfig) Enabled() bool { //nolint:gocritic
+func (m *TracesConfig) Enabled() bool { //nolint:gocritic
 	return m.CommonEndpoint != "" || m.TracesEndpoint != "" || m.Grafana.TracesEnabled()
 }
 
@@ -119,9 +123,19 @@ func (m *TracesConfig) guessProtocol() Protocol {
 	return ProtocolHTTPProtobuf
 }
 
+func makeTracesReceiver(ctx context.Context, cfg TracesConfig, ctxInfo *global.ContextInfo, userAttribSelection attributes.Selection) *tracesOTELReceiver {
+	return &tracesOTELReceiver{
+		ctx:        ctx,
+		cfg:        cfg,
+		ctxInfo:    ctxInfo,
+		attributes: userAttribSelection,
+		is:         instrumentations.NewInstrumentationSelection(cfg.Instrumentations),
+	}
+}
+
 // TracesReceiver creates a terminal node that consumes request.Spans and sends OpenTelemetry metrics to the configured consumers.
 func TracesReceiver(ctx context.Context, cfg TracesConfig, ctxInfo *global.ContextInfo, userAttribSelection attributes.Selection) pipe.FinalProvider[[]request.Span] {
-	return (&tracesOTELReceiver{ctx: ctx, cfg: cfg, ctxInfo: ctxInfo, attributes: userAttribSelection}).provideLoop
+	return makeTracesReceiver(ctx, cfg, ctxInfo, userAttribSelection).provideLoop
 }
 
 type tracesOTELReceiver struct {
@@ -129,6 +143,7 @@ type tracesOTELReceiver struct {
 	cfg        TracesConfig
 	ctxInfo    *global.ContextInfo
 	attributes attributes.Selection
+	is         instrumentations.InstrumentationSelection
 }
 
 func GetUserSelectedAttributes(attrs attributes.Selection) (map[attr.Name]struct{}, error) {
@@ -178,7 +193,7 @@ func (tr *tracesOTELReceiver) provideLoop() (pipe.FinalFunc[[]request.Span], err
 		for spans := range in {
 			for i := range spans {
 				span := &spans[i]
-				if span.IgnoreSpan == request.IgnoreTraces {
+				if span.IgnoreSpan == request.IgnoreTraces || !tr.acceptSpan(span) {
 					continue
 				}
 				traces := GenerateTraces(span, traceAttrs)
@@ -207,23 +222,19 @@ func getTracesExporter(ctx context.Context, cfg TracesConfig, ctxInfo *global.Co
 			slog.Error("can't instantiate OTEL HTTP traces exporter", err)
 			return nil, err
 		}
-		endpoint, _, err := parseTracesEndpoint(&cfg)
-		if err != nil {
-			slog.Error("can't parse traces endpoint", "error", err)
-			return nil, err
-		}
 		factory := otlphttpexporter.NewFactory()
 		config := factory.CreateDefaultConfig().(*otlphttpexporter.Config)
 		config.QueueConfig.Enabled = false
 		config.RetryConfig = getRetrySettings(cfg)
 		config.ClientConfig = confighttp.ClientConfig{
-			Endpoint: endpoint.String(),
+			Endpoint: opts.Scheme + "://" + opts.Endpoint + opts.BaseURLPath,
 			TLSSetting: configtls.ClientConfig{
 				Insecure:           opts.Insecure,
 				InsecureSkipVerify: cfg.InsecureSkipVerify,
 			},
 			Headers: convertHeaders(opts.HTTPHeaders),
 		}
+		slog.Debug("getTracesExporter: confighttp.ClientConfig created", "endpoint", config.ClientConfig.Endpoint)
 		set := getTraceSettings(ctxInfo, cfg, t)
 		return factory.CreateTracesExporter(ctx, set, config)
 	case ProtocolGRPC:
@@ -484,7 +495,7 @@ func grpcTracer(ctx context.Context, opts otlpOptions) (*otlptrace.Exporter, err
 
 func SpanKindString(span *request.Span) string {
 	switch span.Type {
-	case request.EventTypeHTTP, request.EventTypeGRPC:
+	case request.EventTypeHTTP, request.EventTypeGRPC, request.EventTypeKafkaServer, request.EventTypeRedisServer:
 		return "SPAN_KIND_SERVER"
 	case request.EventTypeHTTPClient, request.EventTypeGRPCClient, request.EventTypeSQLClient, request.EventTypeRedisClient:
 		return "SPAN_KIND_CLIENT"
@@ -497,6 +508,23 @@ func SpanKindString(span *request.Span) string {
 		}
 	}
 	return "SPAN_KIND_INTERNAL"
+}
+
+func (tr *tracesOTELReceiver) acceptSpan(span *request.Span) bool {
+	switch span.Type {
+	case request.EventTypeHTTP, request.EventTypeHTTPClient:
+		return tr.is.HTTPEnabled()
+	case request.EventTypeGRPC, request.EventTypeGRPCClient:
+		return tr.is.GRPCEnabled()
+	case request.EventTypeSQLClient:
+		return tr.is.SQLEnabled()
+	case request.EventTypeRedisClient, request.EventTypeRedisServer:
+		return tr.is.RedisEnabled()
+	case request.EventTypeKafkaClient, request.EventTypeKafkaServer:
+		return tr.is.KafkaEnabled()
+	}
+
+	return false
 }
 
 // nolint:cyclop
@@ -560,7 +588,7 @@ func traceAttributes(span *request.Span, optionalAttrs map[attr.Name]struct{}) [
 				attrs = append(attrs, request.DBCollectionName(table))
 			}
 		}
-	case request.EventTypeRedisClient:
+	case request.EventTypeRedisServer, request.EventTypeRedisClient:
 		attrs = []attribute.KeyValue{
 			request.ServerAddr(request.SpanHost(span)),
 			request.ServerPort(span.HostPort),
@@ -576,9 +604,11 @@ func traceAttributes(span *request.Span, optionalAttrs map[attr.Name]struct{}) [
 				}
 			}
 		}
-	case request.EventTypeKafkaClient:
+	case request.EventTypeKafkaServer, request.EventTypeKafkaClient:
 		operation := request.MessagingOperationType(span.Method)
 		attrs = []attribute.KeyValue{
+			request.ServerAddr(request.SpanHost(span)),
+			request.ServerPort(span.HostPort),
 			semconv.MessagingSystemKafka,
 			semconv.MessagingDestinationName(span.Path),
 			semconv.MessagingClientID(span.OtherNamespace),
@@ -611,12 +641,12 @@ func TraceName(span *request.Span) string {
 			operation += " " + table
 		}
 		return operation
-	case request.EventTypeRedisClient:
+	case request.EventTypeRedisClient, request.EventTypeRedisServer:
 		if span.Method == "" {
 			return "REDIS"
 		}
 		return span.Method
-	case request.EventTypeKafkaClient:
+	case request.EventTypeKafkaClient, request.EventTypeKafkaServer:
 		if span.Path == "" {
 			return span.Method
 		}
@@ -627,11 +657,11 @@ func TraceName(span *request.Span) string {
 
 func spanKind(span *request.Span) trace2.SpanKind {
 	switch span.Type {
-	case request.EventTypeHTTP, request.EventTypeGRPC:
+	case request.EventTypeHTTP, request.EventTypeGRPC, request.EventTypeRedisServer:
 		return trace2.SpanKindServer
 	case request.EventTypeHTTPClient, request.EventTypeGRPCClient, request.EventTypeSQLClient, request.EventTypeRedisClient:
 		return trace2.SpanKindClient
-	case request.EventTypeKafkaClient:
+	case request.EventTypeKafkaClient, request.EventTypeKafkaServer:
 		switch span.Method {
 		case request.MessagingPublish:
 			return trace2.SpanKindProducer
@@ -689,6 +719,7 @@ func getHTTPTracesEndpointOptions(cfg *TracesConfig) (otlpOptions, error) {
 	log.Debug("Configuring exporter", "protocol",
 		cfg.Protocol, "tracesProtocol", cfg.TracesProtocol, "endpoint", murl.Host)
 	setTracesProtocol(cfg)
+	opts.Scheme = murl.Scheme
 	opts.Endpoint = murl.Host
 	if murl.Scheme == "http" || murl.Scheme == "unix" {
 		log.Debug("Specifying insecure connection", "scheme", murl.Scheme)
@@ -696,13 +727,10 @@ func getHTTPTracesEndpointOptions(cfg *TracesConfig) (otlpOptions, error) {
 	}
 	// If the value is set from the OTEL_EXPORTER_OTLP_ENDPOINT common property, we need to add /v1/traces to the path
 	// otherwise, we leave the path that is explicitly set by the user
-	opts.URLPath = murl.Path
+	opts.URLPath = strings.TrimSuffix(murl.Path, "/")
+	opts.BaseURLPath = strings.TrimSuffix(opts.URLPath, "/v1/traces")
 	if isCommon {
-		if strings.HasSuffix(opts.URLPath, "/") {
-			opts.URLPath += "v1/traces"
-		} else {
-			opts.URLPath += "/v1/traces"
-		}
+		opts.URLPath += "/v1/traces"
 		log.Debug("Specifying path", "path", opts.URLPath)
 	}
 

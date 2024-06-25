@@ -27,10 +27,9 @@ type NameResolverConfig struct {
 }
 
 type NameResolver struct {
-	cache  *expirable.LRU[string, string]
-	sCache *expirable.LRU[string, svc.ID]
-	cfg    *NameResolverConfig
-	db     *kube2.Database
+	cache *expirable.LRU[string, string]
+	cfg   *NameResolverConfig
+	db    *kube2.Database
 }
 
 func NameResolutionProvider(ctxInfo *global.ContextInfo, cfg *NameResolverConfig) pipe.MiddleProvider[[]request.Span, []request.Span] {
@@ -44,10 +43,9 @@ func NameResolutionProvider(ctxInfo *global.ContextInfo, cfg *NameResolverConfig
 
 func nameResolver(ctxInfo *global.ContextInfo, cfg *NameResolverConfig) (pipe.MiddleFunc[[]request.Span, []request.Span], error) {
 	nr := NameResolver{
-		cfg:    cfg,
-		db:     ctxInfo.AppO11y.K8sDatabase,
-		cache:  expirable.NewLRU[string, string](cfg.CacheLen, nil, cfg.CacheTTL),
-		sCache: expirable.NewLRU[string, svc.ID](cfg.CacheLen, nil, cfg.CacheTTL),
+		cfg:   cfg,
+		db:    ctxInfo.AppO11y.K8sDatabase,
+		cache: expirable.NewLRU[string, string](cfg.CacheLen, nil, cfg.CacheTTL),
 	}
 
 	return func(in <-chan []request.Span, out chan<- []request.Span) {
@@ -78,16 +76,10 @@ func trimPrefixIgnoreCase(s, prefix string) string {
 func (nr *NameResolver) resolveNames(span *request.Span) {
 	if span.IsClientSpan() {
 		span.HostName, span.OtherNamespace = nr.resolve(&span.ServiceID, span.Host)
-		span.PeerName = span.ServiceID.Name
-		if len(span.Peer) > 0 {
-			nr.sCache.Add(span.Peer, span.ServiceID)
-		}
+		span.PeerName, _ = nr.resolve(&span.ServiceID, span.Peer)
 	} else {
 		span.PeerName, span.OtherNamespace = nr.resolve(&span.ServiceID, span.Peer)
-		span.HostName = span.ServiceID.Name
-		if len(span.Host) > 0 {
-			nr.sCache.Add(span.Host, span.ServiceID)
-		}
+		span.HostName, _ = nr.resolve(&span.ServiceID, span.Host)
 	}
 }
 
@@ -95,18 +87,12 @@ func (nr *NameResolver) resolve(svc *svc.ID, ip string) (string, string) {
 	var name, ns string
 
 	if len(ip) > 0 {
-		peerSvc, ok := nr.sCache.Get(ip)
-		if ok {
-			name = peerSvc.Name
-			ns = peerSvc.Namespace
+		var peer string
+		peer, ns = nr.dnsResolve(svc, ip)
+		if len(peer) > 0 {
+			name = peer
 		} else {
-			var peer string
-			peer, ns = nr.dnsResolve(svc, ip)
-			if len(peer) > 0 {
-				name = peer
-			} else {
-				name = ip
-			}
+			name = ip
 		}
 	}
 

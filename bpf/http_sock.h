@@ -19,17 +19,6 @@
 
 volatile const s32 capture_header_buffer = 0;
 
-// Keeps track of active accept or connect connection infos
-// From this table we extract the PID of the process and filter
-// HTTP calls we are not interested in
-struct {
-    __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, pid_connection_info_t);
-    __type(value, http_connection_metadata_t); // PID_TID group and connection type
-    __uint(max_entries, MAX_CONCURRENT_SHARED_REQUESTS);
-    __uint(pinning, LIBBPF_PIN_BY_NAME);
-} filtered_connections SEC(".maps");
-
 // Keeps track of the ongoing http connections we match for request/response
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
@@ -70,6 +59,14 @@ struct {
     __uint(max_entries, MAX_CONCURRENT_SHARED_REQUESTS);
     __uint(pinning, LIBBPF_PIN_BY_NAME);
 } ongoing_tcp_req SEC(".maps");
+
+struct {
+    __uint(type, BPF_MAP_TYPE_LRU_HASH);
+    __type(key, pid_connection_info_t);   // connection that's SSL
+    __type(value, u64); // ssl
+    __uint(max_entries, MAX_CONCURRENT_SHARED_REQUESTS);
+    __uint(pinning, LIBBPF_PIN_BY_NAME);
+} active_ssl_connections SEC(".maps");
 
 // http_info_t became too big to be declared as a variable in the stack.
 // We use a percpu array to keep a reusable copy of it
@@ -150,15 +147,14 @@ struct _iov_iter {
 			size_t count;
 		};
 	};
+    union {
+		unsigned long nr_segs;
+		loff_t xarray_start;
+	};
 };
 
 static __always_inline void *find_msghdr_buf(struct msghdr *msg) {
-    unsigned int m_flags;
-    struct iov_iter msg_iter;
-
-    bpf_probe_read_kernel(&m_flags, sizeof(unsigned int), &(msg->msg_flags));
-    bpf_probe_read_kernel(&msg_iter, sizeof(struct iov_iter), &(msg->msg_iter));
-
+    struct iov_iter msg_iter = BPF_CORE_READ(msg, msg_iter);
     u8 msg_iter_type = 0;
 
     if (bpf_core_field_exists(msg_iter.iter_type)) {
@@ -166,7 +162,7 @@ static __always_inline void *find_msghdr_buf(struct msghdr *msg) {
         bpf_dbg_printk("msg iter type exists, read value %d", msg_iter_type);
     }
 
-    bpf_dbg_printk("msg flags %x, iter type %d", m_flags, msg_iter_type);
+    bpf_dbg_printk("iter type %d", msg_iter_type);
 
     struct iovec *iov = NULL;
 
@@ -179,13 +175,12 @@ static __always_inline void *find_msghdr_buf(struct msghdr *msg) {
         // here assumes the kernel iov_iter structure is the format with __iov and __ubuf_iovec.
         struct _iov_iter _msg_iter;
         bpf_probe_read_kernel(&_msg_iter, sizeof(struct _iov_iter), &(msg->msg_iter));
-        
-        bpf_dbg_printk("new kernel, iov doesn't exist");
 
+        bpf_dbg_printk("new kernel, iov doesn't exist, nr_segs %d", _msg_iter.nr_segs);
         if (msg_iter_type == 5) {
             struct iovec vec;
             bpf_probe_read(&vec, sizeof(struct iovec), &(_msg_iter.__ubuf_iovec));
-            bpf_dbg_printk("ubuf base %llx", vec.iov_base);
+            bpf_dbg_printk("ubuf base %llx, &ubuf base %llx", vec.iov_base, &vec.iov_base);
 
             return vec.iov_base;
         } else {
@@ -205,7 +200,21 @@ static __always_inline void *find_msghdr_buf(struct msghdr *msg) {
     struct iovec vec;
     bpf_probe_read(&vec, sizeof(struct iovec), iov);
 
-    bpf_dbg_printk("standard iov %llx base %llx", iov, vec.iov_base);
+    bpf_dbg_printk("standard iov %llx base %llx len %d", iov, vec.iov_base, vec.iov_len);
+
+    if (!vec.iov_base) {
+        // We didn't find the base in the first vector, loop couple of times to find the base
+        for (int i = 1; i < 4; i++) {
+            void *p = &iov[i];
+            bpf_probe_read(&vec, sizeof(struct iovec), p);
+            // No prints in loops on 5.10
+            // bpf_dbg_printk("iov[%d]=%llx base %llx, len %d", i, p, vec.iov_base, vec.iov_len);
+            if (!vec.iov_base || !vec.iov_len) {
+                continue;
+            }
+            return vec.iov_base;
+        }
+    }
 
     return vec.iov_base;    
 }
@@ -245,8 +254,12 @@ static __always_inline http_connection_metadata_t* empty_connection_meta() {
     return bpf_map_lookup_elem(&connection_meta_mem, &zero);
 }
 
-static __always_inline void finish_http(http_info_t *info) {
-    if (info->start_monotime_ns != 0 && info->status != 0 && info->pid.host_pid != 0) {
+static __always_inline u8 http_info_complete(http_info_t *info) {
+    return (info->start_monotime_ns != 0 && info->status != 0 && info->pid.host_pid != 0);
+}
+
+static __always_inline void finish_http(http_info_t *info, pid_connection_info_t *pid_conn) {
+    if (http_info_complete(info)) {
         http_info_t *trace = bpf_ringbuf_reserve(&events, sizeof(http_info_t), 0);        
         if (trace) {
             bpf_dbg_printk("Sending trace %lx, response length %d", info, info->resp_len);
@@ -256,25 +269,21 @@ static __always_inline void finish_http(http_info_t *info) {
             bpf_ringbuf_submit(trace, get_flags());
         }
 
-        delete_server_trace();
-
-        u64 pid_tid = bpf_get_current_pid_tgid();
+        if (info->type == EVENT_HTTP_REQUEST) {
+            delete_server_trace();
+        }
 
         // bpf_dbg_printk("Terminating trace for pid=%d", pid_from_pid_tgid(pid_tid));
         // dbg_print_http_connection_info(&info->conn_info); // commented out since GitHub CI doesn't like this call
-        pid_connection_info_t pid_conn = {
-            .conn = info->conn_info,
-            .pid = pid_from_pid_tgid(pid_tid)
-        };
-
-        bpf_map_delete_elem(&ongoing_http, &pid_conn);
+        bpf_map_delete_elem(&ongoing_http, pid_conn);
+        bpf_map_delete_elem(&active_ssl_connections, pid_conn);
     }        
 }
 
 static __always_inline void finish_possible_delayed_http_request(pid_connection_info_t *pid_conn) {
     http_info_t *info = bpf_map_lookup_elem(&ongoing_http, pid_conn);
     if (info) {        
-        finish_http(info);
+        finish_http(info, pid_conn);
     }
 }
 
@@ -289,7 +298,7 @@ static __always_inline http_info_t *get_or_set_http_info(http_info_t *info, pid_
     if (packet_type == PACKET_TYPE_REQUEST) {
         http_info_t *old_info = bpf_map_lookup_elem(&ongoing_http, pid_conn);
         if (old_info) {
-            finish_http(old_info); // this will delete ongoing_http for this connection info if there's full stale request
+            finish_http(old_info, pid_conn); // this will delete ongoing_http for this connection info if there's full stale request
         }
 
         bpf_map_update_elem(&ongoing_http, pid_conn, info, BPF_ANY);
@@ -313,7 +322,21 @@ static __always_inline bool still_reading(http_info_t *info) {
     return info->status == 0 && info->start_monotime_ns != 0;
 }
 
-static __always_inline void process_http_request(http_info_t *info, int len, http_connection_metadata_t *meta, int direction) {
+// We sort the connection info to ensure we can track requests and responses. However, if the destination port
+// is somehow in the ephemeral port range, it can be higher than the source port and we'd use the sorted connection
+// info in user space, effectively reversing the flow of the operation. We keep track of the original destination port
+// and we undo the swap in the data collections we send to user space.
+static __always_inline void fixup_connection_info(connection_info_t *conn_info, u8 client, u16 orig_dport) {
+    // The destination port is the server port in userspace
+    if ((client && conn_info->d_port != orig_dport) || 
+        (!client && conn_info->d_port == orig_dport)) {
+        bpf_dbg_printk("Swapped connection info for userspace, client = %d, orig_dport = %d", client, orig_dport);
+        swap_connection_info_order(conn_info);
+        //dbg_print_http_connection_info(conn_info); // commented out since GitHub CI doesn't like this call
+    }
+}
+
+static __always_inline void process_http_request(http_info_t *info, int len, http_connection_metadata_t *meta, int direction, u16 orig_dport) {
     // Set pid and type early as best effort in case the request times out or dies.
     if (meta) {
         info->pid = meta->pid;
@@ -326,6 +349,9 @@ static __always_inline void process_http_request(http_info_t *info, int len, htt
         }
         task_pid(&info->pid);
     }
+
+    fixup_connection_info(&info->conn_info, info->type == EVENT_HTTP_CLIENT, orig_dport);
+
     info->start_monotime_ns = bpf_ktime_get_ns();
     info->status = 0;
     info->len = len;
@@ -343,31 +369,31 @@ static __always_inline void process_http_response(http_info_t *info, unsigned ch
     }
 }
 
-static __always_inline http_connection_metadata_t *connection_meta(pid_connection_info_t *pid_conn, u8 direction, u8 packet_type) {
-    http_connection_metadata_t *meta = bpf_map_lookup_elem(&filtered_connections, pid_conn);
-    if (meta) {
-        return meta;
+static __always_inline u8 request_type_by_direction(u8 direction, u8 packet_type) {
+    if (packet_type == PACKET_TYPE_RESPONSE) {
+        if (direction == TCP_RECV) {
+            return EVENT_HTTP_CLIENT;
+        } else {
+            return EVENT_HTTP_REQUEST;
+        }
+    } else {
+        if (direction == TCP_RECV) {
+            return EVENT_HTTP_REQUEST;
+        } else {
+            return EVENT_HTTP_CLIENT;
+        }
     }
 
-    meta = empty_connection_meta();
+    return 0;
+}
+
+static __always_inline http_connection_metadata_t *connection_meta_by_direction(pid_connection_info_t *pid_conn, u8 direction, u8 packet_type) {
+    http_connection_metadata_t *meta = empty_connection_meta();
     if (!meta) {
         return 0;
     }
 
-    if (packet_type == PACKET_TYPE_RESPONSE) {
-        if (direction == TCP_RECV) {
-            meta->type = EVENT_HTTP_CLIENT;
-        } else {
-            meta->type = EVENT_HTTP_REQUEST;
-        }
-    } else {
-        if (direction == TCP_RECV) {
-            meta->type = EVENT_HTTP_REQUEST;
-        } else {
-            meta->type = EVENT_HTTP_CLIENT;
-        }
-    }
-
+    meta->type = request_type_by_direction(direction, packet_type);
     task_pid(&meta->pid);
 
     return meta;
@@ -377,21 +403,28 @@ static __always_inline void handle_http_response(unsigned char *small_buf, pid_c
     process_http_response(info, small_buf, orig_len);
 
     if ((direction != TCP_SEND) /*|| (ssl != NO_SSL) || (orig_len < KPROBES_LARGE_RESPONSE_LEN)*/) {
-        finish_http(info);
+        finish_http(info, pid_conn);
     } else {
         if (ssl && (pid_conn->conn.s_port == 0) && (pid_conn->conn.d_port == 0)) {
             bpf_dbg_printk("Fake connection info, finishing request");
-            finish_http(info);
+            finish_http(info, pid_conn);
         } else {
             bpf_dbg_printk("Delaying finish http for large request, orig_len %d", orig_len);
         }
     }
 }
 
-static __always_inline void http2_grpc_start(http2_conn_stream_t *s_key, void *u_buf, int len, u8 direction, u8 ssl) {
+static __always_inline void http2_grpc_start(http2_conn_stream_t *s_key, void *u_buf, int len, u8 direction, u8 ssl, u16 orig_dport) {
+    http2_grpc_request_t *existing = bpf_map_lookup_elem(&ongoing_http2_grpc, s_key);
+    if (existing) {
+        bpf_dbg_printk("already found existing grpcstart, ignoring this exchange");
+        return;
+    }
     http2_grpc_request_t *h2g_info = empty_http2_info();
+    bpf_dbg_printk("http2/grpc start direction=%d stream=%d", direction, s_key->stream_id);
+    //dbg_print_http_connection_info(&s_key->pid_conn.conn); // commented out since GitHub CI doesn't like this call
     if (h2g_info) {
-        http_connection_metadata_t *meta = connection_meta(&s_key->pid_conn, direction, PACKET_TYPE_REQUEST);
+        http_connection_metadata_t *meta = connection_meta_by_direction(&s_key->pid_conn, direction, PACKET_TYPE_REQUEST);
         if (!meta) {
             bpf_dbg_printk("Can't get meta memory or connection not found");
             return;
@@ -406,6 +439,7 @@ static __always_inline void http2_grpc_start(http2_conn_stream_t *s_key, void *u
             h2g_info->pid = meta->pid;
             h2g_info->type = meta->type;
         }
+        fixup_connection_info(&h2g_info->conn_info, h2g_info->type == EVENT_HTTP_CLIENT, orig_dport);
         bpf_probe_read(h2g_info->data, KPROBES_HTTP2_BUF_SIZE, u_buf);
 
         bpf_map_update_elem(&ongoing_http2_grpc, s_key, h2g_info, BPF_ANY);
@@ -413,9 +447,11 @@ static __always_inline void http2_grpc_start(http2_conn_stream_t *s_key, void *u
 }
 
 static __always_inline void http2_grpc_end(http2_conn_stream_t *stream, http2_grpc_request_t *prev_info, void *u_buf) {
-    //bpf_dbg_printk("http2/grpc end prev_info=%llx", prev_info);
+    bpf_dbg_printk("http2/grpc end prev_info=%llx", prev_info);
     if (prev_info) {
         prev_info->end_monotime_ns = bpf_ktime_get_ns();
+        bpf_dbg_printk("stream_id = %d", stream->stream_id);
+        //dbg_print_http_connection_info(&stream->pid_conn.conn); // commented out since GitHub CI doesn't like this call
 
         http2_grpc_request_t *trace = bpf_ringbuf_reserve(&events, sizeof(http2_grpc_request_t), 0);        
         if (trace) {
@@ -428,7 +464,7 @@ static __always_inline void http2_grpc_end(http2_conn_stream_t *stream, http2_gr
     bpf_map_delete_elem(&ongoing_http2_grpc, stream);
 }
 
-static __always_inline void process_http2_grpc_frames(pid_connection_info_t *pid_conn, void *u_buf, int bytes_len, u8 direction, u8 ssl) {
+static __always_inline void process_http2_grpc_frames(pid_connection_info_t *pid_conn, void *u_buf, int bytes_len, u8 direction, u8 ssl, u16 orig_dport) {
     int pos = 0;
     u8 found_start_frame = 0;
     u8 found_end_frame = 0;
@@ -467,8 +503,11 @@ static __always_inline void process_http2_grpc_frames(pid_connection_info_t *pid
                     break;
                 } 
             } else {
-                found_start_frame = 1;
-                break;
+                // Not starting new grpc request, found end frame in a start, likely just terminating prev connection
+                if (!(is_flags_only_frame(&frame) && http_grpc_stream_ended(&frame))) {
+                    found_start_frame = 1;
+                    break;
+                }
             }
         }
 
@@ -486,14 +525,14 @@ static __always_inline void process_http2_grpc_frames(pid_connection_info_t *pid
             break;
         }
 
-        if (pos < (bytes_len - frame.length + FRAME_HEADER_LEN)) {
+        if (pos < (bytes_len - (frame.length + FRAME_HEADER_LEN))) {
             pos += (frame.length + FRAME_HEADER_LEN);
             //bpf_dbg_printk("New buf read pos = %d", pos);
         }
     }
 
     if (found_start_frame) {
-        http2_grpc_start(&stream, (void *)((u8 *)u_buf + pos), bytes_len, direction, ssl);
+        http2_grpc_start(&stream, (void *)((u8 *)u_buf + pos), bytes_len, direction, ssl, orig_dport);        
     } else {
         // We only loop 6 times looking for the stream termination. If the data packed is large we'll miss the
         // frame saying the stream closed. In that case we try this backup path.
@@ -507,12 +546,21 @@ static __always_inline void process_http2_grpc_frames(pid_connection_info_t *pid
             }
         }
         if (found_end_frame) {
-            http2_grpc_end(&stream, prev_info, (void *)((u8 *)u_buf + saved_buf_pos));
+            u8 req_type = request_type_by_direction(direction, PACKET_TYPE_RESPONSE);
+            if (prev_info) {
+                if (req_type == prev_info->type) {
+                    http2_grpc_end(&stream, prev_info, (void *)((u8 *)u_buf + saved_buf_pos));
+                    bpf_map_delete_elem(&active_ssl_connections, pid_conn);
+                } else {
+                    bpf_dbg_printk("grpc request/response mismatch, req_type %d, prev_info->type %d", req_type, prev_info->type);
+                    bpf_map_delete_elem(&ongoing_http2_grpc, &stream);
+                }
+            }
         }
     }
 }
 
-static __always_inline void handle_unknown_tcp_connection(pid_connection_info_t *pid_conn, void *u_buf, int bytes_len, u8 direction, u8 ssl) {
+static __always_inline void handle_unknown_tcp_connection(pid_connection_info_t *pid_conn, void *u_buf, int bytes_len, u8 direction, u8 ssl, u16 orig_dport) {
     // SSL requests will see both TCP traffic and text traffic, ignore the TCP if
     // we are processing SSL request. HTTP2 is already checked in handle_buf_with_connection.
     http_info_t *http_info = bpf_map_lookup_elem(&ongoing_http, pid_conn);
@@ -526,6 +574,7 @@ static __always_inline void handle_unknown_tcp_connection(pid_connection_info_t 
         if (req) {
             req->flags = EVENT_TCP_REQUEST;
             req->conn_info = pid_conn->conn;
+            fixup_connection_info(&req->conn_info, direction, orig_dport);
             req->ssl = ssl;
             req->direction = direction;
             req->start_monotime_ns = bpf_ktime_get_ns();
@@ -569,7 +618,7 @@ static __always_inline void handle_unknown_tcp_connection(pid_connection_info_t 
     }
 }
 
-static __always_inline void handle_buf_with_connection(pid_connection_info_t *pid_conn, void *u_buf, int bytes_len, u8 ssl, u8 direction) {
+static __always_inline void handle_buf_with_connection(pid_connection_info_t *pid_conn, void *u_buf, int bytes_len, u8 ssl, u8 direction, u16 orig_dport) {
     unsigned char small_buf[MIN_HTTP2_SIZE] = {0};   // MIN_HTTP2_SIZE > MIN_HTTP_SIZE
     bpf_probe_read(small_buf, MIN_HTTP2_SIZE, u_buf);
 
@@ -599,7 +648,7 @@ static __always_inline void handle_buf_with_connection(pid_connection_info_t *pi
         bpf_dbg_printk("=== http_buffer_event len=%d pid=%d still_reading=%d ===", bytes_len, pid_from_pid_tgid(bpf_get_current_pid_tgid()), still_reading(info));
 
         if (packet_type == PACKET_TYPE_REQUEST && (info->status == 0) && (info->start_monotime_ns == 0)) {
-            http_connection_metadata_t *meta = connection_meta(pid_conn, direction, PACKET_TYPE_REQUEST);
+            http_connection_metadata_t *meta = connection_meta_by_direction(pid_conn, direction, PACKET_TYPE_REQUEST);
 
             get_or_create_trace_info(meta, pid_conn->pid, &pid_conn->conn, u_buf, bytes_len, capture_header_buffer);
 
@@ -629,7 +678,7 @@ static __always_inline void handle_buf_with_connection(pid_connection_info_t *pi
             // we copy some small part of the buffer to the info trace event, so that we can process an event even with
             // incomplete trace info in user space.
             bpf_probe_read(info->buf, FULL_BUF_SIZE, u_buf);
-            process_http_request(info, bytes_len, meta, direction);
+            process_http_request(info, bytes_len, meta, direction, orig_dport);
         } else if ((packet_type == PACKET_TYPE_RESPONSE) && (info->status == 0)) {
             handle_http_response(small_buf, pid_conn, info, bytes_len, direction, ssl);
         } else if (still_reading(info)) {
@@ -644,14 +693,14 @@ static __always_inline void handle_buf_with_connection(pid_connection_info_t *pi
     } else {
         u8 *h2g = bpf_map_lookup_elem(&ongoing_http2_connections, pid_conn);
         if (h2g && *h2g == ssl) {
-            process_http2_grpc_frames(pid_conn, u_buf, bytes_len, direction, ssl);
+            process_http2_grpc_frames(pid_conn, u_buf, bytes_len, direction, ssl, orig_dport);
         } else { // large request tracking
             http_info_t *info = bpf_map_lookup_elem(&ongoing_http, pid_conn);
 
             if (info && still_responding(info)) {
                 info->end_monotime_ns = bpf_ktime_get_ns();
             } else if (!info) {
-                handle_unknown_tcp_connection(pid_conn, u_buf, bytes_len, direction, ssl);
+                handle_unknown_tcp_connection(pid_conn, u_buf, bytes_len, direction, ssl, orig_dport);
             }
         }
     }

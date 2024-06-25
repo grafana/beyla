@@ -134,6 +134,10 @@ services:
       BEYLA_METRICS_REPORT_TARGET: "true"
       BEYLA_METRICS_REPORT_PEER: "true"
       BEYLA_HOSTNAME: "beyla"
+      BEYLA_INTERNAL_METRICS_PROMETHEUS_PORT: 8999
+      BEYLA_INTERNAL_METRICS_PROMETHEUS_PATH: /metrics
+    ports:
+      - "8999:8999"      
 
   # OpenTelemetry Collector
   otelcol:
@@ -166,6 +170,7 @@ services:
       - --storage.tsdb.path=/prometheus
       - --web.enable-lifecycle
       - --web.route-prefix=/
+      - --log.level=debug
     volumes:
       - ./configs/:/etc/prometheus
     ports:

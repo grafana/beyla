@@ -7,6 +7,7 @@ import (
 
 	"go.opentelemetry.io/otel/attribute"
 	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
+	semconv2 "go.opentelemetry.io/otel/semconv/v1.25.0"
 )
 
 // Name of an attribute. This is the common internal representation of a metric attribute name,
@@ -105,6 +106,8 @@ const (
 	ProcCommand     = Name(semconv.ProcessCommandKey)
 	ProcCommandLine = Name(semconv.ProcessCommandLineKey)
 	ProcCPUState    = Name("process.cpu.state")
+	ProcDiskIODir   = Name(semconv2.DiskIoDirectionKey)
+	ProcNetIODir    = Name(semconv2.NetworkIoDirectionKey)
 	ProcOwner       = Name(semconv.ProcessOwnerKey)
 	ProcParentPid   = Name(semconv.ProcessParentPIDKey)
 	ProcPid         = Name(semconv.ProcessPIDKey)

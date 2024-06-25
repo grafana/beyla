@@ -30,7 +30,7 @@ func printFunc() (pipe.FinalFunc[[]request.Span], error) {
 		for spans := range input {
 			for i := range spans {
 				t := spans[i].Timings()
-				fmt.Printf("%s (%s[%s]) %s %v %s %s [%s]->[%s:%d] size:%dB svc=[%s %s] traceparent=[%s]\n",
+				fmt.Printf("%s (%s[%s]) %s %v %s %s [%s:%d]->[%s:%d] size:%dB svc=[%s %s] traceparent=[%s]\n",
 					t.Start.Format("2006-01-02 15:04:05.12345"),
 					t.End.Sub(t.RequestStart),
 					t.End.Sub(t.Start),
@@ -39,6 +39,7 @@ func printFunc() (pipe.FinalFunc[[]request.Span], error) {
 					spans[i].Method,
 					spans[i].Path,
 					spans[i].Peer+" as "+spans[i].PeerName,
+					spans[i].PeerPort,
 					spans[i].Host+" as "+spans[i].HostName,
 					spans[i].HostPort,
 					spans[i].ContentLength,
@@ -74,6 +75,10 @@ func spanType(span *request.Span) string {
 		return "REDIS"
 	case request.EventTypeKafkaClient:
 		return "KAFKA"
+	case request.EventTypeRedisServer:
+		return "REDIS_SRV"
+	case request.EventTypeKafkaServer:
+		return "KAFKA_SRV"
 	}
 
 	return ""

@@ -37,10 +37,6 @@ static __always_inline tp_info_pid_t *trace_info_for_connection(connection_info_
     return (tp_info_pid_t *)bpf_map_lookup_elem(&trace_map, conn);
 }
 
-static __always_inline void delete_trace_info_for_connection(connection_info_t *conn) {
-    bpf_map_delete_elem(&trace_map, conn);
-}
-
 static __always_inline u64 current_epoch(u64 ts) {
     u64 temp = ts / NANOSECONDS_PER_EPOCH;
     return temp * NANOSECONDS_PER_EPOCH;

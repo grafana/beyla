@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/grafana/beyla/pkg/internal/export/attributes"
+	"github.com/grafana/beyla/pkg/internal/export/instrumentations"
 	"github.com/grafana/beyla/pkg/internal/infraolly/process"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/pkg/internal/svc"
@@ -26,6 +27,9 @@ func TestProcMetrics_Aggregated(t *testing.T) {
 	require.NoError(t, err)
 
 	// GIVEN an OTEL Metrics Exporter whose process CPU metrics do not consider the process.cpu.state
+	includedAttributes := attributes.InclusionLists{
+		Include: []string{"process_command"},
+	}
 	otelExporter, err := ProcMetricsExporterProvider(
 		ctx, &global.ContextInfo{}, &ProcMetricsConfig{
 			Metrics: &MetricsConfig{
@@ -34,13 +38,14 @@ func TestProcMetrics_Aggregated(t *testing.T) {
 				MetricsProtocol:   ProtocolHTTPProtobuf,
 				Features:          []string{FeatureApplication, FeatureProcess},
 				TTL:               3 * time.Minute,
+				Instrumentations: []string{
+					instrumentations.InstrumentationALL,
+				},
 			}, AttributeSelectors: attributes.Selection{
-				attributes.ProcessCPUTime.Section: attributes.InclusionLists{
-					Include: []string{"process_command"},
-				},
-				attributes.ProcessCPUUtilization.Section: attributes.InclusionLists{
-					Include: []string{"process_command"},
-				},
+				attributes.ProcessCPUTime.Section:        includedAttributes,
+				attributes.ProcessCPUUtilization.Section: includedAttributes,
+				attributes.ProcessDiskIO.Section:         includedAttributes,
+				attributes.ProcessNetIO.Section:          includedAttributes,
 			},
 		})()
 	require.NoError(t, err)
@@ -53,37 +58,65 @@ func TestProcMetrics_Aggregated(t *testing.T) {
 		{Command: "foo", Service: &svc.ID{UID: "foo"},
 			CPUUtilisationWait: 3, CPUUtilisationSystem: 2, CPUUtilisationUser: 1,
 			CPUTimeUserDelta: 30, CPUTimeWaitDelta: 20, CPUTimeSystemDelta: 10,
+			IOReadBytesDelta: 123, IOWriteBytesDelta: 456,
+			NetRcvBytesDelta: 11, NetTxBytesDelta: 22,
 		},
 		{Command: "bar", Service: &svc.ID{UID: "bar"},
 			CPUUtilisationWait: 31, CPUUtilisationSystem: 21, CPUUtilisationUser: 11,
 			CPUTimeUserDelta: 301, CPUTimeWaitDelta: 201, CPUTimeSystemDelta: 101,
+			IOReadBytesDelta: 321, IOWriteBytesDelta: 654,
+			NetRcvBytesDelta: 1, NetTxBytesDelta: 2,
 		},
 	}
 
 	// THEN the metrics are exported adding system/user/wait times into a single datapoint
 	test.Eventually(t, timeout, func(t require.TestingT) {
-		metric := readChan(t, otlp.Records, timeout)
+		metric := readChan(t, otlp.Records(), timeout)
 		require.Equal(t, "process.cpu.time", metric.Name)
 		require.Equal(t, map[string]string{"process.command": "foo"}, metric.Attributes)
 		require.EqualValues(t, 60, metric.FloatVal)
 	})
 	test.Eventually(t, timeout, func(t require.TestingT) {
-		metric := readChan(t, otlp.Records, timeout)
+		metric := readChan(t, otlp.Records(), timeout)
 		require.Equal(t, "process.cpu.time", metric.Name)
 		require.Equal(t, map[string]string{"process.command": "bar"}, metric.Attributes)
 		require.EqualValues(t, 603, metric.FloatVal)
 	})
 	test.Eventually(t, timeout, func(t require.TestingT) {
-		metric := readChan(t, otlp.Records, timeout)
+		metric := readChan(t, otlp.Records(), timeout)
 		require.Equal(t, "process.cpu.utilization", metric.Name)
 		require.Equal(t, map[string]string{"process.command": "foo"}, metric.Attributes)
 		require.EqualValues(t, 6, metric.FloatVal)
 	})
 	test.Eventually(t, timeout, func(t require.TestingT) {
-		metric := readChan(t, otlp.Records, timeout)
+		metric := readChan(t, otlp.Records(), timeout)
 		require.Equal(t, "process.cpu.utilization", metric.Name)
 		require.Equal(t, map[string]string{"process.command": "bar"}, metric.Attributes)
 		require.EqualValues(t, 63, metric.FloatVal)
+	})
+	test.Eventually(t, timeout, func(t require.TestingT) {
+		metric := readChan(t, otlp.Records(), timeout)
+		require.Equal(t, "process.disk.io", metric.Name)
+		require.Equal(t, map[string]string{"process.command": "foo"}, metric.Attributes)
+		require.EqualValues(t, 123+456, metric.IntVal)
+	})
+	test.Eventually(t, timeout, func(t require.TestingT) {
+		metric := readChan(t, otlp.Records(), timeout)
+		require.Equal(t, "process.disk.io", metric.Name)
+		require.Equal(t, map[string]string{"process.command": "bar"}, metric.Attributes)
+		require.EqualValues(t, 321+654, metric.IntVal)
+	})
+	test.Eventually(t, timeout, func(t require.TestingT) {
+		metric := readChan(t, otlp.Records(), timeout)
+		require.Equal(t, "process.network.io", metric.Name)
+		require.Equal(t, map[string]string{"process.command": "foo"}, metric.Attributes)
+		require.EqualValues(t, 33, metric.IntVal)
+	})
+	test.Eventually(t, timeout, func(t require.TestingT) {
+		metric := readChan(t, otlp.Records(), timeout)
+		require.Equal(t, "process.network.io", metric.Name)
+		require.Equal(t, map[string]string{"process.command": "bar"}, metric.Attributes)
+		require.EqualValues(t, 3, metric.IntVal)
 	})
 
 	// AND WHEN new metrics are received
@@ -91,33 +124,47 @@ func TestProcMetrics_Aggregated(t *testing.T) {
 		{Command: "foo", Service: &svc.ID{UID: "foo"},
 			CPUUtilisationWait: 4, CPUUtilisationSystem: 1, CPUUtilisationUser: 2,
 			CPUTimeUserDelta: 3, CPUTimeWaitDelta: 2, CPUTimeSystemDelta: 1,
+			IOReadBytesDelta: 1, IOWriteBytesDelta: 2,
+			NetRcvBytesDelta: 10, NetTxBytesDelta: 20,
 		},
 	}
 
 	// THEN the counter is updated by adding values and the gauges change their values
 	test.Eventually(t, timeout, func(t require.TestingT) {
-		metric := readChan(t, otlp.Records, timeout)
+		metric := readChan(t, otlp.Records(), timeout)
 		require.Equal(t, "process.cpu.time", metric.Name)
 		require.Equal(t, map[string]string{"process.command": "foo"}, metric.Attributes)
 		require.EqualValues(t, 66, metric.FloatVal)
 	})
 	test.Eventually(t, timeout, func(t require.TestingT) {
-		metric := readChan(t, otlp.Records, timeout)
+		metric := readChan(t, otlp.Records(), timeout)
 		require.Equal(t, "process.cpu.time", metric.Name)
 		require.Equal(t, map[string]string{"process.command": "bar"}, metric.Attributes)
 		require.EqualValues(t, 603, metric.FloatVal)
 	})
 	test.Eventually(t, timeout, func(t require.TestingT) {
-		metric := readChan(t, otlp.Records, timeout)
+		metric := readChan(t, otlp.Records(), timeout)
 		require.Equal(t, "process.cpu.utilization", metric.Name)
 		require.Equal(t, map[string]string{"process.command": "foo"}, metric.Attributes)
 		require.EqualValues(t, 7, metric.FloatVal)
 	})
 	test.Eventually(t, timeout, func(t require.TestingT) {
-		metric := readChan(t, otlp.Records, timeout)
+		metric := readChan(t, otlp.Records(), timeout)
 		require.Equal(t, "process.cpu.utilization", metric.Name)
 		require.Equal(t, map[string]string{"process.command": "bar"}, metric.Attributes)
 		require.EqualValues(t, 63, metric.FloatVal)
+	})
+	test.Eventually(t, timeout, func(t require.TestingT) {
+		metric := readChan(t, otlp.Records(), timeout)
+		require.Equal(t, "process.disk.io", metric.Name)
+		require.Equal(t, map[string]string{"process.command": "foo"}, metric.Attributes)
+		require.EqualValues(t, 123+456+1+2, metric.IntVal)
+	})
+	test.Eventually(t, timeout, func(t require.TestingT) {
+		metric := readChan(t, otlp.Records(), timeout)
+		require.Equal(t, "process.network.io", metric.Name)
+		require.Equal(t, map[string]string{"process.command": "foo"}, metric.Attributes)
+		require.EqualValues(t, 63, metric.IntVal)
 	})
 }
 
@@ -131,6 +178,9 @@ func TestProcMetrics_Disaggregated(t *testing.T) {
 	require.NoError(t, err)
 
 	// GIVEN an OTEL Metrics Exporter whose process CPU metrics consider the process.cpu.state
+	includedAttributes := attributes.InclusionLists{
+		Include: []string{"process_command", "process_cpu_state", "disk_io_direction", "network_io_direction"},
+	}
 	otelExporter, err := ProcMetricsExporterProvider(
 		ctx, &global.ContextInfo{}, &ProcMetricsConfig{
 			Metrics: &MetricsConfig{
@@ -139,13 +189,14 @@ func TestProcMetrics_Disaggregated(t *testing.T) {
 				MetricsProtocol:   ProtocolHTTPProtobuf,
 				Features:          []string{FeatureApplication, FeatureProcess},
 				TTL:               3 * time.Minute,
+				Instrumentations: []string{
+					instrumentations.InstrumentationALL,
+				},
 			}, AttributeSelectors: attributes.Selection{
-				attributes.ProcessCPUTime.Section: attributes.InclusionLists{
-					Include: []string{"process_cpu_state", "process_command"},
-				},
-				attributes.ProcessCPUUtilization.Section: attributes.InclusionLists{
-					Include: []string{"process_cpu_state", "process_command"},
-				},
+				attributes.ProcessCPUTime.Section:        includedAttributes,
+				attributes.ProcessCPUUtilization.Section: includedAttributes,
+				attributes.ProcessDiskIO.Section:         includedAttributes,
+				attributes.ProcessNetIO.Section:          includedAttributes,
 			},
 		})()
 	require.NoError(t, err)
@@ -158,50 +209,76 @@ func TestProcMetrics_Disaggregated(t *testing.T) {
 		{Command: "foo", Service: &svc.ID{UID: "foo"},
 			CPUUtilisationWait: 3, CPUUtilisationSystem: 2, CPUUtilisationUser: 1,
 			CPUTimeUserDelta: 30, CPUTimeWaitDelta: 20, CPUTimeSystemDelta: 10,
+			IOReadBytesDelta: 123, IOWriteBytesDelta: 456,
+			NetRcvBytesDelta: 10, NetTxBytesDelta: 20,
 		},
 	}
 
 	// THEN the metrics are exported aggregated by system/user/wait times
 	test.Eventually(t, timeout, func(t require.TestingT) {
-		metric := readChan(t, otlp.Records, timeout)
+		metric := readChan(t, otlp.Records(), timeout)
 		require.Equal(t, "process.cpu.time", metric.Name)
 		require.Equal(t, map[string]string{
 			"process.command": "foo", "process.cpu.state": "user"}, metric.Attributes)
 		require.EqualValues(t, 30, metric.FloatVal)
 	})
 	test.Eventually(t, timeout, func(t require.TestingT) {
-		metric := readChan(t, otlp.Records, timeout)
+		metric := readChan(t, otlp.Records(), timeout)
 		require.Equal(t, "process.cpu.time", metric.Name)
 		require.Equal(t, map[string]string{
 			"process.command": "foo", "process.cpu.state": "system"}, metric.Attributes)
 		require.EqualValues(t, 10, metric.FloatVal)
 	})
 	test.Eventually(t, timeout, func(t require.TestingT) {
-		metric := readChan(t, otlp.Records, timeout)
+		metric := readChan(t, otlp.Records(), timeout)
 		require.Equal(t, "process.cpu.time", metric.Name)
 		require.Equal(t, map[string]string{
 			"process.command": "foo", "process.cpu.state": "wait"}, metric.Attributes)
 		require.EqualValues(t, 20, metric.FloatVal)
 	})
 	test.Eventually(t, timeout, func(t require.TestingT) {
-		metric := readChan(t, otlp.Records, timeout)
+		metric := readChan(t, otlp.Records(), timeout)
 		require.Equal(t, "process.cpu.utilization", metric.Name)
 		require.Equal(t, map[string]string{
 			"process.command": "foo", "process.cpu.state": "user"}, metric.Attributes)
 		require.EqualValues(t, 1, metric.FloatVal)
 	})
 	test.Eventually(t, timeout, func(t require.TestingT) {
-		metric := readChan(t, otlp.Records, timeout)
+		metric := readChan(t, otlp.Records(), timeout)
 		require.Equal(t, "process.cpu.utilization", metric.Name)
 		require.Equal(t, map[string]string{
 			"process.command": "foo", "process.cpu.state": "system"}, metric.Attributes)
 		require.EqualValues(t, 2, metric.FloatVal)
 	})
 	test.Eventually(t, timeout, func(t require.TestingT) {
-		metric := readChan(t, otlp.Records, timeout)
+		metric := readChan(t, otlp.Records(), timeout)
 		require.Equal(t, "process.cpu.utilization", metric.Name)
 		require.Equal(t, map[string]string{
 			"process.command": "foo", "process.cpu.state": "wait"}, metric.Attributes)
 		require.EqualValues(t, 3, metric.FloatVal)
+	})
+	test.Eventually(t, timeout, func(t require.TestingT) {
+		metric := readChan(t, otlp.Records(), timeout)
+		require.Equal(t, "process.disk.io", metric.Name)
+		require.Equal(t, map[string]string{"process.command": "foo", "disk.io.direction": "write"}, metric.Attributes)
+		require.EqualValues(t, 456, metric.IntVal)
+	})
+	test.Eventually(t, timeout, func(t require.TestingT) {
+		metric := readChan(t, otlp.Records(), timeout)
+		require.Equal(t, "process.disk.io", metric.Name)
+		require.Equal(t, map[string]string{"process.command": "foo", "disk.io.direction": "read"}, metric.Attributes)
+		require.EqualValues(t, 123, metric.IntVal)
+	})
+	test.Eventually(t, timeout, func(t require.TestingT) {
+		metric := readChan(t, otlp.Records(), timeout)
+		require.Equal(t, "process.network.io", metric.Name)
+		require.Equal(t, map[string]string{"process.command": "foo", "network.io.direction": "receive"}, metric.Attributes)
+		require.EqualValues(t, 10, metric.IntVal)
+	})
+	test.Eventually(t, timeout, func(t require.TestingT) {
+		metric := readChan(t, otlp.Records(), timeout)
+		require.Equal(t, "process.network.io", metric.Name)
+		require.Equal(t, map[string]string{"process.command": "foo", "network.io.direction": "transmit"}, metric.Attributes)
+		require.EqualValues(t, 20, metric.IntVal)
 	})
 }

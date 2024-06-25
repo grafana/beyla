@@ -36,12 +36,14 @@ func GoKafkaToSpan(event *GoKafkaClientInfo, data *KafkaInfo) request.Span {
 		peer, hostname = (*BPFConnInfo)(unsafe.Pointer(&event.Conn)).reqHostInfo()
 		hostPort = int(event.Conn.D_port)
 	}
+
 	return request.Span{
 		Type:           request.EventTypeKafkaClient,
 		Method:         data.Operation.String(),
 		OtherNamespace: data.ClientID,
 		Path:           data.Topic,
 		Peer:           peer,
+		PeerPort:       int(event.Conn.S_port),
 		Host:           hostname,
 		HostPort:       hostPort,
 		ContentLength:  0,

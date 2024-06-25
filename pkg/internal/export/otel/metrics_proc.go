@@ -23,6 +23,12 @@ var (
 	stateWaitAttr   = attr2.ProcCPUState.OTEL().String("wait")
 	stateUserAttr   = attr2.ProcCPUState.OTEL().String("user")
 	stateSystemAttr = attr2.ProcCPUState.OTEL().String("system")
+
+	diskIODirRead  = attr2.ProcDiskIODir.OTEL().String("read")
+	diskIODirWrite = attr2.ProcDiskIODir.OTEL().String("write")
+
+	netIODirTx  = attr2.ProcNetIODir.OTEL().String("transmit")
+	netIODirRcv = attr2.ProcNetIODir.OTEL().String("receive")
 )
 
 // ProcMetricsConfig extends MetricsConfig for process metrics
@@ -54,11 +60,18 @@ type procMetricsExporter struct {
 	attrCPUUtil       []attributes.Field[*process.Status, attribute.KeyValue]
 	attrMemory        []attributes.Field[*process.Status, attribute.KeyValue]
 	attrMemoryVirtual []attributes.Field[*process.Status, attribute.KeyValue]
+	attrDisk          []attributes.Field[*process.Status, attribute.KeyValue]
+	attrNet           []attributes.Field[*process.Status, attribute.KeyValue]
 
 	// the observation code for CPU metrics will be different depending on
 	// the "process.cpu.state" attribute being selected or not
-	cpuTimeObserver        func(*procMetrics, *process.Status)
-	cpuUtilisationObserver func(*procMetrics, *process.Status)
+	cpuTimeObserver        func(context.Context, *procMetrics, *process.Status)
+	cpuUtilisationObserver func(context.Context, *procMetrics, *process.Status)
+
+	// the observation code for disk and network metrics will be different depending on
+	// the *.io.direction attributes being selected or not
+	diskObserver func(context.Context, *procMetrics, *process.Status)
+	netObserver  func(context.Context, *procMetrics, *process.Status)
 }
 
 type procMetrics struct {
@@ -66,10 +79,13 @@ type procMetrics struct {
 	service  *svc.ID
 	provider *metric.MeterProvider
 
-	cpuTime        *Expirer[*process.Status, metric2.Float64Observer, *FloatCounter, float64]
-	cpuUtilisation *Expirer[*process.Status, metric2.Float64Observer, *Gauge, float64]
-	memory         *Expirer[*process.Status, metric2.Int64Observer, *IntGauge, int64]
-	memoryVirtual  *Expirer[*process.Status, metric2.Int64Observer, *IntGauge, int64]
+	// don't forget to add the cleanup code in cleanupAllMetricsInstances function
+	cpuTime        *Expirer[*process.Status, metric2.Float64Counter, float64]
+	cpuUtilisation *Expirer[*process.Status, metric2.Float64Gauge, float64]
+	memory         *Expirer[*process.Status, metric2.Int64UpDownCounter, int64]
+	memoryVirtual  *Expirer[*process.Status, metric2.Int64UpDownCounter, int64]
+	disk           *Expirer[*process.Status, metric2.Int64Counter, int64]
+	net            *Expirer[*process.Status, metric2.Int64Counter, int64]
 }
 
 func ProcMetricsExporterProvider(
@@ -102,10 +118,20 @@ func newProcMetricsExporter(
 		return nil, fmt.Errorf("process OTEL exporter attributes: %w", err)
 	}
 
-	attrCPUTime, cpuTimeHasState := cpuAttributes(attrProv, attributes.ProcessCPUTime)
-	attrCPUUtil, cpuUtilHasState := cpuAttributes(attrProv, attributes.ProcessCPUUtilization)
+	cpuTimeNames := attrProv.For(attributes.ProcessCPUTime)
+	attrCPUTime := attributes.OpenTelemetryGetters(process.OTELGetters, cpuTimeNames)
+
+	cpuUtilNames := attrProv.For(attributes.ProcessCPUUtilization)
+	attrCPUUtil := attributes.OpenTelemetryGetters(process.OTELGetters, cpuUtilNames)
+
+	diskNames := attrProv.For(attributes.ProcessDiskIO)
+	attrDisk := attributes.OpenTelemetryGetters(process.OTELGetters, diskNames)
+
+	netNames := attrProv.For(attributes.ProcessNetIO)
+	attrNet := attributes.OpenTelemetryGetters(process.OTELGetters, netNames)
 
 	mr := &procMetricsExporter{
+		log:         log,
 		ctx:         ctx,
 		cfg:         cfg,
 		clock:       expire.NewCachedClock(timeNow),
@@ -115,25 +141,37 @@ func newProcMetricsExporter(
 			attrProv.For(attributes.ProcessMemoryUsage)),
 		attrMemoryVirtual: attributes.OpenTelemetryGetters(process.OTELGetters,
 			attrProv.For(attributes.ProcessMemoryVirtual)),
-		log: log,
+		attrDisk: attrDisk,
+		attrNet:  attrNet,
 	}
-	if cpuTimeHasState {
+	if slices.Contains(cpuTimeNames, attr2.ProcCPUState) {
 		mr.cpuTimeObserver = cpuTimeDisaggregatedObserver
 	} else {
 		mr.cpuTimeObserver = cpuTimeAggregatedObserver
 	}
-	if cpuUtilHasState {
+	if slices.Contains(cpuUtilNames, attr2.ProcCPUState) {
 		mr.cpuUtilisationObserver = cpuUtilisationDisaggregatedObserver
 	} else {
 		mr.cpuUtilisationObserver = cpuUtilisationAggregatedObserver
 	}
+	if slices.Contains(diskNames, attr2.ProcDiskIODir) {
+		mr.diskObserver = diskDisaggregatedObserver
+	} else {
+		mr.diskObserver = diskAggregatedObserver
+	}
+	if slices.Contains(netNames, attr2.ProcNetIODir) {
+		mr.netObserver = netDisaggregatedObserver
+	} else {
+		mr.netObserver = netAggregatedObserver
+	}
 
-	mr.reporters = NewReporterPool[*procMetrics](cfg.Metrics.ReportersCacheLen,
-		func(id svc.UID, v *procMetrics) {
+	mr.reporters = NewReporterPool[*procMetrics](cfg.Metrics.ReportersCacheLen, cfg.Metrics.TTL, timeNow,
+		func(id svc.UID, v *expirable[*procMetrics]) {
 			llog := log.With("service", id)
 			llog.Debug("evicting metrics reporter from cache")
+			v.value.cleanupAllMetricsInstances()
 			go func() {
-				if err := v.provider.ForceFlush(ctx); err != nil {
+				if err := v.value.provider.ForceFlush(ctx); err != nil {
 					llog.Warn("error flushing evicted metrics provider", "error", err)
 				}
 			}()
@@ -166,56 +204,79 @@ func (me *procMetricsExporter) newMetricSet(service *svc.ID) (*procMetrics, erro
 
 	meter := m.provider.Meter(reporterName)
 
-	m.cpuTime = NewExpirer[*process.Status, metric2.Float64Observer](
-		NewFloatCounter, me.attrCPUTime, timeNow, me.cfg.Metrics.TTL)
-	if _, err := meter.Float64ObservableCounter(
+	if cpuTime, err := meter.Float64Counter(
 		attributes.ProcessCPUTime.OTEL, metric2.WithUnit("s"),
 		metric2.WithDescription("Total CPU seconds broken down by different states"),
-		metric2.WithFloat64Callback(m.cpuTime.Collect),
 	); err != nil {
 		log.Error("creating observable gauge for "+attributes.ProcessCPUUtilization.OTEL, "error", err)
 		return nil, err
+	} else {
+		m.cpuTime = NewExpirer[*process.Status, metric2.Float64Counter, float64](
+			me.ctx, cpuTime, me.attrCPUTime, timeNow, me.cfg.Metrics.TTL)
 	}
 
-	m.cpuUtilisation = NewExpirer[*process.Status, metric2.Float64Observer](
-		NewGauge, me.attrCPUUtil, timeNow, me.cfg.Metrics.TTL)
-	if _, err := meter.Float64ObservableGauge(
+	if cpuUtilisation, err := meter.Float64Gauge(
 		attributes.ProcessCPUUtilization.OTEL,
 		metric2.WithDescription("Difference in process.cpu.time since the last measurement, divided by the elapsed time and number of CPUs available to the process"),
 		metric2.WithUnit("1"),
-		metric2.WithFloat64Callback(m.cpuUtilisation.Collect),
 	); err != nil {
 		log.Error("creating observable gauge for "+attributes.ProcessCPUUtilization.OTEL, "error", err)
 		return nil, err
+	} else {
+		m.cpuUtilisation = NewExpirer[*process.Status, metric2.Float64Gauge, float64](
+			me.ctx, cpuUtilisation, me.attrCPUUtil, timeNow, me.cfg.Metrics.TTL)
 	}
 
 	// memory metrics are defined as UpDownCounters in the Otel specification, but we
 	// internally treat them as gauges, as it's aligned to what we get from the /proc filesystem
-	m.memory = NewExpirer[*process.Status, metric2.Int64Observer](
-		NewIntGauge, me.attrMemory, timeNow, me.cfg.Metrics.TTL)
-	if _, err := meter.Int64ObservableUpDownCounter(
+
+	if memory, err := meter.Int64UpDownCounter(
 		attributes.ProcessMemoryUsage.OTEL,
 		metric2.WithDescription("The amount of physical memory in use"),
 		metric2.WithUnit("By"),
-		metric2.WithInt64Callback(m.memory.Collect),
 	); err != nil {
 		log.Error("creating observable gauge for "+attributes.ProcessMemoryUsage.OTEL, "error", err)
 		return nil, err
+	} else {
+		m.memory = NewExpirer[*process.Status, metric2.Int64UpDownCounter, int64](
+			me.ctx, memory, me.attrMemory, timeNow, me.cfg.Metrics.TTL)
 	}
-	// memory metrics are defined as UpDownCounters in the Otel specification, but we
-	// internally treat them as gauges, as it's aligned to what we get from the /proc filesystem
-	m.memoryVirtual = NewExpirer[*process.Status, metric2.Int64Observer](
-		NewIntGauge, me.attrMemory, timeNow, me.cfg.Metrics.TTL)
-	if _, err := meter.Int64ObservableUpDownCounter(
+
+	if memoryVirtual, err := meter.Int64UpDownCounter(
 		attributes.ProcessMemoryVirtual.OTEL,
 		metric2.WithDescription("The amount of committed virtual memory"),
 		metric2.WithUnit("By"),
-		metric2.WithInt64Callback(m.memoryVirtual.Collect),
 	); err != nil {
 		log.Error("creating observable gauge for "+attributes.ProcessMemoryVirtual.OTEL, "error", err)
 		return nil, err
+	} else {
+		m.memoryVirtual = NewExpirer[*process.Status, metric2.Int64UpDownCounter, int64](
+			me.ctx, memoryVirtual, me.attrMemoryVirtual, timeNow, me.cfg.Metrics.TTL)
 	}
 
+	if disk, err := meter.Int64Counter(
+		attributes.ProcessDiskIO.OTEL,
+		metric2.WithDescription("Disk bytes transferred"),
+		metric2.WithUnit("By"),
+	); err != nil {
+		log.Error("creating observable gauge for "+attributes.ProcessMemoryVirtual.OTEL, "error", err)
+		return nil, err
+	} else {
+		m.disk = NewExpirer[*process.Status, metric2.Int64Counter, int64](
+			me.ctx, disk, me.attrDisk, timeNow, me.cfg.Metrics.TTL)
+	}
+
+	if net, err := meter.Int64Counter(
+		attributes.ProcessNetIO.OTEL,
+		metric2.WithDescription("Network bytes transferred"),
+		metric2.WithUnit("By"),
+	); err != nil {
+		log.Error("creating observable gauge for "+attributes.ProcessMemoryVirtual.OTEL, "error", err)
+		return nil, err
+	} else {
+		m.net = NewExpirer[*process.Status, metric2.Int64Counter, int64](
+			me.ctx, net, me.attrNet, timeNow, me.cfg.Metrics.TTL)
+	}
 	return &m, nil
 }
 
@@ -236,55 +297,84 @@ func (me *procMetricsExporter) Do(in <-chan []*process.Status) {
 }
 
 func (me *procMetricsExporter) observeMetric(reporter *procMetrics, s *process.Status) {
-	me.log.Debug("reporting data for record", "record", s)
+	// me.log.Debug("reporting data for record", "record", s)
 
-	me.cpuTimeObserver(reporter, s)
-	me.cpuUtilisationObserver(reporter, s)
-	reporter.memory.ForRecord(s).Set(s.MemoryRSSBytes)
-	reporter.memoryVirtual.ForRecord(s).Set(s.MemoryVMSBytes)
+	me.cpuTimeObserver(me.ctx, reporter, s)
+	me.cpuUtilisationObserver(me.ctx, reporter, s)
+
+	mem, attrs := reporter.memory.ForRecord(s)
+	mem.Add(me.ctx, s.MemoryRSSBytesDelta, metric2.WithAttributeSet(attrs))
+
+	vmem, attrs := reporter.memoryVirtual.ForRecord(s)
+	vmem.Add(me.ctx, s.MemoryVMSBytesDelta, metric2.WithAttributeSet(attrs))
+
+	me.diskObserver(me.ctx, reporter, s)
+	me.netObserver(me.ctx, reporter, s)
 }
 
 // aggregated observers report all the CPU metrics in a single data point
 // to be triggered when the user disables the "process_cpu_state" metric
-func cpuTimeAggregatedObserver(reporter *procMetrics, record *process.Status) {
-	reporter.cpuTime.ForRecord(record).
-		Add(record.CPUTimeUserDelta + record.CPUTimeSystemDelta + record.CPUTimeWaitDelta)
+func cpuTimeAggregatedObserver(ctx context.Context, reporter *procMetrics, record *process.Status) {
+	cpu, attrs := reporter.cpuTime.ForRecord(record)
+	cpu.Add(ctx, record.CPUTimeUserDelta+record.CPUTimeSystemDelta+record.CPUTimeWaitDelta,
+		metric2.WithAttributeSet(attrs))
 }
 
-func cpuUtilisationAggregatedObserver(reporter *procMetrics, record *process.Status) {
-	reporter.cpuUtilisation.ForRecord(record).
-		Set(record.CPUUtilisationUser + record.CPUUtilisationSystem + record.CPUUtilisationWait)
+func cpuUtilisationAggregatedObserver(ctx context.Context, reporter *procMetrics, record *process.Status) {
+	cpu, attrs := reporter.cpuUtilisation.ForRecord(record)
+	cpu.Record(ctx, record.CPUUtilisationUser+record.CPUUtilisationSystem+record.CPUUtilisationWait,
+		metric2.WithAttributeSet(attrs))
 }
 
 // disaggregated observers report three CPU metrics: system, user and wait time
 // to be triggered when the user enables the "process_cpu_state" metric
-func cpuTimeDisaggregatedObserver(reporter *procMetrics, record *process.Status) {
-	reporter.cpuTime.ForRecord(record, stateWaitAttr).Add(record.CPUTimeWaitDelta)
-	reporter.cpuTime.ForRecord(record, stateUserAttr).Add(record.CPUTimeUserDelta)
-	reporter.cpuTime.ForRecord(record, stateSystemAttr).Add(record.CPUTimeSystemDelta)
+func cpuTimeDisaggregatedObserver(ctx context.Context, reporter *procMetrics, record *process.Status) {
+	cpu, attrs := reporter.cpuTime.ForRecord(record, stateWaitAttr)
+	cpu.Add(ctx, record.CPUTimeWaitDelta, metric2.WithAttributeSet(attrs))
+	cpu, attrs = reporter.cpuTime.ForRecord(record, stateUserAttr)
+	cpu.Add(ctx, record.CPUTimeUserDelta, metric2.WithAttributeSet(attrs))
+	cpu, attrs = reporter.cpuTime.ForRecord(record, stateSystemAttr)
+	cpu.Add(ctx, record.CPUTimeSystemDelta, metric2.WithAttributeSet(attrs))
 }
 
-func cpuUtilisationDisaggregatedObserver(reporter *procMetrics, record *process.Status) {
-	reporter.cpuUtilisation.ForRecord(record, stateWaitAttr).Set(record.CPUUtilisationWait)
-	reporter.cpuUtilisation.ForRecord(record, stateUserAttr).Set(record.CPUUtilisationUser)
-	reporter.cpuUtilisation.ForRecord(record, stateSystemAttr).Set(record.CPUUtilisationSystem)
+func cpuUtilisationDisaggregatedObserver(ctx context.Context, reporter *procMetrics, record *process.Status) {
+	cpu, attrs := reporter.cpuUtilisation.ForRecord(record, stateWaitAttr)
+	cpu.Record(ctx, record.CPUUtilisationWait, metric2.WithAttributeSet(attrs))
+	cpu, attrs = reporter.cpuUtilisation.ForRecord(record, stateUserAttr)
+	cpu.Record(ctx, record.CPUUtilisationUser, metric2.WithAttributeSet(attrs))
+	cpu, attrs = reporter.cpuUtilisation.ForRecord(record, stateSystemAttr)
+	cpu.Record(ctx, record.CPUUtilisationSystem, metric2.WithAttributeSet(attrs))
 }
 
-// cpuAttributes returns, for a metric name definition, the getters for
-// them. It also returns if the invoker must explicitly add the "process.cpu.state" name and value
-func cpuAttributes(
-	provider *attributes.AttrSelector, metricName attributes.Name,
-) (
-	getters []attributes.Field[*process.Status, attribute.KeyValue], containsState bool,
-) {
-	attrNames := provider.For(metricName)
-	// "process_cpu_state" won't be added by OpenTelemetryGetters, as it's not defined in the *process.Status
-	// we need to be aware of the user willing to add it to explicitly choose between
-	// cpuTimeAggregatedObserver and cpuTimeDisggregatedObserver
-	for _, attr := range attrNames {
-		containsState = containsState || attr.OTEL() == attr2.ProcCPUState.OTEL()
-	}
-	getters = attributes.OpenTelemetryGetters(process.OTELGetters, attrNames)
+func diskAggregatedObserver(ctx context.Context, reporter *procMetrics, record *process.Status) {
+	disk, attrs := reporter.disk.ForRecord(record)
+	disk.Add(ctx, int64(record.IOReadBytesDelta+record.IOWriteBytesDelta), metric2.WithAttributeSet(attrs))
+}
 
-	return
+func diskDisaggregatedObserver(ctx context.Context, reporter *procMetrics, record *process.Status) {
+	disk, attrs := reporter.disk.ForRecord(record, diskIODirRead)
+	disk.Add(ctx, int64(record.IOReadBytesDelta), metric2.WithAttributeSet(attrs))
+	disk, attrs = reporter.disk.ForRecord(record, diskIODirWrite)
+	disk.Add(ctx, int64(record.IOWriteBytesDelta), metric2.WithAttributeSet(attrs))
+}
+
+func netAggregatedObserver(ctx context.Context, reporter *procMetrics, record *process.Status) {
+	net, attrs := reporter.net.ForRecord(record)
+	net.Add(ctx, record.NetTxBytesDelta+record.NetRcvBytesDelta, metric2.WithAttributeSet(attrs))
+}
+
+func netDisaggregatedObserver(ctx context.Context, reporter *procMetrics, record *process.Status) {
+	net, attrs := reporter.net.ForRecord(record, netIODirTx)
+	net.Add(ctx, record.NetTxBytesDelta, metric2.WithAttributeSet(attrs))
+	net, attrs = reporter.net.ForRecord(record, netIODirRcv)
+	net.Add(ctx, record.NetRcvBytesDelta, metric2.WithAttributeSet(attrs))
+}
+
+func (r *procMetrics) cleanupAllMetricsInstances() {
+	r.cpuTime.RemoveAllMetrics(r.ctx)
+	r.cpuUtilisation.RemoveAllMetrics(r.ctx)
+	r.memory.RemoveAllMetrics(r.ctx)
+	r.memoryVirtual.RemoveAllMetrics(r.ctx)
+	r.disk.RemoveAllMetrics(r.ctx)
+	r.net.RemoveAllMetrics(r.ctx)
 }

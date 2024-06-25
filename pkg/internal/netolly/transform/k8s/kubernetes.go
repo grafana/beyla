@@ -28,6 +28,7 @@ import (
 	"github.com/mariomac/pipes/pipe"
 
 	attr "github.com/grafana/beyla/pkg/internal/export/attributes/names"
+	"github.com/grafana/beyla/pkg/internal/kube"
 	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
 	"github.com/grafana/beyla/pkg/transform"
 )
@@ -52,14 +53,22 @@ const (
 
 func log() *slog.Logger { return slog.With("component", "k8s.MetadataDecorator") }
 
-func MetadataDecoratorProvider(ctx context.Context, cfg *transform.KubernetesDecorator) (pipe.MiddleFunc[[]*ebpf.Record, []*ebpf.Record], error) {
-	if !cfg.Enabled() {
+func MetadataDecoratorProvider(
+	ctx context.Context,
+	cfg *transform.KubernetesDecorator,
+	k8sInformer *kube.MetadataProvider,
+) (pipe.MiddleFunc[[]*ebpf.Record, []*ebpf.Record], error) {
+	if !k8sInformer.IsKubeEnabled() {
 		// This node is not going to be instantiated. Let the pipes library just bypassing it.
 		return pipe.Bypass[[]*ebpf.Record](), nil
 	}
-	nt, err := newDecorator(ctx, cfg)
+	metadata, err := k8sInformer.Get(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("instantiating network transformer: %w", err)
+		return nil, fmt.Errorf("instantiating k8s.MetadataDecorator: %w", err)
+	}
+	nt, err := newDecorator(ctx, cfg, metadata)
+	if err != nil {
+		return nil, fmt.Errorf("instantiating k8s.MetadataDecorator: %w", err)
 	}
 	var decorate func([]*ebpf.Record) []*ebpf.Record
 	if cfg.DropExternal {
@@ -80,7 +89,7 @@ func MetadataDecoratorProvider(ctx context.Context, cfg *transform.KubernetesDec
 type decorator struct {
 	log              *slog.Logger
 	alreadyLoggedIPs *simplelru.LRU[string, struct{}]
-	kube             NetworkInformers
+	kube             *kube.Metadata
 	clusterName      string
 }
 
@@ -115,7 +124,7 @@ func (n *decorator) transform(flow *ebpf.Record) bool {
 
 // decorate the flow with Kube metadata. Returns false if there is no metadata found for such IP
 func (n *decorator) decorate(flow *ebpf.Record, prefix, ip string) bool {
-	kubeInfo, ok := n.kube.GetInfo(ip)
+	ipinfo, meta, ok := n.kube.GetInfo(ip)
 	if !ok {
 		if n.log.Enabled(context.TODO(), slog.LevelDebug) {
 			// avoid spoofing the debug logs with the same message for each flow whose IP can't be decorated
@@ -126,35 +135,36 @@ func (n *decorator) decorate(flow *ebpf.Record, prefix, ip string) bool {
 		}
 		return false
 	}
-	flow.Attrs.Metadata[attr.Name(prefix+attrSuffixNs)] = kubeInfo.Namespace
-	flow.Attrs.Metadata[attr.Name(prefix+attrSuffixName)] = kubeInfo.Name
-	flow.Attrs.Metadata[attr.Name(prefix+attrSuffixType)] = kubeInfo.Type
-	flow.Attrs.Metadata[attr.Name(prefix+attrSuffixOwnerName)] = kubeInfo.Owner.Name
-	flow.Attrs.Metadata[attr.Name(prefix+attrSuffixOwnerType)] = kubeInfo.Owner.Type
-	if kubeInfo.HostIP != "" {
-		flow.Attrs.Metadata[attr.Name(prefix+attrSuffixHostIP)] = kubeInfo.HostIP
-		if kubeInfo.HostName != "" {
-			flow.Attrs.Metadata[attr.Name(prefix+attrSuffixHostName)] = kubeInfo.HostName
+	flow.Attrs.Metadata[attr.Name(prefix+attrSuffixNs)] = meta.Namespace
+	flow.Attrs.Metadata[attr.Name(prefix+attrSuffixName)] = meta.Name
+	flow.Attrs.Metadata[attr.Name(prefix+attrSuffixType)] = ipinfo.Kind
+	flow.Attrs.Metadata[attr.Name(prefix+attrSuffixOwnerName)] = ipinfo.Owner.Name
+	flow.Attrs.Metadata[attr.Name(prefix+attrSuffixOwnerType)] = ipinfo.Owner.Kind
+	if ipinfo.HostIP != "" {
+		flow.Attrs.Metadata[attr.Name(prefix+attrSuffixHostIP)] = ipinfo.HostIP
+		if ipinfo.HostName != "" {
+			flow.Attrs.Metadata[attr.Name(prefix+attrSuffixHostName)] = ipinfo.HostName
 		}
 	}
 	// decorate other names from metadata, if required
 	if prefix == attrPrefixDst {
 		if flow.Attrs.DstName == "" {
-			flow.Attrs.DstName = kubeInfo.Name
+			flow.Attrs.DstName = meta.Name
 		}
 	} else {
 		if flow.Attrs.SrcName == "" {
-			flow.Attrs.SrcName = kubeInfo.Name
+			flow.Attrs.SrcName = meta.Name
 		}
 	}
 	return true
 }
 
 // newDecorator create a new transform
-func newDecorator(ctx context.Context, cfg *transform.KubernetesDecorator) (*decorator, error) {
+func newDecorator(ctx context.Context, cfg *transform.KubernetesDecorator, meta *kube.Metadata) (*decorator, error) {
 	nt := decorator{
 		log:         log(),
 		clusterName: kubeClusterName(ctx, cfg),
+		kube:        meta,
 	}
 	if nt.log.Enabled(ctx, slog.LevelDebug) {
 		var err error
@@ -162,10 +172,6 @@ func newDecorator(ctx context.Context, cfg *transform.KubernetesDecorator) (*dec
 		if err != nil {
 			return nil, fmt.Errorf("instantiating debug notified error cache: %w", err)
 		}
-	}
-
-	if err := nt.kube.InitFromConfig(ctx, cfg.KubeconfigPath, cfg.InformersSyncTimeout); err != nil {
-		return nil, err
 	}
 	return &nt, nil
 }

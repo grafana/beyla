@@ -27,9 +27,12 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"path"
 	"runtime"
+	"strconv"
 
 	"github.com/hashicorp/golang-lru/v2/simplelru"
+	"github.com/shirou/gopsutil/v3/process"
 
 	"github.com/grafana/beyla/pkg/internal/svc"
 )
@@ -74,7 +77,7 @@ func newHarvester(cfg *CollectConfig, cache *simplelru.LRU[int32, *linuxProcess]
 // will be ignored
 func (ps *Harvester) Harvest(svcID *svc.ID) (*Status, error) {
 	pid := svcID.ProcPID
-	ps.log.Debug("harvesting pid", "pid", pid)
+	// ps.log.Debug("harvesting pid", "pid", pid)
 	// Reuses process information that does not vary
 	cached, hasCachedEntry := ps.cache.Get(pid)
 
@@ -105,6 +108,11 @@ func (ps *Harvester) Harvest(svcID *svc.ID) (*Status, error) {
 		return nil, fmt.Errorf("can't fetch deltas: %w", err)
 	}
 
+	ps.populateNetworkInfo(status, cached)
+
+	// current stats will be used in the next iteration to calculate some delta values
+	cached.prevStats = cached.stats
+
 	return status, nil
 }
 
@@ -134,14 +142,18 @@ func (ps *Harvester) populateGauges(status *Status, process *linuxProcess) error
 	var err error
 
 	// Calculate CPU metrics from current and previous user/system/wait time
-	status.CPUTimeSystemDelta = process.stats.cpu.SystemTime - process.previousCPUStats.SystemTime
-	status.CPUTimeUserDelta = process.stats.cpu.UserTime - process.previousCPUStats.UserTime
-	status.CPUTimeWaitDelta = process.stats.cpu.WaitTime - process.previousCPUStats.WaitTime
+	var zero CPUInfo
+	// we only calculate CPU deltas and utilization time from the second sample onwards
+	if process.prevStats.cpu != zero {
+		status.CPUTimeSystemDelta = process.stats.cpu.SystemTime - process.prevStats.cpu.SystemTime
+		status.CPUTimeUserDelta = process.stats.cpu.UserTime - process.prevStats.cpu.UserTime
+		status.CPUTimeWaitDelta = process.stats.cpu.WaitTime - process.prevStats.cpu.WaitTime
 
-	delta := process.measureTime.Sub(process.previousMeasureTime).Seconds() * float64(runtime.NumCPU())
-	status.CPUUtilisationSystem = (process.stats.cpu.SystemTime - process.previousCPUStats.SystemTime) / delta
-	status.CPUUtilisationUser = (process.stats.cpu.UserTime - process.previousCPUStats.UserTime) / delta
-	status.CPUUtilisationWait = (process.stats.cpu.WaitTime - process.previousCPUStats.WaitTime) / delta
+		delta := process.measureTime.Sub(process.previousMeasureTime).Seconds() * float64(runtime.NumCPU())
+		status.CPUUtilisationSystem = (process.stats.cpu.SystemTime - process.prevStats.cpu.SystemTime) / delta
+		status.CPUUtilisationUser = (process.stats.cpu.UserTime - process.prevStats.cpu.UserTime) / delta
+		status.CPUUtilisationWait = (process.stats.cpu.WaitTime - process.prevStats.cpu.WaitTime) / delta
+	}
 
 	if ps.privileged {
 		status.FdCount, err = process.NumFDs()
@@ -154,23 +166,44 @@ func (ps *Harvester) populateGauges(status *Status, process *linuxProcess) error
 	status.Status = process.stats.state
 	status.ThreadCount = process.stats.numThreads
 	status.MemoryVMSBytes = process.stats.vmSize
+	status.MemoryVMSBytesDelta = process.stats.vmSize - process.prevStats.vmSize
 	status.MemoryRSSBytes = process.stats.vmRSS
+	status.MemoryRSSBytesDelta = process.stats.vmRSS - process.prevStats.vmRSS
 
 	return nil
 }
 
-// populateIOCounters fills the status with the IO counters data. For the "X per second" metrics, it requires the
+// populateIOCounters fills the status with the IO counters data. For the delta metrics, it requires the
 // last process status for comparative purposes
 func (ps *Harvester) populateIOCounters(status *Status, source *linuxProcess) error {
+	previous := source.previousIOCounters
+	if previous == nil {
+		previous = &process.IOCountersStat{}
+	}
 	ioCounters, err := source.IOCounters()
 	if err != nil {
 		return err
 	}
+	source.previousIOCounters = ioCounters
 	if ioCounters != nil {
 		status.IOReadCount = ioCounters.ReadCount
 		status.IOWriteCount = ioCounters.WriteCount
-		status.IOReadBytes = ioCounters.ReadBytes
-		status.IOWriteBytes = ioCounters.WriteBytes
+		status.IOReadBytesDelta = ioCounters.ReadBytes - previous.ReadBytes
+		status.IOWriteBytesDelta = ioCounters.WriteBytes - previous.WriteBytes
 	}
 	return nil
+}
+
+func (ps *Harvester) populateNetworkInfo(status *Status, source *linuxProcess) {
+	statPath := path.Join(ps.procFSRoot, strconv.Itoa(int(source.pid)), "net", "dev")
+	content, err := os.ReadFile(statPath)
+	if err != nil {
+		ps.log.Debug("can't read net dev file", "path", statPath, "error", err)
+		return
+	}
+	rx, tx := parseProcNetDev(content)
+	status.NetRcvBytesDelta = rx - source.previousNetRx
+	status.NetTxBytesDelta = tx - source.previousNetTx
+	source.previousNetRx = rx
+	source.previousNetTx = tx
 }

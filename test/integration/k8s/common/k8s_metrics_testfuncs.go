@@ -66,6 +66,8 @@ var (
 		"process_cpu_utilization_ratio",
 		"process_memory_usage_bytes",
 		"process_memory_virtual_bytes",
+		"process_disk_io_bytes_total",
+		"process_network_io_bytes_total",
 	}
 )
 
@@ -120,7 +122,7 @@ func FeatureHTTPMetricsDecoration(manifest string) features.Feature {
 				"k8s_replicaset_name": "^testserver-",
 			})).
 		Assess("all the span graph metrics exist",
-			testMetricsDecoration(spanGraphMetrics, `{connection_type="virtual_node",server="testserver"}`, map[string]string{
+			testMetricsDecoration(spanGraphMetrics, `{server="testserver"}`, map[string]string{
 				"server_service_namespace": "integration-test",
 				"source":                   "beyla",
 			}),

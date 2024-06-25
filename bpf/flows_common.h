@@ -15,6 +15,7 @@
 // according to field 61 in https://www.iana.org/assignments/ipfix/ipfix.xhtml
 #define INGRESS 0
 #define EGRESS 1
+#define UNKNOWN 255
 
 // Flags according to RFC 9293 & https://www.iana.org/assignments/ipfix/ipfix.xhtml
 #define FIN_FLAG 0x01
@@ -43,6 +44,13 @@ struct {
     __type(key, flow_id);
     __type(value, flow_metrics);
 } aggregated_flows SEC(".maps");
+
+// Key: the flow identifier. Value: the flow direction.
+struct {
+	__uint(type, BPF_MAP_TYPE_LRU_HASH);
+	__type(key, flow_id);
+	__type(value, u8);
+} flow_directions SEC(".maps");
 
 const u8 ip4in6[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff};
 

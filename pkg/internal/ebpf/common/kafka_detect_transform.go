@@ -50,10 +50,15 @@ var topicRegex = regexp.MustCompile("\x02\t(.*)\x02")
 
 // ProcessKafkaRequest processes a TCP packet and returns error if the packet is not a valid Kafka request.
 // Otherwise, return kafka.Info with the processed data.
-func ProcessPossibleKafkaEvent(pkt []byte, rpkt []byte) (*KafkaInfo, error) {
+func ProcessPossibleKafkaEvent(event *TCPRequestInfo, pkt []byte, rpkt []byte) (*KafkaInfo, error) {
 	k, err := ProcessKafkaRequest(pkt)
 	if err != nil {
+		// If we are getting the information in the response buffer, the event
+		// must be reversed and that's how we captured it.
 		k, err = ProcessKafkaRequest(rpkt)
+		if err == nil {
+			reverseTCPEvent(event)
+		}
 	}
 	return k, err
 }
@@ -326,12 +331,19 @@ func TCPToKafkaToSpan(trace *TCPRequestInfo, data *KafkaInfo) request.Span {
 		peer, hostname = (*BPFConnInfo)(unsafe.Pointer(&trace.ConnInfo)).reqHostInfo()
 		hostPort = int(trace.ConnInfo.D_port)
 	}
+
+	reqType := request.EventTypeKafkaClient
+	if trace.Direction == 0 {
+		reqType = request.EventTypeKafkaServer
+	}
+
 	return request.Span{
-		Type:           request.EventTypeKafkaClient,
+		Type:           reqType,
 		Method:         data.Operation.String(),
 		OtherNamespace: data.ClientID,
 		Path:           data.Topic,
 		Peer:           peer,
+		PeerPort:       int(trace.ConnInfo.S_port),
 		Host:           hostname,
 		HostPort:       hostPort,
 		ContentLength:  0,

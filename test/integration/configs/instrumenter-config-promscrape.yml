@@ -19,3 +19,7 @@ attributes:
       include: ["*"]
     process_memory_virtual:
       include: ["*"]
+    process_disk_io:
+      include: ["*"]
+    process_network_io:
+      include: ["*"]

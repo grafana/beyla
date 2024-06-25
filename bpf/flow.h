@@ -44,6 +44,8 @@ typedef struct flow_metrics_t {
     u64 end_mono_time_ns;
     // TCP Flags from https://www.ietf.org/rfc/rfc793.txt
     u16 flags;
+    // direction of the flow EGRESS / INGRESS
+    u8 direction;
     // The positive errno of a failed map insertion that caused a flow
     // to be sent via ringbuffer.
     // 0 otherwise
@@ -60,7 +62,6 @@ typedef struct flow_id_t {
     struct in6_addr src_ip; // keep these aligned
     struct in6_addr dst_ip;
     u16 eth_protocol;
-    u8 direction;
     // L4 transport layer
     u16 src_port;
     u16 dst_port;

@@ -81,6 +81,16 @@ var (
 		Prom:    "process_memory_virtual_bytes",
 		OTEL:    "process.memory.virtual",
 	}
+	ProcessDiskIO = Name{
+		Section: "process.disk.io",
+		Prom:    "process_disk_io_bytes_total",
+		OTEL:    "process.disk.io",
+	}
+	ProcessNetIO = Name{
+		Section: "process.network.io",
+		Prom:    "process_network_io_bytes_total",
+		OTEL:    "process.network.io",
+	}
 	MessagingPublishDuration = Name{
 		Section: "messaging.publish.duration",
 		Prom:    "messaging_publish_duration_seconds",

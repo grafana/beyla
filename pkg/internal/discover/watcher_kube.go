@@ -1,6 +1,7 @@
 package discover
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 
@@ -51,10 +52,24 @@ type nsName struct {
 	name      string
 }
 
-func WatcherKubeEnricherProvider(enabled bool, informer kubeMetadata) pipe.MiddleProvider[[]Event[processAttrs], []Event[processAttrs]] {
+// kubeMetadataProvider abstracts kube.MetadataProvider for easier dependency
+// injection in tests
+type kubeMetadataProvider interface {
+	IsKubeEnabled() bool
+	Get(context.Context) (*kube.Metadata, error)
+}
+
+func WatcherKubeEnricherProvider(
+	ctx context.Context,
+	informerProvider kubeMetadataProvider,
+) pipe.MiddleProvider[[]Event[processAttrs], []Event[processAttrs]] {
 	return func() (pipe.MiddleFunc[[]Event[processAttrs], []Event[processAttrs]], error) {
-		if !enabled {
+		if !informerProvider.IsKubeEnabled() {
 			return pipe.Bypass[[]Event[processAttrs]](), nil
+		}
+		informer, err := informerProvider.Get(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("instantiating WatcherKubeEnricher: %w", err)
 		}
 		wk := watcherKubeEnricher{informer: informer}
 		if err := wk.init(); err != nil {

@@ -188,9 +188,10 @@ config:
         enable: true
     ## internal metrics reporting. Refer: https://grafana.com/docs/beyla/latest/configure/options/#internal-metrics-reporter
     ## If set, user can expose the metrics endpoint via k8s service by configuring .Values.service section
-    prometheus_export:
-      port: 9090
-      path: /metrics
+    internal_metrics:
+      prometheus:
+        port: 9090
+        path: /metrics
 
 ## Env variables that will override configmap values
 ## For example:

@@ -102,7 +102,7 @@ var podIndexers = cache.Indexers{
 
 var serviceIndexers = cache.Indexers{
 	IndexIP: func(obj interface{}) ([]string, error) {
-		pi := obj.(*PodInfo)
+		pi := obj.(*ServiceInfo)
 		return pi.IPInfo.IPs, nil
 	},
 }

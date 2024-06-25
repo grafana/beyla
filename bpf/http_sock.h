@@ -19,17 +19,6 @@
 
 volatile const s32 capture_header_buffer = 0;
 
-// Keeps track of active accept or connect connection infos
-// From this table we extract the PID of the process and filter
-// HTTP calls we are not interested in
-struct {
-    __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, pid_connection_info_t);
-    __type(value, http_connection_metadata_t); // PID_TID group and connection type
-    __uint(max_entries, MAX_CONCURRENT_SHARED_REQUESTS);
-    __uint(pinning, LIBBPF_PIN_BY_NAME);
-} filtered_connections SEC(".maps");
-
 // Keeps track of the ongoing http connections we match for request/response
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
@@ -410,15 +399,6 @@ static __always_inline http_connection_metadata_t *connection_meta_by_direction(
     return meta;
 }
 
-static __always_inline http_connection_metadata_t *connection_meta(pid_connection_info_t *pid_conn, u8 direction, u8 packet_type) {
-    http_connection_metadata_t *meta = bpf_map_lookup_elem(&filtered_connections, pid_conn);
-    if (meta) {
-        return meta;
-    }
-
-    return connection_meta_by_direction(pid_conn, direction, packet_type);
-}
-
 static __always_inline void handle_http_response(unsigned char *small_buf, pid_connection_info_t *pid_conn, http_info_t *info, int orig_len, u8 direction, u8 ssl) {
     process_http_response(info, small_buf, orig_len);
 
@@ -668,7 +648,7 @@ static __always_inline void handle_buf_with_connection(pid_connection_info_t *pi
         bpf_dbg_printk("=== http_buffer_event len=%d pid=%d still_reading=%d ===", bytes_len, pid_from_pid_tgid(bpf_get_current_pid_tgid()), still_reading(info));
 
         if (packet_type == PACKET_TYPE_REQUEST && (info->status == 0) && (info->start_monotime_ns == 0)) {
-            http_connection_metadata_t *meta = connection_meta(pid_conn, direction, PACKET_TYPE_REQUEST);
+            http_connection_metadata_t *meta = connection_meta_by_direction(pid_conn, direction, PACKET_TYPE_REQUEST);
 
             get_or_create_trace_info(meta, pid_conn->pid, &pid_conn->conn, u_buf, bytes_len, capture_header_buffer);
 

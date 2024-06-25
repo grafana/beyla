@@ -2,7 +2,6 @@ package transform
 
 import (
 	"log/slog"
-	"strings"
 	"time"
 
 	"github.com/mariomac/pipes/pipe"
@@ -14,23 +13,12 @@ import (
 	"github.com/grafana/beyla/pkg/internal/svc"
 )
 
-type KubeEnableFlag string
-
-const (
-	EnabledTrue       = KubeEnableFlag("true")
-	EnabledFalse      = KubeEnableFlag("false")
-	EnabledAutodetect = KubeEnableFlag("autodetect")
-	EnabledDefault    = EnabledFalse
-
-	// TODO: let the user decide which attributes to add, as in https://opentelemetry.io/docs/kubernetes/collector/components/#kubernetes-attributes-processor
-)
-
 func klog() *slog.Logger {
 	return slog.With("component", "transform.KubernetesDecorator")
 }
 
 type KubernetesDecorator struct {
-	Enable KubeEnableFlag `yaml:"enable" env:"BEYLA_KUBE_METADATA_ENABLE"`
+	Enable kube.EnableFlag `yaml:"enable" env:"BEYLA_KUBE_METADATA_ENABLE"`
 
 	// ClusterName overrides cluster name. If empty, the NetO11y module will try to retrieve
 	// it from the Cloud Provider Metadata (EC2, GCP and Azure), and leave it empty if it fails to.
@@ -46,31 +34,9 @@ type KubernetesDecorator struct {
 	DropExternal bool `yaml:"drop_external" env:"BEYLA_NETWORK_DROP_EXTERNAL"`
 }
 
-func (d KubernetesDecorator) Enabled() bool {
-	switch strings.ToLower(string(d.Enable)) {
-	case string(EnabledTrue):
-		return true
-	case string(EnabledFalse), "": // empty value is disabled
-		return false
-	case string(EnabledAutodetect):
-		// We autodetect that we are in a kubernetes if we can properly load a K8s configuration file
-		_, err := kube.LoadConfig(d.KubeconfigPath)
-		if err != nil {
-			klog().Debug("kubeconfig can't be detected. Assuming we are not in Kubernetes", "error", err)
-			return false
-		}
-		return true
-	default:
-		klog().Warn("invalid value for Enable value. Ignoring stage", "value", d.Enable)
-		return false
-	}
-}
-
-func KubeDecoratorProvider(
-	ctxInfo *global.ContextInfo, kubeDecorator *KubernetesDecorator,
-) pipe.MiddleProvider[[]request.Span, []request.Span] {
+func KubeDecoratorProvider(ctxInfo *global.ContextInfo) pipe.MiddleProvider[[]request.Span, []request.Span] {
 	return func() (pipe.MiddleFunc[[]request.Span, []request.Span], error) {
-		if !kubeDecorator.Enabled() {
+		if !ctxInfo.K8sInformer.IsKubeEnabled() {
 			// if kubernetes decoration is disabled, we just bypass the node
 			return pipe.Bypass[[]request.Span](), nil
 		}

@@ -181,6 +181,8 @@ type metricsReporter struct {
 
 	is instrumentations.InstrumentationSelection
 
+	kubeEnabled bool
+
 	serviceCache *expirable.LRU[svc.UID, svc.ID]
 }
 
@@ -261,12 +263,14 @@ func newReporter(
 	}
 
 	clock := expire.NewCachedClock(timeNow)
+	kubeEnabled := ctxInfo.K8sInformer.IsKubeEnabled()
 	// If service name is not explicitly set, we take the service name as set by the
 	// executable inspector
 	mr := &metricsReporter{
 		bgCtx:                     ctx,
 		ctxInfo:                   ctxInfo,
 		cfg:                       cfg,
+		kubeEnabled:               kubeEnabled,
 		clock:                     clock,
 		is:                        is,
 		promConnect:               ctxInfo.Prometheus,
@@ -408,7 +412,7 @@ func newReporter(
 			return NewExpirer[prometheus.Gauge](prometheus.NewGaugeVec(prometheus.GaugeOpts{
 				Name: TracesTargetInfo,
 				Help: "target service information in trace span metric format",
-			}, labelNamesTargetInfo(ctxInfo)).MetricVec, clock.Time, cfg.TTL)
+			}, labelNamesTargetInfo(kubeEnabled)).MetricVec, clock.Time, cfg.TTL)
 		}),
 		serviceGraphClient: optionalHistogramProvider(cfg.ServiceGraphMetricsEnabled(), func() *Expirer[prometheus.Histogram] {
 			return NewExpirer[prometheus.Histogram](prometheus.NewHistogramVec(prometheus.HistogramOpts{
@@ -683,10 +687,10 @@ func (r *metricsReporter) labelValuesSpans(span *request.Span) []string {
 	}
 }
 
-func labelNamesTargetInfo(ctxInfo *global.ContextInfo) []string {
+func labelNamesTargetInfo(kubeEnabled bool) []string {
 	names := []string{serviceKey, serviceNamespaceKey, serviceInstanceKey, serviceJobKey, telemetryLanguageKey, telemetrySDKKey, sourceKey}
 
-	if ctxInfo.K8sEnabled {
+	if kubeEnabled {
 		names = appendK8sLabelNames(names)
 	}
 
@@ -708,7 +712,7 @@ func (r *metricsReporter) labelValuesTargetInfo(service svc.ID) []string {
 		"beyla",
 	}
 
-	if r.ctxInfo.K8sEnabled {
+	if r.kubeEnabled {
 		values = appendK8sLabelValuesService(values, service)
 	}
 

@@ -109,7 +109,7 @@ func newGraphBuilder(ctx context.Context, config *beyla.Config, ctxInfo *global.
 	}))
 
 	pipe.AddMiddleProvider(gnb, router, transform.RoutesProvider(config.Routes))
-	pipe.AddMiddleProvider(gnb, kubernetes, transform.KubeDecoratorProvider(ctxInfo, &config.Attributes.Kubernetes))
+	pipe.AddMiddleProvider(gnb, kubernetes, transform.KubeDecoratorProvider(ctxInfo))
 	pipe.AddMiddleProvider(gnb, nameResolver, transform.NameResolutionProvider(gb.ctxInfo, config.NameResolver))
 	pipe.AddMiddleProvider(gnb, attrFilter, filter.ByAttribute(config.Filters.Application, spanPtrPromGetters))
 	config.Metrics.Grafana = &gb.config.Grafana.OTLP

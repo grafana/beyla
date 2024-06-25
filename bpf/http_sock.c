@@ -116,11 +116,6 @@ int BPF_KPROBE(kprobe_tcp_rcv_established, struct sock *sk, struct sk_buff *skb)
         sort_connection_info(&pid_info.p_conn.conn);
         pid_info.p_conn.pid = pid_from_pid_tgid(id);        
 
-        http_connection_metadata_t meta = {};
-        task_pid(&meta.pid);
-        meta.type = EVENT_HTTP_REQUEST;
-        bpf_map_update_elem(&filtered_connections, &pid_info.p_conn, &meta, BPF_NOEXIST); // On purpose BPF_NOEXIST, we don't want to overwrite data by accept or connect
-
         // This is a current limitation for port ordering detection for SSL.
         // tcp_rcv_established flip flops the ports and we can't tell if it's client or server call.
         // If the source port for a client call is lower, we'll get this wrong.
@@ -171,14 +166,9 @@ int BPF_KRETPROBE(kretprobe_sys_accept4, uint fd)
         //dbg_print_http_connection_info(&info.conn);
         sort_connection_info(&info.p_conn.conn);
         info.p_conn.pid = pid_from_pid_tgid(id);
-
-        http_connection_metadata_t meta = {};
-        task_pid(&meta.pid);
-        meta.type = EVENT_HTTP_REQUEST;
-        bpf_map_update_elem(&filtered_connections, &info, &meta, BPF_ANY); // On purpose BPF_ANY, we want to overwrite stale
-
         info.orig_dport = orig_dport;
         task_tid(&info.c_tid);
+        
         bpf_map_update_elem(&pid_tid_to_conn, &id, &info, BPF_ANY); // to support SSL on missing handshake
     }
 
@@ -243,13 +233,9 @@ int BPF_KRETPROBE(kretprobe_sys_connect, int fd)
         //dbg_print_http_connection_info(&info.conn);
         sort_connection_info(&info.p_conn.conn);
         info.p_conn.pid = pid_from_pid_tgid(id);
-
-        http_connection_metadata_t meta = {};
-        task_pid(&meta.pid);
-        meta.type = EVENT_HTTP_CLIENT;
-        bpf_map_update_elem(&filtered_connections, &info, &meta, BPF_ANY); // On purpose BPF_ANY, we want to overwrite stale
         info.orig_dport = orig_dport;
         task_tid(&info.c_tid);
+
         bpf_map_update_elem(&pid_tid_to_conn, &id, &info, BPF_ANY); // to support SSL 
     }
 

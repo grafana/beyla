@@ -15,6 +15,12 @@ func TestHTTP2QuickDetection(t *testing.T) {
 		expected bool
 	}{
 		{
+			name:     "Status instead of start",
+			input:    []byte{0, 0, 29, 1, 4, 0, 0, 1, 101, 136, 224, 223, 222, 221, 97, 150, 223, 105, 126, 148, 19, 106, 101, 182, 165, 4, 1, 52, 160, 92, 184, 23, 174, 1, 197, 49, 104, 223, 0, 0, 44, 0, 0, 0, 0, 1, 101, 1, 0, 0, 0, 39, 31, 139, 8, 0, 0, 0, 0, 0, 0, 255, 18, 98, 11, 14, 113, 12, 241, 116, 150, 98, 206, 79, 75, 83, 98, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+			inputLen: 100,
+			expected: true,
+		},
+		{
 			name:     "Empty",
 			input:    []byte{},
 			inputLen: 100,
@@ -68,6 +74,8 @@ func TestHTTP2QuickDetection(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			res := isLikelyHTTP2(tt.input, tt.inputLen)
 			assert.Equal(t, tt.expected, res)
+			res1 := isHTTP2(tt.input, tt.inputLen)
+			assert.Equal(t, tt.expected, res1)
 		})
 	}
 }

@@ -72,6 +72,37 @@ func protocolIsGRPC(conn *BPFConnInfo) {
 	}
 }
 
+var commonHDec = bhpack.NewDecoder(0, nil)
+
+func knownFrameKeys(fr *http2.Framer, hf *http2.HeadersFrame) bool {
+	known := false
+	commonHDec.SetEmitFunc(func(hf bhpack.HeaderField) {
+		hfKey := strings.ToLower(hf.Name)
+		switch hfKey {
+		case ":method", ":path", "content-type", ":status", "grpc-status":
+			known = true
+		}
+	})
+	// Lose reference to MetaHeadersFrame:
+	defer commonHDec.SetEmitFunc(func(_ bhpack.HeaderField) {})
+
+	for {
+		frag := hf.HeaderBlockFragment()
+		if _, err := commonHDec.Write(frag); err != nil {
+			break
+		}
+
+		if hf.HeadersEnded() {
+			break
+		}
+		if _, err := fr.ReadFrame(); err != nil {
+			break
+		}
+	}
+
+	return known
+}
+
 func readMetaFrame(conn *BPFConnInfo, fr *http2.Framer, hf *http2.HeadersFrame) (string, string, string) {
 	h2c := getOrInitH2Conn(conn)
 
@@ -398,12 +429,12 @@ func isLikelyHTTP2(data []uint8, eventLen int) bool {
 	return false
 }
 
-func isHTTP2(data []uint8, event *TCPRequestInfo) bool {
+func isHTTP2(data []uint8, eventLen int) bool {
 	// Parsing HTTP2 frames with the Go HTTP2/gRPC parser is very expensive.
 	// Therefore, we replicate some of our HTTP2 frame reader from eBPF here to
 	// check if this payload even remotely looks like HTTP2/gRPC, e.g. we must
 	// find a resonably looking HTTP "headers" frame.
-	if !isLikelyHTTP2(data, int(event.Len)) {
+	if !isLikelyHTTP2(data, eventLen) {
 		return false
 	}
 
@@ -417,8 +448,7 @@ func isHTTP2(data []uint8, event *TCPRequestInfo) bool {
 		}
 
 		if ff, ok := f.(*http2.HeadersFrame); ok {
-			method, path, _ := readMetaFrame((*BPFConnInfo)(&event.ConnInfo), framer, ff)
-			return method != "" || path != ""
+			return knownFrameKeys(framer, ff)
 		}
 	}
 

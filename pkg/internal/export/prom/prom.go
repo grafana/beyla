@@ -18,6 +18,7 @@ import (
 	"github.com/grafana/beyla/pkg/internal/export/attributes"
 	attr "github.com/grafana/beyla/pkg/internal/export/attributes/names"
 	"github.com/grafana/beyla/pkg/internal/export/expire"
+	"github.com/grafana/beyla/pkg/internal/export/instrumentations"
 	"github.com/grafana/beyla/pkg/internal/export/otel"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/pkg/internal/request"
@@ -99,6 +100,8 @@ type PrometheusConfig struct {
 
 	// Features of metrics that are can be exported. Accepted values are "application" and "network".
 	Features []string `yaml:"features" env:"BEYLA_PROMETHEUS_FEATURES" envSeparator:","`
+	// Allows configuration of which instrumentations should be enabled, e.g. http, grpc, sql...
+	Instrumentations []string `yaml:"instrumentations" env:"BEYLA_PROMETHEUS_INSTRUMENTATIONS" envSeparator:","`
 
 	Buckets otel.Buckets `yaml:"buckets"`
 
@@ -112,24 +115,24 @@ type PrometheusConfig struct {
 	Registry *prometheus.Registry `yaml:"-"`
 }
 
-func (p PrometheusConfig) SpanMetricsEnabled() bool {
+func (p *PrometheusConfig) SpanMetricsEnabled() bool {
 	return slices.Contains(p.Features, otel.FeatureSpan)
 }
 
-func (p PrometheusConfig) OTelMetricsEnabled() bool {
+func (p *PrometheusConfig) OTelMetricsEnabled() bool {
 	return slices.Contains(p.Features, otel.FeatureApplication)
 }
 
-func (p PrometheusConfig) ServiceGraphMetricsEnabled() bool {
+func (p *PrometheusConfig) ServiceGraphMetricsEnabled() bool {
 	return slices.Contains(p.Features, otel.FeatureGraph)
 }
 
-func (p PrometheusConfig) EndpointEnabled() bool {
+func (p *PrometheusConfig) EndpointEnabled() bool {
 	return p.Port != 0 || p.Registry != nil
 }
 
 // nolint:gocritic
-func (p PrometheusConfig) Enabled() bool {
+func (p *PrometheusConfig) Enabled() bool {
 	return p.EndpointEnabled() && (p.OTelMetricsEnabled() || p.SpanMetricsEnabled() || p.ServiceGraphMetricsEnabled())
 }
 
@@ -176,6 +179,8 @@ type metricsReporter struct {
 	bgCtx   context.Context
 	ctxInfo *global.ContextInfo
 
+	is instrumentations.InstrumentationSelection
+
 	kubeEnabled bool
 
 	serviceCache *expirable.LRU[svc.UID, svc.ID]
@@ -202,6 +207,7 @@ func PrometheusEndpoint(
 	}
 }
 
+// nolint:cyclop
 func newReporter(
 	ctx context.Context,
 	ctxInfo *global.ContextInfo,
@@ -216,24 +222,45 @@ func newReporter(
 		return nil, fmt.Errorf("selecting metrics attributes: %w", err)
 	}
 
-	attrHTTPDuration := attributes.PrometheusGetters(request.SpanPromGetters,
-		attrsProvider.For(attributes.HTTPServerDuration))
-	attrHTTPClientDuration := attributes.PrometheusGetters(request.SpanPromGetters,
-		attrsProvider.For(attributes.HTTPClientDuration))
-	attrHTTPRequestSize := attributes.PrometheusGetters(request.SpanPromGetters,
-		attrsProvider.For(attributes.HTTPServerRequestSize))
-	attrHTTPClientRequestSize := attributes.PrometheusGetters(request.SpanPromGetters,
-		attrsProvider.For(attributes.HTTPClientRequestSize))
-	attrGRPCDuration := attributes.PrometheusGetters(request.SpanPromGetters,
-		attrsProvider.For(attributes.RPCServerDuration))
-	attrGRPCClientDuration := attributes.PrometheusGetters(request.SpanPromGetters,
-		attrsProvider.For(attributes.RPCClientDuration))
-	attrDBClientDuration := attributes.PrometheusGetters(request.SpanPromGetters,
-		attrsProvider.For(attributes.DBClientDuration))
-	attrMessagingPublishDuration := attributes.PrometheusGetters(request.SpanPromGetters,
-		attrsProvider.For(attributes.MessagingPublishDuration))
-	attrMessagingProcessDuration := attributes.PrometheusGetters(request.SpanPromGetters,
-		attrsProvider.For(attributes.MessagingProcessDuration))
+	is := instrumentations.NewInstrumentationSelection(cfg.Instrumentations)
+
+	var attrHTTPDuration, attrHTTPClientDuration, attrHTTPRequestSize, attrHTTPClientRequestSize []attributes.Field[*request.Span, string]
+
+	if is.HTTPEnabled() {
+		attrHTTPDuration = attributes.PrometheusGetters(request.SpanPromGetters,
+			attrsProvider.For(attributes.HTTPServerDuration))
+		attrHTTPClientDuration = attributes.PrometheusGetters(request.SpanPromGetters,
+			attrsProvider.For(attributes.HTTPClientDuration))
+		attrHTTPRequestSize = attributes.PrometheusGetters(request.SpanPromGetters,
+			attrsProvider.For(attributes.HTTPServerRequestSize))
+		attrHTTPClientRequestSize = attributes.PrometheusGetters(request.SpanPromGetters,
+			attrsProvider.For(attributes.HTTPClientRequestSize))
+	}
+
+	var attrGRPCDuration, attrGRPCClientDuration []attributes.Field[*request.Span, string]
+
+	if is.GRPCEnabled() {
+		attrGRPCDuration = attributes.PrometheusGetters(request.SpanPromGetters,
+			attrsProvider.For(attributes.RPCServerDuration))
+		attrGRPCClientDuration = attributes.PrometheusGetters(request.SpanPromGetters,
+			attrsProvider.For(attributes.RPCClientDuration))
+	}
+
+	var attrDBClientDuration []attributes.Field[*request.Span, string]
+
+	if is.DBEnabled() {
+		attrDBClientDuration = attributes.PrometheusGetters(request.SpanPromGetters,
+			attrsProvider.For(attributes.DBClientDuration))
+	}
+
+	var attrMessagingProcessDuration, attrMessagingPublishDuration []attributes.Field[*request.Span, string]
+
+	if is.MQEnabled() {
+		attrMessagingPublishDuration = attributes.PrometheusGetters(request.SpanPromGetters,
+			attrsProvider.For(attributes.MessagingPublishDuration))
+		attrMessagingProcessDuration = attributes.PrometheusGetters(request.SpanPromGetters,
+			attrsProvider.For(attributes.MessagingProcessDuration))
+	}
 
 	clock := expire.NewCachedClock(timeNow)
 	kubeEnabled := ctxInfo.K8sInformer.IsKubeEnabled()
@@ -245,6 +272,7 @@ func newReporter(
 		cfg:                       cfg,
 		kubeEnabled:               kubeEnabled,
 		clock:                     clock,
+		is:                        is,
 		promConnect:               ctxInfo.Prometheus,
 		attrHTTPDuration:          attrHTTPDuration,
 		attrHTTPClientDuration:    attrHTTPClientDuration,
@@ -268,122 +296,156 @@ func newReporter(
 				"revision":  buildinfo.Revision,
 			},
 		}, beylaInfoLabelNames).MetricVec, clock.Time, cfg.TTL),
-		httpDuration: NewExpirer[prometheus.Histogram](prometheus.NewHistogramVec(prometheus.HistogramOpts{
-			Name:                            attributes.HTTPServerDuration.Prom,
-			Help:                            "duration of HTTP service calls from the server side, in seconds",
-			Buckets:                         cfg.Buckets.DurationHistogram,
-			NativeHistogramBucketFactor:     defaultHistogramBucketFactor,
-			NativeHistogramMaxBucketNumber:  defaultHistogramMaxBucketNumber,
-			NativeHistogramMinResetDuration: defaultHistogramMinResetDuration,
-		}, labelNames(attrHTTPDuration)).MetricVec, clock.Time, cfg.TTL),
-		httpClientDuration: NewExpirer[prometheus.Histogram](prometheus.NewHistogramVec(prometheus.HistogramOpts{
-			Name:                            attributes.HTTPClientDuration.Prom,
-			Help:                            "duration of HTTP service calls from the client side, in seconds",
-			Buckets:                         cfg.Buckets.DurationHistogram,
-			NativeHistogramBucketFactor:     defaultHistogramBucketFactor,
-			NativeHistogramMaxBucketNumber:  defaultHistogramMaxBucketNumber,
-			NativeHistogramMinResetDuration: defaultHistogramMinResetDuration,
-		}, labelNames(attrHTTPClientDuration)).MetricVec, clock.Time, cfg.TTL),
-		grpcDuration: NewExpirer[prometheus.Histogram](prometheus.NewHistogramVec(prometheus.HistogramOpts{
-			Name:                            attributes.RPCServerDuration.Prom,
-			Help:                            "duration of RCP service calls from the server side, in seconds",
-			Buckets:                         cfg.Buckets.DurationHistogram,
-			NativeHistogramBucketFactor:     defaultHistogramBucketFactor,
-			NativeHistogramMaxBucketNumber:  defaultHistogramMaxBucketNumber,
-			NativeHistogramMinResetDuration: defaultHistogramMinResetDuration,
-		}, labelNames(attrGRPCDuration)).MetricVec, clock.Time, cfg.TTL),
-		grpcClientDuration: NewExpirer[prometheus.Histogram](prometheus.NewHistogramVec(prometheus.HistogramOpts{
-			Name:                            attributes.RPCClientDuration.Prom,
-			Help:                            "duration of GRPC service calls from the client side, in seconds",
-			Buckets:                         cfg.Buckets.DurationHistogram,
-			NativeHistogramBucketFactor:     defaultHistogramBucketFactor,
-			NativeHistogramMaxBucketNumber:  defaultHistogramMaxBucketNumber,
-			NativeHistogramMinResetDuration: defaultHistogramMinResetDuration,
-		}, labelNames(attrGRPCClientDuration)).MetricVec, clock.Time, cfg.TTL),
-		dbClientDuration: NewExpirer[prometheus.Histogram](prometheus.NewHistogramVec(prometheus.HistogramOpts{
-			Name:                            attributes.DBClientDuration.Prom,
-			Help:                            "duration of db client operations, in seconds",
-			Buckets:                         cfg.Buckets.DurationHistogram,
-			NativeHistogramBucketFactor:     defaultHistogramBucketFactor,
-			NativeHistogramMaxBucketNumber:  defaultHistogramMaxBucketNumber,
-			NativeHistogramMinResetDuration: defaultHistogramMinResetDuration,
-		}, labelNames(attrDBClientDuration)).MetricVec, clock.Time, cfg.TTL),
-		msgPublishDuration: NewExpirer[prometheus.Histogram](prometheus.NewHistogramVec(prometheus.HistogramOpts{
-			Name:                            attributes.MessagingPublishDuration.Prom,
-			Help:                            "duration of messaging client publish operations, in seconds",
-			Buckets:                         cfg.Buckets.DurationHistogram,
-			NativeHistogramBucketFactor:     defaultHistogramBucketFactor,
-			NativeHistogramMaxBucketNumber:  defaultHistogramMaxBucketNumber,
-			NativeHistogramMinResetDuration: defaultHistogramMinResetDuration,
-		}, labelNames(attrMessagingPublishDuration)).MetricVec, clock.Time, cfg.TTL),
-		msgProcessDuration: NewExpirer[prometheus.Histogram](prometheus.NewHistogramVec(prometheus.HistogramOpts{
-			Name:                            attributes.MessagingProcessDuration.Prom,
-			Help:                            "duration of messaging client process operations, in seconds",
-			Buckets:                         cfg.Buckets.DurationHistogram,
-			NativeHistogramBucketFactor:     defaultHistogramBucketFactor,
-			NativeHistogramMaxBucketNumber:  defaultHistogramMaxBucketNumber,
-			NativeHistogramMinResetDuration: defaultHistogramMinResetDuration,
-		}, labelNames(attrMessagingProcessDuration)).MetricVec, clock.Time, cfg.TTL),
-		httpRequestSize: NewExpirer[prometheus.Histogram](prometheus.NewHistogramVec(prometheus.HistogramOpts{
-			Name:                            attributes.HTTPServerRequestSize.Prom,
-			Help:                            "size, in bytes, of the HTTP request body as received at the server side",
-			Buckets:                         cfg.Buckets.RequestSizeHistogram,
-			NativeHistogramBucketFactor:     defaultHistogramBucketFactor,
-			NativeHistogramMaxBucketNumber:  defaultHistogramMaxBucketNumber,
-			NativeHistogramMinResetDuration: defaultHistogramMinResetDuration,
-		}, labelNames(attrHTTPRequestSize)).MetricVec, clock.Time, cfg.TTL),
-		httpClientRequestSize: NewExpirer[prometheus.Histogram](prometheus.NewHistogramVec(prometheus.HistogramOpts{
-			Name:                            attributes.HTTPClientRequestSize.Prom,
-			Help:                            "size, in bytes, of the HTTP request body as sent from the client side",
-			Buckets:                         cfg.Buckets.RequestSizeHistogram,
-			NativeHistogramBucketFactor:     defaultHistogramBucketFactor,
-			NativeHistogramMaxBucketNumber:  defaultHistogramMaxBucketNumber,
-			NativeHistogramMinResetDuration: defaultHistogramMinResetDuration,
-		}, labelNames(attrHTTPClientRequestSize)).MetricVec, clock.Time, cfg.TTL),
-		spanMetricsLatency: NewExpirer[prometheus.Histogram](prometheus.NewHistogramVec(prometheus.HistogramOpts{
-			Name:                            SpanMetricsLatency,
-			Help:                            "duration of service calls (client and server), in seconds, in trace span metrics format",
-			Buckets:                         cfg.Buckets.DurationHistogram,
-			NativeHistogramBucketFactor:     defaultHistogramBucketFactor,
-			NativeHistogramMaxBucketNumber:  defaultHistogramMaxBucketNumber,
-			NativeHistogramMinResetDuration: defaultHistogramMinResetDuration,
-		}, labelNamesSpans()).MetricVec, clock.Time, cfg.TTL),
-		spanMetricsCallsTotal: NewExpirer[prometheus.Counter](prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: SpanMetricsCalls,
-			Help: "number of service calls in trace span metrics format",
-		}, labelNamesSpans()).MetricVec, clock.Time, cfg.TTL),
-		spanMetricsSizeTotal: NewExpirer[prometheus.Counter](prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: SpanMetricsSizes,
-			Help: "size of service calls, in bytes, in trace span metrics format",
-		}, labelNamesSpans()).MetricVec, clock.Time, cfg.TTL),
-		tracesTargetInfo: NewExpirer[prometheus.Gauge](prometheus.NewGaugeVec(prometheus.GaugeOpts{
-			Name: TracesTargetInfo,
-			Help: "target service information in trace span metric format",
-		}, labelNamesTargetInfo(kubeEnabled)).MetricVec, clock.Time, cfg.TTL),
-		serviceGraphClient: NewExpirer[prometheus.Histogram](prometheus.NewHistogramVec(prometheus.HistogramOpts{
-			Name:                            ServiceGraphClient,
-			Help:                            "duration of client service calls, in seconds, in trace service graph metrics format",
-			Buckets:                         cfg.Buckets.DurationHistogram,
-			NativeHistogramBucketFactor:     defaultHistogramBucketFactor,
-			NativeHistogramMaxBucketNumber:  defaultHistogramMaxBucketNumber,
-			NativeHistogramMinResetDuration: defaultHistogramMinResetDuration,
-		}, labelNamesServiceGraph()).MetricVec, clock.Time, cfg.TTL),
-		serviceGraphServer: NewExpirer[prometheus.Histogram](prometheus.NewHistogramVec(prometheus.HistogramOpts{
-			Name:                            ServiceGraphServer,
-			Help:                            "duration of server service calls, in seconds, in trace service graph metrics format",
-			Buckets:                         cfg.Buckets.DurationHistogram,
-			NativeHistogramBucketFactor:     defaultHistogramBucketFactor,
-			NativeHistogramMaxBucketNumber:  defaultHistogramMaxBucketNumber,
-			NativeHistogramMinResetDuration: defaultHistogramMinResetDuration,
-		}, labelNamesServiceGraph()).MetricVec, clock.Time, cfg.TTL),
-		serviceGraphFailed: NewExpirer[prometheus.Counter](prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: ServiceGraphFailed,
-			Help: "number of failed service calls in trace service graph metrics format",
-		}, labelNamesServiceGraph()).MetricVec, clock.Time, cfg.TTL),
-		serviceGraphTotal: NewExpirer[prometheus.Counter](prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: ServiceGraphTotal,
-			Help: "number of service calls in trace service graph metrics format",
-		}, labelNamesServiceGraph()).MetricVec, clock.Time, cfg.TTL),
+		httpDuration: optionalHistogramProvider(is.HTTPEnabled(), func() *Expirer[prometheus.Histogram] {
+			return NewExpirer[prometheus.Histogram](prometheus.NewHistogramVec(prometheus.HistogramOpts{
+				Name:                            attributes.HTTPServerDuration.Prom,
+				Help:                            "duration of HTTP service calls from the server side, in seconds",
+				Buckets:                         cfg.Buckets.DurationHistogram,
+				NativeHistogramBucketFactor:     defaultHistogramBucketFactor,
+				NativeHistogramMaxBucketNumber:  defaultHistogramMaxBucketNumber,
+				NativeHistogramMinResetDuration: defaultHistogramMinResetDuration,
+			}, labelNames(attrHTTPDuration)).MetricVec, clock.Time, cfg.TTL)
+		}),
+		httpClientDuration: optionalHistogramProvider(is.HTTPEnabled(), func() *Expirer[prometheus.Histogram] {
+			return NewExpirer[prometheus.Histogram](prometheus.NewHistogramVec(prometheus.HistogramOpts{
+				Name:                            attributes.HTTPClientDuration.Prom,
+				Help:                            "duration of HTTP service calls from the client side, in seconds",
+				Buckets:                         cfg.Buckets.DurationHistogram,
+				NativeHistogramBucketFactor:     defaultHistogramBucketFactor,
+				NativeHistogramMaxBucketNumber:  defaultHistogramMaxBucketNumber,
+				NativeHistogramMinResetDuration: defaultHistogramMinResetDuration,
+			}, labelNames(attrHTTPClientDuration)).MetricVec, clock.Time, cfg.TTL)
+		}),
+		grpcDuration: optionalHistogramProvider(is.GRPCEnabled(), func() *Expirer[prometheus.Histogram] {
+			return NewExpirer[prometheus.Histogram](prometheus.NewHistogramVec(prometheus.HistogramOpts{
+				Name:                            attributes.RPCServerDuration.Prom,
+				Help:                            "duration of RCP service calls from the server side, in seconds",
+				Buckets:                         cfg.Buckets.DurationHistogram,
+				NativeHistogramBucketFactor:     defaultHistogramBucketFactor,
+				NativeHistogramMaxBucketNumber:  defaultHistogramMaxBucketNumber,
+				NativeHistogramMinResetDuration: defaultHistogramMinResetDuration,
+			}, labelNames(attrGRPCDuration)).MetricVec, clock.Time, cfg.TTL)
+		}),
+		grpcClientDuration: optionalHistogramProvider(is.GRPCEnabled(), func() *Expirer[prometheus.Histogram] {
+			return NewExpirer[prometheus.Histogram](prometheus.NewHistogramVec(prometheus.HistogramOpts{
+				Name:                            attributes.RPCClientDuration.Prom,
+				Help:                            "duration of GRPC service calls from the client side, in seconds",
+				Buckets:                         cfg.Buckets.DurationHistogram,
+				NativeHistogramBucketFactor:     defaultHistogramBucketFactor,
+				NativeHistogramMaxBucketNumber:  defaultHistogramMaxBucketNumber,
+				NativeHistogramMinResetDuration: defaultHistogramMinResetDuration,
+			}, labelNames(attrGRPCClientDuration)).MetricVec, clock.Time, cfg.TTL)
+		}),
+		dbClientDuration: optionalHistogramProvider(is.DBEnabled(), func() *Expirer[prometheus.Histogram] {
+			return NewExpirer[prometheus.Histogram](prometheus.NewHistogramVec(prometheus.HistogramOpts{
+				Name:                            attributes.DBClientDuration.Prom,
+				Help:                            "duration of db client operations, in seconds",
+				Buckets:                         cfg.Buckets.DurationHistogram,
+				NativeHistogramBucketFactor:     defaultHistogramBucketFactor,
+				NativeHistogramMaxBucketNumber:  defaultHistogramMaxBucketNumber,
+				NativeHistogramMinResetDuration: defaultHistogramMinResetDuration,
+			}, labelNames(attrDBClientDuration)).MetricVec, clock.Time, cfg.TTL)
+		}),
+		msgPublishDuration: optionalHistogramProvider(is.MQEnabled(), func() *Expirer[prometheus.Histogram] {
+			return NewExpirer[prometheus.Histogram](prometheus.NewHistogramVec(prometheus.HistogramOpts{
+				Name:                            attributes.MessagingPublishDuration.Prom,
+				Help:                            "duration of messaging client publish operations, in seconds",
+				Buckets:                         cfg.Buckets.DurationHistogram,
+				NativeHistogramBucketFactor:     defaultHistogramBucketFactor,
+				NativeHistogramMaxBucketNumber:  defaultHistogramMaxBucketNumber,
+				NativeHistogramMinResetDuration: defaultHistogramMinResetDuration,
+			}, labelNames(attrMessagingPublishDuration)).MetricVec, clock.Time, cfg.TTL)
+		}),
+		msgProcessDuration: optionalHistogramProvider(is.MQEnabled(), func() *Expirer[prometheus.Histogram] {
+			return NewExpirer[prometheus.Histogram](prometheus.NewHistogramVec(prometheus.HistogramOpts{
+				Name:                            attributes.MessagingProcessDuration.Prom,
+				Help:                            "duration of messaging client process operations, in seconds",
+				Buckets:                         cfg.Buckets.DurationHistogram,
+				NativeHistogramBucketFactor:     defaultHistogramBucketFactor,
+				NativeHistogramMaxBucketNumber:  defaultHistogramMaxBucketNumber,
+				NativeHistogramMinResetDuration: defaultHistogramMinResetDuration,
+			}, labelNames(attrMessagingProcessDuration)).MetricVec, clock.Time, cfg.TTL)
+		}),
+		httpRequestSize: optionalHistogramProvider(is.HTTPEnabled(), func() *Expirer[prometheus.Histogram] {
+			return NewExpirer[prometheus.Histogram](prometheus.NewHistogramVec(prometheus.HistogramOpts{
+				Name:                            attributes.HTTPServerRequestSize.Prom,
+				Help:                            "size, in bytes, of the HTTP request body as received at the server side",
+				Buckets:                         cfg.Buckets.RequestSizeHistogram,
+				NativeHistogramBucketFactor:     defaultHistogramBucketFactor,
+				NativeHistogramMaxBucketNumber:  defaultHistogramMaxBucketNumber,
+				NativeHistogramMinResetDuration: defaultHistogramMinResetDuration,
+			}, labelNames(attrHTTPRequestSize)).MetricVec, clock.Time, cfg.TTL)
+		}),
+		httpClientRequestSize: optionalHistogramProvider(is.HTTPEnabled(), func() *Expirer[prometheus.Histogram] {
+			return NewExpirer[prometheus.Histogram](prometheus.NewHistogramVec(prometheus.HistogramOpts{
+				Name:                            attributes.HTTPClientRequestSize.Prom,
+				Help:                            "size, in bytes, of the HTTP request body as sent from the client side",
+				Buckets:                         cfg.Buckets.RequestSizeHistogram,
+				NativeHistogramBucketFactor:     defaultHistogramBucketFactor,
+				NativeHistogramMaxBucketNumber:  defaultHistogramMaxBucketNumber,
+				NativeHistogramMinResetDuration: defaultHistogramMinResetDuration,
+			}, labelNames(attrHTTPClientRequestSize)).MetricVec, clock.Time, cfg.TTL)
+		}),
+		spanMetricsLatency: optionalHistogramProvider(cfg.SpanMetricsEnabled(), func() *Expirer[prometheus.Histogram] {
+			return NewExpirer[prometheus.Histogram](prometheus.NewHistogramVec(prometheus.HistogramOpts{
+				Name:                            SpanMetricsLatency,
+				Help:                            "duration of service calls (client and server), in seconds, in trace span metrics format",
+				Buckets:                         cfg.Buckets.DurationHistogram,
+				NativeHistogramBucketFactor:     defaultHistogramBucketFactor,
+				NativeHistogramMaxBucketNumber:  defaultHistogramMaxBucketNumber,
+				NativeHistogramMinResetDuration: defaultHistogramMinResetDuration,
+			}, labelNamesSpans()).MetricVec, clock.Time, cfg.TTL)
+		}),
+		spanMetricsCallsTotal: optionalCounterProvider(cfg.SpanMetricsEnabled(), func() *Expirer[prometheus.Counter] {
+			return NewExpirer[prometheus.Counter](prometheus.NewCounterVec(prometheus.CounterOpts{
+				Name: SpanMetricsCalls,
+				Help: "number of service calls in trace span metrics format",
+			}, labelNamesSpans()).MetricVec, clock.Time, cfg.TTL)
+		}),
+		spanMetricsSizeTotal: optionalCounterProvider(cfg.SpanMetricsEnabled(), func() *Expirer[prometheus.Counter] {
+			return NewExpirer[prometheus.Counter](prometheus.NewCounterVec(prometheus.CounterOpts{
+				Name: SpanMetricsSizes,
+				Help: "size of service calls, in bytes, in trace span metrics format",
+			}, labelNamesSpans()).MetricVec, clock.Time, cfg.TTL)
+		}),
+		tracesTargetInfo: optionalGaugeProvider(cfg.SpanMetricsEnabled() || cfg.ServiceGraphMetricsEnabled(), func() *Expirer[prometheus.Gauge] {
+			return NewExpirer[prometheus.Gauge](prometheus.NewGaugeVec(prometheus.GaugeOpts{
+				Name: TracesTargetInfo,
+				Help: "target service information in trace span metric format",
+			}, labelNamesTargetInfo(kubeEnabled)).MetricVec, clock.Time, cfg.TTL)
+		}),
+		serviceGraphClient: optionalHistogramProvider(cfg.ServiceGraphMetricsEnabled(), func() *Expirer[prometheus.Histogram] {
+			return NewExpirer[prometheus.Histogram](prometheus.NewHistogramVec(prometheus.HistogramOpts{
+				Name:                            ServiceGraphClient,
+				Help:                            "duration of client service calls, in seconds, in trace service graph metrics format",
+				Buckets:                         cfg.Buckets.DurationHistogram,
+				NativeHistogramBucketFactor:     defaultHistogramBucketFactor,
+				NativeHistogramMaxBucketNumber:  defaultHistogramMaxBucketNumber,
+				NativeHistogramMinResetDuration: defaultHistogramMinResetDuration,
+			}, labelNamesServiceGraph()).MetricVec, clock.Time, cfg.TTL)
+		}),
+		serviceGraphServer: optionalHistogramProvider(cfg.ServiceGraphMetricsEnabled(), func() *Expirer[prometheus.Histogram] {
+			return NewExpirer[prometheus.Histogram](prometheus.NewHistogramVec(prometheus.HistogramOpts{
+				Name:                            ServiceGraphServer,
+				Help:                            "duration of server service calls, in seconds, in trace service graph metrics format",
+				Buckets:                         cfg.Buckets.DurationHistogram,
+				NativeHistogramBucketFactor:     defaultHistogramBucketFactor,
+				NativeHistogramMaxBucketNumber:  defaultHistogramMaxBucketNumber,
+				NativeHistogramMinResetDuration: defaultHistogramMinResetDuration,
+			}, labelNamesServiceGraph()).MetricVec, clock.Time, cfg.TTL)
+		}),
+		serviceGraphFailed: optionalCounterProvider(cfg.ServiceGraphMetricsEnabled(), func() *Expirer[prometheus.Counter] {
+			return NewExpirer[prometheus.Counter](prometheus.NewCounterVec(prometheus.CounterOpts{
+				Name: ServiceGraphFailed,
+				Help: "number of failed service calls in trace service graph metrics format",
+			}, labelNamesServiceGraph()).MetricVec, clock.Time, cfg.TTL)
+		}),
+		serviceGraphTotal: optionalCounterProvider(cfg.ServiceGraphMetricsEnabled(), func() *Expirer[prometheus.Counter] {
+			return NewExpirer[prometheus.Counter](prometheus.NewCounterVec(prometheus.CounterOpts{
+				Name: ServiceGraphTotal,
+				Help: "number of service calls in trace service graph metrics format",
+			}, labelNamesServiceGraph()).MetricVec, clock.Time, cfg.TTL)
+		}),
 	}
 
 	if cfg.SpanMetricsEnabled() {
@@ -399,16 +461,34 @@ func newReporter(
 	}
 
 	if cfg.OTelMetricsEnabled() {
-		registeredMetrics = append(registeredMetrics,
-			mr.httpClientRequestSize,
-			mr.httpClientDuration,
-			mr.grpcClientDuration,
-			mr.dbClientDuration,
-			mr.msgProcessDuration,
-			mr.msgPublishDuration,
-			mr.httpRequestSize,
-			mr.httpDuration,
-			mr.grpcDuration)
+		if is.HTTPEnabled() {
+			registeredMetrics = append(registeredMetrics,
+				mr.httpClientRequestSize,
+				mr.httpClientDuration,
+				mr.httpRequestSize,
+				mr.httpDuration,
+			)
+		}
+
+		if is.GRPCEnabled() {
+			registeredMetrics = append(registeredMetrics,
+				mr.grpcClientDuration,
+				mr.grpcDuration,
+			)
+		}
+
+		if is.DBEnabled() {
+			registeredMetrics = append(registeredMetrics,
+				mr.dbClientDuration,
+			)
+		}
+
+		if is.MQEnabled() {
+			registeredMetrics = append(registeredMetrics,
+				mr.msgProcessDuration,
+				mr.msgPublishDuration,
+			)
+		}
 	}
 
 	if cfg.SpanMetricsEnabled() {
@@ -438,6 +518,30 @@ func newReporter(
 	return mr, nil
 }
 
+func optionalHistogramProvider(enable bool, provider func() *Expirer[prometheus.Histogram]) *Expirer[prometheus.Histogram] {
+	if !enable {
+		return nil
+	}
+
+	return provider()
+}
+
+func optionalCounterProvider(enable bool, provider func() *Expirer[prometheus.Counter]) *Expirer[prometheus.Counter] {
+	if !enable {
+		return nil
+	}
+
+	return provider()
+}
+
+func optionalGaugeProvider(enable bool, provider func() *Expirer[prometheus.Gauge]) *Expirer[prometheus.Gauge] {
+	if !enable {
+		return nil
+	}
+
+	return provider()
+}
+
 func (r *metricsReporter) reportMetrics(input <-chan []request.Span) {
 	go r.promConnect.StartHTTP(r.bgCtx)
 	r.collectMetrics(input)
@@ -462,41 +566,53 @@ func (r *metricsReporter) observe(span *request.Span) {
 	if r.cfg.OTelMetricsEnabled() {
 		switch span.Type {
 		case request.EventTypeHTTP:
-			r.httpDuration.WithLabelValues(
-				labelValues(span, r.attrHTTPDuration)...,
-			).metric.Observe(duration)
-			r.httpRequestSize.WithLabelValues(
-				labelValues(span, r.attrHTTPRequestSize)...,
-			).metric.Observe(float64(span.ContentLength))
+			if r.is.HTTPEnabled() {
+				r.httpDuration.WithLabelValues(
+					labelValues(span, r.attrHTTPDuration)...,
+				).metric.Observe(duration)
+				r.httpRequestSize.WithLabelValues(
+					labelValues(span, r.attrHTTPRequestSize)...,
+				).metric.Observe(float64(span.ContentLength))
+			}
 		case request.EventTypeHTTPClient:
-			r.httpClientDuration.WithLabelValues(
-				labelValues(span, r.attrHTTPClientDuration)...,
-			).metric.Observe(duration)
-			r.httpClientRequestSize.WithLabelValues(
-				labelValues(span, r.attrHTTPClientRequestSize)...,
-			).metric.Observe(float64(span.ContentLength))
+			if r.is.HTTPEnabled() {
+				r.httpClientDuration.WithLabelValues(
+					labelValues(span, r.attrHTTPClientDuration)...,
+				).metric.Observe(duration)
+				r.httpClientRequestSize.WithLabelValues(
+					labelValues(span, r.attrHTTPClientRequestSize)...,
+				).metric.Observe(float64(span.ContentLength))
+			}
 		case request.EventTypeGRPC:
-			r.grpcDuration.WithLabelValues(
-				labelValues(span, r.attrGRPCDuration)...,
-			).metric.Observe(duration)
+			if r.is.GRPCEnabled() {
+				r.grpcDuration.WithLabelValues(
+					labelValues(span, r.attrGRPCDuration)...,
+				).metric.Observe(duration)
+			}
 		case request.EventTypeGRPCClient:
-			r.grpcClientDuration.WithLabelValues(
-				labelValues(span, r.attrGRPCClientDuration)...,
-			).metric.Observe(duration)
+			if r.is.GRPCEnabled() {
+				r.grpcClientDuration.WithLabelValues(
+					labelValues(span, r.attrGRPCClientDuration)...,
+				).metric.Observe(duration)
+			}
 		case request.EventTypeRedisClient, request.EventTypeSQLClient, request.EventTypeRedisServer:
-			r.dbClientDuration.WithLabelValues(
-				labelValues(span, r.attrDBClientDuration)...,
-			).metric.Observe(duration)
+			if r.is.DBEnabled() {
+				r.dbClientDuration.WithLabelValues(
+					labelValues(span, r.attrDBClientDuration)...,
+				).metric.Observe(duration)
+			}
 		case request.EventTypeKafkaClient, request.EventTypeKafkaServer:
-			switch span.Method {
-			case request.MessagingPublish:
-				r.msgPublishDuration.WithLabelValues(
-					labelValues(span, r.attrMsgPublishDuration)...,
-				).metric.Observe(duration)
-			case request.MessagingProcess:
-				r.msgProcessDuration.WithLabelValues(
-					labelValues(span, r.attrMsgProcessDuration)...,
-				).metric.Observe(duration)
+			if r.is.MQEnabled() {
+				switch span.Method {
+				case request.MessagingPublish:
+					r.msgPublishDuration.WithLabelValues(
+						labelValues(span, r.attrMsgPublishDuration)...,
+					).metric.Observe(duration)
+				case request.MessagingProcess:
+					r.msgProcessDuration.WithLabelValues(
+						labelValues(span, r.attrMsgProcessDuration)...,
+					).metric.Observe(duration)
+				}
 			}
 		}
 	}
@@ -604,7 +720,7 @@ func (r *metricsReporter) labelValuesTargetInfo(service svc.ID) []string {
 }
 
 func labelNamesServiceGraph() []string {
-	return []string{clientKey, clientNamespaceKey, serverKey, serverNamespaceKey, connectionTypeKey, sourceKey}
+	return []string{clientKey, clientNamespaceKey, serverKey, serverNamespaceKey, sourceKey}
 }
 
 func (r *metricsReporter) labelValuesServiceGraph(span *request.Span) []string {
@@ -614,7 +730,6 @@ func (r *metricsReporter) labelValuesServiceGraph(span *request.Span) []string {
 			span.ServiceID.Namespace,
 			request.SpanHost(span),
 			span.OtherNamespace,
-			"virtual_node",
 			"beyla",
 		}
 	}
@@ -623,7 +738,6 @@ func (r *metricsReporter) labelValuesServiceGraph(span *request.Span) []string {
 		span.OtherNamespace,
 		request.SpanHost(span),
 		span.ServiceID.Namespace,
-		"virtual_node",
 		"beyla",
 	}
 }

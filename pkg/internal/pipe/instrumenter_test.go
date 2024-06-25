@@ -17,6 +17,7 @@ import (
 	"github.com/grafana/beyla/pkg/beyla"
 	"github.com/grafana/beyla/pkg/internal/export/attributes"
 	attr "github.com/grafana/beyla/pkg/internal/export/attributes/names"
+	"github.com/grafana/beyla/pkg/internal/export/instrumentations"
 	"github.com/grafana/beyla/pkg/internal/export/otel"
 	"github.com/grafana/beyla/pkg/internal/filter"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
@@ -66,6 +67,9 @@ func TestBasicPipeline(t *testing.T) {
 			MetricsEndpoint: tc.ServerEndpoint, Interval: 10 * time.Millisecond,
 			ReportersCacheLen: 16,
 			TTL:               5 * time.Minute,
+			Instrumentations: []string{
+				instrumentations.InstrumentationALL,
+			},
 		},
 		Attributes: beyla.Attributes{Select: allMetrics},
 	}, gctx(0), make(<-chan []request.Span))
@@ -120,6 +124,7 @@ func TestTracerPipeline(t *testing.T) {
 			BatchTimeout:      10 * time.Millisecond,
 			TracesEndpoint:    tc.ServerEndpoint,
 			ReportersCacheLen: 16,
+			Instrumentations:  []string{instrumentations.InstrumentationALL},
 		},
 	}, gctx(0), make(<-chan []request.Span))
 	// Override eBPF tracer to send some fake data
@@ -190,6 +195,7 @@ func BenchmarkTestTracerPipeline(b *testing.B) {
 				BatchTimeout:      10 * time.Millisecond,
 				TracesEndpoint:    tc.ServerEndpoint,
 				ReportersCacheLen: 16,
+				Instrumentations:  []string{instrumentations.InstrumentationALL},
 			},
 		}, gctx(0), make(<-chan []request.Span))
 		// Override eBPF tracer to send some fake data
@@ -222,6 +228,7 @@ func TestTracerPipelineBadTimestamps(t *testing.T) {
 			BatchTimeout:      10 * time.Millisecond,
 			TracesEndpoint:    tc.ServerEndpoint,
 			ReportersCacheLen: 16,
+			Instrumentations:  []string{instrumentations.InstrumentationALL},
 		},
 	}, gctx(0), make(<-chan []request.Span))
 	// Override eBPF tracer to send some fake data
@@ -254,6 +261,9 @@ func TestRouteConsolidation(t *testing.T) {
 			MetricsEndpoint: tc.ServerEndpoint, Interval: 10 * time.Millisecond,
 			ReportersCacheLen: 16,
 			TTL:               5 * time.Minute,
+			Instrumentations: []string{
+				instrumentations.InstrumentationALL,
+			},
 		},
 		Routes:     &transform.RoutesConfig{Patterns: []string{"/user/{id}", "/products/{id}/push"}},
 		Attributes: beyla.Attributes{Select: allMetricsBut("client.address", "url.path")},
@@ -351,6 +361,9 @@ func TestGRPCPipeline(t *testing.T) {
 			MetricsEndpoint: tc.ServerEndpoint, Interval: time.Millisecond,
 			ReportersCacheLen: 16,
 			TTL:               5 * time.Minute,
+			Instrumentations: []string{
+				instrumentations.InstrumentationALL,
+			},
 		},
 		Attributes: beyla.Attributes{Select: allMetrics},
 	}, gctx(0), make(<-chan []request.Span))
@@ -401,6 +414,7 @@ func TestTraceGRPCPipeline(t *testing.T) {
 		Traces: otel.TracesConfig{
 			TracesEndpoint: tc.ServerEndpoint,
 			BatchTimeout:   time.Millisecond, ReportersCacheLen: 16,
+			Instrumentations: []string{instrumentations.InstrumentationALL},
 		},
 	}, gctx(0), make(<-chan []request.Span))
 	// Override eBPF tracer to send some fake data
@@ -438,6 +452,9 @@ func TestBasicPipelineInfo(t *testing.T) {
 			MetricsEndpoint: tc.ServerEndpoint,
 			Interval:        10 * time.Millisecond, ReportersCacheLen: 16,
 			TTL: 5 * time.Minute,
+			Instrumentations: []string{
+				instrumentations.InstrumentationALL,
+			},
 		},
 		Attributes: beyla.Attributes{Select: allMetrics},
 	}, gctx(0), tracesInput)
@@ -479,7 +496,7 @@ func TestTracerPipelineInfo(t *testing.T) {
 	require.NoError(t, err)
 
 	gb := newGraphBuilder(ctx, &beyla.Config{
-		Traces: otel.TracesConfig{TracesEndpoint: tc.ServerEndpoint, ReportersCacheLen: 16},
+		Traces: otel.TracesConfig{TracesEndpoint: tc.ServerEndpoint, ReportersCacheLen: 16, Instrumentations: []string{instrumentations.InstrumentationALL}},
 	}, gctx(0), make(<-chan []request.Span))
 	// Override eBPF tracer to send some fake data
 	pipe.AddStart(gb.builder, tracesReader,
@@ -509,6 +526,7 @@ func TestSpanAttributeFilterNode(t *testing.T) {
 			MetricsEndpoint: tc.ServerEndpoint, Interval: 10 * time.Millisecond,
 			ReportersCacheLen: 16,
 			TTL:               5 * time.Minute,
+			Instrumentations:  []string{instrumentations.InstrumentationALL},
 		},
 		Filters: filter.AttributesConfig{
 			Application: map[string]filter.MatchDefinition{"url.path": {Match: "/user/*"}},

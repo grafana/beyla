@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/grafana/beyla/pkg/internal/export/attributes"
+	"github.com/grafana/beyla/pkg/internal/export/instrumentations"
 	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/pkg/internal/request"
@@ -40,6 +41,9 @@ func TestNetMetricsExpiration(t *testing.T) {
 				MetricsProtocol: ProtocolHTTPProtobuf,
 				Features:        []string{FeatureNetwork},
 				TTL:             3 * time.Minute,
+				Instrumentations: []string{
+					instrumentations.InstrumentationALL,
+				},
 			}, AttributeSelectors: attributes.Selection{
 				attributes.BeylaNetworkFlow.Section: attributes.InclusionLists{
 					Include: []string{"src.name", "dst.name"},
@@ -145,6 +149,9 @@ func TestAppMetricsExpiration_ByMetricAttrs(t *testing.T) {
 			Features:          []string{FeatureApplication},
 			TTL:               3 * time.Minute,
 			ReportersCacheLen: 100,
+			Instrumentations: []string{
+				instrumentations.InstrumentationALL,
+			},
 		}, attributes.Selection{
 			attributes.HTTPServerDuration.Section: attributes.InclusionLists{
 				Include: []string{"url.path"},
@@ -256,6 +263,9 @@ func TestAppMetricsExpiration_BySvcID(t *testing.T) {
 			Features:          []string{FeatureApplication},
 			TTL:               3 * time.Minute,
 			ReportersCacheLen: 100,
+			Instrumentations: []string{
+				instrumentations.InstrumentationALL,
+			},
 		}, attributes.Selection{
 			attributes.HTTPServerDuration.Section: attributes.InclusionLists{
 				Include: []string{"url.path"},

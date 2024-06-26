@@ -191,3 +191,14 @@ func (k *Metadata) getHostName(hostIP string) string {
 	}
 	return ""
 }
+
+func (k *Metadata) AddServiceIPEventHandler(s cache.ResourceEventHandler) error {
+	_, err := k.servicesIP.AddEventHandler(s)
+	// passing a snapshot of the currently stored entities
+	go func() {
+		for _, svc := range k.servicesIP.GetStore().List() {
+			s.OnAdd(svc, true)
+		}
+	}()
+	return err
+}

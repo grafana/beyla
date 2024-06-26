@@ -39,7 +39,6 @@ struct {
 
 #define bpf_dbg_printk(fmt, args...) { \
     bpf_printk(fmt, ##args); \
-    bpf_dbg_helper(fmt, ##args); \
 }
 #else
 #define bpf_dbg_printk(fmt, args...)

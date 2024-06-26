@@ -175,6 +175,9 @@ static __always_inline int read_msghdr_buf(struct msghdr *msg, u8* buf, int max_
 
     struct iovec *iov = NULL;
 
+    u32 l = max_len;
+    bpf_clamp_umax(l, IO_VEC_MAX_LEN);
+
     if (bpf_core_field_exists(msg_iter.iov)) {
         bpf_probe_read(&iov, sizeof(struct iovec *), &(msg_iter.iov));
         bpf_dbg_printk("iov exists, read value %llx", iov);
@@ -191,10 +194,7 @@ static __always_inline int read_msghdr_buf(struct msghdr *msg, u8* buf, int max_
             bpf_probe_read(&vec, sizeof(struct iovec), &(_msg_iter.__ubuf_iovec));
             bpf_dbg_printk("ubuf base %llx, &ubuf base %llx", vec.iov_base, &vec.iov_base);
 
-            u32 l = max_len;
-            bpf_clamp_umax(l, IO_VEC_MAX_LEN);
             bpf_probe_read(buf, l, vec.iov_base);
-
             return l;
         } else {
             bpf_probe_read(&iov, sizeof(struct iovec *), &(_msg_iter.__iov));
@@ -207,8 +207,6 @@ static __always_inline int read_msghdr_buf(struct msghdr *msg, u8* buf, int max_
 
     if (msg_iter_type == 6) {// Direct char buffer
         bpf_dbg_printk("direct char buffer type=6 iov %llx", iov);
-        u32 l = max_len;
-        bpf_clamp_umax(l, IO_VEC_MAX_LEN);
         bpf_probe_read(buf, l, iov);
 
         return l;
@@ -231,17 +229,13 @@ static __always_inline int read_msghdr_buf(struct msghdr *msg, u8* buf, int max_
             continue;
         }
 
-        if (tot_len > max_len) {
-            break;
-        }
-
         u32 l = vec.iov_len;
         u32 remaining = IO_VEC_MAX_LEN > tot_len ? (IO_VEC_MAX_LEN - tot_len) : 0;
         u32 iov_size = l < remaining ? l : remaining;
         bpf_clamp_umax(tot_len, IO_VEC_MAX_LEN);
         bpf_clamp_umax(iov_size, IO_VEC_MAX_LEN);
         // bpf_printk("tot_len=%d, remaining=%d", tot_len, remaining);
-        if (tot_len + iov_size >= IO_VEC_MAX_LEN) {
+        if (tot_len + iov_size > l) {
             break;
         }
         bpf_probe_read(&buf[tot_len], iov_size, vec.iov_base);    
@@ -514,7 +508,7 @@ static __always_inline void process_http2_grpc_frames(pid_connection_info_t *pid
     u8 found_data_frame = 0;
     http2_conn_stream_t stream = {0};
 
-    for (int i = 0; i < 8; i++) {
+    for (int i = 0; i < 6; i++) {
         unsigned char frame_buf[FRAME_HEADER_LEN];
         frame_header_t frame = {0};
         

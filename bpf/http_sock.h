@@ -191,7 +191,7 @@ static __always_inline int read_msghdr_buf(struct msghdr *msg, u8* buf, int max_
             bpf_probe_read(&vec, sizeof(struct iovec), &(_msg_iter.__ubuf_iovec));
             bpf_dbg_printk("ubuf base %llx, &ubuf base %llx", vec.iov_base, &vec.iov_base);
 
-            u32 l = vec.iov_len;
+            u32 l = max_len;
             bpf_clamp_umax(l, IO_VEC_MAX_LEN);
             bpf_probe_read(buf, l, vec.iov_base);
 

@@ -40,3 +40,8 @@ func TestSymbolDetection(t *testing.T) {
 	assert.Equal(t, svc.InstrumentableGeneric, instrumentableFromSymbolName("graal"))
 	assert.Equal(t, svc.InstrumentableGeneric, instrumentableFromSymbolName("rust"))
 }
+
+func TestPathDetection(t *testing.T) {
+	assert.Equal(t, svc.InstrumentablePHP, instrumentableFromPath("php"))
+	assert.Equal(t, svc.InstrumentableGeneric, instrumentableFromPath("python"))
+}

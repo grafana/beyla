@@ -1,7 +1,7 @@
 package svc
 
 import (
-	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
+	semconv "go.opentelemetry.io/otel/semconv/v1.25.0"
 
 	attr "github.com/grafana/beyla/pkg/internal/export/attributes/names"
 )
@@ -17,6 +17,7 @@ const (
 	InstrumentableNodejs
 	InstrumentableRust
 	InstrumentableGeneric
+	InstrumentablePHP
 )
 
 func (it InstrumentableType) String() string {
@@ -34,7 +35,9 @@ func (it InstrumentableType) String() string {
 	case InstrumentableNodejs:
 		return semconv.TelemetrySDKLanguageNodejs.Value.AsString()
 	case InstrumentableRust:
-		return "rust"
+		return semconv.TelemetrySDKLanguageRust.Value.AsString()
+	case InstrumentablePHP:
+		return semconv.TelemetrySDKLanguagePHP.Value.AsString()
 	case InstrumentableGeneric:
 		return "generic"
 	default:

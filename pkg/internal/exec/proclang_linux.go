@@ -9,7 +9,7 @@ import (
 	"github.com/grafana/beyla/pkg/internal/svc"
 )
 
-func FindProcLanguage(pid int32, elfF *elf.File) svc.InstrumentableType {
+func FindProcLanguage(pid int32, elfF *elf.File, path string) svc.InstrumentableType {
 	maps, err := FindLibMaps(pid)
 
 	if err != nil {
@@ -33,6 +33,11 @@ func FindProcLanguage(pid int32, elfF *elf.File) svc.InstrumentableType {
 	}
 
 	t := findLanguageFromElf(elfF)
+	if t != svc.InstrumentableGeneric {
+		return t
+	}
+
+	t = instrumentableFromPath(path)
 	if t != svc.InstrumentableGeneric {
 		return t
 	}

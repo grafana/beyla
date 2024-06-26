@@ -150,7 +150,7 @@ func (t *typer) asInstrumentable(execElf *exec.FileInfo) Instrumentable {
 		parent, ok = t.currentPids[parent.Ppid]
 	}
 
-	detectedType := exec.FindProcLanguage(execElf.Pid, execElf.ELF)
+	detectedType := exec.FindProcLanguage(execElf.Pid, execElf.ELF, execElf.CmdExePath)
 
 	log.Debug("instrumented", "comm", execElf.CmdExePath, "pid", execElf.Pid,
 		"child", child, "language", detectedType.String())

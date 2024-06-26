@@ -67,9 +67,6 @@ func printFeatureWithClient(point *pb.Point, counter int) {
 // printFeature gets the feature for the given point.
 func printFeature(client pb.RouteGuideClient, point *pb.Point, counter int) {
 	slog.Debug("Getting feature for point", "lat", point.Latitude, "long", point.Longitude)
-	// ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	// defer cancel()
-
 	ctx := context.Background()
 
 	var traceID [16]byte

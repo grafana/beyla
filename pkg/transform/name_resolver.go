@@ -139,8 +139,6 @@ func (nr *NameResolver) dnsResolve(svc *svc.ID, ip string) (string, string) {
 
 	n = nr.cleanName(svc, ip, n)
 
-	// fmt.Printf("%s -> %s\n", ip, n)
-
 	return n, svc.Namespace
 }
 

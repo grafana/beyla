@@ -37,7 +37,10 @@ func FindProcLanguage(pid int32, elfF *elf.File) svc.InstrumentableType {
 		return t
 	}
 
-	bytes, _ := os.ReadFile(fmt.Sprintf("/proc/%d/environ", pid))
+	bytes, err := os.ReadFile(fmt.Sprintf("/proc/%d/environ", pid))
+	if err != nil {
+		return svc.InstrumentableGeneric
+	}
 	return instrumentableFromEnviron(string(bytes))
 }
 

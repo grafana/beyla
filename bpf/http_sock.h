@@ -17,6 +17,8 @@
 #define PACKET_TYPE_REQUEST 1
 #define PACKET_TYPE_RESPONSE 2
 
+#define IO_VEC_MAX_LEN 512
+
 volatile const s32 capture_header_buffer = 0;
 
 // Keeps track of the ongoing http connections we match for request/response
@@ -99,6 +101,13 @@ struct {
     __uint(max_entries, 1);
 } tcp_req_mem SEC(".maps");
 
+struct {
+    __uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
+    __type(key, int);
+    __type(value, u8[(IO_VEC_MAX_LEN * 2)]);
+    __uint(max_entries, 1);
+} iovec_mem SEC(".maps");
+
 static __always_inline u8 is_http(unsigned char *p, u32 len, u8 *packet_type) {
     if (len < MIN_HTTP_SIZE) {
         return 0;
@@ -153,7 +162,7 @@ struct _iov_iter {
 	};
 };
 
-static __always_inline void *find_msghdr_buf(struct msghdr *msg) {
+static __always_inline int read_msghdr_buf(struct msghdr *msg, u8* buf, int max_len) {
     struct iov_iter msg_iter = BPF_CORE_READ(msg, msg_iter);
     u8 msg_iter_type = 0;
 
@@ -182,19 +191,27 @@ static __always_inline void *find_msghdr_buf(struct msghdr *msg) {
             bpf_probe_read(&vec, sizeof(struct iovec), &(_msg_iter.__ubuf_iovec));
             bpf_dbg_printk("ubuf base %llx, &ubuf base %llx", vec.iov_base, &vec.iov_base);
 
-            return vec.iov_base;
+            u32 l = vec.iov_len;
+            bpf_clamp_umax(l, IO_VEC_MAX_LEN);
+            bpf_probe_read(buf, l, vec.iov_base);
+
+            return l;
         } else {
             bpf_probe_read(&iov, sizeof(struct iovec *), &(_msg_iter.__iov));
         }     
     }
     
     if (!iov) {
-        return NULL;
+        return 0;
     }
 
     if (msg_iter_type == 6) {// Direct char buffer
         bpf_dbg_printk("direct char buffer type=6 iov %llx", iov);
-        return iov;
+        u32 l = max_len;
+        bpf_clamp_umax(l, IO_VEC_MAX_LEN);
+        bpf_probe_read(buf, l, iov);
+
+        return l;
     }
 
     struct iovec vec;
@@ -202,21 +219,38 @@ static __always_inline void *find_msghdr_buf(struct msghdr *msg) {
 
     bpf_dbg_printk("standard iov %llx base %llx len %d", iov, vec.iov_base, vec.iov_len);
 
-    if (!vec.iov_base) {
-        // We didn't find the base in the first vector, loop couple of times to find the base
-        for (int i = 1; i < 4; i++) {
-            void *p = &iov[i];
-            bpf_probe_read(&vec, sizeof(struct iovec), p);
-            // No prints in loops on 5.10
-            // bpf_dbg_printk("iov[%d]=%llx base %llx, len %d", i, p, vec.iov_base, vec.iov_len);
-            if (!vec.iov_base || !vec.iov_len) {
-                continue;
-            }
-            return vec.iov_base;
+    u32 tot_len = 0;
+
+    // Loop couple of times reading the various io_vecs
+    for (int i = 0; i < 4; i++) {
+        void *p = &iov[i];
+        bpf_probe_read(&vec, sizeof(struct iovec), p);
+        // No prints in loops on 5.10
+        // bpf_printk("iov[%d]=%llx base %llx, len %d", i, p, vec.iov_base, vec.iov_len);
+        if (!vec.iov_base || !vec.iov_len) {
+            continue;
         }
+
+        if (tot_len > max_len) {
+            break;
+        }
+
+        u32 l = vec.iov_len;
+        u32 remaining = IO_VEC_MAX_LEN > tot_len ? (IO_VEC_MAX_LEN - tot_len) : 0;
+        u32 iov_size = l < remaining ? l : remaining;
+        bpf_clamp_umax(tot_len, IO_VEC_MAX_LEN);
+        bpf_clamp_umax(iov_size, IO_VEC_MAX_LEN);
+        // bpf_printk("tot_len=%d, remaining=%d", tot_len, remaining);
+        if (tot_len + iov_size >= IO_VEC_MAX_LEN) {
+            break;
+        }
+        bpf_probe_read(&buf[tot_len], iov_size, vec.iov_base);    
+        // bpf_printk("iov_size=%d, buf=%s", iov_size, buf);
+
+        tot_len += iov_size;
     }
 
-    return vec.iov_base;    
+    return tot_len;
 }
 
 // empty_http_info zeroes and return the unique percpu copy in the map
@@ -252,6 +286,11 @@ static __always_inline tcp_req_t* empty_tcp_req() {
 static __always_inline http_connection_metadata_t* empty_connection_meta() {
     int zero = 0;
     return bpf_map_lookup_elem(&connection_meta_mem, &zero);
+}
+
+static __always_inline u8* iovec_memory() {
+    int zero = 0;
+    return bpf_map_lookup_elem(&iovec_mem, &zero);
 }
 
 static __always_inline u8 http_info_complete(http_info_t *info) {
@@ -455,8 +494,8 @@ static __always_inline void http2_grpc_end(http2_conn_stream_t *stream, http2_gr
 
         http2_grpc_request_t *trace = bpf_ringbuf_reserve(&events, sizeof(http2_grpc_request_t), 0);        
         if (trace) {
+            bpf_probe_read(prev_info->ret_data, KPROBES_HTTP2_RET_BUF_SIZE, u_buf);
             bpf_memcpy(trace, prev_info, sizeof(http2_grpc_request_t));
-            bpf_probe_read(trace->ret_data, KPROBES_HTTP2_RET_BUF_SIZE, u_buf);
             bpf_ringbuf_submit(trace, get_flags());
         }
     }
@@ -549,7 +588,9 @@ static __always_inline void process_http2_grpc_frames(pid_connection_info_t *pid
             u8 req_type = request_type_by_direction(direction, PACKET_TYPE_RESPONSE);
             if (prev_info) {
                 if (req_type == prev_info->type) {
-                    http2_grpc_end(&stream, prev_info, (void *)((u8 *)u_buf + saved_buf_pos));
+                    u32 buf_pos = saved_buf_pos;
+                    bpf_clamp_umax(buf_pos, IO_VEC_MAX_LEN);
+                    http2_grpc_end(&stream, prev_info, (void *)((u8 *)u_buf + buf_pos));
                     bpf_map_delete_elem(&active_ssl_connections, pid_conn);
                 } else {
                     bpf_dbg_printk("grpc request/response mismatch, req_type %d, prev_info->type %d", req_type, prev_info->type);

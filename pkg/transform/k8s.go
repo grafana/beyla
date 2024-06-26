@@ -48,6 +48,7 @@ func KubeDecoratorProvider(ctxInfo *global.ContextInfo) pipe.MiddleProvider[[]re
 // production implementer: kube.Database
 type kubeDatabase interface {
 	OwnerPodInfo(pidNamespace uint32) (*kube.PodInfo, bool)
+	HostNameForIP(ip string) string
 }
 
 type metadataDecorator struct {
@@ -72,6 +73,13 @@ func (md *metadataDecorator) do(span *request.Span) {
 	} else {
 		// do not leave the service attributes map as nil
 		span.ServiceID.Metadata = map[attr.Name]string{}
+	}
+	// override the peer and host names from Kubernetes metadata, if found
+	if hn := md.db.HostNameForIP(span.Host); hn != "" {
+		span.HostName = hn
+	}
+	if pn := md.db.HostNameForIP(span.Peer); pn != "" {
+		span.PeerName = pn
 	}
 }
 

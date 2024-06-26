@@ -30,6 +30,13 @@ func instrumentableFromModuleMap(moduleName string) svc.InstrumentableType {
 	return svc.InstrumentableGeneric
 }
 
+func instrumentableFromEnviron(environ string) svc.InstrumentableType {
+	if strings.Contains(environ, "ASPNET") || strings.Contains(environ, "DOTNET") {
+		return svc.InstrumentableDotnet
+	}
+	return svc.InstrumentableGeneric
+}
+
 func instrumentableFromSymbolName(symbol string) svc.InstrumentableType {
 	if strings.Contains(symbol, "rust_panic") {
 		return svc.InstrumentableRust

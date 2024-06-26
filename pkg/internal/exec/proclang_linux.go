@@ -4,6 +4,7 @@ import (
 	"debug/elf"
 	"errors"
 	"fmt"
+	"os"
 
 	"github.com/grafana/beyla/pkg/internal/svc"
 )
@@ -17,6 +18,14 @@ func FindProcLanguage(pid int32, elfF *elf.File) svc.InstrumentableType {
 
 	for _, m := range maps {
 		t := instrumentableFromModuleMap(m.Pathname)
+		if t != svc.InstrumentableGeneric {
+			return t
+		}
+	}
+
+	bytes, err := os.ReadFile(fmt.Sprintf("/proc/%d/environ", pid))
+	if err == nil {
+		t := instrumentableFromEnviron(string(bytes))
 		if t != svc.InstrumentableGeneric {
 			return t
 		}

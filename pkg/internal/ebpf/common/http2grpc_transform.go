@@ -269,6 +269,7 @@ func (event *BPFHTTP2Info) hostInfo() (source, target string) {
 	return src.String(), dst.String()
 }
 
+// nolint:cyclop
 func http2FromBuffers(event *BPFHTTP2Info) (request.Span, bool, error) {
 	bLen := len(event.Data)
 	if event.Len < int32(bLen) {
@@ -344,7 +345,6 @@ func http2FromBuffers(event *BPFHTTP2Info) (request.Span, bool, error) {
 	return request.Span{}, true, nil // ignore if we couldn't parse it
 }
 
-// nolint:cyclop
 func ReadHTTP2InfoIntoSpan(record *ringbuf.Record, filter ServiceFilter) (request.Span, bool, error) {
 	var event BPFHTTP2Info
 

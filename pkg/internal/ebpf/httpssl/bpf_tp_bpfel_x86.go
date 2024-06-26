@@ -223,6 +223,7 @@ type bpf_tpMapSpecs struct {
 	Events                  *ebpf.MapSpec `ebpf:"events"`
 	Http2InfoMem            *ebpf.MapSpec `ebpf:"http2_info_mem"`
 	HttpInfoMem             *ebpf.MapSpec `ebpf:"http_info_mem"`
+	IovecMem                *ebpf.MapSpec `ebpf:"iovec_mem"`
 	OngoingHttp             *ebpf.MapSpec `ebpf:"ongoing_http"`
 	OngoingHttp2Connections *ebpf.MapSpec `ebpf:"ongoing_http2_connections"`
 	OngoingHttp2Grpc        *ebpf.MapSpec `ebpf:"ongoing_http2_grpc"`
@@ -268,6 +269,7 @@ type bpf_tpMaps struct {
 	Events                  *ebpf.Map `ebpf:"events"`
 	Http2InfoMem            *ebpf.Map `ebpf:"http2_info_mem"`
 	HttpInfoMem             *ebpf.Map `ebpf:"http_info_mem"`
+	IovecMem                *ebpf.Map `ebpf:"iovec_mem"`
 	OngoingHttp             *ebpf.Map `ebpf:"ongoing_http"`
 	OngoingHttp2Connections *ebpf.Map `ebpf:"ongoing_http2_connections"`
 	OngoingHttp2Grpc        *ebpf.Map `ebpf:"ongoing_http2_grpc"`
@@ -296,6 +298,7 @@ func (m *bpf_tpMaps) Close() error {
 		m.Events,
 		m.Http2InfoMem,
 		m.HttpInfoMem,
+		m.IovecMem,
 		m.OngoingHttp,
 		m.OngoingHttp2Connections,
 		m.OngoingHttp2Grpc,

@@ -122,7 +122,7 @@ func FeatureHTTPMetricsDecoration(manifest string) features.Feature {
 				"k8s_replicaset_name": "^testserver-",
 			})).
 		Assess("all the span graph metrics exist",
-			testMetricsDecoration(spanGraphMetrics, `{server="testserver"}`, map[string]string{
+			testMetricsDecoration(spanGraphMetrics, `{server="testserver",client="internal-pinger"}`, map[string]string{
 				"server_service_namespace": "integration-test",
 				"source":                   "beyla",
 			}),

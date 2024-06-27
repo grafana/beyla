@@ -469,6 +469,8 @@ int BPF_KRETPROBE(kretprobe_tcp_recvmsg, int copied_len) {
                 copied_len = read_msghdr_buf((void *)args->iovec_ptr, buf, copied_len);
                 if (copied_len) {
                     handle_buf_with_connection(ctx, &info, buf, copied_len, NO_SSL, TCP_RECV, orig_dport);
+                } else {
+                    bpf_dbg_printk("Not copied anything");
                 }
             }
         } else {

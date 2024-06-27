@@ -120,6 +120,7 @@ func hostNamePIDDecorator(cfg *InstanceIDConfig) decorator {
 			}
 			spans[i].ServiceID.Instance = instanceID
 			spans[i].ServiceID.UID = svc.UID(instanceID)
+			spans[i].ServiceID.HostName = fullHostName
 		}
 	}
 }

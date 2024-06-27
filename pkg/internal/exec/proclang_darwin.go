@@ -6,7 +6,7 @@ import (
 	"github.com/grafana/beyla/pkg/internal/svc"
 )
 
-func FindProcLanguage(_ int32, _ *elf.File) svc.InstrumentableType {
+func FindProcLanguage(_ int32, _ *elf.File, _ string) svc.InstrumentableType {
 	return svc.InstrumentableGeneric
 }
 

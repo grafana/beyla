@@ -70,6 +70,8 @@ func NewStatus(pid int32, svcID *svc.ID) *Status {
 func OTELGetters(name attr.Name) (attributes.Getter[*Status, attribute.KeyValue], bool) {
 	var g attributes.Getter[*Status, attribute.KeyValue]
 	switch name {
+	case attr.HostName:
+		g = func(s *Status) attribute.KeyValue { return attribute.Key(attr.HostName).String(s.Service.HostName) }
 	case attr.ProcCommand:
 		g = func(s *Status) attribute.KeyValue { return attribute.Key(attr.ProcCommand).String(s.Command) }
 	case attr.ProcCommandLine:
@@ -111,6 +113,8 @@ func OTELGetters(name attr.Name) (attributes.Getter[*Status, attribute.KeyValue]
 func PromGetters(name attr.Name) (attributes.Getter[*Status, string], bool) {
 	var g attributes.Getter[*Status, string]
 	switch name {
+	case attr.HostName:
+		g = func(s *Status) string { return s.Service.HostName }
 	case attr.ProcCommand:
 		g = func(s *Status) string { return s.Command }
 	case attr.ProcCommandLine:

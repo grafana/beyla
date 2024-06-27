@@ -15,6 +15,7 @@ import (
 	"github.com/grafana/beyla/pkg/internal/export/otel"
 	"github.com/grafana/beyla/pkg/internal/infraolly/process"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
+	"github.com/grafana/beyla/pkg/internal/svc"
 )
 
 func TestProcPrometheusEndpoint_AggregatedMetrics(t *testing.T) {
@@ -53,13 +54,13 @@ func TestProcPrometheusEndpoint_AggregatedMetrics(t *testing.T) {
 
 	// WHEN it receives process metrics
 	metrics <- []*process.Status{
-		{Command: "foo",
+		{Service: &svc.ID{}, Command: "foo",
 			CPUUtilisationWait: 3, CPUUtilisationSystem: 2, CPUUtilisationUser: 1,
 			CPUTimeUserDelta: 30, CPUTimeWaitDelta: 20, CPUTimeSystemDelta: 10,
 			IOReadBytesDelta: 123, IOWriteBytesDelta: 456,
 			NetRcvBytesDelta: 12, NetTxBytesDelta: 34,
 		},
-		{Command: "bar",
+		{Service: &svc.ID{}, Command: "bar",
 			CPUUtilisationWait: 31, CPUUtilisationSystem: 21, CPUUtilisationUser: 11,
 			CPUTimeUserDelta: 301, CPUTimeWaitDelta: 201, CPUTimeSystemDelta: 101,
 			IOReadBytesDelta: 321, IOWriteBytesDelta: 654,
@@ -82,7 +83,7 @@ func TestProcPrometheusEndpoint_AggregatedMetrics(t *testing.T) {
 
 	// AND WHEN new metrics are received
 	metrics <- []*process.Status{
-		{Command: "foo",
+		{Service: &svc.ID{}, Command: "foo",
 			CPUUtilisationWait: 4, CPUUtilisationSystem: 1, CPUUtilisationUser: 2,
 			CPUTimeUserDelta: 3, CPUTimeWaitDelta: 2, CPUTimeSystemDelta: 1,
 			IOReadBytesDelta: 31, IOWriteBytesDelta: 10,
@@ -140,7 +141,7 @@ func TestProcPrometheusEndpoint_DisaggregatedMetrics(t *testing.T) {
 
 	// WHEN it receives process metrics
 	metrics <- []*process.Status{
-		{Command: "foo",
+		{Service: &svc.ID{}, Command: "foo",
 			CPUUtilisationWait: 3, CPUUtilisationSystem: 2, CPUUtilisationUser: 1,
 			CPUTimeUserDelta: 30, CPUTimeWaitDelta: 20, CPUTimeSystemDelta: 10,
 			IOReadBytesDelta: 123, IOWriteBytesDelta: 456,
@@ -165,7 +166,7 @@ func TestProcPrometheusEndpoint_DisaggregatedMetrics(t *testing.T) {
 
 	// AND WHEN new metrics are received
 	metrics <- []*process.Status{
-		{Command: "foo",
+		{Service: &svc.ID{}, Command: "foo",
 			CPUUtilisationWait: 4, CPUUtilisationSystem: 1, CPUUtilisationUser: 2,
 			CPUTimeUserDelta: 3, CPUTimeWaitDelta: 2, CPUTimeSystemDelta: 1,
 			IOReadBytesDelta: 3, IOWriteBytesDelta: 2,

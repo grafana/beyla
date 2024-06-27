@@ -150,8 +150,15 @@ func getDefinitions(groups AttrGroups) map[Section]AttrReportGroup {
 		},
 	}
 
+	// TODO: populate it with host resource attributes in https://opentelemetry.io/docs/specs/semconv/resource/host/
+	var hostAttributes = AttrReportGroup{
+		Attributes: map[attr.Name]Default{
+			attr.HostName: true,
+		},
+	}
+
 	var processAttributes = AttrReportGroup{
-		SubGroups: []*AttrReportGroup{&appKubeAttributes},
+		SubGroups: []*AttrReportGroup{&appKubeAttributes, &hostAttributes},
 		Attributes: map[attr.Name]Default{
 			attr.ProcCommand:     true,
 			attr.ProcCPUState:    true,

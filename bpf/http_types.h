@@ -34,6 +34,8 @@
 #define NO_SSL 0
 #define WITH_SSL 1
 
+#define MIN_HTTP2_SIZE 24 // Preface PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n https://datatracker.ietf.org/doc/html/rfc7540#section-3.5
+
 // Struct to keep information on the connections in flight 
 // s = source, d = destination
 // h = high word, l = low word
@@ -115,6 +117,16 @@ typedef struct tcp_req {
     tp_info_t tp;
 } tcp_req_t;
 
+typedef struct call_protocol_info {
+    pid_connection_info_t pid_conn;
+    unsigned char small_buf[MIN_HTTP2_SIZE];
+    u64 u_buf;
+    int bytes_len; 
+    u8 ssl;
+    u8 direction; 
+    u16 orig_dport;
+    u8 packet_type;
+} call_protocol_info_t;
 
 // Here we keep information on the packets passing through the socket filter
 typedef struct protocol_info {

@@ -34,6 +34,8 @@ type CommonTracer interface {
 	AddCloser(c ...io.Closer)
 	// BpfObjects that are created by the bpf2go compiler
 	BpfObjects() any
+	// Sets up any tail call tables if the BPF program has it
+	SetupTailCalls()
 }
 
 type KprobesTracer interface {

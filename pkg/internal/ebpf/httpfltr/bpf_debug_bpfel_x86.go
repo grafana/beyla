@@ -12,6 +12,18 @@ import (
 	"github.com/cilium/ebpf"
 )
 
+type bpf_debugCallProtocolInfoT struct {
+	PidConn    bpf_debugPidConnectionInfoT
+	SmallBuf   [24]uint8
+	U_buf      uint64
+	BytesLen   int32
+	Ssl        uint8
+	Direction  uint8
+	OrigDport  uint16
+	PacketType uint8
+	_          [7]byte
+}
+
 type bpf_debugConnectionInfoT struct {
 	S_addr [16]uint8
 	D_addr [16]uint8
@@ -231,6 +243,9 @@ type bpf_debugProgramSpecs struct {
 	KretprobeSysConnect     *ebpf.ProgramSpec `ebpf:"kretprobe_sys_connect"`
 	KretprobeTcpRecvmsg     *ebpf.ProgramSpec `ebpf:"kretprobe_tcp_recvmsg"`
 	KretprobeTcpSendmsg     *ebpf.ProgramSpec `ebpf:"kretprobe_tcp_sendmsg"`
+	ProtocolHttp            *ebpf.ProgramSpec `ebpf:"protocol_http"`
+	ProtocolHttp2           *ebpf.ProgramSpec `ebpf:"protocol_http2"`
+	ProtocolTcp             *ebpf.ProgramSpec `ebpf:"protocol_tcp"`
 	SocketHttpFilter        *ebpf.ProgramSpec `ebpf:"socket__http_filter"`
 }
 
@@ -254,6 +269,7 @@ type bpf_debugMapSpecs struct {
 	Http2InfoMem            *ebpf.MapSpec `ebpf:"http2_info_mem"`
 	HttpInfoMem             *ebpf.MapSpec `ebpf:"http_info_mem"`
 	IovecMem                *ebpf.MapSpec `ebpf:"iovec_mem"`
+	JumpTable               *ebpf.MapSpec `ebpf:"jump_table"`
 	OngoingHttp             *ebpf.MapSpec `ebpf:"ongoing_http"`
 	OngoingHttp2Connections *ebpf.MapSpec `ebpf:"ongoing_http2_connections"`
 	OngoingHttp2Grpc        *ebpf.MapSpec `ebpf:"ongoing_http2_grpc"`
@@ -261,6 +277,7 @@ type bpf_debugMapSpecs struct {
 	OngoingTcpReq           *ebpf.MapSpec `ebpf:"ongoing_tcp_req"`
 	PidCache                *ebpf.MapSpec `ebpf:"pid_cache"`
 	PidTidToConn            *ebpf.MapSpec `ebpf:"pid_tid_to_conn"`
+	ProtocolMem             *ebpf.MapSpec `ebpf:"protocol_mem"`
 	ServerTraces            *ebpf.MapSpec `ebpf:"server_traces"`
 	SslToConn               *ebpf.MapSpec `ebpf:"ssl_to_conn"`
 	SslToPidTid             *ebpf.MapSpec `ebpf:"ssl_to_pid_tid"`
@@ -307,6 +324,7 @@ type bpf_debugMaps struct {
 	Http2InfoMem            *ebpf.Map `ebpf:"http2_info_mem"`
 	HttpInfoMem             *ebpf.Map `ebpf:"http_info_mem"`
 	IovecMem                *ebpf.Map `ebpf:"iovec_mem"`
+	JumpTable               *ebpf.Map `ebpf:"jump_table"`
 	OngoingHttp             *ebpf.Map `ebpf:"ongoing_http"`
 	OngoingHttp2Connections *ebpf.Map `ebpf:"ongoing_http2_connections"`
 	OngoingHttp2Grpc        *ebpf.Map `ebpf:"ongoing_http2_grpc"`
@@ -314,6 +332,7 @@ type bpf_debugMaps struct {
 	OngoingTcpReq           *ebpf.Map `ebpf:"ongoing_tcp_req"`
 	PidCache                *ebpf.Map `ebpf:"pid_cache"`
 	PidTidToConn            *ebpf.Map `ebpf:"pid_tid_to_conn"`
+	ProtocolMem             *ebpf.Map `ebpf:"protocol_mem"`
 	ServerTraces            *ebpf.Map `ebpf:"server_traces"`
 	SslToConn               *ebpf.Map `ebpf:"ssl_to_conn"`
 	SslToPidTid             *ebpf.Map `ebpf:"ssl_to_pid_tid"`
@@ -343,6 +362,7 @@ func (m *bpf_debugMaps) Close() error {
 		m.Http2InfoMem,
 		m.HttpInfoMem,
 		m.IovecMem,
+		m.JumpTable,
 		m.OngoingHttp,
 		m.OngoingHttp2Connections,
 		m.OngoingHttp2Grpc,
@@ -350,6 +370,7 @@ func (m *bpf_debugMaps) Close() error {
 		m.OngoingTcpReq,
 		m.PidCache,
 		m.PidTidToConn,
+		m.ProtocolMem,
 		m.ServerTraces,
 		m.SslToConn,
 		m.SslToPidTid,
@@ -378,6 +399,9 @@ type bpf_debugPrograms struct {
 	KretprobeSysConnect     *ebpf.Program `ebpf:"kretprobe_sys_connect"`
 	KretprobeTcpRecvmsg     *ebpf.Program `ebpf:"kretprobe_tcp_recvmsg"`
 	KretprobeTcpSendmsg     *ebpf.Program `ebpf:"kretprobe_tcp_sendmsg"`
+	ProtocolHttp            *ebpf.Program `ebpf:"protocol_http"`
+	ProtocolHttp2           *ebpf.Program `ebpf:"protocol_http2"`
+	ProtocolTcp             *ebpf.Program `ebpf:"protocol_tcp"`
 	SocketHttpFilter        *ebpf.Program `ebpf:"socket__http_filter"`
 }
 
@@ -395,6 +419,9 @@ func (p *bpf_debugPrograms) Close() error {
 		p.KretprobeSysConnect,
 		p.KretprobeTcpRecvmsg,
 		p.KretprobeTcpSendmsg,
+		p.ProtocolHttp,
+		p.ProtocolHttp2,
+		p.ProtocolTcp,
 		p.SocketHttpFilter,
 	)
 }

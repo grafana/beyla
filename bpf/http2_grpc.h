@@ -7,7 +7,6 @@
 #include "bpf_endian.h"
 #include "http_types.h"
 
-#define MIN_HTTP2_SIZE 24 // Preface PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n https://datatracker.ietf.org/doc/html/rfc7540#section-3.5
 #define HTTP2_GRPC_PREFACE "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n"
 
 #define FRAME_HEADER_LEN 9

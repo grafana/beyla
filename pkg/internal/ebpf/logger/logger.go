@@ -62,6 +62,8 @@ func (p *BPFLogger) Tracepoints() map[string]ebpfcommon.FunctionPrograms {
 	return nil
 }
 
+func (p *BPFLogInfo) SetupTailCalls() {}
+
 func (p *BPFLogger) Run(ctx context.Context) {
 	ebpfcommon.ForwardRingbuf(
 		&p.cfg.EBPF,

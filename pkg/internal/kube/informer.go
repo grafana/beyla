@@ -21,9 +21,14 @@ import (
 
 const (
 	kubeConfigEnvVariable  = "KUBECONFIG"
-	syncTime               = 10 * time.Minute
+	resyncTime             = 10 * time.Minute
+	defaultSyncTimeout     = 10 * time.Minute
 	IndexPodByContainerIDs = "idx_pod_by_container"
 	IndexReplicaSetNames   = "idx_rs"
+	IndexIP                = "idx_ip"
+	typeNode               = "Node"
+	typePod                = "Pod"
+	typeService            = "Service"
 )
 
 func klog() *slog.Logger {
@@ -38,18 +43,17 @@ type ContainerEventHandler interface {
 
 // Metadata stores an in-memory copy of the different Kubernetes objects whose metadata is relevant to us.
 type Metadata struct {
+	log *slog.Logger
 	// pods and replicaSets cache the different K8s types to custom, smaller object types
 	pods        cache.SharedIndexInformer
 	replicaSets cache.SharedIndexInformer
+	nodesIP     cache.SharedIndexInformer
+	servicesIP  cache.SharedIndexInformer
 
 	containerEventHandlers []ContainerEventHandler
 }
 
-// PodInfo contains precollected metadata for Pods, Nodes and Services.
-// Not all the fields are populated for all the above types. To save
-// memory, we just keep in memory the necessary data for each Type.
-// For more information about which fields are set for each type, please
-// refer to the instantiation function of the respective informers.
+// PodInfo contains precollected metadata for Pods.
 type PodInfo struct {
 	// Informers need that internal object is an ObjectMeta instance
 	metav1.ObjectMeta
@@ -60,22 +64,53 @@ type PodInfo struct {
 	// StartTimeStr caches value of ObjectMeta.StartTimestamp.String()
 	StartTimeStr string
 	ContainerIDs []string
-	IPs          []string
+	IPInfo       IPInfo
 }
 
+// ServiceInfo contains precollected metadata for services.
+type ServiceInfo struct {
+	metav1.ObjectMeta
+	IPInfo IPInfo
+}
+
+// ReplicaSetInfo contains precollected metadata for ReplicaSets
 type ReplicaSetInfo struct {
 	metav1.ObjectMeta
 	Owner *Owner
+}
+
+// NodeInfo contains precollected metadata for nodes
+type NodeInfo struct {
+	metav1.ObjectMeta
+	IPInfo IPInfo
 }
 
 func qName(namespace, name string) string {
 	return namespace + "/" + name
 }
 
-var podIndexer = cache.Indexers{
+var podIndexers = cache.Indexers{
 	IndexPodByContainerIDs: func(obj interface{}) ([]string, error) {
 		pi := obj.(*PodInfo)
 		return pi.ContainerIDs, nil
+	},
+	IndexIP: func(obj interface{}) ([]string, error) {
+		pi := obj.(*PodInfo)
+		return pi.IPInfo.IPs, nil
+	},
+}
+
+var serviceIndexers = cache.Indexers{
+	IndexIP: func(obj interface{}) ([]string, error) {
+		pi := obj.(*ServiceInfo)
+		return pi.IPInfo.IPs, nil
+	},
+}
+
+var nodeIndexers = cache.Indexers{
+	IndexIP: func(obj interface{}) ([]string, error) {
+		pi := obj.(*NodeInfo)
+		return pi.IPInfo.IPs, nil
 	},
 }
 
@@ -84,7 +119,7 @@ var podIndexer = cache.Indexers{
 // if the ReplicaSet is owned by a Deployment, the reported Pod Owner should
 // be the Deployment, as the Replicaset is just an intermediate entity
 // used by the Deployment that it's actually defined by the user
-var replicaSetIndexer = cache.Indexers{
+var replicaSetIndexers = cache.Indexers{
 	IndexReplicaSetNames: func(obj interface{}) ([]string, error) {
 		rs := obj.(*ReplicaSetInfo)
 		return []string{qName(rs.Namespace, rs.Name)}, nil
@@ -95,7 +130,7 @@ var replicaSetIndexer = cache.Indexers{
 func (k *Metadata) GetContainerPod(containerID string) (*PodInfo, bool) {
 	objs, err := k.pods.GetIndexer().ByIndex(IndexPodByContainerIDs, containerID)
 	if err != nil {
-		klog().Debug("error accessing index by container ID. Ignoring", "error", err, "containerID", containerID)
+		k.log.Debug("error accessing index by container ID. Ignoring", "error", err, "containerID", containerID)
 		return nil, false
 	}
 	if len(objs) == 0 {
@@ -105,10 +140,9 @@ func (k *Metadata) GetContainerPod(containerID string) (*PodInfo, bool) {
 }
 
 func (k *Metadata) initPodInformer(informerFactory informers.SharedInformerFactory) error {
-	log := klog().With("informer", "Pod")
 	pods := informerFactory.Core().V1().Pods().Informer()
 
-	k.initContainerListeners(log, pods)
+	k.initContainerListeners(pods)
 
 	// Transform any *v1.Pod instance into a *PodInfo instance to save space
 	// in the informer's cache
@@ -149,29 +183,34 @@ func (k *Metadata) initPodInformer(informerFactory informers.SharedInformerFacto
 
 		owner := OwnerFrom(pod.OwnerReferences)
 		startTime := pod.GetCreationTimestamp().String()
-		if log.Enabled(context.TODO(), slog.LevelDebug) {
-			log.Debug("inserting pod", "name", pod.Name, "namespace", pod.Namespace,
+		if k.log.Enabled(context.TODO(), slog.LevelDebug) {
+			k.log.Debug("inserting pod", "name", pod.Name, "namespace", pod.Namespace,
 				"uid", pod.UID, "owner", owner,
 				"node", pod.Spec.NodeName, "startTime", startTime,
 				"containerIDs", containerIDs)
 		}
 		return &PodInfo{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      pod.Name,
-				Namespace: pod.Namespace,
-				UID:       pod.UID,
-				Labels:    pod.Labels,
+				Name:            pod.Name,
+				Namespace:       pod.Namespace,
+				UID:             pod.UID,
+				Labels:          pod.Labels,
+				OwnerReferences: pod.OwnerReferences,
 			},
 			Owner:        owner,
 			NodeName:     pod.Spec.NodeName,
 			StartTimeStr: startTime,
 			ContainerIDs: containerIDs,
-			IPs:          ips,
+			IPInfo: IPInfo{
+				Kind:   typePod,
+				HostIP: pod.Status.HostIP,
+				IPs:    ips,
+			},
 		}, nil
 	}); err != nil {
 		return fmt.Errorf("can't set pods transform: %w", err)
 	}
-	if err := pods.AddIndexers(podIndexer); err != nil {
+	if err := pods.AddIndexers(podIndexers); err != nil {
 		return fmt.Errorf("can't add indexers to Pods informer: %w", err)
 	}
 
@@ -180,17 +219,17 @@ func (k *Metadata) initPodInformer(informerFactory informers.SharedInformerFacto
 }
 
 // initContainerListeners listens for deletions of pods, to forward them to the ContainerEventHandler subscribers.
-func (k *Metadata) initContainerListeners(log *slog.Logger, pods cache.SharedIndexInformer) {
+func (k *Metadata) initContainerListeners(pods cache.SharedIndexInformer) {
 	if _, err := pods.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		DeleteFunc: func(obj interface{}) {
 			pod := obj.(*PodInfo)
-			log.Debug("deleting containers for pod", "pod", pod.Name, "containers", pod.ContainerIDs)
+			k.log.Debug("deleting containers for pod", "pod", pod.Name, "containers", pod.ContainerIDs)
 			for _, listener := range k.containerEventHandlers {
 				listener.OnDeletion(pod.ContainerIDs)
 			}
 		},
 	}); err != nil {
-		log.Warn("can't attach container listener to the Kubernetes informer."+
+		k.log.Warn("can't attach container listener to the Kubernetes informer."+
 			" Your kubernetes metadata might be outdated in the long term", "error", err)
 	}
 }
@@ -240,15 +279,16 @@ func (k *Metadata) initReplicaSetInformer(informerFactory informers.SharedInform
 		}
 		return &ReplicaSetInfo{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      rs.Name,
-				Namespace: rs.Namespace,
+				Name:            rs.Name,
+				Namespace:       rs.Namespace,
+				OwnerReferences: rs.OwnerReferences,
 			},
 			Owner: owner,
 		}, nil
 	}); err != nil {
 		return fmt.Errorf("can't set pods transform: %w", err)
 	}
-	if err := rss.AddIndexers(replicaSetIndexer); err != nil {
+	if err := rss.AddIndexers(replicaSetIndexers); err != nil {
 		return fmt.Errorf("can't add %s indexer to ReplicaSets informer: %w", IndexReplicaSetNames, err)
 	}
 
@@ -258,6 +298,7 @@ func (k *Metadata) initReplicaSetInformer(informerFactory informers.SharedInform
 
 func (k *Metadata) InitFromClient(ctx context.Context, client kubernetes.Interface, timeout time.Duration) error {
 	// Initialization variables
+	k.log = klog()
 	return k.initInformers(ctx, client, timeout)
 }
 
@@ -288,14 +329,21 @@ func LoadConfig(kubeConfigPath string) (*rest.Config, error) {
 	return config, nil
 }
 
-func (k *Metadata) initInformers(ctx context.Context, client kubernetes.Interface, timeout time.Duration) error {
-	informerFactory := informers.NewSharedInformerFactory(client, syncTime)
-	err := k.initPodInformer(informerFactory)
-	if err != nil {
+func (k *Metadata) initInformers(ctx context.Context, client kubernetes.Interface, syncTimeout time.Duration) error {
+	if syncTimeout <= 0 {
+		syncTimeout = defaultSyncTimeout
+	}
+	informerFactory := informers.NewSharedInformerFactory(client, resyncTime)
+	if err := k.initPodInformer(informerFactory); err != nil {
 		return err
 	}
-	err = k.initReplicaSetInformer(informerFactory)
-	if err != nil {
+	if err := k.initNodeIPInformer(informerFactory); err != nil {
+		return err
+	}
+	if err := k.initServiceIPInformer(informerFactory); err != nil {
+		return err
+	}
+	if err := k.initReplicaSetInformer(informerFactory); err != nil {
 		return err
 	}
 
@@ -311,8 +359,8 @@ func (k *Metadata) initInformers(ctx context.Context, client kubernetes.Interfac
 	case <-finishedCacheSync:
 		log.Debug("kubernetes informers started")
 		return nil
-	case <-time.After(timeout):
-		return fmt.Errorf("kubernetes cache has not been synced after %s timeout", timeout)
+	case <-time.After(syncTimeout):
+		return fmt.Errorf("kubernetes cache has not been synced after %s timeout", syncTimeout)
 	}
 }
 

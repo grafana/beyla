@@ -11,6 +11,7 @@ import (
 	"github.com/grafana/beyla/pkg/internal/connector"
 	"github.com/grafana/beyla/pkg/internal/export/attributes"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
+	"github.com/grafana/beyla/pkg/internal/kube"
 	"github.com/grafana/beyla/pkg/internal/netolly/agent"
 	"github.com/grafana/beyla/pkg/internal/netolly/flow"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
@@ -85,7 +86,11 @@ func buildCommonContextInfo(
 	promMgr := &connector.PrometheusManager{}
 	ctxInfo := &global.ContextInfo{
 		Prometheus: promMgr,
-		K8sEnabled: config.Attributes.Kubernetes.Enabled(),
+		K8sInformer: kube.NewMetadataProvider(
+			config.Attributes.Kubernetes.Enable,
+			config.Attributes.Kubernetes.KubeconfigPath,
+			config.Attributes.Kubernetes.InformersSyncTimeout,
+		),
 	}
 	if config.InternalMetrics.Prometheus.Port != 0 {
 		slog.Debug("reporting internal metrics as Prometheus")
@@ -106,7 +111,7 @@ func buildCommonContextInfo(
 // attributeGroups specifies, based in the provided configuration, which groups of attributes
 // need to be enabled by default for the diverse metrics
 func attributeGroups(config *beyla.Config, ctxInfo *global.ContextInfo) {
-	if ctxInfo.K8sEnabled {
+	if ctxInfo.K8sInformer.IsKubeEnabled() {
 		ctxInfo.MetricAttributeGroups.Add(attributes.GroupKubernetes)
 	}
 	if config.Routes != nil {

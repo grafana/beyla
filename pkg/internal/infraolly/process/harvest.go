@@ -77,7 +77,6 @@ func newHarvester(cfg *CollectConfig, cache *simplelru.LRU[int32, *linuxProcess]
 // will be ignored
 func (ps *Harvester) Harvest(svcID *svc.ID) (*Status, error) {
 	pid := svcID.ProcPID
-	ps.log.Debug("harvesting pid", "pid", pid)
 	// Reuses process information that does not vary
 	cached, hasCachedEntry := ps.cache.Get(pid)
 

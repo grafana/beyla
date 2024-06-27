@@ -19,6 +19,7 @@ const (
 )
 
 type Owner struct {
+	Kind      string
 	LabelName OwnerLabel
 	Name      string
 	// Owner of the owner. For example, a ReplicaSet might be owned by a Deployment
@@ -40,13 +41,13 @@ func OwnerFrom(orefs []metav1.OwnerReference) *Owner {
 		}
 		switch or.Kind {
 		case "ReplicaSet":
-			return &Owner{LabelName: OwnerReplicaSet, Name: or.Name}
+			return &Owner{LabelName: OwnerReplicaSet, Name: or.Name, Kind: or.Kind}
 		case "Deployment":
-			return &Owner{LabelName: OwnerDeployment, Name: or.Name}
+			return &Owner{LabelName: OwnerDeployment, Name: or.Name, Kind: or.Kind}
 		case "StatefulSet":
-			return &Owner{LabelName: OwnerStatefulSet, Name: or.Name}
+			return &Owner{LabelName: OwnerStatefulSet, Name: or.Name, Kind: or.Kind}
 		case "DaemonSet":
-			return &Owner{LabelName: OwnerDaemonSet, Name: or.Name}
+			return &Owner{LabelName: OwnerDaemonSet, Name: or.Name, Kind: or.Kind}
 		default:
 			fallback = unrecognizedOwner(or)
 		}

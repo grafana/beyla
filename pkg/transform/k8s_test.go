@@ -19,7 +19,7 @@ const timeout = 5 * time.Second
 
 func TestDecoration(t *testing.T) {
 	// pre-populated kubernetes metadata database
-	dec := metadataDecorator{db: fakeDatabase{
+	dec := metadataDecorator{db: &fakeDatabase{pidNSPods: map[uint32]*kube.PodInfo{
 		12: &kube.PodInfo{
 			ObjectMeta: v1.ObjectMeta{
 				Name: "pod-12", Namespace: "the-ns", UID: "uid-12",
@@ -43,7 +43,7 @@ func TestDecoration(t *testing.T) {
 			NodeName:     "the-node",
 			StartTimeStr: "2020-01-02 12:56:56",
 		},
-	}}
+	}}}
 	inputCh, outputhCh := make(chan []request.Span, 10), make(chan []request.Span, 10)
 	defer close(inputCh)
 	go dec.nodeLoop(inputCh, outputhCh)
@@ -127,9 +127,16 @@ func TestDecoration(t *testing.T) {
 	})
 }
 
-type fakeDatabase map[uint32]*kube.PodInfo
+type fakeDatabase struct {
+	pidNSPods map[uint32]*kube.PodInfo
+	ipNames   map[string]string
+}
 
-func (f fakeDatabase) OwnerPodInfo(pidNamespace uint32) (*kube.PodInfo, bool) {
-	pi, ok := f[pidNamespace]
+func (f *fakeDatabase) HostNameForIP(ip string) string {
+	return f.ipNames[ip]
+}
+
+func (f *fakeDatabase) OwnerPodInfo(pidNamespace uint32) (*kube.PodInfo, bool) {
+	pi, ok := f.pidNSPods[pidNamespace]
 	return pi, ok
 }

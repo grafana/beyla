@@ -85,7 +85,6 @@ func (ps *Collector) Run(out chan<- []*Status) {
 				pids[spans[i].ServiceID.ProcPID] = &spans[i].ServiceID
 			}
 		case <-collectTicker.C:
-			ps.log.Debug("start process collection")
 			procs, removed := ps.Collect(pids)
 			for _, rp := range removed {
 				delete(pids, rp)

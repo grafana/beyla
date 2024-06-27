@@ -38,6 +38,7 @@ linters-settings:
       - rangeExprCopy
       - rangeValCopy
       - indexAlloc
+      - commentedOutCode
   cyclop:
     max-complexity: 12
 

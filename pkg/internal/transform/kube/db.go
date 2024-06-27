@@ -37,6 +37,10 @@ type Database struct {
 	// ip to pod name matcher
 	podsMut  sync.RWMutex
 	podsByIP map[string]*kube.PodInfo
+
+	// ip to service name matcher
+	svcMut  sync.RWMutex
+	svcByIP map[string]*kube.ServiceInfo
 }
 
 func CreateDatabase(kubeMetadata *kube.Metadata) Database {
@@ -45,6 +49,7 @@ func CreateDatabase(kubeMetadata *kube.Metadata) Database {
 		containerIDs:     map[string]*container.Info{},
 		namespaces:       map[uint32]*container.Info{},
 		podsByIP:         map[string]*kube.PodInfo{},
+		svcByIP:          map[string]*kube.ServiceInfo{},
 		informer:         kubeMetadata,
 	}
 }
@@ -66,6 +71,20 @@ func StartDatabase(kubeMetadata *kube.Metadata) (*Database, error) {
 		},
 	}); err != nil {
 		return nil, fmt.Errorf("can't register Database as Pod event handler: %w", err)
+	}
+	if err := db.informer.AddServiceIPEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc: func(obj interface{}) {
+			db.UpdateNewServicesByIPIndex(obj.(*kube.ServiceInfo))
+		},
+		UpdateFunc: func(oldObj, newObj interface{}) {
+			db.UpdateDeletedServicesByIPIndex(oldObj.(*kube.ServiceInfo))
+			db.UpdateNewServicesByIPIndex(newObj.(*kube.ServiceInfo))
+		},
+		DeleteFunc: func(obj interface{}) {
+			db.UpdateDeletedServicesByIPIndex(obj.(*kube.ServiceInfo))
+		},
+	}); err != nil {
+		return nil, fmt.Errorf("can't register Database as Service event handler: %w", err)
 	}
 
 	return &db, nil
@@ -131,20 +150,20 @@ func (id *Database) OwnerPodInfo(pidNamespace uint32) (*kube.PodInfo, bool) {
 }
 
 func (id *Database) UpdateNewPodsByIPIndex(pod *kube.PodInfo) {
-	if len(pod.IPs) > 0 {
+	if len(pod.IPInfo.IPs) > 0 {
 		id.podsMut.Lock()
 		defer id.podsMut.Unlock()
-		for _, ip := range pod.IPs {
+		for _, ip := range pod.IPInfo.IPs {
 			id.podsByIP[ip] = pod
 		}
 	}
 }
 
 func (id *Database) UpdateDeletedPodsByIPIndex(pod *kube.PodInfo) {
-	if len(pod.IPs) > 0 {
+	if len(pod.IPInfo.IPs) > 0 {
 		id.podsMut.Lock()
 		defer id.podsMut.Unlock()
-		for _, ip := range pod.IPs {
+		for _, ip := range pod.IPInfo.IPs {
 			delete(id.podsByIP, ip)
 		}
 	}
@@ -154,4 +173,46 @@ func (id *Database) PodInfoForIP(ip string) *kube.PodInfo {
 	id.podsMut.RLock()
 	defer id.podsMut.RUnlock()
 	return id.podsByIP[ip]
+}
+
+func (id *Database) UpdateNewServicesByIPIndex(svc *kube.ServiceInfo) {
+	if len(svc.IPInfo.IPs) > 0 {
+		id.svcMut.Lock()
+		defer id.svcMut.Unlock()
+		for _, ip := range svc.IPInfo.IPs {
+			id.svcByIP[ip] = svc
+		}
+	}
+}
+
+func (id *Database) UpdateDeletedServicesByIPIndex(svc *kube.ServiceInfo) {
+	if len(svc.IPInfo.IPs) > 0 {
+		id.svcMut.Lock()
+		defer id.svcMut.Unlock()
+		for _, ip := range svc.IPInfo.IPs {
+			delete(id.svcByIP, ip)
+		}
+	}
+}
+
+func (id *Database) ServiceInfoForIP(ip string) *kube.ServiceInfo {
+	id.svcMut.RLock()
+	defer id.svcMut.RUnlock()
+	return id.svcByIP[ip]
+}
+
+func (id *Database) HostNameForIP(ip string) string {
+	id.svcMut.RLock()
+	svc, ok := id.svcByIP[ip]
+	id.svcMut.RUnlock()
+	if ok {
+		return svc.Name
+	}
+	id.podsMut.RLock()
+	pod, ok := id.podsByIP[ip]
+	id.podsMut.RUnlock()
+	if ok {
+		return pod.Name
+	}
+	return ""
 }

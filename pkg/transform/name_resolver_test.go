@@ -36,17 +36,17 @@ func TestResolveFromK8s(t *testing.T) {
 
 	pod1 := kube2.PodInfo{
 		ObjectMeta: metav1.ObjectMeta{Name: "pod1"},
-		IPs:        []string{"10.0.0.1", "10.1.0.1"},
+		IPInfo:     kube2.IPInfo{IPs: []string{"10.0.0.1", "10.1.0.1"}},
 	}
 
 	pod2 := kube2.PodInfo{
 		ObjectMeta: metav1.ObjectMeta{Name: "pod2", Namespace: "something"},
-		IPs:        []string{"10.0.0.2", "10.1.0.2"},
+		IPInfo:     kube2.IPInfo{IPs: []string{"10.0.0.2", "10.1.0.2"}},
 	}
 
 	pod3 := kube2.PodInfo{
 		ObjectMeta: metav1.ObjectMeta{Name: "pod3"},
-		IPs:        []string{"10.0.0.3", "10.1.0.3"},
+		IPInfo:     kube2.IPInfo{IPs: []string{"10.0.0.3", "10.1.0.3"}},
 	}
 
 	db.UpdateNewPodsByIPIndex(&pod1)

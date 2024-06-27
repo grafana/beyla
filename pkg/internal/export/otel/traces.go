@@ -37,6 +37,7 @@ import (
 
 	"github.com/grafana/beyla/pkg/internal/export/attributes"
 	attr "github.com/grafana/beyla/pkg/internal/export/attributes/names"
+	"github.com/grafana/beyla/pkg/internal/export/instrumentations"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/pkg/internal/request"
@@ -54,6 +55,9 @@ type TracesConfig struct {
 
 	Protocol       Protocol `yaml:"protocol" env:"OTEL_EXPORTER_OTLP_PROTOCOL"`
 	TracesProtocol Protocol `yaml:"-" env:"OTEL_EXPORTER_OTLP_TRACES_PROTOCOL"`
+
+	// Allows configuration of which instrumentations should be enabled, e.g. http, grpc, sql...
+	Instrumentations []string `yaml:"instrumentations" env:"BEYLA_OTEL_TRACES_INSTRUMENTATIONS" envSeparator:","`
 
 	// InsecureSkipVerify is not standard, so we don't follow the same naming convention
 	InsecureSkipVerify bool `yaml:"insecure_skip_verify" env:"BEYLA_OTEL_INSECURE_SKIP_VERIFY"`
@@ -89,7 +93,7 @@ type TracesConfig struct {
 // Enabled specifies that the OTEL traces node is enabled if and only if
 // either the OTEL endpoint and OTEL traces endpoint is defined.
 // If not enabled, this node won't be instantiated
-func (m TracesConfig) Enabled() bool { //nolint:gocritic
+func (m *TracesConfig) Enabled() bool { //nolint:gocritic
 	return m.CommonEndpoint != "" || m.TracesEndpoint != "" || m.Grafana.TracesEnabled()
 }
 
@@ -119,9 +123,19 @@ func (m *TracesConfig) guessProtocol() Protocol {
 	return ProtocolHTTPProtobuf
 }
 
+func makeTracesReceiver(ctx context.Context, cfg TracesConfig, ctxInfo *global.ContextInfo, userAttribSelection attributes.Selection) *tracesOTELReceiver {
+	return &tracesOTELReceiver{
+		ctx:        ctx,
+		cfg:        cfg,
+		ctxInfo:    ctxInfo,
+		attributes: userAttribSelection,
+		is:         instrumentations.NewInstrumentationSelection(cfg.Instrumentations),
+	}
+}
+
 // TracesReceiver creates a terminal node that consumes request.Spans and sends OpenTelemetry metrics to the configured consumers.
 func TracesReceiver(ctx context.Context, cfg TracesConfig, ctxInfo *global.ContextInfo, userAttribSelection attributes.Selection) pipe.FinalProvider[[]request.Span] {
-	return (&tracesOTELReceiver{ctx: ctx, cfg: cfg, ctxInfo: ctxInfo, attributes: userAttribSelection}).provideLoop
+	return makeTracesReceiver(ctx, cfg, ctxInfo, userAttribSelection).provideLoop
 }
 
 type tracesOTELReceiver struct {
@@ -129,6 +143,7 @@ type tracesOTELReceiver struct {
 	cfg        TracesConfig
 	ctxInfo    *global.ContextInfo
 	attributes attributes.Selection
+	is         instrumentations.InstrumentationSelection
 }
 
 func GetUserSelectedAttributes(attrs attributes.Selection) (map[attr.Name]struct{}, error) {
@@ -178,7 +193,7 @@ func (tr *tracesOTELReceiver) provideLoop() (pipe.FinalFunc[[]request.Span], err
 		for spans := range in {
 			for i := range spans {
 				span := &spans[i]
-				if span.IgnoreSpan == request.IgnoreTraces {
+				if span.IgnoreSpan == request.IgnoreTraces || !tr.acceptSpan(span) {
 					continue
 				}
 				traces := GenerateTraces(span, traceAttrs)
@@ -493,6 +508,23 @@ func SpanKindString(span *request.Span) string {
 		}
 	}
 	return "SPAN_KIND_INTERNAL"
+}
+
+func (tr *tracesOTELReceiver) acceptSpan(span *request.Span) bool {
+	switch span.Type {
+	case request.EventTypeHTTP, request.EventTypeHTTPClient:
+		return tr.is.HTTPEnabled()
+	case request.EventTypeGRPC, request.EventTypeGRPCClient:
+		return tr.is.GRPCEnabled()
+	case request.EventTypeSQLClient:
+		return tr.is.SQLEnabled()
+	case request.EventTypeRedisClient, request.EventTypeRedisServer:
+		return tr.is.RedisEnabled()
+	case request.EventTypeKafkaClient, request.EventTypeKafkaServer:
+		return tr.is.KafkaEnabled()
+	}
+
+	return false
 }
 
 // nolint:cyclop

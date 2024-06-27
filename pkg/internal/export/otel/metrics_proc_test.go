@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/grafana/beyla/pkg/internal/export/attributes"
+	"github.com/grafana/beyla/pkg/internal/export/instrumentations"
 	"github.com/grafana/beyla/pkg/internal/infraolly/process"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/pkg/internal/svc"
@@ -37,6 +38,9 @@ func TestProcMetrics_Aggregated(t *testing.T) {
 				MetricsProtocol:   ProtocolHTTPProtobuf,
 				Features:          []string{FeatureApplication, FeatureProcess},
 				TTL:               3 * time.Minute,
+				Instrumentations: []string{
+					instrumentations.InstrumentationALL,
+				},
 			}, AttributeSelectors: attributes.Selection{
 				attributes.ProcessCPUTime.Section:        includedAttributes,
 				attributes.ProcessCPUUtilization.Section: includedAttributes,
@@ -185,6 +189,9 @@ func TestProcMetrics_Disaggregated(t *testing.T) {
 				MetricsProtocol:   ProtocolHTTPProtobuf,
 				Features:          []string{FeatureApplication, FeatureProcess},
 				TTL:               3 * time.Minute,
+				Instrumentations: []string{
+					instrumentations.InstrumentationALL,
+				},
 			}, AttributeSelectors: attributes.Selection{
 				attributes.ProcessCPUTime.Section:        includedAttributes,
 				attributes.ProcessCPUUtilization.Section: includedAttributes,

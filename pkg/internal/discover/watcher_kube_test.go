@@ -73,7 +73,7 @@ func TestWatcherKubeEnricher(t *testing.T) {
 			k8sClient := fakek8sclientset.NewSimpleClientset()
 			informer := kube.Metadata{}
 			require.NoError(t, informer.InitFromClient(context.TODO(), k8sClient, 30*time.Minute))
-			wkeNodeFunc, err := WatcherKubeEnricherProvider(true, &informer)()
+			wkeNodeFunc, err := WatcherKubeEnricherProvider(context.TODO(), &informerProvider{informer: &informer})()
 			require.NoError(t, err)
 			inputCh, outputCh := make(chan []Event[processAttrs], 10), make(chan []Event[processAttrs], 10)
 			defer close(inputCh)
@@ -119,7 +119,7 @@ func TestWatcherKubeEnricherWithMatcher(t *testing.T) {
 	k8sClient := fakek8sclientset.NewSimpleClientset()
 	informer := kube.Metadata{}
 	require.NoError(t, informer.InitFromClient(context.TODO(), k8sClient, 30*time.Minute))
-	wkeNodeFunc, err := WatcherKubeEnricherProvider(true, &informer)()
+	wkeNodeFunc, err := WatcherKubeEnricherProvider(context.TODO(), &informerProvider{informer: &informer})()
 	require.NoError(t, err)
 	pipeConfig := beyla.Config{}
 	require.NoError(t, yaml.Unmarshal([]byte(`discovery:
@@ -307,4 +307,16 @@ func fakeProcessInfo(pp processAttrs) (*services.ProcessInfo, error) {
 		OpenPorts: pp.openPorts,
 		ExePath:   fmt.Sprintf("/bin/process%d", pp.pid),
 	}, nil
+}
+
+type informerProvider struct {
+	informer *kube.Metadata
+}
+
+func (*informerProvider) IsKubeEnabled() bool {
+	return true
+}
+
+func (ip *informerProvider) Get(_ context.Context) (*kube.Metadata, error) {
+	return ip.informer, nil
 }

@@ -246,7 +246,7 @@ cleanup:
 
 // Main HTTP read and write operations are handled with tcp_sendmsg and tcp_recvmsg 
 
-static __always_inline void *is_ssl_connection(u64 id, pid_connection_info_t *conn) {
+static __always_inline void *is_ssl_connection(u64 id) {
     void *ssl = 0;
     // Checks if it's sandwitched between active SSL handshake, read or write uprobe/uretprobe
     void **s = bpf_map_lookup_elem(&active_ssl_handshakes, &id);
@@ -262,10 +262,10 @@ static __always_inline void *is_ssl_connection(u64 id, pid_connection_info_t *co
         }
     }            
 
-    if (ssl) {
-        return ssl;
-    }
+    return ssl;
+}
 
+static __always_inline void *is_active_ssl(pid_connection_info_t *conn) {
     return bpf_map_lookup_elem(&active_ssl_connections, conn);
 }
 
@@ -296,20 +296,25 @@ int BPF_KPROBE(kprobe_tcp_sendmsg, struct sock *sk, struct msghdr *msg, size_t s
         sort_connection_info(&s_args.p_conn.conn);
         s_args.p_conn.pid = pid_from_pid_tgid(id);
 
-        void *ssl = is_ssl_connection(id, &s_args.p_conn);
+        void *ssl = is_ssl_connection(id);
         if (size > 0) {
             if (!ssl) {
-                u8* buf = iovec_memory();
-                if (buf) {
-                    size = read_msghdr_buf(msg, buf, size);
-                    if (size) {
-                        u64 sock_p = (u64)sk;
-                        bpf_map_update_elem(&active_send_args, &id, &s_args, BPF_ANY);
-                        bpf_map_update_elem(&active_send_sock_args, &sock_p, &s_args, BPF_ANY);
-                        handle_buf_with_connection(ctx, &s_args.p_conn, buf, size, NO_SSL, TCP_SEND, orig_dport);
-                    } else {
-                        bpf_dbg_printk("can't find iovec ptr in msghdr, not tracking sendmsg");
+                void *active_ssl = is_active_ssl(&s_args.p_conn);
+                if (!active_ssl) {
+                    u8* buf = iovec_memory();
+                    if (buf) {
+                        size = read_msghdr_buf(msg, buf, size);
+                        if (size) {
+                            u64 sock_p = (u64)sk;
+                            bpf_map_update_elem(&active_send_args, &id, &s_args, BPF_ANY);
+                            bpf_map_update_elem(&active_send_sock_args, &sock_p, &s_args, BPF_ANY);
+                            handle_buf_with_connection(ctx, &s_args.p_conn, buf, size, NO_SSL, TCP_SEND, orig_dport);
+                        } else {
+                            bpf_dbg_printk("can't find iovec ptr in msghdr, not tracking sendmsg");
+                        }
                     }
+                } else {
+                    bpf_dbg_printk("tcp_sendmsg for identified SSL connection, ignoring...");
                 }
             } else {
                 bpf_dbg_printk("tcp_sendmsg for identified SSL connection, ignoring...");
@@ -330,7 +335,7 @@ int BPF_KPROBE(kprobe_tcp_sendmsg, struct sock *sk, struct msghdr *msg, size_t s
         };
         bpf_memcpy(&ssl_conn.p_conn, &s_args.p_conn, sizeof(pid_connection_info_t));
         task_tid(&ssl_conn.c_tid);
-        bpf_map_update_elem(&ssl_to_conn, &ssl, &ssl_conn, BPF_ANY);
+        bpf_map_update_elem(&ssl_to_conn, &ssl, &ssl_conn, BPF_NOEXIST);
     }
 
     return 0;
@@ -461,17 +466,22 @@ int BPF_KRETPROBE(kretprobe_tcp_recvmsg, int copied_len) {
         sort_connection_info(&info.conn);
         info.pid = pid_from_pid_tgid(id);
 
-        void *ssl = is_ssl_connection(id, &info);
+        void *ssl = is_ssl_connection(id);
 
         if (!ssl) {
-            u8* buf = iovec_memory();
-            if (buf) {
-                copied_len = read_msghdr_buf((void *)args->iovec_ptr, buf, copied_len);
-                if (copied_len) {
-                    handle_buf_with_connection(ctx, &info, buf, copied_len, NO_SSL, TCP_RECV, orig_dport);
-                } else {
-                    bpf_dbg_printk("Not copied anything");
+            void *active_ssl = is_active_ssl(&info);
+            if (!active_ssl) {
+                u8* buf = iovec_memory();
+                if (buf) {
+                    copied_len = read_msghdr_buf((void *)args->iovec_ptr, buf, copied_len);
+                    if (copied_len) {
+                        handle_buf_with_connection(ctx, &info, buf, copied_len, NO_SSL, TCP_RECV, orig_dport);
+                    } else {
+                        bpf_dbg_printk("Not copied anything");
+                    }
                 }
+            } else {
+                bpf_dbg_printk("tcp_recvmsg for an identified SSL connection, ignoring...");
             }
         } else {
             bpf_dbg_printk("tcp_recvmsg for an identified SSL connection, ignoring...");

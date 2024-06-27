@@ -76,14 +76,18 @@ struct {
 } active_ssl_write_args SEC(".maps");
 
 static __always_inline void cleanup_ssl_server_trace(http_info_t *info, void *ssl) {
-    if (info && http_info_complete(info) && (info->type == EVENT_HTTP_REQUEST)) {
-        ssl_pid_connection_info_t *ssl_info = bpf_map_lookup_elem(&ssl_to_conn, &ssl);
+    if (info && http_info_complete(info)) {
+        if (info->type == EVENT_HTTP_REQUEST) {
+            ssl_pid_connection_info_t *ssl_info = bpf_map_lookup_elem(&ssl_to_conn, &ssl);
 
-        if (ssl_info) {
-            bpf_dbg_printk("Looking to delete server trace for ssl = %llx, info->type = %d", ssl, info->type);
-            //dbg_print_http_connection_info(&ssl_info->conn.conn); // commented out since GitHub CI doesn't like this call
-            delete_server_trace_tid(&ssl_info->c_tid);
+            if (ssl_info) {
+                bpf_dbg_printk("Looking to delete server trace for ssl = %llx, info->type = %d", ssl, info->type);
+                //dbg_print_http_connection_info(&ssl_info->conn.conn); // commented out since GitHub CI doesn't like this call
+                delete_server_trace_tid(&ssl_info->c_tid);
+            }
         }
+
+        bpf_map_delete_elem(&ssl_to_conn, &ssl);
     }
 }
 

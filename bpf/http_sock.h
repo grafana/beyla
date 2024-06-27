@@ -229,9 +229,8 @@ static __always_inline int read_msghdr_buf(struct msghdr *msg, u8* buf, int max_
             continue;
         }
 
-        u32 l = vec.iov_len;
         u32 remaining = IO_VEC_MAX_LEN > tot_len ? (IO_VEC_MAX_LEN - tot_len) : 0;
-        u32 iov_size = l < remaining ? l : remaining;
+        u32 iov_size = vec.iov_len < remaining ? vec.iov_len : remaining;
         bpf_clamp_umax(tot_len, IO_VEC_MAX_LEN);
         bpf_clamp_umax(iov_size, IO_VEC_MAX_LEN);
         // bpf_printk("tot_len=%d, remaining=%d", tot_len, remaining);

@@ -2,6 +2,7 @@ package traces
 
 import (
 	"context"
+	"os"
 	"testing"
 	"time"
 
@@ -66,9 +67,15 @@ func TestReadDecorator(t *testing.T) {
 				{Path: "/bar", Pid: request.PidInfo{HostPID: 1234}},
 			}
 			outSpans := testutil.ReadChannel(t, decoratedOutput, testTimeout)
+			expectedHostName := tc.cfg.InstanceID.OverrideHostname
+			if expectedHostName == "" {
+				expectedHostName, _ = os.Hostname()
+			}
 			assert.Equal(t, []request.Span{
-				{ServiceID: svc.ID{Instance: tc.expectedID, UID: tc.expectedUID}, Path: "/foo", Pid: request.PidInfo{HostPID: 1234}},
-				{ServiceID: svc.ID{Instance: tc.expectedID, UID: tc.expectedUID}, Path: "/bar", Pid: request.PidInfo{HostPID: 1234}},
+				{ServiceID: svc.ID{Instance: tc.expectedID, UID: tc.expectedUID, HostName: expectedHostName},
+					Path: "/foo", Pid: request.PidInfo{HostPID: 1234}},
+				{ServiceID: svc.ID{Instance: tc.expectedID, UID: tc.expectedUID, HostName: expectedHostName},
+					Path: "/bar", Pid: request.PidInfo{HostPID: 1234}},
 			}, outSpans)
 		})
 	}

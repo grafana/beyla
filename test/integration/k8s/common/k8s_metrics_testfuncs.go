@@ -159,17 +159,23 @@ func FeatureGRPCMetricsDecoration(manifest string) features.Feature {
 		).Feature()
 }
 
-func FeatureProcessMetricsDecoration() features.Feature {
+func FeatureProcessMetricsDecoration(overrideProperties map[string]string) features.Feature {
+	properties := map[string]string{
+		"k8s_namespace_name":  "^default$",
+		"k8s_node_name":       ".+-control-plane$",
+		"k8s_pod_name":        "^testserver-.*",
+		"k8s_pod_uid":         UUIDRegex,
+		"k8s_pod_start_time":  TimeRegex,
+		"k8s_deployment_name": "^testserver$",
+		"k8s_replicaset_name": "^testserver-",
+	}
+	for k, v := range overrideProperties {
+		properties[k] = v
+	}
 	return features.New("Decoration of process metrics").
 		Assess("all the process metrics from currently instrumented services are properly decorated",
-			testMetricsDecoration(processMetrics, `{k8s_pod_name=~"testserver-.*"}`, map[string]string{
-				"k8s_namespace_name":  "^default$",
-				"k8s_node_name":       ".+-control-plane$",
-				"k8s_pod_uid":         UUIDRegex,
-				"k8s_pod_start_time":  TimeRegex,
-				"k8s_deployment_name": "^testserver$",
-				"k8s_replicaset_name": "^testserver-",
-			})).Feature()
+			testMetricsDecoration(processMetrics, `{k8s_pod_name=~"`+properties["k8s_pod_name"]+`"}`, properties),
+		).Feature()
 }
 
 func testMetricsDecoration(

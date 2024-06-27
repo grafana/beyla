@@ -109,4 +109,6 @@ func appendMetadata(span *request.Span, info *kube.PodInfo) {
 		span.ServiceID.Metadata[attr.Name(owner.LabelName)] = owner.Name
 		owner = owner.Owner
 	}
+	// override hostname by the Pod name
+	span.ServiceID.HostName = info.Name
 }

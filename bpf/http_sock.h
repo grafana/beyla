@@ -20,23 +20,11 @@ struct bpf_map_def SEC("maps") jump_table = {
    .max_entries = 8,
 };
 
-struct {
-    __uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
-    __type(key, int);
-    __type(value, call_protocol_info_t);
-    __uint(max_entries, 1);
-} protocol_mem SEC(".maps");
-
 #define TAIL_PROTOCOL_HTTP  0
 #define TAIL_PROTOCOL_HTTP2 1
-#define TAIL_PROTOCOL_TCP   3
+#define TAIL_PROTOCOL_TCP   2
 
-static __always_inline call_protocol_info_t* protocol_memory() {
-    int zero = 0;
-    return bpf_map_lookup_elem(&protocol_mem, &zero);
-}
-
-static __always_inline void handle_buf_with_connection(pid_connection_info_t *pid_conn, void *u_buf, int bytes_len, u8 ssl, u8 direction, u16 orig_dport) {
+static __always_inline void handle_buf_with_connection(void *ctx, pid_connection_info_t *pid_conn, void *u_buf, int bytes_len, u8 ssl, u8 direction, u16 orig_dport) {
     call_protocol_info_t *p_info = protocol_memory();
 
     if (!p_info) {
@@ -54,7 +42,7 @@ static __always_inline void handle_buf_with_connection(pid_connection_info_t *pi
     bpf_dbg_printk("buf=[%s], pid=%d, len=%d", p_info->small_buf, pid_conn->pid, bytes_len);
 
     if (is_http(p_info->small_buf, MIN_HTTP_SIZE, &p_info->packet_type)) {
-        bpf_tail_call(p_info, &jump_table, TAIL_PROTOCOL_HTTP);
+        bpf_tail_call(ctx, &jump_table, TAIL_PROTOCOL_HTTP);
     } else if (is_http2_or_grpc(p_info->small_buf, MIN_HTTP2_SIZE)) {
         bpf_dbg_printk("Found HTTP2 or gRPC connection");
         u8 is_ssl = ssl;
@@ -62,7 +50,7 @@ static __always_inline void handle_buf_with_connection(pid_connection_info_t *pi
     } else {
         u8 *h2g = bpf_map_lookup_elem(&ongoing_http2_connections, pid_conn);
         if (h2g && *h2g == ssl) {
-            bpf_tail_call(p_info, &jump_table, TAIL_PROTOCOL_HTTP2);
+            bpf_tail_call(ctx, &jump_table, TAIL_PROTOCOL_HTTP2);
         } else { // large request tracking
             http_info_t *info = bpf_map_lookup_elem(&ongoing_http, pid_conn);
 
@@ -73,7 +61,7 @@ static __always_inline void handle_buf_with_connection(pid_connection_info_t *pi
                 // we are processing SSL request. HTTP2 is already checked in handle_buf_with_connection.
                 http_info_t *http_info = bpf_map_lookup_elem(&ongoing_http, pid_conn);
                 if (!http_info) {
-                    bpf_tail_call(p_info, &jump_table, TAIL_PROTOCOL_TCP);
+                    bpf_tail_call(ctx, &jump_table, TAIL_PROTOCOL_TCP);
                 }
             }
         }

@@ -100,7 +100,7 @@ static __always_inline void cleanup_trace_info_for_delayed_trace(pid_connection_
     cleanup_ssl_server_trace(info, ssl);
 }
 
-static __always_inline void handle_ssl_buf(u64 id, ssl_args_t *args, int bytes_len, u8 direction) {
+static __always_inline void handle_ssl_buf(void *ctx, u64 id, ssl_args_t *args, int bytes_len, u8 direction) {
     if (args && bytes_len > 0) {
         void *ssl = ((void *)args->ssl);
         u64 ssl_ptr = (u64)ssl;
@@ -167,7 +167,7 @@ static __always_inline void handle_ssl_buf(u64 id, ssl_args_t *args, int bytes_l
             //     bpf_dbg_printk("%x ", buf[i]);
             // }
             bpf_map_update_elem(&active_ssl_connections, &conn->p_conn, &ssl_ptr, BPF_ANY);
-            handle_buf_with_connection(&conn->p_conn, (void *)args->buf, bytes_len, WITH_SSL, direction, conn->orig_dport);
+            handle_buf_with_connection(ctx, &conn->p_conn, (void *)args->buf, bytes_len, WITH_SSL, direction, conn->orig_dport);
             // We should attempt to clean up the server trace immediately. The cleanup information
             // is keyed of the *ssl, so when it's delayed we might have different *ssl on the same
             // connection.

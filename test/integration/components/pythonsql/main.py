@@ -15,7 +15,7 @@ async def root():
             dbname="sqltest",
             user="postgres",
             password="postgres",
-            host="sqlserver",
+            host="localhost",
             port="5432"
         )
 

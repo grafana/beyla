@@ -106,7 +106,7 @@ static __always_inline void process_http2_grpc_frames(pid_connection_info_t *pid
     unsigned char frame_buf[FRAME_HEADER_LEN];
     frame_header_t frame = {0};
 
-    for (int i = 0; i < 6; i++) {        
+    for (int i = 0; i < 8; i++) {        
         if (pos >= bytes_len) {
             break;
         }
@@ -189,8 +189,14 @@ static __always_inline void process_http2_grpc_frames(pid_connection_info_t *pid
     }
 }
 
-SEC("protocol/http2")
-int protocol_http2(call_protocol_info_t *p_info) {
+SEC("kprobe/http2")
+int protocol_http2(void *ctx) {
+    call_protocol_info_t *p_info = protocol_memory();
+
+    if (!p_info) {
+        return 0;
+    }
+
     process_http2_grpc_frames(
         &p_info->pid_conn, 
         (void *)p_info->u_buf, 

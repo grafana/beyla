@@ -187,8 +187,14 @@ static __always_inline void handle_http_response(unsigned char *small_buf, pid_c
     }
 }
 
-SEC("protocol/http")
-int protocol_http(call_protocol_info_t *p_info) {
+SEC("kprobe/http")
+int protocol_http(void *ctx) {
+    call_protocol_info_t *p_info = protocol_memory();
+
+    if (!p_info) {
+        return 0;
+    }
+
     http_info_t *in = empty_http_info();
     if (!in) {
         bpf_dbg_printk("Error allocating http info from per CPU map");

@@ -34,6 +34,13 @@ struct {
 } iovec_mem SEC(".maps");
 
 struct {
+    __uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
+    __type(key, int);
+    __type(value, call_protocol_info_t);
+    __uint(max_entries, 1);
+} protocol_mem SEC(".maps");
+
+struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __type(key, pid_connection_info_t);   // connection that's SSL
     __type(value, u64); // ssl
@@ -49,6 +56,11 @@ static __always_inline http_connection_metadata_t* empty_connection_meta() {
 static __always_inline u8* iovec_memory() {
     int zero = 0;
     return bpf_map_lookup_elem(&iovec_mem, &zero);
+}
+
+static __always_inline call_protocol_info_t* protocol_memory() {
+    int zero = 0;
+    return bpf_map_lookup_elem(&protocol_mem, &zero);
 }
 
 static __always_inline u8 request_type_by_direction(u8 direction, u8 packet_type) {

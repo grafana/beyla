@@ -306,7 +306,7 @@ int BPF_KPROBE(kprobe_tcp_sendmsg, struct sock *sk, struct msghdr *msg, size_t s
                         u64 sock_p = (u64)sk;
                         bpf_map_update_elem(&active_send_args, &id, &s_args, BPF_ANY);
                         bpf_map_update_elem(&active_send_sock_args, &sock_p, &s_args, BPF_ANY);
-                        handle_buf_with_connection(&s_args.p_conn, buf, size, NO_SSL, TCP_SEND, orig_dport);
+                        handle_buf_with_connection(ctx, &s_args.p_conn, buf, size, NO_SSL, TCP_SEND, orig_dport);
                     } else {
                         bpf_dbg_printk("can't find iovec ptr in msghdr, not tracking sendmsg");
                     }
@@ -468,7 +468,7 @@ int BPF_KRETPROBE(kretprobe_tcp_recvmsg, int copied_len) {
             if (buf) {
                 copied_len = read_msghdr_buf((void *)args->iovec_ptr, buf, copied_len);
                 if (copied_len) {
-                    handle_buf_with_connection(&info, buf, copied_len, NO_SSL, TCP_RECV, orig_dport);
+                    handle_buf_with_connection(ctx, &info, buf, copied_len, NO_SSL, TCP_RECV, orig_dport);
                 }
             }
         } else {

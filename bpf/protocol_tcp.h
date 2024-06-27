@@ -85,8 +85,14 @@ static __always_inline void handle_unknown_tcp_connection(pid_connection_info_t 
     }
 }
 
-SEC("protocol/tcp")
-int protocol_tcp(call_protocol_info_t *p_info) {
+SEC("kprobe/tcp")
+int protocol_tcp(void *ctx) {
+    call_protocol_info_t *p_info = protocol_memory();
+
+    if (!p_info) {
+        return 0;
+    }
+
     handle_unknown_tcp_connection(
         &p_info->pid_conn, 
         (void *)p_info->u_buf, 

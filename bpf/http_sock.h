@@ -510,7 +510,7 @@ static __always_inline void process_http2_grpc_frames(pid_connection_info_t *pid
     unsigned char frame_buf[FRAME_HEADER_LEN];
     frame_header_t frame = {0};
 
-    for (int i = 0; i < 6; i++) {        
+    for (int i = 0; i < 4; i++) {        
         if (pos >= bytes_len) {
             break;
         }

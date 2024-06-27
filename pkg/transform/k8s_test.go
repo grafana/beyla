@@ -1,6 +1,7 @@
 package transform
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -43,7 +44,7 @@ func TestDecoration(t *testing.T) {
 			NodeName:     "the-node",
 			StartTimeStr: "2020-01-02 12:56:56",
 		},
-	}}}
+	}}, cfg: &KubernetesDecorator{ClusterName: "the-cluster"}, ctx: context.Background()}
 	inputCh, outputhCh := make(chan []request.Span, 10), make(chan []request.Span, 10)
 	defer close(inputCh)
 	go dec.nodeLoop(inputCh, outputhCh)
@@ -63,6 +64,7 @@ func TestDecoration(t *testing.T) {
 			"k8s.pod.uid":         "uid-12",
 			"k8s.deployment.name": "deployment-12",
 			"k8s.pod.start_time":  "2020-01-02 12:12:56",
+			"k8s.cluster.name":    "the-cluster",
 		}, deco[0].ServiceID.Metadata)
 	})
 	t.Run("pod info without deployment should set replicaset as name", func(t *testing.T) {
@@ -80,6 +82,7 @@ func TestDecoration(t *testing.T) {
 			"k8s.pod.name":        "pod-34",
 			"k8s.pod.uid":         "uid-34",
 			"k8s.pod.start_time":  "2020-01-02 12:34:56",
+			"k8s.cluster.name":    "the-cluster",
 		}, deco[0].ServiceID.Metadata)
 	})
 	t.Run("pod info with only pod name should set pod name as name", func(t *testing.T) {
@@ -96,6 +99,7 @@ func TestDecoration(t *testing.T) {
 			"k8s.pod.name":       "the-pod",
 			"k8s.pod.uid":        "uid-56",
 			"k8s.pod.start_time": "2020-01-02 12:56:56",
+			"k8s.cluster.name":   "the-cluster",
 		}, deco[0].ServiceID.Metadata)
 	})
 	t.Run("process without pod Info won't be decorated", func(t *testing.T) {
@@ -123,6 +127,7 @@ func TestDecoration(t *testing.T) {
 			"k8s.pod.uid":         "uid-12",
 			"k8s.deployment.name": "deployment-12",
 			"k8s.pod.start_time":  "2020-01-02 12:12:56",
+			"k8s.cluster.name":    "the-cluster",
 		}, deco[0].ServiceID.Metadata)
 	})
 }

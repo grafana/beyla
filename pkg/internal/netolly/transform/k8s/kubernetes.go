@@ -22,7 +22,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"time"
 
 	"github.com/hashicorp/golang-lru/v2/simplelru"
 	"github.com/mariomac/pipes/pipe"
@@ -46,10 +45,6 @@ const (
 )
 
 const alreadyLoggedIPsCacheLen = 256
-const (
-	clusterMetadataRetries       = 5
-	clusterMetadataFailRetryTime = 500 * time.Millisecond
-)
 
 func log() *slog.Logger { return slog.With("component", "k8s.MetadataDecorator") }
 
@@ -163,7 +158,7 @@ func (n *decorator) decorate(flow *ebpf.Record, prefix, ip string) bool {
 func newDecorator(ctx context.Context, cfg *transform.KubernetesDecorator, meta *kube.Metadata) (*decorator, error) {
 	nt := decorator{
 		log:         log(),
-		clusterName: kubeClusterName(ctx, cfg),
+		clusterName: transform.KubeClusterName(ctx, cfg),
 		kube:        meta,
 	}
 	if nt.log.Enabled(ctx, slog.LevelDebug) {
@@ -174,30 +169,4 @@ func newDecorator(ctx context.Context, cfg *transform.KubernetesDecorator, meta 
 		}
 	}
 	return &nt, nil
-}
-
-func kubeClusterName(ctx context.Context, cfg *transform.KubernetesDecorator) string {
-	log := log().With("func", "kubeClusterName")
-	if cfg.ClusterName != "" {
-		return cfg.ClusterName
-	}
-	retries := 0
-	for retries < clusterMetadataRetries {
-		if clusterName := fetchClusterName(ctx); clusterName != "" {
-			return clusterName
-		}
-		retries++
-		log.Debug("retrying cluster name fetching in 500 ms...")
-		select {
-		case <-ctx.Done():
-			log.Debug("context canceled before starting the kubernetes decorator node")
-			return ""
-		case <-time.After(clusterMetadataFailRetryTime):
-			// retry or end!
-		}
-	}
-	log.Warn("can't fetch Kubernetes Cluster Name." +
-		" Network metrics won't contain k8s.cluster.name attribute unless you explicitly set " +
-		" the BEYLA_KUBE_CLUSTER_NAME environment variable")
-	return ""
 }

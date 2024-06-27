@@ -46,6 +46,7 @@ Beyla can decorate your traces with the following Kubernetes labels:
 - `k8s.pod.name`
 - `k8s.pod.uid`
 - `k8s.pod.start_time`
+- `k8s.cluster.name`
 
 To enable metadata decoration, you need to:
 

@@ -12,7 +12,7 @@ import (
 	"github.com/cilium/ebpf"
 )
 
-type bpfCallProtocolInfoT struct {
+type bpfCallProtocolArgsT struct {
 	PidConn    bpfPidConnectionInfoT
 	SmallBuf   [24]uint8
 	U_buf      uint64
@@ -247,7 +247,7 @@ type bpfMapSpecs struct {
 	OngoingTcpReq           *ebpf.MapSpec `ebpf:"ongoing_tcp_req"`
 	PidCache                *ebpf.MapSpec `ebpf:"pid_cache"`
 	PidTidToConn            *ebpf.MapSpec `ebpf:"pid_tid_to_conn"`
-	ProtocolMem             *ebpf.MapSpec `ebpf:"protocol_mem"`
+	ProtocolArgsMem         *ebpf.MapSpec `ebpf:"protocol_args_mem"`
 	ServerTraces            *ebpf.MapSpec `ebpf:"server_traces"`
 	SslToConn               *ebpf.MapSpec `ebpf:"ssl_to_conn"`
 	SslToPidTid             *ebpf.MapSpec `ebpf:"ssl_to_pid_tid"`
@@ -295,7 +295,7 @@ type bpfMaps struct {
 	OngoingTcpReq           *ebpf.Map `ebpf:"ongoing_tcp_req"`
 	PidCache                *ebpf.Map `ebpf:"pid_cache"`
 	PidTidToConn            *ebpf.Map `ebpf:"pid_tid_to_conn"`
-	ProtocolMem             *ebpf.Map `ebpf:"protocol_mem"`
+	ProtocolArgsMem         *ebpf.Map `ebpf:"protocol_args_mem"`
 	ServerTraces            *ebpf.Map `ebpf:"server_traces"`
 	SslToConn               *ebpf.Map `ebpf:"ssl_to_conn"`
 	SslToPidTid             *ebpf.Map `ebpf:"ssl_to_pid_tid"`
@@ -326,7 +326,7 @@ func (m *bpfMaps) Close() error {
 		m.OngoingTcpReq,
 		m.PidCache,
 		m.PidTidToConn,
-		m.ProtocolMem,
+		m.ProtocolArgsMem,
 		m.ServerTraces,
 		m.SslToConn,
 		m.SslToPidTid,

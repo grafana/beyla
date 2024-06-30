@@ -189,21 +189,22 @@ static __always_inline void process_http2_grpc_frames(pid_connection_info_t *pid
     }
 }
 
+// TAIL_PROTOCOL_HTTP2
 SEC("kprobe/http2")
 int protocol_http2(void *ctx) {
-    call_protocol_info_t *p_info = protocol_memory();
+    call_protocol_args_t *args = protocol_args();
 
-    if (!p_info) {
+    if (!args) {
         return 0;
     }
 
     process_http2_grpc_frames(
-        &p_info->pid_conn, 
-        (void *)p_info->u_buf, 
-        p_info->bytes_len, 
-        p_info->direction, 
-        p_info->ssl, 
-        p_info->orig_dport
+        &args->pid_conn, 
+        (void *)args->u_buf, 
+        args->bytes_len, 
+        args->direction, 
+        args->ssl, 
+        args->orig_dport
     );
 
     return 0;

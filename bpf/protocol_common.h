@@ -36,9 +36,9 @@ struct {
 struct {
     __uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
     __type(key, int);
-    __type(value, call_protocol_info_t);
+    __type(value, call_protocol_args_t);
     __uint(max_entries, 1);
-} protocol_mem SEC(".maps");
+} protocol_args_mem SEC(".maps");
 
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
@@ -58,9 +58,9 @@ static __always_inline u8* iovec_memory() {
     return bpf_map_lookup_elem(&iovec_mem, &zero);
 }
 
-static __always_inline call_protocol_info_t* protocol_memory() {
+static __always_inline call_protocol_args_t* protocol_args() {
     int zero = 0;
-    return bpf_map_lookup_elem(&protocol_mem, &zero);
+    return bpf_map_lookup_elem(&protocol_args_mem, &zero);
 }
 
 static __always_inline u8 request_type_by_direction(u8 direction, u8 packet_type) {

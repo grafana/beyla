@@ -75,33 +75,43 @@ struct {
     __uint(pinning, LIBBPF_PIN_BY_NAME);
 } active_ssl_write_args SEC(".maps");
 
-static __always_inline void cleanup_ssl_server_trace(http_info_t *info, void *ssl) {
-    if (info && http_info_complete(info)) {
-        if (info->type == EVENT_HTTP_REQUEST) {
-            ssl_pid_connection_info_t *ssl_info = bpf_map_lookup_elem(&ssl_to_conn, &ssl);
+static __always_inline void cleanup_ssl_trace_info(http_info_t *info, void *ssl) {
+    if (info->type == EVENT_HTTP_REQUEST) {
+        ssl_pid_connection_info_t *ssl_info = bpf_map_lookup_elem(&ssl_to_conn, &ssl);
 
-            if (ssl_info) {
-                bpf_dbg_printk("Looking to delete server trace for ssl = %llx, info->type = %d", ssl, info->type);
-                //dbg_print_http_connection_info(&ssl_info->conn.conn); // commented out since GitHub CI doesn't like this call
-                delete_server_trace_tid(&ssl_info->c_tid);
-            }
+        if (ssl_info) {
+            bpf_dbg_printk("Looking to delete server trace for ssl = %llx, info->type = %d", ssl, info->type);
+            //dbg_print_http_connection_info(&ssl_info->conn.conn); // commented out since GitHub CI doesn't like this call
+            delete_server_trace_tid(&ssl_info->c_tid);
         }
+    }
 
-        bpf_map_delete_elem(&ssl_to_conn, &ssl);
+    bpf_map_delete_elem(&ssl_to_conn, &ssl);
+}
+
+static __always_inline void cleanup_ssl_server_trace(http_info_t *info, void *ssl, void *buf, u32 len) {
+    if (info && http_will_complete(info, buf, len)) {
+        cleanup_ssl_trace_info(info, ssl);
+    }
+}
+
+static __always_inline void cleanup_complete_ssl_server_trace(http_info_t *info, void *ssl) {
+    if (info && http_info_complete(info)) {
+        cleanup_ssl_trace_info(info, ssl);
     }
 }
 
 static __always_inline void finish_possible_delayed_tls_http_request(pid_connection_info_t *pid_conn, void *ssl) {
     http_info_t *info = bpf_map_lookup_elem(&ongoing_http, pid_conn);
     if (info) {        
-        cleanup_ssl_server_trace(info, ssl);
+        cleanup_complete_ssl_server_trace(info, ssl);
         finish_http(info, pid_conn);        
     }
 }
 
-static __always_inline void cleanup_trace_info_for_delayed_trace(pid_connection_info_t *pid_conn, void *ssl) {
+static __always_inline void cleanup_trace_info_for_delayed_trace(pid_connection_info_t *pid_conn, void *ssl, void *buf, u32 len) {
     http_info_t *info = bpf_map_lookup_elem(&ongoing_http, pid_conn);
-    cleanup_ssl_server_trace(info, ssl);
+    cleanup_ssl_server_trace(info, ssl, buf, len);
 }
 
 static __always_inline void handle_ssl_buf(void *ctx, u64 id, ssl_args_t *args, int bytes_len, u8 direction) {
@@ -165,17 +175,22 @@ static __always_inline void handle_ssl_buf(void *ctx, u64 id, ssl_args_t *args, 
             // bpf_dbg_printk("conn pid %d", conn.pid);
             // dbg_print_http_connection_info(&conn.conn);
 
+            dbg_print_http_connection_info(&conn->p_conn.conn);
+
             // unsigned char buf[48];
             // bpf_probe_read(buf, 48, (void *)args->buf);
             // for (int i=0; i < 48; i++) {
             //     bpf_dbg_printk("%x ", buf[i]);
             // }
             bpf_map_update_elem(&active_ssl_connections, &conn->p_conn, &ssl_ptr, BPF_ANY);
-            handle_buf_with_connection(ctx, &conn->p_conn, (void *)args->buf, bytes_len, WITH_SSL, direction, conn->orig_dport);
+
+
             // We should attempt to clean up the server trace immediately. The cleanup information
             // is keyed of the *ssl, so when it's delayed we might have different *ssl on the same
             // connection.
-            cleanup_trace_info_for_delayed_trace(&conn->p_conn, ssl);
+            cleanup_trace_info_for_delayed_trace(&conn->p_conn, ssl, (void *)args->buf, bytes_len);
+            // must be last, doesn't return
+            handle_buf_with_connection(ctx, &conn->p_conn, (void *)args->buf, bytes_len, WITH_SSL, direction, conn->orig_dport);
         } else {
             bpf_dbg_printk("No connection info! This is a bug.");
         }

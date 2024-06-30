@@ -117,7 +117,7 @@ typedef struct tcp_req {
     tp_info_t tp;
 } tcp_req_t;
 
-typedef struct call_protocol_info {
+typedef struct call_protocol_args {
     pid_connection_info_t pid_conn;
     unsigned char small_buf[MIN_HTTP2_SIZE];
     u64 u_buf;
@@ -126,7 +126,7 @@ typedef struct call_protocol_info {
     u8 direction; 
     u16 orig_dport;
     u8 packet_type;
-} call_protocol_info_t;
+} call_protocol_args_t;
 
 // Here we keep information on the packets passing through the socket filter
 typedef struct protocol_info {

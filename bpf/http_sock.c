@@ -260,7 +260,7 @@ static __always_inline void *is_ssl_connection(u64 id) {
         if (ssl_args) {
             ssl = (void *)ssl_args->ssl;
         }
-    }            
+    }         
 
     return ssl;
 }
@@ -308,6 +308,8 @@ int BPF_KPROBE(kprobe_tcp_sendmsg, struct sock *sk, struct msghdr *msg, size_t s
                             u64 sock_p = (u64)sk;
                             bpf_map_update_elem(&active_send_args, &id, &s_args, BPF_ANY);
                             bpf_map_update_elem(&active_send_sock_args, &sock_p, &s_args, BPF_ANY);
+
+                            // Logically last for !ssl.
                             handle_buf_with_connection(ctx, &s_args.p_conn, buf, size, NO_SSL, TCP_SEND, orig_dport);
                         } else {
                             bpf_dbg_printk("can't find iovec ptr in msghdr, not tracking sendmsg");
@@ -335,7 +337,7 @@ int BPF_KPROBE(kprobe_tcp_sendmsg, struct sock *sk, struct msghdr *msg, size_t s
         };
         bpf_memcpy(&ssl_conn.p_conn, &s_args.p_conn, sizeof(pid_connection_info_t));
         task_tid(&ssl_conn.c_tid);
-        bpf_map_update_elem(&ssl_to_conn, &ssl, &ssl_conn, BPF_NOEXIST);
+        bpf_map_update_elem(&ssl_to_conn, &ssl, &ssl_conn, BPF_ANY);
     }
 
     return 0;
@@ -449,6 +451,7 @@ int BPF_KRETPROBE(kretprobe_tcp_recvmsg, int copied_len) {
     recv_args_t *args = bpf_map_lookup_elem(&active_recv_args, &id);
 
     if (!args || (copied_len <= 0)) {
+        bpf_map_delete_elem(&active_recv_args, &id);
         goto done;
     }
 
@@ -456,11 +459,19 @@ int BPF_KRETPROBE(kretprobe_tcp_recvmsg, int copied_len) {
 
     if (!args->iovec_ptr) {
         bpf_dbg_printk("iovec_ptr found in kprobe is NULL, ignoring this tcp_recvmsg");
+        bpf_map_delete_elem(&active_recv_args, &id);
+
+        goto done;
     }
 
     pid_connection_info_t info = {};
 
-    if (parse_sock_info((struct sock *)args->sock_ptr, &info.conn)) {
+    void *iovec_ptr = (void *)args->iovec_ptr;
+    void *sock_ptr = (void *)args->sock_ptr;
+
+    bpf_map_delete_elem(&active_recv_args, &id);
+
+    if (parse_sock_info((struct sock *)sock_ptr, &info.conn)) {
         u16 orig_dport = info.conn.d_port;
         //dbg_print_http_connection_info(&info.conn);
         sort_connection_info(&info.conn);
@@ -473,8 +484,9 @@ int BPF_KRETPROBE(kretprobe_tcp_recvmsg, int copied_len) {
             if (!active_ssl) {
                 u8* buf = iovec_memory();
                 if (buf) {
-                    copied_len = read_msghdr_buf((void *)args->iovec_ptr, buf, copied_len);
+                    copied_len = read_msghdr_buf((void *)iovec_ptr, buf, copied_len);
                     if (copied_len) {
+                        // doesn't return must be logically last statement
                         handle_buf_with_connection(ctx, &info, buf, copied_len, NO_SSL, TCP_RECV, orig_dport);
                     } else {
                         bpf_dbg_printk("Not copied anything");
@@ -489,8 +501,6 @@ int BPF_KRETPROBE(kretprobe_tcp_recvmsg, int copied_len) {
     }
 
 done:
-    bpf_map_delete_elem(&active_recv_args, &id);
-
     return 0;
 }
 

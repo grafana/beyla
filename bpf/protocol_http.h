@@ -83,6 +83,19 @@ static __always_inline u8 http_info_complete(http_info_t *info) {
     return (info->start_monotime_ns != 0 && info->status != 0 && info->pid.host_pid != 0);
 }
 
+static __always_inline u8 http_will_complete(http_info_t *info, unsigned char *buf, u32 len) {
+    if (info->start_monotime_ns != 0) {
+        u8 packet_type;
+        unsigned char small_buf[MIN_HTTP2_SIZE];
+        bpf_probe_read(small_buf, MIN_HTTP2_SIZE, (void *)buf);
+        if (is_http(small_buf, len, &packet_type)) {
+            return packet_type == PACKET_TYPE_RESPONSE;
+        }
+    }
+
+    return false;
+}
+
 static __always_inline void finish_http(http_info_t *info, pid_connection_info_t *pid_conn) {
     if (http_info_complete(info)) {
         http_info_t *trace = bpf_ringbuf_reserve(&events, sizeof(http_info_t), 0);        
@@ -94,14 +107,9 @@ static __always_inline void finish_http(http_info_t *info, pid_connection_info_t
             bpf_ringbuf_submit(trace, get_flags());
         }
 
-        if (info->type == EVENT_HTTP_REQUEST) {
-            delete_server_trace();
-        }
-
         // bpf_dbg_printk("Terminating trace for pid=%d", pid_from_pid_tgid(pid_tid));
         // dbg_print_http_connection_info(&info->conn_info); // commented out since GitHub CI doesn't like this call
         bpf_map_delete_elem(&ongoing_http, pid_conn);
-        bpf_map_delete_elem(&active_ssl_connections, pid_conn);
     }        
 }
 
@@ -185,13 +193,24 @@ static __always_inline void handle_http_response(unsigned char *small_buf, pid_c
             bpf_dbg_printk("Delaying finish http for large request, orig_len %d", orig_len);
         }
     }
+    
+    if (info->type == EVENT_HTTP_REQUEST) {
+        delete_server_trace();
+    } else {
+        bpf_dbg_printk("Deleting client trace map for connection");
+        dbg_print_http_connection_info(&pid_conn->conn);
+
+        bpf_map_delete_elem(&trace_map, &pid_conn->conn);
+    }
+    bpf_map_delete_elem(&active_ssl_connections, pid_conn);
 }
 
+// TAIL_PROTOCOL_HTTP
 SEC("kprobe/http")
 int protocol_http(void *ctx) {
-    call_protocol_info_t *p_info = protocol_memory();
+    call_protocol_args_t *args = protocol_args();
 
-    if (!p_info) {
+    if (!args) {
         return 0;
     }
 
@@ -201,13 +220,13 @@ int protocol_http(void *ctx) {
         return 0;
     }
 
-    bpf_memcpy(&in->conn_info, &p_info->pid_conn.conn, sizeof(connection_info_t));
-    in->ssl = p_info->ssl;
+    bpf_memcpy(&in->conn_info, &args->pid_conn.conn, sizeof(connection_info_t));
+    in->ssl = args->ssl;
 
-    http_info_t *info = get_or_set_http_info(in, &p_info->pid_conn, p_info->packet_type);
+    http_info_t *info = get_or_set_http_info(in, &args->pid_conn, args->packet_type);
     if (!info) {
-        bpf_dbg_printk("No info, pid =%d?, looking for fallback...", p_info->pid_conn.pid);
-        info = (http_info_t *)bpf_map_lookup_elem(&ongoing_http_fallback, &p_info->pid_conn.conn);
+        bpf_dbg_printk("No info, pid =%d?, looking for fallback...", args->pid_conn.pid);
+        info = (http_info_t *)bpf_map_lookup_elem(&ongoing_http_fallback, &args->pid_conn.conn);
         if (!info) {
             bpf_dbg_printk("No fallback either, giving up");
             //dbg_print_http_connection_info(&pid_conn->conn); // commented out since GitHub CI doesn't like this call
@@ -215,15 +234,15 @@ int protocol_http(void *ctx) {
         }
     } 
 
-    bpf_dbg_printk("=== http_buffer_event len=%d pid=%d still_reading=%d ===", p_info->bytes_len, pid_from_pid_tgid(bpf_get_current_pid_tgid()), still_reading(info));
+    bpf_dbg_printk("=== http_buffer_event len=%d pid=%d still_reading=%d ===", args->bytes_len, pid_from_pid_tgid(bpf_get_current_pid_tgid()), still_reading(info));
 
-    if (p_info->packet_type == PACKET_TYPE_REQUEST && (info->status == 0) && (info->start_monotime_ns == 0)) {
-        http_connection_metadata_t *meta = connection_meta_by_direction(&p_info->pid_conn, p_info->direction, PACKET_TYPE_REQUEST);
+    if (args->packet_type == PACKET_TYPE_REQUEST && (info->status == 0) && (info->start_monotime_ns == 0)) {
+        http_connection_metadata_t *meta = connection_meta_by_direction(&args->pid_conn, args->direction, PACKET_TYPE_REQUEST);
 
-        get_or_create_trace_info(meta, p_info->pid_conn.pid, &p_info->pid_conn.conn, (void *)p_info->u_buf, p_info->bytes_len, capture_header_buffer);
+        get_or_create_trace_info(meta, args->pid_conn.pid, &args->pid_conn.conn, (void *)args->u_buf, args->bytes_len, capture_header_buffer);
 
         if (meta) {            
-            tp_info_pid_t *tp_p = trace_info_for_connection(&p_info->pid_conn.conn);
+            tp_info_pid_t *tp_p = trace_info_for_connection(&args->pid_conn.conn);
             if (tp_p) {
                 info->tp = tp_p->tp;
 
@@ -247,15 +266,15 @@ int protocol_http(void *ctx) {
 
         // we copy some small part of the buffer to the info trace event, so that we can process an event even with
         // incomplete trace info in user space.
-        bpf_probe_read(info->buf, FULL_BUF_SIZE, (void *)p_info->u_buf);
-        process_http_request(info, p_info->bytes_len, meta, p_info->direction, p_info->orig_dport);
-    } else if ((p_info->packet_type == PACKET_TYPE_RESPONSE) && (info->status == 0)) {
-        handle_http_response(p_info->small_buf, &p_info->pid_conn, info, p_info->bytes_len, p_info->direction, p_info->ssl);
+        bpf_probe_read(info->buf, FULL_BUF_SIZE, (void *)args->u_buf);
+        process_http_request(info, args->bytes_len, meta, args->direction, args->orig_dport);
+    } else if ((args->packet_type == PACKET_TYPE_RESPONSE) && (info->status == 0)) {
+        handle_http_response(args->small_buf, &args->pid_conn, info, args->bytes_len, args->direction, args->ssl);
     } else if (still_reading(info)) {
-        info->len += p_info->bytes_len;
+        info->len += args->bytes_len;
     }   
 
-    bpf_map_delete_elem(&ongoing_http_fallback, &p_info->pid_conn.conn);
+    bpf_map_delete_elem(&ongoing_http_fallback, &args->pid_conn.conn);
 
     return 0;
 }

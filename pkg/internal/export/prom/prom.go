@@ -53,6 +53,7 @@ const (
 	k8sNodeName        = "k8s_node_name"
 	k8sPodUID          = "k8s_pod_uid"
 	k8sPodStartTime    = "k8s_pod_start_time"
+	k8sClusterName     = "k8s_cluster_name"
 
 	spanNameKey          = "span_name"
 	statusCodeKey        = "status_code"
@@ -646,7 +647,7 @@ func (r *metricsReporter) observe(span *request.Span) {
 
 func appendK8sLabelNames(names []string) []string {
 	names = append(names, k8sNamespaceName, k8sPodName, k8sNodeName, k8sPodUID, k8sPodStartTime,
-		k8sDeploymentName, k8sReplicaSetName, k8sStatefulSetName, k8sDaemonSetName)
+		k8sDeploymentName, k8sReplicaSetName, k8sStatefulSetName, k8sDaemonSetName, k8sClusterName)
 	return names
 }
 

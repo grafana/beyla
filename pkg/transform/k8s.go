@@ -50,7 +50,7 @@ func KubeDecoratorProvider(
 			// if kubernetes decoration is disabled, we just bypass the node
 			return pipe.Bypass[[]request.Span](), nil
 		}
-		decorator := &metadataDecorator{db: ctxInfo.AppO11y.K8sDatabase, cfg: cfg, ctx: ctx}
+		decorator := &metadataDecorator{db: ctxInfo.AppO11y.K8sDatabase, clusterName: KubeClusterName(ctx, cfg)}
 		return decorator.nodeLoop, nil
 	}
 }
@@ -62,9 +62,8 @@ type kubeDatabase interface {
 }
 
 type metadataDecorator struct {
-	db  kubeDatabase
-	cfg *KubernetesDecorator
-	ctx context.Context
+	db          kubeDatabase
+	clusterName string
 }
 
 func (md *metadataDecorator) nodeLoop(in <-chan []request.Span, out chan<- []request.Span) {
@@ -115,7 +114,7 @@ func (md *metadataDecorator) appendMetadata(span *request.Span, info *kube.PodIn
 		attr.K8sNodeName:      info.NodeName,
 		attr.K8sPodUID:        string(info.UID),
 		attr.K8sPodStartTime:  info.StartTimeStr,
-		attr.K8sClusterName:   KubeClusterName(md.ctx, md.cfg),
+		attr.K8sClusterName:   md.clusterName,
 	}
 	owner := info.Owner
 	for owner != nil {

@@ -111,6 +111,7 @@ func FeatureHTTPMetricsDecoration(manifest string) features.Feature {
 				"k8s_node_name":      ".+-control-plane$",
 				"k8s_pod_uid":        UUIDRegex,
 				"k8s_pod_start_time": TimeRegex,
+				"k8s_cluster_name":   "^beyla$",
 			}, "k8s_deployment_name")).
 		Assess("all the server metrics are properly decorated",
 			testMetricsDecoration(httpServerMetrics, `{url_path="/iping",k8s_pod_name=~"testserver-.*"}`, map[string]string{
@@ -120,6 +121,7 @@ func FeatureHTTPMetricsDecoration(manifest string) features.Feature {
 				"k8s_pod_start_time":  TimeRegex,
 				"k8s_deployment_name": "^testserver$",
 				"k8s_replicaset_name": "^testserver-",
+				"k8s_cluster_name":    "^beyla$",
 			})).
 		Assess("all the span graph metrics exist",
 			testMetricsDecoration(spanGraphMetrics, `{server="testserver",client="internal-pinger"}`, map[string]string{
@@ -146,6 +148,7 @@ func FeatureGRPCMetricsDecoration(manifest string) features.Feature {
 				"k8s_node_name":      ".+-control-plane$",
 				"k8s_pod_uid":        UUIDRegex,
 				"k8s_pod_start_time": TimeRegex,
+				"k8s_cluster_name":   "^beyla$",
 			}, "k8s_deployment_name")).
 		Assess("all the server metrics are properly decorated",
 			testMetricsDecoration(grpcServerMetrics, `{k8s_pod_name=~"testserver-.*"}`, map[string]string{
@@ -155,6 +158,7 @@ func FeatureGRPCMetricsDecoration(manifest string) features.Feature {
 				"k8s_pod_start_time":  TimeRegex,
 				"k8s_deployment_name": "^testserver$",
 				"k8s_replicaset_name": "^testserver-",
+				"k8s_cluster_name":    "^beyla$",
 			}),
 		).Feature()
 }
@@ -169,6 +173,7 @@ func FeatureProcessMetricsDecoration() features.Feature {
 				"k8s_pod_start_time":  TimeRegex,
 				"k8s_deployment_name": "^testserver$",
 				"k8s_replicaset_name": "^testserver-",
+				"k8s_cluster_name":    "^beyla$",
 			})).Feature()
 }
 

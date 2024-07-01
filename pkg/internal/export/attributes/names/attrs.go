@@ -67,7 +67,7 @@ const (
 )
 
 // Beyla-specific network attributes
-var (
+const (
 	BeylaIP    = Name("beyla.ip")
 	Transport  = Name("transport")
 	SrcAddress = Name("src.address")
@@ -117,7 +117,7 @@ const (
 )
 
 // other beyla-specific attributes
-var (
+const (
 	// TargetInstance is a Prometheus-only attribute.
 	// It will expose the process hostname-pid (or K8s Pod).
 	// It is advised for users that to use relabeling rules to
@@ -131,6 +131,8 @@ var (
 	// attributes, which can't be enabled/disabled by the users
 	ServiceName      = Name(semconv.ServiceNameKey)
 	ServiceNamespace = Name(semconv.ServiceNamespaceKey)
+
+	HostName = Name(semconv.HostNameKey)
 )
 
 // traces related attributes

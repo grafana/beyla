@@ -80,7 +80,7 @@ func (p *BPFLogger) processLogEvent(record *ringbuf.Record, _ ebpfcommon.Service
 	err := binary.Read(bytes.NewBuffer(record.RawSample), binary.LittleEndian, &event)
 
 	if err == nil {
-		p.log.Info(readString(event.Log[:]), "pid", event.Pid, "comm", readString(event.Comm[:]))
+		p.log.Debug(readString(event.Log[:]), "pid", event.Pid, "comm", readString(event.Comm[:]))
 	}
 
 	return request.Span{}, true, nil

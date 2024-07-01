@@ -121,6 +121,8 @@ func (md *metadataDecorator) appendMetadata(span *request.Span, info *kube.PodIn
 		span.ServiceID.Metadata[attr.Name(owner.LabelName)] = owner.Name
 		owner = owner.Owner
 	}
+	// override hostname by the Pod name
+	span.ServiceID.HostName = info.Name
 }
 
 func KubeClusterName(ctx context.Context, cfg *KubernetesDecorator) string {

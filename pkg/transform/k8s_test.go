@@ -1,7 +1,6 @@
 package transform
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -44,7 +43,7 @@ func TestDecoration(t *testing.T) {
 			NodeName:     "the-node",
 			StartTimeStr: "2020-01-02 12:56:56",
 		},
-	}}, cfg: &KubernetesDecorator{ClusterName: "the-cluster"}, ctx: context.Background()}
+	}}, clusterName: "the-cluster"}
 	inputCh, outputhCh := make(chan []request.Span, 10), make(chan []request.Span, 10)
 	defer close(inputCh)
 	go dec.nodeLoop(inputCh, outputhCh)

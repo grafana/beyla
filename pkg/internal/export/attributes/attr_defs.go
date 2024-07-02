@@ -53,7 +53,8 @@ func getDefinitions(groups AttrGroups) map[Section]AttrReportGroup {
 	var appAttributes = AttrReportGroup{
 		SubGroups: []*AttrReportGroup{&prometheusAttributes},
 		Attributes: map[attr.Name]Default{
-			attr.ServiceName: true,
+			attr.ServiceName:      true,
+			attr.ServiceNamespace: true,
 		},
 	}
 

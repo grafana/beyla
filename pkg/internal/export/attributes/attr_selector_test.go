@@ -31,15 +31,18 @@ func TestFor(t *testing.T) {
 		},
 	})
 	require.NoError(t, err)
-	assert.Equal(t, []attr.Name{
-		"beyla.ip",
-		"k8s.dst.namespace",
-		"k8s.dst.node.ip",
-		"k8s.src.namespace",
-		"k8s.src.node.ip",
-		"src.address",
-		"src.name",
-		"src.port",
+	assert.Equal(t, Sections[[]attr.Name]{
+		Metric: []attr.Name{
+			"beyla.ip",
+			"k8s.dst.namespace",
+			"k8s.dst.node.ip",
+			"k8s.src.namespace",
+			"k8s.src.node.ip",
+			"src.address",
+			"src.name",
+			"src.port",
+		},
+		Resource: []attr.Name{},
 	}, p.For(BeylaNetworkFlow))
 }
 
@@ -51,10 +54,13 @@ func TestFor_KubeDisabled(t *testing.T) {
 		},
 	})
 	require.NoError(t, err)
-	assert.Equal(t, []attr.Name{
-		"beyla.ip",
-		"src.address",
-		"src.name",
+	assert.Equal(t, Sections[[]attr.Name]{
+		Metric: []attr.Name{
+			"beyla.ip",
+			"src.address",
+			"src.name",
+		},
+		Resource: []attr.Name{},
 	}, p.For(BeylaNetworkFlow))
 }
 
@@ -69,12 +75,15 @@ func TestNilDoesNotCrash(t *testing.T) {
 func TestDefault(t *testing.T) {
 	p, err := NewAttrSelector(GroupKubernetes, nil)
 	require.NoError(t, err)
-	assert.Equal(t, []attr.Name{
-		"k8s.cluster.name",
-		"k8s.dst.namespace",
-		"k8s.dst.owner.name",
-		"k8s.src.namespace",
-		"k8s.src.owner.name",
+	assert.Equal(t, Sections[[]attr.Name]{
+		Metric: []attr.Name{
+			"k8s.cluster.name",
+			"k8s.dst.namespace",
+			"k8s.dst.owner.name",
+			"k8s.src.namespace",
+			"k8s.src.owner.name",
+		},
+		Resource: []attr.Name{},
 	}, p.For(BeylaNetworkFlow))
 }
 
@@ -85,7 +94,10 @@ func TestTraces(t *testing.T) {
 		},
 	})
 	require.NoError(t, err)
-	assert.Equal(t, []attr.Name{
-		"db.query.text",
+	assert.Equal(t, Sections[[]attr.Name]{
+		Metric: []attr.Name{
+			"db.query.text",
+		},
+		Resource: []attr.Name{},
 	}, p.For(Traces))
 }

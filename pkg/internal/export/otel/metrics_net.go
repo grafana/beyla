@@ -113,7 +113,7 @@ func newMetricsExporter(ctx context.Context, ctxInfo *global.ContextInfo, cfg *N
 		log.Error("creating observable counter", "error", err)
 		return nil, err
 	}
-	expirer := NewExpirer[*ebpf.Record, metric2.Int64Counter, float64](ctx, bytesMetric, attrs, clock.Time, cfg.Metrics.TTL)
+	expirer := NewExpirer[*ebpf.Record, metric2.Int64Counter, float64](ctx, bytesMetric, attrs.Metric, clock.Time, cfg.Metrics.TTL)
 	log.Debug("restricting attributes not in this list", "attributes", cfg.AttributeSelectors)
 	return &netMetricsExporter{
 		ctx:       ctx,

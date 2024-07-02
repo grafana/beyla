@@ -154,7 +154,10 @@ func GetUserSelectedAttributes(attrs attributes.Selection) (map[attr.Name]struct
 	}
 	traceAttrsArr := attribProvider.For(attributes.Traces)
 	traceAttrs := make(map[attr.Name]struct{})
-	for _, a := range traceAttrsArr {
+	for _, a := range traceAttrsArr.Metric {
+		traceAttrs[a] = struct{}{}
+	}
+	for _, a := range traceAttrsArr.Resource {
 		traceAttrs[a] = struct{}{}
 	}
 

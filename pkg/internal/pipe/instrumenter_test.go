@@ -100,6 +100,7 @@ func TestBasicPipeline(t *testing.T) {
 			string(attr.HTTPUrlPath):            "/foo/bar",
 			string(attr.ClientAddr):             "1.1.1.1",
 			string(semconv.ServiceNameKey):      "foo-svc",
+			string(semconv.ServiceNamespaceKey): "",
 		},
 		ResourceAttributes: map[string]string{
 			string(semconv.ServiceNameKey):          "foo-svc",
@@ -298,6 +299,7 @@ func TestRouteConsolidation(t *testing.T) {
 		Unit: "s",
 		Attributes: map[string]string{
 			string(semconv.ServiceNameKey):      "svc-1",
+			string(semconv.ServiceNamespaceKey): "",
 			string(attr.HTTPRequestMethod):      "GET",
 			string(attr.HTTPResponseStatusCode): "200",
 			string(semconv.HTTPRouteKey):        "/user/{id}",
@@ -316,6 +318,7 @@ func TestRouteConsolidation(t *testing.T) {
 		Unit: "s",
 		Attributes: map[string]string{
 			string(semconv.ServiceNameKey):      "svc-1",
+			string(semconv.ServiceNamespaceKey): "",
 			string(attr.HTTPRequestMethod):      "GET",
 			string(attr.HTTPResponseStatusCode): "200",
 			string(semconv.HTTPRouteKey):        "/products/{id}/push",
@@ -334,6 +337,7 @@ func TestRouteConsolidation(t *testing.T) {
 		Unit: "s",
 		Attributes: map[string]string{
 			string(semconv.ServiceNameKey):      "svc-1",
+			string(semconv.ServiceNamespaceKey): "",
 			string(attr.HTTPRequestMethod):      "GET",
 			string(attr.HTTPResponseStatusCode): "200",
 			string(semconv.HTTPRouteKey):        "/**",
@@ -388,6 +392,7 @@ func TestGRPCPipeline(t *testing.T) {
 		Unit: "s",
 		Attributes: map[string]string{
 			string(semconv.ServiceNameKey):       "grpc-svc",
+			string(semconv.ServiceNamespaceKey):  "",
 			string(semconv.RPCSystemKey):         "grpc",
 			string(semconv.RPCGRPCStatusCodeKey): "3",
 			string(semconv.RPCMethodKey):         "/foo/bar",
@@ -477,6 +482,7 @@ func TestBasicPipelineInfo(t *testing.T) {
 			string(attr.HTTPUrlPath):            "/aaa/bbb",
 			string(attr.ClientAddr):             "1.1.1.1",
 			string(semconv.ServiceNameKey):      "comm",
+			string(semconv.ServiceNamespaceKey): "",
 		},
 		ResourceAttributes: map[string]string{
 			string(semconv.ServiceNameKey):          "comm",
@@ -561,6 +567,7 @@ func TestSpanAttributeFilterNode(t *testing.T) {
 	assert.Equal(t, map[string]map[string]string{
 		"/user/1234": {
 			string(semconv.ServiceNameKey):      "svc-1",
+			string(semconv.ServiceNamespaceKey): "",
 			string(attr.ClientAddr):             "1.1.1.1",
 			string(attr.HTTPRequestMethod):      "GET",
 			string(attr.HTTPResponseStatusCode): "201",
@@ -568,6 +575,7 @@ func TestSpanAttributeFilterNode(t *testing.T) {
 		},
 		"/user/4321": {
 			string(semconv.ServiceNameKey):      "svc-3",
+			string(semconv.ServiceNamespaceKey): "",
 			string(attr.ClientAddr):             "1.1.1.1",
 			string(attr.HTTPRequestMethod):      "GET",
 			string(attr.HTTPResponseStatusCode): "203",

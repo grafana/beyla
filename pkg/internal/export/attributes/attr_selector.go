@@ -27,6 +27,7 @@ type AttrReportGroup struct {
 	ResourceAttributes map[attr.Name]Default
 }
 
+// Sections classifies some attribute-related groups between Metric and Resource attributes
 type Sections[T any] struct {
 	Metric   T
 	Resource T

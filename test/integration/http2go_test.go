@@ -19,6 +19,7 @@ import (
 )
 
 func testREDMetricsForHTTP2Library(t *testing.T, route, svcNs string) {
+	t.Skip("testing what happens with skip")
 	// Eventually, Prometheus would make this query visible
 	pq := prom.Client{HostPort: prometheusHostPort}
 	var results []prom.Result

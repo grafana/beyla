@@ -39,6 +39,8 @@ func SpanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValu
 		getter = func(s *Span) attribute.KeyValue { return semconv.RPCGRPCStatusCodeKey.Int(s.Status) }
 	case attr.ServiceName:
 		getter = func(s *Span) attribute.KeyValue { return semconv.ServiceName(s.ServiceID.Name) }
+	case attr.ServiceNamespace:
+		getter = func(s *Span) attribute.KeyValue { return semconv.ServiceNamespace(s.ServiceID.Namespace) }
 	case attr.DBOperation:
 		getter = func(span *Span) attribute.KeyValue { return DBOperationName(span.Method) }
 	case attr.DBSystem:

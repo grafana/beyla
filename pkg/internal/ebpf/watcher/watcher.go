@@ -81,6 +81,8 @@ func (p *Watcher) Tracepoints() map[string]ebpfcommon.FunctionPrograms {
 	return nil
 }
 
+func (p *Watcher) SetupTailCalls() {}
+
 func (p *Watcher) Run(ctx context.Context) {
 	p.events <- Event{Type: Ready}
 	ebpfcommon.ForwardRingbuf(

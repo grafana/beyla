@@ -93,6 +93,10 @@ func (pt *ProcessTracer) tracers() ([]Tracer, error) {
 				return nil, fmt.Errorf("loading and assigning BPF objects: %w", err)
 			}
 		}
+
+		// Setup any tail call jump tables
+		p.SetupTailCalls()
+
 		i := instrumenter{
 			exe:     pt.Exe,
 			offsets: pt.Goffsets,

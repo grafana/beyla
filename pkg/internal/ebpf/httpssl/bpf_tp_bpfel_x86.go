@@ -12,6 +12,18 @@ import (
 	"github.com/cilium/ebpf"
 )
 
+type bpf_tpCallProtocolArgsT struct {
+	PidConn    bpf_tpPidConnectionInfoT
+	SmallBuf   [24]uint8
+	U_buf      uint64
+	BytesLen   int32
+	Ssl        uint8
+	Direction  uint8
+	OrigDport  uint16
+	PacketType uint8
+	_          [7]byte
+}
+
 type bpf_tpConnectionInfoT struct {
 	S_addr [16]uint8
 	D_addr [16]uint8
@@ -197,6 +209,9 @@ type bpf_tpSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpf_tpProgramSpecs struct {
+	ProtocolHttp            *ebpf.ProgramSpec `ebpf:"protocol_http"`
+	ProtocolHttp2           *ebpf.ProgramSpec `ebpf:"protocol_http2"`
+	ProtocolTcp             *ebpf.ProgramSpec `ebpf:"protocol_tcp"`
 	UprobeSslDoHandshake    *ebpf.ProgramSpec `ebpf:"uprobe_ssl_do_handshake"`
 	UprobeSslRead           *ebpf.ProgramSpec `ebpf:"uprobe_ssl_read"`
 	UprobeSslReadEx         *ebpf.ProgramSpec `ebpf:"uprobe_ssl_read_ex"`
@@ -224,6 +239,7 @@ type bpf_tpMapSpecs struct {
 	Http2InfoMem            *ebpf.MapSpec `ebpf:"http2_info_mem"`
 	HttpInfoMem             *ebpf.MapSpec `ebpf:"http_info_mem"`
 	IovecMem                *ebpf.MapSpec `ebpf:"iovec_mem"`
+	JumpTable               *ebpf.MapSpec `ebpf:"jump_table"`
 	OngoingHttp             *ebpf.MapSpec `ebpf:"ongoing_http"`
 	OngoingHttp2Connections *ebpf.MapSpec `ebpf:"ongoing_http2_connections"`
 	OngoingHttp2Grpc        *ebpf.MapSpec `ebpf:"ongoing_http2_grpc"`
@@ -231,6 +247,7 @@ type bpf_tpMapSpecs struct {
 	OngoingTcpReq           *ebpf.MapSpec `ebpf:"ongoing_tcp_req"`
 	PidCache                *ebpf.MapSpec `ebpf:"pid_cache"`
 	PidTidToConn            *ebpf.MapSpec `ebpf:"pid_tid_to_conn"`
+	ProtocolArgsMem         *ebpf.MapSpec `ebpf:"protocol_args_mem"`
 	ServerTraces            *ebpf.MapSpec `ebpf:"server_traces"`
 	SslToConn               *ebpf.MapSpec `ebpf:"ssl_to_conn"`
 	SslToPidTid             *ebpf.MapSpec `ebpf:"ssl_to_pid_tid"`
@@ -270,6 +287,7 @@ type bpf_tpMaps struct {
 	Http2InfoMem            *ebpf.Map `ebpf:"http2_info_mem"`
 	HttpInfoMem             *ebpf.Map `ebpf:"http_info_mem"`
 	IovecMem                *ebpf.Map `ebpf:"iovec_mem"`
+	JumpTable               *ebpf.Map `ebpf:"jump_table"`
 	OngoingHttp             *ebpf.Map `ebpf:"ongoing_http"`
 	OngoingHttp2Connections *ebpf.Map `ebpf:"ongoing_http2_connections"`
 	OngoingHttp2Grpc        *ebpf.Map `ebpf:"ongoing_http2_grpc"`
@@ -277,6 +295,7 @@ type bpf_tpMaps struct {
 	OngoingTcpReq           *ebpf.Map `ebpf:"ongoing_tcp_req"`
 	PidCache                *ebpf.Map `ebpf:"pid_cache"`
 	PidTidToConn            *ebpf.Map `ebpf:"pid_tid_to_conn"`
+	ProtocolArgsMem         *ebpf.Map `ebpf:"protocol_args_mem"`
 	ServerTraces            *ebpf.Map `ebpf:"server_traces"`
 	SslToConn               *ebpf.Map `ebpf:"ssl_to_conn"`
 	SslToPidTid             *ebpf.Map `ebpf:"ssl_to_pid_tid"`
@@ -299,6 +318,7 @@ func (m *bpf_tpMaps) Close() error {
 		m.Http2InfoMem,
 		m.HttpInfoMem,
 		m.IovecMem,
+		m.JumpTable,
 		m.OngoingHttp,
 		m.OngoingHttp2Connections,
 		m.OngoingHttp2Grpc,
@@ -306,6 +326,7 @@ func (m *bpf_tpMaps) Close() error {
 		m.OngoingTcpReq,
 		m.PidCache,
 		m.PidTidToConn,
+		m.ProtocolArgsMem,
 		m.ServerTraces,
 		m.SslToConn,
 		m.SslToPidTid,
@@ -321,6 +342,9 @@ func (m *bpf_tpMaps) Close() error {
 //
 // It can be passed to loadBpf_tpObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpf_tpPrograms struct {
+	ProtocolHttp            *ebpf.Program `ebpf:"protocol_http"`
+	ProtocolHttp2           *ebpf.Program `ebpf:"protocol_http2"`
+	ProtocolTcp             *ebpf.Program `ebpf:"protocol_tcp"`
 	UprobeSslDoHandshake    *ebpf.Program `ebpf:"uprobe_ssl_do_handshake"`
 	UprobeSslRead           *ebpf.Program `ebpf:"uprobe_ssl_read"`
 	UprobeSslReadEx         *ebpf.Program `ebpf:"uprobe_ssl_read_ex"`
@@ -336,6 +360,9 @@ type bpf_tpPrograms struct {
 
 func (p *bpf_tpPrograms) Close() error {
 	return _Bpf_tpClose(
+		p.ProtocolHttp,
+		p.ProtocolHttp2,
+		p.ProtocolTcp,
 		p.UprobeSslDoHandshake,
 		p.UprobeSslRead,
 		p.UprobeSslReadEx,

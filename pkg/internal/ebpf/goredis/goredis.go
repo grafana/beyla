@@ -67,6 +67,8 @@ func (p *Tracer) Load() (*ebpf.CollectionSpec, error) {
 	return loader()
 }
 
+func (p *Tracer) SetupTailCalls() {}
+
 func (p *Tracer) Constants(_ *exec.FileInfo, offsets *goexec.Offsets) map[string]any {
 	// Set the field offsets and the logLevel for grpc BPF program,
 	// as well as some other configuration constants

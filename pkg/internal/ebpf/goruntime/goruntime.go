@@ -66,6 +66,8 @@ func (p *Tracer) Load() (*ebpf.CollectionSpec, error) {
 	return loader()
 }
 
+func (p *Tracer) SetupTailCalls() {}
+
 func (p *Tracer) Constants(_ *exec.FileInfo, _ *goexec.Offsets) map[string]any {
 	return make(map[string]any)
 }

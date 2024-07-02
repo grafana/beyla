@@ -193,6 +193,9 @@ static __always_inline void get_or_create_trace_info(http_connection_metadata_t 
                 bpf_memcpy(tp_p->tp.parent_id, server_tp->tp.span_id, sizeof(tp_p->tp.parent_id));
             }
         } else {
+            //bpf_dbg_printk("Looking up existing trace for connection");
+            //dbg_print_http_connection_info(conn);
+
             tp_info_pid_t *existing_tp = trace_info_for_connection(conn);
 
             if (correlated_requests(tp_p, existing_tp)) {
@@ -211,6 +214,10 @@ static __always_inline void get_or_create_trace_info(http_connection_metadata_t 
     } else {
         bpf_dbg_printk("Using old traceparent id");
     }
+
+    //unsigned char tp_buf[TP_MAX_VAL_LENGTH];
+    //make_tp_string(tp_buf, &tp_p->tp);
+    //bpf_dbg_printk("tp: %s", tp_buf);
 
 #ifdef BPF_TRACEPARENT
     // The below buffer scan can be expensive on high volume of requests. We make it optional

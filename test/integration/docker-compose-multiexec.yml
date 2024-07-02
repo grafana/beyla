@@ -10,6 +10,12 @@ services:
       - "8080:8080"
     environment:
       LOG_LEVEL: DEBUG
+    depends_on:
+      otelcol:
+        condition: service_started
+      jaeger:
+        condition: service_started
+
   # another instance of the above image. Used to test the deduplication
   # of metrics when they come from the same executable file
   testserver-unused:
@@ -122,7 +128,6 @@ services:
     image: hatest-autoinstrumenter
     privileged: true # in some environments (not GH Pull Requests) you can set it to false and then cap_add: [ SYS_ADMIN ]
     pid: "host"
-    network_mode: "host"
     environment:
       GOCOVERDIR: "/coverage"
       BEYLA_OTEL_METRICS_FEATURES: "application,application_span"

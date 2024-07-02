@@ -19,7 +19,6 @@ import (
 )
 
 func TestMultiProcess(t *testing.T) {
-	t.Skip("temp disable")
 	compose, err := docker.ComposeSuite("docker-compose-multiexec.yml", path.Join(pathOutput, "test-suite-multiexec.log"))
 	// we are going to setup discovery directly in the configuration file
 	compose.Env = append(compose.Env, `BEYLA_EXECUTABLE_NAME=`, `BEYLA_OPEN_PORT=`)

@@ -1,9 +1,9 @@
 routes:
   unmatched: path
 otel_metrics_export:
-  endpoint: http://127.0.0.1:4018
+  endpoint: http://otelcol:4018
 otel_traces_export:
-  endpoint: http://127.0.0.1:4318
+  endpoint: http://jaeger:4318
 discovery:
   services:
     - namespace: http2-go

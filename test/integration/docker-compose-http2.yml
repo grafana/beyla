@@ -19,6 +19,11 @@ services:
     image: hatest-server
     ports:
       - "7373:7373"
+    depends_on:
+      otelcol:
+        condition: service_started
+      jaeger:
+        condition: service_started
       
   autoinstrumenter:
     build:
@@ -34,7 +39,6 @@ services:
     image: hatest-autoinstrumenter
     privileged: true # in some environments (not GH Pull Requests) you can set it to false and then cap_add: [ SYS_ADMIN ]
     pid: "host"
-    network_mode: "host"
     environment:
       GOCOVERDIR: "/coverage"
       BEYLA_PRINT_TRACES: "true"

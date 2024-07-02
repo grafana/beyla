@@ -1,6 +1,7 @@
 package transform
 
 import (
+	"context"
 	"log/slog"
 	"time"
 
@@ -34,13 +35,22 @@ type KubernetesDecorator struct {
 	DropExternal bool `yaml:"drop_external" env:"BEYLA_NETWORK_DROP_EXTERNAL"`
 }
 
-func KubeDecoratorProvider(ctxInfo *global.ContextInfo) pipe.MiddleProvider[[]request.Span, []request.Span] {
+const (
+	clusterMetadataRetries       = 5
+	clusterMetadataFailRetryTime = 500 * time.Millisecond
+)
+
+func KubeDecoratorProvider(
+	ctx context.Context,
+	cfg *KubernetesDecorator,
+	ctxInfo *global.ContextInfo,
+) pipe.MiddleProvider[[]request.Span, []request.Span] {
 	return func() (pipe.MiddleFunc[[]request.Span, []request.Span], error) {
 		if !ctxInfo.K8sInformer.IsKubeEnabled() {
 			// if kubernetes decoration is disabled, we just bypass the node
 			return pipe.Bypass[[]request.Span](), nil
 		}
-		decorator := &metadataDecorator{db: ctxInfo.AppO11y.K8sDatabase}
+		decorator := &metadataDecorator{db: ctxInfo.AppO11y.K8sDatabase, clusterName: KubeClusterName(ctx, cfg)}
 		return decorator.nodeLoop, nil
 	}
 }
@@ -52,7 +62,8 @@ type kubeDatabase interface {
 }
 
 type metadataDecorator struct {
-	db kubeDatabase
+	db          kubeDatabase
+	clusterName string
 }
 
 func (md *metadataDecorator) nodeLoop(in <-chan []request.Span, out chan<- []request.Span) {
@@ -69,7 +80,7 @@ func (md *metadataDecorator) nodeLoop(in <-chan []request.Span, out chan<- []req
 
 func (md *metadataDecorator) do(span *request.Span) {
 	if podInfo, ok := md.db.OwnerPodInfo(span.Pid.Namespace); ok {
-		appendMetadata(span, podInfo)
+		md.appendMetadata(span, podInfo)
 	} else {
 		// do not leave the service attributes map as nil
 		span.ServiceID.Metadata = map[attr.Name]string{}
@@ -83,7 +94,7 @@ func (md *metadataDecorator) do(span *request.Span) {
 	}
 }
 
-func appendMetadata(span *request.Span, info *kube.PodInfo) {
+func (md *metadataDecorator) appendMetadata(span *request.Span, info *kube.PodInfo) {
 	// If the user has not defined criteria values for the reported
 	// service name and namespace, we will automatically set it from
 	// the kubernetes metadata
@@ -103,6 +114,7 @@ func appendMetadata(span *request.Span, info *kube.PodInfo) {
 		attr.K8sNodeName:      info.NodeName,
 		attr.K8sPodUID:        string(info.UID),
 		attr.K8sPodStartTime:  info.StartTimeStr,
+		attr.K8sClusterName:   md.clusterName,
 	}
 	owner := info.Owner
 	for owner != nil {
@@ -111,4 +123,30 @@ func appendMetadata(span *request.Span, info *kube.PodInfo) {
 	}
 	// override hostname by the Pod name
 	span.ServiceID.HostName = info.Name
+}
+
+func KubeClusterName(ctx context.Context, cfg *KubernetesDecorator) string {
+	log := klog().With("func", "KubeClusterName")
+	if cfg.ClusterName != "" {
+		return cfg.ClusterName
+	}
+	retries := 0
+	for retries < clusterMetadataRetries {
+		if clusterName := fetchClusterName(ctx); clusterName != "" {
+			return clusterName
+		}
+		retries++
+		log.Debug("retrying cluster name fetching in 500 ms...")
+		select {
+		case <-ctx.Done():
+			log.Debug("context canceled before starting the kubernetes decorator node")
+			return ""
+		case <-time.After(clusterMetadataFailRetryTime):
+			// retry or end!
+		}
+	}
+	log.Warn("can't fetch Kubernetes Cluster Name." +
+		" Network metrics won't contain k8s.cluster.name attribute unless you explicitly set " +
+		" the BEYLA_KUBE_CLUSTER_NAME environment variable")
+	return ""
 }

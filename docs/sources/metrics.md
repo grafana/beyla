@@ -53,6 +53,7 @@ In order to configure which attributes to show or which attributes to hide, chec
 | Application (all)              | `k8s.pod.uid`               | shown if `attributes.kubernetes.enable`       |
 | Application (all)              | `k8s.replicaset.name`       | shown if `attributes.kubernetes.enable`       |
 | Application (all)              | `k8s.statefulset.name`      | shown if `attributes.kubernetes.enable`       |
+| Application (all)              | `k8s.cluster.name`          | shown if `attributes.kubernetes.enable`       |
 | Application (all)              | `service.name`              | shown                                         | 
 | Application (all)              | `service.namespace`         | shown                                         | 
 | Application (all)              | `target.instance`           | shown                                         |

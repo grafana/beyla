@@ -69,7 +69,7 @@ func NewExpirer[Record any, Metric removableMetric[ValType], ValType any](
 }
 
 // ForRecord returns the data point for the given eBPF record. If that record
-// s accessed for the first time, a new data point is created.
+// is accessed for the first time, a new data point is created.
 // If not, a cached copy is returned and the "last access" cache time is updated.
 // Extra attributes can be explicitly added (e.g. process_cpu_state="wait")
 func (ex *Expirer[Record, Metric, ValType]) ForRecord(r Record, extraAttrs ...attribute.KeyValue) (Metric, attribute.Set) {

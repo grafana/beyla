@@ -90,7 +90,7 @@ int BPF_URETPROBE(uretprobe_ssl_read, int ret) {
     ssl_args_t *args = bpf_map_lookup_elem(&active_ssl_read_args, &id);
 
     bpf_map_delete_elem(&active_ssl_read_args, &id);
-    
+
     // must be last in the function, doesn't return
     handle_ssl_buf(ctx, id, args, ret, TCP_RECV);
     return 0;

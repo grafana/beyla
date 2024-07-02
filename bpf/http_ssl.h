@@ -173,9 +173,7 @@ static __always_inline void handle_ssl_buf(void *ctx, u64 id, ssl_args_t *args, 
 
         if (conn) {
             // bpf_dbg_printk("conn pid %d", conn.pid);
-            // dbg_print_http_connection_info(&conn.conn);
-
-            dbg_print_http_connection_info(&conn->p_conn.conn);
+            // dbg_print_http_connection_info(&conn->p_conn.conn);
 
             // unsigned char buf[48];
             // bpf_probe_read(buf, 48, (void *)args->buf);

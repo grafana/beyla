@@ -71,7 +71,9 @@ func (md *metadataDecorator) nodeLoop(in <-chan []request.Span, out chan<- []req
 	for spans := range in {
 		// in-place decoration and forwarding
 		for i := range spans {
-			md.do(&spans[i])
+			s := &spans[i]
+			md.do(s)
+			klog().Debug("Decorating span for k8s", "span", s)
 		}
 		out <- spans
 	}

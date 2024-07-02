@@ -27,14 +27,9 @@ type AttrReportGroup struct {
 	ResourceAttributes map[attr.Name]Default
 }
 
-type SelectedAttributes struct {
-	Metric   []attr.Name
-	Resource []attr.Name
-}
-
-type SelectedAttributeSets struct {
-	Metric   map[attr.Name]struct{}
-	Resource map[attr.Name]struct{}
+type Sections[T any] struct {
+	Metric   T
+	Resource T
 }
 
 // AttrSelector returns, for each metric, the attributes that have to be reported
@@ -56,7 +51,7 @@ func NewAttrSelector(groups AttrGroups, selectorCfg Selection) (*AttrSelector, e
 }
 
 // For returns the list of attribute names for a given metric
-func (p *AttrSelector) For(metricName Name) SelectedAttributes {
+func (p *AttrSelector) For(metricName Name) Sections[[]attr.Name] {
 	attributeNames, ok := p.definition[metricName.Section]
 	if !ok {
 		panic(fmt.Sprintf("BUG! metric not found %+v", metricName))
@@ -65,7 +60,7 @@ func (p *AttrSelector) For(metricName Name) SelectedAttributes {
 	if !ok {
 		attrs := attributeNames.Default()
 		// if the user did not provide any selector, return the default attributes for that metric
-		sas := SelectedAttributes{
+		sas := Sections[[]attr.Name]{
 			Metric:   helpers.SetToSlice(attrs.Metric),
 			Resource: helpers.SetToSlice(attrs.Resource),
 		}
@@ -73,13 +68,13 @@ func (p *AttrSelector) For(metricName Name) SelectedAttributes {
 		slices.Sort(sas.Resource)
 		return sas
 	}
-	var addAttributes SelectedAttributeSets
+	var addAttributes Sections[map[attr.Name]struct{}]
 	// if the "include" list is empty, we use the default attributes
 	// as included
 	if len(inclusionLists.Include) == 0 {
 		addAttributes = attributeNames.Default()
 	} else {
-		addAttributes = SelectedAttributeSets{
+		addAttributes = Sections[map[attr.Name]struct{}]{
 			Metric:   map[attr.Name]struct{}{},
 			Resource: map[attr.Name]struct{}{},
 		}
@@ -102,7 +97,7 @@ func (p *AttrSelector) For(metricName Name) SelectedAttributes {
 	maps.DeleteFunc(addAttributes.Resource, func(attr attr.Name, _ struct{}) bool {
 		return inclusionLists.excludes(attr)
 	})
-	sas := SelectedAttributes{
+	sas := Sections[[]attr.Name]{
 		Metric:   helpers.SetToSlice(addAttributes.Metric),
 		Resource: helpers.SetToSlice(addAttributes.Resource),
 	}
@@ -112,8 +107,8 @@ func (p *AttrSelector) For(metricName Name) SelectedAttributes {
 }
 
 // All te attributes for this group and their subgroups, unless they are disabled.
-func (p *AttrReportGroup) All() SelectedAttributeSets {
-	sas := SelectedAttributeSets{
+func (p *AttrReportGroup) All() Sections[map[attr.Name]struct{}] {
+	sas := Sections[map[attr.Name]struct{}]{
 		Metric:   map[attr.Name]struct{}{},
 		Resource: map[attr.Name]struct{}{},
 	}
@@ -135,8 +130,8 @@ func (p *AttrReportGroup) All() SelectedAttributeSets {
 }
 
 // Default attributes for this group and their subgroups, unless they are disabled.
-func (p *AttrReportGroup) Default() SelectedAttributeSets {
-	sas := SelectedAttributeSets{
+func (p *AttrReportGroup) Default() Sections[map[attr.Name]struct{}] {
+	sas := Sections[map[attr.Name]struct{}]{
 		Metric:   map[attr.Name]struct{}{},
 		Resource: map[attr.Name]struct{}{},
 	}

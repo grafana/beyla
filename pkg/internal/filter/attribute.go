@@ -122,6 +122,7 @@ batchLoop:
 				continue batchLoop
 			}
 		}
+		alog().Debug("Attributes", "record", batch[t])
 		batch[w] = batch[t]
 		w++
 	}

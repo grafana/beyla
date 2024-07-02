@@ -86,9 +86,11 @@ func (rn *routerNode) provideRoutes() (pipe.MiddleFunc[[]request.Span, []request
 			filtered := make([]request.Span, 0, len(spans))
 			for i := range spans {
 				s := &spans[i]
+				klog().Debug("Route span", "span", s)
 				if ignoreEnabled {
 					if discarder.Find(s.Path) != "" {
 						if ignoreMode == IgnoreAll {
+							klog().Debug("Ignoring span", "span", s)
 							continue
 						}
 						// we can't discard it here, ignoring is selective (metrics | traces)

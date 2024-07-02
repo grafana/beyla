@@ -104,6 +104,7 @@ func getDefinitions(groups AttrGroups) map[Section]AttrReportGroup {
 			attr.K8sNodeName:        true,
 			attr.K8sPodUID:          true,
 			attr.K8sPodStartTime:    true,
+			attr.K8sClusterName:     true,
 		},
 	}
 

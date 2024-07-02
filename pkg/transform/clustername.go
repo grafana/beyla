@@ -2,7 +2,7 @@
 // https://github.com/DataDog/datadog-agent,
 // published under Apache License 2.0
 
-package k8s
+package transform
 
 import (
 	"bytes"
@@ -43,7 +43,7 @@ type clusterNameFetcher func(context.Context) (string, error)
 // cloud providers: EC2, GCP, Azure.
 // TODO: consider other providers (Alibaba, Oracle, etc...)
 func fetchClusterName(ctx context.Context) string {
-	log := log().With("func", "fetchClusterName")
+	log := klog().With("func", "fetchClusterName")
 	var clusterNameFetchers = map[string]clusterNameFetcher{
 		"EC2":   ec2ClusterNameFetcher,
 		"GCP":   gcpClusterNameFetcher,

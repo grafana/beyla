@@ -101,9 +101,11 @@ func TestBasicPipeline(t *testing.T) {
 			string(attr.HTTPUrlPath):            "/foo/bar",
 			string(attr.ClientAddr):             "1.1.1.1",
 			string(semconv.ServiceNameKey):      "foo-svc",
+			string(semconv.ServiceNamespaceKey): "ns",
 		},
 		ResourceAttributes: map[string]string{
 			string(semconv.ServiceNameKey):          "foo-svc",
+			string(semconv.ServiceNamespaceKey):     "ns",
 			string(semconv.TelemetrySDKLanguageKey): "go",
 			string(semconv.TelemetrySDKNameKey):     "beyla",
 		},
@@ -299,12 +301,14 @@ func TestRouteConsolidation(t *testing.T) {
 		Unit: "s",
 		Attributes: map[string]string{
 			string(semconv.ServiceNameKey):      "svc-1",
+			string(semconv.ServiceNamespaceKey): "ns",
 			string(attr.HTTPRequestMethod):      "GET",
 			string(attr.HTTPResponseStatusCode): "200",
 			string(semconv.HTTPRouteKey):        "/user/{id}",
 		},
 		ResourceAttributes: map[string]string{
 			string(semconv.ServiceNameKey):          "svc-1",
+			string(semconv.ServiceNamespaceKey):     "ns",
 			string(semconv.TelemetrySDKLanguageKey): "go",
 			string(semconv.TelemetrySDKNameKey):     "beyla",
 		},
@@ -317,12 +321,14 @@ func TestRouteConsolidation(t *testing.T) {
 		Unit: "s",
 		Attributes: map[string]string{
 			string(semconv.ServiceNameKey):      "svc-1",
+			string(semconv.ServiceNamespaceKey): "ns",
 			string(attr.HTTPRequestMethod):      "GET",
 			string(attr.HTTPResponseStatusCode): "200",
 			string(semconv.HTTPRouteKey):        "/products/{id}/push",
 		},
 		ResourceAttributes: map[string]string{
 			string(semconv.ServiceNameKey):          "svc-1",
+			string(semconv.ServiceNamespaceKey):     "ns",
 			string(semconv.TelemetrySDKLanguageKey): "go",
 			string(semconv.TelemetrySDKNameKey):     "beyla",
 		},
@@ -335,12 +341,14 @@ func TestRouteConsolidation(t *testing.T) {
 		Unit: "s",
 		Attributes: map[string]string{
 			string(semconv.ServiceNameKey):      "svc-1",
+			string(semconv.ServiceNamespaceKey): "ns",
 			string(attr.HTTPRequestMethod):      "GET",
 			string(attr.HTTPResponseStatusCode): "200",
 			string(semconv.HTTPRouteKey):        "/**",
 		},
 		ResourceAttributes: map[string]string{
 			string(semconv.ServiceNameKey):          "svc-1",
+			string(semconv.ServiceNamespaceKey):     "ns",
 			string(semconv.TelemetrySDKLanguageKey): "go",
 			string(semconv.TelemetrySDKNameKey):     "beyla",
 		},
@@ -389,6 +397,7 @@ func TestGRPCPipeline(t *testing.T) {
 		Unit: "s",
 		Attributes: map[string]string{
 			string(semconv.ServiceNameKey):       "grpc-svc",
+			string(semconv.ServiceNamespaceKey):  "",
 			string(semconv.RPCSystemKey):         "grpc",
 			string(semconv.RPCGRPCStatusCodeKey): "3",
 			string(semconv.RPCMethodKey):         "/foo/bar",
@@ -478,6 +487,7 @@ func TestBasicPipelineInfo(t *testing.T) {
 			string(attr.HTTPUrlPath):            "/aaa/bbb",
 			string(attr.ClientAddr):             "1.1.1.1",
 			string(semconv.ServiceNameKey):      "comm",
+			string(semconv.ServiceNamespaceKey): "",
 		},
 		ResourceAttributes: map[string]string{
 			string(semconv.ServiceNameKey):          "comm",
@@ -580,9 +590,11 @@ func TestSpanAttributeFilterNode(t *testing.T) {
 				string(attr.HTTPResponseStatusCode): "201",
 				string(attr.HTTPUrlPath):            "/user/1234",
 				string(semconv.ServiceNameKey):      "svc-1",
+				string(semconv.ServiceNamespaceKey): "ns",
 			},
 			Resource: map[string]string{
 				string(semconv.ServiceNameKey):          "svc-1",
+				string(semconv.ServiceNamespaceKey):     "ns",
 				string(semconv.TelemetrySDKLanguageKey): "go",
 				string(semconv.TelemetrySDKNameKey):     "beyla",
 				string(semconv.ServiceInstanceIDKey):    "",
@@ -591,6 +603,7 @@ func TestSpanAttributeFilterNode(t *testing.T) {
 		"/user/4321": {
 			Metric: map[string]string{
 				string(semconv.ServiceNameKey):      "svc-3",
+				string(semconv.ServiceNamespaceKey): "ns",
 				string(attr.ClientAddr):             "1.1.1.1",
 				string(attr.HTTPRequestMethod):      "GET",
 				string(attr.HTTPResponseStatusCode): "203",
@@ -598,6 +611,7 @@ func TestSpanAttributeFilterNode(t *testing.T) {
 			},
 			Resource: map[string]string{
 				string(semconv.ServiceNameKey):          "svc-3",
+				string(semconv.ServiceNamespaceKey):     "ns",
 				string(semconv.TelemetrySDKLanguageKey): "go",
 				string(semconv.TelemetrySDKNameKey):     "beyla",
 				string(semconv.ServiceInstanceIDKey):    "",
@@ -618,7 +632,7 @@ func newRequest(serviceName string, method, path, peer string, status int) []req
 		Start:        2,
 		RequestStart: 1,
 		End:          3,
-		ServiceID:    svc.ID{Name: serviceName, UID: svc.UID(serviceName)},
+		ServiceID:    svc.ID{Namespace: "ns", Name: serviceName, UID: svc.UID(serviceName)},
 	}}
 }
 
@@ -678,6 +692,7 @@ func matchTraceEvent(t require.TestingT, name string, event collector.TraceRecor
 		},
 		ResourceAttributes: map[string]string{
 			string(semconv.ServiceNameKey):          "bar-svc",
+			string(semconv.ServiceNamespaceKey):     "ns",
 			string(semconv.TelemetrySDKLanguageKey): "go",
 			string(semconv.TelemetrySDKNameKey):     "beyla",
 			string(semconv.OTelLibraryNameKey):      "github.com/grafana/beyla",
@@ -696,6 +711,7 @@ func matchInnerTraceEvent(t require.TestingT, name string, event collector.Trace
 		},
 		ResourceAttributes: map[string]string{
 			string(semconv.ServiceNameKey):          "bar-svc",
+			string(semconv.ServiceNamespaceKey):     "ns",
 			string(semconv.TelemetrySDKLanguageKey): "go",
 			string(semconv.TelemetrySDKNameKey):     "beyla",
 			string(semconv.OTelLibraryNameKey):      "github.com/grafana/beyla",

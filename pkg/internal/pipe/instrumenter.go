@@ -112,6 +112,9 @@ func newGraphBuilder(ctx context.Context, config *beyla.Config, ctxInfo *global.
 	pipe.AddMiddleProvider(gnb, kubernetes, transform.KubeDecoratorProvider(ctx, &config.Attributes.Kubernetes, ctxInfo))
 	pipe.AddMiddleProvider(gnb, nameResolver, transform.NameResolutionProvider(gb.ctxInfo, config.NameResolver))
 	pipe.AddMiddleProvider(gnb, attrFilter, filter.ByAttribute(config.Filters.Application, spanPtrPromGetters))
+
+	pipe.AddFinalProvider(gnb, printer, debug.PrinterNode(config.Printer))
+
 	config.Metrics.Grafana = &gb.config.Grafana.OTLP
 	pipe.AddFinalProvider(gnb, otelMetrics, otel.ReportMetrics(ctx, gb.ctxInfo, &config.Metrics, config.Attributes.Select))
 	config.Traces.Grafana = &gb.config.Grafana.OTLP
@@ -120,7 +123,6 @@ func newGraphBuilder(ctx context.Context, config *beyla.Config, ctxInfo *global.
 	pipe.AddFinalProvider(gnb, alloyTraces, alloy.TracesReceiver(ctx, &config.TracesReceiver, config.Attributes.Select))
 
 	pipe.AddFinalProvider(gnb, noop, debug.NoopNode(config.Noop))
-	pipe.AddFinalProvider(gnb, printer, debug.PrinterNode(config.Printer))
 
 	// process subpipeline will start another pipeline only to collect and export data
 	// about the processes of an instrumented application

@@ -124,6 +124,32 @@ func (p *Tracer) Load() (*ebpf.CollectionSpec, error) {
 	return loader()
 }
 
+func (p *Tracer) SetupTailCalls() {
+	for _, tc := range []struct {
+		index int
+		prog  *ebpf.Program
+	}{
+		{
+			index: 0,
+			prog:  p.bpfObjects.ProtocolHttp,
+		},
+		{
+			index: 1,
+			prog:  p.bpfObjects.ProtocolHttp2,
+		},
+		{
+			index: 2,
+			prog:  p.bpfObjects.ProtocolTcp,
+		},
+	} {
+		err := p.bpfObjects.JumpTable.Update(uint32(tc.index), uint32(tc.prog.FD()), ebpf.UpdateAny)
+
+		if err != nil {
+			p.log.Error("error loading info tail call jump table", "error", err)
+		}
+	}
+}
+
 func (p *Tracer) Constants(_ *exec.FileInfo, _ *goexec.Offsets) map[string]any {
 	m := make(map[string]any, 2)
 

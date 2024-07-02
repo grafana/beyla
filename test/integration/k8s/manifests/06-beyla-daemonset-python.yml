@@ -6,7 +6,8 @@ data:
   beyla-config.yml: |
     attributes:
       kubernetes:
-        enable: true    
+        enable: true
+        cluster_name: beyla
     print_traces: true
     log_level: debug
     discovery:

@@ -126,10 +126,12 @@ func (pf *PIDsFilter) Filter(inputSpans []request.Span) []request.Span {
 	for i := range inputSpans {
 		span := &inputSpans[i]
 
+		pf.log.Debug("In filter", "span", span)
 		// We first confirm that the current namespace seen by BPF is tracked by Beyla
 		ns, nsExists := pf.current[span.Pid.Namespace]
 
 		if !nsExists {
+			pf.log.Debug("Ignoring span", "span", span)
 			continue
 		}
 

@@ -44,7 +44,7 @@ services:
 
   # OpenTelemetry Collector
   otelcol:
-    image: otel/opentelemetry-collector-contrib:0.85.0
+    image: otel/opentelemetry-collector-contrib:0.103.0
     container_name: otel-col
     deploy:
       resources:
@@ -65,7 +65,7 @@ services:
 
   # Prometheus
   prometheus:
-    image: quay.io/prometheus/prometheus:v2.46.0
+    image: quay.io/prometheus/prometheus:v2.53.0
     container_name: prometheus
     command:
       - --storage.tsdb.retention.time=1m

@@ -135,7 +135,7 @@ func getDefinitions(groups AttrGroups) map[Section]AttrReportGroup {
 
 	// TODO Beyla 2.0 remove
 	// this just defaults the path as default when the target report is enabled
-	// via the deprecated BEYLA_METRICS_REPORT_PEER config option
+	// via the deprecated BEYLA_METRICS_REPORT_TARGET config option
 	var deprecatedHTTPPath = AttrReportGroup{
 		Disabled: !groups.Has(GroupTarget),
 		MetricAttributes: map[attr.Name]Default{

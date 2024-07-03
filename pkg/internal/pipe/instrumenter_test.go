@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mariomac/guara/pkg/test"
 	"github.com/mariomac/pipes/pipe"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -100,9 +101,11 @@ func TestBasicPipeline(t *testing.T) {
 			string(attr.HTTPUrlPath):            "/foo/bar",
 			string(attr.ClientAddr):             "1.1.1.1",
 			string(semconv.ServiceNameKey):      "foo-svc",
+			string(semconv.ServiceNamespaceKey): "ns",
 		},
 		ResourceAttributes: map[string]string{
 			string(semconv.ServiceNameKey):          "foo-svc",
+			string(semconv.ServiceNamespaceKey):     "ns",
 			string(semconv.TelemetrySDKLanguageKey): "go",
 			string(semconv.TelemetrySDKNameKey):     "beyla",
 		},
@@ -298,12 +301,14 @@ func TestRouteConsolidation(t *testing.T) {
 		Unit: "s",
 		Attributes: map[string]string{
 			string(semconv.ServiceNameKey):      "svc-1",
+			string(semconv.ServiceNamespaceKey): "ns",
 			string(attr.HTTPRequestMethod):      "GET",
 			string(attr.HTTPResponseStatusCode): "200",
 			string(semconv.HTTPRouteKey):        "/user/{id}",
 		},
 		ResourceAttributes: map[string]string{
 			string(semconv.ServiceNameKey):          "svc-1",
+			string(semconv.ServiceNamespaceKey):     "ns",
 			string(semconv.TelemetrySDKLanguageKey): "go",
 			string(semconv.TelemetrySDKNameKey):     "beyla",
 		},
@@ -316,12 +321,14 @@ func TestRouteConsolidation(t *testing.T) {
 		Unit: "s",
 		Attributes: map[string]string{
 			string(semconv.ServiceNameKey):      "svc-1",
+			string(semconv.ServiceNamespaceKey): "ns",
 			string(attr.HTTPRequestMethod):      "GET",
 			string(attr.HTTPResponseStatusCode): "200",
 			string(semconv.HTTPRouteKey):        "/products/{id}/push",
 		},
 		ResourceAttributes: map[string]string{
 			string(semconv.ServiceNameKey):          "svc-1",
+			string(semconv.ServiceNamespaceKey):     "ns",
 			string(semconv.TelemetrySDKLanguageKey): "go",
 			string(semconv.TelemetrySDKNameKey):     "beyla",
 		},
@@ -334,12 +341,14 @@ func TestRouteConsolidation(t *testing.T) {
 		Unit: "s",
 		Attributes: map[string]string{
 			string(semconv.ServiceNameKey):      "svc-1",
+			string(semconv.ServiceNamespaceKey): "ns",
 			string(attr.HTTPRequestMethod):      "GET",
 			string(attr.HTTPResponseStatusCode): "200",
 			string(semconv.HTTPRouteKey):        "/**",
 		},
 		ResourceAttributes: map[string]string{
 			string(semconv.ServiceNameKey):          "svc-1",
+			string(semconv.ServiceNamespaceKey):     "ns",
 			string(semconv.TelemetrySDKLanguageKey): "go",
 			string(semconv.TelemetrySDKNameKey):     "beyla",
 		},
@@ -388,6 +397,7 @@ func TestGRPCPipeline(t *testing.T) {
 		Unit: "s",
 		Attributes: map[string]string{
 			string(semconv.ServiceNameKey):       "grpc-svc",
+			string(semconv.ServiceNamespaceKey):  "",
 			string(semconv.RPCSystemKey):         "grpc",
 			string(semconv.RPCGRPCStatusCodeKey): "3",
 			string(semconv.RPCMethodKey):         "/foo/bar",
@@ -477,6 +487,7 @@ func TestBasicPipelineInfo(t *testing.T) {
 			string(attr.HTTPUrlPath):            "/aaa/bbb",
 			string(attr.ClientAddr):             "1.1.1.1",
 			string(semconv.ServiceNameKey):      "comm",
+			string(semconv.ServiceNamespaceKey): "",
 		},
 		ResourceAttributes: map[string]string{
 			string(semconv.ServiceNameKey):          "comm",
@@ -550,28 +561,61 @@ func TestSpanAttributeFilterNode(t *testing.T) {
 	go pipe.Run(ctx)
 
 	// expect to receive only the records matching the Filters criteria
-	events := map[string]map[string]string{}
-	event := testutil.ReadChannel(t, tc.Records(), testTimeout)
-	assert.Equal(t, "http.server.request.duration", event.Name)
-	events[event.Attributes["url.path"]] = event.Attributes
-	event = testutil.ReadChannel(t, tc.Records(), testTimeout)
-	assert.Equal(t, "http.server.request.duration", event.Name)
-	events[event.Attributes["url.path"]] = event.Attributes
+	events := map[string]attributes.Sections[map[string]string]{}
+	var event collector.MetricRecord
+	test.Eventually(t, testTimeout, func(it require.TestingT) {
+		event = testutil.ReadChannel(t, tc.Records(), testTimeout)
+		require.Equal(it, "http.server.request.duration", event.Name)
+		require.Equal(it, "/user/1234", event.Attributes["url.path"])
+	})
+	events[event.Attributes["url.path"]] = attributes.Sections[map[string]string]{
+		Metric:   event.Attributes,
+		Resource: event.ResourceAttributes,
+	}
+	test.Eventually(t, testTimeout, func(it require.TestingT) {
+		event = testutil.ReadChannel(t, tc.Records(), testTimeout)
+		require.Equal(it, "http.server.request.duration", event.Name)
+		require.Equal(it, "/user/4321", event.Attributes["url.path"])
+	})
+	events[event.Attributes["url.path"]] = attributes.Sections[map[string]string]{
+		Metric:   event.Attributes,
+		Resource: event.ResourceAttributes,
+	}
 
-	assert.Equal(t, map[string]map[string]string{
+	assert.Equal(t, map[string]attributes.Sections[map[string]string]{
 		"/user/1234": {
-			string(semconv.ServiceNameKey):      "svc-1",
-			string(attr.ClientAddr):             "1.1.1.1",
-			string(attr.HTTPRequestMethod):      "GET",
-			string(attr.HTTPResponseStatusCode): "201",
-			string(attr.HTTPUrlPath):            "/user/1234",
+			Metric: map[string]string{
+				string(attr.ClientAddr):             "1.1.1.1",
+				string(attr.HTTPRequestMethod):      "GET",
+				string(attr.HTTPResponseStatusCode): "201",
+				string(attr.HTTPUrlPath):            "/user/1234",
+				string(semconv.ServiceNameKey):      "svc-1",
+				string(semconv.ServiceNamespaceKey): "ns",
+			},
+			Resource: map[string]string{
+				string(semconv.ServiceNameKey):          "svc-1",
+				string(semconv.ServiceNamespaceKey):     "ns",
+				string(semconv.TelemetrySDKLanguageKey): "go",
+				string(semconv.TelemetrySDKNameKey):     "beyla",
+				string(semconv.ServiceInstanceIDKey):    "",
+			},
 		},
 		"/user/4321": {
-			string(semconv.ServiceNameKey):      "svc-3",
-			string(attr.ClientAddr):             "1.1.1.1",
-			string(attr.HTTPRequestMethod):      "GET",
-			string(attr.HTTPResponseStatusCode): "203",
-			string(attr.HTTPUrlPath):            "/user/4321",
+			Metric: map[string]string{
+				string(semconv.ServiceNameKey):      "svc-3",
+				string(semconv.ServiceNamespaceKey): "ns",
+				string(attr.ClientAddr):             "1.1.1.1",
+				string(attr.HTTPRequestMethod):      "GET",
+				string(attr.HTTPResponseStatusCode): "203",
+				string(attr.HTTPUrlPath):            "/user/4321",
+			},
+			Resource: map[string]string{
+				string(semconv.ServiceNameKey):          "svc-3",
+				string(semconv.ServiceNamespaceKey):     "ns",
+				string(semconv.TelemetrySDKLanguageKey): "go",
+				string(semconv.TelemetrySDKNameKey):     "beyla",
+				string(semconv.ServiceInstanceIDKey):    "",
+			},
 		},
 	}, events)
 }
@@ -588,7 +632,7 @@ func newRequest(serviceName string, method, path, peer string, status int) []req
 		Start:        2,
 		RequestStart: 1,
 		End:          3,
-		ServiceID:    svc.ID{Name: serviceName},
+		ServiceID:    svc.ID{Namespace: "ns", Name: serviceName, UID: svc.UID(serviceName)},
 	}}
 }
 
@@ -604,7 +648,7 @@ func newRequestWithTiming(svcName string, kind request.EventType, method, path, 
 		RequestStart: int64(goStart),
 		Start:        int64(start),
 		End:          int64(end),
-		ServiceID:    svc.ID{Name: svcName},
+		ServiceID:    svc.ID{Name: svcName, UID: svc.UID(svcName)},
 	}}
 }
 
@@ -648,6 +692,7 @@ func matchTraceEvent(t require.TestingT, name string, event collector.TraceRecor
 		},
 		ResourceAttributes: map[string]string{
 			string(semconv.ServiceNameKey):          "bar-svc",
+			string(semconv.ServiceNamespaceKey):     "ns",
 			string(semconv.TelemetrySDKLanguageKey): "go",
 			string(semconv.TelemetrySDKNameKey):     "beyla",
 			string(semconv.OTelLibraryNameKey):      "github.com/grafana/beyla",
@@ -666,6 +711,7 @@ func matchInnerTraceEvent(t require.TestingT, name string, event collector.Trace
 		},
 		ResourceAttributes: map[string]string{
 			string(semconv.ServiceNameKey):          "bar-svc",
+			string(semconv.ServiceNamespaceKey):     "ns",
 			string(semconv.TelemetrySDKLanguageKey): "go",
 			string(semconv.TelemetrySDKNameKey):     "beyla",
 			string(semconv.OTelLibraryNameKey):      "github.com/grafana/beyla",

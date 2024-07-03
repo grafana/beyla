@@ -166,15 +166,15 @@ type MetricsReporter struct {
 	is         instrumentations.InstrumentationSelection
 
 	// user-selected fields for each of the reported metrics
-	attrHTTPDuration          []attributes.Field[*request.Span, attribute.KeyValue]
-	attrHTTPClientDuration    []attributes.Field[*request.Span, attribute.KeyValue]
-	attrGRPCServer            []attributes.Field[*request.Span, attribute.KeyValue]
-	attrGRPCClient            []attributes.Field[*request.Span, attribute.KeyValue]
-	attrDBClient              []attributes.Field[*request.Span, attribute.KeyValue]
-	attrMessagingPublish      []attributes.Field[*request.Span, attribute.KeyValue]
-	attrMessagingProcess      []attributes.Field[*request.Span, attribute.KeyValue]
-	attrHTTPRequestSize       []attributes.Field[*request.Span, attribute.KeyValue]
-	attrHTTPClientRequestSize []attributes.Field[*request.Span, attribute.KeyValue]
+	attrHTTPDuration          attributes.Sections[[]attributes.Field[*request.Span, attribute.KeyValue]]
+	attrHTTPClientDuration    attributes.Sections[[]attributes.Field[*request.Span, attribute.KeyValue]]
+	attrGRPCServer            attributes.Sections[[]attributes.Field[*request.Span, attribute.KeyValue]]
+	attrGRPCClient            attributes.Sections[[]attributes.Field[*request.Span, attribute.KeyValue]]
+	attrDBClient              attributes.Sections[[]attributes.Field[*request.Span, attribute.KeyValue]]
+	attrMessagingPublish      attributes.Sections[[]attributes.Field[*request.Span, attribute.KeyValue]]
+	attrMessagingProcess      attributes.Sections[[]attributes.Field[*request.Span, attribute.KeyValue]]
+	attrHTTPRequestSize       attributes.Sections[[]attributes.Field[*request.Span, attribute.KeyValue]]
+	attrHTTPClientRequestSize attributes.Sections[[]attributes.Field[*request.Span, attribute.KeyValue]]
 }
 
 // Metrics is a set of metrics associated to a given OTEL MeterProvider.
@@ -379,28 +379,28 @@ func (mr *MetricsReporter) setupOtelMeters(m *Metrics, meter instrument.Meter) e
 			return fmt.Errorf("creating http duration histogram metric: %w", err)
 		}
 		m.httpDuration = NewExpirer[*request.Span, instrument.Float64Histogram, float64](
-			m.ctx, httpDuration, mr.attrHTTPDuration, timeNow, mr.cfg.TTL)
+			m.ctx, httpDuration, mr.attrHTTPDuration.Metric, timeNow, mr.cfg.TTL)
 
 		httpClientDuration, err := meter.Float64Histogram(attributes.HTTPClientDuration.OTEL, instrument.WithUnit("s"))
 		if err != nil {
 			return fmt.Errorf("creating http duration histogram metric: %w", err)
 		}
 		m.httpClientDuration = NewExpirer[*request.Span, instrument.Float64Histogram, float64](
-			m.ctx, httpClientDuration, mr.attrHTTPClientDuration, timeNow, mr.cfg.TTL)
+			m.ctx, httpClientDuration, mr.attrHTTPClientDuration.Metric, timeNow, mr.cfg.TTL)
 
 		httpRequestSize, err := meter.Float64Histogram(attributes.HTTPServerRequestSize.OTEL, instrument.WithUnit("By"))
 		if err != nil {
 			return fmt.Errorf("creating http size histogram metric: %w", err)
 		}
 		m.httpRequestSize = NewExpirer[*request.Span, instrument.Float64Histogram, float64](
-			m.ctx, httpRequestSize, mr.attrHTTPRequestSize, timeNow, mr.cfg.TTL)
+			m.ctx, httpRequestSize, mr.attrHTTPRequestSize.Metric, timeNow, mr.cfg.TTL)
 
 		httpClientRequestSize, err := meter.Float64Histogram(attributes.HTTPClientRequestSize.OTEL, instrument.WithUnit("By"))
 		if err != nil {
 			return fmt.Errorf("creating http size histogram metric: %w", err)
 		}
 		m.httpClientRequestSize = NewExpirer[*request.Span, instrument.Float64Histogram, float64](
-			m.ctx, httpClientRequestSize, mr.attrHTTPClientRequestSize, timeNow, mr.cfg.TTL)
+			m.ctx, httpClientRequestSize, mr.attrHTTPClientRequestSize.Metric, timeNow, mr.cfg.TTL)
 	}
 
 	if mr.is.GRPCEnabled() {
@@ -409,14 +409,14 @@ func (mr *MetricsReporter) setupOtelMeters(m *Metrics, meter instrument.Meter) e
 			return fmt.Errorf("creating grpc duration histogram metric: %w", err)
 		}
 		m.grpcDuration = NewExpirer[*request.Span, instrument.Float64Histogram, float64](
-			m.ctx, grpcDuration, mr.attrGRPCServer, timeNow, mr.cfg.TTL)
+			m.ctx, grpcDuration, mr.attrGRPCServer.Metric, timeNow, mr.cfg.TTL)
 
 		grpcClientDuration, err := meter.Float64Histogram(attributes.RPCClientDuration.OTEL, instrument.WithUnit("s"))
 		if err != nil {
 			return fmt.Errorf("creating grpc duration histogram metric: %w", err)
 		}
 		m.grpcClientDuration = NewExpirer[*request.Span, instrument.Float64Histogram, float64](
-			m.ctx, grpcClientDuration, mr.attrGRPCClient, timeNow, mr.cfg.TTL)
+			m.ctx, grpcClientDuration, mr.attrGRPCClient.Metric, timeNow, mr.cfg.TTL)
 	}
 
 	if mr.is.DBEnabled() {
@@ -425,7 +425,7 @@ func (mr *MetricsReporter) setupOtelMeters(m *Metrics, meter instrument.Meter) e
 			return fmt.Errorf("creating db client duration histogram metric: %w", err)
 		}
 		m.dbClientDuration = NewExpirer[*request.Span, instrument.Float64Histogram, float64](
-			m.ctx, dbClientDuration, mr.attrDBClient, timeNow, mr.cfg.TTL)
+			m.ctx, dbClientDuration, mr.attrDBClient.Metric, timeNow, mr.cfg.TTL)
 	}
 
 	if mr.is.MQEnabled() {
@@ -434,14 +434,14 @@ func (mr *MetricsReporter) setupOtelMeters(m *Metrics, meter instrument.Meter) e
 			return fmt.Errorf("creating messaging client publish duration histogram metric: %w", err)
 		}
 		m.msgPublishDuration = NewExpirer[*request.Span, instrument.Float64Histogram, float64](
-			m.ctx, msgPublishDuration, mr.attrMessagingPublish, timeNow, mr.cfg.TTL)
+			m.ctx, msgPublishDuration, mr.attrMessagingPublish.Metric, timeNow, mr.cfg.TTL)
 
 		msgProcessDuration, err := meter.Float64Histogram(attributes.MessagingProcessDuration.OTEL, instrument.WithUnit("s"))
 		if err != nil {
 			return fmt.Errorf("creating messaging client process duration histogram metric: %w", err)
 		}
 		m.msgProcessDuration = NewExpirer[*request.Span, instrument.Float64Histogram, float64](
-			m.ctx, msgProcessDuration, mr.attrMessagingProcess, timeNow, mr.cfg.TTL)
+			m.ctx, msgProcessDuration, mr.attrMessagingProcess.Metric, timeNow, mr.cfg.TTL)
 	}
 
 	return nil

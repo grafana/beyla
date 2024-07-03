@@ -122,7 +122,7 @@ func chooseUnmatchPolicy(rc *RoutesConfig) (func(span *request.Span), error) {
 					"route for trace span names. For optimal experience, please define your application " +
 					"HTTP route patterns or enable the route 'heuristic' mode. " +
 					"For more information please see the documentation at: " +
-					"https://grafana.com/docs/beyla/latest/configure/options/#routes-decorator . " +
+					"https://grafana.com/docs/beyla/latest/configure/options/#routes-decorator. " +
 					"If your application is only using gRPC you can ignore this warning.")
 		}
 	case UnmatchUnset:

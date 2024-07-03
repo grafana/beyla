@@ -197,8 +197,8 @@ static __always_inline void handle_http_response(unsigned char *small_buf, pid_c
     if (info->type == EVENT_HTTP_REQUEST) {
         delete_server_trace();
     } else {
-        bpf_dbg_printk("Deleting client trace map for connection");
-        dbg_print_http_connection_info(&pid_conn->conn);
+        //bpf_dbg_printk("Deleting client trace map for connection");
+        //dbg_print_http_connection_info(&pid_conn->conn);
 
         bpf_map_delete_elem(&trace_map, &pid_conn->conn);
     }

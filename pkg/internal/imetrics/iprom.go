@@ -21,15 +21,6 @@ type PrometheusConfig struct {
 	Path string `yaml:"path,omitempty" env:"BEYLA_INTERNAL_METRICS_PROMETHEUS_PATH"`
 }
 
-// metrics for Beyla statistics
-const (
-	BeylaBuildInfo = "beyla_build_info"
-	LanguageLabel  = "target_lang"
-)
-
-// not adding version, as it is a fixed value
-var BeylaInfoLabelNames = []string{LanguageLabel}
-
 // PrometheusReporter is an internal metrics Reporter that exports to Prometheus
 type PrometheusReporter struct {
 	connector             *connector.PrometheusManager
@@ -40,7 +31,7 @@ type PrometheusReporter struct {
 	otelTraceExportErrs   *prometheus.CounterVec
 	prometheusRequests    *prometheus.CounterVec
 	instrumentedProcesses *prometheus.GaugeVec
-	beylaInfo             *prometheus.GaugeVec
+	beylaInfo             prometheus.Gauge
 }
 
 func NewPrometheusReporter(cfg *PrometheusConfig, manager *connector.PrometheusManager) *PrometheusReporter {
@@ -78,11 +69,10 @@ func NewPrometheusReporter(cfg *PrometheusConfig, manager *connector.PrometheusM
 			Name: "beyla_instrumented_processes",
 			Help: "Instrumented processes by Beyla",
 		}, []string{"process_name"}),
-		beylaInfo: prometheus.NewGaugeVec(prometheus.GaugeOpts{
-			Name: BeylaBuildInfo,
+		beylaInfo: prometheus.NewGauge(prometheus.GaugeOpts{
+			Name: "beyla_build_info",
 			Help: "A metric with a constant '1' value labeled by version, revision, branch, " +
-				"goversion from which Beyla was built, the goos and goarch for the build, and the" +
-				"language of the reported services",
+				"goversion from which Beyla was built, the goos and goarch for the build.",
 			ConstLabels: map[string]string{
 				"goarch":    runtime.GOARCH,
 				"goos":      runtime.GOOS,
@@ -90,7 +80,7 @@ func NewPrometheusReporter(cfg *PrometheusConfig, manager *connector.PrometheusM
 				"version":   buildinfo.Version,
 				"revision":  buildinfo.Revision,
 			},
-		}, BeylaInfoLabelNames),
+		}),
 	}
 	manager.Register(cfg.Port, cfg.Path,
 		pr.tracerFlushes,
@@ -107,6 +97,7 @@ func NewPrometheusReporter(cfg *PrometheusConfig, manager *connector.PrometheusM
 
 func (p *PrometheusReporter) Start(ctx context.Context) {
 	p.connector.StartHTTP(ctx)
+	p.beylaInfo.Set(1)
 }
 
 func (p *PrometheusReporter) TracerFlush(len int) {
@@ -139,8 +130,4 @@ func (p *PrometheusReporter) InstrumentProcess(processName string) {
 
 func (p *PrometheusReporter) UninstrumentProcess(processName string) {
 	p.instrumentedProcesses.WithLabelValues(processName).Dec()
-}
-
-func (p *PrometheusReporter) SetBeylaInfo(lang string) {
-	p.beylaInfo.WithLabelValues(lang).Set(1)
 }

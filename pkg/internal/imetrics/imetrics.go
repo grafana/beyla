@@ -32,8 +32,6 @@ type Reporter interface {
 	InstrumentProcess(processName string)
 	// UninstrumentProcess is invoked every time a process is removed from the instrumented processed
 	UninstrumentProcess(processName string)
-	// SetBeylaInfo is invoked every time the BeylaInfo metric is set
-	SetBeylaInfo(lang string)
 }
 
 // NoopReporter is a metrics Reporter that just does nothing
@@ -48,4 +46,3 @@ func (n NoopReporter) OTELTraceExportError(_ error)  {}
 func (n NoopReporter) PrometheusRequest(_, _ string) {}
 func (n NoopReporter) InstrumentProcess(_ string)    {}
 func (n NoopReporter) UninstrumentProcess(_ string)  {}
-func (n NoopReporter) SetBeylaInfo(_ string)         {}

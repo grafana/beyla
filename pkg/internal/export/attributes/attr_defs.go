@@ -123,13 +123,13 @@ func getDefinitions(groups AttrGroups) map[Section]AttrReportGroup {
 	}
 	var httpClientInfo = AttrReportGroup{
 		MetricAttributes: map[attr.Name]Default{
-			attr.ServerAddr: Default(peerInfoEnabled),
-			attr.ServerPort: Default(peerInfoEnabled),
+			attr.ServerAddr: true,
+			attr.ServerPort: true,
 		},
 	}
 	var grpcClientInfo = AttrReportGroup{
 		MetricAttributes: map[attr.Name]Default{
-			attr.ServerAddr: Default(peerInfoEnabled),
+			attr.ServerAddr: true,
 		},
 	}
 

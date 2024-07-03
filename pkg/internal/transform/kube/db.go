@@ -150,6 +150,7 @@ func (id *Database) OwnerPodInfo(pidNamespace uint32) (*kube.PodInfo, bool) {
 }
 
 func (id *Database) UpdateNewPodsByIPIndex(pod *kube.PodInfo) {
+	dblog().Debug("updating pod by IP index", "pod", pod.Name, "ips", pod.IPInfo.IPs)
 	if len(pod.IPInfo.IPs) > 0 {
 		id.podsMut.Lock()
 		defer id.podsMut.Unlock()
@@ -160,6 +161,7 @@ func (id *Database) UpdateNewPodsByIPIndex(pod *kube.PodInfo) {
 }
 
 func (id *Database) UpdateDeletedPodsByIPIndex(pod *kube.PodInfo) {
+	dblog().Debug("deleting pod by IP index", "pod", pod.Name, "ips", pod.IPInfo.IPs)
 	if len(pod.IPInfo.IPs) > 0 {
 		id.podsMut.Lock()
 		defer id.podsMut.Unlock()
@@ -176,6 +178,7 @@ func (id *Database) PodInfoForIP(ip string) *kube.PodInfo {
 }
 
 func (id *Database) UpdateNewServicesByIPIndex(svc *kube.ServiceInfo) {
+	dblog().Debug("updating service by IP index", "service", svc.Name, "ips", svc.IPInfo.IPs)
 	if len(svc.IPInfo.IPs) > 0 {
 		id.svcMut.Lock()
 		defer id.svcMut.Unlock()
@@ -186,6 +189,7 @@ func (id *Database) UpdateNewServicesByIPIndex(svc *kube.ServiceInfo) {
 }
 
 func (id *Database) UpdateDeletedServicesByIPIndex(svc *kube.ServiceInfo) {
+	dblog().Debug("deleting service by IP index", "service", svc.Name, "ips", svc.IPInfo.IPs)
 	if len(svc.IPInfo.IPs) > 0 {
 		id.svcMut.Lock()
 		defer id.svcMut.Unlock()
@@ -206,13 +210,16 @@ func (id *Database) HostNameForIP(ip string) string {
 	svc, ok := id.svcByIP[ip]
 	id.svcMut.RUnlock()
 	if ok {
+		dblog().Debug("found service for IP", "ip", ip, "service", svc.Name)
 		return svc.Name
 	}
 	id.podsMut.RLock()
 	pod, ok := id.podsByIP[ip]
 	id.podsMut.RUnlock()
 	if ok {
+		dblog().Debug("found pod for IP", "ip", ip, "pod", pod.Name)
 		return pod.Name
 	}
+	dblog().Debug("no service or pod found for IP", "ip", ip)
 	return ""
 }

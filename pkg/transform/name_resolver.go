@@ -2,6 +2,7 @@ package transform
 
 import (
 	"context"
+	"log/slog"
 	"net"
 	"strings"
 	"time"
@@ -41,6 +42,10 @@ func NameResolutionProvider(ctxInfo *global.ContextInfo, cfg *NameResolverConfig
 	}
 }
 
+func log() *slog.Logger {
+	return slog.With("component", "transform.NameResolver")
+}
+
 func nameResolver(ctxInfo *global.ContextInfo, cfg *NameResolverConfig) (pipe.MiddleFunc[[]request.Span, []request.Span], error) {
 	nr := NameResolver{
 		cfg:   cfg,
@@ -78,9 +83,11 @@ func (nr *NameResolver) resolveNames(span *request.Span) {
 	if span.IsClientSpan() {
 		hn, span.OtherNamespace = nr.resolve(&span.ServiceID, span.Host)
 		pn, _ = nr.resolve(&span.ServiceID, span.Peer)
+		log().Debug("resolved client span", "service", span.ServiceID.Name, "pn", pn, "hn", hn, "host", span.Host)
 	} else {
 		pn, span.OtherNamespace = nr.resolve(&span.ServiceID, span.Peer)
 		hn, _ = nr.resolve(&span.ServiceID, span.Host)
+		log().Debug("resolved server span", "service", span.ServiceID.Name, "pn", pn, "hn", hn, "peer", span.Peer)
 	}
 	// don't set names if the peer and host names have been already decorated
 	// in a previous stage (e.g. Kubernetes decorator)
@@ -161,7 +168,10 @@ func (nr *NameResolver) resolveFromK8s(ip string) (string, string) {
 }
 
 func (nr *NameResolver) resolveIP(ip string) string {
+	log().Debug("Performing DNS lookup for IP", "ip", ip)
+
 	if host, ok := nr.cache.Get(ip); ok {
+		log().Debug("Cache hit for IP", "ip", ip, "hostname", host)
 		return host
 	}
 
@@ -169,15 +179,18 @@ func (nr *NameResolver) resolveIP(ip string) string {
 	addr, err := r.LookupAddr(context.Background(), ip)
 
 	if err != nil {
+		log().Error("Failed to perform DNS lookup", "ip", ip, "error", err)
 		nr.cache.Add(ip, ip)
 		return ip
 	}
 
 	for _, a := range addr {
+		log().Debug("Resolved IP to hostname", "ip", ip, "hostname", a)
 		nr.cache.Add(ip, a)
 		return a
 	}
 
+	log().Warn("No hostname found for IP", "ip", ip)
 	nr.cache.Add(ip, ip)
 	return ip
 }

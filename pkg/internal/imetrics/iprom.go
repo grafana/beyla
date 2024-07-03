@@ -2,10 +2,12 @@ package imetrics
 
 import (
 	"context"
+	"runtime"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 
+	"github.com/grafana/beyla/pkg/buildinfo"
 	"github.com/grafana/beyla/pkg/internal/connector"
 )
 
@@ -29,6 +31,7 @@ type PrometheusReporter struct {
 	otelTraceExportErrs   *prometheus.CounterVec
 	prometheusRequests    *prometheus.CounterVec
 	instrumentedProcesses *prometheus.GaugeVec
+	beylaInfo             prometheus.Gauge
 }
 
 func NewPrometheusReporter(cfg *PrometheusConfig, manager *connector.PrometheusManager) *PrometheusReporter {
@@ -66,6 +69,18 @@ func NewPrometheusReporter(cfg *PrometheusConfig, manager *connector.PrometheusM
 			Name: "beyla_instrumented_processes",
 			Help: "Instrumented processes by Beyla",
 		}, []string{"process_name"}),
+		beylaInfo: prometheus.NewGauge(prometheus.GaugeOpts{
+			Name: "beyla_build_info",
+			Help: "A metric with a constant '1' value labeled by version, revision, branch, " +
+				"goversion from which Beyla was built, the goos and goarch for the build.",
+			ConstLabels: map[string]string{
+				"goarch":    runtime.GOARCH,
+				"goos":      runtime.GOOS,
+				"goversion": runtime.Version(),
+				"version":   buildinfo.Version,
+				"revision":  buildinfo.Revision,
+			},
+		}),
 	}
 	manager.Register(cfg.Port, cfg.Path,
 		pr.tracerFlushes,
@@ -74,13 +89,15 @@ func NewPrometheusReporter(cfg *PrometheusConfig, manager *connector.PrometheusM
 		pr.otelTraceExports,
 		pr.otelTraceExportErrs,
 		pr.prometheusRequests,
-		pr.instrumentedProcesses)
+		pr.instrumentedProcesses,
+		pr.beylaInfo)
 
 	return pr
 }
 
 func (p *PrometheusReporter) Start(ctx context.Context) {
 	p.connector.StartHTTP(ctx)
+	p.beylaInfo.Set(1)
 }
 
 func (p *PrometheusReporter) TracerFlush(len int) {

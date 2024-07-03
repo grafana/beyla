@@ -31,7 +31,7 @@ func TestMain(m *testing.M) {
 		docker.ImageBuild{Tag: "grpcpinger:dev", Dockerfile: k8s.DockerfilePinger},
 		docker.ImageBuild{Tag: "httppinger:dev", Dockerfile: k8s.DockerfileHTTPPinger},
 		docker.ImageBuild{Tag: "quay.io/prometheus/prometheus:v2.53.0"},
-		docker.ImageBuild{Tag: "otel/opentelemetry-collector-contrib:0.104.0"},
+		docker.ImageBuild{Tag: "otel/opentelemetry-collector-contrib:0.103.0"},
 		docker.ImageBuild{Tag: "jaegertracing/all-in-one:1"},
 	); err != nil {
 		slog.Error("can't build docker images", err)
@@ -46,7 +46,7 @@ func TestMain(m *testing.M) {
 		kube.LocalImage("grpcpinger:dev"),
 		kube.LocalImage("httppinger:dev"),
 		kube.LocalImage("quay.io/prometheus/prometheus:v2.53.0"),
-		kube.LocalImage("otel/opentelemetry-collector-contrib:0.104.0"),
+		kube.LocalImage("otel/opentelemetry-collector-contrib:0.103.0"),
 		kube.LocalImage("jaegertracing/all-in-one:1"),
 		kube.Deploy(k8s.PathManifests+"/01-volumes.yml"),
 		kube.Deploy(k8s.PathManifests+"/01-serviceaccount.yml"),

@@ -40,7 +40,8 @@ func (k *Metadata) initServiceIPInformer(informerFactory informers.SharedInforme
 			return nil, fmt.Errorf("was expecting a Service. Got: %T", i)
 		}
 		if svc.Spec.ClusterIP == corev1.ClusterIPNone {
-			k.log.Warn("Service doesn't have any ClusterIP. Beyla won't decorate their flows",
+			// this will be normal for headless services
+			k.log.Debug("Service doesn't have any ClusterIP. Beyla won't decorate their flows",
 				"namespace", svc.Namespace, "name", svc.Name)
 		}
 		return &ServiceInfo{

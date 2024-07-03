@@ -3,7 +3,6 @@ package ebpfcommon
 import (
 	"encoding/binary"
 	"errors"
-	"fmt"
 	"regexp"
 	"unsafe"
 
@@ -46,6 +45,7 @@ func (k Operation) String() string {
 }
 
 const KafkaMinLength = 14
+const KafkaMaxPayload = 20 * 1024 * 1024 // 20 MB max, 1MB is default for most Kafka installations
 
 var topicRegex = regexp.MustCompile("\x02\t(.*)\x02")
 
@@ -117,6 +117,11 @@ func isValidKafkaHeader(header *Header) bool {
 	if header.MessageSize < int32(KafkaMinLength) || header.APIVersion < 0 {
 		return false
 	}
+
+	if header.MessageSize > KafkaMaxPayload {
+		return false
+	}
+
 	switch Operation(header.APIKey) {
 	case Fetch:
 		if header.APIVersion > 16 { // latest: Fetch Request (Version: 16)
@@ -341,8 +346,6 @@ func TCPToKafkaToSpan(trace *TCPRequestInfo, data *KafkaInfo) request.Span {
 	peer := ""
 	hostname := ""
 	hostPort := 0
-
-	fmt.Printf("Kafka trace %v\n", trace)
 
 	if trace.ConnInfo.S_port != 0 || trace.ConnInfo.D_port != 0 {
 		peer, hostname = (*BPFConnInfo)(unsafe.Pointer(&trace.ConnInfo)).reqHostInfo()

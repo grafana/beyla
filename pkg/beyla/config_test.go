@@ -172,7 +172,9 @@ network:
 				},
 			},
 		},
-		Routes: &transform.RoutesConfig{},
+		Routes: &transform.RoutesConfig{
+			Unmatch: transform.UnmatchHeuristic,
+		},
 		NameResolver: &transform.NameResolverConfig{
 			CacheLen: 1024,
 			CacheTTL: 5 * time.Minute,

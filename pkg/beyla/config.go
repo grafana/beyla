@@ -109,7 +109,7 @@ var DefaultConfig = Config{
 			InformersSyncTimeout: 30 * time.Second,
 		},
 	},
-	Routes:       &transform.RoutesConfig{},
+	Routes:       &transform.RoutesConfig{Unmatch: transform.UnmatchHeuristic},
 	NetworkFlows: defaultNetworkConfig,
 	Processes: process.CollectConfig{
 		RunMode:  process.RunModePrivileged,

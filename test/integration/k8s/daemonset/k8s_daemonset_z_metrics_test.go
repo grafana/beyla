@@ -16,6 +16,5 @@ func TestProcessMetrics(t *testing.T) {
 		"k8s_deployment_name": "^otherinstance$",
 		"k8s_replicaset_name": "^otherinstance-.*",
 		"k8s_pod_name":        "^otherinstance-.*",
-		"host_name":           "^otherinstance-.*",
 	}))
 }

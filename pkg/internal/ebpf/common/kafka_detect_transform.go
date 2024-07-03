@@ -3,6 +3,7 @@ package ebpfcommon
 import (
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"regexp"
 	"unsafe"
 
@@ -159,7 +160,11 @@ func processKafkaOperation(header *Header, pkt []byte, k *KafkaInfo, offset *int
 		k.Operation = Produce
 		k.TopicOffset = *offset
 	case Fetch:
-		*offset += getTopicOffsetFromFetchOperation(header)
+		to, err := getTopicOffsetFromFetchOperation(pkt, *offset, header)
+		if err != nil {
+			return err
+		}
+		*offset += to
 		k.Operation = Fetch
 		k.TopicOffset = *offset
 	default:
@@ -218,6 +223,9 @@ func getTopicName(pkt []byte, offset int, op Operation, apiVersion int16) (strin
 		topicName = []byte(extractTopic(string(topicName)))
 	}
 	if isValidKafkaString(topicName, len(topicName), int(topicNameSize), false) {
+		if op == Fetch && apiVersion <= 11 && len(topicName) == 0 {
+			return "", errors.New("topic name must not be empty for api version <= 11")
+		}
 		return string(topicName), nil
 	}
 	return "", errors.New("invalid topic name")
@@ -284,7 +292,7 @@ func getTopicOffsetFromProduceOperation(header *Header, pkt []byte, offset *int)
 	return true, nil
 }
 
-func getTopicOffsetFromFetchOperation(header *Header) int {
+func getTopicOffsetFromFetchOperation(pkt []byte, origOffset int, header *Header) (int, error) {
 	offset := 3 * 4 // 3 * sizeof(int32)
 
 	if header.APIVersion >= 15 {
@@ -294,6 +302,13 @@ func getTopicOffsetFromFetchOperation(header *Header) int {
 	if header.APIVersion >= 3 {
 		offset += 4 // max_bytes
 		if header.APIVersion >= 4 {
+			if origOffset+offset >= len(pkt) {
+				return 0, errors.New("packet too small")
+			}
+			isolation := pkt[origOffset+offset]
+			if isolation > 1 {
+				return 0, errors.New("wrong isolation level")
+			}
 			offset++ // isolation_level
 			if header.APIVersion >= 7 {
 				offset += 2 * 4 // session_id + session_epoch
@@ -301,7 +316,7 @@ func getTopicOffsetFromFetchOperation(header *Header) int {
 		}
 	}
 
-	return offset
+	return offset, nil
 }
 
 func readUnsignedVarint(data []byte) (int, error) {
@@ -326,6 +341,8 @@ func TCPToKafkaToSpan(trace *TCPRequestInfo, data *KafkaInfo) request.Span {
 	peer := ""
 	hostname := ""
 	hostPort := 0
+
+	fmt.Printf("Kafka trace %v\n", trace)
 
 	if trace.ConnInfo.S_port != 0 || trace.ConnInfo.D_port != 0 {
 		peer, hostname = (*BPFConnInfo)(unsafe.Pointer(&trace.ConnInfo)).reqHostInfo()

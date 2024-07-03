@@ -66,7 +66,7 @@ func SharedRingbuf(
 	log := slog.With("component", "ringbuf.Tracer")
 	rbf := ringBufForwarder{
 		cfg: cfg, logger: log, ringbuffer: ringbuffer,
-		closers: nil, reader: ReadHTTPRequestTraceAsSpan,
+		closers: nil, reader: ReadBPFTraceAsSpan,
 		filter: filter, metrics: metrics,
 	}
 	singleRbf = &rbf

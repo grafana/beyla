@@ -116,24 +116,28 @@ func TestGetTopicOffsetFromFetchOperation(t *testing.T) {
 		APIVersion: 3,
 	}
 
-	offset := getTopicOffsetFromFetchOperation(header)
+	to, err := getTopicOffsetFromFetchOperation([]byte{}, 0, header)
+	assert.NoError(t, err)
 	expectedOffset := 3*4 + 4
-	assert.Equal(t, expectedOffset, offset)
+	assert.Equal(t, expectedOffset, to)
 
 	header.APIVersion = 4
-	offset = getTopicOffsetFromFetchOperation(header)
+	to, err = getTopicOffsetFromFetchOperation([]byte{0x00, 0x02, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x01}, 0, header)
+	assert.NoError(t, err)
 	expectedOffset = 3*4 + 5
-	assert.Equal(t, expectedOffset, offset)
+	assert.Equal(t, expectedOffset, to)
 
 	header.APIVersion = 7
-	offset = getTopicOffsetFromFetchOperation(header)
+	to, err = getTopicOffsetFromFetchOperation([]byte{0x00, 0x02, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x01}, 0, header)
+	assert.NoError(t, err)
 	expectedOffset = 3*4 + 4 + 1 + 2*4
-	assert.Equal(t, expectedOffset, offset)
+	assert.Equal(t, expectedOffset, to)
 
 	header.APIVersion = 2
-	offset = getTopicOffsetFromFetchOperation(header)
+	to, err = getTopicOffsetFromFetchOperation([]byte{0x00, 0x02, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x01}, 0, header)
+	assert.NoError(t, err)
 	expectedOffset = 3 * 4
-	assert.Equal(t, expectedOffset, offset)
+	assert.Equal(t, expectedOffset, to)
 }
 
 func TestIsValidKafkaHeader(t *testing.T) {

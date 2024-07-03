@@ -36,7 +36,7 @@ func TestForwardRingbuf_CapacityFull(t *testing.T) {
 		&TracerConfig{BatchLength: 10},
 		nil, // the source ring buffer can be null
 		&fltr,
-		ReadHTTPRequestTraceAsSpan,
+		ReadBPFTraceAsSpan,
 		slog.With("test", "TestForwardRingbuf_CapacityFull"),
 		metrics,
 		nil,
@@ -88,7 +88,7 @@ func TestForwardRingbuf_Deadline(t *testing.T) {
 		&TracerConfig{BatchLength: 10, BatchTimeout: 20 * time.Millisecond},
 		nil,   // the source ring buffer can be null
 		&fltr, // change fltr to a pointer
-		ReadHTTPRequestTraceAsSpan,
+		ReadBPFTraceAsSpan,
 		slog.With("test", "TestForwardRingbuf_Deadline"),
 		metrics,
 	)(context.Background(), forwardedMessages)
@@ -128,7 +128,7 @@ func TestForwardRingbuf_Close(t *testing.T) {
 		&TracerConfig{BatchLength: 10},
 		nil, // the source ring buffer can be null
 		(&IdentityPidsFilter{}),
-		ReadHTTPRequestTraceAsSpan,
+		ReadBPFTraceAsSpan,
 		slog.With("test", "TestForwardRingbuf_Close"),
 		metrics,
 		&closable,

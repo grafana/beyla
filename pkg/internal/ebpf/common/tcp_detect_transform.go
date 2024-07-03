@@ -61,11 +61,15 @@ func ReadTCPRequestIntoSpan(record *ringbuf.Record, filter ServiceFilter) (reque
 			return TCPToRedisToSpan(&event, op, text, status), false, nil
 		}
 	default:
-		k, err := ProcessPossibleKafkaEvent(&event, b, event.Rbuf[:])
-		if err == nil {
-			return TCPToKafkaToSpan(&event, k), false, nil
-		} else if isHTTP2(b, int(event.Len)) || isHTTP2(event.Rbuf[:], int(event.RespLen)) {
+		// Kafka and gRPC can look very similar in terms of bytes. We can mistake one for another.
+		// We try gRPC first because it's more reliable in detecting false gRPC sequences.
+		if isHTTP2(b, int(event.Len)) || isHTTP2(event.Rbuf[:], int(event.RespLen)) {
 			MisclassifiedEvents <- MisclassifiedEvent{EventType: EventTypeKHTTP2, TCPInfo: &event}
+		} else {
+			k, err := ProcessPossibleKafkaEvent(&event, b, event.Rbuf[:])
+			if err == nil {
+				return TCPToKafkaToSpan(&event, k), false, nil
+			}
 		}
 	}
 

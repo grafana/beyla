@@ -168,7 +168,10 @@ func (nr *NameResolver) resolveFromK8s(ip string) (string, string) {
 }
 
 func (nr *NameResolver) resolveIP(ip string) string {
+	log().Debug("Performing DNS lookup for IP", "ip", ip)
+
 	if host, ok := nr.cache.Get(ip); ok {
+		log().Debug("Cache hit for IP", "ip", ip, "hostname", host)
 		return host
 	}
 
@@ -176,15 +179,18 @@ func (nr *NameResolver) resolveIP(ip string) string {
 	addr, err := r.LookupAddr(context.Background(), ip)
 
 	if err != nil {
+		log().Error("Failed to perform DNS lookup", "ip", ip, "error", err)
 		nr.cache.Add(ip, ip)
 		return ip
 	}
 
 	for _, a := range addr {
+		log().Debug("Resolved IP to hostname", "ip", ip, "hostname", a)
 		nr.cache.Add(ip, a)
 		return a
 	}
 
+	log().Warn("No hostname found for IP", "ip", ip)
 	nr.cache.Add(ip, ip)
 	return ip
 }

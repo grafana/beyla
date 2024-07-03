@@ -2,7 +2,6 @@ package transform
 
 import (
 	"context"
-	"log/slog"
 	"net"
 	"strings"
 	"time"
@@ -33,10 +32,6 @@ type NameResolver struct {
 	db    *kube2.Database
 }
 
-func nrlog() *slog.Logger {
-	return slog.With("component", "transform.NameResolver")
-}
-
 func NameResolutionProvider(ctxInfo *global.ContextInfo, cfg *NameResolverConfig) pipe.MiddleProvider[[]request.Span, []request.Span] {
 	return func() (pipe.MiddleFunc[[]request.Span, []request.Span], error) {
 		if cfg == nil {
@@ -58,7 +53,6 @@ func nameResolver(ctxInfo *global.ContextInfo, cfg *NameResolverConfig) (pipe.Mi
 			for i := range spans {
 				s := &spans[i]
 				nr.resolveNames(s)
-				nrlog().Debug("Name resolving span", "span", s)
 			}
 			out <- spans
 		}

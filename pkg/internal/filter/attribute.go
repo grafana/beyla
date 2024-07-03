@@ -2,7 +2,6 @@ package filter
 
 import (
 	"fmt"
-	"log/slog"
 
 	"github.com/gobwas/glob"
 	"github.com/mariomac/pipes/pipe"
@@ -106,10 +105,6 @@ func (f *filter[T]) doFilter(in <-chan []T, out chan<- []T) {
 	}
 }
 
-func alog() *slog.Logger {
-	return slog.With("component", "transform.FilterByAttribute")
-}
-
 // filterBatch removes from the input slice the records that do not match
 // the user-provided attribute matchers
 func (f *filter[T]) filterBatch(batch []T) []T {
@@ -118,11 +113,9 @@ batchLoop:
 	for t := range batch {
 		for m := range f.matchers {
 			if !f.matchers[m].Matches(batch[t]) {
-				alog().Debug("Removing record because no attributes match", "record", batch[t])
 				continue batchLoop
 			}
 		}
-		alog().Debug("Attributes", "record", batch[t])
 		batch[w] = batch[t]
 		w++
 	}

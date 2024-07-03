@@ -20,6 +20,7 @@ import (
 	"github.com/grafana/beyla/pkg/internal/export/expire"
 	"github.com/grafana/beyla/pkg/internal/export/instrumentations"
 	"github.com/grafana/beyla/pkg/internal/export/otel"
+	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/pkg/internal/request"
 	"github.com/grafana/beyla/pkg/internal/svc"
@@ -76,16 +77,6 @@ const (
 	defaultHistogramMaxBucketNumber  = uint32(100)
 	defaultHistogramMinResetDuration = 1 * time.Hour
 )
-
-// metrics for Beyla statistics
-const (
-	BeylaBuildInfo = "beyla_build_info"
-
-	LanguageLabel = "target_lang"
-)
-
-// not adding version, as it is a fixed value
-var beylaInfoLabelNames = []string{LanguageLabel}
 
 // TODO: TLS
 type PrometheusConfig struct {
@@ -285,7 +276,7 @@ func newReporter(
 		attrHTTPRequestSize:       attrHTTPRequestSize,
 		attrHTTPClientRequestSize: attrHTTPClientRequestSize,
 		beylaInfo: NewExpirer[prometheus.Gauge](prometheus.NewGaugeVec(prometheus.GaugeOpts{
-			Name: BeylaBuildInfo,
+			Name: imetrics.BeylaBuildInfo,
 			Help: "A metric with a constant '1' value labeled by version, revision, branch, " +
 				"goversion from which Beyla was built, the goos and goarch for the build, and the" +
 				"language of the reported services",
@@ -296,7 +287,7 @@ func newReporter(
 				"version":   buildinfo.Version,
 				"revision":  buildinfo.Revision,
 			},
-		}, beylaInfoLabelNames).MetricVec, clock.Time, cfg.TTL),
+		}, imetrics.BeylaInfoLabelNames).MetricVec, clock.Time, cfg.TTL),
 		httpDuration: optionalHistogramProvider(is.HTTPEnabled(), func() *Expirer[prometheus.Histogram] {
 			return NewExpirer[prometheus.Histogram](prometheus.NewHistogramVec(prometheus.HistogramOpts{
 				Name:                            attributes.HTTPServerDuration.Prom,
@@ -563,6 +554,7 @@ func (r *metricsReporter) collectMetrics(input <-chan []request.Span) {
 func (r *metricsReporter) observe(span *request.Span) {
 	t := span.Timings()
 	r.beylaInfo.WithLabelValues(span.ServiceID.SDKLanguage.String()).metric.Set(1.0)
+	r.ctxInfo.Metrics.SetBeylaInfo(span.ServiceID.SDKLanguage.String())
 	duration := t.End.Sub(t.RequestStart).Seconds()
 	if r.cfg.OTelMetricsEnabled() {
 		switch span.Type {

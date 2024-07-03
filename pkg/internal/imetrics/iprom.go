@@ -2,10 +2,12 @@ package imetrics
 
 import (
 	"context"
+	"runtime"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 
+	"github.com/grafana/beyla/pkg/buildinfo"
 	"github.com/grafana/beyla/pkg/internal/connector"
 )
 
@@ -19,6 +21,15 @@ type PrometheusConfig struct {
 	Path string `yaml:"path,omitempty" env:"BEYLA_INTERNAL_METRICS_PROMETHEUS_PATH"`
 }
 
+// metrics for Beyla statistics
+const (
+	BeylaBuildInfo = "beyla_build_info"
+	LanguageLabel  = "target_lang"
+)
+
+// not adding version, as it is a fixed value
+var BeylaInfoLabelNames = []string{LanguageLabel}
+
 // PrometheusReporter is an internal metrics Reporter that exports to Prometheus
 type PrometheusReporter struct {
 	connector             *connector.PrometheusManager
@@ -29,6 +40,7 @@ type PrometheusReporter struct {
 	otelTraceExportErrs   *prometheus.CounterVec
 	prometheusRequests    *prometheus.CounterVec
 	instrumentedProcesses *prometheus.GaugeVec
+	beylaInfo             *prometheus.GaugeVec
 }
 
 func NewPrometheusReporter(cfg *PrometheusConfig, manager *connector.PrometheusManager) *PrometheusReporter {
@@ -66,6 +78,19 @@ func NewPrometheusReporter(cfg *PrometheusConfig, manager *connector.PrometheusM
 			Name: "beyla_instrumented_processes",
 			Help: "Instrumented processes by Beyla",
 		}, []string{"process_name"}),
+		beylaInfo: prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Name: BeylaBuildInfo,
+			Help: "A metric with a constant '1' value labeled by version, revision, branch, " +
+				"goversion from which Beyla was built, the goos and goarch for the build, and the" +
+				"language of the reported services",
+			ConstLabels: map[string]string{
+				"goarch":    runtime.GOARCH,
+				"goos":      runtime.GOOS,
+				"goversion": runtime.Version(),
+				"version":   buildinfo.Version,
+				"revision":  buildinfo.Revision,
+			},
+		}, BeylaInfoLabelNames),
 	}
 	manager.Register(cfg.Port, cfg.Path,
 		pr.tracerFlushes,
@@ -74,7 +99,8 @@ func NewPrometheusReporter(cfg *PrometheusConfig, manager *connector.PrometheusM
 		pr.otelTraceExports,
 		pr.otelTraceExportErrs,
 		pr.prometheusRequests,
-		pr.instrumentedProcesses)
+		pr.instrumentedProcesses,
+		pr.beylaInfo)
 
 	return pr
 }
@@ -113,4 +139,8 @@ func (p *PrometheusReporter) InstrumentProcess(processName string) {
 
 func (p *PrometheusReporter) UninstrumentProcess(processName string) {
 	p.instrumentedProcesses.WithLabelValues(processName).Dec()
+}
+
+func (p *PrometheusReporter) SetBeylaInfo(lang string) {
+	p.beylaInfo.WithLabelValues(lang).Set(1)
 }

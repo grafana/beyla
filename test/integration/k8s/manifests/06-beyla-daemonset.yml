@@ -9,17 +9,7 @@ data:
         enable: true
         cluster_name: beyla
       select:
-        process_cpu_time:
-          include: ["*"]
-        process_cpu_utilization:
-          include: ["*"]
-        process_memory_usage:
-          include: ["*"]
-        process_memory_virtual:
-          include: ["*"]
-        process_disk_io:
-          include: ["*"]
-        process_network_io:
+        process_*:
           include: ["*"]
     print_traces: true
     log_level: debug

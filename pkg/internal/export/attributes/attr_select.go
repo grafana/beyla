@@ -71,6 +71,10 @@ func (incl Selection) Normalize() {
 	maps.Copy(incl, normalized)
 }
 
+// Matching returns all the entries of the inclusion list matching the provided metric name.
+// This would include "glob-like" entries.
+// They are returned from more to less broad scope (for example, for a metric named foo_bar
+// it could return the inclusion lists defined with keys "*", "foo_*" and "foo_bar", in that order).
 func (incl Selection) Matching(metricName Name) []InclusionLists {
 	if incl == nil {
 		return nil

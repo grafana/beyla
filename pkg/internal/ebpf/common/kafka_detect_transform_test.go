@@ -138,6 +138,11 @@ func TestGetTopicOffsetFromFetchOperation(t *testing.T) {
 	assert.NoError(t, err)
 	expectedOffset = 3 * 4
 	assert.Equal(t, expectedOffset, to)
+
+	// Isolation level is the last byte in the sequence, it can only be 0 and 1, nothing else.
+	header.APIVersion = 7
+	_, err = getTopicOffsetFromFetchOperation([]byte{0x00, 0x02, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x02}, 0, header)
+	assert.Error(t, err)
 }
 
 func TestIsValidKafkaHeader(t *testing.T) {

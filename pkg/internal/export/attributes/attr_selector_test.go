@@ -46,6 +46,55 @@ func TestFor(t *testing.T) {
 	}, p.For(BeylaNetworkFlow))
 }
 
+func TestFor_GlobEntries(t *testing.T) {
+	// include all groups just to verify that other attributes aren't anyway selected
+	p, err := NewAttrSelector(GroupKubernetes, Selection{
+		"*": InclusionLists{
+			Include: []string{"beyla_ip"},
+			Exclude: []string{"k8s_*_name"},
+		},
+		"beyla_network_flow_bytes_total": InclusionLists{
+			Include: []string{"src.*", "k8s.*"},
+			Exclude: []string{"k8s.*.type"},
+		},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, Sections[[]attr.Name]{
+		Metric: []attr.Name{
+			"beyla.ip",
+			"k8s.dst.namespace",
+			"k8s.dst.node.ip",
+			"k8s.src.namespace",
+			"k8s.src.node.ip",
+			"src.address",
+			"src.name",
+			"src.port",
+		},
+		Resource: []attr.Name{},
+	}, p.For(BeylaNetworkFlow))
+}
+
+// if no include lists are defined, it takes the default arguments
+func TestFor_GlobEntries_NoInclusion(t *testing.T) {
+	p, err := NewAttrSelector(GroupKubernetes|GroupNetCIDR, Selection{
+		"*": InclusionLists{
+			Exclude: []string{"*dst*"},
+		},
+		"beyla_network_flow_bytes_total": InclusionLists{
+			Exclude: []string{"k8s.*.namespace"},
+		},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, Sections[[]attr.Name]{
+		Metric: []attr.Name{
+			"k8s.cluster.name",
+			"k8s.src.owner.name",
+			"src.cidr",
+		},
+		Resource: []attr.Name{},
+	}, p.For(BeylaNetworkFlow))
+}
+
 func TestFor_KubeDisabled(t *testing.T) {
 	p, err := NewAttrSelector(0, Selection{
 		"beyla_network_flow_bytes_total": InclusionLists{

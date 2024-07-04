@@ -3,6 +3,7 @@ package attributes
 import (
 	"maps"
 	"path"
+	"slices"
 	"strings"
 
 	attr "github.com/grafana/beyla/pkg/internal/export/attributes/names"
@@ -68,4 +69,26 @@ func (incl Selection) Normalize() {
 	// clear the current map before copying again normalized values
 	maps.DeleteFunc(incl, func(_ Section, _ InclusionLists) bool { return true })
 	maps.Copy(incl, normalized)
+}
+
+// Matching returns all the entries of the inclusion list matching the provided metric name.
+// This would include "glob-like" entries.
+// They are returned from more to less broad scope (for example, for a metric named foo_bar
+// it could return the inclusion lists defined with keys "*", "foo_*" and "foo_bar", in that order).
+func (incl Selection) Matching(metricName Name) []InclusionLists {
+	if incl == nil {
+		return nil
+	}
+	var matchingMetricGlobs []Section
+	for glob := range incl {
+		if ok, _ := path.Match(string(glob), string(metricName.Section)); ok {
+			matchingMetricGlobs = append(matchingMetricGlobs, glob)
+		}
+	}
+	slices.Sort(matchingMetricGlobs)
+	inclusionLists := make([]InclusionLists, 0, len(matchingMetricGlobs))
+	for _, glob := range matchingMetricGlobs {
+		inclusionLists = append(inclusionLists, incl[glob])
+	}
+	return inclusionLists
 }

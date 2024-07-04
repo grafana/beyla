@@ -694,7 +694,7 @@ that only traces matching the `ignored_patterns` will be discarded, while metric
 
 | YAML        | Environment variable | Type   | Default    |
 | ----------- | ------- | ------ | ---------- |
-| `unmatched` | --      | string | `wildcard` |
+| `unmatched` | --      | string | `heuristic` |
 
 Specifies what to do when a trace HTTP path does not match any of the `patterns` entries.
 

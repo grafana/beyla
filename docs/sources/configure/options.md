@@ -502,6 +502,31 @@ attributes:
       exclude: ["k8s.pod.*"]
 ```
 
+Additionally, you can use "`*`" wildcards as metric names to add and exclude attributes for
+groups of metrics having the same name. For example:
+
+```yaml
+attributes:
+  select:
+    http_*:
+      include: ["*"]
+      exclude: ["http_path", "http_route"]
+    http_client_*:
+      # override http_* exclusion
+      include: ["http_path"]
+    http_server_*:
+      # override http_* exclusion
+      include: ["http_route"]
+```
+
+In the previous example, all the metrics with a name starting with `http_` (or `http.`) would include all
+the possible attributes but `http_path` and `http_route` (or `http.path`/`http.route`).
+But the `http_client_*` and `http_server_*` sections would override the base configuration, enabling the
+`http_path` attribute for the HTTP client metrics and `http_route` for the HTTP server metrics.
+
+When a metric name matches multiple definitions using wildcards, the metrics inclusion/exclusion lists
+are applied in order from more generic to more specific. 
+
 ### Instance ID decoration
 
 The metrics and the traces are decorated with a unique instance ID string, identifying

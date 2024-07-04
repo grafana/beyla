@@ -127,6 +127,9 @@ func (ta *TraceAttacher) getTracer(ie *Instrumentable) (*ebpf.ProcessTracer, boo
 		} else {
 			programs = newNonGoTracersGroup(ta.Cfg, ta.Metrics)
 		}
+		if ie.Type == svc.InstrumentableNodejs {
+			programs = append(programs, newNodeJSTracersGroup(ta.Cfg, ta.Metrics)...)
+		}
 	default:
 		ta.log.Warn("unexpected instrumentable type. This is basically a bug", "type", ie.Type)
 	}

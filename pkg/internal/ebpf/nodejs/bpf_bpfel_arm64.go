@@ -53,6 +53,7 @@ type bpfSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpfProgramSpecs struct {
+	AsyncReset    *ebpf.ProgramSpec `ebpf:"async_reset"`
 	EmitAsyncInit *ebpf.ProgramSpec `ebpf:"emit_async_init"`
 }
 
@@ -60,6 +61,7 @@ type bpfProgramSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpfMapSpecs struct {
+	Events    *ebpf.MapSpec `ebpf:"events"`
 	PidCache  *ebpf.MapSpec `ebpf:"pid_cache"`
 	ValidPids *ebpf.MapSpec `ebpf:"valid_pids"`
 }
@@ -83,12 +85,14 @@ func (o *bpfObjects) Close() error {
 //
 // It can be passed to loadBpfObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpfMaps struct {
+	Events    *ebpf.Map `ebpf:"events"`
 	PidCache  *ebpf.Map `ebpf:"pid_cache"`
 	ValidPids *ebpf.Map `ebpf:"valid_pids"`
 }
 
 func (m *bpfMaps) Close() error {
 	return _BpfClose(
+		m.Events,
 		m.PidCache,
 		m.ValidPids,
 	)
@@ -98,11 +102,13 @@ func (m *bpfMaps) Close() error {
 //
 // It can be passed to loadBpfObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpfPrograms struct {
+	AsyncReset    *ebpf.Program `ebpf:"async_reset"`
 	EmitAsyncInit *ebpf.Program `ebpf:"emit_async_init"`
 }
 
 func (p *bpfPrograms) Close() error {
 	return _BpfClose(
+		p.AsyncReset,
 		p.EmitAsyncInit,
 	)
 }

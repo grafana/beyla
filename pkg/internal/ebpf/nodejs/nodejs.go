@@ -71,11 +71,8 @@ func (p *Tracer) Constants(_ *exec.FileInfo, _ *goexec.Offsets) map[string]any {
 		m["filter_pids"] = int32(0)
 	}
 
-	if p.cfg.EBPF.TrackRequestHeaders {
-		m["capture_header_buffer"] = int32(1)
-	} else {
-		m["capture_header_buffer"] = int32(0)
-	}
+	m["async_wrap_async_id_off"] = int32(0x28)
+	m["async_wrap_trigger_async_id_off"] = int32(0x30)
 
 	return m
 }
@@ -114,6 +111,14 @@ func (p *Tracer) UProbes() map[string]map[string]ebpfcommon.FunctionPrograms {
 			"_ZN4node13EmitAsyncInitEPN2v87IsolateENS0_5LocalINS0_6ObjectEEEPKcd": {
 				Required: false,
 				Start:    p.bpfObjects.EmitAsyncInit,
+			},
+			"_ZN4node9AsyncWrap10AsyncResetEN2v85LocalINS1_6ObjectEEEdb": {
+				Required: false,
+				Start:    p.bpfObjects.AsyncReset,
+			},
+			"_ZN4node9AsyncWrap10AsyncResetERKN2v820FunctionCallbackInfoINS1_5ValueEEE": {
+				Required: false,
+				Start:    p.bpfObjects.AsyncReset,
 			},
 		},
 	}

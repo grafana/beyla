@@ -38,7 +38,7 @@ func gctx(groups attributes.AttrGroups) *global.ContextInfo {
 	return &global.ContextInfo{
 		Metrics:               imetrics.NoopReporter{},
 		MetricAttributeGroups: groups,
-		K8sInformer:           kube.NewMetadataProvider(kube.EnabledFalse, "", 0),
+		K8sInformer:           kube.NewMetadataProvider(kube.EnabledFalse, nil, "", 0),
 	}
 }
 

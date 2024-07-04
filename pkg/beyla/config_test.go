@@ -164,6 +164,7 @@ network:
 				KubeconfigPath:       "/foo/bar",
 				Enable:               kube.EnabledTrue,
 				InformersSyncTimeout: 30 * time.Second,
+				Informers:            []string{"pod", "service", "replicaset", "node"},
 			},
 			Select: attributes.Selection{
 				attributes.BeylaNetworkFlow.Section: attributes.InclusionLists{

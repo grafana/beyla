@@ -88,6 +88,7 @@ func buildCommonContextInfo(
 		Prometheus: promMgr,
 		K8sInformer: kube.NewMetadataProvider(
 			config.Attributes.Kubernetes.Enable,
+			config.Attributes.Kubernetes.Informers,
 			config.Attributes.Kubernetes.KubeconfigPath,
 			config.Attributes.Kubernetes.InformersSyncTimeout,
 		),

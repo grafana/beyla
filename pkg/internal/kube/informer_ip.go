@@ -26,6 +26,9 @@ type IPInfo struct {
 }
 
 func (k *Metadata) initServiceIPInformer(informerFactory informers.SharedInformerFactory) error {
+	if !k.enabledInformers.Has(InformerService) {
+		return nil
+	}
 	services := informerFactory.Core().V1().Services().Informer()
 	// Transform any *v1.Service instance into a *IPInfo instance to save space
 	// in the informer's cache
@@ -68,6 +71,9 @@ func (k *Metadata) initServiceIPInformer(informerFactory informers.SharedInforme
 }
 
 func (k *Metadata) initNodeIPInformer(informerFactory informers.SharedInformerFactory) error {
+	if !k.enabledInformers.Has(InformerNode) {
+		return nil
+	}
 	nodes := informerFactory.Core().V1().Nodes().Informer()
 	// Transform any *v1.Node instance into a *IPInfo instance to save space
 	// in the informer's cache
@@ -126,19 +132,25 @@ func (k *Metadata) GetInfo(ip string) (*IPInfo, *metav1.ObjectMeta, bool) {
 }
 
 func (k *Metadata) fetchInformersByIP(ip string) (*IPInfo, *metav1.ObjectMeta, bool) {
-	if info, ok := k.infoForIP(k.pods.GetIndexer(), ip); ok {
-		info := info.(*PodInfo)
-		// it might happen that the Host is discovered after the Pod
-		if info.IPInfo.HostName == "" {
-			info.IPInfo.HostName = k.getHostName(info.IPInfo.HostIP)
+	if k.enabledInformers.Has(InformerPod) {
+		if info, ok := k.infoForIP(k.pods.GetIndexer(), ip); ok {
+			info := info.(*PodInfo)
+			// it might happen that the Host is discovered after the Pod
+			if info.IPInfo.HostName == "" {
+				info.IPInfo.HostName = k.getHostName(info.IPInfo.HostIP)
+			}
+			return &info.IPInfo, &info.ObjectMeta, true
 		}
-		return &info.IPInfo, &info.ObjectMeta, true
 	}
-	if info, ok := k.infoForIP(k.nodesIP.GetIndexer(), ip); ok {
-		return &info.(*NodeInfo).IPInfo, &info.(*NodeInfo).ObjectMeta, true
+	if k.enabledInformers.Has(InformerNode) {
+		if info, ok := k.infoForIP(k.nodesIP.GetIndexer(), ip); ok {
+			return &info.(*NodeInfo).IPInfo, &info.(*NodeInfo).ObjectMeta, true
+		}
 	}
-	if info, ok := k.infoForIP(k.servicesIP.GetIndexer(), ip); ok {
-		return &info.(*ServiceInfo).IPInfo, &info.(*ServiceInfo).ObjectMeta, true
+	if k.enabledInformers.Has(InformerService) {
+		if info, ok := k.infoForIP(k.servicesIP.GetIndexer(), ip); ok {
+			return &info.(*ServiceInfo).IPInfo, &info.(*ServiceInfo).ObjectMeta, true
+		}
 	}
 	return nil, nil, false
 }
@@ -162,18 +174,20 @@ func (k *Metadata) getOwner(meta *metav1.ObjectMeta, info *IPInfo) Owner {
 			return *OwnerFrom(meta.OwnerReferences)
 		}
 
-		item, ok, err := k.replicaSets.GetIndexer().GetByKey(meta.Namespace + "/" + ownerReference.Name)
-		switch {
-		case err != nil:
-			k.log.Debug("can't get ReplicaSet info from informer. Ignoring",
-				"key", meta.Namespace+"/"+ownerReference.Name, "error", err)
-		case !ok:
-			k.log.Debug("ReplicaSet info still not in the informer. Ignoring",
-				"key", meta.Namespace+"/"+ownerReference.Name)
-		default:
-			rsInfo := item.(*ReplicaSetInfo).ObjectMeta
-			if len(rsInfo.OwnerReferences) > 0 {
-				return *OwnerFrom(rsInfo.OwnerReferences)
+		if k.enabledInformers.Has(InformerReplicaSet) {
+			item, ok, err := k.replicaSets.GetIndexer().GetByKey(meta.Namespace + "/" + ownerReference.Name)
+			switch {
+			case err != nil:
+				k.log.Debug("can't get ReplicaSet info from informer. Ignoring",
+					"key", meta.Namespace+"/"+ownerReference.Name, "error", err)
+			case !ok:
+				k.log.Debug("ReplicaSet info still not in the informer. Ignoring",
+					"key", meta.Namespace+"/"+ownerReference.Name)
+			default:
+				rsInfo := item.(*ReplicaSetInfo).ObjectMeta
+				if len(rsInfo.OwnerReferences) > 0 {
+					return *OwnerFrom(rsInfo.OwnerReferences)
+				}
 			}
 		}
 	}
@@ -185,7 +199,7 @@ func (k *Metadata) getOwner(meta *metav1.ObjectMeta, info *IPInfo) Owner {
 }
 
 func (k *Metadata) getHostName(hostIP string) string {
-	if hostIP != "" {
+	if k.enabledInformers.Has(InformerNode) && hostIP != "" {
 		if info, ok := k.infoForIP(k.nodesIP.GetIndexer(), hostIP); ok {
 			return info.(*NodeInfo).Name
 		}
@@ -194,6 +208,9 @@ func (k *Metadata) getHostName(hostIP string) string {
 }
 
 func (k *Metadata) AddServiceIPEventHandler(s cache.ResourceEventHandler) error {
+	if !k.enabledInformers.Has(InformerService) {
+		return nil
+	}
 	_, err := k.servicesIP.AddEventHandler(s)
 	// passing a snapshot of the currently stored entities
 	go func() {

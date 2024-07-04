@@ -107,7 +107,6 @@ var DefaultConfig = Config{
 		Kubernetes: transform.KubernetesDecorator{
 			Enable:               kube.EnabledDefault,
 			InformersSyncTimeout: 30 * time.Second,
-			Informers:            []string{"pod", "service", "replicaset", "node"},
 		},
 	},
 	Routes:       &transform.RoutesConfig{Unmatch: transform.UnmatchHeuristic},

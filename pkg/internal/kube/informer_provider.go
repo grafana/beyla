@@ -27,20 +27,20 @@ type MetadataProvider struct {
 	kubeConfigPath string
 	syncTimeout    time.Duration
 
-	enable           atomic.Value
-	enabledInformers InformerType
+	enable            atomic.Value
+	disabledInformers informerType
 }
 
 func NewMetadataProvider(
 	enable EnableFlag,
-	enabledInformers []string,
+	disabledInformers []string,
 	kubeConfigPath string,
 	syncTimeout time.Duration,
 ) *MetadataProvider {
 	mp := &MetadataProvider{
-		kubeConfigPath:   kubeConfigPath,
-		syncTimeout:      syncTimeout,
-		enabledInformers: InformerTypes(enabledInformers),
+		kubeConfigPath:    kubeConfigPath,
+		syncTimeout:       syncTimeout,
+		disabledInformers: informerTypes(disabledInformers),
 	}
 	mp.enable.Store(enable)
 	return mp
@@ -91,8 +91,8 @@ func (mp *MetadataProvider) Get(ctx context.Context) (*Metadata, error) {
 	if err != nil {
 		return nil, fmt.Errorf("kubernetes client can't be initialized: %w", err)
 	}
-	mp.metadata = &Metadata{}
-	if err := mp.metadata.InitFromClient(ctx, kubeClient, mp.enabledInformers, mp.syncTimeout); err != nil {
+	mp.metadata = &Metadata{disabledInformers: mp.disabledInformers}
+	if err := mp.metadata.InitFromClient(ctx, kubeClient, mp.syncTimeout); err != nil {
 		return nil, fmt.Errorf("can't initialize kubernetes metadata: %w", err)
 	}
 	return mp.metadata, nil

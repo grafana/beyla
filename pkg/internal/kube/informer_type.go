@@ -2,21 +2,18 @@ package kube
 
 import "strings"
 
-type InformerType int
+type informerType int
 
 const (
-	InformerPod = InformerType(1 << iota)
-	InformerService
+	InformerService = informerType(1 << iota)
 	InformerReplicaSet
 	InformerNode
 )
 
-func InformerTypes(str []string) InformerType {
-	it := InformerType(0)
+func informerTypes(str []string) informerType {
+	it := informerType(0)
 	for _, s := range str {
 		switch strings.ToLower(s) {
-		case "pod", "pods":
-			it |= InformerPod
 		case "service", "services":
 			it |= InformerService
 		case "replicaset", "replicasets":
@@ -28,6 +25,6 @@ func InformerTypes(str []string) InformerType {
 	return it
 }
 
-func (i InformerType) Has(it InformerType) bool {
+func (i informerType) Has(it informerType) bool {
 	return i&it != 0
 }

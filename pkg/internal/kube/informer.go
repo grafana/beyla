@@ -52,7 +52,7 @@ type Metadata struct {
 
 	containerEventHandlers []ContainerEventHandler
 
-	enabledInformers InformerType
+	disabledInformers informerType
 }
 
 // PodInfo contains precollected metadata for Pods.
@@ -130,9 +130,6 @@ var replicaSetIndexers = cache.Indexers{
 
 // GetContainerPod fetches metadata from a Pod given the name of one of its containers
 func (k *Metadata) GetContainerPod(containerID string) (*PodInfo, bool) {
-	if !k.enabledInformers.Has(InformerPod) {
-		return nil, false
-	}
 	objs, err := k.pods.GetIndexer().ByIndex(IndexPodByContainerIDs, containerID)
 	if err != nil {
 		k.log.Debug("error accessing index by container ID. Ignoring", "error", err, "containerID", containerID)
@@ -145,9 +142,6 @@ func (k *Metadata) GetContainerPod(containerID string) (*PodInfo, bool) {
 }
 
 func (k *Metadata) initPodInformer(informerFactory informers.SharedInformerFactory) error {
-	if !k.enabledInformers.Has(InformerPod) {
-		return nil
-	}
 	pods := informerFactory.Core().V1().Pods().Informer()
 
 	k.initContainerListeners(pods)
@@ -253,7 +247,7 @@ func rmContainerIDSchema(containerID string) string {
 
 // GetReplicaSetInfo fetches metadata from a ReplicaSet given its name
 func (k *Metadata) GetReplicaSetInfo(namespace, name string) (*ReplicaSetInfo, bool) {
-	if !k.enabledInformers.Has(InformerReplicaSet) {
+	if k.disabledInformers.Has(InformerReplicaSet) {
 		return nil, false
 	}
 	objs, err := k.replicaSets.GetIndexer().ByIndex(IndexReplicaSetNames, qName(namespace, name))
@@ -269,7 +263,7 @@ func (k *Metadata) GetReplicaSetInfo(namespace, name string) (*ReplicaSetInfo, b
 }
 
 func (k *Metadata) initReplicaSetInformer(informerFactory informers.SharedInformerFactory) error {
-	if !k.enabledInformers.Has(InformerReplicaSet) {
+	if k.disabledInformers.Has(InformerReplicaSet) {
 		return nil
 	}
 	log := klog().With("informer", "ReplicaSet")
@@ -310,10 +304,9 @@ func (k *Metadata) initReplicaSetInformer(informerFactory informers.SharedInform
 	return nil
 }
 
-func (k *Metadata) InitFromClient(ctx context.Context, client kubernetes.Interface, enabledInformers InformerType, timeout time.Duration) error {
+func (k *Metadata) InitFromClient(ctx context.Context, client kubernetes.Interface, timeout time.Duration) error {
 	// Initialization variables
 	k.log = klog()
-	k.enabledInformers = enabledInformers
 	return k.initInformers(ctx, client, timeout)
 }
 
@@ -396,9 +389,6 @@ func (k *Metadata) AddContainerEventHandler(eh ContainerEventHandler) {
 }
 
 func (k *Metadata) AddPodEventHandler(h cache.ResourceEventHandler) error {
-	if !k.enabledInformers.Has(InformerPod) {
-		return nil
-	}
 	_, err := k.pods.AddEventHandler(h)
 	// passing a snapshot of the currently stored entities
 	go func() {
@@ -410,7 +400,7 @@ func (k *Metadata) AddPodEventHandler(h cache.ResourceEventHandler) error {
 }
 
 func (k *Metadata) AddReplicaSetEventHandler(h cache.ResourceEventHandler) error {
-	if !k.enabledInformers.Has(InformerReplicaSet) {
+	if k.disabledInformers.Has(InformerReplicaSet) {
 		return nil
 	}
 	_, err := k.replicaSets.AddEventHandler(h)

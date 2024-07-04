@@ -7,20 +7,17 @@ import (
 )
 
 func TestInformerTypeHas(t *testing.T) {
-	it := InformerTypes([]string{"Pod", "ReplicaSet", "Node"})
-	require.True(t, it.Has(InformerPod))
+	it := informerTypes([]string{"ReplicaSet", "Node"})
 	require.False(t, it.Has(InformerService))
 	require.True(t, it.Has(InformerReplicaSet))
 	require.True(t, it.Has(InformerNode))
 
-	it = InformerTypes([]string{"Service"})
-	require.False(t, it.Has(InformerPod))
+	it = informerTypes([]string{"Service"})
 	require.True(t, it.Has(InformerService))
 	require.False(t, it.Has(InformerReplicaSet))
 	require.False(t, it.Has(InformerNode))
 
-	it = InformerTypes(nil)
-	require.False(t, it.Has(InformerPod))
+	it = informerTypes(nil)
 	require.False(t, it.Has(InformerService))
 	require.False(t, it.Has(InformerReplicaSet))
 	require.False(t, it.Has(InformerNode))

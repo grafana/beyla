@@ -34,9 +34,12 @@ type KubernetesDecorator struct {
 	// IPs are not matched to any kubernetes entity, assuming they are cluster-external
 	DropExternal bool `yaml:"drop_external" env:"BEYLA_NETWORK_DROP_EXTERNAL"`
 
-	// Informers that will be enabled. Default: pod, replicaset, node, service. Disabling any of them
+	// DisableInformers allow selectively disabling some informers. Accepted value is a list
+	// that mitght contain replicaset, node, service. Disabling any of them
 	// will cause metadata to be incomplete but will reduce the load of the Kube API.
-	Informers []string `yaml:"informers" env:"BEYLA_KUBE_INFORMERS"`
+	// Pods informer can't be disabled. For that purpose, you should disable the whole
+	// kubernetes metadata decoration.
+	DisableInformers []string `yaml:"informers" env:"BEYLA_KUBE_INFORMERS"`
 }
 
 const (

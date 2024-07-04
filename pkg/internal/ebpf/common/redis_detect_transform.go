@@ -38,7 +38,7 @@ func isRedisOp(buf []uint8) bool {
 		return isRedisError(buf[1:])
 	case ':', '$', '*':
 		return crlfTerminatedMatch(buf[1:], func(c uint8) bool {
-			return (c >= '0' && c <= '9')
+			return (c >= '0' && c <= '9') || c == '-'
 		})
 	}
 

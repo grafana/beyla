@@ -101,7 +101,7 @@ var MisclassifiedEvents = make(chan MisclassifiedEvent)
 
 func ptlog() *slog.Logger { return slog.With("component", "ebpf.ProcessTracer") }
 
-func ReadHTTPRequestTraceAsSpan(record *ringbuf.Record, filter ServiceFilter) (request.Span, bool, error) {
+func ReadBPFTraceAsSpan(record *ringbuf.Record, filter ServiceFilter) (request.Span, bool, error) {
 	var eventType uint8
 
 	// we read the type first, depending on the type we decide what kind of record we have

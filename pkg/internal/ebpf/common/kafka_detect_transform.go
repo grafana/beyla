@@ -45,6 +45,7 @@ func (k Operation) String() string {
 }
 
 const KafkaMinLength = 14
+const KafkaMaxPayload = 20 * 1024 * 1024 // 20 MB max, 1MB is default for most Kafka installations
 
 var topicRegex = regexp.MustCompile("\x02\t(.*)\x02")
 
@@ -116,6 +117,11 @@ func isValidKafkaHeader(header *Header) bool {
 	if header.MessageSize < int32(KafkaMinLength) || header.APIVersion < 0 {
 		return false
 	}
+
+	if header.MessageSize > KafkaMaxPayload {
+		return false
+	}
+
 	switch Operation(header.APIKey) {
 	case Fetch:
 		if header.APIVersion > 16 { // latest: Fetch Request (Version: 16)
@@ -159,7 +165,11 @@ func processKafkaOperation(header *Header, pkt []byte, k *KafkaInfo, offset *int
 		k.Operation = Produce
 		k.TopicOffset = *offset
 	case Fetch:
-		*offset += getTopicOffsetFromFetchOperation(header)
+		to, err := getTopicOffsetFromFetchOperation(pkt, *offset, header)
+		if err != nil {
+			return err
+		}
+		*offset += to
 		k.Operation = Fetch
 		k.TopicOffset = *offset
 	default:
@@ -218,6 +228,9 @@ func getTopicName(pkt []byte, offset int, op Operation, apiVersion int16) (strin
 		topicName = []byte(extractTopic(string(topicName)))
 	}
 	if isValidKafkaString(topicName, len(topicName), int(topicNameSize), false) {
+		if op == Fetch && apiVersion <= 11 && len(topicName) == 0 {
+			return "", errors.New("topic name must not be empty for api version <= 11")
+		}
 		return string(topicName), nil
 	}
 	return "", errors.New("invalid topic name")
@@ -284,7 +297,7 @@ func getTopicOffsetFromProduceOperation(header *Header, pkt []byte, offset *int)
 	return true, nil
 }
 
-func getTopicOffsetFromFetchOperation(header *Header) int {
+func getTopicOffsetFromFetchOperation(pkt []byte, origOffset int, header *Header) (int, error) {
 	offset := 3 * 4 // 3 * sizeof(int32)
 
 	if header.APIVersion >= 15 {
@@ -294,6 +307,13 @@ func getTopicOffsetFromFetchOperation(header *Header) int {
 	if header.APIVersion >= 3 {
 		offset += 4 // max_bytes
 		if header.APIVersion >= 4 {
+			if origOffset+offset >= len(pkt) {
+				return 0, errors.New("packet too small")
+			}
+			isolation := pkt[origOffset+offset]
+			if isolation > 1 {
+				return 0, errors.New("wrong isolation level")
+			}
 			offset++ // isolation_level
 			if header.APIVersion >= 7 {
 				offset += 2 * 4 // session_id + session_epoch
@@ -301,7 +321,7 @@ func getTopicOffsetFromFetchOperation(header *Header) int {
 		}
 	}
 
-	return offset
+	return offset, nil
 }
 
 func readUnsignedVarint(data []byte) (int, error) {

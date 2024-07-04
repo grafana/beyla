@@ -51,11 +51,13 @@ func TestFor_GlobEntries(t *testing.T) {
 	p, err := NewAttrSelector(GroupKubernetes, Selection{
 		"*": InclusionLists{
 			Include: []string{"beyla_ip"},
-			Exclude: []string{"k8s_*_name"},
+			// won't be excluded from the final snapshot because they are
+			// re-included in the next inclusion list
+			Exclude: []string{"k8s_*_type"},
 		},
 		"beyla_network_flow_bytes_total": InclusionLists{
 			Include: []string{"src.*", "k8s.*"},
-			Exclude: []string{"k8s.*.type"},
+			Exclude: []string{"k8s.*.name"},
 		},
 	})
 	require.NoError(t, err)
@@ -64,8 +66,12 @@ func TestFor_GlobEntries(t *testing.T) {
 			"beyla.ip",
 			"k8s.dst.namespace",
 			"k8s.dst.node.ip",
+			"k8s.dst.owner.type",
+			"k8s.dst.type",
 			"k8s.src.namespace",
 			"k8s.src.node.ip",
+			"k8s.src.owner.type",
+			"k8s.src.type",
 			"src.address",
 			"src.name",
 			"src.port",
@@ -93,6 +99,52 @@ func TestFor_GlobEntries_NoInclusion(t *testing.T) {
 		},
 		Resource: []attr.Name{},
 	}, p.For(BeylaNetworkFlow))
+}
+
+func TestFor_GlobEntries_Order(t *testing.T) {
+	// verify that policies are overridden from more generic to more concrete
+	p, err := NewAttrSelector(0, Selection{
+		"*": InclusionLists{
+			Include: []string{"*"},
+		},
+		"beyla_network_*": InclusionLists{
+			Exclude: []string{"dst.*", "transport", "direction", "iface"},
+		},
+		"beyla_network_flow_bytes_total": InclusionLists{
+			Include: []string{"dst.name"},
+		},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, Sections[[]attr.Name]{
+		Metric: []attr.Name{
+			"beyla.ip",
+			"dst.name",
+			"src.address",
+			"src.name",
+			"src.port",
+		},
+		Resource: []attr.Name{},
+	}, p.For(BeylaNetworkFlow))
+}
+
+func TestFor_GlobEntries_Order_Default(t *testing.T) {
+	// verify that policies are overridden from more generic to more concrete
+	p, err := NewAttrSelector(0, Selection{
+		"*": InclusionLists{}, // assuming default set
+		"http_*": InclusionLists{
+			Exclude: []string{"*"},
+		},
+		"http_server_request_duration": InclusionLists{
+			Include: []string{"url.path"},
+		},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, Sections[[]attr.Name]{
+		Metric: []attr.Name{
+			"url.path",
+		},
+		Resource: []attr.Name{},
+	}, p.For(HTTPServerDuration))
 }
 
 func TestFor_KubeDisabled(t *testing.T) {

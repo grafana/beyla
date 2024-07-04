@@ -73,18 +73,17 @@ func (p *AttrSelector) For(metricName Name) Sections[[]attr.Name] {
 		Metric:   map[attr.Name]struct{}{},
 		Resource: map[attr.Name]struct{}{},
 	}
-	for _, il := range allInclusionLists {
+	for i, il := range allInclusionLists {
 		p.addIncludedAttributes(&matchingAttrs, attributeNames, il)
-	}
-	// if the "include" lists are empty, we use the default attributes
-	// as included
-	if len(matchingAttrs.Metric) == 0 && len(matchingAttrs.Resource) == 0 {
-		matchingAttrs = attributeNames.Default()
-	}
-	// now remove any attribute specified in the "exclude" lists
-	for _, il := range allInclusionLists {
+		// if the "include" lists are empty in the first iteration, we use the default attributes
+		// as included
+		if i == 0 && len(matchingAttrs.Metric) == 0 && len(matchingAttrs.Resource) == 0 {
+			matchingAttrs = attributeNames.Default()
+		}
+		// now remove any attribute specified in the "exclude" lists
 		p.rmExcludedAttributes(&matchingAttrs, il)
 	}
+
 	sas := Sections[[]attr.Name]{
 		Metric:   helpers.SetToSlice(matchingAttrs.Metric),
 		Resource: helpers.SetToSlice(matchingAttrs.Resource),
@@ -94,7 +93,14 @@ func (p *AttrSelector) For(metricName Name) Sections[[]attr.Name] {
 	return sas
 }
 
-func (p *AttrSelector) addIncludedAttributes(matchingAttrs *Sections[map[attr.Name]struct{}], attributeNames AttrReportGroup, inclusionLists InclusionLists) {
+// returns if the inclusion list have contents or not
+// this will be useful to decide whether to use the default
+// attribute set or not
+func (p *AttrSelector) addIncludedAttributes(
+	matchingAttrs *Sections[map[attr.Name]struct{}],
+	attributeNames AttrReportGroup,
+	inclusionLists InclusionLists,
+) {
 	allAttributes := attributeNames.All()
 	for attrName := range allAttributes.Metric {
 		if inclusionLists.includes(attrName) {

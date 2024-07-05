@@ -85,7 +85,7 @@ static __always_inline void cleanup_ssl_trace_info(http_info_t *info, void *ssl)
             trace_key_t t_key = {0};
             t_key.extra_id = info->extra_id;
             t_key.p_key.ns = info->pid.ns;
-            t_key.p_key.pid = info->pid.user_pid;
+            t_key.p_key.pid = info->task_tid;
 
             delete_server_trace(&t_key);
         }

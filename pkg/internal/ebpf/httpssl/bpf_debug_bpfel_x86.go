@@ -101,6 +101,8 @@ type bpf_debugHttpInfoT struct {
 		_        [7]byte
 	}
 	ExtraId uint64
+	TaskTid uint32
+	_       [4]byte
 }
 
 type bpf_debugPidConnectionInfoT struct {

@@ -153,7 +153,7 @@ static __always_inline unsigned char *extract_flags(unsigned char *tp_start) {
 static __always_inline void delete_server_trace(trace_key_t *t_key) {
     int __attribute__((unused)) res = bpf_map_delete_elem(&server_traces, t_key);
     // Fails on 5.10 with unknown function
-    // bpf_dbg_printk("Deleting server span for id=%llx, pid=%d, ns=%d, res = %d", bpf_get_current_pid_tgid(), t_key->p_key.pid, t_key->p_key.ns, res);
+    bpf_dbg_printk("Deleting server span for id=%llx, pid=%d, ns=%d, res = %d", bpf_get_current_pid_tgid(), t_key->p_key.pid, t_key->p_key.ns, res);
 }
 
 static __always_inline void server_or_client_trace(http_connection_metadata_t *meta, connection_info_t *conn, tp_info_pid_t *tp_p) {

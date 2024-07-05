@@ -100,6 +100,7 @@ type bpfHttpInfoT struct {
 		Flags    uint8
 		_        [7]byte
 	}
+	ExtraId uint64
 }
 
 type bpfPidConnectionInfoT struct {
@@ -121,7 +122,6 @@ type bpfSslArgsT struct {
 type bpfSslPidConnectionInfoT struct {
 	P_conn    bpfPidConnectionInfoT
 	OrigDport uint16
-	C_tid     bpfPidKeyT
 	_         [2]byte
 }
 
@@ -166,6 +166,11 @@ type bpfTpInfoPidT struct {
 	Pid   uint32
 	Valid uint8
 	_     [3]byte
+}
+
+type bpfTraceKeyT struct {
+	P_key   bpfPidKeyT
+	ExtraId uint64
 }
 
 // loadBpf returns the embedded CollectionSpec for bpf.
@@ -229,6 +234,7 @@ type bpfProgramSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpfMapSpecs struct {
+	ActiveNodejsIds         *ebpf.MapSpec `ebpf:"active_nodejs_ids"`
 	ActiveSslConnections    *ebpf.MapSpec `ebpf:"active_ssl_connections"`
 	ActiveSslHandshakes     *ebpf.MapSpec `ebpf:"active_ssl_handshakes"`
 	ActiveSslReadArgs       *ebpf.MapSpec `ebpf:"active_ssl_read_args"`
@@ -240,6 +246,7 @@ type bpfMapSpecs struct {
 	HttpInfoMem             *ebpf.MapSpec `ebpf:"http_info_mem"`
 	IovecMem                *ebpf.MapSpec `ebpf:"iovec_mem"`
 	JumpTable               *ebpf.MapSpec `ebpf:"jump_table"`
+	NodejsParentMap         *ebpf.MapSpec `ebpf:"nodejs_parent_map"`
 	OngoingHttp             *ebpf.MapSpec `ebpf:"ongoing_http"`
 	OngoingHttp2Connections *ebpf.MapSpec `ebpf:"ongoing_http2_connections"`
 	OngoingHttp2Grpc        *ebpf.MapSpec `ebpf:"ongoing_http2_grpc"`
@@ -277,6 +284,7 @@ func (o *bpfObjects) Close() error {
 //
 // It can be passed to loadBpfObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpfMaps struct {
+	ActiveNodejsIds         *ebpf.Map `ebpf:"active_nodejs_ids"`
 	ActiveSslConnections    *ebpf.Map `ebpf:"active_ssl_connections"`
 	ActiveSslHandshakes     *ebpf.Map `ebpf:"active_ssl_handshakes"`
 	ActiveSslReadArgs       *ebpf.Map `ebpf:"active_ssl_read_args"`
@@ -288,6 +296,7 @@ type bpfMaps struct {
 	HttpInfoMem             *ebpf.Map `ebpf:"http_info_mem"`
 	IovecMem                *ebpf.Map `ebpf:"iovec_mem"`
 	JumpTable               *ebpf.Map `ebpf:"jump_table"`
+	NodejsParentMap         *ebpf.Map `ebpf:"nodejs_parent_map"`
 	OngoingHttp             *ebpf.Map `ebpf:"ongoing_http"`
 	OngoingHttp2Connections *ebpf.Map `ebpf:"ongoing_http2_connections"`
 	OngoingHttp2Grpc        *ebpf.Map `ebpf:"ongoing_http2_grpc"`
@@ -308,6 +317,7 @@ type bpfMaps struct {
 
 func (m *bpfMaps) Close() error {
 	return _BpfClose(
+		m.ActiveNodejsIds,
 		m.ActiveSslConnections,
 		m.ActiveSslHandshakes,
 		m.ActiveSslReadArgs,
@@ -319,6 +329,7 @@ func (m *bpfMaps) Close() error {
 		m.HttpInfoMem,
 		m.IovecMem,
 		m.JumpTable,
+		m.NodejsParentMap,
 		m.OngoingHttp,
 		m.OngoingHttp2Connections,
 		m.OngoingHttp2Grpc,

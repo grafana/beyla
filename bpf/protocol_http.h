@@ -7,6 +7,7 @@
 #include "http_types.h"
 #include "ringbuf.h"
 #include "pid.h"
+#include "runtime.h"
 #include "protocol_common.h"
 
 // http_info_t became too big to be declared as a variable in the stack.
@@ -166,6 +167,7 @@ static __always_inline void process_http_request(http_info_t *info, int len, htt
     info->start_monotime_ns = bpf_ktime_get_ns();
     info->status = 0;
     info->len = len;
+    info->extra_id = extra_runtime_id();
 }
 
 static __always_inline void process_http_response(http_info_t *info, unsigned char *buf, int len) {
@@ -195,7 +197,11 @@ static __always_inline void handle_http_response(unsigned char *small_buf, pid_c
     }
     
     if (info->type == EVENT_HTTP_REQUEST) {
-        delete_server_trace();
+        trace_key_t t_key = {0};
+        t_key.extra_id = info->extra_id;
+        t_key.p_key.ns = info->pid.ns;
+        t_key.p_key.pid = info->pid.user_pid;
+        delete_server_trace(&t_key);
     } else {
         //bpf_dbg_printk("Deleting client trace map for connection");
         //dbg_print_http_connection_info(&pid_conn->conn);

@@ -74,6 +74,7 @@ type bpfHttpInfoT struct {
 		Flags    uint8
 		_        [7]byte
 	}
+	ExtraId uint64
 }
 
 type bpfHttpRequestTrace struct {

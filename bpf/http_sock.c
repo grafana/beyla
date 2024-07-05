@@ -121,7 +121,6 @@ int BPF_KPROBE(kprobe_tcp_rcv_established, struct sock *sk, struct sk_buff *skb)
         // If the source port for a client call is lower, we'll get this wrong.
         // TODO: Need to fix this. 
         pid_info.orig_dport = pid_info.p_conn.conn.s_port,
-        task_tid(&pid_info.c_tid);
         bpf_map_update_elem(&pid_tid_to_conn, &id, &pid_info, BPF_ANY); // to support SSL on missing handshake, respect the original info if there
     }
 
@@ -167,7 +166,6 @@ int BPF_KRETPROBE(kretprobe_sys_accept4, uint fd)
         sort_connection_info(&info.p_conn.conn);
         info.p_conn.pid = pid_from_pid_tgid(id);
         info.orig_dport = orig_dport;
-        task_tid(&info.c_tid);
         
         bpf_map_update_elem(&pid_tid_to_conn, &id, &info, BPF_ANY); // to support SSL on missing handshake
     }
@@ -234,7 +232,6 @@ int BPF_KRETPROBE(kretprobe_sys_connect, int fd)
         sort_connection_info(&info.p_conn.conn);
         info.p_conn.pid = pid_from_pid_tgid(id);
         info.orig_dport = orig_dport;
-        task_tid(&info.c_tid);
 
         bpf_map_update_elem(&pid_tid_to_conn, &id, &info, BPF_ANY); // to support SSL 
     }
@@ -336,7 +333,6 @@ int BPF_KPROBE(kprobe_tcp_sendmsg, struct sock *sk, struct msghdr *msg, size_t s
             .orig_dport = orig_dport,
         };
         bpf_memcpy(&ssl_conn.p_conn, &s_args.p_conn, sizeof(pid_connection_info_t));
-        task_tid(&ssl_conn.c_tid);
         bpf_map_update_elem(&ssl_to_conn, &ssl, &ssl_conn, BPF_ANY);
     }
 
@@ -628,8 +624,8 @@ int BPF_KPROBE(kprobe_sys_exit, int status) {
         return 0;
     }
 
-    pid_key_t task = {0};
-    task_tid(&task);
+    trace_key_t task = {0};
+    task_tid(&task.p_key);
 
     bpf_dbg_printk("sys_exit %d, pid=%d, valid_pid(id)=%d", id, pid_from_pid_tgid(id), valid_pid(id));
  
@@ -641,7 +637,9 @@ int BPF_KPROBE(kprobe_sys_exit, int status) {
         bpf_map_delete_elem(&active_ssl_connections, &s_args->p_conn);
     }
 
-    bpf_map_delete_elem(&clone_map, &task);
+    bpf_map_delete_elem(&clone_map, &task.p_key);
+    // This won't delete trace ids for traces with extra_id, like NodeJS. But, 
+    // we expect that it doesn't matter, since NodeJS main thread won't exit. 
     bpf_map_delete_elem(&server_traces, &task);
     
     return 0;

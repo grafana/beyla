@@ -130,10 +130,9 @@ func (p *Tracer) SocketFilters() []*ebpf.Program {
 	return nil
 }
 
-func (p *Tracer) RecordInstrumentedLib(id uint64) {
-}
+func (p *Tracer) RecordInstrumentedLib(_ uint64) {}
 
-func (p *Tracer) AlreadyInstrumentedLib(id uint64) bool {
+func (p *Tracer) AlreadyInstrumentedLib(_ uint64) bool {
 	return false
 }
 

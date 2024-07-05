@@ -39,7 +39,7 @@ type KubernetesDecorator struct {
 	// will cause metadata to be incomplete but will reduce the load of the Kube API.
 	// Pods informer can't be disabled. For that purpose, you should disable the whole
 	// kubernetes metadata decoration.
-	DisableInformers []string `yaml:"informers" env:"BEYLA_KUBE_INFORMERS"`
+	DisableInformers []string `yaml:"disable_informers" env:"BEYLA_KUBE_DISABLE_INFORMERS"`
 }
 
 const (

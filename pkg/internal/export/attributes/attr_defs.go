@@ -42,7 +42,7 @@ func getDefinitions(groups AttrGroups) map[Section]AttrReportGroup {
 	// attributes to be reported exclusively for prometheus exporters
 	var prometheusAttributes = AttrReportGroup{
 		Disabled: !promEnabled,
-		MetricAttributes: map[attr.Name]Default{
+		Attributes: map[attr.Name]Default{
 			attr.TargetInstance:   true,
 			attr.ServiceNamespace: true,
 		},
@@ -52,7 +52,7 @@ func getDefinitions(groups AttrGroups) map[Section]AttrReportGroup {
 	// but Grafana Cloud takes it from the metric
 	var appAttributes = AttrReportGroup{
 		SubGroups: []*AttrReportGroup{&prometheusAttributes},
-		MetricAttributes: map[attr.Name]Default{
+		Attributes: map[attr.Name]Default{
 			attr.ServiceName:      true,
 			attr.ServiceNamespace: true,
 		},
@@ -62,7 +62,7 @@ func getDefinitions(groups AttrGroups) map[Section]AttrReportGroup {
 	// kubernetes metadata is enabled
 	var networkKubeAttributes = AttrReportGroup{
 		Disabled: !kubeEnabled,
-		MetricAttributes: map[attr.Name]Default{
+		Attributes: map[attr.Name]Default{
 			attr.K8sSrcOwnerName: true,
 			attr.K8sSrcNamespace: true,
 			attr.K8sDstOwnerName: true,
@@ -85,7 +85,7 @@ func getDefinitions(groups AttrGroups) map[Section]AttrReportGroup {
 	// is defined
 	var networkCIDR = AttrReportGroup{
 		Disabled: !cidrEnabled,
-		MetricAttributes: map[attr.Name]Default{
+		Attributes: map[attr.Name]Default{
 			attr.DstCIDR: true,
 			attr.SrcCIDR: true,
 		},
@@ -95,7 +95,7 @@ func getDefinitions(groups AttrGroups) map[Section]AttrReportGroup {
 	// kubernetes metadata is enabled
 	var appKubeAttributes = AttrReportGroup{
 		Disabled: !kubeEnabled,
-		ResourceAttributes: map[attr.Name]Default{
+		Attributes: map[attr.Name]Default{
 			attr.K8sNamespaceName:   true,
 			attr.K8sPodName:         true,
 			attr.K8sDeploymentName:  true,
@@ -111,24 +111,24 @@ func getDefinitions(groups AttrGroups) map[Section]AttrReportGroup {
 
 	var httpRoutes = AttrReportGroup{
 		Disabled: !groups.Has(GroupHTTPRoutes),
-		MetricAttributes: map[attr.Name]Default{
+		Attributes: map[attr.Name]Default{
 			attr.HTTPRoute: true,
 		},
 	}
 
 	var serverInfo = AttrReportGroup{
-		MetricAttributes: map[attr.Name]Default{
+		Attributes: map[attr.Name]Default{
 			attr.ClientAddr: Default(peerInfoEnabled),
 		},
 	}
 	var httpClientInfo = AttrReportGroup{
-		MetricAttributes: map[attr.Name]Default{
+		Attributes: map[attr.Name]Default{
 			attr.ServerAddr: true,
 			attr.ServerPort: true,
 		},
 	}
 	var grpcClientInfo = AttrReportGroup{
-		MetricAttributes: map[attr.Name]Default{
+		Attributes: map[attr.Name]Default{
 			attr.ServerAddr: true,
 		},
 	}
@@ -138,14 +138,14 @@ func getDefinitions(groups AttrGroups) map[Section]AttrReportGroup {
 	// via the deprecated BEYLA_METRICS_REPORT_TARGET config option
 	var deprecatedHTTPPath = AttrReportGroup{
 		Disabled: !groups.Has(GroupTarget),
-		MetricAttributes: map[attr.Name]Default{
+		Attributes: map[attr.Name]Default{
 			attr.HTTPUrlPath: true,
 		},
 	}
 
 	var httpCommon = AttrReportGroup{
 		SubGroups: []*AttrReportGroup{&httpRoutes, &deprecatedHTTPPath},
-		MetricAttributes: map[attr.Name]Default{
+		Attributes: map[attr.Name]Default{
 			attr.HTTPRequestMethod:      true,
 			attr.HTTPResponseStatusCode: true,
 			attr.HTTPUrlPath:            false,
@@ -154,7 +154,7 @@ func getDefinitions(groups AttrGroups) map[Section]AttrReportGroup {
 
 	// TODO: populate it with host resource attributes in https://opentelemetry.io/docs/specs/semconv/resource/host/
 	var hostAttributes = AttrReportGroup{
-		ResourceAttributes: map[attr.Name]Default{
+		Attributes: map[attr.Name]Default{
 			attr.HostName: true,
 		},
 	}
@@ -164,7 +164,7 @@ func getDefinitions(groups AttrGroups) map[Section]AttrReportGroup {
 		// TODO: attributes below are resource-level, but in App O11y we don't treat processes as resources,
 		// but applications. Let's first consider how to match processes and Applications before marking this spec
 		// as stable
-		MetricAttributes: map[attr.Name]Default{
+		Attributes: map[attr.Name]Default{
 			attr.ProcCommand:     true,
 			attr.ProcCPUState:    true,
 			attr.ProcOwner:       true,
@@ -181,7 +181,7 @@ func getDefinitions(groups AttrGroups) map[Section]AttrReportGroup {
 
 	var messagingAttributes = AttrReportGroup{
 		SubGroups: []*AttrReportGroup{&appAttributes, &appKubeAttributes},
-		MetricAttributes: map[attr.Name]Default{
+		Attributes: map[attr.Name]Default{
 			attr.MessagingSystem:      true,
 			attr.MessagingDestination: true,
 		},
@@ -190,7 +190,7 @@ func getDefinitions(groups AttrGroups) map[Section]AttrReportGroup {
 	return map[Section]AttrReportGroup{
 		BeylaNetworkFlow.Section: {
 			SubGroups: []*AttrReportGroup{&networkCIDR, &networkKubeAttributes},
-			MetricAttributes: map[attr.Name]Default{
+			Attributes: map[attr.Name]Default{
 				attr.BeylaIP:    false,
 				attr.Transport:  false,
 				attr.SrcAddress: false,
@@ -217,7 +217,7 @@ func getDefinitions(groups AttrGroups) map[Section]AttrReportGroup {
 		},
 		RPCClientDuration.Section: {
 			SubGroups: []*AttrReportGroup{&appAttributes, &appKubeAttributes, &grpcClientInfo},
-			MetricAttributes: map[attr.Name]Default{
+			Attributes: map[attr.Name]Default{
 				attr.RPCMethod:         true,
 				attr.RPCSystem:         true,
 				attr.RPCGRPCStatusCode: true,
@@ -225,7 +225,7 @@ func getDefinitions(groups AttrGroups) map[Section]AttrReportGroup {
 		},
 		RPCServerDuration.Section: {
 			SubGroups: []*AttrReportGroup{&appAttributes, &appKubeAttributes, &serverInfo},
-			MetricAttributes: map[attr.Name]Default{
+			Attributes: map[attr.Name]Default{
 				attr.RPCMethod:         true,
 				attr.RPCSystem:         true,
 				attr.RPCGRPCStatusCode: true,
@@ -236,7 +236,7 @@ func getDefinitions(groups AttrGroups) map[Section]AttrReportGroup {
 		},
 		DBClientDuration.Section: {
 			SubGroups: []*AttrReportGroup{&appAttributes, &appKubeAttributes},
-			MetricAttributes: map[attr.Name]Default{
+			Attributes: map[attr.Name]Default{
 				attr.DBOperation: true,
 				attr.DBSystem:    true,
 				attr.ErrorType:   true,
@@ -249,7 +249,7 @@ func getDefinitions(groups AttrGroups) map[Section]AttrReportGroup {
 			SubGroups: []*AttrReportGroup{&messagingAttributes},
 		},
 		Traces.Section: {
-			MetricAttributes: map[attr.Name]Default{
+			Attributes: map[attr.Name]Default{
 				attr.DBQueryText: false,
 			},
 		},
@@ -268,9 +268,7 @@ func AllAttributeNames() map[attr.Name]struct{} {
 	names := map[attr.Name]struct{}{}
 	// -1 to enable all the metric group flags
 	for _, section := range getDefinitions(-1) {
-		allNames := section.All()
-		maps.Copy(names, allNames.Metric)
-		maps.Copy(names, allNames.Resource)
+		maps.Copy(names, section.All())
 	}
 	return names
 }

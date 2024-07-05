@@ -75,8 +75,6 @@ func SpanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValu
 			return semconv.MessagingDestinationName("")
 		}
 	}
-	// default: unlike the Prometheus getters, we don't check here for service name nor k8s metadata
-	// because they are already attributes of the Resource instead of the attributes.
 	return getter, getter != nil
 }
 
@@ -146,14 +144,10 @@ func SpanPromGetters(attrName attr.Name) (attributes.Getter[*Span, string], bool
 			}
 			return ""
 		}
-	// resource metadata values below. Unlike OTEL, they are included here because they
-	// belong to the metric, instead of the Resource
 	case attr.ServiceName:
 		getter = func(s *Span) string { return s.ServiceID.Name }
 	case attr.ServiceNamespace:
 		getter = func(s *Span) string { return s.ServiceID.Namespace }
-	default:
-		getter = func(s *Span) string { return s.ServiceID.Metadata[attrName] }
 	}
 	return getter, getter != nil
 }

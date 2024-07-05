@@ -18,6 +18,7 @@ import (
 	instrument "go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/sdk/instrumentation"
 	"go.opentelemetry.io/otel/sdk/metric"
+	"go.opentelemetry.io/otel/sdk/resource"
 	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 
 	"github.com/grafana/beyla/pkg/internal/export/attributes"
@@ -517,8 +518,7 @@ func (mr *MetricsReporter) setupGraphMeters(m *Metrics, meter instrument.Meter) 
 func (mr *MetricsReporter) newMetricSet(service *svc.ID) (*Metrics, error) {
 	mlog := mlog().With("service", service)
 	mlog.Debug("creating new Metrics reporter")
-	resources := getResourceAttrs(service)
-
+	resources := resource.NewWithAttributes(semconv.SchemaURL, getResourceAttrs(service)...)
 	opts := []metric.Option{
 		metric.WithResource(resources),
 		metric.WithReader(metric.NewPeriodicReader(mr.exporter,

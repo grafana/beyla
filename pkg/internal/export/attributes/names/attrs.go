@@ -126,13 +126,16 @@ const (
 	// https://prometheus.io/docs/guides/multi-target-exporter/
 	TargetInstance = Name("target.instance")
 
-	// ServiceName and ServiceNamespace are going to be used only on Prometheus
-	// as metric attributes. The OTEL exporter already uses them as Resource
-	// attributes, which can't be enabled/disabled by the users
+	// ServiceName and ServiceNamespace might be used both as Resource and Metric attributes.
 	ServiceName      = Name(semconv.ServiceNameKey)
 	ServiceNamespace = Name(semconv.ServiceNamespaceKey)
 
-	HostName = Name(semconv.HostNameKey)
+	HostName             = Name(semconv.HostNameKey)
+	ServiceInstanceID    = Name(semconv.ServiceInstanceIDKey)
+	TelemetrySDKLanguage = Name(semconv.TelemetrySDKLanguageKey)
+	TelemetrySDKName     = Name(semconv.TelemetrySDKNameKey)
+
+	Job = Name("job")
 )
 
 // traces related attributes

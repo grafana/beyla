@@ -17,7 +17,6 @@ import (
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
-	"go.opentelemetry.io/otel/sdk/resource"
 	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 	"google.golang.org/grpc/credentials"
 
@@ -60,7 +59,8 @@ var DefaultBuckets = Buckets{
 	RequestSizeHistogram: []float64{0, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192},
 }
 
-func getResourceAttrs(service *svc.ID) *resource.Resource {
+// getResourceAttrs must include the same attributes as appTargetInfoLabelNames from ../prom/prom.go
+func getResourceAttrs(service *svc.ID) []attribute.KeyValue {
 	attrs := []attribute.KeyValue{
 		semconv.ServiceName(service.Name),
 		semconv.ServiceInstanceID(service.Instance),
@@ -71,6 +71,7 @@ func getResourceAttrs(service *svc.ID) *resource.Resource {
 		semconv.TelemetrySDKLanguageKey.String(service.SDKLanguage.String()),
 		// We set the SDK name as Beyla, so we can distinguish beyla generated metrics from other SDKs
 		semconv.TelemetrySDKNameKey.String("beyla"),
+		semconv.HostName(service.HostName),
 	}
 
 	if service.Namespace != "" {
@@ -80,8 +81,7 @@ func getResourceAttrs(service *svc.ID) *resource.Resource {
 	for k, v := range service.Metadata {
 		attrs = append(attrs, k.OTEL().String(v))
 	}
-
-	return resource.NewWithAttributes(semconv.SchemaURL, attrs...)
+	return attrs
 }
 
 // ReporterPool keeps an LRU cache of different OTEL reporters given a service name.

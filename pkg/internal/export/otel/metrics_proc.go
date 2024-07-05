@@ -10,6 +10,8 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	metric2 "go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/sdk/metric"
+	"go.opentelemetry.io/otel/sdk/resource"
+	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 
 	"github.com/grafana/beyla/pkg/internal/export/attributes"
 	attr2 "github.com/grafana/beyla/pkg/internal/export/attributes/names"
@@ -189,7 +191,7 @@ func newProcMetricsExporter(
 func (me *procMetricsExporter) newMetricSet(service *svc.ID) (*procMetrics, error) {
 	log := me.log.With("service", service)
 	log.Debug("creating new Metrics exporter")
-	resources := getResourceAttrs(service)
+	resources := resource.NewWithAttributes(semconv.SchemaURL, getResourceAttrs(service)...)
 	opts := []metric.Option{
 		metric.WithResource(resources),
 		metric.WithReader(metric.NewPeriodicReader(me.exporter,

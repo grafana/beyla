@@ -115,10 +115,12 @@ func (p *Tracer) UProbes() map[string]map[string]ebpfcommon.FunctionPrograms {
 			"_ZN4node9AsyncWrap10AsyncResetEN2v85LocalINS1_6ObjectEEEdb": {
 				Required: false,
 				Start:    p.bpfObjects.AsyncReset,
+				End:      p.bpfObjects.AsyncResetRet,
 			},
 			"_ZN4node9AsyncWrap10AsyncResetERKN2v820FunctionCallbackInfoINS1_5ValueEEE": {
 				Required: false,
 				Start:    p.bpfObjects.AsyncReset,
+				End:      p.bpfObjects.AsyncResetRet,
 			},
 		},
 	}

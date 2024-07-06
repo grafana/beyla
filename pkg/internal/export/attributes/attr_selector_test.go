@@ -31,18 +31,15 @@ func TestFor(t *testing.T) {
 		},
 	})
 	require.NoError(t, err)
-	assert.Equal(t, Sections[[]attr.Name]{
-		Metric: []attr.Name{
-			"beyla.ip",
-			"k8s.dst.namespace",
-			"k8s.dst.node.ip",
-			"k8s.src.namespace",
-			"k8s.src.node.ip",
-			"src.address",
-			"src.name",
-			"src.port",
-		},
-		Resource: []attr.Name{},
+	assert.Equal(t, []attr.Name{
+		"beyla.ip",
+		"k8s.dst.namespace",
+		"k8s.dst.node.ip",
+		"k8s.src.namespace",
+		"k8s.src.node.ip",
+		"src.address",
+		"src.name",
+		"src.port",
 	}, p.For(BeylaNetworkFlow))
 }
 
@@ -61,22 +58,19 @@ func TestFor_GlobEntries(t *testing.T) {
 		},
 	})
 	require.NoError(t, err)
-	assert.Equal(t, Sections[[]attr.Name]{
-		Metric: []attr.Name{
-			"beyla.ip",
-			"k8s.dst.namespace",
-			"k8s.dst.node.ip",
-			"k8s.dst.owner.type",
-			"k8s.dst.type",
-			"k8s.src.namespace",
-			"k8s.src.node.ip",
-			"k8s.src.owner.type",
-			"k8s.src.type",
-			"src.address",
-			"src.name",
-			"src.port",
-		},
-		Resource: []attr.Name{},
+	assert.Equal(t, []attr.Name{
+		"beyla.ip",
+		"k8s.dst.namespace",
+		"k8s.dst.node.ip",
+		"k8s.dst.owner.type",
+		"k8s.dst.type",
+		"k8s.src.namespace",
+		"k8s.src.node.ip",
+		"k8s.src.owner.type",
+		"k8s.src.type",
+		"src.address",
+		"src.name",
+		"src.port",
 	}, p.For(BeylaNetworkFlow))
 }
 
@@ -91,13 +85,10 @@ func TestFor_GlobEntries_NoInclusion(t *testing.T) {
 		},
 	})
 	require.NoError(t, err)
-	assert.Equal(t, Sections[[]attr.Name]{
-		Metric: []attr.Name{
-			"k8s.cluster.name",
-			"k8s.src.owner.name",
-			"src.cidr",
-		},
-		Resource: []attr.Name{},
+	assert.Equal(t, []attr.Name{
+		"k8s.cluster.name",
+		"k8s.src.owner.name",
+		"src.cidr",
 	}, p.For(BeylaNetworkFlow))
 }
 
@@ -115,15 +106,12 @@ func TestFor_GlobEntries_Order(t *testing.T) {
 		},
 	})
 	require.NoError(t, err)
-	assert.Equal(t, Sections[[]attr.Name]{
-		Metric: []attr.Name{
-			"beyla.ip",
-			"dst.name",
-			"src.address",
-			"src.name",
-			"src.port",
-		},
-		Resource: []attr.Name{},
+	assert.Equal(t, []attr.Name{
+		"beyla.ip",
+		"dst.name",
+		"src.address",
+		"src.name",
+		"src.port",
 	}, p.For(BeylaNetworkFlow))
 }
 
@@ -139,11 +127,8 @@ func TestFor_GlobEntries_Order_Default(t *testing.T) {
 		},
 	})
 	require.NoError(t, err)
-	assert.Equal(t, Sections[[]attr.Name]{
-		Metric: []attr.Name{
-			"url.path",
-		},
-		Resource: []attr.Name{},
+	assert.Equal(t, []attr.Name{
+		"url.path",
 	}, p.For(HTTPServerDuration))
 }
 
@@ -155,13 +140,10 @@ func TestFor_KubeDisabled(t *testing.T) {
 		},
 	})
 	require.NoError(t, err)
-	assert.Equal(t, Sections[[]attr.Name]{
-		Metric: []attr.Name{
-			"beyla.ip",
-			"src.address",
-			"src.name",
-		},
-		Resource: []attr.Name{},
+	assert.Equal(t, []attr.Name{
+		"beyla.ip",
+		"src.address",
+		"src.name",
 	}, p.For(BeylaNetworkFlow))
 }
 
@@ -176,15 +158,12 @@ func TestNilDoesNotCrash(t *testing.T) {
 func TestDefault(t *testing.T) {
 	p, err := NewAttrSelector(GroupKubernetes, nil)
 	require.NoError(t, err)
-	assert.Equal(t, Sections[[]attr.Name]{
-		Metric: []attr.Name{
-			"k8s.cluster.name",
-			"k8s.dst.namespace",
-			"k8s.dst.owner.name",
-			"k8s.src.namespace",
-			"k8s.src.owner.name",
-		},
-		Resource: []attr.Name{},
+	assert.Equal(t, []attr.Name{
+		"k8s.cluster.name",
+		"k8s.dst.namespace",
+		"k8s.dst.owner.name",
+		"k8s.src.namespace",
+		"k8s.src.owner.name",
 	}, p.For(BeylaNetworkFlow))
 }
 
@@ -195,10 +174,7 @@ func TestTraces(t *testing.T) {
 		},
 	})
 	require.NoError(t, err)
-	assert.Equal(t, Sections[[]attr.Name]{
-		Metric: []attr.Name{
-			"db.query.text",
-		},
-		Resource: []attr.Name{},
+	assert.Equal(t, []attr.Name{
+		"db.query.text",
 	}, p.For(Traces))
 }

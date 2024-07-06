@@ -291,8 +291,7 @@ func attributesWithExplicit(
 	// we need to be aware of the user willing to add it to explicitly choose between
 	// observeAggregatedCPU and observeDisaggregatedCPU
 	// Similar for "process_disk_io" or "process_network_io"
-	containsExplicit = slices.Contains(attrNames.Metric, explicitAttribute) ||
-		slices.Contains(attrNames.Resource, explicitAttribute)
+	containsExplicit = slices.Contains(attrNames, explicitAttribute)
 	getters = attributes.PrometheusGetters(process.PromGetters, attrNames)
 
 	if containsExplicit {

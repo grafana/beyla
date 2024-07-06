@@ -533,6 +533,7 @@ func TestSpanAttributeFilterNode(t *testing.T) {
 	// Application pipeline that will let only pass spans whose url.path matches /user/*
 	gb := newGraphBuilder(ctx, &beyla.Config{
 		Metrics: otel.MetricsConfig{
+			SDKLogLevel:     "debug",
 			Features:        []string{otel.FeatureApplication},
 			MetricsEndpoint: tc.ServerEndpoint, Interval: 10 * time.Millisecond,
 			ReportersCacheLen: 16,
@@ -561,61 +562,35 @@ func TestSpanAttributeFilterNode(t *testing.T) {
 	go pipe.Run(ctx)
 
 	// expect to receive only the records matching the Filters criteria
-	events := map[string]attributes.Sections[map[string]string]{}
+	events := map[string]map[string]string{}
 	var event collector.MetricRecord
-	test.Eventually(t, testTimeout, func(it require.TestingT) {
+	test.Eventually(t, testTimeout, func(tt require.TestingT) {
 		event = testutil.ReadChannel(t, tc.Records(), testTimeout)
-		require.Equal(it, "http.server.request.duration", event.Name)
-		require.Equal(it, "/user/1234", event.Attributes["url.path"])
+		require.Equal(tt, "http.server.request.duration", event.Name)
 	})
-	events[event.Attributes["url.path"]] = attributes.Sections[map[string]string]{
-		Metric:   event.Attributes,
-		Resource: event.ResourceAttributes,
-	}
-	test.Eventually(t, testTimeout, func(it require.TestingT) {
+	events[event.Attributes["url.path"]] = event.Attributes
+	test.Eventually(t, testTimeout, func(tt require.TestingT) {
 		event = testutil.ReadChannel(t, tc.Records(), testTimeout)
-		require.Equal(it, "http.server.request.duration", event.Name)
-		require.Equal(it, "/user/4321", event.Attributes["url.path"])
+		require.Equal(tt, "http.server.request.duration", event.Name)
 	})
-	events[event.Attributes["url.path"]] = attributes.Sections[map[string]string]{
-		Metric:   event.Attributes,
-		Resource: event.ResourceAttributes,
-	}
+	events[event.Attributes["url.path"]] = event.Attributes
 
-	assert.Equal(t, map[string]attributes.Sections[map[string]string]{
+	assert.Equal(t, map[string]map[string]string{
 		"/user/1234": {
-			Metric: map[string]string{
-				string(attr.ClientAddr):             "1.1.1.1",
-				string(attr.HTTPRequestMethod):      "GET",
-				string(attr.HTTPResponseStatusCode): "201",
-				string(attr.HTTPUrlPath):            "/user/1234",
-				string(semconv.ServiceNameKey):      "svc-1",
-				string(semconv.ServiceNamespaceKey): "ns",
-			},
-			Resource: map[string]string{
-				string(semconv.ServiceNameKey):          "svc-1",
-				string(semconv.ServiceNamespaceKey):     "ns",
-				string(semconv.TelemetrySDKLanguageKey): "go",
-				string(semconv.TelemetrySDKNameKey):     "beyla",
-				string(semconv.ServiceInstanceIDKey):    "",
-			},
+			string(semconv.ServiceNameKey):      "svc-1",
+			string(semconv.ServiceNamespaceKey): "ns",
+			string(attr.ClientAddr):             "1.1.1.1",
+			string(attr.HTTPRequestMethod):      "GET",
+			string(attr.HTTPResponseStatusCode): "201",
+			string(attr.HTTPUrlPath):            "/user/1234",
 		},
 		"/user/4321": {
-			Metric: map[string]string{
-				string(semconv.ServiceNameKey):      "svc-3",
-				string(semconv.ServiceNamespaceKey): "ns",
-				string(attr.ClientAddr):             "1.1.1.1",
-				string(attr.HTTPRequestMethod):      "GET",
-				string(attr.HTTPResponseStatusCode): "203",
-				string(attr.HTTPUrlPath):            "/user/4321",
-			},
-			Resource: map[string]string{
-				string(semconv.ServiceNameKey):          "svc-3",
-				string(semconv.ServiceNamespaceKey):     "ns",
-				string(semconv.TelemetrySDKLanguageKey): "go",
-				string(semconv.TelemetrySDKNameKey):     "beyla",
-				string(semconv.ServiceInstanceIDKey):    "",
-			},
+			string(semconv.ServiceNameKey):      "svc-3",
+			string(semconv.ServiceNamespaceKey): "ns",
+			string(attr.ClientAddr):             "1.1.1.1",
+			string(attr.HTTPRequestMethod):      "GET",
+			string(attr.HTTPResponseStatusCode): "203",
+			string(attr.HTTPUrlPath):            "/user/4321",
 		},
 	}, events)
 }

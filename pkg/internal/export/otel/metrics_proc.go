@@ -56,12 +56,12 @@ type procMetricsExporter struct {
 
 	log *slog.Logger
 
-	attrCPUTime       attributes.Sections[[]attributes.Field[*process.Status, attribute.KeyValue]]
-	attrCPUUtil       attributes.Sections[[]attributes.Field[*process.Status, attribute.KeyValue]]
-	attrMemory        attributes.Sections[[]attributes.Field[*process.Status, attribute.KeyValue]]
-	attrMemoryVirtual attributes.Sections[[]attributes.Field[*process.Status, attribute.KeyValue]]
-	attrDisk          attributes.Sections[[]attributes.Field[*process.Status, attribute.KeyValue]]
-	attrNet           attributes.Sections[[]attributes.Field[*process.Status, attribute.KeyValue]]
+	attrCPUTime       []attributes.Field[*process.Status, attribute.KeyValue]
+	attrCPUUtil       []attributes.Field[*process.Status, attribute.KeyValue]
+	attrMemory        []attributes.Field[*process.Status, attribute.KeyValue]
+	attrMemoryVirtual []attributes.Field[*process.Status, attribute.KeyValue]
+	attrDisk          []attributes.Field[*process.Status, attribute.KeyValue]
+	attrNet           []attributes.Field[*process.Status, attribute.KeyValue]
 
 	// the observation code for CPU metrics will be different depending on
 	// the "process.cpu.state" attribute being selected or not
@@ -144,23 +144,22 @@ func newProcMetricsExporter(
 		attrDisk: attrDisk,
 		attrNet:  attrNet,
 	}
-	// TODO: replace .Metric by .Resource when we move process attributes to the resource
-	if slices.Contains(cpuTimeNames.Metric, attr2.ProcCPUState) {
+	if slices.Contains(cpuTimeNames, attr2.ProcCPUState) {
 		mr.cpuTimeObserver = cpuTimeDisaggregatedObserver
 	} else {
 		mr.cpuTimeObserver = cpuTimeAggregatedObserver
 	}
-	if slices.Contains(cpuUtilNames.Metric, attr2.ProcCPUState) {
+	if slices.Contains(cpuUtilNames, attr2.ProcCPUState) {
 		mr.cpuUtilisationObserver = cpuUtilisationDisaggregatedObserver
 	} else {
 		mr.cpuUtilisationObserver = cpuUtilisationAggregatedObserver
 	}
-	if slices.Contains(diskNames.Metric, attr2.ProcDiskIODir) {
+	if slices.Contains(diskNames, attr2.ProcDiskIODir) {
 		mr.diskObserver = diskDisaggregatedObserver
 	} else {
 		mr.diskObserver = diskAggregatedObserver
 	}
-	if slices.Contains(netNames.Metric, attr2.ProcNetIODir) {
+	if slices.Contains(netNames, attr2.ProcNetIODir) {
 		mr.netObserver = netDisaggregatedObserver
 	} else {
 		mr.netObserver = netAggregatedObserver
@@ -213,7 +212,7 @@ func (me *procMetricsExporter) newMetricSet(service *svc.ID) (*procMetrics, erro
 		return nil, err
 	} else {
 		m.cpuTime = NewExpirer[*process.Status, metric2.Float64Counter, float64](
-			me.ctx, cpuTime, me.attrCPUTime.Metric, timeNow, me.cfg.Metrics.TTL)
+			me.ctx, cpuTime, me.attrCPUTime, timeNow, me.cfg.Metrics.TTL)
 	}
 
 	if cpuUtilisation, err := meter.Float64Gauge(
@@ -225,7 +224,7 @@ func (me *procMetricsExporter) newMetricSet(service *svc.ID) (*procMetrics, erro
 		return nil, err
 	} else {
 		m.cpuUtilisation = NewExpirer[*process.Status, metric2.Float64Gauge, float64](
-			me.ctx, cpuUtilisation, me.attrCPUUtil.Metric, timeNow, me.cfg.Metrics.TTL)
+			me.ctx, cpuUtilisation, me.attrCPUUtil, timeNow, me.cfg.Metrics.TTL)
 	}
 
 	// memory metrics are defined as UpDownCounters in the Otel specification, but we
@@ -240,7 +239,7 @@ func (me *procMetricsExporter) newMetricSet(service *svc.ID) (*procMetrics, erro
 		return nil, err
 	} else {
 		m.memory = NewExpirer[*process.Status, metric2.Int64UpDownCounter, int64](
-			me.ctx, memory, me.attrMemory.Metric, timeNow, me.cfg.Metrics.TTL)
+			me.ctx, memory, me.attrMemory, timeNow, me.cfg.Metrics.TTL)
 	}
 
 	if memoryVirtual, err := meter.Int64UpDownCounter(
@@ -252,7 +251,7 @@ func (me *procMetricsExporter) newMetricSet(service *svc.ID) (*procMetrics, erro
 		return nil, err
 	} else {
 		m.memoryVirtual = NewExpirer[*process.Status, metric2.Int64UpDownCounter, int64](
-			me.ctx, memoryVirtual, me.attrMemoryVirtual.Metric, timeNow, me.cfg.Metrics.TTL)
+			me.ctx, memoryVirtual, me.attrMemoryVirtual, timeNow, me.cfg.Metrics.TTL)
 	}
 
 	if disk, err := meter.Int64Counter(
@@ -264,7 +263,7 @@ func (me *procMetricsExporter) newMetricSet(service *svc.ID) (*procMetrics, erro
 		return nil, err
 	} else {
 		m.disk = NewExpirer[*process.Status, metric2.Int64Counter, int64](
-			me.ctx, disk, me.attrDisk.Metric, timeNow, me.cfg.Metrics.TTL)
+			me.ctx, disk, me.attrDisk, timeNow, me.cfg.Metrics.TTL)
 	}
 
 	if net, err := meter.Int64Counter(
@@ -276,7 +275,7 @@ func (me *procMetricsExporter) newMetricSet(service *svc.ID) (*procMetrics, erro
 		return nil, err
 	} else {
 		m.net = NewExpirer[*process.Status, metric2.Int64Counter, int64](
-			me.ctx, net, me.attrNet.Metric, timeNow, me.cfg.Metrics.TTL)
+			me.ctx, net, me.attrNet, timeNow, me.cfg.Metrics.TTL)
 	}
 	return &m, nil
 }

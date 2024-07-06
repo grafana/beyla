@@ -5,6 +5,7 @@ package k8s
 import (
 	"context"
 	"net/http"
+	"slices"
 	"testing"
 	"time"
 
@@ -181,6 +182,31 @@ func FeatureProcessMetricsDecoration(overrideProperties map[string]string) featu
 		Assess("all the process metrics from currently instrumented services are properly decorated",
 			testMetricsDecoration(processMetrics, `{k8s_pod_name=~"`+properties["k8s_pod_name"]+`"}`, properties),
 		).Feature()
+}
+
+func FeatureDisableInformersAppMetricsDecoration() features.Feature {
+	pinger := kube.Template[Pinger]{
+		TemplateFile: PingerManifest,
+		Data: Pinger{
+			PodName:   "internal-pinger",
+			TargetURL: "http://testserver:8080/iping",
+		},
+	}
+	return features.New("Disabled informers for App metrics").
+		Setup(pinger.Deploy()).
+		Teardown(pinger.Delete()).
+		Assess("Application metrics miss the attributes coming from the disabled informers",
+			testMetricsDecoration(slices.Concat(processMetrics, httpServerMetrics),
+				`{k8s_pod_name=~"^testserver-.*"}`, map[string]string{
+					"k8s_namespace_name":  "^default$",
+					"k8s_node_name":       ".+-control-plane$",
+					"k8s_pod_name":        "^testserver-.*",
+					"k8s_pod_uid":         UUIDRegex,
+					"k8s_pod_start_time":  TimeRegex,
+					"k8s_deployment_name": "",
+					"k8s_replicaset_name": "^testserver-.*",
+					"k8s_cluster_name":    "^beyla$",
+				})).Feature()
 }
 
 func testMetricsDecoration(

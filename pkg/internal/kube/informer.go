@@ -51,6 +51,8 @@ type Metadata struct {
 	servicesIP  cache.SharedIndexInformer
 
 	containerEventHandlers []ContainerEventHandler
+
+	disabledInformers informerType
 }
 
 // PodInfo contains precollected metadata for Pods.
@@ -245,6 +247,9 @@ func rmContainerIDSchema(containerID string) string {
 
 // GetReplicaSetInfo fetches metadata from a ReplicaSet given its name
 func (k *Metadata) GetReplicaSetInfo(namespace, name string) (*ReplicaSetInfo, bool) {
+	if k.disabledInformers.Has(InformerReplicaSet) {
+		return nil, false
+	}
 	objs, err := k.replicaSets.GetIndexer().ByIndex(IndexReplicaSetNames, qName(namespace, name))
 	if err != nil {
 		klog().Debug("error accessing ReplicaSet index by name. Ignoring",
@@ -258,6 +263,9 @@ func (k *Metadata) GetReplicaSetInfo(namespace, name string) (*ReplicaSetInfo, b
 }
 
 func (k *Metadata) initReplicaSetInformer(informerFactory informers.SharedInformerFactory) error {
+	if k.disabledInformers.Has(InformerReplicaSet) {
+		return nil
+	}
 	log := klog().With("informer", "ReplicaSet")
 	rss := informerFactory.Apps().V1().ReplicaSets().Informer()
 	// Transform any *appsv1.Replicaset instance into a *ReplicaSetInfo instance to save space
@@ -392,6 +400,9 @@ func (k *Metadata) AddPodEventHandler(h cache.ResourceEventHandler) error {
 }
 
 func (k *Metadata) AddReplicaSetEventHandler(h cache.ResourceEventHandler) error {
+	if k.disabledInformers.Has(InformerReplicaSet) {
+		return nil
+	}
 	_, err := k.replicaSets.AddEventHandler(h)
 	// passing a snapshot of the currently stored entities
 	go func() {

@@ -82,7 +82,12 @@ static __always_inline void cleanup_ssl_trace_info(http_info_t *info, void *ssl)
         if (ssl_info) {
             bpf_dbg_printk("Looking to delete server trace for ssl = %llx, info->type = %d", ssl, info->type);
             //dbg_print_http_connection_info(&ssl_info->conn.conn); // commented out since GitHub CI doesn't like this call
-            delete_server_trace_tid(&ssl_info->c_tid);
+            trace_key_t t_key = {0};
+            t_key.extra_id = info->extra_id;
+            t_key.p_key.ns = info->pid.ns;
+            t_key.p_key.pid = info->task_tid;
+
+            delete_server_trace(&t_key);
         }
     }
 
@@ -165,7 +170,6 @@ static __always_inline void handle_ssl_buf(void *ctx, u64 id, ssl_args_t *args, 
             bpf_memcpy(&p_c.p_conn.conn.s_addr, &ssl, sizeof(void *));
             p_c.p_conn.conn.d_port = p_c.p_conn.conn.s_port = p_c.orig_dport = 0;
             p_c.p_conn.pid = pid_from_pid_tgid(id);
-            task_tid(&p_c.c_tid);
 
             bpf_map_update_elem(&ssl_to_conn, &ssl, &p_c, BPF_ANY);
             conn = bpf_map_lookup_elem(&ssl_to_conn, &ssl);

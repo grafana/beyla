@@ -15,6 +15,7 @@ import (
 	"github.com/grafana/beyla/pkg/internal/ebpf/httpfltr"
 	"github.com/grafana/beyla/pkg/internal/ebpf/httpssl"
 	"github.com/grafana/beyla/pkg/internal/ebpf/nethttp"
+	"github.com/grafana/beyla/pkg/internal/ebpf/nodejs"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 )
@@ -112,4 +113,8 @@ func newNonGoTracersGroup(cfg *beyla.Config, metrics imetrics.Reporter) []ebpf.T
 
 func newNonGoTracersGroupUProbes(cfg *beyla.Config, metrics imetrics.Reporter) []ebpf.Tracer {
 	return []ebpf.Tracer{httpssl.New(cfg, metrics)}
+}
+
+func newNodeJSTracersGroup(cfg *beyla.Config, metrics imetrics.Reporter) []ebpf.Tracer {
+	return []ebpf.Tracer{nodejs.New(cfg, metrics)}
 }

@@ -119,14 +119,11 @@ func (ta *TraceAttacher) getTracer(ie *Instrumentable) (*ebpf.ProcessTracer, boo
 			tracerType = ebpf.Go
 			programs = filterNotFoundPrograms(newGoTracersGroup(ta.Cfg, ta.Metrics), ie.Offsets)
 		}
-	case svc.InstrumentableJava, svc.InstrumentableNodejs, svc.InstrumentableRuby, svc.InstrumentablePython, svc.InstrumentableDotnet, svc.InstrumentableGeneric, svc.InstrumentableRust, svc.InstrumentablePHP:
-		// We are not instrumenting a Go application, we override the programs
-		// list with the generic kernel/socket space filters
-		if ta.reusableTracer != nil {
-			programs = newNonGoTracersGroupUProbes(ta.Cfg, ta.Metrics)
-		} else {
-			programs = newNonGoTracersGroup(ta.Cfg, ta.Metrics)
-		}
+	case svc.InstrumentableNodejs:
+		programs = ta.genericTracers()
+		programs = append(programs, newNodeJSTracersGroup(ta.Cfg, ta.Metrics)...)
+	case svc.InstrumentableJava, svc.InstrumentableRuby, svc.InstrumentablePython, svc.InstrumentableDotnet, svc.InstrumentableGeneric, svc.InstrumentableRust, svc.InstrumentablePHP:
+		programs = ta.genericTracers()
 	default:
 		ta.log.Warn("unexpected instrumentable type. This is basically a bug", "type", ie.Type)
 	}
@@ -171,6 +168,14 @@ func (ta *TraceAttacher) getTracer(ie *Instrumentable) (*ebpf.ProcessTracer, boo
 	}
 	ta.log.Debug(".done")
 	return tracer, true
+}
+
+func (ta *TraceAttacher) genericTracers() []ebpf.Tracer {
+	if ta.reusableTracer != nil {
+		return newNonGoTracersGroupUProbes(ta.Cfg, ta.Metrics)
+	}
+
+	return newNonGoTracersGroup(ta.Cfg, ta.Metrics)
 }
 
 func monitorPIDs(tracer *ebpf.ProcessTracer, ie *Instrumentable) {

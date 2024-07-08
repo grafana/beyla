@@ -6,10 +6,16 @@
 #include "trace_util.h"
 #include "tracing.h"
 #include "pid_types.h"
+#include "runtime.h"
+
+typedef struct trace_key {
+    pid_key_t p_key;  // pid key as seen by the userspace (for example, inside its container)
+    u64 extra_id;  // pids namespace for the process
+} __attribute__((packed)) trace_key_t;
 
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, pid_key_t); // key: pid_tid
+    __type(key, trace_key_t); // key: pid_tid
     __type(value, tp_info_pid_t);  // value: traceparent info
     __uint(max_entries, MAX_CONCURRENT_SHARED_REQUESTS);
     __uint(pinning, LIBBPF_PIN_BY_NAME);
@@ -91,25 +97,37 @@ static __always_inline unsigned char *bpf_strstr_tp_loop(unsigned char *buf, int
 #endif
 
 static __always_inline tp_info_pid_t *find_parent_trace() {
-    pid_key_t c_tid = {0};
+    trace_key_t t_key = {0};
 
-    task_tid(&c_tid);
+    task_tid(&t_key.p_key);
+    u64 extra_id = extra_runtime_id();
+    t_key.extra_id = extra_id;
+
     int attempts = 0;
 
     do {        
-        tp_info_pid_t *server_tp = bpf_map_lookup_elem(&server_traces, &c_tid);
+        tp_info_pid_t *server_tp = bpf_map_lookup_elem(&server_traces, &t_key);
 
         if (!server_tp) { // not this goroutine running the server request processing
             // Let's find the parent scope
-            pid_key_t *p_tid = (pid_key_t *)bpf_map_lookup_elem(&clone_map, &c_tid);
-            if (p_tid) {
-                // Lookup now to see if the parent was a request
-                c_tid = *p_tid;
+            if (t_key.extra_id) {
+                u64 parent_id = parent_runtime_id(&t_key.p_key, t_key.extra_id);
+                if (parent_id) {
+                    t_key.extra_id = parent_id;
+                } else {
+                    break;
+                }
             } else {
-                break;
+                pid_key_t *p_tid = (pid_key_t *)bpf_map_lookup_elem(&clone_map, &t_key.p_key);
+                if (p_tid) {
+                    // Lookup now to see if the parent was a request
+                    t_key.p_key = *p_tid;
+                } else {
+                    break;
+                }
             }
         } else {
-            bpf_dbg_printk("Found parent trace for pid=%d, ns=%lx", c_tid.pid, c_tid.ns);
+            bpf_dbg_printk("Found parent trace for pid=%d, ns=%lx, orig_extra_id=%llx, extra_id=%llx", t_key.p_key.pid, t_key.p_key.ns, extra_id, t_key.extra_id);
             return server_tp;
         }
 
@@ -132,17 +150,10 @@ static __always_inline unsigned char *extract_flags(unsigned char *tp_start) {
     return tp_start + 13 + 2 + 1 + 32 + 1 + 16 + 1; // strlen("Traceparent: ") + strlen(ver) + strlen("-") + strlen(trace_id) + strlen("-") + strlen(span_id) + strlen("-")
 }
 
-static __always_inline void delete_server_trace_tid(pid_key_t *c_tid) {
-    int __attribute__((unused)) res = bpf_map_delete_elem(&server_traces, c_tid);
+static __always_inline void delete_server_trace(trace_key_t *t_key) {
+    int __attribute__((unused)) res = bpf_map_delete_elem(&server_traces, t_key);
     // Fails on 5.10 with unknown function
-    // bpf_dbg_printk("Deleting server span for id=%llx, pid=%d, ns=%d, res = %d", bpf_get_current_pid_tgid(), c_tid->pid, c_tid->ns, res);
-}
-
-static __always_inline void delete_server_trace() {
-    pid_key_t c_tid = {0};
-    task_tid(&c_tid);
-
-    delete_server_trace_tid(&c_tid);
+    bpf_dbg_printk("Deleting server span for id=%llx, pid=%d, ns=%d, res = %d", bpf_get_current_pid_tgid(), t_key->p_key.pid, t_key->p_key.ns, res);
 }
 
 static __always_inline void server_or_client_trace(http_connection_metadata_t *meta, connection_info_t *conn, tp_info_pid_t *tp_p) {
@@ -150,10 +161,11 @@ static __always_inline void server_or_client_trace(http_connection_metadata_t *m
         return;
     }
     if (meta->type == EVENT_HTTP_REQUEST) {
-        pid_key_t c_tid = {0};
-        task_tid(&c_tid);
+        trace_key_t t_key = {0};
+        task_tid(&t_key.p_key);
+        t_key.extra_id = extra_runtime_id();
 
-        tp_info_pid_t *existing = bpf_map_lookup_elem(&server_traces, &c_tid);
+        tp_info_pid_t *existing = bpf_map_lookup_elem(&server_traces, &t_key);
         // we have a conflict, mark this invalid and do nothing
         if (existing) {
             bpf_dbg_printk("Found conflicting server span, marking as invalid, id=%llx", bpf_get_current_pid_tgid());
@@ -161,8 +173,8 @@ static __always_inline void server_or_client_trace(http_connection_metadata_t *m
             return;
         }
 
-        bpf_dbg_printk("Saving server span for id=%llx, pid=%d, ns=%d", bpf_get_current_pid_tgid(), c_tid.pid, c_tid.ns);
-        bpf_map_update_elem(&server_traces, &c_tid, tp_p, BPF_ANY);
+        bpf_dbg_printk("Saving server span for id=%llx, pid=%d, ns=%d, extra_id=%llx", bpf_get_current_pid_tgid(), t_key.p_key.pid, t_key.p_key.ns, t_key.extra_id);
+        bpf_map_update_elem(&server_traces, &t_key, tp_p, BPF_ANY);
     }
 }
 
@@ -177,6 +189,7 @@ static __always_inline void get_or_create_trace_info(http_connection_metadata_t 
     tp_p->tp.flags = 1;
     tp_p->valid = 1;
     tp_p->pid = pid; // used for avoiding finding stale server requests with client port reuse
+
     urand_bytes(tp_p->tp.span_id, SPAN_ID_SIZE_BYTES);
 
     u8 found_tp = 0;

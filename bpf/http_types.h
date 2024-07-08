@@ -62,7 +62,6 @@ typedef struct http_pid_connection_info {
 typedef struct ssl_pid_connection_info {
     pid_connection_info_t p_conn;
     u16 orig_dport;
-    pid_key_t c_tid;
 } ssl_pid_connection_info_t;
 
 typedef struct tp_info {
@@ -96,6 +95,8 @@ typedef struct http_info {
     // with other instrumented processes
     pid_info pid;
     tp_info_t tp;
+    u64 extra_id;
+    u32 task_tid;
 } http_info_t;
 
 // Here we track unknown TCP requests that are not HTTP, HTTP2 or gRPC

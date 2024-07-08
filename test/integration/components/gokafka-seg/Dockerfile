@@ -1,6 +1,6 @@
 # Build the testserver binary
 # Docker command must be invoked from the projec root directory
-FROM golang:1.22 as builder
+FROM golang:1.22 AS builder
 
 ARG TARGETARCH
 
@@ -9,7 +9,7 @@ ENV GOARCH=$TARGETARCH
 WORKDIR /src
 
 # Copy the go manifests and source
-COPY test/integration/components/gokafka/ .
+COPY test/integration/components/gokafka-seg/ .
 
 # Build
 RUN go build -o testserver main.go
@@ -21,7 +21,7 @@ WORKDIR /
 COPY --from=builder /src/testserver .
 USER 0:0
 
-ENV kafkaURL="127.0.0.1:9093"
+ENV kafkaURL="kafka:9093"
 ENV topic="logging"
 ENV groupID="1"
 

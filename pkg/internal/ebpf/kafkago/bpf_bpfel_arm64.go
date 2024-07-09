@@ -24,6 +24,23 @@ type bpfGoroutineMetadata struct {
 	Timestamp uint64
 }
 
+type bpfKafkaGoReqT struct {
+	Type            uint8
+	StartMonotimeNs uint64
+	EndMonotimeNs   uint64
+	Topic           [64]uint8
+	_               [7]byte
+	Conn            bpfConnectionInfoT
+	Tp              bpfTpInfoT
+	Pid             struct {
+		HostPid uint32
+		UserPid uint32
+		Ns      uint32
+	}
+	Op uint8
+	_  [7]byte
+}
+
 type bpfProduceReqT struct {
 	MsgPtr          uint64
 	ConnPtr         uint64
@@ -92,6 +109,9 @@ type bpfProgramSpecs struct {
 	UprobeClientRoundTrip      *ebpf.ProgramSpec `ebpf:"uprobe_client_roundTrip"`
 	UprobeProtocolRoundtrip    *ebpf.ProgramSpec `ebpf:"uprobe_protocol_roundtrip"`
 	UprobeProtocolRoundtripRet *ebpf.ProgramSpec `ebpf:"uprobe_protocol_roundtrip_ret"`
+	UprobeReaderRead           *ebpf.ProgramSpec `ebpf:"uprobe_reader_read"`
+	UprobeReaderReadRet        *ebpf.ProgramSpec `ebpf:"uprobe_reader_read_ret"`
+	UprobeReaderSendMessage    *ebpf.ProgramSpec `ebpf:"uprobe_reader_send_message"`
 	UprobeWriterProduce        *ebpf.ProgramSpec `ebpf:"uprobe_writer_produce"`
 }
 
@@ -100,6 +120,7 @@ type bpfProgramSpecs struct {
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpfMapSpecs struct {
 	Events                    *ebpf.MapSpec `ebpf:"events"`
+	FetchRequests             *ebpf.MapSpec `ebpf:"fetch_requests"`
 	GoTraceMap                *ebpf.MapSpec `ebpf:"go_trace_map"`
 	GolangMapbucketStorageMap *ebpf.MapSpec `ebpf:"golang_mapbucket_storage_map"`
 	OngoingClientConnections  *ebpf.MapSpec `ebpf:"ongoing_client_connections"`
@@ -131,6 +152,7 @@ func (o *bpfObjects) Close() error {
 // It can be passed to loadBpfObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpfMaps struct {
 	Events                    *ebpf.Map `ebpf:"events"`
+	FetchRequests             *ebpf.Map `ebpf:"fetch_requests"`
 	GoTraceMap                *ebpf.Map `ebpf:"go_trace_map"`
 	GolangMapbucketStorageMap *ebpf.Map `ebpf:"golang_mapbucket_storage_map"`
 	OngoingClientConnections  *ebpf.Map `ebpf:"ongoing_client_connections"`
@@ -145,6 +167,7 @@ type bpfMaps struct {
 func (m *bpfMaps) Close() error {
 	return _BpfClose(
 		m.Events,
+		m.FetchRequests,
 		m.GoTraceMap,
 		m.GolangMapbucketStorageMap,
 		m.OngoingClientConnections,
@@ -164,6 +187,9 @@ type bpfPrograms struct {
 	UprobeClientRoundTrip      *ebpf.Program `ebpf:"uprobe_client_roundTrip"`
 	UprobeProtocolRoundtrip    *ebpf.Program `ebpf:"uprobe_protocol_roundtrip"`
 	UprobeProtocolRoundtripRet *ebpf.Program `ebpf:"uprobe_protocol_roundtrip_ret"`
+	UprobeReaderRead           *ebpf.Program `ebpf:"uprobe_reader_read"`
+	UprobeReaderReadRet        *ebpf.Program `ebpf:"uprobe_reader_read_ret"`
+	UprobeReaderSendMessage    *ebpf.Program `ebpf:"uprobe_reader_send_message"`
 	UprobeWriterProduce        *ebpf.Program `ebpf:"uprobe_writer_produce"`
 }
 
@@ -172,6 +198,9 @@ func (p *bpfPrograms) Close() error {
 		p.UprobeClientRoundTrip,
 		p.UprobeProtocolRoundtrip,
 		p.UprobeProtocolRoundtripRet,
+		p.UprobeReaderRead,
+		p.UprobeReaderReadRet,
+		p.UprobeReaderSendMessage,
 		p.UprobeWriterProduce,
 	)
 }

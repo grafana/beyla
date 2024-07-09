@@ -20,6 +20,7 @@
 
 volatile const u64 kafka_go_writer_topic_pos = 0x10;
 volatile const u64 kafka_go_roundtrip_conn_pos = 0x8;
+volatile const u64 kafka_go_reader_topic_pos = 0x40;
 
 typedef struct produce_req {
     u64 msg_ptr;
@@ -52,6 +53,14 @@ struct {
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
 } produce_requests SEC(".maps");
 
+struct {
+    __uint(type, BPF_MAP_TYPE_LRU_HASH);
+    __type(key, void *); // goroutine
+    __type(value, kafka_go_req_t); // rw ptr + start time
+    __uint(max_entries, MAX_CONCURRENT_REQUESTS);
+} fetch_requests SEC(".maps");
+
+// Code for the produce messages path
 SEC("uprobe/writer_produce")
 int uprobe_writer_produce(struct pt_regs *ctx) {
     void *goroutine_addr = (void *)GOROUTINE_PTR(ctx);
@@ -70,6 +79,9 @@ int uprobe_writer_produce(struct pt_regs *ctx) {
             bpf_map_update_elem(&ongoing_produce_topics, &goroutine_addr, &topic, BPF_ANY);
         }
     }
+
+    // TODO: Since we can find the relationship from the originating goroutine, we can set the traceparent.
+    // Add it to topic_t.
 
     return 0;
 }
@@ -154,14 +166,93 @@ int uprobe_protocol_roundtrip_ret(struct pt_regs *ctx) {
                 bpf_probe_read(trace->topic, MAX_TOPIC_NAME_LEN, ((void *)topic_ptr->name));
                 task_pid(&trace->pid);
                 bpf_ringbuf_submit(trace, get_flags());
-            } else {
-                bpf_dbg_printk("can't allocate on the ringbuffer");
             }
         }
         bpf_map_delete_elem(&ongoing_produce_messages, &msg_ptr);
     }
 
     bpf_map_delete_elem(&produce_requests, &goroutine_addr);
+
+    return 0;
+}
+
+
+// Code for the fetch messages path
+SEC("uprobe/reader_read")
+int uprobe_reader_read(struct pt_regs *ctx) {
+    void *goroutine_addr = (void *)GOROUTINE_PTR(ctx);
+    void *r_ptr = (void *)GO_PARAM1(ctx);
+    void *conn = (void *)GO_PARAM5(ctx);
+    bpf_printk("=== uprobe/kafka-go reader_read %llx r_ptr %llx=== ", goroutine_addr, r_ptr);
+
+    if (r_ptr) {
+        kafka_go_req_t r = {
+            .type = EVENT_GO_KAFKA_SEG,
+            .op = KAFKA_API_FETCH,
+            .start_monotime_ns = 0,
+        };
+
+        void *topic_ptr = 0;
+        bpf_probe_read_user(&topic_ptr, sizeof(void *), r_ptr + kafka_go_reader_topic_pos);
+
+        bpf_dbg_printk("topic_ptr %llx", topic_ptr);
+        if (topic_ptr) {
+            bpf_probe_read_user(&r.topic, sizeof(r.topic), topic_ptr);
+        }
+
+        if (conn) {
+            void *conn_ptr = 0;
+            bpf_probe_read(&conn_ptr, sizeof(conn_ptr), (void *)(conn + 8)); // find conn
+            bpf_dbg_printk("conn ptr %llx", conn_ptr);
+            if (conn_ptr) {
+                get_conn_info(conn_ptr, &r.conn);
+            }
+        }
+
+        bpf_map_update_elem(&fetch_requests, &goroutine_addr, &r, BPF_ANY);
+    }
+
+    return 0;
+}
+
+SEC("uprobe/reader_send_message")
+int uprobe_reader_send_message(struct pt_regs *ctx) {
+    void *goroutine_addr = (void *)GOROUTINE_PTR(ctx);
+    bpf_dbg_printk("=== uprobe/kafka-go reader_send_message %llx === ", goroutine_addr);
+
+    kafka_go_req_t *req = (kafka_go_req_t *)bpf_map_lookup_elem(&fetch_requests, &goroutine_addr);
+    bpf_dbg_printk("Found req_ptr %llx", req);
+
+    if (req) {
+        req->start_monotime_ns = bpf_ktime_get_ns();
+    }
+
+    return 0;
+}
+
+SEC("uprobe/reader_read")
+int uprobe_reader_read_ret(struct pt_regs *ctx) {
+    void *goroutine_addr = (void *)GOROUTINE_PTR(ctx);
+    bpf_dbg_printk("=== uprobe/kafka-go reader_read ret %llx === ", goroutine_addr);
+
+    kafka_go_req_t *req = (kafka_go_req_t *)bpf_map_lookup_elem(&fetch_requests, &goroutine_addr);
+    bpf_dbg_printk("Found req_ptr %llx", req);
+
+    if (req) {
+        if (req->start_monotime_ns) {
+            kafka_go_req_t *trace = bpf_ringbuf_reserve(&events, sizeof(kafka_go_req_t), 0);
+            if (trace) {
+                __builtin_memcpy(trace, req, sizeof(kafka_go_req_t));
+                trace->end_monotime_ns = bpf_ktime_get_ns();
+                task_pid(&trace->pid);
+                bpf_ringbuf_submit(trace, get_flags());
+            }
+        } else {
+            bpf_dbg_printk("Found request with no start time, ignoring...");
+        }
+    }
+
+    bpf_map_delete_elem(&fetch_requests, &goroutine_addr);
 
     return 0;
 }

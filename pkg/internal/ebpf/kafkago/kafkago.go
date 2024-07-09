@@ -111,6 +111,15 @@ func (p *Tracer) GoProbes() map[string]ebpfcommon.FunctionPrograms {
 			End:      p.bpfObjects.UprobeProtocolRoundtripRet,
 			Required: true,
 		},
+		"github.com/segmentio/kafka-go.(*reader).read": { // used for capturing the info for the fetch operations
+			Start:    p.bpfObjects.UprobeReaderRead,
+			End:      p.bpfObjects.UprobeReaderReadRet,
+			Required: true,
+		},
+		"github.com/segmentio/kafka-go.(*reader).sendMessage": { // to accurately measure the start time
+			Start:    p.bpfObjects.UprobeReaderRead,
+			Required: true,
+		},
 	}
 }
 

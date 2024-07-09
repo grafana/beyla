@@ -24,6 +24,23 @@ type bpf_debugGoroutineMetadata struct {
 	Timestamp uint64
 }
 
+type bpf_debugKafkaGoReqT struct {
+	Type            uint8
+	StartMonotimeNs uint64
+	EndMonotimeNs   uint64
+	Topic           [64]uint8
+	_               [7]byte
+	Conn            bpf_debugConnectionInfoT
+	Tp              bpf_debugTpInfoT
+	Pid             struct {
+		HostPid uint32
+		UserPid uint32
+		Ns      uint32
+	}
+	Op uint8
+	_  [7]byte
+}
+
 type bpf_debugProduceReqT struct {
 	MsgPtr          uint64
 	ConnPtr         uint64
@@ -92,6 +109,9 @@ type bpf_debugProgramSpecs struct {
 	UprobeClientRoundTrip      *ebpf.ProgramSpec `ebpf:"uprobe_client_roundTrip"`
 	UprobeProtocolRoundtrip    *ebpf.ProgramSpec `ebpf:"uprobe_protocol_roundtrip"`
 	UprobeProtocolRoundtripRet *ebpf.ProgramSpec `ebpf:"uprobe_protocol_roundtrip_ret"`
+	UprobeReaderRead           *ebpf.ProgramSpec `ebpf:"uprobe_reader_read"`
+	UprobeReaderReadRet        *ebpf.ProgramSpec `ebpf:"uprobe_reader_read_ret"`
+	UprobeReaderSendMessage    *ebpf.ProgramSpec `ebpf:"uprobe_reader_send_message"`
 	UprobeWriterProduce        *ebpf.ProgramSpec `ebpf:"uprobe_writer_produce"`
 }
 
@@ -101,6 +121,7 @@ type bpf_debugProgramSpecs struct {
 type bpf_debugMapSpecs struct {
 	DebugEvents               *ebpf.MapSpec `ebpf:"debug_events"`
 	Events                    *ebpf.MapSpec `ebpf:"events"`
+	FetchRequests             *ebpf.MapSpec `ebpf:"fetch_requests"`
 	GoTraceMap                *ebpf.MapSpec `ebpf:"go_trace_map"`
 	GolangMapbucketStorageMap *ebpf.MapSpec `ebpf:"golang_mapbucket_storage_map"`
 	OngoingClientConnections  *ebpf.MapSpec `ebpf:"ongoing_client_connections"`
@@ -133,6 +154,7 @@ func (o *bpf_debugObjects) Close() error {
 type bpf_debugMaps struct {
 	DebugEvents               *ebpf.Map `ebpf:"debug_events"`
 	Events                    *ebpf.Map `ebpf:"events"`
+	FetchRequests             *ebpf.Map `ebpf:"fetch_requests"`
 	GoTraceMap                *ebpf.Map `ebpf:"go_trace_map"`
 	GolangMapbucketStorageMap *ebpf.Map `ebpf:"golang_mapbucket_storage_map"`
 	OngoingClientConnections  *ebpf.Map `ebpf:"ongoing_client_connections"`
@@ -148,6 +170,7 @@ func (m *bpf_debugMaps) Close() error {
 	return _Bpf_debugClose(
 		m.DebugEvents,
 		m.Events,
+		m.FetchRequests,
 		m.GoTraceMap,
 		m.GolangMapbucketStorageMap,
 		m.OngoingClientConnections,
@@ -167,6 +190,9 @@ type bpf_debugPrograms struct {
 	UprobeClientRoundTrip      *ebpf.Program `ebpf:"uprobe_client_roundTrip"`
 	UprobeProtocolRoundtrip    *ebpf.Program `ebpf:"uprobe_protocol_roundtrip"`
 	UprobeProtocolRoundtripRet *ebpf.Program `ebpf:"uprobe_protocol_roundtrip_ret"`
+	UprobeReaderRead           *ebpf.Program `ebpf:"uprobe_reader_read"`
+	UprobeReaderReadRet        *ebpf.Program `ebpf:"uprobe_reader_read_ret"`
+	UprobeReaderSendMessage    *ebpf.Program `ebpf:"uprobe_reader_send_message"`
 	UprobeWriterProduce        *ebpf.Program `ebpf:"uprobe_writer_produce"`
 }
 
@@ -175,6 +201,9 @@ func (p *bpf_debugPrograms) Close() error {
 		p.UprobeClientRoundTrip,
 		p.UprobeProtocolRoundtrip,
 		p.UprobeProtocolRoundtripRet,
+		p.UprobeReaderRead,
+		p.UprobeReaderReadRet,
+		p.UprobeReaderSendMessage,
 		p.UprobeWriterProduce,
 	)
 }

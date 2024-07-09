@@ -75,6 +75,7 @@ func getResourceAttrs(service *svc.ID) []attribute.KeyValue {
 		semconv.TelemetrySDKLanguageKey.String(service.SDKLanguage.String()),
 		// We set the SDK name as Beyla, so we can distinguish beyla generated metrics from other SDKs
 		semconv.TelemetrySDKNameKey.String("beyla"),
+		semconv.HostName(service.HostName),
 	}
 
 	if service.Namespace != "" {

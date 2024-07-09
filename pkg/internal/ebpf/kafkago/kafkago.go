@@ -117,7 +117,7 @@ func (p *Tracer) GoProbes() map[string]ebpfcommon.FunctionPrograms {
 			Required: true,
 		},
 		"github.com/segmentio/kafka-go.(*reader).sendMessage": { // to accurately measure the start time
-			Start:    p.bpfObjects.UprobeReaderRead,
+			Start:    p.bpfObjects.UprobeReaderSendMessage,
 			Required: true,
 		},
 	}

@@ -118,20 +118,20 @@ func (ps *Harvester) Harvest(svcID *svc.ID) (*Status, error) {
 // populateStaticData populates the status with the process data won't vary during the process life cycle
 func (ps *Harvester) populateStaticData(status *Status, process *linuxProcess) error {
 	process.fetchCommandInfo()
-	status.Command = process.stats.command
-	status.CommandArgs = process.commandArgs
-	status.CommandLine = process.commandLine
-	status.ExecPath = process.execPath
-	status.ExecName = process.execName
+	status.ID.Command = process.stats.command
+	status.ID.CommandArgs = process.commandArgs
+	status.ID.CommandLine = process.commandLine
+	status.ID.ExecPath = process.execPath
+	status.ID.ExecName = process.execName
 
-	status.ProcessID = process.Pid()
+	status.ID.ProcessID = process.Pid()
 
 	var err error
-	if status.User, err = process.Username(); err != nil {
-		ps.log.Debug("can't get username for process", "pid", status.ProcessID, "error", err)
+	if status.ID.User, err = process.Username(); err != nil {
+		ps.log.Debug("can't get username for process", "pid", status.ID.ProcessID, "error", err)
 	}
 
-	status.ParentProcessID = process.stats.ppid
+	status.ID.ParentProcessID = process.stats.ppid
 
 	return nil
 }

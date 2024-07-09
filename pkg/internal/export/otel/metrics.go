@@ -162,7 +162,7 @@ type MetricsReporter struct {
 	cfg        *MetricsConfig
 	attributes *attributes.AttrSelector
 	exporter   metric.Exporter
-	reporters  ReporterPool[*Metrics]
+	reporters  ReporterPool[*svc.ID, *Metrics]
 	is         instrumentations.InstrumentationSelection
 
 	// user-selected fields for each of the reported metrics
@@ -276,7 +276,7 @@ func newMetricsReporter(
 			request.SpanOTELGetters, mr.attributes.For(attributes.MessagingProcessDuration))
 	}
 
-	mr.reporters = NewReporterPool(cfg.ReportersCacheLen, cfg.TTL, timeNow,
+	mr.reporters = NewReporterPool[*svc.ID, *Metrics](cfg.ReportersCacheLen, cfg.TTL, timeNow,
 		func(id svc.UID, v *expirable[*Metrics]) {
 			if mr.cfg.SpanMetricsEnabled() {
 				attrOpt := instrument.WithAttributeSet(mr.metricResourceAttributes(v.value.service))

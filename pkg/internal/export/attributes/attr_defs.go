@@ -159,23 +159,29 @@ func getDefinitions(groups AttrGroups) map[Section]AttrReportGroup {
 		},
 	}
 
-	var processAttributes = AttrReportGroup{
-		SubGroups: []*AttrReportGroup{&appKubeAttributes, &hostAttributes},
-		// TODO: attributes below are resource-level, but in App O11y we don't treat processes as resources,
-		// but applications. Let's first consider how to match processes and Applications before marking this spec
-		// as stable
+	// the following attributes are only reported as metric attributes in Prometheus,
+	// as the OTEL standard defines them as resource attributes.
+	var promProcessAttributes = AttrReportGroup{
+		Disabled: !promEnabled,
 		Attributes: map[attr.Name]Default{
 			attr.ProcCommand:     true,
-			attr.ProcCPUState:    true,
 			attr.ProcOwner:       true,
 			attr.ProcParentPid:   true,
 			attr.ProcPid:         true,
-			attr.ProcDiskIODir:   true,
-			attr.ProcNetIODir:    true,
 			attr.ProcCommandLine: false,
 			attr.ProcCommandArgs: false,
 			attr.ProcExecName:    false,
 			attr.ProcExecPath:    false,
+		},
+	}
+
+	var processAttributes = AttrReportGroup{
+		SubGroups: []*AttrReportGroup{&appKubeAttributes, &hostAttributes, &promProcessAttributes},
+		Attributes: map[attr.Name]Default{
+			// real resource attributes
+			attr.ProcCPUState:  true,
+			attr.ProcDiskIODir: true,
+			attr.ProcNetIODir:  true,
 		},
 	}
 

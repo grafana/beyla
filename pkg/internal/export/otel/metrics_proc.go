@@ -52,7 +52,7 @@ type procMetricsExporter struct {
 	clock *expire.CachedClock
 
 	exporter  metric.Exporter
-	reporters ReporterPool[*procMetrics]
+	reporters ReporterPool[*svc.ID, *procMetrics]
 
 	log *slog.Logger
 
@@ -165,7 +165,7 @@ func newProcMetricsExporter(
 		mr.netObserver = netAggregatedObserver
 	}
 
-	mr.reporters = NewReporterPool[*procMetrics](cfg.Metrics.ReportersCacheLen, cfg.Metrics.TTL, timeNow,
+	mr.reporters = NewReporterPool[*svc.ID, *procMetrics](cfg.Metrics.ReportersCacheLen, cfg.Metrics.TTL, timeNow,
 		func(id svc.UID, v *expirable[*procMetrics]) {
 			llog := log.With("service", id)
 			llog.Debug("evicting metrics reporter from cache")

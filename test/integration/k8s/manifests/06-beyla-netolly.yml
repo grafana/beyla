@@ -24,6 +24,7 @@ data:
         beyla.network.flow.bytes:
           # assured cardinality explosion. Don't try in production!
           include: ["*"]
+          exclude: ["src_port"]
 ---
 apiVersion: apps/v1
 kind: DaemonSet

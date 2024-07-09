@@ -3,6 +3,7 @@ package ebpfcommon
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"unsafe"
 
 	"github.com/cilium/ebpf/ringbuf"
@@ -17,6 +18,8 @@ func ReadGoKafkaRequestIntoSpan(record *ringbuf.Record) (request.Span, bool, err
 	if err != nil {
 		return request.Span{}, true, err
 	}
+
+	fmt.Printf("Event %v\n", event)
 
 	info, err := ProcessKafkaRequest(event.Buf[:])
 
@@ -57,4 +60,48 @@ func GoKafkaToSpan(event *GoKafkaClientInfo, data *KafkaInfo) request.Span {
 			Namespace: event.Pid.Ns,
 		},
 	}
+}
+
+func ReadGoKafkaGoRequestIntoSpan(record *ringbuf.Record) (request.Span, bool, error) {
+	var event GoKafkaGoClientInfo
+
+	err := binary.Read(bytes.NewBuffer(record.RawSample), binary.LittleEndian, &event)
+	if err != nil {
+		return request.Span{}, true, err
+	}
+
+	peer := ""
+	hostname := ""
+	hostPort := 0
+
+	if event.Conn.S_port != 0 || event.Conn.D_port != 0 {
+		peer, hostname = (*BPFConnInfo)(unsafe.Pointer(&event.Conn)).reqHostInfo()
+		hostPort = int(event.Conn.D_port)
+	}
+
+	op := Produce
+	if event.Op == 1 {
+		op = Fetch
+	}
+
+	return request.Span{
+		Type:           request.EventTypeKafkaClient,
+		Method:         op.String(),
+		OtherNamespace: "github.com/segmentio/kafka-go",
+		Path:           cstr(event.Topic[:]),
+		Peer:           peer,
+		PeerPort:       int(event.Conn.S_port),
+		Host:           hostname,
+		HostPort:       hostPort,
+		ContentLength:  0,
+		RequestStart:   int64(event.StartMonotimeNs),
+		Start:          int64(event.StartMonotimeNs),
+		End:            int64(event.EndMonotimeNs),
+		Status:         0,
+		Pid: request.PidInfo{
+			HostPID:   event.Pid.HostPid,
+			UserPID:   event.Pid.UserPid,
+			Namespace: event.Pid.Ns,
+		},
+	}, false, nil
 }

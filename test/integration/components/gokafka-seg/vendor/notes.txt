@@ -1,0 +1,15 @@
+1. Stick uprobes on this, on entry remember rw ptr, on exit parse rw.buffer and rw.conn (send)
+
+// github.com/segmentio/kafka-go/protocol.RoundTrip
+func RoundTrip(rw io.ReadWriter, apiVersion int16, correlationID int32, clientID string, req Message) (Message, error) {
+
+	rw has everything you need.
+
+2. consume
+
+Breakpoints on this:
+// github.com/segmentio/kafka-go.(*reader).read
+func (r *reader) read(ctx context.Context, offset int64, conn *Conn) (int64, error) {
+
+	r.topic gives you the topic, no need to parse anything
+	conn gives you net.TCPConn

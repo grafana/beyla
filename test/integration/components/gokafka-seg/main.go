@@ -25,8 +25,7 @@ func producerHandler(kafkaWriter *kafka.Writer) func(http.ResponseWriter, *http.
 		err = kafkaWriter.WriteMessages(req.Context(), msg)
 
 		if err != nil {
-			wrt.Write([]byte(err.Error()))
-			log.Fatalln(err)
+			fmt.Printf("error %v\n", err)
 		}
 	})
 }

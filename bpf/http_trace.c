@@ -18,3 +18,4 @@ const sql_request_trace *unused_3 __attribute__((unused));
 const tcp_req_t *unused_5 __attribute__((unused));
 const kafka_client_req_t *unused_6 __attribute__((unused));
 const redis_client_req_t *unused_7 __attribute__((unused));
+const kafka_go_req_t *unused_8 __attribute__((unused));

@@ -128,7 +128,7 @@ func isValidKafkaHeader(header *Header) bool {
 			return false
 		}
 	case Produce:
-		if header.APIVersion == 0 || header.APIVersion > 10 { // latest: Produce Request (Version: 10)
+		if header.APIVersion > 10 { // latest: Produce Request (Version: 10)
 			return false
 		}
 	default:
@@ -144,9 +144,9 @@ func processClientID(header *Header, pkt []byte, k *KafkaInfo) (int, error) {
 	offset := KafkaMinLength
 	if header.ClientIDSize > 0 {
 		clientID := pkt[offset : offset+int(header.ClientIDSize)]
-		if !isValidClientID(clientID, int(header.ClientIDSize)) {
-			return 0, errors.New("invalid client ID")
-		}
+		//if !isValidClientID(clientID, int(header.ClientIDSize)) {
+		//	return 0, errors.New("invalid client ID")
+		//}
 		offset += int(header.ClientIDSize)
 		k.ClientID = string(clientID)
 	} else if header.ClientIDSize < -1 {

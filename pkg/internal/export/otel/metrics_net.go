@@ -35,7 +35,7 @@ func nmlog() *slog.Logger {
 	return slog.With("component", "otel.NetworkMetricsExporter")
 }
 
-func newResource() *resource.Resource {
+func newNetworkResource() *resource.Resource {
 	attrs := []attribute.KeyValue{
 		semconv.ServiceName("beyla-network-flows"),
 		semconv.ServiceInstanceID(uuid.New().String()),
@@ -87,7 +87,7 @@ func newMetricsExporter(ctx context.Context, ctxInfo *global.ContextInfo, cfg *N
 		return nil, err
 	}
 
-	provider, err := newMeterProvider(newResource(), &exporter, cfg.Metrics.Interval)
+	provider, err := newMeterProvider(newNetworkResource(), &exporter, cfg.Metrics.Interval)
 
 	if err != nil {
 		log.Error("", "error", err)

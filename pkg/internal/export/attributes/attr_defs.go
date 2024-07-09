@@ -43,8 +43,7 @@ func getDefinitions(groups AttrGroups) map[Section]AttrReportGroup {
 	var prometheusAttributes = AttrReportGroup{
 		Disabled: !promEnabled,
 		Attributes: map[attr.Name]Default{
-			attr.TargetInstance:   true,
-			attr.ServiceNamespace: true,
+			attr.TargetInstance: true,
 		},
 	}
 	// ServiceName and ServiceNamespace are reported both as resource and metric attributes, as
@@ -88,24 +87,6 @@ func getDefinitions(groups AttrGroups) map[Section]AttrReportGroup {
 		Attributes: map[attr.Name]Default{
 			attr.DstCIDR: true,
 			attr.SrcCIDR: true,
-		},
-	}
-
-	// attributes to be reported exclusively for application metrics when
-	// kubernetes metadata is enabled
-	var appKubeAttributes = AttrReportGroup{
-		Disabled: !kubeEnabled,
-		Attributes: map[attr.Name]Default{
-			attr.K8sNamespaceName:   true,
-			attr.K8sPodName:         true,
-			attr.K8sDeploymentName:  true,
-			attr.K8sReplicaSetName:  true,
-			attr.K8sDaemonSetName:   true,
-			attr.K8sStatefulSetName: true,
-			attr.K8sNodeName:        true,
-			attr.K8sPodUID:          true,
-			attr.K8sPodStartTime:    true,
-			attr.K8sClusterName:     true,
 		},
 	}
 
@@ -159,11 +140,9 @@ func getDefinitions(groups AttrGroups) map[Section]AttrReportGroup {
 		},
 	}
 
+	// TODO: remove when we move them to resource-level attributes
 	var processAttributes = AttrReportGroup{
-		SubGroups: []*AttrReportGroup{&appKubeAttributes, &hostAttributes},
-		// TODO: attributes below are resource-level, but in App O11y we don't treat processes as resources,
-		// but applications. Let's first consider how to match processes and Applications before marking this spec
-		// as stable
+		SubGroups: []*AttrReportGroup{&hostAttributes},
 		Attributes: map[attr.Name]Default{
 			attr.ProcCommand:     true,
 			attr.ProcCPUState:    true,
@@ -180,7 +159,7 @@ func getDefinitions(groups AttrGroups) map[Section]AttrReportGroup {
 	}
 
 	var messagingAttributes = AttrReportGroup{
-		SubGroups: []*AttrReportGroup{&appAttributes, &appKubeAttributes},
+		SubGroups: []*AttrReportGroup{&appAttributes},
 		Attributes: map[attr.Name]Default{
 			attr.MessagingSystem:      true,
 			attr.MessagingDestination: true,
@@ -204,19 +183,19 @@ func getDefinitions(groups AttrGroups) map[Section]AttrReportGroup {
 			},
 		},
 		HTTPServerDuration.Section: {
-			SubGroups: []*AttrReportGroup{&appAttributes, &appKubeAttributes, &httpCommon, &serverInfo},
+			SubGroups: []*AttrReportGroup{&appAttributes, &httpCommon, &serverInfo},
 		},
 		HTTPServerRequestSize.Section: {
-			SubGroups: []*AttrReportGroup{&appAttributes, &appKubeAttributes, &httpCommon, &serverInfo},
+			SubGroups: []*AttrReportGroup{&appAttributes, &httpCommon, &serverInfo},
 		},
 		HTTPClientDuration.Section: {
-			SubGroups: []*AttrReportGroup{&appAttributes, &appKubeAttributes, &httpCommon, &httpClientInfo},
+			SubGroups: []*AttrReportGroup{&appAttributes, &httpCommon, &httpClientInfo},
 		},
 		HTTPClientRequestSize.Section: {
-			SubGroups: []*AttrReportGroup{&appAttributes, &appKubeAttributes, &httpCommon, &httpClientInfo},
+			SubGroups: []*AttrReportGroup{&appAttributes, &httpCommon, &httpClientInfo},
 		},
 		RPCClientDuration.Section: {
-			SubGroups: []*AttrReportGroup{&appAttributes, &appKubeAttributes, &grpcClientInfo},
+			SubGroups: []*AttrReportGroup{&appAttributes, &grpcClientInfo},
 			Attributes: map[attr.Name]Default{
 				attr.RPCMethod:         true,
 				attr.RPCSystem:         true,
@@ -224,7 +203,7 @@ func getDefinitions(groups AttrGroups) map[Section]AttrReportGroup {
 			},
 		},
 		RPCServerDuration.Section: {
-			SubGroups: []*AttrReportGroup{&appAttributes, &appKubeAttributes, &serverInfo},
+			SubGroups: []*AttrReportGroup{&appAttributes, &serverInfo},
 			Attributes: map[attr.Name]Default{
 				attr.RPCMethod:         true,
 				attr.RPCSystem:         true,
@@ -235,7 +214,7 @@ func getDefinitions(groups AttrGroups) map[Section]AttrReportGroup {
 			},
 		},
 		DBClientDuration.Section: {
-			SubGroups: []*AttrReportGroup{&appAttributes, &appKubeAttributes},
+			SubGroups: []*AttrReportGroup{&appAttributes},
 			Attributes: map[attr.Name]Default{
 				attr.DBOperation: true,
 				attr.DBSystem:    true,

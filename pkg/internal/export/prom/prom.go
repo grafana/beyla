@@ -35,6 +35,7 @@ const (
 	SpanMetricsCalls   = "traces_spanmetrics_calls_total"
 	SpanMetricsSizes   = "traces_spanmetrics_size_total"
 	TracesTargetInfo   = "traces_target_info"
+	TargetInfo         = "target_info"
 
 	ServiceGraphClient = "traces_service_graph_request_client_seconds"
 	ServiceGraphServer = "traces_service_graph_request_server_seconds"
@@ -44,31 +45,17 @@ const (
 	serviceKey          = "service"
 	serviceNamespaceKey = "service_namespace"
 
-	k8sNamespaceName   = "k8s_namespace_name"
-	k8sPodName         = "k8s_pod_name"
-	k8sDeploymentName  = "k8s_deployment_name"
-	k8sStatefulSetName = "k8s_statefulset_name"
-	k8sReplicaSetName  = "k8s_replicaset_name"
-	k8sDaemonSetName   = "k8s_daemonset_name"
-	k8sNodeName        = "k8s_node_name"
-	k8sPodUID          = "k8s_pod_uid"
-	k8sPodStartTime    = "k8s_pod_start_time"
-	k8sClusterName     = "k8s_cluster_name"
-
-	spanNameKey          = "span_name"
-	statusCodeKey        = "status_code"
-	spanKindKey          = "span_kind"
-	serviceInstanceKey   = "instance"
-	serviceJobKey        = "job"
-	sourceKey            = "source"
-	telemetryLanguageKey = "telemetry_sdk_language"
-	telemetrySDKKey      = "telemetry_sdk_name"
+	spanNameKey        = "span_name"
+	statusCodeKey      = "status_code"
+	spanKindKey        = "span_kind"
+	serviceInstanceKey = "instance"
+	serviceJobKey      = "job"
+	sourceKey          = "source"
 
 	clientKey          = "client"
 	clientNamespaceKey = "client_service_namespace"
 	serverKey          = "server"
 	serverNamespaceKey = "server_service_namespace"
-	connectionTypeKey  = "connection_type"
 
 	// default values for the histogram configuration
 	// from https://grafana.com/docs/mimir/latest/send/native-histograms/#migrate-from-classic-histograms
@@ -150,6 +137,7 @@ type metricsReporter struct {
 	msgProcessDuration    *Expirer[prometheus.Histogram]
 	httpRequestSize       *Expirer[prometheus.Histogram]
 	httpClientRequestSize *Expirer[prometheus.Histogram]
+	targetInfo            *Expirer[prometheus.Gauge]
 
 	// user-selected attributes for the application-level metrics
 	attrHTTPDuration          []attributes.Field[*request.Span, string]
@@ -184,7 +172,7 @@ type metricsReporter struct {
 
 	kubeEnabled bool
 
-	serviceCache *expirable.LRU[svc.UID, svc.ID]
+	serviceCache *expirable.LRU[svc.UID, *svc.ID]
 }
 
 func PrometheusEndpoint(
@@ -409,11 +397,17 @@ func newReporter(
 				Help: "size of service calls, in bytes, in trace span metrics format",
 			}, labelNamesSpans()).MetricVec, clock.Time, cfg.TTL)
 		}),
+		targetInfo: optionalGaugeProvider(cfg.OTelMetricsEnabled(), func() *Expirer[prometheus.Gauge] {
+			return NewExpirer[prometheus.Gauge](prometheus.NewGaugeVec(prometheus.GaugeOpts{
+				Name: TargetInfo,
+				Help: "target service information",
+			}, appMetricsTargetInfoLabelNames(kubeEnabled)).MetricVec, clock.Time, cfg.TTL)
+		}),
 		tracesTargetInfo: optionalGaugeProvider(cfg.SpanMetricsEnabled() || cfg.ServiceGraphMetricsEnabled(), func() *Expirer[prometheus.Gauge] {
 			return NewExpirer[prometheus.Gauge](prometheus.NewGaugeVec(prometheus.GaugeOpts{
 				Name: TracesTargetInfo,
 				Help: "target service information in trace span metric format",
-			}, labelNamesTargetInfo(kubeEnabled)).MetricVec, clock.Time, cfg.TTL)
+			}, appTracesTargetInfoLabelNames(kubeEnabled)).MetricVec, clock.Time, cfg.TTL)
 		}),
 		serviceGraphClient: optionalHistogramProvider(cfg.ServiceGraphMetricsEnabled(), func() *Expirer[prometheus.Histogram] {
 			return NewExpirer[prometheus.Histogram](prometheus.NewHistogramVec(prometheus.HistogramOpts{
@@ -450,7 +444,7 @@ func newReporter(
 	}
 
 	if cfg.SpanMetricsEnabled() {
-		mr.serviceCache = expirable.NewLRU(cfg.SpanMetricsServiceCacheSize, func(_ svc.UID, v svc.ID) {
+		mr.serviceCache = expirable.NewLRU(cfg.SpanMetricsServiceCacheSize, func(_ svc.UID, v *svc.ID) {
 			lv := mr.labelValuesTargetInfo(v)
 			mr.tracesTargetInfo.WithLabelValues(lv...).metric.Sub(1)
 		}, cfg.TTL)
@@ -625,8 +619,8 @@ func (r *metricsReporter) observe(span *request.Span) {
 
 		_, ok := r.serviceCache.Get(span.ServiceID.UID)
 		if !ok {
-			r.serviceCache.Add(span.ServiceID.UID, span.ServiceID)
-			lv = r.labelValuesTargetInfo(span.ServiceID)
+			r.serviceCache.Add(span.ServiceID.UID, &span.ServiceID)
+			lv = r.labelValuesTargetInfo(&span.ServiceID)
 			r.tracesTargetInfo.WithLabelValues(lv...).metric.Add(1)
 		}
 	}
@@ -646,12 +640,22 @@ func (r *metricsReporter) observe(span *request.Span) {
 }
 
 func appendK8sLabelNames(names []string) []string {
-	names = append(names, k8sNamespaceName, k8sPodName, k8sNodeName, k8sPodUID, k8sPodStartTime,
-		k8sDeploymentName, k8sReplicaSetName, k8sStatefulSetName, k8sDaemonSetName, k8sClusterName)
+	names = append(names,
+		attr.K8sNamespaceName.Prom(),
+		attr.K8sPodName.Prom(),
+		attr.K8sNodeName.Prom(),
+		attr.K8sPodUID.Prom(),
+		attr.K8sPodStartTime.Prom(),
+		attr.K8sDeploymentName.Prom(),
+		attr.K8sReplicaSetName.Prom(),
+		attr.K8sStatefulSetName.Prom(),
+		attr.K8sDaemonSetName.Prom(),
+		attr.K8sClusterName.Prom(),
+	)
 	return names
 }
 
-func appendK8sLabelValuesService(values []string, service svc.ID) []string {
+func appendK8sLabelValuesService(values []string, service *svc.ID) []string {
 	// must follow the order in appendK8sLabelNames
 	values = append(values,
 		service.Metadata[(attr.K8sNamespaceName)],
@@ -689,8 +693,24 @@ func (r *metricsReporter) labelValuesSpans(span *request.Span) []string {
 	}
 }
 
-func labelNamesTargetInfo(kubeEnabled bool) []string {
-	names := []string{serviceKey, serviceNamespaceKey, serviceInstanceKey, serviceJobKey, telemetryLanguageKey, telemetrySDKKey, sourceKey}
+func appMetricsTargetInfoLabelNames(kubeEnabled bool) []string {
+	return appTargetInfoLabelNames([]string{attr.ServiceName.Prom()}, kubeEnabled)
+}
+
+func appTracesTargetInfoLabelNames(kubeEnabled bool) []string {
+	return appTargetInfoLabelNames([]string{attr.Service.Prom()}, kubeEnabled)
+}
+
+func appTargetInfoLabelNames(names []string, kubeEnabled bool) []string {
+	names = append(names,
+		attr.ServiceNamespace.Prom(),
+		attr.ServiceInstanceID.Prom(),
+		attr.Job.Prom(),
+		attr.TelemetrySDKLanguage.Prom(),
+		attr.TelemetrySDKName.Prom(),
+		attr.Source.Prom(),
+		attr.HostName.Prom(),
+	)
 
 	if kubeEnabled {
 		names = appendK8sLabelNames(names)
@@ -699,7 +719,7 @@ func labelNamesTargetInfo(kubeEnabled bool) []string {
 	return names
 }
 
-func (r *metricsReporter) labelValuesTargetInfo(service svc.ID) []string {
+func (r *metricsReporter) labelValuesTargetInfo(service *svc.ID) []string {
 	job := service.Name
 	if service.Namespace != "" {
 		job = service.Namespace + "/" + job
@@ -712,6 +732,7 @@ func (r *metricsReporter) labelValuesTargetInfo(service svc.ID) []string {
 		service.SDKLanguage.String(),
 		"beyla",
 		"beyla",
+		service.HostName,
 	}
 
 	if r.kubeEnabled {

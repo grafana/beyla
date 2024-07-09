@@ -17,7 +17,6 @@ import (
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
-	"go.opentelemetry.io/otel/sdk/resource"
 	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 	"google.golang.org/grpc/credentials"
 
@@ -60,10 +59,15 @@ var DefaultBuckets = Buckets{
 	RequestSizeHistogram: []float64{0, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192},
 }
 
-func getResourceAttrs(service *svc.ID) *resource.Resource {
+func getAppResourceAttrs(service *svc.ID) []attribute.KeyValue {
+	return append(getResourceAttrs(service),
+		semconv.ServiceInstanceID(service.Instance),
+	)
+}
+
+func getResourceAttrs(service *svc.ID) []attribute.KeyValue {
 	attrs := []attribute.KeyValue{
 		semconv.ServiceName(service.Name),
-		semconv.ServiceInstanceID(service.Instance),
 		// SpanMetrics requires an extra attribute besides service name
 		// to generate the traces_target_info metric,
 		// so the service is visible in the ServicesList
@@ -81,7 +85,7 @@ func getResourceAttrs(service *svc.ID) *resource.Resource {
 		attrs = append(attrs, k.OTEL().String(v))
 	}
 
-	return resource.NewWithAttributes(semconv.SchemaURL, attrs...)
+	return attrs
 }
 
 // ReporterPool keeps an LRU cache of different OTEL reporters given a service name.

@@ -19,6 +19,12 @@ func pslog() *slog.Logger {
 type ID struct {
 	Service *svc.ID
 
+	// UID for a process. Even if the Service field has its own UID,
+	// a service might have multiple processes, so Application and Process
+	// will be different resources, each one with its own UID,
+	// which will be the composition of Service.Instance-ProcessID
+	UID svc.UID
+
 	ProcessID       int32
 	ParentProcessID int32
 	User            string
@@ -30,7 +36,7 @@ type ID struct {
 }
 
 func (i *ID) GetUID() svc.UID {
-	return i.Service.UID
+	return i.UID
 }
 
 // Status of a process after being harvested
@@ -71,6 +77,7 @@ func NewStatus(pid int32, svcID *svc.ID) *Status {
 	return &Status{ID: ID{
 		ProcessID: pid,
 		Service:   svcID,
+		UID:       svcID.UID + svc.UID("-"+strconv.Itoa(int(pid))),
 	}}
 }
 

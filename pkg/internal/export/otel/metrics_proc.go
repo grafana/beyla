@@ -5,11 +5,14 @@ import (
 	"fmt"
 	"log/slog"
 	"slices"
+	"strconv"
 
 	"github.com/mariomac/pipes/pipe"
 	"go.opentelemetry.io/otel/attribute"
 	metric2 "go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/sdk/metric"
+	"go.opentelemetry.io/otel/sdk/resource"
+	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 
 	"github.com/grafana/beyla/pkg/internal/export/attributes"
 	attr2 "github.com/grafana/beyla/pkg/internal/export/attributes/names"
@@ -52,7 +55,7 @@ type procMetricsExporter struct {
 	clock *expire.CachedClock
 
 	exporter  metric.Exporter
-	reporters ReporterPool[*svc.ID, *procMetrics]
+	reporters ReporterPool[*process.ID, *procMetrics]
 
 	log *slog.Logger
 
@@ -76,7 +79,6 @@ type procMetricsExporter struct {
 
 type procMetrics struct {
 	ctx      context.Context
-	service  *svc.ID
 	provider *metric.MeterProvider
 
 	// don't forget to add the cleanup code in cleanupAllMetricsInstances function
@@ -165,7 +167,7 @@ func newProcMetricsExporter(
 		mr.netObserver = netAggregatedObserver
 	}
 
-	mr.reporters = NewReporterPool[*svc.ID, *procMetrics](cfg.Metrics.ReportersCacheLen, cfg.Metrics.TTL, timeNow,
+	mr.reporters = NewReporterPool[*process.ID, *procMetrics](cfg.Metrics.ReportersCacheLen, cfg.Metrics.TTL, timeNow,
 		func(id svc.UID, v *expirable[*procMetrics]) {
 			llog := log.With("service", id)
 			llog.Debug("evicting metrics reporter from cache")
@@ -186,10 +188,25 @@ func newProcMetricsExporter(
 	return mr.Do, nil
 }
 
-func (me *procMetricsExporter) newMetricSet(service *svc.ID) (*procMetrics, error) {
-	log := me.log.With("service", service)
+func getProcessResourceAttrs(procID *process.ID) []attribute.KeyValue {
+	return append(
+		getAppResourceAttrs(procID.Service),
+		semconv.ServiceInstanceID(string(procID.UID)),
+		attr2.ProcCommand.OTEL().String(procID.Command),
+		attr2.ProcOwner.OTEL().String(procID.User),
+		attr2.ProcParentPid.OTEL().String(strconv.Itoa(int(procID.ParentProcessID))),
+		attr2.ProcPid.OTEL().String(strconv.Itoa(int(procID.ProcessID))),
+		attr2.ProcCommandLine.OTEL().String(procID.CommandLine),
+		attr2.ProcCommandArgs.OTEL().StringSlice(procID.CommandArgs),
+		attr2.ProcExecName.OTEL().String(procID.ExecName),
+		attr2.ProcExecPath.OTEL().String(procID.ExecPath),
+	)
+}
+
+func (me *procMetricsExporter) newMetricSet(procID *process.ID) (*procMetrics, error) {
+	log := me.log.With("service", procID.Service, "processID", procID.UID)
 	log.Debug("creating new Metrics exporter")
-	resources := getResourceAttrs(service)
+	resources := resource.NewWithAttributes(semconv.SchemaURL, getProcessResourceAttrs(procID)...)
 	opts := []metric.Option{
 		metric.WithResource(resources),
 		metric.WithReader(metric.NewPeriodicReader(me.exporter,
@@ -198,7 +215,6 @@ func (me *procMetricsExporter) newMetricSet(service *svc.ID) (*procMetrics, erro
 
 	m := procMetrics{
 		ctx:      me.ctx,
-		service:  service,
 		provider: metric.NewMeterProvider(opts...),
 	}
 
@@ -285,10 +301,10 @@ func (me *procMetricsExporter) Do(in <-chan []*process.Status) {
 	for i := range in {
 		me.clock.Update()
 		for _, s := range i {
-			reporter, err := me.reporters.For(s.Service)
+			reporter, err := me.reporters.For(&s.ID)
 			if err != nil {
 				me.log.Error("unexpected error creating OTEL resource. Ignoring metric",
-					err, "service", s.Service)
+					err, "service", s.ID.Service)
 				continue
 			}
 			me.observeMetric(reporter, s)

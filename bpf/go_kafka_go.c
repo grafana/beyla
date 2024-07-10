@@ -30,7 +30,15 @@ typedef struct produce_req {
 
 typedef struct topic {
     char name[MAX_TOPIC_NAME_LEN];
+    tp_info_t tp;
 } topic_t;
+
+struct {
+    __uint(type, BPF_MAP_TYPE_LRU_HASH);
+    __type(key, void *); // w_ptr
+    __type(value, tp_info_t); // traceparent
+    __uint(max_entries, MAX_CONCURRENT_REQUESTS);
+} produce_traceparents SEC(".maps");
 
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
@@ -61,6 +69,21 @@ struct {
 } fetch_requests SEC(".maps");
 
 // Code for the produce messages path
+SEC("uprobe/writer_write_messages")
+int uprobe_writer_write_messages(struct pt_regs *ctx) {
+    void *goroutine_addr = (void *)GOROUTINE_PTR(ctx);
+    void *w_ptr = (void *)GO_PARAM1(ctx);
+    bpf_dbg_printk("=== uprobe/kafka-go writer_write_messages %llx w_ptr %llx === ", goroutine_addr, w_ptr);
+
+    tp_info_t tp = {};
+
+    // We don't look up in the headers, no http/grpc request, therefore 0 as last argument
+    client_trace_parent(goroutine_addr, &tp, 0);
+
+    bpf_map_update_elem(&produce_traceparents, &w_ptr, &tp, BPF_ANY);
+    return 0;
+}
+
 SEC("uprobe/writer_produce")
 int uprobe_writer_produce(struct pt_regs *ctx) {
     void *goroutine_addr = (void *)GOROUTINE_PTR(ctx);
@@ -75,13 +98,21 @@ int uprobe_writer_produce(struct pt_regs *ctx) {
         bpf_dbg_printk("topic_ptr %llx", topic_ptr);
         if (topic_ptr) {
             topic_t topic = {};
+
+            tp_info_t *tp = bpf_map_lookup_elem(&produce_traceparents, &w_ptr);
+            if (tp) {
+                bpf_dbg_printk("found existing traceparent %llx", tp);
+                __builtin_memcpy(&topic.tp, tp, sizeof(tp_info_t));
+            } else {
+                urand_bytes(topic.tp.trace_id, TRACE_ID_SIZE_BYTES);            
+                urand_bytes(topic.tp.span_id, SPAN_ID_SIZE_BYTES);
+            }
+
             bpf_probe_read_user(&topic.name, sizeof(topic.name), topic_ptr);
             bpf_map_update_elem(&ongoing_produce_topics, &goroutine_addr, &topic, BPF_ANY);
         }
+        bpf_map_delete_elem(&produce_traceparents, &w_ptr);
     }
-
-    // TODO: Since we can find the relationship from the originating goroutine, we can set the traceparent.
-    // Add it to topic_t.
 
     return 0;
 }
@@ -163,7 +194,8 @@ int uprobe_protocol_roundtrip_ret(struct pt_regs *ctx) {
                     get_conn_info(conn_ptr, &trace->conn);
                 }
 
-                bpf_probe_read(trace->topic, MAX_TOPIC_NAME_LEN, ((void *)topic_ptr->name));
+                __builtin_memcpy(trace->topic, topic_ptr->name, MAX_TOPIC_NAME_LEN);
+                __builtin_memcpy(&trace->tp, &(topic_ptr->tp), sizeof(tp_info_t));
                 task_pid(&trace->pid);
                 bpf_ringbuf_submit(trace, get_flags());
             }

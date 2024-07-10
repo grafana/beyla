@@ -47,7 +47,10 @@ type bpfProduceReqT struct {
 	StartMonotimeNs uint64
 }
 
-type bpfTopicT struct{ Name [64]int8 }
+type bpfTopicT struct {
+	Name [64]int8
+	Tp   bpfTpInfoT
+}
 
 type bpfTpInfoPidT struct {
 	Tp    bpfTpInfoT
@@ -113,6 +116,7 @@ type bpfProgramSpecs struct {
 	UprobeReaderReadRet        *ebpf.ProgramSpec `ebpf:"uprobe_reader_read_ret"`
 	UprobeReaderSendMessage    *ebpf.ProgramSpec `ebpf:"uprobe_reader_send_message"`
 	UprobeWriterProduce        *ebpf.ProgramSpec `ebpf:"uprobe_writer_produce"`
+	UprobeWriterWriteMessages  *ebpf.ProgramSpec `ebpf:"uprobe_writer_write_messages"`
 }
 
 // bpfMapSpecs contains maps before they are loaded into the kernel.
@@ -129,6 +133,7 @@ type bpfMapSpecs struct {
 	OngoingProduceTopics      *ebpf.MapSpec `ebpf:"ongoing_produce_topics"`
 	OngoingServerConnections  *ebpf.MapSpec `ebpf:"ongoing_server_connections"`
 	ProduceRequests           *ebpf.MapSpec `ebpf:"produce_requests"`
+	ProduceTraceparents       *ebpf.MapSpec `ebpf:"produce_traceparents"`
 	TraceMap                  *ebpf.MapSpec `ebpf:"trace_map"`
 }
 
@@ -161,6 +166,7 @@ type bpfMaps struct {
 	OngoingProduceTopics      *ebpf.Map `ebpf:"ongoing_produce_topics"`
 	OngoingServerConnections  *ebpf.Map `ebpf:"ongoing_server_connections"`
 	ProduceRequests           *ebpf.Map `ebpf:"produce_requests"`
+	ProduceTraceparents       *ebpf.Map `ebpf:"produce_traceparents"`
 	TraceMap                  *ebpf.Map `ebpf:"trace_map"`
 }
 
@@ -176,6 +182,7 @@ func (m *bpfMaps) Close() error {
 		m.OngoingProduceTopics,
 		m.OngoingServerConnections,
 		m.ProduceRequests,
+		m.ProduceTraceparents,
 		m.TraceMap,
 	)
 }
@@ -191,6 +198,7 @@ type bpfPrograms struct {
 	UprobeReaderReadRet        *ebpf.Program `ebpf:"uprobe_reader_read_ret"`
 	UprobeReaderSendMessage    *ebpf.Program `ebpf:"uprobe_reader_send_message"`
 	UprobeWriterProduce        *ebpf.Program `ebpf:"uprobe_writer_produce"`
+	UprobeWriterWriteMessages  *ebpf.Program `ebpf:"uprobe_writer_write_messages"`
 }
 
 func (p *bpfPrograms) Close() error {
@@ -202,6 +210,7 @@ func (p *bpfPrograms) Close() error {
 		p.UprobeReaderReadRet,
 		p.UprobeReaderSendMessage,
 		p.UprobeWriterProduce,
+		p.UprobeWriterWriteMessages,
 	)
 }
 

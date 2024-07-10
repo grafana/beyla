@@ -47,7 +47,10 @@ type bpf_debugProduceReqT struct {
 	StartMonotimeNs uint64
 }
 
-type bpf_debugTopicT struct{ Name [64]int8 }
+type bpf_debugTopicT struct {
+	Name [64]int8
+	Tp   bpf_debugTpInfoT
+}
 
 type bpf_debugTpInfoPidT struct {
 	Tp    bpf_debugTpInfoT
@@ -113,6 +116,7 @@ type bpf_debugProgramSpecs struct {
 	UprobeReaderReadRet        *ebpf.ProgramSpec `ebpf:"uprobe_reader_read_ret"`
 	UprobeReaderSendMessage    *ebpf.ProgramSpec `ebpf:"uprobe_reader_send_message"`
 	UprobeWriterProduce        *ebpf.ProgramSpec `ebpf:"uprobe_writer_produce"`
+	UprobeWriterWriteMessages  *ebpf.ProgramSpec `ebpf:"uprobe_writer_write_messages"`
 }
 
 // bpf_debugMapSpecs contains maps before they are loaded into the kernel.
@@ -130,6 +134,7 @@ type bpf_debugMapSpecs struct {
 	OngoingProduceTopics      *ebpf.MapSpec `ebpf:"ongoing_produce_topics"`
 	OngoingServerConnections  *ebpf.MapSpec `ebpf:"ongoing_server_connections"`
 	ProduceRequests           *ebpf.MapSpec `ebpf:"produce_requests"`
+	ProduceTraceparents       *ebpf.MapSpec `ebpf:"produce_traceparents"`
 	TraceMap                  *ebpf.MapSpec `ebpf:"trace_map"`
 }
 
@@ -163,6 +168,7 @@ type bpf_debugMaps struct {
 	OngoingProduceTopics      *ebpf.Map `ebpf:"ongoing_produce_topics"`
 	OngoingServerConnections  *ebpf.Map `ebpf:"ongoing_server_connections"`
 	ProduceRequests           *ebpf.Map `ebpf:"produce_requests"`
+	ProduceTraceparents       *ebpf.Map `ebpf:"produce_traceparents"`
 	TraceMap                  *ebpf.Map `ebpf:"trace_map"`
 }
 
@@ -179,6 +185,7 @@ func (m *bpf_debugMaps) Close() error {
 		m.OngoingProduceTopics,
 		m.OngoingServerConnections,
 		m.ProduceRequests,
+		m.ProduceTraceparents,
 		m.TraceMap,
 	)
 }
@@ -194,6 +201,7 @@ type bpf_debugPrograms struct {
 	UprobeReaderReadRet        *ebpf.Program `ebpf:"uprobe_reader_read_ret"`
 	UprobeReaderSendMessage    *ebpf.Program `ebpf:"uprobe_reader_send_message"`
 	UprobeWriterProduce        *ebpf.Program `ebpf:"uprobe_writer_produce"`
+	UprobeWriterWriteMessages  *ebpf.Program `ebpf:"uprobe_writer_write_messages"`
 }
 
 func (p *bpf_debugPrograms) Close() error {
@@ -205,6 +213,7 @@ func (p *bpf_debugPrograms) Close() error {
 		p.UprobeReaderReadRet,
 		p.UprobeReaderSendMessage,
 		p.UprobeWriterProduce,
+		p.UprobeWriterWriteMessages,
 	)
 }
 

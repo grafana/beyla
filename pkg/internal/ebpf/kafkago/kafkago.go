@@ -101,6 +101,10 @@ func (p *Tracer) AddCloser(c ...io.Closer) {
 
 func (p *Tracer) GoProbes() map[string]ebpfcommon.FunctionPrograms {
 	return map[string]ebpfcommon.FunctionPrograms{
+		"github.com/segmentio/kafka-go.(*Writer).WriteMessages": { // runs on the same gorountine as other requests, finds traceparent info
+			Start:    p.bpfObjects.UprobeWriterWriteMessages,
+			Required: true,
+		},
 		"github.com/segmentio/kafka-go.(*Writer).produce": { // stores the current topic
 			Start:    p.bpfObjects.UprobeWriterProduce,
 			Required: true,

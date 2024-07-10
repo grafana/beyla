@@ -7,8 +7,8 @@ import (
 	"unsafe"
 
 	"github.com/cilium/ebpf/ringbuf"
-
 	"github.com/grafana/beyla/pkg/internal/request"
+	"go.opentelemetry.io/otel/trace"
 )
 
 func ReadGoSaramaRequestIntoSpan(record *ringbuf.Record) (request.Span, bool, error) {
@@ -97,6 +97,9 @@ func ReadGoKafkaGoRequestIntoSpan(record *ringbuf.Record) (request.Span, bool, e
 		RequestStart:   int64(event.StartMonotimeNs),
 		Start:          int64(event.StartMonotimeNs),
 		End:            int64(event.EndMonotimeNs),
+		TraceID:        trace.TraceID(event.Tp.TraceId),
+		SpanID:         trace.SpanID(event.Tp.SpanId),
+		ParentSpanID:   trace.SpanID(event.Tp.ParentId),
 		Status:         0,
 		Pid: request.PidInfo{
 			HostPID:   event.Pid.HostPid,

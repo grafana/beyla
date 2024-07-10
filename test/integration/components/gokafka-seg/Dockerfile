@@ -21,7 +21,7 @@ WORKDIR /
 COPY --from=builder /src/testserver .
 USER 0:0
 
-ENV kafkaURL="kafka:9093"
+ENV kafkaURL="kafka:9092"
 ENV topic="logging"
 ENV groupID="1"
 

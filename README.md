@@ -96,6 +96,7 @@ The Go instrumentation is limited to certain specific libraries.
 | [Go x/net/http2](https://golang.org/x/net/http2)    | ✅         |
 | [Go-Redis v9](github.com/redis/go-redis)            | ✅         |
 | [Sarama Kafka](github.com/IBM/sarama)               | ✅         |
+| [kafka-Go](https://github.com/segmentio/kafka-go)   | ✅         |
 
 HTTPS instrumentation is limited to Go programs and libraries/languages using libssl3.
 

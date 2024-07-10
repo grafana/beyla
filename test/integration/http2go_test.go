@@ -151,7 +151,6 @@ func testNestedHTTP2Traces(t *testing.T, url string) {
 }
 
 func TestHTTP2Go(t *testing.T) {
-	DockerPrune(t)
 	compose, err := docker.ComposeSuite("docker-compose-http2.yml", path.Join(pathOutput, "test-suite-http2.log"))
 	// we are going to setup discovery directly in the configuration file
 	compose.Env = append(compose.Env, `BEYLA_EXECUTABLE_NAME=`, `BEYLA_OPEN_PORT=`)

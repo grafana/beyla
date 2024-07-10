@@ -65,7 +65,7 @@ services:
 
   # OpenTelemetry Collector for Metrics. For Traces, we use directly Jaeger
   otelcol:
-    image: otel/opentelemetry-collector-contrib:0.103.0
+    image: otel/opentelemetry-collector-contrib:0.104.0
     container_name: otel-col
     deploy:
       resources:

@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	kafka "github.com/segmentio/kafka-go"
 )
@@ -53,6 +54,18 @@ func main() {
 	// get kafka writer using environment variables.
 	kafkaURL := os.Getenv("kafkaURL")
 	topic := os.Getenv("topic")
+
+	for {
+		client := kafka.Client{
+			Addr: kafka.TCP(kafkaURL),
+		}
+		_, err := client.Metadata(context.Background(), &kafka.MetadataRequest{})
+		if err == nil {
+			break
+		}
+		fmt.Printf("Waiting on kafka to start ...\n")
+		time.Sleep(2 * time.Second)
+	}
 
 	kafkaWriter := getKafkaWriter(kafkaURL, topic)
 	defer kafkaWriter.Close()

@@ -7,8 +7,9 @@ import (
 	"unsafe"
 
 	"github.com/cilium/ebpf/ringbuf"
-	"github.com/grafana/beyla/pkg/internal/request"
 	"go.opentelemetry.io/otel/trace"
+
+	"github.com/grafana/beyla/pkg/internal/request"
 )
 
 func ReadGoSaramaRequestIntoSpan(record *ringbuf.Record) (request.Span, bool, error) {

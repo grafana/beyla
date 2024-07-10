@@ -29,8 +29,8 @@ import (
 	"github.com/grafana/beyla/pkg/internal/svc"
 )
 
-//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf ../../../../bpf/go_kafka_seg.c -- -I../../../../bpf/headers
-//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf_debug ../../../../bpf/go_kafka_seg.c -- -I../../../../bpf/headers -DBPF_DEBUG
+//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf ../../../../bpf/go_kafka_go.c -- -I../../../../bpf/headers
+//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf_debug ../../../../bpf/go_kafka_go.c -- -I../../../../bpf/headers -DBPF_DEBUG
 
 type Tracer struct {
 	log        *slog.Logger
@@ -77,6 +77,9 @@ func (p *Tracer) Constants(_ *exec.FileInfo, offsets *goexec.Offsets) map[string
 	}
 
 	for _, s := range []string{
+		"kafka_go_writer_topic_pos",
+		"kafka_go_protocol_conn_pos",
+		"kafka_go_reader_topic_pos",
 		"conn_fd_pos",
 		"fd_laddr_pos",
 		"fd_raddr_pos",

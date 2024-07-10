@@ -10,7 +10,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package gokafka
+package sarama
 
 import (
 	"context"
@@ -29,8 +29,8 @@ import (
 	"github.com/grafana/beyla/pkg/internal/svc"
 )
 
-//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf ../../../../bpf/go_kafka.c -- -I../../../../bpf/headers
-//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf_debug ../../../../bpf/go_kafka.c -- -I../../../../bpf/headers -DBPF_DEBUG
+//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf ../../../../bpf/go_sarama.c -- -I../../../../bpf/headers
+//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf_debug ../../../../bpf/go_sarama.c -- -I../../../../bpf/headers -DBPF_DEBUG
 
 type Tracer struct {
 	log        *slog.Logger
@@ -42,7 +42,7 @@ type Tracer struct {
 }
 
 func New(cfg *beyla.Config, metrics imetrics.Reporter) *Tracer {
-	log := slog.With("component", "gokafka.Tracer")
+	log := slog.With("component", "sarama.Tracer")
 	return &Tracer{
 		log:        log,
 		cfg:        &cfg.EBPF,

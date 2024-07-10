@@ -11,8 +11,8 @@ import (
 	"github.com/grafana/beyla/pkg/internal/request"
 )
 
-func ReadGoKafkaRequestIntoSpan(record *ringbuf.Record) (request.Span, bool, error) {
-	var event GoKafkaClientInfo
+func ReadGoSaramaRequestIntoSpan(record *ringbuf.Record) (request.Span, bool, error) {
+	var event GoSaramaClientInfo
 
 	err := binary.Read(bytes.NewBuffer(record.RawSample), binary.LittleEndian, &event)
 	if err != nil {
@@ -24,13 +24,13 @@ func ReadGoKafkaRequestIntoSpan(record *ringbuf.Record) (request.Span, bool, err
 	info, err := ProcessKafkaRequest(event.Buf[:])
 
 	if err == nil {
-		return GoKafkaToSpan(&event, info), false, nil
+		return GoKafkaSaramaToSpan(&event, info), false, nil
 	}
 
 	return request.Span{}, true, nil // ignore if we couldn't parse it
 }
 
-func GoKafkaToSpan(event *GoKafkaClientInfo, data *KafkaInfo) request.Span {
+func GoKafkaSaramaToSpan(event *GoSaramaClientInfo, data *KafkaInfo) request.Span {
 	peer := ""
 	hostname := ""
 	hostPort := 0

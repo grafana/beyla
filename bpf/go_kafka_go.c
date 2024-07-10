@@ -18,9 +18,9 @@
 #define KAFKA_API_FETCH   1
 #define KAFKA_API_PRODUCE 0
 
-volatile const u64 kafka_go_writer_topic_pos = 0x10;
-volatile const u64 kafka_go_roundtrip_conn_pos = 0x8;
-volatile const u64 kafka_go_reader_topic_pos = 0x40;
+volatile const u64 kafka_go_writer_topic_pos;
+volatile const u64 kafka_go_protocol_conn_pos;
+volatile const u64 kafka_go_reader_topic_pos;
 
 typedef struct produce_req {
     u64 msg_ptr;
@@ -121,7 +121,7 @@ int uprobe_protocol_roundtrip(struct pt_regs *ctx) {
         bpf_dbg_printk("Found topic %llx", topic_ptr);
         if (topic_ptr) {
             produce_req_t p = {
-                .conn_ptr = ((u64)rw_ptr) + kafka_go_roundtrip_conn_pos,
+                .conn_ptr = ((u64)rw_ptr) + kafka_go_protocol_conn_pos,
                 .msg_ptr = (u64)msg_ptr,
                 .start_monotime_ns = bpf_ktime_get_ns(),
             };

@@ -78,6 +78,10 @@ type ID struct {
 	HostName string
 }
 
+func (i *ID) GetUID() UID {
+	return i.UID
+}
+
 func (i *ID) String() string {
 	if i.Namespace != "" {
 		return i.Namespace + "/" + i.Name

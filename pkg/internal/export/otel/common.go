@@ -17,7 +17,6 @@ import (
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
-	"go.opentelemetry.io/otel/sdk/resource"
 	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 	"google.golang.org/grpc/credentials"
 
@@ -60,10 +59,15 @@ var DefaultBuckets = Buckets{
 	RequestSizeHistogram: []float64{0, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192},
 }
 
-func getResourceAttrs(service *svc.ID) *resource.Resource {
+func getAppResourceAttrs(service *svc.ID) []attribute.KeyValue {
+	return append(getResourceAttrs(service),
+		semconv.ServiceInstanceID(service.Instance),
+	)
+}
+
+func getResourceAttrs(service *svc.ID) []attribute.KeyValue {
 	attrs := []attribute.KeyValue{
 		semconv.ServiceName(service.Name),
-		semconv.ServiceInstanceID(service.Instance),
 		// SpanMetrics requires an extra attribute besides service name
 		// to generate the traces_target_info metric,
 		// so the service is visible in the ServicesList
@@ -71,6 +75,7 @@ func getResourceAttrs(service *svc.ID) *resource.Resource {
 		semconv.TelemetrySDKLanguageKey.String(service.SDKLanguage.String()),
 		// We set the SDK name as Beyla, so we can distinguish beyla generated metrics from other SDKs
 		semconv.TelemetrySDKNameKey.String("beyla"),
+		semconv.HostName(service.HostName),
 	}
 
 	if service.Namespace != "" {
@@ -81,17 +86,18 @@ func getResourceAttrs(service *svc.ID) *resource.Resource {
 		attrs = append(attrs, k.OTEL().String(v))
 	}
 
-	return resource.NewWithAttributes(semconv.SchemaURL, attrs...)
+	return attrs
 }
 
 // ReporterPool keeps an LRU cache of different OTEL reporters given a service name.
-type ReporterPool[T any] struct {
+type ReporterPool[K uidGetter, T any] struct {
 	pool *simplelru.LRU[svc.UID, *expirable[T]]
 
-	itemConstructor func(*svc.ID) (T, error)
+	itemConstructor func(getter K) (T, error)
 
-	lastReporter *expirable[T]
-	lastService  *svc.ID
+	lastReporter   *expirable[T]
+	lastService    uidGetter
+	lastServiceUID svc.UID
 
 	// TODO: use cacheable clock for efficiency
 	clock          expire.Clock
@@ -106,23 +112,27 @@ type expirable[T any] struct {
 	value      T
 }
 
+type uidGetter interface {
+	GetUID() svc.UID
+}
+
 // NewReporterPool creates a ReporterPool instance given a cache length,
 // an eviction callback to be invoked each time an element is removed
 // from the cache, and a constructor function that will specify how to
 // instantiate the generic OTEL metrics/traces reporter.
-func NewReporterPool[T any](
+func NewReporterPool[K uidGetter, T any](
 	cacheLen int,
 	ttl time.Duration,
 	clock expire.Clock,
 	callback simplelru.EvictCallback[svc.UID, *expirable[T]],
-	itemConstructor func(id *svc.ID) (T, error),
-) ReporterPool[T] {
+	itemConstructor func(id K) (T, error),
+) ReporterPool[K, T] {
 	pool, err := simplelru.NewLRU[svc.UID, *expirable[T]](cacheLen, callback)
 	if err != nil {
 		// should never happen: bug!
 		panic(err)
 	}
-	return ReporterPool[T]{
+	return ReporterPool[K, T]{
 		pool:            pool,
 		itemConstructor: itemConstructor,
 		ttl:             ttl,
@@ -133,7 +143,7 @@ func NewReporterPool[T any](
 
 // For retrieves the associated item for the given service name, or
 // creates a new one if it does not exist
-func (rp *ReporterPool[T]) For(service *svc.ID) (T, error) {
+func (rp *ReporterPool[K, T]) For(service K) (T, error) {
 	rp.expireOldReporters()
 	// optimization: do not query the resources' cache if the
 	// previously processed span belongs to the same service name
@@ -142,12 +152,14 @@ func (rp *ReporterPool[T]) For(service *svc.ID) (T, error) {
 	// only a single instrumented process.
 	// In multi-process tracing, this is likely to happen as most
 	// tracers group traces belonging to the same service in the same slice.
-	if rp.lastService == nil || service.UID != rp.lastService.UID {
-		lm, err := rp.get(service)
+	svcUID := service.GetUID()
+	if rp.lastServiceUID == "" || svcUID != rp.lastService.GetUID() {
+		lm, err := rp.get(svcUID, service)
 		if err != nil {
 			var t T
 			return t, err
 		}
+		rp.lastServiceUID = svcUID
 		rp.lastService = service
 		rp.lastReporter = lm
 	}
@@ -159,7 +171,7 @@ func (rp *ReporterPool[T]) For(service *svc.ID) (T, error) {
 
 // expireOldReporters will remove the metrics reporters that haven't been accessed
 // during the last TTL period
-func (rp *ReporterPool[T]) expireOldReporters() {
+func (rp *ReporterPool[K, T]) expireOldReporters() {
 	now := rp.clock()
 	if now.Sub(rp.lastExpiration) < rp.ttl {
 		return
@@ -174,16 +186,16 @@ func (rp *ReporterPool[T]) expireOldReporters() {
 	}
 }
 
-func (rp *ReporterPool[T]) get(service *svc.ID) (*expirable[T], error) {
-	if e, ok := rp.pool.Get(service.UID); ok {
+func (rp *ReporterPool[K, T]) get(uid svc.UID, service K) (*expirable[T], error) {
+	if e, ok := rp.pool.Get(uid); ok {
 		return e, nil
 	}
 	m, err := rp.itemConstructor(service)
 	if err != nil {
-		return nil, fmt.Errorf("creating resource for service %q: %w", service, err)
+		return nil, fmt.Errorf("creating resource for service %v: %w", service, err)
 	}
 	e := &expirable[T]{value: m}
-	rp.pool.Add(service.UID, e)
+	rp.pool.Add(uid, e)
 	return e, nil
 }
 

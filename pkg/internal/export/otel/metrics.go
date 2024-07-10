@@ -18,6 +18,7 @@ import (
 	instrument "go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/sdk/instrumentation"
 	"go.opentelemetry.io/otel/sdk/metric"
+	"go.opentelemetry.io/otel/sdk/resource"
 	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 
 	"github.com/grafana/beyla/pkg/internal/export/attributes"
@@ -162,7 +163,7 @@ type MetricsReporter struct {
 	cfg        *MetricsConfig
 	attributes *attributes.AttrSelector
 	exporter   metric.Exporter
-	reporters  ReporterPool[*Metrics]
+	reporters  ReporterPool[*svc.ID, *Metrics]
 	is         instrumentations.InstrumentationSelection
 
 	// user-selected fields for each of the reported metrics
@@ -276,7 +277,7 @@ func newMetricsReporter(
 			request.SpanOTELGetters, mr.attributes.For(attributes.MessagingProcessDuration))
 	}
 
-	mr.reporters = NewReporterPool(cfg.ReportersCacheLen, cfg.TTL, timeNow,
+	mr.reporters = NewReporterPool[*svc.ID, *Metrics](cfg.ReportersCacheLen, cfg.TTL, timeNow,
 		func(id svc.UID, v *expirable[*Metrics]) {
 			if mr.cfg.SpanMetricsEnabled() {
 				attrOpt := instrument.WithAttributeSet(mr.metricResourceAttributes(v.value.service))
@@ -517,7 +518,7 @@ func (mr *MetricsReporter) setupGraphMeters(m *Metrics, meter instrument.Meter) 
 func (mr *MetricsReporter) newMetricSet(service *svc.ID) (*Metrics, error) {
 	mlog := mlog().With("service", service)
 	mlog.Debug("creating new Metrics reporter")
-	resources := getResourceAttrs(service)
+	resources := resource.NewWithAttributes(semconv.SchemaURL, getAppResourceAttrs(service)...)
 
 	opts := []metric.Option{
 		metric.WithResource(resources),

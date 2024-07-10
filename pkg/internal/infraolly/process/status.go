@@ -16,15 +16,32 @@ func pslog() *slog.Logger {
 	return slog.With("component", "process.Collector")
 }
 
+type ID struct {
+	Service *svc.ID
+
+	// UID for a process. Even if the Service field has its own UID,
+	// a service might have multiple processes, so Application and Process
+	// will be different resources, each one with its own UID,
+	// which will be the composition of Service.Instance-ProcessID
+	UID svc.UID
+
+	ProcessID       int32
+	ParentProcessID int32
+	User            string
+	Command         string
+	CommandArgs     []string
+	CommandLine     string
+	ExecName        string
+	ExecPath        string
+}
+
+func (i *ID) GetUID() svc.UID {
+	return i.UID
+}
+
 // Status of a process after being harvested
 type Status struct {
-	ProcessID   int32
-	User        string
-	Command     string
-	CommandArgs []string
-	CommandLine string
-	ExecName    string
-	ExecPath    string
+	ID ID
 
 	// Despite values below are absolute counters, the OTEL and Prometheus APIs require that
 	// they are specified as deltas
@@ -43,10 +60,9 @@ type Status struct {
 	MemoryRSSBytesDelta int64
 	MemoryVMSBytesDelta int64
 
-	Status          string
-	ParentProcessID int32
-	ThreadCount     int32
-	FdCount         int32
+	Status      string
+	ThreadCount int32
+	FdCount     int32
 
 	IOReadCount       uint64
 	IOWriteCount      uint64
@@ -55,56 +71,25 @@ type Status struct {
 
 	NetTxBytesDelta  int64
 	NetRcvBytesDelta int64
-
-	Service *svc.ID
 }
 
 func NewStatus(pid int32, svcID *svc.ID) *Status {
-	return &Status{
+	return &Status{ID: ID{
 		ProcessID: pid,
 		Service:   svcID,
-	}
+		UID:       svcID.UID + svc.UID("-"+strconv.Itoa(int(pid))),
+	}}
 }
 
+// OTELGetters is currently empty as most attributes are resource-level,
+// but left as a placeholder for future attribute additions.
 // nolint:cyclop
 func OTELGetters(name attr.Name) (attributes.Getter[*Status, attribute.KeyValue], bool) {
 	var g attributes.Getter[*Status, attribute.KeyValue]
 	switch name {
-	case attr.HostName:
-		g = func(s *Status) attribute.KeyValue { return attribute.Key(attr.HostName).String(s.Service.HostName) }
-	case attr.ProcCommand:
-		g = func(s *Status) attribute.KeyValue { return attribute.Key(attr.ProcCommand).String(s.Command) }
-	case attr.ProcCommandLine:
-		g = func(s *Status) attribute.KeyValue {
-			return attribute.Key(attr.ProcCommandLine).String(s.CommandLine)
-		}
-	case attr.ProcExecName:
-		g = func(status *Status) attribute.KeyValue {
-			return attribute.Key(attr.ProcExecName).String(status.ExecName)
-		}
-	case attr.ProcExecPath:
-		g = func(status *Status) attribute.KeyValue {
-			return attribute.Key(attr.ProcExecPath).String(status.ExecPath)
-		}
-	case attr.ProcCommandArgs:
-		g = func(status *Status) attribute.KeyValue {
-			return attribute.Key(attr.ProcCommandArgs).StringSlice(status.CommandArgs)
-		}
-	case attr.ProcOwner:
-		g = func(s *Status) attribute.KeyValue { return attribute.Key(attr.ProcOwner).String(s.User) }
-	case attr.ProcParentPid:
-		g = func(s *Status) attribute.KeyValue {
-			return attribute.Key(attr.ProcParentPid).Int(int(s.ParentProcessID))
-		}
-	case attr.ProcPid:
-		g = func(s *Status) attribute.KeyValue {
-			return attribute.Key(attr.ProcPid).Int(int(s.ProcessID))
-		}
 	case attr.ProcCPUState, attr.ProcDiskIODir, attr.ProcNetIODir:
 		// the attributes are handled explicitly by the OTEL exporter, but we need to
 		// ignore them to avoid that the default case tries to report them from service metadata
-	default:
-		g = func(s *Status) attribute.KeyValue { return attribute.String(string(name), s.Service.Metadata[name]) }
 	}
 	return g, g != nil
 }
@@ -114,28 +99,28 @@ func PromGetters(name attr.Name) (attributes.Getter[*Status, string], bool) {
 	var g attributes.Getter[*Status, string]
 	switch name {
 	case attr.HostName:
-		g = func(s *Status) string { return s.Service.HostName }
+		g = func(s *Status) string { return s.ID.Service.HostName }
 	case attr.ProcCommand:
-		g = func(s *Status) string { return s.Command }
+		g = func(s *Status) string { return s.ID.Command }
 	case attr.ProcCommandLine:
-		g = func(s *Status) string { return s.CommandLine }
+		g = func(s *Status) string { return s.ID.CommandLine }
 	case attr.ProcExecName:
-		g = func(status *Status) string { return status.ExecName }
+		g = func(status *Status) string { return status.ID.ExecName }
 	case attr.ProcExecPath:
-		g = func(status *Status) string { return status.ExecPath }
+		g = func(status *Status) string { return status.ID.ExecPath }
 	case attr.ProcCommandArgs:
-		g = func(status *Status) string { return strings.Join(status.CommandArgs, ",") }
+		g = func(status *Status) string { return strings.Join(status.ID.CommandArgs, ",") }
 	case attr.ProcOwner:
-		g = func(s *Status) string { return s.User }
+		g = func(s *Status) string { return s.ID.User }
 	case attr.ProcParentPid:
-		g = func(s *Status) string { return strconv.Itoa(int(s.ParentProcessID)) }
+		g = func(s *Status) string { return strconv.Itoa(int(s.ID.ParentProcessID)) }
 	case attr.ProcPid:
-		g = func(s *Status) string { return strconv.Itoa(int(s.ProcessID)) }
+		g = func(s *Status) string { return strconv.Itoa(int(s.ID.ProcessID)) }
 	case attr.ProcCPUState, attr.ProcDiskIODir, attr.ProcNetIODir:
 		// the attributes are handled explicitly by the prometheus exporter, but we need to
 		// ignore them to avoid that the default case tries to report them from service metadata
 	default:
-		g = func(s *Status) string { return s.Service.Metadata[name] }
+		g = func(s *Status) string { return s.ID.Service.Metadata[name] }
 	}
 	return g, g != nil
 }

@@ -43,7 +43,8 @@ podAnnotations:
 env:
   OTEL_EXPORTER_OTLP_ENDPOINT: your-otlp-endpoint:4318
 ```
-Run the following `helm` commands to add the `grafana` repo and install `beyla`:
+
+Run the following `helm` commands to add the `grafana` repository and install `beyla`:
 
 ```sh
 helm repo add grafana https://grafana.github.io/helm-charts

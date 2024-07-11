@@ -54,9 +54,9 @@ network metrics (in the previous example, `otel_metrics_export`, but it also acc
 
 Enables network metrics reporting in Beyla.
 
-| YAML                 | Environment variable               | Type     | Default  |
-| -------------------- | ---------------------------------- | -------- | -------- |
-| `source`             | `BEYLA_NETWORK_SOURCE`             | string   | `tc`     |
+| YAML                 | Environment variable               | Type     | Default             |
+| -------------------- | ---------------------------------- | -------- | ------------------- |
+| `source`             | `BEYLA_NETWORK_SOURCE`             | string   | `socket_filter`     |
 
 Specifies the Linux Kernel feature used to source the network events Beyla reports.
 

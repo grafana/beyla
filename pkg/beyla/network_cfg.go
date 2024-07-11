@@ -120,7 +120,7 @@ type NetworkConfig struct {
 }
 
 var defaultNetworkConfig = NetworkConfig{
-	Source:             EbpfSourceTC,
+	Source:             EbpfSourceSock,
 	AgentIPIface:       "external",
 	AgentIPType:        "any",
 	ExcludeInterfaces:  []string{"lo"},

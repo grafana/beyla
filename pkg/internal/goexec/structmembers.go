@@ -221,6 +221,24 @@ var structMembers = map[string]structInfo{
 			"bw": "redis_conn_bw_pos",
 		},
 	},
+	"github.com/segmentio/kafka-go.Writer": {
+		lib: "github.com/segmentio/kafka-go",
+		fields: map[string]string{
+			"Topic": "kafka_go_writer_topic_pos",
+		},
+	},
+	"github.com/segmentio/kafka-go/protocol.Conn": {
+		lib: "github.com/segmentio/kafka-go",
+		fields: map[string]string{
+			"conn": "kafka_go_protocol_conn_pos",
+		},
+	},
+	"github.com/segmentio/kafka-go.reader": {
+		lib: "github.com/segmentio/kafka-go",
+		fields: map[string]string{
+			"topic": "kafka_go_reader_topic_pos",
+		},
+	},
 }
 
 func structMemberOffsets(elfFile *elf.File) (FieldOffsets, error) {

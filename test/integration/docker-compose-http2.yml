@@ -20,7 +20,7 @@ services:
     ports:
       - "7373:7373"
     depends_on:
-      otelcol:
+      prometheus:
         condition: service_started
       jaeger:
         condition: service_started
@@ -53,26 +53,39 @@ services:
       testclient:
         condition: service_started
 
+  # otelcol:
+  #   image: grafana/agent
+  #   container_name: demo-agent
+  #   command:
+  #     - run
+  #     - /etc/agent/agent-config.river
+  #   volumes:
+  #     - ./configs/:/etc/agent
+  #   environment:
+  #     AGENT_MODE: "flow"
+  #   ports:
+  #     - "4017:4017"
+  #     - "4018:4018"
+  #   depends_on:
+  #     prometheus:
+  #       condition: service_started
+
   # OpenTelemetry Collector
-  otelcol:
-    image: otel/opentelemetry-collector-contrib:0.103.0
-    container_name: otel-col
-    deploy:
-      resources:
-        limits:
-          memory: 125M
-    restart: unless-stopped
-    command: [ "--config=/etc/otelcol-config/otelcol-config-4017.yml" ]
-    volumes:
-      - ./configs/:/etc/otelcol-config
-    ports:
-      - "4017"          # OTLP over gRPC receiver
-      - "4018:4018"     # OTLP over HTTP receiver
-      - "9464"          # Prometheus exporter
-      - "8888"          # metrics endpoint
-    depends_on:
-      prometheus:
-        condition: service_started
+  # otelcol:
+  #   image: otel/opentelemetry-collector-contrib:0.103.0
+  #   container_name: otel-col
+  #   restart: unless-stopped
+  #   command: [ "--config=/etc/otelcol-config/otelcol-config-4017.yml" ]
+  #   volumes:
+  #     - ./configs/:/etc/otelcol-config
+  #   ports:
+  #     - "4017"          # OTLP over gRPC receiver
+  #     - "4018:4018"     # OTLP over HTTP receiver
+  #     - "9464"          # Prometheus exporter
+  #     - "8888"          # metrics endpoint
+  #   depends_on:
+  #     prometheus:
+  #       condition: service_started
 
   # Prometheus
   prometheus:
@@ -80,7 +93,7 @@ services:
     container_name: prometheus
     command:
       - --storage.tsdb.retention.time=1m
-      - --config.file=/etc/prometheus/prometheus-config.yml
+      - --config.file=/etc/prometheus/prometheus-config-promscrape.yml
       - --storage.tsdb.path=/prometheus
       - --web.enable-lifecycle
       - --web.route-prefix=/
@@ -90,7 +103,7 @@ services:
       - "9090:9090"
 
   jaeger:
-    image: jaegertracing/all-in-one:1
+    image: jaegertracing/all-in-one:1.57
     ports:
       - "16686:16686" # Query frontend
       - "4317:4317"   # OTEL GRPC traces collector

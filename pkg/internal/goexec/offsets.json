@@ -162,6 +162,48 @@
         ]
       }
     },
+    "github.com/segmentio/kafka-go.Writer": {
+      "Topic": {
+        "versions": {
+          "oldest": "0.4.11",
+          "newest": "0.4.47"
+        },
+        "offsets": [
+          {
+            "offset": 16,
+            "since": "0.4.11"
+          }
+        ]
+      }
+    },
+    "github.com/segmentio/kafka-go.reader": {
+      "topic": {
+        "versions": {
+          "oldest": "0.4.11",
+          "newest": "0.4.47"
+        },
+        "offsets": [
+          {
+            "offset": 64,
+            "since": "0.4.11"
+          }
+        ]
+      }
+    },
+    "github.com/segmentio/kafka-go/protocol.Conn": {
+      "conn": {
+        "versions": {
+          "oldest": "0.4.11",
+          "newest": "0.4.47"
+        },
+        "offsets": [
+          {
+            "offset": 8,
+            "since": "0.4.11"
+          }
+        ]
+      }
+    },
     "golang.org/x/net/http2.ClientConn": {
       "nextStreamID": {
         "versions": {

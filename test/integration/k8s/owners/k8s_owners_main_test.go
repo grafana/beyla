@@ -30,7 +30,7 @@ func TestMain(m *testing.M) {
 		docker.ImageBuild{Tag: "beyla:dev", Dockerfile: k8s.DockerfileBeyla},
 		docker.ImageBuild{Tag: "quay.io/prometheus/prometheus:v2.53.0"},
 		docker.ImageBuild{Tag: "otel/opentelemetry-collector-contrib:0.103.0"},
-		docker.ImageBuild{Tag: "jaegertracing/all-in-one:1"},
+		docker.ImageBuild{Tag: "jaegertracing/all-in-one:1.57"},
 	); err != nil {
 		slog.Error("can't build docker images", err)
 		os.Exit(-1)
@@ -44,7 +44,7 @@ func TestMain(m *testing.M) {
 		kube.LocalImage("grpcpinger:dev"),
 		kube.LocalImage("quay.io/prometheus/prometheus:v2.53.0"),
 		kube.LocalImage("otel/opentelemetry-collector-contrib:0.103.0"),
-		kube.LocalImage("jaegertracing/all-in-one:1"),
+		kube.LocalImage("jaegertracing/all-in-one:1.57"),
 		kube.Deploy(k8s.PathManifests+"/01-volumes.yml"),
 		kube.Deploy(k8s.PathManifests+"/01-serviceaccount.yml"),
 		kube.Deploy(k8s.PathManifests+"/03-otelcol.yml"),

@@ -10,7 +10,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package gokafka
+package kafkago
 
 import (
 	"context"
@@ -29,8 +29,8 @@ import (
 	"github.com/grafana/beyla/pkg/internal/svc"
 )
 
-//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf ../../../../bpf/go_kafka.c -- -I../../../../bpf/headers
-//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf_debug ../../../../bpf/go_kafka.c -- -I../../../../bpf/headers -DBPF_DEBUG
+//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf ../../../../bpf/go_kafka_go.c -- -I../../../../bpf/headers
+//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf_debug ../../../../bpf/go_kafka_go.c -- -I../../../../bpf/headers -DBPF_DEBUG
 
 type Tracer struct {
 	log        *slog.Logger
@@ -42,7 +42,7 @@ type Tracer struct {
 }
 
 func New(cfg *beyla.Config, metrics imetrics.Reporter) *Tracer {
-	log := slog.With("component", "gokafka.Tracer")
+	log := slog.With("component", "kafkago.Tracer")
 	return &Tracer{
 		log:        log,
 		cfg:        &cfg.EBPF,
@@ -75,11 +75,11 @@ func (p *Tracer) Constants(_ *exec.FileInfo, offsets *goexec.Offsets) map[string
 	constants := map[string]any{
 		"wakeup_data_bytes": uint32(p.cfg.WakeupLen) * uint32(unsafe.Sizeof(ebpfcommon.HTTPRequestTrace{})),
 	}
+
 	for _, s := range []string{
-		"sarama_broker_corr_id_pos",
-		"sarama_response_corr_id_pos",
-		"sarama_broker_conn_pos",
-		"sarama_bufconn_conn_pos",
+		"kafka_go_writer_topic_pos",
+		"kafka_go_protocol_conn_pos",
+		"kafka_go_reader_topic_pos",
 		"conn_fd_pos",
 		"fd_laddr_pos",
 		"fd_raddr_pos",
@@ -101,16 +101,30 @@ func (p *Tracer) AddCloser(c ...io.Closer) {
 
 func (p *Tracer) GoProbes() map[string]ebpfcommon.FunctionPrograms {
 	return map[string]ebpfcommon.FunctionPrograms{
-		"github.com/IBM/sarama.(*Broker).write": {
-			Start:    p.bpfObjects.UprobeSaramaBrokerWrite,
+		"github.com/segmentio/kafka-go.(*Writer).WriteMessages": { // runs on the same gorountine as other requests, finds traceparent info
+			Start:    p.bpfObjects.UprobeWriterWriteMessages,
 			Required: true,
 		},
-		"github.com/IBM/sarama.(*responsePromise).handle": {
-			Start:    p.bpfObjects.UprobeSaramaResponsePromiseHandle,
+		"github.com/segmentio/kafka-go.(*Writer).produce": { // stores the current topic
+			Start:    p.bpfObjects.UprobeWriterProduce,
 			Required: true,
 		},
-		"github.com/IBM/sarama.(*Broker).sendInternal": {
-			Start:    p.bpfObjects.UprobeSaramaSendInternal,
+		"github.com/segmentio/kafka-go.(*Client).roundTrip": { // has the goroutine connection with (*Writer).produce and msg* connection with protocol.RoundTrip
+			Start:    p.bpfObjects.UprobeClientRoundTrip,
+			Required: true,
+		},
+		"github.com/segmentio/kafka-go/protocol.RoundTrip": { // used for collecting the connection information
+			Start:    p.bpfObjects.UprobeProtocolRoundtrip,
+			End:      p.bpfObjects.UprobeProtocolRoundtripRet,
+			Required: true,
+		},
+		"github.com/segmentio/kafka-go.(*reader).read": { // used for capturing the info for the fetch operations
+			Start:    p.bpfObjects.UprobeReaderRead,
+			End:      p.bpfObjects.UprobeReaderReadRet,
+			Required: true,
+		},
+		"github.com/segmentio/kafka-go.(*reader).sendMessage": { // to accurately measure the start time
+			Start:    p.bpfObjects.UprobeReaderSendMessage,
 			Required: true,
 		},
 	}
@@ -139,37 +153,6 @@ func (p *Tracer) AlreadyInstrumentedLib(_ uint64) bool {
 }
 
 func (p *Tracer) Run(ctx context.Context, eventsChan chan<- []request.Span) {
-	ebpfcommon.SharedRingbuf(
-		p.cfg,
-		p.pidsFilter,
-		p.bpfObjects.Events,
-		p.metrics,
-	)(ctx, append(p.closers, &p.bpfObjects), eventsChan)
-}
-
-// ShopifyKafkaTracer overrides Tracer to inspect the Shopify version of the library
-type ShopifyKafkaTracer struct {
-	Tracer
-}
-
-func (p *ShopifyKafkaTracer) GoProbes() map[string]ebpfcommon.FunctionPrograms {
-	return map[string]ebpfcommon.FunctionPrograms{
-		"github.com/Shopify/sarama.(*Broker).write": {
-			Start:    p.bpfObjects.UprobeSaramaBrokerWrite,
-			Required: true,
-		},
-		"github.com/Shopify/sarama.(*responsePromise).handle": {
-			Start:    p.bpfObjects.UprobeSaramaResponsePromiseHandle,
-			Required: true,
-		},
-		"github.com/Shopify/sarama.(*Broker).sendInternal": {
-			Start:    p.bpfObjects.UprobeSaramaSendInternal,
-			Required: true,
-		},
-	}
-}
-
-func (p *ShopifyKafkaTracer) Run(ctx context.Context, eventsChan chan<- []request.Span) {
 	ebpfcommon.SharedRingbuf(
 		p.cfg,
 		p.pidsFilter,

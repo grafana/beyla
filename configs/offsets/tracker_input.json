@@ -150,5 +150,20 @@
         "bw"
       ]
     }
-  }    
+  },
+  "github.com/segmentio/kafka-go": {
+    "inspect": "./configs/offsets/kafkago/inspect.go",
+    "versions": ">= v0.4.11",
+    "fields": {
+      "github.com/segmentio/kafka-go.Writer": [
+        "Topic"
+      ],
+      "github.com/segmentio/kafka-go/protocol.Conn": [
+        "conn"
+      ],
+      "github.com/segmentio/kafka-go.reader": [
+        "topic"
+      ]
+    }
+  }
 }

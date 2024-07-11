@@ -10,6 +10,7 @@ import (
 
 // RecordGetters returns the attributes.Getter function that returns the string value of a given
 // attribute name.
+// nolint:cyclop
 func RecordGetters(name attr.Name) (attributes.Getter[*Record, attribute.KeyValue], bool) {
 	var getter attributes.Getter[*Record, attribute.KeyValue]
 	switch name {
@@ -41,6 +42,27 @@ func RecordGetters(name attr.Name) (attributes.Getter[*Record, attribute.KeyValu
 		}
 	case attr.Iface:
 		getter = func(r *Record) attribute.KeyValue { return attribute.String(string(attr.Iface), r.Attrs.Interface) }
+	case attr.ClientPort:
+		getter = func(r *Record) attribute.KeyValue {
+			var clientPort int
+			// TODO: won't work, use flags
+			if r.Metrics.Direction == DirectionIngress {
+				clientPort = int(r.Id.DstPort)
+			} else {
+				clientPort = int(r.Id.SrcPort)
+			}
+			return attribute.Int(string(attr.ClientPort), clientPort)
+		}
+	case attr.ServerPort:
+		getter = func(r *Record) attribute.KeyValue {
+			var serverPort int
+			if r.Metrics.Direction == DirectionIngress {
+				serverPort = int(r.Id.SrcPort)
+			} else {
+				serverPort = int(r.Id.DstPort)
+			}
+			return attribute.Int(string(attr.ServerPort), serverPort)
+		}
 	default:
 		getter = func(r *Record) attribute.KeyValue { return attribute.String(string(name), r.Attrs.Metadata[name]) }
 	}

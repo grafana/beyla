@@ -5,6 +5,8 @@ prometheus_export:
   features:
     - application
     - application_process
+otel_traces_export:
+  endpoint: http://jaeger:4318
 discovery:
   services:
     - namespace: http2-go

@@ -26,29 +26,41 @@ Before you install Beyla network metrics and export telemetry data to Asserts yo
 
 You can register for a [free forever Grafana Cloud account](/auth/sign-up/create-user) in minutes and start sending telemetry data and monitoring your infrastructure and applications.
 
-## Install Beyla with Helm
+There are two configuration options to collect metrics to send to Grafana Cloud for Asserts. First, through Kubernetes monitoring or alternatively with an OpenTelemetry Collector.
 
-Create a Helm `values.yml` for Beyla with the following content:
+## Configuration for Kubernetes monitoring
+
+If you use Kubernetes monitoring and a Helm chart for scraping metrics, create a `values.yml` with the following configuration:
 
 ```yaml
 preset: network
 
-# If using kubernetes-monitoring helm chart and scraping metrics
 podAnnotations:
   k8s.grafana.com/scrape: true
   k8s.grafana.com/job: beyla-network
   k8s.grafana.com/metrics.portName: metrics
+```
 
-# else if using an otel-collector for metrics collection
+## Configure for OpenTelemetry Collector
+
+If you use an OpenTelemetry Collector for metrics collection, either Grafana Alloy the upstream collector, create a `values.yml` with the following configuration:
+
+```sh
+preset: network
+
 env:
   OTEL_EXPORTER_OTLP_ENDPOINT: your-otlp-endpoint:4318
 ```
 
-Run the following `helm` commands to add the `grafana` repository and install `beyla`:
+## Install and run Beyla network metrics for Asserts
+
+Run the following `helm` commands to add the `grafana` repository and install and run `beyla` with your configuration for network metrics:
 
 ```sh
 helm repo add grafana https://grafana.github.io/helm-charts
 helm install beyla --create-namespace -n beyla -f values.yaml grafana/beyla
 ```
 
-/todo, what do people have to do next?
+## Observe your services in Asserts
+
+Finally, navigate to Asserts in [Grafana Cloud](/auth/sign-in/) and view your instrumented services.

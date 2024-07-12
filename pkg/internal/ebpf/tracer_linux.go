@@ -11,6 +11,7 @@ import (
 	"sync"
 
 	"github.com/cilium/ebpf"
+	"github.com/cilium/ebpf/btf"
 
 	common "github.com/grafana/beyla/pkg/internal/ebpf/common"
 	"github.com/grafana/beyla/pkg/internal/request"
@@ -135,6 +136,8 @@ func (pt *ProcessTracer) tracers() ([]Tracer, error) {
 		tracers = append(tracers, p)
 	}
 
+	btf.FlushKernelSpec()
+
 	return tracers, nil
 }
 
@@ -173,6 +176,8 @@ func RunUtilityTracer(p UtilityTracer, pinPath string) error {
 	}
 
 	go p.Run(context.Background())
+
+	btf.FlushKernelSpec()
 
 	return nil
 }

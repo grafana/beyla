@@ -66,7 +66,7 @@ var DefaultConfig = Config{
 		Buckets:              otel.DefaultBuckets,
 		ReportersCacheLen:    ReporterLRUSize,
 		HistogramAggregation: otel.AggregationExplicit,
-		Features:             []string{otel.FeatureNetwork, otel.FeatureApplication},
+		Features:             []string{otel.FeatureApplication},
 		Instrumentations: []string{
 			instrumentations.InstrumentationALL,
 		},
@@ -85,7 +85,7 @@ var DefaultConfig = Config{
 	Prometheus: prom.PrometheusConfig{
 		Path:     "/metrics",
 		Buckets:  otel.DefaultBuckets,
-		Features: []string{otel.FeatureNetwork, otel.FeatureApplication},
+		Features: []string{otel.FeatureApplication},
 		Instrumentations: []string{
 			instrumentations.InstrumentationALL,
 		},
@@ -233,11 +233,19 @@ func (c *Config) Validate() error {
 	return nil
 }
 
+func (c *Config) promNetO11yEnabled() bool {
+	return c.Prometheus.Enabled() && c.Prometheus.NetworkMetricsEnabled()
+}
+
+func (c *Config) otelNetO11yEnabled() bool {
+	return (c.Metrics.Enabled() || c.Grafana.OTLP.MetricsEnabled()) && c.Metrics.NetworkMetricsEnabled()
+}
+
 // Enabled checks if a given Beyla feature is enabled according to the global configuration
 func (c *Config) Enabled(feature Feature) bool {
 	switch feature {
 	case FeatureNetO11y:
-		return c.NetworkFlows.Enable
+		return c.NetworkFlows.Enable || c.promNetO11yEnabled() || c.otelNetO11yEnabled()
 	case FeatureAppO11y:
 		return c.Port.Len() > 0 || c.Exec.IsSet() || len(c.Discovery.Services) > 0 || c.Discovery.SystemWide
 	}

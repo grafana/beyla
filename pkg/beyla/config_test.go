@@ -120,7 +120,7 @@ network:
 				DurationHistogram:    []float64{0, 1, 2},
 				RequestSizeHistogram: otel.DefaultBuckets.RequestSizeHistogram,
 			},
-			Features: []string{"network", "application"},
+			Features: []string{"application"},
 			Instrumentations: []string{
 				instrumentations.InstrumentationALL,
 			},
@@ -140,7 +140,7 @@ network:
 		},
 		Prometheus: prom.PrometheusConfig{
 			Path:     "/metrics",
-			Features: []string{otel.FeatureNetwork, otel.FeatureApplication},
+			Features: []string{otel.FeatureApplication},
 			Instrumentations: []string{
 				instrumentations.InstrumentationALL,
 			},

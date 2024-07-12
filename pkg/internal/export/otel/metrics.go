@@ -152,6 +152,10 @@ func (m *MetricsConfig) OTelMetricsEnabled() bool {
 	return slices.Contains(m.Features, FeatureApplication)
 }
 
+func (m *MetricsConfig) NetworkMetricsEnabled() bool {
+	return slices.Contains(m.Features, FeatureNetwork)
+}
+
 func (m *MetricsConfig) Enabled() bool {
 	return m.EndpointEnabled() && (m.OTelMetricsEnabled() || m.SpanMetricsEnabled() || m.ServiceGraphMetricsEnabled())
 }

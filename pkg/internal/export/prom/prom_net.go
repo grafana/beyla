@@ -3,7 +3,6 @@ package prom
 import (
 	"context"
 	"fmt"
-	"slices"
 
 	"github.com/mariomac/pipes/pipe"
 	"github.com/prometheus/client_golang/prometheus"
@@ -11,7 +10,6 @@ import (
 	"github.com/grafana/beyla/pkg/internal/connector"
 	"github.com/grafana/beyla/pkg/internal/export/attributes"
 	"github.com/grafana/beyla/pkg/internal/export/expire"
-	"github.com/grafana/beyla/pkg/internal/export/otel"
 	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 )
@@ -22,11 +20,12 @@ import (
 type NetPrometheusConfig struct {
 	Config             *PrometheusConfig
 	AttributeSelectors attributes.Selection
+	GloballyEnabled    bool
 }
 
 // nolint:gocritic
 func (p NetPrometheusConfig) Enabled() bool {
-	return p.Config != nil && p.Config.Port != 0 && slices.Contains(p.Config.Features, otel.FeatureNetwork)
+	return p.Config != nil && p.Config.Port != 0 && (p.Config.NetworkMetricsEnabled() || p.GloballyEnabled)
 }
 
 type netMetricsReporter struct {

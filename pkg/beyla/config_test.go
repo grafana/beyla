@@ -288,6 +288,26 @@ func TestConfig_OtelGoAutoEnv(t *testing.T) {
 	assert.True(t, cfg.Exec.IsSet()) // Exec maps to BEYLA_EXECUTABLE_NAME
 }
 
+func TestConfig_NetworkImplicit(t *testing.T) {
+	// OTEL_GO_AUTO_TARGET_EXE is an alias to BEYLA_EXECUTABLE_NAME
+	// (Compatibility with OpenTelemetry)
+	require.NoError(t, os.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4318"))
+	require.NoError(t, os.Setenv("BEYLA_OTEL_METRIC_FEATURES", "network"))
+	cfg, err := LoadConfig(bytes.NewReader(nil))
+	require.NoError(t, err)
+	assert.True(t, cfg.Enabled(FeatureNetO11y)) // Net o11y should be on
+}
+
+func TestConfig_NetworkImplicitProm(t *testing.T) {
+	// OTEL_GO_AUTO_TARGET_EXE is an alias to BEYLA_EXECUTABLE_NAME
+	// (Compatibility with OpenTelemetry)
+	require.NoError(t, os.Setenv("BEYLA_PROMETHEUS_PORT", "9090"))
+	require.NoError(t, os.Setenv("BEYLA_PROMETHEUS_FEATURES", "network"))
+	cfg, err := LoadConfig(bytes.NewReader(nil))
+	require.NoError(t, err)
+	assert.True(t, cfg.Enabled(FeatureNetO11y)) // Net o11y should be on
+}
+
 func loadConfig(t *testing.T, env map[string]string) *Config {
 	for k, v := range env {
 		require.NoError(t, os.Setenv(k, v))

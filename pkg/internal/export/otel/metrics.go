@@ -157,7 +157,7 @@ func (m *MetricsConfig) NetworkMetricsEnabled() bool {
 }
 
 func (m *MetricsConfig) Enabled() bool {
-	return m.EndpointEnabled() && (m.OTelMetricsEnabled() || m.SpanMetricsEnabled() || m.ServiceGraphMetricsEnabled())
+	return m.EndpointEnabled() && (m.OTelMetricsEnabled() || m.SpanMetricsEnabled() || m.ServiceGraphMetricsEnabled() || m.NetworkMetricsEnabled())
 }
 
 // MetricsReporter implements the graph node that receives request.Span

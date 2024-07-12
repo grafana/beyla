@@ -138,7 +138,7 @@ func (p *PrometheusConfig) EndpointEnabled() bool {
 
 // nolint:gocritic
 func (p *PrometheusConfig) Enabled() bool {
-	return p.EndpointEnabled() && (p.OTelMetricsEnabled() || p.SpanMetricsEnabled() || p.ServiceGraphMetricsEnabled())
+	return p.EndpointEnabled() && (p.OTelMetricsEnabled() || p.SpanMetricsEnabled() || p.ServiceGraphMetricsEnabled() || p.NetworkMetricsEnabled())
 }
 
 type metricsReporter struct {

@@ -31,6 +31,16 @@
 #define FIN_ACK_FLAG 0x200
 #define RST_ACK_FLAG 0x400
 
+// In conn_initiator_key, which sorted connection inititated the connection
+#define INITIATOR_LOW     1
+#define INITIATOR_HIGH    2
+
+// In flow_metrics, who initiated the connection
+#define INITIATOR_SRC 1
+#define INITIATOR_DST 2
+
+#define INITIATOR_UNKNOWN 0
+
 // Common Ringbuffer as a conduit for ingress/egress flows to userspace
 struct {
     __uint(type, BPF_MAP_TYPE_RINGBUF);
@@ -51,6 +61,15 @@ struct {
 	__type(key, flow_id);
 	__type(value, u8);
 } flow_directions SEC(".maps");
+
+// Key: the flow identifier. Value: the flow direction.
+// Since the same connection can be visible from different perspectives
+// (Client to Server, as seen by the)
+struct {
+	__uint(type, BPF_MAP_TYPE_LRU_HASH);
+	__type(key, conn_initiator_key);
+	__type(value, u8);
+} conn_initiators SEC(".maps");
 
 const u8 ip4in6[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff};
 

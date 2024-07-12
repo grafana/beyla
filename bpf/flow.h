@@ -34,6 +34,9 @@ typedef __u16 u16;
 typedef __u32 u32;
 typedef __u64 u64;
 
+#define INITIATOR_LOW  0
+#define INITIATOR_HIGH 1
+
 typedef struct flow_metrics_t {
     u32 packets;
     u64 bytes;
@@ -46,6 +49,8 @@ typedef struct flow_metrics_t {
     u16 flags;
     // direction of the flow EGRESS / INGRESS
     u8 direction;
+    // initiator of the connection: SRC or DST address/port
+    u8 initiator;
     // The positive errno of a failed map insertion that caused a flow
     // to be sent via ringbuffer.
     // 0 otherwise
@@ -77,5 +82,17 @@ typedef struct flow_record_t {
     flow_id id;
     flow_metrics metrics;
 } __attribute__((packed)) flow_record;
+
+// To know who initiated each connection, we store the src/dst ip:ports but ordered
+// by numeric value of the IP (and port as secondary criteria).
+// Storing connection keys by high/low number instead of source/destination address
+// gives us consistency for connections, as the same connection will be registered
+// with the same key whichever you see it from the source or the destination
+typedef struct conn_initiator_key_t {
+    struct in6_addr low_ip;
+    struct in6_addr high_ip;
+    u16 low_ip_port;
+    u16 high_ip_port;
+} __attribute__((packed)) conn_initiator_key;
 
 #endif

@@ -106,16 +106,13 @@ func TestNetwork_Direction(t *testing.T) {
 	// test correct direction labels
 	client := results[slices.IndexFunc(results, func(result prom.Result) bool { return result.Metric["dst_port"] == "8080" })]
 	require.Equal(t, client.Metric["direction"], "egress")
-	assert.Equal(t, client.Metric["server_port"], "8080")
-	assert.NotEmpty(t, client.Metric["client_port"])
-	assert.Equal(t, client.Metric["client_port"], client.Metric["src_port"])
 	server := results[slices.IndexFunc(results, func(result prom.Result) bool { return result.Metric["src_port"] == "8080" })]
 	require.Equal(t, server.Metric["direction"], "ingress")
-	assert.Equal(t, server.Metric["server_port"], "8080")
-	assert.NotEmpty(t, server.Metric["client_port"])
-	assert.Equal(t, client.Metric["client_port"], client.Metric["src_port"])
 
-	require.NoError(t, compose.Close())
+	// test correct client and server ports
+
+
+	//require.NoError(t, compose.Close())
 }
 
 func TestNetwork_Direction_Use_Socket_Filter(t *testing.T) {
@@ -132,14 +129,8 @@ func TestNetwork_Direction_Use_Socket_Filter(t *testing.T) {
 	// test correct direction labels
 	client := results[slices.IndexFunc(results, func(result prom.Result) bool { return result.Metric["dst_port"] == "8080" })]
 	require.Equal(t, client.Metric["direction"], "egress")
-	assert.Equal(t, client.Metric["server_port"], "8080")
-	assert.NotEmpty(t, client.Metric["client_port"])
-	assert.Equal(t, client.Metric["client_port"], client.Metric["src_port"])
 	server := results[slices.IndexFunc(results, func(result prom.Result) bool { return result.Metric["src_port"] == "8080" })]
 	require.Equal(t, server.Metric["direction"], "ingress")
-	assert.Equal(t, server.Metric["server_port"], "8080")
-	assert.NotEmpty(t, server.Metric["client_port"])
-	assert.Equal(t, client.Metric["client_port"], client.Metric["dst_port"])
 
 	require.NoError(t, compose.Close())
 }

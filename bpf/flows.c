@@ -47,9 +47,9 @@ static inline u8 fill_conn_initiator_key(flow_id *id, conn_initiator_key *key) {
         key->high_ip_port = id->dst_port;
         return 1;
     }
+    // if the IPs are equal (cmp == 0) we will use the ports as secondary order criteria
     __builtin_memcpy(&key->high_ip, &id->src_ip, sizeof(struct in6_addr));
     __builtin_memcpy(&key->low_ip, &id->dst_ip, sizeof(struct in6_addr));
-    // if the IPs are equal (cmp == 0) we will use the ports as secondary order criteria
     if (cmp > 0 || id->src_port > id->dst_port) {
         key->high_ip_port = id->src_port;
         key->low_ip_port = id->dst_port;
@@ -268,6 +268,7 @@ static inline int flow_monitor(struct __sk_buff *skb) {
         u8 *initiator = (u8 *)bpf_map_lookup_elem(&conn_initiators, &initiator_key);
         u8 hilo_initiator = INITIATOR_UNKNOWN;
         if (initiator == NULL) {
+            esto se debe hacer teniendo en cuenta el ingress/egress
             // SYN and ACK mean that we are reading a server-side packet,
             // SYN means we are reading a client-side packet,
             // In both cases, the source address/port initiated the connection

@@ -22,7 +22,7 @@ Before you install Beyla network metrics and export telemetry data to Asserts yo
 1. A free Grafana Cloud account.
 1. An application to auto-instrument with Beyla.
 1. A Linux environment that supports eBPF kernel modules.
-1. Administrative `sudo` privileges or `CAP_SYS_ADMIN` permissions.
+1. Access rights to a Kubernetes cluster, enough to create components with privileges.
 
 You can register for a [free forever Grafana Cloud account](/auth/sign-up/create-user) in minutes and start sending telemetry data and monitoring your infrastructure and applications.
 

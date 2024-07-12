@@ -34,9 +34,6 @@ typedef __u16 u16;
 typedef __u32 u32;
 typedef __u64 u64;
 
-#define INITIATOR_LOW  0
-#define INITIATOR_HIGH 1
-
 typedef struct flow_metrics_t {
     u32 packets;
     u64 bytes;

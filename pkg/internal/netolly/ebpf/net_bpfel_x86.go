@@ -12,6 +12,13 @@ import (
 	"github.com/cilium/ebpf"
 )
 
+type NetConnInitiatorKey struct {
+	LowIp      struct{ In6U struct{ U6Addr8 [16]uint8 } }
+	HighIp     struct{ In6U struct{ U6Addr8 [16]uint8 } }
+	LowIpPort  uint16
+	HighIpPort uint16
+}
+
 type NetFlowId NetFlowIdT
 
 type NetFlowIdT struct {
@@ -33,6 +40,7 @@ type NetFlowMetricsT struct {
 	EndMonoTimeNs   uint64
 	Flags           uint16
 	Direction       uint8
+	Initiator       uint8
 	Errno           uint8
 }
 
@@ -91,6 +99,7 @@ type NetProgramSpecs struct {
 // It can be passed ebpf.CollectionSpec.Assign.
 type NetMapSpecs struct {
 	AggregatedFlows *ebpf.MapSpec `ebpf:"aggregated_flows"`
+	ConnInitiators  *ebpf.MapSpec `ebpf:"conn_initiators"`
 	DirectFlows     *ebpf.MapSpec `ebpf:"direct_flows"`
 	FlowDirections  *ebpf.MapSpec `ebpf:"flow_directions"`
 }
@@ -115,6 +124,7 @@ func (o *NetObjects) Close() error {
 // It can be passed to LoadNetObjects or ebpf.CollectionSpec.LoadAndAssign.
 type NetMaps struct {
 	AggregatedFlows *ebpf.Map `ebpf:"aggregated_flows"`
+	ConnInitiators  *ebpf.Map `ebpf:"conn_initiators"`
 	DirectFlows     *ebpf.Map `ebpf:"direct_flows"`
 	FlowDirections  *ebpf.Map `ebpf:"flow_directions"`
 }
@@ -122,6 +132,7 @@ type NetMaps struct {
 func (m *NetMaps) Close() error {
 	return _NetClose(
 		m.AggregatedFlows,
+		m.ConnInitiators,
 		m.DirectFlows,
 		m.FlowDirections,
 	)

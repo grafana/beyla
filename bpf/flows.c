@@ -26,9 +26,9 @@
 
 // we can safely assume that the passed address is IPv6 as long as we encode IPv4
 // as IPv6 during the creation of the flow_id.
-static inline s32 compare_ipv6(struct in6_addr *ipa, struct in6_addr *ipb) {
+static inline s32 compare_ipv6(flow_id *fid) {
     for (int i = 0; i < 4; i++) {
-        s32 diff = ipa->in6_u.u6_addr32 - ipb->in6_u.u6_addr32;
+        s32 diff = fid->src_ip.in6_u.u6_addr32[i] - fid->dst_ip.in6_u.u6_addr32[i];
         if (diff != 0) {
             return diff;
         }
@@ -36,55 +36,28 @@ static inline s32 compare_ipv6(struct in6_addr *ipa, struct in6_addr *ipb) {
     return 0;
 }
 
-static inline void sort_connections(
-    flow_id *id, struct in6_addr **low, u32 *low_port, struct in6_addr **high, u32 *high_port) {
-    s32 cmp = compare_ipv6(&id->src_ip, &id->dst_ip);
+// returns true if the lower address corresponds to the source address
+// (false if the lower address corresponds to the destination address)
+static inline u8 fill_conn_initiator_key(flow_id *id, conn_initiator_key *key) {
+    s32 cmp = compare_ipv6(id);
     if (cmp < 0) {
-        *low = &id->src_ip;
-        *low_port = &id->src_port;
-        *high = &id->dst_ip;
-        *high_port = &id->dst_port;
-    } else {
-        *low = &id->dst_ip;
-        *high = &id->src_ip;
-        if (cmp > 0) {
-            *low_port = &id->dst_port;
-            *high_port = &id->src_port;
-            // if the IPs are equal (cmp == 0) we will use the ports as secondary order criteria
-        } else if (id->src_port < id->dst_port) {
-            *low_port = &id->src_port;
-            *high_port = &id->dst_port;
-        } else {
-            *low_port = &id->dst_port;
-            *high_port = &id->src_port;
-        }
+        __builtin_memcpy(&key->low_ip, &id->src_ip, sizeof(struct in6_addr));
+        key->low_ip_port = id->src_port;
+        __builtin_memcpy(&key->high_ip, &id->dst_ip, sizeof(struct in6_addr));
+        key->high_ip_port = id->dst_port;
+        return 1;
     }
-}
-
-static inline conn_initiator_key create_conn_initiator_key(flow_id *id) {
-    conn_initiator_key key;
-    s32 cmp = compare_ipv6(&id->src_ip, &id->dst_ip);
-    if (cmp < 0) {
-        __builtin_memcpy(&key.low_ip, &id->src_ip, sizeof(struct in6_addr));
-        key.low_ip_port = id->src_port;
-        __builtin_memcpy(&key.high_ip, &id->dst_ip, sizeof(struct in6_addr));
-        key.high_ip_port = id->dst_port;
-    } else {
-        __builtin_memcpy(&key.high_ip, &id->src_ip, sizeof(struct in6_addr));
-        __builtin_memcpy(&key.low_ip, &id->dst_ip, sizeof(struct in6_addr));
-        if (cmp > 0) {
-            key.high_ip_port = id->src_port;
-            key.low_ip_port = id->dst_port;
-            // if the IPs are equal (cmp == 0) we will use the ports as secondary order criteria
-        } else if (id->src_port < id->dst_port) {
-            key.high_ip_port = id->src_port;
-            key.low_ip_port = id->dst_port;
-        } else {
-            key.high_ip_port = id->src_port;
-            key.low_ip_port = id->dst_port;
-        }
+    __builtin_memcpy(&key->high_ip, &id->src_ip, sizeof(struct in6_addr));
+    __builtin_memcpy(&key->low_ip, &id->dst_ip, sizeof(struct in6_addr));
+    // if the IPs are equal (cmp == 0) we will use the ports as secondary order criteria
+    if (cmp > 0 || id->src_port > id->dst_port) {
+        key->high_ip_port = id->src_port;
+        key->low_ip_port = id->dst_port;
+        return 0;
     }
-    return key;
+    key->low_ip_port = id->src_port;
+    key->high_ip_port = id->dst_port;
+    return 1;
 }
 
 // sets the TCP header flags for connection information
@@ -291,13 +264,7 @@ static inline int flow_monitor(struct __sk_buff *skb) {
         }
 
         // know who initiated the connection, which might be the src or the dst address
-        struct in6_addr *low, *high;
-        u32 low_port, high_port;
-        sort_connections(&id, &low, &low_port, &high, &high_port);
-        initiator_key.high_ip_port = high_port;
-        initiator_key.low_ip_port = low_port;
-        __builtin_memcpy(&initiator_key.high_ip, high, sizeof(struct in6_addr));
-        __builtin_memcpy(&initiator_key.high_ip, high, sizeof(struct in6_addr));
+        u8 low_is_src = fill_conn_initiator_key(&id, &initiator_key);
         u8 *initiator = (u8 *)bpf_map_lookup_elem(&conn_initiators, &initiator_key);
         u8 hilo_initiator = INITIATOR_UNKNOWN;
         if (initiator == NULL) {
@@ -305,7 +272,7 @@ static inline int flow_monitor(struct __sk_buff *skb) {
             // SYN means we are reading a client-side packet,
             // In both cases, the source address/port initiated the connection
             if ((flags & (SYN_ACK_FLAG | SYN_FLAG)) != 0) {
-                if (low == &id.src_ip && low_port == id.src_port) {
+                if (low_is_src) {
                     hilo_initiator = INITIATOR_LOW;
                 } else {
                     hilo_initiator = INITIATOR_HIGH;
@@ -323,14 +290,14 @@ static inline int flow_monitor(struct __sk_buff *skb) {
         // heuristic actions to guess who is
         switch (hilo_initiator) {
         case INITIATOR_LOW:
-            if (low == &id.src_ip && low_port == id.src_port) {
+            if (low_is_src) {
                 new_flow.initiator = INITIATOR_SRC;
             } else {
                 new_flow.initiator = INITIATOR_DST;
             }
             break;
         case INITIATOR_HIGH:
-            if (high == &id.src_ip && high_port == id.src_port) {
+            if (low_is_src) {
                 new_flow.initiator = INITIATOR_SRC;
             } else {
                 new_flow.initiator = INITIATOR_DST;

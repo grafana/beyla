@@ -266,30 +266,37 @@ static inline int flow_monitor(struct __sk_buff *skb) {
         // know who initiated the connection, which might be the src or the dst address
         u8 low_is_src = fill_conn_initiator_key(&id, &initiator_key);
         u8 *initiator = (u8 *)bpf_map_lookup_elem(&conn_initiators, &initiator_key);
-        u8 hilo_initiator = INITIATOR_UNKNOWN;
+        u8 initiator_index = INITIATOR_UNKNOWN;
         if (initiator == NULL) {
-            esto se debe hacer teniendo en cuenta el ingress/egress
-            // SYN and ACK mean that we are reading a server-side packet,
-            // SYN means we are reading a client-side packet,
-            // In both cases, the source address/port initiated the connection
-            if ((flags & (SYN_ACK_FLAG | SYN_FLAG)) != 0) {
+            if (new_flow.direction == INGRESS) {
                 if (low_is_src) {
-                    hilo_initiator = INITIATOR_LOW;
+                    initiator_index = INITIATOR_LOW;
                 } else {
-                    hilo_initiator = INITIATOR_HIGH;
+                    initiator_index = INITIATOR_HIGH;
+                }
+            } else {
+                if (low_is_src) {
+                    initiator_index = INITIATOR_HIGH;
+                } else {
+                    initiator_index = INITIATOR_HIGH;
                 }
             }
-            if (hilo_initiator != INITIATOR_UNKNOWN) {
-                bpf_map_update_elem(&conn_initiators, &initiator_key, &hilo_initiator, BPF_NOEXIST);
+            if (initiator_index != INITIATOR_UNKNOWN) {
+                bpf_map_update_elem(&conn_initiators, &initiator_key, &initiator_index, BPF_NOEXIST);
             }
         } else {
-            hilo_initiator = *initiator;
+            initiator_index = *initiator;
+        }
+
+        bpf_printk("zacacaca -- ");
+        if ((id.src_port == 7000 || id.dst_port == 7000) && (id.src_port == 8080 || id.dst_port == 8080)) {
+            bpf_printk("zacacaca[%llx] %d->%d %d<%d idx: %d", initiator, id.src_port, id.dst_port, initiator_key.low_ip_port, initiator_key.high_ip_port, initiator_index);
         }
 
         // at this point, we should know who initiated the connection.
         // If not, we forward the unknown status and the userspace will take
         // heuristic actions to guess who is
-        switch (hilo_initiator) {
+        switch (initiator_index) {
         case INITIATOR_LOW:
             if (low_is_src) {
                 new_flow.initiator = INITIATOR_SRC;

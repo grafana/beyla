@@ -1,6 +1,8 @@
 package ebpf
 
 import (
+	"fmt"
+
 	"go.opentelemetry.io/otel/attribute"
 
 	"github.com/grafana/beyla/pkg/internal/export/attributes"
@@ -59,6 +61,9 @@ func RecordGetters(name attr.Name) (attributes.Getter[*Record, attribute.KeyValu
 	case attr.ServerPort:
 		getter = func(r *Record) attribute.KeyValue {
 			var serverPort uint16
+			if (r.Id.SrcPort == 7000 || r.Id.DstPort == 7000) && (r.Id.SrcPort == 8080 || r.Id.DstPort == 8080) {
+				fmt.Printf("zacacaca %d -> %d : %d\n", r.Id.SrcPort, r.Id.DstPort, r.Metrics.Initiator)
+			}
 			switch r.Metrics.Initiator {
 			case InitiatorDst:
 				serverPort = r.Id.SrcPort

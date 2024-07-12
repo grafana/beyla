@@ -2,14 +2,16 @@ package components
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
-	"os"
+	"slices"
 	"sync"
 
 	"github.com/grafana/beyla/pkg/beyla"
 	"github.com/grafana/beyla/pkg/internal/appolly"
 	"github.com/grafana/beyla/pkg/internal/connector"
 	"github.com/grafana/beyla/pkg/internal/export/attributes"
+	"github.com/grafana/beyla/pkg/internal/export/otel"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/kube"
 	"github.com/grafana/beyla/pkg/internal/netolly/agent"
@@ -19,7 +21,7 @@ import (
 
 // RunBeyla in the foreground process. This is a blocking function and won't exit
 // until both the AppO11y and NetO11y components end
-func RunBeyla(ctx context.Context, cfg *beyla.Config) {
+func RunBeyla(ctx context.Context, cfg *beyla.Config) error {
 	ctxInfo := buildCommonContextInfo(cfg)
 
 	wg := sync.WaitGroup{}
@@ -32,22 +34,33 @@ func RunBeyla(ctx context.Context, cfg *beyla.Config) {
 		wg.Add(1)
 	}
 
+	errs := make(chan error, 2)
 	if app {
 		go func() {
 			defer wg.Done()
-			setupAppO11y(ctx, ctxInfo, cfg)
+			if err := setupAppO11y(ctx, ctxInfo, cfg); err != nil {
+				errs <- err
+			}
 		}()
 	}
 	if net {
 		go func() {
 			defer wg.Done()
-			setupNetO11y(ctx, ctxInfo, cfg)
+			if err := setupNetO11y(ctx, ctxInfo, cfg); err != nil {
+				errs <- err
+			}
 		}()
 	}
 	wg.Wait()
+	select {
+	case err := <-errs:
+		return err
+	default:
+		return nil
+	}
 }
 
-func setupAppO11y(ctx context.Context, ctxInfo *global.ContextInfo, config *beyla.Config) {
+func setupAppO11y(ctx context.Context, ctxInfo *global.ContextInfo, config *beyla.Config) error {
 	slog.Info("starting Beyla in Application Observability mode")
 	// TODO: when we split Beyla in two processes with different permissions, this code can be split:
 	// in two parts:
@@ -56,26 +69,45 @@ func setupAppO11y(ctx context.Context, ctxInfo *global.ContextInfo, config *beyl
 
 	instr := appolly.New(ctx, ctxInfo, config)
 	if err := instr.FindAndInstrument(); err != nil {
-		slog.Error("Beyla couldn't find target process", "error", err)
-		os.Exit(-1)
+		return fmt.Errorf("can't find target process: %w", err)
 	}
 	if err := instr.ReadAndForward(); err != nil {
-		slog.Error("Beyla couldn't start read and forwarding", "error", err)
-		os.Exit(-1)
+		return fmt.Errorf("can't start read and forwarding: %w", err)
 	}
+	return nil
 }
 
-func setupNetO11y(ctx context.Context, ctxInfo *global.ContextInfo, cfg *beyla.Config) {
+func setupNetO11y(ctx context.Context, ctxInfo *global.ContextInfo, cfg *beyla.Config) error {
+	if msg := mustSkip(cfg); msg != "" {
+		slog.Warn(msg + ". Skipping Network metrics component")
+		return nil
+	}
 	slog.Info("starting Beyla in Network metrics mode")
 	flowsAgent, err := agent.FlowsAgent(ctxInfo, cfg)
 	if err != nil {
-		slog.Error("can't start network metrics capture", "error", err)
-		os.Exit(-1)
+		return fmt.Errorf("can't start network metrics capture: %w", err)
 	}
 	if err := flowsAgent.Run(ctx); err != nil {
-		slog.Error("can't start network metrics capture", "error", err)
-		os.Exit(-1)
+		return fmt.Errorf("can't start network metrics capture: %w", err)
 	}
+	return nil
+}
+
+func mustSkip(cfg *beyla.Config) string {
+	otelEnabled := cfg.Metrics.Enabled()
+	otelFeature := slices.Contains(cfg.Metrics.Features, otel.FeatureNetwork)
+	promEnabled := cfg.Prometheus.Enabled()
+	promFeature := slices.Contains(cfg.Prometheus.Features, otel.FeatureNetwork)
+	if otelEnabled && !otelFeature && !promEnabled {
+		return "network not present in BEYLA_OTEL_METRICS_FEATURES"
+	}
+	if promEnabled && !promFeature && !otelEnabled {
+		return "network not present in BEYLA_PROMETHEUS_FEATURES"
+	}
+	if promEnabled && !promFeature && otelEnabled && !otelFeature {
+		return "network not present neither in BEYLA_PROMETHEUS_FEATURES nor BEYLA_OTEL_METRICS_FEATURES"
+	}
+	return ""
 }
 
 // BuildContextInfo populates some globally shared components and properties

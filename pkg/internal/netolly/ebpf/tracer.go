@@ -45,7 +45,7 @@ const (
 	constSampling      = "sampling"
 	constTraceMessages = "trace_messages"
 	aggregatedFlowsMap = "aggregated_flows"
-	connInitiatorsMap = "conn_initiators"
+	connInitiatorsMap  = "conn_initiators"
 	flowDirectionsMap  = "flow_directions"
 )
 

@@ -32,8 +32,8 @@
 #define RST_ACK_FLAG 0x400
 
 // In conn_initiator_key, which sorted ip:port inititated the connection
-#define INITIATOR_LOW     1
-#define INITIATOR_HIGH    2
+#define INITIATOR_LOW 1
+#define INITIATOR_HIGH 2
 
 // In flow_metrics, who initiated the connection
 #define INITIATOR_SRC 1
@@ -57,9 +57,9 @@ struct {
 
 // Key: the flow identifier. Value: the flow direction.
 struct {
-	__uint(type, BPF_MAP_TYPE_LRU_HASH);
-	__type(key, flow_id);
-	__type(value, u8);
+    __uint(type, BPF_MAP_TYPE_LRU_HASH);
+    __type(key, flow_id);
+    __type(value, u8);
 } flow_directions SEC(".maps");
 
 // To know who initiated each connection, we store the src/dst ip:ports but ordered
@@ -75,9 +75,9 @@ typedef struct conn_initiator_key_t {
 // Key: the flow identifier.
 // Value: the connection initiator index (INITIATOR_LOW, INITIATOR_HIGH).
 struct {
-	__uint(type, BPF_MAP_TYPE_LRU_HASH);
-	__type(key, conn_initiator_key);
-	__type(value, u8);
+    __uint(type, BPF_MAP_TYPE_LRU_HASH);
+    __type(key, conn_initiator_key);
+    __type(value, u8);
 } conn_initiators SEC(".maps");
 
 const u8 ip4in6[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff};
@@ -129,66 +129,66 @@ static inline u8 fill_conn_initiator_key(flow_id *id, conn_initiator_key *key) {
 // will handle this last case heuristically
 static inline u8 get_connection_initiator(flow_id *id, u16 flags) {
     conn_initiator_key initiator_key;
-	// from the initiator_key with sorted ip/ports, know the index of the
-	// endpoint that that initiated the connection, which might be the low or the high address
-	u8 low_is_src = fill_conn_initiator_key(id, &initiator_key);
-	u8 *initiator = (u8 *)bpf_map_lookup_elem(&conn_initiators, &initiator_key);
-	u8 initiator_index = INITIATOR_UNKNOWN;
-	if (initiator == NULL) {
-		// SYN is sent from the client to the server.
-		// The initiator is the source address
-		if(flags & SYN_FLAG) {
-			if (low_is_src) {
-				initiator_index = INITIATOR_LOW;
-			} else {
-				initiator_index = INITIATOR_HIGH;
-			}
-		} else 
-		// SYN and ACK is sent from the server to the client
-		// The initiator is the destination address
-		if(flags & SYN_ACK_FLAG) {
-			if (low_is_src) {
-				initiator_index = INITIATOR_HIGH;
-			} else {
-				initiator_index = INITIATOR_LOW;
-			}
-		}            
-           
-		if (initiator_index != INITIATOR_UNKNOWN) {
-			bpf_map_update_elem(&conn_initiators, &initiator_key, &initiator_index, BPF_NOEXIST);
-		}
-	} else {
-		initiator_index = *initiator;
-	}
+    // from the initiator_key with sorted ip/ports, know the index of the
+    // endpoint that that initiated the connection, which might be the low or the high address
+    u8 low_is_src = fill_conn_initiator_key(id, &initiator_key);
+    u8 *initiator = (u8 *)bpf_map_lookup_elem(&conn_initiators, &initiator_key);
+    u8 initiator_index = INITIATOR_UNKNOWN;
+    if (initiator == NULL) {
+        // SYN is sent from the client to the server.
+        // The initiator is the source address
+        if (flags & SYN_FLAG) {
+            if (low_is_src) {
+                initiator_index = INITIATOR_LOW;
+            } else {
+                initiator_index = INITIATOR_HIGH;
+            }
+        } else
+            // SYN and ACK is sent from the server to the client
+            // The initiator is the destination address
+            if (flags & SYN_ACK_FLAG) {
+                if (low_is_src) {
+                    initiator_index = INITIATOR_HIGH;
+                } else {
+                    initiator_index = INITIATOR_LOW;
+                }
+            }
 
-	// when flow receives FIN or RST, clean flow_directions
-    if(flags & FIN_FLAG || flags & RST_FLAG || flags & FIN_ACK_FLAG || flags & RST_ACK_FLAG) {
+        if (initiator_index != INITIATOR_UNKNOWN) {
+            bpf_map_update_elem(&conn_initiators, &initiator_key, &initiator_index, BPF_NOEXIST);
+        }
+    } else {
+        initiator_index = *initiator;
+    }
+
+    // when flow receives FIN or RST, clean flow_directions
+    if (flags & FIN_FLAG || flags & RST_FLAG || flags & FIN_ACK_FLAG || flags & RST_ACK_FLAG) {
         bpf_map_delete_elem(&conn_initiators, &initiator_key);
     }
 
-	u8 flow_initiator = INITIATOR_UNKNOWN;
-	// at this point, we should know the index of the endpoint that initiated the connection.
-	// Then we accordingly set whether the initiator is the source or the destination address.
-	// If not, we forward the unknown status and the userspace will take
-	// heuristic actions to guess who is
-	switch (initiator_index) {
-	case INITIATOR_LOW:
-		if (low_is_src) {
-			flow_initiator = INITIATOR_SRC;
-		} else {
-			flow_initiator = INITIATOR_DST;
-		}
-		break;
-	case INITIATOR_HIGH:
-		if (low_is_src) {
-			flow_initiator = INITIATOR_DST;
-		} else {
-			flow_initiator = INITIATOR_SRC;
-		}
-		break;
-	}
+    u8 flow_initiator = INITIATOR_UNKNOWN;
+    // at this point, we should know the index of the endpoint that initiated the connection.
+    // Then we accordingly set whether the initiator is the source or the destination address.
+    // If not, we forward the unknown status and the userspace will take
+    // heuristic actions to guess who is
+    switch (initiator_index) {
+    case INITIATOR_LOW:
+        if (low_is_src) {
+            flow_initiator = INITIATOR_SRC;
+        } else {
+            flow_initiator = INITIATOR_DST;
+        }
+        break;
+    case INITIATOR_HIGH:
+        if (low_is_src) {
+            flow_initiator = INITIATOR_DST;
+        } else {
+            flow_initiator = INITIATOR_SRC;
+        }
+        break;
+    }
 
-	return flow_initiator;
+    return flow_initiator;
 }
 
 #endif //__FLOW_HELPERS_H__

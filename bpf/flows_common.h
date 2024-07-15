@@ -31,7 +31,7 @@
 #define FIN_ACK_FLAG 0x200
 #define RST_ACK_FLAG 0x400
 
-// In conn_initiator_key, which sorted connection inititated the connection
+// In conn_initiator_key, which sorted ip:port inititated the connection
 #define INITIATOR_LOW     1
 #define INITIATOR_HIGH    2
 
@@ -62,9 +62,8 @@ struct {
 	__type(value, u8);
 } flow_directions SEC(".maps");
 
-// Key: the flow identifier. Value: the flow direction.
-// Since the same connection can be visible from different perspectives
-// (Client to Server, as seen by the)
+// Key: the flow identifier.
+// Value: the connection initiator index (INITIATOR_LOW, INITIATOR_HIGH).
 struct {
 	__uint(type, BPF_MAP_TYPE_LRU_HASH);
 	__type(key, conn_initiator_key);
@@ -115,6 +114,9 @@ static inline u8 fill_conn_initiator_key(flow_id *id, conn_initiator_key *key) {
     return 1;
 }
 
+// returns INITIATOR_SRC or INITIATOR_DST, but might return INITIATOR_UNKNOWN
+// if the connection initiator couldn't be found. The user-space Beyla pipeline
+// will handle this last case heuristically
 static inline u8 get_connection_initiator(flow_id *id, u16 flags) {
     conn_initiator_key initiator_key;
 	// from the initiator_key with sorted ip/ports, know the index of the

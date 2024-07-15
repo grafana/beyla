@@ -17,8 +17,3 @@ attributes:
       - direction
       - client.port
       - server.port
-ebpf:
-  bpf_debug: true
-discovery:
-  services:
-    - exe_path: .

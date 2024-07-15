@@ -80,14 +80,4 @@ typedef struct flow_record_t {
     flow_metrics metrics;
 } __attribute__((packed)) flow_record;
 
-// To know who initiated each connection, we store the src/dst ip:ports but ordered
-// by numeric value of the IP (and port as secondary criteria), so the key is consistent
-// for either client and server flows.
-typedef struct conn_initiator_key_t {
-    struct in6_addr low_ip;
-    struct in6_addr high_ip;
-    u16 low_ip_port;
-    u16 high_ip_port;
-} __attribute__((packed)) conn_initiator_key;
-
 #endif

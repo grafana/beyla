@@ -3,9 +3,12 @@
 package components
 
 import (
+	"bytes"
 	"context"
+	"os"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/grafana/beyla/pkg/beyla"
@@ -70,4 +73,11 @@ func TestRun_DontPanic(t *testing.T) {
 			})
 		})
 	}
+}
+
+func Test_NetworkEnabled(t *testing.T) {
+	require.NoError(t, os.Setenv("BEYLA_NETWORK_METRICS", "true"))
+	cfg, err := beyla.LoadConfig(bytes.NewReader(nil))
+	assert.NoError(t, err)
+	assert.Equal(t, mustSkip(cfg), "")
 }

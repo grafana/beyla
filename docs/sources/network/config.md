@@ -2,7 +2,7 @@
 title: Beyla Network Metrics configuration options
 menuTitle: Configuration
 description: Learn about the configuration options available for Beyla network metrics
-weight: 2
+weight: 3
 keywords:
   - Beyla
   - eBPF
@@ -52,7 +52,9 @@ network metrics (in the previous example, `otel_metrics_export`, but it also acc
 | -------- | ----------------------- | ------- | ------- |
 | `enable` | `BEYLA_NETWORK_METRICS` | boolean | `false` |
 
-Enables network metrics reporting in Beyla.
+Explicitly enables network metrics reporting in Beyla. You can also enable network metrics reporting
+by adding `network` to the list of `features` for [otel_metrics_export]({{< relref "../configure/options.md#otel-metrics-exporter" >}}))
+or [prometheus_export]({{< relref "../configure/options.md#prometheus-http-endpoint" >}})).
 
 | YAML                 | Environment variable               | Type     | Default             |
 | -------------------- | ---------------------------------- | -------- | ------------------- |
@@ -64,7 +66,7 @@ The available options are: `tc` and `socket_filter`.
 
 When `tc` is used as an event source, Beyla uses the Linux Traffic Control ingress and egress
 filters to capture the network events, in a direct action mode. This event source mode assumes
-that no other eBPF programs are attaching to the same Linux Traffic Control interface, in 
+that no other eBPF programs are attaching to the same Linux Traffic Control interface, in
 direct action mode. For example, the Cilium Kubernetes CNI uses the same approach, therefore
 if you have Cilium CNI installed in your Kubernetes cluster, configure Beyla to capture the
 network events with the `socket_filter` mode.

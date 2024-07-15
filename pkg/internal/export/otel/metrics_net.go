@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"slices"
 	"time"
 
 	"github.com/google/uuid"
@@ -25,10 +24,11 @@ import (
 type NetMetricsConfig struct {
 	Metrics            *MetricsConfig
 	AttributeSelectors attributes.Selection
+	GloballyEnabled    bool
 }
 
 func (mc NetMetricsConfig) Enabled() bool {
-	return mc.Metrics != nil && mc.Metrics.EndpointEnabled() && slices.Contains(mc.Metrics.Features, FeatureNetwork)
+	return mc.Metrics != nil && mc.Metrics.EndpointEnabled() && (mc.Metrics.NetworkMetricsEnabled() || mc.GloballyEnabled)
 }
 
 func nmlog() *slog.Logger {

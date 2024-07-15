@@ -835,7 +835,7 @@ The purpose of this value is to avoid reporting indefinitely finished applicatio
 
 | YAML       | Environment variable          | Type            | Default                      |
 |------------|-------------------------------|-----------------|------------------------------|
-| `features` | `BEYLA_OTEL_METRICS_FEATURES` | list of strings | `["application", "network"]` |
+| `features` | `BEYLA_OTEL_METRICS_FEATURES` | list of strings | `["application"]` |
 
 A list of metric groups which are allowed to be exported. Each group belongs to a different feature
 of Beyla: application-level metrics or network metrics.
@@ -853,8 +853,8 @@ of Beyla: application-level metrics or network metrics.
   the OpenTelemetry service names used in Beyla. In Kubernetes environments, the OpenTelemetry service name set by the service name
   discovery is the best choice for service graph metrics.
 - If the list contains `network`, the Beyla OpenTelemetry exporter exports network-level
-  metrics; but only if there is defined an OpenTelemetry endpoint and the
-  [network metrics are enabled]({{< relref "../network" >}}).
+  metrics; but only if there is an OpenTelemetry endpoint defined. For network-level metrics options visit the
+  [network metrics]({{< relref "../network" >}}) configuration documentation.
 
 Usually you do not need to change this configuration option, unless, for example, a Beyla instance
 instruments both network and applications, and you want to disable application-level metrics because
@@ -1214,7 +1214,7 @@ The `buckets` object allows overriding the bucket boundaries of diverse histogra
 
 | YAML       | Environment variable        | Type            | Default                      |
 |------------|-----------------------------|-----------------|------------------------------|
-| `features` | `BEYLA_PROMETHEUS_FEATURES` | list of strings | `["application", "network"]` |
+| `features` | `BEYLA_PROMETHEUS_FEATURES` | list of strings | `["application"]` |
 
 A list of metric groups that are allowed to be exported. Each group belongs to a different feature
 of Beyla: application-level metrics or network metrics.
@@ -1232,8 +1232,8 @@ of Beyla: application-level metrics or network metrics.
   the OpenTelemetry service names used in Beyla. In Kubernetes environments, the OpenTelemetry service name set by the service name
   discovery is the best choice for service graph metrics.
 - If the list contains `network`, the Beyla Prometheus exporter exports network-level
-  metrics; but only if the Prometheus `port` property is defined and the
-  [network metrics are enabled]({{< relref "../network" >}}).
+  metrics; but only if the Prometheus `port` property is defined. For network-level metrics options visit the
+  [network metrics]({{< relref "../network" >}}) configuration documentation.
 
 Usually you do not need to change this configuration option, unless, for example, a Beyla instance
 instruments both network and applications, and you want to disable application-level metrics because

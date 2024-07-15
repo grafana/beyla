@@ -136,12 +136,14 @@ func (f *Flows) pipelineBuilder(ctx context.Context) (*pipe.Builder[*FlowsPipeli
 		return otel.NetMetricsExporterProvider(ctx, f.ctxInfo, &otel.NetMetricsConfig{
 			Metrics:            &f.cfg.Metrics,
 			AttributeSelectors: f.cfg.Attributes.Select,
+			GloballyEnabled:    f.cfg.NetworkFlows.Enable,
 		})
 	})
 	pipe.AddFinalProvider(pb, promExport, func() (pipe.FinalFunc[[]*ebpf.Record], error) {
 		return prom.NetPrometheusEndpoint(ctx, f.ctxInfo, &prom.NetPrometheusConfig{
 			Config:             &f.cfg.Prometheus,
 			AttributeSelectors: f.cfg.Attributes.Select,
+			GloballyEnabled:    f.cfg.NetworkFlows.Enable,
 		})
 	})
 	pipe.AddFinalProvider(pb, printer, func() (pipe.FinalFunc[[]*ebpf.Record], error) {

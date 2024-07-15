@@ -120,7 +120,7 @@ network:
 				DurationHistogram:    []float64{0, 1, 2},
 				RequestSizeHistogram: otel.DefaultBuckets.RequestSizeHistogram,
 			},
-			Features: []string{"network", "application"},
+			Features: []string{"application"},
 			Instrumentations: []string{
 				instrumentations.InstrumentationALL,
 			},
@@ -140,7 +140,7 @@ network:
 		},
 		Prometheus: prom.PrometheusConfig{
 			Path:     "/metrics",
-			Features: []string{otel.FeatureNetwork, otel.FeatureApplication},
+			Features: []string{otel.FeatureApplication},
 			Instrumentations: []string{
 				instrumentations.InstrumentationALL,
 			},
@@ -286,6 +286,26 @@ func TestConfig_OtelGoAutoEnv(t *testing.T) {
 	cfg, err := LoadConfig(bytes.NewReader(nil))
 	require.NoError(t, err)
 	assert.True(t, cfg.Exec.IsSet()) // Exec maps to BEYLA_EXECUTABLE_NAME
+}
+
+func TestConfig_NetworkImplicit(t *testing.T) {
+	// OTEL_GO_AUTO_TARGET_EXE is an alias to BEYLA_EXECUTABLE_NAME
+	// (Compatibility with OpenTelemetry)
+	require.NoError(t, os.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4318"))
+	require.NoError(t, os.Setenv("BEYLA_OTEL_METRIC_FEATURES", "network"))
+	cfg, err := LoadConfig(bytes.NewReader(nil))
+	require.NoError(t, err)
+	assert.True(t, cfg.Enabled(FeatureNetO11y)) // Net o11y should be on
+}
+
+func TestConfig_NetworkImplicitProm(t *testing.T) {
+	// OTEL_GO_AUTO_TARGET_EXE is an alias to BEYLA_EXECUTABLE_NAME
+	// (Compatibility with OpenTelemetry)
+	require.NoError(t, os.Setenv("BEYLA_PROMETHEUS_PORT", "9090"))
+	require.NoError(t, os.Setenv("BEYLA_PROMETHEUS_FEATURES", "network"))
+	cfg, err := LoadConfig(bytes.NewReader(nil))
+	require.NoError(t, err)
+	assert.True(t, cfg.Enabled(FeatureNetO11y)) // Net o11y should be on
 }
 
 func loadConfig(t *testing.T, env map[string]string) *Config {

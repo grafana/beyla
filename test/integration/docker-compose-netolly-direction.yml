@@ -41,7 +41,7 @@ services:
       BEYLA_CONFIG_PATH: /configs/instrumenter-config-netolly${BEYLA_CONFIG_SUFFIX}.yml
       GOCOVERDIR: "/coverage"
       BEYLA_NETWORK_SOURCE: ${BEYLA_NETWORK_SOURCE}
-      BEYLA_NETWORK_METRICS: "true"
+      BEYLA_OTEL_METRICS_FEATURES: "network" # implicitly enabling network metrics without a global enable
       BEYLA_NETWORK_PRINT_FLOWS: "true"
       BEYLA_NETWORK_DEDUPER: ${BEYLA_NETWORK_DEDUPER}
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otelcol:4318

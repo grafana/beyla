@@ -152,8 +152,12 @@ func (m *MetricsConfig) OTelMetricsEnabled() bool {
 	return slices.Contains(m.Features, FeatureApplication)
 }
 
+func (m *MetricsConfig) NetworkMetricsEnabled() bool {
+	return slices.Contains(m.Features, FeatureNetwork)
+}
+
 func (m *MetricsConfig) Enabled() bool {
-	return m.EndpointEnabled() && (m.OTelMetricsEnabled() || m.SpanMetricsEnabled() || m.ServiceGraphMetricsEnabled())
+	return m.EndpointEnabled() && (m.OTelMetricsEnabled() || m.SpanMetricsEnabled() || m.ServiceGraphMetricsEnabled() || m.NetworkMetricsEnabled())
 }
 
 // MetricsReporter implements the graph node that receives request.Span

@@ -122,7 +122,8 @@ func (pf *PIDsFilter) Filter(inputSpans []request.Span) []request.Span {
 	defer pf.mux.RUnlock()
 	// todo: adaptive presizing as a function of the historical percentage
 	// of filtered spans
-	outputSpans := make([]request.Span, 0, len(inputSpans))
+	var outputSpans []request.Span
+	skipped := false
 	for i := range inputSpans {
 		span := &inputSpans[i]
 
@@ -130,6 +131,12 @@ func (pf *PIDsFilter) Filter(inputSpans []request.Span) []request.Span {
 		ns, nsExists := pf.current[span.Pid.Namespace]
 
 		if !nsExists {
+			if !skipped {
+				outputSpans = make([]request.Span, 0, len(inputSpans)-1)
+				copy(outputSpans, inputSpans[:i])
+				skipped = true
+			}
+
 			continue
 		}
 
@@ -138,8 +145,14 @@ func (pf *PIDsFilter) Filter(inputSpans []request.Span) []request.Span {
 		// of container layers. The Host PID is always the outer most layer.
 		if info, pidExists := ns[span.Pid.UserPID]; pidExists {
 			inputSpans[i].ServiceID = info.service
-			outputSpans = append(outputSpans, inputSpans[i])
+			if skipped {
+				outputSpans = append(outputSpans, inputSpans[i])
+			}
 		}
+	}
+
+	if outputSpans == nil {
+		return inputSpans
 	}
 
 	if len(outputSpans) != len(inputSpans) {
@@ -201,7 +214,8 @@ func (pf *IdentityPidsFilter) CurrentPIDs(_ PIDType) map[uint32]map[uint32]svc.I
 func (pf *IdentityPidsFilter) Filter(inputSpans []request.Span) []request.Span {
 	for i := range inputSpans {
 		s := &inputSpans[i]
-		s.ServiceID = serviceInfo(s.Pid.HostPID)
+		svc := serviceInfo(s.Pid.HostPID)
+		s.ServiceID = &svc
 	}
 	return inputSpans
 }

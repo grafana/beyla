@@ -65,7 +65,10 @@ func main() {
 	// child process isn't found.
 	ctx, _ := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 
-	components.RunBeyla(ctx, config)
+	if err := components.RunBeyla(ctx, config); err != nil {
+		slog.Error("Beyla can't start", "error", err)
+		os.Exit(-1)
+	}
 
 	if gc := os.Getenv("GOCOVERDIR"); gc != "" {
 		slog.Info("Waiting 1s to collect coverage data...")

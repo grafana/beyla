@@ -103,16 +103,18 @@ func TestNetwork_Direction(t *testing.T) {
 		require.Contains(t, f.Metric, "direction")
 	}
 
-	// test correct direction labels
+	// test correct direction labels and client/server ports
 	client := results[slices.IndexFunc(results, func(result prom.Result) bool { return result.Metric["dst_port"] == "8080" })]
-	require.Equal(t, client.Metric["direction"], "egress")
+	require.Equal(t, "egress", client.Metric["direction"])
+	require.Equal(t, "7000", client.Metric["client_port"])
+	require.Equal(t, "8080", client.Metric["server_port"])
+
 	server := results[slices.IndexFunc(results, func(result prom.Result) bool { return result.Metric["src_port"] == "8080" })]
-	require.Equal(t, server.Metric["direction"], "ingress")
+	require.Equal(t, "ingress", server.Metric["direction"], "ingress")
+	require.Equal(t, "7000", client.Metric["client_port"])
+	require.Equal(t, "8080", client.Metric["server_port"])
 
-	// test correct client and server ports
-
-
-	//require.NoError(t, compose.Close())
+	require.NoError(t, compose.Close())
 }
 
 func TestNetwork_Direction_Use_Socket_Filter(t *testing.T) {
@@ -126,11 +128,17 @@ func TestNetwork_Direction_Use_Socket_Filter(t *testing.T) {
 		require.Contains(t, f.Metric, "direction")
 	}
 
-	// test correct direction labels
+	// test correct direction labels and client/server ports
 	client := results[slices.IndexFunc(results, func(result prom.Result) bool { return result.Metric["dst_port"] == "8080" })]
-	require.Equal(t, client.Metric["direction"], "egress")
+	require.Equal(t, "egress", client.Metric["direction"])
+	require.Equal(t, "7000", client.Metric["client_port"])
+	require.Equal(t, "8080", client.Metric["server_port"])
+
 	server := results[slices.IndexFunc(results, func(result prom.Result) bool { return result.Metric["src_port"] == "8080" })]
 	require.Equal(t, server.Metric["direction"], "ingress")
+	require.Equal(t, "ingress", server.Metric["direction"], "ingress")
+	require.Equal(t, "7000", client.Metric["client_port"])
+	require.Equal(t, "8080", client.Metric["server_port"])
 
 	require.NoError(t, compose.Close())
 }

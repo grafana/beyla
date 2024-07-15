@@ -36,6 +36,8 @@ static inline s32 compare_ipv6(flow_id *fid) {
     return 0;
 }
 
+// creates a key that is consistent for both requests and responses, by
+// ordering endpoints (ip:port) numerically into a lower and a higher endpoint.
 // returns true if the lower address corresponds to the source address
 // (false if the lower address corresponds to the destination address)
 static inline u8 fill_conn_initiator_key(flow_id *id, conn_initiator_key *key) {
@@ -263,24 +265,22 @@ static inline int flow_monitor(struct __sk_buff *skb) {
             new_flow.direction = *direction;
         }
 
-        // know who initiated the connection, which might be the src or the dst address
+        // from the initiator_key with sorted ip/ports, know the index of the
+        // endpoint that that initiated the connection, which might be the low or the high address
         u8 low_is_src = fill_conn_initiator_key(&id, &initiator_key);
         u8 *initiator = (u8 *)bpf_map_lookup_elem(&conn_initiators, &initiator_key);
         u8 initiator_index = INITIATOR_UNKNOWN;
         if (initiator == NULL) {
-            if (new_flow.direction == INGRESS) {
+            // SYN and ACK mean someone else initiated the connection.
+            // SYN means we initiated the connection.
+            // In both cases, the source address must be the initiator
+            if((flags & (SYN_ACK_FLAG | SYN_FLAG)) != 0) {
                 if (low_is_src) {
                     initiator_index = INITIATOR_LOW;
                 } else {
                     initiator_index = INITIATOR_HIGH;
                 }
-            } else {
-                if (low_is_src) {
-                    initiator_index = INITIATOR_HIGH;
-                } else {
-                    initiator_index = INITIATOR_HIGH;
-                }
-            }
+            }            
             if (initiator_index != INITIATOR_UNKNOWN) {
                 bpf_map_update_elem(&conn_initiators, &initiator_key, &initiator_index, BPF_NOEXIST);
             }
@@ -288,12 +288,10 @@ static inline int flow_monitor(struct __sk_buff *skb) {
             initiator_index = *initiator;
         }
 
-        bpf_printk("zacacaca -- ");
-        if ((id.src_port == 7000 || id.dst_port == 7000) && (id.src_port == 8080 || id.dst_port == 8080)) {
-            bpf_printk("zacacaca[%llx] %d->%d %d<%d idx: %d", initiator, id.src_port, id.dst_port, initiator_key.low_ip_port, initiator_key.high_ip_port, initiator_index);
-        }
+        bpf_printk("conn_initiator[%llx] %d->%d %d<%d idx: %d", initiator, id.src_port, id.dst_port, initiator_key.low_ip_port, initiator_key.high_ip_port, initiator_index);
 
-        // at this point, we should know who initiated the connection.
+        // at this point, we should know the index of the endpoint that initiated the connection.
+        // Then we accordingly set whether the initiator is the source or the destination address.
         // If not, we forward the unknown status and the userspace will take
         // heuristic actions to guess who is
         switch (initiator_index) {
@@ -306,9 +304,9 @@ static inline int flow_monitor(struct __sk_buff *skb) {
             break;
         case INITIATOR_HIGH:
             if (low_is_src) {
-                new_flow.initiator = INITIATOR_SRC;
-            } else {
                 new_flow.initiator = INITIATOR_DST;
+            } else {
+                new_flow.initiator = INITIATOR_SRC;
             }
             break;
         }

@@ -7,18 +7,15 @@ package transform
 import (
 	"bytes"
 	"context"
-	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
 	"time"
 
-	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/credentials"
-	"github.com/aws/aws-sdk-go-v2/service/ec2"
-	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
+	"go.opentelemetry.io/contrib/detectors/aws/eks"
+
+	attr2 "github.com/grafana/beyla/pkg/internal/export/attributes/names"
 )
 
 const (
@@ -45,7 +42,7 @@ type clusterNameFetcher func(context.Context) (string, error)
 func fetchClusterName(ctx context.Context) string {
 	log := klog().With("func", "fetchClusterName")
 	var clusterNameFetchers = map[string]clusterNameFetcher{
-		"EC2":   ec2ClusterNameFetcher,
+		"EC2":   eksClusterNameFetcher,
 		"GCP":   gcpClusterNameFetcher,
 		"Azure": azureClusterNameFetcher,
 	}
@@ -105,103 +102,17 @@ func azureClusterNameFetcher(ctx context.Context) (string, error) {
 	return splitAll[len(splitAll)-2], nil
 }
 
-type ec2Identity struct {
-	Region     string
-	InstanceID string
-	AccountID  string
-}
-
-func getInstanceIdentity(ctx context.Context) (*ec2Identity, error) {
-	instanceIdentity := &ec2Identity{}
-
-	res, err := httpGet(ctx, ec2InstanceIdentityURL, nil)
-	if err != nil {
-		return instanceIdentity, fmt.Errorf("unable to fetch EC2 API to get identity: %w", err)
-	}
-
-	err = json.Unmarshal([]byte(res), &instanceIdentity)
-	if err != nil {
-		return instanceIdentity, fmt.Errorf("unable to unmarshall json, %w", err)
-	}
-
-	return instanceIdentity, nil
-}
-
-type ec2SecurityCred struct {
-	AccessKeyID     string
-	SecretAccessKey string
-	Token           string
-}
-
-func getSecurityCreds(ctx context.Context) (*ec2SecurityCred, error) {
-	iamParams := &ec2SecurityCred{}
-
-	iamRole, err := getIAMRole(ctx)
-	if err != nil {
-		return iamParams, err
-	}
-
-	res, err := httpGet(ctx, ec2SecurityCredsURL+iamRole, nil)
-	if err != nil {
-		return iamParams, fmt.Errorf("unable to fetch EC2 API to get iam role: %w", err)
-	}
-
-	err = json.Unmarshal([]byte(res), &iamParams)
-	if err != nil {
-		return iamParams, fmt.Errorf("unable to unmarshall json, %w", err)
-	}
-	return iamParams, nil
-}
-
-func getIAMRole(ctx context.Context) (string, error) {
-	res, err := httpGet(ctx, ec2SecurityCredsURL, nil)
-	if err != nil {
-		return "", fmt.Errorf("unable to fetch EC2 API to get security credentials: %w", err)
-	}
-
-	return res, nil
-}
-
-func ec2ClusterNameFetcher(ctx context.Context) (string, error) {
-	instanceIdentity, err := getInstanceIdentity(ctx)
+func eksClusterNameFetcher(ctx context.Context) (string, error) {
+	// Instantiate a new EKS Resource detector
+	eksResourceDetector := eks.NewResourceDetector()
+	resource, err := eksResourceDetector.Detect(ctx)
 	if err != nil {
 		return "", err
 	}
-
-	secCreds, err := getSecurityCreds(ctx)
-	if err != nil {
-		return "", err
-	}
-	awsCreds := credentials.NewStaticCredentialsProvider(secCreds.AccessKeyID, secCreds.SecretAccessKey, secCreds.Token)
-
-	connection := ec2.New(ec2.Options{
-		Region:      instanceIdentity.Region,
-		Credentials: awsCreds,
-	})
-
-	ec2Tags, err := connection.DescribeTags(ctx,
-		&ec2.DescribeTagsInput{
-			Filters: []types.Filter{{
-				Name: aws.String("resource-id"),
-				Values: []string{
-					instanceIdentity.InstanceID,
-				},
-			}},
-		},
-	)
-	if err != nil {
-		return "", fmt.Errorf("retrieving EC2 tags: %w", err)
-	}
-
-	// tagsStr is a newline-separated list of strings containing tag keys
-	for _, tag := range ec2Tags.Tags {
-		if tag.Key == nil {
-			continue
-		}
-		// tag key format: kubernetes.io/cluster/clustername"
-		if strings.HasPrefix(*tag.Key, "kubernetes.io/cluster/") {
-			return strings.Split(*tag.Key, "/")[2], nil
+	for _, attr := range resource.Attributes() {
+		if string(attr.Key) == string(attr2.K8sClusterName) {
+			return attr.Value.Emit(), nil
 		}
 	}
-	return "", errors.New("did not find any kubernetes.io/cluster/... tag")
+	return "", fmt.Errorf("did not find any cluster attribute in %+v", resource.Attributes())
 }

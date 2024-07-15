@@ -1,7 +1,5 @@
-// This file contains changes that are only compatible with go 1.10 and onwards.
-
-//go:build go1.10
-// +build go1.10
+//go:build go1.21
+// +build go1.21
 
 /*
 Copyright 2021 The Kubernetes Authors.
@@ -19,13 +17,15 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package yaml
+package klog
 
-import "encoding/json"
+import (
+	"log/slog"
 
-// DisallowUnknownFields configures the JSON decoder to error out if unknown
-// fields come along, instead of dropping them by default.
-func DisallowUnknownFields(d *json.Decoder) *json.Decoder {
-	d.DisallowUnknownFields()
-	return d
+	"github.com/go-logr/logr"
+)
+
+// SetSlogLogger reconfigures klog to log through the slog logger. The logger must not be nil.
+func SetSlogLogger(logger *slog.Logger) {
+	SetLoggerWithOptions(logr.FromSlogHandler(logger.Handler()), ContextualLogger(true))
 }

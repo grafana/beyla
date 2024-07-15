@@ -92,7 +92,7 @@ func setupNetO11y(ctx context.Context, ctxInfo *global.ContextInfo, cfg *beyla.C
 }
 
 func mustSkip(cfg *beyla.Config) string {
-	enabled := cfg.Enabled(beyla.FeatureAppO11y)
+	enabled := cfg.Enabled(beyla.FeatureNetO11y)
 	if !enabled {
 		return "network not present neither in BEYLA_PROMETHEUS_FEATURES nor BEYLA_OTEL_METRICS_FEATURES"
 	}

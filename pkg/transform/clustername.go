@@ -21,10 +21,6 @@ import (
 const (
 	gcpMetadataURL   = "http://metadata.google.internal/computeMetadata/v1/instance/attributes/cluster-name"
 	azureMetadataURL = "http://169.254.169.254/metadata/instance/compute/resourceGroupName?api-version=2017-08-01&format=text"
-
-	ec2MetadataURL         = "http://169.254.169.254/latest/meta-data"
-	ec2SecurityCredsURL    = ec2MetadataURL + "/iam/security-credentials/"
-	ec2InstanceIdentityURL = "http://169.254.169.254/latest/dynamic/instance-identity/document/"
 )
 
 var (

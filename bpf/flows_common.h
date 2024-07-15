@@ -143,16 +143,16 @@ static inline u8 get_connection_initiator(flow_id *id, u16 flags) {
             } else {
                 initiator_index = INITIATOR_HIGH;
             }
-        } else
-            // SYN and ACK is sent from the server to the client
-            // The initiator is the destination address
-            if (flags & SYN_ACK_FLAG) {
-                if (low_is_src) {
-                    initiator_index = INITIATOR_HIGH;
-                } else {
-                    initiator_index = INITIATOR_LOW;
-                }
+        }
+        // SYN and ACK is sent from the server to the client
+        // The initiator is the destination address
+        else if (flags & SYN_ACK_FLAG) {
+            if (low_is_src) {
+                initiator_index = INITIATOR_HIGH;
+            } else {
+                initiator_index = INITIATOR_LOW;
             }
+        }
 
         if (initiator_index != INITIATOR_UNKNOWN) {
             bpf_map_update_elem(&conn_initiators, &initiator_key, &initiator_index, BPF_NOEXIST);

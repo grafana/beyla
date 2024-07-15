@@ -94,7 +94,7 @@ func TestNetwork_AllowedAttributes(t *testing.T) {
 
 func TestNetwork_Direction(t *testing.T) {
 	compose, err := docker.ComposeSuite("docker-compose-netolly-direction.yml", path.Join(pathOutput, "test-suite-netolly-direction.log"))
-	compose.Env = append(compose.Env, "BEYLA_NETWORK_DEDUPER=first_come", "BEYLA_EXECUTABLE_NAME=", `BEYLA_CONFIG_SUFFIX=-direction`)
+	compose.Env = append(compose.Env, "BEYLA_NETWORK_DEDUPER=first_come", "BEYLA_NETWORK_SOURCE=tc", "BEYLA_EXECUTABLE_NAME=", `BEYLA_CONFIG_SUFFIX=-direction`)
 	require.NoError(t, err)
 	require.NoError(t, compose.Up())
 

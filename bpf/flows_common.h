@@ -77,5 +77,97 @@ const u8 ip4in6[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff};
 volatile const u32 sampling = 0;
 volatile const u8 trace_messages = 0;
 
+// we can safely assume that the passed address is IPv6 as long as we encode IPv4
+// as IPv6 during the creation of the flow_id.
+static inline s32 compare_ipv6(flow_id *fid) {
+    for (int i = 0; i < 4; i++) {
+        s32 diff = fid->src_ip.in6_u.u6_addr32[i] - fid->dst_ip.in6_u.u6_addr32[i];
+        if (diff != 0) {
+            return diff;
+        }
+    }
+    return 0;
+}
+
+// creates a key that is consistent for both requests and responses, by
+// ordering endpoints (ip:port) numerically into a lower and a higher endpoint.
+// returns true if the lower address corresponds to the source address
+// (false if the lower address corresponds to the destination address)
+static inline u8 fill_conn_initiator_key(flow_id *id, conn_initiator_key *key) {
+    s32 cmp = compare_ipv6(id);
+    if (cmp < 0) {
+        __builtin_memcpy(&key->low_ip, &id->src_ip, sizeof(struct in6_addr));
+        key->low_ip_port = id->src_port;
+        __builtin_memcpy(&key->high_ip, &id->dst_ip, sizeof(struct in6_addr));
+        key->high_ip_port = id->dst_port;
+        return 1;
+    }
+    // if the IPs are equal (cmp == 0) we will use the ports as secondary order criteria
+    __builtin_memcpy(&key->high_ip, &id->src_ip, sizeof(struct in6_addr));
+    __builtin_memcpy(&key->low_ip, &id->dst_ip, sizeof(struct in6_addr));
+    if (cmp > 0 || id->src_port > id->dst_port) {
+        key->high_ip_port = id->src_port;
+        key->low_ip_port = id->dst_port;
+        return 0;
+    }
+    key->low_ip_port = id->src_port;
+    key->high_ip_port = id->dst_port;
+    return 1;
+}
+
+static inline u8 get_connection_initiator(flow_id *id, u16 flags) {
+    conn_initiator_key initiator_key;
+	// from the initiator_key with sorted ip/ports, know the index of the
+	// endpoint that that initiated the connection, which might be the low or the high address
+	u8 low_is_src = fill_conn_initiator_key(id, &initiator_key);
+	u8 *initiator = (u8 *)bpf_map_lookup_elem(&conn_initiators, &initiator_key);
+	u8 initiator_index = INITIATOR_UNKNOWN;
+	if (initiator == NULL) {
+		// SYN and ACK mean someone else initiated the connection.
+		// SYN means we initiated the connection.
+		// In both cases, the source address must be the initiator
+		if((flags & (SYN_ACK_FLAG | SYN_FLAG)) != 0) {
+			if (low_is_src) {
+				initiator_index = INITIATOR_LOW;
+			} else {
+				initiator_index = INITIATOR_HIGH;
+			}
+		}            
+		if (initiator_index != INITIATOR_UNKNOWN) {
+			bpf_map_update_elem(&conn_initiators, &initiator_key, &initiator_index, BPF_NOEXIST);
+		}
+	} else {
+		initiator_index = *initiator;
+	}
+
+	// when flow receives FIN or RST, clean flow_directions
+    if(flags & FIN_FLAG || flags & RST_FLAG || flags & FIN_ACK_FLAG || flags & RST_ACK_FLAG) {
+        bpf_map_delete_elem(&conn_initiators, &initiator_key);
+    }
+
+	u8 flow_initiator = INITIATOR_UNKNOWN;
+	// at this point, we should know the index of the endpoint that initiated the connection.
+	// Then we accordingly set whether the initiator is the source or the destination address.
+	// If not, we forward the unknown status and the userspace will take
+	// heuristic actions to guess who is
+	switch (initiator_index) {
+	case INITIATOR_LOW:
+		if (low_is_src) {
+			flow_initiator = INITIATOR_SRC;
+		} else {
+			flow_initiator = INITIATOR_DST;
+		}
+		break;
+	case INITIATOR_HIGH:
+		if (low_is_src) {
+			flow_initiator = INITIATOR_DST;
+		} else {
+			flow_initiator = INITIATOR_SRC;
+		}
+		break;
+	}
+
+	return flow_initiator;
+}
 
 #endif //__FLOW_HELPERS_H__

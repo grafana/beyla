@@ -22,5 +22,3 @@ ebpf:
 discovery:
   services:
     - exe_path: .
-network:
-  source: tc

@@ -137,7 +137,7 @@ static inline u8 get_connection_initiator(flow_id *id, u16 flags) {
     if (initiator == NULL) {
         // SYN and ACK is sent from the server to the client
         // The initiator is the destination address
-        if (flags & SYN_ACK_FLAG) {
+        if ((flags & (SYN_FLAG | ACK_FLAG)) == (SYN_FLAG | ACK_FLAG)) {
             if (low_is_src) {
                 initiator_index = INITIATOR_HIGH;
             } else {

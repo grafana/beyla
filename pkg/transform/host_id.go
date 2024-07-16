@@ -7,10 +7,11 @@ import (
 	"os"
 	"strings"
 
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/sdk/resource"
 	"go.opentelemetry.io/contrib/detectors/aws/ec2"
 	"go.opentelemetry.io/contrib/detectors/gcp"
-
+	"go.opentelemetry.io/contrib/detectors/azure/azurevm"
 	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 )
 
@@ -24,16 +25,19 @@ var cloudFetchers = map[string]hostIDFetcher{
 var fallbackCloudFetcher = linuxLocalMachineIDFetcher
 
 func azureHostIDFetcher(ctx context.Context) (string, error) {
-
+	azurevm.
 }
 
 func gcpHostIDFetcher(ctx context.Context) (string, error) {
-	gcp.NewDetector()
+	return detectHostID(ctx, gcp.NewDetector())
 }
 
 func ec2HostIDFetcher(ctx context.Context) (string, error) {
-	ec2ResourceDetector := ec2.NewResourceDetector()
-	res, err := ec2ResourceDetector.Detect(ctx)
+	return detectHostID(ctx, ec2.NewResourceDetector())
+}
+
+func detectHostID(ctx context.Context, detector resource.Detector) (string, error) {
+	res, err := detector.Detect(ctx)
 	if err != nil {
 		return "", err
 	}

@@ -236,9 +236,6 @@ func getDefinitions(groups AttrGroups) map[Section]AttrReportGroup {
 				attr.RPCMethod:         true,
 				attr.RPCSystem:         true,
 				attr.RPCGRPCStatusCode: true,
-				// Overriding default serverInfo configuration because we want
-				// to report it by default
-				attr.ClientAddr: true,
 			},
 		},
 		DBClientDuration.Section: {

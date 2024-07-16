@@ -123,8 +123,12 @@ checkfmt:
 
 .PHONY: lint-dashboard
 lint-dashboard: prereqs
-	@echo "### Linting dashboard"
-	$(DASHBOARD_LINTER) lint grafana/dashboard.json
+	@echo "### Linting dashboard";
+	@if [ "$(shell sh -c 'git ls-files --modified | grep grafana/dashboard.json ')" != "" ]; then \
+		$(DASHBOARD_LINTER) lint --strict grafana/dashboard.json; \
+	else \
+		echo '(no git changes detected. Skipping)'; \
+	fi
 
 .PHONY: lint
 lint: prereqs checkfmt

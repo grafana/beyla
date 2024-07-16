@@ -56,6 +56,8 @@ func DoTestNetFlowBytesForExistingConnections(ctx context.Context, t *testing.T,
 		assert.Equal(t, "Service", metric["k8s_dst_type"])
 		assert.Contains(t, podSubnets, metric["src_cidr"], metric)
 		assert.Contains(t, svcSubnets, metric["dst_cidr"], metric)
+		assert.Equal(t, "8080", metric["server_port"])
+		assert.NotEqual(t, "8080", metric["client_port"])
 		// services don't have host IP or name
 	})
 	// testing request flows (to testserver as Pod)
@@ -89,6 +91,8 @@ func DoTestNetFlowBytesForExistingConnections(ctx context.Context, t *testing.T,
 		assertIsIP(t, metric["k8s_dst_node_ip"])
 		assert.Contains(t, podSubnets, metric["src_cidr"], metric)
 		assert.Contains(t, podSubnets, metric["dst_cidr"], metric)
+		assert.Equal(t, "8080", metric["server_port"])
+		assert.NotEqual(t, "8080", metric["client_port"])
 	})
 
 	// testing response flows (from testserver Pod)
@@ -122,6 +126,8 @@ func DoTestNetFlowBytesForExistingConnections(ctx context.Context, t *testing.T,
 		assert.Contains(t, podSubnets, metric["src_cidr"], metric)
 		assert.Contains(t, podSubnets, metric["dst_cidr"], metric)
 		assert.Equal(t, "TCP", metric["transport"])
+		assert.Equal(t, "8080", metric["server_port"])
+		assert.NotEqual(t, "8080", metric["client_port"])
 	})
 
 	// testing response flows (from testserver Service)
@@ -151,6 +157,8 @@ func DoTestNetFlowBytesForExistingConnections(ctx context.Context, t *testing.T,
 		assertIsIP(t, metric["k8s_dst_node_ip"])
 		assert.Contains(t, svcSubnets, metric["src_cidr"], metric)
 		assert.Contains(t, podSubnets, metric["dst_cidr"], metric)
+		assert.Equal(t, "8080", metric["server_port"])
+		assert.NotEqual(t, "8080", metric["client_port"])
 	})
 
 	// check that there aren't captured flows if there is no communication

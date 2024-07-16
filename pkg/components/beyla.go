@@ -4,14 +4,12 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"slices"
 	"sync"
 
 	"github.com/grafana/beyla/pkg/beyla"
 	"github.com/grafana/beyla/pkg/internal/appolly"
 	"github.com/grafana/beyla/pkg/internal/connector"
 	"github.com/grafana/beyla/pkg/internal/export/attributes"
-	"github.com/grafana/beyla/pkg/internal/export/otel"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/kube"
 	"github.com/grafana/beyla/pkg/internal/netolly/agent"
@@ -94,17 +92,8 @@ func setupNetO11y(ctx context.Context, ctxInfo *global.ContextInfo, cfg *beyla.C
 }
 
 func mustSkip(cfg *beyla.Config) string {
-	otelEnabled := cfg.Metrics.Enabled()
-	otelFeature := slices.Contains(cfg.Metrics.Features, otel.FeatureNetwork)
-	promEnabled := cfg.Prometheus.Enabled()
-	promFeature := slices.Contains(cfg.Prometheus.Features, otel.FeatureNetwork)
-	if otelEnabled && !otelFeature && !promEnabled {
-		return "network not present in BEYLA_OTEL_METRICS_FEATURES"
-	}
-	if promEnabled && !promFeature && !otelEnabled {
-		return "network not present in BEYLA_PROMETHEUS_FEATURES"
-	}
-	if promEnabled && !promFeature && otelEnabled && !otelFeature {
+	enabled := cfg.Enabled(beyla.FeatureNetO11y)
+	if !enabled {
 		return "network not present neither in BEYLA_PROMETHEUS_FEATURES nor BEYLA_OTEL_METRICS_FEATURES"
 	}
 	return ""

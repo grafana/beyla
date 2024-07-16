@@ -52,7 +52,9 @@ network metrics (in the previous example, `otel_metrics_export`, but it also acc
 | -------- | ----------------------- | ------- | ------- |
 | `enable` | `BEYLA_NETWORK_METRICS` | boolean | `false` |
 
-Enables network metrics reporting in Beyla.
+Explicitly enables network metrics reporting in Beyla. You can also enable network metrics reporting
+by adding `network` to the list of `features` for [otel_metrics_export]({{< relref "../configure/options.md#otel-metrics-exporter" >}}))
+or [prometheus_export]({{< relref "../configure/options.md#prometheus-http-endpoint" >}})).
 
 | YAML                 | Environment variable               | Type     | Default             |
 | -------------------- | ---------------------------------- | -------- | ------------------- |

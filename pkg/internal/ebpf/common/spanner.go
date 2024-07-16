@@ -3,7 +3,7 @@ package ebpfcommon
 import (
 	"bytes"
 	"log/slog"
-	"net"
+	"unsafe"
 
 	trace2 "go.opentelemetry.io/otel/trace"
 
@@ -31,7 +31,8 @@ func HTTPRequestTraceToSpan(trace *HTTPRequestTrace) request.Span {
 	hostPort := 0
 
 	if trace.Conn.S_port != 0 || trace.Conn.D_port != 0 {
-		peer, hostname = trace.hostInfo()
+		peer, hostname = (*BPFConnInfo)(unsafe.Pointer(&trace.Conn)).reqHostInfo()
+
 		hostPort = int(trace.Conn.D_port)
 	}
 
@@ -58,15 +59,6 @@ func HTTPRequestTraceToSpan(trace *HTTPRequestTrace) request.Span {
 			Namespace: trace.Pid.Ns,
 		},
 	}
-}
-
-func (trace *HTTPRequestTrace) hostInfo() (source, target string) {
-	src := make(net.IP, net.IPv6len)
-	dst := make(net.IP, net.IPv6len)
-	copy(src, trace.Conn.S_addr[:])
-	copy(dst, trace.Conn.D_addr[:])
-
-	return src.String(), dst.String()
 }
 
 func SQLRequestTraceToSpan(trace *SQLRequestTrace) request.Span {

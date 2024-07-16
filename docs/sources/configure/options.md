@@ -852,13 +852,12 @@ of Beyla: application-level metrics or network metrics.
   For best experience with generating service graph metrics, use a DNS for service discovery and make sure the DNS names match
   the OpenTelemetry service names used in Beyla. In Kubernetes environments, the OpenTelemetry service name set by the service name
   discovery is the best choice for service graph metrics.
+- If the list contains `application_process`, the Beyla OpenTelemetry exporter exports metrics about the processes that
+  run the instrumented application.
 - If the list contains `network`, the Beyla OpenTelemetry exporter exports network-level
   metrics; but only if there is an OpenTelemetry endpoint defined. For network-level metrics options visit the
   [network metrics]({{< relref "../network" >}}) configuration documentation.
 
-Usually you do not need to change this configuration option, unless, for example, a Beyla instance
-instruments both network and applications, and you want to disable application-level metrics because
-you only care about application traces, but still want Beyla to send network metrics.
 
 | YAML               | Environment variable                  | Type            | Default                      |
 |--------------------|---------------------------------------|-----------------|------------------------------|
@@ -1231,13 +1230,12 @@ of Beyla: application-level metrics or network metrics.
   For best experience with generating service graph metrics, use a DNS for service discovery and make sure the DNS names match
   the OpenTelemetry service names used in Beyla. In Kubernetes environments, the OpenTelemetry service name set by the service name
   discovery is the best choice for service graph metrics.
+- If the list contains `application_process`, the Beyla Prometheus exporter exports metrics about the processes that
+  run the instrumented application.
 - If the list contains `network`, the Beyla Prometheus exporter exports network-level
   metrics; but only if the Prometheus `port` property is defined. For network-level metrics options visit the
   [network metrics]({{< relref "../network" >}}) configuration documentation.
 
-Usually you do not need to change this configuration option, unless, for example, a Beyla instance
-instruments both network and applications, and you want to disable application-level metrics because
-you only care about application traces, but still want Beyla to send network metrics.
 
 | YAML               | Environment variable                  | Type            | Default                      |
 |--------------------|---------------------------------------|-----------------|------------------------------|

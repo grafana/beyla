@@ -562,6 +562,9 @@ go.opentelemetry.io/contrib/detectors/aws/ec2
 # go.opentelemetry.io/contrib/detectors/aws/eks v1.28.0
 ## explicit; go 1.21
 go.opentelemetry.io/contrib/detectors/aws/eks
+# go.opentelemetry.io/contrib/detectors/azure/azurevm v0.0.1
+## explicit; go 1.21
+go.opentelemetry.io/contrib/detectors/azure/azurevm
 # go.opentelemetry.io/contrib/detectors/gcp v1.28.0
 ## explicit; go 1.21
 go.opentelemetry.io/contrib/detectors/gcp

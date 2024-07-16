@@ -5,13 +5,11 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"strings"
 
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/sdk/resource"
 	"go.opentelemetry.io/contrib/detectors/aws/ec2"
-	"go.opentelemetry.io/contrib/detectors/gcp"
 	"go.opentelemetry.io/contrib/detectors/azure/azurevm"
+	"go.opentelemetry.io/contrib/detectors/gcp"
+	"go.opentelemetry.io/otel/sdk/resource"
 	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 )
 
@@ -25,7 +23,7 @@ var cloudFetchers = map[string]hostIDFetcher{
 var fallbackCloudFetcher = linuxLocalMachineIDFetcher
 
 func azureHostIDFetcher(ctx context.Context) (string, error) {
-	azurevm.
+	return detectHostID(ctx, azurevm.New())
 }
 
 func gcpHostIDFetcher(ctx context.Context) (string, error) {
@@ -60,4 +58,3 @@ func linuxLocalMachineIDFetcher(ctx context.Context) (string, error) {
 		return "", fmt.Errorf("can't read host ID: %w", err)
 	}
 }
-

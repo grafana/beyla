@@ -305,6 +305,8 @@ go.opentelemetry.io/contrib/detectors/aws/ec2 v1.28.0 h1:d+y/wygENfwEbVpo7c3A9Gf
 go.opentelemetry.io/contrib/detectors/aws/ec2 v1.28.0/go.mod h1:gxGqapN+BNTBkKvKZFQJ1mfhQss7suB5gDmPwzJJWhQ=
 go.opentelemetry.io/contrib/detectors/aws/eks v1.28.0 h1:446exEE2fdXqNttY+oHB54NMGXRAmQBaMz2fXkL77bc=
 go.opentelemetry.io/contrib/detectors/aws/eks v1.28.0/go.mod h1:L2UOyaTFvypCAHW69TwGnce7YgKhSI9n8kAzQjyNbJk=
+go.opentelemetry.io/contrib/detectors/azure/azurevm v0.0.1 h1:hgKJ88bL5cTomIlP7VYxsG4HfYeRp3U2tfcpZr0B0yY=
+go.opentelemetry.io/contrib/detectors/azure/azurevm v0.0.1/go.mod h1:nmQyKaRlFYOboU/JGyRb1/9eLpuKYmTFd+rDjrIZTKk=
 go.opentelemetry.io/contrib/detectors/gcp v1.28.0 h1:eAaOyCwPqwAG7INWn0JTDD3KFR4qbSlhh0YCuFOmmDE=
 go.opentelemetry.io/contrib/detectors/gcp v1.28.0/go.mod h1:9BIqH22qyHWAiZxQh0whuJygro59z+nbMVuc7ciiGug=
 go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.52.0 h1:vS1Ao/R55RNV4O7TA2Qopok8yN+X0LIP6RVWLFkprck=

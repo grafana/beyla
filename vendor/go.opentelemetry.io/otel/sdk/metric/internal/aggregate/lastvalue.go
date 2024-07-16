@@ -125,7 +125,7 @@ func (s *lastValue[N]) copyDpts(dest *[]metricdata.DataPoint[N], t time.Time) in
 	for _, v := range s.values {
 		(*dest)[i].Attributes = v.attrs
 		(*dest)[i].StartTime = s.start
-		(*dest)[i].Time = v.timestamp
+		(*dest)[i].Time = t
 		(*dest)[i].Value = v.value
 		collectExemplars(&(*dest)[i].Exemplars, v.res.Collect)
 		i++
@@ -134,7 +134,7 @@ func (s *lastValue[N]) copyDpts(dest *[]metricdata.DataPoint[N], t time.Time) in
 	return n
 }
 
-func (s *lastValue[N]) copyDptsWithStale(dest *[]metricdata.DataPoint[N]) int {
+func (s *lastValue[N]) copyDptsWithStale(dest *[]metricdata.DataPoint[N], t time.Time) int {
 	n := len(s.values) + len(s.stale)
 
 	*dest = reset(*dest, n, n)
@@ -152,7 +152,7 @@ func (s *lastValue[N]) copyDptsWithStale(dest *[]metricdata.DataPoint[N]) int {
 	for _, v := range s.stale {
 		(*dest)[i].Attributes = v.attrs
 		(*dest)[i].StartTime = s.start
-		(*dest)[i].Time = v.timestamp
+		(*dest)[i].Time = t
 		(*dest)[i].NoRecordedValue = true
 		i++
 	}

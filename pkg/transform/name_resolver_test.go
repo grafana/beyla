@@ -83,6 +83,7 @@ func TestResolvePodsFromK8s(t *testing.T) {
 		Peer: "10.0.0.1",
 		Host: "10.0.0.2",
 		ServiceID: svc.ID{
+			UID:       svc.RandomUID(),
 			Name:      "pod1",
 			Namespace: "",
 		},
@@ -93,6 +94,7 @@ func TestResolvePodsFromK8s(t *testing.T) {
 		Peer: "10.0.0.1",
 		Host: "10.0.0.2",
 		ServiceID: svc.ID{
+			UID:       svc.RandomUID(),
 			Name:      "pod2",
 			Namespace: "something",
 		},
@@ -165,6 +167,7 @@ func TestResolveServiceFromK8s(t *testing.T) {
 		Peer: "10.0.0.1",
 		Host: "10.0.0.2",
 		ServiceID: svc.ID{
+			UID:       svc.RandomUID(),
 			Name:      "pod1",
 			Namespace: "",
 		},
@@ -175,6 +178,7 @@ func TestResolveServiceFromK8s(t *testing.T) {
 		Peer: "10.0.0.1",
 		Host: "10.0.0.2",
 		ServiceID: svc.ID{
+			UID:       svc.RandomUID(),
 			Name:      "pod2",
 			Namespace: "something",
 		},
@@ -197,6 +201,7 @@ func TestResolveServiceFromK8s(t *testing.T) {
 
 func TestCleanName(t *testing.T) {
 	s := svc.ID{
+		UID:       svc.RandomUID(),
 		Name:      "service",
 		Namespace: "special.namespace",
 		Metadata: map[attr.Name]string{

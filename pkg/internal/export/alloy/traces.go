@@ -37,7 +37,7 @@ func (tr *tracesReceiver) provideLoop() (pipe.FinalFunc[[]request.Span], error) 
 		for spans := range in {
 			for i := range spans {
 				span := &spans[i]
-				if span.IgnoreSpan == request.IgnoreTraces {
+				if span.IgnoreTraces() {
 					continue
 				}
 

@@ -18,7 +18,7 @@ const (
 	PIDTypeGo
 )
 
-var activePids, _ = lru.New[uint32, svc.ID](1024)
+var activePids, _ = lru.New[uint32, *svc.ID](1024)
 
 // injectable functions (can be replaced in tests). It reads the
 // current process namespace from the /proc filesystem. It is required to
@@ -26,16 +26,16 @@ var activePids, _ = lru.New[uint32, svc.ID](1024)
 var readNamespacePIDs = exec.FindNamespacedPids
 
 type PIDInfo struct {
-	service svc.ID
+	service *svc.ID
 	pidType PIDType
 }
 
 type ServiceFilter interface {
-	AllowPID(uint32, uint32, svc.ID, PIDType)
+	AllowPID(uint32, uint32, *svc.ID, PIDType)
 	BlockPID(uint32, uint32)
 	ValidPID(uint32, uint32, PIDType) bool
 	Filter(inputSpans []request.Span) []request.Span
-	CurrentPIDs(PIDType) map[uint32]map[uint32]svc.ID
+	CurrentPIDs(PIDType) map[uint32]map[uint32]*svc.ID
 }
 
 // PIDsFilter keeps a thread-safe copy of the PIDs whose traces are allowed to
@@ -73,7 +73,7 @@ func CommonPIDsFilter(systemWide bool) ServiceFilter {
 	return commonPIDsFilter
 }
 
-func (pf *PIDsFilter) AllowPID(pid, ns uint32, svc svc.ID, pidType PIDType) {
+func (pf *PIDsFilter) AllowPID(pid, ns uint32, svc *svc.ID, pidType PIDType) {
 	pf.mux.Lock()
 	defer pf.mux.Unlock()
 	pf.addPID(pid, ns, svc, pidType)
@@ -99,13 +99,13 @@ func (pf *PIDsFilter) ValidPID(userPID, ns uint32, pidType PIDType) bool {
 
 }
 
-func (pf *PIDsFilter) CurrentPIDs(t PIDType) map[uint32]map[uint32]svc.ID {
+func (pf *PIDsFilter) CurrentPIDs(t PIDType) map[uint32]map[uint32]*svc.ID {
 	pf.mux.RLock()
 	defer pf.mux.RUnlock()
-	cp := map[uint32]map[uint32]svc.ID{}
+	cp := map[uint32]map[uint32]*svc.ID{}
 
 	for k, v := range pf.current {
-		cVal := map[uint32]svc.ID{}
+		cVal := map[uint32]*svc.ID{}
 		for kv, vv := range v {
 			if vv.pidType == t {
 				cVal[kv] = vv.service
@@ -122,8 +122,7 @@ func (pf *PIDsFilter) Filter(inputSpans []request.Span) []request.Span {
 	defer pf.mux.RUnlock()
 	// todo: adaptive presizing as a function of the historical percentage
 	// of filtered spans
-	var outputSpans []request.Span
-	skipped := false
+	outputSpans := make([]request.Span, 0, len(inputSpans))
 	for i := range inputSpans {
 		span := &inputSpans[i]
 
@@ -131,12 +130,6 @@ func (pf *PIDsFilter) Filter(inputSpans []request.Span) []request.Span {
 		ns, nsExists := pf.current[span.Pid.Namespace]
 
 		if !nsExists {
-			if !skipped {
-				outputSpans = make([]request.Span, 0, len(inputSpans)-1)
-				copy(outputSpans, inputSpans[:i])
-				skipped = true
-			}
-
 			continue
 		}
 
@@ -144,15 +137,9 @@ func (pf *PIDsFilter) Filter(inputSpans []request.Span) []request.Span {
 		// saw. We don't check for the host pid, because we can't be sure of the number
 		// of container layers. The Host PID is always the outer most layer.
 		if info, pidExists := ns[span.Pid.UserPID]; pidExists {
-			inputSpans[i].ServiceID = info.service
-			if skipped {
-				outputSpans = append(outputSpans, inputSpans[i])
-			}
+			inputSpans[i].ServiceID = *info.service // must copy, service will get modified to add metadata
+			outputSpans = append(outputSpans, inputSpans[i])
 		}
-	}
-
-	if outputSpans == nil {
-		return inputSpans
 	}
 
 	if len(outputSpans) != len(inputSpans) {
@@ -164,7 +151,7 @@ func (pf *PIDsFilter) Filter(inputSpans []request.Span) []request.Span {
 	return outputSpans
 }
 
-func (pf *PIDsFilter) addPID(pid, nsid uint32, s svc.ID, t PIDType) {
+func (pf *PIDsFilter) addPID(pid, nsid uint32, s *svc.ID, t PIDType) {
 	ns, nsExists := pf.current[nsid]
 	if !nsExists {
 		ns = make(map[uint32]PIDInfo)
@@ -199,7 +186,7 @@ func (pf *PIDsFilter) removePID(pid, nsid uint32) {
 // for system-wide instrumenation
 type IdentityPidsFilter struct{}
 
-func (pf *IdentityPidsFilter) AllowPID(_ uint32, _ uint32, _ svc.ID, _ PIDType) {}
+func (pf *IdentityPidsFilter) AllowPID(_ uint32, _ uint32, _ *svc.ID, _ PIDType) {}
 
 func (pf *IdentityPidsFilter) BlockPID(_ uint32, _ uint32) {}
 
@@ -207,7 +194,7 @@ func (pf *IdentityPidsFilter) ValidPID(_ uint32, _ uint32, _ PIDType) bool {
 	return true
 }
 
-func (pf *IdentityPidsFilter) CurrentPIDs(_ PIDType) map[uint32]map[uint32]svc.ID {
+func (pf *IdentityPidsFilter) CurrentPIDs(_ PIDType) map[uint32]map[uint32]*svc.ID {
 	return nil
 }
 
@@ -215,12 +202,12 @@ func (pf *IdentityPidsFilter) Filter(inputSpans []request.Span) []request.Span {
 	for i := range inputSpans {
 		s := &inputSpans[i]
 		svc := serviceInfo(s.Pid.HostPID)
-		s.ServiceID = &svc
+		s.ServiceID = *svc // must copy, spans will add more metadata
 	}
 	return inputSpans
 }
 
-func serviceInfo(pid uint32) svc.ID {
+func serviceInfo(pid uint32) *svc.ID {
 	cached, ok := activePids.Get(pid)
 	if ok {
 		return cached
@@ -228,7 +215,7 @@ func serviceInfo(pid uint32) svc.ID {
 
 	name := commName(pid)
 	lang := exec.FindProcLanguage(int32(pid), nil, name)
-	result := svc.ID{Name: name, SDKLanguage: lang, ProcPID: int32(pid)}
+	result := &svc.ID{UID: svc.RandomUID(), Name: name, SDKLanguage: lang, ProcPID: int32(pid)}
 
 	activePids.Add(pid, result)
 

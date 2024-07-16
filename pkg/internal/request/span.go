@@ -28,11 +28,9 @@ const (
 	EventTypeKafkaServer
 )
 
-type IgnoreMode uint8
-
 const (
-	IgnoreMetrics IgnoreMode = iota + 1
-	IgnoreTraces
+	ignoreMetrics uint8 = 0x1
+	ignoreTraces  uint8 = 0x2
 )
 
 const (
@@ -64,7 +62,7 @@ type PidInfo struct {
 // SpanPromGetters and getDefinitions in pkg/internal/export/metric/definitions.go
 type Span struct {
 	Type           EventType
-	IgnoreSpan     IgnoreMode
+	ignoreMode     uint8
 	Method         string
 	Path           string
 	Route          string
@@ -186,4 +184,28 @@ func GrpcSpanStatusCode(span *Span) codes.Code {
 	}
 
 	return codes.Unset
+}
+
+func (s *Span) setIgnoreFlag(flag uint8) {
+	s.ignoreMode |= flag
+}
+
+func (s *Span) isIgnored(flag uint8) bool {
+	return (s.ignoreMode & flag) == flag
+}
+
+func (s *Span) SetIgnoreMetrics() {
+	s.setIgnoreFlag(ignoreMetrics)
+}
+
+func (s *Span) SetIgnoreTraces() {
+	s.setIgnoreFlag(ignoreTraces)
+}
+
+func (s *Span) IgnoreMetrics() bool {
+	return s.isIgnored(ignoreMetrics)
+}
+
+func (s *Span) IgnoreTraces() bool {
+	return s.isIgnored(ignoreTraces)
 }

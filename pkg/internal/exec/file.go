@@ -29,7 +29,7 @@ func (fi *FileInfo) ExecutableName() string {
 	return parts[len(parts)-1]
 }
 
-func FindExecELF(p *services.ProcessInfo, svcID svc.ID) (*FileInfo, error) {
+func FindExecELF(p *services.ProcessInfo, svcID *svc.ID) (*FileInfo, error) {
 	// In container environments or K8s, we can't just open the executable exe path, because it might
 	// be in the volume of another pod/container. We need to access it through the /proc/<pid>/exe symbolic link
 	ns, err := FindNamespace(p.Pid)
@@ -37,7 +37,7 @@ func FindExecELF(p *services.ProcessInfo, svcID svc.ID) (*FileInfo, error) {
 		return nil, fmt.Errorf("can't find namespace for PID=%d: %w", p.Pid, err)
 	}
 	file := FileInfo{
-		Service:    svcID,
+		Service:    *svcID,
 		CmdExePath: p.ExePath,
 		// TODO: allow overriding /proc root folder
 		ProExeLinkPath: fmt.Sprintf("/proc/%d/exe", p.Pid),

@@ -188,7 +188,7 @@ type metricsReporter struct {
 
 	kubeEnabled bool
 
-	serviceCache *expirable.LRU[svc.UID, svc.ID]
+	serviceCache *expirable.LRU[svc.UID, *svc.ID]
 }
 
 func PrometheusEndpoint(
@@ -454,7 +454,7 @@ func newReporter(
 	}
 
 	if cfg.SpanMetricsEnabled() {
-		mr.serviceCache = expirable.NewLRU(cfg.SpanMetricsServiceCacheSize, func(_ svc.UID, v svc.ID) {
+		mr.serviceCache = expirable.NewLRU(cfg.SpanMetricsServiceCacheSize, func(_ svc.UID, v *svc.ID) {
 			lv := mr.labelValuesTargetInfo(v)
 			mr.tracesTargetInfo.WithLabelValues(lv...).metric.Sub(1)
 		}, cfg.TTL)
@@ -629,8 +629,8 @@ func (r *metricsReporter) observe(span *request.Span) {
 
 		_, ok := r.serviceCache.Get(span.ServiceID.UID)
 		if !ok {
-			r.serviceCache.Add(span.ServiceID.UID, span.ServiceID)
-			lv = r.labelValuesTargetInfo(span.ServiceID)
+			r.serviceCache.Add(span.ServiceID.UID, &span.ServiceID)
+			lv = r.labelValuesTargetInfo(&span.ServiceID)
 			r.tracesTargetInfo.WithLabelValues(lv...).metric.Add(1)
 		}
 	}
@@ -655,7 +655,7 @@ func appendK8sLabelNames(names []string) []string {
 	return names
 }
 
-func appendK8sLabelValuesService(values []string, service svc.ID) []string {
+func appendK8sLabelValuesService(values []string, service *svc.ID) []string {
 	// must follow the order in appendK8sLabelNames
 	values = append(values,
 		service.Metadata[(attr.K8sNamespaceName)],
@@ -703,7 +703,7 @@ func labelNamesTargetInfo(kubeEnabled bool) []string {
 	return names
 }
 
-func (r *metricsReporter) labelValuesTargetInfo(service svc.ID) []string {
+func (r *metricsReporter) labelValuesTargetInfo(service *svc.ID) []string {
 	job := service.Name
 	if service.Namespace != "" {
 		job = service.Namespace + "/" + job

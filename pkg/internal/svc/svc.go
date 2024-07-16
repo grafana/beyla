@@ -1,6 +1,7 @@
 package svc
 
 import (
+	"github.com/google/uuid"
 	semconv "go.opentelemetry.io/otel/semconv/v1.25.0"
 
 	attr "github.com/grafana/beyla/pkg/internal/export/attributes/names"
@@ -87,4 +88,8 @@ func (i *ID) String() string {
 		return i.Namespace + "/" + i.Name
 	}
 	return i.Name
+}
+
+func RandomUID() UID {
+	return UID(uuid.New().String())
 }

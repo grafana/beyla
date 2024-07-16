@@ -31,7 +31,7 @@ func TestForwardRingbuf_CapacityFull(t *testing.T) {
 	metrics := &metricsReporter{}
 	forwardedMessages := make(chan []request.Span, 100)
 	fltr := TestPidsFilter{services: map[uint32]svc.ID{}}
-	fltr.AllowPID(1, 1, svc.ID{Name: "myService"}, PIDTypeGo)
+	fltr.AllowPID(1, 1, &svc.ID{UID: svc.RandomUID(), Name: "myService"}, PIDTypeGo)
 	go ForwardRingbuf(
 		&TracerConfig{BatchLength: 10},
 		nil, // the source ring buffer can be null
@@ -54,13 +54,13 @@ func TestForwardRingbuf_CapacityFull(t *testing.T) {
 	batch := testutil.ReadChannel(t, forwardedMessages, testTimeout)
 	require.Len(t, batch, 10)
 	for i := range batch {
-		assert.Equal(t, request.Span{Type: 1, Method: "GET", ContentLength: int64(i), ServiceID: svc.ID{Name: "myService"}, Pid: request.PidInfo{HostPID: 1}}, batch[i])
+		assert.Equal(t, request.Span{Type: 1, Method: "GET", ContentLength: int64(i), ServiceID: svc.ID{UID: svc.RandomUID(), Name: "myService"}, Pid: request.PidInfo{HostPID: 1}}, batch[i])
 	}
 
 	batch = testutil.ReadChannel(t, forwardedMessages, testTimeout)
 	require.Len(t, batch, 10)
 	for i := range batch {
-		assert.Equal(t, request.Span{Type: 1, Method: "GET", ContentLength: int64(10 + i), ServiceID: svc.ID{Name: "myService"}, Pid: request.PidInfo{HostPID: 1}}, batch[i])
+		assert.Equal(t, request.Span{Type: 1, Method: "GET", ContentLength: int64(10 + i), ServiceID: svc.ID{UID: svc.RandomUID(), Name: "myService"}, Pid: request.PidInfo{HostPID: 1}}, batch[i])
 	}
 	// AND metrics are properly updated
 	assert.Equal(t, 2, metrics.flushes)
@@ -83,7 +83,7 @@ func TestForwardRingbuf_Deadline(t *testing.T) {
 	metrics := &metricsReporter{}
 	forwardedMessages := make(chan []request.Span, 100)
 	fltr := TestPidsFilter{services: map[uint32]svc.ID{}}
-	fltr.AllowPID(1, 1, svc.ID{Name: "myService"}, PIDTypeGo)
+	fltr.AllowPID(1, 1, &svc.ID{UID: svc.RandomUID(), Name: "myService"}, PIDTypeGo)
 	go ForwardRingbuf(
 		&TracerConfig{BatchLength: 10, BatchTimeout: 20 * time.Millisecond},
 		nil,   // the source ring buffer can be null
@@ -109,7 +109,7 @@ func TestForwardRingbuf_Deadline(t *testing.T) {
 	}
 	require.Len(t, batch, 7)
 	for i := range batch {
-		assert.Equal(t, request.Span{Type: 1, Method: "GET", ContentLength: int64(i), ServiceID: svc.ID{Name: "myService"}, Pid: request.PidInfo{HostPID: 1}}, batch[i])
+		assert.Equal(t, request.Span{Type: 1, Method: "GET", ContentLength: int64(i), ServiceID: svc.ID{UID: svc.RandomUID(), Name: "myService"}, Pid: request.PidInfo{HostPID: 1}}, batch[i])
 	}
 
 	// AND metrics are properly updated
@@ -219,8 +219,8 @@ type TestPidsFilter struct {
 	services map[uint32]svc.ID
 }
 
-func (pf *TestPidsFilter) AllowPID(p uint32, _ uint32, s svc.ID, _ PIDType) {
-	pf.services[p] = s
+func (pf *TestPidsFilter) AllowPID(p uint32, _ uint32, s *svc.ID, _ PIDType) {
+	pf.services[p] = *s
 }
 
 func (pf *TestPidsFilter) BlockPID(p uint32, _ uint32) {
@@ -231,7 +231,7 @@ func (pf *TestPidsFilter) ValidPID(_ uint32, _ uint32, _ PIDType) bool {
 	return true
 }
 
-func (pf *TestPidsFilter) CurrentPIDs(_ PIDType) map[uint32]map[uint32]svc.ID {
+func (pf *TestPidsFilter) CurrentPIDs(_ PIDType) map[uint32]map[uint32]*svc.ID {
 	return nil
 }
 

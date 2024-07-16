@@ -215,7 +215,7 @@ int uprobe_reader_read(struct pt_regs *ctx) {
     void *goroutine_addr = (void *)GOROUTINE_PTR(ctx);
     void *r_ptr = (void *)GO_PARAM1(ctx);
     void *conn = (void *)GO_PARAM5(ctx);
-    bpf_printk("=== uprobe/kafka-go reader_read %llx r_ptr %llx=== ", goroutine_addr, r_ptr);
+    bpf_dbg_printk("=== uprobe/kafka-go reader_read %llx r_ptr %llx=== ", goroutine_addr, r_ptr);
 
     if (r_ptr) {
         kafka_go_req_t r = {

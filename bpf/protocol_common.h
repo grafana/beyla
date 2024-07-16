@@ -7,6 +7,7 @@
 #include "http_types.h"
 #include "ringbuf.h"
 #include "pid.h"
+#include "bpf_dbg.h"
 
 #define MIN_HTTP_SIZE  12 // HTTP/1.1 CCC is the smallest valid request we can have
 #define RESPONSE_STATUS_POS 9 // HTTP/1.1 <--
@@ -186,7 +187,7 @@ static __always_inline int read_msghdr_buf(struct msghdr *msg, u8* buf, int max_
         void *p = &iov[i];
         bpf_probe_read(&vec, sizeof(struct iovec), p);
         // No prints in loops on 5.10
-        // bpf_printk("iov[%d]=%llx base %llx, len %d", i, p, vec.iov_base, vec.iov_len);
+        // bpf_dbg_printk("iov[%d]=%llx base %llx, len %d", i, p, vec.iov_base, vec.iov_len);
         if (!vec.iov_base || !vec.iov_len) {
             continue;
         }
@@ -196,12 +197,12 @@ static __always_inline int read_msghdr_buf(struct msghdr *msg, u8* buf, int max_
         iov_size = iov_size < remaining ? iov_size : remaining;
         bpf_clamp_umax(tot_len, IO_VEC_MAX_LEN);
         bpf_clamp_umax(iov_size, IO_VEC_MAX_LEN);
-        // bpf_printk("tot_len=%d, remaining=%d", tot_len, remaining);
+        // bpf_dbg_printk("tot_len=%d, remaining=%d", tot_len, remaining);
         if (tot_len + iov_size > l) {
             break;
         }
         bpf_probe_read(&buf[tot_len], iov_size, vec.iov_base);    
-        // bpf_printk("iov_size=%d, buf=%s", iov_size, buf);
+        // bpf_dbg_printk("iov_size=%d, buf=%s", iov_size, buf);
 
         tot_len += iov_size;
     }

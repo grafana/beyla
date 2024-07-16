@@ -103,7 +103,7 @@ int uprobe_ServeHTTP(struct pt_regs *ctx) {
 
         // Get method from Request.Method
         if (!read_go_str("method", req, method_ptr_pos, &invocation.method, sizeof(invocation.method))) {
-            bpf_printk("can't read http Request.Method");
+            bpf_dbg_printk("can't read http Request.Method");
             goto done;
         }
 
@@ -112,13 +112,13 @@ int uprobe_ServeHTTP(struct pt_regs *ctx) {
         int res = bpf_probe_read(&url_ptr, sizeof(url_ptr), (void *)(req + url_ptr_pos));
 
         if (res || !url_ptr || !read_go_str("path", url_ptr, path_ptr_pos, &invocation.path, sizeof(invocation.path))) {
-            bpf_printk("can't read http Request.URL.Path");
+            bpf_dbg_printk("can't read http Request.URL.Path");
             goto done;
         }
 
         res = bpf_probe_read(&invocation.content_length, sizeof(invocation.content_length), (void *)(req + content_length_ptr_pos));
         if (res) {
-            bpf_printk("can't read http Request.ContentLength");
+            bpf_dbg_printk("can't read http Request.ContentLength");
             goto done;
         }
     } else {
@@ -331,7 +331,7 @@ static __always_inline void roundTripStartHelper(struct pt_regs *ctx) {
 
     // Get method from Request.Method
     if (!read_go_str("method", req, method_ptr_pos, &trace.method, sizeof(trace.method))) {
-        bpf_printk("can't read http Request.Method");
+        bpf_dbg_printk("can't read http Request.Method");
         return;
     }
 
@@ -342,7 +342,7 @@ static __always_inline void roundTripStartHelper(struct pt_regs *ctx) {
     bpf_probe_read(&url_ptr, sizeof(url_ptr), (void *)(req + url_ptr_pos));
 
     if (!url_ptr || !read_go_str("path", url_ptr, path_ptr_pos, &trace.path, sizeof(trace.path))) {
-        bpf_printk("can't read http Request.URL.Path");
+        bpf_dbg_printk("can't read http Request.URL.Path");
         return;
     }
 

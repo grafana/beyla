@@ -169,7 +169,7 @@ int uprobe_server_handleStream_return(struct pt_regs *ctx) {
 
     // Get method from transport.Stream.Method
     if (!read_go_str("grpc method", stream_ptr, grpc_stream_method_ptr_pos, &trace->path, sizeof(trace->path))) {
-        bpf_printk("can't read grpc transport.Stream.Method");
+        bpf_dbg_printk("can't read grpc transport.Stream.Method");
         bpf_ringbuf_discard(trace, 0);
         goto done;
     }
@@ -339,7 +339,7 @@ static __always_inline int grpc_connect_done(struct pt_regs *ctx, void *err) {
 
     // Get method from the incoming call arguments
     if (!read_go_str_n("method", method_ptr, (u64)method_len, &trace->path, sizeof(trace->path))) {
-        bpf_printk("can't read grpc client method");
+        bpf_dbg_printk("can't read grpc client method");
         bpf_ringbuf_discard(trace, 0);
         goto done;
     }

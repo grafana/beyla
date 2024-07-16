@@ -195,6 +195,7 @@ static inline int flow_monitor(struct __sk_buff *skb) {
             .end_mono_time_ns = current_time,
             .flags = flags,
             .direction = UNKNOWN,
+            .initiator = INITIATOR_UNKNOWN,
         };
 
         u8 *direction = (u8 *)bpf_map_lookup_elem(&flow_directions, &id);
@@ -224,6 +225,8 @@ static inline int flow_monitor(struct __sk_buff *skb) {
             // get direction from saved flow
             new_flow.direction = *direction;
         }
+
+        new_flow.initiator = get_connection_initiator(&id, flags);
 
         // even if we know that the entry is new, another CPU might be concurrently inserting a flow
         // so we need to specify BPF_ANY

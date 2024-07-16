@@ -10,6 +10,7 @@ import (
 
 // RecordGetters returns the attributes.Getter function that returns the string value of a given
 // attribute name.
+// nolint:cyclop
 func RecordGetters(name attr.Name) (attributes.Getter[*Record, attribute.KeyValue], bool) {
 	var getter attributes.Getter[*Record, attribute.KeyValue]
 	switch name {
@@ -41,6 +42,34 @@ func RecordGetters(name attr.Name) (attributes.Getter[*Record, attribute.KeyValu
 		}
 	case attr.Iface:
 		getter = func(r *Record) attribute.KeyValue { return attribute.String(string(attr.Iface), r.Attrs.Interface) }
+	case attr.ClientPort:
+		getter = func(r *Record) attribute.KeyValue {
+			var clientPort uint16
+			switch r.Metrics.Initiator {
+			case InitiatorDst:
+				clientPort = r.Id.DstPort
+			case InitiatorSrc:
+				clientPort = r.Id.SrcPort
+			default:
+				// guess it, assuming that ephemeral ports for clients would be usually higher
+				clientPort = max(r.Id.DstPort, r.Id.SrcPort)
+			}
+			return attribute.Int(string(attr.ClientPort), int(clientPort))
+		}
+	case attr.ServerPort:
+		getter = func(r *Record) attribute.KeyValue {
+			var serverPort uint16
+			switch r.Metrics.Initiator {
+			case InitiatorDst:
+				serverPort = r.Id.SrcPort
+			case InitiatorSrc:
+				serverPort = r.Id.DstPort
+			default:
+				// guess it, assuming that ephemeral ports for clients would be usually higher
+				serverPort = min(r.Id.DstPort, r.Id.SrcPort)
+			}
+			return attribute.Int(string(attr.ServerPort), int(serverPort))
+		}
 	default:
 		getter = func(r *Record) attribute.KeyValue { return attribute.String(string(name), r.Attrs.Metadata[name]) }
 	}

@@ -320,7 +320,7 @@ func traceProviderWithInternalMetrics(ctxInfo *global.ContextInfo, cfg TracesCon
 	)
 }
 
-func getTraceSettings(ctxInfo *global.ContextInfo, cfg TracesConfig, in trace.SpanExporter) exporter.CreateSettings {
+func getTraceSettings(ctxInfo *global.ContextInfo, cfg TracesConfig, in trace.SpanExporter) exporter.Settings {
 	var traceProvider trace2.TracerProvider
 
 	telemetryLevel := configtelemetry.LevelNone
@@ -342,7 +342,7 @@ func getTraceSettings(ctxInfo *global.ContextInfo, cfg TracesConfig, in trace.Sp
 			}
 		},
 	}
-	return exporter.CreateSettings{
+	return exporter.Settings{
 		ID:                component.NewIDWithName(component.DataTypeMetrics, "beyla"),
 		TelemetrySettings: telemetrySettings,
 	}

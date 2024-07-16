@@ -108,7 +108,9 @@ func TestFor_GlobEntries_Order(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, []attr.Name{
 		"beyla.ip",
+		"client.port",
 		"dst.name",
+		"server.port",
 		"src.address",
 		"src.name",
 		"src.port",

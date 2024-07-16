@@ -3,6 +3,7 @@ package transform
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 
@@ -15,12 +16,31 @@ import (
 
 type hostIDFetcher func(context.Context) (string, error)
 
-var cloudFetchers = map[string]hostIDFetcher{
-	"EC2":   ec2HostIDFetcher,
-	"GCP":   gcpHostIDFetcher,
-	"Azure": azureHostIDFetcher,
+type fetcher struct {
+	name string
+	fetch hostIDFetcher
 }
-var fallbackCloudFetcher = linuxLocalMachineIDFetcher
+
+func fetchHostID(ctx context.Context) (string, error) {
+	log := klog().With("func", "fetchHostID")
+	fetchers := []fetcher{
+		{name: "AWS", fetch: ec2HostIDFetcher},
+		{name: "Azure", fetch: azureHostIDFetcher},
+		{name: "GCP", fetch: gcpHostIDFetcher},
+		{name: "fallback", fetch: linuxLocalMachineIDFetcher},
+	}
+	for _, f := range fetchers {
+		log := log.With("fetcher", f.name)
+		log.Debug("trying to fetch host ID")
+		if id, err := f.fetch(ctx); err != nil {
+			log.Debug("didn't get host ID", "error", err)
+		} else {
+			log.Info("got host ID", "hostID", id)
+			return id, nil
+		}
+	}
+	return "", errors.New("could not find host ID")
+}
 
 func azureHostIDFetcher(ctx context.Context) (string, error) {
 	return detectHostID(ctx, azurevm.New())
@@ -47,7 +67,7 @@ func detectHostID(ctx context.Context, detector resource.Detector) (string, erro
 	return "", fmt.Errorf("can't find host.id in %v", res.Attributes())
 }
 
-func linuxLocalMachineIDFetcher(ctx context.Context) (string, error) {
+func linuxLocalMachineIDFetcher(_ context.Context) (string, error) {
 	if result, err := os.ReadFile("/etc/machine-id"); err == nil {
 		return string(bytes.TrimSpace(result)), nil
 	}

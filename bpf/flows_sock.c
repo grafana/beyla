@@ -241,6 +241,8 @@ int socket__http_filter(struct __sk_buff *skb) {
             new_flow.direction = *direction;
         }
 
+        new_flow.initiator = get_connection_initiator(&id, flags);
+
         // even if we know that the entry is new, another CPU might be concurrently inserting a flow
         // so we need to specify BPF_ANY
         long ret = bpf_map_update_elem(&aggregated_flows, &id, &new_flow, BPF_ANY);

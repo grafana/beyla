@@ -15,3 +15,5 @@ attributes:
       - dst.cidr
       - iface
       - direction
+      - client.port
+      - server.port

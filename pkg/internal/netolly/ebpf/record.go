@@ -75,6 +75,7 @@ func (fm *NetFlowMetrics) Accumulate(src *NetFlowMetrics) {
 		fm.StartMonoTimeNs = src.StartMonoTimeNs
 		// set Direction here, because the correct value is in the first packet only
 		fm.Direction = src.Direction
+		fm.Initiator = src.Initiator
 	}
 	if fm.EndMonoTimeNs == 0 || fm.EndMonoTimeNs < src.EndMonoTimeNs {
 		fm.EndMonoTimeNs = src.EndMonoTimeNs

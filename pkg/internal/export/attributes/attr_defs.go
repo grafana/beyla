@@ -204,6 +204,8 @@ func getDefinitions(groups AttrGroups) map[Section]AttrReportGroup {
 				attr.DstPort:    false,
 				attr.SrcName:    false,
 				attr.DstName:    false,
+				attr.ServerPort: false,
+				attr.ClientPort: false,
 				attr.Direction:  Default(ifaceDirEnabled),
 				attr.Iface:      Default(ifaceDirEnabled),
 			},

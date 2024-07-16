@@ -42,7 +42,7 @@ func TestMain(m *testing.M) {
 		kube.Deploy(k8s.PathManifests+"/01-serviceaccount.yml"),
 		kube.Deploy(k8s.PathManifests+"/02-prometheus-promscrape.yml"),
 		kube.Deploy(k8s.PathManifests+"/05-uninstrumented-service.yml"),
-		kube.Deploy(k8s.PathManifests+"/06-beyla-netolly-sk-promexport.yml"),
+		kube.Deploy(k8s.PathManifests+"/06-beyla-netolly-tc-promexport.yml"),
 	)
 
 	cluster.Run(m)

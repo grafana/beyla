@@ -90,7 +90,16 @@ type bpfHttpRequestTrace struct {
 	_                 [2]byte
 	Conn              bpfConnectionInfoT
 	ContentLength     int64
-	Tp                struct {
+	Error             struct {
+		Pid      uint32
+		CpuId    uint32
+		Comm     [16]int8
+		UstackSz int32
+		_        [4]byte
+		Ustack   [32]uint64
+		ErrMsg   [128]uint8
+	}
+	Tp struct {
 		TraceId  [16]uint8
 		SpanId   [8]uint8
 		ParentId [8]uint8

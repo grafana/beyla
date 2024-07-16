@@ -19,14 +19,18 @@ import (
 )
 
 func testHTTPTracesNoTraceID(t *testing.T) {
-	testHTTPTracesCommon(t, false, 200)
+	testHTTPTracesCommon(t, false, 200, false)
 }
 
 func testHTTPTraces(t *testing.T) {
-	testHTTPTracesCommon(t, true, 500)
+	testHTTPTracesCommon(t, true, 500, true)
 }
 
-func testHTTPTracesCommon(t *testing.T, doTraceID bool, httpCode int) {
+func testHTTPTracesNoErrors(t *testing.T) {
+	testHTTPTracesCommon(t, true, 500, false)
+}
+
+func testHTTPTracesCommon(t *testing.T, doTraceID bool, httpCode int, checkErrors bool) {
 	var traceID string
 	var parentID string
 
@@ -58,7 +62,7 @@ func testHTTPTracesCommon(t *testing.T, doTraceID bool, httpCode int) {
 		traces := tq.FindBySpan(jaeger.Tag{Key: "url.path", Type: "string", Value: "/" + slug})
 		require.Len(t, traces, 1)
 		trace = traces[0]
-		require.Len(t, trace.Spans, 3) // parent - in queue - processing
+		require.GreaterOrEqual(t, len(trace.Spans), 3) // parent - in queue - processing
 	}, test.Interval(100*time.Millisecond))
 
 	// Check the information of the parent span
@@ -91,6 +95,20 @@ func testHTTPTracesCommon(t *testing.T, doTraceID bool, httpCode int) {
 			jaeger.Tag{Key: "otel.status_code", Type: "string", Value: "ERROR"},
 		)
 		assert.Empty(t, sd, sd.String())
+		if checkErrors {
+			assert.NotEmpty(t, parent.Logs)
+			eventAttr := parent.Logs[0].Fields
+			eventType, ok := jaeger.FindIn(eventAttr, "event")
+			require.True(t, ok)
+			assert.Equal(t, "exception", eventType.Value)
+
+			errMessage, ok := jaeger.FindIn(eventAttr, "exception.message")
+			require.True(t, ok)
+			assert.Equal(t, "unsupported protocol scheme \"htt\"", errMessage.Value)
+
+			_, ok = jaeger.FindIn(eventAttr, "exception.stacktrace")
+			require.True(t, ok)
+		}
 	}
 
 	// Check the information of the "in queue" span

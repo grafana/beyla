@@ -3,6 +3,7 @@ package ebpfcommon
 import (
 	"bytes"
 	"context"
+	"debug/gosym"
 	"encoding/binary"
 	"log/slog"
 	"sync"
@@ -31,7 +32,7 @@ func TestForwardRingbuf_CapacityFull(t *testing.T) {
 	metrics := &metricsReporter{}
 	forwardedMessages := make(chan []request.Span, 100)
 	fltr := TestPidsFilter{services: map[uint32]svc.ID{}}
-	fltr.AllowPID(1, 1, svc.ID{Name: "myService"}, PIDTypeGo)
+	fltr.AllowPID(1, 1, svc.ID{Name: "myService"}, PIDTypeGo, nil)
 	go ForwardRingbuf(
 		&TracerConfig{BatchLength: 10},
 		nil, // the source ring buffer can be null
@@ -83,7 +84,7 @@ func TestForwardRingbuf_Deadline(t *testing.T) {
 	metrics := &metricsReporter{}
 	forwardedMessages := make(chan []request.Span, 100)
 	fltr := TestPidsFilter{services: map[uint32]svc.ID{}}
-	fltr.AllowPID(1, 1, svc.ID{Name: "myService"}, PIDTypeGo)
+	fltr.AllowPID(1, 1, svc.ID{Name: "myService"}, PIDTypeGo, nil)
 	go ForwardRingbuf(
 		&TracerConfig{BatchLength: 10, BatchTimeout: 20 * time.Millisecond},
 		nil,   // the source ring buffer can be null
@@ -219,7 +220,7 @@ type TestPidsFilter struct {
 	services map[uint32]svc.ID
 }
 
-func (pf *TestPidsFilter) AllowPID(p uint32, _ uint32, s svc.ID, _ PIDType) {
+func (pf *TestPidsFilter) AllowPID(p uint32, _ uint32, s svc.ID, _ PIDType, _ *gosym.Table) {
 	pf.services[p] = s
 }
 
@@ -232,6 +233,10 @@ func (pf *TestPidsFilter) ValidPID(_ uint32, _ uint32, _ PIDType) bool {
 }
 
 func (pf *TestPidsFilter) CurrentPIDs(_ PIDType) map[uint32]map[uint32]svc.ID {
+	return nil
+}
+
+func (pf *TestPidsFilter) GetSymTab(_ uint32) *gosym.Table {
 	return nil
 }
 

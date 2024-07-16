@@ -2,6 +2,7 @@ package nodejs
 
 import (
 	"context"
+	"debug/gosym"
 	"io"
 	"log/slog"
 
@@ -39,8 +40,8 @@ func New(cfg *beyla.Config, metrics imetrics.Reporter) *Tracer {
 	}
 }
 
-func (p *Tracer) AllowPID(pid, ns uint32, svc svc.ID) {
-	p.pidsFilter.AllowPID(pid, ns, svc, ebpfcommon.PIDTypeKProbes)
+func (p *Tracer) AllowPID(pid, ns uint32, svc svc.ID, _ *gosym.Table) {
+	p.pidsFilter.AllowPID(pid, ns, svc, ebpfcommon.PIDTypeKProbes, nil)
 }
 
 func (p *Tracer) BlockPID(pid, ns uint32) {

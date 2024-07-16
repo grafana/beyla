@@ -2,7 +2,10 @@ package ebpfcommon
 
 import (
 	"bytes"
+	"debug/gosym"
+	"fmt"
 	"log/slog"
+	"strings"
 	"unsafe"
 
 	trace2 "go.opentelemetry.io/otel/trace"
@@ -13,7 +16,7 @@ import (
 
 var log = slog.With("component", "goexec.spanner")
 
-func HTTPRequestTraceToSpan(trace *HTTPRequestTrace) request.Span {
+func HTTPRequestTraceToSpan(trace *HTTPRequestTrace, filter ServiceFilter) request.Span {
 	// From C, assuming 0-ended strings
 	methodLen := bytes.IndexByte(trace.Method[:], 0)
 	if methodLen < 0 {
@@ -23,6 +26,10 @@ func HTTPRequestTraceToSpan(trace *HTTPRequestTrace) request.Span {
 	pathLen := bytes.IndexByte(trace.Path[:], 0)
 	if pathLen < 0 {
 		pathLen = len(trace.Path)
+	}
+	errMsgLen := bytes.IndexByte(trace.Error.ErrMsg[:], 0)
+	if errMsgLen < 0 {
+		errMsgLen = len(trace.Error.ErrMsg)
 	}
 	path := string(trace.Path[:pathLen])
 
@@ -58,7 +65,25 @@ func HTTPRequestTraceToSpan(trace *HTTPRequestTrace) request.Span {
 			UserPID:   trace.Pid.UserPid,
 			Namespace: trace.Pid.Ns,
 		},
+		ErrorMessage:    string(trace.Error.ErrMsg[:errMsgLen]),
+		ErrorStacktrace: extractErrorStacktrace(trace, filter.GetSymTab(trace.Pid.UserPid)),
 	}
+}
+
+func extractErrorStacktrace(trace *HTTPRequestTrace, symTab *gosym.Table) string {
+	var stacktrace strings.Builder
+	if symTab != nil && trace.Error.UstackSz > 0 {
+		for _, pc := range trace.Error.Ustack {
+			f := symTab.PCToFunc(pc)
+			if f == nil {
+				break
+			}
+			file, line, _ := symTab.PCToLine(pc)
+			stacktrace.WriteString(fmt.Sprintf("%s\n", f.Name))
+			stacktrace.WriteString(fmt.Sprintf("\t%s:%d\n", file, line))
+		}
+	}
+	return stacktrace.String()
 }
 
 func SQLRequestTraceToSpan(trace *SQLRequestTrace) request.Span {

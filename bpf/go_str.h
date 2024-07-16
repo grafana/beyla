@@ -14,6 +14,7 @@
 #define GO_STR_H
 
 #include "utils.h"
+#include "bpf_dbg.h"
 
 static __always_inline int read_go_str_n(char *name, void *base_ptr, u64 len, void *field, u64 max_size) {
     u64 size = max_size < len ? max_size : len;

@@ -54,6 +54,10 @@ func HTTPHandler(log *slog.Logger, echoPort int) http.HandlerFunc {
 				} else {
 					status = s
 				}
+				if status == 500 {
+					echoError(rw)
+					return
+				}
 			case arg.Delay:
 				if d, err := time.ParseDuration(v[0]); err != nil {
 					log.Debug("wrong delay value. Ignoring", "error", err)
@@ -178,6 +182,12 @@ func echoCall(rw http.ResponseWriter) {
 		return
 	}
 	rw.WriteHeader(204)
+}
+
+func echoError(rw http.ResponseWriter) {
+	_, err := httpClient.Get("htt://pytestserver:8083/error")
+	slog.Error("error making http request", "err", err)
+	rw.WriteHeader(500)
 }
 
 func Setup(port int) {

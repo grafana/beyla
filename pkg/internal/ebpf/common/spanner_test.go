@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/grafana/beyla/pkg/internal/request"
+	"github.com/grafana/beyla/pkg/internal/svc"
 )
 
 func tocstr(s string) []byte {
@@ -54,38 +55,40 @@ func assertMatches(t *testing.T, span *request.Span, method, path string, status
 }
 
 func TestRequestTraceParsing(t *testing.T) {
+	fltr := TestPidsFilter{services: map[uint32]svc.ID{}}
 	t.Run("Test basic parsing", func(t *testing.T) {
 		tr := makeHTTPRequestTrace("POST", "/users", 200, 5)
-		s := HTTPRequestTraceToSpan(&tr)
+		s := HTTPRequestTraceToSpan(&tr, &fltr)
 		assertMatches(t, &s, "POST", "/users", 200, 5)
 	})
 
 	t.Run("Test with empty path and missing peer host", func(t *testing.T) {
 		tr := makeHTTPRequestTrace("GET", "", 403, 6)
-		s := HTTPRequestTraceToSpan(&tr)
+		s := HTTPRequestTraceToSpan(&tr, &fltr)
 		assertMatches(t, &s, "GET", "", 403, 6)
 	})
 
 	t.Run("Test with missing peer port", func(t *testing.T) {
 		tr := makeHTTPRequestTrace("GET", "/posts/1/1", 500, 1)
-		s := HTTPRequestTraceToSpan(&tr)
+		s := HTTPRequestTraceToSpan(&tr, &fltr)
 		assertMatches(t, &s, "GET", "/posts/1/1", 500, 1)
 	})
 
 	t.Run("Test with invalid peer port", func(t *testing.T) {
 		tr := makeHTTPRequestTrace("GET", "/posts/1/1", 500, 1)
-		s := HTTPRequestTraceToSpan(&tr)
+		s := HTTPRequestTraceToSpan(&tr, &fltr)
 		assertMatches(t, &s, "GET", "/posts/1/1", 500, 1)
 	})
 
 	t.Run("Test with GRPC request", func(t *testing.T) {
 		tr := makeGRPCRequestTrace("/posts/1/1", 2, 1)
-		s := HTTPRequestTraceToSpan(&tr)
+		s := HTTPRequestTraceToSpan(&tr, &fltr)
 		assertMatches(t, &s, "", "/posts/1/1", 2, 1)
 	})
 }
 
 func makeSpanWithTimings(goStart, start, end uint64) request.Span {
+	fltr := TestPidsFilter{services: map[uint32]svc.ID{}}
 	tr := HTTPRequestTrace{
 		Type:              1,
 		Path:              [100]uint8{},
@@ -95,7 +98,7 @@ func makeSpanWithTimings(goStart, start, end uint64) request.Span {
 		EndMonotimeNs:     end,
 	}
 
-	return HTTPRequestTraceToSpan(&tr)
+	return HTTPRequestTraceToSpan(&tr, &fltr)
 }
 
 func TestSpanNesting(t *testing.T) {

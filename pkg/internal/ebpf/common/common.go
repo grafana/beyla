@@ -136,8 +136,7 @@ func ReadBPFTraceAsSpan(record *ringbuf.Record, filter ServiceFilter) (request.S
 	if err != nil {
 		return request.Span{}, true, err
 	}
-
-	return HTTPRequestTraceToSpan(&event), false, nil
+	return HTTPRequestTraceToSpan(&event, filter), false, nil
 }
 
 func ReadSQLRequestTraceAsSpan(record *ringbuf.Record) (request.Span, bool, error) {

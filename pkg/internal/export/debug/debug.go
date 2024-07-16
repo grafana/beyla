@@ -47,6 +47,9 @@ func printFunc() (pipe.FinalFunc[[]request.Span], error) {
 					spans[i].ServiceID.SDKLanguage.String(),
 					traceparent(&spans[i]),
 				)
+				if spans[i].ErrorMessage != "" {
+					fmt.Printf("error_message=%s stacktrace=\n%s\n", spans[i].ErrorMessage, spans[i].ErrorStacktrace)
+				}
 			}
 		}
 	}, nil

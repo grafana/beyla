@@ -34,7 +34,7 @@
 // In x86, current goroutine is pointed by r14, according to
 // https://go.googlesource.com/go/+/refs/heads/dev.regabi/src/cmd/compile/internal-abi.md#amd64-architecture
 #define GOROUTINE_PTR(x) ((void*)(x)->r14)
-
+#define STACK_PTR(x) ((void*)(x)->sp)
 #elif defined(__TARGET_ARCH_arm64)
 
 #define GO_PARAM1(x) ((void*)((PT_REGS_ARM64 *)(x))->regs[0])
@@ -50,6 +50,7 @@
 // In arm64, current goroutine is pointed by R28 according to
 // https://github.com/golang/go/blob/master/src/cmd/compile/abi-internal.md#arm64-architecture
 #define GOROUTINE_PTR(x) ((void*)((PT_REGS_ARM64 *)(x))->regs[28])
+#define STACK_PTR(x) ((void*)((PT_REGS_ARM64 *)(x))->regs[13])
 
 #endif /*defined(__TARGET_ARCH_arm64)*/
 

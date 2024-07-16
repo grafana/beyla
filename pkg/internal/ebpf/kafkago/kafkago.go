@@ -14,6 +14,7 @@ package kafkago
 
 import (
 	"context"
+	"debug/gosym"
 	"io"
 	"log/slog"
 	"unsafe"
@@ -51,8 +52,8 @@ func New(cfg *beyla.Config, metrics imetrics.Reporter) *Tracer {
 	}
 }
 
-func (p *Tracer) AllowPID(pid, ns uint32, svc svc.ID) {
-	p.pidsFilter.AllowPID(pid, ns, svc, ebpfcommon.PIDTypeGo)
+func (p *Tracer) AllowPID(pid, ns uint32, svc svc.ID, _ *gosym.Table) {
+	p.pidsFilter.AllowPID(pid, ns, svc, ebpfcommon.PIDTypeGo, nil)
 }
 
 func (p *Tracer) BlockPID(pid, ns uint32) {

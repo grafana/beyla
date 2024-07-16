@@ -63,30 +63,32 @@ type PidInfo struct {
 // REMINDER: any attribute here must be also added to the functions SpanOTELGetters,
 // SpanPromGetters and getDefinitions in pkg/internal/export/metric/definitions.go
 type Span struct {
-	Type           EventType
-	IgnoreSpan     IgnoreMode
-	Method         string
-	Path           string
-	Route          string
-	Peer           string
-	PeerPort       int
-	Host           string
-	HostPort       int
-	Status         int
-	ContentLength  int64
-	RequestStart   int64
-	Start          int64
-	End            int64
-	ServiceID      svc.ID // TODO: rename to Service or ResourceAttrs
-	TraceID        trace2.TraceID
-	SpanID         trace2.SpanID
-	ParentSpanID   trace2.SpanID
-	Flags          uint8
-	Pid            PidInfo
-	PeerName       string
-	HostName       string
-	OtherNamespace string
-	Statement      string
+	Type            EventType
+	IgnoreSpan      IgnoreMode
+	Method          string
+	Path            string
+	Route           string
+	Peer            string
+	PeerPort        int
+	Host            string
+	HostPort        int
+	Status          int
+	ContentLength   int64
+	RequestStart    int64
+	Start           int64
+	End             int64
+	ServiceID       svc.ID // TODO: rename to Service or ResourceAttrs
+	TraceID         trace2.TraceID
+	SpanID          trace2.SpanID
+	ParentSpanID    trace2.SpanID
+	Flags           uint8
+	Pid             PidInfo
+	PeerName        string
+	HostName        string
+	OtherNamespace  string
+	Statement       string
+	ErrorMessage    string
+	ErrorStacktrace string
 }
 
 func (s *Span) Inside(parent *Span) bool {

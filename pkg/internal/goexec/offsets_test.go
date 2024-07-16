@@ -7,6 +7,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/grafana/beyla/pkg/internal/export/otel"
 	"github.com/grafana/beyla/pkg/internal/testutil"
 )
 
@@ -18,7 +19,8 @@ func TestProcessNotFound(t *testing.T) {
 	finish := make(chan struct{})
 	go func() {
 		defer close(finish)
-		_, err := InspectOffsets(nil, nil)
+		cfg := &otel.TracesConfig{}
+		_, err := InspectOffsets(cfg, nil, nil)
 		require.Error(t, err)
 	}()
 	testutil.ReadChannel(t, finish, 5*time.Second)

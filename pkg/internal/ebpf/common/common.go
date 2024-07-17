@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"io"
 	"log/slog"
+	"net"
 	"os"
 	"strings"
 	"time"
@@ -227,4 +228,24 @@ func cstr(chars []uint8) string {
 	}
 
 	return string(chars[:addrLen])
+}
+
+func (connInfo *BPFConnInfo) reqHostInfo() (source, target string) {
+	src := make(net.IP, net.IPv6len)
+	dst := make(net.IP, net.IPv6len)
+	copy(src, connInfo.S_addr[:])
+	copy(dst, connInfo.D_addr[:])
+
+	srcStr := src.String()
+	dstStr := dst.String()
+
+	if src.IsUnspecified() {
+		srcStr = ""
+	}
+
+	if dst.IsUnspecified() {
+		dstStr = ""
+	}
+
+	return srcStr, dstStr
 }

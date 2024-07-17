@@ -46,6 +46,8 @@ typedef struct flow_metrics_t {
     u16 flags;
     // direction of the flow EGRESS / INGRESS
     u8 direction;
+    // who initiated of the connection: INITIATOR_SRC or INITIATOR_DST
+    u8 initiator;
     // The positive errno of a failed map insertion that caused a flow
     // to be sent via ringbuffer.
     // 0 otherwise

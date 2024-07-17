@@ -3,9 +3,9 @@ package ebpfcommon
 import (
 	"bytes"
 	"encoding/binary"
-	"net"
 	"strconv"
 	"strings"
+	"unsafe"
 
 	"github.com/cilium/ebpf/ringbuf"
 	lru "github.com/hashicorp/golang-lru/v2"
@@ -258,15 +258,6 @@ func (event *BPFHTTP2Info) eventType(protocol Protocol) request.EventType {
 	return 0
 }
 
-func (event *BPFHTTP2Info) hostInfo() (source, target string) {
-	src := make(net.IP, net.IPv6len)
-	dst := make(net.IP, net.IPv6len)
-	copy(src, event.ConnInfo.S_addr[:])
-	copy(dst, event.ConnInfo.D_addr[:])
-
-	return src.String(), dst.String()
-}
-
 // nolint:cyclop
 func http2FromBuffers(event *BPFHTTP2Info) (request.Span, bool, error) {
 	bLen := len(event.Data)
@@ -331,7 +322,7 @@ func http2FromBuffers(event *BPFHTTP2Info) (request.Span, bool, error) {
 			peer := ""
 			host := ""
 			if event.ConnInfo.S_port != 0 || event.ConnInfo.D_port != 0 {
-				source, target := event.hostInfo()
+				source, target := (*BPFConnInfo)(unsafe.Pointer(&event.ConnInfo)).reqHostInfo()
 				host = target
 				peer = source
 			}

@@ -81,6 +81,8 @@ const (
 	SrcCIDR    = Name("src.cidr")
 	DstCIDR    = Name("dst.cidr")
 
+	ClientPort = Name("client.port")
+
 	K8sSrcOwnerName = Name("k8s.src.owner.name")
 	K8sSrcNamespace = Name("k8s.src.namespace")
 	K8sDstOwnerName = Name("k8s.dst.owner.name")

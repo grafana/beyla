@@ -233,8 +233,7 @@ int uprobe_ServeHTTPReturns(struct pt_regs *ctx) {
                 bpf_probe_read(&conn_conn_conn_ptr, sizeof(conn_conn_conn_ptr), conn_conn_ptr + 8);
                 bpf_dbg_printk("conn_conn_conn_ptr %llx", conn_conn_conn_ptr);
 
-                get_conn_info(conn_conn_conn_ptr, &trace->conn);
-                found_conn = 1;
+                found_conn = get_conn_info(conn_conn_conn_ptr, &trace->conn);
             }
         } 
 
@@ -263,9 +262,10 @@ int uprobe_ServeHTTPReturns(struct pt_regs *ctx) {
                     void *conn_ptr = 0;
                     bpf_probe_read(&conn_ptr, sizeof(conn_ptr), (void *)(rwc_ptr + rwc_conn_pos)); // find conn
                     if (conn_ptr) {
-                        get_conn_info(conn_ptr, &trace->conn);
-                        found = 1;
-                        bpf_dbg_printk("found backup connection info");
+                        found = get_conn_info(conn_ptr, &trace->conn);
+                        if (found) {
+                            bpf_dbg_printk("found backup connection info");
+                        }
                         //dbg_print_http_connection_info(&conn);
                     }
                 }
@@ -562,12 +562,14 @@ int uprobe_http2RoundTrip(struct pt_regs *ctx) {
             bpf_dbg_printk("tconn_conn %llx", tconn_conn);
 
             connection_info_t conn = {0};
-            get_conn_info(tconn_conn, &conn);
+            u8 ok = get_conn_info(tconn_conn, &conn);
 
-            void *goroutine_addr = GOROUTINE_PTR(ctx);
-            bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);    
+            if (ok) {
+                void *goroutine_addr = GOROUTINE_PTR(ctx);
+                bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);    
 
-            bpf_map_update_elem(&ongoing_client_connections, &goroutine_addr, &conn, BPF_ANY);
+                bpf_map_update_elem(&ongoing_client_connections, &goroutine_addr, &conn, BPF_ANY);
+            }
         }
 
 #ifndef NO_HEADER_PROPAGATION
@@ -775,7 +777,7 @@ int uprobe_netFdRead(struct pt_regs *ctx) {
         bpf_dbg_printk("Found existing server connection, parsing FD information for socket tuples, %llx", goroutine_addr);
 
         void *fd_ptr = GO_PARAM1(ctx);
-        get_conn_info_from_fd(fd_ptr, conn);
+        get_conn_info_from_fd(fd_ptr, conn); // ok to not check the result, we leave it as 0
 
         //dbg_print_http_connection_info(conn);
     }
@@ -813,7 +815,7 @@ int uprobe_persistConnRoundTrip(struct pt_regs *ctx) {
             bpf_probe_read(&conn_ptr, sizeof(conn_ptr), (void *)(conn_conn_ptr + rwc_conn_pos)); // find conn
             if (conn_ptr) {
                 connection_info_t conn = {0};
-                get_conn_info(conn_ptr, &conn);
+                get_conn_info(conn_ptr, &conn); // initialized to 0, no need to check the result if we succeeded
                 u64 pid_tid = bpf_get_current_pid_tgid();
                 u32 pid = pid_from_pid_tgid(pid_tid);
                 tp_info_pid_t tp_p = {

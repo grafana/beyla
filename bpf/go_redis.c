@@ -115,7 +115,10 @@ int uprobe_redis_with_writer(struct pt_regs *ctx) {
                 bpf_probe_read(&conn_ptr, sizeof(conn_ptr), (void *)(tcp_conn_ptr + 8)); // find conn
                 bpf_dbg_printk("conn ptr %llx", conn_ptr);
                 if (conn_ptr) {
-                    get_conn_info(conn_ptr, &req->conn);
+                    u8 ok = get_conn_info(conn_ptr, &req->conn);
+                    if (!ok) {
+                        __builtin_memset(&req->conn, 0, sizeof(connection_info_t));
+                    }
                 }
             }
         }

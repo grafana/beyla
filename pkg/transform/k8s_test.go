@@ -50,7 +50,7 @@ func TestDecoration(t *testing.T) {
 
 	t.Run("complete pod info should set deployment as name", func(t *testing.T) {
 		inputCh <- []request.Span{{
-			Pid: request.PidInfo{Namespace: 12}, ServiceID: svc.ID{AutoName: true},
+			Pid: request.PidInfo{Namespace: 12}, ServiceID: svc.ID{UID: svc.RandomUID(), AutoName: true},
 		}}
 		deco := testutil.ReadChannel(t, outputhCh, timeout)
 		require.Len(t, deco, 1)
@@ -68,7 +68,7 @@ func TestDecoration(t *testing.T) {
 	})
 	t.Run("pod info without deployment should set replicaset as name", func(t *testing.T) {
 		inputCh <- []request.Span{{
-			Pid: request.PidInfo{Namespace: 34}, ServiceID: svc.ID{AutoName: true},
+			Pid: request.PidInfo{Namespace: 34}, ServiceID: svc.ID{UID: svc.RandomUID(), AutoName: true},
 		}}
 		deco := testutil.ReadChannel(t, outputhCh, timeout)
 		require.Len(t, deco, 1)
@@ -86,7 +86,7 @@ func TestDecoration(t *testing.T) {
 	})
 	t.Run("pod info with only pod name should set pod name as name", func(t *testing.T) {
 		inputCh <- []request.Span{{
-			Pid: request.PidInfo{Namespace: 56}, ServiceID: svc.ID{AutoName: true},
+			Pid: request.PidInfo{Namespace: 56}, ServiceID: svc.ID{UID: svc.RandomUID(), AutoName: true},
 		}}
 		deco := testutil.ReadChannel(t, outputhCh, timeout)
 		require.Len(t, deco, 1)
@@ -103,7 +103,7 @@ func TestDecoration(t *testing.T) {
 	})
 	t.Run("process without pod Info won't be decorated", func(t *testing.T) {
 		inputCh <- []request.Span{{
-			Pid: request.PidInfo{Namespace: 78}, ServiceID: svc.ID{Name: "exec", AutoName: true},
+			Pid: request.PidInfo{Namespace: 78}, ServiceID: svc.ID{UID: svc.RandomUID(), Name: "exec", AutoName: true},
 		}}
 		deco := testutil.ReadChannel(t, outputhCh, timeout)
 		require.Len(t, deco, 1)
@@ -113,7 +113,7 @@ func TestDecoration(t *testing.T) {
 	})
 	t.Run("if service name or namespace are manually specified, don't override them", func(t *testing.T) {
 		inputCh <- []request.Span{{
-			Pid: request.PidInfo{Namespace: 12}, ServiceID: svc.ID{Name: "tralari", Namespace: "tralara"},
+			Pid: request.PidInfo{Namespace: 12}, ServiceID: svc.ID{UID: svc.RandomUID(), Name: "tralari", Namespace: "tralara"},
 		}}
 		deco := testutil.ReadChannel(t, outputhCh, timeout)
 		require.Len(t, deco, 1)

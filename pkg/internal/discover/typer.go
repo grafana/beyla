@@ -83,7 +83,7 @@ func (t *typer) FilterClassify(evs []Event[ProcessMatch]) []Event[Instrumentable
 				Namespace: ev.Obj.Criteria.Namespace,
 				ProcPID:   ev.Obj.Process.Pid,
 			}
-			if elfFile, err := exec.FindExecELF(ev.Obj.Process, svcID); err != nil {
+			if elfFile, err := exec.FindExecELF(ev.Obj.Process, &svcID); err != nil {
 				t.log.Warn("error finding process ELF. Ignoring", "error", err)
 			} else {
 				t.currentPids[ev.Obj.Process.Pid] = elfFile

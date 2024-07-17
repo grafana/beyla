@@ -1140,7 +1140,7 @@ func generateTracesForSpans(t *testing.T, tr *tracesOTELReceiver, spans []reques
 	assert.NoError(t, err)
 	for i := range spans {
 		span := &spans[i]
-		if span.IgnoreSpan == request.IgnoreTraces || !tr.acceptSpan(span) {
+		if span.IgnoreTraces() || !tr.acceptSpan(span) {
 			continue
 		}
 		res = append(res, GenerateTraces(span, traceAttrs))

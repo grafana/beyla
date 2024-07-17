@@ -34,6 +34,8 @@ import (
 	"github.com/grafana/beyla/pkg/internal/helpers"
 )
 
+const unknown string = "-"
+
 // CPUInfo represents CPU usage statistics at a given point
 type CPUInfo struct {
 	// User time of CPU, in seconds
@@ -153,19 +155,24 @@ func (pw *linuxProcess) Username() (string, error) {
 		// try to get it from gopsutil and return it if ok
 		pw.user, err = pw.process.Username()
 		if err == nil {
+			if pw.user == "" {
+				pw.user = unknown
+			}
 			return pw.user, nil
 		}
 
 		// get the uid to be retrieved from getent
 		uid, err := pw.uid()
 		if err != nil {
-			return "", err
+			pw.user = unknown
+			return pw.user, err
 		}
 
 		// try to get it using getent
 		pw.user, err = usernameFromGetent(uid)
 		if err != nil {
-			return "", err
+			pw.user = unknown
+			return pw.user, err
 		}
 	}
 	return pw.user, nil

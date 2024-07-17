@@ -72,7 +72,7 @@ func makeHTTPInfo(method, path, peer, host, comm string, peerPort, hostPort uint
 		Peer:        peer,
 		URL:         path,
 		Host:        host,
-		Service:     svc.ID{Name: comm, SDKLanguage: svc.InstrumentableRuby},
+		Service:     svc.ID{UID: svc.RandomUID(), Name: comm, SDKLanguage: svc.InstrumentableRuby},
 	}
 
 	i.ConnInfo.D_port = uint16(hostPort)

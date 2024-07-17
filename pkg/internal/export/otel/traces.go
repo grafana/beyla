@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	expirable2 "github.com/hashicorp/golang-lru/v2/expirable"
 	"github.com/mariomac/pipes/pipe"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/config/configgrpc"
@@ -41,6 +42,7 @@ import (
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/pkg/internal/request"
+	"github.com/grafana/beyla/pkg/internal/svc"
 )
 
 func tlog() *slog.Logger {
@@ -48,6 +50,8 @@ func tlog() *slog.Logger {
 }
 
 const reporterName = "github.com/grafana/beyla"
+
+var serviceAttrCache = expirable2.NewLRU[svc.UID, []attribute.KeyValue](1024, nil, 5*time.Minute)
 
 type TracesConfig struct {
 	CommonEndpoint string `yaml:"-" env:"OTEL_EXPORTER_OTLP_ENDPOINT"`
@@ -79,6 +83,9 @@ type TracesConfig struct {
 	BackOffMaxInterval time.Duration `yaml:"backoff_max_interval" env:"BEYLA_BACKOFF_MAX_INTERVAL"`
 	// BackOffMaxElapsedTime is the maximum amount of time (including retries) spent trying to send a request/batch.
 	BackOffMaxElapsedTime time.Duration `yaml:"backoff_max_elapsed_time" env:"BEYLA_BACKOFF_MAX_ELAPSED_TIME"`
+
+	ServiceCacheTTL time.Duration `yaml:"service_cache_expiry" env:"BEYLA_TRACES_SERVICE_CACHE_TTL"`
+	ServiceCacheLen int           `yaml:"service_cache_len" env:"BEYLA_TRACES_SERVICE_CACHE_LEN"`
 
 	ReportersCacheLen int `yaml:"reporters_cache_len" env:"BEYLA_TRACES_REPORT_CACHE_LEN"`
 
@@ -193,7 +200,7 @@ func (tr *tracesOTELReceiver) provideLoop() (pipe.FinalFunc[[]request.Span], err
 		for spans := range in {
 			for i := range spans {
 				span := &spans[i]
-				if span.IgnoreSpan == request.IgnoreTraces || !tr.acceptSpan(span) {
+				if span.IgnoreTraces() || !tr.acceptSpan(span) {
 					continue
 				}
 				traces := GenerateTraces(span, traceAttrs)
@@ -362,6 +369,17 @@ func getRetrySettings(cfg TracesConfig) configretry.BackOffConfig {
 	return backOffCfg
 }
 
+func traceAppResourceAttrs(service *svc.ID) []attribute.KeyValue {
+	attrs, ok := serviceAttrCache.Get(service.UID)
+	if ok {
+		return attrs
+	}
+	attrs = getAppResourceAttrs(service)
+	serviceAttrCache.Add(service.UID, attrs)
+
+	return attrs
+}
+
 // GenerateTraces creates a ptrace.Traces from a request.Span
 func GenerateTraces(span *request.Span, userAttrs map[attr.Name]struct{}) ptrace.Traces {
 	t := span.Timings()
@@ -370,7 +388,7 @@ func GenerateTraces(span *request.Span, userAttrs map[attr.Name]struct{}) ptrace
 	traces := ptrace.NewTraces()
 	rs := traces.ResourceSpans().AppendEmpty()
 	ss := rs.ScopeSpans().AppendEmpty()
-	resourceAttrs := attrsToMap(getAppResourceAttrs(&span.ServiceID))
+	resourceAttrs := attrsToMap(traceAppResourceAttrs(&span.ServiceID))
 	resourceAttrs.PutStr(string(semconv.OTelLibraryNameKey), reporterName)
 	resourceAttrs.CopyTo(rs.Resource().Attributes())
 

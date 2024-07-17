@@ -6,6 +6,7 @@
 #include "bpf_helpers.h"
 #include "http_defs.h"
 #include "pid_types.h"
+#include "bpf_dbg.h"
 
 #define FULL_BUF_SIZE 160 // should be enough for most URLs, we may need to extend it if not. Must be multiple of 16 for the copy to work.
 #define TRACE_BUF_SIZE 1024 // must be power of 2, we do an & to limit the buffer size
@@ -172,7 +173,7 @@ const u8 ip4ip6_prefix[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff};
 
 #ifdef BPF_DEBUG
 static __always_inline void dbg_print_http_connection_info(connection_info_t *info) {
-    bpf_printk("[http] s_h = %llx, s_l = %llx, d_h = %llx, d_l = %llx, s_port=%d, d_port=%d",
+    bpf_dbg_printk("[http] s_h = %llx, s_l = %llx, d_h = %llx, d_l = %llx, s_port=%d, d_port=%d",
                *(u64 *)(&info->s_addr),
                *(u64 *)(&info->s_addr[8]),
                *(u64 *)(&info->d_addr),

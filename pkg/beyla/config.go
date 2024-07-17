@@ -56,6 +56,7 @@ var DefaultConfig = Config{
 		},
 	},
 	NameResolver: &transform.NameResolverConfig{
+		Enable:   false,
 		CacheLen: 1024,
 		CacheTTL: 5 * time.Minute,
 	},

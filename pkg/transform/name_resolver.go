@@ -17,6 +17,7 @@ import (
 )
 
 type NameResolverConfig struct {
+	Enable bool `yaml:"enable" env:"BEYLA_NAME_RESOLVER_ENABLE" default:"false"`
 	// CacheLen specifies the max size of the LRU cache that is checked before
 	// performing the name lookup. Default: 256
 	CacheLen int `yaml:"cache_len" env:"BEYLA_NAME_RESOLVER_CACHE_LEN"`
@@ -34,7 +35,7 @@ type NameResolver struct {
 
 func NameResolutionProvider(ctxInfo *global.ContextInfo, cfg *NameResolverConfig) pipe.MiddleProvider[[]request.Span, []request.Span] {
 	return func() (pipe.MiddleFunc[[]request.Span, []request.Span], error) {
-		if cfg == nil {
+		if cfg == nil || !cfg.Enable {
 			return pipe.Bypass[[]request.Span](), nil
 		}
 		return nameResolver(ctxInfo, cfg)

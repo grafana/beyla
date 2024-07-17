@@ -42,10 +42,15 @@ typedef struct grpc_client_func_invocation {
     u64 flags;
 } grpc_client_func_invocation_t;
 
+typedef struct grpc_transports {
+    u8 type;
+    connection_info_t conn;
+} grpc_transports_t;
+
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __type(key, void *); // key: pointer to the transport pointer
-    __type(value, u8);
+    __type(value, grpc_transports_t);
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
 } ongoing_grpc_transports SEC(".maps");
 
@@ -134,14 +139,43 @@ int uprobe_server_handleStream(struct pt_regs *ctx) {
     return 0;
 }
 
+// Handles finding the connection information for http2 servers in grpc
 SEC("uprobe/http2Server_operateHeaders")
 int uprobe_http2Server_operateHeaders(struct pt_regs *ctx) {
     void *tr = GO_PARAM1(ctx);
     bpf_dbg_printk("=== uprobe/http2Server_operateHeaders tr %llx === ", tr);
 
-    u8 type = TRANSPORT_HTTP2;
+    grpc_transports_t t = {
+        .type = TRANSPORT_HTTP2,
+        .conn = {0},
+    };
 
-    bpf_map_update_elem(&ongoing_grpc_transports, &tr, &type, BPF_ANY);
+    bpf_map_update_elem(&ongoing_grpc_transports, &tr, &t, BPF_ANY);
+
+    return 0;
+}
+
+// Handles finding the connection information for grpc ServeHTTP
+SEC("uprobe/serverHandlerTransport_HandleStreams")
+int uprobe_server_handler_transport_handle_streams(struct pt_regs *ctx) {
+    void *tr = GO_PARAM1(ctx);
+    void *goroutine_addr = GOROUTINE_PTR(ctx);
+    bpf_printk("=== uprobe/serverHandlerTransport_HandleStreams tr %llx goroutine %lx === ", tr, goroutine_addr);
+
+    void *parent_go = (void *)find_parent_goroutine(goroutine_addr);
+    if (parent_go) {
+        bpf_dbg_printk("found parent goroutine for transport handler [%llx]", parent_go);
+        connection_info_t *conn = bpf_map_lookup_elem(&ongoing_server_connections, &parent_go);
+        bpf_dbg_printk("conn %llx", conn);
+        if (conn) {
+            grpc_transports_t t = {
+                .type = TRANSPORT_HANDLER,
+            };
+            __builtin_memcpy(&t.conn, conn, sizeof(connection_info_t));
+            
+            bpf_map_update_elem(&ongoing_grpc_transports, &tr, &t, BPF_ANY);
+        }
+    }
 
     return 0;
 }
@@ -160,10 +194,11 @@ int uprobe_server_handleStream_return(struct pt_regs *ctx) {
         goto done;
     }
 
-    u16 *status = bpf_map_lookup_elem(&ongoing_grpc_request_status, &goroutine_addr);
-    if (status == NULL) {
+    u16 *status_ptr = bpf_map_lookup_elem(&ongoing_grpc_request_status, &goroutine_addr);
+    u16 status = 0;
+    if (status_ptr != NULL) {
         bpf_dbg_printk("can't read grpc invocation status");
-        goto done;
+        status = *status_ptr;        
     }
 
     void *stream_ptr = (void *)invocation->stream;
@@ -177,7 +212,7 @@ int uprobe_server_handleStream_return(struct pt_regs *ctx) {
     task_pid(&trace->pid);
     trace->type = EVENT_GRPC_REQUEST;
     trace->start_monotime_ns = invocation->start_monotime_ns;
-    trace->status = *status;
+    trace->status = status;
     trace->content_length = 0;
     trace->method[0] = 0;
 
@@ -203,19 +238,25 @@ int uprobe_server_handleStream_return(struct pt_regs *ctx) {
 
     bpf_dbg_printk("st_ptr %llx", st_ptr);
     if (st_ptr) {
-        u8 *type = bpf_map_lookup_elem(&ongoing_grpc_transports, &st_ptr);
+        grpc_transports_t *t = bpf_map_lookup_elem(&ongoing_grpc_transports, &st_ptr);
 
-        if (type && (*type == TRANSPORT_HTTP2)) {
-            void *conn_ptr = st_ptr + grpc_st_conn_pos;
-            bpf_dbg_printk("conn_ptr %llx", conn_ptr);
-            if (conn_ptr) {
-                void *conn_conn_ptr = 0;
-                bpf_probe_read(&conn_conn_ptr, sizeof(conn_conn_ptr), conn_ptr + 8);
-                bpf_dbg_printk("conn_conn_ptr %llx", conn_conn_ptr);
-                if (conn_conn_ptr) {                
-                    found_conn = get_conn_info(conn_conn_ptr, &trace->conn);
-                }
-            } 
+        if (t) {
+            if (t->type == TRANSPORT_HTTP2) {
+                void *conn_ptr = st_ptr + grpc_st_conn_pos;
+                bpf_dbg_printk("conn_ptr %llx", conn_ptr);
+                if (conn_ptr) {
+                    void *conn_conn_ptr = 0;
+                    bpf_probe_read(&conn_conn_ptr, sizeof(conn_conn_ptr), conn_ptr + 8);
+                    bpf_dbg_printk("conn_conn_ptr %llx", conn_conn_ptr);
+                    if (conn_conn_ptr) {                
+                        found_conn = get_conn_info(conn_conn_ptr, &trace->conn);
+                    }
+                } 
+            } else if (t->type == TRANSPORT_HANDLER) {
+                bpf_dbg_printk("setting up connection info from grpc handler");
+                __builtin_memcpy(&trace->conn, &t->conn, sizeof(connection_info_t));
+                found_conn = 1;
+            }
         }
     }
 

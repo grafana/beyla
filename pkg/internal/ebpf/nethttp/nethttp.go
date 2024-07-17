@@ -164,6 +164,9 @@ func (p *Tracer) GoProbes() map[string]ebpfcommon.FunctionPrograms {
 		"golang.org/x/net/http2.(*responseWriterState).writeHeader": { // http2 server request done, capture the response code
 			Start: p.bpfObjects.UprobeHttp2ResponseWriterStateWriteHeader,
 		},
+		"golang.org/x/net/http2.(*serverConn).runHandler": {
+			Start: p.bpfObjects.UprobeHttp2serverConnRunHandler, // http2 server connection tracking
+		},
 		// tracking of tcp connections for black-box propagation
 		"net/http.(*conn).serve": { // http server
 			Start: p.bpfObjects.UprobeConnServe,

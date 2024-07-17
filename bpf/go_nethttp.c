@@ -107,6 +107,12 @@ int uprobe_ServeHTTP(struct pt_regs *ctx) {
             goto done;
         }
 
+        // Ignore gRPC ServeHTTP
+        if (invocation.method[0] == 'P' && invocation.method[1] == 'R' && invocation.method[2] == 'I') {
+            bpf_dbg_printk("ignoring grpc ServeHTTP wrapper");
+            goto done;
+        }
+
         // Get path from Request.URL
         void *url_ptr = 0;
         int res = bpf_probe_read(&url_ptr, sizeof(url_ptr), (void *)(req + url_ptr_pos));
@@ -219,39 +225,16 @@ int uprobe_ServeHTTPReturns(struct pt_regs *ctx) {
 
     bpf_dbg_printk("Resp ptr %llx", resp_ptr);
 
-    if (invocation->http2) {
-        void *conn_ptr = 0;
-        bpf_probe_read(&conn_ptr, sizeof(conn_ptr), resp_ptr + rws_conn_pos);
-        bpf_dbg_printk("conn_ptr %llx", conn_ptr);
-        u8 found_conn = 0;
-        if (conn_ptr) {
-            void *conn_conn_ptr = 0;
-            bpf_probe_read(&conn_conn_ptr, sizeof(conn_conn_ptr), conn_ptr + http2_server_conn_pos + 8);
-            bpf_dbg_printk("conn_conn_ptr %llx", conn_conn_ptr);
-            if (conn_conn_ptr) {                
-                void *conn_conn_conn_ptr = 0;
-                bpf_probe_read(&conn_conn_conn_ptr, sizeof(conn_conn_conn_ptr), conn_conn_ptr + 8);
-                bpf_dbg_printk("conn_conn_conn_ptr %llx", conn_conn_conn_ptr);
+    connection_info_t *info = bpf_map_lookup_elem(&ongoing_server_connections, &goroutine_addr);
 
-                found_conn = get_conn_info(conn_conn_conn_ptr, &trace->conn);
-            }
-        } 
-
-        if (!found_conn) {
-            __builtin_memset(&trace->conn, 0, sizeof(connection_info_t));
-        }
+    if (info) {
+        //dbg_print_http_connection_info(info);
+        __builtin_memcpy(&trace->conn, info, sizeof(connection_info_t));
     } else {
-        connection_info_t *info = bpf_map_lookup_elem(&ongoing_server_connections, &goroutine_addr);
-
-        if (info) {
-            //dbg_print_http_connection_info(info);
-            __builtin_memcpy(&trace->conn, info, sizeof(connection_info_t));
-        } else {
-            // We can't find the connection info, this typically means there are too many requests per second
-            // and the connection map is too small for the workload.
-            bpf_dbg_printk("Can't find connection info for %llx", goroutine_addr);
-            __builtin_memset(&trace->conn, 0, sizeof(connection_info_t));
-        }
+        // We can't find the connection info, this typically means there are too many requests per second
+        // and the connection map is too small for the workload.
+        bpf_dbg_printk("Can't find connection info for %llx", goroutine_addr);
+        __builtin_memset(&trace->conn, 0, sizeof(connection_info_t));
     }
 
     // Server connections have opposite order, source port is the server port
@@ -505,6 +488,36 @@ int uprobe_http2ResponseWriterStateWriteHeader(struct pt_regs *ctx) {
     }  
 
     invocation->http2 = 1;
+
+    return 0;
+}
+
+// HTTP 2.0 server support
+SEC("uprobe/http2serverConn_runHandler")
+int uprobe_http2serverConn_runHandler(struct pt_regs *ctx) {
+    bpf_dbg_printk("=== uprobe/proc http2serverConn_runHandler === ");
+
+    void *goroutine_addr = GOROUTINE_PTR(ctx);
+    bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);    
+
+
+    void *sc = GO_PARAM1(ctx);
+
+    if (sc) {
+        void *conn_ptr = 0;
+        bpf_probe_read(&conn_ptr, sizeof(void *), sc + 0x10 + 8);
+        bpf_dbg_printk("conn_ptr %llx", conn_ptr);
+        if (conn_ptr) {
+            void *conn_conn_ptr = 0;
+            bpf_probe_read(&conn_conn_ptr, sizeof(void *), conn_ptr + 8);
+            bpf_dbg_printk("conn_conn_ptr %llx", conn_conn_ptr);
+            if (conn_conn_ptr) {
+                connection_info_t conn = {0};
+                get_conn_info(conn_conn_ptr, &conn);
+                bpf_map_update_elem(&ongoing_server_connections, &goroutine_addr, &conn, BPF_ANY);
+            }
+        }
+    }
 
     return 0;
 }

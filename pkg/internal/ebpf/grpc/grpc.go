@@ -170,10 +170,10 @@ func (p *Tracer) GoProbes() map[string]ebpfcommon.FunctionPrograms {
 			Start: p.bpfObjects.UprobeTransportHttp2ClientNewStream,
 		},
 		"google.golang.org/grpc/internal/transport.(*http2Server).operateHeaders": {
-			Start: p.bpfObjects.UprobeHttp2ServerHandleStreams,
+			Start: p.bpfObjects.UprobeHttp2ServerOperateHeaders,
 		},
 		"google.golang.org/grpc/internal/transport.(*serverHandlerTransport).HandleStreams": {
-			Start: p.bpfObjects.UprobeHttp2ServerHandleStreams,
+			Start: p.bpfObjects.UprobeServerHandlerTransportHandleStreams,
 		},
 	}
 

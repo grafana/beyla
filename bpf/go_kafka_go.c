@@ -191,7 +191,10 @@ int uprobe_protocol_roundtrip_ret(struct pt_regs *ctx) {
                 bpf_probe_read(&conn_ptr, sizeof(conn_ptr), (void *)(p_ptr->conn_ptr + 8)); // find conn
                 bpf_dbg_printk("conn ptr %llx", conn_ptr);
                 if (conn_ptr) {
-                    get_conn_info(conn_ptr, &trace->conn);
+                    u8 ok = get_conn_info(conn_ptr, &trace->conn);
+                    if (!ok) {
+                        __builtin_memset(&trace->conn, 0, sizeof(connection_info_t));
+                    }
                 }
 
                 __builtin_memcpy(trace->topic, topic_ptr->name, MAX_TOPIC_NAME_LEN);
@@ -215,7 +218,7 @@ int uprobe_reader_read(struct pt_regs *ctx) {
     void *goroutine_addr = (void *)GOROUTINE_PTR(ctx);
     void *r_ptr = (void *)GO_PARAM1(ctx);
     void *conn = (void *)GO_PARAM5(ctx);
-    bpf_printk("=== uprobe/kafka-go reader_read %llx r_ptr %llx=== ", goroutine_addr, r_ptr);
+    bpf_dbg_printk("=== uprobe/kafka-go reader_read %llx r_ptr %llx=== ", goroutine_addr, r_ptr);
 
     if (r_ptr) {
         kafka_go_req_t r = {
@@ -237,7 +240,10 @@ int uprobe_reader_read(struct pt_regs *ctx) {
             bpf_probe_read(&conn_ptr, sizeof(conn_ptr), (void *)(conn + 8)); // find conn
             bpf_dbg_printk("conn ptr %llx", conn_ptr);
             if (conn_ptr) {
-                get_conn_info(conn_ptr, &r.conn);
+                u8 ok = get_conn_info(conn_ptr, &r.conn);
+                if (!ok) {
+                    __builtin_memset(&r.conn, 0, sizeof(connection_info_t));
+                }
             }
         }
 

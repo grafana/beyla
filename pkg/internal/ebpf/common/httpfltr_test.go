@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"testing"
+	"unsafe"
 
 	"github.com/cilium/ebpf/ringbuf"
 	"github.com/stretchr/testify/assert"
@@ -41,7 +42,7 @@ func TestHostInfo(t *testing.T) {
 		},
 	}
 
-	source, target := event.hostInfo()
+	source, target := (*BPFConnInfo)(unsafe.Pointer(&event.ConnInfo)).reqHostInfo()
 
 	assert.Equal(t, "192.168.0.1", source)
 	assert.Equal(t, "8.8.8.8", target)
@@ -53,7 +54,7 @@ func TestHostInfo(t *testing.T) {
 		},
 	}
 
-	source, target = event.hostInfo()
+	source, target = (*BPFConnInfo)(unsafe.Pointer(&event.ConnInfo)).reqHostInfo()
 
 	assert.Equal(t, "100::ffff:c0a8:1", source)
 	assert.Equal(t, "100::ffff:808:808", target)
@@ -62,10 +63,10 @@ func TestHostInfo(t *testing.T) {
 		ConnInfo: bpfConnectionInfoT{},
 	}
 
-	source, target = event.hostInfo()
+	source, target = (*BPFConnInfo)(unsafe.Pointer(&event.ConnInfo)).reqHostInfo()
 
-	assert.Equal(t, "::", source)
-	assert.Equal(t, "::", target)
+	assert.Equal(t, "", source)
+	assert.Equal(t, "", target)
 }
 
 func TestCstr(t *testing.T) {

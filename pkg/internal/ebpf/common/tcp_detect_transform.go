@@ -3,7 +3,6 @@ package ebpfcommon
 import (
 	"bytes"
 	"encoding/binary"
-	"net"
 
 	"github.com/cilium/ebpf/ringbuf"
 
@@ -74,15 +73,6 @@ func ReadTCPRequestIntoSpan(record *ringbuf.Record, filter ServiceFilter) (reque
 	}
 
 	return request.Span{}, true, nil // ignore if we couldn't parse it
-}
-
-func (connInfo *BPFConnInfo) reqHostInfo() (source, target string) {
-	src := make(net.IP, net.IPv6len)
-	dst := make(net.IP, net.IPv6len)
-	copy(src, connInfo.S_addr[:])
-	copy(dst, connInfo.D_addr[:])
-
-	return src.String(), dst.String()
 }
 
 func reverseTCPEvent(trace *TCPRequestInfo) {

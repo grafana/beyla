@@ -5,6 +5,7 @@
 #include "bpf_helpers.h"
 #include "bpf_core_read.h"
 #include "pid_types.h"
+#include "bpf_dbg.h"
 
 #define MAX_CONCURRENT_PIDS 3001 // estimate: 1000 concurrent processes (including children) * 3 namespaces per pid
 #define PRIME_HASH 192053 // closest prime to 3001 * 64
@@ -37,7 +38,7 @@ static __always_inline u8 pid_matches(pid_key_t *p) {
     u64 *v = bpf_map_lookup_elem(&valid_pids, &segment);
     if (!v) {
         // This is an error of some kind, we should always find the segment
-        bpf_printk("Error looking up PID segment %d", segment);
+        bpf_dbg_printk("Error looking up PID segment %d", segment);
         return 1;
     }
 

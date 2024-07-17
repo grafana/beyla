@@ -169,7 +169,7 @@ int uprobe_server_handleStream_return(struct pt_regs *ctx) {
 
     // Get method from transport.Stream.Method
     if (!read_go_str("grpc method", stream_ptr, grpc_stream_method_ptr_pos, &trace->path, sizeof(trace->path))) {
-        bpf_printk("can't read grpc transport.Stream.Method");
+        bpf_dbg_printk("can't read grpc transport.Stream.Method");
         bpf_ringbuf_discard(trace, 0);
         goto done;
     }
@@ -188,8 +188,7 @@ int uprobe_server_handleStream_return(struct pt_regs *ctx) {
             bpf_probe_read(&conn_conn_ptr, sizeof(conn_conn_ptr), conn_ptr + 8);
             bpf_dbg_printk("conn_conn_ptr %llx", conn_conn_ptr);
             if (conn_conn_ptr) {                
-                get_conn_info(conn_conn_ptr, &trace->conn);
-                found_conn = 1;
+                found_conn = get_conn_info(conn_conn_ptr, &trace->conn);
             }
         } 
     }
@@ -339,7 +338,7 @@ static __always_inline int grpc_connect_done(struct pt_regs *ctx, void *err) {
 
     // Get method from the incoming call arguments
     if (!read_go_str_n("method", method_ptr, (u64)method_len, &trace->path, sizeof(trace->path))) {
-        bpf_printk("can't read grpc client method");
+        bpf_dbg_printk("can't read grpc client method");
         bpf_ringbuf_discard(trace, 0);
         goto done;
     }
@@ -431,8 +430,10 @@ int uprobe_transport_http2Client_NewStream(struct pt_regs *ctx) {
             bpf_dbg_printk("conn_conn_ptr %llx", conn_conn_ptr);
             if (conn_conn_ptr) {                
                 connection_info_t conn = {0};
-                get_conn_info(conn_conn_ptr, &conn);
-                bpf_map_update_elem(&ongoing_client_connections, &goroutine_addr, &conn, BPF_ANY);
+                u8 ok = get_conn_info(conn_conn_ptr, &conn);
+                if (ok) {
+                    bpf_map_update_elem(&ongoing_client_connections, &goroutine_addr, &conn, BPF_ANY);
+                }
             }
         } 
 

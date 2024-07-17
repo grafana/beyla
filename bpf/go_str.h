@@ -14,11 +14,12 @@
 #define GO_STR_H
 
 #include "utils.h"
+#include "bpf_dbg.h"
 
 static __always_inline int read_go_str_n(char *name, void *base_ptr, u64 len, void *field, u64 max_size) {
     u64 size = max_size < len ? max_size : len;
     if (bpf_probe_read(field, size, base_ptr)) {
-        bpf_printk("can't read string for %s", name);
+        bpf_dbg_printk("can't read string for %s", name);
         return 0;
     }
 
@@ -33,19 +34,19 @@ static __always_inline int read_go_str_n(char *name, void *base_ptr, u64 len, vo
 static __always_inline int read_go_str(char *name, void *base_ptr, u8 offset, void *field, u64 max_size) {
     void *ptr = 0;
     if (bpf_probe_read(&ptr, sizeof(ptr), (void *)(base_ptr + offset)) != 0) {
-        bpf_printk("can't read ptr for %s", name);
+        bpf_dbg_printk("can't read ptr for %s", name);
         return 0;
     }
 
     u64 len = 0;
     if (bpf_probe_read(&len, sizeof(len), (void *)(base_ptr + (offset + 8))) != 0) {
-        bpf_printk("can't read len for %s", name);
+        bpf_dbg_printk("can't read len for %s", name);
         return 0;
     }
 
     u64 size = max_size < len ? max_size : len;
     if (bpf_probe_read(field, size, ptr)) {
-        bpf_printk("can't read string for %s", name);
+        bpf_dbg_printk("can't read string for %s", name);
         return 0;
     }
 

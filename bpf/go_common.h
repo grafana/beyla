@@ -228,7 +228,7 @@ static __always_inline void read_ip_and_port(u8 *dst_ip, u16 *dst_port, void *sr
     }
 }
 
-static __always_inline void get_conn_info_from_fd(void *fd_ptr, connection_info_t *info) {
+static __always_inline u8 get_conn_info_from_fd(void *fd_ptr, connection_info_t *info) {
     if (fd_ptr) {
         void *laddr_ptr = 0;
         void *raddr_ptr = 0;
@@ -251,20 +251,26 @@ static __always_inline void get_conn_info_from_fd(void *fd_ptr, connection_info_
             // in Go we keep the original connection info order, since we only need it
             // sorted when we make server requests or when we populate the trace_map for
             // black box context propagation.
+
+            return 1;
         }
     }
+
+    return 0;
 }
 
 // HTTP black-box context propagation
-static __always_inline void get_conn_info(void *conn_ptr, connection_info_t *info) {
+static __always_inline u8 get_conn_info(void *conn_ptr, connection_info_t *info) {
     if (conn_ptr) {
         void *fd_ptr = 0;
         bpf_probe_read(&fd_ptr, sizeof(fd_ptr), (void *)(conn_ptr + conn_fd_pos)); // find fd
 
         bpf_dbg_printk("Found fd ptr %llx", fd_ptr);
 
-        get_conn_info_from_fd(fd_ptr, info);
+        return get_conn_info_from_fd(fd_ptr, info);
     }
+
+    return 0;
 }
 
 #endif // GO_COMMON_H

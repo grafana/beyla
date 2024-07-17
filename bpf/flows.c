@@ -21,7 +21,7 @@
 
 #include "bpf_helpers.h"
 #include "bpf_endian.h"
-
+#include "bpf_dbg.h"
 #include "flows_common.h"
 
 // sets the TCP header flags for connection information
@@ -184,7 +184,7 @@ static inline int flow_monitor(struct __sk_buff *skb) {
             // a duplicated UNION of flows (two different flows with partial aggregation of the same packets),
             // which can't be deduplicated.
             // other possible values https://chromium.googlesource.com/chromiumos/docs/+/master/constants/errnos.md
-            bpf_printk("error updating flow %d\n", ret);
+            bpf_dbg_printk("error updating flow %d\n", ret);
         }
     } else {
         // Key does not exist in the map, and will need to create a new entry.
@@ -238,14 +238,14 @@ static inline int flow_monitor(struct __sk_buff *skb) {
             // which can be re-aggregated at userspace.
             // other possible values https://chromium.googlesource.com/chromiumos/docs/+/master/constants/errnos.md
             if (trace_messages) {
-                bpf_printk("error adding flow %d\n", ret);
+                bpf_dbg_printk("error adding flow %d\n", ret);
             }
 
             new_flow.errno = -ret;
             flow_record *record = (flow_record *)bpf_ringbuf_reserve(&direct_flows, sizeof(flow_record), 0);
             if (!record) {
                 if (trace_messages) {
-                    bpf_printk("couldn't reserve space in the ringbuf. Dropping flow");
+                    bpf_dbg_printk("couldn't reserve space in the ringbuf. Dropping flow");
                 }
                 goto cleanup;
             }

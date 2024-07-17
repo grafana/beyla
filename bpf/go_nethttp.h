@@ -36,5 +36,4 @@ volatile const u64 rwc_conn_pos;
 volatile const u64 rws_conn_pos;
 volatile const u64 http2_server_conn_pos;
 volatile const u64 cc_tconn_pos;
-
 #endif

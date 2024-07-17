@@ -25,6 +25,7 @@
 #include "tracing.h"
 #include "hpack.h"
 #include "ringbuf.h"
+#include "errors.h"
 
 typedef struct http_func_invocation {
     u64 start_monotime_ns;
@@ -45,6 +46,13 @@ struct {
     __type(value, http_func_invocation_t);
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
 } ongoing_http_client_requests SEC(".maps");
+
+struct {
+    __uint(type, BPF_MAP_TYPE_LRU_HASH);
+    __type(key, void *); // key: pointer to the request goroutine
+    __type(value, struct error_event);
+    __uint(max_entries, MAX_CONCURRENT_REQUESTS);
+} last_error SEC(".maps");
 
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
@@ -198,6 +206,9 @@ int uprobe_ServeHTTPReturns(struct pt_regs *ctx) {
         resp_ptr = deref_resp_ptr;
     }
 
+    struct error_event *error = bpf_map_lookup_elem(&last_error, &goroutine_addr);
+    bpf_map_delete_elem(&last_error, &goroutine_addr);
+
     http_request_trace *trace = bpf_ringbuf_reserve(&events, sizeof(http_request_trace), 0);
     if (!trace) {
         bpf_dbg_printk("can't reserve space in the ringbuffer");
@@ -208,6 +219,8 @@ int uprobe_ServeHTTPReturns(struct pt_regs *ctx) {
     trace->type = EVENT_HTTP_REQUEST;
     trace->start_monotime_ns = invocation->start_monotime_ns;
     trace->end_monotime_ns = bpf_ktime_get_ns();
+    if (error)
+        trace->error = *error;
 
     goroutine_metadata *g_metadata = bpf_map_lookup_elem(&ongoing_goroutines, &goroutine_addr);
     if (g_metadata) {
@@ -433,6 +446,75 @@ done:
     bpf_map_delete_elem(&ongoing_http_client_requests, &goroutine_addr);
     bpf_map_delete_elem(&ongoing_http_client_requests_data, &goroutine_addr);
     bpf_map_delete_elem(&ongoing_client_connections, &goroutine_addr);
+    return 0;
+}
+
+
+SEC("uprobe/error")
+int uprobe_error(struct pt_regs *ctx) {
+    bpf_dbg_printk("=== uprobe/proc error === ");
+
+    void *goroutine_addr = GOROUTINE_PTR(ctx);
+    bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
+
+    int pid = bpf_get_current_pid_tgid() >> 32;
+    int cpu_id = bpf_get_smp_processor_id();
+    int BPF_F_USER_STACK = (1ULL << 8);
+    struct error_event event = {
+        .pid = pid,
+        .cpu_id = cpu_id,
+    };
+
+    if (bpf_get_current_comm(event.comm, sizeof(event.comm)))
+        event.comm[0] = 0;
+
+    // Read the stack trace
+    event.ustack_sz = bpf_get_stack(ctx, event.ustack, sizeof(event.ustack), BPF_F_USER_STACK);
+
+    // Get the caller of the error function and store it in the first slot of the stack
+    void *sp_caller = STACK_PTR(ctx);
+    u64 caller = 0;
+    bpf_probe_read(&caller, sizeof(u64), sp_caller);
+    bpf_dbg_printk("sp_caller %lx caller %lx", sp_caller, caller);
+    event.ustack[0] = caller;
+
+    // Write event
+    if (bpf_map_update_elem(&last_error, &goroutine_addr, &event, BPF_ANY)) {
+        bpf_dbg_printk("can't update event error map element");
+    }
+    return 0;
+}
+
+SEC("uprobe/error_return")
+int uprobe_errorReturn(struct pt_regs *ctx) {
+    bpf_dbg_printk("=== uprobe/proc error return === ");
+
+    void *goroutine_addr = GOROUTINE_PTR(ctx);
+    bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
+
+    error_event *event = bpf_map_lookup_elem(&last_error, &goroutine_addr);
+    if (event == NULL) {
+        bpf_dbg_printk("can't read error event");
+        return 0;
+    }
+
+    // Read the error message
+    // GO_PARAM1(ctx) is the pointer to the error message
+    // GO_PARAM2(ctx) is the length of the error message
+    void *msg_ptr = GO_PARAM1(ctx);
+    u64 len = (u64)GO_PARAM2(ctx);
+    u64 max_size = sizeof(event->err_msg);
+    u64 size = max_size < len ? max_size : len;
+    bpf_probe_read(&event->err_msg, size, msg_ptr);
+    if (size < max_size) {
+        ((char *)event->err_msg)[size] = 0;
+    }
+    bpf_dbg_printk("error msg %llx, %s", msg_ptr, event->err_msg);
+
+    // Write event
+    if (bpf_map_update_elem(&last_error, &goroutine_addr, event, BPF_ANY)) {
+        bpf_dbg_printk("can't update event error map element");
+    }
     return 0;
 }
 

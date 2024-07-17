@@ -15,6 +15,7 @@
 
 #include "pid_types.h"
 #include "utils.h"
+#include "errors.h"
 #include "http_types.h"
 
 #define PATH_MAX_LEN 100
@@ -39,6 +40,7 @@ typedef struct http_request_trace_t {
     u16 status;
     connection_info_t conn __attribute__ ((aligned (8)));
     s64 content_length;
+    error_event error;
     tp_info_t tp;
 
     pid_info pid;

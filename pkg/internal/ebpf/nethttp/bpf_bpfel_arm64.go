@@ -19,6 +19,16 @@ type bpfConnectionInfoT struct {
 	D_port uint16
 }
 
+type bpfErrorEvent struct {
+	Pid      uint32
+	CpuId    uint32
+	Comm     [16]int8
+	UstackSz int32
+	_        [4]byte
+	Ustack   [32]uint64
+	ErrMsg   [128]uint8
+}
+
 type bpfGoroutineMetadata struct {
 	Parent    uint64
 	Timestamp uint64
@@ -122,6 +132,8 @@ type bpfProgramSpecs struct {
 	UprobeServeHTTPReturns                    *ebpf.ProgramSpec `ebpf:"uprobe_ServeHTTPReturns"`
 	UprobeConnServe                           *ebpf.ProgramSpec `ebpf:"uprobe_connServe"`
 	UprobeConnServeRet                        *ebpf.ProgramSpec `ebpf:"uprobe_connServeRet"`
+	UprobeError                               *ebpf.ProgramSpec `ebpf:"uprobe_error"`
+	UprobeErrorReturn                         *ebpf.ProgramSpec `ebpf:"uprobe_errorReturn"`
 	UprobeExecDC                              *ebpf.ProgramSpec `ebpf:"uprobe_execDC"`
 	UprobeHttp2FramerWriteHeaders             *ebpf.ProgramSpec `ebpf:"uprobe_http2FramerWriteHeaders"`
 	UprobeHttp2FramerWriteHeadersReturns      *ebpf.ProgramSpec `ebpf:"uprobe_http2FramerWriteHeaders_returns"`
@@ -144,6 +156,7 @@ type bpfMapSpecs struct {
 	Events                        *ebpf.MapSpec `ebpf:"events"`
 	GoTraceMap                    *ebpf.MapSpec `ebpf:"go_trace_map"`
 	GolangMapbucketStorageMap     *ebpf.MapSpec `ebpf:"golang_mapbucket_storage_map"`
+	LastError                     *ebpf.MapSpec `ebpf:"last_error"`
 	OngoingClientConnections      *ebpf.MapSpec `ebpf:"ongoing_client_connections"`
 	OngoingGoroutines             *ebpf.MapSpec `ebpf:"ongoing_goroutines"`
 	OngoingHttpClientRequests     *ebpf.MapSpec `ebpf:"ongoing_http_client_requests"`
@@ -176,6 +189,7 @@ type bpfMaps struct {
 	Events                        *ebpf.Map `ebpf:"events"`
 	GoTraceMap                    *ebpf.Map `ebpf:"go_trace_map"`
 	GolangMapbucketStorageMap     *ebpf.Map `ebpf:"golang_mapbucket_storage_map"`
+	LastError                     *ebpf.Map `ebpf:"last_error"`
 	OngoingClientConnections      *ebpf.Map `ebpf:"ongoing_client_connections"`
 	OngoingGoroutines             *ebpf.Map `ebpf:"ongoing_goroutines"`
 	OngoingHttpClientRequests     *ebpf.Map `ebpf:"ongoing_http_client_requests"`
@@ -191,6 +205,7 @@ func (m *bpfMaps) Close() error {
 		m.Events,
 		m.GoTraceMap,
 		m.GolangMapbucketStorageMap,
+		m.LastError,
 		m.OngoingClientConnections,
 		m.OngoingGoroutines,
 		m.OngoingHttpClientRequests,
@@ -210,6 +225,8 @@ type bpfPrograms struct {
 	UprobeServeHTTPReturns                    *ebpf.Program `ebpf:"uprobe_ServeHTTPReturns"`
 	UprobeConnServe                           *ebpf.Program `ebpf:"uprobe_connServe"`
 	UprobeConnServeRet                        *ebpf.Program `ebpf:"uprobe_connServeRet"`
+	UprobeError                               *ebpf.Program `ebpf:"uprobe_error"`
+	UprobeErrorReturn                         *ebpf.Program `ebpf:"uprobe_errorReturn"`
 	UprobeExecDC                              *ebpf.Program `ebpf:"uprobe_execDC"`
 	UprobeHttp2FramerWriteHeaders             *ebpf.Program `ebpf:"uprobe_http2FramerWriteHeaders"`
 	UprobeHttp2FramerWriteHeadersReturns      *ebpf.Program `ebpf:"uprobe_http2FramerWriteHeaders_returns"`
@@ -231,6 +248,8 @@ func (p *bpfPrograms) Close() error {
 		p.UprobeServeHTTPReturns,
 		p.UprobeConnServe,
 		p.UprobeConnServeRet,
+		p.UprobeError,
+		p.UprobeErrorReturn,
 		p.UprobeExecDC,
 		p.UprobeHttp2FramerWriteHeaders,
 		p.UprobeHttp2FramerWriteHeadersReturns,

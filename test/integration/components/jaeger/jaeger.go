@@ -28,12 +28,18 @@ type Span struct {
 	Duration      int64       `json:"duration"`
 	Tags          []Tag       `json:"tags"`
 	ProcessID     string      `json:"processID"`
+	Logs          []Log       `json:"logs"`
 }
 
 type Tag struct {
 	Key   string      `json:"key"`
 	Type  string      `json:"type"`
 	Value interface{} `json:"value"`
+}
+
+type Log struct {
+	Timestamp int64 `json:"timestamp"`
+	Fields    []Tag `json:"fields"`
 }
 
 type Reference struct {

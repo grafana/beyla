@@ -12,9 +12,8 @@ import (
 
 // instrumentationPoints loads the provided executable and looks for the addresses
 // where the start and return probes must be inserted.
-//
-//nolint:cyclop
-func instrumentationPoints(elfF *elf.File, funcNames []string) (map[string]FuncOffsets, error) {
+// nolint:cyclop
+func instrumentationPoints(elfF *elf.File, funcNames []string) (map[string]FuncOffsets, *gosym.Table, error) {
 	ilog := slog.With("component", "goexec.instructions")
 	ilog.Debug("searching for instrumentation points", "functions", funcNames)
 	functions := map[string]struct{}{}
@@ -23,12 +22,12 @@ func instrumentationPoints(elfF *elf.File, funcNames []string) (map[string]FuncO
 	}
 	symTab, err := findGoSymbolTable(elfF)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	goVersion, _, err := getGoDetails(elfF)
 	if err == nil && !supportedGoVersion(goVersion) {
-		return nil, fmt.Errorf("unsupported Go version: %v. Minimum supported version is %v", goVersion, minGoVersion)
+		return nil, nil, fmt.Errorf("unsupported Go version: %v. Minimum supported version is %v", goVersion, minGoVersion)
 	}
 
 	gosyms := elfF.Section(".gosymtab")
@@ -40,7 +39,7 @@ func instrumentationPoints(elfF *elf.File, funcNames []string) (map[string]FuncO
 	if gosyms == nil {
 		allSyms, err = exec.FindExeSymbols(elfF, functions)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
 
@@ -65,7 +64,7 @@ func instrumentationPoints(elfF *elf.File, funcNames []string) (map[string]FuncO
 
 			offs, ok, err := findFuncOffset(&f, elfF)
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 			if ok {
 				ilog.Debug("found relevant function for instrumentation", "function", fName, "offsets", offs)
@@ -74,7 +73,7 @@ func instrumentationPoints(elfF *elf.File, funcNames []string) (map[string]FuncO
 		}
 	}
 
-	return allOffsets, nil
+	return allOffsets, symTab, nil
 }
 
 func handleStaticSymbol(fName string, allOffsets map[string]FuncOffsets, allSyms map[string]exec.Sym, ilog *slog.Logger) {

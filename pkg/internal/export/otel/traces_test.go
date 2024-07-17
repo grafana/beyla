@@ -318,18 +318,23 @@ func TestGenerateTraces(t *testing.T) {
 		spanID, _ := trace.SpanIDFromHex("89cbc1f60aab3b01")
 		traceID, _ := trace.TraceIDFromHex("eae56fbbec9505c102e8aabfc6b5c481")
 		span := &request.Span{
-			Type:         request.EventTypeHTTP,
-			RequestStart: start.UnixNano(),
-			Start:        start.Add(time.Second).UnixNano(),
-			End:          start.Add(3 * time.Second).UnixNano(),
-			Method:       "GET",
-			Route:        "/test",
-			Status:       200,
-			ParentSpanID: parentSpanID,
-			TraceID:      traceID,
-			SpanID:       spanID,
+			Type:            request.EventTypeHTTP,
+			RequestStart:    start.UnixNano(),
+			Start:           start.Add(time.Second).UnixNano(),
+			End:             start.Add(3 * time.Second).UnixNano(),
+			Method:          "GET",
+			Route:           "/test",
+			Status:          200,
+			ParentSpanID:    parentSpanID,
+			TraceID:         traceID,
+			SpanID:          spanID,
+			ErrorMessage:    "crash",
+			ErrorStacktrace: "function\nline",
 		}
-		traces := GenerateTraces(span, map[attr.Name]struct{}{})
+		cfg := TracesConfig{
+			ReportExceptionEvents: true,
+		}
+		traces := GenerateTraces(cfg, span, map[attr.Name]struct{}{})
 
 		assert.Equal(t, 1, traces.ResourceSpans().Len())
 		assert.Equal(t, 1, traces.ResourceSpans().At(0).ScopeSpans().Len())
@@ -357,6 +362,13 @@ func TestGenerateTraces(t *testing.T) {
 
 		assert.NotEqual(t, spans.At(0).SpanID().String(), spans.At(1).SpanID().String())
 		assert.NotEqual(t, spans.At(1).SpanID().String(), spans.At(2).SpanID().String())
+
+		e := spans.At(2).Events().At(0)
+		val, _ := e.Attributes().Get(string(semconv.ExceptionMessageKey))
+		assert.Equal(t, "crash", val.AsString())
+		val, _ = e.Attributes().Get(string(semconv.ExceptionStacktraceKey))
+		assert.Equal(t, "function\nline", val.AsString())
+
 	})
 
 	t.Run("test with subtraces - ids set bpf layer", func(t *testing.T) {
@@ -374,7 +386,8 @@ func TestGenerateTraces(t *testing.T) {
 			SpanID:       spanID,
 			TraceID:      traceID,
 		}
-		traces := GenerateTraces(span, map[attr.Name]struct{}{})
+		cfg := TracesConfig{}
+		traces := GenerateTraces(cfg, span, map[attr.Name]struct{}{})
 
 		assert.Equal(t, 1, traces.ResourceSpans().Len())
 		assert.Equal(t, 1, traces.ResourceSpans().At(0).ScopeSpans().Len())
@@ -410,7 +423,8 @@ func TestGenerateTraces(t *testing.T) {
 			Route:        "/test",
 			Status:       200,
 		}
-		traces := GenerateTraces(span, map[attr.Name]struct{}{})
+		cfg := TracesConfig{}
+		traces := GenerateTraces(cfg, span, map[attr.Name]struct{}{})
 
 		assert.Equal(t, 1, traces.ResourceSpans().Len())
 		assert.Equal(t, 1, traces.ResourceSpans().At(0).ScopeSpans().Len())
@@ -447,7 +461,8 @@ func TestGenerateTraces(t *testing.T) {
 			SpanID:       spanID,
 			TraceID:      traceID,
 		}
-		traces := GenerateTraces(span, map[attr.Name]struct{}{})
+		cfg := TracesConfig{}
+		traces := GenerateTraces(cfg, span, map[attr.Name]struct{}{})
 
 		assert.Equal(t, 1, traces.ResourceSpans().Len())
 		assert.Equal(t, 1, traces.ResourceSpans().At(0).ScopeSpans().Len())
@@ -472,7 +487,8 @@ func TestGenerateTraces(t *testing.T) {
 			ParentSpanID: parentSpanID,
 			TraceID:      traceID,
 		}
-		traces := GenerateTraces(span, map[attr.Name]struct{}{})
+		cfg := TracesConfig{}
+		traces := GenerateTraces(cfg, span, map[attr.Name]struct{}{})
 
 		assert.Equal(t, 1, traces.ResourceSpans().Len())
 		assert.Equal(t, 1, traces.ResourceSpans().At(0).ScopeSpans().Len())
@@ -492,7 +508,8 @@ func TestGenerateTraces(t *testing.T) {
 			Method:       "GET",
 			Route:        "/test",
 		}
-		traces := GenerateTraces(span, map[attr.Name]struct{}{})
+		cfg := TracesConfig{}
+		traces := GenerateTraces(cfg, span, map[attr.Name]struct{}{})
 
 		assert.Equal(t, 1, traces.ResourceSpans().Len())
 		assert.Equal(t, 1, traces.ResourceSpans().At(0).ScopeSpans().Len())
@@ -508,7 +525,8 @@ func TestGenerateTraces(t *testing.T) {
 func TestGenerateTracesAttributes(t *testing.T) {
 	t.Run("test SQL trace generation, no statement", func(t *testing.T) {
 		span := makeSQLRequestSpan("SELECT password FROM credentials WHERE username=\"bill\"")
-		traces := GenerateTraces(&span, map[attr.Name]struct{}{})
+		cfg := TracesConfig{}
+		traces := GenerateTraces(cfg, &span, map[attr.Name]struct{}{})
 
 		assert.Equal(t, 1, traces.ResourceSpans().Len())
 		assert.Equal(t, 1, traces.ResourceSpans().At(0).ScopeSpans().Len())
@@ -529,7 +547,8 @@ func TestGenerateTracesAttributes(t *testing.T) {
 
 	t.Run("test SQL trace generation, unknown attribute", func(t *testing.T) {
 		span := makeSQLRequestSpan("SELECT password FROM credentials WHERE username=\"bill\"")
-		traces := GenerateTraces(&span, map[attr.Name]struct{}{"db.operation.name": {}})
+		cfg := TracesConfig{}
+		traces := GenerateTraces(cfg, &span, map[attr.Name]struct{}{"db.operation.name": {}})
 
 		assert.Equal(t, 1, traces.ResourceSpans().Len())
 		assert.Equal(t, 1, traces.ResourceSpans().At(0).ScopeSpans().Len())
@@ -550,7 +569,8 @@ func TestGenerateTracesAttributes(t *testing.T) {
 
 	t.Run("test SQL trace generation, unknown attribute", func(t *testing.T) {
 		span := makeSQLRequestSpan("SELECT password FROM credentials WHERE username=\"bill\"")
-		traces := GenerateTraces(&span, map[attr.Name]struct{}{attr.DBQueryText: {}})
+		cfg := TracesConfig{}
+		traces := GenerateTraces(cfg, &span, map[attr.Name]struct{}{attr.DBQueryText: {}})
 
 		assert.Equal(t, 1, traces.ResourceSpans().Len())
 		assert.Equal(t, 1, traces.ResourceSpans().At(0).ScopeSpans().Len())
@@ -570,7 +590,8 @@ func TestGenerateTracesAttributes(t *testing.T) {
 	})
 	t.Run("test Kafka trace generation", func(t *testing.T) {
 		span := request.Span{Type: request.EventTypeKafkaClient, Method: "process", Path: "important-topic", OtherNamespace: "test"}
-		traces := GenerateTraces(&span, map[attr.Name]struct{}{})
+		cfg := TracesConfig{}
+		traces := GenerateTraces(cfg, &span, map[attr.Name]struct{}{})
 
 		assert.Equal(t, 1, traces.ResourceSpans().Len())
 		assert.Equal(t, 1, traces.ResourceSpans().At(0).ScopeSpans().Len())
@@ -1143,7 +1164,8 @@ func generateTracesForSpans(t *testing.T, tr *tracesOTELReceiver, spans []reques
 		if span.IgnoreSpan == request.IgnoreTraces || !tr.acceptSpan(span) {
 			continue
 		}
-		res = append(res, GenerateTraces(span, traceAttrs))
+		cfg := TracesConfig{}
+		res = append(res, GenerateTraces(cfg, span, traceAttrs))
 	}
 
 	return res

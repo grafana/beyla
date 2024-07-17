@@ -76,9 +76,6 @@ type ID struct {
 	// HostName running the process. It will default to the Beyla host and will be overridden
 	// by other metadata if available (e.g., Pod Name, Node Name, etc...)
 	HostName string
-
-	// HostID is the cloud instance ID or the local machine ID
-	HostID string
 }
 
 func (i *ID) GetUID() UID {

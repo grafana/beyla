@@ -1,9 +1,10 @@
-package traces
+package global
 
 import (
 	"bytes"
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 
 	"go.opentelemetry.io/contrib/detectors/aws/ec2"
@@ -20,8 +21,13 @@ type fetcher struct {
 	fetch hostIDFetcher
 }
 
-func fetchHostID(ctx context.Context) string {
-	log := rlog().With("func", "fetchHostID")
+// FetchHostID tries to get the host ID from one of the following sources, by priority
+// 1. If Beyla runs in AWS, GCP or Azure, it will take the instance ID
+// 2. Otherwise, will try to read the machine ID
+// This process is known to fail when Beyla runs inside a Kubernetes Pod out of the cloud providers
+// mentioned in (1). In that case, the host.id will be later set to the full hostname.
+func FetchHostID(ctx context.Context) string {
+	log := slog.With("func", "fetchHostID")
 	fetchers := []fetcher{
 		{name: "AWS", fetch: ec2HostIDFetcher},
 		{name: "Azure", fetch: azureHostIDFetcher},
@@ -38,9 +44,14 @@ func fetchHostID(ctx context.Context) string {
 			log.Info("got host ID", "hostID", id)
 			return id
 		}
-		log.Debug("didn't get host ID", "error", err)
+		log.Debug("didn't get host ID", "cause", err)
 	}
-	return ""
+	log.Debug("falling back to local host ID")
+	hid, err := os.Hostname()
+	if err != nil {
+		log.Warn("getting host ID from host name", "error", err)
+	}
+	return hid
 }
 
 func azureHostIDFetcher(ctx context.Context) (string, error) {

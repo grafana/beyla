@@ -59,13 +59,13 @@ var DefaultBuckets = Buckets{
 	RequestSizeHistogram: []float64{0, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192},
 }
 
-func getAppResourceAttrs(service *svc.ID) []attribute.KeyValue {
-	return append(getResourceAttrs(service),
+func getAppResourceAttrs(hostID string, service *svc.ID) []attribute.KeyValue {
+	return append(getResourceAttrs(hostID, service),
 		semconv.ServiceInstanceID(service.Instance),
 	)
 }
 
-func getResourceAttrs(service *svc.ID) []attribute.KeyValue {
+func getResourceAttrs(hostID string, service *svc.ID) []attribute.KeyValue {
 	attrs := []attribute.KeyValue{
 		semconv.ServiceName(service.Name),
 		// SpanMetrics requires an extra attribute besides service name
@@ -76,6 +76,7 @@ func getResourceAttrs(service *svc.ID) []attribute.KeyValue {
 		// We set the SDK name as Beyla, so we can distinguish beyla generated metrics from other SDKs
 		semconv.TelemetrySDKNameKey.String("beyla"),
 		semconv.HostName(service.HostName),
+		semconv.HostID(hostID),
 	}
 
 	if service.Namespace != "" {

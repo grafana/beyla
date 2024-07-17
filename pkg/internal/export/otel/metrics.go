@@ -165,6 +165,7 @@ func (m *MetricsConfig) Enabled() bool {
 type MetricsReporter struct {
 	ctx        context.Context
 	cfg        *MetricsConfig
+	hostID     string
 	attributes *attributes.AttrSelector
 	exporter   metric.Exporter
 	reporters  ReporterPool[*svc.ID, *Metrics]
@@ -250,6 +251,7 @@ func newMetricsReporter(
 		cfg:        cfg,
 		is:         is,
 		attributes: attribProvider,
+		hostID:     ctxInfo.HostID,
 	}
 	// initialize attribute getters
 	if is.HTTPEnabled() {
@@ -522,7 +524,7 @@ func (mr *MetricsReporter) setupGraphMeters(m *Metrics, meter instrument.Meter) 
 func (mr *MetricsReporter) newMetricSet(service *svc.ID) (*Metrics, error) {
 	mlog := mlog().With("service", service)
 	mlog.Debug("creating new Metrics reporter")
-	resources := resource.NewWithAttributes(semconv.SchemaURL, getAppResourceAttrs(service)...)
+	resources := resource.NewWithAttributes(semconv.SchemaURL, getAppResourceAttrs(mr.hostID, service)...)
 
 	opts := []metric.Option{
 		metric.WithResource(resources),
@@ -691,6 +693,7 @@ func (mr *MetricsReporter) metricResourceAttributes(service *svc.ID) attribute.S
 		semconv.TelemetrySDKLanguageKey.String(service.SDKLanguage.String()),
 		semconv.TelemetrySDKNameKey.String("beyla"),
 		request.SourceMetric("beyla"),
+		semconv.HostID(mr.hostID),
 	}
 	for k, v := range service.Metadata {
 		attrs = append(attrs, k.OTEL().String(v))
@@ -708,6 +711,7 @@ func (mr *MetricsReporter) spanMetricAttributes(span *request.Span) attribute.Se
 		request.SpanNameMetric(TraceName(span)),
 		request.StatusCodeMetric(int(request.SpanStatusCode(span))),
 		request.SourceMetric("beyla"),
+		semconv.HostID(mr.hostID),
 	}
 
 	return attribute.NewSet(attrs...)

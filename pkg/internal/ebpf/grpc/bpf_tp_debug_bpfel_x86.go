@@ -110,7 +110,7 @@ type bpf_tp_debugProgramSpecs struct {
 	UprobeClientStreamRecvMsgReturn     *ebpf.ProgramSpec `ebpf:"uprobe_clientStream_RecvMsg_return"`
 	UprobeGrpcFramerWriteHeaders        *ebpf.ProgramSpec `ebpf:"uprobe_grpcFramerWriteHeaders"`
 	UprobeGrpcFramerWriteHeadersReturns *ebpf.ProgramSpec `ebpf:"uprobe_grpcFramerWriteHeaders_returns"`
-	UprobeHttp2ServerHandleStreams      *ebpf.ProgramSpec `ebpf:"uprobe_http2Server_handleStreams"`
+	UprobeHttp2ServerOperateHeaders     *ebpf.ProgramSpec `ebpf:"uprobe_http2Server_operateHeaders"`
 	UprobeServerHandleStream            *ebpf.ProgramSpec `ebpf:"uprobe_server_handleStream"`
 	UprobeServerHandleStreamReturn      *ebpf.ProgramSpec `ebpf:"uprobe_server_handleStream_return"`
 	UprobeTransportHttp2ClientNewStream *ebpf.ProgramSpec `ebpf:"uprobe_transport_http2Client_NewStream"`
@@ -206,7 +206,7 @@ type bpf_tp_debugPrograms struct {
 	UprobeClientStreamRecvMsgReturn     *ebpf.Program `ebpf:"uprobe_clientStream_RecvMsg_return"`
 	UprobeGrpcFramerWriteHeaders        *ebpf.Program `ebpf:"uprobe_grpcFramerWriteHeaders"`
 	UprobeGrpcFramerWriteHeadersReturns *ebpf.Program `ebpf:"uprobe_grpcFramerWriteHeaders_returns"`
-	UprobeHttp2ServerHandleStreams      *ebpf.Program `ebpf:"uprobe_http2Server_handleStreams"`
+	UprobeHttp2ServerOperateHeaders     *ebpf.Program `ebpf:"uprobe_http2Server_operateHeaders"`
 	UprobeServerHandleStream            *ebpf.Program `ebpf:"uprobe_server_handleStream"`
 	UprobeServerHandleStreamReturn      *ebpf.Program `ebpf:"uprobe_server_handleStream_return"`
 	UprobeTransportHttp2ClientNewStream *ebpf.Program `ebpf:"uprobe_transport_http2Client_NewStream"`
@@ -223,7 +223,7 @@ func (p *bpf_tp_debugPrograms) Close() error {
 		p.UprobeClientStreamRecvMsgReturn,
 		p.UprobeGrpcFramerWriteHeaders,
 		p.UprobeGrpcFramerWriteHeadersReturns,
-		p.UprobeHttp2ServerHandleStreams,
+		p.UprobeHttp2ServerOperateHeaders,
 		p.UprobeServerHandleStream,
 		p.UprobeServerHandleStreamReturn,
 		p.UprobeTransportHttp2ClientNewStream,

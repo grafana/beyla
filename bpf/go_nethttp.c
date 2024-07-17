@@ -250,30 +250,7 @@ int uprobe_ServeHTTPReturns(struct pt_regs *ctx) {
             // We can't find the connection info, this typically means there are too many requests per second
             // and the connection map is too small for the workload.
             bpf_dbg_printk("Can't find connection info for %llx", goroutine_addr);
-
-            // Attempt last resort read, in case the connection info is one of the standard http ones and not
-            // overloaded by the client app
-            void *c_ptr = 0;
-            u8 found = 0;
-            bpf_probe_read(&c_ptr, sizeof(c_ptr), (void *)(resp_ptr)); // load c
-            if (c_ptr) {
-                void *rwc_ptr = c_ptr + 8 + c_rwc_pos; // load rwc, embedded struct
-                if (rwc_ptr) {
-                    void *conn_ptr = 0;
-                    bpf_probe_read(&conn_ptr, sizeof(conn_ptr), (void *)(rwc_ptr + rwc_conn_pos)); // find conn
-                    if (conn_ptr) {
-                        found = get_conn_info(conn_ptr, &trace->conn);
-                        if (found) {
-                            bpf_dbg_printk("found backup connection info");
-                        }
-                        //dbg_print_http_connection_info(&conn);
-                    }
-                }
-            }
-
-            if (!found) {
-                __builtin_memset(&trace->conn, 0, sizeof(connection_info_t));
-            }
+            __builtin_memset(&trace->conn, 0, sizeof(connection_info_t));
         }
     }
 

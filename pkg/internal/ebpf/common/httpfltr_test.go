@@ -49,6 +49,18 @@ func TestHostInfo(t *testing.T) {
 
 	event = BPFHTTPInfo{
 		ConnInfo: bpfConnectionInfoT{
+			S_addr: [16]byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff, 0x0a, 0x2a, 0, 1},
+			D_addr: [16]byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff, 0x0a, 0x2a, 0, 0xb9},
+		},
+	}
+
+	source, target = (*BPFConnInfo)(unsafe.Pointer(&event.ConnInfo)).reqHostInfo()
+
+	assert.Equal(t, "10.42.0.1", source)
+	assert.Equal(t, "10.42.0.185", target)
+
+	event = BPFHTTPInfo{
+		ConnInfo: bpfConnectionInfoT{
 			S_addr: [16]byte{1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff, 192, 168, 0, 1},
 			D_addr: [16]byte{1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff, 8, 8, 8, 8},
 		},
@@ -117,7 +129,7 @@ func TestToRequestTrace(t *testing.T) {
 		Start:        123456,
 		End:          789012,
 		HostPort:     1,
-		ServiceID:    svc.ID{SDKLanguage: svc.InstrumentableGeneric},
+		ServiceID:    svc.ID{UID: result.ServiceID.UID, SDKLanguage: svc.InstrumentableGeneric},
 	}
 	assert.Equal(t, expected, result)
 }
@@ -153,7 +165,7 @@ func TestToRequestTraceNoConnection(t *testing.T) {
 		End:          789012,
 		Status:       200,
 		HostPort:     7033,
-		ServiceID:    svc.ID{SDKLanguage: svc.InstrumentableGeneric},
+		ServiceID:    svc.ID{UID: result.ServiceID.UID, SDKLanguage: svc.InstrumentableGeneric},
 	}
 	assert.Equal(t, expected, result)
 }
@@ -190,7 +202,7 @@ func TestToRequestTrace_BadHost(t *testing.T) {
 		Start:        123456,
 		End:          789012,
 		HostPort:     0,
-		ServiceID:    svc.ID{SDKLanguage: svc.InstrumentableGeneric},
+		ServiceID:    svc.ID{UID: result.ServiceID.UID, SDKLanguage: svc.InstrumentableGeneric},
 	}
 	assert.Equal(t, expected, result)
 

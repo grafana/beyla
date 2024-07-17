@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"unsafe"
 
 	"github.com/cilium/ebpf/ringbuf"
 	"go.opentelemetry.io/otel/trace"
@@ -81,7 +82,7 @@ func HTTPInfoEventToSpan(event BPFHTTPInfo) (request.Span, bool, error) {
 	// When we can't find the connection info, we signal that through making the
 	// source and destination ports equal to max short. E.g. async SSL
 	if event.ConnInfo.S_port != 0 || event.ConnInfo.D_port != 0 {
-		source, target := event.hostInfo()
+		source, target := (*BPFConnInfo)(unsafe.Pointer(&event.ConnInfo)).reqHostInfo()
 		result.Host = target
 		result.Peer = source
 	} else {
@@ -166,15 +167,6 @@ func (event *BPFHTTPInfo) hostFromBuf() (string, int) {
 	port, _ := strconv.Atoi(portStr)
 
 	return host, port
-}
-
-func (event *BPFHTTPInfo) hostInfo() (source, target string) {
-	src := make(net.IP, net.IPv6len)
-	dst := make(net.IP, net.IPv6len)
-	copy(src, event.ConnInfo.S_addr[:])
-	copy(dst, event.ConnInfo.D_addr[:])
-
-	return src.String(), dst.String()
 }
 
 func commName(pid uint32) string {

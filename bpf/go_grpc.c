@@ -188,8 +188,7 @@ int uprobe_server_handleStream_return(struct pt_regs *ctx) {
             bpf_probe_read(&conn_conn_ptr, sizeof(conn_conn_ptr), conn_ptr + 8);
             bpf_dbg_printk("conn_conn_ptr %llx", conn_conn_ptr);
             if (conn_conn_ptr) {                
-                get_conn_info(conn_conn_ptr, &trace->conn);
-                found_conn = 1;
+                found_conn = get_conn_info(conn_conn_ptr, &trace->conn);
             }
         } 
     }
@@ -431,8 +430,10 @@ int uprobe_transport_http2Client_NewStream(struct pt_regs *ctx) {
             bpf_dbg_printk("conn_conn_ptr %llx", conn_conn_ptr);
             if (conn_conn_ptr) {                
                 connection_info_t conn = {0};
-                get_conn_info(conn_conn_ptr, &conn);
-                bpf_map_update_elem(&ongoing_client_connections, &goroutine_addr, &conn, BPF_ANY);
+                u8 ok = get_conn_info(conn_conn_ptr, &conn);
+                if (ok) {
+                    bpf_map_update_elem(&ongoing_client_connections, &goroutine_addr, &conn, BPF_ANY);
+                }
             }
         } 
 

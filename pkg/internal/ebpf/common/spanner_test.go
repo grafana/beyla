@@ -2,6 +2,7 @@ package ebpfcommon
 
 import (
 	"testing"
+	"unsafe"
 
 	"github.com/stretchr/testify/assert"
 
@@ -113,4 +114,12 @@ func TestSpanNesting(t *testing.T) {
 	a = makeSpanWithTimings(9999, 11000, 19999)
 	b = makeSpanWithTimings(10000, 30000, 30000)
 	assert.False(t, (&a).Inside(&b))
+}
+
+func Test_EmptyHostInfo(t *testing.T) {
+	tr := HTTPRequestTrace{}
+	src, dest := (*BPFConnInfo)(unsafe.Pointer(&tr.Conn)).reqHostInfo()
+
+	assert.Equal(t, src, "")
+	assert.Equal(t, dest, "")
 }

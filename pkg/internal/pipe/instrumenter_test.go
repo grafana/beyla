@@ -44,7 +44,7 @@ func gctx(groups attributes.AttrGroups) *global.ContextInfo {
 }
 
 var allMetrics = attributes.Selection{
-	attributes.HTTPServerDuration.Section: attributes.InclusionLists{Include: []string{"*"}},
+	"*": attributes.InclusionLists{Include: []string{"*"}},
 }
 
 func allMetricsBut(patterns ...string) attributes.Selection {

@@ -2,7 +2,6 @@ package transform
 
 import (
 	"context"
-	"fmt"
 	"net"
 	"strings"
 	"time"
@@ -169,8 +168,6 @@ func (nr *NameResolver) resolveIP(ip string) string {
 	if host, ok := nr.cache.Get(ip); ok {
 		return host
 	}
-
-	fmt.Printf("**** resolving ip %s ****", ip)
 
 	var r *net.Resolver
 	addr, err := r.LookupAddr(context.Background(), ip)

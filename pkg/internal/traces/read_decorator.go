@@ -55,9 +55,10 @@ type ReadDecorator struct {
 type decorator func(spans []request.Span)
 
 func ReadFromChannel(ctx context.Context, r *ReadDecorator) pipe.StartFunc[[]request.Span] {
-	decorate := getDecorator(&r.InstanceID)
+	decorate := getDecorator(ctx, &r.InstanceID)
 	return func(out chan<- []request.Span) {
 		cancelChan := ctx.Done()
+
 		for {
 			select {
 			case trace, ok := <-r.TracesInput:
@@ -76,8 +77,8 @@ func ReadFromChannel(ctx context.Context, r *ReadDecorator) pipe.StartFunc[[]req
 	}
 }
 
-func getDecorator(cfg *InstanceIDConfig) decorator {
-	hnPidDecorator := hostNamePIDDecorator(cfg)
+func getDecorator(ctx context.Context, cfg *InstanceIDConfig) decorator {
+	hnPidDecorator := hostNamePIDDecorator(ctx, cfg)
 	if cfg.OverrideInstanceID == "" {
 		return hnPidDecorator
 	}
@@ -91,7 +92,7 @@ func getDecorator(cfg *InstanceIDConfig) decorator {
 	}
 }
 
-func hostNamePIDDecorator(cfg *InstanceIDConfig) decorator {
+func hostNamePIDDecorator(ctx context.Context, cfg *InstanceIDConfig) decorator {
 	// TODO: periodically update in case the current Beyla instance is created from a VM snapshot running as a different hostname
 	resolver := hostname.CreateResolver(cfg.OverrideHostname, "", cfg.HostnameDNSResolution)
 	fullHostName, _, err := resolver.Query()
@@ -102,6 +103,11 @@ func hostNamePIDDecorator(cfg *InstanceIDConfig) decorator {
 			"error", err)
 	} else {
 		log.Info("using hostname", "hostname", fullHostName)
+	}
+	hostID := fetchHostID(ctx)
+	if hostID == "" {
+		rlog().Debug("using host name as host ID", "hostname", fullHostName)
+		hostID = fullHostName
 	}
 
 	// caching instance ID composition for speed and saving memory generation
@@ -121,6 +127,7 @@ func hostNamePIDDecorator(cfg *InstanceIDConfig) decorator {
 			spans[i].ServiceID.Instance = instanceID
 			spans[i].ServiceID.UID = svc.UID(instanceID)
 			spans[i].ServiceID.HostName = fullHostName
+			spans[i].ServiceID.HostID = hostID
 		}
 	}
 }

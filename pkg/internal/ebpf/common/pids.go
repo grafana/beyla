@@ -99,6 +99,7 @@ func (pf *PIDsFilter) ValidPID(userPID, ns uint32, pidType PIDType) bool {
 
 }
 
+//nolint:gocritic
 func (pf *PIDsFilter) CurrentPIDs(t PIDType) map[uint32]map[uint32]svc.ID {
 	pf.mux.RLock()
 	defer pf.mux.RUnlock()

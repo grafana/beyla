@@ -1,9 +1,8 @@
-package transform
+package traces
 
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"os"
 
@@ -17,29 +16,31 @@ import (
 type hostIDFetcher func(context.Context) (string, error)
 
 type fetcher struct {
-	name string
+	name  string
 	fetch hostIDFetcher
 }
 
-func fetchHostID(ctx context.Context) (string, error) {
-	log := klog().With("func", "fetchHostID")
+func fetchHostID(ctx context.Context) string {
+	log := rlog().With("func", "fetchHostID")
 	fetchers := []fetcher{
 		{name: "AWS", fetch: ec2HostIDFetcher},
 		{name: "Azure", fetch: azureHostIDFetcher},
 		{name: "GCP", fetch: gcpHostIDFetcher},
-		{name: "fallback", fetch: linuxLocalMachineIDFetcher},
+		{name: "local", fetch: linuxLocalMachineIDFetcher},
 	}
+	// if all the methods fail, keep at least the fallback method error
+	var err error
 	for _, f := range fetchers {
 		log := log.With("fetcher", f.name)
 		log.Debug("trying to fetch host ID")
-		if id, err := f.fetch(ctx); err != nil {
-			log.Debug("didn't get host ID", "error", err)
-		} else {
+		var id string
+		if id, err = f.fetch(ctx); err == nil {
 			log.Info("got host ID", "hostID", id)
-			return id, nil
+			return id
 		}
+		log.Debug("didn't get host ID", "error", err)
 	}
-	return "", errors.New("could not find host ID")
+	return ""
 }
 
 func azureHostIDFetcher(ctx context.Context) (string, error) {

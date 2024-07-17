@@ -54,6 +54,9 @@ func NetPrometheusEndpoint(
 	if err != nil {
 		return nil, err
 	}
+	if cfg.Config.Registry != nil {
+		return reporter.collectMetrics, nil
+	}
 	return reporter.reportMetrics, nil
 }
 
@@ -95,14 +98,21 @@ func newNetReporter(
 			Help: "bytes submitted from a source network endpoint to a destination network endpoint",
 		}, labelNames).MetricVec, clock.Time, cfg.Config.TTL),
 	}
-
-	mr.promConnect.Register(cfg.Config.Port, cfg.Config.Path, mr.flowBytes)
+	if cfg.Config.Registry != nil {
+		cfg.Config.Registry.MustRegister(mr.flowBytes)
+	} else {
+		mr.promConnect.Register(cfg.Config.Port, cfg.Config.Path, mr.flowBytes)
+	}
 
 	return mr, nil
 }
 
 func (r *netMetricsReporter) reportMetrics(input <-chan []*ebpf.Record) {
 	go r.promConnect.StartHTTP(r.bgCtx)
+	r.collectMetrics(input)
+}
+
+func (r *netMetricsReporter) collectMetrics(input <-chan []*ebpf.Record) {
 	for flows := range input {
 		// clock needs to be updated to let the expirer
 		// remove the old metrics

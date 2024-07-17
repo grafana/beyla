@@ -44,6 +44,13 @@ typedef struct grpc_client_func_invocation {
 
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
+    __type(key, void *); // key: pointer to the transport pointer
+    __type(value, u8);
+    __uint(max_entries, MAX_CONCURRENT_REQUESTS);
+} ongoing_grpc_transports SEC(".maps");
+
+struct {
+    __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __type(key, void *); // key: pointer to the request goroutine
     __type(value, grpc_client_func_invocation_t);
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
@@ -71,6 +78,9 @@ struct {
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
 } ongoing_grpc_header_writes SEC(".maps");
 
+
+#define TRANSPORT_HTTP2   1
+#define TRANSPORT_HANDLER 2
 
 // To be Injected from the user space during the eBPF program load & initialization
 
@@ -104,7 +114,7 @@ int uprobe_server_handleStream(struct pt_regs *ctx) {
     grpc_srv_func_invocation_t invocation = {
         .start_monotime_ns = bpf_ktime_get_ns(),
         .stream = (u64)stream_ptr,
-        .tp = {0}
+        .tp = {0},
     };
 
     if (stream_ptr) {
@@ -120,6 +130,18 @@ int uprobe_server_handleStream(struct pt_regs *ctx) {
     if (bpf_map_update_elem(&ongoing_grpc_server_requests, &goroutine_addr, &invocation, BPF_ANY)) {
         bpf_dbg_printk("can't update grpc map element");
     }
+
+    return 0;
+}
+
+SEC("uprobe/http2Server_operateHeaders")
+int uprobe_http2Server_operateHeaders(struct pt_regs *ctx) {
+    void *tr = GO_PARAM1(ctx);
+    bpf_dbg_printk("=== uprobe/http2Server_operateHeaders tr %llx === ", tr);
+
+    u8 type = TRANSPORT_HTTP2;
+
+    bpf_map_update_elem(&ongoing_grpc_transports, &tr, &type, BPF_ANY);
 
     return 0;
 }
@@ -181,16 +203,20 @@ int uprobe_server_handleStream_return(struct pt_regs *ctx) {
 
     bpf_dbg_printk("st_ptr %llx", st_ptr);
     if (st_ptr) {
-        void *conn_ptr = st_ptr + grpc_st_conn_pos;
-        bpf_dbg_printk("conn_ptr %llx", conn_ptr);
-        if (conn_ptr) {
-            void *conn_conn_ptr = 0;
-            bpf_probe_read(&conn_conn_ptr, sizeof(conn_conn_ptr), conn_ptr + 8);
-            bpf_dbg_printk("conn_conn_ptr %llx", conn_conn_ptr);
-            if (conn_conn_ptr) {                
-                found_conn = get_conn_info(conn_conn_ptr, &trace->conn);
-            }
-        } 
+        u8 *type = bpf_map_lookup_elem(&ongoing_grpc_transports, &st_ptr);
+
+        if (type && (*type == TRANSPORT_HTTP2)) {
+            void *conn_ptr = st_ptr + grpc_st_conn_pos;
+            bpf_dbg_printk("conn_ptr %llx", conn_ptr);
+            if (conn_ptr) {
+                void *conn_conn_ptr = 0;
+                bpf_probe_read(&conn_conn_ptr, sizeof(conn_conn_ptr), conn_ptr + 8);
+                bpf_dbg_printk("conn_conn_ptr %llx", conn_conn_ptr);
+                if (conn_conn_ptr) {                
+                    found_conn = get_conn_info(conn_conn_ptr, &trace->conn);
+                }
+            } 
+        }
     }
 
     if (!found_conn) {
@@ -479,6 +505,11 @@ struct {
 SEC("uprobe/grpcFramerWriteHeaders")
 int uprobe_grpcFramerWriteHeaders(struct pt_regs *ctx) {
     bpf_dbg_printk("=== uprobe/proc grpc Framer writeHeaders === ");
+
+    if (framer_w_pos == 0) {
+        bpf_dbg_printk("framer w not found");
+        return 0;
+    }
 
     void *framer = GO_PARAM1(ctx);
     u64 stream_id = (u64)GO_PARAM2(ctx);

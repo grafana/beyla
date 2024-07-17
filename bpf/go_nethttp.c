@@ -608,6 +608,11 @@ SEC("uprobe/http2FramerWriteHeaders")
 int uprobe_http2FramerWriteHeaders(struct pt_regs *ctx) {
     bpf_dbg_printk("=== uprobe/proc http2 Framer writeHeaders === ");
 
+    if (framer_w_pos == 0) {
+        bpf_dbg_printk("framer w not found");
+        return 0;
+    }
+
     void *framer = GO_PARAM1(ctx);
     u64 stream_id = (u64)GO_PARAM2(ctx);
 

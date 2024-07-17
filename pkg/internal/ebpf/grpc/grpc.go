@@ -114,6 +114,16 @@ func (p *Tracer) Constants(_ *exec.FileInfo, offsets *goexec.Offsets) map[string
 	} {
 		constants[s] = offsets.Field[s]
 	}
+
+	// fix-up optional
+	for _, s := range []string{
+		"framer_w_pos",
+	} {
+		if constants[s] == nil {
+			constants[s] = uint64(0)
+		}
+	}
+
 	return constants
 }
 
@@ -158,6 +168,12 @@ func (p *Tracer) GoProbes() map[string]ebpfcommon.FunctionPrograms {
 		},
 		"google.golang.org/grpc/internal/transport.(*http2Client).NewStream": {
 			Start: p.bpfObjects.UprobeTransportHttp2ClientNewStream,
+		},
+		"google.golang.org/grpc/internal/transport.(*http2Server).operateHeaders": {
+			Start: p.bpfObjects.UprobeHttp2ServerHandleStreams,
+		},
+		"google.golang.org/grpc/internal/transport.(*serverHandlerTransport).HandleStreams": {
+			Start: p.bpfObjects.UprobeHttp2ServerHandleStreams,
 		},
 	}
 

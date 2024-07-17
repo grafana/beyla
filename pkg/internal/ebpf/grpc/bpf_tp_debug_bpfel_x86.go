@@ -110,6 +110,7 @@ type bpf_tp_debugProgramSpecs struct {
 	UprobeClientStreamRecvMsgReturn     *ebpf.ProgramSpec `ebpf:"uprobe_clientStream_RecvMsg_return"`
 	UprobeGrpcFramerWriteHeaders        *ebpf.ProgramSpec `ebpf:"uprobe_grpcFramerWriteHeaders"`
 	UprobeGrpcFramerWriteHeadersReturns *ebpf.ProgramSpec `ebpf:"uprobe_grpcFramerWriteHeaders_returns"`
+	UprobeHttp2ServerHandleStreams      *ebpf.ProgramSpec `ebpf:"uprobe_http2Server_handleStreams"`
 	UprobeServerHandleStream            *ebpf.ProgramSpec `ebpf:"uprobe_server_handleStream"`
 	UprobeServerHandleStreamReturn      *ebpf.ProgramSpec `ebpf:"uprobe_server_handleStream_return"`
 	UprobeTransportHttp2ClientNewStream *ebpf.ProgramSpec `ebpf:"uprobe_transport_http2Client_NewStream"`
@@ -131,6 +132,7 @@ type bpf_tp_debugMapSpecs struct {
 	OngoingGrpcHeaderWrites   *ebpf.MapSpec `ebpf:"ongoing_grpc_header_writes"`
 	OngoingGrpcRequestStatus  *ebpf.MapSpec `ebpf:"ongoing_grpc_request_status"`
 	OngoingGrpcServerRequests *ebpf.MapSpec `ebpf:"ongoing_grpc_server_requests"`
+	OngoingGrpcTransports     *ebpf.MapSpec `ebpf:"ongoing_grpc_transports"`
 	OngoingServerConnections  *ebpf.MapSpec `ebpf:"ongoing_server_connections"`
 	OngoingStreams            *ebpf.MapSpec `ebpf:"ongoing_streams"`
 	TraceMap                  *ebpf.MapSpec `ebpf:"trace_map"`
@@ -166,6 +168,7 @@ type bpf_tp_debugMaps struct {
 	OngoingGrpcHeaderWrites   *ebpf.Map `ebpf:"ongoing_grpc_header_writes"`
 	OngoingGrpcRequestStatus  *ebpf.Map `ebpf:"ongoing_grpc_request_status"`
 	OngoingGrpcServerRequests *ebpf.Map `ebpf:"ongoing_grpc_server_requests"`
+	OngoingGrpcTransports     *ebpf.Map `ebpf:"ongoing_grpc_transports"`
 	OngoingServerConnections  *ebpf.Map `ebpf:"ongoing_server_connections"`
 	OngoingStreams            *ebpf.Map `ebpf:"ongoing_streams"`
 	TraceMap                  *ebpf.Map `ebpf:"trace_map"`
@@ -184,6 +187,7 @@ func (m *bpf_tp_debugMaps) Close() error {
 		m.OngoingGrpcHeaderWrites,
 		m.OngoingGrpcRequestStatus,
 		m.OngoingGrpcServerRequests,
+		m.OngoingGrpcTransports,
 		m.OngoingServerConnections,
 		m.OngoingStreams,
 		m.TraceMap,
@@ -202,6 +206,7 @@ type bpf_tp_debugPrograms struct {
 	UprobeClientStreamRecvMsgReturn     *ebpf.Program `ebpf:"uprobe_clientStream_RecvMsg_return"`
 	UprobeGrpcFramerWriteHeaders        *ebpf.Program `ebpf:"uprobe_grpcFramerWriteHeaders"`
 	UprobeGrpcFramerWriteHeadersReturns *ebpf.Program `ebpf:"uprobe_grpcFramerWriteHeaders_returns"`
+	UprobeHttp2ServerHandleStreams      *ebpf.Program `ebpf:"uprobe_http2Server_handleStreams"`
 	UprobeServerHandleStream            *ebpf.Program `ebpf:"uprobe_server_handleStream"`
 	UprobeServerHandleStreamReturn      *ebpf.Program `ebpf:"uprobe_server_handleStream_return"`
 	UprobeTransportHttp2ClientNewStream *ebpf.Program `ebpf:"uprobe_transport_http2Client_NewStream"`
@@ -218,6 +223,7 @@ func (p *bpf_tp_debugPrograms) Close() error {
 		p.UprobeClientStreamRecvMsgReturn,
 		p.UprobeGrpcFramerWriteHeaders,
 		p.UprobeGrpcFramerWriteHeadersReturns,
+		p.UprobeHttp2ServerHandleStreams,
 		p.UprobeServerHandleStream,
 		p.UprobeServerHandleStreamReturn,
 		p.UprobeTransportHttp2ClientNewStream,

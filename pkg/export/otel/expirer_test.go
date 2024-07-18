@@ -10,8 +10,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/grafana/beyla/pkg/internal/export/attributes"
-	"github.com/grafana/beyla/pkg/internal/export/instrumentations"
+	"github.com/grafana/beyla/pkg/export/attributes"
+	"github.com/grafana/beyla/pkg/export/instrumentations"
 	"github.com/grafana/beyla/pkg/internal/netolly/ebpf"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/pkg/internal/request"

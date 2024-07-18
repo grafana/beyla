@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	attr "github.com/grafana/beyla/pkg/internal/export/attributes/names"
+	attr "github.com/grafana/beyla/pkg/export/attributes/names"
 	kube2 "github.com/grafana/beyla/pkg/internal/kube"
 	"github.com/grafana/beyla/pkg/internal/request"
 	"github.com/grafana/beyla/pkg/internal/svc"

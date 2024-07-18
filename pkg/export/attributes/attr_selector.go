@@ -5,7 +5,7 @@ import (
 	"maps"
 	"slices"
 
-	attr "github.com/grafana/beyla/pkg/internal/export/attributes/names"
+	attr "github.com/grafana/beyla/pkg/export/attributes/names"
 	"github.com/grafana/beyla/pkg/internal/helpers"
 )
 

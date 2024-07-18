@@ -8,11 +8,11 @@ import (
 	"github.com/mariomac/pipes/pipe"
 	"github.com/prometheus/client_golang/prometheus"
 
+	"github.com/grafana/beyla/pkg/export/attributes"
+	attr2 "github.com/grafana/beyla/pkg/export/attributes/names"
+	"github.com/grafana/beyla/pkg/export/expire"
+	"github.com/grafana/beyla/pkg/export/otel"
 	"github.com/grafana/beyla/pkg/internal/connector"
-	"github.com/grafana/beyla/pkg/internal/export/attributes"
-	attr2 "github.com/grafana/beyla/pkg/internal/export/attributes/names"
-	"github.com/grafana/beyla/pkg/internal/export/expire"
-	"github.com/grafana/beyla/pkg/internal/export/otel"
 	"github.com/grafana/beyla/pkg/internal/infraolly/process"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 )

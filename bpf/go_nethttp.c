@@ -505,7 +505,7 @@ int uprobe_http2serverConn_runHandler(struct pt_regs *ctx) {
 
     if (sc) {
         void *conn_ptr = 0;
-        bpf_probe_read(&conn_ptr, sizeof(void *), sc + 0x10 + 8);
+        bpf_probe_read(&conn_ptr, sizeof(void *), sc + sc_conn_pos + 8);
         bpf_dbg_printk("conn_ptr %llx", conn_ptr);
         if (conn_ptr) {
             void *conn_conn_ptr = 0;

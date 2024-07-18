@@ -33,9 +33,6 @@
       "vendor/golang.org/x/net/http2/hpack.Encoder": [
         "w"
       ],
-      "net/http.conn": [
-        "rwc" 
-      ],
       "net.TCPConn": [
         "conn" 
       ],
@@ -57,11 +54,7 @@
     "fields": {
       "golang.org/x/net/http2.responseWriterState": [
         "req",
-        "status",
-        "conn"
-      ],
-      "golang.org/x/net/http2.serverConn": [
-        "conn"
+        "status"
       ],
       "golang.org/x/net/http2/hpack.Encoder": [
         "w"
@@ -72,6 +65,9 @@
       ],
       "golang.org/x/net/http2.Framer": [
         "w"
+      ],
+      "golang.org/x/net/http2.serverConn": [
+        "conn"
       ]
     }
   },  

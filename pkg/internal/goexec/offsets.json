@@ -253,18 +253,6 @@
       }
     },
     "golang.org/x/net/http2.responseWriterState": {
-      "conn": {
-        "versions": {
-          "oldest": "0.12.0",
-          "newest": "0.27.0"
-        },
-        "offsets": [
-          {
-            "offset": 16,
-            "since": "0.12.0"
-          }
-        ]
-      },
       "req": {
         "versions": {
           "oldest": "0.12.0",
@@ -622,20 +610,6 @@
     },
     "net/http.Response": {
       "StatusCode": {
-        "versions": {
-          "oldest": "1.17.0",
-          "newest": "1.22.5"
-        },
-        "offsets": [
-          {
-            "offset": 16,
-            "since": "1.17.0"
-          }
-        ]
-      }
-    },
-    "net/http.conn": {
-      "rwc": {
         "versions": {
           "oldest": "1.17.0",
           "newest": "1.22.5"

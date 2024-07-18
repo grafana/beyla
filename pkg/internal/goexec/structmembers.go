@@ -115,13 +115,6 @@ var structMembers = map[string]structInfo{
 		lib: "golang.org/x/net",
 		fields: map[string]string{
 			"status": "rws_status_pos",
-			"conn":   "rws_conn_pos",
-		},
-	},
-	"golang.org/x/net/http2.serverConn": {
-		lib: "golang.org/x/net",
-		fields: map[string]string{
-			"conn": "http2_server_conn_pos",
 		},
 	},
 	"golang.org/x/net/http2.ClientConn": {
@@ -137,10 +130,10 @@ var structMembers = map[string]structInfo{
 			"w": "framer_w_pos",
 		},
 	},
-	"net/http.conn": {
-		lib: "go",
+	"golang.org/x/net/http2.serverConn": {
+		lib: "golang.org/x/net",
 		fields: map[string]string{
-			"rwc": "c_rwc_pos",
+			"conn": "sc_conn_pos",
 		},
 	},
 	"net.TCPConn": {

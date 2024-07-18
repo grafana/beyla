@@ -10,14 +10,30 @@ import (
 	"github.com/mariomac/pipes/pipe"
 
 	attr "github.com/grafana/beyla/pkg/export/attributes/names"
+	"github.com/grafana/beyla/pkg/internal/helpers/maps"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/pkg/internal/request"
 	"github.com/grafana/beyla/pkg/internal/svc"
 	kube2 "github.com/grafana/beyla/pkg/internal/transform/kube"
 )
 
+const (
+	ResolverDNS = maps.Bits(1 << iota)
+	ResolverK8s
+)
+
+func resolverSources(str []string) maps.Bits {
+	return maps.MappedBits(str, map[string]maps.Bits{
+		"dns":        ResolverDNS,
+		"k8s":        ResolverK8s,
+		"kube":       ResolverK8s,
+		"kubernetes": ResolverK8s,
+	}, maps.WithTransform(strings.ToLower))
+}
+
 type NameResolverConfig struct {
-	Enable bool `yaml:"enable" env:"BEYLA_NAME_RESOLVER_ENABLE" default:"false"`
+	// Sources for name resolving. Accepted values: dns, k8s
+	Sources []string `yaml:"sources" env:"BEYLA_NAME_RESOLVER_SOURCES" envSeparator:","`
 	// CacheLen specifies the max size of the LRU cache that is checked before
 	// performing the name lookup. Default: 256
 	CacheLen int `yaml:"cache_len" env:"BEYLA_NAME_RESOLVER_CACHE_LEN"`
@@ -31,11 +47,13 @@ type NameResolver struct {
 	cache *expirable.LRU[string, string]
 	cfg   *NameResolverConfig
 	db    *kube2.Database
+
+	sources maps.Bits
 }
 
 func NameResolutionProvider(ctxInfo *global.ContextInfo, cfg *NameResolverConfig) pipe.MiddleProvider[[]request.Span, []request.Span] {
 	return func() (pipe.MiddleFunc[[]request.Span, []request.Span], error) {
-		if cfg == nil || !cfg.Enable {
+		if cfg == nil || len(cfg.Sources) == 0 {
 			return pipe.Bypass[[]request.Span](), nil
 		}
 		return nameResolver(ctxInfo, cfg)
@@ -44,9 +62,10 @@ func NameResolutionProvider(ctxInfo *global.ContextInfo, cfg *NameResolverConfig
 
 func nameResolver(ctxInfo *global.ContextInfo, cfg *NameResolverConfig) (pipe.MiddleFunc[[]request.Span, []request.Span], error) {
 	nr := NameResolver{
-		cfg:   cfg,
-		db:    ctxInfo.AppO11y.K8sDatabase,
-		cache: expirable.NewLRU[string, string](cfg.CacheLen, nil, cfg.CacheTTL),
+		cfg:     cfg,
+		db:      ctxInfo.AppO11y.K8sDatabase,
+		cache:   expirable.NewLRU[string, string](cfg.CacheLen, nil, cfg.CacheTTL),
+		sources: resolverSources(cfg.Sources),
 	}
 
 	return func(in <-chan []request.Span, out chan<- []request.Span) {
@@ -130,7 +149,7 @@ func (nr *NameResolver) dnsResolve(svc *svc.ID, ip string) (string, string) {
 		return "", ""
 	}
 
-	if nr.db != nil {
+	if nr.sources.Has(ResolverK8s) && nr.db != nil {
 		ipAddr := net.ParseIP(ip)
 
 		if ipAddr != nil && !ipAddr.IsLoopback() {
@@ -142,14 +161,15 @@ func (nr *NameResolver) dnsResolve(svc *svc.ID, ip string) (string, string) {
 		}
 	}
 
-	n := nr.resolveIP(ip)
-	if n == ip {
+	if nr.sources.Has(ResolverDNS) {
+		n := nr.resolveIP(ip)
+		if n == ip {
+			return n, svc.Namespace
+		}
+		n = nr.cleanName(svc, ip, n)
 		return n, svc.Namespace
 	}
-
-	n = nr.cleanName(svc, ip, n)
-
-	return n, svc.Namespace
+	return "", ""
 }
 
 func (nr *NameResolver) resolveFromK8s(ip string) (string, string) {

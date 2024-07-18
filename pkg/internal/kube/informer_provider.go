@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"k8s.io/client-go/kubernetes"
+
+	"github.com/grafana/beyla/pkg/internal/helpers/maps"
 )
 
 type EnableFlag string
@@ -28,7 +30,7 @@ type MetadataProvider struct {
 	syncTimeout    time.Duration
 
 	enable            atomic.Value
-	disabledInformers informerType
+	disabledInformers maps.Bits
 }
 
 func NewMetadataProvider(

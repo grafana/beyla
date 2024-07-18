@@ -11,7 +11,7 @@ import (
 	"github.com/grafana/beyla/pkg/beyla"
 	"github.com/grafana/beyla/pkg/internal/ebpf"
 	"github.com/grafana/beyla/pkg/internal/goexec"
-	"github.com/grafana/beyla/pkg/internal/helpers"
+	"github.com/grafana/beyla/pkg/internal/helpers/maps"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/svc"
 )
@@ -31,7 +31,7 @@ type TraceAttacher struct {
 	// processInstances keeps track of the instances of each process. This will help making sure
 	// that we don't remove the BPF resources of an executable until all their instances are removed
 	// are stopped
-	processInstances helpers.MultiCounter[uint64]
+	processInstances maps.MultiCounter[uint64]
 
 	// keeps a copy of all the tracers for a given executable path
 	existingTracers map[uint64]*ebpf.ProcessTracer
@@ -45,7 +45,7 @@ func TraceAttacherProvider(ta *TraceAttacher) pipe.FinalProvider[[]Event[Instrum
 func (ta *TraceAttacher) attacherLoop() (pipe.FinalFunc[[]Event[Instrumentable]], error) {
 	ta.log = slog.With("component", "discover.TraceAttacher")
 	ta.existingTracers = map[uint64]*ebpf.ProcessTracer{}
-	ta.processInstances = helpers.MultiCounter[uint64]{}
+	ta.processInstances = maps.MultiCounter[uint64]{}
 	ta.pinPath = BuildPinPath(ta.Cfg)
 
 	if err := ta.init(); err != nil {

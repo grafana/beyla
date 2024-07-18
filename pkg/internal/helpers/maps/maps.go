@@ -1,4 +1,4 @@
-package helpers
+package maps
 
 // MultiCounter maps a counter to a given key
 type MultiCounter[K comparable] map[K]*int

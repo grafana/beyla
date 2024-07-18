@@ -257,6 +257,9 @@ func (c *Config) SetDebugMode() {
 	c.Printer = true
 	c.LogLevel = "DEBUG"
 	c.EBPF.BpfDebug = true
+	if c.NetworkFlows.Enable {
+		c.NetworkFlows.Print = true
+	}
 }
 
 // LoadConfig overrides configuration in the following order (from less to most priority)

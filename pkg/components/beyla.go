@@ -113,7 +113,6 @@ func buildCommonContextInfo(
 			config.Attributes.Kubernetes.KubeconfigPath,
 			config.Attributes.Kubernetes.InformersSyncTimeout,
 		),
-		HostID: global.FetchHostID(ctx),
 	}
 	switch {
 	case config.InternalMetrics.Prometheus.Port != 0:
@@ -131,6 +130,8 @@ func buildCommonContextInfo(
 	}
 
 	attributeGroups(config, ctxInfo)
+
+	ctxInfo.FetchHostID(ctx)
 
 	return ctxInfo
 }

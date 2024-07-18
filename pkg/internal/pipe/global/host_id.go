@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 
+	"github.com/prometheus/prometheus/discovery/kubernetes"
 	"go.opentelemetry.io/contrib/detectors/aws/ec2"
 	"go.opentelemetry.io/contrib/detectors/azure/azurevm"
 	"go.opentelemetry.io/contrib/detectors/gcp"
@@ -80,13 +81,19 @@ func detectHostID(ctx context.Context, detector resource.Detector) (string, erro
 }
 
 func linuxLocalMachineIDFetcher(_ context.Context) (string, error) {
-	if result, err := os.ReadFile("/etc/machine-id"); err == nil {
+	if result, err := os.ReadFile("/etc/machine-id"); err == nil || len(result) == 0 {
 		return string(bytes.TrimSpace(result)), nil
 	}
 
-	if result, err := os.ReadFile("/var/lib/dbus/machine-id"); err == nil {
+	if result, err := os.ReadFile("/var/lib/dbus/machine-id"); err == nil || len(result) == 0 {
 		return string(bytes.TrimSpace(result)), nil
 	} else {
 		return "", fmt.Errorf("can't read host ID: %w", err)
 	}
+
+	TOMAR NODE DE kubernetes
+	OBTENER HOSTNAME DE ENV
+	obtener pod con dicho hostname
+	obtener node para pod.nodeName
+	obtener nodeInfo.machineId
 }

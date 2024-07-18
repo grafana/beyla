@@ -831,9 +831,16 @@ int uprobe_persistConnRoundTrip(struct pt_regs *ctx) {
     void *pc_ptr = GO_PARAM1(ctx);
     if (pc_ptr) {
         void *conn_conn_ptr = pc_ptr + 8 + pc_conn_pos; // embedded struct
+        void *tls_state = 0;
+        bpf_probe_read(&tls_state, sizeof(tls_state), (void *)(pc_ptr + 0x60)); // find tlsState
+        bpf_dbg_printk("conn_conn_ptr %llx, tls_state %llx", conn_conn_ptr, tls_state);
+
+        conn_conn_ptr = unwrap_tls_conn_info(conn_conn_ptr, tls_state);
+
         if (conn_conn_ptr) {
             void *conn_ptr = 0;
             bpf_probe_read(&conn_ptr, sizeof(conn_ptr), (void *)(conn_conn_ptr + rwc_conn_pos)); // find conn
+            bpf_dbg_printk("conn_ptr %llx", conn_ptr);            
             if (conn_ptr) {
                 connection_info_t conn = {0};
                 get_conn_info(conn_ptr, &conn); // initialized to 0, no need to check the result if we succeeded

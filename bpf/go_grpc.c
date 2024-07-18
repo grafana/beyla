@@ -56,6 +56,13 @@ struct {
 
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
+    __type(key, void *); // key: goroutine
+    __type(value, void *); // the transport *
+    __uint(max_entries, MAX_CONCURRENT_REQUESTS);
+} ongoing_grpc_operate_headers SEC(".maps");
+
+struct {
+    __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __type(key, void *); // key: pointer to the request goroutine
     __type(value, grpc_client_func_invocation_t);
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
@@ -139,17 +146,39 @@ int uprobe_server_handleStream(struct pt_regs *ctx) {
     return 0;
 }
 
+// Sets up the connection info to be grabbed and mapped over the transport to operateHeaders
+SEC("uprobe/netFdReadGRPC")
+int uprobe_netFdReadGRPC(struct pt_regs *ctx) {
+    void *goroutine_addr = GOROUTINE_PTR(ctx);
+    bpf_dbg_printk("=== uprobe/proc netFD read goroutine %lx === ", goroutine_addr);
+
+    void *tr = bpf_map_lookup_elem(&ongoing_grpc_operate_headers, &goroutine_addr);
+    bpf_dbg_printk("tr %llx", tr);
+    if (tr) {
+        grpc_transports_t *t = bpf_map_lookup_elem(&ongoing_grpc_transports, tr);
+        bpf_dbg_printk("t %llx", t);
+        if (t) {
+            void *fd_ptr = GO_PARAM1(ctx);
+            get_conn_info_from_fd(fd_ptr, &t->conn); // ok to not check the result, we leave it as 0
+        }
+    }
+
+    return 0;
+}
+
 // Handles finding the connection information for http2 servers in grpc
 SEC("uprobe/http2Server_operateHeaders")
 int uprobe_http2Server_operateHeaders(struct pt_regs *ctx) {
+    void *goroutine_addr = GOROUTINE_PTR(ctx);
     void *tr = GO_PARAM1(ctx);
-    bpf_dbg_printk("=== uprobe/http2Server_operateHeaders tr %llx === ", tr);
+    bpf_dbg_printk("=== uprobe/http2Server_operateHeaders tr %llx goroutine %lx === ", tr, goroutine_addr);
 
     grpc_transports_t t = {
         .type = TRANSPORT_HTTP2,
         .conn = {0},
     };
 
+    bpf_map_update_elem(&ongoing_grpc_operate_headers, &goroutine_addr, &tr, BPF_ANY);
     bpf_map_update_elem(&ongoing_grpc_transports, &tr, &t, BPF_ANY);
 
     return 0;
@@ -241,22 +270,9 @@ int uprobe_server_handleStream_return(struct pt_regs *ctx) {
         grpc_transports_t *t = bpf_map_lookup_elem(&ongoing_grpc_transports, &st_ptr);
 
         if (t) {
-            if (t->type == TRANSPORT_HTTP2) {
-                void *conn_ptr = st_ptr + grpc_st_conn_pos;
-                bpf_dbg_printk("conn_ptr %llx", conn_ptr);
-                if (conn_ptr) {
-                    void *conn_conn_ptr = 0;
-                    bpf_probe_read(&conn_conn_ptr, sizeof(conn_conn_ptr), conn_ptr + 8);
-                    bpf_dbg_printk("conn_conn_ptr %llx", conn_conn_ptr);
-                    if (conn_conn_ptr) {                
-                        found_conn = get_conn_info(conn_conn_ptr, &trace->conn);
-                    }
-                } 
-            } else if (t->type == TRANSPORT_HANDLER) {
-                bpf_dbg_printk("setting up connection info from grpc handler");
-                __builtin_memcpy(&trace->conn, &t->conn, sizeof(connection_info_t));
-                found_conn = 1;
-            }
+            bpf_dbg_printk("setting up connection info from grpc handler");
+            __builtin_memcpy(&trace->conn, &t->conn, sizeof(connection_info_t));
+            found_conn = 1;
         }
     }
 

@@ -175,6 +175,9 @@ func (p *Tracer) GoProbes() map[string]ebpfcommon.FunctionPrograms {
 		"google.golang.org/grpc/internal/transport.(*serverHandlerTransport).HandleStreams": {
 			Start: p.bpfObjects.UprobeServerHandlerTransportHandleStreams,
 		},
+		"net.(*netFD).Read": {
+			Start: p.bpfObjects.UprobeNetFdReadGRPC,
+		},
 	}
 
 	if p.supportsContextPropagation() {

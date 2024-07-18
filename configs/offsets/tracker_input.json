@@ -44,10 +44,12 @@
         "raddr"
       ],
       "net/http.persistConn": [
-        "conn"
+        "conn",
+        "tlsState"
       ],
       "net/http.conn": [
-        "rwc"
+        "rwc",
+        "tlsState"
       ]
     }
   },

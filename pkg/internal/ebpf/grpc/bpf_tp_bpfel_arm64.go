@@ -117,6 +117,7 @@ type bpf_tpProgramSpecs struct {
 	UprobeGrpcFramerWriteHeaders              *ebpf.ProgramSpec `ebpf:"uprobe_grpcFramerWriteHeaders"`
 	UprobeGrpcFramerWriteHeadersReturns       *ebpf.ProgramSpec `ebpf:"uprobe_grpcFramerWriteHeaders_returns"`
 	UprobeHttp2ServerOperateHeaders           *ebpf.ProgramSpec `ebpf:"uprobe_http2Server_operateHeaders"`
+	UprobeNetFdReadGRPC                       *ebpf.ProgramSpec `ebpf:"uprobe_netFdReadGRPC"`
 	UprobeServerHandleStream                  *ebpf.ProgramSpec `ebpf:"uprobe_server_handleStream"`
 	UprobeServerHandleStreamReturn            *ebpf.ProgramSpec `ebpf:"uprobe_server_handleStream_return"`
 	UprobeServerHandlerTransportHandleStreams *ebpf.ProgramSpec `ebpf:"uprobe_server_handler_transport_handle_streams"`
@@ -136,6 +137,7 @@ type bpf_tpMapSpecs struct {
 	OngoingGoroutines         *ebpf.MapSpec `ebpf:"ongoing_goroutines"`
 	OngoingGrpcClientRequests *ebpf.MapSpec `ebpf:"ongoing_grpc_client_requests"`
 	OngoingGrpcHeaderWrites   *ebpf.MapSpec `ebpf:"ongoing_grpc_header_writes"`
+	OngoingGrpcOperateHeaders *ebpf.MapSpec `ebpf:"ongoing_grpc_operate_headers"`
 	OngoingGrpcRequestStatus  *ebpf.MapSpec `ebpf:"ongoing_grpc_request_status"`
 	OngoingGrpcServerRequests *ebpf.MapSpec `ebpf:"ongoing_grpc_server_requests"`
 	OngoingGrpcTransports     *ebpf.MapSpec `ebpf:"ongoing_grpc_transports"`
@@ -171,6 +173,7 @@ type bpf_tpMaps struct {
 	OngoingGoroutines         *ebpf.Map `ebpf:"ongoing_goroutines"`
 	OngoingGrpcClientRequests *ebpf.Map `ebpf:"ongoing_grpc_client_requests"`
 	OngoingGrpcHeaderWrites   *ebpf.Map `ebpf:"ongoing_grpc_header_writes"`
+	OngoingGrpcOperateHeaders *ebpf.Map `ebpf:"ongoing_grpc_operate_headers"`
 	OngoingGrpcRequestStatus  *ebpf.Map `ebpf:"ongoing_grpc_request_status"`
 	OngoingGrpcServerRequests *ebpf.Map `ebpf:"ongoing_grpc_server_requests"`
 	OngoingGrpcTransports     *ebpf.Map `ebpf:"ongoing_grpc_transports"`
@@ -189,6 +192,7 @@ func (m *bpf_tpMaps) Close() error {
 		m.OngoingGoroutines,
 		m.OngoingGrpcClientRequests,
 		m.OngoingGrpcHeaderWrites,
+		m.OngoingGrpcOperateHeaders,
 		m.OngoingGrpcRequestStatus,
 		m.OngoingGrpcServerRequests,
 		m.OngoingGrpcTransports,
@@ -211,6 +215,7 @@ type bpf_tpPrograms struct {
 	UprobeGrpcFramerWriteHeaders              *ebpf.Program `ebpf:"uprobe_grpcFramerWriteHeaders"`
 	UprobeGrpcFramerWriteHeadersReturns       *ebpf.Program `ebpf:"uprobe_grpcFramerWriteHeaders_returns"`
 	UprobeHttp2ServerOperateHeaders           *ebpf.Program `ebpf:"uprobe_http2Server_operateHeaders"`
+	UprobeNetFdReadGRPC                       *ebpf.Program `ebpf:"uprobe_netFdReadGRPC"`
 	UprobeServerHandleStream                  *ebpf.Program `ebpf:"uprobe_server_handleStream"`
 	UprobeServerHandleStreamReturn            *ebpf.Program `ebpf:"uprobe_server_handleStream_return"`
 	UprobeServerHandlerTransportHandleStreams *ebpf.Program `ebpf:"uprobe_server_handler_transport_handle_streams"`
@@ -229,6 +234,7 @@ func (p *bpf_tpPrograms) Close() error {
 		p.UprobeGrpcFramerWriteHeaders,
 		p.UprobeGrpcFramerWriteHeadersReturns,
 		p.UprobeHttp2ServerOperateHeaders,
+		p.UprobeNetFdReadGRPC,
 		p.UprobeServerHandleStream,
 		p.UprobeServerHandleStreamReturn,
 		p.UprobeServerHandlerTransportHandleStreams,

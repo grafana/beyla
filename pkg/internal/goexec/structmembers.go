@@ -139,7 +139,7 @@ var structMembers = map[string]structInfo{
 	"net.TCPConn": {
 		lib: "go",
 		fields: map[string]string{
-			"conn": "rwc_conn_pos",
+			"conn": "net_conn_pos",
 		},
 	},
 	"net.conn": {
@@ -158,13 +158,15 @@ var structMembers = map[string]structInfo{
 	"net/http.persistConn": {
 		lib: "go",
 		fields: map[string]string{
-			"conn": "pc_conn_pos",
+			"conn":     "pc_conn_pos",
+			"tlsState": "pc_tls_pos",
 		},
 	},
 	"net/http.conn": {
 		lib: "go",
 		fields: map[string]string{
-			"rwc": "c_rwc_pos",
+			"rwc":      "c_rwc_pos",
+			"tlsState": "c_tls_pos",
 		},
 	},
 	"google.golang.org/grpc/internal/transport.bufWriter": {

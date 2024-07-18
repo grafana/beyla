@@ -634,6 +634,18 @@
             "since": "1.17.0"
           }
         ]
+      },
+      "tlsState": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.22.5"
+        },
+        "offsets": [
+          {
+            "offset": 48,
+            "since": "1.17.0"
+          }
+        ]
       }
     },
     "net/http.persistConn": {
@@ -645,6 +657,18 @@
         "offsets": [
           {
             "offset": 80,
+            "since": "1.17.0"
+          }
+        ]
+      },
+      "tlsState": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.22.5"
+        },
+        "offsets": [
+          {
+            "offset": 96,
             "since": "1.17.0"
           }
         ]

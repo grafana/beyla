@@ -31,9 +31,11 @@ volatile const u64 cc_next_stream_id_pos;
 volatile const u64 framer_w_pos;
 
 volatile const u64 pc_conn_pos;
-volatile const u64 rwc_conn_pos;
+volatile const u64 pc_tls_pos;
+volatile const u64 net_conn_pos;
 volatile const u64 cc_tconn_pos;
 volatile const u64 sc_conn_pos;
 volatile const u64 c_rwc_pos;
+volatile const u64 c_tls_pos;
 
 #endif

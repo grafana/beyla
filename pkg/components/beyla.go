@@ -7,9 +7,9 @@ import (
 	"sync"
 
 	"github.com/grafana/beyla/pkg/beyla"
+	"github.com/grafana/beyla/pkg/export/attributes"
 	"github.com/grafana/beyla/pkg/internal/appolly"
 	"github.com/grafana/beyla/pkg/internal/connector"
-	"github.com/grafana/beyla/pkg/internal/export/attributes"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/kube"
 	"github.com/grafana/beyla/pkg/internal/netolly/agent"
@@ -115,13 +115,17 @@ func buildCommonContextInfo(
 		),
 		HostID: global.FetchHostID(ctx),
 	}
-	if config.InternalMetrics.Prometheus.Port != 0 {
+	switch {
+	case config.InternalMetrics.Prometheus.Port != 0:
 		slog.Debug("reporting internal metrics as Prometheus")
-		ctxInfo.Metrics = imetrics.NewPrometheusReporter(&config.InternalMetrics.Prometheus, promMgr)
+		ctxInfo.Metrics = imetrics.NewPrometheusReporter(&config.InternalMetrics.Prometheus, promMgr, nil)
 		// Prometheus manager also has its own internal metrics, so we need to pass the imetrics reporter
 		// TODO: remove this dependency cycle and let prommgr to create and return the PrometheusReporter
 		promMgr.InstrumentWith(ctxInfo.Metrics)
-	} else {
+	case config.Prometheus.Registry != nil:
+		slog.Debug("reporting internal metrics with Prometheus Registry")
+		ctxInfo.Metrics = imetrics.NewPrometheusReporter(&config.InternalMetrics.Prometheus, nil, config.Prometheus.Registry)
+	default:
 		slog.Debug("not reporting internal metrics")
 		ctxInfo.Metrics = imetrics.NoopReporter{}
 	}

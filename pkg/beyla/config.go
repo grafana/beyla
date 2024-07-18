@@ -10,12 +10,12 @@ import (
 	otelconsumer "go.opentelemetry.io/collector/consumer"
 	"gopkg.in/yaml.v3"
 
+	"github.com/grafana/beyla/pkg/export/attributes"
+	"github.com/grafana/beyla/pkg/export/debug"
+	"github.com/grafana/beyla/pkg/export/instrumentations"
+	"github.com/grafana/beyla/pkg/export/otel"
+	"github.com/grafana/beyla/pkg/export/prom"
 	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
-	"github.com/grafana/beyla/pkg/internal/export/attributes"
-	"github.com/grafana/beyla/pkg/internal/export/debug"
-	"github.com/grafana/beyla/pkg/internal/export/instrumentations"
-	"github.com/grafana/beyla/pkg/internal/export/otel"
-	"github.com/grafana/beyla/pkg/internal/export/prom"
 	"github.com/grafana/beyla/pkg/internal/filter"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/infraolly/process"
@@ -250,6 +250,16 @@ func (c *Config) Enabled(feature Feature) bool {
 		return c.Port.Len() > 0 || c.Exec.IsSet() || len(c.Discovery.Services) > 0 || c.Discovery.SystemWide
 	}
 	return false
+}
+
+// SetDebugMode sets the debug mode for Beyla
+func (c *Config) SetDebugMode() {
+	c.Printer = true
+	c.LogLevel = "DEBUG"
+	c.EBPF.BpfDebug = true
+	if c.NetworkFlows.Enable {
+		c.NetworkFlows.Print = true
+	}
 }
 
 // LoadConfig overrides configuration in the following order (from less to most priority)

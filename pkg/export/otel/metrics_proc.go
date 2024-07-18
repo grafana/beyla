@@ -14,9 +14,9 @@ import (
 	"go.opentelemetry.io/otel/sdk/resource"
 	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 
-	"github.com/grafana/beyla/pkg/internal/export/attributes"
-	attr2 "github.com/grafana/beyla/pkg/internal/export/attributes/names"
-	"github.com/grafana/beyla/pkg/internal/export/expire"
+	"github.com/grafana/beyla/pkg/export/attributes"
+	attr2 "github.com/grafana/beyla/pkg/export/attributes/names"
+	"github.com/grafana/beyla/pkg/export/expire"
 	"github.com/grafana/beyla/pkg/internal/infraolly/process"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/pkg/internal/svc"

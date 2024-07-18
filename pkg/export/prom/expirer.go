@@ -6,7 +6,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 
-	"github.com/grafana/beyla/pkg/internal/export/expire"
+	"github.com/grafana/beyla/pkg/export/expire"
 )
 
 func plog() *slog.Logger {

@@ -141,6 +141,32 @@ done:
 }
 
 SEC("uprobe/readRequest")
+int uprobe_readRequestStart(struct pt_regs *ctx) {
+    bpf_dbg_printk("=== uprobe/proc readRequest === ");
+
+    void *goroutine_addr = GOROUTINE_PTR(ctx);
+    bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
+
+    void *c_ptr = GO_PARAM1(ctx);
+    if (c_ptr) {
+        void *conn_conn_ptr = c_ptr + 8 + c_rwc_pos; // embedded struct
+        bpf_dbg_printk("conn_conn_ptr %llx", conn_conn_ptr);
+        if (conn_conn_ptr) {
+            void *conn_ptr = 0;
+            bpf_probe_read(&conn_ptr, sizeof(conn_ptr), (void *)(conn_conn_ptr + rwc_conn_pos)); // find conn
+            bpf_dbg_printk("conn_ptr %llx", conn_ptr);
+            if (conn_ptr) {
+                connection_info_t conn = {0};
+                get_conn_info(conn_ptr, &conn); // initialized to 0, no need to check the result if we succeeded
+                bpf_map_update_elem(&ongoing_server_connections, &goroutine_addr, &conn, BPF_ANY);
+            }
+        }
+    }
+
+    return 0;
+}
+
+SEC("uprobe/readRequest")
 int uprobe_readRequestReturns(struct pt_regs *ctx) {
     bpf_dbg_printk("=== uprobe/proc readRequest returns === ");
 

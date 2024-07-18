@@ -45,6 +45,9 @@
       ],
       "net/http.persistConn": [
         "conn"
+      ],
+      "net/http.conn": [
+        "rwc"
       ]
     }
   },

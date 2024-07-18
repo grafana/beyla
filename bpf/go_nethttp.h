@@ -34,5 +34,6 @@ volatile const u64 pc_conn_pos;
 volatile const u64 rwc_conn_pos;
 volatile const u64 cc_tconn_pos;
 volatile const u64 sc_conn_pos;
+volatile const u64 c_rwc_pos;
 
 #endif

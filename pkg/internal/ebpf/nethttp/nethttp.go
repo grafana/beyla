@@ -105,6 +105,7 @@ func (p *Tracer) Constants(_ *exec.FileInfo, offsets *goexec.Offsets) map[string
 		"tcp_addr_port_ptr_pos",
 		"tcp_addr_ip_ptr_pos",
 		"pc_conn_pos",
+		"c_rwc_pos",
 		"rwc_conn_pos",
 		"conn_fd_pos",
 		"fd_laddr_pos",
@@ -145,7 +146,8 @@ func (p *Tracer) GoProbes() map[string]ebpfcommon.FunctionPrograms {
 			End:   p.bpfObjects.UprobeServeHTTPReturns,
 		},
 		"net/http.(*conn).readRequest": {
-			End: p.bpfObjects.UprobeReadRequestReturns,
+			Start: p.bpfObjects.UprobeReadRequestStart,
+			End:   p.bpfObjects.UprobeReadRequestReturns,
 		},
 		"net/http.(*Transport).roundTrip": { // HTTP client, works with Client.Do as well as using the RoundTripper directly
 			Start: p.bpfObjects.UprobeRoundTrip,

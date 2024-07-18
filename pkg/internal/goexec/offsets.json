@@ -622,6 +622,20 @@
         ]
       }
     },
+    "net/http.conn": {
+      "rwc": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.22.5"
+        },
+        "offsets": [
+          {
+            "offset": 16,
+            "since": "1.17.0"
+          }
+        ]
+      }
+    },
     "net/http.persistConn": {
       "conn": {
         "versions": {

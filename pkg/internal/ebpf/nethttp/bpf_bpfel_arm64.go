@@ -133,6 +133,7 @@ type bpfProgramSpecs struct {
 	UprobeQueryDC                             *ebpf.ProgramSpec `ebpf:"uprobe_queryDC"`
 	UprobeQueryReturn                         *ebpf.ProgramSpec `ebpf:"uprobe_queryReturn"`
 	UprobeReadRequestReturns                  *ebpf.ProgramSpec `ebpf:"uprobe_readRequestReturns"`
+	UprobeReadRequestStart                    *ebpf.ProgramSpec `ebpf:"uprobe_readRequestStart"`
 	UprobeRoundTrip                           *ebpf.ProgramSpec `ebpf:"uprobe_roundTrip"`
 	UprobeRoundTripReturn                     *ebpf.ProgramSpec `ebpf:"uprobe_roundTripReturn"`
 	UprobeWriteSubset                         *ebpf.ProgramSpec `ebpf:"uprobe_writeSubset"`
@@ -222,6 +223,7 @@ type bpfPrograms struct {
 	UprobeQueryDC                             *ebpf.Program `ebpf:"uprobe_queryDC"`
 	UprobeQueryReturn                         *ebpf.Program `ebpf:"uprobe_queryReturn"`
 	UprobeReadRequestReturns                  *ebpf.Program `ebpf:"uprobe_readRequestReturns"`
+	UprobeReadRequestStart                    *ebpf.Program `ebpf:"uprobe_readRequestStart"`
 	UprobeRoundTrip                           *ebpf.Program `ebpf:"uprobe_roundTrip"`
 	UprobeRoundTripReturn                     *ebpf.Program `ebpf:"uprobe_roundTripReturn"`
 	UprobeWriteSubset                         *ebpf.Program `ebpf:"uprobe_writeSubset"`
@@ -244,6 +246,7 @@ func (p *bpfPrograms) Close() error {
 		p.UprobeQueryDC,
 		p.UprobeQueryReturn,
 		p.UprobeReadRequestReturns,
+		p.UprobeReadRequestStart,
 		p.UprobeRoundTrip,
 		p.UprobeRoundTripReturn,
 		p.UprobeWriteSubset,

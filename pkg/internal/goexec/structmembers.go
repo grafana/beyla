@@ -161,6 +161,12 @@ var structMembers = map[string]structInfo{
 			"conn": "pc_conn_pos",
 		},
 	},
+	"net/http.conn": {
+		lib: "go",
+		fields: map[string]string{
+			"rwc": "c_rwc_pos",
+		},
+	},
 	"google.golang.org/grpc/internal/transport.bufWriter": {
 		lib: "google.golang.org/grpc",
 		fields: map[string]string{

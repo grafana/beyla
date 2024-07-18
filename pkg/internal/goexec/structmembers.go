@@ -107,8 +107,9 @@ var structMembers = map[string]structInfo{
 	"google.golang.org/grpc/internal/transport.http2Client": {
 		lib: "google.golang.org/grpc",
 		fields: map[string]string{
-			"nextID": "http2_client_next_id_pos",
-			"conn":   "grpc_t_conn_pos",
+			"nextID":   "http2_client_next_id_pos",
+			"conn":     "grpc_t_conn_pos",
+			"isSecure": "grpc_t_secure_pos",
 		},
 	},
 	"golang.org/x/net/http2.responseWriterState": {

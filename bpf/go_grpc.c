@@ -106,6 +106,7 @@ volatile const u64 grpc_stream_ctx_ptr_pos;
 volatile const u64 value_context_val_ptr_pos;
 volatile const u64 grpc_st_conn_pos;
 volatile const u64 grpc_t_conn_pos;
+volatile const u64 grpc_t_secure_pos;
 
 // Context propagation
 volatile const u64 http2_client_next_id_pos;
@@ -505,11 +506,18 @@ int uprobe_transport_http2Client_NewStream(struct pt_regs *ctx) {
     bpf_dbg_printk("goroutine_addr %lx, t_ptr %llx, t.conn_pos %x", goroutine_addr, t_ptr, grpc_t_conn_pos);
 
     if (t_ptr) {
-        void *conn_ptr = t_ptr + grpc_t_conn_pos;
-        bpf_dbg_printk("conn_ptr %llx", conn_ptr);
+        void *conn_ptr = t_ptr + grpc_t_conn_pos + 8;
+        u64 is_secure = 0;
+        bpf_probe_read(&is_secure, sizeof(is_secure), t_ptr + grpc_t_secure_pos);
+        if (is_secure) {
+            // double wrapped in grpc
+            conn_ptr = unwrap_tls_conn_info(conn_ptr, (void *)is_secure);
+            conn_ptr = unwrap_tls_conn_info(conn_ptr, (void *)is_secure);
+        }
+        bpf_dbg_printk("conn_ptr %llx is_secure %lld", conn_ptr, is_secure);
         if (conn_ptr) {
             void *conn_conn_ptr = 0;
-            bpf_probe_read(&conn_conn_ptr, sizeof(conn_conn_ptr), conn_ptr + 8);
+            bpf_probe_read(&conn_conn_ptr, sizeof(conn_conn_ptr), conn_ptr);
             bpf_dbg_printk("conn_conn_ptr %llx", conn_conn_ptr);
             if (conn_conn_ptr) {                
                 connection_info_t conn = {0};

@@ -8,8 +8,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/grafana/beyla/pkg/kubeflags"
 	"k8s.io/client-go/kubernetes"
+
+	"github.com/grafana/beyla/pkg/kubeflags"
 )
 
 type MetadataProvider struct {

@@ -28,6 +28,7 @@ import (
 	"github.com/grafana/beyla/pkg/internal/svc"
 	"github.com/grafana/beyla/pkg/internal/testutil"
 	"github.com/grafana/beyla/pkg/internal/traces"
+	"github.com/grafana/beyla/pkg/kubeflags"
 	"github.com/grafana/beyla/pkg/transform"
 	"github.com/grafana/beyla/test/collector"
 	"github.com/grafana/beyla/test/consumer"
@@ -39,7 +40,7 @@ func gctx(groups attributes.AttrGroups) *global.ContextInfo {
 	return &global.ContextInfo{
 		Metrics:               imetrics.NoopReporter{},
 		MetricAttributeGroups: groups,
-		K8sInformer:           kube.NewMetadataProvider(kube.EnabledFalse, nil, "", 0),
+		K8sInformer:           kube.NewMetadataProvider(kubeflags.EnabledFalse, nil, "", 0),
 		HostID:                "host-id",
 	}
 }

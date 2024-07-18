@@ -427,26 +427,6 @@
           }
         ]
       },
-      "isSecure": {
-        "versions": {
-          "oldest": "1.40.0",
-          "newest": "1.65.0"
-        },
-        "offsets": [
-          {
-            "offset": 200,
-            "since": "1.40.0"
-          },
-          {
-            "offset": 272,
-            "since": "1.52.0"
-          },
-          {
-            "offset": 264,
-            "since": "1.58.0"
-          }
-        ]
-      },
       "nextID": {
         "versions": {
           "oldest": "1.40.0",
@@ -476,6 +456,26 @@
           {
             "offset": 432,
             "since": "1.64.0"
+          }
+        ]
+      },
+      "scheme": {
+        "versions": {
+          "oldest": "1.40.0",
+          "newest": "1.65.0"
+        },
+        "offsets": [
+          {
+            "offset": 184,
+            "since": "1.40.0"
+          },
+          {
+            "offset": 256,
+            "since": "1.52.0"
+          },
+          {
+            "offset": 248,
+            "since": "1.58.0"
           }
         ]
       }

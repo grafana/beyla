@@ -106,7 +106,7 @@ volatile const u64 grpc_stream_ctx_ptr_pos;
 volatile const u64 value_context_val_ptr_pos;
 volatile const u64 grpc_st_conn_pos;
 volatile const u64 grpc_t_conn_pos;
-volatile const u64 grpc_t_secure_pos;
+volatile const u64 grpc_t_scheme_pos;
 
 // Context propagation
 volatile const u64 http2_client_next_id_pos;
@@ -270,6 +270,7 @@ int uprobe_server_handleStream_return(struct pt_regs *ctx) {
     if (st_ptr) {
         grpc_transports_t *t = bpf_map_lookup_elem(&ongoing_grpc_transports, &st_ptr);
 
+        bpf_dbg_printk("found t %llx", t);
         if (t) {
             bpf_dbg_printk("setting up connection info from grpc handler");
             __builtin_memcpy(&trace->conn, &t->conn, sizeof(connection_info_t));
@@ -278,6 +279,7 @@ int uprobe_server_handleStream_return(struct pt_regs *ctx) {
     }
 
     if (!found_conn) {
+        bpf_dbg_printk("can't find connection info for st_ptr %llx", st_ptr);
         __builtin_memset(&trace->conn, 0, sizeof(connection_info_t));
     }
 
@@ -507,8 +509,19 @@ int uprobe_transport_http2Client_NewStream(struct pt_regs *ctx) {
 
     if (t_ptr) {
         void *conn_ptr = t_ptr + grpc_t_conn_pos + 8;
+        u8 buf[16];
         u64 is_secure = 0;
-        bpf_probe_read(&is_secure, sizeof(is_secure), t_ptr + grpc_t_secure_pos);
+
+        if (!read_go_str("transport scheme", t_ptr, grpc_t_scheme_pos, &buf, sizeof(buf))) {
+            bpf_dbg_printk("can't read grpc transport.Stream.Method");
+        }
+
+        bpf_dbg_printk("scheme %s", buf);
+
+        if (buf[0] == 'h' && buf[1] == 't' && buf[2] == 't' && buf[3] == 'p' && buf[4] == 's') {
+            is_secure = 1;
+        }
+
         if (is_secure) {
             // double wrapped in grpc
             conn_ptr = unwrap_tls_conn_info(conn_ptr, (void *)is_secure);

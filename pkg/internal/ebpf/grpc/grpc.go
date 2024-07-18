@@ -103,7 +103,7 @@ func (p *Tracer) Constants(_ *exec.FileInfo, offsets *goexec.Offsets) map[string
 		"tcp_addr_ip_ptr_pos",
 		"grpc_stream_ctx_ptr_pos",
 		"grpc_t_conn_pos",
-		"grpc_t_secure_pos",
+		"grpc_t_scheme_pos",
 		"value_context_val_ptr_pos",
 		"http2_client_next_id_pos",
 		"framer_w_pos",

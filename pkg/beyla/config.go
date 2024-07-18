@@ -252,6 +252,16 @@ func (c *Config) Enabled(feature Feature) bool {
 	return false
 }
 
+// SetDebugMode sets the debug mode for Beyla
+func (c *Config) SetDebugMode() {
+	c.Printer = true
+	c.LogLevel = "DEBUG"
+	c.EBPF.BpfDebug = true
+	if c.NetworkFlows.Enable {
+		c.NetworkFlows.Print = true
+	}
+}
+
 // LoadConfig overrides configuration in the following order (from less to most priority)
 // 1 - Default configuration (defaultConfig variable)
 // 2 - Contents of the provided file reader (nillable)

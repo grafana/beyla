@@ -18,9 +18,9 @@ import (
 	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/infraolly/process"
-	"github.com/grafana/beyla/pkg/internal/kube"
 	"github.com/grafana/beyla/pkg/internal/netolly/transform/cidr"
 	"github.com/grafana/beyla/pkg/internal/traces"
+	"github.com/grafana/beyla/pkg/kubeflags"
 	"github.com/grafana/beyla/pkg/transform"
 )
 
@@ -162,7 +162,7 @@ network:
 			},
 			Kubernetes: transform.KubernetesDecorator{
 				KubeconfigPath:       "/foo/bar",
-				Enable:               kube.EnabledTrue,
+				Enable:               kubeflags.EnabledTrue,
 				InformersSyncTimeout: 30 * time.Second,
 			},
 			Select: attributes.Selection{

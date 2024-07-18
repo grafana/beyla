@@ -19,8 +19,8 @@ import (
 	"github.com/grafana/beyla/pkg/internal/filter"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/infraolly/process"
-	"github.com/grafana/beyla/pkg/internal/kube"
 	"github.com/grafana/beyla/pkg/internal/traces"
+	"github.com/grafana/beyla/pkg/kubeflags"
 	"github.com/grafana/beyla/pkg/services"
 	"github.com/grafana/beyla/pkg/transform"
 )
@@ -105,7 +105,7 @@ var DefaultConfig = Config{
 			HostnameDNSResolution: true,
 		},
 		Kubernetes: transform.KubernetesDecorator{
-			Enable:               kube.EnabledDefault,
+			Enable:               kubeflags.EnabledDefault,
 			InformersSyncTimeout: 30 * time.Second,
 		},
 	},

@@ -56,12 +56,11 @@ struct {
 typedef struct server_http_func_invocation {
     u64 start_monotime_ns;
     tp_info_t tp;
-    u64 response;
     u8  method[METHOD_MAX_LEN];
     u8  path[PATH_MAX_LEN];
     u64 content_length;
 
-    u8 http2;
+    u64 status;
 } server_http_func_invocation_t;
 
 struct {
@@ -82,14 +81,12 @@ int uprobe_ServeHTTP(struct pt_regs *ctx) {
     void *goroutine_addr = GOROUTINE_PTR(ctx);
     bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
 
-    void *resp = GO_PARAM3(ctx);
     void *req = GO_PARAM4(ctx);
 
     server_http_func_invocation_t invocation = {
         .start_monotime_ns = bpf_ktime_get_ns(),
         .tp = {0},
-        .response = (u64)resp,
-        .http2 = 0,
+        .status = 0,
         .content_length = 0,
     };
 
@@ -104,12 +101,6 @@ int uprobe_ServeHTTP(struct pt_regs *ctx) {
         // Get method from Request.Method
         if (!read_go_str("method", req, method_ptr_pos, &invocation.method, sizeof(invocation.method))) {
             bpf_dbg_printk("can't read http Request.Method");
-            goto done;
-        }
-
-        // Ignore gRPC ServeHTTP
-        if (invocation.method[0] == 'P' && invocation.method[1] == 'R' && invocation.method[2] == 'I') {
-            bpf_dbg_printk("ignoring grpc ServeHTTP wrapper");
             goto done;
         }
 
@@ -220,23 +211,6 @@ int uprobe_ServeHTTPReturns(struct pt_regs *ctx) {
         }
     }    
 
-    void *resp_ptr = (void *)invocation->response;
-
-    if (!resp_ptr) {
-        bpf_dbg_printk("can't find response ptr");
-        goto done;
-    }
-
-    if (invocation->http2) {
-        void *deref_resp_ptr = 0;
-        bpf_probe_read(&deref_resp_ptr, sizeof(deref_resp_ptr), resp_ptr);
-        if (!deref_resp_ptr) {
-            bpf_dbg_printk("can't dereference response ptr for http2");
-            goto done;
-        }
-        resp_ptr = deref_resp_ptr;
-    }
-
     http_request_trace *trace = bpf_ringbuf_reserve(&events, sizeof(http_request_trace), 0);
     if (!trace) {
         bpf_dbg_printk("can't reserve space in the ringbuffer");
@@ -256,8 +230,6 @@ int uprobe_ServeHTTPReturns(struct pt_regs *ctx) {
         trace->go_start_monotime_ns = invocation->start_monotime_ns;
     }
 
-    bpf_dbg_printk("Resp ptr %llx", resp_ptr);
-
     connection_info_t *info = bpf_map_lookup_elem(&ongoing_server_connections, &goroutine_addr);
 
     if (info) {
@@ -276,14 +248,7 @@ int uprobe_ServeHTTPReturns(struct pt_regs *ctx) {
     trace->content_length = invocation->content_length;
     __builtin_memcpy(trace->method, invocation->method, sizeof(trace->method));
     __builtin_memcpy(trace->path, invocation->path, sizeof(trace->path));
-
-    u64 status_pos = status_ptr_pos;
-
-    if (invocation->http2) {
-        status_pos = rws_status_pos;
-    }
-
-    bpf_probe_read(&trace->status, sizeof(u16), (void *)(resp_ptr + status_pos));
+    trace->status = (u16)invocation->status;
 
     // submit the completed trace via ringbuffer
     bpf_ringbuf_submit(trace, get_flags());
@@ -499,10 +464,11 @@ int uprobe_writeSubset(struct pt_regs *ctx) {
 // HTTP 2.0 server support
 SEC("uprobe/http2ResponseWriterStateWriteHeader")
 int uprobe_http2ResponseWriterStateWriteHeader(struct pt_regs *ctx) {
-    bpf_dbg_printk("=== uprobe/proc http2 responseWriterState writeHeader === ");
+    bpf_dbg_printk("=== uprobe/proc (http response)/(http2 responseWriterState) writeHeader === ");
 
     void *goroutine_addr = GOROUTINE_PTR(ctx);
-    bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);    
+    u64 status = (u64)GO_PARAM2(ctx);
+    bpf_dbg_printk("goroutine_addr %lx, status %d", goroutine_addr, status);    
 
     server_http_func_invocation_t *invocation =
         bpf_map_lookup_elem(&ongoing_http_server_requests, &goroutine_addr);
@@ -520,7 +486,7 @@ int uprobe_http2ResponseWriterStateWriteHeader(struct pt_regs *ctx) {
         }
     }  
 
-    invocation->http2 = 1;
+    invocation->status = status;
 
     return 0;
 }

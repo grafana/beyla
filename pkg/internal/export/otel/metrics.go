@@ -749,7 +749,7 @@ func (r *Metrics) record(span *request.Span, mr *MetricsReporter) {
 				httpDuration.Record(r.ctx, duration, instrument.WithAttributeSet(attrs))
 
 				httpRequestSize, attrs := r.httpRequestSize.ForRecord(span)
-				httpRequestSize.Record(r.ctx, float64(span.ContentLength), instrument.WithAttributeSet(attrs))
+				httpRequestSize.Record(r.ctx, float64(span.RequestLength()), instrument.WithAttributeSet(attrs))
 			}
 		case request.EventTypeGRPC:
 			if mr.is.GRPCEnabled() {
@@ -766,7 +766,7 @@ func (r *Metrics) record(span *request.Span, mr *MetricsReporter) {
 				httpClientDuration, attrs := r.httpClientDuration.ForRecord(span)
 				httpClientDuration.Record(r.ctx, duration, instrument.WithAttributeSet(attrs))
 				httpClientRequestSize, attrs := r.httpClientRequestSize.ForRecord(span)
-				httpClientRequestSize.Record(r.ctx, float64(span.ContentLength), instrument.WithAttributeSet(attrs))
+				httpClientRequestSize.Record(r.ctx, float64(span.RequestLength()), instrument.WithAttributeSet(attrs))
 			}
 		case request.EventTypeRedisServer, request.EventTypeRedisClient, request.EventTypeSQLClient:
 			if mr.is.DBEnabled() {
@@ -791,7 +791,7 @@ func (r *Metrics) record(span *request.Span, mr *MetricsReporter) {
 		attrOpt := instrument.WithAttributeSet(mr.spanMetricAttributes(span))
 		r.spanMetricsLatency.Record(r.ctx, duration, attrOpt)
 		r.spanMetricsCallsTotal.Add(r.ctx, 1, attrOpt)
-		r.spanMetricsSizeTotal.Add(r.ctx, float64(span.ContentLength), attrOpt)
+		r.spanMetricsSizeTotal.Add(r.ctx, float64(span.RequestLength()), attrOpt)
 	}
 
 	if mr.cfg.ServiceGraphMetricsEnabled() {

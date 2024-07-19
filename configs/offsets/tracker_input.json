@@ -12,13 +12,6 @@
       "net/url.URL": [
         "Path"
       ],
-      "net/http.response": [
-        "status",
-        "req"
-      ],
-      "net/http.Response": [
-        "StatusCode"
-      ],
       "net.TCPAddr": [
         "IP",
         "Port"
@@ -57,10 +50,6 @@
     "inspect": "./configs/offsets/http2/inspect.go",
     "versions": ">= 0.12.0",
     "fields": {
-      "golang.org/x/net/http2.responseWriterState": [
-        "req",
-        "status"
-      ],
       "golang.org/x/net/http2/hpack.Encoder": [
         "w"
       ],

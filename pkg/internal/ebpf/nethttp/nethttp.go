@@ -96,8 +96,6 @@ func (p *Tracer) Constants(_ *exec.FileInfo, offsets *goexec.Offsets) map[string
 		"url_ptr_pos",
 		"path_ptr_pos",
 		"method_ptr_pos",
-		"status_ptr_pos",
-		"status_code_ptr_pos",
 		"content_length_ptr_pos",
 		"req_header_ptr_pos",
 		"io_writer_buf_ptr_pos",
@@ -118,7 +116,6 @@ func (p *Tracer) Constants(_ *exec.FileInfo, offsets *goexec.Offsets) map[string
 
 	// Optional list
 	for _, s := range []string{
-		"rws_status_pos",
 		"cc_next_stream_id_pos",
 		"framer_w_pos",
 		"cc_tconn_pos",
@@ -172,6 +169,9 @@ func (p *Tracer) GoProbes() map[string]ebpfcommon.FunctionPrograms {
 		},
 		"net/http.(*http2responseWriterState).writeHeader": { // same as above, vendored in go
 			Start: p.bpfObjects.UprobeHttp2ResponseWriterStateWriteHeader,
+		},
+		"net/http.(*response).WriteHeader": {
+			Start: p.bpfObjects.UprobeHttp2ResponseWriterStateWriteHeader, // http response code capture
 		},
 		"golang.org/x/net/http2.(*serverConn).runHandler": {
 			Start: p.bpfObjects.UprobeHttp2serverConnRunHandler, // http2 server connection tracking

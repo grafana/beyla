@@ -194,7 +194,6 @@ func newProcMetricsExporter(
 func getProcessResourceAttrs(hostID string, procID *process.ID) []attribute.KeyValue {
 	return append(
 		getAppResourceAttrs(hostID, procID.Service),
-		semconv.ServiceInstanceID(string(procID.UID)),
 		attr2.ProcCommand.OTEL().String(procID.Command),
 		attr2.ProcOwner.OTEL().String(procID.User),
 		attr2.ProcParentPid.OTEL().String(strconv.Itoa(int(procID.ParentProcessID))),

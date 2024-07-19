@@ -96,6 +96,7 @@ func (p *Tracer) Constants(_ *exec.FileInfo, offsets *goexec.Offsets) map[string
 		"url_ptr_pos",
 		"path_ptr_pos",
 		"method_ptr_pos",
+		"status_code_ptr_pos",
 		"content_length_ptr_pos",
 		"req_header_ptr_pos",
 		"io_writer_buf_ptr_pos",

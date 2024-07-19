@@ -152,12 +152,16 @@
       "bw": {
         "versions": {
           "oldest": "9.0.0",
-          "newest": "9.5.4"
+          "newest": "9.6.0"
         },
         "offsets": [
           {
             "offset": 32,
             "since": "9.0.0"
+          },
+          {
+            "offset": 48,
+            "since": "9.6.0"
           }
         ]
       }
@@ -247,32 +251,6 @@
         "offsets": [
           {
             "offset": 120,
-            "since": "0.12.0"
-          }
-        ]
-      }
-    },
-    "golang.org/x/net/http2.responseWriterState": {
-      "req": {
-        "versions": {
-          "oldest": "0.12.0",
-          "newest": "0.27.0"
-        },
-        "offsets": [
-          {
-            "offset": 8,
-            "since": "0.12.0"
-          }
-        ]
-      },
-      "status": {
-        "versions": {
-          "oldest": "0.12.0",
-          "newest": "0.27.0"
-        },
-        "offsets": [
-          {
-            "offset": 72,
             "since": "0.12.0"
           }
         ]
@@ -689,32 +667,6 @@
         "offsets": [
           {
             "offset": 96,
-            "since": "1.17.0"
-          }
-        ]
-      }
-    },
-    "net/http.response": {
-      "req": {
-        "versions": {
-          "oldest": "1.17.0",
-          "newest": "1.22.5"
-        },
-        "offsets": [
-          {
-            "offset": 8,
-            "since": "1.17.0"
-          }
-        ]
-      },
-      "status": {
-        "versions": {
-          "oldest": "1.17.0",
-          "newest": "1.22.5"
-        },
-        "offsets": [
-          {
-            "offset": 120,
             "since": "1.17.0"
           }
         ]

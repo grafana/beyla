@@ -20,6 +20,7 @@
 volatile const u64 url_ptr_pos;
 volatile const u64 path_ptr_pos;
 volatile const u64 method_ptr_pos;
+volatile const u64 status_code_ptr_pos;
 volatile const u64 content_length_ptr_pos;
 volatile const u64 req_header_ptr_pos;
 volatile const u64 io_writer_buf_ptr_pos;

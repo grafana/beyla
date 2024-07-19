@@ -12,6 +12,9 @@
       "net/url.URL": [
         "Path"
       ],
+      "net/http.Response": [
+        "StatusCode"
+      ],
       "net.TCPAddr": [
         "IP",
         "Port"

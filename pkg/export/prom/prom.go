@@ -35,6 +35,7 @@ const (
 	SpanMetricsCalls   = "traces_spanmetrics_calls_total"
 	SpanMetricsSizes   = "traces_spanmetrics_size_total"
 	TracesTargetInfo   = "traces_target_info"
+	TargetInfo         = "target_info"
 
 	ServiceGraphClient = "traces_service_graph_request_client_seconds"
 	ServiceGraphServer = "traces_service_graph_request_server_seconds"
@@ -43,6 +44,9 @@ const (
 
 	serviceKey          = "service"
 	serviceNamespaceKey = "service_namespace"
+
+	hostIDKey   = "host_id"
+	hostNameKey = "host_name"
 
 	k8sNamespaceName   = "k8s_namespace_name"
 	k8sPodName         = "k8s_pod_name"
@@ -154,6 +158,7 @@ type metricsReporter struct {
 	msgProcessDuration    *Expirer[prometheus.Histogram]
 	httpRequestSize       *Expirer[prometheus.Histogram]
 	httpClientRequestSize *Expirer[prometheus.Histogram]
+	targetInfo            *Expirer[prometheus.Gauge]
 
 	// user-selected attributes for the application-level metrics
 	attrHTTPDuration          []attributes.Field[*request.Span, string]
@@ -187,6 +192,7 @@ type metricsReporter struct {
 	is instrumentations.InstrumentationSelection
 
 	kubeEnabled bool
+	hostID      string
 
 	serviceCache *expirable.LRU[svc.UID, svc.ID]
 }
@@ -276,6 +282,7 @@ func newReporter(
 		ctxInfo:                   ctxInfo,
 		cfg:                       cfg,
 		kubeEnabled:               kubeEnabled,
+		hostID:                    ctxInfo.HostID,
 		clock:                     clock,
 		is:                        is,
 		promConnect:               ctxInfo.Prometheus,
@@ -451,6 +458,10 @@ func newReporter(
 				Help: "number of service calls in trace service graph metrics format",
 			}, labelNamesServiceGraph()).MetricVec, clock.Time, cfg.TTL)
 		}),
+		targetInfo: NewExpirer[prometheus.Gauge](prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Name: TargetInfo,
+			Help: "attributes associated to a given monitored entity",
+		}, labelNamesTargetInfo(kubeEnabled)).MetricVec, clock.Time, cfg.TTL),
 	}
 
 	if cfg.SpanMetricsEnabled() {
@@ -460,7 +471,8 @@ func newReporter(
 		}, cfg.TTL)
 	}
 
-	var registeredMetrics []prometheus.Collector
+	registeredMetrics := []prometheus.Collector{mr.targetInfo}
+
 	if !mr.cfg.DisableBuildInfo {
 		registeredMetrics = append(registeredMetrics, mr.beylaInfo)
 	}
@@ -568,6 +580,10 @@ func (r *metricsReporter) observe(span *request.Span) {
 	t := span.Timings()
 	r.beylaInfo.WithLabelValues(span.ServiceID.SDKLanguage.String()).metric.Set(1.0)
 	duration := t.End.Sub(t.RequestStart).Seconds()
+
+	targetInfoLabelValues := r.labelValuesTargetInfo(span.ServiceID)
+	r.targetInfo.WithLabelValues(targetInfoLabelValues...).metric.Set(1)
+
 	if r.cfg.OTelMetricsEnabled() {
 		switch span.Type {
 		case request.EventTypeHTTP:
@@ -630,8 +646,7 @@ func (r *metricsReporter) observe(span *request.Span) {
 		_, ok := r.serviceCache.Get(span.ServiceID.UID)
 		if !ok {
 			r.serviceCache.Add(span.ServiceID.UID, span.ServiceID)
-			lv = r.labelValuesTargetInfo(span.ServiceID)
-			r.tracesTargetInfo.WithLabelValues(lv...).metric.Add(1)
+			r.tracesTargetInfo.WithLabelValues(targetInfoLabelValues...).metric.Add(1)
 		}
 	}
 
@@ -694,7 +709,7 @@ func (r *metricsReporter) labelValuesSpans(span *request.Span) []string {
 }
 
 func labelNamesTargetInfo(kubeEnabled bool) []string {
-	names := []string{serviceKey, serviceNamespaceKey, serviceInstanceKey, serviceJobKey, telemetryLanguageKey, telemetrySDKKey, sourceKey}
+	names := []string{hostIDKey, hostNameKey, serviceKey, serviceNamespaceKey, serviceInstanceKey, serviceJobKey, telemetryLanguageKey, telemetrySDKKey, sourceKey}
 
 	if kubeEnabled {
 		names = appendK8sLabelNames(names)
@@ -709,6 +724,8 @@ func (r *metricsReporter) labelValuesTargetInfo(service svc.ID) []string {
 		job = service.Namespace + "/" + job
 	}
 	values := []string{
+		r.hostID,
+		service.HostName,
 		service.Name,
 		service.Namespace,
 		service.Instance,

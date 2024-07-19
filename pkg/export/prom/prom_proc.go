@@ -46,6 +46,9 @@ func ProcPrometheusEndpoint(
 		if err != nil {
 			return nil, err
 		}
+		if cfg.Metrics.Registry != nil {
+			return reporter.collectMetrics, nil
+		}
 		return reporter.reportMetrics, nil
 	}
 }
@@ -178,17 +181,29 @@ func newProcReporter(
 		mr.netObserver = mr.observeAggregatedNet
 	}
 
-	mr.promConnect.Register(cfg.Metrics.Port, cfg.Metrics.Path,
-		mr.cpuUtilization, mr.cpuTime,
-		mr.memory, mr.memoryVirtual,
-		mr.disk,
-		mr.net)
+	if cfg.Metrics.Registry != nil {
+		cfg.Metrics.Registry.MustRegister(
+			mr.cpuUtilization, mr.cpuTime,
+			mr.memory, mr.memoryVirtual,
+			mr.disk, mr.net,
+		)
+	} else {
+		mr.promConnect.Register(cfg.Metrics.Port, cfg.Metrics.Path,
+			mr.cpuUtilization, mr.cpuTime,
+			mr.memory, mr.memoryVirtual,
+			mr.disk,
+			mr.net)
+	}
 
 	return mr, nil
 }
 
 func (r *procMetricsReporter) reportMetrics(input <-chan []*process.Status) {
 	go r.promConnect.StartHTTP(r.bgCtx)
+	r.collectMetrics(input)
+}
+
+func (r *procMetricsReporter) collectMetrics(input <-chan []*process.Status) {
 	for processes := range input {
 		// clock needs to be updated to let the expirer
 		// remove the old metrics

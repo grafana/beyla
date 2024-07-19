@@ -119,6 +119,8 @@ func getDefinitions(groups AttrGroups) map[Section]AttrReportGroup {
 	var serverInfo = AttrReportGroup{
 		Attributes: map[attr.Name]Default{
 			attr.ClientAddr: Default(peerInfoEnabled),
+			attr.ServerAddr: true,
+			attr.ServerPort: true,
 		},
 	}
 	var httpClientInfo = AttrReportGroup{

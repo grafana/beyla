@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/rand"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -23,7 +24,7 @@ const (
 	instrumentedServiceGorillaURL     = "http://localhost:8082"
 	instrumentedServiceGorillaMidURL  = "http://localhost:8083"
 	instrumentedServiceGorillaMid2URL = "http://localhost:8087"
-	instrumentedServiceStdTLSURL      = "https://localhost:9393"
+	instrumentedServiceStdTLSURL      = "https://localhost:8383"
 	prometheusHostPort                = "localhost:9090"
 	jaegerQueryURL                    = "http://localhost:16686/api/traces"
 
@@ -143,6 +144,13 @@ func testSpanMetricsForHTTPLibrary(t *testing.T, svcName, svcNs string) {
 func testREDMetricsForHTTPLibrary(t *testing.T, url, svcName, svcNs string) {
 	path := "/basic/" + rndStr()
 
+	parts := strings.Split(url, ":")
+	assert.LessOrEqual(t, 3, len(parts))
+
+	lastPart := parts[len(parts)-1]
+	parts = strings.Split(lastPart, "/")
+	serverPort := parts[0]
+
 	// Call 3 times the instrumented service, forcing it to:
 	// - take at least 30ms to respond
 	// - returning a 404 code
@@ -165,6 +173,7 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url, svcName, svcNs string) {
 			`http_response_status_code="404",` +
 			`service_namespace="` + svcNs + `",` +
 			`service_name="` + svcName + `",` +
+			`server_port="` + serverPort + `",` +
 			`http_route="/basic/:rnd",` +
 			`url_path="` + path + `"}`)
 		require.NoError(t, err)
@@ -353,14 +362,14 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url, svcName, svcNs string) {
 }
 
 func testREDMetricsGRPC(t *testing.T) {
-	testREDMetricsGRPCInternal(t, nil)
+	testREDMetricsGRPCInternal(t, nil, "5051")
 }
 
 func testREDMetricsGRPCTLS(t *testing.T) {
-	testREDMetricsGRPCInternal(t, []grpcclient.PingOption{grpcclient.WithSSL(), grpcclient.WithServerAddr("localhost:50051")})
+	testREDMetricsGRPCInternal(t, []grpcclient.PingOption{grpcclient.WithSSL(), grpcclient.WithServerAddr("localhost:50051")}, "50051")
 }
 
-func testREDMetricsGRPCInternal(t *testing.T, opts []grpcclient.PingOption) {
+func testREDMetricsGRPCInternal(t *testing.T, opts []grpcclient.PingOption, serverPort string) {
 	// Call 300 times the instrumented service, an overkill to make sure
 	// we get some of the metrics to be visible in Prometheus. This test is
 	// currently the last one that runs.
@@ -379,6 +388,7 @@ func testREDMetricsGRPCInternal(t *testing.T, opts []grpcclient.PingOption) {
 			`service_namespace="integration-test",` +
 			`client_address!="127.0.0.1",` + // discard the metrics from testREDMetricsForHTTPLibrary/GorillaURL
 			`service_name="testserver",` +
+			`server_port="` + serverPort + `",` +
 			`rpc_method="/routeguide.RouteGuide/GetFeature"}`)
 		require.NoError(t, err)
 		// check duration_count has at least 3 calls and all the arguments

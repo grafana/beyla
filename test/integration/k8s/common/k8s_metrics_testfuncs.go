@@ -25,8 +25,9 @@ const (
 	testTimeout        = 2 * time.Minute
 	prometheusHostPort = "localhost:39090"
 
-	UUIDRegex = `^[0-9A-Fa-f]{8}-([0-9A-Fa-f]{4}-){3}[0-9A-Fa-f]{12}$`
-	TimeRegex = `^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d`
+	HostIDRegex = `^[0-9A-Fa-f]+$`
+	UUIDRegex   = `^[0-9A-Fa-f]{8}-([0-9A-Fa-f]{4}-){3}[0-9A-Fa-f]{12}$`
+	TimeRegex   = `^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d`
 )
 
 var (
@@ -128,6 +129,11 @@ func FeatureHTTPMetricsDecoration(manifest string) features.Feature {
 			testMetricsDecoration(spanGraphMetrics, `{server="testserver",client="internal-pinger"}`, map[string]string{
 				"server_service_namespace": "integration-test",
 				"source":                   "beyla",
+			})).
+		Assess("target_info metrics exist",
+			testMetricsDecoration([]string{"target_info"}, `{job=~".*testserver"}`, map[string]string{
+				"host_name": "testserver",
+				"host_id":   HostIDRegex,
 			}),
 		).Feature()
 }
@@ -160,6 +166,11 @@ func FeatureGRPCMetricsDecoration(manifest string) features.Feature {
 				"k8s_deployment_name": "^testserver$",
 				"k8s_replicaset_name": "^testserver-",
 				"k8s_cluster_name":    "^beyla$",
+			})).
+		Assess("target_info metrics exist",
+			testMetricsDecoration([]string{"target_info"}, `{job=~".*testserver"}`, map[string]string{
+				"host_name": "testserver",
+				"host_id":   HostIDRegex,
 			}),
 		).Feature()
 }

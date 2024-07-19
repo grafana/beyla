@@ -163,11 +163,21 @@ func (p *Tracer) GoProbes() map[string]ebpfcommon.FunctionPrograms {
 			Start: p.bpfObjects.UprobeHttp2RoundTrip,
 			End:   p.bpfObjects.UprobeRoundTripReturn, // return is the same as for http 1.1
 		},
+		"net/http.(*http2ClientConn).RoundTrip": { // http2 client vendored in Go
+			Start: p.bpfObjects.UprobeHttp2RoundTrip,
+			End:   p.bpfObjects.UprobeRoundTripReturn, // return is the same as for http 1.1
+		},
 		"golang.org/x/net/http2.(*responseWriterState).writeHeader": { // http2 server request done, capture the response code
+			Start: p.bpfObjects.UprobeHttp2ResponseWriterStateWriteHeader,
+		},
+		"net/http.(*http2responseWriterState).writeHeader": { // same as above, vendored in go
 			Start: p.bpfObjects.UprobeHttp2ResponseWriterStateWriteHeader,
 		},
 		"golang.org/x/net/http2.(*serverConn).runHandler": {
 			Start: p.bpfObjects.UprobeHttp2serverConnRunHandler, // http2 server connection tracking
+		},
+		"net/http.(*http2serverConn).runHandler": {
+			Start: p.bpfObjects.UprobeHttp2serverConnRunHandler, // http2 server connection tracking, vendored in go
 		},
 		// tracking of tcp connections for black-box propagation
 		"net/http.(*conn).serve": { // http server
@@ -196,6 +206,10 @@ func (p *Tracer) GoProbes() map[string]ebpfcommon.FunctionPrograms {
 			Start: p.bpfObjects.UprobeWriteSubset, // http 1.x context propagation
 		}
 		m["golang.org/x/net/http2.(*Framer).WriteHeaders"] = ebpfcommon.FunctionPrograms{ // http2 context propagation
+			Start: p.bpfObjects.UprobeHttp2FramerWriteHeaders,
+			End:   p.bpfObjects.UprobeHttp2FramerWriteHeadersReturns,
+		}
+		m["net/http.(*http2Framer).WriteHeaders"] = ebpfcommon.FunctionPrograms{ // http2 context propagation
 			Start: p.bpfObjects.UprobeHttp2FramerWriteHeaders,
 			End:   p.bpfObjects.UprobeHttp2FramerWriteHeadersReturns,
 		}

@@ -23,6 +23,7 @@ const (
 	instrumentedServiceGorillaURL     = "http://localhost:8082"
 	instrumentedServiceGorillaMidURL  = "http://localhost:8083"
 	instrumentedServiceGorillaMid2URL = "http://localhost:8087"
+	instrumentedServiceStdTLSURL      = "http://localhost:8383"
 	prometheusHostPort                = "localhost:9090"
 	jaegerQueryURL                    = "http://localhost:16686/api/traces"
 
@@ -174,6 +175,7 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url, svcName, svcNs string) {
 			res := results[0]
 			addr := res.Metric["client_address"]
 			assert.NotNil(t, addr)
+			assert.NotNil(t, res.Metric["server_port"])
 		}
 	})
 

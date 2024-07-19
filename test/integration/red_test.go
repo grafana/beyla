@@ -23,7 +23,7 @@ const (
 	instrumentedServiceGorillaURL     = "http://localhost:8082"
 	instrumentedServiceGorillaMidURL  = "http://localhost:8083"
 	instrumentedServiceGorillaMid2URL = "http://localhost:8087"
-	instrumentedServiceStdTLSURL      = "http://localhost:8383"
+	instrumentedServiceStdTLSURL      = "https://localhost:9393"
 	prometheusHostPort                = "localhost:9090"
 	jaegerQueryURL                    = "http://localhost:16686/api/traces"
 
@@ -49,6 +49,7 @@ func testREDMetricsHTTP(t *testing.T) {
 		instrumentedServiceGinURL,
 		instrumentedServiceGorillaMidURL,
 		instrumentedServiceGorillaMid2URL,
+		instrumentedServiceStdTLSURL,
 	} {
 		t.Run(testCaseURL, func(t *testing.T) {
 			waitForTestComponents(t, testCaseURL)
@@ -352,11 +353,19 @@ func testREDMetricsForHTTPLibrary(t *testing.T, url, svcName, svcNs string) {
 }
 
 func testREDMetricsGRPC(t *testing.T) {
+	testREDMetricsGRPCInternal(t, nil)
+}
+
+func testREDMetricsGRPCTLS(t *testing.T) {
+	testREDMetricsGRPCInternal(t, []grpcclient.PingOption{grpcclient.WithSSL(), grpcclient.WithServerAddr("localhost:50051")})
+}
+
+func testREDMetricsGRPCInternal(t *testing.T, opts []grpcclient.PingOption) {
 	// Call 300 times the instrumented service, an overkill to make sure
 	// we get some of the metrics to be visible in Prometheus. This test is
 	// currently the last one that runs.
 	for i := 0; i < 300; i++ {
-		err := grpcclient.Ping()
+		err := grpcclient.Ping(opts...)
 		require.NoError(t, err)
 	}
 
@@ -380,6 +389,7 @@ func testREDMetricsGRPC(t *testing.T) {
 			res := results[0]
 			addr := res.Metric["client_address"]
 			assert.NotNil(t, addr)
+			assert.NotNil(t, res.Metric["server_port"])
 		}
 	})
 }

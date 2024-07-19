@@ -71,7 +71,15 @@ func main() {
 		close(wait)
 	}()
 	go func() {
-		err := grpctest.Setup()
+		err := grpctest.Setup(5051)
+		if err != nil {
+			slog.Error("HTTP server has unexpectedly stopped", err)
+		}
+		close(wait)
+	}()
+
+	go func() {
+		err := grpctest.SetupTLS(50051)
 		if err != nil {
 			slog.Error("HTTP server has unexpectedly stopped", err)
 		}

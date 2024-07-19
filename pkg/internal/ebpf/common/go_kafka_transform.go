@@ -7,7 +7,8 @@ import (
 	"unsafe"
 
 	"github.com/cilium/ebpf/ringbuf"
-	"go.opentelemetry.io/otel/trace"
+
+	"github.com/grafana/opentelemetry-go/trace"
 
 	"github.com/grafana/beyla/pkg/internal/request"
 )

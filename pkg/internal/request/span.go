@@ -5,9 +5,10 @@ import (
 	"unicode/utf8"
 
 	"github.com/gavv/monotime"
-	"go.opentelemetry.io/otel/codes"
-	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
-	trace2 "go.opentelemetry.io/otel/trace"
+
+	"github.com/grafana/opentelemetry-go/codes"
+	semconv "github.com/grafana/opentelemetry-go/semconv/v1.17.0"
+	trace2 "github.com/grafana/opentelemetry-go/trace"
 
 	"github.com/grafana/beyla/pkg/internal/svc"
 )

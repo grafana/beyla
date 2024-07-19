@@ -7,7 +7,7 @@ import (
 	"strings"
 	"unsafe"
 
-	trace2 "go.opentelemetry.io/otel/trace"
+	trace2 "github.com/grafana/opentelemetry-go/trace"
 
 	"github.com/grafana/beyla/pkg/internal/request"
 	"github.com/grafana/beyla/pkg/internal/sqlprune"

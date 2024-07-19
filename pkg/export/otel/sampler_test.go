@@ -4,7 +4,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"go.opentelemetry.io/otel/sdk/trace"
+
+	"github.com/grafana/opentelemetry-go/sdk/trace"
 )
 
 func TestSamplerImplementation(t *testing.T) {

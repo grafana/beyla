@@ -13,7 +13,7 @@ import (
 	"syscall"
 	"time"
 
-	otelsdk "go.opentelemetry.io/otel/sdk"
+	otelsdk "github.com/grafana/opentelemetry-go/sdk"
 
 	"github.com/grafana/beyla/pkg/beyla"
 	"github.com/grafana/beyla/pkg/buildinfo"

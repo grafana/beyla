@@ -1,7 +1,7 @@
 package ebpf
 
 import (
-	"go.opentelemetry.io/otel/attribute"
+	"github.com/grafana/opentelemetry-go/attribute"
 
 	"github.com/grafana/beyla/pkg/export/attributes"
 	attr "github.com/grafana/beyla/pkg/export/attributes/names"

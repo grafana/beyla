@@ -11,14 +11,15 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/hashicorp/golang-lru/v2/simplelru"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
-	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp"
-	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
-	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
-	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 	"google.golang.org/grpc/credentials"
+
+	"github.com/grafana/opentelemetry-go"
+	"github.com/grafana/opentelemetry-go/attribute"
+	"github.com/grafana/opentelemetry-go/exporters/otlp/otlpmetric/otlpmetricgrpc"
+	"github.com/grafana/opentelemetry-go/exporters/otlp/otlpmetric/otlpmetrichttp"
+	"github.com/grafana/opentelemetry-go/exporters/otlp/otlptrace/otlptracegrpc"
+	"github.com/grafana/opentelemetry-go/exporters/otlp/otlptrace/otlptracehttp"
+	semconv "github.com/grafana/opentelemetry-go/semconv/v1.19.0"
 
 	"github.com/grafana/beyla/pkg/export/expire"
 	"github.com/grafana/beyla/pkg/internal/svc"

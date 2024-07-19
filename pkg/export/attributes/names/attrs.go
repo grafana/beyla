@@ -5,9 +5,9 @@ package attr
 import (
 	"strings"
 
-	"go.opentelemetry.io/otel/attribute"
-	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
-	semconv2 "go.opentelemetry.io/otel/semconv/v1.25.0"
+	"github.com/grafana/opentelemetry-go/attribute"
+	semconv "github.com/grafana/opentelemetry-go/semconv/v1.19.0"
+	semconv2 "github.com/grafana/opentelemetry-go/semconv/v1.25.0"
 )
 
 // Name of an attribute. This is the common internal representation of a metric attribute name,

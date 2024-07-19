@@ -17,10 +17,11 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/ptrace"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/codes"
-	semconv "go.opentelemetry.io/otel/semconv/v1.25.0"
-	"go.opentelemetry.io/otel/trace"
+
+	"github.com/grafana/opentelemetry-go/attribute"
+	"github.com/grafana/opentelemetry-go/codes"
+	semconv "github.com/grafana/opentelemetry-go/semconv/v1.25.0"
+	"github.com/grafana/opentelemetry-go/trace"
 
 	"github.com/grafana/beyla/pkg/export/attributes"
 	attr "github.com/grafana/beyla/pkg/export/attributes/names"

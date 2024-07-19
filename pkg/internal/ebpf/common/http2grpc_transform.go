@@ -9,8 +9,9 @@ import (
 
 	"github.com/cilium/ebpf/ringbuf"
 	lru "github.com/hashicorp/golang-lru/v2"
-	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/net/http2"
+
+	"github.com/grafana/opentelemetry-go/trace"
 
 	"github.com/grafana/beyla/pkg/internal/ebpf/bhpack"
 	"github.com/grafana/beyla/pkg/internal/request"

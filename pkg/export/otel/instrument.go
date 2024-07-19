@@ -3,9 +3,9 @@ package otel
 import (
 	"context"
 
-	"go.opentelemetry.io/otel/sdk/metric"
-	"go.opentelemetry.io/otel/sdk/metric/metricdata"
-	"go.opentelemetry.io/otel/sdk/trace"
+	"github.com/grafana/opentelemetry-go/sdk/metric"
+	"github.com/grafana/opentelemetry-go/sdk/metric/metricdata"
+	"github.com/grafana/opentelemetry-go/sdk/trace"
 
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 )

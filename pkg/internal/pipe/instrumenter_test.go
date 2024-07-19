@@ -13,7 +13,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/pdata/pmetric"
 	"go.opentelemetry.io/collector/pdata/ptrace"
-	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
+
+	semconv "github.com/grafana/opentelemetry-go/semconv/v1.19.0"
 
 	"github.com/grafana/beyla/pkg/beyla"
 	"github.com/grafana/beyla/pkg/export/attributes"

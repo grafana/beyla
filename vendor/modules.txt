@@ -200,6 +200,81 @@ github.com/gorilla/websocket
 github.com/grafana/go-offsets-tracker/pkg/offsets
 github.com/grafana/go-offsets-tracker/pkg/utils
 github.com/grafana/go-offsets-tracker/pkg/versions
+# github.com/grafana/opentelemetry-go v1.28.0-grafana.7-renamed
+## explicit; go 1.21
+github.com/grafana/opentelemetry-go
+github.com/grafana/opentelemetry-go/attribute
+github.com/grafana/opentelemetry-go/baggage
+github.com/grafana/opentelemetry-go/codes
+github.com/grafana/opentelemetry-go/internal
+github.com/grafana/opentelemetry-go/internal/attribute
+github.com/grafana/opentelemetry-go/internal/baggage
+github.com/grafana/opentelemetry-go/internal/global
+github.com/grafana/opentelemetry-go/propagation
+github.com/grafana/opentelemetry-go/semconv/v1.17.0
+github.com/grafana/opentelemetry-go/semconv/v1.19.0
+github.com/grafana/opentelemetry-go/semconv/v1.25.0
+github.com/grafana/opentelemetry-go/semconv/v1.26.0
+# github.com/grafana/opentelemetry-go/exporters/otlp/otlpmetric/otlpmetricgrpc v1.28.0-grafana.7-renamed
+## explicit; go 1.21
+github.com/grafana/opentelemetry-go/exporters/otlp/otlpmetric/otlpmetricgrpc
+github.com/grafana/opentelemetry-go/exporters/otlp/otlpmetric/otlpmetricgrpc/internal
+github.com/grafana/opentelemetry-go/exporters/otlp/otlpmetric/otlpmetricgrpc/internal/envconfig
+github.com/grafana/opentelemetry-go/exporters/otlp/otlpmetric/otlpmetricgrpc/internal/oconf
+github.com/grafana/opentelemetry-go/exporters/otlp/otlpmetric/otlpmetricgrpc/internal/retry
+github.com/grafana/opentelemetry-go/exporters/otlp/otlpmetric/otlpmetricgrpc/internal/transform
+# github.com/grafana/opentelemetry-go/exporters/otlp/otlpmetric/otlpmetrichttp v1.28.0-grafana.7-renamed
+## explicit; go 1.21
+github.com/grafana/opentelemetry-go/exporters/otlp/otlpmetric/otlpmetrichttp
+github.com/grafana/opentelemetry-go/exporters/otlp/otlpmetric/otlpmetrichttp/internal
+github.com/grafana/opentelemetry-go/exporters/otlp/otlpmetric/otlpmetrichttp/internal/envconfig
+github.com/grafana/opentelemetry-go/exporters/otlp/otlpmetric/otlpmetrichttp/internal/oconf
+github.com/grafana/opentelemetry-go/exporters/otlp/otlpmetric/otlpmetrichttp/internal/retry
+github.com/grafana/opentelemetry-go/exporters/otlp/otlpmetric/otlpmetrichttp/internal/transform
+# github.com/grafana/opentelemetry-go/exporters/otlp/otlptrace v1.28.0-grafana.7-renamed
+## explicit; go 1.21
+github.com/grafana/opentelemetry-go/exporters/otlp/otlptrace
+github.com/grafana/opentelemetry-go/exporters/otlp/otlptrace/internal/tracetransform
+# github.com/grafana/opentelemetry-go/exporters/otlp/otlptrace/otlptracegrpc v1.28.0-grafana.7-renamed
+## explicit; go 1.21
+github.com/grafana/opentelemetry-go/exporters/otlp/otlptrace/otlptracegrpc
+github.com/grafana/opentelemetry-go/exporters/otlp/otlptrace/otlptracegrpc/internal
+github.com/grafana/opentelemetry-go/exporters/otlp/otlptrace/otlptracegrpc/internal/envconfig
+github.com/grafana/opentelemetry-go/exporters/otlp/otlptrace/otlptracegrpc/internal/otlpconfig
+github.com/grafana/opentelemetry-go/exporters/otlp/otlptrace/otlptracegrpc/internal/retry
+# github.com/grafana/opentelemetry-go/exporters/otlp/otlptrace/otlptracehttp v1.28.0-grafana.7-renamed
+## explicit; go 1.21
+github.com/grafana/opentelemetry-go/exporters/otlp/otlptrace/otlptracehttp
+github.com/grafana/opentelemetry-go/exporters/otlp/otlptrace/otlptracehttp/internal
+github.com/grafana/opentelemetry-go/exporters/otlp/otlptrace/otlptracehttp/internal/envconfig
+github.com/grafana/opentelemetry-go/exporters/otlp/otlptrace/otlptracehttp/internal/otlpconfig
+github.com/grafana/opentelemetry-go/exporters/otlp/otlptrace/otlptracehttp/internal/retry
+# github.com/grafana/opentelemetry-go/metric v1.28.0-grafana.7-renamed
+## explicit; go 1.21
+github.com/grafana/opentelemetry-go/metric
+github.com/grafana/opentelemetry-go/metric/embedded
+github.com/grafana/opentelemetry-go/metric/noop
+# github.com/grafana/opentelemetry-go/sdk v1.28.0-grafana.7-renamed
+## explicit; go 1.21
+github.com/grafana/opentelemetry-go/sdk
+github.com/grafana/opentelemetry-go/sdk/instrumentation
+github.com/grafana/opentelemetry-go/sdk/internal/env
+github.com/grafana/opentelemetry-go/sdk/internal/x
+github.com/grafana/opentelemetry-go/sdk/resource
+github.com/grafana/opentelemetry-go/sdk/trace
+# github.com/grafana/opentelemetry-go/sdk/metric v1.28.0-grafana.7-renamed
+## explicit; go 1.21
+github.com/grafana/opentelemetry-go/sdk/metric
+github.com/grafana/opentelemetry-go/sdk/metric/internal
+github.com/grafana/opentelemetry-go/sdk/metric/internal/aggregate
+github.com/grafana/opentelemetry-go/sdk/metric/internal/exemplar
+github.com/grafana/opentelemetry-go/sdk/metric/internal/x
+github.com/grafana/opentelemetry-go/sdk/metric/metricdata
+# github.com/grafana/opentelemetry-go/trace v1.28.0-grafana.7-renamed
+## explicit; go 1.21
+github.com/grafana/opentelemetry-go/trace
+github.com/grafana/opentelemetry-go/trace/embedded
+github.com/grafana/opentelemetry-go/trace/noop
 # github.com/grpc-ecosystem/grpc-gateway/v2 v2.20.0
 ## explicit; go 1.20
 github.com/grpc-ecosystem/grpc-gateway/v2/internal/httprule
@@ -515,7 +590,7 @@ go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc/inte
 go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp
 go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp/internal/semconv
 go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp/internal/semconvutil
-# go.opentelemetry.io/otel v1.28.0 => github.com/grafana/opentelemetry-go v1.28.0-grafana.2
+# go.opentelemetry.io/otel v1.28.0
 ## explicit; go 1.21
 go.opentelemetry.io/otel
 go.opentelemetry.io/otel/attribute
@@ -527,70 +602,22 @@ go.opentelemetry.io/otel/internal/baggage
 go.opentelemetry.io/otel/internal/global
 go.opentelemetry.io/otel/propagation
 go.opentelemetry.io/otel/semconv/v1.17.0
-go.opentelemetry.io/otel/semconv/v1.19.0
 go.opentelemetry.io/otel/semconv/v1.20.0
-go.opentelemetry.io/otel/semconv/v1.25.0
 go.opentelemetry.io/otel/semconv/v1.26.0
-# go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc v1.28.0
-## explicit; go 1.21
-go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc
-go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc/internal
-go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc/internal/envconfig
-go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc/internal/oconf
-go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc/internal/retry
-go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc/internal/transform
-# go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp v1.28.0
-## explicit; go 1.21
-go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp
-go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp/internal
-go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp/internal/envconfig
-go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp/internal/oconf
-go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp/internal/retry
-go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp/internal/transform
-# go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.28.0
-## explicit; go 1.21
-go.opentelemetry.io/otel/exporters/otlp/otlptrace
-go.opentelemetry.io/otel/exporters/otlp/otlptrace/internal/tracetransform
-# go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.28.0
-## explicit; go 1.21
-go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc
-go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc/internal
-go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc/internal/envconfig
-go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc/internal/otlpconfig
-go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc/internal/retry
-# go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.28.0
-## explicit; go 1.21
-go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp
-go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp/internal
-go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp/internal/envconfig
-go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp/internal/otlpconfig
-go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp/internal/retry
-# go.opentelemetry.io/otel/metric v1.28.0 => github.com/grafana/opentelemetry-go/metric v1.28.0-grafana.2
+# go.opentelemetry.io/otel/metric v1.28.0
 ## explicit; go 1.21
 go.opentelemetry.io/otel/metric
 go.opentelemetry.io/otel/metric/embedded
 go.opentelemetry.io/otel/metric/noop
-# go.opentelemetry.io/otel/sdk v1.28.0 => github.com/grafana/opentelemetry-go/sdk v1.28.0-grafana.2
+# go.opentelemetry.io/otel/sdk v1.28.0
 ## explicit; go 1.21
 go.opentelemetry.io/otel/sdk
-go.opentelemetry.io/otel/sdk/instrumentation
-go.opentelemetry.io/otel/sdk/internal/env
 go.opentelemetry.io/otel/sdk/internal/x
 go.opentelemetry.io/otel/sdk/resource
-go.opentelemetry.io/otel/sdk/trace
-# go.opentelemetry.io/otel/sdk/metric v1.28.0 => github.com/grafana/opentelemetry-go/sdk/metric v1.28.0-grafana.2
-## explicit; go 1.21
-go.opentelemetry.io/otel/sdk/metric
-go.opentelemetry.io/otel/sdk/metric/internal
-go.opentelemetry.io/otel/sdk/metric/internal/aggregate
-go.opentelemetry.io/otel/sdk/metric/internal/exemplar
-go.opentelemetry.io/otel/sdk/metric/internal/x
-go.opentelemetry.io/otel/sdk/metric/metricdata
-# go.opentelemetry.io/otel/trace v1.28.0 => github.com/grafana/opentelemetry-go/trace v1.28.0-grafana.2
+# go.opentelemetry.io/otel/trace v1.28.0
 ## explicit; go 1.21
 go.opentelemetry.io/otel/trace
 go.opentelemetry.io/otel/trace/embedded
-go.opentelemetry.io/otel/trace/noop
 # go.opentelemetry.io/proto/otlp v1.3.1
 ## explicit; go 1.17
 go.opentelemetry.io/proto/otlp/collector/metrics/v1
@@ -1269,8 +1296,3 @@ sigs.k8s.io/structured-merge-diff/v4/value
 ## explicit; go 1.12
 sigs.k8s.io/yaml
 sigs.k8s.io/yaml/goyaml.v2
-# go.opentelemetry.io/otel => github.com/grafana/opentelemetry-go v1.28.0-grafana.2
-# go.opentelemetry.io/otel/metric => github.com/grafana/opentelemetry-go/metric v1.28.0-grafana.2
-# go.opentelemetry.io/otel/trace => github.com/grafana/opentelemetry-go/trace v1.28.0-grafana.2
-# go.opentelemetry.io/otel/sdk => github.com/grafana/opentelemetry-go/sdk v1.28.0-grafana.2
-# go.opentelemetry.io/otel/sdk/metric => github.com/grafana/opentelemetry-go/sdk/metric v1.28.0-grafana.2

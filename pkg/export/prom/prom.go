@@ -11,7 +11,8 @@ import (
 	"github.com/hashicorp/golang-lru/v2/expirable"
 	"github.com/mariomac/pipes/pipe"
 	"github.com/prometheus/client_golang/prometheus"
-	"go.opentelemetry.io/otel/codes"
+
+	"github.com/grafana/opentelemetry-go/codes"
 
 	"github.com/grafana/beyla/pkg/buildinfo"
 	"github.com/grafana/beyla/pkg/export/attributes"

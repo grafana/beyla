@@ -3,9 +3,9 @@ package request
 import (
 	"strconv"
 
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/codes"
-	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
+	"github.com/grafana/opentelemetry-go/attribute"
+	"github.com/grafana/opentelemetry-go/codes"
+	semconv "github.com/grafana/opentelemetry-go/semconv/v1.19.0"
 
 	"github.com/grafana/beyla/pkg/export/attributes"
 	attr "github.com/grafana/beyla/pkg/export/attributes/names"

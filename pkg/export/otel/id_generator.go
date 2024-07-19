@@ -23,7 +23,7 @@ import (
 	"encoding/binary"
 	"math/rand"
 
-	"go.opentelemetry.io/otel/trace"
+	"github.com/grafana/opentelemetry-go/trace"
 )
 
 type BeylaIDGenerator struct{}

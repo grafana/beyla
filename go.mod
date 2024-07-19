@@ -2,6 +2,11 @@ module github.com/grafana/beyla
 
 go 1.22
 
+// TODO: Important!
+// Replace again github.com/grafana/opentelemetry-go back to go.opentelemetry.io/otel
+// (both the entries here as well as the package imports in the code)
+// when the changes to add Removal are finally merged into the main Go repository
+// Status track: https://github.com/open-telemetry/opentelemetry-specification/pull/4135
 require (
 	github.com/AlessandroPomponio/go-gibberish v0.0.0-20191004143433-a2d4156f0396
 	github.com/caarlos0/env/v9 v9.0.0
@@ -14,6 +19,16 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/mux v1.8.1
 	github.com/grafana/go-offsets-tracker v0.1.7
+	github.com/grafana/opentelemetry-go v1.28.0-grafana.7-renamed
+	github.com/grafana/opentelemetry-go/exporters/otlp/otlpmetric/otlpmetricgrpc v1.28.0-grafana.7-renamed
+	github.com/grafana/opentelemetry-go/exporters/otlp/otlpmetric/otlpmetrichttp v1.28.0-grafana.7-renamed
+	github.com/grafana/opentelemetry-go/exporters/otlp/otlptrace v1.28.0-grafana.7-renamed
+	github.com/grafana/opentelemetry-go/exporters/otlp/otlptrace/otlptracegrpc v1.28.0-grafana.7-renamed
+	github.com/grafana/opentelemetry-go/exporters/otlp/otlptrace/otlptracehttp v1.28.0-grafana.7-renamed
+	github.com/grafana/opentelemetry-go/metric v1.28.0-grafana.7-renamed
+	github.com/grafana/opentelemetry-go/sdk v1.28.0-grafana.7-renamed
+	github.com/grafana/opentelemetry-go/sdk/metric v1.28.0-grafana.7-renamed
+	github.com/grafana/opentelemetry-go/trace v1.28.0-grafana.7-renamed
 	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/mariomac/guara v0.0.0-20230621100729-42bd7716e524
 	github.com/mariomac/pipes v0.10.0
@@ -41,16 +56,6 @@ require (
 	go.opentelemetry.io/collector/exporter/otlphttpexporter v0.104.0
 	go.opentelemetry.io/collector/pdata v1.11.0
 	go.opentelemetry.io/contrib/detectors/aws/eks v1.28.0
-	go.opentelemetry.io/otel v1.28.0
-	go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc v1.28.0
-	go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp v1.28.0
-	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.28.0
-	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.28.0
-	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.28.0
-	go.opentelemetry.io/otel/metric v1.28.0
-	go.opentelemetry.io/otel/sdk v1.28.0
-	go.opentelemetry.io/otel/sdk/metric v1.28.0
-	go.opentelemetry.io/otel/trace v1.28.0
 	go.uber.org/zap v1.27.0
 	golang.org/x/arch v0.7.0
 	golang.org/x/mod v0.17.0
@@ -64,16 +69,6 @@ require (
 	k8s.io/client-go v0.29.4
 	sigs.k8s.io/e2e-framework v0.3.0
 )
-
-replace go.opentelemetry.io/otel => github.com/grafana/opentelemetry-go v1.28.0-grafana.2
-
-replace go.opentelemetry.io/otel/metric => github.com/grafana/opentelemetry-go/metric v1.28.0-grafana.2
-
-replace go.opentelemetry.io/otel/trace => github.com/grafana/opentelemetry-go/trace v1.28.0-grafana.2
-
-replace go.opentelemetry.io/otel/sdk => github.com/grafana/opentelemetry-go/sdk v1.28.0-grafana.2
-
-replace go.opentelemetry.io/otel/sdk/metric => github.com/grafana/opentelemetry-go/sdk/metric v1.28.0-grafana.2
 
 require (
 	github.com/beorn7/perks v1.0.1 // indirect
@@ -150,6 +145,10 @@ require (
 	go.opentelemetry.io/collector/featuregate v1.11.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.52.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.52.0 // indirect
+	go.opentelemetry.io/otel v1.28.0 // indirect
+	go.opentelemetry.io/otel/metric v1.28.0 // indirect
+	go.opentelemetry.io/otel/sdk v1.28.0 // indirect
+	go.opentelemetry.io/otel/trace v1.28.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.3.1 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	golang.org/x/crypto v0.24.0 // indirect

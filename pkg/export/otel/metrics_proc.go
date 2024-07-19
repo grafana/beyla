@@ -8,11 +8,12 @@ import (
 	"strconv"
 
 	"github.com/mariomac/pipes/pipe"
-	"go.opentelemetry.io/otel/attribute"
-	metric2 "go.opentelemetry.io/otel/metric"
-	"go.opentelemetry.io/otel/sdk/metric"
-	"go.opentelemetry.io/otel/sdk/resource"
-	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
+
+	"github.com/grafana/opentelemetry-go/attribute"
+	metric2 "github.com/grafana/opentelemetry-go/metric"
+	"github.com/grafana/opentelemetry-go/sdk/metric"
+	"github.com/grafana/opentelemetry-go/sdk/resource"
+	semconv "github.com/grafana/opentelemetry-go/semconv/v1.19.0"
 
 	"github.com/grafana/beyla/pkg/export/attributes"
 	attr2 "github.com/grafana/beyla/pkg/export/attributes/names"

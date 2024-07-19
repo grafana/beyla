@@ -5,7 +5,8 @@ import (
 	"fmt"
 
 	"github.com/mariomac/pipes/pipe"
-	"go.opentelemetry.io/otel/trace"
+
+	"github.com/grafana/opentelemetry-go/trace"
 
 	"github.com/grafana/beyla/pkg/internal/request"
 )

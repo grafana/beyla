@@ -4,7 +4,7 @@ import (
 	"log/slog"
 	"strconv"
 
-	"go.opentelemetry.io/otel/sdk/trace"
+	"github.com/grafana/opentelemetry-go/sdk/trace"
 )
 
 // Sampler standard configuration

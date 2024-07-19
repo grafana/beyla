@@ -1,7 +1,7 @@
 package svc
 
 import (
-	semconv "go.opentelemetry.io/otel/semconv/v1.25.0"
+	semconv "github.com/grafana/opentelemetry-go/semconv/v1.25.0"
 
 	attr "github.com/grafana/beyla/pkg/export/attributes/names"
 )

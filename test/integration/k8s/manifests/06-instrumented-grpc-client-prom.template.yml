@@ -79,3 +79,5 @@ spec:
           value: "true"
         - name: BEYLA_KUBE_METADATA_ENABLE
           value: "true"
+        - name: BEYLA_NAME_RESOLVER_SOURCES
+          value: "dns,k8s"

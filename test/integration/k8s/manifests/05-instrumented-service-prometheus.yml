@@ -130,6 +130,8 @@ spec:
               value: "30m0s"
             - name: BEYLA_KUBE_CLUSTER_NAME
               value: "beyla"
+            - name: BEYLA_NAME_RESOLVER_SOURCES
+              value: "dns,k8s"
           ports:
             - containerPort: 8999
               hostPort: 8999

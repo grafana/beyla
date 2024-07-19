@@ -6,7 +6,7 @@ import (
 	"slices"
 
 	attr "github.com/grafana/beyla/pkg/export/attributes/names"
-	"github.com/grafana/beyla/pkg/internal/helpers"
+	maps2 "github.com/grafana/beyla/pkg/internal/helpers/maps"
 )
 
 // Default is true if an attribute must be reported by default,
@@ -52,7 +52,7 @@ func (p *AttrSelector) For(metricName Name) []attr.Name {
 	allInclusionLists := p.selector.Matching(metricName)
 	if len(allInclusionLists) == 0 {
 		// if the user did not provide any selector, return the default attributes for that metric
-		attrs := helpers.SetToSlice(attributeNames.Default())
+		attrs := maps2.SetToSlice(attributeNames.Default())
 		slices.Sort(attrs)
 		return attrs
 	}
@@ -68,7 +68,7 @@ func (p *AttrSelector) For(metricName Name) []attr.Name {
 		p.rmExcludedAttributes(matchingAttrs, il)
 	}
 
-	sas := helpers.SetToSlice(matchingAttrs)
+	sas := maps2.SetToSlice(matchingAttrs)
 	slices.Sort(sas)
 	return sas
 }

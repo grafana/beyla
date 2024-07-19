@@ -9,15 +9,9 @@ import (
 	"time"
 
 	"k8s.io/client-go/kubernetes"
-)
 
-type EnableFlag string
-
-const (
-	EnabledTrue       = EnableFlag("true")
-	EnabledFalse      = EnableFlag("false")
-	EnabledAutodetect = EnableFlag("autodetect")
-	EnabledDefault    = EnabledFalse
+	"github.com/grafana/beyla/pkg/internal/helpers/maps"
+	"github.com/grafana/beyla/pkg/kubeflags"
 )
 
 type MetadataProvider struct {
@@ -28,11 +22,11 @@ type MetadataProvider struct {
 	syncTimeout    time.Duration
 
 	enable            atomic.Value
-	disabledInformers informerType
+	disabledInformers maps.Bits
 }
 
 func NewMetadataProvider(
-	enable EnableFlag,
+	enable kubeflags.EnableFlag,
 	disabledInformers []string,
 	kubeConfigPath string,
 	syncTimeout time.Duration,
@@ -50,20 +44,20 @@ func (mp *MetadataProvider) IsKubeEnabled() bool {
 	if mp == nil {
 		return false
 	}
-	switch strings.ToLower(string(mp.enable.Load().(EnableFlag))) {
-	case string(EnabledTrue):
+	switch strings.ToLower(string(mp.enable.Load().(kubeflags.EnableFlag))) {
+	case string(kubeflags.EnabledTrue):
 		return true
-	case string(EnabledFalse), "": // empty value is disabled
+	case string(kubeflags.EnabledFalse), "": // empty value is disabled
 		return false
-	case string(EnabledAutodetect):
+	case string(kubeflags.EnabledAutodetect):
 		// We autodetect that we are in a kubernetes if we can properly load a K8s configuration file
 		_, err := LoadConfig(mp.kubeConfigPath)
 		if err != nil {
 			klog().Debug("kubeconfig can't be detected. Assuming we are not in Kubernetes", "error", err)
-			mp.enable.Store(EnabledFalse)
+			mp.enable.Store(kubeflags.EnabledFalse)
 			return false
 		}
-		mp.enable.Store(EnabledTrue)
+		mp.enable.Store(kubeflags.EnabledTrue)
 		return true
 	default:
 		klog().Warn("invalid value for Enable value. Ignoring stage", "value", mp.enable.Load())
@@ -72,7 +66,7 @@ func (mp *MetadataProvider) IsKubeEnabled() bool {
 }
 
 func (mp *MetadataProvider) ForceDisable() {
-	mp.enable.Store(EnabledFalse)
+	mp.enable.Store(kubeflags.EnabledFalse)
 }
 
 func (mp *MetadataProvider) Get(ctx context.Context) (*Metadata, error) {

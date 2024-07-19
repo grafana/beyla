@@ -8,8 +8,8 @@ import (
 	"github.com/mariomac/pipes/pipe"
 	"k8s.io/client-go/tools/cache"
 
-	"github.com/grafana/beyla/pkg/internal/helpers"
 	"github.com/grafana/beyla/pkg/internal/helpers/container"
+	"github.com/grafana/beyla/pkg/internal/helpers/maps"
 	"github.com/grafana/beyla/pkg/internal/kube"
 	"github.com/grafana/beyla/pkg/services"
 )
@@ -41,7 +41,7 @@ type watcherKubeEnricher struct {
 	// we use our own indexer instead an informer indexer because we need a 1:N relation while
 	// the other indices provide N:1 relation
 	// level-1 key: replicaset ns/name. Level-2 key: Pod name
-	podsByOwner helpers.Map2[nsName, string, *kube.PodInfo]
+	podsByOwner maps.Map2[nsName, string, *kube.PodInfo]
 
 	podsInfoCh chan Event[*kube.PodInfo]
 	rsInfoCh   chan Event[*kube.ReplicaSetInfo]
@@ -84,7 +84,7 @@ func (wk *watcherKubeEnricher) init() error {
 	wk.log = slog.With("component", "discover.watcherKubeEnricher")
 	wk.containerByPID = map[PID]container.Info{}
 	wk.processByContainer = map[string]processAttrs{}
-	wk.podsByOwner = helpers.Map2[nsName, string, *kube.PodInfo]{}
+	wk.podsByOwner = maps.Map2[nsName, string, *kube.PodInfo]{}
 
 	// the podsInfoCh channel will receive any update about pods being created or deleted
 	wk.podsInfoCh = make(chan Event[*kube.PodInfo], 10)

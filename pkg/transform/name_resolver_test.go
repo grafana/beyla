@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	attr "github.com/grafana/beyla/pkg/internal/export/attributes/names"
+	attr "github.com/grafana/beyla/pkg/export/attributes/names"
 	kube2 "github.com/grafana/beyla/pkg/internal/kube"
 	"github.com/grafana/beyla/pkg/internal/request"
 	"github.com/grafana/beyla/pkg/internal/svc"
@@ -62,8 +62,9 @@ func TestResolvePodsFromK8s(t *testing.T) {
 	assert.Nil(t, db.PodInfoForIP("10.1.0.3"))
 
 	nr := NameResolver{
-		db:    &db,
-		cache: expirable.NewLRU[string, string](10, nil, 5*time.Hour),
+		db:      &db,
+		cache:   expirable.NewLRU[string, string](10, nil, 5*time.Hour),
+		sources: resolverSources([]string{"dns", "k8s"}),
 	}
 
 	name, namespace := nr.resolveFromK8s("10.0.0.1")
@@ -144,8 +145,9 @@ func TestResolveServiceFromK8s(t *testing.T) {
 	assert.Nil(t, db.PodInfoForIP("10.1.0.3"))
 
 	nr := NameResolver{
-		db:    &db,
-		cache: expirable.NewLRU[string, string](10, nil, 5*time.Hour),
+		db:      &db,
+		cache:   expirable.NewLRU[string, string](10, nil, 5*time.Hour),
+		sources: resolverSources([]string{"dns", "k8s"}),
 	}
 
 	name, namespace := nr.resolveFromK8s("10.0.0.1")

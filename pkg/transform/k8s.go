@@ -7,11 +7,12 @@ import (
 
 	"github.com/mariomac/pipes/pipe"
 
-	attr "github.com/grafana/beyla/pkg/internal/export/attributes/names"
+	attr "github.com/grafana/beyla/pkg/export/attributes/names"
 	"github.com/grafana/beyla/pkg/internal/kube"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/pkg/internal/request"
 	"github.com/grafana/beyla/pkg/internal/svc"
+	"github.com/grafana/beyla/pkg/kubeflags"
 )
 
 func klog() *slog.Logger {
@@ -19,7 +20,7 @@ func klog() *slog.Logger {
 }
 
 type KubernetesDecorator struct {
-	Enable kube.EnableFlag `yaml:"enable" env:"BEYLA_KUBE_METADATA_ENABLE"`
+	Enable kubeflags.EnableFlag `yaml:"enable" env:"BEYLA_KUBE_METADATA_ENABLE"`
 
 	// ClusterName overrides cluster name. If empty, the NetO11y module will try to retrieve
 	// it from the Cloud Provider Metadata (EC2, GCP and Azure), and leave it empty if it fails to.

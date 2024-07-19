@@ -11,16 +11,16 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/grafana/beyla/pkg/export/attributes"
+	"github.com/grafana/beyla/pkg/export/instrumentations"
+	"github.com/grafana/beyla/pkg/export/otel"
+	"github.com/grafana/beyla/pkg/export/prom"
 	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
-	"github.com/grafana/beyla/pkg/internal/export/attributes"
-	"github.com/grafana/beyla/pkg/internal/export/instrumentations"
-	"github.com/grafana/beyla/pkg/internal/export/otel"
-	"github.com/grafana/beyla/pkg/internal/export/prom"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/infraolly/process"
-	"github.com/grafana/beyla/pkg/internal/kube"
 	"github.com/grafana/beyla/pkg/internal/netolly/transform/cidr"
 	"github.com/grafana/beyla/pkg/internal/traces"
+	"github.com/grafana/beyla/pkg/kubeflags"
 	"github.com/grafana/beyla/pkg/transform"
 )
 
@@ -65,6 +65,7 @@ network:
 	require.NoError(t, os.Setenv("BEYLA_INTERNAL_METRICS_PROMETHEUS_PORT", "3210"))
 	require.NoError(t, os.Setenv("GRAFANA_CLOUD_SUBMIT", "metrics,traces"))
 	require.NoError(t, os.Setenv("KUBECONFIG", "/foo/bar"))
+	require.NoError(t, os.Setenv("BEYLA_NAME_RESOLVER_SOURCES", "k8s,dns"))
 	defer unsetEnv(t, map[string]string{
 		"KUBECONFIG":      "",
 		"BEYLA_OPEN_PORT": "", "BEYLA_EXECUTABLE_NAME": "", "OTEL_SERVICE_NAME": "", "BEYLA_NOOP_TRACES": "",
@@ -162,7 +163,7 @@ network:
 			},
 			Kubernetes: transform.KubernetesDecorator{
 				KubeconfigPath:       "/foo/bar",
-				Enable:               kube.EnabledTrue,
+				Enable:               kubeflags.EnabledTrue,
 				InformersSyncTimeout: 30 * time.Second,
 			},
 			Select: attributes.Selection{
@@ -176,6 +177,7 @@ network:
 			Unmatch: transform.UnmatchHeuristic,
 		},
 		NameResolver: &transform.NameResolverConfig{
+			Sources:  []string{"k8s", "dns"},
 			CacheLen: 1024,
 			CacheTTL: 5 * time.Minute,
 		},

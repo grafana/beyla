@@ -16,10 +16,10 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 
 	"github.com/grafana/beyla/pkg/beyla"
-	"github.com/grafana/beyla/pkg/internal/export/attributes"
-	attr "github.com/grafana/beyla/pkg/internal/export/attributes/names"
-	"github.com/grafana/beyla/pkg/internal/export/instrumentations"
-	"github.com/grafana/beyla/pkg/internal/export/otel"
+	"github.com/grafana/beyla/pkg/export/attributes"
+	attr "github.com/grafana/beyla/pkg/export/attributes/names"
+	"github.com/grafana/beyla/pkg/export/instrumentations"
+	"github.com/grafana/beyla/pkg/export/otel"
 	"github.com/grafana/beyla/pkg/internal/filter"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/kube"
@@ -28,6 +28,7 @@ import (
 	"github.com/grafana/beyla/pkg/internal/svc"
 	"github.com/grafana/beyla/pkg/internal/testutil"
 	"github.com/grafana/beyla/pkg/internal/traces"
+	"github.com/grafana/beyla/pkg/kubeflags"
 	"github.com/grafana/beyla/pkg/transform"
 	"github.com/grafana/beyla/test/collector"
 	"github.com/grafana/beyla/test/consumer"
@@ -39,7 +40,7 @@ func gctx(groups attributes.AttrGroups) *global.ContextInfo {
 	return &global.ContextInfo{
 		Metrics:               imetrics.NoopReporter{},
 		MetricAttributeGroups: groups,
-		K8sInformer:           kube.NewMetadataProvider(kube.EnabledFalse, nil, "", 0),
+		K8sInformer:           kube.NewMetadataProvider(kubeflags.EnabledFalse, nil, "", 0),
 	}
 }
 

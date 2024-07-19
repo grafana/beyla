@@ -17,6 +17,8 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/clientcmd"
+
+	"github.com/grafana/beyla/pkg/internal/helpers/maps"
 )
 
 const (
@@ -52,7 +54,7 @@ type Metadata struct {
 
 	containerEventHandlers []ContainerEventHandler
 
-	disabledInformers informerType
+	disabledInformers maps.Bits
 }
 
 // PodInfo contains precollected metadata for Pods.

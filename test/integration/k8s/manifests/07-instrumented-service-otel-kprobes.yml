@@ -123,3 +123,5 @@ spec:
           value: "8999"
         - name: BEYLA_KUBE_METADATA_ENABLE
           value: "autodetect"
+        - name: BEYLA_NAME_RESOLVER_SOURCES
+          value: "dns,k8s"

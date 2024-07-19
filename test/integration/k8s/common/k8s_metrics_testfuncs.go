@@ -25,7 +25,7 @@ const (
 	testTimeout        = 2 * time.Minute
 	prometheusHostPort = "localhost:39090"
 
-	HostIDRegex = `^[0-9A-Fa-f]+$`
+	HostIDRegex = `^[0-9A-Fa-f\-]+$`
 	UUIDRegex   = `^[0-9A-Fa-f]{8}-([0-9A-Fa-f]{4}-){3}[0-9A-Fa-f]{12}$`
 	TimeRegex   = `^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d`
 )

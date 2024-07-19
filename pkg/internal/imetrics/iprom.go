@@ -34,7 +34,7 @@ type PrometheusReporter struct {
 	beylaInfo             prometheus.Gauge
 }
 
-func NewPrometheusReporter(cfg *PrometheusConfig, manager *connector.PrometheusManager) *PrometheusReporter {
+func NewPrometheusReporter(cfg *PrometheusConfig, manager *connector.PrometheusManager, registry *prometheus.Registry) *PrometheusReporter {
 	pr := &PrometheusReporter{
 		connector: manager,
 		tracerFlushes: prometheus.NewHistogram(prometheus.HistogramOpts{
@@ -82,21 +82,34 @@ func NewPrometheusReporter(cfg *PrometheusConfig, manager *connector.PrometheusM
 			},
 		}),
 	}
-	manager.Register(cfg.Port, cfg.Path,
-		pr.tracerFlushes,
-		pr.otelMetricExports,
-		pr.otelMetricExportErrs,
-		pr.otelTraceExports,
-		pr.otelTraceExportErrs,
-		pr.prometheusRequests,
-		pr.instrumentedProcesses,
-		pr.beylaInfo)
+	if registry != nil {
+		registry.MustRegister(pr.tracerFlushes,
+			pr.otelMetricExports,
+			pr.otelMetricExportErrs,
+			pr.otelTraceExports,
+			pr.otelTraceExportErrs,
+			pr.prometheusRequests,
+			pr.instrumentedProcesses,
+			pr.beylaInfo)
+	} else {
+		manager.Register(cfg.Port, cfg.Path,
+			pr.tracerFlushes,
+			pr.otelMetricExports,
+			pr.otelMetricExportErrs,
+			pr.otelTraceExports,
+			pr.otelTraceExportErrs,
+			pr.prometheusRequests,
+			pr.instrumentedProcesses,
+			pr.beylaInfo)
+	}
 
 	return pr
 }
 
 func (p *PrometheusReporter) Start(ctx context.Context) {
-	p.connector.StartHTTP(ctx)
+	if p.connector != nil {
+		p.connector.StartHTTP(ctx)
+	}
 	p.beylaInfo.Set(1)
 }
 

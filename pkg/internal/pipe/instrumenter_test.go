@@ -104,6 +104,8 @@ func TestBasicPipeline(t *testing.T) {
 			string(attr.ClientAddr):             "1.1.1.1",
 			string(semconv.ServiceNameKey):      "foo-svc",
 			string(semconv.ServiceNamespaceKey): "ns",
+			string(attr.ServerPort):             "8080",
+			string(attr.ServerAddr):             event.Attributes["server.address"],
 		},
 		ResourceAttributes: map[string]string{
 			string(semconv.HostNameKey):             "the-host",
@@ -308,6 +310,8 @@ func TestRouteConsolidation(t *testing.T) {
 			string(attr.HTTPRequestMethod):      "GET",
 			string(attr.HTTPResponseStatusCode): "200",
 			string(semconv.HTTPRouteKey):        "/user/{id}",
+			string(attr.ServerPort):             "8080",
+			string(attr.ServerAddr):             events["/user/{id}"].Attributes["server.address"],
 		},
 		ResourceAttributes: map[string]string{
 			string(semconv.HostNameKey):             "the-host",
@@ -329,6 +333,8 @@ func TestRouteConsolidation(t *testing.T) {
 			string(attr.HTTPRequestMethod):      "GET",
 			string(attr.HTTPResponseStatusCode): "200",
 			string(semconv.HTTPRouteKey):        "/products/{id}/push",
+			string(attr.ServerPort):             "8080",
+			string(attr.ServerAddr):             events["/products/{id}/push"].Attributes["server.address"],
 		},
 		ResourceAttributes: map[string]string{
 			string(semconv.HostNameKey):             "the-host",
@@ -350,6 +356,8 @@ func TestRouteConsolidation(t *testing.T) {
 			string(attr.HTTPRequestMethod):      "GET",
 			string(attr.HTTPResponseStatusCode): "200",
 			string(semconv.HTTPRouteKey):        "/**",
+			string(attr.ServerPort):             "8080",
+			string(attr.ServerAddr):             events["/**"].Attributes["server.address"],
 		},
 		ResourceAttributes: map[string]string{
 			string(semconv.HostNameKey):             "the-host",
@@ -408,6 +416,8 @@ func TestGRPCPipeline(t *testing.T) {
 			string(semconv.RPCGRPCStatusCodeKey): "3",
 			string(semconv.RPCMethodKey):         "/foo/bar",
 			string(attr.ClientAddr):              "1.1.1.1",
+			string(attr.ServerPort):              "8080",
+			string(attr.ServerAddr):              event.Attributes["server.address"],
 		},
 		ResourceAttributes: map[string]string{
 			string(semconv.HostNameKey):             "the-host",
@@ -498,6 +508,8 @@ func TestBasicPipelineInfo(t *testing.T) {
 			string(attr.ClientAddr):             "1.1.1.1",
 			string(semconv.ServiceNameKey):      "comm",
 			string(semconv.ServiceNamespaceKey): "",
+			string(attr.ServerPort):             "8080",
+			string(attr.ServerAddr):             event.Attributes["server.address"],
 		},
 		ResourceAttributes: map[string]string{
 			string(semconv.HostNameKey):             "the-host",
@@ -594,6 +606,8 @@ func TestSpanAttributeFilterNode(t *testing.T) {
 			string(attr.HTTPRequestMethod):      "GET",
 			string(attr.HTTPResponseStatusCode): "201",
 			string(attr.HTTPUrlPath):            "/user/1234",
+			string(attr.ServerPort):             "8080",
+			string(attr.ServerAddr):             events["/user/1234"]["server.address"],
 		},
 		"/user/4321": {
 			string(semconv.ServiceNameKey):      "svc-3",
@@ -602,6 +616,8 @@ func TestSpanAttributeFilterNode(t *testing.T) {
 			string(attr.HTTPRequestMethod):      "GET",
 			string(attr.HTTPResponseStatusCode): "203",
 			string(attr.HTTPUrlPath):            "/user/4321",
+			string(attr.ServerPort):             "8080",
+			string(attr.ServerAddr):             events["/user/1234"]["server.address"],
 		},
 	}, events)
 }

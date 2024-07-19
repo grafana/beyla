@@ -107,6 +107,7 @@ func (p *Tracer) Constants(_ *exec.FileInfo, offsets *goexec.Offsets) map[string
 		"pc_conn_pos",
 		"pc_tls_pos",
 		"c_rwc_pos",
+		"c_tls_pos",
 		"net_conn_pos",
 		"conn_fd_pos",
 		"fd_laddr_pos",
@@ -122,7 +123,6 @@ func (p *Tracer) Constants(_ *exec.FileInfo, offsets *goexec.Offsets) map[string
 		"framer_w_pos",
 		"cc_tconn_pos",
 		"sc_conn_pos",
-		"c_tls_pos",
 	} {
 		constants[s] = offsets.Field[s]
 		if constants[s] == nil {

@@ -154,9 +154,9 @@ int uprobe_readRequestStart(struct pt_regs *ctx) {
         if (c_ptr) {
             void *conn_conn_ptr = c_ptr + 8 + c_rwc_pos; // embedded struct
             void *tls_state = 0;
-            bpf_probe_read(&c_ptr, sizeof(tls_state), (void *)(c_ptr + c_tls_pos));
+            bpf_probe_read(&tls_state, sizeof(tls_state), (void *)(c_ptr + c_tls_pos));
             conn_conn_ptr = unwrap_tls_conn_info(conn_conn_ptr, tls_state);
-            bpf_dbg_printk("conn_conn_ptr %llx, tls_state %llx", conn_conn_ptr, tls_state);
+            bpf_dbg_printk("conn_conn_ptr %llx, tls_state %llx, c_tls_pos = %d, c_tls_ptr = %llx", conn_conn_ptr, tls_state, c_tls_pos, c_ptr + c_tls_pos);
             if (conn_conn_ptr) {
                 void *conn_ptr = 0;
                 bpf_probe_read(&conn_ptr, sizeof(conn_ptr), (void *)(conn_conn_ptr + net_conn_pos)); // find conn

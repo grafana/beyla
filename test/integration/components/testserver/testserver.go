@@ -24,6 +24,8 @@ that allow modifying its behavior (duration, response...)
 type config struct {
 	// STDPort to listen connections using the standard library
 	STDPort int `env:"STD_PORT" envDefault:"8080"`
+	// STDPort to listen connections using the standard library
+	STDTLSPort int `env:"STD_TLS_PORT" envDefault:"8383"`
 	// GinPort to listen connections using the Gin framework
 	GinPort int `env:"GIN_PORT" envDefault:"8081"`
 	// GorillaPort to listen connections using the Gorilla Mux framework
@@ -45,6 +47,10 @@ func main() {
 	wait := make(chan struct{})
 	go func() {
 		std.Setup(cfg.STDPort)
+		close(wait)
+	}()
+	go func() {
+		std.SetupTLS(cfg.STDTLSPort)
 		close(wait)
 	}()
 	go func() {

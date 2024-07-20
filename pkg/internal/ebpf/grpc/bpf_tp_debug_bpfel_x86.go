@@ -45,6 +45,12 @@ type bpf_tp_debugGrpcSrvFuncInvocationT struct {
 	Tp              bpf_tp_debugTpInfoT
 }
 
+type bpf_tp_debugGrpcTransportsT struct {
+	Type uint8
+	_    [1]byte
+	Conn bpf_tp_debugConnectionInfoT
+}
+
 type bpf_tp_debugTpInfoPidT struct {
 	Tp    bpf_tp_debugTpInfoT
 	Pid   uint32
@@ -102,18 +108,21 @@ type bpf_tp_debugSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpf_tp_debugProgramSpecs struct {
-	UprobeClientConnClose               *ebpf.ProgramSpec `ebpf:"uprobe_ClientConn_Close"`
-	UprobeClientConnInvoke              *ebpf.ProgramSpec `ebpf:"uprobe_ClientConn_Invoke"`
-	UprobeClientConnInvokeReturn        *ebpf.ProgramSpec `ebpf:"uprobe_ClientConn_Invoke_return"`
-	UprobeClientConnNewStream           *ebpf.ProgramSpec `ebpf:"uprobe_ClientConn_NewStream"`
-	UprobeClientConnNewStreamReturn     *ebpf.ProgramSpec `ebpf:"uprobe_ClientConn_NewStream_return"`
-	UprobeClientStreamRecvMsgReturn     *ebpf.ProgramSpec `ebpf:"uprobe_clientStream_RecvMsg_return"`
-	UprobeGrpcFramerWriteHeaders        *ebpf.ProgramSpec `ebpf:"uprobe_grpcFramerWriteHeaders"`
-	UprobeGrpcFramerWriteHeadersReturns *ebpf.ProgramSpec `ebpf:"uprobe_grpcFramerWriteHeaders_returns"`
-	UprobeServerHandleStream            *ebpf.ProgramSpec `ebpf:"uprobe_server_handleStream"`
-	UprobeServerHandleStreamReturn      *ebpf.ProgramSpec `ebpf:"uprobe_server_handleStream_return"`
-	UprobeTransportHttp2ClientNewStream *ebpf.ProgramSpec `ebpf:"uprobe_transport_http2Client_NewStream"`
-	UprobeTransportWriteStatus          *ebpf.ProgramSpec `ebpf:"uprobe_transport_writeStatus"`
+	UprobeClientConnClose                     *ebpf.ProgramSpec `ebpf:"uprobe_ClientConn_Close"`
+	UprobeClientConnInvoke                    *ebpf.ProgramSpec `ebpf:"uprobe_ClientConn_Invoke"`
+	UprobeClientConnInvokeReturn              *ebpf.ProgramSpec `ebpf:"uprobe_ClientConn_Invoke_return"`
+	UprobeClientConnNewStream                 *ebpf.ProgramSpec `ebpf:"uprobe_ClientConn_NewStream"`
+	UprobeClientConnNewStreamReturn           *ebpf.ProgramSpec `ebpf:"uprobe_ClientConn_NewStream_return"`
+	UprobeClientStreamRecvMsgReturn           *ebpf.ProgramSpec `ebpf:"uprobe_clientStream_RecvMsg_return"`
+	UprobeGrpcFramerWriteHeaders              *ebpf.ProgramSpec `ebpf:"uprobe_grpcFramerWriteHeaders"`
+	UprobeGrpcFramerWriteHeadersReturns       *ebpf.ProgramSpec `ebpf:"uprobe_grpcFramerWriteHeaders_returns"`
+	UprobeHttp2ServerOperateHeaders           *ebpf.ProgramSpec `ebpf:"uprobe_http2Server_operateHeaders"`
+	UprobeNetFdReadGRPC                       *ebpf.ProgramSpec `ebpf:"uprobe_netFdReadGRPC"`
+	UprobeServerHandleStream                  *ebpf.ProgramSpec `ebpf:"uprobe_server_handleStream"`
+	UprobeServerHandleStreamReturn            *ebpf.ProgramSpec `ebpf:"uprobe_server_handleStream_return"`
+	UprobeServerHandlerTransportHandleStreams *ebpf.ProgramSpec `ebpf:"uprobe_server_handler_transport_handle_streams"`
+	UprobeTransportHttp2ClientNewStream       *ebpf.ProgramSpec `ebpf:"uprobe_transport_http2Client_NewStream"`
+	UprobeTransportWriteStatus                *ebpf.ProgramSpec `ebpf:"uprobe_transport_writeStatus"`
 }
 
 // bpf_tp_debugMapSpecs contains maps before they are loaded into the kernel.
@@ -129,8 +138,10 @@ type bpf_tp_debugMapSpecs struct {
 	OngoingGoroutines         *ebpf.MapSpec `ebpf:"ongoing_goroutines"`
 	OngoingGrpcClientRequests *ebpf.MapSpec `ebpf:"ongoing_grpc_client_requests"`
 	OngoingGrpcHeaderWrites   *ebpf.MapSpec `ebpf:"ongoing_grpc_header_writes"`
+	OngoingGrpcOperateHeaders *ebpf.MapSpec `ebpf:"ongoing_grpc_operate_headers"`
 	OngoingGrpcRequestStatus  *ebpf.MapSpec `ebpf:"ongoing_grpc_request_status"`
 	OngoingGrpcServerRequests *ebpf.MapSpec `ebpf:"ongoing_grpc_server_requests"`
+	OngoingGrpcTransports     *ebpf.MapSpec `ebpf:"ongoing_grpc_transports"`
 	OngoingServerConnections  *ebpf.MapSpec `ebpf:"ongoing_server_connections"`
 	OngoingStreams            *ebpf.MapSpec `ebpf:"ongoing_streams"`
 	TraceMap                  *ebpf.MapSpec `ebpf:"trace_map"`
@@ -164,8 +175,10 @@ type bpf_tp_debugMaps struct {
 	OngoingGoroutines         *ebpf.Map `ebpf:"ongoing_goroutines"`
 	OngoingGrpcClientRequests *ebpf.Map `ebpf:"ongoing_grpc_client_requests"`
 	OngoingGrpcHeaderWrites   *ebpf.Map `ebpf:"ongoing_grpc_header_writes"`
+	OngoingGrpcOperateHeaders *ebpf.Map `ebpf:"ongoing_grpc_operate_headers"`
 	OngoingGrpcRequestStatus  *ebpf.Map `ebpf:"ongoing_grpc_request_status"`
 	OngoingGrpcServerRequests *ebpf.Map `ebpf:"ongoing_grpc_server_requests"`
+	OngoingGrpcTransports     *ebpf.Map `ebpf:"ongoing_grpc_transports"`
 	OngoingServerConnections  *ebpf.Map `ebpf:"ongoing_server_connections"`
 	OngoingStreams            *ebpf.Map `ebpf:"ongoing_streams"`
 	TraceMap                  *ebpf.Map `ebpf:"trace_map"`
@@ -182,8 +195,10 @@ func (m *bpf_tp_debugMaps) Close() error {
 		m.OngoingGoroutines,
 		m.OngoingGrpcClientRequests,
 		m.OngoingGrpcHeaderWrites,
+		m.OngoingGrpcOperateHeaders,
 		m.OngoingGrpcRequestStatus,
 		m.OngoingGrpcServerRequests,
+		m.OngoingGrpcTransports,
 		m.OngoingServerConnections,
 		m.OngoingStreams,
 		m.TraceMap,
@@ -194,18 +209,21 @@ func (m *bpf_tp_debugMaps) Close() error {
 //
 // It can be passed to loadBpf_tp_debugObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpf_tp_debugPrograms struct {
-	UprobeClientConnClose               *ebpf.Program `ebpf:"uprobe_ClientConn_Close"`
-	UprobeClientConnInvoke              *ebpf.Program `ebpf:"uprobe_ClientConn_Invoke"`
-	UprobeClientConnInvokeReturn        *ebpf.Program `ebpf:"uprobe_ClientConn_Invoke_return"`
-	UprobeClientConnNewStream           *ebpf.Program `ebpf:"uprobe_ClientConn_NewStream"`
-	UprobeClientConnNewStreamReturn     *ebpf.Program `ebpf:"uprobe_ClientConn_NewStream_return"`
-	UprobeClientStreamRecvMsgReturn     *ebpf.Program `ebpf:"uprobe_clientStream_RecvMsg_return"`
-	UprobeGrpcFramerWriteHeaders        *ebpf.Program `ebpf:"uprobe_grpcFramerWriteHeaders"`
-	UprobeGrpcFramerWriteHeadersReturns *ebpf.Program `ebpf:"uprobe_grpcFramerWriteHeaders_returns"`
-	UprobeServerHandleStream            *ebpf.Program `ebpf:"uprobe_server_handleStream"`
-	UprobeServerHandleStreamReturn      *ebpf.Program `ebpf:"uprobe_server_handleStream_return"`
-	UprobeTransportHttp2ClientNewStream *ebpf.Program `ebpf:"uprobe_transport_http2Client_NewStream"`
-	UprobeTransportWriteStatus          *ebpf.Program `ebpf:"uprobe_transport_writeStatus"`
+	UprobeClientConnClose                     *ebpf.Program `ebpf:"uprobe_ClientConn_Close"`
+	UprobeClientConnInvoke                    *ebpf.Program `ebpf:"uprobe_ClientConn_Invoke"`
+	UprobeClientConnInvokeReturn              *ebpf.Program `ebpf:"uprobe_ClientConn_Invoke_return"`
+	UprobeClientConnNewStream                 *ebpf.Program `ebpf:"uprobe_ClientConn_NewStream"`
+	UprobeClientConnNewStreamReturn           *ebpf.Program `ebpf:"uprobe_ClientConn_NewStream_return"`
+	UprobeClientStreamRecvMsgReturn           *ebpf.Program `ebpf:"uprobe_clientStream_RecvMsg_return"`
+	UprobeGrpcFramerWriteHeaders              *ebpf.Program `ebpf:"uprobe_grpcFramerWriteHeaders"`
+	UprobeGrpcFramerWriteHeadersReturns       *ebpf.Program `ebpf:"uprobe_grpcFramerWriteHeaders_returns"`
+	UprobeHttp2ServerOperateHeaders           *ebpf.Program `ebpf:"uprobe_http2Server_operateHeaders"`
+	UprobeNetFdReadGRPC                       *ebpf.Program `ebpf:"uprobe_netFdReadGRPC"`
+	UprobeServerHandleStream                  *ebpf.Program `ebpf:"uprobe_server_handleStream"`
+	UprobeServerHandleStreamReturn            *ebpf.Program `ebpf:"uprobe_server_handleStream_return"`
+	UprobeServerHandlerTransportHandleStreams *ebpf.Program `ebpf:"uprobe_server_handler_transport_handle_streams"`
+	UprobeTransportHttp2ClientNewStream       *ebpf.Program `ebpf:"uprobe_transport_http2Client_NewStream"`
+	UprobeTransportWriteStatus                *ebpf.Program `ebpf:"uprobe_transport_writeStatus"`
 }
 
 func (p *bpf_tp_debugPrograms) Close() error {
@@ -218,8 +236,11 @@ func (p *bpf_tp_debugPrograms) Close() error {
 		p.UprobeClientStreamRecvMsgReturn,
 		p.UprobeGrpcFramerWriteHeaders,
 		p.UprobeGrpcFramerWriteHeadersReturns,
+		p.UprobeHttp2ServerOperateHeaders,
+		p.UprobeNetFdReadGRPC,
 		p.UprobeServerHandleStream,
 		p.UprobeServerHandleStreamReturn,
+		p.UprobeServerHandlerTransportHandleStreams,
 		p.UprobeTransportHttp2ClientNewStream,
 		p.UprobeTransportWriteStatus,
 	)

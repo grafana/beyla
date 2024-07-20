@@ -107,6 +107,12 @@ int uprobe_ServeHTTP(struct pt_regs *ctx) {
             goto done;
         }
 
+        // Ignore gRPC ServeHTTP
+        if (invocation.method[0] == 'P' && invocation.method[1] == 'R' && invocation.method[2] == 'I') {
+            bpf_dbg_printk("ignoring grpc ServeHTTP wrapper");
+            goto done;
+        }
+
         // Get path from Request.URL
         void *url_ptr = 0;
         int res = bpf_probe_read(&url_ptr, sizeof(url_ptr), (void *)(req + url_ptr_pos));
@@ -131,6 +137,39 @@ int uprobe_ServeHTTP(struct pt_regs *ctx) {
     }
 
 done:
+    return 0;
+}
+
+SEC("uprobe/readRequest")
+int uprobe_readRequestStart(struct pt_regs *ctx) {
+    bpf_dbg_printk("=== uprobe/proc readRequest === ");
+
+    void *goroutine_addr = GOROUTINE_PTR(ctx);
+    bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
+
+    connection_info_t *existing = bpf_map_lookup_elem(&ongoing_server_connections, &goroutine_addr);
+
+    if (!existing) {
+        void *c_ptr = GO_PARAM1(ctx);
+        if (c_ptr) {
+            void *conn_conn_ptr = c_ptr + 8 + c_rwc_pos; // embedded struct
+            void *tls_state = 0;
+            bpf_probe_read(&tls_state, sizeof(tls_state), (void *)(c_ptr + c_tls_pos));
+            conn_conn_ptr = unwrap_tls_conn_info(conn_conn_ptr, tls_state);
+            bpf_dbg_printk("conn_conn_ptr %llx, tls_state %llx, c_tls_pos = %d, c_tls_ptr = %llx", conn_conn_ptr, tls_state, c_tls_pos, c_ptr + c_tls_pos);
+            if (conn_conn_ptr) {
+                void *conn_ptr = 0;
+                bpf_probe_read(&conn_ptr, sizeof(conn_ptr), (void *)(conn_conn_ptr + net_conn_pos)); // find conn
+                bpf_dbg_printk("conn_ptr %llx", conn_ptr);
+                if (conn_ptr) {
+                    connection_info_t conn = {0};
+                    get_conn_info(conn_ptr, &conn); // initialized to 0, no need to check the result if we succeeded
+                    bpf_map_update_elem(&ongoing_server_connections, &goroutine_addr, &conn, BPF_ANY);
+                }
+            }
+        }
+    }
+    
     return 0;
 }
 
@@ -219,62 +258,16 @@ int uprobe_ServeHTTPReturns(struct pt_regs *ctx) {
 
     bpf_dbg_printk("Resp ptr %llx", resp_ptr);
 
-    if (invocation->http2) {
-        void *conn_ptr = 0;
-        bpf_probe_read(&conn_ptr, sizeof(conn_ptr), resp_ptr + rws_conn_pos);
-        bpf_dbg_printk("conn_ptr %llx", conn_ptr);
-        u8 found_conn = 0;
-        if (conn_ptr) {
-            void *conn_conn_ptr = 0;
-            bpf_probe_read(&conn_conn_ptr, sizeof(conn_conn_ptr), conn_ptr + http2_server_conn_pos + 8);
-            bpf_dbg_printk("conn_conn_ptr %llx", conn_conn_ptr);
-            if (conn_conn_ptr) {                
-                void *conn_conn_conn_ptr = 0;
-                bpf_probe_read(&conn_conn_conn_ptr, sizeof(conn_conn_conn_ptr), conn_conn_ptr + 8);
-                bpf_dbg_printk("conn_conn_conn_ptr %llx", conn_conn_conn_ptr);
+    connection_info_t *info = bpf_map_lookup_elem(&ongoing_server_connections, &goroutine_addr);
 
-                found_conn = get_conn_info(conn_conn_conn_ptr, &trace->conn);
-            }
-        } 
-
-        if (!found_conn) {
-            __builtin_memset(&trace->conn, 0, sizeof(connection_info_t));
-        }
+    if (info) {
+        //dbg_print_http_connection_info(info);
+        __builtin_memcpy(&trace->conn, info, sizeof(connection_info_t));
     } else {
-        connection_info_t *info = bpf_map_lookup_elem(&ongoing_server_connections, &goroutine_addr);
-
-        if (info) {
-            //dbg_print_http_connection_info(info);
-            __builtin_memcpy(&trace->conn, info, sizeof(connection_info_t));
-        } else {
-            // We can't find the connection info, this typically means there are too many requests per second
-            // and the connection map is too small for the workload.
-            bpf_dbg_printk("Can't find connection info for %llx", goroutine_addr);
-
-            // Attempt last resort read, in case the connection info is one of the standard http ones and not
-            // overloaded by the client app
-            void *c_ptr = 0;
-            u8 found = 0;
-            bpf_probe_read(&c_ptr, sizeof(c_ptr), (void *)(resp_ptr)); // load c
-            if (c_ptr) {
-                void *rwc_ptr = c_ptr + 8 + c_rwc_pos; // load rwc, embedded struct
-                if (rwc_ptr) {
-                    void *conn_ptr = 0;
-                    bpf_probe_read(&conn_ptr, sizeof(conn_ptr), (void *)(rwc_ptr + rwc_conn_pos)); // find conn
-                    if (conn_ptr) {
-                        found = get_conn_info(conn_ptr, &trace->conn);
-                        if (found) {
-                            bpf_dbg_printk("found backup connection info");
-                        }
-                        //dbg_print_http_connection_info(&conn);
-                    }
-                }
-            }
-
-            if (!found) {
-                __builtin_memset(&trace->conn, 0, sizeof(connection_info_t));
-            }
-        }
+        // We can't find the connection info, this typically means there are too many requests per second
+        // and the connection map is too small for the workload.
+        bpf_dbg_printk("Can't find connection info for %llx", goroutine_addr);
+        __builtin_memset(&trace->conn, 0, sizeof(connection_info_t));
     }
 
     // Server connections have opposite order, source port is the server port
@@ -532,6 +525,36 @@ int uprobe_http2ResponseWriterStateWriteHeader(struct pt_regs *ctx) {
     return 0;
 }
 
+// HTTP 2.0 server support
+SEC("uprobe/http2serverConn_runHandler")
+int uprobe_http2serverConn_runHandler(struct pt_regs *ctx) {
+    bpf_dbg_printk("=== uprobe/proc http2serverConn_runHandler === ");
+
+    void *goroutine_addr = GOROUTINE_PTR(ctx);
+    bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);    
+
+
+    void *sc = GO_PARAM1(ctx);
+
+    if (sc) {
+        void *conn_ptr = 0;
+        bpf_probe_read(&conn_ptr, sizeof(void *), sc + sc_conn_pos + 8);
+        bpf_dbg_printk("conn_ptr %llx", conn_ptr);
+        if (conn_ptr) {
+            void *conn_conn_ptr = 0;
+            bpf_probe_read(&conn_conn_ptr, sizeof(void *), conn_ptr + 8);
+            bpf_dbg_printk("conn_conn_ptr %llx", conn_conn_ptr);
+            if (conn_conn_ptr) {
+                connection_info_t conn = {0};
+                get_conn_info(conn_conn_ptr, &conn);
+                bpf_map_update_elem(&ongoing_server_connections, &goroutine_addr, &conn, BPF_ANY);
+            }
+        }
+    }
+
+    return 0;
+}
+
 // HTTP 2.0 client support
 #ifndef NO_HEADER_PROPAGATION
 struct {
@@ -607,6 +630,11 @@ struct {
 SEC("uprobe/http2FramerWriteHeaders")
 int uprobe_http2FramerWriteHeaders(struct pt_regs *ctx) {
     bpf_dbg_printk("=== uprobe/proc http2 Framer writeHeaders === ");
+
+    if (framer_w_pos == 0) {
+        bpf_dbg_printk("framer w not found");
+        return 0;
+    }
 
     void *framer = GO_PARAM1(ctx);
     u64 stream_id = (u64)GO_PARAM2(ctx);
@@ -810,9 +838,16 @@ int uprobe_persistConnRoundTrip(struct pt_regs *ctx) {
     void *pc_ptr = GO_PARAM1(ctx);
     if (pc_ptr) {
         void *conn_conn_ptr = pc_ptr + 8 + pc_conn_pos; // embedded struct
+        void *tls_state = 0;
+        bpf_probe_read(&tls_state, sizeof(tls_state), (void *)(pc_ptr + pc_tls_pos)); // find tlsState
+        bpf_dbg_printk("conn_conn_ptr %llx, tls_state %llx", conn_conn_ptr, tls_state);
+
+        conn_conn_ptr = unwrap_tls_conn_info(conn_conn_ptr, tls_state);
+
         if (conn_conn_ptr) {
             void *conn_ptr = 0;
-            bpf_probe_read(&conn_ptr, sizeof(conn_ptr), (void *)(conn_conn_ptr + rwc_conn_pos)); // find conn
+            bpf_probe_read(&conn_ptr, sizeof(conn_ptr), (void *)(conn_conn_ptr + net_conn_pos)); // find conn
+            bpf_dbg_printk("conn_ptr %llx", conn_ptr);            
             if (conn_ptr) {
                 connection_info_t conn = {0};
                 get_conn_info(conn_ptr, &conn); // initialized to 0, no need to check the result if we succeeded

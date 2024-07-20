@@ -24,6 +24,8 @@ that allow modifying its behavior (duration, response...)
 type config struct {
 	// STDPort to listen connections using the standard library
 	STDPort int `env:"STD_PORT" envDefault:"8080"`
+	// STDPort to listen connections using the standard library
+	STDTLSPort int `env:"STD_TLS_PORT" envDefault:"8383"`
 	// GinPort to listen connections using the Gin framework
 	GinPort int `env:"GIN_PORT" envDefault:"8081"`
 	// GorillaPort to listen connections using the Gorilla Mux framework
@@ -31,6 +33,8 @@ type config struct {
 	// GorillaPort to listen connections using the Gorilla Mux framework, but using a middleware that has custom ResposeWriter
 	GorillaMidPort  int    `env:"GORILLA_MID_PORT" envDefault:"8083"`
 	GorillaMid2Port int    `env:"GORILLA_MID2_PORT" envDefault:"8087"`
+	GRPCPort        int    `env:"GRPC_PORT" envDefault:"5051"`
+	GRPCTLSPort     int    `env:"GRPC_TLS_PORT" envDefault:"50051"`
 	LogLevel        string `env:"LOG_LEVEL" envDefault:"INFO"`
 }
 
@@ -45,6 +49,10 @@ func main() {
 	wait := make(chan struct{})
 	go func() {
 		std.Setup(cfg.STDPort)
+		close(wait)
+	}()
+	go func() {
+		std.SetupTLS(cfg.STDTLSPort)
 		close(wait)
 	}()
 	go func() {
@@ -65,9 +73,17 @@ func main() {
 		close(wait)
 	}()
 	go func() {
-		err := grpctest.Setup()
+		err := grpctest.Setup(cfg.GRPCPort)
 		if err != nil {
-			slog.Error("HTTP server has unexpectedly stopped", err)
+			slog.Error("HTTP server has unexpectedly stopped", "error", err)
+		}
+		close(wait)
+	}()
+
+	go func() {
+		err := grpctest.SetupTLS(cfg.GRPCTLSPort)
+		if err != nil {
+			slog.Error("HTTP server has unexpectedly stopped", "error", err)
 		}
 		close(wait)
 	}()

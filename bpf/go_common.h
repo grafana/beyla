@@ -54,7 +54,8 @@ struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __type(key, void *); // key: pointer to the request goroutine
     __type(value, connection_info_t);
-    __uint(max_entries, MAX_CONCURRENT_REQUESTS);
+    __uint(max_entries, MAX_CONCURRENT_SHARED_REQUESTS);
+    __uint(pinning, LIBBPF_PIN_BY_NAME);
 } ongoing_server_connections SEC(".maps");
 
 struct {
@@ -271,6 +272,21 @@ static __always_inline u8 get_conn_info(void *conn_ptr, connection_info_t *info)
     }
 
     return 0;
+}
+
+static __always_inline void* unwrap_tls_conn_info(void *conn_ptr, void *tls_state) {
+    if (conn_ptr && tls_state) {
+        void *c_ptr = 0;
+        bpf_probe_read(&c_ptr, sizeof(c_ptr), (void *)(conn_ptr)); // unwrap conn
+
+        bpf_dbg_printk("unwrapped conn ptr %llx", c_ptr);
+
+        if (c_ptr) {
+            return c_ptr + 8;
+        }
+    }
+
+    return conn_ptr;
 }
 
 #endif // GO_COMMON_H

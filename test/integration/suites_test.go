@@ -25,6 +25,7 @@ func TestSuite(t *testing.T) {
 	t.Run("HTTP traces (no traceID)", testHTTPTracesNoTraceID)
 	t.Run("GRPC traces", testGRPCTraces)
 	t.Run("GRPC RED metrics", testREDMetricsGRPC)
+	t.Run("GRPC TLS RED metrics", testREDMetricsGRPCTLS)
 	t.Run("Internal Prometheus metrics", testInternalPrometheusExport)
 
 	t.Run("BPF pinning folder mounted", testBPFPinningMounted)

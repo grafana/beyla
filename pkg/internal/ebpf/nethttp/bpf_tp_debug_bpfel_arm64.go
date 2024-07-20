@@ -133,11 +133,13 @@ type bpf_tp_debugProgramSpecs struct {
 	UprobeHttp2FramerWriteHeadersReturns      *ebpf.ProgramSpec `ebpf:"uprobe_http2FramerWriteHeaders_returns"`
 	UprobeHttp2ResponseWriterStateWriteHeader *ebpf.ProgramSpec `ebpf:"uprobe_http2ResponseWriterStateWriteHeader"`
 	UprobeHttp2RoundTrip                      *ebpf.ProgramSpec `ebpf:"uprobe_http2RoundTrip"`
+	UprobeHttp2serverConnRunHandler           *ebpf.ProgramSpec `ebpf:"uprobe_http2serverConn_runHandler"`
 	UprobeNetFdRead                           *ebpf.ProgramSpec `ebpf:"uprobe_netFdRead"`
 	UprobePersistConnRoundTrip                *ebpf.ProgramSpec `ebpf:"uprobe_persistConnRoundTrip"`
 	UprobeQueryDC                             *ebpf.ProgramSpec `ebpf:"uprobe_queryDC"`
 	UprobeQueryReturn                         *ebpf.ProgramSpec `ebpf:"uprobe_queryReturn"`
 	UprobeReadRequestReturns                  *ebpf.ProgramSpec `ebpf:"uprobe_readRequestReturns"`
+	UprobeReadRequestStart                    *ebpf.ProgramSpec `ebpf:"uprobe_readRequestStart"`
 	UprobeRoundTrip                           *ebpf.ProgramSpec `ebpf:"uprobe_roundTrip"`
 	UprobeRoundTripReturn                     *ebpf.ProgramSpec `ebpf:"uprobe_roundTripReturn"`
 	UprobeWriteSubset                         *ebpf.ProgramSpec `ebpf:"uprobe_writeSubset"`
@@ -233,11 +235,13 @@ type bpf_tp_debugPrograms struct {
 	UprobeHttp2FramerWriteHeadersReturns      *ebpf.Program `ebpf:"uprobe_http2FramerWriteHeaders_returns"`
 	UprobeHttp2ResponseWriterStateWriteHeader *ebpf.Program `ebpf:"uprobe_http2ResponseWriterStateWriteHeader"`
 	UprobeHttp2RoundTrip                      *ebpf.Program `ebpf:"uprobe_http2RoundTrip"`
+	UprobeHttp2serverConnRunHandler           *ebpf.Program `ebpf:"uprobe_http2serverConn_runHandler"`
 	UprobeNetFdRead                           *ebpf.Program `ebpf:"uprobe_netFdRead"`
 	UprobePersistConnRoundTrip                *ebpf.Program `ebpf:"uprobe_persistConnRoundTrip"`
 	UprobeQueryDC                             *ebpf.Program `ebpf:"uprobe_queryDC"`
 	UprobeQueryReturn                         *ebpf.Program `ebpf:"uprobe_queryReturn"`
 	UprobeReadRequestReturns                  *ebpf.Program `ebpf:"uprobe_readRequestReturns"`
+	UprobeReadRequestStart                    *ebpf.Program `ebpf:"uprobe_readRequestStart"`
 	UprobeRoundTrip                           *ebpf.Program `ebpf:"uprobe_roundTrip"`
 	UprobeRoundTripReturn                     *ebpf.Program `ebpf:"uprobe_roundTripReturn"`
 	UprobeWriteSubset                         *ebpf.Program `ebpf:"uprobe_writeSubset"`
@@ -254,11 +258,13 @@ func (p *bpf_tp_debugPrograms) Close() error {
 		p.UprobeHttp2FramerWriteHeadersReturns,
 		p.UprobeHttp2ResponseWriterStateWriteHeader,
 		p.UprobeHttp2RoundTrip,
+		p.UprobeHttp2serverConnRunHandler,
 		p.UprobeNetFdRead,
 		p.UprobePersistConnRoundTrip,
 		p.UprobeQueryDC,
 		p.UprobeQueryReturn,
 		p.UprobeReadRequestReturns,
+		p.UprobeReadRequestStart,
 		p.UprobeRoundTrip,
 		p.UprobeRoundTripReturn,
 		p.UprobeWriteSubset,

@@ -23,6 +23,9 @@ RUN go build -tags -a -ldflags '-linkmode external -extldflags "-static"' -o tes
 FROM debian:12
 
 WORKDIR /
+RUN mkdir -p x509
+COPY --from=builder /src/test/integration/components/testserver/x509/server_test_cert.pem x509
+COPY --from=builder /src/test/integration/components/testserver/x509/server_test_key.pem x509
 COPY --from=builder /src/testserver .
 USER 0:0
 

@@ -253,18 +253,6 @@
       }
     },
     "golang.org/x/net/http2.responseWriterState": {
-      "conn": {
-        "versions": {
-          "oldest": "0.12.0",
-          "newest": "0.27.0"
-        },
-        "offsets": [
-          {
-            "offset": 16,
-            "since": "0.12.0"
-          }
-        ]
-      },
       "req": {
         "versions": {
           "oldest": "0.12.0",
@@ -470,6 +458,26 @@
             "since": "1.64.0"
           }
         ]
+      },
+      "scheme": {
+        "versions": {
+          "oldest": "1.40.0",
+          "newest": "1.65.0"
+        },
+        "offsets": [
+          {
+            "offset": 184,
+            "since": "1.40.0"
+          },
+          {
+            "offset": 256,
+            "since": "1.52.0"
+          },
+          {
+            "offset": 248,
+            "since": "1.58.0"
+          }
+        ]
       }
     },
     "google.golang.org/grpc/internal/transport.http2Server": {
@@ -646,6 +654,18 @@
             "since": "1.17.0"
           }
         ]
+      },
+      "tlsState": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.22.5"
+        },
+        "offsets": [
+          {
+            "offset": 48,
+            "since": "1.17.0"
+          }
+        ]
       }
     },
     "net/http.persistConn": {
@@ -657,6 +677,18 @@
         "offsets": [
           {
             "offset": 80,
+            "since": "1.17.0"
+          }
+        ]
+      },
+      "tlsState": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.22.5"
+        },
+        "offsets": [
+          {
+            "offset": 96,
             "since": "1.17.0"
           }
         ]

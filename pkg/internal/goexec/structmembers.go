@@ -109,19 +109,13 @@ var structMembers = map[string]structInfo{
 		fields: map[string]string{
 			"nextID": "http2_client_next_id_pos",
 			"conn":   "grpc_t_conn_pos",
+			"scheme": "grpc_t_scheme_pos",
 		},
 	},
 	"golang.org/x/net/http2.responseWriterState": {
 		lib: "golang.org/x/net",
 		fields: map[string]string{
 			"status": "rws_status_pos",
-			"conn":   "rws_conn_pos",
-		},
-	},
-	"golang.org/x/net/http2.serverConn": {
-		lib: "golang.org/x/net",
-		fields: map[string]string{
-			"conn": "http2_server_conn_pos",
 		},
 	},
 	"golang.org/x/net/http2.ClientConn": {
@@ -137,16 +131,16 @@ var structMembers = map[string]structInfo{
 			"w": "framer_w_pos",
 		},
 	},
-	"net/http.conn": {
-		lib: "go",
+	"golang.org/x/net/http2.serverConn": {
+		lib: "golang.org/x/net",
 		fields: map[string]string{
-			"rwc": "c_rwc_pos",
+			"conn": "sc_conn_pos",
 		},
 	},
 	"net.TCPConn": {
 		lib: "go",
 		fields: map[string]string{
-			"conn": "rwc_conn_pos",
+			"conn": "net_conn_pos",
 		},
 	},
 	"net.conn": {
@@ -165,7 +159,15 @@ var structMembers = map[string]structInfo{
 	"net/http.persistConn": {
 		lib: "go",
 		fields: map[string]string{
-			"conn": "pc_conn_pos",
+			"conn":     "pc_conn_pos",
+			"tlsState": "pc_tls_pos",
+		},
+	},
+	"net/http.conn": {
+		lib: "go",
+		fields: map[string]string{
+			"rwc":      "c_rwc_pos",
+			"tlsState": "c_tls_pos",
 		},
 	},
 	"google.golang.org/grpc/internal/transport.bufWriter": {

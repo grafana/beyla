@@ -33,6 +33,8 @@ type config struct {
 	// GorillaPort to listen connections using the Gorilla Mux framework, but using a middleware that has custom ResposeWriter
 	GorillaMidPort  int    `env:"GORILLA_MID_PORT" envDefault:"8083"`
 	GorillaMid2Port int    `env:"GORILLA_MID2_PORT" envDefault:"8087"`
+	GRPCPort        int    `env:"GRPC_PORT" envDefault:"5051"`
+	GRPCTLSPort     int    `env:"GRPC_TLS_PORT" envDefault:"50051"`
 	LogLevel        string `env:"LOG_LEVEL" envDefault:"INFO"`
 }
 
@@ -71,17 +73,17 @@ func main() {
 		close(wait)
 	}()
 	go func() {
-		err := grpctest.Setup(5051)
+		err := grpctest.Setup(cfg.GRPCPort)
 		if err != nil {
-			slog.Error("HTTP server has unexpectedly stopped", err)
+			slog.Error("HTTP server has unexpectedly stopped", "error", err)
 		}
 		close(wait)
 	}()
 
 	go func() {
-		err := grpctest.SetupTLS(50051)
+		err := grpctest.SetupTLS(cfg.GRPCTLSPort)
 		if err != nil {
-			slog.Error("HTTP server has unexpectedly stopped", err)
+			slog.Error("HTTP server has unexpectedly stopped", "error", err)
 		}
 		close(wait)
 	}()

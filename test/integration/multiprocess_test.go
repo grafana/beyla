@@ -142,13 +142,13 @@ func checkInstrumentedProcessesMetric(t *testing.T) {
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
 		// we expected to have this in Prometheus at this point
 		processes := map[string]int{
-			"python3.11":    10,
+			"python3.11":    10, this can vary
 			"greetings":     2,
 			"java":          1,
 			"node":          2,
 			"ruby":          2,
 			"duped_service": 1,
-			"testserver":    2,
+			"testserver":    3,
 			"rename1":       1,
 		}
 

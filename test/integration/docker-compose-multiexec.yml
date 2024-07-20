@@ -19,7 +19,10 @@ services:
   # another instance of the above image. Used to test the deduplication
   # of metrics when they come from the same executable file
   testserver-unused:
-    image: hatest-testserver
+    build:
+      context: ../..
+      dockerfile: test/integration/components/testserver/Dockerfile
+    image: hatest-testserver-unused
     ports:
       - "38080:8080"
     environment:

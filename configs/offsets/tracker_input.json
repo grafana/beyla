@@ -46,12 +46,6 @@
       "net/http.conn": [
         "rwc",
         "tlsState"
-        "conn",
-        "tlsState"
-      ],
-      "net/http.conn": [
-        "rwc",
-        "tlsState"
       ]
     }
   },
@@ -68,9 +62,6 @@
       ],
       "golang.org/x/net/http2.Framer": [
         "w"
-      ],
-      "golang.org/x/net/http2.serverConn": [
-        "conn"
       ],
       "golang.org/x/net/http2.serverConn": [
         "conn"
@@ -93,8 +84,6 @@
       ],
       "google.golang.org/grpc/internal/transport.http2Client": [
         "nextID",
-        "conn",
-        "scheme"
         "conn",
         "scheme"
       ],

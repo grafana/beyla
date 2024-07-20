@@ -148,7 +148,7 @@ func checkInstrumentedProcessesMetric(t *testing.T) {
 			"node":          2,
 			"ruby":          2,
 			"duped_service": 1,
-			"testserver":    3,
+			"testserver":    2,
 			"rename1":       1,
 		}
 

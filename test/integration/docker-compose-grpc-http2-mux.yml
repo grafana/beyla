@@ -7,7 +7,7 @@ services:
       dockerfile: test/integration/components/go_grpc_server_mux/Dockerfile_pinger${TEST_SUFFIX}
     image: hatest-testclient
     environment:
-      TARGET_URL: "testserver:8080"
+      TARGET_URL: ${TARGET_URL}
     depends_on:
       testserver:
         condition: service_started
@@ -18,7 +18,7 @@ services:
       dockerfile: Dockerfile${TEST_SUFFIX}
     image: hatest-server
     ports:
-      - "8080:8080"
+      - ${TARGET_PORTS}
     depends_on:
       prometheus:
         condition: service_started

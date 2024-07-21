@@ -56,10 +56,6 @@ func main() {
 		close(wait)
 	}()
 	go func() {
-		std.SetupTLS(cfg.STDTLSPort)
-		close(wait)
-	}()
-	go func() {
 		gin2.SetMode(gin2.ReleaseMode)
 		gin.Setup(cfg.GinPort)
 		close(wait)

@@ -219,6 +219,8 @@ func TestSuite_PrometheusScrape(t *testing.T) {
 	compose.Env = append(compose.Env,
 		`INSTRUMENTER_CONFIG_SUFFIX=-promscrape`,
 		`PROM_CONFIG_SUFFIX=-promscrape`,
+		`BEYLA_EXECUTABLE_NAME=`,
+		`BEYLA_OPEN_PORT=8082,8999`, // force Beyla self-instrumentation to ensure we don't do it
 	)
 
 	require.NoError(t, err)
@@ -227,6 +229,7 @@ func TestSuite_PrometheusScrape(t *testing.T) {
 	t.Run("GRPC RED metrics", testREDMetricsGRPC)
 	t.Run("Internal Prometheus metrics", testInternalPrometheusExport)
 	t.Run("Testing Beyla Build Info metric", testPrometheusBeylaBuildInfo)
+	t.Run("Testing for no Beyla self metrics", testPrometheusNoBeylaEvents)
 	t.Run("Testing process-level metrics", testProcesses(map[string]string{
 		"process_executable_name": "testserver",
 		"process_executable_path": "/testserver",

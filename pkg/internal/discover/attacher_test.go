@@ -5,10 +5,11 @@ import (
 	"os"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/grafana/beyla/pkg/beyla"
 	"github.com/grafana/beyla/pkg/internal/exec"
 	"github.com/grafana/beyla/pkg/services"
-	"github.com/stretchr/testify/assert"
 )
 
 func TestSkipSelfInstrumentation(t *testing.T) {

@@ -20,7 +20,7 @@ import (
 // RunBeyla in the foreground process. This is a blocking function and won't exit
 // until both the AppO11y and NetO11y components end
 func RunBeyla(ctx context.Context, cfg *beyla.Config) error {
-	ctxInfo := buildCommonContextInfo(cfg)
+	ctxInfo := buildCommonContextInfo(ctx, cfg)
 
 	wg := sync.WaitGroup{}
 	app := cfg.Enabled(beyla.FeatureAppO11y)
@@ -102,7 +102,7 @@ func mustSkip(cfg *beyla.Config) string {
 // BuildContextInfo populates some globally shared components and properties
 // from the user-provided configuration
 func buildCommonContextInfo(
-	config *beyla.Config,
+	ctx context.Context, config *beyla.Config,
 ) *global.ContextInfo {
 	promMgr := &connector.PrometheusManager{}
 	ctxInfo := &global.ContextInfo{
@@ -130,6 +130,8 @@ func buildCommonContextInfo(
 	}
 
 	attributeGroups(config, ctxInfo)
+
+	ctxInfo.FetchHostID(ctx)
 
 	return ctxInfo
 }

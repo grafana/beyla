@@ -35,7 +35,7 @@ func nmlog() *slog.Logger {
 	return slog.With("component", "otel.NetworkMetricsExporter")
 }
 
-func newResource() *resource.Resource {
+func newResource(hostID string) *resource.Resource {
 	attrs := []attribute.KeyValue{
 		semconv.ServiceName("beyla-network-flows"),
 		semconv.ServiceInstanceID(uuid.New().String()),
@@ -46,6 +46,7 @@ func newResource() *resource.Resource {
 		semconv.TelemetrySDKLanguageKey.String(semconv.TelemetrySDKLanguageGo.Value.AsString()),
 		// We set the SDK name as Beyla, so we can distinguish beyla generated metrics from other SDKs
 		semconv.TelemetrySDKNameKey.String("beyla"),
+		semconv.HostID(hostID),
 	}
 
 	return resource.NewWithAttributes(semconv.SchemaURL, attrs...)
@@ -87,7 +88,7 @@ func newMetricsExporter(ctx context.Context, ctxInfo *global.ContextInfo, cfg *N
 		return nil, err
 	}
 
-	provider, err := newMeterProvider(newResource(), &exporter, cfg.Metrics.Interval)
+	provider, err := newMeterProvider(newResource(ctxInfo.HostID), &exporter, cfg.Metrics.Interval)
 
 	if err != nil {
 		log.Error("", "error", err)

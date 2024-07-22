@@ -54,6 +54,8 @@ type procMetricsExporter struct {
 	cfg   *ProcMetricsConfig
 	clock *expire.CachedClock
 
+	hostID string
+
 	exporter  metric.Exporter
 	reporters ReporterPool[*process.ID, *procMetrics]
 
@@ -136,6 +138,7 @@ func newProcMetricsExporter(
 		log:         log,
 		ctx:         ctx,
 		cfg:         cfg,
+		hostID:      ctxInfo.HostID,
 		clock:       expire.NewCachedClock(timeNow),
 		attrCPUTime: attrCPUTime,
 		attrCPUUtil: attrCPUUtil,
@@ -188,10 +191,9 @@ func newProcMetricsExporter(
 	return mr.Do, nil
 }
 
-func getProcessResourceAttrs(procID *process.ID) []attribute.KeyValue {
+func getProcessResourceAttrs(hostID string, procID *process.ID) []attribute.KeyValue {
 	return append(
-		getAppResourceAttrs(procID.Service),
-		semconv.ServiceInstanceID(string(procID.UID)),
+		getAppResourceAttrs(hostID, procID.Service),
 		attr2.ProcCommand.OTEL().String(procID.Command),
 		attr2.ProcOwner.OTEL().String(procID.User),
 		attr2.ProcParentPid.OTEL().String(strconv.Itoa(int(procID.ParentProcessID))),
@@ -206,7 +208,7 @@ func getProcessResourceAttrs(procID *process.ID) []attribute.KeyValue {
 func (me *procMetricsExporter) newMetricSet(procID *process.ID) (*procMetrics, error) {
 	log := me.log.With("service", procID.Service, "processID", procID.UID)
 	log.Debug("creating new Metrics exporter")
-	resources := resource.NewWithAttributes(semconv.SchemaURL, getProcessResourceAttrs(procID)...)
+	resources := resource.NewWithAttributes(semconv.SchemaURL, getProcessResourceAttrs(me.hostID, procID)...)
 	opts := []metric.Option{
 		metric.WithResource(resources),
 		metric.WithReader(metric.NewPeriodicReader(me.exporter,

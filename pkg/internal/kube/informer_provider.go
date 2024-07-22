@@ -69,6 +69,14 @@ func (mp *MetadataProvider) ForceDisable() {
 	mp.enable.Store(kubeflags.EnabledFalse)
 }
 
+func (mp *MetadataProvider) KubeClient() (kubernetes.Interface, error) {
+	restCfg, err := LoadConfig(mp.kubeConfigPath)
+	if err != nil {
+		return nil, fmt.Errorf("kubeconfig can't be detected: %w", err)
+	}
+	return kubernetes.NewForConfig(restCfg)
+}
+
 func (mp *MetadataProvider) Get(ctx context.Context) (*Metadata, error) {
 	mp.mt.Lock()
 	defer mp.mt.Unlock()
@@ -77,11 +85,7 @@ func (mp *MetadataProvider) Get(ctx context.Context) (*Metadata, error) {
 		return mp.metadata, nil
 	}
 
-	restCfg, err := LoadConfig(mp.kubeConfigPath)
-	if err != nil {
-		return nil, fmt.Errorf("kubeconfig can't be detected: %w", err)
-	}
-	kubeClient, err := kubernetes.NewForConfig(restCfg)
+	kubeClient, err := mp.KubeClient()
 	if err != nil {
 		return nil, fmt.Errorf("kubernetes client can't be initialized: %w", err)
 	}

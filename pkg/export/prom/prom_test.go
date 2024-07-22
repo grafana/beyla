@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"regexp"
 	"sync"
 	"testing"
 	"time"
@@ -37,7 +38,7 @@ func TestAppMetricsExpiration(t *testing.T) {
 
 	// GIVEN a Prometheus Metrics Exporter with a metrics expire time of 3 minutes
 	exporter, err := PrometheusEndpoint(
-		ctx, &global.ContextInfo{Prometheus: &connector.PrometheusManager{}},
+		ctx, &global.ContextInfo{Prometheus: &connector.PrometheusManager{}, HostID: "my-host"},
 		&PrometheusConfig{
 			Port:                        openPort,
 			Path:                        "/metrics",
@@ -57,19 +58,20 @@ func TestAppMetricsExpiration(t *testing.T) {
 	metrics := make(chan []request.Span, 20)
 	go exporter(metrics)
 
-	time.Sleep(5 * time.Second)
-
 	// WHEN it receives metrics
 	metrics <- []request.Span{
 		{Type: request.EventTypeHTTP, Path: "/foo", End: 123 * time.Second.Nanoseconds()},
 		{Type: request.EventTypeHTTP, Path: "/baz", End: 456 * time.Second.Nanoseconds()},
 	}
 
+	containsTargetInfo := regexp.MustCompile(`\ntarget_info\{.*host_id="my-host"`)
+
 	// THEN the metrics are exported
 	test.Eventually(t, timeout, func(t require.TestingT) {
 		exported := getMetrics(t, promURL)
 		assert.Contains(t, exported, `http_server_request_duration_seconds_sum{url_path="/foo"} 123`)
 		assert.Contains(t, exported, `http_server_request_duration_seconds_sum{url_path="/baz"} 456`)
+		assert.Regexp(t, containsTargetInfo, exported)
 	})
 
 	// AND WHEN it keeps receiving a subset of the initial metrics during the timeout
@@ -88,6 +90,7 @@ func TestAppMetricsExpiration(t *testing.T) {
 	})
 	// BUT not the metrics that haven't been received during that time
 	assert.NotContains(t, exported, `http_server_request_duration_seconds_sum{url_path="/baz"}`)
+	assert.Regexp(t, containsTargetInfo, exported)
 	now.Advance(2 * time.Minute)
 
 	// AND WHEN the metrics labels that disappeared are received again
@@ -102,6 +105,7 @@ func TestAppMetricsExpiration(t *testing.T) {
 		assert.Contains(t, exported, `http_server_request_duration_seconds_sum{url_path="/baz"} 456`)
 	})
 	assert.NotContains(t, exported, `http_server_request_duration_seconds_sum{url_path="/foo"}`)
+	assert.Regexp(t, containsTargetInfo, exported)
 }
 
 type InstrTest struct {

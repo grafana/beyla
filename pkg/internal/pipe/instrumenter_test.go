@@ -41,6 +41,7 @@ func gctx(groups attributes.AttrGroups) *global.ContextInfo {
 		Metrics:               imetrics.NoopReporter{},
 		MetricAttributeGroups: groups,
 		K8sInformer:           kube.NewMetadataProvider(kubeflags.EnabledFalse, nil, "", 0),
+		HostID:                "host-id",
 	}
 }
 
@@ -108,6 +109,7 @@ func TestBasicPipeline(t *testing.T) {
 			string(attr.ServerAddr):             event.Attributes["server.address"],
 		},
 		ResourceAttributes: map[string]string{
+			string(semconv.HostIDKey):               "host-id",
 			string(semconv.HostNameKey):             "the-host",
 			string(semconv.ServiceNameKey):          "foo-svc",
 			string(semconv.ServiceNamespaceKey):     "ns",
@@ -314,6 +316,7 @@ func TestRouteConsolidation(t *testing.T) {
 			string(attr.ServerAddr):             events["/user/{id}"].Attributes["server.address"],
 		},
 		ResourceAttributes: map[string]string{
+			string(semconv.HostIDKey):               "host-id",
 			string(semconv.HostNameKey):             "the-host",
 			string(semconv.ServiceNameKey):          "svc-1",
 			string(semconv.ServiceNamespaceKey):     "ns",
@@ -337,6 +340,7 @@ func TestRouteConsolidation(t *testing.T) {
 			string(attr.ServerAddr):             events["/products/{id}/push"].Attributes["server.address"],
 		},
 		ResourceAttributes: map[string]string{
+			string(semconv.HostIDKey):               "host-id",
 			string(semconv.HostNameKey):             "the-host",
 			string(semconv.ServiceNameKey):          "svc-1",
 			string(semconv.ServiceNamespaceKey):     "ns",
@@ -360,6 +364,7 @@ func TestRouteConsolidation(t *testing.T) {
 			string(attr.ServerAddr):             events["/**"].Attributes["server.address"],
 		},
 		ResourceAttributes: map[string]string{
+			string(semconv.HostIDKey):               "host-id",
 			string(semconv.HostNameKey):             "the-host",
 			string(semconv.ServiceNameKey):          "svc-1",
 			string(semconv.ServiceNamespaceKey):     "ns",
@@ -420,6 +425,7 @@ func TestGRPCPipeline(t *testing.T) {
 			string(attr.ServerAddr):              event.Attributes["server.address"],
 		},
 		ResourceAttributes: map[string]string{
+			string(semconv.HostIDKey):               "host-id",
 			string(semconv.HostNameKey):             "the-host",
 			string(semconv.ServiceNameKey):          "grpc-svc",
 			string(semconv.TelemetrySDKLanguageKey): "go",
@@ -512,6 +518,7 @@ func TestBasicPipelineInfo(t *testing.T) {
 			string(attr.ServerAddr):             event.Attributes["server.address"],
 		},
 		ResourceAttributes: map[string]string{
+			string(semconv.HostIDKey):               "host-id",
 			string(semconv.HostNameKey):             "the-host",
 			string(semconv.ServiceNameKey):          "comm",
 			string(semconv.TelemetrySDKLanguageKey): "go",
@@ -693,6 +700,7 @@ func matchTraceEvent(t require.TestingT, name string, event collector.TraceRecor
 			"parent_span_id":                    event.Attributes["parent_span_id"],
 		},
 		ResourceAttributes: map[string]string{
+			string(semconv.HostIDKey):               "host-id",
 			string(semconv.HostNameKey):             "the-host",
 			string(semconv.ServiceNameKey):          "bar-svc",
 			string(semconv.ServiceNamespaceKey):     "ns",
@@ -713,6 +721,7 @@ func matchInnerTraceEvent(t require.TestingT, name string, event collector.Trace
 			"parent_span_id": event.Attributes["parent_span_id"],
 		},
 		ResourceAttributes: map[string]string{
+			string(semconv.HostIDKey):               "host-id",
 			string(semconv.HostNameKey):             "the-host",
 			string(semconv.ServiceNameKey):          "bar-svc",
 			string(semconv.ServiceNamespaceKey):     "ns",
@@ -738,6 +747,7 @@ func matchGRPCTraceEvent(t *testing.T, name string, event collector.TraceRecord)
 			"parent_span_id":                     event.Attributes["parent_span_id"],
 		},
 		ResourceAttributes: map[string]string{
+			string(semconv.HostIDKey):               "host-id",
 			string(semconv.HostNameKey):             "the-host",
 			string(semconv.ServiceNameKey):          "svc",
 			string(semconv.TelemetrySDKLanguageKey): "go",
@@ -756,6 +766,7 @@ func matchInnerGRPCTraceEvent(t *testing.T, name string, event collector.TraceRe
 			"parent_span_id": event.Attributes["parent_span_id"],
 		},
 		ResourceAttributes: map[string]string{
+			string(semconv.HostIDKey):               "host-id",
 			string(semconv.HostNameKey):             "the-host",
 			string(semconv.ServiceNameKey):          "svc",
 			string(semconv.TelemetrySDKLanguageKey): "go",
@@ -809,6 +820,7 @@ func matchInfoEvent(t *testing.T, name string, event collector.TraceRecord) {
 			"parent_span_id":                    "",
 		},
 		ResourceAttributes: map[string]string{
+			string(semconv.HostIDKey):               "host-id",
 			string(semconv.HostNameKey):             "the-host",
 			string(semconv.ServiceNameKey):          "comm",
 			string(semconv.TelemetrySDKLanguageKey): "go",

@@ -147,7 +147,7 @@ int uprobe_readRequestStart(struct pt_regs *ctx) {
             void *tls_state = 0;
             bpf_probe_read(&tls_state, sizeof(tls_state), (void *)(c_ptr + c_tls_pos));
             conn_conn_ptr = unwrap_tls_conn_info(conn_conn_ptr, tls_state);
-            bpf_dbg_printk("conn_conn_ptr %llx, tls_state %llx, c_tls_pos = %d, c_tls_ptr = %llx", conn_conn_ptr, tls_state, c_tls_pos, c_ptr + c_tls_pos);
+            //bpf_dbg_printk("conn_conn_ptr %llx, tls_state %llx, c_tls_pos = %d, c_tls_ptr = %llx", conn_conn_ptr, tls_state, c_tls_pos, c_ptr + c_tls_pos);
             if (conn_conn_ptr) {
                 void *conn_ptr = 0;
                 bpf_probe_read(&conn_ptr, sizeof(conn_ptr), (void *)(conn_conn_ptr + net_conn_pos)); // find conn
@@ -684,7 +684,7 @@ int uprobe_http2FramerWriteHeaders_returns(struct pt_regs *ctx) {
 
             bpf_clamp_umax(initial_n, MAX_W_PTR_N);
 
-            bpf_dbg_printk("Found f_info, this is the place to write to w = %llx, buf=%llx, n=%lld, size=%lld", w_ptr, buf_arr, n, cap);
+            //bpf_dbg_printk("Found f_info, this is the place to write to w = %llx, buf=%llx, n=%lld, size=%lld", w_ptr, buf_arr, n, cap);
             if (buf_arr && n < (cap - HTTP2_ENCODED_HEADER_LEN)) {
                 uint8_t tp_str[TP_MAX_VAL_LENGTH];
 
@@ -695,7 +695,7 @@ int uprobe_http2FramerWriteHeaders_returns(struct pt_regs *ctx) {
                 // We don't hpack encode the value of the traceparent field, because that will require that 
                 // we use bpf_loop, which in turn increases the kernel requirement to 5.17+.
                 make_tp_string(tp_str, &f_info->tp);
-                bpf_dbg_printk("Will write %s, type = %d, key_len = %d, val_len = %d", tp_str, type_byte, key_len, val_len);
+                //bpf_dbg_printk("Will write %s, type = %d, key_len = %d, val_len = %d", tp_str, type_byte, key_len, val_len);
 
                 bpf_probe_write_user(buf_arr + (n & 0x0ffff), &type_byte, sizeof(type_byte));                        
                 n++;

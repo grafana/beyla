@@ -512,11 +512,12 @@ int uprobe_transport_http2Client_NewStream(struct pt_regs *ctx) {
         u8 buf[16];
         u64 is_secure = 0;
 
-        if (!read_go_str("transport scheme", t_ptr, grpc_t_scheme_pos, &buf, sizeof(buf))) {
-            bpf_dbg_printk("can't read grpc transport.Stream.Method");
-        }
-
-        bpf_dbg_printk("scheme %s", buf);
+        void *s_ptr = 0;
+        buf[0] = 0;
+        bpf_probe_read(&s_ptr, sizeof(s_ptr), (void *)(t_ptr + grpc_t_scheme_pos));
+        bpf_probe_read(buf, sizeof(buf), s_ptr);
+        
+        //bpf_dbg_printk("scheme %s", buf);
 
         if (buf[0] == 'h' && buf[1] == 't' && buf[2] == 't' && buf[3] == 'p' && buf[4] == 's') {
             is_secure = 1;
@@ -665,7 +666,7 @@ int uprobe_grpcFramerWriteHeaders_returns(struct pt_regs *ctx) {
 
             bpf_clamp_umax(off, MAX_W_PTR_OFFSET);
 
-            bpf_dbg_printk("Found f_info, this is the place to write to w = %llx, buf=%llx, n=%lld, size=%lld", w_ptr, buf_arr, n, cap);
+            //bpf_dbg_printk("Found f_info, this is the place to write to w = %llx, buf=%llx, n=%lld, size=%lld", w_ptr, buf_arr, n, cap);
             if (buf_arr && n < (cap - HTTP2_ENCODED_HEADER_LEN)) {
                 uint8_t tp_str[TP_MAX_VAL_LENGTH];
 
@@ -676,7 +677,7 @@ int uprobe_grpcFramerWriteHeaders_returns(struct pt_regs *ctx) {
                 // We don't hpack encode the value of the traceparent field, because that will require that 
                 // we use bpf_loop, which in turn increases the kernel requirement to 5.17+.
                 make_tp_string(tp_str, &f_info->tp);
-                bpf_dbg_printk("Will write %s, type = %d, key_len = %d, val_len = %d", tp_str, type_byte, key_len, val_len);
+                //bpf_dbg_printk("Will write %s, type = %d, key_len = %d, val_len = %d", tp_str, type_byte, key_len, val_len);
 
                 bpf_probe_write_user(buf_arr + (n & 0x0ffff), &type_byte, sizeof(type_byte));                        
                 n++;

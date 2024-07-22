@@ -593,7 +593,7 @@ func (r *metricsReporter) observe(span *request.Span) {
 				).metric.Observe(duration)
 				r.httpRequestSize.WithLabelValues(
 					labelValues(span, r.attrHTTPRequestSize)...,
-				).metric.Observe(float64(span.ContentLength))
+				).metric.Observe(float64(span.RequestLength()))
 			}
 		case request.EventTypeHTTPClient:
 			if r.is.HTTPEnabled() {
@@ -602,7 +602,7 @@ func (r *metricsReporter) observe(span *request.Span) {
 				).metric.Observe(duration)
 				r.httpClientRequestSize.WithLabelValues(
 					labelValues(span, r.attrHTTPClientRequestSize)...,
-				).metric.Observe(float64(span.ContentLength))
+				).metric.Observe(float64(span.RequestLength()))
 			}
 		case request.EventTypeGRPC:
 			if r.is.GRPCEnabled() {
@@ -641,7 +641,7 @@ func (r *metricsReporter) observe(span *request.Span) {
 		lv := r.labelValuesSpans(span)
 		r.spanMetricsLatency.WithLabelValues(lv...).metric.Observe(duration)
 		r.spanMetricsCallsTotal.WithLabelValues(lv...).metric.Add(1)
-		r.spanMetricsSizeTotal.WithLabelValues(lv...).metric.Add(float64(span.ContentLength))
+		r.spanMetricsSizeTotal.WithLabelValues(lv...).metric.Add(float64(span.RequestLength()))
 
 		_, ok := r.serviceCache.Get(span.ServiceID.UID)
 		if !ok {

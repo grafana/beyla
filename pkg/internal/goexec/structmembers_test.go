@@ -74,7 +74,6 @@ func TestGoOffsetsFromDwarf(t *testing.T) {
 		"conn_fd_pos":           uint64(0),
 		"fd_laddr_pos":          uint64(96),
 		"method_ptr_pos":        uint64(0),
-		"status_ptr_pos":        uint64(120),
 		"tcp_addr_ip_ptr_pos":   uint64(0),
 		"tcp_addr_port_ptr_pos": uint64(24),
 	}, offsets)
@@ -103,7 +102,6 @@ func TestGoOffsetsWithoutDwarf(t *testing.T) {
 		"conn_fd_pos":    uint64(0),
 		"fd_laddr_pos":   uint64(96),
 		"method_ptr_pos": uint64(0),
-		"status_ptr_pos": uint64(120),
 	}, offsets)
 }
 

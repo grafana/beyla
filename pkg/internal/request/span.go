@@ -187,3 +187,11 @@ func GrpcSpanStatusCode(span *Span) codes.Code {
 
 	return codes.Unset
 }
+
+func (s *Span) RequestLength() int64 {
+	if s.ContentLength < 0 {
+		return 0
+	}
+
+	return s.ContentLength
+}

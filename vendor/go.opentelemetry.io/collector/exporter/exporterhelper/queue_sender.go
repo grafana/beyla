@@ -6,21 +6,26 @@ package exporterhelper // import "go.opentelemetry.io/collector/exporter/exporte
 import (
 	"context"
 	"errors"
+	"time"
 
 	"go.opentelemetry.io/otel/attribute"
+	otelmetric "go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/multierr"
 	"go.uber.org/zap"
 
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/exporter"
-	"go.opentelemetry.io/collector/exporter/exporterhelper/internal/metadata"
 	"go.opentelemetry.io/collector/exporter/exporterqueue"
 	"go.opentelemetry.io/collector/exporter/internal/queue"
 	"go.opentelemetry.io/collector/internal/obsreportconfig/obsmetrics"
 )
 
 const defaultQueueSize = 1000
+
+var (
+	scopeName = "go.opentelemetry.io/collector/exporterhelper"
+)
 
 // QueueSettings defines configuration for queueing batches before sending to the consumerSender.
 type QueueSettings struct {
@@ -68,21 +73,27 @@ func (qCfg *QueueSettings) Validate() error {
 
 type queueSender struct {
 	baseRequestSender
+	fullName       string
 	queue          exporterqueue.Queue[Request]
 	numConsumers   int
 	traceAttribute attribute.KeyValue
+	logger         *zap.Logger
+	meter          otelmetric.Meter
 	consumers      *queue.Consumers[Request]
 
-	telemetryBuilder *metadata.TelemetryBuilder
+	metricCapacity otelmetric.Int64ObservableGauge
+	metricSize     otelmetric.Int64ObservableGauge
 }
 
-func newQueueSender(q exporterqueue.Queue[Request], set exporter.Settings, numConsumers int,
-	exportFailureMessage string, telemetryBuilder *metadata.TelemetryBuilder) *queueSender {
+func newQueueSender(q exporterqueue.Queue[Request], set exporter.CreateSettings, numConsumers int,
+	exportFailureMessage string) *queueSender {
 	qs := &queueSender{
-		queue:            q,
-		numConsumers:     numConsumers,
-		traceAttribute:   attribute.String(obsmetrics.ExporterKey, set.ID.String()),
-		telemetryBuilder: telemetryBuilder,
+		fullName:       set.ID.String(),
+		queue:          q,
+		numConsumers:   numConsumers,
+		traceAttribute: attribute.String(obsmetrics.ExporterKey, set.ID.String()),
+		logger:         set.TelemetrySettings.Logger,
+		meter:          set.TelemetrySettings.MeterProvider.Meter(scopeName),
 	}
 	consumeFunc := func(ctx context.Context, req Request) error {
 		err := qs.nextSender.send(ctx, req)
@@ -102,10 +113,32 @@ func (qs *queueSender) Start(ctx context.Context, host component.Host) error {
 		return err
 	}
 
-	return multierr.Append(
-		qs.telemetryBuilder.InitExporterQueueSize(func() int64 { return int64(qs.queue.Size()) }),
-		qs.telemetryBuilder.InitExporterQueueCapacity(func() int64 { return int64(qs.queue.Capacity()) }),
+	var err, errs error
+
+	attrs := otelmetric.WithAttributeSet(attribute.NewSet(attribute.String(obsmetrics.ExporterKey, qs.fullName)))
+
+	qs.metricSize, err = qs.meter.Int64ObservableGauge(
+		obsmetrics.ExporterKey+"/queue_size",
+		otelmetric.WithDescription("Current size of the retry queue (in batches)"),
+		otelmetric.WithUnit("1"),
+		otelmetric.WithInt64Callback(func(_ context.Context, o otelmetric.Int64Observer) error {
+			o.Observe(int64(qs.queue.Size()), attrs)
+			return nil
+		}),
 	)
+	errs = multierr.Append(errs, err)
+
+	qs.metricCapacity, err = qs.meter.Int64ObservableGauge(
+		obsmetrics.ExporterKey+"/queue_capacity",
+		otelmetric.WithDescription("Fixed capacity of the retry queue (in batches)"),
+		otelmetric.WithUnit("1"),
+		otelmetric.WithInt64Callback(func(_ context.Context, o otelmetric.Int64Observer) error {
+			o.Observe(int64(qs.queue.Capacity()), attrs)
+			return nil
+		}))
+
+	errs = multierr.Append(errs, err)
+	return errs
 }
 
 // Shutdown is invoked during service shutdown.
@@ -119,7 +152,7 @@ func (qs *queueSender) Shutdown(ctx context.Context) error {
 func (qs *queueSender) send(ctx context.Context, req Request) error {
 	// Prevent cancellation and deadline to propagate to the context stored in the queue.
 	// The grpc/http based receivers will cancel the request context after this function returns.
-	c := context.WithoutCancel(ctx)
+	c := noCancellationContext{Context: ctx}
 
 	span := trace.SpanFromContext(c)
 	if err := qs.queue.Offer(c, req); err != nil {
@@ -128,5 +161,21 @@ func (qs *queueSender) send(ctx context.Context, req Request) error {
 	}
 
 	span.AddEvent("Enqueued item.", trace.WithAttributes(qs.traceAttribute))
+	return nil
+}
+
+type noCancellationContext struct {
+	context.Context
+}
+
+func (noCancellationContext) Deadline() (deadline time.Time, ok bool) {
+	return
+}
+
+func (noCancellationContext) Done() <-chan struct{} {
+	return nil
+}
+
+func (noCancellationContext) Err() error {
 	return nil
 }

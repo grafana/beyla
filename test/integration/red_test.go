@@ -685,3 +685,14 @@ func testPrometheusBeylaBuildInfo(t *testing.T) {
 		require.NotEmpty(t, results)
 	})
 }
+
+func testPrometheusNoBeylaEvents(t *testing.T) {
+	pq := prom.Client{HostPort: prometheusHostPort}
+	var results []prom.Result
+	test.Eventually(t, testTimeout, func(t require.TestingT) {
+		var err error
+		results, err = pq.Query(`http_server_request_duration_seconds_count{service_name="beyla"}`)
+		require.NoError(t, err)
+		require.Equal(t, 0, len(results))
+	})
+}

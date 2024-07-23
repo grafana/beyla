@@ -46,6 +46,9 @@ attributes:
     informers_sync_timeout: 30s
   instance_id:
     dns: true
+  host_id:
+    override: the-host-id
+    fetch_timeout: 4s
   select:
     beyla.network.flow:
       include: ["foo", "bar"]
@@ -165,6 +168,10 @@ network:
 				KubeconfigPath:       "/foo/bar",
 				Enable:               kubeflags.EnabledTrue,
 				InformersSyncTimeout: 30 * time.Second,
+			},
+			HostID: HostIDConfig{
+				Override:     "the-host-id",
+				FetchTimeout: 4 * time.Second,
 			},
 			Select: attributes.Selection{
 				attributes.BeylaNetworkFlow.Section: attributes.InclusionLists{

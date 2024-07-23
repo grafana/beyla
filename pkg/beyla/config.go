@@ -109,6 +109,9 @@ var DefaultConfig = Config{
 			Enable:               kubeflags.EnabledDefault,
 			InformersSyncTimeout: 30 * time.Second,
 		},
+		HostID: HostIDConfig{
+			FetchTimeout: 500 * time.Millisecond,
+		},
 	},
 	Routes:       &transform.RoutesConfig{Unmatch: transform.UnmatchHeuristic},
 	NetworkFlows: defaultNetworkConfig,
@@ -192,6 +195,14 @@ type Attributes struct {
 	Kubernetes transform.KubernetesDecorator `yaml:"kubernetes"`
 	InstanceID traces.InstanceIDConfig       `yaml:"instance_id"`
 	Select     attributes.Selection          `yaml:"select"`
+	HostID     HostIDConfig                  `yaml:"host_id"`
+}
+
+type HostIDConfig struct {
+	// Override allows overriding the reported host.id in Beyla
+	Override string `yaml:"override" env:"BEYLA_HOST_ID"`
+	// HostIDFetchTimeout specifies the timeout for trying to fetch the HostID from diverse Cloud Providers
+	FetchTimeout time.Duration `yaml:"fetch_timeout" env:"BEYLA_HOST_ID_FETCH_TIMEOUT"`
 }
 
 type ConfigError string

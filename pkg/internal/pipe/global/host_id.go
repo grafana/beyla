@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"time"
 
 	"go.opentelemetry.io/contrib/detectors/aws/ec2"
 	"go.opentelemetry.io/contrib/detectors/azure/azurevm"
@@ -16,7 +17,7 @@ import (
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-type hostIDFetcher func(context.Context) (string, error)
+type hostIDFetcher func(context.Context, time.Duration) (string, error)
 
 type fetcher struct {
 	name  string
@@ -35,7 +36,7 @@ func cilog() *slog.Logger {
 // This process is known to fail when Beyla runs inside a Kubernetes Pod out of the cloud providers
 // mentioned in (1). In that case, the host.id will be later set to the full hostname.
 // This method must be invoked once the ContextInfo object is completely initialized
-func (ci *ContextInfo) FetchHostID(ctx context.Context) {
+func (ci *ContextInfo) FetchHostID(ctx context.Context, timeout time.Duration) {
 	log := cilog().With("func", "fetchHostID")
 	fetchers := []fetcher{
 		{name: "AWS", fetch: ec2HostIDFetcher},
@@ -50,7 +51,7 @@ func (ci *ContextInfo) FetchHostID(ctx context.Context) {
 		log := log.With("fetcher", f.name)
 		log.Debug("trying to fetch host ID")
 		var id string
-		if id, err = f.fetch(ctx); err == nil {
+		if id, err = f.fetch(ctx, timeout); err == nil {
 			log.Info("got host ID", "hostID", id)
 			ci.HostID = id
 			return
@@ -64,22 +65,39 @@ func (ci *ContextInfo) FetchHostID(ctx context.Context) {
 	}
 }
 
-func azureHostIDFetcher(ctx context.Context) (string, error) {
-	return detectHostID(ctx, azurevm.New())
+func azureHostIDFetcher(ctx context.Context, timeout time.Duration) (string, error) {
+	return detectHostID(ctx, timeout, azurevm.New())
 }
 
-func gcpHostIDFetcher(ctx context.Context) (string, error) {
-	return detectHostID(ctx, gcp.NewDetector())
+func gcpHostIDFetcher(ctx context.Context, timeout time.Duration) (string, error) {
+	return detectHostID(ctx, timeout, gcp.NewDetector())
 }
 
-func ec2HostIDFetcher(ctx context.Context) (string, error) {
-	return detectHostID(ctx, ec2.NewResourceDetector())
+func ec2HostIDFetcher(ctx context.Context, timeout time.Duration) (string, error) {
+	return detectHostID(ctx, timeout, ec2.NewResourceDetector())
 }
 
-func detectHostID(ctx context.Context, detector resource.Detector) (string, error) {
-	res, err := detector.Detect(ctx)
-	if err != nil {
+func detectHostID(ctx context.Context, timeout time.Duration, detector resource.Detector) (string, error) {
+	// passing a cancellable context to the detector.Detect(ctx) does not always
+	// end the connection prematurely, so we wrap its invocation into a goroutine
+	cctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	resCh := make(chan *resource.Resource, 1)
+	errCh := make(chan error, 1)
+	go func() {
+		if res, err := detector.Detect(ctx); err != nil {
+			errCh <- err
+		} else {
+			resCh <- res
+		}
+	}()
+	var res *resource.Resource
+	select {
+	case res = <-resCh: // continue!
+	case err := <-errCh:
 		return "", err
+	case <-cctx.Done():
+		return "", errors.New("timed out waiting for host ID connection")
 	}
 	for _, attr := range res.Attributes() {
 		if attr.Key == semconv.HostIDKey {
@@ -89,7 +107,7 @@ func detectHostID(ctx context.Context, detector resource.Detector) (string, erro
 	return "", fmt.Errorf("can't find host.id in %v", res.Attributes())
 }
 
-func (ci *ContextInfo) kubeNodeFetcher(ctx context.Context) (string, error) {
+func (ci *ContextInfo) kubeNodeFetcher(ctx context.Context, _ time.Duration) (string, error) {
 	if !ci.K8sInformer.IsKubeEnabled() {
 		return "", errors.New("kubernetes is not enabled")
 	}
@@ -130,7 +148,7 @@ func (ci *ContextInfo) kubeNodeFetcher(ctx context.Context) (string, error) {
 	return nodes.Items[0].Status.NodeInfo.MachineID, nil
 }
 
-func linuxLocalMachineIDFetcher(_ context.Context) (string, error) {
+func linuxLocalMachineIDFetcher(_ context.Context, _ time.Duration) (string, error) {
 	if result, err := os.ReadFile("/etc/machine-id"); err == nil || len(result) == 0 {
 		return string(bytes.TrimSpace(result)), nil
 	}

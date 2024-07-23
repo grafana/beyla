@@ -131,7 +131,11 @@ func buildCommonContextInfo(
 
 	attributeGroups(config, ctxInfo)
 
-	ctxInfo.FetchHostID(ctx)
+	if config.Attributes.HostID.Override == "" {
+		ctxInfo.FetchHostID(ctx, config.Attributes.HostID.FetchTimeout)
+	} else {
+		ctxInfo.HostID = config.Attributes.HostID.Override
+	}
 
 	return ctxInfo
 }

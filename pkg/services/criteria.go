@@ -47,6 +47,10 @@ type DiscoveryConfig struct {
 	// added to the services definition criteria, with the lowest preference.
 	Services DefinitionCriteria `yaml:"services"`
 
+	// ExcludeServices works analogously to Services, but the applications matching this section won't be instrumented
+	// even if they match the Services selection.
+	ExcludeServices DefinitionCriteria `yaml:"exclude_services"`
+
 	// PollInterval specifies, for the poll service watcher, the interval time between
 	// process inspections
 	PollInterval time.Duration `yaml:"poll_interval" env:"BEYLA_DISCOVERY_POLL_INTERVAL"`

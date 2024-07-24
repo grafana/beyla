@@ -216,6 +216,9 @@ func (c *Config) Validate() error {
 	if err := c.Discovery.Services.Validate(); err != nil {
 		return ConfigError(fmt.Sprintf("error in services YAML property: %s", err.Error()))
 	}
+	if err := c.Discovery.ExcludeServices.Validate(); err != nil {
+		return ConfigError(fmt.Sprintf("error in exclude_services YAML property: %s", err.Error()))
+	}
 	if !c.Enabled(FeatureNetO11y) && !c.Enabled(FeatureAppO11y) {
 		return ConfigError("missing at least one of BEYLA_NETWORK_METRICS, BEYLA_EXECUTABLE_NAME or BEYLA_OPEN_PORT property")
 	}

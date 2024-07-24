@@ -19,17 +19,19 @@ import (
 func CriteriaMatcherProvider(cfg *beyla.Config) pipe.MiddleProvider[[]Event[processAttrs], []Event[ProcessMatch]] {
 	return func() (pipe.MiddleFunc[[]Event[processAttrs], []Event[ProcessMatch]], error) {
 		m := &matcher{
-			log:            slog.With("component", "discover.CriteriaMatcher"),
-			criteria:       FindingCriteria(cfg),
-			processHistory: map[PID]*services.ProcessInfo{},
+			log:             slog.With("component", "discover.CriteriaMatcher"),
+			criteria:        FindingCriteria(cfg),
+			excludeCriteria: cfg.Discovery.ExcludeServices,
+			processHistory:  map[PID]*services.ProcessInfo{},
 		}
 		return m.run, nil
 	}
 }
 
 type matcher struct {
-	log      *slog.Logger
-	criteria services.DefinitionCriteria
+	log             *slog.Logger
+	criteria        services.DefinitionCriteria
+	excludeCriteria services.DefinitionCriteria
 	// processHistory keeps track of the processes that have been already matched and submitted for
 	// instrumentation.
 	// This avoids keep inspecting again and again client processes each time they open a new connection port
@@ -81,7 +83,7 @@ func (m *matcher) filterCreated(obj processAttrs) (Event[ProcessMatch], bool) {
 		return Event[ProcessMatch]{}, false
 	}
 	for i := range m.criteria {
-		if m.matchProcess(&obj, proc, &m.criteria[i]) {
+		if m.matchProcess(&obj, proc, &m.criteria[i]) && !m.isExcluded(&obj, proc) {
 			m.log.Debug("found process", "pid", proc.Pid, "comm", proc.ExePath, "metadata", obj.metadata, "podLabels", obj.podLabels)
 			m.processHistory[obj.pid] = proc
 			return Event[ProcessMatch]{
@@ -118,8 +120,17 @@ func (m *matcher) filterDeleted(obj processAttrs) (Event[ProcessMatch], bool) {
 	}, true
 }
 
+func (m *matcher) isExcluded(obj *processAttrs, proc *services.ProcessInfo) bool {
+	for i := range m.excludeCriteria {
+		if m.matchProcess(obj, proc, &m.excludeCriteria[i]) {
+			return true
+		}
+	}
+	return false
+}
+
 func (m *matcher) matchProcess(obj *processAttrs, p *services.ProcessInfo, a *services.Attributes) bool {
-	if !a.Path.IsSet() && a.OpenPorts.Len() == 0 {
+	if !a.Path.IsSet() && a.OpenPorts.Len() == 0 && len(obj.metadata) == 0 && len(obj.metadata) == 0 {
 		return false
 	}
 	if (a.Path.IsSet() || a.PathRegexp.IsSet()) && !m.matchByExecutable(p, a) {

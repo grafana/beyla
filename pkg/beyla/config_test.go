@@ -62,7 +62,6 @@ network:
 	require.NoError(t, os.Setenv("BEYLA_NETWORK_AGENT_IP", "1.2.3.4"))
 	require.NoError(t, os.Setenv("BEYLA_OPEN_PORT", "8080-8089"))
 	require.NoError(t, os.Setenv("OTEL_SERVICE_NAME", "svc-name"))
-	require.NoError(t, os.Setenv("BEYLA_NOOP_TRACES", "true"))
 	require.NoError(t, os.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "localhost:3131"))
 	require.NoError(t, os.Setenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", "localhost:3232"))
 	require.NoError(t, os.Setenv("BEYLA_INTERNAL_METRICS_PROMETHEUS_PORT", "3210"))
@@ -71,7 +70,7 @@ network:
 	require.NoError(t, os.Setenv("BEYLA_NAME_RESOLVER_SOURCES", "k8s,dns"))
 	defer unsetEnv(t, map[string]string{
 		"KUBECONFIG":      "",
-		"BEYLA_OPEN_PORT": "", "BEYLA_EXECUTABLE_NAME": "", "OTEL_SERVICE_NAME": "", "BEYLA_NOOP_TRACES": "",
+		"BEYLA_OPEN_PORT": "", "BEYLA_EXECUTABLE_NAME": "", "OTEL_SERVICE_NAME": "",
 		"OTEL_EXPORTER_OTLP_ENDPOINT": "", "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT": "", "GRAFANA_CLOUD_SUBMIT": "",
 	})
 
@@ -100,7 +99,6 @@ network:
 		ChannelBufferLen: 33,
 		LogLevel:         "INFO",
 		Printer:          false,
-		Noop:             true,
 		EBPF: ebpfcommon.TracerConfig{
 			BatchLength:        100,
 			BatchTimeout:       time.Second,

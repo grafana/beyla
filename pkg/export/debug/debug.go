@@ -84,22 +84,6 @@ func spanType(span *request.Span) string {
 	return ""
 }
 
-type NoopEnabled bool
-
-func (n NoopEnabled) Enabled() bool {
-	return bool(n)
-}
-func NoopNode(n NoopEnabled) pipe.FinalProvider[[]request.Span] {
-	return func() (pipe.FinalFunc[[]request.Span], error) {
-		if !n {
-			return pipe.IgnoreFinal[[]request.Span](), nil
 		}
-		counter := 0
-		return func(spans <-chan []request.Span) {
-			for range spans {
-				counter += len(spans)
-			}
-			fmt.Printf("Processed %d requests\n", counter)
-		}, nil
 	}
 }

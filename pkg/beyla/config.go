@@ -94,7 +94,6 @@ var DefaultConfig = Config{
 		SpanMetricsServiceCacheSize: 10000,
 	},
 	Printer: false,
-	Noop:    false,
 	InternalMetrics: imetrics.Config{
 		Prometheus: imetrics.PrometheusConfig{
 			Port: 0, // disabled by default
@@ -165,7 +164,6 @@ type Config struct {
 	// are useful for development purposes. They might be helpful for customer support.
 
 	ChannelBufferLen int               `yaml:"channel_buffer_len" env:"BEYLA_CHANNEL_BUFFER_LEN"`
-	Noop             debug.NoopEnabled `yaml:"noop" env:"BEYLA_NOOP_TRACES"`
 	ProfilePort      int               `yaml:"profile_port" env:"BEYLA_PROFILE_PORT"`
 	InternalMetrics  imetrics.Config   `yaml:"internal_metrics"`
 
@@ -237,7 +235,7 @@ func (c *Config) Validate() error {
 			" purposes, you can also set BEYLA_NETWORK_PRINT_FLOWS=true")
 	}
 
-	if c.Enabled(FeatureAppO11y) && !c.Noop.Enabled() && !c.Printer.Enabled() &&
+	if c.Enabled(FeatureAppO11y) && !c.Printer.Enabled() &&
 		!c.Grafana.OTLP.MetricsEnabled() && !c.Grafana.OTLP.TracesEnabled() &&
 		!c.Metrics.Enabled() && !c.Traces.Enabled() &&
 		!c.Prometheus.Enabled() {

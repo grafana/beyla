@@ -117,7 +117,7 @@ func newGraphBuilder(ctx context.Context, config *beyla.Config, ctxInfo *global.
 	pipe.AddFinalProvider(gnb, prometheus, prom.PrometheusEndpoint(ctx, gb.ctxInfo, &config.Prometheus, config.Attributes.Select))
 	pipe.AddFinalProvider(gnb, alloyTraces, alloy.TracesReceiver(ctx, gb.ctxInfo, &config.TracesReceiver, config.Attributes.Select))
 
-	pipe.AddFinalProvider(gnb, printer, debug.PrinterNode(config.Printer))
+	pipe.AddFinalProvider(gnb, printer, debug.PrinterNode(config.TracePrinter))
 
 	// process subpipeline will start another pipeline only to collect and export data
 	// about the processes of an instrumented application

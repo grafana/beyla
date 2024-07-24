@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/grafana/beyla/pkg/export/attributes"
+	"github.com/grafana/beyla/pkg/export/debug"
 	"github.com/grafana/beyla/pkg/export/instrumentations"
 	"github.com/grafana/beyla/pkg/export/otel"
 	"github.com/grafana/beyla/pkg/export/prom"
@@ -24,8 +25,11 @@ import (
 	"github.com/grafana/beyla/pkg/transform"
 )
 
+type envMap map[string]string
+
 func TestConfig_Overrides(t *testing.T) {
 	userConfig := bytes.NewBufferString(`
+trace_printer: json
 channel_buffer_len: 33
 ebpf:
   functions:
@@ -68,7 +72,7 @@ network:
 	require.NoError(t, os.Setenv("GRAFANA_CLOUD_SUBMIT", "metrics,traces"))
 	require.NoError(t, os.Setenv("KUBECONFIG", "/foo/bar"))
 	require.NoError(t, os.Setenv("BEYLA_NAME_RESOLVER_SOURCES", "k8s,dns"))
-	defer unsetEnv(t, map[string]string{
+	defer unsetEnv(t, envMap{
 		"KUBECONFIG":      "",
 		"BEYLA_OPEN_PORT": "", "BEYLA_EXECUTABLE_NAME": "", "OTEL_SERVICE_NAME": "",
 		"OTEL_EXPORTER_OTLP_ENDPOINT": "", "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT": "", "GRAFANA_CLOUD_SUBMIT": "",
@@ -99,6 +103,7 @@ network:
 		ChannelBufferLen: 33,
 		LogLevel:         "INFO",
 		Printer:          false,
+		TracePrinter:     "json",
 		EBPF: ebpfcommon.TracerConfig{
 			BatchLength:        100,
 			BatchTimeout:       time.Second,
@@ -203,11 +208,18 @@ func TestConfig_ServiceName(t *testing.T) {
 }
 
 func TestConfigValidate(t *testing.T) {
-	testCases := []map[string]string{
+	testCases := []envMap{
 		{"OTEL_EXPORTER_OTLP_ENDPOINT": "localhost:1234", "BEYLA_EXECUTABLE_NAME": "foo", "INSTRUMENT_FUNC_NAME": "bar"},
 		{"OTEL_EXPORTER_OTLP_METRICS_ENDPOINT": "localhost:1234", "BEYLA_EXECUTABLE_NAME": "foo", "INSTRUMENT_FUNC_NAME": "bar"},
 		{"OTEL_EXPORTER_OTLP_TRACES_ENDPOINT": "localhost:1234", "BEYLA_EXECUTABLE_NAME": "foo", "INSTRUMENT_FUNC_NAME": "bar"},
 		{"BEYLA_PRINT_TRACES": "true", "BEYLA_EXECUTABLE_NAME": "foo", "INSTRUMENT_FUNC_NAME": "bar"},
+		{"BEYLA_PRINT_TRACES": "true", "BEYLA_TRACE_PRINTER": "disabled", "BEYLA_EXECUTABLE_NAME": "foo"},
+		{"BEYLA_PRINT_TRACES": "true", "BEYLA_TRACE_PRINTER": "", "BEYLA_EXECUTABLE_NAME": "foo"},
+		{"BEYLA_PRINT_TRACES": "false", "BEYLA_TRACE_PRINTER": "text", "BEYLA_EXECUTABLE_NAME": "foo"},
+		{"BEYLA_TRACE_PRINTER": "text", "BEYLA_EXECUTABLE_NAME": "foo"},
+		{"BEYLA_TRACE_PRINTER": "json", "BEYLA_EXECUTABLE_NAME": "foo"},
+		{"BEYLA_TRACE_PRINTER": "json_indent", "BEYLA_EXECUTABLE_NAME": "foo"},
+		{"BEYLA_TRACE_PRINTER": "counter", "BEYLA_EXECUTABLE_NAME": "foo"},
 		{"BEYLA_PROMETHEUS_PORT": "8080", "BEYLA_EXECUTABLE_NAME": "foo", "INSTRUMENT_FUNC_NAME": "bar"},
 	}
 	for n, tc := range testCases {
@@ -219,9 +231,13 @@ func TestConfigValidate(t *testing.T) {
 }
 
 func TestConfigValidate_error(t *testing.T) {
-	testCases := []map[string]string{
+	testCases := []envMap{
 		{"OTEL_EXPORTER_OTLP_ENDPOINT": "localhost:1234", "INSTRUMENT_FUNC_NAME": "bar"},
 		{"BEYLA_EXECUTABLE_NAME": "foo", "INSTRUMENT_FUNC_NAME": "bar", "BEYLA_PRINT_TRACES": "false"},
+		{"BEYLA_EXECUTABLE_NAME": "foo", "BEYLA_PRINT_TRACES": "true", "BEYLA_TRACE_PRINTER": "text"},
+		{"BEYLA_EXECUTABLE_NAME": "foo", "BEYLA_PRINT_TRACES": "true", "BEYLA_TRACE_PRINTER": "json"},
+		{"BEYLA_EXECUTABLE_NAME": "foo", "BEYLA_PRINT_TRACES": "true", "BEYLA_TRACE_PRINTER": "json_indent"},
+		{"BEYLA_EXECUTABLE_NAME": "foo", "BEYLA_PRINT_TRACES": "true", "BEYLA_TRACE_PRINTER": "counter"},
 	}
 	for n, tc := range testCases {
 		t.Run(fmt.Sprint("case", n), func(t *testing.T) {
@@ -232,7 +248,7 @@ func TestConfigValidate_error(t *testing.T) {
 }
 
 func TestConfigValidateDiscovery(t *testing.T) {
-	userConfig := bytes.NewBufferString(`print_traces: true
+	userConfig := bytes.NewBufferString(`trace_printer: text
 discovery:
   services:
     - name: foo
@@ -245,11 +261,11 @@ discovery:
 
 func TestConfigValidateDiscovery_Errors(t *testing.T) {
 	for _, tc := range []string{
-		`print_traces: true
+		`trace_printer: text
 discovery:
   services:
     - name: missing-attributes
-`, `print_traces: true
+`, `trace_printer: text
 discovery:
   services:
     - name: invalid-attribute
@@ -286,6 +302,50 @@ network:
 	require.NoError(t, cfg.Validate())
 }
 
+func TestConfigValidate_TracePrinter(t *testing.T) {
+	type test struct {
+		env      envMap
+		errorMsg string
+	}
+
+	testCases := []test{
+		{
+			env:      envMap{"BEYLA_EXECUTABLE_NAME": "foo", "BEYLA_TRACE_PRINTER": "invalid_printer"},
+			errorMsg: "invalid value for trace_printer: 'invalid_printer'",
+		},
+		{
+			env:      envMap{"BEYLA_EXECUTABLE_NAME": "foo", "BEYLA_TRACE_PRINTER": "json", "BEYLA_PRINT_TRACES": "true"},
+			errorMsg: "print_traces and trace_printer are mutually exclusive, use trace_printer instead",
+		},
+		{
+			env:      envMap{"BEYLA_EXECUTABLE_NAME": "foo"},
+			errorMsg: "you need to define at least one exporter: trace_printer, grafana, otel_metrics_export, otel_traces_export or prometheus_export",
+		},
+	}
+
+	for i := range testCases {
+		cfg := loadConfig(t, testCases[i].env)
+		unsetEnv(t, testCases[i].env)
+
+		err := cfg.Validate()
+		require.Error(t, err)
+		assert.Equal(t, err.Error(), testCases[i].errorMsg)
+	}
+}
+
+func TestConfigValidate_TracePrinterFallback(t *testing.T) {
+	env := envMap{"BEYLA_EXECUTABLE_NAME": "foo", "BEYLA_PRINT_TRACES": "true"}
+
+	cfg := loadConfig(t, env)
+
+	unsetEnv(t, env)
+
+	err := cfg.Validate()
+	require.NoError(t, err)
+	assert.True(t, cfg.Printer.Enabled())
+	assert.Equal(t, cfg.TracePrinter, debug.TracePrinterText)
+}
+
 func TestConfig_OtelGoAutoEnv(t *testing.T) {
 	// OTEL_GO_AUTO_TARGET_EXE is an alias to BEYLA_EXECUTABLE_NAME
 	// (Compatibility with OpenTelemetry)
@@ -315,7 +375,7 @@ func TestConfig_NetworkImplicitProm(t *testing.T) {
 	assert.True(t, cfg.Enabled(FeatureNetO11y)) // Net o11y should be on
 }
 
-func loadConfig(t *testing.T, env map[string]string) *Config {
+func loadConfig(t *testing.T, env envMap) *Config {
 	for k, v := range env {
 		require.NoError(t, os.Setenv(k, v))
 	}
@@ -324,7 +384,7 @@ func loadConfig(t *testing.T, env map[string]string) *Config {
 	return cfg
 }
 
-func unsetEnv(t *testing.T, env map[string]string) {
+func unsetEnv(t *testing.T, env envMap) {
 	for k := range env {
 		require.NoError(t, os.Unsetenv(k))
 	}

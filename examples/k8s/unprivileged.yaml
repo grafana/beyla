@@ -127,8 +127,8 @@ spec:
         terminationMessagePolicy: FallbackToLogsOnError
         image: grafana/beyla:latest
         env:
-          - name: BEYLA_PRINT_TRACES
-            value: "true"
+          - name: BEYLA_TRACE_PRINTER
+            value: "text"
           - name: BEYLA_EXECUTABLE_NAME
             value: "greetings"
           - name: BEYLA_SERVICE_NAMESPACE

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
 
 	"github.com/grafana/beyla/pkg/export/attributes"
 	"github.com/grafana/beyla/pkg/export/expire"
@@ -19,8 +20,7 @@ func plog() *slog.Logger {
 }
 
 type removableMetric[VT any] interface {
-	// TODO [expiration]: uncomment when remove is added to the Otel SDK API
-	// Remove(context.Context, ...metric.RemoveOption)
+	Remove(context.Context, ...metric.RemoveOption)
 }
 
 // Expirer drops metrics from labels that haven't been updated during a given timeout.
@@ -110,15 +110,13 @@ func (ex *Expirer[Record, Metric, ValType]) removeOutdated(ctx context.Context) 
 	}
 }
 
-func (ex *Expirer[Record, Metric, ValType]) deleteMetricInstance(_ context.Context, _ attribute.Set) {
-	// TODO [expiration]: uncomment when remove is added to the Otel SDK API
-	// if ex.log.Enabled(ex.ctx, slog.LevelDebug) {
-	//	ex.logger(attrs).Debug("deleting old OTEL metric")
-	// }
-	// ex.metric.Remove(ctx, metric.WithAttributeSet(attrs))
+func (ex *Expirer[Record, Metric, ValType]) deleteMetricInstance(ctx context.Context, attrs attribute.Set) {
+	if ex.log.Enabled(ex.ctx, slog.LevelDebug) {
+		ex.logger(attrs).Debug("deleting old OTEL metric")
+	}
+	ex.metric.Remove(ctx, metric.WithAttributeSet(attrs))
 }
 
-// nolint:unused
 func (ex *Expirer[Record, Metric, ValType]) logger(attrs attribute.Set) *slog.Logger {
 	fmtAttrs := make([]any, 0, attrs.Len()*2)
 	for it := attrs.Iter(); it.Next(); {

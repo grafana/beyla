@@ -255,6 +255,31 @@ func (c RecordConfig) Attributes() attribute.Set {
 	return c.attrs
 }
 
+// RemoveOption applies options to an addition measurement. See
+// [MeasurementOption] for other options that can be used as an RemoveOption.
+type RemoveOption interface {
+	applyRemove(RemoveConfig) RemoveConfig
+}
+
+// RemoveConfig contains options for an addition measurement.
+type RemoveConfig struct {
+	attrs attribute.Set
+}
+
+// NewRemoveConfig returns a new [RemoveConfig] with all opts applied.
+func NewRemoveConfig(opts []RemoveOption) RemoveConfig {
+	config := RemoveConfig{attrs: *attribute.EmptySet()}
+	for _, o := range opts {
+		config = o.applyRemove(config)
+	}
+	return config
+}
+
+// Attributes returns the configured attribute set.
+func (c RemoveConfig) Attributes() attribute.Set {
+	return c.attrs
+}
+
 // ObserveOption applies options to an addition measurement. See
 // [MeasurementOption] for other options that can be used as a ObserveOption.
 type ObserveOption interface {
@@ -285,6 +310,7 @@ type MeasurementOption interface {
 	AddOption
 	RecordOption
 	ObserveOption
+	RemoveOption
 }
 
 type attrOpt struct {
@@ -326,6 +352,17 @@ func (o attrOpt) applyRecord(c RecordConfig) RecordConfig {
 }
 
 func (o attrOpt) applyObserve(c ObserveConfig) ObserveConfig {
+	switch {
+	case o.set.Len() == 0:
+	case c.attrs.Len() == 0:
+		c.attrs = o.set
+	default:
+		c.attrs = mergeSets(c.attrs, o.set)
+	}
+	return c
+}
+
+func (o attrOpt) applyRemove(c RemoveConfig) RemoveConfig {
 	switch {
 	case o.set.Len() == 0:
 	case c.attrs.Len() == 0:

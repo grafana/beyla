@@ -22,7 +22,6 @@ import (
 const timeout = 20 * time.Second
 
 func TestNetMetricsExpiration(t *testing.T) {
-	t.Skip("[expiration] removed until OTEL SDK provides Remove function")
 	defer restoreEnvAfterExecution()()
 	ctx, cancelCtx := context.WithCancel(context.Background())
 	defer cancelCtx()
@@ -131,8 +130,6 @@ func TestNetMetricsExpiration(t *testing.T) {
 // (2) by metric set of a given service ID
 // this test verifies case 1
 func TestAppMetricsExpiration_ByMetricAttrs(t *testing.T) {
-	t.Skip("[expiration] removed until OTEL SDK provides Remove function")
-
 	defer restoreEnvAfterExecution()()
 	ctx, cancelCtx := context.WithCancel(context.Background())
 	defer cancelCtx()
@@ -247,8 +244,6 @@ func TestAppMetricsExpiration_ByMetricAttrs(t *testing.T) {
 // (2) by metric set of a given service ID
 // this test verifies case 2
 func TestAppMetricsExpiration_BySvcID(t *testing.T) {
-	t.Skip("[expiration] removed until OTEL SDK provides Remove function")
-
 	defer restoreEnvAfterExecution()()
 	ctx, cancelCtx := context.WithCancel(context.Background())
 	defer cancelCtx()

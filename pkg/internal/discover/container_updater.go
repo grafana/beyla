@@ -28,7 +28,9 @@ func updateLoop(db *kube.Database) pipe.MiddleFunc[[]Event[Instrumentable], []Ev
 					db.AddProcess(uint32(ev.Obj.FileInfo.Pid))
 				case EventDeleted:
 					// we don't need to handle process deletion from here, as the Kubernetes informer will
-					// remove the process from the database when the Pod that contains it is deleted
+					// remove the process from the database when the Pod that contains it is deleted.
+					// However we clean-up the performance related caches, in case we miss pod removal event
+					db.CleanProcessCaches(ev.Obj.FileInfo.Ns)
 				}
 			}
 			out <- instrumentables

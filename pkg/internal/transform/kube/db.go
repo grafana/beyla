@@ -108,6 +108,18 @@ func (id *Database) OnDeletion(containerID []string) {
 	}
 }
 
+func (id *Database) addProcess(ifp *container.Info) {
+	id.podsCacheMut.Lock()
+	delete(id.fetchedPodsCache, ifp.PIDNamespace)
+	id.podsCacheMut.Unlock()
+	id.nsMut.Lock()
+	id.namespaces[ifp.PIDNamespace] = ifp
+	id.nsMut.Unlock()
+	id.cntMut.Lock()
+	id.containerIDs[ifp.ContainerID] = ifp
+	id.cntMut.Unlock()
+}
+
 // AddProcess also searches for the container.Info of the passed PID
 func (id *Database) AddProcess(pid uint32) {
 	ifp, err := container.InfoForPID(pid)
@@ -115,12 +127,16 @@ func (id *Database) AddProcess(pid uint32) {
 		dblog().Debug("failing to get container information", "pid", pid, "error", err)
 		return
 	}
-	id.nsMut.Lock()
-	id.namespaces[ifp.PIDNamespace] = &ifp
-	id.nsMut.Unlock()
-	id.cntMut.Lock()
-	id.containerIDs[ifp.ContainerID] = &ifp
-	id.cntMut.Unlock()
+
+	id.addProcess(&ifp)
+}
+
+func (id *Database) CleanProcessCaches(ns uint32) {
+	// Don't delete the id.namespaces, we can't tell if Add/Delete events
+	// are in order. Deleting from the cache is safe, since it will be rebuilt.
+	id.podsCacheMut.Lock()
+	delete(id.fetchedPodsCache, ns)
+	id.podsCacheMut.Unlock()
 }
 
 // OwnerPodInfo returns the information of the pod owning the passed namespace

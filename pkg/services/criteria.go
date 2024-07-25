@@ -47,6 +47,10 @@ type DiscoveryConfig struct {
 	// added to the services definition criteria, with the lowest preference.
 	Services DefinitionCriteria `yaml:"services"`
 
+	// ExcludeServices works analogously to Services, but the applications matching this section won't be instrumented
+	// even if they match the Services selection.
+	ExcludeServices DefinitionCriteria `yaml:"exclude_services"`
+
 	// PollInterval specifies, for the poll service watcher, the interval time between
 	// process inspections
 	PollInterval time.Duration `yaml:"poll_interval" env:"BEYLA_DISCOVERY_POLL_INTERVAL"`
@@ -55,6 +59,8 @@ type DiscoveryConfig struct {
 	// No filtering per application will be done. Using this option may result in reduced quality of information
 	// gathered for certain languages, such as Golang.
 	SystemWide bool `yaml:"system_wide" env:"BEYLA_SYSTEM_WIDE"`
+
+	AllowSelfInstrumentation bool `yaml:"allow_self_instrumentation" env:"BEYLA_ALLOW_SELF_INSTRUMENTATION"`
 
 	// This can be enabled to use generic HTTP tracers only, no Go-specifics will be used:
 	SkipGoSpecificTracers bool `yaml:"skip_go_specific_tracers" env:"BEYLA_SKIP_GO_SPECIFIC_TRACERS"`

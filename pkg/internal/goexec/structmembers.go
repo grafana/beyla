@@ -46,12 +46,6 @@ var structMembers = map[string]structInfo{
 			"Path": "path_ptr_pos",
 		},
 	},
-	"net/http.response": {
-		lib: "go",
-		fields: map[string]string{
-			"status": "status_ptr_pos",
-		},
-	},
 	"net/http.Response": {
 		lib: "go",
 		fields: map[string]string{
@@ -110,12 +104,6 @@ var structMembers = map[string]structInfo{
 			"nextID": "http2_client_next_id_pos",
 			"conn":   "grpc_t_conn_pos",
 			"scheme": "grpc_t_scheme_pos",
-		},
-	},
-	"golang.org/x/net/http2.responseWriterState": {
-		lib: "golang.org/x/net",
-		fields: map[string]string{
-			"status": "rws_status_pos",
 		},
 	},
 	"golang.org/x/net/http2.ClientConn": {

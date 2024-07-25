@@ -3,6 +3,7 @@ package discover
 import (
 	"context"
 	"log/slog"
+	"os"
 	"path"
 
 	"github.com/cilium/ebpf/link"
@@ -27,6 +28,7 @@ type TraceAttacher struct {
 	DeleteTracers     chan *Instrumentable
 	Metrics           imetrics.Reporter
 	pinPath           string
+	beylaPID          int
 
 	// processInstances keeps track of the instances of each process. This will help making sure
 	// that we don't remove the BPF resources of an executable until all their instances are removed
@@ -46,6 +48,7 @@ func (ta *TraceAttacher) attacherLoop() (pipe.FinalFunc[[]Event[Instrumentable]]
 	ta.log = slog.With("component", "discover.TraceAttacher")
 	ta.existingTracers = map[uint64]*ebpf.ProcessTracer{}
 	ta.processInstances = maps.MultiCounter[uint64]{}
+	ta.beylaPID = os.Getpid()
 	ta.pinPath = BuildPinPath(ta.Cfg)
 
 	if err := ta.init(); err != nil {
@@ -79,6 +82,10 @@ func (ta *TraceAttacher) attacherLoop() (pipe.FinalFunc[[]Event[Instrumentable]]
 	}, nil
 }
 
+func (ta *TraceAttacher) skipSelfInstrumentation(ie *Instrumentable) bool {
+	return ie.FileInfo.Pid == int32(ta.beylaPID) && !ta.Cfg.Discovery.AllowSelfInstrumentation
+}
+
 //nolint:cyclop
 func (ta *TraceAttacher) getTracer(ie *Instrumentable) (*ebpf.ProcessTracer, bool) {
 	if tracer, ok := ta.existingTracers[ie.FileInfo.Ino]; ok {
@@ -96,6 +103,12 @@ func (ta *TraceAttacher) getTracer(ie *Instrumentable) (*ebpf.ProcessTracer, boo
 		ta.log.Debug(".done")
 		return nil, false
 	}
+
+	if ta.skipSelfInstrumentation(ie) {
+		ta.log.Info("skipping self-instrumentation of Beyla process", "cmd", ie.FileInfo.CmdExePath, "pid", ie.FileInfo.Pid)
+		return nil, false
+	}
+
 	ta.log.Info("instrumenting process", "cmd", ie.FileInfo.CmdExePath, "pid", ie.FileInfo.Pid)
 	ta.Metrics.InstrumentProcess(ie.FileInfo.ExecutableName())
 

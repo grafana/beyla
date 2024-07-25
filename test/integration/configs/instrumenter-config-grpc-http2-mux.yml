@@ -1,0 +1,14 @@
+routes:
+  unmatched: path
+prometheus_export:
+  port: 8999
+  features:
+    - application
+    - application_process
+otel_traces_export:
+  endpoint: http://jaeger:4318
+discovery:
+  services:
+    - namespace: grpc-http2-go
+      name: server
+      exe_path: testserver

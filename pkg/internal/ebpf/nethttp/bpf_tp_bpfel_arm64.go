@@ -51,13 +51,11 @@ type bpf_tpHttpFuncInvocationT struct {
 type bpf_tpServerHttpFuncInvocationT struct {
 	StartMonotimeNs uint64
 	Tp              bpf_tpTpInfoT
-	Response        uint64
 	Method          [7]uint8
 	Path            [100]uint8
 	_               [5]byte
 	ContentLength   uint64
-	Http2           uint8
-	_               [7]byte
+	Status          uint64
 }
 
 type bpf_tpSqlFuncInvocationT struct {

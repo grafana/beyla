@@ -110,6 +110,9 @@ var DefaultConfig = Config{
 			Enable:               kubeflags.EnabledDefault,
 			InformersSyncTimeout: 30 * time.Second,
 		},
+		HostID: HostIDConfig{
+			FetchTimeout: 500 * time.Millisecond,
+		},
 	},
 	Routes:       &transform.RoutesConfig{Unmatch: transform.UnmatchHeuristic},
 	NetworkFlows: defaultNetworkConfig,
@@ -193,6 +196,14 @@ type Attributes struct {
 	Kubernetes transform.KubernetesDecorator `yaml:"kubernetes"`
 	InstanceID traces.InstanceIDConfig       `yaml:"instance_id"`
 	Select     attributes.Selection          `yaml:"select"`
+	HostID     HostIDConfig                  `yaml:"host_id"`
+}
+
+type HostIDConfig struct {
+	// Override allows overriding the reported host.id in Beyla
+	Override string `yaml:"override" env:"BEYLA_HOST_ID"`
+	// HostIDFetchTimeout specifies the timeout for trying to fetch the HostID from diverse Cloud Providers
+	FetchTimeout time.Duration `yaml:"fetch_timeout" env:"BEYLA_HOST_ID_FETCH_TIMEOUT"`
 }
 
 type ConfigError string
@@ -205,6 +216,9 @@ func (e ConfigError) Error() string {
 func (c *Config) Validate() error {
 	if err := c.Discovery.Services.Validate(); err != nil {
 		return ConfigError(fmt.Sprintf("error in services YAML property: %s", err.Error()))
+	}
+	if err := c.Discovery.ExcludeServices.Validate(); err != nil {
+		return ConfigError(fmt.Sprintf("error in exclude_services YAML property: %s", err.Error()))
 	}
 	if !c.Enabled(FeatureNetO11y) && !c.Enabled(FeatureAppO11y) {
 		return ConfigError("missing at least one of BEYLA_NETWORK_METRICS, BEYLA_EXECUTABLE_NAME or BEYLA_OPEN_PORT property")

@@ -239,11 +239,11 @@ func (connInfo *BPFConnInfo) reqHostInfo() (source, target string) {
 	srcStr := src.String()
 	dstStr := dst.String()
 
-	if src.IsUnspecified() || src.Equal(net.IPv6loopback) {
+	if src.IsUnspecified() {
 		srcStr = ""
 	}
 
-	if dst.IsUnspecified() || dst.Equal(net.IPv6loopback) {
+	if dst.IsUnspecified() {
 		dstStr = ""
 	}
 

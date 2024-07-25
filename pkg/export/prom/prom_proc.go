@@ -27,8 +27,7 @@ type ProcPrometheusConfig struct {
 
 // nolint:gocritic
 func (p ProcPrometheusConfig) Enabled() bool {
-	// TODO:
-	return p.Metrics != nil && p.Metrics.Port != 0 && p.Metrics.OTelMetricsEnabled() &&
+	return p.Metrics != nil && (p.Metrics.Port != 0 || p.Metrics.Registry != nil) && p.Metrics.OTelMetricsEnabled() &&
 		slices.Contains(p.Metrics.Features, otel.FeatureProcess)
 }
 

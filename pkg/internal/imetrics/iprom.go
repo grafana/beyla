@@ -89,8 +89,10 @@ func NewPrometheusReporter(cfg *PrometheusConfig, manager *connector.PrometheusM
 			pr.otelTraceExports,
 			pr.otelTraceExportErrs,
 			pr.prometheusRequests,
-			pr.instrumentedProcesses,
-			pr.beylaInfo)
+			pr.instrumentedProcesses)
+		// Using the registry here means that the metrics will be registered with the global prometheus registry
+		// Therefore, we won't register beyla_build_info as it's already registered in pkg/export/prom/prom.go
+		pr.beylaInfo = nil
 	} else {
 		manager.Register(cfg.Port, cfg.Path,
 			pr.tracerFlushes,
@@ -110,7 +112,9 @@ func (p *PrometheusReporter) Start(ctx context.Context) {
 	if p.connector != nil {
 		p.connector.StartHTTP(ctx)
 	}
-	p.beylaInfo.Set(1)
+	if p.beylaInfo != nil {
+		p.beylaInfo.Set(1)
+	}
 }
 
 func (p *PrometheusReporter) TracerFlush(len int) {

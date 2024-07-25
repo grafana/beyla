@@ -110,7 +110,7 @@ type PidInfo struct {
 // Span contains the information being submitted by the following nodes in the graph.
 // It enables comfortable handling of data from Go.
 // REMINDER: any attribute here must be also added to the functions SpanOTELGetters,
-// SpanPromGetters and getDefinitions in pkg/internal/export/metric/definitions.go
+// SpanPromGetters and getDefinitions in pkg/export/attributes/attr_defs.go
 type Span struct {
 	Type           EventType      `json:"type"`
 	IgnoreSpan     IgnoreMode     `json:"ignoreSpan"`

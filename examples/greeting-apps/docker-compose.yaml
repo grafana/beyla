@@ -28,7 +28,7 @@ services:
     pid: "service:nginx"
     environment:
       BEYLA_CONFIG_PATH: "/configs/beyla-config.yml"
-      BEYLA_PRINT_TRACES: "true"
+      BEYLA_TRACE_PRINTER: "text"
       BEYLA_OPEN_PORT: "3330"
       BEYLA_SERVICE_NAMESPACE: "demo"
       OTEL_SERVICE_NAME: "demo-nginx"
@@ -58,7 +58,7 @@ services:
     pid: "service:gotestserver"
     environment:
       BEYLA_CONFIG_PATH: "/configs/beyla-config.yml"
-      BEYLA_PRINT_TRACES: "true"
+      BEYLA_TRACE_PRINTER: "text"
       BEYLA_OPEN_PORT: "8080"
       BEYLA_SERVICE_NAMESPACE: "demo"
       OTEL_SERVICE_NAME: "demo-go-service"
@@ -88,7 +88,7 @@ services:
     pid: "service:javatestserver"
     environment:
       BEYLA_CONFIG_PATH: "/configs/beyla-config.yml"
-      BEYLA_PRINT_TRACES: "true"
+      BEYLA_TRACE_PRINTER: "text"
       BEYLA_OPEN_PORT: "8085"
       BEYLA_SERVICE_NAMESPACE: "demo"
       OTEL_SERVICE_NAME: "demo-graalvm-native-service"
@@ -118,7 +118,7 @@ services:
     pid: "service:rusttestserver"
     environment:
       BEYLA_CONFIG_PATH: "/configs/beyla-config.yml"
-      BEYLA_PRINT_TRACES: "true"
+      BEYLA_TRACE_PRINTER: "text"
       BEYLA_OPEN_PORT: "8090"
       BEYLA_SERVICE_NAMESPACE: "demo"
       OTEL_SERVICE_NAME: "demo-rust-service"

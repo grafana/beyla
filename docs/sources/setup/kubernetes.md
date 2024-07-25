@@ -336,8 +336,8 @@ spec:
         terminationMessagePolicy: FallbackToLogsOnError
         image: grafana/beyla:latest
         env:
-          - name: BEYLA_PRINT_TRACES
-            value: "true"
+          - name: BEYLA_TRACE_PRINTER
+            value: "text"
           - name: BEYLA_KUBE_METADATA_ENABLE
             value: "autodetect"
           - name: KUBE_NAMESPACE
@@ -418,7 +418,7 @@ metadata:
   name: beyla-config
 data:
   beyla-config.yml: |
-    print_traces: true
+    trace_printer: text
     grafana:
       otlp:
         submit: ["metrics","traces"]

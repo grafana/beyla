@@ -104,8 +104,8 @@ spec:
               value: "/testoutput"
             - name: BEYLA_DISCOVERY_POLL_INTERVAL
               value: "500ms"
-            - name: BEYLA_PRINT_TRACES
-              value: "true"
+            - name: BEYLA_TRACE_PRINTER
+              value: "text"
             - name: BEYLA_OPEN_PORT
               value: "8080"
             - name: BEYLA_SERVICE_NAMESPACE

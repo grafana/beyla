@@ -33,7 +33,6 @@ type Tracer struct {
 	bpfObjects bpfObjects
 	closers    []io.Closer
 	log        *slog.Logger
-	Service    *svc.ID
 }
 
 func New(cfg *beyla.Config, metrics imetrics.Reporter) *Tracer {

@@ -11,7 +11,7 @@ data:
       select:
         process_*:
           include: ["*"]
-    print_traces: true
+    trace_printer: text
     log_level: debug
     discovery:
       services:

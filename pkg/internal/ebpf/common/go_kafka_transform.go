@@ -3,7 +3,6 @@ package ebpfcommon
 import (
 	"bytes"
 	"encoding/binary"
-	"fmt"
 	"unsafe"
 
 	"github.com/cilium/ebpf/ringbuf"
@@ -19,8 +18,6 @@ func ReadGoSaramaRequestIntoSpan(record *ringbuf.Record) (request.Span, bool, er
 	if err != nil {
 		return request.Span{}, true, err
 	}
-
-	fmt.Printf("Event %v\n", event)
 
 	info, err := ProcessKafkaRequest(event.Buf[:])
 

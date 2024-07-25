@@ -99,8 +99,8 @@ spec:
       env:
         - name: GOCOVERDIR
           value: "/testoutput"
-        - name: BEYLA_PRINT_TRACES
-          value: "true"
+        - name: BEYLA_TRACE_PRINTER
+          value: "json"
         - name: BEYLA_OPEN_PORT
           value: "8080"
         - name: BEYLA_DISCOVERY_POLL_INTERVAL

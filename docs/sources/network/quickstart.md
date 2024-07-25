@@ -145,7 +145,7 @@ Note the following requirements for this deployment configuration:
 - To listen to network packets on the host, Beyla requires the `hostNetwork: true` permission
 - To decorate the network metrics with Kubernetes metadata, create a `ClusterRole` and `ClusterRoleBinding` with `list` and `watch` permissions for ReplicaSets, Pods, Services and Nodes
 
-The configuration does not set an endpoint to export metrics. Instead, the `print_traces: true` option outputs the captured network flows to standard output.
+The configuration does not set an endpoint to export metrics. Instead, the `trace_printer: text` option outputs the captured network flows to standard output.
 
 Use `kubectl logs` to see network flow entries, for example:
 

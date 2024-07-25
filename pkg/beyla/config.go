@@ -3,6 +3,7 @@ package beyla
 import (
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"time"
 
@@ -93,8 +94,8 @@ var DefaultConfig = Config{
 		TTL:                         defaultMetricsTTL,
 		SpanMetricsServiceCacheSize: 10000,
 	},
-	Printer: false,
-	Noop:    false,
+	Printer:      false, // Deprecated: use TracePrinter instead
+	TracePrinter: debug.TracePrinterDisabled,
 	InternalMetrics: imetrics.Config{
 		Prometheus: imetrics.PrometheusConfig{
 			Port: 0, // disabled by default
@@ -141,6 +142,7 @@ type Config struct {
 	Traces       otel.TracesConfig             `yaml:"otel_traces_export"`
 	Prometheus   prom.PrometheusConfig         `yaml:"prometheus_export"`
 	Printer      debug.PrintEnabled            `yaml:"print_traces" env:"BEYLA_PRINT_TRACES"`
+	TracePrinter debug.TracePrinter            `yaml:"trace_printer" env:"BEYLA_TRACE_PRINTER"`
 
 	// Exec allows selecting the instrumented executable whose complete path contains the Exec value.
 	Exec       services.RegexpAttr `yaml:"executable_name" env:"BEYLA_EXECUTABLE_NAME"`
@@ -164,10 +166,9 @@ type Config struct {
 	// From this comment, the properties below will remain undocumented, as they
 	// are useful for development purposes. They might be helpful for customer support.
 
-	ChannelBufferLen int               `yaml:"channel_buffer_len" env:"BEYLA_CHANNEL_BUFFER_LEN"`
-	Noop             debug.NoopEnabled `yaml:"noop" env:"BEYLA_NOOP_TRACES"`
-	ProfilePort      int               `yaml:"profile_port" env:"BEYLA_PROFILE_PORT"`
-	InternalMetrics  imetrics.Config   `yaml:"internal_metrics"`
+	ChannelBufferLen int             `yaml:"channel_buffer_len" env:"BEYLA_CHANNEL_BUFFER_LEN"`
+	ProfilePort      int             `yaml:"profile_port" env:"BEYLA_PROFILE_PORT"`
+	InternalMetrics  imetrics.Config `yaml:"internal_metrics"`
 
 	// Processes metrics for application. They will be only enabled if there is a metrics exporter enabled,
 	// and both the "application" and "application_process" features are enabled
@@ -237,11 +238,26 @@ func (c *Config) Validate() error {
 			" purposes, you can also set BEYLA_NETWORK_PRINT_FLOWS=true")
 	}
 
-	if c.Enabled(FeatureAppO11y) && !c.Noop.Enabled() && !c.Printer.Enabled() &&
+	if !c.TracePrinter.Valid() {
+		return ConfigError(fmt.Sprintf("invalid value for trace_printer: '%s'", c.TracePrinter))
+	}
+
+	if c.Printer.Enabled() && c.TracePrinter.Enabled() {
+		return ConfigError("print_traces and trace_printer are mutually exclusive, use trace_printer instead")
+	}
+
+	// TODO Printer is deprecated, remove
+	if c.Printer.Enabled() {
+		slog.Warn("'print_traces' configuration option has been deprecated and will be removed" +
+			" in the future - use 'trace_printer' instead")
+		c.TracePrinter = debug.TracePrinterText
+	}
+
+	if c.Enabled(FeatureAppO11y) && !c.Printer.Enabled() &&
 		!c.Grafana.OTLP.MetricsEnabled() && !c.Grafana.OTLP.TracesEnabled() &&
 		!c.Metrics.Enabled() && !c.Traces.Enabled() &&
-		!c.Prometheus.Enabled() {
-		return ConfigError("you need to define at least one exporter: print_traces," +
+		!c.Prometheus.Enabled() && !c.TracePrinter.Enabled() {
+		return ConfigError("you need to define at least one exporter: trace_printer," +
 			" grafana, otel_metrics_export, otel_traces_export or prometheus_export")
 	}
 
@@ -269,7 +285,7 @@ func (c *Config) Enabled(feature Feature) bool {
 
 // SetDebugMode sets the debug mode for Beyla
 func (c *Config) SetDebugMode() {
-	c.Printer = true
+	c.TracePrinter = debug.TracePrinterText
 	c.LogLevel = "DEBUG"
 	c.EBPF.BpfDebug = true
 	if c.NetworkFlows.Enable {

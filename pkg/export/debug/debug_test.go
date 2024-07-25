@@ -3,6 +3,7 @@ package debug
 import (
 	"io"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -92,12 +93,12 @@ func traceFuncHelper(t *testing.T, tracePrinter TracePrinter) string {
 }
 
 func TestTracePrinterResolve_PrinterText(t *testing.T) {
-	expected := "2024-07-20 13:31:54.72013154 (25µs[20µs]) HTTP 200 method path" +
-		" [peer as peername:1234]->[host as hostname:5678] size:1024B svc=[ go]" +
+	expected := "(25µs[20µs]) HTTP 200 method path [peer as peername:1234]->" +
+		"[host as hostname:5678] size:1024B svc=[ go]" +
 		" traceparent=[00-01020300000000000000000000000000-0102030000000000-01]\n"
 
 	actual := traceFuncHelper(t, TracePrinterText)
-	assert.Equal(t, expected, actual)
+	assert.True(t, strings.HasSuffix(actual, expected))
 }
 
 func TestTracePrinterResolve_PrinterCounter(t *testing.T) {
@@ -107,21 +108,27 @@ func TestTracePrinterResolve_PrinterCounter(t *testing.T) {
 }
 
 func TestTracePrinterResolve_PrinterJSON(t *testing.T) {
-	expected := `[{"type":"HTTP","ignoreSpan":"Metrics","peer":"peer","peerPort":"1234",` +
+	// test as separate chunks to exclude timestamps (start, handlerStart, end)
+
+	prefix := `[{"type":"HTTP","ignoreSpan":"Metrics","peer":"peer","peerPort":"1234",` +
 		`"host":"host","hostPort":"5678","traceID":"01020300000000000000000000000000",` +
 		`"spanID":"0102030000000000","parentSpanID":"0102030000000000","flags":"1",` +
-		`"peerName":"peername","hostName":"hostname","kind":"SERVER","start":"1721503914233133",` +
-		`"handlerStart":"1721503914233138","end":"1721503914233158","duration":"25µs",` +
-		`"durationUSec":"25","handlerDuration":"20µs","handlerDurationUSec":"20","attributes":` +
-		`{"clientAddr":"peername","contentLen":"1024","method":"method","route":"route",` +
+		`"peerName":"peername","hostName":"hostname","kind":"SERVER","`
+
+	suffix := `duration":"25µs","durationUSec":"25","handlerDuration":"20µs",` +
+		`"handlerDurationUSec":"20","attributes":{"clientAddr":"peername",` +
+		`"contentLen":"1024","method":"method","route":"route",` +
 		`"serverAddr":"hostname","serverPort":"5678","status":"200","url":"path"}}]` + "\n"
 
 	actual := traceFuncHelper(t, TracePrinterJSON)
-	assert.Equal(t, expected, actual)
+	assert.True(t, strings.HasPrefix(actual, prefix))
+	assert.True(t, strings.HasSuffix(actual, suffix))
 }
 
 func TestTracePrinterResolve_PrinterJSONIndent(t *testing.T) {
-	expected := `[
+	// test as separate chunks to exclude timestamps (start, handlerStart, end)
+
+	prefix := `[
  {
   "type": "HTTP",
   "ignoreSpan": "Metrics",
@@ -135,11 +142,9 @@ func TestTracePrinterResolve_PrinterJSONIndent(t *testing.T) {
   "flags": "1",
   "peerName": "peername",
   "hostName": "hostname",
-  "kind": "SERVER",
-  "start": "1721503914233133",
-  "handlerStart": "1721503914233138",
-  "end": "1721503914233158",
-  "duration": "25µs",
+  "kind": "SERVER",`
+
+	suffix := `"duration": "25µs",
   "durationUSec": "25",
   "handlerDuration": "20µs",
   "handlerDurationUSec": "20",
@@ -158,7 +163,8 @@ func TestTracePrinterResolve_PrinterJSONIndent(t *testing.T) {
 `
 
 	actual := traceFuncHelper(t, TracePrinterJSONIndent)
-	assert.Equal(t, expected, actual)
+	assert.True(t, strings.HasPrefix(actual, prefix))
+	assert.True(t, strings.HasSuffix(actual, suffix))
 }
 
 func TestTracePrinterResolve_PrinterDisabledInvalid(t *testing.T) {

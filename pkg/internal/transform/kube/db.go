@@ -98,9 +98,7 @@ func (id *Database) OnDeletion(containerID []string) {
 		delete(id.containerIDs, cid)
 		id.cntMut.Unlock()
 		if ok {
-			id.podsCacheMut.Lock()
-			delete(id.fetchedPodsCache, info.PIDNamespace)
-			id.podsCacheMut.Unlock()
+			id.deletePodCache(info.PIDNamespace)
 			id.nsMut.Lock()
 			delete(id.namespaces, info.PIDNamespace)
 			id.nsMut.Unlock()
@@ -109,9 +107,7 @@ func (id *Database) OnDeletion(containerID []string) {
 }
 
 func (id *Database) addProcess(ifp *container.Info) {
-	id.podsCacheMut.Lock()
-	delete(id.fetchedPodsCache, ifp.PIDNamespace)
-	id.podsCacheMut.Unlock()
+	id.deletePodCache(ifp.PIDNamespace)
 	id.nsMut.Lock()
 	id.namespaces[ifp.PIDNamespace] = ifp
 	id.nsMut.Unlock()
@@ -134,6 +130,10 @@ func (id *Database) AddProcess(pid uint32) {
 func (id *Database) CleanProcessCaches(ns uint32) {
 	// Don't delete the id.namespaces, we can't tell if Add/Delete events
 	// are in order. Deleting from the cache is safe, since it will be rebuilt.
+	id.deletePodCache(ns)
+}
+
+func (id *Database) deletePodCache(ns uint32) {
 	id.podsCacheMut.Lock()
 	delete(id.fetchedPodsCache, ns)
 	id.podsCacheMut.Unlock()

@@ -3,9 +3,10 @@ package kube
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/grafana/beyla/pkg/internal/helpers/container"
 	"github.com/grafana/beyla/pkg/internal/kube"
-	"github.com/stretchr/testify/assert"
 )
 
 func Test_NamespaceReuse(t *testing.T) {

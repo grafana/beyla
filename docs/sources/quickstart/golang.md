@@ -59,7 +59,7 @@ To run Beyla, first set the following environment variables:
   (for example, `80` or `443`). If using the example service in the
   first section of this guide, set this variable to `8080`.
 
-To facilitate local testing, set the `BEYLA_TRACE_PRINTER=text` environment variable. This will cause Beyla to print traces to standard output.
+To facilitate local testing, set the `BEYLA_TRACE_PRINTER=text` environment variable. When this option is set, Beyla prints traces in text format to the standard output.
 
 Notice: Beyla requires administrative (sudo) privileges, or at least it needs to be granted the `CAP_SYS_ADMIN` capability.
 

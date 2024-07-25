@@ -177,7 +177,7 @@ Valid log level values are: `DEBUG`, `INFO`, `WARN` and `ERROR`.
 
 <a id="printer"></a>
 
-Prints any instrumented trace on the standard output (stdout). The value of
+Prints any instrumented trace on the standard output. The value of
 this option specify the format to be used when printing the trace. Valid
 formats are:
 
@@ -188,14 +188,6 @@ formats are:
 | `json`        | prints a compact JSON object   |
 | `json_indent` | prints an indented JSON object |
 
-
-**The following option has been DEPRECATED.** *Use `trace_printer` instead.*
-
-| YAML           | Environment variable              | Type    | Default |
-| -------------- | -------------------- | ------- | ------- |
-| `print_traces` | `BEYLA_PRINT_TRACES` | boolean | `false` |
-
-If `true`, prints any instrumented trace on the standard output (stdout).
 
 ## Service discovery
 

@@ -135,10 +135,13 @@ const (
 	ServiceNamespace = Name(semconv.ServiceNamespaceKey)
 
 	HostName = Name(semconv.HostNameKey)
+	HostID   = Name(semconv.HostIDKey)
+
+	ServiceInstanceID = Name(semconv.ServiceInstanceIDKey)
 )
 
 // traces related attributes
-var (
+const (
 	// SQL
 	DBQueryText = Name("db.query.text")
 )

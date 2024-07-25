@@ -388,7 +388,7 @@ func GenerateTraces(span *request.Span, hostID string, userAttrs map[attr.Name]s
 
 	// Create a parent span for the whole request session
 	s := ss.Spans().AppendEmpty()
-	s.SetName(TraceName(span))
+	s.SetName(request.TraceName(span))
 	s.SetKind(ptrace.SpanKind(spanKind(span)))
 	s.SetStartTimestamp(pcommon.NewTimestampFromTime(start))
 
@@ -491,23 +491,6 @@ func grpcTracer(ctx context.Context, opts otlpOptions) (*otlptrace.Exporter, err
 		return nil, fmt.Errorf("creating GRPC trace exporter: %w", err)
 	}
 	return texp, nil
-}
-
-func SpanKindString(span *request.Span) string {
-	switch span.Type {
-	case request.EventTypeHTTP, request.EventTypeGRPC, request.EventTypeKafkaServer, request.EventTypeRedisServer:
-		return "SPAN_KIND_SERVER"
-	case request.EventTypeHTTPClient, request.EventTypeGRPCClient, request.EventTypeSQLClient, request.EventTypeRedisClient:
-		return "SPAN_KIND_CLIENT"
-	case request.EventTypeKafkaClient:
-		switch span.Method {
-		case request.MessagingPublish:
-			return "SPAN_KIND_PRODUCER"
-		case request.MessagingProcess:
-			return "SPAN_KIND_CONSUMER"
-		}
-	}
-	return "SPAN_KIND_INTERNAL"
 }
 
 func (tr *tracesOTELReceiver) acceptSpan(span *request.Span) bool {
@@ -617,42 +600,6 @@ func traceAttributes(span *request.Span, optionalAttrs map[attr.Name]struct{}) [
 	}
 
 	return attrs
-}
-
-func TraceName(span *request.Span) string {
-	switch span.Type {
-	case request.EventTypeHTTP:
-		name := span.Method
-		if span.Route != "" {
-			name += " " + span.Route
-		}
-		return name
-	case request.EventTypeGRPC, request.EventTypeGRPCClient:
-		return span.Path
-	case request.EventTypeHTTPClient:
-		return span.Method
-	case request.EventTypeSQLClient:
-		operation := span.Method
-		if operation == "" {
-			return "SQL"
-		}
-		table := span.Path
-		if table != "" {
-			operation += " " + table
-		}
-		return operation
-	case request.EventTypeRedisClient, request.EventTypeRedisServer:
-		if span.Method == "" {
-			return "REDIS"
-		}
-		return span.Method
-	case request.EventTypeKafkaClient, request.EventTypeKafkaServer:
-		if span.Path == "" {
-			return span.Method
-		}
-		return fmt.Sprintf("%s %s", span.Path, span.Method)
-	}
-	return ""
 }
 
 func spanKind(span *request.Span) trace2.SpanKind {

@@ -118,6 +118,7 @@ func TestBasicPipeline(t *testing.T) {
 		},
 		Type:     pmetric.MetricTypeHistogram,
 		FloatVal: 2 / float64(time.Second),
+		Count:    1,
 	}, event)
 
 }
@@ -325,6 +326,7 @@ func TestRouteConsolidation(t *testing.T) {
 		},
 		Type:     pmetric.MetricTypeHistogram,
 		FloatVal: 2 / float64(time.Second),
+		Count:    1,
 	}, events["/user/{id}"])
 
 	assert.Equal(t, collector.MetricRecord{
@@ -349,6 +351,7 @@ func TestRouteConsolidation(t *testing.T) {
 		},
 		Type:     pmetric.MetricTypeHistogram,
 		FloatVal: 2 / float64(time.Second),
+		Count:    1,
 	}, events["/products/{id}/push"])
 
 	assert.Equal(t, collector.MetricRecord{
@@ -373,6 +376,7 @@ func TestRouteConsolidation(t *testing.T) {
 		},
 		Type:     pmetric.MetricTypeHistogram,
 		FloatVal: 2 / float64(time.Second),
+		Count:    1,
 	}, events["/**"])
 }
 
@@ -433,6 +437,7 @@ func TestGRPCPipeline(t *testing.T) {
 		},
 		Type:     pmetric.MetricTypeHistogram,
 		FloatVal: 2 / float64(time.Second),
+		Count:    1,
 	}, event)
 }
 
@@ -526,6 +531,7 @@ func TestBasicPipelineInfo(t *testing.T) {
 		},
 		Type:     pmetric.MetricTypeHistogram,
 		FloatVal: 1 / float64(time.Second),
+		Count:    1,
 	}, event)
 }
 

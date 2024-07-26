@@ -175,6 +175,7 @@ func TestAppMetricsExpiration_ByMetricAttrs(t *testing.T) {
 		assert.Equal(t, "http.server.request.duration", metric.Name)
 		assert.Equal(t, map[string]string{"url.path": "/foo"}, metric.Attributes)
 		assert.EqualValues(t, 100/float64(time.Second), metric.FloatVal)
+		assert.Equal(t, 1, metric.Count)
 	})
 
 	test.Eventually(t, timeout, func(t require.TestingT) {
@@ -182,6 +183,7 @@ func TestAppMetricsExpiration_ByMetricAttrs(t *testing.T) {
 		require.Equal(t, "http.server.request.duration", metric.Name)
 		assert.Equal(t, map[string]string{"url.path": "/bar"}, metric.Attributes)
 		assert.EqualValues(t, 25/float64(time.Second), metric.FloatVal)
+		assert.Equal(t, 1, metric.Count)
 	})
 
 	// AND WHEN it keeps receiving a subset of the initial metrics during the TTL
@@ -196,6 +198,7 @@ func TestAppMetricsExpiration_ByMetricAttrs(t *testing.T) {
 		require.Equal(t, "http.server.request.duration", metric.Name)
 		assert.Equal(t, map[string]string{"url.path": "/foo"}, metric.Attributes)
 		assert.EqualValues(t, 130/float64(time.Second), metric.FloatVal)
+		assert.Equal(t, 2, metric.Count)
 	})
 
 	now.Advance(2 * time.Minute)
@@ -222,6 +225,7 @@ func TestAppMetricsExpiration_ByMetricAttrs(t *testing.T) {
 		}
 		require.Equal(t, map[string]string{"url.path": "/foo"}, metric.Attributes)
 		require.EqualValues(t, 140/float64(time.Second), metric.FloatVal)
+		assert.Equal(t, 3, metric.Count)
 	}
 
 	// AND WHEN the metrics labels that disappeared are received again
@@ -236,6 +240,7 @@ func TestAppMetricsExpiration_ByMetricAttrs(t *testing.T) {
 		require.Equal(t, "http.server.request.duration", metric.Name)
 		assert.Equal(t, map[string]string{"url.path": "/bar"}, metric.Attributes)
 		assert.EqualValues(t, 70/float64(time.Second), metric.FloatVal)
+		assert.Equal(t, 1, metric.Count)
 	})
 }
 
@@ -289,6 +294,7 @@ func TestAppMetricsExpiration_BySvcID(t *testing.T) {
 		assert.Equal(t, "http.server.request.duration", metric.Name)
 		assert.Equal(t, map[string]string{"url.path": "/foo"}, metric.Attributes)
 		assert.EqualValues(t, 100/float64(time.Second), metric.FloatVal)
+		assert.Equal(t, 1, metric.Count)
 	})
 
 	test.Eventually(t, timeout, func(t require.TestingT) {
@@ -296,6 +302,7 @@ func TestAppMetricsExpiration_BySvcID(t *testing.T) {
 		require.Equal(t, "http.server.request.duration", metric.Name)
 		assert.Equal(t, map[string]string{"url.path": "/bar"}, metric.Attributes)
 		assert.EqualValues(t, 25/float64(time.Second), metric.FloatVal)
+		assert.Equal(t, 1, metric.Count)
 	})
 
 	// AND WHEN it keeps receiving a subset of the initial metrics during the TTL
@@ -310,6 +317,7 @@ func TestAppMetricsExpiration_BySvcID(t *testing.T) {
 		require.Equal(t, "http.server.request.duration", metric.Name)
 		require.Equal(t, map[string]string{"url.path": "/foo"}, metric.Attributes)
 		assert.EqualValues(t, 130/float64(time.Second), metric.FloatVal)
+		assert.Equal(t, 2, metric.Count)
 	})
 
 	now.Advance(2 * time.Minute)
@@ -337,6 +345,7 @@ func TestAppMetricsExpiration_BySvcID(t *testing.T) {
 			}
 			require.Equal(t, map[string]string{"url.path": "/foo"}, metric.Attributes)
 			require.EqualValues(t, 140/float64(time.Second), metric.FloatVal)
+			assert.Equal(t, 3, metric.Count)
 		}
 	})
 	// AND WHEN the metrics labels that disappeared are received again
@@ -351,6 +360,7 @@ func TestAppMetricsExpiration_BySvcID(t *testing.T) {
 		require.Equal(t, "http.server.request.duration", metric.Name)
 		assert.Equal(t, map[string]string{"url.path": "/bar"}, metric.Attributes)
 		assert.EqualValues(t, 70/float64(time.Second), metric.FloatVal)
+		assert.Equal(t, 1, metric.Count)
 	})
 }
 

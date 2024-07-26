@@ -35,6 +35,7 @@ ebpf:
   functions:
     - FooBar
 otel_metrics_export:
+  ttl: 5m
   endpoint: localhost:3030
   buckets:
     duration_histogram: [0, 1, 2]

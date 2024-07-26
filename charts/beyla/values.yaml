@@ -199,7 +199,7 @@ config:
 # -- extra environment variables
 env: {}
   # BEYLA_INTERNAL_METRICS_PROMETHEUS_PORT: 9090
-  # BEYLA_PRINT_TRACES: "true"
+  # BEYLA_TRACE_PRINTER: "text"
 
 # -- extra environment variables to be set from resources such as k8s configMaps/secrets
 envValueFrom: {}

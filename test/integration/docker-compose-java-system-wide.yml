@@ -36,7 +36,7 @@ services:
     environment:
       BEYLA_CONFIG_PATH: "/configs/instrumenter-config-java.yml"
       GOCOVERDIR: "/coverage"
-      BEYLA_PRINT_TRACES: "true"
+      BEYLA_TRACE_PRINTER: "text"
       BEYLA_OPEN_PORT: "${JAVA_OPEN_PORT}"
       BEYLA_EXECUTABLE_NAME: "${JAVA_EXECUTABLE_NAME}"
       BEYLA_SYSTEM_WIDE: "${BEYLA_SYSTEM_WIDE}"

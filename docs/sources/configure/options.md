@@ -171,13 +171,23 @@ Sets the verbosity level of the process standard output logger.
 Valid log level values are: `DEBUG`, `INFO`, `WARN` and `ERROR`.
 `DEBUG` being the most verbose and `ERROR` the least verbose.
 
-| YAML           | Environment variable              | Type    | Default |
-| -------------- | -------------------- | ------- | ------- |
-| `print_traces` | `BEYLA_PRINT_TRACES` | boolean | `false` |
+| YAML            | Environment variable  | Type    | Default    |
+| --------------  | --------------------- | ------- | ---------- |
+| `trace_printer` | `BEYLA_TRACE_PRINTER` | string  | `disabled` |
 
 <a id="printer"></a>
 
-If `true`, prints any instrumented trace on the standard output (stdout).
+Prints any instrumented trace on the standard output. The value of
+this option specify the format to be used when printing the trace. Valid
+formats are:
+
+| Value         | Description                    |
+|---------------|--------------------------------|
+| `disabled`    | disables the printer           |
+| `text`        | prints a concise line of text  |
+| `json`        | prints a compact JSON object   |
+| `json_indent` | prints an indented JSON object |
+
 
 ## Service discovery
 

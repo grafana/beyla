@@ -388,7 +388,7 @@ func GenerateTraces(span *request.Span, hostID string, userAttrs map[attr.Name]s
 
 	// Create a parent span for the whole request session
 	s := ss.Spans().AppendEmpty()
-	s.SetName(request.TraceName(span))
+	s.SetName(span.TraceName())
 	s.SetKind(ptrace.SpanKind(spanKind(span)))
 	s.SetStartTimestamp(pcommon.NewTimestampFromTime(start))
 

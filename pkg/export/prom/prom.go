@@ -699,9 +699,9 @@ func (r *metricsReporter) labelValuesSpans(span *request.Span) []string {
 	return []string{
 		span.ServiceID.Name,
 		span.ServiceID.Namespace,
-		request.TraceName(span),
+		span.TraceName(),
 		strconv.Itoa(int(request.SpanStatusCode(span))),
-		request.SpanKindString(span),
+		span.ServiceGraphKind(),
 		span.ServiceID.Instance,
 		job,
 		"beyla",

@@ -64,9 +64,9 @@ func SpanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValu
 	case attr.ServiceNamespace:
 		getter = func(s *Span) attribute.KeyValue { return semconv.ServiceNamespace(s.ServiceID.Namespace) }
 	case attr.SpanKind:
-		getter = func(s *Span) attribute.KeyValue { return SpanKindMetric(SpanKindString(s)) }
+		getter = func(s *Span) attribute.KeyValue { return SpanKindMetric(s.ServiceGraphKind()) }
 	case attr.SpanName:
-		getter = func(s *Span) attribute.KeyValue { return SpanNameMetric(TraceName(s)) }
+		getter = func(s *Span) attribute.KeyValue { return SpanNameMetric(s.TraceName()) }
 	case attr.Source:
 		getter = func(_ *Span) attribute.KeyValue { return SourceMetric("beyla") }
 	case attr.StatusCode:

@@ -142,31 +142,6 @@ func (s *Span) Inside(parent *Span) bool {
 	return s.RequestStart >= parent.RequestStart && s.End <= parent.End
 }
 
-const (
-	kClient   = "CLIENT"
-	kServer   = "SERVER"
-	kProducer = "PRODUCER"
-	kConsumer = "CONSUMER"
-	kInternal = "INTERNAL"
-)
-
-func kindString(span *Span) string {
-	switch span.Type {
-	case EventTypeHTTP, EventTypeGRPC, EventTypeKafkaServer, EventTypeRedisServer:
-		return kServer
-	case EventTypeHTTPClient, EventTypeGRPCClient, EventTypeSQLClient, EventTypeRedisClient:
-		return kClient
-	case EventTypeKafkaClient:
-		switch span.Method {
-		case MessagingPublish:
-			return kProducer
-		case MessagingProcess:
-			return kConsumer
-		}
-	}
-	return kInternal
-}
-
 // helper attribute functions used by JSON serialization
 type SpanAttributes map[string]string
 
@@ -258,7 +233,7 @@ func (s Span) MarshalJSON() ([]byte, error) {
 		Attributes        SpanAttributes `json:"attributes"`
 	}{
 		JSONSpan:          JSONSpan(s),
-		Kind:              kindString(&s),
+		Kind:              s.ServiceGraphKind(),
 		Start:             start,
 		HandlerStart:      handlerStart,
 		End:               end,
@@ -373,4 +348,58 @@ func (s *Span) RequestLength() int64 {
 	}
 
 	return s.ContentLength
+}
+
+// ServiceGraphKind returns the Kind string representation that is compliant with service graph metrics specification
+func (s *Span) ServiceGraphKind() string {
+	switch s.Type {
+	case EventTypeHTTP, EventTypeGRPC, EventTypeKafkaServer, EventTypeRedisServer:
+		return "SPAN_KIND_SERVER"
+	case EventTypeHTTPClient, EventTypeGRPCClient, EventTypeSQLClient, EventTypeRedisClient:
+		return "SPAN_KIND_CLIENT"
+	case EventTypeKafkaClient:
+		switch s.Method {
+		case MessagingPublish:
+			return "SPAN_KIND_PRODUCER"
+		case MessagingProcess:
+			return "SPAN_KIND_CONSUMER"
+		}
+	}
+	return "SPAN_KIND_INTERNAL"
+}
+
+func (s *Span) TraceName() string {
+	switch s.Type {
+	case EventTypeHTTP:
+		name := s.Method
+		if s.Route != "" {
+			name += " " + s.Route
+		}
+		return name
+	case EventTypeGRPC, EventTypeGRPCClient:
+		return s.Path
+	case EventTypeHTTPClient:
+		return s.Method
+	case EventTypeSQLClient:
+		operation := s.Method
+		if operation == "" {
+			return "SQL"
+		}
+		table := s.Path
+		if table != "" {
+			operation += " " + table
+		}
+		return operation
+	case EventTypeRedisClient, EventTypeRedisServer:
+		if s.Method == "" {
+			return "REDIS"
+		}
+		return s.Method
+	case EventTypeKafkaClient, EventTypeKafkaServer:
+		if s.Path == "" {
+			return s.Method
+		}
+		return fmt.Sprintf("%s %s", s.Path, s.Method)
+	}
+	return ""
 }

@@ -1,8 +1,6 @@
 package request
 
 import (
-	"fmt"
-
 	"go.opentelemetry.io/otel/attribute"
 	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 
@@ -119,57 +117,4 @@ func SpanPeer(span *Span) string {
 	}
 
 	return span.Peer
-}
-
-func SpanKindString(span *Span) string {
-	switch span.Type {
-	case EventTypeHTTP, EventTypeGRPC, EventTypeKafkaServer, EventTypeRedisServer:
-		return "SPAN_KIND_SERVER"
-	case EventTypeHTTPClient, EventTypeGRPCClient, EventTypeSQLClient, EventTypeRedisClient:
-		return "SPAN_KIND_CLIENT"
-	case EventTypeKafkaClient:
-		switch span.Method {
-		case MessagingPublish:
-			return "SPAN_KIND_PRODUCER"
-		case MessagingProcess:
-			return "SPAN_KIND_CONSUMER"
-		}
-	}
-	return "SPAN_KIND_INTERNAL"
-}
-
-func TraceName(span *Span) string {
-	switch span.Type {
-	case EventTypeHTTP:
-		name := span.Method
-		if span.Route != "" {
-			name += " " + span.Route
-		}
-		return name
-	case EventTypeGRPC, EventTypeGRPCClient:
-		return span.Path
-	case EventTypeHTTPClient:
-		return span.Method
-	case EventTypeSQLClient:
-		operation := span.Method
-		if operation == "" {
-			return "SQL"
-		}
-		table := span.Path
-		if table != "" {
-			operation += " " + table
-		}
-		return operation
-	case EventTypeRedisClient, EventTypeRedisServer:
-		if span.Method == "" {
-			return "REDIS"
-		}
-		return span.Method
-	case EventTypeKafkaClient, EventTypeKafkaServer:
-		if span.Path == "" {
-			return span.Method
-		}
-		return fmt.Sprintf("%s %s", span.Path, span.Method)
-	}
-	return ""
 }

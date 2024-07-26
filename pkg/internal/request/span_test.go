@@ -59,21 +59,21 @@ func TestIgnoreModeString(t *testing.T) {
 
 func TestKindString(t *testing.T) {
 	m := map[*Span]string{
-		&Span{Type: EventTypeHTTP}:                                  kServer,
-		&Span{Type: EventTypeGRPC}:                                  kServer,
-		&Span{Type: EventTypeKafkaServer}:                           kServer,
-		&Span{Type: EventTypeRedisServer}:                           kServer,
-		&Span{Type: EventTypeHTTPClient}:                            kClient,
-		&Span{Type: EventTypeGRPCClient}:                            kClient,
-		&Span{Type: EventTypeSQLClient}:                             kClient,
-		&Span{Type: EventTypeRedisClient}:                           kClient,
-		&Span{Type: EventTypeKafkaClient, Method: MessagingPublish}: kProducer,
-		&Span{Type: EventTypeKafkaClient, Method: MessagingProcess}: kConsumer,
-		&Span{}: kInternal,
+		&Span{Type: EventTypeHTTP}:                                  "SPAN_KIND_SERVER",
+		&Span{Type: EventTypeGRPC}:                                  "SPAN_KIND_SERVER",
+		&Span{Type: EventTypeKafkaServer}:                           "SPAN_KIND_SERVER",
+		&Span{Type: EventTypeRedisServer}:                           "SPAN_KIND_SERVER",
+		&Span{Type: EventTypeHTTPClient}:                            "SPAN_KIND_CLIENT",
+		&Span{Type: EventTypeGRPCClient}:                            "SPAN_KIND_CLIENT",
+		&Span{Type: EventTypeSQLClient}:                             "SPAN_KIND_CLIENT",
+		&Span{Type: EventTypeRedisClient}:                           "SPAN_KIND_CLIENT",
+		&Span{Type: EventTypeKafkaClient, Method: MessagingPublish}: "SPAN_KIND_PRODUCER",
+		&Span{Type: EventTypeKafkaClient, Method: MessagingProcess}: "SPAN_KIND_CONSUMER",
+		&Span{}: "SPAN_KIND_INTERNAL",
 	}
 
 	for span, str := range m {
-		assert.Equal(t, kindString(span), str)
+		assert.Equal(t, span.ServiceGraphKind(), str)
 	}
 }
 
@@ -211,7 +211,7 @@ func TestSerializeJSONSpans(t *testing.T) {
 
 		assert.Equal(t, map[string]any{
 			"type":                tData.eventType.String(),
-			"kind":                kindString(&span),
+			"kind":                span.ServiceGraphKind(),
 			"ignoreSpan":          "Metrics",
 			"peer":                "peer",
 			"peerPort":            "1234",

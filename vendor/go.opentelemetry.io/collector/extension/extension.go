@@ -63,12 +63,7 @@ type StatusWatcher interface {
 }
 
 // CreateSettings is passed to Factory.Create(...) function.
-//
-// Deprecated: [v0.103.0] Use extension.Settings instead.
-type CreateSettings = Settings
-
-// Settings is passed to Factory.Create(...) function.
-type Settings struct {
+type CreateSettings struct {
 	// ID returns the ID of the component that will be created.
 	ID component.ID
 
@@ -79,10 +74,10 @@ type Settings struct {
 }
 
 // CreateFunc is the equivalent of Factory.Create(...) function.
-type CreateFunc func(context.Context, Settings, component.Config) (Extension, error)
+type CreateFunc func(context.Context, CreateSettings, component.Config) (Extension, error)
 
 // CreateExtension implements Factory.Create.
-func (f CreateFunc) CreateExtension(ctx context.Context, set Settings, cfg component.Config) (Extension, error) {
+func (f CreateFunc) CreateExtension(ctx context.Context, set CreateSettings, cfg component.Config) (Extension, error) {
 	return f(ctx, set, cfg)
 }
 
@@ -90,7 +85,7 @@ type Factory interface {
 	component.Factory
 
 	// CreateExtension creates an extension based on the given config.
-	CreateExtension(ctx context.Context, set Settings, cfg component.Config) (Extension, error)
+	CreateExtension(ctx context.Context, set CreateSettings, cfg component.Config) (Extension, error)
 
 	// ExtensionStability gets the stability level of the Extension.
 	ExtensionStability() component.StabilityLevel
@@ -154,7 +149,7 @@ func NewBuilder(cfgs map[component.ID]component.Config, factories map[component.
 }
 
 // Create creates an extension based on the settings and configs available.
-func (b *Builder) Create(ctx context.Context, set Settings) (Extension, error) {
+func (b *Builder) Create(ctx context.Context, set CreateSettings) (Extension, error) {
 	cfg, existsCfg := b.cfgs[set.ID]
 	if !existsCfg {
 		return nil, fmt.Errorf("extension %q is not configured", set.ID)

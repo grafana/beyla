@@ -89,7 +89,7 @@ type PersistentQueueSettings[T any] struct {
 	StorageID        component.ID
 	Marshaler        func(req T) ([]byte, error)
 	Unmarshaler      func([]byte) (T, error)
-	ExporterSettings exporter.Settings
+	ExporterSettings exporter.CreateSettings
 }
 
 // NewPersistentQueue creates a new queue backed by file storage; name and signal must be a unique combination that identifies the queue storage

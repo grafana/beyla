@@ -10,6 +10,7 @@ import (
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/trace"
+	"go.uber.org/zap"
 
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/config/configtelemetry"
@@ -23,6 +24,7 @@ type ObsReport struct {
 	level          configtelemetry.Level
 	spanNamePrefix string
 	tracer         trace.Tracer
+	logger         *zap.Logger
 
 	otelAttrs        []attribute.KeyValue
 	telemetryBuilder *metadata.TelemetryBuilder
@@ -31,7 +33,7 @@ type ObsReport struct {
 // ObsReportSettings are settings for creating an ObsReport.
 type ObsReportSettings struct {
 	ExporterID             component.ID
-	ExporterCreateSettings exporter.Settings
+	ExporterCreateSettings exporter.CreateSettings
 }
 
 // NewObsReport creates a new Exporter.
@@ -40,9 +42,7 @@ func NewObsReport(cfg ObsReportSettings) (*ObsReport, error) {
 }
 
 func newExporter(cfg ObsReportSettings) (*ObsReport, error) {
-	telemetryBuilder, err := metadata.NewTelemetryBuilder(cfg.ExporterCreateSettings.TelemetrySettings,
-		metadata.WithAttributeSet(attribute.NewSet(attribute.String(obsmetrics.ExporterKey, cfg.ExporterID.String()))),
-	)
+	telemetryBuilder, err := metadata.NewTelemetryBuilder(cfg.ExporterCreateSettings.TelemetrySettings)
 	if err != nil {
 		return nil, err
 	}
@@ -51,6 +51,7 @@ func newExporter(cfg ObsReportSettings) (*ObsReport, error) {
 		level:          cfg.ExporterCreateSettings.TelemetrySettings.MetricsLevel,
 		spanNamePrefix: obsmetrics.ExporterPrefix + cfg.ExporterID.String(),
 		tracer:         cfg.ExporterCreateSettings.TracerProvider.Tracer(cfg.ExporterID.String()),
+		logger:         cfg.ExporterCreateSettings.Logger,
 
 		otelAttrs: []attribute.KeyValue{
 			attribute.String(obsmetrics.ExporterKey, cfg.ExporterID.String()),
@@ -69,7 +70,7 @@ func (or *ObsReport) StartTracesOp(ctx context.Context) context.Context {
 // EndTracesOp completes the export operation that was started with StartTracesOp.
 func (or *ObsReport) EndTracesOp(ctx context.Context, numSpans int, err error) {
 	numSent, numFailedToSend := toNumItems(numSpans, err)
-	or.recordMetrics(context.WithoutCancel(ctx), component.DataTypeTraces, numSent, numFailedToSend)
+	or.recordMetrics(noCancellationContext{Context: ctx}, component.DataTypeTraces, numSent, numFailedToSend)
 	endSpan(ctx, err, numSent, numFailedToSend, obsmetrics.SentSpansKey, obsmetrics.FailedToSendSpansKey)
 }
 
@@ -84,7 +85,7 @@ func (or *ObsReport) StartMetricsOp(ctx context.Context) context.Context {
 // StartMetricsOp.
 func (or *ObsReport) EndMetricsOp(ctx context.Context, numMetricPoints int, err error) {
 	numSent, numFailedToSend := toNumItems(numMetricPoints, err)
-	or.recordMetrics(context.WithoutCancel(ctx), component.DataTypeMetrics, numSent, numFailedToSend)
+	or.recordMetrics(noCancellationContext{Context: ctx}, component.DataTypeMetrics, numSent, numFailedToSend)
 	endSpan(ctx, err, numSent, numFailedToSend, obsmetrics.SentMetricPointsKey, obsmetrics.FailedToSendMetricPointsKey)
 }
 
@@ -98,7 +99,7 @@ func (or *ObsReport) StartLogsOp(ctx context.Context) context.Context {
 // EndLogsOp completes the export operation that was started with StartLogsOp.
 func (or *ObsReport) EndLogsOp(ctx context.Context, numLogRecords int, err error) {
 	numSent, numFailedToSend := toNumItems(numLogRecords, err)
-	or.recordMetrics(context.WithoutCancel(ctx), component.DataTypeLogs, numSent, numFailedToSend)
+	or.recordMetrics(noCancellationContext{Context: ctx}, component.DataTypeLogs, numSent, numFailedToSend)
 	endSpan(ctx, err, numSent, numFailedToSend, obsmetrics.SentLogRecordsKey, obsmetrics.FailedToSendLogRecordsKey)
 }
 

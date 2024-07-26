@@ -285,8 +285,12 @@ func (c *Config) Enabled(feature Feature) bool {
 
 // SetDebugMode sets the debug mode for Beyla
 func (c *Config) SetDebugMode() {
+	lvl := slog.LevelVar{}
+	lvl.Set(slog.LevelDebug)
+	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
+		Level: &lvl,
+	})))
 	c.TracePrinter = debug.TracePrinterText
-	c.LogLevel = "DEBUG"
 	c.EBPF.BpfDebug = true
 	if c.NetworkFlows.Enable {
 		c.NetworkFlows.Print = true

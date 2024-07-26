@@ -22,6 +22,7 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 
 	"github.com/grafana/beyla/pkg/export/attributes"
+	attr "github.com/grafana/beyla/pkg/export/attributes/names"
 	"github.com/grafana/beyla/pkg/export/instrumentations"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
@@ -201,14 +202,14 @@ type Metrics struct {
 	httpRequestSize       *Expirer[*request.Span, instrument.Float64Histogram, float64]
 	httpClientRequestSize *Expirer[*request.Span, instrument.Float64Histogram, float64]
 	// trace span metrics
-	spanMetricsLatency    instrument.Float64Histogram
-	spanMetricsCallsTotal instrument.Int64Counter
-	spanMetricsSizeTotal  instrument.Float64Counter
+	spanMetricsLatency    *Expirer[*request.Span, instrument.Float64Histogram, float64]
+	spanMetricsCallsTotal *Expirer[*request.Span, instrument.Int64Counter, int64]
+	spanMetricsSizeTotal  *Expirer[*request.Span, instrument.Float64Counter, float64]
+	serviceGraphClient    *Expirer[*request.Span, instrument.Float64Histogram, float64]
+	serviceGraphServer    *Expirer[*request.Span, instrument.Float64Histogram, float64]
+	serviceGraphFailed    *Expirer[*request.Span, instrument.Int64Counter, int64]
+	serviceGraphTotal     *Expirer[*request.Span, instrument.Int64Counter, int64]
 	tracesTargetInfo      instrument.Int64UpDownCounter
-	serviceGraphClient    instrument.Float64Histogram
-	serviceGraphServer    instrument.Float64Histogram
-	serviceGraphFailed    instrument.Int64Counter
-	serviceGraphTotal     instrument.Int64Counter
 }
 
 func ReportMetrics(
@@ -461,20 +462,28 @@ func (mr *MetricsReporter) setupSpanMeters(m *Metrics, meter instrument.Meter) e
 
 	var err error
 
-	m.spanMetricsLatency, err = meter.Float64Histogram(SpanMetricsLatency)
+	spanMetricAttrs := mr.spanMetricAttributes()
+
+	spanMetricsLatency, err := meter.Float64Histogram(SpanMetricsLatency)
 	if err != nil {
 		return fmt.Errorf("creating span metric histogram for latency: %w", err)
 	}
+	m.spanMetricsLatency = NewExpirer[*request.Span, instrument.Float64Histogram, float64](
+		m.ctx, spanMetricsLatency, spanMetricAttrs, timeNow, mr.cfg.TTL)
 
-	m.spanMetricsCallsTotal, err = meter.Int64Counter(SpanMetricsCalls)
+	spanMetricsCallsTotal, err := meter.Int64Counter(SpanMetricsCalls)
 	if err != nil {
 		return fmt.Errorf("creating span metric calls total: %w", err)
 	}
+	m.spanMetricsCallsTotal = NewExpirer[*request.Span, instrument.Int64Counter, int64](
+		m.ctx, spanMetricsCallsTotal, spanMetricAttrs, timeNow, mr.cfg.TTL)
 
-	m.spanMetricsSizeTotal, err = meter.Float64Counter(SpanMetricsSizes)
+	spanMetricsSizeTotal, err := meter.Float64Counter(SpanMetricsSizes)
 	if err != nil {
 		return fmt.Errorf("creating span metric size total: %w", err)
 	}
+	m.spanMetricsSizeTotal = NewExpirer[*request.Span, instrument.Float64Counter, float64](
+		m.ctx, spanMetricsSizeTotal, spanMetricAttrs, timeNow, mr.cfg.TTL)
 
 	m.tracesTargetInfo, err = meter.Int64UpDownCounter(TracesTargetInfo)
 	if err != nil {
@@ -491,25 +500,35 @@ func (mr *MetricsReporter) setupGraphMeters(m *Metrics, meter instrument.Meter) 
 
 	var err error
 
-	m.serviceGraphClient, err = meter.Float64Histogram(ServiceGraphClient, instrument.WithUnit("s"))
+	serviceGraphAttrs := mr.serviceGraphAttributes()
+
+	serviceGraphClient, err := meter.Float64Histogram(ServiceGraphClient, instrument.WithUnit("s"))
 	if err != nil {
 		return fmt.Errorf("creating service graph client histogram: %w", err)
 	}
+	m.serviceGraphClient = NewExpirer[*request.Span, instrument.Float64Histogram, float64](
+		m.ctx, serviceGraphClient, serviceGraphAttrs, timeNow, mr.cfg.TTL)
 
-	m.serviceGraphServer, err = meter.Float64Histogram(ServiceGraphServer, instrument.WithUnit("s"))
+	serviceGraphServer, err := meter.Float64Histogram(ServiceGraphServer, instrument.WithUnit("s"))
 	if err != nil {
 		return fmt.Errorf("creating service graph server histogram: %w", err)
 	}
+	m.serviceGraphServer = NewExpirer[*request.Span, instrument.Float64Histogram, float64](
+		m.ctx, serviceGraphServer, serviceGraphAttrs, timeNow, mr.cfg.TTL)
 
-	m.serviceGraphFailed, err = meter.Int64Counter(ServiceGraphFailed)
+	serviceGraphFailed, err := meter.Int64Counter(ServiceGraphFailed)
 	if err != nil {
 		return fmt.Errorf("creating service graph failed total: %w", err)
 	}
+	m.serviceGraphFailed = NewExpirer[*request.Span, instrument.Int64Counter, int64](
+		m.ctx, serviceGraphFailed, serviceGraphAttrs, timeNow, mr.cfg.TTL)
 
-	m.serviceGraphTotal, err = meter.Int64Counter(ServiceGraphTotal)
+	serviceGraphTotal, err := meter.Int64Counter(ServiceGraphTotal)
 	if err != nil {
 		return fmt.Errorf("creating service graph total: %w", err)
 	}
+	m.serviceGraphTotal = NewExpirer[*request.Span, instrument.Int64Counter, int64](
+		m.ctx, serviceGraphTotal, serviceGraphAttrs, timeNow, mr.cfg.TTL)
 
 	if m.tracesTargetInfo == nil {
 		m.tracesTargetInfo, err = meter.Int64UpDownCounter(TracesTargetInfo)
@@ -702,41 +721,38 @@ func (mr *MetricsReporter) metricResourceAttributes(service *svc.ID) attribute.S
 	return attribute.NewSet(attrs...)
 }
 
-func (mr *MetricsReporter) spanMetricAttributes(span *request.Span) attribute.Set {
-	attrs := []attribute.KeyValue{
-		request.ServiceMetric(span.ServiceID.Name),
-		semconv.ServiceInstanceID(span.ServiceID.Instance),
-		semconv.ServiceNamespace(span.ServiceID.Namespace),
-		request.SpanKindMetric(SpanKindString(span)),
-		request.SpanNameMetric(TraceName(span)),
-		request.StatusCodeMetric(int(request.SpanStatusCode(span))),
-		request.SourceMetric("beyla"),
-		semconv.HostID(mr.hostID),
-	}
-
-	return attribute.NewSet(attrs...)
+// spanMetricAttributes follow a given specification, so their attribute getters are predefined and can't be
+// selected by the user
+func (mr *MetricsReporter) spanMetricAttributes() []attributes.Field[*request.Span, attribute.KeyValue] {
+	return append(attributes.OpenTelemetryGetters(
+		request.SpanOTELGetters, []attr.Name{
+			attr.Service,
+			attr.ServiceInstanceID,
+			attr.ServiceNamespace,
+			attr.SpanKind,
+			attr.SpanName,
+			attr.StatusCode,
+			attr.Source,
+		}),
+		// hostID is not taken from the span but common to the metrics reporter,
+		// so the getter is injected here directly
+		attributes.Field[*request.Span, attribute.KeyValue]{
+			ExposedName: string(attr.HostID.OTEL()),
+			Get: func(_ *request.Span) attribute.KeyValue {
+				return semconv.HostID(mr.hostID)
+			},
+		})
 }
 
-func (mr *MetricsReporter) serviceGraphAttributes(span *request.Span) attribute.Set {
-	var attrs []attribute.KeyValue
-	if span.IsClientSpan() {
-		attrs = []attribute.KeyValue{
-			request.ClientMetric(request.SpanPeer(span)),
-			request.ClientNamespaceMetric(span.ServiceID.Namespace),
-			request.ServerMetric(request.SpanHost(span)),
-			request.ServerNamespaceMetric(span.OtherNamespace),
-			request.SourceMetric("beyla"),
-		}
-	} else {
-		attrs = []attribute.KeyValue{
-			request.ClientMetric(request.SpanPeer(span)),
-			request.ClientNamespaceMetric(span.OtherNamespace),
-			request.ServerMetric(request.SpanHost(span)),
-			request.ServerNamespaceMetric(span.ServiceID.Namespace),
-			request.SourceMetric("beyla"),
-		}
-	}
-	return attribute.NewSet(attrs...)
+func (mr *MetricsReporter) serviceGraphAttributes() []attributes.Field[*request.Span, attribute.KeyValue] {
+	return attributes.OpenTelemetryGetters(
+		request.SpanOTELGetters, []attr.Name{
+			attr.Client,
+			attr.ClientNamespace,
+			attr.Server,
+			attr.ServerNamespace,
+			attr.Source,
+		})
 }
 
 // nolint:cyclop
@@ -792,22 +808,29 @@ func (r *Metrics) record(span *request.Span, mr *MetricsReporter) {
 	}
 
 	if mr.cfg.SpanMetricsEnabled() {
-		attrOpt := instrument.WithAttributeSet(mr.spanMetricAttributes(span))
-		r.spanMetricsLatency.Record(r.ctx, duration, attrOpt)
-		r.spanMetricsCallsTotal.Add(r.ctx, 1, attrOpt)
-		r.spanMetricsSizeTotal.Add(r.ctx, float64(span.RequestLength()), attrOpt)
+		sml, attrs := r.spanMetricsLatency.ForRecord(span)
+		sml.Record(r.ctx, duration, instrument.WithAttributeSet(attrs))
+
+		smct, attrs := r.spanMetricsCallsTotal.ForRecord(span)
+		smct.Add(r.ctx, 1, instrument.WithAttributeSet(attrs))
+
+		smst, attrs := r.spanMetricsSizeTotal.ForRecord(span)
+		smst.Add(r.ctx, float64(span.RequestLength()), instrument.WithAttributeSet(attrs))
 	}
 
 	if mr.cfg.ServiceGraphMetricsEnabled() {
-		attrOpt := instrument.WithAttributeSet(mr.serviceGraphAttributes(span))
 		if span.IsClientSpan() {
-			r.serviceGraphClient.Record(r.ctx, duration, attrOpt)
+			sgc, attrs := r.serviceGraphClient.ForRecord(span)
+			sgc.Record(r.ctx, duration, instrument.WithAttributeSet(attrs))
 		} else {
-			r.serviceGraphServer.Record(r.ctx, duration, attrOpt)
+			sgs, attrs := r.serviceGraphServer.ForRecord(span)
+			sgs.Record(r.ctx, duration, instrument.WithAttributeSet(attrs))
 		}
-		r.serviceGraphTotal.Add(r.ctx, 1, attrOpt)
+		sgt, attrs := r.serviceGraphTotal.ForRecord(span)
+		sgt.Add(r.ctx, 1, instrument.WithAttributeSet(attrs))
 		if request.SpanStatusCode(span) == codes.Error {
-			r.serviceGraphFailed.Add(r.ctx, 1, attrOpt)
+			sgf, attrs := r.serviceGraphFailed.ForRecord(span)
+			sgf.Add(r.ctx, 1, instrument.WithAttributeSet(attrs))
 		}
 	}
 }

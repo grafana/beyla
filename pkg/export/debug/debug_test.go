@@ -113,7 +113,7 @@ func TestTracePrinterResolve_PrinterJSON(t *testing.T) {
 	prefix := `[{"type":"HTTP","ignoreSpan":"Metrics","peer":"peer","peerPort":"1234",` +
 		`"host":"host","hostPort":"5678","traceID":"01020300000000000000000000000000",` +
 		`"spanID":"0102030000000000","parentSpanID":"0102030000000000","flags":"1",` +
-		`"peerName":"peername","hostName":"hostname","kind":"SERVER","`
+		`"peerName":"peername","hostName":"hostname","kind":"SPAN_KIND_SERVER","`
 
 	suffix := `duration":"25µs","durationUSec":"25","handlerDuration":"20µs",` +
 		`"handlerDurationUSec":"20","attributes":{"clientAddr":"peername",` +
@@ -142,7 +142,7 @@ func TestTracePrinterResolve_PrinterJSONIndent(t *testing.T) {
   "flags": "1",
   "peerName": "peername",
   "hostName": "hostname",
-  "kind": "SERVER",`
+  "kind": "SPAN_KIND_SERVER",`
 
 	suffix := `"duration": "25µs",
   "durationUSec": "25",

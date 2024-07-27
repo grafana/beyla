@@ -34,6 +34,11 @@ func main() {
 		os.Exit(-1)
 	}
 
+	if err := beyla.CheckOSCapabilities(); err != nil {
+		slog.Error("can't start Beyla", "error", err)
+		os.Exit(-1)
+	}
+
 	configPath := flag.String("config", "", "path to the configuration file")
 	flag.Parse()
 

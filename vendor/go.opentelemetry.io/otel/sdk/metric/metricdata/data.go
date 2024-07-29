@@ -84,11 +84,6 @@ type DataPoint[N int64 | float64] struct {
 
 	// Exemplars is the sampled Exemplars collected during the timeseries.
 	Exemplars []Exemplar[N] `json:",omitempty"`
-
-	// This DataPoint is valid but has no recorded value.  This value
-	// is used to reflect explicitly missing data in a series, as for
-	// an equivalent to the Prometheus "staleness marker".
-	NoRecordedValue bool `json:",omitempty"`
 }
 
 // Histogram represents the histogram of all measurements of values from an instrument.
@@ -130,11 +125,6 @@ type HistogramDataPoint[N int64 | float64] struct {
 
 	// Exemplars is the sampled Exemplars collected during the timeseries.
 	Exemplars []Exemplar[N] `json:",omitempty"`
-
-	// This DataPoint is valid but has no recorded value.  This value
-	// is used to reflect explicitly missing data in a series, as for
-	// an equivalent to the Prometheus "staleness marker".
-	NoRecordedValue bool `json:",omitempty"`
 }
 
 // ExponentialHistogram represents the histogram of all measurements of values from an instrument.
@@ -192,11 +182,6 @@ type ExponentialHistogramDataPoint[N int64 | float64] struct {
 
 	// Exemplars is the sampled Exemplars collected during the timeseries.
 	Exemplars []Exemplar[N] `json:",omitempty"`
-
-	// This DataPoint is valid but has no recorded value.  This value
-	// is used to reflect explicitly missing data in a series, as for
-	// an equivalent to the Prometheus "staleness marker".
-	NoRecordedValue bool `json:",omitempty"`
 }
 
 // ExponentialBucket are a set of bucket counts, encoded in a contiguous array

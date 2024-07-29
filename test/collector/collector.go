@@ -184,6 +184,7 @@ func (tc *TestCollector) metricEvent(writer http.ResponseWriter, body []byte) {
 							Unit:               m.Unit(),
 							Type:               m.Type(),
 							FloatVal:           hdp.Sum(),
+							Count:              int(hdp.Count()),
 							Attributes:         map[string]string{},
 							ResourceAttributes: resourceAttrs,
 						}
@@ -227,6 +228,7 @@ type MetricRecord struct {
 	Type               pmetric.MetricType
 	IntVal             int64
 	FloatVal           float64
+	Count              int
 }
 
 type TraceRecord struct {

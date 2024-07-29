@@ -833,16 +833,6 @@ attacks. This option should be used only for testing and development purposes.
 
 Configures the intervening time between exports.
 
-
-| YAML  | Environment variable     | Type     | Default |
-|-------|--------------------------|----------|---------|
-| `ttl` | `BEYLA_OTEL_METRICS_TTL` | Duration | `5m`    |
-
-The group of attributes for a metric instance is not reported anymore if the time since
-the last update is greater than this Time-To-Leave (TTL) value.
-
-The purpose of this value is to avoid reporting indefinitely finished application instances.
-
 | YAML       | Environment variable          | Type            | Default                      |
 |------------|-------------------------------|-----------------|------------------------------|
 | `features` | `BEYLA_OTEL_METRICS_FEATURES` | list of strings | `["application"]` |

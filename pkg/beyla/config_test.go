@@ -385,6 +385,7 @@ func TestConfig_ExternalLogger(t *testing.T) {
 		handler       func(out io.Writer) slog.Handler
 		expectedText  *regexp.Regexp
 		expectedCfg   Config
+		tracing       bool
 		networkEnable bool
 	}
 	for _, tc := range []testCase{{
@@ -402,6 +403,7 @@ func TestConfig_ExternalLogger(t *testing.T) {
 		expectedText: regexp.MustCompile(
 			`^time=\S+ level=INFO msg=information arg=info
 time=\S+ level=DEBUG msg=debug arg=debug$`),
+		tracing: true,
 		expectedCfg: Config{
 			TracePrinter: debug.TracePrinterText,
 			EBPF:         ebpfcommon.TracerConfig{BpfDebug: true},
@@ -415,6 +417,7 @@ time=\S+ level=DEBUG msg=debug arg=debug$`),
 		expectedText: regexp.MustCompile(
 			`^time=\S+ level=INFO msg=information arg=info
 time=\S+ level=DEBUG msg=debug arg=debug$`),
+		tracing: true,
 		expectedCfg: Config{
 			TracePrinter: debug.TracePrinterText,
 			EBPF:         ebpfcommon.TracerConfig{BpfDebug: true},
@@ -424,7 +427,7 @@ time=\S+ level=DEBUG msg=debug arg=debug$`),
 		t.Run(tc.name, func(t *testing.T) {
 			cfg := Config{NetworkFlows: NetworkConfig{Enable: tc.networkEnable}}
 			out := &bytes.Buffer{}
-			cfg.ExternalLogger(tc.handler(out))
+			cfg.ExternalLogger(tc.handler(out), tc.tracing)
 			slog.Info("information", "arg", "info")
 			slog.Debug("debug", "arg", "debug")
 			assert.Regexp(t, tc.expectedText, strings.TrimSpace(out.String()))

@@ -1,7 +1,6 @@
 package beyla
 
 import (
-	"context"
 	"fmt"
 	"io"
 	"log/slog"
@@ -289,9 +288,9 @@ func (c *Config) Enabled(feature Feature) bool {
 // ExternalLogger sets the logging capabilities of Beyla.
 // Used for integrating Beyla with an external logging system (for example Alloy)
 // TODO: maybe this method has too many responsibilities, as it affects the global logger.
-func (c *Config) ExternalLogger(handler slog.Handler) {
+func (c *Config) ExternalLogger(handler slog.Handler, tracing bool) {
 	slog.SetDefault(slog.New(handler))
-	if handler.Enabled(context.TODO(), slog.LevelDebug) {
+	if tracing {
 		c.TracePrinter = debug.TracePrinterText
 		c.EBPF.BpfDebug = true
 		if c.NetworkFlows.Enable {

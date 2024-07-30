@@ -116,6 +116,14 @@ func TestOSCapabilitiesError_ErrorString(t *testing.T) {
 	assert.Equal(t, capErr.Error(), "the following capabilities are required: CAP_NET_RAW, CAP_BPF")
 }
 
+func unsetCap(data *capUserData, c osCapability) {
+	data[c>>5].Effective &= ^(1 << (c & 31))
+}
+
+func setCap(data *capUserData, c osCapability) {
+	data[c>>5].Effective |= (1 << (c & 31))
+}
+
 func TestCheckOSCapabilities_capData(t *testing.T) {
 	var data capUserData
 
@@ -129,6 +137,10 @@ func TestCheckOSCapabilities_capData(t *testing.T) {
 	unsetCap(&data, unix.CAP_BPF)
 
 	assert.False(t, isCapSet(&data, unix.CAP_BPF))
+}
+
+func setCurrentProcCapabilities(data *capUserData) error {
+	return unix.Capset(capUserHeader(), &data[0])
 }
 
 // This needs to run in the main thread (called by TestMain() below)

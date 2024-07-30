@@ -120,23 +120,8 @@ func getCurrentProcCapabilities() (*capUserData, error) {
 	return &data, err
 }
 
-// used by tests
-func setCurrentProcCapabilities(data *capUserData) error {
-	return unix.Capset(capUserHeader(), &data[0])
-}
-
 func isCapSet(data *capUserData, c osCapability) bool {
 	return (data[c>>5].Effective & (1 << (c & 31))) > 0
-}
-
-// used by tests
-func unsetCap(data *capUserData, c osCapability) {
-	data[c>>5].Effective &= ^(1 << (c & 31))
-}
-
-// used by tests
-func setCap(data *capUserData, c osCapability) {
-	data[c>>5].Effective |= (1 << (c & 31))
 }
 
 func CheckOSCapabilities() error {

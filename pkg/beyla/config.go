@@ -285,17 +285,17 @@ func (c *Config) Enabled(feature Feature) bool {
 	return false
 }
 
-// SetDebugMode sets the debug mode for Beyla
-func (c *Config) SetDebugMode() {
-	lvl := slog.LevelVar{}
-	lvl.Set(slog.LevelDebug)
-	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
-		Level: &lvl,
-	})))
-	c.TracePrinter = debug.TracePrinterText
-	c.EBPF.BpfDebug = true
-	if c.NetworkFlows.Enable {
-		c.NetworkFlows.Print = true
+// ExternalLogger sets the logging capabilities of Beyla.
+// Used for integrating Beyla with an external logging system (for example Alloy)
+// TODO: maybe this method has too many responsibilities, as it affects the global logger.
+func (c *Config) ExternalLogger(handler slog.Handler, tracing bool) {
+	slog.SetDefault(slog.New(handler))
+	if tracing {
+		c.TracePrinter = debug.TracePrinterText
+		c.EBPF.BpfDebug = true
+		if c.NetworkFlows.Enable {
+			c.NetworkFlows.Print = true
+		}
 	}
 }
 

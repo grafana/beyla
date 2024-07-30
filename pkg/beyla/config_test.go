@@ -3,8 +3,11 @@ package beyla
 import (
 	"bytes"
 	"fmt"
+	"io"
+	"log/slog"
 	"os"
 	"regexp"
+	"strings"
 	"testing"
 	"time"
 
@@ -374,6 +377,60 @@ func TestConfig_NetworkImplicitProm(t *testing.T) {
 	cfg, err := LoadConfig(bytes.NewReader(nil))
 	require.NoError(t, err)
 	assert.True(t, cfg.Enabled(FeatureNetO11y)) // Net o11y should be on
+}
+
+func TestConfig_ExternalLogger(t *testing.T) {
+	type testCase struct {
+		name          string
+		handler       func(out io.Writer) slog.Handler
+		expectedText  *regexp.Regexp
+		expectedCfg   Config
+		networkEnable bool
+	}
+	for _, tc := range []testCase{{
+		name: "default info log",
+		handler: func(out io.Writer) slog.Handler {
+			return slog.NewTextHandler(out, &slog.HandlerOptions{Level: slog.LevelInfo})
+		},
+		expectedText: regexp.MustCompile(
+			`^time=\S+ level=INFO msg=information arg=info$`),
+	}, {
+		name: "default debug log",
+		handler: func(out io.Writer) slog.Handler {
+			return slog.NewTextHandler(out, &slog.HandlerOptions{Level: slog.LevelDebug})
+		},
+		expectedText: regexp.MustCompile(
+			`^time=\S+ level=INFO msg=information arg=info
+time=\S+ level=DEBUG msg=debug arg=debug$`),
+		expectedCfg: Config{
+			TracePrinter: debug.TracePrinterText,
+			EBPF:         ebpfcommon.TracerConfig{BpfDebug: true},
+		},
+	}, {
+		name: "debug log with network flows",
+		handler: func(out io.Writer) slog.Handler {
+			return slog.NewTextHandler(out, &slog.HandlerOptions{Level: slog.LevelDebug})
+		},
+		networkEnable: true,
+		expectedText: regexp.MustCompile(
+			`^time=\S+ level=INFO msg=information arg=info
+time=\S+ level=DEBUG msg=debug arg=debug$`),
+		expectedCfg: Config{
+			TracePrinter: debug.TracePrinterText,
+			EBPF:         ebpfcommon.TracerConfig{BpfDebug: true},
+			NetworkFlows: NetworkConfig{Enable: true, Print: true},
+		},
+	}} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := Config{NetworkFlows: NetworkConfig{Enable: tc.networkEnable}}
+			out := &bytes.Buffer{}
+			cfg.ExternalLogger(tc.handler(out))
+			slog.Info("information", "arg", "info")
+			slog.Debug("debug", "arg", "debug")
+			assert.Regexp(t, tc.expectedText, strings.TrimSpace(out.String()))
+			assert.Equal(t, tc.expectedCfg, cfg)
+		})
+	}
 }
 
 func loadConfig(t *testing.T, env envMap) *Config {

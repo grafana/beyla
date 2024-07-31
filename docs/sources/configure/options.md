@@ -224,7 +224,7 @@ namespace.
 For more details about this section, go to the [discovery services section](#discovery-services-section)
 of this document.
 
-| YAML                       | Environment variable                          | Type    | Default |
+| YAML                       | Environment variable             | Type    | Default |
 | -------------------------- | -------------------------------- | ------- | ------- |
 | `skip_go_specific_tracers` | `BEYLA_SKIP_GO_SPECIFIC_TRACERS` | boolean | false   |
 
@@ -563,7 +563,7 @@ attributes:
     dns: false
 ```
 
-| YAML  | Environment variable                         | Type    | Default |
+| YAML  | Environment variable            | Type    | Default |
 | ----- | ------------------------------- | ------- | ------- |
 | `dns` | `BEYLA_HOSTNAME_DNS_RESOLUTION` | boolean | `true`  |
 
@@ -616,7 +616,7 @@ It is IMPORTANT to consider that enabling this feature requires a previous step 
 providing some extra permissions to the Beyla Pod. Consult the
 ["Configuring Kubernetes metadata decoration section" in the "Running Beyla in Kubernetes"]({{< relref "../setup/kubernetes.md" >}}) page.
 
-| YAML     | Environment variable                      | Type    | Default |
+| YAML     | Environment variable         | Type    | Default |
 | -------- | ---------------------------- | ------- | ------- |
 | `enable` | `BEYLA_KUBE_METADATA_ENABLE` | boolean | `false` |
 
@@ -829,9 +829,9 @@ If this property is not provided, Beyla will guess it according to the following
 - Beyla will guess `http/protobuf` if the port ends in `4318` (`4318`, `14318`, `24318`, ...),
   as `4318` is the usual Port number for the OTEL HTTP collector.
 
-| YAML                   | Environment variable                           | Type | Default |
-| ---------------------- | --------------------------------- | ---- | ------- |
-| `insecure_skip_verify` | `BEYLA_OTEL_INSECURE_SKIP_VERIFY` | bool | `false` |
+| YAML                   | Environment variable              | Type | Default |
+| ---------------------- | --------------------------------- | ------- | ------- |
+| `insecure_skip_verify` | `BEYLA_OTEL_INSECURE_SKIP_VERIFY` | boolean | `false` |
 
 Controls whether the OTEL client verifies the server's certificate chain and host name.
 If set to `true`, the OTEL client accepts any certificate presented by the server
@@ -1029,9 +1029,9 @@ If this property is not provided, Beyla will guess it according to the following
 - Beyla will guess `http/protobuf` if the port ends in `4318` (`4318`, `14318`, `24318`, ...),
   as `4318` is the usual Port number for the OTEL HTTP collector.
 
-| YAML                   | Environment variable                           | Type | Default |
-| ---------------------- | --------------------------------- | ---- | ------- |
-| `insecure_skip_verify` | `BEYLA_OTEL_INSECURE_SKIP_VERIFY` | bool | `false` |
+| YAML                   | Environment variable              | Type    | Default |
+| ---------------------- | --------------------------------- | ------- | ------- |
+| `insecure_skip_verify` | `BEYLA_OTEL_INSECURE_SKIP_VERIFY` | boolean | `false` |
 
 Controls whether the OTEL client verifies the server's certificate chain and host name.
 If set to `true`, the OTEL client accepts any certificate presented by the server

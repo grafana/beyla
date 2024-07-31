@@ -188,6 +188,17 @@ formats are:
 | `json`        | prints a compact JSON object   |
 | `json_indent` | prints an indented JSON object |
 
+| YAML               | Environment variable     | Type     | Default    |
+| -----------------  | ------------------------ | -------- | ---------- |
+| `enforce_sys_caps` | `BEYLA_ENFORCE_SYS_CAPS` | boolean  | `true`     |
+
+<a id="caps"></a>
+
+When set to `true`, aborts Beyla startup if the required system capabilities
+are not present. A list of the missing capabilities is printed to the log
+before the Beyla process terminates. When set to `false`, Beyla prints the
+list of missing capabilities, if any, but continues executing.
+
 
 ## Service discovery
 

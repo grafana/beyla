@@ -53,8 +53,12 @@ func main() {
 	}
 
 	if err := beyla.CheckOSCapabilities(config); err != nil {
-		slog.Error("can't start Beyla", "error", err)
-		os.Exit(-1)
+		if config.EnforceSysCaps {
+			slog.Error("can't start Beyla", "error", err)
+			os.Exit(-1)
+		}
+
+		slog.Warn("Required system capabilities not present, Beyla may malfunction", "error", err)
 	}
 
 	if config.ProfilePort != 0 {

@@ -86,6 +86,7 @@ func TestFor_GlobEntries_NoInclusion(t *testing.T) {
 	})
 	require.NoError(t, err)
 	assert.Equal(t, []attr.Name{
+		"direction",
 		"k8s.cluster.name",
 		"k8s.src.owner.name",
 		"src.cidr",
@@ -99,7 +100,7 @@ func TestFor_GlobEntries_Order(t *testing.T) {
 			Include: []string{"*"},
 		},
 		"beyla_network_*": InclusionLists{
-			Exclude: []string{"dst.*", "transport", "direction", "iface"},
+			Exclude: []string{"dst.*", "transport", "*direction", "iface"},
 		},
 		"beyla_network_flow_bytes_total": InclusionLists{
 			Include: []string{"dst.name"},
@@ -161,6 +162,7 @@ func TestDefault(t *testing.T) {
 	p, err := NewAttrSelector(GroupKubernetes, nil)
 	require.NoError(t, err)
 	assert.Equal(t, []attr.Name{
+		"direction",
 		"k8s.cluster.name",
 		"k8s.dst.namespace",
 		"k8s.dst.owner.name",

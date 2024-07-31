@@ -194,7 +194,7 @@ static inline int flow_monitor(struct __sk_buff *skb) {
             .start_mono_time_ns = current_time,
             .end_mono_time_ns = current_time,
             .flags = flags,
-            .direction = UNKNOWN,
+            .iface_direction = UNKNOWN,
             .initiator = INITIATOR_UNKNOWN,
         };
 
@@ -203,27 +203,27 @@ static inline int flow_monitor(struct __sk_buff *skb) {
             // Calculate direction based on first flag received
             // SYN and ACK mean someone else initiated the connection and this is the INGRESS direction
             if((flags & SYN_ACK_FLAG) == SYN_ACK_FLAG) {
-                new_flow.direction = INGRESS;
+                new_flow.iface_direction = INGRESS;
             }
             // SYN only means we initiated the connection and this is the EGRESS direction
             else if((flags & SYN_FLAG) == SYN_FLAG) {
-                new_flow.direction = EGRESS;
+                new_flow.iface_direction = EGRESS;
             }
             // save, when direction was calculated based on TCP flag
-            if(new_flow.direction != UNKNOWN) {
+            if(new_flow.iface_direction != UNKNOWN) {
                 // errors are intentionally omitted
-                bpf_map_update_elem(&flow_directions, &id, &new_flow.direction, BPF_NOEXIST);
+                bpf_map_update_elem(&flow_directions, &id, &new_flow.iface_direction, BPF_NOEXIST);
             }
             // fallback for lost or already started connections and UDP
             else {
-                new_flow.direction = INGRESS;
+                new_flow.iface_direction = INGRESS;
                 if (id.src_port > id.dst_port) {
-                    new_flow.direction = EGRESS;
+                    new_flow.iface_direction = EGRESS;
                 }
             }
         } else {
             // get direction from saved flow
-            new_flow.direction = *direction;
+            new_flow.iface_direction = *direction;
         }
 
         new_flow.initiator = get_connection_initiator(&id, flags);

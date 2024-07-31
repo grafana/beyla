@@ -12,4 +12,5 @@ attributes:
       - src.cidr
       - dst.cidr
       - iface
+      - iface_direction
       - direction

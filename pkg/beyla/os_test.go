@@ -8,6 +8,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/sys/unix"
+
+	"github.com/grafana/beyla/pkg/internal/helpers"
 )
 
 type testCase struct {
@@ -59,24 +61,6 @@ var capTests = []capDesc{
 	{osCap: unix.CAP_SYS_RESOURCE, str: "CAP_SYS_RESOURCE", kernMaj: 4, kernMin: 11},
 }
 
-func TestOSCapability_String(t *testing.T) {
-	test := func(c *capDesc) {
-		t.Run(c.str, func(t *testing.T) {
-			assert.Equal(t, c.osCap.String(), c.str)
-		})
-	}
-
-	for i := range capTests {
-		test(&capTests[i])
-	}
-
-	capEmpty := capDesc{osCap: 0, str: "UNKNOWN"}
-	capInv := capDesc{osCap: 99, str: "UNKNOWN"}
-
-	test(&capEmpty)
-	test(&capInv)
-}
-
 func TestOSCapabilitiesError_Empty(t *testing.T) {
 	var capErr osCapabilitiesError
 
@@ -116,31 +100,10 @@ func TestOSCapabilitiesError_ErrorString(t *testing.T) {
 	assert.Equal(t, capErr.Error(), "the following capabilities are required: CAP_NET_RAW, CAP_BPF")
 }
 
-func unsetCap(data *capUserData, c osCapability) {
-	data[c>>5].Effective &= ^(1 << (c & 31))
+
+
 }
 
-func setCap(data *capUserData, c osCapability) {
-	data[c>>5].Effective |= (1 << (c & 31))
-}
-
-func TestCheckOSCapabilities_capData(t *testing.T) {
-	var data capUserData
-
-	assert.Zero(t, data[0])
-	assert.Zero(t, data[1])
-
-	setCap(&data, unix.CAP_BPF)
-
-	assert.True(t, isCapSet(&data, unix.CAP_BPF))
-
-	unsetCap(&data, unix.CAP_BPF)
-
-	assert.False(t, isCapSet(&data, unix.CAP_BPF))
-}
-
-func setCurrentProcCapabilities(data *capUserData) error {
-	return unix.Capset(capUserHeader(), &data[0])
 }
 
 // This needs to run in the main thread (called by TestMain() below)
@@ -154,7 +117,7 @@ func setCurrentProcCapabilities(data *capUserData) error {
 //
 // We need to drop capabilities to correctly test TestCheckOSCapabilities()
 func dropCapabilities() error {
-	data, err := getCurrentProcCapabilities()
+	data, err := helpers.GetCurrentProcCapabilities()
 
 	if err != nil {
 		return err
@@ -164,7 +127,7 @@ func dropCapabilities() error {
 		unsetCap(data, capTests[i].osCap)
 	}
 
-	return setCurrentProcCapabilities(data)
+	return helpers.SetCurrentProcCapabilities(data)
 }
 
 func TestCheckOSCapabilities(t *testing.T) {
@@ -184,7 +147,7 @@ func TestCheckOSCapabilities(t *testing.T) {
 		}
 
 		assert.True(t, osCapErr.IsSet(data.osCap),
-			fmt.Sprintf("%s should be present in error", data.str))
+			fmt.Sprintf("%s should be present in error", data.osCap.String()))
 	}
 
 	for i := range capTests {

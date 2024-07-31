@@ -2,12 +2,12 @@ package beyla
 
 import (
 	"fmt"
-	"os"
 	"strings"
 
 	"golang.org/x/sys/unix"
 
 	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
+	"github.com/grafana/beyla/pkg/internal/helpers"
 )
 
 // Minimum required Kernel version: 5.8
@@ -26,10 +26,8 @@ func CheckOSSupport() error {
 	return nil
 }
 
-type osCapability uint8
-
 type capDesc struct {
-	osCap osCapability
+	osCap helpers.OSCapability
 	str   string
 
 	// kernMaj.kernMin is the MAXIMUM kernel version this capability is needed
@@ -48,28 +46,17 @@ var requiredCaps = []capDesc{
 	{osCap: unix.CAP_SYS_PTRACE, str: "CAP_SYS_PTRACE"},
 	{osCap: unix.CAP_SYS_RESOURCE, str: "CAP_SYS_RESOURCE", kernMaj: 5, kernMin: 10},
 }
-
-func (c osCapability) String() string {
-	for i := range requiredCaps {
-		if c == requiredCaps[i].osCap {
-			return requiredCaps[i].str
-		}
-	}
-
-	return "UNKNOWN"
-}
-
 type osCapabilitiesError uint64
 
-func (e *osCapabilitiesError) Set(c osCapability) {
+func (e *osCapabilitiesError) Set(c helpers.OSCapability) {
 	*e |= 1 << c
 }
 
-func (e *osCapabilitiesError) Clear(c osCapability) {
+func (e *osCapabilitiesError) Clear(c helpers.OSCapability) {
 	*e &= ^(1 << c)
 }
 
-func (e osCapabilitiesError) IsSet(c osCapability) bool {
+func (e osCapabilitiesError) IsSet(c helpers.OSCapability) bool {
 	return e&(1<<c) > 0
 }
 
@@ -78,9 +65,6 @@ func (e osCapabilitiesError) Empty() bool {
 }
 
 func (e osCapabilitiesError) Error() string {
-	// linux capabilities are at most a byte long in practice
-	const capMax = 0xff
-
 	if e == 0 {
 		return ""
 	}
@@ -89,7 +73,7 @@ func (e osCapabilitiesError) Error() string {
 
 	sep := ""
 
-	for i := osCapability(1); i < capMax; i++ {
+	for i := helpers.OSCapability(0); i <= unix.CAP_LAST_CAP; i++ {
 		if e.IsSet(i) {
 			sb.WriteString(sep)
 			sb.WriteString(i.String())
@@ -101,31 +85,8 @@ func (e osCapabilitiesError) Error() string {
 	return fmt.Sprintf("the following capabilities are required: %s", sb.String())
 }
 
-// From the capget(2) manpage:
-// Note that 64-bit capabilities use datap[0] and datap[1], whereas 32-bit capabilities use only datap[0].
-type capUserData [2]unix.CapUserData
-
-func capUserHeader() *unix.CapUserHeader {
-	return &unix.CapUserHeader{
-		Version: unix.LINUX_CAPABILITY_VERSION_3,
-		Pid:     int32(os.Getpid()),
-	}
-}
-
-func getCurrentProcCapabilities() (*capUserData, error) {
-	data := capUserData{}
-
-	err := unix.Capget(capUserHeader(), &data[0])
-
-	return &data, err
-}
-
-func isCapSet(data *capUserData, c osCapability) bool {
-	return (data[c>>5].Effective & (1 << (c & 31))) > 0
-}
-
 func CheckOSCapabilities() error {
-	data, err := getCurrentProcCapabilities()
+	caps, err := helpers.GetCurrentProcCapabilities()
 
 	if err != nil {
 		return fmt.Errorf("unable to query OS capabilities: %w", err)
@@ -133,8 +94,8 @@ func CheckOSCapabilities() error {
 
 	var capError osCapabilitiesError
 
-	testAndSet := func(c osCapability) {
-		if !isCapSet(data, c) {
+	testAndSet := func(c helpers.OSCapability) {
+		if !caps.Has(c) {
 			capError.Set(c)
 		}
 	}

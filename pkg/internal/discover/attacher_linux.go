@@ -6,6 +6,8 @@ import (
 
 	"github.com/cilium/ebpf/rlimit"
 	"golang.org/x/sys/unix"
+
+	"github.com/grafana/beyla/pkg/internal/helpers"
 )
 
 func (ta *TraceAttacher) close() {
@@ -46,6 +48,12 @@ func (ta *TraceAttacher) bpfMount(pinPath string) error {
 		return err
 	}
 	if !mounted {
+		caps, err := helpers.GetCurrentProcCapabilities()
+
+		if err == nil && !caps.Has(unix.CAP_SYS_ADMIN) {
+			return fmt.Errorf("beyla requires CAP_SYS_ADMIN in order to mount %s", pinPath)
+		}
+
 		return unix.Mount(pinPath, pinPath, "bpf", 0, "")
 	}
 	if !bpffsInstance {

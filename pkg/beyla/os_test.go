@@ -3,13 +3,13 @@ package beyla
 import (
 	"errors"
 	"fmt"
-	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/sys/unix"
 
 	"github.com/grafana/beyla/pkg/internal/helpers"
+	"github.com/grafana/beyla/pkg/services"
 )
 
 type testCase struct {
@@ -50,17 +50,6 @@ func TestCheckOSSupport_Unsupported(t *testing.T) {
 	}
 }
 
-var capTests = []capDesc{
-	{osCap: unix.CAP_BPF, str: "CAP_BPF"},
-	{osCap: unix.CAP_CHECKPOINT_RESTORE, str: "CAP_CHECKPOINT_RESTORE"},
-	{osCap: unix.CAP_DAC_READ_SEARCH, str: "CAP_DAC_READ_SEARCH"},
-	{osCap: unix.CAP_NET_RAW, str: "CAP_NET_RAW"},
-	{osCap: unix.CAP_PERFMON, str: "CAP_PERFMON"},
-	{osCap: unix.CAP_SYS_PTRACE, str: "CAP_SYS_PTRACE"},
-	{osCap: unix.CAP_SYS_RESOURCE, str: "CAP_SYS_RESOURCE", kernMaj: 5, kernMin: 10},
-	{osCap: unix.CAP_SYS_RESOURCE, str: "CAP_SYS_RESOURCE", kernMaj: 4, kernMin: 11},
-}
-
 func TestOSCapabilitiesError_Empty(t *testing.T) {
 	var capErr osCapabilitiesError
 
@@ -71,9 +60,7 @@ func TestOSCapabilitiesError_Empty(t *testing.T) {
 func TestOSCapabilitiesError_Set(t *testing.T) {
 	var capErr osCapabilitiesError
 
-	for i := range capTests {
-		c := capTests[i].osCap
-
+	for c := helpers.OSCapability(0); c <= unix.CAP_LAST_CAP; c++ {
 		assert.False(t, capErr.IsSet(c))
 		capErr.Set(c)
 		assert.True(t, capErr.IsSet(c))
@@ -100,41 +87,52 @@ func TestOSCapabilitiesError_ErrorString(t *testing.T) {
 	assert.Equal(t, capErr.Error(), "the following capabilities are required: CAP_NET_RAW, CAP_BPF")
 }
 
+type capClass int
 
+const (
+	capCore = capClass(iota + 1)
+	capApp
+	capNet
+)
 
+type capTestData struct {
+	osCap   helpers.OSCapability
+	class   capClass
+	kernMaj int
+	kernMin int
 }
 
-}
-
-// This needs to run in the main thread (called by TestMain() below)
-// capset() can fail with EPERM when called from a different thread. From the
-// manpage:
-//
-//	EPERM  The caller attempted to use capset() to modify the capabilities of
-//	a thread other than itself, but lacked sufficient privilege.  For kernels
-//	supporting VFS capabilities, this is never  permitted.
-//	For  kernels  lacking  VFS  support,  the CAP_SETPCAP  capability  is  required.
-//
-// We need to drop capabilities to correctly test TestCheckOSCapabilities()
-func dropCapabilities() error {
-	data, err := helpers.GetCurrentProcCapabilities()
-
-	if err != nil {
-		return err
-	}
-
-	for i := range capTests {
-		unsetCap(data, capTests[i].osCap)
-	}
-
-	return helpers.SetCurrentProcCapabilities(data)
+var capTests = []capTestData{
+	{osCap: unix.CAP_BPF, class: capCore},
+	{osCap: unix.CAP_PERFMON, class: capCore},
+	{osCap: unix.CAP_DAC_READ_SEARCH, class: capCore},
+	{osCap: unix.CAP_SYS_RESOURCE, class: capCore, kernMaj: 5, kernMin: 10},
+	{osCap: unix.CAP_SYS_RESOURCE, class: capCore, kernMaj: 4, kernMin: 11},
+	{osCap: unix.CAP_CHECKPOINT_RESTORE, class: capApp},
+	{osCap: unix.CAP_SYS_PTRACE, class: capApp},
+	{osCap: unix.CAP_NET_RAW, class: capNet},
 }
 
 func TestCheckOSCapabilities(t *testing.T) {
-	test := func(data *capDesc) {
+	caps, err := helpers.GetCurrentProcCapabilities()
+
+	assert.NoError(t, err)
+
+	// assume this proc doesn't have any caps set (which is usually the case
+	// for non privileged processes) instead of turning this into a privileged
+	// test and manually dropping capabilities
+	assert.Zero(t, caps[0].Effective)
+	assert.Zero(t, caps[1].Effective)
+
+	test := func(data *capTestData) {
 		overrideKernelVersion(testCase{data.kernMaj, data.kernMin})
 
-		err := CheckOSCapabilities()
+		cfg := Config{
+			NetworkFlows: NetworkConfig{Enable: data.class == capNet},
+			Discovery:    services.DiscoveryConfig{SystemWide: data.class == capApp},
+		}
+
+		err := CheckOSCapabilities(&cfg)
 
 		if !assert.Error(t, err) {
 			assert.FailNow(t, "CheckOSCapabilities() should have returned an error")
@@ -156,13 +154,4 @@ func TestCheckOSCapabilities(t *testing.T) {
 			test(&c)
 		})
 	}
-}
-
-func TestMain(m *testing.M) {
-	if err := dropCapabilities(); err != nil {
-		fmt.Printf("Failed to drop capabilities: %s\n", err)
-		os.Exit(-1)
-	}
-
-	os.Exit(m.Run())
 }

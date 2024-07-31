@@ -26,26 +26,6 @@ func CheckOSSupport() error {
 	return nil
 }
 
-type capDesc struct {
-	osCap helpers.OSCapability
-	str   string
-
-	// kernMaj.kernMin is the MAXIMUM kernel version this capability is needed
-	// if push comes to shove in the future, we may want to implement proper
-	// ranges here
-	kernMaj int
-	kernMin int
-}
-
-var requiredCaps = []capDesc{
-	{osCap: unix.CAP_BPF, str: "CAP_BPF"},
-	{osCap: unix.CAP_CHECKPOINT_RESTORE, str: "CAP_CHECKPOINT_RESTORE"},
-	{osCap: unix.CAP_DAC_READ_SEARCH, str: "CAP_DAC_READ_SEARCH"},
-	{osCap: unix.CAP_NET_RAW, str: "CAP_NET_RAW"},
-	{osCap: unix.CAP_PERFMON, str: "CAP_PERFMON"},
-	{osCap: unix.CAP_SYS_PTRACE, str: "CAP_SYS_PTRACE"},
-	{osCap: unix.CAP_SYS_RESOURCE, str: "CAP_SYS_RESOURCE", kernMaj: 5, kernMin: 10},
-}
 type osCapabilitiesError uint64
 
 func (e *osCapabilitiesError) Set(c helpers.OSCapability) {
@@ -85,7 +65,7 @@ func (e osCapabilitiesError) Error() string {
 	return fmt.Sprintf("the following capabilities are required: %s", sb.String())
 }
 
-func CheckOSCapabilities() error {
+func CheckOSCapabilities(config *Config) error {
 	caps, err := helpers.GetCurrentProcCapabilities()
 
 	if err != nil {
@@ -100,16 +80,25 @@ func CheckOSCapabilities() error {
 		}
 	}
 
+	// core capabilities
+	testAndSet(unix.CAP_BPF)
+	testAndSet(unix.CAP_PERFMON)
+	testAndSet(unix.CAP_DAC_READ_SEARCH)
+
 	major, minor := kernelVersion()
 
-	for i := range requiredCaps {
-		c := &requiredCaps[i]
+	// CAP_SYS_RESOURCE is only required on kernels < 5.11
+	if (major == 5 && minor < 11) || (major < 5) {
+		testAndSet(unix.CAP_SYS_RESOURCE)
+	}
 
-		if c.kernMaj == 0 ||
-			(major == c.kernMaj && minor <= c.kernMin) ||
-			(major < c.kernMaj) {
-			testAndSet(c.osCap)
-		}
+	if config.Enabled(FeatureAppO11y) {
+		testAndSet(unix.CAP_CHECKPOINT_RESTORE)
+		testAndSet(unix.CAP_SYS_PTRACE)
+	}
+
+	if config.Enabled(FeatureNetO11y) {
+		testAndSet(unix.CAP_NET_RAW)
 	}
 
 	if capError.Empty() {

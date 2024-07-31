@@ -34,11 +34,6 @@ func main() {
 		os.Exit(-1)
 	}
 
-	if err := beyla.CheckOSCapabilities(); err != nil {
-		slog.Error("can't start Beyla", "error", err)
-		os.Exit(-1)
-	}
-
 	configPath := flag.String("config", "", "path to the configuration file")
 	flag.Parse()
 
@@ -54,6 +49,11 @@ func main() {
 
 	if err := lvl.UnmarshalText([]byte(config.LogLevel)); err != nil {
 		slog.Error("unknown log level specified, choices are [DEBUG, INFO, WARN, ERROR]", err)
+		os.Exit(-1)
+	}
+
+	if err := beyla.CheckOSCapabilities(config); err != nil {
+		slog.Error("can't start Beyla", "error", err)
 		os.Exit(-1)
 	}
 

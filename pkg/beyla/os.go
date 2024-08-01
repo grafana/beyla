@@ -51,6 +51,8 @@ func (e osCapabilitiesError) Error() string {
 
 	var sb strings.Builder
 
+	sb.WriteString("the following capabilities are required: ")
+
 	sep := ""
 
 	for i := helpers.OSCapability(0); i <= unix.CAP_LAST_CAP; i++ {
@@ -62,7 +64,7 @@ func (e osCapabilitiesError) Error() string {
 		}
 	}
 
-	return fmt.Sprintf("the following capabilities are required: %s", sb.String())
+	return sb.String()
 }
 
 func CheckOSCapabilities(config *Config) error {

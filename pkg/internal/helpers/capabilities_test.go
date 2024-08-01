@@ -26,5 +26,5 @@ func TestOSCapabilities_String(t *testing.T) {
 		assert.Equal(t, str, k.String())
 	}
 
-	assert.Equal(t, OSCapability(99).String(), "UNKNOWN")
+	assert.Equal(t, "UNKNOWN", OSCapability(99).String())
 }

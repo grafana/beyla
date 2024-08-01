@@ -54,7 +54,7 @@ func TestOSCapabilitiesError_Empty(t *testing.T) {
 	var capErr osCapabilitiesError
 
 	assert.True(t, capErr.Empty())
-	assert.Equal(t, capErr.Error(), "")
+	assert.Equal(t, "", capErr.Error())
 }
 
 func TestOSCapabilitiesError_Set(t *testing.T) {
@@ -72,19 +72,19 @@ func TestOSCapabilitiesError_Set(t *testing.T) {
 func TestOSCapabilitiesError_ErrorString(t *testing.T) {
 	var capErr osCapabilitiesError
 
-	assert.Equal(t, capErr.Error(), "")
+	assert.Equal(t, "", capErr.Error())
 
 	capErr.Set(unix.CAP_BPF)
 
 	// no separator (,)
-	assert.Equal(t, capErr.Error(), "the following capabilities are required: CAP_BPF")
+	assert.Equal(t, "the following capabilities are required: CAP_BPF", capErr.Error())
 
 	capErr.Set(unix.CAP_NET_RAW)
 
 	// capabilities appear in ascending order (they are just numeric
 	// constants) separated by a comma
 	assert.True(t, unix.CAP_NET_RAW < unix.CAP_BPF)
-	assert.Equal(t, capErr.Error(), "the following capabilities are required: CAP_NET_RAW, CAP_BPF")
+	assert.Equal(t, "the following capabilities are required: CAP_NET_RAW, CAP_BPF", capErr.Error())
 }
 
 type capClass int

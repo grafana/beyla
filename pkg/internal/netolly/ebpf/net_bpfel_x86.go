@@ -39,7 +39,7 @@ type NetFlowMetricsT struct {
 	StartMonoTimeNs uint64
 	EndMonoTimeNs   uint64
 	Flags           uint16
-	Direction       uint8
+	IfaceDirection  uint8
 	Initiator       uint8
 	Errno           uint8
 }

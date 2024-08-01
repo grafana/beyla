@@ -76,12 +76,16 @@ const (
 	DstPort    = Name("dst.port")
 	SrcName    = Name("src.name")
 	DstName    = Name("dst.name")
-	Direction  = Name("direction")
 	Iface      = Name("iface")
 	SrcCIDR    = Name("src.cidr")
 	DstCIDR    = Name("dst.cidr")
 
 	ClientPort = Name("client.port")
+
+	// Direction values: request or response
+	Direction = Name("direction")
+	// IfaceDirection values: ingress or egress
+	IfaceDirection = Name("iface.direction")
 
 	K8sSrcOwnerName = Name("k8s.src.owner.name")
 	K8sSrcNamespace = Name("k8s.src.namespace")

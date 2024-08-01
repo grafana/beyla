@@ -45,7 +45,7 @@ typedef struct flow_metrics_t {
     // TCP Flags from https://www.ietf.org/rfc/rfc793.txt
     u16 flags;
     // direction of the flow EGRESS / INGRESS
-    u8 direction;
+    u8 iface_direction;
     // who initiated of the connection: INITIATOR_SRC or INITIATOR_DST
     u8 initiator;
     // The positive errno of a failed map insertion that caused a flow

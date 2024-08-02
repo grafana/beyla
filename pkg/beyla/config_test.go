@@ -106,6 +106,7 @@ network:
 		ServiceName:      "svc-name",
 		ChannelBufferLen: 33,
 		LogLevel:         "INFO",
+		EnforceSysCaps:   true,
 		Printer:          false,
 		TracePrinter:     "json",
 		EBPF: ebpfcommon.TracerConfig{

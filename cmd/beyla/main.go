@@ -52,6 +52,15 @@ func main() {
 		os.Exit(-1)
 	}
 
+	if err := beyla.CheckOSCapabilities(config); err != nil {
+		if config.EnforceSysCaps {
+			slog.Error("can't start Beyla", "error", err)
+			os.Exit(-1)
+		}
+
+		slog.Warn("Required system capabilities not present, Beyla may malfunction", "error", err)
+	}
+
 	if config.ProfilePort != 0 {
 		go func() {
 			slog.Info("starting PProf HTTP listener", "port", config.ProfilePort)

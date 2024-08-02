@@ -80,7 +80,8 @@ func (p *Tracer) Load() (*ebpf.CollectionSpec, error) {
 			loader = loadBpf_tp_debug
 		}
 	} else {
-		p.log.Info("Kernel in lockdown mode or older than 5.17, trace info propagation in gRPC headers is disabled.")
+		p.log.Info("Kernel in lockdown mode, missing CAP_SYS_ADMIN" +
+			" or older than 5.17, trace info propagation in gRPC headers is disabled.")
 	}
 	return loader()
 }

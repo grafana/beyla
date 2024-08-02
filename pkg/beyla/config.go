@@ -43,6 +43,7 @@ const (
 var DefaultConfig = Config{
 	ChannelBufferLen: 10,
 	LogLevel:         "INFO",
+	EnforceSysCaps:   true,
 	EBPF: ebpfcommon.TracerConfig{
 		BatchLength:        100,
 		BatchTimeout:       time.Second,
@@ -164,6 +165,11 @@ type Config struct {
 	Discovery services.DiscoveryConfig `yaml:"discovery"`
 
 	LogLevel string `yaml:"log_level" env:"BEYLA_LOG_LEVEL"`
+
+	// Check for required system capabilities and bail if they are not
+	// present. If set to 'false', Beyla will still print a list of missing
+	// capabilities, but the execution will continue
+	EnforceSysCaps bool `yaml:"enforce_sys_caps" env:"BEYLA_ENFORCE_SYS_CAPS"`
 
 	// From this comment, the properties below will remain undocumented, as they
 	// are useful for development purposes. They might be helpful for customer support.

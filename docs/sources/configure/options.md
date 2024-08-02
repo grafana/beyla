@@ -194,11 +194,12 @@ formats are:
 
 <a id="caps"></a>
 
-When set to `true`, aborts Beyla startup if the required system capabilities
-are not present. A list of the missing capabilities is printed to the log
-before the Beyla process terminates. When set to `false`, Beyla prints the
-list of missing capabilities, if any, but continues executing.
+If you have set the `enforce_sys_caps` to true, if the required system
+capabilities are not present Beyla aborts its startup and logs a list of the
+missing capabilities.
 
+If you have set the configuration option to `false`, Beyla logs a list of the
+missing capabilities only.
 
 ## Service discovery
 

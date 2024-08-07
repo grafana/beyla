@@ -42,6 +42,7 @@ const (
 	envProtocol        = "OTEL_EXPORTER_OTLP_PROTOCOL"
 	envHeaders         = "OTEL_EXPORTER_OTLP_HEADERS"
 	envTracesHeaders   = "OTEL_EXPORTER_OTLP_TRACES_HEADERS"
+	envResourceAttribs = "OTEL_RESOURCE_ATTRIBUTES"
 )
 
 // Buckets defines the histograms bucket boundaries, and allows users to
@@ -86,6 +87,8 @@ func getResourceAttrs(hostID string, service *svc.ID) []attribute.KeyValue {
 	for k, v := range service.Metadata {
 		attrs = append(attrs, k.OTEL().String(v))
 	}
+
+	attrs = append(attrs, otelResourceAttribs...)
 
 	return attrs
 }
@@ -333,24 +336,63 @@ func (l *LogrAdaptor) WithName(name string) logr.LogSink {
 	return &LogrAdaptor{inner: l.inner.With("name", name)}
 }
 
-// headersFromEnv returns a map of the headers as specified by the
-// OTEL_EXPORTER_OTLP_*HEADERS group of variables. This is,
-// a comma-separated list of key=values. For example:
-// api-key=key,other-config-value=value
 func headersFromEnv(varName string) map[string]string {
-	headersStr, ok := os.LookupEnv(varName)
-	if !ok {
-		return nil
-	}
 	headers := map[string]string{}
+
+	addToMap := func(k string, v string) {
+		headers[k] = v
+	}
+
+	parseOTELEnvVar(varName, addToMap)
+
+	return headers
+}
+
+type sinkFunc func(k string, v string)
+
+// parseOTELEnvVar parses a comma separated group of variables
+// in the format specified by OTEL_EXPORTER_OTLP_*HEADERS or
+// OTEL_RESOURCE_ATTRIBUTES, i.e. a comma-separated list of
+// key=values. For example: api-key=key,other-config-value=value
+// The values are passed as parameters to the sink function sFunc
+func parseOTELEnvVar(varName string, sFunc sinkFunc) {
+	envVar, ok := os.LookupEnv(varName)
+
+	if !ok {
+		return
+	}
+
 	// split all the comma-separated key=value entries
-	for _, entry := range strings.Split(headersStr, ",") {
+	for _, entry := range strings.Split(envVar, ",") {
 		// split only by the first '=' appearance, as values might
 		// have base64 '=' padding symbols
 		keyVal := strings.SplitN(entry, "=", 2)
-		if len(keyVal) > 1 {
-			headers[strings.TrimSpace(keyVal[0])] = strings.TrimSpace(keyVal[1])
+		if len(keyVal) < 2 {
+			continue
 		}
+
+		k := strings.TrimSpace(keyVal[0])
+		v := strings.TrimSpace(keyVal[1])
+
+		if k == "" || v == "" {
+			continue
+		}
+
+		sFunc(strings.TrimSpace(keyVal[0]), strings.TrimSpace(keyVal[1]))
 	}
-	return headers
+}
+
+// we want to initialize this only once instead of every time a trace or
+// metric is constructed
+var otelResourceAttribs []attribute.KeyValue
+
+// init() function specific for dealing with OTEL_RESOURCE_ATTRIBUTES.
+// (not so?) important: passing service.name in OTEL_RESOURCE_ATTRIBUTES will
+// override other beyla configuration (e.g. OTEL_SERVICE_NAME)
+func init() {
+	apply := func(k string, v string) {
+		otelResourceAttribs = append(otelResourceAttribs, attribute.String(k, v))
+	}
+
+	parseOTELEnvVar(envResourceAttribs, apply)
 }

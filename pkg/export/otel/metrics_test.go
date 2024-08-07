@@ -524,6 +524,37 @@ func TestAppMetrics_ByInstrumentation(t *testing.T) {
 
 }
 
+func TestAppMetrics_ResourceAttributes(t *testing.T) {
+	defer restoreEnvAfterExecution()()
+
+	require.NoError(t, os.Setenv(envResourceAttrs, "deployment.environment=production,source=upstream.beyla"))
+
+	ctx, cancelCtx := context.WithCancel(context.Background())
+	defer cancelCtx()
+
+	otlp, err := collector.Start(ctx)
+	require.NoError(t, err)
+
+	now := syncedClock{now: time.Now()}
+	timeNow = now.Now
+
+	otelExporter := makeExporter(ctx, t, []string{instrumentations.InstrumentationHTTP}, otlp)
+	require.NoError(t, err)
+
+	metrics := make(chan []request.Span, 1)
+	go otelExporter(metrics)
+
+	metrics <- []request.Span{
+		{ServiceID: svc.ID{UID: "foo"}, Type: request.EventTypeHTTP, Path: "/foo", RequestStart: 100, End: 200},
+	}
+
+	res := readNChan(t, otlp.Records(), 1, timeout)
+	assert.Len(t, res, 1)
+	attributes := res[0].ResourceAttributes
+	assert.Equal(t, "production", attributes["deployment.environment"])
+	assert.Equal(t, "upstream.beyla", attributes["source"])
+}
+
 func TestMetricsConfig_Enabled(t *testing.T) {
 	assert.True(t, (&MetricsConfig{Features: []string{FeatureApplication, FeatureNetwork}, CommonEndpoint: "foo"}).Enabled())
 	assert.True(t, (&MetricsConfig{Features: []string{FeatureApplication}, MetricsEndpoint: "foo"}).Enabled())

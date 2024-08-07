@@ -543,7 +543,8 @@ func (mr *MetricsReporter) setupGraphMeters(m *Metrics, meter instrument.Meter) 
 func (mr *MetricsReporter) newMetricSet(service *svc.ID) (*Metrics, error) {
 	mlog := mlog().With("service", service)
 	mlog.Debug("creating new Metrics reporter")
-	resources := resource.NewWithAttributes(semconv.SchemaURL, getAppResourceAttrs(mr.hostID, service)...)
+	resourceAttributes := append(getAppResourceAttrs(mr.hostID, service), ResourceAttrsFromEnv()...)
+	resources := resource.NewWithAttributes(semconv.SchemaURL, resourceAttributes...)
 
 	opts := []metric.Option{
 		metric.WithResource(resources),

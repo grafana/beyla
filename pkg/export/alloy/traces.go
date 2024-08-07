@@ -40,6 +40,7 @@ func (tr *tracesReceiver) provideLoop() (pipe.FinalFunc[[]request.Span], error) 
 		if err != nil {
 			slog.Error("error fetching user defined attributes", "error", err)
 		}
+		envResourceAttrs := otel.ResourceAttrsFromEnv()
 
 		for spans := range in {
 			for i := range spans {
@@ -49,7 +50,7 @@ func (tr *tracesReceiver) provideLoop() (pipe.FinalFunc[[]request.Span], error) 
 				}
 
 				for _, tc := range tr.cfg.Traces {
-					traces := otel.GenerateTraces(span, tr.hostID, traceAttrs)
+					traces := otel.GenerateTraces(span, tr.hostID, traceAttrs, envResourceAttrs)
 					err := tc.ConsumeTraces(tr.ctx, traces)
 					if err != nil {
 						slog.Error("error sending trace to consumer", "error", err)

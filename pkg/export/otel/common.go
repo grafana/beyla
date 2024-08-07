@@ -379,7 +379,7 @@ func parseOTELEnvVar(varName string, sFunc sinkFunc) {
 	}
 }
 
-func resourceAttrsFromEnv() []attribute.KeyValue {
+func ResourceAttrsFromEnv() []attribute.KeyValue {
 	var otelResourceAttrs []attribute.KeyValue
 	apply := func(k string, v string) {
 		otelResourceAttrs = append(otelResourceAttrs, attribute.String(k, v))

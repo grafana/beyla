@@ -190,7 +190,7 @@ func (tr *tracesOTELReceiver) provideLoop() (pipe.FinalFunc[[]request.Span], err
 			return
 		}
 
-		envResourceAttrs := resourceAttrsFromEnv()
+		envResourceAttrs := ResourceAttrsFromEnv()
 
 		for spans := range in {
 			for i := range spans {

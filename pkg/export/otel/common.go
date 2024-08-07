@@ -345,14 +345,14 @@ func headersFromEnv(varName string) map[string]string {
 	return headers
 }
 
-type sinkFunc func(k string, v string)
+type varHandler func(k string, v string)
 
 // parseOTELEnvVar parses a comma separated group of variables
 // in the format specified by OTEL_EXPORTER_OTLP_*HEADERS or
 // OTEL_RESOURCE_ATTRIBUTES, i.e. a comma-separated list of
 // key=values. For example: api-key=key,other-config-value=value
-// The values are passed as parameters to the sink function sFunc
-func parseOTELEnvVar(varName string, sFunc sinkFunc) {
+// The values are passed as parameters to the handler function
+func parseOTELEnvVar(varName string, handler varHandler) {
 	envVar, ok := os.LookupEnv(varName)
 
 	if !ok {
@@ -375,7 +375,7 @@ func parseOTELEnvVar(varName string, sFunc sinkFunc) {
 			continue
 		}
 
-		sFunc(strings.TrimSpace(keyVal[0]), strings.TrimSpace(keyVal[1]))
+		handler(strings.TrimSpace(keyVal[0]), strings.TrimSpace(keyVal[1]))
 	}
 }
 

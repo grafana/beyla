@@ -42,7 +42,7 @@ const (
 	envProtocol        = "OTEL_EXPORTER_OTLP_PROTOCOL"
 	envHeaders         = "OTEL_EXPORTER_OTLP_HEADERS"
 	envTracesHeaders   = "OTEL_EXPORTER_OTLP_TRACES_HEADERS"
-	envResourceAttribs = "OTEL_RESOURCE_ATTRIBUTES"
+	envResourceAttrs   = "OTEL_RESOURCE_ATTRIBUTES"
 )
 
 // Buckets defines the histograms bucket boundaries, and allows users to
@@ -385,6 +385,6 @@ func resourceAttrsFromEnv() []attribute.KeyValue {
 		otelResourceAttrs = append(otelResourceAttrs, attribute.String(k, v))
 	}
 
-	parseOTELEnvVar(envResourceAttribs, apply)
+	parseOTELEnvVar(envResourceAttrs, apply)
 	return otelResourceAttrs
 }

@@ -588,7 +588,7 @@ func TestGenerateTracesAttributes(t *testing.T) {
 	})
 	t.Run("test env var resource attributes", func(t *testing.T) {
 		defer restoreEnvAfterExecution()()
-		require.NoError(t, os.Setenv(envResourceAttribs, "deployment.environment=productions,source.upstream=beyla"))
+		require.NoError(t, os.Setenv(envResourceAttrs, "deployment.environment=productions,source.upstream=beyla"))
 		span := request.Span{Type: request.EventTypeHTTP, Method: "GET", Route: "/test", Status: 200}
 		traces := GenerateTraces(&span, "host-id", map[attr.Name]struct{}{}, resourceAttrsFromEnv())
 

@@ -190,13 +190,15 @@ func (tr *tracesOTELReceiver) provideLoop() (pipe.FinalFunc[[]request.Span], err
 			return
 		}
 
+		envResourceAttrs := ResourceAttrsFromEnv()
+
 		for spans := range in {
 			for i := range spans {
 				span := &spans[i]
 				if span.IgnoreSpan == request.IgnoreTraces || !tr.acceptSpan(span) {
 					continue
 				}
-				traces := GenerateTraces(span, tr.ctxInfo.HostID, traceAttrs)
+				traces := GenerateTraces(span, tr.ctxInfo.HostID, traceAttrs, envResourceAttrs)
 				err := exp.ConsumeTraces(tr.ctx, traces)
 				if err != nil {
 					slog.Error("error sending trace to consumer", "error", err)
@@ -363,16 +365,18 @@ func getRetrySettings(cfg TracesConfig) configretry.BackOffConfig {
 }
 
 // GenerateTraces creates a ptrace.Traces from a request.Span
-func GenerateTraces(span *request.Span, hostID string, userAttrs map[attr.Name]struct{}) ptrace.Traces {
+func GenerateTraces(span *request.Span, hostID string, userAttrs map[attr.Name]struct{}, envResourceAttrs []attribute.KeyValue) ptrace.Traces {
 	t := span.Timings()
 	start := spanStartTime(t)
 	hasSubSpans := t.Start.After(start)
 	traces := ptrace.NewTraces()
 	rs := traces.ResourceSpans().AppendEmpty()
 	ss := rs.ScopeSpans().AppendEmpty()
-	resourceAttrs := attrsToMap(getAppResourceAttrs(hostID, &span.ServiceID))
-	resourceAttrs.PutStr(string(semconv.OTelLibraryNameKey), reporterName)
-	resourceAttrs.CopyTo(rs.Resource().Attributes())
+	resourceAttrs := getAppResourceAttrs(hostID, &span.ServiceID)
+	resourceAttrs = append(resourceAttrs, envResourceAttrs...)
+	resourceAttrsMap := attrsToMap(resourceAttrs)
+	resourceAttrsMap.PutStr(string(semconv.OTelLibraryNameKey), reporterName)
+	resourceAttrsMap.CopyTo(rs.Resource().Attributes())
 
 	traceID := pcommon.TraceID(span.TraceID)
 	spanID := pcommon.SpanID(randomSpanID())

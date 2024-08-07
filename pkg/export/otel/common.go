@@ -87,9 +87,6 @@ func getResourceAttrs(hostID string, service *svc.ID) []attribute.KeyValue {
 	for k, v := range service.Metadata {
 		attrs = append(attrs, k.OTEL().String(v))
 	}
-
-	attrs = append(attrs, otelResourceAttribs...)
-
 	return attrs
 }
 
@@ -382,17 +379,12 @@ func parseOTELEnvVar(varName string, sFunc sinkFunc) {
 	}
 }
 
-// we want to initialize this only once instead of every time a trace or
-// metric is constructed
-var otelResourceAttribs []attribute.KeyValue
-
-// init() function specific for dealing with OTEL_RESOURCE_ATTRIBUTES.
-// (not so?) important: passing service.name in OTEL_RESOURCE_ATTRIBUTES will
-// override other beyla configuration (e.g. OTEL_SERVICE_NAME)
-func init() {
+func resourceAttrsFromEnv() []attribute.KeyValue {
+	var otelResourceAttrs []attribute.KeyValue
 	apply := func(k string, v string) {
-		otelResourceAttribs = append(otelResourceAttribs, attribute.String(k, v))
+		otelResourceAttrs = append(otelResourceAttrs, attribute.String(k, v))
 	}
 
 	parseOTELEnvVar(envResourceAttribs, apply)
+	return otelResourceAttrs
 }

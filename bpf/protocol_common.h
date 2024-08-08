@@ -95,33 +95,29 @@ static __always_inline http_connection_metadata_t *connection_meta_by_direction(
 }
 
 // Newer version of uio.h iov_iter than what we have in vmlinux.h.
-struct _iov_iter {
-	u8 iter_type;
-	bool copy_mc;
-	bool nofault;
-	bool data_source;
-	bool user_backed;
-	union {
-		size_t iov_offset;
-		int last_offset;
-	};
-	union {
-		struct iovec __ubuf_iovec;
-		struct {
-			union {
-				const struct iovec *__iov;
-				const struct kvec *kvec;
-				const struct bio_vec *bvec;
-				struct xarray *xarray;
-				void *ubuf;
-			};
-			size_t count;
-		};
-	};
+struct iov_iter___v64 {
+    u8 iter_type;
+    bool nofault;
+    bool data_source;
+    size_t iov_offset;
     union {
-		unsigned long nr_segs;
-		loff_t xarray_start;
-	};
+        struct iovec __ubuf_iovec;
+        struct {
+            union {
+                /* use iter_iov() to get the current vec */
+                const struct iovec *__iov;
+                const struct kvec *kvec;
+                const struct bio_vec *bvec;
+                struct xarray *xarray;
+                void *ubuf;
+            };
+            size_t count;
+        };
+    };
+    union {
+        unsigned long nr_segs;
+        loff_t xarray_start;
+    };
 };
 
 
@@ -148,8 +144,8 @@ static __always_inline int read_msghdr_buf(struct msghdr *msg, u8* buf, int max_
         // TODO: I wonder if there's a way to check for field existence without having to
         // make fake structures that match the new version of the kernel code. This code
         // here assumes the kernel iov_iter structure is the format with __iov and __ubuf_iovec.
-        struct _iov_iter _msg_iter;
-        bpf_probe_read_kernel(&_msg_iter, sizeof(struct _iov_iter), &(msg->msg_iter));
+        struct iov_iter___v64 _msg_iter;
+        bpf_probe_read_kernel(&_msg_iter, sizeof(struct iov_iter___v64), &(msg->msg_iter));
 
         bpf_dbg_printk("new kernel, iov doesn't exist, nr_segs %d", _msg_iter.nr_segs);
         if (msg_iter_type == 5) {

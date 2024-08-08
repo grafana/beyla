@@ -120,17 +120,57 @@ struct iov_iter___v64 {
     };
 };
 
+// older struct that features 'type' instead of 'iter_type'
+struct iov_iter___v58 {
+    unsigned int type;
+    size_t iov_offset;
+    size_t count;
+    union {
+        const struct iovec *iov;
+        const struct kvec *kvec;
+        const struct bio_vec *bvec;
+        struct pipe_inode_info *pipe;
+    };
+    union {
+        unsigned long nr_segs;
+        struct {
+            unsigned int head;
+            unsigned int start_head;
+        };
+    };
+};
+
+
+// first appeared in linux 6.0, value reassigned on v6.7
+// because enum iter_type is already defined in vmlinux.h (without ITER_BUF),
+// we just define the missing enumerator here to avoid multiple definitions
+enum iter_type___v60 {
+    ITER_UBUF
+};
 
 static __always_inline int read_msghdr_buf(struct msghdr *msg, u8* buf, int max_len) {
     struct iov_iter msg_iter = BPF_CORE_READ(msg, msg_iter);
-    u8 msg_iter_type = 0;
+
+    // msg_iter_type is a bitmask on kernels <= 5.13, hence the bitwise
+    // operations below
+    unsigned int msg_iter_type = 0;
 
     if (bpf_core_field_exists(msg_iter.iter_type)) {
-        bpf_probe_read(&msg_iter_type, sizeof(u8), &(msg_iter.iter_type));
-        bpf_dbg_printk("msg iter type exists, read value %d", msg_iter_type);
+        // kernels >= 5.14 have iov_iter::iter_type, which is a simple
+        // 8-bit enumerator value
+        u8 type;
+        bpf_probe_read(&type, sizeof(u8), &(msg_iter.iter_type));
+        msg_iter_type = type & 0xff;
+    } else if (bpf_core_field_exists(((struct iov_iter___v58*)(0))->type)) {
+        // older kernels up to 5.13 have iov_iter::type, an unsigned int
+        // bitmask
+        bpf_probe_read(&msg_iter_type, sizeof(unsigned int), &(msg_iter.iter_type));
+    } else {
+        bpf_dbg_printk("msg iter type does not exist, kernel is too old - bailing");
+        return 0;
     }
 
-    bpf_dbg_printk("iter type %d", msg_iter_type);
+    bpf_dbg_printk("iter type %u", msg_iter_type);
 
     struct iovec *iov = NULL;
 
@@ -148,7 +188,11 @@ static __always_inline int read_msghdr_buf(struct msghdr *msg, u8* buf, int max_
         bpf_probe_read_kernel(&_msg_iter, sizeof(struct iov_iter___v64), &(msg->msg_iter));
 
         bpf_dbg_printk("new kernel, iov doesn't exist, nr_segs %d", _msg_iter.nr_segs);
-        if (msg_iter_type == 5) {
+
+        const unsigned int iter_discard = bpf_core_enum_value(enum iter_type, ITER_DISCARD);
+
+        // XXX is iter_discard really intended?
+        if ((msg_iter_type & iter_discard) == iter_discard) {
             struct iovec vec;
             bpf_probe_read(&vec, sizeof(struct iovec), &(_msg_iter.__ubuf_iovec));
             bpf_dbg_printk("ubuf base %llx, &ubuf base %llx", vec.iov_base, &vec.iov_base);
@@ -157,18 +201,30 @@ static __always_inline int read_msghdr_buf(struct msghdr *msg, u8* buf, int max_
             return l;
         } else {
             bpf_probe_read(&iov, sizeof(struct iovec *), &(_msg_iter.__iov));
-        }     
+        }
     }
-    
+
     if (!iov) {
         return 0;
     }
 
-    if (msg_iter_type == 6) {// Direct char buffer
-        bpf_dbg_printk("direct char buffer type=6 iov %llx", iov);
-        bpf_probe_read(buf, l, iov);
+    if (bpf_core_enum_value_exists(enum iter_type___v60, ITER_UBUF)) {
+        // this enum value is not the same across different kernel versions
+        const int iter_ubuf = bpf_core_enum_value(enum iter_type___v60, ITER_UBUF);
 
-        return l;
+        if ((msg_iter_type & iter_ubuf) == iter_ubuf) {// Direct char buffer
+            bpf_dbg_printk("direct char buffer type=6 iov %llx", iov);
+            bpf_probe_read(buf, l, iov);
+
+            return l;
+        }
+    }
+
+    const int iter_iovec = bpf_core_enum_value(enum iter_type, ITER_IOVEC);
+
+    if ((msg_iter_type & iter_iovec) != iter_iovec) {
+        //FIXME is this correct?
+        return 0;
     }
 
     struct iovec vec;

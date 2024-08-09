@@ -20,6 +20,8 @@
 
 volatile const s32 capture_header_buffer = 0;
 
+extern int LINUX_KERNEL_VERSION __kconfig;
+
 struct {
     __uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
     __type(key, int);
@@ -164,7 +166,7 @@ static __always_inline int read_msghdr_buf(struct msghdr *msg, u8* buf, int max_
     } else if (bpf_core_field_exists(((struct iov_iter___v58*)(0))->type)) {
         // older kernels up to 5.13 have iov_iter::type, an unsigned int
         // bitmask
-        bpf_probe_read(&msg_iter_type, sizeof(unsigned int), &(msg_iter.iter_type));
+        BPF_CORE_READ_INTO(&msg_iter_type, (struct iov_iter___v58*)&msg_iter, type);
     } else {
         bpf_dbg_printk("msg iter type does not exist, kernel is too old - bailing");
         return 0;
@@ -208,10 +210,13 @@ static __always_inline int read_msghdr_buf(struct msghdr *msg, u8* buf, int max_
         return 0;
     }
 
-    if (bpf_core_enum_value_exists(enum iter_type___v60, ITER_UBUF)) {
+    if (LINUX_KERNEL_VERSION >= KERNEL_VERSION(6, 0, 0)) {
         // this enum value is not the same across different kernel versions
-        const int iter_ubuf = bpf_core_enum_value(enum iter_type___v60, ITER_UBUF);
+        //const int iter_ubuf = bpf_core_enum_value(enum iter_type___v60, ITER_UBUF);
 
+        const int iter_ubuf = LINUX_KERNEL_VERSION > KERNEL_VERSION(6, 7, 0)
+            ? 0 : 6;
+                                 //
         if ((msg_iter_type & iter_ubuf) == iter_ubuf) {// Direct char buffer
             bpf_dbg_printk("direct char buffer type=6 iov %llx", iov);
             bpf_probe_read(buf, l, iov);

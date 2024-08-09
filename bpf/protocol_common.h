@@ -20,6 +20,8 @@
 
 volatile const s32 capture_header_buffer = 0;
 
+extern int LINUX_KERNEL_VERSION __kconfig;
+
 struct {
     __uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
     __type(key, int);
@@ -95,46 +97,82 @@ static __always_inline http_connection_metadata_t *connection_meta_by_direction(
 }
 
 // Newer version of uio.h iov_iter than what we have in vmlinux.h.
-struct _iov_iter {
-	u8 iter_type;
-	bool copy_mc;
-	bool nofault;
-	bool data_source;
-	bool user_backed;
-	union {
-		size_t iov_offset;
-		int last_offset;
-	};
-	union {
-		struct iovec __ubuf_iovec;
-		struct {
-			union {
-				const struct iovec *__iov;
-				const struct kvec *kvec;
-				const struct bio_vec *bvec;
-				struct xarray *xarray;
-				void *ubuf;
-			};
-			size_t count;
-		};
-	};
+struct iov_iter___v64 {
+    u8 iter_type;
+    bool nofault;
+    bool data_source;
+    size_t iov_offset;
     union {
-		unsigned long nr_segs;
-		loff_t xarray_start;
-	};
+        struct iovec __ubuf_iovec;
+        struct {
+            union {
+                /* use iter_iov() to get the current vec */
+                const struct iovec *__iov;
+                const struct kvec *kvec;
+                const struct bio_vec *bvec;
+                struct xarray *xarray;
+                void *ubuf;
+            };
+            size_t count;
+        };
+    };
+    union {
+        unsigned long nr_segs;
+        loff_t xarray_start;
+    };
+};
+
+// older struct that features 'type' instead of 'iter_type'
+struct iov_iter___v58 {
+    unsigned int type;
+    size_t iov_offset;
+    size_t count;
+    union {
+        const struct iovec *iov;
+        const struct kvec *kvec;
+        const struct bio_vec *bvec;
+        struct pipe_inode_info *pipe;
+    };
+    union {
+        unsigned long nr_segs;
+        struct {
+            unsigned int head;
+            unsigned int start_head;
+        };
+    };
 };
 
 
+// first appeared in linux 6.0, value reassigned on v6.7
+// because enum iter_type is already defined in vmlinux.h (without ITER_BUF),
+// we just define the missing enumerator here to avoid multiple definitions
+enum iter_type___v60 {
+    ITER_UBUF
+};
+
 static __always_inline int read_msghdr_buf(struct msghdr *msg, u8* buf, int max_len) {
     struct iov_iter msg_iter = BPF_CORE_READ(msg, msg_iter);
-    u8 msg_iter_type = 0;
+
+    // msg_iter_type is a bitmask on kernels <= 5.13, hence the bitwise
+    // operations below
+    unsigned int msg_iter_type = 0;
 
     if (bpf_core_field_exists(msg_iter.iter_type)) {
-        bpf_probe_read(&msg_iter_type, sizeof(u8), &(msg_iter.iter_type));
-        bpf_dbg_printk("msg iter type exists, read value %d", msg_iter_type);
+        // kernels >= 5.14 have iov_iter::iter_type, which is a simple
+        // 8-bit enumerator value
+        u8 type;
+        bpf_probe_read(&type, sizeof(u8), &(msg_iter.iter_type));
+        msg_iter_type = type & 0xff;
+    } else if (bpf_core_field_exists(((struct iov_iter___v58*)(0))->type)) {
+        // older kernels up to 5.13 have iov_iter::type, an unsigned int
+        // bitmask
+        BPF_CORE_READ_INTO(&msg_iter_type, (struct iov_iter___v58*)&msg_iter, type);
+    } else {
+        bpf_dbg_printk("msg iter type does not exist, kernel is too old - bailing");
+        return 0;
     }
 
-    bpf_dbg_printk("iter type %d", msg_iter_type);
+    bpf_dbg_printk("iter type %u", msg_iter_type);
 
     struct iovec *iov = NULL;
 
@@ -148,11 +186,15 @@ static __always_inline int read_msghdr_buf(struct msghdr *msg, u8* buf, int max_
         // TODO: I wonder if there's a way to check for field existence without having to
         // make fake structures that match the new version of the kernel code. This code
         // here assumes the kernel iov_iter structure is the format with __iov and __ubuf_iovec.
-        struct _iov_iter _msg_iter;
-        bpf_probe_read_kernel(&_msg_iter, sizeof(struct _iov_iter), &(msg->msg_iter));
+        struct iov_iter___v64 _msg_iter;
+        bpf_probe_read_kernel(&_msg_iter, sizeof(struct iov_iter___v64), &(msg->msg_iter));
 
         bpf_dbg_printk("new kernel, iov doesn't exist, nr_segs %d", _msg_iter.nr_segs);
-        if (msg_iter_type == 5) {
+
+        const unsigned int iter_discard = bpf_core_enum_value(enum iter_type, ITER_DISCARD);
+
+        // XXX is iter_discard really intended?
+        if ((msg_iter_type & iter_discard) == iter_discard) {
             struct iovec vec;
             bpf_probe_read(&vec, sizeof(struct iovec), &(_msg_iter.__ubuf_iovec));
             bpf_dbg_printk("ubuf base %llx, &ubuf base %llx", vec.iov_base, &vec.iov_base);
@@ -161,18 +203,33 @@ static __always_inline int read_msghdr_buf(struct msghdr *msg, u8* buf, int max_
             return l;
         } else {
             bpf_probe_read(&iov, sizeof(struct iovec *), &(_msg_iter.__iov));
-        }     
+        }
     }
-    
+
     if (!iov) {
         return 0;
     }
 
-    if (msg_iter_type == 6) {// Direct char buffer
-        bpf_dbg_printk("direct char buffer type=6 iov %llx", iov);
-        bpf_probe_read(buf, l, iov);
+    if (LINUX_KERNEL_VERSION >= KERNEL_VERSION(6, 0, 0)) {
+        // this enum value is not the same across different kernel versions
+        //const int iter_ubuf = bpf_core_enum_value(enum iter_type___v60, ITER_UBUF);
 
-        return l;
+        const int iter_ubuf = LINUX_KERNEL_VERSION > KERNEL_VERSION(6, 7, 0)
+            ? 0 : 6;
+                                 //
+        if ((msg_iter_type & iter_ubuf) == iter_ubuf) {// Direct char buffer
+            bpf_dbg_printk("direct char buffer type=6 iov %llx", iov);
+            bpf_probe_read(buf, l, iov);
+
+            return l;
+        }
+    }
+
+    const int iter_iovec = bpf_core_enum_value(enum iter_type, ITER_IOVEC);
+
+    if ((msg_iter_type & iter_iovec) != iter_iovec) {
+        //FIXME is this correct?
+        return 0;
     }
 
     struct iovec vec;
@@ -201,7 +258,7 @@ static __always_inline int read_msghdr_buf(struct msghdr *msg, u8* buf, int max_
         if (tot_len + iov_size > l) {
             break;
         }
-        bpf_probe_read(&buf[tot_len], iov_size, vec.iov_base);    
+        bpf_probe_read(&buf[tot_len], iov_size, vec.iov_base);
         // bpf_dbg_printk("iov_size=%d, buf=%s", iov_size, buf);
 
         tot_len += iov_size;
@@ -216,7 +273,7 @@ static __always_inline int read_msghdr_buf(struct msghdr *msg, u8* buf, int max_
 // and we undo the swap in the data collections we send to user space.
 static __always_inline void fixup_connection_info(connection_info_t *conn_info, u8 client, u16 orig_dport) {
     // The destination port is the server port in userspace
-    if ((client && conn_info->d_port != orig_dport) || 
+    if ((client && conn_info->d_port != orig_dport) ||
         (!client && conn_info->d_port == orig_dport)) {
         bpf_dbg_printk("Swapped connection info for userspace, client = %d, orig_dport = %d", client, orig_dport);
         swap_connection_info_order(conn_info);

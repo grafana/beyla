@@ -97,7 +97,8 @@ static __always_inline http_connection_metadata_t *connection_meta_by_direction(
 }
 
 // Newer version of uio.h iov_iter than what we have in vmlinux.h.
-struct iov_iter___v64 {
+
+struct iov_iter___v68 {
     u8 iter_type;
     bool nofault;
     bool data_source;
@@ -118,6 +119,41 @@ struct iov_iter___v64 {
     };
     union {
         unsigned long nr_segs;
+        loff_t xarray_start;
+    };
+};
+
+struct iov_iter___v64 {
+    u8 iter_type;
+    bool copy_mc;
+    bool nofault;
+    bool data_source;
+    bool user_backed;
+    union {
+        size_t iov_offset;
+        int last_offset;
+    };
+    union {
+        struct iovec __ubuf_iovec;
+        struct {
+            union {
+                /* use iter_iov() to get the current vec */
+                const struct iovec *__iov;
+                const struct kvec *kvec;
+                const struct bio_vec *bvec;
+                struct xarray *xarray;
+                struct pipe_inode_info *pipe;
+                void *ubuf;
+            };
+            size_t count;
+        };
+    };
+    union {
+        unsigned long nr_segs;
+        struct {
+            unsigned int head;
+            unsigned int start_head;
+        };
         loff_t xarray_start;
     };
 };
@@ -183,7 +219,7 @@ struct iovec_iter_ctx {
 
 // extracts kernel specific iov_iter information into a iovec_iter_ctx instance
 static __always_inline void get_iovec_ctx(struct iovec_iter_ctx* ctx, struct msghdr *msg) {
-    if (LINUX_KERNEL_VERSION <= KERNEL_VERSION(5, 13, 0)) {
+    if (LINUX_KERNEL_VERSION < KERNEL_VERSION(5, 14, 0)) {
         struct iov_iter___v58 iter;
         bpf_core_read(&iter, sizeof(iter), &msg->msg_iter);
 
@@ -193,7 +229,7 @@ static __always_inline void get_iovec_ctx(struct iovec_iter_ctx* ctx, struct msg
         ctx->nr_segs = iter.nr_segs;
         ctx->iov = iter.iov;
         ctx->ubuf = NULL;
-    } else if (LINUX_KERNEL_VERSION <= KERNEL_VERSION(6, 3, 0)) {
+    } else if (LINUX_KERNEL_VERSION < KERNEL_VERSION(6, 4, 0)) {
         struct iov_iter___v60 iter;
         bpf_core_read(&iter, sizeof(iter), &msg->msg_iter);
 
@@ -203,8 +239,18 @@ static __always_inline void get_iovec_ctx(struct iovec_iter_ctx* ctx, struct msg
         ctx->nr_segs = iter.nr_segs;
         ctx->iov = iter.iov;
         ctx->ubuf = iter.ubuf;
-    } else {
+    } else if (LINUX_KERNEL_VERSION < KERNEL_VERSION(6, 8, 0)) {
         struct iov_iter___v64 iter;
+        bpf_core_read(&iter, sizeof(iter), &msg->msg_iter);
+
+        ctx->iter_type = iter.iter_type & 0xff;
+        ctx->iov_offset = iter.iov_offset;
+        ctx->count = iter.count;
+        ctx->nr_segs = iter.nr_segs;
+        ctx->iov = iter.__iov;
+        ctx->ubuf = iter.ubuf;
+    } else {
+        struct iov_iter___v68 iter;
         bpf_core_read(&iter, sizeof(iter), &msg->msg_iter);
 
         ctx->iter_type = iter.iter_type & 0xff;

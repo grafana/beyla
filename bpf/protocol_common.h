@@ -96,170 +96,42 @@ static __always_inline http_connection_metadata_t *connection_meta_by_direction(
     return meta;
 }
 
-// Newer version of uio.h iov_iter than what we have in vmlinux.h.
-
-struct iov_iter___v68 {
+struct iov_iter___dummy {
+    unsigned int type; // for co-re support, use iter_type instead
     u8 iter_type;
-    bool nofault;
-    bool data_source;
-    size_t iov_offset;
-    union {
-        struct iovec __ubuf_iovec;
-        struct {
-            union {
-                /* use iter_iov() to get the current vec */
-                const struct iovec *__iov;
-                const struct kvec *kvec;
-                const struct bio_vec *bvec;
-                struct xarray *xarray;
-                void *ubuf;
-            };
-            size_t count;
-        };
-    };
-    union {
-        unsigned long nr_segs;
-        loff_t xarray_start;
-    };
-};
-
-struct iov_iter___v64 {
-    u8 iter_type;
-    bool copy_mc;
-    bool nofault;
-    bool data_source;
-    bool user_backed;
-    union {
-        size_t iov_offset;
-        int last_offset;
-    };
-    union {
-        struct iovec __ubuf_iovec;
-        struct {
-            union {
-                /* use iter_iov() to get the current vec */
-                const struct iovec *__iov;
-                const struct kvec *kvec;
-                const struct bio_vec *bvec;
-                struct xarray *xarray;
-                struct pipe_inode_info *pipe;
-                void *ubuf;
-            };
-            size_t count;
-        };
-    };
-    union {
-        unsigned long nr_segs;
-        struct {
-            unsigned int head;
-            unsigned int start_head;
-        };
-        loff_t xarray_start;
-    };
-};
-
-struct iov_iter___v60 {
-    u8 iter_type;
-    bool nofault;
-    bool data_source;
-    bool user_backed;
-    union {
-        size_t iov_offset;
-        int last_offset;
-    };
     size_t count;
-    union {
-        const struct iovec *iov;
-        const struct kvec *kvec;
-        const struct bio_vec *bvec;
-        struct xarray *xarray;
-        struct pipe_inode_info *pipe;
-        void *ubuf;
-    };
-    union {
-        unsigned long nr_segs;
-        struct {
-            unsigned int head;
-            unsigned int start_head;
-        };
-        loff_t xarray_start;
-    };
-};
-
-
-// older struct that features 'type' instead of 'iter_type'
-struct iov_iter___v58 {
-    unsigned int type;
-    size_t iov_offset;
-    size_t count;
-    union {
-        const struct iovec *iov;
-        const struct kvec *kvec;
-        const struct bio_vec *bvec;
-        struct pipe_inode_info *pipe;
-    };
-    union {
-        unsigned long nr_segs;
-        struct {
-            unsigned int head;
-            unsigned int start_head;
-        };
-    };
-};
-
-// helper struct used by get_iovec_ctx
-struct iovec_iter_ctx {
-    unsigned int iter_type;
-    size_t iov_offset;
-    size_t count;
-    unsigned long nr_segs;
+    void *ubuf;
     const struct iovec *iov;
-    const void *ubuf;
+    const struct iovec *__iov;
+    unsigned long nr_segs;
 };
+
+typedef struct iov_iter___dummy iovec_iter_ctx;
 
 // extracts kernel specific iov_iter information into a iovec_iter_ctx instance
-static __always_inline void get_iovec_ctx(struct iovec_iter_ctx* ctx, struct msghdr *msg) {
-    if (LINUX_KERNEL_VERSION < KERNEL_VERSION(5, 14, 0)) {
-        struct iov_iter___v58 iter;
-        bpf_core_read(&iter, sizeof(iter), &msg->msg_iter);
-
-        ctx->iter_type = iter.type;
-        ctx->iov_offset = iter.iov_offset;
-        ctx->count = iter.count;
-        ctx->nr_segs = iter.nr_segs;
-        ctx->iov = iter.iov;
-        ctx->ubuf = NULL;
-    } else if (LINUX_KERNEL_VERSION < KERNEL_VERSION(6, 4, 0)) {
-        struct iov_iter___v60 iter;
-        bpf_core_read(&iter, sizeof(iter), &msg->msg_iter);
-
-        ctx->iter_type = iter.iter_type & 0xff;
-        ctx->iov_offset = iter.iov_offset;
-        ctx->count = iter.count;
-        ctx->nr_segs = iter.nr_segs;
-        ctx->iov = iter.iov;
-        ctx->ubuf = iter.ubuf;
-    } else if (LINUX_KERNEL_VERSION < KERNEL_VERSION(6, 8, 0)) {
-        struct iov_iter___v64 iter;
-        bpf_core_read(&iter, sizeof(iter), &msg->msg_iter);
-
-        ctx->iter_type = iter.iter_type & 0xff;
-        ctx->iov_offset = iter.iov_offset;
-        ctx->count = iter.count;
-        ctx->nr_segs = iter.nr_segs;
-        ctx->iov = iter.__iov;
-        ctx->ubuf = iter.ubuf;
+static __always_inline void get_iovec_ctx(iovec_iter_ctx* ctx, struct msghdr *msg) {
+    if (bpf_core_field_exists(((struct iov_iter___dummy*)&msg->msg_iter)->type)) {
+        ctx->iter_type = BPF_CORE_READ((struct iov_iter___dummy*)&msg->msg_iter, type) & 0xff;
     } else {
-        struct iov_iter___v68 iter;
-        bpf_core_read(&iter, sizeof(iter), &msg->msg_iter);
-
-        ctx->iter_type = iter.iter_type & 0xff;
-        ctx->iov_offset = iter.iov_offset;
-        ctx->count = iter.count;
-        ctx->nr_segs = iter.nr_segs;
-        ctx->iov = iter.__iov;
-        ctx->ubuf = iter.ubuf;
+        ctx->iter_type = BPF_CORE_READ((struct iov_iter___dummy*)&msg->msg_iter, iter_type);
     }
+
+    if (bpf_core_field_exists(((struct iov_iter___dummy*)&msg->msg_iter)->ubuf)) {
+        ctx->ubuf = BPF_CORE_READ((struct iov_iter___dummy*)&msg->msg_iter, ubuf);
+    } else {
+        ctx->ubuf = NULL;
+    }
+
+    if (bpf_core_field_exists(((struct iov_iter___dummy*)&msg->msg_iter)->iov)) {
+        ctx->iov = BPF_CORE_READ((struct iov_iter___dummy*)&msg->msg_iter, iov);
+    } else if (bpf_core_field_exists(((struct iov_iter___dummy*)&msg->msg_iter)->__iov)) {
+        ctx->iov = BPF_CORE_READ((struct iov_iter___dummy*)&msg->msg_iter, __iov);
+    } else {
+        ctx->iov = NULL;
+    }
+
+    ctx->count = BPF_CORE_READ((struct iov_iter___dummy*)&msg->msg_iter, count);
+    ctx->nr_segs = BPF_CORE_READ((struct iov_iter___dummy*)&msg->msg_iter, nr_segs);
 }
 
 static __always_inline int read_msghdr_buf(struct msghdr *msg, u8* buf, size_t max_len) {
@@ -269,23 +141,27 @@ static __always_inline int read_msghdr_buf(struct msghdr *msg, u8* buf, size_t m
 
     bpf_clamp_umax(max_len, IO_VEC_MAX_LEN);
 
-    struct iovec_iter_ctx ctx;
+    iovec_iter_ctx ctx;
 
     get_iovec_ctx(&ctx, msg);
 
-    const int iter_ubuf = LINUX_KERNEL_VERSION > KERNEL_VERSION(6, 7, 0) ? 0 : 6;
 
-    bpf_printk("t=%u, off=%llu, count=%llu", ctx.iter_type, ctx.iov_offset, ctx.count);
+    bpf_printk("t=%u, count=%llu", ctx.iter_type, ctx.count);
     bpf_printk("nr_segs=%lu, iov=%p, ubuf=%p", ctx.nr_segs, ctx.iov, ctx.ubuf);
 
-    if (ctx.count == 0)
+    if (ctx.count == 0) {
         return 0;
+    }
 
-    if (ctx.count > max_len)
+    if (ctx.count > max_len) {
         ctx.count = max_len;
+    }
+
+    // kernel 5.10 does not like bpf_core_enum_value_exists()
+    const int iter_ubuf = LINUX_KERNEL_VERSION > KERNEL_VERSION(6, 7, 0) ? 0 : 6;
 
     // ITER_UBUF only exists in kernels >= 6.0 - earlier kernels use ITER_IOVEC
-    if (LINUX_KERNEL_VERSION >= KERNEL_VERSION(6, 0, 0) && ctx.iter_type == iter_ubuf) {
+    if (ctx.ubuf != NULL && (ctx.iter_type & iter_ubuf) == iter_ubuf) {
         return bpf_probe_read(buf, ctx.count, ctx.ubuf) == 0 ? ctx.count : 0;
     }
 

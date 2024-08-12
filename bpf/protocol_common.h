@@ -134,6 +134,19 @@ static __always_inline void get_iovec_ctx(iovec_iter_ctx* ctx, struct msghdr *ms
     ctx->nr_segs = BPF_CORE_READ((struct iov_iter___dummy*)&msg->msg_iter, nr_segs);
 }
 
+// this only applies to LINUX_KERNEL_VERSION >= 6.0
+static __always_inline int iter_ubuf_value()
+{
+    if (LINUX_KERNEL_VERSION < KERNEL_VERSION(6, 5, 0)) {
+        return 6;
+    } else if (LINUX_KERNEL_VERSION < KERNEL_VERSION(6, 7, 0)) {
+        return 5;
+    }
+
+    // ITER_UBUF == 0 in kernels >= 6.7
+    return 0;
+}
+
 static __always_inline int read_msghdr_buf(struct msghdr *msg, u8* buf, size_t max_len) {
     if (max_len == 0) {
         return 0;
@@ -157,13 +170,15 @@ static __always_inline int read_msghdr_buf(struct msghdr *msg, u8* buf, size_t m
         ctx.count = max_len;
     }
 
-    // kernel 5.10 does not like bpf_core_enum_value_exists()
-    const int iter_ubuf = LINUX_KERNEL_VERSION > KERNEL_VERSION(6, 7, 0) ? 0 : 6;
-
     // ITER_UBUF only exists in kernels >= 6.0 - earlier kernels use ITER_IOVEC
-    if (ctx.ubuf != NULL && (ctx.iter_type & iter_ubuf) == iter_ubuf) {
-        bpf_clamp_umax(ctx.count, IO_VEC_MAX_LEN);
-        return bpf_probe_read(buf, ctx.count, ctx.ubuf) == 0 ? ctx.count : 0;
+    // kernel 5.10 does not like bpf_core_enum_value_exists() and friends
+    if (LINUX_KERNEL_VERSION >= KERNEL_VERSION(6, 0, 0)) {
+        const int iter_ubuf = iter_ubuf_value();
+
+        if (ctx.ubuf != NULL && (ctx.iter_type & iter_ubuf) == iter_ubuf) {
+            bpf_clamp_umax(ctx.count, IO_VEC_MAX_LEN);
+            return bpf_probe_read(buf, ctx.count, ctx.ubuf) == 0 ? ctx.count : 0;
+        }
     }
 
     if ((ctx.iter_type & ITER_IOVEC) != ITER_IOVEC) {

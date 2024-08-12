@@ -190,7 +190,7 @@ static __always_inline int read_msghdr_buf(struct msghdr *msg, u8* buf, size_t m
     u32 tot_len = 0;
 
     // Loop couple of times reading the various io_vecs
-    for (int i = 0; i < ctx.nr_segs; i++) {
+    for (int i = 0; i < ctx.nr_segs && i < 4; i++) {
         struct iovec vec;
 
         if (bpf_probe_read_kernel(&vec, sizeof(vec), &ctx.iov[i]) != 0)

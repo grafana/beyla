@@ -159,8 +159,8 @@ static __always_inline int read_msghdr_buf(struct msghdr *msg, u8* buf, size_t m
     get_iovec_ctx(&ctx, msg);
 
 
-    bpf_printk("t=%u, count=%llu", ctx.iter_type, ctx.count);
-    bpf_printk("nr_segs=%lu, iov=%p, ubuf=%p", ctx.nr_segs, ctx.iov, ctx.ubuf);
+    bpf_dbg_printk("iter_type=%u, count=%llu", ctx.iter_type, ctx.count);
+    bpf_dbg_printk("nr_segs=%lu, iov=%p, ubuf=%p", ctx.nr_segs, ctx.iov, ctx.ubuf);
 
     if (ctx.count == 0) {
         return 0;

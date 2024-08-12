@@ -162,6 +162,7 @@ static __always_inline int read_msghdr_buf(struct msghdr *msg, u8* buf, size_t m
 
     // ITER_UBUF only exists in kernels >= 6.0 - earlier kernels use ITER_IOVEC
     if (ctx.ubuf != NULL && (ctx.iter_type & iter_ubuf) == iter_ubuf) {
+        bpf_clamp_umax(ctx.count, IO_VEC_MAX_LEN);
         return bpf_probe_read(buf, ctx.count, ctx.ubuf) == 0 ? ctx.count : 0;
     }
 

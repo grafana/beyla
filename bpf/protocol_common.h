@@ -20,8 +20,6 @@
 
 volatile const s32 capture_header_buffer = 0;
 
-extern int LINUX_KERNEL_VERSION __kconfig;
-
 struct {
     __uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
     __type(key, int);
@@ -108,6 +106,10 @@ struct iov_iter___dummy {
 
 typedef struct iov_iter___dummy iovec_iter_ctx;
 
+enum iter_type___dummy {
+    ITER_UBUF
+};
+
 // extracts kernel specific iov_iter information into a iovec_iter_ctx instance
 static __always_inline void get_iovec_ctx(iovec_iter_ctx* ctx, struct msghdr *msg) {
     if (bpf_core_field_exists(((struct iov_iter___dummy*)&msg->msg_iter)->type)) {
@@ -134,19 +136,6 @@ static __always_inline void get_iovec_ctx(iovec_iter_ctx* ctx, struct msghdr *ms
     ctx->nr_segs = BPF_CORE_READ((struct iov_iter___dummy*)&msg->msg_iter, nr_segs);
 }
 
-// this only applies to LINUX_KERNEL_VERSION >= 6.0
-static __always_inline int iter_ubuf_value()
-{
-    if (LINUX_KERNEL_VERSION < KERNEL_VERSION(6, 5, 0)) {
-        return 6;
-    } else if (LINUX_KERNEL_VERSION < KERNEL_VERSION(6, 7, 0)) {
-        return 5;
-    }
-
-    // ITER_UBUF == 0 in kernels >= 6.7
-    return 0;
-}
-
 static __always_inline int read_msghdr_buf(struct msghdr *msg, u8* buf, size_t max_len) {
     if (max_len == 0) {
         return 0;
@@ -157,7 +146,6 @@ static __always_inline int read_msghdr_buf(struct msghdr *msg, u8* buf, size_t m
     iovec_iter_ctx ctx;
 
     get_iovec_ctx(&ctx, msg);
-
 
     bpf_dbg_printk("iter_type=%u, count=%llu", ctx.iter_type, ctx.count);
     bpf_dbg_printk("nr_segs=%lu, iov=%p, ubuf=%p", ctx.nr_segs, ctx.iov, ctx.ubuf);
@@ -171,9 +159,8 @@ static __always_inline int read_msghdr_buf(struct msghdr *msg, u8* buf, size_t m
     }
 
     // ITER_UBUF only exists in kernels >= 6.0 - earlier kernels use ITER_IOVEC
-    // kernel 5.10 does not like bpf_core_enum_value_exists() and friends
-    if (LINUX_KERNEL_VERSION >= KERNEL_VERSION(6, 0, 0)) {
-        const int iter_ubuf = iter_ubuf_value();
+    if (bpf_core_enum_value_exists(enum iter_type___dummy, ITER_UBUF)) {
+        const int iter_ubuf = bpf_core_enum_value(enum iter_type___dummy, ITER_UBUF);
 
         if (ctx.ubuf != NULL && (ctx.iter_type & iter_ubuf) == iter_ubuf) {
             bpf_clamp_umax(ctx.count, IO_VEC_MAX_LEN);
@@ -185,12 +172,12 @@ static __always_inline int read_msghdr_buf(struct msghdr *msg, u8* buf, size_t m
         return 0;
     }
 
-    bpf_clamp_umax(ctx.nr_segs, 4);
-
     u32 tot_len = 0;
 
+    bpf_clamp_umax(ctx.nr_segs, 4);
+
     // Loop couple of times reading the various io_vecs
-    for (int i = 0; i < ctx.nr_segs && i < 4; i++) {
+    for (unsigned long i = 0; i < ctx.nr_segs; i++) {
         struct iovec vec;
 
         if (bpf_probe_read_kernel(&vec, sizeof(vec), &ctx.iov[i]) != 0)

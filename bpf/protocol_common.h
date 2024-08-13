@@ -97,7 +97,6 @@ static __always_inline http_connection_metadata_t *connection_meta_by_direction(
 struct iov_iter___dummy {
     unsigned int type; // for co-re support, use iter_type instead
     u8 iter_type;
-    size_t count;
     void *ubuf;
     const struct iovec *iov;
     const struct iovec *__iov;
@@ -132,7 +131,6 @@ static __always_inline void get_iovec_ctx(iovec_iter_ctx* ctx, struct msghdr *ms
         ctx->iov = NULL;
     }
 
-    ctx->count = BPF_CORE_READ((struct iov_iter___dummy*)&msg->msg_iter, count);
     ctx->nr_segs = BPF_CORE_READ((struct iov_iter___dummy*)&msg->msg_iter, nr_segs);
 }
 
@@ -147,16 +145,8 @@ static __always_inline int read_msghdr_buf(struct msghdr *msg, u8* buf, size_t m
 
     get_iovec_ctx(&ctx, msg);
 
-    bpf_dbg_printk("iter_type=%u, count=%llu", ctx.iter_type, ctx.count);
+    bpf_dbg_printk("iter_type=%u", ctx.iter_type);
     bpf_dbg_printk("nr_segs=%lu, iov=%p, ubuf=%p", ctx.nr_segs, ctx.iov, ctx.ubuf);
-
-    if (ctx.count == 0) {
-        return 0;
-    }
-
-    if (ctx.count > max_len) {
-        ctx.count = max_len;
-    }
 
     // ITER_UBUF only exists in kernels >= 6.0 - earlier kernels use ITER_IOVEC
     if (bpf_core_enum_value_exists(enum iter_type___dummy, ITER_UBUF)) {
@@ -165,8 +155,8 @@ static __always_inline int read_msghdr_buf(struct msghdr *msg, u8* buf, size_t m
         // ITER_UBUF is never a bitmask, and can be 0, so we perform a proper
         // equality check rather than a bitwise and like we do for ITER_IOVEC
         if (ctx.ubuf != NULL && ctx.iter_type == iter_ubuf) {
-            bpf_clamp_umax(ctx.count, IO_VEC_MAX_LEN);
-            return bpf_probe_read(buf, ctx.count, ctx.ubuf) == 0 ? ctx.count : 0;
+            bpf_clamp_umax(max_len, IO_VEC_MAX_LEN);
+            return bpf_probe_read(buf, max_len, ctx.ubuf) == 0 ? max_len : 0;
         }
     }
 

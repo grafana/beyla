@@ -162,7 +162,9 @@ static __always_inline int read_msghdr_buf(struct msghdr *msg, u8* buf, size_t m
     if (bpf_core_enum_value_exists(enum iter_type___dummy, ITER_UBUF)) {
         const int iter_ubuf = bpf_core_enum_value(enum iter_type___dummy, ITER_UBUF);
 
-        if (ctx.ubuf != NULL && (ctx.iter_type & iter_ubuf) == iter_ubuf) {
+        // ITER_UBUF is never a bitmask, and can be 0, so we perform a proper
+        // equality check rather than a bitwise and like we do for ITER_IOVEC
+        if (ctx.ubuf != NULL && ctx.iter_type == iter_ubuf) {
             bpf_clamp_umax(ctx.count, IO_VEC_MAX_LEN);
             return bpf_probe_read(buf, ctx.count, ctx.ubuf) == 0 ? ctx.count : 0;
         }

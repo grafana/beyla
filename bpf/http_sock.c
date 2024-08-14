@@ -424,8 +424,6 @@ int BPF_KPROBE(kprobe_tcp_recvmsg, struct sock *sk, struct msghdr *msg, size_t l
     u64 sock_p = (u64)sk;
     ensure_sent_event(id, &sock_p);
 
-    // Important: We must work here to remember the iovec pointer, since the msghdr structure
-    // can get modified in non-reversible way if the incoming packet is large and broken down in parts. 
     recv_args_t args = {
         .sock_ptr = (u64)sk,
         .iovec_ptr = (u64)(msg)
@@ -468,7 +466,7 @@ int BPF_KRETPROBE(kretprobe_tcp_recvmsg, int copied_len) {
     bpf_map_delete_elem(&active_recv_args, &id);
 
     if (parse_sock_info((struct sock *)sock_ptr, &info.conn)) {
-        u16 orig_dport = info.conn.d_port;
+        //u16 orig_dport = info.conn.d_port;
         //dbg_print_http_connection_info(&info.conn);
         sort_connection_info(&info.conn);
         info.pid = pid_from_pid_tgid(id);
@@ -483,7 +481,7 @@ int BPF_KRETPROBE(kretprobe_tcp_recvmsg, int copied_len) {
                     copied_len = read_msghdr_buf((void *)iovec_ptr, buf, copied_len);
                     if (copied_len) {
                         // doesn't return must be logically last statement
-                        handle_buf_with_connection(ctx, &info, buf, copied_len, NO_SSL, TCP_RECV, orig_dport);
+                        //handle_buf_with_connection(ctx, &info, buf, copied_len, NO_SSL, TCP_RECV, orig_dport);
                     } else {
                         bpf_dbg_printk("Not copied anything");
                     }

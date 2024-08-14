@@ -159,23 +159,16 @@ static __always_inline int read_msghdr_buf(struct msghdr *msg, u8* buf, size_t m
         }
     }
 
-    if ((ctx.iter_type & ITER_IOVEC) != ITER_IOVEC) {
-        return 0;
-    }
-
     u32 tot_len = 0;
 
-    bpf_clamp_umax(ctx.nr_segs, 4);
-
     // Loop couple of times reading the various io_vecs
-    for (unsigned long i = 0; i < ctx.nr_segs; i++) {
-        struct iovec vec;
+    for (unsigned long i = 0; i < 4; i++) {
+        struct iovec vec = {0};
 
-        if (bpf_probe_read_kernel(&vec, sizeof(vec), &ctx.iov[i]) != 0)
-            return 0;
+        bpf_probe_read(&vec, sizeof(vec), &ctx.iov[i]);
 
-        // bpf_dbg_printk("iov[%d]=%llx", i, &ctx.iov[i]);
-        // bpf_dbg_printk("base %llx, len %d", vec.iov_base, vec.iov_len);
+        bpf_dbg_printk("iov[%d]=%llx", i, &ctx.iov[i]);
+        bpf_dbg_printk("base %llx, len %d", vec.iov_base, vec.iov_len);
 
         if (!vec.iov_base || !vec.iov_len) {
             continue;
@@ -187,7 +180,7 @@ static __always_inline int read_msghdr_buf(struct msghdr *msg, u8* buf, size_t m
         bpf_clamp_umax(tot_len, IO_VEC_MAX_LEN);
         bpf_clamp_umax(iov_size, IO_VEC_MAX_LEN);
 
-        // bpf_dbg_printk("tot_len=%d, remaining=%d", tot_len, remaining);
+        bpf_dbg_printk("tot_len=%d, remaining=%d", tot_len, remaining);
 
         if (tot_len + iov_size > max_len) {
             break;
@@ -195,7 +188,7 @@ static __always_inline int read_msghdr_buf(struct msghdr *msg, u8* buf, size_t m
 
         bpf_probe_read(&buf[tot_len], iov_size, vec.iov_base);
 
-        // bpf_dbg_printk("iov_size=%d, buf=%s", iov_size, buf);
+        bpf_dbg_printk("iov_size=%d, buf=%s", iov_size, buf);
 
         tot_len += iov_size;
     }

@@ -444,12 +444,20 @@ int BPF_KRETPROBE(kretprobe_tcp_recvmsg, int copied_len) {
 
     recv_args_t *args = bpf_map_lookup_elem(&active_recv_args, &id);
 
-    if (!args || (copied_len <= 0)) {
+    bpf_dbg_printk("=== tcp_recvmsg ret id=%d args=%llx copied_len %d ===", id, args, copied_len);
+
+    if (!args) {
+        goto done;
+    }
+
+    if (!copied_len) {
         bpf_map_delete_elem(&active_recv_args, &id);
         goto done;
     }
 
-    bpf_dbg_printk("=== tcp_recvmsg ret id=%d sock=%llx copied_len %d ===", id, args->sock_ptr, copied_len);
+    if (copied_len < 0) {
+        copied_len = IO_VEC_MAX_LEN;
+    }
 
     if (!args->iovec_ptr) {
         bpf_dbg_printk("iovec_ptr found in kprobe is NULL, ignoring this tcp_recvmsg");
@@ -466,7 +474,7 @@ int BPF_KRETPROBE(kretprobe_tcp_recvmsg, int copied_len) {
     bpf_map_delete_elem(&active_recv_args, &id);
 
     if (parse_sock_info((struct sock *)sock_ptr, &info.conn)) {
-        //u16 orig_dport = info.conn.d_port;
+        u16 orig_dport = info.conn.d_port;
         //dbg_print_http_connection_info(&info.conn);
         sort_connection_info(&info.conn);
         info.pid = pid_from_pid_tgid(id);
@@ -481,7 +489,7 @@ int BPF_KRETPROBE(kretprobe_tcp_recvmsg, int copied_len) {
                     copied_len = read_msghdr_buf((void *)iovec_ptr, buf, copied_len);
                     if (copied_len) {
                         // doesn't return must be logically last statement
-                        //handle_buf_with_connection(ctx, &info, buf, copied_len, NO_SSL, TCP_RECV, orig_dport);
+                        handle_buf_with_connection(ctx, &info, buf, copied_len, NO_SSL, TCP_RECV, orig_dport);
                     } else {
                         bpf_dbg_printk("Not copied anything");
                     }

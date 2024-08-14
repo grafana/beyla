@@ -111,7 +111,10 @@ enum iter_type___dummy {
 // extracts kernel specific iov_iter information into a iovec_iter_ctx instance
 static __always_inline void get_iovec_ctx(iovec_iter_ctx* ctx, struct msghdr *msg) {
     if (bpf_core_field_exists(((struct iov_iter___dummy*)&msg->msg_iter)->type)) {
-        ctx->iter_type = BPF_CORE_READ((struct iov_iter___dummy*)&msg->msg_iter, type) & 0xff;
+        // clear the direction bit when reading iovec_iter::type to end up
+        // with the original enumerator value (the direction bit is the LSB
+        // and is either 0 (READ) or 1 (WRITE)).
+        ctx->iter_type = BPF_CORE_READ((struct iov_iter___dummy*)&msg->msg_iter, type) & 0xfe;
     } else {
         ctx->iter_type = BPF_CORE_READ((struct iov_iter___dummy*)&msg->msg_iter, iter_type);
     }
@@ -159,7 +162,9 @@ static __always_inline int read_msghdr_buf(struct msghdr *msg, u8* buf, size_t m
         }
     }
 
-    if ((ctx.iter_type & ITER_IOVEC) != ITER_IOVEC) {
+    const int iter_iovec = bpf_core_enum_value(enum iter_type, ITER_IOVEC);
+
+    if (ctx.iter_type != iter_iovec) {
         return 0;
     }
 

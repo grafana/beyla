@@ -178,14 +178,17 @@ static __always_inline int read_msghdr_buf(struct msghdr *msg, u8* buf, size_t m
 
     u32 tot_len = 0;
 
-    bpf_clamp_umax(ctx.nr_segs, 4);
+    enum { max_segments = 4 };
+
+    bpf_clamp_umax(ctx.nr_segs, max_segments);
 
     // Loop couple of times reading the various io_vecs
-    for (unsigned long i = 0; i < ctx.nr_segs; i++) {
+    for (unsigned long i = 0; i < ctx.nr_segs && i < max_segments; i++) {
         struct iovec vec;
 
-        if (bpf_probe_read_kernel(&vec, sizeof(vec), &ctx.iov[i]) != 0)
-            return 0;
+        if (bpf_probe_read_kernel(&vec, sizeof(vec), &ctx.iov[i]) != 0) {
+            break;
+        }
 
         bpf_dbg_printk("iov[%d]=%llx", i, &ctx.iov[i]);
         bpf_dbg_printk("base %llx, len %d", vec.iov_base, vec.iov_len);

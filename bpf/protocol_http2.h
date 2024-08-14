@@ -3,7 +3,6 @@
 
 #include "vmlinux.h"
 #include "bpf_helpers.h"
-#include "bpf_builtins.h"
 #include "http_types.h"
 #include "ringbuf.h"
 #include "pid.h"
@@ -37,7 +36,7 @@ static __always_inline http2_grpc_request_t* empty_http2_info() {
     int zero = 0;
     http2_grpc_request_t *value = bpf_map_lookup_elem(&http2_info_mem, &zero);
     if (value) {
-        bpf_memset(value, 0, sizeof(http2_grpc_request_t));
+        __builtin_memset(value, 0, sizeof(http2_grpc_request_t));
     }
     return value;
 }
@@ -84,7 +83,7 @@ static __always_inline void http2_grpc_end(http2_conn_stream_t *stream, http2_gr
         http2_grpc_request_t *trace = bpf_ringbuf_reserve(&events, sizeof(http2_grpc_request_t), 0);        
         if (trace) {
             bpf_probe_read(prev_info->ret_data, KPROBES_HTTP2_RET_BUF_SIZE, u_buf);
-            bpf_memcpy(trace, prev_info, sizeof(http2_grpc_request_t));
+            __builtin_memcpy(trace, prev_info, sizeof(http2_grpc_request_t));
             bpf_ringbuf_submit(trace, get_flags());
         }
     }

@@ -29,15 +29,17 @@ struct {
 enum bpf_func_id___x { BPF_FUNC_snprintf___x = 42 /* avoid zero */ };
 
 #define bpf_dbg_helper(fmt, args...) { \
-    if(bpf_core_enum_value_exists(enum bpf_func_id___x, BPF_FUNC_snprintf___x)) { \
-        log_info_t *__trace__ = bpf_ringbuf_reserve(&debug_events, sizeof(log_info_t), 0); \
-        if (__trace__) { \
+    log_info_t *__trace__ = bpf_ringbuf_reserve(&debug_events, sizeof(log_info_t), 0); \
+    if (__trace__) { \
+        if(bpf_core_enum_value_exists(enum bpf_func_id___x, BPF_FUNC_snprintf___x)) { \
             BPF_SNPRINTF(__trace__->log, sizeof(__trace__->log), fmt, ##args); \
-            u64 id = bpf_get_current_pid_tgid(); \
-            bpf_get_current_comm(&__trace__->comm, sizeof(__trace__->comm)); \
-            __trace__->pid = id >> 32; \
-            bpf_ringbuf_submit(__trace__, 0); \
+        } else { \
+            __builtin_memcpy(__trace__->log, fmt, sizeof(__trace__->log)); \
         } \
+        u64 id = bpf_get_current_pid_tgid(); \
+        bpf_get_current_comm(&__trace__->comm, sizeof(__trace__->comm)); \
+        __trace__->pid = id >> 32; \
+        bpf_ringbuf_submit(__trace__, 0); \
     } \
 }
 

@@ -1,0 +1,9 @@
+{application,how_to_create_a_http_server_with_elixir,
+             [{config_mtime,1718631096},
+              {optional_applications,[]},
+              {applications,[kernel,stdlib,elixir,logger]},
+              {description,"how_to_create_a_http_server_with_elixir"},
+              {modules,['Elixir.HttpServer']},
+              {registered,[]},
+              {vsn,"0.1.0"},
+              {mod,{'Elixir.HttpServer',[]}}]}.

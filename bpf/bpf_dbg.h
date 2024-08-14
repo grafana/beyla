@@ -34,7 +34,7 @@ enum bpf_func_id___x { BPF_FUNC_snprintf___x = 42 /* avoid zero */ };
         if(bpf_core_enum_value_exists(enum bpf_func_id___x, BPF_FUNC_snprintf___x)) { \
             BPF_SNPRINTF(__trace__->log, sizeof(__trace__->log), fmt, ##args); \
         } else { \
-            __builtin_memcpy(__trace__->log, fmt, sizeof(__trace__->log)); \
+            bpf_probe_read(__trace__->log, sizeof(__trace__->log), fmt); \
         } \
         u64 id = bpf_get_current_pid_tgid(); \
         bpf_get_current_comm(&__trace__->comm, sizeof(__trace__->comm)); \

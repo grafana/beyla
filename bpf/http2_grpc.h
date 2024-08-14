@@ -3,7 +3,6 @@
 
 #include "vmlinux.h"
 #include "bpf_helpers.h"
-#include "bpf_builtins.h"
 #include "bpf_endian.h"
 #include "http_types.h"
 
@@ -64,12 +63,22 @@ static __always_inline u8 is_headers_frame(frame_header_t *frame) {
     return frame->type == FrameHeaders && frame->stream_id;
 }
 
+static __always_inline int bpf_memcmp(char *s1, char *s2, s32 size) {
+    for (int i = 0; i < size; i++) {
+        if (s1[i] != s2[i]) {
+            return i+1;
+        }
+    }
+
+    return 0;
+}
+
 static __always_inline u8 has_preface(unsigned char *p, u32 len) {
     if (len < MIN_HTTP2_SIZE) {
         return 0;
     }
 
-    return !__bpf_memcmp(p, HTTP2_GRPC_PREFACE, MIN_HTTP2_SIZE);
+    return !bpf_memcmp((char *)p, HTTP2_GRPC_PREFACE, MIN_HTTP2_SIZE);
 }
 
 static __always_inline u8 is_http2_or_grpc(unsigned char *p, u32 len) {

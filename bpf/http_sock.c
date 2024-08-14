@@ -332,7 +332,7 @@ int BPF_KPROBE(kprobe_tcp_sendmsg, struct sock *sk, struct msghdr *msg, size_t s
         ssl_pid_connection_info_t ssl_conn = {
             .orig_dport = orig_dport,
         };
-        bpf_memcpy(&ssl_conn.p_conn, &s_args.p_conn, sizeof(pid_connection_info_t));
+        __builtin_memcpy(&ssl_conn.p_conn, &s_args.p_conn, sizeof(pid_connection_info_t));
         bpf_map_update_elem(&ssl_to_conn, &ssl, &ssl_conn, BPF_ANY);
     }
 
@@ -560,7 +560,7 @@ int socket__http_filter(struct __sk_buff *skb) {
             partial->d_port = conn.d_port;
             partial->s_port = conn.s_port;
             partial->tcp_seq = tcp.seq;
-            bpf_memcpy(partial->s_addr, conn.s_addr, sizeof(partial->s_addr));
+            __builtin_memcpy(partial->s_addr, conn.s_addr, sizeof(partial->s_addr));
 
             tp_info_pid_t *trace_info = trace_info_for_connection(&conn);
             if (trace_info) {
@@ -576,7 +576,7 @@ int socket__http_filter(struct __sk_buff *skb) {
                         if (current_immediate_epoch(trace_info->tp.ts) == current_immediate_epoch(bpf_ktime_get_ns())) {
                             //bpf_dbg_printk("Found trace info on another interface, setting it up for this connection");
                             tp_info_pid_t other_info = {0};
-                            bpf_memcpy(&other_info, trace_info, sizeof(tp_info_pid_t));
+                            __builtin_memcpy(&other_info, trace_info, sizeof(tp_info_pid_t));
                             bpf_map_update_elem(&trace_map, &conn, &other_info, BPF_ANY);
                         }
                     }

@@ -3,7 +3,6 @@
 
 #include "vmlinux.h"
 #include "bpf_helpers.h"
-#include "bpf_builtins.h"
 #include "http_types.h"
 #include "http_sock.h"
 
@@ -167,7 +166,7 @@ static __always_inline void handle_ssl_buf(void *ctx, u64 id, ssl_args_t *args, 
             // even though we won't have peer information.
             ssl_pid_connection_info_t p_c = {};
             bpf_dbg_printk("setting fake connection info ssl=%llx", ssl);
-            bpf_memcpy(&p_c.p_conn.conn.s_addr, &ssl, sizeof(void *));
+            __builtin_memcpy(&p_c.p_conn.conn.s_addr, &ssl, sizeof(void *));
             p_c.p_conn.conn.d_port = p_c.p_conn.conn.s_port = p_c.orig_dport = 0;
             p_c.p_conn.pid = pid_from_pid_tgid(id);
 

@@ -3,7 +3,6 @@
 
 #include "vmlinux.h"
 #include "bpf_helpers.h"
-#include "bpf_builtins.h"
 #include "http_types.h"
 #include "ringbuf.h"
 #include "pid.h"
@@ -79,7 +78,7 @@ static __always_inline void handle_buf_with_connection(void *ctx, pid_connection
         return;
     }
     
-    bpf_memcpy(&args->pid_conn, pid_conn, sizeof(pid_connection_info_t));
+    __builtin_memcpy(&args->pid_conn, pid_conn, sizeof(pid_connection_info_t));
 
     handle_buf_with_args(ctx, args);
 }

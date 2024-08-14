@@ -3,7 +3,6 @@
 
 #include "vmlinux.h"
 #include "bpf_helpers.h"
-#include "bpf_builtins.h"
 #include "http_types.h"
 #include "ringbuf.h"
 #include "pid.h"
@@ -29,7 +28,7 @@ static __always_inline tcp_req_t* empty_tcp_req() {
     int zero = 0;
     tcp_req_t *value = bpf_map_lookup_elem(&tcp_req_mem, &zero);
     if (value) {
-        bpf_memset(value, 0, sizeof(tcp_req_t));
+        __builtin_memset(value, 0, sizeof(tcp_req_t));
     }
     return value;
 }
@@ -53,8 +52,8 @@ static __always_inline void handle_unknown_tcp_connection(pid_connection_info_t 
 
             if (server_tp && server_tp->valid) {
                 bpf_dbg_printk("Found existing server tp for client call");
-                bpf_memcpy(req->tp.trace_id, server_tp->tp.trace_id, sizeof(req->tp.trace_id));
-                bpf_memcpy(req->tp.parent_id, server_tp->tp.span_id, sizeof(req->tp.parent_id));
+                __builtin_memcpy(req->tp.trace_id, server_tp->tp.trace_id, sizeof(req->tp.trace_id));
+                __builtin_memcpy(req->tp.parent_id, server_tp->tp.span_id, sizeof(req->tp.parent_id));
                 urand_bytes(req->tp.span_id, SPAN_ID_SIZE_BYTES);
             }
 
@@ -67,7 +66,7 @@ static __always_inline void handle_unknown_tcp_connection(pid_connection_info_t 
         if (trace) {
             bpf_dbg_printk("Sending TCP trace %lx, response length %d", existing, existing->resp_len);
 
-            bpf_memcpy(trace, existing, sizeof(tcp_req_t));
+            __builtin_memcpy(trace, existing, sizeof(tcp_req_t));
             bpf_probe_read(trace->rbuf, K_TCP_RES_LEN, u_buf);
             bpf_ringbuf_submit(trace, get_flags());
         }

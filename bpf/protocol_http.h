@@ -3,7 +3,6 @@
 
 #include "vmlinux.h"
 #include "bpf_helpers.h"
-#include "bpf_builtins.h"
 #include "http_types.h"
 #include "ringbuf.h"
 #include "pid.h"
@@ -43,7 +42,7 @@ static __always_inline http_info_t* empty_http_info() {
     int zero = 0;
     http_info_t *value = bpf_map_lookup_elem(&http_info_mem, &zero);
     if (value) {
-        bpf_memset(value, 0, sizeof(http_info_t));
+        __builtin_memset(value, 0, sizeof(http_info_t));
     }
     return value;
 }
@@ -103,7 +102,7 @@ static __always_inline void finish_http(http_info_t *info, pid_connection_info_t
         if (trace) {
             bpf_dbg_printk("Sending trace %lx, response length %d", info, info->resp_len);
 
-            bpf_memcpy(trace, info, sizeof(http_info_t));
+            __builtin_memcpy(trace, info, sizeof(http_info_t));
             trace->flags = EVENT_K_HTTP_REQUEST;
             bpf_ringbuf_submit(trace, get_flags());
         }
@@ -227,7 +226,7 @@ int protocol_http(void *ctx) {
         return 0;
     }
 
-    bpf_memcpy(&in->conn_info, &args->pid_conn.conn, sizeof(connection_info_t));
+    __builtin_memcpy(&in->conn_info, &args->pid_conn.conn, sizeof(connection_info_t));
     in->ssl = args->ssl;
 
     http_info_t *info = get_or_set_http_info(in, &args->pid_conn, args->packet_type);
@@ -258,8 +257,8 @@ int protocol_http(void *ctx) {
                     tp_info_pid_t *server_tp = find_parent_trace();
                     if (server_tp && server_tp->valid) {
                         bpf_dbg_printk("Found existing server span for id=%llx", bpf_get_current_pid_tgid());
-                        bpf_memcpy(info->tp.trace_id, server_tp->tp.trace_id, sizeof(info->tp.trace_id));
-                        bpf_memcpy(info->tp.parent_id, server_tp->tp.span_id, sizeof(info->tp.parent_id));
+                        __builtin_memcpy(info->tp.trace_id, server_tp->tp.trace_id, sizeof(info->tp.trace_id));
+                        __builtin_memcpy(info->tp.parent_id, server_tp->tp.span_id, sizeof(info->tp.parent_id));
                     } else {
                         bpf_dbg_printk("Cannot find server span for id=%llx", bpf_get_current_pid_tgid());
                     }

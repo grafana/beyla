@@ -202,8 +202,8 @@ static __always_inline void get_or_create_trace_info(http_connection_metadata_t 
             if (server_tp && server_tp->valid) {
                 found_tp = 1;
                 bpf_dbg_printk("Found existing server tp for client call");
-                bpf_memcpy(tp_p->tp.trace_id, server_tp->tp.trace_id, sizeof(tp_p->tp.trace_id));
-                bpf_memcpy(tp_p->tp.parent_id, server_tp->tp.span_id, sizeof(tp_p->tp.parent_id));
+                __builtin_memcpy(tp_p->tp.trace_id, server_tp->tp.trace_id, sizeof(tp_p->tp.trace_id));
+                __builtin_memcpy(tp_p->tp.parent_id, server_tp->tp.span_id, sizeof(tp_p->tp.parent_id));
             }
         } else {
             //bpf_dbg_printk("Looking up existing trace for connection");
@@ -214,8 +214,8 @@ static __always_inline void get_or_create_trace_info(http_connection_metadata_t 
             if (correlated_requests(tp_p, existing_tp)) {
                 found_tp = 1;
                 bpf_dbg_printk("Found existing correlated tp for server request");
-                bpf_memcpy(tp_p->tp.trace_id, existing_tp->tp.trace_id, sizeof(tp_p->tp.trace_id));
-                bpf_memcpy(tp_p->tp.parent_id, existing_tp->tp.span_id, sizeof(tp_p->tp.parent_id));
+                __builtin_memcpy(tp_p->tp.trace_id, existing_tp->tp.trace_id, sizeof(tp_p->tp.trace_id));
+                __builtin_memcpy(tp_p->tp.parent_id, existing_tp->tp.span_id, sizeof(tp_p->tp.parent_id));
             } 
         }
     }
@@ -223,7 +223,7 @@ static __always_inline void get_or_create_trace_info(http_connection_metadata_t 
     if (!found_tp) {
         bpf_dbg_printk("Generating new traceparent id");
         urand_bytes(tp_p->tp.trace_id, TRACE_ID_SIZE_BYTES);        
-        bpf_memset(tp_p->tp.parent_id, 0, sizeof(tp_p->tp.span_id));
+        __builtin_memset(tp_p->tp.parent_id, 0, sizeof(tp_p->tp.span_id));
     } else {
         bpf_dbg_printk("Using old traceparent id");
     }

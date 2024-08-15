@@ -450,13 +450,9 @@ int BPF_KRETPROBE(kretprobe_tcp_recvmsg, int copied_len) {
         goto done;
     }
 
-    if (!copied_len) {
+    if (copied_len <= 0) {
         bpf_map_delete_elem(&active_recv_args, &id);
         goto done;
-    }
-
-    if (copied_len < 0) {
-        copied_len = IO_VEC_MAX_LEN;
     }
 
     if (!args->iovec_ptr) {

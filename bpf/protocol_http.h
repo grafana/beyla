@@ -230,6 +230,7 @@ int protocol_http(void *ctx) {
     in->ssl = args->ssl;
 
     http_info_t *info = get_or_set_http_info(in, &args->pid_conn, args->packet_type);
+    u8 fallback = 0;
     if (!info) {
         bpf_dbg_printk("No info, pid =%d?, looking for fallback...", args->pid_conn.pid);
         info = (http_info_t *)bpf_map_lookup_elem(&ongoing_http_fallback, &args->pid_conn.conn);
@@ -237,6 +238,13 @@ int protocol_http(void *ctx) {
             bpf_dbg_printk("No fallback either, giving up");
             //dbg_print_http_connection_info(&pid_conn->conn); // commented out since GitHub CI doesn't like this call
             return 0;
+        }
+        fallback = 1;
+        task_pid(&info->pid);
+        if (args->direction == TCP_RECV) {
+            info->type = EVENT_HTTP_CLIENT;
+        } else {
+            info->type = EVENT_HTTP_REQUEST;
         }
     } 
 
@@ -276,6 +284,9 @@ int protocol_http(void *ctx) {
         process_http_request(info, args->bytes_len, meta, args->direction, args->orig_dport);
     } else if ((args->packet_type == PACKET_TYPE_RESPONSE) && (info->status == 0)) {
         handle_http_response(args->small_buf, &args->pid_conn, info, args->bytes_len, args->direction, args->ssl);
+        if (fallback) {
+            finish_http(info, &args->pid_conn);
+        }
     } else if (still_reading(info)) {
         info->len += args->bytes_len;
     }   

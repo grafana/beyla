@@ -424,8 +424,6 @@ int BPF_KPROBE(kprobe_tcp_recvmsg, struct sock *sk, struct msghdr *msg, size_t l
     u64 sock_p = (u64)sk;
     ensure_sent_event(id, &sock_p);
 
-    // Important: We must work here to remember the iovec pointer, since the msghdr structure
-    // can get modified in non-reversible way if the incoming packet is large and broken down in parts. 
     recv_args_t args = {
         .sock_ptr = (u64)sk,
         .iovec_ptr = (u64)(msg)
@@ -446,12 +444,16 @@ int BPF_KRETPROBE(kretprobe_tcp_recvmsg, int copied_len) {
 
     recv_args_t *args = bpf_map_lookup_elem(&active_recv_args, &id);
 
-    if (!args || (copied_len <= 0)) {
-        bpf_map_delete_elem(&active_recv_args, &id);
+    bpf_dbg_printk("=== tcp_recvmsg ret id=%d args=%llx copied_len %d ===", id, args, copied_len);
+
+    if (!args) {
         goto done;
     }
 
-    bpf_dbg_printk("=== tcp_recvmsg ret id=%d sock=%llx copied_len %d ===", id, args->sock_ptr, copied_len);
+    if (copied_len <= 0) {
+        bpf_map_delete_elem(&active_recv_args, &id);
+        goto done;
+    }
 
     if (!args->iovec_ptr) {
         bpf_dbg_printk("iovec_ptr found in kprobe is NULL, ignoring this tcp_recvmsg");

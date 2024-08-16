@@ -228,6 +228,9 @@ func (p *Tracer) KProbes() map[string]ebpfcommon.FunctionPrograms {
 			Start:    p.bpfObjects.KprobeTcpRecvmsg,
 			End:      p.bpfObjects.KretprobeTcpRecvmsg,
 		},
+		"tcp_cleanup_rbuf": {
+			Start: p.bpfObjects.KprobeTcpCleanupRbuf, // this kprobe runs the same code as recvmsg return, we use it because kretprobes can be unreliable.
+		},
 		"sys_clone": {
 			Required: true,
 			End:      p.bpfObjects.KretprobeSysClone,

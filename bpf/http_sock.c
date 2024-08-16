@@ -434,24 +434,12 @@ int BPF_KPROBE(kprobe_tcp_recvmsg, struct sock *sk, struct msghdr *msg, size_t l
     return 0;
 }
 
-SEC("kretprobe/tcp_recvmsg")
-int BPF_KRETPROBE(kretprobe_tcp_recvmsg, int copied_len) {
-    u64 id = bpf_get_current_pid_tgid();
-
-    if (!valid_pid(id)) {
-        return 0;
-    }
-
+static __always_inline int return_recvmsg(void *ctx, u64 id, int copied_len) {
     recv_args_t *args = bpf_map_lookup_elem(&active_recv_args, &id);
 
-    bpf_dbg_printk("=== tcp_recvmsg ret id=%d args=%llx copied_len %d ===", id, args, copied_len);
+    bpf_dbg_printk("=== return recvmsg id=%d args=%llx copied_len %d ===", id, args, copied_len);
 
-    if (!args) {
-        goto done;
-    }
-
-    if (copied_len <= 0) {
-        bpf_map_delete_elem(&active_recv_args, &id);
+    if (!args || (copied_len <= 0)) {
         goto done;
     }
 
@@ -500,6 +488,32 @@ int BPF_KRETPROBE(kretprobe_tcp_recvmsg, int copied_len) {
 
 done:
     return 0;
+}
+
+SEC("kprobe/tcp_cleanup_rbuf")
+int BPF_KPROBE(kprobe_tcp_cleanup_rbuf, struct sock *sk, int copied) {
+    u64 id = bpf_get_current_pid_tgid();
+
+    if (!valid_pid(id)) {
+        return 0;
+    }
+
+    bpf_dbg_printk("=== tcp_cleanup_rbuf id=%d copied_len %d ===", id, copied);
+
+    return return_recvmsg(ctx, id, copied);
+}
+
+SEC("kretprobe/tcp_recvmsg")
+int BPF_KRETPROBE(kretprobe_tcp_recvmsg, int copied_len) {
+    u64 id = bpf_get_current_pid_tgid();
+
+    if (!valid_pid(id)) {
+        return 0;
+    }
+
+    bpf_dbg_printk("=== kretprobe_tcp_recvmsg id=%d copied_len %d ===", id, copied_len);
+
+    return return_recvmsg(ctx, id, copied_len);
 }
 
 // Fall-back in case we don't see kretprobe on tcp_recvmsg in high network volume situations

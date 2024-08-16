@@ -149,13 +149,38 @@ beyla.ebpf "default" {
 
 	discovery {
 		services {
-			exe_path   = "http"
-			open_ports = "80"
+      kubernetes {
+				namespace = "default"
+				deployment_name = "."
+      }
 		}
+	}
+
+	metrics {
+		features = [
+			"application",
+		]
 	}
 
 	output {
 		traces = [otelcol.exporter.otlp.grafana_cloud_tempo.input]
+	}
+}
+
+prometheus.scrape "beyla" {
+	targets      = beyla.ebpf.default.targets
+	honor_labels = true
+	forward_to   = [prometheus.remote_write.rw.receiver]
+}
+
+prometheus.remote_write "rw" {
+	endpoint {
+		url = "https://prometheus-us-central1.grafana.net/api/prom/push"
+
+		basic_auth {
+			username = env("PROMETHEUS_REMOTE_WRITE_USERNAME")
+			password = env("PROMETHEUS_REMOTE_WRITE_PASSWORD")
+		}
 	}
 }
 
@@ -180,9 +205,9 @@ kubectl create configmap --namespace alloy alloy-config "--from-file=config.allo
 
 With this configuration Beyla instruments the services running in the Kubernetes cluster and send traces to Grafana Cloud Tempo and metrics to Prometheus.
 
-The argument `discovery > services > exe_path` specifies the path to the executable of the services to instrument. The `discovery > services > open_ports` argument specifies the port where the services are listening.
-
 The `attributes > kubernetes > enable` enables Kubernetes decoration for metrics and traces, which adds the metadata of the Kubernetes entities running the automatically instrumented services.
+
+The argument `discovery > services > kubernetes` specifies the selection of services based ton Kubernetes metadata. In this example, Beyla instruments all deployments in namespace "default".
 
 The `prometheus.scrape` section configures the Prometheus scrape configuration to collect the metrics from Beyla. The `prometheus.remote_write` section configures the remote write to send the metrics to Grafana Cloud Prometheus.
 

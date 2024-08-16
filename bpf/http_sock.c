@@ -439,12 +439,7 @@ static __always_inline int return_recvmsg(void *ctx, u64 id, int copied_len) {
 
     bpf_dbg_printk("=== return recvmsg id=%d args=%llx copied_len %d ===", id, args, copied_len);
 
-    if (!args) {
-        goto done;
-    }
-
-    if (copied_len <= 0) {
-        bpf_map_delete_elem(&active_recv_args, &id);
+    if (!args || (copied_len <= 0)) {
         goto done;
     }
 

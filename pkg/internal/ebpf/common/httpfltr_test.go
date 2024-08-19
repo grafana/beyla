@@ -117,7 +117,7 @@ func TestToRequestTrace(t *testing.T) {
 		Start:        123456,
 		End:          789012,
 		HostPort:     1,
-		ServiceID:    svc.ID{SDKLanguage: svc.InstrumentableGeneric},
+		ServiceID:    svc.ID{},
 	}
 	assert.Equal(t, expected, result)
 }
@@ -153,7 +153,7 @@ func TestToRequestTraceNoConnection(t *testing.T) {
 		End:          789012,
 		Status:       200,
 		HostPort:     7033,
-		ServiceID:    svc.ID{SDKLanguage: svc.InstrumentableGeneric},
+		ServiceID:    svc.ID{},
 	}
 	assert.Equal(t, expected, result)
 }
@@ -190,7 +190,7 @@ func TestToRequestTrace_BadHost(t *testing.T) {
 		Start:        123456,
 		End:          789012,
 		HostPort:     0,
-		ServiceID:    svc.ID{SDKLanguage: svc.InstrumentableGeneric},
+		ServiceID:    svc.ID{},
 	}
 	assert.Equal(t, expected, result)
 

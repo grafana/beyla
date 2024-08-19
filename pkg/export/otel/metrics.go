@@ -842,7 +842,7 @@ func (mr *MetricsReporter) reportMetrics(input <-chan []request.Span) {
 			s := &spans[i]
 
 			// If we are ignoring this span because of route patterns, don't do anything
-			if s.IgnoreSpan == request.IgnoreMetrics {
+			if s.IgnoreMetrics() {
 				continue
 			}
 			reporter, err := mr.reporters.For(&s.ServiceID)

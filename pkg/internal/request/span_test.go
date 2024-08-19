@@ -45,11 +45,11 @@ func TestEventTypeString(t *testing.T) {
 }
 
 func TestIgnoreModeString(t *testing.T) {
-	modeStringMap := map[IgnoreMode]string{
-		IgnoreMetrics:  "Metrics",
-		IgnoreTraces:   "Traces",
-		IgnoreMode(0):  "(none)",
-		IgnoreMode(99): "UNKNOWN (99)",
+	modeStringMap := map[ignoreMode]string{
+		ignoreMetrics:                            "Metrics",
+		ignoreTraces:                             "Traces",
+		ignoreMode(0):                            "",
+		ignoreMode(ignoreTraces | ignoreMetrics): "MetricsTraces",
 	}
 
 	for mode, str := range modeStringMap {
@@ -178,7 +178,7 @@ func TestSerializeJSONSpans(t *testing.T) {
 	test := func(t *testing.T, tData *testData) {
 		span := Span{
 			Type:           tData.eventType,
-			IgnoreSpan:     IgnoreMetrics,
+			IgnoreSpan:     ignoreMetrics,
 			Method:         "method",
 			Path:           "path",
 			Route:          "route",

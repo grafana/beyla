@@ -95,8 +95,6 @@ func HTTPInfoEventToSpan(event BPFHTTPInfo) (request.Span, bool, error) {
 	}
 	result.URL = event.url()
 	result.Method = event.method()
-	// set generic service to be overwritten later by the PID filters
-	result.Service = svc.ID{SDKLanguage: svc.InstrumentableGeneric}
 
 	return httpInfoToSpan(&result), false, nil
 }

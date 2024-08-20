@@ -14,7 +14,6 @@ import (
 
 	"github.com/grafana/beyla/pkg/internal/ebpf/bhpack"
 	"github.com/grafana/beyla/pkg/internal/request"
-	"github.com/grafana/beyla/pkg/internal/svc"
 )
 
 type BPFHTTP2Info bpfHttp2GrpcRequestT
@@ -210,8 +209,6 @@ func readRetMetaFrame(conn *BPFConnInfo, fr *http2.Framer, hf *http2.HeadersFram
 	return status, grpc, ok
 }
 
-var genericServiceID = svc.ID{SDKLanguage: svc.InstrumentableGeneric}
-
 func http2InfoToSpan(info *BPFHTTP2Info, method, path, peer, host string, status int, protocol Protocol) request.Span {
 	return request.Span{
 		Type:          info.eventType(protocol),
@@ -226,7 +223,6 @@ func http2InfoToSpan(info *BPFHTTP2Info, method, path, peer, host string, status
 		Start:         int64(info.StartMonotimeNs),
 		End:           int64(info.EndMonotimeNs),
 		Status:        status,
-		ServiceID:     genericServiceID, // set generic service to be overwritten later by the PID filters
 		TraceID:       trace.TraceID(info.Tp.TraceId),
 		SpanID:        trace.SpanID(info.Tp.SpanId),
 		ParentSpanID:  trace.SpanID(info.Tp.ParentId),

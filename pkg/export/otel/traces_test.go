@@ -878,7 +878,6 @@ func TestSpanHostPeer(t *testing.T) {
 }
 
 func TestTracesInstrumentations(t *testing.T) {
-
 	tests := []InstrTest{
 		{
 			name:     "all instrumentations",
@@ -955,6 +954,38 @@ func TestTracesInstrumentations(t *testing.T) {
 				}
 				assert.True(t, found, tt.name+":"+tt.expected[i])
 			}
+		})
+	}
+}
+
+func TestTracesAttrReuse(t *testing.T) {
+	tests := []struct {
+		name string
+		span request.Span
+		same bool
+	}{
+		{
+			name: "Reuses the trace attributes, with svc.UID defined",
+			span: request.Span{ServiceID: svc.ID{UID: "foo"}, Type: request.EventTypeHTTP, Method: "GET", Route: "/foo", RequestStart: 100, End: 200},
+			same: true,
+		},
+		{
+			name: "No UID, no caching of trace attributes",
+			span: request.Span{ServiceID: svc.ID{}, Type: request.EventTypeHTTP, Method: "GET", Route: "/foo", RequestStart: 100, End: 200},
+			same: false,
+		},
+		{
+			name: "No ServiceID, no caching of trace attributes",
+			span: request.Span{Type: request.EventTypeHTTP, Method: "GET", Route: "/foo", RequestStart: 100, End: 200},
+			same: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			attr1 := traceAppResourceAttrs("123", &tt.span.ServiceID)
+			attr2 := traceAppResourceAttrs("123", &tt.span.ServiceID)
+			assert.Equal(t, tt.same, &attr1[0] == &attr2[0], tt.name)
 		})
 	}
 }
@@ -1152,7 +1183,7 @@ func generateTracesForSpans(t *testing.T, tr *tracesOTELReceiver, spans []reques
 	assert.NoError(t, err)
 	for i := range spans {
 		span := &spans[i]
-		if span.IgnoreSpan == request.IgnoreTraces || !tr.acceptSpan(span) {
+		if span.IgnoreTraces() || !tr.acceptSpan(span) {
 			continue
 		}
 		res = append(res, GenerateTraces(span, "host-id", traceAttrs, []attribute.KeyValue{}))

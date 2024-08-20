@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	expirable2 "github.com/hashicorp/golang-lru/v2/expirable"
 	"github.com/mariomac/pipes/pipe"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/config/configgrpc"
@@ -41,6 +42,7 @@ import (
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/pkg/internal/request"
+	"github.com/grafana/beyla/pkg/internal/svc"
 )
 
 func tlog() *slog.Logger {
@@ -48,6 +50,8 @@ func tlog() *slog.Logger {
 }
 
 const reporterName = "github.com/grafana/beyla"
+
+var serviceAttrCache = expirable2.NewLRU[svc.UID, []attribute.KeyValue](1024, nil, 5*time.Minute)
 
 type TracesConfig struct {
 	CommonEndpoint string `yaml:"-" env:"OTEL_EXPORTER_OTLP_ENDPOINT"`
@@ -195,7 +199,7 @@ func (tr *tracesOTELReceiver) provideLoop() (pipe.FinalFunc[[]request.Span], err
 		for spans := range in {
 			for i := range spans {
 				span := &spans[i]
-				if span.IgnoreSpan == request.IgnoreTraces || !tr.acceptSpan(span) {
+				if span.IgnoreTraces() || !tr.acceptSpan(span) {
 					continue
 				}
 				traces := GenerateTraces(span, tr.ctxInfo.HostID, traceAttrs, envResourceAttrs)
@@ -364,6 +368,21 @@ func getRetrySettings(cfg TracesConfig) configretry.BackOffConfig {
 	return backOffCfg
 }
 
+func traceAppResourceAttrs(hostID string, service *svc.ID) []attribute.KeyValue {
+	if service.UID == "" {
+		return getAppResourceAttrs(hostID, service)
+	}
+
+	attrs, ok := serviceAttrCache.Get(service.UID)
+	if ok {
+		return attrs
+	}
+	attrs = getAppResourceAttrs(hostID, service)
+	serviceAttrCache.Add(service.UID, attrs)
+
+	return attrs
+}
+
 // GenerateTraces creates a ptrace.Traces from a request.Span
 func GenerateTraces(span *request.Span, hostID string, userAttrs map[attr.Name]struct{}, envResourceAttrs []attribute.KeyValue) ptrace.Traces {
 	t := span.Timings()
@@ -372,7 +391,7 @@ func GenerateTraces(span *request.Span, hostID string, userAttrs map[attr.Name]s
 	traces := ptrace.NewTraces()
 	rs := traces.ResourceSpans().AppendEmpty()
 	ss := rs.ScopeSpans().AppendEmpty()
-	resourceAttrs := getAppResourceAttrs(hostID, &span.ServiceID)
+	resourceAttrs := traceAppResourceAttrs(hostID, &span.ServiceID)
 	resourceAttrs = append(resourceAttrs, envResourceAttrs...)
 	resourceAttrsMap := attrsToMap(resourceAttrs)
 	resourceAttrsMap.PutStr(string(semconv.OTelLibraryNameKey), reporterName)

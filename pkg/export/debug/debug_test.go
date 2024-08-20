@@ -40,7 +40,6 @@ func TestTracePrinterValidEnabled(t *testing.T) {
 func traceFuncHelper(t *testing.T, tracePrinter TracePrinter) string {
 	fakeSpan := request.Span{
 		Type:           request.EventTypeHTTP,
-		IgnoreSpan:     request.IgnoreMetrics,
 		Method:         "method",
 		Path:           "path",
 		Route:          "route",
@@ -62,6 +61,8 @@ func traceFuncHelper(t *testing.T, tracePrinter TracePrinter) string {
 		OtherNamespace: "otherns",
 		Statement:      "statement",
 	}
+
+	fakeSpan.SetIgnoreMetrics()
 
 	// redirect the TracePrinter function stdout to a pipe so that we can
 	// capture and return its output

@@ -73,11 +73,11 @@ endef
 #   1. Variable name(s) to test.
 #   2. (optional) Error message to print.
 check_defined = \
-    $(strip $(foreach 1,$1, \
-        $(call __check_defined,$1,$(strip $(value 2)))))
+	$(strip $(foreach 1,$1, \
+		$(call __check_defined,$1,$(strip $(value 2)))))
 __check_defined = \
-    $(if $(value $1),, \
-      $(error Undefined $1$(if $2, ($2))))
+	$(if $(value $1),, \
+	  $(error Undefined $1$(if $2, ($2))))
 
 # prereqs binary dependencies
 GOLANGCI_LINT = $(TOOLS_DIR)/golangci-lint
@@ -124,8 +124,10 @@ checkfmt:
 .PHONY: lint-dashboard
 lint-dashboard: prereqs
 	@echo "### Linting dashboard";
-	@if [ "$(shell sh -c 'git ls-files --modified | grep grafana/dashboard.json ')" != "" ]; then \
-		$(DASHBOARD_LINTER) lint --strict grafana/dashboard.json; \
+	@if [ "$(shell sh -c 'git ls-files --modified | grep grafana/*.json ')" != "" ]; then \
+		for file in grafana/*.json; do \
+			$(DASHBOARD_LINTER) lint --strict $$file; \
+		done; \
 	else \
 		echo '(no git changes detected. Skipping)'; \
 	fi

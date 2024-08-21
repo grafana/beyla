@@ -199,7 +199,7 @@ func (tr *tracesOTELReceiver) provideLoop() (pipe.FinalFunc[[]request.Span], err
 		for spans := range in {
 			for i := range spans {
 				span := &spans[i]
-				if span.IgnoreTraces() || !tr.acceptSpan(span) {
+				if span.IgnoreTraces() || span.ServiceID.ExportsOTelTraces() || !tr.acceptSpan(span) {
 					continue
 				}
 				traces := GenerateTraces(span, tr.ctxInfo.HostID, traceAttrs, envResourceAttrs)

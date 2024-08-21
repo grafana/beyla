@@ -2,6 +2,7 @@ package ebpfcommon
 
 import (
 	"log/slog"
+	"strings"
 	"sync"
 
 	lru "github.com/hashicorp/golang-lru/v2"
@@ -9,6 +10,7 @@ import (
 	"github.com/grafana/beyla/pkg/internal/exec"
 	"github.com/grafana/beyla/pkg/internal/request"
 	"github.com/grafana/beyla/pkg/internal/svc"
+	"github.com/grafana/beyla/pkg/services"
 )
 
 type PIDType uint8
@@ -19,6 +21,9 @@ const (
 )
 
 var activePids, _ = lru.New[uint32, svc.ID](1024)
+
+const metricsDetectPattern = "/v1/metrics"
+const tracesDetectPattern = "/v1/traces"
 
 // injectable functions (can be replaced in tests). It reads the
 // current process namespace from the /proc filesystem. It is required to
@@ -42,32 +47,36 @@ type ServiceFilter interface {
 // be forwarded. Its Filter method filters the request.Span instances whose
 // PIDs are not in the allowed list.
 type PIDsFilter struct {
-	log     *slog.Logger
-	current map[uint32]map[uint32]PIDInfo
-	mux     *sync.RWMutex
+	log        *slog.Logger
+	current    map[uint32]map[uint32]PIDInfo
+	mux        *sync.RWMutex
+	detectOtel bool
 }
 
 var commonPIDsFilter *PIDsFilter
 var commonLock sync.Mutex
 
-func NewPIDsFilter(log *slog.Logger) *PIDsFilter {
+func newPIDsFilter(c *services.DiscoveryConfig, log *slog.Logger) *PIDsFilter {
 	return &PIDsFilter{
-		log:     log,
-		current: map[uint32]map[uint32]PIDInfo{},
-		mux:     &sync.RWMutex{},
+		log:        log,
+		current:    map[uint32]map[uint32]PIDInfo{},
+		mux:        &sync.RWMutex{},
+		detectOtel: c.ExcludeOTelInstrumentedServices,
 	}
 }
 
-func CommonPIDsFilter(systemWide bool) ServiceFilter {
+func CommonPIDsFilter(c *services.DiscoveryConfig) ServiceFilter {
 	commonLock.Lock()
 	defer commonLock.Unlock()
 
-	if systemWide {
-		return &IdentityPidsFilter{}
+	if c.SystemWide {
+		return &IdentityPidsFilter{
+			detectOTel: c.ExcludeOTelInstrumentedServices,
+		}
 	}
 
 	if commonPIDsFilter == nil {
-		commonPIDsFilter = NewPIDsFilter(slog.With("component", "ebpfCommon.CommonPIDsFilter"))
+		commonPIDsFilter = newPIDsFilter(c, slog.With("component", "ebpfCommon.CommonPIDsFilter"))
 	}
 
 	return commonPIDsFilter
@@ -96,7 +105,6 @@ func (pf *PIDsFilter) ValidPID(userPID, ns uint32, pidType PIDType) bool {
 	}
 
 	return false
-
 }
 
 func (pf *PIDsFilter) CurrentPIDs(t PIDType) map[uint32]map[uint32]svc.ID {
@@ -137,6 +145,9 @@ func (pf *PIDsFilter) Filter(inputSpans []request.Span) []request.Span {
 		// saw. We don't check for the host pid, because we can't be sure of the number
 		// of container layers. The Host PID is always the outer most layer.
 		if info, pidExists := ns[span.Pid.UserPID]; pidExists {
+			if pf.detectOtel {
+				verifyOTelExport(&info.service, span)
+			}
 			inputSpans[i].ServiceID = info.service
 			outputSpans = append(outputSpans, inputSpans[i])
 		}
@@ -184,7 +195,9 @@ func (pf *PIDsFilter) removePID(pid, nsid uint32) {
 
 // IdentityPidsFilter is a PIDsFilter that does not filter anything. It is feasible
 // for system-wide instrumenation
-type IdentityPidsFilter struct{}
+type IdentityPidsFilter struct {
+	detectOTel bool
+}
 
 func (pf *IdentityPidsFilter) AllowPID(_ uint32, _ uint32, _ svc.ID, _ PIDType) {}
 
@@ -202,6 +215,9 @@ func (pf *IdentityPidsFilter) Filter(inputSpans []request.Span) []request.Span {
 	for i := range inputSpans {
 		s := &inputSpans[i]
 		s.ServiceID = serviceInfo(s.Pid.HostPID)
+		if pf.detectOTel {
+			verifyOTelExport(&s.ServiceID, s)
+		}
 	}
 	return inputSpans
 }
@@ -219,4 +235,12 @@ func serviceInfo(pid uint32) svc.ID {
 	activePids.Add(pid, result)
 
 	return result
+}
+
+func verifyOTelExport(svc *svc.ID, span *request.Span) {
+	if strings.HasPrefix(span.Path, metricsDetectPattern) {
+		svc.SetExportsOTelMetrics()
+	} else if strings.HasPrefix(span.Path, tracesDetectPattern) {
+		svc.SetExportsOTelTraces()
+	}
 }

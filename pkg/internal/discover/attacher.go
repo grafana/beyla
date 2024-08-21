@@ -200,7 +200,7 @@ func monitorPIDs(tracer *ebpf.ProcessTracer, ie *Instrumentable) {
 		ie.FileInfo.Service.Name = ie.FileInfo.ExecutableName()
 		// we mark the service ID as automatically named in case we want to look,
 		// in later stages of the pipeline, for better automatic service name
-		ie.FileInfo.Service.AutoName = true
+		ie.FileInfo.Service.SetAutoName()
 	}
 
 	// allowing the tracer to forward traces from the discovered PID and its children processes

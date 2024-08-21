@@ -49,7 +49,7 @@ func New(cfg *beyla.Config, metrics imetrics.Reporter) *Tracer {
 	log := slog.With("component", "nethttp.Tracer")
 	return &Tracer{
 		log:        log,
-		pidsFilter: ebpfcommon.CommonPIDsFilter(cfg.Discovery.SystemWide),
+		pidsFilter: ebpfcommon.CommonPIDsFilter(&cfg.Discovery),
 		cfg:        &cfg.EBPF,
 		metrics:    metrics,
 	}

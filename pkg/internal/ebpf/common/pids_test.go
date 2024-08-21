@@ -9,6 +9,7 @@ import (
 
 	"github.com/grafana/beyla/pkg/internal/request"
 	"github.com/grafana/beyla/pkg/internal/svc"
+	"github.com/grafana/beyla/pkg/services"
 )
 
 var spanSet = []request.Span{
@@ -24,7 +25,7 @@ func TestFilter_SameNS(t *testing.T) {
 	readNamespacePIDs = func(pid int32) ([]uint32, error) {
 		return []uint32{uint32(pid)}, nil
 	}
-	pf := NewPIDsFilter(slog.With("env", "testing"))
+	pf := newPIDsFilter(&services.DiscoveryConfig{}, slog.With("env", "testing"))
 	pf.AllowPID(123, 33, svc.ID{}, PIDTypeGo)
 	pf.AllowPID(456, 33, svc.ID{}, PIDTypeGo)
 	pf.AllowPID(789, 33, svc.ID{}, PIDTypeGo)
@@ -42,7 +43,7 @@ func TestFilter_DifferentNS(t *testing.T) {
 	readNamespacePIDs = func(pid int32) ([]uint32, error) {
 		return []uint32{uint32(pid)}, nil
 	}
-	pf := NewPIDsFilter(slog.With("env", "testing"))
+	pf := newPIDsFilter(&services.DiscoveryConfig{}, slog.With("env", "testing"))
 	pf.AllowPID(123, 22, svc.ID{}, PIDTypeGo)
 	pf.AllowPID(456, 22, svc.ID{}, PIDTypeGo)
 	pf.AllowPID(666, 22, svc.ID{}, PIDTypeGo)
@@ -56,7 +57,7 @@ func TestFilter_Block(t *testing.T) {
 	readNamespacePIDs = func(pid int32) ([]uint32, error) {
 		return []uint32{uint32(pid)}, nil
 	}
-	pf := NewPIDsFilter(slog.With("env", "testing"))
+	pf := newPIDsFilter(&services.DiscoveryConfig{}, slog.With("env", "testing"))
 	pf.AllowPID(123, 33, svc.ID{}, PIDTypeGo)
 	pf.AllowPID(456, 33, svc.ID{}, PIDTypeGo)
 	pf.BlockPID(123, 33)
@@ -74,7 +75,7 @@ func TestFilter_NewNSLater(t *testing.T) {
 	readNamespacePIDs = func(pid int32) ([]uint32, error) {
 		return []uint32{uint32(pid)}, nil
 	}
-	pf := NewPIDsFilter(slog.With("env", "testing"))
+	pf := newPIDsFilter(&services.DiscoveryConfig{}, slog.With("env", "testing"))
 	pf.AllowPID(123, 33, svc.ID{}, PIDTypeGo)
 	pf.AllowPID(456, 33, svc.ID{}, PIDTypeGo)
 	pf.AllowPID(789, 33, svc.ID{}, PIDTypeGo)

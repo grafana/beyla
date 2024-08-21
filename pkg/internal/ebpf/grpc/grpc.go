@@ -52,7 +52,7 @@ func New(cfg *beyla.Config, metrics imetrics.Reporter) *Tracer {
 		log:        log,
 		cfg:        &cfg.EBPF,
 		metrics:    metrics,
-		pidsFilter: ebpfcommon.CommonPIDsFilter(cfg.Discovery.SystemWide),
+		pidsFilter: ebpfcommon.CommonPIDsFilter(&cfg.Discovery),
 	}
 }
 

@@ -2,7 +2,6 @@ package ebpfcommon
 
 import (
 	"log/slog"
-	"strings"
 	"sync"
 
 	lru "github.com/hashicorp/golang-lru/v2"
@@ -21,9 +20,6 @@ const (
 )
 
 var activePids, _ = lru.New[uint32, svc.ID](1024)
-
-const metricsDetectPattern = "/v1/metrics"
-const tracesDetectPattern = "/v1/traces"
 
 // injectable functions (can be replaced in tests). It reads the
 // current process namespace from the /proc filesystem. It is required to
@@ -146,7 +142,7 @@ func (pf *PIDsFilter) Filter(inputSpans []request.Span) []request.Span {
 		// of container layers. The Host PID is always the outer most layer.
 		if info, pidExists := ns[span.Pid.UserPID]; pidExists {
 			if pf.detectOtel {
-				verifyOTelExport(&info.service, span)
+				checkIfExportsOTel(&info.service, span)
 			}
 			inputSpans[i].ServiceID = info.service
 			outputSpans = append(outputSpans, inputSpans[i])
@@ -216,7 +212,7 @@ func (pf *IdentityPidsFilter) Filter(inputSpans []request.Span) []request.Span {
 		s := &inputSpans[i]
 		s.ServiceID = serviceInfo(s.Pid.HostPID)
 		if pf.detectOTel {
-			verifyOTelExport(&s.ServiceID, s)
+			checkIfExportsOTel(&s.ServiceID, s)
 		}
 	}
 	return inputSpans
@@ -237,10 +233,10 @@ func serviceInfo(pid uint32) svc.ID {
 	return result
 }
 
-func verifyOTelExport(svc *svc.ID, span *request.Span) {
-	if strings.HasPrefix(span.Path, metricsDetectPattern) {
+func checkIfExportsOTel(svc *svc.ID, span *request.Span) {
+	if span.IsExportMetricsSpan() {
 		svc.SetExportsOTelMetrics()
-	} else if strings.HasPrefix(span.Path, tracesDetectPattern) {
+	} else if span.IsExportTracesSpan() {
 		svc.SetExportsOTelTraces()
 	}
 }

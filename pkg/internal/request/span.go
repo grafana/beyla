@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 	"unicode/utf8"
 
@@ -29,6 +30,11 @@ const (
 	EventTypeKafkaClient
 	EventTypeRedisServer
 	EventTypeKafkaServer
+)
+
+const (
+	metricsDetectPattern = "/v1/metrics"
+	tracesDetectPattern  = "/v1/traces"
 )
 
 func (t EventType) String() string {
@@ -426,4 +432,26 @@ func (s *Span) TraceName() string {
 		return fmt.Sprintf("%s %s", s.Path, s.Method)
 	}
 	return ""
+}
+
+func (s *Span) isExportSpan() bool {
+	return s.Type == EventTypeHTTPClient || s.Type == EventTypeGRPCClient
+}
+
+func (s *Span) IsExportMetricsSpan() bool {
+	// check if it's a successful client call
+	if !s.isExportSpan() || (SpanStatusCode(s) != codes.Unset) {
+		return false
+	}
+
+	return strings.HasPrefix(s.Path, metricsDetectPattern)
+}
+
+func (s *Span) IsExportTracesSpan() bool {
+	// check if it's a successful client call
+	if !s.isExportSpan() || (SpanStatusCode(s) != codes.Unset) {
+		return false
+	}
+
+	return strings.HasPrefix(s.Path, tracesDetectPattern)
 }

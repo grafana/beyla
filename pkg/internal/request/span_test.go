@@ -238,3 +238,114 @@ func TestSerializeJSONSpans(t *testing.T) {
 		test(t, &tData[i])
 	}
 }
+
+func TestDetectsOTelExport(t *testing.T) {
+	// Metrics
+	tests := []struct {
+		name    string
+		span    Span
+		exports bool
+	}{
+		{
+			name:    "HTTP server spans don't export",
+			span:    Span{Type: EventTypeHTTP, Method: "GET", Path: "/v1/metrics", RequestStart: 100, End: 200, Status: 200},
+			exports: false,
+		},
+		{
+			name:    "HTTP /foo doesn't export",
+			span:    Span{Type: EventTypeHTTPClient, Method: "GET", Path: "/foo", RequestStart: 100, End: 200, Status: 200},
+			exports: false,
+		},
+		{
+			name:    "HTTP failed spans don't export",
+			span:    Span{Type: EventTypeHTTPClient, Method: "GET", Path: "/v1/metrics", RequestStart: 100, End: 200, Status: 401},
+			exports: false,
+		},
+		{
+			name:    "Successfull HTTP /v1/metrics spans export",
+			span:    Span{Type: EventTypeHTTPClient, Method: "GET", Path: "/v1/metrics", RequestStart: 100, End: 200, Status: 200},
+			exports: true,
+		},
+		{
+			name:    "GRPC server spans don't export",
+			span:    Span{Type: EventTypeGRPC, Method: "GET", Path: "/v1/metrics", RequestStart: 100, End: 200, Status: 0},
+			exports: false,
+		},
+		{
+			name:    "GRPC /foo doesn't export",
+			span:    Span{Type: EventTypeGRPCClient, Method: "GET", Path: "/foo", RequestStart: 100, End: 200, Status: 0},
+			exports: false,
+		},
+		{
+			name:    "GRPC failed spans don't export",
+			span:    Span{Type: EventTypeGRPCClient, Method: "GET", Path: "/v1/metrics", RequestStart: 100, End: 200, Status: 1},
+			exports: false,
+		},
+		{
+			name:    "Successfull GRPC /v1/metrics spans export",
+			span:    Span{Type: EventTypeGRPCClient, Method: "GET", Path: "/v1/metrics", RequestStart: 100, End: 200, Status: 0},
+			exports: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.exports, tt.span.IsExportMetricsSpan())
+			assert.Equal(t, false, tt.span.IsExportTracesSpan())
+		})
+	}
+
+	// Traces
+	tests = []struct {
+		name    string
+		span    Span
+		exports bool
+	}{
+		{
+			name:    "HTTP server spans don't export",
+			span:    Span{Type: EventTypeHTTP, Method: "GET", Path: "/v1/traces", RequestStart: 100, End: 200, Status: 200},
+			exports: false,
+		},
+		{
+			name:    "/foo doesn't export",
+			span:    Span{Type: EventTypeHTTPClient, Method: "GET", Path: "/foo", RequestStart: 100, End: 200, Status: 200},
+			exports: false,
+		},
+		{
+			name:    "HTTP failed spans don't export",
+			span:    Span{Type: EventTypeHTTPClient, Method: "GET", Path: "/v1/traces", RequestStart: 100, End: 200, Status: 401},
+			exports: false,
+		},
+		{
+			name:    "Successfull HTTP /v1/traces spans export",
+			span:    Span{Type: EventTypeHTTPClient, Method: "GET", Path: "/v1/traces", RequestStart: 100, End: 200, Status: 200},
+			exports: true,
+		},
+		{
+			name:    "GRPC server spans don't export",
+			span:    Span{Type: EventTypeGRPC, Method: "GET", Path: "/v1/traces", RequestStart: 100, End: 200, Status: 0},
+			exports: false,
+		},
+		{
+			name:    "GRPC /foo doesn't export",
+			span:    Span{Type: EventTypeGRPCClient, Method: "GET", Path: "/foo", RequestStart: 100, End: 200, Status: 0},
+			exports: false,
+		},
+		{
+			name:    "GRPC failed spans don't export",
+			span:    Span{Type: EventTypeGRPCClient, Method: "GET", Path: "/v1/traces", RequestStart: 100, End: 200, Status: 1},
+			exports: false,
+		},
+		{
+			name:    "Successfull GRPC /v1/traces spans export",
+			span:    Span{Type: EventTypeGRPCClient, Method: "GET", Path: "/v1/traces", RequestStart: 100, End: 200, Status: 0},
+			exports: true,
+		}}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.exports, tt.span.IsExportTracesSpan())
+			assert.Equal(t, false, tt.span.IsExportMetricsSpan())
+		})
+	}
+}

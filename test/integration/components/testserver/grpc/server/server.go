@@ -154,14 +154,14 @@ func (s *routeGuideServer) loadFeatures(filePath string) {
 		var err error
 		data, err = os.ReadFile(filePath)
 		if err != nil {
-			log.Error("Failed to load default features", err)
+			log.Error("Failed to load default features", "error", err)
 			os.Exit(-1)
 		}
 	} else {
 		data = exampleData
 	}
 	if err := json.Unmarshal(data, &s.savedFeatures); err != nil {
-		log.Error("Failed to load default features", err)
+		log.Error("Failed to load default features", "error", err)
 		os.Exit(-1)
 	}
 }
@@ -220,7 +220,7 @@ func Setup(port int) error {
 	flag.Parse()
 	lis, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%d", port))
 	if err != nil {
-		log.Error("failed to listen", err)
+		log.Error("failed to listen", "error", err)
 		return err
 	}
 	var opts []grpc.ServerOption
@@ -229,7 +229,7 @@ func Setup(port int) error {
 	log.Info("GRPC listening and serving", "port", port)
 	err = grpcServer.Serve(lis)
 	if err != nil {
-		log.Error("failed to serve", err)
+		log.Error("failed to serve", "error", err)
 		return err
 	}
 	return nil
@@ -239,7 +239,7 @@ func SetupTLS(port int) error {
 	flag.Parse()
 	lis, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%d", port))
 	if err != nil {
-		log.Error("failed to listen", err)
+		log.Error("failed to listen", "error", err)
 		return err
 	}
 	var opts []grpc.ServerOption
@@ -247,7 +247,7 @@ func SetupTLS(port int) error {
 	keyFile := "x509/server_test_key.pem"
 	creds, err := credentials.NewServerTLSFromFile(certFile, keyFile)
 	if err != nil {
-		log.Error("Failed to generate credentials", err)
+		log.Error("Failed to generate credentials", "error", err)
 		return err
 	}
 	opts = []grpc.ServerOption{grpc.Creds(creds)}
@@ -256,7 +256,7 @@ func SetupTLS(port int) error {
 	log.Info("GRPC listening and serving", "port", port)
 	err = grpcServer.Serve(lis)
 	if err != nil {
-		log.Error("failed to serve", err)
+		log.Error("failed to serve", "error", err)
 		return err
 	}
 	return nil

@@ -112,3 +112,26 @@ func TestFilter_NewNSLater(t *testing.T) {
 		{Pid: request.PidInfo{UserPID: 789, HostPID: 234, Namespace: 33}},
 	}, pf.Filter(spanSet))
 }
+
+func TestFilter_ExportsOTelDetection(t *testing.T) {
+	s := svc.ID{}
+	span := request.Span{Type: request.EventTypeHTTP, Method: "GET", Path: "/random/server/span", RequestStart: 100, End: 200, Status: 200}
+
+	checkIfExportsOTel(&s, &span)
+	assert.False(t, s.ExportsOTelMetrics())
+	assert.False(t, s.ExportsOTelTraces())
+
+	s = svc.ID{}
+	span = request.Span{Type: request.EventTypeHTTPClient, Method: "GET", Path: "/v1/metrics", RequestStart: 100, End: 200, Status: 200}
+
+	checkIfExportsOTel(&s, &span)
+	assert.True(t, s.ExportsOTelMetrics())
+	assert.False(t, s.ExportsOTelTraces())
+
+	s = svc.ID{}
+	span = request.Span{Type: request.EventTypeHTTPClient, Method: "GET", Path: "/v1/traces", RequestStart: 100, End: 200, Status: 200}
+
+	checkIfExportsOTel(&s, &span)
+	assert.False(t, s.ExportsOTelMetrics())
+	assert.True(t, s.ExportsOTelTraces())
+}

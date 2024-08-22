@@ -30,6 +30,10 @@ type tracesReceiver struct {
 	hostID     string
 }
 
+func (tr *tracesReceiver) spanDiscarded(span *request.Span) bool {
+	return span.IgnoreTraces() || span.ServiceID.ExportsOTelTraces()
+}
+
 func (tr *tracesReceiver) provideLoop() (pipe.FinalFunc[[]request.Span], error) {
 	if !tr.cfg.Enabled() {
 		return pipe.IgnoreFinal[[]request.Span](), nil
@@ -45,7 +49,7 @@ func (tr *tracesReceiver) provideLoop() (pipe.FinalFunc[[]request.Span], error) 
 		for spans := range in {
 			for i := range spans {
 				span := &spans[i]
-				if span.IgnoreTraces() || span.ServiceID.ExportsOTelTraces() {
+				if tr.spanDiscarded(span) {
 					continue
 				}
 

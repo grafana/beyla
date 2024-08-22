@@ -575,6 +575,10 @@ func (r *metricsReporter) collectMetrics(input <-chan []request.Span) {
 	}
 }
 
+func (r *metricsReporter) otelSpanObserved(span *request.Span) bool {
+	return r.cfg.OTelMetricsEnabled() && !span.ServiceID.ExportsOTelMetrics()
+}
+
 // nolint:cyclop
 func (r *metricsReporter) observe(span *request.Span) {
 	t := span.Timings()
@@ -584,7 +588,7 @@ func (r *metricsReporter) observe(span *request.Span) {
 	targetInfoLabelValues := r.labelValuesTargetInfo(span.ServiceID)
 	r.targetInfo.WithLabelValues(targetInfoLabelValues...).metric.Set(1)
 
-	if r.cfg.OTelMetricsEnabled() && !span.ServiceID.ExportsOTelMetrics() {
+	if r.otelSpanObserved(span) {
 		switch span.Type {
 		case request.EventTypeHTTP:
 			if r.is.HTTPEnabled() {

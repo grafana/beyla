@@ -756,12 +756,16 @@ func (mr *MetricsReporter) serviceGraphAttributes() []attributes.Field[*request.
 		})
 }
 
+func otelSpanAccepted(span *request.Span, mr *MetricsReporter) bool {
+	return mr.cfg.OTelMetricsEnabled() && !span.ServiceID.ExportsOTelMetrics()
+}
+
 // nolint:cyclop
 func (r *Metrics) record(span *request.Span, mr *MetricsReporter) {
 	t := span.Timings()
 	duration := t.End.Sub(t.RequestStart).Seconds()
 
-	if mr.cfg.OTelMetricsEnabled() && !span.ServiceID.ExportsOTelMetrics() {
+	if otelSpanAccepted(span, mr) {
 		switch span.Type {
 		case request.EventTypeHTTP:
 			if mr.is.HTTPEnabled() {

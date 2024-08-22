@@ -761,7 +761,7 @@ func (r *Metrics) record(span *request.Span, mr *MetricsReporter) {
 	t := span.Timings()
 	duration := t.End.Sub(t.RequestStart).Seconds()
 
-	if mr.cfg.OTelMetricsEnabled() {
+	if mr.cfg.OTelMetricsEnabled() && !span.ServiceID.ExportsOTelMetrics() {
 		switch span.Type {
 		case request.EventTypeHTTP:
 			if mr.is.HTTPEnabled() {

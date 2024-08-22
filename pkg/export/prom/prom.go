@@ -584,7 +584,7 @@ func (r *metricsReporter) observe(span *request.Span) {
 	targetInfoLabelValues := r.labelValuesTargetInfo(span.ServiceID)
 	r.targetInfo.WithLabelValues(targetInfoLabelValues...).metric.Set(1)
 
-	if r.cfg.OTelMetricsEnabled() {
+	if r.cfg.OTelMetricsEnabled() && !span.ServiceID.ExportsOTelMetrics() {
 		switch span.Type {
 		case request.EventTypeHTTP:
 			if r.is.HTTPEnabled() {
@@ -637,6 +637,7 @@ func (r *metricsReporter) observe(span *request.Span) {
 			}
 		}
 	}
+
 	if r.cfg.SpanMetricsEnabled() {
 		lv := r.labelValuesSpans(span)
 		r.spanMetricsLatency.WithLabelValues(lv...).metric.Observe(duration)

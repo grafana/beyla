@@ -336,6 +336,10 @@ func SpanStatusCode(span *Span) codes.Code {
 
 // https://opentelemetry.io/docs/specs/otel/trace/semantic_conventions/http/#status
 func HTTPSpanStatusCode(span *Span) codes.Code {
+	if span.Status == 0 {
+		return codes.Error
+	}
+
 	if span.Status < 400 {
 		return codes.Unset
 	}

@@ -203,7 +203,6 @@ func (tr *tracesOTELReceiver) provideLoop() (pipe.FinalFunc[[]request.Span], err
 		for spans := range in {
 			for i := range spans {
 				span := &spans[i]
-				slog.Info("logging span", "span", span)
 				if tr.spanDiscarded(span) {
 					continue
 				}

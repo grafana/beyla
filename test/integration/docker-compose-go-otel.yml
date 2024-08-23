@@ -10,6 +10,8 @@ services:
       - "8080:8080"
     environment:
       LOG_LEVEL: DEBUG
+      OTEL_EXPORTER_OTLP_METRICS_ENDPOINT: "${APP_OTEL_METRICS_ENDPOINT}"
+      OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: "${APP_OTEL_TRACES_ENDPOINT}"
 
   autoinstrumenter:
     build:

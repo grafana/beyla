@@ -50,23 +50,36 @@ func NewServer() *Server {
 }
 
 func initOTelProvider() {
-	endpoint := os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
-	if endpoint == "" {
-		endpoint = "http://localhost:4018" // Default value if the environment variable is not set
+	mendpoint := os.Getenv("OTEL_EXPORTER_OTLP_METRICS_ENDPOINT")
+	if mendpoint == "" {
+		mendpoint = "http://localhost:4018" // Default value if the environment variable is not set
 	}
 
-	logger.Info("Using OTEL_EXPORTER_OTLP_ENDPOINT", zap.String("endpoint", endpoint))
+	logger.Info("Using OTEL_EXPORTER_OTLP_METRICS_ENDPOINT", zap.String("mendpoint", mendpoint))
 
-	murl, err := url.Parse(endpoint)
+	murl, err := url.Parse(mendpoint)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+
+	tendpoint := os.Getenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT")
+	if tendpoint == "" {
+		tendpoint = "http://localhost:4018" // Default value if the environment variable is not set
+	}
+
+	logger.Info("Using OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", zap.String("tendpoint", tendpoint))
+
+	turl, err := url.Parse(tendpoint)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
 
 	topts := []otlptracehttp.Option{
-		otlptracehttp.WithEndpoint(murl.Host),
+		otlptracehttp.WithEndpoint(turl.Host),
 		otlptracehttp.WithInsecure(),
-		otlptracehttp.WithURLPath(murl.Path + "/v1/traces"),
+		otlptracehttp.WithURLPath(turl.Path + "/v1/traces"),
 	}
 
 	texp, err := otlptracehttp.New(context.Background(), topts...)

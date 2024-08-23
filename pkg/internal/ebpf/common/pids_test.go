@@ -26,9 +26,9 @@ func TestFilter_SameNS(t *testing.T) {
 		return []uint32{uint32(pid)}, nil
 	}
 	pf := newPIDsFilter(&services.DiscoveryConfig{}, slog.With("env", "testing"))
-	pf.AllowPID(123, 33, svc.ID{}, PIDTypeGo)
-	pf.AllowPID(456, 33, svc.ID{}, PIDTypeGo)
-	pf.AllowPID(789, 33, svc.ID{}, PIDTypeGo)
+	pf.AllowPID(123, 33, &svc.ID{}, PIDTypeGo)
+	pf.AllowPID(456, 33, &svc.ID{}, PIDTypeGo)
+	pf.AllowPID(789, 33, &svc.ID{}, PIDTypeGo)
 
 	// with the same namespace, it filters by user PID, as it is the PID
 	// that is seen by Beyla's process discovery
@@ -44,9 +44,9 @@ func TestFilter_DifferentNS(t *testing.T) {
 		return []uint32{uint32(pid)}, nil
 	}
 	pf := newPIDsFilter(&services.DiscoveryConfig{}, slog.With("env", "testing"))
-	pf.AllowPID(123, 22, svc.ID{}, PIDTypeGo)
-	pf.AllowPID(456, 22, svc.ID{}, PIDTypeGo)
-	pf.AllowPID(666, 22, svc.ID{}, PIDTypeGo)
+	pf.AllowPID(123, 22, &svc.ID{}, PIDTypeGo)
+	pf.AllowPID(456, 22, &svc.ID{}, PIDTypeGo)
+	pf.AllowPID(666, 22, &svc.ID{}, PIDTypeGo)
 
 	// with the same namespace, it filters by user PID, as it is the PID
 	// that is seen by Beyla's process discovery
@@ -58,8 +58,8 @@ func TestFilter_Block(t *testing.T) {
 		return []uint32{uint32(pid)}, nil
 	}
 	pf := newPIDsFilter(&services.DiscoveryConfig{}, slog.With("env", "testing"))
-	pf.AllowPID(123, 33, svc.ID{}, PIDTypeGo)
-	pf.AllowPID(456, 33, svc.ID{}, PIDTypeGo)
+	pf.AllowPID(123, 33, &svc.ID{}, PIDTypeGo)
+	pf.AllowPID(456, 33, &svc.ID{}, PIDTypeGo)
 	pf.BlockPID(123, 33)
 
 	// with the same namespace, it filters by user PID, as it is the PID
@@ -76,9 +76,9 @@ func TestFilter_NewNSLater(t *testing.T) {
 		return []uint32{uint32(pid)}, nil
 	}
 	pf := newPIDsFilter(&services.DiscoveryConfig{}, slog.With("env", "testing"))
-	pf.AllowPID(123, 33, svc.ID{}, PIDTypeGo)
-	pf.AllowPID(456, 33, svc.ID{}, PIDTypeGo)
-	pf.AllowPID(789, 33, svc.ID{}, PIDTypeGo)
+	pf.AllowPID(123, 33, &svc.ID{}, PIDTypeGo)
+	pf.AllowPID(456, 33, &svc.ID{}, PIDTypeGo)
+	pf.AllowPID(789, 33, &svc.ID{}, PIDTypeGo)
 
 	// with the same namespace, it filters by user PID, as it is the PID
 	// that is seen by Beyla's process discovery
@@ -88,7 +88,7 @@ func TestFilter_NewNSLater(t *testing.T) {
 		{Pid: request.PidInfo{UserPID: 789, HostPID: 234, Namespace: 33}},
 	}, pf.Filter(spanSet))
 
-	pf.AllowPID(1000, 44, svc.ID{}, PIDTypeGo)
+	pf.AllowPID(1000, 44, &svc.ID{}, PIDTypeGo)
 
 	assert.Equal(t, []request.Span{
 		{Pid: request.PidInfo{UserPID: 123, HostPID: 333, Namespace: 33}},

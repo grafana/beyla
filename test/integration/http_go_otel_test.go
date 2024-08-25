@@ -200,7 +200,7 @@ func otelWaitForTestComponents(t *testing.T, url, subpath string) {
 }
 
 func TestHTTPGoOTelAvoidsInstrumentedApp(t *testing.T) {
-	compose, err := docker.ComposeSuite("docker-compose-go-otel.yml", path.Join(pathOutput, "test-suite-go-otel.log"))
+	compose, err := docker.ComposeSuite("docker-compose-go-otel.yml", path.Join(pathOutput, "test-suite-go-otel-avoids.log"))
 	// we are going to setup discovery directly in the configuration file
 	compose.Env = append(compose.Env, `BEYLA_EXECUTABLE_NAME=`, `BEYLA_OPEN_PORT=8080`, `APP_OTEL_METRICS_ENDPOINT=http://otelcol:4318`, `APP_OTEL_TRACES_ENDPOINT=http://jaeger:4318`)
 	lockdown := KernelLockdownMode()
@@ -212,10 +212,46 @@ func TestHTTPGoOTelAvoidsInstrumentedApp(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, compose.Up())
 
-	t.Run("Go RED metrics: http service instrumented with OTel", func(t *testing.T) {
+	t.Run("Go RED metrics: http service instrumented with OTel, no istrumentation", func(t *testing.T) {
 		otelWaitForTestComponents(t, "http://localhost:8080", "/smoke")
 		time.Sleep(15 * time.Second) // ensure we see some calls to /v1/metrics /v1/traces
 		testInstrumentationMissing(t, "/rolldice", "integration-test")
+	})
+
+	t.Run("BPF pinning folders mounted", func(t *testing.T) {
+		// 1 beyla pinned map folder for all processes
+		testBPFPinningMounted(t)
+	})
+
+	require.NoError(t, compose.Close())
+	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
+}
+
+func TestHTTPGoOTelDisabledOptInstrumentedApp(t *testing.T) {
+	compose, err := docker.ComposeSuite("docker-compose-go-otel.yml", path.Join(pathOutput, "test-suite-go-otel-disabled.log"))
+	// we are going to setup discovery directly in the configuration file
+	compose.Env = append(
+		compose.Env,
+		`BEYLA_EXECUTABLE_NAME=`,
+		`BEYLA_OPEN_PORT=8080`,
+		`APP_OTEL_METRICS_ENDPOINT=http://otelcol:4318`,
+		`APP_OTEL_TRACES_ENDPOINT=http://jaeger:4318`,
+		`BEYLA_EXCLUDE_OTEL_INSTRUMENTED_SERVICES=false`,
+	)
+
+	lockdown := KernelLockdownMode()
+
+	if !lockdown {
+		compose.Env = append(compose.Env, `SECURITY_CONFIG_SUFFIX=_none`)
+	}
+
+	require.NoError(t, err)
+	require.NoError(t, compose.Up())
+
+	t.Run("Go RED metrics: http service instrumented with OTel, option disabled", func(t *testing.T) {
+		otelWaitForTestComponents(t, "http://localhost:8080", "/smoke")
+		time.Sleep(15 * time.Second) // ensure we see some calls to /v1/metrics /v1/traces
+		testForHTTPGoOTelLibrary(t, "/rolldice", "integration-test")
 	})
 
 	t.Run("BPF pinning folders mounted", func(t *testing.T) {

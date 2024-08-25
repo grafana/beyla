@@ -45,6 +45,7 @@ services:
       BEYLA_INTERNAL_METRICS_PROMETHEUS_PORT: 8999
       BEYLA_PROCESSES_INTERVAL: "100ms"
       BEYLA_HOSTNAME: "beyla"
+      BEYLA_EXCLUDE_OTEL_INSTRUMENTED_SERVICES: "${BEYLA_EXCLUDE_OTEL_INSTRUMENTED_SERVICES}"
     ports:
       - "8999:8999" # Prometheus scrape port, if enabled via config
 

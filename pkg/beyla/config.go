@@ -75,7 +75,7 @@ var DefaultConfig = Config{
 		},
 		// TODO: keep OTEL expiration disabled by default until we address
 		// this issue: https://github.com/grafana/beyla/issues/1065
-		TTL: 100 * 365 * 24 * time.Hour,
+		TTL: defaultMetricsTTL,
 	},
 	Traces: otel.TracesConfig{
 		Protocol:           otel.ProtocolUnset,

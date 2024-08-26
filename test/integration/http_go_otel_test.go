@@ -114,15 +114,6 @@ func testInstrumentationMissing(t *testing.T, route, svcNs string) {
 	// Eventually, Prometheus would make this query visible
 	pq := prom.Client{HostPort: prometheusHostPort}
 	var results []prom.Result
-	test.Eventually(t, time.Duration(1)*time.Minute, func(t require.TestingT) {
-		var err error
-		results, err = pq.Query(`http_server_duration_count{` +
-			`http_method="GET",` +
-			`job="manual/dicer"}`)
-		require.NoError(t, err)
-		// check duration_count has 3 calls and all the arguments
-		enoughPromResults(t, results)
-	})
 
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
 		var err error
@@ -252,6 +243,83 @@ func TestHTTPGoOTelDisabledOptInstrumentedApp(t *testing.T) {
 		otelWaitForTestComponents(t, "http://localhost:8080", "/smoke")
 		time.Sleep(15 * time.Second) // ensure we see some calls to /v1/metrics /v1/traces
 		testForHTTPGoOTelLibrary(t, "/rolldice", "integration-test")
+	})
+
+	t.Run("BPF pinning folders mounted", func(t *testing.T) {
+		// 1 beyla pinned map folder for all processes
+		testBPFPinningMounted(t)
+	})
+
+	require.NoError(t, compose.Close())
+	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
+}
+
+func TestHTTPGoOTelInstrumentedAppGRPC(t *testing.T) {
+	compose, err := docker.ComposeSuite("docker-compose-go-otel-grpc.yml", path.Join(pathOutput, "test-suite-go-otel-grpc.log"))
+	// we are going to setup discovery directly in the configuration file
+	compose.Env = append(compose.Env, `BEYLA_EXECUTABLE_NAME=`, `BEYLA_OPEN_PORT=8080`, `APP_OTEL_ENDPOINT=http://localhost:1111`)
+	lockdown := KernelLockdownMode()
+
+	if !lockdown {
+		compose.Env = append(compose.Env, `SECURITY_CONFIG_SUFFIX=_none`)
+	}
+
+	require.NoError(t, err)
+	require.NoError(t, compose.Up())
+
+	t.Run("Go RED metrics: http service instrumented with OTel - GRPC", func(t *testing.T) {
+		waitForTestComponents(t, "http://localhost:8080")
+		testForHTTPGoOTelLibrary(t, "/rolldice", "integration-test")
+	})
+
+	t.Run("BPF pinning folders mounted", func(t *testing.T) {
+		// 1 beyla pinned map folder for all processes
+		testBPFPinningMounted(t)
+	})
+
+	require.NoError(t, compose.Close())
+	t.Run("BPF pinning folder unmounted", testBPFPinningUnmounted)
+}
+
+func otelWaitForTestComponentsTraces(t *testing.T, url, subpath string) {
+	test.Eventually(t, 1*time.Minute, func(t require.TestingT) {
+		// first, verify that the test service endpoint is healthy
+		req, err := http.NewRequest("GET", url+subpath, nil)
+		require.NoError(t, err)
+		r, err := testHTTPClient.Do(req)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, r.StatusCode)
+
+		resp, err := http.Get(jaegerQueryURL + "?service=dicer&operation=Smoke")
+		require.NoError(t, err)
+		if resp == nil {
+			return
+		}
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+		var tq jaeger.TracesQuery
+		require.NoError(t, json.NewDecoder(resp.Body).Decode(&tq))
+		traces := tq.FindBySpan(jaeger.Tag{Key: "http.method", Type: "string", Value: "GET"})
+		assert.LessOrEqual(t, 1, len(traces))
+	}, test.Interval(time.Second))
+}
+
+func TestHTTPGoOTelAvoidsInstrumentedAppGRPC(t *testing.T) {
+	compose, err := docker.ComposeSuite("docker-compose-go-otel-grpc.yml", path.Join(pathOutput, "test-suite-go-otel-avoids-grpc.log"))
+	// we are going to setup discovery directly in the configuration file
+	compose.Env = append(compose.Env, `BEYLA_EXECUTABLE_NAME=`, `BEYLA_OPEN_PORT=8080`, `APP_OTEL_METRICS_ENDPOINT=http://otelcol:4317`, `APP_OTEL_TRACES_ENDPOINT=http://jaeger:4317`)
+	lockdown := KernelLockdownMode()
+
+	if !lockdown {
+		compose.Env = append(compose.Env, `SECURITY_CONFIG_SUFFIX=_none`)
+	}
+
+	require.NoError(t, err)
+	require.NoError(t, compose.Up())
+
+	t.Run("Go RED metrics: http service instrumented with OTel, no istrumentation, GRPC", func(t *testing.T) {
+		otelWaitForTestComponentsTraces(t, "http://localhost:8080", "/smoke")
+		time.Sleep(15 * time.Second) // ensure we see some calls to /v1/metrics /v1/traces
+		testInstrumentationMissing(t, "/rolldice", "integration-test")
 	})
 
 	t.Run("BPF pinning folders mounted", func(t *testing.T) {

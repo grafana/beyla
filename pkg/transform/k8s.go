@@ -106,7 +106,7 @@ func (md *metadataDecorator) appendMetadata(span *request.Span, info *kube.PodIn
 	// If the user has not defined criteria values for the reported
 	// service name and namespace, we will automatically set it from
 	// the kubernetes metadata
-	if span.ServiceID.AutoName {
+	if span.ServiceID.AutoName() {
 		span.ServiceID.Name = info.ServiceName()
 	}
 	if span.ServiceID.Namespace == "" {

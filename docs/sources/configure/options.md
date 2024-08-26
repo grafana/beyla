@@ -225,12 +225,36 @@ namespace.
 For more details about this section, go to the [discovery services section](#discovery-services-section)
 of this document.
 
+| YAML               | Environment variable | Type            | Default |
+| ------------------ | ------- | --------------- | ------- |
+| `exclude_services` | N/A     | list of objects | (unset) |
+
+This section allows for specifying selection criteria for excluding services from 
+being instrumented. It follows the same definition format as described in the 
+[discovery services section](#discovery-services-section) of this document.
+
+This option is useful for avoiding instrumentation of services which are typically
+found in observability environments. For example, use this option to exclude instrumenting
+Prometheus, the OpenTelemetry collector or Grafana Alloy.
+
 | YAML                       | Environment variable             | Type    | Default |
 | -------------------------- | -------------------------------- | ------- | ------- |
 | `skip_go_specific_tracers` | `BEYLA_SKIP_GO_SPECIFIC_TRACERS` | boolean | false   |
 
-Disables the detection of Go specifics when ebpf tracer inspects executables to be instrumented.
+Disables the detection of Go specifics when the **ebpf** tracer inspects executables to be instrumented.
 The tracer will fallback to using generic instrumentation, which will generally be less efficient.
+
+| YAML                                 | Environment variable                       | Type    | Default |
+| ------------------------------------ | ------------------------------------------ | ------- | ------- |
+| `exclude_otel_instrumented_services` | `BEYLA_EXCLUDE_OTEL_INSTRUMENTED_SERVICES` | boolean | true    |
+
+Disables Beyla instrumentation of services which are already instrumented with OpenTelemetry. Since Beyla
+is often deployed to monitor all services in a Kubernetes cluster, monitoring already instrumented services
+can lead to duplicate telemetry data, unless the instrumentation selection (or exclusion) criteria is 
+carefully crafted. To avoid unnecessary configuration overhead, Beyla monitors for the OpenTelemetry SDK calls
+to publish metrics and traces, and automatically turns off instrumentation of services which publish their own
+telemetry data. Turn this option off if your application generated telemetry data doesn't conflict with the
+Beyla generated metrics and traces.
 
 ### Discovery services section
 

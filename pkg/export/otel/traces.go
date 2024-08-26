@@ -165,6 +165,10 @@ func GetUserSelectedAttributes(attrs attributes.Selection) (map[attr.Name]struct
 	return traceAttrs, err
 }
 
+func (tr *tracesOTELReceiver) spanDiscarded(span *request.Span) bool {
+	return span.IgnoreTraces() || span.ServiceID.ExportsOTelTraces() || !tr.acceptSpan(span)
+}
+
 func (tr *tracesOTELReceiver) provideLoop() (pipe.FinalFunc[[]request.Span], error) {
 	if !tr.cfg.Enabled() {
 		return pipe.IgnoreFinal[[]request.Span](), nil
@@ -199,7 +203,7 @@ func (tr *tracesOTELReceiver) provideLoop() (pipe.FinalFunc[[]request.Span], err
 		for spans := range in {
 			for i := range spans {
 				span := &spans[i]
-				if span.IgnoreTraces() || !tr.acceptSpan(span) {
+				if tr.spanDiscarded(span) {
 					continue
 				}
 				traces := GenerateTraces(span, tr.ctxInfo.HostID, traceAttrs, envResourceAttrs)

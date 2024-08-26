@@ -571,6 +571,51 @@ func TestMetricsConfig_Disabled(t *testing.T) {
 	assert.False(t, (&MetricsConfig{Grafana: &GrafanaOTLP{Submit: []string{"traces", "metrics"}, InstanceID: "33221"}}).Enabled())
 }
 
+func TestSpanMetricsDiscarded(t *testing.T) {
+	mc := MetricsConfig{
+		Features: []string{FeatureApplication},
+	}
+	mr := MetricsReporter{
+		cfg: &mc,
+	}
+
+	svcNoExport := svc.ID{}
+
+	svcExportMetrics := svc.ID{}
+	svcExportMetrics.SetExportsOTelMetrics()
+
+	svcExportTraces := svc.ID{}
+	svcExportTraces.SetExportsOTelTraces()
+
+	tests := []struct {
+		name      string
+		span      request.Span
+		discarded bool
+	}{
+		{
+			name:      "Foo span is not filtered",
+			span:      request.Span{ServiceID: svcNoExport, Type: request.EventTypeHTTPClient, Method: "GET", Route: "/foo", RequestStart: 100, End: 200},
+			discarded: false,
+		},
+		{
+			name:      "/v1/metrics span is filtered",
+			span:      request.Span{ServiceID: svcExportMetrics, Type: request.EventTypeHTTPClient, Method: "GET", Route: "/v1/metrics", RequestStart: 100, End: 200},
+			discarded: true,
+		},
+		{
+			name:      "/v1/traces span is not filtered",
+			span:      request.Span{ServiceID: svcExportTraces, Type: request.EventTypeHTTPClient, Method: "GET", Route: "/v1/traces", RequestStart: 100, End: 200},
+			discarded: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.discarded, !otelSpanAccepted(&tt.span, &mr), tt.name)
+		})
+	}
+}
+
 func (f *fakeInternalMetrics) OTELMetricExport(len int) {
 	fakeMux.Lock()
 	defer fakeMux.Unlock()

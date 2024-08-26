@@ -39,7 +39,7 @@ func New(cfg *beyla.Config, metrics imetrics.Reporter) *Tracer {
 		log:        log,
 		cfg:        cfg,
 		metrics:    metrics,
-		pidsFilter: ebpfcommon.CommonPIDsFilter(cfg.Discovery.SystemWide),
+		pidsFilter: ebpfcommon.CommonPIDsFilter(&cfg.Discovery),
 	}
 }
 
@@ -94,7 +94,7 @@ func (p *Tracer) rebuildValidPids() {
 	}
 }
 
-func (p *Tracer) AllowPID(pid, ns uint32, svc svc.ID) {
+func (p *Tracer) AllowPID(pid, ns uint32, svc *svc.ID) {
 	p.pidsFilter.AllowPID(pid, ns, svc, ebpfcommon.PIDTypeKProbes)
 	p.rebuildValidPids()
 }

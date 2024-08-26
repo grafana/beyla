@@ -48,9 +48,12 @@ func TestDecoration(t *testing.T) {
 	defer close(inputCh)
 	go dec.nodeLoop(inputCh, outputhCh)
 
+	autoNameSvc := svc.ID{}
+	autoNameSvc.SetAutoName()
+
 	t.Run("complete pod info should set deployment as name", func(t *testing.T) {
 		inputCh <- []request.Span{{
-			Pid: request.PidInfo{Namespace: 12}, ServiceID: svc.ID{AutoName: true},
+			Pid: request.PidInfo{Namespace: 12}, ServiceID: autoNameSvc,
 		}}
 		deco := testutil.ReadChannel(t, outputhCh, timeout)
 		require.Len(t, deco, 1)
@@ -68,7 +71,7 @@ func TestDecoration(t *testing.T) {
 	})
 	t.Run("pod info without deployment should set replicaset as name", func(t *testing.T) {
 		inputCh <- []request.Span{{
-			Pid: request.PidInfo{Namespace: 34}, ServiceID: svc.ID{AutoName: true},
+			Pid: request.PidInfo{Namespace: 34}, ServiceID: autoNameSvc,
 		}}
 		deco := testutil.ReadChannel(t, outputhCh, timeout)
 		require.Len(t, deco, 1)
@@ -86,7 +89,7 @@ func TestDecoration(t *testing.T) {
 	})
 	t.Run("pod info with only pod name should set pod name as name", func(t *testing.T) {
 		inputCh <- []request.Span{{
-			Pid: request.PidInfo{Namespace: 56}, ServiceID: svc.ID{AutoName: true},
+			Pid: request.PidInfo{Namespace: 56}, ServiceID: autoNameSvc,
 		}}
 		deco := testutil.ReadChannel(t, outputhCh, timeout)
 		require.Len(t, deco, 1)
@@ -102,8 +105,10 @@ func TestDecoration(t *testing.T) {
 		}, deco[0].ServiceID.Metadata)
 	})
 	t.Run("process without pod Info won't be decorated", func(t *testing.T) {
+		svc := svc.ID{Name: "exec"}
+		svc.SetAutoName()
 		inputCh <- []request.Span{{
-			Pid: request.PidInfo{Namespace: 78}, ServiceID: svc.ID{Name: "exec", AutoName: true},
+			Pid: request.PidInfo{Namespace: 78}, ServiceID: svc,
 		}}
 		deco := testutil.ReadChannel(t, outputhCh, timeout)
 		require.Len(t, deco, 1)

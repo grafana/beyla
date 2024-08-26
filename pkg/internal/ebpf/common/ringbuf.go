@@ -96,7 +96,7 @@ func (rbf *ringBufForwarder) sharedReadAndForward(ctx context.Context, closers [
 	// user space.
 	eventsReader, err := readerFactory(rbf.ringbuffer)
 	if err != nil {
-		rbf.logger.Error("creating perf reader. Exiting", err)
+		rbf.logger.Error("creating perf reader. Exiting", "error", err)
 		return
 	}
 	rbf.spans = make([]request.Span, rbf.cfg.BatchLength)
@@ -113,7 +113,7 @@ func (rbf *ringBufForwarder) readAndForward(ctx context.Context, spansChan chan<
 	// user space.
 	eventsReader, err := readerFactory(rbf.ringbuffer)
 	if err != nil {
-		rbf.logger.Error("creating perf reader. Exiting", err)
+		rbf.logger.Error("creating perf reader. Exiting", "error", err)
 		return
 	}
 	rbf.closers = append(rbf.closers, eventsReader)
@@ -153,7 +153,7 @@ func (rbf *ringBufForwarder) readAndForwardInner(eventsReader ringBufReader, spa
 				rbf.logger.Debug("ring buffer is closed")
 				return
 			}
-			rbf.logger.Error("error reading from perf reader", err)
+			rbf.logger.Error("error reading from perf reader", "error", err)
 			continue
 		}
 		rbf.processAndForward(record, spansChan)
@@ -172,7 +172,7 @@ func (rbf *ringBufForwarder) processAndForward(record ringbuf.Record, spansChan 
 	defer rbf.access.Unlock()
 	s, ignore, err := rbf.reader(&record, rbf.filter)
 	if err != nil {
-		rbf.logger.Error("error parsing perf event", err)
+		rbf.logger.Error("error parsing perf event", "error", err)
 		return
 	}
 	if ignore {

@@ -55,7 +55,7 @@ func printFeatureWithClient(point *pb.Point, counter int) {
 
 	conn, err := grpc.NewClient(*serverAddr, opts...)
 	if err != nil {
-		slog.Error("fail to dial", err)
+		slog.Error("fail to dial", "error", err)
 		os.Exit(-1)
 	}
 	defer conn.Close()
@@ -84,7 +84,7 @@ func printFeature(client pb.RouteGuideClient, point *pb.Point, counter int) {
 
 	feature, err := client.GetFeature(ctx, point)
 	if err != nil {
-		slog.Error("client.GetFeature failed", err)
+		slog.Error("client.GetFeature failed", "error", err)
 		os.Exit(-1)
 	}
 	if slog.Default().Enabled(context.TODO(), slog.LevelDebug) {
@@ -99,7 +99,7 @@ func printFeatureWrapper(client pb.RouteGuideClient, point *pb.Point) {
 	defer cancel()
 	feature, err := client.GetFeatureWrapper(ctx, point)
 	if err != nil {
-		slog.Error("client.GetFeature failed", err)
+		slog.Error("client.GetFeature failed", "error", err)
 		// nolint:gocritic
 		os.Exit(-1)
 	}
@@ -115,7 +115,7 @@ func printFeatures(client pb.RouteGuideClient, rect *pb.Rectangle) {
 	defer cancel()
 	stream, err := client.ListFeatures(ctx, rect)
 	if err != nil {
-		slog.Error("client.ListFeatures failed", err)
+		slog.Error("client.ListFeatures failed", "error", err)
 		// nolint:gocritic
 		os.Exit(-1)
 	}
@@ -125,7 +125,7 @@ func printFeatures(client pb.RouteGuideClient, rect *pb.Rectangle) {
 			break
 		}
 		if err != nil {
-			slog.Error("client.ListFeatures failed", err)
+			slog.Error("client.ListFeatures failed", "error", err)
 			os.Exit(-1)
 		}
 		slog.Info("Feature: ", "name", feature.GetName(),
@@ -147,20 +147,20 @@ func runRecordRoute(client pb.RouteGuideClient) {
 	defer cancel()
 	stream, err := client.RecordRoute(ctx)
 	if err != nil {
-		slog.Error("client.RecordRoute failed", err)
+		slog.Error("client.RecordRoute failed", "error", err)
 		// nolint:gocritic
 		os.Exit(-1)
 	}
 	for _, point := range points {
 		if err := stream.Send(point); err != nil {
-			slog.Error("client.RecordRoute: stream.Send failed", err, "point", point)
+			slog.Error("client.RecordRoute: stream.Send failed", "error", err, "point", point)
 			// nolint:gocritic
 			os.Exit(-1)
 		}
 	}
 	reply, err := stream.CloseAndRecv()
 	if err != nil {
-		slog.Error("client.RecordRoute failed", err)
+		slog.Error("client.RecordRoute failed", "error", err)
 		// nolint:gocritic
 		os.Exit(-1)
 	}
@@ -181,7 +181,7 @@ func runRouteChat(client pb.RouteGuideClient) {
 	defer cancel()
 	stream, err := client.RouteChat(ctx)
 	if err != nil {
-		slog.Error("client.RouteChat failed", err)
+		slog.Error("client.RouteChat failed", "error", err)
 		// nolint:gocritic
 		os.Exit(-1)
 	}
@@ -195,7 +195,7 @@ func runRouteChat(client pb.RouteGuideClient) {
 				return
 			}
 			if err != nil {
-				slog.Error("client.RouteChat failed", err)
+				slog.Error("client.RouteChat failed", "error", err)
 				// nolint:gocritic
 				os.Exit(-1)
 			}
@@ -204,13 +204,13 @@ func runRouteChat(client pb.RouteGuideClient) {
 	}()
 	for _, note := range notes {
 		if err := stream.Send(note); err != nil {
-			slog.Error("client.RouteChat:", err, "stream.Send", note)
+			slog.Error("client.RouteChat:", "error", err, "stream.Send", note)
 			os.Exit(-1)
 		}
 	}
 	err = stream.CloseSend()
 	if err != nil {
-		slog.Error("client.CloseSend", err)
+		slog.Error("client.CloseSend", "error", err)
 		// nolint:gocritic
 		os.Exit(-1)
 	}
@@ -232,7 +232,7 @@ func main() {
 	if ok {
 		err := lvl.UnmarshalText([]byte(lvlEnv))
 		if err != nil {
-			slog.Error("unknown log level specified, choises are [DEBUG, INFO, WARN, ERROR]", errors.New(lvlEnv))
+			slog.Error("unknown log level specified, choises are [DEBUG, INFO, WARN, ERROR]", "error", errors.New(lvlEnv))
 			os.Exit(-1)
 		}
 	}
@@ -254,7 +254,7 @@ func main() {
 
 	conn, err := grpc.NewClient(*serverAddr, opts...)
 	if err != nil {
-		slog.Error("fail to dial", err)
+		slog.Error("fail to dial", "error", err)
 		os.Exit(-1)
 	}
 	defer conn.Close()

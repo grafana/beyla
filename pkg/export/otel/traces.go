@@ -225,7 +225,7 @@ func getTracesExporter(ctx context.Context, cfg TracesConfig, ctxInfo *global.Co
 			return nil, err
 		}
 		if t, err = httpTracer(ctx, opts); err != nil {
-			slog.Error("can't instantiate OTEL HTTP traces exporter", err)
+			slog.Error("can't instantiate OTEL HTTP traces exporter", "error", err)
 			return nil, err
 		}
 		factory := otlphttpexporter.NewFactory()
@@ -253,7 +253,7 @@ func getTracesExporter(ctx context.Context, cfg TracesConfig, ctxInfo *global.Co
 			return nil, err
 		}
 		if t, err = grpcTracer(ctx, opts); err != nil {
-			slog.Error("can't instantiate OTEL GRPC traces exporter: %w", err)
+			slog.Error("can't instantiate OTEL GRPC traces exporter", "error", err)
 			return nil, err
 		}
 		endpoint, _, err := parseTracesEndpoint(&cfg)

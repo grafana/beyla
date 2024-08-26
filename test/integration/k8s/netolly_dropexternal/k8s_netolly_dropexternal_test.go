@@ -36,7 +36,7 @@ func TestMain(m *testing.M) {
 		docker.ImageBuild{Tag: "quay.io/prometheus/prometheus:v2.53.0"},
 		docker.ImageBuild{Tag: "otel/opentelemetry-collector-contrib:0.103.0"},
 	); err != nil {
-		slog.Error("can't build docker images", err)
+		slog.Error("can't build docker images", "error", err)
 		os.Exit(-1)
 	}
 

@@ -13,10 +13,8 @@ import (
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/ringbuf"
-	"golang.org/x/sys/unix"
 
 	"github.com/grafana/beyla/pkg/internal/goexec"
-	"github.com/grafana/beyla/pkg/internal/helpers"
 	"github.com/grafana/beyla/pkg/internal/request"
 )
 
@@ -228,11 +226,6 @@ func KernelLockdownMode() KernelLockdown {
 
 	plog.Debug("can't find /sys/kernel/security/lockdown, assuming no lockdown")
 	return KernelLockdownNone
-}
-
-func hasCapSysAdmin() bool {
-	caps, err := helpers.GetCurrentProcCapabilities()
-	return err == nil && caps.Has(unix.CAP_SYS_ADMIN)
 }
 
 func cstr(chars []uint8) string {

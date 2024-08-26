@@ -4,6 +4,8 @@ import (
 	"syscall"
 
 	"golang.org/x/sys/unix"
+
+	"github.com/grafana/beyla/pkg/internal/helpers"
 )
 
 func (f *Filter) Close() error {
@@ -37,4 +39,9 @@ func KernelVersion() (major, minor int) {
 	}
 
 	return values[0], values[1]
+}
+
+func hasCapSysAdmin() bool {
+	caps, err := helpers.GetCurrentProcCapabilities()
+	return err == nil && caps.Has(unix.CAP_SYS_ADMIN)
 }

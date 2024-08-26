@@ -274,7 +274,7 @@ func main() {
 		fmt.Printf("Sleeping, press any key\n")
 
 		var input string
-		fmt.Scanln(&input)
+		_, _ = fmt.Scanln(&input)
 
 		counter++
 		// Feature missing.
@@ -308,7 +308,7 @@ func main() {
 			fmt.Printf("tp_buf: %x\n", tpBuf)
 
 			var input string
-			fmt.Scanln(&input)
+			_, _ = fmt.Scanln(&input)
 			counter++
 			printFeatureWithClient(&pb.Point{Latitude: 409146138, Longitude: -746188906}, counter)
 		}

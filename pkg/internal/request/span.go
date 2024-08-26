@@ -438,13 +438,13 @@ func (s *Span) TraceName() string {
 	return ""
 }
 
-func (s *Span) isExportSpan() bool {
+func (s *Span) isHTTPOrGRPCClient() bool {
 	return s.Type == EventTypeHTTPClient || s.Type == EventTypeGRPCClient
 }
 
 func (s *Span) IsExportMetricsSpan() bool {
 	// check if it's a successful client call
-	if !s.isExportSpan() || (SpanStatusCode(s) != codes.Unset) {
+	if !s.isHTTPOrGRPCClient() || (SpanStatusCode(s) != codes.Unset) {
 		return false
 	}
 
@@ -453,7 +453,7 @@ func (s *Span) IsExportMetricsSpan() bool {
 
 func (s *Span) IsExportTracesSpan() bool {
 	// check if it's a successful client call
-	if !s.isExportSpan() || (SpanStatusCode(s) != codes.Unset) {
+	if !s.isHTTPOrGRPCClient() || (SpanStatusCode(s) != codes.Unset) {
 		return false
 	}
 

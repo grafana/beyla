@@ -70,7 +70,7 @@ func echoAsync(rw http.ResponseWriter, port int) {
 	duration, err := time.ParseDuration("10s")
 
 	if err != nil {
-		slog.Error("can't parse duration", err)
+		slog.Error("can't parse duration", "error", err)
 		rw.WriteHeader(500)
 		return
 	}
@@ -104,7 +104,7 @@ func echo(rw http.ResponseWriter, port int) {
 
 	res, err := http.Get(requestURL)
 	if err != nil {
-		slog.Error("error making http request", err)
+		slog.Error("error making http request", "error", err)
 		rw.WriteHeader(500)
 		return
 	}
@@ -130,7 +130,7 @@ func echoLowPort(rw http.ResponseWriter) {
 
 	res, err := httpClient.Get(requestURL)
 	if err != nil {
-		slog.Error("error making http request", err)
+		slog.Error("error making http request", "error", err)
 		rw.WriteHeader(500)
 		return
 	}
@@ -146,7 +146,7 @@ func echoDist(rw http.ResponseWriter) {
 
 	res, err := http.Get(requestURL)
 	if err != nil {
-		slog.Error("error making http request", err)
+		slog.Error("error making http request", "error", err)
 		rw.WriteHeader(500)
 		return
 	}
@@ -159,7 +159,7 @@ func echoCall(rw http.ResponseWriter) {
 	opts := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
 	conn, err := grpc.NewClient("localhost:5051", opts...)
 	if err != nil {
-		slog.Error("fail to dial", err)
+		slog.Error("fail to dial", "error", err)
 		rw.WriteHeader(500)
 		return
 	}

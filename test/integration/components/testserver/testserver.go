@@ -41,7 +41,7 @@ type config struct {
 func main() {
 	cfg := config{}
 	if err := env.Parse(&cfg); err != nil {
-		slog.Error("can't load configuration from environment", err)
+		slog.Error("can't load configuration from environment", "error", err)
 		os.Exit(-1)
 	}
 	setupLog(&cfg)
@@ -97,7 +97,7 @@ func setupLog(cfg *config) {
 	lvl := slog.LevelInfo
 	err := lvl.UnmarshalText([]byte(cfg.LogLevel))
 	if err != nil {
-		slog.Error("unknown log level specified, choises are [DEBUG, INFO, WARN, ERROR]", err)
+		slog.Error("unknown log level specified, choises are [DEBUG, INFO, WARN, ERROR]", "error", err)
 		os.Exit(-1)
 	}
 	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{

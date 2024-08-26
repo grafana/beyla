@@ -33,8 +33,10 @@ const (
 )
 
 const (
-	metricsDetectPattern = "/v1/metrics"
-	tracesDetectPattern  = "/v1/traces"
+	metricsDetectPattern     = "/v1/metrics"
+	grpcMetricsDetectPattern = "/opentelemetry.proto.collector.metrics.v1.MetricsService/Export"
+	tracesDetectPattern      = "/v1/traces"
+	grpcTracesDetectPattern  = "/opentelemetry.proto.collector.trace.v1.TraceService/Export"
 )
 
 func (t EventType) String() string {
@@ -442,13 +444,35 @@ func (s *Span) isHTTPOrGRPCClient() bool {
 	return s.Type == EventTypeHTTPClient || s.Type == EventTypeGRPCClient
 }
 
+func (s *Span) isMetricsExportURL() bool {
+	switch s.Type {
+	case EventTypeGRPCClient:
+		return strings.HasPrefix(s.Path, grpcMetricsDetectPattern)
+	case EventTypeHTTPClient:
+		return strings.HasPrefix(s.Path, metricsDetectPattern)
+	default:
+		return false
+	}
+}
+
+func (s *Span) isTracesExportURL() bool {
+	switch s.Type {
+	case EventTypeGRPCClient:
+		return strings.HasPrefix(s.Path, grpcTracesDetectPattern)
+	case EventTypeHTTPClient:
+		return strings.HasPrefix(s.Path, tracesDetectPattern)
+	default:
+		return false
+	}
+}
+
 func (s *Span) IsExportMetricsSpan() bool {
 	// check if it's a successful client call
 	if !s.isHTTPOrGRPCClient() || (SpanStatusCode(s) != codes.Unset) {
 		return false
 	}
 
-	return strings.HasPrefix(s.Path, metricsDetectPattern)
+	return s.isMetricsExportURL()
 }
 
 func (s *Span) IsExportTracesSpan() bool {
@@ -457,5 +481,5 @@ func (s *Span) IsExportTracesSpan() bool {
 		return false
 	}
 
-	return strings.HasPrefix(s.Path, tracesDetectPattern)
+	return s.isTracesExportURL()
 }

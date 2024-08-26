@@ -268,22 +268,22 @@ func TestDetectsOTelExport(t *testing.T) {
 		},
 		{
 			name:    "GRPC server spans don't export",
-			span:    Span{Type: EventTypeGRPC, Method: "GET", Path: "/v1/metrics", RequestStart: 100, End: 200, Status: 0},
+			span:    Span{Type: EventTypeGRPC, Method: "GET", Path: "/opentelemetry.proto.collector.metrics.v1.MetricsService/Export", RequestStart: 100, End: 200, Status: 0},
 			exports: false,
 		},
 		{
-			name:    "GRPC /foo doesn't export",
-			span:    Span{Type: EventTypeGRPCClient, Method: "GET", Path: "/foo", RequestStart: 100, End: 200, Status: 0},
+			name:    "GRPC /v1/metrics doesn't export",
+			span:    Span{Type: EventTypeGRPCClient, Method: "GET", Path: "/v1/metrics", RequestStart: 100, End: 200, Status: 0},
 			exports: false,
 		},
 		{
 			name:    "GRPC failed spans don't export",
-			span:    Span{Type: EventTypeGRPCClient, Method: "GET", Path: "/v1/metrics", RequestStart: 100, End: 200, Status: 1},
+			span:    Span{Type: EventTypeGRPCClient, Method: "GET", Path: "/opentelemetry.proto.collector.metrics.v1.MetricsService/Export", RequestStart: 100, End: 200, Status: 1},
 			exports: false,
 		},
 		{
 			name:    "Successfull GRPC /v1/metrics spans export",
-			span:    Span{Type: EventTypeGRPCClient, Method: "GET", Path: "/v1/metrics", RequestStart: 100, End: 200, Status: 0},
+			span:    Span{Type: EventTypeGRPCClient, Method: "GET", Path: "/opentelemetry.proto.collector.metrics.v1.MetricsService/Export", RequestStart: 100, End: 200, Status: 0},
 			exports: true,
 		},
 	}
@@ -323,22 +323,22 @@ func TestDetectsOTelExport(t *testing.T) {
 		},
 		{
 			name:    "GRPC server spans don't export",
-			span:    Span{Type: EventTypeGRPC, Method: "GET", Path: "/v1/traces", RequestStart: 100, End: 200, Status: 0},
+			span:    Span{Type: EventTypeGRPC, Method: "GET", Path: "/opentelemetry.proto.collector.trace.v1.TraceService/Export", RequestStart: 100, End: 200, Status: 0},
 			exports: false,
 		},
 		{
-			name:    "GRPC /foo doesn't export",
-			span:    Span{Type: EventTypeGRPCClient, Method: "GET", Path: "/foo", RequestStart: 100, End: 200, Status: 0},
+			name:    "GRPC /v1/traces doesn't export",
+			span:    Span{Type: EventTypeGRPCClient, Method: "GET", Path: "/v1/traces", RequestStart: 100, End: 200, Status: 0},
 			exports: false,
 		},
 		{
 			name:    "GRPC failed spans don't export",
-			span:    Span{Type: EventTypeGRPCClient, Method: "GET", Path: "/v1/traces", RequestStart: 100, End: 200, Status: 1},
+			span:    Span{Type: EventTypeGRPCClient, Method: "GET", Path: "/opentelemetry.proto.collector.trace.v1.TraceService/Export", RequestStart: 100, End: 200, Status: 1},
 			exports: false,
 		},
 		{
 			name:    "Successfull GRPC /v1/traces spans export",
-			span:    Span{Type: EventTypeGRPCClient, Method: "GET", Path: "/v1/traces", RequestStart: 100, End: 200, Status: 0},
+			span:    Span{Type: EventTypeGRPCClient, Method: "GET", Path: "/opentelemetry.proto.collector.trace.v1.TraceService/Export", RequestStart: 100, End: 200, Status: 0},
 			exports: true,
 		}}
 

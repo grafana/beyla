@@ -306,7 +306,7 @@ func (me *procMetricsExporter) Do(in <-chan []*process.Status) {
 			reporter, err := me.reporters.For(&s.ID)
 			if err != nil {
 				me.log.Error("unexpected error creating OTEL resource. Ignoring metric",
-					err, "service", s.ID.Service)
+					"error", err, "service", s.ID.Service)
 				continue
 			}
 			me.observeMetric(reporter, s)

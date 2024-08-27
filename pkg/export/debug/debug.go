@@ -112,7 +112,7 @@ func jsonPrinter(input <-chan []request.Span, indent bool) {
 		data, err := serializeSpansJSON(spans, indent)
 
 		if err != nil {
-			mlog().Error("Error serializing span to json")
+			mlog().Error("Error serializing span to json", "error", err)
 			continue
 		}
 

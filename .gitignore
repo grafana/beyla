@@ -80,3 +80,5 @@ test/integration/components/gokafka-seg/vendor/*
 test/integration/components/gokafka-seg/gokafka
 test/integration/components/goredis/vendor/*
 test/integration/components/goredis/goredis
+test/integration/components/go_otel/rolldice
+test/integration/components/go_otel_grpc/rolldice

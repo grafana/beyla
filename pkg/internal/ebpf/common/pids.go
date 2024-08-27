@@ -9,6 +9,7 @@ import (
 	"github.com/grafana/beyla/pkg/internal/exec"
 	"github.com/grafana/beyla/pkg/internal/request"
 	"github.com/grafana/beyla/pkg/internal/svc"
+	"github.com/grafana/beyla/pkg/services"
 )
 
 type PIDType uint8
@@ -18,7 +19,7 @@ const (
 	PIDTypeGo
 )
 
-var activePids, _ = lru.New[uint32, svc.ID](1024)
+var activePids, _ = lru.New[uint32, *svc.ID](1024)
 
 // injectable functions (can be replaced in tests). It reads the
 // current process namespace from the /proc filesystem. It is required to
@@ -26,12 +27,12 @@ var activePids, _ = lru.New[uint32, svc.ID](1024)
 var readNamespacePIDs = exec.FindNamespacedPids
 
 type PIDInfo struct {
-	service svc.ID
+	service *svc.ID
 	pidType PIDType
 }
 
 type ServiceFilter interface {
-	AllowPID(uint32, uint32, svc.ID, PIDType)
+	AllowPID(uint32, uint32, *svc.ID, PIDType)
 	BlockPID(uint32, uint32)
 	ValidPID(uint32, uint32, PIDType) bool
 	Filter(inputSpans []request.Span) []request.Span
@@ -42,38 +43,42 @@ type ServiceFilter interface {
 // be forwarded. Its Filter method filters the request.Span instances whose
 // PIDs are not in the allowed list.
 type PIDsFilter struct {
-	log     *slog.Logger
-	current map[uint32]map[uint32]PIDInfo
-	mux     *sync.RWMutex
+	log        *slog.Logger
+	current    map[uint32]map[uint32]PIDInfo
+	mux        *sync.RWMutex
+	detectOtel bool
 }
 
 var commonPIDsFilter *PIDsFilter
 var commonLock sync.Mutex
 
-func NewPIDsFilter(log *slog.Logger) *PIDsFilter {
+func newPIDsFilter(c *services.DiscoveryConfig, log *slog.Logger) *PIDsFilter {
 	return &PIDsFilter{
-		log:     log,
-		current: map[uint32]map[uint32]PIDInfo{},
-		mux:     &sync.RWMutex{},
+		log:        log,
+		current:    map[uint32]map[uint32]PIDInfo{},
+		mux:        &sync.RWMutex{},
+		detectOtel: c.ExcludeOTelInstrumentedServices,
 	}
 }
 
-func CommonPIDsFilter(systemWide bool) ServiceFilter {
+func CommonPIDsFilter(c *services.DiscoveryConfig) ServiceFilter {
 	commonLock.Lock()
 	defer commonLock.Unlock()
 
-	if systemWide {
-		return &IdentityPidsFilter{}
+	if c.SystemWide {
+		return &IdentityPidsFilter{
+			detectOTel: c.ExcludeOTelInstrumentedServices,
+		}
 	}
 
 	if commonPIDsFilter == nil {
-		commonPIDsFilter = NewPIDsFilter(slog.With("component", "ebpfCommon.CommonPIDsFilter"))
+		commonPIDsFilter = newPIDsFilter(c, slog.With("component", "ebpfCommon.CommonPIDsFilter"))
 	}
 
 	return commonPIDsFilter
 }
 
-func (pf *PIDsFilter) AllowPID(pid, ns uint32, svc svc.ID, pidType PIDType) {
+func (pf *PIDsFilter) AllowPID(pid, ns uint32, svc *svc.ID, pidType PIDType) {
 	pf.mux.Lock()
 	defer pf.mux.Unlock()
 	pf.addPID(pid, ns, svc, pidType)
@@ -96,7 +101,6 @@ func (pf *PIDsFilter) ValidPID(userPID, ns uint32, pidType PIDType) bool {
 	}
 
 	return false
-
 }
 
 func (pf *PIDsFilter) CurrentPIDs(t PIDType) map[uint32]map[uint32]svc.ID {
@@ -108,7 +112,7 @@ func (pf *PIDsFilter) CurrentPIDs(t PIDType) map[uint32]map[uint32]svc.ID {
 		cVal := map[uint32]svc.ID{}
 		for kv, vv := range v {
 			if vv.pidType == t {
-				cVal[kv] = vv.service
+				cVal[kv] = *vv.service
 			}
 		}
 		cp[k] = cVal
@@ -137,7 +141,10 @@ func (pf *PIDsFilter) Filter(inputSpans []request.Span) []request.Span {
 		// saw. We don't check for the host pid, because we can't be sure of the number
 		// of container layers. The Host PID is always the outer most layer.
 		if info, pidExists := ns[span.Pid.UserPID]; pidExists {
-			inputSpans[i].ServiceID = info.service
+			if pf.detectOtel {
+				checkIfExportsOTel(info.service, span)
+			}
+			inputSpans[i].ServiceID = *info.service
 			outputSpans = append(outputSpans, inputSpans[i])
 		}
 	}
@@ -151,7 +158,7 @@ func (pf *PIDsFilter) Filter(inputSpans []request.Span) []request.Span {
 	return outputSpans
 }
 
-func (pf *PIDsFilter) addPID(pid, nsid uint32, s svc.ID, t PIDType) {
+func (pf *PIDsFilter) addPID(pid, nsid uint32, s *svc.ID, t PIDType) {
 	ns, nsExists := pf.current[nsid]
 	if !nsExists {
 		ns = make(map[uint32]PIDInfo)
@@ -184,9 +191,11 @@ func (pf *PIDsFilter) removePID(pid, nsid uint32) {
 
 // IdentityPidsFilter is a PIDsFilter that does not filter anything. It is feasible
 // for system-wide instrumenation
-type IdentityPidsFilter struct{}
+type IdentityPidsFilter struct {
+	detectOTel bool
+}
 
-func (pf *IdentityPidsFilter) AllowPID(_ uint32, _ uint32, _ svc.ID, _ PIDType) {}
+func (pf *IdentityPidsFilter) AllowPID(_ uint32, _ uint32, _ *svc.ID, _ PIDType) {}
 
 func (pf *IdentityPidsFilter) BlockPID(_ uint32, _ uint32) {}
 
@@ -201,12 +210,16 @@ func (pf *IdentityPidsFilter) CurrentPIDs(_ PIDType) map[uint32]map[uint32]svc.I
 func (pf *IdentityPidsFilter) Filter(inputSpans []request.Span) []request.Span {
 	for i := range inputSpans {
 		s := &inputSpans[i]
-		s.ServiceID = serviceInfo(s.Pid.HostPID)
+		svc := serviceInfo(s.Pid.HostPID)
+		if pf.detectOTel {
+			checkIfExportsOTel(svc, s)
+		}
+		s.ServiceID = *svc
 	}
 	return inputSpans
 }
 
-func serviceInfo(pid uint32) svc.ID {
+func serviceInfo(pid uint32) *svc.ID {
 	cached, ok := activePids.Get(pid)
 	if ok {
 		return cached
@@ -216,7 +229,15 @@ func serviceInfo(pid uint32) svc.ID {
 	lang := exec.FindProcLanguage(int32(pid), nil, name)
 	result := svc.ID{Name: name, SDKLanguage: lang, ProcPID: int32(pid)}
 
-	activePids.Add(pid, result)
+	activePids.Add(pid, &result)
 
-	return result
+	return &result
+}
+
+func checkIfExportsOTel(svc *svc.ID, span *request.Span) {
+	if span.IsExportMetricsSpan() {
+		svc.SetExportsOTelMetrics()
+	} else if span.IsExportTracesSpan() {
+		svc.SetExportsOTelTraces()
+	}
 }

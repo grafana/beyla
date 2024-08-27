@@ -123,6 +123,9 @@ var DefaultConfig = Config{
 		RunMode:  process.RunModePrivileged,
 		Interval: 5 * time.Second,
 	},
+	Discovery: services.DiscoveryConfig{
+		ExcludeOTelInstrumentedServices: true,
+	},
 }
 
 type Config struct {

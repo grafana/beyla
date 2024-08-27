@@ -25,7 +25,7 @@ func TestMain(m *testing.M) {
 		docker.ImageBuild{Tag: "httppinger:dev", Dockerfile: k8s.DockerfileHTTPPinger},
 		docker.ImageBuild{Tag: "quay.io/prometheus/prometheus:v2.53.0"},
 	); err != nil {
-		slog.Error("can't build docker images", err)
+		slog.Error("can't build docker images", "error", err)
 		os.Exit(-1)
 	}
 

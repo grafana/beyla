@@ -60,6 +60,7 @@ type DiscoveryConfig struct {
 	// gathered for certain languages, such as Golang.
 	SystemWide bool `yaml:"system_wide" env:"BEYLA_SYSTEM_WIDE"`
 
+	// Allow for Beyla to self instrument
 	AllowSelfInstrumentation bool `yaml:"allow_self_instrumentation" env:"BEYLA_ALLOW_SELF_INSTRUMENTATION"`
 
 	// This can be enabled to use generic HTTP tracers only, no Go-specifics will be used:
@@ -67,6 +68,9 @@ type DiscoveryConfig struct {
 
 	// Debugging only option. Make sure the kernel side doesn't filter any PIDs, force user space filtering.
 	BPFPidFilterOff bool `yaml:"bpf_pid_filter_off" env:"BEYLA_BPF_PID_FILTER_OFF"`
+
+	// Disables instrumentation of services which are already instrumented
+	ExcludeOTelInstrumentedServices bool `yaml:"exclude_otel_instrumented_services" env:"BEYLA_EXCLUDE_OTEL_INSTRUMENTED_SERVICES"`
 }
 
 // DefinitionCriteria allows defining a group of services to be instrumented according to a set

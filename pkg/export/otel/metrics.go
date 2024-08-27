@@ -756,12 +756,16 @@ func (mr *MetricsReporter) serviceGraphAttributes() []attributes.Field[*request.
 		})
 }
 
+func otelSpanAccepted(span *request.Span, mr *MetricsReporter) bool {
+	return mr.cfg.OTelMetricsEnabled() && !span.ServiceID.ExportsOTelMetrics()
+}
+
 // nolint:cyclop
 func (r *Metrics) record(span *request.Span, mr *MetricsReporter) {
 	t := span.Timings()
 	duration := t.End.Sub(t.RequestStart).Seconds()
 
-	if mr.cfg.OTelMetricsEnabled() {
+	if otelSpanAccepted(span, mr) {
 		switch span.Type {
 		case request.EventTypeHTTP:
 			if mr.is.HTTPEnabled() {
@@ -848,7 +852,7 @@ func (mr *MetricsReporter) reportMetrics(input <-chan []request.Span) {
 			reporter, err := mr.reporters.For(&s.ServiceID)
 			if err != nil {
 				mlog().Error("unexpected error creating OTEL resource. Ignoring metric",
-					err, "service", s.ServiceID)
+					"error", err, "service", s.ServiceID)
 				continue
 			}
 			reporter.record(s, mr)

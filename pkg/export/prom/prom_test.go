@@ -366,7 +366,8 @@ func TestTerminatesOnBadPromPort(t *testing.T) {
 			time.Sleep(5 * time.Second)
 			serverUp <- true
 		}()
-		server.ListenAndServe()
+		err := server.ListenAndServe()
+		fmt.Printf("Terminating server %v\n", err)
 	}()
 
 	sigChan := make(chan os.Signal, 1)

@@ -124,7 +124,15 @@ type bpf_tpPidKeyT struct {
 
 type bpf_tpRecvArgsT struct {
 	SockPtr  uint64
-	IovecPtr uint64
+	IovecCtx struct {
+		DummyType     uint32
+		DummyIterType uint8
+		_             [3]byte
+		DummyUbuf     uint64
+		DummyIov      uint64
+		DummyIov1     uint64
+		DummyNrSegs   uint64
+	}
 }
 
 type bpf_tpSendArgsT struct {

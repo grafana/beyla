@@ -93,6 +93,17 @@ static __always_inline http_connection_metadata_t *connection_meta_by_direction(
     return meta;
 }
 
+// This data structure must be kept in sync with iov_iter__dummy below. All pointers
+// must be converted to u64 to have enough data for 64bit (and 32bit) platforms.
+struct iov_iter_data {
+    unsigned int __dummy_type;
+    u8 __dummy_iter_type;
+    u64 __dummy_ubuf;
+    u64 __dummy_iov;
+    u64 __dummy_iov1;
+    unsigned long __dummy_nr_segs;
+};
+
 struct iov_iter___dummy {
     unsigned int type; // for co-re support, use iter_type instead
     u8 iter_type;
@@ -110,6 +121,8 @@ enum iter_type___dummy {
 
 // extracts kernel specific iov_iter information into a iovec_iter_ctx instance
 static __always_inline void get_iovec_ctx(iovec_iter_ctx* ctx, struct msghdr *msg) {
+    ctx->ubuf = NULL;
+    ctx->iov = NULL;
     if (bpf_core_field_exists(((struct iov_iter___dummy*)&msg->msg_iter)->type)) {
         // clear the direction bit when reading iovec_iter::type to end up
         // with the original enumerator value (the direction bit is the LSB
@@ -136,19 +149,15 @@ static __always_inline void get_iovec_ctx(iovec_iter_ctx* ctx, struct msghdr *ms
     ctx->nr_segs = BPF_CORE_READ((struct iov_iter___dummy*)&msg->msg_iter, nr_segs);
 }
 
-static __always_inline int read_msghdr_buf(struct msghdr *msg, u8* buf, size_t max_len) {
+static __always_inline int read_iovec_ctx(iovec_iter_ctx *ctx, u8* buf, size_t max_len) {
     if (max_len == 0) {
         return 0;
     }
 
     bpf_clamp_umax(max_len, IO_VEC_MAX_LEN);
 
-    iovec_iter_ctx ctx;
-
-    get_iovec_ctx(&ctx, msg);
-
-    bpf_dbg_printk("iter_type=%u", ctx.iter_type);
-    bpf_dbg_printk("nr_segs=%lu, iov=%p, ubuf=%p", ctx.nr_segs, ctx.iov, ctx.ubuf);
+    bpf_dbg_printk("iter_type=%u", ctx->iter_type);
+    bpf_dbg_printk("nr_segs=%lu, iov=%p, ubuf=%p", ctx->nr_segs, ctx->iov, ctx->ubuf);
 
     // ITER_UBUF only exists in kernels >= 6.0 - earlier kernels use ITER_IOVEC
     if (bpf_core_enum_value_exists(enum iter_type___dummy, ITER_UBUF)) {
@@ -156,15 +165,15 @@ static __always_inline int read_msghdr_buf(struct msghdr *msg, u8* buf, size_t m
 
         // ITER_UBUF is never a bitmask, and can be 0, so we perform a proper
         // equality check rather than a bitwise and like we do for ITER_IOVEC
-        if (ctx.ubuf != NULL && ctx.iter_type == iter_ubuf) {
+        if (ctx->ubuf != NULL && ctx->iter_type == iter_ubuf) {
             bpf_clamp_umax(max_len, IO_VEC_MAX_LEN);
-            return bpf_probe_read(buf, max_len, ctx.ubuf) == 0 ? max_len : 0;
+            return bpf_probe_read(buf, max_len, ctx->ubuf) == 0 ? max_len : 0;
         }
     }
 
     const int iter_iovec = bpf_core_enum_value(enum iter_type, ITER_IOVEC);
 
-    if (ctx.iter_type != iter_iovec) {
+    if (ctx->iter_type != iter_iovec) {
         return 0;
     }
 
@@ -172,17 +181,17 @@ static __always_inline int read_msghdr_buf(struct msghdr *msg, u8* buf, size_t m
 
     enum { max_segments = 4 };
 
-    bpf_clamp_umax(ctx.nr_segs, max_segments);
+    bpf_clamp_umax(ctx->nr_segs, max_segments);
 
     // Loop couple of times reading the various io_vecs
-    for (unsigned long i = 0; i < ctx.nr_segs && i < max_segments; i++) {
+    for (unsigned long i = 0; i < ctx->nr_segs && i < max_segments; i++) {
         struct iovec vec;
 
-        if (bpf_probe_read_kernel(&vec, sizeof(vec), &ctx.iov[i]) != 0) {
+        if (bpf_probe_read_kernel(&vec, sizeof(vec), &ctx->iov[i]) != 0) {
             break;
         }
 
-        // bpf_dbg_printk("iov[%d]=%llx", i, &ctx.iov[i]);
+        // bpf_dbg_printk("iov[%d]=%llx", i, &ctx->iov[i]);
         // bpf_dbg_printk("base %llx, len %d", vec.iov_base, vec.iov_len);
 
         if (!vec.iov_base || !vec.iov_len) {
@@ -209,6 +218,18 @@ static __always_inline int read_msghdr_buf(struct msghdr *msg, u8* buf, size_t m
     }
 
     return tot_len;
+}
+
+static __always_inline int read_msghdr_buf(struct msghdr *msg, u8* buf, size_t max_len) {
+    if (max_len == 0) {
+        return 0;
+    }
+
+    iovec_iter_ctx ctx;
+
+    get_iovec_ctx(&ctx, msg);
+
+    return read_iovec_ctx(&ctx, buf, max_len);
 }
 
 // We sort the connection info to ensure we can track requests and responses. However, if the destination port

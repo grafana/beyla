@@ -111,7 +111,7 @@ const (
 const (
 	ProcCommand     = Name(semconv.ProcessCommandKey)
 	ProcCommandLine = Name(semconv.ProcessCommandLineKey)
-	ProcCPUState    = Name("process.cpu.state")
+	ProcCPUMode     = Name("cpu.mode")
 	ProcDiskIODir   = Name(semconv2.DiskIoDirectionKey)
 	ProcNetIODir    = Name(semconv2.NetworkIoDirectionKey)
 	ProcOwner       = Name(semconv.ProcessOwnerKey)

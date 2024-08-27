@@ -28,7 +28,7 @@ func TestProcPrometheusEndpoint_AggregatedMetrics(t *testing.T) {
 	require.NoError(t, err)
 	promURL := fmt.Sprintf("http://127.0.0.1:%d/metrics", openPort)
 
-	// GIVEN a Prometheus Metrics Exporter whose process CPU metrics do not consider the process_cpu_state
+	// GIVEN a Prometheus Metrics Exporter whose process CPU metrics do not consider the cpu_mode
 	attribs := attributes.InclusionLists{
 		Include: []string{"process_command"},
 	}
@@ -115,9 +115,9 @@ func TestProcPrometheusEndpoint_DisaggregatedMetrics(t *testing.T) {
 	require.NoError(t, err)
 	promURL := fmt.Sprintf("http://127.0.0.1:%d/metrics", openPort)
 
-	// GIVEN a Prometheus Metrics Exporter whose process CPU metrics consider the process_cpu_state
+	// GIVEN a Prometheus Metrics Exporter whose process CPU metrics consider the cpu_mode
 	attribs := attributes.InclusionLists{
-		Include: []string{"process_command", "process_cpu_state", "disk_io_direction", "network_io_direction"},
+		Include: []string{"process_command", "cpu_mode", "disk_io_direction", "network_io_direction"},
 	}
 	exporter, err := ProcPrometheusEndpoint(
 		ctx, &global.ContextInfo{Prometheus: &connector.PrometheusManager{}},
@@ -152,12 +152,12 @@ func TestProcPrometheusEndpoint_DisaggregatedMetrics(t *testing.T) {
 	// THEN the metrics are exported aggregated by system/user/wait times
 	test.Eventually(t, timeout, func(t require.TestingT) {
 		exported := getMetrics(t, promURL)
-		assert.Contains(t, exported, `process_cpu_utilization_ratio{process_command="foo",process_cpu_state="user"} 1`)
-		assert.Contains(t, exported, `process_cpu_utilization_ratio{process_command="foo",process_cpu_state="system"} 2`)
-		assert.Contains(t, exported, `process_cpu_utilization_ratio{process_command="foo",process_cpu_state="wait"} 3`)
-		assert.Contains(t, exported, `process_cpu_time_seconds_total{process_command="foo",process_cpu_state="user"} 30`)
-		assert.Contains(t, exported, `process_cpu_time_seconds_total{process_command="foo",process_cpu_state="system"} 10`)
-		assert.Contains(t, exported, `process_cpu_time_seconds_total{process_command="foo",process_cpu_state="wait"} 20`)
+		assert.Contains(t, exported, `process_cpu_utilization_ratio{cpu_mode="user",process_command="foo"} 1`)
+		assert.Contains(t, exported, `process_cpu_utilization_ratio{cpu_mode="system",process_command="foo"} 2`)
+		assert.Contains(t, exported, `process_cpu_utilization_ratio{cpu_mode="wait",process_command="foo"} 3`)
+		assert.Contains(t, exported, `process_cpu_time_seconds_total{cpu_mode="user",process_command="foo"} 30`)
+		assert.Contains(t, exported, `process_cpu_time_seconds_total{cpu_mode="system",process_command="foo"} 10`)
+		assert.Contains(t, exported, `process_cpu_time_seconds_total{cpu_mode="wait",process_command="foo"} 20`)
 		assert.Contains(t, exported, `process_disk_io_bytes_total{disk_io_direction="read",process_command="foo"} 123`)
 		assert.Contains(t, exported, `process_disk_io_bytes_total{disk_io_direction="write",process_command="foo"} 456`)
 		assert.Contains(t, exported, `process_network_io_bytes_total{network_io_direction="transmit",process_command="foo"} 3`)
@@ -177,12 +177,12 @@ func TestProcPrometheusEndpoint_DisaggregatedMetrics(t *testing.T) {
 	// THEN the counter is updated by adding values and the gauges change their values
 	test.Eventually(t, timeout, func(t require.TestingT) {
 		exported := getMetrics(t, promURL)
-		assert.Contains(t, exported, `process_cpu_utilization_ratio{process_command="foo",process_cpu_state="user"} 2`)
-		assert.Contains(t, exported, `process_cpu_utilization_ratio{process_command="foo",process_cpu_state="system"} 1`)
-		assert.Contains(t, exported, `process_cpu_utilization_ratio{process_command="foo",process_cpu_state="wait"} 4`)
-		assert.Contains(t, exported, `process_cpu_time_seconds_total{process_command="foo",process_cpu_state="user"} 33`)
-		assert.Contains(t, exported, `process_cpu_time_seconds_total{process_command="foo",process_cpu_state="system"} 11`)
-		assert.Contains(t, exported, `process_cpu_time_seconds_total{process_command="foo",process_cpu_state="wait"} 22`)
+		assert.Contains(t, exported, `process_cpu_utilization_ratio{cpu_mode="user",process_command="foo"} 2`)
+		assert.Contains(t, exported, `process_cpu_utilization_ratio{cpu_mode="system",process_command="foo"} 1`)
+		assert.Contains(t, exported, `process_cpu_utilization_ratio{cpu_mode="wait",process_command="foo"} 4`)
+		assert.Contains(t, exported, `process_cpu_time_seconds_total{cpu_mode="user",process_command="foo"} 33`)
+		assert.Contains(t, exported, `process_cpu_time_seconds_total{cpu_mode="system",process_command="foo"} 11`)
+		assert.Contains(t, exported, `process_cpu_time_seconds_total{cpu_mode="wait",process_command="foo"} 22`)
 		assert.Contains(t, exported, `process_disk_io_bytes_total{disk_io_direction="read",process_command="foo"} 126`)
 		assert.Contains(t, exported, `process_disk_io_bytes_total{disk_io_direction="write",process_command="foo"} 458`)
 		assert.Contains(t, exported, `process_network_io_bytes_total{network_io_direction="transmit",process_command="foo"} 33`)

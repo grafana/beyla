@@ -82,7 +82,7 @@ type procMetricsReporter struct {
 	net      *Expirer[prometheus.Counter]
 
 	// the observation code for CPU metrics will be different depending on
-	// the "process.cpu.state" attribute being selected or not
+	// the "cpu.mode" attribute being selected or not
 	cpuTimeObserver        func(*process.Status)
 	cpuUtilizationObserver func(*process.Status)
 
@@ -108,9 +108,9 @@ func newProcReporter(
 	}
 
 	cpuTimeLblNames, cpuTimeGetters, cpuTimeHasState :=
-		attributesWithExplicit(provider, attributes.ProcessCPUTime, attr2.ProcCPUState)
+		attributesWithExplicit(provider, attributes.ProcessCPUTime, attr2.ProcCPUMode)
 	cpuUtilLblNames, cpuUtilGetters, cpuUtilHasState :=
-		attributesWithExplicit(provider, attributes.ProcessCPUUtilization, attr2.ProcCPUState)
+		attributesWithExplicit(provider, attributes.ProcessCPUUtilization, attr2.ProcCPUMode)
 	diskLblNames, diskGetters, diskHasDirection :=
 		attributesWithExplicit(provider, attributes.ProcessDiskIO, attr2.ProcDiskIODir)
 	netLblNames, netGetters, netHasDirection :=
@@ -225,7 +225,7 @@ func (r *procMetricsReporter) observeMetric(proc *process.Status) {
 }
 
 // aggregated observers report all the CPU metrics in a single data point
-// to be triggered when the user disables the "process_cpu_state" metric
+// to be triggered when the user disables the "cpu_mode" metric
 func (r *procMetricsReporter) observeAggregatedCPUTime(proc *process.Status) {
 	r.cpuTime.WithLabelValues(labelValues(proc, r.cpuTimeAttrs)...).
 		metric.Add(proc.CPUTimeUserDelta + proc.CPUTimeSystemDelta + proc.CPUTimeWaitDelta)
@@ -237,7 +237,7 @@ func (r *procMetricsReporter) observeAggregatedCPUUtilization(proc *process.Stat
 }
 
 // disaggregated observers report three CPU metrics: system, user and wait time
-// to be triggered when the user enables the "process_cpu_state" metric
+// to be triggered when the user enables the "cpu_mode" metric
 func (r *procMetricsReporter) observeDisaggregatedCPUTime(proc *process.Status) {
 	commonLabelValues := labelValues(proc, r.cpuTimeAttrs)
 
@@ -293,7 +293,7 @@ func (r *procMetricsReporter) observeDisaggregatedNet(proc *process.Status) {
 // attributesWithExplicit returns, for a metric name definition,
 // which attribute names are defined as well as the getters for
 // them. It also returns if the invoker must explicitly add the
-// provided explicit attribute name and value (e.g. "process.cpu.state"
+// provided explicit attribute name and value (e.g. "cpu.mode"
 // or "disk.io.direction")
 func attributesWithExplicit(
 	provider *attributes.AttrSelector, metricName attributes.Name, explicitAttribute attr2.Name,
@@ -301,7 +301,7 @@ func attributesWithExplicit(
 	names []string, getters []attributes.Field[*process.Status, string], containsExplicit bool,
 ) {
 	attrNames := provider.For(metricName)
-	// For example, "process_cpu_state" won't be added by PrometheusGetters, as it's not defined in the *process.Status
+	// For example, "cpu_mode" won't be added by PrometheusGetters, as it's not defined in the *process.Status
 	// we need to be aware of the user willing to add it to explicitly choose between
 	// observeAggregatedCPU and observeDisaggregatedCPU
 	// Similar for "process_disk_io" or "process_network_io"

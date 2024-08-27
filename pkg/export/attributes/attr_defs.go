@@ -180,7 +180,7 @@ func getDefinitions(groups AttrGroups) map[Section]AttrReportGroup {
 	var processAttributes = AttrReportGroup{
 		SubGroups: []*AttrReportGroup{&appKubeAttributes, &hostAttributes, &promProcessAttributes},
 		Attributes: map[attr.Name]Default{
-			attr.ProcCPUState:  true,
+			attr.ProcCPUMode:   true,
 			attr.ProcDiskIODir: true,
 			attr.ProcNetIODir:  true,
 		},

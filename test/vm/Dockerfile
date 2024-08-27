@@ -1,4 +1,4 @@
-FROM alpine:latest
+FROM golang:1.23-rc-alpine
 
 # this is the toplevel Makefile target to be invoked
 # see the contents of 'startup.sh' at the end of this file
@@ -6,7 +6,6 @@ ARG target=run-integration-test-vm
 
 RUN apk update
 RUN apk add --no-cache openrc
-RUN apk add --no-cache go
 RUN apk add --no-cache docker
 RUN apk add --no-cache docker-compose
 RUN apk add --no-cache git
@@ -42,9 +41,6 @@ tmpfs   /run               tmpfs    defaults,size=4G                            
 testout /build/testoutput  9p       trans=virtio,version=9p2000.L                                  0  0
 EOF
 
-RUN echo export GOPATH=/run/go >> /etc/profile
-RUN echo export GOCACHE=/run/gocache >> /etc/profile
-
 RUN echo beyla > /etc/hostname
 
 RUN cat <<EOF > /etc/network/interfaces
@@ -71,6 +67,8 @@ RUN rc-update add startup default
 
 RUN cat <<EOF > /startup.sh
 #!/bin/sh
+
+export PATH=$PATH:/usr/local/go/bin
 
 if [[ -n "$target" ]]; then
     cd /build && make $target && touch /build/testoutput/success

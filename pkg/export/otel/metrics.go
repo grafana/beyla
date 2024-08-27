@@ -852,7 +852,7 @@ func (mr *MetricsReporter) reportMetrics(input <-chan []request.Span) {
 			reporter, err := mr.reporters.For(&s.ServiceID)
 			if err != nil {
 				mlog().Error("unexpected error creating OTEL resource. Ignoring metric",
-					err, "service", s.ServiceID)
+					"error", err, "service", s.ServiceID)
 				continue
 			}
 			reporter.record(s, mr)

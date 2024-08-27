@@ -34,7 +34,7 @@ func TestMain(m *testing.M) {
 		docker.ImageBuild{Tag: "otel/opentelemetry-collector-contrib:0.103.0"},
 		docker.ImageBuild{Tag: "jaegertracing/all-in-one:1.57"},
 	); err != nil {
-		slog.Error("can't build docker images", err)
+		slog.Error("can't build docker images", "error", err)
 		os.Exit(-1)
 	}
 

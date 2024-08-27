@@ -182,14 +182,14 @@ func (s *routeGuideServer) loadFeatures(filePath string) {
 		var err error
 		data, err = os.ReadFile(filePath)
 		if err != nil {
-			slog.Error("Failed to load default features", err)
+			slog.Error("Failed to load default features", "error", err)
 			os.Exit(-1)
 		}
 	} else {
 		data = exampleData
 	}
 	if err := json.Unmarshal(data, &s.savedFeatures); err != nil {
-		slog.Error("Failed to load default features", err)
+		slog.Error("Failed to load default features", "error", err)
 		os.Exit(-1)
 	}
 }
@@ -253,7 +253,7 @@ func main() {
 	if ok {
 		err := lvl.UnmarshalText([]byte(lvlEnv))
 		if err != nil {
-			slog.Error("unknown log level specified, choises are [DEBUG, INFO, WARN, ERROR]", errors.New(lvlEnv))
+			slog.Error("unknown log level specified, choises are [DEBUG, INFO, WARN, ERROR]", "error", errors.New(lvlEnv))
 			os.Exit(-1)
 		}
 	}
@@ -265,7 +265,7 @@ func main() {
 	flag.Parse()
 	lis, err := net.Listen("tcp", fmt.Sprintf("localhost:%d", *port))
 	if err != nil {
-		slog.Error("failed to listen", err)
+		slog.Error("failed to listen", "error", err)
 		os.Exit(-1)
 	}
 	var opts []grpc.ServerOption
@@ -278,7 +278,7 @@ func main() {
 		}
 		creds, err := credentials.NewServerTLSFromFile(*certFile, *keyFile)
 		if err != nil {
-			slog.Error("Failed to generate credentials", err)
+			slog.Error("Failed to generate credentials", "error", err)
 			os.Exit(-1)
 		}
 		opts = []grpc.ServerOption{grpc.Creds(creds)}
@@ -288,7 +288,7 @@ func main() {
 	slog.Info("listening and serving", "port", *port)
 	err = grpcServer.Serve(lis)
 	if err != nil {
-		slog.Error("failed to serve", err)
+		slog.Error("failed to serve", "error", err)
 		os.Exit(-1)
 	}
 }

@@ -31,12 +31,12 @@ func (ta *TraceAttacher) mountBpfPinPath() error {
 
 func (ta *TraceAttacher) unmountBpfPinPath() {
 	if err := unix.Unmount(ta.pinPath, unix.MNT_FORCE); err != nil {
-		ta.log.Warn("can't unmount pinned root. Try unmounting and removing it manually", err)
+		ta.log.Warn("can't unmount pinned root. Try unmounting and removing it manually", "error", err)
 		return
 	}
 	ta.log.Debug("unmounted bpf file system")
 	if err := os.RemoveAll(ta.pinPath); err != nil {
-		ta.log.Warn("can't remove pinned root. Try removing it manually", err)
+		ta.log.Warn("can't remove pinned root. Try removing it manually", "error", err)
 	} else {
 		ta.log.Debug("removed pin path")
 	}

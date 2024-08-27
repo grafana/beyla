@@ -29,7 +29,7 @@ struct {
 // Temporary tracking of tcp_recvmsg arguments
 typedef struct recv_args {
     u64 sock_ptr; // linux sock or socket address
-    struct iov_iter_data iovec_ctx;
+    u8 iovec_ctx[sizeof(iovec_iter_ctx)];
 } recv_args_t;
 
 struct {

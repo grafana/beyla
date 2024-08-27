@@ -93,17 +93,6 @@ static __always_inline http_connection_metadata_t *connection_meta_by_direction(
     return meta;
 }
 
-// This data structure must be kept in sync with iov_iter__dummy below. All pointers
-// must be converted to u64 to have enough data for 64bit (and 32bit) platforms.
-struct iov_iter_data {
-    unsigned int __dummy_type;
-    u8 __dummy_iter_type;
-    u64 __dummy_ubuf;
-    u64 __dummy_iov;
-    u64 __dummy_iov1;
-    unsigned long __dummy_nr_segs;
-};
-
 struct iov_iter___dummy {
     unsigned int type; // for co-re support, use iter_type instead
     u8 iter_type;
@@ -134,16 +123,12 @@ static __always_inline void get_iovec_ctx(iovec_iter_ctx* ctx, struct msghdr *ms
 
     if (bpf_core_field_exists(((struct iov_iter___dummy*)&msg->msg_iter)->ubuf)) {
         ctx->ubuf = BPF_CORE_READ((struct iov_iter___dummy*)&msg->msg_iter, ubuf);
-    } else {
-        ctx->ubuf = NULL;
     }
 
     if (bpf_core_field_exists(((struct iov_iter___dummy*)&msg->msg_iter)->iov)) {
         ctx->iov = BPF_CORE_READ((struct iov_iter___dummy*)&msg->msg_iter, iov);
     } else if (bpf_core_field_exists(((struct iov_iter___dummy*)&msg->msg_iter)->__iov)) {
         ctx->iov = BPF_CORE_READ((struct iov_iter___dummy*)&msg->msg_iter, __iov);
-    } else {
-        ctx->iov = NULL;
     }
 
     ctx->nr_segs = BPF_CORE_READ((struct iov_iter___dummy*)&msg->msg_iter, nr_segs);

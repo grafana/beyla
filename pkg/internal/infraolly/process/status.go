@@ -87,7 +87,7 @@ func NewStatus(pid int32, svcID *svc.ID) *Status {
 func OTELGetters(name attr.Name) (attributes.Getter[*Status, attribute.KeyValue], bool) {
 	var g attributes.Getter[*Status, attribute.KeyValue]
 	switch name {
-	case attr.ProcCPUState, attr.ProcDiskIODir, attr.ProcNetIODir:
+	case attr.ProcCPUMode, attr.ProcDiskIODir, attr.ProcNetIODir:
 		// the attributes are handled explicitly by the OTEL exporter, but we need to
 		// ignore them to avoid that the default case tries to report them from service metadata
 	}
@@ -116,7 +116,7 @@ func PromGetters(name attr.Name) (attributes.Getter[*Status, string], bool) {
 		g = func(s *Status) string { return strconv.Itoa(int(s.ID.ParentProcessID)) }
 	case attr.ProcPid:
 		g = func(s *Status) string { return strconv.Itoa(int(s.ID.ProcessID)) }
-	case attr.ProcCPUState, attr.ProcDiskIODir, attr.ProcNetIODir:
+	case attr.ProcCPUMode, attr.ProcDiskIODir, attr.ProcNetIODir:
 		// the attributes are handled explicitly by the prometheus exporter, but we need to
 		// ignore them to avoid that the default case tries to report them from service metadata
 	default:

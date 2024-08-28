@@ -23,9 +23,9 @@ import (
 )
 
 var (
-	stateWaitAttr   = attr2.ProcCPUState.OTEL().String("wait")
-	stateUserAttr   = attr2.ProcCPUState.OTEL().String("user")
-	stateSystemAttr = attr2.ProcCPUState.OTEL().String("system")
+	stateWaitAttr   = attr2.ProcCPUMode.OTEL().String("wait")
+	stateUserAttr   = attr2.ProcCPUMode.OTEL().String("user")
+	stateSystemAttr = attr2.ProcCPUMode.OTEL().String("system")
 
 	diskIODirRead  = attr2.ProcDiskIODir.OTEL().String("read")
 	diskIODirWrite = attr2.ProcDiskIODir.OTEL().String("write")
@@ -69,7 +69,7 @@ type procMetricsExporter struct {
 	attrNet           []attributes.Field[*process.Status, attribute.KeyValue]
 
 	// the observation code for CPU metrics will be different depending on
-	// the "process.cpu.state" attribute being selected or not
+	// the "cpu.mode" attribute being selected or not
 	cpuTimeObserver        func(context.Context, *procMetrics, *process.Status)
 	cpuUtilisationObserver func(context.Context, *procMetrics, *process.Status)
 
@@ -149,12 +149,12 @@ func newProcMetricsExporter(
 		attrDisk: attrDisk,
 		attrNet:  attrNet,
 	}
-	if slices.Contains(cpuTimeNames, attr2.ProcCPUState) {
+	if slices.Contains(cpuTimeNames, attr2.ProcCPUMode) {
 		mr.cpuTimeObserver = cpuTimeDisaggregatedObserver
 	} else {
 		mr.cpuTimeObserver = cpuTimeAggregatedObserver
 	}
-	if slices.Contains(cpuUtilNames, attr2.ProcCPUState) {
+	if slices.Contains(cpuUtilNames, attr2.ProcCPUMode) {
 		mr.cpuUtilisationObserver = cpuUtilisationDisaggregatedObserver
 	} else {
 		mr.cpuUtilisationObserver = cpuUtilisationAggregatedObserver
@@ -329,7 +329,7 @@ func (me *procMetricsExporter) observeMetric(reporter *procMetrics, s *process.S
 }
 
 // aggregated observers report all the CPU metrics in a single data point
-// to be triggered when the user disables the "process_cpu_state" metric
+// to be triggered when the user disables the "cpu_mode" metric
 func cpuTimeAggregatedObserver(ctx context.Context, reporter *procMetrics, record *process.Status) {
 	cpu, attrs := reporter.cpuTime.ForRecord(record)
 	cpu.Add(ctx, record.CPUTimeUserDelta+record.CPUTimeSystemDelta+record.CPUTimeWaitDelta,
@@ -343,7 +343,7 @@ func cpuUtilisationAggregatedObserver(ctx context.Context, reporter *procMetrics
 }
 
 // disaggregated observers report three CPU metrics: system, user and wait time
-// to be triggered when the user enables the "process_cpu_state" metric
+// to be triggered when the user enables the "cpu_mode" metric
 func cpuTimeDisaggregatedObserver(ctx context.Context, reporter *procMetrics, record *process.Status) {
 	cpu, attrs := reporter.cpuTime.ForRecord(record, stateWaitAttr)
 	cpu.Add(ctx, record.CPUTimeWaitDelta, metric2.WithAttributeSet(attrs))

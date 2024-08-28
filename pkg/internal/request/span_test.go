@@ -4,10 +4,11 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/grafana/beyla/pkg/internal/svc"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	trace2 "go.opentelemetry.io/otel/trace"
+
+	"github.com/grafana/beyla/pkg/internal/svc"
 )
 
 func TestSpanClientServer(t *testing.T) {

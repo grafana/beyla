@@ -894,6 +894,17 @@ of Beyla: application-level metrics or network metrics.
   metrics; but only if there is an OpenTelemetry endpoint defined. For network-level metrics options visit the
   [network metrics]({{< relref "../network" >}}) configuration documentation.
 
+| YAML                                  | Environment variable                        | Type     | Default |
+|---------------------------------------|---------------------------------------------|----------|---------|
+| `allow_service_graph_self_references` | `BEYLA_ALLOW_SERVICE_GRAPH_SELF_REFERENCES` | boolean  | `false` |
+
+This option affects the behaviour of the generation of application-level service graph metrics, which can be enabled 
+by adding `application_service_graph` to the list of OpenTelemetry metric export features. By default, Beyla does not
+report application-level service graph metrics which are considered to be self-referencing. For example, self-references
+can be calls from local node metric scrape tools, or a service making an HTTP call to itself. We consider self-references
+not useful for the purpose of showing service graphs, while at the same time they increase the cardinality and the
+overall metric storage cost. To allow generation of application-level service graph metrics which also include 
+self-references, change this option value to `true`.
 
 | YAML               | Environment variable                  | Type            | Default                      |
 |--------------------|---------------------------------------|-----------------|------------------------------|
@@ -1271,6 +1282,18 @@ of Beyla: application-level metrics or network metrics.
 - If the list contains `network`, the Beyla Prometheus exporter exports network-level
   metrics; but only if the Prometheus `port` property is defined. For network-level metrics options visit the
   [network metrics]({{< relref "../network" >}}) configuration documentation.
+
+| YAML                                  | Environment variable                                   | Type     | Default |
+|---------------------------------------|--------------------------------------------------------|----------|---------|
+| `allow_service_graph_self_references` | `BEYLA_PROMETHEUS_ALLOW_SERVICE_GRAPH_SELF_REFERENCES` | boolean  | `false` |
+
+This option affects the behaviour of the generation of application-level service graph metrics, which can be enabled 
+by adding `application_service_graph` to the list of Prometheus metric export features. By default, Beyla does not
+report application-level service graph metrics which are considered to be self-referencing. For example, self-references
+can be calls from local node metric scrape tools, or a service making an HTTP call to itself. We consider self-references
+not useful for the purpose of showing service graphs, while at the same time they increase the cardinality and the
+overall metric storage cost. To allow generation of application-level service graph metrics which also include 
+self-references, change this option value to `true`.
 
 
 | YAML               | Environment variable                  | Type            | Default                      |

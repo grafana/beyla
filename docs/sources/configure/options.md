@@ -894,9 +894,9 @@ of Beyla: application-level metrics or network metrics.
   metrics; but only if there is an OpenTelemetry endpoint defined. For network-level metrics options visit the
   [network metrics]({{< relref "../network" >}}) configuration documentation.
 
-| YAML                                  | Environment variable                        | Type     | Default |
-|---------------------------------------|---------------------------------------------|----------|---------|
-| `allow_service_graph_self_references` | `BEYLA_ALLOW_SERVICE_GRAPH_SELF_REFERENCES` | boolean  | `false` |
+| YAML                                  | Environment variable                             | Type     | Default |
+|---------------------------------------|--------------------------------------------------|----------|---------|
+| `allow_service_graph_self_references` | `BEYLA_OTEL_ALLOW_SERVICE_GRAPH_SELF_REFERENCES` | boolean  | `false` |
 
 This option affects the behaviour of the generation of application-level service graph metrics, which can be enabled 
 by adding `application_service_graph` to the list of OpenTelemetry metric export features. By default, Beyla does not

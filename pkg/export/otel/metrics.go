@@ -101,7 +101,7 @@ type MetricsConfig struct {
 	// removed from the metrics set.
 	TTL time.Duration `yaml:"ttl" env:"BEYLA_OTEL_METRICS_TTL"`
 
-	AllowServiceGraphSelfReferences bool `yaml:"allow_service_graph_self_references" env:"BEYLA_ALLOW_SERVICE_GRAPH_SELF_REFERENCES"`
+	AllowServiceGraphSelfReferences bool `yaml:"allow_service_graph_self_references" env:"BEYLA_OTEL_ALLOW_SERVICE_GRAPH_SELF_REFERENCES"`
 
 	// Grafana configuration needs to be explicitly set up before building the graph
 	Grafana *GrafanaOTLP `yaml:"-"`

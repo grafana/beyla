@@ -152,7 +152,8 @@ func testServiceGraphMetricsForHTTPLibrary(t *testing.T, svcNs string) {
 		var err error
 		results, err = pq.Query(`traces_service_graph_request_server_seconds_count{` +
 			`service_namespace="` + svcNs + `"` +
-			`}`)
+			`} or traces_service_graph_request_server_seconds_count{` +
+			`server_service_namespace="` + svcNs + `"}`)
 		require.NoError(t, err)
 		// check span metric latency exists
 		enoughPromResults(t, results)
@@ -162,7 +163,6 @@ func testServiceGraphMetricsForHTTPLibrary(t *testing.T, svcNs string) {
 
 	var err error
 	results, err = pq.Query(`traces_service_graph_request_server_seconds_count{` +
-		`service_namespace="` + svcNs + `",` +
 		`client="127.0.0.1",` +
 		`server="127.0.0.1"` +
 		`}`)
@@ -172,7 +172,6 @@ func testServiceGraphMetricsForHTTPLibrary(t *testing.T, svcNs string) {
 	assert.Equal(t, 0, val)
 
 	results, err = pq.Query(`traces_service_graph_request_server_seconds_count{` +
-		`service_namespace="` + svcNs + `",` +
 		`client="::1",` +
 		`server="::1"` +
 		`}`)

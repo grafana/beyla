@@ -483,3 +483,7 @@ func (s *Span) IsExportTracesSpan() bool {
 
 	return s.isTracesExportURL()
 }
+
+func (s *Span) IsSelfReferenceSpan() bool {
+	return s.Peer == s.Host && (s.ServiceID.Namespace == s.OtherNamespace || s.OtherNamespace == "")
+}

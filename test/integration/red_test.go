@@ -56,7 +56,7 @@ func testREDMetricsHTTP(t *testing.T) {
 			waitForTestComponents(t, testCaseURL)
 			testREDMetricsForHTTPLibrary(t, testCaseURL, "testserver", "integration-test")
 			testSpanMetricsForHTTPLibrary(t, "testserver", "integration-test")
-			testServiceGraphMetricsForHTTPLibrary(t, "testserver", "integration-test")
+			testServiceGraphMetricsForHTTPLibrary(t, "integration-test")
 		})
 	}
 }
@@ -143,7 +143,7 @@ func testSpanMetricsForHTTPLibrary(t *testing.T, svcName, svcNs string) {
 }
 
 // **IMPORTANT** Tests must first call -> func testREDMetricsForHTTPLibrary(t *testing.T, url, svcName, svcNs string) {
-func testServiceGraphMetricsForHTTPLibrary(t *testing.T, svcName, svcNs string) {
+func testServiceGraphMetricsForHTTPLibrary(t *testing.T, svcNs string) {
 	pq := prom.Client{HostPort: prometheusHostPort}
 	var results []prom.Result
 
@@ -151,8 +151,7 @@ func testServiceGraphMetricsForHTTPLibrary(t *testing.T, svcName, svcNs string) 
 	test.Eventually(t, testTimeout, func(t require.TestingT) {
 		var err error
 		results, err = pq.Query(`traces_service_graph_request_server_seconds_count{` +
-			`service_namespace="` + svcNs + `",` +
-			`service_name="` + svcName + `"` +
+			`service_namespace="` + svcNs + `"` +
 			`}`)
 		require.NoError(t, err)
 		// check span metric latency exists
@@ -165,8 +164,7 @@ func testServiceGraphMetricsForHTTPLibrary(t *testing.T, svcName, svcNs string) 
 	results, err = pq.Query(`traces_service_graph_request_server_seconds_count{` +
 		`service_namespace="` + svcNs + `",` +
 		`client="127.0.0.1",` +
-		`server="127.0.0.1",` +
-		`service_name="` + svcName + `"` +
+		`server="127.0.0.1"` +
 		`}`)
 	require.NoError(t, err)
 	// check calls total to 0, no self references
@@ -176,8 +174,7 @@ func testServiceGraphMetricsForHTTPLibrary(t *testing.T, svcName, svcNs string) 
 	results, err = pq.Query(`traces_service_graph_request_server_seconds_count{` +
 		`service_namespace="` + svcNs + `",` +
 		`client="::1",` +
-		`server="::1",` +
-		`service_name="` + svcName + `"` +
+		`server="::1"` +
 		`}`)
 	require.NoError(t, err)
 	// check calls total to 0, no self references

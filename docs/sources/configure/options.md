@@ -901,7 +901,7 @@ of Beyla: application-level metrics or network metrics.
 This option affects the behaviour of the generation of application-level service graph metrics, which can be enabled 
 by adding `application_service_graph` to the list of OpenTelemetry metric export features. By default, Beyla does not
 report application-level service graph metrics which are considered to be self-referencing. For example, self-references
-can be calls from local node metric scrape tools, or a service making an HTTP call to itself. We consider self-references
+can be calls from local node metric scrape tools, or a service making an HTTP call to itself. Self-references
 not useful for the purpose of showing service graphs, while at the same time they increase the cardinality and the
 overall metric storage cost. To allow generation of application-level service graph metrics which also include 
 self-references, change this option value to `true`.
@@ -1290,7 +1290,7 @@ of Beyla: application-level metrics or network metrics.
 This option affects the behaviour of the generation of application-level service graph metrics, which can be enabled 
 by adding `application_service_graph` to the list of Prometheus metric export features. By default, Beyla does not
 report application-level service graph metrics which are considered to be self-referencing. For example, self-references
-can be calls from local node metric scrape tools, or a service making an HTTP call to itself. We consider self-references
+can be calls from local node metric scrape tools, or a service making an HTTP call to itself. Self-references
 not useful for the purpose of showing service graphs, while at the same time they increase the cardinality and the
 overall metric storage cost. To allow generation of application-level service graph metrics which also include 
 self-references, change this option value to `true`.

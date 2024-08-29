@@ -302,7 +302,7 @@
       "s": {
         "versions": {
           "oldest": "1.40.0",
-          "newest": "1.65.0"
+          "newest": "1.66.0"
         },
         "offsets": [
           {
@@ -316,31 +316,39 @@
       "ctx": {
         "versions": {
           "oldest": "1.40.0",
-          "newest": "1.65.0"
+          "newest": "1.66.0"
         },
         "offsets": [
           {
             "offset": 32,
             "since": "1.40.0"
+          },
+          {
+            "offset": 40,
+            "since": "1.66.0"
           }
         ]
       },
       "method": {
         "versions": {
           "oldest": "1.40.0",
-          "newest": "1.65.0"
+          "newest": "1.66.0"
         },
         "offsets": [
           {
             "offset": 80,
             "since": "1.40.0"
+          },
+          {
+            "offset": 88,
+            "since": "1.66.0"
           }
         ]
       },
       "st": {
         "versions": {
           "oldest": "1.40.0",
-          "newest": "1.65.0"
+          "newest": "1.66.0"
         },
         "offsets": [
           {
@@ -354,7 +362,7 @@
       "buf": {
         "versions": {
           "oldest": "1.40.0",
-          "newest": "1.65.0"
+          "newest": "1.66.0"
         },
         "offsets": [
           {
@@ -370,7 +378,7 @@
       "offset": {
         "versions": {
           "oldest": "1.40.0",
-          "newest": "1.65.0"
+          "newest": "1.66.0"
         },
         "offsets": [
           {
@@ -388,7 +396,7 @@
       "conn": {
         "versions": {
           "oldest": "1.40.0",
-          "newest": "1.65.0"
+          "newest": "1.66.0"
         },
         "offsets": [
           {
@@ -408,7 +416,7 @@
       "nextID": {
         "versions": {
           "oldest": "1.40.0",
-          "newest": "1.65.0"
+          "newest": "1.66.0"
         },
         "offsets": [
           {
@@ -440,7 +448,7 @@
       "scheme": {
         "versions": {
           "oldest": "1.40.0",
-          "newest": "1.65.0"
+          "newest": "1.66.0"
         },
         "offsets": [
           {
@@ -462,7 +470,7 @@
       "conn": {
         "versions": {
           "oldest": "1.40.0",
-          "newest": "1.65.0"
+          "newest": "1.66.0"
         },
         "offsets": [
           {

@@ -115,6 +115,8 @@ type PrometheusConfig struct {
 	TTL                         time.Duration `yaml:"ttl" env:"BEYLA_PROMETHEUS_TTL"`
 	SpanMetricsServiceCacheSize int           `yaml:"service_cache_size"`
 
+	AllowServiceGraphSelfReferences bool `yaml:"allow_service_graph_self_references" env:"BEYLA_PROMETHEUS_ALLOW_SERVICE_GRAPH_SELF_REFERENCES"`
+
 	// Registry is only used for embedding Beyla within the Grafana Agent.
 	// It must be nil when Beyla runs as standalone
 	Registry *prometheus.Registry `yaml:"-"`
@@ -656,15 +658,17 @@ func (r *metricsReporter) observe(span *request.Span) {
 	}
 
 	if r.cfg.ServiceGraphMetricsEnabled() {
-		lvg := r.labelValuesServiceGraph(span)
-		if span.IsClientSpan() {
-			r.serviceGraphClient.WithLabelValues(lvg...).metric.Observe(duration)
-		} else {
-			r.serviceGraphServer.WithLabelValues(lvg...).metric.Observe(duration)
-		}
-		r.serviceGraphTotal.WithLabelValues(lvg...).metric.Add(1)
-		if request.SpanStatusCode(span) == codes.Error {
-			r.serviceGraphFailed.WithLabelValues(lvg...).metric.Add(1)
+		if !span.IsSelfReferenceSpan() || r.cfg.AllowServiceGraphSelfReferences {
+			lvg := r.labelValuesServiceGraph(span)
+			if span.IsClientSpan() {
+				r.serviceGraphClient.WithLabelValues(lvg...).metric.Observe(duration)
+			} else {
+				r.serviceGraphServer.WithLabelValues(lvg...).metric.Observe(duration)
+			}
+			r.serviceGraphTotal.WithLabelValues(lvg...).metric.Add(1)
+			if request.SpanStatusCode(span) == codes.Error {
+				r.serviceGraphFailed.WithLabelValues(lvg...).metric.Add(1)
+			}
 		}
 	}
 }

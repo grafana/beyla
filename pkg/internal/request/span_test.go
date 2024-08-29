@@ -7,6 +7,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	trace2 "go.opentelemetry.io/otel/trace"
+
+	"github.com/grafana/beyla/pkg/internal/svc"
 )
 
 func TestSpanClientServer(t *testing.T) {
@@ -346,6 +348,37 @@ func TestDetectsOTelExport(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			assert.Equal(t, tt.exports, tt.span.IsExportTracesSpan())
 			assert.Equal(t, false, tt.span.IsExportMetricsSpan())
+		})
+	}
+}
+
+func TestSelfReferencingSpan(t *testing.T) {
+	// Metrics
+	tests := []struct {
+		name    string
+		span    Span
+		selfref bool
+	}{
+		{
+			name:    "Not a self-reference",
+			span:    Span{Type: EventTypeHTTP, Method: "GET", Path: "/v1/metrics", RequestStart: 100, End: 200, Status: 200, Host: "10.10.10.10", Peer: "10.11.10.11", OtherNamespace: "", ServiceID: svc.ID{Namespace: ""}},
+			selfref: false,
+		},
+		{
+			name:    "Not a self-reference, same IP, different namespace",
+			span:    Span{Type: EventTypeHTTP, Method: "GET", Path: "/v1/metrics", RequestStart: 100, End: 200, Status: 200, Host: "10.10.10.10", Peer: "10.10.10.10", OtherNamespace: "B", ServiceID: svc.ID{Namespace: "A"}},
+			selfref: false,
+		},
+		{
+			name:    "Same IP different namespace, but the other namespace is empty",
+			span:    Span{Type: EventTypeHTTP, Method: "GET", Path: "/v1/metrics", RequestStart: 100, End: 200, Status: 200, Host: "10.10.10.10", Peer: "10.10.10.10", OtherNamespace: "", ServiceID: svc.ID{Namespace: "A"}},
+			selfref: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.selfref, tt.span.IsSelfReferenceSpan())
 		})
 	}
 }

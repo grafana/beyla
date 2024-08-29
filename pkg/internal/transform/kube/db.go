@@ -59,8 +59,7 @@ func StartDatabase(kubeMetadata *kube.Metadata) (*Database, error) {
 			db.UpdateNewPodsByIPIndex(obj.(*kube.PodInfo))
 		},
 		UpdateFunc: func(oldObj, newObj interface{}) {
-			db.UpdateDeletedPodsByIPIndex(oldObj.(*kube.PodInfo))
-			db.UpdateNewPodsByIPIndex(newObj.(*kube.PodInfo))
+			db.UpdatePodsByIPIndex(oldObj.(*kube.PodInfo), newObj.(*kube.PodInfo))
 		},
 		DeleteFunc: func(obj interface{}) {
 			db.UpdateDeletedPodsByIPIndex(obj.(*kube.PodInfo))
@@ -153,9 +152,7 @@ func (id *Database) UpdateNewPodsByIPIndex(pod *kube.PodInfo) {
 	if len(pod.IPInfo.IPs) > 0 {
 		id.access.Lock()
 		defer id.access.Unlock()
-		for _, ip := range pod.IPInfo.IPs {
-			id.podsByIP[ip] = pod
-		}
+		id.addPods(pod)
 	}
 }
 
@@ -163,8 +160,33 @@ func (id *Database) UpdateDeletedPodsByIPIndex(pod *kube.PodInfo) {
 	if len(pod.IPInfo.IPs) > 0 {
 		id.access.Lock()
 		defer id.access.Unlock()
-		for _, ip := range pod.IPInfo.IPs {
-			delete(id.podsByIP, ip)
+		id.deletePods(pod)
+	}
+}
+
+func (id *Database) UpdatePodsByIPIndex(oldPod, newPod *kube.PodInfo) {
+	id.access.Lock()
+	defer id.access.Unlock()
+	id.deletePods(oldPod)
+	id.addPods(newPod)
+}
+
+func (id *Database) addPods(pod *kube.PodInfo) {
+	for _, ip := range pod.IPInfo.IPs {
+		id.podsByIP[ip] = pod
+	}
+}
+
+func (id *Database) deletePods(pod *kube.PodInfo) {
+	for _, ip := range pod.IPInfo.IPs {
+		delete(id.podsByIP, ip)
+		for _, cid := range pod.ContainerIDs {
+			cnt, ok := id.containerIDs[cid]
+			delete(id.containerIDs, cid)
+			if ok {
+				delete(id.namespaces, cnt.PIDNamespace)
+				delete(id.fetchedPodsCache, cnt.PIDNamespace)
+			}
 		}
 	}
 }

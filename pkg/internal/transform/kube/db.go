@@ -275,10 +275,16 @@ func (id *Database) HostNameForIP(ip string) string {
 	if ok {
 		return pod.Name
 	}
+	id.nodeMut.RLock()
+	node, ok := id.nodeByIP[ip]
+	id.nodeMut.RUnlock()
+	if ok {
+		return node.Name
+	}
 	return ""
 }
 
-func (id *Database) HostNameNamespaceForIP(ip string) (string, string) {
+func (id *Database) ServiceNameNamespaceForIP(ip string) (string, string) {
 	id.svcMut.RLock()
 	svc, ok := id.svcByIP[ip]
 	id.svcMut.RUnlock()
@@ -289,7 +295,7 @@ func (id *Database) HostNameNamespaceForIP(ip string) (string, string) {
 	pod, ok := id.podsByIP[ip]
 	id.podsMut.RUnlock()
 	if ok {
-		return pod.Name, pod.Namespace
+		return pod.ServiceName(), pod.Namespace
 	}
 	id.nodeMut.RLock()
 	node, ok := id.nodeByIP[ip]

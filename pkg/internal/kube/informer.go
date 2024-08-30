@@ -415,6 +415,20 @@ func (k *Metadata) AddReplicaSetEventHandler(h cache.ResourceEventHandler) error
 	return err
 }
 
+func (k *Metadata) AddNodeEventHandler(h cache.ResourceEventHandler) error {
+	if k.disabledInformers.Has(InformerNode) {
+		return nil
+	}
+	_, err := k.nodesIP.AddEventHandler(h)
+	// passing a snapshot of the currently stored entities
+	go func() {
+		for _, node := range k.nodesIP.GetStore().List() {
+			h.OnAdd(node, true)
+		}
+	}()
+	return err
+}
+
 func (i *PodInfo) ServiceName() string {
 	if i.Owner != nil {
 		// we have two levels of ownership at most

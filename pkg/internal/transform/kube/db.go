@@ -275,12 +275,6 @@ func (id *Database) HostNameForIP(ip string) string {
 	if ok {
 		return pod.Name
 	}
-	id.nodeMut.RLock()
-	node, ok := id.nodeByIP[ip]
-	id.nodeMut.RUnlock()
-	if ok {
-		return node.Name
-	}
 	return ""
 }
 

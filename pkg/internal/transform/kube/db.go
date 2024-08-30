@@ -41,6 +41,10 @@ type Database struct {
 	// ip to service name matcher
 	svcMut  sync.RWMutex
 	svcByIP map[string]*kube.ServiceInfo
+
+	// ip to node name matcher
+	nodeMut  sync.RWMutex
+	nodeByIP map[string]*kube.NodeInfo
 }
 
 func CreateDatabase(kubeMetadata *kube.Metadata) Database {
@@ -50,6 +54,7 @@ func CreateDatabase(kubeMetadata *kube.Metadata) Database {
 		namespaces:       map[uint32]*container.Info{},
 		podsByIP:         map[string]*kube.PodInfo{},
 		svcByIP:          map[string]*kube.ServiceInfo{},
+		nodeByIP:         map[string]*kube.NodeInfo{},
 		informer:         kubeMetadata,
 	}
 }
@@ -85,6 +90,20 @@ func StartDatabase(kubeMetadata *kube.Metadata) (*Database, error) {
 		},
 	}); err != nil {
 		return nil, fmt.Errorf("can't register Database as Service event handler: %w", err)
+	}
+	if err := db.informer.AddNodeEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc: func(obj interface{}) {
+			db.UpdateNewNodesByIPIndex(obj.(*kube.NodeInfo))
+		},
+		UpdateFunc: func(oldObj, newObj interface{}) {
+			db.UpdateDeletedNodesByIPIndex(oldObj.(*kube.NodeInfo))
+			db.UpdateNewNodesByIPIndex(newObj.(*kube.NodeInfo))
+		},
+		DeleteFunc: func(obj interface{}) {
+			db.UpdateDeletedNodesByIPIndex(obj.(*kube.NodeInfo))
+		},
+	}); err != nil {
+		return nil, fmt.Errorf("can't register Database as Node event handler: %w", err)
 	}
 
 	return &db, nil
@@ -217,6 +236,32 @@ func (id *Database) ServiceInfoForIP(ip string) *kube.ServiceInfo {
 	return id.svcByIP[ip]
 }
 
+func (id *Database) UpdateNewNodesByIPIndex(svc *kube.NodeInfo) {
+	id.nodeMut.Lock()
+	defer id.nodeMut.Unlock()
+	if len(svc.IPInfo.IPs) > 0 {
+		for _, ip := range svc.IPInfo.IPs {
+			id.nodeByIP[ip] = svc
+		}
+	}
+}
+
+func (id *Database) UpdateDeletedNodesByIPIndex(svc *kube.NodeInfo) {
+	id.nodeMut.Lock()
+	defer id.nodeMut.Unlock()
+	if len(svc.IPInfo.IPs) > 0 {
+		for _, ip := range svc.IPInfo.IPs {
+			delete(id.nodeByIP, ip)
+		}
+	}
+}
+
+func (id *Database) NodeInfoForIP(ip string) *kube.NodeInfo {
+	id.nodeMut.RLock()
+	defer id.nodeMut.RUnlock()
+	return id.nodeByIP[ip]
+}
+
 func (id *Database) HostNameForIP(ip string) string {
 	id.svcMut.RLock()
 	svc, ok := id.svcByIP[ip]
@@ -230,5 +275,33 @@ func (id *Database) HostNameForIP(ip string) string {
 	if ok {
 		return pod.Name
 	}
+	id.nodeMut.RLock()
+	node, ok := id.nodeByIP[ip]
+	id.nodeMut.RUnlock()
+	if ok {
+		return node.Name
+	}
 	return ""
+}
+
+func (id *Database) ServiceNameNamespaceForIP(ip string) (string, string) {
+	id.svcMut.RLock()
+	svc, ok := id.svcByIP[ip]
+	id.svcMut.RUnlock()
+	if ok {
+		return svc.Name, svc.Namespace
+	}
+	id.podsMut.RLock()
+	pod, ok := id.podsByIP[ip]
+	id.podsMut.RUnlock()
+	if ok {
+		return pod.ServiceName(), pod.Namespace
+	}
+	id.nodeMut.RLock()
+	node, ok := id.nodeByIP[ip]
+	id.nodeMut.RUnlock()
+	if ok {
+		return node.Name, node.Namespace
+	}
+	return "", ""
 }

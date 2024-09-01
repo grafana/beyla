@@ -9,7 +9,7 @@ import (
 // - /user/:userId/details (Gin)
 // - /user/{userId}/details (Gorilla)
 // More formats will be appended at some point
-var wildcard = regexp.MustCompile(`^((:\w*)|(\{\w*}))$`)
+var wildcard = regexp.MustCompile(`^((:\w*)|(\{\w*\}))$`)
 
 // Matcher allows matching a given URL path towards a set of framework-like provided
 // patterns.

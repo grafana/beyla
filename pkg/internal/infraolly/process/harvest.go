@@ -201,8 +201,15 @@ func (ps *Harvester) populateNetworkInfo(status *Status, source *linuxProcess) {
 		return
 	}
 	rx, tx := parseProcNetDev(content)
-	status.NetRcvBytesDelta = rx - source.previousNetRx
-	status.NetTxBytesDelta = tx - source.previousNetTx
+	// removing a row in the /proc/<pid>/net/dev table could cause a negative delta
+	// and crashing the counters in the instrumentation libraries
+	if rx <= source.previousNetRx || tx <= source.previousNetTx {
+		status.NetRcvBytesDelta = 0
+		status.NetTxBytesDelta = 0
+	} else {
+		status.NetRcvBytesDelta = rx - source.previousNetRx
+		status.NetTxBytesDelta = tx - source.previousNetTx
+	}
 	source.previousNetRx = rx
 	source.previousNetTx = tx
 }

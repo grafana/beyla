@@ -173,16 +173,7 @@ func (nr *NameResolver) dnsResolve(svc *svc.ID, ip string) (string, string) {
 }
 
 func (nr *NameResolver) resolveFromK8s(ip string) (string, string) {
-	svcInfo := nr.db.ServiceInfoForIP(ip)
-	if svcInfo == nil {
-		podInfo := nr.db.PodInfoForIP(ip)
-		if podInfo == nil {
-			return "", ""
-		}
-		return podInfo.ServiceName(), podInfo.Namespace
-	}
-
-	return svcInfo.Name, svcInfo.Namespace
+	return nr.db.ServiceNameNamespaceForIP(ip)
 }
 
 func (nr *NameResolver) resolveIP(ip string) string {

@@ -39,7 +39,6 @@ type Database struct {
 	svcByIP map[string]*kube.ServiceInfo
 
 	// ip to node name matcher
-	nodeMut  sync.RWMutex
 	nodeByIP map[string]*kube.NodeInfo
 }
 
@@ -120,10 +119,10 @@ func (id *Database) OnDeletion(containerID []string) {
 
 func (id *Database) addProcess(ifp *container.Info) {
 	id.access.Lock()
+	defer id.access.Unlock()
 	delete(id.fetchedPodsCache, ifp.PIDNamespace)
 	id.namespaces[ifp.PIDNamespace] = ifp
 	id.containerIDs[ifp.ContainerID] = ifp
-	id.access.Unlock()
 }
 
 // AddProcess also searches for the container.Info of the passed PID
@@ -139,10 +138,10 @@ func (id *Database) AddProcess(pid uint32) {
 
 func (id *Database) CleanProcessCaches(ns uint32) {
 	id.access.Lock()
+	defer id.access.Unlock()
 	// Don't delete the id.namespaces, we can't tell if Add/Delete events
 	// are in order. Deleting from the cache is safe, since it will be rebuilt.
 	delete(id.fetchedPodsCache, ns)
-	id.access.Unlock()
 }
 
 // OwnerPodInfo returns the information of the pod owning the passed namespace
@@ -168,17 +167,17 @@ func (id *Database) OwnerPodInfo(pidNamespace uint32) (*kube.PodInfo, bool) {
 }
 
 func (id *Database) UpdateNewPodsByIPIndex(pod *kube.PodInfo) {
+	id.access.Lock()
+	defer id.access.Unlock()
 	if len(pod.IPInfo.IPs) > 0 {
-		id.access.Lock()
-		defer id.access.Unlock()
 		id.addPods(pod)
 	}
 }
 
 func (id *Database) UpdateDeletedPodsByIPIndex(pod *kube.PodInfo) {
+	id.access.Lock()
+	defer id.access.Unlock()
 	if len(pod.IPInfo.IPs) > 0 {
-		id.access.Lock()
-		defer id.access.Unlock()
 		id.deletePods(pod)
 	}
 }
@@ -217,9 +216,9 @@ func (id *Database) PodInfoForIP(ip string) *kube.PodInfo {
 }
 
 func (id *Database) UpdateNewServicesByIPIndex(svc *kube.ServiceInfo) {
+	id.access.Lock()
+	defer id.access.Unlock()
 	if len(svc.IPInfo.IPs) > 0 {
-		id.access.Lock()
-		defer id.access.Unlock()
 		for _, ip := range svc.IPInfo.IPs {
 			id.svcByIP[ip] = svc
 		}
@@ -227,9 +226,9 @@ func (id *Database) UpdateNewServicesByIPIndex(svc *kube.ServiceInfo) {
 }
 
 func (id *Database) UpdateDeletedServicesByIPIndex(svc *kube.ServiceInfo) {
+	id.access.Lock()
+	defer id.access.Unlock()
 	if len(svc.IPInfo.IPs) > 0 {
-		id.access.Lock()
-		defer id.access.Unlock()
 		for _, ip := range svc.IPInfo.IPs {
 			delete(id.svcByIP, ip)
 		}
@@ -243,8 +242,8 @@ func (id *Database) ServiceInfoForIP(ip string) *kube.ServiceInfo {
 }
 
 func (id *Database) UpdateNewNodesByIPIndex(svc *kube.NodeInfo) {
-	id.nodeMut.Lock()
-	defer id.nodeMut.Unlock()
+	id.access.Lock()
+	defer id.access.Unlock()
 	if len(svc.IPInfo.IPs) > 0 {
 		for _, ip := range svc.IPInfo.IPs {
 			id.nodeByIP[ip] = svc
@@ -253,8 +252,8 @@ func (id *Database) UpdateNewNodesByIPIndex(svc *kube.NodeInfo) {
 }
 
 func (id *Database) UpdateDeletedNodesByIPIndex(svc *kube.NodeInfo) {
-	id.nodeMut.Lock()
-	defer id.nodeMut.Unlock()
+	id.access.Lock()
+	defer id.access.Unlock()
 	if len(svc.IPInfo.IPs) > 0 {
 		for _, ip := range svc.IPInfo.IPs {
 			delete(id.nodeByIP, ip)
@@ -263,8 +262,8 @@ func (id *Database) UpdateDeletedNodesByIPIndex(svc *kube.NodeInfo) {
 }
 
 func (id *Database) NodeInfoForIP(ip string) *kube.NodeInfo {
-	id.nodeMut.RLock()
-	defer id.nodeMut.RUnlock()
+	id.access.RLock()
+	defer id.access.RUnlock()
 	return id.nodeByIP[ip]
 }
 
@@ -279,9 +278,7 @@ func (id *Database) HostNameForIP(ip string) string {
 	if ok {
 		return pod.Name
 	}
-	id.nodeMut.RLock()
 	node, ok := id.nodeByIP[ip]
-	id.nodeMut.RUnlock()
 	if ok {
 		return node.Name
 	}
@@ -289,21 +286,17 @@ func (id *Database) HostNameForIP(ip string) string {
 }
 
 func (id *Database) ServiceNameNamespaceForIP(ip string) (string, string) {
-	id.svcMut.RLock()
+	id.access.RLock()
+	defer id.access.RUnlock()
 	svc, ok := id.svcByIP[ip]
-	id.svcMut.RUnlock()
 	if ok {
 		return svc.Name, svc.Namespace
 	}
-	id.podsMut.RLock()
 	pod, ok := id.podsByIP[ip]
-	id.podsMut.RUnlock()
 	if ok {
 		return pod.ServiceName(), pod.Namespace
 	}
-	id.nodeMut.RLock()
 	node, ok := id.nodeByIP[ip]
-	id.nodeMut.RUnlock()
 	if ok {
 		return node.Name, node.Namespace
 	}

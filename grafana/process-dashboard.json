@@ -15,7 +15,7 @@
       "type": "grafana",
       "id": "grafana",
       "name": "Grafana",
-      "version": "11.3.0-75154"
+      "version": "11.3.0-75409"
     },
     {
       "type": "datasource",
@@ -132,7 +132,7 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "11.3.0-75154",
+      "pluginVersion": "11.3.0-75409",
       "targets": [
         {
           "datasource": {
@@ -140,10 +140,23 @@
             "uid": "${DS_GRAFANACLOUD-MARIOMACIAS-PROM}"
           },
           "editorMode": "code",
-          "expr": "sum(rate(process_cpu_time[$__interval]) + on(instance) group_left(k8s_pod_name,k8s_namespace_name,process_command,process_pid) (0 * target_info{process_pid!=\"\"})) by(k8s_pod_name,k8s_namespace_name,process_command,process_pid)",
+          "expr": "sum(rate({__name__=~\"process_cpu_time.*\",process_pid=\"\"}[$__interval]) + on(instance) group_left(k8s_pod_name,k8s_namespace_name,process_command,process_pid) (0 * target_info{process_pid!=\"\"})) by(k8s_pod_name,k8s_namespace_name,process_command,process_pid)",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_GRAFANACLOUD-MARIOMACIAS-PROM}"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate({__name__=~\"process_cpu_time.*\",process_pid!=\"\"}[$__interval])) by(k8s_pod_name,k8s_namespace_name,process_command,process_pid)",
+          "hide": false,
+          "instant": false,
+          "legendFormat": "__auto",
+          "range": true,
+          "refId": "B"
         }
       ],
       "title": "Process CPU",
@@ -229,7 +242,7 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "11.3.0-75154",
+      "pluginVersion": "11.3.0-75409",
       "targets": [
         {
           "datasource": {
@@ -237,10 +250,22 @@
             "uid": "${DS_GRAFANACLOUD-MARIOMACIAS-PROM}"
           },
           "editorMode": "code",
-          "expr": "sum(process_memory_usage + on(instance) group_left(k8s_pod_name,k8s_namespace_name,process_command,process_pid) (0 * target_info{process_pid!=\"\"})) by(k8s_pod_name,k8s_namespace_name,process_command,process_pid)",
+          "expr": "sum({__name__=~\"process_memory_usage.*\",process_pid=\"\"} + on(instance) group_left(k8s_pod_name,k8s_namespace_name,process_command,process_pid) (0 * target_info{process_pid!=\"\"})) by(k8s_pod_name,k8s_namespace_name,process_command,process_pid)",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_GRAFANACLOUD-MARIOMACIAS-PROM}"
+          },
+          "editorMode": "code",
+          "expr": "sum({__name__=~\"process_memory_usage.*\",process_pid!=\"\"}) by(k8s_pod_name,k8s_namespace_name,process_command,process_pid)",
+          "hide": false,
+          "legendFormat": "__auto",
+          "range": true,
+          "refId": "B"
         }
       ],
       "title": "Process physical memory",
@@ -326,7 +351,7 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "11.3.0-75154",
+      "pluginVersion": "11.3.0-75409",
       "targets": [
         {
           "datasource": {
@@ -334,10 +359,22 @@
             "uid": "${DS_GRAFANACLOUD-MARIOMACIAS-PROM}"
           },
           "editorMode": "code",
-          "expr": "sum(process_memory_virtual + on(instance) group_left(k8s_pod_name,k8s_namespace_name,process_command,process_pid) (0 * target_info{process_pid!=\"\"})) by(k8s_pod_name,k8s_namespace_name,process_command,process_pid)",
+          "expr": "sum({__name__=~\"process_memory_virtual.*\",process_pid=\"\"} + on(instance) group_left(k8s_pod_name,k8s_namespace_name,process_command,process_pid) (0 * target_info{process_pid!=\"\"})) by(k8s_pod_name,k8s_namespace_name,process_command,process_pid)",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_GRAFANACLOUD-MARIOMACIAS-PROM}"
+          },
+          "editorMode": "code",
+          "expr": "sum({__name__=~\"process_memory_virtual.*\",process_pid!=\"\"}) by(k8s_pod_name,k8s_namespace_name,process_command,process_pid)",
+          "hide": false,
+          "legendFormat": "__auto",
+          "range": true,
+          "refId": "B"
         }
       ],
       "title": "Process virtual memory",
@@ -423,7 +460,7 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "11.3.0-75154",
+      "pluginVersion": "11.3.0-75409",
       "targets": [
         {
           "datasource": {
@@ -431,10 +468,22 @@
             "uid": "${DS_GRAFANACLOUD-MARIOMACIAS-PROM}"
           },
           "editorMode": "code",
-          "expr": "sum(rate(process_disk_io[$__interval]) + on(instance) group_left(k8s_pod_name,k8s_namespace_name,process_command,process_pid) (0 * target_info{process_pid!=\"\"})) by(k8s_pod_name,k8s_namespace_name,process_command,process_pid,disk_io_direction)",
+          "expr": "sum(rate({__name__=~\"process_disk_io.*\",process_pid=\"\"}[$__interval]) + on(instance) group_left(k8s_pod_name,k8s_namespace_name,process_command,process_pid) (0 * target_info{process_pid!=\"\"})) by(k8s_pod_name,k8s_namespace_name,process_command,process_pid,disk_io_direction)",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_GRAFANACLOUD-MARIOMACIAS-PROM}"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate({__name__=~\"process_disk_io.*\",process_pid!=\"\"}[$__interval])) by(k8s_pod_name,k8s_namespace_name,process_command,process_pid,disk_io_direction)",
+          "hide": false,
+          "legendFormat": "__auto",
+          "range": true,
+          "refId": "B"
         }
       ],
       "title": "Process disk I/O",
@@ -520,7 +569,7 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "11.3.0-75154",
+      "pluginVersion": "11.3.0-75409",
       "targets": [
         {
           "datasource": {
@@ -528,10 +577,22 @@
             "uid": "${DS_GRAFANACLOUD-MARIOMACIAS-PROM}"
           },
           "editorMode": "code",
-          "expr": "sum(rate(process_network_io[$__interval]) + on(instance) group_left(k8s_pod_name,k8s_namespace_name,process_command,process_pid) (0 * target_info{process_pid!=\"\"})) by(k8s_pod_name,k8s_namespace_name,process_command,process_pid,network_io_direction)",
+          "expr": "sum(rate({__name__=~\"process_network_io.*\",process_pid=\"\"}[$__interval]) + on(instance) group_left(k8s_pod_name,k8s_namespace_name,process_command,process_pid) (0 * target_info{process_pid!=\"\"})) by(k8s_pod_name,k8s_namespace_name,process_command,process_pid,network_io_direction)",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_GRAFANACLOUD-MARIOMACIAS-PROM}"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate({__name__=~\"process_network_io.*\",process_pid!=\"\"}[$__interval])) by(k8s_pod_name,k8s_namespace_name,process_command,process_pid,network_io_direction)",
+          "hide": false,
+          "legendFormat": "__auto",
+          "range": true,
+          "refId": "B"
         }
       ],
       "title": "Process network I/O",
@@ -544,13 +605,13 @@
     "list": []
   },
   "time": {
-    "from": "now-30m",
+    "from": "now-15m",
     "to": "now"
   },
   "timepicker": {},
   "timezone": "browser",
   "title": "Beyla process metrics",
   "uid": "bdw3b5cqiwlq8b",
-  "version": 13,
+  "version": 24,
   "weekStart": ""
 }

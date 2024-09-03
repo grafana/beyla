@@ -43,8 +43,8 @@ rules:
   verbs: ["get", "watch", "list"]
 - apiGroups: [""]
   resources: ["services"]
-  # list services is needed by network-policy beyla.
-  verbs: ["list"]
+  # list and watch services are needed by network-policy beyla.
+  verbs: ["list", "watch"]
 - apiGroups: ["*"]
   resources: ["deployments", "replicasets", "statefulsets", "daemonsets", "jobs", "cronjobs", "replicationcontrollers"]
   # Required to retrieve the owner references used by the seccomp beyla.

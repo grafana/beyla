@@ -711,7 +711,7 @@ func (r *metricsReporter) labelValuesSpans(span *request.Span) []string {
 		span.TraceName(),
 		strconv.Itoa(int(request.SpanStatusCode(span))),
 		span.ServiceGraphKind(),
-		span.ServiceID.Instance,
+		string(span.ServiceID.UID), // app instance ID
 		job,
 		"beyla",
 	}
@@ -737,7 +737,7 @@ func (r *metricsReporter) labelValuesTargetInfo(service svc.ID) []string {
 		service.HostName,
 		service.Name,
 		service.Namespace,
-		service.Instance,
+		string(service.UID), // app instance ID
 		job,
 		service.SDKLanguage.String(),
 		"beyla",

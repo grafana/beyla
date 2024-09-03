@@ -62,7 +62,7 @@ var DefaultBuckets = Buckets{
 
 func getAppResourceAttrs(hostID string, service *svc.ID) []attribute.KeyValue {
 	return append(getResourceAttrs(hostID, service),
-		semconv.ServiceInstanceID(service.Instance),
+		semconv.ServiceInstanceID(string(service.UID)),
 	)
 }
 

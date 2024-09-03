@@ -57,8 +57,6 @@ func SpanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValu
 		}
 	case attr.Service:
 		getter = func(s *Span) attribute.KeyValue { return ServiceMetric(s.ServiceID.Name) }
-	case attr.ServiceInstanceID:
-		getter = func(s *Span) attribute.KeyValue { return semconv.ServiceInstanceID(s.ServiceID.Instance) }
 	case attr.ServiceName:
 		getter = func(s *Span) attribute.KeyValue { return semconv.ServiceName(s.ServiceID.Name) }
 	case attr.ServiceNamespace:

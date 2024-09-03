@@ -604,14 +604,6 @@ instead of trying to automatically resolve the host name.
 
 This option takes precedence over `dns`.
 
-| YAML                   | Environment variable             | Type   | Default |
-| ---------------------- | ------------------- | ------ | ------- |
-| `override_instance_id` | `BEYLA_INSTANCE_ID` | string | (unset) |
-
-If set, Beyla will use this value directly as instance ID of any instrumented
-process. If you are managing multiple processes from a single Beyla instance,
-all the processes will have the same instance ID.
-
 ### Kubernetes decorator
 
 If you run Beyla in a Kubernetes environment, you can configure it to decorate the traces

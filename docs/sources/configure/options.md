@@ -300,7 +300,7 @@ precedence:
 
 - If Kubernetes is enabled:
   1. The name of the Deployment that runs the instrumented process, if any.
-  2. The name of the ReplicaSet that runs the instrumented process, if any.
+  2. The name of the ReplicaSet/DaemonSet/StatefulSet that runs the instrumented process, if any.
   3. The name of the Pod that runs the instrumented process.
 - If kubernetes is not enabled:
   1. The name of the process executable file.
@@ -308,8 +308,8 @@ precedence:
 If multiple processes match the service selection criteria described below,
 the metrics and traces for all the instances might share the same service name;
 for example, when multiple instrumented processes run under the same Deployment,
-or have the same executable name. In that case, the reported `instance.id` (OTEL) or
-`target_instance` (Prometheus) would allow differentiating the different instances
+or have the same executable name. In that case, the reported `instance` attribute
+would allow differentiating the different instances
 of the service.
 
 | YAML        | Environment variable | Type   | Default                  |
@@ -1214,6 +1214,12 @@ string inside the YAML file.
 API key of your Grafana Cloud account.
 
 ## Prometheus HTTP endpoint
+
+> ℹ️ The Prometheus scraper might override the values of the `instance` and `job` labels.
+> To keep the original values as set by Beyla, make sure to configure the
+> Prometheus scraper to set the `honor_labels` option to `true`.
+> 
+> ([How to set `honor_labels` in Grafana Alloy](/docs/alloy/latest/reference/components/prometheus/prometheus.scrape/)).
 
 YAML section `prometheus_export`.
 

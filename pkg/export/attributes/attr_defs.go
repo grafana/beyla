@@ -43,7 +43,8 @@ func getDefinitions(groups AttrGroups) map[Section]AttrReportGroup {
 	var prometheusAttributes = AttrReportGroup{
 		Disabled: !promEnabled,
 		Attributes: map[attr.Name]Default{
-			attr.TargetInstance:   true,
+			attr.Instance:         true,
+			attr.Job:              true,
 			attr.ServiceNamespace: true,
 		},
 	}
@@ -166,11 +167,12 @@ func getDefinitions(groups AttrGroups) map[Section]AttrReportGroup {
 	var promProcessAttributes = AttrReportGroup{
 		Disabled: !promEnabled,
 		Attributes: map[attr.Name]Default{
+			attr.Instance:        true,
+			attr.Job:             true,
 			attr.ProcCommand:     true,
 			attr.ProcOwner:       true,
 			attr.ProcParentPid:   true,
 			attr.ProcPid:         true,
-			attr.TargetInstance:  true,
 			attr.ProcCommandLine: false,
 			attr.ProcCommandArgs: false,
 			attr.ProcExecName:    false,

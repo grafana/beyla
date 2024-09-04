@@ -45,9 +45,6 @@ func (it InstrumentableType) String() string {
 	}
 }
 
-// UID uniquely identifies a service instance
-type UID string
-
 type idFlags uint8
 
 const (

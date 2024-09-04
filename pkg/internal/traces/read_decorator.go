@@ -3,7 +3,6 @@ package traces
 import (
 	"context"
 	"log/slog"
-	"strconv"
 
 	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/mariomac/pipes/pipe"
@@ -95,7 +94,7 @@ func hostNamePIDDecorator(cfg *InstanceIDConfig) decorator {
 		for i := range spans {
 			uid, ok := uidsCache.Get(spans[i].Pid.HostPID)
 			if !ok {
-				uid = svc.UID(fullHostName + "-" + strconv.Itoa(int(spans[i].Pid.HostPID)))
+				uid = svc.NewUID(fullHostName).AppendUint32(spans[i].Pid.HostPID)
 				uidsCache.Add(spans[i].Pid.HostPID, uid)
 			}
 			spans[i].ServiceID.UID = uid

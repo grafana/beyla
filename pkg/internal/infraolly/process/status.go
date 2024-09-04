@@ -77,7 +77,7 @@ func NewStatus(pid int32, svcID *svc.ID) *Status {
 	return &Status{ID: ID{
 		ProcessID: pid,
 		Service:   svcID,
-		UID:       svcID.UID + svc.UID("-"+strconv.Itoa(int(pid))),
+		UID:       svcID.UID.AppendUint32(uint32(pid)),
 	}}
 }
 
@@ -119,6 +119,8 @@ func PromGetters(name attr.Name) (attributes.Getter[*Status, string], bool) {
 	case attr.ProcCPUMode, attr.ProcDiskIODir, attr.ProcNetIODir:
 		// the attributes are handled explicitly by the prometheus exporter, but we need to
 		// ignore them to avoid that the default case tries to report them from service metadata
+	case attr.TargetInstance:
+		g = func(s *Status) string { return string(s.ID.UID) }
 	default:
 		g = func(s *Status) string { return s.ID.Service.Metadata[name] }
 	}

@@ -29,6 +29,7 @@ eBPF-based autoinstrumentation HTTP, HTTP2 and gRPC services, as well as network
 | dnsPolicy | string | `"ClusterFirstWithHostNet"` | Determines how DNS resolution is handled for that pod. If `.Values.preset` is set to `network` or `.Values.config.data.network` is enabled, Beyla requires `hostNetwork` access, causing cluster service DNS resolution to fail. It is recommended not to change this if Beyla sends traces and metrics to Grafana components via k8s service. |
 | env | object | `{}` | extra environment variables |
 | envValueFrom | object | `{}` | extra environment variables to be set from resources such as k8s configMaps/secrets |
+| extraCapabilities | list | `[]` | Extra capabilities for unprivileged / less privileged setup. |
 | fullnameOverride | string | `""` | Overrides the chart's computed fullname. |
 | global.image.pullSecrets | list | `[]` | Optional set of global image pull secrets. |
 | global.image.registry | string | `""` | Global image registry to use if it needs to be overridden for some specific use cases (e.g local registries, custom images, ...) |
@@ -46,10 +47,11 @@ eBPF-based autoinstrumentation HTTP, HTTP2 and gRPC services, as well as network
 | podSecurityContext | object | `{}` |  |
 | preset | string | `"application"` | Preconfigures some default properties for network or application observability. Accepted values are "network" or "application". |
 | priorityClassName | string | `""` |  |
+| privileged | bool | `true` | If set to false, deploys an unprivileged / less privileged setup. |
 | rbac.create | bool | `true` | Whether to create RBAC resources for Belya |
 | rbac.extraClusterRoleRules | list | `[]` | Extra custer roles to be created for Belya |
 | resources | object | `{}` |  |
-| securityContext.privileged | bool | `true` | For an unprivileged / less privileged setup, use privileged: false and uncomment the required capabilities in the values file. |
+| securityContext | object | `{"privileged":true}` | Security context for privileged setup. |
 | service.annotations | object | `{}` | Service annotations. |
 | service.appProtocol | string | `""` | Adds the appProtocol field to the service. This allows to work with istio protocol selection. Ex: "http" or "tcp" |
 | service.clusterIP | string | `""` | cluster IP |

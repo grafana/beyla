@@ -170,6 +170,7 @@ func getDefinitions(groups AttrGroups) map[Section]AttrReportGroup {
 			attr.ProcOwner:       true,
 			attr.ProcParentPid:   true,
 			attr.ProcPid:         true,
+			attr.TargetInstance:  true,
 			attr.ProcCommandLine: false,
 			attr.ProcCommandArgs: false,
 			attr.ProcExecName:    false,

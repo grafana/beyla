@@ -11,6 +11,7 @@ import (
 	"github.com/grafana/beyla/pkg/internal/kube"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/pkg/internal/request"
+	"github.com/grafana/beyla/pkg/internal/svc"
 	"github.com/grafana/beyla/pkg/kubeflags"
 )
 
@@ -115,7 +116,7 @@ func (md *metadataDecorator) appendMetadata(span *request.Span, info *kube.PodIn
 	// if the application/process was discovered and reported information
 	// before the kubernetes metadata was available
 	// (related issue: https://github.com/grafana/beyla/issues/1124)
-	span.ServiceID.UID = span.ServiceID.UID.Append(string(info.UID))
+	span.ServiceID.UID = svc.NewUID(string(info.UID))
 
 	// if, in the future, other pipeline steps modify the service metadata, we should
 	// replace the map literal by individual entry insertions

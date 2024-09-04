@@ -69,6 +69,26 @@ func (e osCapabilitiesError) Error() string {
 	return sb.String()
 }
 
+func testAndSet(caps *helpers.OSCapabilities, capError *osCapabilitiesError, c helpers.OSCapability) {
+	if !caps.Has(c) {
+		capError.Set(c)
+	}
+}
+
+func checkCapabilitiesForSetOptions(config *Config, caps *helpers.OSCapabilities, capError *osCapabilitiesError) {
+	if config.Enabled(FeatureAppO11y) {
+		testAndSet(caps, capError, unix.CAP_CHECKPOINT_RESTORE)
+		testAndSet(caps, capError, unix.CAP_SYS_PTRACE)
+	}
+
+	if config.Enabled(FeatureNetO11y) {
+		// test for net raw only if we don't have net admin
+		if !caps.Has(unix.CAP_NET_ADMIN) {
+			testAndSet(caps, capError, unix.CAP_NET_RAW)
+		}
+	}
+}
+
 func CheckOSCapabilities(config *Config) error {
 	caps, err := helpers.GetCurrentProcCapabilities()
 
@@ -78,32 +98,35 @@ func CheckOSCapabilities(config *Config) error {
 
 	var capError osCapabilitiesError
 
-	testAndSet := func(c helpers.OSCapability) {
-		if !caps.Has(c) {
-			capError.Set(c)
+	major, minor := kernelVersion()
+
+	// below kernels 5.8 all BPF permissions were bundled under SYS_ADMIN
+	if (major == 5 && minor < 8) || (major < 5) {
+		testAndSet(caps, &capError, unix.CAP_SYS_ADMIN)
+
+		if capError.Empty() {
+			return nil
 		}
+
+		return capError
+	}
+
+	// if sys admin is set, we have all capabilities
+	if caps.Has(unix.CAP_SYS_ADMIN) {
+		return nil
 	}
 
 	// core capabilities
-	testAndSet(unix.CAP_BPF)
-	testAndSet(unix.CAP_PERFMON)
-	testAndSet(unix.CAP_DAC_READ_SEARCH)
-
-	major, minor := kernelVersion()
+	testAndSet(caps, &capError, unix.CAP_BPF)
+	testAndSet(caps, &capError, unix.CAP_PERFMON)
+	testAndSet(caps, &capError, unix.CAP_DAC_READ_SEARCH)
 
 	// CAP_SYS_RESOURCE is only required on kernels < 5.11
 	if (major == 5 && minor < 11) || (major < 5) {
-		testAndSet(unix.CAP_SYS_RESOURCE)
+		testAndSet(caps, &capError, unix.CAP_SYS_RESOURCE)
 	}
 
-	if config.Enabled(FeatureAppO11y) {
-		testAndSet(unix.CAP_CHECKPOINT_RESTORE)
-		testAndSet(unix.CAP_SYS_PTRACE)
-	}
-
-	if config.Enabled(FeatureNetO11y) {
-		testAndSet(unix.CAP_NET_RAW)
-	}
+	checkCapabilitiesForSetOptions(config, caps, &capError)
 
 	if capError.Empty() {
 		return nil

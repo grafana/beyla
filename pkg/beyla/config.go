@@ -43,7 +43,7 @@ const (
 var DefaultConfig = Config{
 	ChannelBufferLen: 10,
 	LogLevel:         "INFO",
-	EnforceSysCaps:   true,
+	EnforceSysCaps:   false,
 	EBPF: ebpfcommon.TracerConfig{
 		BatchLength:        100,
 		BatchTimeout:       time.Second,

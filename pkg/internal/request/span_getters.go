@@ -180,8 +180,10 @@ func SpanPromGetters(attrName attr.Name) (attributes.Getter[*Span, string], bool
 		getter = func(s *Span) string { return string(s.ServiceID.UID) }
 	// resource metadata values below. Unlike OTEL, they are included here because they
 	// belong to the metric, instead of the Resource
-	case attr.TargetInstance:
+	case attr.Instance:
 		getter = func(s *Span) string { return string(s.ServiceID.UID) }
+	case attr.Job:
+		getter = func(s *Span) string { return s.ServiceID.Job() }
 	case attr.ServiceName:
 		getter = func(s *Span) string { return s.ServiceID.Name }
 	case attr.ServiceNamespace:

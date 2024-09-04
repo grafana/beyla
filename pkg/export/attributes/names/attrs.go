@@ -124,13 +124,13 @@ const (
 
 // other beyla-specific attributes
 const (
-	// TargetInstance is a Prometheus-only attribute.
-	// It will expose the process hostname-pid (or K8s Pod).
-	// It is advised for users that to use relabeling rules to
-	// override the "instance" attribute with "target" in the
-	// Prometheus server. This would be similar to the "multi target pattern":
-	// https://prometheus.io/docs/guides/multi-target-exporter/
-	TargetInstance = Name("target.instance")
+	// Instance and Job are only explicitly used in the Prometheus
+	// exporter, as the OpenTelemetry SDK already sets them implicitly.
+	// It is advised for users to configure their Prometheus scraper with
+	// the `honor_labels` option set to true, to avoid overwriting the
+	// instance attribute with the target attribute.
+	Instance = Name("instance")
+	Job      = Name("job")
 
 	// ServiceName and ServiceNamespace are going to be used only on Prometheus
 	// as metric attributes. The OTEL exporter already uses them as Resource

@@ -119,8 +119,10 @@ func PromGetters(name attr.Name) (attributes.Getter[*Status, string], bool) {
 	case attr.ProcCPUMode, attr.ProcDiskIODir, attr.ProcNetIODir:
 		// the attributes are handled explicitly by the prometheus exporter, but we need to
 		// ignore them to avoid that the default case tries to report them from service metadata
-	case attr.TargetInstance:
+	case attr.Instance:
 		g = func(s *Status) string { return string(s.ID.UID) }
+	case attr.Job:
+		g = func(s *Status) string { return s.ID.Service.Job() }
 	default:
 		g = func(s *Status) string { return s.ID.Service.Metadata[name] }
 	}

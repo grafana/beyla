@@ -86,6 +86,10 @@ func (i *ID) GetUID() UID {
 }
 
 func (i *ID) String() string {
+	return i.Job()
+}
+
+func (i *ID) Job() string {
 	if i.Namespace != "" {
 		return i.Namespace + "/" + i.Name
 	}

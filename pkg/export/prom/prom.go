@@ -701,10 +701,6 @@ func labelNamesSpans() []string {
 }
 
 func (r *metricsReporter) labelValuesSpans(span *request.Span) []string {
-	job := span.ServiceID.Name
-	if span.ServiceID.Namespace != "" {
-		job = span.ServiceID.Namespace + "/" + job
-	}
 	return []string{
 		span.ServiceID.Name,
 		span.ServiceID.Namespace,
@@ -712,7 +708,7 @@ func (r *metricsReporter) labelValuesSpans(span *request.Span) []string {
 		strconv.Itoa(int(request.SpanStatusCode(span))),
 		span.ServiceGraphKind(),
 		string(span.ServiceID.UID), // app instance ID
-		job,
+		span.ServiceID.Job(),
 		"beyla",
 	}
 }
@@ -728,17 +724,13 @@ func labelNamesTargetInfo(kubeEnabled bool) []string {
 }
 
 func (r *metricsReporter) labelValuesTargetInfo(service svc.ID) []string {
-	job := service.Name
-	if service.Namespace != "" {
-		job = service.Namespace + "/" + job
-	}
 	values := []string{
 		r.hostID,
 		service.HostName,
 		service.Name,
 		service.Namespace,
 		string(service.UID), // app instance ID
-		job,
+		service.Job(),
 		service.SDKLanguage.String(),
 		"beyla",
 		"beyla",

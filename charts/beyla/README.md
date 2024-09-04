@@ -1,6 +1,6 @@
 # beyla
 
-![Version: 1.3.0](https://img.shields.io/badge/Version-1.3.0-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 1.7.0](https://img.shields.io/badge/AppVersion-1.7.0-informational?style=flat-square)
+![Version: 1.4.0](https://img.shields.io/badge/Version-1.4.0-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 1.8.0](https://img.shields.io/badge/AppVersion-1.8.0-informational?style=flat-square)
 
 eBPF-based autoinstrumentation HTTP, HTTP2 and gRPC services, as well as network metrics.
 
@@ -24,7 +24,7 @@ eBPF-based autoinstrumentation HTTP, HTTP2 and gRPC services, as well as network
 |-----|------|---------|-------------|
 | affinity | object | `{}` | used for scheduling of pods based on affinity rules |
 | config.create | bool | `true` | set to true, to use the below default configurations |
-| config.data | object | `{"attributes":{"kubernetes":{"enable":true}},"prometheus_export":{"path":"/metrics","port":9090}}` | default value of beyla configuration |
+| config.data | object | `{"attributes":{"kubernetes":{"enable":true},"select":{"beyla_network_flow_bytes":{"include":["k8s.src.owner.type","k8s.dst.owner.type","direction"]}}},"filter":{"network":{"k8s_dst_owner_name":{"not_match":"{kube*,*jaeger-agent*,*prometheus*,*promtail*,*grafana-agent*}"},"k8s_src_owner_name":{"not_match":"{kube*,*jaeger-agent*,*prometheus*,*promtail*,*grafana-agent*}"}}},"prometheus_export":{"path":"/metrics","port":9090}}` | default value of beyla configuration |
 | config.name | string | `""` |  |
 | dnsPolicy | string | `"ClusterFirstWithHostNet"` | Determines how DNS resolution is handled for that pod. If `.Values.preset` is set to `network` or `.Values.config.data.network` is enabled, Beyla requires `hostNetwork` access, causing cluster service DNS resolution to fail. It is recommended not to change this if Beyla sends traces and metrics to Grafana components via k8s service. |
 | env | object | `{}` | extra environment variables |
@@ -49,7 +49,7 @@ eBPF-based autoinstrumentation HTTP, HTTP2 and gRPC services, as well as network
 | rbac.create | bool | `true` | Whether to create RBAC resources for Belya |
 | rbac.extraClusterRoleRules | list | `[]` | Extra custer roles to be created for Belya |
 | resources | object | `{}` |  |
-| securityContext.privileged | bool | `true` |  |
+| securityContext.privileged | bool | `true` | For an unprivileged / less privileged setup, use privileged: false and uncomment the required capabilities in the values file. |
 | service.annotations | object | `{}` | Service annotations. |
 | service.appProtocol | string | `""` | Adds the appProtocol field to the service. This allows to work with istio protocol selection. Ex: "http" or "tcp" |
 | service.clusterIP | string | `""` | cluster IP |

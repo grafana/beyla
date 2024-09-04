@@ -59,7 +59,7 @@ podSecurityContext: {}
   # fsGroup: 2000
 
 securityContext:
-  # -- For an unprivileged / less privileged setup, use privileged: false and uncomment the settings below
+  # -- For an unprivileged / less privileged setup, use privileged: false and uncomment the required capabilities in the values file.
   privileged: true
   # runAsUser: 0
   # readOnlyRootFilesystem: true

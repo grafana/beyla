@@ -25,7 +25,7 @@ spec:
         {{- with .Values.podAnnotations }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
-        {{- if ne .Values.securityContext.privileged }}
+        {{- if not (.Values.securityContext.privileged) }}
         container.apparmor.security.beta.kubernetes.io/beyla: "unconfined"
         {{- end }}
       labels:
@@ -45,7 +45,7 @@ spec:
       {{- if .Values.priorityClassName }}
       priorityClassName: {{ .Values.priorityClassName }}
       {{- end }}
-      {{- if ne .Values.securityContext.privileged }}
+      {{- if not (.Values.securityContext.privileged) }}
       initContainers:
         - name: mount-bpf-fs
           image: {{ .Values.global.image.registry | default .Values.image.registry }}/{{ .Values.image.repository }}{{ include "beyla.imageId" . }}
@@ -89,7 +89,7 @@ spec:
           env:
             - name: BEYLA_CONFIG_PATH
               value: "/etc/beyla/config/beyla-config.yml"
-          {{- if ne .Values.securityContext.privileged }}
+          {{- if not (.Values.securityContext.privileged) }}
             - name: KUBE_NAMESPACE
               valueFrom:
                 fieldRef:
@@ -111,7 +111,7 @@ spec:
           volumeMounts:
             - mountPath: /etc/beyla/config
               name: beyla-config
-          {{- if ne .Values.securityContext.privileged }}
+          {{- if not (.Values.securityContext.privileged) }}
             - name: bpffs
               mountPath: /sys/fs/bpf
               mountPropagation: HostToContainer
@@ -140,7 +140,7 @@ spec:
         - name: beyla-config
           configMap:
             name: {{ default (include "beyla.fullname" .) .Values.config.name }}
-      {{- if ne .Values.securityContext.privileged }}
+      {{- if not (.Values.securityContext.privileged) }}
         - name: bpffs
           hostPath:
             path: /sys/fs/bpf

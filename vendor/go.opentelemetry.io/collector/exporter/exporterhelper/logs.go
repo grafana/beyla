@@ -71,7 +71,7 @@ type logsExporter struct {
 // NewLogsExporter creates an exporter.Logs that records observability metrics and wraps every request with a Span.
 func NewLogsExporter(
 	ctx context.Context,
-	set exporter.CreateSettings,
+	set exporter.Settings,
 	cfg component.Config,
 	pusher consumer.ConsumeLogsFunc,
 	options ...Option,
@@ -106,7 +106,7 @@ func requestFromLogs(pusher consumer.ConsumeLogsFunc) RequestFromLogsFunc {
 // until https://github.com/open-telemetry/opentelemetry-collector/issues/8122 is resolved.
 func NewLogsRequestExporter(
 	_ context.Context,
-	set exporter.CreateSettings,
+	set exporter.Settings,
 	converter RequestFromLogsFunc,
 	options ...Option,
 ) (exporter.Logs, error) {
@@ -146,16 +146,17 @@ func NewLogsRequestExporter(
 
 type logsExporterWithObservability struct {
 	baseRequestSender
-	obsrep *ObsReport
+	obsrep *obsReport
 }
 
-func newLogsExporterWithObservability(obsrep *ObsReport) requestSender {
+func newLogsExporterWithObservability(obsrep *obsReport) requestSender {
 	return &logsExporterWithObservability{obsrep: obsrep}
 }
 
 func (lewo *logsExporterWithObservability) send(ctx context.Context, req Request) error {
-	c := lewo.obsrep.StartLogsOp(ctx)
+	c := lewo.obsrep.startLogsOp(ctx)
+	numLogRecords := req.ItemsCount()
 	err := lewo.nextSender.send(c, req)
-	lewo.obsrep.EndLogsOp(c, req.ItemsCount(), err)
+	lewo.obsrep.endLogsOp(c, numLogRecords, err)
 	return err
 }

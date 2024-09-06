@@ -40,7 +40,7 @@ endif
 
 ifeq ($(QEMU_HOST_ARCH),aarch64)
 	ifeq ($(QEMU_TARGET_ARCH),aarch64)
-		QEMU_CPU_FLAGS=-cpu host
+		QEMU_CPU_FLAGS=-cpu cortex-a57
 	endif
 
 	ifeq ($(QEMU_TARGET_ARCH),x86_64)

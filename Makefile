@@ -248,6 +248,12 @@ run-integration-test-vm:
 	@echo "### Running integration tests"
 	go test -p 1 -failfast -v -timeout 60m -mod vendor -a ./test/integration/... --tags=integration -run "^TestMultiProcess"
 
+.PHONY: run-integration-test-arm
+run-integration-test-arm:
+	@echo "### Running integration tests"
+	go clean -testcache
+	go test -p 1 -failfast -v -timeout 60m -mod vendor -a ./test/integration/... --tags=integration -run "^TestMultiProcess"
+
 .PHONY: integration-test
 integration-test: prereqs prepare-integration-test
 	$(MAKE) run-integration-test || (ret=$$?; $(MAKE) cleanup-integration-test && exit $$ret)
@@ -257,6 +263,12 @@ integration-test: prereqs prepare-integration-test
 .PHONY: integration-test-k8s
 integration-test-k8s: prereqs prepare-integration-test
 	$(MAKE) run-integration-test-k8s || (ret=$$?; $(MAKE) cleanup-integration-test && exit $$ret)
+	$(MAKE) itest-coverage-data
+	$(MAKE) cleanup-integration-test
+
+.PHONY: integration-test-arm
+integration-test-arm: prereqs prepare-integration-test
+	$(MAKE) run-integration-test-arm || (ret=$$?; $(MAKE) cleanup-integration-test && exit $$ret)
 	$(MAKE) itest-coverage-data
 	$(MAKE) cleanup-integration-test
 

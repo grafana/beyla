@@ -12,22 +12,24 @@ import (
 	"time"
 
 	"github.com/mostynb/go-grpc-compression/nonclobbering/snappy"
+	"github.com/mostynb/go-grpc-compression/nonclobbering/zstd"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"go.opentelemetry.io/otel"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/encoding/gzip"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
+	"google.golang.org/grpc/status"
 
 	"go.opentelemetry.io/collector/client"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/config/configauth"
 	"go.opentelemetry.io/collector/config/configcompression"
-	grpcInternal "go.opentelemetry.io/collector/config/configgrpc/internal"
 	"go.opentelemetry.io/collector/config/confignet"
 	"go.opentelemetry.io/collector/config/configopaque"
 	"go.opentelemetry.io/collector/config/configtelemetry"
@@ -53,6 +55,11 @@ func NewDefaultKeepaliveClientConfig() *KeepaliveClientConfig {
 		Time:    time.Second * 10,
 		Timeout: time.Second * 10,
 	}
+}
+
+// BalancerName returns a string with default load balancer value
+func BalancerName() string {
+	return "round_robin"
 }
 
 // ClientConfig defines common settings for a gRPC client configuration.
@@ -102,9 +109,10 @@ type ClientConfig struct {
 // NewDefaultClientConfig returns a new instance of ClientConfig with default values.
 func NewDefaultClientConfig() *ClientConfig {
 	return &ClientConfig{
-		TLSSetting: configtls.NewDefaultClientConfig(),
-		Keepalive:  NewDefaultKeepaliveClientConfig(),
-		Auth:       configauth.NewDefaultAuthentication(),
+		TLSSetting:   configtls.NewDefaultClientConfig(),
+		Keepalive:    NewDefaultKeepaliveClientConfig(),
+		Auth:         configauth.NewDefaultAuthentication(),
+		BalancerName: BalancerName(),
 	}
 }
 
@@ -182,7 +190,6 @@ type ServerConfig struct {
 	Auth *configauth.Authentication `mapstructure:"auth"`
 
 	// Include propagates the incoming connection's metadata to downstream consumers.
-	// Experimental: *NOTE* this option is subject to change or removal in the future.
 	IncludeMetadata bool `mapstructure:"include_metadata"`
 }
 
@@ -218,8 +225,8 @@ func (gcs *ClientConfig) isSchemeHTTPS() bool {
 // a non-blocking dial (the function won't wait for connections to be
 // established, and connecting happens in the background). To make it a blocking
 // dial, use grpc.WithBlock() dial option.
-func (gcs *ClientConfig) ToClientConn(_ context.Context, host component.Host, settings component.TelemetrySettings, extraOpts ...grpc.DialOption) (*grpc.ClientConn, error) {
-	opts, err := gcs.toDialOptions(host, settings)
+func (gcs *ClientConfig) ToClientConn(ctx context.Context, host component.Host, settings component.TelemetrySettings, extraOpts ...grpc.DialOption) (*grpc.ClientConn, error) {
+	opts, err := gcs.toDialOptions(ctx, host, settings)
 	if err != nil {
 		return nil, err
 	}
@@ -227,7 +234,7 @@ func (gcs *ClientConfig) ToClientConn(_ context.Context, host component.Host, se
 	return grpc.NewClient(gcs.sanitizedEndpoint(), opts...)
 }
 
-func (gcs *ClientConfig) toDialOptions(host component.Host, settings component.TelemetrySettings) ([]grpc.DialOption, error) {
+func (gcs *ClientConfig) toDialOptions(ctx context.Context, host component.Host, settings component.TelemetrySettings) ([]grpc.DialOption, error) {
 	var opts []grpc.DialOption
 	if gcs.Compression.IsCompressed() {
 		cp, err := getGRPCCompressionName(gcs.Compression)
@@ -237,7 +244,7 @@ func (gcs *ClientConfig) toDialOptions(host component.Host, settings component.T
 		opts = append(opts, grpc.WithDefaultCallOptions(grpc.UseCompressor(cp)))
 	}
 
-	tlsCfg, err := gcs.TLSSetting.LoadTLSConfig(context.Background())
+	tlsCfg, err := gcs.TLSSetting.LoadTLSConfig(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -271,7 +278,7 @@ func (gcs *ClientConfig) toDialOptions(host component.Host, settings component.T
 			return nil, errors.New("no extensions configuration available")
 		}
 
-		grpcAuthenticator, cerr := gcs.Auth.GetClientAuthenticator(host.GetExtensions())
+		grpcAuthenticator, cerr := gcs.Auth.GetClientAuthenticator(ctx, host.GetExtensions())
 		if cerr != nil {
 			return nil, cerr
 		}
@@ -387,7 +394,7 @@ func (gss *ServerConfig) toServerOption(host component.Host, settings component.
 	var sInterceptors []grpc.StreamServerInterceptor
 
 	if gss.Auth != nil {
-		authenticator, err := gss.Auth.GetServerAuthenticator(host.GetExtensions())
+		authenticator, err := gss.Auth.GetServerAuthenticator(context.Background(), host.GetExtensions())
 		if err != nil {
 			return nil, err
 		}
@@ -426,7 +433,7 @@ func getGRPCCompressionName(compressionType configcompression.Type) (string, err
 	case configcompression.TypeSnappy:
 		return snappy.Name, nil
 	case configcompression.TypeZstd:
-		return grpcInternal.ZstdName, nil
+		return zstd.Name, nil
 	default:
 		return "", fmt.Errorf("unsupported compression type %q", compressionType)
 	}
@@ -473,7 +480,7 @@ func authUnaryServerInterceptor(ctx context.Context, req any, _ *grpc.UnaryServe
 
 	ctx, err := server.Authenticate(ctx, headers)
 	if err != nil {
-		return nil, err
+		return nil, status.Error(codes.Unauthenticated, err.Error())
 	}
 
 	return handler(ctx, req)
@@ -488,7 +495,7 @@ func authStreamServerInterceptor(srv any, stream grpc.ServerStream, _ *grpc.Stre
 
 	ctx, err := server.Authenticate(ctx, headers)
 	if err != nil {
-		return err
+		return status.Error(codes.Unauthenticated, err.Error())
 	}
 
 	return handler(srv, wrapServerStream(ctx, stream))

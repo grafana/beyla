@@ -3,18 +3,27 @@ name: Pull request integration tests on VM
 on:
   workflow_call:
     inputs:
-      arch:
+      target-arch:
         description: 'Target architecture to run the tests'
+        required: true
+        type: string
+      host-arch:
+        description: 'Archicteture of the github runner'
         required: true
         type: string
       kernel-version:
         description: 'Kernel version to use when running the tests'
         required: true
         type: string
+      runner:
+        description: 'Github runner to use'
+        required: true
+        type: string
+        default: ubuntu-latest
 jobs:
   test:
     name: test
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner }}
     strategy:
       matrix:
         go: [ '1.22' ]
@@ -27,10 +36,12 @@ jobs:
       - name: Install QEMU
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends qemu-utils qemu-system-x86
+          sudo apt-get remove liboss4-salsa-asound2
+          sudo apt-get remove libasound2
+          sudo apt-get install -y --no-install-recommends qemu-utils qemu-system-${{ inputs.target-arch }} ipxe-qemu
       - name: Run VM integration tests
         run: |
-          sudo make -C test/vm KERNEL_VER=${{ inputs.kernel-version }} ARCH=${{ inputs.arch }} && [ -f testoutput/success ]
+          sudo make -C test/vm KERNEL_VER=${{ inputs.kernel-version }} HOST_ARCH=${{ inputs.host-arch }} TARGET_ARCH=${{ inputs.target-arch }} && [ -f testoutput/success ]
         timeout-minutes: 60
       - name: Upload integration test logs
         uses: actions/upload-artifact@v3

@@ -30,7 +30,7 @@ QEMU := $(shell which $(QEMU_BIN))
 
 ifeq ($(QEMU_HOST_ARCH),x86_64)
 	ifeq ($(QEMU_TARGET_ARCH),aarch64)
-		QEMU_CPU_FLAGS=-cpu max
+		QEMU_CPU_FLAGS=-cpu cortex-a57
 	endif
 
 	ifeq ($(QEMU_TARGET_ARCH),x86_64)
@@ -49,7 +49,7 @@ ifeq ($(QEMU_HOST_ARCH),aarch64)
 endif
 
 ifeq ($(QEMU_TARGET_ARCH),aarch64)
-	QEMU_MACHINE_TYPE=-M type=virt,accel=tcg,highmem=on
+	QEMU_MACHINE_TYPE=-M type=virt,accel=tcg
 	QEMU_KERNEL_CMDLINE=earlyprintk=ttyAMA0 console=ttyAMA0 root=/dev/vda rw quiet
 else
 	QEMU_KERNEL_CMDLINE=earlyprintk=ttyS0 console=ttyS0 root=/dev/sda rw quiet

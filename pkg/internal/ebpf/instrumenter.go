@@ -36,20 +36,22 @@ func (i *instrumenter) goprobes(p Tracer) error {
 	log := ilog().With("probes", "goprobes")
 	// TODO: not running program if it does not find the required probes
 	for funcName, funcPrograms := range p.GoProbes() {
-		offs, ok := i.offsets.Funcs[funcName]
-		if !ok {
-			// the program function is not in the detected offsets. Ignoring
-			log.Debug("ignoring function", "function", funcName)
-			continue
+		for _, funcProgram := range funcPrograms {
+			offs, ok := i.offsets.Funcs[funcName]
+			if !ok {
+				// the program function is not in the detected offsets. Ignoring
+				log.Debug("ignoring function", "function", funcName)
+				continue
+			}
+			log.Debug("going to instrument function", "function", funcName, "offsets", offs, "programs", funcPrograms)
+			if err := i.goprobe(ebpfcommon.Probe{
+				Offsets:  offs,
+				Programs: funcProgram,
+			}); err != nil {
+				return fmt.Errorf("instrumenting function %q: %w", funcName, err)
+			}
+			p.AddCloser(i.closables...)
 		}
-		log.Debug("going to instrument function", "function", funcName, "offsets", offs, "programs", funcPrograms)
-		if err := i.goprobe(ebpfcommon.Probe{
-			Offsets:  offs,
-			Programs: funcPrograms,
-		}); err != nil {
-			return fmt.Errorf("instrumenting function %q: %w", funcName, err)
-		}
-		p.AddCloser(i.closables...)
 	}
 
 	return nil

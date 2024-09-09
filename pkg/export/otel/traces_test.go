@@ -990,6 +990,47 @@ func TestTracesAttrReuse(t *testing.T) {
 	}
 }
 
+func TestTracesSkipsInstrumented(t *testing.T) {
+	svcNoExport := svc.ID{}
+
+	svcNoExportTraces := svc.ID{}
+	svcNoExportTraces.SetExportsOTelMetrics()
+
+	svcExportTraces := svc.ID{}
+	svcExportTraces.SetExportsOTelTraces()
+
+	tests := []struct {
+		name     string
+		spans    []request.Span
+		filtered bool
+	}{
+		{
+			name:     "Foo span is not filtered",
+			spans:    []request.Span{{ServiceID: svcNoExport, Type: request.EventTypeHTTPClient, Method: "GET", Route: "/foo", RequestStart: 100, End: 200}},
+			filtered: false,
+		},
+		{
+			name:     "/v1/metrics span is not filtered",
+			spans:    []request.Span{{ServiceID: svcNoExportTraces, Type: request.EventTypeHTTPClient, Method: "GET", Route: "/v1/metrics", RequestStart: 100, End: 200}},
+			filtered: false,
+		},
+		{
+			name:     "/v1/traces span is filtered",
+			spans:    []request.Span{{ServiceID: svcExportTraces, Type: request.EventTypeHTTPClient, Method: "GET", Route: "/v1/traces", RequestStart: 100, End: 200}},
+			filtered: true,
+		},
+	}
+
+	tr := makeTracesTestReceiver([]string{instrumentations.InstrumentationALL})
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			traces := generateTracesForSpans(t, tr, tt.spans)
+			assert.Equal(t, tt.filtered, len(traces) == 0, tt.name)
+		})
+	}
+}
+
 type fakeInternalTraces struct {
 	imetrics.NoopReporter
 	sum  atomic.Int32
@@ -1183,7 +1224,7 @@ func generateTracesForSpans(t *testing.T, tr *tracesOTELReceiver, spans []reques
 	assert.NoError(t, err)
 	for i := range spans {
 		span := &spans[i]
-		if span.IgnoreTraces() || !tr.acceptSpan(span) {
+		if tr.spanDiscarded(span) {
 			continue
 		}
 		res = append(res, GenerateTraces(span, "host-id", traceAttrs, []attribute.KeyValue{}))

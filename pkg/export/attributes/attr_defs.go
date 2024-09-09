@@ -43,7 +43,8 @@ func getDefinitions(groups AttrGroups) map[Section]AttrReportGroup {
 	var prometheusAttributes = AttrReportGroup{
 		Disabled: !promEnabled,
 		Attributes: map[attr.Name]Default{
-			attr.TargetInstance:   true,
+			attr.Instance:         true,
+			attr.Job:              true,
 			attr.ServiceNamespace: true,
 		},
 	}
@@ -64,18 +65,18 @@ func getDefinitions(groups AttrGroups) map[Section]AttrReportGroup {
 		Disabled: !kubeEnabled,
 		Attributes: map[attr.Name]Default{
 			attr.K8sSrcOwnerName: true,
+			attr.K8sSrcOwnerType: true,
 			attr.K8sSrcNamespace: true,
 			attr.K8sDstOwnerName: true,
+			attr.K8sDstOwnerType: true,
 			attr.K8sDstNamespace: true,
 			attr.K8sClusterName:  true,
 			attr.K8sSrcName:      false,
 			attr.K8sSrcType:      false,
-			attr.K8sSrcOwnerType: false,
 			attr.K8sSrcNodeIP:    false,
 			attr.K8sSrcNodeName:  false,
 			attr.K8sDstName:      false,
 			attr.K8sDstType:      false,
-			attr.K8sDstOwnerType: false,
 			attr.K8sDstNodeIP:    false,
 			attr.K8sDstNodeName:  false,
 		},
@@ -166,6 +167,8 @@ func getDefinitions(groups AttrGroups) map[Section]AttrReportGroup {
 	var promProcessAttributes = AttrReportGroup{
 		Disabled: !promEnabled,
 		Attributes: map[attr.Name]Default{
+			attr.Instance:        true,
+			attr.Job:             true,
 			attr.ProcCommand:     true,
 			attr.ProcOwner:       true,
 			attr.ProcParentPid:   true,
@@ -180,7 +183,7 @@ func getDefinitions(groups AttrGroups) map[Section]AttrReportGroup {
 	var processAttributes = AttrReportGroup{
 		SubGroups: []*AttrReportGroup{&appKubeAttributes, &hostAttributes, &promProcessAttributes},
 		Attributes: map[attr.Name]Default{
-			attr.ProcCPUState:  true,
+			attr.ProcCPUMode:   true,
 			attr.ProcDiskIODir: true,
 			attr.ProcNetIODir:  true,
 		},

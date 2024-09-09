@@ -9,4 +9,4 @@ attributes:
     process_*:
       include: ["*"]
     process_cpu_*:
-      exclude: ["process_cpu_state"]
+      exclude: ["cpu_mode"]

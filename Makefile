@@ -32,7 +32,7 @@ CLANG ?= clang
 CFLAGS := -O2 -g -Wall -Werror $(CFLAGS)
 
 # regular expressions for excluded file patterns
-EXCLUDE_COVERAGE_FILES="(bpfel_)|(/pingserver/)|(/grafana/beyla/test/)|(integration/components)|(/grafana/beyla/docs/)|(/grafana/beyla/configs/)|(/grafana/beyla/examples/)"
+EXCLUDE_COVERAGE_FILES="(_bpfel.go)|(/pingserver/)|(/grafana/beyla/test/)|(integration/components)|(/grafana/beyla/docs/)|(/grafana/beyla/configs/)|(/grafana/beyla/examples/)"
 
 .DEFAULT_GOAL := all
 
@@ -73,11 +73,11 @@ endef
 #   1. Variable name(s) to test.
 #   2. (optional) Error message to print.
 check_defined = \
-    $(strip $(foreach 1,$1, \
-        $(call __check_defined,$1,$(strip $(value 2)))))
+	$(strip $(foreach 1,$1, \
+		$(call __check_defined,$1,$(strip $(value 2)))))
 __check_defined = \
-    $(if $(value $1),, \
-      $(error Undefined $1$(if $2, ($2))))
+	$(if $(value $1),, \
+	  $(error Undefined $1$(if $2, ($2))))
 
 # prereqs binary dependencies
 GOLANGCI_LINT = $(TOOLS_DIR)/golangci-lint
@@ -98,7 +98,7 @@ endef
 prereqs:
 	@echo "### Check if prerequisites are met, and installing missing dependencies"
 	mkdir -p $(TEST_OUTPUT)/run
-	$(call go-install-tool,$(GOLANGCI_LINT),github.com/golangci/golangci-lint/cmd/golangci-lint,v1.57.2)
+	$(call go-install-tool,$(GOLANGCI_LINT),github.com/golangci/golangci-lint/cmd/golangci-lint,v1.60.3)
 	$(call go-install-tool,$(BPF2GO),github.com/cilium/ebpf/cmd/bpf2go,$(call gomod-version,cilium/ebpf))
 	$(call go-install-tool,$(GO_OFFSETS_TRACKER),github.com/grafana/go-offsets-tracker/cmd/go-offsets-tracker,$(call gomod-version,grafana/go-offsets-tracker))
 	$(call go-install-tool,$(GOIMPORTS_REVISER),github.com/incu6us/goimports-reviser/v3,v3.6.4)
@@ -124,8 +124,10 @@ checkfmt:
 .PHONY: lint-dashboard
 lint-dashboard: prereqs
 	@echo "### Linting dashboard";
-	@if [ "$(shell sh -c 'git ls-files --modified | grep grafana/dashboard.json ')" != "" ]; then \
-		$(DASHBOARD_LINTER) lint --strict grafana/dashboard.json; \
+	@if [ "$(shell sh -c 'git ls-files --modified | grep grafana/*.json ')" != "" ]; then \
+		for file in grafana/*.json; do \
+			$(DASHBOARD_LINTER) lint --strict $$file; \
+		done; \
 	else \
 		echo '(no git changes detected. Skipping)'; \
 	fi
@@ -240,6 +242,11 @@ run-integration-test-k8s:
 	@echo "### Running integration tests"
 	go clean -testcache
 	go test -p 1 -failfast -v -timeout 60m -mod vendor -a ./test/integration/... --tags=integration_k8s
+
+.PHONY: run-integration-test-vm
+run-integration-test-vm:
+	@echo "### Running integration tests"
+	go test -p 1 -failfast -v -timeout 60m -mod vendor -a ./test/integration/... --tags=integration -run "^TestMultiProcess"
 
 .PHONY: integration-test
 integration-test: prereqs prepare-integration-test

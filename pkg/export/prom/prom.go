@@ -115,6 +115,8 @@ type PrometheusConfig struct {
 	TTL                         time.Duration `yaml:"ttl" env:"BEYLA_PROMETHEUS_TTL"`
 	SpanMetricsServiceCacheSize int           `yaml:"service_cache_size"`
 
+	AllowServiceGraphSelfReferences bool `yaml:"allow_service_graph_self_references" env:"BEYLA_PROMETHEUS_ALLOW_SERVICE_GRAPH_SELF_REFERENCES"`
+
 	// Registry is only used for embedding Beyla within the Grafana Agent.
 	// It must be nil when Beyla runs as standalone
 	Registry *prometheus.Registry `yaml:"-"`
@@ -575,6 +577,10 @@ func (r *metricsReporter) collectMetrics(input <-chan []request.Span) {
 	}
 }
 
+func (r *metricsReporter) otelSpanObserved(span *request.Span) bool {
+	return r.cfg.OTelMetricsEnabled() && !span.ServiceID.ExportsOTelMetrics()
+}
+
 // nolint:cyclop
 func (r *metricsReporter) observe(span *request.Span) {
 	t := span.Timings()
@@ -584,7 +590,7 @@ func (r *metricsReporter) observe(span *request.Span) {
 	targetInfoLabelValues := r.labelValuesTargetInfo(span.ServiceID)
 	r.targetInfo.WithLabelValues(targetInfoLabelValues...).metric.Set(1)
 
-	if r.cfg.OTelMetricsEnabled() {
+	if r.otelSpanObserved(span) {
 		switch span.Type {
 		case request.EventTypeHTTP:
 			if r.is.HTTPEnabled() {
@@ -637,6 +643,7 @@ func (r *metricsReporter) observe(span *request.Span) {
 			}
 		}
 	}
+
 	if r.cfg.SpanMetricsEnabled() {
 		lv := r.labelValuesSpans(span)
 		r.spanMetricsLatency.WithLabelValues(lv...).metric.Observe(duration)
@@ -651,15 +658,17 @@ func (r *metricsReporter) observe(span *request.Span) {
 	}
 
 	if r.cfg.ServiceGraphMetricsEnabled() {
-		lvg := r.labelValuesServiceGraph(span)
-		if span.IsClientSpan() {
-			r.serviceGraphClient.WithLabelValues(lvg...).metric.Observe(duration)
-		} else {
-			r.serviceGraphServer.WithLabelValues(lvg...).metric.Observe(duration)
-		}
-		r.serviceGraphTotal.WithLabelValues(lvg...).metric.Add(1)
-		if request.SpanStatusCode(span) == codes.Error {
-			r.serviceGraphFailed.WithLabelValues(lvg...).metric.Add(1)
+		if !span.IsSelfReferenceSpan() || r.cfg.AllowServiceGraphSelfReferences {
+			lvg := r.labelValuesServiceGraph(span)
+			if span.IsClientSpan() {
+				r.serviceGraphClient.WithLabelValues(lvg...).metric.Observe(duration)
+			} else {
+				r.serviceGraphServer.WithLabelValues(lvg...).metric.Observe(duration)
+			}
+			r.serviceGraphTotal.WithLabelValues(lvg...).metric.Add(1)
+			if request.SpanStatusCode(span) == codes.Error {
+				r.serviceGraphFailed.WithLabelValues(lvg...).metric.Add(1)
+			}
 		}
 	}
 }
@@ -692,18 +701,14 @@ func labelNamesSpans() []string {
 }
 
 func (r *metricsReporter) labelValuesSpans(span *request.Span) []string {
-	job := span.ServiceID.Name
-	if span.ServiceID.Namespace != "" {
-		job = span.ServiceID.Namespace + "/" + job
-	}
 	return []string{
 		span.ServiceID.Name,
 		span.ServiceID.Namespace,
 		span.TraceName(),
 		strconv.Itoa(int(request.SpanStatusCode(span))),
 		span.ServiceGraphKind(),
-		span.ServiceID.Instance,
-		job,
+		string(span.ServiceID.UID), // app instance ID
+		span.ServiceID.Job(),
 		"beyla",
 	}
 }
@@ -719,17 +724,13 @@ func labelNamesTargetInfo(kubeEnabled bool) []string {
 }
 
 func (r *metricsReporter) labelValuesTargetInfo(service svc.ID) []string {
-	job := service.Name
-	if service.Namespace != "" {
-		job = service.Namespace + "/" + job
-	}
 	values := []string{
 		r.hostID,
 		service.HostName,
 		service.Name,
 		service.Namespace,
-		service.Instance,
-		job,
+		string(service.UID), // app instance ID
+		service.Job(),
 		service.SDKLanguage.String(),
 		"beyla",
 		"beyla",

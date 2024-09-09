@@ -29,7 +29,7 @@ struct {
 // Temporary tracking of tcp_recvmsg arguments
 typedef struct recv_args {
     u64 sock_ptr; // linux sock or socket address
-    u64 iovec_ptr;
+    u8 iovec_ctx[sizeof(iovec_iter_ctx)];
 } recv_args_t;
 
 struct {
@@ -426,8 +426,9 @@ int BPF_KPROBE(kprobe_tcp_recvmsg, struct sock *sk, struct msghdr *msg, size_t l
 
     recv_args_t args = {
         .sock_ptr = (u64)sk,
-        .iovec_ptr = (u64)(msg)
     };
+
+    get_iovec_ctx((iovec_iter_ctx *)&args.iovec_ctx, msg);
 
     bpf_map_update_elem(&active_recv_args, &id, &args, BPF_ANY);
 
@@ -443,7 +444,9 @@ static __always_inline int return_recvmsg(void *ctx, u64 id, int copied_len) {
         goto done;
     }
 
-    if (!args->iovec_ptr) {
+    iovec_iter_ctx *iov_ctx = (iovec_iter_ctx *)&args->iovec_ctx;
+
+    if (!iov_ctx->iov && !iov_ctx->ubuf) {
         bpf_dbg_printk("iovec_ptr found in kprobe is NULL, ignoring this tcp_recvmsg");
         bpf_map_delete_elem(&active_recv_args, &id);
 
@@ -452,7 +455,6 @@ static __always_inline int return_recvmsg(void *ctx, u64 id, int copied_len) {
 
     pid_connection_info_t info = {};
 
-    void *iovec_ptr = (void *)args->iovec_ptr;
     void *sock_ptr = (void *)args->sock_ptr;
 
     bpf_map_delete_elem(&active_recv_args, &id);
@@ -470,7 +472,7 @@ static __always_inline int return_recvmsg(void *ctx, u64 id, int copied_len) {
             if (!active_ssl) {
                 u8* buf = iovec_memory();
                 if (buf) {
-                    copied_len = read_msghdr_buf((void *)iovec_ptr, buf, copied_len);
+                    copied_len = read_iovec_ctx(iov_ctx, buf, copied_len);
                     if (copied_len) {
                         // doesn't return must be logically last statement
                         handle_buf_with_connection(ctx, &info, buf, copied_len, NO_SSL, TCP_RECV, orig_dport);

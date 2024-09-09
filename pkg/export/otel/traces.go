@@ -165,6 +165,10 @@ func GetUserSelectedAttributes(attrs attributes.Selection) (map[attr.Name]struct
 	return traceAttrs, err
 }
 
+func (tr *tracesOTELReceiver) spanDiscarded(span *request.Span) bool {
+	return span.IgnoreTraces() || span.ServiceID.ExportsOTelTraces() || !tr.acceptSpan(span)
+}
+
 func (tr *tracesOTELReceiver) provideLoop() (pipe.FinalFunc[[]request.Span], error) {
 	if !tr.cfg.Enabled() {
 		return pipe.IgnoreFinal[[]request.Span](), nil
@@ -199,7 +203,7 @@ func (tr *tracesOTELReceiver) provideLoop() (pipe.FinalFunc[[]request.Span], err
 		for spans := range in {
 			for i := range spans {
 				span := &spans[i]
-				if span.IgnoreTraces() || !tr.acceptSpan(span) {
+				if tr.spanDiscarded(span) {
 					continue
 				}
 				traces := GenerateTraces(span, tr.ctxInfo.HostID, traceAttrs, envResourceAttrs)
@@ -225,7 +229,7 @@ func getTracesExporter(ctx context.Context, cfg TracesConfig, ctxInfo *global.Co
 			return nil, err
 		}
 		if t, err = httpTracer(ctx, opts); err != nil {
-			slog.Error("can't instantiate OTEL HTTP traces exporter", err)
+			slog.Error("can't instantiate OTEL HTTP traces exporter", "error", err)
 			return nil, err
 		}
 		factory := otlphttpexporter.NewFactory()
@@ -253,7 +257,7 @@ func getTracesExporter(ctx context.Context, cfg TracesConfig, ctxInfo *global.Co
 			return nil, err
 		}
 		if t, err = grpcTracer(ctx, opts); err != nil {
-			slog.Error("can't instantiate OTEL GRPC traces exporter: %w", err)
+			slog.Error("can't instantiate OTEL GRPC traces exporter", "error", err)
 			return nil, err
 		}
 		endpoint, _, err := parseTracesEndpoint(&cfg)
@@ -326,7 +330,7 @@ func traceProviderWithInternalMetrics(ctxInfo *global.ContextInfo, cfg TracesCon
 	)
 }
 
-func getTraceSettings(ctxInfo *global.ContextInfo, cfg TracesConfig, in trace.SpanExporter) exporter.CreateSettings {
+func getTraceSettings(ctxInfo *global.ContextInfo, cfg TracesConfig, in trace.SpanExporter) exporter.Settings {
 	var traceProvider trace2.TracerProvider
 
 	telemetryLevel := configtelemetry.LevelNone
@@ -342,13 +346,8 @@ func getTraceSettings(ctxInfo *global.ContextInfo, cfg TracesConfig, in trace.Sp
 		MeterProvider:  metric.NewMeterProvider(),
 		TracerProvider: traceProvider,
 		MetricsLevel:   telemetryLevel,
-		ReportStatus: func(event *component.StatusEvent) {
-			if err := event.Err(); err != nil {
-				slog.Error("error reported by component", "error", err)
-			}
-		},
 	}
-	return exporter.CreateSettings{
+	return exporter.Settings{
 		ID:                component.NewIDWithName(component.DataTypeMetrics, "beyla"),
 		TelemetrySettings: telemetrySettings,
 	}

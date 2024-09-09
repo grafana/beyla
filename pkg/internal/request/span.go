@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 	"unicode/utf8"
 
@@ -29,6 +30,13 @@ const (
 	EventTypeKafkaClient
 	EventTypeRedisServer
 	EventTypeKafkaServer
+)
+
+const (
+	metricsDetectPattern     = "/v1/metrics"
+	grpcMetricsDetectPattern = "/opentelemetry.proto.collector.metrics.v1.MetricsService/Export"
+	tracesDetectPattern      = "/v1/traces"
+	grpcTracesDetectPattern  = "/opentelemetry.proto.collector.trace.v1.TraceService/Export"
 )
 
 func (t EventType) String() string {
@@ -330,6 +338,10 @@ func SpanStatusCode(span *Span) codes.Code {
 
 // https://opentelemetry.io/docs/specs/otel/trace/semantic_conventions/http/#status
 func HTTPSpanStatusCode(span *Span) codes.Code {
+	if span.Status == 0 {
+		return codes.Error
+	}
+
 	if span.Status < 400 {
 		return codes.Unset
 	}
@@ -426,4 +438,52 @@ func (s *Span) TraceName() string {
 		return fmt.Sprintf("%s %s", s.Path, s.Method)
 	}
 	return ""
+}
+
+func (s *Span) isHTTPOrGRPCClient() bool {
+	return s.Type == EventTypeHTTPClient || s.Type == EventTypeGRPCClient
+}
+
+func (s *Span) isMetricsExportURL() bool {
+	switch s.Type {
+	case EventTypeGRPCClient:
+		return strings.HasPrefix(s.Path, grpcMetricsDetectPattern)
+	case EventTypeHTTPClient:
+		return strings.HasPrefix(s.Path, metricsDetectPattern)
+	default:
+		return false
+	}
+}
+
+func (s *Span) isTracesExportURL() bool {
+	switch s.Type {
+	case EventTypeGRPCClient:
+		return strings.HasPrefix(s.Path, grpcTracesDetectPattern)
+	case EventTypeHTTPClient:
+		return strings.HasPrefix(s.Path, tracesDetectPattern)
+	default:
+		return false
+	}
+}
+
+func (s *Span) IsExportMetricsSpan() bool {
+	// check if it's a successful client call
+	if !s.isHTTPOrGRPCClient() || (SpanStatusCode(s) != codes.Unset) {
+		return false
+	}
+
+	return s.isMetricsExportURL()
+}
+
+func (s *Span) IsExportTracesSpan() bool {
+	// check if it's a successful client call
+	if !s.isHTTPOrGRPCClient() || (SpanStatusCode(s) != codes.Unset) {
+		return false
+	}
+
+	return s.isTracesExportURL()
+}
+
+func (s *Span) IsSelfReferenceSpan() bool {
+	return s.Peer == s.Host && (s.ServiceID.Namespace == s.OtherNamespace || s.OtherNamespace == "")
 }

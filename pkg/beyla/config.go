@@ -43,7 +43,7 @@ const (
 var DefaultConfig = Config{
 	ChannelBufferLen: 10,
 	LogLevel:         "INFO",
-	EnforceSysCaps:   true,
+	EnforceSysCaps:   false,
 	EBPF: ebpfcommon.TracerConfig{
 		BatchLength:        100,
 		BatchTimeout:       time.Second,
@@ -122,6 +122,9 @@ var DefaultConfig = Config{
 	Processes: process.CollectConfig{
 		RunMode:  process.RunModePrivileged,
 		Interval: 5 * time.Second,
+	},
+	Discovery: services.DiscoveryConfig{
+		ExcludeOTelInstrumentedServices: true,
 	},
 }
 
@@ -236,6 +239,9 @@ func (c *Config) Validate() error {
 	}
 	if c.EBPF.BatchLength == 0 {
 		return ConfigError("BEYLA_BPF_BATCH_LENGTH must be at least 1")
+	}
+	if c.Attributes.Kubernetes.InformersSyncTimeout == 0 {
+		return ConfigError("BEYLA_KUBE_INFORMERS_SYNC_TIMEOUT duration must be greater than 0s")
 	}
 
 	if c.Enabled(FeatureNetO11y) && !c.Grafana.OTLP.MetricsEnabled() && !c.Metrics.Enabled() &&

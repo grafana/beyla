@@ -124,7 +124,7 @@ type bpf_tp_debugPidKeyT struct {
 
 type bpf_tp_debugRecvArgsT struct {
 	SockPtr  uint64
-	IovecPtr uint64
+	IovecCtx [40]uint8
 }
 
 type bpf_tp_debugSendArgsT struct {

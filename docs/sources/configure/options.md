@@ -225,12 +225,36 @@ namespace.
 For more details about this section, go to the [discovery services section](#discovery-services-section)
 of this document.
 
+| YAML               | Environment variable | Type            | Default |
+| ------------------ | ------- | --------------- | ------- |
+| `exclude_services` | N/A     | list of objects | (unset) |
+
+This section allows for specifying selection criteria for excluding services from 
+being instrumented. It follows the same definition format as described in the 
+[discovery services section](#discovery-services-section) of this document.
+
+This option is useful for avoiding instrumentation of services which are typically
+found in observability environments. For example, use this option to exclude instrumenting
+Prometheus, the OpenTelemetry collector or Grafana Alloy.
+
 | YAML                       | Environment variable             | Type    | Default |
 | -------------------------- | -------------------------------- | ------- | ------- |
 | `skip_go_specific_tracers` | `BEYLA_SKIP_GO_SPECIFIC_TRACERS` | boolean | false   |
 
-Disables the detection of Go specifics when ebpf tracer inspects executables to be instrumented.
+Disables the detection of Go specifics when the **ebpf** tracer inspects executables to be instrumented.
 The tracer will fallback to using generic instrumentation, which will generally be less efficient.
+
+| YAML                                 | Environment variable                       | Type    | Default |
+| ------------------------------------ | ------------------------------------------ | ------- | ------- |
+| `exclude_otel_instrumented_services` | `BEYLA_EXCLUDE_OTEL_INSTRUMENTED_SERVICES` | boolean | true    |
+
+Disables Beyla instrumentation of services which are already instrumented with OpenTelemetry. Since Beyla
+is often deployed to monitor all services in a Kubernetes cluster, monitoring already instrumented services
+can lead to duplicate telemetry data, unless the instrumentation selection (or exclusion) criteria is 
+carefully crafted. To avoid unnecessary configuration overhead, Beyla monitors for the OpenTelemetry SDK calls
+to publish metrics and traces, and automatically turns off instrumentation of services which publish their own
+telemetry data. Turn this option off if your application generated telemetry data doesn't conflict with the
+Beyla generated metrics and traces.
 
 ### Discovery services section
 
@@ -276,7 +300,7 @@ precedence:
 
 - If Kubernetes is enabled:
   1. The name of the Deployment that runs the instrumented process, if any.
-  2. The name of the ReplicaSet that runs the instrumented process, if any.
+  2. The name of the ReplicaSet/DaemonSet/StatefulSet that runs the instrumented process, if any.
   3. The name of the Pod that runs the instrumented process.
 - If kubernetes is not enabled:
   1. The name of the process executable file.
@@ -284,8 +308,8 @@ precedence:
 If multiple processes match the service selection criteria described below,
 the metrics and traces for all the instances might share the same service name;
 for example, when multiple instrumented processes run under the same Deployment,
-or have the same executable name. In that case, the reported `instance.id` (OTEL) or
-`target_instance` (Prometheus) would allow differentiating the different instances
+or have the same executable name. In that case, the reported `instance` attribute
+would allow differentiating the different instances
 of the service.
 
 | YAML        | Environment variable | Type   | Default                  |
@@ -580,14 +604,6 @@ instead of trying to automatically resolve the host name.
 
 This option takes precedence over `dns`.
 
-| YAML                   | Environment variable             | Type   | Default |
-| ---------------------- | ------------------- | ------ | ------- |
-| `override_instance_id` | `BEYLA_INSTANCE_ID` | string | (unset) |
-
-If set, Beyla will use this value directly as instance ID of any instrumented
-process. If you are managing multiple processes from a single Beyla instance,
-all the processes will have the same instance ID.
-
 ### Kubernetes decorator
 
 If you run Beyla in a Kubernetes environment, you can configure it to decorate the traces
@@ -870,6 +886,17 @@ of Beyla: application-level metrics or network metrics.
   metrics; but only if there is an OpenTelemetry endpoint defined. For network-level metrics options visit the
   [network metrics]({{< relref "../network" >}}) configuration documentation.
 
+| YAML                                  | Environment variable                             | Type     | Default |
+|---------------------------------------|--------------------------------------------------|----------|---------|
+| `allow_service_graph_self_references` | `BEYLA_OTEL_ALLOW_SERVICE_GRAPH_SELF_REFERENCES` | boolean  | `false` |
+
+This option affects the behaviour of the generation of application-level service graph metrics, which can be enabled 
+by adding `application_service_graph` to the list of OpenTelemetry metric export features. By default, Beyla does not
+report application-level service graph metrics which are considered to be self-referencing. For example, self-references
+can be calls from local node metric scrape tools, or a service making an HTTP call to itself. Self-references
+not useful for the purpose of showing service graphs, while at the same time they increase the cardinality and the
+overall metric storage cost. To allow generation of application-level service graph metrics which also include 
+self-references, change this option value to `true`.
 
 | YAML               | Environment variable                  | Type            | Default                      |
 |--------------------|---------------------------------------|-----------------|------------------------------|
@@ -1188,6 +1215,12 @@ API key of your Grafana Cloud account.
 
 ## Prometheus HTTP endpoint
 
+> ℹ️ The Prometheus scraper might override the values of the `instance` and `job` labels.
+> To keep the original values as set by Beyla, make sure to configure the
+> Prometheus scraper to set the `honor_labels` option to `true`.
+> 
+> ([How to set `honor_labels` in Grafana Alloy](/docs/alloy/latest/reference/components/prometheus/prometheus.scrape/)).
+
 YAML section `prometheus_export`.
 
 This component opens an HTTP endpoint in the auto-instrumentation tool
@@ -1247,6 +1280,18 @@ of Beyla: application-level metrics or network metrics.
 - If the list contains `network`, the Beyla Prometheus exporter exports network-level
   metrics; but only if the Prometheus `port` property is defined. For network-level metrics options visit the
   [network metrics]({{< relref "../network" >}}) configuration documentation.
+
+| YAML                                  | Environment variable                                   | Type     | Default |
+|---------------------------------------|--------------------------------------------------------|----------|---------|
+| `allow_service_graph_self_references` | `BEYLA_PROMETHEUS_ALLOW_SERVICE_GRAPH_SELF_REFERENCES` | boolean  | `false` |
+
+This option affects the behaviour of the generation of application-level service graph metrics, which can be enabled 
+by adding `application_service_graph` to the list of Prometheus metric export features. By default, Beyla does not
+report application-level service graph metrics which are considered to be self-referencing. For example, self-references
+can be calls from local node metric scrape tools, or a service making an HTTP call to itself. Self-references
+not useful for the purpose of showing service graphs, while at the same time they increase the cardinality and the
+overall metric storage cost. To allow generation of application-level service graph metrics which also include 
+self-references, change this option value to `true`.
 
 
 | YAML               | Environment variable                  | Type            | Default                      |

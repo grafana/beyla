@@ -25,6 +25,7 @@ import (
 	"github.com/grafana/beyla/pkg/internal/netolly/transform/cidr"
 	"github.com/grafana/beyla/pkg/internal/traces"
 	"github.com/grafana/beyla/pkg/kubeflags"
+	"github.com/grafana/beyla/pkg/services"
 	"github.com/grafana/beyla/pkg/transform"
 )
 
@@ -106,7 +107,7 @@ network:
 		ServiceName:      "svc-name",
 		ChannelBufferLen: 33,
 		LogLevel:         "INFO",
-		EnforceSysCaps:   true,
+		EnforceSysCaps:   false,
 		Printer:          false,
 		TracePrinter:     "json",
 		EBPF: ebpfcommon.TracerConfig{
@@ -199,6 +200,9 @@ network:
 		Processes: process.CollectConfig{
 			RunMode:  process.RunModePrivileged,
 			Interval: 5 * time.Second,
+		},
+		Discovery: services.DiscoveryConfig{
+			ExcludeOTelInstrumentedServices: true,
 		},
 	}, cfg)
 }

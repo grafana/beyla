@@ -5,13 +5,17 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"os/signal"
 	"regexp"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 
 	"github.com/mariomac/guara/pkg/test"
 	"github.com/mariomac/pipes/pipe"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -294,6 +298,101 @@ func TestAppMetrics_ByInstrumentation(t *testing.T) {
 
 		})
 	}
+}
+
+func TestSpanMetricsDiscarded(t *testing.T) {
+	mc := PrometheusConfig{
+		Features: []string{otel.FeatureApplication},
+	}
+	mr := metricsReporter{
+		cfg: &mc,
+	}
+
+	svcNoExport := svc.ID{}
+
+	svcExportMetrics := svc.ID{}
+	svcExportMetrics.SetExportsOTelMetrics()
+
+	svcExportTraces := svc.ID{}
+	svcExportTraces.SetExportsOTelTraces()
+
+	tests := []struct {
+		name      string
+		span      request.Span
+		discarded bool
+	}{
+		{
+			name:      "Foo span is not filtered",
+			span:      request.Span{ServiceID: svcNoExport, Type: request.EventTypeHTTPClient, Method: "GET", Route: "/foo", RequestStart: 100, End: 200},
+			discarded: false,
+		},
+		{
+			name:      "/v1/metrics span is filtered",
+			span:      request.Span{ServiceID: svcExportMetrics, Type: request.EventTypeHTTPClient, Method: "GET", Route: "/v1/metrics", RequestStart: 100, End: 200},
+			discarded: true,
+		},
+		{
+			name:      "/v1/traces span is not filtered",
+			span:      request.Span{ServiceID: svcExportTraces, Type: request.EventTypeHTTPClient, Method: "GET", Route: "/v1/traces", RequestStart: 100, End: 200},
+			discarded: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.discarded, !mr.otelSpanObserved(&tt.span), tt.name)
+		})
+	}
+}
+
+func TestTerminatesOnBadPromPort(t *testing.T) {
+	now := syncedClock{now: time.Now()}
+	timeNow = now.Now
+
+	ctx, cancelCtx := context.WithCancel(context.Background())
+	defer cancelCtx()
+	openPort, err := test.FreeTCPPort()
+	require.NoError(t, err)
+
+	// Grab the port we just allocated for something else
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintf(w, "Hello, %v, http: %v\n", r.URL.Path, r.TLS == nil)
+	})
+	server := http.Server{Addr: fmt.Sprintf(":%d", openPort), Handler: handler}
+	serverUp := make(chan bool, 1)
+
+	go func() {
+		go func() {
+			time.Sleep(5 * time.Second)
+			serverUp <- true
+		}()
+		err := server.ListenAndServe()
+		fmt.Printf("Terminating server %v\n", err)
+	}()
+
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT)
+
+	pm := connector.PrometheusManager{}
+
+	c := prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: TracesTargetInfo,
+		Help: "target service information in trace span metric format",
+	}, []string{"a"}).MetricVec
+
+	pm.Register(openPort, "/metrics", c)
+	go pm.StartHTTP(ctx)
+
+	ok := false
+	select {
+	case sig := <-sigChan:
+		assert.Equal(t, sig, syscall.SIGINT)
+		ok = true
+	case <-time.After(5 * time.Second):
+		ok = false
+	}
+
+	assert.True(t, ok)
 }
 
 var mmux = sync.Mutex{}

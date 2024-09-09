@@ -45,26 +45,27 @@ func (it InstrumentableType) String() string {
 	}
 }
 
-// UID uniquely identifies a service instance
-type UID string
+type idFlags uint8
+
+const (
+	autoName           idFlags = 0x1
+	exportsOTelMetrics idFlags = 0x2
+	exportsOTelTraces  idFlags = 0x4
+)
 
 // ID stores the metadata attributes of a service/resource
 // TODO: rename to svc.Attributes
 type ID struct {
-	// UID might coincide with other fields (usually, Instance), but UID
-	// can't be overriden by the user, so it's the only field that can be
-	// used for internal differentiation of the users.
-	// UID is not exported in the metrics or traces.
+	// UID uniquely identifies a service instance. It is not exported
+	// in the metrics or traces, but it is used to compose the InstanceID
 	UID UID
 
 	Name string
 	// AutoName is true if the Name has been automatically set by Beyla (e.g. executable name when
 	// the Name is empty). This will allow later refinement of the Name value (e.g. to override it
 	// again with Kubernetes metadata).
-	AutoName    bool
 	Namespace   string
 	SDKLanguage InstrumentableType
-	Instance    string
 
 	Metadata map[attr.Name]string
 
@@ -76,6 +77,8 @@ type ID struct {
 	// HostName running the process. It will default to the Beyla host and will be overridden
 	// by other metadata if available (e.g., Pod Name, Node Name, etc...)
 	HostName string
+
+	flags idFlags
 }
 
 func (i *ID) GetUID() UID {
@@ -83,8 +86,44 @@ func (i *ID) GetUID() UID {
 }
 
 func (i *ID) String() string {
+	return i.Job()
+}
+
+func (i *ID) Job() string {
 	if i.Namespace != "" {
 		return i.Namespace + "/" + i.Name
 	}
 	return i.Name
+}
+
+func (i *ID) setFlag(flag idFlags) {
+	i.flags |= flag
+}
+
+func (i *ID) getFlag(flag idFlags) bool {
+	return (i.flags & flag) == flag
+}
+
+func (i *ID) SetAutoName() {
+	i.setFlag(autoName)
+}
+
+func (i *ID) AutoName() bool {
+	return i.getFlag(autoName)
+}
+
+func (i *ID) SetExportsOTelMetrics() {
+	i.setFlag(exportsOTelMetrics)
+}
+
+func (i *ID) ExportsOTelMetrics() bool {
+	return i.getFlag(exportsOTelMetrics)
+}
+
+func (i *ID) SetExportsOTelTraces() {
+	i.setFlag(exportsOTelTraces)
+}
+
+func (i *ID) ExportsOTelTraces() bool {
+	return i.getFlag(exportsOTelTraces)
 }

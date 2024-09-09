@@ -1,3 +1,5 @@
+//go:build linux
+
 package beyla
 
 import (
@@ -103,14 +105,14 @@ type capTestData struct {
 }
 
 var capTests = []capTestData{
-	{osCap: unix.CAP_BPF, class: capCore},
-	{osCap: unix.CAP_PERFMON, class: capCore},
-	{osCap: unix.CAP_DAC_READ_SEARCH, class: capCore},
+	{osCap: unix.CAP_BPF, class: capCore, kernMaj: 6, kernMin: 10},
+	{osCap: unix.CAP_PERFMON, class: capCore, kernMaj: 6, kernMin: 10},
+	{osCap: unix.CAP_DAC_READ_SEARCH, class: capCore, kernMaj: 6, kernMin: 10},
 	{osCap: unix.CAP_SYS_RESOURCE, class: capCore, kernMaj: 5, kernMin: 10},
-	{osCap: unix.CAP_SYS_RESOURCE, class: capCore, kernMaj: 4, kernMin: 11},
-	{osCap: unix.CAP_CHECKPOINT_RESTORE, class: capApp},
-	{osCap: unix.CAP_SYS_PTRACE, class: capApp},
-	{osCap: unix.CAP_NET_RAW, class: capNet},
+	{osCap: unix.CAP_SYS_ADMIN, class: capCore, kernMaj: 4, kernMin: 11},
+	{osCap: unix.CAP_CHECKPOINT_RESTORE, class: capApp, kernMaj: 6, kernMin: 10},
+	{osCap: unix.CAP_SYS_PTRACE, class: capApp, kernMaj: 6, kernMin: 10},
+	{osCap: unix.CAP_NET_RAW, class: capNet, kernMaj: 6, kernMin: 10},
 }
 
 func TestCheckOSCapabilities(t *testing.T) {

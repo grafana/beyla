@@ -13,7 +13,7 @@ import (
 )
 
 // Minimum required Kernel version: 5.8
-const minKernMaj, minKernMin = 5, 8
+const minKernMaj, minKernMin = 4, 18
 
 var kernelVersion = ebpfcommon.KernelVersion
 

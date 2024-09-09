@@ -43,7 +43,7 @@ func (i *instrumenter) goprobes(p Tracer) error {
 				log.Debug("ignoring function", "function", funcName)
 				continue
 			}
-			log.Debug("going to instrument function", "function", funcName, "offsets", offs, "programs", funcPrograms)
+			log.Debug("going to instrument function", "function", funcName, "offsets", offs, "programs", funcProgram)
 			if err := i.goprobe(ebpfcommon.Probe{
 				Offsets:  offs,
 				Programs: funcProgram,

@@ -329,8 +329,7 @@ func (p *Tracer) GoProbes() map[string][]ebpfcommon.FunctionPrograms {
 			Start: p.bpfObjects.UprobeSaramaResponsePromiseHandle,
 		}},
 		"github.com/Shopify/sarama.(*Broker).sendInternal": {{
-			Start:    p.bpfObjects.UprobeSaramaSendInternal,
-			Required: true,
+			Start: p.bpfObjects.UprobeSaramaSendInternal,
 		}},
 	}
 

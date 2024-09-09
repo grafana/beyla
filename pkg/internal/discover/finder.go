@@ -93,9 +93,7 @@ func (pf *ProcessFinder) Start() (<-chan *ebpf.ProcessTracer, <-chan *Instrument
 
 func newGoTracersGroup(cfg *beyla.Config, metrics imetrics.Reporter) []ebpf.Tracer {
 	// Each program is an eBPF source: net/http, grpc...
-	return []ebpf.Tracer{
-		gotracer.New(cfg, metrics),
-	}
+	return []ebpf.Tracer{gotracer.New(cfg, metrics)}
 }
 
 func newNonGoTracersGroup(cfg *beyla.Config, metrics imetrics.Reporter) []ebpf.Tracer {

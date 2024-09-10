@@ -25,7 +25,6 @@ const (
 	EACCES     = linux.EACCES
 	EILSEQ     = linux.EILSEQ
 	EOPNOTSUPP = linux.EOPNOTSUPP
-	ESTALE     = linux.ESTALE
 )
 
 const (
@@ -40,8 +39,6 @@ const (
 	BPF_F_MMAPABLE            = linux.BPF_F_MMAPABLE
 	BPF_F_INNER_MAP           = linux.BPF_F_INNER_MAP
 	BPF_F_KPROBE_MULTI_RETURN = linux.BPF_F_KPROBE_MULTI_RETURN
-	BPF_F_UPROBE_MULTI_RETURN = linux.BPF_F_UPROBE_MULTI_RETURN
-	BPF_F_LOCK                = linux.BPF_F_LOCK
 	BPF_OBJ_NAME_LEN          = linux.BPF_OBJ_NAME_LEN
 	BPF_TAG_SIZE              = linux.BPF_TAG_SIZE
 	BPF_RINGBUF_BUSY_BIT      = linux.BPF_RINGBUF_BUSY_BIT
@@ -101,7 +98,6 @@ type PerfEventMmapPage = linux.PerfEventMmapPage
 type EpollEvent = linux.EpollEvent
 type PerfEventAttr = linux.PerfEventAttr
 type Utsname = linux.Utsname
-type CPUSet = linux.CPUSet
 
 func Syscall(trap, a1, a2, a3 uintptr) (r1, r2 uintptr, err syscall.Errno) {
 	return linux.Syscall(trap, a1, a2, a3)
@@ -205,12 +201,4 @@ func Fstat(fd int, stat *Stat_t) error {
 
 func SetsockoptInt(fd, level, opt, value int) error {
 	return linux.SetsockoptInt(fd, level, opt, value)
-}
-
-func SchedSetaffinity(pid int, set *CPUSet) error {
-	return linux.SchedSetaffinity(pid, set)
-}
-
-func SchedGetaffinity(pid int, set *CPUSet) error {
-	return linux.SchedGetaffinity(pid, set)
 }

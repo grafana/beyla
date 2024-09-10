@@ -2,7 +2,6 @@ package internal
 
 import (
 	"fmt"
-	"sync"
 
 	"github.com/cilium/ebpf/internal/unix"
 )
@@ -80,7 +79,7 @@ func (v Version) Kernel() uint32 {
 }
 
 // KernelVersion returns the version of the currently running kernel.
-var KernelVersion = sync.OnceValues(func() (Version, error) {
+var KernelVersion = Memoize(func() (Version, error) {
 	return detectKernelVersion()
 })
 

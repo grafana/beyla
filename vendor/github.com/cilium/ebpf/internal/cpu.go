@@ -1,31 +1,16 @@
-package ebpf
+package internal
 
 import (
 	"fmt"
 	"os"
 	"strings"
-	"sync"
 )
 
-var possibleCPU = sync.OnceValues(func() (int, error) {
+// PossibleCPUs returns the max number of CPUs a system may possibly have
+// Logical CPU numbers must be of the form 0-n
+var PossibleCPUs = Memoize(func() (int, error) {
 	return parseCPUsFromFile("/sys/devices/system/cpu/possible")
 })
-
-// PossibleCPU returns the max number of CPUs a system may possibly have
-// Logical CPU numbers must be of the form 0-n
-func PossibleCPU() (int, error) {
-	return possibleCPU()
-}
-
-// MustPossibleCPU is a helper that wraps a call to PossibleCPU and panics if
-// the error is non-nil.
-func MustPossibleCPU() int {
-	cpus, err := PossibleCPU()
-	if err != nil {
-		panic(err)
-	}
-	return cpus
-}
 
 func parseCPUsFromFile(path string) (int, error) {
 	spec, err := os.ReadFile(path)

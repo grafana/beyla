@@ -130,7 +130,7 @@ int uprobe_sarama_response_promise_handle(struct pt_regs *ctx) {
 
         bpf_probe_read(&correlation_id, sizeof(u32), p + sarama_response_corr_id_pos);
 
-        bpf_dbg_printk("correlation_id = %d", correlation_id);
+        bpf_dbg_printk("correlation__id = %d", correlation_id);
 
         if (correlation_id) {
             kafka_client_req_t *req = bpf_map_lookup_elem(&kafka_requests, &correlation_id);

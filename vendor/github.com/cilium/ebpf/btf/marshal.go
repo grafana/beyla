@@ -5,12 +5,12 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"maps"
 	"math"
-	"slices"
 	"sync"
 
 	"github.com/cilium/ebpf/internal"
+
+	"golang.org/x/exp/slices"
 )
 
 type MarshalOptions struct {
@@ -20,17 +20,14 @@ type MarshalOptions struct {
 	StripFuncLinkage bool
 	// Replace Enum64 with a placeholder for compatibility with <6.0 kernels.
 	ReplaceEnum64 bool
-	// Prevent the "No type found" error when loading BTF without any types.
-	PreventNoTypeFound bool
 }
 
 // KernelMarshalOptions will generate BTF suitable for the current kernel.
 func KernelMarshalOptions() *MarshalOptions {
 	return &MarshalOptions{
-		Order:              internal.NativeEndian,
-		StripFuncLinkage:   haveFuncLinkage() != nil,
-		ReplaceEnum64:      haveEnum64() != nil,
-		PreventNoTypeFound: true, // All current kernels require this.
+		Order:            internal.NativeEndian,
+		StripFuncLinkage: haveFuncLinkage() != nil,
+		ReplaceEnum64:    haveEnum64() != nil,
 	}
 }
 
@@ -42,7 +39,6 @@ type encoder struct {
 	buf     *bytes.Buffer
 	strings *stringTableBuilder
 	ids     map[Type]TypeID
-	visited map[Type]struct{}
 	lastID  TypeID
 }
 
@@ -95,11 +91,6 @@ func NewBuilder(types []Type) (*Builder, error) {
 	}
 
 	return b, nil
-}
-
-// Empty returns true if neither types nor strings have been added.
-func (b *Builder) Empty() bool {
-	return len(b.types) == 0 && (b.strings == nil || b.strings.Length() == 0)
 }
 
 // Add a Type and allocate a stable ID for it.
@@ -168,29 +159,15 @@ func (b *Builder) Marshal(buf []byte, opts *MarshalOptions) ([]byte, error) {
 		buf:            w,
 		strings:        stb,
 		lastID:         TypeID(len(b.types)),
-		visited:        make(map[Type]struct{}, len(b.types)),
-		ids:            maps.Clone(b.stableIDs),
-	}
-
-	if e.ids == nil {
-		e.ids = make(map[Type]TypeID)
-	}
-
-	types := b.types
-	if len(types) == 0 && stb.Length() > 0 && opts.PreventNoTypeFound {
-		// We have strings that need to be written out,
-		// but no types (besides the implicit Void).
-		// Kernels as recent as v6.7 refuse to load such BTF
-		// with a "No type found" error in the log.
-		// Fix this by adding a dummy type.
-		types = []Type{&Int{Size: 0}}
+		ids:            make(map[Type]TypeID, len(b.types)),
 	}
 
 	// Ensure that types are marshaled in the exact order they were Add()ed.
 	// Otherwise the ID returned from Add() won't match.
-	e.pending.Grow(len(types))
-	for _, typ := range types {
+	e.pending.Grow(len(b.types))
+	for _, typ := range b.types {
 		e.pending.Push(typ)
+		e.ids[typ] = b.stableIDs[typ]
 	}
 
 	if err := e.deflatePending(); err != nil {
@@ -237,28 +214,16 @@ func (b *Builder) addString(str string) (uint32, error) {
 	return b.strings.Add(str)
 }
 
-func (e *encoder) allocateIDs(root Type) (err error) {
-	visitInPostorder(root, e.visited, func(typ Type) bool {
-		if _, ok := typ.(*Void); ok {
-			return true
-		}
+func (e *encoder) allocateID(typ Type) error {
+	id := e.lastID + 1
+	if id < e.lastID {
+		return errors.New("type ID overflow")
+	}
 
-		if _, ok := e.ids[typ]; ok {
-			return true
-		}
-
-		id := e.lastID + 1
-		if id < e.lastID {
-			err = errors.New("type ID overflow")
-			return false
-		}
-
-		e.pending.Push(typ)
-		e.ids[typ] = id
-		e.lastID = id
-		return true
-	})
-	return
+	e.pending.Push(typ)
+	e.ids[typ] = id
+	e.lastID = id
+	return nil
 }
 
 // id returns the ID for the given type or panics with an error.
@@ -278,13 +243,33 @@ func (e *encoder) id(typ Type) TypeID {
 func (e *encoder) deflatePending() error {
 	// Declare root outside of the loop to avoid repeated heap allocations.
 	var root Type
+	skip := func(t Type) (skip bool) {
+		if t == root {
+			// Force descending into the current root type even if it already
+			// has an ID. Otherwise we miss children of types that have their
+			// ID pre-allocated via Add.
+			return false
+		}
+
+		_, isVoid := t.(*Void)
+		_, alreadyEncoded := e.ids[t]
+		return isVoid || alreadyEncoded
+	}
 
 	for !e.pending.Empty() {
 		root = e.pending.Shift()
 
 		// Allocate IDs for all children of typ, including transitive dependencies.
-		if err := e.allocateIDs(root); err != nil {
-			return err
+		iter := postorderTraversal(root, skip)
+		for iter.Next() {
+			if iter.Type == root {
+				// The iterator yields root at the end, do not allocate another ID.
+				break
+			}
+
+			if err := e.allocateID(iter.Type); err != nil {
+				return err
+			}
 		}
 
 		if err := e.deflateType(root); err != nil {
@@ -509,7 +494,7 @@ func (e *encoder) deflateEnum64(raw *rawType, enum *Enum) (err error) {
 		if enum.Signed {
 			placeholder.Encoding = Signed
 		}
-		if err := e.allocateIDs(placeholder); err != nil {
+		if err := e.allocateID(placeholder); err != nil {
 			return fmt.Errorf("add enum64 placeholder: %w", err)
 		}
 

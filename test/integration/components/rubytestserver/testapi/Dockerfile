@@ -1,4 +1,4 @@
-FROM ruby:3.0.2 as builder
+FROM ruby:3.0.2 AS builder
 
 # Set the working directory to /build
 WORKDIR /build
@@ -8,8 +8,10 @@ COPY test/integration/components/rubytestserver/testapi .
 
 # Install Rails 
 RUN gem install rails
-RUN gem install bundler rails
+RUN gem install bundler
 RUN bundle install
+RUN bundle exec rake app:update:bin
+RUN bin/rails db:migrate
 
 EXPOSE 3040
 

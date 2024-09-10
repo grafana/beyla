@@ -8,7 +8,7 @@
 #include "pid_types.h"
 #include "bpf_dbg.h"
 
-#define FULL_BUF_SIZE 160 // should be enough for most URLs, we may need to extend it if not. Must be multiple of 16 for the copy to work.
+#define FULL_BUF_SIZE 192 // should be enough for most URLs, we may need to extend it if not. Must be multiple of 16 for the copy to work.
 #define TRACE_BUF_SIZE 1024 // must be power of 2, we do an & to limit the buffer size
 #define KPROBES_HTTP2_BUF_SIZE 256
 #define KPROBES_HTTP2_RET_BUF_SIZE 64

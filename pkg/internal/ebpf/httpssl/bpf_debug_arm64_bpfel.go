@@ -81,7 +81,7 @@ type bpf_debugHttpInfoT struct {
 	_               [2]byte
 	StartMonotimeNs uint64
 	EndMonotimeNs   uint64
-	Buf             [160]uint8
+	Buf             [192]uint8
 	Len             uint32
 	RespLen         uint32
 	Status          uint16

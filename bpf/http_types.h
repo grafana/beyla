@@ -134,6 +134,8 @@ typedef struct call_protocol_args {
 typedef struct protocol_info {
     u32 hdr_len;
     u32 seq;
+    u16 h_proto;
+    u16 tot_len;
     u8  flags;
 } protocol_info_t;
 

@@ -1,6 +1,6 @@
 FROM ubuntu:latest
 
-ARG GOVERSION="1.23.0"
+ARG GOVERSION="1.23.1"
 
 ARG TARGETARCH
 

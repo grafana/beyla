@@ -505,6 +505,7 @@ func (p *Tracer) registerIngress(iface ifaces.Interface, ipvlan netlink.Link) er
 }
 
 func (p *Tracer) closeTC() {
+	p.log.Info("removing traffic control probes")
 	// cleanup egress
 	for iface, ef := range p.egressFilters {
 		p.log.Debug("deleting egress filter", "interface", iface)

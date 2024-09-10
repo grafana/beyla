@@ -663,13 +663,13 @@ int BPF_KPROBE(kprobe_sys_exit, int status) {
     return 0;
 }
 
-SEC("app_tc_ingress")
+SEC("tc_ingress")
 int app_ingress(struct __sk_buff *skb) {
     bpf_printk("ingress");
     return 0;
 }
 
-SEC("app_tc_egress")
+SEC("tc_egress")
 int app_egress(struct __sk_buff *skb) {
     bpf_printk("egress");
     return 0;

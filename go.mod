@@ -68,15 +68,15 @@ require (
 	sigs.k8s.io/e2e-framework v0.3.0
 )
 
-replace go.opentelemetry.io/otel => github.com/grafana/opentelemetry-go v1.28.0-grafana.2
+replace go.opentelemetry.io/otel => github.com/grafana/opentelemetry-go v1.28.0-grafana.3
 
-replace go.opentelemetry.io/otel/metric => github.com/grafana/opentelemetry-go/metric v1.28.0-grafana.2
+replace go.opentelemetry.io/otel/metric => github.com/grafana/opentelemetry-go/metric v1.28.0-grafana.3
 
-replace go.opentelemetry.io/otel/trace => github.com/grafana/opentelemetry-go/trace v1.28.0-grafana.2
+replace go.opentelemetry.io/otel/trace => github.com/grafana/opentelemetry-go/trace v1.28.0-grafana.3
 
-replace go.opentelemetry.io/otel/sdk => github.com/grafana/opentelemetry-go/sdk v1.28.0-grafana.2
+replace go.opentelemetry.io/otel/sdk => github.com/grafana/opentelemetry-go/sdk v1.28.0-grafana.3
 
-replace go.opentelemetry.io/otel/sdk/metric => github.com/grafana/opentelemetry-go/sdk/metric v1.28.0-grafana.2
+replace go.opentelemetry.io/otel/sdk/metric => github.com/grafana/opentelemetry-go/sdk/metric v1.28.0-grafana.3
 
 require (
 	cloud.google.com/go/compute/metadata v0.4.0 // indirect

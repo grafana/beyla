@@ -238,6 +238,8 @@ type bpfSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpfProgramSpecs struct {
+	AppEgress               *ebpf.ProgramSpec `ebpf:"app_egress"`
+	AppIngress              *ebpf.ProgramSpec `ebpf:"app_ingress"`
 	KprobeSysExit           *ebpf.ProgramSpec `ebpf:"kprobe_sys_exit"`
 	KprobeTcpCleanupRbuf    *ebpf.ProgramSpec `ebpf:"kprobe_tcp_cleanup_rbuf"`
 	KprobeTcpClose          *ebpf.ProgramSpec `ebpf:"kprobe_tcp_close"`
@@ -398,6 +400,8 @@ func (m *bpfMaps) Close() error {
 //
 // It can be passed to loadBpfObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpfPrograms struct {
+	AppEgress               *ebpf.Program `ebpf:"app_egress"`
+	AppIngress              *ebpf.Program `ebpf:"app_ingress"`
 	KprobeSysExit           *ebpf.Program `ebpf:"kprobe_sys_exit"`
 	KprobeTcpCleanupRbuf    *ebpf.Program `ebpf:"kprobe_tcp_cleanup_rbuf"`
 	KprobeTcpClose          *ebpf.Program `ebpf:"kprobe_tcp_close"`
@@ -419,6 +423,8 @@ type bpfPrograms struct {
 
 func (p *bpfPrograms) Close() error {
 	return _BpfClose(
+		p.AppEgress,
+		p.AppIngress,
 		p.KprobeSysExit,
 		p.KprobeTcpCleanupRbuf,
 		p.KprobeTcpClose,

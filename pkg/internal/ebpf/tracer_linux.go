@@ -98,6 +98,9 @@ func (pt *ProcessTracer) tracers() ([]Tracer, error) {
 		// Setup any tail call jump tables
 		p.SetupTailCalls()
 
+		// Setup any traffic control probes
+		p.SetupTC()
+
 		i := instrumenter{
 			exe:     pt.Exe,
 			offsets: pt.Goffsets,

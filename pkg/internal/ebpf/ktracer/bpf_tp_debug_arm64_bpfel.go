@@ -238,6 +238,8 @@ type bpf_tp_debugSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpf_tp_debugProgramSpecs struct {
+	AppEgress               *ebpf.ProgramSpec `ebpf:"app_egress"`
+	AppIngress              *ebpf.ProgramSpec `ebpf:"app_ingress"`
 	KprobeSysExit           *ebpf.ProgramSpec `ebpf:"kprobe_sys_exit"`
 	KprobeTcpCleanupRbuf    *ebpf.ProgramSpec `ebpf:"kprobe_tcp_cleanup_rbuf"`
 	KprobeTcpClose          *ebpf.ProgramSpec `ebpf:"kprobe_tcp_close"`
@@ -401,6 +403,8 @@ func (m *bpf_tp_debugMaps) Close() error {
 //
 // It can be passed to loadBpf_tp_debugObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpf_tp_debugPrograms struct {
+	AppEgress               *ebpf.Program `ebpf:"app_egress"`
+	AppIngress              *ebpf.Program `ebpf:"app_ingress"`
 	KprobeSysExit           *ebpf.Program `ebpf:"kprobe_sys_exit"`
 	KprobeTcpCleanupRbuf    *ebpf.Program `ebpf:"kprobe_tcp_cleanup_rbuf"`
 	KprobeTcpClose          *ebpf.Program `ebpf:"kprobe_tcp_close"`
@@ -422,6 +426,8 @@ type bpf_tp_debugPrograms struct {
 
 func (p *bpf_tp_debugPrograms) Close() error {
 	return _Bpf_tp_debugClose(
+		p.AppEgress,
+		p.AppIngress,
 		p.KprobeSysExit,
 		p.KprobeTcpCleanupRbuf,
 		p.KprobeTcpClose,

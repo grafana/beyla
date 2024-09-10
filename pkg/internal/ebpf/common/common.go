@@ -73,6 +73,9 @@ type TracerConfig struct {
 	TrackRequestHeaders bool `yaml:"track_request_headers" env:"BEYLA_BPF_TRACK_REQUEST_HEADERS"`
 
 	HTTPRequestTimeout time.Duration `yaml:"http_request_timeout" env:"BEYLA_BPF_HTTP_REQUEST_TIMEOUT"`
+
+	// Enables Linux Traffic Control probes for context propagation
+	UseLinuxTC bool `yaml:"enable_traffic_control" env:"BEYLA_BPF_TC"`
 }
 
 // Probe holds the information of the instrumentation points of a given function: its start and end offsets and

@@ -175,7 +175,8 @@ int uprobe_protocol_roundtrip_ret(struct pt_regs *ctx) {
         void *msg_ptr = (void *)p_ptr->msg_ptr;
         topic_t *topic_ptr = bpf_map_lookup_elem(&ongoing_produce_messages, &msg_ptr);
 
-        bpf_dbg_printk("goroutine_addr %lx, conn ptr %llx, msg_ptr = %llx, topic_ptr = %llx", goroutine_addr, p_ptr->conn_ptr, p_ptr->msg_ptr, topic_ptr);
+        bpf_dbg_printk("goroutine_addr %lx, conn ptr %llx", goroutine_addr, p_ptr->conn_ptr);
+        bpf_dbg_printk("msg_ptr = %llx, topic_ptr = %llx", p_ptr->msg_ptr, topic_ptr);
 
         if (topic_ptr) {
             kafka_go_req_t *trace = bpf_ringbuf_reserve(&events, sizeof(kafka_go_req_t), 0);

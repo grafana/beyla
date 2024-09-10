@@ -1,4 +1,4 @@
-package httpfltr
+package ktracer
 
 import (
 	"context"
@@ -34,7 +34,7 @@ type Tracer struct {
 }
 
 func New(cfg *beyla.Config, metrics imetrics.Reporter) *Tracer {
-	log := slog.With("component", "httpfltr.Tracer")
+	log := slog.With("component", "ktracer.Tracer")
 	return &Tracer{
 		log:        log,
 		cfg:        cfg,

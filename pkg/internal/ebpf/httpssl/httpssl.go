@@ -36,7 +36,7 @@ type Tracer struct {
 }
 
 func New(cfg *beyla.Config, metrics imetrics.Reporter) *Tracer {
-	log := slog.With("component", "httpfltr.Tracer")
+	log := slog.With("component", "httpssl.Tracer")
 	return &Tracer{
 		log:        log,
 		cfg:        cfg,

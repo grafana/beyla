@@ -19,7 +19,6 @@
 #include "go_byte_arr.h"
 #include "bpf_dbg.h"
 #include "go_common.h"
-#include "go_nethttp_defs.h"
 #include "go_traceparent.h"
 #include "http_types.h"
 #include "tracing.h"
@@ -69,6 +68,27 @@ struct {
     __type(value, server_http_func_invocation_t);
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
 } ongoing_http_server_requests SEC(".maps");
+
+// To be Injected from the user space during the eBPF program load & initialization
+
+volatile const u64 url_ptr_pos;
+volatile const u64 path_ptr_pos;
+volatile const u64 method_ptr_pos;
+volatile const u64 status_code_ptr_pos;
+volatile const u64 content_length_ptr_pos;
+volatile const u64 req_header_ptr_pos;
+volatile const u64 io_writer_buf_ptr_pos;
+volatile const u64 io_writer_n_pos;
+volatile const u64 cc_next_stream_id_pos;
+volatile const u64 framer_w_pos;
+
+volatile const u64 pc_conn_pos;
+volatile const u64 pc_tls_pos;
+volatile const u64 net_conn_pos;
+volatile const u64 cc_tconn_pos;
+volatile const u64 sc_conn_pos;
+volatile const u64 c_rwc_pos;
+volatile const u64 c_tls_pos;
 
 /* HTTP Server */
 

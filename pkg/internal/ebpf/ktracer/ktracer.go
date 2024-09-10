@@ -328,7 +328,6 @@ func (p *Tracer) Run(ctx context.Context, eventsChan chan<- []request.Span) {
 	go p.watchForMisclassifedEvents()
 	go p.lookForTimeouts(timeoutTicker, eventsChan)
 	defer timeoutTicker.Stop()
-	defer p.closeTC()
 
 	ebpfcommon.SharedRingbuf(
 		&p.cfg.EBPF,
@@ -336,6 +335,8 @@ func (p *Tracer) Run(ctx context.Context, eventsChan chan<- []request.Span) {
 		p.bpfObjects.Events,
 		p.metrics,
 	)(ctx, append(p.closers, &p.bpfObjects), eventsChan)
+
+	p.closeTC()
 }
 
 func kernelTime(ktime uint64) time.Time {
@@ -506,6 +507,10 @@ func (p *Tracer) registerIngress(iface ifaces.Interface, ipvlan netlink.Link) er
 
 func (p *Tracer) closeTC() {
 	p.log.Info("removing traffic control probes")
+
+	p.bpfObjects.AppEgress.Close()
+	p.bpfObjects.AppIngress.Close()
+
 	// cleanup egress
 	for iface, ef := range p.egressFilters {
 		p.log.Debug("deleting egress filter", "interface", iface)

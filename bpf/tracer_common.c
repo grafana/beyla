@@ -10,7 +10,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "http_trace.h"
+#include "tracer_common.h"
 
 // Force emitting struct http_request_trace into the ELF for automatic creation of Golang struct
 const http_request_trace *unused_4 __attribute__((unused));

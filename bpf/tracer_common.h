@@ -10,8 +10,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef HTTP_TRACE_H
-#define HTTP_TRACE_H
+#ifndef TRACER_COMMON_H
+#define TRACER_COMMON_H
 
 #include "pid_types.h"
 #include "utils.h"
@@ -86,4 +86,4 @@ typedef struct redis_client_req {
     u8 err;
 } __attribute__((packed)) redis_client_req_t;
 
-#endif //HTTP_TRACE_H
+#endif //TRACER_COMMON_H

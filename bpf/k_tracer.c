@@ -5,7 +5,7 @@
 #include "pid.h"
 #include "sockaddr.h"
 #include "tcp_info.h"
-#include "http_sock.h"
+#include "k_tracer.h"
 #include "http_ssl.h"
 
 char __license[] SEC("license") = "Dual MIT/GPL";

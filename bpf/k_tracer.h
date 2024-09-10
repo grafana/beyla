@@ -1,5 +1,5 @@
-#ifndef HTTP_SOCK_HELPERS
-#define HTTP_SOCK_HELPERS
+#ifndef K_TRACER_HELPERS
+#define K_TRACER_HELPERS
 
 #include "vmlinux.h"
 #include "bpf_helpers.h"

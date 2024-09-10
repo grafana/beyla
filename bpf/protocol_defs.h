@@ -1,5 +1,5 @@
-#ifndef HTTP_DEFS_H
-#define HTTP_DEFS_H
+#ifndef PROTOCOL_DEFS_H
+#define PROTOCOL_DEFS_H
 
 // Taken from linux/socket.h
 #define AF_INET		2	/* Internet IP Protocol 	*/
@@ -33,4 +33,4 @@
 #define TCPHDR_ECE 0x40
 #define TCPHDR_CWR 0x80
 
-#endif
+#endif //PROTOCOL_DEFS_H

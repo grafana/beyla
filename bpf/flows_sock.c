@@ -23,7 +23,7 @@
 #include "bpf_endian.h"
 #include "bpf_dbg.h"
 #include "flows_common.h"
-#include "http_defs.h"
+#include "protocol_defs.h"
 
 struct __tcphdr {
     __be16 source;

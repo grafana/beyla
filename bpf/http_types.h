@@ -4,7 +4,7 @@
 #include "vmlinux.h"
 #include "map_sizing.h"
 #include "bpf_helpers.h"
-#include "http_defs.h"
+#include "protocol_defs.h"
 #include "pid_types.h"
 #include "bpf_dbg.h"
 

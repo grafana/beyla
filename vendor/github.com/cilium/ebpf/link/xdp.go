@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/cilium/ebpf"
-	"github.com/cilium/ebpf/internal/sys"
 )
 
 // XDPAttachFlags represents how XDP program will be attached to interface.
@@ -51,30 +50,5 @@ func AttachXDP(opts XDPOptions) (Link, error) {
 		Flags:   uint32(opts.Flags),
 	})
 
-	if err != nil {
-		return nil, fmt.Errorf("failed to attach link: %w", err)
-	}
-
-	return &xdpLink{*rawLink}, nil
-}
-
-type xdpLink struct {
-	RawLink
-}
-
-func (xdp *xdpLink) Info() (*Info, error) {
-	var info sys.XDPLinkInfo
-	if err := sys.ObjInfo(xdp.fd, &info); err != nil {
-		return nil, fmt.Errorf("xdp link info: %s", err)
-	}
-	extra := &XDPInfo{
-		Ifindex: info.Ifindex,
-	}
-
-	return &Info{
-		info.Type,
-		info.Id,
-		ebpf.ProgramID(info.ProgId),
-		extra,
-	}, nil
+	return rawLink, err
 }

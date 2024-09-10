@@ -8,7 +8,11 @@
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific la
+#ifndef GO_KAFKA_DEFS_H
+#define GO_KAFKA_DEFS_H
 
 #define KAFKA_API_FETCH   0
 #define KAFKA_API_PRODUCE 1
 #define KAFKA_API_KEY_POS 5
+
+#endif

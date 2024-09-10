@@ -58,7 +58,7 @@ type Tracer interface {
 	// GoProbes returns a map with the name of Go functions that need to be inspected
 	// in the executable, as well as the eBPF programs that optionally need to be
 	// inserted as the Go function start and end probes
-	GoProbes() map[string]ebpfcommon.FunctionPrograms
+	GoProbes() map[string][]ebpfcommon.FunctionPrograms
 	// UProbes returns a map with the module name mapping to the uprobes that need to be
 	// tapped into. Start matches uprobe, End matches uretprobe
 	UProbes() map[string]map[string]ebpfcommon.FunctionPrograms

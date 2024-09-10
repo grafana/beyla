@@ -8,15 +8,10 @@ import (
 
 	"github.com/grafana/beyla/pkg/beyla"
 	"github.com/grafana/beyla/pkg/internal/ebpf"
-	"github.com/grafana/beyla/pkg/internal/ebpf/goredis"
-	"github.com/grafana/beyla/pkg/internal/ebpf/goruntime"
-	"github.com/grafana/beyla/pkg/internal/ebpf/grpc"
+	"github.com/grafana/beyla/pkg/internal/ebpf/gotracer"
 	"github.com/grafana/beyla/pkg/internal/ebpf/httpfltr"
 	"github.com/grafana/beyla/pkg/internal/ebpf/httpssl"
-	"github.com/grafana/beyla/pkg/internal/ebpf/kafkago"
-	"github.com/grafana/beyla/pkg/internal/ebpf/nethttp"
 	"github.com/grafana/beyla/pkg/internal/ebpf/nodejs"
-	"github.com/grafana/beyla/pkg/internal/ebpf/sarama"
 	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 )
@@ -98,15 +93,7 @@ func (pf *ProcessFinder) Start() (<-chan *ebpf.ProcessTracer, <-chan *Instrument
 
 func newGoTracersGroup(cfg *beyla.Config, metrics imetrics.Reporter) []ebpf.Tracer {
 	// Each program is an eBPF source: net/http, grpc...
-	return []ebpf.Tracer{
-		nethttp.New(cfg, metrics),
-		grpc.New(cfg, metrics),
-		goruntime.New(cfg, metrics),
-		sarama.New(cfg, metrics),
-		&sarama.ShopifyKafkaTracer{Tracer: *sarama.New(cfg, metrics)},
-		goredis.New(cfg, metrics),
-		kafkago.New(cfg, metrics),
-	}
+	return []ebpf.Tracer{gotracer.New(cfg, metrics)}
 }
 
 func newNonGoTracersGroup(cfg *beyla.Config, metrics imetrics.Reporter) []ebpf.Tracer {

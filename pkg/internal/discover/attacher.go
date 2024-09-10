@@ -248,12 +248,14 @@ func filterNotFoundPrograms(programs []ebpf.Tracer, offsets *goexec.Offsets) []e
 	funcs := offsets.Funcs
 programs:
 	for _, p := range programs {
-		for fn, fp := range p.GoProbes() {
-			if !fp.Required {
-				continue
-			}
-			if _, ok := funcs[fn]; !ok {
-				continue programs
+		for funcName, funcPrograms := range p.GoProbes() {
+			for _, fp := range funcPrograms {
+				if !fp.Required {
+					continue
+				}
+				if _, ok := funcs[funcName]; !ok {
+					continue programs
+				}
 			}
 		}
 		filtered = append(filtered, p)

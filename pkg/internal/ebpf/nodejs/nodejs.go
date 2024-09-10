@@ -84,7 +84,7 @@ func (p *Tracer) AddCloser(c ...io.Closer) {
 	p.closers = append(p.closers, c...)
 }
 
-func (p *Tracer) GoProbes() map[string]ebpfcommon.FunctionPrograms {
+func (p *Tracer) GoProbes() map[string][]ebpfcommon.FunctionPrograms {
 	return nil
 }
 

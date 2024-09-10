@@ -198,14 +198,6 @@ func (id *Database) addPods(pod *kube.PodInfo) {
 func (id *Database) deletePods(pod *kube.PodInfo) {
 	for _, ip := range pod.IPInfo.IPs {
 		delete(id.podsByIP, ip)
-		for _, cid := range pod.ContainerIDs {
-			cnt, ok := id.containerIDs[cid]
-			delete(id.containerIDs, cid)
-			if ok {
-				delete(id.namespaces, cnt.PIDNamespace)
-				delete(id.fetchedPodsCache, cnt.PIDNamespace)
-			}
-		}
 	}
 }
 

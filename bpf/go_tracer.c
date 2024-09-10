@@ -14,6 +14,7 @@
 
 #include "go_runtime.h"
 #include "go_nethttp.h"
+#include "go_sql.h"
 #include "go_grpc.h"
 #include "go_redis.h"
 #include "go_kafka_go.h"

@@ -12,6 +12,8 @@ import (
 
 	"github.com/cilium/ebpf"
 	"github.com/gavv/monotime"
+	"github.com/vishvananda/netlink"
+	"golang.org/x/sys/unix"
 
 	"github.com/grafana/beyla/pkg/beyla"
 	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
@@ -21,8 +23,6 @@ import (
 	"github.com/grafana/beyla/pkg/internal/netolly/ifaces"
 	"github.com/grafana/beyla/pkg/internal/request"
 	"github.com/grafana/beyla/pkg/internal/svc"
-	"github.com/vishvananda/netlink"
-	"golang.org/x/sys/unix"
 )
 
 //go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 bpf ../../../../bpf/k_tracer.c -- -I../../../../bpf/headers

@@ -60,8 +60,8 @@ func (s *valueMap[N]) remove(ctx context.Context, fltrAttr attribute.Set) {
 
 	key := fltrAttr.Equivalent()
 
-	if val, ok := s.values[key]; ok {
-		s.stale[key] = val
+	if _, ok := s.values[key]; ok {
+		//s.stale[key] = val
 		delete(s.values, key)
 	}
 }

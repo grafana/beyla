@@ -103,7 +103,7 @@
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "beyla_build_info",
+          "expr": "beyla_internal_build_info",
           "format": "table",
           "instant": true,
           "legendFormat": "__auto",

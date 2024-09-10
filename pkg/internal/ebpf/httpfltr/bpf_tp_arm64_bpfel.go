@@ -124,7 +124,7 @@ type bpf_tpPidKeyT struct {
 
 type bpf_tpRecvArgsT struct {
 	SockPtr  uint64
-	IovecPtr uint64
+	IovecCtx [40]uint8
 }
 
 type bpf_tpSendArgsT struct {

@@ -26,7 +26,7 @@ func TestProcMetrics_Aggregated(t *testing.T) {
 	otlp, err := collector.Start(ctx)
 	require.NoError(t, err)
 
-	// GIVEN an OTEL Metrics Exporter whose process CPU metrics do not consider the process.cpu.state
+	// GIVEN an OTEL Metrics Exporter whose process CPU metrics do not consider the cpu.mode
 	includedAttributes := attributes.InclusionLists{
 		Exclude: []string{"*"},
 	}
@@ -191,9 +191,9 @@ func TestProcMetrics_Disaggregated(t *testing.T) {
 	otlp, err := collector.Start(ctx)
 	require.NoError(t, err)
 
-	// GIVEN an OTEL Metrics Exporter whose process CPU metrics consider the process.cpu.state
+	// GIVEN an OTEL Metrics Exporter whose process CPU metrics consider the cpu.mode
 	includedAttributes := attributes.InclusionLists{
-		Include: []string{"process_command", "process_cpu_state", "disk_io_direction", "network_io_direction"},
+		Include: []string{"process_command", "cpu_mode", "disk_io_direction", "network_io_direction"},
 	}
 	otelExporter, err := ProcMetricsExporterProvider(
 		ctx, &global.ContextInfo{}, &ProcMetricsConfig{
@@ -233,42 +233,42 @@ func TestProcMetrics_Disaggregated(t *testing.T) {
 		metric := readChan(t, otlp.Records(), timeout)
 		require.Equal(t, "process.cpu.time", metric.Name)
 		require.Equal(t, "foo", metric.ResourceAttributes["process.command"])
-		require.Equal(t, map[string]string{"process.cpu.state": "user"}, metric.Attributes)
+		require.Equal(t, map[string]string{"cpu.mode": "user"}, metric.Attributes)
 		require.EqualValues(t, 30, metric.FloatVal)
 	})
 	test.Eventually(t, timeout, func(t require.TestingT) {
 		metric := readChan(t, otlp.Records(), timeout)
 		require.Equal(t, "process.cpu.time", metric.Name)
 		require.Equal(t, "foo", metric.ResourceAttributes["process.command"])
-		require.Equal(t, map[string]string{"process.cpu.state": "system"}, metric.Attributes)
+		require.Equal(t, map[string]string{"cpu.mode": "system"}, metric.Attributes)
 		require.EqualValues(t, 10, metric.FloatVal)
 	})
 	test.Eventually(t, timeout, func(t require.TestingT) {
 		metric := readChan(t, otlp.Records(), timeout)
 		require.Equal(t, "process.cpu.time", metric.Name)
 		require.Equal(t, "foo", metric.ResourceAttributes["process.command"])
-		require.Equal(t, map[string]string{"process.cpu.state": "wait"}, metric.Attributes)
+		require.Equal(t, map[string]string{"cpu.mode": "wait"}, metric.Attributes)
 		require.EqualValues(t, 20, metric.FloatVal)
 	})
 	test.Eventually(t, timeout, func(t require.TestingT) {
 		metric := readChan(t, otlp.Records(), timeout)
 		require.Equal(t, "process.cpu.utilization", metric.Name)
 		require.Equal(t, "foo", metric.ResourceAttributes["process.command"])
-		require.Equal(t, map[string]string{"process.cpu.state": "user"}, metric.Attributes)
+		require.Equal(t, map[string]string{"cpu.mode": "user"}, metric.Attributes)
 		require.EqualValues(t, 1, metric.FloatVal)
 	})
 	test.Eventually(t, timeout, func(t require.TestingT) {
 		metric := readChan(t, otlp.Records(), timeout)
 		require.Equal(t, "process.cpu.utilization", metric.Name)
 		require.Equal(t, "foo", metric.ResourceAttributes["process.command"])
-		require.Equal(t, map[string]string{"process.cpu.state": "system"}, metric.Attributes)
+		require.Equal(t, map[string]string{"cpu.mode": "system"}, metric.Attributes)
 		require.EqualValues(t, 2, metric.FloatVal)
 	})
 	test.Eventually(t, timeout, func(t require.TestingT) {
 		metric := readChan(t, otlp.Records(), timeout)
 		require.Equal(t, "process.cpu.utilization", metric.Name)
 		require.Equal(t, "foo", metric.ResourceAttributes["process.command"])
-		require.Equal(t, map[string]string{"process.cpu.state": "wait"}, metric.Attributes)
+		require.Equal(t, map[string]string{"cpu.mode": "wait"}, metric.Attributes)
 		require.EqualValues(t, 3, metric.FloatVal)
 	})
 	test.Eventually(t, timeout, func(t require.TestingT) {

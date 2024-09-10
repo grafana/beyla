@@ -215,3 +215,86 @@ func TestCleanName(t *testing.T) {
 	assert.Equal(t, "service", nr.cleanName(&s, "127.0.0.1", "service.special.namespace.svc.cluster.local."))
 	assert.Equal(t, "service", nr.cleanName(&s, "127.0.0.1", "service.k8snamespace.svc.cluster.local."))
 }
+
+func TestResolveNodesFromK8s(t *testing.T) {
+	db := kube.CreateDatabase(nil)
+
+	node1 := kube2.NodeInfo{
+		ObjectMeta: metav1.ObjectMeta{Name: "node1"},
+		IPInfo:     kube2.IPInfo{IPs: []string{"10.0.0.1", "10.1.0.1"}},
+	}
+
+	node2 := kube2.NodeInfo{
+		ObjectMeta: metav1.ObjectMeta{Name: "node2", Namespace: "something"},
+		IPInfo:     kube2.IPInfo{IPs: []string{"10.0.0.2", "10.1.0.2"}},
+	}
+
+	node3 := kube2.NodeInfo{
+		ObjectMeta: metav1.ObjectMeta{Name: "node3"},
+		IPInfo:     kube2.IPInfo{IPs: []string{"10.0.0.3", "10.1.0.3"}},
+	}
+
+	db.UpdateNewNodesByIPIndex(&node1)
+	db.UpdateNewNodesByIPIndex(&node2)
+	db.UpdateNewNodesByIPIndex(&node3)
+
+	assert.Equal(t, &node1, db.NodeInfoForIP("10.0.0.1"))
+	assert.Equal(t, &node1, db.NodeInfoForIP("10.1.0.1"))
+	assert.Equal(t, &node2, db.NodeInfoForIP("10.0.0.2"))
+	assert.Equal(t, &node2, db.NodeInfoForIP("10.1.0.2"))
+	assert.Equal(t, &node3, db.NodeInfoForIP("10.1.0.3"))
+	db.UpdateDeletedNodesByIPIndex(&node3)
+	assert.Nil(t, db.NodeInfoForIP("10.1.0.3"))
+
+	nr := NameResolver{
+		db:      &db,
+		cache:   expirable.NewLRU[string, string](10, nil, 5*time.Hour),
+		sources: resolverSources([]string{"dns", "k8s"}),
+	}
+
+	name, namespace := nr.resolveFromK8s("10.0.0.1")
+	assert.Equal(t, "node1", name)
+	assert.Equal(t, "", namespace)
+
+	name, namespace = nr.resolveFromK8s("10.0.0.2")
+	assert.Equal(t, "node2", name)
+	assert.Equal(t, "something", namespace)
+
+	name, namespace = nr.resolveFromK8s("10.0.0.3")
+	assert.Equal(t, "", name)
+	assert.Equal(t, "", namespace)
+
+	clientSpan := request.Span{
+		Type: request.EventTypeHTTPClient,
+		Peer: "10.0.0.1",
+		Host: "10.0.0.2",
+		ServiceID: svc.ID{
+			Name:      "node1",
+			Namespace: "",
+		},
+	}
+
+	serverSpan := request.Span{
+		Type: request.EventTypeHTTP,
+		Peer: "10.0.0.1",
+		Host: "10.0.0.2",
+		ServiceID: svc.ID{
+			Name:      "node2",
+			Namespace: "something",
+		},
+	}
+
+	nr.resolveNames(&clientSpan)
+
+	assert.Equal(t, "node1", clientSpan.PeerName)
+	assert.Equal(t, "", clientSpan.ServiceID.Namespace)
+	assert.Equal(t, "node2", clientSpan.HostName)
+	assert.Equal(t, "something", clientSpan.OtherNamespace)
+
+	nr.resolveNames(&serverSpan)
+
+	assert.Equal(t, "node1", serverSpan.PeerName)
+	assert.Equal(t, "", serverSpan.OtherNamespace)
+	assert.Equal(t, "node2", serverSpan.HostName)
+	assert.Equal(t, "something", serverSpan.ServiceID.Namespace)
+}

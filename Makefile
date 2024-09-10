@@ -243,6 +243,11 @@ run-integration-test-k8s:
 	go clean -testcache
 	go test -p 1 -failfast -v -timeout 60m -mod vendor -a ./test/integration/... --tags=integration_k8s
 
+.PHONY: run-integration-test-vm
+run-integration-test-vm:
+	@echo "### Running integration tests"
+	go test -p 1 -failfast -v -timeout 60m -mod vendor -a ./test/integration/... --tags=integration -run "^TestMultiProcess"
+
 .PHONY: integration-test
 integration-test: prereqs prepare-integration-test
 	$(MAKE) run-integration-test || (ret=$$?; $(MAKE) cleanup-integration-test && exit $$ret)

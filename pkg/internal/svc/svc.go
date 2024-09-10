@@ -45,9 +45,6 @@ func (it InstrumentableType) String() string {
 	}
 }
 
-// UID uniquely identifies a service instance
-type UID string
-
 type idFlags uint8
 
 const (
@@ -59,10 +56,8 @@ const (
 // ID stores the metadata attributes of a service/resource
 // TODO: rename to svc.Attributes
 type ID struct {
-	// UID might coincide with other fields (usually, Instance), but UID
-	// can't be overriden by the user, so it's the only field that can be
-	// used for internal differentiation of the users.
-	// UID is not exported in the metrics or traces.
+	// UID uniquely identifies a service instance. It is not exported
+	// in the metrics or traces, but it is used to compose the InstanceID
 	UID UID
 
 	Name string
@@ -71,7 +66,6 @@ type ID struct {
 	// again with Kubernetes metadata).
 	Namespace   string
 	SDKLanguage InstrumentableType
-	Instance    string
 
 	Metadata map[attr.Name]string
 
@@ -92,6 +86,10 @@ func (i *ID) GetUID() UID {
 }
 
 func (i *ID) String() string {
+	return i.Job()
+}
+
+func (i *ID) Job() string {
 	if i.Namespace != "" {
 		return i.Namespace + "/" + i.Name
 	}

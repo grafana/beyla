@@ -89,6 +89,7 @@ func TestFor_GlobEntries_NoInclusion(t *testing.T) {
 		"direction",
 		"k8s.cluster.name",
 		"k8s.src.owner.name",
+		"k8s.src.owner.type",
 		"src.cidr",
 	}, p.For(BeylaNetworkFlow))
 }
@@ -166,8 +167,10 @@ func TestDefault(t *testing.T) {
 		"k8s.cluster.name",
 		"k8s.dst.namespace",
 		"k8s.dst.owner.name",
+		"k8s.dst.owner.type",
 		"k8s.src.namespace",
 		"k8s.src.owner.name",
+		"k8s.src.owner.type",
 	}, p.For(BeylaNetworkFlow))
 }
 

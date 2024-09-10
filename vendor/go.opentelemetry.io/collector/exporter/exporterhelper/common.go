@@ -41,7 +41,7 @@ func (b *baseRequestSender) setNextSender(nextSender requestSender) {
 	b.nextSender = nextSender
 }
 
-type obsrepSenderFactory func(obsrep *ObsReport) requestSender
+type obsrepSenderFactory func(obsrep *obsReport) requestSender
 
 // Option apply changes to baseExporter.
 type Option func(*baseExporter) error
@@ -110,7 +110,7 @@ func WithQueue(config QueueSettings) Option {
 			NumConsumers: config.NumConsumers,
 			QueueSize:    config.QueueSize,
 		})
-		o.queueSender = newQueueSender(q, o.set, config.NumConsumers, o.exportFailureMessage)
+		o.queueSender = newQueueSender(q, o.set, config.NumConsumers, o.exportFailureMessage, o.obsrep)
 		return nil
 	}
 }
@@ -132,7 +132,7 @@ func WithRequestQueue(cfg exporterqueue.Config, queueFactory exporterqueue.Facto
 			DataType:         o.signal,
 			ExporterSettings: o.set,
 		}
-		o.queueSender = newQueueSender(queueFactory(context.Background(), set, cfg), o.set, cfg.NumConsumers, o.exportFailureMessage)
+		o.queueSender = newQueueSender(queueFactory(context.Background(), set, cfg), o.set, cfg.NumConsumers, o.exportFailureMessage, o.obsrep)
 		return nil
 	}
 }
@@ -231,8 +231,8 @@ type baseExporter struct {
 	marshaler   exporterqueue.Marshaler[Request]
 	unmarshaler exporterqueue.Unmarshaler[Request]
 
-	set    exporter.CreateSettings
-	obsrep *ObsReport
+	set    exporter.Settings
+	obsrep *obsReport
 
 	// Message for the user to be added with an export failure message.
 	exportFailureMessage string
@@ -249,8 +249,8 @@ type baseExporter struct {
 	consumerOptions []consumer.Option
 }
 
-func newBaseExporter(set exporter.CreateSettings, signal component.DataType, osf obsrepSenderFactory, options ...Option) (*baseExporter, error) {
-	obsReport, err := NewObsReport(ObsReportSettings{ExporterID: set.ID, ExporterCreateSettings: set})
+func newBaseExporter(set exporter.Settings, signal component.DataType, osf obsrepSenderFactory, options ...Option) (*baseExporter, error) {
+	obsReport, err := newExporter(obsReportSettings{exporterID: set.ID, exporterCreateSettings: set, dataType: signal})
 	if err != nil {
 		return nil, err
 	}
@@ -280,7 +280,7 @@ func newBaseExporter(set exporter.CreateSettings, signal component.DataType, osf
 	if bs, ok := be.batchSender.(*batchSender); ok {
 		// If queue sender is enabled assign to the batch sender the same number of workers.
 		if qs, ok := be.queueSender.(*queueSender); ok {
-			bs.concurrencyLimit = uint64(qs.numConsumers)
+			bs.concurrencyLimit = int64(qs.numConsumers)
 		}
 		// Batcher sender mutates the data.
 		be.consumerOptions = append(be.consumerOptions, consumer.WithCapabilities(consumer.Capabilities{MutatesData: true}))

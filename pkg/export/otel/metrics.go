@@ -101,6 +101,8 @@ type MetricsConfig struct {
 	// removed from the metrics set.
 	TTL time.Duration `yaml:"ttl" env:"BEYLA_OTEL_METRICS_TTL"`
 
+	AllowServiceGraphSelfReferences bool `yaml:"allow_service_graph_self_references" env:"BEYLA_OTEL_ALLOW_SERVICE_GRAPH_SELF_REFERENCES"`
+
 	// Grafana configuration needs to be explicitly set up before building the graph
 	Grafana *GrafanaOTLP `yaml:"-"`
 }
@@ -708,7 +710,7 @@ func otelHistogramConfig(metricName string, buckets []float64, useExponentialHis
 func (mr *MetricsReporter) metricResourceAttributes(service *svc.ID) attribute.Set {
 	attrs := []attribute.KeyValue{
 		request.ServiceMetric(service.Name),
-		semconv.ServiceInstanceID(service.Instance),
+		semconv.ServiceInstanceID(string(service.UID)),
 		semconv.ServiceNamespace(service.Namespace),
 		semconv.TelemetrySDKLanguageKey.String(service.SDKLanguage.String()),
 		semconv.TelemetrySDKNameKey.String("beyla"),
@@ -824,18 +826,20 @@ func (r *Metrics) record(span *request.Span, mr *MetricsReporter) {
 	}
 
 	if mr.cfg.ServiceGraphMetricsEnabled() {
-		if span.IsClientSpan() {
-			sgc, attrs := r.serviceGraphClient.ForRecord(span)
-			sgc.Record(r.ctx, duration, instrument.WithAttributeSet(attrs))
-		} else {
-			sgs, attrs := r.serviceGraphServer.ForRecord(span)
-			sgs.Record(r.ctx, duration, instrument.WithAttributeSet(attrs))
-		}
-		sgt, attrs := r.serviceGraphTotal.ForRecord(span)
-		sgt.Add(r.ctx, 1, instrument.WithAttributeSet(attrs))
-		if request.SpanStatusCode(span) == codes.Error {
-			sgf, attrs := r.serviceGraphFailed.ForRecord(span)
-			sgf.Add(r.ctx, 1, instrument.WithAttributeSet(attrs))
+		if !span.IsSelfReferenceSpan() || mr.cfg.AllowServiceGraphSelfReferences {
+			if span.IsClientSpan() {
+				sgc, attrs := r.serviceGraphClient.ForRecord(span)
+				sgc.Record(r.ctx, duration, instrument.WithAttributeSet(attrs))
+			} else {
+				sgs, attrs := r.serviceGraphServer.ForRecord(span)
+				sgs.Record(r.ctx, duration, instrument.WithAttributeSet(attrs))
+			}
+			sgt, attrs := r.serviceGraphTotal.ForRecord(span)
+			sgt.Add(r.ctx, 1, instrument.WithAttributeSet(attrs))
+			if request.SpanStatusCode(span) == codes.Error {
+				sgf, attrs := r.serviceGraphFailed.ForRecord(span)
+				sgf.Add(r.ctx, 1, instrument.WithAttributeSet(attrs))
+			}
 		}
 	}
 }

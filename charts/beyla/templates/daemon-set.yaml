@@ -25,6 +25,9 @@ spec:
         {{- with .Values.podAnnotations }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
+        {{- if not (.Values.privileged) }}
+        container.apparmor.security.beta.kubernetes.io/beyla: "unconfined"
+        {{- end }}
       labels:
         {{- include "beyla.labels" . | nindent 8 }}
         app.kubernetes.io/component: workload
@@ -42,13 +45,56 @@ spec:
       {{- if .Values.priorityClassName }}
       priorityClassName: {{ .Values.priorityClassName }}
       {{- end }}
+      {{- if not (.Values.privileged) }}
+      initContainers:
+        - name: mount-bpf-fs
+          image: {{ .Values.global.image.registry | default .Values.image.registry }}/{{ .Values.image.repository }}{{ include "beyla.imageId" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+          - 'mkdir -p /sys/fs/bpf/$BEYLA_BPF_FS_PATH && mount -t bpf bpf /sys/fs/bpf/$BEYLA_BPF_FS_PATH'
+          command:
+          - /bin/bash
+          - -c
+          - --
+          securityContext:
+            privileged: true
+          volumeMounts:
+          - name: bpffs
+            mountPath: /sys/fs/bpf
+            mountPropagation: Bidirectional
+          env:
+            - name: KUBE_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: BEYLA_BPF_FS_PATH
+              value: beyla-$(KUBE_NAMESPACE)
+      {{- end }}
       containers:
         - name: beyla
           image: {{ .Values.global.image.registry | default .Values.image.registry }}/{{ .Values.image.repository }}{{ include "beyla.imageId" . }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
-          {{- with .Values.securityContext }}
           securityContext:
+          {{- if .Values.privileged }}
+          {{- with .Values.securityContext }}
             {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- else }}
+            runAsUser: 0
+            readOnlyRootFilesystem: true
+            capabilities:
+              add:
+                - BPF
+                - SYS_PTRACE
+                - NET_RAW
+                - CHECKPOINT_RESTORE
+                - DAC_READ_SEARCH
+                - PERFMON
+              {{- with .Values.extraCapabilities }}
+                {{- toYaml . | nindent 16 }}
+              {{- end }}
+              drop:
+                - ALL
           {{- end }}
           ports:
           - name: {{ .Values.service.portName }}
@@ -61,6 +107,16 @@ spec:
           env:
             - name: BEYLA_CONFIG_PATH
               value: "/etc/beyla/config/beyla-config.yml"
+          {{- if not (.Values.privileged) }}
+            - name: KUBE_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: BEYLA_BPF_FS_PATH
+              value: beyla-$(KUBE_NAMESPACE)
+            - name: BEYLA_BPF_FS_BASE_DIR
+              value: /sys/fs/bpf
+          {{- end }}
           {{- range $key, $value := .Values.env }}
             - name: {{ $key }}
               value: "{{ $value }}"
@@ -73,6 +129,11 @@ spec:
           volumeMounts:
             - mountPath: /etc/beyla/config
               name: beyla-config
+          {{- if not (.Values.privileged) }}
+            - name: bpffs
+              mountPath: /sys/fs/bpf
+              mountPropagation: HostToContainer
+          {{- end }}
       {{- if or .Values.global.image.pullSecrets .Values.image.pullSecrets }}
       imagePullSecrets:
         {{- if .Values.global.image.pullSecrets }}
@@ -97,3 +158,8 @@ spec:
         - name: beyla-config
           configMap:
             name: {{ default (include "beyla.fullname" .) .Values.config.name }}
+      {{- if not (.Values.privileged) }}
+        - name: bpffs
+          hostPath:
+            path: /sys/fs/bpf
+      {{- end }}

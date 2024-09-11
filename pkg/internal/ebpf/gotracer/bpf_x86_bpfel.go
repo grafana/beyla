@@ -258,11 +258,11 @@ type bpfProgramSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpfMapSpecs struct {
-	ClientTraceMap                *ebpf.MapSpec `ebpf:"client_trace_map"`
 	Events                        *ebpf.MapSpec `ebpf:"events"`
 	FetchRequests                 *ebpf.MapSpec `ebpf:"fetch_requests"`
 	GoTraceMap                    *ebpf.MapSpec `ebpf:"go_trace_map"`
 	GolangMapbucketStorageMap     *ebpf.MapSpec `ebpf:"golang_mapbucket_storage_map"`
+	IncomingTraceMap              *ebpf.MapSpec `ebpf:"incoming_trace_map"`
 	KafkaRequests                 *ebpf.MapSpec `ebpf:"kafka_requests"`
 	Newproc1                      *ebpf.MapSpec `ebpf:"newproc1"`
 	OngoingClientConnections      *ebpf.MapSpec `ebpf:"ongoing_client_connections"`
@@ -283,10 +283,10 @@ type bpfMapSpecs struct {
 	OngoingServerConnections      *ebpf.MapSpec `ebpf:"ongoing_server_connections"`
 	OngoingSqlQueries             *ebpf.MapSpec `ebpf:"ongoing_sql_queries"`
 	OngoingStreams                *ebpf.MapSpec `ebpf:"ongoing_streams"`
+	OutgoingTraceMap              *ebpf.MapSpec `ebpf:"outgoing_trace_map"`
 	ProduceRequests               *ebpf.MapSpec `ebpf:"produce_requests"`
 	ProduceTraceparents           *ebpf.MapSpec `ebpf:"produce_traceparents"`
 	RedisWrites                   *ebpf.MapSpec `ebpf:"redis_writes"`
-	ServerTraceMap                *ebpf.MapSpec `ebpf:"server_trace_map"`
 	TraceMap                      *ebpf.MapSpec `ebpf:"trace_map"`
 }
 
@@ -309,11 +309,11 @@ func (o *bpfObjects) Close() error {
 //
 // It can be passed to loadBpfObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpfMaps struct {
-	ClientTraceMap                *ebpf.Map `ebpf:"client_trace_map"`
 	Events                        *ebpf.Map `ebpf:"events"`
 	FetchRequests                 *ebpf.Map `ebpf:"fetch_requests"`
 	GoTraceMap                    *ebpf.Map `ebpf:"go_trace_map"`
 	GolangMapbucketStorageMap     *ebpf.Map `ebpf:"golang_mapbucket_storage_map"`
+	IncomingTraceMap              *ebpf.Map `ebpf:"incoming_trace_map"`
 	KafkaRequests                 *ebpf.Map `ebpf:"kafka_requests"`
 	Newproc1                      *ebpf.Map `ebpf:"newproc1"`
 	OngoingClientConnections      *ebpf.Map `ebpf:"ongoing_client_connections"`
@@ -334,20 +334,20 @@ type bpfMaps struct {
 	OngoingServerConnections      *ebpf.Map `ebpf:"ongoing_server_connections"`
 	OngoingSqlQueries             *ebpf.Map `ebpf:"ongoing_sql_queries"`
 	OngoingStreams                *ebpf.Map `ebpf:"ongoing_streams"`
+	OutgoingTraceMap              *ebpf.Map `ebpf:"outgoing_trace_map"`
 	ProduceRequests               *ebpf.Map `ebpf:"produce_requests"`
 	ProduceTraceparents           *ebpf.Map `ebpf:"produce_traceparents"`
 	RedisWrites                   *ebpf.Map `ebpf:"redis_writes"`
-	ServerTraceMap                *ebpf.Map `ebpf:"server_trace_map"`
 	TraceMap                      *ebpf.Map `ebpf:"trace_map"`
 }
 
 func (m *bpfMaps) Close() error {
 	return _BpfClose(
-		m.ClientTraceMap,
 		m.Events,
 		m.FetchRequests,
 		m.GoTraceMap,
 		m.GolangMapbucketStorageMap,
+		m.IncomingTraceMap,
 		m.KafkaRequests,
 		m.Newproc1,
 		m.OngoingClientConnections,
@@ -368,10 +368,10 @@ func (m *bpfMaps) Close() error {
 		m.OngoingServerConnections,
 		m.OngoingSqlQueries,
 		m.OngoingStreams,
+		m.OutgoingTraceMap,
 		m.ProduceRequests,
 		m.ProduceTraceparents,
 		m.RedisWrites,
-		m.ServerTraceMap,
 		m.TraceMap,
 	)
 }

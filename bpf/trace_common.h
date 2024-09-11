@@ -156,6 +156,14 @@ static __always_inline void delete_server_trace(trace_key_t *t_key) {
     // bpf_dbg_printk("Deleting server span for id=%llx, pid=%d, ns=%d, res = %d", bpf_get_current_pid_tgid(), t_key->p_key.pid, t_key->p_key.ns, res);
 }
 
+static __always_inline u8 valid_span(unsigned char *span_id) {
+    return *((u64 *)span_id) != 0;
+}
+
+static __always_inline u8 valid_trace(unsigned char *trace_id) {
+    return *((u64 *)trace_id) != 0 && *((u64 *)(trace_id + 8)) != 0;
+}
+
 static __always_inline void server_or_client_trace(http_connection_metadata_t *meta, connection_info_t *conn, tp_info_pid_t *tp_p) {
     if (!meta) {
         return;
@@ -175,7 +183,6 @@ static __always_inline void server_or_client_trace(http_connection_metadata_t *m
 
         // bpf_dbg_printk("Saving server span for id=%llx, pid=%d, ns=%d, extra_id=%llx", bpf_get_current_pid_tgid(), t_key.p_key.pid, t_key.p_key.ns, t_key.extra_id);
         bpf_map_update_elem(&server_traces, &t_key, tp_p, BPF_ANY);
-        bpf_map_update_elem(&server_trace_map, conn, tp_p, BPF_ANY);
     }
 }
 
@@ -197,10 +204,16 @@ static __always_inline void get_or_create_trace_info(http_connection_metadata_t 
 
     if (meta) {
         if (meta->type == EVENT_HTTP_CLIENT) {
+            tp_info_pid_t *in_tp = bpf_map_lookup_elem(&outgoing_trace_map, conn);
+            if (in_tp) {
+                found_tp = 1;
+                __builtin_memcpy(tp_p, in_tp, sizeof(tp_info_pid_t));
+            }
+
             tp_p->pid = -1; // we only want to prevent correlation of duplicate server calls by PID
             tp_info_pid_t *server_tp = find_parent_trace();
 
-            if (server_tp && server_tp->valid) {
+            if (server_tp && server_tp->valid && valid_trace(server_tp->tp.trace_id)) {
                 found_tp = 1;
                 bpf_dbg_printk("Found existing server tp for client call");
                 __builtin_memcpy(tp_p->tp.trace_id, server_tp->tp.trace_id, sizeof(tp_p->tp.trace_id));
@@ -210,14 +223,22 @@ static __always_inline void get_or_create_trace_info(http_connection_metadata_t 
             //bpf_dbg_printk("Looking up existing trace for connection");
             //dbg_print_http_connection_info(conn);
 
-            tp_info_pid_t *existing_tp = trace_info_for_connection(conn);
-
-            if (correlated_requests(tp_p, existing_tp)) {
+            tp_info_pid_t *existing_tp = bpf_map_lookup_elem(&incoming_trace_map, conn);
+            if (existing_tp) {
                 found_tp = 1;
-                bpf_dbg_printk("Found existing correlated tp for server request");
+                bpf_dbg_printk("Found incoming (TCP) tp for server request");
                 __builtin_memcpy(tp_p->tp.trace_id, existing_tp->tp.trace_id, sizeof(tp_p->tp.trace_id));
                 __builtin_memcpy(tp_p->tp.parent_id, existing_tp->tp.span_id, sizeof(tp_p->tp.parent_id));
-            } 
+            } else {
+                existing_tp = trace_info_for_connection(conn);
+
+                if (correlated_requests(tp_p, existing_tp)) {
+                    found_tp = 1;
+                    bpf_dbg_printk("Found existing correlated tp for server request");
+                    __builtin_memcpy(tp_p->tp.trace_id, existing_tp->tp.trace_id, sizeof(tp_p->tp.trace_id));
+                    __builtin_memcpy(tp_p->tp.parent_id, existing_tp->tp.span_id, sizeof(tp_p->tp.parent_id));
+                } 
+            }
         }
     }
 
@@ -275,10 +296,6 @@ static __always_inline void get_or_create_trace_info(http_connection_metadata_t 
     server_or_client_trace(meta, conn, tp_p);
 
     return;
-}
-
-static __always_inline u8 valid_span(unsigned char *span_id) {
-    return *((u64 *)span_id) != 0;
 }
 
 #endif

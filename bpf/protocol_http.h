@@ -263,7 +263,7 @@ int protocol_http(void *ctx) {
                 if (meta->type == EVENT_HTTP_CLIENT && !valid_span(tp_p->tp.parent_id)) {
                     bpf_dbg_printk("Looking for trace id of a client span");                        
                     tp_info_pid_t *server_tp = find_parent_trace();
-                    if (server_tp && server_tp->valid) {
+                    if (server_tp && server_tp->valid && valid_trace(server_tp->tp.trace_id)) {
                         bpf_dbg_printk("Found existing server span for id=%llx", bpf_get_current_pid_tgid());
                         __builtin_memcpy(info->tp.trace_id, server_tp->tp.trace_id, sizeof(info->tp.trace_id));
                         __builtin_memcpy(info->tp.parent_id, server_tp->tp.span_id, sizeof(info->tp.parent_id));

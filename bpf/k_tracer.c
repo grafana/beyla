@@ -579,19 +579,23 @@ int socket__http_filter(struct __sk_buff *skb) {
         //dbg_print_http_connection_info(&conn); // commented out since GitHub CI doesn't like this call
         sort_connection_info(&conn);
 
-        http_info_t info = {0};
-        info.conn_info = conn;
+        http_info_t *info = empty_http_info();
+        if (!info) {
+            return 0;
+        }
+        
+        __builtin_memcpy(&info->conn_info, &conn, sizeof(conn));
 
         if (packet_type == PACKET_TYPE_REQUEST) {
             u32 full_len = skb->len - tcp.hdr_len;
             if (full_len > FULL_BUF_SIZE) {
                 full_len = FULL_BUF_SIZE;
             }
-            read_skb_bytes(skb, tcp.hdr_len, info.buf, full_len);
+            read_skb_bytes(skb, tcp.hdr_len, info->buf, full_len);
             u64 cookie = bpf_get_socket_cookie(skb);
             //bpf_dbg_printk("=== http_filter cookie = %llx, tcp_seq=%d len=%d %s ===", cookie, tcp.seq, len, buf);
             //dbg_print_http_connection_info(&conn);
-            set_fallback_http_info(&info, &conn, skb->len - tcp.hdr_len);
+            set_fallback_http_info(info, &conn, skb->len - tcp.hdr_len);
 
             // The code below is looking to see if we have recorded black-box trace info on 
             // another interface. We do this for client calls, where essentially the original 
@@ -601,7 +605,7 @@ int socket__http_filter(struct __sk_buff *skb) {
             // This casting is done here to save allocating memory on a per CPU buffer, since
             // we don't need info anymore, we reuse it's space and it's much bigger than
             // partial_connection_info_t.
-            partial_connection_info_t *partial = (partial_connection_info_t *)(&info);
+            partial_connection_info_t *partial = (partial_connection_info_t *)(info);
             partial->d_port = conn.d_port;
             partial->s_port = conn.s_port;
             partial->tcp_seq = tcp.seq;

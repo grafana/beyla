@@ -57,7 +57,7 @@ func newFilter[T any](config AttributeFamilyConfig, getters attributes.NamedGett
 	for attrStr, match := range config {
 		normalAttr, ok := attrProm2Normal[attr.Name(attrStr).Prom()]
 		if !ok {
-			return nil, fmt.Errorf("attribute filter: unknown attribute name %q", attrStr)
+			return nil, fmt.Errorf("attribute filter: unknown attribute name %q, available: %v", attrStr, attrProm2Normal)
 		}
 		matcher, err := buildMatcher(getters, normalAttr, &match)
 		if err != nil {

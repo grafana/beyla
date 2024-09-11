@@ -34,8 +34,12 @@ func SpanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValu
 		getter = func(s *Span) attribute.KeyValue { return semconv.HTTPRoute(s.Route) }
 	case attr.HTTPUrlPath:
 		getter = func(s *Span) attribute.KeyValue { return HTTPUrlPath(s.Path) }
+	case attr.SrcName:
+		fallthrough
 	case attr.ClientAddr:
 		getter = func(s *Span) attribute.KeyValue { return ClientAddr(SpanPeer(s)) }
+	case attr.DstName:
+		fallthrough
 	case attr.ServerAddr:
 		getter = func(s *Span) attribute.KeyValue { return ServerAddr(SpanHost(s)) }
 	case attr.ServerPort:
@@ -124,8 +128,12 @@ func SpanPromGetters(attrName attr.Name) (attributes.Getter[*Span, string], bool
 		getter = func(s *Span) string { return s.Route }
 	case attr.HTTPUrlPath:
 		getter = func(s *Span) string { return s.Path }
+	case attr.SrcName:
+		fallthrough
 	case attr.ClientAddr:
 		getter = SpanPeer
+	case attr.DstName:
+		fallthrough
 	case attr.ServerAddr:
 		getter = SpanHost
 	case attr.ServerPort:

@@ -16,7 +16,7 @@
 #include "utils.h"
 #include "map_sizing.h"
 #include "bpf_dbg.h"
-#include "http_trace.h"
+#include "tracer_common.h"
 #include "tracing.h"
 #include "trace_util.h"
 #include "go_traceparent.h"

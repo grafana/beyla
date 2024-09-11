@@ -36,7 +36,7 @@ type Tracer struct {
 }
 
 func New(cfg *beyla.Config, metrics imetrics.Reporter) *Tracer {
-	log := slog.With("component", "httpfltr.Tracer")
+	log := slog.With("component", "httpssl.Tracer")
 	return &Tracer{
 		log:        log,
 		cfg:        cfg,
@@ -195,6 +195,8 @@ func (p *Tracer) AlreadyInstrumentedLib(id uint64) bool {
 
 	return ok
 }
+
+func (p *Tracer) SetupTC() {}
 
 func (p *Tracer) Run(ctx context.Context, eventsChan chan<- []request.Span) {
 	ebpfcommon.SharedRingbuf(

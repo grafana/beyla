@@ -1,4 +1,4 @@
-package httpfltr
+package ktracer
 
 import (
 	"testing"

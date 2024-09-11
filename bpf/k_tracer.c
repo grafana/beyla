@@ -5,7 +5,7 @@
 #include "pid.h"
 #include "sockaddr.h"
 #include "tcp_info.h"
-#include "http_sock.h"
+#include "k_tracer.h"
 #include "http_ssl.h"
 
 char __license[] SEC("license") = "Dual MIT/GPL";
@@ -660,5 +660,77 @@ int BPF_KPROBE(kprobe_sys_exit, int status) {
     // we expect that it doesn't matter, since NodeJS main thread won't exit. 
     bpf_map_delete_elem(&server_traces, &task);
     
+    return 0;
+}
+
+SEC("tc_ingress")
+int app_ingress(struct __sk_buff *skb) {
+    //bpf_printk("ingress");
+
+    protocol_info_t tcp = {};
+    connection_info_t conn = {};
+
+    if (!read_sk_buff(skb, &tcp, &conn)) {
+        return 0;
+    }
+
+    unsigned char buf[12];
+
+    if (tcp_syn(&tcp) && !tcp_ack(&tcp)) {
+        bpf_skb_load_bytes(skb, tcp.hdr_len, &buf, 4);
+
+        s32 len = skb->len-sizeof(u32);
+        bpf_printk("SYN packed len = %d, offset = %d, hdr_len %d", skb->len, len, tcp.hdr_len);
+
+        bpf_printk("***Data: %x%x", buf[3], buf[2]);
+        bpf_printk("***Data: %x%x", buf[1], buf[0]);
+    }
+    return 0;
+}
+
+SEC("tc_egress")
+int app_egress(struct __sk_buff *skb) {
+    //bpf_printk("egress");
+
+    protocol_info_t tcp = {};
+    connection_info_t conn = {};
+
+    if (!read_sk_buff(skb, &tcp, &conn)) {
+        return 0;
+    }
+
+    sort_connection_info(&conn);
+
+    if (tcp_syn(&tcp) && !tcp_ack(&tcp)) {
+        bpf_printk("SYN packed len = %d", skb->len);
+
+        u32 val=0xdeadf00d;
+
+        uint16_t pkt_end = skb->data_end - skb->data;
+        bpf_printk("Changing tail and setting data on syn, end=%d", pkt_end);
+        bpf_skb_change_tail(skb, pkt_end + sizeof(val), 0);
+        bpf_skb_store_bytes(skb, pkt_end, &val, sizeof(val), 0);
+
+        u32 offset_ip_tot_len = 0;
+        u32 offset_ip_checksum = 0;
+        if (tcp.h_proto == ETH_P_IP) {
+            offset_ip_tot_len = ETH_HLEN + offsetof(struct iphdr, tot_len);
+            offset_ip_checksum = ETH_HLEN + offsetof(struct iphdr, check);
+        } else {
+            offset_ip_tot_len = ETH_HLEN + offsetof(struct ipv6hdr, payload_len);
+        }            
+
+        u16 new_tot_len = bpf_htons(bpf_ntohs(tcp.tot_len) + sizeof(val));
+
+        bpf_printk("tot_len = %d, tot_len_alt = %d, new_tot_len = %d", tcp.tot_len, bpf_ntohs(tcp.tot_len), new_tot_len);
+        bpf_printk("new_tot_len_alt = %d, h_proto = %d, skb->len = %d", bpf_ntohs(new_tot_len), tcp.h_proto, skb->len);
+
+        if (offset_ip_checksum) {
+            bpf_l3_csum_replace(skb, offset_ip_checksum, tcp.tot_len, new_tot_len, sizeof(u16));
+        }
+
+        bpf_skb_store_bytes(skb, offset_ip_tot_len, &new_tot_len, sizeof(u16), 0);
+    }
+
     return 0;
 }

@@ -4,7 +4,7 @@
 #include "vmlinux.h"
 #include "map_sizing.h"
 #include "bpf_helpers.h"
-#include "http_defs.h"
+#include "protocol_defs.h"
 #include "pid_types.h"
 #include "bpf_dbg.h"
 
@@ -134,6 +134,8 @@ typedef struct call_protocol_args {
 typedef struct protocol_info {
     u32 hdr_len;
     u32 seq;
+    u16 h_proto;
+    u16 tot_len;
     u8  flags;
 } protocol_info_t;
 

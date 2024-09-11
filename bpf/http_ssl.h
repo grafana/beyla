@@ -4,7 +4,7 @@
 #include "vmlinux.h"
 #include "bpf_helpers.h"
 #include "http_types.h"
-#include "http_sock.h"
+#include "k_tracer.h"
 
 // We use this map to track ssl handshake enter/exit, it should be only
 // temporary

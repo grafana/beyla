@@ -6,7 +6,7 @@
 #include "bpf_endian.h"
 #include "bpf_core_read.h"
 #include "http_types.h"
-#include "http_defs.h"
+#include "protocol_defs.h"
 
 typedef struct accept_args {
     u64 addr; // linux sock or socket address

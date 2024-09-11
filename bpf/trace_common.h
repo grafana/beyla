@@ -207,7 +207,7 @@ static __always_inline void get_or_create_trace_info(http_connection_metadata_t 
             tp_info_pid_t *in_tp = bpf_map_lookup_elem(&outgoing_trace_map, conn);
             if (in_tp) {
                 found_tp = 1;
-                __builtin_memcpy(tp_p, in_tp, sizeof(tp_info_pid_t));
+                tp_p = in_tp;
             }
 
             tp_p->pid = -1; // we only want to prevent correlation of duplicate server calls by PID

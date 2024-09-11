@@ -270,6 +270,7 @@ type bpf_tpProgramSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpf_tpMapSpecs struct {
+	ClientTraceMap                *ebpf.MapSpec `ebpf:"client_trace_map"`
 	Events                        *ebpf.MapSpec `ebpf:"events"`
 	FetchRequests                 *ebpf.MapSpec `ebpf:"fetch_requests"`
 	FramerInvocationMap           *ebpf.MapSpec `ebpf:"framer_invocation_map"`
@@ -301,6 +302,7 @@ type bpf_tpMapSpecs struct {
 	ProduceRequests               *ebpf.MapSpec `ebpf:"produce_requests"`
 	ProduceTraceparents           *ebpf.MapSpec `ebpf:"produce_traceparents"`
 	RedisWrites                   *ebpf.MapSpec `ebpf:"redis_writes"`
+	ServerTraceMap                *ebpf.MapSpec `ebpf:"server_trace_map"`
 	TraceMap                      *ebpf.MapSpec `ebpf:"trace_map"`
 }
 
@@ -323,6 +325,7 @@ func (o *bpf_tpObjects) Close() error {
 //
 // It can be passed to loadBpf_tpObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpf_tpMaps struct {
+	ClientTraceMap                *ebpf.Map `ebpf:"client_trace_map"`
 	Events                        *ebpf.Map `ebpf:"events"`
 	FetchRequests                 *ebpf.Map `ebpf:"fetch_requests"`
 	FramerInvocationMap           *ebpf.Map `ebpf:"framer_invocation_map"`
@@ -354,11 +357,13 @@ type bpf_tpMaps struct {
 	ProduceRequests               *ebpf.Map `ebpf:"produce_requests"`
 	ProduceTraceparents           *ebpf.Map `ebpf:"produce_traceparents"`
 	RedisWrites                   *ebpf.Map `ebpf:"redis_writes"`
+	ServerTraceMap                *ebpf.Map `ebpf:"server_trace_map"`
 	TraceMap                      *ebpf.Map `ebpf:"trace_map"`
 }
 
 func (m *bpf_tpMaps) Close() error {
 	return _Bpf_tpClose(
+		m.ClientTraceMap,
 		m.Events,
 		m.FetchRequests,
 		m.FramerInvocationMap,
@@ -390,6 +395,7 @@ func (m *bpf_tpMaps) Close() error {
 		m.ProduceRequests,
 		m.ProduceTraceparents,
 		m.RedisWrites,
+		m.ServerTraceMap,
 		m.TraceMap,
 	)
 }

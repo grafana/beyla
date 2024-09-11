@@ -186,6 +186,30 @@ int BPF_KPROBE(kprobe_tcp_connect, struct sock *sk) {
 
     bpf_dbg_printk("=== tcp connect %llx ===", id);
 
+    tp_info_pid_t *tp_p = tp_buf();
+
+    if (tp_p) {
+        tp_p->tp.ts = bpf_ktime_get_ns();
+        tp_p->tp.flags = 1;
+        tp_p->valid = 1;
+        tp_p->pid = 0;
+        urand_bytes(tp_p->tp.span_id, SPAN_ID_SIZE_BYTES);
+        tp_info_pid_t *server_tp = find_parent_trace();
+        if (server_tp) {
+            __builtin_memcpy(tp_p->tp.trace_id, server_tp->tp.trace_id, sizeof(tp_p->tp.trace_id));
+            __builtin_memcpy(tp_p->tp.parent_id, server_tp->tp.span_id, sizeof(tp_p->tp.parent_id));
+        }
+
+        connection_info_t conn = {};
+        parse_sock_info(sk, &conn);
+        sort_connection_info(&conn);
+
+        bpf_dbg_printk("Setting up tp info");
+        dbg_print_http_connection_info(&conn);
+
+        bpf_map_update_elem(&client_trace_map, &conn, tp_p, BPF_ANY);
+    }
+
     u64 addr = (u64)sk;
 
     sock_args_t args = {};
@@ -232,7 +256,8 @@ int BPF_KRETPROBE(kretprobe_sys_connect, int fd)
         sort_connection_info(&info.p_conn.conn);
         info.p_conn.pid = pid_from_pid_tgid(id);
         info.orig_dport = orig_dport;
-
+        
+        bpf_map_delete_elem(&client_trace_map, &info.p_conn.conn);
         bpf_map_update_elem(&pid_tid_to_conn, &id, &info, BPF_ANY); // to support SSL 
     }
 
@@ -699,10 +724,21 @@ int app_egress(struct __sk_buff *skb) {
         return 0;
     }
 
+    if (!tcp_syn(&tcp) || tcp_ack(&tcp)) {
+        return 0;
+    }
+
     sort_connection_info(&conn);
 
-    if (tcp_syn(&tcp) && !tcp_ack(&tcp)) {
+    tp_info_pid_t *tp = bpf_map_lookup_elem(&client_trace_map, &conn);
+
+    if (tp) {
         bpf_printk("SYN packed len = %d", skb->len);
+
+        trace_key_t task = {0};
+        task_tid(&task.p_key);
+
+        bpf_printk("TC pid=%d, ns=%d", task.p_key.pid, task.p_key.ns);
 
         u32 val=0xdeadf00d;
 

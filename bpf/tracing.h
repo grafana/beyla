@@ -15,6 +15,20 @@ struct {
     __uint(pinning, LIBBPF_PIN_BY_NAME);
 } trace_map SEC(".maps");
 
+struct {
+    __uint(type, BPF_MAP_TYPE_LRU_HASH);
+    __type(key, connection_info_t); // key: the connection info
+    __type(value, tp_info_pid_t);  // value: traceparent info
+    __uint(max_entries, MAX_CONCURRENT_REQUESTS);
+} server_trace_map SEC(".maps");
+
+struct {
+    __uint(type, BPF_MAP_TYPE_LRU_HASH);
+    __type(key, connection_info_t); // key: the connection info
+    __type(value, tp_info_pid_t);  // value: traceparent info
+    __uint(max_entries, MAX_CONCURRENT_REQUESTS);
+} client_trace_map SEC(".maps");
+
 static __always_inline void make_tp_string(unsigned char *buf, tp_info_t *tp) {
     // Version
     *buf++ = '0'; *buf++ = '0'; *buf++ = '-';

@@ -175,6 +175,7 @@ static __always_inline void server_or_client_trace(http_connection_metadata_t *m
 
         // bpf_dbg_printk("Saving server span for id=%llx, pid=%d, ns=%d, extra_id=%llx", bpf_get_current_pid_tgid(), t_key.p_key.pid, t_key.p_key.ns, t_key.extra_id);
         bpf_map_update_elem(&server_traces, &t_key, tp_p, BPF_ANY);
+        bpf_map_update_elem(&server_trace_map, conn, tp_p, BPF_ANY);
     }
 }
 

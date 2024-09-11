@@ -273,6 +273,7 @@ type bpf_tp_debugMapSpecs struct {
 	ActiveSslHandshakes     *ebpf.MapSpec `ebpf:"active_ssl_handshakes"`
 	ActiveSslReadArgs       *ebpf.MapSpec `ebpf:"active_ssl_read_args"`
 	ActiveSslWriteArgs      *ebpf.MapSpec `ebpf:"active_ssl_write_args"`
+	ClientTraceMap          *ebpf.MapSpec `ebpf:"client_trace_map"`
 	CloneMap                *ebpf.MapSpec `ebpf:"clone_map"`
 	ConnectionMetaMem       *ebpf.MapSpec `ebpf:"connection_meta_mem"`
 	DebugEvents             *ebpf.MapSpec `ebpf:"debug_events"`
@@ -290,6 +291,7 @@ type bpf_tp_debugMapSpecs struct {
 	PidCache                *ebpf.MapSpec `ebpf:"pid_cache"`
 	PidTidToConn            *ebpf.MapSpec `ebpf:"pid_tid_to_conn"`
 	ProtocolArgsMem         *ebpf.MapSpec `ebpf:"protocol_args_mem"`
+	ServerTraceMap          *ebpf.MapSpec `ebpf:"server_trace_map"`
 	ServerTraces            *ebpf.MapSpec `ebpf:"server_traces"`
 	SslToConn               *ebpf.MapSpec `ebpf:"ssl_to_conn"`
 	SslToPidTid             *ebpf.MapSpec `ebpf:"ssl_to_pid_tid"`
@@ -330,6 +332,7 @@ type bpf_tp_debugMaps struct {
 	ActiveSslHandshakes     *ebpf.Map `ebpf:"active_ssl_handshakes"`
 	ActiveSslReadArgs       *ebpf.Map `ebpf:"active_ssl_read_args"`
 	ActiveSslWriteArgs      *ebpf.Map `ebpf:"active_ssl_write_args"`
+	ClientTraceMap          *ebpf.Map `ebpf:"client_trace_map"`
 	CloneMap                *ebpf.Map `ebpf:"clone_map"`
 	ConnectionMetaMem       *ebpf.Map `ebpf:"connection_meta_mem"`
 	DebugEvents             *ebpf.Map `ebpf:"debug_events"`
@@ -347,6 +350,7 @@ type bpf_tp_debugMaps struct {
 	PidCache                *ebpf.Map `ebpf:"pid_cache"`
 	PidTidToConn            *ebpf.Map `ebpf:"pid_tid_to_conn"`
 	ProtocolArgsMem         *ebpf.Map `ebpf:"protocol_args_mem"`
+	ServerTraceMap          *ebpf.Map `ebpf:"server_trace_map"`
 	ServerTraces            *ebpf.Map `ebpf:"server_traces"`
 	SslToConn               *ebpf.Map `ebpf:"ssl_to_conn"`
 	SslToPidTid             *ebpf.Map `ebpf:"ssl_to_pid_tid"`
@@ -370,6 +374,7 @@ func (m *bpf_tp_debugMaps) Close() error {
 		m.ActiveSslHandshakes,
 		m.ActiveSslReadArgs,
 		m.ActiveSslWriteArgs,
+		m.ClientTraceMap,
 		m.CloneMap,
 		m.ConnectionMetaMem,
 		m.DebugEvents,
@@ -387,6 +392,7 @@ func (m *bpf_tp_debugMaps) Close() error {
 		m.PidCache,
 		m.PidTidToConn,
 		m.ProtocolArgsMem,
+		m.ServerTraceMap,
 		m.ServerTraces,
 		m.SslToConn,
 		m.SslToPidTid,

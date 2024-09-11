@@ -682,7 +682,8 @@ int app_ingress(struct __sk_buff *skb) {
         s32 len = skb->len-sizeof(u32);
         bpf_printk("SYN packed len = %d, offset = %d, hdr_len %d", skb->len, len, tcp.hdr_len);
 
-        bpf_printk("***Data: %x%x%x%x", buf[3], buf[2], buf[1], buf[0]);
+        bpf_printk("***Data: %x%x", buf[3], buf[2]);
+        bpf_printk("***Data: %x%x", buf[1], buf[0]);
     }
     return 0;
 }

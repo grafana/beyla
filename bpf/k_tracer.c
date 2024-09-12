@@ -10,6 +10,8 @@
 
 char __license[] SEC("license") = "Dual MIT/GPL";
 
+#define TC_SYN_PACKET_ID 0xdeadf00d
+
 // Temporary tracking of accept arguments
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
@@ -188,11 +190,17 @@ int BPF_KPROBE(kprobe_tcp_connect, struct sock *sk) {
 
     tp_info_pid_t *tp_p = tp_buf();
 
+    // Connect runs before the SYN packet is sent. 
+    // We use this opportunity to setup a trace context information for the connection. 
+    // We'll later query the trace information in tc_egress, and serialize it on the TCP packet.
+    // Why would we do this here instead of on the tc_egress itself? We could move this on the tc_egress,
+    // but we would be modifying all packets, not just for processes which are instrumented,
+    // since we can't reliably tell the process PID in TC or socket filters. 
     if (tp_p) {
         tp_p->tp.ts = bpf_ktime_get_ns();
         tp_p->tp.flags = 1;
         tp_p->valid = 1;
-        tp_p->pid = 0;
+        tp_p->pid = TC_SYN_PACKET_ID; // set an ID up here in case someone else is doing what we are doing
         urand_bytes(tp_p->tp.span_id, SPAN_ID_SIZE_BYTES);
         tp_info_pid_t *server_tp = find_parent_trace();
         if (server_tp && valid_trace(server_tp->tp.trace_id)) {
@@ -705,6 +713,7 @@ int app_ingress(struct __sk_buff *skb) {
         return 0;
     }
 
+    // handle SYN only, ignore SYN+ACK packets
     if (!tcp_syn(&tcp) || tcp_ack(&tcp)) {
         return 0;
     }
@@ -718,6 +727,11 @@ int app_ingress(struct __sk_buff *skb) {
 
     bpf_skb_load_bytes(skb, tcp.hdr_len, &tp, sizeof(tp_info_pid_t));
 
+    if (tp.pid != TC_SYN_PACKET_ID) {
+        bpf_printk("SYN packet without the custom ID inside pid, ignoring...");
+        return 0;
+    }
+
     s32 len = skb->len-sizeof(u32);
     bpf_printk("Received SYN packed len = %d, offset = %d, hdr_len %d", skb->len, len, tcp.hdr_len);
 
@@ -725,6 +739,7 @@ int app_ingress(struct __sk_buff *skb) {
     make_tp_string(tp_buf, &tp.tp);
     bpf_printk("tp: %s", tp_buf);
 
+    // Once we receive a traceID over the wire (TCP packet) we store it for later to be used by the trace code.
     bpf_map_update_elem(&incoming_trace_map, &conn, &tp, BPF_ANY);
 
     return 0;
@@ -741,6 +756,7 @@ int app_egress(struct __sk_buff *skb) {
         return 0;
     }
 
+    // handle SYN only, ignore SYN+ACK packets
     if (!tcp_syn(&tcp) || tcp_ack(&tcp)) {
         return 0;
     }
@@ -772,8 +788,8 @@ int app_egress(struct __sk_buff *skb) {
 
         u16 new_tot_len = bpf_htons(bpf_ntohs(tcp.tot_len) + sizeof(tp_info_pid_t));
 
-        bpf_printk("tot_len = %d, new_tot_len = %d", bpf_ntohs(tcp.tot_len), bpf_ntohs(new_tot_len));
-        bpf_printk("h_proto = %d, skb->len = %d", tcp.h_proto, skb->len);
+        bpf_printk("tot_len = %u, new_tot_len = %u", bpf_ntohs(tcp.tot_len), bpf_ntohs(new_tot_len));
+        bpf_printk("h_proto = %u, skb->len = %u", tcp.h_proto, skb->len);
 
         if (offset_ip_checksum) {
             bpf_l3_csum_replace(skb, offset_ip_checksum, tcp.tot_len, new_tot_len, sizeof(u16));

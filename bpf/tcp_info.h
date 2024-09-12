@@ -101,7 +101,7 @@ static __always_inline bool read_sk_buff(struct __sk_buff *skb, protocol_info_t 
     tcp->h_proto = h_proto;
     tcp->hdr_len += doff;
 
-    if ((skb->len - tcp->hdr_len) < 0) { // less than 0 is a packet we can't parse
+    if (tcp->hdr_len > skb->len) { // bad packet, hdr_len is greater than the skb len, we can't parse this.
         return false;
     }
 

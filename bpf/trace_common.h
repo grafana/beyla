@@ -204,25 +204,31 @@ static __always_inline void get_or_create_trace_info(http_connection_metadata_t 
 
     if (meta) {
         if (meta->type == EVENT_HTTP_CLIENT) {
+            // Before this change the client code only looked for a server wrapped trace and 
+            // if it didn't find it would generate the trace information later. Now we look if 
+            // the TC egress has setup TCP trace info for us. If we find this info we set the bool as having trace info,
+            // i.e. we must not regenerate it later. The kprobe on 'tcp_connect' does the lookup of the server trace
+            // for us, so the server context should already be setup.
             tp_info_pid_t *in_tp = bpf_map_lookup_elem(&outgoing_trace_map, conn);
+            tp_p->pid = -1; // we only want to prevent correlation of duplicate server calls by PID
             if (in_tp) {
                 found_tp = 1;
                 tp_p = in_tp;
-            }
+            } else {
+                tp_info_pid_t *server_tp = find_parent_trace();
 
-            tp_p->pid = -1; // we only want to prevent correlation of duplicate server calls by PID
-            tp_info_pid_t *server_tp = find_parent_trace();
-
-            if (server_tp && server_tp->valid && valid_trace(server_tp->tp.trace_id)) {
-                found_tp = 1;
-                bpf_dbg_printk("Found existing server tp for client call");
-                __builtin_memcpy(tp_p->tp.trace_id, server_tp->tp.trace_id, sizeof(tp_p->tp.trace_id));
-                __builtin_memcpy(tp_p->tp.parent_id, server_tp->tp.span_id, sizeof(tp_p->tp.parent_id));
+                if (server_tp && server_tp->valid && valid_trace(server_tp->tp.trace_id)) {
+                    found_tp = 1;
+                    bpf_dbg_printk("Found existing server tp for client call");
+                    __builtin_memcpy(tp_p->tp.trace_id, server_tp->tp.trace_id, sizeof(tp_p->tp.trace_id));
+                    __builtin_memcpy(tp_p->tp.parent_id, server_tp->tp.span_id, sizeof(tp_p->tp.parent_id));
+                }
             }
         } else {
             //bpf_dbg_printk("Looking up existing trace for connection");
             //dbg_print_http_connection_info(conn);
 
+            // For server requests, we first look for TCP info (setup by TC ingress) and then we fall back to black-box info.
             tp_info_pid_t *existing_tp = bpf_map_lookup_elem(&incoming_trace_map, conn);
             if (existing_tp) {
                 found_tp = 1;

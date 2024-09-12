@@ -279,6 +279,7 @@ type bpf_tp_debugMapSpecs struct {
 	GrpcFramerInvocationMap       *ebpf.MapSpec `ebpf:"grpc_framer_invocation_map"`
 	HeaderReqMap                  *ebpf.MapSpec `ebpf:"header_req_map"`
 	Http2ReqMap                   *ebpf.MapSpec `ebpf:"http2_req_map"`
+	IncomingTraceMap              *ebpf.MapSpec `ebpf:"incoming_trace_map"`
 	KafkaRequests                 *ebpf.MapSpec `ebpf:"kafka_requests"`
 	Newproc1                      *ebpf.MapSpec `ebpf:"newproc1"`
 	OngoingClientConnections      *ebpf.MapSpec `ebpf:"ongoing_client_connections"`
@@ -299,6 +300,7 @@ type bpf_tp_debugMapSpecs struct {
 	OngoingServerConnections      *ebpf.MapSpec `ebpf:"ongoing_server_connections"`
 	OngoingSqlQueries             *ebpf.MapSpec `ebpf:"ongoing_sql_queries"`
 	OngoingStreams                *ebpf.MapSpec `ebpf:"ongoing_streams"`
+	OutgoingTraceMap              *ebpf.MapSpec `ebpf:"outgoing_trace_map"`
 	ProduceRequests               *ebpf.MapSpec `ebpf:"produce_requests"`
 	ProduceTraceparents           *ebpf.MapSpec `ebpf:"produce_traceparents"`
 	RedisWrites                   *ebpf.MapSpec `ebpf:"redis_writes"`
@@ -333,6 +335,7 @@ type bpf_tp_debugMaps struct {
 	GrpcFramerInvocationMap       *ebpf.Map `ebpf:"grpc_framer_invocation_map"`
 	HeaderReqMap                  *ebpf.Map `ebpf:"header_req_map"`
 	Http2ReqMap                   *ebpf.Map `ebpf:"http2_req_map"`
+	IncomingTraceMap              *ebpf.Map `ebpf:"incoming_trace_map"`
 	KafkaRequests                 *ebpf.Map `ebpf:"kafka_requests"`
 	Newproc1                      *ebpf.Map `ebpf:"newproc1"`
 	OngoingClientConnections      *ebpf.Map `ebpf:"ongoing_client_connections"`
@@ -353,6 +356,7 @@ type bpf_tp_debugMaps struct {
 	OngoingServerConnections      *ebpf.Map `ebpf:"ongoing_server_connections"`
 	OngoingSqlQueries             *ebpf.Map `ebpf:"ongoing_sql_queries"`
 	OngoingStreams                *ebpf.Map `ebpf:"ongoing_streams"`
+	OutgoingTraceMap              *ebpf.Map `ebpf:"outgoing_trace_map"`
 	ProduceRequests               *ebpf.Map `ebpf:"produce_requests"`
 	ProduceTraceparents           *ebpf.Map `ebpf:"produce_traceparents"`
 	RedisWrites                   *ebpf.Map `ebpf:"redis_writes"`
@@ -370,6 +374,7 @@ func (m *bpf_tp_debugMaps) Close() error {
 		m.GrpcFramerInvocationMap,
 		m.HeaderReqMap,
 		m.Http2ReqMap,
+		m.IncomingTraceMap,
 		m.KafkaRequests,
 		m.Newproc1,
 		m.OngoingClientConnections,
@@ -390,6 +395,7 @@ func (m *bpf_tp_debugMaps) Close() error {
 		m.OngoingServerConnections,
 		m.OngoingSqlQueries,
 		m.OngoingStreams,
+		m.OutgoingTraceMap,
 		m.ProduceRequests,
 		m.ProduceTraceparents,
 		m.RedisWrites,

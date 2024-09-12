@@ -279,6 +279,7 @@ type bpf_tp_debugMapSpecs struct {
 	Events                  *ebpf.MapSpec `ebpf:"events"`
 	Http2InfoMem            *ebpf.MapSpec `ebpf:"http2_info_mem"`
 	HttpInfoMem             *ebpf.MapSpec `ebpf:"http_info_mem"`
+	IncomingTraceMap        *ebpf.MapSpec `ebpf:"incoming_trace_map"`
 	IovecMem                *ebpf.MapSpec `ebpf:"iovec_mem"`
 	JumpTable               *ebpf.MapSpec `ebpf:"jump_table"`
 	NodejsParentMap         *ebpf.MapSpec `ebpf:"nodejs_parent_map"`
@@ -287,6 +288,7 @@ type bpf_tp_debugMapSpecs struct {
 	OngoingHttp2Grpc        *ebpf.MapSpec `ebpf:"ongoing_http2_grpc"`
 	OngoingHttpFallback     *ebpf.MapSpec `ebpf:"ongoing_http_fallback"`
 	OngoingTcpReq           *ebpf.MapSpec `ebpf:"ongoing_tcp_req"`
+	OutgoingTraceMap        *ebpf.MapSpec `ebpf:"outgoing_trace_map"`
 	PidCache                *ebpf.MapSpec `ebpf:"pid_cache"`
 	PidTidToConn            *ebpf.MapSpec `ebpf:"pid_tid_to_conn"`
 	ProtocolArgsMem         *ebpf.MapSpec `ebpf:"protocol_args_mem"`
@@ -336,6 +338,7 @@ type bpf_tp_debugMaps struct {
 	Events                  *ebpf.Map `ebpf:"events"`
 	Http2InfoMem            *ebpf.Map `ebpf:"http2_info_mem"`
 	HttpInfoMem             *ebpf.Map `ebpf:"http_info_mem"`
+	IncomingTraceMap        *ebpf.Map `ebpf:"incoming_trace_map"`
 	IovecMem                *ebpf.Map `ebpf:"iovec_mem"`
 	JumpTable               *ebpf.Map `ebpf:"jump_table"`
 	NodejsParentMap         *ebpf.Map `ebpf:"nodejs_parent_map"`
@@ -344,6 +347,7 @@ type bpf_tp_debugMaps struct {
 	OngoingHttp2Grpc        *ebpf.Map `ebpf:"ongoing_http2_grpc"`
 	OngoingHttpFallback     *ebpf.Map `ebpf:"ongoing_http_fallback"`
 	OngoingTcpReq           *ebpf.Map `ebpf:"ongoing_tcp_req"`
+	OutgoingTraceMap        *ebpf.Map `ebpf:"outgoing_trace_map"`
 	PidCache                *ebpf.Map `ebpf:"pid_cache"`
 	PidTidToConn            *ebpf.Map `ebpf:"pid_tid_to_conn"`
 	ProtocolArgsMem         *ebpf.Map `ebpf:"protocol_args_mem"`
@@ -376,6 +380,7 @@ func (m *bpf_tp_debugMaps) Close() error {
 		m.Events,
 		m.Http2InfoMem,
 		m.HttpInfoMem,
+		m.IncomingTraceMap,
 		m.IovecMem,
 		m.JumpTable,
 		m.NodejsParentMap,
@@ -384,6 +389,7 @@ func (m *bpf_tp_debugMaps) Close() error {
 		m.OngoingHttp2Grpc,
 		m.OngoingHttpFallback,
 		m.OngoingTcpReq,
+		m.OutgoingTraceMap,
 		m.PidCache,
 		m.PidTidToConn,
 		m.ProtocolArgsMem,

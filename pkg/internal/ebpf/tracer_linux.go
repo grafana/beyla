@@ -108,10 +108,12 @@ func (pt *ProcessTracer) Init() error {
 func (pt *ProcessTracer) NewExecutableForTracer(exe *link.Executable, ie *Instrumentable) error {
 	i := instrumenter{
 		exe:     exe,
-		offsets: ie.Offsets,
+		offsets: ie.Offsets, // this is needed for the function offsets, not fields
 	}
 
 	for _, p := range pt.Programs {
+		p.RegisterOffsets(ie.FileInfo, ie.Offsets)
+
 		// Go style Uprobes
 		if err := i.goprobes(p); err != nil {
 			printVerifierErrorInfo(err)

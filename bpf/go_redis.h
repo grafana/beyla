@@ -15,9 +15,6 @@
 #include "go_common.h"
 #include "ringbuf.h"
 
-volatile const u64 redis_conn_bw_pos;
-volatile const u64 io_writer_buf_ptr_pos;
-
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __type(key, void *); // key: goroutine id
@@ -88,6 +85,8 @@ SEC("uprobe/redis_with_writer")
 int uprobe_redis_with_writer(struct pt_regs *ctx) {
     bpf_dbg_printk("=== uprobe/redis WithWriter === ");
     void *goroutine_addr = GOROUTINE_PTR(ctx);
+    u64 id = bpf_get_current_pid_tgid();
+
     bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
 
     redis_client_req_t *req = bpf_map_lookup_elem(&ongoing_redis_requests, &goroutine_addr);
@@ -102,7 +101,7 @@ int uprobe_redis_with_writer(struct pt_regs *ctx) {
 
         void *bw_ptr = 0;
 
-        bpf_probe_read(&bw_ptr, sizeof(void *), cn_ptr + redis_conn_bw_pos);
+        bpf_probe_read(&bw_ptr, sizeof(void *), cn_ptr + go_offset_of(id, _redis_conn_bw_pos));
         bpf_dbg_printk("bw_ptr %llx", bw_ptr);
 
         bpf_map_update_elem(&redis_writes, &goroutine_addr, &bw_ptr, BPF_ANY);
@@ -131,6 +130,7 @@ SEC("uprobe/redis_with_writer")
 int uprobe_redis_with_writer_ret(struct pt_regs *ctx) {
     bpf_dbg_printk("=== uprobe/redis WithWriter returns === ");
     void *goroutine_addr = GOROUTINE_PTR(ctx);
+    u64 id = bpf_get_current_pid_tgid();
     bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
 
     redis_client_req_t *req = bpf_map_lookup_elem(&ongoing_redis_requests, &goroutine_addr);
@@ -142,6 +142,8 @@ int uprobe_redis_with_writer_ret(struct pt_regs *ctx) {
             void *bw = *bw_ptr;
             if (bw) {
                 bpf_dbg_printk("Found bw %llx", bw);
+
+                u64 io_writer_buf_ptr_pos = go_offset_of(id, _io_writer_buf_ptr_pos);
 
                 void *buf = 0;
                 bpf_probe_read(&buf, sizeof(void *), bw + io_writer_buf_ptr_pos);

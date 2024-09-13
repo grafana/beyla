@@ -70,7 +70,6 @@ type bpf_debugKafkaClientReqT struct {
 	Buf             [256]uint8
 	_               [7]byte
 	Conn            bpf_debugConnectionInfoT
-	Tp              bpf_debugTpInfoT
 	Pid             struct {
 		HostPid uint32
 		UserPid uint32
@@ -261,6 +260,7 @@ type bpf_debugMapSpecs struct {
 	DebugEvents                   *ebpf.MapSpec `ebpf:"debug_events"`
 	Events                        *ebpf.MapSpec `ebpf:"events"`
 	FetchRequests                 *ebpf.MapSpec `ebpf:"fetch_requests"`
+	GoOffsetsMap                  *ebpf.MapSpec `ebpf:"go_offsets_map"`
 	GoTraceMap                    *ebpf.MapSpec `ebpf:"go_trace_map"`
 	GolangMapbucketStorageMap     *ebpf.MapSpec `ebpf:"golang_mapbucket_storage_map"`
 	IncomingTraceMap              *ebpf.MapSpec `ebpf:"incoming_trace_map"`
@@ -313,6 +313,7 @@ type bpf_debugMaps struct {
 	DebugEvents                   *ebpf.Map `ebpf:"debug_events"`
 	Events                        *ebpf.Map `ebpf:"events"`
 	FetchRequests                 *ebpf.Map `ebpf:"fetch_requests"`
+	GoOffsetsMap                  *ebpf.Map `ebpf:"go_offsets_map"`
 	GoTraceMap                    *ebpf.Map `ebpf:"go_trace_map"`
 	GolangMapbucketStorageMap     *ebpf.Map `ebpf:"golang_mapbucket_storage_map"`
 	IncomingTraceMap              *ebpf.Map `ebpf:"incoming_trace_map"`
@@ -348,6 +349,7 @@ func (m *bpf_debugMaps) Close() error {
 		m.DebugEvents,
 		m.Events,
 		m.FetchRequests,
+		m.GoOffsetsMap,
 		m.GoTraceMap,
 		m.GolangMapbucketStorageMap,
 		m.IncomingTraceMap,

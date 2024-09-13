@@ -19,13 +19,8 @@
 #include "tracer_common.h"
 #include "tracing.h"
 #include "trace_util.h"
+#include "go_offsets.h"
 #include "go_traceparent.h"
-
-volatile const u64 conn_fd_pos;
-volatile const u64 fd_laddr_pos;
-volatile const u64 fd_raddr_pos;
-volatile const u64 tcp_addr_port_ptr_pos;
-volatile const u64 tcp_addr_ip_ptr_pos;
 
 char __license[] SEC("license") = "Dual MIT/GPL";
 
@@ -215,11 +210,12 @@ static __always_inline u8 client_trace_parent(void *goroutine_addr, tp_info_t *t
 static __always_inline void read_ip_and_port(u8 *dst_ip, u16 *dst_port, void *src) {
     s64 addr_len = 0;
     void *addr_ip = 0;
+    u64 id = bpf_get_current_pid_tgid();
 
-    bpf_probe_read(dst_port, sizeof(u16), (void *)(src + tcp_addr_port_ptr_pos));
-    bpf_probe_read(&addr_ip, sizeof(addr_ip), (void *)(src + tcp_addr_ip_ptr_pos));
+    bpf_probe_read(dst_port, sizeof(u16), (void *)(src + go_offset_of(id, _tcp_addr_port_ptr_pos)));
+    bpf_probe_read(&addr_ip, sizeof(addr_ip), (void *)(src + go_offset_of(id, _tcp_addr_ip_ptr_pos)));
     if (addr_ip) {
-        bpf_probe_read(&addr_len, sizeof(addr_len), (void *)(src + tcp_addr_ip_ptr_pos + 8));
+        bpf_probe_read(&addr_len, sizeof(addr_len), (void *)(src + go_offset_of(id, _tcp_addr_ip_ptr_pos) + 8));
         if (addr_len == 4) {
             __builtin_memcpy(dst_ip, ip4ip6_prefix, sizeof(ip4ip6_prefix));
             bpf_probe_read(dst_ip + sizeof(ip4ip6_prefix), 4, addr_ip);
@@ -233,9 +229,11 @@ static __always_inline u8 get_conn_info_from_fd(void *fd_ptr, connection_info_t 
     if (fd_ptr) {
         void *laddr_ptr = 0;
         void *raddr_ptr = 0;
+        u64 id = bpf_get_current_pid_tgid();
+        u64 fd_laddr_pos = go_offset_of(id, _fd_laddr_pos);
 
         bpf_probe_read(&laddr_ptr, sizeof(laddr_ptr), (void *)(fd_ptr + fd_laddr_pos + 8)); // find laddr
-        bpf_probe_read(&raddr_ptr, sizeof(raddr_ptr), (void *)(fd_ptr + fd_raddr_pos + 8)); // find raddr
+        bpf_probe_read(&raddr_ptr, sizeof(raddr_ptr), (void *)(fd_ptr + go_offset_of(id, _fd_raddr_pos) + 8)); // find raddr
         
         bpf_dbg_printk("laddr_ptr %llx, laddr %llx, raddr %llx", fd_ptr + fd_laddr_pos + 8, laddr_ptr, raddr_ptr);
         if (laddr_ptr && raddr_ptr) {
@@ -264,7 +262,9 @@ static __always_inline u8 get_conn_info_from_fd(void *fd_ptr, connection_info_t 
 static __always_inline u8 get_conn_info(void *conn_ptr, connection_info_t *info) {
     if (conn_ptr) {
         void *fd_ptr = 0;
-        bpf_probe_read(&fd_ptr, sizeof(fd_ptr), (void *)(conn_ptr + conn_fd_pos)); // find fd
+        u64 id = bpf_get_current_pid_tgid();
+
+        bpf_probe_read(&fd_ptr, sizeof(fd_ptr), (void *)(conn_ptr + go_offset_of(id, _conn_fd_pos))); // find fd
 
         bpf_dbg_printk("Found fd ptr %llx", fd_ptr);
 

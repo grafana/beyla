@@ -18,7 +18,7 @@ type FuncOffsets struct {
 	Returns []uint64
 }
 
-type FieldOffsets map[string]any
+type FieldOffsets map[GoOffset]any
 
 // InspectOffsets gets the memory addresses/offsets of the instrumenting function, as well as the required
 // parameters fields to be read from the eBPF code

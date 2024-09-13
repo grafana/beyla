@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"path"
 	"reflect"
 	"strings"
 	"sync"
@@ -14,13 +15,25 @@ import (
 	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/link"
 
+	"github.com/grafana/beyla/pkg/beyla"
 	common "github.com/grafana/beyla/pkg/internal/ebpf/common"
+	"github.com/grafana/beyla/pkg/internal/exec"
 	"github.com/grafana/beyla/pkg/internal/request"
 )
 
 var loadMux sync.Mutex
 
 func ptlog() *slog.Logger { return slog.With("component", "ebpf.ProcessTracer") }
+
+func NewProcessTracer(cfg *beyla.Config, tracerType ProcessTracerType, programs []Tracer) *ProcessTracer {
+	return &ProcessTracer{
+		Programs:        programs,
+		PinPath:         BuildPinPath(cfg),
+		SystemWide:      cfg.Discovery.SystemWide,
+		Type:            tracerType,
+		Instrumentables: map[uint64]*instrumenter{},
+	}
+}
 
 func (pt *ProcessTracer) Run(ctx context.Context, out chan<- []request.Span) {
 	pt.log = ptlog().With("type", pt.Type)
@@ -35,6 +48,13 @@ func (pt *ProcessTracer) Run(ctx context.Context, out chan<- []request.Span) {
 	go func() {
 		<-ctx.Done()
 	}()
+}
+
+// BuildPinPath pinpath must be unique for a given executable group
+// it will be:
+//   - current beyla PID
+func BuildPinPath(cfg *beyla.Config) string {
+	return path.Join(cfg.EBPF.BpfBaseDir, cfg.EBPF.BpfPath)
 }
 
 func (pt *ProcessTracer) loadSpec(p Tracer) (*ebpf.CollectionSpec, error) {
@@ -105,7 +125,7 @@ func (pt *ProcessTracer) Init() error {
 	return pt.loadTracers()
 }
 
-func (pt *ProcessTracer) NewExecutableForTracer(exe *link.Executable, ie *Instrumentable) error {
+func (pt *ProcessTracer) NewExecutable(exe *link.Executable, ie *Instrumentable) error {
 	i := instrumenter{
 		exe:     exe,
 		offsets: ie.Offsets, // this is needed for the function offsets, not fields
@@ -145,7 +165,21 @@ func (pt *ProcessTracer) NewExecutableForTracer(exe *link.Executable, ie *Instru
 		}
 	}
 
+	pt.Instrumentables[ie.FileInfo.Ino] = &i
+
 	return nil
+}
+
+func (pt *ProcessTracer) UnlinkExecutable(info *exec.FileInfo) {
+	if i, ok := pt.Instrumentables[info.Ino]; ok {
+		for _, c := range i.closables {
+			if err := c.Close(); err != nil {
+				pt.log.Debug("Unable to close on unlink", "closable", c)
+			}
+		}
+	} else {
+		pt.log.Warn("Unable to find executable to unlink", "info", info)
+	}
 }
 
 func printVerifierErrorInfo(err error) {

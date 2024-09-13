@@ -4,7 +4,6 @@ import (
 	"context"
 	"log/slog"
 	"os"
-	"path"
 
 	"github.com/cilium/ebpf/link"
 	"github.com/mariomac/pipes/pipe"
@@ -50,7 +49,7 @@ func (ta *TraceAttacher) attacherLoop() (pipe.FinalFunc[[]Event[ebpf.Instrumenta
 	ta.existingTracers = map[uint64]*ebpf.ProcessTracer{}
 	ta.processInstances = maps.MultiCounter[uint64]{}
 	ta.beylaPID = os.Getpid()
-	ta.pinPath = BuildPinPath(ta.Cfg)
+	ta.pinPath = ebpf.BuildPinPath(ta.Cfg)
 
 	if err := ta.init(); err != nil {
 		ta.log.Error("cant start process tracer. Stopping it", "error", err)
@@ -138,10 +137,17 @@ func (ta *TraceAttacher) getTracer(ie *ebpf.Instrumentable) bool {
 					return false
 				}
 
-				if err := ta.reusableGoTracer.NewExecutableForTracer(exe, ie); err != nil {
+				if err := ta.reusableGoTracer.NewExecutable(exe, ie); err != nil {
 					return false
 				}
+
+				ta.log.Debug("reusing Go tracer for",
+					"pid", ie.FileInfo.Pid,
+					"child", ie.ChildPids,
+					"exec", ie.FileInfo.CmdExePath)
+
 				monitorPIDs(ta.reusableGoTracer, ie)
+				ta.existingTracers[ie.FileInfo.Ino] = ta.reusableGoTracer
 
 				return true
 			}
@@ -170,20 +176,16 @@ func (ta *TraceAttacher) getTracer(ie *ebpf.Instrumentable) bool {
 		return false
 	}
 
-	tracer := &ebpf.ProcessTracer{
-		Programs:   programs,
-		PinPath:    BuildPinPath(ta.Cfg),
-		SystemWide: ta.Cfg.Discovery.SystemWide,
-		Type:       tracerType,
-	}
+	tracer := ebpf.NewProcessTracer(ta.Cfg, tracerType, programs)
+
 	if err := tracer.Init(); err != nil {
 		ta.log.Error("couldn't trace process. Stopping process tracer", "error", err)
 		return false
 	}
 
-	ie.TracerToLaunch = tracer
+	ie.Tracer = tracer
 
-	if err := tracer.NewExecutableForTracer(exe, ie); err != nil {
+	if err := tracer.NewExecutable(exe, ie); err != nil {
 		return false
 	}
 
@@ -200,6 +202,8 @@ func (ta *TraceAttacher) getTracer(ie *ebpf.Instrumentable) bool {
 		} else {
 			ta.reusableTracer = tracer
 		}
+	} else {
+		ta.reusableGoTracer = tracer
 	}
 	ta.log.Debug(".done")
 	return true
@@ -245,13 +249,6 @@ func monitorPIDs(tracer *ebpf.ProcessTracer, ie *ebpf.Instrumentable) {
 	}
 }
 
-// BuildPinPath pinpath must be unique for a given executable group
-// it will be:
-//   - current beyla PID
-func BuildPinPath(cfg *beyla.Config) string {
-	return path.Join(cfg.EBPF.BpfBaseDir, cfg.EBPF.BpfPath)
-}
-
 func (ta *TraceAttacher) notifyProcessDeletion(ie *ebpf.Instrumentable) {
 	if tracer, ok := ta.existingTracers[ie.FileInfo.Ino]; ok {
 		ta.log.Info("process ended for already instrumented executable",
@@ -268,6 +265,7 @@ func (ta *TraceAttacher) notifyProcessDeletion(ie *ebpf.Instrumentable) {
 		// We don't remove kernel-based traces as there is only one tracer per host
 		if tracer.Type != ebpf.Generic && ta.processInstances.Dec(ie.FileInfo.Ino) == 0 {
 			delete(ta.existingTracers, ie.FileInfo.Ino)
+			ie.Tracer = tracer
 			ta.DeleteTracers <- ie
 		}
 	}

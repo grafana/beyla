@@ -69,21 +69,22 @@ func (i *Instrumenter) FindAndInstrument() error {
 			case pt := <-foundProcesses:
 				log.Debug("running tracer for new process",
 					"inode", pt.FileInfo.Ino, "pid", pt.FileInfo.Pid, "exec", pt.FileInfo.CmdExePath)
-				cctx, ok := contexts[pt.FileInfo.Ino]
-				if !ok {
-					cctx.ctx, cctx.cancel = context.WithCancel(i.ctx)
-					contexts[pt.FileInfo.Ino] = cctx
-				}
-				if pt.TracerToLaunch != nil {
-					go pt.TracerToLaunch.Run(cctx.ctx, i.tracesInput)
+				if pt.Tracer != nil {
+					cctx, ok := contexts[pt.FileInfo.Ino]
+					if !ok {
+						cctx.ctx, cctx.cancel = context.WithCancel(i.ctx)
+						contexts[pt.FileInfo.Ino] = cctx
+					}
+					go pt.Tracer.Run(cctx.ctx, i.tracesInput)
 				}
 			case dp := <-deletedProcesses:
 				log.Debug("stopping ProcessTracer because there are no more instances of such process",
 					"inode", dp.FileInfo.Ino, "pid", dp.FileInfo.Pid, "exec", dp.FileInfo.CmdExePath)
-				if cctx, ok := contexts[dp.FileInfo.Ino]; ok {
-					delete(contexts, dp.FileInfo.Ino)
-					cctx.cancel()
+				if dp.Tracer != nil {
+					dp.Tracer.UnlinkExecutable(dp.FileInfo)
 				}
+				delete(contexts, dp.FileInfo.Ino)
+				//cctx.cancel()
 			}
 		}
 	}()

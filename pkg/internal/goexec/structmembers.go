@@ -24,10 +24,10 @@ const (
 	ConnFdPos GoOffset = iota + 1 // start at 1, must match what's in go_offsets.h
 	FdLaddrPos
 	FdRaddrPos
-	TcpAddrPortPtrPos
-	TcpAddrIpPtrPos
+	TCPAddrPortPtrPos
+	TCPAddrIPPtrPos
 	// http
-	UrlPtrPos
+	URLPtrPos
 	PathPtrPos
 	MethodPtrPos
 	StatusCodePtrPos
@@ -35,10 +35,10 @@ const (
 	ReqHeaderPtrPos
 	IoWriterBufPtrPos
 	IoWriterNPos
-	CcNextStreamIdPos
+	CcNextStreamIDPos
 	FramerWPos
 	PcConnPos
-	PcTlsPos
+	PcTLSPos
 	NetConnPos
 	CcTconnPos
 	ScConnPos
@@ -54,7 +54,7 @@ const (
 	GrpcStConnPos
 	GrpcTConnPos
 	GrpcTSchemePos
-	Http2ClientNextIdPos
+	HTTP2ClientNextIDPos
 	GrpcTransportBufWriterBufPos
 	GrpcTransportBufWriterOffsetPos
 	// redis
@@ -64,8 +64,8 @@ const (
 	KafkaGoProtocolConnPos
 	KafkaGoReaderTopicPos
 	// kafka sarama
-	SaramaBrokerCorrIdPos
-	SaramaResponseCorrIdPos
+	SaramaBrokerCorrIDPos
+	SaramaResponseCorrIDPos
 	SaramaBrokerConnPos
 	SaramaBufconnConnPos
 )
@@ -88,7 +88,7 @@ var structMembers = map[string]structInfo{
 	"net/http.Request": {
 		lib: "go",
 		fields: map[string]GoOffset{
-			"URL":           UrlPtrPos,
+			"URL":           URLPtrPos,
 			"Method":        MethodPtrPos,
 			"ContentLength": ContentLengthPtrPos,
 			"Header":        ReqHeaderPtrPos,
@@ -135,8 +135,8 @@ var structMembers = map[string]structInfo{
 	"net.TCPAddr": {
 		lib: "go",
 		fields: map[string]GoOffset{
-			"IP":   TcpAddrIpPtrPos,
-			"Port": TcpAddrPortPtrPos,
+			"IP":   TCPAddrIPPtrPos,
+			"Port": TCPAddrPortPtrPos,
 		},
 	},
 	"bufio.Writer": {
@@ -155,7 +155,7 @@ var structMembers = map[string]structInfo{
 	"google.golang.org/grpc/internal/transport.http2Client": {
 		lib: "google.golang.org/grpc",
 		fields: map[string]GoOffset{
-			"nextID": Http2ClientNextIdPos,
+			"nextID": HTTP2ClientNextIDPos,
 			"conn":   GrpcTConnPos,
 			"scheme": GrpcTSchemePos,
 		},
@@ -163,7 +163,7 @@ var structMembers = map[string]structInfo{
 	"golang.org/x/net/http2.ClientConn": {
 		lib: "golang.org/x/net",
 		fields: map[string]GoOffset{
-			"nextStreamID": CcNextStreamIdPos,
+			"nextStreamID": CcNextStreamIDPos,
 			"tconn":        CcTconnPos,
 		},
 	},
@@ -202,7 +202,7 @@ var structMembers = map[string]structInfo{
 		lib: "go",
 		fields: map[string]GoOffset{
 			"conn":     PcConnPos,
-			"tlsState": PcTlsPos,
+			"tlsState": PcTLSPos,
 		},
 	},
 	"net/http.conn": {
@@ -222,14 +222,14 @@ var structMembers = map[string]structInfo{
 	"github.com/IBM/sarama.Broker": {
 		lib: "github.com/IBM/sarama",
 		fields: map[string]GoOffset{
-			"correlationID": SaramaBrokerCorrIdPos,
+			"correlationID": SaramaBrokerCorrIDPos,
 			"conn":          SaramaBrokerConnPos,
 		},
 	},
 	"github.com/IBM/sarama.responsePromise": {
 		lib: "github.com/IBM/sarama",
 		fields: map[string]GoOffset{
-			"correlationID": SaramaResponseCorrIdPos,
+			"correlationID": SaramaResponseCorrIDPos,
 		},
 	},
 	"github.com/IBM/sarama.bufConn": {
@@ -243,14 +243,14 @@ var structMembers = map[string]structInfo{
 	"github.com/Shopify/sarama.Broker": {
 		lib: "github.com/IBM/sarama",
 		fields: map[string]GoOffset{
-			"correlationID": SaramaBrokerCorrIdPos,
+			"correlationID": SaramaBrokerCorrIDPos,
 			"conn":          SaramaBrokerConnPos,
 		},
 	},
 	"github.com/Shopify/sarama.responsePromise": {
 		lib: "github.com/IBM/sarama",
 		fields: map[string]GoOffset{
-			"correlationID": SaramaResponseCorrIdPos,
+			"correlationID": SaramaResponseCorrIDPos,
 		},
 	},
 	"github.com/Shopify/sarama.bufConn": {

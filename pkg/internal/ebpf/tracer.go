@@ -6,6 +6,7 @@ import (
 	"log/slog"
 
 	"github.com/cilium/ebpf"
+	"github.com/cilium/ebpf/link"
 
 	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
 	"github.com/grafana/beyla/pkg/internal/exec"
@@ -22,9 +23,9 @@ type Instrumentable struct {
 	// tracing both the parent pid and all of its children pid
 	ChildPids []uint32
 
-	FileInfo       *exec.FileInfo
-	Offsets        *goexec.Offsets
-	TracerToLaunch *ProcessTracer
+	FileInfo *exec.FileInfo
+	Offsets  *goexec.Offsets
+	Tracer   *ProcessTracer
 }
 
 type PIDsAccounter interface {
@@ -99,6 +100,12 @@ type UtilityTracer interface {
 
 type ProcessTracerType int
 
+type instrumenter struct {
+	offsets   *goexec.Offsets
+	exe       *link.Executable
+	closables []io.Closer
+}
+
 const (
 	Go = ProcessTracerType(iota)
 	Generic
@@ -111,8 +118,9 @@ type ProcessTracer struct {
 	Programs []Tracer
 	PinPath  string
 
-	SystemWide bool
-	Type       ProcessTracerType
+	SystemWide      bool
+	Type            ProcessTracerType
+	Instrumentables map[uint64]*instrumenter
 }
 
 func (pt *ProcessTracer) AllowPID(pid, ns uint32, svc *svc.ID) {

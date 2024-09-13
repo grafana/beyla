@@ -5,7 +5,6 @@ package ebpf
 import (
 	"encoding/binary"
 	"fmt"
-	"io"
 	"log/slog"
 	"os"
 	"strings"
@@ -19,14 +18,7 @@ import (
 
 	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
 	"github.com/grafana/beyla/pkg/internal/exec"
-	"github.com/grafana/beyla/pkg/internal/goexec"
 )
-
-type instrumenter struct {
-	offsets   *goexec.Offsets
-	exe       *link.Executable
-	closables []io.Closer
-}
 
 func ilog() *slog.Logger {
 	return slog.With("component", "ebpf.Instrumenter")
@@ -92,7 +84,9 @@ func (i *instrumenter) kprobes(p KprobesTracer) error {
 		log.Debug("going to add kprobe to function", "function", kfunc, "probes", kprobes)
 
 		if err := i.kprobe(kfunc, kprobes); err != nil {
-			return fmt.Errorf("instrumenting function %q: %w", kfunc, err)
+			if kprobes.Required {
+				return fmt.Errorf("instrumenting function %q: %w", kfunc, err)
+			}
 		}
 		p.AddCloser(i.closables...)
 	}

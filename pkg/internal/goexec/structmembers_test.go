@@ -69,13 +69,13 @@ func TestGoOffsetsFromDwarf(t *testing.T) {
 	offsets, _ := structMemberOffsetsFromDwarf(debugData)
 	// this test might fail if a future Go version updates the internal structure of the used structs.
 	mustMatch(t, FieldOffsets{
-		UrlPtrPos:         uint64(16),
+		URLPtrPos:         uint64(16),
 		PathPtrPos:        uint64(56),
 		ConnFdPos:         uint64(0),
 		FdLaddrPos:        uint64(96),
 		MethodPtrPos:      uint64(0),
-		TcpAddrIpPtrPos:   uint64(0),
-		TcpAddrPortPtrPos: uint64(24),
+		TCPAddrIPPtrPos:   uint64(0),
+		TCPAddrPortPtrPos: uint64(24),
 	}, offsets)
 }
 
@@ -97,7 +97,7 @@ func TestGoOffsetsWithoutDwarf(t *testing.T) {
 	require.NoError(t, err)
 	// this test might fail if a future Go version updates the internal structure of the used structs.
 	mustMatch(t, FieldOffsets{
-		UrlPtrPos:    uint64(16),
+		URLPtrPos:    uint64(16),
 		PathPtrPos:   uint64(56),
 		ConnFdPos:    uint64(0),
 		FdLaddrPos:   uint64(96),

@@ -17,12 +17,22 @@ metadata:
   {{- end }}
 spec:
   endpoints:
-    - port: {{ .Values.service.portName }}
+    {{- if or (.Values.service.metrics.targetPort) (.Values.config.data.prometheus_export) }}
+    - port: {{ .Values.service.metrics.portName }}
       path: {{ .Values.config.data.prometheus_export.path }}
       scheme: http 
-      {{- with .Values.serviceMonitor.endpoint }}
+      {{- with .Values.serviceMonitor.metrics.endpoint }}
       {{- toYaml . | nindent 6 }}
       {{- end }}
+    {{- end }}
+    {{- if or (.Values.service.internalMetrics.targetPort) (.Values.config.data.internal_metrics) }}
+    - port: {{ .Values.service.internalMetrics.portName }}
+      path: {{ .Values.config.data.internal_metrics.prometheus.path }}
+      scheme: http 
+      {{- with .Values.serviceMonitor.internalMetrics.endpoint }}
+      {{- toYaml . | nindent 6 }}
+      {{- end }}
+    {{- end }}
   jobLabel: {{ .Values.serviceMonitor.jobLabel | default (include "beyla.fullname" .) }}
   selector:
     matchLabels:

@@ -44,16 +44,30 @@ spec:
   externalTrafficPolicy: {{ . }}
   {{- end }}
   ports:
-    - name: {{ .Values.service.portName }}
-      port: {{ .Values.service.port }}
+    {{- if or (.Values.service.metrics.targetPort) (.Values.config.data.prometheus_export) }}
+    - name: {{ .Values.service.metrics.portName }}
+      port: {{ .Values.service.metrics.port }}
       protocol: TCP
-      targetPort: {{ .Values.service.targetPort }}
-      {{- with .Values.service.appProtocol }}
+      targetPort: {{ .Values.service.metrics.targetPort | default .Values.config.data.prometheus_export.port }}
+      {{- with .Values.service.metrics.appProtocol }}
       appProtocol: {{ . }}
       {{- end }}
-      {{- if (and (eq .Values.service.type "NodePort") (not (empty .Values.service.nodePort))) }}
-      nodePort: {{ .Values.service.nodePort }}
+      {{- if (and (eq .Values.service.type "NodePort") (not (empty .Values.service.metrics.nodePort))) }}
+      nodePort: {{ .Values.service.metrics.nodePort }}
       {{- end }}
+    {{- end }}
+    {{- if or (.Values.service.internalMetrics.targetPort) (.Values.config.data.internal_metrics) }}
+    - name: {{ .Values.service.internalMetrics.portName }}
+      port: {{ .Values.service.internalMetrics.port }}
+      protocol: TCP
+      targetPort: {{ .Values.service.internalMetrics.targetPort | default .Values.config.data.internal_metrics.prometheus.port }}
+      {{- with .Values.service.internalMetrics.appProtocol }}
+      appProtocol: {{ . }}
+      {{- end }}
+      {{- if (and (eq .Values.service.type "NodePort") (not (empty .Values.service.internalMetrics.nodePort))) }}
+      nodePort: {{ .Values.service.internalMetrics.nodePort }}
+      {{- end }}
+    {{- end }}
   selector:
     {{- include "beyla.selectorLabels" . | nindent 4 }}
 {{- end }}

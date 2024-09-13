@@ -114,7 +114,7 @@ service:
   internalMetrics:
     # -- internal metrics service port
     port: 8080
-    # -- targetPort overrides the internal metrics port. It defaults to the value of `prometheus_export.port`
+    # -- targetPort overrides the internal metrics port. It defaults to the value of `internal_metrics.prometheus.port`
     # from the Beyla configuration file.
     targetPort: null
     # -- name of the port for internal metrics.
@@ -257,13 +257,13 @@ serviceMonitor:
   annotations: {}
   metrics:
   # -- ServiceMonitor Prometheus scraping endpoint.
-  # Target port and path is set based on service and prometheus_export values.
+  # Target port and path is set based on service and `prometheus_export` values.
   # For additional values, see the ServiceMonitor spec
     endpoint:
       interval: 15s
   internalMetrics:
   # -- ServiceMonitor internal metrics scraping endpoint.
-  # Target port and path is set based on service and prometheus_export values.
+  # Target port and path is set based on service and `internal_metrics` values.
   # For additional values, see the ServiceMonitor spec
     endpoint:
       interval: 15s

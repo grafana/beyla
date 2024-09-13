@@ -87,7 +87,13 @@ func (p *Tracer) Load() (*ebpf.CollectionSpec, error) {
 
 func (p *Tracer) SetupTailCalls() {}
 
-func (p *Tracer) Constants(_ *exec.FileInfo, offsets *goexec.Offsets) map[string]any {
+func (p *Tracer) Constants() map[string]any {
+	return map[string]any{
+		"wakeup_data_bytes": uint32(p.cfg.WakeupLen) * uint32(unsafe.Sizeof(ebpfcommon.HTTPRequestTrace{})),
+	}
+}
+
+func (p *Tracer) RegisterOffsets(_ *exec.FileInfo, offsets *goexec.Offsets) {
 	// Set the field offsets and the logLevel for nethttp BPF program,
 	// as well as some other configuration constants
 	constants := map[string]any{
@@ -153,8 +159,6 @@ func (p *Tracer) Constants(_ *exec.FileInfo, offsets *goexec.Offsets) map[string
 			constants[s] = uint64(0xffffffffffffffff)
 		}
 	}
-
-	return constants
 }
 
 func (p *Tracer) BpfObjects() any {

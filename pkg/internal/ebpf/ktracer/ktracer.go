@@ -163,7 +163,7 @@ func (p *Tracer) SetupTailCalls() {
 	}
 }
 
-func (p *Tracer) Constants(_ *exec.FileInfo, _ *goexec.Offsets) map[string]any {
+func (p *Tracer) Constants() map[string]any {
 	m := make(map[string]any, 2)
 
 	// The eBPF side does some basic filtering of events that do not belong to
@@ -184,6 +184,8 @@ func (p *Tracer) Constants(_ *exec.FileInfo, _ *goexec.Offsets) map[string]any {
 
 	return m
 }
+
+func (p *Tracer) RegisterOffsets(_ *exec.FileInfo, _ *goexec.Offsets) {}
 
 func (p *Tracer) BpfObjects() any {
 	return &p.bpfObjects

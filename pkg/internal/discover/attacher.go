@@ -24,8 +24,8 @@ type TraceAttacher struct {
 	log               *slog.Logger
 	Cfg               *beyla.Config
 	Ctx               context.Context
-	DiscoveredTracers chan *ebpf.ProcessTracer
-	DeleteTracers     chan *Instrumentable
+	DiscoveredTracers chan *ebpf.Instrumentable
+	DeleteTracers     chan *ebpf.Instrumentable
 	Metrics           imetrics.Reporter
 	pinPath           string
 	beylaPID          int
@@ -36,15 +36,16 @@ type TraceAttacher struct {
 	processInstances maps.MultiCounter[uint64]
 
 	// keeps a copy of all the tracers for a given executable path
-	existingTracers map[uint64]*ebpf.ProcessTracer
-	reusableTracer  *ebpf.ProcessTracer
+	existingTracers  map[uint64]*ebpf.ProcessTracer
+	reusableTracer   *ebpf.ProcessTracer
+	reusableGoTracer *ebpf.ProcessTracer
 }
 
-func TraceAttacherProvider(ta *TraceAttacher) pipe.FinalProvider[[]Event[Instrumentable]] {
+func TraceAttacherProvider(ta *TraceAttacher) pipe.FinalProvider[[]Event[ebpf.Instrumentable]] {
 	return ta.attacherLoop
 }
 
-func (ta *TraceAttacher) attacherLoop() (pipe.FinalFunc[[]Event[Instrumentable]], error) {
+func (ta *TraceAttacher) attacherLoop() (pipe.FinalFunc[[]Event[ebpf.Instrumentable]], error) {
 	ta.log = slog.With("component", "discover.TraceAttacher")
 	ta.existingTracers = map[uint64]*ebpf.ProcessTracer{}
 	ta.processInstances = maps.MultiCounter[uint64]{}
@@ -56,7 +57,7 @@ func (ta *TraceAttacher) attacherLoop() (pipe.FinalFunc[[]Event[Instrumentable]]
 		return nil, err
 	}
 
-	return func(in <-chan []Event[Instrumentable]) {
+	return func(in <-chan []Event[ebpf.Instrumentable]) {
 	mainLoop:
 		for instrumentables := range in {
 			for _, instr := range instrumentables {
@@ -64,8 +65,8 @@ func (ta *TraceAttacher) attacherLoop() (pipe.FinalFunc[[]Event[Instrumentable]]
 				switch instr.Type {
 				case EventCreated:
 					ta.processInstances.Inc(instr.Obj.FileInfo.Ino)
-					if pt, ok := ta.getTracer(&instr.Obj); ok {
-						ta.DiscoveredTracers <- pt
+					if ok := ta.getTracer(&instr.Obj); ok {
+						ta.DiscoveredTracers <- &instr.Obj
 						if ta.Cfg.Discovery.SystemWide {
 							ta.log.Info("system wide instrumentation. Creating a single instrumenter")
 							break mainLoop
@@ -82,12 +83,12 @@ func (ta *TraceAttacher) attacherLoop() (pipe.FinalFunc[[]Event[Instrumentable]]
 	}, nil
 }
 
-func (ta *TraceAttacher) skipSelfInstrumentation(ie *Instrumentable) bool {
+func (ta *TraceAttacher) skipSelfInstrumentation(ie *ebpf.Instrumentable) bool {
 	return ie.FileInfo.Pid == int32(ta.beylaPID) && !ta.Cfg.Discovery.AllowSelfInstrumentation
 }
 
 //nolint:cyclop
-func (ta *TraceAttacher) getTracer(ie *Instrumentable) (*ebpf.ProcessTracer, bool) {
+func (ta *TraceAttacher) getTracer(ie *ebpf.Instrumentable) bool {
 	if tracer, ok := ta.existingTracers[ie.FileInfo.Ino]; ok {
 		ta.log.Info("new process for already instrumented executable",
 			"pid", ie.FileInfo.Pid,
@@ -99,14 +100,16 @@ func (ta *TraceAttacher) getTracer(ie *Instrumentable) (*ebpf.ProcessTracer, boo
 		ta.Metrics.InstrumentProcess(ie.FileInfo.ExecutableName())
 		if tracer.Type == ebpf.Generic {
 			monitorPIDs(ta.reusableTracer, ie)
+		} else {
+			monitorPIDs(ta.reusableGoTracer, ie)
 		}
 		ta.log.Debug(".done")
-		return nil, false
+		return ok
 	}
 
 	if ta.skipSelfInstrumentation(ie) {
 		ta.log.Info("skipping self-instrumentation of Beyla process", "cmd", ie.FileInfo.CmdExePath, "pid", ie.FileInfo.Pid)
-		return nil, false
+		return false
 	}
 
 	ta.log.Info("instrumenting process", "cmd", ie.FileInfo.CmdExePath, "pid", ie.FileInfo.Pid)
@@ -129,6 +132,19 @@ func (ta *TraceAttacher) getTracer(ie *Instrumentable) (*ebpf.ProcessTracer, boo
 				programs = newNonGoTracersGroup(ta.Cfg, ta.Metrics)
 			}
 		} else {
+			if ta.reusableGoTracer != nil {
+				exe, ok := ta.loadExecutable(ie)
+				if !ok {
+					return false
+				}
+
+				if err := ta.reusableGoTracer.NewExecutableForTracer(exe, ie); err != nil {
+					return false
+				}
+				monitorPIDs(ta.reusableGoTracer, ie)
+
+				return true
+			}
 			tracerType = ebpf.Go
 			programs = filterNotFoundPrograms(newGoTracersGroup(ta.Cfg, ta.Metrics), ie.Offsets)
 		}
@@ -142,29 +158,35 @@ func (ta *TraceAttacher) getTracer(ie *Instrumentable) (*ebpf.ProcessTracer, boo
 	}
 	if len(programs) == 0 {
 		ta.log.Warn("no instrumentable functions found. Ignoring", "pid", ie.FileInfo.Pid, "cmd", ie.FileInfo.CmdExePath)
-		return nil, false
+		return false
 	}
 
 	ie.FileInfo.Service.SDKLanguage = ie.Type
 
 	// Instead of the executable file in the disk, we pass the /proc/<pid>/exec
 	// to allow loading it from different container/pods in containerized environments
-	exe, err := link.OpenExecutable(ie.FileInfo.ProExeLinkPath)
-	if err != nil {
-		ta.log.Warn("can't open executable. Ignoring",
-			"error", err, "pid", ie.FileInfo.Pid, "cmd", ie.FileInfo.CmdExePath)
-		return nil, false
+	exe, ok := ta.loadExecutable(ie)
+	if !ok {
+		return false
 	}
 
 	tracer := &ebpf.ProcessTracer{
 		Programs:   programs,
-		ELFInfo:    ie.FileInfo,
-		Goffsets:   ie.Offsets,
-		Exe:        exe,
 		PinPath:    BuildPinPath(ta.Cfg),
 		SystemWide: ta.Cfg.Discovery.SystemWide,
 		Type:       tracerType,
 	}
+	if err := tracer.Init(); err != nil {
+		ta.log.Error("couldn't trace process. Stopping process tracer", "error", err)
+		return false
+	}
+
+	ie.TracerToLaunch = tracer
+
+	if err := tracer.NewExecutableForTracer(exe, ie); err != nil {
+		return false
+	}
+
 	ta.log.Debug("new executable for discovered process",
 		"pid", ie.FileInfo.Pid,
 		"child", ie.ChildPids,
@@ -180,7 +202,20 @@ func (ta *TraceAttacher) getTracer(ie *Instrumentable) (*ebpf.ProcessTracer, boo
 		}
 	}
 	ta.log.Debug(".done")
-	return tracer, true
+	return true
+}
+
+func (ta *TraceAttacher) loadExecutable(ie *ebpf.Instrumentable) (*link.Executable, bool) {
+	// Instead of the executable file in the disk, we pass the /proc/<pid>/exec
+	// to allow loading it from different container/pods in containerized environments
+	exe, err := link.OpenExecutable(ie.FileInfo.ProExeLinkPath)
+	if err != nil {
+		ta.log.Warn("can't open executable. Ignoring",
+			"error", err, "pid", ie.FileInfo.Pid, "cmd", ie.FileInfo.CmdExePath)
+		return nil, false
+	}
+
+	return exe, true
 }
 
 func (ta *TraceAttacher) genericTracers() []ebpf.Tracer {
@@ -191,7 +226,7 @@ func (ta *TraceAttacher) genericTracers() []ebpf.Tracer {
 	return newNonGoTracersGroup(ta.Cfg, ta.Metrics)
 }
 
-func monitorPIDs(tracer *ebpf.ProcessTracer, ie *Instrumentable) {
+func monitorPIDs(tracer *ebpf.ProcessTracer, ie *ebpf.Instrumentable) {
 	// If the user does not override the service name via configuration
 	// the service name is the name of the found executable
 	// Unless the case of system-wide tracing, where the name of the
@@ -217,7 +252,7 @@ func BuildPinPath(cfg *beyla.Config) string {
 	return path.Join(cfg.EBPF.BpfBaseDir, cfg.EBPF.BpfPath)
 }
 
-func (ta *TraceAttacher) notifyProcessDeletion(ie *Instrumentable) {
+func (ta *TraceAttacher) notifyProcessDeletion(ie *ebpf.Instrumentable) {
 	if tracer, ok := ta.existingTracers[ie.FileInfo.Ino]; ok {
 		ta.log.Info("process ended for already instrumented executable",
 			"pid", ie.FileInfo.Pid,

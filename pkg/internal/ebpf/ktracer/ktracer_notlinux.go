@@ -21,20 +21,21 @@ import (
 
 type Tracer struct{}
 
-func New(_ *beyla.Config, _ imetrics.Reporter) *Tracer                         { return nil }
-func (p *Tracer) AllowPID(_, _ uint32, _ *svc.ID)                              {}
-func (p *Tracer) BlockPID(_, _ uint32)                                         {}
-func (p *Tracer) Load() (*ebpf.CollectionSpec, error)                          { return nil, nil }
-func (p *Tracer) BpfObjects() any                                              { return nil }
-func (p *Tracer) AddCloser(_ ...io.Closer)                                     {}
-func (p *Tracer) GoProbes() map[string][]ebpfcommon.FunctionPrograms           { return nil }
-func (p *Tracer) KProbes() map[string]ebpfcommon.FunctionPrograms              { return nil }
-func (p *Tracer) UProbes() map[string]map[string]ebpfcommon.FunctionPrograms   { return nil }
-func (p *Tracer) Tracepoints() map[string]ebpfcommon.FunctionPrograms          { return nil }
-func (p *Tracer) SocketFilters() []*ebpf.Program                               { return nil }
-func (p *Tracer) RecordInstrumentedLib(_ uint64)                               {}
-func (p *Tracer) AlreadyInstrumentedLib(_ uint64) bool                         { return false }
-func (p *Tracer) Run(_ context.Context, _ chan<- []request.Span)               {}
-func (p *Tracer) Constants(_ *exec.FileInfo, _ *goexec.Offsets) map[string]any { return nil }
-func (p *Tracer) SetupTC()                                                     {}
-func (p *Tracer) SetupTailCalls()                                              {}
+func New(_ *beyla.Config, _ imetrics.Reporter) *Tracer                       { return nil }
+func (p *Tracer) AllowPID(_, _ uint32, _ *svc.ID)                            {}
+func (p *Tracer) BlockPID(_, _ uint32)                                       {}
+func (p *Tracer) Load() (*ebpf.CollectionSpec, error)                        { return nil, nil }
+func (p *Tracer) BpfObjects() any                                            { return nil }
+func (p *Tracer) AddCloser(_ ...io.Closer)                                   {}
+func (p *Tracer) GoProbes() map[string][]ebpfcommon.FunctionPrograms         { return nil }
+func (p *Tracer) KProbes() map[string]ebpfcommon.FunctionPrograms            { return nil }
+func (p *Tracer) UProbes() map[string]map[string]ebpfcommon.FunctionPrograms { return nil }
+func (p *Tracer) Tracepoints() map[string]ebpfcommon.FunctionPrograms        { return nil }
+func (p *Tracer) SocketFilters() []*ebpf.Program                             { return nil }
+func (p *Tracer) RecordInstrumentedLib(_ uint64)                             {}
+func (p *Tracer) AlreadyInstrumentedLib(_ uint64) bool                       { return false }
+func (p *Tracer) Run(_ context.Context, _ chan<- []request.Span)             {}
+func (p *Tracer) Constants() map[string]any                                  { return nil }
+func (p *Tracer) SetupTC()                                                   {}
+func (p *Tracer) SetupTailCalls()                                            {}
+func (p *Tracer) RegisterOffsets(_ *exec.FileInfo, _ *goexec.Offsets)        {}

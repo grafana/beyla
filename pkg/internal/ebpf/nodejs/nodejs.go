@@ -57,7 +57,7 @@ func (p *Tracer) Load() (*ebpf.CollectionSpec, error) {
 
 func (p *Tracer) SetupTailCalls() {}
 
-func (p *Tracer) Constants(_ *exec.FileInfo, _ *goexec.Offsets) map[string]any {
+func (p *Tracer) Constants() map[string]any {
 	m := make(map[string]any, 2)
 
 	// The eBPF side does some basic filtering of events that do not belong to
@@ -70,11 +70,15 @@ func (p *Tracer) Constants(_ *exec.FileInfo, _ *goexec.Offsets) map[string]any {
 		m["filter_pids"] = int32(0)
 	}
 
+	// TODO: These need to be moved to RegisterOffsets if they change position
+	// based on the NodeJS runtime
 	m["async_wrap_async_id_off"] = int32(0x28)
 	m["async_wrap_trigger_async_id_off"] = int32(0x30)
 
 	return m
 }
+
+func (p *Tracer) RegisterOffsets(_ *exec.FileInfo, _ *goexec.Offsets) {}
 
 func (p *Tracer) BpfObjects() any {
 	return &p.bpfObjects

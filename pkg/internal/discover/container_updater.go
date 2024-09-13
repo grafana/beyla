@@ -3,23 +3,24 @@ package discover
 import (
 	"github.com/mariomac/pipes/pipe"
 
+	"github.com/grafana/beyla/pkg/internal/ebpf"
 	"github.com/grafana/beyla/pkg/internal/transform/kube"
 )
 
 // ContainerDBUpdaterProvider is a stage in the Process Finder pipeline that will be
 // enabled only if Kubernetes decoration is enabled.
 // It just updates part of the kubernetes database when a new process is discovered.
-func ContainerDBUpdaterProvider(enabled bool, db *kube.Database) pipe.MiddleProvider[[]Event[Instrumentable], []Event[Instrumentable]] {
-	return func() (pipe.MiddleFunc[[]Event[Instrumentable], []Event[Instrumentable]], error) {
+func ContainerDBUpdaterProvider(enabled bool, db *kube.Database) pipe.MiddleProvider[[]Event[ebpf.Instrumentable], []Event[ebpf.Instrumentable]] {
+	return func() (pipe.MiddleFunc[[]Event[ebpf.Instrumentable], []Event[ebpf.Instrumentable]], error) {
 		if !enabled {
-			return pipe.Bypass[[]Event[Instrumentable]](), nil
+			return pipe.Bypass[[]Event[ebpf.Instrumentable]](), nil
 		}
 		return updateLoop(db), nil
 	}
 }
 
-func updateLoop(db *kube.Database) pipe.MiddleFunc[[]Event[Instrumentable], []Event[Instrumentable]] {
-	return func(in <-chan []Event[Instrumentable], out chan<- []Event[Instrumentable]) {
+func updateLoop(db *kube.Database) pipe.MiddleFunc[[]Event[ebpf.Instrumentable], []Event[ebpf.Instrumentable]] {
+	return func(in <-chan []Event[ebpf.Instrumentable], out chan<- []Event[ebpf.Instrumentable]) {
 		for instrumentables := range in {
 			for i := range instrumentables {
 				ev := &instrumentables[i]

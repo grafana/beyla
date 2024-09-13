@@ -236,6 +236,8 @@ preset: application
 # -- Enable creation of ServiceMonitor for scraping of prometheus HTTP endpoint
 serviceMonitor:
   enabled: false
+  # -- Add custom labels to the ServiceMonitor resource
+  additionalLabels: {}
   # -- ServiceMonitor annotations
   annotations: {}
   # -- ServiceMonitor scraping endpoint.

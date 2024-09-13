@@ -269,6 +269,25 @@ func getDefinitions(groups AttrGroups) map[Section]AttrReportGroup {
 		ProcessMemoryVirtual.Section:  {SubGroups: []*AttrReportGroup{&processAttributes}},
 		ProcessDiskIO.Section:         {SubGroups: []*AttrReportGroup{&processAttributes}},
 		ProcessNetIO.Section:          {SubGroups: []*AttrReportGroup{&processAttributes}},
+		// span and service graph metrics don't yet implement attribute selection,
+		// but their values can still be filtered, so we list them here just to
+		// make the filter recognize its attributes
+		// TODO: when service graph and spam metrics implement attribute selection, replace this section by proper metric names
+		"---- temporary placeholder for span and service graph metrics ----": {
+			Attributes: map[attr.Name]Default{
+				attr.Client:            false,
+				attr.ClientNamespace:   false,
+				attr.Server:            false,
+				attr.ServerNamespace:   false,
+				attr.Source:            false,
+				attr.Service:           false,
+				attr.ServiceInstanceID: false,
+				attr.ServiceNamespace:  false,
+				attr.SpanKind:          false,
+				attr.SpanName:          false,
+				attr.StatusCode:        false,
+			},
+		},
 	}
 }
 

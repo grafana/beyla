@@ -124,9 +124,9 @@ func SpanPromGetters(attrName attr.Name) (attributes.Getter[*Span, string], bool
 		getter = func(s *Span) string { return s.Route }
 	case attr.HTTPUrlPath:
 		getter = func(s *Span) string { return s.Path }
-	case attr.ClientAddr:
+	case attr.Client, attr.ClientAddr:
 		getter = SpanPeer
-	case attr.ServerAddr:
+	case attr.Server, attr.ServerAddr:
 		getter = SpanHost
 	case attr.ServerPort:
 		getter = func(s *Span) string { return strconv.Itoa(s.HostPort) }

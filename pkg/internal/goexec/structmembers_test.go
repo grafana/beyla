@@ -126,7 +126,7 @@ func TestGoOffsetsFromDwarf_ErrorIfConstantNotFound(t *testing.T) {
 		},
 	}
 	_, missing := structMemberOffsetsFromDwarf(debugData)
-	assert.Contains(t, missing, "tralara")
+	assert.Contains(t, missing, GoOffset(123456))
 }
 
 func TestReadMembers_UnsupportedLocationType(t *testing.T) {

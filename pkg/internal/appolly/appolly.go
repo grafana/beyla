@@ -84,7 +84,6 @@ func (i *Instrumenter) FindAndInstrument() error {
 					dp.Tracer.UnlinkExecutable(dp.FileInfo)
 				}
 				delete(contexts, dp.FileInfo.Ino)
-				//cctx.cancel()
 			}
 		}
 	}()

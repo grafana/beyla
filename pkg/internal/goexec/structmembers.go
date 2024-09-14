@@ -19,6 +19,8 @@ func log() *slog.Logger {
 // this const table must match what's in go_offsets.h
 type GoOffset uint32
 
+const GoOffsetsTableSize = 30
+
 const (
 	// go common
 	ConnFdPos GoOffset = iota + 1 // start at 1, must match what's in go_offsets.h

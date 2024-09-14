@@ -96,6 +96,8 @@ type bpf_debugKafkaGoReqT struct {
 
 type bpf_debugNewFuncInvocationT struct{ Parent uint64 }
 
+type bpf_debugOffTableT struct{ Table [30]uint64 }
+
 type bpf_debugProduceReqT struct {
 	MsgPtr          uint64
 	ConnPtr         uint64

@@ -94,6 +94,7 @@ func (p *Tracer) Constants() map[string]any {
 }
 
 func (p *Tracer) RegisterOffsets(fileInfo *exec.FileInfo, offsets *goexec.Offsets) {
+	offTable := bpfOffTableT{}
 	// Set the field offsets and the logLevel for the Go BPF program in a map
 	for _, field := range []goexec.GoOffset{
 		goexec.ConnFdPos,
@@ -144,14 +145,14 @@ func (p *Tracer) RegisterOffsets(fileInfo *exec.FileInfo, offsets *goexec.Offset
 		goexec.SaramaBrokerConnPos,
 		goexec.SaramaBufconnConnPos,
 	} {
-		key := ((uint64(fileInfo.Pid) << 32) | uint64(field))
 		if val, ok := offsets.Field[field].(uint64); ok {
-			if err := p.bpfObjects.GoOffsetsMap.Put(key, val); err != nil {
-				p.log.Error("error setting offset in map for", "pid", fileInfo.Pid, "field", field)
-			}
+			offTable.Table[field] = val
 		}
 	}
 
+	if err := p.bpfObjects.GoOffsetsMap.Put(fileInfo.Ino, offTable); err != nil {
+		p.log.Error("error setting offset in map for", "pid", fileInfo.Pid, "ino", fileInfo.Ino)
+	}
 }
 
 func (p *Tracer) BpfObjects() any {

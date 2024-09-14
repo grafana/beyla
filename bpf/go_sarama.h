@@ -34,7 +34,7 @@ SEC("uprobe/sarama_sendInternal")
 int uprobe_sarama_sendInternal(struct pt_regs *ctx) {
     bpf_dbg_printk("=== uprobe/sarama_sendInternal === ");
     void *goroutine_addr = GOROUTINE_PTR(ctx);
-    u64 id = bpf_get_current_pid_tgid();
+    off_table_t *ot = get_offsets_table();
 
     bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
 
@@ -42,7 +42,7 @@ int uprobe_sarama_sendInternal(struct pt_regs *ctx) {
     
     void *b_ptr = GO_PARAM1(ctx);
     if (b_ptr) {
-        bpf_probe_read(&correlation_id, sizeof(u32), b_ptr + go_offset_of(id, _sarama_broker_corr_id_pos));
+        bpf_probe_read(&correlation_id, sizeof(u32), b_ptr + go_offset_of(ot, _sarama_broker_corr_id_pos));
     }
 
     if (correlation_id) {
@@ -60,7 +60,7 @@ SEC("uprobe/sarama_broker_write")
 int uprobe_sarama_broker_write(struct pt_regs *ctx) {
     bpf_dbg_printk("=== uprobe/sarama_broker write === ");
     void *goroutine_addr = GOROUTINE_PTR(ctx);
-    u64 id = bpf_get_current_pid_tgid();
+    off_table_t *ot = get_offsets_table();
 
     bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
 
@@ -86,11 +86,11 @@ int uprobe_sarama_broker_write(struct pt_regs *ctx) {
                 .start_monotime_ns = bpf_ktime_get_ns(),
             };
 
-            void *conn_conn_ptr = (void *)(b_ptr + go_offset_of(id, _sarama_broker_conn_pos));
+            void *conn_conn_ptr = (void *)(b_ptr + go_offset_of(ot, _sarama_broker_conn_pos));
             bpf_dbg_printk("conn conn ptr %llx", conn_conn_ptr);
             if (conn_conn_ptr) {
                 void *tcp_conn_ptr = 0;
-                bpf_probe_read(&tcp_conn_ptr, sizeof(tcp_conn_ptr), (void *)(conn_conn_ptr + go_offset_of(id, _sarama_bufconn_conn_pos) + 8)); // find conn
+                bpf_probe_read(&tcp_conn_ptr, sizeof(tcp_conn_ptr), (void *)(conn_conn_ptr + go_offset_of(ot, _sarama_bufconn_conn_pos) + 8)); // find conn
                 bpf_dbg_printk("tcp conn ptr %llx", tcp_conn_ptr);
                 if (tcp_conn_ptr) {
                     void *conn_ptr = 0;
@@ -123,12 +123,12 @@ int uprobe_sarama_response_promise_handle(struct pt_regs *ctx) {
     bpf_dbg_printk("=== uprobe/sarama_response_promise_handle === ");
 
     void *p = GO_PARAM1(ctx);
-    u64 id = bpf_get_current_pid_tgid();
+    off_table_t *ot = get_offsets_table();
 
     if (p) {
         u32 correlation_id = 0;
 
-        bpf_probe_read(&correlation_id, sizeof(u32), p + go_offset_of(id, _sarama_response_corr_id_pos));
+        bpf_probe_read(&correlation_id, sizeof(u32), p + go_offset_of(ot, _sarama_response_corr_id_pos));
 
         bpf_dbg_printk("correlation_id = %d", correlation_id);
 

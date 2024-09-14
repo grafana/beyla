@@ -111,7 +111,7 @@ func (ta *TraceAttacher) getTracer(ie *ebpf.Instrumentable) bool {
 		return false
 	}
 
-	ta.log.Info("instrumenting process", "cmd", ie.FileInfo.CmdExePath, "pid", ie.FileInfo.Pid)
+	ta.log.Info("instrumenting process", "cmd", ie.FileInfo.CmdExePath, "pid", ie.FileInfo.Pid, "ino", ie.FileInfo.Ino)
 	ta.Metrics.InstrumentProcess(ie.FileInfo.ExecutableName())
 
 	// builds a tracer for that executable

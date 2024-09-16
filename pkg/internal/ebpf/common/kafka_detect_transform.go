@@ -253,10 +253,8 @@ func getTopicNameSize(pkt []byte, offset int, op Operation, apiVersion int16) (i
 		if err != nil {
 			return 0, err
 		}
-	} else {
-		if offset < len(pkt) {
-			topicNameSize = int(binary.BigEndian.Uint16(pkt[offset:]))
-		}
+	} else if offset < len(pkt) {
+		topicNameSize = int(binary.BigEndian.Uint16(pkt[offset:]))
 	}
 	if topicNameSize <= 0 {
 		return 0, errors.New("invalid topic name size")

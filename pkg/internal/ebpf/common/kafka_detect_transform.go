@@ -206,7 +206,7 @@ func getTopicName(pkt []byte, offset int, op Operation, apiVersion int16) (strin
 	}
 
 	offset += 4
-	if offset > len(pkt) {
+	if offset >= len(pkt) {
 		return "", errors.New("invalid buffer length")
 	}
 	topicNameSize, err := getTopicNameSize(pkt, offset, op, apiVersion)
@@ -215,7 +215,7 @@ func getTopicName(pkt []byte, offset int, op Operation, apiVersion int16) (strin
 	}
 	offset += 2
 
-	if offset > len(pkt) {
+	if offset >= len(pkt) {
 		return "", nil
 	}
 	maxLen := offset + topicNameSize
@@ -254,7 +254,9 @@ func getTopicNameSize(pkt []byte, offset int, op Operation, apiVersion int16) (i
 			return 0, err
 		}
 	} else {
-		topicNameSize = int(binary.BigEndian.Uint16(pkt[offset:]))
+		if offset < len(pkt) {
+			topicNameSize = int(binary.BigEndian.Uint16(pkt[offset:]))
+		}
 	}
 	if topicNameSize <= 0 {
 		return 0, errors.New("invalid topic name size")

@@ -227,7 +227,7 @@ config:
     # internal_metrics:
     #   prometheus:
     #     port: 6060
-    #     path: /internal/metrics
+    #     path: /metrics
 
 ## Env variables that will override configmap values
 ## For example:

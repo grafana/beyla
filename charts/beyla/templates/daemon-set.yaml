@@ -102,7 +102,7 @@ spec:
             containerPort: {{ .Values.service.metrics.targetPort | default .Values.config.data.prometheus_export.port }}
             protocol: TCP
           {{- end }}
-          {{- if or (.Values.service.internalMetrics.targetPort) (.Values.config.data.internal_metrics) }}
+          {{- if (and (or (.Values.service.internalMetrics.targetPort) (.Values.config.data.internal_metrics)) (not (eq .Values.config.data.prometheus_export.port .Values.config.data.internal_metrics.prometheus.port))) }}
           - name: {{ .Values.service.internalMetrics.portName }}
             containerPort: {{ .Values.service.internalMetrics.targetPort | default .Values.config.data.internal_metrics.prometheus.port }}
             protocol: TCP

@@ -56,7 +56,7 @@ spec:
       nodePort: {{ .Values.service.metrics.nodePort }}
       {{- end }}
     {{- end }}
-    {{- if or (.Values.service.internalMetrics.targetPort) (.Values.config.data.internal_metrics) }}
+    {{- if (and (or (.Values.service.internalMetrics.targetPort) (.Values.config.data.internal_metrics)) (not (eq .Values.config.data.prometheus_export.port .Values.config.data.internal_metrics.prometheus.port))) }}
     - name: {{ .Values.service.internalMetrics.portName }}
       port: {{ .Values.service.internalMetrics.port }}
       protocol: TCP

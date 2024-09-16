@@ -25,7 +25,7 @@ spec:
       {{- toYaml . | nindent 6 }}
       {{- end }}
     {{- end }}
-    {{- if or (.Values.service.internalMetrics.targetPort) (.Values.config.data.internal_metrics) }}
+    {{- if (and (or (.Values.service.internalMetrics.targetPort) (.Values.config.data.internal_metrics)) (not (eq .Values.config.data.prometheus_export.port .Values.config.data.internal_metrics.prometheus.port))) }}
     - port: {{ .Values.service.internalMetrics.portName }}
       path: {{ .Values.config.data.internal_metrics.prometheus.path }}
       scheme: http 

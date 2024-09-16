@@ -108,7 +108,7 @@ type bpf_tpKafkaGoReqT struct {
 
 type bpf_tpNewFuncInvocationT struct{ Parent uint64 }
 
-type bpf_tpOffTableT struct{ Table [30]uint64 }
+type bpf_tpOffTableT struct{ Table [43]uint64 }
 
 type bpf_tpProduceReqT struct {
 	MsgPtr          uint64

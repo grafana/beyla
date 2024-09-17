@@ -42,9 +42,14 @@ typedef struct goroutine_metadata_t {
     u64 timestamp;
 } goroutine_metadata;
 
+typedef struct goroutine_key{
+    __u32 pid;       // PID of the process
+    __u64 addr;      // Address of the goroutine
+} goroutine_key_t;
+
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, void *); // key: pointer to the goroutine
+    __type(key, goroutine_key_t); // key: pointer to the goroutine
     __type(value, goroutine_metadata);  // value: timestamp of the goroutine creation
     __uint(max_entries, MAX_CONCURRENT_SHARED_REQUESTS);
     __uint(pinning, LIBBPF_PIN_BY_NAME);
@@ -52,7 +57,7 @@ struct {
 
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, void *); // key: pointer to the request goroutine
+    __type(key, goroutine_key_t); // key: pointer to the request goroutine
     __type(value, connection_info_t);
     __uint(max_entries, MAX_CONCURRENT_SHARED_REQUESTS);
     __uint(pinning, LIBBPF_PIN_BY_NAME);
@@ -60,42 +65,45 @@ struct {
 
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, void *); // key: pointer to the request goroutine
+    __type(key, goroutine_key_t); // key: pointer to the request goroutine
     __type(value, connection_info_t);
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
 } ongoing_client_connections SEC(".maps");
 
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, void *); // key: pointer to the goroutine
+    __type(key, goroutine_key_t); // key: pointer to the goroutine
     __type(value, tp_info_t);  // value: traceparent info
     __uint(max_entries, MAX_CONCURRENT_SHARED_REQUESTS);
     __uint(pinning, LIBBPF_PIN_BY_NAME);
 } go_trace_map SEC(".maps");
 
-static __always_inline u64 find_parent_goroutine(void *goroutine_addr) {
-    void *r_addr = goroutine_addr;
+static __always_inline goroutine_key_t find_parent_goroutine(goroutine_key_t *goroutine_k) {
+    goroutine_key_t r_key;
+    bpf_probe_read(&r_key, sizeof(r_key), goroutine_k);
     int attempts = 0;
     do {
-        void *p_inv = bpf_map_lookup_elem(&go_trace_map, &r_addr);
+        void *p_inv = bpf_map_lookup_elem(&go_trace_map, &r_key);
         if (!p_inv) { // not this goroutine running the server request processing
             // Let's find the parent scope
-            goroutine_metadata *g_metadata = (goroutine_metadata *)bpf_map_lookup_elem(&ongoing_goroutines, &r_addr);
+            goroutine_metadata *g_metadata = (goroutine_metadata *)bpf_map_lookup_elem(&ongoing_goroutines, &r_key);
             if (g_metadata) {
                 // Lookup now to see if the parent was a request
-                r_addr = (void *)g_metadata->parent;
+                r_key.addr = (__u64)g_metadata->parent;
             } else {
                 break;
             }
         } else {
-            bpf_dbg_printk("Found parent %lx", r_addr);
-            return (u64)r_addr;
+            bpf_dbg_printk("Found parent %lx", r_key.addr);
+            return r_key;
         }
 
         attempts++;
     } while (attempts < 3); // Up to 3 levels of goroutine nesting allowed
 
-    return 0;
+    // Return an empty key if no parent is found
+    goroutine_key_t empty_key = {0};
+    return empty_key;
 }
 
 static __always_inline void decode_go_traceparent(unsigned char *buf, unsigned char *trace_id, unsigned char *span_id, unsigned char *flags) {
@@ -193,9 +201,9 @@ static __always_inline u8 client_trace_parent(void *goroutine_addr, tp_info_t *t
     if (!found_trace_id) {
         tp_info_t *tp = 0;
 
-        u64 parent_id = find_parent_goroutine(goroutine_addr);
+        goroutine_key_t parent_id = find_parent_goroutine(goroutine_addr);
 
-        if (parent_id) {// we found a parent request
+        if (parent_id.addr) {// we found a parent request
             tp = (tp_info_t *)bpf_map_lookup_elem(&go_trace_map, &parent_id);
         }
 

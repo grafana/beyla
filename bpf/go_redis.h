@@ -20,28 +20,32 @@ volatile const u64 io_writer_buf_ptr_pos;
 
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, void *); // key: goroutine id
+    __type(key, goroutine_key_t); // key: goroutine id
     __type(value, redis_client_req_t); // the request
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
 } ongoing_redis_requests SEC(".maps");
 
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, void *); // key: goroutine id
+    __type(key, goroutine_key_t); // key: goroutine id
     __type(value, void *); // the *Conn
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
 } redis_writes SEC(".maps");
 
 static __always_inline void setup_request(void *goroutine_addr) {
-        redis_client_req_t req = {
+    redis_client_req_t req = {
         .type = EVENT_GO_REDIS,
         .start_monotime_ns = bpf_ktime_get_ns(),
     };
+    goroutine_key_t goroutine_key = {
+        .pid = bpf_get_current_pid_tgid(),
+        .addr = (__u64)goroutine_addr,
+    };    
 
     // We don't look up in the headers, no http/grpc request, therefore 0 as last argument
     client_trace_parent(goroutine_addr, &req.tp, 0);
 
-    bpf_map_update_elem(&ongoing_redis_requests, &goroutine_addr, &req, BPF_ANY);
+    bpf_map_update_elem(&ongoing_redis_requests, &goroutine_key, &req, BPF_ANY);
 }
 
 // github.com/redis/go-redis/v9.(*baseClient)._process
@@ -62,8 +66,12 @@ int uprobe_redis_process_ret(struct pt_regs *ctx) {
     bpf_dbg_printk("=== uprobe/redis _process returns === ");
     void *goroutine_addr = GOROUTINE_PTR(ctx);
     bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
+    goroutine_key_t goroutine_key = {
+        .pid = bpf_get_current_pid_tgid(),
+        .addr = (__u64)goroutine_addr,
+    };    
 
-    redis_client_req_t *req = bpf_map_lookup_elem(&ongoing_redis_requests, &goroutine_addr);
+    redis_client_req_t *req = bpf_map_lookup_elem(&ongoing_redis_requests, &goroutine_key);
     if (req) {
         redis_client_req_t *trace = bpf_ringbuf_reserve(&events, sizeof(redis_client_req_t), 0);        
         if (trace) {
@@ -75,7 +83,7 @@ int uprobe_redis_process_ret(struct pt_regs *ctx) {
         }
     }
 
-    bpf_map_delete_elem(&ongoing_redis_requests, &goroutine_addr);
+    bpf_map_delete_elem(&ongoing_redis_requests, &goroutine_key);
 
     return 0;
 }
@@ -89,12 +97,16 @@ int uprobe_redis_with_writer(struct pt_regs *ctx) {
     bpf_dbg_printk("=== uprobe/redis WithWriter === ");
     void *goroutine_addr = GOROUTINE_PTR(ctx);
     bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
+    goroutine_key_t goroutine_key = {
+        .pid = bpf_get_current_pid_tgid(),
+        .addr = (__u64)goroutine_addr,
+    };    
 
-    redis_client_req_t *req = bpf_map_lookup_elem(&ongoing_redis_requests, &goroutine_addr);
+    redis_client_req_t *req = bpf_map_lookup_elem(&ongoing_redis_requests, &goroutine_key);
 
     if (!req) {
         setup_request(goroutine_addr);
-        req = bpf_map_lookup_elem(&ongoing_redis_requests, &goroutine_addr);
+        req = bpf_map_lookup_elem(&ongoing_redis_requests, &goroutine_key);
     }
 
     if (req) {
@@ -105,7 +117,7 @@ int uprobe_redis_with_writer(struct pt_regs *ctx) {
         bpf_probe_read(&bw_ptr, sizeof(void *), cn_ptr + redis_conn_bw_pos);
         bpf_dbg_printk("bw_ptr %llx", bw_ptr);
 
-        bpf_map_update_elem(&redis_writes, &goroutine_addr, &bw_ptr, BPF_ANY);
+        bpf_map_update_elem(&redis_writes, &goroutine_key, &bw_ptr, BPF_ANY);
 
         if (cn_ptr) {
             void *tcp_conn_ptr = cn_ptr + 8;
@@ -132,11 +144,15 @@ int uprobe_redis_with_writer_ret(struct pt_regs *ctx) {
     bpf_dbg_printk("=== uprobe/redis WithWriter returns === ");
     void *goroutine_addr = GOROUTINE_PTR(ctx);
     bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
+    goroutine_key_t goroutine_key = {
+        .pid = bpf_get_current_pid_tgid(),
+        .addr = (__u64)goroutine_addr,
+    };    
 
-    redis_client_req_t *req = bpf_map_lookup_elem(&ongoing_redis_requests, &goroutine_addr);
+    redis_client_req_t *req = bpf_map_lookup_elem(&ongoing_redis_requests, &goroutine_key);
 
     if (req) {
-        void **bw_ptr = bpf_map_lookup_elem(&redis_writes, &goroutine_addr);
+        void **bw_ptr = bpf_map_lookup_elem(&redis_writes, &goroutine_key);
 
         if (bw_ptr) {
             void *bw = *bw_ptr;

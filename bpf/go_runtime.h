@@ -20,7 +20,7 @@ typedef struct new_func_invocation {
 
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, void *); // key: pointer to the request goroutine
+    __type(key, goroutine_key_t); // key: pointer to the request goroutine
     __type(value, new_func_invocation_t);
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
 } newproc1 SEC(".maps");
@@ -30,13 +30,17 @@ int uprobe_proc_newproc1(struct pt_regs *ctx) {
     bpf_dbg_printk("=== uprobe/proc newproc1 === ");
     void *creator_goroutine = GOROUTINE_PTR(ctx);
     bpf_dbg_printk("creator_goroutine_addr %lx", creator_goroutine);
+    goroutine_key_t goroutine_key = {
+        .pid = bpf_get_current_pid_tgid(),
+        .addr = (__u64)creator_goroutine,
+    };     
 
     new_func_invocation_t invocation = {
         .parent = (u64)GO_PARAM2(ctx) 
     };
 
     // Save the registers on invocation to be able to fetch the arguments at return of newproc1
-    if (bpf_map_update_elem(&newproc1, &creator_goroutine, &invocation, BPF_ANY)) {
+    if (bpf_map_update_elem(&newproc1, &goroutine_key, &invocation, BPF_ANY)) {
         bpf_dbg_printk("can't update map element");
     }
 
@@ -48,10 +52,14 @@ int uprobe_proc_newproc1_ret(struct pt_regs *ctx) {
     bpf_dbg_printk("=== uprobe/proc newproc1 returns === ");
     void *creator_goroutine = GOROUTINE_PTR(ctx);
     bpf_dbg_printk("creator_goroutine_addr %lx", creator_goroutine);
+    goroutine_key_t creator_goroutine_key = {
+        .pid = bpf_get_current_pid_tgid(),
+        .addr = (__u64)creator_goroutine,
+    };    
 
     // Lookup the newproc1 invocation metadata
     new_func_invocation_t *invocation =
-        bpf_map_lookup_elem(&newproc1, &creator_goroutine);
+        bpf_map_lookup_elem(&newproc1, &creator_goroutine_key);
     if (invocation == NULL) {
         bpf_dbg_printk("can't read newproc1 invocation metadata");
         goto done;
@@ -64,18 +72,22 @@ int uprobe_proc_newproc1_ret(struct pt_regs *ctx) {
     // The result of newproc1 is the new goroutine
     void *goroutine_addr = (void *)GO_PARAM1(ctx);
     bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
+    goroutine_key_t goroutine_key = {
+        .pid = bpf_get_current_pid_tgid(),
+        .addr = (__u64)goroutine_addr,
+    };    
 
     goroutine_metadata metadata = {
         .timestamp = bpf_ktime_get_ns(),
         .parent = (u64)parent_goroutine,
     };
 
-    if (bpf_map_update_elem(&ongoing_goroutines, &goroutine_addr, &metadata, BPF_ANY)) {
+    if (bpf_map_update_elem(&ongoing_goroutines, &goroutine_key, &metadata, BPF_ANY)) {
         bpf_dbg_printk("can't update active goroutine");
     }
 
 done:
-    bpf_map_delete_elem(&newproc1, &creator_goroutine);
+    bpf_map_delete_elem(&newproc1, &creator_goroutine_key);
 
     return 0;
 }
@@ -86,11 +98,15 @@ int uprobe_proc_goexit1(struct pt_regs *ctx) {
 
     void *goroutine_addr = GOROUTINE_PTR(ctx);
     bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
+    goroutine_key_t goroutine_key = {
+        .pid = bpf_get_current_pid_tgid(),
+        .addr = (__u64)goroutine_addr,
+    };      
 
-    bpf_map_delete_elem(&ongoing_goroutines, &goroutine_addr);
+    bpf_map_delete_elem(&ongoing_goroutines, &goroutine_key);
     // We also clean-up the go routine based trace map, it's an LRU
     // but at this point we are sure we don't need the data.
-    bpf_map_delete_elem(&go_trace_map, &goroutine_addr);
+    bpf_map_delete_elem(&go_trace_map, &goroutine_key);
 
     return 0;
 }

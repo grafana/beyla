@@ -92,7 +92,11 @@ func (i *instrumenter) kprobes(p KprobesTracer) error {
 		log.Debug("going to add kprobe to function", "function", kfunc, "probes", kprobes)
 
 		if err := i.kprobe(kfunc, kprobes); err != nil {
-			return fmt.Errorf("instrumenting function %q: %w", kfunc, err)
+			if kprobes.Required {
+				return fmt.Errorf("instrumenting function %q: %w", kfunc, err)
+			}
+
+			log.Debug("error instrumenting kprobe", "function", kfunc, "error", err)
 		}
 		p.AddCloser(i.closables...)
 	}

@@ -100,9 +100,9 @@ int uprobe_server_handleStream(struct pt_regs *ctx) {
     bpf_dbg_printk("=== uprobe/server_handleStream === ");
     void *goroutine_addr = GOROUTINE_PTR(ctx);
     bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
-    off_table_t *ot = get_offsets_table();
 
     void *stream_ptr = GO_PARAM4(ctx);
+    off_table_t *ot = get_offsets_table();
 
     grpc_srv_func_invocation_t invocation = {
         .start_monotime_ns = bpf_ktime_get_ns(),
@@ -490,9 +490,9 @@ int uprobe_transport_http2Client_NewStream(struct pt_regs *ctx) {
     bpf_dbg_printk("=== uprobe/proc transport.(*http2Client).NewStream === ");
 
     void *goroutine_addr = GOROUTINE_PTR(ctx);
+    void *t_ptr = GO_PARAM1(ctx);
     off_table_t *ot = get_offsets_table();
 
-    void *t_ptr = GO_PARAM1(ctx);
     u64 grpc_t_conn_pos = go_offset_of(ot, _grpc_t_scheme_pos);
     bpf_dbg_printk("goroutine_addr %lx, t_ptr %llx, t.conn_pos %x", goroutine_addr, t_ptr, grpc_t_conn_pos);
 
@@ -574,6 +574,9 @@ SEC("uprobe/grpcFramerWriteHeaders")
 int uprobe_grpcFramerWriteHeaders(struct pt_regs *ctx) {
     bpf_dbg_printk("=== uprobe/proc grpc Framer writeHeaders === ");
 
+    void *framer = GO_PARAM1(ctx);
+    u64 stream_id = (u64)GO_PARAM2(ctx);
+
     off_table_t *ot = get_offsets_table();
     u64 framer_w_pos = go_offset_of(ot, _framer_w_pos);
 
@@ -581,9 +584,6 @@ int uprobe_grpcFramerWriteHeaders(struct pt_regs *ctx) {
         bpf_dbg_printk("framer w not found");
         return 0;
     }
-
-    void *framer = GO_PARAM1(ctx);
-    u64 stream_id = (u64)GO_PARAM2(ctx);
 
     bpf_dbg_printk("framer=%llx, stream_id=%lld, framer_w_pos %llx", framer, ((u64)stream_id), framer_w_pos);
 

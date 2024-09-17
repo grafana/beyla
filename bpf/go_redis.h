@@ -85,6 +85,8 @@ SEC("uprobe/redis_with_writer")
 int uprobe_redis_with_writer(struct pt_regs *ctx) {
     bpf_dbg_printk("=== uprobe/redis WithWriter === ");
     void *goroutine_addr = GOROUTINE_PTR(ctx);
+    void *cn_ptr = GO_PARAM1(ctx);
+
     off_table_t *ot = get_offsets_table();
 
     bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
@@ -97,8 +99,6 @@ int uprobe_redis_with_writer(struct pt_regs *ctx) {
     }
 
     if (req) {
-        void *cn_ptr = GO_PARAM1(ctx);
-
         void *bw_ptr = 0;
 
         bpf_probe_read(&bw_ptr, sizeof(void *), cn_ptr + go_offset_of(ot, _redis_conn_bw_pos));

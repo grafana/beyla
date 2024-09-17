@@ -81,11 +81,10 @@ int uprobe_writer_write_messages(struct pt_regs *ctx) {
 SEC("uprobe/writer_produce")
 int uprobe_writer_produce(struct pt_regs *ctx) {
     void *goroutine_addr = (void *)GOROUTINE_PTR(ctx);
-    off_table_t *ot = get_offsets_table();
-
     bpf_dbg_printk("=== uprobe/kafka-go writer_produce %llx === ", goroutine_addr);
 
     void *w_ptr = (void *)GO_PARAM1(ctx);
+    off_table_t *ot = get_offsets_table();
 
     if (w_ptr) {
         void *topic_ptr = 0;
@@ -138,12 +137,11 @@ SEC("uprobe/protocol_RoundTrip")
 int uprobe_protocol_roundtrip(struct pt_regs *ctx) {
     bpf_dbg_printk("=== uprobe/kafka-go protocol_RoundTrip === ");
     void *goroutine_addr = (void *)GOROUTINE_PTR(ctx);
-    off_table_t *ot = get_offsets_table();
-
     void *rw_ptr = (void *)GO_PARAM2(ctx);
     void *msg_ptr = (void *)GO_PARAM8(ctx);
-    bpf_dbg_printk("goroutine_addr %lx, rw ptr %llx, msg_ptr %llx", goroutine_addr, rw_ptr, msg_ptr);
+    off_table_t *ot = get_offsets_table();
 
+    bpf_dbg_printk("goroutine_addr %lx, rw ptr %llx, msg_ptr %llx", goroutine_addr, rw_ptr, msg_ptr);
 
     if (rw_ptr) {
         topic_t *topic_ptr = bpf_map_lookup_elem(&ongoing_produce_messages, &msg_ptr);
@@ -215,10 +213,10 @@ int uprobe_protocol_roundtrip_ret(struct pt_regs *ctx) {
 SEC("uprobe/reader_read")
 int uprobe_reader_read(struct pt_regs *ctx) {
     void *goroutine_addr = (void *)GOROUTINE_PTR(ctx);
-    off_table_t *ot = get_offsets_table();
-
     void *r_ptr = (void *)GO_PARAM1(ctx);
     void *conn = (void *)GO_PARAM5(ctx);
+    off_table_t *ot = get_offsets_table();
+
     bpf_dbg_printk("=== uprobe/kafka-go reader_read %llx r_ptr %llx=== ", goroutine_addr, r_ptr);
 
     if (r_ptr) {

@@ -78,11 +78,11 @@ SEC("uprobe/ServeHTTP")
 int uprobe_ServeHTTP(struct pt_regs *ctx) {
     bpf_dbg_printk("=== uprobe/ServeHTTP === ");
     void *goroutine_addr = GOROUTINE_PTR(ctx);
-    off_table_t *ot = get_offsets_table();
 
     bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
-
     void *req = GO_PARAM4(ctx);
+
+    off_table_t *ot = get_offsets_table();
 
     server_http_func_invocation_t invocation = {
         .start_monotime_ns = bpf_ktime_get_ns(),
@@ -277,11 +277,11 @@ static __always_inline void roundTripStartHelper(struct pt_regs *ctx) {
     bpf_dbg_printk("=== uprobe/proc http roundTrip === ");
 
     void *goroutine_addr = GOROUTINE_PTR(ctx);
-    off_table_t *ot = get_offsets_table();
 
     bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
 
     void *req = GO_PARAM2(ctx);
+    off_table_t *ot = get_offsets_table();
 
     http_func_invocation_t invocation = {
         .start_monotime_ns = bpf_ktime_get_ns(),
@@ -408,9 +408,9 @@ SEC("uprobe/header_writeSubset")
 int uprobe_writeSubset(struct pt_regs *ctx) {
     bpf_dbg_printk("=== uprobe/proc header writeSubset === ");
 
-    off_table_t *ot = get_offsets_table();
     void *header_addr = GO_PARAM1(ctx);
     void *io_writer_addr = GO_PARAM3(ctx);
+    off_table_t *ot = get_offsets_table();
 
     bpf_dbg_printk("goroutine_addr %lx, header ptr %llx", GOROUTINE_PTR(ctx), header_addr);
 
@@ -507,10 +507,10 @@ int uprobe_http2serverConn_runHandler(struct pt_regs *ctx) {
     bpf_dbg_printk("=== uprobe/proc http2serverConn_runHandler === ");
 
     void *goroutine_addr = GOROUTINE_PTR(ctx);
-    off_table_t *ot = get_offsets_table();
     bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);    
 
     void *sc = GO_PARAM1(ctx);
+    off_table_t *ot = get_offsets_table();
 
     if (sc) {
         void *conn_ptr = 0;
@@ -608,6 +608,9 @@ struct {
 SEC("uprobe/http2FramerWriteHeaders")
 int uprobe_http2FramerWriteHeaders(struct pt_regs *ctx) {
     bpf_dbg_printk("=== uprobe/proc http2 Framer writeHeaders === ");
+    void *framer = GO_PARAM1(ctx);
+    u64 stream_id = (u64)GO_PARAM2(ctx);
+
     off_table_t *ot = get_offsets_table();
     u64 framer_w_pos = go_offset_of(ot, _framer_w_pos);
 
@@ -615,9 +618,6 @@ int uprobe_http2FramerWriteHeaders(struct pt_regs *ctx) {
         bpf_dbg_printk("framer w not found");
         return 0;
     }
-
-    void *framer = GO_PARAM1(ctx);
-    u64 stream_id = (u64)GO_PARAM2(ctx);
 
     bpf_dbg_printk("framer=%llx, stream_id=%lld", framer, ((u64)stream_id));
 

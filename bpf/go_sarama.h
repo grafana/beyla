@@ -34,13 +34,13 @@ SEC("uprobe/sarama_sendInternal")
 int uprobe_sarama_sendInternal(struct pt_regs *ctx) {
     bpf_dbg_printk("=== uprobe/sarama_sendInternal === ");
     void *goroutine_addr = GOROUTINE_PTR(ctx);
+    void *b_ptr = GO_PARAM1(ctx);
     off_table_t *ot = get_offsets_table();
 
     bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
 
     u32 correlation_id = 0;
     
-    void *b_ptr = GO_PARAM1(ctx);
     if (b_ptr) {
         bpf_probe_read(&correlation_id, sizeof(u32), b_ptr + go_offset_of(ot, _sarama_broker_corr_id_pos));
     }
@@ -60,13 +60,13 @@ SEC("uprobe/sarama_broker_write")
 int uprobe_sarama_broker_write(struct pt_regs *ctx) {
     bpf_dbg_printk("=== uprobe/sarama_broker write === ");
     void *goroutine_addr = GOROUTINE_PTR(ctx);
-    off_table_t *ot = get_offsets_table();
 
     bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
 
     u32 *invocation = bpf_map_lookup_elem(&ongoing_kafka_requests, &goroutine_addr);
     void *b_ptr = GO_PARAM1(ctx);
     void *buf_ptr = GO_PARAM2(ctx);
+    off_table_t *ot = get_offsets_table();
 
     if (invocation) {
         u8 small_buf[8];

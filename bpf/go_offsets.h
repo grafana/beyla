@@ -73,7 +73,6 @@ struct {
 static __always_inline off_table_t* get_offsets_table() {
     struct task_struct *task = (struct task_struct *)bpf_get_current_task();
     u64 ino = (u64)BPF_CORE_READ(task, mm, exe_file, f_inode, i_ino);
-    bpf_printk("ino %lld", ino);
     return (off_table_t *)bpf_map_lookup_elem(&go_offsets_map, &ino);
 }
 

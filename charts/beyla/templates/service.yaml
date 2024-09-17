@@ -44,16 +44,16 @@ spec:
   externalTrafficPolicy: {{ . }}
   {{- end }}
   ports:
-    {{- if or (.Values.service.metrics.targetPort) (.Values.config.data.prometheus_export) }}
-    - name: {{ .Values.service.metrics.portName }}
-      port: {{ .Values.service.metrics.port }}
+    {{- if or (.Values.service.targetPort) (.Values.config.data.prometheus_export) }}
+    - name: {{ .Values.service.portName }}
+      port: {{ .Values.service.port }}
       protocol: TCP
-      targetPort: {{ .Values.service.metrics.targetPort | default .Values.config.data.prometheus_export.port }}
-      {{- with .Values.service.metrics.appProtocol }}
+      targetPort: {{ .Values.service.targetPort | default .Values.config.data.prometheus_export.port }}
+      {{- with .Values.service.appProtocol }}
       appProtocol: {{ . }}
       {{- end }}
-      {{- if (and (eq .Values.service.type "NodePort") (not (empty .Values.service.metrics.nodePort))) }}
-      nodePort: {{ .Values.service.metrics.nodePort }}
+      {{- if (and (eq .Values.service.type "NodePort") (not (empty .Values.service.nodePort))) }}
+      nodePort: {{ .Values.service.nodePort }}
       {{- end }}
     {{- end }}
     {{- if (and (or (.Values.service.internalMetrics.targetPort) (.Values.config.data.internal_metrics)) (not (eq .Values.config.data.prometheus_export.port .Values.config.data.internal_metrics.prometheus.port))) }}

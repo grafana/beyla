@@ -53,6 +53,7 @@ eBPF-based autoinstrumentation HTTP, HTTP2 and gRPC services, as well as network
 | resources | object | `{}` |  |
 | securityContext | object | `{"privileged":true}` | Security context for privileged setup. |
 | service.annotations | object | `{}` | Service annotations. |
+| service.appProtocol | string | `""` | Adds the appProtocol field to the service. This allows to work with istio protocol selection. Ex: "http" or "tcp" |
 | service.clusterIP | string | `""` | cluster IP |
 | service.enabled | bool | `false` | whether to create a service for metrics |
 | service.internalMetrics.appProtocol | string | `""` | Adds the appProtocol field to the service. This allows to work with istio protocol selection. Ex: "http" or "tcp" |
@@ -63,10 +64,9 @@ eBPF-based autoinstrumentation HTTP, HTTP2 and gRPC services, as well as network
 | service.loadBalancerClass | string | `""` | loadbalancer class name |
 | service.loadBalancerIP | string | `""` | loadbalancer IP |
 | service.loadBalancerSourceRanges | list | `[]` | source ranges for loadbalancer |
-| service.metrics.appProtocol | string | `""` | Adds the appProtocol field to the service. This allows to work with istio protocol selection. Ex: "http" or "tcp" |
-| service.metrics.port | int | `80` | Prometheus metrics service port |
-| service.metrics.portName | string | `"metrics"` | name of the port for Prometheus metrics. |
-| service.metrics.targetPort | string | `nil` | targetPort overrides the Prometheus metrics port. It defaults to the value of `prometheus_export.port` from the Beyla configuration file. |
+| service.port | int | `80` | Prometheus metrics service port |
+| service.portName | string | `"metrics"` | name of the port for Prometheus metrics. |
+| service.targetPort | string | `nil` | targetPort overrides the Prometheus metrics port. It defaults to the value of `prometheus_export.port` from the Beyla configuration file. |
 | service.type | string | `"ClusterIP"` | type of the service |
 | serviceAccount.annotations | object | `{}` | Annotations to add to the service account |
 | serviceAccount.automount | bool | `true` | Automatically mount a ServiceAccount's API credentials? |

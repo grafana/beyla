@@ -97,9 +97,9 @@ spec:
                 - ALL
           {{- end }}
           ports:
-          {{- if or (.Values.service.metrics.targetPort) (.Values.config.data.prometheus_export) }}
-          - name: {{ .Values.service.metrics.portName }}
-            containerPort: {{ .Values.service.metrics.targetPort | default .Values.config.data.prometheus_export.port }}
+          {{- if or (.Values.service.targetPort) (.Values.config.data.prometheus_export) }}
+          - name: {{ .Values.service.portName }}
+            containerPort: {{ .Values.service.targetPort | default .Values.config.data.prometheus_export.port }}
             protocol: TCP
           {{- end }}
           {{- if (and (or (.Values.service.internalMetrics.targetPort) (.Values.config.data.internal_metrics)) (not (eq .Values.config.data.prometheus_export.port .Values.config.data.internal_metrics.prometheus.port))) }}

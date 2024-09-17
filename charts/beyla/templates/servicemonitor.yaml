@@ -17,11 +17,11 @@ metadata:
   {{- end }}
 spec:
   endpoints:
-    {{- if or (.Values.service.metrics.targetPort) (.Values.config.data.prometheus_export) }}
-    - port: {{ .Values.service.metrics.portName }}
+    {{- if or (.Values.service.targetPort) (.Values.config.data.prometheus_export) }}
+    - port: {{ .Values.service.portName }}
       path: {{ .Values.config.data.prometheus_export.path }}
       scheme: http 
-      {{- with .Values.serviceMonitor.metrics.endpoint }}
+      {{- with .Values.serviceMonitor.endpoint }}
       {{- toYaml . | nindent 6 }}
       {{- end }}
     {{- end }}

@@ -101,16 +101,15 @@ service:
   loadBalancerClass: ""
   # -- source ranges for loadbalancer
   loadBalancerSourceRanges: []
-  metrics:
-    # -- Prometheus metrics service port
-    port: 80
-    # -- targetPort overrides the Prometheus metrics port. It defaults to the value of `prometheus_export.port`
-    # from the Beyla configuration file.
-    targetPort: null
-    # -- name of the port for Prometheus metrics.
-    portName: metrics
-    # -- Adds the appProtocol field to the service. This allows to work with istio protocol selection. Ex: "http" or "tcp"
-    appProtocol: ""
+  # -- Prometheus metrics service port
+  port: 80
+  # -- targetPort overrides the Prometheus metrics port. It defaults to the value of `prometheus_export.port`
+  # from the Beyla configuration file.
+  targetPort: null
+  # -- name of the port for Prometheus metrics.
+  portName: metrics
+  # -- Adds the appProtocol field to the service. This allows to work with istio protocol selection. Ex: "http" or "tcp"
+  appProtocol: ""
   internalMetrics:
     # -- internal metrics service port
     port: 8080

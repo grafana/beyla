@@ -25,7 +25,6 @@ func testBPFPinningMounted(t *testing.T) {
 
 // to be invoked after docker compose down
 func testBPFPinningUnmounted(t *testing.T) {
-	t.Skip("tracers will persist now")
 	entries, err := os.ReadDir(pathVarRun)
 	require.NoError(t, err)
 	require.Empty(t, entries)

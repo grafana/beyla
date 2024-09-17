@@ -78,6 +78,7 @@ func (ta *TraceAttacher) attacherLoop() (pipe.FinalFunc[[]Event[ebpf.Instrumenta
 		}
 		// waiting until context is done, in the case of SystemWide instrumentation
 		<-ta.Ctx.Done()
+		ta.log.Debug("terminating process attacher")
 		ta.close()
 	}, nil
 }

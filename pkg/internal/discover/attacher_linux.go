@@ -2,6 +2,7 @@ package discover
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 
 	"github.com/cilium/ebpf/rlimit"
@@ -29,17 +30,20 @@ func (ta *TraceAttacher) mountBpfPinPath() error {
 	return ta.bpfMount(ta.pinPath)
 }
 
-func (ta *TraceAttacher) unmountBpfPinPath() {
-	if err := unix.Unmount(ta.pinPath, unix.MNT_FORCE); err != nil {
-		ta.log.Warn("can't unmount pinned root. Try unmounting and removing it manually", "error", err)
-		return
+func UnmountBPFFS(pinPath string, log *slog.Logger) {
+	if err := unix.Unmount(pinPath, unix.MNT_FORCE); err != nil {
+		log.Debug("can't unmount pinned root. Try unmounting and removing it manually", "error", err)
 	}
-	ta.log.Debug("unmounted bpf file system")
-	if err := os.RemoveAll(ta.pinPath); err != nil {
-		ta.log.Warn("can't remove pinned root. Try removing it manually", "error", err)
+	log.Debug("unmounted bpf file system")
+	if err := os.RemoveAll(pinPath); err != nil {
+		log.Warn("can't remove pinned root. Try removing it manually", "error", err)
 	} else {
-		ta.log.Debug("removed pin path")
+		log.Debug("removed pin path")
 	}
+}
+
+func (ta *TraceAttacher) unmountBpfPinPath() {
+	UnmountBPFFS(ta.pinPath, ta.log)
 }
 
 func (ta *TraceAttacher) bpfMount(pinPath string) error {

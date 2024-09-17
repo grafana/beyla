@@ -12,8 +12,8 @@ import (
 	"github.com/grafana/beyla/pkg/internal/helpers"
 )
 
-// Minimum required Kernel version: 5.8
-const minKernMaj, minKernMin = 5, 8
+// Minimum required Kernel version: 4.18
+const minKernMaj, minKernMin = 4, 18
 
 var kernelVersion = ebpfcommon.KernelVersion
 

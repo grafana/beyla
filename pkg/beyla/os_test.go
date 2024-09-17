@@ -42,8 +42,8 @@ func TestCheckOSSupport_Unsupported(t *testing.T) {
 	for _, tc := range []testCase{
 		{maj: 0, min: 0},
 		{maj: 3, min: 11},
-		{maj: 5, min: 0},
-		{maj: 5, min: 7},
+		{maj: 4, min: 0},
+		{maj: 4, min: 17},
 	} {
 		t.Run(fmt.Sprintf("%d.%d", tc.maj, tc.min), func(t *testing.T) {
 			overrideKernelVersion(tc)

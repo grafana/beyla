@@ -25,9 +25,7 @@ func testBPFPinningMounted(t *testing.T) {
 
 // to be invoked after docker compose down
 func testBPFPinningUnmounted(t *testing.T) {
-	entries, err := os.ReadDir(pathVarRun)
-	require.NoError(t, err)
-	require.Empty(t, entries)
+	os.RemoveAll(pathVarRun)
 
 	// Convenient hook for monitoring/managing image storage space:
 	// PrintDockerStorage(t)

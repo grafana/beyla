@@ -44,7 +44,8 @@ func (c *Compose) Logs() error {
 }
 
 func (c *Compose) Stop() error {
-	return c.command("stop")
+	c.command("stop")
+	return c.Remove()
 }
 
 func (c *Compose) Remove() error {

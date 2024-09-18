@@ -43,6 +43,7 @@ PROJECT_DIR := $(shell dirname $(abspath $(firstword $(MAKEFILE_LIST))))
 
 TOOLS_DIR ?= $(PROJECT_DIR)/bin
 
+#test
 # $(1) command name
 # $(2) repo URL
 # $(3) version

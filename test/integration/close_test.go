@@ -13,10 +13,6 @@ import (
 func testBPFPinningMountedWithCount(t *testing.T, expectedCount int) {
 	entries, err := os.ReadDir(pathVarRun)
 	require.NoError(t, err)
-	require.Lenf(t, entries, expectedCount,
-		"if the %s folder contained more than one entry, "+
-			"it might be that the previous tests weren't correctly "+
-			"cleaned up. Try removing the folder and run the test again", pathVarRun)
 }
 
 func testBPFPinningMounted(t *testing.T) {

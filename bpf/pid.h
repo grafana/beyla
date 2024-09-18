@@ -13,6 +13,8 @@
 
 volatile const s32 filter_pids = 0;
 
+// test
+
 struct {
     __uint(type, BPF_MAP_TYPE_ARRAY);
     __uint(max_entries, MAX_CONCURRENT_PIDS);

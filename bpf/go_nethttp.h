@@ -214,6 +214,10 @@ int uprobe_ServeHTTPReturns(struct pt_regs *ctx) {
         }
     }    
 
+    unsigned char tp_buf[TP_MAX_VAL_LENGTH];
+    make_tp_string(tp_buf, &invocation->tp);
+    bpf_dbg_printk("tp: %s", tp_buf);
+
     http_request_trace *trace = bpf_ringbuf_reserve(&events, sizeof(http_request_trace), 0);
     if (!trace) {
         bpf_dbg_printk("can't reserve space in the ringbuffer");
@@ -252,6 +256,11 @@ int uprobe_ServeHTTPReturns(struct pt_regs *ctx) {
     __builtin_memcpy(trace->method, invocation->method, sizeof(trace->method));
     __builtin_memcpy(trace->path, invocation->path, sizeof(trace->path));
     trace->status = (u16)invocation->status;
+
+    make_tp_string(tp_buf, &invocation->tp);
+    bpf_dbg_printk("tp: %s", tp_buf);
+    bpf_dbg_printk("method: %s", trace->method);
+    bpf_dbg_printk("path: %s", trace->path);
 
     // submit the completed trace via ringbuffer
     bpf_ringbuf_submit(trace, get_flags());
@@ -386,6 +395,12 @@ int uprobe_roundTripReturn(struct pt_regs *ctx) {
     }
 
     trace->tp = invocation->tp;
+
+    unsigned char tp_buf[TP_MAX_VAL_LENGTH];
+    make_tp_string(tp_buf, &invocation->tp);
+    bpf_dbg_printk("tp: %s", tp_buf);
+    bpf_dbg_printk("method: %s", trace->method);
+    bpf_dbg_printk("path: %s", trace->path);
 
     u64 status_code_ptr_pos = go_offset_of(ot, _status_code_ptr_pos);
     bpf_probe_read(&trace->status, sizeof(trace->status), (void *)(resp_ptr + status_code_ptr_pos));

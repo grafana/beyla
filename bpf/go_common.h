@@ -156,12 +156,16 @@ static __always_inline void server_trace_parent(void *goroutine_addr, tp_info_t 
         if (!found_info) {
             bpf_dbg_printk("No traceparent in headers, generating");
             urand_bytes(tp->trace_id, TRACE_ID_SIZE_BYTES);
-            *((u64 *)tp->parent_id) = 0;
+            *((u64 *)tp->parent_id) = 0;            
         }
     }
 
     urand_bytes(tp->span_id, SPAN_ID_SIZE_BYTES);
     bpf_map_update_elem(&go_trace_map, &goroutine_addr, tp, BPF_ANY);
+
+    unsigned char tp_buf[TP_MAX_VAL_LENGTH];
+    make_tp_string(tp_buf, tp);
+    bpf_dbg_printk("tp: %s", tp_buf);
 }
 
 static __always_inline u8 client_trace_parent(void *goroutine_addr, tp_info_t *tp_i, void *req_header) {

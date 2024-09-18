@@ -4,7 +4,7 @@
 #include "utils.h"
 #include "pid_types.h"
 
-#define MAX_GO_PROGRAMS        10000 // Max 10,000 go programs tracked
+#define MAX_GO_PROGRAMS 10000 // Max 10,000 go programs tracked
 
 // To be Injected from the user space during the eBPF program load & initialization
 typedef enum {
@@ -15,7 +15,7 @@ typedef enum {
     _tcp_addr_port_ptr_pos,
     _tcp_addr_ip_ptr_pos,
     // http
-    _url_ptr_pos, 
+    _url_ptr_pos,
     _path_ptr_pos,
     _method_ptr_pos,
     _status_code_ptr_pos,
@@ -60,7 +60,7 @@ typedef enum {
 } go_offset_const;
 
 typedef struct go_offset_t {
-  go_offset_const v;
+    go_offset_const v;
 } go_offset;
 
 typedef struct off_table {
@@ -69,24 +69,23 @@ typedef struct off_table {
 
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, u64); // key: upper 32 bit is PID, lower 32 bit is the offset
+    __type(key, u64);           // key: upper 32 bit is PID, lower 32 bit is the offset
     __type(value, off_table_t); // the offset table
     __uint(max_entries, MAX_GO_PROGRAMS);
 } go_offsets_map SEC(".maps");
 
-static __always_inline off_table_t* get_offsets_table() {
+static __always_inline off_table_t *get_offsets_table() {
     struct task_struct *task = (struct task_struct *)bpf_get_current_task();
     u64 ino = (u64)BPF_CORE_READ(task, mm, exe_file, f_inode, i_ino);
     return (off_table_t *)bpf_map_lookup_elem(&go_offsets_map, &ino);
 }
 
-static __always_inline u64 go_offset_of(off_table_t *ot, go_offset off) {    
+static __always_inline u64 go_offset_of(off_table_t *ot, go_offset off) {
     if (ot && off.v < _last_go_offset) {
         return ot->table[off.v];
     }
 
     return -1;
 }
-
 
 #endif // GO_OFFSETS_H

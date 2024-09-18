@@ -29,35 +29,35 @@ typedef struct topic {
 
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, void *); // w_ptr
+    __type(key, void *);      // w_ptr
     __type(value, tp_info_t); // traceparent
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
 } produce_traceparents SEC(".maps");
 
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, void *); // goroutine
+    __type(key, void *);    // goroutine
     __type(value, topic_t); // topic info
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
 } ongoing_produce_topics SEC(".maps");
 
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, void *); // msg ptr
+    __type(key, void *);    // msg ptr
     __type(value, topic_t); // topic info
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
 } ongoing_produce_messages SEC(".maps");
 
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, void *); // goroutine
+    __type(key, void *);          // goroutine
     __type(value, produce_req_t); // rw ptr + start time
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
 } produce_requests SEC(".maps");
 
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, void *); // goroutine
+    __type(key, void *);           // goroutine
     __type(value, kafka_go_req_t); // rw ptr + start time
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
 } fetch_requests SEC(".maps");
@@ -67,7 +67,8 @@ SEC("uprobe/writer_write_messages")
 int uprobe_writer_write_messages(struct pt_regs *ctx) {
     void *goroutine_addr = (void *)GOROUTINE_PTR(ctx);
     void *w_ptr = (void *)GO_PARAM1(ctx);
-    bpf_dbg_printk("=== uprobe/kafka-go writer_write_messages %llx w_ptr %llx === ", goroutine_addr, w_ptr);
+    bpf_dbg_printk(
+        "=== uprobe/kafka-go writer_write_messages %llx w_ptr %llx === ", goroutine_addr, w_ptr);
 
     tp_info_t tp = {};
 
@@ -88,7 +89,9 @@ int uprobe_writer_produce(struct pt_regs *ctx) {
 
     if (w_ptr) {
         void *topic_ptr = 0;
-        bpf_probe_read_user(&topic_ptr, sizeof(void *), w_ptr + go_offset_of(ot, (go_offset){.v=_kafka_go_writer_topic_pos}));
+        bpf_probe_read_user(&topic_ptr,
+                            sizeof(void *),
+                            w_ptr + go_offset_of(ot, (go_offset){.v = _kafka_go_writer_topic_pos}));
 
         bpf_dbg_printk("topic_ptr %llx", topic_ptr);
         if (topic_ptr) {
@@ -99,7 +102,7 @@ int uprobe_writer_produce(struct pt_regs *ctx) {
                 bpf_dbg_printk("found existing traceparent %llx", tp);
                 __builtin_memcpy(&topic.tp, tp, sizeof(tp_info_t));
             } else {
-                urand_bytes(topic.tp.trace_id, TRACE_ID_SIZE_BYTES);            
+                urand_bytes(topic.tp.trace_id, TRACE_ID_SIZE_BYTES);
                 urand_bytes(topic.tp.span_id, SPAN_ID_SIZE_BYTES);
             }
 
@@ -141,14 +144,16 @@ int uprobe_protocol_roundtrip(struct pt_regs *ctx) {
     void *msg_ptr = (void *)GO_PARAM8(ctx);
     off_table_t *ot = get_offsets_table();
 
-    bpf_dbg_printk("goroutine_addr %lx, rw ptr %llx, msg_ptr %llx", goroutine_addr, rw_ptr, msg_ptr);
+    bpf_dbg_printk(
+        "goroutine_addr %lx, rw ptr %llx, msg_ptr %llx", goroutine_addr, rw_ptr, msg_ptr);
 
     if (rw_ptr) {
         topic_t *topic_ptr = bpf_map_lookup_elem(&ongoing_produce_messages, &msg_ptr);
         bpf_dbg_printk("Found topic %llx", topic_ptr);
         if (topic_ptr) {
             produce_req_t p = {
-                .conn_ptr = ((u64)rw_ptr) + go_offset_of(ot, (go_offset){.v=_kafka_go_protocol_conn_pos}),
+                .conn_ptr =
+                    ((u64)rw_ptr) + go_offset_of(ot, (go_offset){.v = _kafka_go_protocol_conn_pos}),
                 .msg_ptr = (u64)msg_ptr,
                 .start_monotime_ns = bpf_ktime_get_ns(),
             };
@@ -164,7 +169,7 @@ SEC("uprobe/protocol_RoundTrip_ret")
 int uprobe_protocol_roundtrip_ret(struct pt_regs *ctx) {
     void *goroutine_addr = (void *)GOROUTINE_PTR(ctx);
     bpf_dbg_printk("=== uprobe/protocol_RoundTrip ret %llx === ", goroutine_addr);
-    
+
     produce_req_t *p_ptr = bpf_map_lookup_elem(&produce_requests, &goroutine_addr);
 
     bpf_dbg_printk("p_ptr %llx", p_ptr);
@@ -185,7 +190,8 @@ int uprobe_protocol_roundtrip_ret(struct pt_regs *ctx) {
                 trace->end_monotime_ns = bpf_ktime_get_ns();
 
                 void *conn_ptr = 0;
-                bpf_probe_read(&conn_ptr, sizeof(conn_ptr), (void *)(p_ptr->conn_ptr + 8)); // find conn
+                bpf_probe_read(
+                    &conn_ptr, sizeof(conn_ptr), (void *)(p_ptr->conn_ptr + 8)); // find conn
                 bpf_dbg_printk("conn ptr %llx", conn_ptr);
                 if (conn_ptr) {
                     u8 ok = get_conn_info(conn_ptr, &trace->conn);
@@ -208,7 +214,6 @@ int uprobe_protocol_roundtrip_ret(struct pt_regs *ctx) {
     return 0;
 }
 
-
 // Code for the fetch messages path
 SEC("uprobe/reader_read")
 int uprobe_reader_read(struct pt_regs *ctx) {
@@ -227,7 +232,9 @@ int uprobe_reader_read(struct pt_regs *ctx) {
         };
 
         void *topic_ptr = 0;
-        bpf_probe_read_user(&topic_ptr, sizeof(void *), r_ptr + go_offset_of(ot, (go_offset){.v=_kafka_go_reader_topic_pos}));
+        bpf_probe_read_user(&topic_ptr,
+                            sizeof(void *),
+                            r_ptr + go_offset_of(ot, (go_offset){.v = _kafka_go_reader_topic_pos}));
 
         bpf_dbg_printk("topic_ptr %llx", topic_ptr);
         if (topic_ptr) {

@@ -26,7 +26,7 @@ struct {
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __type(key, void *); // key: goroutine id
-    __type(value, u32); // correlation id
+    __type(value, u32);  // correlation id
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
 } ongoing_kafka_requests SEC(".maps");
 
@@ -40,15 +40,18 @@ int uprobe_sarama_sendInternal(struct pt_regs *ctx) {
     bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
 
     u32 correlation_id = 0;
-    
+
     if (b_ptr) {
-        bpf_probe_read(&correlation_id, sizeof(u32), b_ptr + go_offset_of(ot, (go_offset){.v=_sarama_broker_corr_id_pos}));
+        bpf_probe_read(&correlation_id,
+                       sizeof(u32),
+                       b_ptr + go_offset_of(ot, (go_offset){.v = _sarama_broker_corr_id_pos}));
     }
 
     if (correlation_id) {
         bpf_dbg_printk("correlation_id = %d", correlation_id);
 
-        if (bpf_map_update_elem(&ongoing_kafka_requests, &goroutine_addr, &correlation_id, BPF_ANY)) {
+        if (bpf_map_update_elem(
+                &ongoing_kafka_requests, &goroutine_addr, &correlation_id, BPF_ANY)) {
             bpf_dbg_printk("can't update kafka requests element");
         }
     }
@@ -86,15 +89,22 @@ int uprobe_sarama_broker_write(struct pt_regs *ctx) {
                 .start_monotime_ns = bpf_ktime_get_ns(),
             };
 
-            void *conn_conn_ptr = (void *)(b_ptr + go_offset_of(ot, (go_offset){.v=_sarama_broker_conn_pos}));
+            void *conn_conn_ptr =
+                (void *)(b_ptr + go_offset_of(ot, (go_offset){.v = _sarama_broker_conn_pos}));
             bpf_dbg_printk("conn conn ptr %llx", conn_conn_ptr);
             if (conn_conn_ptr) {
                 void *tcp_conn_ptr = 0;
-                bpf_probe_read(&tcp_conn_ptr, sizeof(tcp_conn_ptr), (void *)(conn_conn_ptr + go_offset_of(ot, (go_offset){.v=_sarama_bufconn_conn_pos}) + 8)); // find conn
+                bpf_probe_read(
+                    &tcp_conn_ptr,
+                    sizeof(tcp_conn_ptr),
+                    (void *)(conn_conn_ptr +
+                             go_offset_of(ot, (go_offset){.v = _sarama_bufconn_conn_pos}) +
+                             8)); // find conn
                 bpf_dbg_printk("tcp conn ptr %llx", tcp_conn_ptr);
                 if (tcp_conn_ptr) {
                     void *conn_ptr = 0;
-                    bpf_probe_read(&conn_ptr, sizeof(conn_ptr), (void *)(tcp_conn_ptr + 8)); // find conn
+                    bpf_probe_read(
+                        &conn_ptr, sizeof(conn_ptr), (void *)(tcp_conn_ptr + 8)); // find conn
                     bpf_dbg_printk("conn ptr %llx", conn_ptr);
                     if (conn_ptr) {
                         u8 ok = get_conn_info(conn_ptr, &req.conn);
@@ -110,7 +120,6 @@ int uprobe_sarama_broker_write(struct pt_regs *ctx) {
             bpf_probe_read(req.buf, KAFKA_MAX_LEN, buf_ptr);
             bpf_map_update_elem(&kafka_requests, &correlation_id, &req, BPF_ANY);
         }
-
     }
 
     bpf_map_delete_elem(&ongoing_kafka_requests, &goroutine_addr);
@@ -128,7 +137,9 @@ int uprobe_sarama_response_promise_handle(struct pt_regs *ctx) {
     if (p) {
         u32 correlation_id = 0;
 
-        bpf_probe_read(&correlation_id, sizeof(u32), p + go_offset_of(ot, (go_offset){.v=_sarama_response_corr_id_pos}));
+        bpf_probe_read(&correlation_id,
+                       sizeof(u32),
+                       p + go_offset_of(ot, (go_offset){.v = _sarama_response_corr_id_pos}));
 
         bpf_dbg_printk("correlation_id = %d", correlation_id);
 
@@ -138,7 +149,8 @@ int uprobe_sarama_response_promise_handle(struct pt_regs *ctx) {
             if (req) {
                 req->end_monotime_ns = bpf_ktime_get_ns();
 
-                kafka_client_req_t *trace = bpf_ringbuf_reserve(&events, sizeof(kafka_client_req_t), 0);        
+                kafka_client_req_t *trace =
+                    bpf_ringbuf_reserve(&events, sizeof(kafka_client_req_t), 0);
                 if (trace) {
                     bpf_dbg_printk("Sending kafka client go trace");
 

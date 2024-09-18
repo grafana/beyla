@@ -39,8 +39,8 @@ typedef struct goroutine_metadata_t {
 
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, void *); // key: pointer to the goroutine
-    __type(value, goroutine_metadata);  // value: timestamp of the goroutine creation
+    __type(key, void *);               // key: pointer to the goroutine
+    __type(value, goroutine_metadata); // value: timestamp of the goroutine creation
     __uint(max_entries, MAX_CONCURRENT_SHARED_REQUESTS);
     __uint(pinning, LIBBPF_PIN_BY_NAME);
 } ongoing_goroutines SEC(".maps");
@@ -62,8 +62,8 @@ struct {
 
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, void *); // key: pointer to the goroutine
-    __type(value, tp_info_t);  // value: traceparent info
+    __type(key, void *);      // key: pointer to the goroutine
+    __type(value, tp_info_t); // value: traceparent info
     __uint(max_entries, MAX_CONCURRENT_SHARED_REQUESTS);
     __uint(pinning, LIBBPF_PIN_BY_NAME);
 } go_trace_map SEC(".maps");
@@ -75,7 +75,8 @@ static __always_inline u64 find_parent_goroutine(void *goroutine_addr) {
         void *p_inv = bpf_map_lookup_elem(&go_trace_map, &r_addr);
         if (!p_inv) { // not this goroutine running the server request processing
             // Let's find the parent scope
-            goroutine_metadata *g_metadata = (goroutine_metadata *)bpf_map_lookup_elem(&ongoing_goroutines, &r_addr);
+            goroutine_metadata *g_metadata =
+                (goroutine_metadata *)bpf_map_lookup_elem(&ongoing_goroutines, &r_addr);
             if (g_metadata) {
                 // Lookup now to see if the parent was a request
                 r_addr = (void *)g_metadata->parent;
@@ -93,15 +94,21 @@ static __always_inline u64 find_parent_goroutine(void *goroutine_addr) {
     return 0;
 }
 
-static __always_inline void decode_go_traceparent(unsigned char *buf, unsigned char *trace_id, unsigned char *span_id, unsigned char *flags) {
+static __always_inline void decode_go_traceparent(unsigned char *buf,
+                                                  unsigned char *trace_id,
+                                                  unsigned char *span_id,
+                                                  unsigned char *flags) {
     unsigned char *t_id = buf + 2 + 1; // strlen(ver) + strlen("-")
-    unsigned char *s_id = buf + 2 + 1 + 32 + 1; // strlen(ver) + strlen("-") + strlen(trace_id) + strlen("-")
-    unsigned char *f_id = buf + 2 + 1 + 32 + 1 + 16 + 1; // strlen(ver) + strlen("-") + strlen(trace_id) + strlen("-") + strlen(span_id) + strlen("-")
+    unsigned char *s_id =
+        buf + 2 + 1 + 32 + 1; // strlen(ver) + strlen("-") + strlen(trace_id) + strlen("-")
+    unsigned char *f_id =
+        buf + 2 + 1 + 32 + 1 + 16 +
+        1; // strlen(ver) + strlen("-") + strlen(trace_id) + strlen("-") + strlen(span_id) + strlen("-")
 
     decode_hex(trace_id, t_id, TRACE_ID_CHAR_LEN);
     decode_hex(span_id, s_id, SPAN_ID_CHAR_LEN);
     decode_hex(flags, f_id, FLAGS_CHAR_LEN);
-} 
+}
 
 static __always_inline void tp_from_parent(tp_info_t *tp, tp_info_t *parent) {
     *((u64 *)tp->trace_id) = *((u64 *)parent->trace_id);
@@ -118,7 +125,8 @@ static __always_inline void tp_clone(tp_info_t *dest, tp_info_t *src) {
     dest->flags = src->flags;
 }
 
-static __always_inline void server_trace_parent(void *goroutine_addr, tp_info_t *tp, void *req_header) {
+static __always_inline void
+server_trace_parent(void *goroutine_addr, tp_info_t *tp, void *req_header) {
     // May get overriden when decoding existing traceparent, but otherwise we set sample ON
     tp->flags = 1;
     // Get traceparent from the Request.Header
@@ -144,7 +152,7 @@ static __always_inline void server_trace_parent(void *goroutine_addr, tp_info_t 
             sort_connection_info(&conn);
             bpf_dbg_printk("Looking up traceparent for connection info");
             tp_info_pid_t *tp_p = trace_info_for_connection(&conn);
-            if (tp_p) {                
+            if (tp_p) {
                 if (correlated_request_with_current(tp_p)) {
                     bpf_dbg_printk("Found traceparent from trace map, another process.");
                     found_info = 1;
@@ -156,7 +164,7 @@ static __always_inline void server_trace_parent(void *goroutine_addr, tp_info_t 
         if (!found_info) {
             bpf_dbg_printk("No traceparent in headers, generating");
             urand_bytes(tp->trace_id, TRACE_ID_SIZE_BYTES);
-            *((u64 *)tp->parent_id) = 0;            
+            *((u64 *)tp->parent_id) = 0;
         }
     }
 
@@ -168,10 +176,12 @@ static __always_inline void server_trace_parent(void *goroutine_addr, tp_info_t 
     bpf_dbg_printk("tp: %s", tp_buf);
 }
 
-static __always_inline u8 client_trace_parent(void *goroutine_addr, tp_info_t *tp_i, void *req_header) {
+static __always_inline u8 client_trace_parent(void *goroutine_addr,
+                                              tp_info_t *tp_i,
+                                              void *req_header) {
     // Get traceparent from the Request.Header
     u8 found_trace_id = 0;
-    
+
     // May get overriden when decoding existing traceparent or finding a server span, but otherwise we set sample ON
     tp_i->flags = 1;
 
@@ -194,7 +204,7 @@ static __always_inline u8 client_trace_parent(void *goroutine_addr, tp_info_t *t
 
         u64 parent_id = find_parent_goroutine(goroutine_addr);
 
-        if (parent_id) {// we found a parent request
+        if (parent_id) { // we found a parent request
             tp = (tp_info_t *)bpf_map_lookup_elem(&go_trace_map, &parent_id);
         }
 
@@ -202,9 +212,9 @@ static __always_inline u8 client_trace_parent(void *goroutine_addr, tp_info_t *t
             bpf_dbg_printk("Found parent request trace_parent %llx", tp);
             tp_from_parent(tp_i, tp);
         } else {
-            urand_bytes(tp_i->trace_id, TRACE_ID_SIZE_BYTES);    
+            urand_bytes(tp_i->trace_id, TRACE_ID_SIZE_BYTES);
         }
-        
+
         urand_bytes(tp_i->span_id, SPAN_ID_SIZE_BYTES);
     }
 
@@ -216,10 +226,17 @@ static __always_inline void read_ip_and_port(u8 *dst_ip, u16 *dst_port, void *sr
     void *addr_ip = 0;
     off_table_t *ot = get_offsets_table();
 
-    bpf_probe_read(dst_port, sizeof(u16), (void *)(src + go_offset_of(ot, (go_offset){.v=_tcp_addr_port_ptr_pos})));
-    bpf_probe_read(&addr_ip, sizeof(addr_ip), (void *)(src + go_offset_of(ot, (go_offset){.v=_tcp_addr_ip_ptr_pos})));
+    bpf_probe_read(dst_port,
+                   sizeof(u16),
+                   (void *)(src + go_offset_of(ot, (go_offset){.v = _tcp_addr_port_ptr_pos})));
+    bpf_probe_read(&addr_ip,
+                   sizeof(addr_ip),
+                   (void *)(src + go_offset_of(ot, (go_offset){.v = _tcp_addr_ip_ptr_pos})));
     if (addr_ip) {
-        bpf_probe_read(&addr_len, sizeof(addr_len), (void *)(src + go_offset_of(ot, (go_offset){.v=_tcp_addr_ip_ptr_pos}) + 8));
+        bpf_probe_read(
+            &addr_len,
+            sizeof(addr_len),
+            (void *)(src + go_offset_of(ot, (go_offset){.v = _tcp_addr_ip_ptr_pos}) + 8));
         if (addr_len == 4) {
             __builtin_memcpy(dst_ip, ip4ip6_prefix, sizeof(ip4ip6_prefix));
             bpf_probe_read(dst_ip + sizeof(ip4ip6_prefix), 4, addr_ip);
@@ -234,12 +251,19 @@ static __always_inline u8 get_conn_info_from_fd(void *fd_ptr, connection_info_t 
         void *laddr_ptr = 0;
         void *raddr_ptr = 0;
         off_table_t *ot = get_offsets_table();
-        u64 fd_laddr_pos = go_offset_of(ot, (go_offset){.v=_fd_laddr_pos});
+        u64 fd_laddr_pos = go_offset_of(ot, (go_offset){.v = _fd_laddr_pos});
 
-        bpf_probe_read(&laddr_ptr, sizeof(laddr_ptr), (void *)(fd_ptr + fd_laddr_pos + 8)); // find laddr
-        bpf_probe_read(&raddr_ptr, sizeof(raddr_ptr), (void *)(fd_ptr + go_offset_of(ot, (go_offset){.v=_fd_raddr_pos}) + 8)); // find raddr
-        
-        bpf_dbg_printk("laddr_ptr %llx, laddr %llx, raddr %llx", fd_ptr + fd_laddr_pos + 8, laddr_ptr, raddr_ptr);
+        bpf_probe_read(
+            &laddr_ptr, sizeof(laddr_ptr), (void *)(fd_ptr + fd_laddr_pos + 8)); // find laddr
+        bpf_probe_read(
+            &raddr_ptr,
+            sizeof(raddr_ptr),
+            (void *)(fd_ptr + go_offset_of(ot, (go_offset){.v = _fd_raddr_pos}) + 8)); // find raddr
+
+        bpf_dbg_printk("laddr_ptr %llx, laddr %llx, raddr %llx",
+                       fd_ptr + fd_laddr_pos + 8,
+                       laddr_ptr,
+                       raddr_ptr);
         if (laddr_ptr && raddr_ptr) {
 
             // read local
@@ -268,7 +292,10 @@ static __always_inline u8 get_conn_info(void *conn_ptr, connection_info_t *info)
         void *fd_ptr = 0;
         off_table_t *ot = get_offsets_table();
 
-        bpf_probe_read(&fd_ptr, sizeof(fd_ptr), (void *)(conn_ptr + go_offset_of(ot, (go_offset){.v=_conn_fd_pos}))); // find fd
+        bpf_probe_read(
+            &fd_ptr,
+            sizeof(fd_ptr),
+            (void *)(conn_ptr + go_offset_of(ot, (go_offset){.v = _conn_fd_pos}))); // find fd
 
         bpf_dbg_printk("Found fd ptr %llx", fd_ptr);
 
@@ -278,7 +305,7 @@ static __always_inline u8 get_conn_info(void *conn_ptr, connection_info_t *info)
     return 0;
 }
 
-static __always_inline void* unwrap_tls_conn_info(void *conn_ptr, void *tls_state) {
+static __always_inline void *unwrap_tls_conn_info(void *conn_ptr, void *tls_state) {
     if (conn_ptr && tls_state) {
         void *c_ptr = 0;
         bpf_probe_read(&c_ptr, sizeof(c_ptr), (void *)(conn_ptr)); // unwrap conn

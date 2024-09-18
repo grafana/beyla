@@ -59,8 +59,8 @@ typedef struct kafka_client_req {
     u8 type; // Must be first
     u64 start_monotime_ns;
     u64 end_monotime_ns;
-    u8  buf[KAFKA_MAX_LEN];
-    connection_info_t conn __attribute__ ((aligned (8)));
+    u8 buf[KAFKA_MAX_LEN];
+    connection_info_t conn __attribute__((aligned(8)));
     pid_info pid;
 } __attribute__((packed)) kafka_client_req_t;
 

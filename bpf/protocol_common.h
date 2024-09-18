@@ -8,7 +8,7 @@
 #include "pid.h"
 #include "bpf_dbg.h"
 
-#define MIN_HTTP_SIZE  12 // HTTP/1.1 CCC is the smallest valid request we can have
+#define MIN_HTTP_SIZE 12      // HTTP/1.1 CCC is the smallest valid request we can have
 #define RESPONSE_STATUS_POS 9 // HTTP/1.1 <--
 #define MAX_HTTP_STATUS 599
 
@@ -42,23 +42,23 @@ struct {
 
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, pid_connection_info_t);   // connection that's SSL
-    __type(value, u64); // ssl
+    __type(key, pid_connection_info_t); // connection that's SSL
+    __type(value, u64);                 // ssl
     __uint(max_entries, MAX_CONCURRENT_SHARED_REQUESTS);
     __uint(pinning, LIBBPF_PIN_BY_NAME);
 } active_ssl_connections SEC(".maps");
 
-static __always_inline http_connection_metadata_t* empty_connection_meta() {
+static __always_inline http_connection_metadata_t *empty_connection_meta() {
     int zero = 0;
     return bpf_map_lookup_elem(&connection_meta_mem, &zero);
 }
 
-static __always_inline u8* iovec_memory() {
+static __always_inline u8 *iovec_memory() {
     int zero = 0;
     return bpf_map_lookup_elem(&iovec_mem, &zero);
 }
 
-static __always_inline call_protocol_args_t* protocol_args() {
+static __always_inline call_protocol_args_t *protocol_args() {
     int zero = 0;
     return bpf_map_lookup_elem(&protocol_args_mem, &zero);
 }
@@ -81,7 +81,8 @@ static __always_inline u8 request_type_by_direction(u8 direction, u8 packet_type
     return 0;
 }
 
-static __always_inline http_connection_metadata_t *connection_meta_by_direction(pid_connection_info_t *pid_conn, u8 direction, u8 packet_type) {
+static __always_inline http_connection_metadata_t *
+connection_meta_by_direction(pid_connection_info_t *pid_conn, u8 direction, u8 packet_type) {
     http_connection_metadata_t *meta = empty_connection_meta();
     if (!meta) {
         return 0;
@@ -104,37 +105,35 @@ struct iov_iter___dummy {
 
 typedef struct iov_iter___dummy iovec_iter_ctx;
 
-enum iter_type___dummy {
-    ITER_UBUF
-};
+enum iter_type___dummy { ITER_UBUF };
 
 // extracts kernel specific iov_iter information into a iovec_iter_ctx instance
-static __always_inline void get_iovec_ctx(iovec_iter_ctx* ctx, struct msghdr *msg) {
+static __always_inline void get_iovec_ctx(iovec_iter_ctx *ctx, struct msghdr *msg) {
     ctx->ubuf = NULL;
     ctx->iov = NULL;
-    if (bpf_core_field_exists(((struct iov_iter___dummy*)&msg->msg_iter)->type)) {
+    if (bpf_core_field_exists(((struct iov_iter___dummy *)&msg->msg_iter)->type)) {
         // clear the direction bit when reading iovec_iter::type to end up
         // with the original enumerator value (the direction bit is the LSB
         // and is either 0 (READ) or 1 (WRITE)).
-        ctx->iter_type = BPF_CORE_READ((struct iov_iter___dummy*)&msg->msg_iter, type) & 0xfe;
+        ctx->iter_type = BPF_CORE_READ((struct iov_iter___dummy *)&msg->msg_iter, type) & 0xfe;
     } else {
-        ctx->iter_type = BPF_CORE_READ((struct iov_iter___dummy*)&msg->msg_iter, iter_type);
+        ctx->iter_type = BPF_CORE_READ((struct iov_iter___dummy *)&msg->msg_iter, iter_type);
     }
 
-    if (bpf_core_field_exists(((struct iov_iter___dummy*)&msg->msg_iter)->ubuf)) {
-        ctx->ubuf = BPF_CORE_READ((struct iov_iter___dummy*)&msg->msg_iter, ubuf);
+    if (bpf_core_field_exists(((struct iov_iter___dummy *)&msg->msg_iter)->ubuf)) {
+        ctx->ubuf = BPF_CORE_READ((struct iov_iter___dummy *)&msg->msg_iter, ubuf);
     }
 
-    if (bpf_core_field_exists(((struct iov_iter___dummy*)&msg->msg_iter)->iov)) {
-        ctx->iov = BPF_CORE_READ((struct iov_iter___dummy*)&msg->msg_iter, iov);
-    } else if (bpf_core_field_exists(((struct iov_iter___dummy*)&msg->msg_iter)->__iov)) {
-        ctx->iov = BPF_CORE_READ((struct iov_iter___dummy*)&msg->msg_iter, __iov);
+    if (bpf_core_field_exists(((struct iov_iter___dummy *)&msg->msg_iter)->iov)) {
+        ctx->iov = BPF_CORE_READ((struct iov_iter___dummy *)&msg->msg_iter, iov);
+    } else if (bpf_core_field_exists(((struct iov_iter___dummy *)&msg->msg_iter)->__iov)) {
+        ctx->iov = BPF_CORE_READ((struct iov_iter___dummy *)&msg->msg_iter, __iov);
     }
 
-    ctx->nr_segs = BPF_CORE_READ((struct iov_iter___dummy*)&msg->msg_iter, nr_segs);
+    ctx->nr_segs = BPF_CORE_READ((struct iov_iter___dummy *)&msg->msg_iter, nr_segs);
 }
 
-static __always_inline int read_iovec_ctx(iovec_iter_ctx *ctx, u8* buf, size_t max_len) {
+static __always_inline int read_iovec_ctx(iovec_iter_ctx *ctx, u8 *buf, size_t max_len) {
     if (max_len == 0) {
         return 0;
     }
@@ -205,7 +204,7 @@ static __always_inline int read_iovec_ctx(iovec_iter_ctx *ctx, u8* buf, size_t m
     return tot_len;
 }
 
-static __always_inline int read_msghdr_buf(struct msghdr *msg, u8* buf, size_t max_len) {
+static __always_inline int read_msghdr_buf(struct msghdr *msg, u8 *buf, size_t max_len) {
     if (max_len == 0) {
         return 0;
     }
@@ -221,11 +220,14 @@ static __always_inline int read_msghdr_buf(struct msghdr *msg, u8* buf, size_t m
 // is somehow in the ephemeral port range, it can be higher than the source port and we'd use the sorted connection
 // info in user space, effectively reversing the flow of the operation. We keep track of the original destination port
 // and we undo the swap in the data collections we send to user space.
-static __always_inline void fixup_connection_info(connection_info_t *conn_info, u8 client, u16 orig_dport) {
+static __always_inline void
+fixup_connection_info(connection_info_t *conn_info, u8 client, u16 orig_dport) {
     // The destination port is the server port in userspace
     if ((client && conn_info->d_port != orig_dport) ||
         (!client && conn_info->d_port == orig_dport)) {
-        bpf_dbg_printk("Swapped connection info for userspace, client = %d, orig_dport = %d", client, orig_dport);
+        bpf_dbg_printk("Swapped connection info for userspace, client = %d, orig_dport = %d",
+                       client,
+                       orig_dport);
         swap_connection_info_order(conn_info);
         //dbg_print_http_connection_info(conn_info); // commented out since GitHub CI doesn't like this call
     }

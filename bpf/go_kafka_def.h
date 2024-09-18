@@ -11,7 +11,7 @@
 #ifndef GO_KAFKA_DEFS_H
 #define GO_KAFKA_DEFS_H
 
-#define KAFKA_API_FETCH   0
+#define KAFKA_API_FETCH 0
 #define KAFKA_API_PRODUCE 1
 #define KAFKA_API_KEY_POS 5
 

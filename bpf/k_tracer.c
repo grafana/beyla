@@ -49,21 +49,23 @@ typedef struct send_args {
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
-    __type(key, u64); // pid_tid
+    __type(key, u64);           // pid_tid
     __type(value, send_args_t); // size to be sent
 } active_send_args SEC(".maps");
 
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
-    __type(key, u64); // *sock
+    __type(key, u64);           // *sock
     __type(value, send_args_t); // size to be sent
 } active_send_sock_args SEC(".maps");
 
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, partial_connection_info_t); // key: the connection info without the destination address, but with the tcp sequence
-    __type(value, connection_info_t);  // value: traceparent info
+    __type(
+        key,
+        partial_connection_info_t); // key: the connection info without the destination address, but with the tcp sequence
+    __type(value, connection_info_t); // value: traceparent info
     __uint(max_entries, 1024);
     __uint(pinning, LIBBPF_PIN_BY_NAME);
 } tcp_connection_map SEC(".maps");
@@ -98,7 +100,7 @@ int BPF_KRETPROBE(kretprobe_sock_alloc, struct socket *sock) {
 // outbound. However, in some cases servers can optimise the accept path if
 // the same request is sent over and over. For that reason, in case we miss the
 // initial accept, we establish an active filtered connection here. By default
-// sets the type to be server HTTP, in client mode we'll overwrite the 
+// sets the type to be server HTTP, in client mode we'll overwrite the
 // data in the map, since those cannot be optimised.
 SEC("kprobe/tcp_rcv_established")
 int BPF_KPROBE(kprobe_tcp_rcv_established, struct sock *sk, struct sk_buff *skb) {
@@ -116,14 +118,18 @@ int BPF_KPROBE(kprobe_tcp_rcv_established, struct sock *sk, struct sk_buff *skb)
         //u16 orig_dport = info.conn.d_port;
         //dbg_print_http_connection_info(&info.conn);
         sort_connection_info(&pid_info.p_conn.conn);
-        pid_info.p_conn.pid = pid_from_pid_tgid(id);        
+        pid_info.p_conn.pid = pid_from_pid_tgid(id);
 
         // This is a current limitation for port ordering detection for SSL.
         // tcp_rcv_established flip flops the ports and we can't tell if it's client or server call.
         // If the source port for a client call is lower, we'll get this wrong.
-        // TODO: Need to fix this. 
+        // TODO: Need to fix this.
         pid_info.orig_dport = pid_info.p_conn.conn.s_port,
-        bpf_map_update_elem(&pid_tid_to_conn, &id, &pid_info, BPF_ANY); // to support SSL on missing handshake, respect the original info if there
+        bpf_map_update_elem(
+            &pid_tid_to_conn,
+            &id,
+            &pid_info,
+            BPF_ANY); // to support SSL on missing handshake, respect the original info if there
     }
 
     return 0;
@@ -132,12 +138,11 @@ int BPF_KPROBE(kprobe_tcp_rcv_established, struct sock *sk, struct sk_buff *skb)
 // We tap into both sys_accept and sys_accept4.
 // We don't care about the accept entry arguments, since we get only peer information
 // we don't have the full picture for the socket.
-// 
+//
 // Note: A current limitation is that likely we won't capture the first accept request. The
 // process may have already reached accept, before the instrumenter has launched.
 SEC("kretprobe/sys_accept4")
-int BPF_KRETPROBE(kretprobe_sys_accept4, uint fd)
-{
+int BPF_KRETPROBE(kretprobe_sys_accept4, uint fd) {
     u64 id = bpf_get_current_pid_tgid();
 
     if (!valid_pid(id)) {
@@ -168,8 +173,9 @@ int BPF_KRETPROBE(kretprobe_sys_accept4, uint fd)
         sort_connection_info(&info.p_conn.conn);
         info.p_conn.pid = pid_from_pid_tgid(id);
         info.orig_dport = orig_dport;
-        
-        bpf_map_update_elem(&pid_tid_to_conn, &id, &info, BPF_ANY); // to support SSL on missing handshake
+
+        bpf_map_update_elem(
+            &pid_tid_to_conn, &id, &info, BPF_ANY); // to support SSL on missing handshake
     }
 
 cleanup:
@@ -190,24 +196,25 @@ int BPF_KPROBE(kprobe_tcp_connect, struct sock *sk) {
 
     tp_info_pid_t *tp_p = tp_buf();
 
-    // Connect runs before the SYN packet is sent. 
-    // We use this opportunity to setup a trace context information for the connection. 
+    // Connect runs before the SYN packet is sent.
+    // We use this opportunity to setup a trace context information for the connection.
     // We'll later query the trace information in tc_egress, and serialize it on the TCP packet.
     // Why would we do this here instead of on the tc_egress itself? We could move this on the tc_egress,
     // but we would be modifying all packets, not just for processes which are instrumented,
-    // since we can't reliably tell the process PID in TC or socket filters. 
+    // since we can't reliably tell the process PID in TC or socket filters.
     if (tp_p) {
         tp_p->tp.ts = bpf_ktime_get_ns();
         tp_p->tp.flags = 1;
         tp_p->valid = 1;
-        tp_p->pid = TC_SYN_PACKET_ID; // set an ID up here in case someone else is doing what we are doing
+        tp_p->pid =
+            TC_SYN_PACKET_ID; // set an ID up here in case someone else is doing what we are doing
         urand_bytes(tp_p->tp.span_id, SPAN_ID_SIZE_BYTES);
         tp_info_pid_t *server_tp = find_parent_trace();
         if (server_tp && valid_trace(server_tp->tp.trace_id)) {
             __builtin_memcpy(tp_p->tp.trace_id, server_tp->tp.trace_id, sizeof(tp_p->tp.trace_id));
             __builtin_memcpy(tp_p->tp.parent_id, server_tp->tp.span_id, sizeof(tp_p->tp.parent_id));
         } else {
-            urand_bytes(tp_p->tp.trace_id, TRACE_ID_SIZE_BYTES);        
+            urand_bytes(tp_p->tp.trace_id, TRACE_ID_SIZE_BYTES);
             __builtin_memset(tp_p->tp.parent_id, 0, sizeof(tp_p->tp.span_id));
         }
 
@@ -236,8 +243,7 @@ int BPF_KPROBE(kprobe_tcp_connect, struct sock *sk) {
 // We tap into sys_connect so we can track properly the processes doing
 // HTTP client calls
 SEC("kretprobe/sys_connect")
-int BPF_KRETPROBE(kretprobe_sys_connect, int fd)
-{
+int BPF_KRETPROBE(kretprobe_sys_connect, int fd) {
     u64 id = bpf_get_current_pid_tgid();
 
     if (!valid_pid(id)) {
@@ -267,8 +273,8 @@ int BPF_KRETPROBE(kretprobe_sys_connect, int fd)
         sort_connection_info(&info.p_conn.conn);
         info.p_conn.pid = pid_from_pid_tgid(id);
         info.orig_dport = orig_dport;
-        
-        bpf_map_update_elem(&pid_tid_to_conn, &id, &info, BPF_ANY); // to support SSL 
+
+        bpf_map_update_elem(&pid_tid_to_conn, &id, &info, BPF_ANY); // to support SSL
     }
 
 cleanup:
@@ -276,7 +282,7 @@ cleanup:
     return 0;
 }
 
-// Main HTTP read and write operations are handled with tcp_sendmsg and tcp_recvmsg 
+// Main HTTP read and write operations are handled with tcp_sendmsg and tcp_recvmsg
 
 static __always_inline void *is_ssl_connection(u64 id) {
     void *ssl = 0;
@@ -292,7 +298,7 @@ static __always_inline void *is_ssl_connection(u64 id) {
         if (ssl_args) {
             ssl = (void *)ssl_args->ssl;
         }
-    }         
+    }
 
     return ssl;
 }
@@ -318,9 +324,7 @@ int BPF_KPROBE(kprobe_tcp_sendmsg, struct sock *sk, struct msghdr *msg, size_t s
 
     bpf_dbg_printk("=== kprobe tcp_sendmsg=%d sock=%llx size %d===", id, sk, size);
 
-    send_args_t s_args = {
-        .size = size
-    };
+    send_args_t s_args = {.size = size};
 
     if (parse_sock_info(sk, &s_args.p_conn.conn)) {
         u16 orig_dport = s_args.p_conn.conn.d_port;
@@ -333,7 +337,7 @@ int BPF_KPROBE(kprobe_tcp_sendmsg, struct sock *sk, struct msghdr *msg, size_t s
             if (!ssl) {
                 void *active_ssl = is_active_ssl(&s_args.p_conn);
                 if (!active_ssl) {
-                    u8* buf = iovec_memory();
+                    u8 *buf = iovec_memory();
                     if (buf) {
                         size = read_msghdr_buf(msg, buf, size);
                         if (size) {
@@ -342,7 +346,8 @@ int BPF_KPROBE(kprobe_tcp_sendmsg, struct sock *sk, struct msghdr *msg, size_t s
                             bpf_map_update_elem(&active_send_sock_args, &sock_p, &s_args, BPF_ANY);
 
                             // Logically last for !ssl.
-                            handle_buf_with_connection(ctx, &s_args.p_conn, buf, size, NO_SSL, TCP_SEND, orig_dport);
+                            handle_buf_with_connection(
+                                ctx, &s_args.p_conn, buf, size, NO_SSL, TCP_SEND, orig_dport);
                         } else {
                             bpf_dbg_printk("can't find iovec ptr in msghdr, not tracking sendmsg");
                         }
@@ -391,8 +396,9 @@ int BPF_KRETPROBE(kretprobe_tcp_sendmsg, int sent_len) {
     if (s_args) {
         if (sent_len > 0) {
             update_http_sent_len(&s_args->p_conn, sent_len);
-        } 
-        if (sent_len < MIN_HTTP_SIZE) { // Sometimes app servers don't send close, but small responses back
+        }
+        if (sent_len <
+            MIN_HTTP_SIZE) { // Sometimes app servers don't send close, but small responses back
             finish_possible_delayed_http_request(&s_args->p_conn);
         }
     }
@@ -405,7 +411,7 @@ static __always_inline void ensure_sent_event(u64 id, u64 *sock_p) {
     if (s_args) {
         bpf_dbg_printk("Checking if we need to finish the request per thread id");
         finish_possible_delayed_http_request(&s_args->p_conn);
-    }  // see if we match on another thread, but same sock *
+    } // see if we match on another thread, but same sock *
     s_args = bpf_map_lookup_elem(&active_send_sock_args, sock_p);
     if (s_args) {
         bpf_dbg_printk("Checking if we need to finish the request per socket");
@@ -444,7 +450,8 @@ int BPF_KPROBE(kprobe_tcp_close, struct sock *sk, long timeout) {
 
 //int tcp_recvmsg(struct sock *sk, struct msghdr *msg, size_t len, int flags, int *addr_len)
 SEC("kprobe/tcp_recvmsg")
-int BPF_KPROBE(kprobe_tcp_recvmsg, struct sock *sk, struct msghdr *msg, size_t len, int flags, int *addr_len) {
+int BPF_KPROBE(
+    kprobe_tcp_recvmsg, struct sock *sk, struct msghdr *msg, size_t len, int flags, int *addr_len) {
     u64 id = bpf_get_current_pid_tgid();
 
     if (!valid_pid(id)) {
@@ -505,12 +512,13 @@ static __always_inline int return_recvmsg(void *ctx, u64 id, int copied_len) {
         if (!ssl) {
             void *active_ssl = is_active_ssl(&info);
             if (!active_ssl) {
-                u8* buf = iovec_memory();
+                u8 *buf = iovec_memory();
                 if (buf) {
                     copied_len = read_iovec_ctx(iov_ctx, buf, copied_len);
                     if (copied_len) {
                         // doesn't return must be logically last statement
-                        handle_buf_with_connection(ctx, &info, buf, copied_len, NO_SSL, TCP_RECV, orig_dport);
+                        handle_buf_with_connection(
+                            ctx, &info, buf, copied_len, NO_SSL, TCP_RECV, orig_dport);
                     } else {
                         bpf_dbg_printk("Not copied anything");
                     }
@@ -572,7 +580,7 @@ int socket__http_filter(struct __sk_buff *skb) {
     if (!tcp_close(&tcp) && tcp_empty(&tcp, skb)) {
         return 0;
     }
-    
+
     // we don't want to read the whole buffer for every packed that passes our checks, we read only a bit and check if it's truly HTTP request/response.
     unsigned char buf[MIN_HTTP_SIZE] = {0};
     bpf_skb_load_bytes(skb, tcp.hdr_len, (void *)buf, sizeof(buf));
@@ -583,7 +591,10 @@ int socket__http_filter(struct __sk_buff *skb) {
     }
 
     u8 packet_type = 0;
-    if (is_http(buf, len, &packet_type)) { // we must check tcp_close second, a packet can be a close and a response      
+    if (is_http(
+            buf,
+            len,
+            &packet_type)) { // we must check tcp_close second, a packet can be a close and a response
         //dbg_print_http_connection_info(&conn); // commented out since GitHub CI doesn't like this call
         sort_connection_info(&conn);
 
@@ -591,7 +602,7 @@ int socket__http_filter(struct __sk_buff *skb) {
         if (!info) {
             return 0;
         }
-        
+
         __builtin_memcpy(&info->conn_info, &conn, sizeof(conn));
 
         if (packet_type == PACKET_TYPE_REQUEST) {
@@ -605,8 +616,8 @@ int socket__http_filter(struct __sk_buff *skb) {
             //dbg_print_http_connection_info(&conn);
             set_fallback_http_info(info, &conn, skb->len - tcp.hdr_len);
 
-            // The code below is looking to see if we have recorded black-box trace info on 
-            // another interface. We do this for client calls, where essentially the original 
+            // The code below is looking to see if we have recorded black-box trace info on
+            // another interface. We do this for client calls, where essentially the original
             // request may go out on one interface, but then get re-routed to another, which is
             // common with some k8s environments.
             //
@@ -630,7 +641,8 @@ int socket__http_filter(struct __sk_buff *skb) {
                 if (prev_conn) {
                     tp_info_pid_t *trace_info = trace_info_for_connection(prev_conn);
                     if (trace_info) {
-                        if (current_immediate_epoch(trace_info->tp.ts) == current_immediate_epoch(bpf_ktime_get_ns())) {
+                        if (current_immediate_epoch(trace_info->tp.ts) ==
+                            current_immediate_epoch(bpf_ktime_get_ns())) {
                             //bpf_dbg_printk("Found trace info on another interface, setting it up for this connection");
                             tp_info_pid_t other_info = {0};
                             __builtin_memcpy(&other_info, trace_info, sizeof(tp_info_pid_t));
@@ -669,7 +681,7 @@ int BPF_KRETPROBE(kretprobe_sys_clone, int tid) {
 
     bpf_dbg_printk("sys_clone_ret %d -> %d", id, tid);
     bpf_map_update_elem(&clone_map, &child, &parent, BPF_ANY);
-    
+
     return 0;
 }
 
@@ -684,8 +696,9 @@ int BPF_KPROBE(kprobe_sys_exit, int status) {
     trace_key_t task = {0};
     task_tid(&task.p_key);
 
-    bpf_dbg_printk("sys_exit %d, pid=%d, valid_pid(id)=%d", id, pid_from_pid_tgid(id), valid_pid(id));
- 
+    bpf_dbg_printk(
+        "sys_exit %d, pid=%d, valid_pid(id)=%d", id, pid_from_pid_tgid(id), valid_pid(id));
+
     // handle the case when the thread terminates without closing a socket
     send_args_t *s_args = bpf_map_lookup_elem(&active_send_args, &id);
     if (s_args) {
@@ -695,10 +708,10 @@ int BPF_KPROBE(kprobe_sys_exit, int status) {
     }
 
     bpf_map_delete_elem(&clone_map, &task.p_key);
-    // This won't delete trace ids for traces with extra_id, like NodeJS. But, 
-    // we expect that it doesn't matter, since NodeJS main thread won't exit. 
+    // This won't delete trace ids for traces with extra_id, like NodeJS. But,
+    // we expect that it doesn't matter, since NodeJS main thread won't exit.
     bpf_map_delete_elem(&server_traces, &task);
-    
+
     return 0;
 }
 
@@ -732,7 +745,7 @@ int app_ingress(struct __sk_buff *skb) {
         return 0;
     }
 
-    s32 len = skb->len-sizeof(u32);
+    s32 len = skb->len - sizeof(u32);
     bpf_printk("Received SYN packed len = %d, offset = %d, hdr_len %d", skb->len, len, tcp.hdr_len);
 
     unsigned char tp_buf[TP_MAX_VAL_LENGTH];
@@ -784,11 +797,12 @@ int app_egress(struct __sk_buff *skb) {
             offset_ip_checksum = ETH_HLEN + offsetof(struct iphdr, check);
         } else {
             offset_ip_tot_len = ETH_HLEN + offsetof(struct ipv6hdr, payload_len);
-        }            
+        }
 
         u16 new_tot_len = bpf_htons(bpf_ntohs(tcp.tot_len) + sizeof(tp_info_pid_t));
 
-        bpf_printk("tot_len = %u, new_tot_len = %u", bpf_ntohs(tcp.tot_len), bpf_ntohs(new_tot_len));
+        bpf_printk(
+            "tot_len = %u, new_tot_len = %u", bpf_ntohs(tcp.tot_len), bpf_ntohs(new_tot_len));
         bpf_printk("h_proto = %u, skb->len = %u", tcp.h_proto, skb->len);
 
         if (offset_ip_checksum) {

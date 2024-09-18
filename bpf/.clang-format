@@ -1,5 +1,6 @@
 {
   BasedOnStyle: LLVM,
+  BreakStringLiterals: true,
   AllowShortFunctionsOnASingleLine: InlineOnly,
   ColumnLimit: 100,
   IndentWidth: 4,

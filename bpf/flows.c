@@ -26,14 +26,14 @@
 
 // sets the TCP header flags for connection information
 static inline void set_flags(struct tcphdr *th, u16 *flags) {
-    //If both ACK and SYN are set, then it is server -> client communication during 3-way handshake. 
+    //If both ACK and SYN are set, then it is server -> client communication during 3-way handshake.
     if (th->ack && th->syn) {
         *flags |= SYN_ACK_FLAG;
-    } else if (th->ack && th->fin ) {
+    } else if (th->ack && th->fin) {
         // If both ACK and FIN are set, then it is graceful termination from server.
         *flags |= FIN_ACK_FLAG;
-    } else if (th->ack && th->rst ) {
-        // If both ACK and RST are set, then it is abrupt connection termination. 
+    } else if (th->ack && th->rst) {
+        // If both ACK and RST are set, then it is abrupt connection termination.
         *flags |= RST_ACK_FLAG;
     } else if (th->fin) {
         *flags |= FIN_FLAG;
@@ -199,18 +199,18 @@ static inline int flow_monitor(struct __sk_buff *skb) {
         };
 
         u8 *direction = (u8 *)bpf_map_lookup_elem(&flow_directions, &id);
-        if(direction == NULL) {
+        if (direction == NULL) {
             // Calculate direction based on first flag received
             // SYN and ACK mean someone else initiated the connection and this is the INGRESS direction
-            if((flags & SYN_ACK_FLAG) == SYN_ACK_FLAG) {
+            if ((flags & SYN_ACK_FLAG) == SYN_ACK_FLAG) {
                 new_flow.iface_direction = INGRESS;
             }
             // SYN only means we initiated the connection and this is the EGRESS direction
-            else if((flags & SYN_FLAG) == SYN_FLAG) {
+            else if ((flags & SYN_FLAG) == SYN_FLAG) {
                 new_flow.iface_direction = EGRESS;
             }
             // save, when direction was calculated based on TCP flag
-            if(new_flow.iface_direction != UNKNOWN) {
+            if (new_flow.iface_direction != UNKNOWN) {
                 // errors are intentionally omitted
                 bpf_map_update_elem(&flow_directions, &id, &new_flow.iface_direction, BPF_NOEXIST);
             }
@@ -242,7 +242,8 @@ static inline int flow_monitor(struct __sk_buff *skb) {
             }
 
             new_flow.errno = -ret;
-            flow_record *record = (flow_record *)bpf_ringbuf_reserve(&direct_flows, sizeof(flow_record), 0);
+            flow_record *record =
+                (flow_record *)bpf_ringbuf_reserve(&direct_flows, sizeof(flow_record), 0);
             if (!record) {
                 if (trace_messages) {
                     bpf_dbg_printk("couldn't reserve space in the ringbuf. Dropping flow");
@@ -257,7 +258,7 @@ static inline int flow_monitor(struct __sk_buff *skb) {
 
 cleanup:
     // finally, when flow receives FIN or RST, clean flow_directions
-    if(flags & FIN_FLAG || flags & RST_FLAG || flags & FIN_ACK_FLAG || flags & RST_ACK_FLAG) {
+    if (flags & FIN_FLAG || flags & RST_FLAG || flags & FIN_ACK_FLAG || flags & RST_ACK_FLAG) {
         bpf_map_delete_elem(&flow_directions, &id);
     }
     return TC_ACT_OK;

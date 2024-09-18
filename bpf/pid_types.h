@@ -6,19 +6,20 @@
 #include "bpf_core_read.h"
 
 typedef struct pid_key {
-    u32 pid;        // pid as seen by the userspace (for example, inside its container)
+    u32 pid; // pid as seen by the userspace (for example, inside its container)
     u32 ns;  // pids namespace for the process
 } __attribute__((packed)) pid_key_t;
 
 typedef struct pid_info_t {
-    u32 host_pid;   // pid as seen by the root cgroup (and by BPF)
-    u32 user_pid;   // pid as seen by the userspace (for example, inside its container)
-    u32 ns;  // pids namespace for the process
+    u32 host_pid; // pid as seen by the root cgroup (and by BPF)
+    u32 user_pid; // pid as seen by the userspace (for example, inside its container)
+    u32 ns;       // pids namespace for the process
 } __attribute__((packed)) pid_info;
 
 // Good resource on this: https://mozillazg.com/2022/05/ebpf-libbpfgo-get-process-info-en.html
 // Using bpf_get_ns_current_pid_tgid is too restrictive for us
-static __always_inline void ns_pid_ppid(struct task_struct *task, int *pid, int *ppid, u32 *pid_ns_id) {
+static __always_inline void
+ns_pid_ppid(struct task_struct *task, int *pid, int *ppid, u32 *pid_ns_id) {
     struct upid upid;
 
     unsigned int level = BPF_CORE_READ(task, nsproxy, pid_ns_for_children, level);

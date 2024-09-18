@@ -16,7 +16,8 @@
 #include "utils.h"
 #include "bpf_dbg.h"
 
-static __inline int read_go_byte_arr(char *name, void *base_ptr, u8 offset, void *field, u64 *size_ptr, u64 max_size) {
+static __inline int
+read_go_byte_arr(char *name, void *base_ptr, u8 offset, void *field, u64 *size_ptr, u64 max_size) {
     void *ptr = 0;
     if (bpf_probe_read(&ptr, sizeof(ptr), (void *)(base_ptr + offset)) != 0) {
         bpf_dbg_printk("can't read ptr for %s", name);

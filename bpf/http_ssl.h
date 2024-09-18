@@ -10,7 +10,7 @@
 // temporary
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, u64);   // the pid_tid 
+    __type(key, u64);   // the pid_tid
     __type(value, u64); // the SSL struct pointer
     __uint(max_entries, MAX_CONCURRENT_SHARED_REQUESTS);
     __uint(pinning, LIBBPF_PIN_BY_NAME);
@@ -21,7 +21,7 @@ struct {
 // when it's sandwitched between ssl_handshake entry/exit.
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, u64);   // the SSL struct pointer
+    __type(key, u64);                         // the SSL struct pointer
     __type(value, ssl_pid_connection_info_t); // the pointer to the file descriptor matching ssl
     __uint(max_entries, MAX_CONCURRENT_SHARED_REQUESTS);
     __uint(pinning, LIBBPF_PIN_BY_NAME);
@@ -32,14 +32,14 @@ struct {
 // in case we miss SSL_do_handshake
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, u64);   // the pid-tid pair
+    __type(key, u64);                         // the pid-tid pair
     __type(value, ssl_pid_connection_info_t); // the pointer to the file descriptor matching ssl
     __uint(max_entries, MAX_CONCURRENT_SHARED_REQUESTS);
     __uint(pinning, LIBBPF_PIN_BY_NAME);
 } pid_tid_to_conn SEC(".maps");
 
 // LRU map which holds onto the mapping of an ssl pointer to pid-tid,
-// we clean-it up when we lookup by ssl. It's setup by SSL_read for cases where frameworks 
+// we clean-it up when we lookup by ssl. It's setup by SSL_read for cases where frameworks
 // process SSL requests on separate thread pools, e.g. Ruby on Rails
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
@@ -50,14 +50,14 @@ struct {
 
 // Temporary tracking of ssl_read/ssl_read_ex and ssl_write/ssl_write_ex arguments
 typedef struct ssl_args {
-    u64 ssl; // SSL struct pointer
-    u64 buf; // pointer to the buffer we read into
+    u64 ssl;     // SSL struct pointer
+    u64 buf;     // pointer to the buffer we read into
     u64 len_ptr; // size_t pointer of the read/written bytes, used only by SSL_read_ex and SSL_write_ex
 } ssl_args_t;
 
 // TODO: we should be able to make this into a single map. It's not a big deal because they are really only
 // tracking the parameters of SSL_read and SSL_write, so their memory consumption is minimal. If we can be
-// 100% certain that SSL_read will never do an SSL_write, then these can be a single map. 
+// 100% certain that SSL_read will never do an SSL_write, then these can be a single map.
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __uint(max_entries, MAX_CONCURRENT_SHARED_REQUESTS);
@@ -79,7 +79,8 @@ static __always_inline void cleanup_ssl_trace_info(http_info_t *info, void *ssl)
         ssl_pid_connection_info_t *ssl_info = bpf_map_lookup_elem(&ssl_to_conn, &ssl);
 
         if (ssl_info) {
-            bpf_dbg_printk("Looking to delete server trace for ssl = %llx, info->type = %d", ssl, info->type);
+            bpf_dbg_printk(
+                "Looking to delete server trace for ssl = %llx, info->type = %d", ssl, info->type);
             //dbg_print_http_connection_info(&ssl_info->conn.conn); // commented out since GitHub CI doesn't like this call
             trace_key_t t_key = {0};
             t_key.extra_id = info->extra_id;
@@ -93,7 +94,8 @@ static __always_inline void cleanup_ssl_trace_info(http_info_t *info, void *ssl)
     bpf_map_delete_elem(&ssl_to_conn, &ssl);
 }
 
-static __always_inline void cleanup_ssl_server_trace(http_info_t *info, void *ssl, void *buf, u32 len) {
+static __always_inline void
+cleanup_ssl_server_trace(http_info_t *info, void *ssl, void *buf, u32 len) {
     if (info && http_will_complete(info, buf, len)) {
         cleanup_ssl_trace_info(info, ssl);
     }
@@ -105,20 +107,25 @@ static __always_inline void cleanup_complete_ssl_server_trace(http_info_t *info,
     }
 }
 
-static __always_inline void finish_possible_delayed_tls_http_request(pid_connection_info_t *pid_conn, void *ssl) {
+static __always_inline void
+finish_possible_delayed_tls_http_request(pid_connection_info_t *pid_conn, void *ssl) {
     http_info_t *info = bpf_map_lookup_elem(&ongoing_http, pid_conn);
-    if (info) {        
+    if (info) {
         cleanup_complete_ssl_server_trace(info, ssl);
-        finish_http(info, pid_conn);        
+        finish_http(info, pid_conn);
     }
 }
 
-static __always_inline void cleanup_trace_info_for_delayed_trace(pid_connection_info_t *pid_conn, void *ssl, void *buf, u32 len) {
+static __always_inline void cleanup_trace_info_for_delayed_trace(pid_connection_info_t *pid_conn,
+                                                                 void *ssl,
+                                                                 void *buf,
+                                                                 u32 len) {
     http_info_t *info = bpf_map_lookup_elem(&ongoing_http, pid_conn);
     cleanup_ssl_server_trace(info, ssl, buf, len);
 }
 
-static __always_inline void handle_ssl_buf(void *ctx, u64 id, ssl_args_t *args, int bytes_len, u8 direction) {
+static __always_inline void
+handle_ssl_buf(void *ctx, u64 id, ssl_args_t *args, int bytes_len, u8 direction) {
     if (args && bytes_len > 0) {
         void *ssl = ((void *)args->ssl);
         u64 ssl_ptr = (u64)ssl;
@@ -140,7 +147,8 @@ static __always_inline void handle_ssl_buf(void *ctx, u64 id, ssl_args_t *args, 
                     u64 pid_tid = *pid_tid_ptr;
 
                     conn = bpf_map_lookup_elem(&pid_tid_to_conn, &pid_tid);
-                    bpf_dbg_printk("Separate pool lookup ssl=%llx, pid=%d, conn=%llx", ssl_ptr, pid_tid, conn);
+                    bpf_dbg_printk(
+                        "Separate pool lookup ssl=%llx, pid=%d, conn=%llx", ssl_ptr, pid_tid, conn);
                 } else {
                     bpf_dbg_printk("Other thread lookup failed for ssl=%llx", ssl_ptr);
                 }
@@ -149,7 +157,7 @@ static __always_inline void handle_ssl_buf(void *ctx, u64 id, ssl_args_t *args, 
             // If we found a connection setup by tcp_rcv_established, which means
             // we missed a SSL_do_handshake, update our ssl to connection map to be
             // used by the rest of the SSL lifecycle. We shouldn't rely on the SSL_write
-            // being on the same thread as the SSL_read. 
+            // being on the same thread as the SSL_read.
             if (conn) {
                 bpf_map_delete_elem(&pid_tid_to_conn, &id);
                 ssl_pid_connection_info_t c;
@@ -185,13 +193,18 @@ static __always_inline void handle_ssl_buf(void *ctx, u64 id, ssl_args_t *args, 
             // }
             bpf_map_update_elem(&active_ssl_connections, &conn->p_conn, &ssl_ptr, BPF_ANY);
 
-
             // We should attempt to clean up the server trace immediately. The cleanup information
             // is keyed of the *ssl, so when it's delayed we might have different *ssl on the same
             // connection.
             cleanup_trace_info_for_delayed_trace(&conn->p_conn, ssl, (void *)args->buf, bytes_len);
             // must be last, doesn't return
-            handle_buf_with_connection(ctx, &conn->p_conn, (void *)args->buf, bytes_len, WITH_SSL, direction, conn->orig_dport);
+            handle_buf_with_connection(ctx,
+                                       &conn->p_conn,
+                                       (void *)args->buf,
+                                       bytes_len,
+                                       WITH_SSL,
+                                       direction,
+                                       conn->orig_dport);
         } else {
             bpf_dbg_printk("No connection info! This is a bug.");
         }

@@ -34,7 +34,8 @@ typedef __u16 u16;
 typedef __u32 u32;
 typedef __u64 u64;
 
-typedef struct flow_metrics_t {
+typedef struct flow_metrics_t
+{  
     u32 packets;
     u64 bytes;
     // start_mono_time_ts and end_mono_time_ts are the start and end times as system monotonic timestamps

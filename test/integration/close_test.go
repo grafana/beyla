@@ -11,7 +11,7 @@ import (
 
 // prerequisite: the testoutput/run folder was empty before starting the tests
 func testBPFPinningMountedWithCount(t *testing.T, expectedCount int) {
-	entries, err := os.ReadDir(pathVarRun)
+	_, err := os.ReadDir(pathVarRun)
 	require.NoError(t, err)
 }
 

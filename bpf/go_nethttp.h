@@ -114,6 +114,8 @@ int uprobe_ServeHTTP(struct pt_regs *ctx) {
             goto done;
         }
 
+        bpf_dbg_printk("path: %s", invocation.path);
+
         res = bpf_probe_read(&invocation.content_length, sizeof(invocation.content_length), (void *)(req + go_offset_of(ot, _content_length_ptr_pos)));
         if (res) {
             bpf_dbg_printk("can't read http Request.ContentLength");
@@ -318,6 +320,8 @@ static __always_inline void roundTripStartHelper(struct pt_regs *ctx) {
         return;
     }
 
+    bpf_dbg_printk("path: %s", trace.path);
+
     // Write event
     if (bpf_map_update_elem(&ongoing_http_client_requests, &goroutine_addr, &invocation, BPF_ANY)) {
         bpf_dbg_printk("can't update http client map element");
@@ -456,7 +460,7 @@ int uprobe_writeSubset(struct pt_regs *ctx) {
     }
     
     s64 size = 0;
-    bpf_probe_read(&size, sizeof(s64), (void *)(io_writer_addr + go_offset_of(ot, io_writer_buf_ptr_pos) + 8)); // grab size
+    bpf_probe_read(&size, sizeof(s64), (void *)(io_writer_addr + io_writer_buf_ptr_pos + 8)); // grab size
 
     s64 len = 0;
     bpf_probe_read(&len, sizeof(s64), (void *)(io_writer_addr + go_offset_of(ot, _io_writer_n_pos))); // grab len

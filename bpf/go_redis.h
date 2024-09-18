@@ -101,7 +101,7 @@ int uprobe_redis_with_writer(struct pt_regs *ctx) {
     if (req) {
         void *bw_ptr = 0;
 
-        bpf_probe_read(&bw_ptr, sizeof(void *), cn_ptr + go_offset_of(ot, _redis_conn_bw_pos));
+        bpf_probe_read(&bw_ptr, sizeof(void *), cn_ptr + go_offset_of(ot, (go_offset){.v=_redis_conn_bw_pos}));
         bpf_dbg_printk("bw_ptr %llx", bw_ptr);
 
         bpf_map_update_elem(&redis_writes, &goroutine_addr, &bw_ptr, BPF_ANY);
@@ -143,7 +143,7 @@ int uprobe_redis_with_writer_ret(struct pt_regs *ctx) {
             if (bw) {
                 bpf_dbg_printk("Found bw %llx", bw);
 
-                u64 io_writer_buf_ptr_pos = go_offset_of(ot, _io_writer_buf_ptr_pos);
+                u64 io_writer_buf_ptr_pos = go_offset_of(ot, (go_offset){.v=_io_writer_buf_ptr_pos});
 
                 void *buf = 0;
                 bpf_probe_read(&buf, sizeof(void *), bw + io_writer_buf_ptr_pos);

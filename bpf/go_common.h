@@ -216,10 +216,10 @@ static __always_inline void read_ip_and_port(u8 *dst_ip, u16 *dst_port, void *sr
     void *addr_ip = 0;
     off_table_t *ot = get_offsets_table();
 
-    bpf_probe_read(dst_port, sizeof(u16), (void *)(src + go_offset_of(ot, _tcp_addr_port_ptr_pos)));
-    bpf_probe_read(&addr_ip, sizeof(addr_ip), (void *)(src + go_offset_of(ot, _tcp_addr_ip_ptr_pos)));
+    bpf_probe_read(dst_port, sizeof(u16), (void *)(src + go_offset_of(ot, (go_offset){.v=_tcp_addr_port_ptr_pos})));
+    bpf_probe_read(&addr_ip, sizeof(addr_ip), (void *)(src + go_offset_of(ot, (go_offset){.v=_tcp_addr_ip_ptr_pos})));
     if (addr_ip) {
-        bpf_probe_read(&addr_len, sizeof(addr_len), (void *)(src + go_offset_of(ot, _tcp_addr_ip_ptr_pos) + 8));
+        bpf_probe_read(&addr_len, sizeof(addr_len), (void *)(src + go_offset_of(ot, (go_offset){.v=_tcp_addr_ip_ptr_pos}) + 8));
         if (addr_len == 4) {
             __builtin_memcpy(dst_ip, ip4ip6_prefix, sizeof(ip4ip6_prefix));
             bpf_probe_read(dst_ip + sizeof(ip4ip6_prefix), 4, addr_ip);
@@ -234,10 +234,10 @@ static __always_inline u8 get_conn_info_from_fd(void *fd_ptr, connection_info_t 
         void *laddr_ptr = 0;
         void *raddr_ptr = 0;
         off_table_t *ot = get_offsets_table();
-        u64 fd_laddr_pos = go_offset_of(ot, _fd_laddr_pos);
+        u64 fd_laddr_pos = go_offset_of(ot, (go_offset){.v=_fd_laddr_pos});
 
         bpf_probe_read(&laddr_ptr, sizeof(laddr_ptr), (void *)(fd_ptr + fd_laddr_pos + 8)); // find laddr
-        bpf_probe_read(&raddr_ptr, sizeof(raddr_ptr), (void *)(fd_ptr + go_offset_of(ot, _fd_raddr_pos) + 8)); // find raddr
+        bpf_probe_read(&raddr_ptr, sizeof(raddr_ptr), (void *)(fd_ptr + go_offset_of(ot, (go_offset){.v=_fd_raddr_pos}) + 8)); // find raddr
         
         bpf_dbg_printk("laddr_ptr %llx, laddr %llx, raddr %llx", fd_ptr + fd_laddr_pos + 8, laddr_ptr, raddr_ptr);
         if (laddr_ptr && raddr_ptr) {
@@ -268,7 +268,7 @@ static __always_inline u8 get_conn_info(void *conn_ptr, connection_info_t *info)
         void *fd_ptr = 0;
         off_table_t *ot = get_offsets_table();
 
-        bpf_probe_read(&fd_ptr, sizeof(fd_ptr), (void *)(conn_ptr + go_offset_of(ot, _conn_fd_pos))); // find fd
+        bpf_probe_read(&fd_ptr, sizeof(fd_ptr), (void *)(conn_ptr + go_offset_of(ot, (go_offset){.v=_conn_fd_pos}))); // find fd
 
         bpf_dbg_printk("Found fd ptr %llx", fd_ptr);
 

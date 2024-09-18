@@ -88,7 +88,7 @@ int uprobe_writer_produce(struct pt_regs *ctx) {
 
     if (w_ptr) {
         void *topic_ptr = 0;
-        bpf_probe_read_user(&topic_ptr, sizeof(void *), w_ptr + go_offset_of(ot, _kafka_go_writer_topic_pos));
+        bpf_probe_read_user(&topic_ptr, sizeof(void *), w_ptr + go_offset_of(ot, (go_offset){.v=_kafka_go_writer_topic_pos}));
 
         bpf_dbg_printk("topic_ptr %llx", topic_ptr);
         if (topic_ptr) {
@@ -148,7 +148,7 @@ int uprobe_protocol_roundtrip(struct pt_regs *ctx) {
         bpf_dbg_printk("Found topic %llx", topic_ptr);
         if (topic_ptr) {
             produce_req_t p = {
-                .conn_ptr = ((u64)rw_ptr) + go_offset_of(ot, _kafka_go_protocol_conn_pos),
+                .conn_ptr = ((u64)rw_ptr) + go_offset_of(ot, (go_offset){.v=_kafka_go_protocol_conn_pos}),
                 .msg_ptr = (u64)msg_ptr,
                 .start_monotime_ns = bpf_ktime_get_ns(),
             };
@@ -227,7 +227,7 @@ int uprobe_reader_read(struct pt_regs *ctx) {
         };
 
         void *topic_ptr = 0;
-        bpf_probe_read_user(&topic_ptr, sizeof(void *), r_ptr + go_offset_of(ot, _kafka_go_reader_topic_pos));
+        bpf_probe_read_user(&topic_ptr, sizeof(void *), r_ptr + go_offset_of(ot, (go_offset){.v=_kafka_go_reader_topic_pos}));
 
         bpf_dbg_printk("topic_ptr %llx", topic_ptr);
         if (topic_ptr) {

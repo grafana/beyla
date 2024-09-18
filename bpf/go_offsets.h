@@ -57,6 +57,10 @@ typedef enum {
     _sarama_broker_conn_pos,
     _sarama_bufconn_conn_pos,
     _last_go_offset,
+} go_offset_const;
+
+typedef struct go_offset_t {
+  go_offset_const v;
 } go_offset;
 
 typedef struct off_table {
@@ -77,8 +81,8 @@ static __always_inline off_table_t* get_offsets_table() {
 }
 
 static __always_inline u64 go_offset_of(off_table_t *ot, go_offset off) {    
-    if (ot && off < _last_go_offset) {
-        return ot->table[off];
+    if (ot && off.v < _last_go_offset) {
+        return ot->table[off.v];
     }
 
     return -1;

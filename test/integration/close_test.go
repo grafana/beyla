@@ -10,7 +10,7 @@ import (
 )
 
 // prerequisite: the testoutput/run folder was empty before starting the tests
-func testBPFPinningMountedWithCount(t *testing.T, expectedCount int) {
+func testBPFPinningMountedWithCount(t *testing.T, _ int) {
 	_, err := os.ReadDir(pathVarRun)
 	require.NoError(t, err)
 }

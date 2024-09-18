@@ -8,12 +8,14 @@
 #include "pid_types.h"
 #include "bpf_dbg.h"
 
-#define FULL_BUF_SIZE 192 // should be enough for most URLs, we may need to extend it if not. Must be multiple of 16 for the copy to work.
+#define FULL_BUF_SIZE                                                                              \
+    192 // should be enough for most URLs, we may need to extend it if not. Must be multiple of 16 for the copy to work.
 #define TRACE_BUF_SIZE 1024 // must be power of 2, we do an & to limit the buffer size
 #define KPROBES_HTTP2_BUF_SIZE 256
 #define KPROBES_HTTP2_RET_BUF_SIZE 64
 
-#define KPROBES_LARGE_RESPONSE_LEN 100000 // 100K and above we try to track the response actual time with kretprobes
+#define KPROBES_LARGE_RESPONSE_LEN                                                                 \
+    100000 // 100K and above we try to track the response actual time with kretprobes
 
 #define K_TCP_MAX_LEN 256
 #define K_TCP_RES_LEN 128
@@ -21,13 +23,13 @@
 #define CONN_INFO_FLAG_TRACE 0x1
 
 #define TRACE_ID_SIZE_BYTES 16
-#define SPAN_ID_SIZE_BYTES   8
-#define FLAGS_SIZE_BYTES     1
-#define TRACE_ID_CHAR_LEN   32
-#define SPAN_ID_CHAR_LEN    16
-#define FLAGS_CHAR_LEN       2
-#define TP_MAX_VAL_LENGTH   55
-#define TP_MAX_KEY_LENGTH   11
+#define SPAN_ID_SIZE_BYTES 8
+#define FLAGS_SIZE_BYTES 1
+#define TRACE_ID_CHAR_LEN 32
+#define SPAN_ID_CHAR_LEN 16
+#define FLAGS_CHAR_LEN 2
+#define TP_MAX_VAL_LENGTH 55
+#define TP_MAX_KEY_LENGTH 11
 
 #define TCP_SEND 1
 #define TCP_RECV 0
@@ -35,21 +37,22 @@
 #define NO_SSL 0
 #define WITH_SSL 1
 
-#define MIN_HTTP2_SIZE 24 // Preface PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n https://datatracker.ietf.org/doc/html/rfc7540#section-3.5
+#define MIN_HTTP2_SIZE                                                                             \
+    24 // Preface PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n https://datatracker.ietf.org/doc/html/rfc7540#section-3.5
 
-// Struct to keep information on the connections in flight 
+// Struct to keep information on the connections in flight
 // s = source, d = destination
 // h = high word, l = low word
 // used as hashmap key, must be 4 byte aligned?
 typedef struct http_connection_info {
-    u8  s_addr[IP_V6_ADDR_LEN];
-    u8  d_addr[IP_V6_ADDR_LEN];
+    u8 s_addr[IP_V6_ADDR_LEN];
+    u8 d_addr[IP_V6_ADDR_LEN];
     u16 s_port;
     u16 d_port;
 } connection_info_t;
 
 typedef struct http_partial_connection_info {
-    u8  s_addr[IP_V6_ADDR_LEN];
+    u8 s_addr[IP_V6_ADDR_LEN];
     u16 s_port;
     u16 d_port;
     u32 tcp_seq;
@@ -70,13 +73,13 @@ typedef struct tp_info {
     unsigned char span_id[SPAN_ID_SIZE_BYTES];
     unsigned char parent_id[SPAN_ID_SIZE_BYTES];
     u64 ts;
-    u8  flags;
+    u8 flags;
 } tp_info_t;
 
 typedef struct tp_info_pid {
     tp_info_t tp;
     u32 pid;
-    u8  valid;
+    u8 valid;
 } tp_info_pid_t;
 
 // Here we keep the information that is sent on the ring buffer
@@ -85,12 +88,13 @@ typedef struct http_info {
     connection_info_t conn_info;
     u64 start_monotime_ns;
     u64 end_monotime_ns;
-    unsigned char buf[FULL_BUF_SIZE] __attribute__ ((aligned (8))); // ringbuffer memcpy complains unless this is 8 byte aligned
+    unsigned char buf[FULL_BUF_SIZE]
+        __attribute__((aligned(8))); // ringbuffer memcpy complains unless this is 8 byte aligned
     u32 len;
     u32 resp_len;
-    u16 status;    
-    u8  type;
-    u8  ssl;
+    u16 status;
+    u8 type;
+    u8 ssl;
     // we need this for system wide tracking so we can find the service name
     // also to filter traces from unsolicited processes that share the executable
     // with other instrumented processes
@@ -106,12 +110,14 @@ typedef struct tcp_req {
     connection_info_t conn_info;
     u64 start_monotime_ns;
     u64 end_monotime_ns;
-    unsigned char buf[K_TCP_MAX_LEN] __attribute__ ((aligned (8))); // ringbuffer memcpy complains unless this is 8 byte aligned
-    unsigned char rbuf[K_TCP_RES_LEN] __attribute__ ((aligned (8))); // ringbuffer memcpy complains unless this is 8 byte aligned
+    unsigned char buf[K_TCP_MAX_LEN]
+        __attribute__((aligned(8))); // ringbuffer memcpy complains unless this is 8 byte aligned
+    unsigned char rbuf[K_TCP_RES_LEN]
+        __attribute__((aligned(8))); // ringbuffer memcpy complains unless this is 8 byte aligned
     u32 len;
     u32 resp_len;
-    u8  ssl;
-    u8  direction;
+    u8 ssl;
+    u8 direction;
     // we need this for system wide tracking so we can find the service name
     // also to filter traces from unsolicited processes that share the executable
     // with other instrumented processes
@@ -123,9 +129,9 @@ typedef struct call_protocol_args {
     pid_connection_info_t pid_conn;
     unsigned char small_buf[MIN_HTTP2_SIZE];
     u64 u_buf;
-    int bytes_len; 
+    int bytes_len;
     u8 ssl;
-    u8 direction; 
+    u8 direction;
     u16 orig_dport;
     u8 packet_type;
 } call_protocol_args_t;
@@ -136,13 +142,13 @@ typedef struct protocol_info {
     u32 seq;
     u16 h_proto;
     u16 tot_len;
-    u8  flags;
+    u8 flags;
 } protocol_info_t;
 
 // Here we keep information on the ongoing filtered connections, PID/TID and connection type
 typedef struct http_connection_metadata {
     pid_info pid;
-    u8  type;
+    u8 type;
 } http_connection_metadata_t;
 
 typedef struct http2_conn_stream {
@@ -151,11 +157,11 @@ typedef struct http2_conn_stream {
 } http2_conn_stream_t;
 
 typedef struct http2_grpc_request {
-    u8  flags;                           // Must be first
+    u8 flags; // Must be first
     connection_info_t conn_info;
-    u8  data[KPROBES_HTTP2_BUF_SIZE];
-    u8  ret_data[KPROBES_HTTP2_RET_BUF_SIZE];
-    u8  type;
+    u8 data[KPROBES_HTTP2_BUF_SIZE];
+    u8 ret_data[KPROBES_HTTP2_RET_BUF_SIZE];
+    u8 type;
     int len;
     u64 start_monotime_ns;
     u64 end_monotime_ns;
@@ -176,13 +182,13 @@ const u8 ip4ip6_prefix[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff};
 #ifdef BPF_DEBUG
 static __always_inline void dbg_print_http_connection_info(connection_info_t *info) {
     bpf_dbg_printk("[conn] s_h = %llx, s_l = %llx, s_port=%d",
-               *(u64 *)(&info->s_addr),
-               *(u64 *)(&info->s_addr[8]),
-               info->s_port);
+                   *(u64 *)(&info->s_addr),
+                   *(u64 *)(&info->s_addr[8]),
+                   info->s_port);
     bpf_dbg_printk("[conn] d_h = %llx, d_l = %llx, d_port=%d",
-               *(u64 *)(&info->d_addr),
-               *(u64 *)(&info->d_addr[8]),
-               info->d_port);
+                   *(u64 *)(&info->d_addr),
+                   *(u64 *)(&info->d_addr[8]),
+                   info->d_port);
 }
 #else
 static __always_inline void dbg_print_http_connection_info(connection_info_t *info) {

@@ -36,7 +36,7 @@ int BPF_UPROBE(uprobe_ssl_do_handshake, void *s) {
 SEC("uretprobe/libssl.so:SSL_do_handshake")
 int BPF_URETPROBE(uretprobe_ssl_do_handshake, int ret) {
     u64 id = bpf_get_current_pid_tgid();
-    
+
     if (!valid_pid(id)) {
         return 0;
     }
@@ -72,7 +72,10 @@ int BPF_UPROBE(uprobe_ssl_read, void *ssl, const void *buf, int num) {
     args.len_ptr = 0;
 
     bpf_map_update_elem(&active_ssl_read_args, &id, &args, BPF_ANY);
-    bpf_map_update_elem(&ssl_to_pid_tid, &args.ssl, &id, BPF_NOEXIST); // we must not overwrite here, remember the original thread
+    bpf_map_update_elem(&ssl_to_pid_tid,
+                        &args.ssl,
+                        &id,
+                        BPF_NOEXIST); // we must not overwrite here, remember the original thread
 
     return 0;
 }
@@ -117,7 +120,10 @@ int BPF_UPROBE(uprobe_ssl_read_ex, void *ssl, const void *buf, int num, size_t *
     args.len_ptr = (u64)readbytes;
 
     bpf_map_update_elem(&active_ssl_read_args, &id, &args, BPF_ANY);
-    bpf_map_update_elem(&ssl_to_pid_tid, &args.ssl, &id, BPF_NOEXIST); // we must not overwrite here, remember the original thread
+    bpf_map_update_elem(&ssl_to_pid_tid,
+                        &args.ssl,
+                        &id,
+                        BPF_NOEXIST); // we must not overwrite here, remember the original thread
 
     return 0;
 }

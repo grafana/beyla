@@ -31,12 +31,10 @@ struct {
 } ongoing_sql_queries SEC(".maps");
 
 static __always_inline void set_sql_info(void *goroutine_addr, void *sql_param, void *query_len) {
-    sql_func_invocation_t invocation = {
-        .start_monotime_ns = bpf_ktime_get_ns(),
-        .sql_param = (u64)sql_param,
-        .query_len = (u64)query_len,
-        .tp = {0}
-    };
+    sql_func_invocation_t invocation = {.start_monotime_ns = bpf_ktime_get_ns(),
+                                        .sql_param = (u64)sql_param,
+                                        .query_len = (u64)query_len,
+                                        .tp = {0}};
 
     // We don't look up in the headers, no http/grpc request, therefore 0 as last argument
     client_trace_parent(goroutine_addr, &invocation.tp, 0);
@@ -100,7 +98,7 @@ int uprobe_queryReturn(struct pt_regs *ctx) {
         if (query_len > sizeof(trace->sql)) {
             query_len = sizeof(trace->sql);
         }
-        bpf_probe_read(trace->sql, query_len, (void*)invocation->sql_param);
+        bpf_probe_read(trace->sql, query_len, (void *)invocation->sql_param);
         bpf_dbg_printk("Found sql statement %s", trace->sql);
         if (query_len < sizeof(trace->sql)) {
             trace->sql[query_len] = 0;

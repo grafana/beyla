@@ -19,7 +19,8 @@
 
 #define PATH_MAX_LEN 100
 #define METHOD_MAX_LEN 7 // Longest method: OPTIONS
-#define REMOTE_ADDR_MAX_LEN 50 // We need 48: 39(ip v6 max) + 1(: separator) + 7(port length max value 65535) + 1(null terminator)
+#define REMOTE_ADDR_MAX_LEN                                                                        \
+    50 // We need 48: 39(ip v6 max) + 1(: separator) + 7(port length max value 65535) + 1(null terminator)
 #define HOST_LEN 64 // can be a fully qualified DNS name
 #define TRACEPARENT_LEN 55
 #define SQL_MAX_LEN 500
@@ -30,14 +31,14 @@
 // Trace of an HTTP call invocation. It is instantiated by the return uprobe and forwarded to the
 // user space through the events ringbuffer.
 typedef struct http_request_trace_t {
-    u8  type;                           // Must be first
+    u8 type; // Must be first
     u64 go_start_monotime_ns;
     u64 start_monotime_ns;
     u64 end_monotime_ns;
-    u8  method[METHOD_MAX_LEN];
-    u8  path[PATH_MAX_LEN];
+    u8 method[METHOD_MAX_LEN];
+    u8 path[PATH_MAX_LEN];
     u16 status;
-    connection_info_t conn __attribute__ ((aligned (8)));
+    connection_info_t conn __attribute__((aligned(8)));
     s64 content_length;
     tp_info_t tp;
 
@@ -45,17 +46,17 @@ typedef struct http_request_trace_t {
 } __attribute__((packed)) http_request_trace;
 
 typedef struct sql_request_trace_t {
-    u8  type;                           // Must be first
+    u8 type; // Must be first
     u64 start_monotime_ns;
     u64 end_monotime_ns;
-    u8  sql[SQL_MAX_LEN];
+    u8 sql[SQL_MAX_LEN];
     u16 status;
     tp_info_t tp;
     pid_info pid;
 } __attribute__((packed)) sql_request_trace;
 
 typedef struct kafka_client_req {
-    u8  type;                           // Must be first
+    u8 type; // Must be first
     u64 start_monotime_ns;
     u64 end_monotime_ns;
     u8  buf[KAFKA_MAX_LEN];
@@ -64,23 +65,23 @@ typedef struct kafka_client_req {
 } __attribute__((packed)) kafka_client_req_t;
 
 typedef struct kafka_go_req {
-    u8  type;                           // Must be first
+    u8 type; // Must be first
     u64 start_monotime_ns;
     u64 end_monotime_ns;
-    u8  topic[MAX_TOPIC_NAME_LEN];
-    connection_info_t conn __attribute__ ((aligned (8)));
+    u8 topic[MAX_TOPIC_NAME_LEN];
+    connection_info_t conn __attribute__((aligned(8)));
     tp_info_t tp;
     pid_info pid;
     u8 op;
 } __attribute__((packed)) kafka_go_req_t;
 
 typedef struct redis_client_req {
-    u8  type;                           // Must be first
+    u8 type; // Must be first
     u64 start_monotime_ns;
     u64 end_monotime_ns;
-    u8  buf[REDIS_MAX_LEN];
-    connection_info_t conn __attribute__ ((aligned (8)));
-    tp_info_t tp __attribute__ ((aligned (8)));
+    u8 buf[REDIS_MAX_LEN];
+    connection_info_t conn __attribute__((aligned(8)));
+    tp_info_t tp __attribute__((aligned(8)));
     pid_info pid;
     u8 err;
 } __attribute__((packed)) redis_client_req_t;

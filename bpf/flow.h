@@ -23,12 +23,12 @@
 #define TC_ACT_SHOT 2
 #define IP_MAX_LEN 16
 
-#define ETH_ALEN        6               /* Octets in one ethernet addr   */
+#define ETH_ALEN 6 /* Octets in one ethernet addr   */
 
-#define s6_addr			in6_u.u6_addr8
-#define ETH_P_IP	0x0800		/* Internet Protocol packet	*/
+#define s6_addr in6_u.u6_addr8
+#define ETH_P_IP 0x0800 /* Internet Protocol packet	*/
 // ETH_P_IPV6 value as defined in IEEE 802: https://www.iana.org/assignments/ieee-802-numbers/ieee-802-numbers.xhtml
-#define ETH_P_IPV6	0x86DD		/* IPv6 over bluebook		*/
+#define ETH_P_IPV6 0x86DD /* IPv6 over bluebook		*/
 typedef __u8 u8;
 typedef __u16 u16;
 typedef __u32 u32;

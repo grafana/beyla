@@ -13,13 +13,15 @@ struct __tcphdr {
     __be16 dest;
     __be32 seq;
     __be32 ack_seq;
-    __u16 res1 : 4, doff : 4, fin : 1, syn : 1, rst : 1, psh : 1, ack : 1, urg : 1, ece : 1, cwr : 1;
+    __u16 res1 : 4, doff : 4, fin : 1, syn : 1, rst : 1, psh : 1, ack : 1, urg : 1, ece : 1,
+        cwr : 1;
     __be16 window;
     __sum16 check;
     __be16 urg_ptr;
 };
 
-static __always_inline bool read_sk_buff(struct __sk_buff *skb, protocol_info_t *tcp, connection_info_t *conn) {
+static __always_inline bool
+read_sk_buff(struct __sk_buff *skb, protocol_info_t *tcp, connection_info_t *conn) {
     // we read the protocol just like here linux/samples/bpf/parse_ldabs.c
     u16 h_proto;
     bpf_skb_load_bytes(skb, offsetof(struct ethhdr, h_proto), &h_proto, sizeof(h_proto));
@@ -41,7 +43,8 @@ static __always_inline bool read_sk_buff(struct __sk_buff *skb, protocol_info_t 
             return false;
         }
 
-        bpf_skb_load_bytes(skb, ETH_HLEN + offsetof(struct iphdr, tot_len), &tcp->tot_len, sizeof(u16));
+        bpf_skb_load_bytes(
+            skb, ETH_HLEN + offsetof(struct iphdr, tot_len), &tcp->tot_len, sizeof(u16));
 
         // we read the ip header linux/samples/bpf/parse_ldabs.c and linux/samples/bpf/tcbpf1_kern.c
         // the level 4 protocol let's us only filter TCP packets, the ip protocol gets us the source
@@ -62,11 +65,15 @@ static __always_inline bool read_sk_buff(struct __sk_buff *skb, protocol_info_t 
         break;
     }
     case ETH_P_IPV6:
-        bpf_skb_load_bytes(skb, ETH_HLEN + offsetof(struct ipv6hdr, payload_len), &tcp->tot_len, sizeof(u16));
-        bpf_skb_load_bytes(skb, ETH_HLEN + offsetof(struct ipv6hdr, nexthdr), &proto, sizeof(proto));
+        bpf_skb_load_bytes(
+            skb, ETH_HLEN + offsetof(struct ipv6hdr, payload_len), &tcp->tot_len, sizeof(u16));
+        bpf_skb_load_bytes(
+            skb, ETH_HLEN + offsetof(struct ipv6hdr, nexthdr), &proto, sizeof(proto));
 
-        bpf_skb_load_bytes(skb, ETH_HLEN + offsetof(struct ipv6hdr, saddr), &conn->s_addr, sizeof(conn->s_addr));
-        bpf_skb_load_bytes(skb, ETH_HLEN + offsetof(struct ipv6hdr, daddr), &conn->d_addr, sizeof(conn->d_addr));
+        bpf_skb_load_bytes(
+            skb, ETH_HLEN + offsetof(struct ipv6hdr, saddr), &conn->s_addr, sizeof(conn->s_addr));
+        bpf_skb_load_bytes(
+            skb, ETH_HLEN + offsetof(struct ipv6hdr, daddr), &conn->d_addr, sizeof(conn->d_addr));
 
         tcp->hdr_len = ETH_HLEN + sizeof(struct ipv6hdr);
         break;
@@ -90,18 +97,28 @@ static __always_inline bool read_sk_buff(struct __sk_buff *skb, protocol_info_t 
     tcp->seq = __bpf_htonl(seq);
 
     u8 doff;
-    bpf_skb_load_bytes(skb, tcp->hdr_len + offsetof(struct __tcphdr, ack_seq) + 4, &doff, sizeof(doff)); // read the first byte past __tcphdr->ack_seq, we can't do offsetof bit fields
-    doff &= 0xf0; // clean-up res1
-    doff >>= 4; // move the upper 4 bits to low
-    doff *= 4; // convert to bytes length
+    bpf_skb_load_bytes(
+        skb,
+        tcp->hdr_len + offsetof(struct __tcphdr, ack_seq) + 4,
+        &doff,
+        sizeof(
+            doff)); // read the first byte past __tcphdr->ack_seq, we can't do offsetof bit fields
+    doff &= 0xf0;   // clean-up res1
+    doff >>= 4;     // move the upper 4 bits to low
+    doff *= 4;      // convert to bytes length
 
     u8 flags;
-    bpf_skb_load_bytes(skb, tcp->hdr_len + offsetof(struct __tcphdr, ack_seq) + 4 + 1, &flags, sizeof(flags)); // read the second byte past __tcphdr->doff, again bit fields offsets
+    bpf_skb_load_bytes(
+        skb,
+        tcp->hdr_len + offsetof(struct __tcphdr, ack_seq) + 4 + 1,
+        &flags,
+        sizeof(flags)); // read the second byte past __tcphdr->doff, again bit fields offsets
     tcp->flags = flags;
     tcp->h_proto = h_proto;
     tcp->hdr_len += doff;
 
-    if (tcp->hdr_len > skb->len) { // bad packet, hdr_len is greater than the skb len, we can't parse this.
+    if (tcp->hdr_len >
+        skb->len) { // bad packet, hdr_len is greater than the skb len, we can't parse this.
         return false;
     }
 
@@ -121,7 +138,7 @@ static __always_inline bool tcp_syn(protocol_info_t *tcp) {
 }
 
 static __always_inline bool tcp_empty(protocol_info_t *tcp, struct __sk_buff *skb) {
-    return tcp->hdr_len == skb->len; 
+    return tcp->hdr_len == skb->len;
 }
 
 #endif

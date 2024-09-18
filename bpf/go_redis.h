@@ -20,20 +20,20 @@ volatile const u64 io_writer_buf_ptr_pos;
 
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, void *); // key: goroutine id
+    __type(key, void *);               // key: goroutine id
     __type(value, redis_client_req_t); // the request
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
 } ongoing_redis_requests SEC(".maps");
 
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, void *); // key: goroutine id
+    __type(key, void *);   // key: goroutine id
     __type(value, void *); // the *Conn
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
 } redis_writes SEC(".maps");
 
 static __always_inline void setup_request(void *goroutine_addr) {
-        redis_client_req_t req = {
+    redis_client_req_t req = {
         .type = EVENT_GO_REDIS,
         .start_monotime_ns = bpf_ktime_get_ns(),
     };
@@ -65,7 +65,7 @@ int uprobe_redis_process_ret(struct pt_regs *ctx) {
 
     redis_client_req_t *req = bpf_map_lookup_elem(&ongoing_redis_requests, &goroutine_addr);
     if (req) {
-        redis_client_req_t *trace = bpf_ringbuf_reserve(&events, sizeof(redis_client_req_t), 0);        
+        redis_client_req_t *trace = bpf_ringbuf_reserve(&events, sizeof(redis_client_req_t), 0);
         if (trace) {
             bpf_dbg_printk("Sending redis client go trace");
             __builtin_memcpy(trace, req, sizeof(redis_client_req_t));
@@ -112,7 +112,8 @@ int uprobe_redis_with_writer(struct pt_regs *ctx) {
             bpf_dbg_printk("tcp conn ptr %llx", tcp_conn_ptr);
             if (tcp_conn_ptr) {
                 void *conn_ptr = 0;
-                bpf_probe_read(&conn_ptr, sizeof(conn_ptr), (void *)(tcp_conn_ptr + 8)); // find conn
+                bpf_probe_read(
+                    &conn_ptr, sizeof(conn_ptr), (void *)(tcp_conn_ptr + 8)); // find conn
                 bpf_dbg_printk("conn ptr %llx", conn_ptr);
                 if (conn_ptr) {
                     u8 ok = get_conn_info(conn_ptr, &req->conn);

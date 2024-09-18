@@ -38,7 +38,7 @@ struct {
 // empty_http_info zeroes and return the unique percpu copy in the map
 // this function assumes that a given thread is not trying to use many
 // instances at the same time
-static __always_inline http_info_t* empty_http_info() {
+static __always_inline http_info_t *empty_http_info() {
     int zero = 0;
     http_info_t *value = bpf_map_lookup_elem(&http_info_mem, &zero);
     if (value) {
@@ -52,17 +52,24 @@ static __always_inline u8 is_http(unsigned char *p, u32 len, u8 *packet_type) {
         return 0;
     }
     //HTTP/1.x
-    if ((p[0] == 'H') && (p[1] == 'T') && (p[2] == 'T') && (p[3] == 'P') && (p[4] == '/') && (p[5] == '1') && (p[6] == '.')) {
-       *packet_type = PACKET_TYPE_RESPONSE;
-       return 1;
-    } else if (
-        ((p[0] == 'G') && (p[1] == 'E') && (p[2] == 'T') && (p[3] == ' ') && (p[4] == '/')) ||                                                      // GET
-        ((p[0] == 'P') && (p[1] == 'O') && (p[2] == 'S') && (p[3] == 'T') && (p[4] == ' ') && (p[5] == '/')) ||                                     // POST
-        ((p[0] == 'P') && (p[1] == 'U') && (p[2] == 'T') && (p[3] == ' ') && (p[4] == '/')) ||                                                      // PUT
-        ((p[0] == 'P') && (p[1] == 'A') && (p[2] == 'T') && (p[3] == 'C') && (p[4] == 'H') && (p[5] == ' ') && (p[6] == '/')) ||                    // PATCH
-        ((p[0] == 'D') && (p[1] == 'E') && (p[2] == 'L') && (p[3] == 'E') && (p[4] == 'T') && (p[5] == 'E') && (p[6] == ' ') && (p[7] == '/')) ||   // DELETE
-        ((p[0] == 'H') && (p[1] == 'E') && (p[2] == 'A') && (p[3] == 'D') && (p[4] == ' ') && (p[5] == '/')) ||                                     // HEAD
-        ((p[0] == 'O') && (p[1] == 'P') && (p[2] == 'T') && (p[3] == 'I') && (p[4] == 'O') && (p[5] == 'N') && (p[6] == 'S') && (p[7] == ' ') && (p[8] == '/'))   // OPTIONS
+    if ((p[0] == 'H') && (p[1] == 'T') && (p[2] == 'T') && (p[3] == 'P') && (p[4] == '/') &&
+        (p[5] == '1') && (p[6] == '.')) {
+        *packet_type = PACKET_TYPE_RESPONSE;
+        return 1;
+    } else if (((p[0] == 'G') && (p[1] == 'E') && (p[2] == 'T') && (p[3] == ' ') &&
+                (p[4] == '/')) || // GET
+               ((p[0] == 'P') && (p[1] == 'O') && (p[2] == 'S') && (p[3] == 'T') && (p[4] == ' ') &&
+                (p[5] == '/')) || // POST
+               ((p[0] == 'P') && (p[1] == 'U') && (p[2] == 'T') && (p[3] == ' ') &&
+                (p[4] == '/')) || // PUT
+               ((p[0] == 'P') && (p[1] == 'A') && (p[2] == 'T') && (p[3] == 'C') && (p[4] == 'H') &&
+                (p[5] == ' ') && (p[6] == '/')) || // PATCH
+               ((p[0] == 'D') && (p[1] == 'E') && (p[2] == 'L') && (p[3] == 'E') && (p[4] == 'T') &&
+                (p[5] == 'E') && (p[6] == ' ') && (p[7] == '/')) || // DELETE
+               ((p[0] == 'H') && (p[1] == 'E') && (p[2] == 'A') && (p[3] == 'D') && (p[4] == ' ') &&
+                (p[5] == '/')) || // HEAD
+               ((p[0] == 'O') && (p[1] == 'P') && (p[2] == 'T') && (p[3] == 'I') && (p[4] == 'O') &&
+                (p[5] == 'N') && (p[6] == 'S') && (p[7] == ' ') && (p[8] == '/')) // OPTIONS
     ) {
         *packet_type = PACKET_TYPE_REQUEST;
         return 1;
@@ -98,7 +105,7 @@ static __always_inline u8 http_will_complete(http_info_t *info, unsigned char *b
 
 static __always_inline void finish_http(http_info_t *info, pid_connection_info_t *pid_conn) {
     if (http_info_complete(info)) {
-        http_info_t *trace = bpf_ringbuf_reserve(&events, sizeof(http_info_t), 0);        
+        http_info_t *trace = bpf_ringbuf_reserve(&events, sizeof(http_info_t), 0);
         if (trace) {
             bpf_dbg_printk("Sending trace %lx, response length %d", info, info->resp_len);
 
@@ -110,21 +117,24 @@ static __always_inline void finish_http(http_info_t *info, pid_connection_info_t
         // bpf_dbg_printk("Terminating trace for pid=%d", pid_from_pid_tgid(pid_tid));
         // dbg_print_http_connection_info(&info->conn_info); // commented out since GitHub CI doesn't like this call
         bpf_map_delete_elem(&ongoing_http, pid_conn);
-    }        
+    }
 }
 
 static __always_inline void update_http_sent_len(pid_connection_info_t *pid_conn, int sent_len) {
     http_info_t *info = bpf_map_lookup_elem(&ongoing_http, pid_conn);
-    if (info) {        
+    if (info) {
         info->resp_len += sent_len;
     }
 }
 
-static __always_inline http_info_t *get_or_set_http_info(http_info_t *info, pid_connection_info_t *pid_conn, u8 packet_type) {
+static __always_inline http_info_t *
+get_or_set_http_info(http_info_t *info, pid_connection_info_t *pid_conn, u8 packet_type) {
     if (packet_type == PACKET_TYPE_REQUEST) {
         http_info_t *old_info = bpf_map_lookup_elem(&ongoing_http, pid_conn);
         if (old_info) {
-            finish_http(old_info, pid_conn); // this will delete ongoing_http for this connection info if there's full stale request
+            finish_http(
+                old_info,
+                pid_conn); // this will delete ongoing_http for this connection info if there's full stale request
         }
 
         bpf_map_update_elem(&ongoing_http, pid_conn, info, BPF_ANY);
@@ -135,19 +145,21 @@ static __always_inline http_info_t *get_or_set_http_info(http_info_t *info, pid_
 
 static __always_inline void finish_possible_delayed_http_request(pid_connection_info_t *pid_conn) {
     http_info_t *info = bpf_map_lookup_elem(&ongoing_http, pid_conn);
-    if (info) {        
+    if (info) {
         finish_http(info, pid_conn);
     }
 }
 
-static __always_inline void set_fallback_http_info(http_info_t *info, connection_info_t *conn, int len) {
+static __always_inline void
+set_fallback_http_info(http_info_t *info, connection_info_t *conn, int len) {
     info->start_monotime_ns = bpf_ktime_get_ns();
     info->status = 0;
     info->len = len;
     bpf_map_update_elem(&ongoing_http_fallback, conn, info, BPF_ANY);
 }
 
-static __always_inline void process_http_request(http_info_t *info, int len, http_connection_metadata_t *meta, int direction, u16 orig_dport) {
+static __always_inline void process_http_request(
+    http_info_t *info, int len, http_connection_metadata_t *meta, int direction, u16 orig_dport) {
     // Set pid and type early as best effort in case the request times out or dies.
     if (meta) {
         info->pid = meta->pid;
@@ -174,7 +186,7 @@ static __always_inline void process_http_response(http_info_t *info, unsigned ch
     info->resp_len = 0;
     info->end_monotime_ns = bpf_ktime_get_ns();
     info->status = 0;
-    info->status += (buf[RESPONSE_STATUS_POS]     - '0') * 100;
+    info->status += (buf[RESPONSE_STATUS_POS] - '0') * 100;
     info->status += (buf[RESPONSE_STATUS_POS + 1] - '0') * 10;
     info->status += (buf[RESPONSE_STATUS_POS + 2] - '0');
     if (info->status > MAX_HTTP_STATUS) { // we read something invalid
@@ -182,7 +194,12 @@ static __always_inline void process_http_response(http_info_t *info, unsigned ch
     }
 }
 
-static __always_inline void handle_http_response(unsigned char *small_buf, pid_connection_info_t *pid_conn, http_info_t *info, int orig_len, u8 direction, u8 ssl) {
+static __always_inline void handle_http_response(unsigned char *small_buf,
+                                                 pid_connection_info_t *pid_conn,
+                                                 http_info_t *info,
+                                                 int orig_len,
+                                                 u8 direction,
+                                                 u8 ssl) {
     process_http_response(info, small_buf, orig_len);
 
     if ((direction != TCP_SEND) /*|| (ssl != NO_SSL) || (orig_len < KPROBES_LARGE_RESPONSE_LEN)*/) {
@@ -195,7 +212,7 @@ static __always_inline void handle_http_response(unsigned char *small_buf, pid_c
             bpf_dbg_printk("Delaying finish http for large request, orig_len %d", orig_len);
         }
     }
-    
+
     if (info->type == EVENT_HTTP_REQUEST) {
         trace_key_t t_key = {0};
         t_key.extra_id = info->extra_id;
@@ -246,29 +263,43 @@ int protocol_http(void *ctx) {
         } else {
             info->type = EVENT_HTTP_REQUEST;
         }
-    } 
+    }
 
-    bpf_dbg_printk("=== http_buffer_event len=%d pid=%d still_reading=%d ===", args->bytes_len, pid_from_pid_tgid(bpf_get_current_pid_tgid()), still_reading(info));
+    bpf_dbg_printk("=== http_buffer_event len=%d pid=%d still_reading=%d ===",
+                   args->bytes_len,
+                   pid_from_pid_tgid(bpf_get_current_pid_tgid()),
+                   still_reading(info));
 
-    if (args->packet_type == PACKET_TYPE_REQUEST && (info->status == 0) && (info->start_monotime_ns == 0)) {
-        http_connection_metadata_t *meta = connection_meta_by_direction(&args->pid_conn, args->direction, PACKET_TYPE_REQUEST);
+    if (args->packet_type == PACKET_TYPE_REQUEST && (info->status == 0) &&
+        (info->start_monotime_ns == 0)) {
+        http_connection_metadata_t *meta =
+            connection_meta_by_direction(&args->pid_conn, args->direction, PACKET_TYPE_REQUEST);
 
-        get_or_create_trace_info(meta, args->pid_conn.pid, &args->pid_conn.conn, (void *)args->u_buf, args->bytes_len, capture_header_buffer);
+        get_or_create_trace_info(meta,
+                                 args->pid_conn.pid,
+                                 &args->pid_conn.conn,
+                                 (void *)args->u_buf,
+                                 args->bytes_len,
+                                 capture_header_buffer);
 
-        if (meta) {            
+        if (meta) {
             tp_info_pid_t *tp_p = trace_info_for_connection(&args->pid_conn.conn);
             if (tp_p) {
                 info->tp = tp_p->tp;
 
                 if (meta->type == EVENT_HTTP_CLIENT && !valid_span(tp_p->tp.parent_id)) {
-                    bpf_dbg_printk("Looking for trace id of a client span");                        
+                    bpf_dbg_printk("Looking for trace id of a client span");
                     tp_info_pid_t *server_tp = find_parent_trace();
                     if (server_tp && server_tp->valid && valid_trace(server_tp->tp.trace_id)) {
-                        bpf_dbg_printk("Found existing server span for id=%llx", bpf_get_current_pid_tgid());
-                        __builtin_memcpy(info->tp.trace_id, server_tp->tp.trace_id, sizeof(info->tp.trace_id));
-                        __builtin_memcpy(info->tp.parent_id, server_tp->tp.span_id, sizeof(info->tp.parent_id));
+                        bpf_dbg_printk("Found existing server span for id=%llx",
+                                       bpf_get_current_pid_tgid());
+                        __builtin_memcpy(
+                            info->tp.trace_id, server_tp->tp.trace_id, sizeof(info->tp.trace_id));
+                        __builtin_memcpy(
+                            info->tp.parent_id, server_tp->tp.span_id, sizeof(info->tp.parent_id));
                     } else {
-                        bpf_dbg_printk("Cannot find server span for id=%llx", bpf_get_current_pid_tgid());
+                        bpf_dbg_printk("Cannot find server span for id=%llx",
+                                       bpf_get_current_pid_tgid());
                     }
                 }
             } else {
@@ -283,18 +314,18 @@ int protocol_http(void *ctx) {
         bpf_probe_read(info->buf, FULL_BUF_SIZE, (void *)args->u_buf);
         process_http_request(info, args->bytes_len, meta, args->direction, args->orig_dport);
     } else if ((args->packet_type == PACKET_TYPE_RESPONSE) && (info->status == 0)) {
-        handle_http_response(args->small_buf, &args->pid_conn, info, args->bytes_len, args->direction, args->ssl);
+        handle_http_response(
+            args->small_buf, &args->pid_conn, info, args->bytes_len, args->direction, args->ssl);
         if (fallback) {
             finish_http(info, &args->pid_conn);
         }
     } else if (still_reading(info)) {
         info->len += args->bytes_len;
-    }   
+    }
 
     bpf_map_delete_elem(&ongoing_http_fallback, &args->pid_conn.conn);
 
     return 0;
 }
-
 
 #endif

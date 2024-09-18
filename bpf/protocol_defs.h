@@ -2,8 +2,8 @@
 #define PROTOCOL_DEFS_H
 
 // Taken from linux/socket.h
-#define AF_INET		2	/* Internet IP Protocol 	*/
-#define AF_INET6	10	/* IP version 6			    */
+#define AF_INET 2   /* Internet IP Protocol 	*/
+#define AF_INET6 10 /* IP version 6			    */
 
 #define IP_V6_ADDR_LEN 16
 
@@ -12,16 +12,15 @@
 #define EPHEMERAL_PORT_MIN 32768
 
 // Taken from errno.h
-#define	EINPROGRESS	115	/* Operation now in progress */
+#define EINPROGRESS 115 /* Operation now in progress */
 
 // Taken from uapi/linux/if_ether.h
-#define ETH_HLEN	14          /* Total octets in header.       */
-#define ETH_P_IP	0x0800      /* Internet Protocol packet      */
-#define ETH_P_IPV6	0x86DD		/* IPv6 over bluebook            */
-
+#define ETH_HLEN 14       /* Total octets in header.       */
+#define ETH_P_IP 0x0800   /* Internet Protocol packet      */
+#define ETH_P_IPV6 0x86DD /* IPv6 over bluebook            */
 
 // Taken from uapi/linux/in.h
-#define IPPROTO_TCP 6           /* Transmission Control Protocol */
+#define IPPROTO_TCP 6 /* Transmission Control Protocol */
 
 // Taken from linux/include/net/tcp.h
 #define TCPHDR_FIN 0x01

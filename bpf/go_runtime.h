@@ -31,9 +31,7 @@ int uprobe_proc_newproc1(struct pt_regs *ctx) {
     void *creator_goroutine = GOROUTINE_PTR(ctx);
     bpf_dbg_printk("creator_goroutine_addr %lx", creator_goroutine);
 
-    new_func_invocation_t invocation = {
-        .parent = (u64)GO_PARAM2(ctx) 
-    };
+    new_func_invocation_t invocation = {.parent = (u64)GO_PARAM2(ctx)};
 
     // Save the registers on invocation to be able to fetch the arguments at return of newproc1
     if (bpf_map_update_elem(&newproc1, &creator_goroutine, &invocation, BPF_ANY)) {
@@ -50,8 +48,7 @@ int uprobe_proc_newproc1_ret(struct pt_regs *ctx) {
     bpf_dbg_printk("creator_goroutine_addr %lx", creator_goroutine);
 
     // Lookup the newproc1 invocation metadata
-    new_func_invocation_t *invocation =
-        bpf_map_lookup_elem(&newproc1, &creator_goroutine);
+    new_func_invocation_t *invocation = bpf_map_lookup_elem(&newproc1, &creator_goroutine);
     if (invocation == NULL) {
         bpf_dbg_printk("can't read newproc1 invocation metadata");
         goto done;

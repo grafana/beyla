@@ -94,8 +94,17 @@ define check_format
 		$(GOIMPORTS_REVISER) -company-prefixes github.com/grafana -list-diff -output stdout $(FILE);))
 endef
 
+
+.PHONY: install-hooks
+install-hooks:
+	@if [ ! -f .git/hooks/pre-commit ]; then \
+		echo "Installing pre-commit hook..."; \
+		cp hooks/pre-commit .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit; \
+		echo "Pre-commit hook installed."; \
+	fi
+
 .PHONY: prereqs
-prereqs:
+prereqs: install-hooks
 	@echo "### Check if prerequisites are met, and installing missing dependencies"
 	mkdir -p $(TEST_OUTPUT)/run
 	$(call go-install-tool,$(GOLANGCI_LINT),github.com/golangci/golangci-lint/cmd/golangci-lint,v1.60.3)

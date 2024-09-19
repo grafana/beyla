@@ -3,7 +3,6 @@ package docker
 
 import (
 	"errors"
-	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -45,10 +44,7 @@ func (c *Compose) Logs() error {
 }
 
 func (c *Compose) Stop() error {
-	if err := c.command("stop", "-t", "60"); err != nil {
-		fmt.Printf("error stopping container %v", err)
-	}
-	return c.Remove()
+	return c.command("stop")
 }
 
 func (c *Compose) Remove() error {

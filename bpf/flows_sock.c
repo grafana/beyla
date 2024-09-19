@@ -150,7 +150,10 @@ static __always_inline bool read_sk_buff(struct __sk_buff *skb, flow_id *id, u16
         id->src_port = __bpf_htons(port);
         bpf_skb_load_bytes(skb, hdr_len + offsetof(struct __udphdr, dest), &port, sizeof(port));
         id->dst_port = __bpf_htons(port);
+        break;
     }
+    default:
+        return false;
     }
 
     // custom flags

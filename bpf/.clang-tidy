@@ -2,13 +2,14 @@
 Checks:
   - '-*'
   - '-clang-diagnostic-error'
-  - 'readability-*'
+  - '-readability-*'
   - '-readability-identifier-length'
   - '-readability-function-cognitive-complexity'
   - '-readability-magic-numbers'
   - '-misc-include-cleaner'
   - 'misc-misplaced_const'
   - '-readability-else-after-return'
+  - 'readability-redundant-casting'
 
 WarningsAsErrors: ''
 HeaderFilterRegex: ''

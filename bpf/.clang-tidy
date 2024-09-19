@@ -1,0 +1,17 @@
+---
+Checks:
+  - '-*'
+  - '-clang-diagnostic-error'
+  - 'readability-*'
+  - '-readability-identifier-length'
+  - '-readability-function-cognitive-complexity'
+  - '-readability-magic-numbers'
+  - '-misc-include-cleaner'
+  - 'misc-misplaced_const'
+  - '-readability-else-after-return'
+
+WarningsAsErrors: ''
+HeaderFilterRegex: ''
+FormatStyle: none
+ExtraArgs: ['--target=bpf', '-Iheaders', '-D__TARGET_ARCH_x86', '-DBPF_DEBUG', '-DBPF_TRACEPARENT']
+

@@ -1,6 +1,9 @@
 #ifndef TRACE_UTIL_H
 #define TRACE_UTIL_H
 
+#include "vmlinux.h"
+#include "bpf_helpers.h"
+
 // 55+13
 #define TRACE_PARENT_HEADER_LEN 68
 

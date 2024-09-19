@@ -12,6 +12,7 @@
 #ifndef BPF_DBG_H
 #define BPF_DBG_H
 
+#include "vmlinux.h"
 #include "bpf_core_read.h"
 
 #ifdef BPF_DEBUG

@@ -8,6 +8,7 @@
 #include "pid.h"
 #include "runtime.h"
 #include "protocol_common.h"
+#include "trace_common.h"
 
 // http_info_t became too big to be declared as a variable in the stack.
 // We use a percpu array to keep a reusable copy of it

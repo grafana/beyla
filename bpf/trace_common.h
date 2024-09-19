@@ -7,6 +7,7 @@
 #include "tracing.h"
 #include "pid_types.h"
 #include "runtime.h"
+#include "ringbuf.h"
 
 typedef struct trace_key {
     pid_key_t p_key; // pid key as seen by the userspace (for example, inside its container)

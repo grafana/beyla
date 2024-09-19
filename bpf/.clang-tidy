@@ -1,16 +1,22 @@
 ---
 Checks:
   - '-*'
-  - '-clang-diagnostic-error'
   - 'readability-*'
+  - 'clang-diagnostic-error'
+  - 'misc-misplaced_const'
+  - 'misc-*'
+  - '-bugprone-*'
+  - '-bugprone-multi-level-implicit-pointer-conversion' #TODO enable this
+  - '-bugprone-reserved-identifier'
+  - '-bugprone-easily-swappable-parameters'
+  - '-bugprone-narrowing-conversions' #TODO this needs to be checked/enabled
+  - '-misc-unused-parameters'
+  - '-misc-misplaced-const'
+  - '-misc-include-cleaner'
+  - '-readability-else-after-return'
   - '-readability-identifier-length'
   - '-readability-function-cognitive-complexity'
   - '-readability-magic-numbers'
-  - '-misc-include-cleaner'
-  - 'misc-misplaced_const'
-  - '-readability-else-after-return'
-  - 'readability-redundant-casting'
-  - 'readability-non-const-parameter'
 
 WarningsAsErrors: ''
 HeaderFilterRegex: ''

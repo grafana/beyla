@@ -165,7 +165,7 @@ static __always_inline bool read_sk_buff(struct __sk_buff *skb, flow_id *id, u16
     return true;
 }
 
-static __always_inline bool same_ip(u8 *ip1, u8 *ip2) {
+static __always_inline bool same_ip(const u8 *ip1, const u8 *ip2) {
     for (int i = 0; i < 16; i += 4) {
         if (*((u32 *)(ip1 + i)) != *((u32 *)(ip2 + i))) {
             return false;

@@ -211,6 +211,11 @@ config:
             - 'k8s.dst.owner.type'
             - 'direction'
     filter:
+      application:
+        client:
+          not_match: '{kube*,*jaeger-agent*,*prometheus*,*promtail*,*grafana-agent*}'
+        server:
+          not_match: '{kube*,*jaeger-agent*,*prometheus*,*promtail*,*grafana-agent*}'
       network:
         k8s_dst_owner_name:
           not_match: '{kube*,*jaeger-agent*,*prometheus*,*promtail*,*grafana-agent*}'

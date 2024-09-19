@@ -154,11 +154,11 @@ static __always_inline void delete_server_trace(trace_key_t *t_key) {
     // bpf_dbg_printk("Deleting server span for id=%llx, pid=%d, ns=%d, res = %d", bpf_get_current_pid_tgid(), t_key->p_key.pid, t_key->p_key.ns, res);
 }
 
-static __always_inline u8 valid_span(unsigned char *span_id) {
+static __always_inline u8 valid_span(const unsigned char *span_id) {
     return *((u64 *)span_id) != 0;
 }
 
-static __always_inline u8 valid_trace(unsigned char *trace_id) {
+static __always_inline u8 valid_trace(const unsigned char *trace_id) {
     return *((u64 *)trace_id) != 0 && *((u64 *)(trace_id + 8)) != 0;
 }
 

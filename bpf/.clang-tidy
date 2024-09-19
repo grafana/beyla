@@ -10,6 +10,7 @@ Checks:
   - 'misc-misplaced_const'
   - '-readability-else-after-return'
   - 'readability-redundant-casting'
+  - 'readability-non-const-parameter'
 
 WarningsAsErrors: ''
 HeaderFilterRegex: ''

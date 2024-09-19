@@ -66,7 +66,7 @@ struct {
 } golang_mapbucket_storage_map SEC(".maps");
 
 // assumes s2 is all lowercase
-static __always_inline int bpf_memicmp(char *s1, char *s2, s32 size) {
+static __always_inline int bpf_memicmp(const char *s1, const char *s2, s32 size) {
     for (int i = 0; i < size; i++) {
         if (s1[i] != s2[i] && s1[i] != (s2[i] - 32)) // compare with each uppercase character
         {

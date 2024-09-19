@@ -48,7 +48,7 @@ static __always_inline http_info_t *empty_http_info() {
     return value;
 }
 
-static __always_inline u8 is_http(unsigned char *p, u32 len, u8 *packet_type) {
+static __always_inline u8 is_http(const unsigned char *p, u32 len, u8 *packet_type) {
     if (len < MIN_HTTP_SIZE) {
         return 0;
     }
@@ -183,7 +183,8 @@ static __always_inline void process_http_request(
     info->task_tid = get_task_tid();     // required for deleting the trace information
 }
 
-static __always_inline void process_http_response(http_info_t *info, unsigned char *buf, int len) {
+static __always_inline void
+process_http_response(http_info_t *info, const unsigned char *buf, int len) {
     info->resp_len = 0;
     info->end_monotime_ns = bpf_ktime_get_ns();
     info->status = 0;

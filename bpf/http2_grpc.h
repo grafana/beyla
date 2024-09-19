@@ -34,7 +34,7 @@ typedef struct frame_header {
 } __attribute__((packed)) frame_header_t;
 
 static __always_inline u8 read_http2_grpc_frame_header(frame_header_t *frame,
-                                                       unsigned char *p,
+                                                       const unsigned char *p,
                                                        u32 len) {
     if (len < FRAME_HEADER_LEN) {
         return 0;
@@ -65,7 +65,7 @@ static __always_inline u8 is_headers_frame(frame_header_t *frame) {
     return frame->type == FrameHeaders && frame->stream_id;
 }
 
-static __always_inline int bpf_memcmp(char *s1, char *s2, s32 size) {
+static __always_inline int bpf_memcmp(const char *s1, const char *s2, s32 size) {
     for (int i = 0; i < size; i++) {
         if (s1[i] != s2[i]) {
             return i + 1;

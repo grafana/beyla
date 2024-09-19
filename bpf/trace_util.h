@@ -32,7 +32,7 @@ static __always_inline void urand_bytes(unsigned char *buf, u32 size) {
     }
 }
 
-static __always_inline void decode_hex(unsigned char *dst, unsigned char *src, int src_len) {
+static __always_inline void decode_hex(unsigned char *dst, const unsigned char *src, int src_len) {
     for (int i = 1, j = 0; i < src_len; i += 2) {
         unsigned char p = src[i - 1];
         unsigned char q = src[i];
@@ -47,7 +47,7 @@ static __always_inline void decode_hex(unsigned char *dst, unsigned char *src, i
     }
 }
 
-static __always_inline void encode_hex(unsigned char *dst, unsigned char *src, int src_len) {
+static __always_inline void encode_hex(unsigned char *dst, const unsigned char *src, int src_len) {
     for (int i = 0, j = 0; i < src_len; i++) {
         unsigned char p = src[i];
         dst[j++] = hex[(p >> 4) & 0xff];
@@ -55,7 +55,7 @@ static __always_inline void encode_hex(unsigned char *dst, unsigned char *src, i
     }
 }
 
-static __always_inline bool is_traceparent(unsigned char *p) {
+static __always_inline bool is_traceparent(const unsigned char *p) {
     if (((p[0] == 'T') || (p[0] == 't')) && (p[1] == 'r') && (p[2] == 'a') && (p[3] == 'c') &&
         (p[4] == 'e') && ((p[5] == 'p') || (p[5] == 'P')) && (p[6] == 'a') && (p[7] == 'r') &&
         (p[8] == 'e') && (p[9] == 'n') && (p[10] == 't') && (p[11] == ':') && (p[12] == ' ')) {

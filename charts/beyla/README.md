@@ -1,6 +1,6 @@
 # beyla
 
-![Version: 1.4.0](https://img.shields.io/badge/Version-1.4.0-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 1.8.0](https://img.shields.io/badge/AppVersion-1.8.0-informational?style=flat-square)
+![Version: 1.4.1](https://img.shields.io/badge/Version-1.4.1-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 1.8.0](https://img.shields.io/badge/AppVersion-1.8.0-informational?style=flat-square)
 
 eBPF-based autoinstrumentation HTTP, HTTP2 and gRPC services, as well as network metrics.
 
@@ -55,24 +55,30 @@ eBPF-based autoinstrumentation HTTP, HTTP2 and gRPC services, as well as network
 | service.annotations | object | `{}` | Service annotations. |
 | service.appProtocol | string | `""` | Adds the appProtocol field to the service. This allows to work with istio protocol selection. Ex: "http" or "tcp" |
 | service.clusterIP | string | `""` | cluster IP |
-| service.enabled | bool | `false` | whether to create a service for internal metrics |
+| service.enabled | bool | `false` | whether to create a service for metrics |
+| service.internalMetrics.appProtocol | string | `""` | Adds the appProtocol field to the service. This allows to work with istio protocol selection. Ex: "http" or "tcp" |
+| service.internalMetrics.port | int | `8080` | internal metrics service port |
+| service.internalMetrics.portName | string | `"internal-metrics"` | name of the port for internal metrics. |
+| service.internalMetrics.targetPort | string | `nil` | targetPort overrides the internal metrics port. It defaults to the value of `internal_metrics.prometheus.port` from the Beyla configuration file. |
 | service.labels | object | `{}` | Service labels. |
 | service.loadBalancerClass | string | `""` | loadbalancer class name |
 | service.loadBalancerIP | string | `""` | loadbalancer IP |
 | service.loadBalancerSourceRanges | list | `[]` | source ranges for loadbalancer |
-| service.port | int | `80` | service port |
-| service.portName | string | `"metrics"` | name of the port for internal metrics. |
-| service.targetPort | int | `9090` | targetPort has to be configured based on the values of `BEYLA_INTERNAL_METRICS_PROMETHEUS_PORT` environment variable or the value of `prometheus_export.port` from beyla configuration file. see more at https://grafana.com/docs/beyla/latest/configure/options/#internal-metrics-reporter |
+| service.port | int | `80` | Prometheus metrics service port |
+| service.portName | string | `"metrics"` | name of the port for Prometheus metrics. |
+| service.targetPort | string | `nil` | targetPort overrides the Prometheus metrics port. It defaults to the value of `prometheus_export.port` from the Beyla configuration file. |
 | service.type | string | `"ClusterIP"` | type of the service |
 | serviceAccount.annotations | object | `{}` | Annotations to add to the service account |
 | serviceAccount.automount | bool | `true` | Automatically mount a ServiceAccount's API credentials? |
 | serviceAccount.create | bool | `true` | Specifies whether a service account should be created |
 | serviceAccount.labels | object | `{}` | ServiceAccount labels. |
 | serviceAccount.name | string | `""` | The name of the service account to use. If not set and create is true, a name is generated using the fullname template |
-| serviceMonitor | object | `{"annotations":{},"enabled":false,"endpoint":{"interval":"15s"},"jobLabel":""}` | Enable creation of ServiceMonitor for scraping of prometheus HTTP endpoint |
+| serviceMonitor | object | `{"additionalLabels":{},"annotations":{},"enabled":false,"internalMetrics":{"endpoint":{"interval":"15s"}},"jobLabel":"","metrics":{"endpoint":{"interval":"15s"}}}` | Enable creation of ServiceMonitor for scraping of prometheus HTTP endpoint |
+| serviceMonitor.additionalLabels | object | `{}` | Add custom labels to the ServiceMonitor resource |
 | serviceMonitor.annotations | object | `{}` | ServiceMonitor annotations |
-| serviceMonitor.endpoint | object | `{"interval":"15s"}` | ServiceMonitor scraping endpoint. Target port and path is set based on service and prometheus_export values. For additional values, see the ServiceMonitor spec |
+| serviceMonitor.internalMetrics.endpoint | object | `{"interval":"15s"}` | ServiceMonitor internal metrics scraping endpoint. Target port and path is set based on service and `internal_metrics` values. For additional values, see the ServiceMonitor spec |
 | serviceMonitor.jobLabel | string | `""` | Prometheus job label. If empty, chart release name is used |
+| serviceMonitor.metrics.endpoint | object | `{"interval":"15s"}` | ServiceMonitor Prometheus scraping endpoint. Target port and path is set based on service and `prometheus_export` values. For additional values, see the ServiceMonitor spec |
 | tolerations | list | `[]` | Tolerations allow pods to be scheduled on nodes with specific taints |
 | updateStrategy.type | string | `"RollingUpdate"` | update strategy type |
 | volumeMounts | list | `[]` | Additional volumeMounts on the output Deployment definition. |

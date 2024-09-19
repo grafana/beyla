@@ -66,11 +66,12 @@ See [Documentation](https://grafana.com/docs/beyla/) and the [tutorials](https:/
   enabled. BTF became enabled by default on most Linux distributions with kernel 5.14 or higher. 
   You can check if your kernel has BTF enabled by verifying if `/sys/kernel/btf/vmlinux` exists on your system.
   If you need to recompile your kernel to enable BTF, the configuration option `CONFIG_DEBUG_INFO_BTF=y` must be
-  set. 
-- eBPF enabled on the host
+  set.
+- Beyla supports Linux distributions running RedHat Enterprise Linux 4.18 kernels build 348 and above as they have the required kernel backports. These include CentOS, AlmaLinux, and Oracle Linux.
+- eBPF enabled on the host.
 - For instrumenting Go programs, they must have been compiled with at least Go 1.17. We currently
   support Go applications built with a major **Go version no earlier than 3 versions** behind the current
-  stable major release.  
+  stable major release.
 - Some level of elevated permissions to execute the instrumenter:
     - On host systems, running Beyla requires `sudo`.
     - For Kubernetes we have detailed configuration example on how to run with minimum

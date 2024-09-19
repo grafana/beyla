@@ -22,7 +22,7 @@ jobs:
       - name: Check Clang Format
         run: |
           # Check for modified C/C++ files
-          files=$(git diff --name-only origin/main...HEAD | grep -E '\.(c|cpp|h)$')
+          files=$(git diff --name-only origin/main...HEAD | grep -E '\.(c|cpp|h)$' || true)
           if [ -z "$files" ]; then
             echo "No C/C++ files modified."
             exit 0

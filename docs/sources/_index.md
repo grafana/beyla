@@ -45,6 +45,7 @@ Beyla offers the following features:
   You can check if your kernel has BTF enabled by verifying if `/sys/kernel/btf/vmlinux` exists on your system.
   If you need to recompile your kernel to enable BTF, the configuration option `CONFIG_DEBUG_INFO_BTF=y` must be
   set.
+- Alternatively, RHEL 4.18 Linux kernels (at least build 348) are also supported, due to their heavily backported nature.
 - eBPF enabled in the host.
 - For instrumenting Go programs, they must have been compiled with at least Go 1.17. We currently
   support Go applications built with a major **Go version no earlier than 3 versions** behind the current

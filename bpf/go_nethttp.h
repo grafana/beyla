@@ -203,16 +203,21 @@ int uprobe_readRequestReturns(struct pt_regs *ctx) {
     void *goroutine_addr = GOROUTINE_PTR(ctx);
     bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
 
+    u64 pid_tid = bpf_get_current_pid_tgid();
+    u32 pid = pid_from_pid_tgid(pid_tid);
+
+    goroutine_key_t g_key = {.addr = (u64)goroutine_addr, .pid = pid};
+
     // This code is here for keepalive support on HTTP requests. Since the connection is not
     // established everytime, we set the initial goroutine start on the new read initiation.
-    goroutine_metadata *g_metadata = bpf_map_lookup_elem(&ongoing_goroutines, &goroutine_addr);
+    goroutine_metadata *g_metadata = bpf_map_lookup_elem(&ongoing_goroutines, &g_key);
     if (!g_metadata) {
         goroutine_metadata metadata = {
             .timestamp = bpf_ktime_get_ns(),
-            .parent = (u64)goroutine_addr,
+            .parent = g_key,
         };
 
-        if (bpf_map_update_elem(&ongoing_goroutines, &goroutine_addr, &metadata, BPF_ANY)) {
+        if (bpf_map_update_elem(&ongoing_goroutines, &g_key, &metadata, BPF_ANY)) {
             bpf_dbg_printk("can't update active goroutine");
         }
     }
@@ -231,7 +236,10 @@ int uprobe_ServeHTTPReturns(struct pt_regs *ctx) {
         bpf_map_lookup_elem(&ongoing_http_server_requests, &goroutine_addr);
 
     if (invocation == NULL) {
-        void *parent_go = (void *)find_parent_goroutine(goroutine_addr);
+        goroutine_key_t g_key = {};
+        goroutine_key_from_id(&g_key, goroutine_addr);
+
+        void *parent_go = (void *)find_parent_goroutine(&g_key);
         if (parent_go) {
             bpf_dbg_printk("found parent goroutine for header [%llx]", parent_go);
             invocation = bpf_map_lookup_elem(&ongoing_http_server_requests, &parent_go);
@@ -258,10 +266,12 @@ int uprobe_ServeHTTPReturns(struct pt_regs *ctx) {
     trace->start_monotime_ns = invocation->start_monotime_ns;
     trace->end_monotime_ns = bpf_ktime_get_ns();
 
-    goroutine_metadata *g_metadata = bpf_map_lookup_elem(&ongoing_goroutines, &goroutine_addr);
+    goroutine_key_t g_key = {.addr = (u64)goroutine_addr, .pid = trace->pid.host_pid};
+
+    goroutine_metadata *g_metadata = bpf_map_lookup_elem(&ongoing_goroutines, &g_key);
     if (g_metadata) {
         trace->go_start_monotime_ns = g_metadata->timestamp;
-        bpf_map_delete_elem(&ongoing_goroutines, &goroutine_addr);
+        bpf_map_delete_elem(&ongoing_goroutines, &g_key);
     } else {
         trace->go_start_monotime_ns = invocation->start_monotime_ns;
     }
@@ -556,7 +566,10 @@ int uprobe_http2ResponseWriterStateWriteHeader(struct pt_regs *ctx) {
         bpf_map_lookup_elem(&ongoing_http_server_requests, &goroutine_addr);
 
     if (invocation == NULL) {
-        void *parent_go = (void *)find_parent_goroutine(goroutine_addr);
+        goroutine_key_t g_key = {};
+        goroutine_key_from_id(&g_key, goroutine_addr);
+
+        void *parent_go = (void *)find_parent_goroutine(&g_key);
         if (parent_go) {
             bpf_dbg_printk("found parent goroutine for header [%llx]", parent_go);
             invocation = bpf_map_lookup_elem(&ongoing_http_server_requests, &parent_go);

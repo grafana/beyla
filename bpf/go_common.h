@@ -32,14 +32,19 @@ char __license[] SEC("license") = "Dual MIT/GPL";
 // Then it is retrieved in the return uprobes and used to know the HTTP call duration as well as its
 // attributes (method, path, and status code).
 
+typedef struct goroutine_key {
+    u32 pid;  // PID of the process
+    u64 addr; // Address of the goroutine
+} goroutine_key_t;
+
 typedef struct goroutine_metadata_t {
-    u64 parent;
+    goroutine_key_t parent;
     u64 timestamp;
 } goroutine_metadata;
 
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, void *);               // key: pointer to the goroutine
+    __type(key, goroutine_key_t);      // key: pointer to the goroutine
     __type(value, goroutine_metadata); // value: timestamp of the goroutine creation
     __uint(max_entries, MAX_CONCURRENT_SHARED_REQUESTS);
     __uint(pinning, LIBBPF_PIN_BY_NAME);
@@ -68,18 +73,31 @@ struct {
     __uint(pinning, LIBBPF_PIN_BY_NAME);
 } go_trace_map SEC(".maps");
 
-static __always_inline u64 find_parent_goroutine(void *goroutine_addr) {
-    void *r_addr = goroutine_addr;
+static __always_inline void goroutine_key_from_id(goroutine_key_t *current, void *goroutine) {
+    u64 pid_tid = bpf_get_current_pid_tgid();
+    u32 pid = pid_from_pid_tgid(pid_tid);
+
+    current->addr = (u64)goroutine;
+    current->pid = pid;
+}
+
+static __always_inline u64 find_parent_goroutine(goroutine_key_t *current) {
+    if (!current) {
+        return 0;
+    }
+
+    u64 r_addr = current->addr;
+
     int attempts = 0;
     do {
-        void *p_inv = bpf_map_lookup_elem(&go_trace_map, &r_addr);
+        tp_info_t *p_inv = bpf_map_lookup_elem(&go_trace_map, &r_addr);
         if (!p_inv) { // not this goroutine running the server request processing
             // Let's find the parent scope
             goroutine_metadata *g_metadata =
-                (goroutine_metadata *)bpf_map_lookup_elem(&ongoing_goroutines, &r_addr);
+                (goroutine_metadata *)bpf_map_lookup_elem(&ongoing_goroutines, current);
             if (g_metadata) {
                 // Lookup now to see if the parent was a request
-                r_addr = (void *)g_metadata->parent;
+                r_addr = (u64)g_metadata->parent.addr;
             } else {
                 break;
             }
@@ -201,8 +219,10 @@ static __always_inline u8 client_trace_parent(void *goroutine_addr,
 
     if (!found_trace_id) {
         tp_info_t *tp = 0;
+        goroutine_key_t g_key = {};
+        goroutine_key_from_id(&g_key, goroutine_addr);
 
-        u64 parent_id = find_parent_goroutine(goroutine_addr);
+        u64 parent_id = find_parent_goroutine(&g_key);
 
         if (parent_id) { // we found a parent request
             tp = (tp_info_t *)bpf_map_lookup_elem(&go_trace_map, &parent_id);

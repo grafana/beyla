@@ -40,8 +40,9 @@ volatile const u32 wakeup_data_bytes;
 static __always_inline long get_flags() {
     long sz;
 
-    if (!wakeup_data_bytes)
+    if (!wakeup_data_bytes) {
         return 0;
+    }
 
     sz = bpf_ringbuf_query(&events, BPF_RB_AVAIL_DATA);
     return sz >= wakeup_data_bytes ? BPF_RB_FORCE_WAKEUP : BPF_RB_NO_WAKEUP;

@@ -2,7 +2,7 @@
 Checks:
   - '-*'
   - '-clang-diagnostic-error'
-  - '-readability-*'
+  - 'readability-*'
   - '-readability-identifier-length'
   - '-readability-function-cognitive-complexity'
   - '-readability-magic-numbers'

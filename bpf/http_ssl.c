@@ -100,7 +100,11 @@ int BPF_URETPROBE(uretprobe_ssl_read, int ret) {
 }
 
 SEC("uprobe/libssl.so:SSL_read_ex")
-int BPF_UPROBE(uprobe_ssl_read_ex, void *ssl, const void *buf, int num, size_t *readbytes) {
+int BPF_UPROBE(uprobe_ssl_read_ex,
+               void *ssl,
+               const void *buf,
+               int num,
+               size_t *readbytes) { //NOLINT(readability-non-const-parameter)
     u64 id = bpf_get_current_pid_tgid();
 
     if (!valid_pid(id)) {

@@ -20,14 +20,14 @@ volatile const u64 io_writer_buf_ptr_pos;
 
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, goroutine_key_t); // key: goroutine id
+    __type(key, void *); // key: goroutine id
     __type(value, redis_client_req_t); // the request
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
 } ongoing_redis_requests SEC(".maps");
 
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, goroutine_key_t); // key: goroutine id
+    __type(key, void *); // key: goroutine id
     __type(value, void *); // the *Conn
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
 } redis_writes SEC(".maps");

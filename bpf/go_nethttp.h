@@ -40,14 +40,14 @@ typedef struct http_client_data {
 
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, goroutine_key_t); // key: pointer to the request goroutine
+    __type(key, void *); // key: pointer to the request goroutine
     __type(value, http_func_invocation_t);
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
 } ongoing_http_client_requests SEC(".maps");
 
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, goroutine_key_t); // key: pointer to the request goroutine
+    __type(key, void *); // key: pointer to the request goroutine
     __type(value, http_client_data_t);
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
 } ongoing_http_client_requests_data SEC(".maps");
@@ -64,7 +64,7 @@ typedef struct server_http_func_invocation {
 
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, goroutine_key_t); // key: pointer to the request goroutine
+    __type(key, void *); // key: pointer to the request goroutine
     __type(value, server_http_func_invocation_t);
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
 } ongoing_http_server_requests SEC(".maps");
@@ -648,7 +648,7 @@ typedef struct framer_func_invocation {
 
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, goroutine_key_t); // key: go routine doing framer write headers
+    __type(key, void *); // key: go routine doing framer write headers
     __type(value, framer_func_invocation_t); // the goroutine of the round trip request, which is the key for our traceparent info
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
 } framer_invocation_map SEC(".maps");

@@ -25,12 +25,6 @@ type bpf_tpFramerFuncInvocationT struct {
 	InitialN  int64
 }
 
-type bpf_tpGoroutineKeyT struct {
-	Pid  uint32
-	_    [4]byte
-	Addr uint64
-}
-
 type bpf_tpGoroutineMetadata struct {
 	Parent    uint64
 	Timestamp uint64

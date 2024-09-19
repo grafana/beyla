@@ -20,7 +20,7 @@ typedef struct new_func_invocation {
 
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, goroutine_key_t); // key: pointer to the request goroutine
+    __type(key, void *); // key: pointer to the request goroutine
     __type(value, new_func_invocation_t);
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
 } newproc1 SEC(".maps");

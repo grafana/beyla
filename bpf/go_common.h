@@ -49,7 +49,7 @@ typedef struct goroutine_key{
 
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, goroutine_key_t); // key: pointer to the goroutine
+    __type(key, void *); // key: pointer to the goroutine
     __type(value, goroutine_metadata);  // value: timestamp of the goroutine creation
     __uint(max_entries, MAX_CONCURRENT_SHARED_REQUESTS);
     __uint(pinning, LIBBPF_PIN_BY_NAME);
@@ -57,7 +57,7 @@ struct {
 
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, goroutine_key_t); // key: pointer to the request goroutine
+    __type(key, void *); // key: pointer to the request goroutine
     __type(value, connection_info_t);
     __uint(max_entries, MAX_CONCURRENT_SHARED_REQUESTS);
     __uint(pinning, LIBBPF_PIN_BY_NAME);
@@ -65,14 +65,14 @@ struct {
 
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, goroutine_key_t); // key: pointer to the request goroutine
+    __type(key, void *); // key: pointer to the request goroutine
     __type(value, connection_info_t);
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
 } ongoing_client_connections SEC(".maps");
 
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, goroutine_key_t); // key: pointer to the goroutine
+    __type(key, void *); // key: pointer to the goroutine
     __type(value, tp_info_t);  // value: traceparent info
     __uint(max_entries, MAX_CONCURRENT_SHARED_REQUESTS);
     __uint(pinning, LIBBPF_PIN_BY_NAME);
@@ -200,8 +200,11 @@ static __always_inline u8 client_trace_parent(void *goroutine_addr, tp_info_t *t
 
     if (!found_trace_id) {
         tp_info_t *tp = 0;
-
-        goroutine_key_t parent_id = find_parent_goroutine(goroutine_addr);
+        goroutine_key_t goroutine_key = {
+            .pid = bpf_get_current_pid_tgid(),
+            .addr = (__u64)goroutine_addr,
+        };        
+        goroutine_key_t parent_id = find_parent_goroutine(&goroutine_key);
 
         if (parent_id.addr) {// we found a parent request
             tp = (tp_info_t *)bpf_map_lookup_elem(&go_trace_map, &parent_id);

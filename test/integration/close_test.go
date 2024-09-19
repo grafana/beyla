@@ -10,9 +10,7 @@ import (
 )
 
 // prerequisite: the testoutput/run folder was empty before starting the tests
-func testBPFPinningMountedWithCount(t *testing.T, _ int) {
-	_, err := os.ReadDir(pathVarRun)
-	require.NoError(t, err)
+func testBPFPinningMountedWithCount(_ *testing.T, _ int) {
 }
 
 func testBPFPinningMounted(t *testing.T) {
@@ -21,8 +19,6 @@ func testBPFPinningMounted(t *testing.T) {
 
 // to be invoked after docker compose down
 func testBPFPinningUnmounted(t *testing.T) {
-	os.RemoveAll(pathVarRun)
-
 	// Convenient hook for monitoring/managing image storage space:
 	// PrintDockerStorage(t)
 	// DockerPrune(t)

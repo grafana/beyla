@@ -70,7 +70,6 @@ type bpfKafkaClientReqT struct {
 	Buf             [256]uint8
 	_               [7]byte
 	Conn            bpfConnectionInfoT
-	Tp              bpfTpInfoT
 	Pid             struct {
 		HostPid uint32
 		UserPid uint32
@@ -96,6 +95,8 @@ type bpfKafkaGoReqT struct {
 }
 
 type bpfNewFuncInvocationT struct{ Parent uint64 }
+
+type bpfOffTableT struct{ Table [43]uint64 }
 
 type bpfProduceReqT struct {
 	MsgPtr          uint64
@@ -260,6 +261,7 @@ type bpfProgramSpecs struct {
 type bpfMapSpecs struct {
 	Events                        *ebpf.MapSpec `ebpf:"events"`
 	FetchRequests                 *ebpf.MapSpec `ebpf:"fetch_requests"`
+	GoOffsetsMap                  *ebpf.MapSpec `ebpf:"go_offsets_map"`
 	GoTraceMap                    *ebpf.MapSpec `ebpf:"go_trace_map"`
 	GolangMapbucketStorageMap     *ebpf.MapSpec `ebpf:"golang_mapbucket_storage_map"`
 	IncomingTraceMap              *ebpf.MapSpec `ebpf:"incoming_trace_map"`
@@ -311,6 +313,7 @@ func (o *bpfObjects) Close() error {
 type bpfMaps struct {
 	Events                        *ebpf.Map `ebpf:"events"`
 	FetchRequests                 *ebpf.Map `ebpf:"fetch_requests"`
+	GoOffsetsMap                  *ebpf.Map `ebpf:"go_offsets_map"`
 	GoTraceMap                    *ebpf.Map `ebpf:"go_trace_map"`
 	GolangMapbucketStorageMap     *ebpf.Map `ebpf:"golang_mapbucket_storage_map"`
 	IncomingTraceMap              *ebpf.Map `ebpf:"incoming_trace_map"`
@@ -345,6 +348,7 @@ func (m *bpfMaps) Close() error {
 	return _BpfClose(
 		m.Events,
 		m.FetchRequests,
+		m.GoOffsetsMap,
 		m.GoTraceMap,
 		m.GolangMapbucketStorageMap,
 		m.IncomingTraceMap,

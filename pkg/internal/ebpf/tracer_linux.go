@@ -6,14 +6,18 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"path"
 	"reflect"
 	"strings"
 	"sync"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/btf"
+	"github.com/cilium/ebpf/link"
 
+	"github.com/grafana/beyla/pkg/beyla"
 	common "github.com/grafana/beyla/pkg/internal/ebpf/common"
+	"github.com/grafana/beyla/pkg/internal/exec"
 	"github.com/grafana/beyla/pkg/internal/request"
 )
 
@@ -21,16 +25,22 @@ var loadMux sync.Mutex
 
 func ptlog() *slog.Logger { return slog.With("component", "ebpf.ProcessTracer") }
 
+func NewProcessTracer(cfg *beyla.Config, tracerType ProcessTracerType, programs []Tracer) *ProcessTracer {
+	return &ProcessTracer{
+		Programs:        programs,
+		PinPath:         BuildPinPath(cfg),
+		SystemWide:      cfg.Discovery.SystemWide,
+		Type:            tracerType,
+		Instrumentables: map[uint64]*instrumenter{},
+	}
+}
+
 func (pt *ProcessTracer) Run(ctx context.Context, out chan<- []request.Span) {
-	pt.log = ptlog().With("path", pt.ELFInfo.CmdExePath, "pid", pt.ELFInfo.Pid)
+	pt.log = ptlog().With("type", pt.Type)
 
 	pt.log.Debug("starting process tracer")
 	// Searches for traceable functions
-	trcrs, err := pt.tracers()
-	if err != nil {
-		pt.log.Error("couldn't trace process. Stopping process tracer", "error", err)
-		return
-	}
+	trcrs := pt.Programs
 
 	for _, t := range trcrs {
 		go t.Run(ctx, out)
@@ -40,33 +50,37 @@ func (pt *ProcessTracer) Run(ctx context.Context, out chan<- []request.Span) {
 	}()
 }
 
+// BuildPinPath pinpath must be unique for a given executable group
+// it will be:
+//   - current beyla PID
+func BuildPinPath(cfg *beyla.Config) string {
+	return path.Join(cfg.EBPF.BpfBaseDir, cfg.EBPF.BpfPath)
+}
+
 func (pt *ProcessTracer) loadSpec(p Tracer) (*ebpf.CollectionSpec, error) {
 	spec, err := p.Load()
 	if err != nil {
 		return nil, fmt.Errorf("loading eBPF program: %w", err)
 	}
-	if err := spec.RewriteConstants(p.Constants(pt.ELFInfo, pt.Goffsets)); err != nil {
+	if err := spec.RewriteConstants(p.Constants()); err != nil {
 		return nil, fmt.Errorf("rewriting BPF constants definition: %w", err)
 	}
 
 	return spec, nil
 }
 
-// tracers returns Tracer implementer for each discovered eBPF traceable source: GRPC, HTTP...
-func (pt *ProcessTracer) tracers() ([]Tracer, error) {
+func (pt *ProcessTracer) loadTracers() error {
 	loadMux.Lock()
 	defer loadMux.Unlock()
-	var log = ptlog()
 
-	// tracerFuncs contains the eBPF Programs (HTTP, GRPC tracers...)
-	var tracers []Tracer
+	var log = ptlog()
 
 	for _, p := range pt.Programs {
 		plog := log.With("program", reflect.TypeOf(p))
-		plog.Debug("loading eBPF program", "PinPath", pt.PinPath, "pid", pt.ELFInfo.Pid, "cmd", pt.ELFInfo.CmdExePath)
+		plog.Debug("loading eBPF program", "PinPath", pt.PinPath, "type", pt.Type)
 		spec, err := pt.loadSpec(p)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		if err := spec.LoadAndAssign(p.BpfObjects(), &ebpf.CollectionOptions{
 			Programs: ebpf.ProgramOptions{LogSize: 640 * 1024},
@@ -91,7 +105,7 @@ func (pt *ProcessTracer) tracers() ([]Tracer, error) {
 			}
 			if err != nil {
 				printVerifierErrorInfo(err)
-				return nil, fmt.Errorf("loading and assigning BPF objects: %w", err)
+				return fmt.Errorf("loading and assigning BPF objects: %w", err)
 			}
 		}
 
@@ -100,48 +114,72 @@ func (pt *ProcessTracer) tracers() ([]Tracer, error) {
 
 		// Setup any traffic control probes
 		p.SetupTC()
+	}
 
-		i := instrumenter{
-			exe:     pt.Exe,
-			offsets: pt.Goffsets,
-		}
+	btf.FlushKernelSpec()
+
+	return nil
+}
+
+func (pt *ProcessTracer) Init() error {
+	return pt.loadTracers()
+}
+
+func (pt *ProcessTracer) NewExecutable(exe *link.Executable, ie *Instrumentable) error {
+	i := instrumenter{
+		exe:     exe,
+		offsets: ie.Offsets, // this is needed for the function offsets, not fields
+	}
+
+	for _, p := range pt.Programs {
+		p.RegisterOffsets(ie.FileInfo, ie.Offsets)
 
 		// Go style Uprobes
 		if err := i.goprobes(p); err != nil {
 			printVerifierErrorInfo(err)
-			return nil, err
+			return err
 		}
 
 		// Kprobes to be used for native instrumentation points
 		if err := i.kprobes(p); err != nil {
 			printVerifierErrorInfo(err)
-			return nil, err
+			return err
 		}
 
 		// Uprobes to be used for native module instrumentation points
-		if err := i.uprobes(pt.ELFInfo.Pid, p); err != nil {
+		if err := i.uprobes(ie.FileInfo.Pid, p); err != nil {
 			printVerifierErrorInfo(err)
-			return nil, err
+			return err
 		}
 
 		// Tracepoints support
 		if err := i.tracepoints(p); err != nil {
 			printVerifierErrorInfo(err)
-			return nil, err
+			return err
 		}
 
 		// Sock filters support
 		if err := i.sockfilters(p); err != nil {
 			printVerifierErrorInfo(err)
-			return nil, err
+			return err
 		}
-
-		tracers = append(tracers, p)
 	}
 
-	btf.FlushKernelSpec()
+	pt.Instrumentables[ie.FileInfo.Ino] = &i
 
-	return tracers, nil
+	return nil
+}
+
+func (pt *ProcessTracer) UnlinkExecutable(info *exec.FileInfo) {
+	if i, ok := pt.Instrumentables[info.Ino]; ok {
+		for _, c := range i.closables {
+			if err := c.Close(); err != nil {
+				pt.log.Debug("Unable to close on unlink", "closable", c)
+			}
+		}
+	} else {
+		pt.log.Warn("Unable to find executable to unlink", "info", info)
+	}
 }
 
 func printVerifierErrorInfo(err error) {

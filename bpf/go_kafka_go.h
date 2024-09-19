@@ -16,10 +16,6 @@
 #include "ringbuf.h"
 #include "go_kafka_def.h"
 
-volatile const u64 kafka_go_writer_topic_pos;
-volatile const u64 kafka_go_protocol_conn_pos;
-volatile const u64 kafka_go_reader_topic_pos;
-
 typedef struct produce_req {
     u64 msg_ptr;
     u64 conn_ptr;
@@ -89,10 +85,13 @@ int uprobe_writer_produce(struct pt_regs *ctx) {
     bpf_dbg_printk("=== uprobe/kafka-go writer_produce %llx === ", goroutine_addr);
 
     void *w_ptr = (void *)GO_PARAM1(ctx);
+    off_table_t *ot = get_offsets_table();
 
     if (w_ptr) {
         void *topic_ptr = 0;
-        bpf_probe_read_user(&topic_ptr, sizeof(void *), w_ptr + kafka_go_writer_topic_pos);
+        bpf_probe_read_user(&topic_ptr,
+                            sizeof(void *),
+                            w_ptr + go_offset_of(ot, (go_offset){.v = _kafka_go_writer_topic_pos}));
 
         bpf_dbg_printk("topic_ptr %llx", topic_ptr);
         if (topic_ptr) {
@@ -143,6 +142,8 @@ int uprobe_protocol_roundtrip(struct pt_regs *ctx) {
     void *goroutine_addr = (void *)GOROUTINE_PTR(ctx);
     void *rw_ptr = (void *)GO_PARAM2(ctx);
     void *msg_ptr = (void *)GO_PARAM8(ctx);
+    off_table_t *ot = get_offsets_table();
+
     bpf_dbg_printk(
         "goroutine_addr %lx, rw ptr %llx, msg_ptr %llx", goroutine_addr, rw_ptr, msg_ptr);
 
@@ -151,7 +152,8 @@ int uprobe_protocol_roundtrip(struct pt_regs *ctx) {
         bpf_dbg_printk("Found topic %llx", topic_ptr);
         if (topic_ptr) {
             produce_req_t p = {
-                .conn_ptr = ((u64)rw_ptr) + kafka_go_protocol_conn_pos,
+                .conn_ptr =
+                    ((u64)rw_ptr) + go_offset_of(ot, (go_offset){.v = _kafka_go_protocol_conn_pos}),
                 .msg_ptr = (u64)msg_ptr,
                 .start_monotime_ns = bpf_ktime_get_ns(),
             };
@@ -218,6 +220,8 @@ int uprobe_reader_read(struct pt_regs *ctx) {
     void *goroutine_addr = (void *)GOROUTINE_PTR(ctx);
     void *r_ptr = (void *)GO_PARAM1(ctx);
     void *conn = (void *)GO_PARAM5(ctx);
+    off_table_t *ot = get_offsets_table();
+
     bpf_dbg_printk("=== uprobe/kafka-go reader_read %llx r_ptr %llx=== ", goroutine_addr, r_ptr);
 
     if (r_ptr) {
@@ -228,7 +232,9 @@ int uprobe_reader_read(struct pt_regs *ctx) {
         };
 
         void *topic_ptr = 0;
-        bpf_probe_read_user(&topic_ptr, sizeof(void *), r_ptr + kafka_go_reader_topic_pos);
+        bpf_probe_read_user(&topic_ptr,
+                            sizeof(void *),
+                            r_ptr + go_offset_of(ot, (go_offset){.v = _kafka_go_reader_topic_pos}));
 
         bpf_dbg_printk("topic_ptr %llx", topic_ptr);
         if (topic_ptr) {

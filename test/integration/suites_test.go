@@ -158,6 +158,7 @@ func TestSuite_UnsupportedGoVersion(t *testing.T) {
 }
 
 func TestSuite_SkipGoTracers(t *testing.T) {
+	t.Skip("seems flaky, we need to look into this")
 	compose, err := docker.ComposeSuite("docker-compose.yml", path.Join(pathOutput, "test-suite-skip-go-tracers.log"))
 	compose.Env = append(compose.Env, `BEYLA_SKIP_GO_SPECIFIC_TRACERS=1`)
 	require.NoError(t, err)

@@ -112,15 +112,7 @@ type bpfKafkaClientReqT struct {
 	Buf             [256]uint8
 	_               [7]byte
 	Conn            bpfConnectionInfoT
-	Tp              struct {
-		TraceId  [16]uint8
-		SpanId   [8]uint8
-		ParentId [8]uint8
-		Ts       uint64
-		Flags    uint8
-		_        [7]byte
-	}
-	Pid struct {
+	Pid             struct {
 		HostPid uint32
 		UserPid uint32
 		Ns      uint32

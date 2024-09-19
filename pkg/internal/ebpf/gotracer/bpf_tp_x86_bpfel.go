@@ -82,7 +82,6 @@ type bpf_tpKafkaClientReqT struct {
 	Buf             [256]uint8
 	_               [7]byte
 	Conn            bpf_tpConnectionInfoT
-	Tp              bpf_tpTpInfoT
 	Pid             struct {
 		HostPid uint32
 		UserPid uint32
@@ -108,6 +107,8 @@ type bpf_tpKafkaGoReqT struct {
 }
 
 type bpf_tpNewFuncInvocationT struct{ Parent uint64 }
+
+type bpf_tpOffTableT struct{ Table [43]uint64 }
 
 type bpf_tpProduceReqT struct {
 	MsgPtr          uint64
@@ -273,6 +274,7 @@ type bpf_tpMapSpecs struct {
 	Events                        *ebpf.MapSpec `ebpf:"events"`
 	FetchRequests                 *ebpf.MapSpec `ebpf:"fetch_requests"`
 	FramerInvocationMap           *ebpf.MapSpec `ebpf:"framer_invocation_map"`
+	GoOffsetsMap                  *ebpf.MapSpec `ebpf:"go_offsets_map"`
 	GoTraceMap                    *ebpf.MapSpec `ebpf:"go_trace_map"`
 	GolangMapbucketStorageMap     *ebpf.MapSpec `ebpf:"golang_mapbucket_storage_map"`
 	GrpcFramerInvocationMap       *ebpf.MapSpec `ebpf:"grpc_framer_invocation_map"`
@@ -328,6 +330,7 @@ type bpf_tpMaps struct {
 	Events                        *ebpf.Map `ebpf:"events"`
 	FetchRequests                 *ebpf.Map `ebpf:"fetch_requests"`
 	FramerInvocationMap           *ebpf.Map `ebpf:"framer_invocation_map"`
+	GoOffsetsMap                  *ebpf.Map `ebpf:"go_offsets_map"`
 	GoTraceMap                    *ebpf.Map `ebpf:"go_trace_map"`
 	GolangMapbucketStorageMap     *ebpf.Map `ebpf:"golang_mapbucket_storage_map"`
 	GrpcFramerInvocationMap       *ebpf.Map `ebpf:"grpc_framer_invocation_map"`
@@ -366,6 +369,7 @@ func (m *bpf_tpMaps) Close() error {
 		m.Events,
 		m.FetchRequests,
 		m.FramerInvocationMap,
+		m.GoOffsetsMap,
 		m.GoTraceMap,
 		m.GolangMapbucketStorageMap,
 		m.GrpcFramerInvocationMap,

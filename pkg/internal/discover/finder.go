@@ -27,9 +27,9 @@ type nodesMap struct {
 	ProcessWatcher      pipe.Start[[]Event[processAttrs]]
 	WatcherKubeEnricher pipe.Middle[[]Event[processAttrs], []Event[processAttrs]]
 	CriteriaMatcher     pipe.Middle[[]Event[processAttrs], []Event[ProcessMatch]]
-	ExecTyper           pipe.Middle[[]Event[ProcessMatch], []Event[Instrumentable]]
-	ContainerDBUpdater  pipe.Middle[[]Event[Instrumentable], []Event[Instrumentable]]
-	TraceAttacher       pipe.Final[[]Event[Instrumentable]]
+	ExecTyper           pipe.Middle[[]Event[ProcessMatch], []Event[ebpf.Instrumentable]]
+	ContainerDBUpdater  pipe.Middle[[]Event[ebpf.Instrumentable], []Event[ebpf.Instrumentable]]
+	TraceAttacher       pipe.Final[[]Event[ebpf.Instrumentable]]
 }
 
 func (pf *nodesMap) Connect() {
@@ -47,13 +47,13 @@ func ptrWatcherKubeEnricher(pf *nodesMap) *pipe.Middle[[]Event[processAttrs], []
 func criteriaMatcher(pf *nodesMap) *pipe.Middle[[]Event[processAttrs], []Event[ProcessMatch]] {
 	return &pf.CriteriaMatcher
 }
-func execTyper(pf *nodesMap) *pipe.Middle[[]Event[ProcessMatch], []Event[Instrumentable]] {
+func execTyper(pf *nodesMap) *pipe.Middle[[]Event[ProcessMatch], []Event[ebpf.Instrumentable]] {
 	return &pf.ExecTyper
 }
-func containerDBUpdater(pf *nodesMap) *pipe.Middle[[]Event[Instrumentable], []Event[Instrumentable]] {
+func containerDBUpdater(pf *nodesMap) *pipe.Middle[[]Event[ebpf.Instrumentable], []Event[ebpf.Instrumentable]] {
 	return &pf.ContainerDBUpdater
 }
-func traceAttacher(pf *nodesMap) *pipe.Final[[]Event[Instrumentable]] { return &pf.TraceAttacher }
+func traceAttacher(pf *nodesMap) *pipe.Final[[]Event[ebpf.Instrumentable]] { return &pf.TraceAttacher }
 
 func NewProcessFinder(ctx context.Context, cfg *beyla.Config, ctxInfo *global.ContextInfo) *ProcessFinder {
 	return &ProcessFinder{ctx: ctx, cfg: cfg, ctxInfo: ctxInfo}
@@ -61,9 +61,9 @@ func NewProcessFinder(ctx context.Context, cfg *beyla.Config, ctxInfo *global.Co
 
 // Start the ProcessFinder pipeline in background. It returns a channel where each new discovered
 // ebpf.ProcessTracer will be notified.
-func (pf *ProcessFinder) Start() (<-chan *ebpf.ProcessTracer, <-chan *Instrumentable, error) {
+func (pf *ProcessFinder) Start() (<-chan *ebpf.Instrumentable, <-chan *ebpf.Instrumentable, error) {
 
-	discoveredTracers, deleteTracers := make(chan *ebpf.ProcessTracer), make(chan *Instrumentable)
+	discoveredTracers, deleteTracers := make(chan *ebpf.Instrumentable), make(chan *ebpf.Instrumentable)
 
 	gb := pipe.NewBuilder(&nodesMap{}, pipe.ChannelBufferLen(pf.cfg.ChannelBufferLen))
 	pipe.AddStart(gb, processWatcher, ProcessWatcherFunc(pf.ctx, pf.cfg))

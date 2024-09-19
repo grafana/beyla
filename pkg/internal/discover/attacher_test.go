@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/grafana/beyla/pkg/beyla"
+	"github.com/grafana/beyla/pkg/internal/ebpf"
 	"github.com/grafana/beyla/pkg/internal/exec"
 	"github.com/grafana/beyla/pkg/services"
 )
@@ -49,7 +50,7 @@ func TestSkipSelfInstrumentation(t *testing.T) {
 		},
 	} {
 		t.Run(tt.test, func(t *testing.T) {
-			i := Instrumentable{FileInfo: &exec.FileInfo{Pid: int32(pid)}}
+			i := ebpf.Instrumentable{FileInfo: &exec.FileInfo{Pid: int32(pid)}}
 
 			assert.Equal(t, tt.isSelf, tt.ta.skipSelfInstrumentation(&i))
 		})

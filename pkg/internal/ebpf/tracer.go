@@ -15,6 +15,19 @@ import (
 	"github.com/grafana/beyla/pkg/internal/svc"
 )
 
+type Instrumentable struct {
+	Type                 svc.InstrumentableType
+	InstrumentationError error
+
+	// in some runtimes, like python gunicorn, we need to allow
+	// tracing both the parent pid and all of its children pid
+	ChildPids []uint32
+
+	FileInfo *exec.FileInfo
+	Offsets  *goexec.Offsets
+	Tracer   *ProcessTracer
+}
+
 type PIDsAccounter interface {
 	// AllowPID notifies the tracer to accept traces from the process with the
 	// provided PID. Unless system-wide instrumentation, the Tracer should discard
@@ -54,7 +67,7 @@ type Tracer interface {
 	KprobesTracer
 	// Constants returns a map of constants to be overriden into the eBPF program.
 	// The key is the constant name and the value is the value to overwrite.
-	Constants(*exec.FileInfo, *goexec.Offsets) map[string]any
+	Constants() map[string]any
 	// GoProbes returns a map with the name of Go functions that need to be inspected
 	// in the executable, as well as the eBPF programs that optionally need to be
 	// inserted as the Go function start and end probes
@@ -72,6 +85,7 @@ type Tracer interface {
 	// The argument is the OS file id
 	RecordInstrumentedLib(uint64)
 	AlreadyInstrumentedLib(uint64) bool
+	RegisterOffsets(*exec.FileInfo, *goexec.Offsets)
 	// Run will do the action of listening for eBPF traces and forward them
 	// periodically to the output channel.
 	Run(context.Context, chan<- []request.Span)
@@ -86,6 +100,12 @@ type UtilityTracer interface {
 
 type ProcessTracerType int
 
+type instrumenter struct {
+	offsets   *goexec.Offsets
+	exe       *link.Executable
+	closables []io.Closer
+}
+
 const (
 	Go = ProcessTracerType(iota)
 	Generic
@@ -96,13 +116,11 @@ const (
 type ProcessTracer struct {
 	log      *slog.Logger //nolint:unused
 	Programs []Tracer
-	ELFInfo  *exec.FileInfo
-	Goffsets *goexec.Offsets
-	Exe      *link.Executable
 	PinPath  string
 
-	SystemWide bool
-	Type       ProcessTracerType
+	SystemWide      bool
+	Type            ProcessTracerType
+	Instrumentables map[uint64]*instrumenter
 }
 
 func (pt *ProcessTracer) AllowPID(pid, ns uint32, svc *svc.ID) {

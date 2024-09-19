@@ -87,74 +87,72 @@ func (p *Tracer) Load() (*ebpf.CollectionSpec, error) {
 
 func (p *Tracer) SetupTailCalls() {}
 
-func (p *Tracer) Constants(_ *exec.FileInfo, offsets *goexec.Offsets) map[string]any {
-	// Set the field offsets and the logLevel for nethttp BPF program,
-	// as well as some other configuration constants
-	constants := map[string]any{
+func (p *Tracer) Constants() map[string]any {
+	return map[string]any{
 		"wakeup_data_bytes": uint32(p.cfg.WakeupLen) * uint32(unsafe.Sizeof(ebpfcommon.HTTPRequestTrace{})),
 	}
-	for _, s := range []string{
-		// Go net/http
-		"url_ptr_pos",
-		"path_ptr_pos",
-		"method_ptr_pos",
-		"status_code_ptr_pos",
-		"content_length_ptr_pos",
-		"req_header_ptr_pos",
-		"io_writer_buf_ptr_pos",
-		"io_writer_n_pos",
-		"tcp_addr_port_ptr_pos",
-		"tcp_addr_ip_ptr_pos",
-		"pc_conn_pos",
-		"pc_tls_pos",
-		"c_rwc_pos",
-		"c_tls_pos",
-		"net_conn_pos",
-		"conn_fd_pos",
-		"fd_laddr_pos",
-		"fd_raddr_pos",
-	} {
-		constants[s] = offsets.Field[s]
-	}
+}
 
-	// Optional list
-	for _, s := range []string{
-		"cc_next_stream_id_pos",
-		"framer_w_pos",
-		"cc_tconn_pos",
-		"sc_conn_pos",
-		// Go gRPC
-		"grpc_stream_st_ptr_pos",
-		"grpc_stream_method_ptr_pos",
-		"grpc_status_s_pos",
-		"grpc_status_code_ptr_pos",
-		"grpc_st_conn_pos",
-		"grpc_stream_ctx_ptr_pos",
-		"grpc_t_conn_pos",
-		"grpc_t_scheme_pos",
-		"value_context_val_ptr_pos",
-		"http2_client_next_id_pos",
-		"grpc_transport_buf_writer_buf_pos",
-		"grpc_transport_buf_writer_offset_pos",
-		// Redis
-		"redis_conn_bw_pos",
-		// Kafka Go
-		"kafka_go_writer_topic_pos",
-		"kafka_go_protocol_conn_pos",
-		"kafka_go_reader_topic_pos",
-		// Kafka sarama
-		"sarama_broker_corr_id_pos",
-		"sarama_response_corr_id_pos",
-		"sarama_broker_conn_pos",
-		"sarama_bufconn_conn_pos",
+func (p *Tracer) RegisterOffsets(fileInfo *exec.FileInfo, offsets *goexec.Offsets) {
+	offTable := bpfOffTableT{}
+	// Set the field offsets and the logLevel for the Go BPF program in a map
+	for _, field := range []goexec.GoOffset{
+		goexec.ConnFdPos,
+		goexec.FdLaddrPos,
+		goexec.FdRaddrPos,
+		goexec.TCPAddrPortPtrPos,
+		goexec.TCPAddrIPPtrPos,
+		// http
+		goexec.URLPtrPos,
+		goexec.PathPtrPos,
+		goexec.MethodPtrPos,
+		goexec.StatusCodePtrPos,
+		goexec.ContentLengthPtrPos,
+		goexec.ReqHeaderPtrPos,
+		goexec.IoWriterBufPtrPos,
+		goexec.IoWriterNPos,
+		goexec.CcNextStreamIDPos,
+		goexec.FramerWPos,
+		goexec.PcConnPos,
+		goexec.PcTLSPos,
+		goexec.NetConnPos,
+		goexec.CcTconnPos,
+		goexec.ScConnPos,
+		goexec.CRwcPos,
+		goexec.CTlsPos,
+		// grpc
+		goexec.GrpcStreamStPtrPos,
+		goexec.GrpcStreamMethodPtrPos,
+		goexec.GrpcStatusSPos,
+		goexec.GrpcStatusCodePtrPos,
+		goexec.GrpcStreamCtxPtrPos,
+		goexec.ValueContextValPtrPos,
+		goexec.GrpcStConnPos,
+		goexec.GrpcTConnPos,
+		goexec.GrpcTSchemePos,
+		goexec.HTTP2ClientNextIDPos,
+		goexec.GrpcTransportBufWriterBufPos,
+		goexec.GrpcTransportBufWriterOffsetPos,
+		// redis
+		goexec.RedisConnBwPos,
+		// kafka go
+		goexec.KafkaGoWriterTopicPos,
+		goexec.KafkaGoProtocolConnPos,
+		goexec.KafkaGoReaderTopicPos,
+		// kafka sarama
+		goexec.SaramaBrokerCorrIDPos,
+		goexec.SaramaResponseCorrIDPos,
+		goexec.SaramaBrokerConnPos,
+		goexec.SaramaBufconnConnPos,
 	} {
-		constants[s] = offsets.Field[s]
-		if constants[s] == nil {
-			constants[s] = uint64(0xffffffffffffffff)
+		if val, ok := offsets.Field[field].(uint64); ok {
+			offTable.Table[field] = val
 		}
 	}
 
-	return constants
+	if err := p.bpfObjects.GoOffsetsMap.Put(fileInfo.Ino, offTable); err != nil {
+		p.log.Error("error setting offset in map for", "pid", fileInfo.Pid, "ino", fileInfo.Ino)
+	}
 }
 
 func (p *Tracer) BpfObjects() any {

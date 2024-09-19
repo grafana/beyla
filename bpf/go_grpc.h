@@ -93,26 +93,6 @@ struct {
 #define TRANSPORT_HTTP2 1
 #define TRANSPORT_HANDLER 2
 
-// To be Injected from the user space during the eBPF program load & initialization
-
-volatile const u64 grpc_stream_st_ptr_pos;
-volatile const u64 grpc_stream_method_ptr_pos;
-volatile const u64 grpc_status_s_pos;
-volatile const u64 grpc_status_code_ptr_pos;
-volatile const u64 tcp_addr_port_ptr_pos;
-volatile const u64 tcp_addr_ip_ptr_pos;
-volatile const u64 grpc_stream_ctx_ptr_pos;
-volatile const u64 value_context_val_ptr_pos;
-volatile const u64 grpc_st_conn_pos;
-volatile const u64 grpc_t_conn_pos;
-volatile const u64 grpc_t_scheme_pos;
-
-// Context propagation
-volatile const u64 http2_client_next_id_pos;
-volatile const u64 framer_w_pos;
-volatile const u64 grpc_transport_buf_writer_buf_pos;
-volatile const u64 grpc_transport_buf_writer_offset_pos;
-
 #define OPTIMISTIC_GRPC_ENCODED_HEADER_LEN                                                         \
     49 // 1 + 1 + 8 + 1 +~ 38 = type byte + hpack_len_as_byte("traceparent") + strlen(hpack("traceparent")) + len_as_byte(38) + hpack(generated tracepanent id)
 
@@ -123,6 +103,7 @@ int uprobe_server_handleStream(struct pt_regs *ctx) {
     bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
 
     void *stream_ptr = GO_PARAM4(ctx);
+    off_table_t *ot = get_offsets_table();
 
     grpc_srv_func_invocation_t invocation = {
         .start_monotime_ns = bpf_ktime_get_ns(),
@@ -135,12 +116,16 @@ int uprobe_server_handleStream(struct pt_regs *ctx) {
         // Read the embedded context object ptr
         bpf_probe_read(&ctx_ptr,
                        sizeof(ctx_ptr),
-                       (void *)(stream_ptr + grpc_stream_ctx_ptr_pos + sizeof(void *)));
+                       (void *)(stream_ptr +
+                                go_offset_of(ot, (go_offset){.v = _grpc_stream_ctx_ptr_pos}) +
+                                sizeof(void *)));
 
         if (ctx_ptr) {
-            server_trace_parent(goroutine_addr,
-                                &invocation.tp,
-                                (void *)(ctx_ptr + value_context_val_ptr_pos + sizeof(void *)));
+            server_trace_parent(
+                goroutine_addr,
+                &invocation.tp,
+                (void *)(ctx_ptr + go_offset_of(ot, (go_offset){.v = _value_context_val_ptr_pos}) +
+                         sizeof(void *)));
         }
     }
 
@@ -222,6 +207,8 @@ int uprobe_server_handleStream_return(struct pt_regs *ctx) {
     bpf_dbg_printk("=== uprobe/server_handleStream return === ");
 
     void *goroutine_addr = GOROUTINE_PTR(ctx);
+    off_table_t *ot = get_offsets_table();
+
     bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
 
     grpc_srv_func_invocation_t *invocation =
@@ -239,6 +226,8 @@ int uprobe_server_handleStream_return(struct pt_regs *ctx) {
     }
 
     void *stream_ptr = (void *)invocation->stream;
+    u64 grpc_stream_method_ptr_pos =
+        go_offset_of(ot, (go_offset){.v = _grpc_stream_method_ptr_pos});
     bpf_dbg_printk("stream_ptr %lx, method pos %lx", stream_ptr, grpc_stream_method_ptr_pos);
 
     http_request_trace *trace = bpf_ringbuf_reserve(&events, sizeof(http_request_trace), 0);
@@ -275,8 +264,11 @@ int uprobe_server_handleStream_return(struct pt_regs *ctx) {
     void *st_ptr = 0;
     u8 found_conn = 0;
     // Read the embedded object ptr
-    bpf_probe_read(
-        &st_ptr, sizeof(st_ptr), (void *)(stream_ptr + grpc_stream_st_ptr_pos + sizeof(void *)));
+    bpf_probe_read(&st_ptr,
+                   sizeof(st_ptr),
+                   (void *)(stream_ptr +
+                            go_offset_of(ot, (go_offset){.v = _grpc_stream_st_ptr_pos}) +
+                            sizeof(void *)));
 
     bpf_dbg_printk("st_ptr %llx", st_ptr);
     if (st_ptr) {
@@ -315,6 +307,8 @@ int uprobe_transport_writeStatus(struct pt_regs *ctx) {
     bpf_dbg_printk("=== uprobe/transport_writeStatus === ");
 
     void *goroutine_addr = GOROUTINE_PTR(ctx);
+    off_table_t *ot = get_offsets_table();
+
     bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
 
     void *status_ptr = GO_PARAM3(ctx);
@@ -322,13 +316,19 @@ int uprobe_transport_writeStatus(struct pt_regs *ctx) {
 
     if (status_ptr != NULL) {
         void *s_ptr;
-        bpf_probe_read(&s_ptr, sizeof(s_ptr), (void *)(status_ptr + grpc_status_s_pos));
+        bpf_probe_read(
+            &s_ptr,
+            sizeof(s_ptr),
+            (void *)(status_ptr + go_offset_of(ot, (go_offset){.v = _grpc_status_s_pos})));
 
         bpf_dbg_printk("s_ptr %lx", s_ptr);
 
         if (s_ptr != NULL) {
             u16 status = -1;
-            bpf_probe_read(&status, sizeof(status), (void *)(s_ptr + grpc_status_code_ptr_pos));
+            bpf_probe_read(
+                &status,
+                sizeof(status),
+                (void *)(s_ptr + go_offset_of(ot, (go_offset){.v = _grpc_status_code_ptr_pos})));
             bpf_dbg_printk("status code %d", status);
             bpf_map_update_elem(&ongoing_grpc_request_status, &goroutine_addr, &status, BPF_ANY);
         }
@@ -348,13 +348,16 @@ static __always_inline void clientConnStart(
         .tp = {0},
         .flags = 0,
     };
+    off_table_t *ot = get_offsets_table();
 
     if (ctx_ptr) {
         void *val_ptr = 0;
         // Read the embedded val object ptr from ctx if there's one
         bpf_probe_read(&val_ptr,
                        sizeof(val_ptr),
-                       (void *)(ctx_ptr + value_context_val_ptr_pos + sizeof(void *)));
+                       (void *)(ctx_ptr +
+                                go_offset_of(ot, (go_offset){.v = _value_context_val_ptr_pos}) +
+                                sizeof(void *)));
 
         invocation.flags = client_trace_parent(goroutine_addr, &invocation.tp, (void *)(val_ptr));
     } else {
@@ -522,18 +525,20 @@ int uprobe_transport_http2Client_NewStream(struct pt_regs *ctx) {
 
     void *goroutine_addr = GOROUTINE_PTR(ctx);
     void *t_ptr = GO_PARAM1(ctx);
+    off_table_t *ot = get_offsets_table();
 
+    u64 grpc_t_conn_pos = go_offset_of(ot, (go_offset){.v = _grpc_t_scheme_pos});
     bpf_dbg_printk(
         "goroutine_addr %lx, t_ptr %llx, t.conn_pos %x", goroutine_addr, t_ptr, grpc_t_conn_pos);
 
     if (t_ptr) {
-        void *conn_ptr = t_ptr + grpc_t_conn_pos + 8;
+        void *conn_ptr = t_ptr + go_offset_of(ot, (go_offset){.v = _grpc_t_conn_pos}) + 8;
         u8 buf[16];
         u64 is_secure = 0;
 
         void *s_ptr = 0;
         buf[0] = 0;
-        bpf_probe_read(&s_ptr, sizeof(s_ptr), (void *)(t_ptr + grpc_t_scheme_pos));
+        bpf_probe_read(&s_ptr, sizeof(s_ptr), (void *)(t_ptr + grpc_t_conn_pos));
         bpf_probe_read(buf, sizeof(buf), s_ptr);
 
         //bpf_dbg_printk("scheme %s", buf);
@@ -565,7 +570,10 @@ int uprobe_transport_http2Client_NewStream(struct pt_regs *ctx) {
 #ifndef NO_HEADER_PROPAGATION
         u32 next_id = 0;
         // Read the next stream id from the httpClient
-        bpf_probe_read(&next_id, sizeof(next_id), (void *)(t_ptr + http2_client_next_id_pos));
+        bpf_probe_read(
+            &next_id,
+            sizeof(next_id),
+            (void *)(t_ptr + go_offset_of(ot, (go_offset){.v = _http2_client_next_id_pos})));
 
         bpf_dbg_printk("next_id %d", next_id);
 
@@ -608,13 +616,16 @@ SEC("uprobe/grpcFramerWriteHeaders")
 int uprobe_grpcFramerWriteHeaders(struct pt_regs *ctx) {
     bpf_dbg_printk("=== uprobe/proc grpc Framer writeHeaders === ");
 
-    if (framer_w_pos == 0) {
+    void *framer = GO_PARAM1(ctx);
+    u64 stream_id = (u64)GO_PARAM2(ctx);
+
+    off_table_t *ot = get_offsets_table();
+    u64 framer_w_pos = go_offset_of(ot, (go_offset){.v = _framer_w_pos});
+
+    if (framer_w_pos == -1) {
         bpf_dbg_printk("framer w not found");
         return 0;
     }
-
-    void *framer = GO_PARAM1(ctx);
-    u64 stream_id = (u64)GO_PARAM2(ctx);
 
     bpf_dbg_printk(
         "framer=%llx, stream_id=%lld, framer_w_pos %llx", framer, ((u64)stream_id), framer_w_pos);
@@ -634,7 +645,10 @@ int uprobe_grpcFramerWriteHeaders(struct pt_regs *ctx) {
         if (w_ptr) {
             s64 offset;
             bpf_probe_read(
-                &offset, sizeof(offset), (void *)(w_ptr + grpc_transport_buf_writer_offset_pos));
+                &offset,
+                sizeof(offset),
+                (void *)(w_ptr + go_offset_of(
+                                     ot, (go_offset){.v = _grpc_transport_buf_writer_offset_pos})));
 
             bpf_dbg_printk("Found initial data offset %d", offset);
 
@@ -674,13 +688,18 @@ int uprobe_grpcFramerWriteHeaders_returns(struct pt_regs *ctx) {
     bpf_dbg_printk("=== uprobe/proc grpc Framer writeHeaders returns === ");
 
     void *goroutine_addr = GOROUTINE_PTR(ctx);
+    off_table_t *ot = get_offsets_table();
 
     grpc_framer_func_invocation_t *f_info =
         bpf_map_lookup_elem(&grpc_framer_invocation_map, &goroutine_addr);
 
     if (f_info) {
-        void *w_ptr = (void *)(f_info->framer_ptr + framer_w_pos + 16);
-        bpf_probe_read(&w_ptr, sizeof(w_ptr), (void *)(f_info->framer_ptr + framer_w_pos + 8));
+        void *w_ptr =
+            (void *)(f_info->framer_ptr + go_offset_of(ot, (go_offset){.v = _framer_w_pos}) + 16);
+        bpf_probe_read(
+            &w_ptr,
+            sizeof(w_ptr),
+            (void *)(f_info->framer_ptr + go_offset_of(ot, (go_offset){.v = _framer_w_pos}) + 8));
 
         if (w_ptr) {
             void *buf_arr = 0;
@@ -691,13 +710,24 @@ int uprobe_grpcFramerWriteHeaders_returns(struct pt_regs *ctx) {
             bpf_probe_read(
                 &buf_arr,
                 sizeof(buf_arr),
+                (void
+                     *)(w_ptr +
+                        go_offset_of(
+                            ot,
+                            (go_offset){
+                                .v =
+                                    _grpc_transport_buf_writer_buf_pos}))); // the buffer is the first field
+            bpf_probe_read(
+                &n,
+                sizeof(n),
+                (void *)(w_ptr + go_offset_of(
+                                     ot, (go_offset){.v = _grpc_transport_buf_writer_offset_pos})));
+            bpf_probe_read(
+                &cap,
+                sizeof(cap),
                 (void *)(w_ptr +
-                         grpc_transport_buf_writer_buf_pos)); // the buffer is the first field
-            bpf_probe_read(&n, sizeof(n), (void *)(w_ptr + grpc_transport_buf_writer_offset_pos));
-            bpf_probe_read(&cap,
-                           sizeof(cap),
-                           (void *)(w_ptr + grpc_transport_buf_writer_offset_pos +
-                                    16)); // the offset of the capacity is 2 * 8 bytes from the buf
+                         go_offset_of(ot, (go_offset){.v = _grpc_transport_buf_writer_offset_pos}) +
+                         16)); // the offset of the capacity is 2 * 8 bytes from the buf
 
             bpf_clamp_umax(off, MAX_W_PTR_OFFSET);
 
@@ -730,7 +760,11 @@ int uprobe_grpcFramerWriteHeaders_returns(struct pt_regs *ctx) {
                 n += TP_MAX_VAL_LENGTH;
                 // Update the value of n in w to reflect the new size
                 bpf_probe_write_user(
-                    (void *)(w_ptr + grpc_transport_buf_writer_offset_pos), &n, sizeof(n));
+                    (void *)(w_ptr +
+                             go_offset_of(ot,
+                                          (go_offset){.v = _grpc_transport_buf_writer_offset_pos})),
+                    &n,
+                    sizeof(n));
 
                 // http2 encodes the length of the headers in the first 3 bytes of buf, we need to update those
                 u8 size_1 = 0;

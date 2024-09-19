@@ -9,6 +9,7 @@ import (
 
 	"github.com/grafana/beyla/pkg/beyla"
 	"github.com/grafana/beyla/pkg/internal/discover"
+	"github.com/grafana/beyla/pkg/internal/ebpf"
 	"github.com/grafana/beyla/pkg/internal/pipe"
 	"github.com/grafana/beyla/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/pkg/internal/request"
@@ -65,22 +66,27 @@ func (i *Instrumenter) FindAndInstrument() error {
 			select {
 			case <-i.ctx.Done():
 				log.Debug("stopped searching for new processes to instrument")
+				for ino, ctx := range contexts {
+					log.Debug("cancelling context for", "ino", ino)
+					ctx.cancel()
+				}
 				return
 			case pt := <-foundProcesses:
 				log.Debug("running tracer for new process",
-					"inode", pt.ELFInfo.Ino, "pid", pt.ELFInfo.Pid, "exec", pt.ELFInfo.CmdExePath)
-				cctx, ok := contexts[pt.ELFInfo.Ino]
-				if !ok {
-					cctx.ctx, cctx.cancel = context.WithCancel(i.ctx)
-					contexts[pt.ELFInfo.Ino] = cctx
+					"inode", pt.FileInfo.Ino, "pid", pt.FileInfo.Pid, "exec", pt.FileInfo.CmdExePath)
+				if pt.Tracer != nil {
+					cctx, ok := contexts[pt.FileInfo.Ino]
+					if !ok {
+						cctx.ctx, cctx.cancel = context.WithCancel(i.ctx)
+						contexts[pt.FileInfo.Ino] = cctx
+					}
+					go pt.Tracer.Run(cctx.ctx, i.tracesInput)
 				}
-				go pt.Run(cctx.ctx, i.tracesInput)
 			case dp := <-deletedProcesses:
 				log.Debug("stopping ProcessTracer because there are no more instances of such process",
 					"inode", dp.FileInfo.Ino, "pid", dp.FileInfo.Pid, "exec", dp.FileInfo.CmdExePath)
-				if cctx, ok := contexts[dp.FileInfo.Ino]; ok {
-					delete(contexts, dp.FileInfo.Ino)
-					cctx.cancel()
+				if dp.Tracer != nil {
+					dp.Tracer.UnlinkExecutable(dp.FileInfo)
 				}
 			}
 		}
@@ -107,6 +113,7 @@ func (i *Instrumenter) ReadAndForward() error {
 	bp.Run(i.ctx)
 
 	log.Info("exiting auto-instrumenter")
+	discover.UnmountBPFFS(ebpf.BuildPinPath(i.config), log)
 
 	return nil
 }

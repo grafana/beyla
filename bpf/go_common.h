@@ -33,8 +33,8 @@ char __license[] SEC("license") = "Dual MIT/GPL";
 // attributes (method, path, and status code).
 
 typedef struct goroutine_key {
-    u32 pid;  // PID of the process
     u64 addr; // Address of the goroutine
+    u64 pid;  // PID of the process
 } goroutine_key_t;
 
 typedef struct goroutine_metadata_t {

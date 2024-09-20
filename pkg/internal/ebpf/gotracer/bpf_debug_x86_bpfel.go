@@ -20,9 +20,8 @@ type bpf_debugConnectionInfoT struct {
 }
 
 type bpf_debugGoroutineKeyT struct {
-	Pid  uint32
-	_    [4]byte
 	Addr uint64
+	Pid  uint64
 }
 
 type bpf_debugGoroutineMetadata struct {

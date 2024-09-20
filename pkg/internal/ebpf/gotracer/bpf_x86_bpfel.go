@@ -20,9 +20,8 @@ type bpfConnectionInfoT struct {
 }
 
 type bpfGoroutineKeyT struct {
-	Pid  uint32
-	_    [4]byte
 	Addr uint64
+	Pid  uint64
 }
 
 type bpfGoroutineMetadata struct {

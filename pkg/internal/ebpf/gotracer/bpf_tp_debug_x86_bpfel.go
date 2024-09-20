@@ -26,9 +26,8 @@ type bpf_tp_debugFramerFuncInvocationT struct {
 }
 
 type bpf_tp_debugGoroutineKeyT struct {
-	Pid  uint32
-	_    [4]byte
 	Addr uint64
+	Pid  uint64
 }
 
 type bpf_tp_debugGoroutineMetadata struct {

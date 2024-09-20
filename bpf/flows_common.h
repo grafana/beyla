@@ -186,6 +186,8 @@ static inline u8 get_connection_initiator(flow_id *id, u16 flags) {
             flow_initiator = INITIATOR_SRC;
         }
         break;
+    default:
+        break;
     }
 
     return flow_initiator;

@@ -18,7 +18,7 @@ Checks:
   - '-readability-function-cognitive-complexity'
   - '-readability-magic-numbers'
 
-WarningsAsErrors: ''
+WarningsAsErrors: '*'
 HeaderFilterRegex: ''
 FormatStyle: none
 ExtraArgs: ['--target=bpf', '-Iheaders', '-D__TARGET_ARCH_x86', '-DBPF_DEBUG', '-DBPF_TRACEPARENT']

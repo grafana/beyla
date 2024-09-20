@@ -29,7 +29,7 @@ jobs:
           cd bpf
           clang-tidy-20 *.c *.h | tee clang-tidy-output.txt
 
-          if grep -q "warning:" clang-tidy-output.txt || [ $? -ne 0 ]; then
+          if [ $? -ne 0 ] || grep -q "warning:" clang-tidy-output.txt; then
             echo "clang-tidy found warnings or errors."
             exit 1
           fi

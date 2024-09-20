@@ -5,6 +5,7 @@ Checks:
   - 'misc-misplaced_const'
   - 'misc-*'
   - '-bugprone-*'
+  - 'bugprone-switch-missing-default-case'
   - '-bugprone-multi-level-implicit-pointer-conversion' #TODO enable this
   - '-bugprone-reserved-identifier'
   - '-bugprone-easily-swappable-parameters'

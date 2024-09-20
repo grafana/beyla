@@ -186,6 +186,34 @@ As described in the previous section, `make dev` takes care of setting up the bu
 
 After a successful compilation, binaries can be found in the `bin/` subdirectory.
 
+#### Formatting and linting code
+
+Beyla uses linters to enforce our coding style and best practices:
+- `golangci-lint` for Go code
+- `clang-format` for formatting C code
+- `clang-tidy` for static analysis of the C code
+
+All of them are enforced on pull requests as part of the Beyla github workflows. Additionally, you can invoke the linters manually:
+
+- `make lint` invokes `golangci-lint` on the Go code
+- `make clang-tidy` invokes `clang-tidy` on the C/eBPF code
+
+`clang-format` is invoked automatically as a `pre-commit` git hook, so there is no explicit `Makefile` target for it.
+
+#### Running VM tests
+
+In addition to the `test` and `integration-test` `Makefile` targets, Beyla also runs select tests on QEMU virtual machines in order to be able to test different kernel versions. These tests are also part of our GitHub workflow, but it is also possible to run them manually using the following command:
+
+```
+$ sudo make -C test/vm KERNEL_VER=...
+```
+
+where `KERNEL_VER` is one of the supported kernel versions located in `test/vm/kernels`. For example, to run tests against kernel version 5.15.152, simply do:
+
+```
+$ sudo make -C test/vm KERNEL_VER=5.15.152
+```
+
 ## Credits
 
 Part of the code is taken from: https://github.com/open-telemetry/opentelemetry-go-instrumentation

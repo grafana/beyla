@@ -63,11 +63,10 @@ See [Documentation](https://grafana.com/docs/beyla/) and the [tutorials](https:/
 ## Requirements
 
 - Linux with Kernel 5.8 or higher with [BTF](https://www.kernel.org/doc/html/latest/bpf/btf.html)
-  enabled. BTF became enabled by default on most Linux distributions with kernel 5.14 or higher. 
+  enabled, or Linux distributions running RedHat Enterprise Linux 4.18 kernels build 348 and above as they have the required kernel backports. These include CentOS, AlmaLinux, and Oracle Linux. BTF became enabled by default on most Linux distributions with kernel 5.14 or higher.
   You can check if your kernel has BTF enabled by verifying if `/sys/kernel/btf/vmlinux` exists on your system.
   If you need to recompile your kernel to enable BTF, the configuration option `CONFIG_DEBUG_INFO_BTF=y` must be
   set.
-- Beyla supports Linux distributions running RedHat Enterprise Linux 4.18 kernels build 348 and above as they have the required kernel backports. These include CentOS, AlmaLinux, and Oracle Linux.
 - eBPF enabled on the host.
 - For instrumenting Go programs, they must have been compiled with at least Go 1.17. We currently
   support Go applications built with a major **Go version no earlier than 3 versions** behind the current
@@ -149,6 +148,43 @@ make generate
 ```
 
 Tested in Fedora 35, 38 and Red Hat Enterprise Linux 8.
+
+## Building Beyla from scratch
+
+### Development environment requirements
+
+- go 1.23
+- llvm >= 18
+- clang >= 18
+- clang-tidy >= 18
+- clang-format >= 18
+-  git-lfs
+- GNU make
+
+> [!IMPORTANT]
+>  You need to run `git lfs install` _once_ after installing the _git-lfs_ package to deploy its global configuration
+
+#### Common `Makefile` targets
+
+Beyla's `Makefile` provides several specific-purpose build targets. The most common ones are:
+- `prereqs` - install the build pre-requisites
+- `generate` - regenerates the eBPF binaries
+- `compile` - compiles the `beyla` binary (but does not automatically regenerates the eBPF binaries)
+- `dev` - equivalent to `make prereqs && make generate && make compile`
+- `test` - runs unit tests
+- `integration-tests` - runs integration tests - may require `sudo`
+
+####  Quickstart: cloning the repository and building Beyla
+
+```
+$ git clone https://github.com/grafana/beyla.git
+$ cd beyla/
+$ make dev
+```
+
+As described in the previous section, `make dev` takes care of setting up the build pre-requisites, including deploying a `clang-format` pre-commit hook.
+
+After a successful compilation, binaries can be found in the `bin/` subdirectory.
 
 ## Credits
 

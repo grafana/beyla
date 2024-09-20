@@ -19,6 +19,8 @@
 #ifndef __FLOW_H__
 #define __FLOW_H__
 
+#include "vmlinux.h"
+
 #define TC_ACT_OK 0
 #define TC_ACT_SHOT 2
 #define IP_MAX_LEN 16

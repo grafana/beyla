@@ -16,6 +16,16 @@
 // This implementation was inspired by https://github.com/open-telemetry/opentelemetry-go-instrumentation/blob/ca1afccea6ec520d18238c3865024a9f5b9c17fe/internal/pkg/instrumentors/bpf/database/sql/bpf/probe.bpf.c
 // and has been modified since.
 
+#ifndef GO_SQL_H
+#define GO_SQL_H
+
+#include "vmlinux.h"
+
+#include "bpf_helpers.h"
+#include "http_types.h"
+#include "go_common.h"
+#include "ringbuf.h"
+
 typedef struct sql_func_invocation {
     u64 start_monotime_ns;
     u64 sql_param;
@@ -110,3 +120,5 @@ int uprobe_queryReturn(struct pt_regs *ctx) {
     }
     return 0;
 }
+
+#endif

@@ -7,6 +7,7 @@
 #include "ringbuf.h"
 #include "pid.h"
 #include "protocol_common.h"
+#include "trace_common.h"
 
 // Keeps track of tcp buffers for unknown protocols
 struct {

@@ -152,6 +152,8 @@ static __always_inline int32_t hpack_encode_tp(struct hpack_ctx *d) {
         d->len += 3;
         return d->len;
     }
+    default:
+        break;
     }
     //	case 4:
     uint32_t y = (uint32_t)(d->m_bytes);

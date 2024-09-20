@@ -359,7 +359,7 @@ static __always_inline void clientConnStart(
                                 go_offset_of(ot, (go_offset){.v = _value_context_val_ptr_pos}) +
                                 sizeof(void *)));
 
-        invocation.flags = client_trace_parent(goroutine_addr, &invocation.tp, (void *)(val_ptr));
+        invocation.flags = client_trace_parent(goroutine_addr, &invocation.tp, val_ptr);
     } else {
         // it's OK sending empty tp for a client, the userspace id generator will make random trace_id, span_id
         bpf_dbg_printk("No ctx_ptr %llx", ctx_ptr);

@@ -308,7 +308,7 @@ static __always_inline u8 get_conn_info(void *conn_ptr, connection_info_t *info)
 static __always_inline void *unwrap_tls_conn_info(void *conn_ptr, void *tls_state) {
     if (conn_ptr && tls_state) {
         void *c_ptr = 0;
-        bpf_probe_read(&c_ptr, sizeof(c_ptr), (void *)(conn_ptr)); // unwrap conn
+        bpf_probe_read(&c_ptr, sizeof(c_ptr), conn_ptr); // unwrap conn
 
         bpf_dbg_printk("unwrapped conn ptr %llx", c_ptr);
 

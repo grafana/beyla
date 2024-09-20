@@ -7,6 +7,7 @@
 #include "tracing.h"
 #include "pid_types.h"
 #include "runtime.h"
+#include "ringbuf.h"
 
 typedef struct trace_key {
     pid_key_t p_key; // pid key as seen by the userspace (for example, inside its container)
@@ -153,11 +154,11 @@ static __always_inline void delete_server_trace(trace_key_t *t_key) {
     // bpf_dbg_printk("Deleting server span for id=%llx, pid=%d, ns=%d, res = %d", bpf_get_current_pid_tgid(), t_key->p_key.pid, t_key->p_key.ns, res);
 }
 
-static __always_inline u8 valid_span(unsigned char *span_id) {
+static __always_inline u8 valid_span(const unsigned char *span_id) {
     return *((u64 *)span_id) != 0;
 }
 
-static __always_inline u8 valid_trace(unsigned char *trace_id) {
+static __always_inline u8 valid_trace(const unsigned char *trace_id) {
     return *((u64 *)trace_id) != 0 && *((u64 *)(trace_id + 8)) != 0;
 }
 
@@ -282,7 +283,7 @@ static __always_inline void get_or_create_trace_info(http_connection_metadata_t 
 
     unsigned char *buf = tp_char_buf();
     if (buf) {
-        int buf_len = (int)bytes_len;
+        int buf_len = bytes_len;
         bpf_clamp_umax(buf_len, TRACE_BUF_SIZE - 1);
 
         bpf_probe_read(buf, buf_len, u_buf);
@@ -311,8 +312,6 @@ static __always_inline void get_or_create_trace_info(http_connection_metadata_t 
 
     bpf_map_update_elem(&trace_map, conn, tp_p, BPF_ANY);
     server_or_client_trace(meta, conn, tp_p);
-
-    return;
 }
 
 #endif

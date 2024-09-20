@@ -11,10 +11,15 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/grafana/beyla/pkg/beyla"
 	"github.com/grafana/beyla/test/integration/components/docker"
 )
 
-var kprobeTraces = true // allow tests to run distributed traces tests
+func kprobeTracesEnabled() bool {
+	major, minor := beyla.KernelVersion()
+
+	return major > 5 || (major == 5 && minor >= 17)
+}
 
 func TestSuite(t *testing.T) {
 	compose, err := docker.ComposeSuite("docker-compose.yml", path.Join(pathOutput, "test-suite.log"))
@@ -493,6 +498,11 @@ func TestSuite_OverrideServiceName(t *testing.T) {
 }
 
 func TestSuiteNodeClient(t *testing.T) {
+	if !kprobeTracesEnabled() {
+		t.Skip("distributed traces not supported")
+		return
+	}
+
 	compose, err := docker.ComposeSuite("docker-compose-nodeclient.yml", path.Join(pathOutput, "test-suite-nodeclient.log"))
 	compose.Env = append(compose.Env, `BEYLA_EXECUTABLE_NAME=node`, `NODE_APP=client`)
 	require.NoError(t, err)
@@ -506,6 +516,11 @@ func TestSuiteNodeClient(t *testing.T) {
 }
 
 func TestSuiteNodeClientTLS(t *testing.T) {
+	if !kprobeTracesEnabled() {
+		t.Skip("distributed traces not supported")
+		return
+	}
+
 	compose, err := docker.ComposeSuite("docker-compose-nodeclient.yml", path.Join(pathOutput, "test-suite-nodeclient-tls.log"))
 	compose.Env = append(compose.Env, `BEYLA_EXECUTABLE_NAME=node`, `NODE_APP=client_tls`)
 	require.NoError(t, err)

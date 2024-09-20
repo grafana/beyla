@@ -88,7 +88,7 @@ func TestMultiProcess(t *testing.T) {
 		assert.Empty(t, results)
 	})
 
-	if kprobeTraces {
+	if kprobeTracesEnabled() {
 		t.Run("Nested traces with kprobes: rust -> java -> node -> go -> python -> rails", func(t *testing.T) {
 			testNestedHTTPTracesKProbes(t)
 		})

@@ -9,5 +9,4 @@ import (
 var (
 	pathRoot   = tools.ProjectDir()
 	pathOutput = path.Join(pathRoot, "testoutput")
-	pathVarRun = path.Join(pathOutput, "run")
 )

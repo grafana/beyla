@@ -252,7 +252,7 @@ func (p *Tracer) KProbes() map[string]ebpfcommon.FunctionPrograms {
 			End:      p.bpfObjects.KretprobeSysClone,
 		},
 		"sys_clone3": {
-			Required: true,
+			Required: false,
 			End:      p.bpfObjects.KretprobeSysClone,
 		},
 		"sys_exit": {

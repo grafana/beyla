@@ -182,6 +182,10 @@ func (p *Tracer) Constants() map[string]any {
 		m["capture_header_buffer"] = int32(0)
 	}
 
+	if p.cfg.EBPF.HighRequestVolume {
+		m["high_request_volume"] = uint32(1)
+	}
+
 	return m
 }
 

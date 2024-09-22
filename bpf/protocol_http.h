@@ -10,6 +10,8 @@
 #include "protocol_common.h"
 #include "trace_common.h"
 
+volatile const u32 high_request_volume;
+
 // http_info_t became too big to be declared as a variable in the stack.
 // We use a percpu array to keep a reusable copy of it
 struct {
@@ -204,7 +206,8 @@ static __always_inline void handle_http_response(unsigned char *small_buf,
                                                  u8 ssl) {
     process_http_response(info, small_buf, orig_len);
 
-    if ((direction != TCP_SEND) /*|| (ssl != NO_SSL) || (orig_len < KPROBES_LARGE_RESPONSE_LEN)*/) {
+    if ((direction != TCP_SEND) ||
+        high_request_volume /*|| (ssl != NO_SSL) || (orig_len < KPROBES_LARGE_RESPONSE_LEN)*/) {
         finish_http(info, pid_conn);
     } else {
         if (ssl && (pid_conn->conn.s_port == 0) && (pid_conn->conn.d_port == 0)) {

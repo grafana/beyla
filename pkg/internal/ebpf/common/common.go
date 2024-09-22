@@ -76,6 +76,9 @@ type TracerConfig struct {
 
 	// Enables Linux Traffic Control probes for context propagation
 	UseLinuxTC bool `yaml:"enable_traffic_control" env:"BEYLA_BPF_TC"`
+
+	// Optimises for getting requests information immediately when request response is seen
+	HighRequestVolume bool `yaml:"high_request_volume" env:"BEYLA_BPF_HIGH_REQUEST_VOLUME"`
 }
 
 // Probe holds the information of the instrumentation points of a given function: its start and end offsets and

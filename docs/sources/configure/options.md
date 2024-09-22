@@ -506,6 +506,14 @@ Configures the time interval after which an HTTP request is considered as a time
 This option allows Beyla to report HTTP transactions which timeout and never return.
 To disable the automatic HTTP request timeout feature, set this option to zero, i.e. "0ms".
 
+| YAML                    | Environment variable               | Type     | Default |
+| ----------------------- | ---------------------------------- | -------- | ------- |
+| `high_request_volume`   | `BEYLA_BPF_HIGH_REQUEST_VOLUME`    | boolean  | (false) |
+
+Configures the HTTP tracer heuristic to send telemetry events as soon as a response is detected. 
+Setting this option reduces the acuracy of timings for requests with large responses, however,
+in high request volume scenarios this option will reduce the number of dropped trace events.
+
 ## Configuration of metrics and traces attributes
 
 Grafana Beyla allows configuring how some attributes for metrics and traces

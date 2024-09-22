@@ -31,6 +31,8 @@ DRONE ?= drone
 CLANG ?= clang
 CFLAGS := -O2 -g -Wall -Werror $(CFLAGS)
 
+CLANG_TIDY ?= clang-tidy
+
 # regular expressions for excluded file patterns
 EXCLUDE_COVERAGE_FILES="(_bpfel.go)|(/pingserver/)|(/grafana/beyla/test/)|(integration/components)|(/grafana/beyla/docs/)|(/grafana/beyla/configs/)|(/grafana/beyla/examples/)"
 
@@ -355,3 +357,7 @@ clean-testoutput:
 .PHONY: check-ebpf-integrity
 check-ebpf-integrity: docker-generate
 	git diff --name-status --exit-code || (echo "Run make docker-generate locally and commit the code changes" && false)
+
+.PHONY: clang-tidy
+clang-tidy:
+	cd bpf && $(CLANG_TIDY) *.c *.h

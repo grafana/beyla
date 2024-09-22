@@ -37,6 +37,7 @@ services:
       BEYLA_METRICS_REPORT_TARGET: "true"
       BEYLA_METRICS_REPORT_PEER: "true"
       BEYLA_HOSTNAME: "beyla"
+      BEYLA_BPF_HIGH_REQUEST_VOLUME: "true"
     depends_on:
       testserver:
         condition: service_started

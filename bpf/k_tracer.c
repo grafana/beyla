@@ -407,6 +407,9 @@ int BPF_KRETPROBE(kretprobe_tcp_sendmsg, int sent_len) {
 }
 
 static __always_inline void ensure_sent_event(u64 id, u64 *sock_p) {
+    if (high_request_volume) {
+        return;
+    }
     send_args_t *s_args = bpf_map_lookup_elem(&active_send_args, &id);
     if (s_args) {
         bpf_dbg_printk("Checking if we need to finish the request per thread id");

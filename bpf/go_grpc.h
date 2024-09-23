@@ -28,7 +28,7 @@ typedef struct grpc_srv_func_invocation {
 
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, void *); // key: pointer to the request goroutine
+    __type(key, goroutine_key_t); // key: pointer to the request goroutine
     __type(value, u16);
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
 } ongoing_grpc_request_status SEC(".maps");
@@ -56,21 +56,21 @@ struct {
 
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, void *);   // key: goroutine
-    __type(value, void *); // the transport *
+    __type(key, goroutine_key_t); // key: goroutine
+    __type(value, void *);        // the transport *
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
 } ongoing_grpc_operate_headers SEC(".maps");
 
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, void *); // key: pointer to the request goroutine
+    __type(key, goroutine_key_t); // key: pointer to the request goroutine
     __type(value, grpc_client_func_invocation_t);
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
 } ongoing_grpc_client_requests SEC(".maps");
 
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, void *); // key: pointer to the request goroutine
+    __type(key, goroutine_key_t); // key: pointer to the request goroutine
     __type(value, grpc_srv_func_invocation_t);
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
 } ongoing_grpc_server_requests SEC(".maps");
@@ -101,6 +101,8 @@ int uprobe_server_handleStream(struct pt_regs *ctx) {
     bpf_dbg_printk("=== uprobe/server_handleStream === ");
     void *goroutine_addr = GOROUTINE_PTR(ctx);
     bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
+    goroutine_key_t g_key = {};
+    goroutine_key_from_id(&g_key, goroutine_addr);
 
     void *stream_ptr = GO_PARAM4(ctx);
     off_table_t *ot = get_offsets_table();
@@ -129,7 +131,7 @@ int uprobe_server_handleStream(struct pt_regs *ctx) {
         }
     }
 
-    if (bpf_map_update_elem(&ongoing_grpc_server_requests, &goroutine_addr, &invocation, BPF_ANY)) {
+    if (bpf_map_update_elem(&ongoing_grpc_server_requests, &g_key, &invocation, BPF_ANY)) {
         bpf_dbg_printk("can't update grpc map element");
     }
 
@@ -141,8 +143,10 @@ SEC("uprobe/netFdReadGRPC")
 int uprobe_netFdReadGRPC(struct pt_regs *ctx) {
     void *goroutine_addr = GOROUTINE_PTR(ctx);
     bpf_dbg_printk("=== uprobe/proc netFD read goroutine %lx === ", goroutine_addr);
+    goroutine_key_t g_key = {};
+    goroutine_key_from_id(&g_key, goroutine_addr);
 
-    void *tr = bpf_map_lookup_elem(&ongoing_grpc_operate_headers, &goroutine_addr);
+    void *tr = bpf_map_lookup_elem(&ongoing_grpc_operate_headers, &g_key);
     bpf_dbg_printk("tr %llx", tr);
     if (tr) {
         grpc_transports_t *t = bpf_map_lookup_elem(&ongoing_grpc_transports, tr);
@@ -163,13 +167,15 @@ int uprobe_http2Server_operateHeaders(struct pt_regs *ctx) {
     void *tr = GO_PARAM1(ctx);
     bpf_dbg_printk(
         "=== uprobe/http2Server_operateHeaders tr %llx goroutine %lx === ", tr, goroutine_addr);
+    goroutine_key_t g_key = {};
+    goroutine_key_from_id(&g_key, goroutine_addr);
 
     grpc_transports_t t = {
         .type = TRANSPORT_HTTP2,
         .conn = {0},
     };
 
-    bpf_map_update_elem(&ongoing_grpc_operate_headers, &goroutine_addr, &tr, BPF_ANY);
+    bpf_map_update_elem(&ongoing_grpc_operate_headers, &g_key, &tr, BPF_ANY);
     bpf_map_update_elem(&ongoing_grpc_transports, &tr, &t, BPF_ANY);
 
     return 0;
@@ -213,15 +219,17 @@ int uprobe_server_handleStream_return(struct pt_regs *ctx) {
     off_table_t *ot = get_offsets_table();
 
     bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
+    goroutine_key_t g_key = {};
+    goroutine_key_from_id(&g_key, goroutine_addr);
 
     grpc_srv_func_invocation_t *invocation =
-        bpf_map_lookup_elem(&ongoing_grpc_server_requests, &goroutine_addr);
+        bpf_map_lookup_elem(&ongoing_grpc_server_requests, &g_key);
     if (invocation == NULL) {
         bpf_dbg_printk("can't read grpc invocation metadata");
         goto done;
     }
 
-    u16 *status_ptr = bpf_map_lookup_elem(&ongoing_grpc_request_status, &goroutine_addr);
+    u16 *status_ptr = bpf_map_lookup_elem(&ongoing_grpc_request_status, &g_key);
     u16 status = 0;
     if (status_ptr != NULL) {
         bpf_dbg_printk("can't read grpc invocation status");
@@ -244,8 +252,6 @@ int uprobe_server_handleStream_return(struct pt_regs *ctx) {
     trace->status = status;
     trace->content_length = 0;
     trace->method[0] = 0;
-
-    goroutine_key_t g_key = {.addr = (u64)goroutine_addr, .pid = trace->pid.host_pid};
 
     goroutine_metadata *g_metadata = bpf_map_lookup_elem(&ongoing_goroutines, &g_key);
     if (g_metadata) {
@@ -300,8 +306,8 @@ int uprobe_server_handleStream_return(struct pt_regs *ctx) {
     bpf_ringbuf_submit(trace, get_flags());
 
 done:
-    bpf_map_delete_elem(&ongoing_grpc_server_requests, &goroutine_addr);
-    bpf_map_delete_elem(&ongoing_grpc_request_status, &goroutine_addr);
+    bpf_map_delete_elem(&ongoing_grpc_server_requests, &g_key);
+    bpf_map_delete_elem(&ongoing_grpc_request_status, &g_key);
     bpf_map_delete_elem(&go_trace_map, &goroutine_addr);
 
     return 0;
@@ -315,6 +321,8 @@ int uprobe_transport_writeStatus(struct pt_regs *ctx) {
     off_table_t *ot = get_offsets_table();
 
     bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
+    goroutine_key_t g_key = {};
+    goroutine_key_from_id(&g_key, goroutine_addr);
 
     void *status_ptr = GO_PARAM3(ctx);
     bpf_dbg_printk("status_ptr %lx", status_ptr);
@@ -335,7 +343,7 @@ int uprobe_transport_writeStatus(struct pt_regs *ctx) {
                 sizeof(status),
                 (void *)(s_ptr + go_offset_of(ot, (go_offset){.v = _grpc_status_code_ptr_pos})));
             bpf_dbg_printk("status code %d", status);
-            bpf_map_update_elem(&ongoing_grpc_request_status, &goroutine_addr, &status, BPF_ANY);
+            bpf_map_update_elem(&ongoing_grpc_request_status, &g_key, &status, BPF_ANY);
         }
     }
 
@@ -354,6 +362,8 @@ static __always_inline void clientConnStart(
         .flags = 0,
     };
     off_table_t *ot = get_offsets_table();
+    goroutine_key_t g_key = {};
+    goroutine_key_from_id(&g_key, goroutine_addr);
 
     if (ctx_ptr) {
         void *val_ptr = 0;
@@ -371,7 +381,7 @@ static __always_inline void clientConnStart(
     }
 
     // Write event
-    if (bpf_map_update_elem(&ongoing_grpc_client_requests, &goroutine_addr, &invocation, BPF_ANY)) {
+    if (bpf_map_update_elem(&ongoing_grpc_client_requests, &g_key, &invocation, BPF_ANY)) {
         bpf_dbg_printk("can't update grpc client map element");
     }
 }
@@ -414,9 +424,11 @@ int uprobe_ClientConn_NewStream(struct pt_regs *ctx) {
 static __always_inline int grpc_connect_done(struct pt_regs *ctx, void *err) {
     void *goroutine_addr = GOROUTINE_PTR(ctx);
     bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
+    goroutine_key_t g_key = {};
+    goroutine_key_from_id(&g_key, goroutine_addr);
 
     grpc_client_func_invocation_t *invocation =
-        bpf_map_lookup_elem(&ongoing_grpc_client_requests, &goroutine_addr);
+        bpf_map_lookup_elem(&ongoing_grpc_client_requests, &g_key);
 
     if (invocation == NULL) {
         bpf_dbg_printk("can't read grpc client invocation metadata");
@@ -471,7 +483,7 @@ static __always_inline int grpc_connect_done(struct pt_regs *ctx, void *err) {
     bpf_ringbuf_submit(trace, get_flags());
 
 done:
-    bpf_map_delete_elem(&ongoing_grpc_client_requests, &goroutine_addr);
+    bpf_map_delete_elem(&ongoing_grpc_client_requests, &g_key);
     return 0;
 }
 
@@ -495,8 +507,10 @@ int uprobe_ClientConn_Close(struct pt_regs *ctx) {
 
     void *goroutine_addr = GOROUTINE_PTR(ctx);
     bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
+    goroutine_key_t g_key = {};
+    goroutine_key_from_id(&g_key, goroutine_addr);
 
-    bpf_map_delete_elem(&ongoing_grpc_client_requests, &goroutine_addr);
+    bpf_map_delete_elem(&ongoing_grpc_client_requests, &g_key);
 
     return 0;
 }
@@ -531,6 +545,8 @@ int uprobe_transport_http2Client_NewStream(struct pt_regs *ctx) {
     void *goroutine_addr = GOROUTINE_PTR(ctx);
     void *t_ptr = GO_PARAM1(ctx);
     off_table_t *ot = get_offsets_table();
+    goroutine_key_t g_key = {};
+    goroutine_key_from_id(&g_key, goroutine_addr);
 
     u64 grpc_t_conn_pos = go_offset_of(ot, (go_offset){.v = _grpc_t_scheme_pos});
     bpf_dbg_printk(
@@ -583,7 +599,7 @@ int uprobe_transport_http2Client_NewStream(struct pt_regs *ctx) {
         bpf_dbg_printk("next_id %d", next_id);
 
         grpc_client_func_invocation_t *invocation =
-            bpf_map_lookup_elem(&ongoing_grpc_client_requests, &goroutine_addr);
+            bpf_map_lookup_elem(&ongoing_grpc_client_requests, &g_key);
 
         if (invocation) {
             grpc_client_func_invocation_t inv_save = *invocation;
@@ -610,7 +626,7 @@ typedef struct grpc_framer_func_invocation {
 
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, void *); // key: go routine doing framer write headers
+    __type(key, goroutine_key_t); // key: go routine doing framer write headers
     __type(
         value,
         grpc_framer_func_invocation_t); // the goroutine of the round trip request, which is the key for our traceparent info
@@ -643,6 +659,8 @@ int uprobe_grpcFramerWriteHeaders(struct pt_regs *ctx) {
     if (invocation) {
         bpf_dbg_printk("Found invocation info %llx", invocation);
         void *goroutine_addr = GOROUTINE_PTR(ctx);
+        goroutine_key_t g_key = {};
+        goroutine_key_from_id(&g_key, goroutine_addr);
 
         void *w_ptr = (void *)(framer + framer_w_pos + 16);
         bpf_probe_read(&w_ptr, sizeof(w_ptr), (void *)(framer + framer_w_pos + 8));
@@ -667,7 +685,7 @@ int uprobe_grpcFramerWriteHeaders(struct pt_regs *ctx) {
                     .offset = offset,
                 };
 
-                bpf_map_update_elem(&grpc_framer_invocation_map, &goroutine_addr, &f_info, BPF_ANY);
+                bpf_map_update_elem(&grpc_framer_invocation_map, &g_key, &f_info, BPF_ANY);
             } else {
                 bpf_dbg_printk("Offset too large, ignoring...");
             }
@@ -694,9 +712,11 @@ int uprobe_grpcFramerWriteHeaders_returns(struct pt_regs *ctx) {
 
     void *goroutine_addr = GOROUTINE_PTR(ctx);
     off_table_t *ot = get_offsets_table();
+    goroutine_key_t g_key = {};
+    goroutine_key_from_id(&g_key, goroutine_addr);
 
     grpc_framer_func_invocation_t *f_info =
-        bpf_map_lookup_elem(&grpc_framer_invocation_map, &goroutine_addr);
+        bpf_map_lookup_elem(&grpc_framer_invocation_map, &g_key);
 
     if (f_info) {
         void *w_ptr =
@@ -797,7 +817,7 @@ int uprobe_grpcFramerWriteHeaders_returns(struct pt_regs *ctx) {
         }
     }
 
-    bpf_map_delete_elem(&grpc_framer_invocation_map, &goroutine_addr);
+    bpf_map_delete_elem(&grpc_framer_invocation_map, &g_key);
     return 0;
 }
 #else

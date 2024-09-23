@@ -88,10 +88,12 @@ static __always_inline u64 find_parent_goroutine(goroutine_key_t *current) {
 
     u64 r_addr = current->addr;
     goroutine_key_t *parent = current;
+    goroutine_key_t g_key = {};
 
     int attempts = 0;
     do {
-        tp_info_t *p_inv = bpf_map_lookup_elem(&go_trace_map, parent);
+        goroutine_key_from_id(&g_key, (void *)r_addr);
+        tp_info_t *p_inv = bpf_map_lookup_elem(&go_trace_map, &g_key);
         if (!p_inv) { // not this goroutine running the server request processing
             // Let's find the parent scope
             goroutine_metadata *g_metadata =

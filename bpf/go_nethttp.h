@@ -495,13 +495,13 @@ int uprobe_writeSubset(struct pt_regs *ctx) {
         bpf_dbg_printk("Can't find parent go routine for header %llx", header_addr);
         return 0;
     }
-
+    u64 parent_goaddr = *request_goaddr;
     goroutine_key_t g_key = {};
-    goroutine_key_from_id(&g_key, request_goaddr);
+    goroutine_key_from_id(&g_key, (void *)parent_goaddr);
 
     http_func_invocation_t *func_inv = bpf_map_lookup_elem(&ongoing_http_client_requests, &g_key);
     if (!func_inv) {
-        bpf_dbg_printk("Can't find client request for goroutine %llx", request_goaddr);
+        bpf_dbg_printk("Can't find client request for goroutine %llx", parent_goaddr);
         goto done;
     }
 

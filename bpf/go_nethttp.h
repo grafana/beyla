@@ -694,7 +694,7 @@ typedef struct framer_func_invocation {
 
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, void *); // key: go routine doing framer write headers
+    __type(key, goroutine_key_t); // key: go routine doing framer write headers
     __type(
         value,
         framer_func_invocation_t); // the goroutine of the round trip request, which is the key for our traceparent info
@@ -753,8 +753,10 @@ int uprobe_http2FramerWriteHeaders(struct pt_regs *ctx) {
                         .framer_ptr = (u64)framer,
                         .initial_n = n,
                     };
+                    goroutine_key_t f_key = {};
+                    goroutine_key_from_id(&f_key, goroutine_addr);
 
-                    bpf_map_update_elem(&framer_invocation_map, &goroutine_addr, &f_info, BPF_ANY);
+                    bpf_map_update_elem(&framer_invocation_map, &f_key, &f_info, BPF_ANY);
                 } else {
                     bpf_dbg_printk("N too large, ignoring...");
                 }
@@ -782,8 +784,10 @@ int uprobe_http2FramerWriteHeaders_returns(struct pt_regs *ctx) {
 
     void *goroutine_addr = GOROUTINE_PTR(ctx);
     off_table_t *ot = get_offsets_table();
+    goroutine_key_t g_key = {};
+    goroutine_key_from_id(&g_key, goroutine_addr);
 
-    framer_func_invocation_t *f_info = bpf_map_lookup_elem(&framer_invocation_map, &goroutine_addr);
+    framer_func_invocation_t *f_info = bpf_map_lookup_elem(&framer_invocation_map, &g_key);
 
     if (f_info) {
         void *w_ptr = 0;
@@ -868,7 +872,7 @@ int uprobe_http2FramerWriteHeaders_returns(struct pt_regs *ctx) {
         }
     }
 
-    bpf_map_delete_elem(&framer_invocation_map, &goroutine_addr);
+    bpf_map_delete_elem(&framer_invocation_map, &g_key);
     return 0;
 }
 #else

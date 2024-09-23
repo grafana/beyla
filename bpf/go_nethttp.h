@@ -276,7 +276,7 @@ int uprobe_ServeHTTPReturns(struct pt_regs *ctx) {
         trace->go_start_monotime_ns = invocation->start_monotime_ns;
     }
 
-    connection_info_t *info = bpf_map_lookup_elem(&ongoing_server_connections, &goroutine_addr);
+    connection_info_t *info = bpf_map_lookup_elem(&ongoing_server_connections, &g_key);
 
     if (info) {
         //dbg_print_http_connection_info(info);
@@ -306,7 +306,7 @@ int uprobe_ServeHTTPReturns(struct pt_regs *ctx) {
 
 done:
     bpf_map_delete_elem(&ongoing_http_server_requests, &g_key);
-    bpf_map_delete_elem(&go_trace_map, &goroutine_addr);
+    bpf_map_delete_elem(&go_trace_map, &g_key);
     return 0;
 }
 
@@ -446,7 +446,7 @@ int uprobe_roundTripReturn(struct pt_regs *ctx) {
 
     void *resp_ptr = (void *)GO_PARAM1(ctx);
 
-    connection_info_t *info = bpf_map_lookup_elem(&ongoing_client_connections, &goroutine_addr);
+    connection_info_t *info = bpf_map_lookup_elem(&ongoing_client_connections, &g_key);
     if (info) {
         __builtin_memcpy(&trace->conn, info, sizeof(connection_info_t));
     } else {
@@ -473,7 +473,7 @@ int uprobe_roundTripReturn(struct pt_regs *ctx) {
 done:
     bpf_map_delete_elem(&ongoing_http_client_requests, &g_key);
     bpf_map_delete_elem(&ongoing_http_client_requests_data, &g_key);
-    bpf_map_delete_elem(&ongoing_client_connections, &goroutine_addr);
+    bpf_map_delete_elem(&ongoing_client_connections, &g_key);
     return 0;
 }
 
@@ -600,6 +600,9 @@ int uprobe_http2serverConn_runHandler(struct pt_regs *ctx) {
     void *sc = GO_PARAM1(ctx);
     off_table_t *ot = get_offsets_table();
 
+    goroutine_key_t g_key = {};
+    goroutine_key_from_id(&g_key, goroutine_addr);
+
     if (sc) {
         void *conn_ptr = 0;
         bpf_probe_read(
@@ -612,7 +615,7 @@ int uprobe_http2serverConn_runHandler(struct pt_regs *ctx) {
             if (conn_conn_ptr) {
                 connection_info_t conn = {0};
                 get_conn_info(conn_conn_ptr, &conn);
-                bpf_map_update_elem(&ongoing_server_connections, &goroutine_addr, &conn, BPF_ANY);
+                bpf_map_update_elem(&ongoing_server_connections, &g_key, &conn, BPF_ANY);
             }
         }
     }
@@ -659,8 +662,10 @@ int uprobe_http2RoundTrip(struct pt_regs *ctx) {
             if (ok) {
                 void *goroutine_addr = GOROUTINE_PTR(ctx);
                 bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
+                goroutine_key_t g_key = {};
+                goroutine_key_from_id(&g_key, goroutine_addr);
 
-                bpf_map_update_elem(&ongoing_client_connections, &goroutine_addr, &conn, BPF_ANY);
+                bpf_map_update_elem(&ongoing_client_connections, &g_key, &conn, BPF_ANY);
             }
         }
 
@@ -887,8 +892,11 @@ int uprobe_connServe(struct pt_regs *ctx) {
     void *goroutine_addr = GOROUTINE_PTR(ctx);
     bpf_dbg_printk("=== uprobe/proc http conn serve goroutine %lx === ", goroutine_addr);
 
+    goroutine_key_t g_key = {};
+    goroutine_key_from_id(&g_key, goroutine_addr);
+
     connection_info_t conn = {0};
-    bpf_map_update_elem(&ongoing_server_connections, &goroutine_addr, &conn, BPF_ANY);
+    bpf_map_update_elem(&ongoing_server_connections, &g_key, &conn, BPF_ANY);
 
     return 0;
 }
@@ -898,7 +906,10 @@ int uprobe_netFdRead(struct pt_regs *ctx) {
     void *goroutine_addr = GOROUTINE_PTR(ctx);
     bpf_dbg_printk("=== uprobe/proc netFD read goroutine %lx === ", goroutine_addr);
 
-    connection_info_t *conn = bpf_map_lookup_elem(&ongoing_server_connections, &goroutine_addr);
+    goroutine_key_t g_key = {};
+    goroutine_key_from_id(&g_key, goroutine_addr);
+
+    connection_info_t *conn = bpf_map_lookup_elem(&ongoing_server_connections, &g_key);
 
     if (conn) {
         bpf_dbg_printk(
@@ -918,6 +929,9 @@ SEC("uprobe/connServeRet")
 int uprobe_connServeRet(struct pt_regs *ctx) {
     bpf_dbg_printk("=== uprobe/proc http conn serve ret === ");
     void *goroutine_addr = GOROUTINE_PTR(ctx);
+
+    goroutine_key_t g_key = {};
+    goroutine_key_from_id(&g_key, goroutine_addr);
 
     bpf_map_delete_elem(&ongoing_server_connections, &goroutine_addr);
 
@@ -976,7 +990,7 @@ int uprobe_persistConnRoundTrip(struct pt_regs *ctx) {
                 tp_clone(&tp_p.tp, &invocation->tp);
                 tp_p.tp.ts = bpf_ktime_get_ns();
                 bpf_dbg_printk("storing trace_map info for black-box tracing");
-                bpf_map_update_elem(&ongoing_client_connections, &goroutine_addr, &conn, BPF_ANY);
+                bpf_map_update_elem(&ongoing_client_connections, &g_key, &conn, BPF_ANY);
 
                 // Must sort the connection info, this map is shared with kprobes which use sorted connection
                 // info always.

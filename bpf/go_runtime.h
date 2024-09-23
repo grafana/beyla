@@ -98,7 +98,7 @@ int uprobe_proc_goexit1(struct pt_regs *ctx) {
     bpf_map_delete_elem(&ongoing_goroutines, &g_key);
     // We also clean-up the go routine based trace map, it's an LRU
     // but at this point we are sure we don't need the data.
-    bpf_map_delete_elem(&go_trace_map, &goroutine_addr);
+    bpf_map_delete_elem(&go_trace_map, &g_key);
 
     return 0;
 }

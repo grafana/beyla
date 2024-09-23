@@ -196,7 +196,9 @@ int uprobe_server_handler_transport_handle_streams(struct pt_regs *ctx) {
     void *parent_go = (void *)find_parent_goroutine(&g_key);
     if (parent_go) {
         bpf_dbg_printk("found parent goroutine for transport handler [%llx]", parent_go);
-        connection_info_t *conn = bpf_map_lookup_elem(&ongoing_server_connections, &parent_go);
+        goroutine_key_t g_key = {};
+        goroutine_key_from_id(&g_key, parent_go);
+        connection_info_t *conn = bpf_map_lookup_elem(&ongoing_server_connections, &g_key);
         bpf_dbg_printk("conn %llx", conn);
         if (conn) {
             grpc_transports_t t = {
@@ -308,7 +310,7 @@ int uprobe_server_handleStream_return(struct pt_regs *ctx) {
 done:
     bpf_map_delete_elem(&ongoing_grpc_server_requests, &g_key);
     bpf_map_delete_elem(&ongoing_grpc_request_status, &g_key);
-    bpf_map_delete_elem(&go_trace_map, &goroutine_addr);
+    bpf_map_delete_elem(&go_trace_map, &g_key);
 
     return 0;
 }
@@ -464,7 +466,7 @@ static __always_inline int grpc_connect_done(struct pt_regs *ctx, void *err) {
         goto done;
     }
 
-    connection_info_t *info = bpf_map_lookup_elem(&ongoing_client_connections, &goroutine_addr);
+    connection_info_t *info = bpf_map_lookup_elem(&ongoing_client_connections, &g_key);
 
     if (info) {
         __builtin_memcpy(&trace->conn, info, sizeof(connection_info_t));
@@ -582,8 +584,7 @@ int uprobe_transport_http2Client_NewStream(struct pt_regs *ctx) {
                 connection_info_t conn = {0};
                 u8 ok = get_conn_info(conn_conn_ptr, &conn);
                 if (ok) {
-                    bpf_map_update_elem(
-                        &ongoing_client_connections, &goroutine_addr, &conn, BPF_ANY);
+                    bpf_map_update_elem(&ongoing_client_connections, &g_key, &conn, BPF_ANY);
                 }
             }
         }

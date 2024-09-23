@@ -43,7 +43,7 @@ $(ROOT_IMG): Dockerfile
 	qemu-img convert $(ROOT_IMAGE_RAW) -O qcow2 $(ROOT_IMG) && rm $(ROOT_IMAGE_RAW)
 
 launchvm: check_qemu $(ROOT_IMG) $(TEST_OUTPUT)
-	qemu-system-$(ARCH) -enable-kvm -cpu host -m 5120 -smp 8 -kernel $(KERNEL) -drive file=$(ROOT_IMG),format=qcow2 \
+	qemu-system-$(ARCH) -enable-kvm -cpu host -m 5120 -smp 4 -kernel $(KERNEL) -drive file=$(ROOT_IMG),format=qcow2 \
 		-append "earlyprintk=ttyS0 console=ttyS0 root=/dev/sda rw quiet" \
 		-virtfs local,path=$(REPO_ROOT),mount_tag=beyla,security_model=mapped,id=beyla \
 		-virtfs local,path=$(TEST_OUTPUT),mount_tag=testout,security_model=mapped,id=testout \

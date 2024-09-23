@@ -184,7 +184,10 @@ int uprobe_server_handler_transport_handle_streams(struct pt_regs *ctx) {
                tr,
                goroutine_addr);
 
-    void *parent_go = (void *)find_parent_goroutine(goroutine_addr);
+    goroutine_key_t g_key = {};
+    goroutine_key_from_id(&g_key, goroutine_addr);
+
+    void *parent_go = (void *)find_parent_goroutine(&g_key);
     if (parent_go) {
         bpf_dbg_printk("found parent goroutine for transport handler [%llx]", parent_go);
         connection_info_t *conn = bpf_map_lookup_elem(&ongoing_server_connections, &parent_go);
@@ -242,10 +245,12 @@ int uprobe_server_handleStream_return(struct pt_regs *ctx) {
     trace->content_length = 0;
     trace->method[0] = 0;
 
-    goroutine_metadata *g_metadata = bpf_map_lookup_elem(&ongoing_goroutines, &goroutine_addr);
+    goroutine_key_t g_key = {.addr = (u64)goroutine_addr, .pid = trace->pid.host_pid};
+
+    goroutine_metadata *g_metadata = bpf_map_lookup_elem(&ongoing_goroutines, &g_key);
     if (g_metadata) {
         trace->go_start_monotime_ns = g_metadata->timestamp;
-        bpf_map_delete_elem(&ongoing_goroutines, &goroutine_addr);
+        bpf_map_delete_elem(&ongoing_goroutines, &g_key);
     } else {
         trace->go_start_monotime_ns = invocation->start_monotime_ns;
     }

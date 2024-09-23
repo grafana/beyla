@@ -228,7 +228,7 @@ static __always_inline u8 client_trace_parent(void *goroutine_addr,
 
         u64 parent_id = find_parent_goroutine(&g_key);
         goroutine_key_t p_key = {};
-        goroutine_key_from_id(&g_key, (void *)parent_id);
+        goroutine_key_from_id(&p_key, (void *)parent_id);
 
         if (parent_id) { // we found a parent request
             tp = (tp_info_t *)bpf_map_lookup_elem(&go_trace_map, &p_key);

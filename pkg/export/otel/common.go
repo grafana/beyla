@@ -340,7 +340,7 @@ func headersFromEnv(varName string) map[string]string {
 		headers[k] = v
 	}
 
-	parseOTELEnvVar(varName, addToMap)
+	parseOTELEnvVar(nil, varName, addToMap)
 
 	return headers
 }
@@ -352,8 +352,17 @@ type varHandler func(k string, v string)
 // OTEL_RESOURCE_ATTRIBUTES, i.e. a comma-separated list of
 // key=values. For example: api-key=key,other-config-value=value
 // The values are passed as parameters to the handler function
-func parseOTELEnvVar(varName string, handler varHandler) {
-	envVar, ok := os.LookupEnv(varName)
+func parseOTELEnvVar(svc *svc.ID, varName string, handler varHandler) {
+	var envVar string
+	ok := false
+
+	if svc.EnvVars != nil {
+		envVar, ok = svc.EnvVars[varName]
+	}
+
+	if !ok {
+		envVar, ok = os.LookupEnv(varName)
+	}
 
 	if !ok {
 		return
@@ -379,12 +388,12 @@ func parseOTELEnvVar(varName string, handler varHandler) {
 	}
 }
 
-func ResourceAttrsFromEnv() []attribute.KeyValue {
+func ResourceAttrsFromEnv(svc *svc.ID) []attribute.KeyValue {
 	var otelResourceAttrs []attribute.KeyValue
 	apply := func(k string, v string) {
 		otelResourceAttrs = append(otelResourceAttrs, attribute.String(k, v))
 	}
 
-	parseOTELEnvVar(envResourceAttrs, apply)
+	parseOTELEnvVar(svc, envResourceAttrs, apply)
 	return otelResourceAttrs
 }

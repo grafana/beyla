@@ -123,7 +123,7 @@ func TestParseOTELEnvVar(t *testing.T) {
 
 			assert.NoError(t, err)
 
-			parseOTELEnvVar(dummyVar, apply)
+			parseOTELEnvVar(nil, dummyVar, apply)
 
 			assert.True(t, reflect.DeepEqual(actual, tc.expected))
 
@@ -141,7 +141,7 @@ func TestParseOTELEnvVar_nil(t *testing.T) {
 		actual[k] = v
 	}
 
-	parseOTELEnvVar("NOT_SET_VAR", apply)
+	parseOTELEnvVar(nil, "NOT_SET_VAR", apply)
 
 	assert.True(t, reflect.DeepEqual(actual, map[string]string{}))
 }

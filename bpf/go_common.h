@@ -98,14 +98,14 @@ static __always_inline u64 find_parent_goroutine(goroutine_key_t *current) {
                 (goroutine_metadata *)bpf_map_lookup_elem(&ongoing_goroutines, parent);
             if (g_metadata) {
                 // Lookup now to see if the parent was a request
-                r_addr = (u64)g_metadata->parent.addr;
+                r_addr = g_metadata->parent.addr;
                 parent = &g_metadata->parent;
             } else {
                 break;
             }
         } else {
             bpf_dbg_printk("Found parent %lx", r_addr);
-            return (u64)r_addr;
+            return r_addr;
         }
 
         attempts++;

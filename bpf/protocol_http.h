@@ -147,6 +147,9 @@ get_or_set_http_info(http_info_t *info, pid_connection_info_t *pid_conn, u8 pack
 }
 
 static __always_inline void finish_possible_delayed_http_request(pid_connection_info_t *pid_conn) {
+    if (high_request_volume) {
+        return;
+    }
     http_info_t *info = bpf_map_lookup_elem(&ongoing_http, pid_conn);
     if (info) {
         finish_http(info, pid_conn);

@@ -25,8 +25,8 @@ struct {
 
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, void *); // key: goroutine id
-    __type(value, u32);  // correlation id
+    __type(key, goroutine_key_t); // key: goroutine id
+    __type(value, u32);           // correlation id
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
 } ongoing_kafka_requests SEC(".maps");
 
@@ -38,6 +38,8 @@ int uprobe_sarama_sendInternal(struct pt_regs *ctx) {
     off_table_t *ot = get_offsets_table();
 
     bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
+    goroutine_key_t g_key = {};
+    goroutine_key_from_id(&g_key, goroutine_addr);
 
     u32 correlation_id = 0;
 
@@ -50,8 +52,7 @@ int uprobe_sarama_sendInternal(struct pt_regs *ctx) {
     if (correlation_id) {
         bpf_dbg_printk("correlation_id = %d", correlation_id);
 
-        if (bpf_map_update_elem(
-                &ongoing_kafka_requests, &goroutine_addr, &correlation_id, BPF_ANY)) {
+        if (bpf_map_update_elem(&ongoing_kafka_requests, &g_key, &correlation_id, BPF_ANY)) {
             bpf_dbg_printk("can't update kafka requests element");
         }
     }
@@ -65,8 +66,10 @@ int uprobe_sarama_broker_write(struct pt_regs *ctx) {
     void *goroutine_addr = GOROUTINE_PTR(ctx);
 
     bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
+    goroutine_key_t g_key = {};
+    goroutine_key_from_id(&g_key, goroutine_addr);
 
-    u32 *invocation = bpf_map_lookup_elem(&ongoing_kafka_requests, &goroutine_addr);
+    u32 *invocation = bpf_map_lookup_elem(&ongoing_kafka_requests, &g_key);
     void *b_ptr = GO_PARAM1(ctx);
     void *buf_ptr = GO_PARAM2(ctx);
     off_table_t *ot = get_offsets_table();
@@ -122,7 +125,7 @@ int uprobe_sarama_broker_write(struct pt_regs *ctx) {
         }
     }
 
-    bpf_map_delete_elem(&ongoing_kafka_requests, &goroutine_addr);
+    bpf_map_delete_elem(&ongoing_kafka_requests, &g_key);
 
     return 0;
 }

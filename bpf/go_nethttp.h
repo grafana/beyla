@@ -161,8 +161,10 @@ int uprobe_readRequestStart(struct pt_regs *ctx) {
     off_table_t *ot = get_offsets_table();
 
     bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
+    goroutine_key_t g_key = {};
+    goroutine_key_from_id(&g_key, goroutine_addr);
 
-    connection_info_t *existing = bpf_map_lookup_elem(&ongoing_server_connections, &goroutine_addr);
+    connection_info_t *existing = bpf_map_lookup_elem(&ongoing_server_connections, &g_key);
 
     if (!existing) {
         void *c_ptr = GO_PARAM1(ctx);
@@ -188,8 +190,7 @@ int uprobe_readRequestStart(struct pt_regs *ctx) {
                     get_conn_info(
                         conn_ptr,
                         &conn); // initialized to 0, no need to check the result if we succeeded
-                    bpf_map_update_elem(
-                        &ongoing_server_connections, &goroutine_addr, &conn, BPF_ANY);
+                    bpf_map_update_elem(&ongoing_server_connections, &g_key, &conn, BPF_ANY);
                 }
             }
         }
@@ -933,7 +934,7 @@ int uprobe_connServeRet(struct pt_regs *ctx) {
     goroutine_key_t g_key = {};
     goroutine_key_from_id(&g_key, goroutine_addr);
 
-    bpf_map_delete_elem(&ongoing_server_connections, &goroutine_addr);
+    bpf_map_delete_elem(&ongoing_server_connections, &g_key);
 
     return 0;
 }

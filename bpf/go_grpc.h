@@ -196,9 +196,9 @@ int uprobe_server_handler_transport_handle_streams(struct pt_regs *ctx) {
     void *parent_go = (void *)find_parent_goroutine(&g_key);
     if (parent_go) {
         bpf_dbg_printk("found parent goroutine for transport handler [%llx]", parent_go);
-        goroutine_key_t g_key = {};
-        goroutine_key_from_id(&g_key, parent_go);
-        connection_info_t *conn = bpf_map_lookup_elem(&ongoing_server_connections, &g_key);
+        goroutine_key_t p_key = {};
+        goroutine_key_from_id(&p_key, parent_go);
+        connection_info_t *conn = bpf_map_lookup_elem(&ongoing_server_connections, &p_key);
         bpf_dbg_printk("conn %llx", conn);
         if (conn) {
             grpc_transports_t t = {

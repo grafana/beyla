@@ -73,11 +73,11 @@ struct {
     __uint(pinning, LIBBPF_PIN_BY_NAME);
 } go_trace_map SEC(".maps");
 
-static __always_inline void go_addr_key_from_id(go_addr_key_t *current, void *goroutine) {
+static __always_inline void go_addr_key_from_id(go_addr_key_t *current, void *addr) {
     u64 pid_tid = bpf_get_current_pid_tgid();
     u32 pid = pid_from_pid_tgid(pid_tid);
 
-    current->addr = (u64)goroutine;
+    current->addr = (u64)addr;
     current->pid = pid;
 }
 

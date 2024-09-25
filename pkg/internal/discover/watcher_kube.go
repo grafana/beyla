@@ -94,12 +94,15 @@ func (wk *watcherKubeEnricher) init() error {
 	if err := wk.informer.AddPodEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
 			pod := obj.(*kube.PodInfo)
-			latency := time.Since(pod.CreationTimestamp.Time).Seconds()
+			d := time.Since(pod.CreationTimestamp.Time)
 			wk.podsInfoCh <- Event[*kube.PodInfo]{Type: EventCreated, Obj: obj.(*kube.PodInfo)}
-			wk.m.InformerPodAddDuration(latency)
+			wk.m.InformerAddDuration("pod", d)
 		},
 		UpdateFunc: func(_, newObj interface{}) {
+			pod := newObj.(*kube.PodInfo)
+			d := time.Since(pod.CreationTimestamp.Time)
 			wk.podsInfoCh <- Event[*kube.PodInfo]{Type: EventCreated, Obj: newObj.(*kube.PodInfo)}
+			wk.m.InformerUpdateDuration("pod", d)
 		},
 		DeleteFunc: func(obj interface{}) {
 			wk.podsInfoCh <- Event[*kube.PodInfo]{Type: EventDeleted, Obj: obj.(*kube.PodInfo)}
@@ -112,10 +115,16 @@ func (wk *watcherKubeEnricher) init() error {
 	wk.rsInfoCh = make(chan Event[*kube.ReplicaSetInfo], 10)
 	if err := wk.informer.AddReplicaSetEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
+			rs := obj.(*kube.ReplicaSetInfo)
+			d := time.Since(rs.CreationTimestamp.Time)
 			wk.rsInfoCh <- Event[*kube.ReplicaSetInfo]{Type: EventCreated, Obj: obj.(*kube.ReplicaSetInfo)}
+			wk.m.InformerAddDuration("replicaset", d)
 		},
 		UpdateFunc: func(_, newObj interface{}) {
+			rs := newObj.(*kube.ReplicaSetInfo)
+			d := time.Since(rs.CreationTimestamp.Time)
 			wk.rsInfoCh <- Event[*kube.ReplicaSetInfo]{Type: EventCreated, Obj: newObj.(*kube.ReplicaSetInfo)}
+			wk.m.InformerUpdateDuration("replicaset", d)
 		},
 		DeleteFunc: func(obj interface{}) {
 			wk.rsInfoCh <- Event[*kube.ReplicaSetInfo]{Type: EventDeleted, Obj: obj.(*kube.ReplicaSetInfo)}

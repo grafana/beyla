@@ -3,6 +3,7 @@ package imetrics
 
 import (
 	"context"
+	"time"
 )
 
 // Config options for the different metrics exporters
@@ -32,20 +33,23 @@ type Reporter interface {
 	InstrumentProcess(processName string)
 	// UninstrumentProcess is invoked every time a process is removed from the instrumented processed
 	UninstrumentProcess(processName string)
-	// InformerPodAddDuration is invoked every time a pod is added to the informer
-	InformerPodAddDuration(d float64)
+	// InformerAddDuration is invoked every time a kubernetes object is added to the informer
+	InformerAddDuration(kind string, d time.Duration)
+	// InformerUpdateDuration is invoked every time a kubernetes object is updated in the informer
+	InformerUpdateDuration(kind string, d time.Duration)
 }
 
 // NoopReporter is a metrics Reporter that just does nothing
 type NoopReporter struct{}
 
-func (n NoopReporter) Start(_ context.Context)       {}
-func (n NoopReporter) TracerFlush(_ int)             {}
-func (n NoopReporter) OTELMetricExport(_ int)        {}
-func (n NoopReporter) OTELMetricExportError(_ error) {}
-func (n NoopReporter) OTELTraceExport(_ int)         {}
-func (n NoopReporter) OTELTraceExportError(_ error)  {}
-func (n NoopReporter) PrometheusRequest(_, _ string) {}
-func (n NoopReporter) InstrumentProcess(_ string)    {}
-func (n NoopReporter) UninstrumentProcess(_ string)  {}
-func (n NoopReporter) InformerPodAddDuration(_ int)  {}
+func (n NoopReporter) Start(_ context.Context)                          {}
+func (n NoopReporter) TracerFlush(_ int)                                {}
+func (n NoopReporter) OTELMetricExport(_ int)                           {}
+func (n NoopReporter) OTELMetricExportError(_ error)                    {}
+func (n NoopReporter) OTELTraceExport(_ int)                            {}
+func (n NoopReporter) OTELTraceExportError(_ error)                     {}
+func (n NoopReporter) PrometheusRequest(_, _ string)                    {}
+func (n NoopReporter) InstrumentProcess(_ string)                       {}
+func (n NoopReporter) UninstrumentProcess(_ string)                     {}
+func (n NoopReporter) InformerAddDuration(_ string, _ time.Duration)    {}
+func (n NoopReporter) InformerUpdateDuration(_ string, _ time.Duration) {}

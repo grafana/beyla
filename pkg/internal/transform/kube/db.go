@@ -4,10 +4,12 @@ import (
 	"fmt"
 	"log/slog"
 	"sync"
+	"time"
 
 	"k8s.io/client-go/tools/cache"
 
 	"github.com/grafana/beyla/pkg/internal/helpers/container"
+	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/kube"
 )
 
@@ -54,7 +56,7 @@ func CreateDatabase(kubeMetadata *kube.Metadata) Database {
 	}
 }
 
-func StartDatabase(kubeMetadata *kube.Metadata) (*Database, error) {
+func StartDatabase(kubeMetadata *kube.Metadata, m imetrics.Reporter) (*Database, error) {
 	db := CreateDatabase(kubeMetadata)
 	db.informer.AddContainerEventHandler(&db)
 
@@ -73,11 +75,17 @@ func StartDatabase(kubeMetadata *kube.Metadata) (*Database, error) {
 	}
 	if err := db.informer.AddServiceIPEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
+			svc := obj.(*kube.ServiceInfo)
+			d := time.Since(svc.CreationTimestamp.Time)
 			db.UpdateNewServicesByIPIndex(obj.(*kube.ServiceInfo))
+			m.InformerAddDuration("service", d)
 		},
 		UpdateFunc: func(oldObj, newObj interface{}) {
+			svc := newObj.(*kube.ServiceInfo)
+			d := time.Since(svc.CreationTimestamp.Time)
 			db.UpdateDeletedServicesByIPIndex(oldObj.(*kube.ServiceInfo))
 			db.UpdateNewServicesByIPIndex(newObj.(*kube.ServiceInfo))
+			m.InformerUpdateDuration("service", d)
 		},
 		DeleteFunc: func(obj interface{}) {
 			db.UpdateDeletedServicesByIPIndex(obj.(*kube.ServiceInfo))
@@ -87,11 +95,17 @@ func StartDatabase(kubeMetadata *kube.Metadata) (*Database, error) {
 	}
 	if err := db.informer.AddNodeEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
+			n := obj.(*kube.NodeInfo)
+			d := time.Since(n.CreationTimestamp.Time)
 			db.UpdateNewNodesByIPIndex(obj.(*kube.NodeInfo))
+			m.InformerAddDuration("node", d)
 		},
 		UpdateFunc: func(oldObj, newObj interface{}) {
+			n := newObj.(*kube.NodeInfo)
+			d := time.Since(n.CreationTimestamp.Time)
 			db.UpdateDeletedNodesByIPIndex(oldObj.(*kube.NodeInfo))
 			db.UpdateNewNodesByIPIndex(newObj.(*kube.NodeInfo))
+			m.InformerUpdateDuration("node", d)
 		},
 		DeleteFunc: func(obj interface{}) {
 			db.UpdateDeletedNodesByIPIndex(obj.(*kube.NodeInfo))

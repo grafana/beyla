@@ -39,7 +39,7 @@ int uprobe_sarama_sendInternal(struct pt_regs *ctx) {
 
     bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
     go_addr_key_t g_key = {};
-    goroutine_key_from_id(&g_key, goroutine_addr);
+    go_addr_key_from_id(&g_key, goroutine_addr);
 
     u32 correlation_id = 0;
 
@@ -67,7 +67,7 @@ int uprobe_sarama_broker_write(struct pt_regs *ctx) {
 
     bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
     go_addr_key_t g_key = {};
-    goroutine_key_from_id(&g_key, goroutine_addr);
+    go_addr_key_from_id(&g_key, goroutine_addr);
 
     u32 *invocation = bpf_map_lookup_elem(&ongoing_kafka_requests, &g_key);
     void *b_ptr = GO_PARAM1(ctx);

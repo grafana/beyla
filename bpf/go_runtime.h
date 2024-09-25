@@ -33,7 +33,7 @@ int uprobe_proc_newproc1(struct pt_regs *ctx) {
 
     new_func_invocation_t invocation = {.parent = (u64)GO_PARAM2(ctx)};
     go_addr_key_t g_key = {};
-    goroutine_key_from_id(&g_key, creator_goroutine);
+    go_addr_key_from_id(&g_key, creator_goroutine);
 
     // Save the registers on invocation to be able to fetch the arguments at return of newproc1
     if (bpf_map_update_elem(&newproc1, &g_key, &invocation, BPF_ANY)) {

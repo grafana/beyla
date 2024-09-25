@@ -73,7 +73,7 @@ struct {
     __uint(pinning, LIBBPF_PIN_BY_NAME);
 } go_trace_map SEC(".maps");
 
-static __always_inline void goroutine_key_from_id(go_addr_key_t *current, void *goroutine) {
+static __always_inline void go_addr_key_from_id(go_addr_key_t *current, void *goroutine) {
     u64 pid_tid = bpf_get_current_pid_tgid();
     u32 pid = pid_from_pid_tgid(pid_tid);
 
@@ -152,7 +152,7 @@ server_trace_parent(void *goroutine_addr, tp_info_t *tp, void *req_header) {
     // Get traceparent from the Request.Header
     void *traceparent_ptr = extract_traceparent_from_req_headers(req_header);
     go_addr_key_t g_key = {};
-    goroutine_key_from_id(&g_key, goroutine_addr);
+    go_addr_key_from_id(&g_key, goroutine_addr);
     if (traceparent_ptr != NULL) {
         unsigned char buf[TP_MAX_VAL_LENGTH];
         long res = bpf_probe_read(buf, sizeof(buf), traceparent_ptr);
@@ -224,11 +224,11 @@ static __always_inline u8 client_trace_parent(void *goroutine_addr,
     if (!found_trace_id) {
         tp_info_t *tp = 0;
         go_addr_key_t g_key = {};
-        goroutine_key_from_id(&g_key, goroutine_addr);
+        go_addr_key_from_id(&g_key, goroutine_addr);
 
         u64 parent_id = find_parent_goroutine(&g_key);
         go_addr_key_t p_key = {};
-        goroutine_key_from_id(&p_key, (void *)parent_id);
+        go_addr_key_from_id(&p_key, (void *)parent_id);
 
         if (parent_id) { // we found a parent request
             tp = (tp_info_t *)bpf_map_lookup_elem(&go_trace_map, &p_key);

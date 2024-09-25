@@ -29,8 +29,8 @@ typedef struct topic {
 
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, void *);      // w_ptr
-    __type(value, tp_info_t); // traceparent
+    __type(key, go_addr_key_t); // w_ptr
+    __type(value, tp_info_t);   // traceparent
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
 } produce_traceparents SEC(".maps");
 
@@ -43,8 +43,8 @@ struct {
 
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, void *);    // msg ptr
-    __type(value, topic_t); // topic info
+    __type(key, go_addr_key_t); // msg ptr
+    __type(value, topic_t);     // topic info
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
 } ongoing_produce_messages SEC(".maps");
 
@@ -74,8 +74,10 @@ int uprobe_writer_write_messages(struct pt_regs *ctx) {
 
     // We don't look up in the headers, no http/grpc request, therefore 0 as last argument
     client_trace_parent(goroutine_addr, &tp, 0);
+    go_addr_key_t p_key = {};
+    go_addr_key_from_id(&p_key, w_ptr);
 
-    bpf_map_update_elem(&produce_traceparents, &w_ptr, &tp, BPF_ANY);
+    bpf_map_update_elem(&produce_traceparents, &p_key, &tp, BPF_ANY);
     return 0;
 }
 
@@ -96,10 +98,11 @@ int uprobe_writer_produce(struct pt_regs *ctx) {
                             w_ptr + go_offset_of(ot, (go_offset){.v = _kafka_go_writer_topic_pos}));
 
         bpf_dbg_printk("topic_ptr %llx", topic_ptr);
+        go_addr_key_t p_key = {};
+        go_addr_key_from_id(&p_key, w_ptr);
         if (topic_ptr) {
             topic_t topic = {};
-
-            tp_info_t *tp = bpf_map_lookup_elem(&produce_traceparents, &w_ptr);
+            tp_info_t *tp = bpf_map_lookup_elem(&produce_traceparents, &p_key);
             if (tp) {
                 bpf_dbg_printk("found existing traceparent %llx", tp);
                 __builtin_memcpy(&topic.tp, tp, sizeof(tp_info_t));
@@ -111,7 +114,7 @@ int uprobe_writer_produce(struct pt_regs *ctx) {
             bpf_probe_read_user(&topic.name, sizeof(topic.name), topic_ptr);
             bpf_map_update_elem(&ongoing_produce_topics, &g_key, &topic, BPF_ANY);
         }
-        bpf_map_delete_elem(&produce_traceparents, &w_ptr);
+        bpf_map_delete_elem(&produce_traceparents, &p_key);
     }
 
     return 0;
@@ -132,7 +135,9 @@ int uprobe_client_roundTrip(struct pt_regs *ctx) {
         if (msg_ptr) {
             topic_t topic;
             __builtin_memcpy(&topic, topic_ptr, sizeof(topic_t));
-            bpf_map_update_elem(&ongoing_produce_messages, &msg_ptr, &topic, BPF_ANY);
+            go_addr_key_t m_key = {};
+            go_addr_key_from_id(&m_key, msg_ptr);
+            bpf_map_update_elem(&ongoing_produce_messages, &m_key, &topic, BPF_ANY);
         }
     }
 
@@ -154,7 +159,9 @@ int uprobe_protocol_roundtrip(struct pt_regs *ctx) {
     go_addr_key_from_id(&g_key, goroutine_addr);
 
     if (rw_ptr) {
-        topic_t *topic_ptr = bpf_map_lookup_elem(&ongoing_produce_messages, &msg_ptr);
+        go_addr_key_t m_key = {};
+        go_addr_key_from_id(&m_key, msg_ptr);
+        topic_t *topic_ptr = bpf_map_lookup_elem(&ongoing_produce_messages, &m_key);
         bpf_dbg_printk("Found topic %llx", topic_ptr);
         if (topic_ptr) {
             produce_req_t p = {
@@ -184,7 +191,9 @@ int uprobe_protocol_roundtrip_ret(struct pt_regs *ctx) {
 
     if (p_ptr) {
         void *msg_ptr = (void *)p_ptr->msg_ptr;
-        topic_t *topic_ptr = bpf_map_lookup_elem(&ongoing_produce_messages, &msg_ptr);
+        go_addr_key_t m_key = {};
+        go_addr_key_from_id(&m_key, msg_ptr);
+        topic_t *topic_ptr = bpf_map_lookup_elem(&ongoing_produce_messages, &m_key);
 
         bpf_dbg_printk("goroutine_addr %lx, conn ptr %llx", goroutine_addr, p_ptr->conn_ptr);
         bpf_dbg_printk("msg_ptr = %llx, topic_ptr = %llx", p_ptr->msg_ptr, topic_ptr);
@@ -214,7 +223,7 @@ int uprobe_protocol_roundtrip_ret(struct pt_regs *ctx) {
                 bpf_ringbuf_submit(trace, get_flags());
             }
         }
-        bpf_map_delete_elem(&ongoing_produce_messages, &msg_ptr);
+        bpf_map_delete_elem(&ongoing_produce_messages, &m_key);
     }
 
     bpf_map_delete_elem(&produce_requests, &g_key);

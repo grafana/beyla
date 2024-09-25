@@ -23,15 +23,16 @@ type PrometheusConfig struct {
 
 // PrometheusReporter is an internal metrics Reporter that exports to Prometheus
 type PrometheusReporter struct {
-	connector             *connector.PrometheusManager
-	tracerFlushes         prometheus.Histogram
-	otelMetricExports     prometheus.Counter
-	otelMetricExportErrs  *prometheus.CounterVec
-	otelTraceExports      prometheus.Counter
-	otelTraceExportErrs   *prometheus.CounterVec
-	prometheusRequests    *prometheus.CounterVec
-	instrumentedProcesses *prometheus.GaugeVec
-	beylaInfo             prometheus.Gauge
+	connector              *connector.PrometheusManager
+	tracerFlushes          prometheus.Histogram
+	otelMetricExports      prometheus.Counter
+	otelMetricExportErrs   *prometheus.CounterVec
+	otelTraceExports       prometheus.Counter
+	otelTraceExportErrs    *prometheus.CounterVec
+	prometheusRequests     *prometheus.CounterVec
+	instrumentedProcesses  *prometheus.GaugeVec
+	beylaInfo              prometheus.Gauge
+	informerPodAddDuration prometheus.Histogram
 }
 
 func NewPrometheusReporter(cfg *PrometheusConfig, manager *connector.PrometheusManager, registry *prometheus.Registry) *PrometheusReporter {
@@ -81,6 +82,14 @@ func NewPrometheusReporter(cfg *PrometheusConfig, manager *connector.PrometheusM
 				"revision":  buildinfo.Revision,
 			},
 		}),
+		informerPodAddDuration: prometheus.NewHistogram(prometheus.HistogramOpts{
+			Name:                            "beyla_k8s_informer_pod_add_duration_seconds",
+			Help:                            "Duration of the pod add event in the Kubernetes informer",
+			Buckets:                         prometheus.DefBuckets,
+			NativeHistogramBucketFactor:     1.1,
+			NativeHistogramMaxBucketNumber:  100,
+			NativeHistogramMinResetDuration: 1 * time.Hour,
+		}),
 	}
 	if registry != nil {
 		registry.MustRegister(pr.tracerFlushes,
@@ -90,7 +99,8 @@ func NewPrometheusReporter(cfg *PrometheusConfig, manager *connector.PrometheusM
 			pr.otelTraceExportErrs,
 			pr.prometheusRequests,
 			pr.instrumentedProcesses,
-			pr.beylaInfo)
+			pr.beylaInfo,
+			pr.informerPodAddDuration)
 	} else {
 		manager.Register(cfg.Port, cfg.Path,
 			pr.tracerFlushes,
@@ -100,7 +110,8 @@ func NewPrometheusReporter(cfg *PrometheusConfig, manager *connector.PrometheusM
 			pr.otelTraceExportErrs,
 			pr.prometheusRequests,
 			pr.instrumentedProcesses,
-			pr.beylaInfo)
+			pr.beylaInfo,
+			pr.informerPodAddDuration)
 	}
 
 	return pr
@@ -143,4 +154,8 @@ func (p *PrometheusReporter) InstrumentProcess(processName string) {
 
 func (p *PrometheusReporter) UninstrumentProcess(processName string) {
 	p.instrumentedProcesses.WithLabelValues(processName).Dec()
+}
+
+func (p *PrometheusReporter) InformerPodAddDuration(d time.Duration) {
+	p.informerPodAddDuration.Observe(d.Seconds())
 }

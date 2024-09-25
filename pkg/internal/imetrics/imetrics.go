@@ -32,6 +32,8 @@ type Reporter interface {
 	InstrumentProcess(processName string)
 	// UninstrumentProcess is invoked every time a process is removed from the instrumented processed
 	UninstrumentProcess(processName string)
+	// InformerPodAddDuration is invoked every time a pod is added to the informer
+	InformerPodAddDuration(d float64)
 }
 
 // NoopReporter is a metrics Reporter that just does nothing
@@ -46,3 +48,4 @@ func (n NoopReporter) OTELTraceExportError(_ error)  {}
 func (n NoopReporter) PrometheusRequest(_, _ string) {}
 func (n NoopReporter) InstrumentProcess(_ string)    {}
 func (n NoopReporter) UninstrumentProcess(_ string)  {}
+func (n NoopReporter) InformerPodAddDuration(_ int)  {}

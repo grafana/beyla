@@ -18,7 +18,7 @@
 
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, u32); // key: correlation id
+    __type(key, go_addr_key_t); // key: correlation id
     __type(value, kafka_client_req_t);
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
 } kafka_requests SEC(".maps");
@@ -121,7 +121,9 @@ int uprobe_sarama_broker_write(struct pt_regs *ctx) {
             bpf_dbg_printk("correlation_id = %d", correlation_id);
 
             bpf_probe_read(req.buf, KAFKA_MAX_LEN, buf_ptr);
-            bpf_map_update_elem(&kafka_requests, &correlation_id, &req, BPF_ANY);
+            go_addr_key_t k_key = {};
+            go_addr_key_from_id(&k_key, (void *)(uintptr_t)correlation_id);
+            bpf_map_update_elem(&kafka_requests, &k_key, &req, BPF_ANY);
         }
     }
 
@@ -147,7 +149,9 @@ int uprobe_sarama_response_promise_handle(struct pt_regs *ctx) {
         bpf_dbg_printk("correlation_id = %d", correlation_id);
 
         if (correlation_id) {
-            kafka_client_req_t *req = bpf_map_lookup_elem(&kafka_requests, &correlation_id);
+            go_addr_key_t k_key = {};
+            go_addr_key_from_id(&k_key, (void *)(uintptr_t)correlation_id);
+            kafka_client_req_t *req = bpf_map_lookup_elem(&kafka_requests, &k_key);
 
             if (req) {
                 req->end_monotime_ns = bpf_ktime_get_ns();
@@ -162,8 +166,7 @@ int uprobe_sarama_response_promise_handle(struct pt_regs *ctx) {
                     bpf_ringbuf_submit(trace, get_flags());
                 }
             }
-
-            bpf_map_delete_elem(&kafka_requests, &correlation_id);
+            bpf_map_delete_elem(&kafka_requests, &k_key);
         }
     }
 

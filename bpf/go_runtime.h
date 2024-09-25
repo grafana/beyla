@@ -20,7 +20,7 @@ typedef struct new_func_invocation {
 
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, goroutine_key_t); // key: pointer to the request goroutine
+    __type(key, go_addr_key_t); // key: pointer to the request goroutine
     __type(value, new_func_invocation_t);
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
 } newproc1 SEC(".maps");
@@ -32,7 +32,7 @@ int uprobe_proc_newproc1(struct pt_regs *ctx) {
     bpf_dbg_printk("creator_goroutine_addr %lx", creator_goroutine);
 
     new_func_invocation_t invocation = {.parent = (u64)GO_PARAM2(ctx)};
-    goroutine_key_t g_key = {};
+    go_addr_key_t g_key = {};
     goroutine_key_from_id(&g_key, creator_goroutine);
 
     // Save the registers on invocation to be able to fetch the arguments at return of newproc1
@@ -49,7 +49,7 @@ int uprobe_proc_newproc1_ret(struct pt_regs *ctx) {
     void *creator_goroutine = GOROUTINE_PTR(ctx);
     u64 pid_tid = bpf_get_current_pid_tgid();
     u32 pid = pid_from_pid_tgid(pid_tid);
-    goroutine_key_t c_key = {.addr = (u64)creator_goroutine, .pid = pid};
+    go_addr_key_t c_key = {.addr = (u64)creator_goroutine, .pid = pid};
 
     bpf_dbg_printk("creator_goroutine_addr %lx", creator_goroutine);
 
@@ -68,8 +68,8 @@ int uprobe_proc_newproc1_ret(struct pt_regs *ctx) {
     void *goroutine_addr = (void *)GO_PARAM1(ctx);
     bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
 
-    goroutine_key_t g_key = {.addr = (u64)goroutine_addr, .pid = pid};
-    goroutine_key_t p_key = {.addr = (u64)parent_goroutine, .pid = pid};
+    go_addr_key_t g_key = {.addr = (u64)goroutine_addr, .pid = pid};
+    go_addr_key_t p_key = {.addr = (u64)parent_goroutine, .pid = pid};
 
     goroutine_metadata metadata = {
         .timestamp = bpf_ktime_get_ns(),
@@ -96,7 +96,7 @@ int uprobe_proc_goexit1(struct pt_regs *ctx) {
     u64 pid_tid = bpf_get_current_pid_tgid();
     u32 pid = pid_from_pid_tgid(pid_tid);
 
-    goroutine_key_t g_key = {.addr = (u64)goroutine_addr, .pid = pid};
+    go_addr_key_t g_key = {.addr = (u64)goroutine_addr, .pid = pid};
 
     bpf_map_delete_elem(&ongoing_goroutines, &g_key);
     // We also clean-up the go routine based trace map, it's an LRU

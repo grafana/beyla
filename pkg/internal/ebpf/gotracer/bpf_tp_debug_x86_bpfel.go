@@ -25,13 +25,13 @@ type bpf_tp_debugFramerFuncInvocationT struct {
 	InitialN  int64
 }
 
-type bpf_tp_debugGoroutineKeyT struct {
+type bpf_tp_debugGoAddrKeyT struct {
 	Pid  uint64
 	Addr uint64
 }
 
 type bpf_tp_debugGoroutineMetadata struct {
-	Parent    bpf_tp_debugGoroutineKeyT
+	Parent    bpf_tp_debugGoAddrKeyT
 	Timestamp uint64
 }
 

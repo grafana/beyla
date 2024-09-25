@@ -25,8 +25,8 @@ struct {
 
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, goroutine_key_t); // key: goroutine id
-    __type(value, u32);           // correlation id
+    __type(key, go_addr_key_t); // key: goroutine id
+    __type(value, u32);         // correlation id
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
 } ongoing_kafka_requests SEC(".maps");
 
@@ -38,7 +38,7 @@ int uprobe_sarama_sendInternal(struct pt_regs *ctx) {
     off_table_t *ot = get_offsets_table();
 
     bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
-    goroutine_key_t g_key = {};
+    go_addr_key_t g_key = {};
     goroutine_key_from_id(&g_key, goroutine_addr);
 
     u32 correlation_id = 0;
@@ -66,7 +66,7 @@ int uprobe_sarama_broker_write(struct pt_regs *ctx) {
     void *goroutine_addr = GOROUTINE_PTR(ctx);
 
     bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
-    goroutine_key_t g_key = {};
+    go_addr_key_t g_key = {};
     goroutine_key_from_id(&g_key, goroutine_addr);
 
     u32 *invocation = bpf_map_lookup_elem(&ongoing_kafka_requests, &g_key);

@@ -10,4 +10,4 @@ func (ta *TraceAttacher) init() error {
 
 func (ta *TraceAttacher) close() {}
 
-func UnmountBPFFS(pinPath string, log *slog.Logger) {}
+func UnmountBPFFS(_ string, _ *slog.Logger) {}

@@ -49,7 +49,7 @@ typedef struct grpc_transports {
 
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, void *); // key: pointer to the transport pointer
+    __type(key, go_addr_key_t); // key: pointer to the transport pointer
     __type(value, grpc_transports_t);
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
 } ongoing_grpc_transports SEC(".maps");
@@ -78,7 +78,7 @@ struct {
 // Context propagation
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, u32);                             // key: stream id
+    __type(key, go_addr_key_t);                   // key: stream id
     __type(value, grpc_client_func_invocation_t); // stored info for the client request
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
 } ongoing_streams SEC(".maps");
@@ -149,7 +149,9 @@ int uprobe_netFdReadGRPC(struct pt_regs *ctx) {
     void *tr = bpf_map_lookup_elem(&ongoing_grpc_operate_headers, &g_key);
     bpf_dbg_printk("tr %llx", tr);
     if (tr) {
-        grpc_transports_t *t = bpf_map_lookup_elem(&ongoing_grpc_transports, tr);
+        go_addr_key_t tr_key = {};
+        go_addr_key_from_id(&tr_key, tr);
+        grpc_transports_t *t = bpf_map_lookup_elem(&ongoing_grpc_transports, &tr_key);
         bpf_dbg_printk("t %llx", t);
         if (t) {
             void *fd_ptr = GO_PARAM1(ctx);
@@ -169,6 +171,8 @@ int uprobe_http2Server_operateHeaders(struct pt_regs *ctx) {
         "=== uprobe/http2Server_operateHeaders tr %llx goroutine %lx === ", tr, goroutine_addr);
     go_addr_key_t g_key = {};
     go_addr_key_from_id(&g_key, goroutine_addr);
+    go_addr_key_t tr_key = {};
+    go_addr_key_from_id(&tr_key, tr);
 
     grpc_transports_t t = {
         .type = TRANSPORT_HTTP2,
@@ -176,7 +180,7 @@ int uprobe_http2Server_operateHeaders(struct pt_regs *ctx) {
     };
 
     bpf_map_update_elem(&ongoing_grpc_operate_headers, &g_key, &tr, BPF_ANY);
-    bpf_map_update_elem(&ongoing_grpc_transports, &tr, &t, BPF_ANY);
+    bpf_map_update_elem(&ongoing_grpc_transports, &tr_key, &t, BPF_ANY);
 
     return 0;
 }
@@ -193,6 +197,9 @@ int uprobe_server_handler_transport_handle_streams(struct pt_regs *ctx) {
     go_addr_key_t g_key = {};
     go_addr_key_from_id(&g_key, goroutine_addr);
 
+    go_addr_key_t tr_key = {};
+    go_addr_key_from_id(&tr_key, tr);
+
     void *parent_go = (void *)find_parent_goroutine(&g_key);
     if (parent_go) {
         bpf_dbg_printk("found parent goroutine for transport handler [%llx]", parent_go);
@@ -206,7 +213,7 @@ int uprobe_server_handler_transport_handle_streams(struct pt_regs *ctx) {
             };
             __builtin_memcpy(&t.conn, conn, sizeof(connection_info_t));
 
-            bpf_map_update_elem(&ongoing_grpc_transports, &tr, &t, BPF_ANY);
+            bpf_map_update_elem(&ongoing_grpc_transports, &tr_key, &t, BPF_ANY);
         }
     }
 
@@ -285,7 +292,9 @@ int uprobe_server_handleStream_return(struct pt_regs *ctx) {
 
     bpf_dbg_printk("st_ptr %llx", st_ptr);
     if (st_ptr) {
-        grpc_transports_t *t = bpf_map_lookup_elem(&ongoing_grpc_transports, &st_ptr);
+        go_addr_key_t tr_key = {};
+        go_addr_key_from_id(&tr_key, st_ptr);
+        grpc_transports_t *t = bpf_map_lookup_elem(&ongoing_grpc_transports, &tr_key);
 
         bpf_dbg_printk("found t %llx", t);
         if (t) {
@@ -604,9 +613,11 @@ int uprobe_transport_http2Client_NewStream(struct pt_regs *ctx) {
 
         if (invocation) {
             grpc_client_func_invocation_t inv_save = *invocation;
+            go_addr_key_t s_key = {};
+            go_addr_key_from_id(&s_key, (void *)(uintptr_t)next_id);
             // This map is an LRU map, we can't be sure that all created streams are going to be
             // seen later by writeHeader to clean up this mapping.
-            bpf_map_update_elem(&ongoing_streams, &next_id, &inv_save, BPF_ANY);
+            bpf_map_update_elem(&ongoing_streams, &s_key, &inv_save, BPF_ANY);
         } else {
             bpf_dbg_printk("Couldn't find invocation metadata for goroutine %lx", goroutine_addr);
         }
@@ -653,9 +664,9 @@ int uprobe_grpcFramerWriteHeaders(struct pt_regs *ctx) {
         "framer=%llx, stream_id=%lld, framer_w_pos %llx", framer, ((u64)stream_id), framer_w_pos);
 
     u32 stream_lookup = (u32)stream_id;
-
-    grpc_client_func_invocation_t *invocation =
-        bpf_map_lookup_elem(&ongoing_streams, &stream_lookup);
+    go_addr_key_t s_key = {};
+    go_addr_key_from_id(&s_key, (void *)(uintptr_t)stream_lookup);
+    grpc_client_func_invocation_t *invocation = bpf_map_lookup_elem(&ongoing_streams, &s_key);
 
     if (invocation) {
         bpf_dbg_printk("Found invocation info %llx", invocation);
@@ -693,7 +704,7 @@ int uprobe_grpcFramerWriteHeaders(struct pt_regs *ctx) {
         }
     }
 
-    bpf_map_delete_elem(&ongoing_streams, &stream_id);
+    bpf_map_delete_elem(&ongoing_streams, &s_key);
     return 0;
 }
 #else

@@ -15,7 +15,7 @@ const (
 	OwnerDeployment  = OwnerLabel(attr.K8sDeploymentName)
 	OwnerStatefulSet = OwnerLabel(attr.K8sStatefulSetName)
 	OwnerDaemonSet   = OwnerLabel(attr.K8sDaemonSetName)
-	OwnerUnknown     = OwnerLabel(attr.K8sUnknownOwnerName)
+	OwnerGeneric     = OwnerLabel(attr.K8sOwnerName)
 )
 
 type Owner struct {
@@ -57,9 +57,35 @@ func OwnerFrom(orefs []metav1.OwnerReference) *Owner {
 
 func unrecognizedOwner(or *metav1.OwnerReference) *Owner {
 	return &Owner{
-		LabelName: OwnerLabel(attr.K8sUnknownOwnerName),
+		LabelName: OwnerLabel(attr.K8sOwnerName),
 		Name:      or.Name,
 	}
+}
+
+// TopOwnerNameLabel returns the top-level name and metadata label in the owner chain.
+// For example, if the owner is a ReplicaSet, it will return the Deployment name.
+func (o *Owner) TopOwnerNameLabel() (string, OwnerLabel) {
+	if o == nil {
+		return "", ""
+	}
+	if o.LabelName == OwnerReplicaSet {
+		// we have two levels of ownership at most
+		if o.Owner != nil {
+			return o.Owner.Name, o.Owner.LabelName
+		}
+		// if the replicaset informer is disabled, we can't get the owner deployment,
+		// so we will heuristically extract it from the ReplicaSet Name (and cache it)
+		topOwnerName := o.Name
+		if idx := strings.LastIndexByte(topOwnerName, '-'); idx > 0 {
+			topOwnerName = topOwnerName[:idx]
+			o.Owner = &Owner{
+				Name:      topOwnerName,
+				LabelName: OwnerDeployment,
+			}
+			return topOwnerName, OwnerDeployment
+		}
+	}
+	return o.Name, o.LabelName
 }
 
 func (o *Owner) String() string {

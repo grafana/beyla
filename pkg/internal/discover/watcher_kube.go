@@ -8,6 +8,7 @@ import (
 	"github.com/mariomac/pipes/pipe"
 	"k8s.io/client-go/tools/cache"
 
+	attr "github.com/grafana/beyla/pkg/export/attributes/names"
 	"github.com/grafana/beyla/pkg/internal/helpers/container"
 	"github.com/grafana/beyla/pkg/internal/helpers/maps"
 	"github.com/grafana/beyla/pkg/internal/kube"
@@ -323,20 +324,12 @@ func withMetadata(pp processAttrs, info *kube.PodInfo) processAttrs {
 		services.AttrPodName:   info.Name,
 	}
 	ret.podLabels = info.Labels
-	owner := info.Owner
-	for owner != nil {
-		ret.metadata[services.AttrOwnerName] = owner.Name
-		switch owner.LabelName {
-		case kube.OwnerDaemonSet:
-			ret.metadata[services.AttrDaemonSetName] = owner.Name
-		case kube.OwnerReplicaSet:
-			ret.metadata[services.AttrReplicaSetName] = owner.Name
-		case kube.OwnerDeployment:
-			ret.metadata[services.AttrDeploymentName] = owner.Name
-		case kube.OwnerStatefulSet:
-			ret.metadata[services.AttrStatefulSetName] = owner.Name
-		}
-		owner = owner.Owner
+
+	if info.Owner != nil {
+		ret.metadata[attr.Name(info.Owner.LabelName).Prom()] = info.Owner.Name
+		topName, topLabel := info.Owner.TopOwnerNameLabel()
+		ret.metadata[attr.Name(topLabel).Prom()] = topName
+		ret.metadata[services.AttrOwnerName] = topName
 	}
 	return ret
 }

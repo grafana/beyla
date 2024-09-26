@@ -68,7 +68,7 @@ func (pf *ProcessFinder) Start() (<-chan *ebpf.Instrumentable, <-chan *ebpf.Inst
 	gb := pipe.NewBuilder(&nodesMap{}, pipe.ChannelBufferLen(pf.cfg.ChannelBufferLen))
 	pipe.AddStart(gb, processWatcher, ProcessWatcherFunc(pf.ctx, pf.cfg))
 	pipe.AddMiddleProvider(gb, ptrWatcherKubeEnricher,
-		WatcherKubeEnricherProvider(pf.ctx, pf.ctxInfo.K8sInformer))
+		WatcherKubeEnricherProvider(pf.ctx, pf.ctxInfo.K8sInformer, pf.ctxInfo.Metrics))
 	pipe.AddMiddleProvider(gb, criteriaMatcher, CriteriaMatcherProvider(pf.cfg))
 	pipe.AddMiddleProvider(gb, execTyper, ExecTyperProvider(pf.cfg, pf.ctxInfo.Metrics))
 	pipe.AddMiddleProvider(gb, containerDBUpdater,

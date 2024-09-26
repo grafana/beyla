@@ -4,12 +4,14 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/mariomac/pipes/pipe"
 	"k8s.io/client-go/tools/cache"
 
 	"github.com/grafana/beyla/pkg/internal/helpers/container"
 	"github.com/grafana/beyla/pkg/internal/helpers/maps"
+	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/kube"
 	"github.com/grafana/beyla/pkg/services"
 )
@@ -33,7 +35,7 @@ type watcherKubeEnricher struct {
 	informer kubeMetadata
 
 	log *slog.Logger
-
+	m   imetrics.Reporter
 	// cached system objects
 	containerByPID     map[PID]container.Info
 	processByContainer map[string]processAttrs
@@ -62,6 +64,7 @@ type kubeMetadataProvider interface {
 func WatcherKubeEnricherProvider(
 	ctx context.Context,
 	informerProvider kubeMetadataProvider,
+	m imetrics.Reporter,
 ) pipe.MiddleProvider[[]Event[processAttrs], []Event[processAttrs]] {
 	return func() (pipe.MiddleFunc[[]Event[processAttrs], []Event[processAttrs]], error) {
 		if !informerProvider.IsKubeEnabled() {
@@ -71,7 +74,7 @@ func WatcherKubeEnricherProvider(
 		if err != nil {
 			return nil, fmt.Errorf("instantiating WatcherKubeEnricher: %w", err)
 		}
-		wk := watcherKubeEnricher{informer: informer}
+		wk := watcherKubeEnricher{informer: informer, m: m}
 		if err := wk.init(); err != nil {
 			return nil, err
 		}
@@ -90,10 +93,16 @@ func (wk *watcherKubeEnricher) init() error {
 	wk.podsInfoCh = make(chan Event[*kube.PodInfo], 10)
 	if err := wk.informer.AddPodEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
+			pod := obj.(*kube.PodInfo)
+			d := time.Since(pod.CreationTimestamp.Time)
 			wk.podsInfoCh <- Event[*kube.PodInfo]{Type: EventCreated, Obj: obj.(*kube.PodInfo)}
+			wk.m.InformerAddDuration("pod", d)
 		},
 		UpdateFunc: func(_, newObj interface{}) {
+			pod := newObj.(*kube.PodInfo)
+			d := time.Since(pod.CreationTimestamp.Time)
 			wk.podsInfoCh <- Event[*kube.PodInfo]{Type: EventCreated, Obj: newObj.(*kube.PodInfo)}
+			wk.m.InformerUpdateDuration("pod", d)
 		},
 		DeleteFunc: func(obj interface{}) {
 			wk.podsInfoCh <- Event[*kube.PodInfo]{Type: EventDeleted, Obj: obj.(*kube.PodInfo)}
@@ -106,10 +115,16 @@ func (wk *watcherKubeEnricher) init() error {
 	wk.rsInfoCh = make(chan Event[*kube.ReplicaSetInfo], 10)
 	if err := wk.informer.AddReplicaSetEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
+			rs := obj.(*kube.ReplicaSetInfo)
+			d := time.Since(rs.CreationTimestamp.Time)
 			wk.rsInfoCh <- Event[*kube.ReplicaSetInfo]{Type: EventCreated, Obj: obj.(*kube.ReplicaSetInfo)}
+			wk.m.InformerAddDuration("replicaset", d)
 		},
 		UpdateFunc: func(_, newObj interface{}) {
+			rs := newObj.(*kube.ReplicaSetInfo)
+			d := time.Since(rs.CreationTimestamp.Time)
 			wk.rsInfoCh <- Event[*kube.ReplicaSetInfo]{Type: EventCreated, Obj: newObj.(*kube.ReplicaSetInfo)}
+			wk.m.InformerUpdateDuration("replicaset", d)
 		},
 		DeleteFunc: func(obj interface{}) {
 			wk.rsInfoCh <- Event[*kube.ReplicaSetInfo]{Type: EventDeleted, Obj: obj.(*kube.ReplicaSetInfo)}

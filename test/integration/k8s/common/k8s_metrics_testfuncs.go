@@ -214,8 +214,7 @@ func FeatureDisableInformersAppMetricsDecoration() features.Feature {
 					"k8s_pod_name":        "^testserver-.*",
 					"k8s_pod_uid":         UUIDRegex,
 					"k8s_pod_start_time":  TimeRegex,
-					"k8s_deployment_name": "^$",
-					"k8s_owner_name":      "^testserver$",
+					"k8s_deployment_name": "^testserver$",
 					"k8s_replicaset_name": "^testserver-.*",
 					"k8s_cluster_name":    "^beyla$",
 				})).Feature()

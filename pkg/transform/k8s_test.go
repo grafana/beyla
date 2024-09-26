@@ -76,11 +76,12 @@ func TestDecoration(t *testing.T) {
 		deco := testutil.ReadChannel(t, outputhCh, timeout)
 		require.Len(t, deco, 1)
 		assert.Equal(t, "the-ns", deco[0].ServiceID.Namespace)
-		assert.Equal(t, "rs-34", deco[0].ServiceID.Name)
+		assert.Equal(t, "rs", deco[0].ServiceID.Name)
 		assert.Equal(t, map[attr.Name]string{
 			"k8s.node.name":       "the-node",
 			"k8s.namespace.name":  "the-ns",
 			"k8s.replicaset.name": "rs-34",
+			"k8s.deployment.name": "rs",
 			"k8s.pod.name":        "pod-34",
 			"k8s.pod.uid":         "uid-34",
 			"k8s.pod.start_time":  "2020-01-02 12:34:56",

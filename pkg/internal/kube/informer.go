@@ -430,14 +430,8 @@ func (k *Metadata) AddNodeEventHandler(h cache.ResourceEventHandler) error {
 }
 
 func (i *PodInfo) ServiceName() string {
-	if i.Owner != nil {
-		// we have two levels of ownership at most
-		if i.Owner.Owner != nil {
-			return i.Owner.Owner.Name
-		}
-
-		return i.Owner.Name
+	if on, _ := i.Owner.TopOwnerNameLabel(); on != "" {
+		return on
 	}
-
 	return i.Name
 }

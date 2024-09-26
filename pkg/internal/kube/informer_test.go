@@ -16,6 +16,7 @@ func TestServiceName(t *testing.T) {
 
 	pod2 := PodInfo{
 		Owner: &Owner{
+			LabelName: OwnerReplicaSet,
 			Owner: &Owner{
 				Name: "nested_two",
 			},
@@ -23,19 +24,6 @@ func TestServiceName(t *testing.T) {
 	}
 
 	pod3 := PodInfo{
-		Owner: &Owner{
-			Owner: &Owner{
-				Owner: &Owner{
-					Name: "nested_three",
-				},
-			},
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "too_nested",
-		},
-	}
-
-	pod4 := PodInfo{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "not_nested",
 		},
@@ -45,7 +33,6 @@ func TestServiceName(t *testing.T) {
 
 	assert.Equal(t, "nested_one", pod.ServiceName())
 	assert.Equal(t, "nested_two", pod2.ServiceName())
-	assert.Equal(t, "", pod3.ServiceName())
-	assert.Equal(t, "not_nested", pod4.ServiceName())
+	assert.Equal(t, "not_nested", pod3.ServiceName())
 	assert.Equal(t, "", pod5.ServiceName())
 }

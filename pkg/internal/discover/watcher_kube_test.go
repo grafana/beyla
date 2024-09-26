@@ -30,9 +30,9 @@ const (
 	containerPID   = 123
 	containerID    = "container-123"
 	containerPort  = 332
-	replicaSetName = "rs-3321"
+	replicaSetName = "the-deployment-123456789"
 	deploymentName = "the-deployment"
-	podName        = "the-pod"
+	podName        = "the-deployment-123456789-abcde"
 )
 
 func TestWatcherKubeEnricher(t *testing.T) {
@@ -155,8 +155,8 @@ func TestWatcherKubeEnricherWithMatcher(t *testing.T) {
 		newProcess(inputCh, 123, []uint32{777})
 		newProcess(inputCh, 456, []uint32{})
 		newProcess(inputCh, 789, []uint32{443})
-		deployOwnedPod(t, k8sClient, namespace, "pod-789", "rs-789", "container-789")
-		deployReplicaSet(t, k8sClient, namespace, "rs-789", "ouyeah")
+		deployOwnedPod(t, k8sClient, namespace, "depl-rsid-podid", "depl-rsid", "container-789")
+		deployReplicaSet(t, k8sClient, namespace, "depl-rsid", "depl")
 	})
 
 	// sending events that will match and will be forwarded
@@ -205,8 +205,8 @@ func TestWatcherKubeEnricherWithMatcher(t *testing.T) {
 
 	t.Run("both process and metadata match", func(t *testing.T) {
 		newProcess(inputCh, 56, []uint32{443})
-		deployOwnedPod(t, k8sClient, namespace, "pod-56", "rs-56", "container-56")
-		deployReplicaSet(t, k8sClient, namespace, "rs-56", "chacha")
+		deployOwnedPod(t, k8sClient, namespace, "chacha-rsid-podid", "chacha-rsid", "container-56")
+		deployReplicaSet(t, k8sClient, namespace, "chacha-rsid", "chacha")
 		matches := testutil.ReadChannel(t, outputCh, timeout)
 		require.Len(t, matches, 1)
 		m := matches[0]

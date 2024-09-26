@@ -174,9 +174,6 @@ func (id *Database) OwnerPodInfo(pidNamespace uint32) (*kube.PodInfo, bool) {
 		}
 		id.fetchedPodsCache[pidNamespace] = pod
 	}
-	// we check DeploymentName after caching, as the replicasetInfo might be
-	// received late by the replicaset informer
-	id.informer.FetchPodOwnerInfo(pod)
 	return pod, true
 }
 

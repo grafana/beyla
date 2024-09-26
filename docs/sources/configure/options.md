@@ -293,7 +293,7 @@ Each `services` entry is a map where the properties can be grouped according to 
 | `name` | --      | string | (see description) |
 
 Defines a name for the matching instrumented service. It will be used to populate the `service.name`
-OTEL property and/or the `service_name` prometheus property in the exported metrics/traces.
+OTEL property and/or the `service_name` Prometheus property in the exported metrics/traces.
 
 If the property is not set, it will default to any of the following properties, in order of
 precedence:
@@ -302,7 +302,7 @@ precedence:
   1. The name of the Deployment that runs the instrumented process, if any.
   2. The name of the ReplicaSet/DaemonSet/StatefulSet that runs the instrumented process, if any.
   3. The name of the Pod that runs the instrumented process.
-- If kubernetes is not enabled:
+- If Kubernetes is not enabled:
   1. The name of the process executable file.
 
 If multiple processes match the service selection criteria described below,
@@ -511,7 +511,7 @@ To disable the automatic HTTP request timeout feature, set this option to zero, 
 | `high_request_volume`   | `BEYLA_BPF_HIGH_REQUEST_VOLUME`    | boolean  | (false) |
 
 Configures the HTTP tracer heuristic to send telemetry events as soon as a response is detected. 
-Setting this option reduces the acuracy of timings for requests with large responses, however,
+Setting this option reduces the accuracy of timings for requests with large responses, however,
 in high request volume scenarios this option will reduce the number of dropped trace events.
 
 ## Configuration of metrics and traces attributes
@@ -661,6 +661,25 @@ to tell Beyla where to find the Kubernetes configuration in order to try to
 establish communication with the Kubernetes Cluster.
 
 Usually you won't need to change this value.
+
+| YAML                | Environment variable           | Type   | Default          |
+|---------------------|--------------------------------|--------|------------------|
+| `disable_informers` | `BEYLA_KUBE_DISABLE_INFORMERS` | string | `~/.kube/config` |
+
+The accepted value is a list that might contain `node` and/or `service`.
+
+This option allows to selectively disable some Kubernetes informers, which are continuously
+listening to the Kubernetes API to obtain the metadata that is required for decorating
+network metrics or application metrics and traces.
+
+When Beyla is deployed as a DaemonSet in very large clusters, all the Beyla instances
+creating multiple informers might end up overloading the Kubernetes API.
+
+Disabling some informers would cause reported metadata to be incomplete, but
+but will reduce the load of the Kubernetes API.
+
+The Pods informer can't be disabled. For that purpose, you should disable the whole
+Kubernetes metadata decoration.
 
 ## Routes decorator
 

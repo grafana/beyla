@@ -8,7 +8,6 @@ import (
 
 const (
 	InformerService = maps.Bits(1 << iota)
-	InformerReplicaSet
 	InformerNode
 )
 
@@ -16,12 +15,10 @@ func informerTypes(str []string) maps.Bits {
 	return maps.MappedBits(
 		str,
 		map[string]maps.Bits{
-			"service":     InformerService,
-			"services":    InformerService,
-			"replicaset":  InformerReplicaSet,
-			"replicasets": InformerReplicaSet,
-			"node":        InformerNode,
-			"nodes":       InformerNode,
+			"service":  InformerService,
+			"services": InformerService,
+			"node":     InformerNode,
+			"nodes":    InformerNode,
 		},
 		maps.WithTransform(strings.ToLower),
 	)

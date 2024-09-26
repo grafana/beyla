@@ -10,6 +10,9 @@ import (
 	"github.com/grafana/beyla/pkg/internal/request"
 )
 
+type instrumenter struct {
+}
+
 // dummy implementations to avoid compilation errors in Darwin.
 // The tracer component is only usable in Linux.
 func (pt *ProcessTracer) Run(_ context.Context, _ chan<- []request.Span) {}
@@ -22,7 +25,7 @@ func (pt *ProcessTracer) Init() error {
 	return nil
 }
 
-func BuildPinPath(cfg *beyla.Config) string {
+func BuildPinPath(_ *beyla.Config) string {
 	return ""
 }
 

@@ -61,27 +61,33 @@ func TestTopOwnerLabel(t *testing.T) {
 	type testCase struct {
 		expectedLabel OwnerLabel
 		expectedName  string
+		expectedKind  string
 		owner         *Owner
 	}
 	for _, tc := range []testCase{
-		{owner: nil},
-		{expectedLabel: OwnerDaemonSet, expectedName: "ds",
-			owner: &Owner{LabelName: OwnerDaemonSet, Name: "ds"}},
-		{expectedLabel: OwnerDeployment, expectedName: "rs-without-dep-meta",
-			owner: &Owner{LabelName: OwnerReplicaSet, Name: "rs-without-dep-meta-34fb1fa3a"}},
-		{expectedLabel: OwnerDeployment, expectedName: "dep",
-			owner: &Owner{LabelName: OwnerReplicaSet, Name: "dep-34fb1fa3a",
-				Owner: &Owner{LabelName: OwnerDeployment, Name: "dep"}}},
+		{expectedLabel: OwnerDaemonSet, expectedName: "ds", expectedKind: "DaemonSet",
+			owner: &Owner{LabelName: OwnerDaemonSet, Name: "ds", Kind: "DaemonSet"}},
+		{expectedLabel: OwnerDeployment, expectedName: "rs-without-dep-meta", expectedKind: "Deployment",
+			owner: &Owner{LabelName: OwnerReplicaSet, Name: "rs-without-dep-meta-34fb1fa3a", Kind: "ReplicaSet"}},
+		{expectedLabel: OwnerDeployment, expectedName: "dep", expectedKind: "Deployment",
+			owner: &Owner{LabelName: OwnerReplicaSet, Name: "dep-34fb1fa3a", Kind: "ReplicaSet",
+				Owner: &Owner{LabelName: OwnerDeployment, Name: "dep", Kind: "Deployment"}}},
 	} {
 		t.Run(tc.expectedName, func(t *testing.T) {
-			name, label := tc.owner.TopOwnerNameLabel()
-			assert.Equal(t, tc.expectedName, name)
-			assert.Equal(t, tc.expectedLabel, label)
+			topOwner := tc.owner.TopOwner()
+			assert.Equal(t, tc.expectedName, topOwner.Name)
+			assert.Equal(t, tc.expectedLabel, topOwner.LabelName)
+			assert.Equal(t, tc.expectedKind, topOwner.Kind)
 
 			// check that the output is consistent (e.g. after ReplicaSet owner data is cached)
-			name, label = tc.owner.TopOwnerNameLabel()
-			assert.Equal(t, tc.expectedName, name)
-			assert.Equal(t, tc.expectedLabel, label)
+			topOwner = tc.owner.TopOwner()
+			assert.Equal(t, tc.expectedName, topOwner.Name)
+			assert.Equal(t, tc.expectedLabel, topOwner.LabelName)
+			assert.Equal(t, tc.expectedKind, topOwner.Kind)
 		})
 	}
+}
+
+func TestTopOwner_Nil(t *testing.T) {
+	assert.Nil(t, (*Owner)(nil).TopOwner())
 }

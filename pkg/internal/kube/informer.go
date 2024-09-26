@@ -324,8 +324,8 @@ func (k *Metadata) AddNodeEventHandler(h cache.ResourceEventHandler) error {
 }
 
 func (i *PodInfo) ServiceName() string {
-	if on, _ := i.Owner.TopOwnerNameLabel(); on != "" {
-		return on
+	if to := i.Owner.TopOwner(); to != nil {
+		return to.Name
 	}
 	return i.Name
 }

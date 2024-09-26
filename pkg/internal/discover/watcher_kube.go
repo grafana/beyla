@@ -248,9 +248,9 @@ func withMetadata(pp processAttrs, info *kube.PodInfo) processAttrs {
 
 	if info.Owner != nil {
 		ret.metadata[attr.Name(info.Owner.LabelName).Prom()] = info.Owner.Name
-		topName, topLabel := info.Owner.TopOwnerNameLabel()
-		ret.metadata[attr.Name(topLabel).Prom()] = topName
-		ret.metadata[services.AttrOwnerName] = topName
+		topOwner := info.Owner.TopOwner()
+		ret.metadata[attr.Name(topOwner.LabelName).Prom()] = topOwner.Name
+		ret.metadata[services.AttrOwnerName] = topOwner.Name
 	}
 	return ret
 }

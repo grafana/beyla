@@ -18,6 +18,7 @@ import (
 
 	"github.com/grafana/beyla/pkg/beyla"
 	"github.com/grafana/beyla/pkg/internal/helpers/container"
+	"github.com/grafana/beyla/pkg/internal/imetrics"
 	"github.com/grafana/beyla/pkg/internal/kube"
 	"github.com/grafana/beyla/pkg/internal/testutil"
 	"github.com/grafana/beyla/pkg/services"
@@ -29,9 +30,9 @@ const (
 	containerPID   = 123
 	containerID    = "container-123"
 	containerPort  = 332
-	replicaSetName = "rs-3321"
+	replicaSetName = "the-deployment-123456789"
 	deploymentName = "the-deployment"
-	podName        = "the-pod"
+	podName        = "the-deployment-123456789-abcde"
 )
 
 func TestWatcherKubeEnricher(t *testing.T) {
@@ -73,7 +74,7 @@ func TestWatcherKubeEnricher(t *testing.T) {
 			k8sClient := fakek8sclientset.NewSimpleClientset()
 			informer := kube.Metadata{}
 			require.NoError(t, informer.InitFromClient(context.TODO(), k8sClient, 30*time.Minute))
-			wkeNodeFunc, err := WatcherKubeEnricherProvider(context.TODO(), &informerProvider{informer: &informer})()
+			wkeNodeFunc, err := WatcherKubeEnricherProvider(context.TODO(), &informerProvider{informer: &informer}, fakeInternalMetrics{})()
 			require.NoError(t, err)
 			inputCh, outputCh := make(chan []Event[processAttrs], 10), make(chan []Event[processAttrs], 10)
 			defer close(inputCh)
@@ -119,7 +120,7 @@ func TestWatcherKubeEnricherWithMatcher(t *testing.T) {
 	k8sClient := fakek8sclientset.NewSimpleClientset()
 	informer := kube.Metadata{}
 	require.NoError(t, informer.InitFromClient(context.TODO(), k8sClient, 30*time.Minute))
-	wkeNodeFunc, err := WatcherKubeEnricherProvider(context.TODO(), &informerProvider{informer: &informer})()
+	wkeNodeFunc, err := WatcherKubeEnricherProvider(context.TODO(), &informerProvider{informer: &informer}, fakeInternalMetrics{})()
 	require.NoError(t, err)
 	pipeConfig := beyla.Config{}
 	require.NoError(t, yaml.Unmarshal([]byte(`discovery:
@@ -154,8 +155,8 @@ func TestWatcherKubeEnricherWithMatcher(t *testing.T) {
 		newProcess(inputCh, 123, []uint32{777})
 		newProcess(inputCh, 456, []uint32{})
 		newProcess(inputCh, 789, []uint32{443})
-		deployOwnedPod(t, k8sClient, namespace, "pod-789", "rs-789", "container-789")
-		deployReplicaSet(t, k8sClient, namespace, "rs-789", "ouyeah")
+		deployOwnedPod(t, k8sClient, namespace, "depl-rsid-podid", "depl-rsid", "container-789")
+		deployReplicaSet(t, k8sClient, namespace, "depl-rsid", "depl")
 	})
 
 	// sending events that will match and will be forwarded
@@ -204,8 +205,8 @@ func TestWatcherKubeEnricherWithMatcher(t *testing.T) {
 
 	t.Run("both process and metadata match", func(t *testing.T) {
 		newProcess(inputCh, 56, []uint32{443})
-		deployOwnedPod(t, k8sClient, namespace, "pod-56", "rs-56", "container-56")
-		deployReplicaSet(t, k8sClient, namespace, "rs-56", "chacha")
+		deployOwnedPod(t, k8sClient, namespace, "chacha-rsid-podid", "chacha-rsid", "container-56")
+		deployReplicaSet(t, k8sClient, namespace, "chacha-rsid", "chacha")
 		matches := testutil.ReadChannel(t, outputCh, timeout)
 		require.Len(t, matches, 1)
 		m := matches[0]
@@ -308,6 +309,13 @@ func fakeProcessInfo(pp processAttrs) (*services.ProcessInfo, error) {
 		ExePath:   fmt.Sprintf("/bin/process%d", pp.pid),
 	}, nil
 }
+
+type fakeInternalMetrics struct {
+	imetrics.NoopReporter
+}
+
+func (fakeInternalMetrics) InformerAddDuration(_ string, _ time.Duration)    {}
+func (fakeInternalMetrics) InformerUpdateDuration(_ string, _ time.Duration) {}
 
 type informerProvider struct {
 	informer *kube.Metadata

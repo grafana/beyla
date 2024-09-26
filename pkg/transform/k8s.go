@@ -128,10 +128,10 @@ func (md *metadataDecorator) appendMetadata(span *request.Span, info *kube.PodIn
 		attr.K8sPodStartTime:  info.StartTimeStr,
 		attr.K8sClusterName:   md.clusterName,
 	}
-	owner := info.Owner
-	for owner != nil {
-		span.ServiceID.Metadata[attr.Name(owner.LabelName)] = owner.Name
-		owner = owner.Owner
+	if info.Owner != nil {
+		span.ServiceID.Metadata[attr.Name(info.Owner.LabelName)] = info.Owner.Name
+		topName, topLabel := info.Owner.TopOwnerNameLabel()
+		span.ServiceID.Metadata[attr.Name(topLabel)] = topName
 	}
 	// override hostname by the Pod name
 	span.ServiceID.HostName = info.Name

@@ -6,7 +6,6 @@ import (
 	"log/slog"
 
 	"github.com/cilium/ebpf"
-	"github.com/cilium/ebpf/link"
 
 	ebpfcommon "github.com/grafana/beyla/pkg/internal/ebpf/common"
 	"github.com/grafana/beyla/pkg/internal/exec"
@@ -99,12 +98,6 @@ type UtilityTracer interface {
 }
 
 type ProcessTracerType int
-
-type instrumenter struct {
-	offsets   *goexec.Offsets
-	exe       *link.Executable
-	closables []io.Closer
-}
 
 const (
 	Go = ProcessTracerType(iota)

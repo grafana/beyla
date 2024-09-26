@@ -293,7 +293,7 @@ Each `services` entry is a map where the properties can be grouped according to 
 | `name` | --      | string | (see description) |
 
 Defines a name for the matching instrumented service. It will be used to populate the `service.name`
-OTEL property and/or the `service_name` Prometheus property in the exported metrics/traces.
+OTEL property and the `service_name` Prometheus property in the exported metrics/traces.
 
 If the property is not set, it will default to any of the following properties, in order of
 precedence:
@@ -666,9 +666,9 @@ Usually you won't need to change this value.
 |---------------------|--------------------------------|--------|------------------|
 | `disable_informers` | `BEYLA_KUBE_DISABLE_INFORMERS` | string | `~/.kube/config` |
 
-The accepted value is a list that might contain `node` and/or `service`.
+The accepted value is a list that might contain `node` and `service`.
 
-This option allows to selectively disable some Kubernetes informers, which are continuously
+This option allows you to selectively disable some Kubernetes informers, which are continuously
 listening to the Kubernetes API to obtain the metadata that is required for decorating
 network metrics or application metrics and traces.
 
@@ -676,7 +676,7 @@ When Beyla is deployed as a DaemonSet in very large clusters, all the Beyla inst
 creating multiple informers might end up overloading the Kubernetes API.
 
 Disabling some informers would cause reported metadata to be incomplete, but
-but will reduce the load of the Kubernetes API.
+reduces the load of the Kubernetes API.
 
 The Pods informer can't be disabled. For that purpose, you should disable the whole
 Kubernetes metadata decoration.

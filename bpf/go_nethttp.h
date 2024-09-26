@@ -628,7 +628,7 @@ int uprobe_http2serverConn_runHandler(struct pt_regs *ctx) {
 #ifndef NO_HEADER_PROPAGATION
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, u32); // key: stream id
+    __type(key, go_addr_key_t); // key: stream id
     __type(
         value,
         u64); // the goroutine of the round trip request, which is the key for our traceparent info
@@ -680,8 +680,9 @@ int uprobe_http2RoundTrip(struct pt_regs *ctx) {
         bpf_dbg_printk("cc_ptr = %llx, nextStreamID=%d", cc_ptr, stream_id);
         if (stream_id) {
             void *goroutine_addr = GOROUTINE_PTR(ctx);
-
-            bpf_map_update_elem(&http2_req_map, &stream_id, &goroutine_addr, BPF_ANY);
+            go_addr_key_t s_key = {};
+            go_addr_key_from_id(&s_key, (void *)(uintptr_t)stream_id);
+            bpf_map_update_elem(&http2_req_map, &s_key, &goroutine_addr, BPF_ANY);
         }
 #endif
     }
@@ -724,8 +725,9 @@ int uprobe_http2FramerWriteHeaders(struct pt_regs *ctx) {
     bpf_dbg_printk("framer=%llx, stream_id=%lld", framer, ((u64)stream_id));
 
     u32 stream_lookup = (u32)stream_id;
-
-    void **go_ptr = bpf_map_lookup_elem(&http2_req_map, &stream_lookup);
+    go_addr_key_t s_key = {};
+    go_addr_key_from_id(&s_key, (void *)(uintptr_t)stream_lookup);
+    void **go_ptr = bpf_map_lookup_elem(&http2_req_map, &s_key);
 
     if (go_ptr) {
         void *go_addr = *go_ptr;
@@ -770,7 +772,7 @@ int uprobe_http2FramerWriteHeaders(struct pt_regs *ctx) {
         }
     }
 
-    bpf_map_delete_elem(&http2_req_map, &stream_lookup);
+    bpf_map_delete_elem(&http2_req_map, &s_key);
     return 0;
 }
 #else

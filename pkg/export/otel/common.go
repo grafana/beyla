@@ -356,7 +356,7 @@ func parseOTELEnvVar(svc *svc.ID, varName string, handler varHandler) {
 	var envVar string
 	ok := false
 
-	if svc.EnvVars != nil {
+	if svc != nil && svc.EnvVars != nil {
 		envVar, ok = svc.EnvVars[varName]
 	}
 

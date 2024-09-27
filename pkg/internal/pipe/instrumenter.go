@@ -152,7 +152,11 @@ type Instrumenter struct {
 func (i *Instrumenter) Run(ctx context.Context) {
 	go i.internalMetrics.Start(ctx)
 	i.graph.Start()
-	<-i.graph.Done()
+	// run until either the graph is finished or the context is cancelled
+	select {
+	case <-i.graph.Done():
+	case <-ctx.Done():
+	}
 }
 
 // spanPtrPromGetters adapts the invocation of SpanPromGetters to work with a request.Span value

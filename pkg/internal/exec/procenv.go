@@ -10,14 +10,15 @@ func envStrsToMap(varsStr []string) map[string]string {
 	vars := make(map[string]string, len(varsStr))
 
 	for _, s := range varsStr {
-		parts := strings.Split(s, "=")
-		if len(parts) >= 2 {
-			key := strings.TrimSpace(parts[0])
-			val := strings.TrimSpace(strings.Join(parts[1:], "="))
+		keyVal := strings.SplitN(s, "=", 2)
+		if len(keyVal) < 2 {
+			continue
+		}
+		key := strings.TrimSpace(keyVal[0])
+		val := strings.TrimSpace(keyVal[1])
 
-			if key != "" && val != "" {
-				vars[key] = val
-			}
+		if key != "" && val != "" {
+			vars[key] = val
 		}
 	}
 

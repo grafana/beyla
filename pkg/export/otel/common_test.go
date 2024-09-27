@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/grafana/beyla/pkg/internal/svc"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -130,6 +131,45 @@ func TestParseOTELEnvVar(t *testing.T) {
 			err = os.Unsetenv(dummyVar)
 
 			assert.NoError(t, err)
+		})
+	}
+}
+
+func TestParseOTELEnvVarPerService(t *testing.T) {
+	type testCase struct {
+		envVar   string
+		expected map[string]string
+	}
+
+	testCases := []testCase{
+		{envVar: "foo=bar", expected: map[string]string{"foo": "bar"}},
+		{envVar: "foo=bar,", expected: map[string]string{"foo": "bar"}},
+		{envVar: "foo=bar,baz", expected: map[string]string{"foo": "bar"}},
+		{envVar: "foo=bar,baz=baz", expected: map[string]string{"foo": "bar", "baz": "baz"}},
+		{envVar: "foo=bar,baz=baz ", expected: map[string]string{"foo": "bar", "baz": "baz"}},
+		{envVar: "  foo=bar, baz=baz ", expected: map[string]string{"foo": "bar", "baz": "baz"}},
+		{envVar: "  foo = bar , baz =baz ", expected: map[string]string{"foo": "bar", "baz": "baz"}},
+		{envVar: "  foo = bar , baz =baz= ", expected: map[string]string{"foo": "bar", "baz": "baz="}},
+		{envVar: ",a=b , c=d,=", expected: map[string]string{"a": "b", "c": "d"}},
+		{envVar: "=", expected: map[string]string{}},
+		{envVar: "====", expected: map[string]string{}},
+		{envVar: "a====b", expected: map[string]string{"a": "===b"}},
+		{envVar: "", expected: map[string]string{}},
+	}
+
+	const dummyVar = "foo"
+
+	for _, tc := range testCases {
+		t.Run(fmt.Sprint(tc), func(t *testing.T) {
+			actual := map[string]string{}
+
+			apply := func(k string, v string) {
+				actual[k] = v
+			}
+
+			parseOTELEnvVar(&svc.ID{EnvVars: map[string]string{dummyVar: tc.envVar}}, dummyVar, apply)
+
+			assert.True(t, reflect.DeepEqual(actual, tc.expected))
 		})
 	}
 }

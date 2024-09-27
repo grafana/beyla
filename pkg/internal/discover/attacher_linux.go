@@ -31,7 +31,7 @@ func (ta *TraceAttacher) mountBpfPinPath() error {
 }
 
 func UnmountBPFFS(pinPath string, log *slog.Logger) {
-	if err := unix.Unmount(pinPath, unix.MNT_FORCE|unix.MNT_DETACH); err != nil {
+	if err := unix.Unmount(pinPath, unix.MNT_DETACH); err != nil {
 		log.Debug("can't unmount pinned root. Try unmounting and removing it manually", "error", err)
 	}
 	log.Debug("unmounted bpf file system")

@@ -5,6 +5,9 @@ services:
     image: ghcr.io/grafana/beyla-test/greeting-rails${TESTSERVER_IMAGE_SUFFIX}/0.0.1
     ports:
       - "${TEST_SERVICE_PORTS}"
+    environment:
+      OTEL_SERVICE_NAME: "my-ruby-app"
+      OTEL_RESOURCE_ATTRIBUTES: "data-center=ca,deployment-zone=to"
     depends_on:
       otelcol:
         condition: service_started

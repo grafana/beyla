@@ -47,6 +47,7 @@ typedef struct grpc_transports {
     connection_info_t conn;
 } grpc_transports_t;
 
+// TODO: use go_addr_key_t as key
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __type(key, void *); // key: pointer to the transport pointer
@@ -76,6 +77,7 @@ struct {
 } ongoing_grpc_server_requests SEC(".maps");
 
 // Context propagation
+// TODO: use go_addr_key_t as key
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __type(key, u32);                             // key: stream id
@@ -83,6 +85,7 @@ struct {
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
 } ongoing_streams SEC(".maps");
 
+// TODO: use go_addr_key_t as key
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __type(key, void *); // key: pointer to the request goroutine

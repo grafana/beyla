@@ -40,14 +40,14 @@ typedef struct http_client_data {
 
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, goroutine_key_t); // key: pointer to the request goroutine
+    __type(key, go_addr_key_t); // key: pointer to the request goroutine
     __type(value, http_func_invocation_t);
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
 } ongoing_http_client_requests SEC(".maps");
 
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, goroutine_key_t); // key: pointer to the request goroutine
+    __type(key, go_addr_key_t); // key: pointer to the request goroutine
     __type(value, http_client_data_t);
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
 } ongoing_http_client_requests_data SEC(".maps");
@@ -64,7 +64,7 @@ typedef struct server_http_func_invocation {
 
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, goroutine_key_t); // key: pointer to the request goroutine
+    __type(key, go_addr_key_t); // key: pointer to the request goroutine
     __type(value, server_http_func_invocation_t);
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
 } ongoing_http_server_requests SEC(".maps");
@@ -81,8 +81,8 @@ int uprobe_ServeHTTP(struct pt_regs *ctx) {
 
     bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
     void *req = GO_PARAM4(ctx);
-    goroutine_key_t g_key = {};
-    goroutine_key_from_id(&g_key, goroutine_addr);
+    go_addr_key_t g_key = {};
+    go_addr_key_from_id(&g_key, goroutine_addr);
 
     off_table_t *ot = get_offsets_table();
 
@@ -161,8 +161,8 @@ int uprobe_readRequestStart(struct pt_regs *ctx) {
     off_table_t *ot = get_offsets_table();
 
     bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
-    goroutine_key_t g_key = {};
-    goroutine_key_from_id(&g_key, goroutine_addr);
+    go_addr_key_t g_key = {};
+    go_addr_key_from_id(&g_key, goroutine_addr);
 
     connection_info_t *existing = bpf_map_lookup_elem(&ongoing_server_connections, &g_key);
 
@@ -206,8 +206,8 @@ int uprobe_readRequestReturns(struct pt_regs *ctx) {
     void *goroutine_addr = GOROUTINE_PTR(ctx);
     bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
 
-    goroutine_key_t g_key = {};
-    goroutine_key_from_id(&g_key, goroutine_addr);
+    go_addr_key_t g_key = {};
+    go_addr_key_from_id(&g_key, goroutine_addr);
 
     // This code is here for keepalive support on HTTP requests. Since the connection is not
     // established everytime, we set the initial goroutine start on the new read initiation.
@@ -232,8 +232,8 @@ int uprobe_ServeHTTPReturns(struct pt_regs *ctx) {
 
     void *goroutine_addr = GOROUTINE_PTR(ctx);
     bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
-    goroutine_key_t g_key = {};
-    goroutine_key_from_id(&g_key, goroutine_addr);
+    go_addr_key_t g_key = {};
+    go_addr_key_from_id(&g_key, goroutine_addr);
 
     server_http_func_invocation_t *invocation =
         bpf_map_lookup_elem(&ongoing_http_server_requests, &g_key);
@@ -242,8 +242,8 @@ int uprobe_ServeHTTPReturns(struct pt_regs *ctx) {
         void *parent_go = (void *)find_parent_goroutine(&g_key);
         if (parent_go) {
             bpf_dbg_printk("found parent goroutine for header [%llx]", parent_go);
-            goroutine_key_t p_key = {};
-            goroutine_key_from_id(&p_key, parent_go);
+            go_addr_key_t p_key = {};
+            go_addr_key_from_id(&p_key, parent_go);
             invocation = bpf_map_lookup_elem(&ongoing_http_server_requests, &p_key);
             goroutine_addr = parent_go;
             g_key.addr = (u64)goroutine_addr;
@@ -328,8 +328,8 @@ static __always_inline void roundTripStartHelper(struct pt_regs *ctx) {
     void *goroutine_addr = GOROUTINE_PTR(ctx);
 
     bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
-    goroutine_key_t g_key = {};
-    goroutine_key_from_id(&g_key, goroutine_addr);
+    go_addr_key_t g_key = {};
+    go_addr_key_from_id(&g_key, goroutine_addr);
 
     void *req = GO_PARAM2(ctx);
     off_table_t *ot = get_offsets_table();
@@ -411,8 +411,8 @@ int uprobe_roundTripReturn(struct pt_regs *ctx) {
     off_table_t *ot = get_offsets_table();
 
     bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
-    goroutine_key_t g_key = {};
-    goroutine_key_from_id(&g_key, goroutine_addr);
+    go_addr_key_t g_key = {};
+    go_addr_key_from_id(&g_key, goroutine_addr);
 
     http_func_invocation_t *invocation = bpf_map_lookup_elem(&ongoing_http_client_requests, &g_key);
     if (invocation == NULL) {
@@ -497,8 +497,8 @@ int uprobe_writeSubset(struct pt_regs *ctx) {
         return 0;
     }
     u64 parent_goaddr = *request_goaddr;
-    goroutine_key_t g_key = {};
-    goroutine_key_from_id(&g_key, (void *)parent_goaddr);
+    go_addr_key_t g_key = {};
+    go_addr_key_from_id(&g_key, (void *)parent_goaddr);
 
     http_func_invocation_t *func_inv = bpf_map_lookup_elem(&ongoing_http_client_requests, &g_key);
     if (!func_inv) {
@@ -564,8 +564,8 @@ int uprobe_http2ResponseWriterStateWriteHeader(struct pt_regs *ctx) {
     void *goroutine_addr = GOROUTINE_PTR(ctx);
     u64 status = (u64)GO_PARAM2(ctx);
     bpf_dbg_printk("goroutine_addr %lx, status %d", goroutine_addr, status);
-    goroutine_key_t g_key = {};
-    goroutine_key_from_id(&g_key, goroutine_addr);
+    go_addr_key_t g_key = {};
+    go_addr_key_from_id(&g_key, goroutine_addr);
 
     server_http_func_invocation_t *invocation =
         bpf_map_lookup_elem(&ongoing_http_server_requests, &g_key);
@@ -574,8 +574,8 @@ int uprobe_http2ResponseWriterStateWriteHeader(struct pt_regs *ctx) {
         void *parent_go = (void *)find_parent_goroutine(&g_key);
         if (parent_go) {
             bpf_dbg_printk("found parent goroutine for header [%llx]", parent_go);
-            goroutine_key_t p_key = {};
-            goroutine_key_from_id(&p_key, parent_go);
+            go_addr_key_t p_key = {};
+            go_addr_key_from_id(&p_key, parent_go);
             invocation = bpf_map_lookup_elem(&ongoing_http_server_requests, &p_key);
             goroutine_addr = parent_go;
         }
@@ -601,8 +601,8 @@ int uprobe_http2serverConn_runHandler(struct pt_regs *ctx) {
     void *sc = GO_PARAM1(ctx);
     off_table_t *ot = get_offsets_table();
 
-    goroutine_key_t g_key = {};
-    goroutine_key_from_id(&g_key, goroutine_addr);
+    go_addr_key_t g_key = {};
+    go_addr_key_from_id(&g_key, goroutine_addr);
 
     if (sc) {
         void *conn_ptr = 0;
@@ -628,7 +628,7 @@ int uprobe_http2serverConn_runHandler(struct pt_regs *ctx) {
 #ifndef NO_HEADER_PROPAGATION
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, u32); // key: stream id
+    __type(key, go_addr_key_t); // key: stream id
     __type(
         value,
         u64); // the goroutine of the round trip request, which is the key for our traceparent info
@@ -663,8 +663,8 @@ int uprobe_http2RoundTrip(struct pt_regs *ctx) {
             if (ok) {
                 void *goroutine_addr = GOROUTINE_PTR(ctx);
                 bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
-                goroutine_key_t g_key = {};
-                goroutine_key_from_id(&g_key, goroutine_addr);
+                go_addr_key_t g_key = {};
+                go_addr_key_from_id(&g_key, goroutine_addr);
 
                 bpf_map_update_elem(&ongoing_client_connections, &g_key, &conn, BPF_ANY);
             }
@@ -680,8 +680,9 @@ int uprobe_http2RoundTrip(struct pt_regs *ctx) {
         bpf_dbg_printk("cc_ptr = %llx, nextStreamID=%d", cc_ptr, stream_id);
         if (stream_id) {
             void *goroutine_addr = GOROUTINE_PTR(ctx);
-
-            bpf_map_update_elem(&http2_req_map, &stream_id, &goroutine_addr, BPF_ANY);
+            go_addr_key_t s_key = {};
+            go_addr_key_from_id(&s_key, (void *)(uintptr_t)stream_id);
+            bpf_map_update_elem(&http2_req_map, &s_key, &goroutine_addr, BPF_ANY);
         }
 #endif
     }
@@ -700,7 +701,7 @@ typedef struct framer_func_invocation {
 
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, goroutine_key_t); // key: go routine doing framer write headers
+    __type(key, go_addr_key_t); // key: go routine doing framer write headers
     __type(
         value,
         framer_func_invocation_t); // the goroutine of the round trip request, which is the key for our traceparent info
@@ -724,14 +725,15 @@ int uprobe_http2FramerWriteHeaders(struct pt_regs *ctx) {
     bpf_dbg_printk("framer=%llx, stream_id=%lld", framer, ((u64)stream_id));
 
     u32 stream_lookup = (u32)stream_id;
-
-    void **go_ptr = bpf_map_lookup_elem(&http2_req_map, &stream_lookup);
+    go_addr_key_t s_key = {};
+    go_addr_key_from_id(&s_key, (void *)(uintptr_t)stream_lookup);
+    void **go_ptr = bpf_map_lookup_elem(&http2_req_map, &s_key);
 
     if (go_ptr) {
         void *go_addr = *go_ptr;
         bpf_dbg_printk("Found existing stream data goaddr = %llx", go_addr);
-        goroutine_key_t g_key = {};
-        goroutine_key_from_id(&g_key, go_addr);
+        go_addr_key_t g_key = {};
+        go_addr_key_from_id(&g_key, go_addr);
 
         http_func_invocation_t *info = bpf_map_lookup_elem(&ongoing_http_client_requests, &g_key);
 
@@ -759,8 +761,8 @@ int uprobe_http2FramerWriteHeaders(struct pt_regs *ctx) {
                         .framer_ptr = (u64)framer,
                         .initial_n = n,
                     };
-                    goroutine_key_t f_key = {};
-                    goroutine_key_from_id(&f_key, goroutine_addr);
+                    go_addr_key_t f_key = {};
+                    go_addr_key_from_id(&f_key, goroutine_addr);
 
                     bpf_map_update_elem(&framer_invocation_map, &f_key, &f_info, BPF_ANY);
                 } else {
@@ -770,7 +772,7 @@ int uprobe_http2FramerWriteHeaders(struct pt_regs *ctx) {
         }
     }
 
-    bpf_map_delete_elem(&http2_req_map, &stream_lookup);
+    bpf_map_delete_elem(&http2_req_map, &s_key);
     return 0;
 }
 #else
@@ -790,8 +792,8 @@ int uprobe_http2FramerWriteHeaders_returns(struct pt_regs *ctx) {
 
     void *goroutine_addr = GOROUTINE_PTR(ctx);
     off_table_t *ot = get_offsets_table();
-    goroutine_key_t g_key = {};
-    goroutine_key_from_id(&g_key, goroutine_addr);
+    go_addr_key_t g_key = {};
+    go_addr_key_from_id(&g_key, goroutine_addr);
 
     framer_func_invocation_t *f_info = bpf_map_lookup_elem(&framer_invocation_map, &g_key);
 
@@ -893,8 +895,8 @@ int uprobe_connServe(struct pt_regs *ctx) {
     void *goroutine_addr = GOROUTINE_PTR(ctx);
     bpf_dbg_printk("=== uprobe/proc http conn serve goroutine %lx === ", goroutine_addr);
 
-    goroutine_key_t g_key = {};
-    goroutine_key_from_id(&g_key, goroutine_addr);
+    go_addr_key_t g_key = {};
+    go_addr_key_from_id(&g_key, goroutine_addr);
 
     connection_info_t conn = {0};
     bpf_map_update_elem(&ongoing_server_connections, &g_key, &conn, BPF_ANY);
@@ -907,8 +909,8 @@ int uprobe_netFdRead(struct pt_regs *ctx) {
     void *goroutine_addr = GOROUTINE_PTR(ctx);
     bpf_dbg_printk("=== uprobe/proc netFD read goroutine %lx === ", goroutine_addr);
 
-    goroutine_key_t g_key = {};
-    goroutine_key_from_id(&g_key, goroutine_addr);
+    go_addr_key_t g_key = {};
+    go_addr_key_from_id(&g_key, goroutine_addr);
 
     connection_info_t *conn = bpf_map_lookup_elem(&ongoing_server_connections, &g_key);
 
@@ -931,8 +933,8 @@ int uprobe_connServeRet(struct pt_regs *ctx) {
     bpf_dbg_printk("=== uprobe/proc http conn serve ret === ");
     void *goroutine_addr = GOROUTINE_PTR(ctx);
 
-    goroutine_key_t g_key = {};
-    goroutine_key_from_id(&g_key, goroutine_addr);
+    go_addr_key_t g_key = {};
+    go_addr_key_from_id(&g_key, goroutine_addr);
 
     bpf_map_delete_elem(&ongoing_server_connections, &g_key);
 
@@ -946,8 +948,8 @@ int uprobe_persistConnRoundTrip(struct pt_regs *ctx) {
     off_table_t *ot = get_offsets_table();
 
     bpf_dbg_printk("goroutine_addr %lx", goroutine_addr);
-    goroutine_key_t g_key = {};
-    goroutine_key_from_id(&g_key, goroutine_addr);
+    go_addr_key_t g_key = {};
+    go_addr_key_from_id(&g_key, goroutine_addr);
 
     http_func_invocation_t *invocation = bpf_map_lookup_elem(&ongoing_http_client_requests, &g_key);
     if (!invocation) {

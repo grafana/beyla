@@ -19,13 +19,13 @@ type bpf_debugConnectionInfoT struct {
 	D_port uint16
 }
 
-type bpf_debugGoroutineKeyT struct {
+type bpf_debugGoAddrKeyT struct {
 	Pid  uint64
 	Addr uint64
 }
 
 type bpf_debugGoroutineMetadata struct {
-	Parent    bpf_debugGoroutineKeyT
+	Parent    bpf_debugGoAddrKeyT
 	Timestamp uint64
 }
 

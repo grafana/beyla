@@ -198,14 +198,13 @@ func (tr *tracesOTELReceiver) provideLoop() (pipe.FinalFunc[[]request.Span], err
 			return
 		}
 
-		envResourceAttrs := ResourceAttrsFromEnv()
-
 		for spans := range in {
 			for i := range spans {
 				span := &spans[i]
 				if tr.spanDiscarded(span) {
 					continue
 				}
+				envResourceAttrs := ResourceAttrsFromEnv(&span.ServiceID)
 				traces := GenerateTraces(span, tr.ctxInfo.HostID, traceAttrs, envResourceAttrs)
 				err := exp.ConsumeTraces(tr.ctx, traces)
 				if err != nil {

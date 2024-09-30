@@ -24,6 +24,10 @@ type FileInfo struct {
 	Ns             uint32
 }
 
+const (
+	envServiceName = "OTEL_SERVICE_NAME"
+)
+
 func (fi *FileInfo) ExecutableName() string {
 	parts := strings.Split(fi.CmdExePath, "/")
 	return parts[len(parts)-1]
@@ -59,5 +63,17 @@ func FindExecELF(p *services.ProcessInfo, svcID svc.ID) (*FileInfo, error) {
 	} else {
 		return nil, err
 	}
+
+	envVars, err := EnvVars(p.Pid)
+
+	if err != nil {
+		return nil, err
+	}
+
+	file.Service.EnvVars = envVars
+	if svcName, ok := file.Service.EnvVars[envServiceName]; ok {
+		file.Service.Name = svcName
+	}
+
 	return &file, nil
 }

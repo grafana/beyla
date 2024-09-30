@@ -730,13 +730,14 @@ int app_ingress(struct __sk_buff *skb) {
                     *((u32 *)(&new_tp.tp.span_id[0])) = tcp.seq;
                     *((u32 *)(&new_tp.tp.span_id[4])) = tcp.ack;
                     bpf_skb_load_bytes(
-                        skb, tcp.opts_off + sizeof(opts), &new_tp.tp.trace_id[0], 10);
+                        skb, tcp.opts_off + sizeof(opts), &new_tp.tp.trace_id[6], 10);
+                    clear_upper_trace_id(&new_tp.tp);
 
-                    if (tcp.ip_len > 20) {
-                        bpf_printk("loading the second part of the trace_id");
-                        bpf_skb_load_bytes(
-                            skb, ETH_HLEN + tcp.ip_len + 2 * sizeof(u8), &new_tp.tp.trace_id[8], 8);
-                    }
+                    // if (tcp.ip_len > 20) {
+                    //     bpf_printk("loading the second part of the trace_id");
+                    //     bpf_skb_load_bytes(
+                    //         skb, ETH_HLEN + tcp.ip_len + 2 * sizeof(u8), &new_tp.tp.trace_id[8], 8);
+                    // }
 
                     make_tp_string(tp_buf, &new_tp.tp);
                     bpf_printk("tp: %s", tp_buf);
@@ -829,7 +830,7 @@ static __always_inline void encode_data_in_tcp_options(struct __sk_buff *skb,
         if (opts == 0x0a080101 && options_len >= 12) { // nop, nop, timestamp
             u16 new_data = 0x0c0f;                     // alternate checksum (obsolete)
             bpf_printk("storing in options %llx, tp flag %d", new_data, tp->valid);
-            bpf_skb_store_bytes(skb, tcp->opts_off, &new_data, sizeof(u16), 0);
+            bpf_skb_store_bytes(skb, tcp->opts_off, &new_data, sizeof(new_data), 0);
 
             pid_connection_info_t p_conn = {};
             __builtin_memcpy(&p_conn.conn, conn, sizeof(connection_info_t));
@@ -842,43 +843,42 @@ static __always_inline void encode_data_in_tcp_options(struct __sk_buff *skb,
                 *((u32 *)(&h_info->tp.span_id[4])) = tcp->ack;
             }
 
-            bpf_skb_store_bytes(skb, tcp->opts_off + sizeof(u16), &tp->tp.trace_id[0], 10, 0);
+            bpf_skb_store_bytes(skb, tcp->opts_off + sizeof(new_data), &tp->tp.trace_id[6], 10, 0);
 
-            if ((tcp->ip_len != 0) && (tcp->ip_len < MAX_IP_HDR_LEN - 10)) {
-                bpf_printk("Adding the second part of the trace_id in the IP Options");
-                bpf_skb_adjust_room(skb, 16, BPF_ADJ_ROOM_NET, BPF_F_ADJ_ROOM_NO_CSUM_RESET);
-                int ip_off = tcp->ip_len + ETH_HLEN;
-                u16 key = 0x1088; // stream_id, 8 bytes length
-                bpf_skb_store_bytes(skb, ip_off, &key, sizeof(u16), 0);
-                bpf_skb_store_bytes(skb, ip_off, &tp->tp.trace_id[8], 8, 0);
-                u8 offset_ip_tot_len = ETH_HLEN + offsetof(struct iphdr, tot_len);
+            // if ((tcp->ip_len != 0) && (tcp->ip_len < MAX_IP_HDR_LEN - 10)) {
+            //     bpf_printk("Adding the second part of the trace_id in the IP Options");
+            //     bpf_skb_adjust_room(skb, 16, BPF_ADJ_ROOM_NET, BPF_F_ADJ_ROOM_NO_CSUM_RESET);
+            //     int ip_off = tcp->ip_len + ETH_HLEN;
+            //     u16 key = 0x1088; // stream_id, 8 bytes length
+            //     bpf_skb_store_bytes(skb, ip_off, &key, sizeof(u16), 0);
+            //     bpf_skb_store_bytes(skb, ip_off, &tp->tp.trace_id[8], 8, 0);
+            //     u8 offset_ip_tot_len = ETH_HLEN + offsetof(struct iphdr, tot_len);
 
-                u16 new_tot_len = bpf_htons(bpf_ntohs(tcp->tot_len) + 16);
+            //     u16 new_tot_len = bpf_htons(bpf_ntohs(tcp->tot_len) + 16);
 
-                u8 hdr_len;
-                u8 hdr_ver;
-                u8 new_len;
-                // ip4 header lengths are variable
-                // access ihl as a u8 (linux/include/linux/skbuff.h)
-                bpf_skb_load_bytes(skb, ETH_HLEN, &hdr_len, sizeof(hdr_len));
-                hdr_ver = hdr_len;
-                new_len = hdr_len;
-                new_len &= 0x0f;
-                new_len += 2;
-                new_len |= hdr_ver & 0xf0;
+            //     u8 hdr_len;
+            //     u8 hdr_ver;
+            //     u8 new_len;
+            //     // ip4 header lengths are variable
+            //     // access ihl as a u8 (linux/include/linux/skbuff.h)
+            //     bpf_skb_load_bytes(skb, ETH_HLEN, &hdr_len, sizeof(hdr_len));
+            //     hdr_ver = hdr_len;
+            //     new_len = hdr_len;
+            //     new_len &= 0x0f;
+            //     new_len += 2;
+            //     new_len |= hdr_ver & 0xf0;
 
-                bpf_l3_csum_replace(skb,
-                                    ETH_HLEN + offsetof(struct iphdr, check),
-                                    tcp->tot_len,
-                                    new_tot_len,
-                                    sizeof(u16));
-                bpf_l3_csum_replace(skb, ETH_HLEN, hdr_len, new_len, sizeof(u8));
+            //     bpf_l3_csum_replace(skb,
+            //                         ETH_HLEN + offsetof(struct iphdr, check),
+            //                         tcp->tot_len,
+            //                         new_tot_len,
+            //                         sizeof(u16));
+            //     bpf_l3_csum_replace(skb, ETH_HLEN, hdr_len, new_len, sizeof(u8));
 
-                bpf_skb_store_bytes(skb, offset_ip_tot_len, &new_tot_len, sizeof(u16), 0);
-                bpf_skb_store_bytes(skb, ETH_HLEN, &new_len, sizeof(u8), 0);
-            }
+            //     bpf_skb_store_bytes(skb, offset_ip_tot_len, &new_tot_len, sizeof(u16), 0);
+            //     bpf_skb_store_bytes(skb, ETH_HLEN, &new_len, sizeof(u8), 0);
+            // }
 
-            tp->valid = 0;
             bpf_map_delete_elem(&outgoing_trace_map, conn);
         }
     }

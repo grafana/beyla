@@ -311,7 +311,7 @@ static __always_inline void get_or_create_trace_info(http_connection_metadata_t 
 
     if (!found_tp) {
         bpf_dbg_printk("Generating new traceparent id");
-        urand_bytes(tp_p->tp.trace_id, TRACE_ID_SIZE_BYTES);
+        new_trace_id(&tp_p->tp);
         __builtin_memset(tp_p->tp.parent_id, 0, sizeof(tp_p->tp.span_id));
     } else {
         bpf_dbg_printk("Using old traceparent id");

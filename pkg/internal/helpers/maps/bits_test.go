@@ -26,6 +26,14 @@ func TestBits_Empty(t *testing.T) {
 	assert.False(t, bits.Has(0b1000))
 }
 
+func TestBits_IgnoreUnknownEnums(t *testing.T) {
+	bits := MappedBits([]key{1, 2, 3, 40}, mapper)
+	assert.True(t, bits.Has(0b0001))
+	assert.True(t, bits.Has(0b0010))
+	assert.True(t, bits.Has(0b0100))
+	assert.False(t, bits.Has(0b1000))
+}
+
 func TestBits_Transform(t *testing.T) {
 	bits := MappedBits([]key{10, 30, 8910}, mapper,
 		WithTransform(func(k key) key { return k / 10 }))

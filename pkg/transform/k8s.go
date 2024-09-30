@@ -35,8 +35,8 @@ type KubernetesDecorator struct {
 	// IPs are not matched to any kubernetes entity, assuming they are cluster-external
 	DropExternal bool `yaml:"drop_external" env:"BEYLA_NETWORK_DROP_EXTERNAL"`
 
-	// DisableInformers allow selectively disabling some informers. Accepted value is a list
-	// that mitght contain replicaset, node, service. Disabling any of them
+	// DisableInformers allows selectively disabling some informers. Accepted value is a list
+	// that might contain node or service. Disabling any of them
 	// will cause metadata to be incomplete but will reduce the load of the Kube API.
 	// Pods informer can't be disabled. For that purpose, you should disable the whole
 	// kubernetes metadata decoration.
@@ -130,8 +130,8 @@ func (md *metadataDecorator) appendMetadata(span *request.Span, info *kube.PodIn
 	}
 	if info.Owner != nil {
 		span.ServiceID.Metadata[attr.Name(info.Owner.LabelName)] = info.Owner.Name
-		topName, topLabel := info.Owner.TopOwnerNameLabel()
-		span.ServiceID.Metadata[attr.Name(topLabel)] = topName
+		topOwner := info.Owner.TopOwner()
+		span.ServiceID.Metadata[attr.Name(topOwner.LabelName)] = topOwner.Name
 	}
 	// override hostname by the Pod name
 	span.ServiceID.HostName = info.Name

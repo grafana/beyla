@@ -7,6 +7,8 @@
 #include "http_types.h"
 #include "bpf_endian.h"
 
+#define MAX_IP_HDR_LEN 60
+
 // Taken from uapi/linux/tcp.h
 struct __tcphdr {
     __be16 source;
@@ -27,6 +29,8 @@ read_sk_buff(struct __sk_buff *skb, protocol_info_t *tcp, connection_info_t *con
     bpf_skb_load_bytes(skb, offsetof(struct ethhdr, h_proto), &h_proto, sizeof(h_proto));
     h_proto = __bpf_htons(h_proto);
 
+    tcp->ip_len = 0;
+
     u8 proto = 0;
     // do something similar as linux/samples/bpf/parse_varlen.c
     switch (h_proto) {
@@ -37,6 +41,7 @@ read_sk_buff(struct __sk_buff *skb, protocol_info_t *tcp, connection_info_t *con
         bpf_skb_load_bytes(skb, ETH_HLEN, &hdr_len, sizeof(hdr_len));
         hdr_len &= 0x0f;
         hdr_len *= 4;
+        tcp->ip_len = hdr_len;
 
         /* verify hlen meets minimum size requirements */
         if (hdr_len < sizeof(struct iphdr)) {

@@ -662,9 +662,9 @@ establish communication with the Kubernetes Cluster.
 
 Usually you won't need to change this value.
 
-| YAML                | Environment variable           | Type   | Default          |
-|---------------------|--------------------------------|--------|------------------|
-| `disable_informers` | `BEYLA_KUBE_DISABLE_INFORMERS` | string | `~/.kube/config` |
+| YAML                | Environment variable           | Type   | Default |
+|---------------------|--------------------------------|--------|---------|
+| `disable_informers` | `BEYLA_KUBE_DISABLE_INFORMERS` | string | (empty) |
 
 The accepted value is a list that might contain `node` and `service`.
 

@@ -9,6 +9,8 @@
 #include "runtime.h"
 #include "ringbuf.h"
 
+#define TC_SYN_PACKET_ID 0xdeadf00d
+
 typedef struct trace_key {
     pid_key_t p_key; // pid key as seen by the userspace (for example, inside its container)
     u64 extra_id;    // pids namespace for the process
@@ -162,6 +164,35 @@ static __always_inline u8 valid_trace(const unsigned char *trace_id) {
     return *((u64 *)trace_id) != 0 && *((u64 *)(trace_id + 8)) != 0;
 }
 
+static __always_inline tp_info_pid_t *tc_tp_info() {
+    tp_info_pid_t *tp_p = tp_buf();
+
+    // Connect runs before the SYN packet is sent.
+    // We use this opportunity to setup a trace context information for the connection.
+    // We'll later query the trace information in tc_egress, and serialize it on the TCP packet.
+    // Why would we do this here instead of on the tc_egress itself? We could move this on the tc_egress,
+    // but we would be modifying all packets, not just for processes which are instrumented,
+    // since we can't reliably tell the process PID in TC or socket filters.
+    if (tp_p) {
+        tp_p->tp.ts = bpf_ktime_get_ns();
+        tp_p->tp.flags = 1;
+        tp_p->valid = 1;
+        tp_p->pid =
+            TC_SYN_PACKET_ID; // set an ID up here in case someone else is doing what we are doing
+        urand_bytes(tp_p->tp.span_id, SPAN_ID_SIZE_BYTES);
+        tp_info_pid_t *server_tp = find_parent_trace();
+        if (server_tp && valid_trace(server_tp->tp.trace_id)) {
+            __builtin_memcpy(tp_p->tp.trace_id, server_tp->tp.trace_id, sizeof(tp_p->tp.trace_id));
+            __builtin_memcpy(tp_p->tp.parent_id, server_tp->tp.span_id, sizeof(tp_p->tp.parent_id));
+        } else {
+            new_trace_id(&tp_p->tp);
+            __builtin_memset(tp_p->tp.parent_id, 0, sizeof(tp_p->tp.span_id));
+        }
+    }
+
+    return tp_p;
+}
+
 static __always_inline void server_or_client_trace(http_connection_metadata_t *meta,
                                                    connection_info_t *conn,
                                                    tp_info_pid_t *tp_p) {
@@ -184,6 +215,23 @@ static __always_inline void server_or_client_trace(http_connection_metadata_t *m
 
         // bpf_dbg_printk("Saving server span for id=%llx, pid=%d, ns=%d, extra_id=%llx", bpf_get_current_pid_tgid(), t_key.p_key.pid, t_key.p_key.ns, t_key.extra_id);
         bpf_map_update_elem(&server_traces, &t_key, tp_p, BPF_ANY);
+    } else {
+        tp_info_pid_t *in_tp = bpf_map_lookup_elem(&outgoing_trace_map, conn);
+
+        // We found info setup with a SYN packet, just clean it up
+        if (in_tp) {
+            bpf_map_delete_elem(&outgoing_trace_map, conn);
+        } else {
+            // If we didn't set this current tp_p as default
+            // Setup a pid too, so that we can find it in TC.
+            // When we don't find a SYN packet, we use the flags field
+            // to store the trace_id and the SEQ/ACK combination for span_id.
+            // We need the PID id to be able to query ongoing_http and update
+            // the span id with the SEQ/ACK pair.
+            u64 id = bpf_get_current_pid_tgid();
+            tp_p->pid = pid_from_pid_tgid(id);
+            bpf_map_update_elem(&outgoing_trace_map, conn, tp_p, BPF_ANY);
+        }
     }
 }
 
@@ -245,6 +293,7 @@ static __always_inline void get_or_create_trace_info(http_connection_metadata_t 
                     tp_p->tp.trace_id, existing_tp->tp.trace_id, sizeof(tp_p->tp.trace_id));
                 __builtin_memcpy(
                     tp_p->tp.parent_id, existing_tp->tp.span_id, sizeof(tp_p->tp.parent_id));
+                bpf_map_delete_elem(&incoming_trace_map, conn);
             } else {
                 existing_tp = trace_info_for_connection(conn);
 

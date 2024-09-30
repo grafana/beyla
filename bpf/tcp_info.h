@@ -96,6 +96,10 @@ read_sk_buff(struct __sk_buff *skb, protocol_info_t *tcp, connection_info_t *con
     bpf_skb_load_bytes(skb, tcp->hdr_len + offsetof(struct __tcphdr, seq), &seq, sizeof(seq));
     tcp->seq = __bpf_htonl(seq);
 
+    u32 ack;
+    bpf_skb_load_bytes(skb, tcp->hdr_len + offsetof(struct __tcphdr, ack_seq), &ack, sizeof(ack));
+    tcp->ack = __bpf_htonl(ack);
+
     u8 doff;
     bpf_skb_load_bytes(
         skb,
@@ -115,6 +119,9 @@ read_sk_buff(struct __sk_buff *skb, protocol_info_t *tcp, connection_info_t *con
         sizeof(flags)); // read the second byte past __tcphdr->doff, again bit fields offsets
     tcp->flags = flags;
     tcp->h_proto = h_proto;
+    tcp->opts_off =
+        tcp->hdr_len + sizeof(struct __tcphdr); // must be done before we add data offset
+
     tcp->hdr_len += doff;
 
     if (tcp->hdr_len >
@@ -130,7 +137,7 @@ static __always_inline bool tcp_close(protocol_info_t *tcp) {
 }
 
 static __always_inline bool tcp_ack(protocol_info_t *tcp) {
-    return tcp->flags == TCPHDR_ACK;
+    return tcp->flags & TCPHDR_ACK;
 }
 
 static __always_inline bool tcp_syn(protocol_info_t *tcp) {

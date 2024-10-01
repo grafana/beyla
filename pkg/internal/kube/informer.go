@@ -11,6 +11,7 @@ import (
 
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -229,10 +230,10 @@ func rmContainerIDSchema(containerID string) string {
 	return containerID
 }
 
-func (k *Metadata) InitFromClient(ctx context.Context, client kubernetes.Interface, timeout time.Duration) error {
+func (k *Metadata) InitFromClient(ctx context.Context, client kubernetes.Interface, restrictNode string, timeout time.Duration) error {
 	// Initialization variables
 	k.log = klog()
-	return k.initInformers(ctx, client, timeout)
+	return k.initInformers(ctx, client, restrictNode, timeout)
 }
 
 func LoadConfig(kubeConfigPath string) (*rest.Config, error) {
@@ -262,11 +263,27 @@ func LoadConfig(kubeConfigPath string) (*rest.Config, error) {
 	return config, nil
 }
 
-func (k *Metadata) initInformers(ctx context.Context, client kubernetes.Interface, syncTimeout time.Duration) error {
+func (k *Metadata) initInformers(ctx context.Context, client kubernetes.Interface, restrictNode string, syncTimeout time.Duration) error {
 	if syncTimeout <= 0 {
 		syncTimeout = defaultSyncTimeout
 	}
-	informerFactory := informers.NewSharedInformerFactory(client, resyncTime)
+	var informerFactory informers.SharedInformerFactory
+	if restrictNode == "" {
+		k.log.Debug("no node selector provided. Listening to global resources")
+		informerFactory = informers.NewSharedInformerFactory(client, resyncTime)
+	} else {
+		fieldSelector := fields.OneTermEqualSelector("spec.nodeName", restrictNode).String()
+		k.log.Debug("using field selector", "selector", fieldSelector)
+		opts := informers.WithTweakListOptions(func(options *metav1.ListOptions) {
+			options.FieldSelector = fieldSelector
+		})
+		informerFactory = informers.NewSharedInformerFactoryWithOptions(client, resyncTime, opts)
+		// In the App O11y use case, we restrict to local nodes as we don't need to listen to global resources.
+		// In App O11y, we don't need neither Node nor Service informers, so we disable them.
+		k.disabledInformers |= InformerNode
+		k.disabledInformers |= InformerService
+	}
+
 	if err := k.initPodInformer(informerFactory); err != nil {
 		return err
 	}
@@ -277,8 +294,7 @@ func (k *Metadata) initInformers(ctx context.Context, client kubernetes.Interfac
 		return err
 	}
 
-	log := klog()
-	log.Debug("starting kubernetes informers, waiting for syncronization")
+	k.log.Debug("starting kubernetes informers, waiting for syncronization")
 	informerFactory.Start(ctx.Done())
 	finishedCacheSync := make(chan struct{})
 	go func() {
@@ -287,7 +303,7 @@ func (k *Metadata) initInformers(ctx context.Context, client kubernetes.Interfac
 	}()
 	select {
 	case <-finishedCacheSync:
-		log.Debug("kubernetes informers started")
+		k.log.Debug("kubernetes informers started")
 		return nil
 	case <-time.After(syncTimeout):
 		return fmt.Errorf("kubernetes cache has not been synced after %s timeout", syncTimeout)

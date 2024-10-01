@@ -111,6 +111,7 @@ func buildCommonContextInfo(
 			config.Attributes.Kubernetes.Enable,
 			config.Attributes.Kubernetes.DisableInformers,
 			config.Attributes.Kubernetes.KubeconfigPath,
+			config.Enabled(beyla.FeatureNetO11y),
 			config.Attributes.Kubernetes.InformersSyncTimeout,
 		),
 	}

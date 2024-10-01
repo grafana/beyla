@@ -186,6 +186,7 @@ func (wk *watcherKubeEnricher) onNewProcess(procInfo processAttrs) (processAttrs
 	wk.processByContainer[containerInfo.ContainerID] = procInfo
 
 	if pod, ok := wk.informer.GetContainerPod(containerInfo.ContainerID); ok {
+		wk.log.Info("Pod found for container", "containerID", containerInfo.ContainerID, "pod", pod.Name)
 		procInfo = withMetadata(procInfo, pod)
 	}
 	return procInfo, true
@@ -193,7 +194,7 @@ func (wk *watcherKubeEnricher) onNewProcess(procInfo processAttrs) (processAttrs
 
 func (wk *watcherKubeEnricher) onNewPod(pod *kube.PodInfo) []Event[processAttrs] {
 	wk.updateNewPodsByOwnerIndex(pod)
-
+	wk.log.Info("Pod added", "namespace", pod.Namespace, "name", pod.Name, "containers", pod.ContainerIDs)
 	var events []Event[processAttrs]
 	for _, containerID := range pod.ContainerIDs {
 		if procInfo, ok := wk.processByContainer[containerID]; ok {

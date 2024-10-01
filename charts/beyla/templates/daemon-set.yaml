@@ -123,6 +123,10 @@ spec:
               value: beyla-$(KUBE_NAMESPACE)
             - name: BEYLA_BPF_FS_BASE_DIR
               value: /sys/fs/bpf
+            - name: HOSTNAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName              
           {{- end }}
           {{- range $key, $value := .Values.env }}
             - name: {{ $key }}

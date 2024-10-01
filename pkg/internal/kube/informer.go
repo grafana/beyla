@@ -11,6 +11,7 @@ import (
 
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -116,7 +117,7 @@ var nodeIndexers = cache.Indexers{
 func (k *Metadata) GetContainerPod(containerID string) (*PodInfo, bool) {
 	objs, err := k.pods.GetIndexer().ByIndex(IndexPodByContainerIDs, containerID)
 	if err != nil {
-		k.log.Debug("error accessing index by container ID. Ignoring", "error", err, "containerID", containerID)
+		k.log.Warn("error accessing index by container ID. Ignoring", "error", err, "containerID", containerID)
 		return nil, false
 	}
 	if len(objs) == 0 {
@@ -137,9 +138,9 @@ func (k *Metadata) initPodInformer(informerFactory informers.SharedInformerFacto
 		if !ok {
 			// it's Ok. The K8s library just informed from an entity
 			// that has been previously transformed/stored
-			if pi, ok := i.(*PodInfo); ok {
-				return pi, nil
-			}
+			// if pi, ok := i.(*PodInfo); ok {
+			// 	return pi, nil
+			// }
 			return nil, fmt.Errorf("was expecting a Pod. Got: %T", i)
 		}
 		containerIDs := make([]string, 0,
@@ -266,10 +267,16 @@ func (k *Metadata) initInformers(ctx context.Context, client kubernetes.Interfac
 	if syncTimeout <= 0 {
 		syncTimeout = defaultSyncTimeout
 	}
-	informerFactory := informers.NewSharedInformerFactory(client, resyncTime)
+	fieldSelector := fields.OneTermEqualSelector("spec.nodeName", "kind-kind").String()
+	k.log.Info("using field selector", "selector", fieldSelector)
+	opts := informers.WithTweakListOptions(func(options *metav1.ListOptions) {
+		options.FieldSelector = fieldSelector
+	})
+	informerFactory := informers.NewSharedInformerFactoryWithOptions(client, resyncTime, opts)
 	if err := k.initPodInformer(informerFactory); err != nil {
 		return err
 	}
+	informerFactory = informers.NewSharedInformerFactory(client, resyncTime)
 	if err := k.initNodeIPInformer(informerFactory); err != nil {
 		return err
 	}

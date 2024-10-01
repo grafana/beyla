@@ -179,7 +179,7 @@ func (wk *watcherKubeEnricher) onNewProcess(procInfo processAttrs) (processAttrs
 	containerInfo, err := wk.getContainerInfo(procInfo.pid)
 	if err != nil {
 		// it is expected for any process not running inside a container
-		wk.log.Debug("can't get container info for PID", "pid", procInfo.pid, "error", err)
+		wk.log.Warn("can't get container info for PID", "pid", procInfo.pid, "error", err)
 		return processAttrs{}, false
 	}
 

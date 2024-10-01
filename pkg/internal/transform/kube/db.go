@@ -143,7 +143,7 @@ func (id *Database) addProcess(ifp *container.Info) {
 func (id *Database) AddProcess(pid uint32) {
 	ifp, err := container.InfoForPID(pid)
 	if err != nil {
-		dblog().Debug("failing to get container information", "pid", pid, "error", err)
+		dblog().Warn("failing to get container information", "pid", pid, "error", err)
 		return
 	}
 
@@ -170,6 +170,7 @@ func (id *Database) OwnerPodInfo(pidNamespace uint32) (*kube.PodInfo, bool) {
 		}
 		pod, ok = id.informer.GetContainerPod(info.ContainerID)
 		if !ok {
+			dblog().Warn("can't find pod for PID namespace", "pid", pidNamespace)
 			return nil, false
 		}
 		id.fetchedPodsCache[pidNamespace] = pod

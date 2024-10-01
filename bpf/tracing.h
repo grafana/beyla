@@ -107,7 +107,7 @@ static __always_inline void clear_upper_trace_id(tp_info_t *tp) {
 // The trace id is 16 bytes, but we can only use 11 bytes in options
 static __always_inline void new_trace_id(tp_info_t *tp) {
     urand_bytes(tp->trace_id, TRACE_ID_SIZE_BYTES);
-    clear_upper_trace_id(tp);
+    //clear_upper_trace_id(tp);
 }
 
 #endif

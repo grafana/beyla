@@ -40,7 +40,7 @@ func gctx(groups attributes.AttrGroups) *global.ContextInfo {
 	return &global.ContextInfo{
 		Metrics:               imetrics.NoopReporter{},
 		MetricAttributeGroups: groups,
-		K8sInformer:           kube.NewMetadataProvider(kubeflags.EnabledFalse, nil, "", 0),
+		K8sInformer:           kube.NewMetadataProvider(kubeflags.EnabledFalse, nil, "", false, 0),
 		HostID:                "host-id",
 	}
 }

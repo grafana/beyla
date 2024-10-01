@@ -14,7 +14,7 @@ import (
 	"go.opentelemetry.io/contrib/detectors/gcp"
 	"go.opentelemetry.io/otel/sdk/resource"
 	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 type hostIDFetcher func(context.Context, time.Duration) (string, error)
@@ -108,42 +108,22 @@ func detectHostID(ctx context.Context, timeout time.Duration, detector resource.
 }
 
 func (ci *ContextInfo) kubeNodeFetcher(ctx context.Context, _ time.Duration) (string, error) {
-	if !ci.K8sInformer.IsKubeEnabled() {
+	if ci.K8sInformer == nil || !ci.K8sInformer.IsKubeEnabled() {
 		return "", errors.New("kubernetes is not enabled")
 	}
-	log := cilog().With("func", "kubeNodeFetcher")
+	nodeName, err := ci.K8sInformer.CurrentNodeName(ctx)
+	if err != nil {
+		return "", fmt.Errorf("can't get node name: %w", err)
+	}
 	kubeClient, err := ci.K8sInformer.KubeClient()
 	if err != nil {
 		return "", fmt.Errorf("can't get kubernetes client: %w", err)
 	}
-	// fist: get the current pod name and namespace
-	currentPod, err := os.Hostname()
-	if err != nil {
-		return "", fmt.Errorf("can't get hostname of current pod: %w", err)
-	}
-	var currentNamespace string
-	if nsBytes, err := os.ReadFile("/var/run/secrets/kubernetes.io/serviceaccount/namespace"); err != nil {
-		log.Warn("can't read service account namespace. Two Beyla pods with the same"+
-			" name could result in inaccuracies in the host.id attribute", "error", err)
-	} else {
-		currentNamespace = string(nsBytes)
-	}
-	// second: get the node for the current Pod
-	// using List instead of Get because to not require extra serviceaccount permissions
-	pods, err := kubeClient.CoreV1().Pods(currentNamespace).List(ctx, v1.ListOptions{
-		FieldSelector: "metadata.name=" + currentPod,
-	})
-	if err != nil || len(pods.Items) == 0 {
-		return "", fmt.Errorf("can't get pod %s/%s: %w", currentNamespace, currentPod, err)
-	}
-	pod := pods.Items[0]
-	// third: get the node MachineID from NodeInfo
-	// using List instead of Get because to not require extra serviceaccount permissions
-	nodes, err := kubeClient.CoreV1().Nodes().List(ctx, v1.ListOptions{
-		FieldSelector: "metadata.name=" + pod.Spec.NodeName,
+	nodes, err := kubeClient.CoreV1().Nodes().List(ctx, metav1.ListOptions{
+		FieldSelector: "metadata.name=" + nodeName,
 	})
 	if err != nil || len(nodes.Items) == 0 {
-		return "", fmt.Errorf("can't get node %s: %w", pod.Spec.NodeName, err)
+		return "", fmt.Errorf("can't get node %s: %w", nodeName, err)
 	}
 	return nodes.Items[0].Status.NodeInfo.MachineID, nil
 }

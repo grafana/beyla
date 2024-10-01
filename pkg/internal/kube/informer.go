@@ -269,11 +269,11 @@ func (k *Metadata) initInformers(ctx context.Context, client kubernetes.Interfac
 	}
 	var informerFactory informers.SharedInformerFactory
 	if restrictNode == "" {
-		k.log.Info("no node selector provided. Listening to global resources")
+		k.log.Debug("no node selector provided. Listening to global resources")
 		informerFactory = informers.NewSharedInformerFactory(client, resyncTime)
 	} else {
 		fieldSelector := fields.OneTermEqualSelector("spec.nodeName", restrictNode).String()
-		k.log.Info("using field selector", "selector", fieldSelector)
+		k.log.Debug("using field selector", "selector", fieldSelector)
 		opts := informers.WithTweakListOptions(func(options *metav1.ListOptions) {
 			options.FieldSelector = fieldSelector
 		})
